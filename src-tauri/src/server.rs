@@ -104,6 +104,12 @@ pub struct ServerState {
     ///
     /// 수수료를 떼는 가게에서는 이 값이 총액이 아니라 **가게 몫**이다.
     order_expect: Arc<Mutex<std::collections::HashMap<String, f64>>>,
+    /// 이 주문의 견적이 언제까지인가.
+    ///
+    /// 🔴 화면은 "5분 안에 보내세요, 지나면 다시 주문해 주세요" 라고 적어
+    /// 두는데 `sweep_payments` 는 그걸 보지 않았다. 만료된 QR 로 **옛 금액**을
+    /// 보내도 결제가 됐다 — 시세가 오르면 가게가 그만큼 덜 받는다.
+    order_until: Arc<Mutex<std::collections::HashMap<String, i64>>>,
     /// Next ticket number. Customers cannot read an address; they can read 14.
     next_ticket: Arc<Mutex<u32>>,
     /// 번호가 어느 날짜의 것인가. 날이 바뀌면 1번부터 다시 센다.
@@ -140,6 +146,8 @@ const WAITING: &str = "waiting";
 /// 돈은 왔는데 모자란다. 조용히 기다리게 두면 손님은 낸 줄 알고 서 있고,
 /// 가게는 안 온 줄 알고 안 만든다 — 둘 다 상대가 잘못했다고 생각한다.
 const SHORT: &str = "short";
+/// 견적이 지난 뒤에 온 돈. 시세가 움직였을 수 있어 사장이 보고 정한다.
+const EXPIRED: &str = "expired";
 
 /// 1분에 이만큼까지만 새 주문을 만든다.
 ///
@@ -646,7 +654,7 @@ async fn sweep_payments(st: &ServerState) {
     let has_waiting = st
         .order_state
         .lock()
-        .map(|m| m.values().any(|(s, _, _)| s == WAITING || s == SHORT))
+        .map(|m| m.values().any(|(s, _, _)| s == WAITING || s == SHORT || s == EXPIRED))
         .unwrap_or(false);
     if !has_waiting {
         return;
@@ -671,7 +679,7 @@ async fn sweep_payments(st: &ServerState) {
             continue;
         };
         let Some(slot) = m.get(addr) else { continue };
-        if slot.0 != WAITING && slot.0 != SHORT {
+        if slot.0 != WAITING && slot.0 != SHORT && slot.0 != EXPIRED {
             continue;
         }
 
@@ -681,6 +689,21 @@ async fn sweep_payments(st: &ServerState) {
         //
         // 기대값은 총액이 아니라 **가게 몫**이다(수수료를 뗀 뒤). 다른 지갑으로
         // 전액이 오면 그건 기대값보다 많으니 당연히 통과한다.
+        // 만료된 견적으로 온 돈은 자동으로 확인하지 않는다. 시세가 움직인
+        // 뒤라 그 금액이 지금 얼마인지 모른다 — 사장이 보고 정할 일이다.
+        // 돈을 돌려보내지도 않는다. 지갑에 들어와 있고, 화면이 말해 준다.
+        let until = st
+            .order_until
+            .lock()
+            .ok()
+            .and_then(|u| u.get(addr).copied())
+            .unwrap_or(0);
+        // 블록이 늦게 잡히는 것까지 만료로 치면 정상 결제가 막힌다. 2분 봐준다.
+        if until > 0 && now_unix() > until + 120 {
+            m.insert(addr.to_string(), (EXPIRED.into(), now_unix(), 0));
+            continue;
+        }
+
         let got = p["amount"].as_f64().unwrap_or(0.0).abs();
         let want = st
             .order_expect
@@ -1323,9 +1346,19 @@ async fn api_order(
         fee_cfg.1.clone(),
     );
     let expect = split["shop_gets"].as_f64().unwrap_or(total_rvn);
+    if let Ok(mut u) = state.order_until.lock() {
+        let until = quote
+            .get("expires_at")
+            .and_then(Value::as_i64)
+            .unwrap_or(now + 300);
+        u.insert(address.clone(), until);
+        if u.len() > 500 {
+            u.retain(|_, t| *t > now);
+        }
+    }
     if let Ok(mut e) = state.order_expect.lock() {
         e.insert(address.clone(), expect);
-        // 🔴 여기서 `e.clear()` 를 하고 있었다. 501번째 주문이 들어오면 **지금
+        // 🔴 여기서 표를 **통째로 비우고** 있었다. 501번째 주문이 들어오면 **지금
         // 입금을 기다리는 주문의 기대 금액까지 전부** 사라지고, 그 뒤로는
         // `want = 0` 이라 **얼마가 들어와도 결제 확인**이 된다.
         // 하루 500건을 넘기는 가게에서 그날 오후가 전부 그 상태가 된다.
@@ -1774,6 +1807,7 @@ pub async fn start_phone_server(
         remote_admin: state.remote_admin.clone(),
         order_table: state.order_table.clone(),
         order_expect: state.order_expect.clone(),
+        order_until: state.order_until.clone(),
         order_times: state.order_times.clone(),
     };
     let owner_token = st.token.lock().map(|t| t.clone()).unwrap_or_default();
@@ -2092,6 +2126,13 @@ pub fn rotate_role_token(state: tauri::State<'_, ServerState>, role: String) -> 
     }
     let mut m = state.role_tokens.lock().map_err(|_| "잠금 실패")?;
     m.insert(role, random_token());
+    // 🔴 저장을 안 하고 있었다. 잃어버린 직원 폰을 끊었다고 생각한 뒤 앱을
+    // 다시 켜면 **옛 토큰이 되살아나** 그 폰의 URL 이 다시 열린다.
+    // 끊는 것은 지금만이 아니라 앞으로도 끊긴 것이어야 한다.
+    let snapshot = m.clone();
+    drop(m);
+    let owner = state.token.lock().map(|t| t.clone()).unwrap_or_default();
+    save_tokens(&owner, &snapshot);
     Ok(())
 }
 
@@ -2199,6 +2240,7 @@ impl Default for ServerState {
             remote_admin: Arc::new(Mutex::new(false)),
             order_table: Arc::new(Mutex::new(std::collections::HashMap::new())),
             order_expect: Arc::new(Mutex::new(std::collections::HashMap::new())),
+            order_until: Arc::new(Mutex::new(std::collections::HashMap::new())),
             order_times: Arc::new(Mutex::new(Vec::new())),
         }
     }
@@ -2545,5 +2587,59 @@ mod ticket_tests {
             1,
             "번호를 나눠 주는 자리가 둘 이상이다",
         );
+    }
+}
+
+#[cfg(test)]
+mod grok_findings {
+    /// 시험 코드 자체에 찾는 문자열이 있으면 언제나 실패한다.
+    fn code_only() -> &'static str {
+        let src = include_str!("server.rs");
+        &src[..src.find("mod grok_findings").unwrap_or(src.len())]
+    }
+
+    /// 🔴 손님 폰이 보낸 금액을 그대로 믿으면, 커피 열 잔을 1원에 판다.
+    /// 손님 폰의 자바스크립트는 손님이 고칠 수 있다 — 화면에서 막는 것은
+    /// 막는 것이 아니다.
+    #[test]
+    fn the_order_total_is_recomputed_from_the_menu() {
+        let src = code_only();
+        let f = &src[src.find("\nasync fn api_order(").expect("api_order 가 없다")..];
+        let head: String = f.chars().take(2200).collect();
+        assert!(
+            head.contains("price_of"),
+            "손님이 보낸 total 을 그대로 쓴다 — 열 잔을 1원에 살 수 있다",
+        );
+    }
+
+    /// 🔴 살아 있는 주문의 기대 금액을 지우면, 그 뒤로 **얼마가 들어와도**
+    /// 결제 확인이 된다(`want = 0`). 하루 500건 넘는 가게가 오후 내내 그렇다.
+    #[test]
+    fn the_expected_amounts_of_live_orders_are_never_wiped() {
+        let src = code_only();
+        assert!(
+            !src.contains("e.clear()"),
+            "기대 금액 표를 통째로 지운다 — 살아 있는 주문까지 사라진다",
+        );
+    }
+
+    /// 🔴 직원 폰을 끊었는데 앱을 다시 켜면 되살아나면, 끊은 것이 아니다.
+    #[test]
+    fn rotating_a_role_token_is_written_to_disk() {
+        let src = code_only();
+        let f = &src[src.find("pub fn rotate_role_token").expect("없다")..];
+        let body: String = f.chars().take(700).collect();
+        assert!(body.contains("save_tokens"), "회전이 저장되지 않는다 — 재시작하면 옛 토큰이 산다");
+    }
+
+    /// 🔴 화면은 "5분 안에 보내세요" 라고 하는데 확인 쪽이 그걸 안 보면,
+    /// 만료된 QR 로 옛 금액을 보내도 결제가 된다.
+    #[test]
+    fn an_expired_quote_is_not_auto_confirmed() {
+        let src = code_only();
+        let f = &src[src.find("async fn sweep_payments").expect("없다")..];
+        let body: String = f.chars().take(3000).collect();
+        assert!(body.contains("order_until"), "만료를 보지 않는다");
+        assert!(body.contains("EXPIRED"), "만료 상태가 없다");
     }
 }

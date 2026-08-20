@@ -54,14 +54,36 @@ pub async fn encrypt_wallet(passphrase: String, confirm: String) -> Result<Value
         return Err("이미 암호가 걸려 있습니다. 바꾸려면 '암호 바꾸기'를 쓰세요.".into());
     }
 
-    // encryptwallet answers, then the node exits. A transport error after this
-    // point usually means it worked and the connection died with the node — so
-    // it must not be reported as a failure the owner might retry.
+    // 🔴 여기서 `Ok(_) | Err(_)` 로 **무조건 성공**이라고 답하고 있었다.
+    // 노드가 꺼져 있어도, 이미 암호가 있어도, 전송이 끊겨도 화면은
+    // "암호를 걸었습니다" 로 갔다. 사장은 잠긴 줄 알고 영업하는데 지갑은 열려
+    // 있다 — 이 프로그램에서 낼 수 있는 가장 비싼 거짓말 중 하나다.
+    //
+    // 원래 주석의 근거("암호를 건 뒤 노드가 꺼지므로 전송 오류는 성공이다")는
+    // 절반만 맞다. 그게 참이려면 **부르기 전에** 노드가 살아 있었고 지갑이
+    // 안 잠겨 있었어야 한다. 그 둘을 먼저 확인하고, 그 뒤의 전송 오류만
+    // 성공으로 친다.
+    let before = call_rpc("getwalletinfo", json!([])).await;
+    match &before {
+        Err(e) => {
+            return Err(format!(
+                "노드에 연결하지 못했습니다. 암호를 걸지 않았습니다. ({e})"
+            ))
+        }
+        Ok(i) => {
+            if i.get("unlocked_until").is_some() {
+                return Err("이미 암호가 걸려 있습니다. 바꾸시려면 「암호 바꾸기」를 쓰세요.".into());
+            }
+        }
+    }
+
     match call_rpc("encryptwallet", json!([passphrase])).await {
-        Ok(_) | Err(_) => Ok(json!({
-            "encrypted": true,
-            "node_stopped": true,
-        })),
+        // 답이 오면 확실히 성공이다.
+        Ok(_) => Ok(json!({ "encrypted": true, "node_stopped": true, "sure": true })),
+        // 노드가 살아 있는 것을 방금 확인했으므로, 여기서 끊긴 것은 노드가
+        // 꺼진 것이다 — 다만 **확실하다고는 말하지 않는다.** 다시 켜서
+        // 확인하라고 화면이 말한다.
+        Err(_) => Ok(json!({ "encrypted": true, "node_stopped": true, "sure": false })),
     }
 }
 

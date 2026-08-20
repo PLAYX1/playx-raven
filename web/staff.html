@@ -271,7 +271,11 @@
 
       const NEXT = { paid: "making", making: "ready", ready: "done" };
       const LABEL = { paid: "만들기 시작", making: "나왔다고 알리기", ready: "전달 완료" };
-      const SHOWN = { paid: "새 주문", making: "만드는 중", ready: "나옴" };
+      const SHOWN = { paid: "새 주문", making: "만드는 중", ready: "나옴",
+            // 앱을 다시 켜면 상태 표가 빈다. 그때 "결제됨" 으로 그리면
+            // 직원이 안 만들어도 될 것을 만든다.
+            unknown: "확인 필요",
+          };
 
       async function load() {
         try {
@@ -283,12 +287,15 @@
           const list = (o.payments || []).filter((p) => p.settled);
 
           // done 은 숨긴다. 끝난 것을 계속 보여주면 새 주문이 아래로 밀린다.
-          const live = list.filter((p) => (states.get(p.address)?.state || "paid") !== "done");
+          // 🔴 모르는 주문을 `paid` 로 치고 있었다. 앱을 다시 켜면 상태 표가
+          // 비므로, 어제 것까지 전부 「결제됨」으로 번호표에 떴다.
+          // 모르면 모른다고 해야 한다 — 직원이 만들면 안 되는 것을 만든다.
+          const live = list.filter((p) => (states.get(p.address)?.state || "unknown") !== "done");
 
           $("list").innerHTML = live.length
             ? live
                 .map((p) => {
-                  const s = states.get(p.address)?.state || "paid";
+                  const s = states.get(p.address)?.state || "unknown";
                   const t = states.get(p.address)?.ticket;
                   const tbl = states.get(p.address)?.table;
                   return `<div class="ticket ${s} risein">
