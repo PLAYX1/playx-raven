@@ -184,6 +184,28 @@
         button:active, .btn:active { transform: none; }
         button:active::after, .pop, .shimmer, .risein { animation: none; }
       }
+      /* 진행 단계 */
+      .statecard { margin-top: 16px; padding: 16px; border-radius: 12px;
+        background: var(--panel); }
+      .statecard.ready { background: var(--accent); color: #fff; }
+      .statecard .tk { font-size: 40px; font-weight: 700; line-height: 1.05;
+        font-variant-numeric: tabular-nums; }
+      .steps { display: flex; align-items: flex-start; gap: 4px; margin-top: 16px; }
+      .stp { flex: 1; text-align: center; position: relative; }
+      /* 단계 사이를 잇는 선. 지난 단계는 채워진다. */
+      .stp::before { content: ""; position: absolute; top: 7px; left: -50%;
+        width: 100%; height: 2px; background: currentColor; opacity: .18; }
+      .stp:first-child::before { display: none; }
+      .stp.on::before { opacity: .55; }
+      .stp .dot { display: block; width: 16px; height: 16px; margin: 0 auto;
+        border-radius: 999px; background: currentColor; opacity: .18;
+        position: relative; z-index: 1; transition: opacity .25s ease, transform .25s ease; }
+      .stp.on .dot { opacity: 1; }
+      /* 지금 단계만 숨 쉰다. 다 채워진 점 셋은 어디가 지금인지 안 알려준다. */
+      .stp.on:last-of-type .dot, .stp.on + .stp:not(.on) { }
+      .stp .lb { display: block; margin-top: 6px; font-size: 12.5px; opacity: .6; }
+      .stp.on .lb { opacity: 1; font-weight: 600; }
+      @media (prefers-reduced-motion: reduce) { .stp .dot { transition: none; } }
 </style>
   </head>
   <body>
@@ -390,6 +412,18 @@
       let paying = false;
 
       $("order").onclick = async () => {
+        // 🔴 알림 권한은 **주문을 누른 순간**에만 묻는다.
+        //
+        // 화면을 열자마자 물으면 대부분 거절한다 — 뭘 알려 주겠다는 건지 모르는
+        // 상태에서 묻기 때문이다. 주문을 누른 사람은 "다 되면 알려 준다" 를
+        // 원하는 사람이라, 그때 물으면 대부분 허락한다.
+        // 브라우저는 사용자가 누른 직후에만 이 창을 띄워 준다는 제약도 있다.
+        if ("Notification" in window && Notification.permission === "default") {
+          try {
+            await Notification.requestPermission();
+          } catch {}
+        }
+
         const chosen = items
           .map((it, i) => ({ name: it.name, price: it.price, qty: cart[i] || 0 }))
           .filter((x) => x.qty > 0);
@@ -474,16 +508,43 @@
 
             const [title, sub, face] = STATE_KO[r.state];
             const isReady = r.state === "ready";
+            // 지금 어디쯤인지. 글자 한 줄로는 "다 됐나 아직인가" 를 못 읽는다.
+            const STEPS = ["paid", "making", "ready"];
+            const at = STEPS.indexOf(r.state);
+            const bar = STEPS.map((k, i) => {
+              const done = at >= 0 && i <= at;
+              return `<div class="stp ${done ? "on" : ""}">
+                        <span class="dot"></span>
+                        <span class="lb">${["결제", "만드는 중", "나왔어요"][i]}</span>
+                      </div>`;
+            }).join("");
+
             $("p-state").innerHTML =
-              `<div style="margin-top:16px;padding:16px;border-radius:12px;
-                    background:${isReady ? "var(--accent)" : "var(--panel)"};
-                    color:${isReady ? "#fff" : "inherit"}">
+              `<div class="statecard ${isReady ? "ready" : ""}">
                  <img class="face" src="/raven-${face}.webp" alt="" width="96" height="127" />
                  ${ticket ? `<div style="font-size:14px;opacity:.8">주문번호</div>
-                             <div style="font-size:34px;font-weight:700;line-height:1.1">${ticket}</div>` : ""}
+                             <div class="tk">${ticket}</div>` : ""}
                  <div style="font-size:${isReady ? "21" : "16"}px;font-weight:600;margin-top:4px">${title}</div>
                  <div style="font-size:14px;opacity:.85;margin-top:4px">${sub}</div>
+                 ${at >= 0 ? `<div class="steps">${bar}</div>` : ""}
                </div>`;
+
+            // 🔴 손님은 이 화면을 보고 서 있지 않는다. 카톡을 보거나 폰을 넣어
+            // 둔다. 소리만으로는 시끄러운 가게에서 못 듣는다 — 다른 앱을 보고
+            // 있어도 뜨는 배너가 필요하다.
+            //
+            // 브라우저를 아예 닫으면 못 받는다. 그건 푸시 서버가 있어야 하고,
+            // 가게 컴퓨터에 그걸 두면 우리가 다시 가운데 서게 된다. 여기까지가
+            // 서버 없이 되는 최대치다 — 화면이 그렇게 말한다.
+            if (isReady && "Notification" in window && Notification.permission === "granted") {
+              try {
+                new Notification(`${ticket ? ticket + "번 " : ""}나왔습니다`, {
+                  body: `${shop.name || "가게"} · 카운터에서 받아 가세요`,
+                  icon: "/raven-happy.webp",
+                  tag: "playx-order",
+                });
+              } catch {}
+            }
 
             // 나왔을 때만 소리와 진동. 매 단계 울리면 사람들이 폰을 엎어 둔다.
             if (isReady) {

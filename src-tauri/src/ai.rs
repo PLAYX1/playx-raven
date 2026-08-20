@@ -972,6 +972,7 @@ mod order_pref_tests {
     /// 평소엔 건너뛰고, 부를 때만 단독으로 돈다:
     ///   cargo test --lib -- --ignored --test-threads=1 order_tests
     fn with_home<T>(name: &str, f: impl FnOnce() -> T) -> T {
+        let _g = crate::paths::TEST_ENV.lock().unwrap_or_else(|e| e.into_inner());
         let dir = std::env::temp_dir().join(format!("playx-raven-test-{name}"));
         let _ = std::fs::remove_dir_all(&dir);
         std::env::set_var("PLAYX_RAVEN_HOME", &dir);

@@ -1011,6 +1011,7 @@ mod fee_tests {
     /// 오픈소스에서 세금은 포크 한 번으로 사라진다.
     #[test]
     fn the_owner_can_turn_it_off() {
+        let _g = crate::paths::TEST_ENV.lock().unwrap_or_else(|e| e.into_inner());
         let dir = std::env::temp_dir().join("playx-raven-test-fee");
         let _ = std::fs::remove_dir_all(&dir);
         std::env::set_var("PLAYX_RAVEN_HOME", &dir);
@@ -1028,9 +1029,66 @@ mod fee_tests {
     /// 오타로 50% 를 적으면 가게가 반을 잃는다.
     #[test]
     fn an_absurd_rate_is_refused() {
+        let _g = crate::paths::TEST_ENV.lock().unwrap_or_else(|e| e.into_inner());
         let dir = std::env::temp_dir().join("playx-raven-test-fee2");
         std::env::set_var("PLAYX_RAVEN_HOME", &dir);
         assert!(fee_save(true, Some(0.5), None).is_err());
+        std::env::remove_var("PLAYX_RAVEN_HOME");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+/// 주문번호가 몇까지 갔다가 1로 돌아가나.
+///
+/// 기본 9,999. 자릿수가 늘수록 카운터에서 **불러도 안 들린다** — 실제 가게가
+/// 세 자리를 쓰는 이유다. 그래도 하루에 그만큼 파는 곳(구내식당·축제)이 있으니
+/// 막지 않고 사장이 정하게 한다.
+///
+/// 상한을 아무리 크게 잡아도 **날이 바뀌면 1번부터**다. 그게 "그날 몇 번째"
+/// 라는 번호의 뜻이다.
+pub fn ticket_cap() -> u32 {
+    let v: Value = std::fs::read_to_string(crate::paths::app_file("shop.json"))
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_else(|| json!({}));
+    v.get("ticket_cap")
+        .and_then(Value::as_u64)
+        .map(|n| n as u32)
+        // 100 미만은 하루에 두 번 도는 가게가 나온다. 999,999 는 여섯 자리라
+        // 부를 수 없다 — 그 위는 번호가 아니라 일련번호다.
+        .filter(|n| (100..=999_999).contains(n))
+        .unwrap_or(9_999)
+}
+
+#[cfg(test)]
+mod ticket_cap_tests {
+    use super::ticket_cap;
+
+    /// 설정이 없으면 9,999. 없다고 1 이나 0 이 되면 모든 손님이 1번이 된다.
+    #[test]
+    fn the_default_is_sane() {
+        let _g = crate::paths::TEST_ENV.lock().unwrap_or_else(|e| e.into_inner());
+        let dir = std::env::temp_dir().join("playx-raven-test-cap");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::env::set_var("PLAYX_RAVEN_HOME", &dir);
+        assert_eq!(ticket_cap(), 9_999);
+        std::env::remove_var("PLAYX_RAVEN_HOME");
+    }
+
+    /// 말도 안 되는 값이 적혀 있어도 기본값으로 돌아간다.
+    #[test]
+    fn a_broken_value_falls_back() {
+        let _g = crate::paths::TEST_ENV.lock().unwrap_or_else(|e| e.into_inner());
+        let dir = std::env::temp_dir().join("playx-raven-test-cap2");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::env::set_var("PLAYX_RAVEN_HOME", &dir);
+        for bad in ["0", "1", "99", "1000000"] {
+            std::fs::write(dir.join("shop.json"), format!("{{\"ticket_cap\":{bad}}}")).unwrap();
+            assert_eq!(ticket_cap(), 9_999, "{bad} 이 그대로 쓰인다");
+        }
+        std::fs::write(dir.join("shop.json"), "{\"ticket_cap\":300}").unwrap();
+        assert_eq!(ticket_cap(), 300, "제대로 된 값을 안 쓴다");
         std::env::remove_var("PLAYX_RAVEN_HOME");
         let _ = std::fs::remove_dir_all(&dir);
     }
