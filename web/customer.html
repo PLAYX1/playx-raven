@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>주문</title>
+    <style>
+      /* 손님 화면. 매장 조명 아래 서서 한 손으로 쓰는 것을 전제한다. */
+      :root {
+        --bg: #ffffff; --fg: #141518; --muted: #6b7280; --line: #e6e7ea;
+        --panel: #fafafb; --accent: #3b3f8f; --warn: #b45309;
+        --safe-b: env(safe-area-inset-bottom, 0px);
+      }
+      @media (prefers-color-scheme: dark) {
+        :root { --bg: #101114; --fg: #eceef2; --muted: #9aa0ab; --line: #26282e;
+                --panel: #17191d; --accent: #8d92e8; --warn: #d99b3f; }
+      }
+      * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+      body { margin: 0; background: var(--bg); color: var(--fg);
+             font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", system-ui, sans-serif;
+             padding-bottom: calc(96px + var(--safe-b)); }
+      header { padding: 20px 18px 14px; border-bottom: 1px solid var(--line); }
+      header img { width: 100%; max-height: 168px; object-fit: cover; border-radius: 12px;
+                   margin-bottom: 13px; display: block; }
+      h1 { margin: 0; font-size: 21px; letter-spacing: -0.02em; }
+      .sub { color: var(--muted); font-size: 13px; margin-top: 4px; }
+      .tags { display: flex; gap: 6px; margin-top: 10px; }
+      /* 맨 위 한 줄. 스크롤하기 전에 보여야 한다. */
+      .openbar { display: flex; align-items: center; gap: 8px; padding: 11px 16px;
+                 font-size: 15px; font-weight: 600; }
+      .openbar.on  { background: rgba(28,122,69,.12); color: var(--ok, #1c7a45); }
+      .openbar.off { background: rgba(150,96,26,.14); color: var(--warn, #96601a); }
+      .openbar .sub { font-weight: 500; opacity: .85; }
+      .openbar .dot { width: 9px; height: 9px; border-radius: 50%; background: currentColor;
+                      opacity: .45; flex: none; }
+      .openbar .dot.on { opacity: 1; }
+      .tablebar { padding: 9px 16px; font-size: 15px; font-weight: 600;
+                  background: var(--panel); border-bottom: 1px solid var(--line); }
+      .tag { font-size: 11px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line);
+             color: var(--muted); }
+
+      main { padding: 8px 18px 0; }
+      .item { display: flex; gap: 13px; align-items: center; padding: 13px 0;
+              border-bottom: 1px solid var(--line); }
+      .item img { width: 62px; height: 62px; object-fit: cover; border-radius: 10px; flex: none;
+                  background: var(--panel); }
+      .item .nm { font-weight: 600; font-size: 15px; }
+      .item .pr { color: var(--muted); font-size: 13px; margin-top: 2px; }
+      .item .rv { color: var(--muted); font-size: 11.5px; }
+      .qty { display: flex; align-items: center; gap: 4px; margin-left: auto; flex: none; }
+      /* 결제에서 가장 큰 것이 지갑 열기여야 한다. 주소도 QR 도 그다음이다. */
+      .walletbtn { display: block; margin: 14px 0 6px; padding: 17px;
+                   border-radius: 13px; background: var(--accent, #6b78d6); color: #fff;
+                   font-size: 18px; font-weight: 700; text-align: center;
+                   text-decoration: none; }
+
+      /* 44px 미만은 손가락으로 못 누른다. */
+      .qty button { width: 44px; height: 44px; border-radius: 9px; border: 1px solid var(--line);
+                    background: var(--bg); color: var(--fg); font-size: 17px; cursor: pointer; }
+      .qty span { min-width: 22px; text-align: center; font-variant-numeric: tabular-nums; }
+
+      .ask { margin: 18px 0 24px; padding: 14px; border: 1px solid var(--line);
+             border-radius: 12px; background: var(--panel); }
+      .ask h3 { margin: 0 0 9px; font-size: 13px; font-weight: 600; }
+      .ask .row { display: flex; gap: 7px; }
+      .ask input { flex: 1; min-width: 0; padding: 11px 12px; border-radius: 9px;
+                   border: 1px solid var(--line); background: var(--bg); color: var(--fg);
+                   font-size: 15px; font-family: inherit; }
+      .ask button { padding: 0 15px; border-radius: 9px; border: 0; background: var(--accent);
+                    color: #fff; font-size: 14px; font-family: inherit; cursor: pointer; }
+      .answer { margin-top: 11px; font-size: 14px; line-height: 1.7; white-space: pre-wrap; }
+      .answer.err { color: var(--warn); }
+      .aidis { font-size: 11px; color: var(--muted); margin-top: 9px; }
+
+      .bar { position: fixed; left: 0; right: 0; bottom: 0; background: var(--bg);
+             border-top: 1px solid var(--line); padding: 12px 18px calc(12px + var(--safe-b));
+             display: flex; align-items: center; gap: 12px; }
+      .bar .tot { font-size: 17px; font-weight: 600; }
+      .bar .tot small { display: block; font-size: 11.5px; font-weight: 400; color: var(--muted); }
+      .bar button { margin-left: auto; padding: 14px 24px; border-radius: 11px; border: 0;
+                    background: var(--accent); color: #fff; font-size: 15px; font-weight: 600;
+                    font-family: inherit; cursor: pointer; }
+      .bar button:disabled { opacity: 0.4; }
+
+      dialog { border: 0; border-radius: 16px; padding: 0; background: var(--bg); color: var(--fg);
+               width: min(92vw, 420px); }
+      dialog::backdrop { background: rgba(0,0,0,0.55); }
+      .pay { padding: 22px 20px; text-align: center; }
+      .pay h2 { margin: 0 0 4px; font-size: 17px; }
+      .pay .amt { font-size: 27px; font-weight: 700; margin: 12px 0 2px;
+                  font-variant-numeric: tabular-nums; }
+      .pay .fiat { color: var(--muted); font-size: 13px; }
+      .pay svg { width: 200px; height: 200px; margin: 16px auto 8px; display: block;
+                 background: #fff; padding: 9px; border-radius: 10px; }
+      .pay code { display: block; font-size: 11.5px; word-break: break-all; color: var(--muted);
+                  margin-top: 6px; }
+      .pay .timer { margin-top: 12px; font-size: 12.5px; color: var(--warn); }
+      .pay .close { margin-top: 16px; width: 100%; padding: 13px; border-radius: 10px;
+                    border: 1px solid var(--line); background: var(--bg); color: var(--fg);
+                    font-size: 14px; font-family: inherit; cursor: pointer; }
+      .empty { color: var(--muted); padding: 34px 0; text-align: center; font-size: 14px; }
+    </style>
+  </head>
+  <body>
+    <div class="openbar" id="openbar"></div>
+
+    <header>
+      <div id="icon"></div>
+      <h1 id="name">불러오는 중…</h1>
+      <div class="sub" id="desc"></div>
+      <div class="sub" id="loc"></div>
+      <div class="tags" id="tags"></div>
+    </header>
+
+    <main>
+      <div id="menu"><div class="empty">메뉴를 불러오는 중…</div></div>
+
+      <div class="ask" id="ask" style="display:none">
+        <h3>궁금한 것 물어보기</h3>
+        <div class="row">
+          <input id="q" placeholder="견과류 들어간 메뉴 있나요?" autocomplete="off" />
+          <button id="qgo">묻기</button>
+        </div>
+        <div class="answer" id="a"></div>
+        <div class="aidis">AI가 가게가 올린 정보로만 답합니다. 확실하지 않으면 가게에 직접 확인하세요.</div>
+      </div>
+    </main>
+
+    <div class="bar">
+      <div class="tot"><span id="total">0</span><small id="totrvn"></small></div>
+      <button id="order" disabled>주문하기</button>
+    </div>
+
+    <dialog id="paydlg">
+      <div class="pay">
+        <h2 id="p-title">지갑 열기를 누르세요</h2>
+        <div class="fiat" id="p-shop"></div>
+        <div class="amt" id="p-rvn"></div>
+        <div class="fiat" id="p-fiat"></div>
+        <!-- 손님은 이 화면을 자기 폰으로 보고 있다. 자기 화면의 QR 을 자기
+             폰으로 찍을 수는 없다. 그래서 누르면 지갑이 열리는 버튼이 먼저다.
+             QR 은 옆 사람 폰이나 태블릿으로 볼 때를 위해 남긴다. -->
+        <a id="p-open" class="walletbtn" href="#">지갑 열기</a>
+        <div class="fiat" id="p-openhint">지갑이 열리면 금액이 채워져 있습니다. 그대로 보내세요.</div>
+        <a id="p-qrlink" href="#"><div id="p-qr"></div></a>
+        <code id="p-addr"></code>
+        <div class="fiat">지갑이 안 열리면 위 주소를 길게 눌러 복사하세요.</div>
+        <div class="timer" id="p-timer"></div>
+        <div id="p-state"></div>
+        <button class="close" id="p-close">닫기</button>
+      </div>
+    </dialog>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      let shop = {}, items = [], cart = {}, rate = null, symbol = "₩", currency = "KRW";
+      let openState = { open: true, say: "" };
+      // 손님 QR 이 ?table=3 을 달고 있으면 그 자리에서 온 주문이다. 없으면
+      // 카운터 주문 — 지금까지처럼 번호로 부른다.
+      const TABLE = (new URLSearchParams(location.search).get("table") || "").trim().slice(0, 12);
+
+      // ── 메뉴판(키오스크) 모드 ────────────────────────────────────────
+      //
+      // 같은 화면인데 기기가 다르다. 손님 폰이면 그 사람 것이고, 매장 태블릿이면
+      // 여러 사람이 번갈아 쓴다. 다른 것은 하나뿐 — **끝나는 방식**이다.
+      //
+      // 태블릿에 앞사람 장바구니가 남아 있으면 그건 사고다. 그래서 주문이
+      // 끝나면 스스로 처음으로 돌아간다. 그리고 결제는 손님 자기 폰으로
+      // 넘긴다 — 매장 태블릿에 지갑을 두면 안 되니까.
+      const KIOSK = new URLSearchParams(location.search).get("kiosk") === "1";
+      let idleTimer = null;
+
+      function kioskReset() {
+        // 결제 중에는 치우지 않는다. 지갑 앱을 열고 QR 을 찍고 금액을 확인하는
+        // 데 90초는 흔히 걸리고, 그때 화면을 지우면 이미 보낸 돈이 어디로 갔는지
+        // 손님이 알 길이 없어진다. 결제가 끝나면 그때 다시 센다.
+        if (paying) {
+          idleTimer = setTimeout(kioskReset, 90_000);
+          return;
+        }
+        cart = {};
+        items.forEach((_, i) => {
+          const el = document.getElementById(`c${i}`);
+          if (el) el.textContent = "0";
+        });
+        $("total").textContent = fmt(0);
+        $("totrvn").textContent = "";
+        $("order").disabled = true;
+        $("order").textContent = "주문하기";
+        paying = false;
+        clearInterval(statePoll);
+        clearInterval(timer);
+        try { $("paydlg").close(); } catch {}
+        window.scrollTo(0, 0);
+      }
+
+      // 손을 뗀 지 오래면 알아서 치운다. 다음 손님이 앞사람 화면을 보면 안 된다.
+      function touchKiosk() {
+        if (!KIOSK) return;
+        clearTimeout(idleTimer);
+        idleTimer = setTimeout(kioskReset, 90_000);
+      }
+      if (KIOSK) {
+        ["click", "touchstart", "keydown"].forEach((e) =>
+          document.addEventListener(e, touchKiosk, { passive: true })
+        );
+      }
+
+      const fmt = (n) =>
+        currency === "RVN" ? `${n} RVN` : `${symbol}${Math.round(n).toLocaleString()}`;
+
+      async function load() {
+        const r = await fetch("/api/shop").then((x) => x.json());
+        shop = r.shop || {};
+        $("name").textContent = shop.name || "가게";
+        $("desc").textContent = shop.description || "";
+        $("loc").textContent = shop.location || "";
+        if (shop.icon) $("icon").innerHTML = `<img src="${shop.icon}" alt="" />`;
+        $("tags").innerHTML =
+          (shop.pickup ? `<span class="tag">매장·포장</span>` : "") +
+          (shop.delivery ? `<span class="tag">배달</span>` : "");
+
+        // 노드가 켜져 있는 것과 가게가 열려 있는 것은 다르다. 새벽에도 노드는
+        // 돌기 때문에, 여기서 말해 주지 않으면 아무도 만들지 않을 커피가
+        // 결제된다. 맨 위에 두는 이유는 스크롤하기 전에 보여야 해서다.
+        if (TABLE) {
+          $("openbar").insertAdjacentHTML("afterend",
+            `<div class="tablebar">${TABLE}번 테이블</div>`);
+        }
+        openState = r.open || { open: true, say: "" };
+        $("openbar").innerHTML = openState.open
+          ? `<span class="dot on"></span>지금 영업 중${openState.say ? ` · <span class="sub">${openState.say}</span>` : ""}`
+          : `<span class="dot"></span>지금은 주문을 받지 않습니다${openState.say ? ` · <span class="sub">${openState.say}</span>` : ""}`;
+        $("openbar").className = openState.open ? "openbar on" : "openbar off";
+
+        items = shop.menu || [];
+        currency = shop.currency || "KRW";
+        symbol = currency === "USD" ? "$" : currency === "RVN" ? "" : "₩";
+        rate = shop.rate || null;
+
+        $("menu").innerHTML = items.length
+          ? items
+              .map(
+                (it, i) => `<div class="item">
+                  ${it.image ? `<img src="${shop.gateway || ""}/ipfs/${it.image}" alt="" loading="lazy" />` : `<div style="width:62px;height:62px;border-radius:10px;background:var(--panel);flex:none"></div>`}
+                  <div>
+                    <div class="nm">${it.name || ""}</div>
+                    <div class="pr">${fmt(it.price || 0)}</div>
+                    ${rate && currency !== "RVN" ? `<div class="rv">${((it.price || 0) / rate).toFixed(2)} RVN</div>` : ""}
+                  </div>
+                  <div class="qty">
+                    <button data-m="${i}">−</button><span id="c${i}">0</span><button data-p="${i}">+</button>
+                  </div>
+                </div>`
+              )
+              .join("")
+          : `<div class="empty">아직 메뉴가 없습니다.</div>`;
+
+        document.querySelectorAll("[data-p]").forEach((b) => {
+          b.onclick = () => bump(+b.dataset.p, 1);
+        });
+        document.querySelectorAll("[data-m]").forEach((b) => {
+          b.onclick = () => bump(+b.dataset.m, -1);
+        });
+        if (r.ai) $("ask").style.display = "";
+      }
+
+      function bump(i, d) {
+        cart[i] = Math.max(0, (cart[i] || 0) + d);
+        $(`c${i}`).textContent = cart[i];
+        const total = items.reduce((s, it, k) => s + (cart[k] || 0) * (it.price || 0), 0);
+        $("total").textContent = fmt(total);
+        $("totrvn").textContent =
+          rate && currency !== "RVN" && total ? `${(total / rate).toFixed(2)} RVN` : "";
+        $("order").disabled = total <= 0 || !openState.open;
+      }
+
+      // 결제 창이 떠 있는 동안인가. 떠 있으면 주문하기를 되살리지 않는다.
+      let paying = false;
+
+      $("order").onclick = async () => {
+        const chosen = items
+          .map((it, i) => ({ name: it.name, price: it.price, qty: cart[i] || 0 }))
+          .filter((x) => x.qty > 0);
+        const total = chosen.reduce((s, x) => s + x.price * x.qty, 0);
+
+        $("order").disabled = true;
+        try {
+          const res = await fetch("/api/order", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ items: chosen, total, currency, note: null, table: TABLE || null }),
+          }).then((x) => x.json());
+          if (res.error) throw new Error(res.error);
+
+          $("p-shop").textContent = res.shop || "";
+          $("p-rvn").textContent = `${res.quote.rvn} RVN`;
+          $("p-fiat").textContent =
+            currency === "RVN" ? "" : `${fmt(total)} · 지금 시세로 계산했습니다`;
+          $("p-addr").textContent = res.address;
+          // 표준 URI. 버튼과 QR 이 같은 것을 가리켜야 한다 — 하나만 고치면
+          // 다른 하나가 옛 금액을 들고 있게 된다.
+          const uri = `raven:${res.address}?amount=${res.quote.rvn}`;
+          $("p-open").href = uri;
+          $("p-qrlink").href = uri;
+          $("p-qr").innerHTML = qrSvg(uri);
+          countdown(res.quote.expires_at);
+          watchOrder(res.address);
+          paying = true;
+          if (KIOSK) {
+            // 태블릿에는 지갑이 없다. 손님이 자기 폰으로 QR 을 찍는다.
+            $("p-title").textContent = "휴대폰으로 QR을 찍어 결제하세요";
+            $("p-open").style.display = "none";
+            $("p-openhint").textContent = "가게 화면의 QR을 손님 휴대폰 카메라로 찍으면 지갑이 열립니다.";
+          }
+          $("paydlg").showModal();
+        } catch (e) {
+          alert(e.message || e);
+        }
+        // 주문이 생겼으면 다시 켜지 않는다. 당황한 손님이 한 번 더 누르면
+        // /api/order 가 또 나가고 주문이 둘이 된다.
+        if (!paying) $("order").disabled = !openState.open;
+      };
+
+      // 결제 창을 닫아도 주문은 살아 있다. 닫았다고 주문이 취소되는 것이
+      // 아니므로, 다시 주문할 수 있게 하려면 손님이 그렇게 말해야 한다.
+      function orderAgain() {
+        paying = false;
+        $("order").disabled = false;
+      }
+
+      // 주문이 어디까지 왔는지. 손님은 이 화면을 열어 두고 기다린다.
+      let statePoll, lastState = "", ticket = 0;
+      const STATE_KO = {
+        // 아직 돈이 안 들어온 상태. 이 줄이 없어서 서버가 곧장 「결제 확인됨」을
+        // 답했고, 손님은 결제하기도 전에 확인 화면을 봤다.
+        waiting: ["입금을 기다립니다", "결제하시면 이 화면이 저절로 바뀝니다"],
+        paid: ["결제 확인됨", "가게가 곧 시작합니다"],
+        making: ["만드는 중", "조금만 기다려 주세요"],
+        ready: ["나왔습니다", "카운터에서 받아 가세요"],
+        done: ["전달됨", "감사합니다"],
+      };
+
+      function watchOrder(address) {
+        clearInterval(statePoll);
+        // 새 주문이다. 앞 손님의 상태와 번호를 지우지 않으면, 같은 상태로 시작한
+        // 두 번째 손님은 "바뀐 게 없다"로 걸러져 번호를 영영 못 본다.
+        lastState = "";
+        ticket = 0;
+        $("p-state").innerHTML = "";
+        const tick = async () => {
+          try {
+            const r = await fetch(`/api/order-state?a=${encodeURIComponent(address)}`).then((x) => x.json());
+            if (r.ticket) ticket = r.ticket;
+            // 서버가 이 주문을 모른다면 (다시 켜졌거나 오래돼 지워졌다) 아무 말도
+            // 하지 않는다. 빈 상자를 그리는 것보다 QR 을 그대로 두는 편이 낫다.
+            if (!STATE_KO[r.state]) return;
+            if (r.state === lastState) return;
+            lastState = r.state;
+
+            const [title, sub] = STATE_KO[r.state];
+            const isReady = r.state === "ready";
+            $("p-state").innerHTML =
+              `<div style="margin-top:16px;padding:16px;border-radius:12px;
+                    background:${isReady ? "var(--accent)" : "var(--panel)"};
+                    color:${isReady ? "#fff" : "inherit"}">
+                 ${ticket ? `<div style="font-size:12px;opacity:.75">주문번호</div>
+                             <div style="font-size:34px;font-weight:700;line-height:1.1">${ticket}</div>` : ""}
+                 <div style="font-size:${isReady ? "21" : "16"}px;font-weight:600;margin-top:6px">${title}</div>
+                 <div style="font-size:13px;opacity:.8">${sub}</div>
+               </div>`;
+
+            // 나왔을 때만 소리와 진동. 매 단계 울리면 사람들이 폰을 엎어 둔다.
+            if (isReady) {
+              try {
+                const ac = new (window.AudioContext || window.webkitAudioContext)();
+                [0, 0.18].forEach((t) => {
+                  const o = ac.createOscillator(), g = ac.createGain();
+                  o.connect(g); g.connect(ac.destination);
+                  o.frequency.value = 880;
+                  g.gain.setValueAtTime(0.001, ac.currentTime + t);
+                  g.gain.exponentialRampToValueAtTime(0.3, ac.currentTime + t + 0.02);
+                  g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + t + 0.14);
+                  o.start(ac.currentTime + t); o.stop(ac.currentTime + t + 0.16);
+                });
+              } catch {}
+              try { navigator.vibrate?.([200, 100, 200]); } catch {}
+            }
+          } catch {}
+        };
+        tick();
+        statePoll = setInterval(tick, 5000);
+      }
+
+      let timer;
+      function countdown(expiresAt) {
+        clearInterval(timer);
+        const tick = () => {
+          const left = expiresAt - Math.floor(Date.now() / 1000);
+          // 시세가 흔들리면 가게가 받는 금액이 달라진다. 시간이 지나면 다시 받아야 한다.
+          $("p-timer").textContent =
+            left > 0
+              ? `이 금액은 ${Math.floor(left / 60)}분 ${left % 60}초 동안 유효합니다`
+              : "시간이 지났습니다. 창을 닫고 다시 주문해 주세요.";
+          if (left <= 0) clearInterval(timer);
+        };
+        tick();
+        timer = setInterval(tick, 1000);
+      }
+
+      // 닫아도 주문은 살아 있다. 상태 추적을 끊으면 "나왔습니다"가 영영 안
+      // 오고, 손님은 카운터에서 자기 커피가 나온 줄 모른 채 서 있게 된다.
+      // 시세 타이머만 멈춘다 — 그건 창이 떠 있을 때만 쓸모가 있다.
+      $("p-close").onclick = () => {
+        clearInterval(timer);
+        $("paydlg").close();
+        if (KIOSK) kioskReset();
+        else orderAgain();
+      };
+
+      $("qgo").onclick = async () => {
+        const question = $("q").value.trim();
+        if (!question) return;
+        $("a").className = "answer";
+        $("a").textContent = "…";
+        try {
+          const r = await fetch("/api/ask", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ question }),
+          }).then((x) => x.json());
+          if (r.error) throw new Error(r.error);
+          $("a").textContent = r.answer;
+        } catch (e) {
+          $("a").className = "answer err";
+          $("a").textContent = e.message || e;
+        }
+      };
+
+      // QR은 서버에서 받아온다 — 손님 폰에 라이브러리를 내려받게 하지 않는다.
+      function qrSvg(text) {
+        return `<img src="/api/qr?text=${encodeURIComponent(text)}" alt="결제 QR" style="width:200px;height:200px;background:#fff;padding:9px;border-radius:10px;display:block;margin:16px auto 8px" />`;
+      }
+
+      load();
+    </script>
+  </body>
+</html>

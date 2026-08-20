@@ -1,0 +1,39 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# ── 절대 커밋되면 안 되는 것 ───────────────────────────────────────────────
+# 지갑과 열쇠는 저장소에 들어가는 순간 되돌릴 수 없다. 한 번 푸시되면
+# 지웠다고 사라지지 않고, 히스토리에 영원히 남는다.
+wallet.dat
+*.wallet
+.env
+.env.*
+*.key
+*.pem
+복구카드*.html
+테이블QR*.html
+# 만들어 둔 백업 묶음이 소스 폴더에 남아 같이 올라가는 사고를 막는다.
+*-백업-*.zip
+backup-*.zip

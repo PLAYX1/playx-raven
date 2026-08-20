@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>검표</title>
+    <style>
+      /* 문 앞 태블릿. 팔 길이에서 한 번에 읽혀야 하고, 하루 종일 켜져 있다. */
+      :root {
+        --bg: #ffffff; --fg: #141518; --muted: #4b5568; --line: #dde3f0;
+        --ok: #1c7a45; --no: #b32b22; --panel: #f7f8fb;
+        --safe-b: env(safe-area-inset-bottom, 0px);
+      }
+      @media (prefers-color-scheme: dark) {
+        :root { --bg: #0d0f13; --fg: #eceef2; --muted: #b3bdd6; --line: #2a2f3a;
+                --ok: #4fbe83; --no: #e8776c; --panel: #171a21; }
+      }
+      * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+      body { margin: 0; background: var(--bg); color: var(--fg);
+             font: 17px/1.6 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", system-ui, sans-serif;
+             padding: 22px 20px calc(24px + var(--safe-b)); }
+      h1 { margin: 0 0 4px; font-size: 19px; }
+      .sub { color: var(--muted); font-size: 14px; }
+
+      input { width: 100%; padding: 20px 18px; margin-top: 18px; border-radius: 13px;
+              border: 2px solid var(--line); background: var(--bg); color: var(--fg);
+              font-size: 22px; font-family: inherit; }
+      input:focus { outline: none; border-color: var(--fg); }
+
+      /* 판정은 한 화면을 덮는다. 곁눈질로 읽혀야 한다. */
+      .verdict { margin-top: 20px; border-radius: 16px; padding: 28px 24px; text-align: center;
+                 display: none; }
+      .verdict.on { display: block; }
+      .verdict.yes { background: color-mix(in srgb, var(--ok) 14%, transparent);
+                     border: 2px solid var(--ok); }
+      .verdict.no { background: color-mix(in srgb, var(--no) 12%, transparent);
+                    border: 2px solid var(--no); }
+      .big { font-size: 40px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.2; }
+      .verdict.yes .big { color: var(--ok); }
+      .verdict.no .big { color: var(--no); }
+      .who { font-size: 24px; font-weight: 600; margin-top: 10px; }
+      .detail { color: var(--muted); font-size: 16px; margin-top: 6px; }
+
+      button { margin-top: 18px; width: 100%; padding: 20px; border-radius: 13px; border: 0;
+               background: var(--ok); color: #fff; font-size: 20px; font-weight: 600;
+               font-family: inherit; cursor: pointer; }
+      button.ghost { background: transparent; color: var(--fg); border: 1px solid var(--line);
+                     font-weight: 400; font-size: 16px; padding: 14px; }
+      .note { margin-top: 26px; font-size: 13.5px; color: var(--muted); line-height: 1.75; }
+    </style>
+  </head>
+  <body>
+    <h1>검표</h1>
+    <div class="sub">회원 이름·전화 뒷자리·회원번호를 넣으세요</div>
+
+    <input id="q" placeholder="홍길동 · 5678 · A7K2" autocomplete="off" autofocus />
+
+    <div class="verdict" id="v">
+      <div class="big" id="v-big"></div>
+      <div class="who" id="v-who"></div>
+      <div class="detail" id="v-detail"></div>
+      <button id="v-in" style="display:none">입장 처리</button>
+      <button class="ghost" id="v-next">다음 사람</button>
+    </div>
+
+    <p class="note">
+      이 화면은 <b>확인만</b> 합니다. 주문도, 회원 명단도, 지갑도 볼 수 없습니다.<br />
+      문 앞에 놓고 하루 종일 켜 두는 화면이라 그렇게 만들었습니다.
+    </p>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const q = new URLSearchParams(location.search).get("t");
+      const token = q || sessionStorage.getItem("st") || "";
+      if (q) {
+        sessionStorage.setItem("st", token);
+        // 주소창에 열쇠를 남기지 않는다. 문 앞 태블릿은 아무나 만진다.
+        history.replaceState(null, "", "/scan");
+      }
+      const H = { "x-playx-token": token, "content-type": "application/json" };
+
+      let current = null, timer;
+
+      $("q").oninput = () => {
+        clearTimeout(timer);
+        const v = $("q").value.trim();
+        if (v.length < 2) { $("v").className = "verdict"; return; }
+        timer = setTimeout(check, 250);
+      };
+
+      async function check() {
+        const query = $("q").value.trim();
+        try {
+          const r = await fetch("/api/scan/check", {
+            method: "POST", headers: H, body: JSON.stringify({ query }),
+          }).then((x) => x.json());
+
+          if (!r.found) {
+            current = null;
+            $("v").className = "verdict no on";
+            $("v-big").textContent = "찾지 못함";
+            $("v-who").textContent = "";
+            $("v-detail").textContent = "이름 일부나 전화 뒷자리로 다시 해보세요";
+            $("v-in").style.display = "none";
+            return;
+          }
+
+          current = r;
+          const ok = r.valid;
+          $("v").className = `verdict ${ok ? "yes" : "no"} on`;
+          $("v-big").textContent = ok ? "들어오세요" : "안 됩니다";
+          $("v-who").textContent = r.name || "";
+          $("v-detail").textContent = ok
+            ? r.kind === "punch" ? `${r.left}회 남음` : ""
+            : r.why || "";
+          $("v-in").style.display = ok ? "" : "none";
+        } catch (e) {
+          $("v").className = "verdict no on";
+          $("v-big").textContent = "확인 실패";
+          $("v-detail").textContent = String(e);
+        }
+      }
+
+      $("v-in").onclick = async () => {
+        if (!current) return;
+        try {
+          const r = await fetch("/api/scan/in", {
+            method: "POST", headers: H, body: JSON.stringify({ asset: current.asset }),
+          }).then((x) => x.json());
+          if (r.error) throw new Error(r.error);
+          $("v-big").textContent = "처리됨";
+          $("v-detail").textContent =
+            current.kind === "punch" ? `${r.left}회 남음` : "";
+          $("v-in").style.display = "none";
+          // 다음 사람이 바로 설 수 있게 자동으로 비운다.
+          setTimeout(reset, 2500);
+        } catch (e) {
+          $("v-detail").textContent = String(e);
+        }
+      };
+
+      function reset() {
+        $("q").value = "";
+        $("v").className = "verdict";
+        current = null;
+        $("q").focus();
+      }
+      $("v-next").onclick = reset;
+    </script>
+  </body>
+</html>

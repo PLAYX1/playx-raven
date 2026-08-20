@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>주문</title>
+    <style>
+      /* 직원 화면. 손이 젖어 있고, 한 손이고, 뒤에 줄이 서 있다. */
+      :root {
+        --bg: #ffffff; --fg: #141518; --muted: #4b5568; --line: #dde3f0;
+        --panel: #f7f8fb; --accent: #384192; --warn: #96601a; --ok: #1c7a45;
+        --safe-b: env(safe-area-inset-bottom, 0px);
+      }
+      @media (prefers-color-scheme: dark) {
+        :root { --bg: #0d0f13; --fg: #eceef2; --muted: #b3bdd6; --line: #2a2f3a;
+                --panel: #171a21; --accent: #7a90de; --warn: #e0ad50; --ok: #4fbe83; }
+      }
+      * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+      body { margin: 0; background: var(--bg); color: var(--fg);
+             font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", system-ui, sans-serif;
+             padding: 18px 16px calc(88px + var(--safe-b)); }
+      h1 { margin: 0 0 2px; font-size: 19px; }
+      .sub { color: var(--muted); font-size: 13.5px; }
+
+      .ticket { border: 1px solid var(--line); border-left: 5px solid var(--line);
+                border-radius: 13px; padding: 15px 17px; margin-top: 12px; background: var(--panel); }
+      .ticket.paid { border-left-color: var(--warn); }
+      .ticket.making { border-left-color: var(--accent); }
+      .ticket.ready { border-left-color: var(--ok); }
+      .no { font-size: 32px; font-weight: 700; line-height: 1.1; }
+      .when { color: var(--muted); font-size: 13.5px; margin-top: 2px; }
+      .items { margin-top: 9px; font-size: 15px; }
+      /* 56px. 주방에서 젖은 손으로 누른다. */
+      .ticket button { margin-top: 13px; width: 100%; min-height: 56px; border-radius: 12px;
+                       border: 0; background: var(--accent); color: #fff; font-size: 17px;
+                       font-weight: 600; font-family: inherit; cursor: pointer; }
+
+      .empty { border: 1px dashed var(--line); border-radius: 13px; padding: 30px 20px;
+               text-align: center; color: var(--muted); font-size: 15px; line-height: 1.8;
+               margin-top: 14px; }
+
+      nav { position: fixed; left: 0; right: 0; bottom: 0; background: var(--bg);
+            border-top: 1px solid var(--line); display: flex; padding-bottom: var(--safe-b); }
+      nav button { flex: 1; border: 0; border-radius: 0; background: none; padding: 15px 4px;
+                   font-size: 14px; color: var(--muted); font-family: inherit; }
+      nav button.on { color: var(--accent); font-weight: 600; }
+      .pane { display: none; } .pane.on { display: block; }
+
+      input { width: 100%; padding: 16px; margin-top: 14px; border-radius: 12px;
+              border: 1px solid var(--line); background: var(--bg); color: var(--fg);
+              font-size: 18px; font-family: inherit; }
+      .mrow { border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px;
+              margin-top: 11px; background: var(--panel); }
+      .mrow .nm { font-size: 17px; font-weight: 600; }
+      .mrow .st { font-size: 14px; margin-top: 3px; }
+      .mrow .st.ok { color: var(--ok); } .mrow .st.no { color: var(--warn); }
+      .note { margin-top: 24px; font-size: 13px; color: var(--muted); line-height: 1.8; }
+      /* 돈이 나가는 버튼이 브라우저 기본 크기로 서 있었다. 이 화면의 주 버튼과
+         같은 손가락 크기를 준다. 색은 겁주지 않는다 — 환불은 직원의 정상 업무고,
+         빨갛게 만들면 해야 할 때 망설인다. 되돌릴 수 없다는 경고는 아래 문장이
+         맡는다. (var(--warn) 은 다크모드에서 밝은 노랑이라 흰 글씨가 안 읽힌다.) */
+      #rf-go { width: 100%; min-height: 56px; margin-top: 18px; border: 0;
+               border-radius: 12px; background: var(--accent); color: #fff;
+               font-size: 17px; font-weight: 600; font-family: inherit; cursor: pointer; }
+      #rf-go:disabled { opacity: .5; }
+      #rf-result { margin-top: 14px; font-size: 15px; line-height: 1.7; }
+    </style>
+  </head>
+  <body>
+    <h1 id="title">주문</h1>
+    <div class="sub" id="when">불러오는 중…</div>
+
+    <div class="pane on" id="p-orders">
+      <div id="list"></div>
+    </div>
+
+    <div class="pane" id="p-refund">
+      <div id="rf-limits" class="note"></div>
+      <!-- 체인은 보낸 사람을 기록하지 않는다. 그래서 손님에게 주소를 물어야
+           하고, 그 사실을 화면이 먼저 말해야 한다. -->
+      <p class="note">
+        <b>손님에게 받을 주소를 물어보세요.</b> 체인은 누가 보냈는지 기록하지 않아서
+        돌려줄 곳을 우리가 알 수 없습니다.
+      </p>
+      <label>손님 주소<input id="rf-to" autocomplete="off" spellcheck="false" /></label>
+      <label>금액 (원)<input id="rf-krw" type="number" inputmode="numeric" /></label>
+      <label>사유<input id="rf-why" value="주문 취소" autocomplete="off" /></label>
+      <button id="rf-go">환불하기</button>
+      <div id="rf-result"></div>
+    </div>
+
+    <div class="pane" id="p-member">
+      <input id="mq" placeholder="이름 · 전화 뒷자리" autocomplete="off" />
+      <div id="mres"></div>
+    </div>
+
+    <p class="note">
+      이 화면에서는 <b>지갑도 설정도 볼 수 없습니다.</b><br />
+      주문을 넘기고, 회원을 확인하고, <b>한도 안에서 환불</b>만 됩니다.
+    </p>
+
+    <nav>
+      <button class="on" data-p="orders">주문</button>
+      <button data-p="member">회원 확인</button>
+      <button data-p="refund">환불</button>
+    </nav>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const q = new URLSearchParams(location.search).get("t");
+      const token = q || sessionStorage.getItem("ft") || "";
+      if (q) {
+        sessionStorage.setItem("ft", token);
+        history.replaceState(null, "", "/staff");
+      }
+      const H = { "x-playx-token": token, "content-type": "application/json" };
+
+      // 환불 탭이 이걸 부르는데 정의가 없었다. 함수가 없으면 그 줄에서 멈추므로
+      // 화면은 오류 없이 그냥 비어 있었다 — 직원은 "환불이 안 되네" 라고 읽는다.
+      const api = (path, body) =>
+        fetch(path, body ? { method: "POST", headers: H, body: JSON.stringify(body) } : { headers: H })
+          .then((r) => r.json());
+
+      const ago = (s) => {
+        const d = Math.floor(Date.now() / 1000) - s;
+        if (d < 60) return "방금";
+        if (d < 3600) return `${Math.floor(d / 60)}분 전`;
+        return `${Math.floor(d / 3600)}시간 전`;
+      };
+
+      document.querySelectorAll("[data-p]").forEach((b) => {
+        b.onclick = () => {
+          document.querySelectorAll("[data-p]").forEach((x) => x.classList.toggle("on", x === b));
+          document.querySelectorAll(".pane").forEach((p) =>
+            p.classList.toggle("on", p.id === `p-${b.dataset.p}`)
+          );
+          $("title").textContent =
+            { orders: "주문", member: "회원 확인", refund: "환불" }[b.dataset.p] || "주문";
+          if (b.dataset.p === "refund") loadLimits();
+        };
+      });
+
+      // ── 환불 ──────────────────────────────────────────────────────
+      async function loadLimits() {
+        try {
+          const l = await api("/api/staff/refund/limits");
+          $("rf-limits").innerHTML =
+            `한 번에 <b>${l.once_krw.toLocaleString()}원</b>까지 · ` +
+            `오늘 남은 한도 <b>${l.left_krw.toLocaleString()}원</b>` +
+            (l.used_krw > 0 ? ` (${l.used_krw.toLocaleString()}원 나감)` : "");
+        } catch (e) {
+          $("rf-limits").textContent = String(e.message || e);
+        }
+      }
+
+      // 금액을 치는 동안 버튼이 따라 바뀐다. 환불은 직원이 매일 하는 일이라
+      // 확인창을 넣으면 계산대가 멈춘다 — 대신 대가를 버튼에 박는다.
+      const rfLabel = () => {
+        const n = Number(($("rf-krw") as HTMLInputElement).value || 0);
+        $("rf-go").textContent = n > 0 ? `${n.toLocaleString()}원 환불하기` : "환불하기";
+      };
+      $("rf-krw").addEventListener("input", rfLabel);
+
+      $("rf-go").onclick = async () => {
+        const to = $("rf-to").value.trim();
+        const krw = Number($("rf-krw").value);
+        if (!to || !(krw > 0)) {
+          $("rf-result").innerHTML = `<div class="bad">주소와 금액을 넣어 주세요.</div>`;
+          return;
+        }
+        $("rf-go").disabled = true;
+        const was = $("rf-go").textContent;
+        $("rf-go").textContent = "보내는 중…";
+        try {
+          const r = await api("/api/staff/refund", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ to, krw, reason: $("rf-why").value, passphrase: null }),
+          });
+          $("rf-result").innerHTML =
+            `<div class="ok"><b>${r.krw.toLocaleString()}원 (${r.rvn} RVN) 돌려줬습니다.</b><br />
+             오늘 남은 한도 ${r.left_krw.toLocaleString()}원 · 사장님께 알림이 갔습니다.</div>`;
+          $("rf-to").value = "";
+          $("rf-krw").value = "";
+          loadLimits();
+        } catch (e) {
+          $("rf-result").innerHTML = `<div class="bad">${e.message || e}</div>`;
+        }
+        $("rf-go").textContent = was;
+        $("rf-go").disabled = false;
+      };
+
+      const NEXT = { paid: "making", making: "ready", ready: "done" };
+      const LABEL = { paid: "만들기 시작", making: "나왔다고 알리기", ready: "전달 완료" };
+      const SHOWN = { paid: "새 주문", making: "만드는 중", ready: "나옴" };
+
+      async function load() {
+        try {
+          const [o, st] = await Promise.all([
+            fetch("/api/admin/orders", { headers: H }).then((r) => r.json()),
+            fetch("/api/admin/states", { headers: H }).then((r) => r.json()),
+          ]);
+          const states = new Map((st.orders || []).map((x) => [x.address, x]));
+          const list = (o.payments || []).filter((p) => p.settled);
+
+          // done 은 숨긴다. 끝난 것을 계속 보여주면 새 주문이 아래로 밀린다.
+          const live = list.filter((p) => (states.get(p.address)?.state || "paid") !== "done");
+
+          $("list").innerHTML = live.length
+            ? live
+                .map((p) => {
+                  const s = states.get(p.address)?.state || "paid";
+                  const t = states.get(p.address)?.ticket;
+                  const tbl = states.get(p.address)?.table;
+                  return `<div class="ticket ${s}">
+                    <!-- 자리로 가져다주는 가게는 번호를 부르지 않는다.
+                         테이블이 있으면 그게 번호보다 먼저 보여야 한다. -->
+                    <div class="no">${tbl ? tbl + "번 테이블" : (t || "—")}</div>
+                    ${tbl && t ? `<div class="when">주문번호 ${t}</div>` : ""}
+                    <div class="when">${SHOWN[s]} · ${p.time ? ago(p.time) : ""}</div>
+                    <div class="items">${p.amount} RVN</div>
+                    ${NEXT[s] ? `<button data-adv="${p.address}" data-to="${NEXT[s]}">${LABEL[s]}</button>` : ""}
+                  </div>`;
+                })
+                .join("")
+            : `<div class="empty">
+                 아직 주문이 없습니다.<br />
+                 손님이 QR로 주문하면 <b>번호표가 여기 뜹니다.</b>
+               </div>`;
+
+          $("list").querySelectorAll("[data-adv]").forEach((b) => {
+            b.onclick = async () => {
+              b.disabled = true;
+              await fetch("/api/admin/state", {
+                method: "POST", headers: H,
+                body: JSON.stringify({ address: b.dataset.adv, state: b.dataset.to }),
+              });
+              load();
+            };
+          });
+          $("when").textContent = `${new Date().toLocaleTimeString("ko-KR")} 기준 · ${live.length}건`;
+        } catch (e) {
+          $("when").textContent = String(e);
+        }
+      }
+
+      let mt;
+      $("mq").oninput = () => {
+        clearTimeout(mt);
+        mt = setTimeout(findMember, 250);
+      };
+
+      async function findMember() {
+        const query = $("mq").value.trim();
+        if (query.length < 2) { $("mres").innerHTML = ""; return; }
+        try {
+          const r = await fetch("/api/scan/check", {
+            method: "POST", headers: H, body: JSON.stringify({ query }),
+          }).then((x) => x.json());
+          $("mres").innerHTML = r.found
+            ? `<div class="mrow">
+                 <div class="nm">${r.name || ""}</div>
+                 <div class="st ${r.valid ? "ok" : "no"}">
+                   ${r.valid ? "들어오셔도 됩니다" : r.why || "안 됩니다"}
+                   ${r.valid && r.kind === "punch" ? ` · ${r.left}회 남음` : ""}
+                 </div>
+               </div>`
+            : `<div class="mrow"><div class="st no">찾지 못했습니다</div></div>`;
+        } catch (e) {
+          $("mres").innerHTML = `<div class="mrow"><div class="st no">${e}</div></div>`;
+        }
+      }
+
+      load();
+      setInterval(load, 20000);
+    </script>
+  </body>
+</html>

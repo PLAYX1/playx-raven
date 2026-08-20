@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <!-- 손님 폰은 인터넷이 없을 수 있다. 바깥으로 나가는 길을 아예 막아 둔다 —
+         코드를 읽어서 "안 나간다"고 믿는 것보다 브라우저가 막는 편이 낫다.
+         connect-src 'self' 라서 12단어가 실수로라도 밖으로 새어 나갈 수 없다. -->
+    <meta http-equiv="Content-Security-Policy"
+          content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline';
+                   img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'" />
+    <title>내 지갑</title>
+    <style>
+      /* 손님 화면. 가게 와이파이만 잡힌 폰에서, 70대도 쓴다.
+         바깥에서 받아오는 것은 아무것도 없다 — 글꼴도 그림도 전부 여기 있다. */
+      :root {
+        --bg: #ffffff; --fg: #141518; --muted: #6b7280; --line: #e6e7ea;
+        --panel: #fafafb; --accent: #3b3f8f; --warn: #b45309; --ok: #166534;
+        --safe-b: env(safe-area-inset-bottom, 0px);
+      }
+      @media (prefers-color-scheme: dark) {
+        :root { --bg: #101114; --fg: #eceef2; --muted: #9aa0ab; --line: #26282e;
+                --panel: #17191d; --accent: #8d92e8; --warn: #d99b3f; --ok: #6ee7a8; }
+      }
+      * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+      body { margin: 0; background: var(--bg); color: var(--fg);
+             font: 17px/1.65 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", system-ui, sans-serif;
+             padding: 0 0 calc(28px + var(--safe-b)); }
+
+      /* 화면은 한 번에 하나만. body[data-screen] 이 고른다. */
+      section { display: none; padding: 22px 18px 0; }
+      body[data-screen="loading"]  #s-loading,
+      body[data-screen="welcome"]  #s-welcome,
+      body[data-screen="unlock"]   #s-unlock,
+      body[data-screen="words"]    #s-words,
+      body[data-screen="quiz"]     #s-quiz,
+      body[data-screen="restore"]  #s-restore,
+      body[data-screen="password"] #s-password,
+      body[data-screen="main"]     #s-main,
+      body[data-screen="send"]     #s-send,
+      body[data-screen="confirm"]  #s-confirm,
+      body[data-screen="sent"]     #s-sent { display: block; }
+
+      h1 { margin: 0 0 6px; font-size: 24px; letter-spacing: -0.02em; }
+      h2 { margin: 0 0 6px; font-size: 20px; letter-spacing: -0.01em; }
+      p  { margin: 0 0 14px; }
+      .sub { color: var(--muted); font-size: 15px; margin: 0 0 18px; }
+
+      /* 44px 미만은 손가락으로 못 누른다. */
+      button, .btn {
+        display: block; width: 100%; min-height: 56px; padding: 16px;
+        border-radius: 13px; border: 1px solid var(--line);
+        background: var(--bg); color: var(--fg);
+        font: inherit; font-size: 17px; font-weight: 600;
+        text-align: center; cursor: pointer; margin-bottom: 12px;
+      }
+      button.primary { background: var(--accent); color: #fff; border-color: transparent; }
+      button.quiet { font-weight: 400; color: var(--muted); min-height: 48px; }
+      button:disabled { opacity: 0.4; }
+      .row2 { display: flex; gap: 10px; }
+      .row2 button { margin-bottom: 12px; }
+
+      input, textarea {
+        display: block; width: 100%; min-height: 56px; padding: 15px 14px;
+        border-radius: 12px; border: 1px solid var(--line);
+        background: var(--bg); color: var(--fg);
+        font: inherit; font-size: 17px; margin-bottom: 12px;
+      }
+      textarea { min-height: 128px; line-height: 1.7; resize: vertical; }
+      label { display: block; font-size: 15px; color: var(--muted); margin-bottom: 6px; }
+
+      .msg { font-size: 15px; margin: 0 0 14px; min-height: 22px; color: var(--muted); }
+      .msg.err { color: var(--warn); }
+      .msg.ok  { color: var(--ok); }
+      .note { font-size: 14px; color: var(--muted); line-height: 1.6;
+              padding: 12px 14px; border-radius: 11px; background: var(--panel);
+              border: 1px solid var(--line); margin-bottom: 16px; }
+      .note.warn { color: var(--warn); }
+
+      .card { border: 1px solid var(--line); border-radius: 14px; background: var(--panel);
+              padding: 18px; margin-bottom: 16px; }
+
+      /* 종이에 옮겨 적어야 하는 글자다. 작으면 사람들이 틀리게 적는다. */
+      .words { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;
+               margin-bottom: 18px; }
+      .word { display: flex; align-items: baseline; gap: 9px; padding: 13px 12px;
+              border: 1px solid var(--line); border-radius: 11px; background: var(--panel); }
+      .word .n { color: var(--muted); font-size: 14px; min-width: 20px;
+                 font-variant-numeric: tabular-nums; }
+      .word b { font-size: 20px; font-weight: 700; letter-spacing: 0.01em; word-break: break-all; }
+
+      .opt { margin-bottom: 10px; font-size: 19px; }
+
+      .bal { font-size: 42px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.15;
+             font-variant-numeric: tabular-nums; word-break: break-all; }
+      .bal .u { font-size: 20px; font-weight: 600; color: var(--muted); margin-left: 6px; }
+
+      .addr { display: block; font-size: 15px; line-height: 1.55; word-break: break-all;
+              font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+              padding: 12px 13px; border-radius: 10px; background: var(--bg);
+              border: 1px solid var(--line); margin-bottom: 10px; }
+      #recv-qr { display: block; width: 220px; height: 220px; margin: 4px auto 12px;
+                 background: #fff; padding: 10px; border-radius: 12px; }
+      .idx { font-size: 14px; color: var(--muted); margin-bottom: 8px; }
+
+      .kv { display: flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line);
+            font-size: 16px; }
+      .kv:last-child { border-bottom: 0; }
+      .kv b { flex: none; min-width: 84px; font-weight: 600; color: var(--muted); }
+      .kv span { flex: 1; word-break: break-all; text-align: right; }
+      .kv.big span { font-size: 19px; font-weight: 700; }
+
+      .topbar { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; }
+      .topbar h1 { flex: 1; margin: 0; }
+      .topbar button { width: auto; min-width: 56px; min-height: 44px; padding: 10px 14px;
+                       margin: 0; font-size: 15px; font-weight: 500; }
+      /* 이 줄에서 링크 하나만 버튼과 다르게 보이면 그게 고장으로 읽힌다.
+     `button, .btn` 규칙이 이미 있었는데 그걸 안 쓰고 새 규칙을 지어서,
+     파란 글씨가 두 줄로 접힌 채 버튼 옆에 서 있었다. */
+  #btn-shops { text-decoration: none; margin-bottom: 12px;
+               display: flex; align-items: center; justify-content: center; }
+  /* 두 동사는 같은 무게로 나란히. 받기가 작으면 손님이 결제만 하는
+     지갑으로 읽히고, 받기가 크면 주소 전시장이 된다. */
+  .verbs button { min-height: 60px; font-size: 17px; }
+  /* 연결 상태 한 줄. 점 하나 + 짧은 말. */
+  .link1 { font-size: 13px; color: var(--muted); margin: 10px 0 18px; }
+  .link1 b { color: var(--fg); font-weight: 600; }
+  /* 마스코트. 화면 가운데, 글자 위. 누를 것이 아니므로 손가락을 안 끈다. */
+  .mascot { display: block; margin: 6px auto 14px; max-width: 62%; height: auto;
+            border-radius: 18px; }
+  #s-loading { text-align: center; padding-top: 40px; }
+</style>
+  </head>
+  <body data-screen="loading">
+    <!-- 번들이 늦어도 화면이 비어 보이지 않게. -->
+    <section id="s-loading">
+      <img class="mascot" src="/raven-head.png" alt="" width="180" />
+      <p class="sub">지갑을 여는 중…</p>
+    </section>
+
+    <section id="s-welcome">
+      <!-- 마스코트는 여기와 기다리는 화면, 그리고 빈 목록에만 나온다.
+           버튼 옆이나 금액 옆에 두면 눌러야 할 것을 가린다. -->
+      <img class="mascot" src="/raven-hello.png" alt="" width="210" />
+      <h1>내 지갑</h1>
+      <p class="sub">이 지갑은 손님 폰 안에만 있습니다. 가게도, 저희도 열 수 없습니다.</p>
+      <button id="btn-new" class="primary">새 지갑 만들기</button>
+      <button id="btn-restore">12단어로 되살리기</button>
+      <div class="note">
+        12단어는 이 지갑의 열쇠 전부입니다. 종이에 적어 두지 않으면
+        폰을 바꾸거나 브라우저를 지우는 날 돈을 되찾을 방법이 없습니다.
+      </div>
+    </section>
+
+    <section id="s-unlock">
+      <h1>지갑 열기</h1>
+      <p class="sub">이 폰에 저장해 둔 지갑이 있습니다. 정해 두신 암호를 넣어 주세요.</p>
+      <!-- 지문으로 잠근 지갑이면 이 줄이 나온다. 숫자 칸을 먼저 보여 주면
+           지문으로 잠근 사람은 있지도 않은 숫자를 떠올리려 한다. -->
+      <div id="unlock-bio" style="display:none">
+        <button id="btn-unlock-bio" class="primary">지문 · 얼굴로 열기</button>
+        <p class="sub">
+          안 되면 아래 12단어로 되살리세요. 기기를 바꾸셨다면 그 길뿐입니다.
+        </p>
+      </div>
+      <label for="unlock-pass">암호</label>
+      <input id="unlock-pass" type="password" autocomplete="current-password" inputmode="text" />
+      <!-- 지문 쪽 안내도 이 칸에 쓴다. 숨겨진 칸에 오류를 찍으면 암호가
+           틀려도 화면이 아무 말도 안 한다. -->
+      <div class="msg" id="unlock-msg"></div>
+      <button id="btn-unlock" class="primary">열기</button>
+      <button id="btn-forget" class="quiet">이 폰에서 지우고 새로 시작하기</button>
+    </section>
+
+    <section id="s-words">
+      <h1>12단어를 종이에 적으세요</h1>
+      <p class="sub">
+        사진으로 찍지 마세요. 카카오톡이나 메모앱에도 넣지 마세요.
+        종이에 적어서 남이 못 보는 곳에 두는 것이 가장 안전합니다.
+      </p>
+      <div class="words" id="words-grid"></div>
+      <button id="btn-words-done" class="primary">다 적었습니다</button>
+      <button id="btn-words-back" class="quiet">그만두기</button>
+    </section>
+
+    <section id="s-quiz">
+      <h1>적으신 것을 확인합니다</h1>
+      <p class="sub">종이를 보고 고르시면 됩니다. <span id="quiz-progress"></span></p>
+      <h2 id="quiz-q"></h2>
+      <div class="msg" id="quiz-msg"></div>
+      <div id="quiz-opts"></div>
+    </section>
+
+    <section id="s-restore">
+      <h1>12단어로 되살리기</h1>
+      <p class="sub">적어 두신 12단어를 순서대로 띄어쓰기로 구분해 적어 주세요.</p>
+      <textarea id="restore-input" autocapitalize="none" autocomplete="off"
+                spellcheck="false" placeholder="예) apple banana cherry …"></textarea>
+      <div class="msg" id="restore-msg"></div>
+      <button id="btn-restore-go" class="primary">되살리기</button>
+      <button id="btn-restore-back" class="quiet">뒤로</button>
+    </section>
+
+    <section id="s-password">
+      <h1>잠금번호를 정하세요</h1>
+      <p class="sub">
+        이 폰에서 지갑을 열 때 씁니다. <b>숫자 6자리면 됩니다.</b>
+      </p>
+      <!-- 커피값 지갑이다. 폰 자체가 이미 잠겨 있는데 그 위에 긴 비밀번호를
+           또 요구하면, 사람은 그걸 이기려고 123456 을 쓴다. 숫자 여섯 자리는
+           숫자 키패드가 뜨고 빨리 쳐진다. -->
+      <label for="pw1">잠금번호</label>
+      <input id="pw1" type="password" inputmode="numeric" autocomplete="new-password" />
+      <label for="pw2">한 번 더</label>
+      <input id="pw2" type="password" inputmode="numeric" autocomplete="new-password" />
+      <div class="msg" id="pw-msg"></div>
+      <button id="btn-pw-save" class="primary">저장하고 시작</button>
+      <!-- 폰은 이미 얼굴로 잠겨 있다. 그 위에 숫자를 또 요구하면 사람은
+           123456 을 쓰고, 그러면 잠금은 연극이 된다. 되는 기기에서만 보인다. -->
+      <button id="btn-pw-bio" class="ghost">지문 · 얼굴로 잠그기</button>
+      <!-- 건너뛸 수 있어야 한다. 다만 건너뛴 사실을 화면이 계속 말한다. -->
+      <button id="btn-pw-skip" class="ghost">잠그지 않고 쓰기</button>
+      <div class="note warn">
+        잠금번호를 잊으면 저희도 풀어 드릴 수 없습니다. 그때는 종이에 적어 둔
+        12단어로만 되살릴 수 있습니다.<br /><br />
+        <b>지문·얼굴로 잠그면</b> 그 열쇠는 이 기기의 보안 칩 안에만 있습니다.
+        폰을 잃거나 바꾸면 이 브라우저의 사본은 못 엽니다 — 그때도
+        <b>12단어로 되살립니다.</b> 12단어가 원래 진짜 열쇠입니다.
+      </div>
+    </section>
+
+    <!-- http 주소로 열렸을 때. 12단어를 못 지키는 화면에 12단어를 치게 두면
+         안 된다. -->
+    <section id="s-insecure"></section>
+
+    <section id="s-main">
+      <div class="note warn" id="openwarn" style="display:none"></div>
+      <div class="topbar">
+        <h1>내 지갑</h1>
+        <button id="btn-lock">잠그기</button>
+      </div>
+
+      <div class="card">
+        <div class="idx">잔액</div>
+        <div class="bal"><span id="balance">0</span><span class="u">RVN</span></div>
+      </div>
+
+      <!-- 연결 상태는 점 하나면 된다. '주소 20개 확인' · '노드가 답했습니다' 는
+           개발자를 안심시키는 말이고, 카운터 앞의 사람에게는 고장 난 기계로
+           읽힌다. 자세한 것은 [찾아보기] 를 누른 뒤에만. -->
+      <div class="link1" id="source-note"></div>
+      <div class="msg" id="scan-status"></div>
+
+      <!-- 이 지갑의 동사는 둘뿐이다. 나머지는 이 둘을 누른 다음에 나온다.
+           탭을 넣지 않는 이유도 같다 — 받기와 보내기는 목적지가 아니라
+           지금 할 일이라, 탭에 가두면 "어느 탭이 결제냐" 부터 고르게 된다. -->
+      <div class="row2 verbs">
+        <button id="btn-recv">받기</button>
+        <button id="btn-send" class="primary">보내기</button>
+      </div>
+
+      <!-- 받기를 눌렀을 때만. 홈에 QR 을 늘 걸어 두면 시각의 주인공이 주소가
+           되고, 그건 지갑이 아니라 주소 전시장이다. -->
+      <div class="card" id="recvbox" style="display:none">
+        <div class="idx">받을 주소 · <span id="recv-index"></span></div>
+        <img id="recv-qr" alt="받을 주소 QR" />
+        <code class="addr" id="recv-addr"></code>
+        <div class="msg" id="recv-msg"></div>
+        <button id="btn-copy">주소 복사하기</button>
+      </div>
+
+      <!-- 잔액이 0 일 때만 나온다. 평소에 '끝까지 찾기' 가 서 있으면 그건
+           "뭔가 덜 됐다" 는 신호로 읽힌다. -->
+      <div id="zerohelp" style="display:none">
+        <div class="note">잔액이 안 보이시나요? 쓰던 주소가 뒤쪽에 있을 수 있습니다.</div>
+        <button id="btn-deep">찾아보기</button>
+      </div>
+
+      <a id="btn-shops" class="btn" href="/shops">가게 둘러보기</a>
+      <button id="btn-refresh" class="quiet">새로고침</button>
+    </section>
+
+    <section id="s-send">
+      <div class="topbar">
+        <h1>보내기</h1>
+        <button id="btn-send-back">뒤로</button>
+      </div>
+      <p class="sub">보낼 수 있는 잔액 <b id="send-have"></b></p>
+
+      <label for="send-to">받는 주소</label>
+      <input id="send-to" autocapitalize="none" autocomplete="off" spellcheck="false"
+             placeholder="R 로 시작하는 주소" />
+
+      <label for="send-amount">금액 (RVN)</label>
+      <input id="send-amount" inputmode="decimal" autocomplete="off" placeholder="0.00" />
+      <button id="btn-send-max" class="quiet">수수료 빼고 전부 넣기</button>
+
+      <div class="msg" id="send-msg"></div>
+      <button id="btn-send-review" class="primary">확인 화면으로</button>
+      <div class="note">
+        보낸 돈은 되돌릴 수 없습니다. 받는 주소를 한 글자씩 확인해 주세요.
+      </div>
+    </section>
+
+    <section id="s-confirm">
+      <h1>이대로 보낼까요?</h1>
+      <div class="card">
+        <div class="kv"><b>받는 곳</b><span id="cf-to"></span></div>
+        <div class="kv big"><b>보낼 금액</b><span id="cf-amount"></span></div>
+        <div class="kv"><b>수수료</b><span id="cf-fee"></span></div>
+        <div class="kv"><b>합계</b><span id="cf-total"></span></div>
+        <div class="kv"><b>거스름</b><span id="cf-change"></span></div>
+      </div>
+      <div class="msg" id="cf-msg"></div>
+      <button id="btn-confirm" class="primary">보내기</button>
+      <button id="btn-cancel" class="quiet">그만두기</button>
+    </section>
+
+    <section id="s-sent">
+      <h1>보냈습니다</h1>
+      <div class="card">
+        <div class="kv big"><b>금액</b><span id="sent-amount"></span></div>
+        <div class="kv"><b>받는 곳</b><span id="sent-to"></span></div>
+        <div class="kv"><b>거래번호</b><span id="sent-txid"></span></div>
+      </div>
+      <div class="note">
+        네트워크가 확인하기까지 보통 몇 분 걸립니다. 그동안 잔액이 조금
+        다르게 보일 수 있습니다.
+      </div>
+      <button id="btn-sent-done" class="primary">확인</button>
+    </section>
+
+    <script src="/wallet.bundle.js"></script>
+  </body>
+</html>

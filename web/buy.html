@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>구매</title>
+    <style>
+      :root {
+        --bg: #ffffff; --fg: #141518; --muted: #4b5568; --line: #e0e3ea;
+        --panel: #fafafb; --accent: #3b3f8f; --warn: #96601a;
+        --safe-b: env(safe-area-inset-bottom, 0px);
+      }
+      @media (prefers-color-scheme: dark) {
+        :root { --bg: #101114; --fg: #eceef2; --muted: #b3bdd6; --line: #2a2d35;
+                --panel: #17191d; --accent: #8d92e8; --warn: #d99b3f; }
+      }
+      * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+      body { margin: 0; background: var(--bg); color: var(--fg);
+             font: 15px/1.62 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", system-ui, sans-serif;
+             padding: 24px 18px calc(30px + var(--safe-b)); max-width: 520px; margin-inline: auto; }
+      h1 { margin: 0 0 3px; font-size: 21px; letter-spacing: -0.02em; }
+      .sub { color: var(--muted); font-size: 13.5px; }
+      img.art { width: 100%; border-radius: 13px; margin: 16px 0; display: block; background: var(--panel); }
+
+      .price { font-size: 27px; font-weight: 700; letter-spacing: -0.02em; margin: 14px 0 2px;
+               font-variant-numeric: tabular-nums; }
+      .price small { display: block; font-size: 13.5px; font-weight: 400; color: var(--muted);
+                     margin-top: 3px; }
+
+      label { display: block; font-size: 13px; color: var(--muted); margin: 16px 0 5px; }
+      input { width: 100%; padding: 13px 14px; border-radius: 10px; border: 1px solid var(--line);
+              background: var(--bg); color: var(--fg); font-size: 16px; font-family: inherit; }
+      button { width: 100%; padding: 15px; border-radius: 11px; border: 0; background: var(--accent);
+               color: #fff; font-size: 15.5px; font-weight: 600; font-family: inherit;
+               cursor: pointer; margin-top: 16px; }
+      button:disabled { opacity: 0.4; }
+      button.ghost { background: transparent; color: var(--fg); border: 1px solid var(--line);
+                     font-weight: 400; }
+
+      .warn { border: 1px solid var(--warn); border-radius: 10px; padding: 12px 14px;
+              font-size: 13.5px; line-height: 1.72; margin: 16px 0;
+              background: color-mix(in srgb, var(--warn) 8%, transparent); }
+      .pay { text-align: center; margin-top: 18px; }
+      .pay img { width: 220px; height: 220px; background: #fff; padding: 10px; border-radius: 11px; }
+      code { display: block; font-size: 12px; word-break: break-all; color: var(--muted);
+             margin-top: 8px; }
+      .step { display: none; } .step.on { display: block; }
+      .note { font-size: 12.5px; color: var(--muted); line-height: 1.75; margin-top: 20px; }
+      .ok { color: #226b43; }
+    </style>
+  </head>
+  <body>
+    <h1 id="name">불러오는 중…</h1>
+    <div class="sub" id="shop"></div>
+    <div id="art"></div>
+
+    <!-- 1. 받을 주소 -->
+    <div class="step on" id="s1">
+      <div class="price" id="price">—<small id="fiat"></small></div>
+
+      <label>이 자산을 받을 레이븐 주소</label>
+      <input id="addr" placeholder="R…" autocomplete="off" spellcheck="false" />
+      <div class="sub" id="addrnote"></div>
+
+      <div class="warn">
+        <b>거래소 주소를 넣지 마세요.</b> 거래소는 자산을 받지 못하고, 보낸 것은 사라집니다.<br />
+        <b>자산을 볼 수 있는 지갑</b>이어야 합니다 — 레이븐 코어, 또는 폰의
+        <b>공식 Ravencoin 지갑</b>(RavenProject).<br />
+        Trust Wallet·Atomic·Guarda 는 RVN 코인만 다룹니다. 그 주소로 보내면
+        <b>화면에 아무것도 안 보입니다</b>(열쇠는 그대로라 나중에 공식 지갑으로
+        되살릴 수는 있습니다).
+      </div>
+
+      <button id="go" disabled>이 주소로 받기</button>
+    </div>
+
+    <!-- 2. 결제 -->
+    <div class="step" id="s2">
+      <div class="pay">
+        <div class="price" id="price2"></div>
+        <div id="qr"></div>
+        <code id="payaddr"></code>
+        <div class="sub" id="timer"></div>
+      </div>
+      <div class="warn">
+        정확히 <b id="exact"></b> 을 보내주세요. 금액이 다르면 자동으로 처리되지 않습니다.
+      </div>
+      <div class="sub" id="status">입금을 기다리는 중…</div>
+      <button class="ghost" id="back">주소 고치기</button>
+    </div>
+
+    <p class="note">
+      결제가 확인되면 적어주신 주소로 자산이 자동으로 갑니다.<br />
+      이 페이지는 판매자의 컴퓨터가 직접 보여주는 것입니다. 중간에 어떤 회사도 없습니다.
+    </p>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const P = new URLSearchParams(location.search);
+      const id = P.get("id") || "";
+      let offer = null, poll = null;
+
+      async function load() {
+        const r = await fetch(`/api/offer?id=${encodeURIComponent(id)}`).then((x) => x.json());
+        if (r.error) { $("name").textContent = r.error; return; }
+        offer = r;
+        $("name").textContent = `${offer.qty > 1 ? offer.qty + " × " : ""}${offer.asset}`;
+        $("shop").textContent = offer.shop || "";
+        if (offer.image) $("art").innerHTML = `<img class="art" src="${offer.gateway}/ipfs/${offer.image}" alt="" />`;
+        $("price").firstChild.textContent = `${offer.rvn} RVN`;
+        $("fiat").textContent =
+          offer.currency !== "RVN" ? `${offer.symbol}${offer.price.toLocaleString()} 기준` : "";
+      }
+
+      // 주소는 눈으로 검사할 수 없다. 노드에게 물어본다.
+      let t;
+      $("addr").oninput = () => {
+        clearTimeout(t);
+        const v = $("addr").value.trim();
+        $("go").disabled = true;
+        if (v.length < 20) { $("addrnote").textContent = ""; return; }
+        t = setTimeout(async () => {
+          const r = await fetch(`/api/check-address?a=${encodeURIComponent(v)}`).then((x) => x.json());
+          if (r.valid) {
+            $("addrnote").innerHTML = `<span class="ok">받을 수 있는 주소입니다</span>`;
+            $("go").disabled = false;
+          } else {
+            $("addrnote").textContent = "레이븐 주소가 아닙니다. 한 글자라도 틀리면 이렇게 나옵니다.";
+          }
+        }, 350);
+      };
+
+      $("go").onclick = async () => {
+        $("go").disabled = true;
+        const r = await fetch("/api/claim", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ id, deliver_to: $("addr").value.trim() }),
+        }).then((x) => x.json());
+        if (r.error) { $("addrnote").textContent = r.error; $("go").disabled = false; return; }
+
+        $("price2").textContent = `${offer.rvn} RVN`;
+        $("exact").textContent = `${offer.rvn} RVN`;
+        $("payaddr").textContent = r.address;
+        $("qr").innerHTML = `<img src="/api/qr?text=${encodeURIComponent(`raven:${r.address}?amount=${offer.rvn}`)}" alt="결제 QR" />`;
+        $("s1").classList.remove("on");
+        $("s2").classList.add("on");
+        watch(r.address);
+      };
+
+      $("back").onclick = () => {
+        clearInterval(poll);
+        $("s2").classList.remove("on");
+        $("s1").classList.add("on");
+        $("go").disabled = false;
+      };
+
+      // 손님 화면이 노드를 계속 두드리면 저사양 PC가 그걸로 바쁘다. 10초.
+      function watch(address) {
+        clearInterval(poll);
+        poll = setInterval(async () => {
+          const r = await fetch(`/api/paid?a=${encodeURIComponent(address)}`).then((x) => x.json());
+          if (r.sent) {
+            $("status").innerHTML = `<span class="ok">보냈습니다.</span> 지갑에서 확인해 주세요.`;
+            clearInterval(poll);
+          } else if (r.paid) {
+            $("status").textContent =
+              r.confirmations >= 1
+                ? "입금 확인됨. 곧 보내드립니다."
+                : `입금이 도착했습니다. 확인을 기다리는 중 (${r.confirmations})`;
+          }
+        }, 10000);
+      }
+
+      load();
+    </script>
+  </body>
+</html>

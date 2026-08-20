@@ -1,0 +1,1567 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PLAY X Raven</title>
+    <style>
+      :root {
+        --bg: #fbfbfe; --panel: #fff; --line: #dde3f0; --text: #161d2b;
+        /* 보조 텍스트를 흐리게 해서 위계를 만들면, 가게 형광등 아래 노안에는
+           라벨이 그냥 사라진다. 위계는 굵기·크기·여백으로 만들고 색 대비는
+           읽을 수 있는 선(7:1 부근)을 지킨다. */
+        --muted: #4b5568; --faint: #7a8296;
+        --brand: #384192; --brand-light: #5874cf;
+        --ok: #226B43; --warn: #96601A; --danger: #B32B22;
+        --side: #f3f5fb;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0b1018; --panel: #1c2535; --line: #2f3b57; --text: #dde3f2;
+          --muted: #b3bdd6; --faint: #8794b3;
+          --brand: #5874cf; --brand-light: #7a90de;
+          --ok: #6fcf9a; --warn: #e0ad50; --danger: #ec7c72;
+          --side: #131b28;
+        }
+      }
+      * { box-sizing: border-box; }
+      /* 한글은 초·중·종성이 한 네모에 묶여 있어 12px 아래에서 받침이 뭉개진다.
+         라틴 기준 크기를 그대로 쓰면 읽히지 않는다. 본문 15 / 줄간격 1.62. */
+      body { margin: 0; font: 15px/1.62 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
+             "Segoe UI", sans-serif;
+             background: var(--bg); color: var(--text); display: flex; height: 100vh; overflow: hidden; }
+
+      /* ── Sidebar ───────────────────────────────────────────────
+         Sections are separated because they carry different risk.
+         The asset view cannot spend; wallet, issue and shop can. Stacking them
+         on one page would teach the same click habit for both.                */
+      nav { width: 172px; flex-shrink: 0; background: var(--side); border-right: 1px solid var(--line);
+            display: flex; flex-direction: column; padding: 14px 0; }
+      .brand { padding: 0 16px 14px; }
+      .brand h1 { font-size: 15px; margin: 0; letter-spacing: -0.2px; }
+      .brand span { font-size: 14px; color: var(--faint); }
+      nav a { display: flex; align-items: center; gap: 8px; padding: 11px 16px; color: var(--text);
+              text-decoration: none; font-size: 15px; cursor: pointer; border-left: 2px solid transparent; }
+      nav a:hover { background: color-mix(in srgb, var(--brand) 7%, transparent); }
+      nav a.on { border-left-color: var(--brand); background: color-mix(in srgb, var(--brand) 12%, transparent);
+                 font-weight: 600; }
+      nav a .risk { margin-left: auto; font-size: 14px; color: var(--warn); }
+      .navfoot { margin-top: auto; padding: 10px 16px 0; border-top: 1px solid var(--line); }
+      .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; }
+      .dot.on { background: var(--ok); } .dot.off { background: var(--muted); }
+      .navfoot div { font-size: 14px; color: var(--muted); margin-bottom: 3px; }
+
+      main { flex: 1; overflow-y: auto; padding: 18px 22px 40px; }
+      .page { display: none; } .page.on { display: block; }
+      h2.title { font-size: 19px; letter-spacing: -0.02em; margin: 0 0 3px; }
+      .lede { color: var(--muted); font-size: 14px; margin: 0 0 16px; }
+
+      .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+      .card { background: var(--panel); border: 1px solid var(--line); border-radius: 9px; padding: 11px 14px; }
+      .card h3 { font-size: 14px; margin: 0 0 6px; color: var(--muted); font-weight: 600; }
+      .state { font-size: 15px; font-weight: 600; }
+      .detail { font-size: 14px; color: var(--muted); margin-top: 3px; }
+      .big { font-size: 28px; letter-spacing: -0.02em; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+      .bar { display: flex; gap: 7px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+      #summary { color: var(--muted); font-size: 14px; margin-right: auto; }
+      #scan-note { width: 100%; font-size: 14px; color: var(--muted); margin-top: -3px; }
+
+      button { font: inherit; font-size: 14px; padding: 10px 16px; border-radius: 8px; min-height: 38px;
+               border: 1px solid var(--brand); background: var(--brand); color: #fff; cursor: pointer; }
+      button:hover:not(:disabled) { background: var(--brand-light); border-color: var(--brand-light); }
+      button:disabled { opacity: 0.4; cursor: default; }
+      button.ghost { background: transparent; color: var(--text); border-color: var(--line); }
+      /* 남에게 피해가 가는 단 하나. 그록 자문: 빨강은 "되돌릴 수 없음"이 아니라
+         "하면 손해/남에게 피해"다. 환불·전송·발행은 사장의 목표라 빨갛게 하면
+         망설이거나, 매일 눌러 무시하게 된다. 여기만 다르게 둔다. */
+      button.harm { background: var(--danger); border-color: var(--danger); color: #fff; }
+      button.harm:hover:not(:disabled) { filter: brightness(1.08); }
+      /* 다크모드의 --danger 는 밝은 살구색이라 흰 글씨가 안 읽힌다. 경고
+         버튼이 안 읽히면 경고가 아니라 장식이다. */
+      @media (prefers-color-scheme: dark) {
+        button.harm { color: #2a0d0b; }
+      }
+      button.link { background: none; border: none; color: var(--brand-light); padding: 0 2px; font-size: 14px; min-height: 0; }
+
+      .split { display: flex; gap: 14px; align-items: flex-start; }
+      .listwrap { flex: 1; min-width: 0; }
+      table { width: 100%; border-collapse: collapse; background: var(--panel);
+              border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+      th, td { padding: 11px 13px; text-align: left; border-bottom: 1px solid var(--line); }
+      th { font-size: 14px; color: var(--muted); font-weight: 600; }
+      tr:last-child td { border-bottom: none; }
+      tbody tr { cursor: pointer; }
+      tbody tr:hover { background: color-mix(in srgb, var(--brand) 5%, transparent); }
+      tbody tr.sel { background: color-mix(in srgb, var(--brand) 11%, transparent); }
+      .name { font-variant-ligatures: none; }
+      .num { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); white-space: nowrap; }
+      .act { text-align: right; width: 1%; white-space: nowrap; }
+      .act button { padding: 6px 12px; font-size: 14px; min-height: 32px; }
+
+      .panel { width: 310px; flex-shrink: 0; background: var(--panel); border: 1px solid var(--line);
+               border-radius: 9px; padding: 14px; position: sticky; top: 0; }
+      .panel.hidden { display: none; }
+      .panel-head { display: flex; align-items: flex-start; gap: 8px; }
+      #p-name { font-weight: 600; font-size: 15px; word-break: break-all; flex: 1; }
+      #p-close { background: none; border: none; color: var(--muted); font-size: 15px; line-height: 1; padding: 0 2px; }
+      #p-amount { color: var(--muted); font-size: 14px; margin: 2px 0 8px; }
+      #p-cid code { font-size: 11.5px; color: var(--faint); }
+      #p-body { margin: 12px 0; min-height: 60px; }
+      #p-body img { width: 100%; border-radius: 7px; display: block; background: var(--bg); }
+      #p-body .doc { width: 100%; height: 360px; border: 1px solid var(--line); border-radius: 7px;
+                     background: #fff; display: block; }
+      .meta { font-size: 14px; color: var(--muted); margin: 6px 0 0; line-height: 1.65; }
+      .filecard { border: 1px dashed var(--line); border-radius: 8px; padding: 22px; text-align: center; }
+      .ft { font-size: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+      #p-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+      .ok { color: var(--ok); } .warn { color: var(--warn); } .muted { color: var(--muted); }
+      .danger { color: var(--danger); }
+      .tblbox { width: 100%; margin-top: 14px; padding: 12px 14px; border-radius: 10px;
+                border: 1px solid var(--line); background: var(--panel); }
+      /* 비교하려면 읽혀야 한다. 34자를 한 줄로 흘리면 아무도 안 본다. */
+      .tail4 { font-family: ui-monospace, monospace; font-size: 17px; letter-spacing: .06em;
+               word-break: break-all; line-height: 1.7; margin: 10px 0;
+               padding: 11px 13px; border-radius: 8px; background: var(--panel);
+               border: 1px solid var(--line); }
+      .tail4 b { background: var(--warn); color: #fff; padding: 1px 4px; border-radius: 4px; }
+
+      .privacy { display: none; font-size: 14px; color: var(--muted); margin: 0 0 8px; }
+      .privacy.show { display: block; }
+      .note { font-size: 14px; color: var(--muted); line-height: 1.75; max-width: 620px; margin-top: 18px; }
+
+      .soon { border: 1px dashed var(--line); border-radius: 9px; padding: 26px; text-align: center;
+              color: var(--muted); font-size: 14px; line-height: 1.8; }
+      .form { max-width: 520px; }
+      .form label { display: block; font-size: 14px; color: var(--muted); margin: 12px 0 4px; font-weight: 600; }
+      .form label.check { display: flex; align-items: center; gap: 9px; font-size: 15px; color: var(--text); font-weight: 400; }
+      .form input[type=text], .form input:not([type]), .form input[type=number] {
+        font: inherit; font-size: 15px; padding: 11px 12px; border-radius: 8px;
+        border: 1px solid var(--line); background: var(--panel); color: var(--text); width: 100%; }
+      .form input:focus { outline: none; border-color: var(--brand-light); }
+      .form .row { display: flex; gap: 10px; align-items: flex-end; }
+      .form .row > div { flex: 1; }
+      .cost { margin: 16px 0 0; padding: 11px 13px; border: 1px solid var(--line);
+              border-radius: 8px; background: var(--panel); font-size: 14px; }
+      .cost .burn { font-size: 19px; font-weight: 700; letter-spacing: -0.01em; }
+      .confirmbox { margin-top: 14px; padding: 13px; border: 1px solid var(--warn); border-radius: 8px;
+                    background: color-mix(in srgb, var(--warn) 8%, transparent); }
+      .confirmbox div { font-size: 14px; margin-bottom: 9px; line-height: 1.7; }
+      .confirmbox input { margin-bottom: 8px; }
+      pre.conf { background: var(--bg); border: 1px solid var(--line); border-radius: 7px;
+                 padding: 9px 11px; font-size: 14px; margin: 0 0 10px; overflow-x: auto; }
+      .kv { display: flex; gap: 8px; font-size: 14px; margin-bottom: 5px; }
+      .kv b { font-weight: 600; min-width: 76px; color: var(--muted); }
+      code.addr { font-size: 11px; word-break: break-all; }
+      .tabs { display: flex; gap: 3px; margin: 4px 0 16px; border-bottom: 1px solid var(--line); }
+      .tab { background: none; border: 0; border-bottom: 2px solid transparent; border-radius: 0;
+             padding: 11px 15px; font-size: 15px; min-height: 40px; color: var(--muted); cursor: pointer; }
+      .tab:hover { color: var(--text); }
+      .tab.on { color: var(--text); border-bottom-color: var(--brand); }
+      .shoptab { display: none; }
+      .shoptab.on { display: block; }
+      .shopgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); gap: 11px; }
+      .shopcard { border: 1px solid var(--line); border-radius: 10px; padding: 13px 14px;
+                  background: var(--panel); }
+      .shopcard h4 { margin: 0 0 3px; font-size: 14px; font-weight: 600; }
+      .shopcard .sub { font-size: 14px; color: var(--muted); word-break: break-all; }
+      .shopcard .tagrow { display: flex; gap: 5px; margin-top: 8px; }
+      .tag { font-size: 14px; padding: 3px 9px; border-radius: 999px;
+             border: 1px solid var(--line); color: var(--muted); }
+      /* 한 품목은 한 줄로 읽혀야 한다.
+         전에는 사진이 버튼에서 한참 떠 있고 품목·가격·사진이 서로 다른 높이에
+         있어서, 한 품목이 하나로 안 읽혔다. 그리고 편집 화면은 결과와 닮아야
+         한다 — 손님이 보는 메뉴판도 사진이 왼쪽이다. */
+      .mnitem { display: grid; grid-template-columns: 56px minmax(0,1fr) 120px auto;
+                gap: 12px; align-items: center;
+                padding: 12px 0; border-bottom: 1px solid var(--line); }
+      .mnitem label { display: block; font-size: 13px; color: var(--faint); margin-bottom: 3px; }
+      .mnitem input { width: 100%; }
+      .mnacts { display: flex; gap: 6px; }
+      .mnacts button { padding: 8px 12px; min-height: 34px; font-size: 13.5px; }
+      /* 사진 자리는 비어 있어도 자리를 지킨다. 안 그러면 사진 있는 줄과 없는
+         줄의 칸이 어긋나서 목록이 흔들린다. */
+      .mnpic { width: 56px; height: 56px; border-radius: 9px; border: 1px dashed var(--line);
+               display: flex; align-items: center; justify-content: center;
+               font-size: 12px; color: var(--faint); cursor: pointer; overflow: hidden;
+               background: var(--bg); }
+      .mnpic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+      /* 한 화면에 다 안 들어가는 폭에서는 세로로 쌓는다. */
+      @media (max-width: 720px) { .mnitem { grid-template-columns: 56px 1fr; } }
+      /* 폴더 행. 눌러서 접고 편다. */
+      tr.grp { cursor: pointer; }
+      tr.grp td { font-weight: 600; }
+      tr.grp:hover td { background: var(--panel); }
+      .tri { display: inline-block; width: 0; height: 0; margin-right: 8px;
+             border-left: 5px solid var(--muted); border-top: 4px solid transparent;
+             border-bottom: 4px solid transparent; vertical-align: 1px;
+             transition: transform 0.12s ease; }
+      .tri.open { transform: rotate(90deg); }
+      tr.child td.name { padding-left: 6px; }
+      .branch { display: inline-block; width: 13px; margin-right: 5px;
+                border-bottom: 1px solid var(--line); vertical-align: 4px; }
+      #chat-open { position: fixed; right: 20px; bottom: 20px; z-index: 40;
+                   padding: 12px 18px; border-radius: 999px;  }
+      #chat { position: fixed; right: 0; top: 0; bottom: 0; width: min(400px, 94vw); z-index: 50;
+              background: var(--panel); border-left: 1px solid var(--line);
+              display: flex; flex-direction: column; }
+      #chat.hidden { display: none; }
+      .chat-head { display: flex; align-items: center; justify-content: space-between;
+                   padding: 15px 17px; border-bottom: 1px solid var(--line);
+                   font-size: 15px; font-weight: 600; }
+      #chat-log { flex: 1; overflow-y: auto; padding: 15px 17px; }
+      .msg { font-size: 15px; line-height: 1.75; margin-bottom: 13px; padding: 10px 12px;
+             border-radius: 10px; max-width: 90%; }
+      .msg.ai { background: var(--bg); border: 1px solid var(--line); }
+      .msg.me { background: var(--brand); color: #fff; margin-left: auto; }
+      .msg.did { background: transparent; border: 1px dashed var(--line); font-size: 14px;
+                 color: var(--muted); }
+      .chat-in { display: flex; gap: 7px; padding: 13px 15px; border-top: 1px solid var(--line); }
+      .chat-in input { flex: 1; min-width: 0; }
+      .seedgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; margin: 14px 0; }
+      .seedword { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;
+                  font-size: 15px; background: var(--bg); }
+      .seedword i { color: var(--faint); font-style: normal; font-size: 12px; margin-right: 7px; }
+      /* ── 이 컴퓨터: 세 가족 ──
+         70대가 형광등 아래에서 읽고 누른다. 행 56px, 제목 18px,
+         상태 단어는 회색 금지 — 색만으로 켜짐을 구분하면 노안·색맹·싼
+         모니터에서 두 회색이 같아진다. */
+      .verdict { border: 1px solid var(--line); border-left: 5px solid var(--muted);
+                 border-radius: 13px; padding: 18px 20px; background: var(--panel);
+                 margin-bottom: 26px; }
+      .verdict.ok { border-left-color: var(--ok); }
+      .verdict.warn { border-left-color: var(--warn); }
+      .verdict.bad { border-left-color: var(--danger); }
+      .v-state { font-size: 19px; font-weight: 600; letter-spacing: -0.01em; }
+      .v-why { font-size: 15px; color: var(--muted); margin-top: 5px; line-height: 1.6; }
+      .v-fix { font-size: 15px; margin-top: 4px; }
+
+      .switches { border: 1px solid var(--line); border-radius: 13px; overflow: hidden;
+                  background: var(--panel); }
+      .sw { border-bottom: 1px solid var(--line); }
+      .sw:last-child { border-bottom: 0; }
+      .sw-head { display: flex; align-items: center; gap: 16px; min-height: 60px;
+                 padding: 12px 18px; cursor: pointer; }
+      .sw-head:hover { background: color-mix(in srgb, var(--brand) 5%, transparent); }
+      .sw-text { flex: 1; min-width: 0; }
+      .sw-title { font-size: 15px; font-weight: 600; line-height: 1.4; }
+      .sw-desc { font-size: 15px; color: var(--muted); line-height: 1.6; margin-top: 2px; }
+      .sw-state { font-size: 15px; font-weight: 600; white-space: nowrap; }
+      .sw-state.on { color: var(--ok); } .sw-state.off { color: var(--faint); }
+      /* 스위치는 지금 도는 상태만 말한다. 여는 것은 행을 누르는 일이다. */
+      .sw-toggle { width: 56px; height: 32px; border-radius: 999px; background: var(--line);
+                   position: relative; flex: none; transition: background 0.15s; }
+      .sw-toggle::after { content: ""; position: absolute; top: 2px; left: 2px;
+                          width: 28px; height: 28px; border-radius: 50%; background: #fff;
+                           transition: transform 0.15s; }
+      .sw.on .sw-toggle { background: var(--ok); }
+      .sw.on .sw-toggle::after { transform: translateX(24px); }
+      .sw-body { display: none; padding: 4px 18px 18px; border-top: 1px dashed var(--line); }
+      .sw.open .sw-body { display: block; }
+      .sw-body label { display: block; font-size: 14px; color: var(--muted); margin: 12px 0 5px; }
+      .sw-apply { min-height: 48px; font-size: 15px; margin-top: 16px; }
+      .sw-pill { display: inline-block; font-size: 14px; padding: 3px 10px; border-radius: 999px;
+                 background: color-mix(in srgb, var(--warn) 15%, transparent); color: var(--warn);
+                 margin-left: 8px; }
+
+      .grouphead { font-size: 15px; font-weight: 600; color: var(--muted);
+                   margin: 30px 0 10px; }
+      .tools { border: 1px solid var(--line); border-radius: 13px; padding: 18px 20px;
+               background: var(--panel); }
+      .advanced { margin-top: 30px; }
+      .advanced > summary { cursor: pointer; font-size: 15px; color: var(--muted);
+                            padding: 12px 0; }
+      /* 세 칸 표. 칸을 넘은 글자가 옆 칸을 덮지 않게 min-width:0 이 필요하다 —
+         그리드 자식의 기본값은 auto 라서, 긴 설명이 줄바꿈 대신 칸을 밀어낸다. */
+      .cfrow { display: grid; grid-template-columns: 150px 150px minmax(0, 1fr); gap: 14px;
+               align-items: start; padding: 13px 0; border-bottom: 1px solid var(--line); }
+      .cfrow > * { min-width: 0; }
+      .cfrow:last-child { border-bottom: 0; }
+      .cfrow .lb { font-size: 14px; font-weight: 600; }
+      .cfrow .lb small { display: block; font-weight: 400; font-size: 14px; color: var(--faint);
+                         font-family: ui-monospace, monospace; word-break: break-all; }
+      /* 이 칸의 입력은 .form 안이 아니라 폭 규칙을 못 받는다. 그대로 두면
+         브라우저 기본 폭이 칸을 넘어 설명 위에 겹쳐 그려진다. */
+      .cfrow input[type=text], .cfrow input:not([type]), .cfrow input[type=number] {
+        font: inherit; font-size: 14px; padding: 9px 10px; border-radius: 8px;
+        border: 1px solid var(--line); background: var(--panel); color: var(--text);
+        width: 100%; min-width: 0; }
+      .cfrow .ex { font-size: 14px; color: var(--muted); line-height: 1.65;
+                   overflow-wrap: anywhere; }
+      /* 인라인 강조다. 박스형 .cost 와 이름이 겹쳐 테두리·여백을 물려받고
+         있었고, 그래서 설명 한가운데에 네모가 떠서 글자를 덮었다. */
+      .cfrow .ex b.hint { display: inline; color: var(--text); font-weight: 600;
+                          border: 0; padding: 0; margin: 0; background: none; }
+      .cfrow .ex .w { color: var(--warn); display: block; margin-top: 3px; }
+
+      /* 좁은 창에서는 세 칸을 못 버틴다. 겹치느니 아래로 내린다. */
+      @media (max-width: 760px) {
+        .cfrow { grid-template-columns: 1fr; gap: 6px; }
+      }
+      .tpl { border: 1px solid var(--line); border-radius: 9px; padding: 11px 13px; cursor: pointer;
+             flex: 1; min-width: 165px; }
+      .tpl:hover { border-color: var(--brand-light); }
+      .tpl b { display: block; font-size: 14px; margin-bottom: 2px; }
+      .tpl span { font-size: 14px; color: var(--muted); }
+      .keyrow { display: grid; grid-template-columns: 152px minmax(0,1fr) auto; gap: 9px;
+                align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
+      .keyrow > * { min-width: 0; }
+      /* 이 줄의 입력도 .form 밖이라 폭 규칙을 못 받는다. */
+      .keyrow input { font: inherit; font-size: 14px; padding: 9px 10px; border-radius: 8px;
+                      border: 1px solid var(--line); background: var(--panel); color: var(--text);
+                      width: 100%; min-width: 0; }
+      @media (max-width: 620px) {
+        .keyrow { grid-template-columns: 1fr auto; }
+        .keyrow .who { grid-column: 1 / -1; }
+      }
+      .keyrow:last-child { border-bottom: 0; }
+      .keyrow .who { font-size: 14px; }
+      .keyrow .saved { font-size: 14px; color: var(--ok); }
+      .keyrow button { padding: 7px 13px; font-size: 14px; min-height: 34px; }
+      .qrrow { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 13px; }
+      .qrbox { text-align: center; }
+      .qrbox svg { width: 168px; height: 168px; background: #fff; padding: 8px;
+                   border-radius: 9px; display: block; }
+      .qrbox .cap { font-size: 14px; color: var(--muted); margin-top: 7px; }
+      .qrbox .cap b { display: block; color: var(--text); font-size: 14px; margin-bottom: 2px; }
+      .aibar { display: flex; gap: 8px; align-items: center; margin-bottom: 14px;
+               padding: 12px 13px; border: 1px solid var(--line); border-radius: 9px;
+               background: var(--panel); }
+      .aibar input { flex: 1; }
+      .aibar .meta { white-space: nowrap; }
+      /* 출입 카드. 7시에 한 번 보고 판단하는 화면이라 크고 단순해야 한다. */
+      .mtab { display: none; } .mtab.on { display: block; }
+      .notice { border: 1px solid var(--line); border-radius: 10px; padding: 13px 15px;
+                margin-bottom: 10px; background: var(--panel); }
+      .notice h4 { margin: 0 0 4px; font-size: 15px; }
+      .notice .when { font-size: 14px; color: var(--muted); }
+      .mcard { border: 1px solid var(--line); border-left: 4px solid var(--line);
+               border-radius: 11px; padding: 15px 17px; margin-top: 11px; background: var(--panel); }
+      .mcard.ok { border-left-color: var(--ok); }
+      .mcard.no { border-left-color: var(--danger); }
+      .mcard.big { padding: 22px 24px; }
+      .mhead { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+      .mname { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+      .mcard.big .mname { font-size: 28px; }
+      .msub { font-size: 14px; color: var(--muted); margin-top: 3px; }
+      .mstate { font-size: 15px; font-weight: 600; white-space: nowrap; }
+      .mcard.big .mstate { font-size: 19px; }
+      .mcard.ok .mstate { color: var(--ok); }
+      .mcard.no .mstate { color: var(--danger); }
+      .msoon { margin-top: 10px; padding: 8px 11px; border-radius: 7px; font-size: 14px;
+               background: color-mix(in srgb, var(--warn) 13%, transparent); color: var(--warn); }
+      .mrow { display: flex; gap: 7px; margin-top: 13px; flex-wrap: wrap; }
+      /* ── 시트: 목록을 덮는다. 나가는 길은 취소뿐. ── */
+      .sheet { position: fixed; inset: 0; z-index: 60; background: rgba(10,14,22,0.55);
+               display: flex; align-items: flex-start; justify-content: center;
+               padding: 34px 20px; overflow-y: auto; }
+      .sheet.hidden { display: none; }
+      .sheet-box { background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+                   width: min(560px, 100%); padding: 20px 22px; }
+      .sheet-head { display: flex; align-items: center; justify-content: space-between;
+                    font-size: 15px; font-weight: 600; margin-bottom: 16px; }
+      .sheet-foot { display: flex; align-items: center; justify-content: space-between;
+                    gap: 10px; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
+      .sheet-box label { display: block; font-size: 14px; color: var(--muted); margin-bottom: 12px; }
+      .sheet-box label input, .sheet-box label select { display: block; width: 100%; margin-top: 5px; }
+      .wstep { display: none; } .wstep.on { display: block; }
+      .steps { display: flex; gap: 6px; margin-bottom: 18px; }
+      .steps i { flex: 1; height: 3px; border-radius: 2px; background: var(--line); }
+      .steps i.on { background: var(--brand); }
+      /* 종류는 이름 기호로 추측하지 않고 먼저 고른다. */
+      .choice .form { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 14px;
+                      color: var(--brand-light); }
+      .choice .ex { margin-top: 9px; padding-top: 9px; border-top: 1px solid var(--line); }
+      .choice .exrow { display: flex; gap: 8px; font-size: 14px; color: var(--muted);
+                       margin-bottom: 3px; }
+      .choice .exrow b { color: var(--text); font-weight: 600; min-width: 52px; }
+      .choice .no { margin-top: 8px; font-size: 14px; color: var(--warn); }
+      .choice.on .ex, .choice.on .no { display: block; }
+      .choice:not(.on) .ex, .choice:not(.on) .no { display: none; }
+      .choice { border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px;
+                margin-bottom: 9px; cursor: pointer; }
+      .choice:hover { border-color: var(--brand-light); }
+      .choice.on { border-color: var(--brand); background: color-mix(in srgb, var(--brand) 8%, transparent); }
+      .choice b { display: block; font-size: 15px; margin-bottom: 2px; }
+      .choice span { font-size: 14px; color: var(--muted); }
+      .dirlist { margin-top: 9px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+      .direntry { display: flex; justify-content: space-between; gap: 10px; padding: 9px 12px;
+                  font-size: 14px; border-bottom: 1px solid var(--line); }
+      .direntry:last-child { border-bottom: 0; }
+      .sendbox { margin-top: 14px; padding: 16px 18px; border: 1px solid var(--line);
+                 border-radius: 10px; background: var(--panel); max-width: 560px; }
+      .sendhead { display: flex; align-items: center; justify-content: space-between;
+                  font-size: 15px; font-weight: 600; margin-bottom: 14px; }
+      .sendbox label { display: block; font-size: 14px; color: var(--muted); margin-bottom: 11px; }
+      /* 라벨이 감싸는 입력칸은 다음 줄로. 인라인이면 글자와 칸이 겹쳐 보인다. */
+      .sendbox label input, .sendbox label select { display: block; width: 100%; margin-top: 5px; }
+      .sendbox input, .sendbox select { margin-top: 5px; }
+      /* 검토는 세 줄만 크게. 읽히지 않는 확인은 확인이 아니다. */
+      .review { display: grid; grid-template-columns: 74px 1fr; gap: 11px 14px; align-items: baseline; }
+      .review .rk { font-size: 14px; color: var(--muted); }
+      .review .rv { font-size: 15px; }
+      .review .rv.big { font-size: 28px; font-weight: 600; letter-spacing: -0.01em; }
+      .review code.addr { display: block; margin-top: 3px; color: var(--muted); }
+      #r-tailbox, #r-passbox { margin-top: 13px; padding: 11px 13px; border-radius: 8px;
+                               border: 1px solid var(--warn);
+                               background: color-mix(in srgb, var(--warn) 8%, transparent); }
+      #r-tailbox input, #r-passbox input { margin-top: 7px; }
+      .warnbox { border: 1px solid var(--warn); border-radius: 8px; padding: 13px 15px;
+                 font-size: 14px; line-height: 1.75; margin-bottom: 12px;
+                 background: color-mix(in srgb, var(--warn) 8%, transparent); }
+
+      /* 메뉴 사진. 작게, 그러나 무엇인지 알아볼 수 있게. */
+      .mnthumb { display: block; width: 56px; height: 56px; object-fit: cover;
+                 border-radius: 8px; border: 1px solid var(--line);
+                 margin-bottom: 6px; cursor: pointer; background: var(--bg); }
+
+      /* ── 묻는 창 ─────────────────────────────────────────────────
+         WKWebView 는 앱이 델리게이트를 붙여 주지 않으면 prompt·confirm·alert
+         를 조용히 무시한다. Tauri 는 붙이지 않는다. 그래서 이 앱의 prompt 12곳이
+         전부 아무 일도 하지 않았고, 그중 다섯이 지갑 암호를 묻는 자리였다 —
+         잠긴 지갑으로는 보내기도 환불도 되지 않았다.
+         브라우저에 부탁하지 않고 우리가 그린다. ── */
+      #askwrap { position: fixed; inset: 0; z-index: 200; display: none;
+                 align-items: center; justify-content: center; padding: 24px;
+                 background: color-mix(in srgb, #000 38%, transparent); }
+      #askwrap.on { display: flex; }
+      .askbox { width: 460px; max-width: 100%; background: var(--panel);
+                border: 1px solid var(--line); border-radius: 14px; padding: 24px 26px; }
+      .askbox h3 { font-size: 19px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 10px; }
+      .askbox .msg { font-size: 15px; color: var(--muted); line-height: 1.68; white-space: pre-wrap; }
+      .askbox input { width: 100%; margin-top: 14px; font-size: 16px; padding: 12px 13px; }
+      .askrow { display: flex; gap: 9px; margin-top: 18px; }
+      .askrow button { flex: 1; min-height: 46px; font-size: 15px; }
+      /* ── 첫 실행 ──────────────────────────────────────────────────
+         body 가 flex 라, 이 화면이 그 안의 칸으로 앉으면 사이드바를 밀어낸다.
+         fixed 로 띄워 레이아웃 밖에 둔다. ── */
+      #onboard { position: fixed; inset: 0; background: var(--bg); z-index: 100;
+                 display: flex; align-items: center; justify-content: center;
+                 padding: 40px 24px; overflow-y: auto; }
+      #onboard.hidden { display: none !important; }
+      .ob-box { width: 520px; max-width: 100%; }
+      .ob-step { display: none; }
+      .ob-step.on { display: block; }
+      .ob-brand { font-size: 19px; font-weight: 600; letter-spacing: -0.02em; }
+      .ob-lead { font-size: 15px; color: var(--muted); margin-top: 8px; line-height: 1.62; }
+      .ob-scan { font-size: 14px; color: var(--faint); margin-top: 40px; }
+      /* button 은 기본이 브랜드색 바탕에 흰 글씨다. 바탕만 바꾸고 글자색을
+         안 바꾸면 흰 바탕에 흰 글씨가 된다 — 제목만 안 보이고 부제목은 보여서
+         빈 카드처럼 읽혔다. */
+      .ob-pick { display: block; width: 100%; text-align: left; margin-bottom: 12px;
+                 padding: 18px 20px; border: 1px solid var(--line); border-radius: 12px;
+                 background: var(--panel); color: var(--text); cursor: pointer; }
+      .ob-pick:hover:not(:disabled) { background: var(--panel); }
+      .ob-pick:hover { border-color: var(--brand); }
+      .ob-pick b { display: block; font-size: 19px; font-weight: 600; letter-spacing: -0.02em; }
+      .ob-pick span { display: block; font-size: 14px; color: var(--muted);
+                      margin-top: 6px; line-height: 1.62; }
+      .ob-pick em { display: block; font-size: 14px; color: var(--faint);
+                    font-style: normal; margin-top: 8px; }
+      .ob-title { font-size: 19px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 16px; }
+      .ob-reasons { font-size: 15px; line-height: 1.62; color: var(--muted); }
+      .ob-reasons div { margin-bottom: 8px; }
+      .ob-note { font-size: 14px; color: var(--muted); line-height: 1.62; margin-top: 8px; }
+      .ob-nums { font-size: 14px; color: var(--muted); margin-top: 16px; line-height: 1.8;
+                 border-top: 1px solid var(--line); padding-top: 16px; }
+      #onboard label { display: block; font-size: 14px; font-weight: 600; color: var(--muted);
+                       margin: 24px 0 8px; }
+      #onboard input { display: block; width: 100%; font-size: 15px; padding: 12px 14px;
+                       border-radius: 8px; border: 1px solid var(--line);
+                       background: var(--panel); color: var(--text); margin-top: 6px; }
+      .ob-go { display: block; width: 100%; min-height: 48px; font-size: 15px; margin-top: 24px; }
+      .ob-link { display: block; width: 100%; background: none; border: 0;
+                 color: var(--brand-light); font-size: 14px; padding: 12px 0; min-height: 0; }
+      .obitem { display: grid; grid-template-columns: minmax(0,1fr) 120px 44px; gap: 8px;
+                margin-top: 8px; align-items: center; }
+      .obitem input { margin-top: 0 !important; }
+      .obitem button { min-height: 44px; padding: 8px; }
+    </style>
+  </head>
+  <body>
+
+    <!-- ── 첫 실행 ───────────────────────────────────────────────────
+         이 프로그램은 노드이자 IPFS이자 지갑이자 계산대다. 첫 화면이
+         "가게 이름을 지으세요"이면, 노드만 돌리려고 켠 사람도 가게 주인이
+         되어야 한다. 그래서 여기서 정하는 것은 이 컴퓨터를 얼마나 쓸지 하나뿐.
+
+         가게는 [내 가게]를 누른 사람이 만든다. 그 화면이 이미 간판·메뉴·사진을
+         다 갖고 있어서, 첫 실행에 또 두면 같은 것을 두 번 만든 셈이었다.
+
+         이미 노드를 돌리던 컴퓨터면 이 화면 자체가 나오지 않는다.  ── -->
+    <div id="onboard" class="hidden">
+      <div class="ob-box">
+        <!-- 0. 살펴보는 중 -->
+        <div class="ob-step on" data-ob="scan">
+          <!-- 새 사장이 이 프로그램에서 제일 먼저 보는 화면이다. 살펴보는
+               동안 사람은 아무것도 못 하므로, 여기가 인사할 자리다. -->
+          <img src="/raven-hello.png" alt="" width="150"
+               style="display:block;margin:0 auto 14px;border-radius:16px" />
+          <div class="ob-brand">PLAY X Raven</div>
+          <div class="ob-lead">노드·사진 창고·지갑·계산대를 한 프로그램에서 씁니다.</div>
+          <div class="ob-scan" id="ob-scanning">이 컴퓨터에 맞게 살펴보는 중…</div>
+        </div>
+
+        <!-- 1. 유일하게 사람이 답해야 하는 질문 -->
+        <div class="ob-step" data-ob="use">
+          <div class="ob-title">이 컴퓨터, 가게에만 쓰시나요?</div>
+          <div class="ob-note" style="margin-bottom:16px">
+            답에 따라 이 프로그램이 컴퓨터를 얼마나 쓸지 정해집니다. 나머지는 알아서 맞춥니다.
+          </div>
+          <div id="ob-usenow"></div>
+          <button class="ob-pick" id="ob-only">
+            <b>가게에만 씁니다</b>
+            <span>계산대·주문만 돌리는 컴퓨터입니다. 장부를 전부 갖고 있어 가장 빠릅니다.</span>
+            <em id="ob-only-gb">약 47 GB</em>
+          </button>
+          <button class="ob-pick" id="ob-also">
+            <b>다른 일도 합니다</b>
+            <span>제 일도 하는 컴퓨터입니다. 꼭 필요한 만큼만 쓰게 합니다.</span>
+            <em id="ob-also-gb">약 6 GB</em>
+          </button>
+          <div class="ob-note" id="ob-usehint" style="margin-top:14px"></div>
+        </div>
+
+        <!-- 2. 판정 -->
+        <div class="ob-step" data-ob="verdict">
+          <div class="ob-title" id="ob-verdict"></div>
+          <div class="ob-reasons" id="ob-reasons"></div>
+          <div id="ob-irrev"></div>
+          <button class="ob-go" id="ob-apply">이대로 켜기</button>
+          <button class="ob-link" id="ob-detail">무엇이 달라지나요</button>
+          <!-- 판정은 대부분 맞지만, 아닌 사람이 반드시 있다. 시험 삼아 돌려 보는
+               사람·지갑 복구를 해 볼 사람은 전부 갖고 있어야 한다. 되돌릴 수 없는
+               쪽으로 미는 판정에는 항상 빠져나갈 문이 있어야 한다. -->
+          <button class="ob-link" id="ob-override" style="display:none">그래도 전부 보관하기</button>
+          <div class="ob-nums" id="ob-nums" style="display:none"></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- 묻는 창. 브라우저 것이 아니라 우리 것이다. -->
+    <div id="askwrap">
+      <div class="askbox">
+        <h3 id="ask-title"></h3>
+        <div class="msg" id="ask-msg"></div>
+        <input id="ask-input" autocomplete="off" />
+        <div class="askrow">
+          <button class="ghost" id="ask-no">취소</button>
+          <button id="ask-yes">확인</button>
+        </div>
+      </div>
+    </div>
+
+    <nav>
+      <div class="brand">
+        <h1>PLAY X Raven</h1>
+        <span>v0.1</span>
+      </div>
+      <!-- 사이드바는 기능 상자가 아니라 카운터에서 하는 일 순서다.
+           위험 배지는 뺐다 — 네 칸 중 세 칸이 "위험"이면 아무도 안 읽는다.
+           마찰은 버튼 안쪽에 둔다.
+           "주문하기"는 손님 일이라 지웠다. 카운터 PC에 손님 메뉴가 앉아 있으면
+           이 프로그램이 누구 것인지 매일 헷갈린다. -->
+      <a data-page="wallet" class="on">지갑</a>
+      <a data-page="assets">자산</a>
+      <a data-page="shop">내 가게</a>
+      <a data-page="settings">이 컴퓨터</a>
+      <div class="navfoot">
+        <div><span class="dot off" id="d-node"></span><span id="d-node-t">노드</span></div>
+        <div><span class="dot off" id="d-ipfs"></span><span id="d-ipfs-t">IPFS</span></div>
+      </div>
+    </nav>
+
+    <main>
+
+      <!-- ── 출입 ──────────────────────────────────────────────────────
+           아침 7시에 "들어가도 되나"에 답하는 화면. 이게 종이를 대체하는
+           자리고, 체인은 그 뒤에 붙는 영수증이다. 회원은 아무것도 보내지
+           않는다 — 폰이 잠겨 있고, 수수료가 없고, 줄이 서기 때문이다.  ── -->
+      <section class="page" id="page-door">
+        <button class="ghost" id="door-back" style="margin-bottom:10px">← 가게</button>
+        <h2 class="title">출입 · 회원</h2>
+        <p class="lede">이름·전화 뒷자리·회원번호 아무거나 치면 됩니다.</p>
+
+        <input id="dr-q" placeholder="홍길동 · 5678 · A7K2" autocomplete="off"
+               style="font-size:19px;padding:15px 16px;max-width:520px" />
+        <div id="dr-hits"></div>
+
+        <div class="bar" style="margin-top:22px">
+          <span id="dr-note" class="meta" style="margin-right:auto"></span>
+          <button class="ghost" id="dr-new">회원 등록</button>
+          <button class="ghost" id="dr-all">전체 명단</button>
+          <button class="ghost" id="dr-doors">문 설정</button>
+        </div>
+
+        <!-- 문. 회원권 확인이 먼저 돌고, 통과해야 셸리에 신호가 간다.
+             회원권은 이 컴퓨터의 파일이라 인터넷이 끊겨도 확인된다. -->
+        <div id="dr-doorpanel" style="display:none; margin-top:26px">
+          <h3>문</h3>
+          <p class="meta">
+            셸리 스위치를 같은 공유기에 붙이고 셸리 앱에서 IP를 확인해 여기 적으세요.
+            열림 시간이 지나면 <b>스위치가 스스로 닫습니다</b> — 이 프로그램이 꺼져 있어도 그렇습니다.
+          </p>
+          <div id="dr-doorlist"></div>
+
+          <div class="form" style="margin-top:14px; max-width:520px">
+            <label>이름</label>
+            <input id="dw-name" placeholder="정문" autocomplete="off" />
+            <label style="margin-top:10px">셸리 주소</label>
+            <input id="dw-ip" placeholder="192.168.0.51" autocomplete="off" spellcheck="false" />
+            <div class="row" style="margin-top:10px; gap:12px; flex-wrap:wrap; align-items:flex-end">
+              <label style="flex:none; margin:0">세대<br />
+                <select id="dw-gen"><option value="2">2세대</option><option value="1">1세대</option></select>
+              </label>
+              <label style="flex:none; margin:0">채널<br />
+                <input id="dw-ch" type="number" value="0" style="width:76px" />
+              </label>
+              <label style="flex:none; margin:0">열림 시간(초)<br />
+                <input id="dw-sec" type="number" value="5" style="width:90px" />
+              </label>
+            </div>
+            <label style="margin-top:12px">셸리 아이디 · 비밀번호</label>
+            <div class="row">
+              <input id="dw-user" placeholder="admin" autocomplete="off" />
+              <input id="dw-pass" type="password" placeholder="셸리에 걸어 둔 비밀번호" autocomplete="off" />
+            </div>
+            <div class="row" style="margin-top:12px">
+              <button id="dw-save">문 저장</button>
+              <button class="ghost" id="dw-probe">연결만 확인</button>
+              <span class="meta" id="dw-note"></span>
+            </div>
+          </div>
+
+          <h3 style="margin-top:24px">드나든 기록</h3>
+          <p class="meta">열린 것과 <b>거절된 것</b>을 같이 남깁니다 — "왜 안 열렸지"가 카운터에서 제일 자주 나오는 질문입니다.</p>
+          <div id="dr-doorlog"></div>
+        </div>
+        <div id="dr-list"></div>
+      </section>
+
+      <!-- 회원 등록·수정. 만료도 정지도 여기서 고친다 — 체인은 안 건드린다. -->
+      <div id="msheet" class="sheet hidden">
+        <div class="sheet-box">
+          <div class="sheet-head"><span id="ms-title">회원 등록</span><button class="ghost" id="ms-cancel">취소</button></div>
+
+          <!-- 회원권을 온라인으로 산 사람은 이미 번호를 갖고 있다. 새로 찍으면
+               5 RVN이 또 나가고 그 사람은 두 장을 갖게 된다. -->
+          <div id="ms-numbox">
+            <label>회원권 번호</label>
+            <select id="ms-num"></select>
+            <div class="meta" id="ms-numnote"></div>
+          </div>
+
+          <div class="row">
+            <div style="flex:1"><label>이름<input id="ms-name" autocomplete="off" /></label></div>
+            <div style="flex:1"><label>전화<input id="ms-phone" autocomplete="off" placeholder="010-…" /></label></div>
+          </div>
+
+          <label>종류
+            <select id="ms-kind">
+              <option value="period">기간권 (한달·정기)</option>
+              <option value="punch">횟수권 (10회 등)</option>
+            </select>
+          </label>
+
+          <div id="ms-period">
+            <div class="row">
+              <div style="flex:1"><label>시작일<input id="ms-start" type="date" /></label></div>
+              <div style="flex:1"><label>기간
+                <select id="ms-months">
+                  <option value="1">1개월</option>
+                  <option value="3">3개월</option>
+                  <option value="6">6개월</option>
+                  <option value="12">1년</option>
+                  <option value="0">직접 입력</option>
+                </select>
+              </label></div>
+            </div>
+            <label>끝나는 날<input id="ms-exp" type="date" /></label>
+            <div class="meta" id="ms-calc"></div>
+          </div>
+          <div id="ms-punch" style="display:none">
+            <label>횟수<input id="ms-visits" type="number" min="1" value="10" /></label>
+          </div>
+
+          <label>메모<input id="ms-note" autocomplete="off" placeholder="상담 내용, 주의사항" /></label>
+
+          <div class="warnbox" id="ms-chain" style="font-size:13px">
+            회원번호를 체인에 하나 찍습니다 (<b>5 RVN · 약 17원</b>).
+            이름·기간·정지는 <b>이 컴퓨터에만</b> 저장됩니다 — 체인에 올리면 지울 수 없고,
+            누구나 회원 명단과 계약 종료일을 볼 수 있게 됩니다.
+          </div>
+
+          <div class="sheet-foot">
+            <span class="meta" id="ms-note2"></span>
+            <button id="ms-save">저장</button>
+          </div>
+          <div id="ms-result"></div>
+        </div>
+      </div>
+
+      <!-- ── 자산 ──────────────────────────────────────────────────────
+           기본 화면은 보기와 보관뿐이다. 보내는 칸도 소각 칸도 같은 높이에
+           없다. 동사는 자산을 고른 뒤에만, 옆 패널에서 나온다 — 목록을
+           보다가 500 RVN을 태우는 길이 구조적으로 없어야 한다.        ── -->
+      <section class="page" id="page-assets">
+        <h2 class="title">자산</h2>
+        <p class="lede">자산에 붙은 파일은 체인이 아니라 IPFS에 있습니다. 아무도 보관하지 않으면 찾을 수 없게 됩니다.</p>
+
+        <!-- 숨기지 않는다. 숨기면 옮기지도 않는다. -->
+        <div class="warnbox" id="owner-warn" style="display:none"></div>
+
+        <div class="bar">
+          <button id="new-asset">새 자산 만들기</button>
+          <span class="meta">새 이름을 체인에 새깁니다. RVN이 소각됩니다.</span>
+        </div>
+
+        <div class="tabs" style="margin-bottom:10px">
+          <button class="tab on" data-afilter="all">전체</button>
+          <button class="tab" data-afilter="mine">내가 만든 것</button>
+          <button class="tab" data-afilter="got">받은 것</button>
+          <!-- 팔고 있는 것은 따로 보여야 한다. 목록 아래에 숨어 있으면
+               "지금 무엇이 팔리는 중인가"를 매번 찾아야 한다. -->
+          <button class="tab" data-afilter="selling">판매중</button>
+        </div>
+
+        <div class="bar">
+          <span id="summary">불러오는 중…</span>
+          <button id="refresh" class="ghost">새로고침</button>
+          <button id="scan" class="ghost">다시 확인</button>
+          <button id="pin-all" disabled>보존할 항목 없음</button>
+          <span id="scan-note"></span>
+        </div>
+
+        <!-- 내놓은 것. 팔기는 자산에서 시작하고, 입금은 여기에 쌓인다. -->
+        <div id="vend-wrap" style="display:none">
+          <div class="bar" style="margin-top:16px">
+            <h3 style="font-size:14px;margin:0;margin-right:auto">내놓은 자산</h3>
+            <button class="ghost" id="vd-auto">자동 발송 켜기</button>
+          </div>
+          <div class="meta" id="vd-autonote"></div>
+          <table>
+            <thead><tr><th>자산</th><th class="num">받은 금액</th><th class="num">확인</th><th></th></tr></thead>
+            <tbody id="vd-sales"></tbody>
+          </table>
+          <div id="vd-result"></div>
+        </div>
+
+        <p id="privacy-note" class="privacy">
+          이 컴퓨터의 IPFS로만 찾습니다. 공개 게이트웨이에 자산 목록을 보내지 않습니다.
+        </p>
+
+        <div class="split">
+          <div class="listwrap">
+            <table>
+              <thead><tr><th>자산</th><th class="num">수량</th><th>파일</th><th></th></tr></thead>
+              <tbody id="assets"></tbody>
+            </table>
+          </div>
+          <aside class="panel hidden" id="panel">
+            <div class="panel-head">
+              <div id="p-name"></div>
+              <button id="p-close" title="닫기 (Esc)">×</button>
+            </div>
+            <div id="p-amount"></div>
+            <div id="p-cid"></div>
+            <div id="p-body"></div>
+            <div id="p-actions"></div>
+          </aside>
+        </div>
+      </section>
+
+      <!-- ── 지갑 ── -->
+      <section class="page on" id="page-wallet">
+        <h2 class="title">지갑</h2>
+        <p class="lede">이 앱과 레이븐 코어는 같은 지갑을 씁니다. 동시에 열 수 없습니다.</p>
+
+        <div class="cards">
+          <div class="card">
+            <h3>사용 가능</h3>
+            <div class="big" id="w-confirmed">—</div>
+            <div class="detail" id="w-unconfirmed"></div>
+          </div>
+          <div class="card">
+            <h3>지갑 잠금</h3>
+            <div class="state" id="w-lock">확인 중…</div>
+            <div class="detail" id="w-lock-detail"></div>
+            <div class="row" style="margin-top:9px">
+              <button class="ghost" id="w-enc">암호 걸기</button>
+              <button class="ghost" id="w-lock-now" style="display:none">지금 잠그기</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 암호 걸기. 발행과 같은 급의 비가역 동작이라 같은 마찰을 준다. -->
+        <div class="sendbox" id="encbox" style="display:none">
+          <div class="sendhead"><span id="enc-title">지갑에 암호 걸기</span><button class="ghost" id="enc-cancel">취소</button></div>
+
+          <div class="warnbox" id="enc-warn-new">
+            <b>이 암호를 잊으면 돈과 자산은 영원히 사라집니다.</b><br />
+            이 앱도, 레이븐코인도, 누구도 되돌릴 수 없습니다. 복구 방법이 없습니다.<br /><br />
+            암호를 걸면 <b>노드가 바로 꺼집니다.</b> 다시 켤 때까지 가게가 멈춥니다.
+            영업 중에는 누르지 마세요.<br /><br />
+            암호는 <b>잠겨 있을 때만</b> 지킵니다. 자동 판매를 켜면 잠금이 풀리고,
+            그동안은 암호가 없는 것과 같습니다.
+          </div>
+
+          <!-- 바꾸기는 처음 거는 것보다 안전하다. 같은 경고를 붙이면 진짜
+               무서운 화면이 어느 쪽인지 흐려진다. -->
+          <div class="warnbox" id="enc-warn-change" style="display:none">
+            <b>새 암호를 잊으면 돈과 자산은 영원히 사라집니다.</b><br />
+            바꾸기는 실패해도 지금 암호가 그대로 남고, 노드도 꺼지지 않습니다.
+          </div>
+
+          <div id="enc-old-row" style="display:none">
+            <label>지금 쓰는 암호<input id="enc-old" type="password" autocomplete="off" /></label>
+          </div>
+          <label>새 암호 (10자 이상)<input id="enc-new" type="password" autocomplete="off" /></label>
+          <label>한 번 더<input id="enc-new2" type="password" autocomplete="off" /></label>
+
+          <div class="confirmbox">
+            <div>아래 문장을 그대로 입력하세요.</div>
+            <pre class="conf" id="enc-phrase">암호를 잊으면 되돌릴 수 없다</pre>
+            <input id="enc-confirm" autocomplete="off" />
+            <button id="enc-go" disabled>암호 걸기</button>
+          </div>
+          <div id="enc-result"></div>
+        </div>
+
+        <div class="bar">
+          <button id="w-send-asset" class="ghost">자산 보내기</button>
+          <button id="w-send-rvn" class="ghost">RVN 보내기</button>
+          <button id="w-newaddr" class="ghost">받을 주소 만들기</button>
+          <button id="w-refresh" class="ghost">새로고침</button>
+        </div>
+        <div id="w-addr"></div>
+
+        <!-- 작성. 자산과 RVN은 같은 폼을 쓰지 않는다 — 무엇을 보내는지가
+             드롭다운 한 칸으로 바뀌면 그게 오송금이 되는 자리다. -->
+        <div class="sendbox" id="send-compose" style="display:none">
+          <div class="sendhead"><span id="s-mode"></span><button class="ghost" id="s-cancel">취소</button></div>
+
+          <div class="row" id="s-assetrow">
+            <label>보낼 자산<select id="s-asset"></select></label>
+          </div>
+          <label>받는 주소<input id="s-addr" placeholder="R…" autocomplete="off" spellcheck="false" /></label>
+          <div class="meta" id="s-addrnote"></div>
+          <label id="s-qtylabel">수량<input id="s-qty" type="number" min="0" step="any" /></label>
+          <div class="meta" id="s-held"></div>
+          <div class="row" style="margin-top:12px">
+            <button id="s-review" disabled>검토</button>
+          </div>
+        </div>
+
+        <!-- 검토. 누구에게 · 무엇을 · 얼마. 보내기 버튼은 여기에만 있다. -->
+        <div class="sendbox" id="send-review" style="display:none">
+          <div class="sendhead"><span>보내기 전 확인</span><button class="ghost" id="s-back">고치기</button></div>
+
+          <div class="review">
+            <div class="rk">누구에게</div>
+            <div class="rv"><div id="r-who"></div><code class="addr" id="r-addr"></code><div class="meta" id="r-hist"></div></div>
+            <div class="rk">무엇을</div>
+            <div class="rv" id="r-what"></div>
+            <div class="rk">얼마</div>
+            <div class="rv big" id="r-amount"></div>
+          </div>
+
+          <div id="r-warn"></div>
+
+          <!-- 🔴 이 확인은 문구 하나로 살고 죽는다.
+               예전 문구는 "이 주소 끝 4자리를 입력하세요" 였다. 사람은 우리
+               화면에 뜬 주소를 보고 그 4자리를 친다 — 그런데 클립보드가 이미
+               바뀌었다면 화면에 뜬 것이 공격자 주소라, 공격자 주소의 4자리를
+               정확히 치고 확인이 통과한다. 아무것도 막지 못한다.
+               막으려면 **원본**과 비교하게 해야 한다. -->
+          <div id="r-tailbox" style="display:none">
+            <div class="meta">
+              처음 보내는 주소입니다. 화면에 뜬 주소를 보지 마시고,
+              <b>받는 분이 알려 준 원본</b>(문자·영수증·카운터 화면)을 다시 보세요.
+              <b>끝 4자리</b>가 같으면 그대로 적어 주세요.
+            </div>
+            <div class="tail4" id="r-tailshow"></div>
+            <input id="s-tail" maxlength="4" inputmode="text" autocomplete="off"
+                   spellcheck="false" placeholder="원본의 끝 4자리" />
+            <div class="meta" id="s-tailwarn"></div>
+          </div>
+          <div id="r-passbox" style="display:none">
+            <div class="meta">지갑이 잠겨 있습니다. 이 한 번만 열고 곧바로 다시 잠급니다.</div>
+            <input id="s-pass" type="password" autocomplete="off" placeholder="지갑 암호" />
+          </div>
+
+          <div class="row" style="margin-top:12px">
+            <button id="s-go" disabled>보내기</button>
+          </div>
+          <div id="s-result"></div>
+        </div>
+
+        <div id="w-foreign"></div>
+
+        <table style="margin-top:12px">
+          <thead><tr><th>최근 거래</th><th class="num">금액</th><th class="num">확인</th></tr></thead>
+          <tbody id="w-txs"></tbody>
+        </table>
+      </section>
+
+
+      <!-- ── 가게: 벤딩머신과 메뉴판은 같은 일이다 ── -->
+      <section class="page" id="page-shop">
+        <h2 class="title">가게</h2>
+        <p class="lede">주문마다 주소가 따로 생깁니다. 그 주소로 들어온 돈만 그 주문의 결제입니다.</p>
+        <div class="tabs">
+          <button class="tab on" data-shoptab="orders">들어온 주문</button>
+          <button class="tab" data-shoptab="menu">메뉴판</button>
+          <button class="tab" data-goto="door">출입 · 회원</button>
+          <button class="tab" data-goto="msg">공지</button>
+          <button class="tab" data-shoptab="sales">매출 · 장부</button>
+          <button class="tab" data-shoptab="mine">가게 정보</button>
+        </div>
+
+        <!-- 매출장부. 체인은 "이체가 있었다"까지만 증명하고, 그게 얼마짜리였는지는
+             말해 주지 못한다. 여기가 그 숫자를 보관하고 꺼내는 자리다. -->
+        <div class="shoptab" id="shoptab-sales">
+          <div class="row" id="sl-range">
+            <button class="ghost on" data-days="0">오늘</button>
+            <button class="ghost" data-days="7">7일</button>
+            <button class="ghost" data-days="30">30일</button>
+            <button class="ghost" data-days="90">석 달</button>
+            <input id="sl-from" type="date" />
+            <span class="meta">—</span>
+            <input id="sl-to" type="date" />
+          </div>
+
+          <div id="sl-sum"></div>
+          <div id="sl-items"></div>
+
+          <div class="row" style="margin-top:18px">
+            <button class="ghost" id="sl-csv">엑셀 파일로 내보내기</button>
+            <span class="meta" id="sl-csvnote"></span>
+          </div>
+
+          <p class="meta" style="margin-top:20px; line-height:1.9">
+            가게가 받은 총액입니다. 부가세 구분과 과세 여부는 사업자 유형에 따라 달라서
+            여기서 계산하지 않습니다 — 세무 담당자에게 이 파일을 그대로 주시면 됩니다.
+          </p>
+
+          <div id="sl-rows"></div>
+        </div>
+
+        <!-- 자산 팔기. 손님이 이미 쓰는 결제 길 위에 얹는다. -->
+        <!-- 내 가게: 등록 = 자산 발행. 체인에 남고 아무도 지울 수 없다. -->
+        <div class="shoptab" id="shoptab-mine">
+          <div id="shop-none">
+            <div class="aibar">
+              <input id="ai-shop" placeholder="예: 강남에서 원두 직접 볶는 작은 카페, 포장만" autocomplete="off" />
+              <button class="ghost" id="ai-shop-go">AI로 채우기</button>
+              <button class="ghost" id="sh-sample">샘플 넣기</button>
+              <span class="meta" id="ai-shop-note"></span>
+            </div>
+
+            <div class="form">
+              <label>간판 사진</label>
+              <div class="row">
+                <button class="ghost" id="sh-pic">사진 올리기</button>
+                <span class="meta" id="sh-picnote">없어도 등록됩니다</span>
+              </div>
+              <div id="sh-picprev"></div>
+
+              <label style="margin-top:12px">가게 이름 (손님이 읽는 이름)</label>
+              <div class="row">
+                <input id="sh-ko" placeholder="한국어 — 강남 카페" autocomplete="off" />
+                <input id="sh-en" placeholder="English — Gangnam Cafe" autocomplete="off" />
+              </div>
+              <div class="row">
+                <input id="sh-ja" placeholder="日本語 (선택)" autocomplete="off" />
+                <input id="sh-zh" placeholder="中文 (선택)" autocomplete="off" />
+              </div>
+              <div class="meta">체인에 저장되는 이름은 영문 대문자만 가능합니다. 손님이 보는 이름은 위에 적은 것입니다.</div>
+
+              <label style="margin-top:12px">체인에 남을 이름</label>
+              <input id="sh-asset" placeholder="GANGNAM_CAFE" autocomplete="off" spellcheck="false" />
+              <div class="meta" id="sh-assetcheck"></div>
+
+              <label style="margin-top:12px">소개</label>
+              <input id="sh-desc" placeholder="원두를 직접 볶는 작은 카페" autocomplete="off" />
+
+              <label style="margin-top:12px">주소</label>
+              <input id="sh-loc" placeholder="손님이 찾아올 수 있게 쓰세요" autocomplete="off" />
+              <div class="meta">쓰시는 대로 저장합니다. 나라마다 주소 모양이 달라서 쪼개지 않습니다.</div>
+
+              <label style="margin-top:12px">좌표 (선택)</label>
+              <div class="row">
+                <input id="sh-coords" placeholder="지도 앱에서 복사해 붙여넣기" autocomplete="off" spellcheck="false" />
+                <button class="ghost" id="sh-checkmap">지도에서 확인</button>
+              </div>
+              <div class="meta" id="sh-coordnote">
+                구글·애플 지도에서 가게를 길게 눌러 좌표를 복사한 뒤 여기 붙이세요.
+                넣으면 손님 화면에 <b>거리와 길찾기</b>가 생깁니다. 안 넣어도 가게는 보입니다.
+              </div>
+
+              <label style="margin-top:12px">전화</label>
+              <input id="sh-phone" placeholder="손님이 걸 수 있는 번호" autocomplete="off" />
+
+              <div class="row" style="margin-top:10px">
+                <label class="check"><input type="checkbox" id="sh-pickup" checked /><span>매장·포장</span></label>
+                <label class="check"><input type="checkbox" id="sh-delivery" /><span>배달</span></label>
+              </div>
+
+              <!-- 노드는 새벽에도 돈다. 손님 화면이 그때도 주문을 받으면
+                   아무도 만들지 않을 커피값이 결제된다. -->
+              <!-- 손님이 밖에서 주문하러 오는 문. 이게 없으면 가게 목록에서
+                   가게를 찾아도 갈 데가 없다. -->
+              <label style="margin-top:16px">밖에서 주문하러 올 주소</label>
+              <div class="row">
+                <input id="sh-orderurl" placeholder="https://…" autocomplete="off" spellcheck="false" />
+                <button class="ghost" id="sh-usetunnel">지금 터널 주소 넣기</button>
+              </div>
+              <div class="meta" id="sh-orderurlnote" style="margin-top:6px">
+                비워 두면 가게 목록에 이름만 보이고 <b>주문 버튼이 안 생깁니다.</b>
+                이 주소는 체인에 올라가므로, 바뀌면 <b>재발행(RVN 소각)</b>을 해야 고쳐집니다 —
+                빠른 터널 주소는 켤 때마다 바뀌니 임시로만 쓰세요.
+              </div>
+
+              <label style="margin-top:16px">영업시간</label>
+              <div class="meta" style="margin-bottom:8px">
+                비워 두면 그 요일은 쉬는 날입니다. 닫는 시각이 여는 시각보다 이르면
+                <b>자정을 넘겨</b> 영업하는 것으로 봅니다 — 밤 6시 열고 새벽 2시 닫기.
+              </div>
+              <div id="sh-hours"></div>
+              <button class="ghost" id="sh-hours-all" style="margin-top:8px">월요일 시간을 나머지 요일에도</button>
+
+              <label style="margin-top:16px">지금 상태</label>
+              <div class="row">
+                <label class="check"><input type="checkbox" id="sh-closednow" /><span>지금 닫기 (시간표보다 우선)</span></label>
+              </div>
+              <input id="sh-closednote" placeholder="손님에게 보일 한마디 — 예: 재료가 떨어졌습니다" autocomplete="off" />
+              <div class="meta" id="sh-openpreview" style="margin-top:8px"></div>
+
+              <label style="margin-top:12px">돈 받을 주소</label>
+              <div class="row">
+                <input id="sh-addr" readonly placeholder="아래 버튼으로 만듭니다" />
+                <button class="ghost" id="sh-mkaddr">주소 만들기</button>
+              </div>
+              <div class="meta">이 지갑의 주소만 씁니다. 직접 입력하지 않는 이유는, 잘못 붙여넣으면 매출이 남에게 갑니다.</div>
+
+              <div class="cost" id="sh-cost"></div>
+
+              <div class="confirmbox" id="sh-confirmbox" style="display:none">
+                <div>등록하면 <b id="sh-confirmname"></b> 이름이 체인에 영구히 남고 RVN이 소각됩니다. 이름을 그대로 입력하세요.</div>
+                <input id="sh-confirm" autocomplete="off" />
+                <button id="sh-go" disabled>가게 등록</button>
+              </div>
+              <div id="sh-result"></div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- 메뉴판: 사진은 IPFS에, 메뉴는 CID만 참조 -->
+        <div class="shoptab" id="shoptab-menu">
+          <div class="aibar">
+            <input id="ai-menu" placeholder="예: 아메리카노 4500, 카페라떼 5000, 치즈케이크 6500" autocomplete="off" />
+            <button class="ghost" id="ai-menu-go">AI로 채우기</button>
+            <span class="meta" id="ai-menu-note"></span>
+          </div>
+          <div class="bar">
+            <button id="mn-add">품목 추가</button>
+            <button class="ghost" id="mn-save">메뉴판 올리기</button>
+            <label class="check" style="margin:0">
+              <span class="meta">가격 단위</span>
+              <select id="mn-cur" style="width:auto">
+                <option value="KRW">원 (₩)</option>
+                <option value="USD">달러 ($)</option>
+                <option value="RVN">RVN</option>
+              </select>
+            </label>
+            <span class="meta" id="mn-rate"></span>
+            <span class="meta" id="mn-note"></span>
+          </div>
+          <div id="mn-items"></div>
+          <div class="row" style="margin-top:14px">
+            <button class="ghost" id="mn-preview">손님 화면 보기</button>
+            <span class="meta" id="mn-prevnote"></span>
+          </div>
+          <div id="mn-prevbox"></div>
+          <div id="mn-result"></div>
+        </div>
+
+        <!-- 들어온 주문 -->
+        <div class="shoptab on" id="shoptab-orders">
+          <div class="bar">
+            <button class="ghost" id="or-refresh">새로고침</button>
+            <label class="check" style="margin:0">
+              <input type="checkbox" id="or-auto" /><span>자동 확인 (30초)</span>
+            </label>
+            <span class="meta" id="or-note"></span>
+          </div>
+          <div id="or-refund"></div>
+          <div class="warnbox" style="font-size:11.5px">
+            확인 수가 0이면 아직 <b>결제가 아닙니다.</b> 보낸 사람이 같은 돈을 다시 쓸 수 있습니다.
+            커피 한 잔은 1확인, 값비싼 물건은 더 기다리십시오.
+          </div>
+          <table>
+            <thead><tr><th>번호 · 시각</th><th>주소</th><th class="num">금액</th><th class="num">상태</th><th></th></tr></thead>
+            <tbody id="or-list"></tbody>
+          </table>
+        </div>
+
+      </section>
+
+
+
+      <!-- ── 알림 ──────────────────────────────────────────────────────
+           자산을 가진 것이 곧 구독이다. 회원권을 준 순간 그 회원은 공지
+           대상이 되고, 팔면 빠진다.                                  ── -->
+      <section class="page" id="page-msg">
+        <button class="ghost" id="msg-back" style="margin-bottom:10px">← 가게</button>
+        <h2 class="title">공지</h2>
+        <p class="lede">자산을 가진 사람 전원에게 갑니다. 답장은 받을 수 없습니다.</p>
+
+        <div class="tabs" style="margin-bottom:12px">
+          <button class="tab on" data-mtab="send">공지 보내기</button>
+          <button class="tab" data-mtab="inbox">받은 공지</button>
+          <button class="tab" data-mtab="direct">노드끼리 대화</button>
+        </div>
+
+        <div class="mtab on" id="mtab-send">
+          <div class="form">
+            <label>어느 자산 보유자에게</label>
+            <select id="nt-ch"></select>
+            <div class="meta" id="nt-chnote"></div>
+
+            <label style="margin-top:12px">제목</label>
+            <input id="nt-title" placeholder="이번 주 휴무 안내" autocomplete="off" />
+            <label style="margin-top:12px">내용</label>
+            <input id="nt-body" placeholder="9월 20일 하루 쉽니다" autocomplete="off" />
+
+            <div class="warnbox" style="margin-top:14px">
+              보낸 공지는 <b>지울 수 없습니다.</b> 체인에 영구히 남고 누구나 볼 수 있습니다.<br />
+              보낼 때마다 네트워크 수수료가 듭니다. 답장은 오지 않습니다 — 이건 방송입니다.
+            </div>
+            <div class="row"><button id="nt-go">공지 보내기</button><span class="meta" id="nt-note"></span></div>
+            <div id="nt-result"></div>
+          </div>
+        </div>
+
+        <div class="mtab" id="mtab-inbox">
+          <div class="bar">
+            <button class="ghost" id="in-load">불러오기</button>
+            <span class="meta" id="in-note"></span>
+          </div>
+          <div id="in-list"></div>
+        </div>
+
+        <div class="mtab" id="mtab-direct">
+          <div class="warnbox" id="ps-state" style="font-size:13px"></div>
+          <div class="form">
+            <label>대화방 이름 (상대와 미리 정한 것)</label>
+            <input id="ps-topic" placeholder="playx-도매-2026" autocomplete="off" />
+            <div class="meta">이 이름을 아는 사람은 누구나 들을 수 있습니다. 비밀 대화가 아닙니다.</div>
+            <label style="margin-top:12px">할 말</label>
+            <div class="row">
+              <input id="ps-text" placeholder="원두 20kg 다음 주에 가능할까요?" autocomplete="off" />
+              <button id="ps-go">보내기</button>
+            </div>
+            <div class="meta" id="ps-note"></div>
+          </div>
+          <p class="note">
+            서버 없이 두 컴퓨터가 직접 주고받습니다. 수수료도 없습니다.<br />
+            대신 <b>상대가 켜져 있어야</b> 하고, 지나간 말은 남지 않습니다.
+            손님 폰에는 닿지 않습니다 — 그쪽은 위의 공지나 매장 wifi를 씁니다.
+          </p>
+        </div>
+      </section>
+
+      <!-- ── 설정 ── -->
+      <!-- ── 이 컴퓨터 ─────────────────────────────────────────────────
+           세 가족을 섞지 않는다.
+           · 판정   — 눌러도 안 움직인다. 오늘 장사가 되나
+           · 능력   — 스위치. 지금 돌고 있는지만 말한다
+           · 한 번  — 버튼. 오늘 한 일
+           스위치를 아코디언으로 쓰지 않는다. 스위치가 오른쪽으로 가면
+           사람은 이미 켜진 줄 알고, 저장을 안 누른다.          ── -->
+      <section class="page" id="page-settings">
+        <h2 class="title">이 컴퓨터</h2>
+
+        <!-- 이 노드가 어디인지. 지점이 둘이 되는 순간 "이 컴퓨터"는 뜻이 없다. -->
+        <div class="card" style="margin-bottom:14px">
+          <h3>이 노드</h3>
+          <label style="display:block;font-size:14px;color:var(--muted);margin-top:8px">
+            이름 (지점명)
+            <input id="nd-name" placeholder="강남지점 · 2층 계산대" autocomplete="off"
+                   style="display:block;width:100%;margin-top:5px" />
+          </label>
+          <div class="meta" id="nd-note" style="margin-top:6px"></div>
+        </div>
+
+        <!-- 인터넷이 끊기면 결제 규칙이 달라진다. 화면이 먼저 말해야 한다. -->
+        <div id="net-banner"></div>
+
+        <!-- 판정 -->
+        <div class="verdict" id="hz-card">
+          <div class="v-state" id="hz-state">확인 중…</div>
+          <div class="v-why" id="hz-why"></div>
+          <div class="v-fix" id="hz-fix"></div>
+          <div id="hz-extra"></div>
+        </div>
+
+        <!-- 능력 -->
+        <div class="switches" id="sw-list"></div>
+
+        <!-- 한 번 하는 일 -->
+        <h3 class="grouphead">한 번 하는 일</h3>
+        <div class="tools">
+          <div id="bk-list"></div>
+          <div class="row" style="margin-top:12px">
+            <button id="bk-go">백업 만들기</button>
+            <button class="ghost" id="bk-seed">복구 단어 보기</button>
+            <span class="meta" id="bk-note"></span>
+          </div>
+          <div id="bk-result"></div>
+
+          <!-- 되돌리기. 백업만 있고 이게 없으면 백업이 아니라 습관이다. -->
+          <div class="row" style="margin-top:16px">
+            <button class="ghost" id="rs-pick">백업에서 되돌리기</button>
+            <button class="ghost" id="rs-card">복구 카드 인쇄</button>
+            <button class="ghost" id="rs-lost">폰을 잃어버렸어요</button>
+          </div>
+          <div id="rs-result"></div>
+
+          <!-- 훔쳐가는 문제. 지갑 잠금은 "못 보낸다"를 막을 뿐, "많이 들고 있다"는
+               안 고친다. 카운터를 안전하게 만드는 게 아니라 얕게 만든다. -->
+          <div class="card" style="margin-top:18px">
+            <h3>번 돈 금고로 옮기기</h3>
+            <div class="meta" style="margin-bottom:10px">
+              계산대에 하루치가 쌓입니다. 정해 둔 금액을 넘으면 남는 돈이 자동으로
+              <b>다른 지갑</b>으로 갑니다. 컴퓨터를 잃어버려도 거기 있는 돈은 무사합니다.
+            </div>
+            <div class="row">
+              <div style="flex:2">
+                <label>금고 주소 (이 컴퓨터가 아닌 지갑)</label>
+                <input id="sw-to" placeholder="R…" autocomplete="off" spellcheck="false" />
+              </div>
+            </div>
+            <div class="row" style="margin-top:9px">
+              <div><label>이 금액을 넘으면</label><input id="sw-above" inputmode="decimal" placeholder="3000" /></div>
+              <div><label>계산대에 남길 돈</label><input id="sw-keep" inputmode="decimal" placeholder="1000" /></div>
+            </div>
+            <div class="row" style="margin-top:10px">
+              <button id="sw-save">켜기</button>
+              <button class="ghost" id="sw-off">끄기</button>
+              <span class="meta" id="sw-note"></span>
+            </div>
+            <div id="sw-state" class="meta" style="margin-top:8px"></div>
+            <div class="warnbox" style="margin-top:10px;font-size:13.5px">
+              <b>금고 주소는 켤 때 고정됩니다.</b> 남이 이 컴퓨터를 만져도 목적지를 바꿀 수 없고,
+              사장님 지갑으로 보내는 것만 할 수 있습니다. 주소를 바꾸려면 지갑 암호가 필요합니다.
+            </div>
+          </div>
+
+          <!-- 백업을 어디에 둘 것인가. 폴더 경로를 타이핑하게 하면 아무도 안 한다. -->
+          <div class="card" style="margin-top:14px">
+            <h3>백업 둘 곳</h3>
+            <div id="bk-places" class="meta">찾는 중…</div>
+            <div class="warnbox" style="margin-top:10px;font-size:13.5px">
+              <b>지갑 파일은 클라우드에 둬도 됩니다</b> — 암호로 잠겨 있습니다.
+              하지만 <b>복구 단어 12개는 클라우드에 절대 올리지 마세요.</b>
+              그건 잠겨 있지 않아서, 계정 하나만 뚫려도 가게 돈이 넘어갑니다.
+              12단어는 종이(복구 카드)나 Bitwarden 같은 비밀번호 금고에 두세요.
+            </div>
+          </div>
+
+          <!-- 빈 화면은 전부 똑같이 생겼다. 고장난 것과 아직 아무것도 없는 것을
+               구별하려면 내용이 있어야 한다. -->
+          <div class="row" style="margin-top:16px">
+            <button class="ghost" id="sp-fill">시험용 가게 만들기</button>
+            <button class="ghost" id="sp-clear">시험용 지우기</button>
+            <span class="meta" id="sp-note"></span>
+          </div>
+          <div id="sp-result"></div>
+
+          <div class="warnbox" style="margin-top:12px;font-size:13.5px">
+            <b>백업본을 다른 컴퓨터에서 동시에 켜지 마세요.</b>
+            두 노드가 같은 지갑을 쓰면 같은 주소를 두 번 나눠 주고 돈을 잃습니다.
+            원래 컴퓨터가 <b>완전히 죽었을 때만</b> 쓰세요.
+          </div>
+        </div>
+
+        <!-- 자주 안 여는 것 -->
+        <details class="advanced">
+          <summary>고급 — 채굴 · AI 키 · 세부 설정</summary>
+
+          <div class="card" style="margin-top:14px">
+            <h3>AI 도우미</h3>
+            <div class="warnbox" style="font-size:13.5px">
+              <b>이 기능만 이 컴퓨터 밖으로 나갑니다.</b> 나머지는 전부 127.0.0.1 안에서 돕니다.
+              입력한 문장만 가고, 지갑·개인키·자산 목록은 보내지 않습니다.
+            </div>
+            <div id="keyrows"></div>
+            <details style="margin-top:12px">
+              <summary class="meta" style="cursor:pointer">다른 회사 · 내 컴퓨터의 AI</summary>
+              <div class="row" style="margin-top:9px">
+                <div><label>이름</label><input id="cu-label" placeholder="Grok" autocomplete="off" /></div>
+                <div><label>모델</label><input id="cu-model" placeholder="grok-4" autocomplete="off" /></div>
+              </div>
+              <div class="row" style="margin-top:9px">
+                <div><label>주소</label><input id="cu-url" placeholder="https://api.x.ai/v1" autocomplete="off" /></div>
+                <div><label>키 (없으면 비움)</label><input id="cu-key" type="password" autocomplete="off" /></div>
+              </div>
+              <div class="meta" style="margin-top:7px">Ollama는 <code>http://127.0.0.1:11434/v1</code>, 키 없음.</div>
+            </details>
+            <div class="row" style="margin-top:12px">
+              <button class="ghost" id="key-save">저장</button>
+              <div style="flex:1"><label>지금 쓸 곳</label><select id="ai-pick"></select></div>
+              <span class="meta" id="key-note"></span>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>채굴</h3>
+            <p class="meta" style="margin:0 0 12px">
+              이 컴퓨터로 캐지 않습니다. <b>따로 있는 GPU 기계</b>가 캐고 수익만 이 지갑으로 옵니다.
+            </p>
+            <div id="mn-detect"></div>
+            <div class="row">
+              <div style="flex:1"><label>캘 기계의 그래픽카드<select id="mn-gpu"></select></label></div>
+              <div style="flex:1"><label>전기요금 (원/kWh)<input id="mn-kwh" type="number" value="150" /></label></div>
+            </div>
+            <div class="row" id="mn-custom" style="display:none">
+              <div style="flex:1"><label>해시레이트 (MH/s)<input id="mn-mh" type="number" value="30" /></label></div>
+              <div style="flex:1"><label>소비전력 (W)<input id="mn-watts" type="number" value="150" /></label></div>
+            </div>
+            <div id="mn-calc"></div>
+            <label style="margin-top:14px">GPU를 몇 %로 쓸까요
+              <input id="mn-power" type="range" min="50" max="100" step="5" value="70" style="width:100%;margin-top:8px" />
+            </label>
+            <div id="mn-powernote" class="meta"></div>
+            <div class="row" style="margin-top:14px">
+              <div style="flex:1"><label>풀<select id="mn-pool"></select></label></div>
+              <div style="flex:1"><label>장비 이름<input id="mn-worker" placeholder="rig1" /></label></div>
+            </div>
+            <div class="row">
+              <button class="ghost" id="mn-addr">받을 주소 만들기</button>
+              <button class="ghost" id="mn-income">들어온 수익</button>
+              <span class="meta" id="mine-note"></span>
+              <span class="meta" id="mn-incomenote"></span>
+            </div>
+            <div id="mn-setup"></div>
+            <div id="mn-incomebox"></div>
+
+            <!-- 위는 따로 있는 GPU 기계 이야기다. 이건 이 컴퓨터로 캐는 경우 —
+                 계산대 맥미니로 큰돈이 되지는 않지만, 소량이라도 레이븐에
+                 기여하려는 사람이 많다. 그 선택을 막을 이유는 없고, 대신
+                 무엇을 얻고 무엇을 잃는지 화면이 말해야 한다. -->
+            <h3 style="margin-top:26px">이 컴퓨터로도 캐기</h3>
+            <p class="meta" style="margin:0 0 10px">
+              계산대 컴퓨터로는 <b>전기값이 더 나갈 수 있습니다.</b> 그래도 소량이나마
+              레이븐에 기여하고 싶을 때 켜세요. 채굴기는 우리가 넣어 두지 않았습니다 —
+              백신이 채굴기를 악성코드로 잡는 일이 흔해서, 넣으면 앱 전체가 격리됩니다.
+              아래에서 받아 <b>다운로드 폴더</b>에 두시면 찾아서 씁니다.
+            </p>
+            <div id="mn-miners"></div>
+            <div class="row" style="margin-top:10px">
+              <div style="flex:1"><label>채굴기 실행 파일 이름<input id="mn-bin" placeholder="kawpowminer" autocomplete="off" spellcheck="false" /></label></div>
+            </div>
+            <div class="row" style="margin-top:10px">
+              <button id="mn-run">채굴 켜기</button>
+              <button class="ghost" id="mn-halt">끄기</button>
+              <span class="meta" id="mn-runnote"></span>
+            </div>
+            <div class="meta" id="mn-runstate" style="margin-top:8px"></div>
+            <div class="meta" id="mn-net" style="margin-top:6px"></div>
+          </div>
+
+          <div class="card">
+            <h3>세부 설정</h3>
+            <p class="meta" style="margin:0 0 10px">
+              위의 <b>오래된 컴퓨터로 아끼기</b> 스위치가 이 값들을 대신 정합니다.
+              직접 만지실 때만 여세요.
+            </p>
+            <!-- 첫 화면에서 뺀 결정이 여기로 온다. 이미 노드를 돌리던 사람은
+                 처음 보는 화면이 아니라, 스스로 설정을 열었을 때 이 선택을
+                 만나야 한다. -->
+            <div id="cf-disk"></div>
+            <div class="row" id="cf-templates"></div>
+            <div id="cf-fields"></div>
+            <div class="row" style="margin-top:14px">
+              <button id="cf-save">저장하고 다시 켜기 안내</button>
+              <button class="ghost" id="cf-reload">되읽기</button>
+              <span class="meta" id="cf-note"></span>
+            </div>
+            <div id="cf-result"></div>
+            <div id="cf-others"></div>
+
+            <h3 style="margin-top:20px">IPFS</h3>
+            <div class="row" id="if-profiles">
+              <div class="tpl" data-ipfsprofile="lowpower"><b>오래된 컴퓨터</b><span>연결과 뒷일을 줄입니다</span></div>
+              <div class="tpl" data-ipfsprofile="default-networking"><b>기본으로</b><span>원래대로</span></div>
+            </div>
+            <div id="if-fields"></div>
+            <div class="row" style="margin-top:12px"><span class="meta" id="if-note"></span></div>
+            <div id="if-result"></div>
+          </div>
+
+          <div class="card">
+            <h3>읽기 전용</h3>
+            <div class="kv"><b>노드 RPC</b><span>127.0.0.1:8766 · 쿠키 인증</span></div>
+            <div class="kv"><b>IPFS API</b><span>127.0.0.1:5001</span></div>
+            <div class="kv"><b>IPFS 게이트웨이</b><span>127.0.0.1:8080</span></div>
+            <div class="kv"><b>판매 수수료</b><span>판매액의 1% · <code class="addr" id="fee-addr">아직 설정되지 않음</code></span></div>
+            <p class="meta">수수료를 끄는 스위치는 두지 않습니다 — 트랜잭션을 열어보면 드러나는 것을 설정으로 숨기면 더 나쁩니다.</p>
+          </div>
+        </details>
+      </section>
+    </main>
+
+
+    <!-- ── 발행 마법사 ─────────────────────────────────────────────────
+         목록에서 미끄러져 들어올 수 없는 자리. 전체 화면을 덮고, 나가는
+         길은 취소뿐이다. 단계가 고정이라 "무엇을 만드는지"를 먼저 고른다 —
+         이름의 / 와 # 로 종류를 추측하면 사람이 의도하지 않은 종류를 만든다.
+                                                                    ── -->
+    <div id="wiz" class="sheet hidden">
+      <div class="sheet-box">
+        <div class="sheet-head">
+          <span id="wz-title">새 자산 만들기</span>
+          <button class="ghost" id="wz-cancel">취소</button>
+        </div>
+        <div class="steps" id="wz-steps"></div>
+
+        <!-- 1. 무엇을. 값만 적으면 무엇을 고를지 모른다 — 어떤 가게가
+             언제 쓰는지를 같이 보여준다. -->
+        <div class="wstep on" data-step="1">
+          <div id="wz-kinds"></div>
+        </div>
+
+        <!-- 2. 이름 -->
+        <div class="wstep" data-step="2">
+          <label>자산 이름<input id="i-name" autocomplete="off" spellcheck="false" /></label>
+          <div id="i-namecheck" class="meta"></div>
+        </div>
+
+        <!-- 3. 파일 -->
+        <div class="wstep" data-step="3">
+          <p class="meta">파일이 자산의 얼굴입니다. 없어도 발행은 됩니다.</p>
+          <div class="row">
+            <input id="i-ipfs" placeholder="IPFS 해시 (Qm…)" autocomplete="off" spellcheck="false" />
+            <button class="ghost" id="i-upload">파일 고르기</button>
+          </div>
+          <div id="i-preview"></div>
+          <p class="meta">올린 파일은 이 컴퓨터가 보존합니다.</p>
+        </div>
+
+        <!-- 4. 수량 -->
+        <div class="wstep" data-step="4">
+          <div class="row" id="i-qtyrow">
+            <div style="flex:1"><label>수량<input id="i-qty" type="number" value="1" min="1" /></label></div>
+            <div style="flex:1"><label>소수점 자리<input id="i-units" type="number" value="0" min="0" max="8" /></label></div>
+          </div>
+          <div class="meta" id="i-uniquenote" style="display:none">
+            고유 자산은 하나뿐입니다. 수량은 <b>1</b>로 고정됩니다.
+          </div>
+          <label class="check" style="margin-top:12px">
+            <input type="checkbox" id="i-reissuable" checked />
+            <span>나중에 더 발행할 수 있게 (재발행 가능)</span>
+          </label>
+          <div class="meta" id="i-reissue-note">꺼두면 수량과 설정을 <b>영원히</b> 바꿀 수 없습니다.</div>
+        </div>
+
+        <!-- 5. 확인 -->
+        <div class="wstep" data-step="5">
+          <div class="review">
+            <div class="rk">만드는 것</div><div class="rv" id="i-r-kind"></div>
+            <div class="rk">이름</div><div class="rv" id="i-r-name"></div>
+            <div class="rk">수량</div><div class="rv" id="i-r-qty"></div>
+            <div class="rk">파일</div><div class="rv" id="i-r-file"></div>
+          </div>
+          <div class="cost" id="i-cost"></div>
+          <div class="confirmbox">
+            <div>이 이름은 체인에 영구히 남고 누구도 다시 쓸 수 없습니다. 그대로 다시 입력하세요.</div>
+            <input id="i-confirm" autocomplete="off" spellcheck="false" />
+          </div>
+          <div id="i-result"></div>
+        </div>
+
+        <div class="sheet-foot">
+          <button class="ghost" id="wz-back">뒤로</button>
+          <button id="wz-next">다음</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 팔기 ── -->
+    <div id="sellsheet" class="sheet hidden">
+      <div class="sheet-box">
+        <div class="sheet-head">
+          <span id="sl-title">팔기</span>
+          <button class="ghost" id="sl-cancel">취소</button>
+        </div>
+        <div class="warnbox" style="font-size:13px">
+          팔린 자산을 보내려면 <b>지갑이 잠깐 열립니다.</b> 그동안 이 컴퓨터의 다른 프로그램도
+          지갑을 쓸 수 있습니다. 가게용 지갑은 <b>오늘 팔 것만</b> 담아 따로 두십시오.
+        </div>
+        <div class="row">
+          <div style="flex:1"><label>수량<input id="sl-qty" type="number" min="0" step="any" /></label></div>
+          <div style="flex:1"><label>가격<input id="sl-price" type="number" min="0" step="any" /></label></div>
+          <div style="flex:1"><label>단위<select id="sl-cur">
+            <option value="KRW">원 (₩)</option><option value="USD">달러 ($)</option><option value="RVN">RVN</option>
+          </select></label></div>
+        </div>
+        <label>하루 자동 발송 한도 (수량)
+          <input id="sl-cap" type="number" min="0" step="any" placeholder="비우면 수량 × 10" />
+        </label>
+        <div class="meta">
+          한도는 판매를 막는 것이 아니라, 뭔가 잘못됐을 때 손실이 멈추는 선입니다.
+          하루 100개 팔 생각이면 100으로 두세요.
+        </div>
+        <div class="meta" id="sl-rate"></div>
+        <div id="sl-qr"></div>
+        <div class="sheet-foot">
+          <span class="meta" id="sl-note"></span>
+          <button id="sl-go">이 가격에 내놓기</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 복구 단어. 한 번 보여주고 닫는다. -->
+    <div id="seedsheet" class="sheet hidden">
+      <div class="sheet-box">
+        <div class="sheet-head"><span>복구 단어</span><button class="ghost" id="sd-close">닫기</button></div>
+        <div class="warnbox">
+          <b>이 단어를 아는 사람은 지갑 전부를 가져갈 수 있습니다.</b><br />
+          사진 찍지 마세요. 메모 앱에 적지 마세요. 남에게 보여주지 마세요.<br />
+          <b>종이에 적어</b> 이 컴퓨터가 아닌 곳에 두세요.
+        </div>
+        <div id="sd-words"></div>
+        <div class="meta" id="sd-extra"></div>
+        <p class="meta">
+          단어를 꺼내는 동안 이 컴퓨터에 임시 파일이 잠깐 생겼다가 지워집니다.
+          SSD에서는 지운 흔적이 완전히 사라지지 않을 수 있습니다.
+        </p>
+      </div>
+    </div>
+
+    <!-- ── AI 대화. 폼을 고칠 뿐, 발행·전송은 못 한다 ── -->
+    <button id="chat-open" style="display:none">AI와 대화</button>
+    <aside id="chat" class="hidden">
+      <div class="chat-head">
+        <span>AI와 함께 만들기</span>
+        <button class="ghost" id="chat-close">닫기</button>
+      </div>
+      <div id="chat-log">
+        <div class="msg ai">
+          가게 이름이나 메뉴를 말로 알려주시면 화면에 채워 드립니다.<br />
+          <span class="muted">발행·전송·소각은 하지 못합니다. 그건 직접 누르셔야 합니다.</span>
+        </div>
+      </div>
+      <div class="chat-in">
+        <input id="chat-q" placeholder="아이스 아메리카노 4500원 넣어줘" autocomplete="off" />
+        <button id="chat-go">보내기</button>
+      </div>
+    </aside>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
