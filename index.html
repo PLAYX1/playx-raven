@@ -591,6 +591,17 @@
         border: 1px solid var(--line); border-radius: 8px; background: var(--bg);
         color: var(--fg); font: inherit; font-size: 14px; }
       .keyask button { min-height: 38px; padding: 0 12px; font-size: 13px; }
+      /* 주소록 */
+      .abkrow { display: flex; align-items: center; gap: 12px; padding: 10px 8px;
+        border-bottom: 1px solid var(--line); }
+      .abkrow:last-child { border-bottom: 0; }
+      .abkrow .nm { flex: none; width: 150px; font-weight: 600; font-size: 14px; }
+      .abkrow .nm.none { font-weight: 400; color: var(--muted); }
+      .abkrow .ad { flex: 1; min-width: 0; font-family: ui-monospace, SFMono-Regular, monospace;
+        font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+      .abkrow .bl { flex: none; font-variant-numeric: tabular-nums; font-size: 14px; }
+      .abkrow button { min-height: 34px; padding: 0 10px; font-size: 13px; }
+      .abkrow .chg { font-size: 11.5px; color: var(--muted); }
 </style>
   </head>
   <body>
@@ -893,6 +904,30 @@
       <section class="page on" id="page-wallet">
         <h2 class="title">지갑</h2>
         <p class="lede">이 앱과 레이븐 코어는 같은 지갑을 씁니다. 동시에 열 수 없습니다.</p>
+
+        <!-- 받을 주소록. 코어에는 있고 여기엔 없던 것이다.
+             ⚠️ HD 지갑에는 "진짜 주소" 가 없다 — 씨앗 하나에서 주소가 무한히
+             나오고 전부 같은 지갑이다. 그래서 "내 주소 하나" 를 고르라고 하지
+             않고, **무엇에 쓰는 주소인지 이름을 붙이게** 한다. 나중에 세무에서
+             매출과 수수료를 갈라 보려면 그 이름이 유일한 단서다. -->
+        <details class="advanced" id="abk">
+          <summary>받을 주소록 <span class="meta" id="abk-sum"></span></summary>
+          <div class="row" style="margin-top:12px">
+            <div style="flex:1">
+              <label for="abk-name">새 주소에 붙일 이름</label>
+              <input id="abk-name" placeholder="PLAYX 수수료" autocomplete="off" />
+            </div>
+            <button id="abk-new" style="align-self:flex-end">주소 만들기</button>
+          </div>
+          <div class="meta" id="abk-note" style="margin-top:6px"></div>
+          <div id="abk-list" style="margin-top:12px"></div>
+          <p class="note" style="margin-top:12px">
+            이 목록은 <b>레이븐 코어와 같은 주소록</b>입니다. 여기서 붙인 이름이
+            코어에도 보이고, 코어에서 붙인 이름이 여기 보입니다.<br />
+            주문마다 자동으로 만들어지는 주소는 목록에 넣지 않습니다 — 하루 장사하면
+            수십 줄이 되어 직접 붙인 이름이 묻힙니다.
+          </p>
+        </details>
 
         <div class="cards">
           <div class="card">

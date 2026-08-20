@@ -24,6 +24,7 @@ mod raven;
 mod roles;
 mod send;
 mod setup;
+mod addrbook;
 mod knowledge;
 mod paths;
 mod sweep;
@@ -97,6 +98,9 @@ pub fn run() {
             shop::shop_open_now,
             shop::incoming_payments,
             shop::split_payment,
+            addrbook::addr_book,
+            addrbook::addr_new,
+            addrbook::addr_label,
             shop::fee_read,
             shop::fee_save,
             shop::pay_order,

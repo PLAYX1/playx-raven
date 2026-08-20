@@ -3439,6 +3439,84 @@ async function saveConf() {
   }
 }
 
+// ── 받을 주소록 ───────────────────────────────────────────────────────────
+//
+// 코어에는 있고 여기엔 없던 것이다. 코어의 주소록을 그대로 쓴다 — 우리 파일을
+// 따로 만들면 같은 지갑을 두 프로그램이 다르게 기억하게 되고, 그건 사고의 씨앗이다.
+
+async function loadAddrBook() {
+  try {
+    const r = await invoke<any>("addr_book");
+    const rows: any[] = r.rows || [];
+    $("abk-sum").textContent = `${rows.length}개 · ${fmtQty(r.total || 0)} RVN`;
+    $("abk-list").innerHTML = rows.length
+      ? rows
+          .map(
+            (x) => `<div class="abkrow">
+              <span class="nm ${x.label ? "" : "none"}">${
+                x.label ? escapeHtml(x.label) : "이름 없음"
+              }${x.change ? `<div class="chg">거스름돈</div>` : ""}</span>
+              <span class="ad" title="${escapeHtml(x.address)}">${escapeHtml(x.address)}</span>
+              <span class="bl">${fmtQty(x.balance || 0)}</span>
+              <button class="ghost" data-copy="${escapeHtml(x.address)}">복사</button>
+              <button class="ghost" data-name="${escapeHtml(x.address)}">이름</button>
+            </div>`,
+          )
+          .join("")
+      : emptyWithRaven("아직 이름 붙인 주소가 없습니다.<br />위에서 하나 만들어 보세요.", "hello");
+
+    $("abk-list")
+      .querySelectorAll<HTMLElement>("[data-copy]")
+      .forEach((b) => {
+        b.onclick = async () => {
+          await navigator.clipboard.writeText(b.dataset.copy || "");
+          b.textContent = "복사됨";
+          setTimeout(() => (b.textContent = "복사"), 1400);
+        };
+      });
+    $("abk-list")
+      .querySelectorAll<HTMLElement>("[data-name]")
+      .forEach((b) => {
+        b.onclick = async () => {
+          const addr = b.dataset.name || "";
+          const name = await ask("이 주소의 이름", addr, { value: "" });
+          if (name === null) return;
+          try {
+            await invoke("addr_label", { address: addr, label: name });
+            await loadAddrBook();
+          } catch (e) {
+            $("abk-note").innerHTML = `<span class="warn">${escapeHtml(String(e))}</span>`;
+          }
+        };
+      });
+  } catch (e) {
+    $("abk-list").innerHTML = `<span class="warn">${escapeHtml(String(e))}</span>`;
+  }
+}
+
+async function newAddrWithName() {
+  const name = ($("abk-name") as HTMLInputElement).value.trim();
+  $("abk-note").textContent = "만드는 중…";
+  try {
+    const r = await invoke<any>("addr_new", { label: name });
+    ($("abk-name") as HTMLInputElement).value = "";
+    // 만든 주소를 바로 보여 준다. 목록에서 찾게 하면 방금 만든 것이 어느
+    // 줄인지 몰라 다시 만든다.
+    $("abk-note").innerHTML =
+      `만들었습니다 — <b>${escapeHtml(r.address)}</b>` +
+      ` <button class="ghost" id="abk-cp" style="min-height:30px;padding:0 9px">복사</button>`;
+    const cp = document.getElementById("abk-cp");
+    if (cp)
+      cp.onclick = async () => {
+        await navigator.clipboard.writeText(r.address);
+        cp.textContent = "복사됨";
+      };
+    await loadAddrBook();
+  } catch (e) {
+    $("abk-note").innerHTML = `<span class="warn">${escapeHtml(String(e))}</span>`;
+  }
+}
+
 // ── 백업 ──────────────────────────────────────────────────────────────────
 //
 // 체인은 지갑을 복구해 주지 않는다. 자산은 체인에 있지만 그걸 움직일 열쇠는
@@ -5195,6 +5273,10 @@ window.addEventListener("DOMContentLoaded", () => {
     $("seedsheet").classList.add("hidden");
   });
   loadBackup();
+  $("abk-new").addEventListener("click", () => void newAddrWithName());
+  $("abk").addEventListener("toggle", () => {
+    if (($("abk") as HTMLDetailsElement).open) void loadAddrBook();
+  });
   $("sw-save").addEventListener("click", () => saveSweep(true));
   $("sw-off").addEventListener("click", () => saveSweep(false));
   loadSweep();
