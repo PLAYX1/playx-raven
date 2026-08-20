@@ -17,13 +17,13 @@
       }
       * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
       body { margin: 0; background: var(--bg); color: var(--fg);
-             font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", system-ui, sans-serif;
-             padding-bottom: calc(96px + var(--safe-b)); }
+             font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif;
+             padding-bottom: calc(124px + var(--safe-b)); }
       header { padding: 20px 18px 14px; border-bottom: 1px solid var(--line); }
       header img { width: 100%; max-height: 168px; object-fit: cover; border-radius: 12px;
                    margin-bottom: 13px; display: block; }
       h1 { margin: 0; font-size: 21px; letter-spacing: -0.02em; }
-      .sub { color: var(--muted); font-size: 13px; margin-top: 4px; }
+      .sub { color: var(--muted); font-size: 14px; margin-top: 5px; }
       .tags { display: flex; gap: 6px; margin-top: 10px; }
       /* 맨 위 한 줄. 스크롤하기 전에 보여야 한다. */
       .openbar { display: flex; align-items: center; gap: 8px; padding: 11px 16px;
@@ -36,7 +36,7 @@
       .openbar .dot.on { opacity: 1; }
       .tablebar { padding: 9px 16px; font-size: 15px; font-weight: 600;
                   background: var(--panel); border-bottom: 1px solid var(--line); }
-      .tag { font-size: 11px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line);
+      .tag { font-size: 12.5px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line);
              color: var(--muted); }
 
       main { padding: 8px 18px 0; }
@@ -45,8 +45,8 @@
       .item img { width: 62px; height: 62px; object-fit: cover; border-radius: 10px; flex: none;
                   background: var(--panel); }
       .item .nm { font-weight: 600; font-size: 15px; }
-      .item .pr { color: var(--muted); font-size: 13px; margin-top: 2px; }
-      .item .rv { color: var(--muted); font-size: 11.5px; }
+      .item .pr { color: var(--fg); font-size: 16px; font-weight: 600; margin-top: 3px; }
+      .item .rv { color: var(--muted); font-size: 13px; margin-top: 1px; }
       .qty { display: flex; align-items: center; gap: 4px; margin-left: auto; flex: none; }
       /* 결제에서 가장 큰 것이 지갑 열기여야 한다. 주소도 QR 도 그다음이다. */
       .walletbtn { display: block; margin: 14px 0 6px; padding: 17px;
@@ -61,22 +61,22 @@
 
       .ask { margin: 18px 0 24px; padding: 14px; border: 1px solid var(--line);
              border-radius: 12px; background: var(--panel); }
-      .ask h3 { margin: 0 0 9px; font-size: 13px; font-weight: 600; }
+      .ask h3 { margin: 0 0 9px; font-size: 15px; font-weight: 600; }
       .ask .row { display: flex; gap: 7px; }
-      .ask input { flex: 1; min-width: 0; padding: 11px 12px; border-radius: 9px;
+      .ask input { flex: 1; min-height: 46px; min-width: 0; padding: 11px 12px; border-radius: 9px;
                    border: 1px solid var(--line); background: var(--bg); color: var(--fg);
                    font-size: 15px; font-family: inherit; }
       .ask button { padding: 0 15px; border-radius: 9px; border: 0; background: var(--accent);
-                    color: #fff; font-size: 14px; font-family: inherit; cursor: pointer; }
+                    color: #fff; font-size: 15px; min-height: 46px; font-family: inherit; cursor: pointer; }
       .answer { margin-top: 11px; font-size: 14px; line-height: 1.7; white-space: pre-wrap; }
       .answer.err { color: var(--warn); }
-      .aidis { font-size: 11px; color: var(--muted); margin-top: 9px; }
+      .aidis { font-size: 12.5px; color: var(--muted); margin-top: 9px; line-height: 1.5; }
 
       .bar { position: fixed; left: 0; right: 0; bottom: 0; background: var(--bg);
              border-top: 1px solid var(--line); padding: 12px 18px calc(12px + var(--safe-b));
              display: flex; align-items: center; gap: 12px; }
       .bar .tot { font-size: 17px; font-weight: 600; }
-      .bar .tot small { display: block; font-size: 11.5px; font-weight: 400; color: var(--muted); }
+      .bar .tot small { display: block; font-size: 13px; font-weight: 400; color: var(--muted); }
       .bar button { margin-left: auto; padding: 14px 24px; border-radius: 11px; border: 0;
                     background: var(--accent); color: #fff; font-size: 15px; font-weight: 600;
                     font-family: inherit; cursor: pointer; }
@@ -89,12 +89,12 @@
       .pay h2 { margin: 0 0 4px; font-size: 17px; }
       .pay .amt { font-size: 27px; font-weight: 700; margin: 12px 0 2px;
                   font-variant-numeric: tabular-nums; }
-      .pay .fiat { color: var(--muted); font-size: 13px; }
+      .pay .fiat { color: var(--muted); font-size: 14px; }
       .pay svg { width: 200px; height: 200px; margin: 16px auto 8px; display: block;
                  background: #fff; padding: 9px; border-radius: 10px; }
       .pay code { display: block; font-size: 11.5px; word-break: break-all; color: var(--muted);
                   margin-top: 6px; }
-      .pay .timer { margin-top: 12px; font-size: 12.5px; color: var(--warn); }
+      .pay .timer { margin-top: 12px; font-size: 14px; font-weight: 600; color: var(--warn); }
       .pay .close { margin-top: 16px; width: 100%; padding: 13px; border-radius: 10px;
                     border: 1px solid var(--line); background: var(--bg); color: var(--fg);
                     font-size: 14px; font-family: inherit; cursor: pointer; }
@@ -142,7 +142,7 @@
     </main>
 
     <div class="bar">
-      <div class="tot"><span id="total">0</span><small id="totrvn"></small></div>
+      <div class="tot"><span id="total">₩0</span><small id="totrvn"></small></div>
       <button id="order" disabled>주문하기</button>
     </div>
 
@@ -224,6 +224,16 @@
       const fmt = (n) =>
         currency === "RVN" ? `${n} RVN` : `${symbol}${Math.round(n).toLocaleString()}`;
 
+      const fmtRvn = (n) => {
+        // 커피 한 잔이 1,183 RVN 이다. 소수점 둘째 자리는 1.5원짜리 정보라
+        // 손님에게는 잡음이고, 천단위 구분이 없으면 자릿수를 눈으로 못 센다.
+        // 1 RVN 미만일 때만 소수를 보여 준다 — 거기서는 그게 값의 전부다.
+        if (!isFinite(n)) return "";
+        if (n >= 100) return Math.round(n).toLocaleString() + " RVN";
+        if (n >= 1) return n.toFixed(1) + " RVN";
+        return n.toFixed(3) + " RVN";
+      };
+
       async function load() {
         const r = await fetch("/api/shop").then((x) => x.json());
         shop = r.shop || {};
@@ -257,11 +267,11 @@
           ? items
               .map(
                 (it, i) => `<div class="item">
-                  ${it.image ? `<img src="${shop.gateway || ""}/ipfs/${it.image}" alt="" loading="lazy" />` : `<div style="width:62px;height:62px;border-radius:10px;background:var(--panel);flex:none"></div>`}
+                  ${it.image ? `<img src="${shop.gateway || ""}/ipfs/${it.image}" alt="" loading="lazy" />` : ""}
                   <div>
                     <div class="nm">${it.name || ""}</div>
                     <div class="pr">${fmt(it.price || 0)}</div>
-                    ${rate && currency !== "RVN" ? `<div class="rv">${((it.price || 0) / rate).toFixed(2)} RVN</div>` : ""}
+                    ${rate && currency !== "RVN" ? `<div class="rv">${fmtRvn((it.price || 0) / rate)}</div>` : ""}
                   </div>
                   <div class="qty">
                     <button data-m="${i}">−</button><span id="c${i}">0</span><button data-p="${i}">+</button>
@@ -286,7 +296,7 @@
         const total = items.reduce((s, it, k) => s + (cart[k] || 0) * (it.price || 0), 0);
         $("total").textContent = fmt(total);
         $("totrvn").textContent =
-          rate && currency !== "RVN" && total ? `${(total / rate).toFixed(2)} RVN` : "";
+          rate && currency !== "RVN" && total ? fmtRvn(total / rate) : "";
         $("order").disabled = total <= 0 || !openState.open;
       }
 
@@ -380,10 +390,10 @@
                     background:${isReady ? "var(--accent)" : "var(--panel)"};
                     color:${isReady ? "#fff" : "inherit"}">
                  <img class="face" src="/raven-${face}.webp" alt="" width="96" height="127" />
-                 ${ticket ? `<div style="font-size:12px;opacity:.75">주문번호</div>
+                 ${ticket ? `<div style="font-size:14px;opacity:.8">주문번호</div>
                              <div style="font-size:34px;font-weight:700;line-height:1.1">${ticket}</div>` : ""}
                  <div style="font-size:${isReady ? "21" : "16"}px;font-weight:600;margin-top:6px">${title}</div>
-                 <div style="font-size:13px;opacity:.8">${sub}</div>
+                 <div style="font-size:14px;opacity:.85;margin-top:2px">${sub}</div>
                </div>`;
 
             // 나왔을 때만 소리와 진동. 매 단계 울리면 사람들이 폰을 엎어 둔다.

@@ -16,10 +16,10 @@
       }
       * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
       body { margin: 0; background: var(--bg); color: var(--fg);
-             font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", system-ui, sans-serif;
+             font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif;
              padding: 20px 18px calc(24px + var(--safe-b)); }
       h1 { margin: 0 0 3px; font-size: 21px; letter-spacing: -0.02em; }
-      .sub { color: var(--muted); font-size: 12.5px; }
+      .sub { color: var(--muted); font-size: 14px; }
       .search { margin: 16px 0 14px; }
       .search input { width: 100%; padding: 13px 14px; border-radius: 11px;
                       border: 1px solid var(--line); background: var(--panel); color: var(--fg);
@@ -32,7 +32,7 @@
       .card .ph { width: 56px; height: 56px; border-radius: 11px; flex: none;
                   background: var(--panel); }
       .card .nm { font-weight: 600; font-size: 15px; }
-      .card .de { color: var(--muted); font-size: 12.5px; margin-top: 1px;
+      .card .de { color: var(--muted); font-size: 14px; margin-top: 1px;
                   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .tags { display: flex; gap: 5px; margin-top: 5px; }
       .tag { font-size: 10.5px; padding: 2px 7px; border-radius: 999px;
@@ -49,18 +49,25 @@
       .msbtn { display: block; width: 100%; min-height: 56px; margin-bottom: 9px;
                border-radius: 12px; border: 1px solid var(--line); background: var(--panel);
                color: var(--fg); font-size: 17px; font-family: inherit; cursor: pointer; }
-      .msbtn span { display: block; font-size: 13px; color: var(--muted); margin-top: 2px; }
+      .msbtn span { display: block; font-size: 14px; color: var(--muted); margin-top: 2px; }
       .msbtn.cancel { background: transparent; border-color: transparent; color: var(--muted);
                       font-size: 15px; min-height: 48px; }
       .mschk { display: flex; align-items: center; gap: 10px; padding: 12px 4px;
                font-size: 15px; }
       .mschk input { width: 22px; height: 22px; }
-      .foot { margin-top: 22px; font-size: 11.5px; color: var(--muted); line-height: 1.8; }
+      .foot { margin-top: 22px; font-size: 13.5px; color: var(--muted); line-height: 1.8; }
           /* 목록에서 가장 큰 동작. 가게를 찾은 다음에 할 일은 주문뿐이다. */
       .orderbtn { display: inline-block; margin-top: 8px; margin-right: 8px;
                   padding: 9px 16px; border-radius: 8px; background: var(--fg);
-                  color: var(--bg); font-size: 13px; font-weight: 600;
+                  color: var(--bg); font-size: 14px; font-weight: 600;
                   text-decoration: none; }
+
+      /* 되돌아가는 길. 60x18 이라 손가락보다 작았다 — 나가지 못하는 화면은
+         쉬운 화면이 아니다. */
+      .back { display: inline-flex; align-items: center; min-height: 44px;
+        padding: 0 12px 0 0; font-size: 15px; text-decoration: none; }
+      /* 「가게 / 물건」 을 가르는 탭. 39x22 라 손가락 절반이었다. */
+      .tb { min-height: 44px; padding: 0 16px; font-size: 15px; }
 </style>
   </head>
   <body>
@@ -91,10 +98,9 @@
     <div id="sheet" style="display:none"></div>
 
     <p class="foot">
-      이 목록은 서버가 아니라 <b>블록체인에서 직접</b> 읽습니다. 이 가게의 컴퓨터가 대신 읽어 보여줄 뿐이고,
-      어느 회사도 목록을 가지고 있지 않습니다.<br />
-      가게 정보는 각 가게가 스스로 올린 것입니다. 아무도 검사하지 않으니
-      <b>처음 보는 가게에 큰 돈을 보내기 전에 확인하세요.</b>
+      <b>가게 정보는 각 가게가 직접 올린 것입니다. 아무도 검사하지 않습니다</b> —
+      처음 보는 가게에 큰 돈을 보내기 전에 확인하세요.<br />
+      이 목록을 가진 회사는 없습니다. 블록체인에서 그때그때 읽어 옵니다.
     </p>
 
     <script>
@@ -243,7 +249,7 @@
                         ? `<button data-go="${p.lat},${p.lon}" data-nm="${esc(p.name || "")}"
                              style="margin-top:8px;padding:8px 14px;border-radius:8px;
                              border:1px solid var(--line);background:var(--bg);color:var(--fg);
-                             font-size:13px;font-family:inherit">길찾기</button>`
+                             font-size:15px;font-family:inherit">길찾기</button>`
                         : ""
                     }
                   </div>

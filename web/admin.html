@@ -16,11 +16,11 @@
       }
       * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
       body { margin: 0; background: var(--bg); color: var(--fg);
-             font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", system-ui, sans-serif;
+             font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif;
              padding: 0 0 calc(78px + var(--safe-b)); }
       header { padding: 18px 18px 12px; }
       h1 { margin: 0 0 2px; font-size: 19px; letter-spacing: -0.02em; }
-      .sub { color: var(--muted); font-size: 12px; }
+      .sub { color: var(--muted); font-size: 14px; }
 
       main { padding: 0 18px; }
       .pane { display: none; }
@@ -53,20 +53,20 @@
       .row { display: flex; gap: 8px; margin: 12px 0; }
 
       table { width: 100%; border-collapse: collapse; }
-      th { text-align: left; font-size: 11px; color: var(--muted); font-weight: 500;
+      th { text-align: left; font-size: 13px; color: var(--muted); font-weight: 500;
            padding: 6px 0; border-bottom: 1px solid var(--line); }
       td { padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; }
       td.num { text-align: right; font-variant-numeric: tabular-nums; }
       .pending { color: var(--warn); }
 
       .warn { border: 1px solid var(--warn); border-radius: 10px; padding: 11px 13px;
-              font-size: 12px; line-height: 1.7; margin: 12px 0;
+              font-size: 14px; line-height: 1.7; margin: 12px 0;
               background: color-mix(in srgb, var(--warn) 8%, transparent); }
-      .err { color: var(--bad); font-size: 13px; }
+      .err { color: var(--bad); font-size: 14px; }
       #err:not(:empty) { margin: 0 18px 12px; padding: 12px 14px; border-radius: 10px;
                          border: 1px solid var(--bad); font-size: 13.5px; line-height: 1.7;
                          background: color-mix(in srgb, var(--bad) 8%, transparent); }
-      .note { font-size: 11.5px; color: var(--muted); line-height: 1.7; margin-top: 12px; }
+      .note { font-size: 13.5px; color: var(--muted); line-height: 1.7; margin-top: 12px; }
 
       .mn { display: grid; grid-template-columns: 1fr 92px 44px; gap: 8px; align-items: center;
             padding: 9px 0; border-bottom: 1px solid var(--line); }
@@ -76,16 +76,28 @@
              border-radius: 11px; max-width: 88%; white-space: pre-wrap; }
       .msg.ai { background: var(--panel); border: 1px solid var(--line); }
       .msg.me { background: var(--accent); color: #fff; margin-left: auto; }
-      .msg.did { border: 1px dashed var(--line); font-size: 12px; color: var(--muted);
+      .msg.did { border: 1px dashed var(--line); font-size: 14px; color: var(--muted);
                  max-width: 100%; }
 
       nav { position: fixed; left: 0; right: 0; bottom: 0; background: var(--bg);
             border-top: 1px solid var(--line); display: flex;
             padding-bottom: var(--safe-b); }
-      nav button { flex: 1; border: 0; border-radius: 0; background: none; padding: 13px 4px;
-                   font-size: 11.5px; color: var(--muted); }
+      /* 카운터에서 급하게 누른다. 44px 은 손가락이 아니라 **바쁜 손가락** 기준이다.
+         글자도 11.5px 은 곁눈으로 못 읽는다. */
+      nav button { flex: 1; border: 0; border-radius: 0; background: none; padding: 12px 4px;
+                   min-height: 52px; font-size: 14px; color: var(--muted); }
       nav button.on { color: var(--accent); font-weight: 600; }
-    </style>
+    
+      /* 주인공. 한 화면에 이것 하나만 이 대접을 받는다. */
+      .card.lead { border-color: var(--accent); border-width: 2px; }
+      .card.lead h3 { color: var(--accent); font-size: 15px; }
+      /* 상태 줄 — 카드 하나에 셋을 담는다. */
+      .card.status .srow { display: flex; justify-content: space-between; align-items: baseline;
+        gap: 12px; padding: 7px 0; }
+      .card.status .srow + .detail:empty { display: none; }
+      .card.status .sk { color: var(--muted); font-size: 14px; flex: none; }
+      .card.status .srow > span:last-child { text-align: right; font-size: 15px; }
+</style>
   </head>
   <body>
     <header>
@@ -104,37 +116,38 @@
           <button id="refresh">새로고침</button>
           <button id="auto">자동 켜짐</button>
         </div>
-        <div class="card">
-          <h3>노드</h3>
-          <div id="node"><span class="dot"></span>확인 중…</div>
-          <div class="detail" id="nodedetail"></div>
-        </div>
-        <div class="card">
-          <h3>잔액</h3>
-          <div class="big" id="bal">—</div>
-          <div class="detail" id="unconf"></div>
-        </div>
-        <div class="card">
-          <h3>지갑 잠금</h3>
-          <div id="lock">확인 중…</div>
-          <div class="detail" id="lockdetail"></div>
-        </div>
-        <div class="card">
+        <!-- 사장님이 이 화면을 여는 이유는 하나다 — 주문이 들어왔나.
+             그런데 그것이 다섯 번째 카드였고, 노드 상태·지갑 잠금과 똑같이
+             생겼었다. 카드 다섯이 같은 무게면 주인공이 없는 것이다. -->
+        <div class="card lead">
           <h3>들어온 주문</h3>
           <table>
             <thead><tr><th>시각</th><th>주소</th><th class="num">금액</th><th class="num">확인</th></tr></thead>
             <tbody id="orders"><tr><td colspan="4" class="detail">불러오는 중…</td></tr></tbody>
           </table>
         </div>
+
         <div class="card">
-          <h3>자동 응대</h3>
-          <div id="aiuse">—</div>
+          <h3>잔액</h3>
+          <div class="big" id="bal">—</div>
+          <div class="detail" id="unconf"></div>
+        </div>
+
+        <!-- 상태 셋. 각자 카드를 차지할 만큼 자주 보는 것이 아니다.
+             평소엔 한 줄로 읽고, 이상할 때만 눈에 걸리면 된다. -->
+        <div class="card status">
+          <div class="srow"><span class="sk">노드</span>
+            <span id="node"><span class="dot"></span>확인 중…</span></div>
+          <div class="detail" id="nodedetail"></div>
+          <div class="srow"><span class="sk">지갑 잠금</span><span id="lock">확인 중…</span></div>
+          <div class="detail" id="lockdetail"></div>
+          <div class="srow"><span class="sk">자동 응대</span><span id="aiuse">—</span></div>
           <div class="detail">손님 질문에 답할 때마다 사장님 API 키로 요금이 나갑니다.</div>
         </div>
 
         <p class="note">
-          <b>여기서는 돈을 보낼 수 없고, 자산도 발행할 수 없습니다.</b><br />
-          되돌릴 수 없는 일은 컴퓨터 앞에서 합니다 — 폰은 한 손으로 눌리기 때문입니다.<br /><br />
+          <b>여기서는 돈을 보낼 수 없고, 자산도 발행할 수 없습니다.</b>
+          되돌릴 수 없는 일은 컴퓨터 앞에서만 합니다.<br />
           앱을 다시 시작하면 이 링크는 만료됩니다.
         </p>
       </div>
