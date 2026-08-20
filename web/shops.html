@@ -3,6 +3,16 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <!-- 이 화면만 릴레이로 나간다(물건 목록을 거기서 읽는다). 그래서
+         `connect-src` 에 **그 셋만** 적는다 — 어디로든 나갈 수 있으면
+         CSP 를 쓰는 뜻이 없다. 12단어는 이 화면에 없지만, 남이 체인에
+         올린 가게 이름이 여기 그려지므로 막을 이유는 같다. -->
+    <meta http-equiv="Content-Security-Policy"
+          content="default-src 'none'; script-src 'self' 'unsafe-inline';
+                   style-src 'unsafe-inline'; img-src 'self' data: http: https:;
+                   connect-src 'self' wss://relay.damus.io wss://nos.lol
+                                wss://relay.primal.net;
+                   base-uri 'none'; form-action 'none'; frame-ancestors 'none'" />
     <title>가게 찾기</title>
     <style>
       :root {

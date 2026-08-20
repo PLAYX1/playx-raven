@@ -304,6 +304,75 @@ pub fn run() {
             server::order_states,
             server::set_order_state,
         ])
+        .setup(|app| {
+            // ── 창을 닫아도 가게는 계속 돈다 ────────────────────────────
+            //
+            // 🔴 X 를 누르면 앱이 통째로 끝나고 있었다. 그러면 **손님 폰
+            // 서버(8790)가 같이 죽는다** — QR 을 찍어도 아무 화면이 안 뜨고,
+            // 결제한 손님의 주문 상태가 안 바뀌고, 자동 발송과 채굴이 멈춘다.
+            // `ravend` 는 별도 데몬이라 살아남지만, 가게는 이미 멈춘 뒤다.
+            //
+            // 계산대 컴퓨터는 원래 안 끄는 물건이다. X 는 **창을 치우는 것**이고,
+            // 진짜로 끄는 것은 메뉴 막대에서 따로 고른다.
+            use tauri::menu::{Menu, MenuItem};
+            use tauri::tray::TrayIconBuilder;
+            use tauri::Manager;
+
+            let open = MenuItem::with_id(app, "open", "PLAY X Raven 열기", true, None::<&str>)?;
+            // "종료" 라고만 쓰면 창 닫기와 같은 것으로 읽힌다. 무엇이 멈추는지 쓴다.
+            let quit = MenuItem::with_id(
+                app,
+                "quit",
+                "완전히 끄기 (손님 주문도 멈춥니다)",
+                true,
+                None::<&str>,
+            )?;
+            let menu = Menu::with_items(app, &[&open, &quit])?;
+
+            TrayIconBuilder::with_id("main")
+                .icon(app.default_window_icon().cloned().ok_or("아이콘 없음")?)
+                .tooltip("PLAY X Raven — 가게가 돌고 있습니다")
+                .menu(&menu)
+                .show_menu_on_left_click(false)
+                .on_menu_event(|app, e| match e.id().as_ref() {
+                    "open" => {
+                        if let Some(w) = app.get_webview_window("main") {
+                            let _ = w.show();
+                            let _ = w.unminimize();
+                            let _ = w.set_focus();
+                        }
+                    }
+                    "quit" => app.exit(0),
+                    _ => {}
+                })
+                .on_tray_icon_event(|tray, event| {
+                    // 아이콘을 그냥 누르면 창을 다시 연다. 메뉴를 열어야만
+                    // 돌아올 수 있으면 아무도 못 찾는다.
+                    if let tauri::tray::TrayIconEvent::Click { button, .. } = event {
+                        if button == tauri::tray::MouseButton::Left {
+                            if let Some(w) = tray.app_handle().get_webview_window("main") {
+                                let _ = w.show();
+                                let _ = w.set_focus();
+                            }
+                        }
+                    }
+                })
+                .build(app)?;
+
+            if let Some(w) = app.get_webview_window("main") {
+                let h = app.handle().clone();
+                w.on_window_event(move |e| {
+                    if let tauri::WindowEvent::CloseRequested { api, .. } = e {
+                        // 끄지 않고 감춘다. 가게는 계속 돈다.
+                        api.prevent_close();
+                        if let Some(w) = h.get_webview_window("main") {
+                            let _ = w.hide();
+                        }
+                    }
+                });
+            }
+            Ok(())
+        })
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
         .run(|_app, event| {

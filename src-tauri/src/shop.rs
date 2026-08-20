@@ -1093,3 +1093,64 @@ mod ticket_cap_tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
+
+/// 주문의 진짜 값. **메뉴가 정한다, 손님이 아니라.**
+///
+/// 🔴 여태 손님 폰이 보낸 `total` 을 그대로 썼다. 메뉴에 10잔을 담고
+/// `total: 1` 을 보내면 1원짜리 결제 주소가 나왔고, 1원만 넣어도 「결제
+/// 확인됨」이 떴다. 손님 폰의 자바스크립트는 손님이 고칠 수 있다 — 화면에서
+/// 막는 것은 막는 것이 아니다.
+///
+/// 메뉴에 없는 이름은 0 원으로 친다. 지어낸 품목으로 총액을 부풀릴 수도,
+/// 가게가 못 주는 것을 사 갈 수도 없다.
+pub fn price_of(menu: &Value, items: &Value) -> f64 {
+    let mut price: std::collections::HashMap<String, f64> = std::collections::HashMap::new();
+    for it in menu.as_array().cloned().unwrap_or_default() {
+        if let Some(n) = it.get("name").and_then(Value::as_str) {
+            price.insert(n.to_string(), it.get("price").and_then(Value::as_f64).unwrap_or(0.0));
+        }
+    }
+    let mut sum = 0.0;
+    for it in items.as_array().cloned().unwrap_or_default() {
+        let n = it.get("name").and_then(Value::as_str).unwrap_or("");
+        let q = it.get("qty").and_then(Value::as_f64).unwrap_or(0.0);
+        if q <= 0.0 {
+            continue;
+        }
+        sum += price.get(n).copied().unwrap_or(0.0) * q;
+    }
+    (sum * 1e8).round() / 1e8
+}
+
+#[cfg(test)]
+mod price_tests {
+    use super::*;
+
+    fn menu() -> Value {
+        json!([{ "name": "아메리카노", "price": 4000 }, { "name": "케이크", "price": 6500 }])
+    }
+
+    /// 🔴 손님이 보낸 값을 믿으면 커피 열 잔이 1원이 된다.
+    #[test]
+    fn the_menu_decides_the_price_not_the_phone() {
+        let items = json!([{ "name": "아메리카노", "qty": 10 }]);
+        assert_eq!(price_of(&menu(), &items), 40_000.0);
+    }
+
+    /// 메뉴에 없는 것을 지어내도 값이 안 붙는다.
+    #[test]
+    fn an_invented_item_is_worth_nothing() {
+        let items = json!([{ "name": "황금열쇠", "qty": 1, "price": 1 }]);
+        assert_eq!(price_of(&menu(), &items), 0.0);
+    }
+
+    /// 음수 수량으로 총액을 깎을 수 없다.
+    #[test]
+    fn a_negative_quantity_cannot_discount_the_order() {
+        let items = json!([
+            { "name": "케이크", "qty": 1 },
+            { "name": "아메리카노", "qty": -100 }
+        ]);
+        assert_eq!(price_of(&menu(), &items), 6_500.0);
+    }
+}

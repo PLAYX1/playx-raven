@@ -3,6 +3,19 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <!-- 🔴 이 화면은 지갑과 **같은 출처**다(가게IP:8790). 여기서 남의
+         스크립트가 한 줄이라도 돌면 localStorage 의 12단어를 읽을 수
+         있다. 지갑만 막아 둔 것은 반쪽이었다.
+
+         `script-src 'self'` 는 인라인 <script> 를 막는다. 이 화면들은
+         본문에 <script> 를 쓰므로 그 해시를 넣는 대신 `unsafe-inline` 을
+         쓰되, **가져오는 곳은 자기 자신뿐**으로 못 박는다 — 남이 넣은
+         글자가 스크립트로 실행돼도 결과를 밖으로 보낼 길이 없다. -->
+    <meta http-equiv="Content-Security-Policy"
+          content="default-src 'none'; script-src 'self' 'unsafe-inline';
+                   style-src 'unsafe-inline'; img-src 'self' data: http: https:;
+                   connect-src 'self'; base-uri 'none'; form-action 'none';
+                   frame-ancestors 'none'" />
     <title>주문</title>
     <style>
       /* 손님 화면. 매장 조명 아래 서서 한 손으로 쓰는 것을 전제한다. */

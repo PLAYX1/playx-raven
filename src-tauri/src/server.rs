@@ -1168,8 +1168,27 @@ struct OrderBody {
 /// `getnewaddress`. Deriving a receiving address cannot spend anything.
 async fn api_order(
     State(state): State<ServerState>,
-    Json(body): Json<OrderBody>,
+    Json(mut body): Json<OrderBody>,
 ) -> impl IntoResponse {
+    // 🔴 손님이 보낸 `total` 을 그대로 믿고 있었다. 메뉴에 10잔을 담고
+    // `total: 1` 을 보내면 1원짜리 주소가 나오고, 1원만 넣어도 결제로 올라갔다.
+    // **값은 손님이 정하는 것이 아니라 가게 메뉴가 정한다.**
+    //
+    // 메뉴에 없는 품목은 값이 0 이라 합계에 안 들어간다 — 지어낸 품목으로
+    // 총액을 부풀릴 수 없고, 실제로 못 주는 것을 팔 수도 없다.
+    {
+        let menu = state
+            .shop
+            .lock()
+            .map(|sh| sh.get("menu").cloned().unwrap_or(json!([])))
+            .unwrap_or(json!([]));
+        let real = crate::shop::price_of(&menu, &body.items);
+        // 1원 오차는 반올림이다. 그 이상 어긋나면 우리가 아는 값으로 간다.
+        if (real - body.total).abs() > 1.0 {
+            body.total = real;
+        }
+    }
+
     if body.total <= 0.0 {
         return (
             StatusCode::BAD_REQUEST,
@@ -1306,8 +1325,24 @@ async fn api_order(
     let expect = split["shop_gets"].as_f64().unwrap_or(total_rvn);
     if let Ok(mut e) = state.order_expect.lock() {
         e.insert(address.clone(), expect);
+        // 🔴 여기서 `e.clear()` 를 하고 있었다. 501번째 주문이 들어오면 **지금
+        // 입금을 기다리는 주문의 기대 금액까지 전부** 사라지고, 그 뒤로는
+        // `want = 0` 이라 **얼마가 들어와도 결제 확인**이 된다.
+        // 하루 500건을 넘기는 가게에서 그날 오후가 전부 그 상태가 된다.
+        //
+        // 살아 있는 주문은 절대 안 지운다. 넘치면 **끝난 주문부터** 지운다.
         if e.len() > 500 {
-            e.clear();
+            let alive: std::collections::HashSet<String> = state
+                .order_state
+                .lock()
+                .map(|m| {
+                    m.iter()
+                        .filter(|(_, (st, _, _))| st == WAITING || st == SHORT)
+                        .map(|(k, _)| k.clone())
+                        .collect()
+                })
+                .unwrap_or_default();
+            e.retain(|k, _| alive.contains(k));
         }
     }
 
