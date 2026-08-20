@@ -361,6 +361,8 @@ fn customer_path(path: &str) -> bool {
             | "/api/chain/address"
             | "/api/chain/send"
     ) || path.starts_with("/ipfs/")
+        // 캐릭터 그림. 이걸 막으면 밖에서 연 손님 화면만 그림이 빠진다.
+        || (path.starts_with("/raven-") && (path.ends_with(".webp") || path.ends_with(".png")))
 }
 
 /// Would opening a tunnel put this path on the internet, and should it be?
@@ -1246,6 +1248,54 @@ async fn api_qr(Query(q): Query<std::collections::HashMap<String, String>>) -> i
     }
 }
 
+
+// ── 캐릭터 ────────────────────────────────────────────────────────────────
+//
+// 손님 화면은 `/raven-head.png` 을 부르고 있었는데 이 서버엔 그 경로가 없었다.
+// 가게에서 QR 로 연 손님은 **깨진 그림**을 봤다. rvn.ex.erci.se 로 열면
+// 나왔기 때문에 우리 눈에는 멀쩡해 보였다.
+//
+// 화면과 같이 바이너리에 굽는다(`include_bytes!`). 가게 노드는 폴더를 들고
+// 다니지 않는다 — 파일로 두면 옮길 때 그림만 빠진다.
+//
+// webp 다. 같은 그림이 png 로 263KB, webp 로 16KB — 가게 와이파이에서 이건
+// 취향이 아니라 조건이다. webp 는 2020년 이후 모든 폰에서 열린다.
+const FACES: [(&str, &[u8]); 6] = [
+    ("head", include_bytes!("../../web/raven-head.webp")),
+    ("hello", include_bytes!("../../web/raven-hello.webp")),
+    ("wait", include_bytes!("../../web/raven-wait.webp")),
+    ("happy", include_bytes!("../../web/raven-happy.webp")),
+    ("worry", include_bytes!("../../web/raven-worry.webp")),
+    ("sleep", include_bytes!("../../web/raven-sleep.webp")),
+];
+
+async fn raven_face(axum::extract::Path(name): axum::extract::Path<String>) -> impl IntoResponse {
+    // `raven-happy.webp` 도 `happy` 도 받는다. 예전 화면이 부르던 `.png` 이름도
+    // 같은 그림으로 답한다 — 옛 화면이 캐시에 남아 있어도 깨지지 않게.
+    let key = name
+        .trim_start_matches("raven-")
+        .trim_end_matches(".webp")
+        .trim_end_matches(".png")
+        .to_string();
+    match FACES.iter().find(|(k, _)| *k == key) {
+        Some((_, bytes)) => (
+            StatusCode::OK,
+            [
+                ("content-type", "image/webp"),
+                // 그림은 바뀌지 않는다. 손님이 두 번째 화면을 열 때 다시 받게
+                // 하면 느린 와이파이에서 그 값을 그대로 치른다.
+                ("cache-control", "public, max-age=604800, immutable"),
+            ],
+            bytes.to_vec(),
+        ),
+        None => (
+            StatusCode::NOT_FOUND,
+            [("content-type", "text/plain"), ("cache-control", "no-store")],
+            Vec::new(),
+        ),
+    }
+}
+
 // ── 사장 ──────────────────────────────────────────────────────────────────
 
 async fn admin_page(
@@ -1584,6 +1634,8 @@ pub async fn start_phone_server(
         .route("/api/ask", post(api_ask))
         .route("/api/order", post(api_order))
         .route("/api/qr", get(api_qr))
+        .route("/{name}.webp", get(raven_face))
+        .route("/{name}.png", get(raven_face))
         .route("/shops", get(shops_page))
         .route("/api/shops", get(api_shops))
         .route("/api/shop-profile", get(api_shop_profile))
@@ -2187,5 +2239,85 @@ mod spam {
         assert!(ORDERS_PER_DAY < ORDERS_PER_MIN * 60 * 24);
         // 하루 2,000건이면 12시간 영업에 분당 2.8건. 어떤 카페도 안 넘는다.
         assert!(ORDERS_PER_DAY >= 1_000, "하루 한도가 장사를 막습니다");
+    }
+}
+
+#[cfg(test)]
+mod face_tests {
+    use super::FACES;
+
+    /// 화면이 부르는 그림 이름이 실제로 없으면 **404 가 나고 자리만 빈다.**
+    /// 실제로 그렇게 나 있었다 — customer/wallet 이 `/raven-head.png` 을 불렀는데
+    /// 이 서버엔 그 경로가 없었다. rvn.ex.erci.se 로 열면 나왔기 때문에
+    /// 우리 눈에는 멀쩡했고, 가게에서 QR 로 연 손님만 깨진 그림을 봤다.
+    #[test]
+    fn every_face_the_screens_ask_for_exists() {
+        let sources: [(&str, &str); 4] = [
+            ("customer.html", include_str!("../../web/customer.html")),
+            ("wallet.html", include_str!("../../web/wallet.html")),
+            ("shops.html", include_str!("../../web/shops.html")),
+            ("admin.html", include_str!("../../web/admin.html")),
+        ];
+        let mut checked = 0;
+        for (who, src) in sources {
+            for (i, _) in src.match_indices("raven-") {
+                let rest = &src[i + "raven-".len()..];
+                let name: String = rest
+                    .chars()
+                    .take_while(|c| c.is_ascii_alphanumeric())
+                    .collect();
+                // `raven-${face}` 처럼 값이 실행 중에 정해지는 자리는 여기서
+                // 못 본다. 그 목록은 아래 시험이 따로 대조한다.
+                if name.is_empty() {
+                    continue;
+                }
+                checked += 1;
+                assert!(
+                    FACES.iter().any(|(k, _)| *k == name),
+                    "{who} 가 raven-{name} 을 부르는데 그런 그림이 없다"
+                );
+            }
+        }
+        assert!(checked > 0, "화면에서 캐릭터를 하나도 못 찾았다 — 시험이 헛돈다");
+    }
+
+    /// 손님 화면은 상태에 따라 이름을 조립한다(`/raven-${face}.webp`). 상태
+    /// 표에 적힌 표정이 없으면 **그 상태에 도달한 손님만** 빈 자리를 본다.
+    #[test]
+    fn every_face_in_the_state_table_exists() {
+        let src = include_str!("../../web/customer.html");
+        let table = &src[src.find("const STATE_KO").expect("상태 표가 없다")..];
+        let table: String = table.chars().take(600).collect();
+        let mut found = 0;
+        for line in table.lines() {
+            // ["제목", "설명", "표정"] 의 마지막 따옴표 값.
+            let quoted: Vec<&str> = line.split('"').collect();
+            if quoted.len() >= 7 {
+                let face = quoted[5];
+                found += 1;
+                assert!(
+                    FACES.iter().any(|(k, _)| *k == face),
+                    "상태 표가 raven-{face} 를 쓰는데 그런 그림이 없다"
+                );
+            }
+        }
+        assert!(found >= 4, "상태 표에서 표정을 {found}개밖에 못 읽었다");
+    }
+
+    /// 그림이 실제로 들어 있는지. include_bytes! 는 빈 파일도 조용히 굽는다.
+    #[test]
+    fn the_pictures_are_real_webp_and_small_enough() {
+        for (name, bytes) in FACES {
+            assert!(
+                bytes.starts_with(b"RIFF") && bytes[8..12] == *b"WEBP",
+                "raven-{name} 이 webp 가 아니다"
+            );
+            // 가게 와이파이. png 로 263KB 짜리를 다시 넣는 사고를 막는다.
+            assert!(
+                bytes.len() < 60_000,
+                "raven-{name} 이 {}KB 다 — 손님 폰에 너무 무겁다",
+                bytes.len() / 1024
+            );
+        }
     }
 }

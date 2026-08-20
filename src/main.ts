@@ -69,7 +69,7 @@ function saveHealth() {
 /// 각자 복붙하면 다음에 고칠 때 하나가 꼭 빠진다.
 function emptyWithRaven(html: string): string {
   return `<div style="text-align:center; padding:26px 10px">
-      <img src="/raven-head.png" alt="" width="140"
+      <img src="/raven-head.webp" alt="" width="140"
            style="display:block; margin:0 auto 12px; border-radius:14px" />
       <div class="muted" style="line-height:1.8">${html}</div>
     </div>`;

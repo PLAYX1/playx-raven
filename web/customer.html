@@ -99,7 +99,22 @@
                     border: 1px solid var(--line); background: var(--bg); color: var(--fg);
                     font-size: 14px; font-family: inherit; cursor: pointer; }
       .empty { color: var(--muted); padding: 34px 0; text-align: center; font-size: 14px; }
-    </style>
+    
+      /* 캐릭터. 상태가 바뀔 때 살짝 떠오르며 나타난다 — 애니메이션이 아니라
+         "바뀌었다"는 신호다. 움직임을 줄이는 설정을 켠 손님에게는 안 움직인다. */
+      .face { display: block; margin: 0 auto 8px; width: 96px; height: auto;
+        border-radius: 12px; animation: facein .34s ease-out both; }
+      @keyframes facein {
+        from { opacity: 0; transform: translateY(7px) scale(.96); }
+        to   { opacity: 1; transform: none; }
+      }
+      /* 기다리는 표정만 아주 천천히 숨 쉰다. 화면이 멈춘 게 아니라는 표시다. */
+      .face[src*="wait"] { animation: facein .34s ease-out both, breathe 3.4s ease-in-out .34s infinite; }
+      @keyframes breathe { 0%,100% { transform: none; } 50% { transform: translateY(-3px); } }
+      @media (prefers-reduced-motion: reduce) {
+        .face, .face[src*="wait"] { animation: none; }
+      }
+</style>
   </head>
   <body>
     <div class="openbar" id="openbar"></div>
@@ -334,11 +349,11 @@
       const STATE_KO = {
         // 아직 돈이 안 들어온 상태. 이 줄이 없어서 서버가 곧장 「결제 확인됨」을
         // 답했고, 손님은 결제하기도 전에 확인 화면을 봤다.
-        waiting: ["입금을 기다립니다", "결제하시면 이 화면이 저절로 바뀝니다"],
-        paid: ["결제 확인됨", "가게가 곧 시작합니다"],
-        making: ["만드는 중", "조금만 기다려 주세요"],
-        ready: ["나왔습니다", "카운터에서 받아 가세요"],
-        done: ["전달됨", "감사합니다"],
+        waiting: ["입금을 기다립니다", "결제하시면 이 화면이 저절로 바뀝니다", "wait"],
+        paid: ["결제 확인됨", "가게가 곧 시작합니다", "happy"],
+        making: ["만드는 중", "조금만 기다려 주세요", "wait"],
+        ready: ["나왔습니다", "카운터에서 받아 가세요", "happy"],
+        done: ["전달됨", "감사합니다", "hello"],
       };
 
       function watchOrder(address) {
@@ -358,12 +373,13 @@
             if (r.state === lastState) return;
             lastState = r.state;
 
-            const [title, sub] = STATE_KO[r.state];
+            const [title, sub, face] = STATE_KO[r.state];
             const isReady = r.state === "ready";
             $("p-state").innerHTML =
               `<div style="margin-top:16px;padding:16px;border-radius:12px;
                     background:${isReady ? "var(--accent)" : "var(--panel)"};
                     color:${isReady ? "#fff" : "inherit"}">
+                 <img class="face" src="/raven-${face}.webp" alt="" width="96" height="127" />
                  ${ticket ? `<div style="font-size:12px;opacity:.75">주문번호</div>
                              <div style="font-size:34px;font-weight:700;line-height:1.1">${ticket}</div>` : ""}
                  <div style="font-size:${isReady ? "21" : "16"}px;font-weight:600;margin-top:6px">${title}</div>
