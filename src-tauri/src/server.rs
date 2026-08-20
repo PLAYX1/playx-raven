@@ -364,6 +364,7 @@ fn customer_path(path: &str) -> bool {
             | "/api/shops"
             | "/api/shop-profile"
             | "/api/shop-history"
+            | "/api/nostr/publish"
             | "/api/directions"
             | "/api/ask"
             | "/api/order"
@@ -1369,6 +1370,19 @@ async fn api_shop_history(
     }
 }
 
+
+/// 지갑이 서명한 글을 릴레이로 넘긴다.
+///
+/// 🔴 지갑 화면은 `connect-src 'self'` 라 릴레이로 직접 못 나간다 — 12단어가
+/// 그 페이지에 있어서 일부러 막아 둔 것이다. 서명은 브라우저가 끝내고,
+/// **바깥으로 나가는 일만** 여기서 한다. 개인키는 여기까지 오지 않는다.
+async fn api_nostr_publish(Json(body): Json<Value>) -> impl IntoResponse {
+    match crate::nostrpub::nostr_publish(body).await {
+        Ok(v) => (StatusCode::OK, Json(v)),
+        Err(e) => (StatusCode::BAD_GATEWAY, Json(json!({ "error": e }))),
+    }
+}
+
 // ── 캐릭터 ────────────────────────────────────────────────────────────────
 //
 // 손님 화면은 `/raven-head.png` 을 부르고 있었는데 이 서버엔 그 경로가 없었다.
@@ -1757,6 +1771,7 @@ pub async fn start_phone_server(
         .route("/api/order", post(api_order))
         .route("/api/qr", get(api_qr))
         .route("/api/shop-history", get(api_shop_history))
+        .route("/api/nostr/publish", post(api_nostr_publish))
         .route("/{name}.webp", get(raven_face))
         .route("/{name}.png", get(raven_face))
         .route("/shops", get(shops_page))

@@ -186,6 +186,36 @@
         button:active, .btn:active { transform: none; }
         button:active::after, .pop, .shimmer, .risein { animation: none; }
       }
+      /* 값과 통화를 한 줄로. 기본 select 는 폰에서 작고 줄이 어긋난다. */
+      .priceline { display: flex; gap: 8px; }
+      .priceline input { flex: 1; min-width: 0; }
+      select {
+        min-height: 52px; padding: 0 14px; border-radius: 12px;
+        border: 1px solid var(--line); background: var(--bg); color: var(--fg);
+        font: inherit; font-size: 16px; appearance: none;
+        background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+                          linear-gradient(135deg, currentColor 50%, transparent 50%);
+        background-position: right 18px center, right 13px center;
+        background-size: 5px 5px, 5px 5px;
+        background-repeat: no-repeat;
+        padding-right: 38px;
+      }
+      .priceline select { flex: none; width: 110px; }
+      #sl-status { width: 100%; margin-bottom: 4px; }
+
+      /* 내가 올린 것 */
+      .mine { display: flex; gap: 12px; align-items: flex-start; padding: 12px 0;
+        border-bottom: 1px solid var(--line); }
+      .mine:last-child { border-bottom: 0; }
+      .mine .t { flex: 1; min-width: 0; }
+      .mine .nm { font-weight: 600; font-size: 16px; }
+      .mine .pr { color: var(--muted); font-size: 14px; margin-top: 2px; }
+      .mine .st { display: inline-block; margin-top: 4px; padding: 2px 9px;
+        border-radius: 999px; font-size: 12.5px; border: 1px solid var(--line); }
+      .mine .st.sold { border-color: var(--muted); color: var(--muted); }
+      .mine .st.active { border-color: var(--ok); color: var(--ok); }
+      .mine .st.reserved { border-color: var(--warn); color: var(--warn); }
+      .mine button { min-height: 40px; padding: 0 12px; font-size: 14px; flex: none; }
 </style>
   </head>
   <body data-screen="loading">
@@ -357,7 +387,7 @@
         placeholder="3년 썼고 잘 굴러갑니다. 직거래만 해요."></textarea>
 
       <label for="sl-price">얼마에</label>
-      <div class="row">
+      <div class="priceline">
         <input id="sl-price" inputmode="decimal" placeholder="120000" />
         <select id="sl-cur">
           <option value="KRW">원</option>
@@ -369,6 +399,13 @@
       <label for="sl-where">어디서</label>
       <input id="sl-where" maxlength="40" placeholder="의왕시 내손동" autocomplete="off" />
 
+      <label for="sl-status">지금 상태</label>
+      <select id="sl-status">
+        <option value="active">팝니다</option>
+        <option value="sold">판매 완료</option>
+        <option value="reserved">예약 중</option>
+      </select>
+
       <div class="note" style="margin-top:16px">
         <b>이 글은 어느 회사 서버에도 안 올라갑니다.</b>
         공개 릴레이에 뿌려지고, 사라질 수도 있습니다. 값이 큰 물건은 가게로
@@ -378,6 +415,10 @@
 
       <button id="sl-go" class="primary">올리기</button>
       <div class="msg" id="sl-msg"></div>
+
+      <!-- 내가 올린 것. 여기가 없으면 팔린 물건을 내릴 방법이 없다. -->
+      <h2 style="margin-top:28px">내가 올린 것</h2>
+      <div id="sl-mine"><p class="sub">불러오는 중…</p></div>
     </section>
 
     <section id="s-send">

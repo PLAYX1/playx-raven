@@ -16,7 +16,7 @@ import { rvn, toBitcoinJS } from "@hyperbitjs/chains";
 import RavencoinKey from "@ravenrebels/ravencoin-key";
 import { sign } from "@ravenrebels/ravencoin-sign-transaction";
 import { wordlists } from "bip39";
-import { signEvent, publish, tag, KIND_LISTING } from "./nostr";
+import { signEvent, KIND_LISTING } from "./nostr";
 
 // ── 상수 ────────────────────────────────────────────────────────────────────
 
@@ -630,8 +630,16 @@ async function sellPublish(): Promise<void> {
       tags,
       content: desc,
     });
-    const res = await publish(ev);
-    const okCount = res.ok.length;
+    // 🔴 릴레이로 직접 못 나간다. 이 페이지는 `connect-src 'self'` 이고,
+    // 그건 12단어가 여기 있어서 **일부러** 막아 둔 것이다. 서명은 여기서
+    // 끝내고, 바깥으로 나가는 일은 노드에게 시킨다 — 개인키는 안 넘어간다.
+    const res = await fetch("/api/nostr/publish", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(ev),
+    }).then((x) => x.json());
+    if (res?.error) throw new Error(res.error);
+    const okCount = (res?.ok || []).length;
     if (!okCount) {
       say("sl-msg", "어느 릴레이도 받지 못했습니다. 인터넷을 확인하고 다시 눌러 주세요.", "err");
     } else {

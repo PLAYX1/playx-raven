@@ -29,6 +29,7 @@ mod rewards;
 mod stock;
 mod walletx;
 mod knowledge;
+mod nostrpub;
 mod paths;
 mod sweep;
 mod tunnel;
@@ -114,6 +115,7 @@ pub fn run() {
             walletx::send_from,
             walletx::channels_mine,
             walletx::channel_leave,
+            nostrpub::nostr_publish,
             stock::stock_left,
             rewards::reward_ready,
             rewards::reward_now,

@@ -27,6 +27,10 @@ open = "5"
 zip = { version = "2", default-features = false, features = ["deflate"] }
 sha2 = "0.10"
 hex = "0.4"
+# 릴레이에 글을 올릴 때. 🔴 지갑 화면은 connect-src 'self' 라 밖으로 못 나간다 —
+# 12단어가 있는 페이지에 바깥 통로를 내지 않기 위해서다. 노드가 대신 나간다.
+tokio-tungstenite = { version = "0.24", features = ["rustls-tls-webpki-roots"] }
+futures-util = "0.3"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "multipart"] }
 tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
