@@ -106,6 +106,8 @@ pub struct ServerState {
     order_expect: Arc<Mutex<std::collections::HashMap<String, f64>>>,
     /// Next ticket number. Customers cannot read an address; they can read 14.
     next_ticket: Arc<Mutex<u32>>,
+    /// 번호가 어느 날짜의 것인가. 날이 바뀌면 1번부터 다시 센다.
+    ticket_day: Arc<Mutex<i64>>,
     /// Has the owner opened the till and staff screens to the internet?
     ///
     /// False by default. A tunnel forwards the whole port, and three of the
@@ -535,12 +537,7 @@ async fn admin_set_state(
         Ok(m) => m,
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "잠금 실패" }))),
     };
-    let ticket = m.get(&body.address).map(|(_, _, t)| *t).unwrap_or_else(|| {
-        let mut n = st.next_ticket.lock().unwrap_or_else(|e| e.into_inner());
-        let t = *n;
-        *n = if t >= 999 { 1 } else { t + 1 };
-        t
-    });
+    let ticket = m.get(&body.address).map(|(_, _, t)| *t).unwrap_or_else(|| next_ticket(&st));
     m.insert(body.address.clone(), (body.state.clone(), now_unix(), ticket));
 
     // 하루 200건짜리 가게면 이 표는 1년에 7만 줄이 된다. 아무도 지우지 않아서
@@ -602,6 +599,32 @@ const SWEEP_GAP_SECS: i64 = 4;
 /// seen. Asking it once per polling phone would multiply RPC load by the number
 /// of customers, against a node with four HTTP threads. One read updates every
 /// waiting order at once, so ten customers cost exactly what one costs.
+
+/// 다음 주문번호.
+///
+/// 🔴 여태 999 를 넘으면 1 로 돌아갔고, **날짜가 바뀌어도 안 돌아갔다.**
+/// 둘 다 카운터에서 사고가 난다:
+///  · 하루에 999 를 넘기는 가게(마트·구내식당)는 같은 날 1번이 두 명이 된다
+///  · 어제 500번까지 갔으면 오늘 첫 손님이 "501번" 을 듣는다
+///
+/// 그래서 **날이 바뀌면 1번부터**, 그리고 넘어가도 1 로 안 돌아간다.
+/// 999번을 넘긴 가게는 네 자리를 부르면 된다 — 부르기 불편한 것이
+/// 같은 번호 두 명보다 낫다.
+fn next_ticket(st: &ServerState) -> u32 {
+    let now = now_unix();
+    let day = (now + local_tz_offset_min() * 60) / 86_400;
+    let mut g = st.ticket_day.lock().unwrap_or_else(|e| e.into_inner());
+    let mut n = st.next_ticket.lock().unwrap_or_else(|e| e.into_inner());
+    if *g != day {
+        *g = day;
+        *n = 1;
+    }
+    let t = *n;
+    // 상한은 둔다. 무한히 커지면 화면이 깨지고, 9999 를 넘기는 가게는 없다.
+    *n = if t >= 9_999 { 1 } else { t + 1 };
+    t
+}
+
 async fn sweep_payments(st: &ServerState) {
     {
         // 창구를 먼저 닫고 조회한다. 열어 둔 채 기다리면 그 사이 도착한 요청이
@@ -672,12 +695,7 @@ async fn sweep_payments(st: &ServerState) {
         }
         // 번호는 돈이 들어온 순간에 준다. 주문할 때 주면 결제하지 않고 떠난
         // 사람들이 번호를 가져가서, 카운터에서 부르는 번호가 띄엄띄엄해진다.
-        let ticket = {
-            let mut n = st.next_ticket.lock().unwrap_or_else(|e| e.into_inner());
-            let t = *n;
-            *n = if t >= 999 { 1 } else { t + 1 };
-            t
-        };
+        let ticket = next_ticket(st);
         m.insert(addr.to_string(), ("paid".into(), now_unix(), ticket));
 
         // 여기가 매출이 생기는 순간이고, 장부에 적히는 유일한 순간이다.
@@ -1673,6 +1691,7 @@ pub async fn start_phone_server(
         sent: state.sent.clone(),
         order_state: state.order_state.clone(),
         next_ticket: state.next_ticket.clone(),
+        ticket_day: state.ticket_day.clone(),
         last_sweep: state.last_sweep.clone(),
         remote_admin: state.remote_admin.clone(),
         order_table: state.order_table.clone(),
@@ -1977,12 +1996,7 @@ pub fn set_order_state(
         return Err("알 수 없는 상태입니다.".into());
     }
     let mut m = state.order_state.lock().map_err(|_| "잠금 실패")?;
-    let ticket = m.get(&address).map(|(_, _, t)| *t).unwrap_or_else(|| {
-        let mut n = state.next_ticket.lock().unwrap_or_else(|e| e.into_inner());
-        let t = *n;
-        *n = if t >= 999 { 1 } else { t + 1 };
-        t
-    });
+    let ticket = m.get(&address).map(|(_, _, t)| *t).unwrap_or_else(|| next_ticket(&state));
     m.insert(address, (new_state, now_unix(), ticket));
     Ok(ticket)
 }
@@ -2101,6 +2115,7 @@ impl Default for ServerState {
             sent: Arc::new(Mutex::new(std::collections::HashSet::new())),
             order_state: Arc::new(Mutex::new(std::collections::HashMap::new())),
             next_ticket: Arc::new(Mutex::new(1)),
+            ticket_day: Arc::new(Mutex::new(0)),
             last_sweep: Arc::new(Mutex::new(0)),
             remote_admin: Arc::new(Mutex::new(false)),
             order_table: Arc::new(Mutex::new(std::collections::HashMap::new())),
@@ -2395,5 +2410,56 @@ mod face_tests {
                 bytes.len() / 1024
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod ticket_tests {
+    /// 🔴 번호가 999 에서 1 로 돌아가면 **같은 날 1번이 두 명**이 된다.
+    /// 하루 999잔을 넘기는 가게는 실제로 있다(마트·구내식당·축제).
+    /// 부르기 불편한 네 자리가 같은 번호 두 명보다 낫다.
+    ///
+    /// ⚠️ 시험 코드 자체에 찾는 문자열이 들어 있으면 **언제나 실패한다.**
+    /// 그래서 시험 모듈 앞부분만 본다 — 처음에 이걸 안 해서 두 개가 빨갛게 났다.
+    fn code_only() -> &'static str {
+        let src = include_str!("server.rs");
+        &src[..src.find("mod ticket_tests").unwrap_or(src.len())]
+    }
+
+    #[test]
+    fn the_number_does_not_wrap_at_999() {
+        let src = code_only();
+        assert!(
+            !src.contains("t >= 999"),
+            "999 에서 1 로 돌아간다 — 같은 날 같은 번호가 두 명 생긴다",
+        );
+        assert!(src.contains("t >= 9_999"), "상한이 없다 — 화면이 깨진다");
+    }
+
+    /// 🔴 날이 바뀌어도 안 돌아가면, 오늘 첫 손님이 "501번" 을 듣는다.
+    /// 가게에서 부르는 번호는 그날 몇 번째인지를 뜻한다.
+    #[test]
+    fn the_number_starts_at_one_each_day() {
+        let src = code_only();
+        let f = &src[src.find("fn next_ticket").expect("next_ticket 이 없다")..];
+        let body: String = f.chars().take(700).collect();
+        assert!(body.contains("ticket_day"), "날짜를 안 본다");
+        assert!(body.contains("*n = 1"), "날이 바뀌어도 1 로 안 돌아간다");
+        // 가게 시계를 쓴다. UTC 로 자르면 한국은 아침 9시에 번호가 리셋된다.
+        assert!(
+            body.contains("local_tz_offset_min"),
+            "UTC 로 날을 자르면 한국은 아침 9시에 번호가 바뀐다",
+        );
+    }
+
+    /// 같은 코드가 세 곳에 복사돼 있었다. 한 곳만 고치면 나머지가 남는다.
+    #[test]
+    fn there_is_only_one_place_that_hands_out_numbers() {
+        let src = code_only();
+        assert_eq!(
+            src.matches("next_ticket.lock()").count(),
+            1,
+            "번호를 나눠 주는 자리가 둘 이상이다",
+        );
     }
 }
