@@ -325,7 +325,8 @@ Rules:
 - price is a plain number in the shop's currency. No symbols, no commas.
 - asset must be A-Z 0-9 _ only and is permanent once registered — suggest it, never claim it is set.
 - Indexes refer to the menu list you were given, counting from 0.
-- Only emit actions the owner actually asked for. Do not tidy, rename, or "improve" things they did not mention."#
+- Only emit actions the owner actually asked for. Do not tidy, rename, or "improve" things they did not mention.
+- If they just want to talk, think something through, or ask what something is, answer in "reply" with an empty actions array. You are their assistant, not only a form filler."#
         }
         _ => return Err("알 수 없는 작업입니다.".into()),
     })
@@ -775,33 +776,18 @@ pub async fn ai_answer_any(
     Err("답을 받지 못했습니다.".into())
 }
 
-#[tauri::command]
-pub async fn ai_answer(
-    provider: String,
-    question: String,
-    shop_context: Value,
-) -> Result<String, String> {
-    if question.trim().is_empty() {
-        return Err("질문이 비어 있습니다.".into());
-    }
+/// One question to one provider. No JSON contract, no shop context — just
+/// a system line and a user line.
+///
+/// Pulled out of `ai_answer` because three callers now need the same
+/// transport with different instructions: the customer reply, the owner's
+/// own questions, and the two-provider comparison. Copying the five
+/// provider branches three times is how they drift apart.
+pub async fn ai_raw(provider: String, system: String, input: String) -> Result<String, String> {
     let key = read_key(&provider).unwrap_or_default();
     if key.is_empty() && provider != "custom" {
         return Err("API 키가 저장되어 있지 않습니다.".into());
     }
-
-    let system = "You answer customer questions for a shop, in the customer's own language.\n\
-        Use ONLY the shop information given below. It is the entire truth you have.\n\
-        - If the answer is not in it, say you do not know and suggest asking the shop directly. Never guess a price, an ingredient, an allergen, or an opening time.\n\
-        - Never confirm, accept, or promise an order. You cannot take payment. If they want to order, tell them to use the order button.\n\
-        - Be brief. Two or three sentences.\n\
-        - Prices are as listed; do not convert or discount them.";
-
-    let input = format!(
-        "SHOP INFORMATION:\n{}\n\nCUSTOMER QUESTION:\n{}",
-        serde_json::to_string_pretty(&shop_context).unwrap_or_default(),
-        question.trim()
-    );
-
     let client = reqwest::Client::new();
     match provider.as_str() {
         "anthropic" => {
@@ -841,7 +827,7 @@ pub async fn ai_answer(
         p if openai_compat(p).is_some() => {
             let (base, _) = openai_compat(p).unwrap();
             let model = model_for(p);
-            openai_compatible(&client, base, &model, &key, system, &input, false).await
+            openai_compatible(&client, base, &model, &key, &system, &input, false).await
         }
         "google" => {
             let body = json!({
@@ -881,10 +867,48 @@ pub async fn ai_answer(
         "custom" => {
             let (_, base, model) =
                 custom_config().ok_or_else(|| "커스텀 제공자가 설정되지 않았습니다.".to_string())?;
-            openai_compatible(&client, &base, &model, &key, system, &input, false).await
+            openai_compatible(&client, &base, &model, &key, &system, &input, false).await
         }
         _ => Err("알 수 없는 제공자입니다.".into()),
     }
+}
+
+#[tauri::command]
+pub async fn ai_answer(
+    provider: String,
+    question: String,
+    shop_context: Value,
+) -> Result<String, String> {
+    if question.trim().is_empty() {
+        return Err("질문이 비어 있습니다.".into());
+    }
+    let key = read_key(&provider).unwrap_or_default();
+    if key.is_empty() && provider != "custom" {
+        return Err("API 키가 저장되어 있지 않습니다.".into());
+    }
+
+    // 손님이 "이게 뭐예요", "레이븐코인이 뭐예요" 를 물으면 지금은 답할 것이
+    // 없었다. 노드가 사실을 들고 있게 한다 — 다만 **밝히는 소개**까지다.
+    // 숨은 칭찬을 넣으면 화면에 적어 둔 "가게가 올린 정보로만 답합니다" 가
+    // 거짓말이 되고, 이 프로그램을 쓰는 다른 가게 사장이 동의한 적 없이
+    // 자기 손님에게 우리 광고를 하게 된다.
+    let system = format!("You answer customer questions for a shop, in the customer's own language.\n\
+        Use ONLY the shop information given below. It is the entire truth you have.\n\
+        - If the answer is not in it, say you do not know and suggest asking the shop directly. Never guess a price, an ingredient, an allergen, or an opening time.\n\
+        - Never confirm, accept, or promise an order. You cannot take payment. If they want to order, tell them to use the order button.\n\
+        - Be brief. Two or three sentences.\n\
+        - Prices are as listed; do not convert or discount them.\n\
+        - The block below is background you may use when they ask what this shop, \
+this program, or Ravencoin is. State it plainly; it is an introduction, not a pitch.\n{}",
+        crate::knowledge::customer_brief());
+
+    let input = format!(
+        "SHOP INFORMATION:\n{}\n\nCUSTOMER QUESTION:\n{}",
+        serde_json::to_string_pretty(&shop_context).unwrap_or_default(),
+        question.trim()
+    );
+
+    ai_raw(provider, system, input).await
 }
 
 #[cfg(test)]
@@ -1018,4 +1042,79 @@ mod order_pref_tests {
             assert!(ai_order_save(true, vec!["deepseek".into()]).is_err());
         });
     }
+}
+
+// ── 두 곳에 같이 물어보기 ──────────────────────────────────────────────────
+//
+// 가격을 정하거나 공지 문구를 고를 때, 한 곳의 답은 그럴듯해서 반박할 거리가
+// 없다. 서로 다른 회사의 모델 둘에게 같은 것을 물으면 **어긋나는 지점**이
+// 드러나고, 거기가 사장이 실제로 결정해야 할 자리다.
+//
+// 🔴 손님 응대에는 쓰지 않는다. 값도 두 배, 기다림도 두 배인데 카운터에는
+// 줄이 서 있다 — "장사하는 사람은 속도가 생명" 과 정면으로 부딪힌다.
+// 사장이 스스로 누를 때만 돈다.
+
+/// Ask two different providers the same question and return both answers.
+///
+/// Deliberately no third "judge" call. A judge would hide the disagreement,
+/// and the disagreement is the product — the owner decides, not us.
+#[tauri::command]
+pub async fn ai_debate(question: String) -> Result<Value, String> {
+    if question.trim().is_empty() {
+        return Err("질문이 비어 있습니다.".into());
+    }
+    let order = try_order("", false);
+    if order.len() < 2 {
+        return Err(
+            "두 곳 이상의 API 키가 있어야 합니다. 설정에서 하나 더 넣어 주세요.".into(),
+        );
+    }
+    // 같은 회사 모델 둘은 같은 편향을 갖는다. 목록 순서상 앞의 서로 다른 둘.
+    let (a, b) = (order[0].clone(), order[1].clone());
+
+    let ask = |p: String, q: String| async move {
+        let sys = format!(
+            "You advise a shop owner, in Korean. Answer the question directly in 4~6 sentences.\n\
+             Give your actual recommendation, not a list of considerations. Say the strongest \
+             reason someone might disagree with you, in one sentence at the end.\n{}",
+            crate::knowledge::owner_brief()
+        );
+        ai_raw(p.clone(), sys, q).await.map(|t| (p, t))
+    };
+
+    let (ra, rb) = tokio::join!(ask(a.clone(), question.clone()), ask(b.clone(), question));
+    let one = |r: Result<(String, String), String>| match r {
+        Ok((p, t)) => json!({ "provider": p, "text": t }),
+        Err(e) => json!({ "provider": "", "error": e }),
+    };
+    Ok(json!({ "a": one(ra), "b": one(rb) }))
+}
+
+/// A plain question to one provider — no JSON contract, no form actions.
+///
+/// `ai_chat` makes the model answer in a fixed JSON shape so it can edit forms.
+/// That shape gets in the way when the owner just wants to think out loud, and
+/// a model that must emit `actions` tends to invent one.
+#[tauri::command]
+pub async fn ai_ask_owner(provider: String, question: String) -> Result<Value, String> {
+    if question.trim().is_empty() {
+        return Err("질문이 비어 있습니다.".into());
+    }
+    let order = try_order(&provider, false);
+    if order.is_empty() {
+        return Err("API 키가 하나도 없습니다. 설정에서 넣어 주세요.".into());
+    }
+    let sys = format!(
+        "You are the assistant inside PLAY X Raven, talking to the shop owner in Korean.\n\
+         Be concrete and brief — 3~6 sentences unless they ask for more.\n{}",
+        crate::knowledge::owner_brief()
+    );
+    let mut last = String::new();
+    for p in &order {
+        match ai_raw(p.clone(), sys.clone(), question.clone()).await {
+            Ok(t) => return Ok(json!({ "provider": p, "text": t })),
+            Err(e) => last = e,
+        }
+    }
+    Err(format!("{}곳 모두 실패했습니다. 마지막 이유: {last}", order.len()))
 }

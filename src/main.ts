@@ -1710,11 +1710,73 @@ function applyActions(actions: any[]): string[] {
   return done;
 }
 
+// 무엇을 시킬 것인가. 여태 이 창은 양식 채우기 전용이라, 사장님이 "이거 어떻게
+// 생각해" 라고 물으면 엉뚱하게 메뉴를 고쳤다.
+let chatMode: "fill" | "ask" | "debate" = "fill";
+
+const MODE_HINT: Record<string, string> = {
+  fill: "아이스 아메리카노 4500원 넣어줘",
+  ask: "레이븐코인으로 받으면 뭐가 좋아?",
+  debate: "커피값을 4500원으로 올릴까?",
+};
+
+function setChatMode(m: "fill" | "ask" | "debate") {
+  chatMode = m;
+  $("chat-mode")
+    .querySelectorAll<HTMLElement>("[data-mode]")
+    .forEach((b) => b.classList.toggle("on", b.dataset.mode === m));
+  ($("chat-q") as HTMLInputElement).placeholder = MODE_HINT[m];
+  if (m === "debate")
+    chatSay("ai", "서로 다른 두 곳에 같은 것을 묻습니다. <b>어긋나는 자리</b>가 사장님이 정하실 자리예요.");
+  else if (m === "ask")
+    chatSay("ai", "무엇이든 물어보세요. 화면은 건드리지 않습니다.");
+}
+
+async function chatAsk(q: string) {
+  chatSay("ai", "<span class=\"muted\">생각하는 중…</span>");
+  try {
+    const r = await invoke<any>("ai_ask_owner", { provider: aiProvider, question: q });
+    chatPopThinking();
+    chatSay("ai", escapeHtml(r?.text || "").replace(/\n/g, "<br />"));
+  } catch (e: any) {
+    chatPopThinking();
+    chatSay("ai", `<span class="warn">${escapeHtml(String(e))}</span>`);
+  }
+}
+
+async function chatDebate(q: string) {
+  chatSay("ai", "<span class=\"muted\">두 곳에 묻는 중…</span>");
+  try {
+    const r = await invoke<any>("ai_debate", { question: q });
+    chatPopThinking();
+    const one = (side: any) =>
+      side?.error
+        ? `<div><div class="who">${escapeHtml(side.provider || "?")}</div>
+             <span class="warn">${escapeHtml(side.error)}</span></div>`
+        : `<div><div class="who">${escapeHtml(side?.provider || "")}</div>
+             ${escapeHtml(side?.text || "").replace(/\n/g, "<br />")}</div>`;
+    chatSay("ai", `<div class="duo">${one(r?.a)}${one(r?.b)}</div>`);
+  } catch (e: any) {
+    chatPopThinking();
+    chatSay("ai", `<span class="warn">${escapeHtml(String(e))}</span>`);
+  }
+}
+
+// "생각하는 중…" 을 지운다. 남겨 두면 대화가 기다림으로 채워진다.
+function chatPopThinking() {
+  const log = $("chat-log");
+  const last = log.lastElementChild;
+  if (last && last.textContent?.includes("중…")) last.remove();
+}
+
 async function chatSend() {
   const q = ($("chat-q") as HTMLInputElement).value.trim();
   if (!q || !aiProvider) return;
   ($("chat-q") as HTMLInputElement).value = "";
   chatSay("me", q);
+
+  if (chatMode === "ask") return chatAsk(q);
+  if (chatMode === "debate") return chatDebate(q);
 
   const val = (id: string) => ($(id) as HTMLInputElement)?.value || "";
   const state = {
@@ -5051,6 +5113,11 @@ window.addEventListener("DOMContentLoaded", () => {
   $("chat-open").addEventListener("click", () => $("chat").classList.remove("hidden"));
   $("chat-close").addEventListener("click", () => $("chat").classList.add("hidden"));
   $("chat-go").addEventListener("click", chatSend);
+  $("chat-mode")
+    .querySelectorAll<HTMLElement>("[data-mode]")
+    .forEach((b) => {
+      b.onclick = () => setChatMode(b.dataset.mode as "fill" | "ask" | "debate");
+    });
   $("chat-q").addEventListener("keydown", (e) => {
     if ((e as KeyboardEvent).key === "Enter") chatSend();
   });

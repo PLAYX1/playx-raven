@@ -489,7 +489,80 @@
                 margin-top: 8px; align-items: center; }
       .obitem input { margin-top: 0 !important; }
       .obitem button { min-height: 44px; padding: 8px; }
-    </style>
+    
+      /* Ravi 가 대화창 머리에 앉는다. 도구가 아니라 누구와 이야기하는 느낌. */
+      .chat-ravi { width: 32px; height: 32px; border-radius: 8px; flex: none; }
+      .chat-head { display: flex; align-items: center; gap: 8px; }
+      .chat-head span { flex: 1; font-weight: 600; }
+      /* 무엇을 시킬지 고르는 자리. 세 개뿐이라 접지 않는다. */
+      .chat-mode { display: flex; gap: 4px; padding: 8px 12px 0; }
+      .chat-mode button { flex: 1; min-height: 36px; padding: 0 8px; font-size: 13px;
+        border: 1px solid var(--line); border-radius: 8px; background: none;
+        color: var(--muted); cursor: pointer; transition: background .15s, color .15s; }
+      .chat-mode button.on { background: var(--ravi); border-color: var(--ravi);
+        color: #fff; font-weight: 600; }
+      .chat-mode button:hover:not(.on) { background: var(--panel); }
+      /* 두 곳의 답을 나란히. 어긋나는 자리가 사장님이 결정할 자리다. */
+      .duo { display: grid; gap: 8px; margin-bottom: 12px; }
+      .duo > div { padding: 12px; border-radius: 12px; border: 1px solid var(--line); }
+      .duo .who { font-size: 12px; font-weight: 600; color: var(--ravi); margin-bottom: 4px; }
+
+      /* ── 손맛 ────────────────────────────────────────────────────────────
+         "즐거운 인터랙션" 은 화려한 애니메이션이 아니라 **누른 것이 눌린 것처럼
+         반응하는 것**이다. 아이폰이 처음에 준 느낌이 그거였다.
+         전부 CSS 로만 한다 — 이 화면들의 조건은 외부 스크립트 0개다. */
+
+      /* 누르면 실제로 들어간다. 60~90ms 는 "반응이 즉시"로 느껴지는 구간이고,
+         이보다 길면 굼떠 보이고 짧으면 안 보인다. */
+      button, .btn, a.btn {
+        transition: transform .08s ease, box-shadow .16s ease, background .16s ease,
+                    border-color .16s ease;
+      }
+      button:active, .btn:active { transform: scale(.965); }
+
+      /* 손가락이 닿기 전에 먼저 반응한다(마우스가 있는 기기에서만). */
+      @media (hover: hover) {
+        button:hover:not(:disabled) { border-color: var(--ravi); }
+      }
+
+      /* 눌렀을 때 그 자리에서 번지는 빛. ::after 하나로 끝난다. */
+      button { position: relative; overflow: hidden; }
+      button::after {
+        content: ""; position: absolute; inset: 0; border-radius: inherit;
+        background: radial-gradient(circle at center, var(--ravi) 0%, transparent 62%);
+        opacity: 0; transform: scale(.2); pointer-events: none;
+      }
+      button:active::after { animation: tap .42s ease-out; }
+      @keyframes tap {
+        0%   { opacity: .30; transform: scale(.2); }
+        100% { opacity: 0;   transform: scale(1.7); }
+      }
+
+      /* 값이 바뀐 자리를 눈이 따라가게. 숫자가 조용히 갈리면 못 본다. */
+      .pop { animation: pop .34s cubic-bezier(.34,1.56,.64,1); }
+      @keyframes pop {
+        0% { transform: scale(1); } 45% { transform: scale(1.14); } 100% { transform: scale(1); }
+      }
+
+      /* 기다리는 자리. 회색 상자가 가만히 있으면 고장으로 읽힌다. */
+      .shimmer { background: linear-gradient(90deg,
+        var(--panel) 25%, var(--line) 37%, var(--panel) 63%);
+        background-size: 400% 100%; animation: shim 1.4s linear infinite; }
+      @keyframes shim { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
+
+      /* 새로 들어온 줄은 아래에서 올라온다. 튀어나오면 놀라고, 스며들면 놓친다. */
+      .risein { animation: risein .28s ease-out both; }
+      @keyframes risein {
+        from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; }
+      }
+
+      /* 움직임을 줄이는 설정을 켠 사람에게는 전부 멈춘다. 멀미는 취향이 아니다. */
+      @media (prefers-reduced-motion: reduce) {
+        button, .btn, a.btn { transition: none; }
+        button:active, .btn:active { transform: none; }
+        button:active::after, .pop, .shimmer, .risein { animation: none; }
+      }
+</style>
   </head>
   <body>
 
@@ -1581,9 +1654,19 @@
     <button id="chat-open" style="display:none">AI와 대화</button>
     <aside id="chat" class="hidden">
       <div class="chat-head">
-        <span>AI와 함께 만들기</span>
+        <img src="/raven-head.webp" alt="" class="chat-ravi" />
+        <span>Ravi</span>
         <button class="ghost" id="chat-close">닫기</button>
       </div>
+
+      <!-- 여태 이 창은 양식 채우기 전용이었다. 사장님이 "이거 어떻게 생각해"
+           라고 물으면 엉뚱하게 메뉴를 고쳤다. 무엇을 시키는지 먼저 고르게 한다. -->
+      <div class="chat-mode" id="chat-mode">
+        <button class="on" data-mode="fill">채우기</button>
+        <button data-mode="ask">물어보기</button>
+        <button data-mode="debate">둘에게</button>
+      </div>
+
       <div id="chat-log">
         <div class="msg ai">
           가게 이름이나 메뉴를 말로 알려주시면 화면에 채워 드립니다.<br />

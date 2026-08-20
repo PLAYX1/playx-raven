@@ -24,6 +24,7 @@ mod raven;
 mod roles;
 mod send;
 mod setup;
+mod knowledge;
 mod paths;
 mod sweep;
 mod tunnel;
@@ -100,6 +101,8 @@ pub fn run() {
             ai::delete_api_key,
             ai::api_key_status,
             ai::ai_order_read,
+            ai::ai_debate,
+            ai::ai_ask_owner,
             ai::ai_order_save,
             ai::ai_fill,
             ai::ai_answer,

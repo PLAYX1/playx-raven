@@ -74,6 +74,62 @@
       .ravibox .rs { margin-top: 4px; font-size: 14px; color: var(--muted); line-height: 1.6; }
       @keyframes ravifloat { 0%,100% { transform: none; } 50% { transform: translateY(-6px); } }
       @media (prefers-reduced-motion: reduce) { .ravibox img { animation: none; } }
+
+      /* ── 손맛 ────────────────────────────────────────────────────────────
+         "즐거운 인터랙션" 은 화려한 애니메이션이 아니라 **누른 것이 눌린 것처럼
+         반응하는 것**이다. 아이폰이 처음에 준 느낌이 그거였다.
+         전부 CSS 로만 한다 — 이 화면들의 조건은 외부 스크립트 0개다. */
+
+      /* 누르면 실제로 들어간다. 60~90ms 는 "반응이 즉시"로 느껴지는 구간이고,
+         이보다 길면 굼떠 보이고 짧으면 안 보인다. */
+      button, .btn, a.btn {
+        transition: transform .08s ease, box-shadow .16s ease, background .16s ease,
+                    border-color .16s ease;
+      }
+      button:active, .btn:active { transform: scale(.965); }
+
+      /* 손가락이 닿기 전에 먼저 반응한다(마우스가 있는 기기에서만). */
+      @media (hover: hover) {
+        button:hover:not(:disabled) { border-color: var(--ravi); }
+      }
+
+      /* 눌렀을 때 그 자리에서 번지는 빛. ::after 하나로 끝난다. */
+      button { position: relative; overflow: hidden; }
+      button::after {
+        content: ""; position: absolute; inset: 0; border-radius: inherit;
+        background: radial-gradient(circle at center, var(--ravi) 0%, transparent 62%);
+        opacity: 0; transform: scale(.2); pointer-events: none;
+      }
+      button:active::after { animation: tap .42s ease-out; }
+      @keyframes tap {
+        0%   { opacity: .30; transform: scale(.2); }
+        100% { opacity: 0;   transform: scale(1.7); }
+      }
+
+      /* 값이 바뀐 자리를 눈이 따라가게. 숫자가 조용히 갈리면 못 본다. */
+      .pop { animation: pop .34s cubic-bezier(.34,1.56,.64,1); }
+      @keyframes pop {
+        0% { transform: scale(1); } 45% { transform: scale(1.14); } 100% { transform: scale(1); }
+      }
+
+      /* 기다리는 자리. 회색 상자가 가만히 있으면 고장으로 읽힌다. */
+      .shimmer { background: linear-gradient(90deg,
+        var(--panel) 25%, var(--line) 37%, var(--panel) 63%);
+        background-size: 400% 100%; animation: shim 1.4s linear infinite; }
+      @keyframes shim { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
+
+      /* 새로 들어온 줄은 아래에서 올라온다. 튀어나오면 놀라고, 스며들면 놓친다. */
+      .risein { animation: risein .28s ease-out both; }
+      @keyframes risein {
+        from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; }
+      }
+
+      /* 움직임을 줄이는 설정을 켠 사람에게는 전부 멈춘다. 멀미는 취향이 아니다. */
+      @media (prefers-reduced-motion: reduce) {
+        button, .btn, a.btn { transition: none; }
+        button:active, .btn:active { transform: none; }
+        button:active::after, .pop, .shimmer, .risein { animation: none; }
+      }
 </style>
   </head>
   <body>
@@ -222,7 +278,7 @@
                   const s = states.get(p.address)?.state || "paid";
                   const t = states.get(p.address)?.ticket;
                   const tbl = states.get(p.address)?.table;
-                  return `<div class="ticket ${s}">
+                  return `<div class="ticket ${s} risein">
                     <!-- 자리로 가져다주는 가게는 번호를 부르지 않는다.
                          테이블이 있으면 그게 번호보다 먼저 보여야 한다. -->
                     <div class="no">${tbl ? tbl + "번 테이블" : (t || "—")}</div>
