@@ -95,6 +95,15 @@ pub struct ServerState {
     /// 쓰이는데, 자리를 하나 늘리면 여섯 군데를 다 고쳐야 하고 그중 하나를
     /// 빠뜨리면 컴파일은 되면서 값만 어긋난다.
     order_table: Arc<Mutex<std::collections::HashMap<String, String>>>,
+    /// 이 주소로 **얼마가 들어와야** 이 주문이 결제된 것인가.
+    ///
+    /// 🔴 여태 이 값이 없었다. `sweep_payments` 는 "그 주소로 돈이 왔는가" 만
+    /// 보고 금액을 대조하지 않아서, 1,183 RVN 짜리 커피에 1 RVN 을 보내도
+    /// 「결제 확인됨」이 떴다. 체인은 보낸 만큼만 보내 준다 — 모자란 것을
+    /// 알아채는 것은 우리 몫이다.
+    ///
+    /// 수수료를 떼는 가게에서는 이 값이 총액이 아니라 **가게 몫**이다.
+    order_expect: Arc<Mutex<std::collections::HashMap<String, f64>>>,
     /// Next ticket number. Customers cannot read an address; they can read 14.
     next_ticket: Arc<Mutex<u32>>,
     /// Has the owner opened the till and staff screens to the internet?
@@ -126,6 +135,9 @@ const STATES: [&str; 4] = ["paid", "making", "ready", "done"];
 /// `sweep_payments`. Leaving this out of the settable set is what keeps a
 /// mis-tap on the counter screen from confirming a payment nobody made.
 const WAITING: &str = "waiting";
+/// 돈은 왔는데 모자란다. 조용히 기다리게 두면 손님은 낸 줄 알고 서 있고,
+/// 가게는 안 온 줄 알고 안 만든다 — 둘 다 상대가 잘못했다고 생각한다.
+const SHORT: &str = "short";
 
 /// 1분에 이만큼까지만 새 주문을 만든다.
 ///
@@ -608,7 +620,7 @@ async fn sweep_payments(st: &ServerState) {
     let has_waiting = st
         .order_state
         .lock()
-        .map(|m| m.values().any(|(s, _, _)| s == WAITING))
+        .map(|m| m.values().any(|(s, _, _)| s == WAITING || s == SHORT))
         .unwrap_or(false);
     if !has_waiting {
         return;
@@ -633,7 +645,29 @@ async fn sweep_payments(st: &ServerState) {
             continue;
         };
         let Some(slot) = m.get(addr) else { continue };
-        if slot.0 != WAITING {
+        if slot.0 != WAITING && slot.0 != SHORT {
+            continue;
+        }
+
+        // 🔴 여태 금액을 대조하지 않았다. 그 주소로 **뭐라도** 들어오면
+        // 「결제 확인됨」이었다 — 1,183 RVN 짜리 커피에 1 RVN 을 보내도.
+        // 체인은 보낸 만큼만 보내 준다. 모자란 것을 알아채는 것은 우리 몫이다.
+        //
+        // 기대값은 총액이 아니라 **가게 몫**이다(수수료를 뗀 뒤). 다른 지갑으로
+        // 전액이 오면 그건 기대값보다 많으니 당연히 통과한다.
+        let got = p["amount"].as_f64().unwrap_or(0.0).abs();
+        let want = st
+            .order_expect
+            .lock()
+            .ok()
+            .and_then(|e| e.get(addr).copied())
+            .unwrap_or(0.0);
+        // 1사토시 오차는 봐준다. 8자리 반올림이 양쪽에서 일어난다.
+        if want > 0.0 && got + 1e-8 < want {
+            // 한 푼도 안 왔으면 아직 기다리는 것이고, 왔는데 모자라면 말해 준다.
+            if got > 0.0 {
+                m.insert(addr.to_string(), (SHORT.into(), now_unix(), 0));
+            }
             continue;
         }
         // 번호는 돈이 들어온 순간에 준다. 주문할 때 주면 결제하지 않고 떠난
@@ -1211,11 +1245,34 @@ async fn api_order(
     // 되돌려주지 않는다.
     let _ = crate::ledger::open_order(&address, &body.items, &quote, now, table.as_deref());
 
+    // 얼마가 들어와야 결제인가. 손님은 메뉴 가격을 그대로 내고, 가게가 조금
+    // 덜 받는다 — 카드가 이미 그렇게 돈다. 그래서 **기대값은 총액이 아니라
+    // 가게 몫**이다. 이걸 총액으로 두면 수수료를 뗀 결제가 전부 미달로 보인다.
+    let total_rvn = quote.get("rvn").and_then(Value::as_f64).unwrap_or(0.0);
+    let fee_cfg = crate::shop::fee_config();
+    let split = crate::shop::split_payment(
+        total_rvn,
+        fee_cfg.0,
+        fee_cfg.1.clone(),
+    );
+    let expect = split["shop_gets"].as_f64().unwrap_or(total_rvn);
+    if let Ok(mut e) = state.order_expect.lock() {
+        e.insert(address.clone(), expect);
+        if e.len() > 500 {
+            e.clear();
+        }
+    }
+
     (
         StatusCode::OK,
         Json(json!({
             "address": address,
             "quote": quote,
+            // 손님 지갑이 한 거래로 둘에게 나눠 보낼 수 있게 알려 준다.
+            // 다른 지갑은 모르는 값이라 무시하고 전액을 가게로 보낸다 —
+            // 그때는 수수료가 안 걷히지만 **주문은 정상 처리된다**(아래 대조가
+            // 가게 몫 이상이면 통과시키므로).
+            "fee": split,
             "items": body.items,
             "note": body.note,
             "shop": shop_name,
@@ -1619,6 +1676,7 @@ pub async fn start_phone_server(
         last_sweep: state.last_sweep.clone(),
         remote_admin: state.remote_admin.clone(),
         order_table: state.order_table.clone(),
+        order_expect: state.order_expect.clone(),
         order_times: state.order_times.clone(),
     };
     let owner_token = st.token.lock().map(|t| t.clone()).unwrap_or_default();
@@ -2046,6 +2104,7 @@ impl Default for ServerState {
             last_sweep: Arc::new(Mutex::new(0)),
             remote_admin: Arc::new(Mutex::new(false)),
             order_table: Arc::new(Mutex::new(std::collections::HashMap::new())),
+            order_expect: Arc::new(Mutex::new(std::collections::HashMap::new())),
             order_times: Arc::new(Mutex::new(Vec::new())),
         }
     }

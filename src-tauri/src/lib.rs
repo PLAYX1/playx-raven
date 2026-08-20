@@ -97,6 +97,8 @@ pub fn run() {
             shop::shop_open_now,
             shop::incoming_payments,
             shop::split_payment,
+            shop::fee_read,
+            shop::fee_save,
             shop::pay_order,
             shop::broadcast_message,
             ai::save_api_key,

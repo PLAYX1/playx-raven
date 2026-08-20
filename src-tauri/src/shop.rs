@@ -882,3 +882,156 @@ mod history_tests {
         assert!(!full_shop_name("SHOP.PLAYX").starts_with("SHOP.SHOP"));
     }
 }
+
+// ── 플랫폼 수수료 ─────────────────────────────────────────────────────────
+//
+// 손님은 메뉴 가격을 그대로 낸다. 가게가 조금 덜 받는다 — 카드가 이미
+// 그렇게 돈다. 우리 몫을 손님에게 더 받는 것으로 보이게 만들면 그건 거짓말이다.
+//
+// 🔴 우리가 돈을 들고 있지 않는다. `sendmany` 한 거래에 출력이 둘이라
+// 가게 몫과 우리 몫이 **동시에** 간다. 우리를 거쳐 가지 않으므로 우리가
+// 멈춰도 가게는 계속 판다. 그게 이 판을 쓰는 이유이기도 하다.
+//
+// 다른 지갑으로 결제하면 손님 지갑이 이 규칙을 모르므로 전액이 가게로 간다.
+// 그때는 수수료가 안 걷히지만 **주문은 정상 처리된다** — 대조가 "가게 몫
+// 이상" 이기 때문이다. 못 걷는 것과 손님을 막는 것 중에는 전자가 낫다.
+
+/// 기본 요율. 카드가 2.5% 안팎이라 그 절반 아래로 잡았다.
+pub const DEFAULT_FEE_RATE: f64 = 0.01;
+
+fn fee_path() -> std::path::PathBuf {
+    crate::paths::app_file("fee.json")
+}
+
+/// (요율, 받을 주소). 주소가 비면 걷지 않는다.
+pub fn fee_config() -> (f64, String) {
+    let v: Value = std::fs::read_to_string(fee_path())
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_else(|| json!({}));
+    // 꺼 두면 0. 사장이 끌 수 있어야 한다 — 못 끄는 것은 수수료가 아니라 세금이고,
+    // 오픈소스에서 세금은 포크로 사라진다.
+    if !v.get("on").and_then(Value::as_bool).unwrap_or(true) {
+        return (0.0, String::new());
+    }
+    let rate = v
+        .get("rate")
+        .and_then(Value::as_f64)
+        .filter(|r| (0.0..=0.05).contains(r)) // 5% 넘게 적히면 오타로 본다
+        .unwrap_or(DEFAULT_FEE_RATE);
+    let addr = v
+        .get("address")
+        .and_then(Value::as_str)
+        .unwrap_or(PLATFORM_ADDRESS)
+        .to_string();
+    (rate, addr)
+}
+
+/// 우리가 받을 주소. 비워 두면 아무것도 걷히지 않는다 — 주소를 코드에
+/// 박아 두는 대신 배포할 때 채운다. 잘못된 주소를 박으면 그리로 간 돈은
+/// 영원히 사라진다.
+const PLATFORM_ADDRESS: &str = "";
+
+/// 사장이 보고 끄는 화면용.
+#[tauri::command]
+pub fn fee_read() -> Value {
+    let (rate, addr) = fee_config();
+    json!({
+        "on": rate > 0.0 && !addr.is_empty(),
+        "rate": rate,
+        "address": addr,
+        "percent": rate * 100.0,
+        "default_percent": DEFAULT_FEE_RATE * 100.0,
+    })
+}
+
+#[tauri::command]
+pub fn fee_save(on: bool, rate: Option<f64>, address: Option<String>) -> Result<Value, String> {
+    let mut v: Value = std::fs::read_to_string(fee_path())
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_else(|| json!({}));
+    v["on"] = json!(on);
+    if let Some(r) = rate {
+        if !(0.0..=0.05).contains(&r) {
+            return Err("요율은 0 에서 5% 사이여야 합니다.".into());
+        }
+        v["rate"] = json!(r);
+    }
+    if let Some(a) = address {
+        v["address"] = json!(a.trim());
+    }
+    if let Some(d) = fee_path().parent() {
+        let _ = std::fs::create_dir_all(d);
+    }
+    std::fs::write(fee_path(), serde_json::to_vec_pretty(&v).map_err(|e| e.to_string())?)
+        .map_err(|e| format!("저장하지 못했습니다: {e}"))?;
+    Ok(fee_read())
+}
+
+#[cfg(test)]
+mod fee_tests {
+    use super::*;
+
+    /// 손님은 메뉴 가격을 낸다. 우리 몫은 **총액에서** 나온다.
+    /// 이걸 반대로 하면 손님 화면의 금액이 우리 때문에 올라간다.
+    #[test]
+    fn the_fee_comes_out_of_the_total_not_on_top() {
+        let s = split_payment(1000.0, 0.01, "RTestAddress".into());
+        assert_eq!(s["total"], json!(1000.0));
+        assert_eq!(s["fee"], json!(10.0));
+        assert_eq!(s["shop_gets"], json!(990.0));
+        // 가게 몫 + 우리 몫이 총액과 정확히 같아야 한다. 1사토시라도 새면
+        // 그 거래는 잔돈이 안 맞아 실패한다.
+        let sum = s["shop_gets"].as_f64().unwrap() + s["fee"].as_f64().unwrap();
+        assert!((sum - 1000.0).abs() < 1e-8, "합이 총액과 다르다: {sum}");
+    }
+
+    /// 주소가 없으면 한 푼도 걷지 않는다. 빈 주소로 보내면 그 돈은 사라진다.
+    #[test]
+    fn no_address_means_no_fee() {
+        let s = split_payment(1000.0, 0.01, "".into());
+        assert_eq!(s["fee"], json!(0.0));
+        assert_eq!(s["shop_gets"], json!(1000.0));
+        assert_eq!(s["collected"], json!(false));
+        assert!(s["skip_reason"].as_str().unwrap().contains("주소"));
+    }
+
+    /// 티끌보다 작은 수수료는 보내면 거래 전체가 릴레이되지 않는다.
+    /// 커피 한 잔이 아니라 **아주 싼 것** 을 팔 때 여기에 걸린다.
+    #[test]
+    fn a_fee_below_dust_is_not_collected() {
+        let s = split_payment(0.0001, 0.01, "RTestAddress".into());
+        assert_eq!(s["fee"], json!(0.0));
+        assert_eq!(s["collected"], json!(false));
+        assert!(s["skip_reason"].as_str().unwrap().contains("작아"));
+    }
+
+    /// 사장이 끌 수 있어야 한다. 못 끄는 것은 수수료가 아니라 세금이고,
+    /// 오픈소스에서 세금은 포크 한 번으로 사라진다.
+    #[test]
+    fn the_owner_can_turn_it_off() {
+        let dir = std::env::temp_dir().join("playx-raven-test-fee");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::env::set_var("PLAYX_RAVEN_HOME", &dir);
+        fee_save(false, None, Some("RSomewhere".into())).unwrap();
+        let (rate, _) = fee_config();
+        assert_eq!(rate, 0.0, "껐는데 걷힌다");
+        fee_save(true, Some(0.01), Some("RSomewhere".into())).unwrap();
+        let (rate, addr) = fee_config();
+        assert_eq!(rate, 0.01);
+        assert_eq!(addr, "RSomewhere");
+        std::env::remove_var("PLAYX_RAVEN_HOME");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 오타로 50% 를 적으면 가게가 반을 잃는다.
+    #[test]
+    fn an_absurd_rate_is_refused() {
+        let dir = std::env::temp_dir().join("playx-raven-test-fee2");
+        std::env::set_var("PLAYX_RAVEN_HOME", &dir);
+        assert!(fee_save(true, Some(0.5), None).is_err());
+        std::env::remove_var("PLAYX_RAVEN_HOME");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}
