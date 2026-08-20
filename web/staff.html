@@ -185,6 +185,12 @@
     </nav>
 
     <script>
+      // 사장이 친 글자라도 그대로 넣지 않는다. 메뉴 이름에 `<` 하나가 들어가면
+      // 그 아래 표가 통째로 안 그려지고, 화면은 "매출이 없습니다" 처럼 보인다.
+      const esc = (v) =>
+        String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+
       const $ = (id) => document.getElementById(id);
       const q = new URLSearchParams(location.search).get("t");
       const token = q || sessionStorage.getItem("ft") || "";
@@ -346,7 +352,7 @@
           }).then((x) => x.json());
           $("mres").innerHTML = r.found
             ? `<div class="mrow">
-                 <div class="nm">${r.name || ""}</div>
+                 <div class="nm">${esc(r.name || "")}</div>
                  <div class="st ${r.valid ? "ok" : "no"}">
                    ${r.valid ? "들어오셔도 됩니다" : r.why || "안 됩니다"}
                    ${r.valid && r.kind === "punch" ? ` · ${r.left}회 남음` : ""}

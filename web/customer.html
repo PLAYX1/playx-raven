@@ -13,7 +13,7 @@
          글자가 스크립트로 실행돼도 결과를 밖으로 보낼 길이 없다. -->
     <meta http-equiv="Content-Security-Policy"
           content="default-src 'none'; script-src 'self' 'unsafe-inline';
-                   style-src 'unsafe-inline'; img-src 'self' data: http: https:;
+                   style-src 'unsafe-inline'; img-src 'self' data:;
                    connect-src 'self'; base-uri 'none'; form-action 'none';
                    frame-ancestors 'none'" />
     <title>주문</title>
@@ -332,6 +332,27 @@
       const fmt = (n) =>
         currency === "RVN" ? `${n} RVN` : `${symbol}${Math.round(n).toLocaleString()}`;
 
+      // ── 남의 글자를 화면에 넣기 전에 ──────────────────────────────────
+      //
+      // 🔴 가게 이름·메뉴·간판 주소는 **체인에서 오는 남의 글자**다. 아무나
+      // 500 RVN 이면 SHOP. 자산을 발행해 무엇이든 적을 수 있다.
+      //
+      // 이 화면은 지갑과 **같은 출처**(가게IP:8790)라, 여기서 스크립트가 한 줄
+      // 돌면 localStorage 의 12단어가 사정권에 들어온다. CSP 만으로는 못 막는다
+      // — 인라인 스크립트를 허용해야 이 화면이 돌기 때문에 `onerror=` 같은
+      // 속성이 그대로 통한다. **글자를 넣기 전에 바꾸는 것이 유일한 방어다.**
+      const esc = (v) =>
+        String(v ?? "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+
+      // 주소는 http/https 만. javascript: 를 링크에 넣으면 그건 우리가 뿌리는
+      // 공격이 된다. data: 도 막는다 — 이미지인 척하는 스크립트가 들어온다.
+      const safeUrl = (u) => (/^https?:\/\//i.test(String(u || "")) ? String(u) : "");
+
       const fmtRvn = (n) => {
         // 커피 한 잔이 1,183 RVN 이다. 소수점 둘째 자리는 1.5원짜리 정보라
         // 손님에게는 잡음이고, 천단위 구분이 없으면 자릿수를 눈으로 못 센다.
@@ -348,7 +369,8 @@
         $("name").textContent = shop.name || "가게";
         $("desc").textContent = shop.description || "";
         $("loc").textContent = shop.location || "";
-        if (shop.icon) $("icon").innerHTML = `<img src="${shop.icon}" alt="" />`;
+        if (safeUrl(shop.icon))
+          $("icon").innerHTML = `<img src="${esc(safeUrl(shop.icon))}" alt="" />`;
         $("tags").innerHTML =
           (shop.pickup ? `<span class="tag">매장·포장</span>` : "") +
           (shop.delivery ? `<span class="tag">배달</span>` : "");
@@ -376,16 +398,16 @@
           ? items
               .map(
                 (it, i) => `<div class="item">
-                  ${it.image ? `<img src="${shop.gateway || ""}/ipfs/${it.image}" alt="" loading="lazy" />` : ""}
+                  ${it.image ? `<img src="${esc(safeUrl(shop.gateway) + "/ipfs/" + String(it.image).replace(/[^A-Za-z0-9]/g, ""))}" alt="" loading="lazy" />` : ""}
                   <div>
-                    <div class="nm">${it.name || ""}</div>
+                    <div class="nm">${esc(it.name || "")}</div>
                     <div class="pr">${fmt(it.price || 0)}</div>
                     ${rate && currency !== "RVN" ? `<div class="rv">${fmtRvn((it.price || 0) / rate)}</div>` : ""}
                     ${
                       // 넉넉할 때 "37개 남음" 은 잡음이다. 서두를 이유가 있을
                       // 때만 말한다.
                       typeof left[it.name] === "number" && left[it.name] > 0 && left[it.name] <= 5
-                        ? `<div class="fewleft">${left[it.name]}개 남음</div>`
+                        ? `<div class="fewleft">${esc(left[it.name])}개 남음</div>`
                         : ""
                     }
                   </div>

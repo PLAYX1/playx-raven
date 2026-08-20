@@ -179,8 +179,20 @@ pub async fn sweep_run(passphrase: Option<String>) -> Result<Value, String> {
         Some(0)
     );
     if locked {
-        let pass = passphrase
-            .ok_or_else(|| "지갑이 잠겨 있어 옮기지 못했습니다.".to_string())?;
+        // 🔴 여기서 그냥 오류를 냈고, 5분마다 도는 배경 호출이 그 오류를
+        // **조용히 삼켰다.** 사장은 번 돈이 금고로 가는 줄 알고 계산대를
+        // 두고 나가는데, 실제로는 **한 푼도 안 옮겨진 채** 그 컴퓨터에 쌓인다.
+        //
+        // 잠긴 지갑에서 자동으로 보낼 방법은 없다 — 그건 잠금의 뜻이다.
+        // 그러니 못 하는 것을 **말한다.** 화면이 이 이유를 그대로 띄운다.
+        let Some(pass) = passphrase else {
+            return Ok(json!({
+                "swept": false,
+                "why": "locked",
+                "say": "지갑이 잠겨 있어 옮기지 못하고 있습니다.                         「이 컴퓨터」에서 자동 발송을 켜면 그때 넣은 암호로 같이 옮깁니다.",
+                "would_move": amount,
+            }));
+        };
         call_rpc("walletpassphrase", json!([pass, 30])).await?;
     }
 

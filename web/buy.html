@@ -180,7 +180,18 @@
         offer = r;
         $("name").textContent = `${offer.qty > 1 ? offer.qty + " × " : ""}${offer.asset}`;
         $("shop").textContent = offer.shop || "";
-        if (offer.image) $("art").innerHTML = `<img class="art" src="${offer.gateway}/ipfs/${offer.image}" alt="" />`;
+        // 🔴 `offer.image` 와 `offer.gateway` 는 자산 발행자가 적은 남의 글자다.
+        // 이 화면은 지갑과 같은 출처라, 여기서 스크립트가 돌면 12단어가
+        // 사정권에 들어온다. CID 는 영숫자만 남기고 게이트웨이는 http/https 만.
+        const gw = /^https?:\/\//i.test(String(offer.gateway || "")) ? offer.gateway : "";
+        const cid = String(offer.image || "").replace(/[^A-Za-z0-9]/g, "");
+        if (gw && cid) {
+          const img = document.createElement("img");
+          img.className = "art";
+          img.src = `${gw}/ipfs/${cid}`;
+          img.alt = "";
+          $("art").replaceChildren(img);
+        }
         $("price").firstChild.textContent = `${offer.rvn} RVN`;
         $("fiat").textContent =
           offer.currency !== "RVN" ? `${offer.symbol}${offer.price.toLocaleString()} 기준` : "";

@@ -5627,7 +5627,20 @@ window.addEventListener("DOMContentLoaded", () => {
   const sweepTick = () =>
     invoke<any>("sweep_run", { passphrase: null })
       .then((r) => {
-        if (!r?.swept) return;
+        // 🔴 못 옮기고 있으면 **말한다.** 여태 `if (!r?.swept) return;` 이라
+        // 조용히 끝났고, 사장은 번 돈이 금고로 가는 줄 알고 계산대를 두고
+        // 나갔다 — 실제로는 한 푼도 안 옮겨진 채 그 컴퓨터에 쌓였다.
+        if (!r?.swept) {
+          if (r?.why === "locked") {
+            // 스윕 화면에 붙인다. 5분마다 알림을 띄우면 끄고 싶어진다.
+            const el = document.getElementById("sw-state");
+            if (el)
+              el.innerHTML =
+                `<span class="warn">지금 못 옮기고 있습니다</span> — ${escapeHtml(r.say || "")}` +
+                (r.would_move ? ` (${fmtQty(r.would_move)} RVN 대기)` : "");
+          }
+          return;
+        }
         $("vd-result").innerHTML =
           `<div class="card" style="margin-top:12px"><h3>매출을 옮겼습니다</h3>
              <div class="kv"><b>${r.amount} RVN</b><span><code class="addr">${r.to}</code></span></div>

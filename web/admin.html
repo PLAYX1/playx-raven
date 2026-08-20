@@ -293,6 +293,12 @@
     </nav>
 
     <script>
+      // 사장이 친 글자라도 그대로 넣지 않는다. 메뉴 이름에 `<` 하나가 들어가면
+      // 그 아래 표가 통째로 안 그려지고, 화면은 "매출이 없습니다" 처럼 보인다.
+      const esc = (v) =>
+        String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+
       const $ = (id) => document.getElementById(id);
       // QR로 들어온 뒤 주소에서 열쇠를 지운다. 주소창은 어깨너머로 읽히고
       // 공유 버튼 한 번으로 새어 나간다.
@@ -332,7 +338,7 @@
 
           $("mc-body").innerHTML =
             `<div class="card">
-               <h3>${m.node_name || "이름 없는 노드"}</h3>
+               <h3>${esc(m.node_name || "이름 없는 노드")}</h3>
                <div class="row" style="justify-content:space-between"><b>레이븐 노드</b><span>${on(svc.node?.running)}</span></div>
                <div class="row" style="justify-content:space-between"><b>사진 창고(IPFS)</b><span>${on(svc.ipfs?.running)}</span></div>
                <div class="row" style="justify-content:space-between"><b>바깥 연결</b><span>${net.headline || "—"}</span></div>
@@ -491,7 +497,7 @@
         $("m-list").innerHTML = menu
           .map(
             (m, i) => `<div class="mn">
-              <input data-k="name" data-i="${i}" value="${m.name || ""}" placeholder="품목" />
+              <input data-k="name" data-i="${i}" value="${esc(m.name || "")}" placeholder="품목" />
               <input data-k="price" data-i="${i}" type="number" value="${m.price ?? ""}" placeholder="가격" />
               <button data-del="${i}">✕</button>
             </div>`
