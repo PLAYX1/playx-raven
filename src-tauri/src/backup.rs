@@ -543,6 +543,15 @@ pub async fn backup_zip(dest_folder: String, label: String, include_wallet: bool
     let name = format!("{stem}.zip");
     let out = out_dir.join(&name);
 
+    // 🔴 날짜가 이름에 붙어 날마다 새 파일이 쌓이고 있었다. 몇 달이면 폴더가
+    // zip 으로 차고, 사장은 어느 것이 최신인지 모른 채 아무거나 지운다.
+    //
+    // 자동 복사와 같은 규칙으로 맞춘다 — **지금 것 하나 + 직전 것 하나.**
+    // 직전 것을 남기는 이유는, 백업이 도는 중에 컴퓨터가 꺼지면 새 파일이
+    // 반쯤 쓰인 채 남기 때문이다. 그때 돌아갈 자리가 있어야 한다.
+    // 날짜는 파일 이름이 아니라 **zip 안 설명서**에 적힌다.
+    roll_previous(&out_dir, &stem);
+
     let file = std::fs::File::create(&out).map_err(|e| format!("만들지 못했습니다: {e}"))?;
     let mut zip = zip::ZipWriter::new(file);
     let opts: zip::write::FileOptions<()> =

@@ -26,6 +26,7 @@ mod send;
 mod setup;
 mod addrbook;
 mod rewards;
+mod stock;
 mod walletx;
 mod knowledge;
 mod paths;
@@ -113,6 +114,7 @@ pub fn run() {
             walletx::send_from,
             walletx::channels_mine,
             walletx::channel_leave,
+            stock::stock_left,
             rewards::reward_ready,
             rewards::reward_now,
             rewards::reward_request,

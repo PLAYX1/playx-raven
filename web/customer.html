@@ -106,7 +106,7 @@
     
       /* 캐릭터. 상태가 바뀔 때 살짝 떠오르며 나타난다 — 애니메이션이 아니라
          "바뀌었다"는 신호다. 움직임을 줄이는 설정을 켠 손님에게는 안 움직인다. */
-      .face { display: block; margin: 0 auto 8px; width: 96px; height: auto;
+      .face { display: block; margin: 0 auto 10px; width: 132px; height: auto;
         border-radius: 12px; animation: facein .34s ease-out both; }
       @keyframes facein {
         from { opacity: 0; transform: translateY(7px) scale(.96); }
@@ -206,6 +206,9 @@
       .stp .lb { display: block; margin-top: 6px; font-size: 12.5px; opacity: .6; }
       .stp.on .lb { opacity: 1; font-weight: 600; }
       @media (prefers-reduced-motion: reduce) { .stp .dot { transition: none; } }
+      .soldout { font-size: 14px; color: var(--muted); padding: 0 8px; }
+      /* 몇 개 안 남았을 때만. 서두를 이유가 있을 때만 말한다. */
+      .fewleft { font-size: 13px; color: var(--ravi); font-weight: 600; margin-top: 2px; }
 </style>
   </head>
   <body>
@@ -260,7 +263,7 @@
 
     <script>
       const $ = (id) => document.getElementById(id);
-      let shop = {}, items = [], cart = {}, rate = null, symbol = "₩", currency = "KRW";
+      let shop = {}, items = [], cart = {}, left = {}, rate = null, symbol = "₩", currency = "KRW";
       let openState = { open: true, say: "" };
       // 손님 QR 이 ?table=3 을 달고 있으면 그 자리에서 온 주문이다. 없으면
       // 카운터 주문 — 지금까지처럼 번호로 부른다.
@@ -351,6 +354,7 @@
         $("openbar").className = openState.open ? "openbar on" : "openbar off";
 
         items = shop.menu || [];
+        left = r.left || {};
         currency = shop.currency || "KRW";
         symbol = currency === "USD" ? "$" : currency === "RVN" ? "" : "₩";
         rate = shop.rate || null;
@@ -364,9 +368,22 @@
                     <div class="nm">${it.name || ""}</div>
                     <div class="pr">${fmt(it.price || 0)}</div>
                     ${rate && currency !== "RVN" ? `<div class="rv">${fmtRvn((it.price || 0) / rate)}</div>` : ""}
+                    ${
+                      // 넉넉할 때 "37개 남음" 은 잡음이다. 서두를 이유가 있을
+                      // 때만 말한다.
+                      typeof left[it.name] === "number" && left[it.name] > 0 && left[it.name] <= 5
+                        ? `<div class="fewleft">${left[it.name]}개 남음</div>`
+                        : ""
+                    }
                   </div>
                   <div class="qty">
-                    <button data-m="${i}">−</button><span id="c${i}">0</span><button data-p="${i}">+</button>
+                    ${
+                      // 남은 수량. null 은 무제한이라 아무 말도 하지 않는다 —
+                      // 대부분의 메뉴가 이것이고, 전부에 숫자가 붙으면 시끄럽다.
+                      left[it.name] === 0
+                        ? `<span class="soldout">품절</span>`
+                        : `<button data-m="${i}">−</button><span id="c${i}">0</span><button data-p="${i}">+</button>`
+                    }
                   </div>
                 </div>`
               )
@@ -398,7 +415,10 @@
 
       function bump(i, d) {
         const before = cart[i] || 0;
-        cart[i] = Math.max(0, before + d);
+        const cap = typeof left[items[i]?.name] === "number" ? left[items[i].name] : Infinity;
+        // 남은 것보다 많이 담게 두면, 주문을 눌렀을 때 서버가 거절한다.
+        // 담을 때 막는 편이 낫다 — 거절은 이유를 읽어야 하고 담기는 안 읽어도 된다.
+        cart[i] = Math.min(cap, Math.max(0, before + d));
         if (cart[i] !== before) { pop($("total")); pop($(`c${i}`)); }
         $(`c${i}`).textContent = cart[i];
         const total = items.reduce((s, it, k) => s + (cart[k] || 0) * (it.price || 0), 0);
@@ -521,7 +541,7 @@
 
             $("p-state").innerHTML =
               `<div class="statecard ${isReady ? "ready" : ""}">
-                 <img class="face" src="/raven-${face}.webp" alt="" width="96" height="127" />
+                 <img class="face" src="/raven-${face}.webp" alt="" width="132" height="175" />
                  ${ticket ? `<div style="font-size:14px;opacity:.8">주문번호</div>
                              <div class="tk">${ticket}</div>` : ""}
                  <div style="font-size:${isReady ? "21" : "16"}px;font-weight:600;margin-top:4px">${title}</div>

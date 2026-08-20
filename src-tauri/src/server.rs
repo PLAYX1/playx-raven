@@ -709,6 +709,14 @@ async fn sweep_payments(st: &ServerState) {
             now_unix(),
             p["confirmations"].as_i64().unwrap_or(0),
         );
+
+        // 잡아 둔 것을 진짜로 뺀다. 여기서 빼야 손님 화면의 "남은 수량" 이
+        // 실제와 맞는다. 주문할 때 빼면 결제 안 한 사람 때문에 품절이 된다.
+        if let Ok(mut sh) = st.shop.lock() {
+            if let Some(menu) = sh.get_mut("menu") {
+                crate::stock::commit(addr, menu);
+            }
+        }
     }
 }
 
@@ -1048,6 +1056,12 @@ async fn api_shop(State(state): State<ServerState>) -> impl IntoResponse {
     Json(json!({
         "shop": shop,
         "ai": ai_on,
+        // 지금 몇 개 남았나. 수량을 안 적은 품목은 null(무제한)로 온다 —
+        // 0 으로 보내면 화면이 전부 품절로 그린다.
+        "left": crate::stock::stock_left(
+            shop.get("menu").cloned().unwrap_or(json!([])),
+            now_unix(),
+        ),
         // 영업 여부는 **가게 시계**로 판정한다. 손님 폰의 시간대를 쓰면,
         // 여행 온 손님 폰에만 이 가게가 닫혀 보인다.
         "open": crate::shop::open_at(&shop, now_unix(), local_tz_offset_min()),
@@ -1263,6 +1277,19 @@ async fn api_order(
     // 버려지고 있었는데, 나중에 "그때 레이븐이 얼마였느냐" 에 답할 수 있는
     // 유일한 기록이다. 재구성할 방법이 없다 — 지나간 분 단위 시세는 아무도
     // 되돌려주지 않는다.
+    // 재고를 잡는다. 🔴 결제할 때 빼면 마지막 하나를 두 손님이 **둘 다**
+    // 결제하고, 하나는 못 받는다 — 그 돈은 체인에 들어가 있어 못 되돌린다.
+    {
+        let menu = state
+            .shop
+            .lock()
+            .map(|s| s.get("menu").cloned().unwrap_or(json!([])))
+            .unwrap_or(json!([]));
+        if let Err(e) = crate::stock::hold(&address, &menu, &body.items, now) {
+            return (StatusCode::CONFLICT, Json(json!({ "error": e })));
+        }
+    }
+
     let _ = crate::ledger::open_order(&address, &body.items, &quote, now, table.as_deref());
 
     // 얼마가 들어와야 결제인가. 손님은 메뉴 가격을 그대로 내고, 가게가 조금

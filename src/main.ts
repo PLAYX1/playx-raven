@@ -3804,8 +3804,9 @@ async function doBackup(destFolder = "") {
   // 아무것도 묻지 않는다. 폴더 경로를 타이핑하게 하는 것은 백업을 안 하게 하는
   // 가장 확실한 방법이었다. 바탕화면에 파일 하나로 만들고, 어디 뒀는지 알려준다.
   const node: any = await invoke("node_identity").catch(() => ({}));
-  const today = new Date().toISOString().slice(0, 10);
-  const label = [node?.name, today].filter(Boolean).join("-");
+  // 날짜를 이름에 넣지 않는다. 넣으면 날마다 새 파일이 되어 회전이 안 걸리고
+  // 폴더가 zip 으로 찬다. 언제 만든 백업인지는 zip 안 설명서에 적혀 있다.
+  const label = node?.name || "";
 
   $("bk-note").textContent = "백업 중…";
   try {
