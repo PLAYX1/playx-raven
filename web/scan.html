@@ -8,12 +8,12 @@
       /* 문 앞 태블릿. 팔 길이에서 한 번에 읽혀야 하고, 하루 종일 켜져 있다. */
       :root {
         --bg: #ffffff; --fg: #141518; --muted: #4b5568; --line: #dde3f0;
-        --ok: #1c7a45; --no: #b32b22; --panel: #f7f8fb;
+        --ok: #1c7a45; --no: #b32b22; --panel: #f7f8fb; --ravi: #e7731f; --ravi-soft: #8375ae; --ravi-tint: #fdf1e7;
         --safe-b: env(safe-area-inset-bottom, 0px);
       }
       @media (prefers-color-scheme: dark) {
         :root { --bg: #0d0f13; --fg: #eceef2; --muted: #b3bdd6; --line: #2a2f3a;
-                --ok: #4fbe83; --no: #e8776c; --panel: #171a21; }
+                --ok: #4fbe83; --no: #e8776c; --panel: #171a21; } --ravi: #f0913f; --ravi-soft: #a294cb; --ravi-tint: #2a1f18;
       }
       * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
       body { margin: 0; background: var(--bg); color: var(--fg);
@@ -22,13 +22,13 @@
       h1 { margin: 0 0 4px; font-size: 19px; }
       .sub { color: var(--muted); font-size: 14px; }
 
-      input { width: 100%; padding: 20px 18px; margin-top: 18px; border-radius: 13px;
+      input { width: 100%; padding: 20px 16px; margin-top: 16px; border-radius: 13px;
               border: 2px solid var(--line); background: var(--bg); color: var(--fg);
               font-size: 22px; font-family: inherit; }
       input:focus { outline: none; border-color: var(--fg); }
 
       /* 판정은 한 화면을 덮는다. 곁눈질로 읽혀야 한다. */
-      .verdict { margin-top: 20px; border-radius: 16px; padding: 28px 24px; text-align: center;
+      .verdict { margin-top: 20px; border-radius: 16px; padding: 24px 24px; text-align: center;
                  display: none; }
       .verdict.on { display: block; }
       .verdict.yes { background: color-mix(in srgb, var(--ok) 14%, transparent);
@@ -38,15 +38,15 @@
       .big { font-size: 40px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.2; }
       .verdict.yes .big { color: var(--ok); }
       .verdict.no .big { color: var(--no); }
-      .who { font-size: 24px; font-weight: 600; margin-top: 10px; }
-      .detail { color: var(--muted); font-size: 16px; margin-top: 6px; }
+      .who { font-size: 24px; font-weight: 600; margin-top: 8px; }
+      .detail { color: var(--muted); font-size: 16px; margin-top: 4px; }
 
-      button { margin-top: 18px; width: 100%; padding: 20px; border-radius: 13px; border: 0;
+      button { margin-top: 16px; width: 100%; padding: 20px; border-radius: 13px; border: 0;
                background: var(--ok); color: #fff; font-size: 20px; font-weight: 600;
                font-family: inherit; cursor: pointer; }
       button.ghost { background: transparent; color: var(--fg); border: 1px solid var(--line);
-                     font-weight: 400; font-size: 16px; padding: 14px; }
-      .note { margin-top: 26px; font-size: 13.5px; color: var(--muted); line-height: 1.75; }
+                     font-weight: 400; font-size: 16px; padding: 12px; }
+      .note { margin-top: 24px; font-size: 13.5px; color: var(--muted); line-height: 1.75; }
     </style>
   </head>
   <body>

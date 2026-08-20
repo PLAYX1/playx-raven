@@ -7,35 +7,35 @@
     <style>
       :root {
         --bg: #ffffff; --fg: #141518; --muted: #6b7280; --line: #e6e7ea;
-        --panel: #fafafb; --accent: #3b3f8f; --warn: #b45309;
+        --panel: #fafafb; --accent: #3b3f8f; --warn: #b45309; --ravi: #e7731f; --ravi-soft: #8375ae; --ravi-tint: #fdf1e7;
         --safe-b: env(safe-area-inset-bottom, 0px);
       }
       @media (prefers-color-scheme: dark) {
         :root { --bg: #101114; --fg: #eceef2; --muted: #9aa0ab; --line: #26282e;
-                --panel: #17191d; --accent: #8d92e8; --warn: #d99b3f; }
+                --panel: #17191d; --accent: #8d92e8; --warn: #d99b3f; } --ravi: #f0913f; --ravi-soft: #a294cb; --ravi-tint: #2a1f18;
       }
       * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
       body { margin: 0; background: var(--bg); color: var(--fg);
              font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif;
              padding: 20px 18px calc(24px + var(--safe-b)); }
-      h1 { margin: 0 0 3px; font-size: 21px; letter-spacing: -0.02em; }
+      h1 { margin: 0 0 4px; font-size: 21px; letter-spacing: -0.02em; }
       .sub { color: var(--muted); font-size: 14px; }
-      .search { margin: 16px 0 14px; }
-      .search input { width: 100%; padding: 13px 14px; border-radius: 11px;
+      .search { margin: 16px 0 12px; }
+      .search input { width: 100%; padding: 12px 12px; border-radius: 11px;
                       border: 1px solid var(--line); background: var(--panel); color: var(--fg);
                       font-size: 15px; font-family: inherit; }
 
-      .card { display: flex; gap: 13px; align-items: center; padding: 14px 0;
+      .card { display: flex; gap: 12px; align-items: center; padding: 12px 0;
               border-bottom: 1px solid var(--line); text-decoration: none; color: inherit; }
       .card img { width: 56px; height: 56px; object-fit: cover; border-radius: 11px;
                   flex: none; background: var(--panel); }
       .card .ph { width: 56px; height: 56px; border-radius: 11px; flex: none;
                   background: var(--panel); }
       .card .nm { font-weight: 600; font-size: 15px; }
-      .card .de { color: var(--muted); font-size: 14px; margin-top: 1px;
+      .card .de { color: var(--muted); font-size: 14px; margin-top: 4px;
                   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .tags { display: flex; gap: 5px; margin-top: 5px; }
-      .tag { font-size: 10.5px; padding: 2px 7px; border-radius: 999px;
+      .tags { display: flex; gap: 4px; margin-top: 4px; }
+      .tag { font-size: 10.5px; padding: 4px 8px; border-radius: 999px;
              border: 1px solid var(--line); color: var(--muted); }
       .empty { color: var(--muted); padding: 40px 0; text-align: center; font-size: 14px;
                line-height: 1.8; }
@@ -45,20 +45,20 @@
       #mapsheet.on { display: flex; }
       .msbox { background: var(--bg); border-radius: 18px 18px 0 0; width: 100%;
                max-width: 480px; padding: 20px 18px calc(20px + var(--safe-b)); }
-      .mshead { font-size: 17px; font-weight: 600; margin-bottom: 14px; }
-      .msbtn { display: block; width: 100%; min-height: 56px; margin-bottom: 9px;
+      .mshead { font-size: 17px; font-weight: 600; margin-bottom: 12px; }
+      .msbtn { display: block; width: 100%; min-height: 56px; margin-bottom: 8px;
                border-radius: 12px; border: 1px solid var(--line); background: var(--panel);
                color: var(--fg); font-size: 17px; font-family: inherit; cursor: pointer; }
-      .msbtn span { display: block; font-size: 14px; color: var(--muted); margin-top: 2px; }
+      .msbtn span { display: block; font-size: 14px; color: var(--muted); margin-top: 4px; }
       .msbtn.cancel { background: transparent; border-color: transparent; color: var(--muted);
                       font-size: 15px; min-height: 48px; }
-      .mschk { display: flex; align-items: center; gap: 10px; padding: 12px 4px;
+      .mschk { display: flex; align-items: center; gap: 8px; padding: 12px 4px;
                font-size: 15px; }
       .mschk input { width: 22px; height: 22px; }
-      .foot { margin-top: 22px; font-size: 13.5px; color: var(--muted); line-height: 1.8; }
+      .foot { margin-top: 20px; font-size: 13.5px; color: var(--muted); line-height: 1.8; }
           /* 목록에서 가장 큰 동작. 가게를 찾은 다음에 할 일은 주문뿐이다. */
       .orderbtn { display: inline-block; margin-top: 8px; margin-right: 8px;
-                  padding: 9px 16px; border-radius: 8px; background: var(--fg);
+                  padding: 8px 16px; border-radius: 8px; background: var(--fg);
                   color: var(--bg); font-size: 14px; font-weight: 600;
                   text-decoration: none; }
 
@@ -68,6 +68,14 @@
         padding: 0 12px 0 0; font-size: 15px; text-decoration: none; }
       /* 「가게 / 물건」 을 가르는 탭. 39x22 라 손가락 절반이었다. */
       .tb { min-height: 44px; padding: 0 16px; font-size: 15px; }
+
+      .ravibox { text-align: center; padding: 32px 16px; }
+      .ravibox img { width: 132px; height: auto; border-radius: 16px;
+        animation: ravifloat 3.6s ease-in-out infinite; }
+      .ravibox .rt { margin-top: 12px; font-size: 16px; font-weight: 600; }
+      .ravibox .rs { margin-top: 4px; font-size: 14px; color: var(--muted); line-height: 1.6; }
+      @keyframes ravifloat { 0%,100% { transform: none; } 50% { transform: translateY(-6px); } }
+      @media (prefers-reduced-motion: reduce) { .ravibox img { animation: none; } }
 </style>
   </head>
   <body>
@@ -78,7 +86,7 @@
 
     <!-- 가게는 체인에, 물건은 릴레이에 있다. 손님에게는 둘 다 "여기서 살 수
          있는 것" 이라 나누는 것은 우리 사정이지 손님 사정이 아니다. -->
-    <div class="tabs" style="display:flex;gap:8px;margin:0 0 14px">
+    <div class="tabs" style="display:flex;gap:8px;margin:0 0 12px">
       <button class="tb on" data-tab="shops">가게</button>
       <button class="tb" data-tab="items">물건</button>
     </div>
@@ -91,7 +99,7 @@
         가까운 순으로
       </button>
     </div>
-    <div class="sub" id="locnote" style="margin-bottom:10px"></div>
+    <div class="sub" id="locnote" style="margin-bottom:8px"></div>
     <div id="list"><div class="empty">체인에서 읽는 중…</div></div>
     <div id="items" style="display:none"><div class="empty">불러오는 중…</div></div>
     <div id="mapsheet"></div>
@@ -247,7 +255,7 @@
                     ${
                       p.lat != null
                         ? `<button data-go="${p.lat},${p.lon}" data-nm="${esc(p.name || "")}"
-                             style="margin-top:8px;padding:8px 14px;border-radius:8px;
+                             style="margin-top:8px;padding:8px 12px;border-radius:8px;
                              border:1px solid var(--line);background:var(--bg);color:var(--fg);
                              font-size:15px;font-family:inherit">길찾기</button>`
                         : ""
@@ -256,12 +264,18 @@
                 </a>`;
               })
               .join("")
-          : `<div class="empty">${
-              all.length
-                ? "찾는 가게가 없습니다."
-                : `<img src="/raven-head.webp" alt="" width="150" style="display:block;margin:0 auto 12px;border-radius:14px" />
-                   아직 등록된 가게가 없습니다.<br>첫 번째 가게가 되실 수 있습니다.`
-            }</div>`;
+          : all.length
+            ? `<div class="ravibox">
+                 <img src="/raven-wait.webp" alt="" />
+                 <div class="rt">찾는 가게가 없습니다</div>
+                 <div class="rs">다른 말로 찾아보시거나, 아래 목록을 그냥 둘러보세요.</div>
+               </div>`
+            : `<div class="ravibox">
+                 <img src="/raven-hello.webp" alt="" />
+                 <div class="rt">이 동네의 첫 가게를 찾고 있습니다</div>
+                 <div class="rs">아직 아무도 없습니다. 지금 여시면 <b>1호</b>가 됩니다.<br />
+                   레이븐코인을 받는 가게라면 누구나 올릴 수 있어요.</div>
+               </div>`;
       }
 
       // 길찾기. 우리는 지도를 그리지 않고, 손님이 이미 쓰는 앱으로 넘긴다.

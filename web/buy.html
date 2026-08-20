@@ -7,41 +7,41 @@
     <style>
       :root {
         --bg: #ffffff; --fg: #141518; --muted: #4b5568; --line: #e0e3ea;
-        --panel: #fafafb; --accent: #3b3f8f; --warn: #96601a;
+        --panel: #fafafb; --accent: #3b3f8f; --warn: #96601a; --ravi: #e7731f; --ravi-soft: #8375ae; --ravi-tint: #fdf1e7;
         --safe-b: env(safe-area-inset-bottom, 0px);
       }
       @media (prefers-color-scheme: dark) {
         :root { --bg: #101114; --fg: #eceef2; --muted: #b3bdd6; --line: #2a2d35;
-                --panel: #17191d; --accent: #8d92e8; --warn: #d99b3f; }
+                --panel: #17191d; --accent: #8d92e8; --warn: #d99b3f; } --ravi: #f0913f; --ravi-soft: #a294cb; --ravi-tint: #2a1f18;
       }
       * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
       body { margin: 0; background: var(--bg); color: var(--fg);
              font: 15px/1.62 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif;
              padding: 24px 18px calc(30px + var(--safe-b)); max-width: 520px; margin-inline: auto; }
-      h1 { margin: 0 0 3px; font-size: 21px; letter-spacing: -0.02em; }
+      h1 { margin: 0 0 4px; font-size: 21px; letter-spacing: -0.02em; }
       .sub { color: var(--muted); font-size: 13.5px; }
       img.art { width: 100%; border-radius: 13px; margin: 16px 0; display: block; background: var(--panel); }
 
-      .price { font-size: 27px; font-weight: 700; letter-spacing: -0.02em; margin: 14px 0 2px;
+      .price { font-size: 27px; font-weight: 700; letter-spacing: -0.02em; margin: 12px 0 4px;
                font-variant-numeric: tabular-nums; }
       .price small { display: block; font-size: 13.5px; font-weight: 400; color: var(--muted);
-                     margin-top: 3px; }
+                     margin-top: 4px; }
 
-      label { display: block; font-size: 13px; color: var(--muted); margin: 16px 0 5px; }
-      input { width: 100%; padding: 13px 14px; border-radius: 10px; border: 1px solid var(--line);
+      label { display: block; font-size: 13px; color: var(--muted); margin: 16px 0 4px; }
+      input { width: 100%; padding: 12px 12px; border-radius: 10px; border: 1px solid var(--line);
               background: var(--bg); color: var(--fg); font-size: 16px; font-family: inherit; }
-      button { width: 100%; padding: 15px; border-radius: 11px; border: 0; background: var(--accent);
+      button { width: 100%; padding: 16px; border-radius: 11px; border: 0; background: var(--accent);
                color: #fff; font-size: 15.5px; font-weight: 600; font-family: inherit;
                cursor: pointer; margin-top: 16px; }
       button:disabled { opacity: 0.4; }
       button.ghost { background: transparent; color: var(--fg); border: 1px solid var(--line);
                      font-weight: 400; }
 
-      .warn { border: 1px solid var(--warn); border-radius: 10px; padding: 12px 14px;
+      .warn { border: 1px solid var(--warn); border-radius: 10px; padding: 12px 12px;
               font-size: 13.5px; line-height: 1.72; margin: 16px 0;
               background: color-mix(in srgb, var(--warn) 8%, transparent); }
-      .pay { text-align: center; margin-top: 18px; }
-      .pay img { width: 220px; height: 220px; background: #fff; padding: 10px; border-radius: 11px; }
+      .pay { text-align: center; margin-top: 16px; }
+      .pay img { width: 220px; height: 220px; background: #fff; padding: 8px; border-radius: 11px; }
       code { display: block; font-size: 12px; word-break: break-all; color: var(--muted);
              margin-top: 8px; }
       .step { display: none; } .step.on { display: block; }

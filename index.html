@@ -6,7 +6,7 @@
     <title>PLAY X Raven</title>
     <style>
       :root {
-        --bg: #fbfbfe; --panel: #fff; --line: #dde3f0; --text: #161d2b;
+        --bg: #fbfbfe; --panel: #fff; --line: #dde3f0; --text: #161d2b; --ravi: #e7731f; --ravi-soft: #8375ae; --ravi-tint: #fdf1e7;
         /* 보조 텍스트를 흐리게 해서 위계를 만들면, 가게 형광등 아래 노안에는
            라벨이 그냥 사라진다. 위계는 굵기·크기·여백으로 만들고 색 대비는
            읽을 수 있는 선(7:1 부근)을 지킨다. */
@@ -17,7 +17,7 @@
       }
       @media (prefers-color-scheme: dark) {
         :root {
-          --bg: #0b1018; --panel: #1c2535; --line: #2f3b57; --text: #dde3f2;
+          --bg: #0b1018; --panel: #1c2535; --line: #2f3b57; --text: #dde3f2; --ravi: #f0913f; --ravi-soft: #a294cb; --ravi-tint: #2a1f18;
           --muted: #b3bdd6; --faint: #8794b3;
           --brand: #5874cf; --brand-light: #7a90de;
           --ok: #6fcf9a; --warn: #e0ad50; --danger: #ec7c72;
@@ -36,38 +36,38 @@
          The asset view cannot spend; wallet, issue and shop can. Stacking them
          on one page would teach the same click habit for both.                */
       nav { width: 172px; flex-shrink: 0; background: var(--side); border-right: 1px solid var(--line);
-            display: flex; flex-direction: column; padding: 14px 0; }
-      .brand { padding: 0 16px 14px; }
+            display: flex; flex-direction: column; padding: 12px 0; }
+      .brand { padding: 0 16px 12px; }
       .brand h1 { font-size: 15px; margin: 0; letter-spacing: -0.2px; }
       .brand span { font-size: 14px; color: var(--faint); }
-      nav a { display: flex; align-items: center; gap: 8px; padding: 11px 16px; color: var(--text);
+      nav a { display: flex; align-items: center; gap: 8px; padding: 12px 16px; color: var(--text);
               text-decoration: none; font-size: 15px; cursor: pointer; border-left: 2px solid transparent; }
       nav a:hover { background: color-mix(in srgb, var(--brand) 7%, transparent); }
       nav a.on { border-left-color: var(--brand); background: color-mix(in srgb, var(--brand) 12%, transparent);
                  font-weight: 600; }
       nav a .risk { margin-left: auto; font-size: 14px; color: var(--warn); }
-      .navfoot { margin-top: auto; padding: 10px 16px 0; border-top: 1px solid var(--line); }
-      .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; }
+      .navfoot { margin-top: auto; padding: 8px 16px 0; border-top: 1px solid var(--line); }
+      .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 4px; }
       .dot.on { background: var(--ok); } .dot.off { background: var(--muted); }
-      .navfoot div { font-size: 14px; color: var(--muted); margin-bottom: 3px; }
+      .navfoot div { font-size: 14px; color: var(--muted); margin-bottom: 4px; }
 
-      main { flex: 1; overflow-y: auto; padding: 18px 22px 40px; }
+      main { flex: 1; overflow-y: auto; padding: 16px 20px 40px; }
       .page { display: none; } .page.on { display: block; }
-      h2.title { font-size: 19px; letter-spacing: -0.02em; margin: 0 0 3px; }
+      h2.title { font-size: 19px; letter-spacing: -0.02em; margin: 0 0 4px; }
       .lede { color: var(--muted); font-size: 14px; margin: 0 0 16px; }
 
-      .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
-      .card { background: var(--panel); border: 1px solid var(--line); border-radius: 9px; padding: 11px 14px; }
-      .card h3 { font-size: 14px; margin: 0 0 6px; color: var(--muted); font-weight: 600; }
+      .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+      .card { background: var(--panel); border: 1px solid var(--line); border-radius: 9px; padding: 12px 12px; }
+      .card h3 { font-size: 14px; margin: 0 0 4px; color: var(--muted); font-weight: 600; }
       .state { font-size: 15px; font-weight: 600; }
-      .detail { font-size: 14px; color: var(--muted); margin-top: 3px; }
+      .detail { font-size: 14px; color: var(--muted); margin-top: 4px; }
       .big { font-size: 28px; letter-spacing: -0.02em; font-weight: 600; font-variant-numeric: tabular-nums; }
 
-      .bar { display: flex; gap: 7px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+      .bar { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
       #summary { color: var(--muted); font-size: 14px; margin-right: auto; }
-      #scan-note { width: 100%; font-size: 14px; color: var(--muted); margin-top: -3px; }
+      #scan-note { width: 100%; font-size: 14px; color: var(--muted); margin-top: -4px; }
 
-      button { font: inherit; font-size: 14px; padding: 10px 16px; border-radius: 8px; min-height: 38px;
+      button { font: inherit; font-size: 14px; padding: 8px 16px; border-radius: 8px; min-height: 38px;
                border: 1px solid var(--brand); background: var(--brand); color: #fff; cursor: pointer; }
       button:hover:not(:disabled) { background: var(--brand-light); border-color: var(--brand-light); }
       button:disabled { opacity: 0.4; cursor: default; }
@@ -82,13 +82,13 @@
       @media (prefers-color-scheme: dark) {
         button.harm { color: #2a0d0b; }
       }
-      button.link { background: none; border: none; color: var(--brand-light); padding: 0 2px; font-size: 14px; min-height: 0; }
+      button.link { background: none; border: none; color: var(--brand-light); padding: 0 4px; font-size: 14px; min-height: 0; }
 
-      .split { display: flex; gap: 14px; align-items: flex-start; }
+      .split { display: flex; gap: 12px; align-items: flex-start; }
       .listwrap { flex: 1; min-width: 0; }
       table { width: 100%; border-collapse: collapse; background: var(--panel);
               border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
-      th, td { padding: 11px 13px; text-align: left; border-bottom: 1px solid var(--line); }
+      th, td { padding: 12px 12px; text-align: left; border-bottom: 1px solid var(--line); }
       th { font-size: 14px; color: var(--muted); font-weight: 600; }
       tr:last-child td { border-bottom: none; }
       tbody tr { cursor: pointer; }
@@ -97,77 +97,77 @@
       .name { font-variant-ligatures: none; }
       .num { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); white-space: nowrap; }
       .act { text-align: right; width: 1%; white-space: nowrap; }
-      .act button { padding: 6px 12px; font-size: 14px; min-height: 32px; }
+      .act button { padding: 4px 12px; font-size: 14px; min-height: 32px; }
 
       .panel { width: 310px; flex-shrink: 0; background: var(--panel); border: 1px solid var(--line);
-               border-radius: 9px; padding: 14px; position: sticky; top: 0; }
+               border-radius: 9px; padding: 12px; position: sticky; top: 0; }
       .panel.hidden { display: none; }
       .panel-head { display: flex; align-items: flex-start; gap: 8px; }
       #p-name { font-weight: 600; font-size: 15px; word-break: break-all; flex: 1; }
-      #p-close { background: none; border: none; color: var(--muted); font-size: 15px; line-height: 1; padding: 0 2px; }
-      #p-amount { color: var(--muted); font-size: 14px; margin: 2px 0 8px; }
+      #p-close { background: none; border: none; color: var(--muted); font-size: 15px; line-height: 1; padding: 0 4px; }
+      #p-amount { color: var(--muted); font-size: 14px; margin: 4px 0 8px; }
       #p-cid code { font-size: 11.5px; color: var(--faint); }
       #p-body { margin: 12px 0; min-height: 60px; }
       #p-body img { width: 100%; border-radius: 7px; display: block; background: var(--bg); }
       #p-body .doc { width: 100%; height: 360px; border: 1px solid var(--line); border-radius: 7px;
                      background: #fff; display: block; }
-      .meta { font-size: 14px; color: var(--muted); margin: 6px 0 0; line-height: 1.65; }
-      .filecard { border: 1px dashed var(--line); border-radius: 8px; padding: 22px; text-align: center; }
+      .meta { font-size: 14px; color: var(--muted); margin: 4px 0 0; line-height: 1.65; }
+      .filecard { border: 1px dashed var(--line); border-radius: 8px; padding: 20px; text-align: center; }
       .ft { font-size: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
-      #p-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+      #p-actions { display: flex; gap: 4px; flex-wrap: wrap; }
 
       .ok { color: var(--ok); } .warn { color: var(--warn); } .muted { color: var(--muted); }
       .danger { color: var(--danger); }
-      .tblbox { width: 100%; margin-top: 14px; padding: 12px 14px; border-radius: 10px;
+      .tblbox { width: 100%; margin-top: 12px; padding: 12px 12px; border-radius: 10px;
                 border: 1px solid var(--line); background: var(--panel); }
       /* 비교하려면 읽혀야 한다. 34자를 한 줄로 흘리면 아무도 안 본다. */
       .tail4 { font-family: ui-monospace, monospace; font-size: 17px; letter-spacing: .06em;
-               word-break: break-all; line-height: 1.7; margin: 10px 0;
-               padding: 11px 13px; border-radius: 8px; background: var(--panel);
+               word-break: break-all; line-height: 1.7; margin: 8px 0;
+               padding: 12px 12px; border-radius: 8px; background: var(--panel);
                border: 1px solid var(--line); }
-      .tail4 b { background: var(--warn); color: #fff; padding: 1px 4px; border-radius: 4px; }
+      .tail4 b { background: var(--warn); color: #fff; padding: 4px 4px; border-radius: 4px; }
 
       .privacy { display: none; font-size: 14px; color: var(--muted); margin: 0 0 8px; }
       .privacy.show { display: block; }
-      .note { font-size: 14px; color: var(--muted); line-height: 1.75; max-width: 620px; margin-top: 18px; }
+      .note { font-size: 14px; color: var(--muted); line-height: 1.75; max-width: 620px; margin-top: 16px; }
 
-      .soon { border: 1px dashed var(--line); border-radius: 9px; padding: 26px; text-align: center;
+      .soon { border: 1px dashed var(--line); border-radius: 9px; padding: 24px; text-align: center;
               color: var(--muted); font-size: 14px; line-height: 1.8; }
       .form { max-width: 520px; }
       .form label { display: block; font-size: 14px; color: var(--muted); margin: 12px 0 4px; font-weight: 600; }
-      .form label.check { display: flex; align-items: center; gap: 9px; font-size: 15px; color: var(--text); font-weight: 400; }
+      .form label.check { display: flex; align-items: center; gap: 8px; font-size: 15px; color: var(--text); font-weight: 400; }
       .form input[type=text], .form input:not([type]), .form input[type=number] {
-        font: inherit; font-size: 15px; padding: 11px 12px; border-radius: 8px;
+        font: inherit; font-size: 15px; padding: 12px 12px; border-radius: 8px;
         border: 1px solid var(--line); background: var(--panel); color: var(--text); width: 100%; }
       .form input:focus { outline: none; border-color: var(--brand-light); }
-      .form .row { display: flex; gap: 10px; align-items: flex-end; }
+      .form .row { display: flex; gap: 8px; align-items: flex-end; }
       .form .row > div { flex: 1; }
-      .cost { margin: 16px 0 0; padding: 11px 13px; border: 1px solid var(--line);
+      .cost { margin: 16px 0 0; padding: 12px 12px; border: 1px solid var(--line);
               border-radius: 8px; background: var(--panel); font-size: 14px; }
       .cost .burn { font-size: 19px; font-weight: 700; letter-spacing: -0.01em; }
-      .confirmbox { margin-top: 14px; padding: 13px; border: 1px solid var(--warn); border-radius: 8px;
+      .confirmbox { margin-top: 12px; padding: 12px; border: 1px solid var(--warn); border-radius: 8px;
                     background: color-mix(in srgb, var(--warn) 8%, transparent); }
-      .confirmbox div { font-size: 14px; margin-bottom: 9px; line-height: 1.7; }
+      .confirmbox div { font-size: 14px; margin-bottom: 8px; line-height: 1.7; }
       .confirmbox input { margin-bottom: 8px; }
       pre.conf { background: var(--bg); border: 1px solid var(--line); border-radius: 7px;
-                 padding: 9px 11px; font-size: 14px; margin: 0 0 10px; overflow-x: auto; }
-      .kv { display: flex; gap: 8px; font-size: 14px; margin-bottom: 5px; }
+                 padding: 8px 12px; font-size: 14px; margin: 0 0 8px; overflow-x: auto; }
+      .kv { display: flex; gap: 8px; font-size: 14px; margin-bottom: 4px; }
       .kv b { font-weight: 600; min-width: 76px; color: var(--muted); }
       code.addr { font-size: 11px; word-break: break-all; }
-      .tabs { display: flex; gap: 3px; margin: 4px 0 16px; border-bottom: 1px solid var(--line); }
+      .tabs { display: flex; gap: 4px; margin: 4px 0 16px; border-bottom: 1px solid var(--line); }
       .tab { background: none; border: 0; border-bottom: 2px solid transparent; border-radius: 0;
-             padding: 11px 15px; font-size: 15px; min-height: 40px; color: var(--muted); cursor: pointer; }
+             padding: 12px 16px; font-size: 15px; min-height: 40px; color: var(--muted); cursor: pointer; }
       .tab:hover { color: var(--text); }
       .tab.on { color: var(--text); border-bottom-color: var(--brand); }
       .shoptab { display: none; }
       .shoptab.on { display: block; }
-      .shopgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); gap: 11px; }
-      .shopcard { border: 1px solid var(--line); border-radius: 10px; padding: 13px 14px;
+      .shopgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); gap: 12px; }
+      .shopcard { border: 1px solid var(--line); border-radius: 10px; padding: 12px 12px;
                   background: var(--panel); }
-      .shopcard h4 { margin: 0 0 3px; font-size: 14px; font-weight: 600; }
+      .shopcard h4 { margin: 0 0 4px; font-size: 14px; font-weight: 600; }
       .shopcard .sub { font-size: 14px; color: var(--muted); word-break: break-all; }
-      .shopcard .tagrow { display: flex; gap: 5px; margin-top: 8px; }
-      .tag { font-size: 14px; padding: 3px 9px; border-radius: 999px;
+      .shopcard .tagrow { display: flex; gap: 4px; margin-top: 8px; }
+      .tag { font-size: 14px; padding: 4px 8px; border-radius: 999px;
              border: 1px solid var(--line); color: var(--muted); }
       /* 한 품목은 한 줄로 읽혀야 한다.
          전에는 사진이 버튼에서 한참 떠 있고 품목·가격·사진이 서로 다른 높이에
@@ -176,9 +176,9 @@
       .mnitem { display: grid; grid-template-columns: 56px minmax(0,1fr) 120px auto;
                 gap: 12px; align-items: center;
                 padding: 12px 0; border-bottom: 1px solid var(--line); }
-      .mnitem label { display: block; font-size: 13px; color: var(--faint); margin-bottom: 3px; }
+      .mnitem label { display: block; font-size: 13px; color: var(--faint); margin-bottom: 4px; }
       .mnitem input { width: 100%; }
-      .mnacts { display: flex; gap: 6px; }
+      .mnacts { display: flex; gap: 4px; }
       .mnacts button { padding: 8px 12px; min-height: 34px; font-size: 13.5px; }
       /* 사진 자리는 비어 있어도 자리를 지킨다. 안 그러면 사진 있는 줄과 없는
          줄의 칸이 어긋나서 목록이 흔들린다. */
@@ -198,43 +198,43 @@
              border-bottom: 4px solid transparent; vertical-align: 1px;
              transition: transform 0.12s ease; }
       .tri.open { transform: rotate(90deg); }
-      tr.child td.name { padding-left: 6px; }
-      .branch { display: inline-block; width: 13px; margin-right: 5px;
+      tr.child td.name { padding-left: 4px; }
+      .branch { display: inline-block; width: 13px; margin-right: 4px;
                 border-bottom: 1px solid var(--line); vertical-align: 4px; }
       #chat-open { position: fixed; right: 20px; bottom: 20px; z-index: 40;
-                   padding: 12px 18px; border-radius: 999px;  }
+                   padding: 12px 16px; border-radius: 999px;  }
       #chat { position: fixed; right: 0; top: 0; bottom: 0; width: min(400px, 94vw); z-index: 50;
               background: var(--panel); border-left: 1px solid var(--line);
               display: flex; flex-direction: column; }
       #chat.hidden { display: none; }
       .chat-head { display: flex; align-items: center; justify-content: space-between;
-                   padding: 15px 17px; border-bottom: 1px solid var(--line);
+                   padding: 16px 16px; border-bottom: 1px solid var(--line);
                    font-size: 15px; font-weight: 600; }
-      #chat-log { flex: 1; overflow-y: auto; padding: 15px 17px; }
-      .msg { font-size: 15px; line-height: 1.75; margin-bottom: 13px; padding: 10px 12px;
+      #chat-log { flex: 1; overflow-y: auto; padding: 16px 16px; }
+      .msg { font-size: 15px; line-height: 1.75; margin-bottom: 12px; padding: 8px 12px;
              border-radius: 10px; max-width: 90%; }
       .msg.ai { background: var(--bg); border: 1px solid var(--line); }
       .msg.me { background: var(--brand); color: #fff; margin-left: auto; }
       .msg.did { background: transparent; border: 1px dashed var(--line); font-size: 14px;
                  color: var(--muted); }
-      .chat-in { display: flex; gap: 7px; padding: 13px 15px; border-top: 1px solid var(--line); }
+      .chat-in { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--line); }
       .chat-in input { flex: 1; min-width: 0; }
-      .seedgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; margin: 14px 0; }
-      .seedword { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;
+      .seedgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 0; }
+      .seedword { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px;
                   font-size: 15px; background: var(--bg); }
-      .seedword i { color: var(--faint); font-style: normal; font-size: 12px; margin-right: 7px; }
+      .seedword i { color: var(--faint); font-style: normal; font-size: 12px; margin-right: 8px; }
       /* ── 이 컴퓨터: 세 가족 ──
          70대가 형광등 아래에서 읽고 누른다. 행 56px, 제목 18px,
          상태 단어는 회색 금지 — 색만으로 켜짐을 구분하면 노안·색맹·싼
          모니터에서 두 회색이 같아진다. */
       .verdict { border: 1px solid var(--line); border-left: 5px solid var(--muted);
-                 border-radius: 13px; padding: 18px 20px; background: var(--panel);
-                 margin-bottom: 26px; }
+                 border-radius: 13px; padding: 16px 20px; background: var(--panel);
+                 margin-bottom: 24px; }
       .verdict.ok { border-left-color: var(--ok); }
       .verdict.warn { border-left-color: var(--warn); }
       .verdict.bad { border-left-color: var(--danger); }
       .v-state { font-size: 19px; font-weight: 600; letter-spacing: -0.01em; }
-      .v-why { font-size: 15px; color: var(--muted); margin-top: 5px; line-height: 1.6; }
+      .v-why { font-size: 15px; color: var(--muted); margin-top: 4px; line-height: 1.6; }
       .v-fix { font-size: 15px; margin-top: 4px; }
 
       .switches { border: 1px solid var(--line); border-radius: 13px; overflow: hidden;
@@ -242,11 +242,11 @@
       .sw { border-bottom: 1px solid var(--line); }
       .sw:last-child { border-bottom: 0; }
       .sw-head { display: flex; align-items: center; gap: 16px; min-height: 60px;
-                 padding: 12px 18px; cursor: pointer; }
+                 padding: 12px 16px; cursor: pointer; }
       .sw-head:hover { background: color-mix(in srgb, var(--brand) 5%, transparent); }
       .sw-text { flex: 1; min-width: 0; }
       .sw-title { font-size: 15px; font-weight: 600; line-height: 1.4; }
-      .sw-desc { font-size: 15px; color: var(--muted); line-height: 1.6; margin-top: 2px; }
+      .sw-desc { font-size: 15px; color: var(--muted); line-height: 1.6; margin-top: 4px; }
       .sw-state { font-size: 15px; font-weight: 600; white-space: nowrap; }
       .sw-state.on { color: var(--ok); } .sw-state.off { color: var(--faint); }
       /* 스위치는 지금 도는 상태만 말한다. 여는 것은 행을 누르는 일이다. */
@@ -257,25 +257,25 @@
                            transition: transform 0.15s; }
       .sw.on .sw-toggle { background: var(--ok); }
       .sw.on .sw-toggle::after { transform: translateX(24px); }
-      .sw-body { display: none; padding: 4px 18px 18px; border-top: 1px dashed var(--line); }
+      .sw-body { display: none; padding: 4px 16px 16px; border-top: 1px dashed var(--line); }
       .sw.open .sw-body { display: block; }
-      .sw-body label { display: block; font-size: 14px; color: var(--muted); margin: 12px 0 5px; }
+      .sw-body label { display: block; font-size: 14px; color: var(--muted); margin: 12px 0 4px; }
       .sw-apply { min-height: 48px; font-size: 15px; margin-top: 16px; }
-      .sw-pill { display: inline-block; font-size: 14px; padding: 3px 10px; border-radius: 999px;
+      .sw-pill { display: inline-block; font-size: 14px; padding: 4px 8px; border-radius: 999px;
                  background: color-mix(in srgb, var(--warn) 15%, transparent); color: var(--warn);
                  margin-left: 8px; }
 
       .grouphead { font-size: 15px; font-weight: 600; color: var(--muted);
-                   margin: 30px 0 10px; }
-      .tools { border: 1px solid var(--line); border-radius: 13px; padding: 18px 20px;
+                   margin: 32px 0 8px; }
+      .tools { border: 1px solid var(--line); border-radius: 13px; padding: 16px 20px;
                background: var(--panel); }
-      .advanced { margin-top: 30px; }
+      .advanced { margin-top: 32px; }
       .advanced > summary { cursor: pointer; font-size: 15px; color: var(--muted);
                             padding: 12px 0; }
       /* 세 칸 표. 칸을 넘은 글자가 옆 칸을 덮지 않게 min-width:0 이 필요하다 —
          그리드 자식의 기본값은 auto 라서, 긴 설명이 줄바꿈 대신 칸을 밀어낸다. */
-      .cfrow { display: grid; grid-template-columns: 150px 150px minmax(0, 1fr); gap: 14px;
-               align-items: start; padding: 13px 0; border-bottom: 1px solid var(--line); }
+      .cfrow { display: grid; grid-template-columns: 150px 150px minmax(0, 1fr); gap: 12px;
+               align-items: start; padding: 12px 0; border-bottom: 1px solid var(--line); }
       .cfrow > * { min-width: 0; }
       .cfrow:last-child { border-bottom: 0; }
       .cfrow .lb { font-size: 14px; font-weight: 600; }
@@ -284,7 +284,7 @@
       /* 이 칸의 입력은 .form 안이 아니라 폭 규칙을 못 받는다. 그대로 두면
          브라우저 기본 폭이 칸을 넘어 설명 위에 겹쳐 그려진다. */
       .cfrow input[type=text], .cfrow input:not([type]), .cfrow input[type=number] {
-        font: inherit; font-size: 14px; padding: 9px 10px; border-radius: 8px;
+        font: inherit; font-size: 14px; padding: 8px 8px; border-radius: 8px;
         border: 1px solid var(--line); background: var(--panel); color: var(--text);
         width: 100%; min-width: 0; }
       .cfrow .ex { font-size: 14px; color: var(--muted); line-height: 1.65;
@@ -293,22 +293,22 @@
          있었고, 그래서 설명 한가운데에 네모가 떠서 글자를 덮었다. */
       .cfrow .ex b.hint { display: inline; color: var(--text); font-weight: 600;
                           border: 0; padding: 0; margin: 0; background: none; }
-      .cfrow .ex .w { color: var(--warn); display: block; margin-top: 3px; }
+      .cfrow .ex .w { color: var(--warn); display: block; margin-top: 4px; }
 
       /* 좁은 창에서는 세 칸을 못 버틴다. 겹치느니 아래로 내린다. */
       @media (max-width: 760px) {
-        .cfrow { grid-template-columns: 1fr; gap: 6px; }
+        .cfrow { grid-template-columns: 1fr; gap: 4px; }
       }
-      .tpl { border: 1px solid var(--line); border-radius: 9px; padding: 11px 13px; cursor: pointer;
+      .tpl { border: 1px solid var(--line); border-radius: 9px; padding: 12px 12px; cursor: pointer;
              flex: 1; min-width: 165px; }
       .tpl:hover { border-color: var(--brand-light); }
-      .tpl b { display: block; font-size: 14px; margin-bottom: 2px; }
+      .tpl b { display: block; font-size: 14px; margin-bottom: 4px; }
       .tpl span { font-size: 14px; color: var(--muted); }
-      .keyrow { display: grid; grid-template-columns: 152px minmax(0,1fr) auto; gap: 9px;
+      .keyrow { display: grid; grid-template-columns: 152px minmax(0,1fr) auto; gap: 8px;
                 align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
       .keyrow > * { min-width: 0; }
       /* 이 줄의 입력도 .form 밖이라 폭 규칙을 못 받는다. */
-      .keyrow input { font: inherit; font-size: 14px; padding: 9px 10px; border-radius: 8px;
+      .keyrow input { font: inherit; font-size: 14px; padding: 8px 8px; border-radius: 8px;
                       border: 1px solid var(--line); background: var(--panel); color: var(--text);
                       width: 100%; min-width: 0; }
       @media (max-width: 620px) {
@@ -318,8 +318,8 @@
       .keyrow:last-child { border-bottom: 0; }
       /* 넘어가는 순서. 끌어서 옮기는 것만 두면 손이 떨리는 분은 못 쓴다 —
          ↑↓ 는 마우스로도 키보드로도 되고, 결과가 눈에 바로 보인다. */
-      .ordrow { display: flex; align-items: center; gap: 9px; padding: 9px 10px;
-        border: 1px solid var(--line); border-radius: 10px; margin-top: 7px;
+      .ordrow { display: flex; align-items: center; gap: 8px; padding: 8px 8px;
+        border: 1px solid var(--line); border-radius: 10px; margin-top: 8px;
         background: var(--card-bg, transparent); cursor: grab; }
       .ordrow[draggable="true"]:active { cursor: grabbing; }
       .ordrow.over { border-color: var(--accent); }
@@ -327,106 +327,106 @@
       .ordrow .grip { opacity: .4; letter-spacing: 2px; }
       .ordrow .nm { flex: 1; min-width: 0; font-size: 14px; }
       .ordrow .nokey { font-size: 13px; opacity: .5; }
-      .ordrow button { min-height: 34px; min-width: 38px; padding: 6px 10px; font-size: 15px; }
+      .ordrow button { min-height: 34px; min-width: 38px; padding: 4px 8px; font-size: 15px; }
       .keyrow .who { font-size: 14px; }
       .keyrow .saved { font-size: 14px; color: var(--ok); }
-      .keyrow button { padding: 7px 13px; font-size: 14px; min-height: 34px; }
-      .qrrow { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 13px; }
+      .keyrow button { padding: 8px 12px; font-size: 14px; min-height: 34px; }
+      .qrrow { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 12px; }
       .qrbox { text-align: center; }
       .qrbox svg { width: 168px; height: 168px; background: #fff; padding: 8px;
                    border-radius: 9px; display: block; }
-      .qrbox .cap { font-size: 14px; color: var(--muted); margin-top: 7px; }
-      .qrbox .cap b { display: block; color: var(--text); font-size: 14px; margin-bottom: 2px; }
-      .aibar { display: flex; gap: 8px; align-items: center; margin-bottom: 14px;
-               padding: 12px 13px; border: 1px solid var(--line); border-radius: 9px;
+      .qrbox .cap { font-size: 14px; color: var(--muted); margin-top: 8px; }
+      .qrbox .cap b { display: block; color: var(--text); font-size: 14px; margin-bottom: 4px; }
+      .aibar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px;
+               padding: 12px 12px; border: 1px solid var(--line); border-radius: 9px;
                background: var(--panel); }
       .aibar input { flex: 1; }
       .aibar .meta { white-space: nowrap; }
       /* 출입 카드. 7시에 한 번 보고 판단하는 화면이라 크고 단순해야 한다. */
       .mtab { display: none; } .mtab.on { display: block; }
-      .notice { border: 1px solid var(--line); border-radius: 10px; padding: 13px 15px;
-                margin-bottom: 10px; background: var(--panel); }
+      .notice { border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px;
+                margin-bottom: 8px; background: var(--panel); }
       .notice h4 { margin: 0 0 4px; font-size: 15px; }
       .notice .when { font-size: 14px; color: var(--muted); }
       .mcard { border: 1px solid var(--line); border-left: 4px solid var(--line);
-               border-radius: 11px; padding: 15px 17px; margin-top: 11px; background: var(--panel); }
+               border-radius: 11px; padding: 16px 16px; margin-top: 12px; background: var(--panel); }
       .mcard.ok { border-left-color: var(--ok); }
       .mcard.no { border-left-color: var(--danger); }
-      .mcard.big { padding: 22px 24px; }
-      .mhead { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+      .mcard.big { padding: 20px 24px; }
+      .mhead { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
       .mname { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
       .mcard.big .mname { font-size: 28px; }
-      .msub { font-size: 14px; color: var(--muted); margin-top: 3px; }
+      .msub { font-size: 14px; color: var(--muted); margin-top: 4px; }
       .mstate { font-size: 15px; font-weight: 600; white-space: nowrap; }
       .mcard.big .mstate { font-size: 19px; }
       .mcard.ok .mstate { color: var(--ok); }
       .mcard.no .mstate { color: var(--danger); }
-      .msoon { margin-top: 10px; padding: 8px 11px; border-radius: 7px; font-size: 14px;
+      .msoon { margin-top: 8px; padding: 8px 12px; border-radius: 7px; font-size: 14px;
                background: color-mix(in srgb, var(--warn) 13%, transparent); color: var(--warn); }
-      .mrow { display: flex; gap: 7px; margin-top: 13px; flex-wrap: wrap; }
+      .mrow { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
       /* ── 시트: 목록을 덮는다. 나가는 길은 취소뿐. ── */
       .sheet { position: fixed; inset: 0; z-index: 60; background: rgba(10,14,22,0.55);
                display: flex; align-items: flex-start; justify-content: center;
-               padding: 34px 20px; overflow-y: auto; }
+               padding: 32px 20px; overflow-y: auto; }
       .sheet.hidden { display: none; }
       .sheet-box { background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
-                   width: min(560px, 100%); padding: 20px 22px; }
+                   width: min(560px, 100%); padding: 20px 20px; }
       .sheet-head { display: flex; align-items: center; justify-content: space-between;
                     font-size: 15px; font-weight: 600; margin-bottom: 16px; }
       .sheet-foot { display: flex; align-items: center; justify-content: space-between;
-                    gap: 10px; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
+                    gap: 8px; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
       .sheet-box label { display: block; font-size: 14px; color: var(--muted); margin-bottom: 12px; }
-      .sheet-box label input, .sheet-box label select { display: block; width: 100%; margin-top: 5px; }
+      .sheet-box label input, .sheet-box label select { display: block; width: 100%; margin-top: 4px; }
       .wstep { display: none; } .wstep.on { display: block; }
-      .steps { display: flex; gap: 6px; margin-bottom: 18px; }
+      .steps { display: flex; gap: 4px; margin-bottom: 16px; }
       .steps i { flex: 1; height: 3px; border-radius: 2px; background: var(--line); }
       .steps i.on { background: var(--brand); }
       /* 종류는 이름 기호로 추측하지 않고 먼저 고른다. */
       .choice .form { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 14px;
                       color: var(--brand-light); }
-      .choice .ex { margin-top: 9px; padding-top: 9px; border-top: 1px solid var(--line); }
+      .choice .ex { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
       .choice .exrow { display: flex; gap: 8px; font-size: 14px; color: var(--muted);
-                       margin-bottom: 3px; }
+                       margin-bottom: 4px; }
       .choice .exrow b { color: var(--text); font-weight: 600; min-width: 52px; }
       .choice .no { margin-top: 8px; font-size: 14px; color: var(--warn); }
       .choice.on .ex, .choice.on .no { display: block; }
       .choice:not(.on) .ex, .choice:not(.on) .no { display: none; }
-      .choice { border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px;
-                margin-bottom: 9px; cursor: pointer; }
+      .choice { border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px;
+                margin-bottom: 8px; cursor: pointer; }
       .choice:hover { border-color: var(--brand-light); }
       .choice.on { border-color: var(--brand); background: color-mix(in srgb, var(--brand) 8%, transparent); }
-      .choice b { display: block; font-size: 15px; margin-bottom: 2px; }
+      .choice b { display: block; font-size: 15px; margin-bottom: 4px; }
       .choice span { font-size: 14px; color: var(--muted); }
-      .dirlist { margin-top: 9px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-      .direntry { display: flex; justify-content: space-between; gap: 10px; padding: 9px 12px;
+      .dirlist { margin-top: 8px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+      .direntry { display: flex; justify-content: space-between; gap: 8px; padding: 8px 12px;
                   font-size: 14px; border-bottom: 1px solid var(--line); }
       .direntry:last-child { border-bottom: 0; }
-      .sendbox { margin-top: 14px; padding: 16px 18px; border: 1px solid var(--line);
+      .sendbox { margin-top: 12px; padding: 16px 16px; border: 1px solid var(--line);
                  border-radius: 10px; background: var(--panel); max-width: 560px; }
       .sendhead { display: flex; align-items: center; justify-content: space-between;
-                  font-size: 15px; font-weight: 600; margin-bottom: 14px; }
-      .sendbox label { display: block; font-size: 14px; color: var(--muted); margin-bottom: 11px; }
+                  font-size: 15px; font-weight: 600; margin-bottom: 12px; }
+      .sendbox label { display: block; font-size: 14px; color: var(--muted); margin-bottom: 12px; }
       /* 라벨이 감싸는 입력칸은 다음 줄로. 인라인이면 글자와 칸이 겹쳐 보인다. */
-      .sendbox label input, .sendbox label select { display: block; width: 100%; margin-top: 5px; }
-      .sendbox input, .sendbox select { margin-top: 5px; }
+      .sendbox label input, .sendbox label select { display: block; width: 100%; margin-top: 4px; }
+      .sendbox input, .sendbox select { margin-top: 4px; }
       /* 검토는 세 줄만 크게. 읽히지 않는 확인은 확인이 아니다. */
-      .review { display: grid; grid-template-columns: 74px 1fr; gap: 11px 14px; align-items: baseline; }
+      .review { display: grid; grid-template-columns: 74px 1fr; gap: 12px 12px; align-items: baseline; }
       .review .rk { font-size: 14px; color: var(--muted); }
       .review .rv { font-size: 15px; }
       .review .rv.big { font-size: 28px; font-weight: 600; letter-spacing: -0.01em; }
-      .review code.addr { display: block; margin-top: 3px; color: var(--muted); }
-      #r-tailbox, #r-passbox { margin-top: 13px; padding: 11px 13px; border-radius: 8px;
+      .review code.addr { display: block; margin-top: 4px; color: var(--muted); }
+      #r-tailbox, #r-passbox { margin-top: 12px; padding: 12px 12px; border-radius: 8px;
                                border: 1px solid var(--warn);
                                background: color-mix(in srgb, var(--warn) 8%, transparent); }
-      #r-tailbox input, #r-passbox input { margin-top: 7px; }
-      .warnbox { border: 1px solid var(--warn); border-radius: 8px; padding: 13px 15px;
+      #r-tailbox input, #r-passbox input { margin-top: 8px; }
+      .warnbox { border: 1px solid var(--warn); border-radius: 8px; padding: 12px 16px;
                  font-size: 14px; line-height: 1.75; margin-bottom: 12px;
                  background: color-mix(in srgb, var(--warn) 8%, transparent); }
 
       /* 메뉴 사진. 작게, 그러나 무엇인지 알아볼 수 있게. */
       .mnthumb { display: block; width: 56px; height: 56px; object-fit: cover;
                  border-radius: 8px; border: 1px solid var(--line);
-                 margin-bottom: 6px; cursor: pointer; background: var(--bg); }
+                 margin-bottom: 4px; cursor: pointer; background: var(--bg); }
 
       /* ── 묻는 창 ─────────────────────────────────────────────────
          WKWebView 는 앱이 델리게이트를 붙여 주지 않으면 prompt·confirm·alert
@@ -439,11 +439,11 @@
                  background: color-mix(in srgb, #000 38%, transparent); }
       #askwrap.on { display: flex; }
       .askbox { width: 460px; max-width: 100%; background: var(--panel);
-                border: 1px solid var(--line); border-radius: 14px; padding: 24px 26px; }
-      .askbox h3 { font-size: 19px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 10px; }
+                border: 1px solid var(--line); border-radius: 14px; padding: 24px 24px; }
+      .askbox h3 { font-size: 19px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 8px; }
       .askbox .msg { font-size: 15px; color: var(--muted); line-height: 1.68; white-space: pre-wrap; }
-      .askbox input { width: 100%; margin-top: 14px; font-size: 16px; padding: 12px 13px; }
-      .askrow { display: flex; gap: 9px; margin-top: 18px; }
+      .askbox input { width: 100%; margin-top: 12px; font-size: 16px; padding: 12px 12px; }
+      .askrow { display: flex; gap: 8px; margin-top: 16px; }
       .askrow button { flex: 1; min-height: 46px; font-size: 15px; }
       /* ── 첫 실행 ──────────────────────────────────────────────────
          body 가 flex 라, 이 화면이 그 안의 칸으로 앉으면 사이드바를 밀어낸다.
@@ -462,13 +462,13 @@
          안 바꾸면 흰 바탕에 흰 글씨가 된다 — 제목만 안 보이고 부제목은 보여서
          빈 카드처럼 읽혔다. */
       .ob-pick { display: block; width: 100%; text-align: left; margin-bottom: 12px;
-                 padding: 18px 20px; border: 1px solid var(--line); border-radius: 12px;
+                 padding: 16px 20px; border: 1px solid var(--line); border-radius: 12px;
                  background: var(--panel); color: var(--text); cursor: pointer; }
       .ob-pick:hover:not(:disabled) { background: var(--panel); }
       .ob-pick:hover { border-color: var(--brand); }
       .ob-pick b { display: block; font-size: 19px; font-weight: 600; letter-spacing: -0.02em; }
       .ob-pick span { display: block; font-size: 14px; color: var(--muted);
-                      margin-top: 6px; line-height: 1.62; }
+                      margin-top: 4px; line-height: 1.62; }
       .ob-pick em { display: block; font-size: 14px; color: var(--faint);
                     font-style: normal; margin-top: 8px; }
       .ob-title { font-size: 19px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 16px; }
@@ -479,9 +479,9 @@
                  border-top: 1px solid var(--line); padding-top: 16px; }
       #onboard label { display: block; font-size: 14px; font-weight: 600; color: var(--muted);
                        margin: 24px 0 8px; }
-      #onboard input { display: block; width: 100%; font-size: 15px; padding: 12px 14px;
+      #onboard input { display: block; width: 100%; font-size: 15px; padding: 12px 12px;
                        border-radius: 8px; border: 1px solid var(--line);
-                       background: var(--panel); color: var(--text); margin-top: 6px; }
+                       background: var(--panel); color: var(--text); margin-top: 4px; }
       .ob-go { display: block; width: 100%; min-height: 48px; font-size: 15px; margin-top: 24px; }
       .ob-link { display: block; width: 100%; background: none; border: 0;
                  color: var(--brand-light); font-size: 14px; padding: 12px 0; min-height: 0; }
@@ -509,7 +509,7 @@
           <!-- 새 사장이 이 프로그램에서 제일 먼저 보는 화면이다. 살펴보는
                동안 사람은 아무것도 못 하므로, 여기가 인사할 자리다. -->
           <img src="/raven-hello.webp" alt="" width="150"
-               style="display:block;margin:0 auto 14px;border-radius:16px" />
+               style="display:block;margin:0 auto 12px;border-radius:16px" />
           <div class="ob-brand">PLAY X Raven</div>
           <div class="ob-lead">노드·사진 창고·지갑·계산대를 한 프로그램에서 씁니다.</div>
           <div class="ob-scan" id="ob-scanning">이 컴퓨터에 맞게 살펴보는 중…</div>
@@ -532,7 +532,7 @@
             <span>제 일도 하는 컴퓨터입니다. 꼭 필요한 만큼만 쓰게 합니다.</span>
             <em id="ob-also-gb">약 6 GB</em>
           </button>
-          <div class="ob-note" id="ob-usehint" style="margin-top:14px"></div>
+          <div class="ob-note" id="ob-usehint" style="margin-top:12px"></div>
         </div>
 
         <!-- 2. 판정 -->
@@ -592,15 +592,15 @@
            자리고, 체인은 그 뒤에 붙는 영수증이다. 회원은 아무것도 보내지
            않는다 — 폰이 잠겨 있고, 수수료가 없고, 줄이 서기 때문이다.  ── -->
       <section class="page" id="page-door">
-        <button class="ghost" id="door-back" style="margin-bottom:10px">← 가게</button>
+        <button class="ghost" id="door-back" style="margin-bottom:8px">← 가게</button>
         <h2 class="title">출입 · 회원</h2>
         <p class="lede">이름·전화 뒷자리·회원번호 아무거나 치면 됩니다.</p>
 
         <input id="dr-q" placeholder="홍길동 · 5678 · A7K2" autocomplete="off"
-               style="font-size:19px;padding:15px 16px;max-width:520px" />
+               style="font-size:19px;padding:16px 16px;max-width:520px" />
         <div id="dr-hits"></div>
 
-        <div class="bar" style="margin-top:22px">
+        <div class="bar" style="margin-top:20px">
           <span id="dr-note" class="meta" style="margin-right:auto"></span>
           <button class="ghost" id="dr-new">회원 등록</button>
           <button class="ghost" id="dr-all">전체 명단</button>
@@ -609,7 +609,7 @@
 
         <!-- 문. 회원권 확인이 먼저 돌고, 통과해야 셸리에 신호가 간다.
              회원권은 이 컴퓨터의 파일이라 인터넷이 끊겨도 확인된다. -->
-        <div id="dr-doorpanel" style="display:none; margin-top:26px">
+        <div id="dr-doorpanel" style="display:none; margin-top:24px">
           <h3>문</h3>
           <p class="meta">
             셸리 스위치를 같은 공유기에 붙이고 셸리 앱에서 IP를 확인해 여기 적으세요.
@@ -617,12 +617,12 @@
           </p>
           <div id="dr-doorlist"></div>
 
-          <div class="form" style="margin-top:14px; max-width:520px">
+          <div class="form" style="margin-top:12px; max-width:520px">
             <label>이름</label>
             <input id="dw-name" placeholder="정문" autocomplete="off" />
-            <label style="margin-top:10px">셸리 주소</label>
+            <label style="margin-top:8px">셸리 주소</label>
             <input id="dw-ip" placeholder="192.168.0.51" autocomplete="off" spellcheck="false" />
-            <div class="row" style="margin-top:10px; gap:12px; flex-wrap:wrap; align-items:flex-end">
+            <div class="row" style="margin-top:8px; gap:12px; flex-wrap:wrap; align-items:flex-end">
               <label style="flex:none; margin:0">세대<br />
                 <select id="dw-gen"><option value="2">2세대</option><option value="1">1세대</option></select>
               </label>
@@ -729,7 +729,7 @@
           <span class="meta">새 이름을 체인에 새깁니다. RVN이 소각됩니다.</span>
         </div>
 
-        <div class="tabs" style="margin-bottom:10px">
+        <div class="tabs" style="margin-bottom:8px">
           <button class="tab on" data-afilter="all">전체</button>
           <button class="tab" data-afilter="mine">내가 만든 것</button>
           <button class="tab" data-afilter="got">받은 것</button>
@@ -799,7 +799,7 @@
             <h3>지갑 잠금</h3>
             <div class="state" id="w-lock">확인 중…</div>
             <div class="detail" id="w-lock-detail"></div>
-            <div class="row" style="margin-top:9px">
+            <div class="row" style="margin-top:8px">
               <button class="ghost" id="w-enc">암호 걸기</button>
               <button class="ghost" id="w-lock-now" style="display:none">지금 잠그기</button>
             </div>
@@ -947,7 +947,7 @@
           <div id="sl-sum"></div>
           <div id="sl-items"></div>
 
-          <div class="row" style="margin-top:18px">
+          <div class="row" style="margin-top:16px">
             <button class="ghost" id="sl-csv">엑셀 파일로 내보내기</button>
             <span class="meta" id="sl-csvnote"></span>
           </div>
@@ -1014,7 +1014,7 @@
               <label style="margin-top:12px">전화</label>
               <input id="sh-phone" placeholder="손님이 걸 수 있는 번호" autocomplete="off" />
 
-              <div class="row" style="margin-top:10px">
+              <div class="row" style="margin-top:8px">
                 <label class="check"><input type="checkbox" id="sh-pickup" checked /><span>매장·포장</span></label>
                 <label class="check"><input type="checkbox" id="sh-delivery" /><span>배달</span></label>
               </div>
@@ -1028,7 +1028,7 @@
                 <input id="sh-orderurl" placeholder="https://…" autocomplete="off" spellcheck="false" />
                 <button class="ghost" id="sh-usetunnel">지금 터널 주소 넣기</button>
               </div>
-              <div class="meta" id="sh-orderurlnote" style="margin-top:6px">
+              <div class="meta" id="sh-orderurlnote" style="margin-top:4px">
                 비워 두면 가게 목록에 이름만 보이고 <b>주문 버튼이 안 생깁니다.</b>
                 이 주소는 체인에 올라가므로, 바뀌면 <b>재발행(RVN 소각)</b>을 해야 고쳐집니다 —
                 빠른 터널 주소는 켤 때마다 바뀌니 임시로만 쓰세요.
@@ -1091,7 +1091,7 @@
             <span class="meta" id="mn-note"></span>
           </div>
           <div id="mn-items"></div>
-          <div class="row" style="margin-top:14px">
+          <div class="row" style="margin-top:12px">
             <button class="ghost" id="mn-preview">손님 화면 보기</button>
             <span class="meta" id="mn-prevnote"></span>
           </div>
@@ -1127,7 +1127,7 @@
            자산을 가진 것이 곧 구독이다. 회원권을 준 순간 그 회원은 공지
            대상이 되고, 팔면 빠진다.                                  ── -->
       <section class="page" id="page-msg">
-        <button class="ghost" id="msg-back" style="margin-bottom:10px">← 가게</button>
+        <button class="ghost" id="msg-back" style="margin-bottom:8px">← 가게</button>
         <h2 class="title">공지</h2>
         <p class="lede">자산을 가진 사람 전원에게 갑니다. 답장은 받을 수 없습니다.</p>
 
@@ -1148,7 +1148,7 @@
             <label style="margin-top:12px">내용</label>
             <input id="nt-body" placeholder="9월 20일 하루 쉽니다" autocomplete="off" />
 
-            <div class="warnbox" style="margin-top:14px">
+            <div class="warnbox" style="margin-top:12px">
               보낸 공지는 <b>지울 수 없습니다.</b> 체인에 영구히 남고 누구나 볼 수 있습니다.<br />
               보낼 때마다 네트워크 수수료가 듭니다. 답장은 오지 않습니다 — 이건 방송입니다.
             </div>
@@ -1198,14 +1198,14 @@
         <h2 class="title">이 컴퓨터</h2>
 
         <!-- 이 노드가 어디인지. 지점이 둘이 되는 순간 "이 컴퓨터"는 뜻이 없다. -->
-        <div class="card" style="margin-bottom:14px">
+        <div class="card" style="margin-bottom:12px">
           <h3>이 노드</h3>
           <label style="display:block;font-size:14px;color:var(--muted);margin-top:8px">
             이름 (지점명)
             <input id="nd-name" placeholder="강남지점 · 2층 계산대" autocomplete="off"
-                   style="display:block;width:100%;margin-top:5px" />
+                   style="display:block;width:100%;margin-top:4px" />
           </label>
-          <div class="meta" id="nd-note" style="margin-top:6px"></div>
+          <div class="meta" id="nd-note" style="margin-top:4px"></div>
         </div>
 
         <!-- 인터넷이 끊기면 결제 규칙이 달라진다. 화면이 먼저 말해야 한다. -->
@@ -1243,9 +1243,9 @@
 
           <!-- 훔쳐가는 문제. 지갑 잠금은 "못 보낸다"를 막을 뿐, "많이 들고 있다"는
                안 고친다. 카운터를 안전하게 만드는 게 아니라 얕게 만든다. -->
-          <div class="card" style="margin-top:18px">
+          <div class="card" style="margin-top:16px">
             <h3>번 돈 금고로 옮기기</h3>
-            <div class="meta" style="margin-bottom:10px">
+            <div class="meta" style="margin-bottom:8px">
               계산대에 하루치가 쌓입니다. 정해 둔 금액을 넘으면 남는 돈이 자동으로
               <b>다른 지갑</b>으로 갑니다. 컴퓨터를 잃어버려도 거기 있는 돈은 무사합니다.
             </div>
@@ -1255,27 +1255,27 @@
                 <input id="sw-to" placeholder="R…" autocomplete="off" spellcheck="false" />
               </div>
             </div>
-            <div class="row" style="margin-top:9px">
+            <div class="row" style="margin-top:8px">
               <div><label>이 금액을 넘으면</label><input id="sw-above" inputmode="decimal" placeholder="3000" /></div>
               <div><label>계산대에 남길 돈</label><input id="sw-keep" inputmode="decimal" placeholder="1000" /></div>
             </div>
-            <div class="row" style="margin-top:10px">
+            <div class="row" style="margin-top:8px">
               <button id="sw-save">켜기</button>
               <button class="ghost" id="sw-off">끄기</button>
               <span class="meta" id="sw-note"></span>
             </div>
             <div id="sw-state" class="meta" style="margin-top:8px"></div>
-            <div class="warnbox" style="margin-top:10px;font-size:13.5px">
+            <div class="warnbox" style="margin-top:8px;font-size:13.5px">
               <b>금고 주소는 켤 때 고정됩니다.</b> 남이 이 컴퓨터를 만져도 목적지를 바꿀 수 없고,
               사장님 지갑으로 보내는 것만 할 수 있습니다. 주소를 바꾸려면 지갑 암호가 필요합니다.
             </div>
           </div>
 
           <!-- 백업을 어디에 둘 것인가. 폴더 경로를 타이핑하게 하면 아무도 안 한다. -->
-          <div class="card" style="margin-top:14px">
+          <div class="card" style="margin-top:12px">
             <h3>백업 둘 곳</h3>
             <div id="bk-places" class="meta">찾는 중…</div>
-            <div class="warnbox" style="margin-top:10px;font-size:13.5px">
+            <div class="warnbox" style="margin-top:8px;font-size:13.5px">
               <b>지갑 파일은 클라우드에 둬도 됩니다</b> — 암호로 잠겨 있습니다.
               하지만 <b>복구 단어 12개는 클라우드에 절대 올리지 마세요.</b>
               그건 잠겨 있지 않아서, 계정 하나만 뚫려도 가게 돈이 넘어갑니다.
@@ -1303,7 +1303,7 @@
         <details class="advanced">
           <summary>고급 — 채굴 · AI 키 · 세부 설정</summary>
 
-          <div class="card" style="margin-top:14px">
+          <div class="card" style="margin-top:12px">
             <h3>AI 도우미</h3>
             <div class="warnbox" style="font-size:13.5px">
               <b>이 기능만 이 컴퓨터 밖으로 나갑니다.</b> 나머지는 전부 127.0.0.1 안에서 돕니다.
@@ -1312,15 +1312,15 @@
             <div id="keyrows"></div>
             <details style="margin-top:12px">
               <summary class="meta" style="cursor:pointer">다른 회사 · 내 컴퓨터의 AI</summary>
-              <div class="row" style="margin-top:9px">
+              <div class="row" style="margin-top:8px">
                 <div><label>이름</label><input id="cu-label" placeholder="Grok" autocomplete="off" /></div>
                 <div><label>모델</label><input id="cu-model" placeholder="grok-4" autocomplete="off" /></div>
               </div>
-              <div class="row" style="margin-top:9px">
+              <div class="row" style="margin-top:8px">
                 <div><label>주소</label><input id="cu-url" placeholder="https://api.x.ai/v1" autocomplete="off" /></div>
                 <div><label>키 (없으면 비움)</label><input id="cu-key" type="password" autocomplete="off" /></div>
               </div>
-              <div class="meta" style="margin-top:7px">Ollama는 <code>http://127.0.0.1:11434/v1</code>, 키 없음.</div>
+              <div class="meta" style="margin-top:8px">Ollama는 <code>http://127.0.0.1:11434/v1</code>, 키 없음.</div>
             </details>
             <div class="row" style="margin-top:12px">
               <button class="ghost" id="key-save">저장</button>
@@ -1329,19 +1329,19 @@
             </div>
 
             <!-- 한 곳이 막히면 다음으로 넘어간다. 그 순서가 곧 요금이다. -->
-            <details style="margin-top:14px">
+            <details style="margin-top:12px">
               <summary class="meta" style="cursor:pointer">넘어가는 순서 바꾸기</summary>
-              <div class="meta" style="margin-top:9px">
+              <div class="meta" style="margin-top:8px">
                 위에 있는 곳부터 씁니다. 막히거나 실패하면 아래로 넘어갑니다.
                 <b>안 건드리면 지금 그대로</b> 돕니다.
               </div>
 
-              <h4 style="margin:14px 0 0;font-size:14px">손님 질문에 답할 때</h4>
-              <div class="meta" style="margin-top:3px">하루 200번까지 옵니다. 싸고 빠른 곳이 위로 오는 게 유리합니다.</div>
+              <h4 style="margin:12px 0 0;font-size:14px">손님 질문에 답할 때</h4>
+              <div class="meta" style="margin-top:4px">하루 200번까지 옵니다. 싸고 빠른 곳이 위로 오는 게 유리합니다.</div>
               <div id="ord-customer"></div>
 
               <h4 style="margin:16px 0 0;font-size:14px">사장님을 도울 때</h4>
-              <div class="meta" style="margin-top:3px">가끔 씁니다. 잘하는 곳이 위로 오는 게 유리합니다.</div>
+              <div class="meta" style="margin-top:4px">가끔 씁니다. 잘하는 곳이 위로 오는 게 유리합니다.</div>
               <div id="ord-owner"></div>
 
               <div class="row" style="margin-top:12px">
@@ -1366,11 +1366,11 @@
               <div style="flex:1"><label>소비전력 (W)<input id="mn-watts" type="number" value="150" /></label></div>
             </div>
             <div id="mn-calc"></div>
-            <label style="margin-top:14px">GPU를 몇 %로 쓸까요
+            <label style="margin-top:12px">GPU를 몇 %로 쓸까요
               <input id="mn-power" type="range" min="50" max="100" step="5" value="70" style="width:100%;margin-top:8px" />
             </label>
             <div id="mn-powernote" class="meta"></div>
-            <div class="row" style="margin-top:14px">
+            <div class="row" style="margin-top:12px">
               <div style="flex:1"><label>풀<select id="mn-pool"></select></label></div>
               <div style="flex:1"><label>장비 이름<input id="mn-worker" placeholder="rig1" /></label></div>
             </div>
@@ -1387,29 +1387,29 @@
                  계산대 맥미니로 큰돈이 되지는 않지만, 소량이라도 레이븐에
                  기여하려는 사람이 많다. 그 선택을 막을 이유는 없고, 대신
                  무엇을 얻고 무엇을 잃는지 화면이 말해야 한다. -->
-            <h3 style="margin-top:26px">이 컴퓨터로도 캐기</h3>
-            <p class="meta" style="margin:0 0 10px">
+            <h3 style="margin-top:24px">이 컴퓨터로도 캐기</h3>
+            <p class="meta" style="margin:0 0 8px">
               계산대 컴퓨터로는 <b>전기값이 더 나갈 수 있습니다.</b> 그래도 소량이나마
               레이븐에 기여하고 싶을 때 켜세요. 채굴기는 우리가 넣어 두지 않았습니다 —
               백신이 채굴기를 악성코드로 잡는 일이 흔해서, 넣으면 앱 전체가 격리됩니다.
               아래에서 받아 <b>다운로드 폴더</b>에 두시면 찾아서 씁니다.
             </p>
             <div id="mn-miners"></div>
-            <div class="row" style="margin-top:10px">
+            <div class="row" style="margin-top:8px">
               <div style="flex:1"><label>채굴기 실행 파일 이름<input id="mn-bin" placeholder="kawpowminer" autocomplete="off" spellcheck="false" /></label></div>
             </div>
-            <div class="row" style="margin-top:10px">
+            <div class="row" style="margin-top:8px">
               <button id="mn-run">채굴 켜기</button>
               <button class="ghost" id="mn-halt">끄기</button>
               <span class="meta" id="mn-runnote"></span>
             </div>
             <div class="meta" id="mn-runstate" style="margin-top:8px"></div>
-            <div class="meta" id="mn-net" style="margin-top:6px"></div>
+            <div class="meta" id="mn-net" style="margin-top:4px"></div>
           </div>
 
           <div class="card">
             <h3>세부 설정</h3>
-            <p class="meta" style="margin:0 0 10px">
+            <p class="meta" style="margin:0 0 8px">
               위의 <b>오래된 컴퓨터로 아끼기</b> 스위치가 이 값들을 대신 정합니다.
               직접 만지실 때만 여세요.
             </p>
@@ -1419,7 +1419,7 @@
             <div id="cf-disk"></div>
             <div class="row" id="cf-templates"></div>
             <div id="cf-fields"></div>
-            <div class="row" style="margin-top:14px">
+            <div class="row" style="margin-top:12px">
               <button id="cf-save">저장하고 다시 켜기 안내</button>
               <button class="ghost" id="cf-reload">되읽기</button>
               <span class="meta" id="cf-note"></span>

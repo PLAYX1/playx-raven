@@ -8,63 +8,73 @@
       /* 직원 화면. 손이 젖어 있고, 한 손이고, 뒤에 줄이 서 있다. */
       :root {
         --bg: #ffffff; --fg: #141518; --muted: #4b5568; --line: #dde3f0;
-        --panel: #f7f8fb; --accent: #384192; --warn: #96601a; --ok: #1c7a45;
+        --panel: #f7f8fb; --accent: #384192; --warn: #96601a; --ok: #1c7a45; --ravi: #e7731f; --ravi-soft: #8375ae; --ravi-tint: #fdf1e7;
         --safe-b: env(safe-area-inset-bottom, 0px);
       }
       @media (prefers-color-scheme: dark) {
         :root { --bg: #0d0f13; --fg: #eceef2; --muted: #b3bdd6; --line: #2a2f3a;
-                --panel: #171a21; --accent: #7a90de; --warn: #e0ad50; --ok: #4fbe83; }
+                --panel: #171a21; --accent: #7a90de; --warn: #e0ad50; --ok: #4fbe83; } --ravi: #f0913f; --ravi-soft: #a294cb; --ravi-tint: #2a1f18;
       }
       * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
       body { margin: 0; background: var(--bg); color: var(--fg);
              font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif;
              padding: 18px 16px calc(88px + var(--safe-b)); }
-      h1 { margin: 0 0 2px; font-size: 19px; }
+      h1 { margin: 0 0 4px; font-size: 19px; }
       .sub { color: var(--muted); font-size: 13.5px; }
 
       .ticket { border: 1px solid var(--line); border-left: 5px solid var(--line);
-                border-radius: 13px; padding: 15px 17px; margin-top: 12px; background: var(--panel); }
+                border-radius: 13px; padding: 16px 16px; margin-top: 12px; background: var(--panel); }
       .ticket.paid { border-left-color: var(--warn); }
       .ticket.making { border-left-color: var(--accent); }
       .ticket.ready { border-left-color: var(--ok); }
       .no { font-size: 32px; font-weight: 700; line-height: 1.1; }
-      .when { color: var(--muted); font-size: 13.5px; margin-top: 2px; }
-      .items { margin-top: 9px; font-size: 15px; }
+      .when { color: var(--muted); font-size: 13.5px; margin-top: 4px; }
+      .items { margin-top: 8px; font-size: 15px; }
       /* 56px. 주방에서 젖은 손으로 누른다. */
-      .ticket button { margin-top: 13px; width: 100%; min-height: 56px; border-radius: 12px;
+      .ticket button { margin-top: 12px; width: 100%; min-height: 56px; border-radius: 12px;
                        border: 0; background: var(--accent); color: #fff; font-size: 17px;
                        font-weight: 600; font-family: inherit; cursor: pointer; }
 
-      .empty { border: 1px dashed var(--line); border-radius: 13px; padding: 30px 20px;
+      .empty { border: 1px dashed var(--line); border-radius: 13px; padding: 32px 20px;
                text-align: center; color: var(--muted); font-size: 15px; line-height: 1.8;
-               margin-top: 14px; }
+               margin-top: 12px; }
 
       nav { position: fixed; left: 0; right: 0; bottom: 0; background: var(--bg);
             border-top: 1px solid var(--line); display: flex; padding-bottom: var(--safe-b); }
-      nav button { flex: 1; border: 0; border-radius: 0; background: none; padding: 15px 4px;
+      nav button { flex: 1; border: 0; border-radius: 0; background: none; padding: 16px 4px;
                    font-size: 14px; color: var(--muted); font-family: inherit; }
       nav button.on { color: var(--accent); font-weight: 600; }
       .pane { display: none; } .pane.on { display: block; }
 
-      input { width: 100%; padding: 16px; margin-top: 14px; border-radius: 12px;
+      input { width: 100%; padding: 16px; margin-top: 12px; border-radius: 12px;
               border: 1px solid var(--line); background: var(--bg); color: var(--fg);
               font-size: 18px; font-family: inherit; }
-      .mrow { border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px;
-              margin-top: 11px; background: var(--panel); }
+      .mrow { border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px;
+              margin-top: 12px; background: var(--panel); }
       .mrow .nm { font-size: 17px; font-weight: 600; }
-      .mrow .st { font-size: 14px; margin-top: 3px; }
+      .mrow .st { font-size: 14px; margin-top: 4px; }
       .mrow .st.ok { color: var(--ok); } .mrow .st.no { color: var(--warn); }
       .note { margin-top: 24px; font-size: 14px; color: var(--muted); line-height: 1.8; }
       /* 돈이 나가는 버튼이 브라우저 기본 크기로 서 있었다. 이 화면의 주 버튼과
          같은 손가락 크기를 준다. 색은 겁주지 않는다 — 환불은 직원의 정상 업무고,
          빨갛게 만들면 해야 할 때 망설인다. 되돌릴 수 없다는 경고는 아래 문장이
          맡는다. (var(--warn) 은 다크모드에서 밝은 노랑이라 흰 글씨가 안 읽힌다.) */
-      #rf-go { width: 100%; min-height: 56px; margin-top: 18px; border: 0;
+      #rf-go { width: 100%; min-height: 56px; margin-top: 16px; border: 0;
                border-radius: 12px; background: var(--accent); color: #fff;
                font-size: 17px; font-weight: 600; font-family: inherit; cursor: pointer; }
       #rf-go:disabled { opacity: .5; }
-      #rf-result { margin-top: 14px; font-size: 15px; line-height: 1.7; }
-    </style>
+      #rf-result { margin-top: 12px; font-size: 15px; line-height: 1.7; }
+    
+      /* 빈 상태는 실패 화면이 아니라 모집 화면이다. Ravi 가 서 있으면
+         "고장났나"가 아니라 "아직 시작 전이구나"로 읽힌다. */
+      .ravibox { text-align: center; padding: 32px 16px; }
+      .ravibox img { width: 132px; height: auto; border-radius: 16px;
+        animation: ravifloat 3.6s ease-in-out infinite; }
+      .ravibox .rt { margin-top: 12px; font-size: 16px; font-weight: 600; }
+      .ravibox .rs { margin-top: 4px; font-size: 14px; color: var(--muted); line-height: 1.6; }
+      @keyframes ravifloat { 0%,100% { transform: none; } 50% { transform: translateY(-6px); } }
+      @media (prefers-reduced-motion: reduce) { .ravibox img { animation: none; } }
+</style>
   </head>
   <body>
     <h1 id="title">주문</h1>
@@ -223,9 +233,10 @@
                   </div>`;
                 })
                 .join("")
-            : `<div class="empty">
-                 아직 주문이 없습니다.<br />
-                 손님이 QR로 주문하면 <b>번호표가 여기 뜹니다.</b>
+            : `<div class="ravibox">
+                 <img src="/raven-sleep.webp" alt="" />
+                 <div class="rt">조용하네요</div>
+                 <div class="rs">손님이 QR로 주문하면 <b>번호표가 여기 뜹니다.</b></div>
                </div>`;
 
           $("list").querySelectorAll("[data-adv]").forEach((b) => {

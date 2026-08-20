@@ -7,45 +7,45 @@
     <style>
       :root {
         --bg: #ffffff; --fg: #141518; --muted: #6b7280; --line: #e6e7ea;
-        --panel: #fafafb; --accent: #3b3f8f; --warn: #b45309; --good: #2f7a4f; --bad: #b3261e;
+        --panel: #fafafb; --accent: #3b3f8f; --warn: #b45309; --good: #2f7a4f; --bad: #b3261e; --ravi: #e7731f; --ravi-soft: #8375ae; --ravi-tint: #fdf1e7;
         --safe-b: env(safe-area-inset-bottom, 0px);
       }
       @media (prefers-color-scheme: dark) {
         :root { --bg: #101114; --fg: #eceef2; --muted: #9aa0ab; --line: #26282e;
-                --panel: #17191d; --accent: #8d92e8; --warn: #d99b3f; --good: #63b98a; --bad: #e06a5f; }
+                --panel: #17191d; --accent: #8d92e8; --warn: #d99b3f; --good: #63b98a; --bad: #e06a5f; } --ravi: #f0913f; --ravi-soft: #a294cb; --ravi-tint: #2a1f18;
       }
       * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
       body { margin: 0; background: var(--bg); color: var(--fg);
              font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif;
              padding: 0 0 calc(78px + var(--safe-b)); }
-      header { padding: 18px 18px 12px; }
-      h1 { margin: 0 0 2px; font-size: 19px; letter-spacing: -0.02em; }
+      header { padding: 16px 16px 12px; }
+      h1 { margin: 0 0 4px; font-size: 19px; letter-spacing: -0.02em; }
       .sub { color: var(--muted); font-size: 14px; }
 
-      main { padding: 0 18px; }
+      main { padding: 0 16px; }
       .pane { display: none; }
       .pane.on { display: block; }
 
-      .card { border: 1px solid var(--line); border-radius: 12px; padding: 14px 15px;
-              background: var(--panel); margin-bottom: 10px; }
+      .card { border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px;
+              background: var(--panel); margin-bottom: 8px; }
       .card h3 { margin: 0 0 8px; font-size: 11.5px; font-weight: 600; color: var(--muted);
                  text-transform: uppercase; letter-spacing: 0.05em; }
       .big { font-size: 24px; font-weight: 700; letter-spacing: -0.02em;
              font-variant-numeric: tabular-nums; }
-      .detail { color: var(--muted); font-size: 12.5px; margin-top: 3px; }
+      .detail { color: var(--muted); font-size: 12.5px; margin-top: 4px; }
       .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%;
-             background: var(--muted); margin-right: 7px; vertical-align: 1px; }
+             background: var(--muted); margin-right: 8px; vertical-align: 1px; }
       .dot.ok { background: var(--good); } .dot.no { background: var(--warn); }
 
-      label { display: block; font-size: 11.5px; color: var(--muted); margin: 11px 0 4px; }
-      input, select, textarea { width: 100%; padding: 12px 13px; border-radius: 10px;
+      label { display: block; font-size: 11.5px; color: var(--muted); margin: 12px 0 4px; }
+      input, select, textarea { width: 100%; padding: 12px 12px; border-radius: 10px;
              border: 1px solid var(--line); background: var(--bg); color: var(--fg);
              font-size: 16px; font-family: inherit; }
-      .two { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
-      .chk { display: flex; align-items: center; gap: 9px; margin: 12px 0; font-size: 14px; }
+      .two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+      .chk { display: flex; align-items: center; gap: 8px; margin: 12px 0; font-size: 14px; }
       .chk input { width: 22px; height: 22px; flex: none; }
 
-      button { padding: 13px 17px; border-radius: 10px; border: 1px solid var(--line);
+      button { padding: 12px 16px; border-radius: 10px; border: 1px solid var(--line);
                background: var(--bg); color: var(--fg); font-size: 14.5px; font-family: inherit;
                cursor: pointer; }
       button.go { background: var(--accent); color: #fff; border-color: transparent; width: 100%; }
@@ -54,25 +54,25 @@
 
       table { width: 100%; border-collapse: collapse; }
       th { text-align: left; font-size: 13px; color: var(--muted); font-weight: 500;
-           padding: 6px 0; border-bottom: 1px solid var(--line); }
-      td { padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+           padding: 4px 0; border-bottom: 1px solid var(--line); }
+      td { padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; }
       td.num { text-align: right; font-variant-numeric: tabular-nums; }
       .pending { color: var(--warn); }
 
-      .warn { border: 1px solid var(--warn); border-radius: 10px; padding: 11px 13px;
+      .warn { border: 1px solid var(--warn); border-radius: 10px; padding: 12px 12px;
               font-size: 14px; line-height: 1.7; margin: 12px 0;
               background: color-mix(in srgb, var(--warn) 8%, transparent); }
       .err { color: var(--bad); font-size: 14px; }
-      #err:not(:empty) { margin: 0 18px 12px; padding: 12px 14px; border-radius: 10px;
+      #err:not(:empty) { margin: 0 16px 12px; padding: 12px 12px; border-radius: 10px;
                          border: 1px solid var(--bad); font-size: 13.5px; line-height: 1.7;
                          background: color-mix(in srgb, var(--bad) 8%, transparent); }
       .note { font-size: 13.5px; color: var(--muted); line-height: 1.7; margin-top: 12px; }
 
       .mn { display: grid; grid-template-columns: 1fr 92px 44px; gap: 8px; align-items: center;
-            padding: 9px 0; border-bottom: 1px solid var(--line); }
-      .mn input { padding: 9px 10px; font-size: 15px; }
+            padding: 8px 0; border-bottom: 1px solid var(--line); }
+      .mn input { padding: 8px 8px; font-size: 15px; }
 
-      .msg { font-size: 14px; line-height: 1.7; margin-bottom: 11px; padding: 10px 12px;
+      .msg { font-size: 14px; line-height: 1.7; margin-bottom: 12px; padding: 8px 12px;
              border-radius: 11px; max-width: 88%; white-space: pre-wrap; }
       .msg.ai { background: var(--panel); border: 1px solid var(--line); }
       .msg.me { background: var(--accent); color: #fff; margin-left: auto; }
@@ -93,10 +93,20 @@
       .card.lead h3 { color: var(--accent); font-size: 15px; }
       /* 상태 줄 — 카드 하나에 셋을 담는다. */
       .card.status .srow { display: flex; justify-content: space-between; align-items: baseline;
-        gap: 12px; padding: 7px 0; }
+        gap: 12px; padding: 8px 0; }
       .card.status .srow + .detail:empty { display: none; }
       .card.status .sk { color: var(--muted); font-size: 14px; flex: none; }
       .card.status .srow > span:last-child { text-align: right; font-size: 15px; }
+
+      /* 빈 상태는 실패 화면이 아니라 모집 화면이다. */
+      .ravibox { text-align: center; padding: 24px 12px; }
+      .ravibox img { width: 116px; height: auto; border-radius: 16px;
+        animation: ravifloat 3.6s ease-in-out infinite; }
+      .ravibox.sm img { width: 92px; }
+      .ravibox .rt { margin-top: 12px; font-size: 16px; font-weight: 600; }
+      .ravibox .rs { margin-top: 4px; font-size: 14px; color: var(--muted); line-height: 1.6; }
+      @keyframes ravifloat { 0%,100% { transform: none; } 50% { transform: translateY(-6px); } }
+      @media (prefers-reduced-motion: reduce) { .ravibox img { animation: none; } }
 </style>
   </head>
   <body>
@@ -111,7 +121,7 @@
       <div class="pane on" id="p-home">
         <div class="row">
           <span id="newbadge" style="display:none;background:#e2483d;color:#fff;
-                padding:7px 12px;border-radius:999px;font-weight:700;margin-right:auto">
+                padding:8px 12px;border-radius:999px;font-weight:700;margin-right:auto">
           </span>
           <button id="refresh">새로고침</button>
           <button id="auto">자동 켜짐</button>
@@ -261,18 +271,18 @@
              </div>` +
             (dead
               ? `<button id="mc-start" style="margin-top:12px">지금 켜기</button>`
-              : `<div class="detail" style="margin-top:10px">전부 돌고 있습니다.</div>`) +
+              : `<div class="detail" style="margin-top:8px">전부 돌고 있습니다.</div>`) +
             (!net.online
-              ? `<div class="warn" style="margin-top:10px"><b>인터넷이 끊겼습니다.</b> ${net.advice || ""}</div>`
+              ? `<div class="warn" style="margin-top:8px"><b>인터넷이 끊겼습니다.</b> ${net.advice || ""}</div>`
               : "") +
-            `<div class="card" style="margin-top:14px">
+            `<div class="card" style="margin-top:12px">
                <h3>백업</h3>
                <div class="detail">${
                  m.backup?.last?.at
                    ? `마지막 ${ago(m.backup.last.at)}`
                    : "<b>아직 한 번도 안 했습니다.</b>"
                }</div>
-               <button id="mc-backup" style="margin-top:10px">지금 백업하기</button>
+               <button id="mc-backup" style="margin-top:8px">지금 백업하기</button>
                <div id="mc-bkresult"></div>
              </div>`;
 
@@ -288,11 +298,11 @@
             try {
               const r = await api("/api/admin/backup", { method: "POST" });
               $("mc-bkresult").innerHTML =
-                `<div class="detail" style="margin-top:9px;color:#1f9d55"><b>${r.name}</b> (${r.size_text})<br />
+                `<div class="detail" style="margin-top:8px;color:#1f9d55"><b>${r.name}</b> (${r.size_text})<br />
                  가게 컴퓨터 바탕화면에 있습니다.</div>` +
                 (r.warning ? `<div class="warn" style="margin-top:8px">${r.warning}</div>` : "");
             } catch (e) {
-              $("mc-bkresult").innerHTML = `<div class="warn" style="margin-top:9px">${e.message || e}</div>`;
+              $("mc-bkresult").innerHTML = `<div class="warn" style="margin-top:8px">${e.message || e}</div>`;
             }
             b.disabled = false; b.textContent = "지금 백업하기";
           };
@@ -367,7 +377,12 @@
                     }</td></tr>`
                 )
                 .join("")
-            : `<tr><td colspan="4" class="detail">아직 없습니다.</td></tr>`;
+            : `<tr><td colspan="4">
+                 <div class="ravibox sm">
+                   <img src="/raven-sleep.webp" alt="" />
+                   <div class="rt">아직 주문이 없습니다</div>
+                   <div class="rs">손님이 QR을 찍으면 여기 바로 뜹니다.</div>
+                 </div></td></tr>`;
 
           const ai = s.ai || {};
           $("aiuse").textContent = ai.limit
@@ -443,7 +458,7 @@
         const r = await api("/api/admin/publish", { shop, ai_provider: aiProvider });
         $(where).innerHTML = r.error
           ? `<div class="err">${r.error}</div>`
-          : `<div class="card" style="margin-top:10px">손님 화면에 반영했습니다.</div>`;
+          : `<div class="card" style="margin-top:8px">손님 화면에 반영했습니다.</div>`;
         $("title").textContent = shop.name || "내 노드";
       }
 

@@ -15,12 +15,12 @@
          바깥에서 받아오는 것은 아무것도 없다 — 글꼴도 그림도 전부 여기 있다. */
       :root {
         --bg: #ffffff; --fg: #141518; --muted: #6b7280; --line: #e6e7ea;
-        --panel: #fafafb; --accent: #3b3f8f; --warn: #b45309; --ok: #166534;
+        --panel: #fafafb; --accent: #3b3f8f; --warn: #b45309; --ok: #166534; --ravi: #e7731f; --ravi-soft: #8375ae; --ravi-tint: #fdf1e7;
         --safe-b: env(safe-area-inset-bottom, 0px);
       }
       @media (prefers-color-scheme: dark) {
         :root { --bg: #101114; --fg: #eceef2; --muted: #9aa0ab; --line: #26282e;
-                --panel: #17191d; --accent: #8d92e8; --warn: #d99b3f; --ok: #6ee7a8; }
+                --panel: #17191d; --accent: #8d92e8; --warn: #d99b3f; --ok: #6ee7a8; } --ravi: #f0913f; --ravi-soft: #a294cb; --ravi-tint: #2a1f18;
       }
       * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
       body { margin: 0; background: var(--bg); color: var(--fg);
@@ -28,7 +28,7 @@
              padding: 0 0 calc(28px + var(--safe-b)); }
 
       /* 화면은 한 번에 하나만. body[data-screen] 이 고른다. */
-      section { display: none; padding: 22px 18px 0; }
+      section { display: none; padding: 20px 16px 0; }
       body[data-screen="loading"]  #s-loading,
       body[data-screen="welcome"]  #s-welcome,
       body[data-screen="unlock"]   #s-unlock,
@@ -41,10 +41,10 @@
       body[data-screen="confirm"]  #s-confirm,
       body[data-screen="sent"]     #s-sent { display: block; }
 
-      h1 { margin: 0 0 6px; font-size: 24px; letter-spacing: -0.02em; }
-      h2 { margin: 0 0 6px; font-size: 20px; letter-spacing: -0.01em; }
-      p  { margin: 0 0 14px; }
-      .sub { color: var(--muted); font-size: 15px; margin: 0 0 18px; }
+      h1 { margin: 0 0 4px; font-size: 24px; letter-spacing: -0.02em; }
+      h2 { margin: 0 0 4px; font-size: 20px; letter-spacing: -0.01em; }
+      p  { margin: 0 0 12px; }
+      .sub { color: var(--muted); font-size: 15px; margin: 0 0 16px; }
 
       /* 44px 미만은 손가락으로 못 누른다. */
       button, .btn {
@@ -57,50 +57,50 @@
       button.primary { background: var(--accent); color: #fff; border-color: transparent; }
       button.quiet { font-weight: 400; color: var(--muted); min-height: 48px; }
       button:disabled { opacity: 0.4; }
-      .row2 { display: flex; gap: 10px; }
+      .row2 { display: flex; gap: 8px; }
       .row2 button { margin-bottom: 12px; }
 
       input, textarea {
-        display: block; width: 100%; min-height: 56px; padding: 15px 14px;
+        display: block; width: 100%; min-height: 56px; padding: 16px 12px;
         border-radius: 12px; border: 1px solid var(--line);
         background: var(--bg); color: var(--fg);
         font: inherit; font-size: 17px; margin-bottom: 12px;
       }
       textarea { min-height: 128px; line-height: 1.7; resize: vertical; }
-      label { display: block; font-size: 15px; color: var(--muted); margin-bottom: 6px; }
+      label { display: block; font-size: 15px; color: var(--muted); margin-bottom: 4px; }
 
-      .msg { font-size: 15px; margin: 0 0 14px; min-height: 22px; color: var(--muted); }
+      .msg { font-size: 15px; margin: 0 0 12px; min-height: 22px; color: var(--muted); }
       .msg.err { color: var(--warn); }
       .msg.ok  { color: var(--ok); }
       .note { font-size: 14px; color: var(--muted); line-height: 1.6;
-              padding: 12px 14px; border-radius: 11px; background: var(--panel);
+              padding: 12px 12px; border-radius: 11px; background: var(--panel);
               border: 1px solid var(--line); margin-bottom: 16px; }
       .note.warn { color: var(--warn); }
 
       .card { border: 1px solid var(--line); border-radius: 14px; background: var(--panel);
-              padding: 18px; margin-bottom: 16px; }
+              padding: 16px; margin-bottom: 16px; }
 
       /* 종이에 옮겨 적어야 하는 글자다. 작으면 사람들이 틀리게 적는다. */
-      .words { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;
-               margin-bottom: 18px; }
-      .word { display: flex; align-items: baseline; gap: 9px; padding: 13px 12px;
+      .words { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;
+               margin-bottom: 16px; }
+      .word { display: flex; align-items: baseline; gap: 8px; padding: 12px 12px;
               border: 1px solid var(--line); border-radius: 11px; background: var(--panel); }
       .word .n { color: var(--muted); font-size: 14px; min-width: 20px;
                  font-variant-numeric: tabular-nums; }
       .word b { font-size: 20px; font-weight: 700; letter-spacing: 0.01em; word-break: break-all; }
 
-      .opt { margin-bottom: 10px; font-size: 19px; }
+      .opt { margin-bottom: 8px; font-size: 19px; }
 
       .bal { font-size: 42px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.15;
              font-variant-numeric: tabular-nums; word-break: break-all; }
-      .bal .u { font-size: 20px; font-weight: 600; color: var(--muted); margin-left: 6px; }
+      .bal .u { font-size: 20px; font-weight: 600; color: var(--muted); margin-left: 4px; }
 
       .addr { display: block; font-size: 15px; line-height: 1.55; word-break: break-all;
               font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-              padding: 12px 13px; border-radius: 10px; background: var(--bg);
-              border: 1px solid var(--line); margin-bottom: 10px; }
+              padding: 12px 12px; border-radius: 10px; background: var(--bg);
+              border: 1px solid var(--line); margin-bottom: 8px; }
       #recv-qr { display: block; width: 220px; height: 220px; margin: 4px auto 12px;
-                 background: #fff; padding: 10px; border-radius: 12px; }
+                 background: #fff; padding: 8px; border-radius: 12px; }
       .idx { font-size: 14px; color: var(--muted); margin-bottom: 8px; }
 
       .kv { display: flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line);
@@ -110,9 +110,9 @@
       .kv span { flex: 1; word-break: break-all; text-align: right; }
       .kv.big span { font-size: 19px; font-weight: 700; }
 
-      .topbar { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; }
+      .topbar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
       .topbar h1 { flex: 1; margin: 0; }
-      .topbar button { width: auto; min-width: 56px; min-height: 44px; padding: 10px 14px;
+      .topbar button { width: auto; min-width: 56px; min-height: 44px; padding: 8px 12px;
                        margin: 0; font-size: 15px; font-weight: 500; }
       /* 이 줄에서 링크 하나만 버튼과 다르게 보이면 그게 고장으로 읽힌다.
      `button, .btn` 규칙이 이미 있었는데 그걸 안 쓰고 새 규칙을 지어서,
@@ -123,10 +123,10 @@
      지갑으로 읽히고, 받기가 크면 주소 전시장이 된다. */
   .verbs button { min-height: 60px; font-size: 17px; }
   /* 연결 상태 한 줄. 점 하나 + 짧은 말. */
-  .link1 { font-size: 13px; color: var(--muted); margin: 10px 0 18px; }
+  .link1 { font-size: 13px; color: var(--muted); margin: 8px 0 16px; }
   .link1 b { color: var(--fg); font-weight: 600; }
   /* 마스코트. 화면 가운데, 글자 위. 누를 것이 아니므로 손가락을 안 끈다. */
-  .mascot { display: block; margin: 6px auto 14px; max-width: 62%; height: auto;
+  .mascot { display: block; margin: 4px auto 12px; max-width: 62%; height: auto;
             border-radius: 18px; }
   #s-loading { text-align: center; padding-top: 40px; }
 </style>
