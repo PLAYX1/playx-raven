@@ -809,3 +809,76 @@ mod empty_hours {
         assert!(!open_at(&one, 3 * 3600, 0)["open"].as_bool().unwrap());
     }
 }
+
+// ── 가게 이력 ──────────────────────────────────────────────────────────────
+//
+// 당근의 온도는 중앙 서버가 계산한다. 그걸 흉내 내면 두 가지가 깨진다 —
+// 누가 계산하나(서버가 없다), 그리고 조작을 어떻게 막나(자기가 자기한테
+// 백 번 사면 온도가 오른다). 별점은 살 수 있다.
+//
+// 우리에게만 있는 것은 **체인에 남는다**는 사실이다. 그래서 점수를 매기지 않고
+// 사실만 말한다: 언제부터 있는 가게인가. 별점은 살 수 있어도 **2년 된 이력은
+// 못 산다**, 그리고 이 값은 손님 폰이 직접 확인할 수 있다 — 우리를 믿을
+// 필요가 없다.
+//
+// ⚠️ "손님 몇 명" 은 넣지 않았다. 그러려면 가게 주소의 입금 내역을 세야 하고
+// 그건 `addressindex` 가 있어야 한다. 실측: 지금 노드는 꺼져 있고, 켜려면
+// 34GB 를 다시 색인해야 한다 — 몇 시간 걸린다. 없는 인덱스 위에 숫자를 지어
+// 올리느니 말하지 않는 편이 낫다. 자기 가게의 손님 수는 장부(`ledger`)가
+// 이미 정확히 알고 있고, 그건 사장 화면의 몫이다.
+
+/// When a shop's asset was created, straight from the chain.
+///
+/// Two calls: `listassets` for the block hash the issuance landed in, then
+/// `getblock` for that block's time. The block time is what every node agrees
+/// on, so two people looking at the same shop see the same date.
+#[tauri::command]
+pub async fn shop_history(asset: String) -> Result<Value, String> {
+    let name = full_shop_name(&asset);
+    let v = call_rpc("listassets", json!([name.clone(), true, 1, 0])).await?;
+    let entry = v
+        .get(&name)
+        .ok_or_else(|| "체인에서 이 가게를 찾지 못했습니다.".to_string())?;
+
+    let height = entry.get("block_height").and_then(Value::as_i64);
+    let hash = entry.get("blockhash").and_then(Value::as_str).unwrap_or("");
+    if hash.is_empty() {
+        // 아직 블록에 안 들어갔다. "정보 없음" 과 "방금 만들어졌다" 는 다르다.
+        return Ok(json!({ "asset": name, "pending": true }));
+    }
+
+    let block = call_rpc("getblock", json!([hash, 1])).await?;
+    let time = block.get("time").and_then(Value::as_i64).unwrap_or(0);
+    Ok(json!({
+        "asset": name,
+        "block": height,
+        "since": time,
+        "pending": false,
+    }))
+}
+
+/// The name as it lives on the chain, whether or not the caller typed the prefix.
+fn full_shop_name(input: &str) -> String {
+    let c = input.trim().to_uppercase();
+    if c.starts_with("SHOP.") {
+        c
+    } else {
+        format!("SHOP.{c}")
+    }
+}
+
+#[cfg(test)]
+mod history_tests {
+    use super::full_shop_name;
+
+    /// 사장이 화면에 "GANGNAM_CAFE" 라고 적어 두면 조회가 조용히 빈손으로
+    /// 돌아온다 — 가게가 없는 것처럼 보인다.
+    #[test]
+    fn the_prefix_is_added_only_when_missing() {
+        assert_eq!(full_shop_name("gangnam_cafe"), "SHOP.GANGNAM_CAFE");
+        assert_eq!(full_shop_name("SHOP.GANGNAM_CAFE"), "SHOP.GANGNAM_CAFE");
+        assert_eq!(full_shop_name("  shop.playx  "), "SHOP.PLAYX");
+        // 두 번 붙이면 SHOP.SHOP.X 가 되어 영영 못 찾는다.
+        assert!(!full_shop_name("SHOP.PLAYX").starts_with("SHOP.SHOP"));
+    }
+}

@@ -349,6 +349,7 @@ fn customer_path(path: &str) -> bool {
             | "/api/shop"
             | "/api/shops"
             | "/api/shop-profile"
+            | "/api/shop-history"
             | "/api/directions"
             | "/api/ask"
             | "/api/order"
@@ -1249,6 +1250,21 @@ async fn api_qr(Query(q): Query<std::collections::HashMap<String, String>>) -> i
 }
 
 
+
+/// 가게가 언제부터 있는지. 손님 폰이 직접 확인할 수 있어야 우리를 믿을 필요가 없다.
+async fn api_shop_history(
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> impl IntoResponse {
+    let asset = q.get("a").cloned().unwrap_or_default();
+    if asset.is_empty() || asset.len() > 40 {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "error": "가게 이름이 없습니다." })));
+    }
+    match crate::shop::shop_history(asset).await {
+        Ok(v) => (StatusCode::OK, Json(v)),
+        Err(e) => (StatusCode::BAD_GATEWAY, Json(json!({ "error": e }))),
+    }
+}
+
 // ── 캐릭터 ────────────────────────────────────────────────────────────────
 //
 // 손님 화면은 `/raven-head.png` 을 부르고 있었는데 이 서버엔 그 경로가 없었다.
@@ -1634,6 +1650,7 @@ pub async fn start_phone_server(
         .route("/api/ask", post(api_ask))
         .route("/api/order", post(api_order))
         .route("/api/qr", get(api_qr))
+        .route("/api/shop-history", get(api_shop_history))
         .route("/{name}.webp", get(raven_face))
         .route("/{name}.png", get(raven_face))
         .route("/shops", get(shops_page))

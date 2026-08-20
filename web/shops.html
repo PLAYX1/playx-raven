@@ -132,6 +132,17 @@
         button:active, .btn:active { transform: none; }
         button:active::after, .pop, .shimmer, .risein { animation: none; }
       }
+      /* 나이 배지. 값이 오기 전에는 자리를 잡지 않는다 — 빈 회색 알약이
+         떠 있으면 "안 불러와졌다"로 읽힌다. */
+      .tag.age { display: none; }
+      .tag.age.shown { display: inline-block; border-color: var(--ravi); color: var(--ravi); }
+      /* 개인이 파는 자리. 가게 등록(500 RVN)과 달리 공짜라, 그 사실이
+         버튼 옆에 있어야 눌린다. */
+      .sellcta { display: block; text-align: center; margin: 0 0 16px;
+        min-height: 48px; line-height: 48px; border-radius: 12px;
+        background: var(--ravi); color: #fff; font-weight: 600;
+        text-decoration: none; font-size: 16px; }
+      .sellcta::after { content: " · 공짜"; font-weight: 400; opacity: .85; font-size: 14px; }
 </style>
   </head>
   <body>
@@ -157,7 +168,8 @@
     </div>
     <div class="sub" id="locnote" style="margin-bottom:8px"></div>
     <div id="list"><div class="empty">체인에서 읽는 중…</div></div>
-    <div id="items" style="display:none"><div class="empty">불러오는 중…</div></div>
+    <div id="items" style="display:none">
+      <a class="btn sellcta" href="/wallet#sell">내 물건 올리기</a><div class="empty">불러오는 중…</div></div>
     <div id="mapsheet"></div>
     <div id="sheet" style="display:none"></div>
 
@@ -260,6 +272,7 @@
           }
           $("count").textContent = `${all.length}곳`;
           render();
+          fillAges();
         } catch (e) {
           // "Unexpected token '<'" 를 그대로 보여 주지 않는다. 사람이 할 수
           // 있는 일이 하나도 없는 문장이다.
@@ -291,6 +304,7 @@
                     <div class="de">${esc(p.desc || p.location || label)}</div>
                     <div class="tags">
                       ${s.dist != null ? `<span class="tag">${fmtDist(s.dist)}</span>` : ""}
+                      <span class="tag age" data-age="${esc(s.asset)}"></span>
                       ${p.menu_count ? `<span class="tag">메뉴 ${p.menu_count}가지</span>` : ""}
                       ${
                         // 이름은 아무나 1,700원이면 선점한다. 손님이 판단할
@@ -332,6 +346,43 @@
                  <div class="rs">아직 아무도 없습니다. 지금 여시면 <b>1호</b>가 됩니다.<br />
                    레이븐코인을 받는 가게라면 누구나 올릴 수 있어요.</div>
                </div>`;
+      }
+
+      // ── 언제부터 있는 가게인가 ────────────────────────────────────────
+      //
+      // 별점도 온도도 만들지 않는다. 별점은 살 수 있고, 온도를 계산하려면
+      // 우리가 서버가 되어야 한다. 대신 체인에 남아 **위조할 수 없는 것**을
+      // 말한다 — 이름은 1,700원이면 선점하지만 2년 된 이력은 못 산다.
+      const AGE_CACHE = {};
+
+      function ago(sec) {
+        const d = Math.floor((Date.now() / 1000 - sec) / 86400);
+        if (d < 1) return "오늘 생김";
+        if (d < 30) return `${d}일째`;
+        if (d < 365) return `${Math.floor(d / 30)}개월째`;
+        const y = Math.floor(d / 365);
+        const m = Math.floor((d % 365) / 30);
+        return m ? `${y}년 ${m}개월째` : `${y}년째`;
+      }
+
+      async function fillAges() {
+        const spots = [...document.querySelectorAll("[data-age]")];
+        for (const el of spots) {
+          const a = el.dataset.age;
+          if (AGE_CACHE[a] !== undefined) { paintAge(el, AGE_CACHE[a]); continue; }
+          try {
+            const r = await fetch(`/api/shop-history?a=${encodeURIComponent(a)}`)
+              .then((x) => x.json());
+            AGE_CACHE[a] = r?.since || null;
+          } catch { AGE_CACHE[a] = null; }
+          paintAge(el, AGE_CACHE[a]);
+        }
+      }
+
+      function paintAge(el, since) {
+        if (!since) { el.remove(); return; }   // 모르면 비워 두지 말고 없앤다
+        el.textContent = ago(since);
+        el.classList.add("shown");
       }
 
       // 길찾기. 우리는 지도를 그리지 않고, 손님이 이미 쓰는 앱으로 넘긴다.

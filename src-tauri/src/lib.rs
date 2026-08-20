@@ -87,6 +87,7 @@ pub fn run() {
             shop::list_shops,
             shop::shop_name_free,
             shop::shop_asset_name,
+            shop::shop_history,
             shop::build_shop_profile,
             shop::build_menu,
             shop::counter_confirmations,

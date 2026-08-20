@@ -16,6 +16,7 @@ import { rvn, toBitcoinJS } from "@hyperbitjs/chains";
 import RavencoinKey from "@ravenrebels/ravencoin-key";
 import { sign } from "@ravenrebels/ravencoin-sign-transaction";
 import { wordlists } from "bip39";
+import { signEvent, publish, tag, KIND_LISTING } from "./nostr";
 
 // ── 상수 ────────────────────────────────────────────────────────────────────
 
@@ -170,7 +171,7 @@ function randomInt(max: number): number {
 type Screen =
   | "loading" | "welcome" | "unlock" | "words" | "quiz"
   | "restore" | "password" | "main" | "send" | "confirm" | "sent"
-  | "insecure";
+  | "insecure" | "sell";
 
 function show(screen: Screen): void {
   document.body.dataset.screen = screen;
@@ -570,11 +571,89 @@ function lock(): void {
   void showLockedOrOpen(v);
 }
 
+// ── 중고 물건 올리기 (Nostr NIP-99) ────────────────────────────────────────
+//
+// 가게로 등록하려면 500 RVN 을 태우고 노드를 켜 둬야 한다. 장사하는 사람에겐
+// 아무것도 아니지만, 자전거 한 대 파는 사람에게는 넘을 이유가 없는 벽이다.
+// 그래서 개인 물건은 온체인이 아니라 Nostr 글로 간다 — 공짜고, 노드도 자산도
+// 필요 없고, 서명만 하면 된다.
+//
+// 🔴 서명 키는 지갑 열쇠를 그대로 쓰지 않는다. Nostr 글은 공개고 영구적이라,
+// 같은 키를 쓰면 **올린 글 전부가 그 사람의 잔액과 묶인다.** 누가 무엇을
+// 팔았는지 보면 그 사람이 얼마를 가졌는지가 따라 보인다. 별도 경로로 판다.
+
+function nostrSecret(): Uint8Array {
+  if (!hdKey) throw new Error("지갑이 잠겨 있습니다.");
+  // 지갑 주소 경로와 겹치지 않는 자리. 여기서 나온 키로는 돈을 못 움직인다.
+  const k = RavencoinKey.getAddressByPath(NET_NAME, hdKey, "m/44'/175'/7'/0/0") as {
+    privateKey: string;
+  };
+  const hex = k.privateKey;
+  const out = new Uint8Array(32);
+  for (let i = 0; i < 32; i++) out[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  return out;
+}
+
+async function sellPublish(): Promise<void> {
+  const v = (id: string) => ($(id) as HTMLInputElement | HTMLTextAreaElement).value.trim();
+  const title = v("sl-title");
+  const desc = v("sl-desc");
+  const price = v("sl-price");
+  const cur = ($("sl-cur") as HTMLSelectElement).value;
+  const where = v("sl-where");
+
+  if (!title) return say("sl-msg", "무엇을 파시는지 적어 주세요.", "err");
+  if (!price || !isFinite(Number(price)) || Number(price) <= 0)
+    return say("sl-msg", "얼마에 파실지 숫자로 적어 주세요.", "err");
+
+  const btn = $("sl-go") as HTMLButtonElement;
+  btn.disabled = true;
+  say("sl-msg", "올리는 중…");
+  try {
+    // NIP-99. d 는 이 글의 고유 이름 — 나중에 같은 d 로 다시 올리면 수정이 되고,
+    // 없으면 고칠 때마다 새 글이 쌓인다.
+    const d = `playx-${Date.now().toString(36)}-${Math.floor(
+      crypto.getRandomValues(new Uint32Array(1))[0] % 1e6
+    ).toString(36)}`;
+    const tags: string[][] = [
+      ["d", d],
+      ["title", title],
+      ["price", String(Number(price)), cur],
+      ["published_at", String(Math.floor(Date.now() / 1000))],
+      ["t", "playx"],
+    ];
+    if (where) tags.push(["location", where]);
+
+    const ev = signEvent(nostrSecret(), {
+      kind: KIND_LISTING,
+      created_at: Math.floor(Date.now() / 1000),
+      tags,
+      content: desc,
+    });
+    const res = await publish(ev);
+    const okCount = res.ok.length;
+    if (!okCount) {
+      say("sl-msg", "어느 릴레이도 받지 못했습니다. 인터넷을 확인하고 다시 눌러 주세요.", "err");
+    } else {
+      say("sl-msg", `${okCount}곳에 올렸습니다. 「가게 둘러보기」의 물건 탭에서 보입니다.`, "ok");
+      ["sl-title", "sl-desc", "sl-price", "sl-where"].forEach((id) => {
+        ($(id) as HTMLInputElement).value = "";
+      });
+    }
+  } catch (e) {
+    say("sl-msg", String((e as Error)?.message || e), "err");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 function unlocked(m: string): void {
   mnemonic = m;
   hdKey = RavencoinKey.getHDKey(NET_NAME, m);
   touchIdle();
-  show("main");
+  // 「물건 올리기」로 들어온 사람을 지갑 첫 화면에 떨궈 두면, 왜 여기 왔는지
+  // 잊는다. 잠금을 푼 다음 하려던 자리로 이어 준다.
+  show(location.hash === "#sell" ? "sell" : "main");
 
   // 잠그지 않은 지갑이면 그 사실을 계속 보여 준다. 한 번 뜨고 사라지는 경고는
   // 장식이고, 남아 있는 것만 사실이다. 그리고 잠글 길을 그 자리에 둔다 —
@@ -1084,6 +1163,12 @@ function wire(): void {
     show("send");
   };
   $("btn-sent-done").onclick = () => show("main");
+  $("btn-sell").onclick = () => {
+    say("sl-msg", "");
+    show("sell");
+  };
+  $("sell-back").onclick = () => show("main");
+  $("sl-go").onclick = () => void sellPublish();
 
   for (const ev of ["click", "keydown", "touchstart"]) {
     document.addEventListener(ev, touchIdle, { passive: true });

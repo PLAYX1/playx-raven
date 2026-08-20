@@ -39,7 +39,8 @@
       body[data-screen="main"]     #s-main,
       body[data-screen="send"]     #s-send,
       body[data-screen="confirm"]  #s-confirm,
-      body[data-screen="sent"]     #s-sent { display: block; }
+      body[data-screen="sent"]     #s-sent,
+      body[data-screen="sell"]     #s-sell { display: block; }
 
       h1 { margin: 0 0 4px; font-size: 24px; letter-spacing: -0.02em; }
       h2 { margin: 0 0 4px; font-size: 20px; letter-spacing: -0.01em; }
@@ -333,7 +334,50 @@
       </div>
 
       <a id="btn-shops" class="btn" href="/shops">가게 둘러보기</a>
+      <button id="btn-sell" class="btn">내 물건 팔기</button>
       <button id="btn-refresh" class="quiet">새로고침</button>
+    </section>
+
+    <!-- 중고 물건. 가게 등록은 500 RVN 을 태우고 노드를 켜 둬야 하지만,
+         자전거 한 대 파는 사람이 넘을 이유가 없는 벽이다. 이건 Nostr 글이라
+         공짜고 노드도 자산도 필요 없다 — 다만 **서명**이 필요해서 여기(지갑)에
+         산다. 잠금을 푼 자리가 열쇠가 있는 유일한 자리다. -->
+    <section id="s-sell">
+      <div class="topbar">
+        <h1>내 물건 팔기</h1>
+        <button id="sell-back">뒤로</button>
+      </div>
+      <p class="sub">사업자가 아니어도 됩니다. 가게를 만들 필요도 없어요.</p>
+
+      <label for="sl-title">무엇을 파시나요</label>
+      <input id="sl-title" maxlength="60" placeholder="접이식 자전거" autocomplete="off" />
+
+      <label for="sl-desc">설명</label>
+      <textarea id="sl-desc" rows="4" maxlength="900"
+        placeholder="3년 썼고 잘 굴러갑니다. 직거래만 해요."></textarea>
+
+      <label for="sl-price">얼마에</label>
+      <div class="row">
+        <input id="sl-price" inputmode="decimal" placeholder="120000" />
+        <select id="sl-cur">
+          <option value="KRW">원</option>
+          <option value="RVN">RVN</option>
+          <option value="USD">달러</option>
+        </select>
+      </div>
+
+      <label for="sl-where">어디서</label>
+      <input id="sl-where" maxlength="40" placeholder="의왕시 내손동" autocomplete="off" />
+
+      <div class="note" style="margin-top:16px">
+        <b>이 글은 어느 회사 서버에도 안 올라갑니다.</b>
+        공개 릴레이에 뿌려지고, 사라질 수도 있습니다. 값이 큰 물건은 가게로
+        등록하시는 편이 낫습니다.<br />
+        올린 글은 <b>지울 수 있지만</b>, 이미 받아 간 곳에는 남을 수 있습니다.
+      </div>
+
+      <button id="sl-go" class="primary">올리기</button>
+      <div class="msg" id="sl-msg"></div>
     </section>
 
     <section id="s-send">
