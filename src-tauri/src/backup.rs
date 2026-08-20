@@ -489,15 +489,27 @@ mod tests {
 pub async fn backup_zip(dest_folder: String, label: String, include_wallet: bool) -> Result<Value, String> {
     // 비워서 부르면 바탕화면. 경로를 타이핑하게 하는 것은 백업을 안 하게 만드는
     // 가장 확실한 방법이었다.
-    let out_dir = if dest_folder.trim().is_empty() {
+    let picked = if dest_folder.trim().is_empty() {
         let d = home().join("Desktop");
         if d.is_dir() { d } else { home() }
     } else {
         PathBuf::from(&dest_folder)
     };
-    if !out_dir.is_dir() {
+    if !picked.is_dir() {
         return Err("폴더가 아닙니다. 저장할 폴더를 고르세요.".into());
     }
+
+    // 🔴 고른 폴더 안에 **우리 폴더를 하나 만들고** 거기 넣는다.
+    //
+    // iCloud Drive 나 드롭박스 루트에 zip 을 그냥 뿌리면, 몇 달 뒤 그 폴더는
+    // 정체를 알 수 없는 파일들로 찬다. 사장은 그걸 지운다 — 그리고 지운 것이
+    // 지갑 백업이었다는 것은 지갑이 필요해진 날에 안다.
+    //
+    // 바탕화면만 예외로 둘까 하다가 두지 않았다. 규칙이 자리마다 다르면
+    // "내 백업이 어디 있더라" 가 또 생긴다. 늘 같은 이름의 폴더에 있다.
+    let out_dir = picked.join("PLAY X Raven 백업");
+    std::fs::create_dir_all(&out_dir)
+        .map_err(|e| format!("백업 폴더를 만들지 못했습니다: {e}"))?;
 
     // 지갑은 노드가 만들어야 정합성이 있다. 임시로 뽑아 넣고 지운다.
     let staging = app_dir().join("zip-staging");
@@ -711,8 +723,24 @@ async fn copy_to_cloud(stamp: &str) -> Vec<Value> {
             continue;
         }
         roll_previous(&folder, "PLAYXRaven");
-        if let Ok(v) = backup_zip(folder.to_string_lossy().to_string(), "".into(), false).await {
-            out.push(json!({ "where": f["name"], "path": v["path"], "wallet": false }));
+        // 🔴 지갑을 넣을지는 **암호가 걸려 있는지**로 정한다. 화면은
+        // "지갑 파일은 클라우드에 둬도 됩니다 — 암호로 잠겨 있습니다" 라고
+        // 말하는데, 암호가 없는 지갑을 그렇게 올리면 그 문장이 거짓말이 되고
+        // 클라우드 계정 하나로 가게 돈이 넘어간다.
+        //
+        // 사람에게 묻지 않는다. 이건 취향이 아니라 사실이고, 사실은 기계가
+        // 확인하는 편이 정확하다.
+        let encrypted = crate::raven::call_rpc("getwalletinfo", json!([]))
+            .await
+            .ok()
+            .map(|i| i.get("unlocked_until").is_some())
+            .unwrap_or(false);
+        if let Ok(v) = backup_zip(folder.to_string_lossy().to_string(), "".into(), encrypted).await {
+            out.push(json!({
+                "where": f["name"], "path": v["path"], "wallet": encrypted,
+                // 왜 안 들어갔는지 말한다. 조용히 빼면 들어 있는 줄 안다.
+                "why": if encrypted { "" } else { "지갑에 암호가 없어 열쇠는 빼고 올렸습니다" },
+            }));
         }
     }
     out

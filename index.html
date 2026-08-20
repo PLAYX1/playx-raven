@@ -47,8 +47,13 @@
                  font-weight: 600; }
       nav a .risk { margin-left: auto; font-size: 14px; color: var(--warn); }
       .navfoot { margin-top: auto; padding: 8px 16px 0; border-top: 1px solid var(--line); }
-      .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 4px; }
-      .dot.on { background: var(--ok); } .dot.off { background: var(--muted); }
+      /* 7px 은 곁눈으로 안 보인다. 카운터에서 이걸 들여다보고 있을 사람은 없다. */
+      .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%;
+        margin-right: 6px; background: var(--muted); }
+      .dot.on { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 22%, transparent); }
+      .dot.off { background: var(--muted); opacity: .45; }
+      /* 색만으로 말하지 않는다 — 색맹인 사람과 흑백 화면에서는 초록과 회색이 같다. */
+      .navfoot div { display: flex; align-items: center; font-size: 12.5px; }
       .navfoot div { font-size: 14px; color: var(--muted); margin-bottom: 4px; }
 
       main { flex: 1; overflow-y: auto; padding: 16px 20px 40px; }
@@ -1469,10 +1474,12 @@
             <h3>백업 둘 곳</h3>
             <div id="bk-places" class="meta">찾는 중…</div>
             <div class="warnbox" style="margin-top:8px;font-size:13.5px">
-              <b>지갑 파일은 클라우드에 둬도 됩니다</b> — 암호로 잠겨 있습니다.
-              하지만 <b>복구 단어 12개는 클라우드에 절대 올리지 마세요.</b>
-              그건 잠겨 있지 않아서, 계정 하나만 뚫려도 가게 돈이 넘어갑니다.
-              12단어는 종이(복구 카드)나 Bitwarden 같은 비밀번호 금고에 두세요.
+              <b>지갑에 암호를 걸어 두셨으면</b> 지갑 파일도 함께 올라갑니다 —
+              파일 자체가 잠겨 있어서 클라우드에 둬도 됩니다.
+              <b>암호가 없으면 지갑 파일은 빼고 올립니다</b> — 잠기지 않은 지갑을
+              클라우드에 두면 계정 하나로 가게 돈이 넘어갑니다.<br />
+              🔴 <b>복구 단어 12개는 어느 경우에도 클라우드에 올라가지 않습니다.</b>
+              그건 종이(복구 카드)나 Bitwarden 같은 비밀번호 금고에 두세요.
             </div>
           </div>
 

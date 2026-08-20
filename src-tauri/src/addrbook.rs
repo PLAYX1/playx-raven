@@ -173,3 +173,110 @@ mod tests {
         }
     }
 }
+
+// ── 밖의 지갑으로 받기 ─────────────────────────────────────────────────────
+//
+// 사장이 폰에 지갑을 하나 두고(rvn.ex.erci.se/wallet), 계산대는 그 주소로
+// 받게 하고 싶을 수 있다. 가게 컴퓨터가 도둑맞아도 돈은 폰에 있고, 매출을
+// 개인 지갑과 갈라 두기도 쉽다.
+//
+// 🔴 그 주소는 **이 지갑의 것이 아니다.** 그래서 두 가지가 따라온다:
+//  · 이 앱은 그 돈을 **보낼 수 없다**(개인키가 폰에 있다). 환불도 폰에서 한다.
+//  · 들어왔는지 보려면 **감시 주소로 등록**해야 한다. 등록해도 지갑 잔액에는
+//    안 잡힌다 — 감시일 뿐이다.
+
+/// 밖의 주소를 감시 목록에 넣는다.
+///
+/// `rescan` 은 끈다. 켜면 34GB 를 처음부터 다시 훑어 **몇 시간** 걸리고,
+/// 그동안 노드가 다른 일을 못 한다. 끄면 **등록한 뒤에 들어오는 것만** 본다 —
+/// 받을 주소로 쓰려는 것이니 그걸로 충분하다. 예전 것까지 보고 싶으면
+/// 「이 컴퓨터」에서 다시 훑기를 따로 돌리면 된다.
+#[tauri::command]
+pub async fn watch_add(address: String, label: String) -> Result<Value, String> {
+    let a = address.trim();
+    if a.is_empty() {
+        return Err("주소가 비어 있습니다.".into());
+    }
+    let v = call_rpc("validateaddress", json!([a])).await?;
+    if !v["isvalid"].as_bool().unwrap_or(false) {
+        return Err("올바른 레이븐 주소가 아닙니다.".into());
+    }
+    if v["ismine"].as_bool().unwrap_or(false) {
+        return Err("이미 이 지갑의 주소입니다. 감시로 넣을 필요가 없습니다.".into());
+    }
+    if v["iswatchonly"].as_bool().unwrap_or(false) {
+        return Ok(json!({ "address": a, "already": true }));
+    }
+    call_rpc("importaddress", json!([a, label.trim(), false])).await?;
+    Ok(json!({ "address": a, "label": label.trim(), "already": false }))
+}
+
+/// 받을 QR 하나. 주소는 내 것이든 밖의 것이든 상관없다 — QR 은 그냥 주소다.
+///
+/// 금액을 넣으면 손님 지갑이 그 금액을 미리 채워 준다. 안 넣으면 손님이
+/// 정한다. 가게가 아니라 **사람에게 받을 때**(정산·용돈)는 안 넣는 편이 낫다.
+#[tauri::command]
+pub async fn recv_qr(address: String, amount: Option<f64>, label: Option<String>) -> Result<Value, String> {
+    let a = address.trim();
+    let v = call_rpc("validateaddress", json!([a])).await?;
+    if !v["isvalid"].as_bool().unwrap_or(false) {
+        return Err("올바른 레이븐 주소가 아닙니다.".into());
+    }
+    let mut uri = format!("raven:{a}");
+    let mut q: Vec<String> = Vec::new();
+    if let Some(x) = amount {
+        if x > 0.0 {
+            q.push(format!("amount={x}"));
+        }
+    }
+    if let Some(l) = label.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
+        // 공백과 한글이 그대로 들어가면 지갑에 따라 URI 를 못 읽는다.
+        q.push(format!("label={}", urlish(l)));
+    }
+    if !q.is_empty() {
+        uri.push('?');
+        uri.push_str(&q.join("&"));
+    }
+    let svg = crate::server::qr_svg(uri.clone())?;
+    Ok(json!({
+        "address": a,
+        "uri": uri,
+        "svg": svg,
+        "mine": v["ismine"].as_bool().unwrap_or(false),
+        "watching": v["iswatchonly"].as_bool().unwrap_or(false),
+    }))
+}
+
+/// URI 안에 넣을 수 있게. 완전한 퍼센트 인코딩은 아니고, 깨질 글자만 바꾼다.
+fn urlish(s: &str) -> String {
+    s.bytes()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                (b as char).to_string()
+            }
+            b' ' => "%20".into(),
+            _ => format!("%{b:02X}"),
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod qr_tests {
+    use super::urlish;
+
+    /// 한글 라벨이 그대로 들어가면 지갑에 따라 URI 를 통째로 못 읽는다 —
+    /// 그러면 손님이 QR 을 찍어도 아무 일이 안 일어난다.
+    #[test]
+    fn a_korean_label_survives_the_uri() {
+        let out = urlish("라비 커피");
+        assert!(!out.contains(' '), "공백이 남았다");
+        assert!(out.is_ascii(), "URI 에 못 들어갈 글자가 남았다: {out}");
+        assert!(out.contains("%20"), "공백이 인코딩되지 않았다");
+    }
+
+    /// 영문·숫자는 그대로 둔다. 다 바꾸면 사람이 읽을 수 없게 된다.
+    #[test]
+    fn plain_text_is_left_alone() {
+        assert_eq!(urlish("Ravi-Coffee_1.0"), "Ravi-Coffee_1.0");
+    }
+}

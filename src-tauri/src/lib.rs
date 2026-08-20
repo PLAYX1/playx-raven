@@ -101,6 +101,8 @@ pub fn run() {
             shop::incoming_payments,
             shop::split_payment,
             addrbook::addr_book,
+            addrbook::watch_add,
+            addrbook::recv_qr,
             walletx::sign_message,
             walletx::verify_message,
             walletx::abandon_tx,

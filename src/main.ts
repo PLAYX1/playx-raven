@@ -781,6 +781,43 @@ async function phoneLost() {
   });
 }
 
+// ── 사이드바 아래의 두 점 ─────────────────────────────────────────────────
+//
+// 🔴 이 점들은 **아무도 칠하지 않고 있었다.** HTML 에 `class="dot off"` 로
+// 박혀 있고 그걸 바꾸는 코드가 한 줄도 없었다 — 노드가 돌든 죽든 영원히
+// 회색이다. 늘 같은 색인 표시등은 표시등이 아니라 장식이고, 장식이 상태처럼
+// 생겼으면 그건 거짓말이다.
+//
+// 색만으로 말하지 않는다. 색맹인 사람과 흑백 화면에서는 초록과 회색이 같다 —
+// 글자도 함께 바꾼다.
+async function paintStatusDots() {
+  const set = (dot: string, label: string, ok: boolean, text: string) => {
+    const d = document.getElementById(dot);
+    const t = document.getElementById(label);
+    if (d) {
+      d.classList.toggle("on", ok);
+      d.classList.toggle("off", !ok);
+    }
+    if (t) t.textContent = text;
+  };
+
+  try {
+    const n = await invoke<any>("node_status");
+    // 켜져 있는 것과 따라잡은 것은 다르다. 동기화 중이면 결제 확인이 늦는다.
+    const synced = (n?.progress ?? 0) > 0.9999;
+    set("d-node", "d-node-t", true, synced ? "노드 켜짐" : "노드 따라잡는 중");
+  } catch {
+    set("d-node", "d-node-t", false, "노드 꺼짐");
+  }
+
+  try {
+    const i = await invoke<any>("ipfs_status");
+    set("d-ipfs", "d-ipfs-t", !!i?.running, i?.running ? "IPFS 켜짐" : "IPFS 꺼짐");
+  } catch {
+    set("d-ipfs", "d-ipfs-t", false, "IPFS 꺼짐");
+  }
+}
+
 function showPage(id: string) {
   document.querySelectorAll(".page").forEach((p) => p.classList.toggle("on", p.id === `page-${id}`));
   document.querySelectorAll("nav a").forEach((a) =>
@@ -5403,6 +5440,10 @@ window.addEventListener("DOMContentLoaded", () => {
     $("sd-words").innerHTML = "";
     $("seedsheet").classList.add("hidden");
   });
+  void paintStatusDots();
+  // 노드는 조용히 죽는다. 20초마다 다시 본다 — 죽은 걸 늦게 아는 것이
+  // 카운터에서 제일 비싸다.
+  setInterval(() => void paintStatusDots(), 20_000);
   loadBackup();
   $("abk-new").addEventListener("click", () => void newAddrWithName());
   $("rw-req").addEventListener("click", async () => {
