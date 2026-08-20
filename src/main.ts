@@ -787,6 +787,7 @@ function showPage(id: string) {
     a.classList.toggle("on", (a as HTMLElement).dataset.page === id));
   if (id === "wallet") loadWallet();
   if (id === "settings") { loadNode(); loadNet(); }
+  if (id === "reward") void loadReward();
 }
 
 /* ── 지갑 ─────────────────────────────────────────────────── */
@@ -3439,6 +3440,136 @@ async function saveConf() {
   }
 }
 
+// ── 배당 ──────────────────────────────────────────────────────────────────
+//
+// 자산을 내는 것은 쉽다(500 RVN). 그 자산을 **가질 이유**를 만드는 것이 어렵다.
+// 배당이 그 이유다. 코어에는 있고 우리에겐 없던 기능이다.
+
+let rwDryOk = false;
+
+async function loadReward() {
+  try {
+    const g = await invoke<any>("reward_ready");
+    if (!g.ready) {
+      // 노드가 뱉는 영문 오류를 그대로 보여 주면 사장은 무슨 말인지 모른다.
+      $("rw-gate").innerHTML =
+        `<div class="warnbox">
+           <b>${escapeHtml(g.why)}</b><br />${escapeHtml(g.fix)}
+         </div>`;
+      $("rw-body").style.display = "none";
+      return;
+    }
+    $("rw-gate").innerHTML = "";
+    $("rw-body").style.display = "";
+    const n = await invoke<any>("reward_now");
+    ($("rw-height") as HTMLInputElement).value ||= String(n.suggest);
+    $("rw-now").textContent =
+      `지금 ${n.height.toLocaleString()}번 블록입니다. ` +
+      `${n.suggest.toLocaleString()}번이면 약 ${Math.round((n.suggest - n.height) * n.seconds_per_block / 60)}분 뒤입니다.`;
+    await loadRewardList();
+  } catch (e) {
+    $("rw-gate").innerHTML = `<div class="warnbox">${escapeHtml(String(e))}</div>`;
+  }
+}
+
+async function loadRewardList() {
+  try {
+    const r = await invoke<any>("reward_requests", {
+      asset: ($("rw-asset") as HTMLInputElement).value.trim(),
+    });
+    const list: any[] = Array.isArray(r.requests) ? r.requests : [];
+    $("rw-list").innerHTML = list.length
+      ? list
+          .map((x) => {
+            const h = x.block_height ?? x.height ?? 0;
+            const left = h - (r.now || 0);
+            return `<div class="kv"><b>${escapeHtml(String(x.asset_name || x.asset || ""))} · ${h}</b>
+              <span>${left > 0 ? `${left}블록 남음 (약 ${Math.round(left / 1)}분)` : "굳었습니다"}
+              <button class="ghost" data-snap="${h}" style="min-height:30px;padding:0 9px">명단 보기</button></span></div>`;
+          })
+          .join("")
+      : `<div class="meta">아직 예약이 없습니다.</div>`;
+    $("rw-list")
+      .querySelectorAll<HTMLElement>("[data-snap]")
+      .forEach((b) => {
+        b.onclick = async () => {
+          try {
+            const v = await invoke<any>("reward_snapshot", {
+              asset: ($("rw-asset") as HTMLInputElement).value.trim(),
+              height: Number(b.dataset.snap),
+            });
+            $("rw-out").innerHTML =
+              `<div class="card"><h3>보유자 ${v.holders}명</h3>
+                 <div class="kv"><b>합계</b><span>${fmtQty(v.total_owned)}</span></div></div>`;
+          } catch (e) {
+            $("rw-out").innerHTML = `<div class="warnbox">${escapeHtml(String(e))}</div>`;
+          }
+        };
+      });
+  } catch {}
+}
+
+function rwArgs(dry: boolean) {
+  return {
+    asset: ($("rw-asset") as HTMLInputElement).value.trim(),
+    height: Number(($("rw-height") as HTMLInputElement).value),
+    payWith: ($("rw-pay") as HTMLInputElement).value.trim(),
+    amount: parseFloat(($("rw-amt") as HTMLInputElement).value),
+    skip: ($("rw-skip") as HTMLInputElement).value
+      .split(",")
+      .map((x) => x.trim())
+      .filter(Boolean),
+    dry,
+    passphrase: null as string | null,
+  };
+}
+
+async function rewardDry() {
+  $("rw-out").innerHTML = `<div class="meta">계산 중…</div>`;
+  rwDryOk = false;
+  ($("rw-go") as HTMLButtonElement).disabled = true;
+  try {
+    const r = await invoke<any>("reward_distribute", rwArgs(true));
+    $("rw-out").innerHTML =
+      `<div class="card"><h3>이렇게 나갑니다</h3>
+         <pre style="white-space:pre-wrap;font-size:13px;margin:0">${escapeHtml(
+           JSON.stringify(r.result, null, 2),
+         )}</pre></div>`;
+    rwDryOk = true;
+    ($("rw-go") as HTMLButtonElement).disabled = false;
+  } catch (e) {
+    $("rw-out").innerHTML = `<div class="warnbox">${escapeHtml(String(e))}</div>`;
+  }
+}
+
+async function rewardGo() {
+  // 미리보기를 안 본 사람은 못 보낸다. 몇 명에게 얼마가 가는지 모르고 누르는
+  // 버튼은 버튼이 아니라 함정이다.
+  if (!rwDryOk) return;
+  const a = rwArgs(false);
+  const ok = await sure(
+    "정말 보낼까요?",
+    `${a.asset} 보유자에게 ${a.payWith} ${a.amount} 을 나눠 줍니다. 되돌릴 수 없습니다.`,
+    "보내기",
+  );
+  if (!ok) return;
+  const pass = await ask("지갑 암호", "한 번만 열고 바로 잠급니다.", { password: true });
+  if (!pass) return;
+  $("rw-out").innerHTML = `<div class="meta">보내는 중…</div>`;
+  try {
+    const r = await invoke<any>("reward_distribute", { ...a, passphrase: pass });
+    $("rw-out").innerHTML =
+      `<div class="card"><h3>보냈습니다</h3>
+         <pre style="white-space:pre-wrap;font-size:13px;margin:0">${escapeHtml(
+           JSON.stringify(r.result, null, 2),
+         )}</pre></div>`;
+    rwDryOk = false;
+    ($("rw-go") as HTMLButtonElement).disabled = true;
+  } catch (e) {
+    $("rw-out").innerHTML = `<div class="warnbox">${escapeHtml(String(e))}</div>`;
+  }
+}
+
 // ── 받을 주소록 ───────────────────────────────────────────────────────────
 //
 // 코어에는 있고 여기엔 없던 것이다. 코어의 주소록을 그대로 쓴다 — 우리 파일을
@@ -5274,6 +5405,20 @@ window.addEventListener("DOMContentLoaded", () => {
   });
   loadBackup();
   $("abk-new").addEventListener("click", () => void newAddrWithName());
+  $("rw-req").addEventListener("click", async () => {
+    try {
+      await invoke("reward_request", {
+        asset: ($("rw-asset") as HTMLInputElement).value.trim(),
+        height: Number(($("rw-height") as HTMLInputElement).value),
+      });
+      await loadRewardList();
+      $("rw-now").textContent = "예약했습니다. 그 블록이 지나면 명단이 굳습니다.";
+    } catch (e) {
+      $("rw-now").innerHTML = `<span class="warn">${escapeHtml(String(e))}</span>`;
+    }
+  });
+  $("rw-dry").addEventListener("click", () => void rewardDry());
+  $("rw-go").addEventListener("click", () => void rewardGo());
   $("abk").addEventListener("toggle", () => {
     if (($("abk") as HTMLDetailsElement).open) void loadAddrBook();
   });

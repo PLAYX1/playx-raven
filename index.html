@@ -693,6 +693,7 @@
            이 프로그램이 누구 것인지 매일 헷갈린다. -->
       <a data-page="wallet" class="on">지갑</a>
       <a data-page="assets">자산</a>
+      <a data-page="reward">배당</a>
       <a data-page="shop">내 가게</a>
       <a data-page="settings">이 컴퓨터</a>
       <div class="navfoot">
@@ -1059,6 +1060,54 @@
 
 
       <!-- ── 가게: 벤딩머신과 메뉴판은 같은 일이다 ── -->
+      <!-- 배당. 자산을 내는 것은 쉽고, 가질 이유를 만드는 것이 어렵다. -->
+      <section class="page" id="page-reward">
+        <h2 class="title">배당</h2>
+        <p class="lede">자산을 가진 사람들에게 나눠 줍니다. 회원권·조합원 토큰에 씁니다.</p>
+        <div id="rw-gate"></div>
+        <div id="rw-body" style="display:none">
+          <div class="card">
+            <h3>1. 명단을 굳힐 때를 정합니다</h3>
+            <p class="meta">체인은 지나간 순간의 명단을 되돌려주지 않습니다. 먼저 예약해야
+              그 블록이 지날 때 명단이 굳습니다.</p>
+            <div class="row" style="margin-top:12px">
+              <div style="flex:1"><label>어떤 자산의 보유자</label>
+                <input id="rw-asset" placeholder="PLAYX" autocomplete="off" /></div>
+              <div><label>블록 번호</label><input id="rw-height" inputmode="numeric" /></div>
+              <button id="rw-req" style="align-self:flex-end">예약</button>
+            </div>
+            <div class="meta" id="rw-now" style="margin-top:6px"></div>
+          </div>
+
+          <div class="card" style="margin-top:14px">
+            <h3>2. 예약해 둔 것</h3>
+            <div id="rw-list"></div>
+          </div>
+
+          <div class="card" style="margin-top:14px">
+            <h3>3. 나눠 주기</h3>
+            <div class="row">
+              <div style="flex:1"><label>무엇으로 줄까요</label>
+                <input id="rw-pay" placeholder="RVN 또는 자산 이름" autocomplete="off" /></div>
+              <div><label>전체 얼마</label><input id="rw-amt" inputmode="decimal" /></div>
+            </div>
+            <div class="row" style="margin-top:9px">
+              <div style="flex:1"><label>제외할 주소 (쉼표로 여러 개, 보통 내 주소)</label>
+                <input id="rw-skip" autocomplete="off" /></div>
+            </div>
+            <div class="row" style="margin-top:12px">
+              <button class="ghost" id="rw-dry">먼저 계산해 보기</button>
+              <button id="rw-go" disabled>진짜로 보내기</button>
+            </div>
+            <div id="rw-out" style="margin-top:11px"></div>
+            <div class="warnbox" style="margin-top:12px;font-size:13.5px">
+              <b>보낸 것은 되돌릴 수 없습니다.</b> 「먼저 계산해 보기」로 몇 명에게 얼마가
+              가는지 확인한 뒤에만 보내기가 열립니다.
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section class="page" id="page-shop">
         <h2 class="title">가게</h2>
         <p class="lede">주문마다 주소가 따로 생깁니다. 그 주소로 들어온 돈만 그 주문의 결제입니다.</p>

@@ -25,6 +25,8 @@ mod roles;
 mod send;
 mod setup;
 mod addrbook;
+mod rewards;
+mod walletx;
 mod knowledge;
 mod paths;
 mod sweep;
@@ -99,6 +101,24 @@ pub fn run() {
             shop::incoming_payments,
             shop::split_payment,
             addrbook::addr_book,
+            walletx::sign_message,
+            walletx::verify_message,
+            walletx::abandon_tx,
+            walletx::tx_detail,
+            walletx::fee_rate_set,
+            walletx::fee_rate_get,
+            walletx::keypool_fill,
+            walletx::send_from,
+            walletx::channels_mine,
+            walletx::channel_leave,
+            rewards::reward_ready,
+            rewards::reward_now,
+            rewards::reward_request,
+            rewards::reward_requests,
+            rewards::reward_cancel,
+            rewards::reward_snapshot,
+            rewards::reward_distribute,
+            rewards::reward_status,
             addrbook::addr_new,
             addrbook::addr_label,
             shop::fee_read,
