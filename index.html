@@ -562,6 +562,22 @@
         button:active, .btn:active { transform: none; }
         button:active::after, .pop, .shimmer, .risein { animation: none; }
       }
+      /* 늘 보이는 자리 하나. 이 앱이 누구 것인지 매번 말하지 않아도 되게. */
+      .brand { display: flex; align-items: center; gap: 10px; }
+      .brandravi { width: 36px; height: 36px; border-radius: 10px; flex: none; }
+
+      /* 빈 화면. 데스크톱은 폰보다 넓어서 여백을 더 준다. */
+      .ravibox { text-align: center; padding: 32px 16px; }
+      .ravibox img { width: 140px; height: auto; border-radius: 16px;
+        animation: ravifloat 3.6s ease-in-out infinite; }
+      .ravibox .rs { margin-top: 12px; color: var(--muted); font-size: 15px; line-height: 1.8; }
+      @keyframes ravifloat { 0%,100% { transform: none; } 50% { transform: translateY(-6px); } }
+      @media (prefers-reduced-motion: reduce) { .ravibox img { animation: none; } }
+      /* 누를 수 있는 줄은 누를 수 있어 보여야 한다. */
+      .kv.place { cursor: pointer; border-radius: 10px; padding: 8px; margin: 0 -8px;
+        transition: background .16s ease; }
+      .kv.place[data-dest]:hover { background: var(--panel); }
+      .kv.place:not([data-dest]) { cursor: default; opacity: .6; }
 </style>
   </head>
   <body>
@@ -640,8 +656,11 @@
 
     <nav>
       <div class="brand">
-        <h1>PLAY X Raven</h1>
-        <span>v0.1</span>
+        <img src="/raven-head.webp" alt="" class="brandravi" />
+        <div>
+          <h1>PLAY X Raven</h1>
+          <span>v0.1</span>
+        </div>
       </div>
       <!-- 사이드바는 기능 상자가 아니라 카운터에서 하는 일 순서다.
            위험 배지는 뺐다 — 네 칸 중 세 칸이 "위험"이면 아무도 안 읽는다.

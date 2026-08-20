@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { open as pickFile } from "@tauri-apps/plugin-dialog";
 
 type Asset = {
   name: string;
@@ -67,11 +68,15 @@ function saveHealth() {
 ///
 /// 한 함수로 묶는 이유: 빈 화면 문구가 지금 일곱 군데에 흩어져 있는데,
 /// 각자 복붙하면 다음에 고칠 때 하나가 꼭 빠진다.
-function emptyWithRaven(html: string): string {
-  return `<div style="text-align:center; padding:26px 10px">
-      <img src="/raven-head.webp" alt="" width="140"
-           style="display:block; margin:0 auto 12px; border-radius:14px" />
-      <div class="muted" style="line-height:1.8">${html}</div>
+/// 빈 화면은 실패 화면이 아니라 모집 화면이다.
+///
+/// 표정을 고르게 한 이유: 여태 어느 자리든 같은 얼굴이었다. "아직 회원이
+/// 없습니다"(이제 모으면 된다)와 "오늘 판 것이 없습니다"(조용한 날이다)는
+/// 다른 말인데 같은 얼굴이 붙어 있으면 둘 다 고장으로 읽힌다.
+function emptyWithRaven(html: string, face: "hello" | "sleep" | "wait" | "worry" = "hello"): string {
+  return `<div class="ravibox">
+      <img src="/raven-${face}.webp" alt="" />
+      <div class="rs">${html}</div>
     </div>`;
 }
 
@@ -659,14 +664,21 @@ async function sampleClear() {
 }
 
 async function doRestore() {
-  const where = await ask(
-    "백업 파일이나 폴더의 경로",
-    "바탕화면의 zip 파일을 파인더에서 끌어다 놓으면 경로가 붙습니다."
-  );
-  if (!where) return;
+  // 경로를 타이핑하게 하지 않는다. 이 파일 3,457행에 내가 직접 적어 둔 문장이
+  // "폴더 경로를 타이핑하게 하는 것은 백업을 안 하게 하는 가장 확실한 방법"
+  // 인데, 만들 때만 지키고 **되돌릴 때는 안 지키고 있었다.**
+  // 파일 고르기는 OS 가 한다 — 사람은 파인더에서 눈으로 찾는 데 익숙하다.
+  const where = await pickFile({
+    title: "되돌릴 백업을 고르세요",
+    multiple: false,
+    directory: false,
+    filters: [{ name: "PLAY X Raven 백업", extensions: ["zip"] }],
+    defaultPath: undefined,
+  }).catch(() => null);
+  if (!where || typeof where !== "string") return;
   $("rs-result").innerHTML = `<div class="meta" style="margin-top:9px">읽는 중…</div>`;
   try {
-    const r: any = await invoke("restore_survey", { folder: where.trim() });
+    const r: any = await invoke("restore_survey", { folder: where });
     if (r.empty) {
       $("rs-result").innerHTML = `<div class="warnbox" style="margin-top:11px">${r.note}</div>`;
       return;
@@ -2096,7 +2108,7 @@ async function loadMembers() {
     const list: any[] = r.members || [];
     $("dr-list").innerHTML = list.length
       ? list.map((m) => memberCard(m, false)).join("")
-      : emptyWithRaven("아직 등록된 회원이 없습니다.<br />「회원 등록」으로 첫 회원을 넣어 보세요.");
+      : emptyWithRaven("아직 등록된 회원이 없습니다.<br />「회원 등록」으로 첫 회원을 넣어 보세요.", "hello");
     bindMemberCards("dr-list");
     $("dr-note").textContent = `회원 ${list.length}명`;
   } catch (e) {
@@ -3428,28 +3440,49 @@ async function loadPlaces() {
     const rows: string[] = [];
     for (const f of c.folders || [])
       rows.push(
-        `<div class="kv"><b>${escapeHtml(f.name)}</b><span>클라우드 — 지갑 파일만 두세요</span></div>`
+        `<div class="kv place" data-dest="${escapeHtml(f.path)}"><b>${escapeHtml(f.name)}</b>
+           <span>클라우드 — 눌러서 여기에 백업</span></div>`
       );
     for (const v of d.drives || [])
       rows.push(
-        `<div class="kv"><b>${escapeHtml(v.name || v.path)}</b><span>꽂혀 있는 디스크${
-          v.writable ? "" : " — <span class='warn'>쓰기 불가</span>"
-        }</span></div>`
+        `<div class="kv place" ${v.writable ? `data-dest="${escapeHtml(v.path)}"` : ""}><b>${escapeHtml(v.name || v.path)}</b>
+           <span>${v.writable ? "디스크 — 눌러서 여기에 백업" : "<span class='warn'>쓰기 불가</span>"}</span></div>`
       );
-    $("bk-places").innerHTML = rows.length
-      ? rows.join("") +
-        `<div class="row" style="margin-top:10px"><button class="ghost" id="bk-here">여기에 백업 만들기</button>
-         <span class="meta">고르지 않으면 바탕화면에 만듭니다.</span></div>`
-      : "붙어 있는 클라우드나 외장 디스크가 없습니다. 백업은 바탕화면에 만들어집니다 — " +
-        "그 파일을 USB에 옮겨 두세요.";
-    const here = document.getElementById("bk-here");
-    if (here) here.addEventListener("click", () => doBackup());
+    $("bk-places").innerHTML =
+      (rows.length
+        ? rows.join("")
+        : `<div class="meta">붙어 있는 클라우드나 외장 디스크가 없습니다.</div>`) +
+      `<div class="row" style="margin-top:12px">
+         <button class="ghost" id="bk-pick">다른 폴더 고르기…</button>
+         <span class="meta">아무것도 안 고르면 바탕화면에 만듭니다.</span>
+       </div>`;
+
+    // 목록의 줄을 직접 누르면 거기에 만든다. 여태 「여기에 백업 만들기」 버튼
+    // 하나가 목록 아래에 있었는데, 어느 줄을 고르든 **바탕화면에 만들었다.**
+    // 화면이 고를 수 있다고 말해 놓고 안 고르는 것은 그냥 거짓말이다.
+    $("bk-places")
+      .querySelectorAll<HTMLElement>("[data-dest]")
+      .forEach((el) => {
+        el.onclick = () => void doBackup(el.dataset.dest || "");
+      });
+
+    const pick = document.getElementById("bk-pick");
+    if (pick)
+      pick.onclick = async () => {
+        // 경로를 타이핑하게 하지 않는다. OS 가 고르게 한다.
+        const dir = await pickFile({
+          title: "백업을 둘 폴더를 고르세요",
+          directory: true,
+          multiple: false,
+        }).catch(() => null);
+        if (typeof dir === "string") void doBackup(dir);
+      };
   } catch {
     $("bk-places").textContent = "";
   }
 }
 
-async function doBackup() {
+async function doBackup(destFolder = "") {
   // 아무것도 묻지 않는다. 폴더 경로를 타이핑하게 하는 것은 백업을 안 하게 하는
   // 가장 확실한 방법이었다. 바탕화면에 파일 하나로 만들고, 어디 뒀는지 알려준다.
   const node: any = await invoke("node_identity").catch(() => ({}));
@@ -3458,7 +3491,7 @@ async function doBackup() {
 
   $("bk-note").textContent = "백업 중…";
   try {
-    const r = await invoke<any>("backup_zip", { destFolder: "", label, includeWallet: true });
+    const r = await invoke<any>("backup_zip", { destFolder, label, includeWallet: true });
     $("bk-result").innerHTML =
       `<div class="card" style="margin-top:11px">
          <h3>파일 하나로 만들었습니다</h3>
@@ -4195,7 +4228,7 @@ async function loadDoors() {
            <button class="ghost" data-dprobe="${escapeHtml(d.id)}">확인</button>
            <button class="ghost" data-drm="${escapeHtml(d.id)}">지우기</button>
          </div>`).join("")
-      : emptyWithRaven("아직 등록된 문이 없습니다.<br />아래에서 셸리 주소를 넣어 보세요.");
+      : emptyWithRaven("아직 등록된 문이 없습니다.<br />아래에서 셸리 주소를 넣어 보세요.", "hello");
 
     $("dr-doorlist").querySelectorAll("[data-dopen]").forEach((b) => {
       (b as HTMLElement).onclick = () => openDoor((b as HTMLElement).dataset.dopen!, "사장이 직접 열었습니다");
@@ -4255,7 +4288,7 @@ async function loadDoorLog() {
             <td>${escapeHtml(e.who || e.asset || "")}</td>
             <td class="${e.opened ? "ok" : "danger"}">${e.opened ? "열림" : escapeHtml(e.why || "거절")}</td>
           </tr>`).join("")}</tbody></table>`
-      : emptyWithRaven("아직 드나든 기록이 없습니다.");
+      : emptyWithRaven("아직 드나든 기록이 없습니다.", "sleep");
   } catch { }
 }
 
@@ -4438,7 +4471,7 @@ async function loadSales() {
              <td class="num">${money(i.amount)}</td></tr>`,
          )
          .join("")}</tbody></table>`
-    : emptyWithRaven("이 기간에 팔린 것이 없습니다.<br />손님이 결제하면 여기 쌓입니다.");
+    : emptyWithRaven("이 기간에 팔린 것이 없습니다.<br />손님이 결제하면 여기 쌓입니다.", "sleep");
 
   // 한 건씩. 세무 담당자가 묻는 것은 합계지만, 사장이 확인하는 것은 그날 그 건이다.
   const rows = ((r.rows || []) as any[]).filter((x) => x.kind === "sale" || x.kind === "refund");
@@ -4870,7 +4903,7 @@ async function loadOrders() {
             </tr>`;
           })
           .join("")
-      : `<tr><td colspan="5">${emptyWithRaven("아직 들어온 주문이 없습니다.<br />손님이 폰으로 주문하면 여기 뜹니다.")}</td></tr>`;
+      : `<tr><td colspan="5">${emptyWithRaven("조용하네요.<br />손님이 폰으로 주문하면 여기 바로 뜹니다.", "sleep")}</td></tr>`;
     $("or-note").textContent = `${list.length}건`;
 
     $("or-list")
@@ -5080,7 +5113,9 @@ window.addEventListener("DOMContentLoaded", () => {
   $("ai-shop-go").addEventListener("click", aiFillShop);
   $("ai-menu-go").addEventListener("click", aiFillMenu);
   refreshSwitchState();
-  $("bk-go").addEventListener("click", doBackup);
+  // 이벤트 객체가 목적지 인자로 넘어가지 않게 감싼다. 안 감쌌으면
+  // destFolder 에 MouseEvent 가 들어갔을 것이다 — 타입 검사가 잡았다.
+  $("bk-go").addEventListener("click", () => void doBackup());
   $("bk-seed").addEventListener("click", showSeed);
   $("sd-close").addEventListener("click", () => {
     // 화면에 남겨 두지 않는다. 자리를 비운 사이 누가 볼 수 있다.

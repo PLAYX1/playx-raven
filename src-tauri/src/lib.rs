@@ -39,6 +39,7 @@ mod upload;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         // The owner token is minted once per run and lives only in memory.
         .manage(server::ServerState::default())
         .invoke_handler(tauri::generate_handler![
