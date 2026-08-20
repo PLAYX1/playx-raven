@@ -46,15 +46,9 @@ use std::io::Write;
 use std::path::PathBuf;
 
 fn base() -> PathBuf {
-    // 시험이 진짜 장부에 쓰지 않게 하는 유일한 출구. 장사하는 컴퓨터에는
-    // 이 변수가 없고, 없으면 늘 실제 자리를 쓴다.
-    if let Ok(p) = std::env::var("PLAYX_RAVEN_HOME") {
-        if !p.is_empty() {
-            return PathBuf::from(p);
-        }
-    }
-    let home = std::env::var("HOME").unwrap_or_default();
-    PathBuf::from(home).join("Library/Application Support/PlayXRaven")
+    // 시험이 진짜 장부에 쓰지 않게 하는 출구는 `paths` 에 하나로 있다.
+    // 규칙이 두 벌이면 언젠가 갈라지고, 갈라진 쪽이 진짜 장부를 건드린다.
+    crate::paths::app_dir()
 }
 
 fn ledger_dir() -> PathBuf {

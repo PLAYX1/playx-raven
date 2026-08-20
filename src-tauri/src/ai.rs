@@ -22,8 +22,7 @@ use serde_json::{json, Value};
 use std::path::PathBuf;
 
 fn config_dir() -> PathBuf {
-    let home = std::env::var("HOME").unwrap_or_default();
-    PathBuf::from(home).join("Library/Application Support/PlayXRaven")
+    crate::paths::app_dir()
 }
 
 fn key_path(provider: &str) -> PathBuf {
@@ -614,8 +613,10 @@ async fn openai_compatible(
 /// answers it exactly as well as the expensive one, and the difference lands on
 /// the shop's bill rather than on the answer.
 ///
-/// The owner is never asked to rank these. Ranking five AI providers is a
-/// question a café owner cannot answer, in the same family as `dbcache`.
+/// The owner is never *asked* to rank these — that question belongs with
+/// `dbcache`. But an owner who does care can reorder them (`ai_order_save`),
+/// and the saved order wins. Not offering the choice and hiding it are
+/// different things; this hides it without taking it away.
 const CUSTOMER_ORDER: [&str; 5] = ["groq", "google", "xai", "openai", "anthropic"];
 
 /// The same list, best-first, for work the owner does a few times a day.
@@ -625,18 +626,113 @@ const OWNER_ORDER: [&str; 5] = ["anthropic", "openai", "xai", "google", "groq"];
 ///
 /// The owner's pick goes first when they made one — a chosen provider that gets
 /// silently overruled is worse than no choice at all.
+fn order_path() -> PathBuf {
+    config_dir().join("ai-order.json")
+}
+
+/// The order the owner dragged into place, if they did. One list per lane —
+/// the cheap tier that answers customers is a different decision from the one
+/// that helps the owner write a notice, and merging them would force a trade.
+fn saved_order(customer: bool) -> Vec<String> {
+    let lane = if customer { "customer" } else { "owner" };
+    std::fs::read_to_string(order_path())
+        .ok()
+        .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+        .and_then(|v| v.get(lane).cloned())
+        .and_then(|v| v.as_array().cloned())
+        .map(|a| {
+            a.iter()
+                .filter_map(|x| x.as_str())
+                .filter(|p| known(p))
+                .map(String::from)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Read both lanes for the screen. Unsaved lanes come back as the default, so
+/// the screen never has to know which constant it would have used.
+#[tauri::command]
+pub fn ai_order_read() -> Value {
+    let fill = |customer: bool| {
+        let mut out = saved_order(customer);
+        let base = if customer { CUSTOMER_ORDER } else { OWNER_ORDER };
+        // A provider added in a later version must not vanish because an old
+        // saved list predates it. Anything missing is appended.
+        for p in base {
+            if !out.iter().any(|x| x == p) {
+                out.push(p.to_string());
+            }
+        }
+        json!({
+            "order": out,
+            "custom": !saved_order(customer).is_empty(),
+        })
+    };
+    json!({ "customer": fill(true), "owner": fill(false) })
+}
+
+/// Save one lane. An empty list means "go back to the default".
+#[tauri::command]
+pub fn ai_order_save(customer: bool, order: Vec<String>) -> Result<Value, String> {
+    for p in &order {
+        if !known(p) {
+            return Err(format!("알 수 없는 제공자입니다: {p}"));
+        }
+    }
+    let lane = if customer { "customer" } else { "owner" };
+    let dir = config_dir();
+    std::fs::create_dir_all(&dir).map_err(|e| format!("설정 폴더를 만들지 못했습니다: {e}"))?;
+    let mut v: Value = std::fs::read_to_string(order_path())
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_else(|| json!({}));
+    if !v.is_object() {
+        v = json!({});
+    }
+    if order.is_empty() {
+        if let Some(o) = v.as_object_mut() {
+            o.remove(lane);
+        }
+    } else {
+        v[lane] = json!(order);
+    }
+    std::fs::write(
+        order_path(),
+        serde_json::to_vec_pretty(&v).map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| format!("저장하지 못했습니다: {e}"))?;
+    Ok(ai_order_read())
+}
+
 fn try_order(preferred: &str, customer: bool) -> Vec<String> {
-    let base = if customer { CUSTOMER_ORDER } else { OWNER_ORDER };
+    // 사장이 끌어다 놓은 순서가 있으면 그것이 이긴다. 없으면 기본값.
+    let dragged = saved_order(customer);
+    let base: Vec<String> = if dragged.is_empty() {
+        (if customer { CUSTOMER_ORDER } else { OWNER_ORDER })
+            .iter()
+            .map(|s| s.to_string())
+            .collect()
+    } else {
+        let mut b = dragged;
+        // 나중에 늘어난 제공자가 옛 목록 때문에 아예 안 쓰이면 안 된다.
+        for p in if customer { CUSTOMER_ORDER } else { OWNER_ORDER } {
+            if !b.iter().any(|x| x == p) {
+                b.push(p.to_string());
+            }
+        }
+        b
+    };
     let mut out: Vec<String> = Vec::new();
     if !preferred.is_empty() && read_key(preferred).map(|k| !k.is_empty()).unwrap_or(false) {
         out.push(preferred.to_string());
     }
-    for p in base {
+    for p in &base {
         if out.iter().any(|x| x == p) {
             continue;
         }
         if read_key(p).map(|k| !k.is_empty()).unwrap_or(false) {
-            out.push(p.to_string());
+            out.push(p.clone());
         }
     }
     out
@@ -840,5 +936,86 @@ mod issue_guide_tests {
     fn it_must_say_what_cannot_be_undone() {
         let t = instructions("issue").expect("issue 작업이 없습니다");
         assert!(t.contains("permanent"), "되돌릴 수 없는 것을 말하게 하지 않습니다");
+    }
+}
+
+#[cfg(test)]
+mod order_pref_tests {
+    use super::*;
+
+    /// ⚠️ 환경변수는 프로세스 전체에 걸린다. 다른 시험과 동시에 돌면 그 시험이
+    /// 임시 폴더를 진짜 폴더로 착각한다. 그래서 장부 시험과 같은 관례를 따른다 —
+    /// 평소엔 건너뛰고, 부를 때만 단독으로 돈다:
+    ///   cargo test --lib -- --ignored --test-threads=1 order_tests
+    fn with_home<T>(name: &str, f: impl FnOnce() -> T) -> T {
+        let dir = std::env::temp_dir().join(format!("playx-raven-test-{name}"));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::env::set_var("PLAYX_RAVEN_HOME", &dir);
+        let r = f();
+        std::env::remove_var("PLAYX_RAVEN_HOME");
+        let _ = std::fs::remove_dir_all(&dir);
+        r
+    }
+
+    /// 나중에 제공자가 하나 늘었는데 옛 목록을 저장해 둔 가게에서 그곳이
+    /// **영원히 안 쓰이면**, 키를 넣어도 아무 일이 없다. 조용해서 더 나쁘다.
+    #[test]
+    #[ignore]
+    fn a_provider_added_later_still_gets_tried() {
+        with_home("order-new", || {
+            ai_order_save(true, vec!["openai".into(), "groq".into()]).unwrap();
+            let v = ai_order_read();
+            let got: Vec<String> = v["customer"]["order"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter_map(|x| x.as_str().map(String::from))
+                .collect();
+            assert_eq!(&got[..2], &["openai", "groq"], "고른 순서가 앞에 와야 한다");
+            for p in CUSTOMER_ORDER {
+                assert!(got.iter().any(|x| x == p), "{p} 가 목록에서 사라졌다");
+            }
+        });
+    }
+
+    /// 두 줄은 서로 다른 결정이다. 손님 쪽을 싼 곳으로 바꿨다고 사장 일까지
+    /// 싼 곳으로 끌려가면, 고른 적 없는 손해를 보게 된다.
+    #[test]
+    #[ignore]
+    fn the_two_lanes_do_not_move_together() {
+        with_home("order-lanes", || {
+            ai_order_save(true, vec!["groq".into()]).unwrap();
+            let v = ai_order_read();
+            assert_eq!(v["customer"]["order"][0], json!("groq"));
+            assert_eq!(
+                v["owner"]["order"][0],
+                json!(OWNER_ORDER[0]),
+                "사장 줄이 손님 줄을 따라 움직였다"
+            );
+            assert_eq!(v["owner"]["custom"], json!(false));
+        });
+    }
+
+    /// 빈 목록 = 기본값으로. 이게 없으면 한 번 바꾼 사장님은 돌아갈 길이 없다.
+    #[test]
+    #[ignore]
+    fn saving_nothing_restores_the_default() {
+        with_home("order-reset", || {
+            ai_order_save(true, vec!["anthropic".into()]).unwrap();
+            assert_eq!(ai_order_read()["customer"]["custom"], json!(true));
+            ai_order_save(true, vec![]).unwrap();
+            let v = ai_order_read();
+            assert_eq!(v["customer"]["custom"], json!(false));
+            assert_eq!(v["customer"]["order"][0], json!(CUSTOMER_ORDER[0]));
+        });
+    }
+
+    /// 모르는 이름이 들어가면 순서가 조용히 망가진다.
+    #[test]
+    #[ignore]
+    fn an_unknown_provider_is_refused() {
+        with_home("order-bad", || {
+            assert!(ai_order_save(true, vec!["deepseek".into()]).is_err());
+        });
     }
 }

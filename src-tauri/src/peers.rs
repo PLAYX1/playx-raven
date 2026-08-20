@@ -23,8 +23,7 @@ use serde_json::{json, Value};
 use std::path::PathBuf;
 
 fn store() -> PathBuf {
-    let home = std::env::var("HOME").unwrap_or_default();
-    PathBuf::from(home).join("Library/Application Support/PlayXRaven/peers.json")
+    crate::paths::app_file("peers.json")
 }
 
 fn load() -> Vec<Value> {

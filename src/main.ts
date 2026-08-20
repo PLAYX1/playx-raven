@@ -1379,7 +1379,112 @@ const PROVIDERS: Record<string, [string, string, string]> = {
   groq: ["Groq", "gsk_…", "https://console.groq.com/keys"],
 };
 
+// ── 넘어가는 순서 ──────────────────────────────────────────────────────────
+//
+// 한 곳이 할당량을 넘기면 다음으로 넘어간다. 그 순서가 곧 요금이라서, 원하는
+// 사장님은 정할 수 있어야 한다. 다만 **묻지는 않는다** — 안 건드리면 기본값이다.
+//
+// 끌어서 옮기는 것만 두면 손이 떨리는 분은 못 쓴다. ↑↓ 를 같이 둔다.
+
+let aiOrder: { customer: string[]; owner: string[] } = { customer: [], owner: [] };
+let aiKeyed: Record<string, boolean> = {};
+
+function renderOrder(lane: "customer" | "owner") {
+  const list = aiOrder[lane];
+  const box = $(lane === "customer" ? "ord-customer" : "ord-owner");
+  box.innerHTML = list
+    .map((p, i) => {
+      const label = PROVIDERS[p]?.[0] || p;
+      // 키가 없는 곳은 순서에 있어도 건너뛴다. 그걸 말해 주지 않으면
+      // 1번으로 올려 놓고 왜 안 쓰이는지 모른다.
+      const no = aiKeyed[p] ? "" : `<span class="nokey">키 없음 — 건너뜁니다</span>`;
+      return `<div class="ordrow" draggable="true" data-p="${escapeHtml(p)}" data-i="${i}">
+        <span class="grip" aria-hidden="true">⋮⋮</span>
+        <span class="rank">${i + 1}</span>
+        <span class="nm">${escapeHtml(label)}</span>
+        ${no}
+        <button class="ghost" data-mv="up" ${i === 0 ? "disabled" : ""} title="위로">↑</button>
+        <button class="ghost" data-mv="down" ${i === list.length - 1 ? "disabled" : ""} title="아래로">↓</button>
+      </div>`;
+    })
+    .join("");
+
+  const move = (from: number, to: number) => {
+    if (to < 0 || to >= list.length || from === to) return;
+    const [x] = list.splice(from, 1);
+    list.splice(to, 0, x);
+    renderOrder(lane);
+    saveOrder(lane);
+  };
+
+  box.querySelectorAll<HTMLElement>("[data-mv]").forEach((b) => {
+    b.onclick = () => {
+      const row = b.closest(".ordrow") as HTMLElement;
+      const i = Number(row.dataset.i);
+      move(i, b.dataset.mv === "up" ? i - 1 : i + 1);
+    };
+  });
+
+  let from = -1;
+  box.querySelectorAll<HTMLElement>(".ordrow").forEach((row) => {
+    row.addEventListener("dragstart", (e) => {
+      from = Number(row.dataset.i);
+      // 이게 없으면 파이어폭스 계열에서 끌기가 시작조차 안 된다.
+      (e as DragEvent).dataTransfer?.setData("text/plain", String(from));
+    });
+    row.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      row.classList.add("over");
+    });
+    row.addEventListener("dragleave", () => row.classList.remove("over"));
+    row.addEventListener("drop", (e) => {
+      e.preventDefault();
+      row.classList.remove("over");
+      if (from >= 0) move(from, Number(row.dataset.i));
+      from = -1;
+    });
+  });
+}
+
+async function saveOrder(lane: "customer" | "owner") {
+  $("ord-note").textContent = "저장 중…";
+  try {
+    await invoke("ai_order_save", { customer: lane === "customer", order: aiOrder[lane] });
+    $("ord-note").textContent = "저장했습니다.";
+  } catch (e: any) {
+    $("ord-note").innerHTML = `<span class="warn">${escapeHtml(String(e))}</span>`;
+  }
+}
+
+async function loadOrder() {
+  try {
+    const r = await invoke<any>("ai_order_read");
+    aiOrder = {
+      customer: r?.customer?.order || [],
+      owner: r?.owner?.order || [],
+    };
+    renderOrder("customer");
+    renderOrder("owner");
+  } catch {}
+}
+
+async function resetOrder() {
+  $("ord-note").textContent = "되돌리는 중…";
+  try {
+    // 빈 목록 = 기본값으로. 그러고 나서 기본값을 다시 읽어 화면에 그린다.
+    await invoke("ai_order_save", { customer: true, order: [] });
+    await invoke("ai_order_save", { customer: false, order: [] });
+    await loadOrder();
+    $("ord-note").textContent = "기본값으로 되돌렸습니다.";
+  } catch (e: any) {
+    $("ord-note").innerHTML = `<span class="warn">${escapeHtml(String(e))}</span>`;
+  }
+}
+
 function renderKeyRows(st: any, models: any) {
+  aiKeyed = st || {};
+  renderOrder("customer");
+  renderOrder("owner");
   $("keyrows").innerHTML =
     Object.entries(PROVIDERS)
       .map(([p, [label, ph, console_]]) =>
@@ -4908,6 +5013,8 @@ window.addEventListener("DOMContentLoaded", () => {
   $("ms-months").addEventListener("change", recalcPeriod);
   $("ms-save").addEventListener("click", saveMember);
   $("key-save").addEventListener("click", saveKeys);
+  $("ord-reset").addEventListener("click", resetOrder);
+  loadOrder();
   $("ai-shop-go").addEventListener("click", aiFillShop);
   $("ai-menu-go").addEventListener("click", aiFillMenu);
   refreshSwitchState();

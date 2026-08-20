@@ -40,7 +40,7 @@ fn raven_dir() -> PathBuf {
 }
 
 fn app_dir() -> PathBuf {
-    home().join("Library/Application Support/PlayXRaven")
+    crate::paths::app_dir()
 }
 
 /// Everything this app keeps that the chain does not.

@@ -191,8 +191,7 @@ fn take_ask_budget(state: &ServerState) -> Result<u32, String> {
 /// `logout_all_phones` is the button, and it is the only thing that changes
 /// them.
 fn tokens_path() -> std::path::PathBuf {
-    let home = std::env::var("HOME").unwrap_or_default();
-    std::path::PathBuf::from(home).join("Library/Application Support/PlayXRaven/tokens.json")
+    crate::paths::app_file("tokens.json")
 }
 
 fn load_tokens() -> Option<(String, std::collections::HashMap<String, String>)> {
@@ -1739,8 +1738,7 @@ pub fn pending_claims(state: tauri::State<'_, ServerState>) -> Result<Value, Str
 
 /// Where the buyer's orders live between restarts.
 fn orders_path() -> std::path::PathBuf {
-    let home = std::env::var("HOME").unwrap_or_default();
-    std::path::PathBuf::from(home).join("Library/Application Support/PlayXRaven/orders.json")
+    crate::paths::app_file("orders.json")
 }
 
 /// Saves the one thing the chain cannot tell us: where each buyer wants their

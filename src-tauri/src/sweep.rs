@@ -30,8 +30,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 fn store() -> PathBuf {
-    let home = std::env::var("HOME").unwrap_or_default();
-    PathBuf::from(home).join("Library/Application Support/PlayXRaven/sweep.json")
+    crate::paths::app_file("sweep.json")
 }
 
 fn load() -> Value {

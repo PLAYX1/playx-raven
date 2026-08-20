@@ -438,8 +438,7 @@ pub async fn broadcast_message(channel: String, ipfs_hash: String) -> Result<Str
 /// RVN, and a price change three times a week would be three burns a week.
 /// Local file, backed up with everything else.
 fn shop_path() -> std::path::PathBuf {
-    let home = std::env::var("HOME").unwrap_or_default();
-    std::path::PathBuf::from(home).join("Library/Application Support/PlayXRaven/shop.json")
+    crate::paths::app_file("shop.json")
 }
 
 /// Reads the saved shop, or an empty one on a machine that has never sold.

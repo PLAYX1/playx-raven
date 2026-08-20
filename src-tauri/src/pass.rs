@@ -52,8 +52,7 @@ use serde_json::{json, Value};
 use std::path::PathBuf;
 
 fn dir() -> PathBuf {
-    let home = std::env::var("HOME").unwrap_or_default();
-    PathBuf::from(home).join("Library/Application Support/PlayXRaven")
+    crate::paths::app_dir()
 }
 
 fn store_path() -> PathBuf {

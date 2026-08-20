@@ -77,8 +77,7 @@ pub fn armed_pass() -> Option<String> {
 static FILLED: Mutex<Option<HashMap<String, i64>>> = Mutex::new(None);
 
 fn fills_path() -> std::path::PathBuf {
-    let home = std::env::var("HOME").unwrap_or_default();
-    std::path::PathBuf::from(home).join("Library/Application Support/PlayXRaven/fills.json")
+    crate::paths::app_file("fills.json")
 }
 
 /// Reads the file once, then serves from memory.

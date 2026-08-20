@@ -27,8 +27,7 @@ use serde_json::{json, Value};
 use std::path::PathBuf;
 
 fn store() -> PathBuf {
-    let home = std::env::var("HOME").unwrap_or_default();
-    PathBuf::from(home).join("Library/Application Support/PlayXRaven/sessions.json")
+    crate::paths::app_file("sessions.json")
 }
 
 fn load() -> Vec<Value> {

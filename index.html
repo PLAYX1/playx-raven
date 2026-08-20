@@ -316,6 +316,18 @@
         .keyrow .who { grid-column: 1 / -1; }
       }
       .keyrow:last-child { border-bottom: 0; }
+      /* 넘어가는 순서. 끌어서 옮기는 것만 두면 손이 떨리는 분은 못 쓴다 —
+         ↑↓ 는 마우스로도 키보드로도 되고, 결과가 눈에 바로 보인다. */
+      .ordrow { display: flex; align-items: center; gap: 9px; padding: 9px 10px;
+        border: 1px solid var(--line); border-radius: 10px; margin-top: 7px;
+        background: var(--card-bg, transparent); cursor: grab; }
+      .ordrow[draggable="true"]:active { cursor: grabbing; }
+      .ordrow.over { border-color: var(--accent); }
+      .ordrow .rank { font-variant-numeric: tabular-nums; opacity: .55; min-width: 1.5em; }
+      .ordrow .grip { opacity: .4; letter-spacing: 2px; }
+      .ordrow .nm { flex: 1; min-width: 0; font-size: 14px; }
+      .ordrow .nokey { font-size: 13px; opacity: .5; }
+      .ordrow button { min-height: 34px; min-width: 38px; padding: 6px 10px; font-size: 15px; }
       .keyrow .who { font-size: 14px; }
       .keyrow .saved { font-size: 14px; color: var(--ok); }
       .keyrow button { padding: 7px 13px; font-size: 14px; min-height: 34px; }
@@ -1315,6 +1327,28 @@
               <div style="flex:1"><label>지금 쓸 곳</label><select id="ai-pick"></select></div>
               <span class="meta" id="key-note"></span>
             </div>
+
+            <!-- 한 곳이 막히면 다음으로 넘어간다. 그 순서가 곧 요금이다. -->
+            <details style="margin-top:14px">
+              <summary class="meta" style="cursor:pointer">넘어가는 순서 바꾸기</summary>
+              <div class="meta" style="margin-top:9px">
+                위에 있는 곳부터 씁니다. 막히거나 실패하면 아래로 넘어갑니다.
+                <b>안 건드리면 지금 그대로</b> 돕니다.
+              </div>
+
+              <h4 style="margin:14px 0 0;font-size:14px">손님 질문에 답할 때</h4>
+              <div class="meta" style="margin-top:3px">하루 200번까지 옵니다. 싸고 빠른 곳이 위로 오는 게 유리합니다.</div>
+              <div id="ord-customer"></div>
+
+              <h4 style="margin:16px 0 0;font-size:14px">사장님을 도울 때</h4>
+              <div class="meta" style="margin-top:3px">가끔 씁니다. 잘하는 곳이 위로 오는 게 유리합니다.</div>
+              <div id="ord-owner"></div>
+
+              <div class="row" style="margin-top:12px">
+                <button class="ghost" id="ord-reset">기본값으로</button>
+                <span class="meta" id="ord-note"></span>
+              </div>
+            </details>
           </div>
 
           <div class="card">
