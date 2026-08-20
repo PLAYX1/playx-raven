@@ -1082,6 +1082,9 @@ async fn api_shop(State(state): State<ServerState>) -> impl IntoResponse {
         "ai": ai_on,
         // 지금 몇 개 남았나. 수량을 안 적은 품목은 null(무제한)로 온다 —
         // 0 으로 보내면 화면이 전부 품절로 그린다.
+        // 사장이 고른 색. 손님 화면이 :root 에 얹는다 — CSS 파일을 바꾸지
+        // 않으므로 다음 판올림에도 살아남는다.
+        "theme": crate::shop::theme_read(),
         "left": crate::stock::stock_left(
             shop.get("menu").cloned().unwrap_or(json!([])),
             now_unix(),
@@ -2641,5 +2644,43 @@ mod grok_findings {
         let body: String = f.chars().take(3000).collect();
         assert!(body.contains("order_until"), "만료를 보지 않는다");
         assert!(body.contains("EXPIRED"), "만료 상태가 없다");
+    }
+}
+
+#[cfg(test)]
+mod theme_tests {
+    /// 🔴 어두운 테마 블록의 `}` **뒤에** 변수를 넣으면, 그 변수는 미디어
+    /// 쿼리 밖으로 새어 나가 어두운 모드에서도 밝은 값으로 남는다.
+    /// 실제로 일곱 화면이 전부 그랬다 — 어두운 배경에 밝은 주황이 얹혔다.
+    ///
+    /// CSS 는 문법이 틀려도 조용히 무시하고 넘어간다. 컴파일러가 없으므로
+    /// 이런 것은 시험이 지킬 수밖에 없다.
+    #[test]
+    fn dark_theme_variables_stay_inside_the_media_query() {
+        for (name, src) in [
+            ("customer.html", include_str!("../../web/customer.html")),
+            ("admin.html", include_str!("../../web/admin.html")),
+            ("staff.html", include_str!("../../web/staff.html")),
+            ("wallet.html", include_str!("../../web/wallet.html")),
+            ("shops.html", include_str!("../../web/shops.html")),
+            ("buy.html", include_str!("../../web/buy.html")),
+            ("scan.html", include_str!("../../web/scan.html")),
+            ("index.html", include_str!("../../index.html")),
+        ] {
+            assert!(
+                !src.contains("} --ravi"),
+                "{name}: 어두운 테마 블록을 닫은 뒤에 변수를 넣었다 — 밖으로 샌다",
+            );
+            // 어두운 모드에도 Ravi 색이 있어야 한다. 없으면 밝은 값이 그대로
+            // 쓰여 같은 사고가 난다.
+            if src.contains("prefers-color-scheme: dark") && src.contains("--ravi:") {
+                let dark = &src[src.find("prefers-color-scheme: dark").unwrap()..];
+                let block: String = dark.chars().take(400).collect();
+                assert!(
+                    block.contains("--ravi:"),
+                    "{name}: 어두운 모드에 Ravi 색이 없다",
+                );
+            }
+        }
     }
 }

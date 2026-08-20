@@ -1,5 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
+import { check as checkUpdate } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
 
 type Asset = {
   name: string;
@@ -815,6 +817,74 @@ async function paintStatusDots() {
     set("d-ipfs", "d-ipfs-t", !!i?.running, i?.running ? "IPFS 켜짐" : "IPFS 꺼짐");
   } catch {
     set("d-ipfs", "d-ipfs-t", false, "IPFS 꺼짐");
+  }
+}
+
+// ── 판올림 ────────────────────────────────────────────────────────────────
+//
+// 🔴 **저절로 설치되면 안 된다.** 계산대는 장사 중이고, 재시작하면 손님 폰
+// 서버(8790)가 끊겨 QR 이 먹통이 된다. 받아만 두고 **사장이 고른다.**
+//
+// 확인은 하루 한 번이면 충분하다. 매번 켤 때마다 물어보면 그것도 방해다.
+
+async function checkForUpdate(quiet = true) {
+  try {
+    const up = await checkUpdate();
+    if (!up) {
+      if (!quiet) $("up-note").textContent = "지금이 최신입니다.";
+      return;
+    }
+    // 무엇이 바뀌는지 말하지 않고 "새 버전" 만 띄우면 아무도 안 누른다.
+    $("up-box").style.display = "";
+    $("up-box").innerHTML =
+      `<div class="card" style="border-color:var(--ravi)">
+         <h3>새 버전이 있습니다 — ${escapeHtml(up.version)}</h3>
+         <p class="meta" style="white-space:pre-wrap">${escapeHtml(up.body || "").slice(0, 600)}</p>
+         <div class="row" style="margin-top:12px">
+           <button id="up-go">받아서 설치</button>
+           <button class="ghost" id="up-later">나중에</button>
+           <span class="meta" id="up-note"></span>
+         </div>
+         <p class="note" style="margin-top:10px">
+           설치하면 프로그램이 <b>다시 시작</b>합니다. 그동안 손님 QR 이 잠깐
+           멈추니, <b>손님이 없을 때</b> 누르세요.
+         </p>
+       </div>`;
+    ($("up-go") as HTMLElement).onclick = async () => {
+      const ok = await sure(
+        "지금 설치할까요?",
+        "프로그램이 다시 시작합니다. 손님이 주문 중이면 그 화면이 끊깁니다.",
+        "설치",
+      );
+      if (!ok) return;
+      $("up-note").textContent = "받는 중…";
+      try {
+        let got = 0;
+        let total = 0;
+        await up.downloadAndInstall((e: any) => {
+          if (e.event === "Started") total = e.data?.contentLength || 0;
+          if (e.event === "Progress") {
+            got += e.data?.chunkLength || 0;
+            $("up-note").textContent = total
+              ? `받는 중 ${Math.round((got / total) * 100)}%`
+              : "받는 중…";
+          }
+          if (e.event === "Finished") $("up-note").textContent = "설치 중…";
+        });
+        await relaunch();
+      } catch (e) {
+        $("up-note").innerHTML = `<span class="warn">${escapeHtml(String(e))}</span>`;
+      }
+    };
+    ($("up-later") as HTMLElement).onclick = () => {
+      $("up-box").style.display = "none";
+      // 오늘은 다시 안 묻는다. 5분마다 물으면 끄고 싶어진다.
+      localStorage.setItem("playx-raven-update-snooze", String(Date.now()));
+    };
+  } catch (e) {
+    // 업데이트 서버가 없거나 인터넷이 끊긴 것은 사고가 아니다. 조용히 넘긴다 —
+    // 다만 사장이 직접 눌러 확인했을 때는 말해 준다.
+    if (!quiet) $("up-note").textContent = "확인하지 못했습니다. 인터넷을 확인해 주세요.";
   }
 }
 
@@ -5471,11 +5541,22 @@ window.addEventListener("DOMContentLoaded", () => {
     $("seedsheet").classList.add("hidden");
   });
   void paintStatusDots();
+  // 하루 한 번만 본다. 「나중에」를 누른 날은 그날 다시 안 묻는다.
+  {
+    const last = Number(localStorage.getItem("playx-raven-update-snooze") || 0);
+    if (Date.now() - last > 20 * 60 * 60 * 1000) setTimeout(() => void checkForUpdate(true), 8000);
+  }
   // 노드는 조용히 죽는다. 20초마다 다시 본다 — 죽은 걸 늦게 아는 것이
   // 카운터에서 제일 비싸다.
   setInterval(() => void paintStatusDots(), 20_000);
   loadBackup();
   $("abk-new").addEventListener("click", () => void newAddrWithName());
+  $("up-check").addEventListener("click", () => {
+    // 직접 누른 것이니 결과를 말한다. 배경 확인은 조용히 넘어간다.
+    $("up-box").style.display = "";
+    $("up-box").innerHTML = `<div class="meta" id="up-note">확인 중…</div>`;
+    void checkForUpdate(false);
+  });
   $("rw-req").addEventListener("click", async () => {
     try {
       await invoke("reward_request", {

@@ -1436,6 +1436,10 @@
         <!-- 능력 -->
         <div class="switches" id="sw-list"></div>
 
+        <!-- 판올림. 받아만 두고 사장이 고른다 — 장사 중에 저절로 재시작되면
+             손님 폰 서버가 끊기고 QR 이 먹통이 된다. -->
+        <div id="up-box" style="display:none;margin-bottom:16px"></div>
+
         <!-- 한 번 하는 일 -->
         <h3 class="grouphead">한 번 하는 일</h3>
         <div class="tools">
@@ -1452,6 +1456,7 @@
             <button class="ghost" id="rs-pick">백업에서 되돌리기</button>
             <button class="ghost" id="rs-card">복구 카드 인쇄</button>
             <button class="ghost" id="rs-lost">폰을 잃어버렸어요</button>
+            <button class="ghost" id="up-check">새 버전 확인</button>
           </div>
           <div id="rs-result"></div>
 

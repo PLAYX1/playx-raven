@@ -34,5 +34,18 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "active": true,
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQ2NDExQTFGRjNEQjgyMEEKUldRS2d0dnpIeHBCMWhjYVRSMkdFSUV3VTRyeUZkZ1M0SVIySWw2MEJ6Qml2UjUxdEd3V2gyMjUK",
+      "endpoints": [
+        "https://rvn.ex.erci.se/update/{{target}}/{{arch}}/{{current_version}}"
+      ],
+      "dangerousInsecureTransportProtocol": false,
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

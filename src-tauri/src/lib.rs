@@ -27,6 +27,8 @@ mod setup;
 mod addrbook;
 mod rewards;
 mod stock;
+mod booking;
+mod trade;
 mod walletx;
 mod knowledge;
 mod nostrpub;
@@ -45,6 +47,8 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         // The owner token is minted once per run and lives only in memory.
         .manage(server::ServerState::default())
         .invoke_handler(tauri::generate_handler![
@@ -117,6 +121,9 @@ pub fn run() {
             walletx::channel_leave,
             nostrpub::nostr_publish,
             stock::stock_left,
+            booking::booking_slots,
+            trade::trade_list,
+            trade::trade_get,
             rewards::reward_ready,
             rewards::reward_now,
             rewards::reward_request,
@@ -127,6 +134,8 @@ pub fn run() {
             rewards::reward_status,
             addrbook::addr_new,
             addrbook::addr_label,
+            shop::theme_read,
+            shop::theme_save,
             shop::fee_read,
             shop::fee_save,
             shop::pay_order,

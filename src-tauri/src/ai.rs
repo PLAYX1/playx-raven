@@ -318,6 +318,7 @@ Rules:
 {"type":"menu_clear"}
 {"type":"issue_set","field":"name|qty|units|reissuable","value":""}
 {"type":"go","screen":"assets|wallet|issue|shop|order|settings"}
+{"type":"theme","accent":"RRGGBB","tint":"RRGGBB"}  (six hex digits, no leading hash)
 
 Rules:
 - You can FILL IN the issue form, but you cannot issue. You cannot send money, burn RVN, or register the shop. When asked to, fill the form, use "go" to take them to that screen, and tell them they must press the button themselves because it cannot be undone.
@@ -325,6 +326,11 @@ Rules:
 - price is a plain number in the shop's currency. No symbols, no commas.
 - asset must be A-Z 0-9 _ only and is permanent once registered — suggest it, never claim it is set.
 - Indexes refer to the menu list you were given, counting from 0.
+- "theme" changes the two colours the customer screen uses: `accent` (the one filled button, links) and `tint` (a very light wash behind badges). Emit it only when the owner asks about colour or look. Rules you must keep:
+  * accent must be dark enough to carry white text — aim for a relative luminance under 0.25. A pale accent makes the order button unreadable in a bright shop.
+  * tint must be very light (luminance over 0.85) in the same hue family as accent.
+  * Never propose pure red for accent: red on a payment button reads as "danger" and people hesitate.
+  * Say in "reply" what the colours are for, in plain Korean. The owner is choosing how their shop looks to customers, not editing CSS.
 - Only emit actions the owner actually asked for. Do not tidy, rename, or "improve" things they did not mention.
 - If they just want to talk, think something through, or ask what something is, answer in "reply" with an empty actions array. You are their assistant, not only a form filler."#
         }

@@ -26,7 +26,8 @@
       }
       @media (prefers-color-scheme: dark) {
         :root { --bg: #101114; --fg: #eceef2; --muted: #9aa0ab; --line: #26282e;
-                --panel: #17191d; --accent: #8d92e8; --warn: #d99b3f; } --ravi: #f0913f; --ravi-soft: #a294cb; --ravi-tint: #2a1f18;
+                --panel: #17191d; --accent: #8d92e8; --warn: #d99b3f;
+                --ravi: #f0913f; --ravi-soft: #a294cb; --ravi-tint: #2a1f18; }
       }
       * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
       body { margin: 0; background: var(--bg); color: var(--fg);
@@ -397,6 +398,16 @@
 
         items = shop.menu || [];
         left = r.left || {};
+
+        // 사장이 고른 색. 값이 이상하면 서버가 이미 기본값으로 바꿔서 준다 —
+        // 여기서는 그냥 얹기만 한다. 읽을 수 없는 화면이 나오지 않게 하는 것은
+        // 서버 몫이고, 그건 협상 대상이 아니다.
+        if (r.theme?.accent) {
+          document.documentElement.style.setProperty("--accent", r.theme.accent);
+          document.documentElement.style.setProperty("--ravi", r.theme.accent);
+        }
+        if (r.theme?.tint)
+          document.documentElement.style.setProperty("--ravi-tint", r.theme.tint);
         currency = shop.currency || "KRW";
         symbol = currency === "USD" ? "$" : currency === "RVN" ? "" : "₩";
         rate = shop.rate || null;

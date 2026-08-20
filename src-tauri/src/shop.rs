@@ -1154,3 +1154,98 @@ mod price_tests {
         assert_eq!(price_of(&menu(), &items), 6_500.0);
     }
 }
+
+// ── 가게 색 ───────────────────────────────────────────────────────────────
+//
+// 사장이 AI 에게 "우리 가게는 따뜻한 느낌이면 좋겠어" 라고 말하면 손님 화면의
+// 색이 바뀐다. 바꿀 수 있는 것은 **둘뿐**이다 — 채운 버튼 색(accent)과 배지
+// 뒤의 아주 옅은 바탕(tint).
+//
+// 🔴 더 열지 않는 이유: 글자색·배경색까지 AI 가 정하게 하면 **읽을 수 없는
+// 화면**이 나온다. 흰 바탕에 노란 글자를 만들어 놓고 사장은 자기 폰에서만
+// 확인한다. 우리가 지키는 것은 대비고, 그건 협상 대상이 아니다.
+
+/// 흰 글자를 얹어도 읽히는가. 0.25 는 WCAG 4.5:1 을 흰 글자로 맞추는 언저리다.
+fn luminance(hex: &str) -> Option<f64> {
+    let h = hex.trim().trim_start_matches('#');
+    if h.len() != 6 || !h.chars().all(|c| c.is_ascii_hexdigit()) {
+        return None;
+    }
+    let v = |i: usize| u8::from_str_radix(&h[i..i + 2], 16).ok().map(|x| x as f64 / 255.0);
+    let f = |c: f64| if c <= 0.03928 { c / 12.92 } else { ((c + 0.055) / 1.055).powf(2.4) };
+    Some(0.2126 * f(v(0)?) + 0.7152 * f(v(2)?) + 0.0722 * f(v(4)?))
+}
+
+/// 사장이 고른 색. 없거나 못 읽으면 기본값이다 — **화면이 안 깨지는 쪽으로.**
+#[tauri::command]
+pub fn theme_read() -> Value {
+    let v: Value = std::fs::read_to_string(crate::paths::app_file("shop.json"))
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_else(|| json!({}));
+    let t = v.get("theme").cloned().unwrap_or(json!({}));
+    json!({
+        "accent": ok_accent(t.get("accent").and_then(Value::as_str)).unwrap_or("#3b3f8f".into()),
+        "tint": ok_tint(t.get("tint").and_then(Value::as_str)).unwrap_or("#fdf1e7".into()),
+    })
+}
+
+fn ok_accent(c: Option<&str>) -> Option<String> {
+    let c = c?;
+    // 밝은 강조색에 흰 글자를 얹으면 매장 조명 아래서 안 보인다.
+    (luminance(c)? < 0.30).then(|| c.to_string())
+}
+
+fn ok_tint(c: Option<&str>) -> Option<String> {
+    let c = c?;
+    // 옅은 바탕이 진하면 그 위의 글자가 죽는다.
+    (luminance(c)? > 0.80).then(|| c.to_string())
+}
+
+#[tauri::command]
+pub fn theme_save(accent: String, tint: String) -> Result<Value, String> {
+    let a = ok_accent(Some(&accent))
+        .ok_or("강조색이 너무 밝습니다. 흰 글자를 얹으면 매장 조명 아래서 안 보입니다.")?;
+    let t = ok_tint(Some(&tint)).ok_or("옅은 바탕이 너무 진합니다. 그 위의 글자가 죽습니다.")?;
+    let path = crate::paths::app_file("shop.json");
+    let mut v: Value = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_else(|| json!({}));
+    v["theme"] = json!({ "accent": a, "tint": t });
+    if let Some(d) = path.parent() {
+        let _ = std::fs::create_dir_all(d);
+    }
+    std::fs::write(&path, serde_json::to_vec_pretty(&v).map_err(|e| e.to_string())?)
+        .map_err(|e| format!("저장하지 못했습니다: {e}"))?;
+    Ok(theme_read())
+}
+
+#[cfg(test)]
+mod theme_tests {
+    use super::*;
+
+    /// 🔴 밝은 강조색에 흰 글자를 얹으면 **매장 조명 아래서 안 보인다.**
+    /// AI 가 "따뜻한 노랑" 을 골라 주면 주문 버튼이 사라진다.
+    #[test]
+    fn a_pale_accent_is_refused() {
+        assert!(theme_save("#ffe066".into(), "#fff8e1".into()).is_err());
+        assert!(ok_accent(Some("#ffffff")).is_none());
+        assert!(ok_accent(Some("#3b3f8f")).is_some());
+    }
+
+    /// 옅은 바탕이 진하면 그 위 글자가 죽는다.
+    #[test]
+    fn a_dark_tint_is_refused() {
+        assert!(ok_tint(Some("#333333")).is_none());
+        assert!(ok_tint(Some("#fdf1e7")).is_some());
+    }
+
+    /// 이상한 값이 들어와도 화면은 돌아야 한다 — 기본값으로 떨어진다.
+    #[test]
+    fn nonsense_falls_back_instead_of_breaking_the_screen() {
+        assert!(ok_accent(Some("파랑")).is_none());
+        assert!(ok_accent(Some("#12")).is_none());
+        assert!(ok_accent(None).is_none());
+    }
+}

@@ -36,6 +36,10 @@ tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-opener = "2"
 # 파일 고르기는 OS 가 해야 한다. 경로를 타이핑하게 하면 아무도 안 한다.
 tauri-plugin-dialog = "2"
+# 자동 업데이트. 🔴 받아만 두고 **사장이 눌러야** 설치된다 — 장사 중에
+# 저절로 재시작되면 손님 폰 서버가 끊기고 QR 이 먹통이 된다.
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # Serves the phone screens — the owner's remote control and the customer's
