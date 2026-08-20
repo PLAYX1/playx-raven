@@ -104,7 +104,14 @@ function draw(): void {
       </div>`;
     return;
   }
+  // 릴레이에서 300건 넘게 온다. 전부 그리면 문서가 5만 픽셀이 되고, 그건
+  // 목록이 아니라 벽이다. 한 번에 보여줄 만큼만 그리고 나머지는 눌러서 연다.
+  const PAGE = 30;
+  let shown = Math.min(PAGE, rows.length);
+
+  const paint = () => {
   $("items").innerHTML = rows
+    .slice(0, shown)
     .map((r, i) => {
       const e = r.e;
       const img = firstImage(e);
@@ -126,13 +133,25 @@ function draw(): void {
         </div>
       </div>`;
     })
-    .join("");
+    .join("") +
+    (shown < rows.length
+      ? `<button id="more" class="btn" style="width:100%;margin-top:16px">
+           ${rows.length - shown}건 더 보기</button>`
+      : "");
 
   // 눌러서 자세히. 목록에서는 두 줄로 잘라 두었는데, 자른 줄만 보고 살지
   // 말지 정하라는 것은 무리다.
   $("items").querySelectorAll<HTMLElement>("[data-i]").forEach((el) => {
     el.onclick = () => openItem(rows[Number(el.dataset.i)]);
   });
+  const more = document.getElementById("more");
+  if (more)
+    more.onclick = () => {
+      shown = Math.min(shown + PAGE, rows.length);
+      paint();
+    };
+  };
+  paint();
 }
 
 function openItem(r: { e: NostrEvent; dist: number | null }): void {
@@ -218,6 +237,10 @@ function tabs(): void {
       const isShops = which === "shops";
       $("list").style.display = isShops ? "" : "none";
       $("items").style.display = isShops ? "none" : "";
+      // 개인이 파는 자리는 물건 탭에만. 목록 밖에 두는 이유는 render() 가
+      // #items 를 통째로 갈아 끼우기 때문이다 — 안에 두면 매번 지워졌다.
+      const cta = document.getElementById("sellcta");
+      if (cta) cta.style.display = isShops ? "none" : "block";
       // 가게 탭에만 있는 것들을 물건 탭에서 치운다. 안 그러면 "가까운 순으로"
       // 가 물건 목록 위에 남아, 눌러도 아무 일이 안 일어난다.
       for (const id of ["q", "near", "locnote", "count"]) {

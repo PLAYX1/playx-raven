@@ -65,7 +65,14 @@
       /* 되돌아가는 길. 60x18 이라 손가락보다 작았다 — 나가지 못하는 화면은
          쉬운 화면이 아니다. */
       .back { display: inline-flex; align-items: center; min-height: 44px;
-        padding: 0 12px 0 0; font-size: 15px; text-decoration: none; }
+        padding: 0 12px 0 0; font-size: 15px; text-decoration: none;
+        /* 기본 파란 링크로 두면 이 화면에서 가장 눈에 띄는 것이 "나가기" 가
+           된다. 돌아가는 길은 있되 주인공은 아니다. */
+        color: var(--muted); }
+      @media (hover: hover) { .back:hover { color: var(--ravi); } }
+      /* 지금 어느 탭인지 보이지 않으면 두 번 누른다. */
+      .tb.on { background: var(--ravi); border-color: var(--ravi);
+        color: #fff; font-weight: 600; }
       /* 「가게 / 물건」 을 가르는 탭. 39x22 라 손가락 절반이었다. */
       .tb { min-height: 44px; padding: 0 16px; font-size: 15px; }
 
@@ -143,6 +150,36 @@
         background: var(--ravi); color: #fff; font-weight: 600;
         text-decoration: none; font-size: 16px; }
       .sellcta::after { content: " · 공짜"; font-weight: 400; opacity: .85; font-size: 14px; }
+      /* ── 물건 카드 ────────────────────────────────────────────────────
+         🔴 `.icard` 는 shops.src.ts 가 쓰는데 **CSS 가 아예 없었다.**
+         그래서 남이 올린 사진이 원본 크기 그대로 나와 화면을 통째로 덮었다.
+         가게 카드(.card)와 같은 규칙을 주되, 물건은 사진이 주인공이라
+         조금 크게(74px) 잡는다. 남이 올린 값이 우리 레이아웃을 정하게
+         두면 안 된다 — 그건 크기만 다른 XSS 다. */
+      .icard {
+        display: flex; gap: 12px; align-items: flex-start; padding: 12px 0;
+        border-bottom: 1px solid var(--line); cursor: pointer;
+        transition: background .16s ease;
+      }
+      .icard:last-child { border-bottom: 0; }
+      @media (hover: hover) { .icard:hover { background: var(--panel); } }
+      .icard:active { background: var(--panel); }
+      .icard img {
+        width: 74px; height: 74px; flex: none;
+        object-fit: cover; border-radius: 12px; background: var(--panel);
+      }
+      .icard .nm { font-weight: 600; font-size: 16px; line-height: 1.35;
+        display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+        overflow: hidden; }
+      .icard .pr { margin-top: 2px; font-size: 16px; font-weight: 600; color: var(--ravi); }
+      .icard .de {
+        margin-top: 4px; color: var(--muted); font-size: 14px; line-height: 1.5;
+        display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      .icard .tags { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 6px; }
+      /* 자세히 보기 안의 사진도 같은 이유로 묶는다. */
+      #sheet img, .sheet img { max-width: 100%; height: auto; border-radius: 12px; }
 </style>
   </head>
   <body>
@@ -168,8 +205,8 @@
     </div>
     <div class="sub" id="locnote" style="margin-bottom:8px"></div>
     <div id="list"><div class="empty">체인에서 읽는 중…</div></div>
-    <div id="items" style="display:none">
-      <a class="btn sellcta" href="/wallet#sell">내 물건 올리기</a><div class="empty">불러오는 중…</div></div>
+    <a class="btn sellcta" id="sellcta" href="/wallet#sell" style="display:none">내 물건 올리기</a>
+    <div id="items" style="display:none"><div class="empty">불러오는 중…</div></div>
     <div id="mapsheet"></div>
     <div id="sheet" style="display:none"></div>
 

@@ -18,3 +18,13 @@ grep -q "Buffer" wallet.bundle.js || { echo "🔴 Buffer 가 번들에 없습니
 n=$(wc -c < wallet.bundle.js)
 [ "$n" -gt 650000 ] || { echo "🔴 번들이 너무 작습니다($n) — 뭔가 빠졌습니다"; exit 1; }
 echo "지갑 번들 $n 바이트"
+
+# 가게 목록 번들. 여태 이 스크립트가 지갑만 만들어서, shops.src.ts 를 고쳐도
+# 번들이 옛것으로 남는 사고가 가능했다. 같은 자리에서 같이 만든다.
+../node_modules/.bin/esbuild shops.src.ts \
+  --bundle --format=iife --target=es2020 --minify \
+  --outfile=shops.bundle.js
+grep -q "30402" shops.bundle.js || { echo "🔴 NIP-99 kind 가 번들에 없습니다"; exit 1; }
+m=$(wc -c < shops.bundle.js)
+[ "$m" -gt 30000 ] || { echo "🔴 가게 번들이 너무 작습니다($m)"; exit 1; }
+echo "가게 번들 $m 바이트"
