@@ -68,7 +68,11 @@
                    font-size: 15px; font-family: inherit; }
       .ask button { padding: 0 16px; border-radius: 9px; border: 0; background: var(--accent);
                     color: #fff; font-size: 15px; min-height: 46px; font-family: inherit; cursor: pointer; }
-      .answer { margin-top: 12px; font-size: 14px; line-height: 1.7; white-space: pre-wrap; }
+      .answer { margin-top: 12px; font-size: 15px; line-height: 1.7;
+        display: flex; gap: 8px; align-items: flex-start; }
+      .answer .anstxt { white-space: pre-wrap; min-width: 0; flex: 1; }
+      .ansravi { width: 28px; height: 28px; border-radius: 9px; flex: none; margin-top: 1px; }
+      .answer.err { display: block; }
       .answer.err { color: var(--warn); }
       .aidis { font-size: 12.5px; color: var(--muted); margin-top: 8px; line-height: 1.5; }
 
@@ -541,7 +545,12 @@
             body: JSON.stringify({ question }),
           }).then((x) => x.json());
           if (r.error) throw new Error(r.error);
-          $("a").textContent = r.answer;
+          // 답한 것이 누구인지 보이게 한다. 회색 글자만 뜨면 "어디선가 온 글"
+          // 이고, 얼굴이 붙으면 이 가게의 Ravi 가 답한 것이 된다.
+          $("a").innerHTML =
+            `<img class="ansravi" src="/raven-head.webp" alt="" />` +
+            `<span class="anstxt"></span>`;
+          $("a").querySelector(".anstxt").textContent = r.answer;
         } catch (e) {
           $("a").className = "answer err";
           $("a").textContent = e.message || e;

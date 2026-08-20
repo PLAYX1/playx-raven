@@ -578,6 +578,19 @@
         transition: background .16s ease; }
       .kv.place[data-dest]:hover { background: var(--panel); }
       .kv.place:not([data-dest]) { cursor: default; opacity: .6; }
+      /* Ravi 가 말한 것은 Ravi 얼굴을 달고 나온다. 누가 말하는지가 보이면
+         대화가 도구 출력이 아니라 대화로 읽힌다. */
+      .msg { display: flex; gap: 8px; align-items: flex-start; }
+      .msg.me { display: block; }
+      .msgravi { width: 26px; height: 26px; border-radius: 8px; flex: none; margin-top: 1px; }
+      .msgtxt { min-width: 0; flex: 1; }
+      /* 키를 그 자리에서 받는다. 설정 화면으로 보내면 하려던 말을 잊는다. */
+      .keyask { display: flex; gap: 6px; align-items: center; margin-top: 8px; }
+      .keyask .who { flex: none; width: 96px; font-size: 13px; color: var(--muted); }
+      .keyask input { flex: 1; min-width: 0; min-height: 38px; padding: 0 10px;
+        border: 1px solid var(--line); border-radius: 8px; background: var(--bg);
+        color: var(--fg); font: inherit; font-size: 14px; }
+      .keyask button { min-height: 38px; padding: 0 12px; font-size: 13px; }
 </style>
   </head>
   <body>

@@ -1632,9 +1632,25 @@ async function saveKeys() {
 const chatHistory: any[] = [];
 
 function chatSay(who: "me" | "ai" | "did", text: string) {
+  chatPut(who, escapeHtml(text).replace(/\n/g, "<br />"));
+}
+
+/// 이미 escape 된 HTML 을 넣을 때. 나눠 둔 이유: `chatSay` 는 textContent 라
+/// 안전했지만, 굵게·줄바꿈을 쓰려고 태그를 넘긴 자리들이 **태그 글자 그대로**
+/// 화면에 나오고 있었다. 안전한 기본값과 의도적인 HTML 을 함수로 가른다.
+function chatHtml(who: "me" | "ai" | "did", html: string) {
+  chatPut(who, html);
+}
+
+function chatPut(who: "me" | "ai" | "did", html: string) {
   const div = document.createElement("div");
   div.className = `msg ${who}`;
-  div.textContent = text;
+  // Ravi 가 말한 것은 Ravi 얼굴을 달고 나온다. 누가 말하는지가 보이면
+  // 대화가 도구 출력이 아니라 대화로 읽힌다.
+  div.innerHTML =
+    who === "ai"
+      ? `<img class="msgravi" src="/raven-head.webp" alt="" /><div class="msgtxt">${html}</div>`
+      : `<div class="msgtxt">${html}</div>`;
   $("chat-log").appendChild(div);
   $("chat-log").scrollTop = $("chat-log").scrollHeight;
 }
@@ -1739,25 +1755,25 @@ function setChatMode(m: "fill" | "ask" | "debate") {
     .forEach((b) => b.classList.toggle("on", b.dataset.mode === m));
   ($("chat-q") as HTMLInputElement).placeholder = MODE_HINT[m];
   if (m === "debate")
-    chatSay("ai", "서로 다른 두 곳에 같은 것을 묻습니다. <b>어긋나는 자리</b>가 사장님이 정하실 자리예요.");
+    chatHtml("ai", "서로 다른 두 곳에 같은 것을 묻습니다. <b>어긋나는 자리</b>가 사장님이 정하실 자리예요.");
   else if (m === "ask")
     chatSay("ai", "무엇이든 물어보세요. 화면은 건드리지 않습니다.");
 }
 
 async function chatAsk(q: string) {
-  chatSay("ai", "<span class=\"muted\">생각하는 중…</span>");
+  chatHtml("ai", "<span class=\"muted\">생각하는 중…</span>");
   try {
     const r = await invoke<any>("ai_ask_owner", { provider: aiProvider, question: q });
     chatPopThinking();
-    chatSay("ai", escapeHtml(r?.text || "").replace(/\n/g, "<br />"));
+    chatHtml("ai", escapeHtml(r?.text || "").replace(/\n/g, "<br />"));
   } catch (e: any) {
     chatPopThinking();
-    chatSay("ai", `<span class="warn">${escapeHtml(String(e))}</span>`);
+    chatHtml("ai", `<span class="warn">${escapeHtml(String(e))}</span>`);
   }
 }
 
 async function chatDebate(q: string) {
-  chatSay("ai", "<span class=\"muted\">두 곳에 묻는 중…</span>");
+  chatHtml("ai", "<span class=\"muted\">두 곳에 묻는 중…</span>");
   try {
     const r = await invoke<any>("ai_debate", { question: q });
     chatPopThinking();
@@ -1767,10 +1783,10 @@ async function chatDebate(q: string) {
              <span class="warn">${escapeHtml(side.error)}</span></div>`
         : `<div><div class="who">${escapeHtml(side?.provider || "")}</div>
              ${escapeHtml(side?.text || "").replace(/\n/g, "<br />")}</div>`;
-    chatSay("ai", `<div class="duo">${one(r?.a)}${one(r?.b)}</div>`);
+    chatHtml("ai", `<div class="duo">${one(r?.a)}${one(r?.b)}</div>`);
   } catch (e: any) {
     chatPopThinking();
-    chatSay("ai", `<span class="warn">${escapeHtml(String(e))}</span>`);
+    chatHtml("ai", `<span class="warn">${escapeHtml(String(e))}</span>`);
   }
 }
 
@@ -1781,9 +1797,65 @@ function chatPopThinking() {
   if (last && last.textContent?.includes("중…")) last.remove();
 }
 
+/// 키가 없으면 **그 자리에서** 넣게 한다.
+///
+/// 여태 `if (!q || !aiProvider) return;` 이었다 — 사장이 질문을 치고 보내기를
+/// 눌러도 **아무 일도 안 일어났다.** 조용한 실패는 고장으로 읽히고, 고장으로
+/// 읽힌 기능은 다시 안 눌린다. 설정 화면으로 보내는 것도 답이 아니다 —
+/// 하려던 말을 들고 다른 화면으로 가면 거기서 뭘 하려 했는지 잊는다.
+function chatNeedsKey() {
+  const rows = Object.entries(PROVIDERS)
+    .map(
+      ([p, [label, ph, console_]]) =>
+        `<div class="keyask">
+           <span class="who">${escapeHtml(label)}</span>
+           <input type="password" data-k="${p}" placeholder="${escapeHtml(ph)}" autocomplete="off" />
+           <button class="ghost" data-console="${escapeHtml(console_)}">받기</button>
+         </div>`,
+    )
+    .join("");
+  chatHtml(
+    "ai",
+    `아직 <b>API 키</b>가 없어요. 한 곳만 넣으면 바로 이야기할 수 있어요.<br />
+     <span class="muted">키는 이 컴퓨터에만 저장됩니다(0600). 우리 서버로 가지 않아요.</span>
+     ${rows}
+     <button id="keyask-save" style="margin-top:8px">저장하고 이어가기</button>`,
+  );
+
+  const log = $("chat-log");
+  log.querySelectorAll<HTMLElement>("[data-console]").forEach((b) => {
+    b.onclick = () =>
+      void invoke("open_external", { url: b.dataset.console }).catch(() => {});
+  });
+  const save = document.getElementById("keyask-save");
+  if (save)
+    save.onclick = async () => {
+      let put = 0;
+      for (const el of log.querySelectorAll<HTMLInputElement>("[data-k]")) {
+        const v = el.value.trim();
+        if (!v) continue;
+        try {
+          await invoke("save_api_key", { provider: el.dataset.k, key: v });
+          put++;
+          el.value = "";
+        } catch (e) {
+          chatHtml("ai", `<span class="warn">${escapeHtml(String(e))}</span>`);
+        }
+      }
+      if (!put) return chatSay("ai", "칸이 비어 있어요. 키를 붙여넣고 다시 눌러 주세요.");
+      await refreshKeys();
+      chatSay("ai", "됐어요. 이제 물어보세요.");
+    };
+}
+
 async function chatSend() {
   const q = ($("chat-q") as HTMLInputElement).value.trim();
-  if (!q || !aiProvider) return;
+  if (!q) return;
+  if (!aiProvider) {
+    chatSay("me", q);
+    ($("chat-q") as HTMLInputElement).value = "";
+    return chatNeedsKey();
+  }
   ($("chat-q") as HTMLInputElement).value = "";
   chatSay("me", q);
 
