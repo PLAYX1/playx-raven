@@ -655,6 +655,36 @@ async function sellPublish(): Promise<void> {
   }
 }
 
+/// 이 지갑이 **가게 컴퓨터**에서 열렸는가.
+///
+/// 🔴 브라우저 저장소는 출처(프로토콜+주소+포트)마다 나뉜다. 가게 로컬
+/// 주소(`192.168.0.58:8790`)에서 만든 지갑은 **그 가게에서만 보인다.**
+/// 손님이 다음 가게에 가면 "새 지갑 만들기" 가 뜨고, 돈이 사라진 줄 안다.
+/// (실제로는 12단어만 있으면 되찾지만, 그 순간 그 사람은 그걸 모른다.)
+///
+/// 우리가 할 수 있는 것은 **미리 말해 주는 것**이다. 그리고 인터넷이 되면
+/// 어디서나 열리는 자리(rvn.ex.erci.se)로 안내한다.
+function isShopLocal(): boolean {
+  const h = location.hostname;
+  return (
+    h === "localhost" ||
+    h === "127.0.0.1" ||
+    h.endsWith(".local") ||
+    /^\d+\.\d+\.\d+\.\d+$/.test(h)
+  );
+}
+
+function sayWhereThisWalletLives(): void {
+  if (!isShopLocal()) return;
+  const el = document.getElementById("wherebar");
+  if (!el) return;
+  el.innerHTML =
+    `<b>이 지갑은 이 가게에서만 보입니다.</b> 가게 컴퓨터에 저장되기 때문입니다.<br />` +
+    `다른 가게에서도 쓰시려면 <a href="https://rvn.ex.erci.se/wallet">rvn.ex.erci.se</a> ` +
+    `에서 만드세요 — 같은 12단어로 어디서나 열립니다.`;
+  el.style.display = "";
+}
+
 function unlocked(m: string): void {
   mnemonic = m;
   hdKey = RavencoinKey.getHDKey(NET_NAME, m);
@@ -662,6 +692,7 @@ function unlocked(m: string): void {
   // 「물건 올리기」로 들어온 사람을 지갑 첫 화면에 떨궈 두면, 왜 여기 왔는지
   // 잊는다. 잠금을 푼 다음 하려던 자리로 이어 준다.
   show(location.hash === "#sell" ? "sell" : "main");
+  sayWhereThisWalletLives();
 
   // 잠그지 않은 지갑이면 그 사실을 계속 보여 준다. 한 번 뜨고 사라지는 경고는
   // 장식이고, 남아 있는 것만 사실이다. 그리고 잠글 길을 그 자리에 둔다 —

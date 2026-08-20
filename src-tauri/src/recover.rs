@@ -32,8 +32,7 @@ fn dir() -> PathBuf {
 }
 
 fn raven_dir() -> PathBuf {
-    let home = std::env::var("HOME").unwrap_or_default();
-    PathBuf::from(home).join("Library/Application Support/Raven")
+    crate::paths::raven_dir()
 }
 
 fn node_path() -> PathBuf {

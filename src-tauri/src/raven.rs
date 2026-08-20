@@ -33,8 +33,7 @@ pub struct AssetEntry {
 fn data_dir() -> PathBuf {
     // Only macOS for now; Windows and Linux use different conventions and are
     // added when those builds happen.
-    let home = std::env::var("HOME").unwrap_or_default();
-    PathBuf::from(home).join("Library/Application Support/Raven")
+    crate::paths::raven_dir()
 }
 
 fn read_cookie() -> Result<String, String> {

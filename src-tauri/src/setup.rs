@@ -196,7 +196,7 @@ pub fn recommend_setup() -> Value {
 #[tauri::command]
 pub fn disk_now() -> Value {
     let home = std::env::var("HOME").unwrap_or_default();
-    let dir = format!("{home}/Library/Application Support/Raven");
+    let dir = crate::paths::raven_dir().to_string_lossy().to_string();
 
     let gb = |p: &str| -> u64 {
         std::process::Command::new("du")

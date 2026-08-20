@@ -58,7 +58,7 @@ pub fn default_paths() -> Value {
 
     json!({
         "home": home.clone(),
-        "data_dir": format!("{home}/Library/Application Support/Raven"),
+        "data_dir": crate::paths::raven_dir().to_string_lossy(),
         "ravend": found,
         "searched": candidates,
     })

@@ -109,8 +109,7 @@ pub async fn services_start() -> Result<Value, String> {
     if status["node"]["running"].as_bool().unwrap_or(false) {
         skipped.push(json!({ "what": "노드", "why": "이미 켜져 있습니다" }));
     } else if let Some(path) = which("ravend") {
-        let home = std::env::var("HOME").unwrap_or_default();
-        let datadir = format!("{home}/Library/Application Support/Raven");
+        let datadir = crate::paths::raven_dir().to_string_lossy().to_string();
         match Command::new(&path)
             .arg(format!("-datadir={datadir}"))
             .arg("-server=1")

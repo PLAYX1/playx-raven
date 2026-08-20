@@ -1151,8 +1151,33 @@ function renderSummary() {
   invoke("sweep_hold", { untilUnix: Math.floor(Date.now() / 1000) + 1800 }).catch(() => {});
 }
 
+/// 잠긴 지갑에서 돈이나 자산을 움직이기 전에 한 번 연다.
+///
+/// 🔴 회원권 발행은 이걸 성실히 하는데 **자산 발행과 가게 등록은 안 했다.**
+/// 잠근 채 영업하는 것이 기본 상태라, 사장이 발행 버튼을 누르면 노드가
+/// "wallet is locked" 를 뱉고 화면은 조용히 멈춘다 — 40~70대 사장은 왜 안
+/// 되는지 알 길이 없다. 500 RVN 을 태우려던 참인데 아무 일도 안 일어난다.
+///
+/// 이미 열려 있거나 암호가 없는 지갑이면 아무것도 묻지 않는다.
+/// 취소하면 `false` 를 준다 — 부르는 쪽이 거기서 멈춰야 한다.
+async function ensureUnlocked(why: string): Promise<boolean> {
+  try {
+    const lock: any = await invoke("wallet_lock_state");
+    if (!lock?.encrypted || lock?.unlocked) return true;
+    const pass = await ask("지갑 암호", why, { password: true });
+    if (!pass) return false;
+    await invoke("unlock_for", { passphrase: pass, seconds: 60 });
+    return true;
+  } catch (e) {
+    await sure("지갑을 열지 못했습니다", String(e), "닫기");
+    return false;
+  }
+}
+
 async function doIssue() {
   if (!issueCheck) return;
+  // 발행은 500 RVN 을 태운다. 잠겨 있으면 여기서 멈추고 이유를 말한다.
+  if (!(await ensureUnlocked("자산을 발행하려면 지갑을 열어야 합니다."))) return;
   const btn = $("wz-next") as HTMLButtonElement;
   const wasLabel = btn.textContent;
   btn.disabled = true;
@@ -4897,6 +4922,10 @@ async function makeShopAddress() {
 }
 
 async function registerShop() {
+  // 가게 등록도 500 RVN 을 태운다. 잠긴 채로 누르면 IPFS 에 프로필만 올라가고
+  // 발행이 조용히 실패한다 — 사장은 등록된 줄 알고 QR 을 붙인다.
+  if (!(await ensureUnlocked("가게를 등록하려면 지갑을 열어야 합니다.")))
+    return;
   const btn = $("sh-go") as HTMLButtonElement;
   btn.disabled = true;
   btn.textContent = "등록 중…";

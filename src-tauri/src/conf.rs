@@ -25,8 +25,7 @@ use serde_json::{json, Value};
 use std::path::PathBuf;
 
 fn conf_path() -> PathBuf {
-    let home = std::env::var("HOME").unwrap_or_default();
-    PathBuf::from(home).join("Library/Application Support/Raven/raven.conf")
+    crate::paths::raven_dir().join("raven.conf")
 }
 
 /// The settings worth showing, in the order they matter to a shop.

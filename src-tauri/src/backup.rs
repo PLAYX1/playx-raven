@@ -32,11 +32,11 @@ use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 
 fn home() -> PathBuf {
-    PathBuf::from(std::env::var("HOME").unwrap_or_default())
+    crate::paths::home()
 }
 
 fn raven_dir() -> PathBuf {
-    home().join("Library/Application Support/Raven")
+    crate::paths::raven_dir()
 }
 
 fn app_dir() -> PathBuf {
