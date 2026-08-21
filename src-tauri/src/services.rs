@@ -30,7 +30,7 @@ use std::sync::Mutex;
 /// Processes this app started, so it can stop exactly those and no others.
 static OURS: Mutex<Option<Vec<(String, Child)>>> = Mutex::new(None);
 
-fn which(name: &str) -> Option<String> {
+pub fn which(name: &str) -> Option<String> {
     // A GUI app on macOS inherits a minimal PATH that usually lacks /opt/homebrew,
     // so the usual places are checked directly rather than trusting `which`.
     let home = std::env::var("HOME").unwrap_or_default();

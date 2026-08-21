@@ -790,6 +790,17 @@
       .hb-cancel { width: 100%; min-height: 52px; margin-top: 12px;
         font-size: 17px; font-weight: 600; border-radius: 12px;
         border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
+      /* 연습. 접어 두되 발행 전에 눈에 띄어야 한다. */
+      .rehearse { margin: 14px 0; padding: 12px 14px; border-radius: 14px;
+        border: 1px dashed var(--line); background: var(--bg); }
+      .rehearse > summary { cursor: pointer; min-height: 44px; display: flex;
+        align-items: center; gap: 8px; font-weight: 600; font-size: 15px; }
+      .rehearse .row { display: flex; gap: 8px; flex-wrap: wrap; }
+      .rehearse button { min-height: 44px; }
+      /* 연습 중이라는 것이 늘 보여야 한다. 진짜와 헷갈리면 그게 사고다. */
+      .rhbadge { display: inline-block; margin-top: 10px; padding: 4px 10px;
+        border-radius: 999px; background: var(--warn); color: #fff;
+        font-size: 13px; font-weight: 600; }
 </style>
   </head>
   <body>
@@ -1992,6 +2003,29 @@
             </div>
           </div>
           <div id="ai-issue-out"></div>
+
+          <!-- 🔴 연습. 요약 화면과 취소 창은 "이렇게 됩니다" 를 **말해 줄**
+               뿐이다. 직접 해 보는 것과는 다르고, 사람은 읽은 것보다 해 본
+               것을 안다. 그런데 이 프로그램에서 사장이 발행을 처음 해 보는
+               자리가 **진짜 발행**이었다.
+               regtest 로 사설 체인을 띄운다 — 돈이 안 들고 진짜 노드에
+               닿지도 않는다(포트·폴더가 완전히 따로). -->
+          <details class="rehearse">
+            <summary>먼저 연습해 보기 <span class="meta">— 돈이 들지 않습니다</span></summary>
+            <p class="meta" style="margin:8px 0">
+              진짜와 똑같이 한 번 해 보실 수 있습니다. <b>가짜 체인</b>이라
+              돈이 안 나가고, 마음에 안 들면 지우고 다시 하시면 됩니다.
+              <b>진짜 지갑은 건드리지 않습니다.</b>
+            </p>
+            <div class="row">
+              <button class="ghost" id="rh-start">연습 시작</button>
+              <button class="ghost" id="rh-try">이 이름으로 해 보기</button>
+              <button class="ghost" id="rh-reset">지우고 처음부터</button>
+            </div>
+            <div class="meta" id="rh-note"></div>
+            <div id="rh-out"></div>
+          </details>
+
           <div id="wz-kinds"></div>
         </div>
 

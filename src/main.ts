@@ -2545,6 +2545,93 @@ async function chatSend() {
  * 소각 단추를 대신 누르지도 않는다. 500 RVN 이 타고 이름은 영원하다 —
  * 그 마지막 한 번은 사람이 눌러야 하고, 그러려면 사람이 읽어야 한다.
  */
+
+// ── 연습 ────────────────────────────────────────────────────────────────
+//
+// 🔴 요약 화면과 취소 창은 "이렇게 됩니다" 를 **말해 줄** 뿐이다. 직접 해
+// 보는 것과는 다르고, 사람은 읽은 것보다 해 본 것을 안다. 그런데 사장이
+// 발행을 처음 해 보는 자리가 **진짜 발행**이었다 — 500 RVN 이 타는 자리.
+//
+// regtest 로 사설 체인을 띄운다. 돈이 안 들고, 진짜 노드에 닿지도 않는다
+// (포트 19766·폴더 「연습」 — `rehearse.rs` 의 시험이 그걸 지킨다).
+
+async function rhSay(t: string, warn = false): Promise<void> {
+  const el = $("rh-note");
+  el.innerHTML = warn ? `<span class="danger">${escapeHtml(t)}</span>` : escapeHtml(t);
+}
+
+async function rhPaint(): Promise<void> {
+  try {
+    const st = await invoke<any>("rehearse_status");
+    $("rh-out").innerHTML = st?.running
+      ? `<div class="rhbadge">연습 중</div>
+         <div class="meta" style="margin-top:6px">
+           연습용 돈 ${Number(st.balance || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })} RVN ·
+           만들어 본 자산 ${st.assets || 0}개
+         </div>`
+      : "";
+  } catch {
+    $("rh-out").innerHTML = "";
+  }
+}
+
+function wireRehearse(): void {
+  const start = document.getElementById("rh-start");
+  if (!start) return;
+  start.onclick = async () => {
+    await rhSay("연습용 체인을 켜는 중…");
+    try {
+      await invoke("rehearse_start");
+      // 돈이 없으면 발행이 안 된다. 켜자마자 만들어 둔다 — 묻지 않는다.
+      await rhSay("연습용 돈을 만드는 중…");
+      await invoke("rehearse_fund");
+      await rhSay("준비됐습니다. 「이 이름으로 해 보기」를 눌러 보세요.");
+      await rhPaint();
+    } catch (e) {
+      await rhSay(String((e as Error)?.message || e), true);
+    }
+  };
+
+  (document.getElementById("rh-try") as HTMLElement).onclick = async () => {
+    const name = ($("i-name") as HTMLInputElement).value.trim().toUpperCase();
+    if (!name) return void rhSay("먼저 이름을 정해 주세요.", true);
+    await rhSay(`「${name}」 을 연습으로 만드는 중…`);
+    try {
+      const r = await invoke<any>("rehearse_issue", {
+        name,
+        qty: parseFloat(($("i-qty") as HTMLInputElement).value) || 1,
+        units: parseInt(($("i-units") as HTMLInputElement).value) || 0,
+        reissuable: ($("i-reissuable") as HTMLInputElement).checked,
+      });
+      // ⚠️ 여기서 "발행했습니다" 라고만 쓰면 진짜와 헷갈린다. 연습이라고 적는다.
+      await rhSay(
+        `연습으로 만들었습니다. 진짜로 하시면 이대로 됩니다. (연습용 잔액 ${
+          Number(r?.balance || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })
+        } RVN)`,
+      );
+      await rhPaint();
+    } catch (e) {
+      // 연습에서 실패하는 편이 훨씬 낫다. 이유를 그대로 보여 준다.
+      await rhSay(
+        `연습에서 막혔습니다 — 진짜로 했어도 같았을 것입니다.\n${String((e as Error)?.message || e)}`,
+        true,
+      );
+    }
+  };
+
+  (document.getElementById("rh-reset") as HTMLElement).onclick = async () => {
+    if (!confirm("연습한 것을 전부 지울까요?\n연습이라 아무것도 잃지 않습니다.")) return;
+    await rhSay("지우는 중…");
+    try {
+      await invoke("rehearse_reset");
+      await rhSay("지웠습니다. 「연습 시작」부터 다시 하시면 됩니다.");
+      await rhPaint();
+    } catch (e) {
+      await rhSay(String((e as Error)?.message || e), true);
+    }
+  };
+}
+
 async function aiPickIssue(): Promise<void> {
   const input = ($("ai-issue") as HTMLInputElement).value.trim();
   const note = $("ai-issue-note");
@@ -6149,6 +6236,7 @@ window.addEventListener("DOMContentLoaded", () => {
   loadOrder();
   $("ai-shop-go").addEventListener("click", aiFillShop);
   $("ai-issue-go").addEventListener("click", () => void aiPickIssue());
+  wireRehearse();
   // 엔터로도 된다. 단추를 찾아 누르는 것보다 그 자리에서 치는 편이 빠르다.
   $("ai-issue").addEventListener("keydown", (e) => {
     if ((e as KeyboardEvent).key === "Enter") void aiPickIssue();

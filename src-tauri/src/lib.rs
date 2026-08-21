@@ -43,6 +43,7 @@ mod shop;
 mod upload;
 mod spec;
 mod lockbox;
+mod rehearse;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -110,6 +111,13 @@ pub fn run() {
             shop::incoming_payments,
             shop::split_payment,
             spec::suggest_setup,
+            rehearse::rehearse_start,
+            rehearse::rehearse_stop,
+            rehearse::rehearse_reset,
+            rehearse::rehearse_fund,
+            rehearse::rehearse_confirm,
+            rehearse::rehearse_status,
+            rehearse::rehearse_issue,
             addrbook::addr_book,
             addrbook::watch_add,
             addrbook::recv_qr,
