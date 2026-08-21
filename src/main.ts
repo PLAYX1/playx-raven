@@ -1694,7 +1694,11 @@ async function refreshKeys() {
 
     $("key-note").textContent = have.length ? `${have.length}곳 연결됨` : "아직 없습니다";
     // 대화창은 쓸 수 있는 곳이 하나라도 있을 때만 의미가 있다.
-    $("chat-open").style.display = have.length ? "" : "none";
+    // 🔴 여태 API 키가 없으면 이 버튼을 **숨겼다.** 그러면 Ravi 가 있다는
+    // 것을 알 길이 없다 — 키를 넣을 이유도 못 만난다.
+    // 키가 없을 때는 대화창 안에서 그 자리에 넣게 되어 있으므로(chatNeedsKey),
+    // 버튼은 **늘 보인다.**
+    $("chat-open").style.display = "";
     // Without a key the AI boxes are dead weight; say why rather than failing
     // on click.
     ["ai-shop-note", "ai-menu-note"].forEach((id) => {

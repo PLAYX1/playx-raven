@@ -69,7 +69,14 @@ pub fn conf_options() -> Value {
             "recommended": 1, "off": 0,
             "what": "주소별로 어떤 자산을 갖고 있는지 조회할 수 있게 됩니다. 출입 확인이 체인에서 직접 됩니다.",
             "cost": "디스크가 조금 늘고, 켤 때 재색인에 몇 시간 걸립니다",
-            "warn": "켜는 순간부터 노드가 처음부터 다시 훑습니다. 영업 중에 켜지 마세요.",
+            // 🔴 이 스위치는 **켜는 것만으로는 아무 일도 안 한다.**
+            // 코어가 자산 색인 변경을 검사하지 않는다(init.cpp 에 그 분기가
+            // 없다 — txindex·addressindex 에는 있는데 assetindex 에만 없다).
+            // 그래서 켜고 다시 켜면 노드는 **말없이 옛 상태로** 돌고,
+            // 배당은 계속 "색인이 꺼져 있습니다" 를 답한다.
+            // `-reindex` 를 붙여 다시 켜야 한다 — 그건 우리가 해 준다.
+            "needs_reindex": true,
+            "warn": "켜고 다시 시작하면 노드가 처음부터 다시 훑습니다 — 34GB 라 몇 시간 걸리고, 그동안 손님 주문 확인이 멈춥니다. 밤에 켜세요.",
             "danger": true
         },
         {
@@ -239,6 +246,43 @@ mod defaults {
         assert!(
             src.contains(r#""addressindex", "server""#),
             "addressindex 가 관리 목록에 없습니다 — 켜도 저장이 안 됩니다"
+        );
+    }
+}
+
+/// 설정 파일이 자산 색인을 켜라고 하는가.
+///
+/// 노드를 켤 때 `-reindex` 를 붙여야 하는지 정하는 데 쓴다. 코어가 이 변경을
+/// 검사하지 않으므로(init.cpp 에 assetindex 분기가 없다) 우리가 챙긴다.
+pub fn wants_assetindex() -> bool {
+    std::fs::read_to_string(conf_path())
+        .ok()
+        .map(|t| {
+            t.lines().any(|l| {
+                let l = l.trim();
+                !l.starts_with('#') && (l == "assetindex=1" || l == "assetindex=true")
+            })
+        })
+        .unwrap_or(false)
+}
+
+#[cfg(test)]
+mod assetindex_tests {
+    /// 🔴 코어는 자산 색인이 바뀐 것을 **검사하지 않는다.** txindex 와
+    /// addressindex 에는 그 분기가 있는데 assetindex 에만 없다. 그래서 설정만
+    /// 바꾸고 켜면 노드가 **말없이 옛 상태로** 돌고, 배당은 계속 안 된다.
+    /// 우리가 `-reindex` 를 붙여야 한다.
+    #[test]
+    fn we_add_reindex_because_core_will_not_ask() {
+        let src = include_str!("services.rs");
+        assert!(
+            src.contains("wants_assetindex") && src.contains("\"-reindex\""),
+            "자산 색인을 켰는데 -reindex 를 안 붙인다 — 아무 일도 안 일어난다",
+        );
+        // 켤 때마다 붙이면 그 가게는 영영 장사를 못 한다.
+        assert!(
+            src.contains("reindexed-assetindex"),
+            "한 번만 붙였다는 표시가 없다 — 켤 때마다 34GB 를 다시 훑는다",
         );
     }
 }

@@ -110,9 +110,24 @@ pub async fn services_start() -> Result<Value, String> {
         skipped.push(json!({ "what": "노드", "why": "이미 켜져 있습니다" }));
     } else if let Some(path) = which("ravend") {
         let datadir = crate::paths::raven_dir().to_string_lossy().to_string();
-        match Command::new(&path)
-            .arg(format!("-datadir={datadir}"))
-            .arg("-server=1")
+
+        // 🔴 자산 색인을 켜면 **다시 훑어야 한다.** 그런데 코어는 자산 색인이
+        // 바뀐 것을 **검사하지 않는다**(init.cpp 에 txindex·addressindex 분기는
+        // 있는데 assetindex 만 없다). 그래서 설정만 바꾸고 켜면 노드는 말없이
+        // 옛 상태로 돌고, 배당은 계속 "색인이 꺼져 있습니다" 를 답한다.
+        //
+        // 우리가 대신 붙인다. 한 번 붙이고 나면 표시를 남겨 다음부터는 안 붙인다 —
+        // 켤 때마다 34GB 를 다시 훑으면 그 가게는 영영 장사를 못 한다.
+        let want_asset = crate::conf::wants_assetindex();
+        let stamp = crate::paths::app_file("reindexed-assetindex");
+        let need_reindex = want_asset && !stamp.exists();
+
+        let mut cmd = Command::new(&path);
+        cmd.arg(format!("-datadir={datadir}")).arg("-server=1");
+        if need_reindex {
+            cmd.arg("-reindex");
+        }
+        match cmd
             // Detached: the node keeps running if this app is closed, which is
             // what a shop wants — payments keep being recorded overnight.
             .arg("-daemon")
@@ -122,7 +137,19 @@ pub async fn services_start() -> Result<Value, String> {
         {
             Ok(child) => {
                 remember("node", child);
-                started.push(json!({ "what": "노드", "note": "따라잡는 데 몇 분 걸립니다" }));
+                if need_reindex {
+                    // 한 번만 붙인다. 표시를 남기지 않으면 켤 때마다 다시 훑는다.
+                    let _ = std::fs::write(&stamp, "1");
+                }
+                started.push(json!({
+                    "what": "노드",
+                    "note": if need_reindex {
+                        "자산 색인을 만드느라 처음부터 다시 훑습니다 — 몇 시간 걸립니다. 그동안 주문 확인이 멈춥니다."
+                    } else {
+                        "따라잡는 데 몇 분 걸립니다"
+                    },
+                    "reindexing": need_reindex,
+                }));
             }
             Err(e) => skipped.push(json!({ "what": "노드", "why": e.to_string() })),
         }
