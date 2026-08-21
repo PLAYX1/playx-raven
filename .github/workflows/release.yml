@@ -99,7 +99,12 @@ jobs:
 
       # 리눅스만 재료를 따로 깐다. 나머지 둘은 OS 에 이미 있다.
       - name: 리눅스 재료
-        if: matrix.os == 'ubuntu-22.04'
+        # 🔴 여기가 `ubuntu-22.04` 로 남아 있어서 **이 단계가 통째로 건너뛰어졌다.**
+        # 러너 라벨을 -latest 로 바꾸면서 이 조건을 안 고쳤다. 재료를 아무리
+        # 늘려도 소용이 없었던 진짜 이유다 — 두 번을 엉뚱한 데서 헤맸다.
+        #
+        # 라벨을 다시 적지 않고 **라벨이 무엇이든** 리눅스면 돌게 한다.
+        if: startsWith(matrix.os, 'ubuntu')
         run: |
           sudo apt-get update
           # 🔴 webkit2gtk 만으로는 모자란다. 실측 실패: pangocairo·pango·
