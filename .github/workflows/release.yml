@@ -74,14 +74,23 @@ jobs:
           - os: macos-14          # 애플 실리콘 (M1 이상)
             target: aarch64-apple-darwin
             label: mac-apple-silicon
-          - os: macos-13          # 인텔 맥
+          # 🔴 macos-13(인텔)·ubuntu-22.04 는 깃허브가 은퇴시키는 중이다.
+          # 은퇴한 라벨을 적으면 실패가 아니라 **영원히 큐에 남는다** —
+          # 실측: 이 넷이 10시간 대기, 같은 저장소의 ubuntu-latest 작업은
+          # 20초에 잡혔다. 오류가 안 나서 원인을 찾기가 특히 어렵다.
+          #
+          # 인텔 맥은 잠시 뺀다. 라벨을 확인한 뒤 다시 넣는다 —
+          # 없는 것보다 안 뜨는 것이 낫고, 지금은 맥 사장이 못 받는다.
+          - os: macos-latest      # 애플 실리콘 (인텔은 라벨 확인 후 다시)
             target: x86_64-apple-darwin
             label: mac-intel
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             label: windows
-          - os: ubuntu-22.04      # 22.04 로 고정 — 최신으로 올리면 glibc 가
-            target: x86_64-unknown-linux-gnu   # 새로워져서 옛 리눅스에서 안 돈다
+          # ⚠️ 옛 리눅스 호환을 위해 22.04 로 고정했었는데, 그 라벨이
+          # 은퇴 중이라 잡히지를 않는다. 도는 것이 먼저다.
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
             label: linux
 
     runs-on: ${{ matrix.os }}
@@ -98,6 +107,7 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
         with:
+          # 애플 실리콘 러너에서 인텔용도 만든다. macOS 는 두 대상을 다 지원한다.
           targets: ${{ matrix.target }}
 
       # 빌드가 10분 넘게 걸린다. 매번 처음부터 하면 판올림 한 번에 40분이다.
