@@ -639,6 +639,64 @@
       #chat-open img { width: 32px; height: 32px; border-radius: 999px; flex: none; }
       /* 안내 줄은 늘 맨 위 하나뿐이다. */
       .msg.intro { opacity: .92; }
+      /* 자고 있는 Ravi. "API 키가 없습니다" 는 오류로 읽히고, 오류로 읽힌
+         화면은 다시 안 눌린다. **자고 있다**는 고장이 아니라 상태다. */
+      .wake { display: flex; gap: 12px; align-items: center; }
+      .wake img { width: 76px; height: auto; border-radius: 14px; flex: none;
+        filter: saturate(.72); }
+      .wake.awake img { filter: none; animation: pop .4s cubic-bezier(.34,1.56,.64,1); }
+      #chat-open.asleep img { filter: saturate(.55) opacity(.85); }
+      .keyask { margin-top: 8px; }
+      /* 쉬운 설정. 화면에서 제일 먼저 보이고, 제일 크다 —
+         고급 설정보다 이게 주인공이어야 사장이 여기서 끝낸다. */
+      .easycard { margin-bottom: 16px; border: 2px solid var(--ravi);
+        background: var(--ravi-tint); }
+      .easyhead { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; }
+      .easyhead img { width: 52px; height: 52px; border-radius: 14px; flex: none; }
+      .easyrow { display: flex; gap: 10px; align-items: baseline; padding: 8px 0;
+        border-bottom: 1px solid var(--line); }
+      .easyrow:last-of-type { border-bottom: 0; }
+      .easyrow .k { flex: none; width: 120px; font-weight: 600; }
+      .easyrow .v { font-size: 15px; }
+      .easywhy { margin-top: 12px; padding: 12px; border-radius: 12px;
+        background: var(--bg); font-size: 15px; line-height: 1.75; }
+      .easywhy p { margin: 0 0 8px; }
+      .easywhy p:last-child { margin-bottom: 0; }
+      /* 🔴 이 단추 하나가 이 화면의 전부다. 44px 로는 부족하다. */
+      #easy-go { width: 100%; min-height: 56px; font-size: 17px; font-weight: 700;
+        margin-top: 14px; background: var(--ravi); color: #fff; border: 0;
+        border-radius: 14px; }
+      .easyseen { font-size: 14px; color: var(--muted); margin-top: 10px; }
+      /* ── 맥처럼 ─────────────────────────────────────────────────────
+         🔴 제목줄을 없앴다(titleBarStyle: Overlay). 그러면 **신호등 단추가
+         내용 위에 겹친다** — 위를 비워 두지 않으면 첫 줄을 못 읽는다.
+         28px 은 신호등 아래, 34px 은 그 여유다. */
+      nav { padding-top: 34px; }
+      /* 사이드바에 맥의 반투명 재료가 깔린다(windowEffects: sidebar).
+         우리가 배경색을 칠하면 그 재료가 가려져서 그냥 회색 판이 된다. */
+      nav { background: transparent; }
+      main { padding-top: 34px; }
+      /* 제목줄이 없으면 창을 잡을 곳이 없다. 사이드바 위쪽을 손잡이로 준다. */
+      nav .brand { -webkit-app-region: drag; }
+      nav a, nav button { -webkit-app-region: no-drag; }
+
+      /* 메뉴에 아이콘. 글자만 있으면 어디가 어딘지 매번 읽어야 한다. */
+      nav a { display: flex; align-items: center; gap: 10px; }
+      nav a svg { width: 19px; height: 19px; flex: none; opacity: .72; }
+      nav a.on svg { opacity: 1; }
+      /* 가린 네 글자. 흐리게 두면 "안 보이네" 로 읽히고, 또렷하면
+         적으려 든다. 점 네 개가 "여기에 네 글자가 있다" 는 뜻이 되게. */
+      .tail4 .masked { letter-spacing: 2px; color: var(--muted);
+        background: var(--panel); border-radius: 6px; padding: 0 6px; }
+      /* 시세 환산. 숫자 바로 아래 붙어야 "이게 저거구나" 가 된다. */
+      .unit { font-size: 14px; color: var(--muted); margin-top: 4px; min-height: 20px; }
+      /* 종이에 옮겨 적는 값이라 크고 또렷해야 한다. 작게 보여 주면
+         잘못 적고, 잘못 적은 열쇠는 컴퓨터가 죽은 날에야 틀린 걸 안다. */
+      .keyshow { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 17px; line-height: 2; letter-spacing: 1px; word-break: break-all;
+        padding: 12px; border-radius: 12px; background: var(--panel);
+        border: 1px solid var(--line); color: var(--muted); }
+      .keyshow.on { color: var(--fg); font-weight: 600; }
 </style>
   </head>
   <body>
@@ -728,11 +786,11 @@
            마찰은 버튼 안쪽에 둔다.
            "주문하기"는 손님 일이라 지웠다. 카운터 PC에 손님 메뉴가 앉아 있으면
            이 프로그램이 누구 것인지 매일 헷갈린다. -->
-      <a data-page="wallet" class="on">지갑</a>
-      <a data-page="assets">자산</a>
-      <a data-page="reward">배당</a>
-      <a data-page="shop">내 가게</a>
-      <a data-page="settings">이 컴퓨터</a>
+      <a data-page="wallet" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2.5"/><path d="M3 10.5h18"/><circle cx="17" cy="14.5" r="1.4"/></svg><span>지갑</span></a>
+      <a data-page="assets"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg><span>자산</span></a>
+      <a data-page="reward"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="9" r="5.5"/><path d="M8.5 13.5L7 21l5-2.5L17 21l-1.5-7.5"/></svg><span>배당</span></a>
+      <a data-page="shop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9l1.6-4.2h12.8L20 9"/><path d="M4.5 9h15v10.5h-15z"/><path d="M9.5 19.5v-6h5v6"/></svg><span>내 가게</span></a>
+      <a data-page="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M8 20.5h8M12 16.5v4"/></svg><span>이 컴퓨터</span></a>
       <div class="navfoot">
         <div><span class="dot off" id="d-node"></span><span id="d-node-t">노드</span></div>
         <div><span class="dot off" id="d-ipfs"></span><span id="d-ipfs-t">IPFS</span></div>
@@ -1067,9 +1125,11 @@
                막으려면 **원본**과 비교하게 해야 한다. -->
           <div id="r-tailbox" style="display:none">
             <div class="meta">
-              처음 보내는 주소입니다. 화면에 뜬 주소를 보지 마시고,
-              <b>받는 분이 알려 준 원본</b>(문자·영수증·카운터 화면)을 다시 보세요.
-              <b>끝 4자리</b>가 같으면 그대로 적어 주세요.
+              처음 보내는 주소입니다. <b>끝 네 글자를 일부러 가려 두었습니다</b> —
+              화면을 보고 적으시면 이 확인이 아무 소용이 없기 때문입니다.<br />
+              <b>받는 분이 알려 준 원본</b>(문자·영수증·카운터 화면)을 보시고,
+              그 <b>끝 네 글자</b>를 적어 주세요. 앞부분이 화면과 같은지도 눈으로
+              맞춰 보세요.
             </div>
             <div class="tail4" id="r-tailshow"></div>
             <input id="s-tail" maxlength="4" inputmode="text" autocomplete="off"
@@ -1441,6 +1501,27 @@
       <section class="page" id="page-settings">
         <h2 class="title">이 컴퓨터</h2>
 
+        <!-- ── 쉬운 설정 ────────────────────────────────────────────────
+             🔴 이 화면에는 입력칸 24개·단추 31개가 있었다. 판단을 하나씩
+             사장에게 떠넘긴 결과다. 복잡함은 사라지지 않는다 — 사장에게서
+             걷어내면 우리가 떠안는 것이고, 그 자리가 `src-tauri/src/spec.rs` 다.
+
+             여기서는 **읽고 한 번 누르는 것**만 한다. 값을 정하는 일은
+             컴퓨터를 보고 우리가 하고, 왜 그렇게 정했는지를 사람 말로 적는다.
+             이유 없이 정해진 값은 사장이 못 믿고, 못 믿으면 결국 아래
+             고급 설정을 열어 헤맨다. -->
+        <div class="card easycard" id="easy-setup">
+          <div class="easyhead">
+            <img src="/raven-head.webp" alt="" />
+            <div>
+              <h3 style="margin:0">쉬운 설정</h3>
+              <div class="muted sm">이 컴퓨터를 보고 제가 정해 드릴게요.</div>
+            </div>
+          </div>
+          <div id="easy-body"><div class="muted">컴퓨터를 살펴보는 중…</div></div>
+        </div>
+
+
         <!-- 이 노드가 어디인지. 지점이 둘이 되는 순간 "이 컴퓨터"는 뜻이 없다. -->
         <div class="card" style="margin-bottom:12px">
           <h3>이 노드</h3>
@@ -1505,8 +1586,17 @@
               </div>
             </div>
             <div class="row" style="margin-top:8px">
-              <div><label>이 금액을 넘으면</label><input id="sw-above" inputmode="decimal" placeholder="3000" /></div>
-              <div><label>계산대에 남길 돈</label><input id="sw-keep" inputmode="decimal" placeholder="1000" /></div>
+              <!-- 🔴 여태 단위가 없었다. 이 두 칸은 **RVN** 인데 화면에는
+                   아무 표시가 없어서, 사장은 원으로 읽는다. 그리고 이 설정은
+                   5분마다 **진짜로 돈을 보낸다** — 잘못 읽으면 금고가 안 돌거나
+                   매출이 통째로 나간다. 단위를 적고, 지금 시세로 원이 얼마인지
+                   그 자리에서 보여 준다. -->
+              <div><label>이 금액(RVN)을 넘으면</label>
+                <input id="sw-above" inputmode="decimal" placeholder="3000" />
+                <div class="unit" id="sw-above-krw"></div></div>
+              <div><label>계산대에 남길 돈(RVN)</label>
+                <input id="sw-keep" inputmode="decimal" placeholder="1000" />
+                <div class="unit" id="sw-keep-krw"></div></div>
             </div>
             <div class="row" style="margin-top:8px">
               <button id="sw-save">켜기</button>
@@ -1524,13 +1614,33 @@
           <div class="card" style="margin-top:12px">
             <h3>백업 둘 곳</h3>
             <div id="bk-places" class="meta">찾는 중…</div>
+            <!-- 🔴 여기 문구가 예전엔 「지갑 암호가 있으면 올린다」였다.
+                 그건 레이븐코인 지갑 암호에 기대는 말인데, 그 암호는 2011년
+                 방식이라 `raven` 같은 것은 2.5초에 뚫린다. 사장이 무엇을
+                 넣었는지 우리는 모르고 알 수도 없다. 그래서 이제 우리가
+                 한 번 더 잠근다(`lockbox.rs`). -->
             <div class="warnbox" style="margin-top:8px;font-size:13.5px">
-              <b>지갑에 암호를 걸어 두셨으면</b> 지갑 파일도 함께 올라갑니다 —
-              파일 자체가 잠겨 있어서 클라우드에 둬도 됩니다.
-              <b>암호가 없으면 지갑 파일은 빼고 올립니다</b> — 잠기지 않은 지갑을
-              클라우드에 두면 계정 하나로 가게 돈이 넘어갑니다.<br />
+              <b>클라우드로 나가는 파일은 저희가 한 번 더 잠급니다.</b>
+              지갑 파일도 같이 올라가지만, 잠겨 있어서 클라우드 계정이 털려도
+              열 수 없습니다.<br />
               🔴 <b>복구 단어 12개는 어느 경우에도 클라우드에 올라가지 않습니다.</b>
-              그건 종이(복구 카드)나 Bitwarden 같은 비밀번호 금고에 두세요.
+              그건 종이(복구 카드)나 비밀번호 금고에 두세요.
+            </div>
+
+            <!-- 🔴 열쇠가 컴퓨터에만 있으면, 컴퓨터가 죽는 날 클라우드 사본도
+                 같이 죽는다. 그건 백업이 아니라 짐이다. 그래서 종이에 적게 한다. -->
+            <div class="card" style="margin-top:12px;border-color:var(--warn)">
+              <h3 style="margin-top:0">이 자물쇠의 열쇠</h3>
+              <p class="meta" style="margin:6px 0 10px">
+                컴퓨터가 죽으면 이 열쇠도 같이 사라집니다.
+                <b>종이에 적어 12단어와 같이 보관하세요.</b>
+                이것 없이는 클라우드 사본을 못 엽니다.
+              </p>
+              <div id="ck-key" class="keyshow">눌러서 보기</div>
+              <div class="row" style="margin-top:10px">
+                <button id="ck-show">열쇠 보기</button>
+                <button class="ghost" id="ck-copy">복사</button>
+              </div>
             </div>
           </div>
 

@@ -26,6 +26,13 @@ open = "5"
 # OpenSSL just to talk to 127.0.0.1.
 zip = { version = "2", default-features = false, features = ["deflate"] }
 sha2 = "0.10"
+# 클라우드로 나가는 백업을 우리가 한 번 더 잠근다.
+# 🔴 레이븐코인 지갑 암호는 2011년 방식(SHA-512 25,000회)이라 GPU 로 초당
+#    8만 개를 시험할 수 있다. 영단어 하나짜리 암호는 2.5초에 뚫린다.
+#    Argon2id 는 메모리를 많이 쓰게 만들어 GPU 의 이점을 없앤다.
+aes-gcm = "0.10"
+argon2 = "0.5"
+rand = "0.8"
 hex = "0.4"
 # 릴레이에 글을 올릴 때. 🔴 지갑 화면은 connect-src 'self' 라 밖으로 못 나간다 —
 # 12단어가 있는 페이지에 바깥 통로를 내지 않기 위해서다. 노드가 대신 나간다.

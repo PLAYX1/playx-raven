@@ -371,8 +371,13 @@ fn customer_path(path: &str) -> bool {
             | "/api/shop"
             | "/api/shops"
             | "/api/shop-profile"
+            | "/api/ipfs-kind"
+            | "/i18n.js"
+            | "/ravi.js"
+            | "/api/ai-status"
             | "/api/shop-history"
             | "/api/nostr/publish"
+            | "/api/nostr/query"
             | "/api/directions"
             | "/api/ask"
             | "/api/order"
@@ -507,6 +512,15 @@ async fn api_claim(
         );
     }
 
+    // 이 물건이 얼마인지. 손님이 보낸 값이 아니라 **가게가 정한 값**이다 —
+    // 커피 주문에서 배운 것이 여기도 그대로 적용된다.
+    let offer_rvn = state
+        .offers
+        .lock()
+        .ok()
+        .and_then(|m| m.get(&body.id).and_then(|o| o.get("rvn")).and_then(Value::as_f64))
+        .unwrap_or(0.0);
+
     let address = match crate::raven::new_address(format!("sell:{}", body.id)).await {
         Ok(a) => a,
         Err(e) => return (StatusCode::BAD_GATEWAY, Json(json!({ "error": e }))),
@@ -518,7 +532,17 @@ async fn api_claim(
     // 즉시 디스크에. 손님이 주소를 적은 직후 앱이 죽으면, 그 손님은 돈을 내고도
     // "모르는 주문"이 된다.
     persist_orders(&state);
-    (StatusCode::OK, Json(json!({ "address": address })))
+    // 🔴 벤딩머신에는 수수료 배선이 없었다. 커피 주문에는 넣었는데 여기는
+    // 다른 길이라 빠졌다 — 온라인으로 자산을 파는 것도 똑같이 우리 프로그램이
+    // 하는 일이다.
+    //
+    // 손님이 내는 값은 그대로다. 가게가 조금 덜 받는다.
+    let fee_cfg = crate::shop::fee_config();
+    let split = crate::shop::split_payment(offer_rvn, fee_cfg.0, fee_cfg.1);
+    (
+        StatusCode::OK,
+        Json(json!({ "address": address, "fee": split })),
+    )
 }
 
 /// The shop moves an order along. Called from the desktop and the owner's phone.
@@ -1060,6 +1084,66 @@ async fn api_directions(
     (StatusCode::OK, Json(crate::place::directions_links(lat, lon, label)))
 }
 
+/// 손님 폰이 "이게 그림이냐 음악이냐" 를 묻는 자리.
+///
+/// 🔴 파일 이름으로 짐작하지 않는다 — **CID 에는 이름이 없다.** 게이트웨이에
+/// HEAD 한 번 보내 실제 Content-Type 을 보는 것이 유일하게 맞는 방법이다.
+///
+/// 여태 판매 페이지는 무엇이든 `<img>` 로 그렸다. 그림은 보였지만 음악은
+/// **깨진 그림 아이콘 하나**였고, 사는 사람은 들어보지도 못하고 사야 했다.
+///
+/// 답은 `image | audio | video | other` 한 낱말뿐이다. 손님 폰도 부르는
+/// 경로라 안쪽 사정을 더 얹지 않는다.
+/// 지갑이 「내가 올린 것」을 채우려고 부르는 자리.
+///
+/// 개인키는 오지 않는다 — 공개키만 온다. 누가 썼는지는 원래 릴레이에 공개된 값이다.
+#[derive(serde::Deserialize)]
+struct QueryBody {
+    filter: QueryFilter,
+}
+
+#[derive(serde::Deserialize)]
+struct QueryFilter {
+    #[serde(default)]
+    kinds: Vec<i64>,
+    #[serde(default)]
+    authors: Vec<String>,
+}
+
+async fn api_nostr_query(Json(body): Json<QueryBody>) -> impl IntoResponse {
+    match crate::nostrpub::nostr_query(body.filter.kinds, body.filter.authors).await {
+        Ok(v) => (StatusCode::OK, Json(v)),
+        Err(e) => (StatusCode::BAD_GATEWAY, Json(json!({ "error": e }))),
+    }
+}
+
+async fn api_ipfs_kind(
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> impl IntoResponse {
+    let cid = q.get("cid").cloned().unwrap_or_default();
+    // CID 는 영숫자다. 딴 글자가 섞이면 우리 게이트웨이 주소를 벗어나는
+    // 요청이 될 수 있다.
+    if cid.is_empty() || cid.len() > 80 || !cid.chars().all(|c| c.is_ascii_alphanumeric()) {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "error": "cid 없음" })));
+    }
+    let kind = match crate::ipfs::content_kind(cid).await {
+        Ok(v) => {
+            if v["is_audio"].as_bool() == Some(true) {
+                "audio"
+            } else if v["is_video"].as_bool() == Some(true) {
+                "video"
+            } else if v["is_image"].as_bool() == Some(true) {
+                "image"
+            } else {
+                "other"
+            }
+        }
+        // IPFS 가 안 돌아도 판매는 계속돼야 한다. 미리보기는 덤이다.
+        Err(_) => "image",
+    };
+    (StatusCode::OK, Json(json!({ "kind": kind })))
+}
+
 /// One shop's published profile, read from IPFS by this node.
 async fn api_shop_profile(
     Query(q): Query<std::collections::HashMap<String, String>>,
@@ -1145,6 +1229,76 @@ struct AskBody {
 /// Rate-limited by nothing yet, which is a real gap: the shop pays per call.
 /// Left visible rather than hidden behind a silent cap so it is fixed rather
 /// than forgotten.
+/// 라비가 깨어 있는지. **폰이 누르기 전에** 알 수 있어야 한다.
+///
+/// 이게 없으면 폰은 눌러 봐야 안다. 손님이 눌러서 "이 가게는 자동 응대를 켜지
+/// 않았습니다" 를 받는 것은 안내가 아니라 실패다 — 손님이 할 수 있는 게 없다.
+///
+/// 🔴 **어느 회사 키인지, 키 자체는 절대 내보내지 않는다.** 여기 답은 예/아니오
+/// 하나뿐이다. 손님 폰도 부를 수 있는 경로라, 무엇이든 더 얹으면 그게 새는 것이다.
+/// 사장·직원이 자기 폰에서 라비에게 묻는 자리.
+///
+/// 🔴 `/api/ask` 와 무엇이 다른가 — **답하는 자세가 다르다.**
+/// 손님용은 가게를 대신해 응대하고, 우리 이야기를 하지 않는다. 사장용은 사장
+/// 편에 서서 이 프로그램의 기능까지 같이 본다(`knowledge::owner_brief`).
+/// 두 자세가 섞이면 손님 화면에 우리 광고가 새거나, 사장이 물었는데 "저는 이
+/// 가게 직원입니다" 라고 답한다.
+///
+/// 🔴 이 경로는 `customer_path` 에 **넣지 않았다.** 바깥에서 들어온 요청은
+/// 관리자 잠금에 걸린다 — 남의 가게 노드에 대고 사장 자세로 물을 수 없다.
+///
+/// 열쇠는 **노드에만** 있다. 폰은 묻기만 하고, 답은 가게 컴퓨터가 만든다.
+/// 폰에 키를 넣지 않는 이유는 `web/ravi.js` 첫 주석에 적어 뒀다.
+async fn api_owner_ask(
+    State(state): State<ServerState>,
+    Json(body): Json<AskBody>,
+) -> impl IntoResponse {
+    let provider = state.ai.lock().map(|a| a.clone()).unwrap_or_default();
+    if provider.is_empty() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({
+                "error": "라비가 아직 자고 있어요. 가게 컴퓨터의 PLAY X Raven → 설정 → AI 에서 한 번만 넣어 주세요."
+            })),
+        );
+    }
+    if body.question.chars().count() > 500 {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "error": "질문이 너무 깁니다." })));
+    }
+    // 예산은 손님 응대와 **같은 지갑**에서 나간다. 사장이 폰으로 길게 놀다가
+    // 손님 응대가 멈추면 그건 장사 사고다 — 같이 세는 편이 정직하다.
+    let left = match take_ask_budget(&state) {
+        Ok(n) => n,
+        Err(e) => return (StatusCode::TOO_MANY_REQUESTS, Json(json!({ "error": e }))),
+    };
+
+    let shop = state.shop.lock().map(|s| s.clone()).unwrap_or(json!({}));
+    let q = format!("{}\n\n{}", crate::knowledge::owner_brief(), body.question);
+    match crate::ai::ai_answer_any(provider, q, shop).await {
+        Ok(v) => (
+            StatusCode::OK,
+            Json(json!({
+                "answer": v.get("text").and_then(Value::as_str).unwrap_or_default(),
+                "left": left,
+            })),
+        ),
+        Err(e) => (StatusCode::BAD_GATEWAY, Json(json!({ "error": e }))),
+    }
+}
+
+async fn api_ai_status(State(state): State<ServerState>) -> impl IntoResponse {
+    let awake = state.ai.lock().map(|a| !a.is_empty()).unwrap_or(false);
+    Json(json!({ "awake": awake }))
+}
+
+/// 폰에 그리는 라비. 사장 폰·직원 폰·손님 폰이 같은 파일을 쓴다.
+async fn api_ravi_js() -> impl IntoResponse {
+    (
+        [(axum::http::header::CONTENT_TYPE, "application/javascript; charset=utf-8")],
+        include_str!("../../web/ravi.js"),
+    )
+}
+
 async fn api_ask(State(state): State<ServerState>, Json(body): Json<AskBody>) -> impl IntoResponse {
     let provider = state.ai.lock().map(|a| a.clone()).unwrap_or_default();
     if provider.is_empty() {
@@ -1529,6 +1683,19 @@ const FACES: [(&str, &[u8]); 6] = [
     ("sleep", include_bytes!("../../web/raven-sleep.webp")),
 ];
 
+/// 손님 화면의 4개 국어 사전. 화면과 같이 바이너리에 굽는다 —
+/// 가게 노드는 폴더를 들고 다니지 않는다.
+async fn api_i18n() -> impl IntoResponse {
+    (
+        StatusCode::OK,
+        [
+            ("content-type", "application/javascript; charset=utf-8"),
+            ("cache-control", "public, max-age=3600"),
+        ],
+        include_str!("../../web/i18n.js"),
+    )
+}
+
 async fn raven_face(axum::extract::Path(name): axum::extract::Path<String>) -> impl IntoResponse {
     // `raven-happy.webp` 도 `happy` 도 받는다. 예전 화면이 부르던 `.png` 이름도
     // 같은 그림으로 답한다 — 옛 화면이 캐시에 남아 있어도 깨지지 않게.
@@ -1895,14 +2062,20 @@ pub async fn start_phone_server(
         .route("/api/chain/send", post(chain_send_route))
         .route("/api/shop", get(api_shop))
         .route("/api/ask", post(api_ask))
+        .route("/api/owner-ask", post(api_owner_ask))
         .route("/api/order", post(api_order))
         .route("/api/qr", get(api_qr))
+        .route("/i18n.js", get(api_i18n))
+        .route("/ravi.js", get(api_ravi_js))
+        .route("/api/ai-status", get(api_ai_status))
         .route("/api/shop-history", get(api_shop_history))
         .route("/api/nostr/publish", post(api_nostr_publish))
+        .route("/api/nostr/query", post(api_nostr_query))
         .route("/{name}.webp", get(raven_face))
         .route("/{name}.png", get(raven_face))
         .route("/shops", get(shops_page))
         .route("/api/shops", get(api_shops))
+        .route("/api/ipfs-kind", get(api_ipfs_kind))
         .route("/api/shop-profile", get(api_shop_profile))
         .route("/api/directions", get(api_directions))
         .route("/buy", get(buy_page))

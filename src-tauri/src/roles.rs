@@ -88,6 +88,16 @@ pub fn allowed(role: &str, path: &str) -> bool {
                 // 손님이 내민 표가 진짜인지 보는 것까지. 확인(check)만 열고
                 // 입장 처리(in)는 열지 않는다 — 읽는 일과 쓰는 일은 다르다.
                 || path == "/api/scan/check"
+                // 라비에게 묻기. 직원도 "부분 환불은 어떻게 하나요" 를 물을 수
+                // 있어야 한다 — 못 물으면 사장에게 전화하고, 그 사이 손님이 선다.
+                //
+                // ⚠️ 답은 노드가 **사장 열쇠**로 만든다. 직원 폰에는 열쇠가
+                // 없고 넣지도 않는다(`web/ravi.js` 첫 주석). 예산은 손님 응대와
+                // 같은 지갑에서 나가므로 직원이 길게 놀면 손님 응대가 멈춘다 —
+                // 그건 `take_ask_budget` 이 막는다.
+                || path == "/api/owner-ask"
+                || path == "/api/ai-status"
+                || path == "/ravi.js"
                 || path == "/staff"
         }
         "scanner" => path.starts_with("/api/scan/") || path == "/scan",

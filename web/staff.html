@@ -144,6 +144,24 @@
         button:active, .btn:active { transform: none; }
         button:active::after, .pop, .shimmer, .risein { animation: none; }
       }
+      /* 사장 폰의 라비. 카드 하나로 끝난다 — 화면을 옮기면 하던 일을 잃는다. */
+      .rowhead { display: flex; gap: 10px; align-items: center; }
+      .ravihead { width: 44px; height: 44px; border-radius: 12px; flex: none; }
+      .ravilog { margin-top: 10px; display: grid; gap: 8px; }
+      .ravilog div { padding: 10px 12px; border-radius: 12px; font-size: 15px;
+        line-height: 1.6; white-space: pre-wrap; }
+      .ravilog .me { background: var(--accent); color: #fff; justify-self: end;
+        max-width: 88%; }
+      .ravilog .ai { background: var(--ravi-tint); color: var(--fg); }
+      .raviform { display: flex; gap: 8px; margin-top: 10px; }
+      /* 🔴 16px 미만이면 아이폰 사파리가 탭할 때마다 화면을 확대한다. */
+      .raviform input { flex: 1; min-height: 48px; font-size: 16px; padding: 0 12px;
+        border: 1px solid var(--line); border-radius: 12px;
+        background: var(--bg); color: var(--fg); }
+      .raviform button { min-height: 48px; padding: 0 18px; font-size: 16px;
+        font-weight: 600; border: 0; border-radius: 12px;
+        background: var(--ravi); color: #fff; }
+      .ravibox.ravi-asleep img { filter: saturate(.55) opacity(.85); }
 </style>
   </head>
   <body>
@@ -173,6 +191,23 @@
       <input id="mq" placeholder="이름 · 전화 뒷자리" autocomplete="off" />
       <div id="mres"></div>
     </div>
+    <!-- 직원도 라비에게 묻는다. 🔴 여기에도 **키 칸이 없다** — 직원 폰에
+         키가 들어가면 그건 이미 사장의 키가 아니다. 답은 노드가 만든다.
+         (why: web/ravi.js 첫 주석) -->
+    <div class="pane" id="p-ravi" data-ravi>
+      <div class="rowhead">
+        <img src="/faces/raven-head.webp" alt="" class="ravihead" />
+        <div><b>라비</b>
+          <div class="sub">환불 절차든 회원 확인이든 물어보세요.</div></div>
+      </div>
+      <div id="raviLog" class="ravilog"></div>
+      <div class="raviform">
+        <input id="raviQ" type="text" placeholder="예: 부분 환불은 어떻게 하나요?"
+               autocomplete="off" enterkeyhint="send" />
+        <button id="raviGo">묻기</button>
+      </div>
+    </div>
+
 
     <p class="note">
       이 화면에서는 <b>지갑도 설정도 볼 수 없습니다.</b><br />
@@ -183,6 +218,7 @@
       <button class="on" data-p="orders">주문</button>
       <button data-p="member">회원 확인</button>
       <button data-p="refund">환불</button>
+      <button data-p="ravi">라비</button>
     </nav>
 
     <script>
@@ -361,12 +397,72 @@
                </div>`
             : `<div class="mrow"><div class="st no">찾지 못했습니다</div></div>`;
         } catch (e) {
-          $("mres").innerHTML = `<div class="mrow"><div class="st no">${e}</div></div>`;
+          $("mres").innerHTML = `<div class="mrow"><div class="st no">${e}</div></div>      `;
         }
       }
 
       load();
       setInterval(load, 20000);
     </script>
-  </body>
+      <script src="/ravi.js"></script>
+
+    <script>
+      /* 라비는 **가게 컴퓨터의 열쇠**로 깨어난다. 이 폰에는 키를 넣지 않는다.
+         (why: ravi.js 첫 주석) */
+      (async () => {
+        const st = await window.Ravi.status();
+        document.querySelectorAll("[data-ravi]").forEach((el) => {
+          if (st.awake) return;                 // 깨어 있으면 원래대로 둔다
+          el.innerHTML = window.Ravi.sleepingBox(window.t);
+        });
+      })();
+    </script>
+
+    <script>
+      /* 라비는 **노드의 열쇠**로 답한다. 이 폰에는 키가 없고, 넣지도 않는다. */
+      (() => {
+        const log = document.getElementById("raviLog");
+        const q = document.getElementById("raviQ");
+        const go = document.getElementById("raviGo");
+        if (!log || !q || !go) return;
+
+        const say = (who, text) => {
+          const d = document.createElement("div");
+          d.className = who;
+          d.textContent = text;           // 🔴 textContent. 답을 HTML 로 넣으면
+          log.appendChild(d);             //    모델이 뱉은 태그가 실행된다.
+          d.scrollIntoView({ block: "nearest" });
+        };
+
+        let busy = false;
+        const ask = async () => {
+          const text = q.value.trim();
+          if (!text || busy) return;
+          busy = true; go.disabled = true; q.value = "";
+          say("me", text);
+          const wait = document.createElement("div");
+          wait.className = "ai"; wait.textContent = "생각하는 중…";
+          log.appendChild(wait);
+          try {
+            const r = await fetch("/api/owner-ask", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ question: text }),
+            });
+            const j = await r.json();
+            wait.remove();
+            say("ai", j.answer || j.error || "답을 받지 못했습니다.");
+          } catch (e) {
+            wait.remove();
+            /* 가게 와이파이는 끊긴다. 원문 대신 다음에 할 일을 적는다. */
+            say("ai", "가게 컴퓨터에 닿지 못했습니다. 같은 와이파이인지 확인해 주세요.");
+          } finally {
+            busy = false; go.disabled = false; q.focus();
+          }
+        };
+        go.addEventListener("click", ask);
+        q.addEventListener("keydown", (e) => { if (e.key === "Enter") ask(); });
+      })();
+    </script>
+</body>
 </html>

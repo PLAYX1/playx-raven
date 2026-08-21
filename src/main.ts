@@ -792,6 +792,214 @@ async function phoneLost() {
 //
 // 색만으로 말하지 않는다. 색맹인 사람과 흑백 화면에서는 초록과 회색이 같다 —
 // 글자도 함께 바꾼다.
+
+// ── 쉬운 설정 ────────────────────────────────────────────────────────────
+//
+// 🔴 이 설정 화면에는 입력칸 24개·단추 31개가 있었다. 판단을 하나씩 사장에게
+// 떠넘긴 결과다. 노인이 쓸 화면이 아니다.
+//
+// 복잡함은 사라지지 않는다 — 사장에게서 걷어내면 **우리가 떠안는다.**
+// 그 자리가 `src-tauri/src/spec.rs` 이고, 여기는 그 답을 읽어 주는 곳이다.
+//
+// 규칙 셋:
+//   1. **값을 묻지 않는다.** 컴퓨터를 보고 우리가 정한다.
+//   2. **왜 그렇게 정했는지 적는다.** 이유 없는 값은 못 믿고, 못 믿으면
+//      결국 고급 설정을 열어 헤맨다.
+//   3. **못 읽은 것은 못 읽었다고 한다.** 0 으로 적으면 멀쩡한 컴퓨터에서
+//      "부족합니다" 가 되어 사장이 겁먹는다.
+
+
+/// 금고 칸에 적은 RVN 이 **지금 시세로 얼마인지** 그 자리에서 보여 준다.
+///
+/// 🔴 이 두 칸은 RVN 인데 화면에 단위가 없었다. 사장은 원으로 읽는다.
+/// 그리고 이 설정은 5분마다 **진짜로 돈을 보낸다**(`sweep.rs`). 잘못 읽으면
+/// 금고가 영영 안 돌거나, 반대로 계산대 돈이 통째로 나간다.
+///
+/// ⚠️ 시세를 못 가져오면 **아무 말도 안 한다.** 틀린 환산을 보여주느니
+/// 없는 편이 낫다 — 숫자가 붙어 있으면 그걸 믿고 정한다.
+async function paintSweepKrw(): Promise<void> {
+  let rate = 0;
+  try {
+    const r = await invoke<any>("rvn_rate", { currency: "KRW" });
+    rate = Number(r?.rate) || 0;
+  } catch {
+    return;
+  }
+  if (rate <= 0) return;
+  const pair: [string, string][] = [
+    ["sw-above", "sw-above-krw"],
+    ["sw-keep", "sw-keep-krw"],
+  ];
+  const draw = () => {
+    for (const [inId, outId] of pair) {
+      const inp = document.getElementById(inId) as HTMLInputElement | null;
+      const out = document.getElementById(outId);
+      if (!inp || !out) continue;
+      const n = Number(inp.value.trim());
+      out.textContent =
+        inp.value.trim() && isFinite(n) && n > 0
+          ? `지금 시세로 약 ${Math.round(n * rate).toLocaleString()}원`
+          : "";
+    }
+  };
+  for (const [inId] of pair) {
+    const inp = document.getElementById(inId);
+    if (inp) inp.addEventListener("input", draw);
+  }
+  draw();
+}
+
+
+// ── 클라우드 자물쇠 열쇠 ─────────────────────────────────────────────────
+//
+// 🔴 컴퓨터가 죽으면 이 열쇠도 같이 사라진다. 그러면 클라우드 사본은 열 수
+// 없는 덩어리가 되고, 그건 백업이 아니라 짐이다. 그래서 **눌러서 보고 종이에
+// 적으라고** 말한다.
+//
+// 처음부터 화면에 띄우지 않는 이유: 사장 뒤에 손님이 서 있을 수 있다.
+function wireCloudKey(): void {
+  const show = document.getElementById("ck-show");
+  const box = document.getElementById("ck-key");
+  const copy = document.getElementById("ck-copy");
+  if (!show || !box) return;
+  let key = "";
+  show.onclick = async () => {
+    try {
+      const r = await invoke<any>("cloud_key_show");
+      key = String(r?.key || "");
+      box.textContent = key;
+      box.classList.add("on");
+      show.textContent = "다시 감추기";
+      show.onclick = () => {
+        box.textContent = "눌러서 보기";
+        box.classList.remove("on");
+        wireCloudKey();
+      };
+    } catch (e) {
+      box.textContent = `열쇠를 읽지 못했습니다: ${String((e as Error)?.message || e)}`;
+    }
+  };
+  if (copy) {
+    copy.onclick = async () => {
+      if (!key) return;
+      try {
+        await navigator.clipboard.writeText(key);
+        copy.textContent = "복사했습니다";
+        // ⚠️ 클립보드에 오래 두지 않는다. 다른 프로그램이 읽는다.
+        setTimeout(() => { void navigator.clipboard.writeText(" "); copy.textContent = "복사"; }, 30_000);
+      } catch {
+        copy.textContent = "복사가 안 됩니다";
+      }
+    };
+  }
+}
+
+async function paintEasySetup(): Promise<void> {
+  const body = document.getElementById("easy-body");
+  if (!body) return;
+  let v: any;
+  try {
+    // 🔴 시간 제한이 없으면 **영원히 「살펴보는 중」** 이 된다. 지갑의
+    // 「불러오는 중…」이 똑같은 병이었다 — 끝나지 않는 화면은 고장으로 읽히고,
+    // 사장은 프로그램이 멈춘 줄 안다. 디스크가 잠자고 있으면 df 가 몇 초씩
+    // 걸리기도 한다.
+    v = await Promise.race([
+      invoke<any>("suggest_setup"),
+      new Promise((_, bad) =>
+        setTimeout(() => bad(new Error("오래 걸립니다")), 8000),
+      ),
+    ]);
+  } catch (e) {
+    // 못 본 것과 안 본 것은 다르다. 다음에 할 일을 그 자리에 둔다.
+    body.innerHTML = `<div class="easywhy">
+        <p>이 컴퓨터를 살펴보지 못했습니다.</p>
+        <p class="muted">${escapeHtml(String((e as Error)?.message || e))}</p>
+        <p>아래 <b>고급 설정</b>에서 직접 정하실 수 있고, 다시 눌러 보셔도 됩니다.</p>
+      </div>
+      <button id="easy-go">다시 살펴보기</button>`;
+    const retry = document.getElementById("easy-go");
+    if (retry) retry.onclick = () => void paintEasySetup();
+    return;
+  }
+
+  const seen = v?.seen || {};
+  const sug = v?.suggest || {};
+  // 못 읽은 값은 숫자 대신 "모름" 이다. 0 이라고 적지 않는다.
+  const num = (x: unknown, unit: string) =>
+    typeof x === "number" ? `${x}${unit}` : "모름";
+
+  const rows = [
+    ["블록체인",
+      sug.full_chain
+        ? "전부 이 컴퓨터에 둡니다"
+        : "가볍게 시작합니다"],
+    ["채굴", "꺼 둡니다"],
+    ["사진 저장", typeof sug.ipfs_gb === "number" ? `${sug.ipfs_gb}GB 까지` : "기본값"],
+  ];
+
+  body.innerHTML = `
+    ${rows.map(([k, val]) =>
+      `<div class="easyrow"><div class="k">${k}</div><div class="v">${val}</div></div>`,
+    ).join("")}
+    <div class="easywhy">
+      ${(v?.why || []).map((t: string) => `<p>${escapeHtml(t)}</p>`).join("")}
+    </div>
+    <button id="easy-go">이대로 시작하기</button>
+    <div class="easyseen">
+      살펴본 것 — 일꾼 ${num(seen.cores, "명")} ·
+      기억장치 ${num(seen.memory_gb, "GB")} ·
+      빈 공간 ${num(seen.free_gb, "GB")}
+    </div>`;
+
+  const go = document.getElementById("easy-go") as HTMLButtonElement | null;
+  if (!go) return;
+  go.onclick = async () => {
+    go.disabled = true;
+    go.textContent = "맞추는 중…";
+    try {
+      await applyEasySetup(sug);
+      go.textContent = "다 됐습니다";
+      // 다음에 할 일을 그 자리에 둔다. "완료" 만 뜨면 사장은 다음을 못 찾는다.
+      const must = (v?.must_do || []) as string[];
+      body.insertAdjacentHTML(
+        "beforeend",
+        `<div class="easywhy" style="margin-top:12px">
+           <p><b>이제 이 셋만 하시면 장사가 됩니다.</b></p>
+           <p>${must.map((m) => escapeHtml(m)).join(" · ")}</p>
+           <p class="muted">「내 가게」에서 하실 수 있어요.</p>
+         </div>`,
+      );
+    } catch (e) {
+      go.disabled = false;
+      go.textContent = "이대로 시작하기";
+      body.insertAdjacentHTML(
+        "beforeend",
+        `<div class="easywhy" style="margin-top:12px">맞추지 못했습니다.
+           ${escapeHtml(String((e as Error)?.message || e))}</div>`,
+      );
+    }
+  };
+}
+
+/**
+ * 정한 값을 실제로 넣는다.
+ *
+ * ⚠️ **여기서 하나라도 조용히 실패하면 「다 됐습니다」가 거짓말이 된다.**
+ * 그래서 실패는 던진다 — 화면이 성공했다고 말하는 일이 없게.
+ */
+async function applyEasySetup(sug: any): Promise<void> {
+  // 채굴은 끈다. 장사하는 컴퓨터가 뜨거워지고 느려지면 계산대가 느려지고,
+  // 그건 손님이 기다린다는 뜻이다.
+  if (sug?.mining === false) {
+    await invoke("miner_stop").catch(() => {
+      /* 원래 꺼져 있으면 이건 실패가 아니다 */
+    });
+  }
+  if (typeof sug?.ipfs_gb === "number") {
+    await invoke("ipfs_set_storage_max", { gb: sug.ipfs_gb });
+  }
+}
+
 async function paintStatusDots() {
   const set = (dot: string, label: string, ok: boolean, text: string) => {
     const d = document.getElementById(dot);
@@ -893,7 +1101,15 @@ function showPage(id: string) {
   document.querySelectorAll("nav a").forEach((a) =>
     a.classList.toggle("on", (a as HTMLElement).dataset.page === id));
   if (id === "wallet") loadWallet();
-  if (id === "settings") { loadNode(); loadNet(); }
+  if (id === "settings") {
+    loadNode();
+    loadNet();
+    // 🔴 쉬운 설정이 **제일 먼저** 그려져야 한다. 고급 설정이 먼저 뜨면
+    // 사장은 그걸 읽다가 지친다 — 그게 지금까지 일어난 일이다.
+    void paintEasySetup();
+    void paintSweepKrw();
+    wireCloudKey();
+  }
   if (id === "reward") void loadReward();
 }
 
@@ -1408,10 +1624,22 @@ async function reviewSend() {
   $("s-tailwarn").textContent = "";
   if (needTail) {
     // 주소를 4자씩 끊어 보여 준다. 34자를 한 줄로 흘리면 아무도 비교하지
-    // 않고, 비교하지 않는 확인은 확인이 아니다. 끝 4자리는 강조한다.
+    // 않고, 비교하지 않는 확인은 확인이 아니다.
+    //
+    // 🔴 **끝 4자리는 가린다.** 여태 여기에 굵게 적혀 있었다. 바로 위 안내는
+    // "화면에 뜬 주소를 보지 마시고 받는 분이 알려 준 원본을 보세요" 인데,
+    // 답을 화면에 적어 두면 아무도 원본을 안 본다 — 굵은 글자를 그대로 친다.
+    //
+    // 그러면 이 확인이 막으려던 공격이 **그대로 통과한다.** 클립보드를
+    // 바꿔치기하는 악성코드는 흔하고, 그때 화면의 주소는 이미 공격자 것이다.
+    // 공격자 주소를 보고 공격자 주소의 끝 4자리를 적으면 당연히 맞는다.
+    //
+    // 가려 두면 답이 화면 밖(문자·영수증·카운터 화면)에만 있다. 그게 이
+    // 확인이 성립하는 유일한 조건이다.
     const a = String(sendPreview.address);
     const head = a.slice(0, -4).replace(/(.{4})/g, "$1 ");
-    $("r-tailshow").innerHTML = `${escapeHtml(head)}<b>${escapeHtml(a.slice(-4))}</b>`;
+    $("r-tailshow").innerHTML =
+      `${escapeHtml(head)}<b class="masked" aria-label="가려진 네 글자">••••</b>`;
   }
 
   const lock = await invoke<any>("wallet_lock_state").catch(() => null);
@@ -1699,6 +1927,13 @@ async function refreshKeys() {
     // 키가 없을 때는 대화창 안에서 그 자리에 넣게 되어 있으므로(chatNeedsKey),
     // 버튼은 **늘 보인다.**
     $("chat-open").style.display = "";
+    // 자는지 깨어 있는지 버튼이 먼저 말한다. 눌러 봐야 아는 것은 늦다.
+    const asleep = !have.length;
+    $("chat-open").classList.toggle("asleep", asleep);
+    const img = $("chat-open").querySelector("img");
+    if (img) (img as HTMLImageElement).src = asleep ? "/raven-sleep.webp" : "/raven-head.webp";
+    const lbl = $("chat-open").querySelector("span");
+    if (lbl) lbl.textContent = asleep ? "Ravi 깨우기" : "Ravi에게 물어보기";
     // Without a key the AI boxes are dead weight; say why rather than failing
     // on click.
     ["ai-shop-note", "ai-menu-note"].forEach((id) => {
@@ -1962,6 +2197,13 @@ function chatPopThinking() {
 /// 눌러도 **아무 일도 안 일어났다.** 조용한 실패는 고장으로 읽히고, 고장으로
 /// 읽힌 기능은 다시 안 눌린다. 설정 화면으로 보내는 것도 답이 아니다 —
 /// 하려던 말을 들고 다른 화면으로 가면 거기서 뭘 하려 했는지 잊는다.
+/// 키가 없으면 Ravi 는 **자고 있다.**
+///
+/// 대표: "라비는 api 로 구동되니까 자고 있다가 API 셋업을 마치면 눈을 뜨는 거지"
+///
+/// 이 비유가 맞는 이유: 사장에게 "API 키가 없습니다" 는 오류로 읽히고,
+/// 오류로 읽힌 화면은 다시 안 눌린다. **자고 있다**는 고장이 아니라 상태고,
+/// 깨우는 방법이 있다는 뜻이다.
 function chatNeedsKey() {
   const rows = Object.entries(PROVIDERS)
     .map(
@@ -1975,10 +2217,21 @@ function chatNeedsKey() {
     .join("");
   chatHtml(
     "ai",
-    `아직 <b>API 키</b>가 없어요. 한 곳만 넣으면 바로 이야기할 수 있어요.<br />
-     <span class="muted">키는 이 컴퓨터에만 저장됩니다(0600). 우리 서버로 가지 않아요.</span>
+    `<div class="wake">
+       <img src="/raven-sleep.webp" alt="" />
+       <div>
+         <b>Ravi 가 아직 자고 있어요.</b><br />
+         <span class="muted">Ravi 는 AI 회사의 열쇠 하나로 깨어납니다.
+         아래에서 한 곳만 받아 넣으면 바로 이야기할 수 있어요.</span>
+       </div>
+     </div>
+     <div class="muted" style="margin-top:10px;font-size:13px">
+       [받기] 를 누르면 그 회사 페이지가 열립니다. 가입하고 키를 복사해
+       아래 칸에 붙여 넣으세요.<br />
+       키는 <b>이 컴퓨터에만</b> 저장됩니다(0600). 우리 서버로 가지 않아요.
+     </div>
      ${rows}
-     <button id="keyask-save" style="margin-top:8px">저장하고 이어가기</button>`,
+     <button id="keyask-save" style="margin-top:10px;width:100%">깨우기</button>`,
   );
 
   const log = $("chat-log");
@@ -2003,7 +2256,16 @@ function chatNeedsKey() {
       }
       if (!put) return chatSay("ai", "칸이 비어 있어요. 키를 붙여넣고 다시 눌러 주세요.");
       await refreshKeys();
-      chatSay("ai", "됐어요. 이제 물어보세요.");
+      // 깨어나는 순간을 보여 준다. "됐어요" 한 줄보다 이게 기억에 남는다.
+      chatHtml(
+        "ai",
+        `<div class="wake awake">
+           <img src="/raven-hello.webp" alt="" />
+           <div><b>안녕하세요, 라비예요.</b><br />
+             <span class="muted">무엇이든 물어보세요. 가게 일이면 화면도 채워 드려요.</span>
+           </div>
+         </div>`,
+      );
     };
 }
 

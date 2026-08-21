@@ -242,7 +242,18 @@
       .tabbar a svg { width: 22px; height: 22px; }
       /* 바가 본문 끝을 가리지 않게. 고정 바는 늘 이 짝이 필요하다. */
       body { padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)); }
+      /* 내가 올린 것. 팔린 물건은 흐리게 — 목록에서 바로 구별돼야 한다. */
+      .mineitem { padding: 14px 0; border-bottom: 1px solid var(--line); }
+      .mineitem.done { opacity: .55; }
+      .mineitem .mt { font-weight: 600; font-size: 16px; }
+      .minebtns { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+      /* 🔴 44px 미만은 손가락으로 못 누른다. 40~70대가 쓰는 화면이다. */
+      .minebtns button { min-height: 44px; padding: 0 14px; font-size: 15px;
+        border-radius: 10px; border: 1px solid var(--line);
+        background: var(--panel); color: var(--fg); }
+      .minebtns button.danger { color: #b3261e; border-color: #f0c8c4; }
 </style>
+    <script src="/i18n.js"></script>
   </head>
   <body data-screen="loading">
     <!-- 번들이 늦어도 화면이 비어 보이지 않게. -->
@@ -427,6 +438,37 @@
       <label for="sl-where">어디서</label>
       <input id="sl-where" maxlength="40" placeholder="의왕시 내손동" autocomplete="off" />
 
+      <!-- 사진. Nostr 글에는 **사진 자체가 아니라 주소**가 실린다 —
+           릴레이는 글자를 나르는 곳이지 사진 창고가 아니다. 그래서 이미
+           인터넷에 있는 사진의 주소가 필요하다.
+           가게 컴퓨터에서 여시면 IPFS 에 올려 그 주소를 쓰실 수 있다. -->
+      <label for="sl-image">사진 주소 <span class="sub">(없어도 됩니다)</span></label>
+      <input id="sl-image" inputmode="url" autocomplete="off"
+             placeholder="https://… 로 시작하는 사진 주소" />
+
+      <!-- 🔴 연락처가 없으면 이건 장터가 아니라 게시판이다 — 올려도 안 팔린다.
+           ⚠️ 다만 이 번호는 **전 세계에 공개된다.** 릴레이는 누구나 읽고 봇도
+           읽는다. 지워도 이미 받아 간 곳에는 남는다. 그 사실을 적기 전에
+           먼저 보여 준다. -->
+      <label for="sl-phone">연락받을 번호</label>
+      <input id="sl-phone" inputmode="tel" autocomplete="off" placeholder="010-0000-0000" />
+      <div class="note" style="margin-top:8px">
+        <b>이 번호는 전 세계 누구나 볼 수 있습니다.</b> 나중에 글을 지워도
+        이미 받아 간 곳에는 남습니다.<br />
+        번호를 안 적으셔도 글은 올라가지만, <b>사겠다는 사람이 연락할 방법이
+        없습니다.</b>
+      </div>
+
+      <label>동네 (거리 표시용)</label>
+      <div class="priceline">
+        <button id="sl-geo-go" type="button">지금 자리</button>
+        <input id="sl-geo" readonly placeholder="누르지 않으면 비어 있습니다" />
+      </div>
+      <p class="sub" style="margin-top:6px">
+        누르기 전에는 위치를 읽지 않습니다. 눌러도 <b>동네 정도(600m)</b>만
+        담기고 정확한 자리는 담기지 않습니다.
+      </p>
+
       <label for="sl-status">지금 상태</label>
       <select id="sl-status">
         <option value="active">팝니다</option>
@@ -438,15 +480,22 @@
         <b>이 글은 어느 회사 서버에도 안 올라갑니다.</b>
         공개 릴레이에 뿌려지고, 사라질 수도 있습니다. 값이 큰 물건은 가게로
         등록하시는 편이 낫습니다.<br />
-        올린 글은 <b>지울 수 있지만</b>, 이미 받아 간 곳에는 남을 수 있습니다.
+        올린 글은 <b>지울 수 있지만</b>, 그건 <b>지워 달라는 부탁</b>이지 명령이
+        아닙니다. 대부분 들어주지만 안 들어주는 곳도 있고, 이미 받아 간 사람의
+        화면에는 남습니다.
       </div>
 
       <button id="sl-go" class="primary">올리기</button>
+      <!-- 고치는 중에만 나온다. 없으면 고치다 말 방법이 없다. -->
+      <button id="sl-cancel" style="display:none">고치기 그만두기</button>
       <div class="msg" id="sl-msg"></div>
 
       <!-- 내가 올린 것. 여기가 없으면 팔린 물건을 내릴 방법이 없다. -->
       <h2 style="margin-top:28px">내가 올린 것</h2>
-      <div id="sl-mine"><p class="sub">불러오는 중…</p></div>
+      <!-- 🔴 첫 문구가 「불러오는 중…」이면 거짓말이다. 지갑을 열기 전에는
+           불러올 수가 없다(글쓴이가 누구인지 알아야 릴레이에 물어본다).
+           영원히 "불러오는 중" 인 화면은 고장으로 읽힌다. -->
+      <div id="sl-mine"><p class="sub">지갑을 열면 여기에 보입니다.</p></div>
     </section>
 
     <section id="s-send">
@@ -517,5 +566,10 @@
         <span>물건</span>
       </a>
     </nav>
+    <script>
+      // 손님 폰이 정한 말로 화면을 바꾼다. 없는 문장은 한국어
+      // 그대로 둔다 — 빈 자리보다 낫다.
+      window.translateDom && translateDom(document.body);
+    </script>
 </body>
 </html>

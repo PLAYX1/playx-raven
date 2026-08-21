@@ -732,24 +732,52 @@ async fn copy_to_cloud(stamp: &str) -> Vec<Value> {
             continue;
         }
         roll_previous(&folder, "PLAYXRaven");
-        // 🔴 지갑을 넣을지는 **암호가 걸려 있는지**로 정한다. 화면은
-        // "지갑 파일은 클라우드에 둬도 됩니다 — 암호로 잠겨 있습니다" 라고
-        // 말하는데, 암호가 없는 지갑을 그렇게 올리면 그 문장이 거짓말이 되고
-        // 클라우드 계정 하나로 가게 돈이 넘어간다.
+
+        // 🔴 여태 「지갑 암호가 걸려 있으면 클라우드에 올린다」였다. 방향은
+        // 맞지만 **기준이 낮았다.** 레이븐코인 지갑 암호는 2011년 방식이라
+        // (SHA-512 25,000회) GPU 한 장이 초당 8만 개를 시험한다 —
+        // `raven` 같은 암호는 **2.5초**에 뚫린다. 그리고 사장이 무엇을
+        // 넣었는지 우리는 모른다.
         //
-        // 사람에게 묻지 않는다. 이건 취향이 아니라 사실이고, 사실은 기계가
-        // 확인하는 편이 정확하다.
-        let encrypted = crate::raven::call_rpc("getwalletinfo", json!([]))
-            .await
-            .ok()
-            .map(|i| i.get("unlocked_until").is_some())
-            .unwrap_or(false);
-        if let Ok(v) = backup_zip(folder.to_string_lossy().to_string(), "".into(), encrypted).await {
+        // 그래서 이제 **지갑을 늘 넣되, 우리가 한 번 더 잠근다**(`lockbox`).
+        // 열쇠는 무작위 32바이트라 맞힐 방법이 없다.
+        //
+        // 지갑을 빼지 않는 이유: 그게 있어야 컴퓨터가 죽었을 때 가게가
+        // 살아난다. **노인은 종이 12단어를 잃어버린다** — 그게 실제로 겪는
+        // 일이고, 잃을 확률이 더 높은 쪽을 없애는 것은 안전이 아니다.
+        let Ok(key) = crate::lockbox::key_get_or_make() else {
+            // 열쇠를 못 만들면 **올리지 않는다.** 잠그지 못한 지갑을
+            // 클라우드에 두느니 오늘 사본이 없는 편이 낫다.
             out.push(json!({
-                "where": f["name"], "path": v["path"], "wallet": encrypted,
-                // 왜 안 들어갔는지 말한다. 조용히 빼면 들어 있는 줄 안다.
-                "why": if encrypted { "" } else { "지갑에 암호가 없어 열쇠는 빼고 올렸습니다" },
+                "where": f["name"], "wallet": false,
+                "why": "자물쇠 열쇠를 만들지 못해 오늘은 올리지 않았습니다",
             }));
+            continue;
+        };
+        let Ok(v) = backup_zip(folder.to_string_lossy().to_string(), "".into(), true).await else {
+            continue;
+        };
+        let plain = PathBuf::from(v["path"].as_str().unwrap_or_default());
+        let locked = plain.with_extension("zip.잠김");
+        match crate::lockbox::lock_file(&plain, &locked, &key) {
+            Ok(()) => {
+                // 🔴 잠근 뒤 **원본을 지운다.** 남겨 두면 클라우드에 잠긴 것과
+                // 안 잠긴 것이 나란히 올라가고, 자물쇠는 장식이 된다.
+                let _ = std::fs::remove_file(&plain);
+                out.push(json!({
+                    "where": f["name"], "path": locked.to_string_lossy(),
+                    "wallet": true, "locked": true,
+                    "why": "",
+                }));
+            }
+            Err(e) => {
+                // 잠그지 못했으면 원본도 치운다. 벗은 채로 남기지 않는다.
+                let _ = std::fs::remove_file(&plain);
+                out.push(json!({
+                    "where": f["name"], "wallet": false,
+                    "why": format!("잠그지 못해 올리지 않았습니다: {e}"),
+                }));
+            }
         }
     }
     out

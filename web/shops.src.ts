@@ -50,11 +50,111 @@ function fmtDist(m: number): string {
   return m < 1000 ? `${Math.round(m / 10) * 10}m` : `${(m / 1000).toFixed(m < 10000 ? 1 : 0)}km`;
 }
 
+/**
+ * 지금 시세. 화면이 열릴 때 한 번만 가져와 둔다.
+ *
+ * ⚠️ **못 가져오면 0 이다.** 그러면 「이 물건 사기」가 안 그려진다 —
+ * 틀린 금액이 미리 채워진 채로 지갑이 열리는 것이 제일 나쁘다.
+ * 전화 단추는 그대로 나오므로 살 길이 아주 막히지는 않는다.
+ */
+const rates: Record<string, number> = {};
+
+async function loadRate(cur: string): Promise<void> {
+  if (rates[cur] !== undefined) return;
+  try {
+    const r = await fetch(`/api/rate?currency=${encodeURIComponent(cur)}`).then((x) => x.json());
+    // 두 거래소가 크게 어긋나는 날은 값을 안 쓴다. 그런 날 물건을 사면
+    // 어느 쪽 숫자로 샀는지 아무도 모른다.
+    rates[cur] = r?.unstable || !r?.rate ? 0 : Number(r.rate);
+  } catch {
+    rates[cur] = 0;
+  }
+}
+
+/** 원·달러를 RVN 으로. 시세를 모르면 0 — 부르는 쪽이 단추를 안 그린다. */
+function rvnFor(amount: number, cur: string): number {
+  const rate = rates[cur];
+  if (!rate) return 0;
+  // 소수 8자리가 RVN 의 끝이다. 더 잘게 적으면 노드가 조용히 반올림한다.
+  return Math.round((amount / rate) * 1e8) / 1e8;
+}
+
+/**
+ * 「이 물건 사기」.
+ *
+ * 🔴 파는 사람이 **받을 주소를 실어 뒀을 때만** 나온다. 없으면 그리지 않는다 —
+ * 없는 단추를 그리면 눌러 보고 나서야 안 되는 걸 안다.
+ *
+ * 지갑으로 넘길 때 값을 RVN 으로 미리 바꿔 둔다. 원으로 넘기면 지갑이 시세를
+ * 또 부르게 되고, 두 화면의 숫자가 어긋난다.
+ *
+ * ⚠️ 이 단추는 **에스크로가 아니다.** 누르면 진짜로 돈이 나가고 되돌릴 수 없다.
+ * 그래서 아래에 "만나서, 물건을 보고" 를 같이 적는다.
+ */
+function buyButton(e: NostrEvent): string {
+  const to = tag(e, "pay").trim();
+  if (!/^R[1-9A-HJ-NP-Za-km-z]{25,40}$/.test(to)) return "";
+  const price = e.tags.find((t) => t[0] === "price");
+  const n = Number(price?.[1]);
+  const cur = (price?.[2] || "").toUpperCase();
+  if (!isFinite(n) || n <= 0) return "";
+  // 원·달러면 시세로 바꾼다. 못 바꾸면 단추를 안 그린다 — 틀린 금액이
+  // 미리 채워진 채로 지갑이 열리는 것이 제일 나쁘다.
+  const rvn = cur === "RVN" ? n : rvnFor(n, cur);
+  if (!rvn) return "";
+  const what = tag(e, "title").slice(0, 60);
+  const q = new URLSearchParams({ to, rvn: String(rvn), what });
+  return `<a class="cbtn buy" href="/wallet#pay?${q.toString()}">
+      이 물건 사기
+      <span class="sub2">${esc(String(Math.round(rvn)))} RVN · 개발비 1% 포함</span>
+    </a>`;
+}
+
+/**
+ * 파는 사람에게 말을 거는 자리.
+ *
+ * 🔴 여기가 없어서 이건 장터가 아니라 **게시판**이었다. 올려도 안 팔리고
+ * 봐도 못 산다. 화면에는 "준비 중입니다" 와 공개키 앞 16자리만 있었는데,
+ * 40~70대에게 `3bf0c63fcb934634…` 는 아무것도 아니다.
+ *
+ * ## 왜 전화·문자인가
+ *
+ * Nostr 에 1:1 문의(NIP-17)가 있지만, 그걸 쓰려면 사는 사람도 지갑을 만들고
+ * 열어 두어야 한다. **동네에서 자전거 한 대 사는 사람에게 그건 벽이다.**
+ * 전화는 이미 모두가 쓴다.
+ *
+ * ⚠️ 대신 **번호가 전 세계에 공개된다.** 릴레이는 누구나 읽고, 봇도 읽는다.
+ * 한 번 나간 번호는 지워도 회수되지 않는다. 그래서 올릴 때 그 사실을 먼저
+ * 보여주고(웹 지갑 「내 물건 팔기」), 여기서는 **적은 사람 것만** 보여 준다.
+ * 안 적었으면 없는 대로 정직하게 말한다 — 가짜 단추를 그리지 않는다.
+ */
+function contactBlock(e: NostrEvent): string {
+  const raw = tag(e, "phone").trim();
+  // 숫자·+·- 만 남긴다. 남의 글자가 `tel:` 뒤에 그대로 들어가면 안 된다.
+  const tel = raw.replace(/[^0-9+\-]/g, "");
+  if (!tel || tel.replace(/\D/g, "").length < 8) {
+    return `<p class="foot" style="margin-top:16px">
+      이 글에는 <b>연락처가 없습니다.</b> 파는 분이 적어 두지 않으셨어요.
+    </p>`;
+  }
+  return `<div class="contact">
+      ${buyButton(e)}
+      <a class="cbtn call" href="tel:${esc(tel)}">전화 걸기</a>
+      <a class="cbtn" href="sms:${esc(tel)}">문자 보내기</a>
+      <p class="foot" style="margin-top:10px">
+        ${esc(raw)} · 파는 분이 직접 적은 번호입니다.
+        <b>돈은 만나서, 물건을 보고 보내세요.</b>
+      </p>
+    </div>`;
+}
+
 /** 이 매물이 레이븐 사람들 것인가. 아직 0건이지만, 생기면 맨 위로 온다. */
 function isRaven(e: NostrEvent): boolean {
   const price = e.tags.find((t) => t[0] === "price");
   if (price && price[2] && /rvn|raven/i.test(price[2])) return true;
-  return e.tags.some((t) => t[0] === "t" && /^(rvn|ravencoin)$/i.test(t[1] || ""));
+  // 🔴 `playx` 가 빠져 있었다. `sellPublish` 는 우리 글에 `["t","playx"]` 를
+  // 붙이는데 여기서 안 봐서, **우리 손으로 올린 물건이 맨 위로 못 왔다.**
+  return e.tags.some((t) => t[0] === "t" && /^(rvn|ravencoin|playx)$/i.test(t[1] || ""));
 }
 
 const $ = (id: string) => document.getElementById(id) as HTMLElement;
@@ -162,29 +262,77 @@ function draw(): void {
 //
 // ⚠️ rvn.ex.erci.se 에서 열면 가게 노드가 없다. 그때는 물어볼 곳이 없으므로
 // 버튼을 아예 숨긴다 — 눌러도 안 되는 버튼은 고장으로 읽힌다.
+/** 손님이 자기 AI 열쇠를 넣는 칸. **우리 몫이 떨어졌을 때만** 나타난다. */
+function showKeyBox(): void {
+  if (document.getElementById("ravi-key")) return;
+  const box = document.getElementById("ravi-a");
+  if (!box) return;
+  const d = document.createElement("div");
+  d.className = "keybox";
+  d.innerHTML = `
+    <div class="sub" style="margin-bottom:8px">
+      <b>내 열쇠로 계속 쓰기</b><br />
+      Groq 은 <b>무료로</b> 열쇠를 줍니다. 받아서 아래에 붙여 넣으시면
+      한도 없이 물어보실 수 있어요.
+    </div>
+    <a class="btn" href="https://console.groq.com/keys" target="_blank" rel="noopener">
+      Groq 에서 열쇠 받기</a>
+    <input id="ravi-key" type="password" autocomplete="off" spellcheck="false"
+           placeholder="gsk_ 로 시작하는 열쇠" />
+    <button id="ravi-key-save" style="width:100%;margin-top:8px">저장하고 이어가기</button>
+    <p class="foot" style="margin-top:10px">
+      열쇠는 <b>이 브라우저에만</b> 저장됩니다. 우리 서버는 물어볼 때 잠깐 쓰고
+      저장하지 않아요.<br />
+      다만 이 화면은 지갑과 같은 곳에 있으니, <b>남의 컴퓨터에서는 넣지 마세요.</b>
+    </p>`;
+  box.appendChild(d);
+  const inp = document.getElementById("ravi-key") as HTMLInputElement;
+  inp.value = localStorage.getItem("ravi-key") || "";
+  (document.getElementById("ravi-key-save") as HTMLElement).onclick = () => {
+    const v = inp.value.trim();
+    if (!v) {
+      localStorage.removeItem("ravi-key");
+      return;
+    }
+    localStorage.setItem("ravi-key", v);
+    d.remove();
+    // 넣자마자 다시 물어 준다. "저장했습니다" 만 뜨면 또 눌러야 한다.
+    (document.getElementById("ravi-go") as HTMLElement)?.click();
+  };
+}
+
 function wireRaviAsk(): void {
   const btn = document.getElementById("ravi-ask");
   if (!btn) return;
-  // 가게 노드에서 열렸을 때만 보인다.
+  // 🔴 여태 가게 노드 밖에서는 이 단추를 **숨겼다.** 그런데 배포된 옛
+  // 번들에서는 보이기만 하고 눌러도 아무 일이 없었다 — 대표님이 겪은 것이
+  // 그것이다.
+  //
+  // 이제 웹에도 라비가 있다(`rvn.ex.erci.se/api/ask`). 다만 **자세가 다르다**:
+  // 가게 노드의 라비는 그 가게 직원이라 메뉴·영업시간을 답하고, 웹의 라비는
+  // 가게가 없으므로 레이븐코인과 이 프로그램을 안내한다. 그래서 물어보라고
+  // 적는 문구도 달라야 한다 — 웹에서 "이 가게에 대해 물어보세요" 라고 하면
+  // 있지도 않은 가게 이야기를 기대하게 만든다.
   const local = /^(localhost|127\.0\.0\.1|\d+\.\d+\.\d+\.\d+)$/.test(location.hostname)
     || location.hostname.endsWith(".local");
-  if (!local) {
-    btn.style.display = "none";
-    return;
-  }
   btn.onclick = () => {
     const box = $("sheet");
     box.innerHTML = `<div class="sheetin ravisheet">
         <button class="sheetx" id="sheet-close">닫기</button>
         <h2 style="margin:0 0 4px;font-size:19px">Ravi에게 물어보기</h2>
-        <p class="sub" style="margin:0">이 가게에 대해 물어보세요.</p>
+        <p class="sub" style="margin:0">${local
+          ? "이 가게에 대해 물어보세요."
+          : "레이븐코인이든 이 프로그램이든 편하게 물어보세요."}</p>
         <div class="qa">
-          <input id="ravi-q" placeholder="견과류 들어간 메뉴 있나요?" autocomplete="off" />
+          <input id="ravi-q" autocomplete="off" enterkeyhint="send"
+                 placeholder="${local ? "견과류 들어간 메뉴 있나요?" : "레이븐코인이 뭔가요?"}" />
           <button id="ravi-go" style="width:100%;margin-top:10px">묻기</button>
         </div>
         <div class="ans" id="ravi-a"></div>
         <p class="foot" style="margin-top:14px">
-          가게가 올린 정보로만 답합니다. 확실하지 않으면 가게에 직접 확인하세요.
+          ${local
+            ? "가게가 올린 정보로만 답합니다. 확실하지 않으면 가게에 직접 확인하세요."
+            : "값이 오를지 내릴지는 답하지 않습니다. 그리고 지갑 12단어는 누구에게도 알려주지 마세요 — 저도 묻지 않습니다."}
         </p>
       </div>`;
     box.style.display = "";
@@ -197,16 +345,22 @@ function wireRaviAsk(): void {
       if (!q) return;
       $("ravi-a").innerHTML = `<span class="sub">생각하는 중…</span>`;
       try {
+        // 손님이 자기 열쇠를 넣어 뒀으면 같이 보낸다. 우리 몫이 다 떨어져도
+        // 라비가 계속 깨어 있게 하는 길이다. 서버는 저장하지 않는다.
+        const mine = localStorage.getItem("ravi-key") || "";
         const r = await fetch("/api/ask", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ question: q }),
+          body: JSON.stringify(mine ? { question: q, key: mine } : { question: q }),
         }).then((x) => x.json());
         $("ravi-a").innerHTML = r?.error
           ? `<span class="sub">${esc(r.error)}</span>`
           : `<img src="/raven-head.webp" alt="" /><span></span>`;
         const span = $("ravi-a").querySelector("span");
         if (span && !r?.error) span.textContent = r.answer || "";
+        // 우리 몫이 떨어졌거나 열쇠가 안 먹었을 때만 열쇠 칸을 낸다.
+        // 평소에 보이면 "이걸 넣어야 쓸 수 있나" 로 읽혀서 아무도 안 묻는다.
+        if (r?.own) showKeyBox();
       } catch {
         $("ravi-a").innerHTML = `<span class="sub">지금은 답할 수 없습니다.</span>`;
       }
@@ -234,12 +388,7 @@ function openItem(r: { e: NostrEvent; dist: number | null }): void {
         ${tag(e, "location") ? `<span class="tag">${esc(tag(e, "location"))}</span>` : ""}
         <span class="tag">${new Date(e.created_at * 1000).toLocaleString("ko-KR")}</span>
       </div>
-      <!-- 파는 사람에게 말을 걸 길이 아직 없다. 없는 버튼을 그리는 대신
-           그 사실을 적는다. -->
-      <p class="foot" style="margin-top:16px">
-        파는 사람에게 묻는 기능은 아직 준비 중입니다.
-        올린 사람: <code style="word-break:break-all">${esc(e.pubkey.slice(0, 16))}…</code>
-      </p>
+      ${contactBlock(e)}
     </div>`;
   box.style.display = "";
   $("sheet-close").onclick = () => (box.style.display = "none");
@@ -255,6 +404,8 @@ async function loadItems(): Promise<void> {
     // 위치를 먼저 묻고 목록을 가져온다. 순서를 바꾸면 거리 없는 목록이 한 번
     // 그려졌다가 다시 그려져, 손가락 밑에서 줄이 움직인다.
     me = await myPlace();
+    // 값을 RVN 으로 바꿔야 「이 물건 사기」가 그려진다. 목록과 같이 가져온다.
+    await Promise.all([loadRate("KRW"), loadRate("USD")]);
     const evs = await query({ kinds: [KIND_LISTING], limit: 200 }, { ms: 8000 });
 
     rows = evs
@@ -293,13 +444,26 @@ async function loadItems(): Promise<void> {
   }
 }
 
+/** 주소의 해시(`#items`)에 맞는 탭을 켠다. 이미 그 탭이면 아무 일도 안 한다. */
+function tabFromHash(): void {
+  const want = location.hash === "#items" ? "items" : "shops";
+  const b = document.querySelector<HTMLElement>(`[data-tab="${want}"]`);
+  if (b && !b.classList.contains("on")) b.click();
+}
+
 function tabs(): void {
   // 아래 탭 바에서 「물건」으로 들어오면 그 탭이 열려 있어야 한다.
   // 바를 눌렀는데 가게 목록이 뜨면 사람은 바가 고장 났다고 읽는다.
-  if (location.hash === "#items") {
-    const b = document.querySelector<HTMLElement>('[data-tab="items"]');
-    if (b) setTimeout(() => b.click(), 0);
-  }
+  setTimeout(tabFromHash, 0);
+
+  // 🔴 여기가 고장이었다. 하단 「물건」은 `/shops#items` 로 간다. **이미
+  // `/shops` 에 있으면** 브라우저는 페이지를 다시 열지 않고 해시만 바꾼다 —
+  // 위 검사는 처음 한 번만 도니까 아무 일도 일어나지 않았다. 대표님이 겪은
+  // "물건 눌러도 안 눌러진다" 가 이것이다.
+  //
+  // 뒤로가기도 같은 길이다. `#items` 에서 뒤로 누르면 해시만 빠지므로,
+  // 이 줄이 없으면 주소는 가게인데 화면은 물건인 채로 남는다.
+  window.addEventListener("hashchange", tabFromHash);
 
   wireRaviAsk();
 

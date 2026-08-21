@@ -224,6 +224,8 @@
       /* 몇 개 안 남았을 때만. 서두를 이유가 있을 때만 말한다. */
       .fewleft { font-size: 13px; color: var(--ravi); font-weight: 600; margin-top: 2px; }
 </style>
+    <script src="/i18n.js"></script>
+    <script src="/ravi.js"></script>
   </head>
   <body>
     <div class="openbar" id="openbar"></div>
@@ -239,7 +241,7 @@
     <main>
       <div id="menu"><div class="empty">메뉴를 불러오는 중…</div></div>
 
-      <div class="ask" id="ask" style="display:none">
+      <div class="ask" id="ask" data-ravi style="display:none">
         <h3>궁금한 것 물어보기</h3>
         <div class="row">
           <input id="q" placeholder="견과류 들어간 메뉴 있나요?" autocomplete="off" />
@@ -701,5 +703,22 @@
 
       load();
     </script>
-  </body>
+      <script>
+      // 손님 폰이 정한 말로 화면을 바꾼다. 없는 문장은 한국어
+      // 그대로 둔다 — 빈 자리보다 낫다.
+      window.translateDom && translateDom(document.body);
+    </script>
+
+    <script>
+      /* 라비는 **가게 컴퓨터의 열쇠**로 깨어난다. 이 폰에는 키를 넣지 않는다.
+         (why: ravi.js 첫 주석) */
+      (async () => {
+        const st = await window.Ravi.status();
+        document.querySelectorAll("[data-ravi]").forEach((el) => {
+          if (st.awake) return;                 // 깨어 있으면 원래대로 둔다
+          el.hidden = true;             // 손님에게는 없는 기능이다
+        });
+      })();
+    </script>
+</body>
 </html>

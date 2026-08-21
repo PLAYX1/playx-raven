@@ -177,6 +177,24 @@
         button:active, .btn:active { transform: none; }
         button:active::after, .pop, .shimmer, .risein { animation: none; }
       }
+      /* 사장 폰의 라비. 카드 하나로 끝난다 — 화면을 옮기면 하던 일을 잃는다. */
+      .rowhead { display: flex; gap: 10px; align-items: center; }
+      .ravihead { width: 44px; height: 44px; border-radius: 12px; flex: none; }
+      .ravilog { margin-top: 10px; display: grid; gap: 8px; }
+      .ravilog div { padding: 10px 12px; border-radius: 12px; font-size: 15px;
+        line-height: 1.6; white-space: pre-wrap; }
+      .ravilog .me { background: var(--accent); color: #fff; justify-self: end;
+        max-width: 88%; }
+      .ravilog .ai { background: var(--ravi-tint); color: var(--fg); }
+      .raviform { display: flex; gap: 8px; margin-top: 10px; }
+      /* 🔴 16px 미만이면 아이폰 사파리가 탭할 때마다 화면을 확대한다. */
+      .raviform input { flex: 1; min-height: 48px; font-size: 16px; padding: 0 12px;
+        border: 1px solid var(--line); border-radius: 12px;
+        background: var(--bg); color: var(--fg); }
+      .raviform button { min-height: 48px; padding: 0 18px; font-size: 16px;
+        font-weight: 600; border: 0; border-radius: 12px;
+        background: var(--ravi); color: #fff; }
+      .ravibox.ravi-asleep img { filter: saturate(.55) opacity(.85); }
 </style>
   </head>
   <body>
@@ -270,13 +288,30 @@
       </div>
 
       <!-- AI -->
-      <div class="pane" id="p-ai">
+      <!-- 🔴 이 탭에 **API 키 칸이 없는 것은 빠뜨린 것이 아니다.**
+           열쇠는 가게 컴퓨터 한 곳에만 둔다. 폰은 잃어버리고, 빌려주고,
+           손님에게 넘겨 보여준다 — 컴퓨터의 0600 파일과는 위험이 다르다.
+           폰 세 대를 쓰면 세 번 넣고 바꿀 때 세 번 바꿔야 하는데, 한 대를
+           잊으면 그 폰만 옛 키로 돈다. 어느 폰인지 알 방법도 없다.
+           그래서 폰은 묻기만 하고, 답은 노드가 자기 키로 만든다.
+           (why: web/ravi.js 첫 주석) -->
+      <div class="pane" id="p-ai" data-ravi>
+        <div class="rowhead">
+          <img src="/faces/raven-head.webp" alt="" class="ravihead" />
+          <div><b>라비</b>
+            <div class="sub">가게 일이든 이 프로그램이든 물어보세요.
+              메뉴는 말로 채워 드립니다.</div>
+          </div>
+        </div>
         <div id="ai-log">
-          <div class="msg ai">가게 이름이나 메뉴를 말로 알려주시면 채워 드립니다.
-발행·전송은 하지 못합니다.</div>
+          <div class="msg ai">안녕하세요, 라비예요.
+「아이스 아메리카노 4500원 넣어줘」처럼 말하면 메뉴를 채워 드리고,
+「오늘 매출 정산은 어떻게 하나요」처럼 물으면 답해 드려요.
+발행·전송은 제가 하지 않습니다 — 돈이 나가는 일은 사장님이 직접 누르셔야 해요.</div>
         </div>
         <div class="row">
-          <input id="ai-q" placeholder="아이스 아메리카노 4500원 넣어줘" autocomplete="off" />
+          <input id="ai-q" placeholder="말로 시키거나, 궁금한 걸 물어보세요" autocomplete="off"
+                 enterkeyhint="send" />
           <button id="ai-go">보내기</button>
         </div>
         <p class="note" id="ai-note"></p>
@@ -289,7 +324,7 @@
       <button class="on" data-pane="home">주문</button>
       <button data-pane="shop">장사</button>
       <button data-pane="menu">메뉴</button>
-      <button data-pane="ai">AI</button>
+      <button data-pane="ai">라비</button>
       <button data-pane="machine">이 컴퓨터</button>
     </nav>
 
@@ -534,7 +569,7 @@
         const r = await api("/api/admin/publish", { shop, ai_provider: aiProvider });
         $(where).innerHTML = r.error
           ? `<div class="err">${r.error}</div>`
-          : `<div class="card" style="margin-top:8px">손님 화면에 반영했습니다.</div>`;
+          : `<div class="card" style="margin-top:8px">손님 화면에 반영했습니다.</div>      `;
         $("title").textContent = shop.name || "내 노드";
       }
 
@@ -544,7 +579,15 @@
 
       $("ai-go").onclick = async () => {
         const msg = $("ai-q").value.trim();
-        if (!msg || !aiProvider) return;
+        if (!msg) return;
+        // 🔴 여태 키가 없으면 **말없이 아무 일도 안 했다.** 사장은 버튼이
+        // 고장 난 줄 안다. 자고 있다는 것과 깨우는 방법을 그 자리에서 말한다.
+        if (!aiProvider) {
+          add("me", msg); $("ai-q").value = "";
+          return add("ai",
+            "라비가 아직 자고 있어요. 가게 컴퓨터의 PLAY X Raven → 설정 → AI 에서 " +
+            "한 번만 넣어 주시면 이 폰에서도 깨어납니다. (폰에는 넣지 않으셔도 됩니다)");
+        }
         $("ai-q").value = "";
         add("me", msg);
         const r = await api("/api/admin/ai", {
@@ -557,6 +600,12 @@
         if (r.error) return add("ai", r.error);
         add("ai", r.reply || "");
         const did = apply(r.actions || []);
+        // 메뉴 편집기가 할 말이 없으면 그건 **일반 질문**이다. 여태 여기서
+        // 대화가 끝나서, 사장이 "정산은 어떻게 하나요" 를 물으면 답이 없었다.
+        if (!did.length && !(r.reply || "").trim()) {
+          const g = await api("/api/owner-ask", { question: msg });
+          add("ai", g.answer || g.error || "답을 받지 못했습니다.");
+        }
         if (did.length) add("did", did.join(" · "));
         history_.push({ role: "user", text: msg }, { role: "assistant", text: r.reply || "" });
       };
@@ -632,5 +681,65 @@
       loadHome();
       loadShop();
     </script>
-  </body>
+      <script src="/ravi.js"></script>
+
+    <script>
+      /* 라비는 **가게 컴퓨터의 열쇠**로 깨어난다. 이 폰에는 키를 넣지 않는다.
+         (why: ravi.js 첫 주석) */
+      (async () => {
+        const st = await window.Ravi.status();
+        document.querySelectorAll("[data-ravi]").forEach((el) => {
+          if (st.awake) return;                 // 깨어 있으면 원래대로 둔다
+          el.innerHTML = window.Ravi.sleepingBox(window.t);
+        });
+      })();
+    </script>
+
+    <script>
+      /* 라비는 **노드의 열쇠**로 답한다. 이 폰에는 키가 없고, 넣지도 않는다. */
+      (() => {
+        const log = document.getElementById("raviLog");
+        const q = document.getElementById("raviQ");
+        const go = document.getElementById("raviGo");
+        if (!log || !q || !go) return;
+
+        const say = (who, text) => {
+          const d = document.createElement("div");
+          d.className = who;
+          d.textContent = text;           // 🔴 textContent. 답을 HTML 로 넣으면
+          log.appendChild(d);             //    모델이 뱉은 태그가 실행된다.
+          d.scrollIntoView({ block: "nearest" });
+        };
+
+        let busy = false;
+        const ask = async () => {
+          const text = q.value.trim();
+          if (!text || busy) return;
+          busy = true; go.disabled = true; q.value = "";
+          say("me", text);
+          const wait = document.createElement("div");
+          wait.className = "ai"; wait.textContent = "생각하는 중…";
+          log.appendChild(wait);
+          try {
+            const r = await fetch("/api/owner-ask", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ question: text }),
+            });
+            const j = await r.json();
+            wait.remove();
+            say("ai", j.answer || j.error || "답을 받지 못했습니다.");
+          } catch (e) {
+            wait.remove();
+            /* 가게 와이파이는 끊긴다. 원문 대신 다음에 할 일을 적는다. */
+            say("ai", "가게 컴퓨터에 닿지 못했습니다. 같은 와이파이인지 확인해 주세요.");
+          } finally {
+            busy = false; go.disabled = false; q.focus();
+          }
+        };
+        go.addEventListener("click", ask);
+        q.addEventListener("keydown", (e) => { if (e.key === "Enter") ask(); });
+      })();
+    </script>
+</body>
 </html>

@@ -116,3 +116,96 @@ mod tests {
         assert!(r.unwrap_err().contains("id"), "무엇이 빠졌는지 안 알려준다");
     }
 }
+
+/// 릴레이에서 **읽어다 준다.** 올리는 길만 있고 읽는 길이 없었다.
+///
+/// 그래서 지갑의 「내가 올린 것」은 한 번도 채워진 적이 없다 — 화면에는 자리가
+/// 있는데 채울 방법이 없어서, 자기가 올린 글을 고치지도 지우지도 못했다.
+/// 이유는 위와 같다: 지갑은 `connect-src 'self'` 라 릴레이를 못 읽는다.
+///
+/// 개인키는 여기까지 오지 않는다. **공개키만** 온다 — 누가 썼는지는 원래
+/// 릴레이에 공개돼 있는 값이다.
+pub async fn nostr_query(kinds: Vec<i64>, authors: Vec<String>) -> Result<Value, String> {
+    // 🔴 글쓴이를 안 적으면 릴레이 전체를 긁는 셈이다. 그런 요청을 계속 보내면
+    // 릴레이가 우리를 차단하고, 그러면 모든 가게가 못 쓴다.
+    let authors: Vec<String> = authors
+        .into_iter()
+        .filter(|a| a.len() == 64 && a.chars().all(|c| c.is_ascii_hexdigit()))
+        .take(10)
+        .collect();
+    if authors.is_empty() {
+        return Err("누구 글인지 알려 주세요.".into());
+    }
+    let kinds = if kinds.is_empty() { vec![30402] } else { kinds };
+
+    let sub = "q1";
+    let req = serde_json::to_string(&json!([
+        "REQ", sub, { "kinds": kinds, "authors": authors, "limit": 200 }
+    ]))
+    .map_err(|e| format!("보낼 것을 만들지 못했습니다: {e}"))?;
+
+    let mut seen: std::collections::HashMap<String, Value> = std::collections::HashMap::new();
+    for url in RELAYS {
+        // 한 곳이 죽어도 나머지에서 읽는다. 릴레이는 늘 하나씩 죽는다.
+        if let Ok(events) = read_one(url, &req, sub).await {
+            for e in events {
+                if let Some(id) = e.get("id").and_then(Value::as_str) {
+                    seen.entry(id.to_string()).or_insert(e);
+                }
+            }
+        }
+    }
+    let mut events: Vec<Value> = seen.into_values().collect();
+    events.sort_by_key(|e| -(e.get("created_at").and_then(Value::as_i64).unwrap_or(0)));
+    Ok(json!({ "events": events }))
+}
+
+async fn read_one(url: &str, req: &str, sub: &str) -> Result<Vec<Value>, String> {
+    use futures_util::{SinkExt, StreamExt};
+    use tokio_tungstenite::tungstenite::Message;
+
+    let (mut ws, _) = tokio::time::timeout(
+        std::time::Duration::from_secs(7),
+        tokio_tungstenite::connect_async(url),
+    )
+    .await
+    .map_err(|_| "연결이 오래 걸립니다".to_string())?
+    .map_err(|e| format!("연결 실패: {e}"))?;
+
+    ws.send(Message::Text(req.to_string().into()))
+        .await
+        .map_err(|e| format!("보내지 못했습니다: {e}"))?;
+
+    let mut out = Vec::new();
+    // 사람이 화면 앞에서 기다린다. 오래 붙잡느니 있는 것만 주고 끝낸다.
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(7);
+    loop {
+        let left = deadline.saturating_duration_since(tokio::time::Instant::now());
+        if left.is_zero() || out.len() >= 200 {
+            break;
+        }
+        let Ok(Some(Ok(msg))) = tokio::time::timeout(left, ws.next()).await else {
+            break;
+        };
+        let Message::Text(t) = msg else { continue };
+        let Ok(v) = serde_json::from_str::<Value>(&t) else {
+            continue;
+        };
+        let Some(a) = v.as_array() else { continue };
+        // EOSE = 이 릴레이가 가진 것을 다 보냈다는 뜻. 더 기다릴 이유가 없다.
+        if a.first().and_then(Value::as_str) == Some("EOSE")
+            && a.get(1).and_then(Value::as_str) == Some(sub)
+        {
+            break;
+        }
+        if a.first().and_then(Value::as_str) == Some("EVENT")
+            && a.get(1).and_then(Value::as_str) == Some(sub)
+        {
+            if let Some(e) = a.get(2) {
+                out.push(e.clone());
+            }
+        }
+    }
+    let _ = ws.close(None).await;
+    Ok(out)
+}

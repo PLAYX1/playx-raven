@@ -41,6 +41,8 @@ mod server;
 mod services;
 mod shop;
 mod upload;
+mod spec;
+mod lockbox;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -66,6 +68,7 @@ pub fn run() {
             ipfs::pin_remove,
             ipfs::pin_list,
             ipfs::repo_size,
+            ipfs::ipfs_set_storage_max,
             ipfs::content_kind,
             ipfs::read_metadata,
             ipfs::open_external,
@@ -106,6 +109,7 @@ pub fn run() {
             shop::shop_open_now,
             shop::incoming_payments,
             shop::split_payment,
+            spec::suggest_setup,
             addrbook::addr_book,
             addrbook::watch_add,
             addrbook::recv_qr,
@@ -210,6 +214,8 @@ pub fn run() {
             backup::backup_now,
             backup::backup_auto,
             backup::backup_zip,
+            lockbox::cloud_key_show,
+            lockbox::cloud_unlock,
             backup::external_drives,
             backup::cloud_folders,
             sample::sample_check,
@@ -385,6 +391,29 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
         .run(|_app, event| {
+            // 🔴 Dock 아이콘을 눌러도 창이 안 나왔다.
+            //
+            // X 를 누르면 끄지 않고 **감춘다**(가게는 계속 돌아야 하니까).
+            // 그런데 감춘 창을 다시 부르는 길이 메뉴막대 아이콘 하나뿐이었다.
+            // macOS 는 Dock 아이콘을 누르면 `Reopen` 을 보내는데 아무도 듣지
+            // 않아서, 사장은 프로그램이 사라진 줄 알고 다시 실행하려 했다.
+            //
+            // ⚠️ `has_visible_windows` 가 참이면 이미 보이는 창이 있다는 뜻이라
+            //    그때 또 부르면 남의 창을 앞으로 끌어온다.
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen { has_visible_windows, .. } = event {
+                if !has_visible_windows {
+                    // `Manager` 를 여기서 들인다 — 파일 위쪽에 두면 이 블록이
+                    // 없는 다른 OS 빌드에서 "안 쓰는 import" 경고가 난다.
+                    use tauri::Manager as _;
+                    if let Some(w) = _app.get_webview_window("main") {
+                        let _ = w.show();
+                        let _ = w.unminimize();
+                        let _ = w.set_focus();
+                    }
+                }
+                return;
+            }
             // 앱이 끝나면 채굴기도 끝난다. 이게 없으면 창을 닫은 뒤에도
             // 채굴기가 살아남아 전기를 계속 먹는데, 화면에는 아무것도 없어서
             // 사장은 자기 돈이 나가는 줄 모른다.

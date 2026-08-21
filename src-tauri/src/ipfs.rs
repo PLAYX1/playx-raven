@@ -276,8 +276,33 @@ pub fn read_metadata(doc: Value, lang: String) -> Value {
 /// something arbitrary from a asset's metadata.
 #[tauri::command]
 pub async fn open_external(url: String) -> Result<(), String> {
-    if !url.starts_with("http://127.0.0.1:8080/ipfs/") {
-        return Err("Refusing to open a non-local URL".into());
+    // 🔴 여태 IPFS 주소 하나만 허용했다. 그래서 「열쇠 받기」·「채굴기 받기」를
+    // 누르면 **"Refusing to open a non-local URL"** 이 떴다 — 사장은 무슨 말인지
+    // 알 수 없고, 열쇠를 못 받으니 라비도 못 깨운다.
+    //
+    // 아무 주소나 열면 안 되는 이유는 그대로다: 이 함수는 화면이 준 글자를
+    // 그대로 받는데, 화면에는 자산 발행자가 적은 남의 글자가 섞인다. 그래서
+    // **우리가 아는 곳만** 연다. 목록에 없는 곳은 열지 않는다.
+    const ALLOWED: &[&str] = &[
+        "http://127.0.0.1:8080/ipfs/",       // 우리 IPFS 게이트웨이
+        "https://console.groq.com/",         // 열쇠 받기 — Groq
+        "https://console.anthropic.com/",    // 열쇠 받기 — Anthropic
+        "https://console.x.ai/",             // 열쇠 받기 — xAI
+        "https://aistudio.google.com/",      // 열쇠 받기 — Google (…/apikey)
+        "https://platform.openai.com/",      // 열쇠 받기 — OpenAI
+        "https://openrouter.ai/",            // 열쇠 받기 — OpenRouter
+        "https://ollama.com/",               // 내 컴퓨터의 AI
+        "https://lmstudio.ai/",              // 내 컴퓨터의 AI
+        "https://github.com/trexminer/",     // 채굴기 받기
+        "https://github.com/todxx/",         // 채굴기 받기
+        "https://www.ravencoin.org/",        // 레이븐코인 공식
+        "https://rvn.ex.erci.se/",           // 우리 사이트
+    ];
+    if !ALLOWED.iter().any(|p| url.starts_with(p)) {
+        // 오류 문구도 한국어로. 영어 원문은 사장에게 아무것도 알려주지 않는다.
+        return Err(format!(
+            "이 주소는 열지 않습니다. 우리가 아는 곳만 엽니다.\n{url}"
+        ));
     }
 
     // Call `open` directly rather than going through a helper crate. The same
@@ -316,4 +341,34 @@ pub async fn repo_size() -> Result<Value, String> {
         "max_bytes": v.get("StorageMax").and_then(Value::as_u64).unwrap_or(0),
         "objects": v.get("NumObjects").and_then(Value::as_u64).unwrap_or(0),
     }))
+}
+
+/// 사진·메뉴판을 얼마까지 둘지 정한다.
+///
+/// 🔴 「쉬운 설정」이 이걸 부른다. **여기서 조용히 실패하면 화면의 "다 됐습니다"
+/// 가 거짓말이 된다** — 그래서 실패를 삼키지 않고 그대로 돌려준다.
+///
+/// IPFS 는 이 값을 `Datastore.StorageMax` 에 문자열로 둔다(`"15GB"`). 숫자로
+/// 넣으면 데몬이 조용히 무시한다 — 화면에는 바뀐 것처럼 보이고 실제로는
+/// 안 바뀐다.
+///
+/// ⚠️ 바뀐 값은 **데몬을 다시 켜야** 적용된다. 그 사실을 같이 돌려준다.
+/// "설정했습니다" 만 말하고 안 되어 있으면 그게 제일 나쁘다.
+#[tauri::command]
+pub async fn ipfs_set_storage_max(gb: f64) -> Result<Value, String> {
+    // 5GB 아래면 사진 몇 장에 차 버려서 "왜 사진이 안 올라가지" 가 된다.
+    // 위쪽은 디스크를 통째로 먹지 않게 막는다.
+    if !(5.0..=500.0).contains(&gb) {
+        return Err("5GB 에서 500GB 사이로 정해 주세요.".into());
+    }
+    let want = format!("{}GB", gb.round() as i64);
+    let r = reqwest::Client::new()
+        .post(format!("{API}/config?arg=Datastore.StorageMax&arg={want}"))
+        .send()
+        .await
+        .map_err(|e| format!("IPFS 에 닿지 못했습니다: {e}"))?;
+    if !r.status().is_success() {
+        return Err(format!("IPFS 가 거절했습니다({}).", r.status()));
+    }
+    Ok(json!({ "storage_max": want, "needs_restart": true }))
 }

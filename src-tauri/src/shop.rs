@@ -344,6 +344,10 @@ pub fn split_payment(total: f64, fee_rate: f64, fee_address: String) -> Value {
         "shop_gets": shop,
         "fee": fee,
         "fee_rate": fee_rate,
+        // 🔴 **어디로 갔는지** 를 같이 돌려준다. 여태 금액만 있어서, 수수료가
+        // 맞는 주소로 갔는지 확인할 방법이 화면에 없었다. 확인할 수 없는 돈은
+        // 없는 돈과 같다. 주소는 원래 체인에 공개되므로 숨길 것이 아니다.
+        "fee_address": if collect { fee_address.trim() } else { "" },
         "collected": collect,
         // Why nothing was taken, so the UI never shows a silent zero.
         "skip_reason": if fee_address.trim().is_empty() {
@@ -927,10 +931,26 @@ pub fn fee_config() -> (f64, String) {
     (rate, addr)
 }
 
-/// 우리가 받을 주소. 비워 두면 아무것도 걷히지 않는다 — 주소를 코드에
-/// 박아 두는 대신 배포할 때 채운다. 잘못된 주소를 박으면 그리로 간 돈은
-/// 영원히 사라진다.
-const PLATFORM_ADDRESS: &str = "";
+/// 우리가 받을 주소.
+///
+/// 🔴 **한 글자만 틀려도 그리로 간 돈은 영원히 사라진다.** 체인은 되돌리지
+/// 않고, 아무도 되돌려 줄 수 없다. 그래서 눈으로 보고 넣지 않았다 —
+/// 노드에게 검사시켰다(2026-08-21):
+///
+/// ```text
+/// $ raven-cli validateaddress RLFnbkjmf1VCVq7D9TZvRp7fv6W97rm2cB
+///   "isvalid": true,  "ismine": true,
+///   "account": "PLAY X 1% 수수료",
+///   "hdkeypath": "m/44'/175'/0'/0/63"
+/// ```
+///
+/// ⚠️ 이 주소의 열쇠는 대표님 지갑(`m/44'/175'/0'/0/63`)에 있다. **그 지갑의
+/// 12단어를 잃으면 여기 쌓인 수수료도 같이 잃는다.** 이 값을 고치는 사람은
+/// 위 명령을 다시 돌려서 `isvalid: true` 를 눈으로 확인하고 바꿀 것.
+///
+/// 사장은 `fee.json` 으로 이 값을 덮어쓰거나 아예 끌 수 있다. 못 끄는 것은
+/// 수수료가 아니라 세금이고, 오픈소스에서 세금은 포크로 사라진다.
+const PLATFORM_ADDRESS: &str = "RLFnbkjmf1VCVq7D9TZvRp7fv6W97rm2cB";
 
 /// 사장이 보고 끄는 화면용.
 #[tauri::command]
@@ -972,6 +992,45 @@ pub fn fee_save(on: bool, rate: Option<f64>, address: Option<String>) -> Result<
 #[cfg(test)]
 mod fee_tests {
     use super::*;
+
+    /// 🔴 수수료 주소는 **한 글자만 틀려도 그리로 간 돈이 영원히 사라진다.**
+    /// 체인은 되돌리지 않는다.
+    ///
+    /// 이 시험이 지키는 것 두 가지:
+    ///   1. 주소가 실제로 코드를 통과해 나오는가 — 상수만 고치고 배선을
+    ///      빠뜨리면 컴파일은 되고 수수료는 0원이다. 화면에는 아무 표시도
+    ///      안 나서, 몇 달 뒤 "왜 한 푼도 안 들어왔지" 로 알게 된다.
+    ///   2. 글자가 바뀌지 않았는가 — 리팩터링이나 자동 수정이 한 글자를
+    ///      건드려도 컴파일은 통과한다. 그러면 남의 주소로 돈이 간다.
+    ///
+    /// 값은 `raven-cli validateaddress` 로 확인했다(isvalid: true,
+    /// account "PLAY X 1% 수수료", hdkeypath m/44'/175'/0'/0/63).
+    /// 여기를 고치는 사람은 그 명령을 **다시 돌려서** 확인하고 바꿀 것.
+    #[test]
+    fn the_fee_address_is_exactly_what_the_node_validated() {
+        let _g = crate::paths::TEST_ENV.lock().unwrap_or_else(|e| e.into_inner());
+        // 사장 설정 파일이 끼어들지 않는 깨끗한 자리에서 본다.
+        let dir = std::env::temp_dir().join("playx-raven-test-feeaddr");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::env::set_var("PLAYX_RAVEN_HOME", &dir);
+
+        const EXPECTED: &str = "RLFnbkjmf1VCVq7D9TZvRp7fv6W97rm2cB";
+        assert_eq!(PLATFORM_ADDRESS, EXPECTED, "수수료 주소가 바뀌었다");
+
+        // 상수만 맞는 것으로는 부족하다. **실제로 나오는지** 본다.
+        let (rate, addr) = fee_config();
+        assert_eq!(addr, EXPECTED, "설정을 지나면서 주소가 바뀐다");
+        assert!((rate - 0.01).abs() < 1e-9, "기본 요율이 1% 가 아니다: {rate}");
+
+        // 그리고 그 주소로 진짜 나뉘는지. 여기까지 와야 "걷힌다" 가 사실이다.
+        let s = split_payment(1000.0, rate, addr);
+        assert_eq!(s["fee_address"], json!(EXPECTED));
+        assert_eq!(s["fee"], json!(10.0));
+        assert_eq!(s["collected"], json!(true));
+
+        std::env::remove_var("PLAYX_RAVEN_HOME");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     /// 손님은 메뉴 가격을 낸다. 우리 몫은 **총액에서** 나온다.
     /// 이걸 반대로 하면 손님 화면의 금액이 우리 때문에 올라간다.

@@ -261,7 +261,32 @@
       .ravisheet .ans { margin-top: 12px; font-size: 15px; line-height: 1.75;
         white-space: pre-wrap; display: flex; gap: 8px; align-items: flex-start; }
       .ravisheet .ans img { width: 28px; height: 28px; border-radius: 9px; flex: none; }
+      /* 손님이 자기 AI 열쇠를 넣는 칸. 평소엔 없다 — 한도가 찼을 때만 나온다. */
+      .keybox { margin-top: 14px; padding: 14px; border-radius: 14px;
+        border: 1px solid var(--line); background: var(--panel); }
+      .keybox .btn { display: flex; align-items: center; justify-content: center;
+        min-height: 48px; border-radius: 12px; border: 1px solid var(--line);
+        background: var(--bg); color: var(--fg); text-decoration: none;
+        font-size: 15px; font-weight: 600; }
+      /* 🔴 16px 미만이면 아이폰 사파리가 탭할 때마다 화면을 확대한다. */
+      .keybox input { width: 100%; min-height: 48px; margin-top: 8px; padding: 0 12px;
+        font-size: 16px; border: 1px solid var(--line); border-radius: 12px;
+        background: var(--bg); color: var(--fg); }
+      /* 파는 사람에게 거는 자리. 이 화면에서 제일 중요한 단추라
+         제일 크다 — 여기가 없으면 장터가 아니라 게시판이다. */
+      .contact { margin-top: 18px; display: grid; gap: 10px; }
+      .cbtn { display: flex; align-items: center; justify-content: center;
+        min-height: 56px; border-radius: 14px; font-size: 17px; font-weight: 600;
+        text-decoration: none; border: 1px solid var(--line);
+        background: var(--panel); color: var(--fg); }
+      .cbtn.call { background: var(--ravi); border-color: var(--ravi); color: #fff; }
+      /* 「이 물건 사기」가 이 화면의 주인공이다. 전화보다 위, 더 크게. */
+      .cbtn.buy { flex-direction: column; gap: 2px; min-height: 64px;
+        background: var(--accent); border-color: var(--accent); color: #fff; }
+      .cbtn .sub2 { font-size: 13px; font-weight: 400; opacity: .85; }
 </style>
+    <script src="/i18n.js"></script>
+    <script src="/ravi.js"></script>
   </head>
   <body>
     <!-- 들어올 문만 만들고 나갈 문을 안 만들었다. 폰에 뒤로가기가 있지만,
@@ -593,5 +618,22 @@
         <span>물건</span>
       </a>
     </nav>
+    <script>
+      // 손님 폰이 정한 말로 화면을 바꾼다. 없는 문장은 한국어
+      // 그대로 둔다 — 빈 자리보다 낫다.
+      window.translateDom && translateDom(document.body);
+    </script>
+
+    <script>
+      /* 라비는 **가게 컴퓨터의 열쇠**로 깨어난다. 이 폰에는 키를 넣지 않는다.
+         (why: ravi.js 첫 주석) */
+      (async () => {
+        const st = await window.Ravi.status();
+        document.querySelectorAll("[data-ravi]").forEach((el) => {
+          if (st.awake) return;                 // 깨어 있으면 원래대로 둔다
+          el.hidden = true;             // 손님에게는 없는 기능이다
+        });
+      })();
+    </script>
 </body>
 </html>
