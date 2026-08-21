@@ -2099,6 +2099,10 @@ const SHOP_FIELDS: Record<string, string> = {
   location: "sh-loc",
   phone: "sh-phone",
   asset: "sh-asset",
+  // 🔴 돈 받을 주소(`sh-addr`)와 소각 확인칸(`sh-confirm`)은 **일부러 없다.**
+  // 그 둘은 틀리면 되돌릴 수 없다 — 라비가 채우면 사장은 화면에 뜬 것을
+  // 확인이라 여기고 그대로 누른다.
+  order_url: "sh-orderurl",
 };
 
 function applyActions(actions: any[]): string[] {
@@ -2111,6 +2115,20 @@ function applyActions(actions: any[]): string[] {
           if (!id) break;
           ($(id) as HTMLInputElement).value = String(a.value ?? "");
           done.push(`${a.field} → ${a.value}`);
+          break;
+        }
+        // 사장이 **제일 자주 하는 일**이다 — "오늘 쉰다", "재료 떨어졌다".
+        // 체크박스를 찾는 것보다 말하는 편이 확실히 빠르고, 틀려도 값이 0이다
+        // (다시 켜면 그만이고 체인에 남지 않는다).
+        case "closed": {
+          const box = $("sh-closednow") as HTMLInputElement | null;
+          const note = $("sh-closednote") as HTMLInputElement | null;
+          if (!box) break;
+          box.checked = !!a.today;
+          // 이유를 같이 적는다. 닫힌 문만 보는 것과 "재료가 떨어졌습니다" 를
+          // 보는 것은 손님에게 아주 다른 일이다.
+          if (note && typeof a.note === "string") note.value = a.note.slice(0, 60);
+          done.push(a.today ? `오늘 쉼${a.note ? ` — ${a.note}` : ""}` : "다시 엽니다");
           break;
         }
         case "shop_flag": {
@@ -2412,6 +2430,95 @@ async function chatSend() {
     chatHistory.push({ role: "user", text: q }, { role: "assistant", text: r.reply || "" });
   } catch (e) {
     chatSay("ai", String(e));
+  }
+}
+
+
+/**
+ * 말로 적은 것을 보고 **어떤 자산인지 라비가 고른다.**
+ *
+ * 🔴 `ai.rs` 에 이 안내가 완성돼 있었는데(여섯 종류·각 소각량·무엇이 영원한지·
+ * 더 싼 대안까지) **부르는 코드가 없었다.** 만들어졌는데 길이 없던 것이다.
+ *
+ * 사장은 "회원권 만들고 싶다" 라고 말할 줄 알지 "유니크 자산" 이라는 말은
+ * 모른다. 그 사이를 잇는 것이 이 함수다.
+ *
+ * ⚠️ **라비는 고르고 채우기만 한다.** 다음 단계로 자동으로 넘기지 않고,
+ * 소각 단추를 대신 누르지도 않는다. 500 RVN 이 타고 이름은 영원하다 —
+ * 그 마지막 한 번은 사람이 눌러야 하고, 그러려면 사람이 읽어야 한다.
+ */
+async function aiPickIssue(): Promise<void> {
+  const input = ($("ai-issue") as HTMLInputElement).value.trim();
+  const note = $("ai-issue-note");
+  const out = $("ai-issue-out");
+  if (!input) {
+    note.textContent = "무엇을 만들고 싶으신지 한 줄만 적어 주세요.";
+    return;
+  }
+  if (!aiProvider) {
+    note.textContent = "설정에서 AI 열쇠를 넣으시면 라비가 골라 드립니다.";
+    return;
+  }
+  note.textContent = "생각하는 중…";
+  out.innerHTML = "";
+  try {
+    const r = await invoke<any>("ai_fill", { provider: aiProvider, task: "issue", input });
+
+    // 무엇을 만들지 못 정했으면 되묻는다. 억지로 하나 고르면 그게 500 RVN 이 된다.
+    if (!r?.kind) {
+      note.textContent = "";
+      out.innerHTML = `<div class="aipick">
+        <div class="k">조금 더 알려 주세요</div>
+        <div class="row2">${escapeHtml(r?.why || "무엇에 쓰실 것인지 한 줄만 더 적어 주세요.")}</div>
+      </div>`;
+      return;
+    }
+
+    // 🔴 라비가 만들 수 없는 종류를 고르면 여기서 막는다. 화면이 그 종류를
+    //    안 갖고 있으면 사장은 "골라 줬는데 없다" 를 겪는다.
+    const KNOWN: Record<string, string> = {
+      root: "가게·브랜드 (루트)",
+      sub: "브랜드 아래 상품 (하위)",
+      unique: "한 사람에 하나 (유니크)",
+      qualifier: "자격 배지",
+      restricted: "제한 자산",
+    };
+    const label = KNOWN[String(r.kind)];
+    if (!label) {
+      note.textContent = "";
+      out.innerHTML = `<div class="aipick">
+        <div class="k">이건 아직 이 화면에서 못 만듭니다</div>
+        <div class="row2">라비가 <b>${escapeHtml(String(r.kind))}</b> 를 골랐는데
+          이 프로그램에 그 종류가 없습니다. 아래에서 직접 골라 주세요.</div>
+      </div>`;
+      return;
+    }
+
+    const burn = Number(r.burn_rvn) || 0;
+    note.textContent = "";
+    out.innerHTML = `<div class="aipick">
+      <div class="k">${escapeHtml(label)}</div>
+      <div class="row2">${escapeHtml(String(r.why || ""))}</div>
+      <div class="row2">태울 돈 <span class="burn">${burn} RVN</span>
+        ${r.name ? ` · 이름 <code>${escapeHtml(String(r.name))}</code>` : ""}</div>
+      ${r.permanent ? `<div class="row2">🔴 ${escapeHtml(String(r.permanent))}</div>` : ""}
+      ${r.alternative ? `<div class="row2 muted">${escapeHtml(String(r.alternative))}</div>` : ""}
+      <div class="row2 muted">아래에서 <b>직접 고르셔야</b> 다음으로 넘어갑니다 —
+        라비는 골라 드리기만 합니다.</div>
+    </div>`;
+
+    // 이름·수량은 미리 채워 둔다. 여기까지는 틀려도 값이 0이다.
+    const set = (id: string, v: unknown) => {
+      const el = $(id) as HTMLInputElement | null;
+      if (el && v !== undefined && v !== null && String(v) !== "") el.value = String(v);
+    };
+    set("i-name", r.name);
+    set("i-qty", r.qty);
+    set("i-units", r.units);
+    const re = $("i-reissuable") as HTMLInputElement | null;
+    if (re && typeof r.reissuable === "boolean") re.checked = r.reissuable;
+  } catch (e) {
+    note.innerHTML = `<span style="color:var(--bad)">${escapeHtml(String(e))}</span>`;
   }
 }
 
@@ -5927,6 +6034,11 @@ window.addEventListener("DOMContentLoaded", () => {
   $("ord-reset").addEventListener("click", resetOrder);
   loadOrder();
   $("ai-shop-go").addEventListener("click", aiFillShop);
+  $("ai-issue-go").addEventListener("click", () => void aiPickIssue());
+  // 엔터로도 된다. 단추를 찾아 누르는 것보다 그 자리에서 치는 편이 빠르다.
+  $("ai-issue").addEventListener("keydown", (e) => {
+    if ((e as KeyboardEvent).key === "Enter") void aiPickIssue();
+  });
   $("ai-menu-go").addEventListener("click", aiFillMenu);
   refreshSwitchState();
   // 이벤트 객체가 목적지 인자로 넘어가지 않게 감싼다. 안 감쌌으면

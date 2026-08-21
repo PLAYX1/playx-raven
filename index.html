@@ -736,6 +736,33 @@
       .onceoff > *:not(summary) { margin-left: 16px; margin-right: 16px; }
       .onceoff > *:last-child { margin-bottom: 16px; }
       @media (prefers-reduced-motion: reduce) { .onceoff .oico { transition: none; } }
+      /* 라비에게 묻는 칸. 마법사 첫 단계 맨 위 — 종류 이름을 모르는 사장이
+         제일 먼저 만나는 자리다. */
+      .aiask { display: flex; gap: 12px; align-items: flex-start;
+        padding: 14px; border-radius: 14px; background: var(--ravi-tint);
+        border: 1px solid var(--ravi); margin-bottom: 14px; }
+      .aiask .ravihead { width: 44px; height: 44px; border-radius: 12px; flex: none; }
+      /* 🔴 이 칸은 문장이 들어온다 — "우리 헬스장 3개월 회원권을 30명한테".
+         153px 에 13px 글자면 사장은 자기가 뭘 쳤는지 못 본다. */
+      .aiask input { flex: 1; min-width: 0; min-height: 48px; font-size: 16px;
+        padding: 0 12px; }
+      /* 🔴 `.row` 는 `.form` 안에서만 flex 다(156줄). 발행 마법사는 `.form`
+         이 아니라서 여기 `.row` 는 그냥 block 이었고, 칸이 194px 에 갇혔다.
+         부모 규칙에 기대지 않고 여기서 직접 준다. */
+      .aiask .row { display: flex; gap: 8px; align-items: center; }
+      .aiask button { flex: none; min-height: 48px; white-space: nowrap; }
+      /* 좁아지면 단추를 아래로 내린다. 나란히 두면 칸이 다시 좁아진다. */
+      @media (max-width: 720px) {
+        .aiask .row { flex-wrap: wrap; }
+        .aiask button { width: 100%; }
+      }
+      /* 라비가 고른 것. 사장이 읽고 나서 아래에서 직접 고른다 — 자동으로
+         다음 단계로 넘기지 않는다. 500 RVN 이 걸린 선택이다. */
+      .aipick { padding: 14px; border-radius: 14px; border: 1px solid var(--line);
+        background: var(--panel); margin-bottom: 14px; }
+      .aipick .k { font-size: 17px; font-weight: 700; }
+      .aipick .burn { color: var(--warn); font-weight: 600; }
+      .aipick .row2 { margin-top: 8px; font-size: 15px; line-height: 1.7; }
 </style>
   </head>
   <body>
@@ -1914,6 +1941,30 @@
         <!-- 1. 무엇을. 값만 적으면 무엇을 고를지 모른다 — 어떤 가게가
              언제 쓰는지를 같이 보여준다. -->
         <div class="wstep on" data-step="1">
+          <!-- 🔴 이 칸이 없어서 `ai.rs` 의 발행 안내가 **한 번도 불린 적이
+               없었다.** 여섯 종류·각 소각량·무엇이 영원한지·더 싼 대안까지
+               다 쓰여 있는데 부르는 코드가 없었다. 만들어졌는데 길이 없던 것이다.
+
+               사장은 "회원권 만들고 싶다" 라고 말할 줄 알지 "유니크 자산"
+               이라는 말은 모른다. 그 사이를 라비가 잇는다.
+
+               ⚠️ 라비는 **고르고 채우기만** 한다. 소각은 5단계에서 사장이
+                  이름을 직접 쳐야 열린다. 500 RVN 이 타고 이름은 영원하다. -->
+          <div class="aiask">
+            <img src="/raven-head.webp" alt="" class="ravihead" />
+            <div style="flex:1">
+              <label style="display:block;font-size:14px;color:var(--muted)">
+                무엇을 만들고 싶으신지 말로 적어 보세요
+              </label>
+              <div class="row" style="margin-top:6px">
+                <input id="ai-issue" autocomplete="off"
+                       placeholder="예: 우리 헬스장 3개월 회원권을 30명한테 주고 싶어요" />
+                <button class="ghost" id="ai-issue-go">라비에게 묻기</button>
+              </div>
+              <div class="meta" id="ai-issue-note"></div>
+            </div>
+          </div>
+          <div id="ai-issue-out"></div>
           <div id="wz-kinds"></div>
         </div>
 
