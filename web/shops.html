@@ -216,6 +216,51 @@
       .tabbar a svg { width: 22px; height: 22px; }
       /* 바가 본문 끝을 가리지 않게. 고정 바는 늘 이 짝이 필요하다. */
       body { padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)); }
+      /* ── 물건 자세히 ─────────────────────────────────────────────────
+         🔴 이 규칙이 통째로 없었다. `openItem` 이 `display:""` 로 켜기는
+         하는데 배치가 없어서 **목록 30개 밑에 조용히 그려졌다** — 사장은
+         "눌러도 아무 일이 안 난다" 고 겪는다. 실제로 그렇게 보였다.
+
+         화면을 갈아 끼우지 않고 아래에서 올라오는 판으로 연다. 목록에서
+         자기가 어디를 보고 있었는지 잃지 않는다. */
+      #sheet {
+        position: fixed; inset: 0; z-index: 100;
+        background: rgba(0, 0, 0, .38);
+        display: flex; align-items: flex-end; justify-content: center;
+        -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
+      }
+      .sheetin {
+        width: 100%; max-width: 560px; max-height: 86vh; overflow-y: auto;
+        background: var(--bg); color: var(--fg);
+        border-radius: 20px 20px 0 0;
+        padding: 20px 18px calc(24px + env(safe-area-inset-bottom, 0px));
+        animation: sheetup .26s cubic-bezier(.2, .9, .3, 1) both;
+      }
+      @keyframes sheetup { from { transform: translateY(24px); opacity: .6; } to { transform: none; opacity: 1; } }
+      @media (prefers-reduced-motion: reduce) { .sheetin { animation: none; } }
+      /* 닫기는 오른쪽 위. 44px 이상이어야 손가락으로 닫힌다. */
+      .sheetx {
+        float: right; min-height: 44px; padding: 0 14px; font-size: 15px;
+        border: 1px solid var(--line); border-radius: 10px;
+        background: none; color: var(--muted); cursor: pointer;
+      }
+      /* Ravi 를 부르는 자리. 탭 바 위에 뜬다. */
+      .raviask { position: fixed; right: 14px; z-index: 60;
+        bottom: calc(74px + env(safe-area-inset-bottom, 0px));
+        display: flex; align-items: center; gap: 8px;
+        padding: 7px 15px 7px 7px; border-radius: 999px;
+        border: 1px solid var(--line); background: var(--bg);
+        box-shadow: 0 4px 16px rgba(0,0,0,.14);
+        font-size: 14px; font-weight: 600; color: var(--fg);
+        min-height: 48px; cursor: pointer; }
+      .raviask img { width: 32px; height: 32px; border-radius: 999px; }
+      .ravisheet .qa { margin-top: 12px; }
+      .ravisheet input { width: 100%; min-height: 48px; padding: 0 14px;
+        border: 1px solid var(--line); border-radius: 12px; background: var(--bg);
+        color: var(--fg); font: inherit; font-size: 16px; }
+      .ravisheet .ans { margin-top: 12px; font-size: 15px; line-height: 1.75;
+        white-space: pre-wrap; display: flex; gap: 8px; align-items: flex-start; }
+      .ravisheet .ans img { width: 28px; height: 28px; border-radius: 9px; flex: none; }
 </style>
   </head>
   <body>
@@ -524,7 +569,14 @@
       load();
     </script>
       <script src="/shops.bundle.js"></script>
-      <nav class="tabbar">
+      <!-- 손님도 물어볼 수 있어야 한다. 여기 있는 사람은 사장이 아니라
+         손님이라 **가게 정보만** 답하는 쪽을 쓴다. -->
+    <button class="raviask" id="ravi-ask">
+      <img src="/raven-head.webp" alt="" />
+      <span>Ravi에게 물어보기</span>
+    </button>
+
+    <nav class="tabbar">
       <a href="/wallet" class="tab">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/><circle cx="17" cy="14" r="1.3"/></svg>

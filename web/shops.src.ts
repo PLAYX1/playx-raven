@@ -154,6 +154,70 @@ function draw(): void {
   paint();
 }
 
+// ── Ravi 에게 묻기 ─────────────────────────────────────────────────────────
+//
+// 여기 있는 사람은 사장이 아니라 **손님**이다. 그래서 가게 노드의 손님용
+// 응대(`/api/ask`)를 쓴다 — 가게가 올린 정보로만 답하고, 하루 200회·3초
+// 간격 제한이 이미 걸려 있다.
+//
+// ⚠️ rvn.ex.erci.se 에서 열면 가게 노드가 없다. 그때는 물어볼 곳이 없으므로
+// 버튼을 아예 숨긴다 — 눌러도 안 되는 버튼은 고장으로 읽힌다.
+function wireRaviAsk(): void {
+  const btn = document.getElementById("ravi-ask");
+  if (!btn) return;
+  // 가게 노드에서 열렸을 때만 보인다.
+  const local = /^(localhost|127\.0\.0\.1|\d+\.\d+\.\d+\.\d+)$/.test(location.hostname)
+    || location.hostname.endsWith(".local");
+  if (!local) {
+    btn.style.display = "none";
+    return;
+  }
+  btn.onclick = () => {
+    const box = $("sheet");
+    box.innerHTML = `<div class="sheetin ravisheet">
+        <button class="sheetx" id="sheet-close">닫기</button>
+        <h2 style="margin:0 0 4px;font-size:19px">Ravi에게 물어보기</h2>
+        <p class="sub" style="margin:0">이 가게에 대해 물어보세요.</p>
+        <div class="qa">
+          <input id="ravi-q" placeholder="견과류 들어간 메뉴 있나요?" autocomplete="off" />
+          <button id="ravi-go" style="width:100%;margin-top:10px">묻기</button>
+        </div>
+        <div class="ans" id="ravi-a"></div>
+        <p class="foot" style="margin-top:14px">
+          가게가 올린 정보로만 답합니다. 확실하지 않으면 가게에 직접 확인하세요.
+        </p>
+      </div>`;
+    box.style.display = "";
+    $("sheet-close").onclick = () => (box.style.display = "none");
+    box.onclick = (ev) => {
+      if (ev.target === box) box.style.display = "none";
+    };
+    const ask = async () => {
+      const q = ($("ravi-q") as HTMLInputElement).value.trim();
+      if (!q) return;
+      $("ravi-a").innerHTML = `<span class="sub">생각하는 중…</span>`;
+      try {
+        const r = await fetch("/api/ask", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ question: q }),
+        }).then((x) => x.json());
+        $("ravi-a").innerHTML = r?.error
+          ? `<span class="sub">${esc(r.error)}</span>`
+          : `<img src="/raven-head.webp" alt="" /><span></span>`;
+        const span = $("ravi-a").querySelector("span");
+        if (span && !r?.error) span.textContent = r.answer || "";
+      } catch {
+        $("ravi-a").innerHTML = `<span class="sub">지금은 답할 수 없습니다.</span>`;
+      }
+    };
+    ($("ravi-go") as HTMLElement).onclick = () => void ask();
+    ($("ravi-q") as HTMLInputElement).onkeydown = (e) => {
+      if (e.key === "Enter") void ask();
+    };
+  };
+}
+
 function openItem(r: { e: NostrEvent; dist: number | null }): void {
   const e = r.e;
   const img = firstImage(e);
@@ -236,6 +300,8 @@ function tabs(): void {
     const b = document.querySelector<HTMLElement>('[data-tab="items"]');
     if (b) setTimeout(() => b.click(), 0);
   }
+
+  wireRaviAsk();
 
   document.querySelectorAll<HTMLElement>("[data-tab]").forEach((b) => {
     b.onclick = () => {
