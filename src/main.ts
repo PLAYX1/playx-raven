@@ -857,6 +857,30 @@ async function paintSweepKrw(): Promise<void> {
 // 적으라고** 말한다.
 //
 // 처음부터 화면에 띄우지 않는 이유: 사장 뒤에 손님이 서 있을 수 있다.
+
+// ── 개발비 ───────────────────────────────────────────────────────────────
+//
+// 🔴 이 칸은 여태 「고급 → 읽기 전용」 접힌 칸 맨 안쪽에 있었다. 화면 전체에서
+// 딱 한 번, 제일 깊은 곳에. 나중에 발견한 사장은 1% 가 아니라 프로그램 전체를
+// 의심한다 — 그게 숨기면 안 되는 진짜 이유다.
+//
+// ⚠️ 「읽는 중…」에서 멈추면 그건 고장으로 읽힌다. 못 읽었으면 못 읽었다고 한다.
+async function paintFee(): Promise<void> {
+  const el = document.getElementById("fee-addr");
+  if (!el) return;
+  try {
+    const r = await invoke<any>("fee_read");
+    const addr = String(r?.address || "").trim();
+    el.textContent = addr || "아직 정해지지 않았습니다";
+    // 꺼져 있으면 그렇게 말한다. 켜진 척하지 않는다.
+    if (r && r.on === false) {
+      el.textContent = `${addr || "—"} (지금은 꺼져 있습니다)`;
+    }
+  } catch (e) {
+    el.textContent = "주소를 읽지 못했습니다";
+  }
+}
+
 function wireCloudKey(): void {
   const show = document.getElementById("ck-show");
   const box = document.getElementById("ck-key");
@@ -874,6 +898,7 @@ function wireCloudKey(): void {
         box.textContent = "눌러서 보기";
         box.classList.remove("on");
         wireCloudKey();
+    void paintFee();
       };
     } catch (e) {
       box.textContent = `열쇠를 읽지 못했습니다: ${String((e as Error)?.message || e)}`;

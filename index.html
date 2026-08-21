@@ -697,6 +697,9 @@
         padding: 12px; border-radius: 12px; background: var(--panel);
         border: 1px solid var(--line); color: var(--muted); }
       .keyshow.on { color: var(--fg); font-weight: 600; }
+      /* 개발비 칸. 숨기지 않는 것이 요점이라 눈에 띄어야 한다 —
+         다만 경고는 아니므로 붉은색은 쓰지 않는다. */
+      .feecard { border-color: var(--accent); margin-bottom: 16px; }
 </style>
   </head>
   <body>
@@ -1501,6 +1504,34 @@
       <section class="page" id="page-settings">
         <h2 class="title">이 컴퓨터</h2>
 
+        <!-- 🔴 이 칸은 여태 「고급 → 읽기 전용」 접힌 칸 **맨 안쪽**에 있었다.
+             화면 전체에서 딱 한 번, 제일 깊은 곳에.
+
+             숨기면 안 되는 이유는 정직해서가 아니라 **장사가 걸려서**다.
+             나중에 발견한 사장은 1% 가 아니라 프로그램 전체를 의심한다.
+             그리고 어차피 트랜잭션을 열어보면 드러난다 — 열어보면 드러나는
+             것을 설정으로 숨기는 것이 제일 나쁘다.
+
+             이름도 「수수료」가 아니라 「개발비」다. 수수료는 우리가 무슨
+             서비스를 해 주고 받는 값처럼 들리는데, 우리는 사장 매출에
+             끼어들지 않는다(매출은 우리 서버를 안 지나간다). 이건 이
+             프로그램을 만들고 고치는 값이다. -->
+        <div class="card feecard">
+          <h3 style="margin-top:0">개발비 1%</h3>
+          <p class="meta" style="margin:6px 0 10px">
+            손님이 낸 돈의 <b>1%</b>가 이 프로그램을 만드는 곳으로 갑니다.
+            나머지 99%는 사장님 지갑으로 바로 들어옵니다.
+            <b>손님이 더 내는 것이 아니라</b>, 받으신 금액에서 나뉩니다.
+          </p>
+          <div class="kv"><b>붙는 곳</b><span>가게 결제 · 벤딩머신 · 중고 물건 사기</span></div>
+          <div class="kv"><b>안 붙는 곳</b><span>채굴 · 그냥 보내기 · 자산 발행</span></div>
+          <div class="kv"><b>가는 자리</b><span><code class="addr" id="fee-addr">읽는 중…</code></span></div>
+          <p class="meta" style="margin-top:10px">
+            체인에서 직접 확인하실 수 있습니다. 카드 수수료(2~3%)와 달리
+            <b>단말기 임대료도 정산 대기도 없습니다.</b>
+          </p>
+        </div>
+
         <!-- ── 쉬운 설정 ────────────────────────────────────────────────
              🔴 이 화면에는 입력칸 24개·단추 31개가 있었다. 판단을 하나씩
              사장에게 떠넘긴 결과다. 복잡함은 사라지지 않는다 — 사장에게서
@@ -1803,8 +1834,6 @@
             <div class="kv"><b>노드 RPC</b><span>127.0.0.1:8766 · 쿠키 인증</span></div>
             <div class="kv"><b>IPFS API</b><span>127.0.0.1:5001</span></div>
             <div class="kv"><b>IPFS 게이트웨이</b><span>127.0.0.1:8080</span></div>
-            <div class="kv"><b>판매 수수료</b><span>판매액의 1% · <code class="addr" id="fee-addr">아직 설정되지 않음</code></span></div>
-            <p class="meta">수수료를 끄는 스위치는 두지 않습니다 — 트랜잭션을 열어보면 드러나는 것을 설정으로 숨기면 더 나쁩니다.</p>
           </div>
         </details>
       </section>

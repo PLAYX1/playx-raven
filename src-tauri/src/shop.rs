@@ -351,9 +351,9 @@ pub fn split_payment(total: f64, fee_rate: f64, fee_address: String) -> Value {
         "collected": collect,
         // Why nothing was taken, so the UI never shows a silent zero.
         "skip_reason": if fee_address.trim().is_empty() {
-            "수수료 주소가 설정되지 않았습니다"
+            "개발비 주소가 정해지지 않았습니다"
         } else if !collect {
-            "수수료가 너무 작아 보내지 않습니다"
+            "개발비가 너무 작아 보내지 않습니다"
         } else { "" },
     })
 }
@@ -373,7 +373,7 @@ pub async fn pay_order(
     if shop_address.trim() == fee_address.trim() {
         // sendmany keys by address, so the same address twice would silently
         // collapse into one output and lose money.
-        return Err("가게 주소와 수수료 주소가 같습니다.".into());
+        return Err("가게 주소와 개발비 주소가 같습니다.".into());
     }
 
     let split = split_payment(total, fee_rate, fee_address.clone());
