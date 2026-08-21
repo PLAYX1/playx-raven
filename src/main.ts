@@ -1025,6 +1025,11 @@ async function applyEasySetup(sug: any): Promise<void> {
   }
 }
 
+/// 노드가 살아 있는가. 라비가 자는지 정하는 **유일한** 근거다.
+/// `null` = 아직 안 물어봤다 — 그때는 깨어 있는 쪽으로 친다. 켜자마자
+/// 자는 얼굴이 뜨면 사장은 고장으로 읽는다.
+let nodeUp: boolean | null = null;
+
 async function paintStatusDots() {
   const set = (dot: string, label: string, ok: boolean, text: string) => {
     const d = document.getElementById(dot);
@@ -1041,9 +1046,13 @@ async function paintStatusDots() {
     // 켜져 있는 것과 따라잡은 것은 다르다. 동기화 중이면 결제 확인이 늦는다.
     const synced = (n?.progress ?? 0) > 0.9999;
     set("d-node", "d-node-t", true, synced ? "노드 켜짐" : "노드 따라잡는 중");
+    nodeUp = true;
   } catch {
     set("d-node", "d-node-t", false, "노드 꺼짐");
+    nodeUp = false;
   }
+  // 노드 상태가 바뀌면 라비 얼굴도 따라 바뀐다.
+  void refreshKeys().catch(() => {});
 
   try {
     const i = await invoke<any>("ipfs_status");
@@ -1435,7 +1444,16 @@ function renderSummary() {
   $("i-cost").innerHTML = `<div class="burn danger">${need} RVN 소각</div>
     <div class="meta">소각된 RVN은 돌아오지 않습니다. 네트워크 수수료는 별도입니다.</div>
     <div class="meta" id="i-have">지갑 확인 중…</div>`;
-  ($("i-confirm") as HTMLInputElement).placeholder = issueCheck?.name || "";
+  // 🔴 여기에 `issueCheck.name` 을 넣어 뒀었다. 즉 **정답을 칸 안에 흐리게
+  // 적어 두고 그걸 베끼라고** 한 셈이다. 그러면 이 게이트는 "이 이름이 맞다"
+  // 를 확인하는 것이 아니라 "베낄 줄 안다" 를 확인한다.
+  //
+  // 특히 이름을 라비가 채웠을 때 위험하다. 김치를 `KIMCHEE` 로 잘못 옮기면
+  // 사장은 화면에 뜬 글자를 그대로 쳐서 통과하고, **500 RVN 이 타고 그 이름은
+  // 영원히 안 바뀐다.** 보내기 확인의 「끝 4자리」와 똑같은 병이다.
+  //
+  // 답은 화면 위쪽 요약에만 있고, 이 칸은 비워 둔다.
+  ($("i-confirm") as HTMLInputElement).placeholder = "위에 적힌 이름을 직접 입력";
 
   // 소각액만 보여 주고 잔액을 안 보면, 사람은 이름을 다 적고 마지막에
   // "insufficient funds" 를 만난다. 그리고 매출 자동 이체가 5분마다 도니까
@@ -1952,13 +1970,33 @@ async function refreshKeys() {
     // 키가 없을 때는 대화창 안에서 그 자리에 넣게 되어 있으므로(chatNeedsKey),
     // 버튼은 **늘 보인다.**
     $("chat-open").style.display = "";
-    // 자는지 깨어 있는지 버튼이 먼저 말한다. 눌러 봐야 아는 것은 늦다.
-    const asleep = !have.length;
+    // 🔴 「자고 있다」의 뜻을 바꾼다.
+    //
+    // 여태 **API 키가 없으면** 라비가 잤다. 그리고 화면은 이렇게 말했다:
+    // "Ravi 는 AI 회사의 열쇠 하나로 깨어납니다."
+    //
+    // 사장이 그 말에서 읽는 것은 **"이 프로그램의 본체는 남의 회사다"** 이다.
+    // 그건 사실이 아닐 뿐 아니라(계산대·주문·QR·정산은 키 없이 전부 돈다),
+    // 소스를 열고 "아무 회사도 안 낀다" 고 말하는 것과 정면으로 부딪힌다.
+    //
+    // 자는 얼굴은 **진짜로 장사가 멈춘 상태**에만 쓴다 — 노드가 꺼졌을 때.
+    // 그때는 결제 확인이 안 되므로 자는 것이 사실이다.
+    // AI 열쇠가 없는 것은 "잠"이 아니라 **"아직 못 하는 일이 있음"** 이고,
+    // 그건 눌렀을 때 그 자리에서 말한다(`chatNeedsKey`).
+    const nodeDown = !(nodeUp ?? true);
+    const asleep = nodeDown;
     $("chat-open").classList.toggle("asleep", asleep);
     const img = $("chat-open").querySelector("img");
     if (img) (img as HTMLImageElement).src = asleep ? "/raven-sleep.webp" : "/raven-head.webp";
     const lbl = $("chat-open").querySelector("span");
-    if (lbl) lbl.textContent = asleep ? "Ravi 깨우기" : "Ravi에게 물어보기";
+    if (lbl) {
+      lbl.textContent = asleep
+        ? "노드가 꺼져 있어요"
+        : have.length
+          ? "Ravi에게 물어보기"
+          // 키가 없어도 라비는 깨어 있다. 다만 할 수 있는 일이 적다.
+          : "Ravi에게 물어보기";
+    }
     // Without a key the AI boxes are dead weight; say why rather than failing
     // on click.
     ["ai-shop-note", "ai-menu-note"].forEach((id) => {
@@ -2103,6 +2141,15 @@ function applyActions(actions: any[]): string[] {
           }
           break;
         case "menu_clear":
+          // 🔴 라비가 **혼자서** 할 수 있는 유일한 파괴적 동작이었다.
+          // 돈은 아니지만 사장이 하루 걸려 넣은 메뉴가 한 번에 사라지고,
+          // 되돌릴 방법이 없다. 말로 시킨 것과 시킨 줄 아는 것은 다르다.
+          if (menuItems.length && !confirm(
+            `메뉴 ${menuItems.length}개를 전부 지울까요?\n되돌릴 수 없습니다.`,
+          )) {
+            done.push("메뉴 지우기를 그만두었습니다");
+            break;
+          }
           done.push(`메뉴 ${menuItems.length}개 모두 지움`);
           menuItems.length = 0;
           break;
@@ -2127,6 +2174,31 @@ function applyActions(actions: any[]): string[] {
             done.push(`${a.screen} 화면으로 이동`);
           }
           break;
+
+        // 🔴 이 케이스가 **없었다.** 라비에게는 색 바꾸는 법을 7줄에 걸쳐
+        // 가르쳐 놓고(`ai.rs:321·329`), 받는 쪽이 비어 있었다. 뒤쪽은
+        // 멀쩡히 있다(`shop.rs` theme_read/save, `server.rs` 경로).
+        // **중간만 끊겨서**, 사장이 "가게 색 바꿔줘" 하면 라비는 바꿨다고
+        // 답하고 아무 일도 일어나지 않았다. 거짓말을 하게 만든 셈이다.
+        case "theme": {
+          const hex = (v: unknown) =>
+            /^[0-9a-f]{6}$/i.test(String(v ?? "")) ? `#${String(v)}` : "";
+          const accent = hex(a.accent);
+          const tint = hex(a.tint);
+          if (!accent) break;
+          // ⚠️ 옅은 accent 는 노드가 거절한다(`shop.rs`의 `ok_accent`) —
+          // 흰 글자가 안 읽히는 주문 단추가 되기 때문이다. 거절당하면
+          // 그 사실을 그대로 말한다. 조용히 넘기면 또 거짓말이 된다.
+          // `applyActions` 는 동기 함수다. 여기서 기다리면 나머지 동작이
+          // 멈추므로 보내 놓고, 결과는 대화창에 따로 적는다.
+          void invoke("theme_save", { accent, tint: tint || null })
+            .then(() => chatSay("ai", `가게 색을 ${accent} 로 바꿨습니다.`))
+            .catch((e) =>
+              chatSay("ai", `색을 못 바꿨습니다. ${String((e as Error)?.message || e)}`),
+            );
+          done.push(`가게 색 ${accent} 로 바꾸는 중`);
+          break;
+        }
         // 목록에 없는 것은 조용히 버린다. 모르는 동작을 추측해서 실행하면 안 된다.
       }
     } catch {}
@@ -2245,9 +2317,10 @@ function chatNeedsKey() {
     `<div class="wake">
        <img src="/raven-sleep.webp" alt="" />
        <div>
-         <b>Ravi 가 아직 자고 있어요.</b><br />
-         <span class="muted">Ravi 는 AI 회사의 열쇠 하나로 깨어납니다.
-         아래에서 한 곳만 받아 넣으면 바로 이야기할 수 있어요.</span>
+         <b>말로 시키려면 열쇠가 하나 필요해요.</b><br />
+         <span class="muted">주문·결제·QR·정산은 <b>지금도 전부 됩니다</b> —
+         이건 그 위에 얹는 도우미예요. AI 회사에서 열쇠를 하나 받아
+         넣으시면 말로 설정하고 물어보실 수 있어요.</span>
        </div>
      </div>
      <div class="muted" style="margin-top:10px;font-size:13px">

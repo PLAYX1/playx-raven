@@ -58,7 +58,7 @@ fn openai_compat(provider: &str) -> Option<(&'static str, &'static str)> {
 const DEFAULT_ANTHROPIC: &str = "claude-sonnet-5";
 const DEFAULT_OPENAI: &str = "gpt-4o";
 const DEFAULT_GOOGLE: &str = "gemini-3.7-flash";
-const DEFAULT_GROQ: &str = "llama-3.3-70b-versatile";
+const DEFAULT_GROQ: &str = "openai/gpt-oss-120b";
 const DEFAULT_XAI: &str = "grok-4";
 
 pub fn default_model(provider: &str) -> &'static str {
