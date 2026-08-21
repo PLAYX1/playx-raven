@@ -230,6 +230,13 @@ async function loadItems(): Promise<void> {
 }
 
 function tabs(): void {
+  // 아래 탭 바에서 「물건」으로 들어오면 그 탭이 열려 있어야 한다.
+  // 바를 눌렀는데 가게 목록이 뜨면 사람은 바가 고장 났다고 읽는다.
+  if (location.hash === "#items") {
+    const b = document.querySelector<HTMLElement>('[data-tab="items"]');
+    if (b) setTimeout(() => b.click(), 0);
+  }
+
   document.querySelectorAll<HTMLElement>("[data-tab]").forEach((b) => {
     b.onclick = () => {
       const which = b.dataset.tab!;
@@ -250,6 +257,12 @@ function tabs(): void {
         );
       }
       $("pagetitle").textContent = isShops ? "가게 찾기" : "물건 찾기";
+      // 주소를 맞춰 둔다. 안 그러면 뒤로가기가 엉뚱한 탭으로 돌아온다.
+      history.replaceState(null, "", isShops ? location.pathname : "#items");
+      document.querySelectorAll(".tabbar a").forEach((a) => {
+        const href = (a as HTMLAnchorElement).getAttribute("href") || "";
+        a.classList.toggle("on", isShops ? href === "/shops" : href === "/shops#items");
+      });
       if (!isShops) void loadItems();
     };
   });
