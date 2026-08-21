@@ -1,0 +1,154 @@
+# 맥·윈도우·리눅스 설치 파일을 만들어 공개 저장소에 올린다.
+#
+# 🔴 왜 깃허브에서 만드나 — **한 대의 컴퓨터로는 셋을 못 만든다.**
+# 리눅스 빌드에는 `webkit2gtk` 가 필요한데 그건 리눅스에만 있고, 윈도우
+# 빌드에는 WebView2 와 MSVC 링커가 필요한데 그건 윈도우에만 있다. 실측으로
+# 확인했다(맥에 webkit2gtk 없음). 그래서 세 기계가 각각 자기 것을 만든다.
+#
+# ## 어디에 올리나
+#
+# `PLAYX1/playx-raven-releases` — **파일만 담는 공개 저장소**다.
+# 소스가 있는 `playx-raven` 은 비공개로 남는다.
+#
+# 왜 나눴나:
+#   - 비공개 저장소의 릴리스 파일은 **로그인 없이는 안 열린다.** 사장에게
+#     깃허브 계정을 만들라고 할 수는 없다.
+#   - `playx` 본체에 넣으면 판올림마다 30MB 씩 저장소가 커지고, 한 번 커지면
+#     못 줄인다(지금 이미 .git 이 721MB).
+#
+# 사장은 깃허브 화면을 볼 일이 없다 — rvn.ex.erci.se 의 단추가 파일을 바로
+# 받는다. 깃허브 화면은 "어느 파일을 눌러야 하지" 로 사람을 잃는 자리다.
+#
+# ## ⚠️ 서명
+#
+# 자동 판올림은 `TAURI_SIGNING_PRIVATE_KEY` 로 서명된 것만 설치한다.
+# 그 열쇠는 **이 저장소에 없다**(`~/.playx-raven/updater.key`). 저장소 비밀로
+# 넣어 둔다. 새면 남이 가짜 판올림을 밀어넣을 수 있다.
+name: 설치 파일 만들기
+
+on:
+  push:
+    tags: ["v*"]
+  # 손으로도 돌릴 수 있어야 한다. 태그를 잘못 달았을 때 다시 만들 길이 없으면
+  # 태그를 지우고 다시 다는 수밖에 없고, 그건 이미 받은 사람을 헷갈리게 한다.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "판 번호 (예: 0.1.1)"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      # 🔴 한 기계가 실패해도 나머지는 끝까지 만든다. 기본값은 하나가 죽으면
+      # 전부 취소인데, 그러면 윈도우 하나 때문에 맥·리눅스까지 못 받는다.
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14          # 애플 실리콘
+            target: aarch64-apple-darwin
+            label: mac-apple-silicon
+          - os: macos-13          # 인텔 맥
+            target: x86_64-apple-darwin
+            label: mac-intel
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            label: windows
+          - os: ubuntu-22.04      # 22.04 로 고정 — 최신으로 올리면 glibc 가
+            target: x86_64-unknown-linux-gnu   # 새로워져서 옛 리눅스에서 안 돈다
+            label: linux
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # 리눅스만 재료를 따로 깐다. 나머지 둘은 OS 에 이미 있다.
+      - name: 리눅스 재료
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
+            librsvg2-dev patchelf libssl-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      # 빌드가 10분 넘게 걸린다. 매번 처음부터 하면 판올림 한 번에 40분이다.
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm ci
+
+      - name: 만들기
+        env:
+          # 자동 판올림이 검사할 서명. 없으면 만들어지긴 하는데 판올림이 안 된다.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npx tauri build --target ${{ matrix.target }}
+
+      - name: 만든 것 모으기
+        shell: bash
+        run: |
+          mkdir -p out
+          # 이름을 사람이 읽을 수 있게 바꾼다. 사장이 받은 파일을 보고
+          # "이게 내 컴퓨터 것이 맞나" 를 알 수 있어야 한다.
+          V="${GITHUB_REF_NAME#v}"
+          [ -z "$V" ] && V="${{ inputs.version }}"
+          B="src-tauri/target/${{ matrix.target }}/release/bundle"
+          find "$B" -maxdepth 2 -type f \
+            \( -name '*.dmg' -o -name '*.msi' -o -name '*.exe' -o -name '*.AppImage' -o -name '*.deb' \) \
+            -print0 | while IFS= read -r -d '' f; do
+              ext="${f##*.}"
+              cp "$f" "out/PLAY-X-Raven-${V}-${{ matrix.label }}.${ext}"
+            done
+          # 판올림용 묶음과 서명은 이름을 그대로 둔다 — 업데이터가 이 이름을 본다.
+          find "$B" -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.sig' \) \
+            -exec cp {} out/ \; 2>/dev/null || true
+          ls -la out/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.label }}
+          path: out/*
+
+  publish:
+    needs: build
+    # 🔴 하나가 실패해도 나머지는 올린다. 넷을 다 기다리면 윈도우 하나 때문에
+    # 맥 사장이 못 받는다. 무엇이 빠졌는지는 릴리스 설명에 적는다.
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: all
+
+      - name: 한 곳에 모으고 해시 적기
+        run: |
+          mkdir -p rel && find all -type f -exec cp {} rel/ \;
+          cd rel && sha256sum * > SHA256SUMS.txt || true
+          ls -la
+
+      - name: 공개 저장소에 올리기
+        env:
+          # ⚠️ 이건 `playx-raven-releases` 에 쓸 수 있는 토큰이다. 소스
+          # 저장소에는 못 쓴다 — 하나가 새도 소스가 같이 새지 않게.
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          [ -z "$V" ] && V="${{ inputs.version }}"
+          gh release create "v$V" rel/* \
+            --repo PLAYX1/playx-raven-releases \
+            --title "PLAY X Raven $V" \
+            --notes "가게 컴퓨터용 설치 파일입니다. 받는 곳: https://rvn.ex.erci.se
+
+이 저장소에는 **설치 파일만** 있습니다. 소스는 여기 없습니다." \
+            || gh release upload "v$V" rel/* --repo PLAYX1/playx-raven-releases --clobber
