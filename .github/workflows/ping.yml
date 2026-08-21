@@ -1,0 +1,7 @@
+name: 러너 확인
+on: { workflow_dispatch: {} }
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "러너가 잡혔습니다"
