@@ -105,12 +105,21 @@ jobs:
           # 🔴 webkit2gtk 만으로는 모자란다. 실측 실패: pangocairo·pango·
           # harfbuzz 를 못 찾아 링크가 죽었다. ubuntu-latest(24.04)가
           # 22.04 보다 기본 설치가 적어서, 22.04 에서는 안 나던 오류다.
+          # 🔴 두 번 실패하며 하나씩 늘려 봤는데, 그러다 보면 계속 하나씩
+          # 모자란다. Tauri 가 공식으로 적어 둔 목록을 통째로 쓴다.
+          #
+          # ⚠️ `-y` 만으로는 부족했다. 실패해도 계속 가서 링크 단계에서야
+          #    드러났다 — `set -e` 로 여기서 멈추게 한다.
+          set -e
           sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev \
-            patchelf libssl-dev \
-            libgtk-3-dev libpango1.0-dev libcairo2-dev libharfbuzz-dev \
-            libgdk-pixbuf-2.0-dev libglib2.0-dev libatk1.0-dev \
-            libsoup-3.0-dev libjavascriptcoregtk-4.1-dev
+            libwebkit2gtk-4.1-dev \
+            build-essential curl wget file \
+            libxdo-dev libssl-dev \
+            libayatana-appindicator3-dev librsvg2-dev patchelf
+          # 위가 Tauri v2 공식 목록이다. gtk·pango·cairo·atk 는 webkit2gtk 가
+          # 의존으로 끌어오므로 따로 적지 않는다 — 적으면 이름이 판마다 달라
+          # 오히려 깨진다(ubuntu-24.04 에서 libgdk-pixbuf-2.0-dev 가 그랬다).
+          pkg-config --exists gtk+-3.0 && echo "  gtk 있음" || { echo "🔴 gtk 없음"; exit 1; }
 
       - uses: dtolnay/rust-toolchain@stable
         with:
