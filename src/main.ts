@@ -3594,10 +3594,22 @@ async function loadReward() {
     $("rw-gate").innerHTML = "";
     $("rw-body").style.display = "";
     const n = await invoke<any>("reward_now");
-    ($("rw-height") as HTMLInputElement).value ||= String(n.suggest);
-    $("rw-now").textContent =
-      `지금 ${n.height.toLocaleString()}번 블록입니다. ` +
-      `${n.suggest.toLocaleString()}번이면 약 ${Math.round((n.suggest - n.height) * n.seconds_per_block / 60)}분 뒤입니다.`;
+    // 사장은 블록 번호를 모른다. "언제" 를 고르면 우리가 번호로 바꾼다.
+    const setWhen = (min: number) => {
+      const blocks = Math.max(2, Math.round((min * 60) / (n.seconds_per_block || 60)));
+      ($("rw-height") as HTMLInputElement).value = String(n.height + blocks);
+      $("rw-now").textContent = `그때 명단이 굳습니다. (${(n.height + blocks).toLocaleString()}번 블록)`;
+    };
+    $("rw-when")
+      .querySelectorAll<HTMLElement>("[data-min]")
+      .forEach((b) => {
+        b.onclick = () => {
+          $("rw-when").querySelectorAll("[data-min]").forEach((x) => x.classList.remove("on"));
+          b.classList.add("on");
+          setWhen(Number(b.dataset.min));
+        };
+      });
+    setWhen(10);
     await loadRewardList();
   } catch (e) {
     $("rw-gate").innerHTML = `<div class="warnbox">${escapeHtml(String(e))}</div>`;
@@ -5567,6 +5579,19 @@ window.addEventListener("DOMContentLoaded", () => {
       $("rw-now").textContent = "예약했습니다. 그 블록이 지나면 명단이 굳습니다.";
     } catch (e) {
       $("rw-now").innerHTML = `<span class="warn">${escapeHtml(String(e))}</span>`;
+    }
+  });
+  $("rw-mine").addEventListener("click", async () => {
+    try {
+      const b = await invoke<any>("addr_book");
+      // 잔액이 있는 내 주소들. 배당을 나에게도 보내면 그만큼 헛돈다.
+      const mine = (b.rows || [])
+        .filter((x: any) => (x.balance || 0) > 0 || x.label)
+        .map((x: any) => x.address)
+        .slice(0, 20);
+      ($("rw-skip") as HTMLInputElement).value = mine.join(", ");
+    } catch (e) {
+      $("rw-out").innerHTML = `<div class="warnbox">${escapeHtml(String(e))}</div>`;
     }
   });
   $("rw-dry").addEventListener("click", () => void rewardDry());

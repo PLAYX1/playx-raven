@@ -627,6 +627,16 @@
       .abkrow .bl { flex: none; font-variant-numeric: tabular-nums; font-size: 14px; }
       .abkrow button { min-height: 34px; padding: 0 10px; font-size: 13px; }
       .abkrow .chg { font-size: 11.5px; color: var(--muted); }
+      /* 언제를 고르게 한다. 블록 번호는 우리가 센다. */
+      .whenpick { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+      .whenpick button { flex: 1; min-width: 100px; background: none;
+        border: 1px solid var(--line); color: var(--text); }
+      .whenpick button.on { background: var(--ravi); border-color: var(--ravi); color: #fff; }
+      /* Ravi 를 불러내는 자리. 「AI와 대화」 는 도구 이름이고,
+         얼굴이 붙으면 사람은 그것을 누구와 이야기하는 일로 읽는다. */
+      #chat-open { display: flex; align-items: center; gap: 9px; padding: 8px 18px 8px 10px;
+        border-radius: 999px; }
+      #chat-open img { width: 32px; height: 32px; border-radius: 999px; flex: none; }
 </style>
   </head>
   <body>
@@ -1098,10 +1108,21 @@
             <div class="row" style="margin-top:12px">
               <div style="flex:1"><label>어떤 자산의 보유자</label>
                 <input id="rw-asset" placeholder="PLAYX" autocomplete="off" /></div>
-              <div><label>블록 번호</label><input id="rw-height" inputmode="numeric" /></div>
-              <button id="rw-req" style="align-self:flex-end">예약</button>
             </div>
-            <div class="meta" id="rw-now" style="margin-top:6px"></div>
+            <!-- 🔴 블록 번호를 치게 하고 있었다. 사장이 그 숫자를 알 리 없다.
+                 "언제" 를 고르게 하고 번호는 우리가 센다. -->
+            <label style="margin-top:12px">언제 명단을 굳힐까요</label>
+            <div class="whenpick" id="rw-when">
+              <button data-min="10" class="on">10분 뒤</button>
+              <button data-min="60">1시간 뒤</button>
+              <button data-min="360">6시간 뒤</button>
+              <button data-min="1440">내일 이맘때</button>
+            </div>
+            <div class="row" style="margin-top:12px">
+              <button id="rw-req">예약</button>
+              <span class="meta" id="rw-now"></span>
+            </div>
+            <input id="rw-height" type="hidden" />
           </div>
 
           <div class="card" style="margin-top:14px">
@@ -1117,8 +1138,15 @@
               <div><label>전체 얼마</label><input id="rw-amt" inputmode="decimal" /></div>
             </div>
             <div class="row" style="margin-top:9px">
-              <div style="flex:1"><label>제외할 주소 (쉼표로 여러 개, 보통 내 주소)</label>
-                <input id="rw-skip" autocomplete="off" /></div>
+              <div style="flex:1">
+                <label>나에게는 안 보내기</label>
+                <input id="rw-skip" autocomplete="off" placeholder="비워 두면 나에게도 보냅니다" />
+                <div class="meta" style="margin-top:4px">
+                  <button class="ghost" id="rw-mine" style="min-height:36px;padding:0 10px;font-size:13px">
+                    내 주소 채우기</button>
+                  보통 내가 가진 몫은 빼고 나눕니다.
+                </div>
+              </div>
             </div>
             <div class="row" style="margin-top:12px">
               <button class="ghost" id="rw-dry">먼저 계산해 보기</button>
@@ -1799,7 +1827,10 @@
     </div>
 
     <!-- ── AI 대화. 폼을 고칠 뿐, 발행·전송은 못 한다 ── -->
-    <button id="chat-open" style="display:none">AI와 대화</button>
+    <button id="chat-open" style="display:none">
+      <img src="/raven-head.webp" alt="" />
+      <span>Ravi에게 물어보기</span>
+    </button>
     <aside id="chat" class="hidden">
       <div class="chat-head">
         <img src="/raven-head.webp" alt="" class="chat-ravi" />

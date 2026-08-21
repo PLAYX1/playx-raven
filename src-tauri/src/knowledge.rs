@@ -64,6 +64,17 @@ PLAY X RAVEN (this program)
   cannot send. Stealing the computer does not steal the coins.
 - The mascot is Ravi, a raven.
 
+PAYING OUT TO ASSET HOLDERS ("배당")
+- Two steps, because the chain cannot be asked "who held this last Tuesday".
+  First book a future block (requestsnapshot); when that block passes the list
+  of holders is frozen. Then split a chosen amount among that list.
+- The owner picks *when*, not a block number. Roughly one block per minute.
+- Needs `-assetindex` on the node. Turning it on re-scans the whole chain and
+  takes hours on a machine that is already synced — tell them to do it at night.
+- It sends real money. Always run the dry preview first and read back how many
+  holders and how much each gets before they press the real button.
+- Excluding their own addresses is normal — otherwise they pay themselves.
+
 WHY A SHOP WOULD TAKE RVN
 - The payment is final in about a minute and cannot be charged back.
 - No card fee, no settlement delay, no monthly terminal rental.

@@ -22,6 +22,27 @@
 //! 보지 않고 누르는 버튼은 버튼이 아니라 함정이다.
 
 use crate::raven::call_rpc;
+
+/// 인덱스가 없을 때 이 노드는 **오류가 아니라 오류 문장을 정상 응답으로**
+/// 돌려준다. 그걸 그대로 화면에 넘기면 사장은 영문 한 줄을 보게 된다.
+fn needs_index(v: &Value) -> bool {
+    let t = v.as_str().unwrap_or("");
+    t.contains("assetindex") || t.starts_with("_This rpc call is not functional")
+}
+
+/// 인덱스가 필요한 호출을 감싼다.
+async fn indexed(method: &str, args: Value) -> Result<Value, String> {
+    let v = call_rpc(method, args).await?;
+    if needs_index(&v) {
+        return Err(
+            "자산 색인이 꺼져 있어 배당을 쓸 수 없습니다. \
+             「이 컴퓨터 → 고급 → 자산 전체 색인」을 켜고 노드를 다시 시작하세요. \
+             이미 다 받아 놓은 컴퓨터라면 처음부터 다시 훑느라 몇 시간 걸립니다 — 밤에 켜세요."
+                .into(),
+        );
+    }
+    Ok(v)
+}
 use serde_json::{json, Value};
 
 /// 배당이 지금 이 노드에서 될 수 있나.
@@ -34,8 +55,19 @@ use serde_json::{json, Value};
 pub async fn reward_ready() -> Result<Value, String> {
     // 인덱스가 필요한 호출을 하나 던져 본다. 설정 파일을 읽는 것보다 정확하다 —
     // 파일에 적혀 있어도 노드가 그 인자로 돌고 있지 않을 수 있다.
+    // 🔴 `is_ok()` 만 보면 안 된다. 이 노드는 인덱스가 없을 때 **오류가 아니라
+    // 오류 문장을 정상 응답으로** 돌려준다:
+    //   "_This rpc call is not functional unless -assetindex is enabled…"
+    // 그래서 게이트가 통과했고, 화면은 될 것처럼 열려 있었다. 사장이 예약을
+    // 누르면 그때서야 영문 문장을 만난다.
     let probe = call_rpc("listsnapshotrequests", json!([])).await;
-    let ok = probe.is_ok();
+    let ok = match &probe {
+        Err(_) => false,
+        Ok(v) => {
+            let t = v.as_str().unwrap_or("");
+            !t.contains("assetindex") && !t.starts_with("_This rpc call is not functional")
+        }
+    };
     Ok(json!({
         "ready": ok,
         "why": if ok { "" } else { "자산 색인이 꺼져 있습니다" },
@@ -74,7 +106,7 @@ pub async fn reward_request(asset: String, height: i64) -> Result<Value, String>
             "지나간 블록({height})으로는 예약할 수 없습니다. 지금이 {now} 번이니 그보다 뒤를 고르세요."
         ));
     }
-    call_rpc("requestsnapshot", json!([a, height])).await?;
+    indexed("requestsnapshot", json!([a, height])).await?;
     Ok(json!({ "asset": a, "height": height, "now": now, "blocks_away": height - now }))
 }
 
@@ -83,9 +115,9 @@ pub async fn reward_request(asset: String, height: i64) -> Result<Value, String>
 pub async fn reward_requests(asset: String) -> Result<Value, String> {
     let a = asset.trim().to_uppercase();
     let v = if a.is_empty() {
-        call_rpc("listsnapshotrequests", json!([])).await?
+        indexed("listsnapshotrequests", json!([])).await?
     } else {
-        call_rpc("listsnapshotrequests", json!([[a]])).await?
+        indexed("listsnapshotrequests", json!([[a]])).await?
     };
     let now = call_rpc("getblockcount", json!([]))
         .await?
@@ -179,7 +211,7 @@ pub async fn reward_distribute(
         Value::Null,
         dry
     ]);
-    let out = call_rpc("distributereward", args).await;
+    let out = indexed("distributereward", args).await;
 
     if locked {
         let _ = call_rpc("walletlock", json!([])).await;
