@@ -19,6 +19,22 @@
 # 사장은 깃허브 화면을 볼 일이 없다 — rvn.ex.erci.se 의 단추가 파일을 바로
 # 받는다. 깃허브 화면은 "어느 파일을 눌러야 하지" 로 사람을 잃는 자리다.
 #
+# ## 왜 PAT(개인 토큰) 를 안 쓰나
+#
+# 깃허브는 **토큰을 API 로 만들 수 없다**(`POST /user/tokens` → 404). 사람이
+# 브라우저에서 만들어야 하고, 그건 자동화가 끊기는 자리다.
+#
+# 대신 **배포키(SSH)** 를 쓴다. gh 로 넣을 수 있고, 무엇보다 **범위가 저장소
+# 하나**다. 개인 토큰은 그 사람의 모든 저장소에 닿지만 이 열쇠는
+# `playx-raven-releases` 에만 닿는다 — 그리고 거기엔 설치 파일밖에 없다.
+#
+# 그래서 릴리스 API 대신 **git push** 로 올린다. 배포키는 git 만 되고 API 는
+# 안 된다. 파일은 `raw.githubusercontent.com` 이 그대로 내어 준다.
+#
+# ⚠️ 판올림마다 `dist` 가지를 **뿌리째 새로 만든다**(orphan). 옛 판을 쌓아
+# 두면 저장소가 판올림마다 40MB 씩 커지고 되돌릴 수 없다. 사람은 늘 최신을
+# 받고, 자동 판올림도 우리 서버가 알려주는 최신 주소를 쓴다.
+#
 # ## ⚠️ 서명
 #
 # 자동 판올림은 `TAURI_SIGNING_PRIVATE_KEY` 로 서명된 것만 설치한다.
@@ -127,6 +143,9 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4   # 이 저장소가 아니라 열쇠 준비용 셸만 쓴다
+        with: { fetch-depth: 0 }
+
       - uses: actions/download-artifact@v4
         with:
           path: all
@@ -137,18 +156,42 @@ jobs:
           cd rel && sha256sum * > SHA256SUMS.txt || true
           ls -la
 
-      - name: 공개 저장소에 올리기
+      - name: 열쇠 준비
         env:
-          # ⚠️ 이건 `playx-raven-releases` 에 쓸 수 있는 토큰이다. 소스
-          # 저장소에는 못 쓴다 — 하나가 새도 소스가 같이 새지 않게.
-          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+          # ⚠️ 이 열쇠는 `playx-raven-releases` **한 곳에만** 닿는다. 소스
+          # 저장소에는 못 쓴다 — 새더라도 소스가 같이 새지 않게.
+          KEY: ${{ secrets.RELEASES_DEPLOY_KEY }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          # 처음 보는 서버라고 물어보면 거기서 멈춘다. 깃허브 지문을 미리 넣는다.
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: 공개 저장소에 올리기
         run: |
           V="${GITHUB_REF_NAME#v}"
           [ -z "$V" ] && V="${{ inputs.version }}"
-          gh release create "v$V" rel/* \
-            --repo PLAYX1/playx-raven-releases \
-            --title "PLAY X Raven $V" \
-            --notes "가게 컴퓨터용 설치 파일입니다. 받는 곳: https://rvn.ex.erci.se
+          git config --global user.name playx1
+          git config --global user.email playexercise@gmail.com
+          git clone --depth 1 git@github.com:PLAYX1/playx-raven-releases.git pub
+          cd pub
+          # 🔴 뿌리째 새로 만든다. 옛 판을 쌓으면 판올림마다 40MB 씩 커지고
+          #    되돌릴 수 없다. 사람은 늘 최신을 받는다.
+          git checkout --orphan dist
+          git rm -rf . >/dev/null 2>&1 || true
+          rm -rf ./* .gitignore 2>/dev/null || true
+          cp ../rel/* .
+          cat > README.md <<EOF
+          # PLAY X Raven $V
 
-이 저장소에는 **설치 파일만** 있습니다. 소스는 여기 없습니다." \
-            || gh release upload "v$V" rel/* --repo PLAYX1/playx-raven-releases --clobber
+          가게 컴퓨터용 **설치 파일만** 있습니다. 소스는 여기 없습니다.
+
+          받으시는 곳: <https://rvn.ex.erci.se>
+
+          받은 파일이 맞는지 확인하시려면 \`SHA256SUMS.txt\` 의 값과
+          비교하세요. 다르면 받다가 깨졌거나 누가 바꾼 것이니 **열지 마세요.**
+          EOF
+          git add -A
+          git commit -q -m "PLAY X Raven $V"
+          git push -f origin dist
