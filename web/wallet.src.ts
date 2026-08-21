@@ -88,6 +88,9 @@ interface ChainReply {
   utxos: unknown[];
   source: string;
   trusted: boolean;
+  /** 자산 이름 → 수량. 노드가 RVN 과 **갈라서** 준다.
+   *  🔴 안 가르면 회원권 1장이 1 RVN 으로 세어진다. */
+  assets?: Record<string, number>;
   error?: string;
 }
 
@@ -373,6 +376,13 @@ async function fetchAddress(address: string): Promise<ChainReply> {
   const j = (await r.json()) as ChainReply;
   if (j && j.error) throw new Error(j.error);
   if (!r.ok) throw new Error("조회에 실패했습니다.");
+  // 주소마다 딸려 오는 자산을 합쳐 둔다. 한 사람이 주소를 여러 개 쓰므로
+  // 여기서 모아야 "회원권 1장" 이 흩어지지 않는다.
+  if (j && j.assets) {
+    for (const [name, qty] of Object.entries(j.assets)) {
+      myAssets[name] = (myAssets[name] || 0) + Number(qty || 0);
+    }
+  }
   return j;
 }
 
@@ -1122,6 +1132,8 @@ async function refresh(deep: boolean): Promise<void> {
   say("scan-status", deep ? "주소를 끝까지 찾는 중…" : "주소를 찾는 중…");
 
   try {
+    // 🔴 비우고 시작한다. 안 그러면 새로고침할 때마다 수량이 두 배가 된다.
+    myAssets = {};
     scan = await scanAddresses(hdKey, deep, (done) => {
       say("scan-status", `주소 ${done}개까지 확인했습니다…`);
     });
@@ -1135,11 +1147,136 @@ async function refresh(deep: boolean): Promise<void> {
   }
 }
 
+
+// ── 내 자산 ─────────────────────────────────────────────────────────────
+//
+// 🔴 여태 이 지갑은 **RVN 이 아닌 것을 통째로 버렸다**(`normalizeUtxos`).
+// 버린 이유는 옳았다 — 자산 UTXO 를 RVN 인 줄 알고 쓰면 그 자산이 잔돈으로
+// 태워져 **영영 사라진다.** 레이븐코인에서 제일 흔한 사고다.
+//
+// 그런데 "쓰지 않는다" 와 "보여주지 않는다" 는 다른 일이었다. 회원권을 사도
+// 상품권을 받아도 화면에는 RVN 숫자 하나뿐이었고, 산 사람은 안 왔다고 여긴다.
+// 체인에는 멀쩡히 있는데 지갑이 안 보여 준 것이다.
+//
+// 그리고 자산에 그림·음악이 딸려 있으면 **여기서 바로 보고 듣는다.**
+// 그게 자산을 가진 재미이고, 그 재미가 없으면 그냥 숫자다.
+
+type MyAsset = { name: string; qty: number };
+
+/** 주소를 훑을 때 자산도 같이 모은다. */
+let myAssets: Record<string, number> = {};
+
+function renderAssets(): void {
+  const box = $("myassets");
+  if (!box) return;
+  const rows: MyAsset[] = Object.entries(myAssets)
+    .filter(([, q]) => q > 0)
+    .map(([name, qty]) => ({ name, qty }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  if (!rows.length) {
+    // 없는 것과 못 읽은 것은 다르다. 여기는 진짜 없는 경우다.
+    box.innerHTML = "";
+    return;
+  }
+  box.innerHTML =
+    `<div class="asethead">가진 자산 ${rows.length}가지</div>` +
+    rows
+      .map(
+        (a) => `<div class="aset" data-asset="${escapeHtml(a.name)}">
+          <img class="art" alt="" src="/faces/raven-head.webp" />
+          <div>
+            <div class="nm">${escapeHtml(a.name)}</div>
+            <div class="qt">${a.qty % 1 === 0 ? a.qty : a.qty.toFixed(8).replace(/0+$/, "")}개</div>
+          </div>
+          <button class="open">열어보기</button>
+        </div>`,
+      )
+      .join("");
+
+  box.querySelectorAll<HTMLElement>(".aset").forEach((el) => {
+    const name = el.dataset.asset!;
+    // 그림이 있으면 바꿔 끼운다. 없으면 라비 얼굴 그대로 — 깨진 그림보다 낫다.
+    void paintAssetArt(name, el.querySelector("img") as HTMLImageElement);
+    (el.querySelector(".open") as HTMLElement).onclick = () => void openAsset(name);
+  });
+}
+
+/** 자산에 딸린 그림. 없으면 아무 일도 안 한다. */
+async function paintAssetArt(name: string, img: HTMLImageElement): Promise<void> {
+  try {
+    const r = await fetch(`/api/chain/asset?name=${encodeURIComponent(name)}`).then((x) => x.json());
+    const cid = String(r?.ipfs_hash || "").replace(/[^A-Za-z0-9]/g, "");
+    if (!cid) return;
+    const k = await fetch(`/api/ipfs-kind?cid=${cid}`).then((x) => x.json()).catch(() => null);
+    if (k?.kind === "image") img.src = `/ipfs/${cid}`;
+  } catch {
+    /* 그림이 없는 자산이 훨씬 많다. 조용히 지나간다. */
+  }
+}
+
+/**
+ * 자산 하나를 연다. 그림이면 크게, 음악이면 재생기.
+ *
+ * ⚠️ 파일은 **우리 서버를 거쳐** 온다. 이 페이지는 `connect-src 'self'` 이고,
+ * 같은 출처에 12단어가 있어서 바깥으로 나가는 문을 못 연다.
+ */
+async function openAsset(name: string): Promise<void> {
+  const box = $("sheet");
+  if (!box) return;
+  box.innerHTML = `<div class="sheetin"><p class="sub">여는 중…</p></div>`;
+  box.style.display = "";
+  let body = `<p class="sub">이 자산에는 딸린 파일이 없습니다.</p>`;
+  try {
+    const r = await fetch(`/api/chain/asset?name=${encodeURIComponent(name)}`).then((x) => x.json());
+    const cid = String(r?.ipfs_hash || "").replace(/[^A-Za-z0-9]/g, "");
+    if (cid) {
+      const k = await fetch(`/api/ipfs-kind?cid=${cid}`).then((x) => x.json()).catch(() => null);
+      const url = `/ipfs/${cid}`;
+      const kind = k?.kind || "image";
+      body =
+        kind === "audio"
+          ? `<audio id="aset-play" controls preload="none" src="${url}"></audio>
+             <p class="sub" style="margin-top:8px">가지고 계신 곡입니다. 눌러서 들어보세요.</p>`
+          : kind === "video"
+            ? `<video id="aset-play" controls preload="none" playsinline src="${url}"></video>`
+            : kind === "book"
+              ? `<a class="cbtn" href="${url}" target="_blank" rel="noopener">책 열기</a>
+                 <p class="sub" style="margin-top:8px">새 창에서 열립니다.</p>`
+              : kind === "web"
+                ? // 🔴 `sandbox` 를 반드시 준다. 이 페이지에는 **12단어**가 있고,
+                  // 자산에 딸린 것은 **남이 만든 파일**이다. 그 안의 스크립트가
+                  // 우리 저장소를 읽으면 지갑이 통째로 털린다.
+                  // allow-scripts 만 주고 allow-same-origin 은 주지 않는다 —
+                  // 둘을 같이 주면 sandbox 가 스스로를 풀 수 있다.
+                  `<iframe src="${url}" sandbox="allow-scripts"
+                     style="width:100%;height:60vh;border:0;border-radius:14px"></iframe>
+                   <p class="sub" style="margin-top:8px">
+                     이 안의 내용은 <b>만든 사람이 넣은 것</b>입니다.
+                     여기서는 지갑에 손댈 수 없게 막아 두었습니다.</p>`
+                : `<img src="${url}" alt="" style="width:100%;border-radius:14px" />`;
+    }
+  } catch {
+    body = `<p class="sub">파일을 불러오지 못했습니다.</p>`;
+  }
+  box.innerHTML = `<div class="sheetin">
+      <button class="sheetx" id="sheet-close">닫기</button>
+      <h2 style="margin:0 0 10px;font-size:19px;word-break:break-all">${escapeHtml(name)}</h2>
+      ${body}
+    </div>`;
+  ($("sheet-close") as HTMLElement).onclick = () => (box.style.display = "none");
+  box.onclick = (ev) => {
+    if (ev.target === box) box.style.display = "none";
+  };
+}
+
 function renderMain(): void {
   if (!scan) return;
 
   const total = totalSats();
   $("balance").textContent = fromSats(total);
+
+  renderAssets();
 
   const idx = receiveIndex();
   const addr = addressAt(idx).address;

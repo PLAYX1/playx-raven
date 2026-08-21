@@ -446,13 +446,42 @@ pub async fn chain_address(address: String) -> Result<Value, String> {
     .await
     {
         let rows = v.as_array().cloned().unwrap_or_default();
+
+        // 🔴 `getaddressutxos` 는 **자산 UTXO 도 같이** 준다. 여태 전부 더해서
+        // `rvn` 이라고 불렀는데, 자산의 `satoshis` 는 그 자산의 수량이지
+        // RVN 이 아니다. 회원권 1장을 가진 사람은 그 1이 RVN 으로 세어졌다.
+        //
+        // 화면에 틀린 잔액이 뜨는 것은 지갑이 할 수 있는 가장 나쁜 거짓말이다.
+        let is_rvn = |u: &Value| {
+            u.get("assetName")
+                .and_then(Value::as_str)
+                .map(|n| n.eq_ignore_ascii_case("RVN"))
+                .unwrap_or(true)
+        };
         let sats: u64 = rows
             .iter()
+            .filter(|u| is_rvn(u))
             .filter_map(|u| u.get("satoshis").and_then(Value::as_u64))
             .sum();
+
+        // 자산은 이름별로 묶어 따로 준다. 손님이 회원권을 샀는데 지갑에
+        // 안 보이면, 산 사람은 안 왔다고 여긴다.
+        let mut assets: std::collections::BTreeMap<String, u64> = Default::default();
+        for u in rows.iter().filter(|u| !is_rvn(u)) {
+            let Some(n) = u.get("assetName").and_then(Value::as_str) else { continue };
+            *assets.entry(n.to_string()).or_insert(0) +=
+                u.get("satoshis").and_then(Value::as_u64).unwrap_or(0);
+        }
+        let assets: serde_json::Map<String, Value> = assets
+            .into_iter()
+            // 자산 수량도 8자리로 온다. 나누기 전에는 1장이 100000000 이다.
+            .map(|(k, v)| (k, json!(v as f64 / 100_000_000.0)))
+            .collect();
+
         return Ok(json!({
             "address": address,
             "rvn": sats as f64 / 100_000_000.0,
+            "assets": assets,
             "utxos": rows,
             "source": "이 가게 노드",
             "trusted": true,

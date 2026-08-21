@@ -372,6 +372,7 @@ fn customer_path(path: &str) -> bool {
             | "/api/shops"
             | "/api/shop-profile"
             | "/api/ipfs-kind"
+            | "/api/chain/asset"
             | "/i18n.js"
             | "/ravi.js"
             | "/api/ai-status"
@@ -1084,6 +1085,39 @@ async fn api_directions(
     (StatusCode::OK, Json(crate::place::directions_links(lat, lon, label)))
 }
 
+/// 자산 하나에 딸린 것. 지갑이 "내 회원권" 을 열어 볼 때 부른다.
+///
+/// 🔴 손님 폰도 부르는 경로다. `getassetdata` 는 체인에 이미 공개된 값만
+/// 주므로 숨길 것이 없지만, **이름을 그대로 넘기지 않는다** — 레이븐 자산
+/// 이름은 대문자·숫자·`._/` 뿐이고, 그 밖의 글자가 RPC 로 들어가면 안 된다.
+async fn api_chain_asset(
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> impl IntoResponse {
+    let name = q.get("name").cloned().unwrap_or_default();
+    let ok = !name.is_empty()
+        && name.len() <= 64
+        && name
+            .chars()
+            .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || "._/#!".contains(c));
+    if !ok {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "error": "자산 이름이 아닙니다" })));
+    }
+    match crate::raven::call_rpc("getassetdata", json!([name])).await {
+        Ok(v) => (
+            StatusCode::OK,
+            Json(json!({
+                "name": v.get("name").and_then(Value::as_str).unwrap_or_default(),
+                "ipfs_hash": v.get("ipfs_hash").and_then(Value::as_str).unwrap_or_default(),
+                "units": v.get("units").and_then(Value::as_i64).unwrap_or(0),
+                "reissuable": v.get("reissuable").and_then(Value::as_i64).unwrap_or(0) == 1,
+            })),
+        ),
+        // 없는 자산과 노드가 죽은 것은 다르지만, 화면이 할 일은 같다 —
+        // 딸린 것이 없다고 보여 준다.
+        Err(_) => (StatusCode::OK, Json(json!({ "name": name, "ipfs_hash": "" }))),
+    }
+}
+
 /// 손님 폰이 "이게 그림이냐 음악이냐" 를 묻는 자리.
 ///
 /// 🔴 파일 이름으로 짐작하지 않는다 — **CID 에는 이름이 없다.** 게이트웨이에
@@ -1134,6 +1168,16 @@ async fn api_ipfs_kind(
                 "video"
             } else if v["is_image"].as_bool() == Some(true) {
                 "image"
+            } else if v["is_pdf"].as_bool() == Some(true) {
+                // 책. 새 창에서 연다 — 이 페이지 안에 띄우면 12단어와 같은
+                // 창을 쓰게 되고, PDF 뷰어는 남의 파일을 실행하는 자리다.
+                "book"
+            } else if v["mime"].as_str() == Some("text/html")
+                && v["is_dir"].as_bool() != Some(true)
+            {
+                // 게임·읽을거리. 🔴 이건 **남이 만든 스크립트**다.
+                // 화면 쪽에서 반드시 `sandbox` 안에 가둬야 한다.
+                "web"
             } else {
                 "other"
             }
@@ -2076,6 +2120,7 @@ pub async fn start_phone_server(
         .route("/shops", get(shops_page))
         .route("/api/shops", get(api_shops))
         .route("/api/ipfs-kind", get(api_ipfs_kind))
+        .route("/api/chain/asset", get(api_chain_asset))
         .route("/api/shop-profile", get(api_shop_profile))
         .route("/api/directions", get(api_directions))
         .route("/buy", get(buy_page))

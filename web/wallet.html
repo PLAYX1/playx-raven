@@ -252,6 +252,20 @@
         border-radius: 10px; border: 1px solid var(--line);
         background: var(--panel); color: var(--fg); }
       .minebtns button.danger { color: #b3261e; border-color: #f0c8c4; }
+      /* 내 자산. 숫자만 있으면 재미가 없다 — 그림·음악이 있으면 보여 준다. */
+      .aset { display: flex; gap: 12px; align-items: center; padding: 12px 0;
+        border-bottom: 1px solid var(--line); }
+      .aset:last-child { border-bottom: 0; }
+      .aset .art { width: 56px; height: 56px; border-radius: 12px; flex: none;
+        object-fit: cover; background: var(--panel); }
+      .aset .nm { font-weight: 600; font-size: 16px; word-break: break-all; }
+      .aset .qt { font-size: 14px; color: var(--muted); margin-top: 2px; }
+      /* 🔴 44px 미만은 손가락으로 못 누른다. */
+      .aset .open { margin-left: auto; min-height: 44px; padding: 0 14px;
+        border-radius: 10px; border: 1px solid var(--line);
+        background: var(--bg); color: var(--fg); font-size: 15px; flex: none; }
+      .asethead { margin: 18px 0 4px; font-size: 15px; font-weight: 600; }
+      #aset-play { width: 100%; margin-top: 10px; min-height: 44px; }
 </style>
     <script src="/i18n.js"></script>
   </head>
@@ -371,6 +385,14 @@
         <div class="idx">잔액</div>
         <div class="bal"><span id="balance">0</span><span class="u">RVN</span></div>
       </div>
+
+      <!-- 🔴 여기가 없어서 **산 자산이 지갑에 안 보였다.** 회원권을 사도
+           상품권을 받아도 화면에는 RVN 숫자 하나뿐이었고, 산 사람은 안 왔다고
+           여긴다. 체인에는 멀쩡히 있는데 지갑이 안 보여 준 것이다.
+
+           그림·음악이 딸린 자산이면 여기서 바로 보고 듣는다 — 그게 자산을
+           가진 재미이고, 그 재미가 없으면 그냥 숫자다. -->
+      <div id="myassets"></div>
 
       <!-- 연결 상태는 점 하나면 된다. '주소 20개 확인' · '노드가 답했습니다' 는
            개발자를 안심시키는 말이고, 카운터 앞의 사람에게는 고장 난 기계로

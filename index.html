@@ -676,9 +676,22 @@
          우리가 배경색을 칠하면 그 재료가 가려져서 그냥 회색 판이 된다. */
       nav { background: transparent; }
       main { padding-top: 34px; }
-      /* 제목줄이 없으면 창을 잡을 곳이 없다. 사이드바 위쪽을 손잡이로 준다. */
+      /* 🔴 제목줄을 없애면(titleBarStyle: Overlay) **창을 잡을 곳이 사라진다.**
+         처음에 사이드바 로고만 손잡이로 줬더니, 오른쪽 넓은 본문 어디를 잡아도
+         창이 안 움직였다 — 대표님이 겪은 그것이다.
+
+         맥은 원래 제목줄 **어디나** 잡힌다. 그러니 위 34px 띠를 통째로
+         손잡이로 준다. 사이드바든 본문이든 위쪽을 잡으면 창이 따라온다. */
+      .titlebar {
+        position: fixed; top: 0; left: 0; right: 0; height: 34px;
+        -webkit-app-region: drag; z-index: 50;
+        /* 보이지 않는다. 색을 주면 없앤 제목줄이 되살아난 것처럼 보인다. */
+      }
+      /* 그 띠 안에 눌러야 할 것이 있으면 거기만 뺀다. 지금은 없다. */
+      .titlebar * { -webkit-app-region: no-drag; }
+      /* 로고도 잡힌다 — 맥에서 제목 옆을 잡는 버릇 그대로. */
       nav .brand { -webkit-app-region: drag; }
-      nav a, nav button { -webkit-app-region: no-drag; }
+      nav a, nav button, input, select, textarea, .card { -webkit-app-region: no-drag; }
 
       /* 메뉴에 아이콘. 글자만 있으면 어디가 어딘지 매번 읽어야 한다. */
       nav a { display: flex; align-items: center; gap: 10px; }
@@ -700,9 +713,34 @@
       /* 개발비 칸. 숨기지 않는 것이 요점이라 눈에 띄어야 한다 —
          다만 경고는 아니므로 붉은색은 쓰지 않는다. */
       .feecard { border-color: var(--accent); margin-bottom: 16px; }
+      /* 「처음 한 번 하는 것들」. 🔴 접는 것이지 숨기는 것이 아니다 —
+         숨기면 못 찾고, 접으면 있는 줄 안다. 그래서 크고 또렷하게 둔다. */
+      .onceoff { margin: 4px 0 16px; border: 1px solid var(--line);
+        border-radius: 14px; background: var(--panel); overflow: hidden; }
+      .onceoff > summary {
+        display: flex; align-items: center; gap: 12px; cursor: pointer;
+        /* 🔴 56px. 노인이 손가락으로도 마우스로도 놓치지 않을 크기. */
+        min-height: 56px; padding: 12px 16px; list-style: none;
+        font-size: 16px;
+      }
+      .onceoff > summary::-webkit-details-marker { display: none; }
+      .onceoff .oico { display: grid; place-items: center; width: 28px; height: 28px;
+        flex: none; border-radius: 9px; background: var(--bg); color: var(--muted);
+        transition: transform .18s ease; }
+      .onceoff .oico svg { width: 18px; height: 18px; }
+      .onceoff[open] .oico { transform: rotate(180deg); }
+      .onceoff .osub { display: block; font-size: 13.5px; color: var(--muted);
+        font-weight: 400; margin-top: 2px; }
+      .onceoff[open] > summary { border-bottom: 1px solid var(--line); }
+      /* 안쪽은 여백을 준다 — 접은 것을 열었는데 벽에 붙어 있으면 답답하다. */
+      .onceoff > *:not(summary) { margin-left: 16px; margin-right: 16px; }
+      .onceoff > *:last-child { margin-bottom: 16px; }
+      @media (prefers-reduced-motion: reduce) { .onceoff .oico { transition: none; } }
 </style>
   </head>
   <body>
+    <!-- 창을 잡는 띠. 제목줄을 없앴기 때문에 이게 없으면 창이 안 움직인다. -->
+    <div class="titlebar"></div>
 
     <!-- ── 첫 실행 ───────────────────────────────────────────────────
          이 프로그램은 노드이자 IPFS이자 지갑이자 계산대다. 첫 화면이
@@ -1553,6 +1591,24 @@
         </div>
 
 
+
+        <!-- 🔴 여기부터는 **처음 한 번**만 하는 일이다. 화면에 한글 1,595자와
+             눌 것 61개가 한꺼번에 펼쳐져 있었고, 매일 여는 사장은 그 사이에서
+             오늘 할 일을 찾아야 했다.
+             줄이는 게 아니라 **접는다** — 숨기는 것과 접는 것은 다르다.
+             숨기면 못 찾고, 접으면 있는 줄 안다. -->
+        <details class="onceoff">
+          <summary>
+            <span class="oico" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                   stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+            </span>
+            <span>
+              <b>처음 한 번 하는 것들</b>
+              <span class="osub">지점 이름 · 손님 폰 연결 · 백업 · 금고 — 매일 여실 필요 없어요</span>
+            </span>
+          </summary>
+
         <!-- 이 노드가 어디인지. 지점이 둘이 되는 순간 "이 컴퓨터"는 뜻이 없다. -->
         <div class="card" style="margin-bottom:12px">
           <h3>이 노드</h3>
@@ -1692,7 +1748,9 @@
         </div>
 
         <!-- 자주 안 여는 것 -->
-        <details class="advanced">
+                </details>
+
+<details class="advanced">
           <summary>고급 — 채굴 · AI 키 · 세부 설정</summary>
 
           <div class="card" style="margin-top:12px">
