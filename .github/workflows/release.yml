@@ -102,8 +102,15 @@ jobs:
         if: matrix.os == 'ubuntu-22.04'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
-            librsvg2-dev patchelf libssl-dev
+          # 🔴 webkit2gtk 만으로는 모자란다. 실측 실패: pangocairo·pango·
+          # harfbuzz 를 못 찾아 링크가 죽었다. ubuntu-latest(24.04)가
+          # 22.04 보다 기본 설치가 적어서, 22.04 에서는 안 나던 오류다.
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev \
+            patchelf libssl-dev \
+            libgtk-3-dev libpango1.0-dev libcairo2-dev libharfbuzz-dev \
+            libgdk-pixbuf-2.0-dev libglib2.0-dev libatk1.0-dev \
+            libsoup-3.0-dev libjavascriptcoregtk-4.1-dev
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -134,8 +141,12 @@ jobs:
           mkdir -p out
           # 이름을 사람이 읽을 수 있게 바꾼다. 사장이 받은 파일을 보고
           # "이게 내 컴퓨터 것이 맞나" 를 알 수 있어야 한다.
-          V="${GITHUB_REF_NAME#v}"
-          [ -z "$V" ] && V="${{ inputs.version }}"
+          # 🔴 `GITHUB_REF_NAME` 은 태그로 돌 때만 판 번호다. 손으로 돌리면
+          # 가지 이름(`main`)이 들어가서 파일이 `…-main-windows.msi` 가 됐다.
+          # 사장이 받은 파일이 몇 판인지 알 수 없다.
+          V="${{ inputs.version }}"
+          [ -z "$V" ] && V="${GITHUB_REF_NAME#v}"
+          [ -z "$V" ] || [ "$V" = "main" ] && V="0.0.0-dev"
           B="src-tauri/target/${{ matrix.target }}/release/bundle"
           find "$B" -maxdepth 2 -type f \
             \( -name '*.dmg' -o -name '*.msi' -o -name '*.exe' -o -name '*.AppImage' -o -name '*.deb' \) \
@@ -187,8 +198,9 @@ jobs:
 
       - name: 공개 저장소에 올리기
         run: |
-          V="${GITHUB_REF_NAME#v}"
-          [ -z "$V" ] && V="${{ inputs.version }}"
+          V="${{ inputs.version }}"
+          [ -z "$V" ] && V="${GITHUB_REF_NAME#v}"
+          [ -z "$V" ] || [ "$V" = "main" ] && V="0.0.0-dev"
           git config --global user.name playx1
           git config --global user.email playexercise@gmail.com
           git clone --depth 1 git@github.com:PLAYX1/playx-raven-releases.git pub
