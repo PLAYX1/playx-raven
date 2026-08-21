@@ -1466,6 +1466,34 @@ function renderSummary() {
         ? `지갑에 ${have.toLocaleString(undefined, { maximumFractionDigits: 2 })} RVN 있습니다.`
         : `<span class="danger">지갑에 ${have.toLocaleString(undefined, { maximumFractionDigits: 2 })} RVN뿐입니다 —
            ${(need - have).toFixed(2)} RVN 더 넣으셔야 합니다.</span>`;
+      // 🔴 여태 **나가는 돈만** 보여 줬다. 배당은 dry-run 으로 "무엇이
+      // 어떻게 되는지" 를 강제로 보게 하는데, 발행은 소각량 한 줄뿐이었다.
+      //
+      // 사람은 "500 RVN" 을 읽고도 그게 자기 지갑에서 얼마를 덜어내는지
+      // 잘 모른다. **끝난 뒤의 모습**을 같이 보여 준다 — 그게 결정에 쓰이는
+      // 숫자다. 그리고 되돌릴 수 없는 것을 그 옆에 나란히 적는다.
+      const after = have - need;
+      const rvn = (n: number) =>
+        n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+      const forever: string[] = [`이름 「${issueCheck?.name || ""}」 은 영원히 바뀌지 않습니다`];
+      if (!re && wizKind !== "unique") {
+        forever.push("재발행을 껐으므로 수량과 파일을 영원히 못 바꿉니다");
+      }
+      if (!cid) forever.push("파일을 안 붙이셨습니다 — 나중에 붙이려면 재발행이 켜져 있어야 합니다");
+      $("i-after").innerHTML = ok
+        ? `<div class="afterbox">
+             <div class="ab-row"><span>지금 지갑</span><b>${rvn(have)} RVN</b></div>
+             <div class="ab-row"><span>태울 돈</span><b class="danger">− ${rvn(need)} RVN</b></div>
+             <div class="ab-row ab-sum"><span>끝나면</span><b>${rvn(after)} RVN</b></div>
+             <div class="ab-get">그리고 <b>${
+               wizKind === "unique" ? "1개" : `${qty.toLocaleString()}개`
+             }</b>의 「${escapeHtml(issueCheck?.name || "")}」 이 이 지갑에 들어옵니다.</div>
+             <div class="ab-never">되돌릴 수 없는 것<ul>${
+               forever.map((t) => `<li>${escapeHtml(t)}</li>`).join("")
+             }</ul></div>
+           </div>`
+        : "";
+
       const go = $("wz-next") as HTMLButtonElement;
       go.disabled = !ok;
       // 이 단계의 「다음」은 되돌릴 수 없는 발행이다. 앞 단계들과 글자가
@@ -1503,10 +1531,80 @@ async function ensureUnlocked(why: string): Promise<boolean> {
   }
 }
 
+
+/**
+ * 되돌릴 수 없는 일 앞의 **취소 창.**
+ *
+ * 🔴 왜 필요한가 — 마법사는 「다음」을 네 번 누르게 한다. 손이 그 리듬에
+ * 들어가면 다섯 번째도 누른다. 그 다섯 번째가 500 RVN 이다.
+ *
+ * 🔴 왜 **부르기 전**에 두나 — `issue` RPC 는 만들고 **곧바로 뿌린다.**
+ * 부른 뒤에는 취소할 자리가 없다. 체인은 되돌리지 않는다.
+ *
+ * ⚠️ 확인 체크박스를 하나 더 두는 것과는 다르다. 체크박스는 그냥 눌린다.
+ * 여기서는 **시간이 흐르는 것을 보면서** 아무것도 안 해야 진행된다 —
+ * 습관이 아니라 기다림이 통과 조건이다.
+ *
+ * @returns 사용자가 그대로 두면 `true`, 취소하면 `false`
+ */
+function holdBeforeDoing(what: string, cost: string, seconds = 8): Promise<boolean> {
+  return new Promise((done) => {
+    const box = document.createElement("div");
+    box.className = "holdbox";
+    let left = seconds;
+    const paint = () => {
+      box.innerHTML = `
+        <div class="hb-top">${escapeHtml(what)}</div>
+        <div class="hb-cost">${escapeHtml(cost)}</div>
+        <div class="hb-bar"><i style="width:${((seconds - left) / seconds) * 100}%"></i></div>
+        <div class="hb-left">${left}초 뒤에 시작합니다</div>
+        <button class="hb-cancel">그만두기</button>`;
+      (box.querySelector(".hb-cancel") as HTMLElement).onclick = () => {
+        clearInterval(t);
+        box.remove();
+        done(false);
+      };
+    };
+    paint();
+    // 지금 열려 있는 화면 안에 그린다. 화면 밖에 그리면 스크롤 위치에
+    // 따라 안 보이고, 안 보이는 취소 단추는 없는 것과 같다.
+    const host =
+      document.querySelector("#wiz:not(.hidden) #i-result") ||
+      (document.getElementById("page-shop")?.classList.contains("on")
+        ? document.getElementById("sh-result")
+        : null) ||
+      $("i-result") ||
+      document.body;
+    host.prepend(box);
+    const t = setInterval(() => {
+      left -= 1;
+      if (left <= 0) {
+        clearInterval(t);
+        box.innerHTML = `<div class="hb-top">${escapeHtml(what)}</div>
+          <div class="hb-left">시작합니다…</div>`;
+        done(true);
+        // 잠깐 남겨 둔다 — 바로 사라지면 눌린 줄 모른다.
+        setTimeout(() => box.remove(), 1500);
+        return;
+      }
+      paint();
+    }, 1000);
+  });
+}
+
 async function doIssue() {
   if (!issueCheck) return;
   // 발행은 500 RVN 을 태운다. 잠겨 있으면 여기서 멈추고 이유를 말한다.
   if (!(await ensureUnlocked("자산을 발행하려면 지갑을 열어야 합니다."))) return;
+
+  // 🔴 취소 창. `issue` RPC 는 만들고 곧바로 뿌리므로, 되돌릴 수 있는
+  // 마지막 순간이 **여기**다. 마법사가 「다음」을 네 번 누르게 하고, 손이
+  // 그 리듬에 들어가면 다섯 번째도 누른다 — 그 다섯 번째가 500 RVN 이다.
+  const ok = await holdBeforeDoing(
+    `「${issueCheck.name}」 을 만듭니다`,
+    `${BURN[wizKind]} RVN 이 타고, 이 이름은 영원히 바뀌지 않습니다`,
+  );
+  if (!ok) return;
   const btn = $("wz-next") as HTMLButtonElement;
   const wasLabel = btn.textContent;
   btn.disabled = true;
@@ -5466,7 +5564,10 @@ async function checkShopName() {
        <div class="meta">돌아오지 않습니다. 등록은 취소할 수 없습니다.</div>`;
     $("sh-confirmname").textContent = full;
     $("sh-confirmbox").style.display = "";
-    ($("sh-confirm") as HTMLInputElement).placeholder = full;
+    // 🔴 여기에도 **정답을 칸 안에 적어 두고 있었다.** 발행 마법사에서
+    // 고친 것과 같은 결함이다 — 이 게이트는 "이 이름이 맞다" 가 아니라
+    // "베낄 줄 안다" 를 확인한다. 500 RVN 이 걸린 자리다.
+    ($("sh-confirm") as HTMLInputElement).placeholder = "위에 적힌 이름을 직접 입력";
   } else {
     $("sh-cost").innerHTML = "";
     $("sh-confirmbox").style.display = "none";
@@ -5501,6 +5602,19 @@ async function registerShop() {
   // 발행이 조용히 실패한다 — 사장은 등록된 줄 알고 QR 을 붙인다.
   if (!(await ensureUnlocked("가게를 등록하려면 지갑을 열어야 합니다.")))
     return;
+
+  // 발행 마법사와 같은 취소 창. 여기도 500 RVN 이고, 여기도 되돌릴 수 없다.
+  // 「내 가게」 화면은 입력칸이 21개라 사장이 오래 채우고 마지막에 누른다 —
+  // 그렇게 길게 채운 뒤일수록 손이 그냥 눌린다.
+  {
+    const full = $("sh-confirmname").textContent || "";
+    const ok = await holdBeforeDoing(
+      `「${full}」 로 가게를 등록합니다`,
+      "500 RVN 이 타고, 이 이름은 영원히 바뀌지 않습니다",
+    );
+    if (!ok) return;
+  }
+
   const btn = $("sh-go") as HTMLButtonElement;
   btn.disabled = true;
   btn.textContent = "등록 중…";

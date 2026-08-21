@@ -763,6 +763,33 @@
       .aipick .k { font-size: 17px; font-weight: 700; }
       .aipick .burn { color: var(--warn); font-weight: 600; }
       .aipick .row2 { margin-top: 8px; font-size: 15px; line-height: 1.7; }
+      /* 발행하면 어떻게 되는가. 배당의 dry-run 과 같은 자리다 —
+         되돌릴 수 없는 일 앞에서는 결과를 먼저 보여 준다. */
+      .afterbox { margin-top: 12px; padding: 14px; border-radius: 14px;
+        border: 1px solid var(--line); background: var(--bg); }
+      .ab-row { display: flex; justify-content: space-between; padding: 5px 0;
+        font-size: 15px; }
+      .ab-sum { border-top: 1px solid var(--line); margin-top: 6px; padding-top: 10px;
+        font-size: 17px; }
+      .ab-get { margin-top: 10px; font-size: 15px; color: var(--fg); line-height: 1.6; }
+      .ab-never { margin-top: 12px; font-size: 14px; color: var(--warn); }
+      .ab-never ul { margin: 6px 0 0; padding-left: 18px; line-height: 1.7; }
+      /* 되돌릴 수 없는 일 앞의 취소 창. 체크박스와 다른 점은
+         **시간이 흐르는 것을 보게** 한다는 것이다 — 습관으로는 통과 못 한다. */
+      .holdbox { margin-top: 12px; padding: 16px; border-radius: 14px;
+        border: 2px solid var(--warn); background: var(--panel); }
+      .hb-top { font-size: 17px; font-weight: 700; }
+      .hb-cost { margin-top: 4px; font-size: 15px; color: var(--warn); }
+      .hb-bar { height: 6px; margin-top: 12px; border-radius: 999px;
+        background: var(--line); overflow: hidden; }
+      .hb-bar i { display: block; height: 100%; background: var(--warn);
+        transition: width 1s linear; }
+      .hb-left { margin-top: 8px; font-size: 14px; color: var(--muted); }
+      /* 🔴 그만두기가 진행보다 **쉬워야** 한다. 여기서 망설이는 사람은
+         이미 뭔가 잘못됐다고 느낀 사람이다. */
+      .hb-cancel { width: 100%; min-height: 52px; margin-top: 12px;
+        font-size: 17px; font-weight: 600; border-radius: 12px;
+        border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
 </style>
   </head>
   <body>
@@ -2010,6 +2037,9 @@
             <div class="rk">파일</div><div class="rv" id="i-r-file"></div>
           </div>
           <div class="cost" id="i-cost"></div>
+          <!-- 🔴 나가는 돈만 보여 주면 사람은 그게 자기 지갑에서 얼마를
+               덜어내는지 잘 모른다. 끝난 뒤의 모습이 결정에 쓰이는 숫자다. -->
+          <div id="i-after"></div>
           <div class="confirmbox">
             <div>이 이름은 체인에 영구히 남고 누구도 다시 쓸 수 없습니다. 그대로 다시 입력하세요.</div>
             <input id="i-confirm" autocomplete="off" spellcheck="false" />
