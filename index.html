@@ -637,6 +637,8 @@
       #chat-open { display: flex; align-items: center; gap: 9px; padding: 8px 18px 8px 10px;
         border-radius: 999px; }
       #chat-open img { width: 32px; height: 32px; border-radius: 999px; flex: none; }
+      /* 안내 줄은 늘 맨 위 하나뿐이다. */
+      .msg.intro { opacity: .92; }
 </style>
   </head>
   <body>
@@ -1841,16 +1843,13 @@
       <!-- 여태 이 창은 양식 채우기 전용이었다. 사장님이 "이거 어떻게 생각해"
            라고 물으면 엉뚱하게 메뉴를 고쳤다. 무엇을 시키는지 먼저 고르게 한다. -->
       <div class="chat-mode" id="chat-mode">
-        <button class="on" data-mode="fill">채우기</button>
-        <button data-mode="ask">물어보기</button>
-        <button data-mode="debate">둘에게</button>
+        <button class="on" data-mode="fill" title="말로 알려주면 화면을 채웁니다">화면 채우기</button>
+        <button data-mode="ask" title="무엇이든 물어봅니다. 화면은 안 건드립니다">그냥 묻기</button>
+        <button data-mode="debate" title="서로 다른 AI 두 곳에 같은 것을 묻습니다">두 곳에 묻기</button>
       </div>
 
       <div id="chat-log">
-        <div class="msg ai">
-          가게 이름이나 메뉴를 말로 알려주시면 화면에 채워 드립니다.<br />
-          <span class="muted">발행·전송·소각은 하지 못합니다. 그건 직접 누르셔야 합니다.</span>
-        </div>
+
       </div>
       <div class="chat-in">
         <input id="chat-q" placeholder="아이스 아메리카노 4500원 넣어줘" autocomplete="off" />

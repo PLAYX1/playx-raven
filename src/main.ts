@@ -1879,6 +1879,19 @@ function applyActions(actions: any[]): string[] {
 // 생각해" 라고 물으면 엉뚱하게 메뉴를 고쳤다.
 let chatMode: "fill" | "ask" | "debate" = "fill";
 
+/// 지금 무엇을 시키는 중인지. 이름만으로는 모자란다 —
+/// 「둘에게」가 무엇 둘인지 대표가 물었고, 그건 이름이 틀렸다는 뜻이다.
+const MODE_SAY: Record<string, string> = {
+  fill:
+    "가게 이름이나 메뉴를 <b>말로 알려주시면</b> 화면에 채워 드릴게요.<br />" +
+    '<span class="muted">발행·전송·소각은 하지 못합니다. 그건 직접 누르셔야 합니다.</span>',
+  ask: "무엇이든 물어보세요. <b>화면은 건드리지 않습니다.</b>",
+  debate:
+    "서로 다른 <b>AI 두 곳</b>에 같은 것을 묻고 <b>양쪽 답을 그대로</b> 보여 드려요.<br />" +
+    '<span class="muted">한 곳만 물으면 답이 그럴듯해서 반박할 거리가 없습니다. ' +
+    "두 답이 어긋나는 자리가 사장님이 정하실 자리예요.</span>",
+};
+
 const MODE_HINT: Record<string, string> = {
   fill: "아이스 아메리카노 4500원 넣어줘",
   ask: "레이븐코인으로 받으면 뭐가 좋아?",
@@ -1891,10 +1904,19 @@ function setChatMode(m: "fill" | "ask" | "debate") {
     .querySelectorAll<HTMLElement>("[data-mode]")
     .forEach((b) => b.classList.toggle("on", b.dataset.mode === m));
   ($("chat-q") as HTMLInputElement).placeholder = MODE_HINT[m];
-  if (m === "debate")
-    chatHtml("ai", "서로 다른 두 곳에 같은 것을 묻습니다. <b>어긋나는 자리</b>가 사장님이 정하실 자리예요.");
-  else if (m === "ask")
-    chatSay("ai", "무엇이든 물어보세요. 화면은 건드리지 않습니다.");
+
+  // 🔴 모드를 바꿀 때마다 안내가 **쌓이고 있었다.** 같은 말이 두 번 세 번
+  // 남아, 방금 무엇을 고른 건지 알 수 없게 된다.
+  // 안내는 **맨 위 한 줄만** 있고, 모드가 바뀌면 그 줄이 바뀐다.
+  const log = $("chat-log");
+  let intro = log.querySelector<HTMLElement>(".msg.intro");
+  if (!intro) {
+    intro = document.createElement("div");
+    intro.className = "msg ai intro";
+    log.prepend(intro);
+  }
+  intro.innerHTML =
+    `<img class="msgravi" src="/raven-head.webp" alt="" /><div class="msgtxt">${MODE_SAY[m]}</div>`;
 }
 
 async function chatAsk(q: string) {

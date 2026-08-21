@@ -1077,6 +1077,18 @@ async fn api_shop_profile(
 async fn api_shop(State(state): State<ServerState>) -> impl IntoResponse {
     let shop = state.shop.lock().map(|s| s.clone()).unwrap_or(json!({}));
     let ai_on = state.ai.lock().map(|a| !a.is_empty()).unwrap_or(false);
+    // 영업시간 **그리고** 노드가 받을 수 있는 상태. 둘 중 하나라도 아니면
+    // 닫힌 것이다 — 받아 놓고 확인 못 하는 것이 제일 나쁘다.
+    let open_state = {
+        let mut o = crate::shop::open_at(&shop, now_unix(), local_tz_offset_min());
+        let (ready, why) = node_can_take_orders().await;
+        if !ready {
+            o["open"] = json!(false);
+            o["say"] = json!(why);
+        }
+        o
+    };
+
     Json(json!({
         "shop": shop,
         "ai": ai_on,
@@ -1091,7 +1103,7 @@ async fn api_shop(State(state): State<ServerState>) -> impl IntoResponse {
         ),
         // 영업 여부는 **가게 시계**로 판정한다. 손님 폰의 시간대를 쓰면,
         // 여행 온 손님 폰에만 이 가게가 닫혀 보인다.
-        "open": crate::shop::open_at(&shop, now_unix(), local_tz_offset_min()),
+        "open": open_state,
     }))
 }
 
@@ -1323,6 +1335,15 @@ async fn api_order(
     // 버려지고 있었는데, 나중에 "그때 레이븐이 얼마였느냐" 에 답할 수 있는
     // 유일한 기록이다. 재구성할 방법이 없다 — 지나간 분 단위 시세는 아무도
     // 되돌려주지 않는다.
+    // 🔴 서버에서도 막는다. 화면만 막으면 이미 열어 둔 탭에서 그대로 주문이
+    // 들어오고, 그 돈은 확인되지 않는다.
+    {
+        let (ready, why) = node_can_take_orders().await;
+        if !ready {
+            return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({ "error": why })));
+        }
+    }
+
     // 재고를 잡는다. 🔴 결제할 때 빼면 마지막 하나를 두 손님이 **둘 다**
     // 결제하고, 하나는 못 받는다 — 그 돈은 체인에 들어가 있어 못 되돌린다.
     {
@@ -1451,6 +1472,40 @@ async fn api_nostr_publish(Json(body): Json<Value>) -> impl IntoResponse {
     match crate::nostrpub::nostr_publish(body).await {
         Ok(v) => (StatusCode::OK, Json(v)),
         Err(e) => (StatusCode::BAD_GATEWAY, Json(json!({ "error": e }))),
+    }
+}
+
+
+/// 지금 주문을 받아도 되는가.
+///
+/// 🔴 여태 **영업시간만** 봤다. 재색인 중이거나 노드가 뒤처져 있으면 손님이
+/// 낸 돈을 **볼 수가 없다** — 돈은 체인에 들어가고, 손님 화면은 "입금을
+/// 기다립니다" 에서 멈추고, 가게는 주문이 온 줄도 모른다. 둘 다 상대를 탓한다.
+///
+/// 자산 색인을 켜면 34GB 를 몇 시간 다시 훑는다. 그동안 이 문이 열려 있으면
+/// 안 된다.
+async fn node_can_take_orders() -> (bool, String) {
+    match crate::raven::node_status().await {
+        Err(_) => (
+            false,
+            "가게 컴퓨터가 준비 중입니다. 잠시 뒤에 다시 열어 주세요.".into(),
+        ),
+        Ok(v) => {
+            let p = v.get("progress").and_then(Value::as_f64).unwrap_or(0.0);
+            // 0.9999 미만이면 아직 따라잡는 중이다. 그 상태로 받은 결제는
+            // 확인이 늦거나 아예 안 보인다.
+            if p < 0.9999 {
+                (
+                    false,
+                    format!(
+                        "가게 컴퓨터가 정리 중입니다({}%). 조금 뒤에 다시 열어 주세요.",
+                        (p * 100.0).floor() as i64
+                    ),
+                )
+            } else {
+                (true, String::new())
+            }
+        }
     }
 }
 
