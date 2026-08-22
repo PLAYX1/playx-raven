@@ -1380,6 +1380,34 @@
         <!-- 자산 팔기. 손님이 이미 쓰는 결제 길 위에 얹는다. -->
         <!-- 내 가게: 등록 = 자산 발행. 체인에 남고 아무도 지울 수 없다. -->
         <div class="shoptab" id="shoptab-mine">
+
+          <!-- 🔴 이 칸만 **매일** 바뀐다. 나머지는 처음 한 번이다.
+               여태 12번째에 있어서, "오늘 재료 떨어졌습니다" 를 적으려면
+               가게 이름·좌표·전화·영업시간을 다 지나쳐야 했다.
+               매일 하는 일이 맨 위다. -->
+          <div class="card todaycard">
+            <h3 style="margin-top:0">오늘</h3>
+              <label style="margin-top:16px">지금 상태</label>
+              <div class="row">
+                <label class="check"><input type="checkbox" id="sh-closednow" /><span>지금 닫기 (시간표보다 우선)</span></label>
+              </div>
+              <input id="sh-closednote" placeholder="손님에게 보일 한마디 — 예: 재료가 떨어졌습니다" autocomplete="off" />
+              <div class="meta" id="sh-openpreview" style="margin-top:8px"></div>
+          </div>
+
+          <!-- 아래는 **처음 한 번** 하는 것들이다. 접어 둔다 —
+               숨기는 것이 아니라 접는 것이고, 접으면 있는 줄 안다.
+               (매일 여는 사장이 이름·좌표·영업시간을 매일 지나칠 이유가 없다) -->
+          <details class="onceoff">
+            <summary>
+              <span class="oico" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                     stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+              </span>
+              <span><b>가게 정보 · 처음 한 번</b>
+                <span class="osub">이름 · 사진 · 주소 · 영업시간 · 등록</span></span>
+            </summary>
+
           <div id="shop-none">
             <div class="aibar">
               <input id="ai-shop" placeholder="예: 강남에서 원두 직접 볶는 작은 카페, 포장만" autocomplete="off" />
@@ -1459,12 +1487,6 @@
               <div id="sh-hours"></div>
               <button class="ghost" id="sh-hours-all" style="margin-top:8px">월요일 시간을 나머지 요일에도</button>
 
-              <label style="margin-top:16px">지금 상태</label>
-              <div class="row">
-                <label class="check"><input type="checkbox" id="sh-closednow" /><span>지금 닫기 (시간표보다 우선)</span></label>
-              </div>
-              <input id="sh-closednote" placeholder="손님에게 보일 한마디 — 예: 재료가 떨어졌습니다" autocomplete="off" />
-              <div class="meta" id="sh-openpreview" style="margin-top:8px"></div>
 
               <label style="margin-top:12px">돈 받을 주소</label>
               <div class="row">
@@ -1484,6 +1506,7 @@
             </div>
           </div>
 
+          </details>
         </div>
 
         <!-- 메뉴판: 사진은 IPFS에, 메뉴는 CID만 참조 -->
