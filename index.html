@@ -706,6 +706,8 @@
       .ravihi h2 { font-size: 22px; margin: 0 0 4px; letter-spacing: -0.02em; }
       .ravihi .lede { margin: 0; }
 
+      .raviTodo { margin: 0 0 14px; font-size: 14px; line-height: 1.7; }
+
       .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 22px; }
       @media (max-width: 900px) { .tiles { grid-template-columns: repeat(2, 1fr); } }
       /* 🔴 96px. 44px 이 최소일 뿐 목표가 아니다 — 계산대에서는 보지 않고
@@ -1311,6 +1313,8 @@
 
         <!-- 🔴 타일은 여덟 개까지다. 더 늘리면 다시 '찾는 화면'이 된다.
              왼쪽 넷은 열쇠 없이도 되는 것, 오른쪽 넷은 라비가 하는 것. -->
+        <!-- 아직 안 된 것 한 줄. 눌러 보고 알게 하면 헛걸음이다. -->
+        <div class="warnbox raviTodo" id="ravi-todo" style="display:none"></div>
         <div class="tiles" id="ravi-tiles"></div>
 
         <div id="ravi-chatwrap">

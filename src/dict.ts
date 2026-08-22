@@ -61,6 +61,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "in 1 hour",
     "2. 예약해 둔 것":
       "2. What you have booked",
+    "20초 안에 열리지 않았습니다.":
+      "It did not open within 20 seconds.",
     "2세대":
       "Gen 2",
     "3. 나눠 주기":
@@ -135,6 +137,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Shop introduction",
     "가게 이름 (손님이 읽는 이름)":
       "Shop name (what customers read)",
+    "가게 이름이 비어 있습니다":
+      "The shop name is empty",
     "가게 정보":
       "Shop details",
     "가게 정보 · 처음 한 번":
@@ -163,6 +167,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Gangnam Roastery",
     "강남지점 · 2층 계산대":
       "Gangnam branch · 2nd floor till",
+    "같은 와이파이 주문은 됩니다. 다만 가게 목록에는 안 뜹니다.":
+      "Ordering on the same wifi still works. It just will not appear in the shop list.",
     "같이 보내는 것":
       "What is sent with it",
     "개발비 1%":
@@ -197,6 +203,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "A unique asset is one of a kind. The quantity is fixed at",
     "고치기":
       "Edit",
+    "고치러 가기":
+      "Go fix it",
     "공지":
       "Notices",
     "공지 보내기":
@@ -437,6 +445,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Let me add to the menu. Put these on the menu as I read them out:",
     "메뉴 지우기를 그만두었습니다":
       "Cancelled clearing the menu",
+    "메뉴가 하나도 없습니다":
+      "There is not a single menu item",
     "메뉴판":
       "Menu",
     "메뉴판 올리기":
@@ -681,6 +691,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Could not start the customer phone server.",
     "손님 폰으로 받기":
       "Take orders on customer phones",
+    "손님 화면 맨 위가 빈 채로 뜹니다.":
+      "The top of the customer screen appears blank.",
     "손님 화면 보기":
       "View the customer screen",
     "손님 화면에 보일 가게 소개를 써 주세요. 제 가게는":
@@ -691,6 +703,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "One line customers will see — e.g. we have run out of ingredients",
     "손님에게 안 보입니다":
       "Customers will not see you",
+    "손님이 QR 을 찍어도 시킬 것이 없습니다.":
+      "Even if a customer scans the QR, there is nothing to order.",
     "손님이 QR을 찍어 주문합니다. 같은 wifi 안에서 됩니다.":
       "Customers scan a QR and order. It works on the same wifi.",
     "손님이 걸 수 있는 번호":
@@ -737,6 +751,10 @@ export const DICT: Record<string, Record<string, string>> = {
       "Iced americano",
     "아이스 아메리카노 4500원 넣어줘":
       "add iced americano for 4500 won",
+    "아직 안 된 것":
+      "Not ready yet",
+    "아직 안 된 것이 있습니다":
+      "Some things are not ready yet",
     "아직 없습니다":
       "Not yet",
     "아직 정해지지 않았습니다":
@@ -1163,6 +1181,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "This is an address you are sending to for the first time.",
     "처음 한 번 하는 것들":
       "Things you do once",
+    "체인에 가게를 등록하지 않았습니다":
+      "The shop is not registered on the chain",
     "체인에 남을 이름":
       "The name that stays on the chain",
     "체인에 영구히 남고 누구나 볼 수 있습니다.":
@@ -1335,6 +1355,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "1時間後",
     "2. 예약해 둔 것":
       "2. 予約したもの",
+    "20초 안에 열리지 않았습니다.":
+      "20秒以内に開きませんでした。",
     "2세대":
       "第2世代",
     "3. 나눠 주기":
@@ -1409,6 +1431,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "お店の紹介",
     "가게 이름 (손님이 읽는 이름)":
       "お店の名前（お客様が読む名前）",
+    "가게 이름이 비어 있습니다":
+      "お店の名前が空です",
     "가게 정보":
       "お店の情報",
     "가게 정보 · 처음 한 번":
@@ -1437,6 +1461,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "江南ロースタリー",
     "강남지점 · 2층 계산대":
       "江南支店・2階レジ",
+    "같은 와이파이 주문은 됩니다. 다만 가게 목록에는 안 뜹니다.":
+      "同じwifiでの注文はできます。ただしお店の一覧には出ません。",
     "같이 보내는 것":
       "一緒に送るもの",
     "개발비 1%":
@@ -1471,6 +1497,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "ユニークアセットは1つだけです。数量は",
     "고치기":
       "修正する",
+    "고치러 가기":
+      "直しに行く",
     "공지":
       "お知らせ",
     "공지 보내기":
@@ -1711,6 +1739,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "メニューを入れます。私が読み上げるとおりにメニューへ入れてください：",
     "메뉴 지우기를 그만두었습니다":
       "メニューの削除をやめました",
+    "메뉴가 하나도 없습니다":
+      "メニューが一つもありません",
     "메뉴판":
       "メニュー",
     "메뉴판 올리기":
@@ -1955,6 +1985,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "お客様の端末サーバーを起動できませんでした。",
     "손님 폰으로 받기":
       "お客様の端末で受ける",
+    "손님 화면 맨 위가 빈 채로 뜹니다.":
+      "お客様の画面の一番上が空のまま表示されます。",
     "손님 화면 보기":
       "お客様の画面を見る",
     "손님 화면에 보일 가게 소개를 써 주세요. 제 가게는":
@@ -1965,6 +1997,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "お客様に見せる一言 — 例：材料が切れました",
     "손님에게 안 보입니다":
       "お客様には表示されません",
+    "손님이 QR 을 찍어도 시킬 것이 없습니다.":
+      "お客様がQRを読み取っても頼むものがありません。",
     "손님이 QR을 찍어 주문합니다. 같은 wifi 안에서 됩니다.":
       "お客様がQRを読み取って注文します。同じwifi内で動きます。",
     "손님이 걸 수 있는 번호":
@@ -2011,6 +2045,10 @@ export const DICT: Record<string, Record<string, string>> = {
       "アイスアメリカーノ",
     "아이스 아메리카노 4500원 넣어줘":
       "アイスアメリカーノを4500ウォンで入れて",
+    "아직 안 된 것":
+      "まだできていないこと",
+    "아직 안 된 것이 있습니다":
+      "まだできていないことがあります",
     "아직 없습니다":
       "まだありません",
     "아직 정해지지 않았습니다":
@@ -2437,6 +2475,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "初めて送るアドレスです。",
     "처음 한 번 하는 것들":
       "最初の一度だけすること",
+    "체인에 가게를 등록하지 않았습니다":
+      "お店をチェーンに登録していません",
     "체인에 남을 이름":
       "チェーンに残る名前",
     "체인에 영구히 남고 누구나 볼 수 있습니다.":
@@ -2609,6 +2649,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "1小时后",
     "2. 예약해 둔 것":
       "2. 已预约的",
+    "20초 안에 열리지 않았습니다.":
+      "20 秒内没有打开。",
     "2세대":
       "第2代",
     "3. 나눠 주기":
@@ -2683,6 +2725,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "店铺简介",
     "가게 이름 (손님이 읽는 이름)":
       "店名（顾客看到的名称）",
+    "가게 이름이 비어 있습니다":
+      "店名是空的",
     "가게 정보":
       "店铺信息",
     "가게 정보 · 처음 한 번":
@@ -2711,6 +2755,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "江南烘焙坊",
     "강남지점 · 2층 계산대":
       "江南分店 · 二楼收银台",
+    "같은 와이파이 주문은 됩니다. 다만 가게 목록에는 안 뜹니다.":
+      "同一 wifi 下点单仍可用。只是不会出现在店铺列表中。",
     "같이 보내는 것":
       "一并发送的内容",
     "개발비 1%":
@@ -2745,6 +2791,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "唯一资产只有一个。数量固定为",
     "고치기":
       "修改",
+    "고치러 가기":
+      "去处理",
     "공지":
       "公告",
     "공지 보내기":
@@ -2985,6 +3033,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "我来添加菜品。按我念的加到菜单里：",
     "메뉴 지우기를 그만두었습니다":
       "已取消清空菜单",
+    "메뉴가 하나도 없습니다":
+      "一个菜品都没有",
     "메뉴판":
       "菜单",
     "메뉴판 올리기":
@@ -3229,6 +3279,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "无法启动顾客手机服务。",
     "손님 폰으로 받기":
       "用顾客手机接单",
+    "손님 화면 맨 위가 빈 채로 뜹니다.":
+      "顾客界面顶部会是空白。",
     "손님 화면 보기":
       "查看顾客界面",
     "손님 화면에 보일 가게 소개를 써 주세요. 제 가게는":
@@ -3239,6 +3291,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "给顾客看的一句话 —— 例：原料用完了",
     "손님에게 안 보입니다":
       "顾客将看不到",
+    "손님이 QR 을 찍어도 시킬 것이 없습니다.":
+      "即使顾客扫码，也没有可点的东西。",
     "손님이 QR을 찍어 주문합니다. 같은 wifi 안에서 됩니다.":
       "顾客扫码下单。在同一 wifi 内即可使用。",
     "손님이 걸 수 있는 번호":
@@ -3285,6 +3339,10 @@ export const DICT: Record<string, Record<string, string>> = {
       "冰美式",
     "아이스 아메리카노 4500원 넣어줘":
       "把冰美式加进去，4500韩元",
+    "아직 안 된 것":
+      "尚未完成",
+    "아직 안 된 것이 있습니다":
+      "还有些事没准备好",
     "아직 없습니다":
       "还没有",
     "아직 정해지지 않았습니다":
@@ -3711,6 +3769,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "这是您第一次向该地址转账。",
     "처음 한 번 하는 것들":
       "只需做一次的事",
+    "체인에 가게를 등록하지 않았습니다":
+      "尚未在链上注册店铺",
     "체인에 남을 이름":
       "留在链上的名称",
     "체인에 영구히 남고 누구나 볼 수 있습니다.":

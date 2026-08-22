@@ -1322,6 +1322,19 @@ function paintRavi() {
     }
   }
 
+  /* 🔴 아직 안 된 것이 있으면 **타일에 적어 둔다.** 눌러 보고 알게 하면
+     그 사람은 이미 한 번 헛걸음한 것이다. 대표님 지적이 정확했다 —
+     가게 등록을 안 했으면 QR 을 눌러도 소용이 없는데, 눌러야만 알았다. */
+  const todo = shopTodo();
+  const noteBox = $("ravi-todo");
+  if (noteBox) {
+    noteBox.innerHTML = todo.length
+      ? `<b>${t("아직 안 된 것")}</b> — ` +
+        todo.map((x) => escapeHtml(x.label)).join(" · ")
+      : "";
+    noteBox.style.display = todo.length ? "" : "none";
+  }
+
   const tiles = raviTiles();
   box.innerHTML = tiles
     .map((t, i) => {
@@ -1486,19 +1499,83 @@ async function rpLabel() {
    ⚠️ 손님 QR 만 벽에 붙일 수 있다. 나머지 셋에는 **열쇠가 들어 있어서**,
    붙이면 열쇠를 벽에 붙이는 것이다. 그래서 손님 QR 을 크게 하나,
    나머지 셋을 작게 아래에 두고 테두리로 구별한다. */
+/** 아직 안 된 것. 🔴 QR 을 띄우기 **전에**, 물어보지 않고 먼저 말한다. */
+function shopTodo(): { bad: boolean; label: string; why: string; go?: () => void }[] {
+  const val = (id: string) => ($(id) as HTMLInputElement)?.value.trim() || "";
+  const name = val("sh-ko") || val("sh-en");
+  const toShop = (tab: string) => () => {
+    $("qrwrap").style.display = "none";
+    showPage("shop");
+    shopTab(tab);
+  };
+  return [
+    {
+      bad: !(nodeUp ?? true),
+      label: t("노드가 꺼져 있어요"),
+      why: t("결제가 들어와도 확인을 못 합니다."),
+      go: () => { $("qrwrap").style.display = "none"; showPage("settings"); },
+    },
+    {
+      bad: !name,
+      label: t("가게 이름이 비어 있습니다"),
+      why: t("손님 화면 맨 위가 빈 채로 뜹니다."),
+      go: toShop("mine"),
+    },
+    {
+      bad: menuItems.length === 0,
+      label: t("메뉴가 하나도 없습니다"),
+      why: t("손님이 QR 을 찍어도 시킬 것이 없습니다."),
+      go: toShop("menu"),
+    },
+    {
+      // 체인 등록은 **장사에 꼭 필요한 것이 아니다.** 같은 와이파이 주문은
+      // 등록 없이도 된다. 등록은 가게 목록(장터)에 뜨기 위한 것이다.
+      bad: !val("sh-asset"),
+      label: t("체인에 가게를 등록하지 않았습니다"),
+      why: t("같은 와이파이 주문은 됩니다. 다만 가게 목록에는 안 뜹니다."),
+      go: toShop("mine"),
+    },
+  ].filter((x) => x.bad);
+}
+
 async function openQrSheet() {
   const wrap = $("qrwrap");
   const body = $("qr-body");
   wrap.style.display = "flex";
-  body.innerHTML = `<div class="meta">${t("여는 중…")}</div>`;
+
+  // 🔴 안 된 것을 **먼저** 그린다. QR 을 기다리는 동안 빈 창을 보여 주면
+  //    사장은 고장으로 읽는다. 그리고 여기 적힌 것이 진짜 원인일 때가 많다.
+  const todo = shopTodo();
+  const todoHtml = todo.length
+    ? `<div class="warnbox" style="margin-bottom:14px">
+         <b>${t("아직 안 된 것이 있습니다")}</b>
+         ${todo.map((x, i) =>
+           `<div style="margin-top:8px">• <b>${escapeHtml(x.label)}</b><br />
+              <span class="meta">${escapeHtml(x.why)}</span>
+              ${x.go ? ` <button class="ghost" data-todo="${i}" style="min-height:32px;padding:0 10px;margin-left:4px">${t("고치러 가기")}</button>` : ""}
+            </div>`).join("")}
+       </div>`
+    : "";
+  body.innerHTML = todoHtml + `<div class="meta">${t("여는 중…")}</div>`;
+  body.querySelectorAll<HTMLElement>("[data-todo]").forEach((b) => {
+    b.onclick = () => todo[+b.dataset.todo!].go?.();
+  });
 
   try {
     // 이미 켜져 있으면 그대로 다시 읽고, 꺼져 있으면 여기서 켠다 —
     // 「손님 QR」을 누른 사람은 이미 켜고 싶다는 뜻이다.
-    const r = await invoke<any>("start_phone_server");
+    // ⚠️ 무엇이 걸리든 창이 「여는 중…」에서 멈추면 안 된다. 20초를 넘기면
+    //    멈춘 이유를 말해 준다 — 말없이 기다리게 하는 것이 제일 나쁘다.
+    const r = await Promise.race([
+      invoke<any>("start_phone_server"),
+      new Promise((_, no) =>
+        setTimeout(() => no(new Error(t("20초 안에 열리지 않았습니다."))), 20000)),
+    ]) as any;
     serverIp = r.ip;
     localStorage.setItem(PHONE_KEY, "1");
-    await publishShop(r.ip);
+    // 가게 정보를 손님 화면에 올리는 것은 QR 보다 뒤여도 된다. 여기서
+    // 실패해도 QR 은 나와야 한다.
+    try { await publishShop(r.ip); } catch { /* 메뉴만 빈다 */ }
 
     const [adminQr, staffQr, scanQr, custQr] = await Promise.all([
       invoke<string>("qr_svg", { text: r.admin_url }),
@@ -1507,7 +1584,7 @@ async function openQrSheet() {
       invoke<string>("qr_svg", { text: r.customer_url }),
     ]);
 
-    body.innerHTML =
+    body.innerHTML = todoHtml +
       `<div class="qrmain">${custQr}
          <div>
            <b style="font-size:19px">${t("손님")}</b>
@@ -1538,7 +1615,7 @@ async function openQrSheet() {
     // 🔴 다만 **원문 오류를 크게 띄우지 않는다.** 영어 한 줄을 보여 주면
     //    사장은 다음에 할 일을 못 찾는다. 할 일을 먼저 적고, 원문은
     //    작게 아래에 둔다(신고할 때 이 줄이 쓸모 있다).
-    body.innerHTML =
+    body.innerHTML = todoHtml +
       `<div class="warnbox">
          <b>${t("손님 폰 서버를 켜지 못했습니다.")}</b><br />
          ${t("노드가 켜져 있는지 보시고, 잠시 뒤에 다시 눌러 주세요.")}
@@ -5707,10 +5784,17 @@ async function publishShop(ip?: string) {
   const currency = ($("mn-cur") as HTMLSelectElement)?.value || "KRW";
   if (currency !== "RVN") {
     try {
-      const r = await invoke<any>("rvn_rate", { currency });
-      rate = r.rate;
+      // 🔴 시세는 바깥 거래소에 묻는 것이라 **안 돌아올 수 있다.** 여기서
+      //    무한정 기다리면 이걸 부르는 쪽(손님 QR 창)이 「여는 중…」에서
+      //    멈춘다 — 실제로 그렇게 멈췄다. 6초면 충분하고, 못 받아도
+      //    메뉴는 보여야 한다. RVN 환산만 빠진다.
+      const r = await Promise.race([
+        invoke<any>("rvn_rate", { currency }),
+        new Promise((_, no) => setTimeout(() => no(new Error("rate timeout")), 6000)),
+      ]);
+      rate = (r as any).rate;
     } catch {
-      // 시세를 못 가져와도 메뉴는 보여야 한다. RVN 환산만 빠진다.
+      // 시세를 못 가져와도 메뉴는 보여야 한다.
     }
   }
 
