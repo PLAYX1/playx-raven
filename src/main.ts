@@ -1659,8 +1659,117 @@ async function openQrSheet() {
   }
 }
 
+/** 영업 중 / 지금 닫기 두 칸. 체크박스는 숨어서 그대로 남아 있고,
+    저장·라비의 「closed」 동사·「아직 안 된 것」이 전부 그 칸을 읽는다. */
+function paintOpenPick() {
+  const box = $("sh-closednow") as HTMLInputElement | null;
+  if (!box) return;
+  const closed = box.checked;
+  $("sh-open-btn")?.classList.toggle("on", !closed);
+  $("sh-close-btn")?.classList.toggle("on", closed);
+  // 🔴 「손님에게 보일 한마디」는 **닫았을 때만** 보인다. 열려 있는데
+  //    「재료가 떨어졌습니다」를 적어 두라고 하면 그 칸이 무엇인지 알 수 없다.
+  const note = $("sh-closednote");
+  if (note) note.style.display = closed ? "" : "none";
+}
+
+/** 두 칸 중 하나를 고른다. 이미 그 상태면 아무 일도 안 한다 —
+    같은 칸을 두 번 눌러 장사가 껐다 켜졌다 하면 안 된다. */
+function setOpenState(closed: boolean) {
+  const box = $("sh-closednow") as HTMLInputElement | null;
+  if (!box || box.checked === closed) return;
+  box.checked = closed;
+  // 화면에 이미 붙어 있는 처리(미리보기·저장)를 그대로 태운다.
+  box.dispatchEvent(new Event("change", { bubbles: true }));
+  paintOpenPick();
+  paintRavi();
+}
+
+/* ══ 화면마다 큰 아이콘 줄 ═══════════════════════════════════════════
+   대표님: "다른 메뉴들도 안 되어 있다면 라비 화면과 같은 문법으로 모두
+   수정해줘."
+
+   🔴 화면을 다시 짜지 않는다. 지갑·자산·배당·이 컴퓨터는 **잘 돌고 있고**,
+   돈과 발행이 걸린 화면이라 재작성은 그 자체가 위험이다. 대신 **맨 위에
+   할 일을 큰 아이콘으로** 얹는다 — 아래 있던 것은 그대로 둔다.
+
+   그러면 배울 것이 하나가 된다: 어느 화면이든 위쪽 큰 칸이 「지금 할 일」,
+   아래는 「자세한 것」. 라비 화면과 같은 문법이다. */
+type PageTile = { icon: string; label: string; sub: string; go: () => void };
+
+function pageTiles(page: string): PageTile[] {
+  const jump = (id: string) => () => {
+    const el = document.getElementById(id);
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    (el as HTMLInputElement | null)?.focus?.();
+  };
+  if (page === "wallet") {
+    return [
+      { icon: I('<path d="M12 4v11M8 11l4 4 4-4"/><path d="M4.5 19.5h15"/>'),
+        label: "받기", sub: "받을 주소 만들기", go: () => $("w-newaddr")?.click() },
+      { icon: I('<path d="M12 20V9M8 13l4-4 4 4"/><path d="M4.5 4.5h15"/>'),
+        label: "보내기", sub: "RVN 보내기", go: () => openSend("rvn") },
+      { icon: I('<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/>'),
+        label: "자산 보내기", sub: "쿠폰 · 회원권", go: () => openSend("asset") },
+      { icon: I('<rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="M3.5 9.5h17M8 14h4"/>'),
+        label: "최근 거래", sub: "들어오고 나간 것", go: jump("w-foreign") },
+    ];
+  }
+  if (page === "assets") {
+    return [
+      { icon: I('<path d="M12 5v14M5 12h14"/>'),
+        label: "새 자산 만들기", sub: "쿠폰 · 회원권 · 굿즈", go: () => $("new-asset")?.click() },
+      { icon: I('<path d="M20 12a8 8 0 11-2.3-5.6"/><path d="M20 4v4h-4"/>'),
+        label: "새로고침", sub: "다시 읽어오기", go: () => $("refresh")?.click() },
+      { icon: I('<path d="M12 3.5l7.5 4v9L12 20.5 4.5 16.5v-9z"/><path d="M9 12l2 2 4-4"/>'),
+        label: "파일 지키기", sub: "이 컴퓨터에 보존", go: () => $("pin-all")?.click() },
+      { icon: I('<path d="M4 6.5h16v11H4z"/><path d="M4 10h16M8 14h4"/>'),
+        label: "내놓은 자산", sub: "팔고 있는 것", go: jump("vend-wrap") },
+    ];
+  }
+  if (page === "reward") {
+    return [
+      { icon: I('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>'),
+        label: "명단 굳히기", sub: "먼저 예약합니다", go: () => $("rw-asset")?.focus() },
+      { icon: I('<path d="M4 6.5h16v11H4z"/><path d="M8 10h8M8 14h5"/>'),
+        label: "예약해 둔 것", sub: "굳은 명단", go: jump("rw-list") },
+      { icon: I('<path d="M12 3v9M8 8l4-4 4 4"/><path d="M4 14v5.5h16V14"/>'),
+        label: "나눠 주기", sub: "보유자 전원에게", go: () => $("rw-pay")?.focus() },
+    ];
+  }
+  if (page === "settings") {
+    return [
+      { icon: I('<path d="M12 3.5l7.5 4v9L12 20.5 4.5 16.5v-9z"/><path d="M12 8.5v4M12 15.5h.01"/>'),
+        label: "쉬운 설정", sub: "제가 정해 드려요", go: jump("easy-setup") },
+      { icon: I('<path d="M4 7.5h16v12H4z"/><path d="M9 7.5V5h6v2.5M12 11v5M9.5 13.5h5"/>'),
+        label: "백업", sub: "만들고 · 되돌리기", go: jump("sw-list") },
+      { icon: I('<path d="M9 12a3 3 0 116 0 3 3 0 01-6 0z"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/>'),
+        label: "AI 열쇠", sub: "라비를 깨웁니다", go: jump("key-note") },
+      { icon: I('<path d="M4 18.5h16"/><path d="M7 18.5V11M12 18.5V6M17 18.5v-4.5"/>'),
+        label: "채굴", sub: "수익 계산 · 켜고 끄기", go: jump("mn-gpu") },
+    ];
+  }
+  return [];
+}
+
+/** 화면 맨 위에 큰 아이콘 줄을 그린다. 없으면 아무 일도 안 한다. */
+function paintPageTiles(page: string) {
+  const host = document.getElementById(`pt-${page}`);
+  if (!host) return;
+  const tiles = pageTiles(page);
+  host.innerHTML = tiles
+    .map((x, i) => `<button class="tile" data-pt="${i}">${x.icon}` +
+      `<span>${escapeHtml(t(x.label))}</span>` +
+      `<span class="tsub">${escapeHtml(t(x.sub))}</span></button>`)
+    .join("");
+  host.querySelectorAll<HTMLElement>("[data-pt]").forEach((b) => {
+    b.onclick = () => tiles[+b.dataset.pt!].go();
+  });
+}
+
 function showPage(id: string) {
   if (id === "ravi") paintRavi();
+  paintPageTiles(id);
   // 🔴 라비 화면에서는 떠 있는 「Ravi에게 물어보기」를 숨긴다.
   //    대화창이 바로 앞에 있는데 그리로 가는 단추가 그 위에 떠 있으면,
   //    같은 것이 둘로 보이고 오른쪽 아래 내용을 가린다.
@@ -6407,6 +6516,7 @@ async function loadShop() {
   chk("sh-pickup", sh.pickup);
   chk("sh-delivery", sh.delivery);
   chk("sh-closednow", sh.closed_now);
+  paintOpenPick();
   set("sh-closednote", sh.closed_note);
   drawHours(sh.hours);
 
@@ -6929,6 +7039,11 @@ window.addEventListener("DOMContentLoaded", () => {
     foot?.parentNode?.insertBefore(sel, foot);
   })();
 
+  $("sh-open-btn").addEventListener("click", () => setOpenState(false));
+  $("sh-close-btn").addEventListener("click", () => setOpenState(true));
+  // 라비가 말로 닫거나, 저장한 값을 되읽을 때도 두 칸이 따라가야 한다.
+  $("sh-closednow").addEventListener("change", paintOpenPick);
+  paintOpenPick();
   $("qr-close").addEventListener("click", () => { $("qrwrap").style.display = "none"; });
   $("qrwrap").addEventListener("click", (e) => {
     if (e.target === $("qrwrap")) $("qrwrap").style.display = "none";

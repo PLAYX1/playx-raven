@@ -83,6 +83,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Closed for the day on 20 September",
     "AI 도우미":
       "AI helper",
+    "AI 열쇠":
+      "AI key",
     "AI로 채우기":
       "Fill in with AI",
     "GPU를 몇 %로 쓸까요":
@@ -215,6 +217,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Send a notice",
     "구글·애플 지도에서 가게를 길게 눌러 좌표를 복사한 뒤 여기 붙이세요. 넣으면 손님 화면에":
       "Long-press your shop in Google or Apple Maps, copy the coordinates and paste them here. With them, the customer screen gains",
+    "굳은 명단":
+      "The frozen list",
     "그건 종이(복구 카드)나 비밀번호 금고에 두세요.":
       "Keep those on paper (the recovery card) or in a password vault.",
     "그냥 묻기":
@@ -333,6 +337,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Opened again.",
     "다시 엽니다":
       "Reopening",
+    "다시 읽어오기":
+      "Read it again",
     "다시 켤 때까지 가게가 멈춥니다. 영업 중에는 누르지 마세요.":
       "The shop stops until you start it again. Do not press this while open for business.",
     "다시 확인":
@@ -393,6 +399,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Entry log",
     "들어감":
       "Included",
+    "들어오고 나간 것":
+      "What came in and went out",
     "들어온 수익":
       "Earnings received",
     "들어온 주문":
@@ -407,6 +415,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Ravi",
     "라비가 틀리게 답해요":
       "Ravi answers incorrectly",
+    "라비를 깨웁니다":
+      "Wakes Ravi up",
     "라비에게 묻기":
       "Ask Ravi",
     "레이븐 코어와 같은 주소록":
@@ -425,6 +435,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "What you are creating",
     "만드는 중…":
       "Creating…",
+    "만들고 · 되돌리기":
+      "Make and restore",
     "말로 불러 주세요":
       "Just read them out",
     "말로 알려주면 화면을 채웁니다":
@@ -441,6 +453,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Calculate first",
     "먼저 연습해 보기":
       "Practise first",
+    "먼저 예약합니다":
+      "Book it first",
     "먼저 이름을 정해 주세요.":
       "Please decide a name first.",
     "메뉴 넣기":
@@ -507,6 +521,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "be changed.",
     "밖에서 주문하러 올 주소":
       "The address customers outside come to order from",
+    "받기":
+      "Receive",
     "받는 분이 알려 준 원본":
       "the original the recipient gave you",
     "받는 주소":
@@ -565,6 +581,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Asset to send",
     "보냈습니다. 고맙습니다.":
       "Sent. Thank you.",
+    "보유자 전원에게":
+      "To every holder",
     "보존 중…":
       "Keeping…",
     "보존을 해제할까요?":
@@ -719,10 +737,14 @@ export const DICT: Record<string, Record<string, string>> = {
       "The customer does not pay extra",
     "손님이 시킨 것":
       "What customers ordered",
+    "손님이 주문할 수 있어요":
+      "Customers can order",
     "손님이 찾아올 수 있게 쓰세요":
       "Write it so customers can find you",
     "수량":
       "Quantity",
+    "수익 계산 · 켜고 끄기":
+      "Profit check · start and stop",
     "쉬운 설정":
       "Easy setup",
     "스위치가 스스로 닫습니다":
@@ -831,6 +853,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Open time (seconds)",
     "열쇠 보기":
       "Show the key",
+    "영업 중":
+      "Open now",
     "영업시간":
       "Opening hours",
     "영업하는 것으로 봅니다 — 밤 6시 열고 새벽 2시 닫기.":
@@ -943,6 +967,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Anyone who can use this computer can use the wallet",
     "이 컴퓨터에 맞게 살펴보는 중…":
       "Checking what this computer can do…",
+    "이 컴퓨터에 보존":
+      "Kept on this computer",
     "이 컴퓨터에만":
       "only on this computer",
     "이 컴퓨터에서 사본이 사라집니다. 다른 곳에 사본이 없으면 되찾을 수 없습니다.":
@@ -1059,6 +1085,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Start automatically after a power cut",
     "제 일도 하는 컴퓨터입니다. 꼭 필요한 만큼만 쓰게 합니다.":
       "A computer you also work on. We use only what is needed.",
+    "제가 정해 드려요":
+      "I will decide for you",
     "제목":
       "Subject",
     "제한 자산":
@@ -1231,6 +1259,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Turn on",
     "켜면 QR 네 개가 나옵니다 — 사장님·직원·검표·손님.":
       "Turning it on produces four QR codes — owner, staff, door check, customer.",
+    "쿠폰 · 회원권":
+      "Coupons · memberships",
     "쿠폰 · 회원권 · 굿즈":
       "Coupons · memberships · merch",
     "클라우드":
@@ -1245,6 +1275,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "File",
     "파일 고르기":
       "Choose a file",
+    "파일 지키기":
+      "Keep the files",
     "파일 창고(IPFS)":
       "file store (IPFS)",
     "파일을 고르면 여기 자동으로 채워집니다":
@@ -1263,6 +1295,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "version",
     "판매중":
       "On sale",
+    "팔고 있는 것":
+      "What is on sale",
     "팔기":
       "Sell",
     "팔린 자산을 보내려면":
@@ -1385,6 +1419,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "9月20日は一日お休みします",
     "AI 도우미":
       "AIアシスタント",
+    "AI 열쇠":
+      "AIキー",
     "AI로 채우기":
       "AIで埋める",
     "GPU를 몇 %로 쓸까요":
@@ -1517,6 +1553,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "お知らせを送る",
     "구글·애플 지도에서 가게를 길게 눌러 좌표를 복사한 뒤 여기 붙이세요. 넣으면 손님 화면에":
       "GoogleマップやAppleマップでお店を長押しして座標をコピーし、ここに貼り付けてください。入れるとお客様の画面に",
+    "굳은 명단":
+      "確定した名簿",
     "그건 종이(복구 카드)나 비밀번호 금고에 두세요.":
       "それは紙（復元カード）かパスワード金庫に置いてください。",
     "그냥 묻기":
@@ -1635,6 +1673,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "もう一度開けました。",
     "다시 엽니다":
       "もう一度開けます",
+    "다시 읽어오기":
+      "読み直す",
     "다시 켤 때까지 가게가 멈춥니다. 영업 중에는 누르지 마세요.":
       "再起動するまでお店は止まります。営業中には押さないでください。",
     "다시 확인":
@@ -1695,6 +1735,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "入退室の記録",
     "들어감":
       "含む",
+    "들어오고 나간 것":
+      "入ったもの・出たもの",
     "들어온 수익":
       "入ってきた収益",
     "들어온 주문":
@@ -1709,6 +1751,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Ravi",
     "라비가 틀리게 답해요":
       "Raviの答えが間違っています",
+    "라비를 깨웁니다":
+      "Raviを起こします",
     "라비에게 묻기":
       "Raviに聞く",
     "레이븐 코어와 같은 주소록":
@@ -1727,6 +1771,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "作るもの",
     "만드는 중…":
       "作成中…",
+    "만들고 · 되돌리기":
+      "作成・復元",
     "말로 불러 주세요":
       "口で読み上げてください",
     "말로 알려주면 화면을 채웁니다":
@@ -1743,6 +1789,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "先に計算してみる",
     "먼저 연습해 보기":
       "先に練習してみる",
+    "먼저 예약합니다":
+      "先に予約します",
     "먼저 이름을 정해 주세요.":
       "先に名前を決めてください。",
     "메뉴 넣기":
@@ -1809,6 +1857,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "変えられません。",
     "밖에서 주문하러 올 주소":
       "外から注文しに来るアドレス",
+    "받기":
+      "受け取る",
     "받는 분이 알려 준 원본":
       "受取人が知らせてくれた原本",
     "받는 주소":
@@ -1867,6 +1917,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "送るアセット",
     "보냈습니다. 고맙습니다.":
       "送りました。ありがとうございます。",
+    "보유자 전원에게":
+      "保有者全員へ",
     "보존 중…":
       "保管中…",
     "보존을 해제할까요?":
@@ -2021,10 +2073,14 @@ export const DICT: Record<string, Record<string, string>> = {
       "お客様が余分に払うのではなく",
     "손님이 시킨 것":
       "お客様が注文したもの",
+    "손님이 주문할 수 있어요":
+      "お客様が注文できます",
     "손님이 찾아올 수 있게 쓰세요":
       "お客様が来られるように書いてください",
     "수량":
       "数量",
+    "수익 계산 · 켜고 끄기":
+      "採算計算・起動と停止",
     "쉬운 설정":
       "かんたん設定",
     "스위치가 스스로 닫습니다":
@@ -2133,6 +2189,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "開放時間（秒）",
     "열쇠 보기":
       "鍵を見る",
+    "영업 중":
+      "営業中",
     "영업시간":
       "営業時間",
     "영업하는 것으로 봅니다 — 밤 6시 열고 새벽 2시 닫기.":
@@ -2245,6 +2303,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "このパソコンを使える人はウォレットも使えます",
     "이 컴퓨터에 맞게 살펴보는 중…":
       "このパソコンに合わせて確認中…",
+    "이 컴퓨터에 보존":
+      "このパソコンに保管",
     "이 컴퓨터에만":
       "このパソコンにだけ",
     "이 컴퓨터에서 사본이 사라집니다. 다른 곳에 사본이 없으면 되찾을 수 없습니다.":
@@ -2361,6 +2421,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "停電後に自動で起動する",
     "제 일도 하는 컴퓨터입니다. 꼭 필요한 만큼만 쓰게 합니다.":
       "ご自身の仕事にも使うパソコンです。必要な分だけ使います。",
+    "제가 정해 드려요":
+      "私が決めます",
     "제목":
       "件名",
     "제한 자산":
@@ -2533,6 +2595,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "オンにする",
     "켜면 QR 네 개가 나옵니다 — 사장님·직원·검표·손님.":
       "オンにするとQRが4つ出ます — 店主・スタッフ・検札・お客様。",
+    "쿠폰 · 회원권":
+      "クーポン・会員券",
     "쿠폰 · 회원권 · 굿즈":
       "クーポン・会員券・グッズ",
     "클라우드":
@@ -2547,6 +2611,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "ファイル",
     "파일 고르기":
       "ファイルを選ぶ",
+    "파일 지키기":
+      "ファイルを守る",
     "파일 창고(IPFS)":
       "ファイル倉庫（IPFS）",
     "파일을 고르면 여기 자동으로 채워집니다":
@@ -2565,6 +2631,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "版",
     "판매중":
       "販売中",
+    "팔고 있는 것":
+      "販売中のもの",
     "팔기":
       "販売する",
     "팔린 자산을 보내려면":
@@ -2687,6 +2755,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "9月20日休息一天",
     "AI 도우미":
       "AI 助手",
+    "AI 열쇠":
+      "AI 密钥",
     "AI로 채우기":
       "用 AI 填写",
     "GPU를 몇 %로 쓸까요":
@@ -2819,6 +2889,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "发送公告",
     "구글·애플 지도에서 가게를 길게 눌러 좌표를 복사한 뒤 여기 붙이세요. 넣으면 손님 화면에":
       "在谷歌或苹果地图上长按您的店铺，复制坐标粘贴到这里。填入后顾客界面会出现",
+    "굳은 명단":
+      "已锁定的名单",
     "그건 종이(복구 카드)나 비밀번호 금고에 두세요.":
       "请把它们放在纸上（恢复卡）或密码保险库中。",
     "그냥 묻기":
@@ -2937,6 +3009,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "已重新营业。",
     "다시 엽니다":
       "重新开门",
+    "다시 읽어오기":
+      "重新读取",
     "다시 켤 때까지 가게가 멈춥니다. 영업 중에는 누르지 마세요.":
       "在重新启动之前店铺会停摆。营业期间请勿点击。",
     "다시 확인":
@@ -2997,6 +3071,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "进出记录",
     "들어감":
       "已包含",
+    "들어오고 나간 것":
+      "进出明细",
     "들어온 수익":
       "已到账收益",
     "들어온 주문":
@@ -3011,6 +3087,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Ravi",
     "라비가 틀리게 답해요":
       "Ravi 回答有误",
+    "라비를 깨웁니다":
+      "唤醒 Ravi",
     "라비에게 묻기":
       "问 Ravi",
     "레이븐 코어와 같은 주소록":
@@ -3029,6 +3107,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "将要创建的",
     "만드는 중…":
       "创建中…",
+    "만들고 · 되돌리기":
+      "创建 · 还原",
     "말로 불러 주세요":
       "口述给我即可",
     "말로 알려주면 화면을 채웁니다":
@@ -3045,6 +3125,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "先试算",
     "먼저 연습해 보기":
       "先练习一次",
+    "먼저 예약합니다":
+      "先做预约",
     "먼저 이름을 정해 주세요.":
       "请先确定名称。",
     "메뉴 넣기":
@@ -3111,6 +3193,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "无法更改。",
     "밖에서 주문하러 올 주소":
       "店外顾客下单的网址",
+    "받기":
+      "收款",
     "받는 분이 알려 준 원본":
       "收款方给您的原始信息",
     "받는 주소":
@@ -3169,6 +3253,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "要转出的资产",
     "보냈습니다. 고맙습니다.":
       "已发送。谢谢您。",
+    "보유자 전원에게":
+      "发给所有持有者",
     "보존 중…":
       "保存中…",
     "보존을 해제할까요?":
@@ -3323,10 +3409,14 @@ export const DICT: Record<string, Record<string, string>> = {
       "并不是让顾客多付",
     "손님이 시킨 것":
       "顾客点的东西",
+    "손님이 주문할 수 있어요":
+      "顾客可以下单",
     "손님이 찾아올 수 있게 쓰세요":
       "写清楚，方便顾客找到",
     "수량":
       "数量",
+    "수익 계산 · 켜고 끄기":
+      "收益测算 · 启停",
     "쉬운 설정":
       "简易设置",
     "스위치가 스스로 닫습니다":
@@ -3435,6 +3525,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "开门时长（秒）",
     "열쇠 보기":
       "查看密钥",
+    "영업 중":
+      "营业中",
     "영업시간":
       "营业时间",
     "영업하는 것으로 봅니다 — 밤 6시 열고 새벽 2시 닫기.":
@@ -3547,6 +3639,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "能使用这台电脑的人也能使用钱包",
     "이 컴퓨터에 맞게 살펴보는 중…":
       "正在检查这台电脑的配置…",
+    "이 컴퓨터에 보존":
+      "保存在这台电脑上",
     "이 컴퓨터에만":
       "只保存在这台电脑上",
     "이 컴퓨터에서 사본이 사라집니다. 다른 곳에 사본이 없으면 되찾을 수 없습니다.":
@@ -3663,6 +3757,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "断电后自动启动",
     "제 일도 하는 컴퓨터입니다. 꼭 필요한 만큼만 쓰게 합니다.":
       "您也用来办公的电脑。只占用必要的资源。",
+    "제가 정해 드려요":
+      "我来替您决定",
     "제목":
       "标题",
     "제한 자산":
@@ -3835,6 +3931,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "开启",
     "켜면 QR 네 개가 나옵니다 — 사장님·직원·검표·손님.":
       "开启后会生成四个二维码 —— 店主、员工、验票、顾客。",
+    "쿠폰 · 회원권":
+      "优惠券 · 会员卡",
     "쿠폰 · 회원권 · 굿즈":
       "优惠券 · 会员卡 · 周边",
     "클라우드":
@@ -3849,6 +3947,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "文件",
     "파일 고르기":
       "选择文件",
+    "파일 지키기":
+      "保存文件",
     "파일 창고(IPFS)":
       "文件仓库（IPFS）",
     "파일을 고르면 여기 자동으로 채워집니다":
@@ -3867,6 +3967,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "版本",
     "판매중":
       "在售",
+    "팔고 있는 것":
+      "正在售卖的",
     "팔기":
       "出售",
     "팔린 자산을 보내려면":
