@@ -906,7 +906,7 @@
       <a data-page="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M8 20.5h8M12 16.5v4"/></svg><span>이 컴퓨터</span></a>
       <div class="navfoot">
         <div><span class="dot off" id="d-node"></span><span id="d-node-t">노드</span></div>
-        <div><span class="dot off" id="d-ipfs"></span><span id="d-ipfs-t">IPFS</span></div>
+        <div><span class="dot off" id="d-ipfs"></span><span id="d-ipfs-t">파일창고</span></div>
       </div>
     </nav>
 
@@ -1044,7 +1044,7 @@
            보다가 500 RVN을 태우는 길이 구조적으로 없어야 한다.        ── -->
       <section class="page" id="page-assets">
         <h2 class="title">자산</h2>
-        <p class="lede">자산에 붙은 파일은 체인이 아니라 IPFS에 있습니다. 아무도 보관하지 않으면 찾을 수 없게 됩니다.</p>
+        <p class="lede">자산에 붙은 그림·음악은 체인이 아니라 <b>파일 창고(IPFS)</b>에 있습니다. 아무도 갖고 있지 않으면 찾을 수 없게 됩니다 — 이 컴퓨터가 켜져 있으면 이 컴퓨터가 갖고 있습니다.</p>
 
         <!-- 숨기지 않는다. 숨기면 옮기지도 않는다. -->
         <div class="warnbox" id="owner-warn" style="display:none"></div>
@@ -1086,7 +1086,7 @@
         </div>
 
         <p id="privacy-note" class="privacy">
-          이 컴퓨터의 IPFS로만 찾습니다. 공개 게이트웨이에 자산 목록을 보내지 않습니다.
+          이 컴퓨터의 파일 창고에서만 찾습니다. 내가 가진 자산 목록을 바깥으로 보내지 않습니다.
         </p>
 
         <div class="split">
@@ -2092,7 +2092,7 @@
         <div class="wstep" data-step="3">
           <p class="meta">파일이 자산의 얼굴입니다. 없어도 발행은 됩니다.</p>
           <div class="row">
-            <input id="i-ipfs" placeholder="IPFS 해시 (Qm…)" autocomplete="off" spellcheck="false" />
+            <input id="i-ipfs" placeholder="파일을 고르면 여기 자동으로 채워집니다" autocomplete="off" spellcheck="false" />
             <button class="ghost" id="i-upload">파일 고르기</button>
           </div>
           <div id="i-preview"></div>

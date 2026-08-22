@@ -1093,9 +1093,9 @@ async function paintStatusDots() {
 
   try {
     const i = await invoke<any>("ipfs_status");
-    set("d-ipfs", "d-ipfs-t", !!i?.running, i?.running ? "IPFS 켜짐" : "IPFS 꺼짐");
+    set("d-ipfs", "d-ipfs-t", !!i?.running, i?.running ? "파일창고 켜짐" : "파일창고 꺼짐");
   } catch {
-    set("d-ipfs", "d-ipfs-t", false, "IPFS 꺼짐");
+    set("d-ipfs", "d-ipfs-t", false, "파일창고 꺼짐");
   }
 }
 
