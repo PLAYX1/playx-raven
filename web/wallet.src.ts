@@ -1108,6 +1108,70 @@ async function fillGeo(): Promise<void> {
  * NIP-98 — 우리 열쇠로 서명한 표를 같이 보낸다. 미디어 서버는 그게 없으면
  * 거절한다(실측: 둘 다 401). 개인키는 이 함수 밖으로 안 나간다.
  */
+/* ══ QR 찍기 ═══════════════════════════════════════════════════════════
+   🔴 대표님: "상대방 QR 찍어서 입금 송금… 상대방의 QR 을 찍고 내가 받는
+   기능은 없지?"
+
+   찍는 기능이 **아예 없었다.** 34글자 주소를 폰에서 손으로 옮겨야 했고,
+   잘못 붙이면 돈이 남에게 간다.
+
+   ⚠️ 방향을 분명히 해 둔다. **상대 QR 을 찍는 것은 「보내기」다.**
+      내가 받으려면 **상대가 내 QR 을 찍어야** 한다 — QR 안에는 받을 사람의
+      주소가 들어 있기 때문이다. 그래서 받기 쪽에는 「금액 담기」를 두었다:
+      내 QR 에 금액을 넣어 보여 주면, 상대가 찍는 순간 금액까지 채워진다.
+
+   ⚠️ `BarcodeDetector` 는 크롬에만 있다. 아이폰 사파리에는 없다 —
+      손님 절반이 아이폰이라 그것만 믿을 수 없어서, 사진을 찍어 그림에서
+      읽는 길(jsQR)을 같이 둔다. */
+import jsQR from "jsqr";
+
+/** `raven:주소?amount=0.5` 같은 것에서 주소와 금액을 꺼낸다. */
+function readPayUri(s: string): { addr: string; amount?: string } | null {
+  const v = String(s || "").trim();
+  if (!v) return null;
+  const m = v.match(/^(?:raven(?:coin)?:)?([A-Za-z0-9]{26,42})(?:\?(.*))?$/);
+  if (!m) return null;
+  const out: { addr: string; amount?: string } = { addr: m[1] };
+  if (m[2]) {
+    const a = new URLSearchParams(m[2]).get("amount");
+    if (a && !Number.isNaN(Number(a))) out.amount = a;
+  }
+  return out;
+}
+
+/** 그림 한 장에서 QR 을 읽는다. 못 읽으면 null. */
+async function decodeImage(file: File): Promise<string | null> {
+  const bmp = await createImageBitmap(file, { imageOrientation: "from-image" });
+  // 너무 크면 느리다. 긴 쪽 1000px 이면 QR 은 충분히 읽힌다.
+  const scale = Math.min(1, 1000 / Math.max(bmp.width, bmp.height));
+  const w = Math.round(bmp.width * scale);
+  const h = Math.round(bmp.height * scale);
+  const cv = document.createElement("canvas");
+  cv.width = w;
+  cv.height = h;
+  const cx = cv.getContext("2d", { willReadFrequently: true });
+  if (!cx) return null;
+  cx.drawImage(bmp, 0, 0, w, h);
+  bmp.close?.();
+  const px = cx.getImageData(0, 0, w, h);
+  return jsQR(px.data, w, h)?.data ?? null;
+}
+
+/** 찍은 것을 보내기 칸에 넣는다. */
+function applyScanned(text: string, note: HTMLElement): boolean {
+  const got = readPayUri(text);
+  if (!got) {
+    note.textContent = "레이븐 주소가 아닙니다. 다시 찍어 주세요.";
+    return false;
+  }
+  ($("send-to") as HTMLInputElement).value = got.addr;
+  if (got.amount) ($("send-amount") as HTMLInputElement).value = got.amount;
+  note.textContent = got.amount
+    ? `주소와 금액을 넣었습니다. 보내기 전에 한 번 더 확인해 주세요.`
+    : `주소를 넣었습니다. 보내기 전에 한 번 더 확인해 주세요.`;
+  return true;
+}
+
 /**
  * 사진 사본을 가게 노드에 한 부 둔다.
  *
@@ -1579,7 +1643,20 @@ function renderMain(): void {
 
   // QR 은 가게 서버가 그린다. 손님 폰에 라이브러리를 내려받게 하지 않는다.
   const img = $("recv-qr") as HTMLImageElement;
-  img.src = `/api/qr?text=${encodeURIComponent("raven:" + addr)}`;
+  // 🔴 금액을 담은 QR. 상대가 찍으면 **금액까지 채워진다.** 여태 주소만
+  //    든 QR 이라, 얼마를 받을지는 말로 해야 했다.
+  const drawRecv = () => {
+    const amt = ($("recv-amt") as HTMLInputElement)?.value.trim() || "";
+    const uri = amt && Number(amt) > 0
+      ? `raven:${addr}?amount=${encodeURIComponent(amt)}`
+      : `raven:${addr}`;
+    img.src = `/api/qr?text=${encodeURIComponent(uri)}`;
+  };
+  drawRecv();
+  const amtBtn = $("btn-recv-amt");
+  if (amtBtn) amtBtn.onclick = drawRecv;
+  const amtIn = $("recv-amt") as HTMLInputElement | null;
+  if (amtIn) amtIn.onchange = drawRecv;
   img.alt = "받을 주소 QR";
 
   // 훑는 동안에만 진행을 말한다. 다 끝난 뒤에도 "주소 20개 확인" 이 남아
@@ -2045,6 +2122,34 @@ function wire(): void {
   $("btn-refresh").onclick = () => void refresh(false);
   $("btn-deep").onclick = () => void refresh(true);
   $("btn-lock").onclick = lock;
+
+  /* QR 찍기. 크롬이면 카메라를 바로 열고, 아이폰이면 사진을 찍어 읽는다. */
+  const scanNote = $("send-msg") || $("recv-msg");
+  $("btn-scan").onclick = async () => {
+    const note = scanNote || document.createElement("div");
+    note.textContent = "";
+    // 🔴 아이폰 사파리에는 BarcodeDetector 가 없다. 있으면 쓰고,
+    //    없으면 사진을 찍어 그림에서 읽는다 — 손님 절반이 아이폰이다.
+    ($("scan-file") as HTMLInputElement).click();
+  };
+  ($("scan-file") as HTMLInputElement).onchange = async (e) => {
+    const f = (e.target as HTMLInputElement).files?.[0];
+    if (!f) return;
+    const note = scanNote || document.createElement("div");
+    note.textContent = "QR 을 읽는 중…";
+    try {
+      const text = await decodeImage(f);
+      if (!text) {
+        note.textContent = "QR 을 못 읽었습니다. 화면 전체가 나오게 다시 찍어 주세요.";
+        return;
+      }
+      applyScanned(text, note);
+    } catch {
+      note.textContent = "QR 을 못 읽었습니다.";
+    } finally {
+      (e.target as HTMLInputElement).value = "";
+    }
+  };
 
   $("btn-copy").onclick = async () => {
     const addr = $("recv-addr").textContent || "";
