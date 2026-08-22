@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
 import { check as checkUpdate } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
-import { lang, setLang, LANG_NAMES, startI18n } from "./i18n";
+import { t, lang, setLang, LANG_NAMES, startI18n } from "./i18n";
 
 type Asset = {
   name: string;
@@ -1423,13 +1423,15 @@ function openReport(prefill = "") {
     };
   });
   // 무엇을 같이 보내는지 **먼저 보여 준다.** 몰래 담으면 그건 수집이다.
+  // 🔴 값이 섞인 문장이라 화면 걷기로는 못 옮긴다 — 조각으로 쪼개져서
+  //    사전 열쇠와 안 맞는다. 이런 자리만 `t()` 로 직접 옮긴다.
   $("rp-what").innerHTML =
-    `같이 보내는 것 — <b>${escapeHtml(rpScreen())}</b> 화면 · ` +
+    `${t("같이 보내는 것")} — <b>${escapeHtml(rpScreen())}</b> ${t("화면")} · ` +
     // 판 번호는 화면에 이미 있다(사이드바 로고 옆). 없는 이름을 새로
     // 만들면 두 곳이 어긋난다.
-    `${rpErrors.length ? `${rpErrors.length}건의 오류` : "오류 없음"} · ` +
-    `판 ${document.querySelector(".brand span")?.textContent || "?"}<br />` +
-    `지갑 12단어·열쇠·주소·잔액은 <b>보내지 않습니다.</b>`;
+    `${rpErrors.length ? `${rpErrors.length}${t("건의 오류")}` : t("오류 없음")} · ` +
+    `${t("판")} ${document.querySelector(".brand span")?.textContent || "?"}<br />` +
+    `${t("지갑 12단어·열쇠·주소·잔액은 보내지 않습니다.")}`;
   wrap.style.display = "flex";
   setTimeout(() => text.focus(), 60);
 }
