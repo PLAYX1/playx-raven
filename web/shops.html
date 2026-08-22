@@ -258,12 +258,29 @@
       .ravisheet input { width: 100%; min-height: 48px; padding: 0 14px;
         border: 1px solid var(--line); border-radius: 12px; background: var(--bg);
         color: var(--fg); font: inherit; font-size: 16px; }
+      /* 라비 얼굴과 답을 나란히. ⚠️ `flex-wrap: wrap` 이 필요하다 —
+         열쇠칸이 이 안에 붙는데, 안 감싸면 얼굴과 **같은 줄**에 서려다가
+         폭 100% 가 얼굴 몫만큼 넘쳐서 화면 밖으로 나간다. */
       .ravisheet .ans { margin-top: 12px; font-size: 15px; line-height: 1.75;
-        white-space: pre-wrap; display: flex; gap: 8px; align-items: flex-start; }
+        white-space: pre-wrap; display: flex; flex-wrap: wrap; gap: 8px;
+        align-items: flex-start; }
       .ravisheet .ans img { width: 28px; height: 28px; border-radius: 9px; flex: none; }
       /* 손님이 자기 AI 열쇠를 넣는 칸. 평소엔 없다 — 한도가 찼을 때만 나온다. */
+      /* 🔴 이 칸은 답변 칸(`#ravi-a`, `.ans`) **안에** 붙는다. 그 칸은
+         AI 답의 줄바꿈을 살리려고 `white-space: pre-wrap` 이고 `display:flex`
+         다. 그래서 이 칸을 넣으면 두 가지가 한꺼번에 일어났다:
+           ① 소스의 줄바꿈·들여쓰기가 **화면에 그대로 그려진다.**
+              제목이 안쪽으로 밀리고, 태그 사이마다 빈 줄이 생겼다 —
+              대표님이 보신 "위아래가 텅 빈" 화면이 그것이다.
+           ② flex 자식이라 폭·높이가 제 뜻대로 안 잡힌다.
+         답변 글에는 pre-wrap 이 맞다. 그러니 **이 칸만** 되돌린다. */
       .keybox { margin-top: 14px; padding: 14px; border-radius: 14px;
-        border: 1px solid var(--line); background: var(--panel); }
+        border: 1px solid var(--line); background: var(--panel);
+        white-space: normal; width: 100%; flex: none; }
+      /* 안쪽 글도 마찬가지다. 자식이 pre-wrap 을 물려받으면 같은 일이 난다. */
+      .keybox * { white-space: normal; }
+      /* 다만 열쇠 앞글자(`xai-…`)는 붙여 써야 읽힌다. */
+      .keybox code, .keybox .wg { white-space: nowrap; }
       .keybox .btn { display: flex; align-items: center; justify-content: center;
         min-height: 48px; border-radius: 12px; border: 1px solid var(--line);
         background: var(--bg); color: var(--fg); text-decoration: none;
