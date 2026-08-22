@@ -177,6 +177,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Ordering on the same wifi still works. It just will not appear in the shop list.",
     "같이 보내는 것":
       "What is sent with it",
+    "개를 지키는 중":
+      "files kept",
     "개발비 1%":
       "1% development fee",
     "거리와 길찾기":
@@ -275,6 +277,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Do not send to me",
     "나중에 더 발행할 수 있게 (재발행 가능)":
       "Allow issuing more later (reissuable)",
+    "남은 블록":
+      "Blocks left",
     "남이 이 컴퓨터를 만져도 목적지를 바꿀 수 없고, 사장님 지갑으로 보내는 것만 할 수 있습니다. 주소를 바꾸려면 지갑 암호가 필요합니다.":
       "Even if someone else touches this computer they cannot change the destination; they can only send to your wallet. Changing the address requires the wallet passphrase.",
     "내 가게":
@@ -283,6 +287,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Fill in my address",
     "내가 만든 것":
       "Created by me",
+    "내가 만든 자산의 파일입니다":
+      "This file belongs to an asset you created",
     "내놓은 자산":
       "Assets put up for sale",
     "내용":
@@ -409,6 +415,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Registering",
     "디스크 45 GB → 5 GB, 메모리와 연결도 줄입니다.":
       "Disk 45 GB → 5 GB, and fewer connections and less memory too.",
+    "따라잡음":
+      "Caught up",
     "따로 있는 GPU 기계":
       "A separate GPU machine",
     "라비":
@@ -621,6 +629,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Could not open the browser",
     "브랜드 아래 상품 (하위)":
       "Product under a brand (sub)",
+    "블록":
+      "blocks",
     "블록체인":
       "Blockchain",
     "비우면 수량 × 10":
@@ -782,7 +792,7 @@ export const DICT: Record<string, Record<string, string>> = {
     "아직 안 된 것이 있습니다":
       "Some things are not ready yet",
     "아직 없습니다":
-      "Not yet",
+      "None yet",
     "아직 정해지지 않았습니다":
       "Not decided yet",
     "안 건드리면 지금 그대로":
@@ -1145,6 +1155,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "The wallet is locked. We open it just this once and lock it again immediately.",
     "지갑이 잠깐 열립니다.":
       "the wallet opens briefly.",
+    "지금 결제를 바로 확인합니다":
+      "Payments are confirmed instantly",
     "지금 닫기":
       "Close now",
     "지금 닫기 (시간표보다 우선)":
@@ -1181,10 +1193,14 @@ export const DICT: Record<string, Record<string, string>> = {
       "Deleting…",
     "지울 수 없습니다.":
       "cannot be deleted.",
+    "지웁니다":
+      "Delete it",
     "지웠습니다. 「연습 시작」부터 다시 하시면 됩니다.":
       "Deleted. Start again from \"Start practice\".",
     "지점 이름 · 손님 폰 연결 · 백업 · 금고 — 매일 여실 필요 없어요":
       "Branch name · customer phone link · backup · vault — no need to open these daily",
+    "지킬 것이 없습니다":
+      "Nothing to keep",
     "지킵니다. 자동 판매를 켜면 잠금이 풀리고, 그동안은 암호가 없는 것과 같습니다.":
       ". Turning on auto-selling unlocks it, and during that time it is as if there were no passphrase.",
     "직원":
@@ -1513,6 +1529,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "同じwifiでの注文はできます。ただしお店の一覧には出ません。",
     "같이 보내는 것":
       "一緒に送るもの",
+    "개를 지키는 중":
+      "件を保管中",
     "개발비 1%":
       "開発費1%",
     "거리와 길찾기":
@@ -1611,6 +1629,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "自分には送らない",
     "나중에 더 발행할 수 있게 (재발행 가능)":
       "あとで追加発行できるようにする（再発行可能）",
+    "남은 블록":
+      "残りブロック",
     "남이 이 컴퓨터를 만져도 목적지를 바꿀 수 없고, 사장님 지갑으로 보내는 것만 할 수 있습니다. 주소를 바꾸려면 지갑 암호가 필요합니다.":
       "他人がこのパソコンを触っても送り先は変えられず、店主のウォレットに送ることしかできません。アドレスを変えるにはウォレットのパスフレーズが必要です。",
     "내 가게":
@@ -1619,6 +1639,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "自分のアドレスを入れる",
     "내가 만든 것":
       "自分が作ったもの",
+    "내가 만든 자산의 파일입니다":
+      "自分が作ったアセットのファイルです",
     "내놓은 자산":
       "出品したアセット",
     "내용":
@@ -1745,6 +1767,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "登録すると",
     "디스크 45 GB → 5 GB, 메모리와 연결도 줄입니다.":
       "ディスク45 GB → 5 GB、メモリと接続も減らします。",
+    "따라잡음":
+      "追いつき",
     "따로 있는 GPU 기계":
       "別にあるGPUマシン",
     "라비":
@@ -1957,6 +1981,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "ブラウザを開けませんでした",
     "브랜드 아래 상품 (하위)":
       "ブランド配下の商品（サブ）",
+    "블록":
+      "ブロック",
     "블록체인":
       "ブロックチェーン",
     "비우면 수량 × 10":
@@ -2481,6 +2507,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "ウォレットはロックされています。この一度だけ開き、すぐに再ロックします。",
     "지갑이 잠깐 열립니다.":
       "ウォレットが一時的に開きます。",
+    "지금 결제를 바로 확인합니다":
+      "支払いをすぐ確認できます",
     "지금 닫기":
       "今すぐ閉める",
     "지금 닫기 (시간표보다 우선)":
@@ -2517,10 +2545,14 @@ export const DICT: Record<string, Record<string, string>> = {
       "削除中…",
     "지울 수 없습니다.":
       "消せません。",
+    "지웁니다":
+      "削除します",
     "지웠습니다. 「연습 시작」부터 다시 하시면 됩니다.":
       "消しました。「練習を始める」からやり直せます。",
     "지점 이름 · 손님 폰 연결 · 백업 · 금고 — 매일 여실 필요 없어요":
       "支店名・お客様端末の接続・バックアップ・金庫 — 毎日開く必要はありません",
+    "지킬 것이 없습니다":
+      "保管するものがありません",
     "지킵니다. 자동 판매를 켜면 잠금이 풀리고, 그동안은 암호가 없는 것과 같습니다.":
       "守ります。自動販売をオンにするとロックが解除され、その間はパスフレーズがないのと同じです。",
     "직원":
@@ -2849,6 +2881,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "同一 wifi 下点单仍可用。只是不会出现在店铺列表中。",
     "같이 보내는 것":
       "一并发送的内容",
+    "개를 지키는 중":
+      "个文件正在保存",
     "개발비 1%":
       "开发费 1%",
     "거리와 길찾기":
@@ -2947,6 +2981,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "不发给我自己",
     "나중에 더 발행할 수 있게 (재발행 가능)":
       "允许日后追加发行（可再发行）",
+    "남은 블록":
+      "剩余区块",
     "남이 이 컴퓨터를 만져도 목적지를 바꿀 수 없고, 사장님 지갑으로 보내는 것만 할 수 있습니다. 주소를 바꾸려면 지갑 암호가 필요합니다.":
       "即使他人接触这台电脑也无法更改目的地，只能转到您的钱包。更改地址需要钱包密码。",
     "내 가게":
@@ -2955,6 +2991,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "填入我的地址",
     "내가 만든 것":
       "我创建的",
+    "내가 만든 자산의 파일입니다":
+      "这是您创建的资产的文件",
     "내놓은 자산":
       "已上架的资产",
     "내용":
@@ -3081,6 +3119,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "注册后",
     "디스크 45 GB → 5 GB, 메모리와 연결도 줄입니다.":
       "磁盘 45 GB → 5 GB，内存和连接数也一并减少。",
+    "따라잡음":
+      "已同步",
     "따로 있는 GPU 기계":
       "另外一台 GPU 机器",
     "라비":
@@ -3293,6 +3333,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "无法打开浏览器",
     "브랜드 아래 상품 (하위)":
       "品牌下的商品（子资产）",
+    "블록":
+      "个区块",
     "블록체인":
       "区块链",
     "비우면 수량 × 10":
@@ -3817,6 +3859,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "钱包处于锁定状态。仅本次解锁，随后立即重新锁定。",
     "지갑이 잠깐 열립니다.":
       "钱包会短暂解锁。",
+    "지금 결제를 바로 확인합니다":
+      "可以立即确认付款",
     "지금 닫기":
       "立即打烊",
     "지금 닫기 (시간표보다 우선)":
@@ -3853,10 +3897,14 @@ export const DICT: Record<string, Record<string, string>> = {
       "删除中…",
     "지울 수 없습니다.":
       "无法删除。",
+    "지웁니다":
+      "删除",
     "지웠습니다. 「연습 시작」부터 다시 하시면 됩니다.":
       "已删除。可以从“开始练习”重新来过。",
     "지점 이름 · 손님 폰 연결 · 백업 · 금고 — 매일 여실 필요 없어요":
       "分店名称 · 顾客手机连接 · 备份 · 金库 —— 不必每天打开",
+    "지킬 것이 없습니다":
+      "没有需要保存的",
     "지킵니다. 자동 판매를 켜면 잠금이 풀리고, 그동안은 암호가 없는 것과 같습니다.":
       "才起作用。开启自动售卖会解锁，在此期间等同于没有密码。",
     "직원":

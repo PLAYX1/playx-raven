@@ -866,6 +866,16 @@
       /* 🔴 열쇠가 든 QR 셋. 붙이면 열쇠를 벽에 붙이는 것이다. */
       .qrcard.haskey { border-color: color-mix(in srgb, var(--warn) 55%, var(--line)); }
 
+      /* 표시등 줄. 눌러서 펼친다 — 44px 는 아니어도 되지만(사이드바 아래,
+         자주 누르는 것이 아니다) 손가락이 닿을 만큼은 준다. */
+      .dotrow { display: flex; align-items: center; gap: 8px; width: 100%;
+        min-height: 30px; padding: 0 12px; border: 0; background: transparent;
+        color: inherit; font: inherit; cursor: pointer; text-align: left; }
+      .dotrow:hover { color: var(--ravi); }
+      .dotmore { margin: 2px 12px 8px 30px; font-size: 12.5px; color: var(--muted);
+        line-height: 1.8; }
+      .dotmore b { color: var(--text); font-weight: 600; }
+
       /* 말 고르기. 사이드바 아래, 「문제 알리기」 바로 위. */
       .langsw { display: block; width: calc(100% - 24px); margin: 0 12px 8px;
         min-height: 36px; padding: 0 8px; border: 1px solid var(--line);
@@ -1144,8 +1154,17 @@
         <!-- 🔴 늘 보인다. 신고는 **뭔가 안 될 때** 하는 것이라, 그때 찾아
              헤매게 하면 안 한다. 어느 화면에서 막혔든 같은 자리다. -->
         <button id="rp-open" class="reportlink" type="button">문제 알리기</button>
-        <div><span class="dot off" id="d-node"></span><span id="d-node-t">노드</span></div>
-        <div><span class="dot off" id="d-ipfs"></span><span id="d-ipfs-t">파일창고</span></div>
+        <!-- 🔴 여태 **표시등일 뿐**이었다. 대표님: "노드 켜짐 버튼과 파일창고
+             켜짐 누르면 얼마나 어떻게 작동하고 있는지 실시간 보여주나?"
+             안 보여줬다. 눌러서 지금 상태를 펼쳐 본다. -->
+        <button type="button" class="dotrow" id="d-node-row">
+          <span class="dot off" id="d-node"></span><span id="d-node-t">노드</span>
+        </button>
+        <div class="dotmore" id="d-node-more" style="display:none"></div>
+        <button type="button" class="dotrow" id="d-ipfs-row">
+          <span class="dot off" id="d-ipfs"></span><span id="d-ipfs-t">파일창고</span>
+        </button>
+        <div class="dotmore" id="d-ipfs-more" style="display:none"></div>
       </div>
     </nav>
 

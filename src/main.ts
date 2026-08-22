@@ -273,7 +273,31 @@ async function pinOne(cid: string, btn?: HTMLButtonElement) {
 }
 
 async function unpinOne(cid: string, btn?: HTMLButtonElement) {
-  if (!(await sure("보존을 해제할까요?", "이 컴퓨터에서 사본이 사라집니다. 다른 곳에 사본이 없으면 되찾을 수 없습니다.", "해제합니다"))) return;
+  /* 🔴 대표님 지적: "자산에서도 IPFS 이미지를 너무 쉽게 지우면 안 되지 않나?
+     내가 만든 자산의 핀을 삭제하면 내용이 없어져 버리잖아."
+
+     맞다. 남이 만든 자산이면 다른 사람도 갖고 있을 수 있지만, **내가 만든
+     자산은 이 컴퓨터가 마지막 한 부일 수 있다.** 그때 핀을 지우면 그 자산의
+     그림·음악이 세상에서 사라진다. 되돌릴 방법이 없다.
+
+     그래서 내가 만든 것이면 **자산 이름을 직접 치게** 한다. 500 RVN 을 태울
+     때 쓰는 것과 같은 문턱이다 — 되돌릴 수 없다는 점이 같기 때문이다. */
+  // 🔴 `rows` 는 renderList 안의 지역 변수다. 여기서는 원본 맵을 본다 —
+  //    짐작으로 이름을 갖다 쓰면 조용히 `undefined` 가 되고, 그러면
+  //    **내가 만든 자산도 그냥 지워진다.**
+  const owner = [...assets.values()].find((a) => a.ipfs_hash === cid && a.mine);
+  if (owner) {
+    const typed = await ask(
+      "내가 만든 자산의 파일입니다",
+      `이 컴퓨터가 마지막 사본일 수 있습니다. 지우면 「${owner.name}」의 파일이 ` +
+        `세상에서 사라지고, 되돌릴 방법이 없습니다.\n\n` +
+        `정말 지우시려면 자산 이름을 그대로 입력하세요.`,
+      { ok: "지웁니다" },
+    );
+    if (typed?.trim() !== owner.name) return;
+  } else if (!(await sure("보존을 해제할까요?", "이 컴퓨터에서 사본이 사라집니다. 다른 곳에 사본이 없으면 되찾을 수 없습니다.", "해제합니다"))) {
+    return;
+  }
   if (btn) btn.disabled = true;
   try {
     await invoke("pin_remove", { cid });
@@ -1775,10 +1799,30 @@ function pageTiles(page: string): PageTile[] {
         label: "새 자산 만들기", sub: "쿠폰 · 회원권 · 굿즈", go: () => $("new-asset")?.click() },
       { icon: I('<path d="M20 12a8 8 0 11-2.3-5.6"/><path d="M20 4v4h-4"/>'),
         label: "새로고침", sub: "다시 읽어오기", go: () => $("refresh")?.click() },
-      { icon: I('<path d="M12 3.5l7.5 4v9L12 20.5 4.5 16.5v-9z"/><path d="M9 12l2 2 4-4"/>'),
-        label: "파일 지키기", sub: "이 컴퓨터에 보존", go: () => $("pin-all")?.click() },
-      { icon: I('<path d="M4 6.5h16v11H4z"/><path d="M4 10h16M8 14h4"/>'),
-        label: "내놓은 자산", sub: "팔고 있는 것", go: jump("vend-wrap") },
+      /* 🔴 이 둘이 **눌러도 아무 일이 없었다.** 하나는 disabled, 하나는
+         display:none 이라 스크롤해도 화면이 그대로였다. 대표님이 겪은 그것이다.
+         이제 **지금 상태를 칸에 적고**, 눌리지 않는 때에도 어디를 봐야 하는지
+         데려간다. 아무 일도 안 일어나는 칸은 고장으로 읽힌다. */
+      (() => {
+        const btn = $("pin-all") as HTMLButtonElement | null;
+        const none = !btn || btn.disabled;
+        return {
+          icon: I('<path d="M12 3.5l7.5 4v9L12 20.5 4.5 16.5v-9z"/><path d="M9 12l2 2 4-4"/>'),
+          label: "파일 지키기",
+          sub: none ? "지킬 것이 없습니다" : "이 컴퓨터에 보존",
+          go: () => (none ? jump("assets")() : btn!.click()),
+        };
+      })(),
+      (() => {
+        const wrap = $("vend-wrap");
+        const none = !wrap || wrap.style.display === "none";
+        return {
+          icon: I('<path d="M4 6.5h16v11H4z"/><path d="M4 10h16M8 14h4"/>'),
+          label: "내놓은 자산",
+          sub: none ? "아직 없습니다" : "팔고 있는 것",
+          go: () => (none ? jump("assets")() : jump("vend-wrap")()),
+        };
+      })(),
     ];
   }
   if (page === "reward") {
@@ -1849,6 +1893,69 @@ function typeInto(el: HTMLInputElement, text: string, done?: () => void) {
       done?.();
     }
   }, 14);
+}
+
+/* ══ 표시등을 눌러서 지금 상태 보기 ═══════════════════════════════════
+   대표님: "노드 켜짐 버튼과 파일창고 켜짐 누르면 얼마나 어떻게 작동하고
+   있는지 실시간 보여주나?" — 안 보여줬다. 불 하나만 켜져 있었다.
+
+   ⚠️ 펼쳐 놓았을 때만 다시 읽는다. 접혀 있는데 계속 물어보면 노드가
+   쓸데없이 바빠지고, 그 노드는 손님 결제를 확인해야 하는 노드다. */
+let dotOpen: "" | "node" | "ipfs" = "";
+let dotTimer: number | null = null;
+
+async function paintDotMore() {
+  const nodeBox = $("d-node-more");
+  const ipfsBox = $("d-ipfs-more");
+  nodeBox.style.display = dotOpen === "node" ? "" : "none";
+  ipfsBox.style.display = dotOpen === "ipfs" ? "" : "none";
+  if (!dotOpen) return;
+
+  if (dotOpen === "node") {
+    try {
+      const s = await invoke<any>("node_status");
+      if (!s?.running) {
+        nodeBox.innerHTML = `<b>${t("꺼짐")}</b>`;
+      } else {
+        const behind = Number(s.behind ?? 0);
+        const pct = (Number(s.progress ?? 0) * 100).toFixed(behind > 0 ? 2 : 3);
+        nodeBox.innerHTML =
+          `<div><b>${Number(s.blocks ?? 0).toLocaleString()}</b> ${t("블록")}</div>` +
+          `<div>${t("따라잡음")} <b>${pct}%</b></div>` +
+          // 🔴 "몇 개 뒤처졌나" 가 사장에게 제일 쓸모 있다. 0 이면 지금
+          //    들어온 결제를 바로 확인할 수 있다는 뜻이다.
+          `<div>${behind > 0
+            ? `${t("남은 블록")} <b>${behind.toLocaleString()}</b>`
+            : `<b>${t("지금 결제를 바로 확인합니다")}</b>`}</div>`;
+      }
+    } catch (e) {
+      nodeBox.innerHTML = `<span class="warn">${escapeHtml(String(e))}</span>`;
+    }
+  } else {
+    try {
+      const s = await invoke<any>("ipfs_status");
+      if (!s?.running) {
+        ipfsBox.innerHTML = `<b>${t("꺼짐")}</b>`;
+      } else {
+        // 몇 개를 지키고 있는지가 이 칸의 값어치다. 판 번호는 그 아래.
+        const kept = pinned.size;
+        ipfsBox.innerHTML =
+          `<div><b>${kept.toLocaleString()}</b> ${t("개를 지키는 중")}</div>` +
+          (s.version ? `<div>${escapeHtml(String(s.version).slice(0, 28))}</div>` : "");
+      }
+    } catch (e) {
+      ipfsBox.innerHTML = `<span class="warn">${escapeHtml(String(e))}</span>`;
+    }
+  }
+}
+
+function toggleDot(which: "node" | "ipfs") {
+  dotOpen = dotOpen === which ? "" : which;
+  if (dotTimer !== null) window.clearInterval(dotTimer);
+  dotTimer = null;
+  void paintDotMore();
+  // 펼쳐 둔 동안만 5초마다 다시 읽는다.
+  if (dotOpen) dotTimer = window.setInterval(() => void paintDotMore(), 5000);
 }
 
 function showPage(id: string) {
@@ -7123,6 +7230,8 @@ window.addEventListener("DOMContentLoaded", () => {
     foot?.parentNode?.insertBefore(sel, foot);
   })();
 
+  $("d-node-row").addEventListener("click", () => toggleDot("node"));
+  $("d-ipfs-row").addEventListener("click", () => toggleDot("ipfs"));
   $("sh-open-btn").addEventListener("click", () => setOpenState(false));
   $("sh-close-btn").addEventListener("click", () => setOpenState(true));
   // 라비가 말로 닫거나, 저장한 값을 되읽을 때도 두 칸이 따라가야 한다.

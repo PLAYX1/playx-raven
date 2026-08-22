@@ -1108,6 +1108,49 @@ async function fillGeo(): Promise<void> {
  * NIP-98 — 우리 열쇠로 서명한 표를 같이 보낸다. 미디어 서버는 그게 없으면
  * 거절한다(실측: 둘 다 401). 개인키는 이 함수 밖으로 안 나간다.
  */
+/**
+ * 사진을 줄인다.
+ *
+ * 🔴 여태 **파일을 그대로 올렸다.** 요즘 폰 사진은 3~6MB, 최신 기종은 10MB 를
+ * 넘기도 한다. 우리 한도가 8MB 라 그런 사진은 「8MB 아래로 줄여 주세요」로
+ * 거절당했는데 — **폰에서 그걸 할 방법이 마땅치 않다.** 사람이 못 하는 일을
+ * 시키고 거절한 셈이다.
+ *
+ * 중고 물건 사진에 4000픽셀이 필요하지도 않다. 긴 쪽 1600px 이면 폰에서도
+ * 데스크톱에서도 또렷하고, 보통 200~500KB 로 떨어진다. 가게 와이파이에서
+ * 올리는 시간도 그만큼 짧아진다.
+ *
+ * ⚠️ `imageOrientation: "from-image"` 를 준다. 안 주면 세로로 찍은 사진이
+ *    **눕는다** — 폰 사진에는 회전 정보가 따로 들어 있기 때문이다.
+ * ⚠️ 줄이다 실패하면 **원본을 그대로 보낸다.** 사진 한 장 못 올리는 것보다
+ *    큰 파일이라도 올라가는 편이 낫다.
+ */
+async function shrink(file: File): Promise<Blob> {
+  const MAX = 1600;
+  try {
+    const bmp = await createImageBitmap(file, { imageOrientation: "from-image" });
+    const scale = Math.min(1, MAX / Math.max(bmp.width, bmp.height));
+    // 이미 작으면 손대지 않는다. 다시 그리면 화질만 떨어진다.
+    if (scale >= 1 && file.size <= 1_500_000) return file;
+    const w = Math.round(bmp.width * scale);
+    const h = Math.round(bmp.height * scale);
+    const cv = document.createElement("canvas");
+    cv.width = w;
+    cv.height = h;
+    const cx = cv.getContext("2d");
+    if (!cx) return file;
+    cx.drawImage(bmp, 0, 0, w, h);
+    bmp.close?.();
+    const out = await new Promise<Blob | null>((ok) =>
+      cv.toBlob((b) => ok(b), "image/jpeg", 0.85),
+    );
+    // 줄인 것이 더 크면(작은 png 등) 원본이 낫다.
+    return out && out.size < file.size ? out : file;
+  } catch {
+    return file;
+  }
+}
+
 async function uploadPhoto(file: File): Promise<string> {
   if (!hdKey) throw new Error("지갑을 먼저 열어 주세요.");
   const url = `${location.origin}/api/photo`;
@@ -1138,7 +1181,7 @@ async function uploadPhoto(file: File): Promise<string> {
   }
 
   const fd = new FormData();
-  fd.append("file", file);
+  fd.append("file", await shrink(file), file.name.replace(/\.[^.]+$/, "") + ".jpg");
   const r = await fetch(url, {
     method: "POST",
     body: fd,
