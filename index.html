@@ -784,6 +784,29 @@
         background: var(--bg); color: var(--text); font-family: inherit; resize: vertical; }
       #rp-what { margin-top: 10px; }
 
+      /* QR 창. 카운터에서 보는 것이라 **크게** 띄운다 — 손님이 폰을 들고
+         서 있는 자리에서 작으면 못 찍는다. */
+      #qrwrap { position: fixed; inset: 0; z-index: 210; display: flex;
+        align-items: center; justify-content: center; background: rgba(0,0,0,.5); }
+      .qrsheet { width: 880px; max-width: calc(100vw - 40px); max-height: 88vh; overflow: auto;
+        background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 20px; }
+      .qrhead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+      .qrhead h3 { font-size: 20px; margin: 0; }
+      /* 손님 QR 이 주인공이다 — 이것만 벽에 붙일 수 있다. */
+      .qrmain { display: flex; gap: 20px; align-items: center; margin: 14px 0 18px;
+        padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--bg); }
+      .qrmain svg { width: 260px; height: 260px; flex: none; }
+      .qrothers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+      @media (max-width: 720px) { .qrothers { grid-template-columns: 1fr; }
+        .qrmain { flex-direction: column; } .qrmain svg { width: 220px; height: 220px; } }
+      .qrcard { padding: 12px; border: 1px solid var(--line); border-radius: 12px;
+        background: var(--bg); text-align: center; }
+      .qrcard svg { width: 130px; height: 130px; }
+      .qrcard b { display: block; margin-top: 6px; font-size: 15px; }
+      .qrcard span { display: block; font-size: 13px; color: var(--muted); line-height: 1.5; }
+      /* 🔴 열쇠가 든 QR 셋. 붙이면 열쇠를 벽에 붙이는 것이다. */
+      .qrcard.haskey { border-color: color-mix(in srgb, var(--warn) 55%, var(--line)); }
+
       /* 말 고르기. 사이드바 아래, 「문제 알리기」 바로 위. */
       .langsw { display: block; width: calc(100% - 24px); margin: 0 12px 8px;
         min-height: 36px; padding: 0 8px; border: 1px solid var(--line);
@@ -977,6 +1000,21 @@
           <div class="ob-nums" id="ob-nums" style="display:none"></div>
         </div>
 
+      </div>
+    </div>
+
+    <!-- QR 창.
+         🔴 여태 「손님 QR」을 누르면 **설정 화면으로 데려다 놓기만** 했다.
+         QR 은 거기서 또 찾아야 했고, 사장·직원·검표 QR 은 어디 있는지도
+         몰랐다. 카운터에서 손님이 기다리는데 화면을 뒤지게 하면 안 된다.
+         이제 그 자리에서 띄운다. -->
+    <div id="qrwrap" style="display:none">
+      <div class="qrsheet">
+        <div class="qrhead">
+          <h3 id="qr-title">손님 QR</h3>
+          <button class="ghost" id="qr-close">닫기</button>
+        </div>
+        <div id="qr-body"></div>
       </div>
     </div>
 

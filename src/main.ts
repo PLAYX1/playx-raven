@@ -1230,7 +1230,8 @@ function raviTiles(): Tile[] {
       icon: I('<rect x="3.5" y="3.5" width="7" height="7" rx="1"/><rect x="13.5" y="3.5" width="7" height="7" rx="1"/><rect x="3.5" y="13.5" width="7" height="7" rx="1"/><path d="M13.5 13.5h3v3h-3zM20.5 13.5v3M17.5 20.5h3"/>'),
       label: "손님 QR",
       sub: "카운터에 붙이는 것",
-      do: () => { showPage("settings"); setTimeout(() => $("ph-qr")?.scrollIntoView({ behavior: "smooth", block: "center" }), 250); },
+      // 🔴 설정 화면으로 데려다 놓지 않는다. **QR 을 그 자리에 띄운다.**
+      do: () => void openQrSheet(),
     },
     {
       icon: I('<path d="M6 3h12v18l-3-1.6-3 1.6-3-1.6L6 21z"/><path d="M9.5 8h5M9.5 12h5"/>'),
@@ -1474,6 +1475,75 @@ async function rpLabel() {
     b.classList.toggle("parked", n > 0);
   } catch {
     /* 이 줄이 실패해도 신고는 된다. 라벨일 뿐이다. */
+  }
+}
+
+/* ══ QR 창 ═════════════════════════════════════════════════════════════
+   🔴 여태 「손님 QR」 타일은 **설정 화면으로 데려다 놓기만** 했다. QR 은
+   거기서 또 찾아야 했고, 사장·직원·검표 QR 은 어디 있는지도 몰랐다.
+   카운터에서 손님이 기다리는데 화면을 뒤지게 하면 안 된다.
+
+   ⚠️ 손님 QR 만 벽에 붙일 수 있다. 나머지 셋에는 **열쇠가 들어 있어서**,
+   붙이면 열쇠를 벽에 붙이는 것이다. 그래서 손님 QR 을 크게 하나,
+   나머지 셋을 작게 아래에 두고 테두리로 구별한다. */
+async function openQrSheet() {
+  const wrap = $("qrwrap");
+  const body = $("qr-body");
+  wrap.style.display = "flex";
+  body.innerHTML = `<div class="meta">${t("여는 중…")}</div>`;
+
+  try {
+    // 이미 켜져 있으면 그대로 다시 읽고, 꺼져 있으면 여기서 켠다 —
+    // 「손님 QR」을 누른 사람은 이미 켜고 싶다는 뜻이다.
+    const r = await invoke<any>("start_phone_server");
+    serverIp = r.ip;
+    localStorage.setItem(PHONE_KEY, "1");
+    await publishShop(r.ip);
+
+    const [adminQr, staffQr, scanQr, custQr] = await Promise.all([
+      invoke<string>("qr_svg", { text: r.admin_url }),
+      invoke<string>("qr_svg", { text: r.staff_url }),
+      invoke<string>("qr_svg", { text: r.scan_url }),
+      invoke<string>("qr_svg", { text: r.customer_url }),
+    ]);
+
+    body.innerHTML =
+      `<div class="qrmain">${custQr}
+         <div>
+           <b style="font-size:19px">${t("손님")}</b>
+           <div class="meta" style="margin-top:6px;font-size:15px;line-height:1.7">
+             ${t("카운터에 붙이세요. 이 QR 에는 열쇠가 없어 누가 봐도 괜찮습니다.")}<br />
+             ${escapeHtml(r.ip)}:${escapeHtml(String(r.port))} ·
+             ${t("폰을 같은 와이파이에 붙이고 찍으세요")}
+           </div>
+         </div>
+       </div>` +
+      `<div class="meta" style="margin-bottom:8px">
+         🔴 ${t("아래 셋에는 열쇠가 들어 있습니다. 붙이지 말고, 찍을 때만 보여 주세요.")}
+       </div>` +
+      `<div class="qrothers">
+         <div class="qrcard haskey">${adminQr}<b>${t("사장님만")}</b>
+           <span>${t("돈·발행·설정 전부")}</span></div>
+         <div class="qrcard haskey">${staffQr}<b>${t("직원")}</b>
+           <span>${t("주문·회원확인만")}</span></div>
+         <div class="qrcard haskey">${scanQr}<b>${t("검표 태블릿")}</b>
+           <span>${t("문 앞에 두는 화면")}</span></div>
+       </div>` +
+      `<div class="meta" style="margin-top:14px">
+         ${t("테이블마다 다른 QR 을 인쇄하려면")} —
+         <b>${t("이 컴퓨터")} → ${t("손님 폰으로 받기")}</b>
+       </div>`;
+  } catch (e) {
+    // 못 켰으면 못 켰다고 말한다. 빈 창을 띄우면 고장으로 읽는다.
+    // 🔴 다만 **원문 오류를 크게 띄우지 않는다.** 영어 한 줄을 보여 주면
+    //    사장은 다음에 할 일을 못 찾는다. 할 일을 먼저 적고, 원문은
+    //    작게 아래에 둔다(신고할 때 이 줄이 쓸모 있다).
+    body.innerHTML =
+      `<div class="warnbox">
+         <b>${t("손님 폰 서버를 켜지 못했습니다.")}</b><br />
+         ${t("노드가 켜져 있는지 보시고, 잠시 뒤에 다시 눌러 주세요.")}
+       </div>
+       <div class="meta" style="margin-top:10px">${escapeHtml(String(e))}</div>`;
   }
 }
 
@@ -6737,6 +6807,10 @@ window.addEventListener("DOMContentLoaded", () => {
     foot?.parentNode?.insertBefore(sel, foot);
   })();
 
+  $("qr-close").addEventListener("click", () => { $("qrwrap").style.display = "none"; });
+  $("qrwrap").addEventListener("click", (e) => {
+    if (e.target === $("qrwrap")) $("qrwrap").style.display = "none";
+  });
   $("rp-open").addEventListener("click", () => openReport());
   $("rp-cancel").addEventListener("click", () => { $("rpwrap").style.display = "none"; });
   $("rp-send").addEventListener("click", sendReport);
