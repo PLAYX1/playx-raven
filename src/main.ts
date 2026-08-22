@@ -1167,7 +1167,207 @@ async function checkForUpdate(quiet = true) {
   }
 }
 
+/* ══ 라비 첫 화면 ═════════════════════════════════════════════════════
+   🔴 왜 아이콘을 「라비에게 하는 말」로 만들었나
+
+   보통 이런 화면은 아이콘마다 다른 코드를 붙인다. 그러면 같은 일에 길이
+   둘이 되고(눌러서 하는 길 · 말해서 하는 길), 둘이 조금씩 어긋난다.
+
+   여기서는 아이콘이 **문장을 대신 쳐 주는 것**뿐이다. 누르든 말하든 같은
+   `chatSend` 를 지난다. 사장이 배울 것은 하나다 — 라비에게 말하는 법.
+
+   ⚠️ 다만 **열쇠 없이도 되는 일**은 라비를 거치지 않는다. 오늘 매출을
+   보는 데 AI 회사에 돈을 낼 이유가 없고, 열쇠가 없다고 매출을 못 보면
+   그건 프로그램이 남의 회사에 묶인 것이다. 그래서 타일이 두 종류다:
+     do  — 이 컴퓨터가 바로 한다. 열쇠와 무관.
+     say — 라비가 한다. 열쇠가 없으면 눌렀을 때 그 자리에서 넣게 한다. */
+/* 🔴 사장이 **말해서 만든 단추**를 여기 둔다.
+
+   Nothing 의 Essential Apps, Rabbit 의 Creations 가 하는 일이 이것이다 —
+   화면을 우리가 정해 주는 것이 아니라, 쓰는 사람이 말로 늘린다.
+   "맨날 이거 해" 라고 하면 라비가 단추를 만들어 홈에 붙인다.
+
+   ⚠️ 이 컴퓨터에만 남는다(체인도 서버도 아니다). 단추는 **말 한 줄**일
+   뿐이라 잃어도 잃는 것이 없고, 남의 손에 넘어가도 위험한 값이 아니다. */
+const MYTILE_KEY = "playx-ravi-mytiles";
+type MyTile = { label: string; sub: string; say: string };
+
+function myTiles(): MyTile[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(MYTILE_KEY) || "[]");
+    return Array.isArray(v) ? v.slice(0, 8) : [];
+  } catch {
+    return [];
+  }
+}
+function setMyTiles(v: MyTile[]) {
+  localStorage.setItem(MYTILE_KEY, JSON.stringify(v.slice(0, 8)));
+}
+
+type Tile = {
+  mine?: boolean;
+  icon: string;
+  label: string;
+  sub: string;
+  do?: () => void | Promise<void>;
+  say?: string;
+};
+
+const I = (d: string) =>
+  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+
+function raviTiles(): Tile[] {
+  const closed = ($("sh-closednow") as HTMLInputElement | null)?.checked ?? false;
+  return [
+    {
+      icon: I('<path d="M4 19V9M10 19V5M16 19v-7M21 19H3"/>'),
+      label: "오늘 얼마",
+      sub: "매출 · 장부",
+      do: () => { showPage("shop"); shopTab("sales"); },
+    },
+    {
+      icon: I('<rect x="3.5" y="3.5" width="7" height="7" rx="1"/><rect x="13.5" y="3.5" width="7" height="7" rx="1"/><rect x="3.5" y="13.5" width="7" height="7" rx="1"/><path d="M13.5 13.5h3v3h-3zM20.5 13.5v3M17.5 20.5h3"/>'),
+      label: "손님 QR",
+      sub: "카운터에 붙이는 것",
+      do: () => { showPage("settings"); setTimeout(() => $("ph-qr")?.scrollIntoView({ behavior: "smooth", block: "center" }), 250); },
+    },
+    {
+      icon: I('<path d="M6 3h12v18l-3-1.6-3 1.6-3-1.6L6 21z"/><path d="M9.5 8h5M9.5 12h5"/>'),
+      label: "들어온 주문",
+      sub: "손님이 시킨 것",
+      do: () => { showPage("shop"); shopTab("orders"); },
+    },
+    {
+      // 🔴 되돌릴 수 있는 일이라 바로 한다. 체인에 남지 않고, 다시 누르면
+      //    원래대로다. 대신 **무엇으로 바뀌었는지 반드시 말한다** —
+      //    조용히 바뀌면 손님이 못 들어오는 이유를 사장이 모른다.
+      icon: closed
+        ? I('<path d="M12 3v3M7.5 6h9a1.5 1.5 0 011.5 1.5v7a1.5 1.5 0 01-1.5 1.5h-9A1.5 1.5 0 016 14.5v-7A1.5 1.5 0 017.5 6z"/><path d="M9 11h6M12 18.5V21"/>')
+        : I('<path d="M12 3v3M7.5 6h9a1.5 1.5 0 011.5 1.5v7a1.5 1.5 0 01-1.5 1.5h-9A1.5 1.5 0 016 14.5v-7A1.5 1.5 0 017.5 6z"/><path d="M9 11h6"/>'),
+      label: closed ? "다시 열기" : "지금 닫기",
+      sub: closed ? "지금은 닫혀 있습니다" : "손님에게 안 보입니다",
+      do: () => {
+        const box = $("sh-closednow") as HTMLInputElement | null;
+        if (!box) return;
+        box.checked = !box.checked;
+        // 화면에 이미 붙어 있는 처리(미리보기·저장)를 그대로 태운다.
+        box.dispatchEvent(new Event("change", { bubbles: true }));
+        chatSay("did", box.checked ? "지금 닫았습니다. 손님에게 「주문 받지 않음」으로 보입니다." : "다시 열었습니다.");
+        paintRavi();
+      },
+    },
+    {
+      icon: I('<path d="M4 6.5h16v11H4zM4 10h16M8 14h4"/>'),
+      label: "메뉴 넣기",
+      sub: "말로 불러 주세요",
+      say: "메뉴 넣을게요. 제가 부르는 대로 메뉴판에 넣어 주세요: ",
+    },
+    {
+      icon: I('<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/>'),
+      label: "자산 만들기",
+      sub: "쿠폰 · 회원권 · 굿즈",
+      say: "자산을 하나 만들려고 합니다. 무엇을 물어봐야 하는지부터 알려 주세요.",
+    },
+    {
+      icon: I('<path d="M4 5.5h11l5 4.5v8.5H4z"/><path d="M8 9h5M8 13h8"/>'),
+      label: "가게 소개",
+      sub: "손님에게 보일 글",
+      say: "손님 화면에 보일 가게 소개를 써 주세요. 제 가게는 ",
+    },
+    {
+      icon: I('<circle cx="12" cy="12" r="8.5"/><path d="M12 16.5v-5M12 8h.01"/>'),
+      label: "물어보기",
+      sub: "뭐든 물어보세요",
+      say: "",
+    },
+    // 사장이 말해서 만든 단추. 별표를 달아 우리 것과 구별한다 —
+    // 지울 수 있는 것과 없는 것이 같아 보이면 안 된다.
+    ...myTiles().map((m) => ({
+      icon: I('<path d="M12 3.5l2.5 5.2 5.7.8-4.1 4 1 5.7-5.1-2.7-5.1 2.7 1-5.7-4.1-4 5.7-.8z"/>'),
+      label: m.label,
+      sub: m.sub,
+      say: m.say,
+      mine: true,
+    })),
+  ];
+}
+
+/** 라비 화면을 그린다. 상태가 바뀔 때마다 다시 부른다. */
+function paintRavi() {
+  const box = $("ravi-tiles");
+  if (!box) return;
+
+  // 자는 얼굴의 뜻은 한 곳에서만 정한다 — **노드가 꺼졌을 때**다.
+  // AI 열쇠가 없는 것은 잠이 아니다(장사는 전부 돈다).
+  const nodeDown = !(nodeUp ?? true);
+  const face = $("ravi-face") as HTMLImageElement | null;
+  if (face) {
+    face.src = nodeDown ? "/raven-sleep.webp" : "/raven-hello.webp";
+    face.classList.toggle("asleep", nodeDown);
+  }
+  const hi = $("ravi-hello");
+  const sub = $("ravi-sub");
+  if (hi && sub) {
+    if (nodeDown) {
+      hi.textContent = "노드가 꺼져 있어요.";
+      sub.innerHTML = "결제가 들어와도 확인을 못 합니다. <b>이 컴퓨터</b>에서 켜 주세요.";
+    } else if (!aiProvider) {
+      hi.textContent = "안녕하세요, 라비입니다.";
+      sub.innerHTML = "아래 아이콘은 지금 바로 됩니다. 말로 시키시려면 <b>이 컴퓨터 → AI 열쇠</b>를 한 번만 넣어 주세요.";
+    } else {
+      hi.textContent = "안녕하세요, 라비입니다.";
+      sub.textContent = "무엇을 할까요? 아래를 누르거나, 그냥 말씀하세요.";
+    }
+  }
+
+  const tiles = raviTiles();
+  box.innerHTML = tiles
+    .map((t, i) => {
+      const needs = t.say !== undefined;
+      const cls = ["tile", needs ? "needsai" : "", needs && !aiProvider ? "asleep" : "",
+                   t.mine ? "mytile" : ""].join(" ");
+      // 내가 만든 단추만 지울 수 있다. 붙박이에는 ×가 없다 —
+      // 지워지는 것과 안 지워지는 것이 같아 보이면 손이 멈춘다.
+      const x = t.mine ? `<span class="tilex" data-del="${escapeHtml(t.label)}" title="이 단추 지우기">×</span>` : "";
+      return `<button class="${cls}" data-tile="${i}">${x}${t.icon}` +
+             `<span>${escapeHtml(t.label)}</span>` +
+             `<span class="tsub">${escapeHtml(t.sub)}</span></button>`;
+    })
+    .join("");
+
+  box.querySelectorAll<HTMLElement>("[data-del]").forEach((x) => {
+    x.onclick = (e) => {
+      e.stopPropagation();   // 안 막으면 지우면서 그 단추가 실행된다
+      const label = x.dataset.del!;
+      setMyTiles(myTiles().filter((m) => m.label !== label));
+      chatSay("did", `「${label}」 단추를 지웠습니다.`);
+      paintRavi();
+    };
+  });
+
+  box.querySelectorAll<HTMLElement>("[data-tile]").forEach((b) => {
+    b.onclick = () => {
+      const t = tiles[+b.dataset.tile!];
+      if (t.do) return void t.do();
+      // 말로 하는 일. 🔴 **열쇠가 없어도 막지 않는다.** 막으면 왜 안 되는지도
+      // 모른 채 지나간다. 눌러 보고 그 자리에서 넣는 편이 배운다.
+      const q = $("chat-q") as HTMLInputElement;
+      q.value = t.say!;
+      q.focus();
+      // 문장이 끝나 있으면 바로 보낸다. 뒤에 이어 적어야 하는 것(“제 가게는 ”)은
+      // 커서만 두고 기다린다 — 반쪽짜리 문장을 보내면 엉뚱한 답이 온다.
+      if (t.say && !t.say.endsWith(" ") && !t.say.endsWith(": ")) void chatSend();
+    };
+  });
+}
+
 function showPage(id: string) {
+  if (id === "ravi") paintRavi();
+  // 🔴 라비 화면에서는 떠 있는 「Ravi에게 물어보기」를 숨긴다.
+  //    대화창이 바로 앞에 있는데 그리로 가는 단추가 그 위에 떠 있으면,
+  //    같은 것이 둘로 보이고 오른쪽 아래 내용을 가린다.
+  const fab = document.getElementById("chat-open");
+  if (fab) fab.style.display = id === "ravi" ? "none" : "";
   document.querySelectorAll(".page").forEach((p) => p.classList.toggle("on", p.id === `page-${id}`));
   document.querySelectorAll("nav a").forEach((a) =>
     a.classList.toggle("on", (a as HTMLElement).dataset.page === id));
@@ -2264,6 +2464,34 @@ function applyActions(actions: any[]): string[] {
           // 보는 것은 손님에게 아주 다른 일이다.
           if (note && typeof a.note === "string") note.value = a.note.slice(0, 60);
           done.push(a.today ? `오늘 쉼${a.note ? ` — ${a.note}` : ""}` : "다시 엽니다");
+          break;
+        }
+        // 🔴 홈 화면을 사장이 늘린다. 우리가 정한 여덟 개가 전부가 아니다.
+        //    다만 **말 한 줄을 저장하는 것**뿐이라 위험한 값이 아니고,
+        //    이 컴퓨터를 벗어나지 않는다.
+        case "tile_add": {
+          const label = String(a.label || "").trim().slice(0, 8);
+          const say = String(a.say || "").trim();
+          if (!label || !say) break;
+          const now = myTiles().filter((m) => m.label !== label);
+          if (now.length >= 8) {
+            done.push("단추가 여덟 개까지입니다. 하나 지우고 다시 말씀해 주세요.");
+            break;
+          }
+          now.push({ label, sub: String(a.sub || "").trim().slice(0, 14) || "눌러서 시키기", say });
+          setMyTiles(now);
+          paintRavi();
+          done.push(`「${label}」 단추를 홈에 만들었습니다`);
+          break;
+        }
+        case "tile_remove": {
+          const label = String(a.label || "").trim();
+          const before = myTiles().length;
+          setMyTiles(myTiles().filter((m) => m.label !== label));
+          if (myTiles().length !== before) {
+            paintRavi();
+            done.push(`「${label}」 단추를 지웠습니다`);
+          }
           break;
         }
         case "shop_flag": {
@@ -5331,7 +5559,12 @@ function labelShopNav() {
     ($("sh-ko") as HTMLInputElement)?.value.trim() ||
     ($("sh-en") as HTMLInputElement)?.value.trim();
   const link = document.querySelector('nav a[data-page="shop"]');
-  if (link) link.textContent = name || "내 가게";
+  // 🔴 `textContent =` 는 **아이콘(svg)까지 지운다.** 그래서 메뉴에서
+  //    「내 가게」만 아이콘이 없었다 — 가게 이름을 넣는 순간 사라진 것이다.
+  //    글자가 든 <span> 만 갈아 끼운다.
+  const label = link?.querySelector("span");
+  if (label) label.textContent = name || "내 가게";
+  else if (link) link.textContent = name || "내 가게";
   const title = document.querySelector("#page-shop .title");
   if (title) title.textContent = name || "내 가게";
 }
@@ -6358,8 +6591,10 @@ window.addEventListener("DOMContentLoaded", () => {
   loadIpfsConf();
   checkHealth();
   setInterval(checkHealth, 30000);
-  $("chat-open").addEventListener("click", () => $("chat").classList.remove("hidden"));
-  $("chat-close").addEventListener("click", () => $("chat").classList.add("hidden"));
+  $("chat-open").addEventListener("click", () => {
+    showPage("ravi");
+    ($("chat-q") as HTMLInputElement)?.focus();
+  });
   $("chat-go").addEventListener("click", chatSend);
   $("chat-mode")
     .querySelectorAll<HTMLElement>("[data-mode]")
@@ -6541,6 +6776,10 @@ window.addEventListener("DOMContentLoaded", () => {
   });
 
   labelShopNav();
+  // 🔴 `paintRavi()` 만 부르면 안 된다. 첫 화면이 HTML 에서 이미 켜져
+  //    있어 `showPage` 를 안 지나가고, 그러면 떠 있는 단추를 숨기는
+  //    처리도 안 돈다 — 대화창 위에 대화창으로 가는 단추가 떠 있었다.
+  showPage("ravi");
   loadAssets();
   // Status is cheap; the IPFS scan is not, and is deliberately not on a timer.
 });

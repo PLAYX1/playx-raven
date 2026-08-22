@@ -337,7 +337,7 @@
         border: 1px solid var(--line); border-radius: 10px; margin-top: 8px;
         background: var(--card-bg, transparent); cursor: grab; }
       .ordrow[draggable="true"]:active { cursor: grabbing; }
-      .ordrow.over { border-color: var(--accent); }
+      .ordrow.over { border-color: var(--ravi); }
       .ordrow .rank { font-variant-numeric: tabular-nums; opacity: .55; min-width: 1.5em; }
       .ordrow .grip { opacity: .4; letter-spacing: 2px; }
       .ordrow .nm { flex: 1; min-width: 0; font-size: 14px; }
@@ -614,7 +614,7 @@
       .keyask .who { flex: none; width: 96px; font-size: 13px; color: var(--muted); }
       .keyask input { flex: 1; min-width: 0; min-height: 38px; padding: 0 10px;
         border: 1px solid var(--line); border-radius: 8px; background: var(--bg);
-        color: var(--fg); font: inherit; font-size: 14px; }
+        color: var(--text); font: inherit; font-size: 14px; }
       .keyask button { min-height: 38px; padding: 0 12px; font-size: 13px; }
       /* 주소록 */
       .abkrow { display: flex; align-items: center; gap: 12px; padding: 10px 8px;
@@ -684,14 +684,90 @@
          손잡이로 준다. 사이드바든 본문이든 위쪽을 잡으면 창이 따라온다. */
       .titlebar {
         position: fixed; top: 0; left: 0; right: 0; height: 34px;
-        -webkit-app-region: drag; z-index: 50;
+        z-index: 50;   /* 잡는 일은 CSS 가 아니라 data-tauri-drag-region 이 한다 */
         /* 보이지 않는다. 색을 주면 없앤 제목줄이 되살아난 것처럼 보인다. */
       }
-      /* 그 띠 안에 눌러야 할 것이 있으면 거기만 뺀다. 지금은 없다. */
-      .titlebar * { -webkit-app-region: no-drag; }
-      /* 로고도 잡힌다 — 맥에서 제목 옆을 잡는 버릇 그대로. */
-      nav .brand { -webkit-app-region: drag; }
-      nav a, nav button, input, select, textarea, .card { -webkit-app-region: no-drag; }
+      /* 🔴 여기 있던 `-webkit-app-region: drag / no-drag` 세 줄을 지웠다.
+         그건 **일렉트론 문법**이다. Tauri 는 WKWebView 라 그 속성을 모른다 —
+         CSS 에 적혀 있으니 도는 줄 알았지만 아무 일도 하지 않았고, 그래서
+         창이 안 움직였다. 지금은 마크업의 `data-tauri-drag-region` 이 한다.
+         빼는 규칙도 필요 없다 — 그 속성이 **붙은 요소만** 잡히기 때문에
+         단추·입력칸은 저절로 빠진다. */
+
+      /* ══ 라비 첫 화면 ═══════════════════════════════════════════
+         떠 있던 대화창을 화면 안으로 들였다. 아래 규칙은 그 대화창을
+         '떠 있는 상자'에서 '이 화면의 본체'로 바꾸는 것이다. */
+      .ravihero { display: flex; align-items: center; gap: 16px; margin: 0 0 16px; }
+      .ravihero img { width: 88px; height: auto; flex: none;
+                      transition: filter .5s, opacity .5s; }
+      /* 열쇠가 없으면 자고 있다. 흐리게 하되 지우지는 않는다 —
+         없는 것처럼 보이면 깨울 생각도 안 한다. */
+      .ravihero img.asleep { filter: grayscale(1) brightness(1.06); opacity: .55; }
+      .ravihi h2 { font-size: 22px; margin: 0 0 4px; letter-spacing: -0.02em; }
+      .ravihi .lede { margin: 0; }
+
+      .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 22px; }
+      @media (max-width: 900px) { .tiles { grid-template-columns: repeat(2, 1fr); } }
+      /* 🔴 96px. 44px 이 최소일 뿐 목표가 아니다 — 계산대에서는 보지 않고
+         손만 뻗는다. 크면 안 보고도 눌린다. */
+      .tile { min-height: 88px; display: flex; flex-direction: column; align-items: center;
+              justify-content: center; gap: 8px; padding: 12px 8px; cursor: pointer;
+              border: 1px solid var(--line); border-radius: 14px; background: var(--panel);
+              color: var(--text); font-size: 15px; font-weight: 600; text-align: center;
+              transition: transform .12s, border-color .12s, background .12s; }
+      .tile:hover { border-color: var(--ravi); background: color-mix(in srgb, var(--ravi) 7%, var(--panel)); }
+      .tile:active { transform: scale(.97); }
+      .tile svg { width: 28px; height: 28px; stroke-width: 1.6; opacity: .82; }
+      .tile .tsub { font-size: 13px; font-weight: 400; color: var(--muted); }
+      /* 라비가 해 주는 일. 자고 있어도 **눌린다** — 누르면 깨우는 법을 말해 준다.
+         못 누르게 막으면 왜 안 되는지도 모른다. */
+      .tile.needsai .tsub { color: color-mix(in srgb, var(--ravi) 78%, var(--muted)); }
+      .tile.needsai.asleep { opacity: .68; }
+
+      /* 대화창을 이 화면의 본체로. 떠 있을 때 쓰던 값들을 덮는다. */
+      #page-ravi #chat { position: static; width: auto; max-width: none; height: auto;
+                         box-shadow: none; border: 1px solid var(--line); border-radius: 14px;
+                         display: flex; flex-direction: column; }
+      #page-ravi #chat-log { min-height: 0; max-height: 34vh; }
+      #page-ravi #chat-log:empty { min-height: 0; }
+      /* 말 거는 칸이 이 화면의 주인공이다. 16px 아래면 아이폰이 확대한다. */
+      #page-ravi .chat-in input { font-size: 16px; padding: 14px 14px; }
+      #page-ravi .chat-in button { padding: 14px 20px; font-size: 15px; }
+
+      /* ── 절제 ────────────────────────────────────────────────────
+         그록 정리에서 가져올 것은 기능이 아니라 **뺄셈**이다.
+         Nothing 이 상 받는 이유는 얹어서가 아니라 덜어서다.
+
+         지금 이 화면의 문제는 셋이었다:
+           ① 채운 단추가 **둘**이다(주황 「화면 채우기」·남색 「보내기」).
+              눈이 어디로 가야 할지 모른다. 채운 단추는 화면에 하나다.
+           ② 무엇을 시킬지 고르는 칸(화면 채우기/그냥 묻기/두 곳에 묻기)이
+              제일 크다. 그건 **고르는 일**이지 **하는 일**이 아니다.
+           ③ 대화가 비어 있을 때 큰 빈 상자만 남는다. 빈 상자는 고장으로
+              읽힌다 — 비었을 때야말로 무슨 말을 걸면 되는지 보여야 한다. */
+
+      /* ① 이 화면의 채운 단추는 「보내기」 하나다. */
+      #page-ravi .chat-in button { background: var(--ravi); border-color: var(--ravi); color: #fff; }
+      /* ② 고르는 칸은 작게, 오른쪽으로. 채우지 않고 밑줄로만 지금 것을 표시. */
+      #page-ravi .chat-mode { justify-content: flex-end; gap: 2px; padding: 8px 10px 0; border: 0; }
+      #page-ravi .chat-mode button { flex: 0 0 auto; min-height: 32px; }
+      #page-ravi .chat-mode button { background: transparent; border: 0; color: var(--muted);
+                                     font-size: 13px; padding: 6px 10px; border-radius: 8px; }
+      #page-ravi .chat-mode button.on { background: transparent; color: var(--text); font-weight: 600;
+                                        box-shadow: inset 0 -2px 0 var(--ravi); }
+      /* ③ 비었을 때는 상자가 아니라 **말 거는 예시**를 보여 준다. */
+      #page-ravi #chat-log { padding: 6px 14px; }
+      #page-ravi #chat-log:empty::before {
+        content: "예: 오늘 재료 떨어졌다고 손님에게 알려줘 · 아메리카노 4500원 넣어줘 · 맨날 하는 일이니 단추로 만들어줘";
+        display: block; color: var(--faint); font-size: 14px; line-height: 1.9; padding: 10px 0 14px;
+      }
+
+      /* 내가 만든 단추. 별표 하나로 우리 것과 구별된다. */
+      .tile.mytile { border-style: dashed; }
+      .tilex { position: absolute; top: 6px; right: 8px; font-size: 17px; line-height: 1;
+               color: var(--faint); padding: 4px 6px; border-radius: 6px; }
+      .tilex:hover { color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, transparent); }
+      .tile { position: relative; }
 
       /* 메뉴에 아이콘. 글자만 있으면 어디가 어딘지 매번 읽어야 한다. */
       nav a { display: flex; align-items: center; gap: 10px; }
@@ -709,10 +785,10 @@
         font-size: 17px; line-height: 2; letter-spacing: 1px; word-break: break-all;
         padding: 12px; border-radius: 12px; background: var(--panel);
         border: 1px solid var(--line); color: var(--muted); }
-      .keyshow.on { color: var(--fg); font-weight: 600; }
+      .keyshow.on { color: var(--text); font-weight: 600; }
       /* 개발비 칸. 숨기지 않는 것이 요점이라 눈에 띄어야 한다 —
          다만 경고는 아니므로 붉은색은 쓰지 않는다. */
-      .feecard { border-color: var(--accent); margin-bottom: 16px; }
+      .feecard { border-color: var(--ravi); margin-bottom: 16px; }
       /* 「처음 한 번 하는 것들」. 🔴 접는 것이지 숨기는 것이 아니다 —
          숨기면 못 찾고, 접으면 있는 줄 안다. 그래서 크고 또렷하게 둔다. */
       .onceoff { margin: 4px 0 16px; border: 1px solid var(--line);
@@ -771,7 +847,7 @@
         font-size: 15px; }
       .ab-sum { border-top: 1px solid var(--line); margin-top: 6px; padding-top: 10px;
         font-size: 17px; }
-      .ab-get { margin-top: 10px; font-size: 15px; color: var(--fg); line-height: 1.6; }
+      .ab-get { margin-top: 10px; font-size: 15px; color: var(--text); line-height: 1.6; }
       .ab-never { margin-top: 12px; font-size: 14px; color: var(--warn); }
       .ab-never ul { margin: 6px 0 0; padding-left: 18px; line-height: 1.7; }
       /* 되돌릴 수 없는 일 앞의 취소 창. 체크박스와 다른 점은
@@ -789,7 +865,7 @@
          이미 뭔가 잘못됐다고 느낀 사람이다. */
       .hb-cancel { width: 100%; min-height: 52px; margin-top: 12px;
         font-size: 17px; font-weight: 600; border-radius: 12px;
-        border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
+        border: 1px solid var(--line); background: var(--bg); color: var(--text); }
       /* 연습. 접어 두되 발행 전에 눈에 띄어야 한다. */
       .rehearse { margin: 14px 0; padding: 12px 14px; border-radius: 14px;
         border: 1px dashed var(--line); background: var(--bg); }
@@ -812,7 +888,7 @@
   </head>
   <body>
     <!-- 창을 잡는 띠. 제목줄을 없앴기 때문에 이게 없으면 창이 안 움직인다. -->
-    <div class="titlebar"></div>
+    <div class="titlebar" data-tauri-drag-region></div>
 
     <!-- ── 첫 실행 ───────────────────────────────────────────────────
          이 프로그램은 노드이자 IPFS이자 지갑이자 계산대다. 첫 화면이
@@ -887,11 +963,11 @@
     </div>
 
     <nav>
-      <div class="brand">
-        <img src="/raven-head.webp" alt="" class="brandravi" />
-        <div>
-          <h1>PLAY X Raven</h1>
-          <span>v0.1</span>
+      <div class="brand" data-tauri-drag-region>
+        <img src="/raven-head.webp" alt="" class="brandravi" data-tauri-drag-region />
+        <div data-tauri-drag-region>
+          <h1 data-tauri-drag-region>PLAY X Raven</h1>
+          <span data-tauri-drag-region>v0.1</span>
         </div>
       </div>
       <!-- 사이드바는 기능 상자가 아니라 카운터에서 하는 일 순서다.
@@ -899,7 +975,16 @@
            마찰은 버튼 안쪽에 둔다.
            "주문하기"는 손님 일이라 지웠다. 카운터 PC에 손님 메뉴가 앉아 있으면
            이 프로그램이 누구 것인지 매일 헷갈린다. -->
-      <a data-page="wallet" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2.5"/><path d="M3 10.5h18"/><circle cx="17" cy="14.5" r="1.4"/></svg><span>지갑</span></a>
+      <!-- 🔴 첫 자리는 라비다. 여태 첫 화면이 지갑이었는데, 켜자마자
+           주소·잔액·보내기 같은 것부터 보였다. 사장이 아침에 하는 일은
+           그게 아니다. 물어보고 시키는 것이 먼저다. -->
+      <a data-page="ravi" class="on">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 3.5c-4 0-7 2.6-7 6 0 1.9 1 3.6 2.6 4.7L7 19l3.4-1.7c.5.1 1 .1 1.6.1 4 0 7-2.6 7-6s-3-6-7-6z"/>
+          <circle cx="10" cy="9.2" r="1"/><path d="M14.5 9.2h2"/>
+        </svg><span>라비</span></a>
+      <a data-page="wallet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2.5"/><path d="M3 10.5h18"/><circle cx="17" cy="14.5" r="1.4"/></svg><span>지갑</span></a>
       <a data-page="assets"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg><span>자산</span></a>
       <a data-page="reward"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="9" r="5.5"/><path d="M8.5 13.5L7 21l5-2.5L17 21l-1.5-7.5"/></svg><span>배당</span></a>
       <a data-page="shop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9l1.6-4.2h12.8L20 9"/><path d="M4.5 9h15v10.5h-15z"/><path d="M9.5 19.5v-6h5v6"/></svg><span>내 가게</span></a>
@@ -1110,7 +1195,52 @@
       </section>
 
       <!-- ── 지갑 ── -->
-      <section class="page on" id="page-wallet">
+      <!-- ══ 라비 ══════════════════════════════════════════════════
+           🔴 여기가 첫 화면이다.
+
+           여태 라비는 **오른쪽 아래 작은 단추 뒤**에 있었다. 시킬 줄 아는
+           일이 열 가지나 되는데, 그걸 쓰려면 먼저 단추를 찾아 눌러야 했다.
+           찾아야 하는 것은 심플한 것이 아니다.
+
+           그래서 대화창을 이 화면으로 **옮겼다**(복제가 아니다 — 대화창이
+           둘이면 어느 쪽이 진짜인지 알 수 없다).
+
+           그리고 말로 하기 싫은 날을 위해 위에 **큰 아이콘**을 뒀다.
+           아이콘을 누르면 그 말이 라비에게 그대로 간다 — 누르든 말하든
+           같은 길이라 배울 것이 하나뿐이다. -->
+      <section class="page on" id="page-ravi">
+        <div class="ravihero">
+          <img id="ravi-face" src="/raven-hello.webp" alt="" />
+          <div class="ravihi">
+            <h2 id="ravi-hello">안녕하세요, 라비입니다.</h2>
+            <p id="ravi-sub" class="lede">무엇을 할까요? 아래를 누르거나, 그냥 말씀하세요.</p>
+          </div>
+        </div>
+
+        <!-- 🔴 타일은 여덟 개까지다. 더 늘리면 다시 '찾는 화면'이 된다.
+             왼쪽 넷은 열쇠 없이도 되는 것, 오른쪽 넷은 라비가 하는 것. -->
+        <div class="tiles" id="ravi-tiles"></div>
+
+        <div id="ravi-chatwrap">
+      <div id="chat">
+        <!-- 여태 이 창은 양식 채우기 전용이었다. 사장님이 "이거 어떻게 생각해"
+             라고 물으면 엉뚱하게 메뉴를 고쳤다. 무엇을 시키는지 먼저 고르게 한다. -->
+        <div class="chat-mode" id="chat-mode">
+          <button class="on" data-mode="fill" title="말로 알려주면 화면을 채웁니다">화면 채우기</button>
+          <button data-mode="ask" title="무엇이든 물어봅니다. 화면은 안 건드립니다">그냥 묻기</button>
+          <button data-mode="debate" title="서로 다른 AI 두 곳에 같은 것을 묻습니다">두 곳에 묻기</button>
+        </div>
+
+        <div id="chat-log"></div>
+        <div class="chat-in">
+          <input id="chat-q" placeholder="아이스 아메리카노 4500원 넣어줘" autocomplete="off" />
+          <button id="chat-go">보내기</button>
+        </div>
+      </div>
+        </div>
+      </section>
+
+      <section class="page" id="page-wallet">
         <h2 class="title">지갑</h2>
         <p class="lede">이 앱과 레이븐 코어는 같은 지갑을 씁니다. 동시에 열 수 없습니다.</p>
 
@@ -2198,29 +2328,6 @@
       <img src="/raven-head.webp" alt="" />
       <span>Ravi에게 물어보기</span>
     </button>
-    <aside id="chat" class="hidden">
-      <div class="chat-head">
-        <img src="/raven-head.webp" alt="" class="chat-ravi" />
-        <span>Ravi</span>
-        <button class="ghost" id="chat-close">닫기</button>
-      </div>
-
-      <!-- 여태 이 창은 양식 채우기 전용이었다. 사장님이 "이거 어떻게 생각해"
-           라고 물으면 엉뚱하게 메뉴를 고쳤다. 무엇을 시키는지 먼저 고르게 한다. -->
-      <div class="chat-mode" id="chat-mode">
-        <button class="on" data-mode="fill" title="말로 알려주면 화면을 채웁니다">화면 채우기</button>
-        <button data-mode="ask" title="무엇이든 물어봅니다. 화면은 안 건드립니다">그냥 묻기</button>
-        <button data-mode="debate" title="서로 다른 AI 두 곳에 같은 것을 묻습니다">두 곳에 묻기</button>
-      </div>
-
-      <div id="chat-log">
-
-      </div>
-      <div class="chat-in">
-        <input id="chat-q" placeholder="아이스 아메리카노 4500원 넣어줘" autocomplete="off" />
-        <button id="chat-go">보내기</button>
-      </div>
-    </aside>
 
     <script type="module" src="/src/main.ts"></script>
   </body>
