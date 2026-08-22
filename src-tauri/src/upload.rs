@@ -274,3 +274,67 @@ pub fn build_metadata(
 
     json!({ "rip0014": { "metadata": Value::Object(metadata) } })
 }
+
+/// 남의 사진 서버에 올라간 사진을 **받아서 이 컴퓨터에도 한 부 둔다.**
+///
+/// ## 왜
+///
+/// 장터 사진은 Nostr 미디어 서버(nostr.build 등)에 올라간다. 우리가 갖고
+/// 있지 않아서, **그곳이 문을 닫으면 사진이 사라진다.** 우리도 못 되살린다.
+///
+/// 대표님 물음: *"Nostr 이거는 노드 돌리는 사람들이 같이 안 돌려주나?
+/// 우리 시스템에서 안 돌려주나?"* — 안 돌려준다. Nostr 릴레이는 **글**을
+/// 나르지 사진을 보관하지 않는다.
+///
+/// 그래서 **사본을 하나 더 둔다.** 남의 서버가 닫혀도 노드 하나가 살아
+/// 있으면 사진이 남는다.
+///
+/// ## 🔴 우리가 사진 서버가 되는 것과는 다르다
+///
+/// 남의 사진을 받아 **인터넷에 내주는 것**(NIP-96 서버)은 하지 않는다.
+/// 디스크가 계속 늘고, 대역폭이 나가고, 노드가 바깥에 열려 있어야 하고,
+/// 누가 불법 사진을 올리면 그게 우리 디스크에 남는다. 그 노드는 손님 결제를
+/// 확인해야 하는 노드다.
+///
+/// 여기서 하는 것은 **내가 올린 내 사진 한 부**를 내 컴퓨터에 두는 것뿐이다.
+///
+/// ⚠️ 실패해도 오류를 던지지 않는다. 사본은 덤이다 — 이것 때문에 물건
+///    올리기가 막히면 안 된다.
+#[tauri::command]
+pub async fn ipfs_keep_url(url: String) -> Value {
+    // https 만. 남이 준 주소로 이 컴퓨터의 파일을 읽게 하면 안 된다.
+    if !url.starts_with("https://") {
+        return json!({ "kept": false, "why": "https 주소만 보관합니다" });
+    }
+    // 사진 한 장에 이보다 크면 우리가 받을 이유가 없다.
+    const MAX: usize = 12 * 1024 * 1024;
+
+    let Ok(r) = reqwest::Client::new()
+        .get(&url)
+        .timeout(std::time::Duration::from_secs(60))
+        .send()
+        .await
+    else {
+        return json!({ "kept": false, "why": "사진을 받지 못했습니다" });
+    };
+    if !r.status().is_success() {
+        return json!({ "kept": false, "why": format!("{}", r.status()) });
+    }
+    let Ok(bytes) = r.bytes().await else {
+        return json!({ "kept": false, "why": "사진을 다 받지 못했습니다" });
+    };
+    if bytes.len() > MAX {
+        return json!({ "kept": false, "why": "사진이 너무 큽니다" });
+    }
+
+    let name = url.rsplit('/').next().unwrap_or("photo").to_string();
+    let part = reqwest::multipart::Part::bytes(bytes.to_vec()).file_name(name);
+    let form = reqwest::multipart::Form::new().part("file", part);
+    let Ok(body) = post_multipart("pin=true&cid-version=0", form).await else {
+        return json!({ "kept": false, "why": "파일창고가 꺼져 있습니다" });
+    };
+    match parse_added(&body).last() {
+        Some(a) => json!({ "kept": true, "cid": a.hash, "bytes": bytes.len() }),
+        None => json!({ "kept": false, "why": "파일창고가 답을 안 했습니다" }),
+    }
+}

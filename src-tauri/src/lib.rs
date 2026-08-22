@@ -112,6 +112,7 @@ pub fn run() {
             shop::incoming_payments,
             shop::split_payment,
             spec::suggest_setup,
+            upload::ipfs_keep_url,
             report::report_send,
             report::report_flush,
             report::report_parked,

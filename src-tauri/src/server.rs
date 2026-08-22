@@ -2134,6 +2134,9 @@ pub async fn start_phone_server(
         .route("/api/qr", get(api_qr))
         .route("/i18n.js", get(api_i18n))
         .route("/ravi.js", get(api_ravi_js))
+        // 🔴 장터 사진 사본. 지갑 화면은 브라우저라 Tauri 명령을 못 쓴다 —
+        //    같은 와이파이 안에서 이 길로 부른다.
+        .route("/api/keepphoto", post(api_keep_photo))
         .route("/api/ai-status", get(api_ai_status))
         .route("/api/shop-history", get(api_shop_history))
         .route("/api/nostr/publish", post(api_nostr_publish))
@@ -2980,4 +2983,21 @@ mod theme_tests {
             }
         }
     }
+}
+
+/// 장터 사진을 **이 컴퓨터에도 한 부** 둔다.
+///
+/// 남의 미디어 서버가 닫히면 사진이 사라진다. 노드가 켜져 있는 동안은
+/// 이 컴퓨터가 한 부를 갖고 있다.
+///
+/// ⚠️ 실패해도 오류가 아니다. 사본은 덤이라, 이것 때문에 물건 올리기가
+///    막히면 안 된다. 그래서 늘 200 으로 답하고 결과만 알려 준다.
+/// 🔴 이 길은 **사진을 받아 두기만** 한다. 남에게 내주지 않는다 —
+///    그건 사진 서버가 되는 일이고, 부하도 책임도 다른 이야기다.
+async fn api_keep_photo(Json(body): Json<Value>) -> impl IntoResponse {
+    let url = body.get("url").and_then(Value::as_str).unwrap_or("").to_string();
+    if url.is_empty() {
+        return Json(json!({ "kept": false, "why": "주소가 없습니다" }));
+    }
+    Json(crate::upload::ipfs_keep_url(url).await)
 }

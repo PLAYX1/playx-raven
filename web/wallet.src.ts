@@ -1109,6 +1109,32 @@ async function fillGeo(): Promise<void> {
  * 거절한다(실측: 둘 다 401). 개인키는 이 함수 밖으로 안 나간다.
  */
 /**
+ * 사진 사본을 가게 노드에 한 부 둔다.
+ *
+ * 🔴 `rvn.ex.erci.se` 에서 열면 노드가 없다 — 그때는 조용히 아무것도 안 한다.
+ * 없는 기능을 있는 척하지 않는다. 가게 노드(같은 와이파이)에서 열었을 때만
+ * 사본이 생기고, 그때만 화면에 그렇게 적는다.
+ */
+async function keepCopy(url: string, note: HTMLElement) {
+  try {
+    const r = await fetch("/api/keepphoto", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
+    if (!r.ok) return;
+    const j = await r.json();
+    if (!j?.kept) return;
+    const add = document.createElement("div");
+    add.className = "sub";
+    add.textContent = "이 가게 컴퓨터에도 한 부 보관했습니다.";
+    note.appendChild(add);
+  } catch {
+    // 노드가 없는 곳(웹)에서 열었으면 여기로 온다. 정상이다.
+  }
+}
+
+/**
  * 사진을 줄인다.
  *
  * 🔴 여태 **파일을 그대로 올렸다.** 요즘 폰 사진은 3~6MB, 최신 기종은 10MB 를
@@ -2073,6 +2099,13 @@ function wire(): void {
       // 올라간 것을 **보여 준다.** 주소만 적히면 제대로 갔는지 알 수 없다.
       note.innerHTML = `<img src="${escapeHtml(url)}" alt="" class="shot" />
         <div class="sub">올렸습니다. 다른 사진을 고르시면 바뀝니다.</div>`;
+      // 🔴 사본을 한 부 더 둔다. 사진은 남의 미디어 서버에 있고, 그곳이
+      //    닫히면 사라진다 — 우리도 못 되살린다. 이 화면이 **가게 노드에서**
+      //    열렸으면 그 노드가 한 부를 갖고 있게 한다.
+      //
+      //    ⚠️ 덤이다. 실패해도 아무 말 안 한다 — 사본 때문에 물건 올리기가
+      //       막히거나 겁을 주면 안 된다. 성공했을 때만 한 줄 보탠다.
+      void keepCopy(url, note);
     } catch (e) {
       note.innerHTML = `<span class="err">${escapeHtml(String((e as Error)?.message || e))}</span>`;
     }
