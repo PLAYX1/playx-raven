@@ -794,6 +794,12 @@
       /* 닫았을 때만 뜨는 한마디 칸. 손님이 읽는 글이라 좁으면 안 된다. */
       #sh-closednote { width: 100%; font-size: 16px; padding: 13px 14px; }
 
+      /* 요일마다 지금 어떻게 저장되는지. 빈 시간 칸은 브라우저가 흐린
+         글자로 그려서 **적힌 것처럼 보인다** — 그래서 말로 적는다. */
+      .hrsay { font-size: 13px; color: var(--muted); }
+      .hrsay.warn { color: var(--warn); font-weight: 600; }
+      .hrsay.ok { color: var(--ok); }
+
       /* 영업 중 / 지금 닫기. 라비 화면의 큰 아이콘과 같은 문법이다. */
       .openpick { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 14px 0 12px; }
       @media (max-width: 560px) { .openpick { grid-template-columns: 1fr; } }

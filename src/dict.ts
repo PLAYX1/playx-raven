@@ -755,6 +755,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Quantity",
     "수익 계산 · 켜고 끄기":
       "Profit check · start and stop",
+    "쉬는 날":
+      "Closed",
     "쉬운 설정":
       "Easy setup",
     "스위치가 스스로 닫습니다":
@@ -843,6 +845,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Export as a spreadsheet",
     "여기서 시작합니다":
       "Start here",
+    "여는 시각과 닫는 시각을 둘 다 넣으셔야 나머지 요일에 옮길 수 있습니다.":
+      "You need both the opening and closing time before it can be copied to the other days.",
     "여는 중…":
       "Opening…",
     "연결과 뒷일을 줄입니다":
@@ -913,6 +917,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "last 4 characters of the original",
     "월요일 시간을 나머지 요일에도":
       "Apply Monday's hours to the other days",
+    "월요일부터 채워 주세요":
+      "Please fill in Monday first",
     "위에 있는 곳부터 씁니다. 막히거나 실패하면 아래로 넘어갑니다.":
       "We use the one at the top first. If it is blocked or fails, we move down.",
     "위에 적힌 이름을 직접 입력":
@@ -1047,6 +1053,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Loading assets…",
     "자산을 하나 만들려고 합니다. 무엇을 물어봐야 하는지부터 알려 주세요.":
       "I want to create an asset. Start by telling me what I should be asked.",
+    "자정 넘겨 영업":
+      "Open past midnight",
     "자정을 넘겨":
       "staying open past midnight",
     "잠겨 있을 때만":
@@ -1349,6 +1357,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Korean — Gangnam Cafe",
     "한도는 판매를 막는 것이 아니라, 뭔가 잘못됐을 때 손실이 멈추는 선입니다. 하루 100개 팔 생각이면 100으로 두세요.":
       "The limit is not there to block sales; it is the line where losses stop if something goes wrong. If you plan to sell 100 a day, set 100.",
+    "한쪽만 적혀서 저장되지 않습니다":
+      "Only one side filled — not saved",
     "할 말":
       "Message",
     "해시레이트 (MH/s)":
@@ -2107,6 +2117,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "数量",
     "수익 계산 · 켜고 끄기":
       "採算計算・起動と停止",
+    "쉬는 날":
+      "定休日",
     "쉬운 설정":
       "かんたん設定",
     "스위치가 스스로 닫습니다":
@@ -2195,6 +2207,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "表計算ファイルで書き出す",
     "여기서 시작합니다":
       "ここから始めます",
+    "여는 시각과 닫는 시각을 둘 다 넣으셔야 나머지 요일에 옮길 수 있습니다.":
+      "開店時刻と閉店時刻の両方を入れないと、ほかの曜日に移せません。",
     "여는 중…":
       "開いています…",
     "연결과 뒷일을 줄입니다":
@@ -2265,6 +2279,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "原本の末尾4文字",
     "월요일 시간을 나머지 요일에도":
       "月曜日の時間をほかの曜日にも",
+    "월요일부터 채워 주세요":
+      "まず月曜日を埋めてください",
     "위에 있는 곳부터 씁니다. 막히거나 실패하면 아래로 넘어갑니다.":
       "上にあるところから使います。詰まったり失敗したら下へ移ります。",
     "위에 적힌 이름을 직접 입력":
@@ -2399,6 +2415,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "アセットを読み込み中…",
     "자산을 하나 만들려고 합니다. 무엇을 물어봐야 하는지부터 알려 주세요.":
       "アセットを一つ作りたいです。まず何を聞かれるべきか教えてください。",
+    "자정 넘겨 영업":
+      "日をまたいで営業",
     "자정을 넘겨":
       "日付をまたいで",
     "잠겨 있을 때만":
@@ -2701,6 +2719,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "韓国語 — 江南カフェ",
     "한도는 판매를 막는 것이 아니라, 뭔가 잘못됐을 때 손실이 멈추는 선입니다. 하루 100개 팔 생각이면 100으로 두세요.":
       "上限は販売を止めるためではなく、何かがおかしくなったときに損失が止まる線です。1日100個売るつもりなら100にしてください。",
+    "한쪽만 적혀서 저장되지 않습니다":
+      "片方だけなので保存されません",
     "할 말":
       "伝えたいこと",
     "해시레이트 (MH/s)":
@@ -3459,6 +3479,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "数量",
     "수익 계산 · 켜고 끄기":
       "收益测算 · 启停",
+    "쉬는 날":
+      "休息日",
     "쉬운 설정":
       "简易设置",
     "스위치가 스스로 닫습니다":
@@ -3547,6 +3569,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "导出为表格文件",
     "여기서 시작합니다":
       "从这里开始",
+    "여는 시각과 닫는 시각을 둘 다 넣으셔야 나머지 요일에 옮길 수 있습니다.":
+      "需要同时填写开门和关门时间，才能复制到其他日子。",
     "여는 중…":
       "正在打开…",
     "연결과 뒷일을 줄입니다":
@@ -3617,6 +3641,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "原始信息的最后4位",
     "월요일 시간을 나머지 요일에도":
       "把周一的时间套用到其他日子",
+    "월요일부터 채워 주세요":
+      "请先填好周一",
     "위에 있는 곳부터 씁니다. 막히거나 실패하면 아래로 넘어갑니다.":
       "从最上面的开始使用。若受阻或失败则往下切换。",
     "위에 적힌 이름을 직접 입력":
@@ -3751,6 +3777,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "正在加载资产…",
     "자산을 하나 만들려고 합니다. 무엇을 물어봐야 하는지부터 알려 주세요.":
       "我想创建一个资产。先告诉我应该问些什么。",
+    "자정 넘겨 영업":
+      "跨夜营业",
     "자정을 넘겨":
       "跨过午夜",
     "잠겨 있을 때만":
@@ -4053,6 +4081,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "韩语 —— 江南咖啡",
     "한도는 판매를 막는 것이 아니라, 뭔가 잘못됐을 때 손실이 멈추는 선입니다. 하루 100개 팔 생각이면 100으로 두세요.":
       "上限不是为了限制销售，而是出问题时止损的界线。打算一天卖 100 个就设成 100。",
+    "한쪽만 적혀서 저장되지 않습니다":
+      "只填了一边，不会保存",
     "할 말":
       "要说的话",
     "해시레이트 (MH/s)":

@@ -6321,13 +6321,45 @@ function drawHours(hours: any) {
   const h = hours && typeof hours === "object" ? hours : {};
   $("sh-hours").innerHTML = WEEK.map(([d, ko]) => {
     const v = h[String(d)] || {};
-    return `<div class="row" style="align-items:center; gap:8px; margin-top:6px">
+    return `<div class="row hrrow" style="align-items:center; gap:8px; margin-top:6px">
       <span style="width:22px">${ko}</span>
       <input type="time" id="hr-o-${d}" value="${v.open || ""}" style="width:auto" />
       <span class="meta">–</span>
       <input type="time" id="hr-c-${d}" value="${v.close || ""}" style="width:auto" />
+      <span class="hrsay" id="hr-s-${d}"></span>
     </div>`;
   }).join("");
+  paintHours();
+}
+
+/* ══ 요일마다 지금 어떻게 저장되는지 ═══════════════════════════════════
+   🔴 대표님: "월요일 시간 입력했는데 나머지에 종료시간이 입력이 안 되네
+   — 아 색이 없으면 반영이 안 되는 거구나. 이걸 알려줘야 할 듯한데."
+
+   맞다. 시간 칸이 비어 있으면 브라우저가 흐린 글자로 그려서, **적힌 것처럼
+   보이는데 사실은 빈 칸**이다. 그리고 한쪽만 적힌 요일은 저장할 때 조용히
+   버려진다(`readHours`) — 사장은 왜 그 요일이 안 열리는지 못 찾는다.
+
+   그래서 요일마다 **저장되면 무엇이 되는지**를 옆에 적는다. */
+function paintHours() {
+  for (const [d] of WEEK) {
+    const o = ($(`hr-o-${d}`) as HTMLInputElement)?.value || "";
+    const c = ($(`hr-c-${d}`) as HTMLInputElement)?.value || "";
+    const say = $(`hr-s-${d}`);
+    if (!say) continue;
+    if (o && c) {
+      // 자정을 넘기는 것도 말해 준다 — 밤 6시 열고 새벽 2시 닫기.
+      say.textContent = c <= o ? t("자정 넘겨 영업") : "";
+      say.className = "hrsay ok";
+    } else if (!o && !c) {
+      say.textContent = t("쉬는 날");
+      say.className = "hrsay";
+    } else {
+      // 🔴 반쪽짜리는 저장되지 않는다. 그 사실을 그 자리에서 말한다.
+      say.textContent = t("한쪽만 적혀서 저장되지 않습니다");
+      say.className = "hrsay warn";
+    }
+  }
 }
 
 function readHours(): Record<string, { open: string; close: string }> {
@@ -7017,6 +7049,13 @@ window.addEventListener("DOMContentLoaded", () => {
   $("sh-hours-all").addEventListener("click", () => {
     const o = ($("hr-o-1") as HTMLInputElement)?.value || "";
     const c = ($("hr-c-1") as HTMLInputElement)?.value || "";
+    // 🔴 월요일이 반쪽이면 복사해 봐야 나머지도 반쪽이 된다. 그러면 이레가
+    //    전부 저장 안 되는 상태가 되고, 사장은 눌렀는데 왜 안 됐는지 모른다.
+    if (!o || !c) {
+      say(t("월요일부터 채워 주세요"),
+          t("여는 시각과 닫는 시각을 둘 다 넣으셔야 나머지 요일에 옮길 수 있습니다."));
+      return;
+    }
     for (const [d] of WEEK) {
       if (d === 1) continue;
       const oi = $(`hr-o-${d}`) as HTMLInputElement;
@@ -7024,8 +7063,12 @@ window.addEventListener("DOMContentLoaded", () => {
       if (oi) oi.value = o;
       if (ci) ci.value = c;
     }
+    paintHours();
     previewOpen();
   });
+  // 시간 칸은 나중에 그려지므로 부모에서 받는다.
+  $("sh-hours").addEventListener("change", paintHours);
+  $("sh-hours").addEventListener("input", paintHours);
   ["sh-closednow", "sh-closednote", "sh-hours"].forEach((id) =>
     $(id).addEventListener("change", previewOpen),
   );
