@@ -1958,6 +1958,44 @@ function toggleDot(which: "node" | "ipfs") {
   if (dotOpen) dotTimer = window.setInterval(() => void paintDotMore(), 5000);
 }
 
+/* ══ 개발비 1% — 진짜로 끌 수 있게 ═══════════════════════════════════
+   🔴 러스트에는 `fee_read`·`fee_save` 가 다 있고 명령 등록도 돼 있는데,
+   **화면에 스위치가 없었다.** 그런데 랜딩에는 「설정에서 끄실 수 있습니다」
+   라고 적혀 있다 — 못 하는 것을 한다고 적어 둔 것이다.
+
+   이 프로그램의 주장은 *"못 끄는 것은 개발비가 아니라 세금이고, 소스가
+   열려 있으면 세금은 포크 한 번으로 사라진다"* 이다. 그 주장이 성립하려면
+   여기에 진짜 스위치가 있어야 한다.
+
+   ⚠️ 주소를 읽어 적는 일은 이미 `paintFee` 가 한다(위). 여기서는 **스위치
+      두 칸만** 칠한다 — 같은 일을 하는 함수를 또 만들면 둘이 어긋난다.
+      실제로 처음에 그렇게 만들었다가 「Duplicate function」으로 잡혔다. */
+async function paintFeePick() {
+  if (!document.getElementById("fee-on")) return;
+  try {
+    const f = await invoke<any>("fee_read");
+    $("fee-on").classList.toggle("on", !!f.on);
+    $("fee-off").classList.toggle("on", !f.on);
+    const cus = $("fee-custom") as HTMLInputElement;
+    if (cus && !cus.value) cus.placeholder = String(f.address || "");
+    $("fee-say").textContent = f.on
+      ? `${Number(f.percent ?? 1).toFixed(2)}% · ${t("이 주소로 갑니다")}`
+      : t("지금은 걷지 않습니다. 받으신 금액이 전부 사장님 것입니다.");
+  } catch (e) {
+    $("fee-say").textContent = String(e);
+  }
+  void paintFee();
+}
+
+async function saveFee(on: boolean, address?: string) {
+  try {
+    await invoke("fee_save", { on, rate: null, address: address ?? null });
+    await paintFeePick();
+  } catch (e) {
+    $("fee-say").textContent = String(e);
+  }
+}
+
 function showPage(id: string) {
   if (id === "ravi") paintRavi();
   paintPageTiles(id);
@@ -7273,6 +7311,11 @@ window.addEventListener("DOMContentLoaded", () => {
     foot?.parentNode?.insertBefore(sel, foot);
   })();
 
+  $("fee-on").addEventListener("click", () => void saveFee(true));
+  $("fee-off").addEventListener("click", () => void saveFee(false));
+  $("fee-apply").addEventListener("click", () =>
+    void saveFee(true, ($("fee-custom") as HTMLInputElement).value.trim() || undefined));
+  void paintFeePick();
   $("d-node-row").addEventListener("click", () => toggleDot("node"));
   $("d-ipfs-row").addEventListener("click", () => toggleDot("ipfs"));
   $("sh-open-btn").addEventListener("click", () => setOpenState(false));

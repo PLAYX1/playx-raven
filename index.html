@@ -777,6 +777,41 @@
       input.typing { border-color: var(--ravi) !important;
         box-shadow: 0 0 0 3px color-mix(in srgb, var(--ravi) 22%, transparent); }
 
+      /* 개발비 내기 / 안 내기. 「영업 중 / 지금 닫기」와 같은 문법이다. */
+      .feebox { margin-top: 14px; padding: 14px; border: 1px solid var(--line);
+        border-radius: 14px; background: var(--bg); }
+      .feepick { flex: 1; min-width: 150px; min-height: 64px; display: flex;
+        flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+        border: 1px solid var(--line); border-radius: 12px; background: transparent;
+        color: var(--muted); cursor: pointer; }
+      .feepick b { font-size: 16px; }
+      .feepick span { font-size: 13px; }
+      .feepick.on { background: var(--ravi); border-color: var(--ravi); color: #fff; }
+      .feepick.on span { color: rgba(255,255,255,.88); }
+
+      /* ── 출시 전 실측이 잡은 것 (2026-08-23) ─────────────────────────
+
+         🔴 ① 눌리지 않는 단추가 **채워져** 있었다.
+            자산 화면의 「보존할 항목 없음」이 진한 색이라, 화면에서 제일
+            눈에 띄는 것이 **누를 수 없는 것**이었다. 눈이 거기로 가고,
+            눌러도 아무 일이 없다.
+         🔴 ② 누르는 것이 34~36px 이었다. 여덟 개.
+            40~70대 손이 닿는 크기가 아니다. [[playx-first-user]] 기준은
+            48px, 최소 44px 이다. 사이드바처럼 자주 안 누르는 것도
+            **40px 아래로는 두지 않는다.** */
+      button:disabled, .btn:disabled {
+        background: transparent !important;
+        border-color: var(--line) !important;
+        color: var(--faint) !important;
+        cursor: default;
+      }
+      .todochip { min-height: 40px !important; }
+      .langsw, .reportlink { min-height: 42px !important; }
+      .dotrow { min-height: 38px !important; }
+      #page-ravi .chat-mode button { min-height: 40px !important; }
+      /* 판 번호가 11.5px 이었다. 읽을 글자는 12.5px 아래로 두지 않는다. */
+      .brand span { font-size: 13px !important; }
+
       /* 방금 간 자리. 1.6초만 빛난다 — 어디로 갔는지 눈이 따라가야 한다. */
       .justwent { animation: wentglow 1.6s ease-out; border-radius: 12px; }
       @keyframes wentglow {
@@ -2008,6 +2043,31 @@
           <div class="kv"><b>붙는 곳</b><span>가게 결제 · 벤딩머신 · 중고 물건 사기</span></div>
           <div class="kv"><b>안 붙는 곳</b><span>채굴 · 그냥 보내기 · 자산 발행</span></div>
           <div class="kv"><b>가는 자리</b><span><code class="addr" id="fee-addr">읽는 중…</code></span></div>
+          <!-- 🔴 이 자리가 **비어 있었다.** 러스트에는 `fee_read`·`fee_save`
+               가 다 있고 명령 등록도 돼 있는데, 화면에 스위치가 없었다.
+               그런데 랜딩에는 「설정에서 끄실 수 있습니다. 받는 주소도
+               바꾸실 수 있습니다」라고 적혀 있다 — **못 하는 것을 한다고
+               적어 둔 것**이다.
+
+               이 프로그램의 주장은 "못 끄는 것은 개발비가 아니라 세금이고,
+               소스가 열려 있으면 세금은 포크 한 번으로 사라진다" 이다.
+               그 주장이 성립하려면 여기에 진짜 스위치가 있어야 한다. -->
+          <div class="feebox">
+            <div class="row" style="gap:10px;align-items:center;flex-wrap:wrap">
+              <button type="button" class="feepick" id="fee-on">
+                <b>개발비 내기</b><span>1% · 만드는 곳으로</span>
+              </button>
+              <button type="button" class="feepick" id="fee-off">
+                <b>안 내기</b><span>100% 사장님께</span>
+              </button>
+            </div>
+            <div class="row" style="gap:8px;margin-top:10px">
+              <input id="fee-custom" autocomplete="off" spellcheck="false"
+                     placeholder="다른 주소로 보내기 (비우면 기본 주소)" style="flex:1;min-width:0" />
+              <button class="ghost" id="fee-apply" style="flex:none">저장</button>
+            </div>
+            <div class="meta" id="fee-say" style="margin-top:8px"></div>
+          </div>
           <p class="meta" style="margin-top:10px">
             체인에서 직접 확인하실 수 있습니다. 카드 수수료(2~3%)와 달리
             <b>단말기 임대료도 정산 대기도 없습니다.</b>

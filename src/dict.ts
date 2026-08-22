@@ -45,8 +45,12 @@ export const DICT: Record<string, Record<string, string>> = {
       ", no key needed.",
     "1 (고유)":
       "1 (unique)",
+    "1% · 만드는 곳으로":
+      "1% · to whoever builds it",
     "1. 명단을 굳힐 때를 정합니다":
       "1. Decide when to freeze the holder list",
+    "100% 사장님께":
+      "100% to you",
     "10분 뒤":
       "in 10 minutes",
     "127.0.0.1:8766 · 쿠키 인증":
@@ -181,6 +185,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "files kept",
     "개발비 1%":
       "1% development fee",
+    "개발비 내기":
+      "Pay the development fee",
     "거리와 길찾기":
       "distance and directions",
     "거절된 것":
@@ -329,6 +335,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "All done",
     "다른 일도 합니다":
       "I use it for other things too",
+    "다른 주소로 보내기 (비우면 기본 주소)":
+      "Send to a different address (empty = default)",
     "다른 지갑":
       "a different wallet",
     "다른 폴더 고르기…":
@@ -799,6 +807,10 @@ export const DICT: Record<string, Record<string, string>> = {
       "Not decided yet",
     "안 건드리면 지금 그대로":
       "Leave it alone and it keeps",
+    "안 걷습니다":
+      "Not collected",
+    "안 내기":
+      "Do not pay",
     "안 붙는 곳":
       "Where it does not apply",
     "안 함":
@@ -961,6 +973,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "This address is your own wallet.",
     "이 주소는 체인에 올라가므로, 바뀌면":
       "This address goes onto the chain, so if it changes you need a",
+    "이 주소로 갑니다":
+      "goes to this address",
     "이 지갑의 주소만 씁니다. 직접 입력하지 않는 이유는, 잘못 붙여넣으면 매출이 남에게 갑니다.":
       "Only addresses from this wallet are used. We do not let you type one because a bad paste sends your takings to someone else.",
     "이 컴퓨터":
@@ -1183,6 +1197,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Turn it on now",
     "지금 터널 주소 넣기":
       "Use the current tunnel address",
+    "지금은 걷지 않습니다. 받으신 금액이 전부 사장님 것입니다.":
+      "Not collected right now. Everything you receive is yours.",
     "지금은 닫혀 있습니다":
       "Currently closed",
     "지금은 암호 없이 보낼 수 있는 상태입니다. 자리를 비우기 전에 잠그세요.":
@@ -1407,8 +1423,12 @@ export const DICT: Record<string, Record<string, string>> = {
       "、キー不要。",
     "1 (고유)":
       "1（ユニーク）",
+    "1% · 만드는 곳으로":
+      "1%・作るところへ",
     "1. 명단을 굳힐 때를 정합니다":
       "1. 名簿を確定する時点を決めます",
+    "100% 사장님께":
+      "100%が店主へ",
     "10분 뒤":
       "10分後",
     "127.0.0.1:8766 · 쿠키 인증":
@@ -1543,6 +1563,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "件を保管中",
     "개발비 1%":
       "開発費1%",
+    "개발비 내기":
+      "開発費を払う",
     "거리와 길찾기":
       "距離と経路案内",
     "거절된 것":
@@ -1691,6 +1713,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "完了しました",
     "다른 일도 합니다":
       "ほかの作業にも使います",
+    "다른 주소로 보내기 (비우면 기본 주소)":
+      "別のアドレスへ送る（空欄なら既定）",
     "다른 지갑":
       "別のウォレット",
     "다른 폴더 고르기…":
@@ -2161,6 +2185,10 @@ export const DICT: Record<string, Record<string, string>> = {
       "まだ決まっていません",
     "안 건드리면 지금 그대로":
       "触らなければ今のまま",
+    "안 걷습니다":
+      "徴収しません",
+    "안 내기":
+      "払わない",
     "안 붙는 곳":
       "かからないところ",
     "안 함":
@@ -2323,6 +2351,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "このアドレスは自分のウォレットです。",
     "이 주소는 체인에 올라가므로, 바뀌면":
       "このアドレスはチェーンに載るため、変わったら",
+    "이 주소로 갑니다":
+      "このアドレスへ行きます",
     "이 지갑의 주소만 씁니다. 직접 입력하지 않는 이유는, 잘못 붙여넣으면 매출이 남에게 갑니다.":
       "このウォレットのアドレスのみを使います。直接入力させないのは、貼り間違えると売上が他人に行くからです。",
     "이 컴퓨터":
@@ -2545,6 +2575,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "今すぐオンにする",
     "지금 터널 주소 넣기":
       "今のトンネルアドレスを入れる",
+    "지금은 걷지 않습니다. 받으신 금액이 전부 사장님 것입니다.":
+      "現在は徴収しません。受け取った金額はすべて店主のものです。",
     "지금은 닫혀 있습니다":
       "今は閉まっています",
     "지금은 암호 없이 보낼 수 있는 상태입니다. 자리를 비우기 전에 잠그세요.":
@@ -2769,8 +2801,12 @@ export const DICT: Record<string, Record<string, string>> = {
       "，无需密钥。",
     "1 (고유)":
       "1（唯一）",
+    "1% · 만드는 곳으로":
+      "1% · 归开发方",
     "1. 명단을 굳힐 때를 정합니다":
       "1. 决定何时锁定名单",
+    "100% 사장님께":
+      "100% 归您",
     "10분 뒤":
       "10分钟后",
     "127.0.0.1:8766 · 쿠키 인증":
@@ -2905,6 +2941,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "个文件正在保存",
     "개발비 1%":
       "开发费 1%",
+    "개발비 내기":
+      "支付开发费",
     "거리와 길찾기":
       "距离和导航",
     "거절된 것":
@@ -3053,6 +3091,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "已完成",
     "다른 일도 합니다":
       "还做别的事",
+    "다른 주소로 보내기 (비우면 기본 주소)":
+      "发送到其他地址（留空则用默认）",
     "다른 지갑":
       "另一个钱包",
     "다른 폴더 고르기…":
@@ -3523,6 +3563,10 @@ export const DICT: Record<string, Record<string, string>> = {
       "尚未确定",
     "안 건드리면 지금 그대로":
       "不动它就保持现状",
+    "안 걷습니다":
+      "不收取",
+    "안 내기":
+      "不支付",
     "안 붙는 곳":
       "不收取的范围",
     "안 함":
@@ -3685,6 +3729,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "这个地址是您自己的钱包。",
     "이 주소는 체인에 올라가므로, 바뀌면":
       "该地址会上链，因此一旦变更就需要",
+    "이 주소로 갑니다":
+      "转到此地址",
     "이 지갑의 주소만 씁니다. 직접 입력하지 않는 이유는, 잘못 붙여넣으면 매출이 남에게 갑니다.":
       "只使用本钱包的地址。不让手动输入，是因为粘贴错误会把营业款转给别人。",
     "이 컴퓨터":
@@ -3907,6 +3953,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "立即开启",
     "지금 터널 주소 넣기":
       "填入当前隧道地址",
+    "지금은 걷지 않습니다. 받으신 금액이 전부 사장님 것입니다.":
+      "当前不收取。您收到的全部归您。",
     "지금은 닫혀 있습니다":
       "目前打烊中",
     "지금은 암호 없이 보낼 수 있는 상태입니다. 자리를 비우기 전에 잠그세요.":
