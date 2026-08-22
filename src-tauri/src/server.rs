@@ -373,6 +373,7 @@ fn customer_path(path: &str) -> bool {
             | "/api/shop-profile"
             | "/api/ipfs-kind"
             | "/api/chain/asset"
+            | "/api/notices"
             | "/i18n.js"
             | "/ravi.js"
             | "/api/ai-status"
@@ -1083,6 +1084,25 @@ async fn api_directions(
         return (StatusCode::BAD_REQUEST, Json(json!([])));
     }
     (StatusCode::OK, Json(crate::place::directions_links(lat, lon, label)))
+}
+
+/// 이 가게가 붙인 공지. 손님 폰이 주문 화면에서 부른다.
+///
+/// 🔴 공지는 온체인으로 잘 만들어져 있었는데 **손님이 볼 길이 없었다.**
+/// 사장은 보냈다고 여기고 손님은 온 적이 없다 — 그런 기능은 없는 것보다
+/// 나쁘다. "오늘 재료 떨어졌습니다" 를 못 보면 손님은 헛걸음한다.
+async fn api_notices(State(state): State<ServerState>) -> impl IntoResponse {
+    let asset = state
+        .shop
+        .lock()
+        .ok()
+        .and_then(|s| s.get("asset").and_then(Value::as_str).map(str::to_string))
+        .unwrap_or_default();
+    match crate::msg::shop_notices(asset).await {
+        Ok(v) => (StatusCode::OK, Json(v)),
+        // 공지를 못 읽는 것이 주문을 막을 이유는 없다. 빈 목록으로 답한다.
+        Err(_) => (StatusCode::OK, Json(json!({ "notices": [] }))),
+    }
 }
 
 /// 자산 하나에 딸린 것. 지갑이 "내 회원권" 을 열어 볼 때 부른다.
@@ -2121,6 +2141,7 @@ pub async fn start_phone_server(
         .route("/api/shops", get(api_shops))
         .route("/api/ipfs-kind", get(api_ipfs_kind))
         .route("/api/chain/asset", get(api_chain_asset))
+        .route("/api/notices", get(api_notices))
         .route("/api/shop-profile", get(api_shop_profile))
         .route("/api/directions", get(api_directions))
         .route("/buy", get(buy_page))

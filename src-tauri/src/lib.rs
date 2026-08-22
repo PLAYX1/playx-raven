@@ -222,6 +222,8 @@ pub fn run() {
             backup::backup_now,
             backup::backup_auto,
             backup::backup_zip,
+            backup::usb_lock_read,
+            backup::usb_lock_set,
             lockbox::cloud_key_show,
             lockbox::cloud_unlock,
             backup::external_drives,

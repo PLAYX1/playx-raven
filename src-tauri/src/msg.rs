@@ -231,3 +231,73 @@ pub async fn pubsub_send(topic: String, from: String, text: String) -> Result<()
 }
 
 use crate::tunnel::urlencode;
+
+/// 이 가게가 보낸 공지. **손님 폰이 부르는 자리다.**
+///
+/// 🔴 `inbox` 와 다르다. `inbox` 는 *이 지갑이 받은* 것이고, 손님이 봐야 할
+/// 것은 *이 가게가 보낸* 것이다. 그 길이 없어서 공지는 만들어 놓고 아무도
+/// 못 봤다 — 사장은 보냈다고 여기고 손님은 온 적이 없다.
+///
+/// `listassetmessages` 가 없는 노드도 있어서, 없으면 `viewallmessages` 에서
+/// 이 가게 채널만 골라 낸다. 어느 쪽이든 답은 같은 모양이다.
+///
+/// ⚠️ 손님 폰도 부르는 경로라 **가게 것만** 준다. 이 지갑이 구독한 남의
+/// 채널이 섞이면 그건 사장의 관심사가 손님에게 새는 것이다.
+pub async fn shop_notices(owner_asset: String) -> Result<Value, String> {
+    let root = owner_asset.trim().trim_end_matches('!').to_uppercase();
+    if root.is_empty() {
+        return Ok(json!({ "notices": [] }));
+    }
+
+    let raw = call_rpc("viewallmessages", json!([])).await.unwrap_or(json!([]));
+    let list = raw.as_array().cloned().unwrap_or_default();
+
+    let mut out = Vec::new();
+    for m in list.iter() {
+        let ch = m
+            .get("Asset Name")
+            .or_else(|| m.get("asset_name"))
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_uppercase();
+        // 이 가게 채널만. `SHOP!`·`SHOP~공지` 처럼 뿌리가 같은 것을 받는다.
+        let mine = ch == root
+            || ch == format!("{root}!")
+            || ch.starts_with(&format!("{root}~"))
+            || ch.starts_with(&format!("{root}/"));
+        if !mine {
+            continue;
+        }
+
+        let cid = m
+            .get("IPFS Hash")
+            .or_else(|| m.get("ipfs_hash"))
+            .and_then(Value::as_str)
+            .unwrap_or("");
+        let mut body: Option<Value> = None;
+        if !cid.is_empty() {
+            if let Ok(r) = reqwest::Client::new()
+                .get(format!("http://127.0.0.1:8080/ipfs/{cid}"))
+                .timeout(std::time::Duration::from_secs(10))
+                .send()
+                .await
+            {
+                body = r.json::<Value>().await.ok();
+            }
+        }
+        // 본문을 못 읽었으면 넣지 않는다. 제목 없는 빈 칸이 뜨면 손님은
+        // 고장으로 읽는다.
+        let Some(b) = body else { continue };
+        let n = b.get("playx_notice").unwrap_or(&b);
+        out.push(json!({
+            "title": n.get("title").and_then(Value::as_str).unwrap_or(""),
+            "body": n.get("body").and_then(Value::as_str).unwrap_or(""),
+            "image": n.get("image").and_then(Value::as_str).unwrap_or(""),
+            "time": m.get("Time").or_else(|| m.get("time")),
+        }));
+        if out.len() >= 10 {
+            break;
+        }
+    }
+    Ok(json!({ "notices": out }))
+}

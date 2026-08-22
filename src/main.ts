@@ -881,6 +881,42 @@ async function paintFee(): Promise<void> {
   }
 }
 
+
+/// USB 백업을 잠글지. **기본은 잠금**이고, 끄는 것은 사장이 정할 일이다.
+async function wireUsbLock(): Promise<void> {
+  const box = document.getElementById("bk-usblock") as HTMLInputElement | null;
+  const state = document.getElementById("bk-usbstate");
+  if (!box) return;
+  const paint = (on: boolean) => {
+    box.checked = on;
+    if (state) state.textContent = on ? "잠금" : "안 함";
+  };
+  try {
+    const r = await invoke<any>("usb_lock_read");
+    paint(r?.lock !== false);
+  } catch {
+    paint(true);
+  }
+  box.onchange = async () => {
+    // ⚠️ 끄기는 되돌릴 수 있지만, 끈 뒤에 만든 USB 는 벗은 채로 남는다.
+    // 그 사실을 그 자리에서 말한다.
+    if (!box.checked && !confirm(
+      "USB 백업을 잠그지 않으시겠습니까?\n\n" +
+      "그 USB 를 주운 사람이 가게 돈을 가져갈 수 있습니다.\n" +
+      "이미 만들어진 잠긴 백업은 그대로 남습니다.",
+    )) {
+      box.checked = true;
+      return;
+    }
+    try {
+      const r = await invoke<any>("usb_lock_set", { lock: box.checked });
+      paint(r?.lock !== false);
+    } catch {
+      paint(!box.checked);
+    }
+  };
+}
+
 function wireCloudKey(): void {
   const show = document.getElementById("ck-show");
   const box = document.getElementById("ck-key");
@@ -898,6 +934,7 @@ function wireCloudKey(): void {
         box.textContent = "눌러서 보기";
         box.classList.remove("on");
         wireCloudKey();
+    void wireUsbLock();
     void paintFee();
       };
     } catch (e) {

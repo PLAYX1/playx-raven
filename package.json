@@ -10,6 +10,7 @@
     "tauri": "tauri"
   },
   "dependencies": {
+    "@noble/ciphers": "^2.3.0",
     "@ravenrebels/ravencoin-key": "^3.0.5",
     "@ravenrebels/ravencoin-sign-transaction": "^1.1.5",
     "@tauri-apps/api": "^2",

@@ -357,6 +357,36 @@ fn shred(path: &std::path::Path) {
 ///
 /// Seven generations are kept. One generation is not a backup either: yesterday
 /// overwritten by today means the corruption is now in the only copy.
+/// USB 백업도 잠글 것인가. **기본은 잠근다.**
+///
+/// 끄는 것은 사장이 정할 일이다 — 컴퓨터가 죽은 날 열쇠 종이도 못 찾는
+/// 상황을 두려워하는 사람이 있고, 그건 실제로 일어난다. 다만 끄면 그 USB 를
+/// 주운 사람이 가게 돈을 가져간다는 것도 사실이라, 화면이 둘 다 말한다.
+fn usb_should_lock() -> bool {
+    std::fs::read_to_string(crate::paths::app_file("backup-usb.json"))
+        .ok()
+        .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+        .and_then(|v| v.get("lock").and_then(Value::as_bool))
+        .unwrap_or(true)
+}
+
+/// 사장이 보고 바꾸는 자리.
+#[tauri::command]
+pub fn usb_lock_read() -> Value {
+    json!({ "lock": usb_should_lock() })
+}
+
+#[tauri::command]
+pub fn usb_lock_set(lock: bool) -> Result<Value, String> {
+    let p = crate::paths::app_file("backup-usb.json");
+    if let Some(d) = p.parent() {
+        let _ = std::fs::create_dir_all(d);
+    }
+    std::fs::write(&p, serde_json::to_vec(&json!({ "lock": lock })).unwrap_or_default())
+        .map_err(|e| format!("저장하지 못했습니다: {e}"))?;
+    Ok(json!({ "lock": lock }))
+}
+
 #[tauri::command]
 pub async fn backup_auto(now_unix: i64) -> Value {
     let day = now_unix - (now_unix % 86_400);
@@ -411,8 +441,49 @@ pub async fn backup_auto(now_unix: i64) -> Value {
         }
         roll_previous(&folder, "PLAYXRaven");
         // USB 에는 지갑도 넣는다. 손에 쥐고 서랍에 넣는 물건이라 클라우드와 다르다.
-        if let Ok(v) = backup_zip(folder.to_string_lossy().to_string(), "".into(), true).await {
-            outside.push(json!({ "drive": d["name"], "path": v["path"] }));
+        //
+        // 🔴 그래도 **기본은 잠근다.** USB 는 잃어버리고, 빌려주고, 컴퓨터에
+        // 꽂아 둔 채로 자리를 비운다. 클라우드보다 안전한 것이 아니라
+        // **다른 방식으로 위험하다.**
+        //
+        // 열쇠는 클라우드와 같은 것이다(`lockbox`) — 종이에 적힌 그 하나로
+        // 두 곳을 다 연다. 두 개면 하나를 잃는다.
+        let Ok(v) = backup_zip(folder.to_string_lossy().to_string(), "".into(), true).await else {
+            continue;
+        };
+        let plain = PathBuf::from(v["path"].as_str().unwrap_or_default());
+        if usb_should_lock() {
+            let Ok(key) = crate::lockbox::key_get_or_make() else {
+                // 잠글 열쇠를 못 만들면 **벗은 채로 두지 않는다.**
+                let _ = std::fs::remove_file(&plain);
+                outside.push(json!({
+                    "drive": d["name"], "locked": false,
+                    "why": "자물쇠 열쇠를 만들지 못해 USB 에 올리지 않았습니다",
+                }));
+                continue;
+            };
+            let locked = plain.with_extension("zip.잠김");
+            match crate::lockbox::lock_file(&plain, &locked, &key) {
+                Ok(()) => {
+                    let _ = std::fs::remove_file(&plain);
+                    outside.push(json!({
+                        "drive": d["name"], "path": locked.to_string_lossy(), "locked": true,
+                    }));
+                }
+                Err(e) => {
+                    let _ = std::fs::remove_file(&plain);
+                    outside.push(json!({
+                        "drive": d["name"], "locked": false,
+                        "why": format!("잠그지 못해 올리지 않았습니다: {e}"),
+                    }));
+                }
+            }
+        } else {
+            // 사장이 일부러 끈 경우. 급할 때 열쇠 없이 바로 쓰려는 뜻이고,
+            // 그건 그 사람이 정할 일이다 — 다만 화면이 그 뜻을 적어 둔다.
+            outside.push(json!({
+                "drive": d["name"], "path": plain.to_string_lossy(), "locked": false,
+            }));
         }
     }
 
