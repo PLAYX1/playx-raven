@@ -125,7 +125,11 @@ mod tests {
 ///
 /// 개인키는 여기까지 오지 않는다. **공개키만** 온다 — 누가 썼는지는 원래
 /// 릴레이에 공개돼 있는 값이다.
-pub async fn nostr_query(kinds: Vec<i64>, authors: Vec<String>) -> Result<Value, String> {
+pub async fn nostr_query(
+    kinds: Vec<i64>,
+    authors: Vec<String>,
+    to_me: Vec<String>,
+) -> Result<Value, String> {
     // 🔴 글쓴이를 안 적으면 릴레이 전체를 긁는 셈이다. 그런 요청을 계속 보내면
     // 릴레이가 우리를 차단하고, 그러면 모든 가게가 못 쓴다.
     let authors: Vec<String> = authors
@@ -133,15 +137,29 @@ pub async fn nostr_query(kinds: Vec<i64>, authors: Vec<String>) -> Result<Value,
         .filter(|a| a.len() == 64 && a.chars().all(|c| c.is_ascii_hexdigit()))
         .take(10)
         .collect();
-    if authors.is_empty() {
+    // 🔴 1:1 문의(겉봉)는 보낸 이가 임시 열쇠라 authors 로 못 찾는다.
+    // 받는 이 태그로 찾는다.
+    let to_me: Vec<String> = to_me
+        .into_iter()
+        .filter(|a| a.len() == 64 && a.chars().all(|c| c.is_ascii_hexdigit()))
+        .take(3)
+        .collect();
+    if authors.is_empty() && to_me.is_empty() {
         return Err("누구 글인지 알려 주세요.".into());
     }
     let kinds = if kinds.is_empty() { vec![30402] } else { kinds };
 
     let sub = "q1";
-    let req = serde_json::to_string(&json!([
-        "REQ", sub, { "kinds": kinds, "authors": authors, "limit": 200 }
-    ]))
+    let mut f = serde_json::Map::new();
+    f.insert("kinds".into(), json!(kinds));
+    f.insert("limit".into(), json!(200));
+    if !authors.is_empty() {
+        f.insert("authors".into(), json!(authors));
+    }
+    if !to_me.is_empty() {
+        f.insert("#p".into(), json!(to_me));
+    }
+    let req = serde_json::to_string(&json!(["REQ", sub, Value::Object(f)]))
     .map_err(|e| format!("보낼 것을 만들지 못했습니다: {e}"))?;
 
     let mut seen: std::collections::HashMap<String, Value> = std::collections::HashMap::new();

@@ -133,12 +133,24 @@ function contactBlock(e: NostrEvent): string {
   // 숫자·+·- 만 남긴다. 남의 글자가 `tel:` 뒤에 그대로 들어가면 안 된다.
   const tel = raw.replace(/[^0-9+\-]/g, "");
   if (!tel || tel.replace(/\D/g, "").length < 8) {
-    return `<p class="foot" style="margin-top:16px">
-      이 글에는 <b>연락처가 없습니다.</b> 파는 분이 적어 두지 않으셨어요.
-    </p>`;
+    return `<div class="contact">
+      ${buyButton(e)}
+      <a class="cbtn call" href="/wallet#talk?to=${esc(e.pubkey)}">
+        문의하기 <span class="sub2">번호 없이 · 잠겨서 갑니다</span>
+      </a>
+      <p class="foot" style="margin-top:10px">
+        이 글에는 전화번호가 없습니다. <b>문의하기로 말을 거실 수 있어요</b> —
+        번호를 주고받지 않아도 됩니다.
+      </p>
+    </div>`;
   }
   return `<div class="contact">
       ${buyButton(e)}
+      <!-- 🔴 번호 없이 말을 걸 길. 개인이 자전거 한 대 파는데 번호를
+           전 세계에 거는 것은 큰 값이다. -->
+      <a class="cbtn" href="/wallet#talk?to=${esc(e.pubkey)}">
+        문의하기 <span class="sub2">번호 없이 · 잠겨서 갑니다</span>
+      </a>
       <a class="cbtn call" href="tel:${esc(tel)}">전화 걸기</a>
       <a class="cbtn" href="sms:${esc(tel)}">문자 보내기</a>
       <p class="foot" style="margin-top:10px">
@@ -198,9 +210,15 @@ function myPlace(): Promise<{ lat: number; lon: number } | null> {
 
 function draw(): void {
   if (!rows.length) {
-    $("items").innerHTML = `<div class="empty">
-        <img src="/raven-head.png" alt="" width="150" style="display:block;margin:0 auto 12px;border-radius:14px" />
-        지금 올라온 물건이 없습니다.<br />첫 번째가 되실 수 있습니다.
+    // 🔴 `raven-head` 는 **얼굴만 잘라 둔 그림**이다(360x275). 빈 화면처럼
+    // 큰 자리에 쓰면 아래가 없어 보인다 — 대표님이 "GPU 가 안 보인다" 고
+    // 하신 것이 이것이다. 온전한 그림은 `raven-hello`(420x481) 이고,
+    // 거기 GPU 가 들어 있다.
+    $("items").innerHTML = `<div class="ravibox">
+        <img src="/raven-hello.webp" alt="" />
+        <div class="rt">지금 올라온 물건이 없습니다</div>
+        <div class="rs">첫 번째가 되실 수 있습니다.<br />
+          위 <b>내 물건 올리기</b> 를 눌러 보세요 — 공짜입니다.</div>
       </div>`;
     return;
   }
@@ -269,16 +287,36 @@ function showKeyBox(): void {
   if (!box) return;
   const d = document.createElement("div");
   d.className = "keybox";
+  // 🔴 여태 Groq 한 곳만 적어 뒀다. 이미 Grok 이나 Claude 열쇠를 가진
+  // 사람이 "왜 Groq 만 있냐" 를 물었다. 다섯 곳 다 받는다 —
+  // 어느 것을 넣든 **앞글자로 알아본다.**
+  const WHERE: [string, string, string][] = [
+    ["xAI (Grok)", "xai-", "https://console.x.ai/"],
+    ["Anthropic (Claude)", "sk-ant-", "https://console.anthropic.com/settings/keys"],
+    ["Google (Gemini)", "AIza", "https://aistudio.google.com/apikey"],
+    ["OpenAI (ChatGPT)", "sk-", "https://platform.openai.com/api-keys"],
+    ["Groq", "gsk_", "https://console.groq.com/keys"],
+  ];
   d.innerHTML = `
-    <div class="sub" style="margin-bottom:8px">
-      <b>내 열쇠로 계속 쓰기</b><br />
-      Groq 은 <b>무료로</b> 열쇠를 줍니다. 받아서 아래에 붙여 넣으시면
-      한도 없이 물어보실 수 있어요.
+    <div class="sub" style="margin-bottom:10px">
+      <b>내 열쇠로 쓰기</b><br />
+      아래 어느 곳이든 열쇠를 받아 넣으시면 한도 없이 물어보실 수 있어요.
+      <b>Groq 은 공짜</b>이고, 나머지는 쓴 만큼 그 회사에 내십니다.
     </div>
-    <a class="btn" href="https://console.groq.com/keys" target="_blank" rel="noopener">
-      Groq 에서 열쇠 받기</a>
+    <div class="wherelist">
+      ${WHERE.map(([name, pre, u]) =>
+        `<a class="wrow" href="${u}" target="_blank" rel="noopener">
+           <span class="wn">${esc(name)}</span>
+           <span class="wp"><code>${esc(pre)}…</code></span>
+           <span class="wg">받기 →</span>
+         </a>`).join("")}
+    </div>
+    <p class="sub" style="margin:10px 0 0">
+      받은 글자를 그대로 아래에 붙여 넣으세요. 어느 회사 것인지는
+      <b>앞글자로 알아서 알아봅니다.</b>
+    </p>
     <input id="ravi-key" type="password" autocomplete="off" spellcheck="false"
-           placeholder="gsk_ 로 시작하는 열쇠" />
+           placeholder="xai- · sk-ant- · AIza · sk- · gsk_ 로 시작하는 열쇠" />
     <button id="ravi-key-save" style="width:100%;margin-top:8px">저장하고 이어가기</button>
     <p class="foot" style="margin-top:10px">
       열쇠는 <b>이 브라우저에만</b> 저장됩니다. 우리 서버는 물어볼 때 잠깐 쓰고
@@ -296,6 +334,15 @@ function showKeyBox(): void {
     }
     localStorage.setItem("ravi-key", v);
     d.remove();
+    // 깨어난 것을 **바로 보여 준다.** 단추가 그대로면 넣은 줄 모른다.
+    const b = document.getElementById("ravi-ask");
+    if (b) {
+      b.classList.remove("asleep");
+      const i = b.querySelector("img") as HTMLImageElement | null;
+      if (i) i.src = "/raven-head.webp";
+      const l = b.querySelector("span");
+      if (l) l.textContent = "Ravi에게 물어보기";
+    }
     // 넣자마자 다시 물어 준다. "저장했습니다" 만 뜨면 또 눌러야 한다.
     (document.getElementById("ravi-go") as HTMLElement)?.click();
   };
@@ -315,6 +362,24 @@ function wireRaviAsk(): void {
   // 있지도 않은 가게 이야기를 기대하게 만든다.
   const local = /^(localhost|127\.0\.0\.1|\d+\.\d+\.\d+\.\d+)$/.test(location.hostname)
     || location.hostname.endsWith(".local");
+
+  // 🔴 단추가 **자는지 깨어 있는지** 눌러 보기 전에 보여야 한다.
+  // 물어볼 수 있는 자리가 있으면 깨어 있고, 없으면 자고 있다.
+  // 자는 얼굴을 눌러도 열린다 — 거기서 열쇠를 넣으면 그 자리에서 깨어난다.
+  void (async () => {
+    const img = btn.querySelector("img") as HTMLImageElement | null;
+    const lbl = btn.querySelector("span");
+    const awake = await fetch("/api/ai-status")
+      .then((r) => r.json())
+      .then((j) => !!j?.awake)
+      .catch(() => false)
+      // 내 열쇠를 넣어 뒀으면 우리 몫과 상관없이 깨어 있다.
+      .then((ok) => ok || !!localStorage.getItem("ravi-key"));
+    btn.classList.toggle("asleep", !awake);
+    if (img) img.src = awake ? "/raven-head.webp" : "/raven-sleep.webp";
+    if (lbl) lbl.textContent = awake ? "Ravi에게 물어보기" : "Ravi 깨우기";
+  })();
+
   btn.onclick = () => {
     const box = $("sheet");
     box.innerHTML = `<div class="sheetin ravisheet">
@@ -323,12 +388,27 @@ function wireRaviAsk(): void {
         <p class="sub" style="margin:0">${local
           ? "이 가게에 대해 물어보세요."
           : "레이븐코인이든 이 프로그램이든 편하게 물어보세요."}</p>
+        <!-- 🔴 화면 글자는 이미 네 나라 말인데(i18n.js) 라비만 한국어로
+             답했다. 영어 화면을 보던 사람이 갑자기 한글을 만나면 고장으로 읽힌다. -->
+        <div class="langpick">
+          <label class="sub" for="ravi-lang">답할 말</label>
+          <select id="ravi-lang">
+            <option value="ko">한국어</option>
+            <option value="en">English</option>
+            <option value="ja">日本語</option>
+            <option value="zh">中文</option>
+          </select>
+        </div>
         <div class="qa">
           <input id="ravi-q" autocomplete="off" enterkeyhint="send"
                  placeholder="${local ? "견과류 들어간 메뉴 있나요?" : "레이븐코인이 뭔가요?"}" />
           <button id="ravi-go" style="width:100%;margin-top:10px">묻기</button>
         </div>
         <div class="ans" id="ravi-a"></div>
+        <p class="foot" style="margin-top:10px">
+          <a href="#" id="ravi-mykey">내 열쇠로 쓰기 →</a>
+          <span class="sub">Groq 에서 공짜로 받으실 수 있어요</span>
+        </p>
         <p class="foot" style="margin-top:14px">
           ${local
             ? "가게가 올린 정보로만 답합니다. 확실하지 않으면 가게에 직접 확인하세요."
@@ -340,6 +420,14 @@ function wireRaviAsk(): void {
     box.onclick = (ev) => {
       if (ev.target === box) box.style.display = "none";
     };
+    // 화면이 이미 어느 말인지 안다. 라비도 거기서 시작한다.
+    {
+      const sel = $("ravi-lang") as HTMLSelectElement | null;
+      const cur = localStorage.getItem("playx-lang")
+        || (navigator.language || "ko").slice(0, 2);
+      if (sel && ["ko", "en", "ja", "zh"].includes(cur)) sel.value = cur;
+    }
+
     const ask = async () => {
       const q = ($("ravi-q") as HTMLInputElement).value.trim();
       if (!q) return;
@@ -351,7 +439,11 @@ function wireRaviAsk(): void {
         const r = await fetch("/api/ask", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify(mine ? { question: q, key: mine } : { question: q }),
+          body: JSON.stringify({
+            question: q,
+            lang: (($("ravi-lang") as HTMLSelectElement | null)?.value) || "ko",
+            ...(mine ? { key: mine } : {}),
+          }),
         }).then((x) => x.json());
         $("ravi-a").innerHTML = r?.error
           ? `<span class="sub">${esc(r.error)}</span>`
@@ -365,6 +457,25 @@ function wireRaviAsk(): void {
         $("ravi-a").innerHTML = `<span class="sub">지금은 답할 수 없습니다.</span>`;
       }
     };
+    // 🔴 열쇠 칸을 **한도가 찼을 때만** 냈더니 "AI 설정이 어디냐" 를 세 번
+    // 들었다. 못 찾는 설정은 없는 설정이다. 늘 보이되 작게 둔다 —
+    // 평소에는 안 넣어도 되니까.
+    const my = document.getElementById("ravi-mykey");
+    if (my) {
+      my.onclick = (ev) => {
+        ev.preventDefault();
+        showKeyBox();
+      };
+    }
+
+    // 🔴 **자고 있으면 열쇠 칸을 바로 펼친다.** 자는 라비를 눌렀는데 또
+    // 「내 열쇠로 쓰기」를 찾아 눌러야 하면, 그건 깨우는 길이 두 걸음인 것이다.
+    // 자는 것을 눌렀다는 건 이미 "깨우고 싶다" 는 뜻이다.
+    if (btn.classList.contains("asleep")) {
+      $("ravi-a").innerHTML =
+        `<div class="wakeline">라비가 자고 있어요. 열쇠를 넣으면 깨어납니다.</div>`;
+      showKeyBox();
+    }
     ($("ravi-go") as HTMLElement).onclick = () => void ask();
     ($("ravi-q") as HTMLInputElement).onkeydown = (e) => {
       if (e.key === "Enter") void ask();
@@ -408,8 +519,17 @@ async function loadItems(): Promise<void> {
     await Promise.all([loadRate("KRW"), loadRate("USD")]);
     const evs = await query({ kinds: [KIND_LISTING], limit: 200 }, { ms: 8000 });
 
+    // 🔴 여태 **공개 릴레이의 모든 글**을 그대로 보여 줬다. 화면이 남의
+    // 나라 자전거와 `180,000 sats`(비트코인 단위)로 가득했다 — 40~70대에게는
+    // 못 읽고 못 사는 목록이고, 우리 지갑으로는 살 수도 없다.
+    //
+    // 남의 글로 활기를 연출하면 가짜 장터가 더 그럴듯해질 뿐이다. 우리 것이
+    // 0개면 **0개라고 말하고 첫 사람을 부르는 편**이 낫다.
+    //
+    // `isRaven` 이 보는 것: 값이 RVN 이거나, `t` 태그가 rvn·ravencoin·playx.
     rows = evs
       .filter((e) => tag(e, "status") !== "sold")
+      .filter(isRaven)
       .map((e) => {
         const gh = tag(e, "g");
         const at = gh ? geohashToLatLon(gh) : null;

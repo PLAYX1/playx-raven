@@ -284,9 +284,46 @@
       .cbtn.buy { flex-direction: column; gap: 2px; min-height: 64px;
         background: var(--accent); border-color: var(--accent); color: #fff; }
       .cbtn .sub2 { font-size: 13px; font-weight: 400; opacity: .85; }
+      /* 자는 라비. 눌러도 열린다 — 거기서 열쇠를 넣으면 그 자리에서 깨어난다. */
+      .raviask.asleep img { filter: saturate(.5) opacity(.8); }
+      .raviask.asleep { opacity: .92; }
+      /* 열쇠 링크. 평소엔 작게 — 안 넣어도 되니까. 다만 **늘 보인다.** */
+      #ravi-mykey { color: var(--ravi); font-weight: 600; text-decoration: none;
+        display: inline-block; min-height: 44px; line-height: 44px; }
+      .wakeline { padding: 10px 12px; border-radius: 12px; background: var(--ravi-tint);
+        color: var(--fg); font-size: 15px; margin-bottom: 10px; }
+      .keybox .btn.go { background: var(--ravi); border-color: var(--ravi); color: #fff; }
+      /* 어디서 열쇠를 받나. 다섯 줄이라 표로 두면 눈이 훑는다. */
+      .wherelist { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+      .wrow { display: grid; grid-template-columns: 1fr auto auto; gap: 10px;
+        align-items: center; padding: 0 12px; min-height: 52px;
+        border-bottom: 1px solid var(--line); text-decoration: none; color: var(--fg); }
+      .wrow:last-child { border-bottom: 0; }
+      .wn { font-size: 15px; font-weight: 600; }
+      .wp code { font-size: 13px; color: var(--muted); }
+      .wg { font-size: 14px; color: var(--ravi); font-weight: 600; white-space: nowrap; }
+      /* 답할 말. 작게 두되 늘 보인다 — 외국 손님이 못 찾으면 없는 것과 같다. */
+      .langpick { display: flex; align-items: center; gap: 8px; margin: 10px 0 6px; }
+      .langpick select { min-height: 44px; font-size: 15px; padding: 0 8px;
+        border: 1px solid var(--line); border-radius: 10px;
+        background: var(--bg); color: var(--fg); }
+      /* 🔴 44px 미만은 손가락으로 못 누른다. 이 둘이 39px 이었다 —
+         「묻기」는 이 시트에서 제일 많이 눌리는 단추다. */
+      #ravi-go, #ravi-key-save { min-height: 48px; font-size: 16px; }
 </style>
     <script src="/i18n.js"></script>
     <script src="/ravi.js"></script>
+      <!-- 카톡·텔레그램에 링크를 붙였을 때 뜨는 카드.
+         ⚠️ 매장 노드는 자기 주소(192.168.x)라 바깥에서 그림을 못 가져온다.
+            그래서 그림은 **웹 주소**를 가리킨다 — 가게 안이든 밖이든 뜬다. -->
+    <link rel="icon" href="/faces/raven-head.webp" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="가게와 물건 찾기" />
+    <meta property="og:description" content="블록체인에서 직접 읽어 옵니다." />
+    <meta property="og:image" content="https://rvn.ex.erci.se/og-raven.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
   </head>
   <body>
     <!-- 들어올 문만 만들고 나갈 문을 안 만들었다. 폰에 뒤로가기가 있지만,
@@ -593,7 +630,13 @@
       $("q").oninput = render;
       load();
     </script>
-      <script src="/shops.bundle.js"></script>
+      <!-- 🔴 `defer` 가 꼭 있어야 한다. 이 스크립트는 617줄에 있고 라비 단추는
+         620줄에 있다 — 스크립트가 먼저 돌면 그 단추가 아직 없어서
+         `getElementById("ravi-ask")` 가 null 이고, `wireRaviAsk` 가 조용히
+         빠져나간다. 그래서 **단추는 보이는데 눌러도 아무 일이 없었다.**
+         (같은 파일의 탭 단추는 320줄이라 멀쩡히 붙는다 — 그래서 더 안 보였다)
+         defer 는 문서를 다 읽은 뒤에 돌린다. -->
+    <script defer src="/shops.bundle.js"></script>
       <!-- 손님도 물어볼 수 있어야 한다. 여기 있는 사람은 사장이 아니라
          손님이라 **가게 정보만** 답하는 쪽을 쓴다. -->
     <button class="raviask" id="ravi-ask">

@@ -1162,10 +1162,13 @@ struct QueryFilter {
     kinds: Vec<i64>,
     #[serde(default)]
     authors: Vec<String>,
+    /// 받는 이 태그. 1:1 문의는 이것으로만 찾을 수 있다.
+    #[serde(default, rename = "#p")]
+    to_me: Vec<String>,
 }
 
 async fn api_nostr_query(Json(body): Json<QueryBody>) -> impl IntoResponse {
-    match crate::nostrpub::nostr_query(body.filter.kinds, body.filter.authors).await {
+    match crate::nostrpub::nostr_query(body.filter.kinds, body.filter.authors, body.filter.to_me).await {
         Ok(v) => (StatusCode::OK, Json(v)),
         Err(e) => (StatusCode::BAD_GATEWAY, Json(json!({ "error": e }))),
     }

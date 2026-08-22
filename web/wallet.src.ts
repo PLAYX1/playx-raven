@@ -17,6 +17,7 @@ import RavencoinKey from "@ravenrebels/ravencoin-key";
 import { sign } from "@ravenrebels/ravencoin-sign-transaction";
 import { wordlists } from "bip39";
 import { signEvent, KIND_LISTING, type NostrEvent } from "./nostr";
+import * as nip17 from "./nip17";
 import { schnorr } from "@noble/curves/secp256k1";
 import { bytesToHex } from "@noble/hashes/utils";
 
@@ -709,6 +710,159 @@ function tagOf(e: NostrEvent, name: string): string {
   return e.tags.find((t) => t[0] === name)?.[1] || "";
 }
 
+
+// ── 1:1 문의 ────────────────────────────────────────────────────────────
+//
+// 🔴 여태 물건 상세에는 **전화번호**뿐이었다. 그건 통하지만 번호가 공개
+// 릴레이에 올라가고, 봇도 읽고, 지워도 회수되지 않는다. 개인이 자전거 한 대
+// 파는데 번호를 전 세계에 거는 것은 큰 값이다.
+//
+// 이제 번호 없이 말을 걸 수 있다. 겉봉이 세 겹이라 **릴레이도 누가 누구에게
+// 보냈는지 모른다**(`nip17.ts` 첫 주석).
+//
+// ⚠️ 이 암호는 아무도 검사하지 않았다. 화면에서 그렇게 말한다.
+
+type Talk = { pub: string; last: number; lines: { me: boolean; at: number; text: string }[] };
+
+let talks: Record<string, Talk> = {};
+
+/** 릴레이에서 나에게 온 겉봉을 받아 대화로 푼다. */
+async function loadTalks(): Promise<void> {
+  if (!hdKey) return;
+  const sec = nostrSecret();
+  const me = nip17.pubOf(sec);
+  let events: any[] = [];
+  try {
+    const r = await fetch("/api/nostr/query", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      // 🔴 겉봉은 보낸 이가 임시 열쇠라 `authors` 로 못 찾는다.
+      // 받는 이 태그로만 찾을 수 있다.
+      body: JSON.stringify({ filter: { kinds: [nip17.KIND_WRAP], "#p": [me], limit: 200 } }),
+    }).then((x) => x.json());
+    events = r?.events || [];
+  } catch {
+    return;
+  }
+
+  const next: Record<string, Talk> = {};
+  for (const g of events) {
+    const r = nip17.unwrap(sec, g);
+    // 못 여는 것은 남의 겉봉이다. 오류가 아니다.
+    if (!r) continue;
+    const other = r.pubkey === me ? (r.tags.find((t: string[]) => t[0] === "p")?.[1] ?? "") : r.pubkey;
+    if (!other) continue;
+    const t = (next[other] ||= { pub: other, last: 0, lines: [] });
+    t.lines.push({ me: r.pubkey === me, at: r.created_at, text: r.content });
+    t.last = Math.max(t.last, r.created_at);
+  }
+  for (const t of Object.values(next)) t.lines.sort((a, b) => a.at - b.at);
+  talks = next;
+  renderTalks();
+}
+
+function renderTalks(): void {
+  const box = $("talks");
+  if (!box) return;
+  const list = Object.values(talks).sort((a, b) => b.last - a.last);
+  if (!list.length) {
+    box.innerHTML = `<p class="sub">아직 온 문의가 없습니다.</p>`;
+    return;
+  }
+  box.innerHTML = list
+    .map((t) => {
+      const last = t.lines[t.lines.length - 1];
+      return `<div class="talk" data-pub="${escapeHtml(t.pub)}">
+        <div class="tw">${escapeHtml(t.pub.slice(0, 8))}…</div>
+        <div class="tl">${escapeHtml((last?.text || "").slice(0, 40))}</div>
+        <div class="tt">${new Date(t.last * 1000).toLocaleDateString()}</div>
+      </div>`;
+    })
+    .join("");
+  box.querySelectorAll<HTMLElement>(".talk").forEach((el) => {
+    el.onclick = () => openTalk(el.dataset.pub!);
+  });
+}
+
+/** 한 사람과의 대화를 연다. */
+function openTalk(pub: string): void {
+  const box = $("sheet");
+  if (!box) return;
+  const t = talks[pub];
+  const lines = (t?.lines || [])
+    .map(
+      (l) =>
+        `<div class="bub ${l.me ? "me" : "you"}">${escapeHtml(l.text)}</div>`,
+    )
+    .join("");
+  box.innerHTML = `<div class="sheetin">
+      <button class="sheetx" id="sheet-close">닫기</button>
+      <h2 style="margin:0 0 4px;font-size:18px">${escapeHtml(pub.slice(0, 12))}…</h2>
+      <p class="sub" style="margin:0 0 10px">
+        번호를 주고받지 않아도 됩니다. <b>릴레이도 누가 누구에게 보냈는지
+        모릅니다.</b>
+      </p>
+      <div class="bubs">${lines || `<p class="sub">첫 말을 걸어 보세요.</p>`}</div>
+      <div class="qa" style="margin-top:10px">
+        <input id="talk-in" autocomplete="off" enterkeyhint="send"
+               placeholder="예: 아직 있나요? 내일 볼 수 있을까요?" />
+        <button id="talk-go" style="width:100%;margin-top:8px">보내기</button>
+      </div>
+      <p class="foot" style="margin-top:12px">
+        ⚠️ 이 암호는 <b>아무도 검사하지 않았습니다.</b> 잠겨서 가지만,
+        큰일이 걸린 말은 여기 적지 마세요.
+      </p>
+    </div>`;
+  box.style.display = "";
+  ($("sheet-close") as HTMLElement).onclick = () => (box.style.display = "none");
+  box.onclick = (ev) => {
+    if (ev.target === box) box.style.display = "none";
+  };
+  const send = async () => {
+    const inp = $("talk-in") as HTMLInputElement;
+    const text = inp.value.trim();
+    if (!text) return;
+    const btn = $("talk-go") as HTMLButtonElement;
+    btn.disabled = true;
+    btn.textContent = "보내는 중…";
+    try {
+      await sendTalk(pub, text);
+      inp.value = "";
+      await loadTalks();
+      openTalk(pub);
+    } catch (e) {
+      btn.disabled = false;
+      btn.textContent = "보내기";
+      say("talk-err", String((e as Error)?.message || e), "err");
+    }
+  };
+  ($("talk-go") as HTMLElement).onclick = () => void send();
+  ($("talk-in") as HTMLInputElement).onkeydown = (e) => {
+    if (e.key === "Enter") void send();
+  };
+}
+
+/**
+ * 한 마디를 보낸다.
+ *
+ * ⚠️ **겉봉을 둘 만든다** — 상대 것과 내 것. 내 것을 안 만들면 내가 보낸
+ * 말을 내가 다시 못 읽는다(릴레이에는 상대만 열 수 있는 것이 올라간다).
+ */
+async function sendTalk(toPub: string, text: string): Promise<void> {
+  if (!hdKey) throw new Error("지갑을 먼저 열어 주세요.");
+  const sec = nostrSecret();
+  const me = nip17.pubOf(sec);
+  for (const forWhom of [toPub, me]) {
+    const gift = nip17.wrap(sec, toPub, forWhom, text);
+    const r = await fetch("/api/nostr/publish", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(gift),
+    }).then((x) => x.json());
+    if (r?.error) throw new Error(r.error);
+  }
+}
+
 async function loadMine(): Promise<void> {
   const box = $("sl-mine");
   if (!box) return;
@@ -933,6 +1087,68 @@ async function fillGeo(): Promise<void> {
   }
 }
 
+
+/**
+ * 팔 물건 사진을 올린다.
+ *
+ * 🔴 「사진 없는 중고 글」은 안 팔린다. 그런데 여태 **주소를 붙여넣는 것**만
+ * 있었다 — 폰으로 찍은 사진은 주소가 없으니 사실상 못 올렸다.
+ *
+ * ## 어디로 가나
+ *
+ * Nostr 미디어 서버(NIP-96)다. **우리가 갖고 있지 않는다** — 우리 서버는
+ * 날라 주기만 한다. 사진 창고를 우리가 쥐면 우리가 문을 닫는 날 모두의
+ * 사진이 사라진다.
+ *
+ * ⚠️ 대신 **그 서버가 문을 닫으면 사진이 사라진다.** 우리도 되살릴 수 없다.
+ * 화면에서 그렇게 말한다.
+ *
+ * ## 서명
+ *
+ * NIP-98 — 우리 열쇠로 서명한 표를 같이 보낸다. 미디어 서버는 그게 없으면
+ * 거절한다(실측: 둘 다 401). 개인키는 이 함수 밖으로 안 나간다.
+ */
+async function uploadPhoto(file: File): Promise<string> {
+  if (!hdKey) throw new Error("지갑을 먼저 열어 주세요.");
+  const url = `${location.origin}/api/photo`;
+
+  // 🔴 표 안에는 **어느 주소로 가는 것인지**(`u`)가 들어가고, 미디어 서버는
+  // 그게 **자기 주소**여야 받는다. 우리 주소로 서명한 표를 넘기면 401 이다 —
+  // 실측으로 그렇게 막혔다. 그래서 어디로 갈 수 있는지 먼저 묻고,
+  // **호스트마다 하나씩** 표를 만든다.
+  //
+  // 우리 서버가 대신 서명할 수는 없다 — 그러려면 개인키가 거기 있어야 하고,
+  // 그건 이 지갑이 절대 하지 않는 일이다.
+  const hosts: string[] = await fetch(url)
+    .then((x) => x.json())
+    .then((j) => j?.hosts || [])
+    .catch(() => []);
+  if (!hosts.length) throw new Error("사진 서버를 찾지 못했습니다.");
+
+  const sec = nostrSecret();
+  const tokens: Record<string, string> = {};
+  for (const h of hosts) {
+    const ev = signEvent(sec, {
+      kind: 27235, // NIP-98
+      created_at: Math.floor(Date.now() / 1000),
+      tags: [["u", h], ["method", "POST"]],
+      content: "",
+    });
+    tokens[h] = "Nostr " + btoa(JSON.stringify(ev));
+  }
+
+  const fd = new FormData();
+  fd.append("file", file);
+  const r = await fetch(url, {
+    method: "POST",
+    body: fd,
+    headers: { "x-nostr-auth": JSON.stringify(tokens) },
+  });
+  const j = await r.json();
+  if (!r.ok || !j?.url) throw new Error(j?.error || "사진을 올리지 못했습니다.");
+  return String(j.url);
+}
+
 async function sellPublish(): Promise<void> {
   const v = (id: string) => ($(id) as HTMLInputElement | HTMLTextAreaElement).value.trim();
   const title = v("sl-title");
@@ -1078,8 +1294,17 @@ function unlocked(m: string): void {
   // 「물건 올리기」로 들어온 사람을 지갑 첫 화면에 떨궈 두면, 왜 여기 왔는지
   // 잊는다. 잠금을 푼 다음 하려던 자리로 이어 준다.
   // 「이 물건 사기」로 들어왔으면 보내기 화면을 채운 채로 연다.
-  if (!openBuyFromHash()) show(location.hash === "#sell" ? "sell" : "main");
+  if (!openBuyFromHash()) {
+    show(location.hash === "#sell" ? "sell" : "main");
+    // 물건 화면에서 「문의하기」로 들어오면 그 사람과 바로 연다.
+    const m = /^#talk\?to=([0-9a-f]{64})$/.exec(location.hash);
+    if (m) {
+      show("sell");
+      void loadTalks().then(() => openTalk(m[1]));
+    }
+  }
   if (location.hash === "#sell") void loadMine();
+  void loadTalks();
   sayWhereThisWalletLives();
 
   // 잠그지 않은 지갑이면 그 사실을 계속 보여 준다. 한 번 뜨고 사라지는 경고는
@@ -1789,6 +2014,26 @@ function wire(): void {
   $("sell-back").onclick = () => show("main");
   $("sl-go").onclick = () => void sellPublish();
   $("sl-geo-go").onclick = () => void fillGeo();
+  $("sl-photo-go").onclick = () => {
+    const pick = $("sl-photo") as HTMLInputElement;
+    pick.value = "";
+    pick.click();
+  };
+  ($("sl-photo") as HTMLInputElement).onchange = async () => {
+    const f = ($("sl-photo") as HTMLInputElement).files?.[0];
+    if (!f) return;
+    const note = $("sl-photo-note");
+    note.textContent = "사진을 올리는 중…";
+    try {
+      const url = await uploadPhoto(f);
+      ($("sl-image") as HTMLInputElement).value = url;
+      // 올라간 것을 **보여 준다.** 주소만 적히면 제대로 갔는지 알 수 없다.
+      note.innerHTML = `<img src="${escapeHtml(url)}" alt="" class="shot" />
+        <div class="sub">올렸습니다. 다른 사진을 고르시면 바뀝니다.</div>`;
+    } catch (e) {
+      note.innerHTML = `<span class="err">${escapeHtml(String((e as Error)?.message || e))}</span>`;
+    }
+  };
 
   for (const ev of ["click", "keydown", "touchstart"]) {
     document.addEventListener(ev, touchIdle, { passive: true });
