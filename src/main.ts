@@ -1206,6 +1206,8 @@ function setMyTiles(v: MyTile[]) {
 }
 
 type Tile = {
+  /** 가게가 없을 때 맨 앞에 서는 칸. 눈에 띄게 채워 그린다. */
+  lead?: boolean;
   mine?: boolean;
   icon: string;
   label: string;
@@ -1219,7 +1221,27 @@ const I = (d: string) =>
 
 function raviTiles(): Tile[] {
   const closed = ($("sh-closednow") as HTMLInputElement | null)?.checked ?? false;
-  return [
+  const val = (id: string) => ($(id) as HTMLInputElement)?.value.trim() || "";
+  const hasShop = !!(val("sh-ko") || val("sh-en"));
+
+  /* 🔴 가게가 아직 없으면 **가게 만들기가 맨 앞**이다.
+     대표님 지적: "주문 관련 한 것은 있는데 가게 만들기는 없나?"
+     맞다 — 오늘 매출·들어온 주문은 가게가 있어야 뜻이 있는 것인데,
+     정작 가게를 만드는 자리가 없었다. 없는 사람에게 첫 칸은 그것이다. */
+  const first: Tile[] = hasShop ? [] : [{
+    icon: I('<path d="M4 9l1.6-4.2h12.8L20 9"/><path d="M4.5 9h15v10.5h-15z"/><path d="M9.5 19.5v-6h5v6"/><path d="M12 3.5v2M10.5 4.5h3"/>'),
+    label: "가게 만들기",
+    sub: "여기서 시작합니다",
+    lead: true,
+    do: () => { showPage("shop"); shopTab("mine");
+      // 「가게 정보 · 처음 한 번」은 접혀 있다. 여기로 온 사람에게는 펼쳐 준다.
+      const d = document.querySelector<HTMLDetailsElement>("#shoptab-mine details.onceoff");
+      if (d) d.open = true;
+      setTimeout(() => $("sh-ko")?.focus(), 250);
+    },
+  }];
+
+  return first.concat([
     {
       icon: I('<path d="M4 19V9M10 19V5M16 19v-7M21 19H3"/>'),
       label: "오늘 얼마",
@@ -1291,7 +1313,7 @@ function raviTiles(): Tile[] {
       say: m.say,
       mine: true,
     })),
-  ];
+  ]);
 }
 
 /** 라비 화면을 그린다. 상태가 바뀔 때마다 다시 부른다. */
@@ -1304,20 +1326,33 @@ function paintRavi() {
   const nodeDown = !(nodeUp ?? true);
   const face = $("ravi-face") as HTMLImageElement | null;
   if (face) {
-    face.src = nodeDown ? "/raven-sleep.webp" : "/raven-hello.webp";
+    // 깨어 있으면 **정면 얼굴**, 자면 자는 그림. 헤더(전신)와 다른 그림이라
+    // 한 화면에 같은 것이 둘로 보이지 않는다.
+    face.src = nodeDown ? "/raven-sleep.webp" : "/raven-face.webp";
     face.classList.toggle("asleep", nodeDown);
   }
   const hi = $("ravi-hello");
   const sub = $("ravi-sub");
   if (hi && sub) {
+    /* 🔴 가게를 만들었으면 **그 이름이 여기 뜬다.**
+       대표님 지적: "가게 만들면 가게 이름이 보이는 화면과 통합되어야 하지
+       않나?" 맞다 — 매일 여는 화면에 자기 가게 이름이 없으면, 이 프로그램이
+       내 가게의 것이라는 느낌이 안 든다. 왼쪽 메뉴에만 있었다. */
+    const val = (id: string) => ($(id) as HTMLInputElement)?.value.trim() || "";
+    const shop = val("sh-ko") || val("sh-en");
+
     if (nodeDown) {
       hi.textContent = "노드가 꺼져 있어요.";
       sub.innerHTML = "결제가 들어와도 확인을 못 합니다. <b>이 컴퓨터</b>에서 켜 주세요.";
+    } else if (!shop) {
+      // 가게가 없는 사람에게는 **가게 이야기부터** 한다.
+      hi.textContent = "가게부터 만들까요?";
+      sub.textContent = "이름 하나면 시작됩니다. 나머지는 나중에 채우셔도 됩니다.";
     } else if (!aiProvider) {
-      hi.textContent = "안녕하세요, 라비입니다.";
+      hi.textContent = shop;
       sub.innerHTML = "아래 아이콘은 지금 바로 됩니다. 말로 시키시려면 <b>이 컴퓨터 → AI 열쇠</b>를 한 번만 넣어 주세요.";
     } else {
-      hi.textContent = "안녕하세요, 라비입니다.";
+      hi.textContent = shop;
       sub.textContent = "무엇을 할까요? 아래를 누르거나, 그냥 말씀하세요.";
     }
   }
@@ -1340,7 +1375,7 @@ function paintRavi() {
     .map((t, i) => {
       const needs = t.say !== undefined;
       const cls = ["tile", needs ? "needsai" : "", needs && !aiProvider ? "asleep" : "",
-                   t.mine ? "mytile" : ""].join(" ");
+                   t.mine ? "mytile" : "", t.lead ? "leadtile" : ""].join(" ");
       // 내가 만든 단추만 지울 수 있다. 붙박이에는 ×가 없다 —
       // 지워지는 것과 안 지워지는 것이 같아 보이면 손이 멈춘다.
       const x = t.mine ? `<span class="tilex" data-del="${escapeHtml(t.label)}" title="이 단추 지우기">×</span>` : "";
@@ -5843,6 +5878,9 @@ function labelShopNav() {
   const label = link?.querySelector("span");
   if (label) label.textContent = name || "내 가게";
   else if (link) link.textContent = name || "내 가게";
+  // 라비 화면의 인사말과 「아직 안 된 것」 줄도 같이 따라가야 한다.
+  // 안 그러면 가게를 만들어 놓고도 첫 화면은 「가게부터 만들까요?」 그대로다.
+  if (document.getElementById("ravi-tiles")) paintRavi();
   const title = document.querySelector("#page-shop .title");
   if (title) title.textContent = name || "내 가게";
 }

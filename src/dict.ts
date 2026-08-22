@@ -133,6 +133,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Shop payments · vending machine · buying second-hand items",
     "가게 등록":
       "Register the shop",
+    "가게 만들기":
+      "Create a shop",
     "가게 소개":
       "Shop introduction",
     "가게 이름 (손님이 읽는 이름)":
@@ -147,6 +149,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Shop / brand (root)",
     "가게가 받은 총액입니다. 부가세 구분과 과세 여부는 사업자 유형에 따라 달라서 여기서 계산하지 않습니다 — 세무 담당자에게 이 파일을 그대로 주시면 됩니다.":
       "This is the total the shop received. VAT treatment depends on your business type, so we do not calculate it here — just hand this file to your accountant as it is.",
+    "가게부터 만들까요?":
+      "Shall we create your shop first?",
     "가게에만 씁니다":
       "Only for the shop",
     "가격":
@@ -805,6 +809,8 @@ export const DICT: Record<string, Record<string, string>> = {
       ". If nobody keeps them, they become unfindable — while this computer is on, this computer keeps them.",
     "엑셀 파일로 내보내기":
       "Export as a spreadsheet",
+    "여기서 시작합니다":
+      "Start here",
     "여는 중…":
       "Opening…",
     "연결과 뒷일을 줄입니다":
@@ -959,6 +965,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Name (branch name)",
     "이름 · 사진 · 주소 · 영업시간 · 등록":
       "Name · photo · address · hours · registration",
+    "이름 하나면 시작됩니다. 나머지는 나중에 채우셔도 됩니다.":
+      "One name is enough to start. You can fill in the rest later.",
     "이름·전화 뒷자리·회원번호 아무거나 치면 됩니다.":
       "Type a name, the last digits of a phone number, or a member number — any of them.",
     "이름이 체인에 영구히 남고 RVN이 소각됩니다. 이름을 그대로 입력하세요.":
@@ -1427,6 +1435,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "店舗決済・自動販売機・中古品の購入",
     "가게 등록":
       "お店を登録",
+    "가게 만들기":
+      "お店を作る",
     "가게 소개":
       "お店の紹介",
     "가게 이름 (손님이 읽는 이름)":
@@ -1441,6 +1451,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "お店・ブランド（ルート）",
     "가게가 받은 총액입니다. 부가세 구분과 과세 여부는 사업자 유형에 따라 달라서 여기서 계산하지 않습니다 — 세무 담당자에게 이 파일을 그대로 주시면 됩니다.":
       "お店が受け取った総額です。消費税の扱いは事業形態によって異なるためここでは計算しません — このファイルをそのまま税務担当者に渡してください。",
+    "가게부터 만들까요?":
+      "まずお店を作りましょうか？",
     "가게에만 씁니다":
       "お店専用です",
     "가격":
@@ -2099,6 +2111,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "にあります。誰も持っていないと見つけられなくなります — このパソコンが起動している間は、このパソコンが持っています。",
     "엑셀 파일로 내보내기":
       "表計算ファイルで書き出す",
+    "여기서 시작합니다":
+      "ここから始めます",
     "여는 중…":
       "開いています…",
     "연결과 뒷일을 줄입니다":
@@ -2253,6 +2267,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "名前（支店名）",
     "이름 · 사진 · 주소 · 영업시간 · 등록":
       "名前・写真・住所・営業時間・登録",
+    "이름 하나면 시작됩니다. 나머지는 나중에 채우셔도 됩니다.":
+      "名前が一つあれば始められます。残りは後で埋めても大丈夫です。",
     "이름·전화 뒷자리·회원번호 아무거나 치면 됩니다.":
       "名前・電話番号の下4桁・会員番号のどれでも入力できます。",
     "이름이 체인에 영구히 남고 RVN이 소각됩니다. 이름을 그대로 입력하세요.":
@@ -2721,6 +2737,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "店铺收款 · 自动售货机 · 购买二手物品",
     "가게 등록":
       "注册店铺",
+    "가게 만들기":
+      "创建店铺",
     "가게 소개":
       "店铺简介",
     "가게 이름 (손님이 읽는 이름)":
@@ -2735,6 +2753,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "店铺 / 品牌（根）",
     "가게가 받은 총액입니다. 부가세 구분과 과세 여부는 사업자 유형에 따라 달라서 여기서 계산하지 않습니다 — 세무 담당자에게 이 파일을 그대로 주시면 됩니다.":
       "这是店铺收到的总额。增值税处理因经营主体类型而异，我们不在此计算 —— 把这个文件原样交给会计即可。",
+    "가게부터 만들까요?":
+      "先来创建您的店铺吧？",
     "가게에만 씁니다":
       "只用于店里",
     "가격":
@@ -3393,6 +3413,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "中。如果没人保存，就再也找不到 —— 只要这台电脑开着，它就替您保存。",
     "엑셀 파일로 내보내기":
       "导出为表格文件",
+    "여기서 시작합니다":
+      "从这里开始",
     "여는 중…":
       "正在打开…",
     "연결과 뒷일을 줄입니다":
@@ -3547,6 +3569,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "名称（分店名）",
     "이름 · 사진 · 주소 · 영업시간 · 등록":
       "名称 · 照片 · 地址 · 营业时间 · 注册",
+    "이름 하나면 시작됩니다. 나머지는 나중에 채우셔도 됩니다.":
+      "有一个名字就能开始。其余的可以以后再填。",
     "이름·전화 뒷자리·회원번호 아무거나 치면 됩니다.":
       "输入姓名、手机尾号或会员编号，任意一种都可以。",
     "이름이 체인에 영구히 남고 RVN이 소각됩니다. 이름을 그대로 입력하세요.":

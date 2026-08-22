@@ -586,6 +586,8 @@
       /* 🔴 그림이 360x275 인데 52x52 정사각에 밀어 넣어 **머리가 잘려** 있었다.
          Ravi 는 GPU 옆에 앉아 있는 게 전부인 그림이라, 얼굴만 잘라 놓으면
          무엇을 하는 캐릭터인지 사라진다. 원래 비율로 통째로 보여 준다. */
+      /* 전신 그림이라 세로가 길다(420x481). height:auto 로 비율을 지킨다 —
+         고정하면 GPU 가 잘리거나 라비가 찌그러진다. */
       .brandravi { width: 64px; height: auto; border-radius: 12px; flex: none;
         box-shadow: 0 2px 10px color-mix(in srgb, var(--ravi) 26%, transparent); }
       .brand h1 { font-size: 15px; line-height: 1.25; white-space: nowrap; }
@@ -698,7 +700,8 @@
          떠 있던 대화창을 화면 안으로 들였다. 아래 규칙은 그 대화창을
          '떠 있는 상자'에서 '이 화면의 본체'로 바꾸는 것이다. */
       .ravihero { display: flex; align-items: center; gap: 16px; margin: 0 0 16px; }
-      .ravihero img { width: 88px; height: auto; flex: none;
+      /* 정면 얼굴(420x420, 정사각). 둥글게 두면 말을 거는 자리로 읽힌다. */
+      .ravihero img { width: 88px; height: auto; border-radius: 18px; flex: none;
                       transition: filter .5s, opacity .5s; }
       /* 열쇠가 없으면 자고 있다. 흐리게 하되 지우지는 않는다 —
          없는 것처럼 보이면 깨울 생각도 안 한다. */
@@ -763,6 +766,13 @@
         content: "예: 오늘 재료 떨어졌다고 손님에게 알려줘 · 아메리카노 4500원 넣어줘 · 맨날 하는 일이니 단추로 만들어줘";
         display: block; color: var(--faint); font-size: 14px; line-height: 1.9; padding: 10px 0 14px;
       }
+
+      /* 가게가 없을 때 맨 앞 칸. 화면에서 **채운 것은 이것 하나**다 —
+         지금 할 일이 하나뿐일 때는 그것만 채워야 눈이 안 헤맨다. */
+      .tile.leadtile { background: var(--ravi); border-color: var(--ravi); color: #fff; }
+      .tile.leadtile .tsub { color: rgba(255,255,255,.88); }
+      .tile.leadtile svg { opacity: 1; }
+      .tile.leadtile:hover { background: color-mix(in srgb, var(--ravi) 88%, #000); }
 
       /* 내가 만든 단추. 별표 하나로 우리 것과 구별된다. */
       .tile.mytile { border-style: dashed; }
@@ -1055,7 +1065,10 @@
 
     <nav>
       <div class="brand" data-tauri-drag-region>
-        <img src="/raven-head.webp" alt="" class="brandravi" data-tauri-drag-region />
+        <!-- 🔴 여기는 `raven-head`(360x275, **얼굴만 잘라 둔 그림**)였다.
+                 대표님: "라비와 GPU 그래픽카드 전체가 보이면 좋겠다".
+                 온전한 `raven-hello`(420x481)로 바꾼다 — 아래 GPU 가 보인다. -->
+            <img src="/raven-hello.webp" alt="" class="brandravi" data-tauri-drag-region />
         <div data-tauri-drag-region>
           <h1 data-tauri-drag-region>PLAY X Raven</h1>
           <span data-tauri-drag-region>v0.1</span>
@@ -1304,7 +1317,9 @@
            같은 길이라 배울 것이 하나뿐이다. -->
       <section class="page on" id="page-ravi">
         <div class="ravihero">
-          <img id="ravi-face" src="/raven-hello.webp" alt="" />
+          <!-- 🔴 여기가 헤더와 **같은 그림**이었다. 한 화면에 같은 그림이 둘이면
+                 하나는 낭비다. 여기는 말을 거는 자리라 **정면 얼굴**이 맞다. -->
+            <img id="ravi-face" src="/raven-face.webp" alt="" />
           <div class="ravihi">
             <h2 id="ravi-hello">안녕하세요, 라비입니다.</h2>
             <p id="ravi-sub" class="lede">무엇을 할까요? 아래를 누르거나, 그냥 말씀하세요.</p>
