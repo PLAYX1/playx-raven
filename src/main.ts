@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
 import { check as checkUpdate } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
+import { lang, setLang, LANG_NAMES, startI18n } from "./i18n";
 
 type Asset = {
   name: string;
@@ -6712,6 +6713,28 @@ window.addEventListener("DOMContentLoaded", () => {
   loadIpfsConf();
   checkHealth();
   setInterval(checkHealth, 30000);
+  /* ── 말 고르는 자리 ────────────────────────────────────────────
+     🔴 여태 이 프로그램은 **한국어뿐**이었다. 손님 화면은 네 나라 말인데
+     사장 화면만 한국어라, 한국어를 못 읽는 사장은 아예 못 쓴다.
+
+     자동 판정은 그대로 둔다(처음 켠 사람에게 말부터 고르라고 묻지 않는다).
+     바꿀 길만 더한다 — 「문제 알리기」 바로 위, 늘 보이는 자리다. */
+  (() => {
+    const sel = document.createElement("select");
+    sel.className = "langsw";
+    sel.setAttribute("aria-label", "Language");
+    (Object.keys(LANG_NAMES) as (keyof typeof LANG_NAMES)[]).forEach((k) => {
+      const o = document.createElement("option");
+      o.value = k;
+      o.textContent = LANG_NAMES[k];
+      if (k === lang) o.selected = true;
+      sel.appendChild(o);
+    });
+    sel.onchange = () => setLang(sel.value as typeof lang);
+    const foot = document.querySelector(".navfoot");
+    foot?.parentNode?.insertBefore(sel, foot);
+  })();
+
   $("rp-open").addEventListener("click", () => openReport());
   $("rp-cancel").addEventListener("click", () => { $("rpwrap").style.display = "none"; });
   $("rp-send").addEventListener("click", sendReport);
@@ -6903,6 +6926,10 @@ window.addEventListener("DOMContentLoaded", () => {
   });
 
   labelShopNav();
+  // 🔴 번역은 화면을 다 그린 **뒤에** 켠다. 먼저 켜면 아직 없는 글자를
+  //    지나가고, 그 자리는 한국어로 남는다. 켠 뒤로는 화면이 바뀔
+  //    때마다 저절로 따라간다.
+  startI18n();
   // 🔴 `paintRavi()` 만 부르면 안 된다. 첫 화면이 HTML 에서 이미 켜져
   //    있어 `showPage` 를 안 지나가고, 그러면 떠 있는 단추를 숨기는
   //    처리도 안 돈다 — 대화창 위에 대화창으로 가는 단추가 떠 있었다.

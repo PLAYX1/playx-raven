@@ -784,6 +784,13 @@
         background: var(--bg); color: var(--text); font-family: inherit; resize: vertical; }
       #rp-what { margin-top: 10px; }
 
+      /* 말 고르기. 사이드바 아래, 「문제 알리기」 바로 위. */
+      .langsw { display: block; width: calc(100% - 24px); margin: 0 12px 8px;
+        min-height: 36px; padding: 0 8px; border: 1px solid var(--line);
+        border-radius: 10px; background: transparent; color: var(--muted);
+        font-size: 13px; cursor: pointer; }
+      .langsw:hover { color: var(--text); border-color: var(--ravi); }
+
       /* 문제 알리기. 눈에 띄되 주인공은 아니다 — 매일 누르는 것이 아니다. */
       .reportlink { display: block; width: calc(100% - 24px); margin: 0 12px 10px;
         min-height: 36px; padding: 0 10px; text-align: left;
