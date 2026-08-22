@@ -21,6 +21,7 @@ mod issue;
 mod ledger;
 mod issue2;
 mod raven;
+mod report;
 mod roles;
 mod send;
 mod setup;
@@ -111,6 +112,9 @@ pub fn run() {
             shop::incoming_payments,
             shop::split_payment,
             spec::suggest_setup,
+            report::report_send,
+            report::report_flush,
+            report::report_parked,
             rehearse::rehearse_start,
             rehearse::rehearse_stop,
             rehearse::rehearse_reset,

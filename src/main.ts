@@ -1361,6 +1361,119 @@ function paintRavi() {
   });
 }
 
+/* ══ 문제 알리기 ═══════════════════════════════════════════════════════
+   웹(지갑·장터)과 **같은 상자**로 간다(`px_bug_reports`). 상자가 둘이면
+   한 곳은 반드시 안 보게 된다.
+
+   🔴 화면·오류·이 컴퓨터의 형편은 **묻지 않고** 담는다. 사람은 "안 돼요"
+   라고만 적고, 그것만으로는 못 고친다. 대신 담지 않는 것이 분명히 있다 —
+   12단어·개인키·AI 열쇠·주소·잔액. 신고 하나 편하자고 그걸 보내면 이
+   프로그램이 여태 지켜 온 것이 한 줄로 무너진다. */
+const RP_CATS: [string, string][] = [
+  ["wallet-broken", "지갑이 안 열려요"],
+  ["send-failed", "보내기가 안 돼요"],
+  ["shop-order", "주문·계산이 안 돼요"],
+  ["ravi-wrong", "라비가 틀리게 답해요"],
+  ["install-run", "프로그램이 안 켜져요"],
+  ["ui", "화면 문제"],
+];
+
+/** 방금 난 오류. 신고할 때 물어보면 이미 지나간 뒤다. */
+const rpErrors: { kind: string; msg: string; at: string }[] = [];
+function rpNote(kind: string, msg: unknown) {
+  if (rpErrors.length >= 5) rpErrors.shift();
+  rpErrors.push({ kind, msg: String(msg ?? "").slice(0, 300), at: new Date().toISOString() });
+}
+window.addEventListener("error", (e) => rpNote("error", e.message));
+window.addEventListener("unhandledrejection", (e) =>
+  rpNote("promise", (e.reason as Error)?.message ?? e.reason));
+
+/** 지금 어느 화면인가. 신고에서 제일 값어치 있는 한 줄이다. */
+function rpScreen(): string {
+  const page = document.querySelector(".page.on")?.id?.replace("page-", "") || "?";
+  const nav = document.querySelector<HTMLElement>(`nav a[data-page="${page}"] span`)?.textContent;
+  // 🔴 탭은 **가게 화면일 때만** 붙인다. 가게 탭은 화면을 옮겨도 그대로
+  //    남아 있어서, 그냥 붙이면 「라비 · orders」 같은 없는 자리가 적힌다.
+  //    신고에서 제일 값어치 있는 한 줄이라 틀리면 엉뚱한 데를 열어 본다.
+  if (page !== "shop") return nav || page;
+  const tab = document.querySelector(".shoptab.on")?.id?.replace("shoptab-", "") || "";
+  const say: Record<string, string> = {
+    orders: "들어온 주문", menu: "메뉴판", sales: "매출·장부", mine: "가게 정보",
+  };
+  return (nav || page) + (tab ? ` · ${say[tab] || tab}` : "");
+}
+
+let rpPick: [string, string] | null = null;
+
+function openReport(prefill = "") {
+  const wrap = $("rpwrap");
+  const text = $("rp-text") as HTMLTextAreaElement;
+  const chips = $("rp-chips");
+  rpPick = null;
+  text.value = prefill;
+  chips.innerHTML = RP_CATS.map(
+    (c, i) => `<button data-rc="${i}">${escapeHtml(c[1])}</button>`,
+  ).join("");
+  chips.querySelectorAll<HTMLElement>("[data-rc]").forEach((b) => {
+    b.onclick = () => {
+      chips.querySelectorAll("[data-rc]").forEach((x) => x.classList.remove("on"));
+      b.classList.add("on");
+      rpPick = RP_CATS[+b.dataset.rc!];
+    };
+  });
+  // 무엇을 같이 보내는지 **먼저 보여 준다.** 몰래 담으면 그건 수집이다.
+  $("rp-what").innerHTML =
+    `같이 보내는 것 — <b>${escapeHtml(rpScreen())}</b> 화면 · ` +
+    // 판 번호는 화면에 이미 있다(사이드바 로고 옆). 없는 이름을 새로
+    // 만들면 두 곳이 어긋난다.
+    `${rpErrors.length ? `${rpErrors.length}건의 오류` : "오류 없음"} · ` +
+    `판 ${document.querySelector(".brand span")?.textContent || "?"}<br />` +
+    `지갑 12단어·열쇠·주소·잔액은 <b>보내지 않습니다.</b>`;
+  wrap.style.display = "flex";
+  setTimeout(() => text.focus(), 60);
+}
+
+async function sendReport() {
+  const text = ($("rp-text") as HTMLTextAreaElement).value.trim();
+  if (!text) return void ($("rp-text") as HTMLTextAreaElement).focus();
+  const btn = $("rp-send") as HTMLButtonElement;
+  btn.disabled = true;
+  btn.textContent = "보내는 중…";
+  try {
+    const r = await invoke<any>("report_send", {
+      title: text.slice(0, 60),
+      description: text,
+      category: rpPick ? rpPick[0] : "ui",
+      screen: rpScreen(),
+      context: { errors: rpErrors.slice(-5), theme: document.documentElement.dataset.theme || "" },
+    });
+    // 🔴 못 보냈으면 못 보냈다고 말한다. "고맙습니다" 만 띄우면 사장은
+    //    보냈다고 여기고, 우리는 못 받는다. 대신 사라지지는 않는다.
+    $("rp-what").innerHTML = r?.sent
+      ? "보냈습니다. 고맙습니다."
+      : "지금 인터넷이 안 닿아 <b>이 컴퓨터에 넣어 뒀습니다.</b> 다음에 켤 때 저절로 갑니다.";
+    ($("rp-text") as HTMLTextAreaElement).value = "";
+    setTimeout(() => { $("rpwrap").style.display = "none"; void rpLabel(); }, 1600);
+  } catch (e) {
+    $("rp-what").innerHTML = `<span class="warn">${escapeHtml(String(e))}</span>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "보내기";
+  }
+}
+
+/** 못 보낸 것이 있으면 그렇게 말한다. 조용히 삼키면 보냈다고 여긴다. */
+async function rpLabel() {
+  try {
+    const n = await invoke<number>("report_parked");
+    const b = $("rp-open");
+    b.textContent = n > 0 ? `문제 알리기 · 못 보낸 ${n}건` : "문제 알리기";
+    b.classList.toggle("parked", n > 0);
+  } catch {
+    /* 이 줄이 실패해도 신고는 된다. 라벨일 뿐이다. */
+  }
+}
+
 function showPage(id: string) {
   if (id === "ravi") paintRavi();
   // 🔴 라비 화면에서는 떠 있는 「Ravi에게 물어보기」를 숨긴다.
@@ -2482,6 +2595,14 @@ function applyActions(actions: any[]): string[] {
           setMyTiles(now);
           paintRavi();
           done.push(`「${label}」 단추를 홈에 만들었습니다`);
+          break;
+        }
+        // 🔴 라비가 대신 보내지 않는다. 창을 **열어 주기만** 한다.
+        //    무엇이 같이 가는지 보고 사장이 누르는 것이 맞다 —
+        //    모르는 사이에 이 컴퓨터의 형편이 나가면 그건 수집이다.
+        case "report": {
+          openReport(String(a.text || "").slice(0, 400));
+          done.push("문제 알리기 창을 열었습니다");
           break;
         }
         case "tile_remove": {
@@ -6591,6 +6712,12 @@ window.addEventListener("DOMContentLoaded", () => {
   loadIpfsConf();
   checkHealth();
   setInterval(checkHealth, 30000);
+  $("rp-open").addEventListener("click", () => openReport());
+  $("rp-cancel").addEventListener("click", () => { $("rpwrap").style.display = "none"; });
+  $("rp-send").addEventListener("click", sendReport);
+  // 지난번에 못 보낸 것을 조용히 다시 보낸다. 한 번 보내고 마는
+  // 신고는 안 하느니만 못하다 — 사장은 보냈다고 여긴다.
+  void invoke("report_flush").then(() => rpLabel()).catch(() => rpLabel());
   $("chat-open").addEventListener("click", () => {
     showPage("ravi");
     ($("chat-q") as HTMLInputElement)?.focus();
