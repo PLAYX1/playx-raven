@@ -1363,11 +1363,21 @@ function paintRavi() {
   const todo = shopTodo();
   const noteBox = $("ravi-todo");
   if (noteBox) {
+    /* 🔴 여태 이 줄은 **읽기만 하는 글**이었다. 대표님:
+       "「체인에 가게를 등록하지 않았습니다」 이러면 가게 만들기 버튼은
+        어디 간 거야?"
+
+       맞다. 안 됐다고 알려 주면서 고칠 길이 없으면, 그건 알려 준 것이
+       아니라 답답하게 만든 것이다. **줄마다 눌러서 그 자리로 간다.** */
     noteBox.innerHTML = todo.length
-      ? `<b>${t("아직 안 된 것")}</b> — ` +
-        todo.map((x) => escapeHtml(x.label)).join(" · ")
+      ? `<b>${t("아직 안 된 것")}</b> ` +
+        todo.map((x, i) =>
+          `<button class="todochip" data-todo="${i}">${escapeHtml(x.label)} →</button>`).join("")
       : "";
     noteBox.style.display = todo.length ? "" : "none";
+    noteBox.querySelectorAll<HTMLElement>("[data-todo]").forEach((b) => {
+      b.onclick = () => todo[+b.dataset.todo!].go?.();
+    });
   }
 
   const tiles = raviTiles();
@@ -1402,11 +1412,21 @@ function paintRavi() {
       // 말로 하는 일. 🔴 **열쇠가 없어도 막지 않는다.** 막으면 왜 안 되는지도
       // 모른 채 지나간다. 눌러 보고 그 자리에서 넣는 편이 배운다.
       const q = $("chat-q") as HTMLInputElement;
-      q.value = t.say!;
+      /* 🔴 여기서 값을 **한 번에 꽂아 넣었다.** 그러면 아무 일도 안 일어난 것처럼
+         보인다 — 대표님: "입력하면 인터랙티브하게 입력된 모습을 같이 보여주면서
+         되어야 하는 거 아닌가?"
+
+         맞다. 라비가 대신 치는 것이니 **치는 모습이 보여야** 한다.
+         칸으로 눈을 먼저 데려간 다음, 한 글자씩 친다. */
+      const line = t.say!;
+      q.scrollIntoView({ behavior: "smooth", block: "center" });
       q.focus();
-      // 문장이 끝나 있으면 바로 보낸다. 뒤에 이어 적어야 하는 것(“제 가게는 ”)은
-      // 커서만 두고 기다린다 — 반쪽짜리 문장을 보내면 엉뚱한 답이 온다.
-      if (t.say && !t.say.endsWith(" ") && !t.say.endsWith(": ")) void chatSend();
+      q.value = "";
+      typeInto(q, line, () => {
+        // 문장이 끝나 있으면 바로 보낸다. 뒤에 이어 적어야 하는 것(“제 가게는 ”)은
+        // 커서만 두고 기다린다 — 반쪽짜리 문장을 보내면 엉뚱한 답이 온다.
+        if (line && !line.endsWith(" ") && !line.endsWith(": ")) void chatSend();
+      });
     };
   });
 }
@@ -1568,7 +1588,21 @@ function shopTodo(): { bad: boolean; label: string; why: string; go?: () => void
       bad: !val("sh-asset"),
       label: t("체인에 가게를 등록하지 않았습니다"),
       why: t("같은 와이파이 주문은 됩니다. 다만 가게 목록에는 안 뜹니다."),
-      go: toShop("mine"),
+      // 탭만 열면 또 찾아야 한다. **체인에 남을 이름 칸**까지 데려간다.
+      go: () => {
+        $("qrwrap").style.display = "none";
+        showPage("shop");
+        shopTab("mine");
+        const d = document.querySelector<HTMLDetailsElement>("#shoptab-mine details.onceoff");
+        if (d) d.open = true;
+        setTimeout(() => {
+          const el = $("sh-asset");
+          el?.scrollIntoView({ behavior: "smooth", block: "center" });
+          (el as HTMLInputElement)?.focus?.();
+          el?.classList.add("justwent");
+          setTimeout(() => el?.classList.remove("justwent"), 1600);
+        }, 220);
+      },
     },
   ].filter((x) => x.bad);
 }
@@ -1698,10 +1732,30 @@ function setOpenState(closed: boolean) {
 type PageTile = { icon: string; label: string; sub: string; go: () => void };
 
 function pageTiles(page: string): PageTile[] {
+  /* 🔴 그냥 스크롤만 하면 **아무 일도 안 일어난다.** 대표님이 겪은 그것이다 —
+     백업·AI 열쇠·채굴은 전부 접힌 「고급」 안에 있어서, 접힌 것을 스크롤해
+     봐야 화면이 그대로다.
+
+     그래서 셋을 한다: ① 가는 길의 접힌 것을 **전부 펼치고**
+     ② 그 자리로 가고 ③ **잠깐 빛나게** 해서 어디로 갔는지 보이게 한다.
+     빛나지 않으면, 이미 보이던 자리로 간 경우 눌러도 안 눌린 줄 안다. */
   const jump = (id: string) => () => {
     const el = document.getElementById(id);
-    el?.scrollIntoView({ behavior: "smooth", block: "center" });
-    (el as HTMLInputElement | null)?.focus?.();
+    if (!el) return;
+    // ① 이 자리를 감싼 접힌 것을 전부 펼친다.
+    let up: HTMLElement | null = el;
+    while (up) {
+      if (up instanceof HTMLDetailsElement) up.open = true;
+      up = up.parentElement;
+    }
+    // ② 펼치고 나서 자리가 잡히면 간다.
+    setTimeout(() => {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      (el as HTMLInputElement).focus?.();
+      // ③ 잠깐 빛낸다.
+      el.classList.add("justwent");
+      setTimeout(() => el.classList.remove("justwent"), 1600);
+    }, 60);
   };
   if (page === "wallet") {
     return [
@@ -1742,7 +1796,7 @@ function pageTiles(page: string): PageTile[] {
       { icon: I('<path d="M12 3.5l7.5 4v9L12 20.5 4.5 16.5v-9z"/><path d="M12 8.5v4M12 15.5h.01"/>'),
         label: "쉬운 설정", sub: "제가 정해 드려요", go: jump("easy-setup") },
       { icon: I('<path d="M4 7.5h16v12H4z"/><path d="M9 7.5V5h6v2.5M12 11v5M9.5 13.5h5"/>'),
-        label: "백업", sub: "만들고 · 되돌리기", go: jump("sw-list") },
+        label: "백업", sub: "만들고 · 되돌리기", go: jump("bk-go") },
       { icon: I('<path d="M9 12a3 3 0 116 0 3 3 0 01-6 0z"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/>'),
         label: "AI 열쇠", sub: "라비를 깨웁니다", go: jump("key-note") },
       { icon: I('<path d="M4 18.5h16"/><path d="M7 18.5V11M12 18.5V6M17 18.5v-4.5"/>'),
@@ -1765,6 +1819,36 @@ function paintPageTiles(page: string) {
   host.querySelectorAll<HTMLElement>("[data-pt]").forEach((b) => {
     b.onclick = () => tiles[+b.dataset.pt!].go();
   });
+}
+
+/** 한 글자씩 친다. 라비가 대신 치는 것이니 **치는 모습이 보여야** 한다.
+ *
+ * ⚠️ 너무 느리면 기다리게 되고, 너무 빠르면 안 보인다. 한 글자 14ms 면
+ *    30글자에 0.4초다 — 눈에는 보이고 손은 안 기다린다.
+ * ⚠️ 사람이 중간에 손대면 **즉시 멈춘다.** 내가 치는데 화면이 계속
+ *    글자를 밀어 넣으면 그건 방해다. */
+let typing: number | null = null;
+function typeInto(el: HTMLInputElement, text: string, done?: () => void) {
+  if (typing !== null) window.clearInterval(typing);
+  let i = 0;
+  el.classList.add("typing");
+  typing = window.setInterval(() => {
+    // 사람이 끼어들었으면 그만둔다.
+    if (document.activeElement !== el && el.value !== text.slice(0, i)) {
+      window.clearInterval(typing!);
+      typing = null;
+      el.classList.remove("typing");
+      return;
+    }
+    i += 1;
+    el.value = text.slice(0, i);
+    if (i >= text.length) {
+      window.clearInterval(typing!);
+      typing = null;
+      el.classList.remove("typing");
+      done?.();
+    }
+  }, 14);
 }
 
 function showPage(id: string) {

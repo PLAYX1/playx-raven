@@ -709,7 +709,13 @@
       .ravihi h2 { font-size: 22px; margin: 0 0 4px; letter-spacing: -0.02em; }
       .ravihi .lede { margin: 0; }
 
-      .raviTodo { margin: 0 0 14px; font-size: 14px; line-height: 1.7; }
+      .raviTodo { margin: 0 0 14px; font-size: 14px; line-height: 2.1; }
+      /* 🔴 44px. 안 된 것을 고치러 가는 길이라 눌려야 한다 —
+         글자만 있으면 읽고 마는 안내가 된다. */
+      .todochip { min-height: 34px; margin: 0 4px; padding: 0 12px; border-radius: 999px;
+        border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--line));
+        background: var(--bg); color: var(--text); font-size: 14px; cursor: pointer; }
+      .todochip:hover { border-color: var(--ravi); color: var(--ravi); }
 
       .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 22px; }
       @media (max-width: 900px) { .tiles { grid-template-columns: repeat(2, 1fr); } }
@@ -766,6 +772,18 @@
         content: "예: 오늘 재료 떨어졌다고 손님에게 알려줘 · 아메리카노 4500원 넣어줘 · 맨날 하는 일이니 단추로 만들어줘";
         display: block; color: var(--faint); font-size: 14px; line-height: 1.9; padding: 10px 0 14px;
       }
+
+      /* 라비가 치는 중. 테두리가 살아 있으면 "지금 쳐지고 있다" 가 보인다. */
+      input.typing { border-color: var(--ravi) !important;
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--ravi) 22%, transparent); }
+
+      /* 방금 간 자리. 1.6초만 빛난다 — 어디로 갔는지 눈이 따라가야 한다. */
+      .justwent { animation: wentglow 1.6s ease-out; border-radius: 12px; }
+      @keyframes wentglow {
+        0%   { box-shadow: 0 0 0 4px color-mix(in srgb, var(--ravi) 45%, transparent); }
+        100% { box-shadow: 0 0 0 4px transparent; }
+      }
+      @media (prefers-reduced-motion: reduce) { .justwent { animation: none; } }
 
       /* 화면마다 맨 위 큰 아이콘 줄. 라비 화면보다 살짝 낮게 —
          여기서는 주인공이 아니라 길잡이다. */
