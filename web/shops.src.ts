@@ -208,8 +208,53 @@ function myPlace(): Promise<{ lat: number; lon: number } | null> {
   });
 }
 
+
+// ── 찜·찾기 ─────────────────────────────────────────────────────────────
+//
+// 🔴 찜은 **이 폰에만** 저장한다. 서버에 두면 "누가 무엇을 눈여겨보는지" 를
+// 우리가 갖게 되고, 그건 이 프로그램이 안 갖기로 한 종류의 정보다.
+// 폰을 바꾸면 사라진다 — 그게 값이고, 화면에서 그렇게 말한다.
+
+const FAV_KEY = "playx-fav";
+
+function favs(): Set<string> {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(FAV_KEY) || "[]"));
+  } catch {
+    return new Set();
+  }
+}
+
+function toggleFav(id: string): boolean {
+  const f = favs();
+  const on = !f.has(id);
+  if (on) f.add(id);
+  else f.delete(id);
+  localStorage.setItem(FAV_KEY, JSON.stringify([...f]));
+  return on;
+}
+
+/** 지금 화면에 걸린 찾는 말. */
+let itemQuery = "";
+/** 찜한 것만 볼 것인가. */
+let favOnly = false;
+
+/** 제목·설명·동네에서 찾는다. 띄어쓰기로 나눠 **전부 들어간** 것만. */
+function matches(r: { title: string; body: string; where: string }, q: string): boolean {
+  if (!q) return true;
+  const hay = `${r.title} ${r.body} ${r.where}`.toLowerCase();
+  return q
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .every((w) => hay.includes(w));
+}
+
 function draw(): void {
-  if (!rows.length) {
+  // 🔴 여기 검사가 **찜·찾기보다 먼저** 걸린다. 찜한 것이 없어서 빈 것인데
+  // "지금 올라온 물건이 없습니다" 가 떴다 — 사람은 릴레이가 비었다고 읽는다.
+  // 조건을 걸어 둔 상태면 아래 `paint` 가 맞는 말을 한다.
+  if (!rows.length && !favOnly && !itemQuery) {
     // 🔴 `raven-head` 는 **얼굴만 잘라 둔 그림**이다(360x275). 빈 화면처럼
     // 큰 자리에 쓰면 아래가 없어 보인다 — 대표님이 "GPU 가 안 보인다" 고
     // 하신 것이 이것이다. 온전한 그림은 `raven-hello`(420x481) 이고,
@@ -228,7 +273,37 @@ function draw(): void {
   let shown = Math.min(PAGE, rows.length);
 
   const paint = () => {
-  $("items").innerHTML = rows
+  // 찾는 말과 찜 조건을 여기서 건다. 릴레이에 다시 묻지 않는다 —
+  // 이미 받아 둔 것에서 고르는 일이라 즉시 반응해야 한다.
+  const f = favs();
+  const view = rows.filter(
+    (r) =>
+      (!favOnly || f.has(r.e.id)) &&
+      matches(
+        {
+          title: tag(r.e, "title"),
+          body: r.e.content || "",
+          where: tag(r.e, "location"),
+        },
+        itemQuery,
+      ),
+  );
+  shown = Math.min(shown, Math.max(view.length, PAGE));
+
+  if (!view.length) {
+    $("items").innerHTML = `<div class="ravibox">
+        <img src="/raven-wait.webp" alt="" />
+        <div class="rt">${favOnly ? "찜한 물건이 없습니다" : "찾으시는 것이 없습니다"}</div>
+        <div class="rs">${
+          favOnly
+            ? "물건 옆 하트를 누르면 여기 모입니다."
+            : "다른 말로 찾아보시거나, 위 X 를 눌러 전부 보세요."
+        }</div>
+      </div>`;
+    return;
+  }
+
+  $("items").innerHTML = view
     .slice(0, shown)
     .map((r, i) => {
       const e = r.e;
@@ -236,7 +311,11 @@ function draw(): void {
       const title = tag(e, "title") || "(제목 없음)";
       const price = priceText(e);
       const where = tag(e, "location");
+      // 🔴 하트는 카드 밖에 둔다. 안에 두면 물건을 열려다 찜이 눌린다.
+      const faved = f.has(e.id);
       return `<div class="icard" data-i="${i}">
+        <button class="fav ${faved ? "on" : ""}" data-fav="${esc(e.id)}"
+                aria-label="${faved ? "찜 해제" : "찜하기"}">${faved ? "♥" : "♡"}</button>
         ${img ? `<img src="${esc(img)}" alt="" loading="lazy" />` : `<div style="width:74px;height:74px;border-radius:10px;background:var(--panel);flex:none"></div>`}
         <div style="min-width:0">
           <div class="nm">${esc(title)}</div>
@@ -252,25 +331,47 @@ function draw(): void {
       </div>`;
     })
     .join("") +
-    (shown < rows.length
+    (shown < view.length
       ? `<button id="more" class="btn" style="width:100%;margin-top:16px">
-           ${rows.length - shown}건 더 보기</button>`
+           ${view.length - shown}건 더 보기</button>`
       : "");
 
   // 눌러서 자세히. 목록에서는 두 줄로 잘라 두었는데, 자른 줄만 보고 살지
   // 말지 정하라는 것은 무리다.
   $("items").querySelectorAll<HTMLElement>("[data-i]").forEach((el) => {
-    el.onclick = () => openItem(rows[Number(el.dataset.i)]);
+    el.onclick = (ev) => {
+      // 🔴 하트를 눌렀는데 물건이 열리면 안 된다.
+      if ((ev.target as HTMLElement)?.closest("[data-fav]")) return;
+      openItem(view[Number(el.dataset.i)]);
+    };
+  });
+  // 찜. 목록 전체를 다시 그리지 않고 그 하트만 바꾼다 — 다시 그리면
+  // 스크롤이 맨 위로 튄다.
+  $("items").querySelectorAll<HTMLElement>("[data-fav]").forEach((b) => {
+    b.onclick = (ev) => {
+      ev.stopPropagation();
+      const on = toggleFav(b.dataset.fav!);
+      b.textContent = on ? "♥" : "♡";
+      b.classList.toggle("on", on);
+      b.setAttribute("aria-label", on ? "찜 해제" : "찜하기");
+      // 찜한 것만 보는 중이면 그 자리에서 사라져야 말이 된다.
+      if (favOnly && !on) paint();
+    };
   });
   const more = document.getElementById("more");
   if (more)
     more.onclick = () => {
-      shown = Math.min(shown + PAGE, rows.length);
+      shown = Math.min(shown + PAGE, view.length);
       paint();
     };
   };
+  // 찾기·찜 단추가 이걸 부른다. 릴레이에 다시 묻지 않고 화면만 다시 그린다.
+  repaintItems = paint;
   paint();
 }
+
+/** 찾기·찜이 누를 다시그리기. 목록을 그린 뒤에만 있다. */
+let repaintItems: (() => void) | null = null;
 
 // ── Ravi 에게 묻기 ─────────────────────────────────────────────────────────
 //
@@ -346,6 +447,32 @@ function showKeyBox(): void {
     // 넣자마자 다시 물어 준다. "저장했습니다" 만 뜨면 또 눌러야 한다.
     (document.getElementById("ravi-go") as HTMLElement)?.click();
   };
+}
+
+
+/** 찾기 칸과 찜 단추. 릴레이에 다시 묻지 않고 화면만 다시 그린다. */
+function wireItemBar(): void {
+  const q = document.getElementById("iq") as HTMLInputElement | null;
+  const fo = document.getElementById("favonly");
+  if (q) {
+    // ⚠️ 한 글자마다 다시 그리면 긴 목록에서 버벅인다. 잠깐 기다렸다 한다.
+    let t: number | undefined;
+    q.oninput = () => {
+      window.clearTimeout(t);
+      t = window.setTimeout(() => {
+        itemQuery = q.value.trim();
+        repaintItems?.();
+      }, 180);
+    };
+  }
+  if (fo) {
+    fo.onclick = () => {
+      favOnly = !favOnly;
+      fo.setAttribute("aria-pressed", String(favOnly));
+      fo.textContent = favOnly ? "♥ 찜" : "♡ 찜";
+      repaintItems?.();
+    };
+  }
 }
 
 function wireRaviAsk(): void {
@@ -586,6 +713,7 @@ function tabs(): void {
   window.addEventListener("hashchange", tabFromHash);
 
   wireRaviAsk();
+  wireItemBar();
 
   document.querySelectorAll<HTMLElement>("[data-tab]").forEach((b) => {
     b.onclick = () => {
@@ -598,6 +726,9 @@ function tabs(): void {
       // #items 를 통째로 갈아 끼우기 때문이다 — 안에 두면 매번 지워졌다.
       const cta = document.getElementById("sellcta");
       if (cta) cta.style.display = isShops ? "none" : "block";
+      // 찾기·찜 줄도 물건 탭에서만. 가게 탭에는 이미 「가게 이름」 칸이 있다.
+      const bar = document.getElementById("itembar");
+      if (bar) bar.style.display = isShops ? "none" : "flex";
       // 가게 탭에만 있는 것들을 물건 탭에서 치운다. 안 그러면 "가까운 순으로"
       // 가 물건 목록 위에 남아, 눌러도 아무 일이 안 일어난다.
       for (const id of ["q", "near", "locnote", "count"]) {

@@ -310,6 +310,21 @@
       /* 🔴 44px 미만은 손가락으로 못 누른다. 이 둘이 39px 이었다 —
          「묻기」는 이 시트에서 제일 많이 눌리는 단추다. */
       #ravi-go, #ravi-key-save { min-height: 48px; font-size: 16px; }
+      /* 찾기·찜. 물건 탭 맨 위 — 목록을 훑기 전에 좁힐 수 있어야 한다. */
+      .itembar { display: flex; gap: 8px; margin-bottom: 12px; }
+      /* 🔴 16px 미만이면 아이폰 사파리가 탭할 때마다 화면을 확대한다. */
+      .itembar input { flex: 1; min-width: 0; min-height: 48px; font-size: 16px;
+        padding: 0 12px; border: 1px solid var(--line); border-radius: 12px;
+        background: var(--bg); color: var(--fg); }
+      .itembar button { flex: none; min-height: 48px; padding: 0 16px; font-size: 16px; }
+      .itembar button[aria-pressed="true"] { background: var(--ravi);
+        border-color: var(--ravi); color: #fff; }
+      /* 하트. 카드 오른쪽 위에 띄운다 — 카드 안에 두면 물건을 열려다 눌린다. */
+      .icard { position: relative; }
+      .fav { position: absolute; top: 6px; right: 6px; width: 44px; height: 44px;
+        border: 0; background: transparent; font-size: 22px; line-height: 1;
+        color: var(--muted); cursor: pointer; }
+      .fav.on { color: var(--ravi); }
 </style>
     <script src="/i18n.js"></script>
     <script src="/ravi.js"></script>
@@ -347,6 +362,12 @@
     </div>
     <div class="sub" id="locnote" style="margin-bottom:8px"></div>
     <div id="list"><div class="empty">체인에서 읽는 중…</div></div>
+    <!-- 🔴 물건 탭에서만 쓰는 줄. 가게 탭에는 이미 「가게 이름」 칸이 있다. -->
+    <div class="itembar" id="itembar" style="display:none">
+      <input id="iq" type="search" placeholder="무엇을 찾으세요?" autocomplete="off" />
+      <button id="favonly" class="ghost" aria-pressed="false">♡ 찜</button>
+    </div>
+
     <a class="btn sellcta" id="sellcta" href="/wallet#sell" style="display:none">내 물건 올리기</a>
     <div id="items" style="display:none"><div class="empty">불러오는 중…</div></div>
     <div id="mapsheet"></div>
