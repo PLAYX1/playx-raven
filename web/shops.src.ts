@@ -381,6 +381,48 @@ let repaintItems: (() => void) | null = null;
 //
 // ⚠️ rvn.ex.erci.se 에서 열면 가게 노드가 없다. 그때는 물어볼 곳이 없으므로
 // 버튼을 아예 숨긴다 — 눌러도 안 되는 버튼은 고장으로 읽힌다.
+/** 열쇠가 들어 있는지에 따라 한 줄을 바꾼다.
+ *
+ * 🔴 들어 있는데 「받으실 수 있어요」라고 하면, 넣었는지 아닌지를 화면에서
+ * 알 길이 없다. 넣은 사람에게는 **넣었다고** 말하고 바꿀 길을 준다.
+ * ⚠️ 열쇠 자체는 절대 화면에 안 적는다. 앞 네 글자만 보여 준다 —
+ *    「내가 넣은 그것이 맞나」를 확인하는 데는 그만큼이면 된다.
+ */
+function paintKeyLine(): void {
+  const line = document.getElementById("ravi-keyline");
+  if (!line) return;
+  let key = "";
+  try {
+    key = localStorage.getItem("ravi-key") || "";
+  } catch {
+    /* 막혀 있으면 없는 것으로 본다 */
+  }
+  if (!key) {
+    line.innerHTML =
+      `<a href="#" id="ravi-mykey">내 열쇠로 쓰기 →</a>` +
+      `<span class="sub">Groq 에서 공짜로 받으실 수 있어요</span>`;
+  } else {
+    line.innerHTML =
+      `<span class="sub"><b>내 열쇠가 들어 있습니다</b> (${esc(key.slice(0, 4))}…)</span> ` +
+      `<a href="#" id="ravi-mykey">바꾸기</a> · ` +
+      `<a href="#" id="ravi-keydel">지우기</a>`;
+  }
+  const del = document.getElementById("ravi-keydel");
+  if (del) {
+    del.onclick = (e) => {
+      e.preventDefault();
+      try {
+        localStorage.removeItem("ravi-key");
+      } catch {
+        /* 못 지워도 화면은 다시 그린다 */
+      }
+      paintKeyLine();
+    };
+  }
+  const my = document.getElementById("ravi-mykey");
+  if (my) my.onclick = (e) => { e.preventDefault(); showKeyBox(); };
+}
+
 /** 손님이 자기 AI 열쇠를 넣는 칸. **우리 몫이 떨어졌을 때만** 나타난다. */
 function showKeyBox(): void {
   if (document.getElementById("ravi-key")) return;
@@ -431,10 +473,14 @@ function showKeyBox(): void {
     const v = inp.value.trim();
     if (!v) {
       localStorage.removeItem("ravi-key");
+      paintKeyLine();
       return;
     }
     localStorage.setItem("ravi-key", v);
     d.remove();
+    // 🔴 넣자마자 그 줄이 「내 열쇠가 들어 있습니다」로 바뀌어야 한다.
+    //    안 바뀌면 넣었는지 아닌지를 화면에서 알 길이 없다.
+    paintKeyLine();
     // 깨어난 것을 **바로 보여 준다.** 단추가 그대로면 넣은 줄 모른다.
     const b = document.getElementById("ravi-ask");
     if (b) {
@@ -532,16 +578,18 @@ function wireRaviAsk(): void {
           <button id="ravi-go" style="width:100%;margin-top:10px">묻기</button>
         </div>
         <div class="ans" id="ravi-a"></div>
-        <p class="foot" style="margin-top:10px">
-          <a href="#" id="ravi-mykey">내 열쇠로 쓰기 →</a>
-          <span class="sub">Groq 에서 공짜로 받으실 수 있어요</span>
-        </p>
+        <!-- 🔴 여태 열쇠가 **이미 들어 있어도** 「받으실 수 있어요」라고 했다.
+             넣은 사람에게 또 받으라고 하는 셈이고, 그러면 넣었는지 아닌지를
+             화면에서 알 길이 없다. 들어 있으면 그렇게 말하고, 바꾸거나
+             지울 길을 준다. -->
+        <p class="foot" style="margin-top:10px" id="ravi-keyline"></p>
         <p class="foot" style="margin-top:14px">
           ${local
             ? "가게가 올린 정보로만 답합니다. 확실하지 않으면 가게에 직접 확인하세요."
             : "값이 오를지 내릴지는 답하지 않습니다. 그리고 지갑 12단어는 누구에게도 알려주지 마세요 — 저도 묻지 않습니다."}
         </p>
       </div>`;
+    paintKeyLine();
     box.style.display = "";
     $("sheet-close").onclick = () => (box.style.display = "none");
     box.onclick = (ev) => {
@@ -587,13 +635,9 @@ function wireRaviAsk(): void {
     // 🔴 열쇠 칸을 **한도가 찼을 때만** 냈더니 "AI 설정이 어디냐" 를 세 번
     // 들었다. 못 찾는 설정은 없는 설정이다. 늘 보이되 작게 둔다 —
     // 평소에는 안 넣어도 되니까.
-    const my = document.getElementById("ravi-mykey");
-    if (my) {
-      my.onclick = (ev) => {
-        ev.preventDefault();
-        showKeyBox();
-      };
-    }
+    // ⚠️ 여기서 붙이던 onclick 은 `paintKeyLine` 이 한다. 두 곳에서 붙이면
+    //    줄을 다시 그릴 때 한쪽이 떨어져 나간다.
+    paintKeyLine();
 
     // 🔴 **자고 있으면 열쇠 칸을 바로 펼친다.** 자는 라비를 눌렀는데 또
     // 「내 열쇠로 쓰기」를 찾아 눌러야 하면, 그건 깨우는 길이 두 걸음인 것이다.
