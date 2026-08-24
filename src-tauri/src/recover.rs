@@ -137,6 +137,25 @@ mod lock_tests {
         // 옛 이름으로 만들어 둔 백업이 이미 있다. 계속 받아야 한다.
         assert!(src.contains(r#"ext == "잠김""#), "옛 이름 백업을 버리면 안 된다");
     }
+
+    /// 가게를 다른 컴퓨터로 옮기려면 간판 열쇠가 같이 가야 한다.
+    /// 자산만 보내면 돈은 가지만 「이 가게」는 안 간다.
+    #[test]
+    fn 되돌리기가_간판_열쇠를_가져온다() {
+        let src = include_str!("recover.rs");
+        assert!(
+            src.contains("shopkey.json"),
+            "되돌리기가 가게 간판 열쇠를 안 가져온다"
+        );
+        assert!(
+            src.contains("tickets.json"),
+            "되돌리기가 이용권을 안 가져온다"
+        );
+        assert!(
+            src.contains("bookings.json"),
+            "되돌리기가 예약을 안 가져온다"
+        );
+    }
 }
 
 fn unpack_if_zip(input: &str) -> Result<PathBuf, String> {
@@ -254,12 +273,24 @@ pub fn restore_survey(folder: String, pass: Option<String>) -> Result<Value, Str
                 s.get("name").and_then(Value::as_str).filter(|x| !x.is_empty()).unwrap_or("(이름 없음)"),
                 s.get("menu").and_then(Value::as_array).map(|a| a.len()).unwrap_or(0)
             ),
-            "why": "간판·메뉴·가격·사진",
+            "why": if dir.join("shopkey.json").exists() {
+                "간판·메뉴·가격·사진 · 장터에 올리는 열쇠"
+            } else {
+                "간판·메뉴·가격·사진"
+            },
         }));
     }
     if let Some(n) = count_in("passes.json", "passes") {
         items.push(json!({ "key": "passes", "what": "회원", "detail": format!("{n}명"),
                            "why": "이름·기간·남은 횟수" }));
+    }
+    if let Some(n) = count_in("tickets.json", "tickets") {
+        items.push(json!({ "key": "tickets", "what": "이용권", "detail": format!("{n}장"),
+                           "why": "카운터에서 판 표 — 잃으면 손님이 산 표가 사라집니다" }));
+    }
+    if let Some(n) = count_in("bookings.json", "bookings") {
+        items.push(json!({ "key": "bookings", "what": "예약", "detail": format!("{n}건"),
+                           "why": "잃으면 손님은 오는데 가게가 모릅니다" }));
     }
     if let Some(n) = count_in("sessions.json", "sessions") {
         items.push(json!({ "key": "sessions", "what": "수업", "detail": format!("{n}개 회차"),
@@ -268,6 +299,14 @@ pub fn restore_survey(folder: String, pass: Option<String>) -> Result<Value, Str
     if dir.join("fills.json").exists() {
         items.push(json!({ "key": "fills", "what": "발송 기록", "detail": "있음",
                            "why": "이게 없으면 복구 뒤 같은 자산을 한 번 더 보냅니다" }));
+    }
+    if dir.join("orders.json").exists() {
+        items.push(json!({ "key": "orders", "what": "주문 주소", "detail": "있음",
+                           "why": "손님이 적은 받을 주소" }));
+    }
+    if dir.join("sweep.json").exists() {
+        items.push(json!({ "key": "sweep", "what": "자동 송금", "detail": "있음",
+                           "why": "금고로 옮기는 설정" }));
     }
 
     // 어느 날 것인지가 "복원해도 되나"의 절반이다. 폴더면 폴더 이름이 날짜고,
@@ -347,9 +386,17 @@ pub async fn restore_apply(
     }
 
     // ── 나머지는 그냥 파일이다. 노드와 무관하고 언제든 된다.
+    //
+    // 🔴 `shopkey.json` 은 가게 간판 열쇠다. 백업에는 들어 있었는데 되돌리기가
+    //    안 가져왔다. 새 컴퓨터는 켤 때 새 열쇠를 만들어 버리고, 체인에 적힌
+    //    공개키와 안 맞아 「지금 여기서 주문받습니다」가 영원히 안 올라간다.
+    //    가게를 되돌리면 열쇠도 같이 온다. 따로 고르게 하지 않는다.
     for (key, file, label) in [
         ("shop", "shop.json", "가게"),
+        ("shop", "shopkey.json", "가게 간판 열쇠"),
         ("passes", "passes.json", "회원"),
+        ("tickets", "tickets.json", "이용권"),
+        ("bookings", "bookings.json", "예약"),
         ("sessions", "sessions.json", "수업"),
         ("orders", "orders.json", "주문 주소"),
         ("fills", "fills.json", "발송 기록"),
