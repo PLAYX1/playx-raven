@@ -25,9 +25,13 @@
  */
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const ROOT = new URL(".", import.meta.url).pathname;
+// 🔴 `new URL(...).pathname` 은 윈도우에서 `/D:/a/...` 가 된다.
+//    path.join 이 그걸 `D:\D:\a\...` 로 붙여, 맥·리눅스는 되고 윈도우만
+//    「index.html 이 없다」로 설치 파일이 안 만들어졌다(0.1.1 실측).
+const ROOT = dirname(fileURLToPath(import.meta.url));
 const read = (p) => readFileSync(join(ROOT, p), "utf8");
 
 let bad = 0;
