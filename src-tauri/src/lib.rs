@@ -35,12 +35,20 @@ mod knowledge;
 mod nostrpub;
 mod paths;
 mod sweep;
+mod autostart;
+mod mode;
+mod reindex;
+mod reindex_run;
 mod tunnel;
 mod vending;
 mod wallet;
 mod server;
 mod services;
 mod shop;
+mod shopkey;
+mod devfee;
+mod ticket;
+mod relay;
 mod upload;
 mod spec;
 mod lockbox;
@@ -107,6 +115,7 @@ pub fn run() {
             shop::build_menu,
             shop::counter_confirmations,
             shop::shop_load,
+            shop::unsellable,
             shop::shop_save,
             shop::shop_open_now,
             shop::incoming_payments,
@@ -137,8 +146,20 @@ pub fn run() {
             walletx::channels_mine,
             walletx::channel_leave,
             nostrpub::nostr_publish,
+            shopkey::shop_pubkey,
+            devfee::fee_owed,
+            ticket::ticket_find,
+            ticket::ticket_use,
+            ticket::ticket_list,
+            ticket::ticket_to_member,
+            relay::relay_status,
+            devfee::fee_pay,
+            shopkey::shop_announce,
+            shopkey::shop_refresh,
             stock::stock_left,
             booking::booking_slots,
+            booking::booking_list,
+            booking::booking_cancel,
             trade::trade_list,
             trade::trade_get,
             rewards::reward_ready,
@@ -154,7 +175,6 @@ pub fn run() {
             shop::theme_read,
             shop::theme_save,
             shop::fee_read,
-            shop::fee_save,
             shop::pay_order,
             shop::broadcast_message,
             ai::save_api_key,
@@ -230,6 +250,8 @@ pub fn run() {
             backup::usb_lock_read,
             backup::usb_lock_set,
             lockbox::cloud_key_show,
+            lockbox::backup_pass_set,
+            lockbox::backup_pass_state,
             lockbox::cloud_unlock,
             backup::external_drives,
             backup::cloud_folders,
@@ -305,7 +327,17 @@ pub fn run() {
             price::quote_price,
             server::start_phone_server,
             server::publish_shop,
+            reindex::reindex_window,
+            reindex_run::reindex_state,
+            reindex_run::reindex_arm,
+            reindex_run::reindex_start,
+            reindex_run::reindex_progress,
+            mode::mode_get,
+            mode::mode_set,
+            autostart::autostart_get,
+            autostart::autostart_set,
             tunnel::tunnel_status,
+            tunnel::tunnel_install,
             tunnel::tunnel_start,
             tunnel::tunnel_stop,
             tunnel::public_base,
@@ -317,6 +349,9 @@ pub fn run() {
             server::remote_admin_get,
             server::remote_admin_set,
             server::table_qr_sheet,
+            server::address_check,
+            server::now_ip,
+            server::all_local_ips,
             sweep::sweep_configure,
             sweep::sweep_read,
             sweep::sweep_run,
@@ -398,6 +433,18 @@ pub fn run() {
                         if let Some(w) = h.get_webview_window("main") {
                             let _ = w.hide();
                         }
+                    }
+                });
+            }
+
+            // 창 JS가 늦게 뜨거나 안 떠도 손님·직원 화면은 열려 있어야 한다.
+            // 계산대는 화면이 아니라 포트다.
+            {
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    let state = handle.state::<server::ServerState>();
+                    if let Err(e) = server::start_phone_server(state).await {
+                        eprintln!("[phone] 자동 시작 실패: {e}");
                     }
                 });
             }

@@ -51,8 +51,10 @@
       .empty { color: var(--muted); padding: 40px 0; text-align: center; font-size: 14px;
                line-height: 1.8; }
       /* 지도 앱 고르기. 한 번 고르면 기억한다. */
+      /* 🔴 가게 시트(.shopwrap)가 60이다. 여기가 더 낮으면 「길찾기」를
+         눌러도 고르는 창이 시트 뒤에 가려 아무 일도 안 일어난 것처럼 보인다. */
       #mapsheet { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none;
-                  align-items: flex-end; justify-content: center; z-index: 50; }
+                  align-items: flex-end; justify-content: center; z-index: 80; }
       #mapsheet.on { display: flex; }
       .msbox { background: var(--bg); border-radius: 18px 18px 0 0; width: 100%;
                max-width: 480px; padding: 20px 18px calc(20px + var(--safe-b)); }
@@ -87,6 +89,23 @@
       /* 「가게 / 물건」 을 가르는 탭. 39x22 라 손가락 절반이었다. */
       .tb { min-height: 44px; padding: 0 16px; font-size: 15px; }
 
+      /* 가게 자세히. 손님이 목록에서 하나를 눌렀을 때 여는 것. */
+      .shopwrap { position: fixed; inset: 0; background: rgba(0,0,0,.45);
+                  display: none; align-items: flex-end; z-index: 60; }
+      .shopwrap.on { display: flex; }
+      .shopsheet { background: var(--bg); width: 100%; max-height: 86vh; overflow-y: auto;
+                   border-radius: 18px 18px 0 0;
+                   padding: 20px 18px calc(18px + var(--safe-b)); }
+      .shoptitle { font-size: 21px; font-weight: 700; }
+      .shopsub { color: var(--muted); font-size: 14.5px; margin-top: 4px; line-height: 1.6; }
+      .shoprow { display: flex; gap: 10px; padding: 12px 0;
+                 border-bottom: 1px solid var(--line); font-size: 15px; }
+      .shoprow b { flex: none; width: 92px; color: var(--muted); font-weight: 500; }
+      /* 전화는 눌러서 걸려야 한다. 어르신이 번호를 외워 옮겨 적지 않는다. */
+      .shoprow a { color: var(--ravi); text-decoration: none; }
+      .shopno { margin-top: 14px; width: 100%; min-height: 52px; font-size: 16px;
+                background: transparent; border: 1px solid var(--line);
+                color: var(--muted); border-radius: 12px; font-family: inherit; }
       .ravibox { text-align: center; padding: 32px 16px; }
       .ravibox img { width: 180px; height: auto; border-radius: 16px;
         animation: ravifloat 3.6s ease-in-out infinite; }
@@ -387,7 +406,6 @@
 
     <a class="btn sellcta" id="sellcta" href="/wallet#sell" style="display:none">내 물건 올리기</a>
     <div id="items" style="display:none"><div class="empty">불러오는 중…</div></div>
-    <div id="mapsheet"></div>
     <div id="sheet" style="display:none"></div>
 
     <p class="foot">
@@ -478,8 +496,14 @@
               // 프로필을 못 읽은 가게도 목록에 남긴다. 조용히 빼면 가게가
               // 사라진 것처럼 보이고, 사장은 자기 가게가 왜 없는지 못 찾는다.
               offline: s.offline,
+              // 🔴 체인이 보증하는 공개키로 대조했는가. 릴레이에서만 읽은
+              //    것은 이름표만 보고 믿은 것이라 그렇게 적어야 한다.
+              verified: s.verified,
               menu_count: s.menu_count,
               order_url: s.order_url,
+              // 체인의 주문 주소는 안 바뀌는 가게(자기 도메인)만 적는다.
+              // 대개는 비어 있고, 지금 주소는 이 열쇠로 릴레이에서 찾는다.
+              nostr_pubkey: s.nostr_pubkey,
             },
           }));
           if (me) {
@@ -490,6 +514,9 @@
           $("count").textContent = `${all.length}곳`;
           render();
           fillAges();
+          // 릴레이는 몇 초 걸린다. 기다렸다 목록을 그리면 화면이 그동안 비어
+          // 있고, 그 사이 손님은 「장사 안 한다」고 읽고 나간다.
+          fillLive();
         } catch (e) {
           // "Unexpected token '<'" 를 그대로 보여 주지 않는다. 사람이 할 수
           // 있는 일이 하나도 없는 문장이다.
@@ -514,7 +541,14 @@
               .map((s) => {
                 const p = s.profile || {};
                 const label = s.asset.replace(/^SHOP\./, "");
-                return `<a class="card" href="#">
+                // 🔴 여태 `href="#"` 이었다 — **누르면 아무 일도 안 일어난다.**
+                // 손님이 가게를 찾은 다음에 할 일이 「주문」밖에 없는데,
+                // 그 버튼은 문을 연 가게에만 생긴다. 닫힌 가게를 누른 손님은
+                // 화면이 죽은 줄 안다.
+                //
+                // 이제 누르면 그 가게의 자세한 것이 열린다 — 전화·위치·
+                // 영업시간·길찾기. 닫혀 있어도 「몇 시에 여는지」는 알아야 한다.
+                return `<a class="card" href="#" data-open="${esc(s.asset)}">
                   ${safeUrl(p.icon) ? `<img src="${esc(safeUrl(p.icon))}" alt="" loading="lazy" />` : `<div class="ph"></div>`}
                   <div style="min-width:0">
                     <div class="nm">${esc(p.name || label)}</div>
@@ -529,6 +563,8 @@
                         // 대신 판단해 주는 것이고, 그럼 우리가 심사 기관이 된다.
                         p.offline
                           ? `<span class="tag warn">정보를 못 읽었습니다</span>`
+                          : p.verified === false
+                          ? `<span class="tag warn">확인 못 함</span>`
                           : (!p.desc && p.lat == null && !p.menu_count
                               ? `<span class="tag warn">이름만 등록됨</span>`
                               : "")
@@ -537,7 +573,15 @@
                     ${
                       p.order_url
                         ? `<a class="orderbtn" href="${esc(safeUrl(p.order_url))}" target="_blank" rel="noopener noreferrer">주문하러 가기</a>`
-                        : ""
+                        // 체인에 주소가 없어도 가게가 지금 문을 열어 뒀을 수
+                        // 있다. 릴레이에 물어 보고 답이 오면 그때 버튼이 뜬다.
+                        // 답을 기다리는 동안 빈 자리를 두지 않는다 — 빈 자리는
+                        // 「이 가게는 주문을 안 받는다」로 읽힌다.
+                        : p.nostr_pubkey
+                          ? `<div class="livespot" data-live="${esc(s.asset)}"
+                                  data-pk="${esc(p.nostr_pubkey)}"
+                                  style="margin-top:8px;font-size:14px;color:var(--dim)">지금 여는지 확인 중…</div>`
+                          : ""
                     }
                     ${
                       p.lat != null
@@ -563,6 +607,61 @@
                  <div class="rs">아직 아무도 없습니다. 지금 여시면 <b>1호</b>가 됩니다.<br />
                    레이븐코인을 받는 가게라면 누구나 올릴 수 있어요.</div>
                </div>`;
+        // 다시 그릴 때마다 「지금 여는지」 자리가 새로 생긴다. 채워 주지 않으면
+        // 찾기 칸에 한 글자만 쳐도 열려 있던 가게의 주문 버튼이 사라진다.
+        // 릴레이에 다시 묻지는 않는다 — 위의 `LIVE_CACHE` 가 막는다.
+        fillLive();
+      }
+
+      /* 가게 하나를 자세히 연다.
+       *
+       * 여는 값은 **이미 목록에 있는 것**만 쓴다. 여기서 다시 불러오면
+       * 손님이 누르고 몇 초를 기다리고, 그 사이 빈 시트를 본다.
+       */
+      function openShop(asset) {
+        const row = all.find((s) => s.asset === asset);
+        if (!row) return;
+        const p = row.profile || {};
+        const label = asset.replace(/^SHOP\./, "");
+        $("sh-name").textContent = p.name || label;
+        $("sh-sub").textContent = p.desc || "";
+
+        const line = (k, v) => (v ? `<div class="shoprow"><b>${k}</b><span>${v}</span></div>` : "");
+        const tel = p.phone
+          ? `<div class="shoprow"><b>전화</b><a href="tel:${esc(String(p.phone).replace(/[^0-9+]/g, ""))}">${esc(p.phone)}</a></div>`
+          : "";
+        $("sh-rows").innerHTML =
+          line("이름", esc(p.name || label)) +
+          line("주소", esc(p.location || "")) +
+          tel +
+          line("체인 이름", esc(asset)) +
+          (row.dist != null ? line("거리", fmtDist(row.dist)) : "") +
+          // 🔴 정보를 못 읽은 가게에는 그렇게 적는다. 빈 시트는 고장으로 읽힌다.
+          (p.offline
+            ? `<div class="shoprow"><b>알림</b><span>가게가 올린 정보를 아직 못 읽었습니다.
+                 가게 컴퓨터가 꺼져 있을 수 있습니다.</span></div>`
+            : "");
+
+        // 할 수 있는 일. 주문은 문 연 가게에만, 길찾기는 좌표 있는 가게에만.
+        const live = LIVE_CACHE[asset];
+        const acts = [];
+        if (live && live.url)
+          acts.push(`<a class="orderbtn" href="${esc(safeUrl(live.url))}" target="_blank"
+                        rel="noopener noreferrer">주문하러 가기</a>`);
+        else if (p.order_url)
+          acts.push(`<a class="orderbtn" href="${esc(safeUrl(p.order_url))}" target="_blank"
+                        rel="noopener noreferrer">주문하러 가기</a>`);
+        if (p.lat != null)
+          acts.push(`<button data-go="${p.lat},${p.lon}" data-nm="${esc(p.name || label)}"
+                       style="margin-top:8px;padding:10px 14px;border-radius:10px;
+                       border:1px solid var(--line);background:var(--bg);color:var(--fg);
+                       font-size:15px;font-family:inherit">길찾기</button>`);
+        $("sh-acts").innerHTML =
+          acts.join(" ") ||
+          `<div class="empty" style="padding:18px 0">지금은 주문을 받지 않습니다.</div>`;
+        // 길찾기 단추는 문서 전체에 걸린 처리기가 받는다(아래 `data-go`).
+        // 여기서 따로 묶지 않는다 — 두 번 걸면 두 번 열린다.
+        $("shopwrap").classList.add("on");
       }
 
       // ── 언제부터 있는 가게인가 ────────────────────────────────────────
@@ -602,32 +701,169 @@
         el.classList.add("shown");
       }
 
+      /* 「지금 여는지 확인 중…」 자리를 채운다.
+       *
+       * 체인에는 안 바뀌는 것만 적혀 있어서, 주문 주소가 비어 있는 가게가
+       * 정상이다. 지금 어디서 받는지는 그 가게의 열쇠가 서명한 최신 공지에
+       * 있고, 그건 **이 브라우저가 직접** 릴레이에 물어 직접 서명을 확인한다.
+       * 우리 서버가 대신 읽어 주면 우리가 가짜 주소를 끼워 넣을 자리가 생긴다.
+       *
+       * 🔴 주소를 받았다고 바로 버튼을 그리지 않는다. 옛 주소를 눌러 404 를
+       * 보는 것은 손님에게 「가게가 없다」로 읽힌다. 그 주소를 직접 찔러
+       * 보고 싶지만 그럴 수가 없다 — 이 화면의 CSP 는 `connect-src 'self'` 라
+       * 바깥 주소로 못 나가고, 가게 노드도 CORS 를 안 열어 둔다. 뚫으면
+       * 남이 넣은 가게 이름이 아무 데나 연결할 수 있는 문이 된다.
+       *
+       * 그래서 찔러 보는 대신 **공지의 나이를 본다.** 아래에 적어 뒀다.
+       */
+      // 찾기 칸에 글자를 칠 때마다 목록을 다시 그린다. 그때마다 릴레이에 다시
+      // 물으면 한 글자에 세 곳씩 두드리는 셈이고, 릴레이가 우리를 차단한다.
+      const LIVE_CACHE = {};
+
+      async function fillLive() {
+        const ask = window.rvnLiveShopAddress;
+        const spots = [...document.querySelectorAll("[data-live]")];
+        if (!ask) { spots.forEach((el) => el.remove()); return; }
+        for (const el of spots) {
+          const key = el.dataset.live;
+          let live = LIVE_CACHE[key];
+          if (live === undefined) {
+            try {
+              live = await ask(key, el.dataset.pk);
+            } catch { live = null; }
+            // 🔴 **공지의 나이를 본다.** 가게 노드는 문이 열려 있는 동안
+            // 45분마다 같은 공지를 다시 올린다. 그러니 두 시간이 넘은 공지는
+            // 「그 컴퓨터가 그냥 죽었다」는 뜻이다 — 닫는다는 인사도 못 하고
+            // 꺼진 경우다.
+            //
+            // 공지에 만료 시각을 달아 두긴 했지만(NIP-40), 릴레이가 그걸
+            // 지킬 의무는 없다. 지키는 곳도 있고 무시하는 곳도 있어서,
+            // 릴레이를 믿는 대신 **여기서 다시 센다.**
+            if (live && Date.now() / 1000 - live.at > 2 * 3600) live = null;
+            LIVE_CACHE[key] = live;
+          }
+          if (!live) { el.remove(); continue; }   // 닫혀 있으면 자리를 없앤다
+
+          /* 🔴 **바뀌는 것들을 여기서 덮어쓴다.** 체인에는 안 바뀌는 것만
+             있어서(이름·공개키·돈 받을 주소), 사진·전화·위치는 대개 비어
+             있다. 가게가 그걸 고칠 때마다 재발행(100 RVN)을 물릴 수는 없다.
+
+             체인 값이 있으면 체인이 이긴다 — 자산 이름은 아무도 못 고치는
+             사실이고, 이 글은 가게가 아무 때나 다시 쓰는 것이다. */
+          const p = live.profile || {};
+          const card = el.closest(".card");
+          if (card) {
+            const nm = card.querySelector(".nm");
+            if (nm && p.name && nm.textContent === el.dataset.live.replace(/^SHOP\./, ""))
+              nm.textContent = p.name;
+            const de = card.querySelector(".de");
+            if (de && (p.description || p.location))
+              de.textContent = p.description || p.location;
+            // 사진. IPFS 주소이거나 https 주소다 — 어느 쪽이든 **주소**지
+            // 사진 자체가 아니다. 그래서 바꿔도 소각이 0원이다.
+            const img = card.querySelector("img");
+            const icon = typeof p.icon === "string" ? p.icon : "";
+            if (img && icon) {
+              const src = /^https:\/\//i.test(icon)
+                ? icon
+                // 폴더 주소 뒤에 파일 이름이 붙는다 — `Qm…/icon.jpg`.
+                // 이름 없이 폴더만 쓰면 그림 대신 목록이 온다.
+                : /^Qm[1-9A-HJ-NP-Za-km-z]{44}(\/[\w.-]{1,40})?$/.test(icon)
+                  ? `/rvn/api/ipfs/${icon}`
+                  : "";
+              if (src) img.src = src;
+            }
+          }
+
+          // 문은 닫혔는데 프로필만 온 경우. 정보는 갱신하고 버튼은 안 그린다.
+          if (!live.url) { el.remove(); continue; }
+
+          const a = document.createElement("a");
+          a.className = "orderbtn";
+          a.href = safeUrl(live.url) || "#";
+          a.target = "_blank";
+          a.rel = "noopener noreferrer";
+          a.textContent = "지금 문 열었습니다 · 주문하러 가기";
+          el.replaceWith(a);
+        }
+      }
+
       // 길찾기. 우리는 지도를 그리지 않고, 손님이 이미 쓰는 앱으로 넘긴다.
       //
       // geo: 만 쓰면 한국 폰에서 아무 일도 안 일어난다 — 구글 지도가 없는 폰이
       // 많다. 그래서 한 번 고르게 하고 그 선택을 기억한다.
       const MAPKEY = "playx-map-app";
 
+      // 가게 카드를 누르면 자세히 열린다. 위임으로 건다 — 목록은 찾을
+      // 때마다 다시 그려지고, 그때마다 새로 묶으면 반드시 빠뜨린다.
+      //
+      // 🔴 길찾기(`data-go`)를 카드보다 **먼저** 본다. 단추가 카드 안에
+      //    있어서, 카드를 먼저 받으면 가게 시트만 열리고 길찾기는
+      //    시트 뒤에서 돌아간다 — 눌러도 아무 일이 없는 것처럼 보였다.
       document.addEventListener("click", (e) => {
-        const b = e.target.closest?.("[data-go]");
-        if (!b) return;
-        e.preventDefault();
-        const [lat, lon] = b.dataset.go.split(",").map(Number);
-        openDirections(lat, lon, b.dataset.nm || "");
+        if (e.target.closest?.("#sh-close")) {
+          $("shopwrap")?.classList.remove("on");
+          return;
+        }
+        const go = e.target.closest?.("[data-go]");
+        if (go) {
+          e.preventDefault();
+          e.stopPropagation();
+          const [lat, lon] = go.dataset.go.split(",").map(Number);
+          openDirections(lat, lon, go.dataset.nm || "");
+          return;
+        }
+        const card = e.target.closest?.("[data-open]");
+        if (card) {
+          e.preventDefault();
+          openShop(card.dataset.open);
+        }
+      });
+      // 바깥을 눌러도 닫힌다. 어르신은 「닫기」를 못 찾고 뒤로가기를 누른다.
+      document.addEventListener("click", (e) => {
+        if (e.target.id === "shopwrap") $("shopwrap").classList.remove("on");
       });
 
+      function directionApps(lat, lon, name) {
+        const n = encodeURIComponent(name || "가게");
+        return [
+          { id: "kakao", name: "카카오맵", note: "길 안내가 가장 정확합니다",
+            app: `kakaomap://route?ep=${lat},${lon}&by=CAR`,
+            web: `https://map.kakao.com/link/to/${n},${lat},${lon}` },
+          { id: "naver", name: "네이버지도", note: "",
+            app: `nmap://route/car?dlat=${lat}&dlng=${lon}&dname=${n}&appname=se.erci.rvn`,
+            web: `https://map.naver.com/p/directions/-/${lon},${lat},${n}/-/car` },
+          { id: "tmap", name: "티맵", note: "",
+            app: `tmap://route?goalx=${lon}&goaly=${lat}&goalname=${n}`,
+            web: `https://tmap.life/route?goalx=${lon}&goaly=${lat}` },
+          { id: "apple", name: "애플 지도", note: "아이폰에 기본으로 있습니다",
+            app: `maps://?daddr=${lat},${lon}&dirflg=d`,
+            web: `https://maps.apple.com/?daddr=${lat},${lon}&dirflg=d` },
+          { id: "google", name: "구글 지도", note: "한국에서는 길 안내가 제한됩니다",
+            app: `comgooglemaps://?daddr=${lat},${lon}&directionsmode=driving`,
+            web: `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}` },
+        ];
+      }
+
       async function openDirections(lat, lon, name) {
-        const apps = await fetch(
-          `/api/directions?lat=${lat}&lon=${lon}&label=${encodeURIComponent(name)}`
-        ).then((r) => r.json()).catch(() => null);
-        if (!apps) return;
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+        let apps = directionApps(lat, lon, name);
+        try {
+          const j = await fetch(
+            `/api/directions?lat=${lat}&lon=${lon}&label=${encodeURIComponent(name)}`
+          ).then((r) => r.json());
+          if (Array.isArray(j) && j.length) apps = j;
+        } catch { /* 아래 목록으로 안내한다 */ }
+        if (!Array.isArray(apps) || !apps.length) return;
 
         const saved = localStorage.getItem(MAPKEY);
         const pick = saved && apps.find((a) => a.id === saved);
         if (pick) return launch(pick);
 
         // 처음 한 번만 묻는다. 매번 물으면 그 자체가 방해가 된다.
-        $("mapsheet").innerHTML =
+        const sheet = $("mapsheet");
+        if (!sheet) return;
+        sheet.innerHTML =
           `<div class="msbox">
              <div class="mshead">어느 지도로 안내할까요</div>
              ${apps
@@ -641,17 +877,17 @@
                <span>다음부터 이 앱으로</span></label>
              <button class="msbtn cancel" id="mscancel">취소</button>
            </div>`;
-        $("mapsheet").classList.add("on");
+        sheet.classList.add("on");
 
-        $("mapsheet").querySelectorAll("[data-map]").forEach((btn) => {
+        sheet.querySelectorAll("[data-map]").forEach((btn) => {
           btn.onclick = () => {
             const a = apps.find((x) => x.id === btn.dataset.map);
             if ($("msremember").checked) localStorage.setItem(MAPKEY, a.id);
-            $("mapsheet").classList.remove("on");
+            sheet.classList.remove("on");
             launch(a);
           };
         });
-        $("mscancel").onclick = () => $("mapsheet").classList.remove("on");
+        $("mscancel").onclick = () => sheet.classList.remove("on");
       }
 
       function launch(a) {
@@ -674,6 +910,18 @@
          빠져나간다. 그래서 **단추는 보이는데 눌러도 아무 일이 없었다.**
          (같은 파일의 탭 단추는 320줄이라 멀쩡히 붙는다 — 그래서 더 안 보였다)
          defer 는 문서를 다 읽은 뒤에 돌린다. -->
+    <!-- 가게 자세히. 아래에서 올라오는 시트 — 목록을 잃지 않고 돌아온다. -->
+    <div class="shopwrap" id="shopwrap">
+      <div class="shopsheet">
+        <div class="shoptitle" id="sh-name"></div>
+        <div class="shopsub" id="sh-sub"></div>
+        <div id="sh-rows"></div>
+        <div id="sh-acts"></div>
+        <button class="shopno" id="sh-close">닫기</button>
+      </div>
+    </div>
+    <div id="mapsheet"></div>
+
     <script defer src="/shops.bundle.js"></script>
       <!-- 손님도 물어볼 수 있어야 한다. 여기 있는 사람은 사장이 아니라
          손님이라 **가게 정보만** 답하는 쪽을 쓴다. -->

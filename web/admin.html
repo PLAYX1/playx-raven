@@ -105,6 +105,17 @@
       /* 주인공. 한 화면에 이것 하나만 이 대접을 받는다. */
       .card.lead { border-color: var(--accent); border-width: 2px; }
       .card.lead h3 { color: var(--accent); font-size: 15px; }
+      /* 사장 폰에서도 주방을 돌린다. 표만 있고 버튼이 없으면
+         "결제는 됐는데 주문을 처리할 수 없다"가 된다. */
+      .ticket { border: 1px solid var(--line); border-left: 5px solid var(--line);
+                border-radius: 13px; padding: 14px; margin-top: 10px; background: var(--bg); }
+      .ticket.paid, .ticket.unknown { border-left-color: var(--warn); }
+      .ticket.making { border-left-color: var(--accent); }
+      .ticket.ready { border-left-color: var(--good); }
+      .ticket .no { font-size: 28px; font-weight: 700; line-height: 1.1; }
+      .ticket .when { color: var(--muted); font-size: 13.5px; margin-top: 4px; }
+      .ticket .items { margin-top: 6px; font-size: 15px; }
+      .ticket button.go { margin-top: 10px; min-height: 52px; font-size: 16px; }
       /* 상태 줄 — 카드 하나에 셋을 담는다. */
       .card.status .srow { display: flex; justify-content: space-between; align-items: baseline;
         gap: 12px; padding: 8px 0; }
@@ -219,10 +230,8 @@
              생겼었다. 카드 다섯이 같은 무게면 주인공이 없는 것이다. -->
         <div class="card lead">
           <h3>들어온 주문</h3>
-          <table>
-            <thead><tr><th>시각</th><th>주소</th><th class="num">금액</th><th class="num">확인</th></tr></thead>
-            <tbody id="orders"><tr><td colspan="4" class="detail">불러오는 중…</td></tr></tbody>
-          </table>
+          <p class="detail" style="margin-bottom:8px">손님 폰에 <b>같은 주문번호</b>가 뜹니다. 거래번호는 보지 않아도 됩니다.</p>
+          <div id="orders"><div class="detail">불러오는 중…</div></div>
         </div>
 
         <div class="card">
@@ -297,7 +306,7 @@
            (why: web/ravi.js 첫 주석) -->
       <div class="pane" id="p-ai" data-ravi>
         <div class="rowhead">
-          <img src="/faces/raven-head.webp" alt="" class="ravihead" />
+          <img src="/raven-head.webp" alt="" class="ravihead" />
           <div><b>라비</b>
             <div class="sub">가게 일이든 이 프로그램이든 물어보세요.
               메뉴는 말로 채워 드립니다.</div>
@@ -458,8 +467,12 @@
             ? "지금은 다른 프로그램도 지갑을 씁니다"
             : "";
 
-          const o = await api("/api/admin/orders");
+          const [o, st] = await Promise.all([
+            api("/api/admin/orders"),
+            api("/api/admin/states"),
+          ]);
           const list = o.payments || [];
+          const states = new Map((st.orders || []).map((x) => [x.address, x]));
 
           // 첫 조회는 기준선이다. 앱을 열자마자 옛 주문 전부로 알림이 울리면
           // 사장은 그 소리를 끄고, 그러면 진짜 주문도 못 듣는다.
@@ -471,29 +484,56 @@
             if (fresh.length) alertNewPayment(fresh.length);
             knownPays = seen;
           }
-          $("orders").innerHTML = o.no_address
-            ? `<tr><td colspan="4" class="detail">가게 주소가 아직 없습니다. 컴퓨터에서 만들어 주세요.</td></tr>`
-            : list.length
-            ? list
-                .map(
-                  (p) => `<tr><td>${p.time ? ago(p.time) : "—"}</td>
-                    <td>${(p.address || "").slice(0, 7)}…</td>
-                    <td class="num">${p.amount}</td>
-                    <td class="num">${
-                      // 사장이 봐야 할 것은 확인 횟수가 아니라 "내줘도 되나"다.
-                      // 4,500원 커피 앞에서 "0 대기"를 읽고 있을 시간이 없다.
-                      p.accept_now
-                        ? `<b style="color:#1f9d55">내주세요</b>`
-                        : `<span class="pending">확인 중 ${p.confirmations}</span>`
-                    }</td></tr>`
-                )
-                .join("")
-            : `<tr><td colspan="4">
-                 <div class="ravibox sm">
+
+          const NEXT = { paid: "making", making: "ready", ready: "done", unknown: "making" };
+          const LABEL = { paid: "만들기 시작", making: "나왔다고 알리기", ready: "전달 완료",
+            unknown: "만들기 시작" };
+          const SHOWN = { paid: "새 주문", making: "만드는 중", ready: "나옴",
+            unknown: "확인 필요" };
+
+          if (o.no_address) {
+            $("orders").innerHTML = `<div class="detail">가게 주소가 아직 없습니다. 컴퓨터에서 만들어 주세요.</div>`;
+          } else {
+            const live = list.filter((p) => {
+              if (!(p.accept_now || p.settled)) return false;
+              return (states.get(p.address)?.state || "unknown") !== "done";
+            });
+            $("orders").innerHTML = live.length
+              ? live.map((p) => {
+                  const s = states.get(p.address)?.state || "unknown";
+                  const t = states.get(p.address)?.ticket;
+                  const tbl = states.get(p.address)?.table;
+                  return `<div class="ticket ${s} risein">
+                    <div class="no">${tbl ? tbl + "번 테이블" : (t || "—")}</div>
+                    ${tbl && t ? `<div class="when">주문번호 ${t}</div>` : ""}
+                    <div class="when">${SHOWN[s] || s} · ${p.time ? ago(p.time) : ""}</div>
+                    <div class="items">${p.amount} RVN</div>
+                    ${NEXT[s] ? `<button class="go" data-adv="${esc(p.address)}" data-to="${NEXT[s]}">${LABEL[s]}</button>` : ""}
+                  </div>`;
+                }).join("")
+              : `<div class="ravibox sm">
                    <img src="/raven-sleep.webp" alt="" />
                    <div class="rt">아직 주문이 없습니다</div>
-                   <div class="rs">손님이 QR을 찍으면 여기 바로 뜹니다.</div>
-                 </div></td></tr>`;
+                   <div class="rs">손님이 QR을 찍으면 <b>번호표가 여기 뜹니다.</b></div>
+                 </div>`;
+            $("orders").querySelectorAll("[data-adv]").forEach((b) => {
+              b.onclick = async () => {
+                b.disabled = true;
+                try {
+                  const r = await fetch("/api/admin/state", {
+                    method: "POST", headers: H,
+                    body: JSON.stringify({ address: b.dataset.adv, state: b.dataset.to }),
+                  }).then((x) => x.json());
+                  if (r.error) throw new Error(r.error);
+                } catch (e) {
+                  b.disabled = false;
+                  $("err").textContent = e.message || String(e);
+                  return;
+                }
+                loadHome();
+              };
+            });
+          }
 
           const ai = s.ai || {};
           $("aiuse").textContent = ai.limit
@@ -699,9 +739,9 @@
       /* 라비는 **노드의 열쇠**로 답한다. 이 폰에는 키가 없고, 넣지도 않는다. */
       (() => {
         const log = document.getElementById("raviLog");
-        const q = document.getElementById("raviQ");
+        const box = document.getElementById("raviQ");
         const go = document.getElementById("raviGo");
-        if (!log || !q || !go) return;
+        if (!log || !box || !go) return;
 
         const say = (who, text) => {
           const d = document.createElement("div");
@@ -713,9 +753,9 @@
 
         let busy = false;
         const ask = async () => {
-          const text = q.value.trim();
+          const text = box.value.trim();
           if (!text || busy) return;
-          busy = true; go.disabled = true; q.value = "";
+          busy = true; go.disabled = true; box.value = "";
           say("me", text);
           const wait = document.createElement("div");
           wait.className = "ai"; wait.textContent = "생각하는 중…";
@@ -723,7 +763,7 @@
           try {
             const r = await fetch("/api/owner-ask", {
               method: "POST",
-              headers: { "content-type": "application/json" },
+              headers: H,
               body: JSON.stringify({ question: text }),
             });
             const j = await r.json();
@@ -734,11 +774,11 @@
             /* 가게 와이파이는 끊긴다. 원문 대신 다음에 할 일을 적는다. */
             say("ai", "가게 컴퓨터에 닿지 못했습니다. 같은 와이파이인지 확인해 주세요.");
           } finally {
-            busy = false; go.disabled = false; q.focus();
+            busy = false; go.disabled = false; box.focus();
           }
         };
         go.addEventListener("click", ask);
-        q.addEventListener("keydown", (e) => { if (e.key === "Enter") ask(); });
+        box.addEventListener("keydown", (e) => { if (e.key === "Enter") ask(); });
       })();
     </script>
 </body>

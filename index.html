@@ -192,6 +192,8 @@
       .mnitem label { display: block; font-size: 13px; color: var(--faint); margin-bottom: 4px; }
       .mnitem input { width: 100%; }
       .mnacts { display: flex; gap: 4px; }
+      /* 재고·기간 칸은 줄 전체를 쓴다. 품목·가격 옆에 끼우면 좁아서 못 읽는다. */
+      .mnwide { grid-column: 1 / -1; padding-top: 4px; }
       .mnacts button { padding: 8px 12px; min-height: 34px; font-size: 13.5px; }
       /* 사진 자리는 비어 있어도 자리를 지킨다. 안 그러면 사진 있는 줄과 없는
          줄의 칸이 어긋나서 목록이 흔들린다. */
@@ -200,12 +202,53 @@
                font-size: 12px; color: var(--faint); cursor: pointer; overflow: hidden;
                background: var(--bg); }
       .mnpic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+      /* 사진을 못 받았을 때. 자리를 없애지 않는다 — 다시 그리면 다시 시도한다. */
+      .mnpic.nopic::after { content: "사진"; font-size: 12px; color: var(--faint); }
+      /* 품목 종류 고르기. 라비 화면의 타일과 같은 문법 — 큰 카드, 굵은 제목,
+         아래에 한 줄 설명. 여기만 다른 문법을 쓰면 배운 것이 안 통한다. */
+      .pickwrap { margin: 14px 0; padding: 16px; border: 1px solid var(--line);
+                  border-radius: 14px; background: var(--panel); }
+      .pickhead { font-size: 17px; font-weight: 600; margin-bottom: 12px; }
+      .kindtiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+      @media (max-width: 720px) { .kindtiles { grid-template-columns: 1fr; } }
+      /* 기간 단추. 자주 파는 기간은 눌러서, 나머지는 직접 적는다 —
+         고정 목록만 두면 "2주권" 을 파는 가게가 이 기능을 못 쓴다. */
+      .spanrow { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+      .spanrow button { padding: 8px 12px; min-height: 40px; font-size: 14px;
+                        border-radius: 9px; border: 1px solid var(--line);
+                        background: var(--bg); color: var(--text); font-family: inherit;
+                        cursor: pointer; }
+      /* 기간을 아직 안 골랐다. 회색으로 적으면 안 읽힌다 — 이건 고쳐야
+         넘어가는 자리다. */
+      .needspan { color: var(--warn); font-weight: 600; }
+      .spanrow button.on { border-color: var(--ravi); background: var(--ravi-tint);
+                           color: var(--ravi); font-weight: 600; }
       /* 한 화면에 다 안 들어가는 폭에서는 세로로 쌓는다. */
       @media (max-width: 720px) { .mnitem { grid-template-columns: 56px 1fr; } }
       /* 폴더 행. 눌러서 접고 편다. */
       tr.grp { cursor: pointer; }
       tr.grp td { font-weight: 600; }
       tr.grp:hover td { background: var(--panel); }
+      /* 몇 종류인지. 이름 옆에 조용히 — 수량 칸에 넣으면 그 칸의 뜻이 둘이 된다. */
+      /* 회원 묶음. 「곧 끝남 / 다니는 중 / 끝남」을 눈으로 가른다. */
+      .mgroup { margin-bottom: 22px; }
+      .mgrouphead { font-size: 16px; font-weight: 600; margin: 0 0 8px;
+                    padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+      .mgrouphead .meta { margin-left: 8px; font-weight: 400; }
+      .cnt { margin-left: 10px; font-size: 13px; font-weight: 400; color: var(--faint); }
+      /* 집안의 본체 줄. 「PLAYX」와 「PLAYX#BM_26」이 같은 목록에 있으면
+         어느 쪽이 이름 그 자체인지 표시가 있어야 한다. */
+      /* 라비 인사말 아래의 조용한 한 줄. 새 줄로 떨어뜨려 인사말과 안 섞이게. */
+      .ravinote { display: block; margin-top: 6px; font-size: 13.5px; color: var(--faint); }
+      /* 체인 등록 표시. 조용한 칩 하나 — 소리치지 않는다. */
+      .chainmark { display: inline-block; margin: 0 0 10px; padding: 5px 11px;
+                   border-radius: 999px; font-size: 13px; font-weight: 500;
+                   border: 1px solid var(--line); color: var(--faint);
+                   background: var(--panel); }
+      .chainmark.on { border-color: var(--ravi); color: var(--ravi);
+                      background: var(--ravi-tint); }
+      .selfmark { margin-left: 8px; font-size: 12px; color: var(--faint);
+                  border: 1px solid var(--line); border-radius: 6px; padding: 2px 7px; }
       .tri { display: inline-block; width: 0; height: 0; margin-right: 8px;
              border-left: 5px solid var(--muted); border-top: 4px solid transparent;
              border-bottom: 4px solid transparent; vertical-align: 1px;
@@ -590,7 +633,15 @@
          고정하면 GPU 가 잘리거나 라비가 찌그러진다. */
       .brandravi { width: 64px; height: auto; border-radius: 12px; flex: none;
         box-shadow: 0 2px 10px color-mix(in srgb, var(--ravi) 26%, transparent); }
-      .brand h1 { font-size: 15px; line-height: 1.25; white-space: nowrap; }
+      /* 🔴 `white-space: nowrap` 이 여기 있었다. 사이드바는 172px 이고
+         그림이 64px 를 쓰니 글자에 남는 폭은 80px 남짓인데, 「PLAY X Raven」
+         을 한 줄에 밀어 넣으라고 시킨 셈이다. 그래서 이름이 사이드바
+         밖으로 튀어나왔다.
+         두 줄로 접히게 둔다. 줄바꿈은 낱말 사이에서만 일어난다. */
+      .brand h1 { font-size: 15px; line-height: 1.25; word-break: keep-all; }
+      /* 글자 상자가 줄어들 수 있어야 접힌다. flex 자식은 기본이 min-width:auto
+         라 내용보다 안 작아지고, 그게 넘침의 진짜 원인이다. */
+      .brand > div { min-width: 0; }
       .brand span { font-size: 11.5px; }
 
       /* 빈 화면. 데스크톱은 폰보다 넓어서 여백을 더 준다. */
@@ -896,6 +947,9 @@
       .qrmain { display: flex; gap: 20px; align-items: center; margin: 14px 0 18px;
         padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--bg); }
       .qrmain svg { width: 260px; height: 260px; flex: none; }
+      /* 테이블 QR 뽑는 자리. 손님 QR 창 안에 둔다 — 찾아가라고 적는 대신. */
+      .tblbox { margin-top: 16px; padding: 14px; border: 1px solid var(--line);
+                border-radius: 12px; background: var(--panel); }
       .qrothers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
       @media (max-width: 720px) { .qrothers { grid-template-columns: 1fr; }
         .qrmain { flex-direction: column; } .qrmain svg { width: 220px; height: 220px; } }
@@ -904,6 +958,9 @@
       .qrcard svg { width: 130px; height: 130px; }
       .qrcard b { display: block; margin-top: 6px; font-size: 15px; }
       .qrcard span { display: block; font-size: 13px; color: var(--muted); line-height: 1.5; }
+      /* QR 이 안 열릴 때 손으로 치게. 한 번 누르면 전체가 잡힌다. */
+      .qrurl { display: block; margin-top: 8px; font-size: 11.5px; line-height: 1.45;
+        word-break: break-all; user-select: all; color: var(--text); }
       /* 🔴 열쇠가 든 QR 셋. 붙이면 열쇠를 벽에 붙이는 것이다. */
       .qrcard.haskey { border-color: color-mix(in srgb, var(--warn) 55%, var(--line)); }
 
@@ -913,8 +970,14 @@
         min-height: 30px; padding: 0 12px; border: 0; background: transparent;
         color: inherit; font: inherit; cursor: pointer; text-align: left; }
       .dotrow:hover { color: var(--ravi); }
+      /* 🔴 `.navfoot div { display: flex }` 가 이 안의 줄까지 **가로로 눕혔다.**
+         172px 사이드바에서 「4,506,341」과 「100%」가 나란히 서고 나머지
+         글자가 한 줄에 한 자씩 세로로 흘렀다 — 화면이 깨진 것처럼 보였다.
+         여기서만 되돌린다. 줄은 줄이다. */
       .dotmore { margin: 2px 12px 8px 30px; font-size: 12.5px; color: var(--muted);
-        line-height: 1.8; }
+        line-height: 1.7; }
+      .dotmore div { display: block !important; font-size: 12.5px; margin: 0 0 2px; }
+      .dotmore b { color: var(--text); font-weight: 600; }
       .dotmore b { color: var(--text); font-weight: 600; }
 
       /* 말 고르기. 사이드바 아래, 「문제 알리기」 바로 위. */
@@ -1161,6 +1224,41 @@
       </div>
     </div>
 
+    <!-- ── 첫 실행: 이 프로그램을 무엇으로 쓰실 건가 ───────────────────
+         🔴 사용자가 둘인데 화면이 하나였다. 돕겠다고 켠 사람이 「메뉴판」을
+         보고, 장사하는 사장이 「채굴」을 본다. 여기서 한 번만 묻는다.
+         기능을 빼는 게 아니라 처음 온 사람에게 안 보여 주는 것이고,
+         「이 컴퓨터」에서 언제든 바꾼다. -->
+    <div id="hello" style="display:none;position:fixed;inset:0;z-index:9000;
+         background:var(--bg);overflow:auto;padding:48px 24px">
+      <div style="max-width:720px;margin:0 auto">
+        <h1 style="font-size:26px;margin:0 0 8px">PLAY X Raven 을 무엇으로 쓰실 건가요?</h1>
+        <p class="meta" style="margin:0 0 28px;font-size:15px">
+          한 번만 여쭙습니다. 나중에 「이 컴퓨터」에서 바꾸실 수 있고, 바꿔도 아무것도 지워지지 않습니다.
+        </p>
+
+        <button id="hello-help" class="ghost" style="display:block;width:100%;text-align:left;
+                padding:22px;margin-bottom:14px;min-height:auto">
+          <b style="display:block;font-size:19px;margin-bottom:6px">레이븐코인을 돕고 싶어요</b>
+          <span class="meta" style="font-size:15px;line-height:1.6">
+            켜 두기만 하면 됩니다. 이 컴퓨터가 체인을 지키고, 다른 가게의 공지를 나르고,
+            사진을 나눠 갖습니다. 그래픽카드가 있으면 캘 수도 있습니다.
+          </span>
+        </button>
+
+        <button id="hello-shop" class="ghost" style="display:block;width:100%;text-align:left;
+                padding:22px;min-height:auto">
+          <b style="display:block;font-size:19px;margin-bottom:6px">장사에 쓸 거예요</b>
+          <span class="meta" style="font-size:15px;line-height:1.6">
+            위의 것을 전부 하면서, 손님 QR·메뉴판·결제·기간권·회원까지 씁니다.
+            가게가 없어도 괜찮습니다 — 만드는 것부터 같이 합니다.
+          </span>
+        </button>
+
+        <p class="meta" id="hello-say" style="margin-top:18px"></p>
+      </div>
+    </div>
+
     <nav>
       <div class="brand" data-tauri-drag-region>
         <!-- 🔴 여기는 `raven-head`(360x275, **얼굴만 잘라 둔 그림**)였다.
@@ -1186,9 +1284,17 @@
           <path d="M12 3.5c-4 0-7 2.6-7 6 0 1.9 1 3.6 2.6 4.7L7 19l3.4-1.7c.5.1 1 .1 1.6.1 4 0 7-2.6 7-6s-3-6-7-6z"/>
           <circle cx="10" cy="9.2" r="1"/><path d="M14.5 9.2h2"/>
         </svg><span>라비</span></a>
+      <!-- 「돕기」로 고른 사람에게만 보인다. mode.rs 를 읽어 main.ts 가 켠다. -->
+      <a data-page="helping" style="display:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-4.4-7-9.5A3.9 3.9 0 0 1 12 8a3.9 3.9 0 0 1 7 3.5C19 16.6 12 21 12 21z"/></svg><span>돕는 중</span></a>
+      <!-- 🔴 **하루 종일 쓰는 것이 왼쪽에 없었다.** 체육관·도장 관장의 본업은
+           출입 찍기인데, 「내 가게 → 출입·회원 탭」으로 **두 번** 들어가야 했다.
+           화면은 하나(page-door)이고 입구만 없었던 것이라, 이 한 줄이면 된다.
+           카페 사장은 가게 화면의 탭으로 계속 들어간다 — 입구가 둘이어도
+           같은 화면이라 갈라지지 않는다. -->
+      <a data-page="door"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20.5V5a1.5 1.5 0 011.2-1.47l8-1.6A1.5 1.5 0 0115 3.4v17.1"/><path d="M3 20.5h13"/><circle cx="12" cy="12" r="1"/></svg><span>출입 · 회원</span></a>
       <a data-page="wallet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2.5"/><path d="M3 10.5h18"/><circle cx="17" cy="14.5" r="1.4"/></svg><span>지갑</span></a>
       <a data-page="assets"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg><span>자산</span></a>
-      <a data-page="reward"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="9" r="5.5"/><path d="M8.5 13.5L7 21l5-2.5L17 21l-1.5-7.5"/></svg><span>배당</span></a>
+      <a data-page="reward"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="9" r="5.5"/><path d="M8.5 13.5L7 21l5-2.5L17 21l-1.5-7.5"/></svg><span>나눠주기</span></a>
       <a data-page="shop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9l1.6-4.2h12.8L20 9"/><path d="M4.5 9h15v10.5h-15z"/><path d="M9.5 19.5v-6h5v6"/></svg><span>내 가게</span></a>
       <a data-page="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M8 20.5h8M12 16.5v4"/></svg><span>이 컴퓨터</span></a>
       <div class="navfoot">
@@ -1198,14 +1304,35 @@
         <!-- 🔴 여태 **표시등일 뿐**이었다. 대표님: "노드 켜짐 버튼과 파일창고
              켜짐 누르면 얼마나 어떻게 작동하고 있는지 실시간 보여주나?"
              안 보여줬다. 눌러서 지금 상태를 펼쳐 본다. -->
+        <!-- 🔴 상세를 여기서 펼치지 않는다. 사이드바는 172px 이고, 그 안의
+             `<div>` 는 `.navfoot div { display: flex }` 때문에 가로로 눕는다 —
+             「4,506,341」과 「100.000%」가 나란히 서고 나머지 글자가 **한 줄에
+             한 자씩** 세로로 흘렀다. 화면이 고장난 것처럼 보였다.
+
+             표시등은 「지금 도나」만 말하고, 자세한 것은 **넓은 쪽**에서 본다.
+             누르면 「이 컴퓨터」로 데려간다. -->
+        <!-- 🔴 **넷이 이 프로그램의 전부다.** 노드·채굴·파일창고·릴레이.
+             켜짐/꺼짐만 여기서 말하고, **자세한 것과 설정은 오른쪽 화면**에서
+             본다 — 172px 사이드바에 우겨넣으면 글자가 한 줄에 한 자씩 흐른다.
+             실제로 그렇게 깨져 있었다. -->
         <button type="button" class="dotrow" id="d-node-row">
-          <span class="dot off" id="d-node"></span><span id="d-node-t">노드</span>
+          <span class="dot off" id="d-node"></span><span id="d-node-t">RVN 노드</span>
         </button>
-        <div class="dotmore" id="d-node-more" style="display:none"></div>
+        <button type="button" class="dotrow" id="d-mine-row">
+          <span class="dot off" id="d-mine"></span><span id="d-mine-t">채굴</span>
+        </button>
         <button type="button" class="dotrow" id="d-ipfs-row">
           <span class="dot off" id="d-ipfs"></span><span id="d-ipfs-t">파일창고</span>
         </button>
-        <div class="dotmore" id="d-ipfs-more" style="display:none"></div>
+        <button type="button" class="dotrow" id="d-relay-row">
+          <span class="dot off" id="d-relay"></span><span id="d-relay-t">릴레이</span>
+        </button>
+        <!-- 🔴 다섯째. 넷이 다 초록인데 **손님이 못 들어오는** 상태가 있다.
+             앱은 터널을 이미 돌리고 있었는데 표시가 없어서, 사장은 가게가
+             바깥에 열려 있는지 알 방법이 없었다. -->
+        <button type="button" class="dotrow" id="d-out-row">
+          <span class="dot off" id="d-out"></span><span id="d-out-t">바깥 연결</span>
+        </button>
       </div>
     </nav>
 
@@ -1228,6 +1355,13 @@
           <span id="dr-note" class="meta" style="margin-right:auto"></span>
           <button class="ghost" id="dr-new">회원 등록</button>
           <button class="ghost" id="dr-all">전체 명단</button>
+          <!-- 🔴 카운터에서 판 이용권은 손님 폰에만 있었다. 폰을 닫거나
+               잃으면 사장이 「그 표가 진짜인가」를 확인할 방법이 없었다 —
+               돈은 받았는데 못 들여보내는 상황이고, 그 자리에서 싸움이 된다. -->
+          <button class="ghost" id="dr-passes">판 이용권</button>
+          <!-- 🔴 예약은 손님 폰과 우리 장부에만 있다. 사장이 오늘 몇 시에
+               누가 오는지 볼 곳이 없으면, 그 시간에 다른 일을 잡는다. -->
+          <button class="ghost" id="dr-books">예약 일정</button>
           <button class="ghost" id="dr-doors">문 설정</button>
         </div>
 
@@ -1301,6 +1435,34 @@
             </select>
           </label>
 
+          <!-- 🔴 체육관마다 받는 것이 다르다. 필라테스는 생년, 복싱은
+               비상연락처, 어린이 체육관은 보호자 이름을 받는다. 고정 칸으로
+               박으면 안 쓰는 칸이 늘 비어 있거나 필요한 칸이 없다.
+               셋 다 **선택**이고, 안 적으면 그 회원에게는 아예 없는 값이다. -->
+          <div class="row" style="gap:8px;margin-top:10px">
+            <div style="max-width:140px">
+              <label>태어난 해 <span class="meta">(선택)</span></label>
+              <input id="ms-birth" type="number" min="1900" max="2100" step="1"
+                     placeholder="1985" inputmode="numeric" />
+            </div>
+            <div style="max-width:120px">
+              <label>성별 <span class="meta">(선택)</span></label>
+              <select id="ms-gender">
+                <option value="">안 받음</option>
+                <option value="여">여</option>
+                <option value="남">남</option>
+              </select>
+            </div>
+            <div style="flex:1;min-width:0">
+              <label>비상연락처 <span class="meta">(선택)</span></label>
+              <input id="ms-emg" placeholder="보호자·가족" autocomplete="off" />
+            </div>
+          </div>
+          <div class="meta" style="margin-top:4px">
+            태어난 해를 적으시면 <b>나이가 저절로 계산</b>됩니다 —
+            손으로 적으면 해가 바뀌어도 안 늘어납니다.
+          </div>
+
           <div id="ms-period">
             <div class="row">
               <div style="flex:1"><label>시작일<input id="ms-start" type="date" /></label></div>
@@ -1343,7 +1505,7 @@
            보다가 500 RVN을 태우는 길이 구조적으로 없어야 한다.        ── -->
       <section class="page" id="page-assets">
         <h2 class="title">자산</h2>
-        <p class="lede">자산에 붙은 그림·음악은 체인이 아니라 <b>파일 창고(IPFS)</b>에 있습니다. 아무도 갖고 있지 않으면 찾을 수 없게 됩니다 — 이 컴퓨터가 켜져 있으면 이 컴퓨터가 갖고 있습니다.</p>
+        <p class="lede">자산에 붙은 그림·음악은 체인이 아니라 <b>파일창고(IPFS)</b>에 있습니다. 아무도 갖고 있지 않으면 찾을 수 없게 됩니다 — 이 컴퓨터가 켜져 있으면 이 컴퓨터가 갖고 있습니다.</p>
         <!-- 큰 아이콘 줄. 라비 화면과 같은 문법 — 위는 「지금 할 일」. -->
         <div class="tiles pagetiles" id="pt-assets"></div>
 
@@ -1513,6 +1675,8 @@
           </div>
           <label>새 암호 (10자 이상)<input id="enc-new" type="password" autocomplete="off" /></label>
           <label>한 번 더<input id="enc-new2" type="password" autocomplete="off" /></label>
+          <!-- 🔴 단추만 안 눌리면 사장은 고장인 줄 안다. 왜 안 되는지 여기 적는다. -->
+          <p id="enc-why" class="meta"></p>
 
           <div class="confirmbox">
             <div>아래 문장을 그대로 입력하세요.</div>
@@ -1692,10 +1856,23 @@
 
       <section class="page" id="page-shop">
         <h2 class="title">가게</h2>
+        <!-- 🔴 이 이름이 체인에 있는가, 이 컴퓨터에만 있는가. 여태 구별이
+             없어서, 이름만 적어 둔 가게가 등록된 것처럼 보였다.
+             경고 상자로 만들지 않는다 — 등록 안 한 것은 고장이 아니라
+             정상적인 한 단계고, 커피는 그 상태로도 다 팔린다. -->
+        <span class="chainmark" id="sh-chainmark" style="display:none"></span>
+        <!-- 🔴 사진·전화·영업시간을 고친 뒤 누르는 단추. 체인은 안 건드리므로
+             소각이 0원이고, 몇 번이든 눌러도 된다. 이게 없으면 사장은 바꿔
+             놓고 45분을 기다려야 하고, 그동안 바뀐 줄 안다. -->
+        <button class="ghost" id="sh-refresh" style="display:none;margin-left:8px">바뀐 것 손님에게 알리기</button>
+        <div class="meta" id="sh-refreshsay" style="margin-bottom:8px"></div>
         <p class="lede">주문마다 주소가 따로 생깁니다. 그 주소로 들어온 돈만 그 주문의 결제입니다.</p>
         <div class="tabs">
           <button class="tab on" data-shoptab="orders">들어온 주문</button>
           <button class="tab" data-shoptab="menu">메뉴판</button>
+          <!-- 🔴 손님 QR 은 **장사의 전부**인데 「이 컴퓨터」 안쪽에 있었다.
+               매일 쓰는 것은 매일 여는 화면에 있어야 한다. -->
+          <button class="tab" id="sh-qrtab">손님 QR · 테이블</button>
           <button class="tab" data-goto="door">출입 · 회원</button>
           <button class="tab" data-goto="msg">공지</button>
           <button class="tab" data-shoptab="sales">매출 · 장부</button>
@@ -1806,6 +1983,18 @@
               </div>
               <div id="sh-picprev"></div>
 
+              <!-- 🔴 간판 사진은 목록에 뜨는 **정사각 한 장**이다. 가게 안이
+                   어떻게 생겼는지는 그 한 장으로 안 보인다. 손님이 처음 가는
+                   가게에서 제일 궁금한 것이 그것이다.
+                   여러 장은 파일창고에 **폴더 하나**로 올라가고, 공지에는
+                   주소 하나(60바이트)만 실린다 — 100장을 올려도 부담이 없다. -->
+              <label style="margin-top:14px">가게 안 사진 (여러 장)</label>
+              <div class="row">
+                <button class="ghost" id="sh-pics">사진 여러 장 고르기</button>
+                <span class="meta" id="sh-picsnote">없어도 됩니다</span>
+              </div>
+              <div id="sh-picsprev" class="row" style="flex-wrap:wrap;gap:8px;margin-top:8px"></div>
+
               <label style="margin-top:12px">가게 이름 (손님이 읽는 이름)</label>
               <div class="row">
                 <input id="sh-ko" placeholder="한국어 — 강남 카페" autocomplete="off" />
@@ -1820,6 +2009,11 @@
               <label style="margin-top:12px">체인에 남을 이름</label>
               <input id="sh-asset" placeholder="GANGNAM_CAFE" autocomplete="off" spellcheck="false" />
               <div class="meta" id="sh-assetcheck"></div>
+              <!-- 🔴 **실제로 체인에 올라간 이름.** 위 칸(`sh-asset`)은 사장이
+                   치는 중인 글자라서, 그걸 「등록됨」의 근거로 쓰면 이름을
+                   치기만 해도 등록된 것처럼 보인다. 이 칸은 발행 거래가
+                   성공한 뒤에만 채워진다. -->
+              <input type="hidden" id="sh-registered" />
 
               <label style="margin-top:12px">소개</label>
               <input id="sh-desc" placeholder="원두를 직접 볶는 작은 카페" autocomplete="off" />
@@ -1848,18 +2042,23 @@
 
               <!-- 노드는 새벽에도 돈다. 손님 화면이 그때도 주문을 받으면
                    아무도 만들지 않을 커피값이 결제된다. -->
-              <!-- 손님이 밖에서 주문하러 오는 문. 이게 없으면 가게 목록에서
-                   가게를 찾아도 갈 데가 없다. -->
-              <label style="margin-top:16px">밖에서 주문하러 올 주소</label>
+              <!-- 손님이 밖에서 주문하러 오는 문.
+                   🔴 여기에 「지금 터널 주소 넣기」 단추가 있었다. 그 단추는
+                   켤 때마다 바뀌는 임시 주소를 **체인에 영구히** 적어 넣는
+                   일이었다 — 내일이면 죽은 주소가 영원히 남고, 고치려면
+                   재발행(RVN 소각)이다. 지금은 문을 열 때마다 릴레이에
+                   자동으로 알리므로 체인은 건드리지 않는다. -->
+              <label style="margin-top:16px">밖에서 주문하러 올 주소 <span class="meta">(없어도 됩니다)</span></label>
               <div class="row">
-                <input id="sh-orderurl" placeholder="https://…" autocomplete="off" spellcheck="false" />
-                <button class="ghost" id="sh-usetunnel">지금 터널 주소 넣기</button>
+                <input id="sh-orderurl" placeholder="내 도메인이 있을 때만 — https://…" autocomplete="off" spellcheck="false" />
               </div>
               <div class="meta" id="sh-orderurlnote" style="margin-top:4px">
-                비워 두면 가게 목록에 이름만 보이고 <b>주문 버튼이 안 생깁니다.</b>
-                이 주소는 체인에 올라가므로, 바뀌면 <b>재발행(RVN 소각)</b>을 해야 고쳐집니다 —
-                빠른 터널 주소는 켤 때마다 바뀌니 임시로만 쓰세요.
+                <b>대개는 비워 두시면 됩니다.</b> 「이 컴퓨터 → 바깥에서 열기」를 켜면
+                지금 주소를 손님에게 <b>자동으로 알립니다</b> — 주소가 바뀌어도 저절로 따라갑니다.
+                여기 적은 주소는 체인에 영구히 남아 바꾸려면 재발행(RVN 소각)을 해야 하니,
+                <b>안 바뀌는 내 도메인이 있을 때만</b> 적으세요.
               </div>
+
 
               <label style="margin-top:16px">영업시간</label>
               <div class="meta" style="margin-bottom:8px">
@@ -1897,6 +2096,30 @@
             <input id="ai-menu" placeholder="예: 아메리카노 4500, 카페라떼 5000, 치즈케이크 6500" autocomplete="off" />
             <button class="ghost" id="ai-menu-go">AI로 채우기</button>
             <span class="meta" id="ai-menu-note"></span>
+          </div>
+          <!-- 🔴 품목 줄에 칸을 다섯 개 늘리지 않는다. 아메리카노에 「남은
+               개수」와 「며칠」 칸을 보여 주면, 그 두 칸은 가게의 99% 품목에서
+               평생 비어 있고 화면만 어지럽다.
+
+               대신 **더할 때 종류를 먼저 고른다.** 고른 종류에 필요한 칸만
+               그 줄에 나온다. 묻지 않는 것이 아니라 **한 번만 묻는** 방식이다. -->
+          <div class="pickwrap" id="mn-kindwrap" style="display:none">
+            <div class="pickhead">무엇을 파시나요?</div>
+            <div class="tiles kindtiles">
+              <button type="button" class="tile" data-kind="plain">
+                <b>그냥 파는 것</b><span>커피 · 빵 · 밥</span>
+              </button>
+              <button type="button" class="tile" data-kind="stock">
+                <b>개수가 정해진 것</b><span>굿즈 · 한정 수량</span>
+              </button>
+              <button type="button" class="tile" data-kind="pass">
+                <b>기간 이용권</b><span>하루권 · 한달권 · 1년권</span>
+              </button>
+              <button type="button" class="tile" data-kind="book">
+                <b>예약 받는 것</b><span>커트 · 상담 · 연습실</span>
+              </button>
+            </div>
+            <button class="ghost" id="mn-kindno" style="margin-top:12px">그만두기</button>
           </div>
           <div class="bar">
             <button id="mn-add">품목 추가</button>
@@ -2016,8 +2239,43 @@
            · 한 번  — 버튼. 오늘 한 일
            스위치를 아코디언으로 쓰지 않는다. 스위치가 오른쪽으로 가면
            사람은 이미 켜진 줄 알고, 저장을 안 누른다.          ── -->
+      <!-- 🔴 표시등을 누르면 여기가 열린다. 넷의 상태와 설정이 한 자리에.
+           여태 사이드바에서 펼치려다 화면이 깨졌고, 「이 컴퓨터」로 보내면
+           어디를 보라는 건지 몰랐다. 누른 것만 보여 주는 화면이 맞다. -->
+      <section class="page" id="page-parts">
+        <h2 class="title" id="pt-title">상태</h2>
+        <div class="tabs" id="pt-tabs">
+          <button class="tab on" data-part="node">RVN 노드</button>
+          <button class="tab" data-part="mine">채굴</button>
+          <button class="tab" data-part="ipfs">파일창고</button>
+          <button class="tab" data-part="relay">릴레이</button>
+          <button class="tab" data-part="out">바깥 연결</button>
+        </div>
+        <div id="pt-body"></div>
+      </section>
+
+      <!-- ── 돕는 중 ───────────────────────────────────────────────────
+           🔴 돕겠다고 켠 사람에게 줄 것은 계산대가 아니라 **내가 지금
+           무엇을 하고 있는지**다. 노드를 켜 두는 일은 눈에 안 보여서,
+           보상이 없으면 며칠 뒤에 꺼진다. 이 화면이 그 보상이다. -->
+      <section class="page" id="page-helping">
+        <h2 class="title">돕는 중</h2>
+        <div id="hp-body"></div>
+      </section>
+
       <section class="page" id="page-settings">
         <h2 class="title">이 컴퓨터</h2>
+
+        <!-- 무엇으로 쓰는지. 바꿔도 아무것도 안 지운다 — 돕던 사람이
+             가게를 열 수도 있고, 가게를 접고 돕기만 할 수도 있다. -->
+        <div class="card">
+          <b>이 프로그램을 무엇으로 쓰시나요</b>
+          <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">
+            <button class="ghost" id="mode-help">레이븐코인 돕기</button>
+            <button class="ghost" id="mode-shop">장사에 쓰기</button>
+          </div>
+          <p class="meta" id="mode-say" style="margin-top:10px"></p>
+        </div>
 
         <!-- 🔴 이 칸은 여태 「고급 → 읽기 전용」 접힌 칸 **맨 안쪽**에 있었다.
              화면 전체에서 딱 한 번, 제일 깊은 곳에.
@@ -2043,34 +2301,26 @@
           <div class="kv"><b>붙는 곳</b><span>가게 결제 · 벤딩머신 · 중고 물건 사기</span></div>
           <div class="kv"><b>안 붙는 곳</b><span>채굴 · 그냥 보내기 · 자산 발행</span></div>
           <div class="kv"><b>가는 자리</b><span><code class="addr" id="fee-addr">읽는 중…</code></span></div>
-          <!-- 🔴 이 자리가 **비어 있었다.** 러스트에는 `fee_read`·`fee_save`
-               가 다 있고 명령 등록도 돼 있는데, 화면에 스위치가 없었다.
-               그런데 랜딩에는 「설정에서 끄실 수 있습니다. 받는 주소도
-               바꾸실 수 있습니다」라고 적혀 있다 — **못 하는 것을 한다고
-               적어 둔 것**이다.
+          <!-- 🔴 여기에 「개발비 내기 / 안 내기」 스위치와 받는 주소 칸이
+               있었다. 없앴다(2026-08-23, 대표님 지시: "무조건 1% 받을거야").
 
-               이 프로그램의 주장은 "못 끄는 것은 개발비가 아니라 세금이고,
-               소스가 열려 있으면 세금은 포크 한 번으로 사라진다" 이다.
-               그 주장이 성립하려면 여기에 진짜 스위치가 있어야 한다. -->
-          <div class="feebox">
-            <div class="row" style="gap:10px;align-items:center;flex-wrap:wrap">
-              <button type="button" class="feepick" id="fee-on">
-                <b>개발비 내기</b><span>1% · 만드는 곳으로</span>
-              </button>
-              <button type="button" class="feepick" id="fee-off">
-                <b>안 내기</b><span>100% 사장님께</span>
-              </button>
-            </div>
-            <div class="row" style="gap:8px;margin-top:10px">
-              <input id="fee-custom" autocomplete="off" spellcheck="false"
-                     placeholder="다른 주소로 보내기 (비우면 기본 주소)" style="flex:1;min-width:0" />
-              <button class="ghost" id="fee-apply" style="flex:none">저장</button>
-            </div>
-            <div class="meta" id="fee-say" style="margin-top:8px"></div>
+               반대 논리도 여기 적혀 있었다 — "못 끄는 것은 개발비가 아니라
+               세금이고, 오픈소스에서 세금은 포크 한 번으로 사라진다".
+               그 말은 지금도 맞다. 소스를 고쳐 다시 빌드하면 누구든 뺄 수 있다.
+
+               그래도 **스위치를 눈앞에 두는 것**과 **소스를 고쳐야 하는 것**은
+               다르다. 앞의 것은 설정을 여는 사람마다 한 번씩 고민하게 만든다.
+               카드 단말기는 2~3% 를 떼고 임대료를 따로 받는다. 여기는 1% 뿐이다. -->
+          <div class="feebox" id="fee-owedbox" style="display:none">
+            <div class="kv"><b>쌓인 개발비</b><span id="fee-owed">0 RVN</span></div>
+            <div class="kv"><b>여태 보낸 것</b><span id="fee-sent">0 RVN</span></div>
+            <button class="ghost" id="fee-send" style="margin-top:10px">개발비 보내기</button>
+            <div class="meta" id="fee-sendsay" style="margin-top:8px"></div>
           </div>
           <p class="meta" style="margin-top:10px">
-            체인에서 직접 확인하실 수 있습니다. 카드 수수료(2~3%)와 달리
-            <b>단말기 임대료도 정산 대기도 없습니다.</b>
+            <b>끄는 설정은 없습니다.</b> 대신 체인에서 직접 대조하실 수 있고,
+            소스가 전부 공개돼 있습니다. 카드 수수료(2~3%)와 달리
+            <b>단말기 임대료도 정산 대기도 해지 위약금도 없습니다.</b>
           </p>
         </div>
 
@@ -2115,7 +2365,8 @@
 
         <!-- 이 노드가 어디인지. 지점이 둘이 되는 순간 "이 컴퓨터"는 뜻이 없다. -->
         <div class="card" style="margin-bottom:12px">
-          <h3>이 노드</h3>
+          <!-- 사이드바 표시등을 누르면 여기로 온다. -->
+          <h3 id="sec-node">이 노드</h3>
           <label style="display:block;font-size:14px;color:var(--muted);margin-top:8px">
             이름 (지점명)
             <input id="nd-name" placeholder="강남지점 · 2층 계산대" autocomplete="off"
@@ -2245,7 +2496,10 @@
                  같이 죽는다. 그건 백업이 아니라 짐이다. 그래서 종이에 적게 한다. -->
             <div class="card" style="margin-top:12px;border-color:var(--warn)">
               <h3 style="margin-top:0">이 자물쇠의 열쇠</h3>
-              <p class="meta" style="margin:6px 0 10px">
+              <!-- 🔴 암호를 정한 사람에게 이걸 적으라고 하면 **안 해도 되는 일을
+                   시키는 것**이고, 그래서 「암호가 둘인가?」로 읽힌다.
+                   암호가 정해져 있으면 화면이 그렇게 말한다(main.ts 가 바꾼다). -->
+              <p class="meta" id="ck-need" style="margin:6px 0 10px">
                 컴퓨터가 죽으면 이 열쇠도 같이 사라집니다.
                 <b>종이에 적어 12단어와 같이 보관하세요.</b>
                 이것 없이는 클라우드 사본을 못 엽니다.
@@ -2255,6 +2509,39 @@
                 <button id="ck-show">열쇠 보기</button>
                 <button class="ghost" id="ck-copy">복사</button>
               </div>
+            </div>
+
+            <!-- 🔴 위의 긴 열쇠를 종이에 적는 사람은 많지 않다. 12단어도 이미
+                 적어야 하는데 하나를 더 얹으면 안 하는 쪽으로 흐른다.
+                 그래서 **외우는 암호**로도 열리게 한다. -->
+            <div class="card" style="margin-top:12px">
+              <h3 style="margin-top:0">외우는 암호로도 열기</h3>
+              <!-- 🔴 암호가 두 군데 따로 있으면 사장은 그 둘을 헷갈린다.
+                   그래서 **지갑에 암호를 걸 때 이것도 같이 정해진다.**
+                   여기는 「아직 안 걸었거나, 따로 두고 싶을 때」의 자리다. -->
+              <p class="meta" style="margin:6px 0 10px">
+                <b>「지갑」 화면에서 암호를 거시면 이것도 같이 정해집니다.</b>
+                따로 정하실 필요가 없습니다. 아래는 지갑 암호를 아직 안 걸었거나,
+                <b>백업만 다른 암호로</b> 두고 싶을 때 씁니다.
+              </p>
+              <div class="card" style="margin:0 0 10px;padding:10px 12px">
+                <div class="kv"><b>지갑 암호</b><span>돈을 보낼 때 — 「지갑」 화면</span></div>
+                <div class="kv"><b>이 암호</b><span>새 컴퓨터에서 백업을 열 때</span></div>
+              </div>
+              <!-- 🔴 한 번만 받으면 오타를 못 잡는다. 오타 난 암호는
+                   **새 컴퓨터에서 백업을 못 여는 것**으로 나타나고, 그때는
+                   이미 늦었다. 두 번 받는다. -->
+              <div class="row" id="bp-box">
+                <input id="bp-pass" type="password" placeholder="암호 (10글자 이상)"
+                       autocomplete="new-password" style="flex:1;min-width:150px" />
+                <input id="bp-pass2" type="password" placeholder="한 번 더"
+                       autocomplete="new-password" style="flex:1;min-width:150px" />
+                <button id="bp-save">이 암호로 정하기</button>
+              </div>
+              <!-- 🔴 암호를 정하면 위 칸을 접는데, 접기만 하면 **바꿀 길이
+                   없어진다.** 여는 단추를 남긴다. -->
+              <button class="ghost" id="bp-again" style="display:none;margin-top:10px">암호 바꾸기</button>
+              <p class="meta" id="bp-msg" style="margin-top:8px"></p>
             </div>
           </div>
 
@@ -2328,7 +2615,7 @@
             </details>
           </div>
 
-          <div class="card">
+          <div class="card" id="mine-net-box">
             <h3>채굴</h3>
             <p class="meta" style="margin:0 0 12px">
               이 컴퓨터로 캐지 않습니다. <b>따로 있는 GPU 기계</b>가 캐고 수익만 이 지갑으로 옵니다.
@@ -2404,7 +2691,17 @@
             <div id="cf-result"></div>
             <div id="cf-others"></div>
 
-            <h3 style="margin-top:20px">IPFS</h3>
+            <h3 id="sec-ipfs" style="margin-top:20px">파일창고(IPFS)</h3>
+            <!-- 🔴 「창고」라고만 하면 **내 것만 넣는 곳**으로 읽힌다. 실제로는
+                 세상과 나눠 갖는 곳이고, 그걸 모르면 「내 창고에 넣었으니 남은
+                 못 본다」고 오해한다. 사진을 올리는 사람이 알아야 할 사실이다.
+                 그리고 영문 이름을 한 번은 적어 둬야 한다 — 고장났을 때
+                 사장이 검색할 단어가 「파일창고」뿐이면 아무것도 안 나온다. -->
+            <p class="lede" style="margin-top:4px">
+              가게 사진·메뉴판이 여기 들어갑니다. <b>내 컴퓨터에만 있는 창고가 아니라</b>,
+              손님 폰과 다른 노드가 같이 나눠 갖는 곳입니다 — 그래서 손님이 사진을 볼 수 있습니다.
+              같은 파일은 언제나 같은 주소를 가지므로, <b>바뀌면 주소도 바뀝니다.</b>
+            </p>
             <div class="row" id="if-profiles">
               <div class="tpl" data-ipfsprofile="lowpower"><b>오래된 컴퓨터</b><span>연결과 뒷일을 줄입니다</span></div>
               <div class="tpl" data-ipfsprofile="default-networking"><b>기본으로</b><span>원래대로</span></div>

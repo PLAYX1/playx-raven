@@ -214,7 +214,13 @@ function renderList() {
         ? `<button data-unpin="${cid}" class="ghost">해제</button>`
         : "";
     // 자식 행은 전체 이름 대신 잎만 보여준다. 앞부분이 폴더 이름에 이미 있다.
-    const label = child ? a.name.slice(a.root.length).replace(/^[/#]/, "") : a.name;
+    //
+    // 🔴 그런데 **집안의 본체**(`PLAYX` 자신)는 앞부분을 지우고 나면 아무것도
+    //    안 남는다. 그래서 이름이 빈 줄이 하나 있었고, 하필 그 줄에 제일 큰
+    //    숫자(209억)가 붙어 있었다 — 「뭐가 뭔지 헷갈린다」의 정체가 이것이다.
+    //    이름 없는 줄은 사람에게 고장으로 읽힌다.
+    const leaf = child ? a.name.slice(a.root.length).replace(/^[/#]/, "") : a.name;
+    const label = leaf || `${a.name}<span class="selfmark">이 이름 자체</span>`;
     return `<tr data-row="${a.name}" class="${selected === a.name ? "sel" : ""}${child ? " child" : ""}">
       <td class="name">${child ? '<span class="branch"></span>' : ""}${label}</td>
       <td class="num">${fmtQty(a.amount)}</td>
@@ -229,9 +235,14 @@ function renderList() {
       if (list.length === 1) return rowHtml(list[0], false);
       const open = !collapsed.has(root);
       // 접힌 폴더 안의 자산이 사라진 것처럼 보이면 안 된다. 개수를 항상 적는다.
+      // 🔴 개수를 **수량 칸에 넣으면 안 된다.** 그 칸의 다른 줄은 전부
+      //    「이 자산을 몇 개 가지고 있나」인데, 제목 줄만 「몇 종류인가」였다.
+      //    한 칸에 두 가지 뜻이 있으면 사람은 둘 다 못 믿는다 — 실제로
+      //    「PLAYX 자산이 여기 19개 있다는 건가?」라는 질문이 나왔다.
+      //    개수는 이름 옆으로 옮기고, 단위도 「개」가 아니라 「종류」라고 쓴다.
       const head = `<tr class="grp" data-grp="${root}">
-        <td class="name"><span class="tri ${open ? "open" : ""}"></span>${root}</td>
-        <td class="num">${list.length}개</td>
+        <td class="name"><span class="tri ${open ? "open" : ""}"></span>${root}<span class="cnt">${list.length}종류</span></td>
+        <td class="num"></td>
         <td colspan="2"></td>
       </tr>`;
       return head + (open ? list.map((a) => rowHtml(a, true)).join("") : "");
@@ -699,13 +710,39 @@ async function doRestore() {
     title: "되돌릴 백업을 고르세요",
     multiple: false,
     directory: false,
-    filters: [{ name: "PLAY X Raven 백업", extensions: ["zip"] }],
+    // 🔴 `zip` 만 적어 뒀더니, 잠근 백업(`.zip.pxlock`)이 **회색으로 뜨고
+    //    「열기」가 안 눌렸다.** 백업은 만드는 것보다 **되돌리는 것**이 본업인데
+    //    거르개 한 줄 때문에 되돌릴 수가 없었다. 만들 때 쓰는 이름을 바꾸면
+    //    여는 쪽도 같이 바꿔야 한다 — 그걸 놓쳤다.
+    //
+    //    `잠김` 은 옛 이름이다. 이미 그렇게 만들어 둔 백업이 있으니 계속 받는다.
+    filters: [
+      { name: "PLAY X Raven 백업", extensions: ["pxlock", "zip", "잠김"] },
+      { name: "모든 파일", extensions: ["*"] },
+    ],
     defaultPath: undefined,
   }).catch(() => null);
   if (!where || typeof where !== "string") return;
   $("rs-result").innerHTML = `<div class="meta" style="margin-top:9px">읽는 중…</div>`;
   try {
-    const r: any = await invoke("restore_survey", { folder: where });
+    // 🔴 다른 컴퓨터에서 만든 백업은 **암호가 있어야** 열린다. 그런데 암호를
+    //    칠 데가 없어서, 정작 백업이 필요한 그 상황에서 막혔다.
+    //    같은 컴퓨터에서는 열쇠 파일로 바로 열리므로 안 물어본다.
+    let rsPass = "";
+    let r: any;
+    try {
+      r = await invoke("restore_survey", { folder: where, pass: null });
+    } catch (e) {
+      if (!String(e).includes("다른 컴퓨터")) throw e;
+      const pw = await ask(
+        "백업 암호",
+        "이 백업은 다른 컴퓨터에서 만든 것입니다. 그때 정하신 암호를 넣어 주세요.",
+        { password: true }
+      );
+      if (!pw) return;
+      rsPass = pw;
+      r = await invoke("restore_survey", { folder: where, pass: rsPass });
+    }
     if (r.empty) {
       $("rs-result").innerHTML = `<div class="warnbox" style="margin-top:11px">${r.note}</div>`;
       return;
@@ -729,7 +766,11 @@ async function doRestore() {
         "되돌립니다"
       );
       if (!ok) return;
-      const res: any = await invoke("restore_apply", { folder: where.trim(), keys });
+      const res: any = await invoke("restore_apply", {
+        folder: where.trim(),
+        keys,
+        pass: rsPass || null,
+      });
       $("rs-result").innerHTML =
         `<div class="card" style="margin-top:11px"><h3>되돌렸습니다</h3>` +
         (res.done || []).map((d: any) => `<div class="kv"><b>${d.what}</b><span>${d.note || "완료"}</span></div>`).join("") +
@@ -943,6 +984,100 @@ async function wireUsbLock(): Promise<void> {
 }
 
 function wireCloudKey(): void {
+  // 외우는 암호로도 열리게 하는 칸.
+  const bpSave = document.getElementById("bp-save");
+  const bpMsg = document.getElementById("bp-msg");
+  if (bpSave && bpMsg) {
+    // 🔴 암호가 이미 정해져 있으면 **긴 열쇠를 적을 필요가 없다.** 그런데
+    //    화면은 계속 "종이에 적어 두세요"라고 말하고 있었다. 안 해도 되는
+    //    일을 시키면 사장은 「암호가 둘인가?」로 읽고 둘 다 안 한다.
+    void invoke<any>("backup_pass_state")
+      .then((st) => {
+        const need = document.getElementById("ck-need");
+        const box = document.getElementById("bp-box");
+        if (st?.set) {
+          bpMsg.textContent = "암호가 정해져 있습니다. 새 백업부터 이 암호로 열립니다.";
+          if (need)
+            need.innerHTML =
+              "<b>암호를 정해 두셨으니 이건 안 적으셔도 됩니다.</b> 새 컴퓨터에서는 그 암호를 치시면 됩니다. " +
+              "아래 열쇠는 암호를 잊었을 때 쓰는 여벌입니다.";
+          // 🔴 **접기만 하면 바꿀 길이 없어진다.** 러스트는 덮어쓸 수 있는데
+          //    화면이 칸을 숨겨서, 암호를 한 번 정하면 영영 못 바꿨다.
+          //    접되 **여는 단추**를 남긴다.
+          if (box) box.style.display = "none";
+          const again = document.getElementById("bp-again");
+          if (again) {
+            again.style.display = "";
+            again.onclick = () => {
+              if (box) box.style.display = "";
+              again.style.display = "none";
+              bpMsg.innerHTML =
+                "새 암호를 넣으시면 <b>앞으로 만드는 백업</b>이 새 암호로 열립니다.<br />" +
+                "⚠️ <b>이미 만들어 둔 백업은 예전 암호로만 열립니다</b> — 그 파일 안에 이미 굳어 있어서 " +
+                "바꿀 수가 없습니다. 바꾸신 뒤에 한 부 새로 만들어 두세요.";
+            };
+          }
+        } else if (need) {
+          need.innerHTML =
+            "🔴 <b>아직 암호를 안 정하셨습니다.</b> 컴퓨터가 죽으면 이 열쇠도 같이 사라져서 백업을 못 엽니다.<br />" +
+            "<b>아래에서 암호를 정하시거나</b>, 이 열쇠를 종이에 적어 12단어와 같이 보관하세요.";
+        }
+      })
+      .catch(() => null);
+    // 🔴 두 칸이 다른 것을 **치는 동안** 알려 준다. 누르고 나서야 알려주면
+    //    사장은 이미 「됐겠지」 하고 넘어간 뒤다.
+    const bpCheck = () => {
+      const p1 = (document.getElementById("bp-pass") as HTMLInputElement | null)?.value || "";
+      const p2 = (document.getElementById("bp-pass2") as HTMLInputElement | null)?.value || "";
+      if (p1 && p1.length < 10) bpMsg.textContent = `암호가 짧습니다. ${10 - p1.length}글자 더 필요합니다.`;
+      else if (p2 && p1 !== p2) bpMsg.textContent = "🔴 두 번 넣은 암호가 다릅니다.";
+      else if (p1 && p1 === p2) bpMsg.textContent = "✅ 두 암호가 같습니다.";
+      else bpMsg.textContent = "";
+    };
+    ["bp-pass", "bp-pass2"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener("input", bpCheck);
+    });
+
+    bpSave.onclick = async () => {
+      const inp = document.getElementById("bp-pass") as HTMLInputElement | null;
+      const inp2 = document.getElementById("bp-pass2") as HTMLInputElement | null;
+      const pw = inp?.value || "";
+      // 🔴 오타 난 암호는 **새 컴퓨터에서 백업을 못 여는 것**으로 나타난다.
+      //    그때는 이미 늦었다. 여기서 잡는다.
+      if (pw !== (inp2?.value || "")) {
+        bpMsg.textContent = "두 번 넣은 암호가 다릅니다. 다시 해 주세요.";
+        return;
+      }
+      try {
+        // 🔴 이미 정해져 있으면 **본인인지 확인**한다. 잠깐 자리를 비운 사이
+        //    누가 바꿔 놓으면 사장은 컴퓨터가 죽는 날에야 안다.
+        const st = await invoke<any>("backup_pass_state").catch(() => null);
+        let walletPass: string | null = null;
+        if (st?.set) {
+          walletPass = await ask(
+            "지갑 암호",
+            "이미 정해진 백업 암호를 바꾸려 합니다. 본인이 맞는지 지갑 암호로 확인합니다.",
+            { password: true }
+          );
+          if (!walletPass) return;
+        }
+        await invoke("backup_pass_set", { pass: pw, walletPass });
+        if (inp) inp.value = "";
+        if (inp2) inp2.value = "";
+        bpMsg.innerHTML =
+          "<b>정했습니다.</b> 이제부터 만드는 백업이 이 암호로 열립니다.<br />" +
+          "⚠️ 이미 만들어 둔 백업은 <b>예전 암호</b>로만 열립니다. 지금 한 부 새로 만들어 두세요.";
+        const again2 = document.getElementById("bp-again");
+        const box2 = document.getElementById("bp-box");
+        if (box2) box2.style.display = "none";
+        if (again2) again2.style.display = "";
+      } catch (e) {
+        bpMsg.textContent = String(e);
+      }
+    };
+  }
+
   const show = document.getElementById("ck-show");
   const box = document.getElementById("ck-key");
   const copy = document.getElementById("ck-copy");
@@ -1107,10 +1242,10 @@ async function paintStatusDots() {
     const n = await invoke<any>("node_status");
     // 켜져 있는 것과 따라잡은 것은 다르다. 동기화 중이면 결제 확인이 늦는다.
     const synced = (n?.progress ?? 0) > 0.9999;
-    set("d-node", "d-node-t", true, synced ? "노드 켜짐" : "노드 따라잡는 중");
+    set("d-node", "d-node-t", true, synced ? "RVN 노드 켜짐" : "RVN 노드 따라잡는 중");
     nodeUp = true;
   } catch {
-    set("d-node", "d-node-t", false, "노드 꺼짐");
+    set("d-node", "d-node-t", false, "RVN 노드 꺼짐");
     nodeUp = false;
   }
   // 노드 상태가 바뀌면 라비 얼굴도 따라 바뀐다.
@@ -1119,8 +1254,31 @@ async function paintStatusDots() {
   try {
     const i = await invoke<any>("ipfs_status");
     set("d-ipfs", "d-ipfs-t", !!i?.running, i?.running ? "파일창고 켜짐" : "파일창고 꺼짐");
+    // 채굴과 릴레이도 같이. 넷이 이 프로그램의 전부다.
+    void (async () => {
+      try {
+        const m = await invoke<any>("miner_running");
+        set("d-mine", "d-mine-t", !!m?.running, m?.running ? "채굴 켜짐" : "채굴 꺼짐");
+      } catch {
+        set("d-mine", "d-mine-t", false, "채굴 꺼짐");
+      }
+      try {
+        const r = await invoke<any>("relay_status");
+        set("d-relay", "d-relay-t", !!r?.running, r?.running ? "릴레이 켜짐" : "릴레이 꺼짐");
+      } catch {
+        set("d-relay", "d-relay-t", false, "릴레이 꺼짐");
+      }
+      // 🔴 바깥에서 손님이 들어올 수 있는가. 위의 넷이 다 초록이어도 이게
+      //    꺼져 있으면 **가게 밖에서는 아무도 못 들어온다.**
+      try {
+        const o = await invoke<any>("tunnel_status");
+        set("d-out", "d-out-t", !!o?.running, o?.running ? "바깥 연결 켜짐" : "바깥 연결 꺼짐");
+      } catch {
+        set("d-out", "d-out-t", false, "바깥 연결 꺼짐");
+      }
+    })();
   } catch {
-    set("d-ipfs", "d-ipfs-t", false, "파일창고 꺼짐");
+    set("d-ipfs", "d-ipfs-t", false, "파일창고(IPFS) 꺼짐");
   }
 }
 
@@ -1377,7 +1535,14 @@ function paintRavi() {
       sub.innerHTML = "아래 아이콘은 지금 바로 됩니다. 말로 시키시려면 <b>이 컴퓨터 → AI 열쇠</b>를 한 번만 넣어 주세요.";
     } else {
       hi.textContent = shop;
-      sub.textContent = "무엇을 할까요? 아래를 누르거나, 그냥 말씀하세요.";
+      // 🔴 체인 등록 전에는 그렇다고 말한다. 이름만 적어 둔 가게에 「무엇을
+      //    할까요?」만 뜨면, 다 끝난 줄 알고 손님이 장터에서 찾기를 기다린다.
+      //    영영 안 나온다 — 등록을 안 했기 때문이다.
+      const onChain = !!($("sh-registered") as HTMLInputElement)?.value.trim();
+      sub.innerHTML = onChain
+        ? t("무엇을 할까요? 아래를 누르거나, 그냥 말씀하세요.")
+        : `${t("무엇을 할까요? 아래를 누르거나, 그냥 말씀하세요.")}
+           <span class="ravinote">${t("아직 이 컴퓨터에만 있습니다 — 손님은 QR 로 옵니다.")}</span>`;
     }
   }
 
@@ -1541,7 +1706,13 @@ async function sendReport() {
       description: text,
       category: rpPick ? rpPick[0] : "ui",
       screen: rpScreen(),
-      context: { errors: rpErrors.slice(-5), theme: document.documentElement.dataset.theme || "" },
+      context: {
+        errors: rpErrors.slice(-5),
+        theme: document.documentElement.dataset.theme || "",
+        // 🔴 손님 폰 서버가 왜 안 켜졌는지. 이게 안 실려 오면 「손님이 주문할
+        //    곳이 없습니다」라는 결과만 보고 원인을 못 찾는다 — 실제로 그랬다.
+        phone_error: lastPhoneError,
+      },
     });
     // 🔴 못 보냈으면 못 보냈다고 말한다. "고맙습니다" 만 띄우면 사장은
     //    보냈다고 여기고, 우리는 못 받는다. 대신 사라지지는 않는다.
@@ -1670,12 +1841,27 @@ async function openQrSheet() {
     // 실패해도 QR 은 나와야 한다.
     try { await publishShop(r.ip); } catch { /* 메뉴만 빈다 */ }
 
-    const [adminQr, staffQr, scanQr, custQr] = await Promise.all([
+    const [adminQr, staffQr, scanQr, custQr, extraIps] = await Promise.all([
       invoke<string>("qr_svg", { text: r.admin_url }),
       invoke<string>("qr_svg", { text: r.staff_url }),
       invoke<string>("qr_svg", { text: r.scan_url }),
       invoke<string>("qr_svg", { text: r.customer_url }),
+      invoke<string[]>("all_local_ips").catch(() => [] as string[]),
     ]);
+
+    const qrLinks = (url: string) => {
+      let path = "";
+      try {
+        const u = new URL(url);
+        path = u.pathname + u.search;
+      } catch {
+        return `<code class="addr qrurl">${escapeHtml(url)}</code>`;
+      }
+      const hosts = extraIps.length ? extraIps : [String(r.ip)];
+      return hosts
+        .map((ip) => `<code class="addr qrurl">http://${escapeHtml(ip)}:${escapeHtml(String(r.port))}${escapeHtml(path)}</code>`)
+        .join("");
+    };
 
     body.innerHTML = todoHtml +
       `<div class="qrmain">${custQr}
@@ -1685,24 +1871,74 @@ async function openQrSheet() {
              ${t("카운터에 붙이세요. 이 QR 에는 열쇠가 없어 누가 봐도 괜찮습니다.")}<br />
              ${escapeHtml(r.ip)}:${escapeHtml(String(r.port))} ·
              ${t("폰을 같은 와이파이에 붙이고 찍으세요")}
+             <span id="qr-ips"></span>
            </div>
+           ${qrLinks(r.customer_url)}
          </div>
        </div>` +
       `<div class="meta" style="margin-bottom:8px">
          🔴 ${t("아래 셋에는 열쇠가 들어 있습니다. 붙이지 말고, 찍을 때만 보여 주세요.")}
+         ${t("QR 이 안 열리면 아래 주소를 폰 브라우저에 치세요.")}
        </div>` +
       `<div class="qrothers">
          <div class="qrcard haskey">${adminQr}<b>${t("사장님만")}</b>
-           <span>${t("돈·발행·설정 전부")}</span></div>
+           <span>${t("돈·발행·설정 전부")}</span>
+           ${qrLinks(r.admin_url)}</div>
          <div class="qrcard haskey">${staffQr}<b>${t("직원")}</b>
-           <span>${t("주문·회원확인만")}</span></div>
+           <span>${t("주문·회원확인만")}</span>
+           ${qrLinks(r.staff_url)}</div>
          <div class="qrcard haskey">${scanQr}<b>${t("검표 태블릿")}</b>
-           <span>${t("문 앞에 두는 화면")}</span></div>
+           <span>${t("문 앞에 두는 화면")}</span>
+           ${qrLinks(r.scan_url)}</div>
        </div>` +
-      `<div class="meta" style="margin-top:14px">
-         ${t("테이블마다 다른 QR 을 인쇄하려면")} —
-         <b>${t("이 컴퓨터")} → ${t("손님 폰으로 받기")}</b>
+      // 🔴 여기는 「이 컴퓨터 → 손님 폰으로 받기 에 있습니다」라고만 적혀
+      //    있었다. **그 화면에도 없었다.** 러스트 명령(`table_qr_sheet`)도,
+      //    배선도 다 있는데 칸(`tbl-list`·`tbl-print`)이 index.html 에 아예
+      //    없어서, 누르는 곳 자체가 존재하지 않았다.
+      //
+      //    찾아가라고 적는 대신 **여기서 바로 뽑는다.** 손님 QR 을 보러 온
+      //    사람이 찾는 것이 그것이다.
+      `<div class="tblbox">
+         <b>${t("테이블마다 다른 QR")}</b>
+         <span class="meta" style="margin-left:8px">${t("안 쓰셔도 됩니다")}</span>
+         <div class="meta" style="margin:4px 0 8px">
+           ${t("위의 손님 QR 하나로도 장사가 됩니다.")}
+           ${t("테이블이 있는 가게만, 자리마다 다른 QR 을 붙이면 어느 자리 주문인지 저절로 찍힙니다.")}<br />
+           ${t("번호를 쉼표나 띄어쓰기로 적으세요. 인쇄용 한 장이 만들어집니다.")}
+         </div>
+         <div class="row" style="gap:8px">
+           <input id="tbl-list" placeholder="1 2 3 4 5 · 창가 · 룸A" autocomplete="off"
+                  style="flex:1;min-width:0" />
+           <button class="ghost" id="tbl-print" style="flex:none">${t("만들기")}</button>
+         </div>
+         <div class="meta" id="tbl-note" style="margin-top:8px"></div>
        </div>`;
+
+    // 창을 다시 그릴 때마다 새 칸이 생긴다. 시작할 때 한 번 묶어 두면
+    // 두 번째 여는 사람에게는 안 걸린다 — 그래서 여기서 묶는다.
+    bindTableQr();
+
+    /* 🔴 **주소가 둘 이상이면 전부 알려 준다.**
+       계산대 컴퓨터에 랜선과 와이파이가 둘 다 꽂혀 있는 일이 흔하다.
+       그때 우리가 고른 하나가 손님 폰과 **다른 망**일 수 있고, 그러면
+       QR 을 찍어도 아무것도 안 열린다 — 아무 설명 없이.
+
+       실제로 그랬다: 이 컴퓨터가 en0 에 .57(와이파이), en6 에 .58(랜선)을
+       가지고 있었고 QR 에는 .58 이 박혔다. 폰은 와이파이에 있었다.
+
+       어느 것이 맞는지는 이 컴퓨터가 알 수 없다. 폰을 든 사람은 한 번
+       눌러 보면 안다. */
+    {
+      const box = document.getElementById("qr-ips");
+      if (box && extraIps.length >= 2) {
+        box.innerHTML =
+          `<br /><b>${t("이 컴퓨터는 주소가 둘 이상입니다")}</b> —
+           ${t("위 QR 이 안 열리면 폰 브라우저에 이 주소를 쳐 보세요:")}<br />` +
+          extraIps
+            .map((ip) => `<code class="addr">http://${escapeHtml(ip)}:${r.port}</code>`)
+            .join(" · ");
+      }
+    }
   } catch (e) {
     // 못 켰으면 못 켰다고 말한다. 빈 창을 띄우면 고장으로 읽는다.
     // 🔴 다만 **원문 오류를 크게 띄우지 않는다.** 영어 한 줄을 보여 주면
@@ -1901,61 +2137,345 @@ function typeInto(el: HTMLInputElement, text: string, done?: () => void) {
 
    ⚠️ 펼쳐 놓았을 때만 다시 읽는다. 접혀 있는데 계속 물어보면 노드가
    쓸데없이 바빠지고, 그 노드는 손님 결제를 확인해야 하는 노드다. */
-let dotOpen: "" | "node" | "ipfs" = "";
-let dotTimer: number | null = null;
 
-async function paintDotMore() {
-  const nodeBox = $("d-node-more");
-  const ipfsBox = $("d-ipfs-more");
-  nodeBox.style.display = dotOpen === "node" ? "" : "none";
-  ipfsBox.style.display = dotOpen === "ipfs" ? "" : "none";
-  if (!dotOpen) return;
+type Part = "node" | "mine" | "ipfs" | "relay" | "out";
+let partOpen: Part = "node";
+let partTimer: number | null = null;
+/** 바깥 연결 안내 문구. 🔴 5초마다 다시 그리므로 화면 밖에 둬야 안 지워진다. */
+let outSay = "";
 
-  if (dotOpen === "node") {
-    try {
+/**
+ * 표시등을 누르면 **오른쪽 넓은 화면**에 상태와 설정이 열린다.
+ *
+ * 🔴 두 번 틀렸다. 처음엔 172px 사이드바에서 펼쳤는데
+ * `.navfoot div { display: flex }` 가 줄을 가로로 눕혀 **글자가 한 줄에 한
+ * 자씩** 흘렀다. 그다음엔 「이 컴퓨터」로 보냈는데, 그건 어디를 보라는
+ * 건지 알 수 없었다 — 대표님 말씀대로 **상태를 보여줘야** 하는 자리다.
+ *
+ * 넷이 이 프로그램의 전부다: 노드·채굴·파일창고·릴레이.
+ */
+function toggleDot(which: Part) {
+  partOpen = which;
+  showPage("parts");
+  document.querySelectorAll<HTMLElement>("[data-part]").forEach((b) => {
+    b.classList.toggle("on", b.dataset.part === which);
+  });
+  if (partTimer !== null) {
+    clearInterval(partTimer);
+    partTimer = null;
+  }
+  void paintPart();
+  // 열려 있는 동안만 갱신한다. 닫힌 화면을 5초마다 부르면 헛일이다.
+  partTimer = window.setInterval(() => void paintPart(), 5000);
+}
+
+/** 지금 고른 것의 상태와 설정. */
+async function paintPart(): Promise<void> {
+  const box = document.getElementById("pt-body");
+  if (!box) return;
+  const title = document.getElementById("pt-title");
+
+  try {
+    if (partOpen === "node") {
+      if (title) title.textContent = "RVN 노드";
       const s = await invoke<any>("node_status");
-      if (!s?.running) {
-        nodeBox.innerHTML = `<b>${t("꺼짐")}</b>`;
-      } else {
-        const behind = Number(s.behind ?? 0);
-        const pct = (Number(s.progress ?? 0) * 100).toFixed(behind > 0 ? 2 : 3);
-        nodeBox.innerHTML =
-          `<div><b>${Number(s.blocks ?? 0).toLocaleString()}</b> ${t("블록")}</div>` +
-          `<div>${t("따라잡음")} <b>${pct}%</b></div>` +
-          // 🔴 "몇 개 뒤처졌나" 가 사장에게 제일 쓸모 있다. 0 이면 지금
-          //    들어온 결제를 바로 확인할 수 있다는 뜻이다.
-          `<div>${behind > 0
-            ? `${t("남은 블록")} <b>${behind.toLocaleString()}</b>`
-            : `<b>${t("지금 결제를 바로 확인합니다")}</b>`}</div>`;
-      }
-    } catch (e) {
-      nodeBox.innerHTML = `<span class="warn">${escapeHtml(String(e))}</span>`;
-    }
-  } else {
-    try {
+      const behind = Number(s?.behind ?? 0);
+      box.innerHTML =
+        card(
+          [
+            [t("연결"), s?.peers != null ? `${s.peers}${t("곳")}` : t("확인 중")],
+            [t("블록"), Number(s?.blocks ?? 0).toLocaleString()],
+            [t("따라잡음"), `${(Number(s?.progress ?? 0) * 100).toFixed(behind > 0 ? 2 : 1)}%`],
+            [
+              t("결제 확인"),
+              behind > 0 ? `${t("남은 블록")} ${behind.toLocaleString()}` : t("지금 바로 됩니다"),
+            ],
+          ],
+          behind > 0
+            ? t("따라잡는 동안에는 방금 들어온 결제가 늦게 보입니다.")
+            : t("이 컴퓨터가 체인을 통째로 들고 있습니다. 남에게 묻지 않습니다."),
+        ) + (await indexCard()) + goto("settings", t("노드 설정 열기"));
+    } else if (partOpen === "mine") {
+      if (title) title.textContent = "채굴";
+      const m = await invoke<any>("miner_running").catch(() => null);
+      const net = await invoke<any>("mining_status").catch(() => null);
+      const on = !!m?.running;
+      const hps = Number(net?.network_hps || 0);
+      box.innerHTML =
+        card(
+          [
+            [t("지금"), on ? t("캐는 중") : t("꺼져 있습니다")],
+            [
+              t("네트워크 전체"),
+              hps ? `${(hps / 1e9).toFixed(1)} GH/s` : t("확인 중"),
+            ],
+            [t("블록"), Number(net?.blocks ?? 0).toLocaleString()],
+          ],
+          // 🔴 이 프로그램은 직접 캐지 않는다. 그렇게 적어야 안 캐지는 것을
+          //    고장으로 안 읽는다.
+          t("이 컴퓨터로는 캐지 않습니다. 따로 있는 GPU 기계가 캐고 수익만 이 지갑으로 옵니다.")
+        ) + goto("settings", t("채굴 설정 열기"));
+    } else if (partOpen === "ipfs") {
+      if (title) title.textContent = "파일창고 (IPFS)";
       const s = await invoke<any>("ipfs_status");
-      if (!s?.running) {
-        ipfsBox.innerHTML = `<b>${t("꺼짐")}</b>`;
-      } else {
-        // 몇 개를 지키고 있는지가 이 칸의 값어치다. 판 번호는 그 아래.
-        const kept = pinned.size;
-        ipfsBox.innerHTML =
-          `<div><b>${kept.toLocaleString()}</b> ${t("개를 지키는 중")}</div>` +
-          (s.version ? `<div>${escapeHtml(String(s.version).slice(0, 28))}</div>` : "");
+      box.innerHTML = !s?.running
+        ? card([[t("지금"), t("꺼져 있습니다")]], t("사진과 메뉴판이 여기 들어갑니다. 꺼져 있으면 손님이 사진을 못 봅니다."))
+        : card(
+            [
+              [t("연결"), s.peers != null ? `${s.peers}${t("곳")}` : t("확인 중")],
+              [t("지키는 파일"), `${pinned.size.toLocaleString()}${t("개")}`],
+              [t("판"), String(s.version || "—").slice(0, 22)],
+            ],
+            t("내 컴퓨터에만 있는 창고가 아니라, 손님 폰과 다른 노드가 같이 나눠 갖는 곳입니다.")
+          ) + goto("settings", t("파일창고 설정 열기"));
+    } else if (partOpen === "relay") {
+      if (title) title.textContent = "릴레이";
+      const r = await invoke<any>("relay_status").catch(() => null);
+      box.innerHTML =
+        card(
+          [
+            [t("지금"), r?.running ? t("돌고 있습니다") : t("꺼져 있습니다")],
+            [t("들고 있는 공지"), `${Number(r?.events ?? 0).toLocaleString()}${t("개")}`],
+            [
+              t("바깥 주소"),
+              r?.url ? String(r.url) : t("가게 안에서만 — 「바깥에서 열기」를 켜면 밖에서도 붙습니다"),
+            ],
+          ],
+          // 이게 왜 있는지 한 줄로. 안 적으면 「이건 또 뭐지」가 된다.
+          t("이 컴퓨터가 다른 가게의 공지도 같이 나릅니다. 가게가 늘수록 그물이 촘촘해지고, 남의 릴레이가 끊겨도 서로 붙습니다.")
+        ) + goto("settings", t("바깥에서 열기 설정"));
+    } else {
+      // ── 바깥 연결 ──────────────────────────────────────────────
+      // 손님이 가게 밖에서 들어오는 길. 여기가 꺼져 있으면 위의 넷이 다
+      // 초록이어도 밖에서는 아무도 못 들어온다.
+      if (title) title.textContent = "바깥 연결";
+      const o = await invoke<any>("tunnel_status").catch(() => null);
+      const auto = await invoke<boolean>("autostart_get").catch(() => false);
+      box.innerHTML =
+        card(
+          [
+            [t("지금"), o?.running ? t("바깥에서 들어올 수 있습니다") : t("가게 안에서만 됩니다")],
+            [t("바깥 주소"), o?.url ? String(o.url) : t("없음")],
+            [t("준비물"), o?.installed ? t("갖춰져 있습니다") : t("아직 안 받았습니다")],
+          ],
+          o?.running
+            ? t("손님이 가게 밖에서도 QR 로 들어옵니다.")
+            : t("지금은 같은 와이파이에 있는 손님만 들어옵니다. 밖에서도 받으려면 켜세요.")
+        ) +
+        // 🔴 자동 시작이 여기 있는 이유: 손님이 들어오려면 이 컴퓨터가
+        //    켜져 있어야 한다. 정전 한 번에 QR 이 죽는데, 사장은 프로그램을
+        //    다시 여는 것이 답인 줄 모른다. 실측으로 로그인 항목에 없었다.
+        `<label class="card" style="display:flex;align-items:center;gap:12px;cursor:pointer">
+           <input type="checkbox" id="pt-autostart" ${auto ? "checked" : ""}
+                  style="width:22px;height:22px;flex:none">
+           <span><b style="display:block">${t("컴퓨터를 켜면 저절로 시작")}</b>
+           <span class="meta">${t("정전이나 재시작 뒤에도 손님 QR 이 살아 있습니다.")}</span></span>
+         </label>` +
+        // 🔴 여기에 **켜는 단추가 있어야 한다.** 「설정 열기 →」 로 보냈더니
+        //    「이 컴퓨터」 화면이 나와서 어디서 켜라는 건지 알 수가 없었다.
+        //    상태를 보여 주는 자리가 곧 고치는 자리다.
+        `<div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">
+           <button id="pt-out-go" style="min-height:48px;font-size:16px">
+             ${o?.running ? t("바깥 연결 끄기") : o?.installed ? t("지금 켜기") : t("준비물 받고 켜기")}
+           </button>
+           ${o?.url ? `<button class="ghost" id="pt-out-copy" style="min-height:48px">${t("주소 복사")}</button>` : ""}
+         </div>
+         <p class="meta" id="pt-out-say" style="margin-top:8px">${escapeHtml(outSay)}</p>`;
+
+      const say = (m: string) => {
+        outSay = m;
+        const el = document.getElementById("pt-out-say");
+        if (el) el.textContent = m;
+      };
+      const go = document.getElementById("pt-out-go") as HTMLButtonElement | null;
+      if (go) {
+        go.onclick = async () => {
+          go.disabled = true;
+          try {
+            if (o?.running) {
+              await invoke("tunnel_stop");
+              say(t("껐습니다. 이제 같은 와이파이에서만 들어옵니다."));
+            } else {
+              if (!o?.installed) {
+                say(t("준비물을 받는 중입니다. 1~2분 걸립니다."));
+                await invoke("tunnel_install");
+              }
+              say(t("켜는 중입니다…"));
+              await invoke("tunnel_start", { port: 8790 });
+              say(t("켰습니다. 이제 밖에서도 손님이 들어옵니다."));
+            }
+          } catch (e) {
+            say(String(e));
+          } finally {
+            go.disabled = false;
+            void paintPart();
+          }
+        };
       }
-    } catch (e) {
-      ipfsBox.innerHTML = `<span class="warn">${escapeHtml(String(e))}</span>`;
+      const cp = document.getElementById("pt-out-copy");
+      if (cp && o?.url) {
+        cp.addEventListener("click", () => {
+          void navigator.clipboard.writeText(String(o.url));
+          say(t("주소를 복사했습니다."));
+        });
+      }
+
+      const sw = document.getElementById("pt-autostart") as HTMLInputElement | null;
+      if (sw) {
+        sw.onchange = async () => {
+          try {
+            sw.checked = await invoke<boolean>("autostart_set", { on: sw.checked });
+          } catch (e) {
+            sw.checked = !sw.checked;
+            alert(String(e));
+          }
+        };
+      }
     }
+    bindIndexCard();
+  } catch (e) {
+    box.innerHTML = `<div class="warnbox">${escapeHtml(String(e))}</div>`;
   }
 }
 
-function toggleDot(which: "node" | "ipfs") {
-  dotOpen = dotOpen === which ? "" : which;
-  if (dotTimer !== null) window.clearInterval(dotTimer);
-  dotTimer = null;
-  void paintDotMore();
-  // 펼쳐 둔 동안만 5초마다 다시 읽는다.
-  if (dotOpen) dotTimer = window.setInterval(() => void paintDotMore(), 5000);
+/** 색인 칸의 단추들. 화면을 다시 그릴 때마다 붙인다. */
+function bindIndexCard(): void {
+  const say = (m: string) => {
+    const el = document.getElementById("rx-say");
+    if (el) el.textContent = m;
+  };
+  const arm = document.getElementById("rx-arm") as HTMLInputElement | null;
+  if (arm) {
+    arm.onchange = async () => {
+      try {
+        arm.checked = await invoke<boolean>("reindex_arm", { on: arm.checked });
+        say(arm.checked
+          ? "한가해지면 알아서 시작하겠습니다. 이 프로그램이 켜져 있어야 합니다."
+          : "알아서 시작하지 않겠습니다.");
+      } catch (e) {
+        say(String(e));
+      }
+    };
+  }
+  const now = document.getElementById("rx-now") as HTMLButtonElement | null;
+  if (now) {
+    now.onclick = async () => {
+      if (!confirm("지금 시작하면 몇 시간 동안 입금 확인이 멈춥니다. 시작할까요?")) return;
+      now.disabled = true;
+      say("노드를 다시 띄우는 중입니다…");
+      try {
+        await invoke("reindex_start");
+        say("시작했습니다. 이 화면에서 진행을 보실 수 있습니다.");
+      } catch (e) {
+        say(String(e));
+      } finally {
+        now.disabled = false;
+        void paintPart();
+      }
+    };
+  }
+}
+
+/**
+ * 「한가해지면 알아서」를 켜 뒀으면, 1분마다 지금이 그때인지 본다.
+ *
+ * 🔴 시계를 따로 두지 않는 이유: 앱이 꺼져 있던 시간을 못 따라잡으면
+ *    사장은 예약해 놓고 안 됐다고 겪는다. 물어보는 쪽이 정직하다.
+ */
+async function reindexTick(): Promise<void> {
+  try {
+    const st = await invoke<any>("reindex_state");
+    if (!st?.armed || st.running || st.done) return;
+    const w = await invoke<any>("reindex_window", {
+      nowUnix: Math.floor(Date.now() / 1000),
+      tzOffsetMin: -new Date().getTimezoneOffset(),
+    });
+    // 지금이 창 안이고, 그 창이 넉넉할 때만 시작한다.
+    if (w?.kind === "window" && Number(w.starts_in_min) === 0 && !w.tight) {
+      await invoke("reindex_start");
+    }
+  } catch {
+    // 조용히 넘긴다. 다음 분에 다시 본다.
+  }
+}
+
+/**
+ * 주소 색인 — 이 노드가 남의 지갑에 답할 수 있게 하는 것.
+ *
+ * 🔴 「몇 시에 할까요」라고 묻지 않는다. 사장은 이게 몇 시간짜리 일인지
+ *    모른다. 이미 받아 둔 **영업시간**에서 한가한 창을 우리가 계산해서
+ *    「그때 하겠습니다」라고 말하고, 사장은 예/아니오만 답한다.
+ */
+async function indexCard(): Promise<string> {
+  const st = await invoke<any>("reindex_state").catch(() => null);
+  if (!st) return "";
+  if (st.running) {
+    const p = await invoke<any>("reindex_progress").catch(() => null);
+    const pct = Math.floor(Number(p?.progress ?? 0) * 1000) / 10;
+    return card(
+      [
+        [t("주소 색인"), t("다시 훑는 중입니다")],
+        [t("진행"), `${pct}%`],
+        [t("블록"), Number(p?.blocks ?? 0).toLocaleString()],
+      ],
+      t("끝날 때까지 입금 확인이 멈춥니다. 중간에 꺼져도 괜찮습니다 — 다시 켜면 이어서 합니다.")
+    );
+  }
+  if (st.done) {
+    return card([[t("주소 색인"), t("켜져 있습니다")]],
+      t("이 노드가 손님 지갑의 잔액 질문에 직접 답합니다. 남의 서버에 안 묻습니다."));
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  const w = await invoke<any>("reindex_window", { nowUnix: now, tzOffsetMin: -new Date().getTimezoneOffset() })
+    .catch(() => null);
+  const hm = (min: number) => {
+    const h = Math.floor(min / 60);
+    return h >= 24 ? `${Math.floor(h / 24)}${t("일")} ${h % 24}${t("시간")}` : `${h}${t("시간")}`;
+  };
+  let say: string;
+  let can = false;
+  if (!w || w.kind === "no_hours") {
+    say = t("가게 영업시간을 아직 안 받았습니다. 「내 가게」에서 문 여는 시간과 닫는 시간을 적어 주시면, 한가한 때를 골라 알아서 하겠습니다.");
+  } else if (w.kind === "bad_hours") {
+    say = t("영업시간을 읽지 못했습니다. 「내 가게」에서 다시 봐 주세요. 아무 때나 시작하지 않겠습니다.");
+  } else if (w.kind === "always_open") {
+    say = t("쉬는 시간이 없는 가게라 한가한 때가 없습니다. 정기 휴무일을 적어 주시거나, 장사에 지장이 없는 때를 골라 「지금 시작」을 눌러 주세요.");
+    can = true;
+  } else {
+    const starts = Number(w.starts_in_min ?? 0);
+    say = starts === 0
+      ? t("지금이 한가한 때입니다. 시작하면 좋습니다.")
+      : `${hm(starts)} ${t("뒤부터 한가합니다")} · ${hm(Number(w.window_min ?? 0))} ${t("동안")}`;
+    if (w.tight) say += ` · ${t("넉넉하지는 않습니다")}`;
+    can = true;
+  }
+  return `<div class="card">
+      <b>${t("주소 색인 — 이 노드로 지갑도 열기")}</b>
+      <p class="meta" style="margin-top:8px">${t(
+        "지금은 손님 지갑이 잔액을 우리 서버 한 곳에 묻습니다. 이걸 켜면 이 컴퓨터가 직접 답합니다. 대신 한 번 다시 훑어야 하고, 그동안 입금 확인이 멈춥니다."
+      )}</p>
+      <p class="meta" style="margin-top:8px"><b>${escapeHtml(say)}</b></p>
+      ${can ? `<label style="display:flex;align-items:center;gap:10px;margin-top:12px;cursor:pointer">
+        <input type="checkbox" id="rx-arm" ${st.armed ? "checked" : ""} style="width:22px;height:22px;flex:none">
+        <span>${t("한가해지면 알아서 시작하기")}</span></label>
+      <button id="rx-now" style="margin-top:12px">${t("지금 시작")}</button>` : ""}
+      <p class="meta" id="rx-say" style="margin-top:8px"></p>
+    </div>`;
+}
+
+/** 값 몇 줄과 설명 한 줄. 네 화면이 같은 문법을 쓴다. */
+function card(rows: [string, string][], note: string): string {
+  return (
+    `<div class="card">` +
+    rows.map(([k, v]) => `<div class="kv"><b>${k}</b><span>${escapeHtml(v)}</span></div>`).join("") +
+    `<p class="meta" style="margin-top:10px">${note}</p></div>`
+  );
+}
+
+/** 설정으로 가는 길. 상태만 보여 주고 끝내면 고칠 데를 못 찾는다. */
+function goto(page: string, label: string): string {
+  return `<button class="ghost" data-gopage="${page}" style="margin-top:12px">${label} →</button>`;
 }
 
 /* ══ 개발비 1% — 진짜로 끌 수 있게 ═══════════════════════════════════
@@ -1970,31 +2490,90 @@ function toggleDot(which: "node" | "ipfs") {
    ⚠️ 주소를 읽어 적는 일은 이미 `paintFee` 가 한다(위). 여기서는 **스위치
       두 칸만** 칠한다 — 같은 일을 하는 함수를 또 만들면 둘이 어긋난다.
       실제로 처음에 그렇게 만들었다가 「Duplicate function」으로 잡혔다. */
-async function paintFeePick() {
-  if (!document.getElementById("fee-on")) return;
-  try {
-    const f = await invoke<any>("fee_read");
-    $("fee-on").classList.toggle("on", !!f.on);
-    $("fee-off").classList.toggle("on", !f.on);
-    const cus = $("fee-custom") as HTMLInputElement;
-    if (cus && !cus.value) cus.placeholder = String(f.address || "");
-    $("fee-say").textContent = f.on
-      ? `${Number(f.percent ?? 1).toFixed(2)}% · ${t("이 주소로 갑니다")}`
-      : t("지금은 걷지 않습니다. 받으신 금액이 전부 사장님 것입니다.");
-  } catch (e) {
-    $("fee-say").textContent = String(e);
-  }
+async function paintFeePick(): Promise<void> {
+  // 🔴 예전에는 여기서 「내기/안 내기」 스위치를 그렸다. 스위치를 없앤 뒤
+  //    `fee-say` 칸도 같이 사라졌는데, 이 함수 첫 줄이 그 칸을 찾아 **없으면
+  //    바로 나가고** 있었다. 그래서 그 아래 `paintFee`(가는 주소)와
+  //    `paintOwed`(쌓인 개발비)가 통째로 안 돌았고, 화면은 「읽는 중…」에서
+  //    영원히 멈췄다.
+  //
+  //    없어진 칸을 찾지 않는다. 할 일을 바로 한다.
   void paintFee();
+  void paintOwed();
 }
 
-async function saveFee(on: boolean, address?: string) {
+/**
+ * 테이블 QR 뽑기 단추를 묶는다.
+ *
+ * 🔴 창을 열 때마다 부른다. 시작할 때 한 번만 묶으면, 그때는 이 칸이
+ * 화면에 없어서 아무 데도 안 걸린다 — 실제로 그래서 여태 안 눌렸다.
+ */
+function bindTableQr() {
+  const btn = document.getElementById("tbl-print");
+  if (!btn) return;
+  btn.onclick = async () => {
+    const note = $("tbl-note");
+    const raw = ($("tbl-list") as HTMLInputElement).value.trim();
+    // 쉼표·띄어쓰기·줄바꿈 아무거나 받는다. 사장이 형식을 외우게 하지 않는다.
+    const tables = raw ? raw.split(/[,\s]+/).filter(Boolean) : ["카운터"];
+    note.textContent = t("만드는 중…");
+    try {
+      // 주소를 지금 다시 읽는다. 서버를 켤 때 잡은 값을 쓰면, 공유기가 새
+      // 주소를 준 뒤에 인쇄한 QR 이 죽은 주소를 가리킨다.
+      const ip = await invoke<string>("now_ip").catch(() => serverIp || "127.0.0.1");
+      const r = await invoke<any>("table_qr_sheet", { ip, tables });
+      note.innerHTML = `<span class="ok">${escapeHtml(r.say)}</span> (${escapeHtml(r.path)})`;
+    } catch (e) {
+      note.innerHTML = `<span class="danger">${escapeHtml(String(e))}</span>`;
+    }
+  };
+}
+
+/** 쌓인 개발비. 0 이면 아예 안 보인다 — 빈 칸은 「고장」으로 읽힌다. */
+async function paintOwed() {
+  const box = document.getElementById("fee-owedbox");
+  if (!box) return;
   try {
-    await invoke("fee_save", { on, rate: null, address: address ?? null });
-    await paintFeePick();
-  } catch (e) {
-    $("fee-say").textContent = String(e);
+    const o = await invoke<any>("fee_owed");
+    const owed = Number(o.owed || 0);
+    const sent = Number(o.sent_total || 0);
+    // 한 번도 안 쌓였고 보낸 적도 없으면 이 상자를 안 보여 준다. 처음 켠
+    // 사장에게 「0 RVN」을 보여 줘 봐야 할 일이 하나도 없다.
+    if (owed <= 0 && sent <= 0) {
+      box.style.display = "none";
+      return;
+    }
+    box.style.display = "";
+    $("fee-owed").textContent = `${owed.toFixed(8).replace(/0+$/, "").replace(/\.$/, "")} RVN`;
+    $("fee-sent").textContent = `${sent.toFixed(8).replace(/0+$/, "").replace(/\.$/, "")} RVN`;
+    const btn = $("fee-send") as HTMLButtonElement;
+    // 🔴 못 보내는 이유를 눌러 보고 알게 하지 않는다. 미리 말한다.
+    btn.disabled = !o.ready || owed < 0.01;
+    $("fee-sendsay").textContent = !o.ready
+      ? t("보낼 주소가 아직 정해지지 않았습니다.")
+      : owed < 0.01
+        ? t("아직 보낼 만큼 쌓이지 않았습니다.")
+        : `${o.count || 0}${t("건에서 쌓였습니다.")}`;
+  } catch {
+    box.style.display = "none";
   }
 }
+
+async function sendOwed() {
+  const btn = $("fee-send") as HTMLButtonElement;
+  const say = $("fee-sendsay");
+  btn.disabled = true;
+  say.textContent = t("보내는 중…");
+  try {
+    const r = await invoke<any>("fee_pay");
+    say.innerHTML = `<span class="ok">${t("보냈습니다")} — ${r.sent} RVN</span>`;
+  } catch (e) {
+    // 실패해도 장부는 안 줄어든다. 다시 누르면 된다고 말해 준다.
+    say.innerHTML = `<span class="danger">${escapeHtml(String(e))}</span>`;
+  }
+  await paintOwed();
+}
+
 
 function showPage(id: string) {
   if (id === "ravi") paintRavi();
@@ -2744,6 +3323,8 @@ let menuItems: any[] = [];
 let orderTimer: any = null;
 
 let shopIcon: string | null = null;
+/** 가게 안 사진들이 든 파일창고 폴더 주소. 사진이 아니라 **주소 하나**다. */
+let shopPhotosCid: string | null = null;
 
 // ── AI 도우미 ──
 //
@@ -3144,18 +3725,35 @@ function applyActions(actions: any[]): string[] {
           done.push(`${a.field === "delivery" ? "배달" : "매장·포장"} ${a.value ? "켬" : "끔"}`);
           break;
         }
-        case "menu_add":
+        case "menu_add": {
+          // 🔴 기간·재고는 **적힌 것만** 담는다. 없는 값을 0 으로 채우면
+          //    커피가 「품절」이 되고(재고 0), 이용권이 「0일짜리」가 된다.
+          const months = Number(a.pass_months || 0);
+          const days = Number(a.pass_days || 0);
           menuItems.push({
             name: a.name || "",
             name_en: a.name_en || "",
             price: a.price ?? null,
             image: null,
+            kind: months > 0 || days > 0 ? "pass" : a.stock != null ? "stock" : undefined,
+            pass_months: months > 0 ? months : null,
+            pass_days: days > 0 ? days : null,
+            stock: a.stock == null ? null : Math.max(0, Math.floor(Number(a.stock)) || 0),
           });
           done.push(`메뉴 추가: ${a.name}`);
           break;
+        }
         case "menu_set":
           if (menuItems[a.index]) {
-            menuItems[a.index][a.field] = a.field === "price" ? Number(a.value) : a.value;
+            // 숫자 칸은 숫자로. 빈 값은 **0 이 아니라 없음**이다 —
+            // 재고를 0 으로 만들면 팔던 물건이 품절로 뜬다.
+            const numeric = ["price", "pass_months", "pass_days", "stock"].includes(a.field);
+            menuItems[a.index][a.field] =
+              !numeric ? a.value
+              : a.value === "" || a.value == null ? null
+              : Number(a.value);
+            if (["pass_months", "pass_days"].includes(a.field)) menuItems[a.index].kind = "pass";
+            if (a.field === "stock" && menuItems[a.index].kind !== "pass") menuItems[a.index].kind = "stock";
             done.push(`${a.index + 1}번 ${a.field} → ${a.value}`);
           }
           break;
@@ -3417,7 +4015,17 @@ async function chatSend() {
       pickup: ($("sh-pickup") as HTMLInputElement)?.checked,
       delivery: ($("sh-delivery") as HTMLInputElement)?.checked,
     },
-    menu: menuItems.map((m, i) => ({ index: i, name: m.name, price: m.price })),
+    // 🔴 기간·재고도 보낸다. 안 보내면 라비가 「하루권 얼마야?」에 답을
+    //    못 하고, 이미 있는 이용권을 또 만들라고 한다. 빈 값은 안 보낸다 —
+    //    토큰만 늘고 뜻은 그대로다.
+    menu: menuItems.map((m, i) => ({
+      index: i,
+      name: m.name,
+      price: m.price,
+      ...(m.pass_months ? { pass_months: m.pass_months } : {}),
+      ...(m.pass_days ? { pass_days: m.pass_days } : {}),
+      ...(m.stock != null ? { stock: m.stock } : {}),
+    })),
     currency: ($("mn-cur") as HTMLSelectElement)?.value,
   };
 
@@ -3710,6 +4318,70 @@ async function fillSample() {
 }
 
 /// 간판 사진. 프로필에 인라인으로 들어가므로 작게 줄여 담는다.
+/**
+ * 가게 안 사진 여러 장.
+ *
+ * 🔴 한 장씩 올리면 주소가 여러 개가 되고, 그게 다 공지에 실린다. 폴더
+ * **하나**로 묶어 올리면 공지에는 주소 하나(60바이트)만 실린다 — 100장을
+ * 올려도 릴레이가 안 무겁다.
+ *
+ * 🔴 그리고 **실패를 조용히 넘기지 않는다.** 간판 사진이 그렇게 넘어가서
+ * 사진이 통째로 공지에 실렸고, 사장은 올라간 줄 알았다.
+ */
+function pickShopPhotos() {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "image/*";
+  input.multiple = true;
+  input.onchange = async () => {
+    const files = [...(input.files || [])];
+    if (!files.length) return;
+    const note = $("sh-picsnote");
+    note.textContent = t("줄이는 중…");
+    try {
+      // 긴 쪽 1200px. 가게 안 사진은 크게 볼 일이 없고, 손님 폰에서 빨리
+      // 떠야 한다. 원본을 그대로 올리면 한 장에 몇 MB 다.
+      const out: { name: string; bytes: number[] }[] = [];
+      for (let i = 0; i < files.length && i < 30; i++) {
+        const bmp = await createImageBitmap(files[i]);
+        const scale = Math.min(1, 1200 / Math.max(bmp.width, bmp.height));
+        const w = Math.round(bmp.width * scale);
+        const h = Math.round(bmp.height * scale);
+        const cv = document.createElement("canvas");
+        cv.width = w;
+        cv.height = h;
+        cv.getContext("2d")!.drawImage(bmp, 0, 0, w, h);
+        bmp.close?.();
+        const blob = await new Promise<Blob | null>((r) => cv.toBlob(r, "image/jpeg", 0.82));
+        if (!blob) continue;
+        out.push({
+          name: `${String(i + 1).padStart(2, "0")}.jpg`,
+          bytes: [...new Uint8Array(await blob.arrayBuffer())],
+        });
+      }
+      if (!out.length) throw new Error("읽을 수 있는 사진이 없습니다.");
+      note.textContent = t("올리는 중…");
+      const up = await invoke<any>("ipfs_add_bundle", { files: out, metadata: null });
+      if (!up?.cid) throw new Error("파일창고가 주소를 주지 않았습니다.");
+      shopPhotosCid = up.cid;
+      $("sh-picsprev").innerHTML = out
+        .map(
+          (f) =>
+            `<img src="http://127.0.0.1:8080/ipfs/${up.cid}/${f.name}" alt=""
+                  style="width:84px;height:84px;object-fit:cover;border-radius:8px" />`
+        )
+        .join("");
+      note.textContent = `${out.length}${t("장 올렸습니다. 바꾸셔도 소각은 없습니다.")}`;
+    } catch (e) {
+      // 사진이 안 올라간 것을 조용히 넘기지 않는다.
+      $("sh-picsnote").innerHTML =
+        `<span class="warn"><b>못 올렸습니다.</b> 왼쪽 「파일창고」가 켜져 있는지 봐 주세요. ` +
+        `<span class="meta">${escapeHtml(String((e as Error)?.message || e).slice(0, 70))}</span></span>`;
+    }
+  };
+  input.click();
+}
+
 function pickShopPhoto() {
   const input = document.createElement("input");
   input.type = "file";
@@ -3717,24 +4389,81 @@ function pickShopPhoto() {
   input.onchange = async () => {
     const file = input.files?.[0];
     if (!file) return;
-    $("sh-picnote").textContent = "줄이는 중…";
+    $("sh-picnote").textContent = t("줄이는 중…");
     try {
-      // RIP-0014 carries the icon inline as a data URI, so a 4 MB phone photo
-      // would make the profile itself 4 MB — every customer browsing the shop
-      // list would download it. Downscale before storing.
       const bitmap = await createImageBitmap(file);
-      const max = 512;
-      const scale = Math.min(1, max / Math.max(bitmap.width, bitmap.height));
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.round(bitmap.width * scale);
-      canvas.height = Math.round(bitmap.height * scale);
-      canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-      shopIcon = canvas.toDataURL("image/jpeg", 0.82);
 
-      $("sh-picprev").innerHTML = `<img src="${shopIcon}" alt="" style="max-width:180px;border-radius:8px;margin-top:8px" />`;
-      $("sh-picnote").textContent = `${canvas.width}×${canvas.height}로 줄여 담았습니다`;
+      // 🔴 **정사각형으로 잘라 준다.** 손님 목록에서 이 사진은 56×56 정사각
+      //    자리에 들어가고, 가로로 긴 사진을 넣으면 양옆이 잘려 간판 글씨가
+      //    날아간다. 「정사각형으로 올려 주세요」라고 적어 두는 것은 답이
+      //    아니다 — 사장은 폰 갤러리에서 자를 줄 모르고, 안내문을 읽지도 않는다.
+      //
+      //    가운데를 기준으로 자른다. 간판 사진은 대개 가운데가 주인공이다.
+      const side = Math.min(bitmap.width, bitmap.height);
+      const sx = (bitmap.width - side) / 2;
+      const sy = (bitmap.height - side) / 2;
+      const out = 512;
+      const canvas = document.createElement("canvas");
+      canvas.width = out;
+      canvas.height = out;
+      canvas.getContext("2d")!.drawImage(bitmap, sx, sy, side, side, 0, 0, out, out);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.82);
+
+      // 🔴 사진을 프로필 **안에** 박지 않는다. 그러면 사진을 바꿀 때마다
+      //    프로필이 통째로 바뀌고, 체인에 반영하려면 재발행(100 RVN)이다.
+      //    IPFS 에 따로 올리고 **주소만** 들고 있으면, 사진 교체는 새 주소를
+      //    릴레이에 올리는 것으로 끝난다 — 소각 0원.
+      $("sh-picnote").textContent = t("올리는 중…");
+      let cid = "";
+      let picFail = "";
+      try {
+        const bin = await (await fetch(dataUrl)).blob();
+        const up = await invoke<any>("ipfs_add_bundle", {
+          files: [{ name: "icon.jpg", bytes: [...new Uint8Array(await bin.arrayBuffer())] }],
+          metadata: null,
+        });
+        // 🔴 `ipfs_add_bundle` 은 **폴더** 주소를 준다(`wrap-with-directory`).
+        //    그대로 쓰면 폴더를 그림으로 여는 셈이라 아무것도 안 뜬다.
+        //    안에 든 파일 이름까지 붙여야 그림이 나온다.
+        // 🔴 **두 번째 무언 경로였다.** 응답 모양이 다르면 `catch` 에도 안
+        //    걸리고 조용히 빈 문자열이 되어, 사진이 통째로 공지에 실렸다.
+        //    페이블 지적. 없으면 없다고 던진다.
+        if (!up?.cid) throw new Error("파일창고가 주소를 주지 않았습니다.");
+        cid = `${up.cid}/icon.jpg`;
+      } catch (e) {
+        // 🔴 **조용히 비상 경로로 떨어지면 안 된다.** 실제로 그 일이 났고,
+        //    사장은 사진이 올라간 줄 알았다. 결과는 이렇다:
+        //      · 사진이 공지 안에 **통째로** 실려 18KB 를 차지한다(94%)
+        //      · 릴레이 한 건 32KB 라 **한 장만 더 넣으면 넘친다**
+        //      · 손님 화면에서 안 보일 수 있다
+        //    무엇이 안 됐는지 사장에게 말한다.
+        picFail = String((e as Error)?.message || e).slice(0, 80);
+      }
+
+      shopIcon = cid || dataUrl;
+      $("sh-picprev").innerHTML =
+        `<img src="${dataUrl}" alt="" style="max-width:180px;border-radius:8px;margin-top:8px" />`;
+      if (cid) {
+        $("sh-picnote").textContent = t("정사각형으로 잘라 올렸습니다. 나중에 바꾸셔도 소각은 없습니다.");
+      } else {
+        // 괄호 안 작은 글씨로 적으면 사장은 그냥 넘어간다. 문제로 보이게 한다.
+        $("sh-picnote").innerHTML =
+          `<span class="warnbox" style="display:block;margin-top:8px">` +
+          `<b>파일창고에 못 올렸습니다.</b> 사진을 공지 안에 그대로 담았습니다 — ` +
+          `공지가 무거워져서 <b>사진을 더 넣으면 손님에게 안 갑니다.</b><br />` +
+          `왼쪽 「파일창고」가 켜져 있는지 보시고 다시 올려 주세요.` +
+          (picFail ? `<br /><span class="meta">${escapeHtml(picFail)}</span>` : "") +
+          `</span>`;
+      }
+
+      // 등록한 가게면 바뀐 사진을 바로 알린다. 안 그러면 45분을 기다린다.
+      try {
+        await invoke("shop_refresh");
+      } catch {
+        /* 아직 등록 전이면 알릴 곳이 없다. */
+      }
     } catch (e) {
-      $("sh-picnote").innerHTML = `<span style="color:var(--bad)">${e}</span>`;
+      $("sh-picnote").innerHTML = `<span style="color:var(--bad)">${escapeHtml(String(e))}</span>`;
     }
   };
   input.click();
@@ -3786,6 +4515,16 @@ function memberCard(m: any, big: boolean): string {
         </div>
         <div class="mstate">${ok ? "들어오세요" : m.why}</div>
       </div>
+      <!-- 🔴 사장이 실제로 묻는 것: 「이 사람 요즘 나오나」. 전체 횟수만으로는
+           안 보인다 — 3년 다닌 사람의 200회와 이번 달 0회가 같은 줄에 있다. -->
+      <div class="meta" style="margin-top:4px">
+        ${m.age != null ? `${m.age}세 · ` : ""}${
+          m.visit_count
+            ? `${t("여태")} ${m.visit_count}${t("번")} · ${t("최근 30일")} <b>${m.visits_30d ?? 0}${t("번")}</b>` +
+              (m.last_visit ? ` · ${t("마지막")} ${agoDays(m.last_visit)}` : "")
+            : t("아직 한 번도 안 오셨습니다")
+        }
+      </div>
       ${soon ? `<div class="msoon">${m.days_left}일 뒤 만료 — 지금 말씀드리세요</div>` : ""}
       <div class="mrow">
         ${ok ? `<button data-in="${m.asset}">${m.kind === "punch" ? "1회 차감" : "입장"}</button>` : ""}
@@ -3798,6 +4537,136 @@ function memberCard(m: any, big: boolean): string {
         ${m.kind === "period" ? `<button class="ghost" data-ext="${m.asset}">기간 연장</button>` : `<button class="ghost" data-addv="${m.asset}">횟수 추가</button>`}
       </div>
     </div>`;
+}
+
+/**
+ * 오늘부터의 예약 일정.
+ *
+ * 🔴 **안 낸 것도 같이 보여 준다.** 「지금 누가 고르는 중」이 안 보이면
+ * 사장이 그 시간에 다른 일을 잡고, 몇 분 뒤 결제가 들어와 겹친다.
+ * 다만 낸 것과 구별은 확실히 한다 — 안 낸 것은 안 올 수도 있다.
+ */
+async function showBookings() {
+  const box = $("dr-hits");
+  box.innerHTML = `<div class="meta" style="padding:14px 0">${t("불러오는 중…")}</div>`;
+  try {
+    const r = await invoke<any>("booking_list", { nowUnix: Math.floor(Date.now() / 1000) });
+    const rows: any[] = r.bookings || [];
+    if (!rows.length) {
+      box.innerHTML =
+        `<div class="card" style="margin-top:12px">
+           <h3 style="margin-top:0">${t("잡힌 예약이 없습니다")}</h3>
+           <p class="meta">${t("메뉴판에 「예약 받는 것」을 넣고 손님이 시간을 고르면 여기에 뜹니다.")}</p>
+         </div>`;
+      return;
+    }
+    const when = (s: number) => {
+      const d = new Date(s * 1000);
+      const w = ["일", "월", "화", "수", "목", "금", "토"][d.getDay()];
+      const h = d.getHours();
+      const mm = String(d.getMinutes()).padStart(2, "0");
+      return `${d.getMonth() + 1}/${d.getDate()}(${w}) ${h < 12 ? "오전" : "오후"} ${h % 12 || 12}:${mm}`;
+    };
+    box.innerHTML =
+      `<table class="tbl" style="margin-top:12px">
+         <thead><tr>
+           <th>${t("언제")}</th><th class="num">${t("걸리는 시간")}</th>
+           <th>${t("상태")}</th><th></th>
+         </tr></thead>
+         <tbody>${rows
+           .map((b) => {
+             const paid = b.state === "paid";
+             return `<tr class="${paid ? "" : "muted"}">
+               <td>${when(b.at)}</td>
+               <td class="num">${b.minutes}${t("분")}</td>
+               <td>${paid ? `<span class="ok">${t("결제됨")}</span>` : t("고르는 중 — 안 올 수 있음")}</td>
+               <td class="act"><button class="ghost" data-bcancel="${escapeHtml(b.addr || "")}">${t("취소")}</button></td>
+             </tr>`;
+           })
+           .join("")}</tbody>
+       </table>`;
+    box.querySelectorAll("[data-bcancel]").forEach((el) => {
+      (el as HTMLElement).onclick = async () => {
+        const addr = (el as HTMLElement).dataset.bcancel!;
+        // 🔴 되돌릴 수 없다. 손님은 이미 그 시간에 오기로 알고 있다.
+        const yes = await ask(
+          t("이 예약을 취소합니다"),
+          t("손님은 이 시간에 오기로 알고 계십니다. 연락하실 방법이 있는지 먼저 확인하세요."),
+          { ok: t("취소합니다") }
+        );
+        if (!yes) return;
+        try {
+          await invoke("booking_cancel", { addr });
+        } catch (e) {
+          box.innerHTML = `<div class="warnbox">${escapeHtml(String(e))}</div>`;
+          return;
+        }
+        void showBookings();
+      };
+    });
+  } catch (e) {
+    box.innerHTML = `<div class="warnbox" style="margin-top:12px">${escapeHtml(String(e))}</div>`;
+  }
+}
+
+/**
+ * 카운터에서 판 이용권 목록.
+ *
+ * 🔴 이게 없으면 손님이 폰을 닫는 순간 그 표는 사장에게 존재하지 않는다.
+ * 돈은 받았는데 못 들여보내고, 그건 카운터에서 바로 싸움이 된다.
+ *
+ * 번호를 그대로 보여 준다. 손님이 「제 표가 K7P2 로 시작했어요」라고 말할
+ * 때 찾을 수 있어야 하고, 직원이 검표 칸에 손으로 칠 수도 있어야 한다.
+ */
+async function showPasses() {
+  const box = $("dr-hits");
+  box.innerHTML = `<div class="meta" style="padding:14px 0">${t("불러오는 중…")}</div>`;
+  try {
+    const r = await invoke<any>("ticket_list", { nowUnix: Math.floor(Date.now() / 1000) });
+    const rows: any[] = r.tickets || [];
+    if (!rows.length) {
+      // 빈 화면은 실패가 아니라 안내다. 어떻게 하면 여기 뜨는지 적는다.
+      box.innerHTML =
+        `<div class="card" style="margin-top:12px">
+           <h3 style="margin-top:0">${t("아직 판 이용권이 없습니다")}</h3>
+           <p class="meta">${t("메뉴판에 「기간 이용권」을 넣고 손님이 사면 여기에 쌓입니다.")}</p>
+         </div>`;
+      return;
+    }
+    const ymd = (v: number) =>
+      v ? `${Math.floor(v / 10000)}.${String(Math.floor(v / 100) % 100).padStart(2, "0")}.${String(v % 100).padStart(2, "0")}` : "";
+    box.innerHTML =
+      `<table class="tbl" style="margin-top:12px">
+         <thead><tr>
+           <th>${t("표 번호")}</th><th>${t("품목")}</th>
+           <th>${t("언제까지")}</th><th class="num">${t("남은 날")}</th><th>${t("들어온 횟수")}</th>
+         </tr></thead>
+         <tbody>${rows
+           .map(
+             (p) => `<tr class="${p.valid ? "" : "muted"}">
+               <td><code class="addr">${escapeHtml(p.code || "")}</code></td>
+               <td>${escapeHtml(p.item || "")}</td>
+               <td>${ymd(p.until)}</td>
+               <td class="num">${p.valid ? `${p.left_days}${t("일")}` : escapeHtml(p.why || "")}</td>
+               <td>${(p.visits || []).length}</td>
+             </tr>`
+           )
+           .join("")}</tbody>
+       </table>
+       <p class="meta" style="margin-top:8px">${t("총")} ${rows.length}${t("장")}</p>`;
+  } catch (e) {
+    box.innerHTML = `<div class="warnbox" style="margin-top:12px">${escapeHtml(String(e))}</div>`;
+  }
+}
+
+/** 「3일 전」처럼. 날짜를 적으면 사장이 머리로 뺄셈을 한다. */
+function agoDays(unix: number): string {
+  const d = Math.floor((Date.now() / 1000 - unix) / 86400);
+  if (d <= 0) return t("오늘");
+  if (d === 1) return t("어제");
+  if (d < 30) return `${d}${t("일 전")}`;
+  const m = Math.floor(d / 30);
+  return `${m}${t("달 전")}`;
 }
 
 function bindMemberCards(root: string) {
@@ -3898,11 +4767,33 @@ async function loadMembers() {
   try {
     const r = await invoke<any>("list_members", { nowUnix: nowSec() });
     const list: any[] = r.members || [];
+    // 🔴 **만료된 회원과 다니는 회원을 섞어 두면 안 된다.** 명단이 길어질수록
+    //    사장이 찾는 것은 「지금 다니는 사람」인데, 그 사이에 작년에 끊은
+    //    사람이 끼어 있으면 매번 눈으로 걸러야 한다.
+    //
+    //    끝난 회원을 지우지도 않는다 — 다시 오는 사람이 많고, 그때 옛 기록이
+    //    있으면 「예전에 다니셨죠」가 된다. 나누기만 한다.
+    const live = list.filter((m) => m.valid);
+    const ending = live.filter((m) => m.kind === "period" && m.days_left <= 7);
+    const going = live.filter((m) => !ending.includes(m));
+    const over = list.filter((m) => !m.valid);
+
+    const group = (title: string, rows: any[], why: string) =>
+      rows.length
+        ? `<div class="mgroup"><div class="mgrouphead">${title}
+             <span class="meta">${rows.length}${t("명")}</span></div>
+             ${why ? `<div class="meta" style="margin-bottom:8px">${why}</div>` : ""}
+             ${rows.map((m) => memberCard(m, false)).join("")}</div>`
+        : "";
+
     $("dr-list").innerHTML = list.length
-      ? list.map((m) => memberCard(m, false)).join("")
+      ? group(t("곧 끝납니다"), ending, t("지금 카운터에서 말씀드리면 대개 갱신하십니다.")) +
+        group(t("다니는 중"), going, "") +
+        group(t("끝난 회원"), over, t("지우지 않았습니다 — 다시 오시면 그대로 이어집니다."))
       : emptyWithRaven("아직 등록된 회원이 없습니다.<br />「회원 등록」으로 첫 회원을 넣어 보세요.", "hello");
     bindMemberCards("dr-list");
-    $("dr-note").textContent = `회원 ${list.length}명`;
+    $("dr-note").textContent =
+      `${t("다니는 중")} ${live.length}${t("명")} · ${t("끝남")} ${over.length}${t("명")}`;
   } catch (e) {
     $("dr-note").innerHTML = `<span class="danger">${e}</span>`;
   }
@@ -3928,9 +4819,15 @@ async function openMember(asset?: string): Promise<void> {
       ($("ms-months") as HTMLSelectElement).value = "0";
       set("ms-visits", m.visits_total || 10);
       set("ms-note", m.note);
+      // 추가 항목도 되살린다. 안 하면 전화번호만 고치러 열었다가 저장하는
+      // 순간 생년·성별이 빈 값으로 덮인다.
+      set("ms-birth", m.extra?.birth_year);
+      set("ms-emg", m.extra?.emergency);
+      ($("ms-gender") as HTMLSelectElement).value = m.extra?.gender || "";
     }
   } else {
-    ["ms-name", "ms-phone", "ms-note"].forEach((id) => set(id, ""));
+    ["ms-name", "ms-phone", "ms-note", "ms-birth", "ms-emg"].forEach((id) => set(id, ""));
+    ($("ms-gender") as HTMLSelectElement).value = "";
     await loadUnclaimed();
     // 오늘 시작, 한 달. 시작일을 강제하지는 않는다 — 금요일에 결제하고
     // 월요일부터 시작하는 회원이 실제로 있다.
@@ -4052,6 +4949,20 @@ async function saveMember() {
       visitsTotal: parseInt(val("ms-visits")) || 0,
       note: val("ms-note"),
       nowUnix: nowSec(),
+      // 체육관마다 다른 것들. 빈 칸은 안 보낸다 — 보내면 예전 값을 빈 값으로
+      // 덮어쓴다(러스트가 「이번에 온 것만」 합치기 때문).
+      extra: (() => {
+        const e: Record<string, string> = {};
+        for (const [k, id] of [
+          ["birth_year", "ms-birth"],
+          ["gender", "ms-gender"],
+          ["emergency", "ms-emg"],
+        ] as const) {
+          const v = val(id);
+          if (v) e[k] = v;
+        }
+        return Object.keys(e).length ? e : null;
+      })(),
     });
 
     $("msheet").classList.add("hidden");
@@ -4096,6 +5007,22 @@ function gateEnc() {
     v("enc-confirm").trim() === ($("enc-phrase").textContent || "").trim() &&
     (encMode === "new" || v("enc-old").length > 0);
   ($("enc-go") as HTMLButtonElement).disabled = !ok;
+
+  // 🔴 **단추를 안 눌리게만 하면 안 된다.** 왜 안 눌리는지 말해 주지 않으면
+  //    사장은 화면이 고장 난 줄 안다. 특히 「두 번 넣은 암호가 다르다」는
+  //    본인은 같게 쳤다고 믿기 때문에 절대 스스로 못 찾는다.
+  const say = document.getElementById("enc-why");
+  if (!say) return;
+  const a1 = v("enc-new");
+  const a2 = v("enc-new2");
+  let why = "";
+  if (a1 && a1.length < 10) why = `암호가 짧습니다. ${10 - a1.length}글자 더 필요합니다.`;
+  else if (a2 && a1 !== a2) why = "🔴 두 번 넣은 암호가 다릅니다.";
+  else if (a1 && a1 === a2 && !ok) why = "아래 문장을 그대로 입력하시면 됩니다.";
+  else if (a1 && a1 === a2) why = "✅ 두 암호가 같습니다.";
+  say.textContent = why;
+  say.className = why.startsWith("🔴") ? "warnbox" : "meta";
+  say.style.marginTop = why ? "8px" : "0";
 }
 
 async function doEncrypt() {
@@ -4105,17 +5032,43 @@ async function doEncrypt() {
   try {
     if (encMode === "new") {
       await invoke("encrypt_wallet", { passphrase: v("enc-new"), confirm: v("enc-new2") });
+      // 🔴 **같은 암호로 백업도 열리게 해 둔다.** 백업 암호를 따로 두면
+      //    사장은 암호 두 개를 갖게 되고, 그 둘을 헷갈린다. 지금 이 순간이
+      //    암호를 손에 쥔 유일한 때다 — 여기서 안 하면 다시는 못 한다
+      //    (우리는 암호를 저장하지 않으므로).
+      //
+      //    실패해도 지갑 암호는 이미 걸렸으므로 조용히 넘어간다.
+      const alsoBackup = await invoke("backup_pass_set", { pass: v("enc-new"), walletPass: v("enc-new") })
+        .then(() => true)
+        .catch(() => false);
       $("enc-result").innerHTML =
         `<div class="warnbox" style="margin-top:12px"><b>암호를 걸었습니다. 노드가 꺼졌습니다.</b><br />
          레이븐 노드를 다시 켜야 가게가 다시 돕니다. 암호를 종이에 적어 안전한 곳에 두세요 —
-         이 컴퓨터가 아닌 곳에.</div>`;
+         이 컴퓨터가 아닌 곳에.<br /><br />
+         ${
+           alsoBackup
+             ? "<b>이 암호 하나로 백업도 열립니다.</b> 새 컴퓨터에서 가게를 되살릴 때 이 암호를 칩니다."
+             : "⚠️ 백업 암호는 따로 정하셔야 합니다 — 「이 컴퓨터」에서."
+         }</div>`;
     } else {
       await invoke("change_passphrase", {
         old: v("enc-old"),
         new: v("enc-new"),
         confirm: v("enc-new2"),
       });
-      $("enc-result").innerHTML = `<div class="card" style="margin-top:12px"><h3>바꿨습니다</h3></div>`;
+      // 🔴 **여기가 비어 있었다.** 암호를 바꿔도 백업 봉투는 옛 암호 그대로라,
+      //    새 컴퓨터에서 새 암호를 쳐도 안 열렸다. 사장은 열릴 거라 믿는다.
+      //    바꾸는 이 순간이 새 암호를 손에 쥔 유일한 때다.
+      const synced = await invoke("backup_pass_set", { pass: v("enc-new"), walletPass: v("enc-new") })
+        .then(() => true)
+        .catch(() => false);
+      $("enc-result").innerHTML =
+        `<div class="card" style="margin-top:12px"><h3>바꿨습니다</h3>
+         <p class="meta">${
+           synced
+             ? "앞으로 만드는 백업은 <b>새 암호</b>로 열립니다.<br />⚠️ 이미 만들어 둔 백업은 <b>예전 암호</b>로만 열립니다 — 그 파일 안에 이미 굳어 있어서 바꿀 수가 없습니다. 새로 한 부 만들어 두세요."
+             : "⚠️ 백업 암호는 따로 정하셔야 합니다 — 「이 컴퓨터」에서."
+         }</p></div>`;
     }
     loadWallet();
   } catch (e) {
@@ -4736,7 +5689,12 @@ async function calcMining() {
       krwPerKwh: kwh,
     });
     const net = r.net_krw;
-    const solo = r.solo_days_per_block;
+    // 🔴 이 값은 `contribution` **안에** 있다. 밖에서 읽으면 `undefined` 고,
+    //    아래에서 `solo.toFixed(0)` 이 터진다 — 화면에 영문 TypeError 가
+    //    그대로 떴다. 사장이 할 수 있는 일이 하나도 없는 문장이다.
+    //
+    //    값이 없어도 화면은 나와야 한다. 「모른다」와 「고장났다」는 다르다.
+    const solo = Number(r?.contribution?.solo_days_per_block);
 
     $("mn-calc").innerHTML = `<div class="cost">
       <div class="burn ${net > 0 ? "ok" : "danger"}">
@@ -4749,7 +5707,10 @@ async function calcMining() {
       <div class="meta">
         네트워크 전체의 ${(r.share * 100).toExponential(1)}% ·
         혼자 캐면 블록 하나에 평균 ${
-          solo > 36500 ? "100년 넘게" : solo > 365 ? `${(solo / 365).toFixed(0)}년` : `${solo.toFixed(0)}일`
+          !Number.isFinite(solo) ? "—"
+          : solo > 36500 ? "100년 넘게"
+          : solo > 365 ? `${(solo / 365).toFixed(0)}년`
+          : `${solo.toFixed(0)}일`
         } 걸립니다 — 그래서 풀에 들어갑니다
       </div>
       ${
@@ -5466,7 +6427,7 @@ async function loadPlaces() {
         : `<div class="meta">붙어 있는 클라우드나 외장 디스크가 없습니다.</div>`) +
       `<div class="row" style="margin-top:12px">
          <button class="ghost" id="bk-pick">다른 폴더 고르기…</button>
-         <span class="meta">아무것도 안 고르면 바탕화면에 만듭니다.</span>
+         <span class="meta">아무것도 안 고르면 「내 서류함」에 만듭니다.</span>
        </div>`;
 
     // 목록의 줄을 직접 누르면 거기에 만든다. 여태 「여기에 백업 만들기」 버튼
@@ -5475,7 +6436,37 @@ async function loadPlaces() {
     $("bk-places")
       .querySelectorAll<HTMLElement>("[data-dest]")
       .forEach((el) => {
-        el.onclick = () => void doBackup(el.dataset.dest || "");
+        // 🔴 눌러도 **그 줄은 아무 변화가 없었다.** 안내는 저 아래 다른 자리에
+        //    떠서, 사장은 눌린 건지도 모른 채 몇 번을 더 눌렀다. 누른 자리에서
+        //    답해야 한다 — 사람은 자기가 만진 곳을 본다.
+        el.onclick = async () => {
+          if (el.dataset.busy) return; // 두 번 누르면 두 번 만든다
+          el.dataset.busy = "1";
+          const label = el.querySelector("span");
+          const was = label?.textContent || "";
+          el.style.opacity = "0.6";
+          if (label) label.textContent = "백업 중… 잠시만요";
+          try {
+            const r = await doBackup(el.dataset.dest || "");
+            el.style.opacity = "1";
+            if (label)
+              label.textContent = r
+                ? `✅ 여기에 만들었습니다 — ${r}`
+                : "✅ 여기에 만들었습니다";
+            el.style.borderLeft = "3px solid var(--ok, #2f9e44)";
+          } catch (e) {
+            el.style.opacity = "1";
+            if (label) label.textContent = `🔴 ${String(e).slice(0, 60)}`;
+            el.style.borderLeft = "3px solid var(--danger, #c92a2a)";
+          } finally {
+            delete el.dataset.busy;
+            // 다음에 다시 누를 수 있게 잠시 뒤 원래 문구로.
+            window.setTimeout(() => {
+              if (label && !el.dataset.busy) label.textContent = was;
+              el.style.borderLeft = "";
+            }, 12_000);
+          }
+        };
       });
 
     const pick = document.getElementById("bk-pick");
@@ -5494,7 +6485,7 @@ async function loadPlaces() {
   }
 }
 
-async function doBackup(destFolder = "") {
+async function doBackup(destFolder = ""): Promise<string> {
   // 아무것도 묻지 않는다. 폴더 경로를 타이핑하게 하는 것은 백업을 안 하게 하는
   // 가장 확실한 방법이었다. 바탕화면에 파일 하나로 만들고, 어디 뒀는지 알려준다.
   const node: any = await invoke("node_identity").catch(() => ({}));
@@ -5505,21 +6496,37 @@ async function doBackup(destFolder = "") {
   $("bk-note").textContent = "백업 중…";
   try {
     const r = await invoke<any>("backup_zip", { destFolder, label, includeWallet: true });
+    // 🔴 **어디에 만들었는지 짐작해서 적지 않는다.** 「바탕화면에 있습니다」로
+    //    박아 뒀는데 기본 폴더를 서류함으로 바꾸자 그 문장이 거짓말이 됐고,
+    //    사장은 바탕화면을 뒤졌다. 러스트가 돌려준 **진짜 경로**를 읽는다.
+    const full = String(r.path || "");
+    const folder = full.slice(0, full.lastIndexOf("/"));
+    const home = folder.match(/^\/Users\/[^/]+/)?.[0] || "";
+    const pretty = folder
+      .replace(home + "/Documents", "내 서류함")
+      .replace(home + "/Desktop", "바탕화면")
+      .replace(home, "내 폴더");
+    const whereText = pretty ? `${pretty} 에 있습니다.` : "만들었습니다.";
     $("bk-result").innerHTML =
       `<div class="card" style="margin-top:11px">
          <h3>파일 하나로 만들었습니다</h3>
          <div class="kv"><b>${r.name}</b><span>${r.size_text}</span></div>
-         <p class="meta">바탕화면에 있습니다. 이 파일 하나만 USB나 다른 컴퓨터에 옮겨 두시면
+         <p class="meta">${escapeHtml(whereText)} 이 파일 하나만 USB나 다른 컴퓨터에 옮겨 두시면
            됩니다 — 가게 전부가 들어 있습니다.</p>
          ${(r.inside || []).map((i: any) => `<div class="kv"><b>${i.name}</b><span>${i.what}</span></div>`).join("")}
        </div>` +
       (r.warning
         ? `<div class="warnbox" style="margin-top:9px">${r.warning}</div>`
         : "");
+    $("bk-note").textContent = "";
+    // 누른 줄이 「무엇을」 만들었는지 말할 수 있게 이름을 돌려준다.
+    return String(r.size_text || "");
   } catch (e) {
     $("bk-result").innerHTML = `<div class="warnbox" style="margin-top:11px">${e}</div>`;
+    $("bk-note").textContent = "";
+    // 🔴 삼켜서 「됐다」로 보이게 하면 안 된다. 누른 줄이 빨갛게 되어야 한다.
+    throw e;
   }
-  $("bk-note").textContent = "";
 }
 
 async function showSeed() {
@@ -5559,6 +6566,8 @@ async function showSeed() {
 const ONBOARD_KEY = "playx-onboarded";
 /// 폰 서버를 한 번이라도 켠 적이 있는가. 다음 실행에서 스스로 켤 근거다.
 const PHONE_KEY = "playx-phone-on";
+/** 손님 폰 서버가 왜 안 켜졌나. 「문제 알리기」에 같이 실려 나간다. */
+let lastPhoneError = "";
 let obRec: any = null;
 
 /// 첫 실행의 단계들. 이름으로 부른다.
@@ -6027,8 +7036,35 @@ async function refreshTunnel() {
     tunnelUrl = t.url || "";
 
     if (!t.installed) {
+      // 🔴 「터미널에서 brew install 하세요」는 안내가 아니라 **거절**이다.
+      //    이 프로그램의 사장은 70대이고 터미널을 열어 본 적이 없다.
+      //    우리가 받는다 — 단추 하나.
       $$("tn-detail").innerHTML =
-        `<span class="warn">cloudflared가 없습니다</span> — 터미널에서 <code>brew install cloudflared</code>`;
+        `<div class="card" style="margin-top:11px">
+           <b>바깥에서 열려면 도구가 하나 필요합니다</b>
+           <p class="meta" style="margin:6px 0 10px">
+             Cloudflare 가 만든 것으로, 이 컴퓨터를 인터넷에 잠깐 이어 줍니다.
+             <b>40MB 남짓</b>이고 한 번만 받으면 됩니다.
+           </p>
+           <button id="tn-get">지금 받기</button>
+           <div class="meta" id="tn-getsay" style="margin-top:8px"></div>
+         </div>`;
+      $("tn-get").addEventListener("click", async () => {
+        const say = $("tn-getsay");
+        const btn = $("tn-get") as HTMLButtonElement;
+        btn.disabled = true;
+        // 40MB 다. 아무 말 없이 기다리게 하면 멈춘 줄 안다.
+        // 화면 번역기가 DOM 을 훑으므로 여기서는 한국어 그대로 둔다.
+          say.textContent = "받는 중… 인터넷이 느리면 몇 분 걸립니다.";
+        try {
+          await invoke("tunnel_install");
+          say.innerHTML = `<span class="ok">다 받았습니다. 이제 켤 수 있습니다.</span>`;
+          await refreshTunnel();
+        } catch (e) {
+          say.innerHTML = `<span class="danger">${escapeHtml(String(e))}</span>`;
+          btn.disabled = false;
+        }
+      });
       return;
     }
     // 켜고 끄는 글자는 이제 스위치가 그린다.
@@ -6089,13 +7125,15 @@ async function startPhone() {
       invoke<string>("qr_svg", { text: r.scan_url }),
       invoke<string>("qr_svg", { text: r.customer_url }),
     ]);
+    const oneLink = (url: string) =>
+      `<code class="addr qrurl">${escapeHtml(url)}</code>`;
     // 사장·직원·검표 QR에는 각각 다른 열쇠가 들어 있다. 손님 QR만 붙여도 된다.
     phoneQr =
-      `<div class="qrbox">${adminQr}<div class="cap"><b>사장님만</b>돈·발행·설정 전부</div></div>` +
-      `<div class="qrbox">${staffQr}<div class="cap"><b>직원</b>주문·회원확인만</div></div>` +
-      `<div class="qrbox">${scanQr}<div class="cap"><b>검표 태블릿</b>문 앞에 두는 화면</div></div>` +
-      `<div class="qrbox">${custQr}<div class="cap"><b>손님</b>카운터에 붙이세요</div></div>` +
-      `<div class="meta" style="width:100%;margin-top:8px">${r.ip}:${r.port} · 폰을 같은 와이파이에 붙이고 찍으세요</div>` +
+      `<div class="qrbox">${adminQr}<div class="cap"><b>사장님만</b>돈·발행·설정 전부</div>${oneLink(r.admin_url)}</div>` +
+      `<div class="qrbox">${staffQr}<div class="cap"><b>직원</b>주문·회원확인만</div>${oneLink(r.staff_url)}</div>` +
+      `<div class="qrbox">${scanQr}<div class="cap"><b>검표 태블릿</b>문 앞에 두는 화면</div>${oneLink(r.scan_url)}</div>` +
+      `<div class="qrbox">${custQr}<div class="cap"><b>손님</b>카운터에 붙이세요</div>${oneLink(r.customer_url)}</div>` +
+      `<div class="meta" style="width:100%;margin-top:8px">${r.ip}:${r.port} · 폰을 같은 와이파이에 붙이고 찍으세요. QR 이 안 열리면 위 주소를 치세요.</div>` +
       // 손님 QR 에는 열쇠가 없어 붙여도 된다. 나머지 셋에는 열쇠가 들어 있어
       // 인쇄해 벽에 붙이면 그건 열쇠를 벽에 붙이는 것이다.
       `<div class="tblbox">
@@ -6152,6 +7190,11 @@ async function publishShop(ip?: string) {
   // DOM 에서 IP 를 읽어오던 자리다. 그 칸이 화면 개편에서 사라지면서 조용히
   // 127.0.0.1 로 떨어졌고, 그러면 손님 폰이 사진을 못 받는다. 변수를 본다.
   const host = ip || serverIp || "127.0.0.1";
+  // 🔴 사진이 아직 문서 안에 통째로 들어 있으면 여기서 파일창고로 옮긴다.
+  //    등록할 때만 고치면 **이미 등록된 가게는 영영 못 고친다** — 사장은
+  //    등록 단추를 다시 누를 일이 없기 때문이다. 문을 열 때마다 지나가는
+  //    길이 여기다. 파일창고가 켜져 있으면 그때 조용히 낫는다.
+  await healIcon();
   const val = (id: string) => ($(id) as HTMLInputElement)?.value.trim() || "";
   let rate: number | null = null;
   const currency = ($("mn-cur") as HTMLSelectElement)?.value || "KRW";
@@ -6183,11 +7226,20 @@ async function publishShop(ip?: string) {
       payment_address: shopAddress,
       lat: shopCoords?.lat ?? null,
       lon: shopCoords?.lon ?? null,
-      // 간판이 IPFS 해시면 손님 폰이 읽을 수 있는 주소로 바꿔 준다.
-      icon:
-        shopIcon && shopIcon.startsWith("Qm")
-          ? `http://${host}:8790/ipfs/${shopIcon}`
-          : shopIcon,
+      // 🔴 여기서 주소를 **완성하지 않는다.**
+      //
+      //    예전에는 `http://192.168.0.x:8790/ipfs/…` 로 바꿔 실었다. 그건
+      //    이 집 안에서만 통하는 주소다. 그 공지는 릴레이를 타고 **바깥
+      //    손님**에게도 가는데, 바깥에서는 그 주소가 영원히 안 열린다.
+      //    게다가 손님 화면은 `https` 만 통과시키므로 `http://` 는 그 전에
+      //    걸러져 사진이 아예 안 나왔다.
+      //
+      //    날 주소(`Qm…/icon.jpg`)만 싣는다. 받는 쪽이 각자 자기 길을 붙인다:
+      //      · 가게 안 손님 → 같은 자리(`/ipfs/…`)
+      //      · 바깥 손님   → 서명으로 확인한 가게 주소 + `/ipfs/…`
+      icon: shopIcon,
+      // 가게 안 사진 여러 장. 이것도 안 실려 있어서 바깥 손님은 못 봤다.
+      photos_cid: shopPhotosCid,
       menu: menuItems,
       currency,
       rate,
@@ -6221,6 +7273,45 @@ function labelShopNav() {
   if (document.getElementById("ravi-tiles")) paintRavi();
   const title = document.querySelector("#page-shop .title");
   if (title) title.textContent = name || "내 가게";
+  paintChainMark();
+}
+
+/**
+ * 이 이름이 **체인에 있는가, 이 컴퓨터에만 있는가.**
+ *
+ * 🔴 여태 구별이 없었다. `shop.json` 에 이름만 적어 두면 왼쪽 메뉴에도, 첫
+ * 화면 제목에도 그 이름이 떴다 — 체인 등록(500 RVN 소각)은 한 적이 없는데
+ * **등록한 것처럼 보였다.** 실제로 「가게 자산을 안 만들었는데 만든 것처럼
+ * 보인다」는 지적이 나왔다.
+ *
+ * 둘은 진짜로 다른 상태다:
+ *   - 이 컴퓨터에만 있음 → 손님은 **QR 로만** 온다. 장터에서 못 찾는다.
+ *   - 체인에 등록됨      → 전 세계 어느 노드에서도 이 가게가 보인다.
+ *
+ * 경고 상자로 만들지 않는다. 등록 안 한 것은 고장이 아니라 **정상적인 한
+ * 단계**다 — 커피는 그 상태로도 다 팔린다. 조용한 표시 하나면 된다.
+ */
+function paintChainMark() {
+  const el = document.getElementById("sh-chainmark");
+  if (!el) return;
+  const asset = ($("sh-registered") as HTMLInputElement)?.value.trim() || "";
+  const name =
+    ($("sh-ko") as HTMLInputElement)?.value.trim() ||
+    ($("sh-en") as HTMLInputElement)?.value.trim();
+  if (!name) {
+    el.style.display = "none";
+    return;
+  }
+  el.style.display = "";
+  // 등록한 가게만 알릴 것이 있다. 등록 전에는 손님 화면이 이 컴퓨터에서
+  // 바로 나가므로 알릴 곳이 없다.
+  const btn = document.getElementById("sh-refresh");
+  if (btn) btn.style.display = asset ? "" : "none";
+  el.className = asset ? "chainmark on" : "chainmark";
+  el.textContent = asset ? `체인에 등록됨 · ${asset}` : t("이 컴퓨터에만 있습니다");
+  el.title = asset
+    ? ""
+    : t("손님은 QR 로 옵니다. 장터에서 찾게 하려면 아래에서 등록하세요.");
 }
 
 // ── 문 (셸리) ──────────────────────────────────────────────────────────────
@@ -6663,6 +7754,17 @@ async function registerShop() {
   btn.textContent = "등록 중…";
   const val = (id: string) => ($(id) as HTMLInputElement).value.trim();
 
+  // 🔴 사진이 `data:` 로 남아 있으면 여기서 고친다.
+  //
+  //    실측(이 가게): `shop.json` 의 `icon` 이 17,379바이트짜리 `data:` 였다.
+  //    사진을 고를 때 파일창고가 잠깐 안 돌아서 비상 경로로 떨어진 것이고,
+  //    그 뒤로 **아무도 다시 시도하지 않았다.** 결과가 셋이었다:
+  //      · 공지에서는 `data:` 가 걸러진다(32KB 상한) → 손님에게 안 간다
+  //      · 체인에 올라간 프로필의 `icon` 은 `null` 이었다 → 손님에게 안 간다
+  //      · 사장 화면에는 보인다 → **올라간 줄 안다**
+  //    사진을 다시 고르라고 하지 않는다. 지금 파일창고가 돌면 지금 올린다.
+  await healIcon();
+
   try {
     // Profile first: the asset must point at something that already exists,
     // and a failed upload before the burn costs nothing.
@@ -6676,6 +7778,7 @@ async function registerShop() {
       pickup: ($("sh-pickup") as HTMLInputElement).checked,
       menuCid: null,
       icon: shopIcon,
+      photos_cid: shopPhotosCid,
       // 🔴 좌표가 여기서 빠져 있었다. 서명에는 있는데 호출부에 없어서
       // Tauri 가 조용히 None 으로 채웠고, 체인에 올라간 프로필에는 좌표가
       // 없었다 — 가게 목록의 거리·길찾기가 영영 안 나오는 이유였다.
@@ -6689,12 +7792,36 @@ async function registerShop() {
     const asset = $("sh-confirmname").textContent!;
     const txid = await invoke<string>("issue_asset", {
       name: asset,
-      qty: 1,
-      units: 0,
+      // 🔴 여태 **1개·나눌 수 없음**으로 찍었다. 그러면 이 자산을 손님에게
+      //    나눠 줄 수가 없고, 그래서 **팔로우가 성립하지 않는다.**
+      //    레이븐코인의 `sendmessage` 는 「이 자산을 가진 사람 전원」에게
+      //    가는데, 가진 사람이 사장 하나뿐이면 자기에게 보내는 셈이다.
+      //
+      //    가게 주인임을 증명하는 것은 `SHOP.무엇!`(소유권 토큰)이지 이 자산이
+      //    아니다. 그러니 이 자산은 **처음부터 팔로우 토큰**으로 만든다.
+      //    손님에게 0.00000001 씩 나눠 주면 그 사람들이 가게 공지를 받는다.
+      //
+      //    나중에 고치려면 재발행 100 RVN 이 든다. 그래서 **지금 맞게 찍는다.**
+      qty: 21_000_000_000,
+      units: 8,
       reissuable: true, // 프로필을 나중에 고치려면 재발행이 필요하다
       ipfsHash: up.cid,
       toAddress: null,
     });
+
+    // 🔴 이 줄이 없으면 노드는 자기 가게의 체인 이름을 영영 모른다 — 터널을
+    //    켜도 「누구의 주소인지」를 못 적어서 아무것도 공지하지 못한다.
+    ($("sh-registered") as HTMLInputElement).value = asset;
+    saveShop();
+    labelShopNav();
+    // 문이 이미 열려 있으면 지금 바로 알린다. 다음에 터널을 다시 켤 때까지
+    // 기다리면, 방금 등록한 가게가 오늘 하루 종일 장터에서 안 보인다.
+    try {
+      const t: any = await invoke("tunnel_status");
+      if (t?.url) await invoke("shop_announce", { asset, url: t.url });
+    } catch {
+      /* 공지가 실패해도 등록은 끝났다. 다음에 문 열 때 다시 올라간다. */
+    }
 
     $("sh-result").innerHTML =
       `<div class="card" style="margin-top:12px"><h3>가게가 등록되었습니다</h3>
@@ -6727,12 +7854,21 @@ function shopSnapshot() {
     description: val("sh-desc"),
     location: val("sh-loc"),
     phone: val("sh-phone"),
+    // 🔴 이 둘이 여태 저장 안 됐다. `loadShop` 은 읽는데 저장하는 쪽이 안
+    //    담아서, 사장이 적어 넣은 바깥 주소가 앱을 끄면 사라졌다.
+    //    `asset` 은 더 중요하다 — 노드가 **자기 가게의 체인 이름**을 알아야
+    //    터널이 켜질 때 「SHOP.PLAYX 는 지금 여기서 주문받습니다」를 올린다.
+    order_url: val("sh-orderurl"),
+    // 사장이 치는 중인 이름과, **실제로 체인에 올라간 이름**은 다르다.
+    asset: val("sh-asset"),
+    chain_asset: val("sh-registered"),
     pickup: ($("sh-pickup") as HTMLInputElement)?.checked ?? true,
     delivery: ($("sh-delivery") as HTMLInputElement)?.checked ?? false,
     payment_address: shopAddress,
     lat: shopCoords?.lat ?? null,
     lon: shopCoords?.lon ?? null,
     icon: shopIcon,
+    photos_cid: shopPhotosCid,
     currency: ($("mn-cur") as HTMLSelectElement)?.value || "KRW",
     hours: readHours(),
     closed_now: ($("sh-closednow") as HTMLInputElement)?.checked ?? false,
@@ -6741,13 +7877,78 @@ function shopSnapshot() {
   };
 }
 
+/**
+ * 사진이 문서 안에 통째로 들어 있으면 파일창고로 옮기고 **주소만** 남긴다.
+ *
+ * 사진을 고를 때 파일창고가 안 돌면 비상으로 `data:` 를 들고 있는다. 그건
+ * 사장 화면에서는 보이지만 **손님에게는 한 번도 안 간다** — 공지에서는
+ * 32KB 상한 때문에 걸러지고, 체인 프로필에도 안 실린다.
+ *
+ * 그래서 올리기 직전에 한 번 더 해 본다. 파일창고는 대개 그 사이에 켜진다.
+ * 실패하면 조용히 넘어가지 않고 그대로 둔다 — 사진 때문에 가게 등록 자체를
+ * 막을 이유는 없지만, 안 된 것을 됐다고 하지도 않는다.
+ */
+async function healIcon(): Promise<void> {
+  if (!shopIcon || !shopIcon.startsWith("data:")) return;
+  const was = shopIcon;
+  try {
+    const bin = await (await fetch(was)).blob();
+    const up = await invoke<any>("ipfs_add_bundle", {
+      files: [{ name: "icon.jpg", bytes: [...new Uint8Array(await bin.arrayBuffer())] }],
+      metadata: null,
+    });
+    // 폴더 주소를 준다. 파일 이름까지 붙여야 그림이 나온다.
+    if (!up?.cid) throw new Error("파일창고가 주소를 주지 않았습니다.");
+    shopIcon = `${up.cid}/icon.jpg`;
+    const note = $("sh-picnote");
+    if (note) note.textContent = t("사진을 파일창고에 올렸습니다.");
+    void saveShop();
+  } catch (e) {
+    const note = $("sh-picnote");
+    if (note) {
+      // 괄호 안 작은 글씨로 적으면 사장은 그냥 넘어간다. 문제로 보이게 한다.
+      note.innerHTML =
+        `<b style="color:var(--warn)">사진을 파일창고에 못 올렸습니다.</b><br />` +
+        `가게는 등록됩니다. 다만 <b>손님 화면에는 사진이 안 나옵니다.</b><br />` +
+        `파일창고가 켜진 뒤 사진을 다시 고르시면 그때 올라갑니다. ` +
+        `(${String((e as Error)?.message || e).slice(0, 80)})`;
+    }
+  }
+}
+
 // 글자 하나마다 파일을 쓰지는 않는다. 손을 멈추면 쓴다.
 let shopSaveTimer: number | undefined;
 function saveShop() {
   clearTimeout(shopSaveTimer);
   shopSaveTimer = setTimeout(() => {
     invoke("shop_save", { shop: shopSnapshot() }).catch(() => {});
+    // 🔴 **손님 화면까지 같이 고친다.**
+    //
+    // 여태 `shop_save` 만 했다 — 그건 이 컴퓨터의 파일에만 적는 것이고,
+    // 손님 폰이 보는 것은 서버가 들고 있는 사본이다. 그래서 사장이 값을
+    // 고쳐도 손님은 **옛 값을 보고, 옛 값으로 결제**했다. 「메뉴판 올리기」를
+    // 눌러야만 반영됐는데, 그건 IPFS 에 올리는 것이지 값을 고치는 것이
+    // 아니다 — 사장이 그 둘을 구별할 이유가 없다.
+    //
+    // 서버가 안 켜져 있으면 조용히 아무 일도 안 한다.
+    void pushShopLive();
   }, 600) as unknown as number;
+}
+
+/**
+ * 지금 화면의 가게 정보를 **손님 화면에 바로 반영한다.**
+ *
+ * 값·이름·영업시간을 고치는 즉시 손님이 그것을 본다. IPFS 에 올리는 것
+ * (「메뉴판 올리기」)과는 다른 일이다 — 그쪽은 체인·장터용 사본이고,
+ * 이쪽은 지금 카운터 앞에 선 손님이 보는 화면이다.
+ */
+async function pushShopLive(): Promise<void> {
+  if (!serverIp) return; // 폰 서버가 아직 안 켜졌다
+  try {
+    await publishShop(serverIp);
+  } catch {
+    /* 못 밀어도 파일에는 저장됐다. 다음에 켤 때 반영된다. */
+  }
 }
 
 async function loadShop() {
@@ -6769,6 +7970,9 @@ async function loadShop() {
   set("sh-loc", sh.location);
   set("sh-phone", sh.phone);
   set("sh-orderurl", sh.order_url);
+  set("sh-asset", sh.asset);
+  // 체인 이름. 이걸 되살려야 다음에 문을 열 때도 손님에게 알릴 수 있다.
+  set("sh-registered", sh.chain_asset);
   set("mn-cur", sh.currency);
   const chk = (id: string, v: any) => {
     const el = $(id) as HTMLInputElement | null;
@@ -6783,6 +7987,22 @@ async function loadShop() {
 
   if (sh.payment_address) shopAddress = sh.payment_address;
   if (sh.icon) shopIcon = sh.icon;
+  // 이미 올려 둔 가게 안 사진을 다시 보여 준다. 안 보여 주면 사장은
+  // 「안 올라갔나」 하고 또 올린다.
+  if (sh.photos_cid) {
+    shopPhotosCid = String(sh.photos_cid);
+    const box = document.getElementById("sh-picsprev");
+    const note = document.getElementById("sh-picsnote");
+    if (box) {
+      box.innerHTML = Array.from({ length: 12 }, (_, i) => {
+        const n = String(i + 1).padStart(2, "0");
+        return `<img src="http://127.0.0.1:8080/ipfs/${shopPhotosCid}/${n}.jpg" alt=""
+                 onerror="this.remove()"
+                 style="width:84px;height:84px;object-fit:cover;border-radius:8px" />`;
+      }).join("");
+    }
+    if (note) note.textContent = "올려 두신 사진입니다. 다시 고르시면 통째로 바뀝니다.";
+  }
   if (sh.lat != null && sh.lon != null) shopCoords = { lat: sh.lat, lon: sh.lon };
 
   if (Array.isArray(sh.menu)) {
@@ -6790,12 +8010,209 @@ async function loadShop() {
     sh.menu.forEach((m: any) => menuItems.push(m));
     renderMenu();
   }
+
+  // 🔴 **읽었으면 화면을 다시 그린다.** 이 함수는 `await` 로 값을 채우는데,
+  //    이 함수를 부르는 쪽은 기다리지 않는다. 그래서 첫 화면·왼쪽 메뉴·
+  //    체인 등록 표시는 **칸이 비어 있던 순간의 판단**을 그대로 들고 있었다.
+  //
+  //    그 결과가 「가게가 있는데 「가게 만들기」가 뜬다」였다. 이름은 화면에
+  //    들어와 있는데 아무도 다시 안 본 것이다.
+  labelShopNav();
 }
 
 // ── 메뉴판 ──
 function curLabel() {
   const c = ($("mn-cur") as HTMLSelectElement)?.value || "KRW";
   return c === "KRW" ? "(원)" : c === "USD" ? "($)" : "(RVN)";
+}
+
+/** 자주 걸리는 시간. 직접 적을 수도 있다. */
+const MINUTES: { label: string; v: number }[] = [
+  { label: "15분", v: 15 },
+  { label: "30분", v: 30 },
+  { label: "1시간", v: 60 },
+  { label: "1시간 30분", v: 90 },
+  { label: "2시간", v: 120 },
+  { label: "3시간", v: 180 },
+];
+
+/** 자주 파는 기간. 이걸 안 두면 「30」을 매번 손으로 친다. */
+const SPANS: { label: string; months: number; days: number }[] = [
+  { label: "하루", months: 0, days: 1 },
+  { label: "2일", months: 0, days: 2 },
+  { label: "1주", months: 0, days: 7 },
+  { label: "1개월", months: 1, days: 0 },
+  { label: "3개월", months: 3, days: 0 },
+  { label: "6개월", months: 6, days: 0 },
+  { label: "1년", months: 12, days: 0 },
+];
+
+/**
+ * 품목 종류에 따라 나오는 칸.
+ *
+ * 🔴 커피 줄에는 아무것도 안 나온다. 모든 줄에 재고·기간 칸을 보여 주면
+ * 그 칸들은 가게 품목 대부분에서 평생 비어 있고, 사장은 「내가 뭘 안 채웠나」
+ * 를 계속 신경 쓰게 된다. 빈 칸은 할 일처럼 보인다.
+ */
+function extraFields(it: any, i: number): string {
+  const months = Number(it.pass_months || 0);
+  const days = Number(it.pass_days || 0);
+
+  if (it.kind === "stock" || it.stock != null) {
+    return `<div class="mnwide">
+      <label>남은 개수 — 비우면 무제한</label>
+      <input data-mn="stock" data-i="${i}" type="number" min="0" step="1"
+             placeholder="무제한" value="${it.stock ?? ""}" style="max-width:180px" />
+    </div>`;
+  }
+
+  if (it.kind === "book" || (it.minutes != null && it.minutes > 0)) {
+    const mins = Number(it.minutes || 0);
+    return `<div class="mnwide">
+      <label>한 사람에 얼마나 걸리나요</label>
+      <div class="spanrow">
+        ${MINUTES.map(
+          (s, k) =>
+            `<button type="button" data-mins="${k}" data-i="${i}" class="${s.v === mins ? "on" : ""}">${s.label}</button>`
+        ).join("")}
+      </div>
+      <div class="row" style="gap:8px;margin-top:8px;align-items:end">
+        <div style="max-width:140px">
+          <label>분</label>
+          <input data-mn="minutes" data-i="${i}" type="number" min="0" step="5"
+                 placeholder="0" value="${mins || ""}" />
+        </div>
+        <span class="meta">${
+          mins > 0
+            ? "손님이 이 시간만큼 자리를 잡습니다."
+            : `<span class="needspan">얼마나 걸리는지 골라 주세요</span>`
+        }</span>
+      </div>
+    </div>`;
+  }
+
+  if (it.kind === "pass" || months > 0 || days > 0) {
+    const on = (s: (typeof SPANS)[number]) =>
+      s.months === months && s.days === days ? " on" : "";
+    return `<div class="mnwide">
+      <label>얼마 동안 쓰는 표인가요</label>
+      <div class="spanrow">
+        ${SPANS.map(
+          (s, k) =>
+            `<button type="button" data-span="${k}" data-i="${i}" class="${on(s).trim()}">${s.label}</button>`
+        ).join("")}
+      </div>
+      <div class="row" style="gap:8px;margin-top:8px;align-items:end">
+        <div style="max-width:120px">
+          <label>개월</label>
+          <input data-mn="pass_months" data-i="${i}" type="number" min="0" step="1"
+                 placeholder="0" value="${months || ""}" />
+        </div>
+        <div style="max-width:120px">
+          <label>일</label>
+          <input data-mn="pass_days" data-i="${i}" type="number" min="0" step="1"
+                 placeholder="0" value="${days || ""}" />
+        </div>
+        <span class="meta" data-spansay="${i}"></span>
+      </div>
+    </div>`;
+  }
+  return "";
+}
+
+/**
+ * 손님이 **실제로 보낼 수 있는** 제일 작은 값.
+ *
+ * 🔴 1사토시(0.00000001)가 아니다. 레이븐 노드는 `relayfee`(기본 0.01 RVN)
+ * 보다 작은 거래를 아예 안 날라 준다. 그래서 1사토시짜리 커피는 주문은
+ * 만들어지는데 손님 지갑이 보내려 하면 **거부당한다** — 그리고 화면은
+ * 아무 말도 안 했다. 「결제가 안 돼」의 정체가 이것이었다.
+ */
+const MIN_RVN = 0.01;
+
+/**
+ * 가격이 체인에서 살아남는 값인가.
+ *
+ * 🔴 RVN 은 소수점 **여덟 자리**까지다. `0.0000000000001` 을 적으면 체인에
+ * 올라갈 때 **0 이 되고, 그 물건은 공짜로 나간다.** 화면이 아무 말도 안 하면
+ * 사장은 그걸 모른 채 하루를 판다.
+ *
+ * 원·달러로 파는 가게는 이 문제가 없다 — 주문할 때 그날 시세로 환산하고,
+ * 그 결과가 1사토시보다 작을 일은 없다. 그래서 RVN 으로 값을 매긴 가게만
+ * 본다.
+ */
+async function sayPrice(i: number) {
+  const el = document.querySelector(`[data-pricesay="${i}"]`) as HTMLElement | null;
+  if (!el) return;
+  // 품목에 통화가 적혀 있으면 그것이 이긴다. 없으면 가게 통화.
+  const cur =
+    menuItems[i]?.currency || ($("mn-cur") as HTMLSelectElement)?.value || "KRW";
+  const v = Number(menuItems[i]?.price);
+  if (!Number.isFinite(v) || v <= 0) {
+    el.textContent = "";
+    return;
+  }
+  // 🔴 원으로 매긴 가게에도 **RVN 으로 얼마인지** 적어 준다. 손님이 실제로
+  //    보내는 것은 RVN 이고, 사장은 그 값을 한 번도 못 본 채 장사하게 된다.
+  if (cur !== "RVN") {
+    try {
+      const r = await invoke<any>("rvn_rate", { currency: cur });
+      const rvn = v / Number(r?.rate || 0);
+      el.textContent = Number.isFinite(rvn) && rvn > 0
+        ? `${t("지금 시세로")} ${rvn.toLocaleString(undefined, { maximumFractionDigits: 0 })} RVN`
+        : "";
+    } catch {
+      el.textContent = "";
+    }
+    return;
+  }
+  if (v < MIN_RVN) {
+    el.innerHTML =
+      `<span class="needspan">${t("너무 작아 손님이 못 보냅니다 — 제일 작은 값은 0.01 RVN 입니다.")}</span>`;
+    return;
+  }
+  // 🔴 **지금 시세로 얼마인지 적어 준다.** 사장은 「1286 RVN」이 얼마인지
+  //    모른다 — 아는 값은 「4500원」이다. 이 한 줄이 없으면 값을 잘못 넣고도
+  //    모르고, 실제로 10만 배 작은 값이 들어가 있었다.
+  try {
+    const r = await invoke<any>("rvn_rate", { currency: "KRW" });
+    const won = v * Number(r?.rate || 0);
+    if (won > 0) {
+      el.textContent = `${t("지금 시세로")} ${Math.round(won).toLocaleString()}${t("원")}`;
+      return;
+    }
+  } catch {
+    /* 시세를 못 읽어도 값은 저장된다 */
+  }
+  // 여덟 자리를 넘는 자리는 체인에서 잘린다. 잘린다고 미리 말해 준다.
+  const cut = Math.round(v * 1e8) / 1e8;
+  el.textContent =
+    cut !== v ? `${t("체인에는")} ${cut} RVN ${t("으로 올라갑니다")}` : "";
+}
+
+/** 「8월 23일에 사면 9월 22일까지」 — 사장이 카운터에서 할 말 그대로. */
+async function saySpan(i: number) {
+  const el = document.querySelector(`[data-spansay="${i}"]`) as HTMLElement | null;
+  if (!el) return;
+  const it = menuItems[i];
+  const months = Number(it.pass_months || 0);
+  const days = Number(it.pass_days || 0);
+  if (months <= 0 && days <= 0) {
+    el.innerHTML = `<span class="needspan">${t("기간을 골라 주세요")}</span>`;
+    return;
+  }
+  try {
+    const today = await invoke<number>("today_ymd", { nowUnix: Math.floor(Date.now() / 1000) });
+    const p = await invoke<any>("period_end", {
+      fromYmd: today,
+      months,
+      extraDays: months > 0 && days <= 0 ? 0 : days,
+    });
+    const fmt = (v: number) => `${Math.floor(v / 100) % 100}월 ${v % 100}일`;
+    el.textContent = `${t("오늘 사면")} ${fmt(p.end)}${t("까지")} (${p.days}${t("일")})`;
+  } catch {
+    el.textContent = "";
+  }
 }
 
 function renderMenu() {
@@ -6805,17 +8222,42 @@ function renderMenu() {
         <div class="mnpic" data-mnpic="${i}" title="사진 ${it.image ? "바꾸기" : "올리기"}">
           ${
             it.image
-              ? `<img src="http://127.0.0.1:8080/ipfs/${it.image}" alt=""
-                      onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'못 읽음'}))" />`
+              // 🔴 우리 서버(8790)를 거쳐 받는다. IPFS 게이트웨이(8080)를
+              //    직접 부르면 그쪽이 잠깐 늦을 때마다 실패하고, 아래
+              //    `onerror` 가 **그림 자리를 영구히 글자로 바꿔** 버렸다.
+              //    다시 시도할 길이 없어서 사장 눈에는 「사진이 안 나온다」다.
+              //
+              //    8790 은 이미 켜져 있고 20초를 기다려 준다. 그리고 실패해도
+              //    자리를 안 없앤다 — 다시 그리면 다시 시도한다.
+              ? `<img src="http://127.0.0.1:8790/ipfs/${it.image}" alt="" loading="lazy"
+                      onerror="this.style.display='none';this.parentElement.classList.add('nopic')" />`
               : "사진"
           }
         </div>
         <div><label>품목</label><input data-mn="name" data-i="${i}" value="${it.name || ""}" /></div>
-        <div><label>가격 ${curLabel()}</label><input data-mn="price" data-i="${i}" type="number" step="any" value="${it.price ?? ""}" /></div>
+        <div><label>가격</label>
+          <div class="row" style="gap:6px">
+            <input data-mn="price" data-i="${i}" type="number" step="any"
+                   value="${it.price ?? ""}" style="flex:1;min-width:0" />
+            <!-- 🔴 **품목마다 통화가 다를 수 있다.** 한 가게가 커피(원)와
+                 음반(RVN)과 해외 굿즈(달러)를 같이 판다. 비워 두면 가게
+                 통화를 쓰므로, 커피집은 이 칸을 볼 이유가 없다. -->
+            <select data-mn="currency" data-i="${i}" style="flex:none;width:82px">
+              <option value=""${!it.currency ? " selected" : ""}>${curLabel().replace(/[()]/g, "") || "가게값"}</option>
+              <option value="KRW"${it.currency === "KRW" ? " selected" : ""}>원</option>
+              <option value="RVN"${it.currency === "RVN" ? " selected" : ""}>RVN</option>
+              <option value="USD"${it.currency === "USD" ? " selected" : ""}>USD</option>
+              <option value="JPY"${it.currency === "JPY" ? " selected" : ""}>엔</option>
+              <option value="EUR"${it.currency === "EUR" ? " selected" : ""}>유로</option>
+            </select>
+          </div>
+          <div class="meta" data-pricesay="${i}"></div>
+        </div>
         <div class="mnacts">
           <button class="ghost" data-mnpic="${i}">${it.image ? "사진 바꾸기" : "사진"}</button>
           <button class="ghost" data-mndel="${i}">삭제</button>
         </div>
+        ${extraFields(it, i)}
       </div>`
     )
     .join("");
@@ -6823,13 +8265,66 @@ function renderMenu() {
   $("mn-items")
     .querySelectorAll("[data-mn]")
     .forEach((el) => {
-      (el as HTMLInputElement).oninput = () => {
+      // select 는 `input` 이 아니라 `change` 로 온다. `oninput` 만 걸면
+      // 통화를 골라도 저장이 안 된다.
+      const on = () => {
         const i = +(el as HTMLElement).dataset.i!;
         const k = (el as HTMLElement).dataset.mn!;
-        menuItems[i][k] = k === "price" ? parseFloat((el as HTMLInputElement).value) : (el as HTMLInputElement).value;
+        const raw = (el as HTMLInputElement).value;
+        if (k === "price") {
+          menuItems[i][k] = parseFloat(raw);
+          // 🔴 레이븐은 소수점 **여덟 자리**까지다(1사토시 = 0.00000001).
+          //    그보다 작은 값은 체인에 존재하지 않는다. 화면이 안 막으니
+          //    `0.0000000000001` 같은 값이 그대로 들어갔고, 그건 체인에서
+          //    0 이 되어 **공짜로 팔린다.**
+          void sayPrice(i);
+        } else if (k === "stock" || k === "pass_months" || k === "pass_days" || k === "minutes") {
+          // 🔴 빈 칸과 0 은 다르다. 재고를 비우면 **무제한**이고 0 은 품절이다.
+          //    빈 칸을 0 으로 저장하면 사장이 아무것도 안 적은 품목이 전부
+          //    품절로 뜬다. 러스트도 그렇게 읽는다(`stock.rs` `declared`).
+          menuItems[i][k] = raw.trim() === "" ? null : Math.max(0, Math.floor(+raw) || 0);
+          if (k === "pass_months" || k === "pass_days" || k === "minutes") {
+            // 직접 적으면 기본 단추의 선택 표시를 다시 맞춘다.
+            renderMenu();
+            void saySpan(i);
+          }
+        } else {
+          menuItems[i][k] = raw;
+        }
         saveShop();
       };
+      (el as HTMLInputElement).oninput = on;
+      (el as HTMLSelectElement).onchange = on;
     });
+
+  // 기본 기간 단추. 누르면 개월·일 칸이 같이 채워진다 — 단추만 바뀌고
+  // 칸이 그대로면 무엇이 저장됐는지 알 수 없다.
+  $("mn-items")
+    .querySelectorAll("[data-span]")
+    .forEach((el) => {
+      (el as HTMLElement).onclick = () => {
+        const i = +(el as HTMLElement).dataset.i!;
+        const s = SPANS[+(el as HTMLElement).dataset.span!];
+        menuItems[i].pass_months = s.months || null;
+        menuItems[i].pass_days = s.days || null;
+        menuItems[i].kind = "pass";
+        saveShop();
+        renderMenu();
+        void saySpan(i);
+      };
+    });
+  $("mn-items")
+    .querySelectorAll("[data-mins]")
+    .forEach((el) => {
+      (el as HTMLElement).onclick = () => {
+        const i = +(el as HTMLElement).dataset.i!;
+        menuItems[i].minutes = MINUTES[+(el as HTMLElement).dataset.mins!].v;
+        menuItems[i].kind = "book";
+        saveShop();
+        renderMenu();
+      };
+    });
+  menuItems.forEach((_, i) => { void saySpan(i); void sayPrice(i); });
   $("mn-items")
     .querySelectorAll("[data-mndel]")
     .forEach((el) => {
@@ -6844,7 +8339,39 @@ function renderMenu() {
     .forEach((el) => {
       (el as HTMLElement).onclick = () => pickImage(+(el as HTMLElement).dataset.mnpic!);
     });
-  $("mn-note").textContent = menuItems.length ? `품목 ${menuItems.length}개` : "";
+  // 🔴 값 없는 품목은 손님 화면에 **안 나간다**(공짜로 나가는 것을 막는다).
+  //    그런데 그걸 안 알려 주면 사장은 「왜 손님 화면에 커피가 없지」를
+  //    영영 못 푼다. 조용히 빼는 것이 제일 나쁘다.
+  void (async () => {
+    const note = $("mn-note");
+    const cur = ($("mn-cur") as HTMLSelectElement)?.value || "KRW";
+    let bad: string[] = [];
+    try {
+      bad = await invoke<string[]>("unsellable", { menu: menuItems });
+    } catch {
+      /* 못 물어봤으면 개수만 적는다 */
+    }
+    const count = menuItems.length ? `${t("품목")} ${menuItems.length}${t("개")}` : "";
+    note.innerHTML = !bad.length
+      ? count
+      : `${count} · <span class="needspan">${t("값이 없어 손님에게 안 보이는 것")} ${bad.length}${t("개")}</span>
+         <span class="meta">— ${escapeHtml(bad.slice(0, 4).join(", "))}${bad.length > 4 ? "…" : ""}</span>`;
+    // 🔴 「원으로 하세요」라고 권하지 않는다. 어느 쪽이 맞는지는 사장이 무엇을
+    //    지키고 싶은가에 달렸고, 그건 우리가 정할 일이 아니다.
+    //
+    //      RVN 으로 매기면 → 코인 수량이 일정. 시세가 오르면 손님이 더 낸다.
+    //      원으로 매기면   → 원 가치가 일정. 시세가 오르면 코인을 덜 받는다.
+    //
+    //    RVN 을 모으는 것이 목적인 가게에는 RVN 이 맞다. 둘 다 사실만 적는다.
+    if (menuItems.length) {
+      note.innerHTML +=
+        `<div class="meta" style="margin-top:6px">${
+          cur === "RVN"
+            ? t("값을 RVN 으로 매기고 계십니다 — 코인 수량이 일정하고, 시세가 오르면 손님이 내는 원 값이 같이 오릅니다.")
+            : t("값을 원으로 매기고 계십니다 — 손님이 내는 원 값이 일정하고, RVN 수량은 그날 시세로 계산됩니다.")
+        }</div>`;
+    }
+  })();
 }
 
 /// Shows the owner what the customer sees.
@@ -6888,7 +8415,12 @@ function pickImage(index: number) {
       menuItems[index].image = added.cid;
       saveShop();
       renderMenu();
-      $("mn-note").textContent = "올렸습니다";
+      // 🔴 `renderMenu()` 안에서 「값 없는 품목」 안내가 이 칸을 다시 쓴다.
+      //    그래서 「올렸습니다」가 곧바로 지워졌고, 사장은 올라갔는지 몰랐다.
+      //    그리기가 끝난 뒤에 적는다.
+      setTimeout(() => {
+        $("mn-note").innerHTML = `<span class="ok">사진을 올렸습니다</span>`;
+      }, 80);
     } catch (e) {
       $("mn-note").innerHTML = `<span style="color:var(--bad)">${e}</span>`;
     }
@@ -6897,6 +8429,46 @@ function pickImage(index: number) {
 }
 
 async function saveMenu() {
+  // 🔴 기간 없는 이용권은 **덜 채운 것이 아니라 고장난 상품**이다. 그대로
+  //    올리면 한 달 값을 받고 하루짜리 표가 나가고, 손님은 다음 날 문 앞에서
+  //    알게 된다. 여기서 막는 편이 그 자리에서 싸우는 것보다 낫다.
+  const noSpan = menuItems
+    .map((m, i) => ({ m, i }))
+    .filter(
+      ({ m }) =>
+        (m.kind === "pass" && !Number(m.pass_months || 0) && !Number(m.pass_days || 0)) ||
+        // 예약도 같다. 시간 없는 예약 품목은 손님이 골라도 자리를 안 잡는다.
+        (m.kind === "book" && !Number(m.minutes || 0))
+    );
+  // 🔴 RVN 으로 값을 매긴 가게에서 1사토시보다 작은 값은 **체인에서 0** 이다.
+  //    그대로 올리면 그 물건이 공짜로 나간다.
+  const tooSmall =
+    (($("mn-cur") as HTMLSelectElement)?.value || "KRW") === "RVN"
+      ? menuItems.filter((m) => Number(m.price) > 0 && Number(m.price) < MIN_RVN)
+      : [];
+  if (tooSmall.length) {
+    $("mn-result").innerHTML =
+      `<div class="warnbox" style="margin-top:12px">
+         <b>${escapeHtml(tooSmall.map((m) => m.name || "이름 없음").join(", "))}</b>
+         의 값이 너무 작습니다.<br />
+         레이븐이 <b>나를 수 있는</b> 제일 작은 값은 <b>0.01 RVN</b> 입니다.<br />
+         그보다 작으면 손님이 QR 을 찍어도 <b>지갑이 보내기를 거부합니다</b> —
+         주문은 만들어지는데 결제만 안 됩니다.</div>`;
+    return;
+  }
+  if (noSpan.length) {
+    const names = noSpan.map(({ m, i }) => m.name || `${i + 1}번`).join(", ");
+    $("mn-result").innerHTML =
+      `<div class="warnbox" style="margin-top:12px">
+         <b>${escapeHtml(names)}</b> 의 기간이 비어 있습니다.<br />
+         며칠짜리인지 골라 주세요 — 안 고르면 손님이 산 표가 언제까지인지
+         아무도 모릅니다.</div>`;
+    // 처음 걸린 줄로 데려간다. 어디를 고쳐야 하는지 찾게 하지 않는다.
+    (
+      document.querySelector(`[data-mn="pass_days"][data-i="${noSpan[0].i}"]`) as HTMLElement | null
+    )?.scrollIntoView({ behavior: "smooth", block: "center" });
+    return;
+  }
   if (!menuItems.length) {
     $("mn-result").innerHTML = `<div class="warnbox" style="margin-top:12px">품목이 없습니다.</div>`;
     return;
@@ -6907,6 +8479,14 @@ async function saveMenu() {
       currency: ($("mn-cur") as HTMLSelectElement).value,
     });
     const up = await invoke<any>("ipfs_add_bundle", { files: [], metadata: doc });
+    // 🔴 메뉴가 바뀌었다고 손님에게 알린다. 이게 없으면 사장은 새 메뉴판을
+    //    올려 놓고 「손님 화면은 왜 그대로지」를 겪는다 — 다음 심장이 뛸
+    //    때까지 45분이다. 체인은 안 건드리므로 **소각 0원**이다.
+    try {
+      await invoke("shop_refresh");
+    } catch {
+      /* 아직 체인에 등록 안 했으면 알릴 간판이 없다. 메뉴는 저장됐다. */
+    }
     $("mn-result").innerHTML =
       // 올린 것을 볼 수 없으면 올렸는지 알 수 없다. 주소만 보여 주던 자리다.
       `<div class="card" style="margin-top:12px"><h3>메뉴판을 올렸습니다</h3>
@@ -6973,11 +8553,11 @@ async function loadOrders() {
                   : `<span style="color:var(--warn)">${p.confirmations} 대기</span>`
               }</td>
               <td class="act">${
-                p.settled && next
+                (p.settled || p.accept_now) && next
                   ? `<button data-state="${p.address}" data-to="${next}">${label}</button>`
                   : ""
               }${
-                p.settled
+                p.settled || p.accept_now
                   ? `<button class="ghost" data-refund="${p.address}" data-amt="${p.amount}">환불</button>`
                   : ""
               }</td>
@@ -7002,7 +8582,7 @@ async function loadOrders() {
           try {
             // "나왔다"를 누르는 순간 손님 폰이 울린다. 그래서 이 버튼은
             // 실수로 눌리면 안 되는 자리에 있어야 하고, 되돌릴 수 있어야 한다.
-            await invoke("set_order_state", { address: el.dataset.state, state: el.dataset.to });
+            await invoke("set_order_state", { address: el.dataset.state, newState: el.dataset.to });
             loadOrders();
           } catch (e) {
             $("or-note").innerHTML = `<span style="color:var(--bad)">${e}</span>`;
@@ -7016,7 +8596,7 @@ async function loadOrders() {
 }
 
 // ── 가게 찾기 ──
-window.addEventListener("DOMContentLoaded", () => {
+window.addEventListener("DOMContentLoaded", async () => {
   loadHealth();
   let nameTimer: any;
   $("i-name").addEventListener("input", () => {
@@ -7148,40 +8728,32 @@ window.addEventListener("DOMContentLoaded", () => {
 
   $("door-back").addEventListener("click", () => showPage("shop"));
   $("msg-back").addEventListener("click", () => showPage("shop"));
-  $("tbl-print").addEventListener("click", async () => {
-    const note = $("tbl-note");
-    const raw = ($("tbl-list") as HTMLInputElement).value.trim();
-    // 쉼표·띄어쓰기·줄바꿈 아무거나 받는다. 사장이 형식을 외우게 하지 않는다.
-    const tables = raw ? raw.split(/[,\s]+/).filter(Boolean) : ["카운터"];
-    note.textContent = "만드는 중…";
-    try {
-      const r = await invoke<any>("table_qr_sheet", { ip: serverIp || "127.0.0.1", tables });
-      note.innerHTML = `<span class="ok">${escapeHtml(r.say)}</span> (${escapeHtml(r.path)})`;
-    } catch (e) {
-      note.innerHTML = `<span class="danger">${e}</span>`;
-    }
-  });
 
-  $("sh-usetunnel").addEventListener("click", async () => {
-    const note = $("sh-orderurlnote");
-    try {
-      const t: any = await invoke("tunnel_status");
-      if (!t.url) {
-        note.innerHTML = `<span class="warn">바깥 주소가 아직 없습니다. 「이 컴퓨터 → 바깥에서도 열리게」를 먼저 켜세요.</span>`;
-        return;
-      }
-      ($("sh-orderurl") as HTMLInputElement).value = t.url;
-      note.innerHTML = `<span class="warn">넣었습니다. 이 주소는 <b>임시입니다</b> — 터널을 다시 켜면 바뀌고, 그때는 재발행해야 고쳐집니다.</span>`;
-    } catch (e) {
-      note.innerHTML = `<span class="danger">${e}</span>`;
-    }
-  });
+  // 🔴 「지금 터널 주소 넣기」 단추는 없앴다. 임시 주소를 체인에 영구히
+  //    적어 넣는 일이었고, 지금은 문을 열 때 릴레이에 자동으로 알린다.
+  //    자세한 이유는 index.html 의 그 자리 주석에 적어 뒀다.
   $("sh-pic").addEventListener("click", pickShopPhoto);
+  $("sh-pics").addEventListener("click", pickShopPhotos);
   $("dr-q").addEventListener("input", () => {
     clearTimeout(doorTimer);
     doorTimer = setTimeout(doorSearch, 200);
   });
   $("dr-new").addEventListener("click", () => openMember());
+  $("dr-passes").addEventListener("click", () => void showPasses());
+  $("dr-books").addEventListener("click", () => void showBookings());
+  $("sh-refresh").addEventListener("click", async () => {
+    const say = $("sh-refreshsay");
+    say.textContent = t("알리는 중…");
+    try {
+      const r = await invoke<any>("shop_refresh");
+      const n = (r?.ok || []).length;
+      // 몇 곳이 받았는지 적는다. 「알렸습니다」만 뜨면 한 곳도 안 받았을 때와
+      // 구별이 안 된다 — 릴레이는 늘 하나씩 죽는다.
+      say.innerHTML = `<span class="ok">${t("알렸습니다")} — ${t("릴레이")} ${n}${t("곳")}</span>`;
+    } catch (e) {
+      say.innerHTML = `<span class="danger">${escapeHtml(String(e))}</span>`;
+    }
+  });
   document.querySelectorAll("[data-mtab]").forEach((b) => {
     (b as HTMLElement).onclick = () => mtab((b as HTMLElement).dataset.mtab!);
   });
@@ -7311,12 +8883,59 @@ window.addEventListener("DOMContentLoaded", () => {
     foot?.parentNode?.insertBefore(sel, foot);
   })();
 
-  $("fee-on").addEventListener("click", () => void saveFee(true));
-  $("fee-off").addEventListener("click", () => void saveFee(false));
-  $("fee-apply").addEventListener("click", () =>
-    void saveFee(true, ($("fee-custom") as HTMLInputElement).value.trim() || undefined));
+  $("fee-send").addEventListener("click", () => void sendOwed());
   void paintFeePick();
   $("d-node-row").addEventListener("click", () => toggleDot("node"));
+  $("d-mine-row").addEventListener("click", () => toggleDot("mine"));
+  $("d-relay-row").addEventListener("click", () => toggleDot("relay"));
+  $("d-out-row").addEventListener("click", () => toggleDot("out"));
+
+  // 「이 컴퓨터」에서 언제든 바꾼다.
+  for (const [id, pick] of [["mode-help", "help"], ["mode-shop", "shop"]] as const) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    el.addEventListener("click", async () => {
+      const say = document.getElementById("mode-say");
+      try {
+        await invoke("mode_set", { mode: pick });
+        await applyMode();
+        if (say) say.textContent = pick === "help"
+          ? "돕기로 바꿨습니다. 가게 정보는 그대로 있습니다."
+          : "장사로 바꿨습니다.";
+      } catch (e) {
+        if (say) say.textContent = String(e);
+      }
+    });
+  }
+
+  // 첫 실행 갈림길. 고르면 그 자리에서 화면이 바뀐다.
+  for (const [id, pick] of [["hello-help", "help"], ["hello-shop", "shop"]] as const) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    el.addEventListener("click", async () => {
+      const say = document.getElementById("hello-say");
+      try {
+        await invoke("mode_set", { mode: pick });
+        await applyMode();
+      } catch (e) {
+        if (say) say.textContent = String(e);
+      }
+    });
+  }
+  // 화면 안의 탭. 표시등을 안 거치고도 넷을 오갈 수 있어야 한다.
+  document.querySelectorAll("[data-part]").forEach((b) => {
+    (b as HTMLElement).onclick = () => toggleDot((b as HTMLElement).dataset.part as Part);
+  });
+  // 「설정 열기」. 상태만 보여 주고 끝내면 고칠 데를 못 찾는다.
+  document.addEventListener("click", (e) => {
+    const pg = (e.target as HTMLElement).closest?.("[data-part-go]") as HTMLElement | null;
+    if (pg) {
+      toggleDot(pg.dataset.partGo as Part);
+      return;
+    }
+    const b = (e.target as HTMLElement).closest?.("[data-gopage]") as HTMLElement | null;
+    if (b) showPage(b.dataset.gopage!);
+  });
   $("d-ipfs-row").addEventListener("click", () => toggleDot("ipfs"));
   $("sh-open-btn").addEventListener("click", () => setOpenState(false));
   $("sh-close-btn").addEventListener("click", () => setOpenState(true));
@@ -7324,6 +8943,8 @@ window.addEventListener("DOMContentLoaded", () => {
   $("sh-closednow").addEventListener("change", paintOpenPick);
   paintOpenPick();
   $("qr-close").addEventListener("click", () => { $("qrwrap").style.display = "none"; });
+  // 내 가게 화면에서 바로. 「이 컴퓨터」까지 들어가게 하지 않는다.
+  $("sh-qrtab").addEventListener("click", () => void openQrSheet());
   $("qrwrap").addEventListener("click", (e) => {
     if (e.target === $("qrwrap")) $("qrwrap").style.display = "none";
   });
@@ -7397,9 +9018,37 @@ window.addEventListener("DOMContentLoaded", () => {
   });
   $("sh-go").addEventListener("click", registerShop);
   $("mn-preview").addEventListener("click", previewCustomer);
+  // 🔴 바로 빈 줄을 만들지 않는다. 무엇을 파는지 먼저 묻는다 — 그래야 그
+  //    줄에 필요한 칸만 나오고, 커피 줄에 「며칠」 칸이 안 생긴다.
   $("mn-add").addEventListener("click", () => {
-    menuItems.push({ name: "", price: null, image: null });
-    renderMenu();
+    $("mn-kindwrap").style.display = "";
+    $("mn-kindwrap").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  });
+  $("mn-kindno").addEventListener("click", () => {
+    $("mn-kindwrap").style.display = "none";
+  });
+  document.querySelectorAll("[data-kind]").forEach((b) => {
+    (b as HTMLElement).onclick = () => {
+      const kind = (b as HTMLElement).dataset.kind!;
+      const row: any = { name: "", price: null, image: null, kind };
+      // 예약도 기본값을 안 깔아 둔다. 이유는 기간권과 같다 — 안 고른 채
+      // 넘어가면 15분짜리 커트가 두 시간을 잡거나 그 반대가 된다.
+      // 🔴 기간을 **미리 채우지 않는다.** 하루로 깔아 두면, 이름만
+      //    「한달권」으로 바꾸고 단추를 안 누른 사장이 **한 달 값을 받고
+      //    하루짜리 표**를 내주게 된다. 손님이 다음 날 문 앞에서 알게 되고,
+      //    그건 그 자리에서 싸움이다.
+      //
+      //    대신 안 고르면 아래 `saveMenu` 가 올리기를 막는다. 기간 없는
+      //    이용권은 덜 채운 것이 아니라 **고장난 상품**이다.
+      menuItems.push(row);
+      $("mn-kindwrap").style.display = "none";
+      renderMenu();
+      // 방금 만든 줄의 이름 칸에 커서를 둔다. 다음에 할 일이 손가락 밑에 있다.
+      const last = document.querySelector(
+        `[data-mn="name"][data-i="${menuItems.length - 1}"]`
+      ) as HTMLInputElement | null;
+      last?.focus();
+    };
   });
   $("mn-save").addEventListener("click", saveMenu);
   $("or-refresh").addEventListener("click", loadOrders);
@@ -7445,7 +9094,10 @@ window.addEventListener("DOMContentLoaded", () => {
   // 노드 앞에 서게 된다.
   // 저장된 가게를 먼저 되살린다. 온보딩을 띄울지 판단하기 전에 해야
   // 두 번째 실행에서 빈 화면이 스쳐 지나가지 않는다.
-  loadShop();
+  // 🔴 `await` 한다. 안 기다리면 아래의 「가게가 있나?」 판단이 **칸이 비어
+  //    있던 순간**을 보고, 가게가 있어도 없다고 읽는다 — 첫 화면에
+  //    「가게 만들기」가 뜨고 손님 폰 서버도 안 켜졌다.
+  await loadShop();
 
   // 손님 폰 서버를 스스로 켠다.
   //
@@ -7455,9 +9107,48 @@ window.addEventListener("DOMContentLoaded", () => {
   //
   // 전에 한 번 켠 적이 있으면 다시 켠다. 한 번도 안 켠 컴퓨터는 건드리지
   // 않는다 — 켠 적 없는 서버가 저절로 열리는 것은 다른 종류의 사고다.
-  if (localStorage.getItem(PHONE_KEY) === "1") {
-    startPhone().catch(() => {});
-  }
+  // 🔴 **가게가 있으면 켠다.** 「전에 켠 적이 있으면」만 보고 있었는데,
+  //    그러면 가게를 막 만든 사장은 **손님이 주문할 곳이 없는 채**로 시작한다.
+  //    화면에도 「손님이 주문할 곳이 없습니다」라고만 뜨고, 그걸 켜는 스위치는
+  //    「이 컴퓨터」 안쪽에 있다. 대표님 지적 그대로다 — 손님 폰으로 받는 것은
+  //    장사의 전부인데 꺼진 채로 숨어 있었다.
+  //
+  //    가게 이름을 적었다는 것은 팔겠다는 뜻이다. 그러면 받을 곳이 있어야 한다.
+  //    가게가 없는 컴퓨터는 그대로 둔다 — 켠 적 없는 서버가 저절로 열리는 것은
+  //    다른 종류의 사고다.
+  // 🔴 화면 칸을 보고 판단하면 안 된다. 바로 위 `loadShop()` 은 `await` 없이
+  //    불리므로, 이 줄이 도는 시점에 칸은 **아직 비어 있다.** 그래서 가게가
+  //    있어도 「없음」으로 읽고 서버를 안 켰다 — 손님이 주문할 곳이 없는
+  //    상태로 앱이 시작된다.
+  //
+  //    파일에 직접 묻는다. 화면이 다 그려졌는지와 상관없는 사실이다.
+  void (async () => {
+    let hasShop = false;
+    try {
+      const sh = await invoke<any>("shop_load");
+      hasShop = !!(sh?.name || sh?.name_en);
+    } catch {
+      /* 못 읽었으면 켜지 않는다. 아래 저장된 선택은 그대로 본다. */
+    }
+    if (localStorage.getItem(PHONE_KEY) === "1" || hasShop) {
+      // 🔴 **조용히 삼키지 않는다.** 여태 `.catch(() => {})` 였다. 서버가 안
+      //    켜져도 아무 말이 없었고, 화면에는 「손님이 주문할 곳이 없습니다」만
+      //    떴다. 왜 안 켜졌는지는 아무 데도 안 적혔다 — 나도 못 찾았다.
+      //
+      //    실패하면 이유를 적어 둔다. 「문제 알리기」가 이 값을 같이 보낸다.
+      startPhone().catch((e) => {
+        lastPhoneError = String(e);
+        const box = document.getElementById("todaycard") || document.getElementById("ravi-sub");
+        if (box) {
+          const p = document.createElement("div");
+          p.className = "warnbox";
+          p.style.marginTop = "10px";
+          p.textContent = `손님 폰 서버를 켜지 못했습니다 — ${lastPhoneError}`;
+          box.appendChild(p);
+        }
+      });
+    }
+  })();
 
   // 하루 한 벌, 조용히. 누르라고 하면 안 누른다.
   // 하루 한 벌, 조용히. 앱을 켤 때 한 번만 돌면 일주일 켜 둔 가게는 일주일 동안
@@ -7527,5 +9218,115 @@ window.addEventListener("DOMContentLoaded", () => {
   //    처리도 안 돈다 — 대화창 위에 대화창으로 가는 단추가 떠 있었다.
   showPage("ravi");
   loadAssets();
+  // 🔴 **맨 마지막**에 부른다. 이걸 먼저 부르면 아직 안 그려진 메뉴를
+  //    숨기려 들고, 그러면 「돕기」로 골라도 가게 메뉴가 남는다.
+  void applyMode();
+  // 재색인이 끝났는데 앱이 꺼져 있었던 경우를 여기서 수습한다
+  // (끝났으면 launchd 를 되돌리고 표시를 남긴다).
+  void invoke("reindex_progress").catch(() => null);
+  void reindexTick();
+  window.setInterval(() => void reindexTick(), 60_000);
   // Status is cheap; the IPFS scan is not, and is deliberately not on a timer.
 });
+
+/* ══ 무엇으로 쓸 것인가 ══════════════════════════════════════════════
+   돕기인가 장사인가. 안 골랐으면 첫 화면에서 묻는다. */
+
+/** 고른 것에 맞춰 메뉴와 첫 화면을 맞춘다. */
+async function applyMode(): Promise<void> {
+  let m: any = null;
+  try {
+    m = await invoke<any>("mode_get");
+  } catch {
+    // 못 읽으면 아무것도 숨기지 않는다 — 숨기는 쪽으로 실패하면
+    // 사장이 자기 가게를 못 찾는다.
+    return;
+  }
+  const hello = document.getElementById("hello");
+  if (!m?.chosen) {
+    if (hello) hello.style.display = "";
+    return;
+  }
+  if (hello) hello.style.display = "none";
+
+  const help = m.mode === "help";
+  const show = (page: string, on: boolean) => {
+    const a = document.querySelector<HTMLElement>(`nav a[data-page="${page}"]`);
+    if (a) a.style.display = on ? "" : "none";
+  };
+  show("helping", help);
+  // 🔴 채굴 칸 둘은 **돕는 사람의 것**이다. 계산대 컴퓨터로 캐면 컴퓨터가
+  //    느려지고 전기를 먹어서, 장사하는 사장에게는 권하지도 않는 기능이다.
+  //    그런데 설정 화면 한가운데에 두 칸을 차지하고 있었다.
+  //    모드 스위치가 이미 있는데 표시에 안 쓰고 있었다(페이블 지적).
+  // 🔴 자동으로 나가게 만든 뒤에도 「개발비 보내기」 단추가 남아 있었다.
+  //    자동인데 단추가 있으면 사장은 「안 눌러서 안 갔나」 하고 누른다 —
+  //    할 일이 없는 단추다. 밀린 것이 있을 때만 보인다.
+  void invoke<any>("fee_owed")
+    .then((f) => {
+      const btn = document.getElementById("fee-send");
+      if (btn) btn.style.display = Number(f?.owed ?? 0) >= 0.01 ? "" : "none";
+    })
+    .catch(() => null);
+  ["mine-net-box", "mine-run-box"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = help ? "" : "none";
+  });
+  for (const [id, pick] of [["mode-help", "help"], ["mode-shop", "shop"]] as const) {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle("on", m.mode === pick);
+  }
+  // 「돕기」에서 감추는 것은 **가게 하나뿐**이다. 자산·배당은 레이븐코인
+  // 그 자체라 돕는 사람도 쓴다 — 장사 기능이 아니다.
+  show("shop", !help);
+  show("door", !help);
+
+  if (help) {
+    showPage("helping");
+    void paintHelping();
+    if (helpTimer === null) helpTimer = window.setInterval(() => void paintHelping(), 8000);
+  }
+}
+
+let helpTimer: number | null = null;
+
+/** 이 컴퓨터가 지금 무엇을 하고 있는지. */
+async function paintHelping(): Promise<void> {
+  const box = document.getElementById("hp-body");
+  if (!box) return;
+  const [node, relay, ipfs, mine] = await Promise.all([
+    invoke<any>("node_status").catch(() => null),
+    invoke<any>("relay_status").catch(() => null),
+    invoke<any>("ipfs_status").catch(() => null),
+    invoke<any>("miner_running").catch(() => null),
+  ]);
+  const on = (v: unknown) => (v ? t("하고 있습니다") : t("꺼져 있습니다"));
+  box.innerHTML =
+    card(
+      [
+        [
+          t("체인 지키기"),
+          node?.blocks
+            ? `${t("블록")} ${Number(node.blocks).toLocaleString()} · ${t("이웃")} ${Number(node.peers ?? 0)}${t("곳")}`
+            : on(false),
+        ],
+        [
+          t("공지 나르기"),
+          relay?.running
+            ? `${Number(relay.events ?? 0).toLocaleString()}${t("개를 들고 있습니다")}`
+            : on(false),
+        ],
+        [t("사진 나눠 갖기"), on(ipfs?.running)],
+        [t("캐기"), on(mine?.running)],
+      ],
+      t("켜 두는 것만으로 이 그물이 촘촘해집니다. 가게가 늘수록 남의 릴레이가 끊겨도 서로 붙습니다.")
+    ) +
+    // 🔴 정직하게. 지금은 색인이 꺼져 있어서 이 노드가 남의 지갑을 돕지는
+    //    못한다. 돕고 있다고 적으면 안 된다.
+    `<div class="card"><b>${t("아직 못 하고 있는 것")}</b>
+       <p class="meta" style="margin-top:8px">${t(
+         "이 노드는 아직 남의 지갑 잔액을 대신 답해 주지 못합니다. 주소 색인이 꺼져 있기 때문입니다. 켜면 이 컴퓨터가 실제로 남을 돕게 됩니다."
+       )}</p>
+       <button data-part-go="node" style="margin-top:12px">${t("주소 색인 켜기")}</button>
+     </div>`;
+}

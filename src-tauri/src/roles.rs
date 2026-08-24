@@ -127,6 +127,21 @@ pub fn role_limits(role: String) -> Value {
 mod tests {
     use super::allowed;
 
+    /// 직원 화면은 브라우저가 그대로 읽는다. TypeScript 문법이 한 줄이라도
+    /// 있으면 그 줄에서 스크립트가 멈추고, 주문 목록은 "불러오는 중…" 에
+    /// 영원히 남는다. 실제로 환불 칸의 `as HTMLInputElement` 가 그렇게 했다.
+    #[test]
+    fn staff_screen_is_plain_javascript() {
+        let html = include_str!("../../web/staff.html");
+        assert!(
+            !html.contains(" as HTML")
+                && !html.contains(" as unknown")
+                && !html.contains(" as any")
+                && !html.contains(" as string"),
+            "직원 화면에 TypeScript 문법이 있습니다 — 화면이 통째로 멈춥니다"
+        );
+    }
+
     /// The staff screen's own source is the specification.
     ///
     /// This exists because the staff screen shipped completely dead: every one
