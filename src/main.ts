@@ -8890,6 +8890,35 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("d-relay-row").addEventListener("click", () => toggleDot("relay"));
   $("d-out-row").addEventListener("click", () => toggleDot("out"));
 
+  async function paintWalletDir() {
+    const pathEl = document.getElementById("wd-path");
+    const noteEl = document.getElementById("wd-note");
+    if (!pathEl || !noteEl) return;
+    try {
+      const s = await invoke<any>("datadir_status");
+      pathEl.textContent = s.path || "—";
+      noteEl.textContent = s.note || "";
+      noteEl.style.color = s.has_wallet ? "" : "var(--warn)";
+    } catch (e) {
+      noteEl.textContent = String(e);
+    }
+  }
+  document.getElementById("wd-pick")?.addEventListener("click", async () => {
+    const noteEl = document.getElementById("wd-note");
+    try {
+      const dir = await pickFile({
+        directory: true,
+        title: t("레이븐 코어가 쓰는 폴더"),
+      });
+      if (!dir) return;
+      await invoke("datadir_set", { path: dir });
+      await paintWalletDir();
+    } catch (e) {
+      if (noteEl) noteEl.textContent = String(e);
+    }
+  });
+  void paintWalletDir();
+
   // 「이 컴퓨터」에서 언제든 바꾼다.
   for (const [id, pick] of [["mode-help", "help"], ["mode-shop", "shop"]] as const) {
     const el = document.getElementById(id);

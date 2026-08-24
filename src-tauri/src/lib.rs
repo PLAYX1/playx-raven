@@ -315,6 +315,8 @@ pub fn run() {
             conf::conf_templates,
             conf::conf_read,
             conf::conf_write,
+            paths::datadir_status,
+            paths::datadir_set,
             health::default_paths,
             health::autostart_status,
             health::autostart_enable,

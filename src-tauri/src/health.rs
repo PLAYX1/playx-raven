@@ -43,24 +43,10 @@ fn plist_path() -> PathBuf {
 /// machine. This app is meant to run in shops that are not ours.
 #[tauri::command]
 pub fn default_paths() -> Value {
-    let home = std::env::var("HOME").unwrap_or_default();
-    let candidates = [
-        format!("{home}/RavencoinBuilds-4.8.0/macos-arm64/ravend"),
-        "/Applications/Raven-Qt.app/Contents/MacOS/ravend".to_string(),
-        format!("{home}/Applications/Raven-Qt.app/Contents/MacOS/ravend"),
-        "/usr/local/bin/ravend".to_string(),
-        "/opt/homebrew/bin/ravend".to_string(),
-    ];
-    let found = candidates
-        .iter()
-        .find(|p| std::path::Path::new(p).exists())
-        .cloned();
-
     json!({
-        "home": home.clone(),
+        "home": crate::paths::home().to_string_lossy(),
         "data_dir": crate::paths::raven_dir().to_string_lossy(),
-        "ravend": found,
-        "searched": candidates,
+        "ravend": crate::services::which("ravend"),
     })
 }
 

@@ -31,29 +31,76 @@ use std::sync::Mutex;
 static OURS: Mutex<Option<Vec<(String, Child)>>> = Mutex::new(None);
 
 pub fn which(name: &str) -> Option<String> {
-    // A GUI app on macOS inherits a minimal PATH that usually lacks /opt/homebrew,
-    // so the usual places are checked directly rather than trusting `which`.
-    let home = std::env::var("HOME").unwrap_or_default();
-    let candidates = [
-        format!("/opt/homebrew/bin/{name}"),
-        format!("/usr/local/bin/{name}"),
-        format!("{home}/RavencoinBuilds-4.8.0/macos-arm64/{name}"),
-        format!("/Applications/Raven-Qt.app/Contents/MacOS/{name}"),
-        format!("{home}/.local/bin/{name}"),
-    ];
-    candidates
-        .iter()
-        .find(|p| std::path::Path::new(p).exists())
-        .cloned()
-        .or_else(|| {
-            Command::new("/usr/bin/which")
-                .arg(name)
-                .output()
-                .ok()
-                .filter(|o| o.status.success())
-                .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-                .filter(|s| !s.is_empty())
-        })
+    // GUI 앱은 PATH 가 거의 비어 있다. 코어를 깔아 둔 자리를 직접 본다.
+    let home = crate::paths::home();
+    let mut cands: Vec<std::path::PathBuf> = Vec::new();
+    #[cfg(target_os = "macos")]
+    {
+        cands.push(std::path::PathBuf::from("/opt/homebrew/bin").join(name));
+        cands.push(std::path::PathBuf::from("/usr/local/bin").join(name));
+        cands.push(home.join("RavencoinBuilds-4.8.0/macos-arm64").join(name));
+        cands.push(std::path::PathBuf::from("/Applications/Raven-Qt.app/Contents/MacOS").join(name));
+        cands.push(home.join("Applications/Raven-Qt.app/Contents/MacOS").join(name));
+        cands.push(home.join(".local/bin").join(name));
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let exe = format!("{name}.exe");
+        for root in [
+            std::env::var("ProgramFiles").unwrap_or_else(|_| r"C:\Program Files".into()),
+            std::env::var("ProgramFiles(x86)").unwrap_or_else(|_| r"C:\Program Files (x86)".into()),
+            std::env::var("LOCALAPPDATA").unwrap_or_default(),
+        ] {
+            if root.is_empty() {
+                continue;
+            }
+            let r = std::path::PathBuf::from(root);
+            cands.push(r.join("Raven").join(&exe));
+            cands.push(r.join("RavenCore").join(&exe));
+            cands.push(r.join("Ravencoin").join("daemon").join(&exe));
+            cands.push(r.join("Ravencoin").join(&exe));
+        }
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        cands.push(std::path::PathBuf::from("/usr/bin").join(name));
+        cands.push(std::path::PathBuf::from("/usr/local/bin").join(name));
+        cands.push(home.join(".local/bin").join(name));
+    }
+    cands
+        .into_iter()
+        .find(|p| p.is_file())
+        .map(|p| p.to_string_lossy().to_string())
+        .or_else(|| look_on_path(name))
+}
+
+fn look_on_path(name: &str) -> Option<String> {
+    #[cfg(target_os = "windows")]
+    {
+        let out = Command::new("where").arg(name).output().ok()?;
+        if !out.status.success() {
+            return None;
+        }
+        let line = String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .next()?
+            .trim()
+            .to_string();
+        return if line.is_empty() { None } else { Some(line) };
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let out = Command::new("which").arg(name).output().ok()?;
+        if !out.status.success() {
+            return None;
+        }
+        let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        if s.is_empty() {
+            None
+        } else {
+            Some(s)
+        }
+    }
 }
 
 /// Is each piece installed, running, and did we start it?
