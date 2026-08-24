@@ -6421,13 +6421,30 @@ async function loadPlaces() {
         `<div class="kv place" ${v.writable ? `data-dest="${escapeHtml(v.path)}"` : ""}><b>${escapeHtml(v.name || v.path)}</b>
            <span>${v.writable ? "디스크 — 눌러서 여기에 백업" : "<span class='warn'>쓰기 불가</span>"}</span></div>`
       );
+    const def = c.default || {};
+    const defLabel = String(def.label || "내 서류함");
+    const viaRaw = String(def.via || "").trim();
+    const viaName: Record<string, string> = {
+      OneDrive: "원드라이브",
+      "OneDrive 회사": "회사 원드라이브",
+      "Google Drive": "구글드라이브",
+      "iCloud Drive": "아이클라우드",
+      Dropbox: "드롭박스",
+      Nextcloud: "넥스트클라우드",
+    };
+    const via = viaName[viaRaw] || viaRaw;
+    const hint = via
+      ? `이 폴더는 ${via}와 같이 갑니다.`
+      : (c.folders || []).length
+        ? "붙어 있는 클라우드에도 매일 자동으로 한 벌을 남깁니다."
+        : "원드라이브·구글드라이브를 켜 두면 거기도 자동으로 남깁니다.";
     $("bk-places").innerHTML =
       (rows.length
         ? rows.join("")
         : `<div class="meta">붙어 있는 클라우드나 외장 디스크가 없습니다.</div>`) +
       `<div class="row" style="margin-top:12px">
          <button class="ghost" id="bk-pick">다른 폴더 고르기…</button>
-         <span class="meta">아무것도 안 고르면 「내 서류함」에 만듭니다.</span>
+         <span class="meta">아무것도 안 고르면 「${escapeHtml(defLabel)}」에 만듭니다. ${escapeHtml(hint)}</span>
        </div>`;
 
     // 목록의 줄을 직접 누르면 거기에 만든다. 여태 「여기에 백업 만들기」 버튼
@@ -6499,13 +6516,9 @@ async function doBackup(destFolder = ""): Promise<string> {
     // 🔴 **어디에 만들었는지 짐작해서 적지 않는다.** 「바탕화면에 있습니다」로
     //    박아 뒀는데 기본 폴더를 서류함으로 바꾸자 그 문장이 거짓말이 됐고,
     //    사장은 바탕화면을 뒤졌다. 러스트가 돌려준 **진짜 경로**를 읽는다.
-    const full = String(r.path || "");
-    const folder = full.slice(0, full.lastIndexOf("/"));
-    const home = folder.match(/^\/Users\/[^/]+/)?.[0] || "";
-    const pretty = folder
-      .replace(home + "/Documents", "내 서류함")
-      .replace(home + "/Desktop", "바탕화면")
-      .replace(home, "내 폴더");
+    // 🔴 윈도우 경로는 백슬래시라 lastIndexOf("/") 가 빈 칸이 된다.
+    //    어디서 만들었는지는 러스트가 돌려 준 pretty 를 쓴다.
+    const pretty = String(r.pretty || "");
     const whereText = pretty ? `${pretty} 에 있습니다.` : "만들었습니다.";
     $("bk-result").innerHTML =
       `<div class="card" style="margin-top:11px">

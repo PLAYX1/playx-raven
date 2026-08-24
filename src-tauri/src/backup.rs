@@ -538,10 +538,10 @@ pub async fn backup_auto(now_unix: i64) -> Value {
             "dest": dest.to_string_lossy(),
             "outside": outside,
             "note": match (outside.is_empty(), cloud.is_empty()) {
-                (true, true) => "이 컴퓨터 안에만 저장했습니다. 디스크가 죽으면 백업도 같이 죽습니다 — USB를 꽂아 두시거나 iCloud를 켜 두시면 거기에도 자동으로 남깁니다.",
-                (true, false) => "클라우드에도 남겼습니다. 다만 클라우드 사본에는 지갑이 빠져 있습니다 — 지갑은 USB와 12단어로 지키세요.",
+                (true, true) => "이 컴퓨터 안에만 저장했습니다. 디스크가 죽으면 백업도 같이 죽습니다 — USB를 꽂아 두시거나 원드라이브·구글드라이브를 켜 두면 거기도 자동으로 남깁니다.",
+                (true, false) => "클라우드에도 남겼습니다. 클라우드 사본은 잠겨 있습니다.",
                 (false, true) => "이 컴퓨터와 외장 디스크 양쪽에 남겼습니다.",
-                (false, false) => "이 컴퓨터·외장 디스크·클라우드 세 곳에 남겼습니다. 클라우드 사본에는 지갑이 빠져 있습니다.",
+                (false, false) => "이 컴퓨터·외장 디스크·클라우드 세 곳에 남겼습니다. 클라우드 사본은 잠겨 있습니다.",
             },
         }),
         Err(e) => json!({ "error": e }),
@@ -595,6 +595,31 @@ mod seal_tests {
         //    조각으로 나눠 붙인다(같은 함정을 두 번째로 밟았다).
         let banned = format!("home().join(\"Desk{}\")", "top");
         assert!(!src.contains(&banned), "백업 기본값이 다시 바탕화면이 됐다");
+    }
+
+    /// 윈도우·리눅스 백업이 맥 경로만 보면, 원드라이브가 켜져 있는데
+    /// "클라우드가 없습니다"가 되고 USB 도 못 찾는다.
+    #[test]
+    fn 윈도우_리눅스_서류함과_클라우드를_본다() {
+        let src = include_str!("backup.rs");
+        assert!(
+            src.contains("fn default_backup_parent"),
+            "기본 폴더 함수가 없다"
+        );
+        assert!(
+            src.contains("OneDriveConsumer"),
+            "윈도우 원드라이브 환경변수를 안 본다"
+        );
+        assert!(
+            src.contains("user-dirs.dirs"),
+            "리눅스 서류함 위치를 안 본다"
+        );
+        assert!(src.contains("/run/media"), "리눅스 USB 자리를 안 본다");
+        assert!(src.contains("SystemDrive"), "윈도우 드라이브 문자를 안 본다");
+        assert!(
+            src.contains("iCloudDrive"),
+            "윈도우 아이클라우드 자리를 안 본다"
+        );
     }
 }
 
@@ -673,11 +698,11 @@ async fn backup_zip_plain(dest_folder: String, label: String, include_wallet: bo
     //    바탕화면은 특히 나쁘다. 화면 공유·원격 지원·수리 맡기기·자동 정리에
     //    가장 먼저 노출되는 자리이고, 이 파일에는 지갑과 간판 열쇠가 들어 있다.
     //
-    //    비워서 부르면 **늘 같은 한 곳**이다. 「내 서류함/PLAYXRaven-Backup」.
-    //    자리가 하나면 사장은 어디 뒀는지 안 잊는다.
+    //    비워서 부르면 **늘 같은 한 곳**이다. 「내 서류함/PLAY X Raven 백업」.
+    //    윈도우·맥·리눅스 모두 서류함. 원드라이브가 서류함을 옮긴 컴퓨터는
+    //    그 자리 자체가 클라우드라, 따로 고르지 않아도 같이 간다.
     let picked = if dest_folder.trim().is_empty() {
-        let d = home().join("Documents");
-        if d.is_dir() { d } else { home() }
+        default_backup_parent()
     } else {
         PathBuf::from(&dest_folder)
     };
@@ -794,6 +819,8 @@ async fn backup_zip_plain(dest_folder: String, label: String, include_wallet: bo
 
     Ok(json!({
         "path": out.to_string_lossy(),
+        "folder": out_dir.to_string_lossy(),
+        "pretty": pretty_place(&out_dir),
         "name": name,
         "size": size,
         "size_text": format!("{:.1} MB", size as f64 / 1_048_576.0),
@@ -814,36 +841,116 @@ async fn backup_zip_plain(dest_folder: String, label: String, include_wallet: bo
 /// not a copy.
 ///
 /// So: whenever a USB stick or external drive is plugged in, the backup goes
-/// there too, without asking. macOS mounts removable volumes under `/Volumes`,
-/// and the boot disk appears there as well, so it is excluded by comparing
-/// against the root device.
+/// there too, without asking.
+///
+/// macOS: `/Volumes` (boot disk skipped). Windows: other drive letters.
+/// Linux: `/media/$USER`, `/run/media/$USER`, `/mnt`.
 #[tauri::command]
 pub fn external_drives() -> Value {
+    json!({ "drives": list_external() })
+}
+
+fn drive_row(name: String, path: PathBuf) -> Value {
+    let writable = std::fs::metadata(&path)
+        .map(|m| !m.permissions().readonly())
+        .unwrap_or(false);
+    json!({
+        "name": name,
+        "path": path.to_string_lossy(),
+        "writable": writable,
+    })
+}
+
+#[cfg(target_os = "macos")]
+fn list_external() -> Vec<Value> {
     let mut rows = Vec::new();
     let Ok(rd) = std::fs::read_dir("/Volumes") else {
-        return json!({ "drives": rows });
+        return rows;
     };
     for e in rd.flatten() {
         let p = e.path();
         if !p.is_dir() {
             continue;
         }
-        let name = e.file_name().to_string_lossy().to_string();
         // 부팅 디스크도 /Volumes 아래 보인다. 거기 넣으면 같은 디스크다.
         if p.join("System/Library/CoreServices").exists() {
             continue;
         }
-        // 쓸 수 있어야 백업 대상이다. 읽기 전용으로 마운트된 디스크 이미지가 흔하다.
-        let writable = std::fs::metadata(&p)
-            .map(|m| !m.permissions().readonly())
-            .unwrap_or(false);
-        rows.push(json!({
-            "name": name,
-            "path": p.to_string_lossy(),
-            "writable": writable,
-        }));
+        rows.push(drive_row(e.file_name().to_string_lossy().to_string(), p));
     }
-    json!({ "drives": rows })
+    rows
+}
+
+#[cfg(target_os = "windows")]
+fn list_external() -> Vec<Value> {
+    let mut rows = Vec::new();
+    let system = std::env::var("SystemDrive").unwrap_or_else(|_| "C:".into());
+    let clouds = cloud_folder_list();
+    for letter in b'A'..=b'Z' {
+        let root = PathBuf::from(format!("{}:\\", letter as char));
+        if !root.is_dir() {
+            continue;
+        }
+        let as_str = root.to_string_lossy();
+        if as_str.starts_with(&system) {
+            continue;
+        }
+        // 구글드라이브가 G:\My Drive 로 붙는 자리. USB 가 아니다.
+        if clouds.iter().any(|c| c.path.starts_with(&root)) {
+            continue;
+        }
+        rows.push(drive_row(format!("{}:", letter as char), root));
+    }
+    rows
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+fn list_external() -> Vec<Value> {
+    let mut rows = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    let user = home()
+        .file_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let mut add_children = |base: &Path| {
+        let Ok(rd) = std::fs::read_dir(base) else {
+            return;
+        };
+        for e in rd.flatten() {
+            let p = e.path();
+            if !p.is_dir() {
+                continue;
+            }
+            let name = e.file_name().to_string_lossy().to_string();
+            // WSL 이 윈도우 디스크를 /mnt/c 로 붙인다. 같은 컴퓨터다.
+            let lower = name.to_ascii_lowercase();
+            if matches!(
+                lower.as_str(),
+                "c" | "d" | "wsl" | "wslg" | "wslg.localhost" | "chromeos"
+            ) {
+                continue;
+            }
+            let key = path_key(&p);
+            if !seen.insert(key) {
+                continue;
+            }
+            rows.push(drive_row(name, p));
+        }
+    };
+    let user_media = PathBuf::from("/media").join(&user);
+    let user_run = PathBuf::from("/run/media").join(&user);
+    if user_media.is_dir() {
+        add_children(&user_media);
+    } else {
+        add_children(Path::new("/media"));
+    }
+    if user_run.is_dir() {
+        add_children(&user_run);
+    } else {
+        add_children(Path::new("/run/media"));
+    }
+    add_children(Path::new("/mnt"));
+    rows
 }
 
 /// Slides the current backup aside before it is overwritten.
@@ -865,34 +972,314 @@ fn roll_previous(folder: &Path, stem: &str) {
 /// Folders that already sync themselves off this machine.
 ///
 /// A USB stick only helps if it is plugged in, and it usually is not. iCloud
-/// Drive, OneDrive and Dropbox are folders that are always on, already paid
-/// for, and physically somewhere else — which is the whole requirement.
+/// Drive, OneDrive, Google Drive, Dropbox and Nextcloud are folders that are
+/// always on, already paid for, and physically somewhere else — which is the
+/// whole requirement.
+///
+/// 윈도우 원드라이브는 `~/OneDrive` 가 아니라 `%OneDrive%` 다. 그 변수를
+/// 안 보면 켜져 있는데도 "클라우드가 없습니다"가 된다.
 #[tauri::command]
 pub fn cloud_folders() -> Value {
-    let h = home();
-    let mut rows = Vec::new();
-    for (name, path) in [
-        ("iCloud Drive", h.join("Library/Mobile Documents/com~apple~CloudDocs")),
-        ("OneDrive", h.join("OneDrive")),
-        ("Dropbox", h.join("Dropbox")),
-        ("Google Drive", h.join("Google Drive")),
-    ] {
-        if path.is_dir() {
-            rows.push(json!({ "name": name, "path": path.to_string_lossy() }));
+    let folders: Vec<Value> = cloud_folder_list()
+        .into_iter()
+        .map(|c| json!({ "name": c.name, "path": c.path.to_string_lossy() }))
+        .collect();
+    let dest = default_backup_parent();
+    json!({
+        "folders": folders,
+        "default": {
+            "path": dest.to_string_lossy(),
+            "label": "내 서류함",
+            "via": cloud_covering(&dest),
         }
-    }
-    // 최신 맥은 클라우드 서비스를 여기에 붙인다.
-    if let Ok(rd) = std::fs::read_dir(h.join("Library/CloudStorage")) {
-        for e in rd.flatten() {
-            if e.path().is_dir() {
-                rows.push(json!({
-                    "name": e.file_name().to_string_lossy(),
-                    "path": e.path().to_string_lossy(),
-                }));
+    })
+}
+
+struct CloudPlace {
+    name: String,
+    path: PathBuf,
+}
+
+fn path_key(p: &Path) -> String {
+    p.canonicalize()
+        .unwrap_or_else(|_| p.to_path_buf())
+        .to_string_lossy()
+        .to_lowercase()
+}
+
+fn cloud_folder_list() -> Vec<CloudPlace> {
+    let mut seen = std::collections::HashSet::new();
+    let mut rows = Vec::new();
+    let mut add = |name: &str, path: PathBuf| {
+        if !path.is_dir() {
+            return;
+        }
+        if !seen.insert(path_key(&path)) {
+            return;
+        }
+        rows.push(CloudPlace {
+            name: name.to_string(),
+            path,
+        });
+    };
+
+    let h = home();
+
+    // 윈도우가 알려 주는 원드라이브. 홈 아래 폴더 이름보다 이게 맞다.
+    for (label, var) in [
+        ("OneDrive", "OneDrive"),
+        ("OneDrive", "OneDriveConsumer"),
+        ("OneDrive 회사", "OneDriveCommercial"),
+    ] {
+        if let Ok(p) = std::env::var(var) {
+            if !p.trim().is_empty() {
+                add(label, PathBuf::from(p));
             }
         }
     }
-    json!({ "folders": rows })
+
+    for p in dropbox_roots() {
+        add("Dropbox", p);
+    }
+
+    for (name, rel) in [
+        (
+            "iCloud Drive",
+            "Library/Mobile Documents/com~apple~CloudDocs",
+        ),
+        ("iCloud Drive", "iCloudDrive"),
+        ("iCloud Drive", "iCloud Drive"),
+        ("OneDrive", "OneDrive"),
+        ("Dropbox", "Dropbox"),
+        ("Google Drive", "Google Drive"),
+        ("Google Drive", "GoogleDrive"),
+        ("Google Drive", "My Drive"),
+        ("Nextcloud", "Nextcloud"),
+        ("pCloud", "pCloudDrive"),
+        ("MEGA", "MEGA"),
+        ("MEGA", "MEGAsync"),
+        ("Box", "Box"),
+        ("Box", "Box Sync"),
+    ] {
+        add(name, h.join(rel));
+    }
+
+    if let Ok(rd) = std::fs::read_dir(&h) {
+        for e in rd.flatten() {
+            let name = e.file_name().to_string_lossy().to_string();
+            if name.starts_with("OneDrive - ") {
+                add("OneDrive 회사", e.path());
+            }
+        }
+    }
+
+    if let Ok(rd) = std::fs::read_dir(h.join("Library/CloudStorage")) {
+        for e in rd.flatten() {
+            if e.path().is_dir() {
+                let raw = e.file_name().to_string_lossy().to_string();
+                add(&cloudstorage_label(&raw), e.path());
+            }
+        }
+    }
+
+    // 구글드라이브 데스크톱이 드라이브 문자로 붙는 경우 (Windows).
+    #[cfg(target_os = "windows")]
+    {
+        let system = std::env::var("SystemDrive").unwrap_or_else(|_| "C:".into());
+        for letter in b'A'..=b'Z' {
+            let drive = format!("{}:\\", letter as char);
+            if drive.starts_with(&system) {
+                continue;
+            }
+            let my = PathBuf::from(&drive).join("My Drive");
+            if my.is_dir() {
+                add("Google Drive", my);
+            }
+        }
+    }
+
+    rows
+}
+
+fn cloudstorage_label(raw: &str) -> String {
+    let lower = raw.to_ascii_lowercase();
+    if lower.starts_with("icloud") {
+        "iCloud Drive".into()
+    } else if lower.starts_with("onedrive") {
+        "OneDrive".into()
+    } else if lower.contains("google") {
+        "Google Drive".into()
+    } else if lower.starts_with("dropbox") {
+        "Dropbox".into()
+    } else {
+        raw.to_string()
+    }
+}
+
+fn dropbox_roots() -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    let mut candidates = vec![home().join(".dropbox/info.json")];
+    for var in ["APPDATA", "LOCALAPPDATA"] {
+        if let Ok(p) = std::env::var(var) {
+            if !p.trim().is_empty() {
+                candidates.push(PathBuf::from(p).join("Dropbox").join("info.json"));
+            }
+        }
+    }
+    for p in candidates {
+        let Ok(text) = std::fs::read_to_string(&p) else {
+            continue;
+        };
+        let Ok(j) = serde_json::from_str::<Value>(&text) else {
+            continue;
+        };
+        for key in ["personal", "business"] {
+            if let Some(path) = j
+                .get(key)
+                .and_then(|x| x.get("path"))
+                .and_then(Value::as_str)
+            {
+                if !path.trim().is_empty() {
+                    out.push(PathBuf::from(path));
+                }
+            }
+        }
+    }
+    out
+}
+
+/// 사장이 폴더를 안 고르면 여기. 세 OS 모두 **서류함**.
+///
+/// 바탕화면은 화면 공유·수리 맡기기에 먼저 보인다. AppData / .local 은
+/// 숨어서 "백업이 어디 갔지"가 된다. 서류함은 탐색기 왼쪽에 있고,
+/// 윈도우 원드라이브가 「문서 폴더를 원드라이브로」 켠 컴퓨터에서는
+/// 그 자리 자체가 클라우드다.
+fn documents_dir() -> PathBuf {
+    let h = home();
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        if let Some(p) = xdg_user_dir("DOCUMENTS") {
+            if !p.as_os_str().is_empty() {
+                return p;
+            }
+        }
+    }
+
+    for name in ["Documents", "문서"] {
+        let p = h.join(name);
+        if p.is_dir() {
+            return p;
+        }
+    }
+
+    if let Ok(od) = std::env::var("OneDrive") {
+        let p = PathBuf::from(od).join("Documents");
+        if p.is_dir() {
+            return p;
+        }
+    }
+
+    h.join("Documents")
+}
+
+fn default_backup_parent() -> PathBuf {
+    let d = documents_dir();
+    if !d.is_dir() {
+        let _ = std::fs::create_dir_all(&d);
+    }
+    if d.is_dir() {
+        d
+    } else {
+        home()
+    }
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+fn xdg_user_dir(kind: &str) -> Option<PathBuf> {
+    let env_key = format!("XDG_{kind}_DIR");
+    if let Ok(p) = std::env::var(&env_key) {
+        if !p.trim().is_empty() {
+            return Some(expand_home(&p));
+        }
+    }
+    let text = std::fs::read_to_string(home().join(".config/user-dirs.dirs")).ok()?;
+    let prefix = format!("XDG_{kind}_DIR=");
+    for line in text.lines() {
+        let line = line.trim();
+        if let Some(rest) = line.strip_prefix(&prefix) {
+            return Some(expand_home(rest.trim().trim_matches('"')));
+        }
+    }
+    None
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+fn expand_home(p: &str) -> PathBuf {
+    if let Some(rest) = p.strip_prefix("$HOME") {
+        let rest = rest.trim_start_matches('/').trim_start_matches('\\');
+        if rest.is_empty() {
+            home()
+        } else {
+            home().join(rest)
+        }
+    } else if let Some(rest) = p.strip_prefix("~/") {
+        home().join(rest)
+    } else if let Some(rest) = p.strip_prefix("~\\") {
+        home().join(rest)
+    } else {
+        PathBuf::from(p)
+    }
+}
+
+fn cloud_covering(path: &Path) -> Option<String> {
+    let canon = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    for c in cloud_folder_list() {
+        let root = c.path.canonicalize().unwrap_or_else(|_| c.path.clone());
+        if canon.starts_with(&root) || path.starts_with(&c.path) {
+            return Some(c.name);
+        }
+    }
+    None
+}
+
+/// 화면에는 「내 서류함」처럼 읽히는 이름. 윈도우 백슬래시도 여기서 접는다.
+fn pretty_place(path: &Path) -> String {
+    let resolved = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    let join_rest = |label: &str, rest: &Path| -> String {
+        if rest.as_os_str().is_empty() {
+            label.to_string()
+        } else {
+            format!("{label}/{}", rest.to_string_lossy().replace('\\', "/"))
+        }
+    };
+    let try_strip = |base: &Path, label: &str| -> Option<String> {
+        let base_r = base.canonicalize().unwrap_or_else(|_| base.to_path_buf());
+        resolved
+            .strip_prefix(&base_r)
+            .ok()
+            .map(|rest| join_rest(label, rest))
+    };
+
+    if let Some(s) = try_strip(&documents_dir(), "내 서류함") {
+        return s;
+    }
+    let h = home();
+    if let Some(s) = try_strip(&h.join("Desktop"), "바탕화면") {
+        return s;
+    }
+    if let Some(s) = try_strip(&h.join("바탕화면"), "바탕화면") {
+        return s;
+    }
+    for c in cloud_folder_list() {
+        if let Some(s) = try_strip(&c.path, &c.name) {
+            return s;
+        }
+    }
+    if let Some(s) = try_strip(&h, "내 폴더") {
+        return s;
+    }
+    resolved.to_string_lossy().replace('\\', "/")
 }
 
 /// Puts a copy where the disk dying cannot reach it.
