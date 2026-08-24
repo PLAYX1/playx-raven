@@ -64,6 +64,19 @@ fn manifest() -> Vec<(&'static str, PathBuf, &'static str)> {
     vec![
         ("shop.json", app_dir().join("shop.json"),
          "가게 이름·메뉴·사진·영업 정보 — 이 파일이 곧 가게입니다"),
+        // 🔴 가게 간판 열쇠. 이걸 잃으면 **체인에 적힌 공개키와 짝이 안 맞아**
+        // 다시는 「지금 여기서 주문받습니다」를 못 올린다. 고치려면 자산을
+        // 재발행해야 하고 RVN 이 또 탄다. 컴퓨터를 바꿀 때 같이 가야 한다.
+        ("shopkey.json", app_dir().join("shopkey.json"),
+         "가게 간판 열쇠 — 잃으면 손님이 가게를 못 찾습니다. 남에게 보여주지 마세요"),
+        // 🔴 카운터에서 판 이용권. 잃으면 **손님이 산 표가 없어진다** —
+        // 돈은 받았는데 못 들어오는 상황이고, 그건 그 자리에서 싸움이 된다.
+        ("tickets.json", app_dir().join("tickets.json"),
+         "카운터에서 판 이용권 — 잃으면 손님이 산 표가 사라집니다"),
+        // 🔴 잡힌 예약. 잃으면 **손님은 오는데 가게는 모른다.** 그리고 그
+        // 시간에 다른 예약을 받는다.
+        ("bookings.json", app_dir().join("bookings.json"),
+         "잡힌 예약 — 잃으면 손님은 오는데 가게가 모릅니다"),
         ("passes.json", app_dir().join("passes.json"),
          "회원 명단 — 체인은 회원번호만 알고 이름도 기간도 모릅니다"),
         ("sessions.json", app_dir().join("sessions.json"),
@@ -188,7 +201,7 @@ pub async fn backup_now(dest: String) -> Result<Value, String> {
         \n\
         이 폴더에 AI 열쇠는 들어 있지 않습니다. 복구한 뒤 설정에서\n\
         다시 넣으시면 됩니다.\n";
-    let _ = std::fs::write(dir.join("읽어보세요.txt"), readme);
+    let _ = std::fs::write(dir.join(README_NAME), readme);
 
     // 언제 했는지를 남긴다. "백업하세요"는 아무도 안 누르고, "12일 지났습니다"는
     // 누른다.
@@ -273,6 +286,19 @@ pub async fn address_pool(count: u32, label: String) -> Result<Value, String> {
 pub async fn reveal_seed(passphrase: String) -> Result<Value, String> {
     if passphrase.trim().is_empty() {
         return Err("지갑 암호가 필요합니다.".into());
+    }
+    // 🔴 암호를 **아직 안 건** 지갑에서는 `walletpassphrase` 가 노드의 영문
+    //    오류로 튕긴다. 하필 처음 켠 사람이 제일 먼저 눌러 보는 단추가
+    //    이것이라, 그 사람은 알아들을 수 없는 영어를 만나고 앱이 고장 난
+    //    줄 안다. 무엇을 하라는 말로 바꾼다.
+    if let Ok(st) = crate::raven::wallet_lock_state().await {
+        if !st["encrypted"].as_bool().unwrap_or(true) {
+            return Err(
+                "이 지갑에는 아직 암호가 없습니다. 「지갑」 화면에서 암호를 먼저 걸어 주세요 — \
+                 복구 단어는 암호로 잠긴 지갑에서만 꺼낼 수 있습니다."
+                    .into(),
+            );
+        }
     }
 
     // 30초면 충분하고, 그 이상 열어 둘 이유가 없다.
@@ -362,6 +388,21 @@ fn shred(path: &std::path::Path) {
 /// 끄는 것은 사장이 정할 일이다 — 컴퓨터가 죽은 날 열쇠 종이도 못 찾는
 /// 상황을 두려워하는 사람이 있고, 그건 실제로 일어난다. 다만 끄면 그 USB 를
 /// 주운 사람이 가게 돈을 가져간다는 것도 사실이라, 화면이 둘 다 말한다.
+/// 디스크에 새기는 이름은 **글자 그대로 세계 어디서나 읽혀야 한다.**
+///
+/// 🔴 여태 폴더는 `PLAYXRaven-백업`, 잠근 파일은 `.zip.잠김`, 설명서는
+/// `읽어보세요.txt` 였다. 한국어를 모르는 사람에게는 읽을 수 없는 이름이고,
+/// `.잠김` 은 **확장자 자리에 한글**이라 파일을 뭘로 열지도 알 수 없다.
+/// zip 안의 한글 이름은 실제로 `???????.txt` 로 깨져 있었다(실측).
+///
+/// 화면 글자는 네 나라 말로 옮기지만, **디스크에 새기는 이름은 안 옮긴다** —
+/// 옮기면 컴퓨터 언어를 바꿨을 때 옛 백업을 못 찾는다. ASCII 하나로 고정한다.
+const BACKUP_DIR: &str = "PLAYXRaven-Backup";
+/// 잠근 파일. `.pxlock` 이면 무엇으로 여는 것인지 이름이 말해 준다.
+const LOCKED_EXT: &str = "zip.pxlock";
+/// zip 안 설명서. 어느 나라에서 풀어도 안 깨진다.
+const README_NAME: &str = "READ-ME.txt";
+
 fn usb_should_lock() -> bool {
     std::fs::read_to_string(crate::paths::app_file("backup-usb.json"))
         .ok()
@@ -435,7 +476,7 @@ pub async fn backup_auto(now_unix: i64) -> Value {
             continue;
         }
         let Some(root) = d["path"].as_str() else { continue };
-        let folder = PathBuf::from(root).join("PLAYXRaven-백업");
+        let folder = PathBuf::from(root).join(BACKUP_DIR);
         if std::fs::create_dir_all(&folder).is_err() {
             continue;
         }
@@ -448,7 +489,7 @@ pub async fn backup_auto(now_unix: i64) -> Value {
         //
         // 열쇠는 클라우드와 같은 것이다(`lockbox`) — 종이에 적힌 그 하나로
         // 두 곳을 다 연다. 두 개면 하나를 잃는다.
-        let Ok(v) = backup_zip(folder.to_string_lossy().to_string(), "".into(), true).await else {
+        let Ok(v) = backup_zip_plain(folder.to_string_lossy().to_string(), "".into(), true).await else {
             continue;
         };
         let plain = PathBuf::from(v["path"].as_str().unwrap_or_default());
@@ -462,7 +503,7 @@ pub async fn backup_auto(now_unix: i64) -> Value {
                 }));
                 continue;
             };
-            let locked = plain.with_extension("zip.잠김");
+            let locked = plain.with_extension(LOCKED_EXT);
             match crate::lockbox::lock_file(&plain, &locked, &key) {
                 Ok(()) => {
                     let _ = std::fs::remove_file(&plain);
@@ -526,6 +567,38 @@ fn day_name(day_unix: i64) -> String {
 }
 
 #[cfg(test)]
+mod seal_tests {
+    /// 🔴 사장이 직접 누른 백업이 **암호 없이** 놓여 있었다(실측: iCloud 의
+    /// zip 에서 `shopkey.json` 이 그대로 나왔다). 자동 백업만 잠그고 있었다.
+    ///
+    /// `shopkey.json` 은 가게 간판 열쇠다. 이걸 가진 사람은 「이 가게는 지금
+    /// 여기서 주문받습니다」를 **사장 이름으로 서명**할 수 있고, 손님 돈이
+    /// 그리로 간다. 소유권 토큰을 훔칠 필요조차 없다.
+    #[test]
+    fn 직접_누른_백업도_잠긴다() {
+        let src = include_str!("backup.rs");
+        // 명령이 잠그는 길을 반드시 지나야 한다.
+        let cmd = src.find("pub async fn backup_zip(").expect("명령이 있어야 한다");
+        // 🔴 바이트로 자르면 한글 가운데를 갈라 터진다. 글자 단위로 센다.
+        let tail: String = src[cmd..].chars().take(400).collect();
+        assert!(tail.contains("seal(&plain)"), "직접 누른 백업이 안 잠기고 있다");
+        // 잠근 뒤 평문을 지워야 한다. 남으면 자물쇠는 장식이다.
+        assert!(
+            src.contains("let _ = std::fs::remove_file(plain);"),
+            "잠근 뒤 평문을 지우는 줄이 없다"
+        );
+        // 안쪽(자동 백업)은 두 번 잠그면 안 된다.
+        assert!(src.contains("backup_zip_plain("), "안쪽 함수가 분리돼 있어야 한다");
+        // 🔴 바탕화면은 기본값이 아니다. 화면 공유·수리 맡기기에 가장 먼저
+        //    노출되는 자리이고, 이 파일에는 지갑과 간판 열쇠가 들어 있다.
+        // 🔴 금지 문자열을 그대로 적으면 **자기 자신을 읽고** 걸린다.
+        //    조각으로 나눠 붙인다(같은 함정을 두 번째로 밟았다).
+        let banned = format!("home().join(\"Desk{}\")", "top");
+        assert!(!src.contains(&banned), "백업 기본값이 다시 바탕화면이 됐다");
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::day_name;
 
@@ -556,12 +629,54 @@ mod tests {
 /// it up can spend. `wallet.dat` encrypts private keys when a passphrase is set
 /// and does not otherwise. So the result reports which of the two you made, and
 /// the screen has to say it rather than filing it under details.
+/// 만든 zip 을 **우리 자물쇠로 한 번 더 잠그고 평문을 지운다.**
+///
+/// 🔴 자동 백업(클라우드·USB)은 이미 이렇게 했는데, **사장이 직접 누르는
+/// 「백업 하기」만 이 길을 안 탔다.** 그래서 `wallet.dat` 과 `shopkey.json`
+/// 이 든 zip 이 **암호 없이** 바탕화면과 iCloud 에 놓였다(실측으로 열림).
+///
+/// `shopkey.json` 은 가게 간판 열쇠다. 이걸 가진 사람은 「이 가게는 지금
+/// 여기서 주문받습니다」를 **사장 이름으로 서명**할 수 있고, 손님 돈이 그리로
+/// 간다. **소유권 토큰을 훔칠 필요조차 없다.** zip 은 옮기라고 만든 물건이라
+/// "이미 이 컴퓨터에 있으니 괜찮다"는 논리가 성립하지 않는다.
+async fn seal(plain: &std::path::Path) -> Result<PathBuf, String> {
+    let key = crate::lockbox::key_get_or_make()
+        .map_err(|e| format!("자물쇠 열쇠를 만들지 못했습니다: {e}"))?;
+    let locked = plain.with_extension(LOCKED_EXT);
+    crate::lockbox::lock_file(plain, &locked, &key)
+        .map_err(|e| format!("백업을 잠그지 못했습니다: {e}"))?;
+    // 🔴 잠근 사본을 만들었으면 평문은 **반드시** 지운다. 남겨 두면
+    //    자물쇠는 장식이 되고, 사장은 잠갔다고 믿는다.
+    let _ = std::fs::remove_file(plain);
+    Ok(locked)
+}
+
+/// 사장이 「백업 하기」를 누를 때 부르는 것. **잠근 사본만 남긴다.**
 #[tauri::command]
 pub async fn backup_zip(dest_folder: String, label: String, include_wallet: bool) -> Result<Value, String> {
-    // 비워서 부르면 바탕화면. 경로를 타이핑하게 하는 것은 백업을 안 하게 만드는
-    // 가장 확실한 방법이었다.
+    let mut v = backup_zip_plain(dest_folder, label, include_wallet).await?;
+    let plain = PathBuf::from(v["path"].as_str().unwrap_or_default());
+    let locked = seal(&plain).await?;
+    v["path"] = json!(locked.to_string_lossy());
+    v["name"] = json!(locked.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default());
+    v["locked"] = json!(true);
+    Ok(v)
+}
+
+/// 잠그지 않은 zip 을 만든다. **자동 백업이 쓰는 안쪽 함수**다 —
+/// 그쪽은 만든 뒤에 스스로 잠그므로 여기서 두 번 잠그면 안 된다.
+async fn backup_zip_plain(dest_folder: String, label: String, include_wallet: bool) -> Result<Value, String> {
+    // 🔴 **바탕화면을 기본값으로 두지 않는다.** 실제로 사장이 백업을 누르고
+    //    「어디 갔는지 모르겠다」고 겪었다. 고를 곳이 넷(iCloud·다른 클라우드·
+    //    직접 고르기·아무것도 안 고름=바탕화면)이면 그렇게 된다.
+    //
+    //    바탕화면은 특히 나쁘다. 화면 공유·원격 지원·수리 맡기기·자동 정리에
+    //    가장 먼저 노출되는 자리이고, 이 파일에는 지갑과 간판 열쇠가 들어 있다.
+    //
+    //    비워서 부르면 **늘 같은 한 곳**이다. 「내 서류함/PLAYXRaven-Backup」.
+    //    자리가 하나면 사장은 어디 뒀는지 안 잊는다.
     let picked = if dest_folder.trim().is_empty() {
-        let d = home().join("Desktop");
+        let d = home().join("Documents");
         if d.is_dir() { d } else { home() }
     } else {
         PathBuf::from(&dest_folder)
@@ -660,7 +775,7 @@ pub async fn backup_zip(dest_folder: String, label: String, include_wallet: bool
         }
     );
     use std::io::Write;
-    if zip.start_file("읽어보세요.txt", opts).is_ok() {
+    if zip.start_file(README_NAME, opts).is_ok() {
         let _ = zip.write_all(readme.as_bytes());
     }
     zip.finish().map_err(|e| format!("마무리하지 못했습니다: {e}"))?;
@@ -798,7 +913,7 @@ async fn copy_to_cloud(stamp: &str) -> Vec<Value> {
     let mut out = Vec::new();
     for f in cloud_folders()["folders"].as_array().cloned().unwrap_or_default() {
         let Some(root) = f["path"].as_str() else { continue };
-        let folder = PathBuf::from(root).join("PLAYXRaven-백업");
+        let folder = PathBuf::from(root).join(BACKUP_DIR);
         if std::fs::create_dir_all(&folder).is_err() {
             continue;
         }
@@ -825,11 +940,11 @@ async fn copy_to_cloud(stamp: &str) -> Vec<Value> {
             }));
             continue;
         };
-        let Ok(v) = backup_zip(folder.to_string_lossy().to_string(), "".into(), true).await else {
+        let Ok(v) = backup_zip_plain(folder.to_string_lossy().to_string(), "".into(), true).await else {
             continue;
         };
         let plain = PathBuf::from(v["path"].as_str().unwrap_or_default());
-        let locked = plain.with_extension("zip.잠김");
+        let locked = plain.with_extension(LOCKED_EXT);
         match crate::lockbox::lock_file(&plain, &locked, &key) {
             Ok(()) => {
                 // 🔴 잠근 뒤 **원본을 지운다.** 남겨 두면 클라우드에 잠긴 것과

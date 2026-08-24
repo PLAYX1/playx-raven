@@ -74,6 +74,22 @@ pub fn sample_fill(now_unix: i64, force: bool) -> Result<Value, String> {
         ));
     }
 
+    // 🔴 **덮기 전에 한 부 만든다.** 여기까지 왔다는 것은 사장이 「그래도
+    //    넣겠다」를 눌렀다는 뜻인데, 그때 날아가는 것은 **회원 명단과 수업
+    //    신청자**다. 체인에는 회원 번호만 있고 이름도 기간도 여기에만 있다 —
+    //    잘못 누르면 그 가게는 오늘 문 앞에서 그걸 알게 된다.
+    //
+    //    확인 한 번으로 되돌릴 수 없는 일을 하게 두지 않는다.
+    if existing["has_real_work"].as_bool().unwrap_or(false) {
+        for name in ["shop.json", "passes.json", "sessions.json", "tickets.json", "bookings.json"] {
+            let from = crate::paths::app_file(name);
+            if from.is_file() {
+                let to = crate::paths::app_file(&format!("{name}.덮기전"));
+                let _ = std::fs::copy(&from, &to);
+            }
+        }
+    }
+
     // 이 노드가 실제로 핀하고 있는 사진들이다. 가짜 URL 을 넣으면 손님 화면의
     // 사진 경로가 시험되지 않는다.
     let (shop_pic, iced, latte, cake) = (
@@ -223,6 +239,23 @@ pub fn sample_clear() -> Result<Value, String> {
     }
 
     Ok(json!({ "removed": removed }))
+}
+
+#[cfg(test)]
+mod overwrite_tests {
+    /// 🔴 「시험용 가게 만들기」는 확인 한 번이면 **회원 명단과 수업 신청자를
+    /// 통째로 갈아엎는다**(병합이 아니라 덮어쓰기). 체인에는 회원 번호만 있고
+    /// 이름도 기간도 이 파일에만 있어서, 잘못 누르면 되돌릴 데가 없다.
+    #[test]
+    fn 덮기_전에_한_부_남긴다() {
+        let src = include_str!("sample.rs");
+        assert!(src.contains("덮기전"), "덮기 전 사본을 안 만든다");
+        // 사본은 **실제 데이터가 있을 때만** 만든다. 빈 컴퓨터에 쓰레기를
+        // 남기면 다음 사람이 그게 뭔지 몰라 지우지도 못한다.
+        let i = src.find("덮기전").unwrap();
+        let before: String = src[..i].chars().rev().take(400).collect::<String>().chars().rev().collect();
+        assert!(before.contains("has_real_work"), "빈 컴퓨터에도 사본을 만들고 있다");
+    }
 }
 
 #[cfg(test)]

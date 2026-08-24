@@ -41,8 +41,12 @@ function pick(): Lang {
   } catch {
     /* localStorage 가 막혀 있어도 프로그램은 돈다 */
   }
-  const sys = (navigator.language || "ko").slice(0, 2).toLowerCase();
-  return (DICT as Record<string, unknown>)[sys] ? (sys as Lang) : "ko";
+  const sys = (navigator.language || "en").slice(0, 2).toLowerCase();
+  if ((DICT as Record<string, unknown>)[sys]) return sys as Lang;
+  // 🔴 사전에 없는 언어(불어·독어 등)일 때 **한국어를 주면 안 된다.**
+  //    그 사람에게 한국어는 빈 화면과 같다. 영어는 적어도 짐작이 된다.
+  //    한국어는 컴퓨터가 한국어일 때만 나온다 — 그때는 정확히 맞는다.
+  return "en";
 }
 
 export let lang: Lang = pick();

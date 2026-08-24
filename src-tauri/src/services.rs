@@ -120,7 +120,12 @@ pub async fn services_start() -> Result<Value, String> {
         // 켤 때마다 34GB 를 다시 훑으면 그 가게는 영영 장사를 못 한다.
         let want_asset = crate::conf::wants_assetindex();
         let stamp = crate::paths::app_file("reindexed-assetindex");
-        let need_reindex = want_asset && !stamp.exists();
+        // 🔴 주소 색인도 같은 처리가 필요하다. 다만 이쪽은 코어가 검사해서,
+        //    `-reindex` 없이 켜면 노드가 **아예 안 뜬다**. 조용히 틀리는 게
+        //    아니라 가게가 멈춘다 — 더 급한 쪽이다.
+        let want_addr = crate::conf::wants_addressindex();
+        let addr_stamp = crate::paths::app_file("reindexed-addressindex");
+        let need_reindex = (want_asset && !stamp.exists()) || (want_addr && !addr_stamp.exists());
 
         let mut cmd = Command::new(&path);
         cmd.arg(format!("-datadir={datadir}")).arg("-server=1");
@@ -139,7 +144,12 @@ pub async fn services_start() -> Result<Value, String> {
                 remember("node", child);
                 if need_reindex {
                     // 한 번만 붙인다. 표시를 남기지 않으면 켤 때마다 다시 훑는다.
-                    let _ = std::fs::write(&stamp, "1");
+                    if want_asset {
+                        let _ = std::fs::write(&stamp, "1");
+                    }
+                    if want_addr {
+                        let _ = std::fs::write(&addr_stamp, "1");
+                    }
                 }
                 started.push(json!({
                     "what": "노드",

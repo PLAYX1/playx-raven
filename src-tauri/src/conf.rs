@@ -266,6 +266,24 @@ pub fn wants_assetindex() -> bool {
         .unwrap_or(false)
 }
 
+/// 주소 색인을 켜 뒀는가.
+///
+/// 🔴 이건 코어가 **검사한다** — 켜 놓고 그냥 시작하면 ravend 가
+/// "You need to rebuild the database using -reindex" 하고 죽는다.
+/// 그래서 assetindex 와 달리 조용히 옛 상태로 도는 게 아니라 **아예 안 뜬다**.
+/// 노드가 안 뜨면 가게가 멈추므로, 켤 때 `-reindex` 를 반드시 같이 붙인다.
+pub fn wants_addressindex() -> bool {
+    std::fs::read_to_string(conf_path())
+        .ok()
+        .map(|t| {
+            t.lines().any(|l| {
+                let l = l.trim();
+                !l.starts_with('#') && (l == "addressindex=1" || l == "addressindex=true")
+            })
+        })
+        .unwrap_or(false)
+}
+
 #[cfg(test)]
 mod assetindex_tests {
     /// 🔴 코어는 자산 색인이 바뀐 것을 **검사하지 않는다.** txindex 와

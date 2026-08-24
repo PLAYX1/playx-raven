@@ -28,8 +28,20 @@ pub async fn ipfs_status() -> Result<Value, String> {
                 .json()
                 .await
                 .map_err(|e| format!("IPFS returned something unexpected: {e}"))?;
+            // 🔴 **몇 곳과 이어져 있나.** 켜져 있다는 것만으로는 부족하다 —
+            // 아무와도 안 이어진 파일창고는 켜져 있어도 사진을 못 나른다.
+            // 못 세도 나머지는 보여야 하므로 실패는 `null` 이다.
+            let peer_count = match post("swarm/peers").await {
+                Ok(r) => r
+                    .json::<Value>()
+                    .await
+                    .ok()
+                    .and_then(|j| j.get("Peers").and_then(Value::as_array).map(|a| a.len() as i64)),
+                Err(_) => None,
+            };
             Ok(json!({
                 "running": true,
+                "peers": peer_count,
                 "id": v.get("ID").and_then(Value::as_str).unwrap_or(""),
                 "version": v.get("AgentVersion").and_then(Value::as_str).unwrap_or(""),
             }))

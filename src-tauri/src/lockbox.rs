@@ -175,6 +175,162 @@ fn from_paper(s: &str) -> Result<[u8; 32], String> {
 /// 곧바로 열리지 않게 하는 값은 아니지만(무작위 32바이트라 어차피 못 맞춘다),
 /// **사람이 종이에 적은 값을 잘못 옮겨 적었을 때** 조용히 다른 열쇠가 되는
 /// 대신 확실히 실패하게 만든다.
+/* ══ 암호로도 여는 길 ═══════════════════════════════════════════════════
+   🔴 여태 백업을 여는 길이 **이 컴퓨터의 열쇠 파일 하나**뿐이었다. 그런데
+   백업이 필요한 순간은 대개 **그 컴퓨터가 죽었을 때**다. 그때 열쇠도 같이
+   죽는다. 종이에 적어 두는 길을 만들어 뒀지만, 사장은 12단어도 이미
+   적어야 한다 — 외울 것을 하나 더 얹는 것은 안 하는 쪽으로 흐른다.
+
+   그래서 **문에 열쇠구멍을 하나 더 낸다.** 자물쇠 자체는 그대로 두고,
+   컴퓨터 열쇠를 사장이 정한 암호로 한 번 더 싸서 파일 안에 같이 넣는다.
+
+     같은 컴퓨터   → 열쇠 파일로 그냥 열린다 (아무것도 안 물어봄)
+     새 컴퓨터     → 암호를 치면 열린다
+
+   ⚠️ 레이븐코인 지갑 암호를 **그대로 쓰면 안 된다.** 그건 2011년 방식이라
+      (SHA-512 25,000회) 그래픽카드가 초당 8만 개를 시험한다. 여기서는
+      **Argon2id** 를 지난다 — 메모리를 많이 먹게 만들어 그 이점을 없앤다.
+   ⚠️ 그래도 짧은 암호는 짧은 암호다. 최소 길이를 강제한다.
+*/
+
+/// 암호로 싼 열쇠. 파일 뒤에 붙는다.
+const WRAP_MAGIC: &[u8; 4] = b"PXW1";
+/// 너무 짧은 암호는 받지 않는다. 이 자물쇠는 가게 전부를 지킨다.
+///
+/// 🔴 지갑 암호는 10자를 요구하는데 여기만 8자였다. 같은 암호를 쓰라고
+/// 해 놓고 기준이 다르면, 사장은 8자를 넣고 「지갑에서는 왜 안 되지」를 겪는다.
+pub const MIN_PASS: usize = 10;
+
+/// 암호로 컴퓨터 열쇠를 싼다.
+fn wrap_key(key: &[u8; 32], pass: &str) -> Result<Vec<u8>, String> {
+    use argon2::Argon2;
+    use rand::RngCore;
+    if pass.chars().count() < MIN_PASS {
+        return Err(format!("암호는 {MIN_PASS}글자 이상이어야 합니다."));
+    }
+    let mut salt = [0u8; 16];
+    let mut nonce_b = [0u8; 12];
+    rand::thread_rng().fill_bytes(&mut salt);
+    rand::thread_rng().fill_bytes(&mut nonce_b);
+    let mut derived = [0u8; 32];
+    Argon2::default()
+        .hash_password_into(pass.as_bytes(), &salt, &mut derived)
+        .map_err(|e| format!("암호를 늘리지 못했습니다: {e}"))?;
+    let cipher = Aes256Gcm::new_from_slice(&derived).map_err(|e| format!("자물쇠 오류: {e}"))?;
+    let sealed = cipher
+        .encrypt(Nonce::from_slice(&nonce_b), key.as_ref())
+        .map_err(|_| "암호로 싸지 못했습니다".to_string())?;
+    let mut out = Vec::with_capacity(4 + 16 + 12 + sealed.len());
+    out.extend_from_slice(WRAP_MAGIC);
+    out.extend_from_slice(&salt);
+    out.extend_from_slice(&nonce_b);
+    out.extend_from_slice(&sealed);
+    Ok(out)
+}
+
+/// 암호로 싼 것을 푼다. 컴퓨터 열쇠가 나온다.
+pub fn unwrap_key(blob: &[u8], pass: &str) -> Result<[u8; 32], String> {
+    use argon2::Argon2;
+    if blob.len() < 4 + 16 + 12 || &blob[..4] != WRAP_MAGIC {
+        return Err("이 백업에는 암호로 여는 길이 없습니다.".into());
+    }
+    let mut derived = [0u8; 32];
+    Argon2::default()
+        .hash_password_into(pass.as_bytes(), &blob[4..20], &mut derived)
+        .map_err(|e| format!("암호를 늘리지 못했습니다: {e}"))?;
+    let cipher = Aes256Gcm::new_from_slice(&derived).map_err(|e| format!("자물쇠 오류: {e}"))?;
+    let out = cipher
+        .decrypt(Nonce::from_slice(&blob[20..32]), &blob[32..])
+        .map_err(|_| "암호가 맞지 않습니다.".to_string())?;
+    let mut k = [0u8; 32];
+    if out.len() != 32 {
+        return Err("이 백업의 열쇠가 손상됐습니다.".into());
+    }
+    k.copy_from_slice(&out);
+    Ok(k)
+}
+
+/// 파일에서 「본문」과 「암호 열쇠구멍」을 갈라낸다.
+pub fn strip_wrap(raw: &[u8]) -> (&[u8], Option<&[u8]>) {
+    const TAIL: &[u8; 8] = b"PXWEND12";
+    if raw.len() < 12 + TAIL.len() || &raw[raw.len() - 8..] != TAIL {
+        return (raw, None);
+    }
+    let n_at = raw.len() - 8 - 4;
+    let n = u32::from_le_bytes([raw[n_at], raw[n_at + 1], raw[n_at + 2], raw[n_at + 3]]) as usize;
+    if n == 0 || n > n_at {
+        return (raw, None);
+    }
+    (&raw[..n_at - n], Some(&raw[n_at - n..n_at]))
+}
+
+fn wrap_path() -> PathBuf {
+    crate::paths::app_file("backup-key-envelope")
+}
+
+/// 🔴 **암호를 적어 두지 않는다. 암호로 싼 봉투를 적어 둔다.**
+///
+/// 처음엔 암호를 프로그램이 도는 동안만 기억하게 했는데, 그러면 밤에 도는
+/// 자동 백업에는 안 붙는다 — 정작 컴퓨터가 죽는 밤에 만들어진 백업이
+/// 암호로 안 열린다. 그건 있으나 마나다.
+///
+/// 그래서 암호를 정하는 **그 순간에** 컴퓨터 열쇠를 암호로 싸서 그 결과만
+/// 파일로 남긴다. 봉투는 암호 없이는 못 여는 덩어리라, 이 컴퓨터를
+/// 가져가도 클라우드 백업이 열리지 않는다. 그리고 그 뒤로는 **암호를 안
+/// 물어봐도** 모든 백업에 열쇠구멍이 붙는다.
+fn pass_read() -> Option<Vec<u8>> {
+    std::fs::read(wrap_path()).ok().filter(|v| !v.is_empty())
+}
+
+/// 암호를 정한다. 한 번 정하면 **그 뒤 모든 백업**에 붙는다.
+#[tauri::command]
+pub async fn backup_pass_set(pass: String, wallet_pass: Option<String>) -> Result<Value, String> {
+    if pass.chars().count() < MIN_PASS {
+        return Err(format!("암호는 {MIN_PASS}글자 이상이어야 합니다."));
+    }
+    // 🔴 **이미 정해진 것을 바꿀 때는 본인인지 확인한다.**
+    //
+    // 잠깐 자리를 비운 사이 누가 이 암호를 바꿔 놓으면, 사장은 **그걸 모른다.**
+    // 컴퓨터가 죽는 날에야 「내 백업이 안 열린다」를 알게 된다 — 훔쳐 갈
+    // 필요조차 없는 조용한 공격이다.
+    //
+    // 확인은 **지갑 암호**로 받는다. 옛 백업 암호를 물으면, 잊어버려서
+    // 바꾸려는 사람을 막게 된다 — 그게 바꾸는 이유의 절반이다.
+    // 지갑에 암호가 없으면 확인할 것이 없으므로 그냥 통과시킨다.
+    if pass_read().is_some() {
+        let encrypted = crate::raven::wallet_lock_state()
+            .await
+            .ok()
+            .and_then(|v| v["encrypted"].as_bool())
+            .unwrap_or(false);
+        if encrypted {
+            let wp = wallet_pass.unwrap_or_default();
+            if wp.trim().is_empty() {
+                return Err("이미 정해진 암호를 바꾸려면 지갑 암호를 넣어 주세요.".into());
+            }
+            crate::raven::call_rpc("walletpassphrase", json!([wp, 2]))
+                .await
+                .map_err(|_| "지갑 암호가 맞지 않습니다.".to_string())?;
+            let _ = crate::raven::call_rpc("walletlock", json!([])).await;
+        }
+    }
+    let k = key_get_or_make()?;
+    let envelope = wrap_key(&k, &pass)?;
+    // 바로 열어 봐서 정말 되는지 확인한다. 안 해 보고 「됐습니다」 하면 안 된다.
+    let back = unwrap_key(&envelope, &pass)?;
+    if back != k {
+        return Err("암호를 확인하지 못했습니다. 다시 해 주세요.".into());
+    }
+    std::fs::write(wrap_path(), &envelope).map_err(|e| format!("저장하지 못했습니다: {e}"))?;
+    Ok(json!({ "ok": true }))
+}
+
+/// 암호가 정해져 있나.
+#[tauri::command]
+pub fn backup_pass_state() -> Value {
+    json!({ "set": pass_read().is_some(), "min": MIN_PASS })
+}
+
 pub fn lock_file(src: &std::path::Path, dst: &std::path::Path, key: &[u8; 32]) -> Result<(), String> {
     use argon2::Argon2;
     use rand::RngCore;
@@ -198,12 +354,21 @@ pub fn lock_file(src: &std::path::Path, dst: &std::path::Path, key: &[u8; 32]) -
 
     // 머리 + 소금 + 논스 + 잠긴 내용. 한 파일로 둔다 — 옆 파일이 따로 있으면
     // 하나만 옮겨지고 나머지가 남는 일이 생긴다.
+    // 🔴 암호가 정해져 있으면 **열쇠구멍을 하나 더** 넣는다. 파일 뒤에 붙고,
+    //    없으면 예전과 똑같은 파일이라 옛 백업도 그대로 열린다.
+    let wrap = pass_read();
     let mut out = Vec::with_capacity(8 + 16 + 12 + sealed.len());
     out.extend_from_slice(MAGIC);
     out.extend_from_slice(&salt);
     out.extend_from_slice(&nonce_b);
     out.extend_from_slice(&sealed);
-    std::fs::write(dst, out).map_err(|e| format!("쓰지 못했습니다: {e}"))?;
+        // 열쇠구멍은 **맨 뒤**에 붙인다. 앞을 안 건드려야 옛 파일과 같은 모양이다.
+    if let Some(w) = wrap {
+        out.extend_from_slice(&w);
+        out.extend_from_slice(&(w.len() as u32).to_le_bytes());
+        out.extend_from_slice(b"PXWEND12");
+    }
+std::fs::write(dst, out).map_err(|e| format!("쓰지 못했습니다: {e}"))?;
     Ok(())
 }
 
@@ -219,6 +384,8 @@ pub fn unlock_file(
     if raw.len() < 8 + 16 + 12 || &raw[..8] != MAGIC {
         return Err("이 프로그램이 잠근 파일이 아닙니다.".into());
     }
+    // 뒤에 붙은 열쇠구멍을 떼어낸다. 없으면 예전 파일이다.
+    let raw = strip_wrap(&raw).0.to_vec();
     let salt = &raw[8..24];
     let nonce_b = &raw[24..36];
     let body = &raw[36..];
@@ -346,5 +513,49 @@ mod tests {
             std::fs::read(dir.join("b.bin")).unwrap()
         );
         let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+#[cfg(test)]
+mod pass_tests {
+    use super::*;
+
+    /// 🔴 **백업이 필요한 순간은 대개 그 컴퓨터가 죽었을 때다.** 그때
+    /// 열쇠 파일도 같이 죽는다. 암호로 여는 길이 없으면 백업은 있으나 마나다.
+    #[test]
+    fn 다른_컴퓨터에서_암호로_열린다() {
+        let key = [7u8; 32];
+        let pass = "우리가게2026년봄";  // 10자
+        let envelope = wrap_key(&key, pass).unwrap();
+        // 새 컴퓨터에는 열쇠 파일이 없다. 암호만 있다.
+        assert_eq!(unwrap_key(&envelope, pass).unwrap(), key);
+        // 틀린 암호로는 안 열린다.
+        assert!(unwrap_key(&envelope, "틀린암호입니다요오").is_err());
+    }
+
+    /// 짧은 암호는 안 받는다. 이 자물쇠는 가게 전부를 지킨다.
+    #[test]
+    fn 짧은_암호는_안_받는다() {
+        assert!(wrap_key(&[1u8; 32], "1234").is_err());
+        assert!(wrap_key(&[1u8; 32], "1234567890").is_ok());
+    }
+
+    /// 🔴 열쇠구멍을 뒤에 붙여도 **본문은 한 바이트도 안 달라져야** 한다.
+    /// 달라지면 옛 백업을 못 열고, 그건 돈이 잠기는 일이다.
+    #[test]
+    fn 열쇠구멍을_붙여도_본문은_그대로다() {
+        let body = "PXRLOCK1____본문이라고 치자____".as_bytes().to_vec();
+        let env = wrap_key(&[9u8; 32], "암호암호암호암호열개").unwrap();
+        let mut whole = body.clone();
+        whole.extend_from_slice(&env);
+        whole.extend_from_slice(&(env.len() as u32).to_le_bytes());
+        whole.extend_from_slice(b"PXWEND12");
+        let (got_body, got_env) = strip_wrap(&whole);
+        assert_eq!(got_body, &body[..], "본문이 달라졌다");
+        assert_eq!(got_env.unwrap(), &env[..], "열쇠구멍을 못 찾았다");
+        // 열쇠구멍이 없는 옛 파일은 통째로 본문이다.
+        let (only, none) = strip_wrap(&body);
+        assert_eq!(only, &body[..]);
+        assert!(none.is_none());
     }
 }

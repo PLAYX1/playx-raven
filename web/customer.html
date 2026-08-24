@@ -201,7 +201,63 @@
       /* 진행 단계 */
       .statecard { margin-top: 16px; padding: 16px; border-radius: 12px;
         background: var(--panel); }
+      /* 다른 지갑을 쓰는 손님의 길. 44px 보다 크게 — 결제 중에 누른다. */
+      .copyrow { display: flex; gap: 8px; margin: 10px 0 4px; }
+      .copybtn { flex: 1; min-height: 48px; font-size: 15px; border-radius: 10px;
+                 border: 1px solid var(--line); background: var(--bg); color: var(--fg);
+                 font-family: inherit; }
+      /* 며칠짜리인지. 값보다 먼저 눈에 들어와야 한다 — 그게 사는 이유다. */
+      .span { font-size: 13.5px; color: var(--accent); font-weight: 600; margin-top: 2px; }
       .statecard.ready { background: var(--accent); color: #fff; }
+      /* 시각 고르기 시트. 손님이 폰을 한 손으로 들고 고른다 —
+         버튼은 크고, 목록은 안에서만 구른다. */
+      .slotwrap { position: fixed; inset: 0; background: rgba(0,0,0,.45);
+                  display: none; align-items: flex-end; z-index: 60; }
+      .slotwrap.on { display: flex; }
+      .slotsheet { background: var(--bg); width: 100%; max-height: 82vh;
+                   border-radius: 18px 18px 0 0; padding: 18px 16px 16px;
+                   display: flex; flex-direction: column; }
+      .slothead { font-size: 18px; font-weight: 700; margin-bottom: 12px; }
+      .slotscroll { overflow-y: auto; flex: 1; -webkit-overflow-scrolling: touch; }
+      .slotday { margin-bottom: 16px; }
+      .slotdate { font-size: 15px; color: var(--muted); margin-bottom: 8px; }
+      .slotrow { display: flex; flex-wrap: wrap; gap: 8px; }
+      /* 🔴 56px. 주방·현장에서 젖은 손으로 누른다. 44px 는 여기서 작다. */
+      .slotbtn { min-height: 56px; padding: 0 16px; font-size: 17px;
+                 border-radius: 12px; border: 1px solid var(--line);
+                 background: var(--bg); color: var(--fg); font-family: inherit; }
+      .slotbtn:active { background: var(--accent); color: #fff; }
+      .slotno { margin-top: 12px; min-height: 52px; font-size: 16px;
+                background: transparent; border: 1px solid var(--line);
+                color: var(--muted); border-radius: 12px; font-family: inherit; }
+      /* 예약 시각. 손님이 이 화면을 다시 열어 확인한다 — 크게. */
+      .bookcard { border: 1px solid var(--line); border-radius: 16px;
+                  padding: 16px; margin: 14px 0; text-align: center; }
+      .booklb { font-size: 14px; color: var(--muted); }
+      .bookwhen { font-size: 24px; font-weight: 700; margin: 6px 0; }
+      .slotempty { padding: 24px 8px; font-size: 16px; line-height: 1.7;
+                   color: var(--muted); text-align: center; }
+
+      /* 이용권 표. 문 앞에서 보여 주는 그림이라 **크고 밝아야** 한다 —
+         가게 조명 아래에서 직원이 1초 안에 읽어야 하고, 손님은 폰을 든 채
+         줄에서 기다린다. 그래서 QR 230px, 번호 26px. */
+      .passwrap { text-align: center; padding: 4px 0 8px; }
+      .passhead { font-size: 15px; color: var(--muted); margin-bottom: 10px; }
+      .passcard { border: 1px solid var(--line); border-radius: 16px;
+                  padding: 18px 14px 16px; margin-bottom: 14px; background: #fff; }
+      .passitem { font-size: 19px; font-weight: 700; margin-bottom: 12px; }
+      /* 흰 바탕을 강제한다. 어두운 배경 위의 QR 은 카메라가 못 읽는다. */
+      .passqr { width: 230px; height: 230px; background: #fff; border-radius: 10px; }
+      /* 🔴 번호를 QR 만큼 크게. 화면이 깨졌거나 밝기가 낮으면 QR 이 안 읽히고,
+         그때 직원이 손으로 친다. 붙여 읽기 쉽게 자간을 벌린다. */
+      .passcode { font-size: 26px; font-weight: 700; letter-spacing: 3px;
+                  margin-top: 10px; font-variant-numeric: tabular-nums; }
+      .passwhen { font-size: 15px; color: var(--muted); margin-top: 6px; }
+      /* 못 쓰는 표는 회색으로 죽인다. 「기간이 지났다」를 글자로만 적으면
+         직원이 QR 만 보고 통과시킨다. */
+      .passcard.dead { opacity: .55; }
+      .passcard.dead .passqr { filter: grayscale(1); }
+      .passtip { font-size: 14px; color: var(--muted); margin-top: 4px; line-height: 1.6; }
       .statecard .tk { font-size: 40px; font-weight: 700; line-height: 1.05;
         font-variant-numeric: tabular-nums; }
       .steps { display: flex; align-items: flex-start; gap: 4px; margin-top: 16px; }
@@ -278,6 +334,16 @@
     <div class="bar">
       <div class="tot"><span id="total">₩0</span><small id="totrvn"></small></div>
       <button id="order" disabled>주문하기</button>
+
+    <!-- 시각 고르기. 아래에서 올라오는 시트 — 폰에서 목록이 길어지므로
+         화면을 덮되, 돌아갈 길(그만두기)을 항상 붙여 둔다. -->
+    <div class="slotwrap" id="slotwrap">
+      <div class="slotsheet">
+        <div class="slothead" id="slothead"></div>
+        <div class="slotscroll" id="slotbody"></div>
+        <button class="slotno" id="slotno">그만두기</button>
+      </div>
+    </div>
     </div>
 
     <dialog id="paydlg">
@@ -294,13 +360,28 @@
         <!-- 지갑이 없는 손님에게 갈 곳을 준다. 가게 로컬이 아니라 rvn.ex.erci.se
              로 보낸다 — 브라우저 저장소는 출처마다 나뉘어서, 가게 주소에서
              만든 지갑은 그 가게에서만 보인다. -->
+        <!-- 🔴 여기서 **금액을 들고 가야** 한다. 빈 지갑 화면으로 보내면
+             손님은 12단어를 만들고 나서 「그래서 얼마를 어디로?」에 갇힌다.
+             주소로 돌아올 길이 없다. -->
         <div class="fiat" style="margin-top:8px">
           지갑이 없으신가요?
-          <a href="https://rvn.ex.erci.se/wallet" target="_blank" rel="noopener">1분이면 만듭니다</a>
+          <a id="p-newwallet" href="https://rvn.ex.erci.se/wallet" target="_blank"
+             rel="noopener">1분이면 만듭니다</a>
         </div>
         <a id="p-qrlink" href="#"><div id="p-qr"></div></a>
         <code id="p-addr"></code>
-        <div class="fiat">지갑이 안 열리면 위 주소를 길게 눌러 복사하세요.</div>
+        <!-- 🔴 **다른 지갑을 쓰는 손님의 길.** 위 QR 은 이 화면을 보고 있는
+             손님이 자기 폰으로 찍을 수 없고(자기 화면이다), `raven:` 은 그
+             지갑이 그 형식을 등록해 뒀을 때만 열린다.
+             그러면 남는 길은 **주소와 금액을 옮겨 적는 것**뿐인데, 여태
+             「길게 눌러 복사하세요」라고만 적혀 있었다. 34글자를 손으로
+             옮기다 한 글자만 틀리면 **돈이 남에게 간다.** -->
+        <div class="copyrow">
+          <button class="copybtn" id="p-copyaddr">주소 복사</button>
+          <button class="copybtn" id="p-copyamt">금액 복사</button>
+        </div>
+        <div class="fiat" id="p-copysay"></div>
+        <div class="fiat">다른 지갑을 쓰시면 <b>주소와 금액을 복사</b>해 넣으세요.</div>
         <div class="timer" id="p-timer"></div>
         <div id="p-state"></div>
         <button class="close" id="p-close">닫기</button>
@@ -402,8 +483,22 @@
         $("name").textContent = shop.name || "가게";
         $("desc").textContent = shop.description || "";
         $("loc").textContent = shop.location || "";
-        if (safeUrl(shop.icon))
-          $("icon").innerHTML = `<img src="${esc(safeUrl(shop.icon))}" alt="" />`;
+        // 🔴 `safeUrl` 은 `http/https` 만 통과시킨다. 그런데 가게가 싣는 것은
+        //    이제 **날 주소**(`Qm…/icon.jpg`)다 — 집 안에서만 통하는 주소를
+        //    실어 보내면 바깥 손님이 못 열기 때문이다.
+        //
+        //    이 화면은 가게 노드가 직접 내준다. 그러니 **같은 자리**에서
+        //    받으면 된다. 가게 안 와이파이든 바깥 터널이든 똑같이 열린다.
+        //    사진 자체가 문서에 든 옛 가게(`data:`)도 그대로 보여 준다.
+        {
+          const ic = typeof shop.icon === "string" ? shop.icon.trim() : "";
+          const src = /^https?:\/\//i.test(ic) || /^data:image\//i.test(ic)
+            ? ic
+            : /^Qm[1-9A-HJ-NP-Za-km-z]{44}(\/[\w.-]{1,40})?$/.test(ic)
+              ? `/ipfs/${ic}`
+              : "";
+          if (src) $("icon").innerHTML = `<img src="${esc(src)}" alt="" />`;
+        }
         $("tags").innerHTML =
           (shop.pickup ? `<span class="tag">매장·포장</span>` : "") +
           (shop.delivery ? `<span class="tag">배달</span>` : "");
@@ -441,10 +536,20 @@
           ? items
               .map(
                 (it, i) => `<div class="item">
-                  ${it.image ? `<img src="${esc(safeUrl(shop.gateway) + "/ipfs/" + String(it.image).replace(/[^A-Za-z0-9]/g, ""))}" alt="" loading="lazy" />` : ""}
+                  ${it.image ? `<img src="/ipfs/${esc(String(it.image).replace(/[^A-Za-z0-9]/g, ""))}" alt="" loading="lazy"
+                       onerror="this.style.visibility='hidden'" />` : ""}
                   <div>
                     <div class="nm">${esc(it.name || "")}</div>
-                    <div class="pr">${fmt(it.price || 0)}</div>
+                    <!-- 🔴 **기간권이면 며칠짜리인지 사기 전에 보여야 한다.**
+                         「테스트 1개월운동권」처럼 이름에 적힌 가게도 있지만,
+                         「자유이용권」이라고만 적힌 가게도 있다. 그러면 손님은
+                         **얼마나 쓸 수 있는지 모른 채** 돈을 낸다.
+                         이름에 기대지 않고 메뉴에 적힌 값을 그대로 적는다. -->
+                    ${spanOf(it) ? `<div class="span">${spanOf(it)}</div>` : ""}
+                    <div class="pr">${fmt(it.price || 0)}${
+                      // 품목마다 통화가 다를 수 있다. 가게 통화와 다르면 그렇게 적는다.
+                      it.currency && it.currency !== currency ? ` (${esc(it.currency)})` : ""
+                    }</div>
                     ${rate && currency !== "RVN" ? `<div class="rv">${fmtRvn((it.price || 0) / rate)}</div>` : ""}
                     ${
                       // 넉넉할 때 "37개 남음" 은 잡음이다. 서두를 이유가 있을
@@ -527,12 +632,23 @@
           .filter((x) => x.qty > 0);
         const total = chosen.reduce((s, x) => s + x.price * x.qty, 0);
 
+        /* 🔴 예약이 필요한 것을 담았으면 **시각부터 고른다.**
+           주문을 먼저 만들고 나중에 시각을 물으면, 그 사이에 자리가 나가
+           손님이 돈을 낸 뒤에 「그 시간은 안 됩니다」를 듣게 된다. */
+        const slotWant = await needSlot(chosen);
+        if (slotWant === "cancelled") return;
+        if (slotWant === "none") { /* 예약이 필요 없는 주문 */ }
+
         $("order").disabled = true;
         try {
           const res = await fetch("/api/order", {
             method: "POST",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ items: chosen, total, currency, note: null, table: TABLE || null }),
+            body: JSON.stringify({
+              items: chosen, total, currency, note: null, table: TABLE || null,
+              // 고른 시각. 예약이 아닌 주문에서는 null 이다.
+              at: typeof slotWant === "number" ? slotWant : null,
+            }),
           }).then((x) => x.json());
           if (res.error) throw new Error(res.error);
 
@@ -545,6 +661,59 @@
           // 다른 하나가 옛 금액을 들고 있게 된다.
           const uri = `raven:${res.address}?amount=${res.quote.rvn}`;
           $("p-open").href = uri;
+
+          /* 🔴 **`raven:` 를 받아 줄 앱이 없으면 아무 일도 안 일어난다.**
+             폰에 레이븐 지갑이 깔려 있는 손님은 거의 없다. 그런데 화면은
+             조용하다 — 손님은 단추가 고장난 줄 알고, 사장은 왜 결제가 안
+             되는지 모른다. 대표님이 겪으신 것이 정확히 이것이다.
+             (「지갑이 없으신가요?」는 작은 글씨로 아래에 있었고, 아무도 안 읽는다)
+
+             누른 뒤에도 이 화면이 그대로 보이면 = 아무것도 안 열린 것이다.
+             그때 **우리 지갑으로 데려간다** — 금액과 주소가 채워진 채로.
+             `#pay` 로 가면 개발비 1% 도 같은 거래에 실린다. */
+          $("p-open").onclick = (e) => {
+            const web =
+              "https://rvn.ex.erci.se/wallet#pay?to=" +
+              encodeURIComponent(res.address) +
+              "&rvn=" + encodeURIComponent(res.quote.rvn) +
+              "&what=" + encodeURIComponent(res.shop || "주문");
+            let gone = false;
+            // 다른 앱이 열리면 이 화면이 뒤로 밀린다 — 그때는 아무것도 안 한다.
+            const away = () => { gone = true; };
+            document.addEventListener("visibilitychange", away, { once: true });
+            window.addEventListener("blur", away, { once: true });
+            setTimeout(() => {
+              document.removeEventListener("visibilitychange", away);
+              window.removeEventListener("blur", away);
+              if (gone || document.hidden) return;
+              // 1.3초가 지나도 이 화면 그대로 = 받아 줄 지갑이 없다.
+              e.preventDefault();
+              $("p-openhint").innerHTML =
+                "이 폰에는 레이븐 지갑이 없어서 <b>우리 지갑을 엽니다</b> — 금액이 채워져 있습니다.";
+              location.href = web;
+            }, 1300);
+          };
+          // 다른 지갑을 쓰는 손님. 손으로 옮겨 적다 한 글자 틀리면 돈이
+          // 남에게 가고, 체인은 되돌리지 않는다.
+          const copy = async (text, what) => {
+            try {
+              await navigator.clipboard.writeText(String(text));
+              $("p-copysay").innerHTML = `<span style="color:var(--ok,#2e7d32)">${what}을(를) 복사했습니다</span>`;
+            } catch {
+              // 클립보드가 막힌 브라우저도 있다. 그때는 골라 두기만 해도
+              // 손님이 손가락으로 복사할 수 있다.
+              $("p-copysay").textContent = "복사가 막혀 있습니다 — 위 글자를 길게 눌러 주세요.";
+            }
+          };
+          $("p-copyaddr").onclick = () => copy(res.address, "주소");
+          $("p-copyamt").onclick = () => copy(res.quote.rvn, "금액");
+
+          // 지갑을 새로 만들러 가는 길에도 금액을 실어 보낸다.
+          $("p-newwallet").href =
+            "https://rvn.ex.erci.se/wallet#pay?to=" +
+            encodeURIComponent(res.address) +
+            "&rvn=" + encodeURIComponent(res.quote.rvn) +
+            "&what=" + encodeURIComponent(res.shop || "주문");
           $("p-qrlink").href = uri;
           $("p-qr").innerHTML = qrSvg(uri);
           countdown(res.quote.expires_at);
@@ -574,6 +743,12 @@
 
       // 주문이 어디까지 왔는지. 손님은 이 화면을 열어 두고 기다린다.
       let statePoll, lastState = "", ticket = 0;
+      // 산 이용권. 표가 새로 나오면 상태가 그대로여도 화면을 다시 그려야
+      // 하므로, 장수를 따로 기억한다.
+      let passes = [], lastPasses = -1;
+      // 예약한 시각. 손님이 「몇 시였더라」를 다시 볼 곳은 이 화면뿐이다 —
+      // 문자도 안 가고 앱도 없다.
+      let booking = null;
       const STATE_KO = {
         // 아직 돈이 안 들어온 상태. 이 줄이 없어서 서버가 곧장 「결제 확인됨」을
         // 답했고, 손님은 결제하기도 전에 확인 화면을 봤다.
@@ -595,17 +770,40 @@
         // 새 주문이다. 앞 손님의 상태와 번호를 지우지 않으면, 같은 상태로 시작한
         // 두 번째 손님은 "바뀐 게 없다"로 걸러져 번호를 영영 못 본다.
         lastState = "";
+        passes = [];
+        lastPasses = -1;
         ticket = 0;
         $("p-state").innerHTML = "";
         const tick = async () => {
           try {
             const r = await fetch(`/api/order-state?a=${encodeURIComponent(address)}`).then((x) => x.json());
             if (r.ticket) ticket = r.ticket;
+
+            /* 🔴 기간 이용권을 샀으면 **표를 그린다.** 커피처럼 「만드는 중」
+               을 보여 줄 이유가 없다 — 산 순간 이미 다 된 것이고, 손님이
+               지금 필요한 것은 문에서 보여 줄 그림 하나다.
+
+               자산으로 안 보낸다. 자산이면 손님이 지갑 주소를 적어야 하고,
+               가게는 지갑 잠금을 풀어 둬야 하고, 한 장마다 5 RVN 이 탄다.
+               이유는 `src-tauri/src/ticket.rs` 머리말에 적어 뒀다.
+
+               표는 이 주소로만 찾는다. 주소는 주문마다 새로 만들어져 이
+               폰에만 있으므로, 남이 남의 표를 열 수 없다. */
+            // 🔴 표가 있어도 **주문 상태를 지우지 않는다.** 커피와 이용권을
+            //    같이 산 손님이 있고, 그때 표만 그리면 커피가 어디쯤인지
+            //    영영 안 보인다. 표는 상태 아래에 덧붙인다.
+            //
+            //    표만 샀으면 서버가 상태를 `ready` 로 주므로, 아래 상태
+            //    카드가 「나왔습니다」가 되고 그 밑에 표가 걸린다.
+            passes = Array.isArray(r.passes) ? r.passes : [];
+            booking = r.booking || null;
             // 서버가 이 주문을 모른다면 (다시 켜졌거나 오래돼 지워졌다) 아무 말도
             // 하지 않는다. 빈 상자를 그리는 것보다 QR 을 그대로 두는 편이 낫다.
             if (!STATE_KO[r.state]) return;
-            if (r.state === lastState) return;
+            // 표가 새로 나오면 상태가 그대로여도 다시 그려야 한다.
+            if (r.state === lastState && passes.length === lastPasses) return;
             lastState = r.state;
+            lastPasses = passes.length;
 
             const [title, sub, face] = STATE_KO[r.state];
             const isReady = r.state === "ready";
@@ -628,7 +826,9 @@
                  <div style="font-size:${isReady ? "21" : "16"}px;font-weight:600;margin-top:4px">${title}</div>
                  <div style="font-size:14px;opacity:.85;margin-top:4px">${sub}</div>
                  ${at >= 0 ? `<div class="steps">${bar}</div>` : ""}
-               </div>`;
+               </div>`
+              + (booking ? bookingHtml(booking) : "")
+              + (passes.length ? passesHtml(passes) : "");
 
             // 🔴 손님은 이 화면을 보고 서 있지 않는다. 카톡을 보거나 폰을 넣어
             // 둔다. 소리만으로는 시끄러운 가게에서 못 듣는다 — 다른 앱을 보고
@@ -718,6 +918,160 @@
           $("a").textContent = e.message || e;
         }
       };
+
+      /* 예약이 필요한 주문이면 시각을 고르게 한다.
+       *
+       * 돌려주는 값:
+       *   숫자        — 손님이 고른 시각(유닉스 초)
+       *   "none"      — 예약이 필요 없는 주문(커피)
+       *   "cancelled" — 손님이 그만뒀다
+       *
+       * 🔴 몇 분짜리인지는 **가게가 정한다.** 여기서 계산해 보내면 두 시간짜리
+       * 펌을 15분으로 예약해 놓고 나머지 시간을 남이 못 쓰게 만들 수 있다.
+       * 그래서 장바구니만 보내고 서버가 시간을 센다.
+       */
+      async function needSlot(chosen) {
+        let r;
+        try {
+          r = await fetch("/api/slots", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              items: chosen,
+              tz_offset_min: -new Date().getTimezoneOffset(),
+            }),
+          }).then((x) => x.json());
+        } catch {
+          // 물어보지 못했으면 예약 없이 진행한다. 여기서 막으면 예약을
+          // 안 받는 가게의 커피 주문까지 같이 멈춘다.
+          return "none";
+        }
+        if (!r || !r.needed) return "none";
+
+        const days = r.days || [];
+        if (!days.length) {
+          // 🔴 빈 목록은 「고장」이 아니라 「자리가 없다」다. 그렇게 적는다.
+          $("slotbody").innerHTML =
+            `<div class="slotempty">앞으로 일주일에 빈 시간이 없습니다.<br />
+               가게에 전화해 보세요.</div>`;
+          $("slotwrap").classList.add("on");
+          return new Promise((done) => {
+            $("slotno").onclick = () => { $("slotwrap").classList.remove("on"); done("cancelled"); };
+          });
+        }
+
+        const dayName = (t) => {
+          const d = new Date(t * 1000);
+          const w = ["일", "월", "화", "수", "목", "금", "토"][d.getDay()];
+          return `${d.getMonth() + 1}월 ${d.getDate()}일 (${w})`;
+        };
+        const clock = (t) => {
+          const d = new Date(t * 1000);
+          const h = d.getHours();
+          const m = String(d.getMinutes()).padStart(2, "0");
+          // 「오후 2:30」. 24시간제는 어르신께 한 번 더 계산을 시킨다.
+          return `${h < 12 ? "오전" : "오후"} ${h % 12 || 12}:${m}`;
+        };
+
+        $("slothead").textContent = `언제 오시겠어요? (${r.minutes}분 걸립니다)`;
+        $("slotbody").innerHTML = days
+          .map(
+            (d) => `<div class="slotday">
+              <div class="slotdate">${dayName(d.slots[0])}</div>
+              <div class="slotrow">
+                ${d.slots.map((s) => `<button class="slotbtn" data-at="${s}">${clock(s)}</button>`).join("")}
+              </div>
+            </div>`
+          )
+          .join("");
+        $("slotwrap").classList.add("on");
+
+        return new Promise((done) => {
+          const close = (v) => { $("slotwrap").classList.remove("on"); done(v); };
+          $("slotbody").querySelectorAll("[data-at]").forEach((b) => {
+            b.onclick = () => close(Number(b.dataset.at));
+          });
+          $("slotno").onclick = () => close("cancelled");
+        });
+      }
+
+      /* 예약한 시각을 크게 보여 준다.
+       *
+       * 🔴 이게 없으면 손님은 자기가 몇 시로 잡았는지 확인할 데가 없다.
+       * 문자도 안 가고 앱도 없다 — 이 주소를 다시 여는 것이 전부다.
+       * 그래서 날짜·요일·시각을 한 줄로 다 적는다.
+       */
+      function bookingHtml(b) {
+        const d = new Date(b.at * 1000);
+        const w = ["일", "월", "화", "수", "목", "금", "토"][d.getDay()];
+        const h = d.getHours();
+        const mm = String(d.getMinutes()).padStart(2, "0");
+        return `<div class="bookcard">
+          <div class="booklb">예약하신 시간</div>
+          <div class="bookwhen">${d.getMonth() + 1}월 ${d.getDate()}일 (${w})
+            ${h < 12 ? "오전" : "오후"} ${h % 12 || 12}:${mm}</div>
+          <div class="booklb">${b.minutes}분 걸립니다</div>
+        </div>`;
+      }
+
+      /* 산 이용권을 화면에 건다 — **주문 상태 아래에.**
+       *
+       * 표를 여러 장 샀으면 다 보여 준다. 일행이 나눠 가져야 하기 때문이다 —
+       * 한 장씩 넘겨 보게 하면 문 앞에서 넘기다 줄이 선다.
+       *
+       * 🔴 글자도 같이 크게 보여 준다. QR 은 화면이 깨졌거나 밝기가 낮으면
+       * 안 읽히고, 그때 직원이 손으로 친다. 그래서 표 번호에 헷갈리는
+       * 글자(0·O·1·I·L)를 안 쓴다.
+       */
+      function passesHtml(list) {
+        // 🔴 **연도를 넣는다.** 없으면 1년권이 「8월 23일 ~ 8월 22일」로 보이고,
+        //    그건 하루도 못 쓰는 표처럼 읽힌다. 다만 같은 해 안에서 끝나는
+        //    표(대부분)는 연도가 잡음이라, 해를 넘길 때만 붙인다.
+        const sameYear =
+          list.length &&
+          Math.floor((list[0].from || 0) / 10000) === Math.floor((list[0].until || 0) / 10000);
+        const ymd = (v) => {
+          if (!v) return "";
+          const [y, m, d] = [Math.floor(v / 10000), Math.floor(v / 100) % 100, v % 100];
+          return sameYear ? `${m}월 ${d}일` : `${y}년 ${m}월 ${d}일`;
+        };
+
+        const cards = list
+          .map((p) => {
+            const ok = p.valid;
+            return `<div class="passcard ${ok ? "" : "dead"}">
+              <div class="passitem">${esc(p.item || "이용권")}</div>
+              <img class="passqr" src="/api/qr?text=${encodeURIComponent(p.code)}"
+                   alt="입장 QR" width="230" height="230" />
+              <div class="passcode">${esc(p.code)}</div>
+              <div class="passwhen">
+                ${ok
+                  ? `${ymd(p.from)} ~ ${ymd(p.until)} · 남은 ${p.left_days}일`
+                  : esc(p.why || "쓸 수 없습니다")}
+              </div>
+            </div>`;
+          })
+          .join("");
+
+        return `<div class="passwrap">
+             <div class="passhead">${list.length > 1 ? `이용권 ${list.length}장` : "이용권"}</div>
+             ${cards}
+             <div class="passtip">문에서 이 그림을 보여 주세요.
+               화면을 닫으셔도 <b>이 주소를 다시 열면</b> 나옵니다.</div>
+           </div>`;
+      }
+
+      /** 며칠짜리 표인가. 기간권이 아니면 빈 글자. */
+      function spanOf(it) {
+        const mo = Number(it.pass_months || 0);
+        const d = Number(it.pass_days || 0);
+        if (mo <= 0 && d <= 0) return "";
+        const parts = [];
+        if (mo > 0) parts.push(mo === 12 ? "1년" : `${mo}개월`);
+        if (d > 0) parts.push(d === 7 ? "1주" : `${d}일`);
+        // 「산 날부터」를 같이 적는다. 언제부터인지가 다음 질문이다.
+        return `${parts.join(" ")} · 산 날부터`;
+      }
 
       // QR은 서버에서 받아온다 — 손님 폰에 라이브러리를 내려받게 하지 않는다.
       function qrSvg(text) {

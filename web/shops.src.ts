@@ -15,6 +15,18 @@ import { query, tag, KIND_LISTING, type NostrEvent } from "./nostr";
  * 정밀도는 앞 글자 수로 정해진다. 5글자면 약 2.4km 인데, 동네 장터에는 그
  * 정도면 충분하고 오히려 파는 사람의 집을 정확히 찍지 않아서 낫다.
  */
+
+/**
+ * 지갑이 사는 곳.
+ *
+ * 🔴 장터와 지갑을 **다른 출처**로 뗐다. 장터는 모르는 사람이 체인에 올린
+ * 글자를 그리는 화면이고, 지갑에는 12단어가 있다. `localStorage` 는 출처마다
+ * 공유되므로 같은 곳에 두면 장터의 실수 하나가 지갑을 통째로 넘긴다.
+ *
+ * 🔴 **지갑 쪽 주소는 절대 안 바꾼다.** 벽에 인쇄된 QR 과 이미 깔린 가게
+ * 앱이 이 주소로 오고 있어서, 여기를 건드리면 그 손님들이 결제를 못 한다.
+ */
+const WALLET_ORIGIN = "https://rvn.ex.erci.se";
 const B32 = "0123456789bcdefghjkmnpqrstuvwxyz";
 function geohashToLatLon(gh: string): { lat: number; lon: number } | null {
   let evenBit = true;
@@ -104,7 +116,7 @@ function buyButton(e: NostrEvent): string {
   if (!rvn) return "";
   const what = tag(e, "title").slice(0, 60);
   const q = new URLSearchParams({ to, rvn: String(rvn), what });
-  return `<a class="cbtn buy" href="/wallet#pay?${q.toString()}">
+  return `<a class="cbtn buy" href="${WALLET_ORIGIN}/wallet#pay?${q.toString()}">
       이 물건 사기
       <span class="sub2">${esc(String(Math.round(rvn)))} RVN · 개발비 1% 포함</span>
     </a>`;
@@ -135,7 +147,7 @@ function contactBlock(e: NostrEvent): string {
   if (!tel || tel.replace(/\D/g, "").length < 8) {
     return `<div class="contact">
       ${buyButton(e)}
-      <a class="cbtn call" href="/wallet#talk?to=${esc(e.pubkey)}">
+      <a class="cbtn call" href="${WALLET_ORIGIN}/wallet#talk?to=${esc(e.pubkey)}">
         문의하기 <span class="sub2">번호 없이 · 잠겨서 갑니다</span>
       </a>
       <p class="foot" style="margin-top:10px">
@@ -148,7 +160,7 @@ function contactBlock(e: NostrEvent): string {
       ${buyButton(e)}
       <!-- 🔴 번호 없이 말을 걸 길. 개인이 자전거 한 대 파는데 번호를
            전 세계에 거는 것은 큰 값이다. -->
-      <a class="cbtn" href="/wallet#talk?to=${esc(e.pubkey)}">
+      <a class="cbtn" href="${WALLET_ORIGIN}/wallet#talk?to=${esc(e.pubkey)}">
         문의하기 <span class="sub2">번호 없이 · 잠겨서 갑니다</span>
       </a>
       <a class="cbtn call" href="tel:${esc(tel)}">전화 걸기</a>
@@ -794,3 +806,60 @@ function tabs(): void {
 }
 
 tabs();
+
+/* ── 「지금 어디서 주문받는가」 ──────────────────────────────────────────
+ *
+ * 체인에 적힌 것은 **안 바뀌는 것**뿐이다. 주문 주소는 하루에도 바뀌므로
+ * 체인이 아니라 릴레이에서 읽는다. 자세한 이유는 노드 쪽
+ * `src-tauri/src/shopkey.rs` 머리말에 적어 뒀다.
+ *
+ * 🔴 반드시 이 순서여야 한다:
+ *   1. 체인 프로필에서 이 가게의 공개키를 읽는다 (`nostr_pubkey`)
+ *   2. **그 공개키를 글쓴이로 못 박고** 릴레이에 묻는다
+ *   3. 서명을 확인한다 (`query` 안에서 이미 한다)
+ *   4. `d` 태그가 이 가게 이름인지 다시 본다
+ *
+ * 2번을 빼고 `#d` 만으로 물으면 **아무나 그 이름으로 가짜 주소를 올릴 수
+ * 있다.** 자기 열쇠로 서명하면 서명 검사도 통과한다 — 「이 글은 진짜 이
+ * 열쇠가 썼다」와 「이 열쇠가 이 가게 주인이다」는 다른 말이고, 뒤쪽은
+ * 체인에서만 온다.
+ */
+const SHOP_ADDR_KIND = 30078;
+
+type LiveAddr = { url: string; at: number; profile: Record<string, unknown> } | null;
+
+async function liveShopAddress(asset: string, pubkey: string): Promise<LiveAddr> {
+  if (!asset || !/^[0-9a-f]{64}$/i.test(pubkey)) return null;
+  const evs = await query(
+    { kinds: [SHOP_ADDR_KIND], authors: [pubkey.toLowerCase()], "#d": [asset], limit: 5 },
+    { ms: 5000 },
+  );
+  for (const e of evs) {
+    // 릴레이가 남의 글을 섞어 줄 수 있다. 글쓴이와 `d` 를 둘 다 다시 본다.
+    if (e.pubkey.toLowerCase() !== pubkey.toLowerCase()) continue;
+    if (tag(e, "d") !== asset) continue;
+    let body: { url?: string; online?: boolean };
+    try {
+      body = JSON.parse(e.content);
+    } catch {
+      continue;
+    }
+    // 🔴 **바뀌는 것들이 여기 실려 온다** — 사진·전화·영업시간·위치.
+    //    체인에는 안 바뀌는 것(이름·공개키·돈 받을 주소)만 두기 때문이다.
+    //    체인 프로필을 고치려면 재발행(100 RVN)이고, 전화번호 하나에 그
+    //    값을 물릴 수는 없다.
+    const profile = body as Record<string, unknown>;
+
+    // 문을 닫았다는 공지여도 **프로필은 살아 있다.** 닫힌 가게도 이름과
+    // 사진은 보여야 한다 — 안 그러면 오늘 쉬는 가게가 없는 가게가 된다.
+    if (!body.online || !body.url) return { url: "", at: e.created_at, profile };
+    if (!/^https:\/\//i.test(body.url)) continue;
+    return { url: body.url, at: e.created_at, profile };
+  }
+  return null;
+}
+
+// 가게 탭은 이 파일이 아니라 `shops.html` 안에 인라인으로 있다(의존성 0
+// 원칙). 번들의 함수를 그쪽에서 부를 수 있게 창에 걸어 둔다.
+(window as unknown as { rvnLiveShopAddress?: typeof liveShopAddress }).rvnLiveShopAddress =
+  liveShopAddress;

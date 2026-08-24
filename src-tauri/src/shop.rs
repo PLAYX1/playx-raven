@@ -121,6 +121,9 @@ pub fn build_shop_profile(
     pickup: bool,
     menu_cid: Option<String>,
     icon: Option<String>,
+    // 🔴 가게 **안** 사진들이 든 파일창고 폴더 주소. 사진이 아니라 주소
+    //    하나다 — 100장을 올려도 공지에는 60바이트만 실린다.
+    photos_cid: Option<String>,
     order_url: Option<String>,
 ) -> Value {
     let primary = display_names
@@ -150,6 +153,14 @@ pub fn build_shop_profile(
 
     other.insert("playx_shop".into(), json!(true));
     other.insert("payment_address".into(), json!(payment_address));
+    // 🔴 이 가게의 간판 공개키. **체인에 남는 값 중 유일하게 「지금」을 가리키는
+    // 것**이다 — 주문 주소는 하루에도 바뀌지만 이 열쇠는 안 바뀌므로, 손님은
+    // 이걸 보고 최신 주소를 릴레이에서 찾는다. 없으면 장터가 그 가게의 주문
+    // 버튼을 영원히 못 그린다. 자산 정보는 재발행해야 고쳐지니 **처음 등록할
+    // 때 반드시 들어가야** 한다.
+    if let Ok(pk) = crate::shopkey::shop_pubkey() {
+        other.insert("nostr_pubkey".into(), json!(pk));
+    }
     other.insert("delivery".into(), json!(delivery));
     other.insert("pickup".into(), json!(pickup));
     if let Some(l) = location.filter(|s| !s.trim().is_empty()) {
@@ -186,6 +197,9 @@ pub fn build_shop_profile(
     asset_data.insert("type".into(), json!("shop"));
     if let Some(i) = icon.filter(|s| !s.trim().is_empty()) {
         asset_data.insert("icon".into(), json!(i));
+    }
+    if let Some(p) = photos_cid.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
+        asset_data.insert("photos_cid".into(), json!(p));
     }
 
     json!({
@@ -318,6 +332,21 @@ pub async fn incoming_payments(address: String, min_conf: u32) -> Result<Value, 
 /// will not relay it at all. A platform fee smaller than dust is not collected
 /// — sending it would make the whole payment fail.
 const DUST_RVN: f64 = 0.00000546;
+
+/// 손님이 **실제로 보낼 수 있는** 제일 작은 금액.
+///
+/// 🔴 `DUST_RVN`(546사토시)은 출력 하나가 살아남는 한계지만, 레이븐 노드의
+/// 기본 `relayfee` 는 **0.01 RVN** 이다. 그보다 작은 거래는 네트워크가
+/// 아예 안 날라 준다.
+///
+/// 실제로 그 상태였다 — 커피값이 0.00000001 RVN 이라 주문은 만들어지는데
+/// 손님 지갑이 보내려 하면 거부당했고, **우리 화면은 아무 말도 안 했다.**
+/// 손님은 「결제가 안 된다」만 겪고, 사장은 왜인지 모른다.
+///
+/// 값을 여기 못 박은 이유: 노드에 물어보려면 노드가 켜져 있어야 하는데,
+/// 이 검사는 **메뉴를 적는 순간**에도 돌아야 한다. 기본값이 바뀌면 여기를
+/// 고친다(`raven-cli getnetworkinfo` 의 `relayfee`).
+pub const MIN_SENDABLE_RVN: f64 = 0.01;
 
 /// Splits a payment between the shop and the platform in one transaction.
 ///
@@ -452,6 +481,48 @@ pub fn shop_load() -> Value {
         .ok()
         .and_then(|t| serde_json::from_str::<Value>(&t).ok())
         .unwrap_or_else(|| json!({}))
+}
+
+/// **팔 수 있는 품목만 남긴다.**
+///
+/// 🔴 값이 없거나 1사토시보다 작은 품목이 손님 화면에 그대로 나가고 있었다.
+/// 값이 없으면 `price_of` 가 0 으로 세므로 **다른 것과 같이 담으면 그 품목만
+/// 공짜로 나간다.** 1사토시(0.00000001 RVN)보다 작은 값도 체인에서 0 이
+/// 되어 마찬가지다.
+///
+/// 메뉴에서 지우지는 않는다 — 사장이 값을 아직 안 정했을 뿐이고, 그건
+/// 메뉴판에 남아 있어야 다음에 채운다. **손님에게만 안 보인다.**
+pub fn sellable(menu: &Value) -> Value {
+    json!(menu
+        .as_array()
+        .cloned()
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|it| {
+            let p = it.get("price").and_then(Value::as_f64).unwrap_or(0.0);
+            let named = it
+                .get("name")
+                .and_then(Value::as_str)
+                .map(|s| !s.trim().is_empty())
+                .unwrap_or(false);
+            named && p >= 1e-8
+        })
+        .collect::<Vec<Value>>())
+}
+
+/// 값을 안 매겨 손님에게 못 보여 주는 품목. 사장 화면이 알려 준다.
+///
+/// 🔴 조용히 빼면 사장은 「왜 손님 화면에 커피가 없지」를 영영 못 푼다.
+#[tauri::command]
+pub fn unsellable(menu: Value) -> Vec<String> {
+    menu.as_array()
+        .cloned()
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|it| it.get("price").and_then(Value::as_f64).unwrap_or(0.0) < 1e-8)
+        .filter_map(|it| it.get("name").and_then(Value::as_str).map(str::to_string))
+        .filter(|n| !n.trim().is_empty())
+        .collect()
 }
 
 /// The money this shop counts in.
@@ -907,28 +978,28 @@ fn fee_path() -> std::path::PathBuf {
     crate::paths::app_file("fee.json")
 }
 
-/// (요율, 받을 주소). 주소가 비면 걷지 않는다.
+/// (요율, 받을 주소). **항상 1%, 항상 이 주소.**
+///
+/// ## 🔴 끄는 길이 없다 — 그게 결정이다
+///
+/// 예전에는 `fee.json` 에 `on: false` 를 적으면 걷지 않았다. 그 스위치를
+/// 없앴다(2026-08-23, 대표님 지시: "무조건 1% 받을거야").
+///
+/// 반대 논리도 코드에 적혀 있었다 — "못 끄는 것은 개발비가 아니라 세금이고,
+/// 오픈소스에서 세금은 포크 한 번으로 사라진다". 그 말은 지금도 맞다.
+/// 이 파일을 고쳐 다시 빌드하면 누구든 뺄 수 있다.
+///
+/// 그래도 **끄는 스위치를 눈앞에 두는 것**과 **소스를 고쳐 다시 빌드해야
+/// 하는 것**은 완전히 다르다. 앞의 것은 설정 화면을 여는 사람마다 한 번씩
+/// 고민하게 만들고, 뒤의 것은 그럴 생각이 있는 사람만 한다.
+///
+/// 카드 단말기는 2~3% 를 떼고 임대료를 따로 받는다. 여기는 1% 뿐이고
+/// 단말기도, 정산 대기도, 해지 위약금도 없다. 그 값은 받는 것이 맞다.
+///
+/// ⚠️ 여기를 다시 「끌 수 있게」 만들려는 사람에게: 화면·랜딩·라비 프롬프트
+/// 세 곳이 **끌 수 없다고 적혀 있다.** 코드만 고치면 그 셋이 거짓말이 된다.
 pub fn fee_config() -> (f64, String) {
-    let v: Value = std::fs::read_to_string(fee_path())
-        .ok()
-        .and_then(|t| serde_json::from_str(&t).ok())
-        .unwrap_or_else(|| json!({}));
-    // 꺼 두면 0. 사장이 끌 수 있어야 한다 — 못 끄는 것은 수수료가 아니라 세금이고,
-    // 오픈소스에서 세금은 포크로 사라진다.
-    if !v.get("on").and_then(Value::as_bool).unwrap_or(true) {
-        return (0.0, String::new());
-    }
-    let rate = v
-        .get("rate")
-        .and_then(Value::as_f64)
-        .filter(|r| (0.0..=0.05).contains(r)) // 5% 넘게 적히면 오타로 본다
-        .unwrap_or(DEFAULT_FEE_RATE);
-    let addr = v
-        .get("address")
-        .and_then(Value::as_str)
-        .unwrap_or(PLATFORM_ADDRESS)
-        .to_string();
-    (rate, addr)
+    (DEFAULT_FEE_RATE, PLATFORM_ADDRESS.to_string())
 }
 
 /// 우리가 받을 주소.
@@ -957,7 +1028,9 @@ const PLATFORM_ADDRESS: &str = "RLFnbkjmf1VCVq7D9TZvRp7fv6W97rm2cB";
 pub fn fee_read() -> Value {
     let (rate, addr) = fee_config();
     json!({
-        "on": rate > 0.0 && !addr.is_empty(),
+        // 항상 켜져 있다. 화면이 이 값을 보고 「내는 중」이라고만 적는다 —
+        // 고르는 자리가 아니다.
+        "on": true,
         "rate": rate,
         "address": addr,
         "percent": rate * 100.0,
@@ -965,29 +1038,6 @@ pub fn fee_read() -> Value {
     })
 }
 
-#[tauri::command]
-pub fn fee_save(on: bool, rate: Option<f64>, address: Option<String>) -> Result<Value, String> {
-    let mut v: Value = std::fs::read_to_string(fee_path())
-        .ok()
-        .and_then(|t| serde_json::from_str(&t).ok())
-        .unwrap_or_else(|| json!({}));
-    v["on"] = json!(on);
-    if let Some(r) = rate {
-        if !(0.0..=0.05).contains(&r) {
-            return Err("요율은 0 에서 5% 사이여야 합니다.".into());
-        }
-        v["rate"] = json!(r);
-    }
-    if let Some(a) = address {
-        v["address"] = json!(a.trim());
-    }
-    if let Some(d) = fee_path().parent() {
-        let _ = std::fs::create_dir_all(d);
-    }
-    std::fs::write(fee_path(), serde_json::to_vec_pretty(&v).map_err(|e| e.to_string())?)
-        .map_err(|e| format!("저장하지 못했습니다: {e}"))?;
-    Ok(fee_read())
-}
 
 #[cfg(test)]
 mod fee_tests {
@@ -1066,32 +1116,33 @@ mod fee_tests {
         assert!(s["skip_reason"].as_str().unwrap().contains("작아"));
     }
 
-    /// 사장이 끌 수 있어야 한다. 못 끄는 것은 수수료가 아니라 세금이고,
-    /// 오픈소스에서 세금은 포크 한 번으로 사라진다.
+    /// 🔴 **끄는 길이 없어야 한다.** 예전에는 `fee.json` 에 `on: false` 를
+    /// 적으면 걷히지 않았다. 그 스위치를 없앴다(대표님 지시).
+    ///
+    /// 이 시험이 지키는 것: 누군가 「설정으로 끌 수 있게」를 되살리면서
+    /// 화면·랜딩·라비 프롬프트를 안 고치면, 그 셋이 거짓말이 된다.
+    /// 여기서 먼저 빨갛게 뜬다.
     #[test]
-    fn the_owner_can_turn_it_off() {
+    fn there_is_no_way_to_turn_it_off() {
         let _g = crate::paths::TEST_ENV.lock().unwrap_or_else(|e| e.into_inner());
         let dir = std::env::temp_dir().join("playx-raven-test-fee");
         let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::create_dir_all(&dir);
         std::env::set_var("PLAYX_RAVEN_HOME", &dir);
-        fee_save(false, None, Some("RSomewhere".into())).unwrap();
-        let (rate, _) = fee_config();
-        assert_eq!(rate, 0.0, "껐는데 걷힌다");
-        fee_save(true, Some(0.01), Some("RSomewhere".into())).unwrap();
-        let (rate, addr) = fee_config();
-        assert_eq!(rate, 0.01);
-        assert_eq!(addr, "RSomewhere");
-        std::env::remove_var("PLAYX_RAVEN_HOME");
-        let _ = std::fs::remove_dir_all(&dir);
-    }
 
-    /// 오타로 50% 를 적으면 가게가 반을 잃는다.
-    #[test]
-    fn an_absurd_rate_is_refused() {
-        let _g = crate::paths::TEST_ENV.lock().unwrap_or_else(|e| e.into_inner());
-        let dir = std::env::temp_dir().join("playx-raven-test-fee2");
-        std::env::set_var("PLAYX_RAVEN_HOME", &dir);
-        assert!(fee_save(true, Some(0.5), None).is_err());
+        // 옛 설정 파일이 남아 있어도 무시해야 한다. 예전에 껐던 사장의
+        // 컴퓨터가 그대로 있고, 그 파일이 아직 `on: false` 다.
+        std::fs::write(
+            dir.join("fee.json"),
+            br#"{"on":false,"rate":0.0,"address":"RSomewhere"}"#,
+        )
+        .unwrap();
+
+        let (rate, addr) = fee_config();
+        assert_eq!(rate, DEFAULT_FEE_RATE, "옛 설정으로 꺼졌다");
+        assert_eq!(addr, PLATFORM_ADDRESS, "옛 설정이 주소를 가로챘다");
+        assert!(fee_read()["on"].as_bool().unwrap(), "화면에 꺼진 것으로 보인다");
+
         std::env::remove_var("PLAYX_RAVEN_HOME");
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -1162,6 +1213,93 @@ mod ticket_cap_tests {
 ///
 /// 메뉴에 없는 이름은 0 원으로 친다. 지어낸 품목으로 총액을 부풀릴 수도,
 /// 가게가 못 주는 것을 사 갈 수도 없다.
+/// 품목마다 다른 통화를 **RVN 으로 모아** 합계를 낸다.
+///
+/// ## 왜 필요한가
+///
+/// 한 가게가 커피와 음반과 그림을 같이 판다:
+///
+///   아메리카노   4,500원      — 손님이 아는 값으로 매겨야 한다
+///   LP 한정반    1,200 RVN    — 코인으로 매겨야 수량이 고정된다
+///   해외 굿즈       25 USD    — 달러로 매겨야 환율에 안 흔들린다
+///
+/// 가게 통화 하나로는 이걸 못 적는다. 그렇다고 손님이 통화를 정하게 두면
+/// **4,500원짜리를 4,500동으로 사 간다** — 그 구멍은 이미 한 번 막았다.
+///
+/// 그래서 **통화는 메뉴에 적힌 것만** 쓴다. 손님이 보낸 값은 안 본다.
+///
+/// ## 🔴 합계는 RVN 에서 낸다
+///
+/// 원과 달러를 더할 수 없으니 각각 RVN 으로 바꿔 더한다. 그게 손님이 실제로
+/// 보내는 것이기도 하다. 시세는 **한 번만** 읽는다 — 품목마다 읽으면 같은
+/// 주문 안에서 서로 다른 시세가 섞인다.
+pub async fn price_rvn(menu: &Value, items: &Value, now: i64) -> Result<Value, String> {
+    // 품목 이름 → (값, 통화)
+    let mut card: std::collections::HashMap<String, (f64, String)> =
+        std::collections::HashMap::new();
+    let shop_cur = currency();
+    for it in menu.as_array().cloned().unwrap_or_default() {
+        let Some(n) = it.get("name").and_then(Value::as_str) else { continue };
+        let p = it.get("price").and_then(Value::as_f64).unwrap_or(0.0);
+        // 품목에 통화가 없으면 가게 통화를 쓴다. 예전 메뉴가 그대로 돈다.
+        let c = it
+            .get("currency")
+            .and_then(Value::as_str)
+            .map(str::to_uppercase)
+            .filter(|c| c.len() == 3)
+            .unwrap_or_else(|| shop_cur.clone());
+        card.insert(n.to_string(), (p, c));
+    }
+
+    // 이 주문에 실제로 쓰인 통화만 시세를 묻는다. 안 쓰는 통화까지 물으면
+    // 느려지고, 그중 하나가 실패하면 주문이 통째로 막힌다.
+    let mut need: Vec<String> = Vec::new();
+    for it in items.as_array().cloned().unwrap_or_default() {
+        let n = it.get("name").and_then(Value::as_str).unwrap_or("");
+        if let Some((_, c)) = card.get(n) {
+            if !c.eq_ignore_ascii_case("RVN") && !need.contains(c) {
+                need.push(c.clone());
+            }
+        }
+    }
+    let mut rate: std::collections::HashMap<String, f64> = std::collections::HashMap::new();
+    for c in need {
+        let q = crate::price::quote_price(1.0, c.clone(), now).await?;
+        // 1 단위가 몇 RVN 인가.
+        let one = q.get("rvn").and_then(Value::as_f64).unwrap_or(0.0);
+        if one <= 0.0 {
+            return Err(format!("{c} 시세를 읽지 못했습니다."));
+        }
+        rate.insert(c, one);
+    }
+
+    let mut total = 0.0;
+    let mut lines = Vec::new();
+    for it in items.as_array().cloned().unwrap_or_default() {
+        let n = it.get("name").and_then(Value::as_str).unwrap_or("");
+        let q = it.get("qty").and_then(Value::as_f64).unwrap_or(0.0);
+        if q <= 0.0 {
+            continue;
+        }
+        let Some((p, c)) = card.get(n) else { continue };
+        let rvn = if c.eq_ignore_ascii_case("RVN") {
+            p * q
+        } else {
+            p * q * rate.get(c).copied().unwrap_or(0.0)
+        };
+        total += rvn;
+        lines.push(json!({ "name": n, "qty": q, "price": p, "currency": c, "rvn": rvn }));
+    }
+
+    Ok(json!({
+        "rvn": (total * 1e8).round() / 1e8,
+        "lines": lines,
+        // 어느 시세로 쟀는지 남긴다. 세무에서 이 숫자를 다시 세워야 한다.
+        "rates": rate,
+        "at": now,
+    }))
+}
+
 pub fn price_of(menu: &Value, items: &Value) -> f64 {
     let mut price: std::collections::HashMap<String, f64> = std::collections::HashMap::new();
     for it in menu.as_array().cloned().unwrap_or_default() {
@@ -1306,5 +1444,237 @@ mod theme_tests {
         assert!(ok_accent(Some("파랑")).is_none());
         assert!(ok_accent(Some("#12")).is_none());
         assert!(ok_accent(None).is_none());
+    }
+}
+
+/// 체인의 가게 목록에 **IPFS 프로필까지 합쳐서** 돌려준다.
+///
+/// `list_shops` 는 자산 이름과 CID 만 준다. 그것만으로 장터에 그릴 수 있는
+/// 것은 `SHOP.PLAYX` 라는 글자뿐이다 — 가게 이름도, 돈 받을 주소도, 지금
+/// 어디서 주문을 받는지도 전부 CID 안에 들어 있다.
+///
+/// 🔴 그래서 장터 가게 탭이 여태 비어 있었다. `web/shops.html` 이 부르는
+/// `/api/chain/shops` 가 이 노드에 아예 없었고, 있는 `/api/shops` 는 CID 만
+/// 준다. 화면은 오류를 안 내고 그냥 「가게가 없습니다」를 그렸다.
+///
+/// ## 왜 한꺼번에 받아 오는가
+///
+/// 손님 폰이 가게 하나마다 IPFS 를 따로 부르게 하면, 가게 20곳이면 요청이
+/// 20번이고 그중 하나가 느리면 화면 전체가 늦는다. 노드는 IPFS 를 **옆에**
+/// 두고 있으니 여기서 받는 편이 훨씬 빠르다.
+///
+/// ## 못 읽는 가게를 버리지 않는다
+///
+/// CID 가 우리 IPFS 에 아직 안 퍼졌거나 프로필이 깨졌으면 이름 없이 자산
+/// 이름만 담아 **그대로 목록에 남긴다.** 조용히 빼면 사장이 「내 가게가 왜
+/// 안 보이지」를 영원히 못 푼다. 이름 자리에 자산 이름이 뜨는 편이 낫다.
+pub async fn shop_profiles(count: i64, start: i64) -> Result<Value, String> {
+    let listed = list_shops(count, start).await?;
+    let rows: Vec<Value> = listed
+        .get("shops")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+
+    let client = reqwest::Client::builder()
+        // 가게 하나가 안 퍼진 CID 를 들고 있어도 장터 전체를 세우지 않는다.
+        .timeout(std::time::Duration::from_secs(4))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let mut jobs = tokio::task::JoinSet::new();
+    for row in rows {
+        let client = client.clone();
+        jobs.spawn(async move {
+            let cid = row
+                .get("ipfs_hash")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string();
+            let profile = if cid.is_empty() || cid.contains('/') || cid.contains("..") {
+                None
+            } else {
+                fetch_profile(&client, &cid).await
+            };
+            merge_profile(row, profile)
+        });
+    }
+
+    let mut shops = Vec::new();
+    while let Some(done) = jobs.join_next().await {
+        if let Ok(v) = done {
+            shops.push(v);
+        }
+    }
+    // JoinSet 은 끝난 순서로 준다 — 새로 고칠 때마다 가게 순서가 바뀌면
+    // 손님이 어제 본 가게를 못 찾는다. 이름으로 다시 세운다.
+    shops.sort_by(|a, b| {
+        a["asset"]
+            .as_str()
+            .unwrap_or("")
+            .cmp(b["asset"].as_str().unwrap_or(""))
+    });
+
+    Ok(json!({ "shops": shops, "count": shops.len() }))
+}
+
+/// 우리 IPFS 게이트웨이에서 프로필 JSON 하나를 읽는다.
+///
+/// 실패는 전부 `None` 이다 — 못 읽은 이유(안 퍼짐·깨짐·너무 큼)를 나눠 봐야
+/// 손님이 할 수 있는 일이 같다.
+async fn fetch_profile(client: &reqwest::Client, cid: &str) -> Option<Value> {
+    let url = format!("http://127.0.0.1:8080/ipfs/{cid}");
+    let r = client.get(&url).send().await.ok()?;
+    if !r.status().is_success() {
+        return None;
+    }
+    let body = r.bytes().await.ok()?;
+    // 프로필은 글자 몇 줄이다. 누가 CID 자리에 영화를 넣어도 노드가 그걸
+    // 통째로 메모리에 올리지는 않는다.
+    if body.len() > 256 * 1024 {
+        return None;
+    }
+    serde_json::from_slice::<Value>(&body).ok()
+}
+
+/// 체인에서 온 줄과 IPFS 프로필을 하나로 붙인다.
+///
+/// 🔴 **체인 쪽 값이 항상 이긴다.** 자산 이름과 블록 높이는 아무도 못 고치는
+/// 사실이고, 프로필은 사장이 아무 때나 다시 올릴 수 있는 글이다. 프로필이
+/// `asset` 을 덮어쓸 수 있으면 가게 하나가 남의 이름으로 목록에 앉는다.
+fn merge_profile(row: Value, profile: Option<Value>) -> Value {
+    let mut out = row;
+    // 🔴 열쇠 이름을 웹(`app/rvn/api/chain/shops`)과 **똑같이** 맞춘다.
+    // 장터 화면(`web/shops.html`)은 한 벌뿐이고 매장 노드와 웹 양쪽에서
+    // 돌아간다. 한쪽만 `title` 이고 다른 쪽이 `name` 이면, 그 화면은 한 곳에서
+    // 조용히 빈 이름을 그린다 — 오류는 안 난다.
+    let fallback_title = out["asset"]
+        .as_str()
+        .unwrap_or("")
+        .trim_start_matches("SHOP.")
+        .replace('_', " ");
+
+    let Some(p) = profile else {
+        out["profile_ok"] = json!(false);
+        out["offline"] = json!(true);
+        out["title"] = json!(fallback_title);
+        out["menu_count"] = json!(0);
+        return out;
+    };
+
+    let meta = p.pointer("/rip0014/metadata").unwrap_or(&Value::Null);
+    let asset_data = meta.get("asset_data").cloned().unwrap_or(Value::Null);
+    let other = meta.get("other_data").cloned().unwrap_or(Value::Null);
+
+    let take = |v: &Value, k: &str| -> Option<String> {
+        v.get(k)
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+    };
+
+    out["profile_ok"] = json!(true);
+    out["offline"] = json!(false);
+    out["name"] = json!(take(&asset_data, "name"));
+    // 사람이 부르는 이름이 없으면 자산 이름을 읽기 좋게 다듬어 쓴다. 대문자와
+    // 밑줄뿐인 `SHOP.GANGNAM_CAFE` 는 간판으로 안 읽힌다.
+    out["title"] = json!(take(&asset_data, "name").unwrap_or(fallback_title));
+    out["description"] = json!(take(&asset_data, "description").unwrap_or_default());
+    out["icon"] = json!(take(&asset_data, "icon"));
+    out["menu_count"] = json!(other
+        .get("menu")
+        .and_then(Value::as_array)
+        .map(|m| m.len())
+        .unwrap_or(0));
+
+    for key in [
+        "payment_address",
+        "location",
+        "phone",
+        "menu_cid",
+        "order_url",
+        "nostr_pubkey",
+    ] {
+        out[key] = json!(take(&other, key));
+    }
+    for key in ["delivery", "pickup", "playx_shop"] {
+        out[key] = json!(other.get(key).and_then(Value::as_bool).unwrap_or(false));
+    }
+    for key in ["lat", "lon"] {
+        out[key] = json!(other.get(key).and_then(Value::as_f64));
+    }
+    // 사장이 네 나라 말로 적었으면 그대로 넘긴다. 고르는 것은 화면 몫이다.
+    for lang in ["ko", "en", "ja", "zh"] {
+        if let Some(s) = take(&other, &format!("name_{lang}")) {
+            out[format!("name_{lang}")] = json!(s);
+        }
+        if let Some(s) = take(&other, &format!("description_{lang}")) {
+            out[format!("description_{lang}")] = json!(s);
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod profile_merge_tests {
+    use super::*;
+
+    fn chain_row() -> Value {
+        json!({ "asset": "SHOP.PLAYX", "ipfs_hash": "Qm1", "block": 3_500_000 })
+    }
+
+    fn profile(other: Value) -> Value {
+        json!({ "rip0014": { "metadata": {
+            "asset_data": { "name": "플레이엑스", "description": "동네 가게" },
+            "other_data": other,
+        }}})
+    }
+
+    /// 프로필이 있으면 이름과 돈 받을 주소가 목록에 실려 나온다.
+    /// 이게 안 되면 장터에 버튼이 안 생긴다.
+    #[test]
+    fn a_readable_profile_fills_in_the_shop() {
+        let out = merge_profile(
+            chain_row(),
+            Some(profile(json!({
+                "payment_address": "RLftw4yzCYCTvPw6foMikTjSS98yB1vvwf",
+                "nostr_pubkey": "abc123",
+                "pickup": true,
+            }))),
+        );
+        assert_eq!(out["name"], json!("플레이엑스"));
+        assert_eq!(out["payment_address"], json!("RLftw4yzCYCTvPw6foMikTjSS98yB1vvwf"));
+        assert_eq!(out["nostr_pubkey"], json!("abc123"));
+        assert_eq!(out["pickup"], json!(true));
+        assert_eq!(out["delivery"], json!(false));
+        assert_eq!(out["profile_ok"], json!(true));
+    }
+
+    /// 🔴 프로필이 자산 이름을 덮어쓰면 가게 하나가 남의 이름으로 앉는다.
+    /// 체인에서 온 값이 이겨야 한다.
+    #[test]
+    fn the_profile_cannot_rename_the_asset() {
+        let mut p = profile(json!({}));
+        p["rip0014"]["metadata"]["other_data"]["asset"] = json!("SHOP.SOMEONEELSE");
+        p["rip0014"]["metadata"]["other_data"]["block"] = json!(1);
+        let out = merge_profile(chain_row(), Some(p));
+        assert_eq!(out["asset"], json!("SHOP.PLAYX"));
+        assert_eq!(out["block"], json!(3_500_000));
+    }
+
+    /// 못 읽은 가게도 목록에 남는다 — 조용히 빼면 사장이 원인을 못 찾는다.
+    #[test]
+    fn an_unreadable_shop_still_appears() {
+        let out = merge_profile(chain_row(), None);
+        assert_eq!(out["asset"], json!("SHOP.PLAYX"));
+        assert_eq!(out["profile_ok"], json!(false));
+    }
+
+    /// 빈 문자열은 값이 아니다. 화면이 빈 칸을 그리는 것보다 없는 편이 낫다.
+    #[test]
+    fn blank_fields_come_back_as_nothing() {
+        let out = merge_profile(chain_row(), Some(profile(json!({ "phone": "   " }))));
+        assert_eq!(out["phone"], Value::Null);
     }
 }

@@ -167,7 +167,16 @@ pub async fn node_status() -> Result<Value, String> {
     }
     .or(info.mediantime);
 
+    // 🔴 **연결 수를 같이 준다.** 「지금 얼마나 이어져 있나」가 사장이 진짜
+    // 묻는 것이다 — 블록 수만 보면 멈춘 노드와 도는 노드를 구별 못 한다.
+    // 못 읽어도 나머지는 보여야 하므로 실패는 `null` 이다.
+    let peers = call_rpc("getconnectioncount", json!([]))
+        .await
+        .ok()
+        .and_then(|v| v.as_i64());
+
     Ok(json!({
+        "peers": peers,
         "blocks": info.blocks,
         "headers": info.headers,
         "progress": info.verificationprogress,

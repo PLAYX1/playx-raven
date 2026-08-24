@@ -37,6 +37,19 @@ use std::sync::{Arc, Mutex};
 
 pub const PORT: u16 = 8790;
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
+/// 이 컴퓨터의 릴레이가 정말 듣고 있는가.
+///
+/// 🔴 화면의 [릴레이 켜짐] 은 여기서만 나온다. 예전에는 `true` 를 박아 놨는데,
+/// 옛 앱이 8790 을 쥐고 있던 밤에 그 표시가 계속 「켜짐」이라 멀쩡한 코드를
+/// 세 번이나 고장 났다고 판단했다. **표시는 상태를 읽어야지 주장하면 안 된다.**
+static RELAY_LIVE: AtomicBool = AtomicBool::new(false);
+
+pub fn relay_live() -> bool {
+    RELAY_LIVE.load(Ordering::Relaxed)
+}
+
 #[derive(Clone)]
 pub struct ServerState {
     /// Owner token. Compared in constant time; see `token_ok`.
@@ -119,6 +132,18 @@ pub struct ServerState {
     /// False by default. A tunnel forwards the whole port, and three of the
     /// four screens behind it are not for strangers. See `outside_blocked`.
     remote_admin: Arc<Mutex<bool>>,
+    /// 이 주문이 확인되면 개발비로 적어야 할 RVN.
+    ///
+    /// 🔴 `order_expect`(가게 몫) 튜플에 끼워 넣지 않는다. 그 값은 여러 곳에서
+    /// 「얼마가 들어와야 결제인가」로 읽히고, 거기에 수수료를 섞으면 그 판단이
+    /// 바뀐다. 수수료는 **결제 판단과 아무 상관이 없다** — 손님이 낼 돈은
+    /// 그대로고, 그중 얼마가 우리 몫인지만 여기 적어 둔다.
+    order_fee: Arc<Mutex<std::collections::HashMap<String, f64>>>,
+    /// 서버를 켤 때 이 컴퓨터의 주소. 손님 QR 에 박힌 값이다.
+    ///
+    /// 이 값을 안 들고 있으면 「주소가 바뀌었다」를 알 방법이 없다 —
+    /// 지금 주소만 봐서는 그게 처음부터 그랬는지 방금 바뀐 건지 모른다.
+    started_ip: Arc<Mutex<String>>,
     /// When the chain was last swept for arriving payments.
     ///
     /// Every waiting phone asks this node "has my money landed yet" every few
@@ -370,6 +395,7 @@ fn customer_path(path: &str) -> bool {
             | "/shops"
             | "/api/shop"
             | "/api/shops"
+            | "/api/chain/shops"
             | "/api/shop-profile"
             | "/api/ipfs-kind"
             | "/api/chain/asset"
@@ -384,6 +410,9 @@ fn customer_path(path: &str) -> bool {
             | "/api/ask"
             | "/api/order"
             | "/api/order-state"
+            | "/api/slots"
+            // 릴레이는 열려 있어야 한다. 닫으면 이 컴퓨터가 릴레이가 아니다.
+            | "/api/relay"
             | "/api/qr"
             | "/api/offer"
             | "/api/check-address"
@@ -541,6 +570,17 @@ async fn api_claim(
     // 손님이 내는 값은 그대로다. 가게가 조금 덜 받는다.
     let fee_cfg = crate::shop::fee_config();
     let split = crate::shop::split_payment(offer_rvn, fee_cfg.0, fee_cfg.1);
+    // 🔴 **화면에 적는 것과 받는 것은 다른 일이다.** 여기는 `split` 을 만들어
+    //    손님 화면에 보여 주기만 하고, 장부에 넣는 줄이 없었다. 그래서
+    //    자판기·온라인 판매는 **1% 가 한 푼도 안 들어왔다** — 화면에는
+    //    「개발비 1%」라고 떠 있는 채로. 커피 주문(`api_order`)에는 이 줄이
+    //    있는데 이쪽만 빠졌다. 적혀는 있는데 안 도는 코드의 전형이다.
+    if let Ok(mut f) = state.order_fee.lock() {
+        f.insert(address.clone(), split["fee"].as_f64().unwrap_or(0.0));
+        if f.len() > 500 {
+            f.retain(|a, _| state.claims.lock().map(|c| c.contains_key(a)).unwrap_or(true));
+        }
+    }
     (
         StatusCode::OK,
         Json(json!({ "address": address, "fee": split })),
@@ -695,6 +735,8 @@ async fn sweep_payments(st: &ServerState) {
         Ok(m) => m,
         Err(_) => return,
     };
+    // 자물쇠를 놓은 뒤에 체인에 물어볼 것들.
+    let mut fee_later: Vec<(String, String, f64, f64, f64)> = Vec::new();
     for p in payments {
         // 지금 내줘도 되는 돈만 확인으로 친다. 충돌이 있거나 노드가 끊겨 있으면
         // accept_now 가 false 고, 그때는 손님 화면도 기다린다고 말해야 한다.
@@ -753,12 +795,100 @@ async fn sweep_payments(st: &ServerState) {
         // 여기가 매출이 생기는 순간이고, 장부에 적히는 유일한 순간이다.
         // 주문했을 때가 아니라 돈이 들어왔을 때 — 결제하지 않고 떠난 주문까지
         // 매출로 적으면 그건 장부가 아니라 희망사항이다.
-        crate::ledger::settle(
+        // 🔴 반환값을 받는다. 여기에 **손님이 실제로 주문한 품목**이 들어 있고,
+        // 이용권을 발급하려면 그게 필요하다. 버리면 다시 찾을 곳이 없다 —
+        // `settle` 은 pending 에서 지우면서 옮기기 때문에 두 번 못 읽는다.
+        let settled = crate::ledger::settle(
             addr,
             p["txid"].as_str().unwrap_or(""),
             now_unix(),
             p["confirmations"].as_i64().unwrap_or(0),
         );
+
+        // 🔴 우리 몫도 여기서 적는다 — **돈이 들어온 것이 확인된 이 순간에만.**
+        // 주문이 들어왔을 때 적으면 결제하지 않고 떠난 손님의 1% 를 가게에
+        // 물리는 셈이고, 그건 우리가 훔치는 것이다.
+        //
+        // 적기만 하고 보내지는 않는다. 보내려면 지갑이 열려 있어야 하고,
+        // 가게 컴퓨터의 지갑을 24시간 풀어 두는 것보다 며칠 늦게 받는 편이
+        // 낫다. 사장이 편할 때 「개발비 보내기」를 한 번 누른다.
+        // 예약이 걸린 주문이면 그 자리를 확정한다. 없으면 아무 일도 안 한다.
+        crate::booking::confirm(addr);
+
+        let fee = st
+            .order_fee
+            .lock()
+            .ok()
+            .and_then(|f| f.get(addr).copied())
+            .unwrap_or(0.0);
+        // 🔴 **두 번 떼면 안 된다.** 손님이 내는 길이 둘인데 1% 가 나가는
+        //    방식이 서로 다르다.
+        //
+        //    ① 다른 지갑(`raven:주소?amount=총액`) — 출력이 하나뿐이라
+        //       **총액이 전부 가게로** 들어온다. 우리 몫은 여기 장부에만 남고,
+        //       사장이 나중에 「개발비 보내기」로 한 번에 보낸다.
+        //    ② 우리 지갑(`#pay`) — 같은 거래에 출력을 하나 더 달아
+        //       **1% 를 체인에서 곧바로** 우리 주소로 보낸다. 그래서 가게
+        //       주소에는 99% 만 들어온다.
+        //
+        //    ②인데도 장부에 또 적으면 가게가 **2% 를 낸다.** 우리 지갑을 쓴
+        //    손님일수록 가게가 손해를 보는, 거꾸로 된 일이 벌어진다.
+        //
+        //    들어온 금액으로 갈린다: 총액이 다 왔으면 아직 안 받은 것이고,
+        //    가게 몫(99%)만 왔으면 이미 체인에서 받은 것이다.
+        // 🔴 여기서 체인에 물어볼 수는 없다. 이 루프는 주문 상태 자물쇠를
+        //    쥐고 돌기 때문에, 그 안에서 `.await` 를 하면 이 함수가 서버
+        //    핸들러로 쓸 수 없는 물건이 된다(실제로 컴파일이 막았다).
+        //    모아 뒀다가 자물쇠를 놓은 뒤에 확인한다.
+        if fee > 0.0 {
+            fee_later.push((
+                addr.to_string(),
+                p["txid"].as_str().unwrap_or("").to_string(),
+                fee,
+                got,
+                want,
+            ));
+        }
+
+        // 기간 이용권을 샀으면 표가 여기서 나온다. 결제 확인과 같은 순간이라
+        // 손님은 카운터에서 기다리지 않는다 — 화면이 바로 표로 바뀐다.
+        //
+        // 🔴 며칠짜리인지는 **메뉴에 적힌 값**을 쓴다. 손님이 보낸 주문에도
+        // 항목 이름이 들어 있지만, 거기 적힌 숫자를 믿으면 폰에서 값을 고쳐
+        // 한 달권을 하루권 값에 살 수 있다. 가격에서 이미 배운 것이다.
+        {
+            let items = settled
+                .as_ref()
+                .map(|r| r["items"].clone())
+                .unwrap_or(Value::Null);
+            let menu = st
+                .shop
+                .lock()
+                .ok()
+                .and_then(|s| s.get("menu").cloned())
+                .unwrap_or(Value::Null);
+            let made = crate::ticket::issue_for_order(addr, &items, &menu, now_unix());
+            // 🔴 표가 나왔다고 무조건 「받아 가세요」로 넘기지 않는다.
+            //    커피와 이용권을 같이 산 손님이 있다 — 그때 주문을 바로
+            //    `ready` 로 만들면 **커피가 카운터 흐름에서 통째로 빠진다.**
+            //    직원 화면에서 사라지고, 아무도 안 만든다.
+            //
+            //    표만 샀을 때만 넘긴다. 그때는 만들 것이 정말 없다.
+            let only_passes = items
+                .as_array()
+                .map(|a| {
+                    !a.is_empty()
+                        && a.iter().all(|it| {
+                            let n = it.get("name").and_then(Value::as_str).unwrap_or("");
+                            made.iter()
+                                .any(|t| t.get("item").and_then(Value::as_str) == Some(n))
+                        })
+                })
+                .unwrap_or(false);
+            if !made.is_empty() && only_passes {
+                m.insert(addr.to_string(), ("ready".into(), now_unix(), ticket));
+            }
+        }
 
         // 잡아 둔 것을 진짜로 뺀다. 여기서 빼야 손님 화면의 "남은 수량" 이
         // 실제와 맞는다. 주문할 때 빼면 결제 안 한 사람 때문에 품절이 된다.
@@ -767,6 +897,29 @@ async fn sweep_payments(st: &ServerState) {
                 crate::stock::commit(addr, menu);
             }
         }
+    }
+    // 자물쇠를 놓았다. 이제 체인에 물어본다.
+    //
+    // 🔴 **금액만 보고 가르면 뚫린다.** 외부 지갑으로 정확히 99% 를 보내면
+    //    우리 지갑으로 낸 것처럼 위장돼 1% 가 사라진다(페이블 지적). 금액은
+    //    흉내 낼 수 있지만 **우리 주소로 간 출력은 흉내 낼 수 없다.**
+    //    노드가 못 답할 때만 금액으로 어림잡는다.
+    drop(m);
+    if !fee_later.is_empty() {
+        // 🔴 이 함수 안에서 `.await` 를 하면 서버 손잡이로 못 쓴다(컴파일이
+        //    막았다). 떼어 내서 따로 돌린다 — 손님을 기다리게 할 이유도 없다.
+        //    `accrue` 는 같은 주문을 두 번 안 적으므로 늦게 돌아도 안전하다.
+        tokio::spawn(async move {
+            for (addr, txid, fee, got, want) in fee_later {
+                let on_chain = match crate::devfee::fee_in_tx(&txid, fee).await {
+                    Some(v) => v,
+                    None => crate::devfee::already_on_chain(got, want, fee),
+                };
+                if !on_chain {
+                    crate::devfee::accrue(&addr, fee);
+                }
+            }
+        });
     }
 }
 
@@ -794,7 +947,20 @@ async fn api_order_state(
     match found {
         Some((s, at, t)) => (
             StatusCode::OK,
-            Json(json!({ "state": s, "at": at, "ticket": t })),
+            Json(json!({
+                "state": s,
+                "at": at,
+                "ticket": t,
+                // 기간 이용권을 샀으면 여기에 표가 실려 나간다. 손님 화면은
+                // 이 값이 있으면 주문 상태 대신 **표**를 그린다 — 커피처럼
+                // 「만드는 중」을 볼 이유가 없다. 산 순간 이미 다 된 것이다.
+                //
+                // 주소로만 찾는다. 이 주소는 이 손님의 폰에만 있고, 남이
+                // 알아낼 방법이 없다 — 주문마다 새로 만들기 때문이다.
+                "passes": crate::ticket::for_order(&addr, now_unix())["tickets"],
+                // 예약한 시각. 손님이 「몇 시였더라」를 다시 볼 곳은 여기뿐이다.
+                "booking": crate::booking::for_order(&addr),
+            })),
         ),
         // 모르는 주소다. 예전에는 여기서 "paid" 라고 답했고, 그건 한 푼도 내지
         // 않은 화면에 「결제 확인됨」을 띄웠다 — 이 프로그램이 낼 수 있었던
@@ -987,14 +1153,36 @@ async fn chain_send_route(Json(b): Json<SendBody>) -> impl IntoResponse {
 }
 
 /// Fetches one file from the local IPFS gateway and hands it on.
-async fn ipfs_relay(axum::extract::Path(path): axum::extract::Path<String>) -> impl IntoResponse {
+async fn ipfs_relay(
+    axum::extract::Path(path): axum::extract::Path<String>,
+    axum::extract::RawQuery(q): axum::extract::RawQuery,
+) -> impl IntoResponse {
     // 경로에 .. 이 들어오면 게이트웨이 밖을 가리킬 수 있다. CID 는 그런 글자를
     // 쓰지 않으므로 그냥 거절한다.
     if path.contains("..") {
         return (StatusCode::BAD_REQUEST, [(header::CONTENT_TYPE, "text/plain".to_string())], Vec::new());
     }
 
-    let url = format!("http://127.0.0.1:8080/ipfs/{path}");
+    // 🔴 **물음표 뒤를 버리고 있었다.** 그래서 `?format=raw`(블록 그대로
+    //    달라는 요청)가 게이트웨이에 안 갔고, 서버가 **받은 바이트가 진짜인지
+    //    확인할 방법**이 없었다. 확인을 못 하면 아무 데서나 받아 오는 설계가
+    //    통째로 못 쓰게 된다 — 가짜를 걸러낼 수가 없으므로.
+    //
+    //    거를 것은 거른다: `..` 은 위에서 막고, 물음표 뒤는 게이트웨이가
+    //    아는 것만 통과시킨다.
+    let allowed = q
+        .as_deref()
+        .filter(|v| {
+            v.split('&').all(|kv| {
+                matches!(
+                    kv.split('=').next().unwrap_or(""),
+                    "format" | "filename" | "download" | "dag-scope" | "car-scope"
+                )
+            })
+        })
+        .map(|v| format!("?{v}"))
+        .unwrap_or_default();
+    let url = format!("http://127.0.0.1:8080/ipfs/{path}{allowed}");
     let client = reqwest::Client::builder()
         // 사진 한 장에 손님을 오래 세워 두지 않는다.
         .timeout(std::time::Duration::from_secs(20))
@@ -1058,7 +1246,10 @@ async fn api_shops(State(state): State<ServerState>) -> impl IntoResponse {
         }
     }
 
-    match crate::shop::list_shops(200, 0).await {
+    // 🔴 `list_shops` 가 아니라 `shop_profiles` 다. 앞의 것은 자산 이름과 CID
+    // 만 준다 — 장터는 그것으로 아무것도 못 그린다. 가게 이름·돈 받을 주소·
+    // 지금 주문받는 곳은 전부 IPFS 프로필 안에 있다.
+    match crate::shop::shop_profiles(200, 0).await {
         Ok(v) => {
             if let Ok(mut cache) = state.shops_cache.lock() {
                 *cache = Some((now, v.clone()));
@@ -1240,8 +1431,16 @@ async fn api_shop(State(state): State<ServerState>) -> impl IntoResponse {
         o
     };
 
+    // 🔴 **값 없는 품목은 손님에게 안 보낸다.** 값이 없으면 `price_of` 가 0 으로
+    // 세고, 다른 것과 같이 담으면 그것만 공짜로 나간다. 1사토시보다 작은
+    // 값도 체인에서 0 이 되어 마찬가지다.
+    let mut shown = shop.clone();
+    if let Some(m) = shop.get("menu") {
+        shown["menu"] = crate::shop::sellable(m);
+    }
+
     Json(json!({
-        "shop": shop,
+        "shop": shown,
         "ai": ai_on,
         // 지금 몇 개 남았나. 수량을 안 적은 품목은 null(무제한)로 온다 —
         // 0 으로 보내면 화면이 전부 품절로 그린다.
@@ -1407,6 +1606,11 @@ async fn api_ask(State(state): State<ServerState>, Json(body): Json<AskBody>) ->
 struct OrderBody {
     items: Value,
     total: f64,
+    /// 손님이 고른 시각(유닉스 초). 예약을 받는 가게에서만 온다.
+    ///
+    /// 없으면 예약이 아니다 — 커피는 자리를 안 잡는다.
+    #[serde(default)]
+    at: Option<i64>,
     currency: String,
     note: Option<String>,
     /// 몇 번 테이블에서 온 주문인가. 손님 QR 이 `?table=3` 을 달고 있으면
@@ -1429,6 +1633,39 @@ async fn api_order(
     State(state): State<ServerState>,
     Json(mut body): Json<OrderBody>,
 ) -> impl IntoResponse {
+    // 🔴 **개수를 먼저 바로잡는다.** 안 그러면 값을 세는 쪽과 물건을 내주는
+    // 쪽이 같은 숫자를 다르게 읽는다 — 실제로 그랬다:
+    //
+    //   가격(`price_of`)   : `as_f64`, 0 이하면 그 줄을 건너뛴다 → 0원
+    //   이용권(`ticket.rs`): `as_i64`, 실패하면 1, `max(1)` → 항상 한 장
+    //
+    // 그래서 `{"name":"하루권","qty":0}` 은 **0원에 표 한 장**이었고,
+    // `{"name":"1년권","qty":0.0125}` 는 80만원짜리를 1만원에 사는 길이었다.
+    // 소수는 `as_i64` 가 실패해서 그대로 한 장이 나온다.
+    //
+    // 각자 조심하게 두면 새 소비처가 생길 때마다 같은 구멍이 다시 난다.
+    // **들어오는 문 하나에서** 양의 정수로 만든다. 커피 2.5잔도 뜻이 없다.
+    if let Some(list) = body.items.as_array_mut() {
+        for it in list.iter_mut() {
+            let q = it.get("qty").and_then(Value::as_f64).unwrap_or(0.0);
+            let whole = if q.is_finite() && q >= 1.0 {
+                // 100개 넘게 담는 카운터는 없다. 넘치는 값은 실수거나 장난이다.
+                (q.floor() as i64).min(999)
+            } else {
+                0
+            };
+            it["qty"] = json!(whole);
+        }
+        // 0개짜리 줄은 아예 없앤다. 남겨 두면 장부·영수증에 「0개」가 찍힌다.
+        list.retain(|it| it.get("qty").and_then(Value::as_i64).unwrap_or(0) > 0);
+    }
+    if body.items.as_array().map(|a| a.is_empty()).unwrap_or(true) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "주문할 것을 골라 주세요." })),
+        );
+    }
+
     // 🔴 손님이 보낸 `total` 을 그대로 믿고 있었다. 메뉴에 10잔을 담고
     // `total: 1` 을 보내면 1원짜리 주소가 나오고, 1원만 넣어도 결제로 올라갔다.
     // **값은 손님이 정하는 것이 아니라 가게 메뉴가 정한다.**
@@ -1508,6 +1745,59 @@ async fn api_order(
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0);
 
+    // 🔴 **통화는 가게가 정한다.** 손님이 보낸 값을 쓰고 있었다.
+    //
+    // 메뉴에 4,500(원)이라 적힌 커피에 `currency: "VND"` 를 실어 보내면
+    // 4,500동(≈240원)으로 견적이 났다. 값(`total`)과 개수(`qty`)는 이미
+    // 가게 값으로 다시 세는데, **단위만 손님이 정하고 있었다** — 숫자를
+    // 지키면서 자를 바꿔 준 셈이다.
+    //
+    // 가게 통화는 `shop.json` 에 있다(`shop::currency()`). 손님이 다른 것을
+    // 보내면 조용히 무시한다 — 거절하면 옛 화면을 쓰는 손님이 못 산다.
+    let want_rvn = body.currency.eq_ignore_ascii_case("RVN");
+    let shop_cur = crate::shop::currency();
+    body.currency = if want_rvn && shop_cur.eq_ignore_ascii_case("RVN") {
+        "RVN".to_string()
+    } else {
+        shop_cur
+    };
+
+    // 🔴 **품목마다 통화가 다를 수 있다.** 한 가게가 커피(원)와 음반(RVN)과
+    // 해외 굿즈(달러)를 같이 판다. 그럴 때는 각각 RVN 으로 바꿔 더한다.
+    //
+    // 통화는 **메뉴에 적힌 것**만 쓴다 — 손님이 보낸 값은 안 본다. 그 구멍은
+    // 이미 한 번 막았다(4,500원짜리를 4,500동으로 사 가던 것).
+    let mixed = {
+        let menu = state
+            .shop
+            .lock()
+            .map(|sh| sh.get("menu").cloned().unwrap_or(json!([])))
+            .unwrap_or(json!([]));
+        let many = menu
+            .as_array()
+            .map(|m| {
+                let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+                for it in m {
+                    if let Some(c) = it.get("currency").and_then(Value::as_str) {
+                        seen.insert(c.to_uppercase());
+                    }
+                }
+                seen.len() > 1 || (seen.len() == 1 && !seen.contains(&crate::shop::currency()))
+            })
+            .unwrap_or(false);
+        if many {
+            crate::shop::price_rvn(&menu, &body.items, now).await.ok()
+        } else {
+            None
+        }
+    };
+
+    if let Some(m) = mixed.as_ref() {
+        // 품목마다 통화가 섞인 가게. 합계는 이미 RVN 이다.
+        body.total = m["rvn"].as_f64().unwrap_or(0.0);
+        body.currency = "RVN".into();
+    }
+
     let quote = if body.currency.eq_ignore_ascii_case("RVN") {
         json!({ "rvn": body.total, "currency": "RVN", "expires_at": now + 300 })
     } else {
@@ -1539,9 +1829,25 @@ async fn api_order(
     if let Some(t) = table.as_deref() {
         if let Ok(mut m) = state.order_table.lock() {
             m.insert(address.clone(), t.to_string());
-            // 주문 표와 같은 크기로 유지한다. 안 지우면 이 표만 계속 자란다.
+            // 🔴 여기서 표를 **통째로 비우고** 있었다. 501번째 주문이 들어오면
+            // 지금 자리에 앉아 기다리는 손님들의 테이블 번호가 **전부** 사라지고,
+            // 직원 화면이 그때부터 「번호 부름」으로 바뀐다. 커피를 어느
+            // 자리에 갖다 놓아야 하는지 아무도 모르게 된다.
+            //
+            // 같은 실수를 기대 금액 표에서 한 번 고쳤는데 이 표는 남아 있었다.
+            // 살아 있는 주문은 안 지운다. 끝난 것부터 지운다.
             if m.len() > 500 {
-                m.clear();
+                let alive: std::collections::HashSet<String> = state
+                    .order_state
+                    .lock()
+                    .map(|s| {
+                        s.iter()
+                            .filter(|(_, (st, _, _))| st != "done")
+                            .map(|(k, _)| k.clone())
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                m.retain(|k, _| alive.contains(k));
             }
         }
     }
@@ -1578,7 +1884,25 @@ async fn api_order(
         }
     }
 
-    let _ = crate::ledger::open_order(&address, &body.items, &quote, now, table.as_deref());
+    // 🔴 **장부에는 가게가 정한 단가를 적는다.** 손님이 보낸 `price` 를 그대로
+    // 적고 있었다. 총액은 메뉴로 다시 세니 돈은 안 틀리는데, **장부의 품목별
+    // 단가만 손님이 적은 값**이 된다 — 나중에 세무·정산에서 합계와 낱개가
+    // 안 맞고, 그때는 어느 쪽이 맞는지 아무도 모른다.
+    let mut booked = body.items.clone();
+    if let (Some(list), Ok(sh)) = (booked.as_array_mut(), state.shop.lock()) {
+        let menu = sh.get("menu").cloned().unwrap_or(json!([]));
+        for it in list.iter_mut() {
+            let name = it.get("name").and_then(Value::as_str).unwrap_or("").to_string();
+            let real = menu.as_array().and_then(|m| {
+                m.iter()
+                    .find(|x| x.get("name").and_then(Value::as_str) == Some(name.as_str()))
+                    .and_then(|x| x.get("price").cloned())
+            });
+            // 메뉴에 없는 품목은 값이 0 이다(`price_of` 와 같은 규칙).
+            it["price"] = real.unwrap_or(json!(0));
+        }
+    }
+    let _ = crate::ledger::open_order(&address, &booked, &quote, now, table.as_deref());
 
     // 얼마가 들어와야 결제인가. 손님은 메뉴 가격을 그대로 내고, 가게가 조금
     // 덜 받는다 — 카드가 이미 그렇게 돈다. 그래서 **기대값은 총액이 아니라
@@ -1601,6 +1925,78 @@ async fn api_order(
             u.retain(|_, t| *t > now);
         }
     }
+    // 🔴 이 줄이 없으면 1% 는 화면에만 뜨고 아무 데도 안 간다. 손님 QR 은
+    // `raven:주소?amount=` 라 출력이 하나뿐이고, 총액이 전부 가게로 들어온다.
+    // 그중 우리 몫을 여기 적어 뒀다가, 돈이 들어온 것이 확인되면 장부에 옮긴다.
+    if let Ok(mut f) = state.order_fee.lock() {
+        f.insert(
+            address.clone(),
+            split["fee"].as_f64().unwrap_or(0.0),
+        );
+        // 살아 있는 주문의 수수료는 안 지운다. 지우면 그 주문의 1% 가 사라진다.
+        if f.len() > 500 {
+            let alive: std::collections::HashSet<String> = state
+                .order_state
+                .lock()
+                .map(|m| {
+                    m.iter()
+                        .filter(|(_, (st, _, _))| st == WAITING || st == SHORT)
+                        .map(|(k, _)| k.clone())
+                        .collect()
+                })
+                .unwrap_or_default();
+            f.retain(|k, _| alive.contains(k));
+        }
+    }
+    // 🔴 **보낼 수 있는 금액인지 여기서 본다.**
+    //
+    // 레이븐 네트워크는 `relayfee`(기본 0.01 RVN)보다 작은 거래를 안 날라
+    // 준다. 그런데 주문은 멀쩡히 만들어져서, 손님은 QR 을 찍고 지갑에서
+    // **거부당한 뒤에야** 안다. 화면에는 아무 설명도 없다.
+    //
+    // 견적을 낸 **뒤에** 본다 — 원으로 값을 매긴 가게는 여기서야 RVN 금액이
+    // 정해지기 때문이다.
+    {
+        let rvn = quote.get("rvn").and_then(Value::as_f64).unwrap_or(0.0);
+        if rvn < crate::shop::MIN_SENDABLE_RVN {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({
+                    "error": format!(
+                        "이 금액({rvn} RVN)은 너무 작아 보낼 수 없습니다. \
+                         레이븐이 나를 수 있는 제일 작은 값은 {} RVN 입니다. \
+                         가게에 말씀해 주세요 — 값이 잘못 적혀 있습니다.",
+                        crate::shop::MIN_SENDABLE_RVN
+                    )
+                })),
+            );
+        }
+    }
+
+    // 🔴 **자리를 여기서 잡는다.** 결제할 때 잡으면 늦다 — 마지막 3시 자리를
+    // 두 손님이 동시에 고를 수 있고, 그때는 둘 다 결제에 성공한다. 그 돈은
+    // 체인에 들어와 있어서 되돌릴 수 없고, 한 사람은 헛걸음한다.
+    //
+    // 화면이 「비어 있다」고 보여 준 것은 아무 보장이 아니다. 고르고 넘어오는
+    // 사이에 남이 가져갈 수 있으므로, **잡는 이 순간에 다시 본다.**
+    if let Some(at) = body.at {
+        let menu = state
+            .shop
+            .lock()
+            .map(|sh| sh.get("menu").cloned().unwrap_or(json!([])))
+            .unwrap_or(json!([]));
+        let minutes = crate::booking::minutes_for(&menu, &body.items);
+        if minutes > 0 {
+            let until = quote
+                .get("expires_at")
+                .and_then(Value::as_i64)
+                .unwrap_or(now + 300);
+            if let Err(e) = crate::booking::hold(&address, at, minutes, now, until) {
+                return (StatusCode::CONFLICT, Json(json!({ "error": e })));
+            }
+        }
+    }
+
     if let Ok(mut e) = state.order_expect.lock() {
         e.insert(address.clone(), expect);
         // 🔴 여기서 표를 **통째로 비우고** 있었다. 501번째 주문이 들어오면 **지금
@@ -1640,6 +2036,58 @@ async fn api_order(
             "table": table,
             "created": now,
         })),
+    )
+}
+
+/// 릴레이로 붙는 자리. 웹소켓으로 올라탄다.
+async fn relay_upgrade(ws: axum::extract::ws::WebSocketUpgrade) -> impl IntoResponse {
+    ws.on_upgrade(crate::relay::serve)
+}
+
+#[derive(serde::Deserialize)]
+struct SlotsBody {
+    items: Value,
+    /// 손님 폰의 시간대. 가게 시계로 계산하되, 하루의 경계는 이 값으로 나눈다.
+    #[serde(default)]
+    tz_offset_min: i64,
+}
+
+/// 고를 수 있는 시각들.
+///
+/// 🔴 **여기가 없어서 예약이 여태 안 돌았다.** `booking_slots` 는 규칙이
+/// 다 짜여 있고 시험도 있는데, 손님 화면에서 그 규칙에 닿을 길이 없었다.
+/// 부르는 곳이 한 곳도 없는 함수였다.
+///
+/// 필요한 시간은 **메뉴가 정한다.** 손님이 보낸 숫자를 쓰면 두 시간짜리
+/// 펌을 15분으로 예약해 놓고 나머지 시간을 남이 못 쓰게 만들 수 있다.
+async fn api_slots(
+    State(state): State<ServerState>,
+    Json(body): Json<SlotsBody>,
+) -> impl IntoResponse {
+    let (shop, menu) = {
+        let g = state.shop.lock();
+        match g {
+            Ok(sh) => (sh.clone(), sh.get("menu").cloned().unwrap_or(json!([]))),
+            Err(_) => (json!({}), json!([])),
+        }
+    };
+    let minutes = crate::booking::minutes_for(&menu, &body.items);
+    if minutes <= 0 {
+        // 예약이 필요 없는 주문이다. 빈 목록이 아니라 **필요 없다**고 말한다 —
+        // 빈 목록은 「자리가 다 찼다」로 읽힌다.
+        return (StatusCode::OK, Json(json!({ "needed": false })));
+    }
+    let now = now_unix();
+    let v = crate::booking::booking_slots(
+        shop,
+        crate::booking::taken(now),
+        minutes,
+        now,
+        body.tz_offset_min,
+    );
+    (
+        StatusCode::OK,
+        Json(json!({ "needed": true, "minutes": minutes, "days": v["days"] })),
     )
 }
 
@@ -2030,6 +2478,31 @@ async fn api_scan(
         return (StatusCode::UNAUTHORIZED, Json(json!({ "error": "권한 없음" })));
     }
     let now = now_unix();
+
+    // 🔴 **표를 먼저 본다.** 직원이 「회원인가 표인가」를 골라 찾을 이유가
+    // 없다 — 문 앞에 선 사람은 둘 중 하나고, 직원은 그냥 찍기만 해야 한다.
+    //
+    // 표가 먼저인 이유: 표 번호는 8글자 무작위라 회원 이름·전화번호와 절대
+    // 안 겹친다. 반대로 두면 회원 검색이 부분 일치라서 표를 가릴 수 있다.
+    if let Ok(tk) = crate::ticket::ticket_find(body.query.clone(), now) {
+        return (
+            StatusCode::OK,
+            Json(json!({
+                "found": true,
+                "kind": "pass",
+                // 이름 자리에 품목을 넣는다. 이 표를 산 사람이 누구인지는
+                // 우리가 모른다 — 카운터에서 이름을 안 물었기 때문이다.
+                "name": tk.get("item"),
+                "valid": tk.get("valid"),
+                "why": tk.get("why"),
+                "left": tk.get("left_days"),
+                "asset": tk.get("code"),
+                "used_today": tk.get("used_today"),
+                "until": tk.get("until"),
+            })),
+        );
+    }
+
     match crate::pass::check_in_lookup(body.query, now) {
         Ok(v) => {
             let first = v["matches"].as_array().and_then(|a| a.first()).cloned();
@@ -2066,47 +2539,56 @@ async fn api_scan_in(
     if !authed_for(&state, &headers, &json!({}), "/api/scan/in") {
         return (StatusCode::UNAUTHORIZED, Json(json!({ "error": "권한 없음" })));
     }
-    match crate::pass::check_in(body.asset, now_unix()) {
+    let now = now_unix();
+    // 표 번호면 표를 쓴다. 못 쓰는 표는 `ticket_use` 가 거절한다 —
+    // 경고만 띄우고 세어 두면 나중에 그 숫자를 아무도 못 맞춘다.
+    if crate::ticket::ticket_find(body.asset.clone(), now).is_ok() {
+        return match crate::ticket::ticket_use(body.asset, now) {
+            Ok(v) => (StatusCode::OK, Json(v)),
+            Err(e) => (StatusCode::BAD_REQUEST, Json(json!({ "error": e }))),
+        };
+    }
+    match crate::pass::check_in(body.asset, now) {
         Ok(v) => (StatusCode::OK, Json(v)),
         Err(e) => (StatusCode::BAD_REQUEST, Json(json!({ "error": e }))),
     }
 }
 
-/// Starts the server. Returns the token and the URLs to put on screen.
-///
-/// Sending from the phone is deliberately absent for now. Remote spend needs a
-/// second confirmation path that does not exist yet, and shipping "approve a
-/// payment from your phone" without it would put the wallet one stolen token
-/// away from being emptied.
-#[tauri::command]
-pub async fn start_phone_server(
-    state: tauri::State<'_, ServerState>,
-) -> Result<Value, String> {
-    let st = ServerState {
-        token: state.token.clone(),
-        role_tokens: state.role_tokens.clone(),
-        shop: state.shop.clone(),
-        ai: state.ai.clone(),
-        shops_cache: state.shops_cache.clone(),
-        ask_budget: state.ask_budget.clone(),
-        offers: state.offers.clone(),
-        claims: state.claims.clone(),
-        sent: state.sent.clone(),
-        order_state: state.order_state.clone(),
-        next_ticket: state.next_ticket.clone(),
-        ticket_day: state.ticket_day.clone(),
-        last_sweep: state.last_sweep.clone(),
-        remote_admin: state.remote_admin.clone(),
-        order_table: state.order_table.clone(),
-        order_expect: state.order_expect.clone(),
-        order_until: state.order_until.clone(),
-        order_times: state.order_times.clone(),
-    };
-    let owner_token = st.token.lock().map(|t| t.clone()).unwrap_or_default();
-    if owner_token.is_empty() {
-        return Err("이 컴퓨터에서 안전한 임의 값을 만들지 못해 원격 접속을 켜지 않았습니다.".into());
-    }
+#[derive(serde::Deserialize)]
+struct MemberBody {
+    code: String,
+    name: String,
+    #[serde(default)]
+    phone: String,
+}
 
+/// 표를 회원으로 올린다.
+///
+/// 직원 권한으로 충분하다 — 이름을 받아 적는 것은 직원의 본업이고, 여기서
+/// 사장 열쇠를 요구하면 문 앞에서 아무도 못 한다.
+async fn api_scan_member(
+    State(state): State<ServerState>,
+    headers: HeaderMap,
+    Json(body): Json<MemberBody>,
+) -> impl IntoResponse {
+    if !authed_for(&state, &headers, &json!({}), "/api/scan/in") {
+        return (StatusCode::UNAUTHORIZED, Json(json!({ "error": "권한 없음" })));
+    }
+    match crate::ticket::ticket_to_member(body.code, body.name, body.phone, now_unix()) {
+        Ok(v) => (StatusCode::OK, Json(v)),
+        Err(e) => (StatusCode::BAD_REQUEST, Json(json!({ "error": e }))),
+    }
+}
+
+/// 손님·사장 화면의 길을 전부 엮는다.
+///
+/// 🔴 **떼어낸 이유가 있다.** axum 은 잘못된 경로를 컴파일 때가 아니라
+/// 여기서, 실행 중에 거부한다(패닉). 예전에 `/{name}.webp` 한 줄 때문에
+/// 손님 폰 서버가 통째로 안 켜졌고, 화면에는 시간초과만 떴다.
+///
+/// 함수로 두면 시험이 이걸 한 번 만들어 볼 수 있다 — 그러면 다음 사람은
+/// 배포가 아니라 시험에서 걸린다.
+fn build_phone_router(st: ServerState) -> axum::Router {
     let customer = Router::new()
         .route("/", get(customer_page))
         // 사진을 우리가 대신 내준다.
@@ -2141,10 +2623,28 @@ pub async fn start_phone_server(
         .route("/api/shop-history", get(api_shop_history))
         .route("/api/nostr/publish", post(api_nostr_publish))
         .route("/api/nostr/query", post(api_nostr_query))
-        .route("/{name}.webp", get(raven_face))
-        .route("/{name}.png", get(raven_face))
+        // 🔴 여기가 **서버 전체를 죽이고 있었다.**
+        //
+        //     panicked: Invalid route "/{name}.webp"
+        //               Only one parameter is allowed per path segment
+        //
+        // axum 은 한 칸(`/` 사이)에 변수와 글자를 섞는 것을 허용하지 않는다.
+        // 라우터를 만드는 도중에 패닉이 나므로 **손님 폰 서버가 아예 안 켜졌고**,
+        // 그래서 손님 QR·테이블 QR·장터·메뉴판 미리보기가 전부 죽어 있었다.
+        //
+        // 화면에는 「20초 안에 열리지 않았습니다」만 떴다 — 패닉은 다른
+        // 실타래에서 나서 그 오류가 화면까지 오지 못했다. 터미널에서 띄워
+        // 보고서야 찾았다.
+        //
+        // 핸들러가 이미 `raven-` 접두사와 `.webp`/`.png` 를 떼어내므로,
+        // 칸 하나로 받아 그 안에서 가른다.
+        .route("/{name}", get(raven_face))
         .route("/shops", get(shops_page))
         .route("/api/shops", get(api_shops))
+        // 🔴 장터 화면(`web/shops.html`)이 부르는 이름이 이쪽이다. 이 줄이
+        // 없어서 가게 탭이 여태 「가게가 없습니다」만 그렸다 — 404 는
+        // 화면에 아무 표시도 안 남기고 조용히 빈 목록이 됐다.
+        .route("/api/chain/shops", get(api_shops))
         .route("/api/ipfs-kind", get(api_ipfs_kind))
         .route("/api/chain/asset", get(api_chain_asset))
         .route("/api/notices", get(api_notices))
@@ -2155,7 +2655,16 @@ pub async fn start_phone_server(
         .route("/api/check-address", get(api_check_address))
         .route("/api/claim", post(api_claim))
         .route("/api/paid", get(api_paid))
-        .route("/api/order-state", get(api_order_state));
+        .route("/api/order-state", get(api_order_state))
+        // 손님이 고를 수 있는 시각. 담은 것에 따라 필요한 시간이 달라지므로
+        // 장바구니를 통째로 받는다.
+        .route("/api/slots", post(api_slots))
+        // 🔴 **이 컴퓨터가 릴레이다.** 여태 남의 릴레이 세 곳에 올리기만 했다.
+        // 터널을 켜면 `wss://…/relay` 로 바깥에서도 붙을 수 있고, 안 켜도
+        // 가게 안에서는 돈다 — 인터넷이 끊겨도 공지가 오간다.
+        // 🔴 `/relay` 로 두면 `/{name}`(라비 그림)이 먼저 삼킨다 — 실측으로
+        // 404 였다. **두 칸짜리 경로**면 그 규칙에 안 걸린다.
+        .route("/api/relay", get(relay_upgrade));
 
     // A separate router, not a separate handler: there is no path from these
     // routes into wallet code, by construction rather than by discipline.
@@ -2180,17 +2689,67 @@ pub async fn start_phone_server(
         .route("/staff", get(staff_page))
         .route("/scan", get(scan_page))
         .route("/api/scan/check", post(api_scan))
-        .route("/api/scan/in", post(api_scan_in));
+        .route("/api/scan/in", post(api_scan_in))
+        // 표를 산 손님을 회원으로 올린다. 문 앞 직원이 이름을 받는 자리다.
+        .route("/api/scan/member", post(api_scan_member));
 
     let app = customer.merge(admin).with_state(st.clone());
+    app
+}
+
+/// Starts the server. Returns the token and the URLs to put on screen.
+///
+/// Sending from the phone is deliberately absent for now. Remote spend needs a
+/// second confirmation path that does not exist yet, and shipping "approve a
+/// payment from your phone" without it would put the wallet one stolen token
+/// away from being emptied.
+#[tauri::command]
+pub async fn start_phone_server(
+    state: tauri::State<'_, ServerState>,
+) -> Result<Value, String> {
+    let st = ServerState {
+        token: state.token.clone(),
+        role_tokens: state.role_tokens.clone(),
+        shop: state.shop.clone(),
+        ai: state.ai.clone(),
+        order_fee: state.order_fee.clone(),
+        started_ip: state.started_ip.clone(),
+        shops_cache: state.shops_cache.clone(),
+        ask_budget: state.ask_budget.clone(),
+        offers: state.offers.clone(),
+        claims: state.claims.clone(),
+        sent: state.sent.clone(),
+        order_state: state.order_state.clone(),
+        next_ticket: state.next_ticket.clone(),
+        ticket_day: state.ticket_day.clone(),
+        last_sweep: state.last_sweep.clone(),
+        remote_admin: state.remote_admin.clone(),
+        order_table: state.order_table.clone(),
+        order_expect: state.order_expect.clone(),
+        order_until: state.order_until.clone(),
+        order_times: state.order_times.clone(),
+    };
+    let owner_token = st.token.lock().map(|t| t.clone()).unwrap_or_default();
+    if owner_token.is_empty() {
+        return Err("이 컴퓨터에서 안전한 임의 값을 만들지 못해 원격 접속을 켜지 않았습니다.".into());
+    }
+
+    let app = build_phone_router(st.clone());
+
+    // 이 컴퓨터의 릴레이가 **정말로** 듣고 있는가. 아래 세 갈래 중 하나로만 켜진다.
+    RELAY_LIVE.store(false, Ordering::Relaxed);
 
     // 이미 우리가 듣고 있으면 그건 실패가 아니라 "이미 켜져 있음"이다.
     //
     // 두 번 누르거나 앱이 다시 그릴 때마다 여기로 오는데, 그때 "Address already
     // in use" 를 그대로 보여 주면 화면에는 [켜짐] 옆에 빨간 오류가 같이 뜬다.
     // 사장은 켜진 것을 고장으로 읽는다.
+    // 🔴 어디서 멈추는지 몰라 20초 시간제한에만 걸리고 있었다. 단계마다
+    // 남긴다 — 사장 화면에는 안 보이지만, 「문제 알리기」에 붙어 나온다.
+    eprintln!("[phone] bind 시작 {PORT}");
     match tokio::net::TcpListener::bind(("0.0.0.0", PORT)).await {
         Ok(listener) => {
+            RELAY_LIVE.store(true, Ordering::Relaxed);
             tokio::spawn(async move {
                 let _ = axum::serve(listener, app).await;
             });
@@ -2210,12 +2769,34 @@ pub async fn start_phone_server(
                     "{PORT} 포트를 다른 프로그램이 쓰고 있습니다. 그 프로그램을 끄고 다시 켜세요."
                 ));
             }
+            // 🔴 손님 화면이 답한다고 **릴레이까지** 우리 것은 아니다. 포트를
+            // 쥔 것이 옛 버전이면 `/api/relay` 는 404 다. 물어보고 적는다.
+            let relay_ok = reqwest::Client::new()
+                .get(format!("http://127.0.0.1:{PORT}/api/relay"))
+                .timeout(std::time::Duration::from_secs(2))
+                .send()
+                .await
+                .map(|r| r.status().as_u16() != 404)
+                .unwrap_or(false);
+            RELAY_LIVE.store(relay_ok, Ordering::Relaxed);
         }
         Err(e) => return Err(format!("{PORT} 포트를 열지 못했습니다: {e}")),
     }
 
+    eprintln!("[phone] bind 끝, 주소 읽는 중");
+    // 릴레이가 받은 것을 5초에 한 번 디스크에 내린다.
+    crate::relay::start_saver();
+    // 🔴 밀린 개발비를 **사장이 안 눌러도** 스스로 보낸다. 지갑이 풀려 있는
+    //    순간에만 나가고, 암호는 어디에도 안 적는다.
+    crate::devfee::start_auto_pay();
+
     let ip = local_ip().unwrap_or_else(|| "127.0.0.1".into());
+    // QR 에 박히는 값을 기억해 둔다. 나중에 「바뀌었다」를 말하려면 필요하다.
+    if let Ok(mut g) = st.started_ip.lock() {
+        *g = ip.clone();
+    }
     // 역할 토큰을 먼저 꺼낸다 — json! 매크로 안에서는 블록을 쓸 수 없다.
+    eprintln!("[phone] 주소 {ip}, 토큰 읽는 중");
     let (staff_t, scan_t) = st
         .role_tokens
         .lock()
@@ -2244,6 +2825,155 @@ pub async fn start_phone_server(
 /// Found by asking the OS which interface it would use to reach the outside
 /// world, without sending anything: a connected UDP socket only records a
 /// destination, it does not transmit.
+/// 손님 QR 이 가리키는 주소가 아직 맞나.
+///
+/// 🔴 **이 컴퓨터의 주소는 조용히 바뀐다.** 공유기를 재부팅하거나, 인터넷이
+/// 죽어 폰 핫스팟으로 넘기거나, 그냥 임대 기간이 끝나도 바뀐다.
+///
+/// 그런데 서버는 `0.0.0.0` 에 붙어 있어서 **계속 살아 있다.** 사장 화면에는
+/// 아무 오류도 안 뜬다. 테이블에 붙여 둔 QR 만 죽는다 — 그리고 그건 손님이
+/// 폰을 들이대 봐야 안다. 사장은 「오늘 왜 주문이 없지」로 겪는다.
+///
+/// 그래서 지금 주소를 다시 읽어, 서버를 켤 때의 주소와 다르면 말해 준다.
+/// 고치는 것은 QR 을 다시 뽑는 것뿐이라, 알기만 하면 5분이면 끝난다.
+/// 지금 이 컴퓨터의 주소. QR 을 그릴 때마다 다시 읽는다.
+///
+/// 🔴 서버를 켤 때 잡은 값을 계속 쓰면, 공유기가 새 주소를 준 뒤에 그린 QR 이
+/// **죽은 주소를 가리킨다.** 실제로 그랬다 — QR 은 .58, 컴퓨터는 .57.
+#[tauri::command]
+pub fn now_ip() -> String {
+    // 폰은 전부 와이파이다. QR 에는 그 주소가 들어가야 한다.
+    all_local_ips()
+        .into_iter()
+        .next()
+        .unwrap_or_else(|| "127.0.0.1".into())
+}
+
+#[tauri::command]
+pub fn address_check(state: tauri::State<'_, ServerState>) -> Value {
+    let now = local_ip().unwrap_or_else(|| "127.0.0.1".into());
+    let started = state
+        .started_ip
+        .lock()
+        .map(|g| g.clone())
+        .unwrap_or_default();
+    json!({
+        "now": now,
+        "printed": started,
+        // 서버를 아직 안 켰으면 비교할 것이 없다. 「바뀌었다」고 말하면 안 된다.
+        "changed": !started.is_empty() && started != "127.0.0.1" && started != now,
+    })
+}
+
+/// 이 컴퓨터가 **집 안 망에서 가진 주소 전부.**
+///
+/// 🔴 `local_ip()` 는 「8.8.8.8 로 나가는 길」 하나만 고른다. 그런데 계산대
+/// 컴퓨터에는 랜선과 와이파이가 **둘 다** 꽂혀 있는 일이 흔하고, 그때 고른
+/// 하나가 손님 폰과 다른 망일 수 있다.
+///
+/// 실제로 그랬다 — 이 컴퓨터는 en0 에 192.168.1.57(와이파이), en6 에
+/// 192.168.1.58(랜선)을 가지고 있었고, 기본 경로가 랜선이라 QR 에는 .58 이
+/// 박혔다. 폰은 와이파이에 있어서 그 주소에 닿지 못했고, 화면에는 아무
+/// 설명도 없었다.
+///
+/// 그래서 **하나를 고르지 않고 전부 보여 준다.** 어느 것이 맞는지는 이
+/// 컴퓨터가 알 수 없고, 폰을 들고 있는 사람은 한 번 눌러 보면 안다.
+#[tauri::command]
+pub fn all_local_ips() -> Vec<String> {
+    let out = std::process::Command::new("/sbin/ifconfig")
+        .output()
+        .or_else(|_| std::process::Command::new("ip").arg("addr").output());
+    let text = match out {
+        Ok(o) => String::from_utf8_lossy(&o.stdout).to_string(),
+        Err(_) => return local_ip().into_iter().collect(),
+    };
+
+    let mut ips: Vec<String> = Vec::new();
+    for line in text.lines() {
+        let line = line.trim();
+        let rest = line
+            .strip_prefix("inet ")
+            .or_else(|| line.strip_prefix("inet addr:"));
+        let Some(rest) = rest else { continue };
+        let ip = rest
+            .split_whitespace()
+            .next()
+            .unwrap_or("")
+            .split('/')
+            .next()
+            .unwrap_or("");
+        // 집 안 망만. 공인 주소나 127.0.0.1 은 손님 폰이 쓸 수 없다.
+        let priv_net = ip.starts_with("192.168.")
+            || ip.starts_with("10.")
+            || (ip.starts_with("172.")
+                && ip
+                    .split('.')
+                    .nth(1)
+                    .and_then(|s| s.parse::<u8>().ok())
+                    .map(|n| (16..=31).contains(&n))
+                    .unwrap_or(false));
+        if priv_net && !ips.contains(&ip.to_string()) {
+            ips.push(ip.to_string());
+        }
+    }
+    // 🔴 **와이파이 주소를 맨 앞에 둔다.**
+    //
+    // 「기본 경로로 나가는 주소」를 고르면 안 된다. 가게 계산대에는 랜선과
+    // 와이파이가 **둘 다** 꽂혀 있는 것이 보통이고, 인터넷은 대개 랜선으로
+    // 나간다. 그런데 **사장·직원·손님 폰은 전부 와이파이**다.
+    //
+    // 실제로 그래서 QR 이 죽어 있었다 — 랜선 주소(.58)가 박혔고 폰은
+    // 와이파이(.57 망)에 있었다. 아무 설명 없이 안 열렸다.
+    //
+    // 어느 것이 와이파이인지는 장치 이름으로 안다. 맥은 `en0`, 리눅스는
+    // `wl…`(wlan0·wlp3s0). 못 가리면 기본 경로 것을 쓴다.
+    if let Some(w) = wifi_ip(&text) {
+        if let Some(i) = ips.iter().position(|x| *x == w) {
+            ips.swap(0, i);
+        }
+    } else if let Some(first) = local_ip() {
+        if let Some(i) = ips.iter().position(|x| *x == first) {
+            ips.swap(0, i);
+        }
+    }
+    if ips.is_empty() {
+        ips.extend(local_ip());
+    }
+    ips
+}
+
+/// 와이파이 장치에 붙은 주소.
+///
+/// 🔴 폰은 전부 와이파이로 붙는다 — 사장도, 직원도, 손님도. 랜선 주소를
+/// QR 에 박으면 그 QR 은 아무 폰에서도 안 열린다.
+///
+/// 맥은 내장 와이파이가 `en0` 이다. 리눅스는 `wlan0`·`wlp3s0` 처럼 `wl` 로
+/// 시작한다. 이름으로 못 가리면 `None` 을 돌려주고, 부르는 쪽이 기본 경로
+/// 것을 쓴다 — 틀린 것을 우기는 것보다 낫다.
+fn wifi_ip(ifconfig: &str) -> Option<String> {
+    let mut cur = String::new();
+    let mut wifi = false;
+    for line in ifconfig.lines() {
+        if !line.starts_with(char::is_whitespace) && line.contains(':') {
+            cur = line.split(':').next().unwrap_or("").trim().to_string();
+            // 맥의 내장 와이파이는 en0. 리눅스는 wl 로 시작한다.
+            wifi = cur == "en0" || cur.starts_with("wl");
+            continue;
+        }
+        if !wifi {
+            continue;
+        }
+        let line = line.trim();
+        if let Some(rest) = line.strip_prefix("inet ") {
+            let ip = rest.split_whitespace().next().unwrap_or("");
+            if ip.starts_with("192.168.") || ip.starts_with("10.") || ip.starts_with("172.") {
+                return Some(ip.to_string());
+            }
+        }
+    }
+    None
+}
+
 fn local_ip() -> Option<String> {
     let sock = std::net::UdpSocket::bind("0.0.0.0:0").ok()?;
     sock.connect("8.8.8.8:80").ok()?;
@@ -2531,6 +3261,8 @@ impl Default for ServerState {
             // 뜨고, 사장은 그걸 보고 서버가 죽었다고 생각한다.
             shop: Arc::new(Mutex::new(crate::shop::shop_load())),
             ai: Arc::new(Mutex::new(String::new())),
+            order_fee: Arc::new(Mutex::new(std::collections::HashMap::new())),
+            started_ip: Arc::new(Mutex::new(String::new())),
             shops_cache: Arc::new(Mutex::new(None)),
             ask_budget: Arc::new(Mutex::new((0, 0, 0))),
             offers: Arc::new(Mutex::new(std::collections::HashMap::new())),
@@ -2674,6 +3406,23 @@ pub fn table_qr_sheet(
         .and_then(|s| s.get("name").and_then(Value::as_str).map(str::to_string))
         .unwrap_or_default();
 
+    // 🔴 **주소를 지금 다시 읽는다.** 인자로 받은 `ip` 는 서버를 켤 때 잡힌
+    // 값이라, 그 사이에 공유기가 새 주소를 주면 **인쇄한 QR 이 죽는다.**
+    // 실제로 그랬다 — QR 은 192.168.1.58, 컴퓨터는 192.168.1.57.
+    let ip = local_ip().unwrap_or(ip);
+
+    // 체인에 등록한 가게 이름. 있으면 평생 안 바뀌는 주소를 쓸 수 있다.
+    let stable: Option<String> = std::fs::read_to_string(crate::paths::app_file("shop.json"))
+        .ok()
+        .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+        .and_then(|v| {
+            v.get("chain_asset")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(str::to_string)
+        });
+
     let esc = |s: &str| s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
 
     let mut cards = String::new();
@@ -2682,10 +3431,31 @@ pub fn table_qr_sheet(
         if t.is_empty() {
             continue;
         }
-        let url = format!(
-            "http://{ip}:{PORT}/?table={}",
-            crate::tunnel::urlencode(t)
-        );
+        // 🔴 **집 안 주소를 박으면 안 된다.** 두 가지가 동시에 깨진다:
+        //
+        //   1. 손님은 대개 **자기 데이터**를 쓴다. 가게 와이파이에 접속한
+        //      손님만 `http://192.168.x.x` 가 열린다. 나머지는 아무것도 안 뜬다.
+        //   2. 그 주소는 조용히 바뀐다 — 공유기 재부팅, 임대 만료, 인터넷이
+        //      죽어 폰 핫스팟으로 넘길 때. 서버는 `0.0.0.0` 에 붙어 있어
+        //      **살아 있고**, 사장 화면에는 오류가 없다. 붙여 둔 QR 만 죽는다.
+        //
+        // 그래서 체인에 등록한 가게는 **평생 안 바뀌는 주소**를 박는다.
+        // 그 페이지가 릴레이에서 지금 주소를 읽어 넘겨준다.
+        // 한 번 인쇄하면 끝이고, 네트워크가 몇 번 바뀌어도 따라간다.
+        let url = match &stable {
+            // 🔴 가게 이름을 **경로가 아니라 물음표 뒤**에 둔다. 웹의
+            // 미들웨어가 경로에 점이 있으면 정적 파일로 보고 건너뛰어서,
+            // `/s/SHOP.PLAYX` 는 404 였다 — 라우트는 멀쩡히 도는데
+            // 진짜 가게 이름만 안 열렸다.
+            Some(asset) => format!(
+                "https://rvn.ex.erci.se/s?a={}&table={}",
+                crate::tunnel::urlencode(asset),
+                crate::tunnel::urlencode(t)
+            ),
+            // 아직 등록 전이면 집 안 주소밖에 없다. 그건 가게 와이파이에
+            // 접속한 손님만 열리고, 아래 안내문이 그렇게 말한다.
+            None => format!("http://{ip}:{PORT}/?table={}", crate::tunnel::urlencode(t)),
+        };
         let svg = qr_svg(url.clone())?;
         cards.push_str(&format!(
             r#"<div class="c"><div class="t">{}</div>{svg}<div class="n">{}</div></div>"#,
@@ -3000,4 +3770,53 @@ async fn api_keep_photo(Json(body): Json<Value>) -> impl IntoResponse {
         return Json(json!({ "kept": false, "why": "주소가 없습니다" }));
     }
     Json(crate::upload::ipfs_keep_url(url).await)
+}
+
+#[cfg(test)]
+mod router_builds {
+    /// 🔴 **라우터를 실제로 만들어 본다.**
+    ///
+    /// axum 은 잘못된 경로를 컴파일 때가 아니라 **실행할 때** 거부한다.
+    /// `/{name}.webp` 처럼 한 칸에 변수와 글자를 섞으면 라우터를 만드는
+    /// 도중에 패닉이 나고, 손님 폰 서버가 **아예 안 켜진다.**
+    ///
+    /// 실제로 그랬다. 화면에는 「20초 안에 열리지 않았습니다」만 떴다 —
+    /// 패닉이 다른 실타래에서 나서 그 오류가 화면까지 오지 못했고,
+    /// 손님 QR·테이블 QR·장터·메뉴판 미리보기가 전부 죽어 있었다.
+    /// 터미널에서 앱을 띄워 보고서야 찾았다.
+    ///
+    /// 이 시험은 라우터를 한 번 만들어 본다. 누가 또 이상한 경로를 넣으면
+    /// 배포가 아니라 **여기서** 빨갛게 뜬다.
+    #[tokio::test]
+    async fn the_phone_router_can_actually_be_built() {
+        let st = super::ServerState::default();
+        // 서버를 켜지는 않는다 — 라우터를 만드는 것까지가 패닉이 나는 자리다.
+        let _ = super::build_phone_router(st);
+    }
+}
+
+#[cfg(test)]
+mod bind_probe {
+    /// 🔴 「손님 폰 서버가 20초 안에 안 열린다」를 재현한다.
+    ///
+    /// 화면에서는 20초 시간제한에만 걸려서 **어디서 멈추는지** 알 수가 없었다.
+    /// 앱을 띄우지 않고 같은 일을 여기서 해 본다 — 포트를 잡고, 주소를 읽고,
+    /// 라우터를 만드는 세 가지다.
+    #[tokio::test]
+    async fn binding_the_phone_port_is_fast() {
+        let t = std::time::Instant::now();
+        let l = tokio::net::TcpListener::bind(("0.0.0.0", 0)).await;
+        assert!(l.is_ok(), "포트를 못 잡는다: {:?}", l.err());
+        println!("[probe] bind {:?}", t.elapsed());
+        assert!(t.elapsed().as_secs() < 3, "포트 잡는 데 오래 걸린다");
+    }
+
+    /// 주소 읽기가 느리면 서버 시작이 통째로 늦는다.
+    #[test]
+    fn reading_our_own_address_is_fast() {
+        let t = std::time::Instant::now();
+        let _ = super::local_ip();
+        println!("[probe] local_ip {:?}", t.elapsed());
+        assert!(t.elapsed().as_secs() < 3, "주소 읽기가 느리다");
+    }
 }

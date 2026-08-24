@@ -121,15 +121,29 @@
   </head>
   <body>
     <h1>검표</h1>
-    <div class="sub">회원 이름·전화 뒷자리·회원번호를 넣으세요</div>
+    <!-- 🔴 카운터에서 판 이용권(8글자 표 번호)도 이 칸으로 들어온다.
+         직원이 「회원인가 표인가」를 골라서 찾을 이유가 없다 — 문 앞에 선
+         사람은 둘 중 하나고, 직원은 그냥 넣기만 해야 한다. 서버가 표를
+         먼저 보고, 없으면 회원을 찾는다. -->
+    <div class="sub">회원 이름·전화 뒷자리·회원번호, 또는 <b>이용권 번호</b></div>
 
-    <input id="q" placeholder="홍길동 · 5678 · A7K2" autocomplete="off" autofocus />
+    <input id="q" placeholder="홍길동 · 5678 · A7K2 · K7P2QM4X" autocomplete="off" autofocus />
 
     <div class="verdict" id="v">
       <div class="big" id="v-big"></div>
       <div class="who" id="v-who"></div>
       <div class="detail" id="v-detail"></div>
       <button id="v-in" style="display:none">입장 처리</button>
+      <!-- 🔴 표를 산 손님이 처음 문에 온 순간. 카운터에서 돈 낼 때 연락처를
+           물으면 줄이 서고 대개 거절하는데, 여기서는 이미 멈춰 서 있고
+           직원과 마주 본다. 헬스장 회원 관리가 시작되는 자리다. -->
+      <button class="ghost" id="v-member" style="display:none">회원으로 등록</button>
+      <div id="v-form" style="display:none">
+        <input id="v-name" placeholder="이름" autocomplete="off" />
+        <input id="v-phone" placeholder="전화 뒷자리도 됩니다" autocomplete="off"
+               inputmode="tel" />
+        <button id="v-save">저장</button>
+      </div>
       <button class="ghost" id="v-next">다음 사람</button>
     </div>
 
@@ -179,17 +193,64 @@
           const ok = r.valid;
           $("v").className = `verdict ${ok ? "yes" : "no"} on`;
           $("v-big").textContent = ok ? "들어오세요" : "안 됩니다";
-          $("v-who").textContent = r.name || "";
-          $("v-detail").textContent = ok
-            ? r.kind === "punch" ? `${r.left}회 남음` : ""
-            : r.why || "";
+          // 표는 이름 자리에 **품목**이 온다. 카운터에서 이름을 안 물었기
+          // 때문에 우리는 산 사람이 누구인지 모른다. 그렇게 적는다.
+          $("v-who").textContent = r.kind === "pass"
+            ? `${r.name || "이용권"} · ${r.asset || ""}`
+            : r.name || "";
+          // 🔴 서버는 `left`·`used_today`·`until` 을 주는데 화면이 안 그리고
+          //    있었다. 직원이 「며칠 남았나」를 물어도 답할 수가 없다.
+          //    이용권은 그 세 가지가 전부다.
+          const ymd = (v) =>
+            v ? `${Math.floor(v / 100) % 100}월 ${v % 100}일까지` : "";
+          $("v-detail").textContent = !ok
+            ? r.why || ""
+            : r.kind === "pass"
+              ? [ymd(r.until), `남은 ${r.left}일`,
+                 // 하루권으로 나갔다 들어오는 것은 정상이다. 막지 않고
+                 // 직원이 알고만 있게 한다.
+                 r.used_today ? `오늘 ${r.used_today}번째` : ""]
+                  .filter(Boolean).join(" · ")
+              : r.kind === "punch"
+                ? `${r.left}회 남음`
+                : "";
           $("v-in").style.display = ok ? "" : "none";
+          // 이름이 아직 없는 표에만. 회원으로 올라간 표는 서버가 회원으로
+          // 답하므로 여기 안 온다.
+          $("v-member").style.display = r.kind === "pass" ? "" : "none";
+          $("v-form").style.display = "none";
         } catch (e) {
           $("v").className = "verdict no on";
           $("v-big").textContent = "확인 실패";
           $("v-detail").textContent = String(e);
         }
       }
+
+      $("v-member").onclick = () => {
+        $("v-form").style.display = "block";
+        $("v-name").focus();
+      };
+      $("v-save").onclick = async () => {
+        if (!current) return;
+        const name = $("v-name").value.trim();
+        if (!name) { $("v-name").focus(); return; }
+        try {
+          const r = await fetch("/api/scan/member", {
+            method: "POST", headers: H,
+            body: JSON.stringify({
+              code: current.asset, name, phone: $("v-phone").value.trim(),
+            }),
+          }).then((x) => x.json());
+          if (r.error) throw new Error(r.error);
+          $("v-who").textContent = name;
+          $("v-detail").textContent = "회원으로 등록했습니다";
+          $("v-form").style.display = "none";
+          $("v-member").style.display = "none";
+          $("v-name").value = ""; $("v-phone").value = "";
+        } catch (e) {
+          $("v-detail").textContent = String(e.message || e);
+        }
+      };
 
       $("v-in").onclick = async () => {
         if (!current) return;

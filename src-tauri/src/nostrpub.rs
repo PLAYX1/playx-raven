@@ -18,6 +18,20 @@ const RELAYS: [&str; 3] = [
     "wss://relay.primal.net",
 ];
 
+/// 올릴 곳 전부 — **우리 릴레이를 맨 앞에.**
+///
+/// 🔴 남의 릴레이 세 곳에만 올리면, 그 셋이 우리를 차단하는 날 모든 가게가
+/// 한꺼번에 장터에서 사라진다. 우리 것에도 같이 둔다.
+///
+/// 공개 릴레이를 **버리지는 않는다.** 우리가 문을 닫아도 공지가 남아야
+/// 하고, 그게 이 판이 탈중앙인 이유다. 우리 릴레이는 빠른 길일 뿐
+/// 유일한 길이 아니다.
+fn targets() -> Vec<String> {
+    let mut out = vec![format!("ws://127.0.0.1:{}/api/relay", crate::server::PORT)];
+    out.extend(RELAYS.iter().map(|s| s.to_string()));
+    out
+}
+
 /// 서명된 이벤트 하나를 여러 릴레이에 올린다.
 ///
 /// 한 곳이라도 받으면 성공으로 친다 — 릴레이는 언제든 하나씩 죽고, 그때마다
@@ -35,9 +49,9 @@ pub async fn nostr_publish(event: Value) -> Result<Value, String> {
 
     let mut ok: Vec<String> = Vec::new();
     let mut failed: Vec<Value> = Vec::new();
-    for url in RELAYS {
-        match send_one(url, &msg).await {
-            Ok(()) => ok.push(url.to_string()),
+    for url in targets() {
+        match send_one(&url, &msg).await {
+            Ok(()) => ok.push(url.clone()),
             Err(e) => failed.push(json!({ "relay": url, "why": e })),
         }
     }
@@ -163,9 +177,9 @@ pub async fn nostr_query(
     .map_err(|e| format!("보낼 것을 만들지 못했습니다: {e}"))?;
 
     let mut seen: std::collections::HashMap<String, Value> = std::collections::HashMap::new();
-    for url in RELAYS {
+    for url in targets() {
         // 한 곳이 죽어도 나머지에서 읽는다. 릴레이는 늘 하나씩 죽는다.
-        if let Ok(events) = read_one(url, &req, sub).await {
+        if let Ok(events) = read_one(&url, &req, sub).await {
             for e in events {
                 if let Some(id) = e.get("id").and_then(Value::as_str) {
                     seen.entry(id.to_string()).or_insert(e);

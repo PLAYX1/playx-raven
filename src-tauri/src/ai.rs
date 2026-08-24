@@ -317,9 +317,16 @@ Rules:
 {"type":"shop_set","field":"name_ko|name_en|name_ja|name_zh|description|location|phone|asset|order_url","value":""}
 {"type":"shop_flag","field":"pickup|delivery","value":true}
 {"type":"closed","today":true,"note":"오늘 재료가 떨어졌습니다"}
-{"type":"menu_add","name":"","name_en":"","price":0}
-{"type":"menu_set","index":0,"field":"name|name_en|price","value":""}
+{"type":"menu_add","name":"","name_en":"","price":0,"pass_months":0,"pass_days":0,"stock":null}
+{"type":"menu_set","index":0,"field":"name|name_en|price|pass_months|pass_days|stock","value":""}
 {"type":"menu_remove","index":0}
+  · pass_months / pass_days: a pass item ("하루권", "한달권", "1년권", "3개월권").
+    Count MONTHS in pass_months, not days — 3 months is a calendar quarter, not 90 days.
+    "하루권"→pass_days:1  "2일권"→pass_days:2  "1주일권"→pass_days:7
+    "한달권"→pass_months:1  "3개월권"→pass_months:3  "1년권"→pass_months:12
+    Coffee and food are NOT passes. Leave both at 0.
+  · stock: how many are left. OMIT IT (null) unless the owner states a number —
+    null means unlimited, 0 means sold out. They are different. Most items are null.
 {"type":"menu_clear"}
 {"type":"issue_set","field":"name|qty|units|reissuable","value":""}
 {"type":"go","screen":"assets|wallet|issue|shop|order|settings"}

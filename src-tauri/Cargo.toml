@@ -38,6 +38,10 @@ hex = "0.4"
 # 12단어가 있는 페이지에 바깥 통로를 내지 않기 위해서다. 노드가 대신 나간다.
 tokio-tungstenite = { version = "0.24", features = ["rustls-tls-webpki-roots"] }
 futures-util = "0.3"
+# 가게 주소를 노드가 **스스로** 공지하려면 서명할 열쇠가 있어야 한다.
+# 🔴 지갑의 12단어에서 뽑지 않는다 — 그 열쇠는 브라우저 안에서만 살아야 하고,
+#    노드로 내려오는 순간 가게 돈과 가게 간판이 같은 열쇠를 쓰게 된다.
+secp256k1 = { version = "0.30", features = ["rand", "std"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "multipart"] }
 tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-opener = "2"
@@ -52,7 +56,9 @@ serde_json = "1"
 # Serves the phone screens — the owner's remote control and the customer's
 # order page — from this machine over the local network. Tauri already pulls in
 # tokio, so this adds a router and nothing heavier.
-axum = "0.8"
+# 🔴 `ws` 를 켠다. 이 프로그램이 **릴레이 노릇**을 하려면 웹소켓을 받아야
+# 한다 — 지금은 남의 릴레이 세 곳에 올리기만 한다.
+axum = { version = "0.8", features = ["ws"] }
 tokio = { version = "1", features = ["rt-multi-thread", "net", "macros"] }
 # The owner scans this to reach their own node without typing an IP.
 qrcode = { version = "0.14", default-features = false, features = ["svg"] }

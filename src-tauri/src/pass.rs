@@ -156,6 +156,12 @@ pub fn save_member(
     visits_total: i64,
     note: String,
     now_unix: i64,
+    // 체육관마다 더 받는 것들 — 생년·성별·비상연락처 같은 것.
+    //
+    // 🔴 칸을 고정으로 박지 않는다. 필라테스는 생년을 받고, 복싱은
+    // 비상연락처를 받고, 어린이 체육관은 보호자 이름을 받는다. 우리가
+    // 정해 주면 안 쓰는 칸이 늘 비어 있거나, 필요한 칸이 없다.
+    extra: Option<Value>,
 ) -> Result<(), String> {
     if name.trim().is_empty() {
         return Err("이름이 필요합니다.".into());
@@ -181,6 +187,26 @@ pub fn save_member(
         .and_then(|r| r.get("issued").and_then(Value::as_i64))
         .unwrap_or(now_unix);
 
+    // 🔴 **출석 기록을 지키고 들어간다.** 아래에서 같은 회원 줄을 지우고 새로
+    // 넣는데, `visits` 를 안 들고 오면 이름 한 글자 고칠 때마다 그 사람이
+    // 여태 몇 번 왔는지가 통째로 사라진다.
+    let old_visits = existing
+        .as_ref()
+        .and_then(|r| r.get("visits").cloned())
+        .unwrap_or_else(|| json!([]));
+    // 이번에 안 보낸 항목은 예전 것을 지킨다. 전화번호만 고치러 왔다가
+    // 생년월일이 지워지면 안 된다.
+    let mut merged = existing
+        .as_ref()
+        .and_then(|r| r.get("extra").cloned())
+        .and_then(|v| v.as_object().cloned())
+        .unwrap_or_default();
+    if let Some(add) = extra.as_ref().and_then(Value::as_object) {
+        for (k, v) in add {
+            merged.insert(k.clone(), v.clone());
+        }
+    }
+
     rows.retain(|r| r.get("asset").and_then(Value::as_str) != Some(asset.as_str()));
     rows.push(json!({
         "asset": asset,
@@ -192,6 +218,10 @@ pub fn save_member(
         "visits_used": used,
         "frozen_at": frozen,          // 0 = not frozen, else YYYYMMDD
         "note": note.trim(),
+        // 체육관마다 다른 것들. 사장이 고른 항목만 온다.
+        "extra": Value::Object(merged),
+        // 언제 왔는지. 없으면 정보를 한 번 고칠 때마다 출석이 사라진다.
+        "visits": old_visits,
         "issued": issued,
         "updated": now_unix,
     }));
@@ -237,7 +267,48 @@ fn decorate(r: &Value, today: i64) -> Value {
         m.insert("left".into(), json!((total - used).max(0)));
         // 만료가 가까우면 문 화면이 먼저 말해 준다 — 회원이 카운터에 있을 때
         // 말하는 것이 문자 보내는 것보다 갱신으로 이어진다.
-        m.insert("days_left".into(), json!(if kind == "period" { expires - today } else { 0 }));
+        // 🔴 `expires - today` 로 세고 있었다. 둘 다 `YYYYMMDD` 라 그건 **날짜
+        // 뺄셈이 아니라 자릿수 뺄셈**이다:
+        //
+        //   20260922 - 20260823 =   99   (진짜로는 30일)
+        //   20260901 - 20260831 =   70   (진짜로는 1일 — 내일 끝난다)
+        //   20270822 - 20260823 = 9999   (진짜로는 364일)
+        //
+        // 한 달권이 「99일 남음」으로 뜨는 것보다 나쁜 것이 있다. 화면의
+        // 「7일 안에 만료 — 지금 말씀하세요」가 **영영 안 뜬다.** 70 도 99 도
+        // 7 보다 크기 때문이다. 내일 끝나는 회원에게 아무 말도 못 하고
+        // 있었고, 갱신은 카운터에서 그 한마디로 일어난다.
+        // 생년을 받은 체육관은 나이를 자동으로 센다. 손으로 적으면 해가
+        // 바뀌어도 안 늘어난다.
+        if let Some(y) = r
+            .pointer("/extra/birth_year")
+            .and_then(|v| v.as_i64().or_else(|| v.as_str().and_then(|s| s.parse().ok())))
+            .filter(|y| (1900..=2100).contains(y))
+        {
+            m.insert("age".into(), json!(today / 10_000 - y));
+        }
+        // 여태 몇 번, 마지막이 언제, 최근 30일에 몇 번.
+        // 🔴 전체 횟수만으로는 「요즘 안 나온다」가 안 보인다. 그게 사장이
+        // 연락해야 하는 유일한 신호다.
+        let visits = r.get("visits").and_then(Value::as_array).cloned().unwrap_or_default();
+        let month_ago = days_from_ymd(today) * 86_400 - 30 * 86_400;
+        m.insert("visit_count".into(), json!(visits.len()));
+        m.insert("last_visit".into(), json!(visits.last().and_then(Value::as_i64)));
+        m.insert(
+            "visits_30d".into(),
+            json!(visits
+                .iter()
+                .filter(|v| v.as_i64().map(|s| s >= month_ago).unwrap_or(false))
+                .count()),
+        );
+        m.insert(
+            "days_left".into(),
+            json!(if kind == "period" {
+                days_from_ymd(expires) - days_from_ymd(today)
+            } else {
+                0
+            }),
+        );
     }
     o
 }
@@ -351,7 +422,7 @@ pub fn set_frozen(asset: String, frozen: bool, now_unix: i64) -> Result<Value, S
     Ok(decorate(&rows[idx], today))
 }
 
-fn days_from_ymd(v: i64) -> i64 {
+pub fn days_from_ymd(v: i64) -> i64 {
     let (y, m, d) = (v / 10_000, (v / 100) % 100, v % 100);
     let y2 = if m <= 2 { y - 1 } else { y };
     let era = if y2 >= 0 { y2 } else { y2 - 399 } / 400;
@@ -585,4 +656,45 @@ pub fn remove_member(asset: String) -> Result<(), String> {
     let mut rows = load();
     rows.retain(|r| r.get("asset").and_then(Value::as_str) != Some(asset.as_str()));
     save(&rows)
+}
+
+
+#[cfg(test)]
+mod days_left_tests {
+    use super::*;
+
+    /// 🔴 `YYYYMMDD` 끼리 빼면 날짜가 안 나온다. 한 달권이 「99일 남음」이 되고,
+    /// 「7일 안에 만료」 안내가 **영영 안 뜬다** — 70 도 99 도 7 보다 크다.
+    /// 내일 끝나는 회원에게 아무 말도 못 하고 있었다는 뜻이고, 갱신은
+    /// 그 한마디에서 일어난다.
+    #[test]
+    fn days_left_counts_real_days_not_digits() {
+        let row = json!({ "kind": "period", "expires": 20_260_922 });
+        assert_eq!(decorate(&row, 20_260_823)["days_left"], json!(30));
+    }
+
+    /// 내일 끝나는 회원. 1 이어야 화면이 갱신을 권한다.
+    #[test]
+    fn a_pass_ending_tomorrow_says_one_day() {
+        let row = json!({ "kind": "period", "expires": 20_260_901 });
+        let d = decorate(&row, 20_260_831);
+        assert_eq!(d["days_left"], json!(1));
+        assert!(d["valid"].as_bool().unwrap(), "하루 남았는데 막혔다");
+    }
+
+    /// 마지막 날에도 들어올 수 있어야 한다.
+    #[test]
+    fn the_last_day_is_still_valid() {
+        let row = json!({ "kind": "period", "expires": 20_260_922 });
+        let d = decorate(&row, 20_260_922);
+        assert_eq!(d["days_left"], json!(0));
+        assert!(d["valid"].as_bool().unwrap(), "마지막 날에 막혔다");
+    }
+
+    /// 해를 넘기는 1년권. 9999 같은 값이 나오면 안 된다.
+    #[test]
+    fn a_year_pass_does_not_report_thousands_of_days() {
+        let row = json!({ "kind": "period", "expires": 20_270_822 });
+        assert_eq!(decorate(&row, 20_260_823)["days_left"], json!(364));
+    }
 }

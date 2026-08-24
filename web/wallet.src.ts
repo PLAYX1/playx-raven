@@ -1158,6 +1158,72 @@ async function decodeImage(file: File): Promise<string | null> {
 }
 
 /** 찍은 것을 보내기 칸에 넣는다. */
+/**
+ * 카메라로 QR 을 읽는다. 못 쓰면 `false` 를 돌려주고, 부르는 쪽이 사진
+ * 고르기로 넘어간다.
+ *
+ * 🔴 아이폰 사파리에는 `BarcodeDetector` 가 없다 — 손님 절반이 아이폰이라
+ * 그쪽은 사진 길이 본선이다. 여기서는 **되는 기기만** 카메라를 쓴다.
+ *
+ * 카메라를 켠 뒤에는 **반드시 끈다.** 안 끄면 지갑 화면을 닫아도 카메라
+ * 불이 켜져 있고, 그건 지갑 앱이 절대 하면 안 되는 일이다.
+ */
+async function scanWithCamera(note: HTMLElement): Promise<boolean> {
+  const Det = (window as unknown as { BarcodeDetector?: new (o: unknown) => {
+    detect(v: unknown): Promise<{ rawValue: string }[]>;
+  } }).BarcodeDetector;
+  if (!Det || !navigator.mediaDevices?.getUserMedia) return false;
+
+  let stream: MediaStream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "environment" },
+    });
+  } catch {
+    // 권한을 안 주셨거나 카메라가 없다. 사진 고르기로 넘어간다.
+    return false;
+  }
+
+  const box = document.createElement("div");
+  box.className = "camwrap";
+  const video = document.createElement("video");
+  video.autoplay = true;
+  video.playsInline = true;
+  video.muted = true;
+  video.srcObject = stream;
+  const stop = document.createElement("button");
+  stop.className = "camstop";
+  stop.textContent = "그만두기";
+  box.append(video, stop);
+  document.body.appendChild(box);
+
+  const shut = () => {
+    stream.getTracks().forEach((t) => t.stop());
+    box.remove();
+  };
+  stop.onclick = shut;
+
+  const det = new Det({ formats: ["qr_code"] });
+  note.textContent = "QR 을 화면 안에 넣어 주세요.";
+  return await new Promise<boolean>((done) => {
+    const tick = async () => {
+      if (!box.isConnected) return done(true); // 손님이 그만뒀다
+      try {
+        const found = await det.detect(video);
+        if (found[0]?.rawValue) {
+          shut();
+          applyScanned(found[0].rawValue, note);
+          return done(true);
+        }
+      } catch {
+        /* 한 장 못 읽어도 계속 본다 */
+      }
+      setTimeout(tick, 250);
+    };
+    tick();
+  });
+}
+
 function applyScanned(text: string, note: HTMLElement): boolean {
   const got = readPayUri(text);
   if (!got) {
@@ -1951,14 +2017,25 @@ function openBuyFromHash(): boolean {
   }
   buying = { to, rvn, what };
   openSend();
+  // 결제 중에는 「전부 넣기」를 감춘다. 금액이 이미 정해져 있고, 그 자리에
+  // 「수수료 빼고」가 보이면 개발비를 빼는 단추로 읽힌다.
+  const max = document.getElementById("btn-send-max");
+  if (max) max.style.display = "none";
   ($("send-to") as HTMLInputElement).value = to;
   ($("send-amount") as HTMLInputElement).value = String(rvn);
   const dev = Math.round(rvn * DEV_FEE_RATE * 1e8) / 1e8;
+  // 🔴 「돈은 만나서, 물건을 보고 보내세요」를 여기서 빼야 한다. 그건
+  //    **중고 거래**용 경고다 — 모르는 사람에게 먼저 돈을 보내지 말라는 뜻.
+  //    가게 결제에는 안 맞는다. 손님은 이미 카운터 앞에 서 있고, 그 자리에서
+  //    받은 QR 을 찍은 것이다. 거기에 「만나서 보내세요」가 뜨면 손님은
+  //    **뭘 조심하라는 건지 모른 채 불안해진다.**
+  //
+  //    개발비도 사과하듯 길게 적지 않는다. 카드 단말기는 2~3% 를 떼면서
+  //    아무 말도 안 한다. 우리는 1% 이고, 한 줄로 적는다.
   say(
     "send-msg",
-    `${what ? `「${what}」 · ` : ""}파는 분에게 ${(rvn - dev).toFixed(8).replace(/0+$/, "")} RVN, ` +
-      `개발비 ${dev} RVN(1%) 이 한 번에 나갑니다. ` +
-      `돈은 만나서, 물건을 보고 보내세요.`,
+    `${what ? `「${what}」 · ` : ""}받는 분 ${(rvn - dev).toFixed(8).replace(/0+$/, "")} RVN · ` +
+      `개발비 ${dev} RVN (1%)`,
   );
   return true;
 }
@@ -1971,6 +2048,9 @@ function openSend(): void {
   // 그건 장터 수수료가 아니라 몰래 걷는 지갑 사용료다.
   // (`openBuyFromHash` 가 이 함수를 부른 뒤 다시 채운다)
   buying = null;
+  // 그냥 보내기로 돌아오면 다시 보인다 — 지갑을 비울 때 필요한 단추다.
+  const maxBtn = document.getElementById("btn-send-max");
+  if (maxBtn) maxBtn.style.display = "";
   ($("send-to") as HTMLInputElement).value = "";
   ($("send-amount") as HTMLInputElement).value = "";
   say("send-msg", "");
@@ -2128,8 +2208,13 @@ function wire(): void {
   $("btn-scan").onclick = async () => {
     const note = scanNote || document.createElement("div");
     note.textContent = "";
-    // 🔴 아이폰 사파리에는 BarcodeDetector 가 없다. 있으면 쓰고,
-    //    없으면 사진을 찍어 그림에서 읽는다 — 손님 절반이 아이폰이다.
+    // 🔴 여기 「크롬이면 카메라를 바로 연다」고 적혀 있었는데 **그 코드가
+    //    없었다.** 어느 브라우저든 파일 고르기만 열렸고, 데스크톱에서는
+    //    「QR 찍기」를 눌렀는데 「파일 선택」 창이 떠서 뭘 하라는 건지
+    //    알 수 없었다. 적어 둔 것과 도는 것이 달랐다.
+    //
+    //    카메라를 쓸 수 있으면 카메라를, 안 되면 사진을 고르게 한다.
+    if (await scanWithCamera(note)) return;
     ($("scan-file") as HTMLInputElement).click();
   };
   ($("scan-file") as HTMLInputElement).onchange = async (e) => {
@@ -2140,12 +2225,19 @@ function wire(): void {
     try {
       const text = await decodeImage(f);
       if (!text) {
-        note.textContent = "QR 을 못 읽었습니다. 화면 전체가 나오게 다시 찍어 주세요.";
+        // 🔴 「다시 찍어 주세요」라고만 하면 무엇을 다시 하라는 건지 모른다.
+        //    다시 누를 자리를 여기 붙인다 — 단추를 찾아 위로 올라가게 하지 않는다.
+        note.innerHTML =
+          'QR 을 못 읽었습니다. 화면 전체가 나오게 찍어 주세요. ' +
+          '<button class="quiet" id="scan-again" style="min-height:44px">다시 하기</button>';
+        const again = document.getElementById("scan-again");
+        if (again) again.onclick = () => ($("btn-scan") as HTMLElement).click();
         return;
       }
       applyScanned(text, note);
-    } catch {
-      note.textContent = "QR 을 못 읽었습니다.";
+    } catch (err) {
+      // 무엇이 막았는지 적는다. 「못 읽었습니다」만 뜨면 다음에 할 일이 없다.
+      note.textContent = `QR 을 못 읽었습니다 — ${String(err).slice(0, 60)}`;
     } finally {
       (e.target as HTMLInputElement).value = "";
     }

@@ -111,7 +111,18 @@ pub async fn refund(
         .ok_or_else(|| "sendtoaddress did not return a txid".to_string())?;
     remember_ours(&txid);
 
-    Ok(json!({ "txid": txid, "amount": amount, "to": to_address }))
+    // 🔴 **여기를 안 부르면 함수만 있고 안 도는 코드가 된다.** 환불한 만큼
+    //    우리 몫도 되돌린다 — 취소된 장사에서 개발비를 받으면 안 된다.
+    let back = crate::devfee::refund_credit(amount);
+
+    Ok(json!({
+        "txid": txid,
+        "amount": amount,
+        "to": to_address,
+        // 얼마를 깎았는지 화면이 말할 수 있게 돌려준다. 0 이면 이미 체인으로
+        // 나간 몫이라 못 되돌린 것이고, 그것도 사실대로 적어야 한다.
+        "dev_fee_back": back,
+    }))
 }
 
 /// Spends this app did not make.

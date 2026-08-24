@@ -98,7 +98,53 @@ pub fn node_rename(name: String) -> Result<Value, String> {
 /// The one-file backup and the nightly folder backup should not need two
 /// restore paths — two paths means one of them is the tested one and the other
 /// is where the bug lives.
+#[cfg(test)]
+mod lock_tests {
+    /// 🔴 **암호를 만들어 놓고 쓸 길이 없었다.** 새 컴퓨터에는 열쇠 파일이
+    /// 없으니 「다른 컴퓨터의 자물쇠」라고 답하고 끝났다 — 정확히 백업이
+    /// 필요한 그 상황에서 막힌다.
+    #[test]
+    fn 새_컴퓨터에서_암호로_되돌릴_수_있다() {
+        let src = include_str!("recover.rs");
+        assert!(src.contains("unwrap_key"), "암호로 여는 줄이 없다");
+        assert!(src.contains("strip_wrap"), "봉투를 떼는 줄이 없다");
+        // 두 명령 다 암호를 받아야 한다. 하나만 받으면 살펴보기는 되고
+        // 되돌리기가 안 되는, 더 나쁜 상태가 된다.
+        // 🔴 그냥 이름으로 찾으면 **이 시험 자신**을 읽는다(같은 함정 세 번째).
+        //    선언부만 본다.
+        for decl in [
+            format!("pub fn restore_{}(", "survey"),
+            format!("pub async fn restore_{}(", "apply"),
+        ] {
+            let decl = decl.as_str();
+            let i = src.find(decl).unwrap_or_else(|| panic!("{decl} 이 없다"));
+            let sig: String = src[i..].chars().take(140).collect();
+            assert!(sig.contains("pass"), "{decl} 가 암호를 안 받는다");
+        }
+    }
+
+    /// 🔴 **되돌릴 수 없는 백업은 백업이 아니다.**
+    ///
+    /// 잠근 백업의 확장자를 `.잠김` → `.pxlock` 으로 바꿨는데, 되돌리기 쪽
+    /// 코드와 파일 고르는 창이 옛 이름만 알고 있었다. 그래서 사장이 파일을
+    /// 고르려 하면 **회색으로 뜨고 「열기」가 안 눌렸다.** 만드는 이름을
+    /// 바꾸면 여는 쪽도 같이 바꿔야 한다.
+    #[test]
+    fn 되돌리기가_잠근_백업을_안다() {
+        let src = include_str!("recover.rs");
+        assert!(src.contains("unlock_file"), "잠근 백업을 푸는 줄이 없다");
+        assert!(src.contains(r#"ext == "pxlock""#), "새 이름을 모른다");
+        // 옛 이름으로 만들어 둔 백업이 이미 있다. 계속 받아야 한다.
+        assert!(src.contains(r#"ext == "잠김""#), "옛 이름 백업을 버리면 안 된다");
+    }
+}
+
 fn unpack_if_zip(input: &str) -> Result<PathBuf, String> {
+    unpack_with(input, "")
+}
+
+/// 암호를 받아서 푼다. 빈 문자열이면 이 컴퓨터의 열쇠만 쓴다.
+fn unpack_with(input: &str, pass: &str) -> Result<PathBuf, String> {
     let p = PathBuf::from(input);
     if p.is_dir() {
         return Ok(p);
@@ -110,6 +156,43 @@ fn unpack_if_zip(input: &str) -> Result<PathBuf, String> {
     let scratch = dir().join("restore-open");
     let _ = std::fs::remove_dir_all(&scratch);
     std::fs::create_dir_all(&scratch).map_err(|e| e.to_string())?;
+
+    // 🔴 **잠근 백업을 먼저 푼다.** 우리가 만드는 백업은 `.zip.pxlock`(옛 이름은
+    //    `.zip.잠김`)이라 그대로는 zip 이 아니다. 여태 되돌리기는 zip 만 알아서,
+    //    잠근 백업을 고르면 「PLAY X Raven 백업이 아닙니다」로 끝났다.
+    //    **백업은 만드는 것보다 되돌리는 것이 본업이다.**
+    let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("");
+    let p = if ext == "pxlock" || ext == "잠김" {
+        let opened = scratch.join("backup.zip");
+        // 🔴 **암호를 만들어 놓고 쓸 길이 없었다.** 새 컴퓨터에서는 이 컴퓨터의
+        //    열쇠 파일이 없으니 「다른 컴퓨터의 자물쇠」라고 답하고 끝났다 —
+        //    정확히 백업이 필요한 그 상황에서 막힌다. 암호를 받는다.
+        //
+        //    순서: ① 이 컴퓨터 열쇠 ② 사장이 친 암호. 같은 컴퓨터에서는
+        //    ①에서 바로 열리므로 암호를 안 물어본다.
+        let raw = std::fs::read(&p).map_err(|e| format!("읽지 못했습니다: {e}"))?;
+        let mut done = false;
+        if let Ok(k) = crate::lockbox::key_get_or_make() {
+            if crate::lockbox::unlock_file(&p, &opened, &k).is_ok() {
+                done = true;
+            }
+        }
+        if !done {
+            if pass.trim().is_empty() {
+                return Err("이 백업은 다른 컴퓨터에서 만든 것입니다. 그때 정하신 암호를 넣어 주세요.".into());
+            }
+            let (_body, env) = crate::lockbox::strip_wrap(&raw);
+            let env = env.ok_or_else(|| {
+                "이 백업에는 암호로 여는 길이 없습니다. 만든 컴퓨터의 열쇠(9agn-…)가 있어야 합니다.".to_string()
+            })?;
+            let k = crate::lockbox::unwrap_key(env, pass)?;
+            crate::lockbox::unlock_file(&p, &opened, &k)
+                .map_err(|_| "암호는 맞는데 파일이 손상됐습니다.".to_string())?;
+        }
+        opened
+    } else {
+        p
+    };
 
     let file = std::fs::File::open(&p).map_err(|e| format!("열지 못했습니다: {e}"))?;
     let mut zip = zip::ZipArchive::new(file)
@@ -136,9 +219,9 @@ fn unpack_if_zip(input: &str) -> Result<PathBuf, String> {
 /// names: "회원 12명" is checkable at a glance and "passes.json 4.2 KB" is not.
 /// Restoring the wrong night's folder is the mistake this exists to catch.
 #[tauri::command]
-pub fn restore_survey(folder: String) -> Result<Value, String> {
+pub fn restore_survey(folder: String, pass: Option<String>) -> Result<Value, String> {
     // 폴더든 zip 이든 여기서 같아진다.
-    let dir = unpack_if_zip(&folder)?;
+    let dir = unpack_with(&folder, pass.as_deref().unwrap_or(""))?;
 
     let count_in = |file: &str, key: &str| -> Option<usize> {
         let v: Value =
@@ -213,8 +296,12 @@ pub fn restore_survey(folder: String) -> Result<Value, String> {
 /// not have to touch its wallet. The wallet is the one that can go badly, so it
 /// carries its own conditions rather than riding along with the rest.
 #[tauri::command]
-pub async fn restore_apply(folder: String, keys: Vec<String>) -> Result<Value, String> {
-    let src = unpack_if_zip(&folder)?;
+pub async fn restore_apply(
+    folder: String,
+    keys: Vec<String>,
+    pass: Option<String>,
+) -> Result<Value, String> {
+    let src = unpack_with(&folder, pass.as_deref().unwrap_or(""))?;
     let want = |k: &str| keys.iter().any(|x| x == k);
 
     let mut done = Vec::new();
@@ -377,7 +464,7 @@ mod tests {
 
     #[test]
     fn a_missing_folder_is_refused() {
-        assert!(restore_survey("/nope/not/here".into()).is_err());
+        assert!(restore_survey("/nope/not/here".into(), None).is_err());
     }
 
     #[test]

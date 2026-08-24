@@ -288,7 +288,13 @@
         border: 1px solid var(--line); border-radius: 12px;
         background: var(--bg); color: var(--fg); }
       #talk-go { min-height: 48px; font-size: 16px; }
-</style>
+      /* 카메라로 QR 읽기. 화면을 덮되 그만두는 길을 크게 둔다. */
+      .camwrap { position: fixed; inset: 0; background: #000; z-index: 90;
+                 display: flex; flex-direction: column; }
+      .camwrap video { flex: 1; width: 100%; object-fit: cover; }
+      .camstop { min-height: 60px; font-size: 17px; border: 0; background: #fff;
+                 color: #141518; font-family: inherit; }
+    </style>
     <script src="/i18n.js"></script>
       <!-- 카톡·텔레그램에 링크를 붙였을 때 뜨는 카드.
          ⚠️ 매장 노드는 자기 주소(192.168.x)라 바깥에서 그림을 못 가져온다.
@@ -601,7 +607,12 @@
 
       <label for="send-amount">금액 (RVN)</label>
       <input id="send-amount" inputmode="decimal" autocomplete="off" placeholder="0.00" />
-      <button id="btn-send-max" class="quiet">수수료 빼고 전부 넣기</button>
+      <!-- 🔴 **결제 중에는 안 보인다.** 이 단추는 「가진 것 전부에서 채굴
+           수수료만 빼고 넣기」다 — 지갑을 비울 때 쓰는 것이고, 가게에
+           돈을 낼 때는 금액이 이미 정해져 있다.
+           그 자리에 「수수료 빼고」가 떠 있으면 **개발비를 빼는 단추로
+           읽힌다.** 실제로 그렇게 읽혔다. 결제 화면에서는 숨긴다. -->
+      <button id="btn-send-max" class="quiet">가진 것 전부 넣기</button>
 
       <div class="msg" id="send-msg"></div>
       <button id="btn-send-review" class="primary">확인 화면으로</button>
