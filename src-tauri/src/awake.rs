@@ -18,6 +18,14 @@
 //! 그래서 **「장사」 모드일 때만** 붙잡는다(`mode.rs`). 그리고 붙잡고 있으면
 //! 화면에 그렇게 적는다 — 전기를 쓰는 일을 몰래 하지 않는다.
 //!
+//! ## 🔴 예외 하나 — 다시 훑는 동안
+//!
+//! 색인을 만들려고 세워 둔 컴퓨터는 대개 「돕기」다. 그런데 재색인은 몇
+//! 시간짜리라, 위 규칙만 있으면 그 사이에 잠들어 **처음부터 다시 훑는다.**
+//! 34GB 를 두 번 훑는 셈이다.
+//!
+//! 그래서 **다시 훑는 동안은 모드와 상관없이** 붙잡고, 끝나면 놓는다.
+//!
 //! ## 세 시스템이 다 다르다
 //!
 //! | | 방법 | 화면은 |
@@ -47,15 +55,29 @@ static WANT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(
 ///
 /// 갈림은 하나뿐이라 함수로 뺄 것도 없어 보이지만, **이 판단이 틀리면
 /// 남의 노트북 배터리를 밤새 태운다.** 시험할 수 있게 떼어 둔다.
-pub fn should_hold(mode: &str) -> bool {
+pub fn should_hold(mode: &str, reindexing: bool) -> bool {
+    // 🔴 재색인 중이면 **모드와 상관없이** 붙잡는다.
+    //
+    //    이게 없으면 이런 일이 난다: 색인 전용으로 세워 둔 컴퓨터는 대개
+    //    「돕기」다. 그런데 재색인은 몇 시간짜리라 그 사이에 컴퓨터가 잠들고,
+    //    아침에 와 보면 **처음부터 다시 훑고 있다.** 34GB 를 두 번 훑는다.
+    //
+    //    「돕기니까 배터리를 아낀다」는 규칙이 여기서는 정반대로 작동한다.
+    //    끝나면 다시 놓으므로 계속 켜 두는 것도 아니다.
+    if reindexing {
+        return true;
+    }
     mode == "shop"
 }
 
-/// 「장사」면 붙잡고, 아니면 놓는다. 몇 번을 불러도 결과가 같다.
+/// 지금 상태에 맞춰 붙잡거나 놓는다. 몇 번을 불러도 결과가 같다.
 pub fn sync_with_mode() {
     let m = crate::mode::mode_get();
     let mode = m["mode"].as_str().unwrap_or("");
-    if should_hold(mode) {
+    let busy = crate::reindex_run::reindex_state()["running"]
+        .as_bool()
+        .unwrap_or(false);
+    if should_hold(mode, busy) {
         hold();
     } else {
         release();
@@ -174,13 +196,21 @@ fn win_set(flags: u32) -> bool {
 pub fn awake_status() -> Value {
     let on = ON.lock().map(|g| *g).unwrap_or(false);
     let mode = crate::mode::mode_get()["mode"].as_str().unwrap_or("").to_string();
+    let busy = crate::reindex_run::reindex_state()["running"]
+        .as_bool()
+        .unwrap_or(false);
     json!({
         "holding": on,
         "mode": mode,
-        "note": if on {
+        "why": if busy { "reindex" } else if mode == "shop" { "shop" } else { "" },
+        "note": if on && busy {
+            // 왜 붙잡는지 다르면 문장도 달라야 한다. 색인 중인 사람에게
+            // 「입금」 이야기를 하면 무슨 말인지 모른다.
+            "다시 훑는 동안 이 컴퓨터가 잠들지 않게 하고 있습니다. 잠들면 처음부터 다시 훑습니다."
+        } else if on {
             "이 컴퓨터가 잠들지 않게 하고 있습니다 — 밤새 들어온 입금을 받으려면 필요합니다."
-        } else if should_hold(&mode) {
-            "이 컴퓨터를 깨워 둘 수 없습니다. 잠들면 밤사이 입금 확인이 멈춥니다."
+        } else if should_hold(&mode, busy) {
+            "이 컴퓨터를 깨워 둘 수 없습니다. 잠들면 하던 일이 멈춥니다."
         } else {
             // 「돕기」인 사람에게 굳이 할 말이 아니다. 배터리는 그 사람 것이다.
             ""
@@ -194,16 +224,32 @@ mod tests {
 
     #[test]
     fn 장사만_붙잡는다() {
-        assert!(should_hold("shop"));
+        assert!(should_hold("shop", false));
     }
 
     /// 🔴 이게 이 파일에서 제일 중요한 시험이다. 여기가 틀리면 장사를 안
     ///    하는 사람의 노트북 배터리가 밤새 탄다.
     #[test]
     fn 돕기와_안_고른_사람은_안_건드린다() {
-        assert!(!should_hold("help"), "돕는 사람의 배터리는 그 사람 것이다");
-        assert!(!should_hold(""), "아직 안 고른 사람도 건드리지 않는다");
-        assert!(!should_hold("SHOP"), "모르는 값에 기대서 켜지 않는다");
-        assert!(!should_hold("shop "), "공백이 붙은 값도 아니다");
+        assert!(!should_hold("help", false), "돕는 사람의 배터리는 그 사람 것이다");
+        assert!(!should_hold("", false), "아직 안 고른 사람도 건드리지 않는다");
+        assert!(!should_hold("SHOP", false), "모르는 값에 기대서 켜지 않는다");
+        assert!(!should_hold("shop ", false), "공백이 붙은 값도 아니다");
+    }
+
+    /// 🔴 색인 전용 컴퓨터는 대개 「돕기」다. 여기가 틀리면 몇 시간짜리
+    ///    재색인 도중에 잠들어 **34GB 를 두 번 훑는다.**
+    #[test]
+    fn 다시_훑는_동안은_모드와_상관없이_붙잡는다() {
+        assert!(should_hold("help", true), "돕기여도 색인 중엔 붙잡아야 한다");
+        assert!(should_hold("", true), "아직 안 고른 컴퓨터여도 마찬가지");
+        assert!(should_hold("shop", true));
+    }
+
+    /// 그리고 끝나면 원래 규칙으로 돌아가야 한다 — 계속 붙잡고 있으면
+    /// 그건 그냥 배터리를 태우는 프로그램이다.
+    #[test]
+    fn 다_훑고_나면_돕기는_다시_놓는다() {
+        assert!(!should_hold("help", false));
     }
 }

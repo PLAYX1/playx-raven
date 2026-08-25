@@ -102,10 +102,17 @@ pub async fn reindex_start() -> Result<Value, String> {
     if RUNNING.swap(true, Ordering::Relaxed) {
         return Err("이미 다시 훑고 있습니다.".into());
     }
+    // 🔴 몇 시간짜리 일이다. 그동안 컴퓨터가 잠들면 **처음부터 다시** 훑는다.
+    //    색인 전용으로 세워 둔 컴퓨터는 대개 「돕기」라 평소에는 안 붙잡는데,
+    //    여기서만은 붙잡아야 한다. 끝나면 놓는다.
+    crate::awake::sync_with_mode();
     let out = run().await;
     if out.is_err() {
         RUNNING.store(false, Ordering::Relaxed);
+        crate::awake::sync_with_mode();
     }
+    // 끝났으면(성공이든 실패든) 원래 규칙으로 돌아간다 — 「돕기」면 놓는다.
+    crate::awake::sync_with_mode();
     out
 }
 
@@ -180,6 +187,7 @@ async fn run() -> Result<Value, String> {
             agent_release();
         }
         RUNNING.store(false, Ordering::Relaxed);
+        crate::awake::sync_with_mode();
         return Err("노드가 다시 뜨지 않았습니다. 「이 컴퓨터」에서 상태를 봐 주세요.".into());
     }
     // ── 6. 감독자는 **아직 올리지 않는다** ───────────────────────────
@@ -219,6 +227,7 @@ pub async fn reindex_progress() -> Value {
     let answers = answers && assets_ok;
     if answers {
         RUNNING.store(false, Ordering::Relaxed);
+        crate::awake::sync_with_mode();
         // 색인이 진짜 답을 했다. 이제서야 표시를 남긴다.
         let _ = std::fs::write(crate::paths::app_file("reindexed-addressindex"), "1");
         let _ = std::fs::write(crate::paths::app_file("reindexed-assetindex"), "1");
