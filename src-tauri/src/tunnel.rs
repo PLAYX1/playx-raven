@@ -86,7 +86,9 @@ pub fn find_cloudflared() -> Option<std::path::PathBuf> {
         }
     }
     // 마지막으로 PATH. 터미널에서 켠 경우에는 이쪽이 맞는다.
-    Command::new("which")
+    // 🔴 윈도우에는 `which` 가 없다. `where` 다. 그래서 cloudflared 를
+    //    멀쩡히 깔아 둔 윈도우 사장에게 「없습니다」라고 말했다.
+    crate::quiet::cmd(if cfg!(windows) { "where" } else { "which" })
         .arg("cloudflared")
         .output()
         .ok()
@@ -158,6 +160,25 @@ fn is_our_orphan(line: &str, want: &str) -> bool {
 
 fn kill_orphans(port: u16) -> usize {
     let want = format!("http://127.0.0.1:{port}");
+    // 🔴 윈도우에는 `ps` 도 `kill` 도 없다. 여기가 유닉스 명령뿐이라
+    //    **윈도우에서는 유령이 하나도 안 치워졌다** — 맥에서 고친 그 병이
+    //    윈도우에는 그대로 남아 있었던 것이다.
+    #[cfg(target_os = "windows")]
+    {
+        // 명령줄까지 보고 **우리 포트를 물고 있는 것만** 고른다.
+        let script = format!(
+            "Get-CimInstance Win32_Process -Filter \"Name='cloudflared.exe'\" |              Where-Object {{ $_.CommandLine -like '*{}*' }} |              ForEach-Object {{ Stop-Process -Id $_.ProcessId -Force; 'killed' }}",
+            want
+        );
+        let out = crate::quiet::cmd("powershell")
+            .args(["-NoProfile", "-Command", &script])
+            .output();
+        return out
+            .map(|o| String::from_utf8_lossy(&o.stdout).matches("killed").count())
+            .unwrap_or(0);
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
     let out = match crate::quiet::cmd("ps").args(["-axo", "pid=,command="]).output() {
         Ok(o) => o,
         Err(_) => return 0,
@@ -178,6 +199,7 @@ fn kill_orphans(port: u16) -> usize {
         n += 1;
     }
     n
+    }
 }
 
 /// Opens a public address that forwards to the phone server.

@@ -38,43 +38,179 @@ fn sysctl(key: &str) -> Option<String> {
         .filter(|o| o.status.success())
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
 }
+/// 이 컴퓨터 이름. 못 읽으면 빈 문자열 — 지어내지 않는다.
+fn machine_model() -> String {
+    #[cfg(target_os = "macos")]
+    {
+        return sysctl("hw.model").unwrap_or_default();
+    }
+    #[cfg(target_os = "windows")]
+    {
+        return crate::quiet::cmd("powershell")
+            .args(["-NoProfile", "-Command", "(Get-CimInstance Win32_ComputerSystem).Model"])
+            .output()
+            .ok()
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .unwrap_or_default();
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        return std::fs::read_to_string("/sys/devices/virtual/dmi/id/product_name")
+            .map(|s| s.trim().to_string())
+            .unwrap_or_default();
+    }
+}
+
+/// 메모리 몇 GB인가.
+fn memory_gb() -> Option<u64> {
+    #[cfg(target_os = "macos")]
+    {
+        return sysctl("hw.memsize")
+            .and_then(|v| v.parse::<u64>().ok())
+            .map(|b| b / 1_073_741_824);
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let out = crate::quiet::cmd("powershell")
+            .args([
+                "-NoProfile",
+                "-Command",
+                "(Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory",
+            ])
+            .output()
+            .ok()?;
+        let b: u64 = String::from_utf8_lossy(&out.stdout).trim().parse().ok()?;
+        return Some(b / 1_073_741_824);
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        let txt = std::fs::read_to_string("/proc/meminfo").ok()?;
+        let kb: u64 = txt
+            .lines()
+            .find(|l| l.starts_with("MemTotal:"))?
+            .split_whitespace()
+            .nth(1)?
+            .parse()
+            .ok()?;
+        return Some(kb / 1_048_576);
+    }
+}
+
+/// 배터리가 있나 = 노트북인가. 채굴·연결 수를 정하는 데 쓴다.
+fn has_battery() -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        return crate::quiet::cmd("pmset")
+            .args(["-g", "batt"])
+            .output()
+            .ok()
+            .map(|o| String::from_utf8_lossy(&o.stdout).contains("InternalBattery"))
+            .unwrap_or(false);
+    }
+    #[cfg(target_os = "windows")]
+    {
+        // 배터리가 없는 데스크톱은 이 조회가 빈 값을 준다.
+        return crate::quiet::cmd("powershell")
+            .args([
+                "-NoProfile",
+                "-Command",
+                "if (Get-CimInstance Win32_Battery) { 'yes' } else { 'no' }",
+            ])
+            .output()
+            .ok()
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim() == "yes")
+            .unwrap_or(false);
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        return std::path::Path::new("/sys/class/power_supply/BAT0").exists()
+            || std::path::Path::new("/sys/class/power_supply/BAT1").exists();
+    }
+}
+
+/// 빈 공간이 몇 GB인가. **세 시스템 다 다르게 물어야 한다.**
+///
+/// 🔴 여기가 `df -g /` 하나였다. 윈도우에는 `df` 도 `/` 도 없어서 **늘 0**이
+/// 나왔고, 그래서 첫 화면의 「가게에만 씁니다」가 **「빈 공간이 0 GB뿐이라
+/// 고를 수 없습니다」로 잠겨** 있었다. 34GB 짜리 체인이 이미 들어 있는
+/// 컴퓨터에서도 그랬다.
+///
+/// 사장은 자기 컴퓨터가 멀쩡한데 왜 못 고르는지 알 길이 없다. 그리고 이건
+/// 이 프로그램의 **첫 화면**이라, 여기서 막히면 그다음이 없다.
+///
+/// 오늘만 같은 병을 셋 봤다 — `df`, `sha256sum`, `brew install ipfs`.
+/// 전부 「맥에서 짜고 맥에서만 시험한」 자리다.
+fn free_space_gb() -> Option<u64> {
+    #[cfg(target_os = "windows")]
+    {
+        // 앱이 실제로 쓸 드라이브를 본다. C: 가 꽉 차 있어도 자료는 D: 에
+        // 있을 수 있다.
+        let dir = crate::paths::app_dir();
+        let drive = dir
+            .to_string_lossy()
+            .chars()
+            .take(2)
+            .collect::<String>();
+        let drive = if drive.len() == 2 && drive.ends_with(':') {
+            drive
+        } else {
+            "C:".to_string()
+        };
+        // `wmic` 은 최신 윈도우에서 빠지는 중이라 PowerShell 을 쓴다.
+        let out = crate::quiet::cmd("powershell")
+            .args([
+                "-NoProfile",
+                "-Command",
+                &format!(
+                    "(Get-PSDrive -Name {} ).Free",
+                    drive.trim_end_matches(':')
+                ),
+            ])
+            .output()
+            .ok()?;
+        let bytes: u64 = String::from_utf8_lossy(&out.stdout).trim().parse().ok()?;
+        return Some(bytes / 1_073_741_824);
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        // `-g` 는 맥의 GB 단위. 리눅스 coreutils 에는 없어서 `-BG` 를 쓴다.
+        for args in [["-g", "/"], ["-BG", "/"]] {
+            let out = match crate::quiet::cmd("df").args(args).output() {
+                Ok(o) => o,
+                Err(_) => continue,
+            };
+            let txt = String::from_utf8_lossy(&out.stdout);
+            let n = txt
+                .lines()
+                .nth(1)
+                .and_then(|l| l.split_whitespace().nth(3).map(|s| s.trim_end_matches('G').to_string()))
+                .and_then(|s| s.parse::<u64>().ok());
+            if let Some(v) = n {
+                return Some(v);
+            }
+        }
+        None
+    }
+}
+
 
 /// Everything about this machine that changes what we should recommend.
 #[tauri::command]
 pub fn inspect_machine() -> Value {
-    let model = sysctl("hw.model").unwrap_or_default();
-    let cores = sysctl("hw.ncpu")
-        .and_then(|v| v.parse::<u32>().ok())
+    // 🔴 여기가 전부 맥 명령이었다(`sysctl`·`pmset`). 윈도우·리눅스에서는
+    //    빈 값이 되어 **코어 4개·메모리 8GB·데스크톱**으로 넘어갔다. 실제
+    //    기계가 무엇이든 같은 답이 나온 것이다. 첫 화면의 권유가 이 값으로
+    //    정해지는데, 그러면 그 권유는 그냥 짐작이다.
+    let model = machine_model();
+    // 코어 수는 표준 라이브러리가 안다. 명령을 부를 이유가 없었다.
+    let cores = std::thread::available_parallelism()
+        .map(|n| n.get() as u32)
         .unwrap_or(4);
-    let mem_gb = sysctl("hw.memsize")
-        .and_then(|v| v.parse::<u64>().ok())
-        .map(|b| b / 1_073_741_824)
-        .unwrap_or(8);
+    let mem_gb = memory_gb().unwrap_or(8);
+    // 배터리가 있으면 노트북이다. 모델 이름은 해마다 바뀌고 나라마다 다르다.
+    let laptop = has_battery() || model.contains("MacBook") || model.contains("Laptop");
 
-    // A battery is the honest way to tell a laptop from a desktop; the model
-    // string varies by year and by locale, and Mac mini vs MacBook is exactly
-    // the distinction that decides mining and connection limits.
-    let laptop = std::process::Command::new("pmset")
-        .args(["-g", "batt"])
-        .output()
-        .ok()
-        .map(|o| String::from_utf8_lossy(&o.stdout).contains("InternalBattery"))
-        .unwrap_or(false)
-        || model.contains("MacBook");
-
-    let free_gb = std::process::Command::new("df")
-        .args(["-g", "/"])
-        .output()
-        .ok()
-        .and_then(|o| {
-            String::from_utf8_lossy(&o.stdout)
-                .lines()
-                .nth(1)?
-                .split_whitespace()
-                .nth(3)?
-                .parse::<u64>()
-                .ok()
-        })
+    let free_gb = free_space_gb()
         .unwrap_or(0);
 
     let gpu = crate::mining::detect_gpu();
@@ -199,7 +335,24 @@ pub fn disk_now() -> Value {
     let dir = crate::paths::raven_dir().to_string_lossy().to_string();
 
     let gb = |p: &str| -> u64 {
-        std::process::Command::new("du")
+        // 🔴 `du` 는 윈도우에 없다. 거기서는 늘 0 이 나와서 화면이 「체인이
+        //    0GB」 라고 말했다 — 34GB 가 들어 있는 컴퓨터에서도.
+        #[cfg(target_os = "windows")]
+        {
+            let script = format!(
+                "(Get-ChildItem -LiteralPath '{}' -Recurse -File -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum",
+                p.replace('\'', "''")
+            );
+            return crate::quiet::cmd("powershell")
+                .args(["-NoProfile", "-Command", &script])
+                .output()
+                .ok()
+                .and_then(|o| String::from_utf8_lossy(&o.stdout).trim().parse::<f64>().ok())
+                .map(|b| (b / 1_073_741_824.0) as u64)
+                .unwrap_or(0);
+        }
+        #[allow(unreachable_code)]
+        crate::quiet::cmd("du")
             .args(["-sg", p])
             .output()
             .ok()
@@ -250,4 +403,17 @@ pub async fn apply_setup(conf: Value, ipfs_profile: String) -> Result<Value, Str
         "needs_node_restart": true,
         "note": "노드를 다시 켜야 적용됩니다. 영업 중이면 마감 뒤에 하세요.",
     }))
+}
+
+#[cfg(test)]
+mod space_tests {
+    /// 🔴 이 값이 0 이면 첫 화면의 「가게에만 씁니다」가 잠긴다. 사장은
+    ///    자기 컴퓨터가 멀쩡한데 왜 못 고르는지 알 길이 없고, 그게 이
+    ///    프로그램의 **첫 화면**이라 거기서 끝난다. 윈도우에서 실제로 그랬다.
+    #[test]
+    fn 빈_공간이_0_이_아니다() {
+        let v = super::free_space_gb();
+        assert!(v.is_some(), "빈 공간을 아예 못 읽었다");
+        assert!(v.unwrap() > 0, "0 GB 로 읽혔다 — 첫 화면이 잠긴다");
+    }
 }

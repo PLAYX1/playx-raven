@@ -45,7 +45,7 @@ fn agent_hold() -> bool {
     if !p.is_file() {
         return false;
     }
-    let _ = std::process::Command::new("launchctl")
+    let _ = crate::quiet::cmd("launchctl")
         .args(["unload", "-w"])
         .arg(&p)
         .status();
@@ -55,7 +55,7 @@ fn agent_hold() -> bool {
 fn agent_release() {
     let p = plist_path();
     if p.is_file() {
-        let _ = std::process::Command::new("launchctl")
+        let _ = crate::quiet::cmd("launchctl")
             .args(["load", "-w"])
             .arg(&p)
             .status();

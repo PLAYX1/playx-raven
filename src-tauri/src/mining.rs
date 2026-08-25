@@ -461,7 +461,8 @@ fn find_miner(name: &str) -> Option<String> {
         }
     }
     // PATH 에 있으면 그걸로.
-    ProcCommand::new("which")
+    // 윈도우에는 `which` 가 없다. `where` 다.
+    ProcCommand::new(if cfg!(windows) { "where" } else { "which" })
         .arg(name)
         .output()
         .ok()

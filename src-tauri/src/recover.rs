@@ -56,16 +56,12 @@ pub fn node_identity() -> Value {
     // 아직 없으면 지금 만든다. id 는 기계에서 뽑는다 — 난수를 저장하기 전에
     // 앱이 죽으면 다음 실행에서 다른 id 가 나오고, 그러면 같은 가게가 두 곳이
     // 된다.
-    let seed = format!(
-        "{}-{}",
-        std::process::Command::new("sysctl")
-            .args(["-n", "kern.uuid"])
-            .output()
-            .ok()
-            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-            .unwrap_or_default(),
-        std::env::var("HOME").unwrap_or_default()
-    );
+    // 🔴 여기가 `sysctl kern.uuid` 와 `$HOME` 이었다. 윈도우에는 **둘 다
+    //    없다** — `sysctl` 이 없고 집 폴더 변수는 `USERPROFILE` 이다.
+    //    그래서 씨앗이 모든 윈도우 컴퓨터에서 같아지고, **모든 윈도우
+    //    노드가 같은 고유번호**를 갖게 된다. 같은 가게가 두 곳으로 보이는
+    //    것을 막으려고 만든 자리인데 정반대가 된다.
+    let seed = format!("{}-{}", machine_uuid(), crate::paths::home().to_string_lossy());
     let mut h = sha2::Sha256::new();
     use sha2::Digest;
     h.update(seed.as_bytes());
@@ -75,6 +71,46 @@ pub fn node_identity() -> Value {
     let _ = std::fs::create_dir_all(dir());
     let _ = std::fs::write(node_path(), serde_json::to_vec_pretty(&v).unwrap_or_default());
     v
+}
+
+/// 이 기계의 고유번호. 다시 켜도 같은 값이 나와야 한다.
+fn machine_uuid() -> String {
+    #[cfg(target_os = "macos")]
+    {
+        return crate::quiet::cmd("sysctl")
+            .args(["-n", "kern.uuid"])
+            .output()
+            .ok()
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .unwrap_or_default();
+    }
+    #[cfg(target_os = "windows")]
+    {
+        // 윈도우를 깔 때 한 번 정해지고 안 바뀐다.
+        return crate::quiet::cmd("reg")
+            .args([
+                "query",
+                r"HKLM\SOFTWARE\Microsoft\Cryptography",
+                "/v",
+                "MachineGuid",
+            ])
+            .output()
+            .ok()
+            .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+            .and_then(|t| {
+                t.lines()
+                    .find(|l| l.contains("MachineGuid"))
+                    .and_then(|l| l.split_whitespace().last().map(|s| s.to_string()))
+            })
+            .unwrap_or_default();
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        return std::fs::read_to_string("/etc/machine-id")
+            .or_else(|_| std::fs::read_to_string("/var/lib/dbus/machine-id"))
+            .map(|s| s.trim().to_string())
+            .unwrap_or_default();
+    }
 }
 
 /// Names this machine.

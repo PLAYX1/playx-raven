@@ -72,6 +72,38 @@ pub fn autostart_status() -> Value {
 /// it is an exposure.
 #[tauri::command]
 pub fn autostart_enable(ravend_path: String, data_dir: String) -> Result<(), String> {
+    // 🔴 이 아래는 전부 맥의 launchd 다. 윈도우에서는 **아무 일도 안 일어났고**,
+    //    그래서 재부팅하면 가게가 안 돌아왔다. 계산대 컴퓨터는 정전 한 번이면
+    //    끝인 셈이다.
+    //
+    //    윈도우에서는 **앱 자체를** 자동시작에 넣는다. 앱이 켜지면 노드도
+    //    조용히 켠다(`services_start`). 노드만 따로 넣으면 검은 창이 뜬다.
+    #[cfg(target_os = "windows")]
+    {
+        let _ = (&ravend_path, &data_dir);
+        let exe = std::env::current_exe()
+            .map_err(|e| format!("이 프로그램의 자리를 찾지 못했습니다: {e}"))?;
+        let out = crate::quiet::cmd("reg")
+            .args([
+                "add",
+                r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run",
+                "/v",
+                "PLAY X Raven",
+                "/t",
+                "REG_SZ",
+                "/d",
+                &exe.to_string_lossy(),
+                "/f",
+            ])
+            .output()
+            .map_err(|e| format!("자동시작을 켜지 못했습니다: {e}"))?;
+        if !out.status.success() {
+            return Err("자동시작을 켜지 못했습니다.".into());
+        }
+        return Ok(());
+    }
+    #[allow(unreachable_code)]
+    {
     if !std::path::Path::new(&ravend_path).exists() {
         return Err(format!("{ravend_path} 를 찾지 못했습니다."));
     }
@@ -100,21 +132,39 @@ pub fn autostart_enable(ravend_path: String, data_dir: String) -> Result<(), Str
     std::fs::write(plist_path(), plist).map_err(|e| format!("설정을 쓰지 못했습니다: {e}"))?;
 
     // launchctl load 는 실패해도 파일은 남는다 — 다음 로그인에 뜬다.
-    let _ = std::process::Command::new("launchctl")
+    let _ = crate::quiet::cmd("launchctl")
         .args(["load", "-w"])
         .arg(plist_path())
         .status();
     Ok(())
+    }
 }
 
 #[tauri::command]
 pub fn autostart_disable() -> Result<(), String> {
-    let _ = std::process::Command::new("launchctl")
+    #[cfg(target_os = "windows")]
+    {
+        // 없는 것을 지우려 해도 오류가 아니다 — 끄는 것이 목적이다.
+        let _ = crate::quiet::cmd("reg")
+            .args([
+                "delete",
+                r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run",
+                "/v",
+                "PLAY X Raven",
+                "/f",
+            ])
+            .output();
+        return Ok(());
+    }
+    #[allow(unreachable_code)]
+    {
+    let _ = crate::quiet::cmd("launchctl")
         .args(["unload", "-w"])
         .arg(plist_path())
         .status();
     let _ = std::fs::remove_file(plist_path());
     Ok(())
+    }
 }
 
 /// One answer to "can this shop take an order right now".
