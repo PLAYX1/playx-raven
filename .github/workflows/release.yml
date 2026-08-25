@@ -163,6 +163,12 @@ jobs:
       #    그래서 맥에서는 이 단계가 그냥 넘어가고, 앱은 사장이 따로 깔아 둔
       #    것을 찾아 쓴다. 우리가 빌드해 올리면 그때 여기에 더한다.
       - name: 레이븐 노드 넣기
+        # 🔴 리눅스는 뺀다. AppImage 는 거의 안 눌려서, 넣으면 136MB 가 되고
+        #    깃허브 파일 한도(100MB)를 넘어 **올리기가 통째로 실패**한다.
+        #    릴리스 자산으로 올리면 되지만, 그건 다른 저장소라 토큰이 따로
+        #    필요하다(github.token 은 403). 대표에게 토큰을 만들어 달라고
+        #    하는 대신, 지금은 리눅스만 예전처럼 따로 깔게 둔다.
+        if: matrix.target != 'x86_64-unknown-linux-gnu'
         shell: bash
         run: |
           set -euo pipefail
@@ -236,6 +242,12 @@ jobs:
       #
       # kubo 는 공식 배포에 넷이 다 있다 — 애플 실리콘 맥까지.
       - name: 파일창고 넣기
+        # 🔴 리눅스는 뺀다. AppImage 는 거의 안 눌려서, 넣으면 136MB 가 되고
+        #    깃허브 파일 한도(100MB)를 넘어 **올리기가 통째로 실패**한다.
+        #    릴리스 자산으로 올리면 되지만, 그건 다른 저장소라 토큰이 따로
+        #    필요하다(github.token 은 403). 대표에게 토큰을 만들어 달라고
+        #    하는 대신, 지금은 리눅스만 예전처럼 따로 깔게 둔다.
+        if: matrix.target != 'x86_64-unknown-linux-gnu'
         shell: bash
         run: |
           set -euo pipefail
@@ -455,7 +467,7 @@ jobs:
             const V=process.argv[1];
             // 🔴 설치 파일은 이제 릴리스 자산이다. 깃 가지 주소를 적으면
             //    판올림이 없는 파일을 받으러 간다(100MB 넘는 것은 깃에 없다).
-            const R='https://github.com/PLAYX1/playx-raven-releases/releases/download/latest';
+            const R='https://raw.githubusercontent.com/PLAYX1/playx-raven-releases/dist';
             // 🔴 이름을 **짐작하지 않는다.** 처음엔 「.app.tar.gz」 라고 적었는데
             //    실제로는 「.tar.gz」 로 떨어져서 맥 둘이 표에서 통째로 빠졌다
             //    (윈도우·리눅스만 담겼다). 짐작이 틀려도 오류가 안 나고
@@ -521,29 +533,3 @@ jobs:
       #
       #    「latest」 라는 움직이는 태그 하나를 계속 덮어쓴다. 그래야
       #    랜딩과 판올림이 가리키는 주소가 안 바뀐다.
-      # 설치 파일은 릴리스 자산으로 올린다.
-      #
-      # 깃 가지에는 한 파일 100MB 까지다. 노드와 파일창고를 넣으니 리눅스
-      # 것이 136MB 가 되어 올리기가 통째로 실패했다. 릴리스는 2GB 까지다.
-      #
-      # latest 라는 움직이는 태그를 계속 덮어쓴다 — 랜딩과 판올림이 가리키는
-      # 주소가 안 바뀌어야 한다.
-      - name: 설치 파일 올리기
-        if: always()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          V="${{ inputs.version }}"
-          if [ -z "$V" ]; then V="${GITHUB_REF_NAME#v}"; fi
-          if [ -z "$V" ] || [ "$V" = "main" ]; then V="0.0.0-dev"; fi
-          cd rel
-          ls -la
-          R=PLAYX1/playx-raven-releases
-          for TAG in "v$V" latest; do
-            if ! gh release view "$TAG" --repo "$R" >/dev/null 2>&1; then
-              gh release create "$TAG" --repo "$R" --title "PLAY X Raven $V" --notes "설치 파일만 있습니다." || true
-            fi
-            gh release upload "$TAG" --repo "$R" --clobber PLAY-X-Raven-* || echo "올리기 실패: $TAG"
-          done
