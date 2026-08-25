@@ -1,5 +1,6 @@
 mod ai;
 mod auto;
+mod awake;
 mod backup;
 mod classes;
 mod conf;
@@ -336,6 +337,7 @@ pub fn run() {
             reindex_run::reindex_progress,
             mode::mode_get,
             mode::mode_set,
+            awake::awake_status,
             autostart::autostart_get,
             autostart::autostart_set,
             tunnel::tunnel_status,
@@ -372,6 +374,11 @@ pub fn run() {
             server::set_order_state,
         ])
         .setup(|app| {
+            // 🔴 「장사」면 이 컴퓨터가 잠들지 않게 붙잡는다. 노드를 앱에서
+            //    떼어 놓는 것만으로는 부족하다 — 컴퓨터가 자면 노드도 멈추고,
+            //    밤새 들어온 입금이 아침까지 확인되지 않는다.
+            //    「돕기」인 사람의 노트북은 건드리지 않는다(배터리는 그 사람 것).
+            awake::sync_with_mode();
             // ── 창을 닫아도 가게는 계속 돈다 ────────────────────────────
             //
             // 🔴 X 를 누르면 앱이 통째로 끝나고 있었다. 그러면 **손님 폰

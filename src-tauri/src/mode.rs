@@ -67,6 +67,9 @@ pub fn mode_set(mode: String) -> Result<Value, String> {
     }
     std::fs::write(&dir, serde_json::to_string_pretty(&v).unwrap_or_default())
         .map_err(|e| format!("고르신 것을 저장하지 못했습니다: {e}"))?;
+    // 🔴 여기서 안 부르면, 「장사」→「돕기」로 바꾼 뒤에도 컴퓨터를 계속
+    //    깨워 둔다. 다음에 앱을 켤 때까지 배터리가 탄다.
+    crate::awake::sync_with_mode();
     Ok(mode_get())
 }
 
