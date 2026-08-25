@@ -30,7 +30,46 @@ use std::sync::Mutex;
 /// Processes this app started, so it can stop exactly those and no others.
 static OURS: Mutex<Option<Vec<(String, Child)>>> = Mutex::new(None);
 
+/// 우리 설치 파일에 **같이 들어온** 프로그램이 있나.
+///
+/// 🔴 사장님께 「먼저 레이븐 코어를 받아 설치하세요」라고 말하는 순간 문이
+/// 닫힌다. 70대 사장이 그걸 하지 않는다. 그래서 노드를 **우리 설치 파일에
+/// 같이 넣는다.**
+///
+/// 실행 중에 내려받는 것과는 다르다. 그건 계속 안 한다 — 무엇을 받았는지
+/// 증명할 수 없고, 계산대 프로그램이 악성코드가 되는 길이다. 같이 넣은 것은
+/// **우리가 서명한 설치 파일 안**에 있고, 만들 때 체크섬으로 확인한다.
+fn bundled(name: &str) -> Option<std::path::PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    let dir = exe.parent()?;
+    let file = if cfg!(windows) { format!("{name}.exe") } else { name.to_string() };
+    for p in [
+        // 윈도우 NSIS·리눅스: 실행 파일 옆
+        // Tauri `resources` 는 상대 경로를 그대로 살려 넣는다.
+        // 우리는 `vendor/ravend` 로 넣으므로 그 자리를 먼저 본다.
+        dir.join("vendor").join(&file),
+        dir.join(&file),
+        dir.join("bin").join(&file),
+        // 맥: PLAY X Raven.app/Contents/MacOS/ 옆의 Resources/
+        dir.join("../Resources/vendor").join(&file),
+        dir.join("../Resources").join(&file),
+        dir.join("../Resources/bin").join(&file),
+        // 리눅스 AppImage: usr/bin/ 옆의 usr/lib/
+        dir.join("../lib").join(&file),
+    ] {
+        if p.is_file() {
+            return Some(p);
+        }
+    }
+    None
+}
+
 pub fn which(name: &str) -> Option<String> {
+    // 🔴 **우리가 같이 넣은 것을 가장 먼저 본다.** 사장이 따로 깔아 둔 것이
+    //    있으면 그것도 쓰지만, 아무것도 없어도 돌아야 한다.
+    if let Some(p) = bundled(name) {
+        return Some(p.to_string_lossy().to_string());
+    }
     // GUI 앱은 PATH 가 거의 비어 있다. 코어를 깔아 둔 자리를 직접 본다.
     let home = crate::paths::home();
     let mut cands: Vec<std::path::PathBuf> = Vec::new();

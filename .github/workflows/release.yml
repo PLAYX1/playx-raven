@@ -142,6 +142,72 @@ jobs:
 
       - run: npm ci
 
+      # ── 레이븐 노드를 같이 넣는다 ─────────────────────────────────
+      #
+      # 🔴 사장님께 「먼저 레이븐 코어를 받아 설치하세요」라고 말하는 순간
+      #    문이 닫힌다. 70대 사장이 그걸 하지 않는다. 실제로 그 벽에 걸렸다.
+      #
+      #    실행 중에 내려받는 것과는 다르다. 그건 계속 안 한다 — 무엇을
+      #    받았는지 증명할 수 없다. 여기서 받는 것은 **체크섬을 대조**하고,
+      #    우리가 서명한 설치 파일 **안에** 들어간다.
+      #
+      # 🔴 애플 실리콘 맥은 공식 배포가 없다(win64·linux·osx64[인텔]뿐).
+      #    그래서 맥에서는 이 단계가 그냥 넘어가고, 앱은 사장이 따로 깔아 둔
+      #    것을 찾아 쓴다. 우리가 빌드해 올리면 그때 여기에 더한다.
+      - name: 레이븐 노드 넣기
+        shell: bash
+        run: |
+          set -euo pipefail
+          B=https://github.com/RavenProject/Ravencoin/releases/download/v4.8.0
+          P=raven-4.8.0-225491298
+          mkdir -p src-tauri/vendor
+          case "${{ matrix.target }}" in
+            x86_64-pc-windows-msvc)
+              F=$P-win64.zip
+              # 2026-08-26 에 손으로 받아 대조한 값이다. 이 값이 안 맞으면
+              # 받은 것이 우리가 확인한 그 파일이 아니다 — 멈춘다.
+              WANT=7b39dface10966fc92703eacd9e562cd61d9c18f1fcad5dcbc196742e0ff1752
+              ;;
+            x86_64-unknown-linux-gnu)
+              F=$P-x86_64-linux-gnu.tar.gz
+              WANT=cb359b6a5b42e47068cd655231484fcc763d2f79eae5ea318b029c704a4dc020
+              ;;
+            *)
+              echo "이 기계에는 공식 노드 배포가 없습니다. 넘어갑니다: ${{ matrix.target }}"
+              exit 0
+              ;;
+          esac
+          curl -fsSL "$B/$F" -o node.pkg
+          GOT=$(sha256sum node.pkg | cut -d" " -f1)
+          if [ "$GOT" != "$WANT" ]; then
+            echo "🔴 체크섬이 다릅니다. 받은 것: $GOT / 적힌 것: $WANT"
+            exit 1
+          fi
+          mkdir -p nodetmp
+          case "$F" in
+            *.zip)    unzip -q node.pkg -d nodetmp ;;
+            *.tar.gz) tar -xzf node.pkg -C nodetmp ;;
+          esac
+          # `ravend` 하나만 꺼낸다. 지갑 창(raven-qt)은 안 넣는다 — 우리 앱이
+          # 그 일을 하고, 40MB 를 더 받게 할 이유가 없다.
+          BIN=$(find nodetmp -type f \( -name ravend -o -name ravend.exe \) | head -1)
+          if [ -z "$BIN" ]; then
+            echo "🔴 받은 꾸러미 안에 ravend 가 없습니다."
+            exit 1
+          fi
+          cp "$BIN" "src-tauri/vendor/$(basename "$BIN")"
+          chmod +x "src-tauri/vendor/$(basename "$BIN")" || true
+          ls -la src-tauri/vendor/
+          # 🔴 파일이 정말 있을 때만 `resources` 를 켠다. 글로브가 아무것도
+          #    못 찾으면 Tauri 빌드가 통째로 멈춘다(실측).
+          node -e "
+            const fs=require('fs'), p='src-tauri/tauri.conf.json';
+            const d=JSON.parse(fs.readFileSync(p,'utf8'));
+            d.bundle.resources=['vendor/ravend*'];
+            fs.writeFileSync(p, JSON.stringify(d,null,2)+'\n');
+            console.log('resources 켬');
+          "
+
       - name: 만들기
         env:
           # 자동 판올림이 검사할 서명. 없으면 만들어지긴 하는데 판올림이 안 된다.
