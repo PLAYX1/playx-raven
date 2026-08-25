@@ -36,15 +36,54 @@ fn data_dir() -> PathBuf {
     crate::paths::raven_dir()
 }
 
+/// 노드에 붙을 때 쓸 `사용자:암호`.
+///
+/// ## 🔴 `.cookie` 하나만 보면 안 된다
+///
+/// 코어는 `raven.conf` 에 `rpcuser`·`rpcpassword` 가 **없을 때만** `.cookie` 를
+/// 만든다. 그런데 레이븐 코어를 오래 쓴 사람은 그 둘을 적어 둔 경우가 많다
+/// (지갑 프로그램·채굴기·스크립트를 붙이려면 그렇게 한다).
+///
+/// 그러면 노드가 **멀쩡히 떠 있어도** 우리는 영원히 못 붙는다. 화면에는
+/// 「노드가 꺼져 있습니다」가 뜨고, 「지금 켜기」를 눌러도 아무 일도 안
+/// 일어난다 — 이미 돌고 있으니 켤 것이 없기 때문이다. 사장은 왜 안 되는지
+/// 알 길이 없다. 실측으로 이 상태를 만났다(2026-08-26).
+///
+/// 그래서 **둘 다 본다.** 쿠키가 먼저고, 없으면 설정 파일을 읽는다.
 fn read_cookie() -> Result<String, String> {
     let path = data_dir().join(".cookie");
-    std::fs::read_to_string(&path).map_err(|_| {
-        format!(
-            "Could not read {}. The node is probably not running, or was started \
-             without server=1 in raven.conf.",
-            path.display()
-        )
-    })
+    if let Ok(v) = std::fs::read_to_string(&path) {
+        let v = v.trim().to_string();
+        if !v.is_empty() {
+            return Ok(v);
+        }
+    }
+    // 설정 파일에 적어 둔 것이 있으면 그걸 쓴다.
+    if let Some((u, p)) = conf_rpc_auth() {
+        return Ok(format!("{u}:{p}"));
+    }
+    Err(format!(
+        "Could not read {}, and raven.conf has no rpcuser/rpcpassword. \
+         The node is probably not running, or was started without server=1.",
+        path.display()
+    ))
+}
+
+/// `raven.conf` 의 `rpcuser`·`rpcpassword`. 둘 다 있어야 쓸모가 있다.
+fn conf_rpc_auth() -> Option<(String, String)> {
+    let txt = std::fs::read_to_string(data_dir().join("raven.conf")).ok()?;
+    let get = |key: &str| -> Option<String> {
+        txt.lines()
+            .map(|l| l.trim())
+            // `#` 로 주석 처리한 줄은 살아 있는 설정이 아니다.
+            .filter(|l| !l.starts_with('#'))
+            .find_map(|l| {
+                let (k, v) = l.split_once('=')?;
+                (k.trim() == key).then(|| v.trim().to_string())
+            })
+            .filter(|v| !v.is_empty())
+    };
+    Some((get("rpcuser")?, get("rpcpassword")?))
 }
 
 /// Shared JSON-RPC entry point. Public so sibling modules (issue, shop) do not

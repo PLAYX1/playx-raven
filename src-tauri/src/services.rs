@@ -457,6 +457,17 @@ async fn spawn_node_inner(cmd: &mut Command) -> Result<Option<Child>, String> {
         //    자식들을 **잡 오브젝트**에 묶고, 부모가 끝나면 윈도우가 그 잡을
         //    통째로 죽인다. 떼어 놓지 않으면 앱을 닫는 순간 노드도 같이 죽고,
         //    가게는 밤새 들어온 입금을 못 받는다.
+        // 🔴 **설정 파일의 `daemon=1` 을 눌러 끈다.**
+        //
+        //    우리는 윈도우에서 `-daemon` 을 안 붙인다. 그런데 사장의
+        //    `raven.conf` 에 `daemon=1` 이 적혀 있으면 코어가 **거기서 읽어**
+        //    데몬이 되려 하고, 윈도우에서는 그 자리에서 죽는다:
+        //
+        //      ravend.cpp:166  "-daemon is not supported on this operating system"
+        //
+        //    레이븐 코어를 오래 쓴 사람에게 흔한 설정이다. 실측으로 만났다
+        //    (2026-08-26). 명령줄이 설정 파일을 이기므로 여기서 못 박는다.
+        cmd.arg("-daemon=0");
         const NO_WINDOW: u32 = 0x0800_0000;
         const NEW_GROUP: u32 = 0x0000_0200;
         const BREAKAWAY: u32 = 0x0100_0000;
@@ -562,6 +573,24 @@ pub async fn open_shop() -> Result<Value, String> {
 #[cfg(test)]
 mod tests {
     use super::node_why;
+
+
+    /// 🔴 윈도우에서 노드가 안 뜨던 두 이유를 못 박는다. 둘 다 실측으로
+    ///    만났고, 둘 다 **오류 없이 조용히 실패**한다.
+    #[test]
+    fn 윈도우는_데몬을_눌러_끄고_창을_안_띄운다() {
+        let src = include_str!("services.rs");
+        let i = src.find("fn spawn_node_inner").expect("띄우는 함수가 있어야 한다");
+        let body = &src[i..];
+        // 설정 파일에 daemon=1 이 있으면 코어가 거기서 읽어 데몬이 되려 하고,
+        // 윈도우에서는 그 자리에서 죽는다. 명령줄로 눌러 끈다.
+        assert!(
+            body.contains(&format!("\"-daemon{}0\"", "=")),
+            "설정 파일의 daemon=1 을 안 누르면 윈도우에서 노드가 죽는다"
+        );
+        // 잡에서 안 빠져나오면 앱을 닫을 때 노드도 같이 죽는다.
+        assert!(body.contains("BREAKAWAY"), "잡에서 빠져나와야 밤새 산다");
+    }
 
     /// 🔴 사장이 읽는 문장이다. 여기가 틀리면 코어를 켜 둔 사장이 「노드가
     ///    켜지는 중」을 몇 시간 기다린다. 실제로 그랬다.
