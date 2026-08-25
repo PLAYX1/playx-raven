@@ -9,7 +9,36 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use std::path::PathBuf;
 
-const RPC_URL: &str = "http://127.0.0.1:8766";
+/// 레이븐 기본 RPC 포트.
+const RPC_PORT_DEFAULT: u16 = 8766;
+
+/// 노드에 말 거는 주소.
+///
+/// 🔴 여기가 `http://127.0.0.1:8766` 으로 **못 박혀** 있었다. 그런데
+/// `rpcuser`·`rpcpassword` 를 적어 둘 정도로 손을 본 사람은 `rpcport` 도
+/// 바꿔 뒀을 수 있다(채굴기·다른 지갑과 겹치지 않게 옮기는 일이 흔하다).
+///
+/// 그러면 노드가 멀쩡히 떠 있어도 우리는 빈 포트를 두드리고, 화면에는
+/// 「노드가 꺼져 있습니다」가 뜬다. 설정 파일이 말하는 자리로 간다.
+fn rpc_url() -> String {
+    let port = conf_value("rpcport")
+        .and_then(|v| v.parse::<u16>().ok())
+        .unwrap_or(RPC_PORT_DEFAULT);
+    format!("http://127.0.0.1:{port}")
+}
+
+/// `raven.conf` 에서 값 하나를 읽는다. 주석(`#`)으로 죽여 둔 줄은 안 본다.
+fn conf_value(key: &str) -> Option<String> {
+    let txt = std::fs::read_to_string(data_dir().join("raven.conf")).ok()?;
+    txt.lines()
+        .map(|l| l.trim())
+        .filter(|l| !l.starts_with('#'))
+        .find_map(|l| {
+            let (k, v) = l.split_once('=')?;
+            (k.trim() == key).then(|| v.trim().to_string())
+        })
+        .filter(|v| !v.is_empty())
+}
 
 /// One asset the wallet holds, with whatever IPFS content it points at.
 #[derive(Debug, Clone, serde::Serialize)]
@@ -71,19 +100,7 @@ fn read_cookie() -> Result<String, String> {
 
 /// `raven.conf` 의 `rpcuser`·`rpcpassword`. 둘 다 있어야 쓸모가 있다.
 fn conf_rpc_auth() -> Option<(String, String)> {
-    let txt = std::fs::read_to_string(data_dir().join("raven.conf")).ok()?;
-    let get = |key: &str| -> Option<String> {
-        txt.lines()
-            .map(|l| l.trim())
-            // `#` 로 주석 처리한 줄은 살아 있는 설정이 아니다.
-            .filter(|l| !l.starts_with('#'))
-            .find_map(|l| {
-                let (k, v) = l.split_once('=')?;
-                (k.trim() == key).then(|| v.trim().to_string())
-            })
-            .filter(|v| !v.is_empty())
-    };
-    Some((get("rpcuser")?, get("rpcpassword")?))
+    Some((conf_value("rpcuser")?, conf_value("rpcpassword")?))
 }
 
 /// Shared JSON-RPC entry point. Public so sibling modules (issue, shop) do not
@@ -137,7 +154,7 @@ pub async fn call_rpc(method: &str, params: Value) -> Result<Value, String> {
     let _permit = rpc_gate().acquire().await.map_err(|e| e.to_string())?;
 
     let response = client()
-        .post(RPC_URL)
+        .post(rpc_url())
         .basic_auth(user, Some(pass))
         .json(&body)
         .send()
@@ -148,7 +165,7 @@ pub async fn call_rpc(method: &str, params: Value) -> Result<Value, String> {
                 // 영영 멈췄다. 멈춘 화면은 고장난 화면과 구별되지 않는다.
                 format!("노드가 {RPC_TIMEOUT_SECS}초 안에 답하지 않았습니다 ({method}). 따라잡는 중이거나 바쁠 수 있습니다.")
             } else {
-                format!("노드에 닿지 못했습니다 ({RPC_URL}): {e}")
+                format!("노드에 닿지 못했습니다 ({}): {e}", rpc_url())
             }
         })?;
 
@@ -420,4 +437,21 @@ pub async fn network_state() -> Value {
         // 멤풀은 336시간(14일) 보관한다. 그 안에 인터넷이 돌아오면 저절로 나간다.
         "held_hours": 336,
     })
+}
+
+#[cfg(test)]
+mod conf_tests {
+    /// 🔴 레이븐 코어를 오래 쓴 사람은 raven.conf 에 손을 대 둔다.
+    ///    그걸 안 읽으면 노드가 멀쩡히 떠 있어도 「꺼져 있습니다」가 뜬다.
+    ///    실측으로 만난 상태다(2026-08-26).
+    #[test]
+    fn 설정을_읽는_길이_있다() {
+        let src = include_str!("raven.rs");
+        // 쿠키가 없을 때 설정 파일의 사용자·암호를 쓴다.
+        assert!(src.contains("conf_rpc_auth"), "rpcuser 를 안 읽으면 못 붙는다");
+        assert!(src.contains(&format!("\"rpc{}\"", "user")));
+        assert!(src.contains(&format!("\"rpc{}\"", "password")));
+        // 포트를 옮겨 뒀을 수도 있다.
+        assert!(src.contains(&format!("\"rpc{}\"", "port")), "포트가 못 박혀 있으면 빈 자리를 두드린다");
+    }
 }

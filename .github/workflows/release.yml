@@ -456,8 +456,8 @@ jobs:
             // 🔴 설치 파일은 이제 릴리스 자산이다. 깃 가지 주소를 적으면
             //    판올림이 없는 파일을 받으러 간다(100MB 넘는 것은 깃에 없다).
             const R='https://github.com/PLAYX1/playx-raven-releases/releases/download/latest';
-            // 🔴 이름을 **짐작하지 않는다.** 처음엔 `.app.tar.gz` 라고 적었는데
-            //    실제로는 `.tar.gz` 로 떨어져서 맥 둘이 표에서 통째로 빠졌다
+            // 🔴 이름을 **짐작하지 않는다.** 처음엔 「.app.tar.gz」 라고 적었는데
+            //    실제로는 「.tar.gz」 로 떨어져서 맥 둘이 표에서 통째로 빠졌다
             //    (윈도우·리눅스만 담겼다). 짐작이 틀려도 오류가 안 나고
             //    **조용히 맥 사장만 판올림을 못 받는다** — 제일 나쁜 종류다.
             //    그래서 그 자리에 실제로 있는 .sig 를 세어 담는다.
@@ -520,28 +520,29 @@ jobs:
       #
       #    「latest」 라는 움직이는 태그 하나를 계속 덮어쓴다. 그래야
       #    랜딩과 판올림이 가리키는 주소가 안 바뀐다.
+      # 설치 파일은 릴리스 자산으로 올린다.
+      #
+      # 깃 가지에는 한 파일 100MB 까지다. 노드와 파일창고를 넣으니 리눅스
+      # 것이 136MB 가 되어 올리기가 통째로 실패했다. 릴리스는 2GB 까지다.
+      #
+      # latest 라는 움직이는 태그를 계속 덮어쓴다 — 랜딩과 판올림이 가리키는
+      # 주소가 안 바뀌어야 한다.
       - name: 설치 파일 올리기
         if: always()
         env:
-          GH_TOKEN: ${{ secrets.RELEASES_DEPLOY_TOKEN || github.token }}
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
           V="${{ inputs.version }}"
-          [ -z "$V" ] && V="${GITHUB_REF_NAME#v}"
-          [ -z "$V" ] || [ "$V" = "main" ] && V="0.0.0-dev"
+          if [ -z "$V" ]; then V="${GITHUB_REF_NAME#v}"; fi
+          if [ -z "$V" ] || [ "$V" = "main" ]; then V="0.0.0-dev"; fi
           cd rel
           ls -la
           R=PLAYX1/playx-raven-releases
-          # 판마다 하나, 그리고 안 바뀌는 「latest」 하나.
-          for TAG in "v$V" "latest"; do
-            gh release view "$TAG" --repo "$R" >/dev/null 2>&1 \
-              || gh release create "$TAG" --repo "$R" \
-                   --title "PLAY X Raven $V" \
-                   --notes "설치 파일만 있습니다. 소스는 여기 없습니다." \
-              || true
-            # --clobber: 같은 이름이 있으면 덮어쓴다(latest 태그에 필요).
-            gh release upload "$TAG" --repo "$R" --clobber \
-              PLAY-X-Raven-* || echo "올리기 실패: $TAG"
+          for TAG in "v$V" latest; do
+            if ! gh release view "$TAG" --repo "$R" >/dev/null 2>&1; then
+              gh release create "$TAG" --repo "$R" --title "PLAY X Raven $V" --notes "설치 파일만 있습니다." || true
+            fi
+            gh release upload "$TAG" --repo "$R" --clobber PLAY-X-Raven-* || echo "올리기 실패: $TAG"
           done
-          fi
