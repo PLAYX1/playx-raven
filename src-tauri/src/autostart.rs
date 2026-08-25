@@ -26,7 +26,7 @@ fn agents_dir() -> PathBuf {
             return PathBuf::from(p);
         }
     }
-    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
+    let home = crate::paths::home().to_string_lossy().to_string();
     PathBuf::from(home).join("Library/LaunchAgents")
 }
 

@@ -212,6 +212,24 @@ fn active_datadir() -> PathBuf {
         .unwrap_or_else(default_raven_dir)
 }
 
+/// 폴더가 몇 GB인가. 못 세면 0 — 지어내지 않는다.
+///
+/// 한 겹만 센다. `blocks/` 안에 `blk*.dat` 이 평평하게 깔려 있어서 그것만으로
+/// 충분하고, 34GB 를 재귀로 훑으면 첫 화면이 몇 초씩 멈춘다.
+fn dir_gb(dir: &std::path::Path) -> u64 {
+    let mut total: u64 = 0;
+    if let Ok(rd) = std::fs::read_dir(dir) {
+        for e in rd.flatten() {
+            if let Ok(m) = e.metadata() {
+                if m.is_file() {
+                    total += m.len();
+                }
+            }
+        }
+    }
+    total / 1_073_741_824
+}
+
 /// 지금 붙는 폴더가 어디인지, 기존 지갑이 있는지.
 #[tauri::command]
 pub fn datadir_status() -> serde_json::Value {
@@ -230,11 +248,18 @@ pub fn datadir_status() -> serde_json::Value {
     } else {
         "이 폴더에 wallet.dat 이 없습니다. 코어가 쓰는 폴더를 골라 주세요."
     };
+    // 🔴 「기존 지갑을 찾았습니다」만으로는 부족하다. 사장이 알아야 하는 것은
+    //    **다시 받아야 하나**이고, 그건 몇 시간과 하루가 갈리는 문제다.
+    //    블록 자료가 얼마나 있는지 같이 말한다.
+    let blocks_gb = dir_gb(&path.join("blocks")) + dir_gb(&path.join("chainstate"));
     serde_json::json!({
         "path": path.to_string_lossy(),
         "has_wallet": found,
         "source": source,
         "note": note,
+        // 이미 받아 둔 체인이 몇 GB인가. 0 이면 처음부터 받아야 한다.
+        "chain_gb": blocks_gb,
+        "has_chain": blocks_gb >= 1,
         "candidates": datadir_candidates().iter().map(|p| p.to_string_lossy().to_string()).collect::<Vec<_>>(),
     })
 }

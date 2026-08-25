@@ -32,7 +32,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 static RUNNING: AtomicBool = AtomicBool::new(false);
 
 fn plist_path() -> std::path::PathBuf {
-    let home = std::env::var("HOME").unwrap_or_default();
+    let home = crate::paths::home().to_string_lossy().to_string();
     std::path::PathBuf::from(home).join("Library/LaunchAgents/se.erci.playx.raven.node.plist")
 }
 

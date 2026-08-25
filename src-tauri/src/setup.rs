@@ -331,7 +331,7 @@ pub fn recommend_setup() -> Value {
 /// "설정하기" but "40 GB 되찾기", which is a different sentence entirely.
 #[tauri::command]
 pub fn disk_now() -> Value {
-    let home = std::env::var("HOME").unwrap_or_default();
+    let home = crate::paths::home().to_string_lossy().to_string();
     let dir = crate::paths::raven_dir().to_string_lossy().to_string();
 
     let gb = |p: &str| -> u64 {

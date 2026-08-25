@@ -446,7 +446,7 @@ fn find_miner(name: &str) -> Option<String> {
     if name.contains('/') {
         return std::path::Path::new(name).is_file().then(|| name.to_string());
     }
-    let home = std::env::var("HOME").unwrap_or_default();
+    let home = crate::paths::home().to_string_lossy().to_string();
     let dirs = [
         "/opt/homebrew/bin".to_string(),
         "/usr/local/bin".to_string(),

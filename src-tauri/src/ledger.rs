@@ -520,7 +520,7 @@ pub fn ledger_csv(from_ymd: i64, to_ymd: i64, tz_offset_min: i64) -> String {
 #[tauri::command]
 pub fn ledger_export(from_ymd: i64, to_ymd: i64, tz_offset_min: i64) -> Result<Value, String> {
     let csv = ledger_csv(from_ymd, to_ymd, tz_offset_min);
-    let home = std::env::var("HOME").unwrap_or_default();
+    let home = crate::paths::home().to_string_lossy().to_string();
     let dir = PathBuf::from(&home).join("Downloads");
     let dir = if dir.is_dir() { dir } else { base() };
     let path = dir.join(format!("매출장부_{from_ymd}_{to_ymd}.csv"));

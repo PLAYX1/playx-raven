@@ -29,7 +29,7 @@ use serde_json::{json, Value};
 use std::path::PathBuf;
 
 fn agents_dir() -> PathBuf {
-    let home = std::env::var("HOME").unwrap_or_default();
+    let home = crate::paths::home().to_string_lossy().to_string();
     PathBuf::from(home).join("Library/LaunchAgents")
 }
 

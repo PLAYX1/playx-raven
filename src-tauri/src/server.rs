@@ -3485,7 +3485,7 @@ pub fn table_qr_sheet(
         shop_t = esc(&shop),
     );
 
-    let home = std::env::var("HOME").unwrap_or_default();
+    let home = crate::paths::home().to_string_lossy().to_string();
     let desktop = std::path::PathBuf::from(&home).join("Desktop");
     let dir = if desktop.is_dir() {
         desktop

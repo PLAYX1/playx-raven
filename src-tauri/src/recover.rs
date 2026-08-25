@@ -649,7 +649,7 @@ pub fn recovery_card_print(now_ymd: String) -> Result<Value, String> {
 
     // 바탕화면에 둔다. 이 카드의 존재 이유는 컴퓨터가 죽어도 남는 것인데,
     // 앱 폴더 깊숙이 넣으면 찾지 못해 인쇄도 못 한다.
-    let home = std::env::var("HOME").unwrap_or_default();
+    let home = crate::paths::home().to_string_lossy().to_string();
     let desktop = std::path::PathBuf::from(&home).join("Desktop");
     let out = if desktop.is_dir() { desktop } else { dir() };
     let path = out.join("복구카드.html");

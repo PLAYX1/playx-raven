@@ -6676,6 +6676,28 @@ async function startOnboard() {
   // 그건 나중에 [이 컴퓨터] 안에서 고르면 되는 일이다.
   if (now && now.chain_gb >= 1) {
     obRec = null;
+    // 🔴 **조용히 지나가면 안 된다.** 사장은 「내가 쓰던 레이븐 코어 자료를
+    //    쓰는 건가, 34GB 를 또 받는 건가」를 알고 싶어 한다. 그게 몇 시간과
+    //    하루가 갈리는 문제다. 그런데 여태 아무 말 없이 넘어갔다.
+    //
+    //    묻지는 않는다 — 이미 있는 것을 쓰는 게 유일하게 옳은 답이라 고르게
+    //    할 이유가 없다. 다만 **무엇을 했는지 말한다.**
+    let where = "";
+    try {
+      const d = await invoke<any>("datadir_status");
+      where = String(d?.path || "");
+    } catch {}
+    const scan = $("ob-scanning");
+    if (scan) {
+      scan.innerHTML =
+        `<b>레이븐 코어 자료를 찾았습니다 — ${now.chain_gb} GB.</b><br />` +
+        "그대로 씁니다. 다시 받지 않습니다." +
+        (where
+          ? `<br /><span style="opacity:.7;font-size:13px">${escapeHtml(where)}</span>`
+          : "");
+    }
+    // 읽을 틈을 준다. 바로 넘어가면 못 본다.
+    await new Promise((r) => setTimeout(r, 2600));
     try {
       await invoke("open_shop");
     } catch {}
