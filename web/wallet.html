@@ -256,8 +256,10 @@
       .aset { display: flex; gap: 12px; align-items: center; padding: 12px 0;
         border-bottom: 1px solid var(--line); }
       .aset:last-child { border-bottom: 0; }
+      /* 산 것의 그림이다. 앨범 표지·게임 표지를 잘라 내면 무엇을 산 건지
+         못 알아본다. 비율을 지키고 전체를 보여 준다. */
       .aset .art { width: 56px; height: 56px; border-radius: 12px; flex: none;
-        object-fit: cover; background: var(--panel); }
+        object-fit: contain; background: var(--panel); }
       .aset .nm { font-weight: 600; font-size: 16px; word-break: break-all; }
       .aset .qt { font-size: 14px; color: var(--muted); margin-top: 2px; }
       /* 🔴 44px 미만은 손가락으로 못 누른다. */

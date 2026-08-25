@@ -201,7 +201,14 @@
                display: flex; align-items: center; justify-content: center;
                font-size: 12px; color: var(--faint); cursor: pointer; overflow: hidden;
                background: var(--bg); }
-      .mnpic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+      /* 🔴 `cover` 는 칸을 꽉 채우려고 **가장자리를 잘라낸다.** 가로로 긴
+         사진을 넣으면 가운데 글자 두어 자만 남아서, 사장은 자기가 올린 것이
+         무엇인지 못 알아본다("AY" 만 보였다).
+
+         `contain` 은 비율을 지키고 **전체를 보여 준다.** 남는 자리는 비고,
+         그게 잘린 사진보다 낫다 — 메뉴 사진은 장식이 아니라 무엇을 파는지
+         알아보는 표시다. */
+      .mnpic img { width: 100%; height: 100%; object-fit: contain; display: block; }
       /* 사진을 못 받았을 때. 자리를 없애지 않는다 — 다시 그리면 다시 시도한다. */
       .mnpic.nopic::after { content: "사진"; font-size: 12px; color: var(--faint); }
       /* 품목 종류 고르기. 라비 화면의 타일과 같은 문법 — 큰 카드, 굵은 제목,
@@ -482,7 +489,7 @@
                  background: color-mix(in srgb, var(--warn) 8%, transparent); }
 
       /* 메뉴 사진. 작게, 그러나 무엇인지 알아볼 수 있게. */
-      .mnthumb { display: block; width: 56px; height: 56px; object-fit: cover;
+      .mnthumb { display: block; width: 56px; height: 56px; object-fit: contain;
                  border-radius: 8px; border: 1px solid var(--line);
                  margin-bottom: 4px; cursor: pointer; background: var(--bg); }
 

@@ -143,6 +143,43 @@ pub fn tunnel_status() -> Value {
     })
 }
 
+/// 앞서 남은 cloudflared 중 **우리 포트를 물고 있는 것**만 정리한다.
+///
+/// 고르는 조건이 두 겹이다. 이름이 `cloudflared` 이고, **명령줄에 우리 주소가
+/// 그대로 들어 있어야** 한다. 둘 다 맞아야 죽인다 — 이 컴퓨터에서 남이
+/// 자기 일로 켜 둔 터널을 죽이면 그건 우리가 낸 사고다.
+/// 이 `ps` 한 줄이 **우리가 남긴 터널**인가.
+///
+/// 죽이는 일이라 판단을 떼어 둔다. 여기가 무르면 남의 프로그램을 죽인다.
+fn is_our_orphan(line: &str, want: &str) -> bool {
+    let line = line.trim();
+    line.contains("cloudflared") && line.contains(want) && !line.contains("ps -axo")
+}
+
+fn kill_orphans(port: u16) -> usize {
+    let want = format!("http://127.0.0.1:{port}");
+    let out = match std::process::Command::new("ps").args(["-axo", "pid=,command="]).output() {
+        Ok(o) => o,
+        Err(_) => return 0,
+    };
+    let mut n = 0;
+    for line in String::from_utf8_lossy(&out.stdout).lines() {
+        if !is_our_orphan(line, &want) {
+            continue;
+        }
+        let pid = match line.split_whitespace().next().and_then(|p| p.parse::<i32>().ok()) {
+            Some(p) if p > 1 => p,
+            _ => continue,
+        };
+        if std::process::id() as i32 == pid {
+            continue;
+        }
+        let _ = std::process::Command::new("kill").arg(pid.to_string()).output();
+        n += 1;
+    }
+    n
+}
+
 /// Opens a public address that forwards to the phone server.
 ///
 /// Reads cloudflared's own output for the hostname rather than guessing it.
@@ -158,6 +195,20 @@ pub fn tunnel_start(port: u16) -> Result<Value, String> {
     // PATH 에는 brew 자리가 없다.
     let exe = find_cloudflared()
         .ok_or_else(|| "cloudflared 를 찾지 못했습니다. 「받기」를 눌러 주세요.".to_string())?;
+
+    // 🔴 **앞서 남은 유령을 먼저 치운다.**
+    //
+    //    `CHILD` 는 **이번에 켠 앱이 띄운 자식**만 기억한다. 앱을 껐다 켜면
+    //    그 기억은 사라지는데 cloudflared 는 그대로 남는다. 실측(2026-08-25):
+    //    5시간 10분째 살아 있으면서 **바깥 연결이 0개**인 프로세스가 있었다.
+    //    떠 있기만 하고 주소를 못 받은 채 멈춘 것이다. 같은 자리에서 새로
+    //    띄우면 붙는 것도 확인했다 — 망 문제가 아니라 그 프로세스 문제다.
+    //
+    //    그동안 사장은 「켰는데 왜 가게가 안 보이지」를 몇 시간씩 겪는다.
+    //
+    //    🔴 이름으로 싹 죽이지 않는다. **우리 포트를 물고 있는 것만** 고른다 —
+    //    남이 자기 일로 켜 둔 cloudflared 를 죽이면 그건 우리가 낸 사고다.
+    kill_orphans(port);
     let mut child = Command::new(exe)
         .args([
             "tunnel",
@@ -588,5 +639,42 @@ mod alive_tests {
         let i = src.find("fn start_heartbeat").expect("심장이 있어야 한다");
         let body: String = src[i..].chars().take(1200).collect();
         assert!(body.contains("tunnel_status()"), "심장이 살아 있는지 안 보고 알린다");
+    }
+}
+
+#[cfg(test)]
+mod orphan_tests {
+    use super::is_our_orphan;
+
+    /// 🔴 죽이는 판단이다. 여기가 무르면 **남이 자기 일로 켜 둔 터널**을
+    ///    우리가 죽인다. 그건 우리가 낸 사고다.
+    #[test]
+    fn 남의_터널은_안_죽인다() {
+        let want = "http://127.0.0.1:8790";
+        // 다른 포트 — 남의 일이다
+        assert!(!is_our_orphan("101 cloudflared tunnel --url http://127.0.0.1:3000", want));
+        // 이름 있는 터널 — 남의 도메인이다
+        assert!(!is_our_orphan("102 cloudflared tunnel run mysite", want));
+        // 아예 다른 프로그램
+        assert!(!is_our_orphan("103 node server.js", want));
+        assert!(!is_our_orphan("", want));
+    }
+
+    #[test]
+    fn 우리_것은_잡는다() {
+        let want = "http://127.0.0.1:8790";
+        assert!(is_our_orphan(
+            " 36756 /opt/homebrew/bin/cloudflared tunnel --url http://127.0.0.1:8790 --no-autoupdate",
+            want
+        ));
+    }
+
+    /// 우리가 방금 돌린 `ps` 자신을 잡으면 우스운 일이 된다.
+    #[test]
+    fn ps_자기자신은_거른다() {
+        assert!(!is_our_orphan(
+            "999 ps -axo pid=,command= cloudflared http://127.0.0.1:8790",
+            "http://127.0.0.1:8790"
+        ));
     }
 }
