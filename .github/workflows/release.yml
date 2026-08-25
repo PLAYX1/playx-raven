@@ -172,8 +172,20 @@ jobs:
               F=$P-x86_64-linux-gnu.tar.gz
               WANT=cb359b6a5b42e47068cd655231484fcc763d2f79eae5ea318b029c704a4dc020
               ;;
+            aarch64-apple-darwin)
+              # 🔴 공식 v4.8.0 에 애플 실리콘 판이 **없다**(win64·linux·osx64[인텔]뿐).
+              #    그래서 우리가 원본 소스에서 직접 빌드해 올려 두었다.
+              #
+              #    기준: RavenProject/Ravencoin v4.8.0-2-g0894f15de, 소스 수정 없음.
+              #    묶인 라이브러리는 맥 기본 둘뿐(libSystem, libc++) — 홈브루도
+              #    boost 도 안 물려 있어 **어느 맥에서나 돈다.** 깨끗한 폴더에서
+              #    기동까지 확인했다.
+              B=https://github.com/PLAYX1/playx-raven-releases/releases/download/vendor-ravend-4.8.0
+              F=ravend-macos-arm64
+              WANT=d008e5ed56497dc394ce32e95f61a5e5b19fb59a0cbb5b6600c7aa3bc69a4806
+              ;;
             *)
-              echo "이 기계에는 공식 노드 배포가 없습니다. 넘어갑니다: ${{ matrix.target }}"
+              echo "이 기계에는 넣을 노드가 없습니다. 넘어갑니다: ${{ matrix.target }}"
               exit 0
               ;;
           esac
@@ -187,6 +199,8 @@ jobs:
           case "$F" in
             *.zip)    unzip -q node.pkg -d nodetmp ;;
             *.tar.gz) tar -xzf node.pkg -C nodetmp ;;
+            # 우리가 올린 맥 것은 실행 파일 그대로다. 풀 것이 없다.
+            *)        cp node.pkg nodetmp/ravend ;;
           esac
           # `ravend` 하나만 꺼낸다. 지갑 창(raven-qt)은 안 넣는다 — 우리 앱이
           # 그 일을 하고, 40MB 를 더 받게 할 이유가 없다.
