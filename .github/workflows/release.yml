@@ -369,23 +369,33 @@ jobs:
             const fs=require('fs');
             const V=process.argv[1];
             const R='https://raw.githubusercontent.com/PLAYX1/playx-raven-releases/dist';
-            const map={
-              'windows-x86_64': ['windows.exe'],
-              'darwin-aarch64': ['mac-apple-silicon.app.tar.gz'],
-              'darwin-x86_64':  ['mac-intel.app.tar.gz'],
-              'linux-x86_64':   ['linux.AppImage'],
+            // 🔴 이름을 **짐작하지 않는다.** 처음엔 `.app.tar.gz` 라고 적었는데
+            //    실제로는 `.tar.gz` 로 떨어져서 맥 둘이 표에서 통째로 빠졌다
+            //    (윈도우·리눅스만 담겼다). 짐작이 틀려도 오류가 안 나고
+            //    **조용히 맥 사장만 판올림을 못 받는다** — 제일 나쁜 종류다.
+            //    그래서 그 자리에 실제로 있는 .sig 를 세어 담는다.
+            const label={
+              'windows':           'windows-x86_64',
+              'mac-apple-silicon': 'darwin-aarch64',
+              'mac-intel':         'darwin-x86_64',
+              'linux':             'linux-x86_64',
             };
+            // 판올림으로 받을 수 있는 것만. dmg·msi 는 Tauri 가 안 받는다.
+            const okExt=['.tar.gz','.AppImage','.exe'];
             const platforms={};
-            for (const [k, names] of Object.entries(map)) {
-              for (const n of names) {
-                const f = \`PLAY-X-Raven-\${V}-\${n}\`;
-                if (fs.existsSync(f) && fs.existsSync(f+'.sig')) {
-                  platforms[k] = {
-                    signature: fs.readFileSync(f+'.sig','utf8').trim(),
-                    url: \`\${R}/\${f}\`,
-                  };
-                }
-              }
+            for (const f of fs.readdirSync('.')) {
+              if (!f.endsWith('.sig')) continue;
+              const base=f.slice(0,-4);
+              if (!fs.existsSync(base)) continue;
+              if (!okExt.some(e=>base.endsWith(e))) continue;
+              const m=base.match(/^PLAY-X-Raven-(.+?)-([a-z-]+)\.(?:tar\.gz|AppImage|exe)$/);
+              if (!m || m[1]!==V) continue;
+              const k=label[m[2]];
+              if (!k || platforms[k]) continue;
+              platforms[k]={
+                signature: fs.readFileSync(f,'utf8').trim(),
+                url: R+'/'+base,
+              };
             }
             const out={
               version: V,
