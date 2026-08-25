@@ -158,7 +158,7 @@ fn is_our_orphan(line: &str, want: &str) -> bool {
 
 fn kill_orphans(port: u16) -> usize {
     let want = format!("http://127.0.0.1:{port}");
-    let out = match std::process::Command::new("ps").args(["-axo", "pid=,command="]).output() {
+    let out = match crate::quiet::cmd("ps").args(["-axo", "pid=,command="]).output() {
         Ok(o) => o,
         Err(_) => return 0,
     };
@@ -174,7 +174,7 @@ fn kill_orphans(port: u16) -> usize {
         if std::process::id() as i32 == pid {
             continue;
         }
-        let _ = std::process::Command::new("kill").arg(pid.to_string()).output();
+        let _ = crate::quiet::cmd("kill").arg(pid.to_string()).output();
         n += 1;
     }
     n
@@ -623,9 +623,14 @@ mod alive_tests {
     /// 출력이 파일로 가서 안 막히고 몇 시간이고 살았다. 앱이 띄운 것만 죽었다.
     #[test]
     fn 출력_파이프를_계속_비운다() {
+        // 🔴 예전엔 함수 시작 뒤 **3,000자만** 봤다. 그 앞에 코드나 주석이
+        //    조금만 늘어도(실제로 유령 정리를 넣자 그랬다) 뒷부분이 창 밖으로
+        //    밀려나 **멀쩡한 코드를 없다고 말한다.** 시험이 무르면 고칠 것도
+        //    없는데 사람을 붙잡는다. 함수 **전체**를 본다.
         let src = include_str!("tunnel.rs");
         let i = src.find("pub fn tunnel_start").expect("시작 함수가 있어야 한다");
-        let body: String = src[i..].chars().take(3000).collect();
+        let end = src[i..].find("\n}").map(|k| i + k + 2).unwrap_or(src.len());
+        let body: String = src[i..end].to_string();
         assert!(body.contains("child.stdout.take()"), "stdout 을 안 비운다");
         assert!(
             body.matches("thread::spawn").count() >= 2,

@@ -1,6 +1,7 @@
 mod ai;
 mod auto;
 mod awake;
+mod quiet;
 mod helping;
 mod backup;
 mod classes;

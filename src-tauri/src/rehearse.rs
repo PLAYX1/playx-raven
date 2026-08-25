@@ -77,7 +77,7 @@ pub async fn rehearse_start() -> Result<Value, String> {
 
     let mut args = cli_args();
     args.push("-daemon".into());
-    std::process::Command::new(&ravend)
+    crate::quiet::cmd(&ravend)
         .args(&args)
         .spawn()
         .map_err(|e| format!("연습용 노드를 켜지 못했습니다: {e}"))?;

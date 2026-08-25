@@ -531,7 +531,7 @@ pub fn miner_start(
         args.push(p.to_string());
     }
 
-    let mut child = ProcCommand::new(&path)
+    let mut child = crate::quiet::cmd(&path)
         .args(&args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

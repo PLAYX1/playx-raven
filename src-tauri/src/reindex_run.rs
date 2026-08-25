@@ -154,7 +154,7 @@ async fn run() -> Result<Value, String> {
         return Err("ravend 를 찾지 못했습니다.".into());
     };
     let datadir = crate::paths::raven_dir().to_string_lossy().to_string();
-    std::process::Command::new(&path)
+    crate::quiet::cmd(&path)
         .arg(format!("-datadir={datadir}"))
         .arg("-server=1")
         // 🔴 `-reindex-chainstate` 가 아니다. 위 ① 참고.

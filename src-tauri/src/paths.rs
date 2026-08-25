@@ -178,7 +178,7 @@ fn datadir_candidates() -> Vec<PathBuf> {
 #[cfg(target_os = "windows")]
 fn windows_qt_datadir() -> Option<PathBuf> {
     // Raven-Qt 가 데이터 폴더를 옮겼으면 레지스트리에 남는다.
-    let out = std::process::Command::new("reg")
+    let out = crate::quiet::cmd("reg")
         .args([
             "query",
             r"HKCU\Software\Raven\Raven-Qt",

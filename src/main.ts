@@ -1226,6 +1226,9 @@ async function applyEasySetup(sug: any): Promise<void> {
 /// `null` = 아직 안 물어봤다 — 그때는 깨어 있는 쪽으로 친다. 켜자마자
 /// 자는 얼굴이 뜨면 사장은 고장으로 읽는다.
 let nodeUp: boolean | null = null;
+/** 바깥 연결이 켜져 있나. `null` 은 아직 모른다 — 모를 때 「꺼짐」이라고
+ *  말하면 켜 둔 사장에게 거짓말이 된다. */
+let outUp: boolean | null = null;
 
 async function paintStatusDots() {
   const set = (dot: string, label: string, ok: boolean, text: string) => {
@@ -1272,8 +1275,10 @@ async function paintStatusDots() {
       //    꺼져 있으면 **가게 밖에서는 아무도 못 들어온다.**
       try {
         const o = await invoke<any>("tunnel_status");
+        outUp = !!o?.running;
         set("d-out", "d-out-t", !!o?.running, o?.running ? "바깥 연결 켜짐" : "바깥 연결 꺼짐");
       } catch {
+        outUp = false;
         set("d-out", "d-out-t", false, "바깥 연결 꺼짐");
       }
     })();
@@ -1780,7 +1785,11 @@ function shopTodo(): { bad: boolean; label: string; why: string; go?: () => void
     {
       // 체인 등록은 **장사에 꼭 필요한 것이 아니다.** 같은 와이파이 주문은
       // 등록 없이도 된다. 등록은 가게 목록(장터)에 뜨기 위한 것이다.
-      bad: !val("sh-asset"),
+      // 🔴 여태 `sh-asset`(사장이 **치는 중인** 이름)을 봤다. 그건 등록
+      //    여부와 상관없는 칸이라, 체인에 멀쩡히 올라가 있어도 이 띠가
+      //    「등록하지 않았습니다」를 계속 띄웠다. 실제로 그 상태였다.
+      //    등록됐다는 증거는 **체인에 올라간 이름**(`sh-registered`)이다.
+      bad: !val("sh-registered"),
       label: t("체인에 가게를 등록하지 않았습니다"),
       why: t("같은 와이파이 주문은 됩니다. 다만 가게 목록에는 안 뜹니다."),
       // 탭만 열면 또 찾아야 한다. **체인에 남을 이름 칸**까지 데려간다.
@@ -1798,6 +1807,20 @@ function shopTodo(): { bad: boolean; label: string; why: string; go?: () => void
           setTimeout(() => el?.classList.remove("justwent"), 1600);
         }, 220);
       },
+    },
+    {
+      // 🔴 이건 **매일 켜고 끄는 것**이라 여기 있어야 한다.
+      //
+      //    지금까지는 왼쪽 아래 점으로만 보였다. 그 점을 누르면 설정 화면으로
+      //    갈 뿐이라, 켜려면 두 번 눌러야 했다. 그런데 이게 꺼져 있으면
+      //    **손님이 아예 못 들어온다** — 가게 문을 잠가 둔 것과 같다.
+      //    가장 중요한 스위치를 가장 안 보이는 데 둔 셈이었다.
+      // 모를 때(`null`)는 안 띄운다. 켜 둔 사장에게 「꺼져 있습니다」라고
+      // 하면 그게 거짓말이고, 사장은 앱 말을 안 믿게 된다.
+      bad: outUp === false,
+      label: t("바깥 연결이 꺼져 있습니다"),
+      why: t("가게 안 손님은 QR 로 시킬 수 있습니다. 바깥 손님은 못 들어옵니다."),
+      go: () => toggleDot("out"),
     },
   ].filter((x) => x.bad);
 }

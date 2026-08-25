@@ -50,15 +50,37 @@ pub fn which(name: &str) -> Option<String> {
             std::env::var("ProgramFiles").unwrap_or_else(|_| r"C:\Program Files".into()),
             std::env::var("ProgramFiles(x86)").unwrap_or_else(|_| r"C:\Program Files (x86)".into()),
             std::env::var("LOCALAPPDATA").unwrap_or_default(),
+            // 32비트로 도는 프로세스에서는 `ProgramFiles` 가 (x86) 을 가리킨다.
+            // 진짜 64비트 자리는 이 변수에만 있다.
+            std::env::var("ProgramW6432").unwrap_or_default(),
         ] {
             if root.is_empty() {
                 continue;
             }
             let r = std::path::PathBuf::from(root);
-            cands.push(r.join("Raven").join(&exe));
-            cands.push(r.join("RavenCore").join(&exe));
-            cands.push(r.join("Ravencoin").join("daemon").join(&exe));
-            cands.push(r.join("Ravencoin").join(&exe));
+            // 🔴 여기가 좁아서 **코어를 깔아 둔 컴퓨터에서도 못 찾았다.**
+            //
+            //    레이븐 코어 윈도우 설치본은 데몬을 `daemon\` 아래에 둔다
+            //    (비트코인 코어와 같은 배치다). 그런데 예전 목록에는
+            //    `Ravencoin\daemon` 만 있고 **`Raven\daemon` 이 없었다** —
+            //    가장 흔한 자리가 빠져 있었던 것이다. 폴더 이름도 설치본마다
+            //    다르다: `Raven`, `RavenCore`, `Raven Core`(공백), `Ravencoin`.
+            //
+            //    빠짐없이 훑는다. 파일이 있는지 보는 것뿐이라 값이 안 든다.
+            for folder in [
+                "Raven",
+                "RavenCore",
+                "Raven Core",
+                "Ravencoin",
+                "Ravencoin Core",
+                "RavenCoin",
+            ] {
+                // 데몬을 `daemon\` 아래 두는 설치본이 더 흔하다. 먼저 본다.
+                cands.push(r.join(folder).join("daemon").join(&exe));
+                cands.push(r.join(folder).join(&exe));
+                // Qt 만 깔린 컴퓨터도 있다. 그 옆에 데몬이 같이 오는 판이 많다.
+                cands.push(r.join(folder).join("bin").join(&exe));
+            }
         }
     }
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
@@ -67,17 +89,39 @@ pub fn which(name: &str) -> Option<String> {
         cands.push(std::path::PathBuf::from("/usr/local/bin").join(name));
         cands.push(home.join(".local/bin").join(name));
     }
-    cands
+    // 🔴 못 찾았을 때 **어디를 봤는지** 남긴다. 이게 없으면 화면은
+    //    「설치되어 있지 않습니다」만 말하고, 코어를 멀쩡히 깔아 둔 사장은
+    //    자기가 뭘 잘못했는지 영영 알 수 없다. 실제로 그 상태였다.
+    let looked: Vec<String> = cands.iter().map(|p| p.to_string_lossy().to_string()).collect();
+    let hit = cands
         .into_iter()
         .find(|p| p.is_file())
         .map(|p| p.to_string_lossy().to_string())
-        .or_else(|| look_on_path(name))
+        .or_else(|| look_on_path(name));
+    if hit.is_none() {
+        if let Ok(mut g) = LOOKED.lock() {
+            g.get_or_insert_with(Default::default)
+                .insert(name.to_string(), looked);
+        }
+    }
+    hit
+}
+
+/// 마지막으로 훑어 본 자리들. 「없습니다」라고 말할 때 같이 보여 준다.
+static LOOKED: Mutex<Option<std::collections::HashMap<String, Vec<String>>>> = Mutex::new(None);
+
+fn looked_at(name: &str) -> Vec<String> {
+    LOOKED
+        .lock()
+        .ok()
+        .and_then(|g| g.as_ref().and_then(|m| m.get(name).cloned()))
+        .unwrap_or_default()
 }
 
 fn look_on_path(name: &str) -> Option<String> {
     #[cfg(target_os = "windows")]
     {
-        let out = Command::new("where").arg(name).output().ok()?;
+        let out = crate::quiet::cmd("where").arg(name).output().ok()?;
         if !out.status.success() {
             return None;
         }
@@ -130,6 +174,9 @@ pub async fn services_status() -> Value {
             "path": which("ravend"),
             "ours": started.contains(&"node".to_string()),
             "install": "레이븐 노드를 설치해 주세요. 이 앱은 프로그램을 대신 내려받지 않습니다.",
+            // 못 찾았으면 어디를 봤는지 같이 준다. 사장이 자기 설치 자리를
+            // 알려 주면 그 자리를 다음 판에 넣을 수 있다.
+            "looked": looked_at("ravend"),
         },
         "ipfs": {
             "running": ipfs_running,
