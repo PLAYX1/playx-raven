@@ -121,8 +121,8 @@ jobs:
           # 🔴 두 번 실패하며 하나씩 늘려 봤는데, 그러다 보면 계속 하나씩
           # 모자란다. Tauri 가 공식으로 적어 둔 목록을 통째로 쓴다.
           #
-          # ⚠️ `-y` 만으로는 부족했다. 실패해도 계속 가서 링크 단계에서야
-          #    드러났다 — `set -e` 로 여기서 멈추게 한다.
+          # ⚠️ 「-y」 만으로는 부족했다. 실패해도 계속 가서 링크 단계에서야
+          #    드러났다 — 「set -e」 로 여기서 멈추게 한다.
           set -e
           sudo apt-get install -y \
             libwebkit2gtk-4.1-dev \
@@ -198,7 +198,7 @@ jobs:
               ;;
           esac
           curl -fsSL "$B/$F" -o node.pkg
-          # 🔴 맥에는 `sha256sum` 이 없다. `shasum` 뿐이다. 이 줄 때문에
+          # 🔴 맥에는 「sha256sum」 이 없다. 」shasum」 뿐이다. 이 줄 때문에
           #    애플 실리콘 빌드가 통째로 실패했다(exit 127). 맥이 이 줄에
           #    닿게 된 것은 우리 빌드를 넣으면서부터다 — 그전에는 위에서
           #    빠져나갔다. 두 이름을 다 본다.
@@ -218,7 +218,7 @@ jobs:
             # 우리가 올린 맥 것은 실행 파일 그대로다. 풀 것이 없다.
             *)        cp node.pkg nodetmp/ravend ;;
           esac
-          # `ravend` 하나만 꺼낸다. 지갑 창(raven-qt)은 안 넣는다 — 우리 앱이
+          # 「ravend」 하나만 꺼낸다. 지갑 창(raven-qt)은 안 넣는다 — 우리 앱이
           # 그 일을 하고, 40MB 를 더 받게 할 이유가 없다.
           BIN=$(find nodetmp -type f \( -name ravend -o -name ravend.exe \) | head -1)
           if [ -z "$BIN" ]; then
@@ -320,8 +320,8 @@ jobs:
           mkdir -p out
           # 이름을 사람이 읽을 수 있게 바꾼다. 사장이 받은 파일을 보고
           # "이게 내 컴퓨터 것이 맞나" 를 알 수 있어야 한다.
-          # 🔴 `GITHUB_REF_NAME` 은 태그로 돌 때만 판 번호다. 손으로 돌리면
-          # 가지 이름(`main`)이 들어가서 파일이 `…-main-windows.msi` 가 됐다.
+          # 🔴 「GITHUB_REF_NAME」 은 태그로 돌 때만 판 번호다. 손으로 돌리면
+          # 가지 이름(「main」)이 들어가서 파일이 」…-main-windows.msi」 가 됐다.
           # 사장이 받은 파일이 몇 판인지 알 수 없다.
           V="${{ inputs.version }}"
           [ -z "$V" ] && V="${GITHUB_REF_NAME#v}"
@@ -334,10 +334,10 @@ jobs:
               cp "$f" "out/PLAY-X-Raven-${V}-${{ matrix.label }}.${ext}"
             done
 
-          # 🔴 판올림 서명(`.sig`)도 같이 챙긴다.
+          # 🔴 판올림 서명(「.sig」)도 같이 챙긴다.
           #
           #    여태 서명 열쇠는 저장소 비밀에 멀쩡히 있었는데
-          #    `createUpdaterArtifacts` 가 꺼져 있어 **서명이 아예 안 만들어졌다.**
+          #    「createUpdaterArtifacts」 가 꺼져 있어 **서명이 아예 안 만들어졌다.**
           #    그래서 자동 판올림이 켜져 있는데도 아무도 새 판을 못 받았다 —
           #    0.1.2 를 쓰는 사람에게 서버가 「최신입니다」라고 답했다.
           #
@@ -346,10 +346,10 @@ jobs:
           find "$B" -maxdepth 3 -type f -name '*.sig' -print0 | while IFS= read -r -d '' f; do
             base="${f%.sig}"
             ext="${base##*.}"
-            # `.tar.gz.sig` 처럼 두 겹인 것은 앞엣것까지 살린다.
+            # 「.tar.gz.sig」 처럼 두 겹인 것은 앞엣것까지 살린다.
             case "$base" in *.tar.gz) ext="tar.gz" ;; esac
             cp "$f" "out/PLAY-X-Raven-${V}-${{ matrix.label }}.${ext}.sig"
-            # 맥 판올림은 `.app.tar.gz` 를 받는다. dmg 로는 못 고친다.
+            # 맥 판올림은 「.app.tar.gz」 를 받는다. dmg 로는 못 고친다.
             [ -f "$base" ] && cp "$base" "out/PLAY-X-Raven-${V}-${{ matrix.label }}.${ext}"
           done
           ls -la out/
@@ -385,7 +385,7 @@ jobs:
 
       - name: 열쇠 준비
         env:
-          # ⚠️ 이 열쇠는 `playx-raven-releases` **한 곳에만** 닿는다. 소스
+          # ⚠️ 이 열쇠는 「playx-raven-releases」 **한 곳에만** 닿는다. 소스
           # 저장소에는 못 쓴다 — 새더라도 소스가 같이 새지 않게.
           KEY: ${{ secrets.RELEASES_DEPLOY_KEY }}
         run: |
@@ -409,12 +409,28 @@ jobs:
           git checkout --orphan dist
           git rm -rf . >/dev/null 2>&1 || true
           rm -rf ./* .gitignore 2>/dev/null || true
-          cp ../rel/* .
+          # 🔴 깃허브는 파일 하나가 100MB 를 넘으면 **밀 수 없다.** 노드와
+          #    파일창고를 넣으니 리눅스 설치 파일이 136MB 가 되어 올리기가
+          #    통째로 실패했다(실측 2026-08-26). 앞으로 더 넣으면 윈도우·맥도
+          #    같은 벽에 부딪힌다.
+          #
+          #    큰 것은 깃에 안 담는다. 작은 것(표·판번호·서명)만 담고, 설치
+          #    파일은 **릴리스 자산**으로 올린다 — 거기는 한 파일 2GB 까지다.
+          #    릴리스에 올리는 것은 아래 별도 단계에서 한다.
+          for f in ../rel/*; do
+            [ -f "$f" ] || continue
+            sz=$(wc -c < "$f")
+            if [ "$sz" -lt 95000000 ]; then
+              cp "$f" .
+            else
+              echo "깃에는 안 담습니다(${sz} 바이트): $(basename "$f")"
+            fi
+          done
 
           # 🔴 판 번호가 안 붙은 이름도 **같이** 올린다.
           #
-          #    `dist` 는 판올림마다 뿌리째 새로 만든다. 그래서 v0.1.3 을 올린
-          #    순간 0.1.2 파일이 전부 사라졌는데, 랜딩(`public/rvn/index.html`)
+          #    「dist」 는 판올림마다 뿌리째 새로 만든다. 그래서 v0.1.3 을 올린
+          #    순간 0.1.2 파일이 전부 사라졌는데, 랜딩(「public/rvn/index.html」)
           #    은 그대로 0.1.2 를 가리키고 있었다 — 맥·인텔맥·윈도우·리눅스
           #    **네 개 전부 404**. 사이트에 온 사람은 아무것도 못 받았다.
           #
@@ -437,7 +453,9 @@ jobs:
           node -e "
             const fs=require('fs');
             const V=process.argv[1];
-            const R='https://raw.githubusercontent.com/PLAYX1/playx-raven-releases/dist';
+            // 🔴 설치 파일은 이제 릴리스 자산이다. 깃 가지 주소를 적으면
+            //    판올림이 없는 파일을 받으러 간다(100MB 넘는 것은 깃에 없다).
+            const R='https://github.com/PLAYX1/playx-raven-releases/releases/download/latest';
             // 🔴 이름을 **짐작하지 않는다.** 처음엔 `.app.tar.gz` 라고 적었는데
             //    실제로는 `.tar.gz` 로 떨어져서 맥 둘이 표에서 통째로 빠졌다
             //    (윈도우·리눅스만 담겼다). 짐작이 틀려도 오류가 안 나고
@@ -494,4 +512,36 @@ jobs:
             sleep 10
             git fetch origin dist || true
             git push -f origin dist
+
+      # ── 설치 파일은 릴리스 자산으로 ────────────────────────────────
+      #
+      # 🔴 깃 가지에는 100MB 를 못 올린다. 릴리스는 한 파일 2GB 까지다.
+      #    노드·파일창고를 넣은 뒤로 리눅스 것이 136MB 라 이 길뿐이다.
+      #
+      #    「latest」 라는 움직이는 태그 하나를 계속 덮어쓴다. 그래야
+      #    랜딩과 판올림이 가리키는 주소가 안 바뀐다.
+      - name: 설치 파일 올리기
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_DEPLOY_TOKEN || github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          V="${{ inputs.version }}"
+          [ -z "$V" ] && V="${GITHUB_REF_NAME#v}"
+          [ -z "$V" ] || [ "$V" = "main" ] && V="0.0.0-dev"
+          cd rel
+          ls -la
+          R=PLAYX1/playx-raven-releases
+          # 판마다 하나, 그리고 안 바뀌는 「latest」 하나.
+          for TAG in "v$V" "latest"; do
+            gh release view "$TAG" --repo "$R" >/dev/null 2>&1 \
+              || gh release create "$TAG" --repo "$R" \
+                   --title "PLAY X Raven $V" \
+                   --notes "설치 파일만 있습니다. 소스는 여기 없습니다." \
+              || true
+            # --clobber: 같은 이름이 있으면 덮어쓴다(latest 태그에 필요).
+            gh release upload "$TAG" --repo "$R" --clobber \
+              PLAY-X-Raven-* || echo "올리기 실패: $TAG"
+          done
           fi
