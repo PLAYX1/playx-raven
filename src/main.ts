@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
+import { getVersion } from "@tauri-apps/api/app";
 import { check as checkUpdate } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { t, lang, setLang, LANG_NAMES, startI18n } from "./i18n";
@@ -9567,3 +9568,16 @@ async function paintHelping(): Promise<void> {
        <button data-part-go="node" style="margin-top:12px">${t("주소 색인 켜기")}</button>
      </div>`;
 }
+
+// 🔴 판 번호가 화면에 `v0.1` 로 **박혀** 있었다. 어느 판을 쓰는지 사장도
+//    우리도 모른다 — 「그 문제 고쳤습니다」 하고 안 고쳐진 판을 보고 있을
+//    수 있다. 무엇이 도는지 모르면 진단이 안 된다.
+void (async () => {
+  try {
+    const v = await getVersion();
+    const el = document.getElementById("appver");
+    if (el && v) el.textContent = `v${v}`;
+  } catch {
+    // 못 읽으면 적혀 있는 것을 그대로 둔다.
+  }
+})();

@@ -228,14 +228,83 @@ jobs:
           cp "$BIN" "src-tauri/vendor/$(basename "$BIN")"
           chmod +x "src-tauri/vendor/$(basename "$BIN")" || true
           ls -la src-tauri/vendor/
-          # 🔴 파일이 정말 있을 때만 `resources` 를 켠다. 글로브가 아무것도
-          #    못 찾으면 Tauri 빌드가 통째로 멈춘다(실측).
+      # ── 파일창고(IPFS)도 같이 넣는다 ───────────────────────────────
+      #
+      # 🔴 이 단계를 **만들어 놓고 커밋에서 빠뜨렸다.** 그래서 0.1.5~0.1.12 에
+      #    ravend 만 들어가고 ipfs 는 안 들어갔다. 화면은 「파일창고가
+      #    없습니다」라고 말하고, 사진과 메뉴가 손님에게 안 간다.
+      #
+      # kubo 는 공식 배포에 넷이 다 있다 — 애플 실리콘 맥까지.
+      - name: 파일창고 넣기
+        shell: bash
+        run: |
+          set -euo pipefail
+          V=v0.43.0
+          B=https://github.com/ipfs/kubo/releases/download/$V
+          mkdir -p src-tauri/vendor
+          case "${{ matrix.target }}" in
+            x86_64-pc-windows-msvc)
+              F=kubo_${V}_windows-amd64.zip
+              WANT=0486721fc406d36c9d70d16dc3984e70c50d5f1d1c890de3864a6904564080adb3f73546162ad30a8e1ee43024a18bf900fbda2b6c131197351ff2e8b9782178
+              ;;
+            x86_64-unknown-linux-gnu)
+              F=kubo_${V}_linux-amd64.tar.gz
+              WANT=6af21cd24a307d94326807b3d3827064c74fb7122f83b6940af250e6ae40da250e0ec0e1f3551256b78cd204623ed56c32ce735bbe28bdcc787b36943c52458a
+              ;;
+            aarch64-apple-darwin)
+              F=kubo_${V}_darwin-arm64.tar.gz
+              WANT=2377bc886b340087b20d5a9bdd025e5a6ed4b7e910ac04fa0d0e26f5b7e189b31a33f6cc682c0aaec2695a65b8a38d1f5bfce505c2948c0ea08ee64009034ef6
+              ;;
+            *)
+              echo "이 기계용 파일창고 배포가 목록에 없습니다: ${{ matrix.target }}"
+              exit 0
+              ;;
+          esac
+          curl -fsSL "$B/$F" -o ipfs.pkg
+          # kubo 는 sha512 로 적어 둔다. 맥에는 sha512sum 이 없다.
+          if command -v sha512sum >/dev/null; then
+            GOT=$(sha512sum ipfs.pkg | cut -d" " -f1)
+          else
+            GOT=$(shasum -a 512 ipfs.pkg | cut -d" " -f1)
+          fi
+          if [ "$GOT" != "$WANT" ]; then
+            echo "🔴 체크섬이 다릅니다."
+            echo "   받은 것: $GOT"
+            echo "   적힌 것: $WANT"
+            exit 1
+          fi
+          mkdir -p ipfstmp
+          case "$F" in
+            *.zip)    unzip -q ipfs.pkg -d ipfstmp ;;
+            *.tar.gz) tar -xzf ipfs.pkg -C ipfstmp ;;
+          esac
+          BIN=$(find ipfstmp -type f \( -name ipfs -o -name ipfs.exe \) | head -1)
+          if [ -z "$BIN" ]; then
+            echo "🔴 받은 꾸러미 안에 ipfs 가 없습니다."
+            exit 1
+          fi
+          cp "$BIN" "src-tauri/vendor/$(basename "$BIN")"
+          chmod +x "src-tauri/vendor/$(basename "$BIN")" || true
+
+      # 🔴 파일이 **정말 있을 때만** `resources` 를 켠다. 글로브가 아무것도
+      #    못 찾으면 Tauri 빌드가 통째로 멈춘다(실측:
+      #    "glob pattern … didn't match any files").
+      - name: 같이 넣은 것 등록
+        shell: bash
+        run: |
+          set -euo pipefail
+          ls -la src-tauri/vendor/ || true
           node -e "
             const fs=require('fs'), p='src-tauri/tauri.conf.json';
+            const dir='src-tauri/vendor';
+            const have=fs.existsSync(dir)?fs.readdirSync(dir):[];
+            const res=['vendor/ravend*','vendor/ipfs*']
+              .filter(g=>have.some(f=>f.startsWith(g.split('/')[1].replace('*',''))));
+            if (!res.length) { console.log('같이 넣을 것이 없습니다.'); process.exit(0); }
             const d=JSON.parse(fs.readFileSync(p,'utf8'));
-            d.bundle.resources=['vendor/ravend*'];
+            d.bundle.resources=res;
             fs.writeFileSync(p, JSON.stringify(d,null,2)+'\n');
-            console.log('resources 켬');
+            console.log('resources:', res.join(' '));
           "
 
       - name: 만들기
