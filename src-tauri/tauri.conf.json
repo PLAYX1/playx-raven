@@ -45,7 +45,10 @@
     ],
     "windows": {
       "wix": {
-        "language": ["ko-KR", "en-US"],
+        "language": [
+          "ko-KR",
+          "en-US"
+        ],
         "bannerPath": "icons/wix-banner.bmp",
         "dialogImagePath": "icons/wix-dialog.bmp"
       },
@@ -54,9 +57,13 @@
         "uninstallerIcon": "icons/icon.ico",
         "headerImage": "icons/nsis-header.bmp",
         "sidebarImage": "icons/nsis-sidebar.bmp",
-        "languages": ["Korean", "English"]
+        "languages": [
+          "Korean",
+          "English"
+        ]
       }
-    }
+    },
+    "createUpdaterArtifacts": true
   },
   "plugins": {
     "updater": {

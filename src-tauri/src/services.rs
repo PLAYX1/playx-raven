@@ -65,11 +65,15 @@ fn bundled(name: &str) -> Option<std::path::PathBuf> {
 }
 
 pub fn which(name: &str) -> Option<String> {
-    // 🔴 **우리가 같이 넣은 것을 가장 먼저 본다.** 사장이 따로 깔아 둔 것이
-    //    있으면 그것도 쓰지만, 아무것도 없어도 돌아야 한다.
-    if let Some(p) = bundled(name) {
-        return Some(p.to_string_lossy().to_string());
-    }
+    // 🔴 **이미 깔려 있는 것이 먼저다.** 우리가 넣은 것은 아무것도 없을 때의
+    //    받침이다. 순서를 반대로 하면 이런 일이 난다:
+    //
+    //    사장이 IPFS 를 오래 써 왔고 자료가 옛 판 형식으로 쌓여 있다. 그런데
+    //    우리가 넣은 새 판이 먼저 잡히면, 그 판은 **옛 자료를 그대로 못 읽고**
+    //    「먼저 자료를 옮기세요」 하며 안 뜬다. 잘 돌던 가게가 우리 때문에
+    //    멈추는 것이다. 코어 지갑도 같다 — 쓰던 것을 우리가 갈아 치우면 안 된다.
+    //
+    //    그래서 있는 것을 그대로 쓰고, 없을 때만 우리 것을 쓴다.
     // GUI 앱은 PATH 가 거의 비어 있다. 코어를 깔아 둔 자리를 직접 본다.
     let home = crate::paths::home();
     let mut cands: Vec<std::path::PathBuf> = Vec::new();
@@ -136,7 +140,10 @@ pub fn which(name: &str) -> Option<String> {
         .into_iter()
         .find(|p| p.is_file())
         .map(|p| p.to_string_lossy().to_string())
-        .or_else(|| look_on_path(name));
+        .or_else(|| look_on_path(name))
+        // 아무 데도 없으면 우리가 같이 넣은 것을 쓴다. 사장이 아무것도
+        // 안 깔아도 가게가 돌아야 한다.
+        .or_else(|| bundled(name).map(|p| p.to_string_lossy().to_string()));
     if hit.is_none() {
         if let Ok(mut g) = LOOKED.lock() {
             g.get_or_insert_with(Default::default)
@@ -212,7 +219,13 @@ pub async fn services_status() -> Value {
             "installed": which("ravend").is_some(),
             "path": which("ravend"),
             "ours": started.contains(&"node".to_string()),
-            "install": "레이븐 노드를 설치해 주세요. 이 앱은 프로그램을 대신 내려받지 않습니다.",
+            // 0.1.5 부터 윈도우·리눅스는 설치 파일에 같이 들어간다.
+            // 맥(애플 실리콘)은 공식 배포가 없어 아직 따로 깔아야 한다.
+            "install": if cfg!(target_os = "macos") {
+                "레이븐 노드를 설치해 주세요. 애플 실리콘 맥은 공식 배포가 없어 아직 같이 넣지 못합니다."
+            } else {
+                "노드가 없습니다. PLAY X Raven 을 다시 받아 설치하시면 같이 들어옵니다."
+            },
             // 못 찾았으면 어디를 봤는지 같이 준다. 사장이 자기 설치 자리를
             // 알려 주면 그 자리를 다음 판에 넣을 수 있다.
             "looked": looked_at("ravend"),
@@ -222,7 +235,20 @@ pub async fn services_status() -> Value {
             "installed": which("ipfs").is_some(),
             "path": which("ipfs"),
             "ours": started.contains(&"ipfs".to_string()),
-            "install": "brew install ipfs",
+            // 🔴 여기가 「brew install ipfs」 라고 적혀 있었다. `brew` 는 맥
+            //    명령어다. **윈도우 사장에게는 막다른 길**이고, 이 프로그램의
+            //    사장은 터미널을 열어 본 적이 없다.
+            //
+            //    0.1.5 부터는 설치 파일에 같이 들어가므로 여기까지 오는 일이
+            //    거의 없다. 그래도 올 수 있으니(옛 판을 쓰거나, 우리가 넣은
+            //    것을 지웠거나) 사람이 할 수 있는 말로 적는다.
+            "install": if cfg!(target_os = "windows") {
+                "파일창고가 없습니다. PLAY X Raven 을 다시 받아 설치하시면 같이 들어옵니다."
+            } else if cfg!(target_os = "macos") {
+                "파일창고가 없습니다. PLAY X Raven 을 다시 받아 설치하시면 같이 들어옵니다. (직접 깔려면 brew install ipfs)"
+            } else {
+                "파일창고가 없습니다. PLAY X Raven 을 다시 받아 설치하시면 같이 들어옵니다."
+            },
         },
     })
 }

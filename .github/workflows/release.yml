@@ -234,6 +234,26 @@ jobs:
               ext="${f##*.}"
               cp "$f" "out/PLAY-X-Raven-${V}-${{ matrix.label }}.${ext}"
             done
+
+          # 🔴 판올림 서명(`.sig`)도 같이 챙긴다.
+          #
+          #    여태 서명 열쇠는 저장소 비밀에 멀쩡히 있었는데
+          #    `createUpdaterArtifacts` 가 꺼져 있어 **서명이 아예 안 만들어졌다.**
+          #    그래서 자동 판올림이 켜져 있는데도 아무도 새 판을 못 받았다 —
+          #    0.1.2 를 쓰는 사람에게 서버가 「최신입니다」라고 답했다.
+          #
+          #    서명이 없으면 Tauri 는 받은 것을 **설치하지 않는다.** 그게 맞다.
+          #    없으면 아무나 가짜 판올림을 밀어 넣는다.
+          find "$B" -maxdepth 3 -type f -name '*.sig' -print0 | while IFS= read -r -d '' f; do
+            base="${f%.sig}"
+            ext="${base##*.}"
+            # `.tar.gz.sig` 처럼 두 겹인 것은 앞엣것까지 살린다.
+            case "$base" in *.tar.gz) ext="tar.gz" ;; esac
+            cp "$f" "out/PLAY-X-Raven-${V}-${{ matrix.label }}.${ext}.sig"
+            # 맥 판올림은 `.app.tar.gz` 를 받는다. dmg 로는 못 고친다.
+            [ -f "$base" ] && cp "$base" "out/PLAY-X-Raven-${V}-${{ matrix.label }}.${ext}"
+          done
+          ls -la out/
           # 판올림용 묶음과 서명은 이름을 그대로 둔다 — 업데이터가 이 이름을 본다.
           find "$B" -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.sig' \) \
             -exec cp {} out/ \; 2>/dev/null || true
@@ -312,6 +332,40 @@ jobs:
           done
           # 무엇이 최신인지 기계도 읽을 수 있게 적어 둔다.
           printf '%s\n' "$V" > VERSION
+
+          # 🔴 자동 판올림이 읽을 표. 서명이 있는 것만 담는다 — 서명 없는
+          #    줄을 담으면 앱이 받아 놓고 설치를 거부한다(더 나쁘다).
+          node -e "
+            const fs=require('fs');
+            const V=process.argv[1];
+            const R='https://raw.githubusercontent.com/PLAYX1/playx-raven-releases/dist';
+            const map={
+              'windows-x86_64': ['windows.exe'],
+              'darwin-aarch64': ['mac-apple-silicon.app.tar.gz'],
+              'darwin-x86_64':  ['mac-intel.app.tar.gz'],
+              'linux-x86_64':   ['linux.AppImage'],
+            };
+            const platforms={};
+            for (const [k, names] of Object.entries(map)) {
+              for (const n of names) {
+                const f = \`PLAY-X-Raven-\${V}-\${n}\`;
+                if (fs.existsSync(f) && fs.existsSync(f+'.sig')) {
+                  platforms[k] = {
+                    signature: fs.readFileSync(f+'.sig','utf8').trim(),
+                    url: \`\${R}/\${f}\`,
+                  };
+                }
+              }
+            }
+            const out={
+              version: V,
+              notes: '새 판이 나왔습니다.',
+              pub_date: new Date().toISOString(),
+              platforms,
+            };
+            fs.writeFileSync('latest.json', JSON.stringify(out,null,2));
+            console.log('latest.json 에 담긴 기계:', Object.keys(platforms).join(', ') || '없음');
+          " "$V"
           cat > README.md <<EOF
           # PLAY X Raven $V
 
