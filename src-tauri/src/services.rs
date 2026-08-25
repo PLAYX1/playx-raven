@@ -179,16 +179,11 @@ pub async fn services_start() -> Result<Value, String> {
         if need_reindex {
             cmd.arg("-reindex");
         }
-        match cmd
-            // Detached: the node keeps running if this app is closed, which is
-            // what a shop wants — payments keep being recorded overnight.
-            .arg("-daemon")
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-        {
+        match spawn_node(cmd, &datadir).await {
             Ok(child) => {
-                remember("node", child);
+                if let Some(c) = child {
+                    remember("node", c);
+                }
                 if need_reindex {
                     // 한 번만 붙인다. 표시를 남기지 않으면 켤 때마다 다시 훑는다.
                     if want_asset {
@@ -208,7 +203,7 @@ pub async fn services_start() -> Result<Value, String> {
                     "reindexing": need_reindex,
                 }));
             }
-            Err(e) => skipped.push(json!({ "what": "노드", "why": e.to_string() })),
+            Err(why) => skipped.push(json!({ "what": "노드", "why": why })),
         }
     } else {
         skipped.push(json!({ "what": "노드", "why": "설치되어 있지 않습니다" }));
@@ -237,6 +232,179 @@ pub async fn services_start() -> Result<Value, String> {
     }
 
     Ok(json!({ "started": started, "skipped": skipped }))
+}
+
+/// 노드를 띄우고, **정말 떴는지 확인해서** 답한다.
+///
+/// ## 🔴 왜 이 함수가 생겼나 — 셋 다 실제 결함이었다
+///
+/// ① **윈도우에서는 노드가 아예 안 떴다.** 예전 코드는 `-daemon` 을 조건 없이
+///    붙였는데, 레이븐코어 원본이 이렇다:
+///
+///    ```text
+///    ravend.cpp:166  "Error: -daemon is not supported on this operating system"
+///                    return false;
+///    ```
+///
+///    윈도우 갈래가 없어 맥·리눅스와 같은 줄을 탔고, 코어는 그 자리에서 죽었다.
+///
+/// ② **죽어도 성공으로 보고했다.** `stderr` 를 `Stdio::null()` 로 버리고
+///    `spawn()` 이 `Ok` 면 「따라잡는 데 몇 분 걸립니다」를 띄웠다. 프로세스가
+///    떴다가 곧바로 죽었는지 보는 코드가 한 곳도 없었다(`try_wait` 0곳).
+///    사장은 몇 분을 기다리다 몇 시간을 기다린다.
+///
+/// ③ 그래서 여기서 **잠깐 기다렸다 살아 있는지 본다.** 실패면 코어가 낸
+///    문장을 그대로 읽어 사장이 할 수 있는 말로 바꾼다.
+///
+/// ## 유닉스와 윈도우가 다른 이유
+///
+/// 유닉스는 `-daemon` 이 된다. 부모가 `fork` 하고 바로 끝나므로 부모의 종료
+/// 코드로 초기 실패를 알 수 있다. 대신 부모가 이미 없으니 돌려줄 `Child` 가
+/// 없다(`None`).
+///
+/// 윈도우는 `-daemon` 이 없으니 우리가 대신 떼어 놓는다 — `DETACHED_PROCESS`
+/// 로 띄우면 이 앱을 닫아도 노드는 계속 돈다. 가게는 밤새 입금을 받아야 한다.
+async fn spawn_node(mut cmd: Command, datadir: &str) -> Result<Option<Child>, String> {
+    // 🔴 락 충돌은 **`stderr` 로 못 잡는다.** 레이븐코어 원본 순서가 이렇다:
+    //
+    //    ravend.cpp   "Raven server starting" → daemon(1, 0) → AppInitLockDataDirectory()
+    //
+    //    즉 락 실패는 **fork 이후**에 일어나고, `daemon(1, 0)` 의 둘째 인자 0 이
+    //    FD 를 전부 닫아 버린다. 부모는 이미 0 으로 끝나 있다. 그래서 유닉스에서
+    //    ravend 의 출력만 보면 **락 충돌이 성공으로 보인다.**
+    //
+    //    남는 자리는 `debug.log` 뿐이다. 다만 옛 줄을 읽으면 지난주 충돌을
+    //    오늘 일로 착각하므로, **띄우기 전 길이를 재 두고 그 뒤에 붙은 것만**
+    //    읽는다. 시각을 파싱할 필요가 없고 틀릴 자리도 없다.
+    let log = std::path::Path::new(datadir).join("debug.log");
+    let log_was = std::fs::metadata(&log).map(|m| m.len()).unwrap_or(0);
+
+    let out = spawn_node_inner(&mut cmd).await;
+
+    // 프로세스가 떴어도 락 때문에 곧 죽을 수 있다. 그 줄이 로그에 닿을 틈을 준다.
+    tokio::time::sleep(std::time::Duration::from_millis(2500)).await;
+    if let Some(added) = tail_since(&log, log_was) {
+        if let Some(why) = lock_line(&added) {
+            return Err(why);
+        }
+    }
+    out
+}
+
+/// 띄운 뒤 `debug.log` 에 **새로 붙은 부분**만 읽는다.
+fn tail_since(log: &std::path::Path, from: u64) -> Option<String> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut f = std::fs::File::open(log).ok()?;
+    f.seek(SeekFrom::Start(from)).ok()?;
+    let mut buf = Vec::new();
+    f.take(64 * 1024).read_to_end(&mut buf).ok()?;
+    Some(String::from_utf8_lossy(&buf).to_string())
+}
+
+/// 새로 붙은 로그에 락 충돌이 있나.
+fn lock_line(added: &str) -> Option<String> {
+    let low = added.to_lowercase();
+    if low.contains("cannot obtain a lock") || low.contains("probably already running") {
+        return Some(node_why("Cannot obtain a lock on data directory"));
+    }
+    None
+}
+
+// `return` 을 일부러 적는다 — 아래 두 갈래가 `cfg` 로 갈리므로, 꼬리
+// 표현식에 기대면 어느 쪽이 반환값인지가 대상 운영체제에 따라 달라진다.
+#[allow(clippy::needless_return)]
+async fn spawn_node_inner(cmd: &mut Command) -> Result<Option<Child>, String> {
+    #[cfg(not(target_os = "windows"))]
+    {
+        // 부모는 `fork` 직후 끝난다. 그래서 기다려도 오래 안 걸린다.
+        let out = cmd
+            .arg("-daemon")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()
+            .map_err(|e| e.to_string())?;
+        if out.status.success() {
+            return Ok(None);
+        }
+        let mut why = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        if why.is_empty() {
+            why = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        }
+        // 🔴 `return` 을 명시한다. 아래에 윈도우 갈래가 또 있어서, 꼬리
+        //    표현식에 기대면 어느 쪽이 반환값인지가 `cfg` 에 따라 달라진다.
+        return Err(node_why(&why));
+    }
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        // CREATE_NO_WINDOW          0x0800_0000  사장 화면에 검은 창이 안 뜬다
+        // CREATE_NEW_PROCESS_GROUP  0x0000_0200  Ctrl+C 가 노드까지 안 간다
+        // CREATE_BREAKAWAY_FROM_JOB 0x0100_0000  🔴 이게 핵심이다
+        //
+        // 🔴 `DETACHED_PROCESS` 만으로는 부족하다(그록 지적). Tauri/WebView2 는
+        //    자식들을 **잡 오브젝트**에 묶고, 부모가 끝나면 윈도우가 그 잡을
+        //    통째로 죽인다. 떼어 놓지 않으면 앱을 닫는 순간 노드도 같이 죽고,
+        //    가게는 밤새 들어온 입금을 못 받는다.
+        const NO_WINDOW: u32 = 0x0800_0000;
+        const NEW_GROUP: u32 = 0x0000_0200;
+        const BREAKAWAY: u32 = 0x0100_0000;
+        // 🔴 잡이 빠져나가기를 허락하지 않으면(`JOB_OBJECT_LIMIT_BREAKAWAY_OK`
+        //    가 없으면) `CreateProcess` 가 **접근 거부로 통째로 실패**한다.
+        //    그러면 노드가 아예 안 뜬다 — 고치려던 바로 그 병이 된다.
+        //    그래서 한 번 더, 떼어 놓기 없이 시도한다. 앱과 함께 죽더라도
+        //    켜지기는 하는 편이, 안 켜지는 것보다 낫다.
+        let mut child = match cmd
+            .creation_flags(NO_WINDOW | NEW_GROUP | BREAKAWAY)
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .spawn()
+        {
+            Ok(c) => c,
+            Err(_) => cmd
+                .creation_flags(NO_WINDOW | NEW_GROUP)
+                .spawn()
+                .map_err(|e| e.to_string())?,
+        };
+        // 뜨자마자 죽는 실패(락 충돌·설정 오류)는 1초 안에 끝난다. 그보다
+        // 오래 살아 있으면 블록을 읽기 시작한 것이다.
+        tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+        match child.try_wait() {
+            Ok(Some(_)) => {
+                let mut buf = String::new();
+                if let Some(mut e) = child.stderr.take() {
+                    use std::io::Read;
+                    let _ = e.read_to_string(&mut buf);
+                }
+                return Err(node_why(buf.trim()));
+            }
+            // 살아 있다. 이 `Child` 가 진짜 노드라 `services_stop` 이 끌 수 있다.
+            _ => return Ok(Some(child)),
+        }
+    }
+}
+
+/// 코어가 낸 영어 문장을, 사장이 **할 수 있는 일**이 적힌 문장으로 바꾼다.
+///
+/// 「Cannot obtain a lock on data directory」를 그대로 보여 주면 사장은 할 수
+/// 있는 것이 없다. 이건 사실 가장 흔한 경우고 — 레이븐 코어를 쓰시던 분이
+/// 코어를 켜 둔 채 이 앱을 여는 것 — 답도 한 줄이다.
+fn node_why(raw: &str) -> String {
+    let low = raw.to_lowercase();
+    if low.contains("cannot obtain a lock") || low.contains("probably already running") {
+        return "레이븐 코어가 이미 켜져 있습니다. 같은 지갑은 한 프로그램만 쓸 수 있습니다. \
+                코어를 끄고 다시 눌러 주세요. 돈은 그대로입니다."
+            .into();
+    }
+    if low.contains("-daemon is not supported") {
+        // 여기 오면 안 된다 — 윈도우에서는 `-daemon` 을 안 붙이니까. 오면
+        // 그건 위의 갈래가 깨진 것이므로, 그렇게 적는다.
+        return "이 컴퓨터에서는 노드를 뒤로 돌릴 수 없습니다. 프로그램을 다시 받아 주세요.".into();
+    }
+    if raw.is_empty() {
+        return "노드가 켜지자마자 멈췄습니다. 레이븐 코어가 켜져 있는지 확인해 주세요.".into();
+    }
+    // 모르는 이유는 지어내지 않는다. 코어가 한 말을 그대로 옮긴다.
+    format!("노드가 켜지지 않았습니다: {}", raw.chars().take(200).collect::<String>())
 }
 
 fn remember(name: &str, child: Child) {
@@ -277,4 +445,93 @@ pub async fn open_shop() -> Result<Value, String> {
 
     let health = crate::health::service_health(false, false).await;
     Ok(json!({ "services": svc, "health": health }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::node_why;
+
+    /// 🔴 사장이 읽는 문장이다. 여기가 틀리면 코어를 켜 둔 사장이 「노드가
+    ///    켜지는 중」을 몇 시간 기다린다. 실제로 그랬다.
+    #[test]
+    fn 락_충돌은_끄라고_말한다() {
+        // 레이븐코어 원본 문장(init.cpp). 문자열을 그대로 적지 않고 조립한다 —
+        // 테스트가 제 소스를 읽고 통과하는 일이 이 저장소에서 세 번 있었다.
+        let core = format!(
+            "Error: {} on data directory /x. Ravencoin Core is probably already running.",
+            "Cannot obtain a lock"
+        );
+        let said = node_why(&core);
+        assert!(said.contains("레이븐 코어가 이미 켜져 있습니다"), "실제: {said}");
+        assert!(said.contains("돈은 그대로입니다"), "무서우면 앱을 닫는다");
+        // 사장이 할 수 있는 일이 아닌 말은 안 나와야 한다.
+        assert!(!said.contains("lock"), "영어 원문을 그대로 보이면 안 된다");
+        assert!(!said.contains("datadir"));
+    }
+
+    #[test]
+    fn 조용히_죽은_경우도_말을_한다() {
+        let said = node_why("");
+        assert!(!said.is_empty());
+        assert!(said.contains("코어"), "무엇을 확인할지 알려야 한다: {said}");
+    }
+
+    #[test]
+    fn 모르는_이유는_지어내지_않는다() {
+        let said = node_why("Error: Prune mode is incompatible with -txindex.");
+        assert!(said.contains("Prune mode"), "코어가 한 말을 옮겨야 한다: {said}");
+    }
+
+
+    /// 🔴 옛 줄을 읽으면 **지난주 충돌을 오늘 일로** 착각한다. 그래서
+    ///    「띄우기 전 길이 뒤에 붙은 것만」 읽는 설계가 맞는지 확인한다.
+    #[test]
+    fn 지난번_락은_오늘_일이_아니다() {
+        let dir = std::env::temp_dir().join(format!("pxr-log-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let log = dir.join("debug.log");
+        // 지난주에 락 충돌이 한 번 있었다.
+        let old = format!("2026-08-01 Error: {} on data directory /x.\n", "Cannot obtain a lock");
+        std::fs::write(&log, &old).unwrap();
+        let before = std::fs::metadata(&log).unwrap().len();
+        // 오늘은 정상으로 떴다.
+        std::fs::write(&log, format!("{old}2026-08-25 Raven server starting\n")).unwrap();
+
+        let added = super::tail_since(&log, before).expect("붙은 부분을 읽어야 한다");
+        assert!(super::lock_line(&added).is_none(), "옛 줄을 오늘 일로 읽었다: {added}");
+        // 반대로, 전체를 읽었다면 잘못 걸렸을 것이다 — 그게 이 설계의 이유다.
+        let whole = super::tail_since(&log, 0).unwrap();
+        assert!(super::lock_line(&whole).is_some(), "전체를 읽으면 걸린다(그래서 안 읽는다)");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn 이번에_난_락은_잡는다() {
+        let dir = std::env::temp_dir().join(format!("pxr-log2-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let log = dir.join("debug.log");
+        std::fs::write(&log, "2026-08-25 Raven server starting\n").unwrap();
+        let before = std::fs::metadata(&log).unwrap().len();
+        let line = format!("Error: {} on data directory /x. Ravencoin Core is probably already running.", "Cannot obtain a lock");
+        std::fs::write(&log, format!("2026-08-25 Raven server starting\n{line}\n")).unwrap();
+
+        let added = super::tail_since(&log, before).unwrap();
+        let why = super::lock_line(&added).expect("이번 충돌은 잡아야 한다");
+        assert!(why.contains("코어를 끄고"), "실제: {why}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 로그가 아예 없는 컴퓨터(첫 실행)에서 터지면 안 된다.
+    #[test]
+    fn 로그가_없어도_안_터진다() {
+        let none = std::path::Path::new("/이런/파일은/없다/debug.log");
+        assert!(super::tail_since(none, 0).is_none());
+    }
+
+    /// 아주 긴 오류가 화면을 밀어내지 않게. 200자에서 끊는다.
+    #[test]
+    fn 아주_긴_오류는_끊는다() {
+        let said = node_why(&"E".repeat(5000));
+        assert!(said.chars().count() < 260, "실제 길이: {}", said.chars().count());
+    }
 }
