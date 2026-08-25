@@ -3325,6 +3325,19 @@ let orderTimer: any = null;
 let shopIcon: string | null = null;
 /** 가게 안 사진들이 든 파일창고 폴더 주소. 사진이 아니라 **주소 하나**다. */
 let shopPhotosCid: string | null = null;
+/**
+ * 메뉴를 파일창고에 올린 주소.
+ *
+ * 🔴 **메뉴가 바깥으로 한 번도 안 나갔다.** 공지를 만드는 쪽(`shopkey.rs`)은
+ * `menu_cid` 를 실어 나를 준비가 돼 있는데, 그 값을 넣는 코드가 이 파일에
+ * **한 곳도 없었다.** 그래서 손님 목록에는 「메뉴 6가지」라는 **개수만** 뜨고,
+ * 가게를 끄면 그 개수마저 사라졌다.
+ *
+ * 🔴 왜 체인이 아니라 공지에 싣나 — 체인 문서를 고치려면 **재발행 100 RVN**
+ * 이다. 메뉴는 자주 바뀌는 것이라 그 자리에 두면 안 된다. 「안 바뀌는 것은
+ * 체인에, 바뀌는 것은 공지에」가 이 프로그램의 규칙이고 메뉴는 뒤쪽이다.
+ */
+let shopMenuCid: string | null = null;
 
 // ── AI 도우미 ──
 //
@@ -7208,6 +7221,9 @@ async function publishShop(ip?: string) {
   //    등록 단추를 다시 누를 일이 없기 때문이다. 문을 열 때마다 지나가는
   //    길이 여기다. 파일창고가 켜져 있으면 그때 조용히 낫는다.
   await healIcon();
+  // 🔴 메뉴도 파일창고에 올린다. 이걸 안 하면 가게를 끈 순간 손님은
+  //    메뉴를 못 본다 — 지금까지 메뉴는 이 컴퓨터 밖으로 나간 적이 없다.
+  await publishMenu(menuItems);
   const val = (id: string) => ($(id) as HTMLInputElement)?.value.trim() || "";
   let rate: number | null = null;
   const currency = ($("mn-cur") as HTMLSelectElement)?.value || "KRW";
@@ -7253,6 +7269,11 @@ async function publishShop(ip?: string) {
       icon: shopIcon,
       // 가게 안 사진 여러 장. 이것도 안 실려 있어서 바깥 손님은 못 봤다.
       photos_cid: shopPhotosCid,
+      // 메뉴 자체(공지 안)와 메뉴 주소(파일창고) 를 **둘 다** 싣는다.
+      // 앞엣것은 가게 안 손님용이고, 뒤엣것은 가게가 꺼진 뒤에도 남는다.
+      // 🔴 `shopkey.rs` 는 `menu_cid` 를 실어 나를 준비가 돼 있었는데
+      //    값을 넣는 코드가 없었다 — 또 하나의 「적혀는 있는데 안 도는」 자리.
+      menu_cid: shopMenuCid,
       menu: menuItems,
       currency,
       rate,
@@ -7901,6 +7922,44 @@ function shopSnapshot() {
  * 실패하면 조용히 넘어가지 않고 그대로 둔다 — 사진 때문에 가게 등록 자체를
  * 막을 이유는 없지만, 안 된 것을 됐다고 하지도 않는다.
  */
+/**
+ * 메뉴를 파일창고에 올려 두고 주소만 들고 온다.
+ *
+ * 이걸 해야 **가게를 꺼도 손님이 메뉴를 본다.** 지금까지 메뉴는 이 컴퓨터
+ * 밖으로 나간 적이 없어서, 문 닫은 가게를 누르면 아무것도 없었다.
+ *
+ * 바뀐 게 없으면 안 올린다 — 같은 내용은 같은 주소가 나오지만, 그래도
+ * 문 열 때마다 파일창고를 두드릴 이유는 없다.
+ */
+let lastMenuJson = "";
+async function publishMenu(items: unknown[]): Promise<void> {
+  const json = JSON.stringify({ v: 1, menu: items });
+  // 메뉴를 비운 가게는 주소도 비운다. 옛 메뉴가 남으면 없는 것을 파는 셈이다.
+  if (!Array.isArray(items) || items.length === 0) {
+    shopMenuCid = null;
+    lastMenuJson = "";
+    return;
+  }
+  if (json === lastMenuJson && shopMenuCid) return;
+  try {
+    const bytes = [...new TextEncoder().encode(json)];
+    const up = await invoke<any>("ipfs_add_bundle", {
+      files: [{ name: "menu.json", bytes }],
+      metadata: null,
+    });
+    // 🔴 폴더 주소를 준다. 파일 이름까지 붙여야 손님이 메뉴를 읽는다 —
+    //    이름 없이 폴더만 주면 목록이 온다(사진에서 두 번 겪은 함정).
+    if (!up?.cid) throw new Error("파일창고가 주소를 주지 않았습니다.");
+    shopMenuCid = `${up.cid}/menu.json`;
+    lastMenuJson = json;
+  } catch {
+    // 🔴 조용히 넘어가되 **거짓말은 안 한다.** 못 올렸으면 주소를 비워 둔다.
+    //    옛 주소를 남기면 손님이 어제 메뉴를 오늘 메뉴로 본다.
+    shopMenuCid = null;
+    lastMenuJson = "";
+  }
+}
+
 async function healIcon(): Promise<void> {
   if (!shopIcon || !shopIcon.startsWith("data:")) return;
   const was = shopIcon;
