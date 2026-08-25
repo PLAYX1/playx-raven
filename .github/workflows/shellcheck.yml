@@ -1,0 +1,51 @@
+# 배포 스크립트의 셸 문법을 미리 본다.
+#
+# 왜 있나 — 2026-08-26 에 판올림 배포가 **세 번** 실패했다. 세 번 다
+# 만들기는 성공했고 올리기만 죽었다. 원인은 전부 셸 문법이었다:
+#
+#   · run 블록 주석의 백틱이 명령으로 실행됨 (".app.tar.gz: command not found")
+#   · 단계를 다시 쓰면서 `fi` 를 같이 지움 ("unexpected end of file")
+#
+# 한 번 도는 데 15분씩 걸리는 것을 문법 오류로 태우면 안 된다.
+# 여기서 5초에 잡는다.
+name: 셸 문법
+on:
+  push:
+    paths: ['.github/workflows/**']
+  pull_request:
+    paths: ['.github/workflows/**']
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: run 블록 문법 보기
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import yaml, subprocess, re, glob, sys, tempfile, os
+          bad = 0
+          for f in glob.glob(".github/workflows/*.yml"):
+              d = yaml.safe_load(open(f, encoding="utf-8"))
+              for jn, job in (d.get("jobs") or {}).items():
+                  for st in job.get("steps", []):
+                      run = st.get("run")
+                      if not run:
+                          continue
+                      # GitHub 식 ${{ }} 는 셸이 모른다. 자리표시자로 바꾼다.
+                      sh = re.sub(r"\$\{\{[^}]*\}\}", "X", run)
+                      with tempfile.NamedTemporaryFile("w", suffix=".sh", delete=False) as t:
+                          t.write(sh); p = t.name
+                      r = subprocess.run(["bash", "-n", p], capture_output=True, text=True)
+                      os.unlink(p)
+                      if r.returncode:
+                          bad += 1
+                          print(f"🔴 {f} · {jn} · {st.get('name','?')}")
+                          for l in r.stderr.strip().split("\n")[:3]:
+                              print("   ", l)
+          print(f"문법 오류: {bad}개")
+          sys.exit(1 if bad else 0)
+          PY
