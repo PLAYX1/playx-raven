@@ -512,6 +512,7 @@ jobs:
             sleep 10
             git fetch origin dist || true
             git push -f origin dist
+          fi
 
       # ── 설치 파일은 릴리스 자산으로 ────────────────────────────────
       #
