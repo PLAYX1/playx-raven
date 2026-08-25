@@ -1,6 +1,7 @@
 mod ai;
 mod auto;
 mod awake;
+mod helping;
 mod backup;
 mod classes;
 mod conf;
@@ -338,6 +339,7 @@ pub fn run() {
             mode::mode_get,
             mode::mode_set,
             awake::awake_status,
+            helping::help_round,
             autostart::autostart_get,
             autostart::autostart_set,
             tunnel::tunnel_status,
