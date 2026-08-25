@@ -2201,7 +2201,58 @@ async function paintPart(): Promise<void> {
   try {
     if (partOpen === "node") {
       if (title) title.textContent = "RVN 노드";
-      const s = await invoke<any>("node_status");
+      // 🔴 노드가 꺼져 있으면 `node_status` 가 던진다. 여태 그 영어 오류만
+      //    화면에 남고 **끝이었다** — 왜 안 뜨는지도, 켜는 단추도 없었다.
+      //    「.cookie 를 못 읽었습니다」는 증상이지 원인이 아니다.
+      //    꺼져 있을 때야말로 사장이 이 화면을 연다. 여기서 할 일을 준다.
+      let s: any = null;
+      try {
+        s = await invoke<any>("node_status");
+      } catch {
+        const sv = await invoke<any>("services_status").catch(() => null);
+        const n = sv?.node || {};
+        const looked: string[] = Array.isArray(n.looked) ? n.looked : [];
+        box.innerHTML =
+          `<div class="card">
+             <h3>${t("노드가 꺼져 있습니다")}</h3>
+             <p class="meta">${t("결제 확인도 색인도 이 노드가 합니다.")}</p>
+             ${
+               n.installed
+                 ? `<p class="meta">${t("프로그램은 있습니다")} — <code class="addr">${escapeHtml(String(n.path || ""))}</code></p>
+                    <button id="nd-go" style="margin-top:12px">${t("지금 켜기")}</button>`
+                 : `<p class="meta" style="color:var(--warn)">${t("노드 프로그램을 찾지 못했습니다.")}</p>
+                    <p class="meta">${escapeHtml(String(n.install || ""))}</p>` +
+                   (looked.length
+                     ? `<details style="margin-top:10px"><summary class="meta">${t("어디를 봤는지 보기")}</summary>
+                          <div class="meta" style="margin-top:6px;line-height:1.8">
+                            ${looked.slice(0, 24).map((x) => `<code class="addr">${escapeHtml(x)}</code>`).join("<br />")}
+                          </div></details>`
+                     : "")
+             }
+             <div class="meta" id="nd-say" style="margin-top:12px"></div>
+           </div>`;
+        const go = document.getElementById("nd-go");
+        if (go) {
+          go.addEventListener("click", async () => {
+            (go as HTMLButtonElement).disabled = true;
+            $("nd-say").textContent = t("켜는 중…");
+            try {
+              const r = await invoke<any>("services_start");
+              // 🔴 못 켠 이유를 **그대로 보여 준다.** 레이븐 코어가 켜져 있어서
+              //    못 켜는 경우가 제일 흔한데, 그걸 안 말하면 몇 시간을 헤맨다.
+              const why = (r?.skipped || [])
+                .filter((x: any) => x?.what === "노드")
+                .map((x: any) => String(x.why || ""))
+                .join(" ");
+              $("nd-say").textContent = why || t("켰습니다. 잠시 뒤 다시 봐 주세요.");
+            } catch (e) {
+              $("nd-say").textContent = String((e as Error)?.message || e);
+            }
+            setTimeout(() => void paintPart(), 3000);
+          });
+        }
+        return;
+      }
       const behind = Number(s?.behind ?? 0);
       box.innerHTML =
         card(
