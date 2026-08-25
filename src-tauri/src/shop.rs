@@ -1678,3 +1678,53 @@ mod profile_merge_tests {
         assert_eq!(out["phone"], Value::Null);
     }
 }
+
+/// 이 컴퓨터가 **어느 가게의 주인인지** 지갑에 물어 알아낸다.
+///
+/// ## 🔴 왜 필요한가 (실측 2026-08-25)
+///
+/// 체인에 `SHOP.PLAYX` 가 멀쩡히 있고, 지갑에 소유권 토큰 `SHOP.PLAYX!` 도
+/// 있는데, `shop.json` 의 `chain_asset` 만 비어 있었다. 값을 저장하지 않던
+/// 시절의 흔적이다. 그 한 칸이 비어 있었을 뿐인데 결과가 이랬다:
+///
+/// - 화면은 「체인에 가게를 등록하지 않았습니다」라고 말한다 (거짓말이다)
+/// - **어느 이름으로 알릴지 몰라 릴레이 공지를 못 올린다**
+/// - 그래서 가게를 켜 둬도 세상에서 안 보인다
+///
+/// 사장에게 「체인 이름이 뭐였죠」라고 물으면 안 된다. **답은 이 컴퓨터
+/// 안에 이미 있다.** 소유권 토큰은 이름 끝에 `!` 가 붙고, 그건 그 자산의
+/// 주인만 가질 수 있다.
+///
+/// 여러 개면 `None` 이다 — 골라 주는 것은 우리 일이 아니고, 잘못 고르면
+/// 남의 가게 이름으로 공지가 나간다.
+#[tauri::command]
+pub async fn shop_detect_asset() -> Result<Value, String> {
+    let owned = crate::raven::call_rpc("listmyassets", json!(["SHOP*", false, 200, 0])).await?;
+    let map = owned.as_object().ok_or("지갑이 목록을 주지 않았습니다.")?;
+
+    let mut found: Vec<String> = map
+        .keys()
+        // 소유권 토큰만 본다. 수량 1개짜리 `SHOP.PLAYX` 를 갖고 있는 것은
+        // 손님도 가능하다 — 주인은 `!` 를 가진 쪽이다.
+        .filter_map(|k| k.strip_suffix('!'))
+        // 하위 자산·유니크는 가게 자체가 아니다.
+        .filter(|k| !k.contains('/') && !k.contains('#'))
+        .filter(|k| k.starts_with("SHOP."))
+        .map(|k| k.to_string())
+        .collect();
+    found.sort();
+    found.dedup();
+
+    // 🔴 여기서 파일에 쓰지 않는다. `shop.json` 을 쓰는 곳은 화면 쪽 하나뿐이고
+    //    (`saveShop`), 쓰는 곳이 둘이 되면 서로 덮어써서 사장이 방금 고친 것이
+    //    사라진다. 우리는 **알아낸 것만 돌려준다.**
+    if found.len() == 1 {
+        return Ok(json!({ "asset": found.remove(0) }));
+    }
+    Ok(json!({
+        "asset": Value::Null,
+        // 0개면 정말 등록 안 한 것이고, 여러 개면 우리가 고를 일이 아니다 —
+        // 잘못 고르면 남의 가게 이름으로 공지가 나간다.
+        "candidates": found,
+    }))
+}

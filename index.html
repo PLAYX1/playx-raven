@@ -2021,6 +2021,11 @@
                    치기만 해도 등록된 것처럼 보인다. 이 칸은 발행 거래가
                    성공한 뒤에만 채워진다. -->
               <input type="hidden" id="sh-registered" />
+              <!-- 🔴 위 칸은 숨어 있다. 앱이 체인 이름을 스스로 찾아 채웠을 때
+                   말해 줄 자리가 없으면, 고쳐 놓고도 사장은 모른다.
+                   비어 있으면 아무것도 안 보인다(`:empty`). -->
+              <p class="meta" id="sh-registered-note"
+                 style="margin-top:8px; color:var(--accent)"></p>
 
               <label style="margin-top:12px">소개</label>
               <input id="sh-desc" placeholder="원두를 직접 볶는 작은 카페" autocomplete="off" />

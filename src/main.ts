@@ -8023,6 +8023,36 @@ async function pushShopLive(): Promise<void> {
   }
 }
 
+/**
+ * 체인 이름이 비어 있을 때 **지갑에 물어서** 채운다.
+ *
+ * 사장에게 「체인 이름이 뭐였죠」라고 물으면 안 된다 — 답은 이 컴퓨터
+ * 안에 이미 있다. 소유권 토큰(`SHOP.무엇!`)은 그 자산의 주인만 갖는다.
+ *
+ * 이게 비어 있으면 화면이 「체인에 가게를 등록하지 않았습니다」라고
+ * **거짓말을 하고**, 어느 이름으로 알릴지 몰라 **릴레이 공지도 못 올린다.**
+ * 가게를 켜 뒀는데 세상에서 안 보이던 이유 중 하나가 이것이었다.
+ */
+async function healChainAsset(): Promise<void> {
+  try {
+    const r = await invoke<any>("shop_detect_asset");
+    if (!r?.asset) return;                    // 정말 없거나, 여러 개라 못 고른다
+    const el = $("sh-registered") as HTMLInputElement | null;
+    if (!el || el.value.trim()) return;       // 그 사이 사장이 적었으면 안 건드린다
+    el.value = String(r.asset);
+    await saveShop();
+    // 조용히 고치지 않는다. 무엇이 달라졌는지 사장이 알아야 한다.
+    const note = $("sh-registered-note");
+    if (note) {
+      note.textContent = `지갑에서 찾았습니다 — ${r.asset}. 이제 손님에게 알릴 수 있습니다.`;
+    }
+    // 이름을 알았으니 지금 바로 알린다. 다음에 문 열 때까지 기다릴 이유가 없다.
+    void publishShop();
+  } catch {
+    // 노드가 아직 안 떴을 수 있다. 다음에 켤 때 또 해 본다.
+  }
+}
+
 async function loadShop() {
   let sh: any = null;
   try {
@@ -8045,6 +8075,16 @@ async function loadShop() {
   set("sh-asset", sh.asset);
   // 체인 이름. 이걸 되살려야 다음에 문을 열 때도 손님에게 알릴 수 있다.
   set("sh-registered", sh.chain_asset);
+  // 🔴 비어 있으면 **지갑에 물어서 알아낸다.** 사장에게 「체인 이름이
+  //    뭐였죠」라고 물으면 안 된다 — 답은 이 컴퓨터 안에 이미 있다.
+  //
+  //    실측(2026-08-25): 체인에 `SHOP.PLAYX` 가 멀쩡히 있고 지갑에
+  //    소유권 토큰 `SHOP.PLAYX!` 도 있는데, `shop.json` 의 `chain_asset`
+  //    만 비어 있었다(예전에 저장하는 쪽이 값을 안 담던 시절의 흔적).
+  //    그래서 앱은 「체인에 가게를 등록하지 않았습니다」라고 말했고,
+  //    **어느 이름으로 알릴지 몰라 릴레이 공지도 못 올렸다.**
+  //    가게가 켜져 있는데도 세상에서 안 보이던 이유 중 하나다.
+  if (!sh.chain_asset) void healChainAsset();
   set("mn-cur", sh.currency);
   const chk = (id: string, v: any) => {
     const el = $(id) as HTMLInputElement | null;

@@ -340,6 +340,7 @@ pub fn run() {
             mode::mode_set,
             awake::awake_status,
             helping::help_round,
+            shop::shop_detect_asset,
             autostart::autostart_get,
             autostart::autostart_set,
             tunnel::tunnel_status,
