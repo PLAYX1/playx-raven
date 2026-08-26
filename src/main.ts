@@ -3315,30 +3315,45 @@ async function talkPaintMe() {
     await tkLoadNames([tkMine]);
     const mine = tkNames.get(tkMine);
     const shown = mine?.name ? escapeHtml(String(mine.name)) : t("이름 없음");
+    // 머리줄은 좁다. 긴 설명은 「내 이름」 단추 안에서 말한다.
     $("tk-me").innerHTML =
-      `${t("나")}: <b>${shown}</b> · ` +
-      (me.recoverable
-        ? `<span class="ok">${t("12단어로 되살릴 수 있습니다")}</span>`
-        : `<span class="warn">${escapeHtml(String(me.why || ""))}</span>`);
+      `<b>${shown}</b>` +
+      (me.recoverable ? "" : ` <span class="warn">${t("· 백업 파일이 유일한 사본")}</span>`);
   } catch (e) {
     $("tk-me").innerHTML = `<span class="danger">${escapeHtml(String(e))}</span>`;
   }
 }
 
+let tkRoomNames = new Map<string, string>();
+
 async function talkPaintRooms() {
+  const box = $("tk-rooms");
+  let rooms: any[] = [];
   try {
-    const rooms: any[] = await invoke("talk_rooms");
-    const sel = $("tk-room") as HTMLSelectElement;
-    const keep = sel.value;
-    sel.innerHTML =
-      `<option value="">${t("전체 — 레이븐 이야기")}</option>` +
-      rooms
-        .map((r) => `<option value="${escapeHtml(String(r.id))}">${escapeHtml(String(r.name))}</option>`)
-        .join("");
-    sel.value = keep;
+    rooms = await invoke("talk_rooms");
   } catch {
     // 방 목록을 못 읽어도 전체 글은 보여야 한다. 조용히 넘어간다.
   }
+  tkRoomNames = new Map(rooms.map((r) => [String(r.id), String(r.name)]));
+  box.innerHTML =
+    `<button class="room${tkRoom ? "" : " on"}" data-room="">${t("레이븐 이야기")}</button>` +
+    rooms
+      .map(
+        (r) =>
+          `<button class="room${tkRoom === String(r.id) ? " on" : ""}" data-room="${escapeHtml(String(r.id))}"
+             title="${escapeHtml(String(r.about || ""))}">${escapeHtml(String(r.name))}</button>`
+      )
+      .join("");
+  box.querySelectorAll("[data-room]").forEach((b) => {
+    (b as HTMLElement).onclick = () => {
+      tkRoom = String((b as HTMLElement).dataset.room || "");
+      $("tk-title").textContent = tkRoom
+        ? tkRoomNames.get(tkRoom) || t("방")
+        : t("레이븐 이야기");
+      void talkPaintRooms();
+      void talkPaint();
+    };
+  });
 }
 
 /**
@@ -3350,35 +3365,45 @@ async function talkPaintRooms() {
  */
 async function talkPaint() {
   const box = $("tk-list");
-  box.innerHTML = `<p class="meta">${t("세계 릴레이에서 읽는 중…")}</p>`;
+  box.innerHTML = `<div class="meta" style="margin:auto">${t("세계 릴레이에서 읽는 중…")}</div>`;
   try {
     const list: any[] = await invoke("talk_read", { room: tkRoom || null, limit: 60 });
     if (!list.length) {
       box.innerHTML =
-        `<div class="card"><h3>${t("아직 글이 없습니다")}</h3>` +
-        `<p class="meta">${t("첫 글을 올려 보세요. 세계 릴레이로 함께 나갑니다.")}</p></div>`;
+        `<div class="meta" style="margin:auto;text-align:center;line-height:1.9">` +
+        `${t("아직 글이 없습니다.")}<br />${t("첫 글을 올려 보세요 — 세계 릴레이로 함께 나갑니다.")}</div>`;
       return;
     }
     // 🔴 이름표를 **먼저** 가져온다. 안 그러면 화면에 16진수가 한 번
     //    떴다가 이름으로 바뀌는데, 그 깜빡임이 「고장났나」로 읽힌다.
     await tkLoadNames(list.map((e) => String(e.pubkey || "")));
-    box.innerHTML = list
+    // 🔴 오래된 것이 위, 새것이 아래 — 대화창은 그 방향이다. 읽어 온 것은
+    //    최신순이라 뒤집는다. 안 뒤집으면 인사가 맨 아래에 있다.
+    const asc = [...list].reverse();
+    let prev = "";
+    box.innerHTML = asc
       .map((e) => {
         const who = String(e.pubkey || "");
         const mine = who === tkMine;
-        const when = new Date(Number(e.created_at || 0) * 1000).toLocaleString();
         const id = String(e.id || "");
-        return `<div class="card" style="margin-bottom:10px">
-          <div class="meta">${mine ? `<b>${t("나")}</b>` : tkWho(who)} · ${escapeHtml(when)}</div>
-          <div style="white-space:pre-wrap;margin-top:6px" data-say="${id}">${escapeHtml(String(e.content || ""))}</div>
-          <div class="row" style="margin-top:8px">
-            <button class="ghost" data-tr="${id}">${t("내 말로 보기")}</button>
-            <button class="ghost" data-keep="${id}">${t("간직하기")}</button>
-            <span class="meta" data-note="${id}"></span>
-          </div>
-        </div>`;
+        const when = new Date(Number(e.created_at || 0) * 1000).toLocaleString();
+        // 같은 사람이 이어서 쓰면 이름을 다시 안 적는다. 촘촘해 보인다.
+        const head = who === prev ? "" : `<div class="who">${mine ? `<b>${t("나")}</b>` : tkWho(who)}</div>`;
+        prev = who;
+        return (
+          head +
+          `<div class="bub${mine ? " me" : ""}" data-say="${id}">${escapeHtml(String(e.content || ""))}</div>
+           <div class="bubacts${mine ? " r" : ""}">
+             <button data-tr="${id}">${t("내 말로")}</button>
+             <button data-keep="${id}">${t("간직")}</button>
+             <span class="meta" data-note="${id}"></span>
+           </div>
+           <div class="when"${mine ? ' style="text-align:right"' : ""}>${escapeHtml(when)}</div>`
+        );
       })
       .join("");
+    // 새 글이 아래에 있으므로 맨 아래로 내린다. 안 하면 옛날 글만 보인다.
+    box.scrollTop = box.scrollHeight;
     box.querySelectorAll("[data-tr]").forEach((b) => {
       (b as HTMLElement).onclick = () => void talkTranslate(String((b as HTMLElement).dataset.tr), list);
     });
@@ -3432,6 +3457,7 @@ async function talkTranslate(id: string, list: any[]) {
   const body = document.querySelector(`[data-say="${id}"]`) as HTMLElement | null;
   const ev = list.find((e) => String(e.id) === id);
   if (!note || !body || !ev) return;
+  // 두 번 눌러도 두 번 붙지 않는다.
   if (body.querySelector(".tr")) return;
   note.textContent = t("옮기는 중…");
   try {
@@ -3478,7 +3504,9 @@ async function talkSend() {
   try {
     await invoke("talk_post", { text, room: tkRoom || null });
     box.value = "";
-    $("tk-note").innerHTML = `<span class="ok">${t("올렸습니다")}</span>`;
+    box.style.height = "auto";
+    // 「올렸습니다」를 남겨 두지 않는다 — 대화창에 붙어 있는 알림은 짐이다.
+    $("tk-note").textContent = "";
     setTimeout(() => void talkPaint(), 1200);
   } catch (e) {
     $("tk-note").innerHTML = `<span class="danger">${escapeHtml(String(e))}</span>`;
@@ -10351,9 +10379,19 @@ window.addEventListener("DOMContentLoaded", async () => {
   void listen("drop-enter", () => dropVeil(true));
   void listen("drop-leave", () => dropVeil(false));
   void listen<any>("drop-files", (e) => void onDropped(e.payload?.paths || []));
-  $("tk-room").addEventListener("change", () => {
-    tkRoom = ($("tk-room") as HTMLSelectElement).value;
-    void talkPaint();
+  // 엔터로 보낸다. 줄바꿈은 Shift+Enter — 대화창의 기본 약속이다.
+  $("tk-text").addEventListener("keydown", (e) => {
+    const k = e as KeyboardEvent;
+    if (k.key === "Enter" && !k.shiftKey) {
+      k.preventDefault();
+      void talkSend();
+    }
+  });
+  // 쓴 만큼 칸이 자란다. 한 줄로 고정하면 긴 글을 쓸 때 앞이 안 보인다.
+  $("tk-text").addEventListener("input", () => {
+    const el = $("tk-text") as HTMLTextAreaElement;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(140, el.scrollHeight)}px`;
   });
   // 맞교환. 🔴 러스트에 다 만들어 놓고 **이 다섯 줄이 없으면** 오늘 하루
   //    종일 고친 그 병이 그대로 반복된다.

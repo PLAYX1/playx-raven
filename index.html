@@ -68,6 +68,73 @@
         margin-right: 6px; background: var(--muted); }
       .dot.on { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 22%, transparent); }
       .dot.off { background: var(--muted); opacity: .45; }
+      /* ── 이야기 ─────────────────────────────────────────────────
+         🔴 높이를 화면에 맞춘다. 페이지처럼 길게 흐르면 입력칸을 찾으러
+            매번 맨 아래까지 내려가야 한다 — 대화창이 그러면 안 쓴다. */
+      .talkwrap { display: grid; grid-template-columns: 190px 1fr;
+        gap: 14px; height: calc(100vh - 96px); min-height: 380px; }
+      @media (max-width: 720px) { .talkwrap { grid-template-columns: 1fr; height: auto; } }
+
+      .rooms { border: 1px solid var(--line); border-radius: 14px; padding: 10px;
+        display: flex; flex-direction: column; gap: 4px; overflow-y: auto; }
+      @media (max-width: 720px) { .rooms { flex-direction: row; overflow-x: auto;
+        align-items: center; } }
+      .roomhead { font-size: 11.5px; letter-spacing: .12em; text-transform: uppercase;
+        color: var(--faint); padding: 2px 8px 6px; }
+      @media (max-width: 720px) { .roomhead { display: none; } }
+      /* 44px. 방을 고르는 것이 이 화면에서 제일 자주 하는 일이다. */
+      .room { display: block; width: 100%; text-align: left; min-height: 44px;
+        padding: 0 12px; border: 0; border-radius: 10px; background: none;
+        color: var(--text); font-size: 14px; cursor: pointer; white-space: nowrap;
+        overflow: hidden; text-overflow: ellipsis; }
+      .room:hover { background: var(--panel); }
+      .room.on { background: var(--brand); color: #fff; font-weight: 600; }
+
+      .chat { display: flex; flex-direction: column; min-width: 0;
+        border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+      .chathead { display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+        border-bottom: 1px solid var(--line); background: var(--side); flex-wrap: wrap; }
+      .chathead b { font-size: 15px; }
+
+      .msgs { flex: 1; overflow-y: auto; padding: 14px; display: flex;
+        flex-direction: column; gap: 3px; }
+      @media (max-width: 720px) { .msgs { max-height: 60vh; } }
+
+      /* 말풍선. 🔴 카드가 아니라 풍선이어야 대화로 읽힌다. */
+      .bub { max-width: 76%; align-self: flex-start; padding: 9px 13px;
+        border-radius: 16px 16px 16px 5px; background: var(--panel);
+        border: 1px solid var(--line); font-size: 14.5px; line-height: 1.65;
+        white-space: pre-wrap; word-break: break-word; position: relative; }
+      .bub.me { align-self: flex-end; background: var(--brand); color: #fff;
+        border-color: transparent; border-radius: 16px 16px 5px 16px; }
+      .bub.me .tr { border-top-color: rgba(255,255,255,.35); color: rgba(255,255,255,.85); }
+      /* 같은 사람이 이어서 쓰면 이름을 다시 안 적는다 — 촘촘해 보인다. */
+      .who { font-size: 12.5px; color: var(--faint); margin: 9px 0 3px 4px; }
+      .bub.me + .bub.me, .bub:not(.me) + .bub:not(.me) { margin-top: -1px; }
+      .when { font-size: 11px; opacity: .55; margin: 2px 0 6px 6px; }
+      .bub.me ~ .when { text-align: right; margin-right: 6px; }
+      .tr { margin-top: 7px; padding-top: 7px; border-top: 1px dashed var(--line);
+        color: var(--muted); font-size: 13.5px; }
+
+      /* 손대는 것은 **얹었을 때만.** 늘 보이면 대화가 아니라 서류가 된다. */
+      .bubacts { display: flex; gap: 5px; margin: 1px 0 5px 6px; opacity: 0;
+        transition: opacity .12s ease; }
+      .bubacts.r { justify-content: flex-end; margin-right: 6px; }
+      .msgs > div:hover + .bubacts, .bubacts:hover { opacity: 1; }
+      @media (hover: none) { .bubacts { opacity: .7; } }
+      .bubacts button { min-height: 30px; padding: 0 10px; font-size: 12px;
+        border-radius: 8px; border: 1px solid var(--line); background: var(--bg);
+        color: var(--muted); cursor: pointer; }
+
+      .composer { display: flex; gap: 8px; align-items: flex-end;
+        padding: 10px 14px; border-top: 1px solid var(--line); background: var(--side); }
+      /* 🔴 16px 아래로 내리지 않는다. 그리고 label 안에 끼워 넣지 않는다 —
+         그러면 칸이 글자 옆으로 눌려서 세 글자 폭이 된다(실제로 그랬다). */
+      .composer textarea { flex: 1; min-width: 0; min-height: 44px; max-height: 140px;
+        padding: 11px 12px; font-size: 16px; line-height: 1.5; resize: none;
+        border: 1px solid var(--line); border-radius: 12px;
+        background: var(--bg); color: var(--text); font-family: inherit; }
+      .composer button { flex: none; min-height: 44px; padding: 0 18px; }
       /* 영상 틀. 🔴 높이를 픽셀로 박으면 폰에서 위아래가 잘리거나 검은 띠가
          생긴다. 가로에 맞춰 세로가 따라오게 둔다. */
       .vidwrap { position: relative; width: 100%; aspect-ratio: 16 / 9;
@@ -1581,30 +1648,36 @@
       <!-- ── 이야기 ──────────────────────────────────────────────────
            세계와 한 방에서. 우리 앱을 안 깔아도 같은 글을 본다(NIP-28).
            🔴 여기는 **RVN 이 필요 없다.** 그게 이 칸의 요점이다. -->
+      <!-- ── 이야기 ──────────────────────────────────────────────────
+           🔴 텔레그램 배치다 — **왼쪽 방 목록, 오른쪽 대화.**
+           예전에는 글이 큰 카드로 세로로 쌓이고 카드마다 단추 두 개가
+           붙어 있었다. 그건 대화가 아니라 서류 목록으로 읽힌다.
+           말풍선은 촘촘하고, 손대는 것은 얹었을 때만 나온다. -->
       <section class="page" id="page-talk">
-        <h2 class="title">이야기</h2>
-        <p class="lede">
-          레이븐 이야기가 흐르는 곳입니다. <b>세계 어디든 이어집니다</b> —
-          다른 프로그램(damus · primal)을 쓰는 사람도 같은 글을 봅니다.
-          <b>RVN 이 필요 없습니다.</b>
-        </p>
+        <div class="talkwrap">
+          <aside class="rooms">
+            <div class="roomhead">방</div>
+            <div id="tk-rooms"></div>
+            <button class="ghost" id="tk-newroom">+ 방 만들기</button>
+          </aside>
 
-        <div class="bar">
-          <select id="tk-room" style="min-height:44px"><option value="">전체 — 레이븐 이야기</option></select>
-          <button class="ghost" id="tk-reload">새로고침</button>
-          <button class="ghost" id="tk-name">내 이름 정하기</button>
-          <button class="ghost" id="tk-newroom">방 만들기</button>
-          <span class="meta" id="tk-me"></span>
+          <div class="chat">
+            <div class="chathead">
+              <b id="tk-title">레이븐 이야기</b>
+              <span class="meta" id="tk-me"></span>
+              <span style="margin-left:auto"></span>
+              <button class="ghost" id="tk-name">내 이름</button>
+              <button class="ghost" id="tk-reload">새로고침</button>
+            </div>
+            <div class="msgs" id="tk-list"></div>
+            <div class="composer">
+              <textarea id="tk-text" rows="1"
+                placeholder="여기에 쓰면 세계 릴레이로 함께 나갑니다"></textarea>
+              <button id="tk-send">보내기</button>
+            </div>
+            <div class="meta" id="tk-note" style="padding:0 14px 8px"></div>
+          </div>
         </div>
-
-        <label>할 말
-          <textarea id="tk-text" rows="3" placeholder="여기에 쓰면 세계 릴레이로 함께 나갑니다"></textarea></label>
-        <div class="bar">
-          <button id="tk-send">올리기</button>
-          <span class="meta" id="tk-note"></span>
-        </div>
-
-        <div id="tk-list" style="margin-top:16px"></div>
       </section>
 
       <section class="page" id="page-assets">
