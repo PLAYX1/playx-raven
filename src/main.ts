@@ -3114,7 +3114,9 @@ async function swapLook() {
     box.innerHTML =
       `<div class="card" style="margin-top:12px">
          <div class="kv"><b>${t("받는 것")}</b><span>${escapeHtml(String(r.asset))} ${Number(r.amount).toLocaleString()}${t("개")}</span></div>
-         <div class="kv"><b>${t("내는 돈")}</b><span>${Number(r.price).toLocaleString()} RVN</span></div>
+         <div class="kv"><b>${t("파는 사람에게")}</b><span>${Number(r.price).toLocaleString()} RVN</span></div>
+         <div class="kv"><b>${t("개발비 1%")}</b><span>${Number(r.fee || 0).toLocaleString()} RVN</span></div>
+         <div class="kv"><b>${t("모두")}</b><span><b>${Number(r.total || r.price).toLocaleString()} RVN</b></span></div>
          <div class="kv"><b>${t("한 개당")}</b><span>${Number(r.each).toLocaleString()} RVN</span></div>
          <p class="meta">${t("한 거래 안에서 동시에 오갑니다. 먼저 보내지 않습니다.")}</p>
          <div class="row" style="margin-top:12px"><button id="sw-buy">${t("사기")}</button>
@@ -3139,8 +3141,9 @@ async function swapBuy(hex: string, info: any) {
     const ok = await sure(
       t("이대로 보낼까요?"),
       `${info.asset} ${Number(info.amount).toLocaleString()}개를 받고 ` +
-        `${Number(info.price).toLocaleString()} RVN 을 냅니다. ` +
-        `수수료 ${dry.fee} RVN. 되돌릴 수 없습니다.`
+        `모두 ${Number(info.total || info.price).toLocaleString()} RVN 을 냅니다 ` +
+        `(파는 사람 ${Number(info.price).toLocaleString()} · 개발비 ${Number(info.fee || 0).toLocaleString()}). ` +
+        `그 밖에 체인 수수료 ${dry.fee} RVN. 되돌릴 수 없습니다.`
     );
     if (!ok) { $("sw-note").textContent = ""; return; }
     const r = await invoke<any>("swap_take", { hex, broadcast: true, passphrase: null });

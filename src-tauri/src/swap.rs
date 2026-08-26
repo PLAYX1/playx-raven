@@ -302,11 +302,24 @@ pub async fn swap_check(hex: String) -> Result<Value, String> {
         .unwrap_or("")
         .to_string();
 
+    // 🔴 개발비 1%. **파는 사람이 부른 값은 그대로 간다** — 0번 출력은 파는
+    //    사람이 이미 서명해 둔 것이라 우리가 줄일 수 없다. 그래서 사는 쪽이
+    //    1% 를 얹어 낸다.
+    //
+    //    줄이는 쪽(파는 사람이 99% 만 받게)으로 만들면, 우리 앱이 아닌 다른
+    //    프로그램으로 사는 사람이 나타났을 때 **파는 사람만 1% 를 조용히
+    //    잃는다.** 얹는 쪽은 그런 일이 없다 — 못 걷을 뿐 아무도 안 다친다.
+    let (rate, fee_addr) = crate::shop::fee_config();
+    let fee = (price * rate * 1e8).round() / 1e8;
+
     Ok(json!({
         "ok": true,
         "asset": asset,
         "amount": amount,
         "price": price,
+        "fee": fee,
+        "fee_address": fee_addr,
+        "total": price + fee,
         "seller": seller,
         "txid": txid,
         "vout": vnum,
@@ -340,7 +353,9 @@ pub async fn swap_take(
     let was = unlock(passphrase).await?;
 
     // ── 내 RVN 고르기 ────────────────────────────────────────────
-    let need = price + FEE;
+    let fee_dev = f(&info["fee"]);
+    let fee_addr = info["fee_address"].as_str().unwrap_or_default().to_string();
+    let need = price + fee_dev + FEE;
     let unspent = call_rpc("listunspent", json!([1])).await?;
     let mut mine: Vec<Value> = unspent.as_array().cloned().unwrap_or_default();
     // 큰 것부터 쓴다. 입력 개수가 적을수록 거래가 작고 수수료가 싸다.
@@ -383,10 +398,18 @@ pub async fn swap_take(
     for u in &picked {
         ins.push(json!({ "txid": u["txid"], "vout": u["vout"] }));
     }
-    let change = got - price - FEE;
+    let change = got - price - fee_dev - FEE;
     let mut outs = serde_json::Map::new();
     outs.insert(seller.clone(), json!(price));
     outs.insert(asset_to.clone(), json!({ "transfer": { asset.clone(): amount } }));
+    // 개발비 1%. **같은 거래 안에서 나간다** — 따로 쌓았다가 나중에 보내는
+    // 길(가게 주문이 그렇다)은 여기서 쓸 수 없다. 이건 우리 노드를 거치지
+    // 않는 거래라, 지금 안 넣으면 걷을 자리가 영영 없다.
+    //
+    // 0.01 RVN 미만이면 넣지 않는다 — 보내는 수수료가 더 나온다.
+    if fee_dev >= 0.01 && !fee_addr.is_empty() {
+        outs.insert(fee_addr.clone(), json!(fee_dev));
+    }
     // 거스름돈이 먼지만큼이면 넣지 않는다 — 넣으면 노드가 거절한다.
     if change > 0.0001 {
         outs.insert(change_to.clone(), json!(change));
@@ -421,7 +444,7 @@ pub async fn swap_take(
             "sent": false,
             "hex": full,
             "asset": asset, "amount": amount, "price": price,
-            "fee": FEE, "change": change,
+            "fee": FEE, "dev_fee": fee_dev, "change": change,
             "to": asset_to,
         }));
     }
@@ -512,6 +535,35 @@ mod tests {
         assert!(
             line.contains("mine_hex, hex"),
             "합치는 순서가 뒤집혔다 — 내 입력과 출력이 사라진다"
+        );
+    }
+
+    /// 🔴 **1% 는 여기서 안 걷으면 영영 못 걷는다.** 가게 주문은 우리
+    ///    노드를 지나가서 나중에 장부로 옮길 수 있지만, 맞교환은 두 사람
+    ///    사이에서 끝난다. 같은 거래 안에 출력을 넣는 것 말고는 길이 없다.
+    #[test]
+    fn 맞교환에도_개발비가_들어간다() {
+        let src = include_str!("swap.rs");
+        let i = src.find("pub async fn swap_take").expect("사는 함수가 있어야 한다");
+        let end = src[i..].find("fn check_take_shape").unwrap_or(src.len() - i);
+        let body = &src[i..i + end];
+        assert!(
+            body.contains("fee_addr") && body.contains("outs.insert(fee_addr"),
+            "맞교환에 개발비 출력이 없다 — 이 거래의 1% 는 걷을 자리가 여기뿐이다"
+        );
+    }
+
+    /// 파는 사람이 부른 값은 **그대로** 가야 한다. 줄이는 쪽으로 만들면,
+    /// 우리 앱이 아닌 프로그램으로 사는 사람이 나타났을 때 파는 사람만
+    /// 조용히 1% 를 잃는다.
+    #[test]
+    fn 파는_사람_몫은_안_깎는다() {
+        let src = include_str!("swap.rs");
+        let i = src.find("outs.insert(seller.clone()").expect("파는 사람 출력이 있어야 한다");
+        let line = &src[i..i + 60.min(src.len() - i)];
+        assert!(
+            line.contains("json!(price)"),
+            "파는 사람 몫에서 개발비를 깎고 있다"
         );
     }
 
