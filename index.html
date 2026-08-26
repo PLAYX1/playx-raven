@@ -57,9 +57,12 @@
         font-size: 14px; font-family: inherit; cursor: pointer; }
       #appver:hover { background: var(--panel); color: var(--text); }
       #upnag { display: block; margin-top: 6px; min-height: 32px; padding: 0 10px;
-        border: 1px solid var(--ravi, #e7731f); border-radius: 999px;
-        background: var(--ravi, #e7731f); color: #fff;
-        font-size: 13px; font-weight: 600; cursor: pointer; }
+        border-radius: 999px; font-size: 13px; font-weight: 600; cursor: pointer;
+        border: 1px solid var(--line); background: none; color: var(--faint); }
+      /* 새 버전이 있을 때만 눈에 띈다. 최신일 때 주황이면 늘 뭔가 할 일이
+         있는 것처럼 보이고, 그러면 진짜 있을 때 안 보인다. */
+      #upnag.new { border-color: var(--ravi, #e7731f);
+        background: var(--ravi, #e7731f); color: #fff; }
       #upnag[hidden] { display: none; }
       nav a { display: flex; align-items: center; gap: 8px; padding: 12px 16px; color: var(--text);
               text-decoration: none; font-size: 15px; cursor: pointer; border-left: 2px solid transparent; }
@@ -1411,7 +1414,12 @@
                떴다. 앱은 알고 있으면서 보이는 데서는 아무 말도 안 했다.
                그래서 대표님 맥이 여러 판 뒤처진 채로 남아 있었다.
                늘 보이는 자리에 둔다. 새 판이 없으면 안 그린다. -->
-          <button type="button" id="upnag" hidden>새 버전 받기</button>
+          <!-- 🔴 **늘 있고 글자만 바뀐다.** 예전에는 새 버전이 있을 때만
+               나타나서, 최신일 때는 아무 말이 없었다. 사장은 「확인이 된
+               건가 안 된 건가」를 알 수 없다.
+                 확인 중 → 최신 버전 / 새 버전 받기
+               셋 중 하나가 늘 적혀 있다. -->
+          <button type="button" id="upnag" class="ok">확인 중…</button>
         </div>
       </div>
       <!-- 사이드바는 기능 상자가 아니라 카운터에서 하는 일 순서다.

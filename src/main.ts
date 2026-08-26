@@ -64,25 +64,57 @@ const TOUCH_WINDOW = 8000;
 document.addEventListener("pointerdown", () => (lastTouch = Date.now()), true);
 document.addEventListener("keydown", () => (lastTouch = Date.now()), true);
 
+/**
+ * 안내가 **눌어붙지 않게 하는 두 장치.**
+ *
+ * ## 🔴 왜 필요했나
+ *
+ * 예전에는 도는 일의 개수(`busyCount`)가 0 이 될 때까지 안내를 띄웠다.
+ * 그런데 노드가 장부를 훑는 동안에는 배경 질문 하나가 **몇 분씩** 안
+ * 끝난다. 사장이 아무것도 안 눌렀는데 「하는 중… 잠시만요」가 화면에
+ * 눌어붙었고, 실제로 그렇게 겪으셨다.
+ *
+ * ① **사람이 시킨 일만 센다.** 배경에서 도는 질문은 안내를 붙잡지 않는다.
+ * ② **오래 붙어 있으면 스스로 내려간다.** 안 없어지는 안내는 안내가
+ *    아니라 고장으로 읽힌다. 12초면 충분히 말했다.
+ */
+const BUSY_MAX_MS = 12_000;
+let busyGuard: number | undefined;
+
 async function invoke<T = any>(cmd: string, args?: any): Promise<T> {
-  busyCount++;
-  if (busyTimer === undefined && Date.now() - lastTouch < TOUCH_WINDOW) {
-    // 눈에 띄기까지 0.4초. 그보다 빨리 끝나는 일은 조용히 지나간다.
-    busyTimer = window.setTimeout(() => busyShow(true), 400);
+  // 이 부름이 사람이 시킨 것인가. **시작할 때 정하고 끝까지 그대로 쓴다** —
+  // 끝날 때 다시 재면 그사이 손을 댔는지에 따라 셈이 어긋난다.
+  const mine = Date.now() - lastTouch < TOUCH_WINDOW;
+  if (mine) {
+    busyCount++;
+    if (busyTimer === undefined) {
+      // 눈에 띄기까지 0.4초. 그보다 빨리 끝나는 일은 조용히 지나간다.
+      busyTimer = window.setTimeout(() => {
+        busyShow(true);
+        clearTimeout(busyGuard);
+        busyGuard = window.setTimeout(busyDone, BUSY_MAX_MS);
+      }, 400);
+    }
   }
   try {
     return (await rawInvoke<T>(cmd, args)) as T;
   } finally {
-    busyCount--;
-    if (busyCount <= 0) {
-      busyCount = 0;
-      if (busyTimer !== undefined) {
-        clearTimeout(busyTimer);
-        busyTimer = undefined;
-      }
-      busyShow(false);
+    if (mine) {
+      busyCount--;
+      if (busyCount <= 0) busyDone();
     }
   }
+}
+
+function busyDone() {
+  busyCount = 0;
+  if (busyTimer !== undefined) {
+    clearTimeout(busyTimer);
+    busyTimer = undefined;
+  }
+  clearTimeout(busyGuard);
+  busyGuard = undefined;
+  busyShow(false);
 }
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
 import { getVersion } from "@tauri-apps/api/app";
@@ -1413,38 +1445,35 @@ async function paintStatusDots() {
  *    것에 아무 반응이 없으면 그건 고장이다.
  */
 async function checkNow() {
-  const el = document.getElementById("appver");
-  const was = el?.textContent || "";
-  if (el) el.textContent = t("확인 중…");
-  try {
-    const up = await checkUpdate();
-    if (el) el.textContent = was;
-    if (!up) {
-      // 사이드바는 좁다. 잠깐 글자만 바꿔 말하고 되돌린다.
-      if (el) {
-        el.textContent = t("지금이 최신입니다");
-        setTimeout(() => (el.textContent = was), 2600);
-      }
-      return;
-    }
-    // 있으면 설치 칸으로 데려간다. 거기서 무엇이 바뀌는지 읽고 누른다.
-    await checkForUpdate(false);
+  const nag = document.getElementById("upnag") as HTMLButtonElement | null;
+  // 🔴 판 번호 글자는 그대로 둔다. 번호가 「확인 중…」으로 바뀌면 사장은
+  //    자기가 쓰는 판이 무엇인지 그 순간 못 본다. 아래 단추가 답한다.
+  if (nag) {
+    nag.classList.remove("new");
+    nag.textContent = t("확인 중…");
+  }
+  await checkForUpdate(true);
+  // 새 버전이 있으면 설치 칸으로 데려간다. 없으면 단추가 「최신 버전」이라
+  // 적혀 있고, 그게 답이다.
+  if (nag?.classList.contains("new")) {
     showPage("settings");
     setTimeout(() => $("up-box")?.scrollIntoView({ block: "center" }), 60);
-  } catch (e) {
-    if (el) {
-      el.textContent = t("확인 못 했습니다");
-      setTimeout(() => (el.textContent = was), 2600);
-    }
   }
 }
 
 async function checkForUpdate(quiet = true) {
   try {
     const up = await checkUpdate();
-    const nag = document.getElementById("upnag");
+    const nag = document.getElementById("upnag") as HTMLButtonElement | null;
     if (!up) {
-      if (nag) nag.hidden = true;
+      // 🔴 **감추지 않는다.** 「최신이다」도 답이다. 아무 말이 없으면
+      //    사장은 확인이 된 건지 안 된 건지 알 수 없다.
+      if (nag) {
+        nag.hidden = false;
+        nag.classList.remove("new");
+        nag.textContent = t("최신 버전");
+        nag.onclick = () => void checkNow();
+      }
       if (!quiet) $("up-note").textContent = "지금이 최신입니다.";
       return;
     }
@@ -1454,6 +1483,9 @@ async function checkForUpdate(quiet = true) {
     //    쓰고 계셨다. 판 번호 옆에 붙여 두고, 누르면 그 칸으로 데려간다.
     if (nag) {
       nag.hidden = false;
+      // 🔴 이때만 눈에 띄게 한다. 최신일 때도 주황이면 늘 할 일이 있는
+      //    것처럼 보이고, 그러면 진짜 있을 때 안 보인다.
+      nag.classList.add("new");
       nag.textContent = t("새 버전 받기");
       nag.onclick = () => {
         showPage("settings");
@@ -1511,6 +1543,14 @@ async function checkForUpdate(quiet = true) {
   } catch (e) {
     // 업데이트 서버가 없거나 인터넷이 끊긴 것은 사고가 아니다. 조용히 넘긴다 —
     // 다만 사장이 직접 눌러 확인했을 때는 말해 준다.
+    // 🔴 「확인 중…」에서 멈춘 채로 두면 사장은 프로그램이 멎은 줄 안다.
+    const nag2 = document.getElementById("upnag") as HTMLButtonElement | null;
+    if (nag2) {
+      nag2.hidden = false;
+      nag2.classList.remove("new");
+      nag2.textContent = t("확인 못 했습니다");
+      nag2.onclick = () => void checkNow();
+    }
     if (!quiet) $("up-note").textContent = "확인하지 못했습니다. 인터넷을 확인해 주세요.";
   }
 }
@@ -2441,6 +2481,68 @@ async function paintPart(): Promise<void> {
   if (strip) box.insertAdjacentHTML("afterbegin", strip);
 }
 
+/**
+ * 따라잡는 중일 때만 나오는 칸 — **메모리를 넉넉히 주면 빨라진다.**
+ *
+ * ## 🔴 우리가 반대로 권하고 있었다
+ *
+ * 노드 설정의 권장값이 300MB 였다. 코어 기본값 450 보다도 낮다. 그런데
+ * 장부를 처음부터 훑을 때 이 값이 **속도를 가장 크게 가른다.**
+ * 대표님 윈도우가 5시간에 0.63% 였고, 그중 상당 부분이 이 탓이다.
+ *
+ * ⚠️ 다 따라잡으면 이 칸이 사라진다. 그때는 되돌리는 편이 낫다고 적는다 —
+ *    계산대 메모리를 노드가 계속 물고 있으면 주문 화면이 느려진다.
+ */
+async function speedCard(): Promise<string> {
+  try {
+    const s = await invoke<any>("dbcache_suggest");
+    if (!s?.worth_it) return "";
+    return `<div class="card" style="margin-top:12px;border-color:var(--brand)">
+        <h3>${t("빠르게 따라잡기")}</h3>
+        <div class="kv"><b>${t("지금 메모리")}</b><span>${Number(s.now).toLocaleString()} MB</span></div>
+        <div class="kv"><b>${t("권하는 값")}</b><span><b>${Number(s.suggest).toLocaleString()} MB</b></span></div>
+        <p class="meta">${escapeHtml(String(s.why || ""))}</p>
+        <div class="row" style="margin-top:10px">
+          <button id="nd-fast">${t("메모리 넉넉히 주기")}</button>
+          <span class="meta" id="nd-fastsay"></span>
+        </div>
+      </div>`;
+  } catch {
+    // 못 읽어도 나머지 화면은 그대로 보여야 한다.
+    return "";
+  }
+}
+
+function bindSpeed() {
+  const b = document.getElementById("nd-fast");
+  if (!b) return;
+  b.addEventListener("click", async () => {
+    (b as HTMLButtonElement).disabled = true;
+    const say = $("nd-fastsay");
+    try {
+      const r = await invoke<any>("dbcache_boost");
+      // 🔴 「다시 켜야 한다」를 반드시 말한다. 안 그러면 값만 바꿔 놓고
+      //    「똑같이 느리다」고 겪는다.
+      say.innerHTML =
+        `<span class="ok">${Number(r.set).toLocaleString()} MB ${t("로 정했습니다")}</span>`;
+      const ok = await sure(
+        t("노드를 껐다 켤까요?"),
+        t("그래야 적용됩니다. 재색인은 이어서 합니다 — 처음부터 다시 하지 않습니다. 몇 분 동안 결제 확인이 멈춥니다.")
+      );
+      if (!ok) return;
+      say.textContent = t("다시 켜는 중…");
+      await invoke("services_stop").catch(() => {});
+      await new Promise((r) => setTimeout(r, 3000));
+      await invoke("services_start").catch(() => {});
+      say.innerHTML = `<span class="ok">${t("다시 켰습니다")}</span>`;
+      setTimeout(() => void paintPart(), 4000);
+    } catch (e) {
+      (b as HTMLButtonElement).disabled = false;
+      say.innerHTML = `<span class="danger">${escapeHtml(String(e))}</span>`;
+    }
+  });
+}
+
 async function paintPartBody(): Promise<void> {
   const box = document.getElementById("pt-body");
   if (!box) return;
@@ -2534,7 +2636,9 @@ async function paintPartBody(): Promise<void> {
           behind > 0
             ? t("따라잡는 동안에는 방금 들어온 결제가 늦게 보입니다.")
             : t("이 컴퓨터가 체인을 통째로 들고 있습니다. 남에게 묻지 않습니다."),
-        ) + (await indexCard()) + goto("settings", t("노드 설정 열기"));
+        ) + (behind > 0 ? await speedCard() : "") + (await indexCard()) +
+        goto("settings", t("노드 설정 열기"));
+      bindSpeed();
     } else if (partOpen === "mine") {
       if (title) title.textContent = "채굴";
       const m = await invoke<any>("miner_running").catch(() => null);
@@ -3494,13 +3598,16 @@ async function talkTranslate(id: string, list: any[]) {
   if (body.querySelector(".tr")) return;
   note.textContent = t("옮기는 중…");
   try {
-    const r = await fetch("https://rvn.ex.erci.se/api/translate", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ text: String(ev.content || ""), to: lang }),
+    // 🔴 화면이 직접 부르면 **CORS 로 막힌다.** 앱의 출처는
+    //    `tauri://localhost` 라, 브라우저가 rvn.ex.erci.se 로 나가는 것을
+    //    거절하고 화면에는 `TypeError: Load failed` 라는 뜻 모를 글자만 뜬다.
+    //    실제로 그렇게 났다. 러스트에는 그 규칙이 없다 —
+    //    화면은 부탁하고 나가는 일은 노드가 한다(`nostrpub.rs` 와 같은 길).
+    const j = await invoke<any>("talk_translate", {
+      text: String(ev.content || ""),
+      to: lang,
     });
-    const j = await r.json();
-    if (!j?.translation) throw new Error(j?.error || "옮기지 못했습니다");
+    if (!j?.translation) throw new Error("옮기지 못했습니다");
     body.insertAdjacentHTML(
       "beforeend",
       `<div class="tr" style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);color:var(--muted)">${escapeHtml(String(j.translation))}</div>`

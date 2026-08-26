@@ -62,7 +62,7 @@ fn machine_model() -> String {
 }
 
 /// 메모리 몇 GB인가.
-fn memory_gb() -> Option<u64> {
+pub fn memory_gb() -> Option<u64> {
     #[cfg(target_os = "macos")]
     {
         return sysctl("hw.memsize")

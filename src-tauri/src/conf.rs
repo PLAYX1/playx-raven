@@ -45,9 +45,9 @@ pub fn conf_options() -> Value {
         },
         {
             "key": "dbcache", "label": "메모리 사용", "unit": "MB", "type": "number",
-            "recommended": 300, "off": 0,
-            "what": "노드가 쓰는 메모리. 적게 주면 느려지고, 많이 주면 다른 프로그램이 느려집니다.",
-            "cost": "기본 450 · 저사양 300 · 넉넉하면 1000",
+            "recommended": 2048, "off": 0,
+            "what": "노드가 쓰는 메모리. 🔴 장부를 처음부터 훑는 동안에는 이 값이 속도를 가장 크게 가릅니다 — 적으면 디스크를 계속 두드리고, 넉넉하면 메모리에 담아 두고 한 번에 씁니다.",
+            "cost": "따라잡는 동안 2000~8000 · 다 따라잡으면 450 으로 되돌리세요(계산대 메모리를 노드가 물고 있으면 주문 화면이 느려집니다)",
             "warn": "", "danger": false
         },
         {
@@ -303,4 +303,58 @@ mod assetindex_tests {
             "한 번만 붙였다는 표시가 없다 — 켤 때마다 34GB 를 다시 훑는다",
         );
     }
+}
+
+/// 따라잡는 동안 **메모리를 넉넉히 준다.**
+///
+/// ## 🔴 우리가 반대로 권하고 있었다
+///
+/// 화면의 권장값이 `300MB` 였다. 코어 기본값 `450` 보다도 **낮다.**
+/// 그런데 장부를 처음부터 훑을 때 이 값이 **가장 큰 지렛대**다 — 적으면
+/// 디스크를 계속 두드리고, 넉넉하면 메모리에 담아 두고 한 번에 쓴다.
+/// 몇 배가 갈린다.
+///
+/// 대표님 윈도우가 5시간에 0.63% 였다. 그중 상당 부분이 이 값 탓이다.
+///
+/// ## 왜 「따라잡는 동안만」인가
+///
+/// 다 따라잡은 뒤에는 이만큼 필요 없다. 계산대 컴퓨터의 메모리를 노드가
+/// 계속 물고 있으면 **주문 화면이 느려진다.** 그건 장사에 직접 해가 된다.
+/// 그래서 이건 **한때의 설정**이고, 화면이 그렇게 말한다.
+///
+/// ⚠️ 절반까지만 쓴다. 다 주면 그 컴퓨터로 다른 일을 못 한다.
+#[tauri::command]
+pub fn dbcache_suggest() -> Value {
+    let gb = crate::setup::memory_gb().unwrap_or(8);
+    // 절반, 최소 1GB, 최대 8GB. 8GB 넘게 줘도 더 빨라지지 않는다.
+    let want = ((gb / 2).max(1).min(8) * 1024) as i64;
+    let now = conf_read()["values"]["dbcache"].as_i64().unwrap_or(450);
+    json!({
+        "memory_gb": gb,
+        "now": now,
+        "suggest": want,
+        "worth_it": want > now + 512,
+        "why": format!(
+            "이 컴퓨터 메모리가 {gb}GB 입니다. 따라잡는 동안 {}MB 를 주면 훨씬 빨라집니다. \
+             다 따라잡은 뒤에는 되돌리는 편이 좋습니다 — 계산대 메모리를 노드가 계속 물고 있으면 주문 화면이 느려집니다.",
+            want
+        ),
+    })
+}
+
+/// 위 값을 넣는다. **노드를 다시 켜야 적용된다.**
+#[tauri::command]
+pub fn dbcache_boost() -> Result<Value, String> {
+    let s = dbcache_suggest();
+    let want = s["suggest"].as_i64().unwrap_or(2048);
+    let cur = conf_read();
+    let mut vals = cur["values"].as_object().cloned().unwrap_or_default();
+    vals.insert("dbcache".into(), json!(want));
+    conf_write(Value::Object(vals))?;
+    Ok(json!({
+        "set": want,
+        // 🔴 다시 켜야 한다는 말을 반드시 한다. 안 그러면 사장은 값만
+        //    바꿔 놓고 「똑같이 느리다」고 겪는다.
+        "note": "설정했습니다. **노드를 껐다 켜야** 적용됩니다 — 재색인은 이어서 합니다(처음부터 다시 하지 않습니다).",
+    }))
 }
