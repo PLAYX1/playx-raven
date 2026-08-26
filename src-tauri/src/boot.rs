@@ -132,6 +132,35 @@ fn prep_conf() -> Vec<String> {
     did
 }
 
+/// 컴퓨터를 켜면 이 프로그램도 같이 켜지게 한다. **처음 한 번만.**
+///
+/// ## 왜 기본으로 켜나
+///
+/// 대표님 말: "카카오톡도 텔레그램도 그냥 컴퓨터에 켜 놓고 쉽게 쓰잖아."
+/// 그 프로그램들의 공통점은 **재부팅해도 돌아온다**는 것이다. 우리는 안
+/// 돌아왔다. 계산대 컴퓨터는 정전 한 번이면 끝이고, 그날 밤 입금은
+/// 아무도 확인하지 않는다. 켜 두라고 만든 프로그램이 켜져 있질 못했다.
+///
+/// ## 한 번만 하는 이유
+///
+/// 사장이 껐으면 그건 결정이다. 켤 때마다 다시 켜면 그건 우리가 사장을
+/// 이기려 드는 것이고, 그런 프로그램은 지워진다. 표시를 남겨 한 번만 한다.
+fn prep_autostart() -> Option<String> {
+    let stamp = crate::paths::app_file("autostart-asked");
+    if stamp.exists() || crate::autostart::autostart_get() {
+        return None;
+    }
+    let _ = std::fs::write(&stamp, "1");
+    match crate::autostart::autostart_set(true) {
+        Ok(true) => Some(
+            "컴퓨터를 켜면 이 프로그램도 같이 켜지게 했습니다 — 설정에서 끄실 수 있습니다"
+                .into(),
+        ),
+        // 못 켰다고 시끄럽게 굴 일이 아니다. 조용히 넘어간다.
+        _ => None,
+    }
+}
+
 /// 채굴을 왜 지금 못 켜는가. **켤 수 있으면 그것도 적는다.**
 ///
 /// 🔴 자동으로 켜지 않는다. 전기를 쓰는 일이고, 남의 컴퓨터에서 말없이
@@ -159,6 +188,9 @@ fn mining_why() -> Value {
 /// 첫 화면이 「응답하지 않습니다」가 된다.
 pub async fn run() -> Value {
     let mut notes = prep_conf();
+    if let Some(n) = prep_autostart() {
+        notes.push(n);
+    }
 
     // 파일창고 저장소부터. 이게 없으면 아래 `services_start` 가 띄워도
     // 곧바로 죽는다 — 그리고 죽은 줄 모르고 「켰습니다」라고 답한다.
