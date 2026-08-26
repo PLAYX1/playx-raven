@@ -52,6 +52,14 @@
         margin-right: 6px; background: var(--muted); }
       .dot.on { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 22%, transparent); }
       .dot.off { background: var(--muted); opacity: .45; }
+      /* 🔴 따라잡는 중임을 **막대로** 보여 준다. 코어 지갑이 아래에 이걸 두는
+         이유가 있다 — 「켜짐」과 「쓸 수 있음」은 다른 말이고, 그 사이의
+         몇 시간 동안 사장은 화면만 보고는 고장인지 기다리는 중인지 모른다.
+         172px 사이드바라 글자를 더 넣을 자리가 없어서 막대로 말한다. */
+      .syncbar { height: 4px; border-radius: 999px; background: var(--line);
+        margin: 2px 0 8px 15px; overflow: hidden; }
+      .syncbar i { display: block; height: 100%; width: 0; border-radius: 999px;
+        background: var(--accent); transition: width .6s ease; }
       /* 색만으로 말하지 않는다 — 색맹인 사람과 흑백 화면에서는 초록과 회색이 같다. */
       .navfoot div { display: flex; align-items: center; font-size: 12.5px; }
       .navfoot div { font-size: 14px; color: var(--muted); margin-bottom: 4px; }
@@ -1325,6 +1333,9 @@
         <button type="button" class="dotrow" id="d-node-row">
           <span class="dot off" id="d-node"></span><span id="d-node-t">RVN 노드</span>
         </button>
+        <!-- 따라잡는 동안에만 보인다. 다 따라잡으면 사라진다 — 늘 있으면
+             아무 뜻도 없는 장식이 된다. -->
+        <div class="syncbar" id="d-node-bar" hidden><i id="d-node-fill"></i></div>
         <button type="button" class="dotrow" id="d-mine-row">
           <span class="dot off" id="d-mine"></span><span id="d-mine-t">채굴</span>
         </button>

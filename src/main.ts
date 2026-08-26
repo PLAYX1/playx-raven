@@ -46,9 +46,27 @@ function busyShow(on: boolean) {
   if (el && !on) el.remove();
 }
 
+/**
+ * 마지막으로 사람이 손댄 때.
+ *
+ * 🔴 이 프로그램은 **타이머 13개**가 계속 상태를 물어본다. 노드가 34GB 를
+ *    훑는 동안에는 그 물음의 답이 몇 초씩 늦는다 — 그러면 사장이 아무것도
+ *    안 누르고 가만히 있는데도 「하는 중… 잠시만요」가 화면에 눌어붙는다.
+ *    안 없어지는 안내는 안내가 아니라 고장으로 읽힌다.
+ *
+ *    그래서 **사람이 방금 뭘 눌렀을 때만** 알린다. 배경에서 도는 물음은
+ *    조용히 지나간다.
+ */
+// 켠 직후도 「방금 손댄 것」으로 친다 — 아이콘을 누른 게 사람이다.
+// 첫 화면이 뜨기까지가 제일 오래 걸리는데 거기서 아무 말이 없으면 안 된다.
+let lastTouch = Date.now();
+const TOUCH_WINDOW = 8000;
+document.addEventListener("pointerdown", () => (lastTouch = Date.now()), true);
+document.addEventListener("keydown", () => (lastTouch = Date.now()), true);
+
 async function invoke<T = any>(cmd: string, args?: any): Promise<T> {
   busyCount++;
-  if (busyTimer === undefined) {
+  if (busyTimer === undefined && Date.now() - lastTouch < TOUCH_WINDOW) {
     // 눈에 띄기까지 0.4초. 그보다 빨리 끝나는 일은 조용히 지나간다.
     busyTimer = window.setTimeout(() => busyShow(true), 400);
   }
@@ -1298,6 +1316,24 @@ let nodeUp: boolean | null = null;
  *  말하면 켜 둔 사장에게 거짓말이 된다. */
 let outUp: boolean | null = null;
 
+/**
+ * 따라잡기 막대. `null` 이면 감춘다 — 다 따라잡았거나 노드가 꺼졌을 때.
+ *
+ * 🔴 100% 에서 안 감추면 늘 꽉 찬 막대가 남는다. 늘 있는 표시는 아무도 안 본다.
+ */
+function setSyncBar(pct: number | null) {
+  const bar = document.getElementById("d-node-bar");
+  const fill = document.getElementById("d-node-fill");
+  if (!bar || !fill) return;
+  if (pct == null) {
+    bar.hidden = true;
+    return;
+  }
+  bar.hidden = false;
+  // 0% 면 막대가 안 보여서 「멈춘 것」으로 읽힌다. 최소 2% 는 그려 준다.
+  fill.style.width = `${Math.max(2, pct)}%`;
+}
+
 async function paintStatusDots() {
   const set = (dot: string, label: string, ok: boolean, text: string) => {
     const d = document.getElementById(dot);
@@ -1312,11 +1348,16 @@ async function paintStatusDots() {
   try {
     const n = await invoke<any>("node_status");
     // 켜져 있는 것과 따라잡은 것은 다르다. 동기화 중이면 결제 확인이 늦는다.
+    const pct = Math.max(0, Math.min(1, Number(n?.progress ?? 0))) * 100;
     const synced = (n?.progress ?? 0) > 0.9999;
-    set("d-node", "d-node-t", true, synced ? "RVN 노드 켜짐" : "RVN 노드 따라잡는 중");
+    // 🔴 「따라잡는 중」만 적으면 **끝이 안 보인다.** 34GB 를 훑는 동안
+    //    사장은 이게 10분짜리인지 하루짜리인지 알 수가 없다. 숫자를 준다.
+    set("d-node", "d-node-t", true, synced ? "RVN 노드 켜짐" : `노드 ${pct.toFixed(1)}%`);
+    setSyncBar(synced ? null : pct);
     nodeUp = true;
   } catch {
     set("d-node", "d-node-t", false, "RVN 노드 꺼짐");
+    setSyncBar(null);
     nodeUp = false;
   }
   // 노드 상태가 바뀌면 라비 얼굴도 따라 바뀐다.
@@ -2406,8 +2447,12 @@ async function paintPart(): Promise<void> {
           ],
           // 🔴 이 프로그램은 직접 캐지 않는다. 그렇게 적어야 안 캐지는 것을
           //    고장으로 안 읽는다.
-          t("이 컴퓨터로는 캐지 않습니다. 따로 있는 GPU 기계가 캐고 수익만 이 지갑으로 옵니다.")
-        ) + goto("settings", t("채굴 설정 열기"));
+          on
+            ? t("따로 있는 GPU 기계가 캐고 수익만 이 지갑으로 옵니다.")
+            : // 꺼져 있을 때는 **무엇이 있어야 켜지는지**를 말한다. 「꺼져
+              //  있습니다」만 있으면 그 화면에서 할 일이 없다.
+              t("켜려면 두 가지가 필요합니다 — 캐는 프로그램(kawpowminer)과 받을 주소. 둘 다 아래 설정에서 정합니다.")
+        ) + goto("settings", t(on ? "채굴 설정 열기" : "채굴 켜는 곳으로"));
     } else if (partOpen === "ipfs") {
       if (title) title.textContent = "파일창고 (IPFS)";
       const s = await invoke<any>("ipfs_status");
@@ -2438,7 +2483,11 @@ async function paintPart(): Promise<void> {
           ],
           // 이게 왜 있는지 한 줄로. 안 적으면 「이건 또 뭐지」가 된다.
           t("이 컴퓨터가 다른 가게의 공지도 같이 나릅니다. 가게가 늘수록 그물이 촘촘해지고, 남의 릴레이가 끊겨도 서로 붙습니다.")
-        ) + goto("settings", t("바깥에서 열기 설정"));
+        ) +
+        // 🔴 릴레이는 따로 도는 프로그램이 아니라 **가게 서버 안에** 있다.
+        //    그래서 켜는 길도 가게 서버를 켜는 것 하나뿐이다.
+        (r?.running ? goto("settings", t("바깥에서 열기 설정")) : turnOnBtn("rl-go"));
+      bindTurnOn("rl-go", "start_phone_server");
     } else {
       // ── 바깥 연결 ──────────────────────────────────────────────
       // 손님이 가게 밖에서 들어오는 길. 여기가 꺼져 있으면 위의 넷이 다
