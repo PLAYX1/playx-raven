@@ -1406,6 +1406,39 @@ async function paintStatusDots() {
 //
 // 확인은 하루 한 번이면 충분하다. 매번 켤 때마다 물어보면 그것도 방해다.
 
+/**
+ * 사람이 판 번호를 눌렀을 때.
+ *
+ * 🔴 **없을 때도 답한다.** 배경 확인은 조용히 넘어가지만, 손으로 누른
+ *    것에 아무 반응이 없으면 그건 고장이다.
+ */
+async function checkNow() {
+  const el = document.getElementById("appver");
+  const was = el?.textContent || "";
+  if (el) el.textContent = t("확인 중…");
+  try {
+    const up = await checkUpdate();
+    if (el) el.textContent = was;
+    if (!up) {
+      // 사이드바는 좁다. 잠깐 글자만 바꿔 말하고 되돌린다.
+      if (el) {
+        el.textContent = t("지금이 최신입니다");
+        setTimeout(() => (el.textContent = was), 2600);
+      }
+      return;
+    }
+    // 있으면 설치 칸으로 데려간다. 거기서 무엇이 바뀌는지 읽고 누른다.
+    await checkForUpdate(false);
+    showPage("settings");
+    setTimeout(() => $("up-box")?.scrollIntoView({ block: "center" }), 60);
+  } catch (e) {
+    if (el) {
+      el.textContent = t("확인 못 했습니다");
+      setTimeout(() => (el.textContent = was), 2600);
+    }
+  }
+}
+
 async function checkForUpdate(quiet = true) {
   try {
     const up = await checkUpdate();
@@ -10659,6 +10692,9 @@ void (async () => {
     const v = await getVersion();
     const el = document.getElementById("appver");
     if (el && v) el.textContent = `v${v}`;
+    // 🔴 늘 눌리게 한다. 새 버전이 없을 때도 「지금이 최신입니다」를
+    //    들을 수 있어야 한다 — 아무 반응이 없으면 고장으로 읽힌다.
+    el?.addEventListener("click", () => void checkNow());
   } catch {
     // 못 읽으면 적혀 있는 것을 그대로 둔다.
   }
