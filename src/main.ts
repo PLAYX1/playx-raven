@@ -3043,14 +3043,28 @@ async function makeAddress() {
 
 let tkRoom = "";
 let tkMine = "";
+/** 공개키 → 이름표. 없는 사람은 여기 없다 — **없는 이름을 지어내지 않는다.** */
+const tkNames = new Map<string, any>();
+
+/** 16진수 64자 대신 보여 줄 것. 이름이 있으면 이름, 없으면 앞자리. */
+function tkWho(pk: string): string {
+  const p = tkNames.get(pk);
+  if (p?.name) return escapeHtml(String(p.name));
+  return `<span class="meta">${escapeHtml(pk.slice(0, 10))}…</span>`;
+}
 
 async function talkPaintMe() {
   try {
     const me = await invoke<any>("talk_me");
     tkMine = String(me.pubkey || "");
-    $("tk-me").innerHTML = me.recoverable
-      ? `<span class="ok">${t("내 이름")} ${tkMine.slice(0, 8)}… · ${t("12단어로 되살릴 수 있습니다")}</span>`
-      : `<span class="warn">${t("내 이름")} ${tkMine.slice(0, 8)}… · ${escapeHtml(String(me.why || ""))}</span>`;
+    await tkLoadNames([tkMine]);
+    const mine = tkNames.get(tkMine);
+    const shown = mine?.name ? escapeHtml(String(mine.name)) : t("이름 없음");
+    $("tk-me").innerHTML =
+      `${t("나")}: <b>${shown}</b> · ` +
+      (me.recoverable
+        ? `<span class="ok">${t("12단어로 되살릴 수 있습니다")}</span>`
+        : `<span class="warn">${escapeHtml(String(me.why || ""))}</span>`);
   } catch (e) {
     $("tk-me").innerHTML = `<span class="danger">${escapeHtml(String(e))}</span>`;
   }
@@ -3090,6 +3104,9 @@ async function talkPaint() {
         `<p class="meta">${t("첫 글을 올려 보세요. 세계 릴레이로 함께 나갑니다.")}</p></div>`;
       return;
     }
+    // 🔴 이름표를 **먼저** 가져온다. 안 그러면 화면에 16진수가 한 번
+    //    떴다가 이름으로 바뀌는데, 그 깜빡임이 「고장났나」로 읽힌다.
+    await tkLoadNames(list.map((e) => String(e.pubkey || "")));
     box.innerHTML = list
       .map((e) => {
         const who = String(e.pubkey || "");
@@ -3097,7 +3114,7 @@ async function talkPaint() {
         const when = new Date(Number(e.created_at || 0) * 1000).toLocaleString();
         const id = String(e.id || "");
         return `<div class="card" style="margin-bottom:10px">
-          <div class="meta">${mine ? `<b>${t("나")}</b>` : escapeHtml(who.slice(0, 10)) + "…"} · ${escapeHtml(when)}</div>
+          <div class="meta">${mine ? `<b>${t("나")}</b>` : tkWho(who)} · ${escapeHtml(when)}</div>
           <div style="white-space:pre-wrap;margin-top:6px" data-say="${id}">${escapeHtml(String(e.content || ""))}</div>
           <div class="row" style="margin-top:8px">
             <button class="ghost" data-tr="${id}">${t("내 말로 보기")}</button>
@@ -3115,6 +3132,42 @@ async function talkPaint() {
     });
   } catch (e) {
     box.innerHTML = `<p class="meta danger">${escapeHtml(String(e))}</p>`;
+  }
+}
+
+/** 아직 모르는 사람의 이름표만 가져온다. 이미 아는 것은 다시 안 묻는다. */
+async function tkLoadNames(pubkeys: string[]) {
+  const want = [...new Set(pubkeys.filter((p) => p && !tkNames.has(p)))].slice(0, 50);
+  if (!want.length) return;
+  try {
+    const got: any = await invoke("talk_profiles", { pubkeys: want });
+    for (const [pk, p] of Object.entries(got || {})) tkNames.set(pk, p);
+    // 못 찾은 사람도 적어 둔다 — 안 그러면 화면을 그릴 때마다 또 묻는다.
+    for (const p of want) if (!tkNames.has(p)) tkNames.set(p, null);
+  } catch {
+    // 이름표를 못 읽어도 글은 보여야 한다. 16진수로 보일 뿐이다.
+  }
+}
+
+/** 내 이름 정하기. 이름표는 표준(kind 0)이라 damus·primal 에서도 보인다. */
+async function talkSetName() {
+  const now = tkNames.get(tkMine);
+  const name = await ask(t("내 이름"), t("대화에서 이 이름으로 보입니다."), {
+    value: String(now?.name || ""),
+  });
+  if (!name) return;
+  const about = (await ask(t("한 줄 소개"), t("비워 두셔도 됩니다."), {
+    value: String(now?.about || ""),
+  })) || "";
+  $("tk-note").textContent = t("올리는 중…");
+  try {
+    await invoke("talk_profile_set", { name, about, picture: String(now?.picture || "") });
+    tkNames.set(tkMine, { name, about, picture: now?.picture || "" });
+    $("tk-note").innerHTML = `<span class="ok">${t("이름을 정했습니다")}</span>`;
+    void talkPaintMe();
+    void talkPaint();
+  } catch (e) {
+    $("tk-note").innerHTML = `<span class="danger">${escapeHtml(String(e))}</span>`;
   }
 }
 
@@ -10019,6 +10072,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("tk-send").addEventListener("click", () => void talkSend());
   $("tk-reload").addEventListener("click", () => void talkPaint());
   $("tk-newroom").addEventListener("click", () => void talkNewRoom());
+  $("tk-name").addEventListener("click", () => void talkSetName());
   $("tk-room").addEventListener("change", () => {
     tkRoom = ($("tk-room") as HTMLSelectElement).value;
     void talkPaint();

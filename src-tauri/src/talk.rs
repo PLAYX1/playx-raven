@@ -30,6 +30,12 @@
 
 use serde_json::{json, Value};
 
+/// 이름표(NIP-01 kind 0). 이름·한 줄 소개·사진.
+///
+/// 🔴 이게 없으면 대화 화면에 **16진수 64자**만 뜬다. 텔레그램 방에서
+///    이름 대신 지문이 뜨는 셈이라 아무도 안 쓴다. 그리고 이건 표준이라
+///    damus·primal 이 우리 이름표를 그대로 읽고, 우리도 그쪽 것을 읽는다.
+const KIND_PROFILE: i64 = 0;
 /// 사람 글(NIP-01). 세상 모든 Nostr 앱이 이걸 읽는다.
 const KIND_NOTE: i64 = 1;
 /// 방 만들기 · 방에 쓴 글(NIP-28).
@@ -138,6 +144,131 @@ pub fn talk_me() -> Result<Value, String> {
             "이 이름은 무작위로 만들어졌습니다. 백업 파일이 유일한 사본입니다."
         },
     }))
+}
+
+/// 내 이름표를 정한다.
+///
+/// ⚠️ 이름표에는 **표(`t`)를 안 붙인다.** 이름표는 레이븐 이야기가 아니라
+///    「나」다. 표를 붙이면 이야기 목록에 이름표가 섞여 나온다.
+#[tauri::command]
+pub async fn talk_profile_set(
+    name: String,
+    about: String,
+    picture: String,
+) -> Result<Value, String> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err("이름이 필요합니다.".into());
+    }
+    if name.chars().count() > 40 {
+        return Err("이름이 너무 깁니다. 40자 아래로 줄여 주세요.".into());
+    }
+    let sk = key()?;
+    let body = json!({
+        "name": name,
+        "about": about.trim(),
+        "picture": picture.trim(),
+    })
+    .to_string();
+    let ev = crate::shopkey::sign_with(&sk, KIND_PROFILE, json!([]), &body, now())?;
+    crate::nostrpub::nostr_publish(ev.clone()).await?;
+    Ok(ev)
+}
+
+/// 여러 사람의 이름표를 한 번에 가져온다. `{ 공개키: {name, about, picture} }`.
+///
+/// 못 찾은 사람은 목록에 없다 — 화면이 그때는 16진수 앞자리를 쓴다.
+/// **없는 이름을 지어내지 않는다.**
+#[tauri::command]
+pub async fn talk_profiles(pubkeys: Vec<String>) -> Result<Value, String> {
+    let got = crate::nostrpub::nostr_query_authors(vec![KIND_PROFILE], pubkeys, 60).await?;
+    let mut out = serde_json::Map::new();
+    for e in got {
+        let Some(pk) = e.get("pubkey").and_then(Value::as_str) else {
+            continue;
+        };
+        let body: Value = e
+            .get("content")
+            .and_then(Value::as_str)
+            .and_then(|c| serde_json::from_str(c).ok())
+            .unwrap_or(Value::Null);
+        let name = body.get("name").and_then(Value::as_str).unwrap_or("").trim();
+        if name.is_empty() {
+            continue;
+        }
+        out.insert(
+            pk.to_string(),
+            json!({
+                "name": name.chars().take(40).collect::<String>(),
+                "about": body.get("about").and_then(Value::as_str).unwrap_or(""),
+                "picture": body.get("picture").and_then(Value::as_str).unwrap_or(""),
+            }),
+        );
+    }
+    Ok(Value::Object(out))
+}
+
+/// **12단어만으로 어디까지 되살아나는가.**
+///
+/// 대표님: "레이븐코어에서 쓰던 시드로 모든 게 복구되나? 대화, 상점 등등."
+///
+/// 답이 갈리는 지점이 하나 있다 — **코어 지갑이 12단어로 만들어졌는가.**
+/// 레이븐코어는 12단어로 만든 지갑에만 `getmywords` 를 내준다. 옛날에 그냥
+/// 만든 `wallet.dat` 이면 12단어가 아예 없고, 그러면 우리 열쇠들도 씨앗에서
+/// 못 나와 무작위가 된다 — 그때는 **백업 파일이 유일한 길**이다.
+///
+/// 감추지 않고 그대로 보여 준다. 「복구됩니다」라고 해 놓고 안 되는 것이
+/// 제일 나쁘다.
+#[tauri::command]
+pub fn recovery_status() -> Value {
+    let words = tauri::async_runtime::block_on(async {
+        crate::raven::call_rpc("getmywords", json!([])).await
+    });
+    // 잠긴 것과 12단어가 없는 것은 **다른 말**이다. 잠긴 것은 열면 되고,
+    // 없는 것은 지갑을 새로 만들어 옮겨야 한다. 뭉뚱그리면 안 된다.
+    let (seed, seed_why) = match &words {
+        Ok(_) => (true, "12단어가 있습니다.".to_string()),
+        Err(e) if e.contains("passphrase") || e.contains("잠") => (
+            false,
+            "지갑이 잠겨 있어 확인하지 못했습니다. 열고 다시 봐 주세요.".into(),
+        ),
+        Err(_) => (
+            false,
+            "이 지갑은 12단어로 만들어지지 않았습니다. 그래서 씨앗만으로는 되살릴 수 없습니다."
+                .into(),
+        ),
+    };
+
+    let shop = crate::shopkey::shopkey_origin();
+    let talk_from = std::fs::read_to_string(key_file())
+        .ok()
+        .and_then(|s| serde_json::from_str::<Value>(&s).ok())
+        .and_then(|v| v.get("from").and_then(Value::as_str).map(str::to_string));
+
+    json!({
+        "seed": seed,
+        "seed_why": seed_why,
+        "parts": [
+            { "what": "지갑 · 돈", "ok": seed,
+              "why": "12단어로 만든 지갑이면 어느 기계에서도 같은 주소가 나옵니다." },
+            { "what": "가진 자산 · 가게", "ok": true,
+              "why": "체인에 있습니다. 지갑이 되살아나면 자산도 같이 보입니다." },
+            { "what": "가게 간판 열쇠",
+              "ok": shop["recoverable"].as_bool().unwrap_or(false) || !shop["exists"].as_bool().unwrap_or(false),
+              "why": shop["why"].as_str().unwrap_or("아직 만들지 않았습니다 — 만들 때 12단어에서 뽑습니다.") },
+            { "what": "대화 이름",
+              "ok": talk_from.as_deref() != Some("random"),
+              "why": match talk_from.as_deref() {
+                  Some("seed") => "12단어에서 나왔습니다.",
+                  Some(_) => "무작위로 만들어졌습니다. 백업 파일이 유일한 사본입니다.",
+                  None => "아직 만들지 않았습니다 — 만들 때 12단어에서 뽑습니다.",
+              } },
+            { "what": "쓴 글 · 방", "ok": true,
+              "why": "릴레이에 있습니다. 이름 열쇠가 되살아나면 내 글로 다시 찾습니다." },
+            { "what": "사진 · 메뉴", "ok": true,
+              "why": "파일창고에 있습니다. 아무도 안 들고 있으면 찾을 수 없게 되니, 이 컴퓨터가 계속 들고 있습니다." },
+        ],
+    })
 }
 
 /// 글을 쓴다. 방을 지정하면 그 방에, 아니면 모두에게.

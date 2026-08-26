@@ -241,6 +241,58 @@ pub async fn nostr_query_tag(
     Ok(out)
 }
 
+/// 정해진 사람들의 글을 읽는다. **이름표(프로필)를 찾을 때 쓴다.**
+///
+/// 🔴 위 `nostr_query` 는 글쓴이를 10명까지만 본다. 대화 한 화면에 서른
+///    명이 나오는데 열 명만 물으면 **나머지는 영영 16진수로 남는다.**
+///    이름표는 글 하나가 몇백 바이트라 쉰 명을 물어도 가볍다.
+pub async fn nostr_query_authors(
+    kinds: Vec<i64>,
+    authors: Vec<String>,
+    limit: i64,
+) -> Result<Vec<Value>, String> {
+    let authors: Vec<String> = authors
+        .into_iter()
+        .filter(|a| a.len() == 64 && a.chars().all(|c| c.is_ascii_hexdigit()))
+        .take(50)
+        .collect();
+    if authors.is_empty() || kinds.is_empty() {
+        return Ok(vec![]);
+    }
+    let sub = "a1";
+    let req = serde_json::to_string(&json!([
+        "REQ",
+        sub,
+        { "kinds": kinds, "authors": authors, "limit": limit.clamp(1, 200) }
+    ]))
+    .map_err(|e| format!("보낼 것을 만들지 못했습니다: {e}"))?;
+
+    let mut seen: std::collections::HashMap<String, Value> = std::collections::HashMap::new();
+    for url in targets() {
+        if let Ok(events) = read_one(&url, &req, sub).await {
+            for e in events {
+                // 이름표는 **한 사람에 하나**다. 새것만 남긴다 — 옛것이
+                // 뒤에 오면 바꾼 이름이 다시 옛 이름으로 보인다.
+                let (Some(pk), Some(at)) = (
+                    e.get("pubkey").and_then(Value::as_str).map(str::to_string),
+                    e.get("created_at").and_then(Value::as_i64),
+                ) else {
+                    continue;
+                };
+                let keep = seen
+                    .get(&pk)
+                    .and_then(|o| o.get("created_at").and_then(Value::as_i64))
+                    .map(|old| at > old)
+                    .unwrap_or(true);
+                if keep {
+                    seen.insert(pk, e);
+                }
+            }
+        }
+    }
+    Ok(seen.into_values().collect())
+}
+
 async fn read_one(url: &str, req: &str, sub: &str) -> Result<Vec<Value>, String> {
     use futures_util::{SinkExt, StreamExt};
     use tokio_tungstenite::tungstenite::Message;
