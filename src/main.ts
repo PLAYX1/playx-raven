@@ -2333,6 +2333,12 @@ function pageTiles(page: string): PageTile[] {
   }
   if (page === "settings") {
     return [
+      // 🔴 **제일 앞에 둔다.** 대표님이 두 번 연속으로 못 찾으셨다 —
+      //    "이 컴퓨터 어디에 입력해야 하는거야", "한 번에 준비하기 버튼이
+      //    안 보이는데". 노드 상태 화면 안에만 뒀기 때문이다.
+      //    처음 깐 사람이 설정을 찾을 자리는 거기가 아니라 여기다.
+      { icon: I('<path d="M12 3.5l3 3-3 3-3-3z"/><path d="M4.5 12l3 3-3 3-3-3z" transform="translate(4.5 -1.5)"/><path d="M12 14.5v6M6 20.5h12"/>'),
+        label: "한 번에 준비하기", sub: "백신 · 방화벽 · 메모리", go: gotoPrep },
       { icon: I('<path d="M12 3.5l7.5 4v9L12 20.5 4.5 16.5v-9z"/><path d="M12 8.5v4M12 15.5h.01"/>'),
         label: "쉬운 설정", sub: "제가 정해 드려요", go: jump("easy-setup") },
       { icon: I('<path d="M4 7.5h16v12H4z"/><path d="M9 7.5V5h6v2.5M12 11v5M9.5 13.5h5"/>'),
@@ -2344,6 +2350,30 @@ function pageTiles(page: string): PageTile[] {
     ];
   }
   return [];
+}
+
+/**
+ * 「한 번에 준비하기」로 데려간다.
+ *
+ * 🔴 데려가기만 하면 또 못 찾는다 — 그 화면에도 칸이 여럿이다.
+ *    그래서 **그 단추를 화면 가운데로 올리고 잠깐 깜빡인다.**
+ *    누르는 것은 사장이 한다(관리자 창이 뜨는 일이라 대신 누르지 않는다).
+ */
+function gotoPrep() {
+  toggleDot("node");
+  // 화면이 그려질 때까지 기다린다. paintPart 가 비동기라 바로는 없다.
+  let tries = 0;
+  const look = window.setInterval(() => {
+    const b = document.getElementById("pc-go");
+    if (b) {
+      window.clearInterval(look);
+      b.scrollIntoView({ block: "center", behavior: "smooth" });
+      b.classList.add("flash");
+      setTimeout(() => b.classList.remove("flash"), 2400);
+    } else if (++tries > 40) {
+      window.clearInterval(look);
+    }
+  }, 120);
 }
 
 /** 화면 맨 위에 큰 아이콘 줄을 그린다. 없으면 아무 일도 안 한다. */

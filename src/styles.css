@@ -114,3 +114,15 @@ button {
     background-color: #0f0f0f69;
   }
 }
+
+/* 「여기다」를 잠깐 알려 준다. 데려가기만 하면 그 화면에도 칸이 여럿이라
+   또 못 찾는다 — 대표님이 실제로 두 번 못 찾으셨다. */
+.flash { animation: flash 800ms ease-in-out 3; }
+@keyframes flash {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255,107,53,0); }
+  50%      { box-shadow: 0 0 0 6px rgba(255,107,53,.45); }
+}
+/* 움직임을 싫어하는 분께는 테두리만 남긴다. */
+@media (prefers-reduced-motion: reduce) {
+  .flash { animation: none; box-shadow: 0 0 0 3px rgba(255,107,53,.6); }
+}
