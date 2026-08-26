@@ -357,18 +357,52 @@ mod tests {
     /// 🔴 0 이하를 적으면 장부가 이상해진다. 음수 수수료는 우리가 가게에
     /// 돈을 주는 것이고, 그런 길은 있어서는 안 된다.
     #[test]
-    fn nothing_is_written_for_a_zero_or_negative_fee() {    /// 🔴 자동 송금에 **끄는 길이 있으면 안 된다.** 한 번 만들었다가 지웠고,
+    fn nothing_is_written_for_a_zero_or_negative_fee() {
+        // 🔴 대표님의 **진짜 장부**를 건드리면 안 된다. 여태 이 시험이
+        //    실제 devfee.json 을 읽고 있었고, 앱이 돌면서 거기 기록이
+        //    쌓이자 시험이 깨졌다 — 시험이 남의 돈 장부를 보고 있었다.
+        //    옆의 환불 시험처럼 공용 자물쇠를 잡고 임시 폴더로 보낸다.
+        let _g = crate::paths::TEST_ENV.lock().unwrap_or_else(|e| e.into_inner());
+        let d = std::env::temp_dir().join("playx-devfee-zero-test");
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        std::env::set_var("PLAYX_RAVEN_HOME", &d);
+        // 파일을 안 건드리는 것으로 확인한다 — accrue 는 0 이하에서 즉시 나간다.
+        let before = std::fs::read(ledger_file()).ok();
+        accrue("RtestZero", 0.0);
+        accrue("RtestNeg", -5.0);
+        assert_eq!(std::fs::read(ledger_file()).ok(), before);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// 🔴 자동 송금에 **끄는 길이 있으면 안 된다.** 한 번 만들었다가 지웠고,
     /// 다시 들어오지 못하게 여기서 막는다. 「누르는 것을 잊어서 안 가는 것」은
     /// 끄는 것과 결과가 같다.
     #[test]
     fn 자동_송금을_끌_수_있는_길이_없다() {
+        // 🔴 이 시험은 **자기 소스를 읽는다.** 금지어를 그대로 적으면 자기
+        //    자신에 걸려 늘 실패한다. 조립해서 쓴다 — 이 저장소에서 같은
+        //    함정을 네 번째로 본다.
+        //
+        //    그리고 이 시험은 여태 **한 번도 안 돌았다.** 위 시험의 본문이
+        //    깨져 있어서 이게 안쪽 함수가 됐고, 안쪽 함수의 `#[test]` 는
+        //    무시된다. 「있는데 안 도는 코드」가 시험에도 있었다.
         let src = include_str!("devfee.rs");
-        for banned in ["fee_auto_set", "auto_off", "devfee-auto"] {
+        for banned in [
+            format!("fee{}auto{}set", "_", "_"),
+            format!("auto{}off", "_"),
+            format!("devfee{}auto", "-"),
+        ] {
+            let banned = banned.as_str();
             assert!(!src.contains(banned), "개발비를 끄는 길이 생겼다: {banned}");
         }
         assert!(src.contains("start_auto_pay"), "자동 송금이 있어야 한다");
         // 🔴 암호를 파일에 적으면 그 컴퓨터를 가져간 사람이 가게 돈을 다 가져간다.
-        for banned in ["passphrase\"", "walletpassphrase"] {
+        for banned in [
+            format!("pass{}\"", "phrase"),
+            format!("wallet{}{}", "pass", "phrase"),
+        ] {
+            let banned = banned.as_str();
             assert!(!src.contains(banned), "개발비 코드가 지갑 암호를 만지고 있다: {banned}");
         }
     }
@@ -415,12 +449,6 @@ mod tests {
         assert!(!already_on_chain(50.0, 50.0, 0.0));
     }
 
-        // 파일을 안 건드리는 것으로 확인한다 — accrue 는 0 이하에서 즉시 나간다.
-        let before = std::fs::read(ledger_file()).ok();
-        accrue("RtestZero", 0.0);
-        accrue("RtestNeg", -5.0);
-        assert_eq!(std::fs::read(ledger_file()).ok(), before);
-    }
 
 
     /// 🔴 페이블 지적. 금액만 보면 99% 송금으로 1% 를 건너뛸 수 있다.
