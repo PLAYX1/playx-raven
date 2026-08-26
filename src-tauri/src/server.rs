@@ -286,17 +286,30 @@ fn save_tokens(owner: &str, roles: &std::collections::HashMap<String, String>) {
     }
 }
 
+/// 손님·직원 화면을 여는 열쇠 글자.
+///
+/// ## 🔴 윈도우에서 **가게가 한 번도 안 열렸다**
+///
+/// 예전에는 `/dev/urandom` 을 파일로 열어 읽었다. 그 파일은 **윈도우에
+/// 없다.** 그래서 윈도우에서는 언제나 빈 글자가 나왔고,
+/// `start_phone_server` 는 「안전한 임의 값을 만들지 못해」라며 거절했다.
+///
+/// 거절한 것 자체는 옳다 — 약한 열쇠는 없는 것보다 나쁘다. 문제는 **윈도우에
+/// 안전한 길이 멀쩡히 있는데 안 쓴 것**이다. 그 결과:
+///
+/// - 릴레이가 안 켜졌다(사장이 「지금 켜기」를 눌러도)
+/// - **손님 QR 서버가 아예 안 떴다.** 계산대가 계산대가 아니었다
+/// - 바깥 연결을 켜도 열 것이 없었다
+///
+/// 이 저장소의 다른 곳은 이미 `rand::thread_rng()` 를 쓴다(`lockbox.rs`).
+/// 그건 운영체제의 난수로 씨를 뿌린 암호용 발생기라, 여기서 쓰기에 부족함이
+/// 없고 세 운영체제에서 똑같이 돈다. 「약한 것으로 물러선 것」이 아니다.
 fn random_token() -> String {
+    use rand::RngCore;
     let mut buf = [0u8; 32];
-    if std::fs::File::open("/dev/urandom")
-        .and_then(|mut f| {
-            use std::io::Read;
-            f.read_exact(&mut buf)
-        })
-        .is_err()
-    {
-        // Refuse rather than fall back to something guessable. A weak token
-        // that looks like a token is worse than no remote access.
+    rand::thread_rng().fill_bytes(&mut buf);
+    // 그래도 만에 하나 전부 0 이면 안 쓴다. 그건 열쇠가 아니다.
+    if buf.iter().all(|b| *b == 0) {
         return String::new();
     }
     buf.iter().map(|b| format!("{b:02x}")).collect()
@@ -3524,6 +3537,35 @@ mod spam {
         assert!(ORDERS_PER_DAY < ORDERS_PER_MIN * 60 * 24);
         // 하루 2,000건이면 12시간 영업에 분당 2.8건. 어떤 카페도 안 넘는다.
         assert!(ORDERS_PER_DAY >= 1_000, "하루 한도가 장사를 막습니다");
+    }
+}
+
+#[cfg(test)]
+mod token_tests {
+    /// 🔴 **윈도우에 `/dev/urandom` 은 없다.** 그 파일을 열어 읽던 한 줄
+    ///    때문에 윈도우에서는 열쇠가 늘 비었고, 손님 QR 서버가 아예 안 떴다.
+    ///    계산대가 계산대가 아니었다. 누가 다시 파일로 되돌리면 그날 또
+    ///    윈도우 가게가 전부 닫힌다.
+    #[test]
+    fn 열쇠를_파일에서_읽지_않는다() {
+        let src = include_str!("server.rs");
+        let i = src.find("fn random_token").expect("만드는 함수가 있어야 한다");
+        let end = src[i..].find("\n}").unwrap_or(400);
+        let body = &src[i..i + end];
+        assert!(
+            !body.contains("urandom"),
+            "열쇠를 /dev/urandom 에서 읽고 있다 — 윈도우에는 그 파일이 없다"
+        );
+        assert!(body.contains("fill_bytes"), "운영체제 난수를 안 쓰고 있다");
+    }
+
+    /// 빈 열쇠는 자물쇠 없는 문이다.
+    #[test]
+    fn 열쇠가_비지_않는다() {
+        let t = super::random_token();
+        assert_eq!(t.len(), 64, "32바이트를 16진수로 적으면 64자다");
+        assert!(t.chars().all(|c| c.is_ascii_hexdigit()));
+        assert_ne!(t, super::random_token(), "두 번 불러 같으면 난수가 아니다");
     }
 }
 
