@@ -366,6 +366,7 @@ pub fn run() {
             reindex_run::reindex_arm,
             reindex_run::reindex_start,
             reindex_run::reindex_progress,
+            reindex_run::sync_stalled,
             mode::mode_get,
             mode::mode_set,
             awake::awake_status,

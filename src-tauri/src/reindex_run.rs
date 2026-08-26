@@ -275,3 +275,59 @@ mod tests {
         assert!(hold < stop, "노드를 끄기 **전에** launchd 를 내려야 한다");
     }
 }
+
+/// 진행이 **멈췄나.**
+///
+/// ## 🔴 왜 필요한가
+///
+/// 대표님 화면에서 블록이 `732,977` 로 13분 동안 **한 칸도 안 움직였다.**
+/// 그런데 우리 화면은 「따라잡는 중」이라고만 적고 있었다 — 도는 것과
+/// 멈춘 것을 구별하지 못한 것이다. 사장은 그 앞에서 몇 시간을 기다린다.
+///
+/// 「몇 %」만 보여 주는 것으로는 부족하다. **지난번보다 늘었는가**를
+/// 봐야 하고, 그건 우리가 기억해 둬야 안다.
+///
+/// ⚠️ 재색인 중에는 「따라잡음 %」가 거의 안 움직인다 — 초반 블록은
+///    거래가 적어 작업량 기준으로 0.1% 도 안 되기 때문이다. 그래서
+///    **블록 수**로 본다. 그게 실제로 나아가는 유일한 표시다.
+use std::sync::Mutex;
+static SEEN: Mutex<Option<(i64, i64)>> = Mutex::new(None); // (블록, 본 시각)
+
+#[tauri::command]
+pub async fn sync_stalled() -> Value {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+    let blocks = crate::raven::call_rpc("getblockchaininfo", json!([]))
+        .await
+        .ok()
+        .and_then(|v| v.get("blocks").and_then(Value::as_i64));
+    let Some(blocks) = blocks else {
+        // 노드가 답을 안 하면 그건 다른 이야기다. 여기서는 판단하지 않는다.
+        return json!({ "known": false });
+    };
+
+    let mut g = match SEEN.lock() {
+        Ok(g) => g,
+        Err(e) => e.into_inner(),
+    };
+    let (last_blocks, since) = g.unwrap_or((blocks, now));
+    if blocks > last_blocks {
+        *g = Some((blocks, now));
+        return json!({ "known": true, "stalled": false, "blocks": blocks });
+    }
+    // 처음 본 값이면 그때를 기준으로 잡는다.
+    if g.is_none() {
+        *g = Some((blocks, now));
+    }
+    let quiet_min = (now - since) / 60;
+    json!({
+        "known": true,
+        // 10분은 넉넉히 잡은 것이다. 큰 블록 하나가 몇 분씩 걸릴 수 있다.
+        "stalled": quiet_min >= 10,
+        "blocks": blocks,
+        "quiet_min": quiet_min,
+        "why": "블록 수가 늘지 않고 있습니다. 디스크가 꽉 찼거나, 노드가 멈췄을 수 있습니다.",
+    })
+}

@@ -1444,6 +1444,42 @@ async function paintStatusDots() {
  * 🔴 **없을 때도 답한다.** 배경 확인은 조용히 넘어가지만, 손으로 누른
  *    것에 아무 반응이 없으면 그건 고장이다.
  */
+/**
+ * 받아서 깐다. **묻고 나서.**
+ *
+ * 🔴 장사 중에 저절로 다시 시작되면 손님 QR 이 먹통이 된다. 그래서
+ *    받는 것까지는 자동이어도 **다시 시작은 사람이 정한다.**
+ */
+async function doInstall(up: any) {
+  const nag = document.getElementById("upnag") as HTMLButtonElement | null;
+  const ok = await sure(
+    t("지금 받아서 설치할까요?"),
+    `${t("새 버전")} ${up?.version ?? ""} · ` +
+      t("받은 뒤 프로그램이 다시 시작합니다. 손님이 주문 중이면 그 화면이 끊깁니다.")
+  );
+  if (!ok) return;
+  try {
+    if (nag) {
+      nag.disabled = true;
+      nag.textContent = t("받는 중…");
+    }
+    await up.downloadAndInstall((e: any) => {
+      // 얼마나 왔는지 말한다. 큰 파일이라 아무 말이 없으면 멎은 줄 안다.
+      if (e?.event === "Progress" && nag) {
+        nag.textContent = t("받는 중…");
+      }
+      if (e?.event === "Finished" && nag) nag.textContent = t("설치 중…");
+    });
+    await relaunch();
+  } catch (e) {
+    if (nag) {
+      nag.disabled = false;
+      nag.textContent = t("새 버전 받기");
+    }
+    await sure(t("받지 못했습니다"), String(e), t("닫기"));
+  }
+}
+
 async function checkNow() {
   const nag = document.getElementById("upnag") as HTMLButtonElement | null;
   // 🔴 판 번호 글자는 그대로 둔다. 번호가 「확인 중…」으로 바뀌면 사장은
@@ -1487,10 +1523,11 @@ async function checkForUpdate(quiet = true) {
       //    것처럼 보이고, 그러면 진짜 있을 때 안 보인다.
       nag.classList.add("new");
       nag.textContent = t("새 버전 받기");
-      nag.onclick = () => {
-        showPage("settings");
-        setTimeout(() => $("up-box")?.scrollIntoView({ block: "center" }), 60);
-      };
+      // 🔴 **이름이 「받기」면 받아야 한다.** 여태 화면만 옮겼다 —
+      //    사장은 눌렀는데 아무 일도 안 일어난다고 겪었고, 실제 설치는
+      //    저 아래 「받아서 설치」를 **또** 눌러야 했다. 그 칸이 화면
+      //    밖에 있으면 그런 단추가 있는 줄도 모른다.
+      nag.onclick = () => void doInstall(up);
     }
     // 무엇이 바뀌는지 말하지 않고 "새 버전" 만 띄우면 아무도 안 누른다.
     $("up-box").style.display = "";
@@ -2544,6 +2581,55 @@ async function speedCard(): Promise<string> {
  *    영원히 물고 있게 된다. 빠르게 해 주려다 느리게 만드는 셈이다.
  *    되돌릴 것이 없으면 안 그린다 — 늘 있는 칸은 아무도 안 읽는다.
  */
+/**
+ * **멈춰 있는가.**
+ *
+ * 🔴 대표님 화면에서 블록이 13분 동안 한 칸도 안 움직였는데, 우리는
+ *    「따라잡는 중」이라고만 적고 있었다. 도는 것과 멈춘 것을 구별하지
+ *    못한 것이다. 사장은 그 앞에서 몇 시간을 기다린다.
+ *
+ * ⚠️ 「따라잡음 %」로는 못 본다. 재색인 초반에는 거래가 적어 그 값이
+ *    거의 안 움직이기 때문이다. **블록 수**가 실제로 나아가는 표시다.
+ */
+async function stallCard(): Promise<string> {
+  try {
+    const s = await invoke<any>("sync_stalled");
+    if (!s?.known || !s.stalled) return "";
+    return `<div class="card" style="margin-top:12px;border-color:var(--warn)">
+        <h3>${t("진행이 멈춰 있습니다")}</h3>
+        <div class="kv"><b>${t("블록")}</b><span>${Number(s.blocks).toLocaleString()}</span></div>
+        <div class="kv"><b>${t("안 움직인 시간")}</b><span>${Number(s.quiet_min)}${t("분")}</span></div>
+        <p class="meta">${t("확인하실 것 — ① 이 컴퓨터의 남은 디스크 공간(장부에 40GB 넘게 듭니다) ② 노드를 껐다 켜 보기. 재색인은 이어서 합니다.")}</p>
+        <div class="row" style="margin-top:10px">
+          <button class="ghost" id="nd-restart">${t("노드 껐다 켜기")}</button>
+          <span class="meta" id="nd-restartsay"></span>
+        </div>
+      </div>`;
+  } catch {
+    return "";
+  }
+}
+
+function bindRestart() {
+  const b = document.getElementById("nd-restart");
+  if (!b) return;
+  b.addEventListener("click", async () => {
+    (b as HTMLButtonElement).disabled = true;
+    const say = $("nd-restartsay");
+    say.textContent = t("다시 켜는 중…");
+    try {
+      await invoke("services_stop").catch(() => {});
+      await new Promise((r) => setTimeout(r, 3000));
+      await invoke("services_start").catch(() => {});
+      say.innerHTML = `<span class="ok">${t("다시 켰습니다")}</span>`;
+      setTimeout(() => void paintPart(), 5000);
+    } catch (e) {
+      (b as HTMLButtonElement).disabled = false;
+      say.innerHTML = `<span class="danger">${escapeHtml(String(e))}</span>`;
+    }
+  });
+}
+
 async function restoreCard(): Promise<string> {
   try {
     const s = await invoke<any>("dbcache_suggest");
@@ -2722,10 +2808,12 @@ async function paintPartBody(): Promise<void> {
           behind > 0
             ? t("따라잡는 동안에는 방금 들어온 결제가 늦게 보입니다.")
             : t("이 컴퓨터가 체인을 통째로 들고 있습니다. 남에게 묻지 않습니다."),
-        ) + (behind > 0 ? await speedCard() : await restoreCard()) + (await indexCard()) +
+        ) + (behind > 0 ? await stallCard() : "") +
+        (behind > 0 ? await speedCard() : await restoreCard()) + (await indexCard()) +
         goto("settings", t("노드 설정 열기"));
       bindSpeed();
       bindRestore();
+      bindRestart();
     } else if (partOpen === "mine") {
       if (title) title.textContent = "채굴";
       const m = await invoke<any>("miner_running").catch(() => null);
