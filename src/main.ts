@@ -3037,7 +3037,10 @@ async function makeAddress() {
 
 let issueCheck: any = null;
 let wizStep = 1;
-let wizKind: "root" | "sub" | "unique" = "root";
+type WizKind = "root" | "sub" | "unique" | "reissue" | "bulk" | "qualifier" | "restricted";
+let wizKind: WizKind = "root";
+/** 이미 있는 자산을 고르는 종류. 이름이 **남아 있으면** 안 되고 **있어야** 한다. */
+const NEEDS_EXISTING: WizKind[] = ["reissue", "bulk"];
 const BURN: Record<string, number> = {
   root: 500, sub: 100, unique: 5, reissue: 100, bulk: 5, qualifier: 1000, restricted: 1500,
 };
@@ -3109,17 +3112,77 @@ function wizGo(step: number) {
 
   // 고유 자산은 하나뿐이다. 수량 칸을 보여주면 2를 넣는 사람이 생긴다.
   const unique = wizKind === "unique";
-  $("i-qtyrow").style.display = unique ? "none" : "";
+  $("i-qtyrow").style.display = unique || wizKind === "bulk" ? "none" : "";
   $("i-uniquenote").style.display = unique ? "" : "none";
   if (unique) {
     ($("i-qty") as HTMLInputElement).value = "1";
     ($("i-units") as HTMLInputElement).value = "0";
   }
+  // 소수점 자리는 **새로 만들 때만** 정한다. 더 찍기는 원래 자리를 따르고,
+  // 자격 증명은 개수만 있는 딱지다.
+  const unitsBox = $("i-units").parentElement?.parentElement as HTMLElement | null;
+  if (unitsBox) {
+    unitsBox.style.display =
+      ["reissue", "qualifier"].includes(wizKind) ? "none" : "";
+  }
+  // 「더 찍기」는 다시 잠글 수 있고, 자격 증명은 그 개념이 없다.
+  const reBox = $("i-reissuable").closest("label") as HTMLElement | null;
+  if (reBox) reBox.style.display = ["qualifier", "bulk"].includes(wizKind) ? "none" : "";
+  $("i-reissue-note").style.display = ["qualifier", "bulk"].includes(wizKind) ? "none" : "";
+  renderExtra();
 
   if (wizStep === 5) renderSummary();
   const next = $("wz-next") as HTMLButtonElement;
-  next.textContent = wizStep === 5 ? `${BURN[wizKind]} RVN 소각하고 발행` : "다음";
+  next.textContent = wizStep === 5 ? `${burnNow().toLocaleString()} RVN 소각하고 발행` : "다음";
   wizGate();
+}
+
+/**
+ * 종류마다 더 필요한 칸.
+ *
+ * 🔴 여태 이 칸이 없어서 넷(더 찍기·고유 여러 개·자격 증명·제한 자산)은
+ *    **고를 수는 있는데 끝까지 갈 수가 없었다.** 값까지 적어 놓고 팔면서
+ *    실제로는 물건이 없었던 것이다.
+ */
+function renderExtra() {
+  const box = $("i-extra");
+  if (wizStep !== 4) return;
+  if (wizKind === "bulk") {
+    box.innerHTML = `
+      <label style="margin-top:12px">고유 이름들 — <b>한 줄에 하나</b>
+        <textarea id="x-tags" rows="6" spellcheck="false"
+          placeholder="001&#10;002&#10;VIP-A"></textarea></label>
+      <div class="meta">한 개마다 ${BURN.unique} RVN 이 소각됩니다. 줄 수만큼 곱해집니다.</div>`;
+    $("x-tags").addEventListener("input", () => { renderSummary(); wizGate(); });
+  } else if (wizKind === "restricted") {
+    box.innerHTML = `
+      <label style="margin-top:12px">누가 받을 수 있나 (검증식)
+        <input id="x-verifier" spellcheck="false" placeholder="#KYC" value="#KYC" /></label>
+      <div class="meta">
+        먼저 만든 <b>자격 증명</b>의 이름을 씁니다. <code>#KYC &amp; !#AML</code> 처럼
+        <code>&amp;</code>(그리고) · <code>|</code>(또는) · <code>!</code>(아닌)을 쓸 수 있습니다.
+        <b>여기에 적은 딱지가 붙은 주소만</b> 이 자산을 받습니다.
+      </div>
+      <label style="margin-top:12px">처음 받을 주소
+        <input id="x-to" spellcheck="false" placeholder="R..." /></label>
+      <div class="meta">🔴 이 주소에도 위 딱지가 붙어 있어야 합니다. 안 붙어 있으면 노드가 거절합니다.</div>`;
+    ["x-verifier", "x-to"].forEach((id) =>
+      $(id).addEventListener("input", () => wizGate())
+    );
+  } else {
+    box.innerHTML = "";
+  }
+}
+
+/**
+ * 지금 고른 대로면 얼마가 타는가.
+ *
+ * 🔴 「고유 여러 개」는 **줄 수만큼 곱해진다.** 값을 하나로 보여 주면
+ *    50줄을 넣은 사장이 5 RVN 인 줄 알고 누르고 250 RVN 이 탄다.
+ */
+function burnNow(): number {
+  if (wizKind === "bulk") return BURN.unique * Math.max(1, bulkTags().length);
+  return BURN[wizKind] ?? BURN.root;
 }
 
 function wizGate() {
@@ -3129,7 +3192,22 @@ function wizGate() {
   else if (wizStep === 5) {
     const typed = ($("i-confirm") as HTMLInputElement).value.trim();
     next.disabled = !issueCheck || typed !== issueCheck.name;
+  } else if (wizStep === 4) {
+    // 빈 칸으로 5단계에 가면, 값을 다 보여 준 뒤 마지막에 실패한다.
+    if (wizKind === "bulk") {
+      next.disabled = bulkTags().length === 0;
+    } else if (wizKind === "restricted") {
+      const v = ($("x-verifier") as HTMLInputElement)?.value.trim();
+      const to = ($("x-to") as HTMLInputElement)?.value.trim();
+      next.disabled = !v || !to;
+    } else next.disabled = false;
   } else next.disabled = false;
+}
+
+/** 「고유 여러 개」에 적은 이름들. 빈 줄과 겹치는 줄은 뺀다. */
+function bulkTags(): string[] {
+  const raw = ($("x-tags") as HTMLTextAreaElement)?.value || "";
+  return [...new Set(raw.split("\n").map((l) => l.trim()).filter(Boolean))];
 }
 
 function wizNext() {
@@ -3149,6 +3227,15 @@ async function checkIssueName() {
     note.innerHTML = v.problems.map((p: string) => `<span class="danger">${p}</span>`).join("<br>");
     return;
   }
+  // 🔴 자격 증명·제한 자산은 **표식이 곧 종류**다. 안 맞으면 딴 것이 만들어진다.
+  if (wizKind === "qualifier" && v.kind !== "qualifier") {
+    note.innerHTML = `<span class="danger">자격 증명은 <code>#</code> 으로 시작합니다 — 예: <code>#KYC</code></span>`;
+    return;
+  }
+  if (wizKind === "restricted" && v.kind !== "restricted") {
+    note.innerHTML = `<span class="danger">제한 자산은 <code>$</code> 로 시작합니다 — 예: <code>$SHARE</code></span>`;
+    return;
+  }
   // 고른 종류와 이름이 어긋나면 사람이 의도한 것과 다른 게 만들어진다.
   if (["root", "sub", "unique"].includes(wizKind) && v.kind !== wizKind) {
     note.innerHTML =
@@ -3162,6 +3249,22 @@ async function checkIssueName() {
   // 그걸 실패한 트랜잭션으로 알게 되면 RVN이 날아간다.
   let taken = false;
   try { taken = await invoke<boolean>("name_taken", { name }); } catch {}
+  // 🔴 「더 찍기」와 「고유 여러 개」는 **이미 가진 자산에 얹는 것**이다.
+  //    그런데 여기서 「이미 존재하는 이름」을 무조건 막고 있어서, 그 둘은
+  //    2단계를 **영영 통과할 수 없었다.** 고를 수는 있는데 갈 수가 없었다.
+  if (NEEDS_EXISTING.includes(wizKind)) {
+    if (!taken) {
+      note.innerHTML =
+        `<span class="danger">체인에 없는 이름입니다. ` +
+        (wizKind === "reissue" ? "더 찍으려면" : "고유 자산을 붙이려면") +
+        ` 이미 가진 자산의 이름을 넣으세요.</span>`;
+      return;
+    }
+    note.innerHTML = `<span class="ok">찾았습니다 — 이 자산에 얹습니다</span>`;
+    issueCheck = { ...v, name };
+    wizGate();
+    return;
+  }
   if (taken) {
     note.innerHTML = `<span class="danger">이미 존재하는 이름입니다. 자산 이름은 영구적이라 다시 쓸 수 없습니다.</span>`;
     return;
@@ -3201,15 +3304,29 @@ function renderSummary() {
 
   $("i-r-kind").textContent = KIND_KO[wizKind];
   $("i-r-name").textContent = issueCheck?.name || "";
+  const tags = wizKind === "bulk" ? bulkTags() : [];
   $("i-r-qty").innerHTML =
     wizKind === "unique"
       ? "1 (고유)"
-      : `${qty.toLocaleString()} · 소수점 ${units}자리 · ` +
-        (re ? "재발행 가능" : '<b class="danger">재발행 불가 — 되돌릴 수 없음</b>');
+      : wizKind === "bulk"
+        ? `${tags.length}개 — ${escapeHtml(tags.slice(0, 6).join(", "))}${tags.length > 6 ? " …" : ""}`
+        : wizKind === "reissue"
+          ? `${qty.toLocaleString()}개를 <b>더</b> 찍습니다 · ` +
+            (re ? "다음에도 더 찍을 수 있음" : '<b class="danger">이번이 마지막 — 영원히 잠깁니다</b>')
+          : `${qty.toLocaleString()} · 소수점 ${units}자리 · ` +
+            (re ? "재발행 가능" : '<b class="danger">재발행 불가 — 되돌릴 수 없음</b>');
   $("i-r-file").textContent = cid || "없음";
+  // 제한 자산은 **누가 받을 수 있는지**가 수량보다 중요하다. 요약에 없으면
+  // 검증식을 잘못 적은 채로 1,500 RVN 을 태우게 된다.
+  if (wizKind === "restricted") {
+    const v = ($("x-verifier") as HTMLInputElement)?.value.trim() || "";
+    $("i-r-file").innerHTML =
+      `${escapeHtml(cid || "파일 없음")}<br /><b>받을 수 있는 주소</b>: <code>${escapeHtml(v)}</code>` +
+      ` 딱지가 붙은 곳만`;
+  }
 
-  const need = BURN[wizKind];
-  $("i-cost").innerHTML = `<div class="burn danger">${need} RVN 소각</div>
+  const need = burnNow();
+  $("i-cost").innerHTML = `<div class="burn danger">${need.toLocaleString()} RVN 소각</div>
     <div class="meta">소각된 RVN은 돌아오지 않습니다. 네트워크 수수료는 별도입니다.</div>
     <div class="meta" id="i-have">지갑 확인 중…</div>`;
   // 🔴 여기에 `issueCheck.name` 을 넣어 뒀었다. 즉 **정답을 칸 안에 흐리게
@@ -3378,14 +3495,62 @@ async function doIssue() {
   btn.disabled = true;
   btn.textContent = "발행 중…";
   try {
-    const txid = await invoke<string>("issue_asset", {
-      name: issueCheck.name,
-      qty: wizKind === "unique" ? 1 : parseFloat(($("i-qty") as HTMLInputElement).value) || 1,
-      units: wizKind === "unique" ? 0 : parseInt(($("i-units") as HTMLInputElement).value) || 0,
-      reissuable: ($("i-reissuable") as HTMLInputElement).checked,
-      ipfsHash: ($("i-ipfs") as HTMLInputElement).value.trim() || null,
-      toAddress: null,
-    });
+    const qty = wizKind === "unique" ? 1 : parseFloat(($("i-qty") as HTMLInputElement).value) || 1;
+    const units = wizKind === "unique" ? 0 : parseInt(($("i-units") as HTMLInputElement).value) || 0;
+    const cid = ($("i-ipfs") as HTMLInputElement).value.trim() || null;
+    const re = ($("i-reissuable") as HTMLInputElement).checked;
+
+    // 🔴 여기가 **언제나 `issue_asset` 하나였다.** 화면은 일곱을 고르게 하고,
+    //    실행은 하나만 했다. 고른 것이 무엇이든 평범한 발행이 나갔고,
+    //    자격 증명·제한 자산은 노드가 영어로 거절했다.
+    //    러스트에는 넷 다 이미 있었다 — 부르는 줄이 없었을 뿐이다.
+    let txid: string;
+    if (wizKind === "reissue") {
+      txid = await invoke<string>("reissue", {
+        asset: issueCheck.name,
+        qty,
+        toAddress: null,
+        keepReissuable: re,
+        newIpfs: cid,
+        passphrase: null,
+      });
+    } else if (wizKind === "bulk") {
+      const r = await invoke<any>("issue_many_unique", {
+        root: issueCheck.name,
+        tags: bulkTags(),
+        toAddress: null,
+        passphrase: null,
+      });
+      txid = typeof r === "string" ? r : String(r?.txid || r?.[0] || "");
+    } else if (wizKind === "qualifier") {
+      const r = await invoke<any>("issue_qualifier", {
+        name: issueCheck.name,
+        qty,
+        passphrase: null,
+      });
+      txid = typeof r === "string" ? r : String(r?.txid || r?.[0] || "");
+    } else if (wizKind === "restricted") {
+      const r = await invoke<any>("issue_restricted", {
+        name: issueCheck.name,
+        qty,
+        verifier: ($("x-verifier") as HTMLInputElement).value.trim(),
+        toAddress: ($("x-to") as HTMLInputElement).value.trim(),
+        units,
+        reissuable: re,
+        ipfsHash: cid,
+        passphrase: null,
+      });
+      txid = typeof r === "string" ? r : String(r?.txid || r?.[0] || "");
+    } else {
+      txid = await invoke<string>("issue_asset", {
+        name: issueCheck.name,
+        qty,
+        units,
+        reissuable: re,
+        ipfsHash: cid,
+        toAddress: null,
+      });
+    }
     $("i-result").innerHTML =
       `<div class="card" style="margin-top:12px"><h3>발행했습니다</h3>
        <div class="kv"><b>자산</b><span>${issueCheck.name}</span></div>
