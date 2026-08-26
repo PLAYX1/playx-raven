@@ -40,6 +40,56 @@ static OURS: Mutex<Option<Vec<(String, Child)>>> = Mutex::new(None);
 /// 증명할 수 없고, 계산대 프로그램이 악성코드가 되는 길이다. 같이 넣은 것은
 /// **우리가 서명한 설치 파일 안**에 있고, 만들 때 체크섬으로 확인한다.
 fn bundled(name: &str) -> Option<std::path::PathBuf> {
+    let src = bundled_src(name)?;
+    // 설치 폴더의 것을 **그대로 돌리지 않는다.** 아래 함수의 주석을 볼 것.
+    Some(runnable_copy(&src).unwrap_or(src))
+}
+
+/// 같이 넣은 것을 **딴 자리로 복사해서 거기서 돌린다.**
+///
+/// ## 🔴 왜 이런 짓을 하나 — 업데이트가 통째로 막혔다
+///
+/// 윈도우는 **돌고 있는 실행 파일을 덮어쓰지 못한다.** 우리는 파일창고를
+/// 설치 폴더(`...\PLAY X Raven\vendor\ipfs.exe`)에서 띄우고, 앱을 닫아도
+/// 살아 있게 잡에서 떼어 놨다(`CREATE_BREAKAWAY_FROM_JOB`). 밤새 손님이
+/// 사진을 볼 수 있어야 하니 그건 맞다.
+///
+/// 그런데 그 둘이 겹치니 **새 판을 설치할 수 없게 됐다.** 설치 프로그램이
+/// 그 파일에서 멈추고 「다음 파일을 열 수 없습니다」를 띄운다. 자동으로
+/// 켜지게 만든 바로 그날 업데이트가 막힌 것이다.
+///
+/// 고르는 길은 둘이었다. ① 설치 전에 죽인다 — 노드를 급하게 죽이면 장부가
+/// 상할 수 있고, 설치 프로그램에 그 판단을 맡기고 싶지 않다. ② **설치 폴더의
+/// 것은 건드리지 않는다.** 이쪽을 골랐다. 설치 프로그램이 잠긴 파일을 만날
+/// 일이 아예 없어진다.
+///
+/// ⚠️ 같은 것인지는 **크기로** 본다. 우리가 넣는 것은 위쪽에 못 박아 둔
+/// 판(ravend 4.8.0 · kubo 0.43.0)뿐이라, 판이 바뀌면 크기가 바뀐다.
+/// 복사가 실패하면(= 지금 그게 돌고 있으면) 있던 것을 그대로 쓴다 —
+/// 판을 올리려다 가게를 세우는 것이 제일 나쁘다.
+fn runnable_copy(src: &std::path::Path) -> Option<std::path::PathBuf> {
+    let dir = crate::paths::app_dir().join("run");
+    std::fs::create_dir_all(&dir).ok()?;
+    let dst = dir.join(src.file_name()?);
+    let same = match (std::fs::metadata(src), std::fs::metadata(&dst)) {
+        (Ok(a), Ok(b)) => a.len() == b.len(),
+        _ => false,
+    };
+    if !same && std::fs::copy(src, &dst).is_ok() {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = std::fs::set_permissions(&dst, std::fs::Permissions::from_mode(0o755));
+        }
+    }
+    if dst.is_file() {
+        Some(dst)
+    } else {
+        None
+    }
+}
+
+fn bundled_src(name: &str) -> Option<std::path::PathBuf> {
     let exe = std::env::current_exe().ok()?;
     let dir = exe.parent()?;
     let file = if cfg!(windows) { format!("{name}.exe") } else { name.to_string() };
@@ -586,6 +636,23 @@ pub async fn open_shop() -> Result<Value, String> {
 #[cfg(test)]
 mod tests {
     use super::node_why;
+
+    /// 🔴 **설치 폴더의 것을 그대로 돌리면 업데이트가 막힌다.**
+    ///    윈도우는 돌고 있는 실행 파일을 못 덮어쓰는데, 우리는 앱을 닫아도
+    ///    파일창고가 살아 있게 떼어 놨다. 그래서 설치 프로그램이 그 파일에서
+    ///    멈추고 「다음 파일을 열 수 없습니다」를 띄웠다 — 실제로 겪었다.
+    ///    누가 다시 vendor 경로를 바로 돌리게 바꾸면 그날 또 막힌다.
+    #[test]
+    fn 같이_넣은_것은_복사해서_돌린다() {
+        let src = include_str!("services.rs");
+        let i = src.find("fn bundled(").expect("찾는 함수가 있어야 한다");
+        let end = src[i..].find("fn runnable_copy").expect("복사 함수가 있어야 한다");
+        let body = &src[i..i + end];
+        assert!(
+            body.contains("runnable_copy"),
+            "설치 폴더의 것을 그대로 돌리고 있다 — 다음 판을 설치할 수 없게 된다"
+        );
+    }
 
 
     /// 🔴 윈도우에서 노드가 안 뜨던 두 이유를 못 박는다. 둘 다 실측으로
