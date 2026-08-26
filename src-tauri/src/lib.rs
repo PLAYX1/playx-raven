@@ -326,6 +326,7 @@ pub fn run() {
             conf::conf_write,
             conf::dbcache_suggest,
             conf::dbcache_boost,
+            conf::dbcache_restore,
             paths::datadir_status,
             paths::datadir_set,
             health::default_paths,

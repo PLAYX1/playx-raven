@@ -2537,6 +2537,68 @@ async function speedCard(): Promise<string> {
   }
 }
 
+/**
+ * 다 따라잡은 뒤 **되돌리는 칸.**
+ *
+ * 🔴 올리는 단추만 주고 되돌리는 길을 안 주면, 계산대 메모리를 노드가
+ *    영원히 물고 있게 된다. 빠르게 해 주려다 느리게 만드는 셈이다.
+ *    되돌릴 것이 없으면 안 그린다 — 늘 있는 칸은 아무도 안 읽는다.
+ */
+async function restoreCard(): Promise<string> {
+  try {
+    const s = await invoke<any>("dbcache_suggest");
+    const now = Number(s?.now ?? 450);
+    if (now <= 450) return "";
+    return `<div class="card" style="margin-top:12px">
+        <h3>${t("메모리 되돌리기")}</h3>
+        <div class="kv"><b>${t("지금")}</b><span>${now.toLocaleString()} MB</span></div>
+        <div class="kv"><b>${t("되돌릴 값")}</b><span>450 MB</span></div>
+        <p class="meta">${t("다 따라잡았습니다. 이제 이만큼 필요 없습니다 — 계산대 메모리를 노드가 계속 물고 있으면 주문 화면이 느려집니다.")}</p>
+        <div class="row" style="margin-top:10px">
+          <button class="ghost" id="nd-back">${t("메모리 되돌리기")}</button>
+          <span class="meta" id="nd-backsay"></span>
+        </div>
+      </div>`;
+  } catch {
+    // 되돌리기는 급한 일이 아니다. 못 읽으면 조용히 넘어간다 —
+    // 올리는 쪽과 달리 여기서는 감춰도 잃는 것이 없다.
+    return "";
+  }
+}
+
+function bindRestore() {
+  const b = document.getElementById("nd-back");
+  if (!b) return;
+  b.addEventListener("click", async () => {
+    (b as HTMLButtonElement).disabled = true;
+    const say = $("nd-backsay");
+    try {
+      const r = await invoke<any>("dbcache_restore");
+      if (!r?.changed) {
+        say.innerHTML = `<span class="ok">${t("이미 기본값입니다")}</span>`;
+        return;
+      }
+      const ok = await sure(
+        t("노드를 껐다 켤까요?"),
+        t("그래야 적용됩니다. 몇 분 동안 결제 확인이 멈춥니다.")
+      );
+      if (!ok) {
+        say.innerHTML = `<span class="ok">${t("450 MB 로 정했습니다. 다음에 켤 때 적용됩니다.")}</span>`;
+        return;
+      }
+      say.textContent = t("다시 켜는 중…");
+      await invoke("services_stop").catch(() => {});
+      await new Promise((r) => setTimeout(r, 3000));
+      await invoke("services_start").catch(() => {});
+      say.innerHTML = `<span class="ok">${t("다시 켰습니다")}</span>`;
+      setTimeout(() => void paintPart(), 4000);
+    } catch (e) {
+      (b as HTMLButtonElement).disabled = false;
+      say.innerHTML = `<span class="danger">${escapeHtml(String(e))}</span>`;
+    }
+  });
+}
+
 function bindSpeed() {
   const b = document.getElementById("nd-fast");
   if (!b) return;
@@ -2660,9 +2722,10 @@ async function paintPartBody(): Promise<void> {
           behind > 0
             ? t("따라잡는 동안에는 방금 들어온 결제가 늦게 보입니다.")
             : t("이 컴퓨터가 체인을 통째로 들고 있습니다. 남에게 묻지 않습니다."),
-        ) + (behind > 0 ? await speedCard() : "") + (await indexCard()) +
+        ) + (behind > 0 ? await speedCard() : await restoreCard()) + (await indexCard()) +
         goto("settings", t("노드 설정 열기"));
       bindSpeed();
+      bindRestore();
     } else if (partOpen === "mine") {
       if (title) title.textContent = "채굴";
       const m = await invoke<any>("miner_running").catch(() => null);

@@ -351,6 +351,35 @@ pub async fn dbcache_suggest() -> Value {
     })
 }
 
+/// 다 따라잡은 뒤 **되돌린다.**
+///
+/// ## 🔴 올린 것은 되돌릴 수 있어야 한다
+///
+/// 올리는 단추만 주고 되돌리는 길을 안 주면, 사장은 설정에 들어가 숫자를
+/// 손으로 쳐야 한다. 그걸 아는 사장은 없고, 그래서 **계산대 메모리를 노드가
+/// 영원히 물고 있게** 된다. 그러면 주문 화면이 느려지고, 그건 장사에 직접
+/// 해가 된다 — 우리가 빠르게 해 주려다 느리게 만든 셈이다.
+///
+/// 코어 기본값(450)으로 돌린다. 우리가 지어낸 값이 아니라 원본의 값이다.
+#[tauri::command]
+pub async fn dbcache_restore() -> Result<Value, String> {
+    const CORE_DEFAULT: i64 = 450;
+    let cur = conf_read();
+    let now = cur["values"]["dbcache"].as_i64().unwrap_or(CORE_DEFAULT);
+    if now <= CORE_DEFAULT {
+        return Ok(json!({ "changed": false, "now": now }));
+    }
+    let mut vals = cur["values"].as_object().cloned().unwrap_or_default();
+    vals.insert("dbcache".into(), json!(CORE_DEFAULT));
+    conf_write(Value::Object(vals))?;
+    Ok(json!({
+        "changed": true,
+        "from": now,
+        "now": CORE_DEFAULT,
+        "note": "되돌렸습니다. **노드를 껐다 켜야** 적용됩니다.",
+    }))
+}
+
 /// 위 값을 넣는다. **노드를 다시 켜야 적용된다.**
 #[tauri::command]
 pub async fn dbcache_boost() -> Result<Value, String> {
