@@ -2591,6 +2591,74 @@ async function speedCard(): Promise<string> {
  * ⚠️ 「따라잡음 %」로는 못 본다. 재색인 초반에는 거래가 적어 그 값이
  *    거의 안 움직이기 때문이다. **블록 수**가 실제로 나아가는 표시다.
  */
+/**
+ * **이 컴퓨터 준비하기** — 단추 하나.
+ *
+ * 🔴 대표님: "백신에 등록하던가 그런 거 다 알아서 해 줄 수는 없나?"
+ *            "프로그램 하나로 처리가 안 되나?"
+ *
+ *    그동안 우리는 사장에게 숙제를 다섯 개 냈다 — 백신 예외, 방화벽,
+ *    메모리, 자동 시작, 폴더 경로 붙여넣기. 하나하나는 별것 아닌데
+ *    다섯이 되면 아무도 안 한다. 그리고 못 한 채로 「느리다」고 겪는다.
+ */
+function prepCard(behind: number): string {
+  return `<div class="card" style="margin-top:12px">
+      <h3>${t("이 컴퓨터 준비하기")}</h3>
+      <p class="meta">${t(
+        "백신 검사에서 빼기 · 방화벽 열기 · 메모리 넉넉히 주기 · 켤 때 같이 켜기 — 한 번에 해 드립니다."
+      )}</p>
+      <p class="meta">${t("관리자 권한을 묻는 창이 한 번 뜹니다. 「예」를 눌러 주십시오.")}</p>
+      <div class="row" style="margin-top:10px">
+        <button id="pc-go">${t("한 번에 준비하기")}</button>
+        <span class="meta" id="pc-say"></span>
+      </div>
+      <div id="pc-out"></div>
+    </div>`.replace("<!--behind-->", String(behind));
+}
+
+function bindPrep(behind: number) {
+  const b = document.getElementById("pc-go");
+  if (!b) return;
+  b.addEventListener("click", async () => {
+    (b as HTMLButtonElement).disabled = true;
+    $("pc-say").textContent = t("하는 중… 관리자 창이 뜨면 「예」를 눌러 주십시오");
+    try {
+      // 따라잡는 중일 때만 메모리를 올린다. 다 따라잡은 노드에 올리면
+      // 쓰지도 않을 메모리를 잡아 둔다.
+      const r = await invoke<any>("pc_prepare", { boost: behind > 0 });
+      const rows = (r?.steps || [])
+        .map(
+          (x: any) =>
+            `<div class="kv"><b>${escapeHtml(String(x.what))}</b><span class="${
+              x.ok ? "ok" : "danger"
+            }">${escapeHtml(String(x.say))}</span></div>`
+        )
+        .join("");
+      // 🔴 우리가 **못 하는 것을 먼저** 말한다. 다 된 줄 알고 기다리는 것이
+      //    제일 나쁘다 — 다른 회사 백신은 스크립트로 못 만진다.
+      $("pc-out").innerHTML =
+        `<div style="margin-top:10px">${rows}</div>
+         <p class="meta" style="margin-top:10px">${escapeHtml(String(r?.manual || ""))}</p>
+         <div class="row" style="margin-top:6px">
+           <code style="font-size:12px;word-break:break-all">${escapeHtml(
+             String(r?.folder || "")
+           )}</code>
+           <button class="ghost" id="pc-copy">${t("폴더 주소 복사")}</button>
+         </div>`;
+      $("pc-copy").addEventListener("click", async () => {
+        await navigator.clipboard.writeText(String(r?.folder || "")).catch(() => {});
+        $("pc-say").textContent = t("복사했습니다");
+      });
+      $("pc-say").textContent =
+        Number(r?.failed || 0) === 0 ? t("다 됐습니다") : t("일부는 못 했습니다 — 아래를 봐 주십시오");
+    } catch (e) {
+      $("pc-say").innerHTML = `<span class="danger">${escapeHtml(String(e))}</span>`;
+    } finally {
+      (b as HTMLButtonElement).disabled = false;
+    }
+  });
+}
+
 async function stallCard(): Promise<string> {
   try {
     const s = await invoke<any>("sync_stalled");
@@ -2871,13 +2939,14 @@ async function paintPartBody(): Promise<void> {
             : behind > 0
               ? t("따라잡는 동안에는 방금 들어온 결제가 늦게 보입니다.")
               : t("이 컴퓨터가 체인을 통째로 들고 있습니다. 남에게 묻지 않습니다."),
-        ) + (behind > 0 ? await stallCard() : "") +
+        ) + (behind > 0 ? await stallCard() : "") + prepCard(behind) +
         (behind > 0 ? await speedCard() : await restoreCard()) + (await indexCard()) +
         goto("settings", t("노드 설정 열기"));
       bindSpeed();
       bindRestore();
       bindRestart();
       bindLog();
+      bindPrep(behind);
     } else if (partOpen === "mine") {
       if (title) title.textContent = "채굴";
       const m = await invoke<any>("miner_running").catch(() => null);

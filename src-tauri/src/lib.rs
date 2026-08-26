@@ -2,6 +2,7 @@ mod ai;
 mod auto;
 mod boot;
 mod awake;
+mod prep;
 mod quiet;
 mod helping;
 mod backup;
@@ -367,6 +368,8 @@ pub fn run() {
             reindex_run::reindex_start,
             reindex_run::reindex_progress,
             reindex_run::sync_stalled,
+            reindex_run::node_log_tail,
+            prep::pc_prepare,
             mode::mode_get,
             mode::mode_set,
             awake::awake_status,
