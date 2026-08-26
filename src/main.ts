@@ -2913,6 +2913,8 @@ function showPage(id: string) {
     wireCloudKey();
   }
   if (id === "reward") void loadReward();
+  // 간판 열쇠 옮기기. 이미 씨앗 열쇠면 이 안에서 스스로 숨는다.
+  if (id === "shop") void paintKeyMove();
   // 🔴 화면을 열 때 부르지 않으면 빈 칸만 보인다. 만들어 놓고 안 부르는
   //    것이 이 저장소의 고질병이라 여기 한 줄을 꼭 남긴다.
   if (id === "talk") {
@@ -3034,6 +3036,90 @@ async function makeAddress() {
     $("w-copy").onclick = () => navigator.clipboard.writeText(addr);
   } catch (e) {
     say("주소를 만들지 못했습니다", String(e));
+  }
+}
+
+/* ── 간판 열쇠 옮기기 ─────────────────────────────────────────
+   🔴 100 RVN 이 타고 되돌릴 수 없다. **일어날 일을 다 적고 나서** 묻는다. */
+
+async function paintKeyMove() {
+  const box = document.getElementById("km-box");
+  const body = document.getElementById("km-body");
+  if (!box || !body) return;
+  let p: any;
+  try {
+    p = await invoke("shop_key_move_plan");
+  } catch {
+    // 가게가 없거나 노드가 아직 안 따라잡았다. 조용히 감춘다 —
+    // 이 칸은 없어도 장사가 된다.
+    box.style.display = "none";
+    return;
+  }
+  // 이미 12단어에서 나온 열쇠면 이 칸을 아예 안 보여 준다.
+  if (String(p.blocked || "").includes("이미 12단어")) {
+    box.style.display = "none";
+    return;
+  }
+  box.style.display = "";
+  const max = Number(p.max_add || 0);
+  const blocked = p.blocked ? String(p.blocked) : "";
+  body.innerHTML =
+    `<p class="meta">${t("지금 간판 열쇠는 무작위로 만들어졌습니다. 이 컴퓨터의 백업 파일이 유일한 사본이라, 그 파일을 잃으면 「지금 여기서 주문받습니다」를 영영 못 고칩니다.")}</p>
+     <div class="kv"><b>${t("가게")}</b><span><code class="addr">${escapeHtml(String(p.asset))}</code></span></div>
+     <div class="kv"><b>${t("지금 열쇠")}</b><span><code class="addr">${escapeHtml(String(p.now_pubkey || "").slice(0, 16))}…</code></span></div>
+     <div class="kv"><b>${t("새 열쇠")}</b><span><code class="addr">${escapeHtml(String(p.new_pubkey || "—").slice(0, 16))}…</code> ${t("(12단어에서)")}</span></div>
+     <div class="kv"><b>${t("지금 수량")}</b><span>${Number(p.amount || 0).toLocaleString()}${t("개")}</span></div>
+     ${blocked ? `<p class="meta danger" style="margin-top:10px">${escapeHtml(blocked)}</p>` : `
+     <label style="margin-top:12px">${t("이참에 더 찍을 수량")}
+       <input id="km-qty" type="number" min="0" step="1" value="${max}" /></label>
+     <div class="meta">
+       ${t("넣을 수 있는 최대")} <b>${max.toLocaleString()}</b>${t("개")} —
+       ${t("상한은 210억인데 이미 있는 것만큼 빼야 합니다. 넘으면 거래가 통째로 실패합니다.")}
+     </div>
+     <div class="note" style="margin-top:12px">
+       <b>${t("일어나는 일")}</b>
+       <div class="meta" style="margin-top:6px;line-height:1.9">
+         · ${t("100 RVN 이 소각됩니다. 돌아오지 않습니다.")}<br />
+         · ${t("가게 정보를 그대로 가져와 열쇠 한 줄만 바꿔 다시 새깁니다 — 다른 정보는 안 잃습니다.")}<br />
+         · ${t("체인에 새긴 뒤에야 열쇠 파일을 바꿉니다. 실패하면 아무것도 안 바뀝니다.")}<br />
+         · ${t("옛 열쇠는 지우지 않고 옆에 남깁니다.")}<br />
+         · ${t("「재발행 가능」은 켠 채로 둡니다 — 끄면 결제 주소도 영영 못 바꿉니다.")}<br />
+         · ${t("확인되기까지 몇 분 걸리고, 그동안 손님 화면은 옛 정보를 봅니다.")}
+       </div>
+     </div>
+     <div class="row" style="margin-top:12px">
+       <button id="km-go">${t("100 RVN 소각하고 바꾸기")}</button>
+       <span class="meta" id="km-note"></span>
+     </div>`}`;
+  const go = document.getElementById("km-go");
+  if (go) go.addEventListener("click", () => void doKeyMove(p));
+}
+
+async function doKeyMove(p: any) {
+  const qty = parseFloat(($("km-qty") as HTMLInputElement)?.value || "0") || 0;
+  const max = Number(p.max_add || 0);
+  if (qty > max) {
+    $("km-note").innerHTML = `<span class="danger">${t("넣을 수 있는 최대를 넘었습니다")} — ${max.toLocaleString()}</span>`;
+    return;
+  }
+  const ok = await sure(
+    t("정말 바꿀까요?"),
+    `${p.asset} · ${t("100 RVN 이 소각되고 돌아오지 않습니다.")} ` +
+      (qty > 0 ? `${qty.toLocaleString()}${t("개를 더 찍습니다.")} ` : t("수량은 안 늘립니다. ")) +
+      t("되돌릴 수 없습니다.")
+  );
+  if (!ok) return;
+  if (!(await ensureUnlocked(t("체인에 새기려면 지갑을 열어야 합니다.")))) return;
+  const btn = $("km-go") as HTMLButtonElement;
+  btn.disabled = true;
+  $("km-note").textContent = t("새기는 중… 몇 분 걸립니다");
+  try {
+    const r = await invoke<any>("shop_key_move", { qty, passphrase: null });
+    $("km-note").innerHTML =
+      `<span class="ok">${t("새겼습니다")} — <code class="addr">${escapeHtml(String(r.txid)).slice(0, 20)}…</code></span>`;
+  } catch (e) {
+    btn.disabled = false;
+    $("km-note").innerHTML = `<span class="danger">${escapeHtml(String(e))}</span>`;
   }
 }
 

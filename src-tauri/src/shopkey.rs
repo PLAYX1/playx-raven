@@ -136,7 +136,7 @@ fn load_or_make() -> Result<[u8; 32], String> {
 ///
 /// ⚠️ 표식 문자열은 **절대 바꾸지 마라.** 바꾸면 그날부터 다른 열쇠가
 ///    나오고, 이미 체인에 적힌 공개키와 어긋나 간판이 죽는다.
-const SEED_TAG: &str = "PLAYX-RAVEN-SHOPKEY-v1";
+pub const SEED_TAG: &str = "PLAYX-RAVEN-SHOPKEY-v1";
 
 /// 사람으로서의 열쇠. 가게 간판과 **다른 값**이어야 한다 — 간판을 남에게
 /// 맡겨도 내 이름으로 글을 쓰지는 못하게.
@@ -182,6 +182,39 @@ fn from_seed() -> Option<[u8; 32]> {
     let words = v.get("word_list").and_then(Value::as_str)?;
     let pass = v.get("passphrase").and_then(Value::as_str).unwrap_or("");
     derive_from_words(words, pass)
+}
+
+/// 지금 열쇠를 **12단어에서 나온 것으로 바꿔 넣는다.**
+///
+/// 🔴 이 함수는 `shopmove.rs` 가 **재발행이 성공한 뒤에만** 부른다.
+///    먼저 부르면 그 가게는 그 순간부터 죽는다 — 새 열쇠로 글을 쓰는데
+///    체인은 옛 공개키를 가리킨다. 여기 혼자 쓰지 마라.
+///
+/// 옛 열쇠는 **지우지 않고** `shopkey-old-*.json` 으로 옆에 남긴다.
+/// 되돌릴 일이 생길 수 있고, 지운 것은 못 되돌린다.
+pub fn install_seed_key() -> Result<String, String> {
+    let sk = from_seed().ok_or("12단어를 읽지 못했습니다.")?;
+    let p = key_file();
+    if p.exists() {
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        let _ = std::fs::rename(&p, p.with_file_name(format!("shopkey-old-{stamp}.json")));
+    }
+    let body = json!({
+        "sk": hex::encode(sk),
+        "from": "seed",
+        "note": "가게 간판 열쇠입니다. 12단어에서 나왔으므로 12단어만 있으면 되살릴 수 있습니다.",
+    });
+    std::fs::write(&p, serde_json::to_vec_pretty(&body).unwrap_or_default())
+        .map_err(|e| format!("가게 열쇠를 저장하지 못했습니다: {e}"))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o600));
+    }
+    pubkey_of(&sk)
 }
 
 /// 이 열쇠가 12단어에서 나온 것인가. 화면이 「잃어버려도 되살릴 수 있는가」

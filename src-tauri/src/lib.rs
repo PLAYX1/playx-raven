@@ -52,6 +52,7 @@ mod server;
 mod services;
 mod shop;
 mod shopkey;
+mod shopmove;
 mod devfee;
 mod ticket;
 mod relay;
@@ -335,6 +336,8 @@ pub fn run() {
             price::quote_price,
             boot::boot_report,
             shopkey::shopkey_origin,
+            shopmove::shop_key_move_plan,
+            shopmove::shop_key_move,
             talk::talk_me,
             talk::talk_post,
             talk::talk_read,
@@ -466,6 +469,40 @@ pub fn run() {
                         }
                     }
                 });
+            }
+
+            // 🔴 **화면보다 큰 창을 띄우지 않는다.**
+            //
+            //    대표님: "윈도우에서 화면 크기에 비례해서 자동으로 조정해 주는
+            //    기능이 필요해. 화면이 다 안 보이더라고."
+            //
+            //    기본값이 1120×780 인데, 1366×768 노트북에 125% 배율이면 쓸 수
+            //    있는 높이가 **약 614px** 다. 창이 화면보다 커지고 아래가 잘린다.
+            //    잘린 자리에 표시등 다섯이 있어서, 사장은 노드가 켜졌는지조차
+            //    볼 수 없었다.
+            //
+            //    ⚠️ 물리 크기를 그대로 쓰면 안 된다. 창 크기는 **논리 픽셀**이라
+            //       배율로 나눠야 한다. 안 나누면 4K 에서는 멀쩡하고 배율 높은
+            //       노트북에서만 틀리는, 찾기 어려운 종류의 버그가 된다.
+            if let Some(w) = app.get_webview_window("main") {
+                if let Ok(Some(mon)) = w.current_monitor() {
+                    let sf = mon.scale_factor();
+                    let m = mon.size().to_logical::<f64>(sf);
+                    // 작업 표시줄과 창틀 몫을 남긴다. 화면에 딱 맞추면
+                    // 아래 한 줄이 표시줄에 가린다.
+                    let max_w = (m.width - 40.0).max(720.0);
+                    let max_h = (m.height - 90.0).max(480.0);
+                    if let Ok(cur) = w.inner_size() {
+                        let c = cur.to_logical::<f64>(sf);
+                        if c.width > max_w || c.height > max_h {
+                            let _ = w.set_size(tauri::LogicalSize::new(
+                                c.width.min(max_w),
+                                c.height.min(max_h),
+                            ));
+                            let _ = w.center();
+                        }
+                    }
+                }
             }
 
             // 창 JS가 늦게 뜨거나 안 떠도 손님·직원 화면은 열려 있어야 한다.

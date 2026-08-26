@@ -35,8 +35,15 @@
          Sections are separated because they carry different risk.
          The asset view cannot spend; wallet, issue and shop can. Stacking them
          on one page would teach the same click habit for both.                */
+      /* 🔴 `overflow-y` 가 없어서 **창이 낮으면 아래가 잘리고 볼 방법이 없었다.**
+         표시등 다섯이 맨 아래에 있는데(`margin-top:auto`), 1366×768 노트북에
+         125% 배율이면 그게 통째로 화면 밖으로 나간다. 사장은 노드가 켜졌는지
+         꺼졌는지를 볼 수가 없다. 넘치면 스크롤되게 둔다. */
       nav { width: 172px; flex-shrink: 0; background: var(--side); border-right: 1px solid var(--line);
-            display: flex; flex-direction: column; padding: 12px 0; }
+            display: flex; flex-direction: column; padding: 12px 0;
+            overflow-y: auto; overscroll-behavior: contain; }
+      /* 본문도 같다 — 낮은 창에서 아래 단추에 손이 닿아야 한다. */
+      main { overflow-y: auto; }
       .brand { padding: 0 16px 12px; }
       .brand h1 { font-size: 15px; margin: 0; letter-spacing: -0.2px; }
       .brand span { font-size: 14px; color: var(--faint); }
@@ -1979,6 +1986,15 @@
         <button class="ghost" id="sh-refresh" style="display:none;margin-left:8px">바뀐 것 손님에게 알리기</button>
         <div class="meta" id="sh-refreshsay" style="margin-bottom:8px"></div>
         <p class="lede">주문마다 주소가 따로 생깁니다. 그 주소로 들어온 돈만 그 주문의 결제입니다.</p>
+
+        <!-- ── 간판 열쇠 옮기기 ────────────────────────────────────────
+             🔴 100 RVN 이 타고 되돌릴 수 없다. 그래서 **접어 둔다** —
+             매일 여는 자리에 이런 단추가 펼쳐져 있으면 안 된다.
+             안 나와도 되는 사람에게는 아예 안 보인다(이미 씨앗 열쇠면 숨김). -->
+        <details class="swapbox" id="km-box" style="display:none">
+          <summary><b>간판 열쇠를 12단어에서 나온 것으로 바꾸기</b></summary>
+          <div id="km-body"><p class="meta">읽는 중…</p></div>
+        </details>
         <div class="tabs">
           <button class="tab on" data-shoptab="orders">들어온 주문</button>
           <button class="tab" data-shoptab="menu">메뉴판</button>
