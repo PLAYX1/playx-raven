@@ -40,6 +40,7 @@ mod nostrpub;
 mod paths;
 mod swap;
 mod sweep;
+mod talk;
 mod autostart;
 mod mode;
 mod reindex;
@@ -334,6 +335,11 @@ pub fn run() {
             price::quote_price,
             boot::boot_report,
             shopkey::shopkey_origin,
+            talk::talk_me,
+            talk::talk_post,
+            talk::talk_read,
+            talk::talk_rooms,
+            talk::talk_make_room,
             swap::swap_ready,
             swap::swap_make_lot,
             swap::swap_offer,

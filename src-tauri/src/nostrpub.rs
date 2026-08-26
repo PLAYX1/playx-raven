@@ -192,6 +192,55 @@ pub async fn nostr_query(
     Ok(json!({ "events": events }))
 }
 
+/// 표(`t` 태그)로 좁혀 읽는다. **이야기 화면이 쓰는 길.**
+///
+/// 🔴 위 `nostr_query` 는 글쓴이를 안 적으면 거절한다 — 릴레이 전체를 긁다
+///    차단당하지 않으려고 그렇게 해 뒀고, 그 걱정은 맞다. 다만 「레이븐
+///    이야기를 보여 달라」는 통째로 긁는 것이 아니라 **좁은 물음**이다.
+///    세상의 Nostr 앱이 다 이렇게 읽는다.
+///
+///    그래도 선은 지킨다: 표가 반드시 있어야 하고, 개수 상한이 있고,
+///    종류를 안 적으면 안 읽는다. 「아무거나 다 줘」는 여전히 못 한다.
+pub async fn nostr_query_tag(
+    kinds: Vec<i64>,
+    tag: String,
+    tag_values: Vec<String>,
+    limit: i64,
+) -> Result<Vec<Value>, String> {
+    if kinds.is_empty() {
+        return Err("무엇을 읽을지 알려 주세요.".into());
+    }
+    // 한 글자짜리 태그만 쓴다(NIP-01). `t`(표)·`e`(가리키는 글) 같은 것.
+    if tag.len() != 1 || !tag.chars().all(|c| c.is_ascii_alphabetic()) {
+        return Err("태그가 올바르지 않습니다.".into());
+    }
+    let vals: Vec<String> = tag_values.into_iter().filter(|v| !v.is_empty()).take(8).collect();
+    if vals.is_empty() {
+        return Err("무엇으로 좁힐지 알려 주세요.".into());
+    }
+    let sub = "t1";
+    let mut f = serde_json::Map::new();
+    f.insert("kinds".into(), json!(kinds));
+    f.insert(format!("#{tag}"), json!(vals));
+    f.insert("limit".into(), json!(limit.clamp(1, 200)));
+    let req = serde_json::to_string(&json!(["REQ", sub, Value::Object(f)]))
+        .map_err(|e| format!("보낼 것을 만들지 못했습니다: {e}"))?;
+
+    let mut seen: std::collections::HashMap<String, Value> = std::collections::HashMap::new();
+    for url in targets() {
+        if let Ok(events) = read_one(&url, &req, sub).await {
+            for e in events {
+                if let Some(id) = e.get("id").and_then(Value::as_str) {
+                    seen.entry(id.to_string()).or_insert(e);
+                }
+            }
+        }
+    }
+    let mut out: Vec<Value> = seen.into_values().collect();
+    out.sort_by_key(|e| -(e.get("created_at").and_then(Value::as_i64).unwrap_or(0)));
+    Ok(out)
+}
+
 async fn read_one(url: &str, req: &str, sub: &str) -> Result<Vec<Value>, String> {
     use futures_util::{SinkExt, StreamExt};
     use tokio_tungstenite::tungstenite::Message;

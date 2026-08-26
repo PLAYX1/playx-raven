@@ -138,7 +138,20 @@ fn load_or_make() -> Result<[u8; 32], String> {
 ///    나오고, 이미 체인에 적힌 공개키와 어긋나 간판이 죽는다.
 const SEED_TAG: &str = "PLAYX-RAVEN-SHOPKEY-v1";
 
+/// 사람으로서의 열쇠. 가게 간판과 **다른 값**이어야 한다 — 간판을 남에게
+/// 맡겨도 내 이름으로 글을 쓰지는 못하게.
+pub const SEED_TAG_TALK: &str = "PLAYX-RAVEN-TALKKEY-v1";
+
+/// 12단어에서 이 이름표의 열쇠를 뽑는다. 표식이 다르면 열쇠도 다르다.
+pub fn derive_tagged(tag: &str, words: &str, passphrase: &str) -> Option<[u8; 32]> {
+    derive_with(tag, words, passphrase)
+}
+
 fn derive_from_words(words: &str, passphrase: &str) -> Option<[u8; 32]> {
+    derive_with(SEED_TAG, words, passphrase)
+}
+
+fn derive_with(tag: &str, words: &str, passphrase: &str) -> Option<[u8; 32]> {
     // 12단어는 소문자·한 칸 띄어쓰기가 표준이다. 사람이 옮겨 적으면
     // 대문자나 두 칸이 섞인다 — 그러면 다른 열쇠가 나와서 복구가 실패한다.
     let norm = words.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase();
@@ -146,7 +159,7 @@ fn derive_from_words(words: &str, passphrase: &str) -> Option<[u8; 32]> {
         return None;
     }
     let mut h = Sha256::new();
-    h.update(SEED_TAG.as_bytes());
+    h.update(tag.as_bytes());
     h.update([0u8]);
     h.update(norm.as_bytes());
     h.update([0u8]);
@@ -199,6 +212,11 @@ pub fn shop_pubkey() -> Result<String, String> {
     Ok(hex::encode(xonly(&sk)?.serialize()))
 }
 
+/// 이 열쇠의 이름표(공개키). 밖으로 나가도 되는 유일한 값이다.
+pub fn pubkey_of(sk: &[u8; 32]) -> Result<String, String> {
+    Ok(hex::encode(xonly(sk)?.serialize()))
+}
+
 fn xonly(sk: &[u8; 32]) -> Result<XOnlyPublicKey, String> {
     let kp = Keypair::from_seckey_slice(&Secp256k1::new(), sk)
         .map_err(|e| format!("열쇠가 올바르지 않습니다: {e}"))?;
@@ -212,7 +230,18 @@ fn xonly(sk: &[u8; 32]) -> Result<XOnlyPublicKey, String> {
 /// 안 맞아 조용히 버려진다 — 그래서 여기서 직접 문자열을 만든다.
 /// `serde_json::to_string` 은 공백을 안 넣는다.
 pub fn sign_event(kind: i64, tags: Value, content: &str, created_at: i64) -> Result<Value, String> {
-    let sk = load_or_make()?;
+    sign_with(&load_or_make()?, kind, tags, content, created_at)
+}
+
+/// 열쇠를 골라 서명한다. 가게 간판과 사람 이름이 **다른 열쇠**라서 필요하다.
+pub fn sign_with(
+    sk: &[u8; 32],
+    kind: i64,
+    tags: Value,
+    content: &str,
+    created_at: i64,
+) -> Result<Value, String> {
+    let sk = *sk;
     let pk = hex::encode(xonly(&sk)?.serialize());
 
     let pre = serde_json::to_string(&json!([0, pk, created_at, kind, tags, content]))

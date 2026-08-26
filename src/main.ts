@@ -2913,6 +2913,13 @@ function showPage(id: string) {
     wireCloudKey();
   }
   if (id === "reward") void loadReward();
+  // 🔴 화면을 열 때 부르지 않으면 빈 칸만 보인다. 만들어 놓고 안 부르는
+  //    것이 이 저장소의 고질병이라 여기 한 줄을 꼭 남긴다.
+  if (id === "talk") {
+    void talkPaintMe();
+    void talkPaintRooms();
+    void talkPaint();
+  }
 }
 
 /* ── 지갑 ─────────────────────────────────────────────────── */
@@ -3027,6 +3034,159 @@ async function makeAddress() {
     $("w-copy").onclick = () => navigator.clipboard.writeText(addr);
   } catch (e) {
     say("주소를 만들지 못했습니다", String(e));
+  }
+}
+
+/* ── 이야기 ───────────────────────────────────────────────────
+   세계와 한 방에서. 🔴 여기는 **RVN 이 필요 없다** — 레이븐을 아직 안 쓰는
+   사람이 이 프로그램을 켜 둘 이유가 여기서 생긴다.                      */
+
+let tkRoom = "";
+let tkMine = "";
+
+async function talkPaintMe() {
+  try {
+    const me = await invoke<any>("talk_me");
+    tkMine = String(me.pubkey || "");
+    $("tk-me").innerHTML = me.recoverable
+      ? `<span class="ok">${t("내 이름")} ${tkMine.slice(0, 8)}… · ${t("12단어로 되살릴 수 있습니다")}</span>`
+      : `<span class="warn">${t("내 이름")} ${tkMine.slice(0, 8)}… · ${escapeHtml(String(me.why || ""))}</span>`;
+  } catch (e) {
+    $("tk-me").innerHTML = `<span class="danger">${escapeHtml(String(e))}</span>`;
+  }
+}
+
+async function talkPaintRooms() {
+  try {
+    const rooms: any[] = await invoke("talk_rooms");
+    const sel = $("tk-room") as HTMLSelectElement;
+    const keep = sel.value;
+    sel.innerHTML =
+      `<option value="">${t("전체 — 레이븐 이야기")}</option>` +
+      rooms
+        .map((r) => `<option value="${escapeHtml(String(r.id))}">${escapeHtml(String(r.name))}</option>`)
+        .join("");
+    sel.value = keep;
+  } catch {
+    // 방 목록을 못 읽어도 전체 글은 보여야 한다. 조용히 넘어간다.
+  }
+}
+
+/**
+ * 글 목록.
+ *
+ * 🔴 원문을 지운 자리에 번역을 넣지 않는다. **원문이 진짜다** — 서명되어
+ *    릴레이에 남는 것은 원문이고, 번역은 읽기 위한 보조다. 번역 서버가
+ *    죽어도 대화는 그대로 보여야 한다.
+ */
+async function talkPaint() {
+  const box = $("tk-list");
+  box.innerHTML = `<p class="meta">${t("세계 릴레이에서 읽는 중…")}</p>`;
+  try {
+    const list: any[] = await invoke("talk_read", { room: tkRoom || null, limit: 60 });
+    if (!list.length) {
+      box.innerHTML =
+        `<div class="card"><h3>${t("아직 글이 없습니다")}</h3>` +
+        `<p class="meta">${t("첫 글을 올려 보세요. 세계 릴레이로 함께 나갑니다.")}</p></div>`;
+      return;
+    }
+    box.innerHTML = list
+      .map((e) => {
+        const who = String(e.pubkey || "");
+        const mine = who === tkMine;
+        const when = new Date(Number(e.created_at || 0) * 1000).toLocaleString();
+        const id = String(e.id || "");
+        return `<div class="card" style="margin-bottom:10px">
+          <div class="meta">${mine ? `<b>${t("나")}</b>` : escapeHtml(who.slice(0, 10)) + "…"} · ${escapeHtml(when)}</div>
+          <div style="white-space:pre-wrap;margin-top:6px" data-say="${id}">${escapeHtml(String(e.content || ""))}</div>
+          <div class="row" style="margin-top:8px">
+            <button class="ghost" data-tr="${id}">${t("내 말로 보기")}</button>
+            <button class="ghost" data-keep="${id}">${t("간직하기")}</button>
+            <span class="meta" data-note="${id}"></span>
+          </div>
+        </div>`;
+      })
+      .join("");
+    box.querySelectorAll("[data-tr]").forEach((b) => {
+      (b as HTMLElement).onclick = () => void talkTranslate(String((b as HTMLElement).dataset.tr), list);
+    });
+    box.querySelectorAll("[data-keep]").forEach((b) => {
+      (b as HTMLElement).onclick = () => void talkKeep(String((b as HTMLElement).dataset.keep), list);
+    });
+  } catch (e) {
+    box.innerHTML = `<p class="meta danger">${escapeHtml(String(e))}</p>`;
+  }
+}
+
+/** 읽는 사람 말로 바꿔 준다. 원문 아래에 붙인다 — 지우지 않는다. */
+async function talkTranslate(id: string, list: any[]) {
+  const note = document.querySelector(`[data-note="${id}"]`) as HTMLElement | null;
+  const body = document.querySelector(`[data-say="${id}"]`) as HTMLElement | null;
+  const ev = list.find((e) => String(e.id) === id);
+  if (!note || !body || !ev) return;
+  if (body.querySelector(".tr")) return;
+  note.textContent = t("옮기는 중…");
+  try {
+    const r = await fetch("https://rvn.ex.erci.se/api/translate", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: String(ev.content || ""), to: lang }),
+    });
+    const j = await r.json();
+    if (!j?.translation) throw new Error(j?.error || "옮기지 못했습니다");
+    body.insertAdjacentHTML(
+      "beforeend",
+      `<div class="tr" style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);color:var(--muted)">${escapeHtml(String(j.translation))}</div>`
+    );
+    note.textContent = "";
+  } catch (e) {
+    note.innerHTML = `<span class="danger">${escapeHtml(String(e))}</span>`;
+  }
+}
+
+/** 지우기 싫은 글을 파일창고에 굳힌다. 여기서부터가 우리만 하는 일이다. */
+async function talkKeep(id: string, list: any[]) {
+  const note = document.querySelector(`[data-note="${id}"]`) as HTMLElement | null;
+  const ev = list.find((e) => String(e.id) === id);
+  if (!note || !ev) return;
+  note.textContent = t("굳히는 중…");
+  try {
+    const bytes = Array.from(new TextEncoder().encode(JSON.stringify(ev)));
+    const added = await invoke<any>("ipfs_add_file", {
+      file: { name: `talk-${id.slice(0, 12)}.json`, bytes },
+    });
+    note.innerHTML =
+      `<span class="ok">${t("굳혔습니다")} — <code class="addr">${escapeHtml(String(added.cid))}</code></span>`;
+  } catch (e) {
+    note.innerHTML = `<span class="danger">${escapeHtml(String(e))}</span>`;
+  }
+}
+
+async function talkSend() {
+  const box = $("tk-text") as HTMLTextAreaElement;
+  const text = box.value.trim();
+  if (!text) return;
+  $("tk-note").textContent = t("올리는 중…");
+  try {
+    await invoke("talk_post", { text, room: tkRoom || null });
+    box.value = "";
+    $("tk-note").innerHTML = `<span class="ok">${t("올렸습니다")}</span>`;
+    setTimeout(() => void talkPaint(), 1200);
+  } catch (e) {
+    $("tk-note").innerHTML = `<span class="danger">${escapeHtml(String(e))}</span>`;
+  }
+}
+
+async function talkNewRoom() {
+  const name = await ask(t("방 이름"), t("무엇을 이야기하는 방인가요?"));
+  if (!name) return;
+  const about = (await ask(t("한 줄 설명"), t("비워 두셔도 됩니다."))) || "";
+  try {
+    await invoke("talk_make_room", { name, about });
+    await talkPaintRooms();
+    $("tk-note").innerHTML = `<span class="ok">${t("방을 만들었습니다")}</span>`;
+  } catch (e) {
+    $("tk-note").innerHTML = `<span class="danger">${escapeHtml(String(e))}</span>`;
   }
 }
 
@@ -9854,6 +10014,15 @@ window.addEventListener("DOMContentLoaded", async () => {
     loadWallet();
   });
   $("new-asset").addEventListener("click", openWizard);
+  // 이야기. 🔴 러스트만 만들고 이 다섯 줄을 안 쓰면 오늘 하루 종일 고친
+  //    그 병이 그대로 반복된다.
+  $("tk-send").addEventListener("click", () => void talkSend());
+  $("tk-reload").addEventListener("click", () => void talkPaint());
+  $("tk-newroom").addEventListener("click", () => void talkNewRoom());
+  $("tk-room").addEventListener("change", () => {
+    tkRoom = ($("tk-room") as HTMLSelectElement).value;
+    void talkPaint();
+  });
   // 맞교환. 🔴 러스트에 다 만들어 놓고 **이 다섯 줄이 없으면** 오늘 하루
   //    종일 고친 그 병이 그대로 반복된다.
   $("sw-make").addEventListener("click", () => void swapMakeOffer());
