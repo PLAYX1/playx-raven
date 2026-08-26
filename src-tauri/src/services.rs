@@ -358,7 +358,31 @@ pub async fn services_start() -> Result<Value, String> {
 
         let mut cmd = Command::new(&path);
         cmd.arg(format!("-datadir={datadir}")).arg("-server=1");
-        if need_reindex {
+        // 🔴 **장부가 깨졌을 때 스스로 못 일어나던 것.**
+        //
+        // 2026-08-27 대표님 노드가 켤 때마다 죽었다. 로그가 정확히 말했다:
+        //
+        //     ERROR: VerifyDB(): *** irrecoverable inconsistency at 732975
+        //     : Corrupted block database detected.
+        //     Please restart with -reindex or -reindex-chainstate to recover.
+        //     Aborted block database rebuild. Exiting.
+        //
+        // 켤 때마다 「마지막 6블록 검증」에서 그 자리를 만나 스스로 종료한다.
+        // 그래서 「지금 켜기」를 몇 번 눌러도 소용이 없다 — 사장은 왜인지
+        // 모른 채 계속 누른다. 실제로 그렇게 겪으셨다.
+        //
+        // ⚠️ `-reindex` 가 아니라 **`-reindex-chainstate`** 다. 블록 파일은
+        //    멀쩡하다(로그의 `Checking all blk files are present...` 통과).
+        //    다시 받지 않고 **계산만 다시 한다.** 몇 시간 대 며칠의 차이다.
+        //
+        // ⚠️ 한 번만 붙인다. 표시를 지우고 붙이므로 다음 켜기에는 안 붙는다 —
+        //    성공했는데 또 붙이면 매번 다시 계산하게 된다.
+        let heal = crate::paths::app_file("chainstate-heal");
+        let need_heal = heal.exists();
+        if need_heal {
+            let _ = std::fs::remove_file(&heal);
+            cmd.arg("-reindex-chainstate");
+        } else if need_reindex {
             cmd.arg("-reindex");
         }
         match spawn_node(cmd, &datadir).await {

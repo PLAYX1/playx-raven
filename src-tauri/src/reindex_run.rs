@@ -441,3 +441,86 @@ mod behind_tests {
         assert!(behind_is_honest(0.999, 12, 4_500_000));
     }
 }
+
+/// **장부가 깨졌나** — 노드 기록을 읽어서 판단한다.
+///
+/// ## 🔴 왜 우리가 읽어야 하나
+///
+/// 대표님 노드가 켤 때마다 죽었고, 「지금 켜기」를 몇 번이나 누르셨다.
+/// 화면은 「노드가 꺼져 있습니다」만 반복했다. **왜 꺼졌는지는 우리가
+/// 안 봤다.** 그런데 노드는 자기 기록에 정확히 적어 놨다:
+///
+///     Corrupted block database detected.
+///     Please restart with -reindex or -reindex-chainstate to recover.
+///
+/// 사장이 그 파일을 찾아 열 방법은 없다. **우리가 읽고 고칠 단추를 준다.**
+///
+/// ⚠️ 마지막 부분만 본다. 옛날에 한 번 났던 오류를 지금 일로 착각하면
+///    멀쩡한 노드를 몇 시간 세운다.
+#[tauri::command]
+pub fn chain_broken() -> Value {
+    let tail = node_log_tail();
+    if tail["ok"] != json!(true) {
+        return json!({ "broken": false, "known": false });
+    }
+    let lines: Vec<String> = tail["lines"]
+        .as_array()
+        .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+        .unwrap_or_default();
+    let text = lines.join("\n");
+    let broken = text.contains("Corrupted block database detected")
+        || text.contains("irrecoverable inconsistency");
+    // 고친 뒤 다시 켜졌으면 그 기록이 뒤에 남는다. 마지막이 무엇인지가 중요하다.
+    let recovered = lines
+        .iter()
+        .rposition(|l| l.contains("Corrupted block database detected"))
+        .zip(lines.iter().rposition(|l| l.contains("init message: Verifying blocks")))
+        .map(|(bad, ok)| ok > bad)
+        .unwrap_or(false);
+    json!({
+        "known": true,
+        "broken": broken && !recovered,
+        "why": "장부가 깨졌습니다. 노드가 켜질 때마다 그 자리를 만나 스스로 꺼집니다.",
+        "how": "계산을 다시 하면 고쳐집니다. 블록 파일은 그대로 쓰므로 다시 받지 않습니다.",
+    })
+}
+
+/// 다음에 켤 때 **계산을 다시 하게** 표시해 둔다.
+#[tauri::command]
+pub async fn chain_heal() -> Result<Value, String> {
+    std::fs::write(crate::paths::app_file("chainstate-heal"), "1")
+        .map_err(|e| format!("표시를 못 남겼습니다: {e}"))?;
+    // 꺼져 있으면 그냥 켠다. 켜져 있으면 껐다 켠다 — 어느 쪽이든 새 인자로 뜬다.
+    let _ = crate::services::services_stop();
+    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+    let r = crate::services::services_start().await;
+    Ok(json!({
+        "ok": r.is_ok(),
+        "note": "계산을 다시 하기 시작했습니다. 블록 파일은 다시 받지 않습니다 — \
+                 몇 시간 걸릴 수 있고, 그동안 컴퓨터를 켜 두시면 됩니다.",
+    }))
+}
+
+#[cfg(test)]
+mod heal_tests {
+    /// 🔴 **`-reindex` 가 아니라 `-reindex-chainstate`** 여야 한다.
+    ///    블록 파일은 멀쩡한데 다시 받으면 며칠이 걸린다.
+    #[test]
+    fn 블록을_다시_받지_않는다() {
+        let src = include_str!("services.rs");
+        let end = src.find("#[cfg(test)]").unwrap_or(src.len());
+        assert!(
+            src[..end].contains("-reindex-chainstate"),
+            "고칠 때 계산만 다시 하는 인자를 안 쓰고 있다"
+        );
+    }
+
+    /// 표시를 지우고 붙인다. 안 지우면 켤 때마다 다시 계산한다.
+    #[test]
+    fn 한_번만_고친다() {
+        let src = include_str!("services.rs");
+        let i = src.find("let heal = crate::paths::app_file").expect("있어야 한다");
+        let seg = &src[i..i + 400.min(src.len() - i)];
+        assert!(seg.contains("remove_file"), "표시를 안 지우고 있다 — 매번 다시 계산한다");
+    }
+}

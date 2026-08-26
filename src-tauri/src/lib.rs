@@ -369,6 +369,8 @@ pub fn run() {
             reindex_run::reindex_progress,
             reindex_run::sync_stalled,
             reindex_run::node_log_tail,
+            reindex_run::chain_broken,
+            reindex_run::chain_heal,
             prep::pc_prepare,
             mode::mode_get,
             mode::mode_set,

@@ -1394,6 +1394,35 @@ function setSyncBar(pct: number | null) {
   fill.style.width = `${Math.max(2, pct)}%`;
 }
 
+/**
+ * 노드가 **시작하는 중**인가.
+ *
+ * ## 🔴 왜 이 판별이 따로 필요한가
+ *
+ * 대표님 화면에 이 둘이 **같이** 떠 있었다:
+ *
+ *     가운데:  getblockchaininfo: Loading block index...
+ *     왼쪽:    RVN 노드 꺼짐        ← 라비도 "노드가 꺼져 있어요"
+ *
+ * **꺼져 있으면 저 말을 할 수가 없다.** 노드에 물어봤더니 「장부 여는 중」
+ * 이라고 **답한** 것이다. 살아 있다.
+ *
+ * 표시등은 켜짐/꺼짐 둘뿐이라 「아직 답 못 함」을 꺼짐으로 쳤고, 그래서
+ * 사장이 「노드 켜기」를 몇 번이나 누르셨다 — 이미 켜져 있는 것을.
+ *
+ * 큰 화면(`paintPart`)은 이 판별을 이미 하고 있었는데 표시등이 몰랐다.
+ * **한 군데서 정하고 둘이 같이 쓴다.**
+ */
+function isWarming(err: unknown): boolean {
+  const msg = String((err as Error)?.message ?? err ?? "");
+  return /Loading block index|Verifying|Rewinding|Activating|Loading wallet|warming up|-28/i.test(
+    msg
+  );
+}
+
+/** 표시등이 「시작하는 중」을 아는가. 라비도 이 값을 본다. */
+let nodeWarming = false;
+
 async function paintStatusDots() {
   const set = (dot: string, label: string, ok: boolean, text: string) => {
     const d = document.getElementById(dot);
@@ -1415,8 +1444,17 @@ async function paintStatusDots() {
     set("d-node", "d-node-t", true, synced ? "RVN 노드 켜짐" : `노드 ${pct.toFixed(1)}%`);
     setSyncBar(synced ? null : pct);
     nodeUp = true;
-  } catch {
-    set("d-node", "d-node-t", false, "RVN 노드 꺼짐");
+    nodeWarming = false;
+  } catch (e) {
+    // 🔴 답을 못 받은 것과 꺼진 것은 **다르다.** 「장부 여는 중」이라는
+    //    답이 왔다면 그건 살아 있다는 뜻이다.
+    nodeWarming = isWarming(e);
+    set(
+      "d-node",
+      "d-node-t",
+      nodeWarming,
+      nodeWarming ? "RVN 노드 여는 중" : "RVN 노드 꺼짐"
+    );
     setSyncBar(null);
     nodeUp = false;
   }
@@ -1791,7 +1829,9 @@ function paintRavi() {
     const shop = val("sh-ko") || val("sh-en");
 
     if (nodeDown) {
-      hi.textContent = "노드가 꺼져 있어요.";
+      hi.textContent = nodeWarming
+        ? "노드가 장부를 여는 중이에요. 몇 분 걸려요."
+        : "노드가 꺼져 있어요.";
       sub.innerHTML = "결제가 들어와도 확인을 못 합니다. <b>이 컴퓨터</b>에서 켜 주세요.";
     } else if (!shop) {
       // 가게가 없는 사람에게는 **가게 이야기부터** 한다.
@@ -2028,7 +2068,7 @@ function shopTodo(): { bad: boolean; label: string; why: string; go?: () => void
   return [
     {
       bad: !(nodeUp ?? true),
-      label: t("노드가 꺼져 있어요"),
+      label: t(nodeWarming ? "노드가 여는 중이에요" : "노드가 꺼져 있어요"),
       why: t("결제가 들어와도 확인을 못 합니다."),
       go: () => { $("qrwrap").style.display = "none"; showPage("settings"); },
     },
@@ -2938,7 +2978,8 @@ async function paintPartBody(): Promise<void> {
         //    잠금에 걸려 「레이븐 코어가 켜져 있습니다」가 나온다.
         //    코어를 껐는데 그 말이 나오는 이유가 이것이다. 실측으로 만났다.
         const msg = String((e as Error)?.message || e);
-        const warming = /Loading block index|Verifying|Rewinding|Activating|Loading wallet|warming up|-28/i.test(msg);
+        // 표시등과 **같은 판별**을 쓴다. 두 벌로 두면 한쪽만 고쳐진다.
+        const warming = isWarming(msg);
         if (warming) {
           box.innerHTML =
             `<div class="card">
@@ -2952,6 +2993,53 @@ async function paintPartBody(): Promise<void> {
         const sv = await invoke<any>("services_status").catch(() => null);
         const n = sv?.node || {};
         const looked: string[] = Array.isArray(n.looked) ? n.looked : [];
+        // 🔴 **왜 꺼졌는지 노드가 자기 기록에 적어 놨다.** 우리는 안 읽었다.
+        //    대표님은 「지금 켜기」를 몇 번이나 누르셨고 그때마다 노드는
+        //    같은 자리에서 스스로 죽었다:
+        //
+        //      ERROR: VerifyDB(): *** irrecoverable inconsistency at 732975
+        //      : Corrupted block database detected.
+        //
+        //    켜는 단추를 아무리 눌러도 안 되는 종류다. 읽고, 말하고,
+        //    고칠 단추를 준다.
+        const brk = await invoke<any>("chain_broken").catch(() => null);
+        if (brk?.broken) {
+          box.innerHTML =
+            `<div class="card" style="border-color:var(--warn)">
+               <h3>${t("장부가 깨졌습니다")}</h3>
+               <p class="meta">${t(
+                 "그래서 노드가 켜질 때마다 그 자리를 만나 스스로 꺼집니다. 「지금 켜기」를 눌러도 소용이 없습니다."
+               )}</p>
+               <p class="meta">${t(
+                 "계산을 다시 하면 고쳐집니다. 블록 파일은 그대로 쓰므로 다시 받지 않습니다 — 몇 시간 걸릴 수 있고, 그동안 컴퓨터를 켜 두시면 됩니다."
+               )}</p>
+               <div class="row" style="margin-top:12px">
+                 <button id="nd-heal">${t("장부 고치기")}</button>
+                 <button class="ghost" id="nd-log">${t("노드가 뭐 하는지 보기")}</button>
+                 <span class="meta" id="nd-say"></span>
+               </div>
+               <div id="nd-logbox"></div>
+             </div>`;
+          bindLog();
+          document.getElementById("nd-heal")?.addEventListener("click", async () => {
+            const ok = await sure(
+              t("장부를 다시 계산할까요?"),
+              t("몇 시간 걸릴 수 있습니다. 그동안 결제 확인이 안 됩니다. 블록 파일은 다시 받지 않습니다.")
+            );
+            if (!ok) return;
+            const b = document.getElementById("nd-heal") as HTMLButtonElement;
+            b.disabled = true;
+            $("nd-say").textContent = t("시작하는 중…");
+            try {
+              const r = await invoke<any>("chain_heal");
+              $("nd-say").textContent = String(r?.note || t("시작했습니다."));
+            } catch (e) {
+              b.disabled = false;
+              $("nd-say").innerHTML = `<span class="danger">${escapeHtml(String(e))}</span>`;
+            }
+          });
+          return;
+        }
         box.innerHTML =
           `<div class="card">
              <h3>${t("노드가 꺼져 있습니다")}</h3>
@@ -5214,7 +5302,7 @@ async function refreshKeys() {
     const lbl = $("chat-open").querySelector("span");
     if (lbl) {
       lbl.textContent = asleep
-        ? "노드가 꺼져 있어요"
+        ? (nodeWarming ? "노드가 여는 중이에요" : "노드가 꺼져 있어요")
         : have.length
           ? "Ravi에게 물어보기"
           // 키가 없어도 라비는 깨어 있다. 다만 할 수 있는 일이 적다.

@@ -334,8 +334,7 @@ pub async fn dbcache_suggest() -> Value {
     //    모르면 모른다고 적고, 안전한 값을 권한다.
     let measured = crate::setup::memory_gb();
     let gb = measured.unwrap_or(8);
-    // 절반, 최소 1GB, 최대 8GB. 8GB 넘게 줘도 더 빨라지지 않는다.
-    let want = ((gb / 2).max(1).min(8) * 1024) as i64;
+    let want = suggest_mb(gb);
     let now = conf_read()["values"]["dbcache"].as_i64().unwrap_or(450);
     json!({
         "memory_gb": gb,
@@ -349,6 +348,54 @@ pub async fn dbcache_suggest() -> Value {
             want
         ),
     })
+}
+
+/// 얼마를 줄까.
+///
+/// ## 🔴 절반은 너무 많았다
+///
+/// 처음엔 `(gb / 2).min(8)` 이었다. 16GB 컴퓨터면 **7~8GB** 를 노드에 준다.
+/// 대표님 컴퓨터에서 실제로 7,168MB 가 잡혔고, 그 뒤로 노드가 자꾸 죽었다.
+///
+/// 재색인 중에는 이 값만큼을 모았다가 디스크로 한꺼번에 쏟는다. 그 순간
+/// 쓰는 메모리가 확 뛴다. 크롬까지 켜져 있으면 윈도우가 못 준다고 하고
+/// **노드가 죽는다.** 사장은 「지금 켜기」를 몇 번이나 누르게 된다.
+///
+/// ⚠️ 이건 **장사하는 컴퓨터**다. 남는 서버가 아니다. 계산대도 돌고
+///    브라우저도 켜져 있다. 그 몫을 먼저 떼어 놓고 나눠야 한다.
+///
+/// **윈도우와 다른 프로그램 몫으로 4GB 를 먼저 뗀다. 남은 것의 절반만,
+/// 최대 4GB.** 4GB 넘게 줘도 크게 더 빨라지지 않는다.
+///
+///   16GB → 4096   ·   8GB → 2048   ·   4GB → 512
+///
+/// 기본값(450)의 4.5~9배다. 충분히 빠르면서 안 죽는다.
+pub fn suggest_mb(gb: u64) -> i64 {
+    let free = gb.saturating_sub(4);
+    let half = free * 1024 / 2;
+    (half.min(4096).max(512)) as i64
+}
+
+#[cfg(test)]
+mod cache_tests {
+    use super::suggest_mb;
+
+    /// 🔴 쓰고 있는 컴퓨터의 절반을 노드에 주면 **노드가 죽는다.**
+    ///    대표님 컴퓨터에서 7,168MB 가 잡혔고 그 뒤로 자꾸 꺼졌다.
+    #[test]
+    fn 절반을_주지_않는다() {
+        assert_eq!(suggest_mb(16), 4096, "16GB 에 4GB 넘게 주면 안 된다");
+        assert_eq!(suggest_mb(8), 2048);
+        assert!(suggest_mb(32) <= 4096, "아무리 커도 4GB 를 넘지 않는다");
+    }
+
+    /// 작은 컴퓨터에서도 **기본값보다는 낫게** 준다. 다만 죽지 않을 만큼만.
+    #[test]
+    fn 작은_컴퓨터에도_준다() {
+        assert_eq!(suggest_mb(4), 512, "남는 게 없으면 최소만");
+        assert_eq!(suggest_mb(2), 512);
+        assert!(suggest_mb(4) > 450, "기본값보다는 나아야 의미가 있다");
+    }
 }
 
 /// 다 따라잡은 뒤 **되돌린다.**
