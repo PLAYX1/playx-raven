@@ -36,6 +36,7 @@ mod stock;
 mod booking;
 mod trade;
 mod walletx;
+mod wiring;
 mod knowledge;
 mod nostrpub;
 mod paths;
