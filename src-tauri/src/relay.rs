@@ -45,7 +45,27 @@ use std::sync::Mutex;
 ///
 ///   30078 — 가게가 「지금 여기서 주문받습니다」를 올리는 글
 ///   30402 — 파는 물건(NIP-99). 장터의 물건 탭이 읽는다.
-const KINDS: [i64; 2] = [30078, 30402];
+///      40 — 방 만들기 (NIP-28)
+///      42 — 방에 쓴 글 (NIP-28)
+///       1 — 사람 글
+///
+/// ## 🔴 왜 대화가 여기 들어왔나 — 그리고 왜 아무 글이나 안 받나
+///
+/// 대표님: "전세계 사람들이 원하는 방에서 대화도 가능해야지.
+/// 이건 레이븐코인을 기반으로 하는 내용들만 저장해 두면 되지 않을까?"
+///
+/// 그 한 문장이 이 파일의 가장 어려운 문제를 풀었다. 가게 계산대 컴퓨터에
+/// **세상의 모든 글을 저장할 수는 없다** — 디스크가 차면 그날 장사가 멈춘다.
+/// 그렇다고 대화를 안 받으면 세계와 안 이어진다.
+///
+/// 답은 「전부냐 아무것도 아니냐」가 아니었다. **레이븐 이야기만 남긴다.**
+/// 그 밖의 글은 지나가게 두되(중계는 한다) 디스크에 안 쓴다.
+/// 우리가 세상의 저장소일 이유는 없지만, 레이븐 이야기의 저장소일 이유는 있다.
+const KINDS: [i64; 5] = [30078, 30402, 40, 42, 1];
+
+/// 대화 글의 종류. 이 셋은 위의 가게 규칙(JSON·d 태그)을 적용하면 안 된다 —
+/// 사람이 쓴 글은 JSON 이 아니다.
+const TALK_KINDS: [i64; 3] = [40, 42, 1];
 
 /// 들고 있을 글의 최대 수. 넘치면 오래된 것부터 버린다.
 ///
@@ -207,6 +227,12 @@ fn matches(e: &Value, f: &Value) -> bool {
 /// 가게 정보인가」를 묻는다. 글의 옳고 그름을 판정하지 않는다 — 그건
 /// 우리가 할 일도 아니고, 하겠다고 나서면 그 열쇠를 우리가 갖게 된다.
 fn smells_bad(e: &Value) -> Option<String> {
+    // 대화 글은 다른 잣대로 본다. 아래 규칙은 전부 **가게 공지** 것이라
+    // 사람이 쓴 글에 대면 전부 걸린다.
+    let kind = e.get("kind").and_then(Value::as_i64).unwrap_or(-1);
+    if TALK_KINDS.contains(&kind) {
+        return talk_smells_bad(e);
+    }
     // ① 통째로 너무 크다. 가게 이름·전화·좌표·영업시간·메뉴를 다 합쳐도
     //    몇 KB 다. 그보다 크면 이건 정보가 아니라 짐이다.
     let size = serde_json::to_string(e).map(|s| s.len()).unwrap_or(0);
@@ -236,6 +262,86 @@ fn smells_bad(e: &Value) -> Option<String> {
         return Some("어느 가게 것인지 적혀 있지 않습니다".into());
     }
     None
+}
+
+/// 대화 글을 **저장할** 것인가.
+///
+/// ## 무엇을 레이븐 이야기로 보나 — 셋 중 하나면 된다
+///
+/// ① 우리가 아는 방에 쓴 글. 방 하나가 통째로 레이븐 이야기라면 그 안의
+///    글도 그렇다. 방 주인이 정하고 우리는 따른다.
+/// ② `#ravencoin` · `#rvn` · `#playx` 같은 표를 단 글.
+/// ③ 본문에 레이븐 주소(`R…`)나 자산 이름이 들어 있는 글.
+///
+/// 이 셋에 안 걸리면 **버리는 게 아니라 저장만 안 한다.** 그 글은 다른
+/// 릴레이에 있고, 우리 화면은 거기서 읽는다. 계산대 디스크만 안 쓴다.
+///
+/// ⚠️ 글의 옳고 그름은 여전히 판정하지 않는다. 「레이븐 이야기인가」만 본다.
+///    무엇이 좋은 글인지 정하는 열쇠를 우리가 가지면 안 된다.
+fn talk_smells_bad(e: &Value) -> Option<String> {
+    let size = serde_json::to_string(e).map(|s| s.len()).unwrap_or(0);
+    if size > MAX_EVENT_BYTES {
+        return Some(format!("글이 너무 큽니다({size}바이트)"));
+    }
+    // 방을 만드는 글(40)은 그 자체로 우리가 아는 방이 된다.
+    if e.get("kind").and_then(Value::as_i64) == Some(40) {
+        return None;
+    }
+    if about_ravencoin(e) {
+        return None;
+    }
+    Some("레이븐 이야기가 아니라서 저장하지 않습니다".into())
+}
+
+/// 레이븐 이야기인가. 위 셋을 순서대로 본다.
+fn about_ravencoin(e: &Value) -> bool {
+    const MARKS: [&str; 6] = ["ravencoin", "rvn", "playx", "레이븐", "raven", "asset"];
+    let tags = e.get("tags").and_then(Value::as_array).cloned().unwrap_or_default();
+
+    // ① 방에 쓴 글이면 그 방을 아는지 본다. `e` 태그의 첫 값이 방 id 다.
+    if e.get("kind").and_then(Value::as_i64) == Some(42) && known_room(&tags) {
+        return true;
+    }
+    // ② 표(`t` 태그).
+    for t in &tags {
+        if t.get(0).and_then(Value::as_str) == Some("t") {
+            let v = t.get(1).and_then(Value::as_str).unwrap_or("").to_lowercase();
+            if MARKS.iter().any(|m| v.contains(m)) {
+                return true;
+            }
+        }
+    }
+    // ③ 본문. 주소는 `R` 로 시작하고 34자다 — 그 모양이 있으면 레이븐 이야기다.
+    let c = e.get("content").and_then(Value::as_str).unwrap_or("");
+    let low = c.to_lowercase();
+    if MARKS.iter().any(|m| low.contains(m)) {
+        return true;
+    }
+    c.split(|ch: char| !ch.is_ascii_alphanumeric())
+        .any(|w| w.len() == 34 && w.starts_with('R'))
+}
+
+/// 우리가 저장해 둔 방인가. 방을 만드는 글(40)을 받아 뒀으면 그 방을 안다.
+fn known_room(tags: &[Value]) -> bool {
+    let Some(room) = tags
+        .iter()
+        .find(|t| t.get(0).and_then(Value::as_str) == Some("e"))
+        .and_then(|t| t.get(1).and_then(Value::as_str))
+    else {
+        return false;
+    };
+    STORE
+        .lock()
+        .ok()
+        .and_then(|g| {
+            g.as_ref().map(|v| {
+                v.iter().any(|x| {
+                    x.get("kind").and_then(Value::as_i64) == Some(40)
+                        && x.get("id").and_then(Value::as_str) == Some(room)
+                })
+            })
+        })
+        .unwrap_or(false)
 }
 
 /// 레이븐코인 자산 이름의 모양인가.
@@ -500,6 +606,44 @@ mod tests {
 
     /// 가게 글이 아닌 것은 안 받는다. 열어 두면 세상의 모든 글이 쏟아진다.
     #[test]
+
+    /// 🔴 대화를 받되 **세상의 모든 글을 저장하지는 않는다.**
+    ///    가게 계산대 컴퓨터의 디스크가 차면 그날 장사가 멈춘다.
+    ///    「레이븐 이야기만」이 그 선이다.
+    #[test]
+    fn 레이븐_이야기만_저장한다() {
+        let mine = json!({ "kind": 1, "content": "RVN 자산 발행 해봤는데 잘 되네요", "tags": [] });
+        assert!(super::talk_smells_bad(&mine).is_none(), "레이븐 이야기를 버렸다");
+
+        let tagged = json!({ "kind": 1, "content": "hello", "tags": [["t", "ravencoin"]] });
+        assert!(super::talk_smells_bad(&tagged).is_none(), "표가 붙은 글을 버렸다");
+
+        let addr = json!({
+            "kind": 1,
+            "content": "보내주세요 RLFnbkjmf1VCVq7D9TZvRp7fv6W97rm2cB 로",
+            "tags": []
+        });
+        assert!(super::talk_smells_bad(&addr).is_none(), "주소가 든 글을 버렸다");
+
+        let other = json!({ "kind": 1, "content": "오늘 점심 뭐 먹지", "tags": [] });
+        assert!(
+            super::talk_smells_bad(&other).is_some(),
+            "상관없는 글까지 저장하고 있다 — 계산대 디스크가 찬다"
+        );
+    }
+
+    /// 사람이 쓴 글에 가게 공지 잣대(JSON·d 태그)를 대면 **전부 걸린다.**
+    /// 두 갈래가 섞이면 대화가 통째로 막힌다.
+    #[test]
+    fn 대화에는_가게_잣대를_대지_않는다() {
+        let talk = json!({ "kind": 42, "content": "안녕하세요", "tags": [] });
+        let why = super::smells_bad(&talk);
+        assert!(
+            why.as_deref() != Some("가게 글의 모양이 아닙니다"),
+            "사람 글에 가게 공지 규칙을 대고 있다"
+        );
+    }
+
     fn only_shop_kinds_are_taken() {
         let mut e = json!({ "kind": 1 });
         let (ok, why) = store(e.take());
