@@ -1,4 +1,71 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke as rawInvoke } from "@tauri-apps/api/core";
+
+/**
+ * 오래 걸리는 일에 **「하는 중」을 자동으로 보여 준다.**
+ *
+ * ## 🔴 왜 감싸나
+ *
+ * 사장 신고: 「단추를 누르면 한참 뒤에 작동하는 게 많다. 뭐 하는 중이니
+ * 기다려 달라고 안내를 해 주는 게 좋겠다.」
+ *
+ * 세어 보니 눌렀을 때 아무 표시가 없는 자리가 **89곳**이었다. 한 곳씩
+ * 고치면 89번 고쳐야 하고, 다음에 새로 짜는 사람이 또 빠뜨린다.
+ *
+ * 그래서 **부르는 자리(187곳)를 안 건드리고 여기 한 곳에서** 잡는다.
+ * 0.4초 안에 끝나는 일에는 아무것도 안 띄운다 — 깜빡이면 그게 더 산만하다.
+ */
+let busyCount = 0;
+let busyTimer: number | undefined;
+
+function busyShow(on: boolean) {
+  let el = document.getElementById("busybar");
+  if (!el && on) {
+    el = document.createElement("div");
+    el.id = "busybar";
+    el.setAttribute(
+      "style",
+      "position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:9999;" +
+        "background:var(--fg,#222);color:var(--bg,#fff);padding:10px 18px;border-radius:999px;" +
+        "font-size:15px;box-shadow:0 6px 20px rgba(0,0,0,.25);pointer-events:none;" +
+        "display:flex;align-items:center;gap:9px",
+    );
+    el.innerHTML =
+      '<span style="width:13px;height:13px;border:2px solid currentColor;border-right-color:transparent;' +
+      'border-radius:999px;display:inline-block;animation:busyspin .7s linear infinite"></span>' +
+      "<span>하는 중… 잠시만요</span>";
+    document.body.appendChild(el);
+    if (!document.getElementById("busykeys")) {
+      const st = document.createElement("style");
+      st.id = "busykeys";
+      st.textContent =
+        "@keyframes busyspin{to{transform:rotate(360deg)}}" +
+        "@media (prefers-reduced-motion: reduce){#busybar span:first-child{animation:none}}";
+      document.head.appendChild(st);
+    }
+  }
+  if (el && !on) el.remove();
+}
+
+async function invoke<T = any>(cmd: string, args?: any): Promise<T> {
+  busyCount++;
+  if (busyTimer === undefined) {
+    // 눈에 띄기까지 0.4초. 그보다 빨리 끝나는 일은 조용히 지나간다.
+    busyTimer = window.setTimeout(() => busyShow(true), 400);
+  }
+  try {
+    return (await rawInvoke<T>(cmd, args)) as T;
+  } finally {
+    busyCount--;
+    if (busyCount <= 0) {
+      busyCount = 0;
+      if (busyTimer !== undefined) {
+        clearTimeout(busyTimer);
+        busyTimer = undefined;
+      }
+      busyShow(false);
+    }
+  }
+}
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
 import { getVersion } from "@tauri-apps/api/app";
 import { check as checkUpdate } from "@tauri-apps/plugin-updater";
@@ -2194,6 +2261,39 @@ function toggleDot(which: Part) {
 }
 
 /** 지금 고른 것의 상태와 설정. */
+/**
+ * 꺼져 있는 것에 붙이는 「지금 켜기」.
+ *
+ * 🔴 여태 넷(노드·채굴·파일창고·릴레이) 다 「꺼져 있습니다」라고만 하고
+ *    켜는 단추가 없었다. 사장은 그 화면에서 할 일이 없어 나간다.
+ *    무엇이 꺼졌는지 아는 것보다 켜는 것이 목적이다.
+ */
+function turnOnBtn(id: string): string {
+  return `<button id="${id}" style="margin-top:12px">${t("지금 켜기")}</button>
+          <div class="meta" id="${id}-say" style="margin-top:10px"></div>`;
+}
+
+/** 위 단추를 눌리게 묶는다. HTML 을 넣은 뒤에 부른다. */
+function bindTurnOn(id: string, cmd: string) {
+  const b = document.getElementById(id);
+  if (!b) return;
+  b.addEventListener("click", async () => {
+    (b as HTMLButtonElement).disabled = true;
+    const say = document.getElementById(`${id}-say`);
+    if (say) say.textContent = t("켜는 중…");
+    try {
+      const r = await invoke<any>(cmd);
+      // 못 켰으면 이유를 그대로 보여 준다. 조용히 실패하면 또 누른다.
+      const why = (r?.skipped || []).map((x: any) => `${x.what}: ${x.why}`).join(" · ");
+      if (say) say.textContent = why || t("켰습니다. 잠시 뒤 다시 봐 주세요.");
+    } catch (e) {
+      if (say) say.textContent = String((e as Error)?.message || e);
+    }
+    setTimeout(() => void paintPart(), 3000);
+  });
+}
+
+
 async function paintPart(): Promise<void> {
   const box = document.getElementById("pt-body");
   if (!box) return;
@@ -2209,7 +2309,25 @@ async function paintPart(): Promise<void> {
       let s: any = null;
       try {
         s = await invoke<any>("node_status");
-      } catch {
+      } catch (e) {
+        // 🔴 노드가 **시작하는 중**이면 코어는 「장부 읽는 중」이라고 답한다.
+        //    44GB 를 확인하는 데 몇 분 걸린다. 그걸 오류로 보고 「꺼져
+        //    있습니다」라고 쓰면, 사장은 멀쩡히 켜지는 중인 노드를 붙잡고
+        //    「지금 켜기」를 다시 누른다 — 그러면 두 번째 노드가 뜨려다
+        //    잠금에 걸려 「레이븐 코어가 켜져 있습니다」가 나온다.
+        //    코어를 껐는데 그 말이 나오는 이유가 이것이다. 실측으로 만났다.
+        const msg = String((e as Error)?.message || e);
+        const warming = /Loading block index|Verifying|Rewinding|Activating|Loading wallet|warming up|-28/i.test(msg);
+        if (warming) {
+          box.innerHTML =
+            `<div class="card">
+               <h3>${t("노드가 시작하는 중입니다")}</h3>
+               <p class="meta">${t("장부를 확인하고 있습니다. 몇 분 걸립니다 — 그동안 아무것도 안 하셔도 됩니다.")}</p>
+               <p class="meta" style="opacity:.7">${escapeHtml(msg.slice(0, 120))}</p>
+             </div>`;
+          setTimeout(() => void paintPart(), 5000);
+          return;
+        }
         const sv = await invoke<any>("services_status").catch(() => null);
         const n = sv?.node || {};
         const looked: string[] = Array.isArray(n.looked) ? n.looked : [];
@@ -2294,7 +2412,8 @@ async function paintPart(): Promise<void> {
       if (title) title.textContent = "파일창고 (IPFS)";
       const s = await invoke<any>("ipfs_status");
       box.innerHTML = !s?.running
-        ? card([[t("지금"), t("꺼져 있습니다")]], t("사진과 메뉴판이 여기 들어갑니다. 꺼져 있으면 손님이 사진을 못 봅니다."))
+        ? card([[t("지금"), t("꺼져 있습니다")]], t("사진과 메뉴판이 여기 들어갑니다. 꺼져 있으면 손님이 사진을 못 봅니다.")) +
+            turnOnBtn("ip-go")
         : card(
             [
               [t("연결"), s.peers != null ? `${s.peers}${t("곳")}` : t("확인 중")],
@@ -2303,6 +2422,7 @@ async function paintPart(): Promise<void> {
             ],
             t("내 컴퓨터에만 있는 창고가 아니라, 손님 폰과 다른 노드가 같이 나눠 갖는 곳입니다.")
           ) + goto("settings", t("파일창고 설정 열기"));
+      bindTurnOn("ip-go", "services_start");
     } else if (partOpen === "relay") {
       if (title) title.textContent = "릴레이";
       const r = await invoke<any>("relay_status").catch(() => null);

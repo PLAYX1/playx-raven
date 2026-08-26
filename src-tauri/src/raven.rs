@@ -182,6 +182,19 @@ pub async fn call_rpc(method: &str, params: Value) -> Result<Value, String> {
                 .get("message")
                 .and_then(Value::as_str)
                 .unwrap_or("unknown error");
+            // 🔴 코어가 「THIS COMMAND IS NOT YET ACTIVE!」 라고 답하면 그건
+            //    **자산 색인이 꺼져 있다**는 뜻이다. 그런데 그 답에는 명령
+            //    사용법이 통째로 딸려 와서, 화면에 영어 열 줄이 쏟아졌다.
+            //    사장은 그게 오류인지 설명인지도 모른다. 실측으로 봤다.
+            //
+            //    할 수 있는 일이 적힌 한 문장으로 바꾼다.
+            if msg.contains("NOT YET ACTIVE") {
+                return Err(
+                    "자산 색인이 꺼져 있습니다. 「이 컴퓨터 → RVN 노드」에서 색인을 켜면 \
+                     회원권·표·굿즈가 보입니다. 한 번 켜면 장부를 다시 훑느라 몇 시간 걸립니다."
+                        .into(),
+                );
+            }
             return Err(format!("{method}: {msg}"));
         }
     }

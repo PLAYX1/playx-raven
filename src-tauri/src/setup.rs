@@ -338,20 +338,30 @@ pub fn disk_now() -> Value {
         // 🔴 `du` 는 윈도우에 없다. 거기서는 늘 0 이 나와서 화면이 「체인이
         //    0GB」 라고 말했다 — 34GB 가 들어 있는 컴퓨터에서도.
         #[cfg(target_os = "windows")]
-        {
-            let script = format!(
-                "(Get-ChildItem -LiteralPath '{}' -Recurse -File -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum",
-                p.replace('\'', "''")
-            );
-            return crate::quiet::cmd("powershell")
-                .args(["-NoProfile", "-Command", &script])
-                .output()
-                .ok()
-                .and_then(|o| String::from_utf8_lossy(&o.stdout).trim().parse::<f64>().ok())
-                .map(|b| (b / 1_073_741_824.0) as u64)
-                .unwrap_or(0);
-        }
-        #[allow(unreachable_code)]
+            {
+                // 🔴 처음엔 PowerShell 로 **재귀로** 훑게 했다. 44GB 짜리
+                //    폴더에서 그게 몇 십 초가 걸리고, 이 명령은 async 가
+                //    아니라 **화면 스레드에서 돈다** — 창이 통째로
+                //    「응답하지 않습니다」가 된다. 실측으로 그랬다.
+                //
+                //    체인은 `blocks/` 에 blk*.dat 이 평평하게 깔린다.
+                //    한 겹만 세면 충분하고, 그건 눈 깜짝할 사이다.
+                let one = |d: &std::path::Path| -> u64 {
+                    std::fs::read_dir(d)
+                        .map(|rd| {
+                            rd.flatten()
+                                .filter_map(|e| e.metadata().ok())
+                                .filter(|m| m.is_file())
+                                .map(|m| m.len())
+                                .sum::<u64>()
+                        })
+                        .unwrap_or(0)
+                };
+                let base = std::path::Path::new(p);
+                return (one(base) + one(&base.join("blocks")) + one(&base.join("chainstate")))
+                    / 1_073_741_824;
+            }
+            #[allow(unreachable_code)]
         crate::quiet::cmd("du")
             .args(["-sg", p])
             .output()

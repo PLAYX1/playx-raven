@@ -327,8 +327,21 @@ pub async fn services_start() -> Result<Value, String> {
     } else if let Some(path) = which("ipfs") {
         // `--migrate` because a kubo upgrade otherwise stops at a prompt nobody
         // is watching, and the shop just sees IPFS never coming up.
-        match Command::new(&path)
-            .args(["daemon", "--migrate=true"])
+        // 🔴 창 숨김을 여기만 빠뜨렸다. 노드에는 걸어 두고 파일창고에는
+        //    안 걸어서, 윈도우에서 **검은 창이 하나 떠 있었다.** 사장은
+        //    「이게 뭐지」 하고 닫는다 — 닫으면 파일창고가 같이 죽는다.
+        //
+        //    그리고 잡에서 빠져나온다(BREAKAWAY). 안 그러면 앱을 닫을 때
+        //    파일창고도 같이 죽어서, 손님이 밤에 사진을 못 본다.
+        let mut ipfs_cmd = crate::quiet::cmd(&path);
+        ipfs_cmd.args(["daemon", "--migrate=true"]);
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            // CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP | CREATE_BREAKAWAY_FROM_JOB
+            ipfs_cmd.creation_flags(0x0800_0000 | 0x0000_0200 | 0x0100_0000);
+        }
+        match ipfs_cmd
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()
