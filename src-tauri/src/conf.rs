@@ -323,14 +323,23 @@ mod assetindex_tests {
 /// 그래서 이건 **한때의 설정**이고, 화면이 그렇게 말한다.
 ///
 /// ⚠️ 절반까지만 쓴다. 다 주면 그 컴퓨터로 다른 일을 못 한다.
+/// ⚠️ **`async` 여야 한다.** 윈도우에서 메모리를 읽으려면 PowerShell 을
+/// 부르는데, `async` 가 아닌 명령은 **화면 스레드에서** 돈다. 그러면 그
+/// 몇백 밀리초 동안 창이 멎고, 실패하면 화면이 통째로 조용해진다.
+/// 이 저장소에서 오늘 같은 함정을 이미 한 번 밟았다(`disk_now`).
 #[tauri::command]
-pub fn dbcache_suggest() -> Value {
-    let gb = crate::setup::memory_gb().unwrap_or(8);
+pub async fn dbcache_suggest() -> Value {
+    // 🔴 못 읽어도 **답을 준다.** 예전에는 못 읽으면 화면이 이 칸을 통째로
+    //    감췄고, 사장은 「빠르게 따라잡기가 안 보인다」만 겪었다.
+    //    모르면 모른다고 적고, 안전한 값을 권한다.
+    let measured = crate::setup::memory_gb();
+    let gb = measured.unwrap_or(8);
     // 절반, 최소 1GB, 최대 8GB. 8GB 넘게 줘도 더 빨라지지 않는다.
     let want = ((gb / 2).max(1).min(8) * 1024) as i64;
     let now = conf_read()["values"]["dbcache"].as_i64().unwrap_or(450);
     json!({
         "memory_gb": gb,
+        "measured": measured.is_some(),
         "now": now,
         "suggest": want,
         "worth_it": want > now + 512,
@@ -344,8 +353,8 @@ pub fn dbcache_suggest() -> Value {
 
 /// 위 값을 넣는다. **노드를 다시 켜야 적용된다.**
 #[tauri::command]
-pub fn dbcache_boost() -> Result<Value, String> {
-    let s = dbcache_suggest();
+pub async fn dbcache_boost() -> Result<Value, String> {
+    let s = dbcache_suggest().await;
     let want = s["suggest"].as_i64().unwrap_or(2048);
     let cur = conf_read();
     let mut vals = cur["values"].as_object().cloned().unwrap_or_default();

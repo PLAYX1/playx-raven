@@ -2494,16 +2494,40 @@ async function paintPart(): Promise<void> {
  *    계산대 메모리를 노드가 계속 물고 있으면 주문 화면이 느려진다.
  */
 async function speedCard(): Promise<string> {
+  let s: any = null;
   try {
-    const s = await invoke<any>("dbcache_suggest");
-    if (!s?.worth_it) return "";
+    s = await invoke<any>("dbcache_suggest");
+  } catch (e) {
+    // 🔴 **조용히 감추지 않는다.** 예전에는 여기서 빈 글자를 돌려줘서
+    //    칸이 통째로 사라졌고, 사장은 「빠르게 따라잡기가 안 보인다」만
+    //    겪었다. 왜 안 보이는지 화면 어디에도 없었다.
+    return `<div class="card" style="margin-top:12px">
+        <h3>${t("빠르게 따라잡기")}</h3>
+        <p class="meta danger">${escapeHtml(String(e))}</p>
+        <p class="meta">${t("「노드 설정 열기」에서 「메모리 사용」을 2000 이상으로 직접 정하셔도 됩니다.")}</p>
+      </div>`;
+  }
+  try {
+    // 이미 넉넉하면 **그렇다고 말한다.** 칸이 없으면 사장은 눌러야 할
+    // 것이 있는지 없는지 알 수 없다.
+    if (!s?.worth_it) {
+      return `<div class="card" style="margin-top:12px">
+          <h3>${t("빠르게 따라잡기")}</h3>
+          <div class="kv"><b>${t("지금 메모리")}</b><span>${Number(s?.now ?? 0).toLocaleString()} MB</span></div>
+          <p class="meta"><span class="ok">${t("이미 넉넉합니다. 더 올려도 크게 안 빨라집니다.")}</span></p>
+        </div>`;
+    }
+    // 🔴 칸 제목과 단추 이름을 **같게** 둔다. 달라서 「그 단추가 이건가」를
+    //    묻게 됐다. 같은 것을 두 이름으로 부르면 안 된다 — 오늘만 두 번째다.
     return `<div class="card" style="margin-top:12px;border-color:var(--brand)">
         <h3>${t("빠르게 따라잡기")}</h3>
+        <p class="meta">${t("노드에 메모리를 더 주면 장부를 훨씬 빨리 훑습니다.")}</p>
         <div class="kv"><b>${t("지금 메모리")}</b><span>${Number(s.now).toLocaleString()} MB</span></div>
         <div class="kv"><b>${t("권하는 값")}</b><span><b>${Number(s.suggest).toLocaleString()} MB</b></span></div>
         <p class="meta">${escapeHtml(String(s.why || ""))}</p>
+        ${s.measured ? "" : `<p class="meta warn">${t("이 컴퓨터의 메모리를 못 읽어서 8GB 로 셈했습니다. 실제와 다르면 「노드 설정 열기」에서 직접 정하세요.")}</p>`}
         <div class="row" style="margin-top:10px">
-          <button id="nd-fast">${t("메모리 넉넉히 주기")}</button>
+          <button id="nd-fast">${t("빠르게 따라잡기")}</button>
           <span class="meta" id="nd-fastsay"></span>
         </div>
       </div>`;
