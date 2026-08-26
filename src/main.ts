@@ -1418,7 +1418,7 @@ async function checkForUpdate(quiet = true) {
     //    쓰고 계셨다. 판 번호 옆에 붙여 두고, 누르면 그 칸으로 데려간다.
     if (nag) {
       nag.hidden = false;
-      nag.textContent = `새 판 ${up.version} 받기`;
+      nag.textContent = t("새 버전 받기");
       nag.onclick = () => {
         showPage("settings");
         setTimeout(() => $("up-box")?.scrollIntoView({ block: "center" }), 60);
