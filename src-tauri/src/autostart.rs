@@ -11,6 +11,7 @@
 //!
 //! 의존성을 새로 들이지 않는다. plist 는 글자 파일이고 우리가 쓰면 된다.
 
+use serde_json::{json, Value};
 use std::path::PathBuf;
 
 /// 이 프로그램을 가리키는 이름. 지우고 켜는 것을 이 이름으로 찾는다.
@@ -228,6 +229,57 @@ pub fn autostart_set(on: bool) -> Result<bool, String> {
         let _ = on;
         Err("이 컴퓨터에서는 아직 자동 시작을 켤 수 없습니다.".into())
     }
+}
+
+/// 자동 시작 목록에 **우리 것이 몇 개** 올라가 있나.
+///
+/// ## 🔴 왜 이게 필요한가 — 두 개가 올라가 있었다
+///
+/// 대표님 맥의 로그인 항목에 `PLAY X Raven` 과 `ravend` 가 **따로** 떠 있다.
+/// 둘 다 우리가 만든 것이다 — 앱은 `autostart.rs` 가, 노드는
+/// `health.rs` 가 넣었다. 같은 일을 하는 코드가 두 벌이라 생긴 일이다.
+///
+/// 두 개면 **헷갈리는 것으로 끝나지 않는다.** 노드가 우리와 무관하게
+/// 따로 뜨면, 앱을 끝낼 때 우리가 그걸 못 끈다(`services_stop` 은 우리가
+/// 띄운 것만 안다). 「끝냈는데 ravend 가 남는다」는 그 이야기다.
+///
+/// 앱 하나만 올라가면 된다 — 앱이 켜지면서 노드를 켠다.
+#[tauri::command]
+pub fn autostart_audit() -> Value {
+    let node = crate::paths::home().join("Library/LaunchAgents/se.erci.playx.raven.node.plist");
+    let app_on = autostart_get();
+    let node_on = node.is_file();
+    json!({
+        "app": app_on,
+        "node": node_on,
+        // 앱이 올라가 있으면 노드 항목은 없는 편이 낫다.
+        "extra": node_on,
+        "why": if node_on && app_on {
+            "자동 시작에 두 개가 올라가 있습니다 — 프로그램과 노드. 프로그램만 있으면 됩니다(켜지면서 노드를 같이 켭니다). 노드가 따로 뜨면 프로그램을 끝내도 노드가 남습니다."
+        } else if node_on {
+            "노드만 자동 시작에 올라가 있습니다. 프로그램을 켜 두는 편이 낫습니다."
+        } else {
+            ""
+        },
+    })
+}
+
+/// 노드 쪽 자동 시작 항목만 걷어낸다. **앱 것은 안 건드린다.**
+///
+/// ⚠️ 지금 돌고 있는 노드는 안 끈다. 장부를 훑는 중일 수 있고, 여기서
+///    할 일은 「다음에 자동으로 뜨지 않게」까지다.
+#[tauri::command]
+pub fn autostart_tidy() -> Result<Value, String> {
+    let node = crate::paths::home().join("Library/LaunchAgents/se.erci.playx.raven.node.plist");
+    if !node.is_file() {
+        return Ok(json!({ "removed": false }));
+    }
+    // 먼저 launchd 에서 뗀다. 파일만 지우면 다시 켤 때까지 계속 뜬다.
+    let _ = crate::quiet::cmd("launchctl")
+        .args(["unload", "-w", &node.to_string_lossy()])
+        .output();
+    std::fs::remove_file(&node).map_err(|e| format!("걷어내지 못했습니다: {e}"))?;
+    Ok(json!({ "removed": true, "note": "프로그램 하나만 남았습니다. 프로그램이 켜지면 노드도 같이 켭니다." }))
 }
 
 #[cfg(test)]

@@ -273,7 +273,12 @@ pub fn recovery_status() -> Value {
 
 /// 글을 쓴다. 방을 지정하면 그 방에, 아니면 모두에게.
 #[tauri::command]
-pub async fn talk_post(text: String, room: Option<String>) -> Result<Value, String> {
+pub async fn talk_post(
+    text: String,
+    room: Option<String>,
+    reply_to: Option<String>,
+    reply_pub: Option<String>,
+) -> Result<Value, String> {
     let text = text.trim().to_string();
     if text.is_empty() {
         return Err("쓸 내용이 없습니다.".into());
@@ -284,12 +289,24 @@ pub async fn talk_post(text: String, room: Option<String>) -> Result<Value, Stri
         return Err("글이 너무 깁니다. 8,000자 아래로 줄여 주세요.".into());
     }
     let sk = key()?;
-    let (kind, tags) = match &room {
-        Some(id) => (
-            KIND_ROOM_MSG,
-            json!([["e", id, "", "root"], ["t", TAG]]),
-        ),
-        None => (KIND_NOTE, json!([["t", TAG]])),
+    // 🔴 답글은 **가리키는 글**이 있어야 대화가 된다(NIP-10).
+    //    `e` 는 어느 글에 다는가, `p` 는 누구에게 알리는가다. `p` 가 없으면
+    //    상대는 자기 글에 답이 달린 줄 모른다 — 세상 모든 Nostr 앱이
+    //    그 태그로 알림을 만든다.
+    let (kind, tags) = match (&room, &reply_to) {
+        (_, Some(id)) => {
+            let mut t = vec![json!(["e", id, "", "reply"]), json!(["t", TAG])];
+            if let Some(pk) = &reply_pub {
+                t.push(json!(["p", pk]));
+            }
+            // 방 안의 답글은 방 글이고, 밖의 답글은 그냥 글이다.
+            (
+                if room.is_some() { KIND_ROOM_MSG } else { KIND_NOTE },
+                Value::Array(t),
+            )
+        }
+        (Some(id), None) => (KIND_ROOM_MSG, json!([["e", id, "", "root"], ["t", TAG]])),
+        (None, None) => (KIND_NOTE, json!([["t", TAG]])),
     };
     let ev = crate::shopkey::sign_with(&sk, kind, tags, &text, now())?;
     let r = crate::nostrpub::nostr_publish(ev.clone()).await?;
@@ -351,6 +368,88 @@ pub async fn talk_read(room: Option<String>, limit: Option<i64>) -> Result<Value
     // 최신이 위로.
     list.sort_by_key(|e| -e.get("created_at").and_then(Value::as_i64).unwrap_or(0));
     Ok(json!(list))
+}
+
+/// 이 글들에 달린 답글을 한꺼번에 가져온다.
+///
+/// 🔴 글마다 따로 물으면 스무 번을 왕복한다. 한 번에 여덟 개까지 묶어
+///    묻는다 — 릴레이가 받는 한 요청의 값 개수 한도를 넘지 않는 선이다.
+#[tauri::command]
+pub async fn talk_replies(ids: Vec<String>) -> Result<Value, String> {
+    let ids: Vec<String> = ids.into_iter().filter(|s| !s.is_empty()).take(8).collect();
+    if ids.is_empty() {
+        return Ok(json!({}));
+    }
+    let got = crate::nostrpub::nostr_query_tag(
+        vec![KIND_NOTE, KIND_ROOM_MSG],
+        "e".into(),
+        ids.clone(),
+        100,
+    )
+    .await?;
+
+    // 어느 글에 달린 것인지로 묶는다.
+    let mut out = serde_json::Map::new();
+    for e in got {
+        let Some(tags) = e.get("tags").and_then(Value::as_array) else {
+            continue;
+        };
+        let Some(parent) = tags
+            .iter()
+            .find(|t| t.get(0).and_then(Value::as_str) == Some("e"))
+            .and_then(|t| t.get(1).and_then(Value::as_str))
+        else {
+            continue;
+        };
+        if !ids.iter().any(|i| i == parent) {
+            continue;
+        }
+        out.entry(parent.to_string())
+            .or_insert_with(|| json!([]))
+            .as_array_mut()
+            .map(|a| a.push(e.clone()));
+    }
+    // 오래된 것이 위로. 답글은 시간 순서가 곧 대화다.
+    for (_, v) in out.iter_mut() {
+        if let Some(a) = v.as_array_mut() {
+            a.sort_by_key(|e| e.get("created_at").and_then(Value::as_i64).unwrap_or(0));
+        }
+    }
+    Ok(Value::Object(out))
+}
+
+/// 읽는 사람 말로 옮긴다.
+///
+/// ## 🔴 왜 화면이 직접 안 부르나 — CORS
+///
+/// 앱의 출처는 `tauri://localhost` 다. 거기서 `rvn.ex.erci.se` 로 곧장
+/// 부르면 브라우저가 **CORS 로 막고**, 화면에는 `TypeError: Load failed`
+/// 라는 뜻 모를 글자만 뜬다. 실제로 그렇게 났다.
+///
+/// 러스트에는 그 규칙이 없다. `nostrpub.rs` 가 릴레이에 올릴 때 같은
+/// 이유로 같은 길을 쓴다 — 화면은 부탁하고 나가는 일은 노드가 한다.
+#[tauri::command]
+pub async fn talk_translate(text: String, to: String) -> Result<Value, String> {
+    let body = json!({ "text": text, "to": to });
+    let r = reqwest::Client::new()
+        .post("https://rvn.ex.erci.se/api/translate")
+        .json(&body)
+        .timeout(std::time::Duration::from_secs(20))
+        .send()
+        .await
+        .map_err(|e| format!("옮기지 못했습니다: {e}"))?;
+    let v: Value = r
+        .json()
+        .await
+        .map_err(|e| format!("답을 읽지 못했습니다: {e}"))?;
+    if let Some(t) = v.get("translation").and_then(Value::as_str) {
+        return Ok(json!({ "translation": t }));
+    }
+    Err(v
+        .get("error")
+        .and_then(Value::as_str)
+        .unwrap_or("옮기지 못했습니다")
+        .to_string())
 }
 
 /// 방 목록. 우리가 만든 것과 남이 만든 것을 같이 본다.
