@@ -1645,6 +1645,50 @@ async function paintAssetArt(name: string, img: HTMLImageElement): Promise<void>
  * ⚠️ 파일은 **우리 서버를 거쳐** 온다. 이 페이지는 `connect-src 'self'` 이고,
  * 같은 출처에 12단어가 있어서 바깥으로 나가는 문을 못 연다.
  */
+/**
+ * 영상 주소 하나를 **화면에 맞는 재생 틀**로.
+ *
+ * 🔴 앱(`src/main.ts`)에 같은 함수가 있다. 두 벌이 되는 것을 알고도 이렇게
+ *    둔다 — 이 파일은 **의존성 0** 이 조건이고(손님 폰이 가게 와이파이에서
+ *    연다), 공용 꾸러미를 하나 들이는 순간 그 조건이 깨진다.
+ *    대신 **한쪽만 고치는 일이 없게** 양쪽 주석에 서로를 적어 둔다.
+ *
+ * ⚠️ 폰에서 높이를 픽셀로 박으면 위아래가 잘리거나 검은 띠가 생긴다.
+ *    `aspect-ratio` 로 가로에 맞춰 세로가 따라오게 둔다.
+ */
+function videoEmbed(raw: string): string {
+  const url = (raw || "").trim();
+  if (!url) return "";
+  let src = "";
+  try {
+    const u = new URL(url);
+    const host = u.hostname.replace(/^www\./, "");
+    if (host === "youtu.be") src = `https://www.youtube.com/embed/${u.pathname.slice(1)}`;
+    else if (host.endsWith("youtube.com")) {
+      const v = u.searchParams.get("v");
+      const short = u.pathname.match(/\/(shorts|embed|live)\/([\w-]+)/);
+      if (v) src = `https://www.youtube.com/embed/${v}`;
+      else if (short) src = `https://www.youtube.com/embed/${short[2]}`;
+    } else if (host.endsWith("vimeo.com")) {
+      const id = u.pathname.split("/").filter(Boolean)[0];
+      if (/^\d+$/.test(id || "")) src = `https://player.vimeo.com/video/${id}`;
+    } else if (/\.(mp4|webm|ogg|mov|m4v)$/i.test(u.pathname)) {
+      return `<video src="${escapeHtml(url)}" controls playsinline preload="metadata"
+                style="width:100%;aspect-ratio:16/9;border-radius:14px;background:#000"></video>`;
+    }
+  } catch {}
+  if (!src) {
+    // 못 알아보는 곳이면 억지로 안 끼운다. 깨진 네모보다 단추가 낫다.
+    return `<a class="cbtn" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">영상 열기</a>
+            <p class="sub" style="margin-top:8px">이곳은 화면 안에서 못 틀어서 새 창으로 엽니다.</p>`;
+  }
+  return `<div style="position:relative;width:100%;aspect-ratio:16/9;border-radius:14px;overflow:hidden;background:#000">
+            <iframe src="${src}" title="영상" allowfullscreen referrerpolicy="no-referrer" loading="lazy"
+              allow="accelerometer; clipboard-write; encrypted-media; picture-in-picture"
+              style="position:absolute;inset:0;width:100%;height:100%;border:0"></iframe>
+          </div>`;
+}
+
 async function openAsset(name: string): Promise<void> {
   const box = $("sheet");
   if (!box) return;
@@ -1679,6 +1723,23 @@ async function openAsset(name: string): Promise<void> {
                      이 안의 내용은 <b>만든 사람이 넣은 것</b>입니다.
                      여기서는 지갑에 손댈 수 없게 막아 두었습니다.</p>`
                 : `<img src="${url}" alt="" style="width:100%;border-radius:14px" />`;
+
+      // 🔴 자산에 붙은 것이 **쪽지**면 그 안에 영상 주소가 있을 수 있다.
+      //    붙여 놓고 안 보여 주면 붙인 뜻이 없다.
+      if (kind === "metadata" || kind === "json" || !k?.kind) {
+        try {
+          const doc = await fetch(url).then((x) => x.json());
+          const v = videoEmbed(String(doc?.video_url || doc?.videoUrl || ""));
+          const pic = String(doc?.image || "");
+          if (v || pic) {
+            body =
+              (pic ? `<img src="/ipfs/${encodeURIComponent(pic)}" alt="" style="width:100%;border-radius:14px" />` : "") +
+              v;
+          }
+        } catch {
+          // 쪽지가 아니었다. 위에서 정한 것을 그대로 쓴다.
+        }
+      }
     }
   } catch {
     body = `<p class="sub">파일을 불러오지 못했습니다.</p>`;

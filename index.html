@@ -68,6 +68,14 @@
         margin-right: 6px; background: var(--muted); }
       .dot.on { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 22%, transparent); }
       .dot.off { background: var(--muted); opacity: .45; }
+      /* 영상 틀. 🔴 높이를 픽셀로 박으면 폰에서 위아래가 잘리거나 검은 띠가
+         생긴다. 가로에 맞춰 세로가 따라오게 둔다. */
+      .vidwrap { position: relative; width: 100%; aspect-ratio: 16 / 9;
+        margin-top: 10px; border-radius: 12px; overflow: hidden;
+        background: #000; border: 1px solid var(--line); }
+      .vidwrap iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+      video.vid { width: 100%; aspect-ratio: 16 / 9; margin-top: 10px;
+        border-radius: 12px; background: #000; border: 1px solid var(--line); }
       /* 끌고 오는 순간 덮는 안내. 🔴 **떨어뜨린 자리가 곧 뜻**이라,
          이 화면에서 무슨 일이 일어나는지 그 자리에서 말해야 한다.
          채팅에 사진을 떨어뜨린 사람은 글에 붙이려는 것이지 500 RVN 을

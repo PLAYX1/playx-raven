@@ -494,6 +494,8 @@ async function renderPanel() {
         (meta.description ? `<p class="meta" style="line-height:1.7">${meta.description}</p>` : "") +
         (meta.issuer ? `<div class="kv"><b>발행자</b><span>${meta.issuer}</span></div>` : "") +
         (meta.website ? `<div class="kv"><b>웹사이트</b><span>${meta.website}</span></div>` : "") +
+        // 🔴 붙여 놓고 안 보여 주면 붙인 뜻이 없다. 이 저장소의 그 병이다.
+        videoEmbed(String(meta.video_url || meta.videoUrl || "")) +
         `<p class="meta">RIP-0014 메타데이터</p>`;
     } else {
       $("p-body").innerHTML = `<p class="muted">메타데이터를 읽을 수 없습니다.</p>`;
@@ -3042,6 +3044,62 @@ async function makeAddress() {
   } catch (e) {
     say("주소를 만들지 못했습니다", String(e));
   }
+}
+
+/**
+ * 영상 주소 하나를 **화면에 맞는 재생 틀**로 바꾼다.
+ *
+ * ## 🔴 왜 「비메오 전용」이면 안 되나
+ *
+ * 대표님: "사람들은 비메오가 뭔지도 몰라. 그냥 영상 링크라고 하는 게 좋지.
+ * 아무 영상 링크 올리면 되니 말이야."
+ *
+ * 맞다. 사장은 이미 어딘가에 올려 뒀고, 그 주소를 붙여넣을 뿐이다. 그래서
+ * 우리가 **주소 모양을 보고 알아서** 맞춘다. 못 알아보는 곳이면 억지로
+ * 끼우지 않고 **「영상 열기」 단추**를 준다 — 깨진 네모를 보여 주는 것보다
+ * 낫다. 임베드를 막아 둔 곳(인스타·틱톡 등)이 실제로 있다.
+ *
+ * ## 화면에 맞게
+ *
+ * `aspect-ratio: 16/9` 에 `width: 100%`. 이러면 창을 줄이든 폰에서 보든
+ * 가로에 맞춰 세로가 따라온다. 높이를 픽셀로 박으면 폰에서 위아래가
+ * 잘리거나 검은 띠가 생긴다.
+ */
+function videoEmbed(raw: string): string {
+  const url = (raw || "").trim();
+  if (!url) return "";
+  let src = "";
+  try {
+    const u = new URL(url);
+    const host = u.hostname.replace(/^www\./, "");
+    if (host === "youtu.be") {
+      src = `https://www.youtube.com/embed/${u.pathname.slice(1)}`;
+    } else if (host.endsWith("youtube.com")) {
+      const v = u.searchParams.get("v");
+      const short = u.pathname.match(/\/(shorts|embed|live)\/([\w-]+)/);
+      if (v) src = `https://www.youtube.com/embed/${v}`;
+      else if (short) src = `https://www.youtube.com/embed/${short[2]}`;
+    } else if (host.endsWith("vimeo.com")) {
+      const id = u.pathname.split("/").filter(Boolean)[0];
+      if (/^\d+$/.test(id || "")) src = `https://player.vimeo.com/video/${id}`;
+    } else if (/\.(mp4|webm|ogg|mov|m4v)$/i.test(u.pathname)) {
+      // 파일 주소는 그대로 재생한다. 임베드가 필요 없다.
+      return `<video class="vid" src="${escapeHtml(url)}" controls playsinline preload="metadata"></video>`;
+    }
+  } catch {
+    // 주소가 아니면 아래 폴백으로 간다.
+  }
+  if (!src) {
+    return `<a class="btn ghost" href="${escapeHtml(url)}" target="_blank" rel="noreferrer noopener"
+              style="display:inline-flex;margin-top:10px">${t("영상 열기")} →</a>
+            <div class="meta">${t("이곳은 화면 안에서 못 틀어서 새 창으로 엽니다.")}</div>`;
+  }
+  // 🔴 `sandbox` 를 안 건다. 유튜브·비메오 플레이어는 스크립트로 도는데
+  //    막으면 검은 네모만 나온다. 대신 `referrerpolicy` 로 우리 주소를
+  //    안 넘기고, 이 틀 안에서 지갑에 닿을 길은 없다.
+  return `<div class="vidwrap"><iframe src="${src}" title="영상" allowfullscreen
+            referrerpolicy="no-referrer" loading="lazy"
+            allow="accelerometer; clipboard-write; encrypted-media; picture-in-picture"></iframe></div>`;
 }
 
 /* ── 끌어다 놓기 ─────────────────────────────────────────────
