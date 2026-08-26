@@ -2602,12 +2602,54 @@ async function stallCard(): Promise<string> {
         <p class="meta">${t("확인하실 것 — ① 이 컴퓨터의 남은 디스크 공간(장부에 40GB 넘게 듭니다) ② 노드를 껐다 켜 보기. 재색인은 이어서 합니다.")}</p>
         <div class="row" style="margin-top:10px">
           <button class="ghost" id="nd-restart">${t("노드 껐다 켜기")}</button>
+          <button class="ghost" id="nd-log">${t("노드가 뭐 하는지 보기")}</button>
           <span class="meta" id="nd-restartsay"></span>
         </div>
+        <div id="nd-logbox"></div>
       </div>`;
   } catch {
     return "";
   }
+}
+
+/**
+ * 노드가 남긴 기록을 그대로 보여 준다.
+ *
+ * 🔴 **우리가 해석하지 않는다.** 해석해서 틀리면 사장을 엉뚱한 데로
+ *    보낸다. 노드가 한 말을 그대로 옮기고, 판단은 사람이 한다.
+ *    「멈춘 것 같다」까지가 우리가 말할 수 있는 전부다.
+ */
+function bindLog() {
+  const b = document.getElementById("nd-log");
+  if (!b) return;
+  b.addEventListener("click", async () => {
+    const box = $("nd-logbox");
+    box.innerHTML = `<p class="meta">${t("읽는 중…")}</p>`;
+    try {
+      const r = await invoke<any>("node_log_tail");
+      if (!r?.ok) {
+        box.innerHTML = `<p class="meta danger">${escapeHtml(String(r?.why || ""))}</p>`;
+        return;
+      }
+      box.innerHTML =
+        `<p class="meta" style="margin-top:10px">${escapeHtml(String(r.path))} · ${r.size_mb} MB</p>
+         <pre style="max-height:260px;overflow:auto;font-size:12px;line-height:1.6;
+           background:var(--panel);border:1px solid var(--line);border-radius:10px;
+           padding:10px;white-space:pre-wrap;word-break:break-all">${escapeHtml(
+             (r.lines || []).join("\n")
+           )}</pre>
+         <div class="row" style="margin-top:8px">
+           <button class="ghost" id="nd-logcopy">${t("이 글자 복사")}</button>
+           <span class="meta" id="nd-logsay"></span>
+         </div>`;
+      $("nd-logcopy").addEventListener("click", async () => {
+        await navigator.clipboard.writeText((r.lines || []).join("\n")).catch(() => {});
+        $("nd-logsay").textContent = t("복사했습니다");
+      });
+    } catch (e) {
+      box.innerHTML = `<p class="meta danger">${escapeHtml(String(e))}</p>`;
+    }
+  });
 }
 
 function bindRestart() {
@@ -2794,26 +2836,48 @@ async function paintPartBody(): Promise<void> {
         return;
       }
       const behind = Number(s?.behind ?? 0);
+      // 속도는 두 번 재야 나온다. 처음엔 아직 모른다고 말한다.
+      const st = await invoke<any>("sync_stalled").catch(() => null);
+      const rate = Number(st?.rate ?? 0);
+      const rateText =
+        rate > 0 ? `${t("초당")} ${rate.toLocaleString()}${t("블록")}` : t("재는 중…");
       box.innerHTML =
         card(
           [
             [t("연결"), s?.peers != null ? `${s.peers}${t("곳")}` : t("확인 중")],
             [t("블록"), Number(s?.blocks ?? 0).toLocaleString()],
             [t("따라잡음"), `${(Number(s?.progress ?? 0) * 100).toFixed(behind > 0 ? 2 : 1)}%`],
-            [
-              t("결제 확인"),
-              behind > 0 ? `${t("남은 블록")} ${behind.toLocaleString()}` : t("지금 바로 됩니다"),
-            ],
+            // 🔴 **재색인 중에는 「남은 블록」을 적지 않는다.**
+            //    그때 headers 는 진짜 체인 끝이 아니라 디스크에서 읽어 나간
+            //    만큼이라, 늘 작게 나온다. 대표님 화면에 「남은 블록
+            //    167,999」가 떴는데 실제로는 전체의 0.6% 였다 — 「곧 끝나겠네」
+            //    하고 기다리게 만든다. 며칠이 걸린다.
+            //
+            //    대신 **초당 몇 블록인지**를 적는다. 「멈춘 거 아닌가」에
+            //    답하는 건 %가 아니라 그 숫자다.
+            behind > 0 && s?.behind_honest === false
+              ? [t("속도"), rateText]
+              : [
+                  t("결제 확인"),
+                  behind > 0
+                    ? `${t("남은 블록")} ${behind.toLocaleString()}`
+                    : t("지금 바로 됩니다"),
+                ],
           ],
-          behind > 0
-            ? t("따라잡는 동안에는 방금 들어온 결제가 늦게 보입니다.")
-            : t("이 컴퓨터가 체인을 통째로 들고 있습니다. 남에게 묻지 않습니다."),
+          behind > 0 && s?.behind_honest === false
+            ? t(
+                "다시 훑는 중입니다. 남은 양은 아직 알 수 없습니다 — 며칠 걸릴 수 있습니다. 「따라잡음 %」는 초반에 거의 안 움직이는 것이 정상입니다(옛 블록은 거래가 적어서입니다). 도는지 멈췄는지는 위 속도로 보십시오."
+              )
+            : behind > 0
+              ? t("따라잡는 동안에는 방금 들어온 결제가 늦게 보입니다.")
+              : t("이 컴퓨터가 체인을 통째로 들고 있습니다. 남에게 묻지 않습니다."),
         ) + (behind > 0 ? await stallCard() : "") +
         (behind > 0 ? await speedCard() : await restoreCard()) + (await indexCard()) +
         goto("settings", t("노드 설정 열기"));
       bindSpeed();
       bindRestore();
       bindRestart();
+      bindLog();
     } else if (partOpen === "mine") {
       if (title) title.textContent = "채굴";
       const m = await invoke<any>("miner_running").catch(() => null);

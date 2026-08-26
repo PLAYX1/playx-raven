@@ -314,8 +314,16 @@ pub async fn sync_stalled() -> Value {
     };
     let (last_blocks, since) = g.unwrap_or((blocks, now));
     if blocks > last_blocks {
+        // **초당 몇 블록인지 같이 준다.** 「멈춘 거 아닌가」에 답하는 건
+        // %가 아니라 이 숫자다. 대표님 로그에서 4초에 209블록이 지나갔는데
+        // %는 0.0003%밖에 안 움직였다 — %만 보면 멎은 줄 안다.
+        let secs = (now - since).max(1);
+        let rate = (blocks - last_blocks) as f64 / secs as f64;
         *g = Some((blocks, now));
-        return json!({ "known": true, "stalled": false, "blocks": blocks });
+        return json!({
+            "known": true, "stalled": false, "blocks": blocks,
+            "rate": (rate * 10.0).round() / 10.0,
+        });
     }
     // 처음 본 값이면 그때를 기준으로 잡는다.
     if g.is_none() {
@@ -330,4 +338,91 @@ pub async fn sync_stalled() -> Value {
         "quiet_min": quiet_min,
         "why": "블록 수가 늘지 않고 있습니다. 디스크가 꽉 찼거나, 노드가 멈췄을 수 있습니다.",
     })
+}
+
+/// 노드가 남긴 기록의 **마지막 몇 줄.**
+///
+/// ## 🔴 왜 이걸 화면에 내놓나
+///
+/// 블록이 안 늘 때 우리는 「멈춘 것 같다」까지만 말할 수 있다. **왜**인지는
+/// 노드만 안다. 코어는 그걸 `debug.log` 에 계속 적는데, 사장이 그 파일을
+/// 찾아 열 방법이 없다 — 숨김 폴더 안이고, 43GB 짜리 폴더 안이다.
+///
+/// 그래서 마지막 줄들을 그대로 보여 준다. 우리가 해석하지 않는다 —
+/// 해석해서 틀리면 사장을 엉뚱한 데로 보낸다. **노드가 한 말을 그대로**
+/// 옮기고, 판단은 사람이 한다.
+///
+/// ⚠️ 마지막 40줄만 읽는다. 이 파일은 수백 MB 가 되기도 한다.
+#[tauri::command]
+pub fn node_log_tail() -> Value {
+    let p = crate::paths::raven_dir().join("debug.log");
+    let Ok(meta) = std::fs::metadata(&p) else {
+        return json!({ "ok": false, "why": "노드 기록 파일을 찾지 못했습니다.", "path": p.to_string_lossy() });
+    };
+    // 끝에서부터 읽는다. 앞에서 읽으면 수백 MB 를 훑는다.
+    let want: u64 = 16 * 1024;
+    let from = meta.len().saturating_sub(want);
+    let mut f = match std::fs::File::open(&p) {
+        Ok(f) => f,
+        Err(e) => return json!({ "ok": false, "why": e.to_string() }),
+    };
+    use std::io::{Read, Seek, SeekFrom};
+    if f.seek(SeekFrom::Start(from)).is_err() {
+        return json!({ "ok": false, "why": "기록을 읽지 못했습니다." });
+    }
+    let mut buf = Vec::new();
+    if f.read_to_end(&mut buf).is_err() {
+        return json!({ "ok": false, "why": "기록을 읽지 못했습니다." });
+    }
+    let text = String::from_utf8_lossy(&buf);
+    let lines: Vec<&str> = text.lines().rev().take(40).collect();
+    let tail: Vec<String> = lines.into_iter().rev().map(|s| s.to_string()).collect();
+    json!({
+        "ok": true,
+        "path": p.to_string_lossy(),
+        "size_mb": (meta.len() as f64 / 1_048_576.0 * 10.0).round() / 10.0,
+        "lines": tail,
+    })
+}
+
+/// **「남은 블록」을 믿어도 되는가.**
+///
+/// ## 🔴 화면이 거짓말을 하고 있었다
+///
+/// 우리는 `headers - blocks` 를 「남은 블록」으로 적었다. 평소에는 맞다 —
+/// `headers` 가 남들이 알려 준 진짜 체인 끝이기 때문이다.
+///
+/// **재색인 중에는 아니다.** 그때 `headers` 는 디스크에서 읽어 나간 만큼만
+/// 늘어난다. 그래서 둘의 차이가 늘 작게 나오고, 화면에는 「남은 블록
+/// 167,999」처럼 **거의 다 온 것처럼** 적힌다. 실제로는 전체의 0.6% 였다.
+///
+/// 사장은 그걸 보고 「곧 끝나겠네」 하고 기다린다. 며칠이 걸린다.
+///
+/// ⚠️ 판별법: 따라잡음이 한참 남았는데(`progress` 가 낮은데) 남은 블록이
+///    적게 나오면, 그 숫자는 진짜 끝까지의 거리가 아니다.
+pub fn behind_is_honest(progress: f64, behind: i64, blocks: i64) -> bool {
+    if progress >= 0.99 {
+        return true; // 다 따라잡았으면 남은 것도 진짜다
+    }
+    // 아직 절반도 못 왔는데 남은 것이 지금까지 온 것보다 적다면,
+    // `headers` 가 진짜 끝을 모르고 있다는 뜻이다.
+    !(progress < 0.9 && behind < blocks)
+}
+
+#[cfg(test)]
+mod behind_tests {
+    use super::behind_is_honest;
+
+    /// 대표님 화면에 실제로 뜬 값. 0.6% 인데 「남은 블록 167,999」였다.
+    #[test]
+    fn 재색인_중의_남은_블록은_믿지_않는다() {
+        assert!(!behind_is_honest(0.0062, 167_999, 732_977));
+    }
+
+    /// 평소 따라잡기(헤더가 진짜 끝을 안다)에서는 그대로 쓴다.
+    #[test]
+    fn 평소_따라잡기에서는_그대로_쓴다() {
+        assert!(behind_is_honest(0.30, 3_000_000, 900_000));
+        assert!(behind_is_honest(0.999, 12, 4_500_000));
+    }
 }

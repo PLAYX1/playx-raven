@@ -250,6 +250,13 @@ pub async fn node_status() -> Result<Value, String> {
         "headers": info.headers,
         "progress": info.verificationprogress,
         "behind": info.headers.saturating_sub(info.blocks),
+        // 🔴 재색인 중에는 위 숫자가 **진짜 끝까지의 거리가 아니다.**
+        //    화면이 그걸 모르고 적으면 「곧 끝난다」고 거짓말한다.
+        "behind_honest": crate::reindex_run::behind_is_honest(
+            info.verificationprogress,
+            info.headers.saturating_sub(info.blocks) as i64,
+            info.blocks as i64,
+        ),
         "tip_time": tip_time,
         // Treat "within a couple of blocks of the tip" as synced; an exact match
         // flickers every time a new block arrives.
