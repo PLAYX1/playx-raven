@@ -1406,9 +1406,23 @@ async function paintStatusDots() {
 async function checkForUpdate(quiet = true) {
   try {
     const up = await checkUpdate();
+    const nag = document.getElementById("upnag");
     if (!up) {
+      if (nag) nag.hidden = true;
       if (!quiet) $("up-note").textContent = "지금이 최신입니다.";
       return;
+    }
+    // 🔴 **늘 보이는 자리에 먼저 말한다.** 아래 자세한 칸은 「설정」 화면
+    //    안쪽 스크롤 한참 밑에 있다 — 앱은 새 판이 있는 걸 알면서도
+    //    보이는 데서는 아무 말도 안 했다. 그래서 몇 판이나 뒤처진 채로
+    //    쓰고 계셨다. 판 번호 옆에 붙여 두고, 누르면 그 칸으로 데려간다.
+    if (nag) {
+      nag.hidden = false;
+      nag.textContent = `새 판 ${up.version} 받기`;
+      nag.onclick = () => {
+        showPage("settings");
+        setTimeout(() => $("up-box")?.scrollIntoView({ block: "center" }), 60);
+      };
     }
     // 무엇이 바뀌는지 말하지 않고 "새 버전" 만 띄우면 아무도 안 누른다.
     $("up-box").style.display = "";
@@ -1454,7 +1468,8 @@ async function checkForUpdate(quiet = true) {
     };
     ($("up-later") as HTMLElement).onclick = () => {
       $("up-box").style.display = "none";
-      // 오늘은 다시 안 묻는다. 5분마다 물으면 끄고 싶어진다.
+      // 이 큰 칸만 접는다. **판 번호 옆의 작은 표시는 남긴다** — 새 판이
+      // 있다는 사실 자체를 감추면, 그게 지금까지 벌어진 일이다.
       localStorage.setItem("playx-raven-update-snooze", String(Date.now()));
     };
   } catch (e) {
@@ -9228,11 +9243,16 @@ window.addEventListener("DOMContentLoaded", async () => {
     $("seedsheet").classList.add("hidden");
   });
   void paintStatusDots();
-  // 하루 한 번만 본다. 「나중에」를 누른 날은 그날 다시 안 묻는다.
-  {
-    const last = Number(localStorage.getItem("playx-raven-update-snooze") || 0);
-    if (Date.now() - last > 20 * 60 * 60 * 1000) setTimeout(() => void checkForUpdate(true), 8000);
-  }
+  // 🔴 켤 때마다 본다.
+  //
+  //    여태 「나중에」를 한 번 누르면 **20시간 동안 확인 자체를 안 했다.**
+  //    다시 켜도 안 봤다. 그래서 새 판이 나가도 화면에 아무 말이 없었고,
+  //    대표님 맥이 여러 판 뒤처진 채로 남았다.
+  //
+  //    「나중에」가 막아야 하는 것은 **재시작**이지 **알림**이 아니다.
+  //    설치는 여전히 사장이 누를 때만 한다 — 장사 중에 저절로 다시
+  //    시작되면 손님 QR 이 먹통이 된다.
+  setTimeout(() => void checkForUpdate(true), 8000);
   // 노드는 조용히 죽는다. 20초마다 다시 본다 — 죽은 걸 늦게 아는 것이
   // 카운터에서 제일 비싸다.
   setInterval(() => void paintStatusDots(), 20_000);
