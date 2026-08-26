@@ -2631,6 +2631,21 @@ async function speedCard(): Promise<string> {
  *    메모리, 자동 시작, 폴더 경로 붙여넣기. 하나하나는 별것 아닌데
  *    다섯이 되면 아무도 안 한다. 그리고 못 한 채로 「느리다」고 겪는다.
  */
+/**
+ * 🔴 준비 결과는 **화면 밖에 둔다.**
+ *
+ * 이 화면은 5초마다 통째로 다시 그린다(`partTimer`). 준비하기는 관리자
+ * 창을 띄우고 몇 초 걸리는데, 그사이 다시 그려지면 `innerHTML` 이 결과를
+ * **지운다.** 사장은 눌러도 아무 일 없었던 것처럼 겪는다 — 실제로 그렇게
+ * 겪으셨다("한번에 준비하기 눌렀는데 지금 화면 맞나? 예도 눌렀어").
+ *
+ * 같은 함정을 `outSay` 에 이미 적어 놨는데 또 밟았다. 그래서 여기에도 적는다.
+ */
+let prepFolder = "";
+let prepSay = "";
+let prepOut = "";
+let prepBusy = false;
+
 function prepCard(behind: number): string {
   return `<div class="card" style="margin-top:12px">
       <h3>${t("이 컴퓨터 준비하기")}</h3>
@@ -2639,19 +2654,33 @@ function prepCard(behind: number): string {
       )}</p>
       <p class="meta">${t("관리자 권한을 묻는 창이 한 번 뜹니다. 「예」를 눌러 주십시오.")}</p>
       <div class="row" style="margin-top:10px">
-        <button id="pc-go">${t("한 번에 준비하기")}</button>
-        <span class="meta" id="pc-say"></span>
+        <button id="pc-go"${prepBusy ? " disabled" : ""}>${t("한 번에 준비하기")}</button>
+        <span class="meta" id="pc-say">${prepSay}</span>
       </div>
-      <div id="pc-out"></div>
+      <div id="pc-out">${prepOut}</div>
     </div>`.replace("<!--behind-->", String(behind));
+}
+
+/** 복사 단추만 붙인다. 결과가 다시 그려질 때마다 새 단추가 생기기 때문이다. */
+function bindPrepCopy() {
+  const copy = document.getElementById("pc-copy");
+  if (!copy) return;
+  copy.addEventListener("click", async () => {
+    await navigator.clipboard.writeText(prepFolder).catch(() => {});
+    prepSay = escapeHtml(t("복사했습니다"));
+    $("pc-say").innerHTML = prepSay;
+  });
 }
 
 function bindPrep(behind: number) {
   const b = document.getElementById("pc-go");
   if (!b) return;
+  bindPrepCopy();
   b.addEventListener("click", async () => {
+    prepBusy = true;
     (b as HTMLButtonElement).disabled = true;
-    $("pc-say").textContent = t("하는 중… 관리자 창이 뜨면 「예」를 눌러 주십시오");
+    prepSay = escapeHtml(t("하는 중… 관리자 창이 뜨면 「예」를 눌러 주십시오"));
+    $("pc-say").innerHTML = prepSay;
     try {
       // 따라잡는 중일 때만 메모리를 올린다. 다 따라잡은 노드에 올리면
       // 쓰지도 않을 메모리를 잡아 둔다.
@@ -2666,25 +2695,31 @@ function bindPrep(behind: number) {
         .join("");
       // 🔴 우리가 **못 하는 것을 먼저** 말한다. 다 된 줄 알고 기다리는 것이
       //    제일 나쁘다 — 다른 회사 백신은 스크립트로 못 만진다.
-      $("pc-out").innerHTML =
+      prepFolder = String(r?.folder || "");
+      // 🔴 화면이 아니라 **변수에 담는다.** 5초 뒤 다시 그려도 살아남는다.
+      prepOut =
         `<div style="margin-top:10px">${rows}</div>
          <p class="meta" style="margin-top:10px">${escapeHtml(String(r?.manual || ""))}</p>
          <div class="row" style="margin-top:6px">
-           <code style="font-size:12px;word-break:break-all">${escapeHtml(
-             String(r?.folder || "")
-           )}</code>
+           <code style="font-size:12px;word-break:break-all">${escapeHtml(prepFolder)}</code>
            <button class="ghost" id="pc-copy">${t("폴더 주소 복사")}</button>
          </div>`;
-      $("pc-copy").addEventListener("click", async () => {
-        await navigator.clipboard.writeText(String(r?.folder || "")).catch(() => {});
-        $("pc-say").textContent = t("복사했습니다");
-      });
-      $("pc-say").textContent =
-        Number(r?.failed || 0) === 0 ? t("다 됐습니다") : t("일부는 못 했습니다 — 아래를 봐 주십시오");
+      prepSay = escapeHtml(
+        Number(r?.failed || 0) === 0
+          ? t("다 됐습니다")
+          : t("일부는 못 했습니다 — 아래를 봐 주십시오")
+      );
     } catch (e) {
-      $("pc-say").innerHTML = `<span class="danger">${escapeHtml(String(e))}</span>`;
+      prepSay = `<span class="danger">${escapeHtml(String(e))}</span>`;
     } finally {
+      prepBusy = false;
       (b as HTMLButtonElement).disabled = false;
+      // 담아 둔 것을 지금 화면에도 붙인다. 다음 다시 그리기에서도 그대로 온다.
+      $("pc-say").innerHTML = prepSay;
+      $("pc-out").innerHTML = prepOut;
+      // ⚠️ 여기서 bindPrep 을 다시 부르면 **같은 단추에 처리기가 두 번**
+      //    붙는다 — 한 번 눌러도 두 번 돈다. 방금 새로 생긴 복사 단추만 붙인다.
+      bindPrepCopy();
     }
   });
 }
