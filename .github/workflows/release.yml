@@ -186,6 +186,18 @@ jobs:
               F=$P-x86_64-linux-gnu.tar.gz
               WANT=cb359b6a5b42e47068cd655231484fcc763d2f79eae5ea318b029c704a4dc020
               ;;
+            x86_64-apple-darwin)
+              # 🔴 인텔 맥은 **노드도 파일창고도 안 들어가고 있었다.**
+              #    설치 파일이 12MB 인 것이 그 증거다(애플 실리콘은 57MB).
+              #    그래서 인텔 맥에 깐 사람만 「하나만 깔면 다 되는」이
+              #    거짓이었다. 공식에 인텔 맥 판(osx64)이 있는데 갈래를
+              #    안 적어서 `*)` 로 빠지고 있었다.
+              #
+              #    2026-08-26 에 받아서 **공식이 적어 둔 .sha256sum 과**
+              #    대조했다. 안에 bin/ravend 가 있는 것도 확인했다.
+              F=$P-osx64.tar.gz
+              WANT=8610c117476697e7f34dedf0b85bf8386c79ecebfa36740eedc1260c7d1d5c5a
+              ;;
             aarch64-apple-darwin)
               # 🔴 공식 v4.8.0 에 애플 실리콘 판이 **없다**(win64·linux·osx64[인텔]뿐).
               #    그래서 우리가 원본 소스에서 직접 빌드해 올려 두었다.
@@ -262,6 +274,11 @@ jobs:
             x86_64-unknown-linux-gnu)
               F=kubo_${V}_linux-amd64.tar.gz
               WANT=6af21cd24a307d94326807b3d3827064c74fb7122f83b6940af250e6ae40da250e0ec0e1f3551256b78cd204623ed56c32ce735bbe28bdcc787b36943c52458a
+              ;;
+            x86_64-apple-darwin)
+              # 공식이 적어 둔 .sha512 와 대조했다(2026-08-26).
+              F=kubo_${V}_darwin-amd64.tar.gz
+              WANT=7edd038e9208b8024ef14329102a8bc40827c21337bb2d38ea52400c57a04e3c092086a11c9d342b85083a71df4bf77130fd676bdb68628b2d9e8e6f511ee305
               ;;
             aarch64-apple-darwin)
               F=kubo_${V}_darwin-arm64.tar.gz

@@ -2335,7 +2335,62 @@ function bindTurnOn(id: string, cmd: string) {
 }
 
 
+/**
+ * 켤 때 앱이 대신 해 둔 일. 노드·파일창고를 묻지 않고 켜고, 첫 설치면
+ * 설정까지 갖춘다(러스트 `boot.rs`).
+ *
+ * 아직 안 끝났으면 `pending` 이 온다 — 그때는 담아 두지 않고 다음에 다시 묻는다.
+ */
+let bootRep: any = null;
+async function bootReport(): Promise<any> {
+  if (bootRep) return bootRep;
+  const r = await invoke<any>("boot_report").catch(() => null);
+  if (r && !r.pending) bootRep = r;
+  return r;
+}
+
+/**
+ * 「켤 때 이런 일을 했습니다 / 이건 못 켰습니다」 한 칸.
+ *
+ * 🔴 못 켠 것이 **없으면 아무것도 안 그린다.** 늘 떠 있는 안내는 아무도 안
+ *    읽고, 진짜 문제가 생겼을 때 그 속에 묻힌다.
+ */
+async function bootStrip(): Promise<string> {
+  const r = await bootReport();
+  if (!r || r.pending) return "";
+  const notes: string[] = (r.notes || []).map(String);
+  const bad: string[] = (r.skipped || [])
+    .filter((x: any) => !String(x?.why || "").includes("이미 켜져"))
+    .map((x: any) => `${x.what} — ${x.why}`);
+  if (!notes.length && !bad.length) return "";
+  return (
+    `<div class="card" data-bootstrip style="margin-bottom:14px">` +
+    (notes.length
+      ? `<div class="meta">${t("켤 때 대신 해 둔 일")}<br />${notes
+          .map((n) => `· ${escapeHtml(n)}`)
+          .join("<br />")}</div>`
+      : "") +
+    (bad.length
+      ? `<div class="meta" style="color:var(--warn);margin-top:${notes.length ? 8 : 0}px">` +
+        `${t("이건 못 켰습니다")}<br />${bad.map((n) => `· ${escapeHtml(n)}`).join("<br />")}</div>`
+      : "") +
+    `</div>`
+  );
+}
+
+/**
+ * 파트 화면. 그리고 나서 **맨 위에 「켤 때 있었던 일」을 붙인다.**
+ * 각 갈래마다 붙이면 열두 군데를 고쳐야 하고, 언젠가 한 곳을 빠뜨린다.
+ */
 async function paintPart(): Promise<void> {
+  await paintPartBody();
+  const box = document.getElementById("pt-body");
+  if (!box || box.querySelector("[data-bootstrip]")) return;
+  const strip = await bootStrip();
+  if (strip) box.insertAdjacentHTML("afterbegin", strip);
+}
+
+async function paintPartBody(): Promise<void> {
   const box = document.getElementById("pt-body");
   if (!box) return;
   const title = document.getElementById("pt-title");
@@ -2449,9 +2504,11 @@ async function paintPart(): Promise<void> {
           //    고장으로 안 읽는다.
           on
             ? t("따로 있는 GPU 기계가 캐고 수익만 이 지갑으로 옵니다.")
-            : // 꺼져 있을 때는 **무엇이 있어야 켜지는지**를 말한다. 「꺼져
-              //  있습니다」만 있으면 그 화면에서 할 일이 없다.
-              t("켜려면 두 가지가 필요합니다 — 캐는 프로그램(kawpowminer)과 받을 주소. 둘 다 아래 설정에서 정합니다.")
+            : // 🔴 꺼져 있을 때는 **이 컴퓨터에서 되는 일인지**부터 말한다.
+              //    켤 때 앱이 대신 확인해 둔 답을 그대로 쓴다. 안 되는 것을
+              //    「설정에서 켜세요」로 넘기면 사장은 없는 단추를 찾는다.
+              String((await bootReport())?.mining?.why || "") ||
+              t("켜려면 두 가지가 필요합니다 — 캐는 프로그램(kawpowminer)과 받을 주소.")
         ) + goto("settings", t(on ? "채굴 설정 열기" : "채굴 켜는 곳으로"));
     } else if (partOpen === "ipfs") {
       if (title) title.textContent = "파일창고 (IPFS)";

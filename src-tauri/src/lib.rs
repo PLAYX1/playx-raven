@@ -1,5 +1,6 @@
 mod ai;
 mod auto;
+mod boot;
 mod awake;
 mod quiet;
 mod helping;
@@ -330,6 +331,7 @@ pub fn run() {
             place::directions_links,
             price::rvn_rate,
             price::quote_price,
+            boot::boot_report,
             server::start_phone_server,
             server::publish_shop,
             reindex::reindex_window,
@@ -459,6 +461,22 @@ pub fn run() {
                     if let Err(e) = server::start_phone_server(state).await {
                         eprintln!("[phone] 자동 시작 실패: {e}");
                     }
+                });
+            }
+
+            // 🔴 노드와 파일창고도 **묻지 않고 켠다.**
+            //
+            //    여태 이 둘은 「이 컴퓨터 → RVN 노드 → 지금 켜기」를 찾아
+            //    들어가야만 켜졌다. 거기까지 가는 사장은 없다. 깔고 열면
+            //    표시등 다섯 중 넷이 회색인 화면을 보게 되고, 그건 고장으로
+            //    읽힌다.
+            //
+            //    ⚠️ 따로 떼어 돌린다. 여기서 기다리면 첫 화면이 그만큼
+            //    늦어지고, 그게 「응답하지 않습니다」로 보인다.
+            {
+                tauri::async_runtime::spawn(async move {
+                    let r = boot::run().await;
+                    boot::remember(r);
                 });
             }
             Ok(())
