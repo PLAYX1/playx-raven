@@ -3030,6 +3030,127 @@ async function makeAddress() {
   }
 }
 
+/* ── 맞교환 ───────────────────────────────────────────────────
+   🔴 러스트(`swap.rs`)에 다 만들어 놓고 **부르는 줄을 안 만들면** 오늘
+   하루 종일 고친 그 병이 그대로 반복된다. 여기가 그 줄이다.        */
+
+/** 팔 준비가 됐는지 물어보고, 안 됐으면 무엇을 해야 하는지 적는다. */
+async function swapReady() {
+  const asset = ($("sw-asset") as HTMLInputElement).value.trim();
+  const amount = parseFloat(($("sw-amt") as HTMLInputElement).value) || 0;
+  const note = $("sw-ready");
+  const lot = $("sw-lot") as HTMLButtonElement;
+  if (!asset || amount <= 0) { note.textContent = ""; lot.style.display = "none"; return; }
+  try {
+    const r = await invoke<any>("swap_ready", { asset, amount });
+    if (r.ready) {
+      note.innerHTML = `<span class="ok">${t("팔 준비가 됐습니다")} — ${t("가진 것")} ${Number(r.have).toLocaleString()}</span>`;
+      lot.style.display = "none";
+    } else {
+      note.innerHTML = `<span class="warn">${escapeHtml(String(r.why || ""))}</span>`;
+      lot.style.display = "";
+    }
+  } catch (e) {
+    note.innerHTML = `<span class="danger">${escapeHtml(String(e))}</span>`;
+  }
+}
+
+async function swapMakeLot() {
+  const asset = ($("sw-asset") as HTMLInputElement).value.trim();
+  const amount = parseFloat(($("sw-amt") as HTMLInputElement).value) || 0;
+  if (!(await ensureUnlocked("묶음을 만들려면 지갑을 열어야 합니다."))) return;
+  try {
+    const r = await invoke<any>("swap_make_lot", { asset, amount, passphrase: null });
+    $("sw-ready").innerHTML = r.already
+      ? `<span class="ok">${t("이미 준비돼 있습니다")}</span>`
+      : `<span class="ok">${escapeHtml(String(r.note || ""))}</span>`;
+  } catch (e) {
+    $("sw-ready").innerHTML = `<span class="danger">${escapeHtml(String(e))}</span>`;
+  }
+}
+
+async function swapMakeOffer() {
+  const asset = ($("sw-asset") as HTMLInputElement).value.trim();
+  const amount = parseFloat(($("sw-amt") as HTMLInputElement).value) || 0;
+  const price = parseFloat(($("sw-price") as HTMLInputElement).value) || 0;
+  const box = $("sw-offer");
+  if (!(await ensureUnlocked("제안에 서명하려면 지갑을 열어야 합니다."))) return;
+  box.innerHTML = `<p class="meta">${t("만드는 중…")}</p>`;
+  try {
+    const r = await invoke<any>("swap_offer", { asset, amount, price, passphrase: null });
+    box.innerHTML =
+      `<div class="card" style="margin-top:12px">
+         <h3>${t("제안을 만들었습니다")}</h3>
+         <div class="kv"><b>${t("파는 것")}</b><span>${escapeHtml(asset)} ${amount.toLocaleString()}${t("개")}</span></div>
+         <div class="kv"><b>${t("받을 돈")}</b><span>${price.toLocaleString()} RVN</span></div>
+         <p class="meta">🔴 ${t("이 글자만으로는 아무 일도 안 일어납니다. 사는 사람이 RVN 을 붙여야 거래가 됩니다 — 그래서 아무 데나 보내셔도 됩니다.")}</p>
+         <textarea readonly rows="3" id="sw-out">${escapeHtml(String(r.hex))}</textarea>
+         <div class="row" style="margin-top:10px">
+           <button class="ghost" id="sw-copy">${t("글자 복사")}</button>
+           <span class="meta" id="sw-copied"></span>
+         </div>
+       </div>`;
+    $("sw-copy").addEventListener("click", async () => {
+      await navigator.clipboard.writeText(String(r.hex)).catch(() => {});
+      $("sw-copied").textContent = t("복사했습니다");
+    });
+  } catch (e) {
+    box.innerHTML = `<p class="meta danger">${escapeHtml(String(e))}</p>`;
+  }
+}
+
+/** 받은 제안이 진짜인지 **체인에 물어서** 보여 준다. 글자를 믿지 않는다. */
+async function swapLook() {
+  const hex = ($("sw-hex") as HTMLTextAreaElement).value.trim();
+  const box = $("sw-take");
+  if (!hex) return;
+  box.innerHTML = `<p class="meta">${t("체인에 물어보는 중…")}</p>`;
+  try {
+    const r = await invoke<any>("swap_check", { hex });
+    if (!r.ok) {
+      box.innerHTML = `<p class="meta danger">${escapeHtml(String(r.why))}</p>`;
+      return;
+    }
+    box.innerHTML =
+      `<div class="card" style="margin-top:12px">
+         <div class="kv"><b>${t("받는 것")}</b><span>${escapeHtml(String(r.asset))} ${Number(r.amount).toLocaleString()}${t("개")}</span></div>
+         <div class="kv"><b>${t("내는 돈")}</b><span>${Number(r.price).toLocaleString()} RVN</span></div>
+         <div class="kv"><b>${t("한 개당")}</b><span>${Number(r.each).toLocaleString()} RVN</span></div>
+         <p class="meta">${t("한 거래 안에서 동시에 오갑니다. 먼저 보내지 않습니다.")}</p>
+         <div class="row" style="margin-top:12px"><button id="sw-buy">${t("사기")}</button>
+           <span class="meta" id="sw-note"></span></div>
+       </div>`;
+    $("sw-buy").addEventListener("click", () => void swapBuy(hex, r));
+  } catch (e) {
+    box.innerHTML = `<p class="meta danger">${escapeHtml(String(e))}</p>`;
+  }
+}
+
+/**
+ * 사기. **미리 조립해서 보여 주고**, 사람이 한 번 더 누를 때 보낸다.
+ *
+ * 🔴 돈이 오가는 일에 미리보기 없는 단추를 두지 않는다.
+ */
+async function swapBuy(hex: string, info: any) {
+  if (!(await ensureUnlocked("살 때 내 몫을 서명하려면 지갑을 열어야 합니다."))) return;
+  $("sw-note").textContent = t("조립하는 중…");
+  try {
+    const dry = await invoke<any>("swap_take", { hex, broadcast: false, passphrase: null });
+    const ok = await sure(
+      t("이대로 보낼까요?"),
+      `${info.asset} ${Number(info.amount).toLocaleString()}개를 받고 ` +
+        `${Number(info.price).toLocaleString()} RVN 을 냅니다. ` +
+        `수수료 ${dry.fee} RVN. 되돌릴 수 없습니다.`
+    );
+    if (!ok) { $("sw-note").textContent = ""; return; }
+    const r = await invoke<any>("swap_take", { hex, broadcast: true, passphrase: null });
+    $("sw-note").innerHTML = `<span class="ok">${t("보냈습니다")} — ${escapeHtml(String(r.txid)).slice(0, 20)}…</span>`;
+    void loadAssets(false);
+  } catch (e) {
+    $("sw-note").innerHTML = `<span class="danger">${escapeHtml(String(e))}</span>`;
+  }
+}
+
 /* ── 발행 ─────────────────────────────────────────────────────
    Nothing here is reversible, so the flow is built to slow the user down at the
    two places that matter: the name (permanent, global, unrepeatable) and the
@@ -9730,6 +9851,14 @@ window.addEventListener("DOMContentLoaded", async () => {
     loadWallet();
   });
   $("new-asset").addEventListener("click", openWizard);
+  // 맞교환. 🔴 러스트에 다 만들어 놓고 **이 다섯 줄이 없으면** 오늘 하루
+  //    종일 고친 그 병이 그대로 반복된다.
+  $("sw-make").addEventListener("click", () => void swapMakeOffer());
+  $("sw-lot").addEventListener("click", () => void swapMakeLot());
+  $("sw-look").addEventListener("click", () => void swapLook());
+  ["sw-asset", "sw-amt"].forEach((id) =>
+    $(id).addEventListener("input", () => void swapReady())
+  );
   $("wz-cancel").addEventListener("click", () => $("wiz").classList.add("hidden"));
   $("wz-back").addEventListener("click", () => wizGo(wizStep - 1));
   $("wz-next").addEventListener("click", wizNext);

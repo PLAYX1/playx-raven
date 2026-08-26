@@ -61,6 +61,15 @@
         margin-right: 6px; background: var(--muted); }
       .dot.on { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 22%, transparent); }
       .dot.off { background: var(--muted); opacity: .45; }
+      /* 맞교환 칸. 접어 두는 이유 — 매일 쓰는 일이 아니다. 늘 펼쳐 두면
+         자산 목록이 저 아래로 밀린다. */
+      .swapbox { margin: 14px 0; padding: 14px 16px; border: 1px solid var(--line);
+        border-radius: 14px; background: var(--panel, transparent); }
+      .swapbox > summary { cursor: pointer; min-height: 44px; display: flex;
+        align-items: center; font-size: 15px; }
+      .swapbox textarea { width: 100%; min-height: 76px; font-size: 14px;
+        font-family: ui-monospace, monospace; word-break: break-all; }
+      .swapbox .grouphead { margin: 16px 0 8px; font-size: 14px; }
       /* 🔴 따라잡는 중임을 **막대로** 보여 준다. 코어 지갑이 아래에 이걸 두는
          이유가 있다 — 「켜짐」과 「쓸 수 있음」은 다른 말이고, 그 사이의
          몇 시간 동안 사장은 화면만 보고는 고장인지 기다리는 중인지 모른다.
@@ -1548,6 +1557,44 @@
           <button id="new-asset">새 자산 만들기</button>
           <span class="meta">새 이름을 체인에 새깁니다. RVN이 소각됩니다.</span>
         </div>
+
+        <!-- ── 맞교환 ────────────────────────────────────────────────
+             🔴 여태 자산을 파는 길은 하나뿐이었다 — 손님이 **먼저** 돈을
+             보내고 가게가 자산을 보낸다. 손님이 가게를 믿어야 한다.
+             아는 가게면 되지만 **모르는 사람과는 못 한다.**
+             그래서 「내가 산 자산을 되판다」가 아예 불가능했다.
+
+             맞교환은 돈과 자산이 **한 거래 안에** 들어간다. 둘 다 되거나
+             둘 다 안 된다. 누구도 먼저 보내지 않는다. -->
+        <details class="swapbox" id="swapbox">
+          <summary><b>맞교환</b> — 모르는 사람과도 안전하게 사고팔기</summary>
+          <p class="meta">
+            돈과 자산이 <b>한 거래 안에서 동시에</b> 오갑니다. 누구도 먼저
+            보내지 않습니다. 반쪽짜리 제안은 그냥 글자라, 문자로 보내도 되고
+            릴레이로 날려도 됩니다 — <b>우리 서버를 지나지 않습니다.</b>
+          </p>
+
+          <h3 class="grouphead">팔기</h3>
+          <div class="row">
+            <div style="flex:2"><label>자산<input id="sw-asset" spellcheck="false" placeholder="PLAYX" /></label></div>
+            <div style="flex:1"><label>수량<input id="sw-amt" type="number" value="1" min="0" step="any" /></label></div>
+            <div style="flex:1"><label>받을 RVN<input id="sw-price" type="number" value="100" min="0" step="any" /></label></div>
+          </div>
+          <div class="meta" id="sw-ready"></div>
+          <div class="row" style="margin-top:10px">
+            <button class="ghost" id="sw-lot">묶음 만들기</button>
+            <button id="sw-make">제안 만들기</button>
+          </div>
+          <div id="sw-offer"></div>
+
+          <h3 class="grouphead" style="margin-top:20px">사기</h3>
+          <label>받은 제안 글자를 붙여넣으세요
+            <textarea id="sw-hex" rows="3" spellcheck="false" placeholder="0200000001…"></textarea></label>
+          <div class="row" style="margin-top:10px">
+            <button class="ghost" id="sw-look">무엇인지 보기</button>
+          </div>
+          <div id="sw-take"></div>
+        </details>
 
         <div class="tabs" style="margin-bottom:8px">
           <button class="tab on" data-afilter="all">전체</button>

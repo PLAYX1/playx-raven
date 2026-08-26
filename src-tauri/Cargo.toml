@@ -52,7 +52,13 @@ tauri-plugin-dialog = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+# 🔴 `preserve_order` 가 반드시 필요하다.
+# 기본 serde_json 은 객체 키를 **알파벳순으로 정렬**한다. 그런데 레이븐
+# 노드의 `createrawtransaction` 은 출력 객체의 **적은 순서대로** 출력을
+# 만든다. 원자 교환의 서명(SIGHASH_SINGLE)은 「0번 입력 ↔ 0번 출력」을
+# 묶는 것이라, 순서가 뒤집히면 파는 사람의 서명이 **엉뚱한 출력**에 붙는다.
+# 조용히 돈이 새는 자리다. (swap.rs 에서 조립 뒤에 한 번 더 확인한다.)
+serde_json = { version = "1", features = ["preserve_order"] }
 # Serves the phone screens — the owner's remote control and the customer's
 # order page — from this machine over the local network. Tauri already pulls in
 # tokio, so this adds a router and nothing heavier.

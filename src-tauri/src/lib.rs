@@ -38,6 +38,7 @@ mod walletx;
 mod knowledge;
 mod nostrpub;
 mod paths;
+mod swap;
 mod sweep;
 mod autostart;
 mod mode;
@@ -332,6 +333,11 @@ pub fn run() {
             price::rvn_rate,
             price::quote_price,
             boot::boot_report,
+            swap::swap_ready,
+            swap::swap_make_lot,
+            swap::swap_offer,
+            swap::swap_check,
+            swap::swap_take,
             server::start_phone_server,
             server::publish_shop,
             reindex::reindex_window,
