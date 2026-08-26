@@ -60,7 +60,32 @@ function busyShow(on: boolean) {
 // 켠 직후도 「방금 손댄 것」으로 친다 — 아이콘을 누른 게 사람이다.
 // 첫 화면이 뜨기까지가 제일 오래 걸리는데 거기서 아무 말이 없으면 안 된다.
 let lastTouch = Date.now();
-const TOUCH_WINDOW = 8000;
+// 🔴 8초였다. 그런데 이 앱은 화면을 **5초마다 다시 그린다** — 그 배경
+//    질문들이 전부 8초 창 안에 들어와 「사람이 시킨 일」로 세어졌고,
+//    「하는 중… 잠시만요」가 꺼질 틈이 없었다. 대표님이 실제로 그렇게
+//    겪으셨다("이거는 왜 계속 뜨나?").
+//    누른 직후에 시작되는 부름만 사람 것이다. 1.5초면 충분하다.
+const TOUCH_WINDOW = 1500;
+
+/**
+ * 🔴 **저절로 도는 일은 안내를 띄우지 않는다.**
+ *
+ * 시각으로 짐작하는 것(`lastTouch`)만으로는 부족했다. 5초 타이머가
+ * 사람이 누른 직후에 돌면 그것도 사람 것으로 세어진다. 그래서 배경에서
+ * 도는 자리는 **직접 표시한다.**
+ *
+ * ⚠️ 이 안에서 사람이 누른 일이 시작되면 그것도 조용해진다. 그 대신
+ *    12초 자동 내림(`BUSY_MAX_MS`)이 그대로 남아 있어 눌어붙지는 않는다.
+ */
+let quietDepth = 0;
+async function quietly<T>(fn: () => Promise<T> | T): Promise<T> {
+  quietDepth++;
+  try {
+    return await fn();
+  } finally {
+    quietDepth--;
+  }
+}
 document.addEventListener("pointerdown", () => (lastTouch = Date.now()), true);
 document.addEventListener("keydown", () => (lastTouch = Date.now()), true);
 
@@ -84,7 +109,7 @@ let busyGuard: number | undefined;
 async function invoke<T = any>(cmd: string, args?: any): Promise<T> {
   // 이 부름이 사람이 시킨 것인가. **시작할 때 정하고 끝까지 그대로 쓴다** —
   // 끝날 때 다시 재면 그사이 손을 댔는지에 따라 셈이 어긋난다.
-  const mine = Date.now() - lastTouch < TOUCH_WINDOW;
+  const mine = quietDepth === 0 && Date.now() - lastTouch < TOUCH_WINDOW;
   if (mine) {
     busyCount++;
     if (busyTimer === undefined) {
@@ -2456,7 +2481,7 @@ function toggleDot(which: Part) {
   }
   void paintPart();
   // 열려 있는 동안만 갱신한다. 닫힌 화면을 5초마다 부르면 헛일이다.
-  partTimer = window.setInterval(() => void paintPart(), 5000);
+  partTimer = window.setInterval(() => void quietly(paintPart), 5000);
 }
 
 /** 지금 고른 것의 상태와 설정. */
@@ -2972,8 +2997,9 @@ async function paintPartBody(): Promise<void> {
       // 속도는 두 번 재야 나온다. 처음엔 아직 모른다고 말한다.
       const st = await invoke<any>("sync_stalled").catch(() => null);
       const rate = Number(st?.rate ?? 0);
+      // 20초를 모아야 첫 값이 나온다. 그동안은 재는 중이라고 말한다.
       const rateText =
-        rate > 0 ? `${t("초당")} ${rate.toLocaleString()}${t("블록")}` : t("재는 중…");
+        rate > 0 ? `${t("초당")} ${rate.toLocaleString()}${t("블록")}` : t("재는 중… (20초)");
       box.innerHTML =
         card(
           [
@@ -10571,7 +10597,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   setTimeout(() => void checkForUpdate(true), 8000);
   // 노드는 조용히 죽는다. 20초마다 다시 본다 — 죽은 걸 늦게 아는 것이
   // 카운터에서 제일 비싸다.
-  setInterval(() => void paintStatusDots(), 20_000);
+  setInterval(() => void quietly(paintStatusDots), 20_000);
   loadBackup();
   $("abk-new").addEventListener("click", () => void newAddrWithName());
   $("up-check").addEventListener("click", () => {
@@ -10631,7 +10657,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("mn-income").addEventListener("click", loadMiningIncome);
   loadIpfsConf();
   checkHealth();
-  setInterval(checkHealth, 30000);
+  setInterval(() => void quietly(checkHealth), 30000);
   /* ── 말 고르는 자리 ────────────────────────────────────────────
      🔴 여태 이 프로그램은 **한국어뿐**이었다. 손님 화면은 네 나라 말인데
      사장 화면만 한국어라, 한국어를 못 읽는 사장은 아예 못 쓴다.
@@ -10857,7 +10883,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     clearInterval(orderTimer);
     // Only while the shop is watching. A wallet that polls the chain forever in
     // the background is a wallet that keeps a slow computer busy for nothing.
-    if (on) orderTimer = setInterval(loadOrders, 30000);
+    if (on) orderTimer = setInterval(() => void quietly(loadOrders), 30000);
   });
   // 주문하기 화면은 손님 폰으로 옮겼다.
   $("refresh").addEventListener("click", () => loadAssets(false));
@@ -10992,7 +11018,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   backupTick();
   setInterval(backupTick, 6 * 60 * 60 * 1000);
   // 인터넷이 끊기는 것은 화면을 열어 볼 때가 아니라 장사 중에 일어난다.
-  setInterval(loadNet, 30_000);
+  setInterval(() => void quietly(loadNet), 30_000);
 
   // 매출을 계산대에 쌓아 두지 않는 것이 이 프로그램의 보안 전제다. 그런데
   // sweep_run 을 부르는 곳이 없어서 한 번도 돌지 않았다 — 전제만 있고 실행이

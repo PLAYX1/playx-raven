@@ -292,6 +292,10 @@ mod tests {
 ///    **블록 수**로 본다. 그게 실제로 나아가는 유일한 표시다.
 use std::sync::Mutex;
 static SEEN: Mutex<Option<(i64, i64)>> = Mutex::new(None); // (블록, 본 시각)
+/// 마지막으로 **제대로 잰** 속도. 화면이 5초마다 묻는데 그 사이에 블록이
+/// 안 늘면 「재는 중…」으로 돌아가 버려서, 사장 눈에는 숫자가 깜빡인다.
+/// 한 번 잰 값은 다음 값이 나올 때까지 들고 있는다.
+static RATE: Mutex<f64> = Mutex::new(0.0);
 
 #[tauri::command]
 pub async fn sync_stalled() -> Value {
@@ -313,16 +317,27 @@ pub async fn sync_stalled() -> Value {
         Err(e) => e.into_inner(),
     };
     let (last_blocks, since) = g.unwrap_or((blocks, now));
+    let mut r = match RATE.lock() {
+        Ok(r) => r,
+        Err(e) => e.into_inner(),
+    };
     if blocks > last_blocks {
         // **초당 몇 블록인지 같이 준다.** 「멈춘 거 아닌가」에 답하는 건
         // %가 아니라 이 숫자다. 대표님 로그에서 4초에 209블록이 지나갔는데
         // %는 0.0003%밖에 안 움직였다 — %만 보면 멎은 줄 안다.
-        let secs = (now - since).max(1);
-        let rate = (blocks - last_blocks) as f64 / secs as f64;
-        *g = Some((blocks, now));
+        //
+        // ⚠️ **너무 짧게 재지 않는다.** 화면이 5초마다 묻는데 그 창으로
+        //    재면 값이 크게 튄다(장부를 디스크에 쏟는 동안에는 0 이 나온다).
+        //    20초는 모아서 잰다. 그전에는 지난번 값을 그대로 보여 준다 —
+        //    숫자가 깜빡이는 것보다 조금 묵은 숫자가 낫다.
+        let secs = now - since;
+        if secs >= 20 {
+            *r = (blocks - last_blocks) as f64 / secs as f64;
+            *g = Some((blocks, now));
+        }
         return json!({
             "known": true, "stalled": false, "blocks": blocks,
-            "rate": (rate * 10.0).round() / 10.0,
+            "rate": (*r * 10.0).round() / 10.0,
         });
     }
     // 처음 본 값이면 그때를 기준으로 잡는다.
