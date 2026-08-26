@@ -8,6 +8,7 @@ mod backup;
 mod classes;
 mod conf;
 mod door;
+mod dropbox;
 mod peers;
 mod sample;
 mod recover;
@@ -335,6 +336,7 @@ pub fn run() {
             price::rvn_rate,
             price::quote_price,
             boot::boot_report,
+            upload::ipfs_add_dropped,
             shopkey::shopkey_origin,
             shopmove::shop_key_move_plan,
             shopmove::shop_key_move,
@@ -461,6 +463,39 @@ pub fn run() {
             if let Some(w) = app.get_webview_window("main") {
                 let h = app.handle().clone();
                 w.on_window_event(move |e| {
+                    // 🔴 **떨어뜨린 자리가 곧 뜻이다.**
+                    //
+                    //    대표님: "자산을 발행하기 위해 드랍할 곳이 있고 아닌
+                    //    곳이 있어야 할 것 같아. 화면에 그걸 잘 설명해 줘야 하고."
+                    //
+                    //    맞다. 채팅에 사진을 떨어뜨린 사람은 **글에 붙이려는**
+                    //    것이지 500 RVN 을 태우려는 게 아니다. 그래서 자리마다
+                    //    다른 일이 일어나고, 끌고 오는 **그 순간** 화면이
+                    //    무슨 일이 일어날지 말한다.
+                    //
+                    //    경로는 여기서 기억해 둔다. 화면이 「이 경로를 올려 줘」
+                    //    라고 말할 수 있게 되는데, 아무 경로나 받으면 화면이
+                    //    뚫리는 날 wallet.dat 이 공개 파일창고로 올라간다.
+                    if let tauri::WindowEvent::DragDrop(d) = e {
+                        use tauri::DragDropEvent as D;
+                        let (name, payload) = match d {
+                            D::Enter { .. } => ("drop-enter", serde_json::json!({})),
+                            D::Leave => ("drop-leave", serde_json::json!({})),
+                            D::Drop { paths, .. } => {
+                                let list: Vec<String> =
+                                    paths.iter().map(|p| p.to_string_lossy().to_string()).collect();
+                                crate::dropbox::remember(&list);
+                                ("drop-files", serde_json::json!({ "paths": list }))
+                            }
+                            _ => ("drop-leave", serde_json::json!({})),
+                        };
+                        // `Emitter` 를 여기서 들인다 — 파일 위쪽에 두면 이
+                        // 블록이 없는 빌드에서 「안 쓰는 import」 경고가 난다.
+                        use tauri::Emitter as _;
+                        if let Some(win) = h.get_webview_window("main") {
+                            let _ = win.emit(name, payload);
+                        }
+                    }
                     if let tauri::WindowEvent::CloseRequested { api, .. } = e {
                         // 끄지 않고 감춘다. 가게는 계속 돈다.
                         api.prevent_close();

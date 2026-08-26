@@ -86,6 +86,7 @@ async function invoke<T = any>(cmd: string, args?: any): Promise<T> {
 }
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
 import { getVersion } from "@tauri-apps/api/app";
+import { listen } from "@tauri-apps/api/event";
 import { check as checkUpdate } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { t, lang, setLang, LANG_NAMES, startI18n } from "./i18n";
@@ -2891,7 +2892,11 @@ async function sendOwed() {
 }
 
 
+/** 지금 열려 있는 화면. 끌어다 놓기가 **자리마다 다르게** 굴려면 필요하다. */
+let currentPage = "ravi";
+
 function showPage(id: string) {
+  currentPage = id;
   if (id === "ravi") paintRavi();
   paintPageTiles(id);
   // 🔴 라비 화면에서는 떠 있는 「Ravi에게 물어보기」를 숨긴다.
@@ -3036,6 +3041,112 @@ async function makeAddress() {
     $("w-copy").onclick = () => navigator.clipboard.writeText(addr);
   } catch (e) {
     say("주소를 만들지 못했습니다", String(e));
+  }
+}
+
+/* ── 끌어다 놓기 ─────────────────────────────────────────────
+   🔴 **떨어뜨린 자리가 곧 뜻이다.** 같은 사진이라도 자산 화면에 놓으면
+   발행이고, 이야기 화면에 놓으면 글에 붙이는 것이다. 하나로 뭉뚱그리면
+   채팅에 사진 올리려던 사람이 500 RVN 을 태우게 된다.
+
+   그리고 **끌고 오는 순간** 무슨 일이 일어날지 말한다. 놓고 나서 알려
+   주면 늦다 — 되돌릴 수 없는 일이 섞여 있다.                          */
+
+type DropJob = { title: string; why: string; ok: boolean };
+
+function dropJob(): DropJob {
+  switch (currentPage) {
+    case "assets":
+      return {
+        title: t("새 자산으로 발행합니다"),
+        why: t("파일이 파일창고에 올라가고, 이어서 이름을 정하는 화면이 열립니다. RVN 이 소각되는 것은 마지막에 한 번 더 여쭙습니다."),
+        ok: true,
+      };
+    case "talk":
+      return {
+        title: t("글에 붙입니다"),
+        why: t("자산으로 만드는 것이 아닙니다. 파일창고에 올리고 그 주소를 글에 넣습니다 — 값이 들지 않습니다."),
+        ok: true,
+      };
+    case "shop":
+      return {
+        title: t("가게 사진으로 씁니다"),
+        why: t("가게 정보에 붙습니다. 체인은 안 건드리므로 값이 들지 않습니다."),
+        ok: true,
+      };
+    default:
+      return {
+        title: t("여기서는 받지 않습니다"),
+        why: t("「자산」에 놓으면 발행하고, 「이야기」에 놓으면 글에 붙입니다."),
+        ok: false,
+      };
+  }
+}
+
+function dropVeil(on: boolean) {
+  const v = $("dropveil");
+  if (!on) {
+    v.classList.remove("on");
+    return;
+  }
+  const j = dropJob();
+  $("dropveil-t").textContent = j.title;
+  $("dropveil-p").textContent = j.why;
+  v.classList.toggle("no", !j.ok);
+  v.classList.add("on");
+}
+
+/** 사진인가. 영상은 **안 올린다** — 링크로 받는다. */
+function looksLikeImage(path: string): boolean {
+  return /\.(jpe?g|png|gif|webp|avif|bmp|svg)$/i.test(path);
+}
+
+async function onDropped(paths: string[]) {
+  dropVeil(false);
+  const j = dropJob();
+  if (!j.ok || !paths.length) return;
+
+  const vids = paths.filter((p) => /\.(mp4|mov|avi|mkv|webm|m4v)$/i.test(p));
+  const files = paths.filter(looksLikeImage);
+  if (vids.length && !files.length) {
+    await sure(
+      t("영상은 올리지 않습니다"),
+      t("영상 파일 대신 **영상 주소**를 붙여넣으시면 됩니다. 계산대 컴퓨터가 영상을 나르면 가게 인터넷이 느려지고, 그 인터넷은 주문 받는 길이기도 합니다.").replace(/\*\*/g, ""),
+      t("알겠습니다")
+    );
+    return;
+  }
+  if (!files.length) {
+    await sure(t("사진만 받습니다"), t("사진(jpg · png · gif · webp)을 놓아 주세요."), t("알겠습니다"));
+    return;
+  }
+
+  const one = files[0];
+  try {
+    const added = await invoke<any>("ipfs_add_dropped", { path: one });
+    const cid = String(added.cid || "");
+    if (!cid) throw new Error(t("올리지 못했습니다"));
+
+    if (currentPage === "assets") {
+      // 마법사를 열고 **이미 올라간 상태**로 시작한다. 다시 고르게 하면
+      // 끌어다 놓은 뜻이 없다.
+      openWizard();
+      ($("i-ipfs") as HTMLInputElement).value = cid;
+      $("i-preview").innerHTML =
+        `<img src="http://127.0.0.1:8080/ipfs/${cid}" alt="" style="max-width:220px;border-radius:8px;margin-top:9px" />`;
+    } else if (currentPage === "talk") {
+      const box = $("tk-text") as HTMLTextAreaElement;
+      box.value = `${box.value}${box.value ? "\n" : ""}https://ipfs.io/ipfs/${cid}`;
+      box.focus();
+      $("tk-note").innerHTML = `<span class="ok">${t("사진을 붙였습니다")}</span>`;
+    } else if (currentPage === "shop") {
+      const el = document.getElementById("sh-icon") as HTMLInputElement | null;
+      if (el) el.value = cid;
+      $("sh-refreshsay").innerHTML =
+        `<span class="ok">${t("가게 사진으로 넣었습니다. 「바뀐 것 손님에게 알리기」를 눌러 주세요.")}</span>`;
+    }
+  } catch (e) {
+    await sure(t("올리지 못했습니다"), String(e), t("닫기"));
   }
 }
 
@@ -3514,6 +3625,8 @@ async function openWizard() {
   ($("i-qty") as HTMLInputElement).value = "1";
   ($("i-units") as HTMLInputElement).value = "0";
   ($("i-reissuable") as HTMLInputElement).checked = true;
+  const vid = $("i-video") as HTMLInputElement | null;
+  if (vid) vid.value = "";
   $("i-namecheck").textContent = "";
   $("i-preview").innerHTML = "";
   $("i-result").innerHTML = "";
@@ -3920,7 +4033,23 @@ async function doIssue() {
   try {
     const qty = wizKind === "unique" ? 1 : parseFloat(($("i-qty") as HTMLInputElement).value) || 1;
     const units = wizKind === "unique" ? 0 : parseInt(($("i-units") as HTMLInputElement).value) || 0;
-    const cid = ($("i-ipfs") as HTMLInputElement).value.trim() || null;
+    let cid = ($("i-ipfs") as HTMLInputElement).value.trim() || null;
+    // 🔴 자산에는 IPFS 해시가 **하나**만 박힌다. 사진과 영상 링크를 둘 다
+    //    담으려면 그 둘을 적은 쪽지를 만들어 그 쪽지 주소를 박아야 한다.
+    //    사진만 있으면 쪽지를 안 만든다 — 한 겹 덜 거치는 쪽이 빠르다.
+    const video = ($("i-video") as HTMLInputElement)?.value.trim() || "";
+    if (video) {
+      const up = await invoke<any>("ipfs_add_bundle", {
+        files: [],
+        metadata: {
+          name: issueCheck.name,
+          image: cid || "",
+          // 표준 이름을 쓴다. 남의 지갑도 이 이름을 읽는다.
+          video_url: video,
+        },
+      });
+      cid = String(up.cid || cid || "");
+    }
     const re = ($("i-reissuable") as HTMLInputElement).checked;
 
     // 🔴 여기가 **언제나 `issue_asset` 하나였다.** 화면은 일곱을 고르게 하고,
@@ -10159,6 +10288,11 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("tk-reload").addEventListener("click", () => void talkPaint());
   $("tk-newroom").addEventListener("click", () => void talkNewRoom());
   $("tk-name").addEventListener("click", () => void talkSetName());
+  // 끌어다 놓기. 🔴 이 셋을 안 묶으면 창에 파일을 떨어뜨려도 아무 일도
+  //    안 일어난다 — 만들어 놓고 안 부르는 그 병이다.
+  void listen("drop-enter", () => dropVeil(true));
+  void listen("drop-leave", () => dropVeil(false));
+  void listen<any>("drop-files", (e) => void onDropped(e.payload?.paths || []));
   $("tk-room").addEventListener("change", () => {
     tkRoom = ($("tk-room") as HTMLSelectElement).value;
     void talkPaint();

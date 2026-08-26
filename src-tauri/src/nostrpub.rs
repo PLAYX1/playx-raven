@@ -49,8 +49,19 @@ pub async fn nostr_publish(event: Value) -> Result<Value, String> {
 
     let mut ok: Vec<String> = Vec::new();
     let mut failed: Vec<Value> = Vec::new();
-    for url in targets() {
-        match send_one(&url, &msg).await {
+    // 🔴 **릴레이는 한꺼번에 묻는다. 줄 세우면 안 된다.**
+    //
+    //    예전에는 `for url in targets()` 안에서 `.await` 했다. 네 곳을
+    //    차례로 돌면서 한 곳당 최대 7초를 기다리니 **최대 28초**다. 이야기
+    //    화면은 글·이름표·방 목록을 세 번 읽으므로 **최대 84초**가 된다.
+    //    그 화면은 아무도 안 쓴다.
+    //
+    //    한꺼번에 물으면 최대 7초다 — 제일 느린 한 곳만큼만 기다린다.
+    use futures_util::future::join_all;
+    let urls = targets();
+    let results = join_all(urls.iter().map(|u| send_one(u, &msg))).await;
+    for (url, r) in urls.into_iter().zip(results) {
+        match r {
             Ok(()) => ok.push(url.clone()),
             Err(e) => failed.push(json!({ "relay": url, "why": e })),
         }
@@ -177,9 +188,19 @@ pub async fn nostr_query(
     .map_err(|e| format!("보낼 것을 만들지 못했습니다: {e}"))?;
 
     let mut seen: std::collections::HashMap<String, Value> = std::collections::HashMap::new();
-    for url in targets() {
-        // 한 곳이 죽어도 나머지에서 읽는다. 릴레이는 늘 하나씩 죽는다.
-        if let Ok(events) = read_one(&url, &req, sub).await {
+    // 🔴 **릴레이는 한꺼번에 묻는다. 줄 세우면 안 된다.**
+    //
+    //    예전에는 `for url in targets()` 안에서 `.await` 했다. 네 곳을
+    //    차례로 돌면서 한 곳당 최대 7초를 기다리니 **최대 28초**다. 이야기
+    //    화면은 글·이름표·방 목록을 세 번 읽으므로 **최대 84초**가 된다.
+    //    그 화면은 아무도 안 쓴다.
+    //
+    //    한꺼번에 물으면 최대 7초다 — 제일 느린 한 곳만큼만 기다린다.
+    use futures_util::future::join_all;
+    // 한 곳이 죽어도 나머지에서 읽는다. 릴레이는 늘 하나씩 죽는다.
+    let got = join_all(targets().iter().map(|u| read_one(u, &req, sub))).await;
+    for r in got {
+        if let Ok(events) = r {
             for e in events {
                 if let Some(id) = e.get("id").and_then(Value::as_str) {
                     seen.entry(id.to_string()).or_insert(e);
@@ -227,8 +248,18 @@ pub async fn nostr_query_tag(
         .map_err(|e| format!("보낼 것을 만들지 못했습니다: {e}"))?;
 
     let mut seen: std::collections::HashMap<String, Value> = std::collections::HashMap::new();
-    for url in targets() {
-        if let Ok(events) = read_one(&url, &req, sub).await {
+    // 🔴 **릴레이는 한꺼번에 묻는다. 줄 세우면 안 된다.**
+    //
+    //    예전에는 `for url in targets()` 안에서 `.await` 했다. 네 곳을
+    //    차례로 돌면서 한 곳당 최대 7초를 기다리니 **최대 28초**다. 이야기
+    //    화면은 글·이름표·방 목록을 세 번 읽으므로 **최대 84초**가 된다.
+    //    그 화면은 아무도 안 쓴다.
+    //
+    //    한꺼번에 물으면 최대 7초다 — 제일 느린 한 곳만큼만 기다린다.
+    use futures_util::future::join_all;
+    let got = join_all(targets().iter().map(|u| read_one(u, &req, sub))).await;
+    for r in got {
+        if let Ok(events) = r {
             for e in events {
                 if let Some(id) = e.get("id").and_then(Value::as_str) {
                     seen.entry(id.to_string()).or_insert(e);
@@ -268,8 +299,18 @@ pub async fn nostr_query_authors(
     .map_err(|e| format!("보낼 것을 만들지 못했습니다: {e}"))?;
 
     let mut seen: std::collections::HashMap<String, Value> = std::collections::HashMap::new();
-    for url in targets() {
-        if let Ok(events) = read_one(&url, &req, sub).await {
+    // 🔴 **릴레이는 한꺼번에 묻는다. 줄 세우면 안 된다.**
+    //
+    //    예전에는 `for url in targets()` 안에서 `.await` 했다. 네 곳을
+    //    차례로 돌면서 한 곳당 최대 7초를 기다리니 **최대 28초**다. 이야기
+    //    화면은 글·이름표·방 목록을 세 번 읽으므로 **최대 84초**가 된다.
+    //    그 화면은 아무도 안 쓴다.
+    //
+    //    한꺼번에 물으면 최대 7초다 — 제일 느린 한 곳만큼만 기다린다.
+    use futures_util::future::join_all;
+    let got = join_all(targets().iter().map(|u| read_one(u, &req, sub))).await;
+    for r in got {
+        if let Ok(events) = r {
             for e in events {
                 // 이름표는 **한 사람에 하나**다. 새것만 남긴다 — 옛것이
                 // 뒤에 오면 바꾼 이름이 다시 옛 이름으로 보인다.

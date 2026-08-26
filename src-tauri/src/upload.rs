@@ -156,6 +156,32 @@ fn render_page(doc: &Value) -> Option<String> {
 /// `metadata` is written into the folder as `metadata.json` when provided, so
 /// the description travels with the files rather than living somewhere else
 /// that can be lost separately.
+/// 끌어다 놓은 **파일 경로**를 읽어 파일창고에 올린다.
+///
+/// ## 🔴 왜 경로로 받나
+///
+/// 창에 파일을 떨어뜨리면 Tauri 가 그걸 가로채서 **경로**를 준다(브라우저의
+/// `File` 객체가 아니다). 그래서 화면 쪽에서는 내용을 읽을 수가 없고,
+/// 여기서 읽어야 한다.
+///
+/// ⚠️ **아무 경로나 읽어 주면 안 된다.** 화면이 뚫리면 그 순간
+///    `wallet.dat` 이든 `shopkey.json` 이든 읽어서 올릴 수 있게 된다.
+///    그래서 사람이 **방금 떨어뜨린 파일만** 받는다 — 그 목록은 러스트가
+///    들고 있고 화면은 못 만든다.
+#[tauri::command]
+pub async fn ipfs_add_dropped(path: String) -> Result<Value, String> {
+    if !crate::dropbox::was_dropped(&path) {
+        return Err("이 파일은 창에 떨어뜨린 것이 아닙니다.".into());
+    }
+    let p = std::path::Path::new(&path);
+    let name = p
+        .file_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|| "file".into());
+    let bytes = std::fs::read(p).map_err(|e| format!("파일을 읽지 못했습니다: {e}"))?;
+    ipfs_add_file(Incoming { name, bytes }).await
+}
+
 #[tauri::command]
 pub async fn ipfs_add_bundle(
     files: Vec<Incoming>,

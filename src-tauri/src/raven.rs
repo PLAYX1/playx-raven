@@ -278,6 +278,39 @@ pub async fn list_assets() -> Result<Vec<AssetEntry>, String> {
         .map(|n| n.trim_end_matches('!').to_string())
         .collect();
 
+    // 🔴 **자산 하나마다 줄 서서 묻고 있었다.**
+    //
+    //    예전에는 아래 반복문 안에서 `getassetdata` 를 `.await` 했다. 자산이
+    //    스무 개면 스무 번을 차례로 기다린다. 노드가 한가할 때는 몇백
+    //    밀리초라 안 보이지만, **재색인 중이면 한 번이 몇 초**다 — 그때
+    //    자산 화면은 열리지 않는 화면이 된다. 대표님 윈도우가 지금 그 상태다.
+    //
+    //    한꺼번에 묻는다. 우리 노드는 같은 컴퓨터에 있고 동시 질문을 잘 받는다.
+    let names: Vec<String> = map
+        .keys()
+        .filter(|n| !n.ends_with('!'))
+        .cloned()
+        .collect();
+    let fetched = futures_util::future::join_all(
+        names
+            .iter()
+            .map(|n| async move { (n.clone(), call_rpc("getassetdata", json!([n])).await) }),
+    )
+    .await;
+    let mut cids: std::collections::HashMap<String, Option<String>> =
+        std::collections::HashMap::new();
+    for (n, r) in fetched {
+        // 못 읽었다고 목록에서 빼면 안 된다 — 가진 것은 여전히 진짜고,
+        // 붙은 파일이 없을 뿐이다.
+        let cid = r.ok().and_then(|d| {
+            d.get("ipfs_hash")
+                .and_then(Value::as_str)
+                .filter(|h| !h.is_empty())
+                .map(str::to_string)
+        });
+        cids.insert(n, cid);
+    }
+
     let mut out = Vec::with_capacity(map.len());
     for (name, amount) in map {
         // The owner token itself is bookkeeping, not a holding. Showing `PLAYX`
@@ -285,16 +318,7 @@ pub async fn list_assets() -> Result<Vec<AssetEntry>, String> {
         if name.ends_with('!') {
             continue;
         }
-        let ipfs_hash = match call_rpc("getassetdata", json!([name])).await {
-            Ok(data) => data
-                .get("ipfs_hash")
-                .and_then(Value::as_str)
-                .filter(|h| !h.is_empty())
-                .map(str::to_string),
-            // A missing lookup should not drop the asset from the list — the
-            // holding is still real, it just has no content to preserve.
-            Err(_) => None,
-        };
+        let ipfs_hash = cids.get(name.as_str()).cloned().flatten();
 
         // A unique asset PLAYX#tag and a sub-asset PLAYX/MUSIC both belong to
         // the PLAYX family, and both are ours if we hold PLAYX!.

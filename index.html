@@ -68,6 +68,21 @@
         margin-right: 6px; background: var(--muted); }
       .dot.on { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 22%, transparent); }
       .dot.off { background: var(--muted); opacity: .45; }
+      /* 끌고 오는 순간 덮는 안내. 🔴 **떨어뜨린 자리가 곧 뜻**이라,
+         이 화면에서 무슨 일이 일어나는지 그 자리에서 말해야 한다.
+         채팅에 사진을 떨어뜨린 사람은 글에 붙이려는 것이지 500 RVN 을
+         태우려는 게 아니다. */
+      #dropveil { position: fixed; inset: 0; z-index: 9998; display: none;
+        align-items: center; justify-content: center;
+        background: color-mix(in srgb, var(--bg) 78%, transparent);
+        backdrop-filter: blur(3px); }
+      #dropveil.on { display: flex; }
+      #dropveil .card { text-align: center; padding: 34px 44px; border-radius: 20px;
+        border: 3px dashed var(--brand); background: var(--panel);
+        max-width: 460px; box-shadow: 0 18px 50px rgba(0,0,0,.18); }
+      #dropveil h3 { margin: 0 0 8px; font-size: 21px; }
+      #dropveil p { margin: 0; font-size: 15px; color: var(--muted); line-height: 1.7; }
+      #dropveil.no .card { border-color: var(--muted); }
       /* 맞교환 칸. 접어 두는 이유 — 매일 쓰는 일이 아니다. 늘 펼쳐 두면
          자산 목록이 저 아래로 밀린다. */
       .swapbox { margin: 14px 0; padding: 14px 16px; border: 1px solid var(--line);
@@ -2948,6 +2963,22 @@
             <button class="ghost" id="i-upload">파일 고르기</button>
           </div>
           <div id="i-preview"></div>
+          <!-- 🔴 영상은 **올리지 않고 링크만** 받는다.
+               ① 계산대 PC 가 영상을 나르면 손님 열 명에 가게 인터넷이 죽는다.
+                  그 인터넷은 주문 받는 길이기도 하다.
+               ② 몇백 MB 는 돕는 노드가 안 들어 준다 — 가게가 꺼지면 안 보인다.
+               ③ 유튜브는 전 세계에 서버가 깔려 있고 공짜다. 거기서 이기려
+                  들면 「느리고 자주 끊기는 유튜브」가 될 뿐이다.
+
+               ⚠️ 화면에 서비스 이름을 적지 않는다. 「비메오」가 뭔지 아는
+                  사장은 없다. **아무 영상 링크나** 붙이면 된다. -->
+          <label style="margin-top:14px">영상 링크 <span class="meta">(선택)</span>
+            <input id="i-video" placeholder="유튜브 등 영상 주소를 그대로 붙여넣으세요"
+                   autocomplete="off" spellcheck="false" /></label>
+          <div class="meta">
+            영상 파일은 안 올립니다 — <b>주소만</b> 자산에 붙습니다.
+            그래서 어디에 올리셨든 상관없고, 나중에 <b>주소만 갈아 끼울 수</b> 있습니다.
+          </div>
           <p class="meta">올린 파일은 이 컴퓨터가 보존합니다.</p>
         </div>
 
@@ -3056,5 +3087,10 @@
     </button>
 
     <script type="module" src="/src/main.ts"></script>
+    <!-- 끌고 오는 동안만 보인다. 무슨 일이 일어날지 여기서 말한다. -->
+    <div id="dropveil"><div class="card">
+      <h3 id="dropveil-t"></h3>
+      <p id="dropveil-p"></p>
+    </div></div>
   </body>
 </html>
