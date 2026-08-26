@@ -161,6 +161,37 @@ fn prep_autostart() -> Option<String> {
     }
 }
 
+/// 바깥 연결도 켠다.
+///
+/// ## 🔴 왜 자동으로 켜나 — 안 켜면 가게가 **안에서만** 열린다
+///
+/// 대표님: "릴레이 바깥 연결이 자동으로 작동해야 하는 거 아닌가?"
+///
+/// 맞다. 표시등 넷이 다 초록이어도 이게 꺼져 있으면 **가게 밖에서는
+/// 아무도 못 들어온다.** 손님이 QR 을 찍어도 안 열린다. 그런데 그 사실이
+/// 화면 안쪽에만 적혀 있어서, 사장은 다 켜진 줄 알고 장사를 시작한다.
+///
+/// 켜는 데 드는 값이 없다 — 무료 터널이고, 여는 것은 **우리 손님 화면
+/// 하나**뿐이다. 지갑도 노드 RPC 도 그 길로 안 나간다.
+///
+/// ⚠️ 준비물이 없으면 조용히 넘어간다. 받아 오는 것은 사람이 정한다 —
+///    말없이 인터넷에서 프로그램을 내려받는 계산대는 만들지 않는다.
+fn prep_tunnel() -> Option<String> {
+    let st = crate::tunnel::tunnel_status();
+    if st["running"].as_bool().unwrap_or(false) {
+        return None;
+    }
+    if !st["installed"].as_bool().unwrap_or(false) {
+        return Some("바깥 연결은 준비물이 아직 없습니다 — 「이 컴퓨터 → 바깥 연결」에서 받으실 수 있습니다".into());
+    }
+    match crate::tunnel::tunnel_start(crate::server::PORT) {
+        Ok(v) => v["url"]
+            .as_str()
+            .map(|u| format!("바깥 연결을 켰습니다 — 손님이 가게 밖에서도 들어옵니다 ({u})")),
+        Err(e) => Some(format!("바깥 연결을 켜지 못했습니다: {e}")),
+    }
+}
+
 /// 채굴을 왜 지금 못 켜는가. **켤 수 있으면 그것도 적는다.**
 ///
 /// 🔴 자동으로 켜지 않는다. 전기를 쓰는 일이고, 남의 컴퓨터에서 말없이
@@ -203,6 +234,13 @@ pub async fn run() -> Value {
     }
 
     let r = crate::services::services_start().await;
+
+    // 손님 화면이 뜬 뒤에 바깥 길을 연다. 순서가 바뀌면 터널이 죽은
+    // 포트를 가리킨다.
+    if let Some(n) = prep_tunnel() {
+        notes.push(n);
+    }
+
     let (started, mut skipped) = match r {
         Ok(v) => (
             v["started"].as_array().cloned().unwrap_or_default(),

@@ -333,6 +333,7 @@ pub fn run() {
             price::rvn_rate,
             price::quote_price,
             boot::boot_report,
+            shopkey::shopkey_origin,
             swap::swap_ready,
             swap::swap_make_lot,
             swap::swap_offer,
@@ -518,6 +519,19 @@ pub fn run() {
             // 사장은 자기 돈이 나가는 줄 모른다.
             if matches!(event, tauri::RunEvent::Exit) {
                 crate::mining::stop_on_exit();
+                // 🔴 **우리가 켠 것은 우리가 끈다.**
+                //
+                //    대표님: "프로그램을 다 종료하면 ravend 가 남아 있는데,
+                //    일반인은 이걸 모를 거야."
+                //
+                //    맞다. 작업관리자에 이름 모를 것이 21% 를 먹고 있으면
+                //    보통 사람은 바이러스로 읽는다. 창을 닫는 것(X)은 여전히
+                //    숨기기라 노드가 계속 돈다 — 밤새 입금을 받아야 하니까.
+                //    하지만 **끝내기를 눌렀으면 끝나야 한다.**
+                //
+                //    ⚠️ 사장이 따로 켜 둔 레이븐 코어는 안 건드린다.
+                //       `services_stop` 은 우리가 띄운 것만 안다.
+                crate::services::stop_on_exit();
             }
         });
 }

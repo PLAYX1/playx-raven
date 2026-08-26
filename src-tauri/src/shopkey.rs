@@ -79,11 +79,33 @@ fn load_or_make() -> Result<[u8; 32], String> {
         );
     }
 
-    let (sk, _) = Secp256k1::new().generate_keypair(&mut rand::thread_rng());
-    let bytes = sk.secret_bytes();
+    // 🔴 **씨앗에서 뽑는다.** 무작위로 만들면 `shopkey.json` 을 잃는 순간
+    //    간판을 영영 못 고친다 — 씨앗을 들고 있어도.
+    //
+    //    대표님: "레이븐코인 seed 만 입력해서 복구하면 기존에 사용하던
+    //    모든게 복구가 되었으면 좋겠는데."
+    //
+    //    그러려면 이 열쇠도 씨앗에서 나와야 한다. 지갑이 잠겨 있거나
+    //    12단어로 만든 지갑이 아니면 예전처럼 무작위로 만든다 — 그때는
+    //    백업이 유일한 길이고, 파일에 그렇게 적어 둔다.
+    let (bytes, from) = match from_seed() {
+        Some(b) => (b, "seed"),
+        None => (
+            Secp256k1::new()
+                .generate_keypair(&mut rand::thread_rng())
+                .0
+                .secret_bytes(),
+            "random",
+        ),
+    };
     let body = json!({
         "sk": hex::encode(bytes),
-        "note": "가게 간판 열쇠입니다. 남에게 보여주지 마세요. 백업에 같이 들어갑니다.",
+        "from": from,
+        "note": if from == "seed" {
+            "가게 간판 열쇠입니다. 12단어에서 나왔으므로 12단어만 있으면 되살릴 수 있습니다."
+        } else {
+            "가게 간판 열쇠입니다. 무작위로 만들었으므로 이 파일이 유일한 사본입니다 — 백업을 잃으면 간판을 못 고칩니다."
+        },
     });
     if let Some(dir) = p.parent() {
         let _ = std::fs::create_dir_all(dir);
@@ -96,6 +118,78 @@ fn load_or_make() -> Result<[u8; 32], String> {
         let _ = std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o600));
     }
     Ok(bytes)
+}
+
+/// 12단어에서 이 가게의 열쇠를 뽑는다.
+///
+/// ## 🔴 왜 BIP32 트리를 안 쓰나
+///
+/// 열쇠가 **하나**다. 자식 열쇠를 줄줄이 뽑을 일이 없다. BIP32 를 쓰려면
+/// HMAC-SHA512 와 PBKDF2 를 새로 들여야 하고, 가게 간판을 쥐는 열쇠에
+/// 남의 코드를 더 들이는 것보다 **읽어서 확인되는 열 줄**이 낫다.
+///
+/// 필요한 성질은 셋뿐이고 이 방식이 셋 다 만족한다.
+/// ① 같은 12단어면 언제나 같은 열쇠가 나온다 → 복구된다.
+/// ② 이 열쇠를 손에 넣어도 12단어는 못 얻는다(해시는 되돌릴 수 없다).
+/// ③ 지갑 열쇠와 **다른 값**이다 — 앞에 붙인 표식이 그 일을 한다.
+///    간판이 뚫리는 것과 금고가 뚫리는 것은 같은 사고여서는 안 된다.
+///
+/// ⚠️ 표식 문자열은 **절대 바꾸지 마라.** 바꾸면 그날부터 다른 열쇠가
+///    나오고, 이미 체인에 적힌 공개키와 어긋나 간판이 죽는다.
+const SEED_TAG: &str = "PLAYX-RAVEN-SHOPKEY-v1";
+
+fn derive_from_words(words: &str, passphrase: &str) -> Option<[u8; 32]> {
+    // 12단어는 소문자·한 칸 띄어쓰기가 표준이다. 사람이 옮겨 적으면
+    // 대문자나 두 칸이 섞인다 — 그러면 다른 열쇠가 나와서 복구가 실패한다.
+    let norm = words.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase();
+    if norm.split(' ').count() < 12 {
+        return None;
+    }
+    let mut h = Sha256::new();
+    h.update(SEED_TAG.as_bytes());
+    h.update([0u8]);
+    h.update(norm.as_bytes());
+    h.update([0u8]);
+    // 12단어에 암호를 걸어 둔 지갑이 있다. 그것까지 넣어야 같은 열쇠가 된다.
+    h.update(passphrase.as_bytes());
+    let out: [u8; 32] = h.finalize().into();
+    // 곡선 밖 값이면 못 쓴다. 확률은 사실상 0 이지만 확인은 공짜다.
+    secp256k1::SecretKey::from_byte_array(&out).ok().map(|_| out)
+}
+
+/// 노드에 12단어를 물어본다. 잠겨 있거나 12단어로 만든 지갑이 아니면 `None`.
+///
+/// ⚠️ 12단어는 **여기서만** 쓰고 어디에도 안 남긴다. 로그에도, 파일에도,
+///    화면에도 안 나간다. 나가는 것은 해시 결과뿐이다.
+fn from_seed() -> Option<[u8; 32]> {
+    let v = tauri::async_runtime::block_on(async {
+        crate::raven::call_rpc("getmywords", json!([])).await
+    })
+    .ok()?;
+    let words = v.get("word_list").and_then(Value::as_str)?;
+    let pass = v.get("passphrase").and_then(Value::as_str).unwrap_or("");
+    derive_from_words(words, pass)
+}
+
+/// 이 열쇠가 12단어에서 나온 것인가. 화면이 「잃어버려도 되살릴 수 있는가」
+/// 를 정직하게 말하려면 이게 필요하다.
+#[tauri::command]
+pub fn shopkey_origin() -> Value {
+    let Ok(s) = std::fs::read_to_string(key_file()) else {
+        return json!({ "exists": false });
+    };
+    let v: Value = serde_json::from_str(&s).unwrap_or(Value::Null);
+    let from = v.get("from").and_then(Value::as_str).unwrap_or("random");
+    json!({
+        "exists": true,
+        "from": from,
+        "recoverable": from == "seed",
+        "why": if from == "seed" {
+            "12단어만 있으면 이 열쇠를 되살릴 수 있습니다."
+        } else {
+            "이 열쇠는 무작위로 만들어졌습니다. 백업 파일이 유일한 사본입니다 — 잃으면 간판을 못 고칩니다."
+        },
+    })
 }
 
 /// 체인 프로필에 적을 공개키. **이것만 밖으로 나간다.**

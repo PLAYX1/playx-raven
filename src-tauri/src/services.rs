@@ -334,7 +334,27 @@ pub async fn services_start() -> Result<Value, String> {
         //    아니라 가게가 멈춘다 — 더 급한 쪽이다.
         let want_addr = crate::conf::wants_addressindex();
         let addr_stamp = crate::paths::app_file("reindexed-addressindex");
-        let need_reindex = (want_asset && !stamp.exists()) || (want_addr && !addr_stamp.exists());
+        // 🔴 **여기서 대표님 컴퓨터가 34GB 를 처음부터 다시 훑었다.**
+        //
+        //    예전 줄: `(want_asset && !stamp.exists()) || (want_addr && !addr_stamp.exists())`
+        //    표시 파일이 없으면 무조건 `-reindex` 를 붙였다. 그런데 표시가
+        //    없는 것과 색인이 없는 것은 **다른 말이다.** 색인을 이미 갖춘
+        //    노드에 우리 앱을 처음 깔면 표시만 없다 — 그런데 그 한 줄이
+        //    말없이 몇 시간을 태웠다. 100% 였던 노드가 0% 가 됐다.
+        //
+        //    이제 **먼저 그냥 켜 본다.** 색인이 이미 있으면 잘 뜨고,
+        //    표시만 남기면 끝난다. 정말 다시 훑어야 하는 경우에는 코어가
+        //    「-reindex 로 다시 만들어야 한다」고 하며 안 뜨고, 그때
+        //    **사람에게 물어본다.** 몇 시간짜리 일을 말없이 벌이지 않는다.
+        //
+        //    ⚠️ 한번 시작한 재색인은 **중간에 못 멈춘다.** 코어가 그 상태를
+        //       디스크에 적어 두고 다음에 켜도 이어서 한다. 그래서 시작하기
+        //       전이 유일한 기회다.
+        //    ⚠️ 표시 이름은 **이미 있는 것을 쓴다**(`reindex-armed`). 새로
+        //       만들면 「한가할 때 다시 훑기」 화면과 두 벌이 되고, 이
+        //       저장소에서 그 병을 오늘만 세 번 봤다.
+        let armed = crate::paths::app_file("reindex-armed").exists();
+        let need_reindex = armed && ((want_asset && !stamp.exists()) || (want_addr && !addr_stamp.exists()));
 
         let mut cmd = Command::new(&path);
         cmd.arg(format!("-datadir={datadir}")).arg("-server=1");
@@ -614,6 +634,36 @@ pub fn services_stop() -> Result<Value, String> {
         }
     }
     Ok(json!({ "stopped": stopped }))
+}
+
+/// 앱이 끝날 때 **우리가 켠 것만** 끈다.
+///
+/// ## 노드는 죽이지 않고 「그만」이라고 말한다
+///
+/// `kill` 은 장부를 쓰던 중이면 상하게 할 수 있고, 그러면 다음에 켤 때
+/// 34GB 를 다시 훑는다. 코어에는 `stop` 이라는 정중한 문이 있다 — 쓰던
+/// 것을 마저 쓰고 스스로 닫는다. 몇 초 기다려 준다.
+///
+/// 파일창고는 그냥 끈다. 저장소가 상해도 다음에 켤 때 알아서 고치고,
+/// 무엇보다 **거기엔 남의 돈이 없다.**
+pub fn stop_on_exit() {
+    // 우리가 띄운 노드가 있을 때만 말을 건다. 사장이 따로 켜 둔 코어를
+    // 우리가 끄면 안 된다 — 그건 우리 것이 아니다.
+    let ours_node = OURS
+        .lock()
+        .ok()
+        .and_then(|g| g.as_ref().map(|v| v.iter().any(|(n, _)| n == "node")))
+        .unwrap_or(false);
+    if ours_node {
+        let _ = tauri::async_runtime::block_on(async {
+            let r = crate::raven::call_rpc("stop", json!([])).await;
+            // 스스로 닫는 데 몇 초 걸린다. 안 기다리면 앱이 먼저 사라지고
+            // 노드는 어정쩡하게 남는다 — 지금 겪고 있는 그 모습이다.
+            tokio::time::sleep(std::time::Duration::from_millis(2500)).await;
+            r
+        });
+    }
+    let _ = services_stop();
 }
 
 /// Everything needed to open the shop, in one press.
