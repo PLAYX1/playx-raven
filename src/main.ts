@@ -2727,6 +2727,36 @@ function prepCard(behind: number): string {
 }
 
 /** 복사 단추만 붙인다. 결과가 다시 그려질 때마다 새 단추가 생기기 때문이다. */
+/**
+ * **너무 오래 걸릴 때 왜 그런지 말한다.**
+ *
+ * 🔴 「기다리십시오」만 적으면 사장은 한 달을 기다린다. 무엇이 느리게
+ *    만드는지는 **우리가 켜 놓은 것**이라 우리가 안다.
+ */
+function slowCard(behind: number, rate: number): string {
+  if (rate <= 0 || behind <= 0) return "";
+  const day = behind / rate / 86400;
+  if (day < 7) return "";
+  return `<div class="card" style="margin-top:12px;border-color:var(--warn)">
+      <h3>${t("이대로면 너무 오래 걸립니다")}</h3>
+      <p class="meta">${t("지금 속도로는")} ${Math.round(day)}${t(
+        "일 걸립니다. 아래 셋 중 하나가 원인인 경우가 대부분입니다."
+      )}</p>
+      <div class="kv"><b>${t("① 디스크")}</b><span>${t(
+        "HDD 면 SSD 보다 20~50배 느립니다. 작업 관리자 → 성능 → 디스크 에서 보실 수 있습니다."
+      )}</span></div>
+      <div class="kv"><b>${t("② 백신")}</b><span>${t(
+        "장부 폴더를 검사에서 빼야 합니다 — 위 「한 번에 준비하기」가 해 드립니다."
+      )}</span></div>
+      <div class="kv"><b>${t("③ 색인")}</b><span>${t(
+        "「이 노드로 지갑도 열기」를 켜 두면 여러 배 느려집니다. 급하시면 다 따라잡은 뒤에 켜셔도 됩니다."
+      )}</span></div>
+      <p class="meta" style="margin-top:10px">${t(
+        "그리고 다 따라잡기 전에도 가게는 여실 수 있습니다 — 노드가 따라잡는 동안에는 결제가 늦게 보일 뿐입니다."
+      )}</p>
+    </div>`;
+}
+
 function bindPrepCopy() {
   const copy = document.getElementById("pc-copy");
   if (!copy) return;
@@ -2787,6 +2817,32 @@ function bindPrep(behind: number) {
       bindPrepCopy();
     }
   });
+}
+
+/**
+ * **언제 끝나는지 실측으로 말한다.**
+ *
+ * ## 🔴 우리가 거짓말하고 있었다
+ *
+ * 화면은 「며칠 걸릴 수 있습니다」라고 적어 놨다. 대표님 노드를 8시간
+ * 재어 보니 **초당 1.25블록**이었고, 남은 320만 블록이면 **한 달**이다.
+ *
+ * 「며칠」이라 적힌 걸 보고 사장은 이틀쯤 기다린다. 그리고 안 끝난다.
+ * 그러면 다음에는 우리가 하는 말을 안 믿는다.
+ *
+ * ⚠️ 모르면 모른다고 하는 편이 낫지만, **잴 수 있는 것을 안 재고 어림잡아
+ *    적는 것**이 제일 나쁘다. 남은 블록도 속도도 우리가 이미 알고 있다.
+ */
+function etaText(behind: number, rate: number): string {
+  if (rate <= 0) return t("재는 중…");
+  const sec = behind / rate;
+  const hour = sec / 3600;
+  if (hour < 1) return `${t("약")} ${Math.max(1, Math.round(sec / 60))}${t("분")}`;
+  if (hour < 48) return `${t("약")} ${Math.round(hour)}${t("시간")}`;
+  const day = Math.round(hour / 24);
+  // 🔴 일주일이 넘으면 **그 숫자를 그대로 보여 준다.** 「오래 걸립니다」로
+  //    뭉개면 사장은 얼마나 오랜지 모른 채 기다린다.
+  return `${t("약")} ${day}${t("일")}`;
 }
 
 async function stallCard(): Promise<string> {
@@ -3104,6 +3160,8 @@ async function paintPartBody(): Promise<void> {
             //    답하는 건 %가 아니라 그 숫자다.
             behind > 0 && s?.behind_honest === false
               ? [t("속도"), rateText]
+              : behind > 0 && rate > 0
+                ? [t("남은 시간"), etaText(behind, rate)]
               : [
                   t("결제 확인"),
                   behind > 0
@@ -3113,12 +3171,12 @@ async function paintPartBody(): Promise<void> {
           ],
           behind > 0 && s?.behind_honest === false
             ? t(
-                "다시 훑는 중입니다. 남은 양은 아직 알 수 없습니다 — 며칠 걸릴 수 있습니다. 「따라잡음 %」는 초반에 거의 안 움직이는 것이 정상입니다(옛 블록은 거래가 적어서입니다). 도는지 멈췄는지는 위 속도로 보십시오."
+                "다시 훑는 중입니다. 남은 양은 아직 알 수 없습니다. 「따라잡음 %」는 초반에 거의 안 움직이는 것이 정상입니다(옛 블록은 거래가 적어서입니다). 도는지 멈췄는지는 위 속도로 보십시오."
               )
             : behind > 0
               ? t("따라잡는 동안에는 방금 들어온 결제가 늦게 보입니다.")
               : t("이 컴퓨터가 체인을 통째로 들고 있습니다. 남에게 묻지 않습니다."),
-        ) + (behind > 0 ? await stallCard() : "") + prepCard(behind) +
+        ) + (behind > 0 ? await stallCard() : "") + slowCard(behind, rate) + prepCard(behind) +
         (behind > 0 ? await speedCard() : await restoreCard()) + (await indexCard()) +
         goto("settings", t("노드 설정 열기"));
       bindSpeed();
