@@ -1676,6 +1676,20 @@
             <div class="roomhead">방</div>
             <div id="tk-rooms"></div>
             <button class="ghost" id="tk-newroom">+ 방 만들기</button>
+            <!-- 🔴 모달을 연달아 띄우지 않는다. 「다음, 다음, 다음」은
+                 40~70대에게 제일 나쁜 흐름이다. 한 자리에서 끝낸다. -->
+            <div id="tk-newbox" hidden>
+              <input id="tk-nname" placeholder="방 이름" maxlength="40" />
+              <input id="tk-nabout" placeholder="한 줄 설명 (없어도 됩니다)" maxlength="80" />
+              <label class="meta" for="tk-nasset">이 자산을 가진 분만</label>
+              <select id="tk-nasset"></select>
+              <p class="meta" id="tk-nhint"></p>
+              <div class="row">
+                <button id="tk-nmake">만들기</button>
+                <button class="ghost" id="tk-ncancel">취소</button>
+              </div>
+              <p class="meta" id="tk-nsay"></p>
+            </div>
           </aside>
 
           <div class="chat">
@@ -1683,6 +1697,8 @@
               <b id="tk-title">레이븐 이야기</b>
               <span class="meta" id="tk-me"></span>
               <span style="margin-left:auto"></span>
+              <!-- 🔴 방을 만들어도 남을 부를 길이 없었다. 그러면 혼자 쓰는 방이다. -->
+              <span id="tk-invite"></span>
               <button class="ghost" id="tk-name">내 이름</button>
               <button class="ghost" id="tk-reload">새로고침</button>
             </div>

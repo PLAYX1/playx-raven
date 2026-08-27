@@ -126,3 +126,45 @@ button {
 @media (prefers-reduced-motion: reduce) {
   .flash { animation: none; box-shadow: 0 0 0 3px rgba(255,107,53,.6); }
 }
+
+/* 방 만들기 — 한 자리에서 끝낸다. 모달을 연달아 띄우지 않는다. */
+#tk-newbox {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+}
+#tk-newbox input,
+#tk-newbox select {
+  /* 🔴 16px 미만이면 아이폰 사파리가 탭할 때마다 화면을 확대한다.
+     여기는 데스크톱이지만 같은 값을 쓴다 — 40~70대에게 15px 은 작다. */
+  font-size: 16px;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  color: inherit;
+  width: 100%;
+  box-sizing: border-box;
+}
+/* 방 이름 옆 자산 표. 들어가기 전에 보여야 한다. */
+.room .tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  background: rgba(255, 107, 53, 0.16);
+  color: var(--accent);
+  vertical-align: middle;
+  /* 방 이름이 길면 표가 밀려 나간다. 이름을 줄이고 표를 남긴다. */
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

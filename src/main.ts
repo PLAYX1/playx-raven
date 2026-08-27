@@ -4045,13 +4045,20 @@ async function talkPaintRooms() {
     // 방 목록을 못 읽어도 전체 글은 보여야 한다. 조용히 넘어간다.
   }
   tkRoomNames = new Map(rooms.map((r) => [String(r.id), String(r.name)]));
+  paintInvite();
   box.innerHTML =
     `<button class="room${tkRoom ? "" : " on"}" data-room="">${t("레이븐 이야기")}</button>` +
     rooms
       .map(
         (r) =>
           `<button class="room${tkRoom === String(r.id) ? " on" : ""}" data-room="${escapeHtml(String(r.id))}"
-             title="${escapeHtml(String(r.about || ""))}">${escapeHtml(String(r.name))}</button>`
+             title="${escapeHtml(String(r.about || ""))}">${escapeHtml(String(r.name))}` +
+          // 🔴 자산 방인 것을 **들어가기 전에** 알려 준다. 글을 다 쓰고
+          //    보내기를 눌렀을 때 「못 씁니다」가 뜨면 그건 우리 잘못이다.
+          (r.asset
+            ? `<span class="tag" title="${t("이 자산을 가진 분만 씁니다")}">${escapeHtml(String(r.asset))}</span>`
+            : "") +
+          `</button>`
       )
       .join("");
   box.querySelectorAll("[data-room]").forEach((b) => {
@@ -4060,9 +4067,50 @@ async function talkPaintRooms() {
       $("tk-title").textContent = tkRoom
         ? tkRoomNames.get(tkRoom) || t("방")
         : t("레이븐 이야기");
+      paintInvite();
       void talkPaintRooms();
       void talkPaint();
     };
+  });
+}
+
+/**
+ * **방에 남을 부르는 링크.**
+ *
+ * ## 🔴 왜 필요한가
+ *
+ * 대표님: "방을 sns 로 공유는 못하나?"
+ *
+ * 방을 만드는 것은 되는데 **남을 부를 길이 없었다.** 그러면 혼자 쓰는
+ * 방이다. 만들어 놓고 안 잇는 그 병이 여기에도 있었다.
+ *
+ * ⚠️ 링크에 담는 것은 **방 번호뿐**이다. 대화 내용도 열쇠도 안 담는다 —
+ *    링크는 어디로든 퍼지고, 한번 퍼지면 못 거둔다.
+ */
+function inviteLink(): string {
+  if (!tkRoom) return "https://rvn.ex.erci.se/talk";
+  return `https://rvn.ex.erci.se/talk?room=${encodeURIComponent(tkRoom)}`;
+}
+
+function paintInvite() {
+  const host = document.getElementById("tk-invite");
+  if (!host) return;
+  const name = tkRoom ? tkRoomNames.get(tkRoom) || t("방") : t("레이븐 이야기");
+  host.innerHTML = `<button class="ghost" id="tk-inv">${t("초대하기")}</button>`;
+  document.getElementById("tk-inv")!.addEventListener("click", async () => {
+    const url = inviteLink();
+    // 🔴 **누를 곳을 하나로.** 「복사」와 「보내기」를 나누면 어느 쪽을
+    //    눌러야 할지 묻게 된다. 복사부터 해 두고 어디로 보낼지 고르게 한다.
+    await navigator.clipboard.writeText(url).catch(() => {});
+    const msg = `${t("이 방으로 오세요")} — ${name}\n${url}`;
+    await sure(
+      t("초대 링크를 복사했습니다"),
+      `${url}\n\n` +
+        t("카톡·문자·SNS 어디든 붙여넣으시면 됩니다. 받는 분은 이 프로그램을 깔고 그 방으로 들어옵니다."),
+      t("닫기"),
+    );
+    // 붙여넣기 좋게 문구까지 담아 둔다. 사장이 문장을 지어내지 않아도 된다.
+    await navigator.clipboard.writeText(msg).catch(() => {});
   });
 }
 
@@ -4226,16 +4274,73 @@ async function talkSend() {
   }
 }
 
+/**
+ * 방 만들기 — **한 자리에서 끝낸다.**
+ *
+ * ## 🔴 전에는 모달을 연달아 띄웠다
+ *
+ *     ask("방 이름") → ask("한 줄 설명") → (자산까지 넣으면 셋째)
+ *
+ * 「다음, 다음, 다음」은 40~70대에게 제일 나쁜 흐름이다. 중간에 무엇을
+ * 적었는지 안 보이고, 되돌아갈 수도 없다. 세 칸을 한 화면에 둔다.
+ *
+ * ## ⚠️ 자산 목록은 **열 때 미리 받는다**
+ *
+ * 고르는 순간에 노드에 물으면 그 사이가 빈다. 사람은 그 빈틈을 「고장」으로
+ * 읽는다. 열자마자 받아 두고, 아직 못 받았으면 그렇다고 적는다.
+ */
 async function talkNewRoom() {
-  const name = await ask(t("방 이름"), t("무엇을 이야기하는 방인가요?"));
-  if (!name) return;
-  const about = (await ask(t("한 줄 설명"), t("비워 두셔도 됩니다."))) || "";
+  const box = $("tk-newbox");
+  const open = box.hidden;
+  box.hidden = !open;
+  if (!open) return;
+  (($("tk-nname") as HTMLInputElement).value = ""), (($("tk-nabout") as HTMLInputElement).value = "");
+  $("tk-nsay").textContent = "";
+  ($("tk-nname") as HTMLInputElement).focus();
+
+  const sel = $("tk-nasset") as HTMLSelectElement;
+  sel.innerHTML = `<option value="">${t("누구나 (자산 없이)")}</option>`;
+  $("tk-nhint").textContent = t("자산 목록을 읽는 중…");
   try {
-    await invoke("talk_make_room", { name, about });
+    const r = await invoke<any>("talk_my_assets");
+    const list: string[] = r?.assets || [];
+    sel.innerHTML =
+      `<option value="">${t("누구나 (자산 없이)")}</option>` +
+      list.map((a) => `<option value="${escapeHtml(a)}">${escapeHtml(a)}</option>`).join("");
+    // 🔴 **없는 것과 못 읽은 것을 가른다.** 노드가 장부를 훑는 중이면
+    //    자산이 없는 게 아니라 아직 모르는 것이다.
+    $("tk-nhint").textContent = r?.ok
+      ? list.length
+        ? t("고르시면 그 자산을 가진 분만 이 방에 글을 씁니다. 넘기면 그 순간 끊깁니다.")
+        : t("가진 자산이 없습니다 — 누구나 들어오는 방이 됩니다.")
+      : t("지금은 자산을 확인할 수 없습니다(노드가 따라잡는 중). 누구나 들어오는 방으로 만드실 수 있습니다.");
+  } catch {
+    $("tk-nhint").textContent = t("자산을 확인하지 못했습니다.");
+  }
+}
+
+async function talkMakeRoomGo() {
+  const name = ($("tk-nname") as HTMLInputElement).value.trim();
+  if (!name) {
+    $("tk-nsay").innerHTML = `<span class="danger">${t("방 이름을 적어 주세요")}</span>`;
+    ($("tk-nname") as HTMLInputElement).focus();
+    return;
+  }
+  const about = ($("tk-nabout") as HTMLInputElement).value.trim();
+  const asset = ($("tk-nasset") as HTMLSelectElement).value || null;
+  const b = $("tk-nmake") as HTMLButtonElement;
+  b.disabled = true;
+  // 누른 즉시 말한다. 아무 표시 없이 기다리게 두지 않는다.
+  $("tk-nsay").textContent = t("만드는 중…");
+  try {
+    await invoke("talk_make_room", { name, about, asset });
+    $("tk-newbox").hidden = true;
     await talkPaintRooms();
     $("tk-note").innerHTML = `<span class="ok">${t("방을 만들었습니다")}</span>`;
   } catch (e) {
-    $("tk-note").innerHTML = `<span class="danger">${escapeHtml(String(e))}</span>`;
+    $("tk-nsay").innerHTML = `<span class="danger">${escapeHtml(String(e))}</span>`;
+  } finally {
+    b.disabled = false;
   }
 }
 
@@ -11086,6 +11191,21 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("tk-send").addEventListener("click", () => void talkSend());
   $("tk-reload").addEventListener("click", () => void talkPaint());
   $("tk-newroom").addEventListener("click", () => void talkNewRoom());
+  $("tk-nmake").addEventListener("click", () => void talkMakeRoomGo());
+  $("tk-ncancel").addEventListener("click", () => {
+    $("tk-newbox").hidden = true;
+  });
+  // 🔴 **엔터로 끝난다.** 텔레그램처럼 쉬우려면 손이 마우스로 안 가야 한다.
+  //    이름 칸에서 엔터 → 만들기. 설명 칸에서도 같다.
+  for (const id of ["tk-nname", "tk-nabout"]) {
+    $(id).addEventListener("keydown", (e) => {
+      if ((e as KeyboardEvent).key === "Enter") {
+        e.preventDefault();
+        void talkMakeRoomGo();
+      }
+      if ((e as KeyboardEvent).key === "Escape") $("tk-newbox").hidden = true;
+    });
+  }
   $("tk-name").addEventListener("click", () => void talkSetName());
   // 끌어다 놓기. 🔴 이 셋을 안 묶으면 창에 파일을 떨어뜨려도 아무 일도
   //    안 일어난다 — 만들어 놓고 안 부르는 그 병이다.

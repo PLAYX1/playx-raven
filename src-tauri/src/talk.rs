@@ -283,6 +283,22 @@ pub async fn talk_post(
     if text.is_empty() {
         return Err("쓸 내용이 없습니다.".into());
     }
+    // 🔴 **자산 방이면 가진 사람만 쓴다.**
+    //
+    //    ⚠️ 모를 때는 막지 않는다. 노드가 장부를 다시 훑는 중이면
+    //       `listmyassets` 가 답을 못 하는데, 그때 막으면 **자기 방에
+    //       자기가 못 쓴다.** 재색인은 며칠 걸리기도 한다.
+    //       모르는 것을 「없다」로 치는 것이 이 앱에서 오늘만 여러 번 낸 사고다.
+    if let Some(id) = &room {
+        if let Some(a) = room_asset(id).await {
+            let (has, unknown) = hold_state(&a).await;
+            if !has && unknown.is_none() {
+                return Err(format!(
+                    "이 방은 {a} 을(를) 가진 분들의 방입니다. 아직 갖고 계시지 않습니다."
+                ));
+            }
+        }
+    }
     // 32KB 는 우리 릴레이가 받는 한계다. 넘으면 조용히 버려진다 —
     // 보낸 사람은 올라간 줄 안다. 여기서 미리 말한다.
     if text.len() > 8000 {
@@ -313,16 +329,114 @@ pub async fn talk_post(
     Ok(json!({ "event": ev, "sent": r }))
 }
 
-/// 방을 만든다. 이름과 한 줄 설명만 있으면 된다.
+/// 내가 가진 자산 이름들. 방을 만들 때 고르게 하려고 준다.
+///
+/// 🔴 **하나도 없으면 그렇다고 말한다.** 목록을 비워 두면 사장은 「고장났나」
+///    하고 기다린다. 자산이 없다는 것과 못 읽었다는 것도 갈라서 말한다.
 #[tauri::command]
-pub async fn talk_make_room(name: String, about: String) -> Result<Value, String> {
+pub async fn talk_my_assets() -> Value {
+    match crate::raven::call_rpc("listmyassets", json!([])).await {
+        Ok(v) => {
+            let mut names: Vec<String> = v
+                .as_object()
+                .map(|o| o.keys().cloned().collect())
+                .unwrap_or_default();
+            names.sort();
+            json!({ "ok": true, "assets": names })
+        }
+        // 노드가 아직 안 따라잡았거나 꺼져 있으면 못 읽는다. **없다고 하지 않는다.**
+        Err(e) => json!({ "ok": false, "why": e, "assets": [] }),
+    }
+}
+
+/// 그 방이 자산을 요구하나. 요구하면 그 이름.
+async fn room_asset(room_id: &str) -> Option<String> {
+    let rooms = talk_rooms().await.ok()?;
+    rooms
+        .as_array()?
+        .iter()
+        .find(|r| r.get("id").and_then(Value::as_str) == Some(room_id))?
+        .get("asset")
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+        .map(String::from)
+}
+
+/// 내가 그 자산을 가졌나.
+///
+/// ## 🔴 모르면 「없다」가 아니라 「모른다」다
+///
+/// 노드가 장부를 다시 훑는 중이면 `listmyassets` 가 답을 못 한다. 그때
+/// 「없습니다」라고 막으면, **자기 방에 자기가 못 들어간다.** 재색인은
+/// 며칠 걸리기도 한다 — 그동안 가게 방이 통째로 닫히는 것이다.
+///
+/// 그래서 셋으로 나눈다: 가졌다 / 없다 / 아직 모른다.
+async fn hold_state(asset: &str) -> (bool, Option<String>) {
+    match crate::raven::call_rpc("listmyassets", json!([asset])).await {
+        Ok(v) => {
+            let has = v
+                .as_object()
+                .map(|o| o.values().any(|x| x.as_f64().unwrap_or(0.0) > 0.0))
+                .unwrap_or(false);
+            (has, None)
+        }
+        Err(e) => (false, Some(e)),
+    }
+}
+
+/// 방을 만든다. 자산을 걸면 **그것을 가진 사람만** 쓰는 방이 된다.
+///
+/// ## 🔴 왜 이게 레이븐이라서 되는가
+///
+/// 텔레그램은 「초대받은 사람」까지만 안다. 우리는 **「지금 이 자산을 가진
+/// 사람」**을 안다 — 넘기면 그 순간 끊긴다. 관리자가 추방하는 게 아니라
+/// **합의가 정한다.** 푸시 서버도 방장도 필요 없다.
+///
+/// 그록 실측 지적(2026-08-27): "가게 자산 210억 개를 팔로우 토큰으로 찍어
+/// 놓고 방에 안 물렸다. 남이 베낄 수 없는 기능은 이미 노드 안에 있고,
+/// 방과 장터에만 안 연결돼 있다."
+///
+/// ## ⚠️ 우리가 강제할 수 있는 범위를 넘겨 말하지 않는다
+///
+/// 우리 앱과 우리 릴레이는 이 규칙을 지킨다. 그러나 damus·nos.lol 같은
+/// 공개 릴레이는 우리 규칙을 모른다 — **다른 프로그램으로는 쓸 수 있다.**
+/// 그러니 이건 「비밀방」이 아니라 **「단골 방」**이다. 화면에도 그렇게 적는다.
+/// 비밀이 필요하면 그건 암호(E2EE)의 일이지 자산의 일이 아니다.
+#[tauri::command]
+pub async fn talk_make_room(
+    name: String,
+    about: String,
+    asset: Option<String>,
+) -> Result<Value, String> {
     let name = name.trim();
     if name.is_empty() {
         return Err("방 이름이 필요합니다.".into());
     }
+    let asset = asset.map(|a| a.trim().to_uppercase()).filter(|a| !a.is_empty());
+    // 🔴 **내가 못 가진 자산으로 방을 만들지 않는다.** 만들어 놓고 자기가
+    //    못 들어가는 방이 된다. 모를 때는 막지 않고 그대로 진행한다 —
+    //    노드가 훑는 중일 뿐일 수 있고, 그때 막으면 아무것도 못 만든다.
+    if let Some(a) = &asset {
+        let (has, unknown) = hold_state(a).await;
+        if !has && unknown.is_none() {
+            return Err(format!(
+                "{a} 을(를) 갖고 계시지 않습니다. 자기가 못 들어가는 방이 됩니다."
+            ));
+        }
+    }
     let sk = key()?;
-    let body = json!({ "name": name, "about": about.trim() }).to_string();
-    let ev = crate::shopkey::sign_with(&sk, KIND_ROOM, json!([["t", TAG]]), &body, now())?;
+    let body = json!({
+        "name": name,
+        "about": about.trim(),
+        // 방 정보 안에도 넣는다 — 태그를 못 읽는 프로그램도 볼 수 있게.
+        "asset": asset.clone().unwrap_or_default(),
+    })
+    .to_string();
+    let mut tags = vec![json!(["t", TAG])];
+    if let Some(a) = &asset {
+        tags.push(json!(["asset", a]));
+    }
+    let ev = crate::shopkey::sign_with(&sk, KIND_ROOM, json!(tags), &body, now())?;
     crate::nostrpub::nostr_publish(ev.clone()).await?;
     Ok(ev)
 }
@@ -471,10 +585,26 @@ pub async fn talk_rooms() -> Result<Value, String> {
             .and_then(Value::as_str)
             .and_then(|c| serde_json::from_str(c).ok())
             .unwrap_or(Value::Null);
+        // 🔴 자산을 **두 곳에서** 찾는다. 태그가 규격이고 본문은 받침이다 —
+        //    태그만 보면 옛 프로그램이 만든 방을 못 읽고, 본문만 보면
+        //    태그로 거르는 릴레이에서 안 걸린다.
+        let asset = e
+            .get("tags")
+            .and_then(Value::as_array)
+            .and_then(|ts| {
+                ts.iter().find_map(|t| {
+                    let a = t.as_array()?;
+                    (a.first()?.as_str()? == "asset").then(|| a.get(1)?.as_str())?
+                })
+            })
+            .or_else(|| body.get("asset").and_then(Value::as_str))
+            .unwrap_or("")
+            .to_string();
         out.push(json!({
             "id": id,
             "name": body.get("name").and_then(Value::as_str).unwrap_or("이름 없는 방"),
             "about": body.get("about").and_then(Value::as_str).unwrap_or(""),
+            "asset": asset,
             "created_at": e.get("created_at"),
         }));
     }
@@ -519,6 +649,68 @@ mod tests {
         assert!(
             src[i..i + end].matches("\"t\", TAG").count() >= 2,
             "글에 레이븐 표가 안 붙는다 — 우리 릴레이가 자기 글을 버린다"
+        );
+    }
+}
+
+#[cfg(test)]
+mod gate_tests {
+    /// 시험이 **자기 자신을 세지 않게** 범위를 자른다. 이 저장소에서
+    /// 오늘만 네 번 밟은 함정이다.
+    fn 코드만() -> &'static str {
+        let src = include_str!("talk.rs");
+        let end = src.find("#[cfg(test)]").unwrap_or(src.len());
+        &src[..end]
+    }
+
+    /// 🔴 **모르는 것을 「없다」로 치면 자기 방에 자기가 못 들어간다.**
+    ///    노드가 장부를 다시 훑는 중이면 `listmyassets` 가 답을 못 한다.
+    ///    재색인은 며칠 걸리기도 한다 — 그동안 가게 방이 통째로 닫힌다.
+    #[test]
+    fn 모를_때는_막지_않는다() {
+        let src = 코드만();
+        let i = src.find("pub async fn talk_post").expect("쓰는 함수가 있어야 한다");
+        let end = src[i..].find("\n#[tauri::command]").unwrap_or(src.len() - i);
+        let body = &src[i..i + end];
+        assert!(
+            body.contains("unknown.is_none()"),
+            "확인 못 했을 때도 막고 있다 — 노드가 훑는 동안 자기 방에 자기가 못 쓴다"
+        );
+    }
+
+    /// 자기가 못 가진 자산으로 방을 만들면 **자기가 못 들어가는 방**이 된다.
+    #[test]
+    fn 못_가진_자산으로_방을_안_만든다() {
+        let src = 코드만();
+        let i = src.find("pub async fn talk_make_room").expect("만드는 함수가 있어야 한다");
+        assert!(
+            src[i..].contains("hold_state"),
+            "방을 만들 때 보유를 안 보고 있다"
+        );
+    }
+
+    /// 🔴 방 정보를 **태그와 본문 둘 다**에 넣는다. 태그가 규격이고 본문은
+    ///    받침이다 — 한쪽만 두면 다른 프로그램이 못 읽는 자리가 생긴다.
+    #[test]
+    fn 자산을_태그와_본문_둘_다에_적는다() {
+        let src = 코드만();
+        let i = src.find("pub async fn talk_make_room").expect("있어야 한다");
+        let seg = &src[i..];
+        assert!(seg.contains(r#"json!(["asset", a])"#), "태그에 안 적고 있다");
+        assert!(seg.contains(r#""asset": asset"#), "본문에 안 적고 있다");
+    }
+
+    /// ⚠️ 자산 방은 **비밀방이 아니다.** 공개 릴레이는 우리 규칙을 모른다.
+    ///    「비밀」이라고 적으면 사람이 비밀인 줄 알고 비밀을 쓴다.
+    #[test]
+    fn 비밀방이라고_말하지_않는다() {
+        let src = 코드만();
+        let i = src.find("pub async fn talk_make_room").expect("있어야 한다");
+        // 주석에 그 한계를 적어 뒀는지 본다. 안 적으면 다음 사람이 넓혀 쓴다.
+        let head = &src[i.saturating_sub(2200)..i];
+        assert!(
+            head.contains("공개 릴레이는 우리 규칙을 모른다"),
+            "우리가 강제 못 하는 범위를 안 적고 있다"
         );
     }
 }
