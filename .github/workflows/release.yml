@@ -261,11 +261,39 @@ jobs:
           git config --global user.email playexercise@gmail.com
           git clone --depth 1 git@github.com:PLAYX1/playx-raven-releases.git pub
           cd pub
-          # 🔴 뿌리째 새로 만든다. 옛 판을 쌓으면 판올림마다 40MB 씩 커지고
-          #    되돌릴 수 없다. 사람은 늘 최신을 받는다.
-          git checkout --orphan dist
-          git rm -rf . >/dev/null 2>&1 || true
-          rm -rf ./* .gitignore 2>/dev/null || true
+          # 🔴 **지우기 전에 넣을 것이 다 있는지 본다.**
+          #
+          # 2026-08-27: 윈도우 하나가 네트워크 오류로 실패했는데 이 단계가
+          # `if: always()` 로 그대로 돌았다. 그리고 아래에서 dist 를 **뿌리째
+          # 지우고** 있는 것만 올렸다. 결과:
+          #
+          #     VERSION            404
+          #     windows.exe/.msi   404
+          #     mac-*.dmg          404      ← 맥은 성공했는데 같이 사라졌다
+          #     SHA256SUMS.txt     남음
+          #
+          # **아무도 아무것도 못 받는 상태**가 됐다. 「하나 때문에 나머지가
+          # 막히면 안 된다」고 만든 규칙이 정반대로 작동했다 — 하나 때문에
+          # 나머지까지 지웠다.
+          #
+          # 그래서 **지우는 것을 조건부로** 만든다. 네 기계 것이 다 있을
+          # 때만 뿌리째 새로 만든다. 하나라도 없으면 **옛 dist 를 그대로 두고**
+          # 있는 것만 덮어쓴다 — 그 기계 사람은 옛 판을 받게 되지만,
+          # **404 보다는 옛 판이 낫다.**
+          NEED="windows.exe windows.msi mac-apple-silicon.dmg mac-intel.dmg linux.AppImage"
+          MISSING=""
+          for suffix in $NEED; do
+            ls ../rel/ | grep -q -- "-$suffix$" || MISSING="$MISSING $suffix"
+          done
+          if [ -n "$MISSING" ]; then
+            echo "⚠️ 빠진 것:$MISSING — dist 를 지우지 않고 덮어쓰기만 합니다"
+            git checkout dist 2>/dev/null || git checkout --orphan dist
+          else
+            echo "✅ 다섯 개가 다 있습니다 — 뿌리째 새로 만듭니다"
+            git checkout --orphan dist
+            git rm -rf . >/dev/null 2>&1 || true
+            rm -rf ./* .gitignore 2>/dev/null || true
+          fi
           cp ../rel/* .
           cat > README.md <<EOF
           # PLAY X Raven $V
@@ -278,5 +306,32 @@ jobs:
           비교하세요. 다르면 받다가 깨졌거나 누가 바꾼 것이니 **열지 마세요.**
           EOF
           git add -A
-          git commit -q -m "PLAY X Raven $V"
+          git commit -q -m "PLAY X Raven $V" || echo "바뀐 것이 없습니다"
           git push -f origin dist
+
+          # 🔴 **올렸다고 받아지는 것이 아니다.** 오늘 SHA256SUMS 만 올라가고
+          #    파일은 전부 404 였는데, 이 단계는 성공으로 끝났다. 아무도
+          #    확인하지 않았고, 대표님이 받으려다 아셨다.
+          #
+          #    사람이 실제로 누르는 주소를 그대로 눌러 본다.
+          echo "── 진짜 받아지는지 확인 ──"
+          B=https://raw.githubusercontent.com/PLAYX1/playx-raven-releases/dist
+          sleep 15   # CDN 이 따라오는 데 잠깐 걸린다
+          BAD=""
+          for f in VERSION SHA256SUMS.txt \
+                   PLAY-X-Raven-latest-windows.exe \
+                   PLAY-X-Raven-latest-windows.msi \
+                   PLAY-X-Raven-latest-mac-apple-silicon.dmg \
+                   PLAY-X-Raven-latest-mac-intel.dmg \
+                   PLAY-X-Raven-latest-linux.AppImage; do
+            code=$(curl -sIL -o /dev/null -w "%{http_code}" --max-time 60 "$B/$f")
+            echo "  $code  $f"
+            [ "$code" = "200" ] || BAD="$BAD $f"
+          done
+          if [ -n "$BAD" ]; then
+            echo ""
+            echo "🔴 받아지지 않는 것이 있습니다:$BAD"
+            echo "   이대로 두면 사람들이 404 를 봅니다."
+            exit 1
+          fi
+          echo "✅ 전부 받아집니다"
