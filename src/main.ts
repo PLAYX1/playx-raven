@@ -5471,7 +5471,14 @@ async function refreshKeys() {
     // 것을 알 길이 없다 — 키를 넣을 이유도 못 만난다.
     // 키가 없을 때는 대화창 안에서 그 자리에 넣게 되어 있으므로(chatNeedsKey),
     // 버튼은 **늘 보인다.**
-    $("chat-open").style.display = "";
+    // 🔴 **여기서 무조건 켜면 안 된다.** `showPage` 가 라비 화면에서 숨긴
+    //    것을 이 줄이 도로 켰다. 그러면 대화창 위에 그리로 가는 단추가
+    //    떠 있고, 오른쪽 아래 내용을 가린다(그록 감사 2026-08-27).
+    //    지금 어느 화면인지 보고 정한다.
+    {
+      const onRavi = document.getElementById("page-ravi")?.classList.contains("on");
+      $("chat-open").style.display = onRavi ? "none" : "";
+    }
     // 🔴 「자고 있다」의 뜻을 바꾼다.
     //
     // 여태 **API 키가 없으면** 라비가 잤다. 그리고 화면은 이렇게 말했다:
@@ -6623,6 +6630,13 @@ function bindMemberCards(root: string) {
   const el = $(root);
   el.querySelectorAll("[data-in]").forEach((b) => {
     (b as HTMLElement).onclick = async () => {
+      // 🔴 **손님이 문 앞에 서 있다.** 누른 뒤 아무 표시가 없으면 한 번 더
+      //    누르고, 그러면 입장이 두 번 찍힌다(그록 감사 2026-08-27).
+      const btn = b as HTMLButtonElement;
+      const was = btn.textContent || "";
+      btn.disabled = true;
+      btn.textContent = t("여는 중…");
+      $("dr-note").textContent = t("확인하고 문을 여는 중입니다…");
       try {
         const asset = (b as HTMLElement).dataset.in!;
         await invoke("check_in", { asset, nowUnix: nowSec() });
@@ -6645,7 +6659,13 @@ function bindMemberCards(root: string) {
         doorSearch();
         loadMembers();
       } catch (e) {
-        $("dr-note").innerHTML = `<span class="danger">${e}</span>`;
+        $("dr-note").innerHTML = `<span class="danger">${escapeHtml(String(e))}</span>`;
+      } finally {
+        // 🔴 **실패해도 단추를 푼다.** `try` 안에서만 풀면 실패했을 때
+        //    영영 잠겨서 다시 시도할 수 없다 — 손님은 문 앞에 서 있고
+        //    사장은 누를 수 있는 것이 없다.
+        btn.disabled = false;
+        btn.textContent = was;
       }
     };
   });
@@ -7485,42 +7505,96 @@ async function sendDirect() {
 // 환불은 되돌리기가 아니라 새로 보내는 것이다. 그래서 받는 주소가 있어야 하고,
 // 가게에 RVN이 있어야 하고, 사람이 눌러야 한다.
 
+/**
+ * 환불 — **한 화면에서 끝낸다.**
+ *
+ * ## 🔴 전에는 창을 넷 띄웠다
+ *
+ *     ask(금액) → ask(주소) → ask(사유) → ask(지갑 암호)
+ *
+ * 그록 감사(2026-08-27):
+ * > 같은 `#askwrap` 을 네 번 갈아끼워, 방금 친 금액·주소가 다음 창에서
+ * > 안 보인다. **환불은 손님이 계산대에 서 있는 일이다.**
+ *
+ * 주소를 잘못 쳤는지 확인하려면 처음부터 다시 해야 했다. 그리고 그 사이
+ * 손님은 서 있다. 넷을 한 화면에 놓고, 보내기 전에 **전부 한눈에** 보인다.
+ *
+ * ⚠️ 주소는 **되돌릴 수 없다.** 잘못 보내면 끝이다. 그래서 보내기 전에
+ *    한 번 더 확인하고, 확인 문구에 주소와 금액을 그대로 적는다.
+ */
 async function doRefund(_payAddress: string, suggested: number) {
-  const amount = await ask(
-    "얼마를 돌려드릴까요? (RVN)",
-    `받은 금액은 ${suggested} RVN입니다.\n일부만 돌려주려면 더 적게 넣으세요.`,
-    { value: String(suggested), numeric: true }
-  );
-  if (!amount) return;
-  const to = await ask(
-    "어느 주소로 돌려드릴까요?",
-    "체인은 누가 보냈는지 기록하지 않습니다. 손님에게 받을 주소를 물어보셔야 합니다."
-  );
-  if (!to) return;
-  const reason =
-    (await ask("사유", "내 지갑에만 남습니다. 손님은 못 봅니다.", { value: "주문 취소" })) || "";
-
+  const box = $("or-refund");
   const lock = await invoke<any>("wallet_lock_state").catch(() => null);
-  const pass =
-        lock?.encrypted && !lock?.unlocked
-          ? await ask("지갑 암호", "", { password: true })
-          : null;
-
-  try {
-    const r = await invoke<any>("refund", {
-      toAddress: to.trim(),
-      amount: parseFloat(amount),
-      reason,
-      passphrase: pass,
-    });
-    $("or-refund").innerHTML =
-      `<div class="card" style="margin-top:12px"><h3>환불했습니다</h3>
-       <div class="kv"><b>금액</b><span>${r.amount} RVN</span></div>
-       <div class="kv"><b>트랜잭션</b><code class="addr">${r.txid}</code></div></div>`;
-    loadWallet();
-  } catch (e) {
-    $("or-refund").innerHTML = `<div class="warnbox" style="margin-top:12px">${e}</div>`;
-  }
+  const needPass = !!(lock?.encrypted && !lock?.unlocked);
+  box.innerHTML =
+    `<div class="card" style="margin-top:12px">
+       <h3>${t("환불하기")}</h3>
+       <p class="meta">${t("받은 금액은")} ${suggested} RVN ${t("입니다. 일부만 돌려주시려면 더 적게 넣으세요.")}</p>
+       <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
+         <label class="meta" for="rf-amt">${t("얼마를 돌려드릴까요? (RVN)")}</label>
+         <input id="rf-amt" inputmode="decimal" value="${suggested}" />
+         <label class="meta" for="rf-to">${t("어느 주소로 돌려드릴까요?")}</label>
+         <input id="rf-to" placeholder="R..." autocomplete="off" spellcheck="false" />
+         <p class="meta">${t("체인은 누가 보냈는지 기록하지 않습니다. 손님에게 받을 주소를 물어보셔야 합니다.")}</p>
+         <label class="meta" for="rf-why">${t("사유 (내 지갑에만 남습니다)")}</label>
+         <input id="rf-why" value="${t("주문 취소")}" />
+         ${
+           needPass
+             ? `<label class="meta" for="rf-pass">${t("지갑 암호")}</label>
+                <input id="rf-pass" type="password" autocomplete="off" />`
+             : ""
+         }
+       </div>
+       <div class="row" style="margin-top:12px">
+         <button id="rf-go">${t("돌려주기")}</button>
+         <button class="ghost" id="rf-cancel">${t("취소")}</button>
+         <span class="meta" id="rf-say"></span>
+       </div>
+     </div>`;
+  ($("rf-to") as HTMLInputElement).focus();
+  $("rf-cancel").addEventListener("click", () => {
+    box.innerHTML = "";
+  });
+  $("rf-go").addEventListener("click", async () => {
+    const amount = parseFloat(($("rf-amt") as HTMLInputElement).value);
+    const to = ($("rf-to") as HTMLInputElement).value.trim();
+    const reason = ($("rf-why") as HTMLInputElement).value.trim();
+    const pass = needPass ? ($("rf-pass") as HTMLInputElement).value : null;
+    if (!(amount > 0)) {
+      $("rf-say").innerHTML = `<span class="danger">${t("금액을 확인해 주세요")}</span>`;
+      return;
+    }
+    if (!to) {
+      $("rf-say").innerHTML = `<span class="danger">${t("받을 주소가 필요합니다")}</span>`;
+      ($("rf-to") as HTMLInputElement).focus();
+      return;
+    }
+    // 🔴 **되돌릴 수 없다.** 주소와 금액을 그대로 다시 보여 주고 묻는다.
+    const ok = await sure(
+      t("이 주소로 보낼까요?"),
+      `${amount} RVN\n${to}\n\n${t("보내면 되돌릴 수 없습니다.")}`,
+    );
+    if (!ok) return;
+    const b = $("rf-go") as HTMLButtonElement;
+    b.disabled = true;
+    $("rf-say").textContent = t("보내는 중…");
+    try {
+      const r = await invoke<any>("refund", {
+        toAddress: to,
+        amount,
+        reason,
+        passphrase: pass,
+      });
+      box.innerHTML =
+        `<div class="card" style="margin-top:12px"><h3>${t("환불했습니다")}</h3>
+         <div class="kv"><b>${t("금액")}</b><span>${r.amount} RVN</span></div>
+         <div class="kv"><b>${t("거래 번호")}</b><code class="addr">${escapeHtml(String(r.txid))}</code></div></div>`;
+      loadWallet();
+    } catch (e) {
+      b.disabled = false;
+      $("rf-say").innerHTML = `<span class="danger">${escapeHtml(String(e))}</span>`;
+    }
+  });
 }
 
 // ── 이 앱이 보내지 않은 출금 ──
@@ -10465,7 +10539,7 @@ async function previewCustomer() {
     `<div class="card" style="margin-top:11px">
        <h3>손님이 보는 화면</h3>
        <iframe src="http://127.0.0.1:8790/" title="손님 화면"
-               style="width:390px;max-width:100%;height:620px;border:1px solid var(--line);
+               style="width:390px;max-width:100%;height:min(620px,60vh);border:1px solid var(--line);
                       border-radius:16px;background:#fff;display:block;margin-top:10px"></iframe>
        <p class="meta" style="margin-top:8px">폰 크기 그대로입니다.
          고친 메뉴를 보려면 <b>메뉴판 올리기</b>를 먼저 누르셔야 합니다.</p>
