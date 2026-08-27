@@ -433,9 +433,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # 🔴 **`ls a b` 를 쓰면 안 된다.** 맥에는 `ravend` 는 있고
+          #    `ravend.exe` 는 없다. 그때 `ls` 가 「하나 없다」고 1 을 돌려주고,
+          #    `| head` 때문에 `pipefail` 이 걸리고, `set -e` 가 그 자리에서
+          #    죽인다 — **출력 한 줄 없이.** 실제로 맥·리눅스 빌드가 그렇게
+          #    죽었다(2026-08-27). 있는지 없는지만 보는 검사가, 있는 것까지
+          #    못 나가게 막은 것이다.
+          #
+          #    안전장치가 사고를 내면 안전장치가 아니다. 파일이 있는지만 본다.
           BAD=""
           for n in ravend ipfs; do
-            F=$(ls src-tauri/vendor/$n src-tauri/vendor/$n.exe 2>/dev/null | head -1)
+            F=""
+            for c in "src-tauri/vendor/$n" "src-tauri/vendor/$n.exe"; do
+              if [ -f "$c" ]; then F="$c"; break; fi
+            done
             if [ -z "$F" ]; then
               BAD="$BAD $n"
             else
