@@ -3138,6 +3138,16 @@ async function paintPartBody(): Promise<void> {
         return;
       }
       const behind = Number(s?.behind ?? 0);
+      // 🔴 **어느 노드를 쓰고 있는지 화면에 적는다.**
+      //
+      //    대표님이 이걸 확인하려고 터미널을 여셔야 했다 —
+      //    `"C:\Program Files\Raven\daemon\ravend.exe" -version`.
+      //    우리 앱은 「깔려 있는 것을 먼저」 쓰는데, **그게 어느 것인지도
+      //    그 판이 쓸 수 있는 판인지도 말하지 않았다.**
+      //
+      //    레이븐코인은 이게 치명적이다. 4.8.0 미만은 블록 4,489,527 에서
+      //    멈춘다. 며칠을 따라잡고 나서 거기서 서고, 사장은 왜인지 모른다.
+      const nv = await invoke<any>("node_version").catch(() => null);
       // 속도는 두 번 재야 나온다. 처음엔 아직 모른다고 말한다.
       const st = await invoke<any>("sync_stalled").catch(() => null);
       const rate = Number(st?.rate ?? 0);
@@ -3149,6 +3159,14 @@ async function paintPartBody(): Promise<void> {
           [
             [t("연결"), s?.peers != null ? `${s.peers}${t("곳")}` : t("확인 중")],
             [t("블록"), Number(s?.blocks ?? 0).toLocaleString()],
+            // 판을 숨기지 않는다. 못 읽었으면 못 읽었다고 적는다.
+            [
+              t("노드 판"),
+              nv?.line
+                ? String(nv.line).replace(/^.*?(v[0-9].*)$/, "$1") +
+                  (nv.ok === false ? ` ⚠️` : "")
+                : t("확인 못 함"),
+            ],
             [t("따라잡음"), `${(Number(s?.progress ?? 0) * 100).toFixed(behind > 0 ? 2 : 1)}%`],
             // 🔴 **재색인 중에는 「남은 블록」을 적지 않는다.**
             //    그때 headers 는 진짜 체인 끝이 아니라 디스크에서 읽어 나간
@@ -3176,7 +3194,17 @@ async function paintPartBody(): Promise<void> {
             : behind > 0
               ? t("따라잡는 동안에는 방금 들어온 결제가 늦게 보입니다.")
               : t("이 컴퓨터가 체인을 통째로 들고 있습니다. 남에게 묻지 않습니다."),
-        ) + (behind > 0 ? await stallCard() : "") + slowCard(behind, rate) + prepCard(behind) +
+        ) +
+        // 🔴 못 따라잡는 판이면 **제일 먼저** 말한다. 며칠 기다린 뒤에
+        //    알게 되면 그 며칠이 통째로 버려진다.
+        (nv?.ok === false
+          ? `<div class="card" style="margin-top:12px;border-color:var(--danger)">
+               <h3>${t("이 노드 판으로는 끝까지 못 갑니다")}</h3>
+               <p class="meta">${escapeHtml(String(nv?.say || ""))}</p>
+               <p class="meta"><code class="addr">${escapeHtml(String(nv?.path || ""))}</code></p>
+             </div>`
+          : "") +
+        (behind > 0 ? await stallCard() : "") + slowCard(behind, rate) + prepCard(behind) +
         (behind > 0 ? await speedCard() : await restoreCard()) + (await indexCard()) +
         goto("settings", t("노드 설정 열기"));
       bindSpeed();

@@ -2,6 +2,7 @@ mod ai;
 mod auto;
 mod boot;
 mod awake;
+mod nodever;
 mod prep;
 mod quiet;
 mod helping;
@@ -372,6 +373,7 @@ pub fn run() {
             reindex_run::chain_broken,
             reindex_run::chain_heal,
             prep::pc_prepare,
+            nodever::node_version,
             mode::mode_get,
             mode::mode_set,
             awake::awake_status,
