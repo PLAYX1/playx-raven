@@ -3,6 +3,7 @@ mod auto;
 mod boot;
 mod awake;
 mod nodever;
+mod noncustody;
 mod wording;
 mod prep;
 mod setupflow;
