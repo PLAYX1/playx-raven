@@ -1459,6 +1459,7 @@ async function paintStatusDots() {
     nodeUp = false;
   }
   // 노드 상태가 바뀌면 라비 얼굴도 따라 바뀐다.
+  paintRaviFace();
   void refreshKeys().catch(() => {});
 
   try {
@@ -5682,11 +5683,101 @@ const SHOP_FIELDS: Record<string, string> = {
   order_url: "sh-orderurl",
 };
 
+/**
+ * **라비가 가리킬 수 있는 자리들.**
+ *
+ * ## 🔴 왜 목록으로 두나
+ *
+ * 대표님: "어려우면 무조건 라비 버튼 누르고 도움을 받을 수 있게 말야.
+ *          라비가 이 프로그램을 다 조정해 줄 수 있게. **승인은 사람이 누르고**
+ *          라비가 버튼 알려주면 반짝거리거나 하이라이트로 알려주는 거지."
+ *
+ * 그 말대로 만든다. 다만 **라비가 화면 이름을 지어내게 두지 않는다.**
+ * AI 는 그럴듯한 이름을 잘 만들어 내고, 없는 자리를 가리키면 사장은
+ * 「라비가 시킨 대로 했는데 아무 일도 안 난다」를 겪는다. 그게 제일 나쁘다.
+ *
+ * 여기 적힌 것만 가리킬 수 있다. 목록에 없으면 조용히 무시한다.
+ *
+ * ## ⚠️ **누르지는 않는다**
+ *
+ * 데려가고 반짝이는 데까지가 라비의 일이다. **누르는 것은 사람이 한다** —
+ * 돈이 나가는 일, 체인에 새기는 일이 여기 섞여 있다.
+ */
+const RAVI_SPOTS: Record<string, { page: string; el?: string; say: string }> = {
+  "새 자산 만들기": { page: "assets", el: "as-new", say: "회원권·쿠폰·굿즈를 만드는 곳입니다" },
+  "가게 열기": { page: "shop", el: "sh-save", say: "손님이 볼 화면을 여는 곳입니다" },
+  "문 등록": { page: "door", el: "dr-doors", say: "입구 문을 등록하는 곳입니다" },
+  "회원 등록": { page: "door", el: "dr-new", say: "회원을 등록하는 곳입니다" },
+  "이야기 방 만들기": { page: "talk", el: "tk-newroom", say: "방을 만드는 곳입니다" },
+  "방 초대하기": { page: "talk", el: "tk-inv", say: "초대 링크를 만드는 곳입니다" },
+  "이 컴퓨터 준비하기": { page: "parts", el: "pc-go", say: "백신·방화벽·메모리를 한 번에 정합니다" },
+  "노드 상태": { page: "parts", say: "노드가 어떤지 보는 곳입니다" },
+  "지갑": { page: "wallet", say: "받은 돈과 보낼 곳입니다" },
+  "백업": { page: "settings", el: "bk-go", say: "12단어와 지갑을 지키는 곳입니다" },
+  "손님 받기 순서": { page: "shop", el: "sh-flow", say: "무엇이 남았는지 여기 있습니다" },
+};
+
+/**
+ * 그 자리로 데려가고 **잠깐 반짝인다.**
+ *
+ * ⚠️ 데려가기만 하면 그 화면에도 칸이 여럿이라 또 못 찾는다. 대표님이
+ *    실제로 두 번 못 찾으셨다(0.1.50). 그래서 가운데로 올리고 반짝인다.
+ */
+function raviPoint(spot: { page: string; el?: string; say: string }) {
+  showPage(spot.page);
+  if (!spot.el) return;
+  let tries = 0;
+  const look = window.setInterval(() => {
+    const el = document.getElementById(spot.el!);
+    if (el) {
+      window.clearInterval(look);
+      el.scrollIntoView({ block: "center", behavior: "smooth" });
+      el.classList.add("flash");
+      setTimeout(() => el.classList.remove("flash"), 2600);
+    } else if (++tries > 40) {
+      window.clearInterval(look);
+    }
+  }, 120);
+}
+
+/**
+ * **라비 얼굴이 지금 상황을 말한다.**
+ *
+ * 대표님: "라비의 동적 인터랙티브 움직임이 프로그램의 감정을 표현하듯이
+ *          움직이면 사람들에게 더 사랑받을 것 같은데."
+ *
+ * 그림은 이미 일곱 장 있었다(happy·worry·wait·sleep·hello·face·head).
+ * **만들어 놓고 두 장만 쓰고 있었다** — 이 저장소에서 오늘만 스무 번 본 병이다.
+ *
+ * ⚠️ 얼굴로 **거짓말하지 않는다.** 노드가 죽었는데 웃고 있으면 사장은
+ *    괜찮은 줄 안다. 걱정스러우면 걱정스러운 얼굴이어야 한다.
+ */
+function raviMood(): string {
+  if (!nodeUp && !nodeWarming) return "/raven-worry.webp";
+  if (nodeWarming) return "/raven-wait.webp";
+  if (setupState && !setupState.ready) return "/raven-hello.webp";
+  return "/raven-happy.webp";
+}
+
+function paintRaviFace() {
+  const img = document.querySelector<HTMLImageElement>("#chat-open img");
+  if (img) img.src = raviMood();
+}
+
 function applyActions(actions: any[]): string[] {
   const done: string[] = [];
   for (const a of actions || []) {
     try {
       switch (a.type) {
+        // 🔴 **라비가 단추를 가리킨다. 누르지는 않는다.**
+        //    승인은 사람이 한다 — 돈이 나가는 일이 섞여 있다.
+        case "point": {
+          const spot = RAVI_SPOTS[String(a.spot || "")];
+          if (!spot) break; // 지어낸 이름은 조용히 무시한다
+          raviPoint(spot);
+          done.push(`${a.spot} — ${spot.say}`);
+          break;
+        }
         case "shop_set": {
           const id = SHOP_FIELDS[a.field];
           if (!id) break;

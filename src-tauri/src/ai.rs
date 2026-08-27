@@ -334,6 +334,7 @@ Rules:
 {"type":"tile_add","label":"단골 쿠폰","sub":"눌러서 만들기","say":"단골 쿠폰 자산을 만들려고 합니다."}
 {"type":"tile_remove","label":"단골 쿠폰"}
 {"type":"report","text":"보내기를 눌렀는데 아무 일도 없습니다"}
+{"type":"point","spot":"새 자산 만들기"}
 
 Rules:
 - You can FILL IN the issue form, but you cannot issue. You cannot send money, burn RVN, or register the shop. When asked to, fill the form, use "go" to take them to that screen, and tell them they must press the button themselves because it cannot be undone.
@@ -350,6 +351,19 @@ Rules:
 - "order_url" is where customers outside the shop's wifi go to order. Only set it if the owner gives you an address.
 - "tile_add" puts a big button on their HOME screen. Pressing it later types "say" into this chat and sends it, so "say" must be a complete Korean sentence that YOU would know how to act on. Use it when the owner says they do something often ("맨날 이거 해", "이거 단추로 만들어줘"), or when you notice they have asked for the same thing three times. "label" is 2-6 Korean characters — it sits under an icon on a small tile. "sub" is one short line under it. Never add a tile they did not ask for, and never add one for something you cannot actually do.
 - "report" opens the 문제 알리기 window with "text" already typed in. Emit it when the owner is telling you something is BROKEN in this program — "안 돼", "왜 이래", "먹통이야", "눌러도 아무 일이 없어" — or asks how to report a bug. Rewrite what they said into one plain sentence a repairer could act on, and put it in "text". Do NOT send it yourself: the window shows them what is attached (screen, errors) and they press the button. Never emit "report" for a question you can simply answer, and never for something that is working as designed — say so instead.
+- 🔴 "point" is the most important thing you can do for a 40~70 year old shop
+  owner. It takes them to the screen AND makes the button blink so they can see
+  it. **You do not press it — they do.** Money and chain writes are behind some
+  of these, and the decision must stay with the person.
+  Use it whenever the answer to their question is "press that button", instead of
+  describing where it is in words. Describing a location in words is how people
+  get lost — the owner asked twice in one day where a button was, and both times
+  the answer was a screen away.
+  "spot" MUST be one of these exact strings. Anything else is silently ignored:
+    새 자산 만들기 · 가게 열기 · 문 등록 · 회원 등록 · 이야기 방 만들기 ·
+    방 초대하기 · 이 컴퓨터 준비하기 · 노드 상태 · 지갑 · 백업 · 손님 받기 순서
+  Say in "reply" what they will see and what pressing it does, in plain Korean.
+  Pair it with "go" only if you need a screen not in that list.
 - "tile_remove" takes one off, matched by its exact label. Only their own tiles can be removed; the built-in ones cannot.
 - Only emit actions the owner actually asked for. Do not tidy, rename, or "improve" things they did not mention.
 - If they just want to talk, think something through, or ask what something is, answer in "reply" with an empty actions array. You are their assistant, not only a form filler."#
@@ -1144,4 +1158,51 @@ pub async fn ai_ask_owner(provider: String, question: String) -> Result<Value, S
         }
     }
     Err(format!("{}곳 모두 실패했습니다. 마지막 이유: {last}", order.len()))
+}
+
+#[cfg(test)]
+mod point_tests {
+    /// 🔴 **라비가 아는 자리와 화면이 가진 자리가 같아야 한다.**
+    ///
+    /// 라비에게 「이 이름들만 쓰라」고 적어 놓고 화면이 그 이름을 모르면,
+    /// 사장은 「라비가 시킨 대로 했는데 아무 일도 안 난다」를 겪는다.
+    /// 그게 이 저장소에서 오늘만 스무 번 나온 병이고, 라비가 하면 더 나쁘다 —
+    /// 사람은 프로그램이 고장 났다고 생각하지 않고 자기가 잘못했다고 생각한다.
+    #[test]
+    fn 라비가_아는_자리를_화면도_안다() {
+        let prompt = include_str!("ai.rs");
+        let ui = include_str!("../../src/main.ts");
+        // 프롬프트에 적어 둔 목록을 뽑는다.
+        let i = prompt.find("\"spot\" MUST be one of these").expect("목록 안내가 있어야 한다");
+        let end = prompt[i..].find("Say in \"reply\"").expect("목록 끝을 못 찾음");
+        let listed: Vec<&str> = prompt[i..i + end]
+            .split('·')
+            .flat_map(|x| x.split('\n'))
+            .map(str::trim)
+            .filter(|x| {
+                !x.is_empty()
+                    && x.chars().next().is_some_and(|c| ('가'..='힣').contains(&c))
+            })
+            .collect();
+        assert!(listed.len() >= 8, "목록을 제대로 못 읽었다: {listed:?}");
+        for name in listed {
+            assert!(
+                ui.contains(&format!("\"{name}\":")),
+                "라비는 「{name}」을 가리킬 수 있다고 배웠는데 화면에 그 자리가 없다 — \
+                 사장이 시킨 대로 했는데 아무 일도 안 난다"
+            );
+        }
+    }
+
+    /// ⚠️ **라비가 대신 누르면 안 된다.** 돈이 나가는 일이 섞여 있다.
+    #[test]
+    fn 라비는_누르지_않는다() {
+        let ui = include_str!("../../src/main.ts");
+        let i = ui.find("case \"point\":").expect("가리키기가 있어야 한다");
+        let seg = &ui[i..i + 400.min(ui.len() - i)];
+        assert!(
+            !seg.contains(".click()"),
+            "라비가 단추를 대신 누르고 있다 — 승인은 사람이 해야 한다"
+        );
+    }
 }
