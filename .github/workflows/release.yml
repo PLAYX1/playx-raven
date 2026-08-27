@@ -406,26 +406,37 @@ jobs:
           ls -la out/
 
       # 🔴 **노드와 파일창고가 진짜 들어갔는지 본다.**
+      #
       # 2026-08-27: 이 둘을 받는 코드가 통째로 사라진 채 여섯 판이 나갔다.
       # 설치 파일이 47MB → 7.8MB 로 줄었는데 **빌드는 성공이었다.**
-      # 크기 하나만 보면 알 수 있었다. 안 봤을 뿐이다.
-      - name: 넣을 것이 다 들어갔나
+      #
+      # ⚠️ 처음엔 만든 것의 **크기**로 쟀는데 그게 틀렸다. deb·rpm 은
+      #    xz 압축이라 같은 내용이 82MB(AppImage) → 11MB 가 된다. 멀쩡한
+      #    리눅스 판이 「너무 작다」고 걸렸다. **압축률은 판마다 다르다.**
+      #
+      # 그래서 **넣기 전에 원본이 있는지** 본다. 그게 압축과 무관한 진짜
+      # 확인이고, 없으면 빌드를 시작하기도 전에 멈출 수 있다.
+      - name: 노드·파일창고가 준비됐나
         shell: bash
         run: |
           set -euo pipefail
           BAD=""
-          for f in out/PLAY-X-Raven-*; do
-            case "$f" in *.sig|*.tar.gz|*.zip) continue ;; esac
-            MB=$(( $(wc -c < "$f") / 1048576 ))
-            echo "  ${MB}MB  $(basename "$f")"
-            [ "$MB" -ge 25 ] || BAD="$BAD $(basename "$f")(${MB}MB)"
+          for n in ravend ipfs; do
+            F=$(ls src-tauri/vendor/$n src-tauri/vendor/$n.exe 2>/dev/null | head -1)
+            if [ -z "$F" ]; then
+              BAD="$BAD $n"
+            else
+              echo "  $(( $(wc -c < "$F") / 1048576 ))MB  $(basename "$F")"
+            fi
           done
           if [ -n "$BAD" ]; then
-            echo "🔴 너무 작습니다:$BAD"
-            echo "   노드(ravend)나 파일창고(ipfs)가 안 들어갔습니다."
+            echo ""
+            echo "🔴 없습니다:$BAD"
+            echo "   이대로 내보내면 새로 까는 사람은 노드도 파일창고도 없는"
+            echo "   앱을 받습니다. 화면은 「꺼져 있습니다」만 반복합니다."
             exit 1
           fi
-          echo "✅ 크기 정상"
+          echo "✅ 둘 다 준비됐습니다"
 
       - uses: actions/upload-artifact@v4
         with:
