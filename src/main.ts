@@ -3620,6 +3620,7 @@ function showPage(id: string) {
   document.querySelectorAll("nav a").forEach((a) =>
     a.classList.toggle("on", (a as HTMLElement).dataset.page === id));
   if (id === "wallet") loadWallet();
+  if (id === "shop") void paintFlow();
   if (id === "settings") {
     loadNode();
     loadNet();
@@ -4342,6 +4343,73 @@ async function talkMakeRoomGo() {
   } finally {
     b.disabled = false;
   }
+}
+
+/**
+ * **손님을 받기까지 무엇이 남았나.**
+ *
+ * ## 🔴 왜 이 칸이 생겼나
+ *
+ * 대표님: "출입도 내 가게에서 하는 일 아닌가? 내 가게가 헬스장일지 술집일지
+ *          모르는 거잖아. 내 가게 안에 구현되어야 하는 게 아닌가."
+ *
+ * 맞다. 헬스장을 열려면 **「자산」 → 「내 가게」 → 「출입」** 세 화면을 돌아야
+ * 하는데, 그 순서를 아는 사람은 이 코드를 쓴 사람뿐이었다.
+ *
+ * ⚠️ **지금 할 것 하나만 도드라지게 한다.** 셋을 나란히 놓으면 어느 것부터
+ *    인지 모른다. 나머지는 옅게 둔다.
+ */
+/** 라비가 「지금 무엇을 해야 하는지」 알 수 있게 들고 있는다. */
+export let setupState: any = null;
+
+async function paintFlow() {
+  const host = document.getElementById("sh-flow");
+  if (!host) return;
+  let d: any;
+  try {
+    d = await invoke<any>("shop_setup");
+  } catch {
+    host.innerHTML = "";
+    return;
+  }
+  setupState = d;
+  if (d?.ready) {
+    host.innerHTML = `<p class="meta" style="margin:0 0 10px">${t(
+      "손님 받을 준비가 됐습니다."
+    )}</p>`;
+    return;
+  }
+  const icon = (st: string) =>
+    st === "done" ? "✓" : st === "unknown" ? "?" : "·";
+  host.innerHTML = `<div class="card" style="margin:0 0 14px">
+      <h3>${t("손님을 받으시려면")}</h3>
+      ${(d?.steps || [])
+        .map((s: any, i: number) => {
+          const now = s.key === d.next;
+          const done = s.state === "done";
+          return `<div style="display:flex;gap:10px;align-items:flex-start;
+                    padding:8px 0;opacity:${now || done ? 1 : 0.55}">
+              <b style="min-width:20px;color:${done ? "var(--ok)" : "var(--accent)"}">${
+                done ? icon(s.state) : i + 1
+              }</b>
+              <div style="flex:1;min-width:0">
+                <b>${escapeHtml(t(s.title))}</b>
+                <p class="meta" style="margin:2px 0 0">${escapeHtml(t(s.why))}</p>
+                <p class="meta" style="margin:2px 0 0;opacity:.8">${escapeHtml(String(s.note || ""))}</p>
+              </div>
+              ${
+                done
+                  ? ""
+                  : `<button class="${now ? "" : "ghost"}" data-flow="${escapeHtml(String(s.go))}"
+                       style="flex-shrink:0">${t(now ? "지금 하기" : "가기")}</button>`
+              }
+            </div>`;
+        })
+        .join("")}
+    </div>`;
+  host.querySelectorAll("[data-flow]").forEach((b) => {
+    (b as HTMLElement).onclick = () => showPage((b as HTMLElement).dataset.flow!);
+  });
 }
 
 /* ── 맞교환 ───────────────────────────────────────────────────

@@ -170,7 +170,27 @@ pub fn refund_credit(refunded_rvn: f64) -> f64 {
     back
 }
 
-pub fn accrue(order_addr: &str, fee_rvn: f64) {
+/// 받은 1% 를 장부에 적는다.
+///
+/// ## 🔴 **받은 그 순간의 시세를 같이 적는다**
+///
+/// 대표님: "만에 하나 돈을 받을 때 시점의 rvn 가격을 기록해 두는 게
+///          좋을라나? 혹시 모르니 말야."
+///
+/// 「혹시」가 아니라 **필수**다. 나중에 이 RVN 을 팔 때 내는 세금이
+/// `(판 금액 − 받았을 때 가액)` 으로 계산되는데, **받았을 때 가액을
+/// 증명 못 하면 판 금액 전부가 차익으로 보일 여지가 있다.**
+///
+/// 그리고 **나중에 만들 수 없다.** 지난 시세를 짜맞춘 것은 증빙으로
+/// 안 봐 줄 수 있다. 적는 시점은 지금뿐이다.
+///
+/// ⚠️ 매출장부(`ledger.rs`)는 이미 `1RVN당가격` 을 적고 있었다. 그런데
+///    **우리 몫 장부만 안 적고 있었다** — `{order, rvn, at}` 이 전부였다.
+///
+/// ⚠️ 시세를 못 얻어도 **적는 것은 멈추지 않는다.** 1% 기록을 통째로
+///    빠뜨리는 것이 시세 한 칸 비는 것보다 훨씬 나쁘다. 대신 **0 을 적지
+///    않는다** — 0 을 적으면 나중에 「그때 0원이었다」로 읽힌다.
+pub async fn accrue(order_addr: &str, fee_rvn: f64) {
     if fee_rvn <= 0.0 {
         return;
     }
@@ -195,11 +215,38 @@ pub fn accrue(order_addr: &str, fee_rvn: f64) {
 
     let owed = round8(v["owed"].as_f64().unwrap_or(0.0) + fee_rvn);
     v["owed"] = json!(owed);
+
+    // 🔴 **받은 그 순간의 시세를 같이 적는다. 나중에 못 만든다.**
+    //
+    // ⚠️ **달러를 기준으로 적는다.** 이 프로그램은 한국에서만 쓰는 것이
+    //    아니다. 원화로만 적으면 브라질·독일 상인은 자기 세무에 못 쓴다.
+    //    RVN/USD 가 세계 공통 기준이고, 각 나라 통화는 거기서 환산한다.
+    //
+    // ⚠️ 장부를 빌리기 **전에** 얻는다. 빌린 채로 기다리면 그동안 이 파일을
+    //    아무도 못 만진다.
+    //
+    // ⚠️ 시세를 못 얻어도 **적는 것은 멈추지 않는다.** 1% 기록을 통째로
+    //    빠뜨리는 것이 시세 한 칸 비는 것보다 훨씬 나쁘다. 그리고 **0 을
+    //    적지 않는다** — 0 은 「그때 0원이었다」로 읽힌다.
+    let (usd, src) = match crate::price::rvn_rate("USD".into()).await {
+        Ok(r) => (
+            r.get("rate").and_then(Value::as_f64),
+            r.get("sources")
+                .and_then(Value::as_array)
+                .map(|a| a.iter().filter_map(Value::as_str).collect::<Vec<_>>().join("·"))
+                .unwrap_or_default(),
+        ),
+        Err(e) => (None, format!("못 얻음: {e}")),
+    };
+
     if let Some(h) = v["history"].as_array_mut() {
         h.push(json!({
             "order": order_addr,
             "rvn": round8(fee_rvn),
             "at": now(),
+            // 1 RVN 이 그때 몇 달러였나. 못 얻었으면 null 이고 까닭은 아래.
+            "usd_per_rvn": usd,
+            "price_src": src,
         }));
         // 장부가 무한히 자라면 가게 컴퓨터에서 이 파일을 읽는 데만 시간이
         // 걸린다. 합계(`owed`·`sent_total`)는 남고 낱개만 줄인다.
@@ -369,8 +416,8 @@ mod tests {
         std::env::set_var("PLAYX_RAVEN_HOME", &d);
         // 파일을 안 건드리는 것으로 확인한다 — accrue 는 0 이하에서 즉시 나간다.
         let before = std::fs::read(ledger_file()).ok();
-        accrue("RtestZero", 0.0);
-        accrue("RtestNeg", -5.0);
+        tauri::async_runtime::block_on(accrue("RtestZero", 0.0));
+        tauri::async_runtime::block_on(accrue("RtestNeg", -5.0));
         assert_eq!(std::fs::read(ledger_file()).ok(), before);
         let _ = std::fs::remove_dir_all(&d);
     }
@@ -418,7 +465,7 @@ mod tests {
         std::fs::create_dir_all(&d).unwrap();
         std::env::set_var("PLAYX_RAVEN_HOME", &d);
         {
-            accrue("Rorder1", 1.0); // 100 RVN 매출의 1%
+            tauri::async_runtime::block_on(accrue("Rorder1", 1.0)); // 100 RVN 매출의 1%
             assert_eq!(fee_owed()["owed"].as_f64().unwrap(), 1.0);
             // 50 RVN 을 환불하면 0.5 를 깎는다.
             assert_eq!(refund_credit(50.0), 0.5);

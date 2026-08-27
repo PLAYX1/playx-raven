@@ -5,6 +5,7 @@ mod awake;
 mod nodever;
 mod wording;
 mod prep;
+mod setupflow;
 mod quiet;
 mod helping;
 mod backup;
@@ -375,6 +376,7 @@ pub fn run() {
             reindex_run::chain_broken,
             reindex_run::chain_heal,
             prep::pc_prepare,
+            setupflow::shop_setup,
             nodever::node_version,
             mode::mode_get,
             mode::mode_set,

@@ -929,7 +929,7 @@ async fn sweep_payments(st: &ServerState) {
                     None => crate::devfee::already_on_chain(got, want, fee),
                 };
                 if !on_chain {
-                    crate::devfee::accrue(&addr, fee);
+                    crate::devfee::accrue(&addr, fee).await;
                 }
             }
         });
