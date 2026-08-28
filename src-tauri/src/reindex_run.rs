@@ -470,13 +470,40 @@ pub fn chain_broken() -> Value {
     let text = lines.join("\n");
     let broken = text.contains("Corrupted block database detected")
         || text.contains("irrecoverable inconsistency");
-    // 고친 뒤 다시 켜졌으면 그 기록이 뒤에 남는다. 마지막이 무엇인지가 중요하다.
-    let recovered = lines
+    // 🔴 **「고쳐지고 있는 중」을 「깨졌다」로 말하면 안 된다.**
+    //
+    //    2026-08-28: 대표님 컴퓨터에서 `ravend` 가 CPU 34.8% · 디스크
+    //    34.5MB/s 로 **한창 다시 계산하고 있는데** 화면은 「장부가
+    //    깨졌습니다 / 장부 고치기」를 내밀고 있었다. 그걸 누르면 잘 되던
+    //    것을 껐다 켠다 — **하마터면 몇 시간을 날릴 뻔했다.**
+    //
+    //    까닭은 내가 「고쳐졌다」의 표시를 하나로만 봤기 때문이다:
+    //    `init message: Verifying blocks`. 그런데 `-reindex-chainstate`
+    //    중에는 그 줄이 안 나오고 **`UpdateTip` 이 계속 나온다.**
+    //
+    //    표시를 넓힌다 — 그 오류 뒤에 **노드가 일하고 있다는 어떤 흔적이든**
+    //    있으면 「고쳐지는 중」으로 본다. 덜 막는 쪽이 안전하다:
+    //    · 잘못 「깨졌다」고 하면 → 사장이 잘 되는 걸 껐다 켠다 (몇 시간 손해)
+    //    · 잘못 「괜찮다」고 하면 → 다음에 켤 때 또 알게 된다 (손해 없음)
+    const WORKING: [&str; 5] = [
+        "init message: Verifying blocks",
+        "UpdateTip",                       // 재계산·따라잡기 둘 다 이걸 찍는다
+        "Rebuilding chain state",
+        "Reindexing block file",
+        "LoadBlockIndexDB",
+    ];
+    let bad = lines
         .iter()
-        .rposition(|l| l.contains("Corrupted block database detected"))
-        .zip(lines.iter().rposition(|l| l.contains("init message: Verifying blocks")))
-        .map(|(bad, ok)| ok > bad)
-        .unwrap_or(false);
+        .rposition(|l| l.contains("Corrupted block database detected"));
+    let working = lines
+        .iter()
+        .rposition(|l| WORKING.iter().any(|w| l.contains(w)));
+    let recovered = match (bad, working) {
+        (Some(b), Some(w)) => w > b,
+        // 오류가 아예 없으면 깨진 것도 아니다.
+        (None, _) => true,
+        _ => false,
+    };
     json!({
         "known": true,
         "broken": broken && !recovered,
@@ -522,5 +549,47 @@ mod heal_tests {
         let i = src.find("let heal = crate::paths::app_file").expect("있어야 한다");
         let seg = &src[i..i + 400.min(src.len() - i)];
         assert!(seg.contains("remove_file"), "표시를 안 지우고 있다 — 매번 다시 계산한다");
+    }
+}
+
+#[cfg(test)]
+mod broken_tests {
+    /// 「깨졌나」를 판정하는 함수 본문만 잘라 온다.
+    fn 판정함수() -> &'static str {
+        let src = include_str!("reindex_run.rs");
+        let i = src.find("pub fn chain_broken").expect("판정 함수가 있어야 한다");
+        let end = src[i..].find("\n/// 다음에 켤 때").unwrap_or(src.len() - i);
+        &src[i..i + end]
+    }
+
+    /// 🔴 **한창 고치는 중인데 「깨졌다」고 하면 안 된다.**
+    ///
+    /// 2026-08-28 대표님 컴퓨터에서 실제로 그랬다 — `ravend` 가 디스크를
+    /// 초당 34MB 씩 읽으며 다시 계산하고 있는데 화면은 「장부 고치기」를
+    /// 내밀었다. 눌렀으면 잘 되던 것을 껐다 켜서 몇 시간을 날렸다.
+    #[test]
+    fn 재계산_중을_깨진_것으로_보지_않는다() {
+        // ⚠️ 이 파일에는 `#[cfg(test)]` 가 여럿이라 「첫 것까지」로 자르면
+        //    보려는 함수가 범위 밖으로 나간다(실제로 그래서 시험이 헛돌았다).
+        //    **볼 함수 본문만** 잘라서 본다.
+        let code = 판정함수();
+        // `-reindex-chainstate` 중에 노드가 실제로 찍는 줄들이 표시에 있어야 한다.
+        for 표시 in ["UpdateTip", "Rebuilding chain state"] {
+            assert!(
+                code.contains(&format!("\"{표시}")) || code.contains(표시),
+                "「{표시}」 을 「일하는 중」 표시로 안 보고 있다 — \
+                 재계산 중인 노드를 「깨졌다」고 말하게 된다"
+            );
+        }
+    }
+
+    /// 오류가 아예 없으면 깨진 것도 아니다. 「모름」을 「깨짐」으로 치면
+    /// 멀쩡한 노드를 껐다 켜게 만든다.
+    #[test]
+    fn 오류가_없으면_깨진_것이_아니다() {
+        assert!(
+            판정함수().contains("(None, _) => true"),
+            "오류가 없을 때 「고쳐짐」으로 안 보고 있다"
+        );
     }
 }
