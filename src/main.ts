@@ -13556,7 +13556,13 @@ async function loadOrders() {
       .forEach((b) => {
         (b as HTMLElement).onclick = async () => {
           const el = b as HTMLElement;
+          // 🔴 **카운터에서 제일 자주 누르는 단추인데 누른 티가 없었다**
+          //    (자문 지적 2026-08-30). 눌리면 흐려지기만 하고, 그다음에
+          //    표 전체가 통째로 다시 그려진다 — 그 사이가 「눌렸나?」다.
+          //    줄 선 손님 앞에서 그 반 박자가 한 번 더 누르게 만든다.
+          const 원래 = el.textContent || "";
           el.setAttribute("disabled", "true");
+          el.textContent = t("보내는 중…");
           try {
             // "나왔다"를 누르는 순간 손님 폰이 울린다. 그래서 이 버튼은
             // 실수로 눌리면 안 되는 자리에 있어야 하고, 되돌릴 수 있어야 한다.
@@ -13564,6 +13570,9 @@ async function loadOrders() {
             loadOrders();
           } catch (e) {
             $("or-note").innerHTML = `<span style="color:var(--bad)">${e}</span>`;
+            // 🔴 글자를 되돌린다. 「보내는 중…」인 채로 굳어 있으면
+            //    사장은 아직 도는 줄 알고 하염없이 기다린다.
+            el.textContent = 원래;
             el.removeAttribute("disabled");
           }
         };
