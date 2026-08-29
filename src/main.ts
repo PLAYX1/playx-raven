@@ -4099,34 +4099,60 @@ function paintInvite() {
   if (!host) return;
   const name = tkRoom ? tkRoomNames.get(tkRoom) || t("방") : t("레이븐 이야기");
   host.innerHTML = `<button class="ghost" id="tk-inv">${t("초대하기")}</button>`;
-  document.getElementById("tk-inv")!.addEventListener("click", async () => {
+  document.getElementById("tk-inv")!.addEventListener("click", () => {
     const url = inviteLink();
     // 붙여넣기 좋게 **문구까지** 담는다. 사장이 문장을 지어내지 않아도 된다.
     const msg = `${t("이 방으로 오세요")} — ${name}\n${url}`;
 
-    // 🔴 **폰에서는 OS 공유 시트를 연다.** 대표님: "이야기 방이 sns 공유
-    //    기능 같은 게 없네." 여태 복사만 했다 — 그러면 사장이 카톡을 열고,
-    //    방을 고르고, 붙여넣기까지 해야 한다. 세 걸음이다.
-    //    공유 시트는 **한 번 눌러 카톡·문자·X 로 바로** 간다.
+    // 🔴 대표님(맥): "초대하기 누르면 링크 복사 기능이 없어. 윈도우에서는
+    //    나오는데 맥에서는 안 나와."
     //
-    //    ⚠️ 데스크톱과 옛 브라우저에는 이 기능이 없다. 그때는 복사로
-    //       돌아간다 — 없다고 아무 일도 안 하면 그게 제일 나쁘다.
-    const share = (navigator as any).share;
-    if (typeof share === "function") {
+    //    원인은 **공유 시트에 맡긴 것**이었다. 맥 WebView 에도
+    //    `navigator.share` 가 있어서 OS 시트가 열렸는데, **맥 시트에는
+    //    「복사」가 없다** — AirDrop·메일·메시지 같은 앱만 나온다.
+    //    그리고 `return` 으로 끝나서 복사 코드에 **도달하지 못했다.**
+    //
+    //    ⚠️ OS 가 무엇을 줄지 우리가 모른다. 그러니 **복사는 우리가 준다.**
+    //       공유 시트는 있으면 얹는 것이지 기대는 것이 아니다.
+    const has = typeof (navigator as any).share === "function";
+    host.innerHTML =
+      `<button class="ghost" id="tk-inv">${t("초대하기")}</button>` +
+      `<div class="invbox">` +
+      `<p class="meta">${escapeHtml(t("이 링크를 받은 분은 그 방으로 바로 들어옵니다."))}</p>` +
+      // 🔴 링크는 **한 줄에 안 들어간다.** 상자 안에서 접히게 두지 않으면
+      //    창 밖으로 삐져나가 글자가 잘린다(대표님 화면이 그랬다).
+      `<code class="invlink" id="tk-url">${escapeHtml(url)}</code>` +
+      `<div class="invbtns">` +
+      `<button class="primary" id="tk-copy">${t("링크 복사")}</button>` +
+      (has ? `<button class="ghost" id="tk-send">${t("다른 앱으로")}</button>` : "") +
+      `<button class="ghost" id="tk-close">${t("닫기")}</button>` +
+      `</div></div>`;
+
+    const copy = document.getElementById("tk-copy") as HTMLButtonElement;
+    copy.addEventListener("click", async () => {
       try {
-        await (navigator as any).share({ title: name, text: msg, url });
-        return; // 보냈으면 창을 또 띄우지 않는다
+        await navigator.clipboard.writeText(msg);
+        copy.textContent = t("복사했습니다");
       } catch {
-        // 사장이 취소했거나 이 기계가 못 한다. 아래 복사로 간다.
+        // ⚠️ 클립보드가 막힌 기계도 있다. 그때는 **글자를 골라 준다** —
+        //    아무 일도 안 일어나는 것보다 낫다.
+        const el = document.getElementById("tk-url");
+        if (el) {
+          const r = document.createRange();
+          r.selectNodeContents(el);
+          const sel = window.getSelection();
+          sel?.removeAllRanges();
+          sel?.addRange(r);
+        }
+        copy.textContent = t("직접 복사해 주세요 (⌘C)");
       }
-    }
-    await navigator.clipboard.writeText(msg).catch(() => {});
-    await sure(
-      t("초대 링크를 복사했습니다"),
-      `${msg}\n\n` +
-        t("카톡·문자·SNS 어디든 붙여넣으시면 됩니다. 받는 분은 이 프로그램을 깔고 그 방으로 들어옵니다."),
-      t("닫기"),
-    );
+      setTimeout(() => (copy.textContent = t("링크 복사")), 2500);
+    });
+    document.getElementById("tk-send")?.addEventListener("click", () => {
+      void (navigator as any).share({ title: name, text: msg, url }).catch(() => {});
+    });
+    document.getElementById("tk-close")?.addEventListener("click", () => paintInvite());
+
   });
 }
 

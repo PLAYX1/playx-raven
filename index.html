@@ -1253,6 +1253,16 @@
         padding: 10px 12px; font-size: 14.5px; border-bottom: 1px solid var(--line); }
       .bkrow:last-child { border-bottom: 0; }
       .bkhead { background: var(--panel); color: var(--muted); font-size: 13px; }
+    /* 초대 링크 상자. 🔴 링크는 한 줄에 안 들어간다 — 상자 안에서 접히게
+       두지 않으면 창 밖으로 삐져나가 글자가 잘린다. */
+    .invbox { margin-top: 10px; padding: 12px; border: 1px solid var(--line);
+      border-radius: 12px; background: var(--card); }
+    .invlink { display: block; margin: 8px 0 12px; padding: 10px;
+      border-radius: 8px; background: var(--bg); color: var(--fg);
+      font-size: 13px; line-height: 1.5;
+      overflow-wrap: anywhere; word-break: break-all; user-select: all; }
+    .invbtns { display: flex; gap: 8px; flex-wrap: wrap; }
+    .invbtns button { min-height: 44px; }
 </style>
   </head>
   <body>
