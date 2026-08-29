@@ -68,11 +68,16 @@ async fn chain_profile(asset: &str) -> Result<(Value, String, f64, bool), String
 }
 
 /// 12단어에서 나온 간판 열쇠의 공개키. 읽을 수 없으면 `None`.
-fn seed_pubkey() -> Option<String> {
-    let v = tauri::async_runtime::block_on(async {
-        crate::raven::call_rpc("getmywords", json!([])).await
-    })
-    .ok()?;
+///
+/// 🔴 **`block_on` 을 쓰면 안 된다.** 이 함수를 부르는 곳이 이미 tokio 런타임
+///    위에 있어서, 런타임 안에서 런타임을 시작하려다 그 자리에서 터진다
+///    (`Cannot start a runtime from within a runtime`). 그러면 사장은
+///    「가게 옮기기」를 눌렀는데 아무 말도 없이 앱이 죽는 것을 본다.
+///
+/// ⚠️ 검사로는 안 잡혔다 — 시험은 런타임 밖에서 도니까 통과한다.
+///    **통과가 작동의 증거가 아닌** 또 하나의 자리다.
+async fn seed_pubkey() -> Option<String> {
+    let v = crate::raven::call_rpc("getmywords", json!([])).await.ok()?;
     let words = v.get("word_list").and_then(Value::as_str)?;
     let pass = v.get("passphrase").and_then(Value::as_str).unwrap_or("");
     let sk = crate::shopkey::derive_tagged(crate::shopkey::SEED_TAG, words, pass)?;
@@ -90,7 +95,7 @@ pub async fn shop_key_move_plan() -> Result<Value, String> {
 
     let (profile, cid, amount, reissuable) = chain_profile(&asset).await?;
     let now_pk = profile["nostr_pubkey"].as_str().unwrap_or("").to_string();
-    let new_pk = seed_pubkey();
+    let new_pk = seed_pubkey().await;
 
     // 🔴 이미 넣을 수 있는 최대치가 얼마인지 **우리가 계산해서 준다.**
     //    상한(210억)을 그대로 넣으면 이미 있는 수량만큼 넘쳐서 거래가

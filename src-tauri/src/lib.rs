@@ -50,6 +50,7 @@ mod nostrpub;
 mod paths;
 mod swap;
 mod sweep;
+mod identity;
 mod talk;
 // 팬클럽 — 자산(1집·2집·싱글)마다 있는 방을 묶어 보고, 여러 방에 한 번에 공지한다.
 // 방을 잠그는 일 자체는 talk.rs 가 이미 한다. 여기는 그것을 **자산 기준으로**
@@ -361,6 +362,11 @@ pub fn run() {
             shopkey::shopkey_origin,
             shopmove::shop_key_move_plan,
             shopmove::shop_key_move,
+            // 🔴 12단어 하나에서 나오는 한 사람 — 경로표는 `identity.rs`.
+            identity::identity_paths,
+            identity::identity_status,
+            identity::identity_adopt_person_key,
+            identity::identity_restore_legacy_key,
             talk::talk_me,
             talk::talk_post,
             // 사진 보내기. 사진·영수증·「이거요」를 못 보내면 대화방이 빈 방이 된다.

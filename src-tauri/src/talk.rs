@@ -49,11 +49,26 @@ const KIND_ROOM_MSG: i64 = 42;
 /// 쓴 글이 우리 릴레이에 안 남는, 웃기는 일이 생긴다.
 const TAG: &str = "ravencoin";
 
-fn key_file() -> std::path::PathBuf {
+pub(crate) fn key_file() -> std::path::PathBuf {
     crate::paths::app_file("talkkey.json")
 }
 
 /// 이 사람의 열쇠. 없으면 만든다 — 씨앗에서 먼저 시도한다.
+///
+/// # 🔴 순서가 곧 「그 사람이 사라지지 않는다」이다
+///
+/// **파일이 있으면 파일이 이긴다.** 파일에 든 열쇠가 12단어에서 나온 것이든
+/// 무작위든, 새 방식이든 옛 방식이든 상관없이 그대로 쓴다.
+///
+/// 이 앱은 예전에 열쇠를 **우리만 아는 방식**(`SEED_TAG_TALK` 표식 해시)으로
+/// 뽑았다. 지금은 표준 경로(`identity::PATH_PERSON`)로 뽑는다. 둘은 다른
+/// 값이다. 그런데 옛 이름으로 쓴 글이 **세계 릴레이에 이미 남아 있다.**
+/// 여기서 「새 방식이 옳으니 갈아 끼우자」를 하면 그 사람이 그 순간
+/// 사라진다 — 쓴 글도, 받은 쪽지도 전부 남의 것이 된다.
+///
+/// 그래서 **자동으로는 절대 안 바꾼다.** 바꾸는 길은 사장이 눌러야 하는
+/// `identity_adopt_person_key` 하나뿐이고, 그때 옛 열쇠는 지우지 않고
+/// 「이 글도 나다」를 양쪽 열쇠로 서명해 릴레이에 남긴다.
 fn key() -> Result<[u8; 32], String> {
     if let Ok(s) = std::fs::read_to_string(key_file()) {
         if let Some(h) = serde_json::from_str::<Value>(&s)
@@ -92,6 +107,10 @@ fn key() -> Result<[u8; 32], String> {
     let body = json!({
         "sk": hex::encode(sk),
         "from": from,
+        // 🔴 **어디서 나온 열쇠인지 파일에 적는다.** 이게 없으면 나중에
+        //    이 열쇠가 옛 방식인지 표준 경로인지 알 길이 없고, 그러면
+        //    화면이 「폰과 같은 사람입니다」를 정직하게 말할 수 없다.
+        "path": if from == "seed" { crate::identity::PATH_PERSON } else { "random" },
         "note": if from == "seed" {
             "이야기 열쇠입니다. 12단어에서 나왔으므로 12단어만 있으면 되살릴 수 있습니다."
         } else {
@@ -108,16 +127,82 @@ fn key() -> Result<[u8; 32], String> {
     Ok(sk)
 }
 
-/// ⚠️ 12단어는 **여기서만** 쓰고 어디에도 안 남긴다.
+/// 12단어에서 **사람 열쇠**를 뽑는다 — 표준 경로 `m/44'/175'/7'/0/0`.
+///
+/// 🔴 예전에는 여기서 `SEED_TAG_TALK` 표식 해시를 썼다. 그 값은 웹 지갑과
+///    **다른 사람**이었다 — 같은 12단어를 넣어도 폰의 나와 데스크톱의 나가
+///    달랐다. 이제 웹이 쓰던 자리에 맞춘다(`identity.rs` 의 경로표).
+///
+/// ⚠️ 이 바꿈은 **새로 만드는 열쇠에만** 닿는다. 위 `key()` 가 파일을 먼저
+///    보기 때문에, 이미 이름이 있는 사람은 아무 일도 일어나지 않는다.
+///
+/// ⚠️ 12단어는 `identity.rs` 안에서만 쓰이고 어디에도 안 남는다.
 fn from_seed() -> Option<[u8; 32]> {
-    let v = tauri::async_runtime::block_on(async {
-        crate::raven::call_rpc("getmywords", json!([])).await
-    })
-    .ok()?;
-    let words = v.get("word_list").and_then(Value::as_str)?;
-    let pass = v.get("passphrase").and_then(Value::as_str).unwrap_or("");
-    crate::shopkey::derive_tagged(crate::shopkey::SEED_TAG_TALK, words, pass)
+    crate::identity::person_key()
 }
+
+// 옛 방식(표식 해시)으로 뽑은 이야기 열쇠는 `identity::both_keys_async` 가
+// 만든다. 여기 두면 12단어를 두 번 물어보게 되고, async 자리에서 부를 수도
+// 없다(`block_on` 은 런타임 위에서 터진다).
+
+/// 이 파일에 적힌 열쇠. **만들지 않는다** — 없으면 `None`.
+///
+/// 상태를 보여 주는 자리에서 쓴다. 「지금 어떤 상태인가」를 물었을 뿐인데
+/// 열쇠가 새로 생기면, 묻는 것만으로 사람이 하나 태어나는 셈이다.
+pub(crate) fn key_on_disk() -> Option<([u8; 32], String, String)> {
+    let s = std::fs::read_to_string(key_file()).ok()?;
+    let v: Value = serde_json::from_str(&s).ok()?;
+    let b = hex::decode(v.get("sk").and_then(Value::as_str)?).ok()?;
+    if b.len() != 32 {
+        return None;
+    }
+    let mut sk = [0u8; 32];
+    sk.copy_from_slice(&b);
+    secp256k1::SecretKey::from_byte_array(&sk).ok()?;
+    Some((
+        sk,
+        v.get("from").and_then(Value::as_str).unwrap_or("random").to_string(),
+        v.get("path").and_then(Value::as_str).unwrap_or("").to_string(),
+    ))
+}
+
+/// 이야기 열쇠를 갈아 끼운다. **옛 파일은 지우지 않고 옆에 남긴다.**
+///
+/// 🔴 `talkkey-old-<시각>.json` 으로 이름만 바꾼다. 지운 것은 못 되돌리고,
+///    그 파일이 그 사람의 유일한 사본일 수도 있다.
+pub(crate) fn install_key(sk: &[u8; 32], from: &str, path: &str) -> Result<String, String> {
+    let p = key_file();
+    if p.exists() {
+        let stamp = now();
+        let kept = p.with_file_name(format!("talkkey-old-{stamp}.json"));
+        std::fs::rename(&p, &kept)
+            .map_err(|e| format!("옛 이야기 열쇠를 옆에 남기지 못했습니다. 그래서 아무것도 바꾸지 않았습니다: {e}"))?;
+    }
+    if let Some(d) = p.parent() {
+        let _ = std::fs::create_dir_all(d);
+    }
+    let body = json!({
+        "sk": hex::encode(sk),
+        "from": from,
+        "path": path,
+        "note": "이야기 열쇠입니다. 12단어에서 나왔으므로 12단어만 있으면 되살릴 수 있습니다.",
+    });
+    std::fs::write(&p, serde_json::to_vec_pretty(&body).unwrap_or_default())
+        .map_err(|e| format!("이야기 열쇠를 저장하지 못했습니다: {e}"))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o600));
+    }
+    crate::shopkey::pubkey_of(sk)
+}
+
+/// 우리 글에 붙는 표. `identity.rs` 가 「이 글도 나다」에 같은 표를 붙인다 —
+/// 안 붙이면 **우리 릴레이가 그 글을 안 남긴다**(`relay.rs` 의 저장 규칙).
+pub(crate) const TALK_TAG: &str = TAG;
+pub(crate) const TALK_KIND_PROFILE: i64 = KIND_PROFILE;
+pub(crate) const TALK_KIND_NOTE: i64 = KIND_NOTE;
+pub(crate) const TALK_KIND_ROOM_MSG: i64 = KIND_ROOM_MSG;
 
 fn now() -> i64 {
     std::time::SystemTime::now()
@@ -135,13 +220,20 @@ pub fn talk_me() -> Result<Value, String> {
         .and_then(|s| serde_json::from_str::<Value>(&s).ok())
         .and_then(|v| v.get("from").and_then(Value::as_str).map(str::to_string))
         .unwrap_or_else(|| "random".into());
+    let path = key_on_disk().map(|(_, _, p)| p).unwrap_or_default();
     Ok(json!({
         "pubkey": crate::shopkey::pubkey_of(&sk)?,
         "recoverable": from == "seed",
-        "why": if from == "seed" {
-            "12단어만 있으면 이 이름을 되살릴 수 있습니다."
-        } else {
+        "path": path,
+        // 🔴 「같은 사람인가」를 여기서도 말한다. 이름표만 보여 주면 폰의
+        //    이름과 다르다는 것을 사장이 알 길이 없다.
+        "same_as_wallet": path == crate::identity::PATH_PERSON,
+        "why": if from != "seed" {
             "이 이름은 무작위로 만들어졌습니다. 백업 파일이 유일한 사본입니다."
+        } else if path == crate::identity::PATH_PERSON {
+            "12단어만 있으면 이 이름을 되살릴 수 있습니다. 폰·웹 지갑과 같은 이름입니다."
+        } else {
+            "12단어만 있으면 이 이름을 되살릴 수 있습니다. 다만 옛 방식이라 폰·웹 지갑에서는 다른 이름으로 보입니다."
         },
     }))
 }
