@@ -298,7 +298,11 @@
       .kv { display: flex; gap: 8px; font-size: 14px; margin-bottom: 4px; }
       .kv b { font-weight: 600; min-width: 76px; color: var(--muted); }
       code.addr { font-size: 11px; word-break: break-all; }
-      .tabs { display: flex; gap: 4px; margin: 4px 0 16px; border-bottom: 1px solid var(--line); }
+      .tabs { display: flex; gap: 4px; margin: 4px 0 16px; border-bottom: 1px solid var(--line);   /* 🔴 실측(2026-08-29): 2차 메뉴 7개는 ≈909px 이라 1280px 창에는 들어가지만
+     **1100px 부터 넘친다.** 넘칠 때 줄바꿈되면 아래 내용이 밀려 내려가고,
+     잘리면 「가게 정보」로 갈 길이 사라진다. 옆으로 밀리게 둔다. */
+  overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: thin;
+}
       .tab { background: none; border: 0; border-bottom: 2px solid transparent; border-radius: 0;
              padding: 12px 16px; font-size: 15px; min-height: 40px; color: var(--muted); cursor: pointer; }
       .tab:hover { color: var(--text); }
@@ -2043,7 +2047,7 @@
       <!-- ── 가게: 벤딩머신과 메뉴판은 같은 일이다 ── -->
       <!-- 배당. 자산을 내는 것은 쉽고, 가질 이유를 만드는 것이 어렵다. -->
       <section class="page" id="page-reward">
-        <h2 class="title">배당</h2>
+        <h2 class="title">나눠주기</h2>
         <p class="lede">자산을 가진 사람들에게 나눠 줍니다. 회원권·조합원 토큰에 씁니다.</p>
         <!-- 큰 아이콘 줄. 라비 화면과 같은 문법 — 위는 「지금 할 일」. -->
         <div class="tiles pagetiles" id="pt-reward"></div>

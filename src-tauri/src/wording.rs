@@ -73,3 +73,57 @@ mod tests {
         assert!(BANNED.len() >= 10, "막는 말이 너무 적습니다");
     }
 }
+
+#[cfg(test)]
+mod 화면검사 {
+    /// 🔴 금지어 검사가 **화면을 안 보고 있었다.**
+    ///
+    /// `talk.rs`·`issue2.rs` 만 훑느라, 1차 메뉴 「나눠주기」를 누르면 나오는
+    /// 화면 제목이 **「배당」**인 것을 여섯 달 동안 아무도 못 봤다. 금지한
+    /// 이유(투자로 읽히면 규제 대상이 된다)는 화면에서 더 크게 적용된다 —
+    /// 사람이 실제로 읽는 것은 러스트 소스가 아니라 그 글자다.
+    /// `<!-- -->` 와 `/* */` 를 통째로 지운다.
+    fn 주석없이(src: &str) -> String {
+        let mut out = String::with_capacity(src.len());
+        let b = src.as_bytes();
+        let (mut i, mut html, mut css) = (0usize, false, false);
+        while i < b.len() {
+            if !html && !css && b[i..].starts_with(b"<!--") {
+                html = true;
+                i += 4;
+            } else if html && b[i..].starts_with(b"-->") {
+                html = false;
+                i += 3;
+            } else if !html && !css && b[i..].starts_with(b"/*") {
+                css = true;
+                i += 2;
+            } else if css && b[i..].starts_with(b"*/") {
+                css = false;
+                i += 2;
+            } else {
+                if !html && !css {
+                    out.push(b[i] as char);
+                }
+                i += 1;
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn 화면에도_금지어가_없다() {
+        // ⚠️ 주석은 사람이 못 본다. **줄 단위로 거르면 안 된다** — 여러 줄
+        //    주석의 가운데 줄은 `/*` 로 시작하지 않아서 그냥 통과한다.
+        //    (이 검사를 처음 돌렸을 때 CSS 주석에 걸렸다.) 블록째로 지운다.
+        let html = 주석없이(include_str!("../../index.html"));
+        for line in html.lines() {
+            let t = line.trim_start();
+            for word in ["배당", "수익률", "고수익", "재테크", "떡상"] {
+                assert!(
+                    !t.contains(word),
+                    "화면에 「{word}」 가 보입니다. 투자로 읽히면 규제 대상이 됩니다: {t}"
+                );
+            }
+        }
+    }
+}

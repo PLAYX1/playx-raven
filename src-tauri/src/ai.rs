@@ -361,7 +361,8 @@ Rules:
   the answer was a screen away.
   "spot" MUST be one of these exact strings. Anything else is silently ignored:
     새 자산 만들기 · 가게 열기 · 문 등록 · 회원 등록 · 이야기 방 만들기 ·
-    방 초대하기 · 이 컴퓨터 준비하기 · 노드 상태 · 지갑 · 백업 · 손님 받기 순서
+    방 초대하기 · 이 컴퓨터 준비하기 · 노드 상태 · 지갑 · 백업 · 손님 받기 순서 ·
+    나눠주기 · 내 가게
   Say in "reply" what they will see and what pressing it does, in plain Korean.
   Pair it with "go" only if you need a screen not in that list.
 - "tile_remove" takes one off, matched by its exact label. Only their own tiles can be removed; the built-in ones cannot.
@@ -1205,4 +1206,61 @@ mod point_tests {
             "라비가 단추를 대신 누르고 있다 — 승인은 사람이 해야 한다"
         );
     }
+
+#[cfg(test)]
+mod 양방향 {
+    /// 🔴 여태 검사는 **한 방향만** 봤다: 「AI 가 아는 이름이 화면에 있나」.
+    ///
+    /// 그래서 화면에 새 자리를 넣어도 **AI 는 모른 채로 통과**했다.
+    /// 오늘 「나눠주기」·「내 가게」가 정확히 그렇게 빠져 있었다 —
+    /// 누가 "자산 가진 사람들한테 나눠주려면 어디로 가?" 하고 물으면
+    /// 라비가 **아무 데도 못 가리켰다.**
+    ///
+    /// 대표님: "라비가 이걸 어떻게 사용하는지도 다 설명이 가능해야해"
+    #[test]
+    fn 양쪽_다_안다() {
+        let ts = include_str!("../../src/main.ts");
+        // ⚠️ **주석을 빼고 본다.** 이 검사의 설명글에 「나눠주기」라고 적혀
+        //    있으면 `contains` 가 늘 참이 되어 **아무것도 안 잡는다.**
+        //    (이 파일에서 실제로 그랬다 — 오늘 여섯 번째 같은 함정이다.)
+        let ai: String = include_str!("ai.rs")
+            .lines()
+            .filter(|l| {
+                let t = l.trim_start();
+                !t.starts_with("//") && !t.starts_with("///")
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        // main.ts 의 RAVI_SPOTS 열쇠들
+        // ⚠️ **한 줄짜리만 보면 안 된다.** `RAVI_SPOTS` 항목은 짧으면 한 줄,
+        //    길면 여러 줄로 적힌다. 처음 만든 검사는 한 줄만 봐서, 오늘 새로
+        //    넣은 「나눠주기」(여러 줄)를 **놓쳤다** — 일부러 깨뜨려 보고 나서야
+        //    알았다. 검사를 넣었으면 **깨뜨려 보고 잡히는지** 확인해야 한다.
+        let blk = ts
+            .split("const RAVI_SPOTS")
+            .nth(1)
+            .and_then(|r| r.split("\n};").next())
+            .unwrap_or("");
+        let mut 화면 = vec![];
+        for line in blk.lines() {
+            let t = line.trim_start();
+            if t.starts_with("//") {
+                continue;
+            }
+            if let Some(rest) = t.strip_prefix('"') {
+                if let Some(end) = rest.find("\": {") {
+                    화면.push(rest[..end].to_string());
+                }
+            }
+        }
+        assert!(화면.len() >= 10, "RAVI_SPOTS 를 못 읽었습니다: {}", 화면.len());
+        for name in &화면 {
+            assert!(
+                ai.as_str().contains(name.as_str()),
+                "화면에는 「{name}」 자리가 있는데 **라비는 모릅니다.** \
+                 ai.rs 의 안내 목록에 넣어 주세요 — 모르는 곳은 가리킬 수 없습니다."
+            );
+        }
+    }
+}
 }
