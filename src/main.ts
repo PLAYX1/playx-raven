@@ -5717,6 +5717,17 @@ const SHOP_FIELDS: Record<string, string> = {
  * 데려가고 반짝이는 데까지가 라비의 일이다. **누르는 것은 사람이 한다** —
  * 돈이 나가는 일, 체인에 새기는 일이 여기 섞여 있다.
  */
+// 🔴 화면을 큰 메뉴에서 내릴 때마다 밟는 함정: **가는 길이 하나도 안 남는다.**
+//    켤 때 확인한다 — 길이 없어지면 그 화면은 있어도 없는 것이다.
+if (typeof document !== "undefined") {
+  window.addEventListener("DOMContentLoaded", () => {
+    for (const page of ["door", "shop", "wallet"]) {
+      const 길 = document.querySelectorAll(`[data-page="${page}"],[data-goto="${page}"]`).length;
+      if (!길) console.error(`[배선] ${page} 화면으로 가는 길이 하나도 없습니다.`);
+    }
+  });
+}
+
 const RAVI_SPOTS: Record<string, { page: string; el?: string; say: string }> = {
   "새 자산 만들기": { page: "assets", el: "as-new", say: "회원권·쿠폰·굿즈를 만드는 곳입니다" },
   "가게 열기": { page: "shop", el: "sh-save", say: "손님이 볼 화면을 여는 곳입니다" },
@@ -11679,7 +11690,7 @@ async function applyMode(): Promise<void> {
   // 「돕기」에서 감추는 것은 **가게 하나뿐**이다. 자산·배당은 레이븐코인
   // 그 자체라 돕는 사람도 쓴다 — 장사 기능이 아니다.
   show("shop", !help);
-  show("door", !help);
+  // `door` 는 큰 메뉴에서 내렸다(「내 가게」 안에 있다). 감출 것이 없다.
 
   if (help) {
     showPage("helping");

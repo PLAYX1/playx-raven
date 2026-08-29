@@ -177,7 +177,7 @@ function randomInt(max: number): number {
 type Screen =
   | "loading" | "welcome" | "unlock" | "words" | "quiz"
   | "restore" | "password" | "main" | "send" | "confirm" | "sent"
-  | "insecure" | "sell";
+  | "insecure" | "sell" | "rooms";
 
 function show(screen: Screen): void {
   document.body.dataset.screen = screen;
@@ -713,6 +713,211 @@ function tagOf(e: NostrEvent, name: string): string {
   return e.tags.find((t) => t[0] === name)?.[1] || "";
 }
 
+
+// ── 이야기 방 (NIP-28) ──────────────────────────────────────────────────
+//
+// 🔴 대표님: "대화가 모바일도 같이 되어야 좋은데 말야."
+//
+// 여태 방 대화는 **데스크톱 앱에만** 있었다. 폰에서는 `/talk?room=…` 으로
+// **읽기만** 됐다. 그런데 사람은 폰으로 답한다 — 읽기만 되는 대화는
+// 대화가 아니라 게시판이다.
+//
+// ⚠️ 재료는 이미 여기 다 있었다. 열쇠(12단어에서 나온 것)·서명·릴레이 통신이
+//    쪽지(NIP-17)용으로 이미 돌고 있었고, **방(NIP-28)만 안 이어져 있었다.**
+//    이 저장소에서 오늘만 여러 번 본 그 병이다.
+//
+// ⚠️ 이 페이지는 `connect-src 'self'` 라 릴레이에 직접 못 붙는다(12단어가
+//    여기 있어서 일부러 막아 둔 문이다). 서버가 대신 묻고 대신 올린다 —
+//    **개인키는 안 넘어간다.** 서명은 여기서 하고 서명된 것만 보낸다.
+
+const KIND_ROOM = 40;
+const KIND_ROOM_MSG = 42;
+
+let roomId = "";
+let roomName = "";
+
+/** 릴레이에 물어본다. 서버가 대신 묻는다. */
+async function askRelay(filter: unknown): Promise<any[]> {
+  try {
+    const r = await fetch("/api/nostr/query", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ filter }),
+      signal: AbortSignal.timeout(12_000),
+    });
+    if (!r.ok) return [];
+    const d = await r.json();
+    return Array.isArray(d?.events) ? d.events : Array.isArray(d) ? d : [];
+  } catch {
+    return [];
+  }
+}
+
+/** 방 목록. */
+async function loadRooms(): Promise<void> {
+  const box = $("rm-list");
+  box.textContent = "방을 찾는 중…";
+  const evs = await askRelay({ kinds: [KIND_ROOM], "#t": ["ravencoin"], limit: 50 });
+  const seen = new Set<string>();
+  const rooms = evs
+    .filter((e) => e?.id && !seen.has(e.id) && seen.add(e.id) !== undefined)
+    .map((e) => {
+      let b: any = {};
+      try {
+        b = JSON.parse(e.content || "{}");
+      } catch {
+        /* 모양이 다르면 이름만 비운다 */
+      }
+      const tags: string[][] = e.tags || [];
+      const asset =
+        tags.find((t) => t[0] === "asset")?.[1] || (typeof b.asset === "string" ? b.asset : "");
+      return { id: String(e.id), name: String(b.name || "이름 없는 방"), asset };
+    });
+  if (!rooms.length) {
+    // 🔴 빈 화면은 고장이 아니다. 무엇을 하면 되는지 적는다.
+    // 🔴 빈 화면은 모집 화면이다. 여태 "프로그램에서 만드세요"라고 했는데,
+    //    폰만 가진 사람에게는 **할 수 있는 일이 없다**는 뜻이었다.
+    box.innerHTML = `<p class="sub">아직 방이 없거나 릴레이가 늦게 답했습니다.
+      아래에서 <b>첫 방을 만들어</b> 보세요.</p>`;
+    return;
+  }
+  box.innerHTML = rooms
+    .map(
+      (r) =>
+        `<button class="roomrow" data-room="${escapeHtml(r.id)}" data-nm="${escapeHtml(r.name)}">
+           ${escapeHtml(r.name)}
+           ${r.asset ? `<span class="tag">${escapeHtml(r.asset)}</span>` : ""}
+         </button>`,
+    )
+    .join("");
+  box.querySelectorAll<HTMLElement>("[data-room]").forEach((b) => {
+    b.onclick = () => openRoom(b.dataset.room!, b.dataset.nm || "방");
+  });
+}
+
+/**
+ * 방을 만든다.
+ *
+ * 🔴 대표님: "모바일에서도 채팅방을 만들수 있나?"  못 만들었다. 읽기·쓰기만
+ *    되고 **만들기는 데스크톱 앱에만** 있었다. 폰만 가진 사람은 남이 만든 방에
+ *    들어가는 것밖에 못 했다.
+ *
+ * ⚠️ 자산으로 잠그는 방(회원 전용)은 여기서 안 만든다. 폰에서는 자기 자산
+ *    목록을 못 볼 수도 있어서(공개 조회처는 자산을 못 본다) 고르라고 하면
+ *    빈 칸만 보인다. **이름만 정하면 누구나 들어오는 방**이 생긴다.
+ */
+async function makeRoom(): Promise<void> {
+  const el = $("rm-new") as HTMLInputElement;
+  const name = (el.value || "").trim().slice(0, 40);
+  if (!name) {
+    say("rm-say", "방 이름을 적어 주세요.", "err");
+    el.focus();
+    return;
+  }
+  const sec = nostrSecret();
+  if (!sec) {
+    say("rm-say", "지갑을 먼저 열어 주세요. 방은 본인 열쇠로 서명해서 만듭니다.", "err");
+    return;
+  }
+  const btn = $("rm-make") as HTMLButtonElement;
+  btn.disabled = true;
+  say("rm-say", "방을 만드는 중…");
+  try {
+    // 서명은 여기서. 서버로 가는 것은 이미 서명된 것뿐이다.
+    const ev = signEvent(sec, {
+      kind: KIND_ROOM,
+      created_at: Math.floor(Date.now() / 1000),
+      tags: [["t", "ravencoin"]],
+      content: JSON.stringify({ name, about: "" }),
+    } as any);
+    const r = await fetch("/api/nostr/publish", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ event: ev }),
+    });
+    if (!r.ok) throw new Error(`릴레이가 ${r.status} 로 답했습니다`);
+    el.value = "";
+    say("rm-say", "");
+    // ⚠️ 목록을 다시 부르지 않는다. 릴레이가 방금 것을 바로 안 돌려줄 수
+    //    있어서, 새로고침하면 **방금 만든 방이 사라진 것처럼 보인다.**
+    //    그냥 그 방으로 들어간다.
+    await openRoom(String((ev as any).id), name);
+  } catch (e) {
+    say("rm-say", (e as Error)?.message || "방을 만들지 못했습니다.", "err");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/** 방 하나를 연다. */
+async function openRoom(id: string, name: string): Promise<void> {
+  roomId = id;
+  roomName = name;
+  $("rm-title").textContent = name;
+  $("rm-pane").style.display = "";
+  $("rm-list").style.display = "none";
+  await loadRoomMsgs();
+}
+
+async function loadRoomMsgs(): Promise<void> {
+  const box = $("rm-msgs");
+  box.textContent = "읽는 중…";
+  const evs = await askRelay({ kinds: [KIND_ROOM_MSG], "#e": [roomId], limit: 60 });
+  const me = nostrSecret() ? nip17.pubOf(nostrSecret()) : "";
+  const lines = evs
+    .sort((a, b) => Number(a.created_at || 0) - Number(b.created_at || 0))
+    .map((e) => {
+      const mine = String(e.pubkey || "") === me;
+      return `<div class="msg ${mine ? "me" : ""}">
+          <div class="who">${mine ? "나" : escapeHtml(String(e.pubkey || "").slice(0, 8))}</div>
+          <div class="what">${escapeHtml(String(e.content || "").slice(0, 800))}</div>
+        </div>`;
+    });
+  box.innerHTML = lines.length
+    ? lines.join("")
+    : `<p class="sub">아직 오간 이야기가 없습니다. 첫 글을 쓰실 수 있습니다.</p>`;
+  box.scrollTop = box.scrollHeight;
+}
+
+async function sendRoomMsg(): Promise<void> {
+  const el = $("rm-text") as HTMLTextAreaElement;
+  const text = el.value.trim();
+  if (!text) return;
+  const sec = nostrSecret();
+  if (!sec) {
+    say("rm-say", "지갑을 먼저 열어 주세요. 글은 본인 열쇠로 서명해서 나갑니다.", "err");
+    return;
+  }
+  const btn = $("rm-send") as HTMLButtonElement;
+  btn.disabled = true;
+  say("rm-say", "보내는 중…");
+  try {
+    // 🔴 서명은 **여기서** 한다. 서버로 가는 것은 이미 서명된 것뿐이고,
+    //    개인키는 이 브라우저를 안 떠난다.
+    const ev = signEvent(sec, {
+      kind: KIND_ROOM_MSG,
+      created_at: Math.floor(Date.now() / 1000),
+      tags: [
+        ["e", roomId, "", "root"],
+        ["t", "ravencoin"],
+      ],
+      content: text,
+    } as any);
+    const r = await fetch("/api/nostr/publish", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ event: ev }),
+    });
+    if (!r.ok) throw new Error(`릴레이가 ${r.status} 로 답했습니다`);
+    el.value = "";
+    say("rm-say", "");
+    await loadRoomMsgs();
+  } catch (e) {
+    say("rm-say", (e as Error)?.message || "보내지 못했습니다.", "err");
+  } finally {
+    btn.disabled = false;
+  }
+}
 
 // ── 홈 화면에 추가 ──────────────────────────────────────────────────────
 //
@@ -1643,7 +1848,20 @@ async function refresh(deep: boolean): Promise<void> {
     });
     renderMain();
   } catch (e) {
-    say("scan-status", (e as Error).message || "조회에 실패했습니다.", "err");
+    // 🔴 **못 물어본 것을 「0원」으로 두면 안 된다.**
+    //
+    //    `$("balance")` 는 처음에 「0」으로 시작한다. 조회가 실패하면
+    //    `renderMain()` 이 안 불리고 **그 0 이 그대로 남는다.** 그러면
+    //    돈이 있는 사람에게 **없다고 말하는 것**이 된다 — 지갑이 할 수 있는
+    //    가장 나쁜 거짓말이다. 손님은 「내 돈이 사라졌나」로 읽는다.
+    //
+    //    실제로 그렇게 보였다(2026-08-29, 대표님 화면):
+    //      잔액 0 RVN
+    //      노드에 묻지 못했습니다: RPC: all 1 nodes failed — connect ETIMEDOUT
+    //
+    //    모르면 **모른다고 적는다.**
+    $("balance").textContent = "—";
+    say("scan-status", walletErrSay(e), "err");
   } finally {
     btn.disabled = false;
     deepBtn.disabled = false;
@@ -1833,6 +2051,33 @@ async function openAsset(name: string): Promise<void> {
   box.onclick = (ev) => {
     if (ev.target === box) box.style.display = "none";
   };
+}
+
+/**
+ * 조회가 실패했을 때 **사람이 읽을 수 있는 말**로 바꾼다.
+ *
+ * 🔴 여태 이런 것이 그대로 나갔다:
+ *
+ *     RPC: all 1 nodes failed — connect ETIMEDOUT 106.245.33.202:443
+ *
+ * 이 문장으로 손님이 할 수 있는 일이 **하나도 없다.** 그리고 그 옆에
+ * 「잔액 0」이 같이 떠 있으면 「내 돈이 사라졌다」로 읽는다.
+ *
+ * ⚠️ 제일 중요한 한 줄은 **「돈은 그대로 있습니다」**다. 돈은 체인에 있고
+ *    이 화면이 못 읽을 뿐이다. 그 말을 안 하면 사람은 최악을 상상한다.
+ */
+function walletErrSay(e: unknown): string {
+  const raw = String((e as Error)?.message || e || "");
+  const 못닿음 = /ETIMEDOUT|ECONNREFUSED|ENOTFOUND|nodes failed|fetch failed|502|504/i.test(raw);
+  if (못닿음) {
+    return (
+      "지금 잔액을 확인하지 못했습니다. " +
+      "돈은 그대로 있습니다 — 체인에 있고 이 화면이 못 읽을 뿐입니다. " +
+      "잠시 뒤 「새로고침」을 눌러 주세요."
+    );
+  }
+  // 모르는 오류는 감추지 않는다. 다만 앞에 사람 말을 붙인다.
+  return `지금 잔액을 확인하지 못했습니다. 돈은 그대로 있습니다. (${raw.slice(0, 80)})`;
 }
 
 function renderMain(): void {
@@ -2489,6 +2734,43 @@ function secureEnough(): boolean {
 }
 
 function boot(): void {
+  // 🔴 **이야기 탭을 잇는다.** 화면을 만들어 놓고 부르는 줄을 안 만들면
+  //    이 저장소에서 오늘만 여러 번 본 그 병이 그대로 반복된다.
+  document.getElementById("tab-rooms")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    show("rooms" as any);
+    void loadRooms();
+  });
+  document.getElementById("rm-back")?.addEventListener("click", () => {
+    $("rm-pane").style.display = "none";
+    $("rm-list").style.display = "";
+  });
+  document.getElementById("rm-send")?.addEventListener("click", () => void sendRoomMsg());
+  document.getElementById("rm-make")?.addEventListener("click", () => void makeRoom());
+  document.getElementById("rm-new")?.addEventListener("keydown", (e) => {
+    if ((e as KeyboardEvent).key === "Enter") {
+      e.preventDefault();
+      void makeRoom();
+    }
+  });
+  // 폰에서 엔터로 보낼 수 있게. 줄바꿈은 Shift+Enter.
+  document.getElementById("rm-text")?.addEventListener("keydown", (e) => {
+    const k = e as KeyboardEvent;
+    if (k.key === "Enter" && !k.shiftKey) {
+      k.preventDefault();
+      void sendRoomMsg();
+    }
+  });
+  // 🔴 초대 링크로 바로 그 방을 열 수 있게 — `?room=…`
+  //    그래야 「이 방으로 오세요」 링크가 폰에서 그 방으로 데려간다.
+  {
+    const r = new URLSearchParams(location.search).get("room") || "";
+    if (/^[0-9a-f]{64}$/i.test(r)) {
+      show("rooms" as any);
+      void loadRooms().then(() => openRoom(r, "방"));
+    }
+  }
+
   // 🔴 아이폰 사파리는 `beforeinstallprompt` 를 **안 준다.** 그 신호만
   //    기다리면 아이폰에서는 영영 아무것도 안 나온다. 켤 때 한 번 그린다.
   paintInstall();
