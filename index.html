@@ -1804,7 +1804,14 @@
             <div id="tk-newbox" hidden>
               <input id="tk-nname" placeholder="방 이름" maxlength="40" />
               <input id="tk-nabout" placeholder="한 줄 설명 (없어도 됩니다)" maxlength="80" />
-              <label class="meta" for="tk-nasset">이 자산을 가진 분만</label>
+              <label class="meta" for="tk-nasset">이 자산을 가진 분만 <b>쓸 수</b> 있습니다</label>
+              <!-- 🔴 「잠긴 방」이 **비밀 단톡으로 읽힌다**(그록 지적, 2026-08-29).
+                   실제로는 **쓰기만** 제한이다. 글은 세계 릴레이에 복제되므로
+                   **누구나 읽는다.** 사장이 회원 전용이라 믿고 비밀을 쓰면
+                   그대로 공개된다. 만들 때 그 자리에서 말해야 한다. -->
+              <p class="meta" style="margin-top:4px">
+                ⚠️ <b>읽기는 누구나 됩니다.</b> 글은 세계 릴레이에 그대로 남습니다 —
+                비밀 이야기는 여기 쓰지 마세요.</p>
               <select id="tk-nasset"></select>
               <p class="meta" id="tk-nhint"></p>
               <div class="row">
@@ -1840,6 +1847,13 @@
                  않게 된다. 숨긴 사람은 보복을 안 당하고, 숨겨진 사람도
                  사실을 안다. 탈중앙에서 가능한 유일하게 정직한 방법이다. -->
               <button class="ghost" id="tk-name">내 이름</button>
+            <!-- 🔴 **이름표가 「그 사람」으로 읽힌다**(그록 지적, 2026-08-29).
+                 이름은 누구나 같게 달 수 있다 — 사장 이름을 흉내 낸 사람이
+                 「계좌 바뀌었어요」라고 쓰면 그대로 믿는다.
+                 진짜는 열쇠(공개키)이고, 이름은 그 위에 붙인 딱지일 뿐이다. -->
+            <p class="meta" style="margin-top:6px">
+              ⚠️ 이름은 <b>누구나 같게 달 수 있습니다.</b> 돈이나 주소 이야기는
+              이름만 보고 믿지 마세요.</p>
               <button class="ghost" id="tk-reload">새로고침</button>
             </div>
 

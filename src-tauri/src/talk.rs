@@ -333,6 +333,42 @@ pub async fn talk_post(
 ///
 /// 🔴 **하나도 없으면 그렇다고 말한다.** 목록을 비워 두면 사장은 「고장났나」
 ///    하고 기다린다. 자산이 없다는 것과 못 읽었다는 것도 갈라서 말한다.
+/// 내가 쓴 글을 **지워 달라고 요청한다.**
+///
+/// 🔴 이름이 「삭제」가 아니라 **「지우기 요청」**인 이유가 전부다.
+///
+/// Nostr 에서 글을 지우는 방법은 kind 5 를 올리는 것뿐인데, 그건 **부탁**이지
+/// 명령이 아니다. **릴레이가 따를 의무가 없다.** 세계에 흩어진 릴레이 중
+/// 몇 곳은 따르고 몇 곳은 무시한다. 이미 받아 본 사람의 화면에도 남는다.
+///
+/// ⚠️ 그런데 오타나 전화번호를 잘못 쓴 사람에게는 **거둘 길이 있어야 한다.**
+///    그래서 단추는 만들되 **되는 척하지 않는다:**
+///
+/// ```text
+/// 「삭제」        →  지워졌다고 믿는다. 안 지워졌는데
+/// 「지우기 요청」  →  부탁했다는 것을 안다. 사실이다
+/// ```
+///
+/// 보낸 뒤에도 화면에서 글을 없애거나 「삭제된 메시지」로 바꾸지 않는다.
+/// **「지우기 요청함」**으로 둔다 — 되는 척하지 않는 쪽이 신뢰다.
+#[tauri::command]
+pub async fn talk_delete_request(id: String) -> Result<Value, String> {
+    if id.len() != 64 || !id.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err("글 번호가 올바르지 않습니다.".into());
+    }
+    let sk = key()?;
+    // kind 5 = 지움 요청. `e` 태그로 어느 글인지 가리킨다(NIP-09).
+    let tags = json!([["e", id]]);
+    let ev = crate::shopkey::sign_with(&sk, 5, tags, "", now())?;
+    crate::nostrpub::nostr_publish(ev).await?;
+    Ok(json!({
+        "ok": true,
+        // 🔴 이 말을 화면이 그대로 띄워야 한다.
+        "say": "지워 달라고 요청했습니다. 따르는 릴레이에서는 사라지지만, \
+이미 본 사람의 화면과 따르지 않는 릴레이에는 남을 수 있습니다.",
+    }))
+}
+
 #[tauri::command]
 pub async fn talk_my_assets() -> Value {
     match crate::raven::call_rpc("listmyassets", json!([])).await {

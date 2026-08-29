@@ -4382,6 +4382,10 @@ async function talkPaint() {
           // 내 글에는 안 붙인다. 나를 안 보기로 할 이유가 없고,
           // 눌렀다가 내 글이 사라지면 그것부터 고장으로 읽힌다.
           (mine ? "" : `<button data-mute="${escapeHtml(who)}">${t("안 보기")}</button>`) +
+            // 🔴 내 글에만. 이름이 「삭제」가 아니라 **「지우기 요청」**인 것이
+            //    전부다 — Nostr 의 지움은 **부탁**이지 명령이 아니고, 릴레이가
+            //    따를 의무가 없다. 「삭제」라 적으면 지워졌다고 믿는데 안 지워진다.
+            (mine ? `<button data-del="${id}">${t("지우기 요청")}</button>` : "") +
           `<span class="meta" data-note="${id}"></span>
            </div>
            <div class="when"${mine ? ' style="text-align:right"' : ""}>${escapeHtml(when)}</div>`
@@ -4396,6 +4400,28 @@ async function talkPaint() {
     box.querySelectorAll("[data-keep]").forEach((b) => {
       (b as HTMLElement).onclick = () => void talkKeep(String((b as HTMLElement).dataset.keep), list);
     });
+    box.querySelectorAll("[data-del]").forEach((b) => {
+      (b as HTMLElement).onclick = async () => {
+        const gid = (b as HTMLElement).dataset.del!;
+        const ok = await sure(
+          t("지워 달라고 요청할까요?"),
+          t("이미 본 사람의 화면과, 따르지 않는 릴레이에는 남을 수 있습니다."),
+          t("요청합니다"),
+        );
+        if (!ok) return;
+        const note = box.querySelector(`[data-note="${gid}"]`) as HTMLElement | null;
+        try {
+          const r = await invoke<any>("talk_delete_request", { id: gid });
+          // 🔴 글을 화면에서 없애지 않는다. 없애면 지워진 줄 안다.
+          (b as HTMLElement).textContent = t("지우기 요청함");
+          (b as HTMLButtonElement).disabled = true;
+          if (note) note.textContent = String(r?.say || "");
+        } catch (e) {
+          if (note) note.textContent = errText(e);
+        }
+      };
+    });
+
     box.querySelectorAll("[data-mute]").forEach((b) => {
       (b as HTMLElement).onclick = () => void talkMute(String((b as HTMLElement).dataset.mute));
     });

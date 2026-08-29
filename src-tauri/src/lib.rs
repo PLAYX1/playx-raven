@@ -365,6 +365,7 @@ pub fn run() {
             talk::talk_translate,
             talk::talk_make_room,
             talk::talk_my_assets,
+            talk::talk_delete_request,
             talk::talk_profile_set,
             talk::talk_profiles,
             talk::recovery_status,
