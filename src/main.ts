@@ -9842,7 +9842,21 @@ function shopTab(which: string) {
   });
   if (which === "orders") loadOrders();
   if (which === "sales") loadSales();
-  if (which === "mine") previewOpen();
+  if (which === "mine") {
+    previewOpen();
+    // 🔴 여태 `loadShop()` 은 **앱 켤 때 한 번**만 돌았다. 탭을 눌러도 다시
+    //    읽지 않았다.
+    //
+    //    ⚠️ 그런데 이 파일은 **폰 관리자 화면(`/admin/publish`)도 덮어쓴다.**
+    //       사장이 폰에서 가게 정보를 고치고 컴퓨터로 오면, 컴퓨터는 켤 때
+    //       읽은 **옛 값**을 그대로 보여 준다. 그걸 저장하면 폰에서 한 일이
+    //       **되돌아간다.**
+    //
+    //    ⚠️ `loadShop` 은 칸을 **덮어쓴다.** 그래도 되는 이유는 입력이
+    //       600ms 뒤 자동 저장되기 때문이다 — 화면과 파일이 같다. 그리고
+    //       탭을 옮기는 것은 사장이 의도한 행동이다.
+    void loadShop().catch(() => {});
+  }
 }
 
 // ── 매출 · 장부 ────────────────────────────────────────────────────────────
@@ -10402,8 +10416,36 @@ async function loadShop() {
   set("sh-closednote", sh.closed_note);
   drawHours(sh.hours);
 
-  if (sh.payment_address) shopAddress = sh.payment_address;
-  if (sh.icon) shopIcon = sh.icon;
+  if (sh.payment_address) {
+    shopAddress = sh.payment_address;
+    // 🔴 대표님: "가게 정보 기존에 눌러놓은거 있는데 다시 눌러보면 왜 지금
+    //    입력되어 있는 내용이 없지?"
+    //
+    //    **지워진 게 아니었다.** 값은 파일에 멀쩡히 있었는데 **칸에 되쓰는
+    //    코드가 없었다** — 변수에만 담고 화면에는 안 그렸다. 사장 눈에는
+    //    「입력한 게 날아갔다」로 보인다. 그게 가장 불안한 화면이다.
+    const el = $("sh-addr") as HTMLInputElement | null;
+    if (el && !el.value.trim()) el.value = String(sh.payment_address);
+  }
+  if (sh.icon) {
+    shopIcon = sh.icon;
+    // 🔴 대표님(이전): "사진을 올리면 사진의 썸네일이 보여야 올렸는지 판단이
+    //    되지 않나?"  맞다. 그런데 **다시 열면 사라졌다** — 변수에만 넣고
+    //    그리지 않아서, 사장은 사진이 날아간 줄 알고 또 올린다.
+    const box = document.getElementById("sh-picprev");
+    if (box && !box.innerHTML.trim()) {
+      const src = String(sh.icon).startsWith("data:")
+        ? String(sh.icon)
+        : `http://127.0.0.1:8080/ipfs/${sh.icon}`;
+      // ⚠️ 파일창고가 꺼져 있으면 그림이 안 뜬다. 그때 **빈 자리**로 두면
+      //    또 「없다」로 읽힌다. 무슨 일인지 말한다.
+      box.innerHTML =
+        `<img src="${escapeHtml(src)}" alt="" ` +
+        `style="max-width:180px;border-radius:8px;margin-top:8px" ` +
+        `onerror="this.replaceWith(Object.assign(document.createElement('p'),` +
+        `{className:'meta',textContent:'사진은 올라가 있습니다. 파일창고가 꺼져 있어 지금은 못 보여 드립니다.'}))" />`;
+    }
+  }
   // 이미 올려 둔 가게 안 사진을 다시 보여 준다. 안 보여 주면 사장은
   // 「안 올라갔나」 하고 또 올린다.
   if (sh.photos_cid) {
@@ -10420,7 +10462,12 @@ async function loadShop() {
     }
     if (note) note.textContent = "올려 두신 사진입니다. 다시 고르시면 통째로 바뀝니다.";
   }
-  if (sh.lat != null && sh.lon != null) shopCoords = { lat: sh.lat, lon: sh.lon };
+  if (sh.lat != null && sh.lon != null) {
+    shopCoords = { lat: sh.lat, lon: sh.lon };
+    // 같은 이유로 좌표도 되쓴다.
+    const el = $("sh-coords") as HTMLInputElement | null;
+    if (el && !el.value.trim()) el.value = `${sh.lat}, ${sh.lon}`;
+  }
 
   if (Array.isArray(sh.menu)) {
     menuItems.length = 0;

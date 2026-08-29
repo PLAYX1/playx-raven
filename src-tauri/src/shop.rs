@@ -1728,3 +1728,45 @@ pub async fn shop_detect_asset() -> Result<Value, String> {
         "candidates": found,
     }))
 }
+
+#[cfg(test)]
+mod 되그리기 {
+    /// 🔴 **저장은 되는데 화면에 다시 안 그리는 병.**
+    ///
+    /// 대표님: "가게 정보 기존에 눌러놓은거 있는데 다시 눌러보면 왜 지금
+    /// 입력되어 있는 내용이 없지?"
+    ///
+    /// 지워진 게 아니었다. 값은 `shop.json` 에 멀쩡히 있었는데 `loadShop` 이
+    /// **변수에만 담고 칸에는 안 썼다** — 좌표·돈 받을 주소·간판 사진 셋.
+    /// 사장 눈에는 「입력한 게 날아갔다」로 보인다. 그게 가장 불안한 화면이다.
+    ///
+    /// 저장하는 칸이 새로 생길 때마다 이 병이 다시 생긴다. 그래서 검사한다.
+    #[test]
+    fn 저장한_것은_다시_그린다() {
+        let ts = include_str!("../../src/main.ts");
+        // 주석은 빼고 본다 — 설명글에 이름이 적혀 있으면 늘 통과한다.
+        let 코드: String = ts
+            .lines()
+            .filter(|l| {
+                let t = l.trim_start();
+                !t.starts_with("//") && !t.starts_with("*")
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        let load = 코드
+            .split("async function loadShop")
+            .nth(1)
+            .and_then(|r| r.split("\nasync function ").next())
+            .unwrap_or("");
+        assert!(load.len() > 200, "loadShop 을 못 읽었습니다");
+
+        // 값이 있는데 화면에 안 그리면 「날아갔다」로 보이는 것들.
+        for 칸 in ["sh-addr", "sh-coords", "sh-picprev"] {
+            assert!(
+                load.contains(칸),
+                "`{칸}` 은 파일에 값이 저장되는데 `loadShop` 이 화면에 되쓰지 \
+                 않습니다. 사장은 입력한 것이 날아갔다고 생각합니다."
+            );
+        }
+    }
+}
