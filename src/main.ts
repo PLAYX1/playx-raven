@@ -10288,7 +10288,12 @@ function shopTab(which: string) {
   document.querySelectorAll(".shoptab").forEach((d) => {
     d.classList.toggle("on", d.id === `shoptab-${which}`);
   });
-  if (which === "orders") loadOrders();
+  if (which === "orders") {
+    // 사장이 주문표를 열었다 = 봤다. 빨간 숫자와 알림 띠를 내린다.
+    // 안 내리면 배지가 「봐도 안 없어지는 것」이 되고, 그건 곧 무시된다.
+    주문봤다();
+    loadOrders();
+  }
   if (which === "sales") loadSales();
   if (which === "mine") {
     previewOpen();
@@ -11432,6 +11437,367 @@ async function saveMenu() {
   }
 }
 
+// ── 새 주문 알림 ───────────────────────────────────────────────────────────
+//
+// 🔴 대표님: "우리 프로그램에 돈 들어오거나 하면 알람 오지? 레이븐코어는
+//    알림이 뜨던데 말야."
+//
+//    안 왔다. 돈이 들어와도 소리도, 숫자도, 아무 표시도 없었다. 주문이
+//    들어온 것을 아는 유일한 길은 **「내 가게 → 들어온 주문」 탭을 열어 두고
+//    30초마다 표가 바뀌는지 사장이 직접 보는 것**이었다. 카운터에서 손님을
+//    응대하는 사람에게 그건 없는 기능이나 같다.
+//
+// ## 무엇으로 알리나 — 소리 + 화면 안 배지 + 띠
+//
+//    | 방법 | 썼나 | 왜 |
+//    |---|---|---|
+//    | 소리(Web Audio) | ✅ | 눈이 화면에 없어도 닿는 **유일한** 길 |
+//    | 화면 안 배지 | ✅ | 자리를 비웠다 돌아온 사람에게 「몇 건 놓쳤나」 |
+//    | 화면 안 띠 | ✅ | 소리를 듣고 화면을 봤을 때 **답이 거기 있어야** 한다 |
+//    | 창 깜빡임 | ❌ | 권한이 없다(아래) |
+//    | 창 앞으로 세우기 | ❌ | 알림이 아니라 사고다(아래) |
+//
+//    ⚠️ **창 깜빡임(`requestUserAttention`)은 못 쓴다.** 그건
+//       `src-tauri/capabilities/default.json` 에
+//       `core:window:allow-request-user-attention` 을 넣어야 열리는데,
+//       지금 켜진 창 권한은 읽기 전용(`is-focused`, `title` …)과
+//       위치 옮기기뿐이다. 권한 파일을 안 고치고 부르면 그 자리에서 막힌다.
+//
+//    ⚠️ **창을 앞으로 세우는 것(`set_focus`)은 권한이 있어도 안 한다.**
+//       사장이 세금계산서를 치는 중에 창이 튀어나오면 글자가 엉뚱한 데
+//       들어간다. 그건 알림이 아니라 사고다. 소리로 부르고, 언제 볼지는
+//       사장이 정한다.
+//
+// ## 소리를 파일 없이 만드는 이유
+//
+//    mp3 를 넣으면 파일 하나와 그걸 옮길 빌드 설정이 따라온다. Web Audio 로
+//    사인파 두 개를 겹치면 그게 다 필요 없고, 볼륨·길이·높이를 여기서 글로
+//    설명할 수 있다.
+//
+//    40~70대가 쓴다. 그래서 **놀라게 하지 않는 소리**여야 하고, 동시에
+//    **시끄러운 카운터에서 들려야** 한다. 둘은 반대말 같지만 아니다 —
+//    사람을 놀래키는 것은 크기가 아니라 **갑자기 시작하는 것**(딱 소리)과
+//    **날카로운 배음**이다. 그래서 사인파(배음 없음) + 20ms 에 걸쳐 천천히
+//    올라오는 시작 + 종처럼 길게 남는 꼬리로 만든다. 낮은 도(미)에서
+//    높은 라로 **올라가는** 두 음이다 — 올라가는 소리는 「무언가 왔다」로
+//    들리고, 내려가는 소리는 「무언가 잘못됐다」로 들린다.
+
+const 소리설정_KEY = "playx-raven-order-sound";
+
+/// 알림이 켜져 있나. **기본은 켜짐** — 없는 값은 켜진 것으로 읽는다.
+///
+/// 장사하는 사람에게 소리 없는 주문은 놓친 주문이다. 「시끄러워서 껐다」는
+/// 한 번 찾아 끄면 끝나지만, 「알림이 있는 줄도 몰랐다」는 영영 모른다.
+function 알림켜짐(): boolean {
+  try {
+    return localStorage.getItem(소리설정_KEY) !== "0";
+  } catch {
+    // 저장소가 막힌 기계도 있다. 그때도 장사는 돌아가야 하니 켜진 쪽으로 둔다.
+    return true;
+  }
+}
+
+let 소리상자: AudioContext | null = null;
+
+/// 소리 낼 준비. 없으면 만들고, 자고 있으면 깨운다.
+///
+/// ⚠️ 브라우저·웹뷰는 **사람이 한 번 누르기 전에는 소리를 못 내게** 막는다.
+///    그래서 첫 손짓에 미리 만들어 둔다(아래 `소리깨우기`). 그걸 안 하면
+///    첫 주문이 소리 없이 지나가고, 사장은 「역시 안 되네」로 판단한다.
+function 소리준비(): AudioContext | null {
+  try {
+    if (!소리상자) {
+      const 만들기 =
+        (window as any).AudioContext || (window as any).webkitAudioContext;
+      if (!만들기) return null;
+      소리상자 = new 만들기() as AudioContext;
+    }
+    if (소리상자.state === "suspended") void 소리상자.resume();
+    return 소리상자;
+  } catch {
+    return null;
+  }
+}
+
+/// 종소리 한 음. 사인파 하나 + 소리 크기 곡선.
+function 한음(ctx: AudioContext, 시작: number, 높이: number, 길이: number, 크기: number) {
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = "sine"; // 배음이 없다 = 날카롭지 않다
+  osc.frequency.setValueAtTime(높이, 시작);
+  // 0 에서 시작하면 exponentialRamp 가 안 먹는다. 들리지 않는 값에서 올린다.
+  gain.gain.setValueAtTime(0.0001, 시작);
+  // 20ms 에 걸쳐 올린다. 곧바로 최대로 켜면 「딱」 하는 소리가 나고, 사람을
+  // 놀래키는 것은 소리 크기가 아니라 바로 그 딱 소리다.
+  gain.gain.exponentialRampToValueAtTime(크기, 시작 + 0.02);
+  // 종처럼 길게 사라진다. 뚝 끊기면 기계음으로 들린다.
+  gain.gain.exponentialRampToValueAtTime(0.0001, 시작 + 길이);
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start(시작);
+  // 꼬리가 다 사라진 뒤에 끈다. 여기서 일찍 끊으면 그게 또 딱 소리다.
+  osc.stop(시작 + 길이 + 0.05);
+}
+
+/// 「딩—동」. `번` 만큼 되풀이한다.
+///
+/// 크기 0.25 는 시스템 볼륨의 4분의 1쯤이다. 이 이상 올리면 조용한 사무실에서
+/// 사람이 의자에서 튄다. 카운터가 시끄러워서 안 들리는 경우는 **되풀이**로
+/// 푼다 — 한 번 크게보다 두 번 부르는 쪽이 놀라지 않고 더 잘 닿는다.
+function 알림소리(번: number = 1) {
+  const ctx = 소리준비();
+  if (!ctx) return;
+  try {
+    const 처음 = ctx.currentTime + 0.02;
+    for (let i = 0; i < 번; i++) {
+      const t = 처음 + i * 0.95;
+      한음(ctx, t, 659.25, 0.5, 0.22); // 미
+      한음(ctx, t + 0.17, 880.0, 0.68, 0.25); // 라 — 올라간다
+    }
+  } catch {
+    // 소리가 안 나도 배지와 띠는 남는다. 여기서 던지면 그것까지 죽는다.
+  }
+}
+
+/// 사람이 처음 뭔가 누를 때 소리 상자를 미리 만들어 둔다.
+/// `once: true` 라 한 번 하고 스스로 빠진다.
+function 소리깨우기() {
+  const 한번 = () => void 소리준비();
+  document.addEventListener("pointerdown", 한번, { once: true, capture: true });
+  document.addEventListener("keydown", 한번, { once: true, capture: true });
+}
+
+// ── 같은 주문에 두 번 울리지 않게 ──────────────────────────────────────────
+//
+// 30초마다 같은 목록을 다시 받는다. 기억이 없으면 **주문 하나가 30초마다
+// 영원히 울린다.** 그건 알림이 아니라 고장이고, 사장은 하루 만에 끈다.
+//
+// 주문마다 주소가 다르다(`loadOrders` 첫 줄 참고). 그래서 주소가 곧 주문
+// 번호다. 주소마다 「결제 확인까지 알렸나」를 같이 들고 있는다 — 주문이
+//   ① 처음 보임(아직 확인 0)  → "새 주문"
+//   ② 확인이 붙어 결제됨      → "입금 확인"
+// 두 번 말할 값어치가 있는 순간이 둘이기 때문이다. 하지만 각각 한 번씩만이다.
+const 아는주문 = new Map<string, boolean>();
+
+/// ⚠️ **첫 조회는 조용히 지나간다.**
+///
+///    이걸 안 하면 앱을 켤 때마다 어제·지난주 주문이 통째로 「새 주문」이 되어
+///    한꺼번에 울린다. 프로그램을 켜는 것은 주문이 아니다. 첫 목록은 「지금
+///    여기까지가 이미 아는 것」으로 조용히 적어 두고, 그 다음부터 말한다.
+let 첫목록읽었나 = false;
+
+/// 사장이 주문표를 마지막으로 본 뒤 들어온 건수.
+let 안본주문 = 0;
+
+/// 지금 사장이 화면을 보고 있나.
+///
+/// `쉬는중()`(= `document.hidden`)은 **창을 최소화했을 때만** 참이다. 다른
+/// 창에 가려 뒤에 있을 때는 거짓이라, 그것만으로는 「보고 있다」를 못 판단한다.
+/// `document.hasFocus()` 를 같이 본다 — 이건 DOM 이 그냥 알려 주는 것이라
+/// Tauri 권한이 필요 없다.
+function 화면보는중(): boolean {
+  try {
+    return !쉬는중() && document.hasFocus();
+  } catch {
+    return false;
+  }
+}
+
+/// 지금 눈이 **주문표에** 있나. 여기 있으면 배지·띠는 군더더기다 —
+/// 새 줄이 표에 뜨는 것이 이미 답이다.
+function 주문표보는중(): boolean {
+  return (
+    화면보는중() &&
+    document.getElementById("page-shop")?.classList.contains("on") === true &&
+    document.getElementById("shoptab-orders")?.classList.contains("on") === true
+  );
+}
+
+function 배지그리기() {
+  for (const id of ["or-badge", "nav-orderbadge"]) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    el.textContent = String(안본주문);
+    el.hidden = 안본주문 <= 0;
+  }
+}
+
+/// 사장이 주문표를 봤다 → 숫자와 띠를 내린다.
+function 주문봤다() {
+  안본주문 = 0;
+  배지그리기();
+  const 띠 = document.getElementById("neworder");
+  if (띠) 띠.hidden = true;
+}
+
+function 띠띄우기(제목: string) {
+  const 띠 = document.getElementById("neworder");
+  if (!띠) return;
+  const t = document.getElementById("no-title");
+  if (t) t.textContent = 제목;
+  띠.hidden = false;
+}
+
+/**
+ * 새로 받은 주문 목록을 보고 **말할 것이 있으면 말한다.**
+ *
+ * 목록을 받는 자리가 둘이라(주문표 새로고침 · 아래 `주문지킴이`) 판단은
+ * 여기 한 곳에만 둔다. 두 곳에 나눠 두면 한쪽만 고치는 날이 온다.
+ */
+function 주문살피기(list: any[]) {
+  if (!Array.isArray(list)) return;
+
+  let 새주문 = 0;
+  let 새입금 = 0;
+
+  for (const p of list) {
+    const 키 = p?.address;
+    if (!키) continue;
+    // `settled` 는 확인이 다 붙은 것, `accept_now` 는 사장이 이 금액이면
+    // 그냥 받겠다고 정해 둔 것. 카운터에서는 둘 다 「돈 들어왔다」다.
+    const 돈됐나 = !!(p.settled || p.accept_now);
+
+    if (!아는주문.has(키)) {
+      아는주문.set(키, 돈됐나);
+      if (첫목록읽었나) {
+        if (돈됐나) 새입금++;
+        else 새주문++;
+      }
+    } else if (돈됐나 && !아는주문.get(키)) {
+      // 아까는 확인을 기다리던 주문이 방금 결제로 굳었다.
+      아는주문.set(키, true);
+      if (첫목록읽었나) 새입금++;
+    }
+  }
+
+  // 표가 아주 길어지면 기억도 같이 커진다. 지금 목록에 없는 주소는 다시
+  // 돌아오지 않으니(체인은 지워지지 않는다) 가끔 지금 것만 남기고 턴다.
+  if (아는주문.size > 600) {
+    const 지금 = new Map<string, boolean>();
+    for (const p of list) {
+      if (p?.address && 아는주문.has(p.address)) 지금.set(p.address, 아는주문.get(p.address)!);
+    }
+    아는주문.clear();
+    for (const [k, v] of 지금) 아는주문.set(k, v);
+  }
+
+  if (!첫목록읽었나) {
+    // 여기가 조용한 첫 바퀴다. 위에서 이미 다 적어 뒀다.
+    첫목록읽었나 = true;
+    return;
+  }
+
+  const 모두 = 새주문 + 새입금;
+  if (모두 <= 0) return;
+  if (!알림켜짐()) return; // 꺼 두셨으면 아무것도 안 한다
+
+  // ⚠️ **창을 보고 있어도 소리는 낸다.**
+  //    `쉬는중()` 으로 막고 싶어지는 자리지만, 그러면 이 기능이 없어진다.
+  //    주문이 들어오는 바로 그 순간 사장의 눈은 손님에게 가 있다 — 창이
+  //    앞에 떠 있는 것과 그걸 보고 있는 것은 다른 말이다.
+  //
+  //    대신 **안 보고 있을 때 한 번 더** 부른다. 곁눈으로도 안 잡히는
+  //    상황이니 두 번 부르는 값이 있다.
+  알림소리(화면보는중() ? 1 : 2);
+
+  // 주문표를 열어 놓고 보는 중이면 배지도 띠도 안 올린다. 표에 새 줄이
+  // 뜨는 것이 이미 답이고, 그 위에 「새 주문 1건」을 덮으면 표를 가린다.
+  if (주문표보는중()) return;
+
+  안본주문 += 모두;
+  배지그리기();
+  띠띄우기(
+    새입금 > 0 && 새주문 > 0
+      ? `새 주문 ${새주문}건 · 입금 ${새입금}건`
+      : 새입금 > 0
+        ? `입금 ${새입금}건 확인`
+        : `새 주문 ${새주문}건`,
+  );
+}
+
+/**
+ * 주문표를 안 보고 있어도 도는 지킴이.
+ *
+ * 🔴 주문표의 「자동 확인 (30초)」는 **꺼진 채로 시작**하고, 켜도 그건
+ *    화면을 다시 그리는 일이다. 알림이 그 스위치에 매달려 있으면
+ *    「주문 탭을 열어 두고 스위치를 켠 사장」만 알림을 받는다 — 그 사장은
+ *    애초에 알림이 필요 없는 사람이다.
+ *
+ *    그래서 알림은 **자기 시계**로 돈다. 알림을 끄면 물어보지도 않는다 —
+ *    밤새 켜 두는 컴퓨터에서 노드를 30초마다 깨울 이유가 없다.
+ *
+ * ⚠️ 주문표가 이미 30초마다 돌고 있으면 여기서는 쉰다. 같은 것을 두 번
+ *    물어봐 봐야 답이 같고, 느린 컴퓨터에서는 그 한 번이 아깝다.
+ */
+async function 주문지킴이() {
+  if (!알림켜짐()) return;
+  const 자동 = document.getElementById("or-auto") as HTMLInputElement | null;
+  if (자동?.checked) return; // `loadOrders` 가 이미 살피고 있다
+  try {
+    const res = await quietly(() =>
+      invoke<any>("incoming_payments", { address: "", minConf: 1 }),
+    );
+    주문살피기(res?.payments || []);
+  } catch {
+    // 노드가 아직 따라잡는 중일 수 있다. 조용히 다음 바퀴에 다시 본다 —
+    // 여기서 사장에게 빨간 글씨를 보여 봐야 할 수 있는 일이 없다.
+  }
+}
+
+/// 설정 스위치·소리 시험·알림 띠의 단추들을 잇고, 지킴이 시계를 켠다.
+function 알림배선() {
+  const sw = document.getElementById("snd-on") as HTMLInputElement | null;
+  if (sw) {
+    sw.checked = 알림켜짐();
+    sw.addEventListener("change", () => {
+      try {
+        localStorage.setItem(소리설정_KEY, sw.checked ? "1" : "0");
+      } catch {}
+      const say = document.getElementById("snd-say");
+      if (say)
+        say.textContent = sw.checked
+          ? "이제 주문이 들어오면 소리로 알려 드립니다."
+          : "소리를 껐습니다. 주문은 그대로 들어옵니다.";
+      // 껐으면 지금 떠 있는 것도 같이 내린다. 끄고 나서도 빨간 숫자가
+      // 남아 있으면 꺼진 것인지 아닌지 알 수 없다.
+      if (!sw.checked) 주문봤다();
+    });
+  }
+  // 🔴 「소리 들어보기」는 예의가 아니라 **필수**다. 소리는 안 나 봐야
+  //    안 나는 줄 안다 — 볼륨이 0 인지, 스피커가 없는지, 우리가 고장인지
+  //    사장이 구분할 길이 여기밖에 없다. 그리고 이 단추를 누르는 행동이
+  //    곧 웹뷰의 소리 잠금을 푸는 「사람의 손짓」이기도 하다.
+  document.getElementById("snd-test")?.addEventListener("click", () => {
+    알림소리(1);
+    const say = document.getElementById("snd-say");
+    if (say)
+      say.textContent =
+        "「딩—동」 소리가 안 들리면 컴퓨터 볼륨과 스피커를 확인해 주세요.";
+  });
+
+  document.getElementById("no-go")?.addEventListener("click", () => {
+    주문봤다();
+    showPage("shop");
+    shopTab("orders");
+  });
+  document.getElementById("no-x")?.addEventListener("click", 주문봤다);
+  document.getElementById("no-mute")?.addEventListener("click", () => {
+    try {
+      localStorage.setItem(소리설정_KEY, "0");
+    } catch {}
+    const sw2 = document.getElementById("snd-on") as HTMLInputElement | null;
+    if (sw2) sw2.checked = false;
+    주문봤다();
+  });
+
+  소리깨우기();
+
+  // 켜자마자 한 번 — 이 첫 바퀴가 「이미 아는 주문」을 조용히 적는 자리다.
+  // 3초 미루는 것은 노드가 아직 안 깼을 때 첫 물음이 그냥 실패하기 때문이다.
+  setTimeout(() => void 주문지킴이(), 3000);
+  setInterval(() => void 주문지킴이(), 30000);
+}
+
 // ── 주문 ──
 async function loadOrders() {
   // 주문마다 주소가 다르므로 가게 주소 하나로는 못 찾는다. 빈 주소를 넘기면
@@ -11452,6 +11818,10 @@ async function loadOrders() {
 
     const res = await invoke<any>("incoming_payments", { address: "", minConf: 1 });
     const list: any[] = res.payments || [];
+    // 🔴 목록을 손에 쥔 김에 **여기서도 살핀다.** 주문표를 열어 두고 「자동
+    //    확인」을 켜 놓은 사장에게는 이쪽이 30초마다 도는 시계다. 지킴이는
+    //    그때 쉬므로, 이 한 줄이 없으면 그 사장만 알림을 못 받는다.
+    주문살피기(list);
     // 상태를 같이 읽어 온다. 주문이 어디까지 왔는지가 카운터의 전부다.
     const st = await invoke<any>("order_states").catch(() => ({ orders: [] }));
     const byAddr = new Map<string, any>((st.orders || []).map((o: any) => [o.address, o]));
@@ -12017,6 +12387,9 @@ window.addEventListener("DOMContentLoaded", async () => {
     // the background is a wallet that keeps a slow computer busy for nothing.
     if (on) orderTimer = setInterval(() => void quietly(loadOrders), 30000);
   });
+  // 🔴 돈이 들어오면 소리로 부른다. 이 한 줄이 없으면 사장은 주문표를
+  //    붙들고 있어야 한다 — 위 「자동 확인」은 화면을 다시 그릴 뿐이다.
+  알림배선();
   // 주문하기 화면은 손님 폰으로 옮겼다.
   $("refresh").addEventListener("click", () => loadAssets(false));
   $("scan").addEventListener("click", startScan);
