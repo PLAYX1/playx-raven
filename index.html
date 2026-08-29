@@ -69,6 +69,17 @@
       nav a:hover { background: color-mix(in srgb, var(--brand) 7%, transparent); }
       nav a.on { border-left-color: var(--brand); background: color-mix(in srgb, var(--brand) 12%, transparent);
                  font-weight: 600; }
+      /* 🔴 **왼쪽 메뉴에는 눌린 느낌이 없었다**(자문 지적 2026-08-30).
+         단추(`button:active`)에는 있는데 이 줄들은 `<a>` 라서 빠져 있었고,
+         그래서 화면이 「텔레포트」처럼 갈아끼워졌다. 눌린 티가 있으면
+         내가 눌러서 바뀐 것이 되고, 없으면 그냥 화면이 바뀐 것이 된다. */
+      nav a:active { background: color-mix(in srgb, var(--brand) 18%, transparent); }
+      @media (prefers-reduced-motion: no-preference) {
+        nav a { transition: background .12s ease, border-color .12s ease; }
+        nav a:active { transform: scale(.985); }
+      }
+      /* 키보드로 옮겨 다니는 사람에게도 어디 있는지 보여야 한다. */
+      nav a:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
       nav a .risk { margin-left: auto; font-size: 14px; color: var(--warn); }
 
       /* ── 새 주문 알림 ────────────────────────────────────────────────
@@ -233,6 +244,20 @@
       .line.me { align-self: flex-end; flex-direction: row-reverse; }
       /* 이어 쓴 말은 붙인다. 사람이 바뀌면 위에서 `.who` 가 숨을 띄운다. */
       .line + .line { margin-top: 1px; }
+
+      /* 아직 노드가 받았다고 안 한 말. 🔴 **다 간 것처럼 그리지 않는다.**
+         흐린 것이 「가는 중」이라는 뜻이고, 또렷해지는 순간이 「갔다」는 뜻이다.
+         못 가면 아예 지우고 글을 입력칸에 돌려준다(`talkSend`). */
+      .line.pending .bub { opacity: .55; }
+      .line.pending .tstamp { font-size: 13px; opacity: .8; }
+      /* 붙는 순간이 보여야 「내가 눌러서 생겼다」로 읽힌다. */
+      @media (prefers-reduced-motion: no-preference) {
+        .line.pending { animation: 붙기 .16s ease-out; }
+        @keyframes 붙기 {
+          from { opacity: 0; transform: translateY(6px); }
+          to   { opacity: 1; transform: none; }
+        }
+      }
       /* 시각은 읽는 글이 아니라 곁눈으로 스치는 것이라 크기를 키우는 대신
          **대비**를 올렸다 — `--faint` + `opacity:.55` 였던 것을 `--muted`
          (7:1)로. 11px 반투명 회색은 노안에 그냥 없는 글자였다.
@@ -259,6 +284,30 @@
         .who { color: hsl(var(--h, 220) 58% 72%); } }
       /* 이름을 안 정한 사람. 열쇠 앞자리는 이름이 아니므로 색을 안 준다. */
       .who .key { font-weight: 600; font-size: 14px; color: var(--muted); }
+
+      /* ── 위험한 그 순간에만 뜨는 표시 ─────────────────────────────
+         🔴 자문(2026-08-30): "경고는 위험한 **행동의 순간**에 붙어야 지킨다.
+            횟수로 접으면 위험은 세 번째 이후에 온다."
+
+         그래서 이 둘은 늘 떠 있지 않다. 흉내 내는 사람이 실제로 나타났을
+         때, 돈·주소가 실제로 적혔을 때만 그 자리에 뜬다. */
+
+      /* 같은 이름을 쓰는 열쇠가 둘 이상일 때 이름표 옆에. */
+      .samename { margin-left: 7px; padding: 2px 8px; border-radius: 999px;
+        font-size: 12.5px; font-weight: 700; letter-spacing: .01em;
+        background: var(--warn-bg, #fff4e5); color: var(--warn-fg, #8a4b00);
+        border: 1px solid var(--warn-line, #f0c893); vertical-align: middle; }
+      @media (prefers-color-scheme: dark) {
+        .samename { background: #3a2a10; color: #ffcf8a; border-color: #6b4a17; } }
+
+      /* 돈·주소가 적힌 글 바로 아래. 말풍선 폭에 맞춰 왼쪽에 붙는다. */
+      .moneywarn { align-self: flex-start; max-width: 84%;
+        margin: 5px 0 4px; padding: 9px 13px; border-radius: 12px;
+        font-size: 14px; line-height: 1.6;
+        background: var(--warn-bg, #fff4e5); color: var(--warn-fg, #8a4b00);
+        border: 1px solid var(--warn-line, #f0c893); }
+      @media (prefers-color-scheme: dark) {
+        .moneywarn { background: #3a2a10; color: #ffcf8a; border-color: #6b4a17; } }
       .tr { margin-top: 7px; padding-top: 7px; border-top: 1px dashed var(--line);
         color: var(--muted); font-size: 14.5px; }
 
@@ -490,7 +539,7 @@
       .syncbar { height: 4px; border-radius: 999px; background: var(--line);
         margin: 2px 0 8px 15px; overflow: hidden; }
       .syncbar i { display: block; height: 100%; width: 0; border-radius: 999px;
-        background: var(--accent); transition: width .6s ease; }
+        background: var(--brand); transition: width .6s ease; }
       /* 색만으로 말하지 않는다 — 색맹인 사람과 흑백 화면에서는 초록과 회색이 같다. */
       .navfoot div { display: flex; align-items: center; font-size: 12.5px; }
       .navfoot div { font-size: 14px; color: var(--muted); margin-bottom: 4px; }
@@ -1417,7 +1466,7 @@
       /* 🔴 눌러서 복사한다. 11.5px 글자를 손으로 긁게 하면 안 된다 —
          이건 사장이 가장 많이 뿌리는 링크다. */
       .qrurl { cursor: pointer; }
-      .qrurl:hover { outline: 2px solid var(--accent); outline-offset: 2px; }
+      .qrurl:hover { outline: 2px solid var(--brand); outline-offset: 2px; }
       .qrurl { display: block; margin-top: 8px; font-size: 13px; line-height: 1.45;
         word-break: break-all; user-select: all; color: var(--text); }
       /* 🔴 열쇠가 든 QR 셋. 붙이면 열쇠를 벽에 붙이는 것이다. */
@@ -1573,9 +1622,9 @@
     /* 초대 링크 상자. 🔴 링크는 한 줄에 안 들어간다 — 상자 안에서 접히게
        두지 않으면 창 밖으로 삐져나가 글자가 잘린다. */
     .invbox { margin-top: 10px; padding: 12px; border: 1px solid var(--line);
-      border-radius: 12px; background: var(--card); }
+      border-radius: 12px; background: var(--panel); }
     .invlink { display: block; margin: 8px 0 12px; padding: 10px;
-      border-radius: 8px; background: var(--bg); color: var(--fg);
+      border-radius: 8px; background: var(--bg); color: var(--text);
       font-size: 13px; line-height: 1.5;
       overflow-wrap: anywhere; word-break: break-all; user-select: all; }
     .invbtns { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -2858,7 +2907,7 @@
                    말해 줄 자리가 없으면, 고쳐 놓고도 사장은 모른다.
                    비어 있으면 아무것도 안 보인다(`:empty`). -->
               <p class="meta" id="sh-registered-note"
-                 style="margin-top:8px; color:var(--accent)"></p>
+                 style="margin-top:8px; color:var(--brand)"></p>
 
               <label style="margin-top:12px">소개</label>
               <input id="sh-desc" placeholder="원두를 직접 볶는 작은 카페" autocomplete="off" />
@@ -3119,6 +3168,18 @@
       <section class="page" id="page-settings">
         <h2 class="title">이 컴퓨터</h2>
 
+        <!-- ── 자주 쓰는 것부터 ──────────────────────────────────────────
+             🔴 **이 줄이 「개발비 1%」 카드 **안에** 들어가 있었다.**
+                (자문 지적 2026-08-30 · `index.html:3322` 자리)
+
+                그래서 「한 번에 준비하기」·「쉬운 설정」이 수수료 설명과
+                주소 사이에 끼어 있었다. 대표님이 **두 번** 못 찾으셨다.
+                이 파일 CSS 는 「쉬운 설정이 제일 먼저, 제일 크다」고
+                적어 두었는데, 정작 HTML 은 그 반대였다.
+
+                자주 쓰는 것이 위다. 개발비는 읽고 마는 것이라 아래로 간다. -->
+        <div class="tiles pagetiles" id="pt-settings"></div>
+
         <!-- 무엇으로 쓰는지. 바꿔도 아무것도 안 지운다 — 돕던 사람이
              가게를 열 수도 있고, 가게를 접고 돕기만 할 수도 있다. -->
         <div class="card">
@@ -3280,8 +3341,6 @@
             나머지 99%는 사장님 지갑으로 바로 들어옵니다.
             <b>손님이 더 내는 것이 아니라</b>, 받으신 금액에서 나뉩니다.
           </p>
-        <!-- 큰 아이콘 줄. 라비 화면과 같은 문법 — 위는 「지금 할 일」. -->
-        <div class="tiles pagetiles" id="pt-settings"></div>
           <div class="kv"><b>붙는 곳</b><span>가게 결제 · 벤딩머신 · 중고 물건 사기</span></div>
           <div class="kv"><b>안 붙는 곳</b><span>채굴 · 그냥 보내기 · 자산 발행</span></div>
           <div class="kv"><b>가는 자리</b><span><code class="addr" id="fee-addr">읽는 중…</code></span></div>

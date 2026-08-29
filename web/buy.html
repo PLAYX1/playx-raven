@@ -21,11 +21,13 @@
       :root {
         --bg: #ffffff; --fg: #141518; --muted: #4b5568; --line: #e0e3ea;
         --panel: #fafafb; --accent: #3b3f8f; --warn: #96601a; --ravi: #e7731f; --ravi-soft: #8375ae; --ravi-tint: #fdf1e7;
+        --on-fill: #ffffff;
         --safe-b: env(safe-area-inset-bottom, 0px);
       }
       @media (prefers-color-scheme: dark) {
         :root { --bg: #101114; --fg: #eceef2; --muted: #b3bdd6; --line: #2a2d35;
                 --panel: #17191d; --accent: #8d92e8; --warn: #d99b3f;
+                --on-fill: #101216;
                 --ravi: #f0913f; --ravi-soft: #a294cb; --ravi-tint: #2a1f18; }
       }
       * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -49,7 +51,7 @@
       input { width: 100%; padding: 12px 12px; border-radius: 10px; border: 1px solid var(--line);
               background: var(--bg); color: var(--fg); font-size: 16px; font-family: inherit; }
       button { width: 100%; padding: 16px; border-radius: 11px; border: 0; background: var(--accent);
-               color: #fff; font-size: 15.5px; font-weight: 600; font-family: inherit;
+               color: var(--on-fill); font-size: 15.5px; font-weight: 600; font-family: inherit;
                cursor: pointer; margin-top: 16px; }
       button:disabled { opacity: 0.4; }
       button.ghost { background: transparent; color: var(--fg); border: 1px solid var(--line);

@@ -221,6 +221,45 @@ const ts = read("src/main.ts");
   } else ok(`id ${seen.size}개 전부 하나뿐`);
 }
 
+// ── ⑦ 정의 없이 쓰는 색 ───────────────────────────────────────────────
+//
+// 🔴 2026-08-30 실측으로 **다섯 곳**이 걸렸다. 전부 오류 없이 조용히 죽어
+//    있었다:
+//
+//      index.html  `.syncbar i { background: var(--accent) }`
+//        → 이 파일에 `--accent` 는 없다(`--brand` 다). 노드가 장부를 훑는
+//          **진행 막대가 늘 비어 있었다.** 사장은 얼마나 남았는지 볼 길이
+//          없었고, 화면은 아무 오류도 안 냈다.
+//      index.html  `.invbox { background: var(--card) }` · `color: var(--fg)`
+//      shops.html  `color: var(--dim)` · wallet.html `background: var(--card)`
+//
+// CSS 는 없는 변수를 만나면 **그냥 넘어간다.** 그래서 이 종류는 화면을 직접
+// 봐야만 드러나고, 어두운 판에서만 드러나는 것도 있다. 여기서 잡는다.
+//
+// ⚠️ 폴백이 있는 것(`var(--x, #fff)`)은 없어도 화면이 안 깨지므로 안 잡는다.
+//    좋은 입력을 막으면 검사가 쓸모없어진다.
+{
+  const 파일들 = [
+    ["index.html", html],
+    ...readdirSync(join(ROOT, "web"))
+      .filter((f) => f.endsWith(".html"))
+      .map((f) => [`web/${f}`, read(`web/${f}`)]),
+  ];
+  const 나쁜것 = [];
+  for (const [이름, 글] of 파일들) {
+    const 쓴것 = new Set([...글.matchAll(/var\(\s*(--[a-z0-9-]+)/g)].map((m) => m[1]));
+    const 정의 = new Set([...글.matchAll(/(--[a-z0-9-]+)\s*:/g)].map((m) => m[1]));
+    const 폴백 = new Set([...글.matchAll(/var\(\s*(--[a-z0-9-]+)\s*,/g)].map((m) => m[1]));
+    for (const v of 쓴것) if (!정의.has(v) && !폴백.has(v)) 나쁜것.push(`${이름}: ${v}`);
+  }
+  if (나쁜것.length) {
+    fail(`정의 없이 쓰는 색 ${나쁜것.length}개`, [
+      ...나쁜것,
+      "CSS 는 없는 변수를 조용히 넘어갑니다 — 그 줄은 아무 일도 안 합니다.",
+    ]);
+  } else ok("색 이름 전부 정의돼 있음");
+}
+
 console.log("");
 if (bad) {
   console.log(`검사 실패 — ${bad}가지를 고쳐야 합니다.`);

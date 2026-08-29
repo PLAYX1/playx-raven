@@ -18,11 +18,13 @@
       :root {
         --bg: #ffffff; --fg: #141518; --muted: #6b7280; --line: #e6e7ea;
         --panel: #fafafb; --accent: #3b3f8f; --warn: #b45309; --ravi: #e7731f; --ravi-soft: #8375ae; --ravi-tint: #fdf1e7;
+        --on-fill: #ffffff;
         --safe-b: env(safe-area-inset-bottom, 0px);
       }
       @media (prefers-color-scheme: dark) {
         :root { --bg: #101114; --fg: #eceef2; --muted: #9aa0ab; --line: #26282e;
                 --panel: #17191d; --accent: #8d92e8; --warn: #d99b3f;
+                --on-fill: #101216;
                 --ravi: #f0913f; --ravi-soft: #a294cb; --ravi-tint: #2a1f18; }
       }
       * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -322,7 +324,7 @@
       .cbtn.call { background: var(--ravi); border-color: var(--ravi); color: #fff; }
       /* 「이 물건 사기」가 이 화면의 주인공이다. 전화보다 위, 더 크게. */
       .cbtn.buy { flex-direction: column; gap: 2px; min-height: 64px;
-        background: var(--accent); border-color: var(--accent); color: #fff; }
+        background: var(--accent); border-color: var(--accent); color: var(--on-fill); }
       .cbtn .sub2 { font-size: 13px; font-weight: 400; opacity: .85; }
       /* 자는 라비. 눌러도 열린다 — 거기서 열쇠를 넣으면 그 자리에서 깨어난다. */
       .raviask.asleep img { filter: saturate(.5) opacity(.8); }
@@ -584,7 +586,7 @@
                         : p.nostr_pubkey
                           ? `<div class="livespot" data-live="${esc(s.asset)}"
                                   data-pk="${esc(p.nostr_pubkey)}"
-                                  style="margin-top:8px;font-size:14px;color:var(--dim)">지금 여는지 확인 중…</div>`
+                                  style="margin-top:8px;font-size:14px;color:var(--muted)">지금 여는지 확인 중…</div>`
                           : ""
                     }
                     ${

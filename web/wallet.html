@@ -16,11 +16,13 @@
       :root {
         --bg: #ffffff; --fg: #141518; --muted: #6b7280; --line: #e6e7ea;
         --panel: #fafafb; --accent: #3b3f8f; --warn: #b45309; --ok: #166534; --ravi: #e7731f; --ravi-soft: #8375ae; --ravi-tint: #fdf1e7;
+        --on-fill: #ffffff;
         --safe-b: env(safe-area-inset-bottom, 0px);
       }
       @media (prefers-color-scheme: dark) {
         :root { --bg: #101114; --fg: #eceef2; --muted: #9aa0ab; --line: #26282e;
                 --panel: #17191d; --accent: #8d92e8; --warn: #d99b3f; --ok: #6ee7a8;
+                --on-fill: #101216;
                 --ravi: #f0913f; --ravi-soft: #a294cb; --ravi-tint: #2a1f18; }
       }
       * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -61,7 +63,7 @@
         font: inherit; font-size: 17px; font-weight: 600;
         text-align: center; cursor: pointer; margin-bottom: 12px;
       }
-      button.primary { background: var(--accent); color: #fff; border-color: transparent; }
+      button.primary { background: var(--accent); color: var(--on-fill); border-color: transparent; }
       button.quiet { font-weight: 400; color: var(--muted); min-height: 48px; }
       button:disabled { opacity: 0.4; }
       .row2 { display: flex; gap: 8px; }
@@ -277,7 +279,7 @@
       /* 이야기 방 */
       .rm-newbox { display:flex; gap:8px; margin:14px 0 4px; }
       .rm-newbox input { flex:1; min-width:0; font-size:16px; padding:12px;
-        border-radius:10px; border:1px solid var(--line); background:var(--card);
+        border-radius:10px; border:1px solid var(--line); background:var(--panel);
         color:var(--fg); }
       .rm-newbox .btn { min-height:48px; white-space:nowrap; }
       #s-rooms { padding: 16px; max-width: 560px; margin: 0 auto; }
@@ -323,7 +325,7 @@
       .bubs { max-height: 46vh; overflow-y: auto; display: grid; gap: 8px; }
       .bub { padding: 10px 12px; border-radius: 14px; font-size: 15px; line-height: 1.6;
         max-width: 84%; white-space: pre-wrap; word-break: break-word; }
-      .bub.me { background: var(--accent); color: #fff; justify-self: end; }
+      .bub.me { background: var(--accent); color: var(--on-fill); justify-self: end; }
       .bub.you { background: var(--panel); color: var(--fg); justify-self: start; }
       /* 🔴 16px 미만이면 아이폰 사파리가 탭할 때마다 화면을 확대한다. */
       #talk-in { width: 100%; min-height: 48px; font-size: 16px; padding: 0 12px;

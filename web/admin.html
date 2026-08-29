@@ -21,11 +21,13 @@
       :root {
         --bg: #ffffff; --fg: #141518; --muted: #6b7280; --line: #e6e7ea;
         --panel: #fafafb; --accent: #3b3f8f; --warn: #b45309; --good: #2f7a4f; --bad: #b3261e; --ravi: #e7731f; --ravi-soft: #8375ae; --ravi-tint: #fdf1e7;
+        --on-fill: #ffffff;
         --safe-b: env(safe-area-inset-bottom, 0px);
       }
       @media (prefers-color-scheme: dark) {
         :root { --bg: #101114; --fg: #eceef2; --muted: #9aa0ab; --line: #26282e;
                 --panel: #17191d; --accent: #8d92e8; --warn: #d99b3f; --good: #63b98a; --bad: #e06a5f;
+                --on-fill: #101216;
                 --ravi: #f0913f; --ravi-soft: #a294cb; --ravi-tint: #2a1f18; }
       }
       * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -66,7 +68,7 @@
       button { padding: 12px 16px; border-radius: 10px; border: 1px solid var(--line);
                background: var(--bg); color: var(--fg); font-size: 14.5px; font-family: inherit;
                cursor: pointer; }
-      button.go { background: var(--accent); color: #fff; border-color: transparent; width: 100%; }
+      button.go { background: var(--accent); color: var(--on-fill); border-color: transparent; width: 100%; }
       button:disabled { opacity: 0.4; }
       .row { display: flex; gap: 8px; margin: 12px 0; }
 
@@ -93,7 +95,7 @@
       .msg { font-size: 14px; line-height: 1.7; margin-bottom: 12px; padding: 8px 12px;
              border-radius: 11px; max-width: 88%; white-space: pre-wrap; }
       .msg.ai { background: var(--panel); border: 1px solid var(--line); }
-      .msg.me { background: var(--accent); color: #fff; margin-left: auto; }
+      .msg.me { background: var(--accent); color: var(--on-fill); margin-left: auto; }
       .msg.did { border: 1px dashed var(--line); font-size: 14px; color: var(--muted);
                  max-width: 100%; }
 
@@ -198,7 +200,7 @@
       .ravilog { margin-top: 10px; display: grid; gap: 8px; }
       .ravilog div { padding: 10px 12px; border-radius: 12px; font-size: 15px;
         line-height: 1.6; white-space: pre-wrap; }
-      .ravilog .me { background: var(--accent); color: #fff; justify-self: end;
+      .ravilog .me { background: var(--accent); color: var(--on-fill); justify-self: end;
         max-width: 88%; }
       .ravilog .ai { background: var(--ravi-tint); color: var(--fg); }
       .raviform { display: flex; gap: 8px; margin-top: 10px; }

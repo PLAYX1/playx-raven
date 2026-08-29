@@ -1779,12 +1779,30 @@ function unlocked(m: string): void {
   // 잊는다. 잠금을 푼 다음 하려던 자리로 이어 준다.
   // 「이 물건 사기」로 들어왔으면 보내기 화면을 채운 채로 연다.
   if (!openBuyFromHash()) {
-    show(location.hash === "#sell" ? "sell" : "main");
-    // 물건 화면에서 「문의하기」로 들어오면 그 사람과 바로 연다.
-    const m = /^#talk\?to=([0-9a-f]{64})$/.exec(location.hash);
-    if (m) {
-      show("sell");
-      void loadTalks().then(() => openTalk(m[1]));
+    // 🔴 **「이야기」 탭을 눌러도 지갑 첫 화면이 떴다**(대표님 보고 2026-08-29,
+    //    실측 감사 2026-08-30로 원인 확인).
+    //
+    //    아래 탭은 `/wallet#rooms` 로 보내는데, 이 파일 어디에도 `#rooms` 를
+    //    읽는 곳이 없었다. 그래서 이 줄의 else 가지로 떨어져 **늘 「main」**
+    //    이었다. 탭 이름과 도착지가 달랐다 — 눌러도 아무 일이 안 일어난 이유다.
+    //
+    //    같은 이유로 초대 링크(`?room=…`)도 죽어 있었다. `boot()` 이 방을
+    //    열어 놓아도 잠금을 푼 뒤 이 줄이 「main」 으로 덮어썼다.
+    const 방 = new URLSearchParams(location.search).get("room") || "";
+    const 방으로 = /^[0-9a-f]{64}$/i.test(방);
+    if (location.hash === "#rooms" || 방으로) {
+      show("rooms" as any);
+      void loadRooms().then(() => {
+        if (방으로) openRoom(방, "방");
+      });
+    } else {
+      show(location.hash === "#sell" ? "sell" : "main");
+      // 물건 화면에서 「문의하기」로 들어오면 그 사람과 바로 연다.
+      const m = /^#talk\?to=([0-9a-f]{64})$/.exec(location.hash);
+      if (m) {
+        show("sell");
+        void loadTalks().then(() => openTalk(m[1]));
+      }
     }
   }
   if (location.hash === "#sell") void loadMine();
@@ -2761,15 +2779,11 @@ function boot(): void {
       void sendRoomMsg();
     }
   });
-  // 🔴 초대 링크로 바로 그 방을 열 수 있게 — `?room=…`
-  //    그래야 「이 방으로 오세요」 링크가 폰에서 그 방으로 데려간다.
-  {
-    const r = new URLSearchParams(location.search).get("room") || "";
-    if (/^[0-9a-f]{64}$/i.test(r)) {
-      show("rooms" as any);
-      void loadRooms().then(() => openRoom(r, "방"));
-    }
-  }
+  // 🔴 초대 링크(`?room=…`)와 「이야기」 탭(`#rooms`)이 가야 할 자리는
+  //    **`unlocked()` 안에서** 정한다. 여기서 열어 봐야 잠금을 푼 뒤
+  //    「main」 으로 덮어써졌다 — 그게 「탭을 눌러도 아무 일이 없다」의
+  //    진짜 이유였다. 지갑을 아직 안 만든 사람은 `boot()` 이 「welcome」
+  //    으로 보내고, 그 뒤 이 링크를 다시 누르면 그때 방으로 간다.
 
   // 🔴 아이폰 사파리는 `beforeinstallprompt` 를 **안 준다.** 그 신호만
   //    기다리면 아이폰에서는 영영 아무것도 안 나온다. 켤 때 한 번 그린다.

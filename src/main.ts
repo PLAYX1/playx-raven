@@ -4609,10 +4609,71 @@ function talkPaintMuted() {
   });
 }
 
+/* ── 경고는 문장이 아니라 **그 순간**이어야 한다 ────────────────────
+ *
+ * 🔴 자문(2026-08-30): "접은 것은 옳지만 **횟수로 접은 것이 틀렸다.**
+ *    위험은 세 번째 이후에 온다. 경고는 위험한 행동의 순간에 붙어야 지킨다."
+ *
+ * 맞는 말이다. 「이름은 누구나 같게 달 수 있습니다」를 머리줄에 늘 띄워
+ * 봐야, 정작 누가 사장 이름을 흉내 내고 「계좌가 바뀌었어요」라고 쓰는
+ * **그 글 옆에는 아무 표시도 없었다.** 위험한 것은 화면이 아니라 그 글이다.
+ *
+ * 그래서 두 가지를 글 옆에 붙인다:
+ *   ① 주소나 돈이 적힌 글 → 그 말풍선에 「확인하고 보내세요」
+ *   ② 같은 이름을 쓰는 열쇠가 둘 이상 → 그 이름표에 「같은 이름 N명」
+ *
+ * ②가 진짜 방어다. 흉내 내는 사람이 나타나는 **바로 그때** 표시가 뜬다.
+ * 늘 떠 있는 경고문은 아무 때도 안 뜨는 것과 같다.
+ */
+
+/** 이 방에서 같은 이름을 쓰는 열쇠가 둘 이상인 이름들. 한 판 그릴 때마다 새로 센다. */
+let tk겹친이름 = new Map<string, number>();
+
+/** 지금 그릴 사람들 중 이름이 겹치는 것을 센다. 열쇠가 다르면 다른 사람이다. */
+function tk겹친이름세기(pubkeys: string[]) {
+  const 이름별열쇠 = new Map<string, Set<string>>();
+  for (const pk of new Set(pubkeys)) {
+    const 이름 = String(tkNames.get(pk)?.name || "").trim();
+    if (!이름) continue; // 이름을 안 정한 사람끼리는 겹칠 것이 없다
+    if (!이름별열쇠.has(이름)) 이름별열쇠.set(이름, new Set());
+    이름별열쇠.get(이름)!.add(pk);
+  }
+  tk겹친이름 = new Map(
+    [...이름별열쇠].filter(([, 열쇠들]) => 열쇠들.size > 1).map(([n, s]) => [n, s.size]),
+  );
+}
+
+/**
+ * 이 글에 **돈이나 주소가 적혀 있나.**
+ *
+ * ⚠️ 넉넉하게 잡는다. 못 잡아서 안 띄우는 것보다 한 번 더 띄우는 편이 낫다 —
+ *    이 표시가 하는 말은 「확인하고 보내세요」지 「이 사람은 사기꾼입니다」가
+ *    아니라서, 틀려도 잃는 것이 없다.
+ */
+function tk돈이야기인가(s: string): boolean {
+  // 레이븐 주소는 R 로 시작하는 34자 안팎이다.
+  if (/\bR[1-9A-HJ-NP-Za-km-z]{25,40}\b/.test(s)) return true;
+  // 「계좌」·「입금」·「보내」·「송금」·「지갑주소」 같은 말과 숫자가 같이 있을 때.
+  if (/(계좌|입금|송금|이체|보내\s*주|지갑\s*주소|주소\s*바뀌|바뀌었)/.test(s)) return true;
+  if (/\d[\d,]{2,}\s*(원|RVN|만원|천원)/i.test(s)) return true;
+  return false;
+}
+
 /** 16진수 64자 대신 보여 줄 것. 이름이 있으면 이름, 없으면 앞자리. */
 function tkWho(pk: string): string {
   const p = tkNames.get(pk);
-  if (p?.name) return escapeHtml(String(p.name));
+  if (p?.name) {
+    const 이름 = String(p.name);
+    const 겹침 = tk겹친이름.get(이름.trim());
+    return (
+      escapeHtml(이름) +
+      // 🔴 흉내 내는 사람이 나타난 **그때** 뜬다. 색(`--h`)이 이미 열쇠에서
+      //    나오지만, 색만으로는 「다른 색이네」로 끝나고 뜻이 안 전해진다.
+      (겹침
+        ? `<span class="samename" title="${t("이름은 누구나 같게 달 수 있습니다. 색이 다르면 다른 분입니다.")}">${t("같은 이름")} ${겹침}${t("명")}</span>`
+        : "")
+    );
+  }
   // 🔴 이름을 안 정한 사람. `.key` 는 **색을 안 받는다** — 열쇠 앞자리는
   //    이름이 아니라서, 거기에 사람 색을 칠하면 「이게 이름이구나」로 읽힌다.
   return `<span class="key">${escapeHtml(pk.slice(0, 10))}…</span>`;
@@ -4947,6 +5008,10 @@ async function talkPaint() {
     // 그래서 map 안에서 옆 글을 꺼내 쓴다.
     const 때 = asc.map((e) => Number(e.created_at || 0) * 1000);
     const 쓴이 = asc.map((e) => String(e.pubkey || ""));
+    // 🔴 그리기 전에 **같은 이름을 쓰는 열쇠**를 센다. 흉내 내는 사람이
+    //    나타난 그 판에만 이름표에 표시가 붙는다 — 늘 떠 있는 경고문과 달리
+    //    이건 위험이 실제로 있을 때만 뜬다.
+    tk겹친이름세기(쓴이);
     const 날 = 때.map((ms) => new Date(ms).toDateString());
 
     box.innerHTML = hidNote + asc
@@ -4994,13 +5059,24 @@ async function talkPaint() {
           ? tkStripPicUrl(String(e.content || ""), pic.cid)
           : String(e.content || "");
 
+        // ⑤ 🔴 **돈·주소가 적힌 글에는 그 자리에서 표시한다.** 늘 떠 있는
+        //    경고문은 아무도 안 읽지만, 「계좌가 바뀌었어요」라고 적힌 글
+        //    바로 아래에 붙은 한 줄은 읽는다. 내 글에는 안 붙인다 —
+        //    내가 쓴 것을 나에게 조심하라고 하는 것은 잡음이다.
+        const 조심 =
+          !mine && tk돈이야기인가(본문)
+            ? `<p class="moneywarn">${t("돈·주소가 적힌 글입니다. 이름은 누구나 같게 달 수 있으니, 보내기 전에 다른 길로 한 번 확인하세요.")}</p>`
+            : "";
+
         return (
           day +
           head +
           `<div class="line${mine ? " me" : ""}">
              <div class="bub${mine ? " me" : ""}" data-say="${id}">${escapeHtml(본문)}${pic ? tkPicHtml(pic) : ""}</div>
              ${clock}
-           </div>
+           </div>` +
+          조심 +
+          `
            <div class="bubacts${mine ? " r" : ""}" data-acts="${id}">
              <button data-tr="${id}">${t("내 말로")}</button>
              <button data-keep="${id}">${t("간직")}</button>` +
@@ -5284,21 +5360,59 @@ function tkSaid(msg: string) {
   $("tk-said").hidden = false;
 }
 
+/**
+ * **보내는 순간 내 말풍선을 붙인다.**
+ *
+ * 🔴 자문 지적(2026-08-30): "카톡은 누르는 순간 내 말풍선이 생긴다.
+ *    이 앱은 1.2초 뒤에 목록을 통째로 갈아끼운다."
+ *
+ * 그 1.2초가 「이거 갔나?」다. 그동안 화면은 아무 일도 없었고, 그래서
+ * 한 번 더 누르는 사람이 생긴다. 릴레이는 세계에 흩어져 있어서 실제로
+ * 더 걸릴 수도 있다 — 기다림을 없앨 수는 없으니 **기다림을 보이게** 한다.
+ *
+ * ⚠️ 다 간 것처럼 그리지 않는다. 흐리게(`.pending`) 그려 두고, 노드가
+ *    받았다고 답해야 또렷해진다. **못 갔으면 지우고 글을 입력칸에 돌려준다** —
+ *    안 간 말이 간 것처럼 남아 있는 것이 이 화면에서 가장 나쁜 거짓말이다.
+ */
+function tk임시풍선(text: string): HTMLElement | null {
+  const box = document.getElementById("tk-list");
+  if (!box) return null;
+  const wrap = document.createElement("div");
+  wrap.className = "line me pending";
+  wrap.innerHTML =
+    `<div class="bub me">${escapeHtml(text)}</div>` +
+    `<time class="tstamp">${escapeHtml(t("보내는 중"))}</time>`;
+  box.appendChild(wrap);
+  box.scrollTop = box.scrollHeight;
+  return wrap;
+}
+
 async function talkSend() {
   const box = $("tk-text") as HTMLTextAreaElement;
   const text = box.value.trim();
   // 사진이 걸려 있으면 글이 비어도 보낸다 — 사진 한 장이 곧 본문인 나이대다.
   if (!text && !tkPhoto) return;
   if (tkPhoto) return void talkSendPhoto(text);
-  $("tk-note").textContent = t("올리는 중…");
+  // 누른 즉시 붙는다. 입력칸도 즉시 비운다 — 그래야 다음 말을 바로 친다.
+  const 임시 = tk임시풍선(text);
+  box.value = "";
+  box.style.height = "auto";
+  $("tk-note").textContent = "";
   try {
     await invoke("talk_post", { text, room: tkRoom || null });
-    box.value = "";
-    box.style.height = "auto";
-    // 「올렸습니다」를 남겨 두지 않는다 — 대화창에 붙어 있는 알림은 짐이다.
-    $("tk-note").textContent = "";
+    // 또렷해진다. 「올렸습니다」 같은 알림은 안 띄운다 — 풍선이 곧 답이다.
+    임시?.classList.remove("pending");
+    const 시각 = 임시?.querySelector(".tstamp");
+    if (시각) 시각.textContent = tkClock(Date.now());
+    // 🔴 두 번 다시 그린다. 릴레이가 느리면 1.2초에는 아직 안 돌아와서
+    //    붙여 둔 풍선만 사라진다 — 방금 쓴 말이 눈앞에서 없어지는 셈이다.
     setTimeout(() => void talkPaint(), 1200);
+    setTimeout(() => void talkPaint(), 4000);
   } catch (e) {
+    // 🔴 못 갔으면 지운다. 그리고 **글을 돌려준다** — 다시 치게 만들지 않는다.
+    임시?.remove();
+    box.value = text;
+    box.style.height = "auto";
     $("tk-note").innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
   }
 }
