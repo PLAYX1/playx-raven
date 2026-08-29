@@ -810,6 +810,211 @@ async function saveNode() {
   }
 }
 
+/* ══ 내 이름 ═══════════════════════════════════════════════════════════
+   「이 컴퓨터」 화면의 `#idcard`. 폰(웹 지갑)의 나와 이 컴퓨터의 나가
+   **같은 사람인가**를 보여 주고, 하나로 합치거나 옛 이름으로 되돌린다.
+
+   🔴 이 화면의 값어치는 「합치기」 단추가 아니라 **갈라진 것을 보여 주는
+      데** 있다. `identity.rs` 머리말이 그렇게 적어 놓았다 — 조용히 이름이
+      바뀌는 것이 제일 나쁘고, 그다음이 **갈라진 줄 모르는 것**이다.
+
+   🔴 그래서 셋을 정직하게 갈라 말한다:
+        · 12단어를 못 읽었다   → 열쇠가 없는 게 아니라 **모르는 것**이다
+        · 이름이 아직 없다     → 처음 글을 쓸 때 생긴다
+        · 무작위로 만들어졌다  → **12단어로는 되살릴 수 없다**
+      셋 다 러스트의 `advice` 한 문장에 들어 있어서, 우리는 그대로 띄운다. */
+
+/** 열쇠 한 줄. 64자라 접어서 보여 주고, 전체는 그 밑에 작게 둔다. */
+function idKeyRow(label: string, pk: unknown, note: string): string {
+  const k = typeof pk === "string" && pk.trim() ? pk.trim() : "";
+  if (!k) {
+    return `<div class="kv"><b>${escapeHtml(label)}</b><span>${escapeHtml(note)}</span></div>`;
+  }
+  // 앞 8자만 봐도 다른 이름인지는 안다. 64자를 눈으로 다 맞출 사람은 없다.
+  return (
+    `<div class="kv" style="align-items:flex-start"><b>${escapeHtml(label)}</b>` +
+    `<span><code style="font-size:15px">${escapeHtml(k.slice(0, 8))}…${escapeHtml(k.slice(-4))}</code>` +
+    (note ? ` — ${escapeHtml(note)}` : "") +
+    `<code class="idkey">${escapeHtml(k)}</code></span></div>`
+  );
+}
+
+/** `talk::key_on_disk` 의 `from` 을 사람 말로. 셋 다 뜻이 아주 다르다. */
+function idFromWord(from: unknown): string {
+  const f = String(from ?? "");
+  if (f === "seed") return t("12단어에서 나왔습니다");
+  if (f === "none") return t("아직 이름이 없습니다");
+  // 🔴 「무작위」를 얼버무리면 안 된다. 이 사람은 파일을 잃으면 끝이다.
+  return t("무작위로 만들어졌습니다 — 12단어로는 되살릴 수 없습니다");
+}
+
+async function idLoad() {
+  const body = $("id-body");
+  const adopt = $("id-adopt");
+  const legacy = $("id-legacy");
+  // 다시 읽는 동안에는 단추를 감춘다. 옛 상태로 눌리면 안 된다.
+  adopt.style.display = "none";
+  legacy.style.display = "none";
+  body.innerHTML = `<p class="meta">${t("읽는 중…")}</p>`;
+
+  let s: any;
+  try {
+    s = await invoke<any>("identity_status");
+  } catch (e) {
+    body.innerHTML = `<div class="warnbox">${escapeHtml(errText(e))}</div>`;
+    return;
+  }
+
+  const nowPk = s?.now?.pubkey ?? null;
+  const canon = s?.canonical?.pubkey ?? null;
+  const leg = s?.legacy?.pubkey ?? null;
+  const same = s?.same_as_wallet;
+
+  // 한 줄 판정. 🔴 `null` 은 「다르다」가 아니라 「모른다」다 — 뭉뚱그리면
+  //    12단어를 못 읽은 날 사장이 멀쩡한 이름을 바꾸려 든다.
+  const verdict =
+    same === true
+      ? `<span class="ok">${t("이 컴퓨터와 폰·웹 지갑이 같은 사람입니다.")}</span>`
+      : same === false
+        ? `<span class="warn">${t("이 컴퓨터와 폰·웹 지갑이 다른 사람으로 보입니다.")}</span>`
+        : `<span class="muted">${t("같은 사람인지 확인할 수 없습니다.")}</span>`;
+
+  body.innerHTML =
+    `<p style="font-size:15px;margin:10px 0 12px"><b>${verdict}</b></p>` +
+    idKeyRow(t("이 컴퓨터"), nowPk, idFromWord(s?.now?.from)) +
+    idKeyRow(t("폰 · 웹 지갑"), canon, t("12단어에서 나오는 이름")) +
+    // 🔴 러스트의 `advice` 를 **그대로.** 무엇을 하면 되는지가 여기 들어 있다.
+    (s?.advice ? `<p class="meta" style="margin-top:10px">${escapeHtml(String(s.advice))}</p>` : "") +
+    // 12단어를 못 읽었으면 그 사실이 이 화면에서 제일 중요한 소식이다.
+    (canon
+      ? ""
+      : `<div class="warnbox" style="margin-top:10px">
+           <b>${t("12단어를 읽지 못했습니다.")}</b>
+           ${t("지갑이 잠겨 있으면 열어 주세요. 12단어로 만든 지갑이 아니면, 이 이름은 백업 파일이 유일한 사본입니다 — 파일을 잃으면 이 이름으로 다시 못 돌아옵니다.")}
+         </div>`) +
+    // 옛 이름. 있고 지금 이름과 다를 때만 말한다.
+    (leg && leg !== nowPk
+      ? `<h3 class="grouphead">${t("옛 이름")}</h3>` +
+        idKeyRow(t("옛 방식"), leg, "") +
+        // 🔴 `history_why` 는 「글이 있다 / 없다 / 못 물어봤다」 셋을 갈라
+        //    말한다. 릴레이가 잠깐 죽은 날 「없다」로 읽으면, 남의 글이
+        //    붙어 있는 이름을 버려도 된다고 말하는 셈이 된다.
+        (s?.legacy?.history_why
+          ? `<p class="meta">${escapeHtml(String(s.legacy.history_why))}</p>`
+          : "")
+      : "") +
+    // 가게 간판 열쇠. 이름을 합쳐도 **이건 안 따라온다** — 그 사실을 여기서 못 박는다.
+    `<h3 class="grouphead">${t("가게 간판 열쇠")}</h3>` +
+    (s?.shop?.exists
+      ? `<p class="meta">${escapeHtml(String(s.shop.why ?? ""))}</p>`
+      : `<p class="meta">${t("아직 가게 간판 열쇠가 없습니다.")}</p>`) +
+    (s?.shop_note ? `<p class="meta">${escapeHtml(String(s.shop_note))}</p>` : "");
+
+  // 단추는 **할 수 있을 때만** 보인다. 눌러도 「바꿀 것이 없습니다」만
+  // 돌아오는 단추는 고장으로 읽힌다.
+  if (canon && same !== true) adopt.style.display = "";
+  if (leg && nowPk && leg !== nowPk) legacy.style.display = "";
+}
+
+/** 경로표. 「12단어 하나에서 무엇이 어디로 나오는가」를 사람이 읽고 확인한다. */
+async function idPaths() {
+  const box = $("id-pathbody");
+  try {
+    const p = await invoke<any>("identity_paths");
+    const rows: any[] = Array.isArray(p?.rows) ? p.rows : [];
+    box.innerHTML =
+      `<p class="meta">${t("씨앗")} — ${escapeHtml(String(p?.seed ?? ""))}</p>` +
+      rows
+        .map(
+          (r) =>
+            `<div class="card" style="margin-top:8px">
+               <b style="font-size:15px">${escapeHtml(String(r?.what ?? ""))}</b>
+               <code class="idkey">${escapeHtml(String(r?.path ?? ""))}</code>
+               <p class="meta">${escapeHtml(String(r?.who ?? ""))}</p>
+               <p class="meta">${escapeHtml(String(r?.note ?? ""))}</p>
+             </div>`,
+        )
+        .join("") +
+      (p?.hardening ? `<p class="meta">${escapeHtml(String(p.hardening))}</p>` : "");
+  } catch (e) {
+    box.innerHTML = `<p class="meta"><span class="danger">${escapeHtml(errText(e))}</span></p>`;
+  }
+}
+
+/**
+ * **이름을 하나로 합친다.**
+ *
+ * 🔴 되돌리기 어려운 일이라 8초 확인창을 앞에 둔다(`holdBeforeDoing`).
+ *    체크박스를 하나 더 두는 것과는 다르다 — 체크박스는 그냥 눌리고,
+ *    여기서는 **시간이 흐르는 것을 보면서 아무것도 안 해야** 진행된다.
+ *
+ * 🔴 그리고 **무슨 일이 생기는지** 그 창에 적는다. 「정말 하시겠습니까?」만
+ *    적어 두면 아무도 무엇을 잃는지 모른 채 누른다.
+ */
+async function idAdopt() {
+  const ok = await holdBeforeDoing(
+    t("이 컴퓨터의 이름을 폰·웹 지갑과 같은 이름으로 바꿉니다"),
+    t(
+      "① 지금 이름으로 쓴 글은 그 이름에 그대로 남습니다 — 새 이름으로 옮겨 오지 않습니다. " +
+        "② 두 이름을 잇는 글(「같은 사람입니다」)을 양쪽 열쇠로 서명해 세계 릴레이에 올립니다. " +
+        "한번 퍼진 글은 되거둘 수 없습니다. " +
+        "③ 옛 열쇠 파일은 지우지 않고 talkkey-old-<시각>.json 으로 옆에 남깁니다. " +
+        "④ 가게 간판 열쇠는 바뀌지 않습니다 — 그 공개키는 체인에 박혀 있습니다.",
+    ),
+  );
+  if (!ok) return;
+  const say = $("id-say");
+  say.innerHTML = `<p class="meta">${t("바꾸는 중…")}</p>`;
+  try {
+    const r = await invoke<any>("identity_adopt_person_key");
+    say.innerHTML =
+      `<div class="card" style="margin-top:12px">
+         <p style="margin:0;font-size:15px"><span class="ok">${t("이름을 합쳤습니다.")}</span></p>` +
+      idKeyRow(t("새 이름"), r?.pubkey, "") +
+      // 열쇠 파일이 아예 없던 경우에는 옛 이름이 없다. 없으면 빈 줄을 안 만든다.
+      (r?.old_pubkey ? idKeyRow(t("옛 이름"), r.old_pubkey, "") : "") +
+      `<p class="meta">${t("잇는 글")} ${Number(r?.linked ?? 0)}${t("개를 릴레이에 남겼습니다.")}</p>` +
+      (r?.kept ? `<p class="meta">${escapeHtml(String(r.kept))}</p>` : "") +
+      (r?.note ? `<p class="meta">${escapeHtml(String(r.note))}</p>` : "") +
+      `</div>`;
+    await idLoad();
+    // 「이야기」 머리줄의 이름도 같이 바뀐다. 안 고치면 옛 이름이 남아 있다.
+    void talkPaintMe();
+  } catch (e) {
+    say.innerHTML = `<div class="warnbox" style="margin-top:12px">${escapeHtml(errText(e))}</div>`;
+  }
+}
+
+/** **옛 이름으로 되돌린다.** `talkkey.json` 을 잃고 12단어로만 돌아온 사람용. */
+async function idLegacy() {
+  const ok = await holdBeforeDoing(
+    t("옛 방식으로 뽑은 예전 이름으로 되돌립니다"),
+    t(
+      "① 지금 이름으로 쓴 글은 지금 이름에 남습니다 — 옛 이름으로 옮겨 오지 않습니다. " +
+        "② 되돌리고 나면 폰·웹 지갑에서는 이 컴퓨터가 **다른 사람**으로 보입니다. " +
+        "③ 직전 열쇠 파일은 지우지 않고 talkkey-old-<시각>.json 으로 옆에 남깁니다. " +
+        "④ 다시 합치시려면 「이름 합치기」를 누르시면 됩니다.",
+    ),
+  );
+  if (!ok) return;
+  const say = $("id-say");
+  say.innerHTML = `<p class="meta">${t("되돌리는 중…")}</p>`;
+  try {
+    const r = await invoke<any>("identity_restore_legacy_key");
+    say.innerHTML =
+      `<div class="card" style="margin-top:12px">
+         <p style="margin:0;font-size:15px"><span class="ok">${t("옛 이름으로 돌아왔습니다.")}</span></p>` +
+      idKeyRow(t("지금 이름"), r?.pubkey, "") +
+      (r?.kept ? `<p class="meta">${escapeHtml(String(r.kept))}</p>` : "") +
+      (r?.note ? `<p class="meta">${escapeHtml(String(r.note))}</p>` : "") +
+      `</div>`;
+    await idLoad();
+    void talkPaintMe();
+  } catch (e) {
+    say.innerHTML = `<div class="warnbox" style="margin-top:12px">${escapeHtml(errText(e))}</div>`;
+  }
+}
+
 async function loadNet() {
   if (쉬는중()) return; // 창을 안 보는 동안은 그리지 않는다
 
@@ -2407,6 +2612,24 @@ function pageTiles(page: string): PageTile[] {
           go: () => (none ? jump("assets")() : jump("vend-wrap")()),
         };
       })(),
+      /* 🔴 접힌 칸은 **스크롤해도 아무 일이 안 일어난다.** 이 화면에서 이미
+         한 번 겪은 병이라(위 두 칸의 주석), 팬클럽도 같은 실수를 안 하게
+         **펼치고 · 데려가고 · 빛나게** 한다. */
+      {
+        icon: I(
+          '<circle cx="9" cy="8.5" r="3"/><path d="M2.8 19.5c0-3.2 2.8-5.2 6.2-5.2s6.2 2 6.2 5.2"/>' +
+            '<path d="M16.5 5.9a3 3 0 0 1 0 5.2"/><path d="M18.4 14.6c1.8.8 2.8 2.3 2.8 4"/>',
+        ),
+        label: "팬클럽",
+        sub: "음반마다 팬 방 · 한 번에 알리기",
+        go: () => {
+          const d = document.getElementById("fanbox") as HTMLDetailsElement | null;
+          if (d) d.open = true;
+          // 펼친 뒤에 읽어 온다. 읽기 전에 데려가면 빈 칸으로 도착한다.
+          void fanLoad();
+          jump("fanbox")();
+        },
+      },
     ];
   }
   if (page === "reward") {
@@ -3672,6 +3895,9 @@ function showPage(id: string) {
     void paintEasySetup();
     void paintSweepKrw();
     wireCloudKey();
+    // 🔴 「내 이름」은 **열 때마다** 다시 본다. 다른 창에서 이름을 바꿨거나
+    //    지갑을 열었을 수 있고, 그러면 아까 본 판정이 이미 거짓이다.
+    void idLoad();
   }
   if (id === "reward") void loadReward();
   // 간판 열쇠 옮기기. 이미 씨앗 열쇠면 이 안에서 스스로 숨는다.
@@ -5125,6 +5351,314 @@ async function talkMakeRoomGo() {
   }
 }
 
+/* ══ 팬클럽 ═══════════════════════════════════════════════════════════
+   자산 화면(`#fanbox`)에 붙는다. **왜 거기인가는 index.html 의 주석**에
+   길게 적어 두었다 — 한 줄로 줄이면: 러스트가 방이 아니라 **자산**을
+   주어로 답하기 때문이다(`fan_rooms` 는 `listmyassets` 에서 시작한다).
+
+   🔴 이 칸의 절반은 **못 하는 것을 그대로 옮기는 일**이다. 러스트가
+      `say` · `caveat` · `limits` · `privacy` 로 정직하게 써 놓았고,
+      여기서는 **한 자도 안 고치고** 붙인다. 요약하거나 「간단히」 다시
+      쓰면 그 순간 거짓말이 된다 — 사장은 이 방을 비밀 단톡으로 알고
+      「1년 회원권」을 팔겠다고 한다. 둘 다 이 구조로는 안 된다.        */
+
+type FanRoom = { id?: string; name?: string; about?: string; created_at?: number };
+type FanGroup = {
+  asset: string;
+  i_issued?: boolean;
+  rooms?: FanRoom[];
+  room_count?: number;
+  need_room?: boolean;
+};
+
+/** 지금 화면에 있는 묶음. 다시 그릴 때 러스트를 또 부르지 않으려고 들고 있다. */
+let fanGroups: FanGroup[] = [];
+/** 한 번이라도 읽었나. 칸을 접었다 펼 때마다 노드를 두드리지 않는다. */
+let fanLoaded = false;
+/**
+ * 고른 자산.
+ *
+ * ⚠️ 화면(체크박스)이 아니라 **여기**가 진짜 목록이다. 목록을 다시 그리면
+ *    체크박스는 새로 만들어지므로, 화면만 믿으면 「팬 수 세기」 한 번에
+ *    골라 둔 것이 전부 날아간다.
+ */
+const fanPicked = new Set<string>();
+/**
+ * 자산마다 「몇 분이 가졌나」로 그린 조각.
+ *
+ * 🔴 **안 물어본 것과 0곳은 다른 말이다.** 그래서 미리 0 을 채워 두지 않고,
+ *    누른 자산만 여기 들어온다. 비어 있으면 화면에도 아무 말이 없다.
+ */
+const fanHolders = new Map<string, string>();
+
+/**
+ * 「못 하는 것」을 그린다. **러스트가 준 문장 그대로.**
+ *
+ * ⚠️ 아는 열쇠만 골라 쓰지 않고 `Object.values` 로 **전부** 돈다. 나중에
+ *    러스트가 못 하는 것을 하나 더 적어 넣으면 이 화면이 저절로 그것도
+ *    띄운다 — 여기에 열쇠 이름을 박아 두면 그날 조용히 하나가 빠진다.
+ */
+function fanPaintLimits(limits: unknown) {
+  const rows =
+    limits && typeof limits === "object"
+      ? Object.values(limits as Record<string, unknown>)
+          .filter((v) => typeof v === "string" && v.trim())
+          .map(String)
+      : [];
+  // 못 받았으면 있던 말을 지우지 않는다. 빈 칸이 되면 「없다」로 읽힌다.
+  if (!rows.length) return;
+  $("fan-limits").innerHTML =
+    `<b>${t("먼저 아셔야 할 것")}</b>` +
+    rows.map((v) => `<p>${escapeHtml(v)}</p>`).join("");
+}
+
+/** 몇 개를 골랐는지 · 그게 몇 곳의 방인지. 보내기 전에 알아야 하는 숫자다. */
+function fanPaintPicked() {
+  const picked = fanGroups.filter((g) => fanPicked.has(g.asset));
+  const rooms = picked.reduce((n, g) => n + (Number(g.room_count) || 0), 0);
+  $("fan-picked").textContent = picked.length
+    ? `${t("고른 자산")} ${picked.length} · ${t("보낼 방")} ${rooms}${t("곳")}`
+    : t("아직 고른 자산이 없습니다.");
+}
+
+async function fanLoad(force = false) {
+  if (fanLoaded && !force) return;
+  const say = $("fan-say");
+  say.textContent = t("불러오는 중…");
+  let r: any;
+  try {
+    r = await invoke<any>("fan_rooms");
+  } catch (e) {
+    // 🔴 못 읽었으면 **읽었다고 치지 않는다.** 다음에 열 때 다시 시도한다.
+    fanLoaded = false;
+    say.innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
+    return;
+  }
+  fanLoaded = true;
+  fanPaintLimits(r?.limits);
+  // 🔴 러스트의 `say` 를 그대로. 「자산이 없습니다」와 「못 읽었습니다」를
+  //    거기서 이미 갈라 말한다 — 우리가 다시 쓰면 그 구분이 사라진다.
+  say.textContent = String(r?.say ?? "");
+  fanGroups = Array.isArray(r?.groups) ? (r.groups as FanGroup[]) : [];
+  // 목록에서 사라진 자산은 고른 것에서도 뺀다. 안 그러면 화면에 없는 것에
+  // 보내겠다고 하고, 결과는 「방이 없습니다」만 돌아온다.
+  for (const a of [...fanPicked]) if (!fanGroups.some((g) => g.asset === a)) fanPicked.delete(a);
+  fanPaintGroups();
+}
+
+function fanPaintGroups() {
+  const box = $("fan-groups");
+  if (!fanGroups.length) {
+    box.innerHTML = "";
+    fanPaintPicked();
+    return;
+  }
+  box.innerHTML = fanGroups
+    .map((g) => {
+      const a = String(g.asset ?? "");
+      const key = escapeHtml(a);
+      const rooms = Array.isArray(g.rooms) ? g.rooms : [];
+      const need = !!g.need_room;
+      return (
+        `<div class="fangroup">
+           <div class="fanrow">` +
+        // 🔴 방이 없으면 **고를 수 없게** 한다. 골라 봐야 「이 자산으로 만든
+        //    방이 없습니다」가 돌아올 뿐이고, 그건 실패 목록만 늘린다.
+        //    대신 그 자리에서 방을 만들러 갈 수 있게 한다.
+        (need
+          ? `<span class="fanname" style="margin-right:auto;font-weight:600">${key}</span>`
+          : `<label class="fanpick">
+               <input type="checkbox" data-fanpick="${key}"${fanPicked.has(a) ? " checked" : ""} />
+               <span>${key}</span></label>`) +
+        // 내가 낸 자산인지. 「내가 낸 것」과 「내가 산 것」은 팬클럽에서 뜻이 다르다.
+        (g.i_issued ? `<span class="tag">${t("내가 낸 자산")}</span>` : "") +
+        `<button class="ghost" data-fanwho="${key}">${t("팬 수 세기")}</button>` +
+        (need ? `<button class="ghost" data-fanroom="${key}">${t("방 만들기")}</button>` : "") +
+        `</div>` +
+        (need
+          ? `<p class="fanrooms">${t("아직 방이 없습니다. 「방 만들기」를 누르면 「이야기」로 가고, 이 자산이 골라져 있습니다.")}</p>`
+          : `<p class="fanrooms">${t("방")} ${rooms.length}${t("곳")} — ` +
+            rooms
+              .map((r) => escapeHtml(String(r?.name ?? t("이름 없는 방"))))
+              .join(" · ") +
+            `</p>`) +
+        // 「몇 분이 가졌나」는 누른 자산에만 있다. 안 누른 자산은 조용하다.
+        `<div class="fanwho" data-fanwhobox="${key}">${fanHolders.get(a) ?? ""}</div>` +
+        `</div>`
+      );
+    })
+    .join("");
+
+  box.querySelectorAll<HTMLInputElement>("[data-fanpick]").forEach((c) => {
+    c.onchange = () => {
+      const a = String(c.dataset.fanpick || "");
+      if (c.checked) fanPicked.add(a);
+      else fanPicked.delete(a);
+      fanPaintPicked();
+    };
+  });
+  box.querySelectorAll<HTMLButtonElement>("[data-fanwho]").forEach((b) => {
+    b.onclick = () => void fanCount(String(b.dataset.fanwho || ""), b);
+  });
+  box.querySelectorAll<HTMLButtonElement>("[data-fanroom]").forEach((b) => {
+    b.onclick = () => void fanMakeRoom(String(b.dataset.fanroom || ""));
+  });
+  fanPaintPicked();
+}
+
+/**
+ * **몇 분이 가졌나.** 숫자 하나뿐이다.
+ *
+ * 🔴 주소 목록은 **애초에 안 온다**(러스트가 노드에 개수만 달라고 묻고,
+ *    옛 노드가 목록으로 답해도 거기서 세고 버린다). 그러니 화면이 할 일은
+ *    숫자 옆에 `caveat` 와 `privacy` 를 **그대로 붙이는 것**이다. 숫자만
+ *    적어 두면 사장은 그걸 「팬 82명」으로 읽는데, 그건 사실이 아니다 —
+ *    주소의 개수지 사람의 수가 아니다.
+ */
+async function fanCount(asset: string, btn: HTMLButtonElement) {
+  const box = $("fan-groups").querySelector<HTMLElement>(
+    `[data-fanwhobox="${CSS.escape(asset)}"]`,
+  );
+  const wasLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = t("세는 중…");
+  try {
+    const r = await invoke<any>("fan_holders", { asset });
+    const html =
+      `<b>${escapeHtml(String(r?.say ?? ""))}</b>` +
+      (r?.caveat ? `<p class="meta">${escapeHtml(String(r.caveat))}</p>` : "") +
+      (r?.privacy ? `<p class="meta">${escapeHtml(String(r.privacy))}</p>` : "");
+    fanHolders.set(asset, html);
+    if (box) box.innerHTML = html;
+    // 색인이 꺼져 있으면 러스트가 「켜세요」까지 적어서 오류로 돌려준다.
+    fanPaintLimits(r?.limits);
+  } catch (e) {
+    const html = `<span class="danger">${escapeHtml(errText(e))}</span>`;
+    fanHolders.set(asset, html);
+    if (box) box.innerHTML = html;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = wasLabel;
+  }
+}
+
+/**
+ * **「이야기 → 방 만들기」로 데려가고 자산까지 골라 놓는다.**
+ *
+ * 🔴 여기서 방을 만들지 않는다. 같은 일을 두 곳에 두면 어느 쪽이 진짜인지
+ *    매번 고민하게 되고, 고치는 사람은 한쪽만 고친다. 러스트의 안내문도
+ *    「이야기 → 방 만들기」로 보낸다 — 화면이 그 말과 어긋나면 안 된다.
+ */
+async function fanMakeRoom(asset: string) {
+  showPage("talk");
+  // `talkNewRoom` 은 **토글**이다. 이미 펼쳐져 있으면 접어 버린다 —
+  // 그러면 방을 만들러 왔는데 칸이 닫힌다. 먼저 접어 두고 부른다.
+  $("tk-newbox").hidden = true;
+  // 자산 목록을 다 받을 때까지 기다린다. 안 기다리면 아래에서 고를 것이 없다.
+  await talkNewRoom();
+  const sel = $("tk-nasset") as HTMLSelectElement;
+  const want = asset.trim().toUpperCase();
+  const hit = [...sel.options].find((o) => o.value.trim().toUpperCase() === want);
+  if (hit) {
+    sel.value = hit.value;
+    // 이름을 미리 적어 둔다. 빈 칸으로 두면 「방 이름을 적어 주세요」에서 막힌다.
+    ($("tk-nname") as HTMLInputElement).value = `${asset} ${t("팬 방")}`;
+    ($("tk-nname") as HTMLInputElement).select();
+  } else {
+    // 🔴 **못 골랐으면 못 골랐다고 말한다.** 조용히 「누구나」로 두면
+    //    사장은 자산 방을 만든 줄 알고 아무나 쓸 수 있는 방을 만든다.
+    $("tk-nsay").innerHTML =
+      `<span class="danger">${escapeHtml(asset)} ${t("을(를) 자산 목록에서 못 찾았습니다. 노드가 장부를 훑는 중일 수 있습니다 — 자산 칸을 직접 확인해 주세요.")}</span>`;
+  }
+  $("tk-newbox").scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+/** 보낸 곳과 **못 간 곳**을 그린다. */
+function fanPaintResult(r: any) {
+  const sent: any[] = Array.isArray(r?.sent) ? r.sent : [];
+  const failed: any[] = Array.isArray(r?.failed) ? r.failed : [];
+  const where = (x: any) =>
+    escapeHtml(String(x?.room_name ?? x?.room ?? "")) || t("방을 못 찾았습니다");
+  $("fan-result").innerHTML =
+    `<div class="card" style="margin-top:12px">` +
+    // 러스트가 쓴 한 줄. 몇 곳에 가고 몇 곳에 못 갔는지가 여기 들어 있다.
+    `<p style="margin:0;font-size:15px">${escapeHtml(String(r?.say ?? ""))}</p>` +
+    (sent.length
+      ? `<h3 class="grouphead">${t("간 곳")} ${sent.length}${t("곳")}</h3>` +
+        sent
+          .map(
+            (x) =>
+              `<div class="kv"><b>${escapeHtml(String(x?.asset ?? ""))}</b><span>${where(x)}</span></div>`,
+          )
+          .join("")
+      : "") +
+    // 🔴 **못 간 곳은 접지 않는다.** 어디에 못 갔는지 모르면 사장은 갔다고
+    //    믿는다. 이유까지 한 줄씩 적는다 — 이유를 봐야 다시 보낼지,
+    //    방을 먼저 만들지 판단이 선다.
+    (failed.length
+      ? `<div class="fanfail">
+           <b class="danger">${t("못 간 곳")} ${failed.length}${t("곳")}</b>` +
+        failed
+          .map(
+            (x) =>
+              `<div class="kv" style="margin-top:8px"><b>${escapeHtml(String(x?.asset ?? ""))}</b>` +
+              `<span>${where(x)}<br /><span class="danger">${escapeHtml(String(x?.why ?? ""))}</span></span></div>`,
+          )
+          .join("") +
+        `</div>`
+      : "") +
+    // 「보냈습니다」로 끝내지 않는다. 릴레이 한 곳만 받아도 성공으로 친다.
+    (r?.caveat ? `<p class="meta">${escapeHtml(String(r.caveat))}</p>` : "") +
+    `</div>`;
+}
+
+async function fanSend() {
+  const assets = [...fanPicked];
+  const text = ($("fan-text") as HTMLTextAreaElement).value.trim();
+  const link = ($("fan-link") as HTMLInputElement).value.trim();
+  const res = $("fan-result");
+  if (!assets.length) {
+    res.innerHTML = `<p class="meta"><span class="danger">${t("어느 자산의 방에 보낼지 골라 주세요.")}</span></p>`;
+    return;
+  }
+  if (!text) {
+    res.innerHTML = `<p class="meta"><span class="danger">${t("보낼 내용이 없습니다.")}</span></p>`;
+    ($("fan-text") as HTMLTextAreaElement).focus();
+    return;
+  }
+  const rooms = fanGroups
+    .filter((g) => fanPicked.has(g.asset))
+    .reduce((n, g) => n + (Number(g.room_count) || 0), 0);
+  // 🔴 릴레이에 올린 글은 **못 거둔다.** 몇 곳에 가는지 세어 보여 주고,
+  //    「자산이 없는 분도 읽습니다」를 여기서 한 번 더 말한다 — 위쪽
+  //    「못 하는 것」을 안 읽고 내려온 사람이 마지막으로 걸리는 자리다.
+  const okGo = await sure(
+    t("이 글을 보낼까요?"),
+    `${t("자산")} ${assets.length} · ${t("방")} ${rooms}${t("곳")}${t("에 갑니다. 올린 글은 되돌릴 수 없고, 자산이 없는 분도 읽을 수 있습니다.")}`,
+    t("보내기"),
+  );
+  if (!okGo) return;
+
+  const b = $("fan-send") as HTMLButtonElement;
+  b.disabled = true;
+  res.innerHTML = `<p class="meta">${t("보내는 중…")}</p>`;
+  try {
+    // 링크는 안 적었으면 `null`. 빈 문자열도 러스트가 받지만, 「안 넣었다」를
+    // 값으로 말하는 쪽이 정직하다.
+    const r = await invoke<any>("fan_announce", { assets, text, link: link || null });
+    fanPaintLimits(r?.limits);
+    fanPaintResult(r);
+    // 🔴 글칸은 **안 지운다.** 못 간 곳이 있으면 그 글을 그대로 다시
+    //    보내야 하는데, 지워 버리면 사장이 다시 쳐야 한다.
+  } catch (e) {
+    // 러스트가 통째로 막은 경우다(링크가 이상하거나, 글이 너무 길거나,
+    // 방 목록을 못 읽었거나). 그때는 **아무 곳에도 안 갔다.**
+    res.innerHTML = `<div class="warnbox" style="margin-top:12px">${escapeHtml(errText(e))}</div>`;
+  } finally {
+    b.disabled = false;
+  }
+}
+
 /**
  * **손님을 받기까지 무엇이 남았나.**
  *
@@ -5743,6 +6277,17 @@ function holdBeforeDoing(what: string, cost: string, seconds = 8): Promise<boole
     // 따라 안 보이고, 안 보이는 취소 단추는 없는 것과 같다.
     const host =
       document.querySelector("#wiz:not(.hidden) #i-result") ||
+      // 🔴 **지금 열려 있는 화면이 스스로 내놓은 자리**가 있으면 거기 그린다.
+      //
+      //    아래 마지막 두 줄(`$("i-result")`)은 **자산 마법사 안쪽**이다.
+      //    자산 화면에서 부를 때는 맞는 자리지만, 다른 화면(「이 컴퓨터」의
+      //    「내 이름」)에서 부르면 확인창이 **접혀 있는 마법사 속**에 그려져
+      //    아무도 못 본다 — 그러면 8초 뒤에 아무 예고 없이 일이 벌어진다.
+      //    안 보이는 취소 단추는 없는 것과 같다.
+      //
+      //    `.holdhost` 를 둔 화면이 아직 없던 때와 똑같이 굴러가므로,
+      //    이 줄이 여태 있던 자리를 건드리지는 않는다.
+      document.querySelector(".page.on .holdhost") ||
       (document.getElementById("page-shop")?.classList.contains("on")
         ? document.getElementById("sh-result")
         : null) ||
@@ -13333,6 +13878,41 @@ window.addEventListener("DOMContentLoaded", async () => {
       for (const pk of Object.keys(tkMuted)) talkUnmute(pk);
     })();
   });
+  /* ── 팬클럽 (자산 화면) ────────────────────────────────────────────
+     🔴 러스트가 다 돼 있어도 이 몇 줄이 없으면 화면은 영원히 빈 칸이다.
+        이 저장소가 여러 번 걸린 병이라 한 자리에 모아 둔다. */
+  {
+    const box = document.getElementById("fanbox") as HTMLDetailsElement | null;
+    // 🔴 **펼칠 때 읽는다.** 자산 화면을 열 때마다 읽으면, 팬클럽을 안 쓰는
+    //    사장의 노드를 하루 종일 두드리게 된다. 접힌 칸은 안 쓰는 칸이다.
+    box?.addEventListener("toggle", () => {
+      if (box.open) void fanLoad();
+    });
+  }
+  $("fan-reload").addEventListener("click", () => void fanLoad(true));
+  $("fan-pickall").addEventListener("click", () => {
+    // 방이 없는 자산은 안 고른다. 골라 봐야 실패 목록만 늘어난다.
+    for (const g of fanGroups) if (!g.need_room) fanPicked.add(g.asset);
+    fanPaintGroups();
+  });
+  $("fan-picknone").addEventListener("click", () => {
+    fanPicked.clear();
+    fanPaintGroups();
+  });
+  $("fan-send").addEventListener("click", () => void fanSend());
+
+  /* ── 내 이름 (이 컴퓨터 화면) ──────────────────────────────────────── */
+  $("id-reload").addEventListener("click", () => void idLoad());
+  $("id-adopt").addEventListener("click", () => void idAdopt());
+  $("id-legacy").addEventListener("click", () => void idLegacy());
+  {
+    // 경로표는 **펼칠 때** 읽는다. 매일 볼 표가 아니다.
+    const p = document.getElementById("id-paths") as HTMLDetailsElement | null;
+    p?.addEventListener("toggle", () => {
+      if (p.open) void idPaths();
+    });
+  }
+
   // 끌어다 놓기. 🔴 이 셋을 안 묶으면 창에 파일을 떨어뜨려도 아무 일도
   //    안 일어난다 — 만들어 놓고 안 부르는 그 병이다.
   void listen("drop-enter", () => dropVeil(true));

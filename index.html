@@ -419,6 +419,45 @@
       .swapbox textarea { width: 100%; min-height: 76px; font-size: 14px;
         font-family: ui-monospace, monospace; word-break: break-all; }
       .swapbox .grouphead { margin: 16px 0 8px; font-size: 14px; }
+
+      /* ── 팬클럽 ────────────────────────────────────────────────────
+         맞교환 칸(`.swapbox`)의 테두리·접기 모양을 그대로 빌린다. 같은
+         화면에 문법이 둘이면 어느 것이 무엇인지 매번 다시 배워야 한다. */
+      /* 🔴 `.swapbox textarea` 는 **고정폭 글꼴에 break-all** 이다. 맞교환은
+         16진수 덩어리를 붙여넣는 자리라 거기서는 그게 맞다. 그런데 팬에게
+         보내는 글은 **사람이 읽는 문장**이라, 그 글꼴이면 한글이 어색하게
+         끊긴다. 여기서만 되돌린다. */
+      .fanbox textarea { font-family: inherit; font-size: 15px; word-break: normal;
+        min-height: 96px; }
+      .fanbox input[type=text], .fanbox input:not([type]) { width: 100%; font-size: 15px; }
+      /* 🔴 「못 하는 것」(러스트의 `limits`)은 **접지도 흐리게 하지도 않는다.**
+         회색 작은 글씨로 두면 안 읽고, 안 읽으면 사장이 이 방에 비밀을 쓴다.
+         이 칸이 이 화면에서 제일 눈에 띄어야 한다. */
+      .fanlimits { border: 1px solid var(--warn); border-radius: 10px;
+        padding: 12px 14px; margin: 12px 0; }
+      .fanlimits > b { font-size: 15px; }
+      .fanlimits p { margin: 8px 0 0; font-size: 15px; line-height: 1.65; color: var(--text); }
+      .fangroup { border: 1px solid var(--line); border-radius: 10px;
+        padding: 12px 14px; margin: 8px 0; }
+      .fangroup .fanrow { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+      /* 고르는 칸은 손가락으로 눌린다. 네모만 44px 이 아니라 **글자까지** 눌린다. */
+      .fangroup label.fanpick { display: flex; align-items: center; gap: 9px;
+        min-height: 44px; font-size: 15px; font-weight: 600; cursor: pointer;
+        margin-right: auto; }
+      .fangroup label.fanpick input { width: 20px; height: 20px; }
+      .fangroup .fanwho { font-size: 15px; margin-top: 8px; }
+      .fangroup .fanrooms { font-size: 15px; color: var(--muted); margin-top: 6px; }
+      /* 못 간 곳. 🔴 간 곳과 **다른 색**이어야 한다 — 같은 표에 섞어 놓으면
+         사장은 목록 길이만 보고 다 갔다고 읽는다. */
+      .fanfail { border: 1px solid var(--danger); border-radius: 10px;
+        padding: 12px 14px; margin-top: 12px; }
+      .fanfail .kv b { min-width: 0; color: var(--text); }
+      /* 열쇠(공개키) 64자. 주소 칸(11px)보다는 크게 — 폰 화면과 눈으로
+         맞춰 보는 값이라, 안 보이면 있으나 마나다. */
+      .idkey { font-family: ui-monospace, monospace; font-size: 13.5px;
+        word-break: break-all; color: var(--muted); display: block; margin-top: 2px; }
+      /* 8초 확인창이 그려질 자리. 비어 있을 때는 자리를 안 차지한다. */
+      .holdhost:empty { display: none; }
       /* 🔴 따라잡는 중임을 **막대로** 보여 준다. 코어 지갑이 아래에 이걸 두는
          이유가 있다 — 「켜짐」과 「쓸 수 있음」은 다른 말이고, 그 사이의
          몇 시간 동안 사장은 화면만 보고는 고장인지 기다리는 중인지 모른다.
@@ -2176,6 +2215,73 @@
           <div id="sw-take"></div>
         </details>
 
+        <!-- ── 팬클럽 ────────────────────────────────────────────────
+             🔴 **왜 「이야기」가 아니라 「자산」에 붙였나.**
+
+             대표님 말씀은 "1집·2집·싱글마다 채팅방을 폴더별로" 였는데,
+             러스트가 먼저 못 박아 놓았다 — 「폴더가 아니라 **자산이
+             칸막이**다」(`fanclub.rs` 머리말). `fan_rooms` 는 방 목록이
+             아니라 **내 자산 목록**(`listmyassets`)에서 시작해서 자산마다
+             방을 붙여 준다. 이 칸의 주어는 방이 아니라 자산이다.
+
+             그리고 「이야기」 화면은 **한 번에 한 방**을 보는 자리다
+             (왼쪽 방 목록, 오른쪽 대화 — 텔레그램 배치). 거기에 「여러 방에
+             한 번에」를 얹으면 지금 보고 있는 방과 보내려는 방이 뒤섞인다.
+             층이 다른 일이다.
+
+             여기서는 이야기가 앞뒤로 이어진다: 음반을 자산으로 내고
+             (위 「새 자산 만들기」) → 맞교환으로 팔고(위 「맞교환」) →
+             산 분들이 팬이 되고(여기) → 새 음반을 알린다(여기).
+
+             ⚠️ 방을 **만드는 일은 여기 없다.** 「이야기 → 방 만들기」가
+                이미 그 일을 하고, 러스트의 안내문도 그리로 보낸다. 같은 일을
+                두 곳에 두면 어느 쪽이 진짜인지 매번 고민하게 된다. 대신
+                **데려다 주고 자산까지 골라 놓는다**(아래 「방 만들기」).
+
+             ⚠️ 접어 두는 이유는 맞교환과 같다 — 매일 하는 일이 아니고,
+                펼쳐 두면 자산 목록이 저 아래로 밀린다. 「못 하는 것」은
+                이 칸을 **열면 곧바로** 맨 위에 뜬다(글을 쓰려면 열어야 하므로,
+                쓰는 사람은 반드시 읽게 된다).                        ── -->
+        <details class="swapbox fanbox" id="fanbox">
+          <summary><b>팬클럽</b> — 음반·그림마다 팬 방 · 여러 방에 한 번에 알리기</summary>
+
+          <!-- 🔴 러스트가 준 `limits` 를 **한 자도 안 고치고** 여기에 붙인다.
+               비워 두거나 요약하면 사장은 이 방을 비밀 단톡으로 알고,
+               「1년 회원권」을 팔겠다고 한다. 그 둘 다 이 구조로는 안 된다. -->
+          <div class="fanlimits" id="fan-limits">
+            <b>먼저 아셔야 할 것</b>
+            <p>불러오는 중…</p>
+          </div>
+
+          <div class="bar" style="margin-top:12px">
+            <button class="ghost" id="fan-reload">새로고침</button>
+            <button class="ghost" id="fan-pickall">방 있는 것 전부 고르기</button>
+            <button class="ghost" id="fan-picknone">고른 것 지우기</button>
+          </div>
+          <!-- 러스트의 `say` 를 그대로 띄우는 자리. 「자산이 없다」와
+               「못 읽었다」를 러스트가 갈라 말해 주므로 우리가 고치지 않는다. -->
+          <p class="meta" id="fan-say">여는 순간 읽어 옵니다.</p>
+
+          <div id="fan-groups"></div>
+
+          <h3 class="grouphead">고른 방에 한 번에 알리기</h3>
+          <label>알릴 내용
+            <textarea id="fan-text" rows="4"
+              placeholder="2집 나왔습니다. 들어봐 주세요."></textarea></label>
+          <label>같이 보낼 링크 — X 글 주소 같은 것 (없어도 됩니다)
+            <input id="fan-link" spellcheck="false" autocomplete="off"
+              placeholder="https://x.com/…" /></label>
+          <!-- 🔴 링크는 **줄을 바꿔** 글 끝에 붙습니다(러스트가 그렇게 합니다).
+               붙여 쓰면 앞 글자와 주소가 이어져 링크가 안 걸립니다. -->
+          <p class="meta">링크는 글 끝에 <b>줄을 바꿔</b> 붙습니다. <b>http://</b> 또는
+            <b>https://</b> 로 시작해야 하고, 주소 사이에 띄어쓰기가 있으면 안 됩니다.</p>
+          <div class="bar" style="margin-top:10px">
+            <button id="fan-send">고른 방에 보내기</button>
+            <span class="meta" id="fan-picked" style="margin:0">아직 고른 자산이 없습니다.</span>
+          </div>
+          <div id="fan-result"></div>
+        </details>
+
         <div class="tabs" style="margin-bottom:8px">
           <button class="tab on" data-afilter="all">전체</button>
           <button class="tab" data-afilter="mine">내가 만든 것</button>
@@ -3039,6 +3145,58 @@
             레이븐 코어를 쓰던 컴퓨터면 <b>그 wallet.dat 폴더</b>를 그대로 씁니다.
             코어와 이 프로그램은 같은 지갑이라 <b>동시에 열 수 없습니다.</b>
           </p>
+        </div>
+
+        <!-- ── 내 이름 ──────────────────────────────────────────────────
+             🔴 **여기가 「이야기 → 내 이름」과 다른 것이다.**
+
+             저기 있는 「내 이름」은 화면에 뜨는 **별명**을 정하는 자리다.
+             별명은 누구나 같게 달 수 있어서 그것은 「나」가 아니다.
+             여기는 그 별명을 붙이는 **열쇠** 이야기다 — 폰(웹 지갑)의 나와
+             이 컴퓨터의 나가 **같은 사람인가**.
+
+             ⚠️ 지갑 폴더 칸 바로 밑에 둔다. 열쇠는 12단어에서 나오고,
+                12단어는 그 폴더의 지갑에 들어 있다. 같은 이야기다.
+
+             ⚠️ 여기서 열쇠를 **만들지 않는다.** `identity_status` 는 묻기만
+                한다 — 설정 화면을 열었을 뿐인데 사람이 하나 태어나면 안 된다.
+                                                                       ── -->
+        <div class="card" id="idcard">
+          <b>내 이름</b>
+          <p class="meta" style="margin-top:8px">
+            이 컴퓨터의 「나」와 폰·웹 지갑의 「나」가 <b>같은 사람인지</b> 봅니다.
+            「이야기」에 적는 별명이 아니라, 그 별명을 붙이는 <b>열쇠</b> 이야기입니다 —
+            별명은 누구나 같게 달 수 있어서 그것으로는 같은 사람인지 알 수 없습니다.
+          </p>
+          <div id="id-body"><p class="meta">읽는 중…</p></div>
+
+          <!-- 🔴 8초 확인창이 그려질 자리. 이 자리가 없으면 확인창이
+               **접혀 있는 자산 마법사 속**에 그려져 아무도 못 본다 —
+               안 보이는 취소 단추는 없는 것과 같다. -->
+          <div class="holdhost" id="id-hold"></div>
+
+          <div class="bar" style="margin-top:12px">
+            <button class="ghost" id="id-reload">다시 확인</button>
+            <!-- 되돌리기 어려운 일 둘. 할 수 있을 때만 보인다 — 눌러도
+                 「바꿀 것이 없습니다」만 나오는 단추는 고장으로 읽힌다. -->
+            <button id="id-adopt" style="display:none">이름 합치기</button>
+            <button class="ghost" id="id-legacy" style="display:none">옛 이름으로 되돌리기</button>
+          </div>
+          <div id="id-say"></div>
+
+          <details class="onceoff" id="id-paths" style="margin-top:14px">
+            <summary>
+              <span class="oico" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                     stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+              </span>
+              <span>
+                <b>무엇이 12단어 어디에서 나오나</b>
+                <span class="osub">돈 · 사람 · 가게 간판 — 어느 자리에서 뽑는지 적어 둔 표</span>
+              </span>
+            </summary>
+            <div id="id-pathbody"><p class="meta">읽는 중…</p></div>
+          </details>
         </div>
 
         <!-- 🔴 이 칸은 여태 「고급 → 읽기 전용」 접힌 칸 **맨 안쪽**에 있었다.
