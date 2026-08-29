@@ -7165,6 +7165,22 @@ async function saveMember() {
         $("ms-note2").textContent = "";
         return;
       }
+        // 🔴 **여기서 5 RVN 이 말없이 탄다.** 「저장」을 누르는 순간
+        //    되돌릴 수 없는 체인 기록이 생기고 코인이 소각된다. 그런데
+        //    자산 발행·가게 등록에는 있는 8초 확인창이 **여기엔 없었다** —
+        //    안내는 드롭다운 글자 한 줄뿐이었다.
+        //
+        //    회원을 열 명 등록하면 50 RVN 이다. 사장이 알고 눌러야 한다.
+        if (
+          !(await holdBeforeDoing(
+            `회원 이름표 「${asset}」 을(를) 체인에 만듭니다`,
+            "5 RVN 이 타서 없어집니다. 되돌릴 수 없습니다.",
+          ))
+        ) {
+          btn.disabled = false;
+          $("ms-note2").textContent = "";
+          return;
+        }
       if (pass) await invoke("unlock_for", { passphrase: pass, seconds: 30 }).catch(() => {});
       await invoke("issue_asset", {
         name: asset,
