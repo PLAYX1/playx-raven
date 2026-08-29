@@ -239,6 +239,19 @@ function escapeHtml(s: unknown): string {
     .replace(/"/g, "&quot;");
 }
 
+/// 러스트에서 올라온 오류 글을 화면에 올리기 전에.
+///
+/// 🔴 오류는 **사장이 가장 겁먹은 순간**에만 뜬다. 그런데 여태 `String(e)` 로
+///    그대로 올렸다 — 러스트 쪽 글은 전부 한국어라, 오사카 사장은 무슨 일이
+///    났는지 영영 몰랐다. 사전을 한 번 거친다. 사전에 없으면 한국어 그대로다.
+///
+/// `alert()` 같은 브라우저 창은 `translateDom` 이 손댈 수 없다. 잘라 쓰는
+/// 곳(`.slice()`)도 마찬가지다 — 자른 뒤에는 열쇠와 안 맞는다. 그래서
+/// **화면에 올리기 전에** 여기서 옮긴다.
+function errText(e: unknown): string {
+  return t(String(e).trim());
+}
+
 function fmtQty(n: number): string {
   // 정수면 소수점을 붙이지 않는다. 고유 자산이 "1.00000000"으로 보이면
   // 이게 하나뿐인 물건이라는 사실이 숫자 뒤에 숨는다.
@@ -421,7 +434,7 @@ async function pinOne(cid: string, btn?: HTMLButtonElement) {
     await invoke("pin_add", { cid });
     pinned.add(cid);
   } catch (e) {
-    say("보존하지 못했습니다", String(e));
+    say(t("보존하지 못했습니다"), errText(e));
   }
   renderList();
   if (selected) renderPanel();
@@ -458,7 +471,7 @@ async function unpinOne(cid: string, btn?: HTMLButtonElement) {
     await invoke("pin_remove", { cid });
     pinned.delete(cid);
   } catch (e) {
-    say("해제하지 못했습니다", String(e));
+    say(t("해제하지 못했습니다"), errText(e));
   }
   renderList();
   if (selected) renderPanel();
@@ -653,7 +666,7 @@ async function loadAssets(thenScan = true) {
     renderList();
     if (thenScan) startScan();
   } catch (e) {
-    $("summary").textContent = String(e);
+    $("summary").textContent = errText(e);
   }
 }
 
@@ -788,7 +801,7 @@ async function saveNode() {
     $("nd-note").textContent = "저장했습니다";
     setTimeout(loadNode, 1200);
   } catch (e) {
-    $("nd-note").textContent = String(e);
+    $("nd-note").textContent = errText(e);
   }
 }
 
@@ -1221,7 +1234,7 @@ function wireCloudKey(): void {
         if (box2) box2.style.display = "none";
         if (again2) again2.style.display = "";
       } catch (e) {
-        bpMsg.textContent = String(e);
+        bpMsg.textContent = errText(e);
       }
     };
   }
@@ -1544,7 +1557,7 @@ async function doInstall(up: any) {
       nag.disabled = false;
       nag.textContent = t("새 버전 받기");
     }
-    await sure(t("받지 못했습니다"), String(e), t("닫기"));
+    await sure(t("받지 못했습니다"), errText(e), t("닫기"));
   }
 }
 
@@ -1636,7 +1649,7 @@ async function checkForUpdate(quiet = true) {
         });
         await relaunch();
       } catch (e) {
-        $("up-note").innerHTML = `<span class="warn">${escapeHtml(String(e))}</span>`;
+        $("up-note").innerHTML = `<span class="warn">${escapeHtml(errText(e))}</span>`;
       }
     };
     ($("up-later") as HTMLElement).onclick = () => {
@@ -2034,7 +2047,7 @@ async function sendReport() {
     ($("rp-text") as HTMLTextAreaElement).value = "";
     setTimeout(() => { $("rpwrap").style.display = "none"; void rpLabel(); }, 1600);
   } catch (e) {
-    $("rp-what").innerHTML = `<span class="warn">${escapeHtml(String(e))}</span>`;
+    $("rp-what").innerHTML = `<span class="warn">${escapeHtml(errText(e))}</span>`;
   } finally {
     btn.disabled = false;
     btn.textContent = "보내기";
@@ -2279,7 +2292,7 @@ async function openQrSheet() {
          <b>${t("손님 폰 서버를 켜지 못했습니다.")}</b><br />
          ${t("노드가 켜져 있는지 보시고, 잠시 뒤에 다시 눌러 주세요.")}
        </div>
-       <div class="meta" style="margin-top:10px">${escapeHtml(String(e))}</div>`;
+       <div class="meta" style="margin-top:10px">${escapeHtml(errText(e))}</div>`;
   }
 }
 
@@ -2642,7 +2655,7 @@ async function speedCard(): Promise<string> {
     //    겪었다. 왜 안 보이는지 화면 어디에도 없었다.
     return `<div class="card" style="margin-top:12px">
         <h3>${t("빠르게 따라잡기")}</h3>
-        <p class="meta danger">${escapeHtml(String(e))}</p>
+        <p class="meta danger">${escapeHtml(errText(e))}</p>
         <p class="meta">${t("「노드 설정 열기」에서 「메모리 사용」을 2000 이상으로 직접 정하셔도 됩니다.")}</p>
       </div>`;
   }
@@ -2812,7 +2825,7 @@ function bindPrep(behind: number) {
           : t("일부는 못 했습니다 — 아래를 봐 주십시오")
       );
     } catch (e) {
-      prepSay = `<span class="danger">${escapeHtml(String(e))}</span>`;
+      prepSay = `<span class="danger">${escapeHtml(errText(e))}</span>`;
     } finally {
       prepBusy = false;
       (b as HTMLButtonElement).disabled = false;
@@ -2908,7 +2921,7 @@ function bindLog() {
         $("nd-logsay").textContent = t("복사했습니다");
       });
     } catch (e) {
-      box.innerHTML = `<p class="meta danger">${escapeHtml(String(e))}</p>`;
+      box.innerHTML = `<p class="meta danger">${escapeHtml(errText(e))}</p>`;
     }
   });
 }
@@ -2928,7 +2941,7 @@ function bindRestart() {
       setTimeout(() => void paintPart(), 5000);
     } catch (e) {
       (b as HTMLButtonElement).disabled = false;
-      say.innerHTML = `<span class="danger">${escapeHtml(String(e))}</span>`;
+      say.innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
     }
   });
 }
@@ -2983,7 +2996,7 @@ function bindRestore() {
       setTimeout(() => void paintPart(), 4000);
     } catch (e) {
       (b as HTMLButtonElement).disabled = false;
-      say.innerHTML = `<span class="danger">${escapeHtml(String(e))}</span>`;
+      say.innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
     }
   });
 }
@@ -3013,7 +3026,7 @@ function bindSpeed() {
       setTimeout(() => void paintPart(), 4000);
     } catch (e) {
       (b as HTMLButtonElement).disabled = false;
-      say.innerHTML = `<span class="danger">${escapeHtml(String(e))}</span>`;
+      say.innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
     }
   });
 }
@@ -3098,7 +3111,7 @@ async function paintPartBody(): Promise<void> {
               $("nd-say").textContent = String(r?.note || t("시작했습니다."));
             } catch (e) {
               b.disabled = false;
-              $("nd-say").innerHTML = `<span class="danger">${escapeHtml(String(e))}</span>`;
+              $("nd-say").innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
             }
           });
           return;
@@ -3341,7 +3354,7 @@ async function paintPartBody(): Promise<void> {
               say(t("켰습니다. 이제 밖에서도 손님이 들어옵니다."));
             }
           } catch (e) {
-            say(String(e));
+            say(errText(e));
           } finally {
             go.disabled = false;
             void paintPart();
@@ -3363,14 +3376,14 @@ async function paintPartBody(): Promise<void> {
             sw.checked = await invoke<boolean>("autostart_set", { on: sw.checked });
           } catch (e) {
             sw.checked = !sw.checked;
-            alert(String(e));
+            alert(errText(e));
           }
         };
       }
     }
     bindIndexCard();
   } catch (e) {
-    box.innerHTML = `<div class="warnbox">${escapeHtml(String(e))}</div>`;
+    box.innerHTML = `<div class="warnbox">${escapeHtml(errText(e))}</div>`;
   }
 }
 
@@ -3389,7 +3402,7 @@ function bindIndexCard(): void {
           ? "한가해지면 알아서 시작하겠습니다. 이 프로그램이 켜져 있어야 합니다."
           : "알아서 시작하지 않겠습니다.");
       } catch (e) {
-        say(String(e));
+        say(errText(e));
       }
     };
   }
@@ -3403,7 +3416,7 @@ function bindIndexCard(): void {
         await invoke("reindex_start");
         say("시작했습니다. 이 화면에서 진행을 보실 수 있습니다.");
       } catch (e) {
-        say(String(e));
+        say(errText(e));
       } finally {
         now.disabled = false;
         void paintPart();
@@ -3560,7 +3573,7 @@ function bindTableQr() {
       const r = await invoke<any>("table_qr_sheet", { ip, tables });
       note.innerHTML = `<span class="ok">${escapeHtml(r.say)}</span> (${escapeHtml(r.path)})`;
     } catch (e) {
-      note.innerHTML = `<span class="danger">${escapeHtml(String(e))}</span>`;
+      note.innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
     }
   };
 }
@@ -3605,7 +3618,7 @@ async function sendOwed() {
     say.innerHTML = `<span class="ok">${t("보냈습니다")} — ${r.sent} RVN</span>`;
   } catch (e) {
     // 실패해도 장부는 안 줄어든다. 다시 누르면 된다고 말해 준다.
-    say.innerHTML = `<span class="danger">${escapeHtml(String(e))}</span>`;
+    say.innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
   }
   await paintOwed();
 }
@@ -3679,7 +3692,7 @@ async function loadWallet() {
       : "";
   } catch (e) {
     $("w-confirmed").textContent = "—";
-    $("w-unconfirmed").textContent = String(e);
+    $("w-unconfirmed").textContent = errText(e);
   }
 
   try {
@@ -3726,7 +3739,7 @@ async function loadWallet() {
   } catch (e) {
     $("w-lock").textContent = "확인 불가";
     $("w-lock").className = "state muted";
-    $("w-lock-detail").textContent = String(e);
+    $("w-lock-detail").textContent = errText(e);
   }
 
   try {
@@ -3778,7 +3791,7 @@ async function makeAddress() {
        <div style="margin-top:8px"><button class="ghost" id="w-copy">복사</button></div></div>`;
     $("w-copy").onclick = () => navigator.clipboard.writeText(addr);
   } catch (e) {
-    say("주소를 만들지 못했습니다", String(e));
+    say(t("주소를 만들지 못했습니다"), errText(e));
   }
 }
 
@@ -3940,7 +3953,7 @@ async function onDropped(paths: string[]) {
         `<span class="ok">${t("가게 사진으로 넣었습니다. 「바뀐 것 손님에게 알리기」를 눌러 주세요.")}</span>`;
     }
   } catch (e) {
-    await sure(t("올리지 못했습니다"), String(e), t("닫기"));
+    await sure(t("올리지 못했습니다"), errText(e), t("닫기"));
   }
 }
 
@@ -4024,7 +4037,7 @@ async function doKeyMove(p: any) {
       `<span class="ok">${t("새겼습니다")} — <code class="addr">${escapeHtml(String(r.txid)).slice(0, 20)}…</code></span>`;
   } catch (e) {
     btn.disabled = false;
-    $("km-note").innerHTML = `<span class="danger">${escapeHtml(String(e))}</span>`;
+    $("km-note").innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
   }
 }
 
@@ -4056,7 +4069,7 @@ async function talkPaintMe() {
       `<b>${shown}</b>` +
       (me.recoverable ? "" : ` <span class="warn">${t("· 백업 파일이 유일한 사본")}</span>`);
   } catch (e) {
-    $("tk-me").innerHTML = `<span class="danger">${escapeHtml(String(e))}</span>`;
+    $("tk-me").innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
   }
 }
 
@@ -4208,7 +4221,7 @@ async function talkPaint() {
       (b as HTMLElement).onclick = () => void talkKeep(String((b as HTMLElement).dataset.keep), list);
     });
   } catch (e) {
-    box.innerHTML = `<p class="meta danger">${escapeHtml(String(e))}</p>`;
+    box.innerHTML = `<p class="meta danger">${escapeHtml(errText(e))}</p>`;
   }
 }
 
@@ -4244,7 +4257,7 @@ async function talkSetName() {
     void talkPaintMe();
     void talkPaint();
   } catch (e) {
-    $("tk-note").innerHTML = `<span class="danger">${escapeHtml(String(e))}</span>`;
+    $("tk-note").innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
   }
 }
 
@@ -4274,7 +4287,7 @@ async function talkTranslate(id: string, list: any[]) {
     );
     note.textContent = "";
   } catch (e) {
-    note.innerHTML = `<span class="danger">${escapeHtml(String(e))}</span>`;
+    note.innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
   }
 }
 
@@ -4292,7 +4305,7 @@ async function talkKeep(id: string, list: any[]) {
     note.innerHTML =
       `<span class="ok">${t("굳혔습니다")} — <code class="addr">${escapeHtml(String(added.cid))}</code></span>`;
   } catch (e) {
-    note.innerHTML = `<span class="danger">${escapeHtml(String(e))}</span>`;
+    note.innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
   }
 }
 
@@ -4309,7 +4322,7 @@ async function talkSend() {
     $("tk-note").textContent = "";
     setTimeout(() => void talkPaint(), 1200);
   } catch (e) {
-    $("tk-note").innerHTML = `<span class="danger">${escapeHtml(String(e))}</span>`;
+    $("tk-note").innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
   }
 }
 
@@ -4377,7 +4390,7 @@ async function talkMakeRoomGo() {
     await talkPaintRooms();
     $("tk-note").innerHTML = `<span class="ok">${t("방을 만들었습니다")}</span>`;
   } catch (e) {
-    $("tk-nsay").innerHTML = `<span class="danger">${escapeHtml(String(e))}</span>`;
+    $("tk-nsay").innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
   } finally {
     b.disabled = false;
   }
@@ -4471,7 +4484,7 @@ async function swapReady() {
       lot.style.display = "";
     }
   } catch (e) {
-    note.innerHTML = `<span class="danger">${escapeHtml(String(e))}</span>`;
+    note.innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
   }
 }
 
@@ -4485,7 +4498,7 @@ async function swapMakeLot() {
       ? `<span class="ok">${t("이미 준비돼 있습니다")}</span>`
       : `<span class="ok">${escapeHtml(String(r.note || ""))}</span>`;
   } catch (e) {
-    $("sw-ready").innerHTML = `<span class="danger">${escapeHtml(String(e))}</span>`;
+    $("sw-ready").innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
   }
 }
 
@@ -4515,7 +4528,7 @@ async function swapMakeOffer() {
       $("sw-copied").textContent = t("복사했습니다");
     });
   } catch (e) {
-    box.innerHTML = `<p class="meta danger">${escapeHtml(String(e))}</p>`;
+    box.innerHTML = `<p class="meta danger">${escapeHtml(errText(e))}</p>`;
   }
 }
 
@@ -4544,7 +4557,7 @@ async function swapLook() {
        </div>`;
     $("sw-buy").addEventListener("click", () => void swapBuy(hex, r));
   } catch (e) {
-    box.innerHTML = `<p class="meta danger">${escapeHtml(String(e))}</p>`;
+    box.innerHTML = `<p class="meta danger">${escapeHtml(errText(e))}</p>`;
   }
 }
 
@@ -4570,7 +4583,7 @@ async function swapBuy(hex: string, info: any) {
     $("sw-note").innerHTML = `<span class="ok">${t("보냈습니다")} — ${escapeHtml(String(r.txid)).slice(0, 20)}…</span>`;
     void loadAssets(false);
   } catch (e) {
-    $("sw-note").innerHTML = `<span class="danger">${escapeHtml(String(e))}</span>`;
+    $("sw-note").innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
   }
 }
 
@@ -4957,7 +4970,7 @@ async function ensureUnlocked(why: string): Promise<boolean> {
     await invoke("unlock_for", { passphrase: pass, seconds: 60 });
     return true;
   } catch (e) {
-    await sure("지갑을 열지 못했습니다", String(e), "닫기");
+    await sure(t("지갑을 열지 못했습니다"), errText(e), t("닫기"));
     return false;
   }
 }
@@ -5476,7 +5489,7 @@ async function saveOrder(lane: "customer" | "owner") {
     await invoke("ai_order_save", { customer: lane === "customer", order: aiOrder[lane] });
     $("ord-note").textContent = "저장했습니다.";
   } catch (e: any) {
-    $("ord-note").innerHTML = `<span class="warn">${escapeHtml(String(e))}</span>`;
+    $("ord-note").innerHTML = `<span class="warn">${escapeHtml(errText(e))}</span>`;
   }
 }
 
@@ -5501,7 +5514,7 @@ async function resetOrder() {
     await loadOrder();
     $("ord-note").textContent = "기본값으로 되돌렸습니다.";
   } catch (e: any) {
-    $("ord-note").innerHTML = `<span class="warn">${escapeHtml(String(e))}</span>`;
+    $("ord-note").innerHTML = `<span class="warn">${escapeHtml(errText(e))}</span>`;
   }
 }
 
@@ -5537,7 +5550,7 @@ function renderKeyRows(st: any, models: any) {
         try {
           await invoke("open_external", { url: (b as HTMLElement).dataset.console });
         } catch (e) {
-          await sure("브라우저를 열지 못했습니다", String(e), "닫기");
+          await sure(t("브라우저를 열지 못했습니다"), errText(e), t("닫기"));
         }
       };
     });
@@ -6187,7 +6200,7 @@ async function chatAsk(q: string) {
     chatHtml("ai", escapeHtml(r?.text || "").replace(/\n/g, "<br />"));
   } catch (e: any) {
     chatPopThinking();
-    chatHtml("ai", `<span class="warn">${escapeHtml(String(e))}</span>`);
+    chatHtml("ai", `<span class="warn">${escapeHtml(errText(e))}</span>`);
   }
 }
 
@@ -6205,7 +6218,7 @@ async function chatDebate(q: string) {
     chatHtml("ai", `<div class="duo">${one(r?.a)}${one(r?.b)}</div>`);
   } catch (e: any) {
     chatPopThinking();
-    chatHtml("ai", `<span class="warn">${escapeHtml(String(e))}</span>`);
+    chatHtml("ai", `<span class="warn">${escapeHtml(errText(e))}</span>`);
   }
 }
 
@@ -6277,7 +6290,7 @@ function chatNeedsKey() {
           put++;
           el.value = "";
         } catch (e) {
-          chatHtml("ai", `<span class="warn">${escapeHtml(String(e))}</span>`);
+          chatHtml("ai", `<span class="warn">${escapeHtml(errText(e))}</span>`);
         }
       }
       if (!put) return chatSay("ai", "칸이 비어 있어요. 키를 붙여넣고 다시 눌러 주세요.");
@@ -6349,7 +6362,7 @@ async function chatSend() {
 
     chatHistory.push({ role: "user", text: q }, { role: "assistant", text: r.reply || "" });
   } catch (e) {
-    chatSay("ai", String(e));
+    chatSay("ai", errText(e));
   }
 }
 
@@ -6525,7 +6538,7 @@ async function aiPickIssue(): Promise<void> {
     const re = $("i-reissuable") as HTMLInputElement | null;
     if (re && typeof r.reissuable === "boolean") re.checked = r.reissuable;
   } catch (e) {
-    note.innerHTML = `<span style="color:var(--bad)">${escapeHtml(String(e))}</span>`;
+    note.innerHTML = `<span style="color:var(--bad)">${escapeHtml(errText(e))}</span>`;
   }
 }
 
@@ -6768,7 +6781,7 @@ function pickShopPhoto() {
         /* 아직 등록 전이면 알릴 곳이 없다. */
       }
     } catch (e) {
-      $("sh-picnote").innerHTML = `<span style="color:var(--bad)">${escapeHtml(String(e))}</span>`;
+      $("sh-picnote").innerHTML = `<span style="color:var(--bad)">${escapeHtml(errText(e))}</span>`;
     }
   };
   input.click();
@@ -6903,14 +6916,14 @@ async function showBookings() {
         try {
           await invoke("booking_cancel", { addr });
         } catch (e) {
-          box.innerHTML = `<div class="warnbox">${escapeHtml(String(e))}</div>`;
+          box.innerHTML = `<div class="warnbox">${escapeHtml(errText(e))}</div>`;
           return;
         }
         void showBookings();
       };
     });
   } catch (e) {
-    box.innerHTML = `<div class="warnbox" style="margin-top:12px">${escapeHtml(String(e))}</div>`;
+    box.innerHTML = `<div class="warnbox" style="margin-top:12px">${escapeHtml(errText(e))}</div>`;
   }
 }
 
@@ -6960,7 +6973,7 @@ async function showPasses() {
        </table>
        <p class="meta" style="margin-top:8px">${t("총")} ${rows.length}${t("장")}</p>`;
   } catch (e) {
-    box.innerHTML = `<div class="warnbox" style="margin-top:12px">${escapeHtml(String(e))}</div>`;
+    box.innerHTML = `<div class="warnbox" style="margin-top:12px">${escapeHtml(errText(e))}</div>`;
   }
 }
 
@@ -7007,7 +7020,7 @@ function bindMemberCards(root: string) {
         doorSearch();
         loadMembers();
       } catch (e) {
-        $("dr-note").innerHTML = `<span class="danger">${escapeHtml(String(e))}</span>`;
+        $("dr-note").innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
       } finally {
         // 🔴 **실패해도 단추를 푼다.** `try` 안에서만 풀면 실패했을 때
         //    영영 잠겨서 다시 시도할 수 없다 — 손님은 문 앞에 서 있고
@@ -7619,7 +7632,7 @@ async function showOfferQr(offer: any, isNew: boolean) {
         `</div>`;
       shareBox.querySelectorAll("[data-share]").forEach((b) => {
         (b as HTMLElement).onclick = () =>
-          invoke("open_share", { url: (b as HTMLElement).dataset.share }).catch((e) => say("열지 못했습니다", String(e)));
+          invoke("open_share", { url: (b as HTMLElement).dataset.share }).catch((e) => say(t("열지 못했습니다"), errText(e)));
       });
     }
   }
@@ -7986,7 +7999,7 @@ async function doRefund(payAddress: string, suggested: number) {
       loadWallet();
     } catch (e) {
       b.disabled = false;
-      $("rf-say").innerHTML = `<span class="danger">${escapeHtml(String(e))}</span>`;
+      $("rf-say").innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
     }
   });
 }
@@ -8580,7 +8593,7 @@ async function loadReward() {
     setWhen(10);
     await loadRewardList();
   } catch (e) {
-    $("rw-gate").innerHTML = `<div class="warnbox">${escapeHtml(String(e))}</div>`;
+    $("rw-gate").innerHTML = `<div class="warnbox">${escapeHtml(errText(e))}</div>`;
   }
 }
 
@@ -8614,7 +8627,7 @@ async function loadRewardList() {
               `<div class="card"><h3>보유자 ${v.holders}명</h3>
                  <div class="kv"><b>합계</b><span>${fmtQty(v.total_owned)}</span></div></div>`;
           } catch (e) {
-            $("rw-out").innerHTML = `<div class="warnbox">${escapeHtml(String(e))}</div>`;
+            $("rw-out").innerHTML = `<div class="warnbox">${escapeHtml(errText(e))}</div>`;
           }
         };
       });
@@ -8650,7 +8663,7 @@ async function rewardDry() {
     rwDryOk = true;
     ($("rw-go") as HTMLButtonElement).disabled = false;
   } catch (e) {
-    $("rw-out").innerHTML = `<div class="warnbox">${escapeHtml(String(e))}</div>`;
+    $("rw-out").innerHTML = `<div class="warnbox">${escapeHtml(errText(e))}</div>`;
   }
 }
 
@@ -8678,7 +8691,7 @@ async function rewardGo() {
     rwDryOk = false;
     ($("rw-go") as HTMLButtonElement).disabled = true;
   } catch (e) {
-    $("rw-out").innerHTML = `<div class="warnbox">${escapeHtml(String(e))}</div>`;
+    $("rw-out").innerHTML = `<div class="warnbox">${escapeHtml(errText(e))}</div>`;
   }
 }
 
@@ -8728,12 +8741,12 @@ async function loadAddrBook() {
             await invoke("addr_label", { address: addr, label: name });
             await loadAddrBook();
           } catch (e) {
-            $("abk-note").innerHTML = `<span class="warn">${escapeHtml(String(e))}</span>`;
+            $("abk-note").innerHTML = `<span class="warn">${escapeHtml(errText(e))}</span>`;
           }
         };
       });
   } catch (e) {
-    $("abk-list").innerHTML = `<span class="warn">${escapeHtml(String(e))}</span>`;
+    $("abk-list").innerHTML = `<span class="warn">${escapeHtml(errText(e))}</span>`;
   }
 }
 
@@ -8756,7 +8769,7 @@ async function newAddrWithName() {
       };
     await loadAddrBook();
   } catch (e) {
-    $("abk-note").innerHTML = `<span class="warn">${escapeHtml(String(e))}</span>`;
+    $("abk-note").innerHTML = `<span class="warn">${escapeHtml(errText(e))}</span>`;
   }
 }
 
@@ -8819,7 +8832,7 @@ async function saveSweep(enabled: boolean) {
     $("sw-note").textContent = enabled ? "켰습니다." : "껐습니다.";
     await loadSweep();
   } catch (e: any) {
-    $("sw-note").innerHTML = `<span class="warn">${escapeHtml(String(e))}</span>`;
+    $("sw-note").innerHTML = `<span class="warn">${escapeHtml(errText(e))}</span>`;
   }
 }
 
@@ -8893,7 +8906,7 @@ async function loadPlaces() {
             el.style.borderLeft = "3px solid var(--ok, #2f9e44)";
           } catch (e) {
             el.style.opacity = "1";
-            if (label) label.textContent = `🔴 ${String(e).slice(0, 60)}`;
+            if (label) label.textContent = `🔴 ${errText(e).slice(0, 60)}`;
             el.style.borderLeft = "3px solid var(--danger, #c92a2a)";
           } finally {
             delete el.dataset.busy;
@@ -9345,7 +9358,7 @@ function renderSwitches() {
         try {
           await s.run();
         } catch (err) {
-          say("안 됐습니다", String(err));
+          say(t("안 됐습니다"), errText(err));
         }
         btn.textContent = was;
         btn.disabled = false;
@@ -9518,7 +9531,7 @@ async function refreshTunnel() {
           say.innerHTML = `<span class="ok">다 받았습니다. 이제 켤 수 있습니다.</span>`;
           await refreshTunnel();
         } catch (e) {
-          say.innerHTML = `<span class="danger">${escapeHtml(String(e))}</span>`;
+          say.innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
           btn.disabled = false;
         }
       });
@@ -11141,7 +11154,7 @@ async function saveMenu() {
       (b as HTMLElement).onclick = () =>
         invoke("open_share", {
           url: `http://127.0.0.1:8080/ipfs/${(b as HTMLElement).dataset.openmenu}/`,
-        }).catch((e) => say("열지 못했습니다", String(e)));
+        }).catch((e) => say(t("열지 못했습니다"), errText(e)));
     });
     $("mn-result").querySelectorAll("[data-copymenu]").forEach((b) => {
       (b as HTMLElement).onclick = () =>
@@ -11400,7 +11413,7 @@ window.addEventListener("DOMContentLoaded", async () => {
       // 구별이 안 된다 — 릴레이는 늘 하나씩 죽는다.
       say.innerHTML = `<span class="ok">${t("알렸습니다")} — ${t("릴레이")} ${n}${t("곳")}</span>`;
     } catch (e) {
-      say.innerHTML = `<span class="danger">${escapeHtml(String(e))}</span>`;
+      say.innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
     }
   });
   document.querySelectorAll("[data-mtab]").forEach((b) => {
@@ -11472,7 +11485,7 @@ window.addEventListener("DOMContentLoaded", async () => {
       await loadRewardList();
       $("rw-now").textContent = "예약했습니다. 그 블록이 지나면 명단이 굳습니다.";
     } catch (e) {
-      $("rw-now").innerHTML = `<span class="warn">${escapeHtml(String(e))}</span>`;
+      $("rw-now").innerHTML = `<span class="warn">${escapeHtml(errText(e))}</span>`;
     }
   });
   $("rw-mine").addEventListener("click", async () => {
@@ -11485,7 +11498,7 @@ window.addEventListener("DOMContentLoaded", async () => {
         .slice(0, 20);
       ($("rw-skip") as HTMLInputElement).value = mine.join(", ");
     } catch (e) {
-      $("rw-out").innerHTML = `<div class="warnbox">${escapeHtml(String(e))}</div>`;
+      $("rw-out").innerHTML = `<div class="warnbox">${escapeHtml(errText(e))}</div>`;
     }
   });
   $("rw-dry").addEventListener("click", () => void rewardDry());
@@ -11554,7 +11567,7 @@ window.addEventListener("DOMContentLoaded", async () => {
       noteEl.textContent = s.note || "";
       noteEl.style.color = s.has_wallet ? "" : "var(--warn)";
     } catch (e) {
-      noteEl.textContent = String(e);
+      noteEl.textContent = errText(e);
     }
   }
   document.getElementById("wd-pick")?.addEventListener("click", async () => {
@@ -11568,7 +11581,7 @@ window.addEventListener("DOMContentLoaded", async () => {
       await invoke("datadir_set", { path: dir });
       await paintWalletDir();
     } catch (e) {
-      if (noteEl) noteEl.textContent = String(e);
+      if (noteEl) noteEl.textContent = errText(e);
     }
   });
   void paintWalletDir();
@@ -11586,7 +11599,7 @@ window.addEventListener("DOMContentLoaded", async () => {
           ? "돕기로 바꿨습니다. 가게 정보는 그대로 있습니다."
           : "장사로 바꿨습니다.";
       } catch (e) {
-        if (say) say.textContent = String(e);
+        if (say) say.textContent = errText(e);
       }
     });
   }
@@ -11601,7 +11614,7 @@ window.addEventListener("DOMContentLoaded", async () => {
         await invoke("mode_set", { mode: pick });
         await applyMode();
       } catch (e) {
-        if (say) say.textContent = String(e);
+        if (say) say.textContent = errText(e);
       }
     });
   }
@@ -11874,7 +11887,7 @@ window.addEventListener("DOMContentLoaded", async () => {
           const p = document.createElement("div");
           p.className = "warnbox";
           p.style.marginTop = "10px";
-          p.textContent = `손님 폰 서버를 켜지 못했습니다 — ${lastPhoneError}`;
+          p.textContent = `${t("손님 폰 서버를 켜지 못했습니다")} — ${t(lastPhoneError)}`;
           box.appendChild(p);
         }
       });
