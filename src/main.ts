@@ -4419,6 +4419,19 @@ function tk처음안내() {
 const TK_자동옮김_KEY = "playx-raven-talk-auto-tr";
 const TK_한번에 = 12;
 
+/**
+ * 이미 옮긴 글. **글 번호로 기억한다.**
+ *
+ * 🔴 이게 없으면 값이 샌다. `talkPaint` 는 목록을 통째로 다시 그리는데,
+ *    그때 「이건 옮겼다」는 표시(`dataset`)가 같이 지워진다. 새 글이 하나
+ *    올 때마다 **보이는 글 열둘을 처음부터 다시 옮긴다** — 옮기기는 우리가
+ *    값을 내는 유일한 자리이고, 서버도 분당 마흔에서 막는다.
+ *
+ * 글 번호는 안 변하니까 한 번 옮긴 것은 영영 안 다시 부른다.
+ * 창을 닫으면 사라진다(그때는 어차피 다시 받아 그린다).
+ */
+const tk옮긴것 = new Map<string, string>();
+
 function tk자동옮김(): boolean {
   try {
     return localStorage.getItem(TK_자동옮김_KEY) === "1";
@@ -4455,21 +4468,29 @@ async function tk옮길것찾기() {
   if (!tk자동옮김()) return;
   const box = document.getElementById("tk-list");
   if (!box) return;
-  const 후보: { el: HTMLElement; 글: string }[] = [];
+  const 후보: { el: HTMLElement; 글: string; id: string }[] = [];
   box.querySelectorAll<HTMLElement>("[data-say]").forEach((el) => {
     if (el.querySelector(".tr")) return;
+    const id = String(el.dataset.say || "");
+    // 🔴 **이미 옮긴 것은 다시 안 부른다.** 다시 그릴 때마다 붙여만 준다.
+    //    이 두 줄이 없으면 새 글 하나에 열두 번씩 값을 낸다.
+    const 있던것 = tk옮긴것.get(id);
+    if (있던것 !== undefined) {
+      if (있던것) el.insertAdjacentHTML("beforeend", `<div class="tr">${escapeHtml(있던것)}</div>`);
+      return;
+    }
     if (el.dataset.trDone === "1") return;
     // 🔴 사진이 붙은 풍선은 **첫 글자 마디만** 본다. 통째로 읽으면 사진
     //    칸의 「받는 중…」 같은 우리 안내문까지 옮기러 보낸다.
     const 첫 = el.childNodes[0];
     const 글 = 첫 && 첫.nodeType === Node.TEXT_NODE ? String(첫.textContent || "").trim() : "";
     if (!tk옮길만한가(글)) return;
-    후보.push({ el, 글 });
+    후보.push({ el, 글, id });
   });
   // 🔴 최근 것부터. 화면에 보이는 것은 아래쪽인데, 위에서부터 세면
   //    한도를 옛날 글로 다 써 버리고 **보이는 글은 하나도 안 옮겨진다.**
   const 할것 = 후보.slice(-TK_한번에);
-  for (const { el, 글 } of 할것) {
+  for (const { el, 글, id } of 할것) {
     // 두 번 부르지 않게 먼저 표시한다. 실패해도 이 판에는 다시 안 부른다 —
     // 서버가 막고 있는데 계속 두드리면 더 오래 막힌다.
     el.dataset.trDone = "1";
@@ -4477,12 +4498,22 @@ async function tk옮길것찾기() {
       const j = await invoke<any>("talk_translate", { text: 글, to: lang });
       const 옮김 = String(j?.translation || "");
       // 같은 글이 돌아오면 붙이지 않는다. 같은 말을 두 번 적는 셈이다.
-      if (!옮김 || 옮김.trim() === 글) continue;
+      // 🔴 그때도 **기억은 해 둔다**(빈 값으로). 안 그러면 다시 그릴 때마다
+      //    「옮길 것이 없더라」를 확인하러 또 값을 낸다.
+      if (!옮김 || 옮김.trim() === 글) {
+        tk옮긴것.set(id, "");
+        continue;
+      }
+      tk옮긴것.set(id, 옮김);
       if (el.querySelector(".tr")) continue;
       el.insertAdjacentHTML("beforeend", `<div class="tr">${escapeHtml(옮김)}</div>`);
     } catch {
       // 🔴 조용히 넘어간다. 옮기기는 **곁들이**다 — 못 옮겼다고 빨간 글씨를
       //    글마다 띄우면 대화가 오류 목록이 된다. 원문은 그대로 보인다.
+      //
+      // ⚠️ 실패는 **기억하지 않는다.** 잠깐 끊긴 것일 수 있고, 그때 영영
+      //    안 옮기기로 하면 인터넷이 돌아와도 그 글은 계속 원문뿐이다.
+      //    이 판에서만 안 부른다(`trDone`).
     }
   }
 }
@@ -5217,7 +5248,9 @@ async function talkTranslate(id: string, list: any[]) {
     if (!j?.translation) throw new Error("옮기지 못했습니다");
     // 모양은 `.tr` 이 정한다. 여기서 또 적으면 저절로 옮긴 글과 다르게 보인다.
     body.insertAdjacentHTML("beforeend", `<div class="tr">${escapeHtml(String(j.translation))}</div>`);
-    // 저절로 옮기기가 이 글을 또 부르지 않게 표시한다.
+    // 🔴 **손으로 옮긴 것도 같은 자리에 기억한다.** 두 길이 따로 기억하면
+    //    다시 그릴 때 저절로 옮기기가 같은 글을 또 부른다 — 값을 두 번 낸다.
+    tk옮긴것.set(id, String(j.translation));
     body.dataset.trDone = "1";
     note.textContent = "";
   } catch (e) {
