@@ -385,3 +385,75 @@ mod tests {
         assert_eq!(c.len(), 3, "통화 코드가 세 글자가 아닙니다: {c}");
     }
 }
+
+/// 환불 칸을 미리 채우기 위한 조회.
+///
+/// ⚠️ **노드를 먼저 묻는다.** 우리 노드가 답하면 아무도 우리가 무엇을
+///    조회했는지 모른다. 공개 조회처는 그것을 본다.
+#[tauri::command]
+pub async fn refund_payer(address: String) -> Result<Value, String> {
+    // 주문 주소로 들어온 **첫 거래**를 찾는다. 주문마다 주소가 따로 생기므로
+    // 그 주소의 거래는 곧 그 주문의 결제다.
+    let txid = match crate::raven::call_rpc(
+        "getaddresstxids",
+        json!([{ "addresses": [address.clone()] }]),
+    )
+    .await
+    {
+        Ok(v) => v
+            .as_array()
+            .and_then(|a| a.first())
+            .and_then(Value::as_str)
+            .map(str::to_string),
+        Err(_) => None,
+    };
+    let txid = match txid {
+        Some(t) => t,
+        None => {
+            // 노드에 주소 색인이 없다. 공개 조회처가 거래 목록을 안다.
+            let v = crate::publicbook::address(&address).await?;
+            match v
+                .get("utxos")
+                .and_then(Value::as_array)
+                .and_then(|a| a.first())
+                .and_then(|u| u.get("txid"))
+                .and_then(Value::as_str)
+            {
+                Some(t) => t.to_string(),
+                None => return Ok(json!({ "address": null, "source": "찾지 못함" })),
+            }
+        }
+    };
+    refund_payer_of_tx(txid).await
+}
+
+async fn refund_payer_of_tx(txid: String) -> Result<Value, String> {
+    // ① 이 가게 노드에 그 거래가 있으면 거기서 읽는다.
+    if let Ok(tx) = crate::raven::call_rpc("getrawtransaction", json!([txid.clone(), 1])).await {
+        if let Some(vin) = tx.get("vin").and_then(Value::as_array).and_then(|v| v.first()) {
+            let (Some(prev), Some(n)) = (
+                vin.get("txid").and_then(Value::as_str),
+                vin.get("vout").and_then(Value::as_u64),
+            ) else {
+                return Ok(json!({ "address": null, "source": "이 가게 노드" }));
+            };
+            if let Ok(p) = crate::raven::call_rpc("getrawtransaction", json!([prev, 1])).await {
+                let a = p
+                    .get("vout")
+                    .and_then(Value::as_array)
+                    .and_then(|v| v.get(n as usize))
+                    .and_then(|o| o.get("scriptPubKey"))
+                    .and_then(|s| s.get("addresses"))
+                    .and_then(Value::as_array)
+                    .and_then(|a| a.first())
+                    .and_then(Value::as_str);
+                if let Some(a) = a {
+                    return Ok(json!({ "address": a, "source": "이 가게 노드" }));
+                }
+            }
+        }
+    }
+    // ② 노드가 못 하면 공개 조회처. 프라이버시를 조금 내주고 답을 얻는다.
+    let a = crate::publicbook::payer_of(&txid).await?;
+    Ok(json!({ "address": a, "source": "공개 조회처" }))
+}

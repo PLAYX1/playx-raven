@@ -7741,7 +7741,7 @@ async function sendDirect() {
  * ⚠️ 주소는 **되돌릴 수 없다.** 잘못 보내면 끝이다. 그래서 보내기 전에
  *    한 번 더 확인하고, 확인 문구에 주소와 금액을 그대로 적는다.
  */
-async function doRefund(_payAddress: string, suggested: number) {
+async function doRefund(payAddress: string, suggested: number) {
   const box = $("or-refund");
   const lock = await invoke<any>("wallet_lock_state").catch(() => null);
   const needPass = !!(lock?.encrypted && !lock?.unlocked);
@@ -7754,7 +7754,7 @@ async function doRefund(_payAddress: string, suggested: number) {
          <input id="rf-amt" inputmode="decimal" value="${suggested}" />
          <label class="meta" for="rf-to">${t("어느 주소로 돌려드릴까요?")}</label>
          <input id="rf-to" placeholder="R..." autocomplete="off" spellcheck="false" />
-         <p class="meta">${t("체인은 누가 보냈는지 기록하지 않습니다. 손님에게 받을 주소를 물어보셔야 합니다.")}</p>
+         <p class="meta" id="rf-fromsay">${t("보낸 주소를 찾는 중…")}</p>
          <label class="meta" for="rf-why">${t("사유 (내 지갑에만 남습니다)")}</label>
          <input id="rf-why" value="${t("주문 취소")}" />
          ${
@@ -7771,6 +7771,36 @@ async function doRefund(_payAddress: string, suggested: number) {
        </div>
      </div>`;
   ($("rf-to") as HTMLInputElement).focus();
+
+  // 🔴 대표님: "상대방 지갑주소가 안 보이던데."
+  //
+  //    화면은 「체인은 누가 보냈는지 기록하지 않습니다. 손님에게 물어보셔야
+  //    합니다」라고 적고 있었다. **사실이 아니다** — 거래의 입력에는 그 돈이
+  //    어느 주소에서 왔는지 그대로 적혀 있다(2026-08-29 실측).
+  //
+  //    그리고 그 문구대로면 **환불이 사실상 불가능하다.** 손님은 이미 갔다.
+  //
+  //    ⚠️ 다만 채워 넣고 끝내면 안 된다. 거래소에서 보냈으면 거래소 주소가
+  //       나오고, 거기로 보내면 돈이 사라질 수 있다. **채우되 확인을 청한다.**
+  void (async () => {
+    const say = $("rf-fromsay");
+    if (!say) return;
+    try {
+      const r = await invoke<any>("refund_payer", { address: payAddress });
+      const a = r?.address;
+      if (!a) {
+        say.innerHTML = t("보낸 주소를 찾지 못했습니다. 손님에게 물어봐 주세요.");
+        return;
+      }
+      const el = $("rf-to") as HTMLInputElement;
+      if (!el.value.trim()) el.value = String(a);
+      say.innerHTML =
+        `<b>${t("이 돈을 보낸 주소입니다")}</b> — ` +
+        t("맞는지 손님과 확인해 주세요. 거래소에서 보낸 돈이면 이 주소로 돌려주시면 안 됩니다.");
+    } catch {
+      say.innerHTML = t("보낸 주소를 찾지 못했습니다. 손님에게 물어봐 주세요.");
+    }
+  })();
   $("rf-cancel").addEventListener("click", () => {
     box.innerHTML = "";
   });

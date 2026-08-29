@@ -250,6 +250,7 @@ pub fn run() {
             pass::unclaimed_numbers,
             pass::remove_member,
             refund::refund,
+            refund::refund_payer,
             refund::staff_refund,
             ledger::ledger_range,
             ledger::ledger_csv,

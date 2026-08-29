@@ -150,6 +150,47 @@ pub async fn broadcast(hex: &str) -> Result<String, String> {
         .ok_or_else(|| "공개 조회처가 거래 번호를 주지 않았습니다.".into())
 }
 
+
+/// 이 거래에 **돈을 넣은 주소**.
+///
+/// 🔴 대표님: "상대방 지갑주소가 안 보이던데."  화면은 이렇게 적고 있었다:
+///
+/// > 체인은 누가 보냈는지 기록하지 않습니다. 손님에게 받을 주소를 물어보셔야 합니다.
+///
+/// **사실이 아니다.** 실측(2026-08-29)으로 확인했다 — 거래의 입력에는 그 돈이
+/// 어느 주소에서 왔는지 그대로 적혀 있다. 그래서 환불 칸이 비어 있었고,
+/// **손님은 이미 가고 없으니 환불이 사실상 불가능했다.**
+///
+/// ⚠️ 완벽하지 않다. 정직하게:
+/// · 거래소에서 보냈으면 **거래소 주소**가 나온다. 거기로 보내면 돈이 사라질 수 있다
+/// · 입력이 여럿이면 첫 번째가 보낸 사람이 아닐 수 있다
+///
+/// 그래서 **채워 넣되 「맞는지 확인하세요」라고 말해야 한다.** 빈 칸보다는
+/// 압도적으로 낫지만, 사장이 그대로 누르게 두면 안 된다.
+pub async fn payer_of(txid: &str) -> Result<Option<String>, String> {
+    if txid.len() != 64 || !txid.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err("거래 번호 형식이 올바르지 않습니다.".into());
+    }
+    let tx: Value = client()?
+        .get(format!("{BOOK}/api/v2/tx/{txid}"))
+        .send()
+        .await
+        .map_err(|e| format!("공개 조회처에 닿지 못했습니다: {e}"))?
+        .json()
+        .await
+        .map_err(|e| format!("공개 조회처의 답을 읽지 못했습니다: {e}"))?;
+
+    Ok(tx
+        .get("vin")
+        .and_then(Value::as_array)
+        .and_then(|v| v.first())
+        .and_then(|i| i.get("addresses"))
+        .and_then(Value::as_array)
+        .and_then(|a| a.first())
+        .and_then(Value::as_str)
+        .map(str::to_string))
+}
+
 #[cfg(test)]
 mod tests {
     /// ⚠️ **주석을 빼고** 검사한다. 안 그러면 이 파일의 설명글에 적힌
