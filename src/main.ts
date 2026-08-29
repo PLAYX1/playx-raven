@@ -3674,6 +3674,11 @@ function showPage(id: string) {
   // 🔴 화면을 열 때 부르지 않으면 빈 칸만 보인다. 만들어 놓고 안 부르는
   //    것이 이 저장소의 고질병이라 여기 한 줄을 꼭 남긴다.
   if (id === "talk") {
+    // 열었으면 「안 본 글」 숫자를 내린다. 지금부터는 눈으로 본다.
+    대화봤다();
+    // 지금 보고 있는 방은 지켜보는 명단 맨 앞으로. 나갔다 와도 이 방의
+    // 새 글은 알림을 받는다.
+    방지켜보기(tkRoom);
     void talkPaintMe();
     void talkPaintRooms();
     // 명단은 닫힌 채로 두되 **머리줄 단추에 인원수는 적는다** — 열어 보기
@@ -4218,8 +4223,55 @@ function talkPaintMuted() {
 function tkWho(pk: string): string {
   const p = tkNames.get(pk);
   if (p?.name) return escapeHtml(String(p.name));
-  return `<span class="meta">${escapeHtml(pk.slice(0, 10))}…</span>`;
+  // 🔴 이름을 안 정한 사람. `.key` 는 **색을 안 받는다** — 열쇠 앞자리는
+  //    이름이 아니라서, 거기에 사람 색을 칠하면 「이게 이름이구나」로 읽힌다.
+  return `<span class="key">${escapeHtml(pk.slice(0, 10))}…</span>`;
 }
+
+/**
+ * 열쇠에서 이름 색을 뽑는다. 같은 열쇠 = 늘 같은 색.
+ *
+ * 🔴 **아바타(얼굴 사진)는 없다. 없는 것을 그리지 않는다.** 이름 첫 글자를
+ *    동그라미에 넣는 앱이 많지만, 여기는 이름을 안 정한 사람이 흔해서 그
+ *    동그라미에 16진수 「a」가 들어간다. 그건 얼굴이 아니라 잡음이다.
+ *
+ *    대신 색을 준다. 색은 **이름이 아니라 열쇠**에서 나온다 — 그래서 남의
+ *    이름을 똑같이 흉내 낸 사람은 색이 다르다. 이 화면이 이미 「이름은
+ *    누구나 같게 달 수 있습니다」라고 경고하는 그 위험을 조금 덜어 준다.
+ */
+function tkHue(pk: string): number {
+  let h = 0;
+  for (let i = 0; i < pk.length; i++) h = (h * 31 + pk.charCodeAt(i)) % 360;
+  // 노랑~연두(45~75)는 흰 바탕에서 대비가 무너진다. 그 구간은 비켜 간다.
+  if (h >= 45 && h <= 75) h = (h + 40) % 360;
+  return h;
+}
+
+/** 「오후 3:12」. 날짜는 안 붙인다 — 날짜는 하루 구분선이 한 번만 말한다. */
+function tkClock(ms: number): string {
+  try {
+    return new Date(ms).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  } catch {
+    return "";
+  }
+}
+
+/** 「2026년 8월 29일 금요일」. 하루가 바뀌는 자리에만 쓴다. */
+function tkDay(ms: number): string {
+  try {
+    return new Date(ms).toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      weekday: "long",
+    });
+  } catch {
+    return "";
+  }
+}
+
+/** 같은 사람이 이 시간 안에 이어 쓰면 한 덩어리로 본다. */
+const TK_이음 = 5 * 60 * 1000;
 
 async function talkPaintMe() {
   try {
@@ -4267,6 +4319,8 @@ async function talkPaintRooms() {
   box.querySelectorAll("[data-room]").forEach((b) => {
     (b as HTMLElement).onclick = () => {
       tkRoom = String((b as HTMLElement).dataset.room || "");
+      // 한 번 연 방은 나가 있어도 지켜본다 — 그 방에 새 글이 오면 알린다.
+      방지켜보기(tkRoom);
       $("tk-title").textContent = tkRoom
         ? tkRoomNames.get(tkRoom) || t("방")
         : t("레이븐 이야기");
@@ -4339,9 +4393,19 @@ function paintInvite() {
  */
 async function talkPaint() {
   const box = $("tk-list");
+  // ⚠️ 어느 방을 읽는지 **여기서 붙잡아 둔다.** 릴레이가 답하는 사이에
+  //    사장이 다른 방을 누르면 `tkRoom` 이 바뀌어, 아래에서 이 목록을
+  //    엉뚱한 방의 것으로 세게 된다.
+  const 읽은방 = tkRoom;
   box.innerHTML = `<div class="meta" style="margin:auto">${t("세계 릴레이에서 읽는 중…")}</div>`;
   try {
-    const list: any[] = await invoke("talk_read", { room: tkRoom || null, limit: 60 });
+    const list: any[] = await invoke("talk_read", { room: 읽은방 || null, limit: 60 });
+    // 🔴 알림 판단은 **한 곳**에만 둔다. 화면이 읽은 것도 지킴이가 읽은 것도
+    //    같은 곳(`대화살피기`)으로 보낸다 — 두 곳에 나눠 두면 한쪽만 고치는
+    //    날이 온다. 주문 알림의 `주문살피기` 와 같은 배치다.
+    //    ⚠️ 글이 없어도 부른다. 「이 방은 여기까지가 이미 아는 것」을 적는
+    //       첫 바퀴가 여기이기 때문이다.
+    대화살피기(읽은방, list);
     if (!list.length) {
       box.innerHTML =
         `<div class="meta" style="margin:auto;text-align:center;line-height:1.9">` +
@@ -4363,20 +4427,58 @@ async function talkPaint() {
       ? `<div class="hidnote">${t("안 보기 한 분의 글")} ${hid}${t("개를 숨겼습니다")} ·
            <button data-openmute="1">${t("명단 보기")}</button></div>`
       : "";
-    let prev = "";
+    // 앞뒤 글을 봐야 「이름을 또 적을까」·「시각을 찍을까」를 정할 수 있다.
+    // 그래서 map 안에서 옆 글을 꺼내 쓴다.
+    const 때 = asc.map((e) => Number(e.created_at || 0) * 1000);
+    const 쓴이 = asc.map((e) => String(e.pubkey || ""));
+    const 날 = 때.map((ms) => new Date(ms).toDateString());
+
     box.innerHTML = hidNote + asc
-      .map((e) => {
-        const who = String(e.pubkey || "");
+      .map((e, i) => {
+        const who = 쓴이[i];
         const mine = who === tkMine;
         const id = String(e.id || "");
-        const when = new Date(Number(e.created_at || 0) * 1000).toLocaleString();
-        // 같은 사람이 이어서 쓰면 이름을 다시 안 적는다. 촘촘해 보인다.
-        const head = who === prev ? "" : `<div class="who">${mine ? `<b>${t("나")}</b>` : tkWho(who)}</div>`;
-        prev = who;
+        const ms = 때[i];
+
+        // ① 날짜는 **하루에 한 번**. 글마다 날짜를 적는 것이 게시판이다.
+        const day = i > 0 && 날[i - 1] === 날[i]
+          ? ""
+          : `<div class="daysep">${escapeHtml(tkDay(ms))}</div>`;
+
+        // ② 이름은 사람이 바뀌거나·날이 바뀌거나·5분이 지났을 때만.
+        //    🔴 예전에는 `who === prev` 만 봤다. 그래서 어제 마지막으로 쓴
+        //       사람이 오늘 아침 첫 글을 쓰면 **이름이 안 붙었다** — 밤을
+        //       사이에 두고 이어 쓴 것처럼 보였다.
+        //    ⚠️ 내 글에는 이름을 안 적는다. 오른쪽에 붙은 파란 풍선이 이미
+        //       「나」다. 「나」라고 또 적으면 내 말마다 이름표가 하나씩 더
+        //       붙는데, 그게 카톡과 게시판을 가르는 자리다.
+        const 이어짐 =
+          !day && i > 0 && 쓴이[i - 1] === who && ms - 때[i - 1] < TK_이음;
+        const head =
+          mine || 이어짐
+            ? ""
+            : `<div class="who" style="--h:${tkHue(who)}">${tkWho(who)}</div>`;
+
+        // ③ 시각은 **덩어리의 마지막 글 옆에** 한 번. 한 사람이 세 줄을
+        //    이어 쓰면 시각도 세 번 찍혔는데, 그게 글마다 메타 줄이 붙는
+        //    게시판 문법이다. 정확한 날짜·초는 얹으면(title) 나온다.
+        const 다음이어짐 =
+          i + 1 < asc.length &&
+          쓴이[i + 1] === who &&
+          날[i + 1] === 날[i] &&
+          때[i + 1] - ms < TK_이음;
+        const clock = 다음이어짐
+          ? ""
+          : `<time class="tstamp" title="${escapeHtml(new Date(ms).toLocaleString())}">${escapeHtml(tkClock(ms))}</time>`;
+
         return (
+          day +
           head +
-          `<div class="bub${mine ? " me" : ""}" data-say="${id}">${escapeHtml(String(e.content || ""))}</div>
-           <div class="bubacts${mine ? " r" : ""}">
+          `<div class="line${mine ? " me" : ""}">
+             <div class="bub${mine ? " me" : ""}" data-say="${id}">${escapeHtml(String(e.content || ""))}</div>
+             ${clock}
+           </div>
+           <div class="bubacts${mine ? " r" : ""}" data-acts="${id}">
              <button data-tr="${id}">${t("내 말로")}</button>
              <button data-keep="${id}">${t("간직")}</button>` +
           // 내 글에는 안 붙인다. 나를 안 보기로 할 이유가 없고,
@@ -4387,13 +4489,31 @@ async function talkPaint() {
             //    따를 의무가 없다. 「삭제」라 적으면 지워졌다고 믿는데 안 지워진다.
             (mine ? `<button data-del="${id}">${t("지우기 요청")}</button>` : "") +
           `<span class="meta" data-note="${id}"></span>
-           </div>
-           <div class="when"${mine ? ' style="text-align:right"' : ""}>${escapeHtml(when)}</div>`
+           </div>`
         );
       })
       .join("");
     // 새 글이 아래에 있으므로 맨 아래로 내린다. 안 하면 옛날 글만 보인다.
     box.scrollTop = box.scrollHeight;
+    // 🔴 **말풍선을 누르면 그 글의 단추만 나온다.**
+    //
+    //    단추 줄은 예전에 `opacity:0` 으로 **자리를 늘 차지**했고(손가락
+    //    화면에서는 아예 보였다), 그래서 말 하나에 줄이 셋씩 쌓였다.
+    //    이제는 누른 것 하나만 열린다 — 여러 개가 열려 있으면 다시 서류다.
+    //
+    //    ⚠️ 기능은 하나도 안 없앴다. 「내 말로」·「간직」·「안 보기」·
+    //       「지우기 요청」이 전부 그대로 있고, 꺼내는 법은 입력칸 위에
+    //       한 줄로 적어 뒀다(`.talkhint`). 숨긴 기능은 안 적으면 없앤 기능이다.
+    box.querySelectorAll<HTMLElement>("[data-say]").forEach((b) => {
+      b.onclick = () => {
+        const gid = String(b.dataset.say || "");
+        const acts = box.querySelector(`[data-acts="${gid}"]`) as HTMLElement | null;
+        const 이미열림 = acts?.classList.contains("on") === true;
+        box.querySelectorAll(".bubacts.on").forEach((x) => x.classList.remove("on"));
+        // 같은 글을 다시 누르면 닫힌다 — 연 것을 못 닫으면 그것도 갇힌 것이다.
+        if (acts && !이미열림) acts.classList.add("on");
+      };
+    });
     box.querySelectorAll("[data-tr]").forEach((b) => {
       (b as HTMLElement).onclick = () => void talkTranslate(String((b as HTMLElement).dataset.tr), list);
     });
@@ -11824,6 +11944,323 @@ function 알림배선() {
   setInterval(() => void 주문지킴이(), 30000);
 }
 
+/* ── 대화 알림 ────────────────────────────────────────────────────────
+ *
+ * ## 왜 있나
+ *
+ * 「이야기」 방은 **새 글이 와도 아무 표시가 없었다.** 그러니 이 화면을 두
+ * 번째로 열 이유가 없다 — 열어 봐야 아까 본 글이 그대로 있을 뿐이고, 몇 번
+ * 그러면 다시 안 연다. 만들어 놓고 안 이은 자리가 여기였다.
+ *
+ * ## 🔴 부품을 새로 만들지 않았다
+ *
+ * 소리 내는 장치(`소리준비`·`한음`)는 주문 알림이 이미 갖고 있다. 그것을
+ * 그대로 쓴다. 두 벌을 만들면 볼륨·잠금해제·오류처리를 두 곳에서 고쳐야
+ * 하고, 그러면 반드시 한쪽만 고치는 날이 온다.
+ *
+ * ## ⚠️ 그런데 **소리는 달라야 한다**
+ *
+ *   주문 = 「딩—동」  미(659) → 라(880) **올라가는 두 음**, 크게(0.25), 길게
+ *   대화 = 「톡」      솔(392) **한 음**, 낮게, 작게(0.12), 짧게
+ *
+ * 돈과 말은 급한 정도가 다르다. 소리가 같으면 사장은 하던 일을 멈추고
+ * 주문표를 여는데 거기 아무것도 없다. 두어 번 그러면 다음부터는 **진짜
+ * 주문 소리에도 안 움직인다.** 그게 알림을 죽이는 길이다.
+ *
+ * 세 가지로 갈라 놨다 — **음 개수(2 vs 1)·높이(높다 vs 낮다)·크기.** 하나만
+ * 다르면 시끄러운 카운터에서 헷갈린다.
+ */
+
+const 대화소리_KEY = "playx-raven-talk-sound";
+
+/// 대화 알림이 켜져 있나. **주문 스위치와 완전히 따로다.**
+///
+/// 🔴 「주문은 켜고 대화는 끄고」가 보통이다. 하나로 묶으면 대화가 시끄러워서
+///    끈 사람이 **주문 소리까지** 잃는다 — 이 프로그램에서 일어날 수 있는
+///    제일 나쁜 결과다. 기본은 주문과 같이 켜짐이다(있는 줄 모르는 것이
+///    시끄러운 것보다 나쁘다).
+function 대화알림켜짐(): boolean {
+  try {
+    return localStorage.getItem(대화소리_KEY) !== "0";
+  } catch {
+    return true;
+  }
+}
+
+/// 「톡」. 낮은 솔 한 음, 짧고 작게. 주문의 「딩—동」과 겹치지 않는다.
+///
+/// ⚠️ **되풀이하지 않는다.** 주문은 안 보고 있으면 두 번 부르지만, 대화는
+///    한 번이다. 말은 나중에 읽어도 되고, 두 번 부르는 순간 이것도 「돈이
+///    들어왔나」로 읽힌다. 못 들은 사람을 위해서는 소리 대신 **왼쪽 숫자**가
+///    남는다 — 지나간 소리를 대신 들고 있는 자리다.
+function 말소리() {
+  const ctx = 소리준비();
+  if (!ctx) return;
+  try {
+    // 392 = 낮은 솔. 주문의 659·880 보다 한참 아래라 곁눈으로도 갈린다.
+    한음(ctx, ctx.currentTime + 0.02, 392.0, 0.34, 0.12);
+  } catch {
+    // 소리가 안 나도 왼쪽 숫자는 남는다. 여기서 던지면 그것까지 죽는다.
+  }
+}
+
+// ── 같은 글에 두 번 울리지 않게 ───────────────────────────────────────
+//
+// 릴레이에서 같은 목록을 되풀이해 받는다. 기억이 없으면 **글 하나가 45초마다
+// 영원히 울린다.** 그건 알림이 아니라 고장이다.
+//
+// 방마다 따로 센다. Nostr 의 글 id 는 내용의 지문이라 그대로 열쇠로 쓴다.
+const 아는글 = new Map<string, Set<string>>();
+
+/// ⚠️ **방마다 첫 조회는 조용히 지나간다.**
+///
+///    이걸 안 하면 앱을 켤 때마다 어제·지난주 글이 통째로 「새 글」이 되어
+///    한꺼번에 울린다. 프로그램을 켜는 것은 새 글이 아니다. 주문 알림이
+///    `첫목록읽었나` 로 피한 함정과 **같은 함정, 같은 방법**이다.
+///    다른 점은 방이 여럿이라 「하나」가 아니라 **방마다** 있다는 것뿐이다.
+const 첫바퀴읽은방 = new Set<string>();
+
+/// 사장이 「이야기」를 마지막으로 연 뒤 들어온 글 수.
+let 안본대화 = 0;
+
+function 대화배지그리기() {
+  const el = document.getElementById("nav-talkbadge");
+  if (!el) return;
+  el.textContent = String(안본대화);
+  el.hidden = 안본대화 <= 0;
+}
+
+/// 사장이 이야기를 봤다 → 숫자를 내린다.
+function 대화봤다() {
+  안본대화 = 0;
+  대화배지그리기();
+}
+
+/// 지금 눈이 **바로 그 방에** 있나.
+///
+/// 🔴 세 가지가 다 맞아야 한다. 창을 보고 있고(`화면보는중`), 이야기 화면이
+///    열려 있고, **고른 방이 그 방**이어야 한다. 다른 방을 보고 있는데 이
+///    방의 글을 안 알리면 그건 그냥 못 받은 것이다.
+function 대화방보는중(room: string): boolean {
+  return (
+    화면보는중() &&
+    document.getElementById("page-talk")?.classList.contains("on") === true &&
+    String(tkRoom || "") === String(room || "")
+  );
+}
+
+/**
+ * 방 하나의 글 목록을 보고 **말할 것이 있으면 말한다.**
+ *
+ * 목록을 받는 자리가 둘이라(화면의 `talkPaint` · 아래 `대화지킴이`) 판단은
+ * 여기 한 곳에만 둔다. 주문 알림의 `주문살피기` 와 같은 배치다.
+ */
+function 대화살피기(room: string, list: any[]) {
+  if (!Array.isArray(list)) return;
+  const 방 = String(room || "");
+  let 본 = 아는글.get(방);
+  if (!본) {
+    본 = new Set<string>();
+    아는글.set(방, 본);
+  }
+
+  const 처음 = !첫바퀴읽은방.has(방);
+  let 새글 = 0;
+
+  for (const e of list) {
+    const id = String(e?.id || "");
+    if (!id || 본.has(id)) continue;
+    본.add(id);
+    if (처음) continue; // 첫 바퀴는 **적기만** 한다
+    const who = String(e?.pubkey || "");
+    // ⚠️ 내가 쓴 글에는 안 울린다. 내 말이 릴레이를 돌아 다시 오는 것이라,
+    //    막지 않으면 보내기를 누를 때마다 알림이 울린다.
+    if (!who || who === tkMine) continue;
+    // ⚠️ 안 보기 한 분의 글에도 안 울린다. 화면에서는 숨겨 놓고 소리는
+    //    나면 그게 제일 이상하다 — 소리는 나는데 볼 글이 없다.
+    if (tkMuted[who]) continue;
+    새글++;
+  }
+
+  // 기억이 끝없이 자라지 않게. 지금 목록에 있는 것만 남긴다.
+  if (본.size > 400) {
+    아는글.set(방, new Set(list.map((e) => String(e?.id || "")).filter(Boolean)));
+  }
+
+  if (처음) {
+    // 여기가 조용한 첫 바퀴다. 위에서 이미 다 적어 뒀다.
+    첫바퀴읽은방.add(방);
+    return;
+  }
+  if (새글 <= 0) return;
+  // ⚠️ 내가 누구인지 아직 모르면 **아무것도 안 한다.** 모르는 채로 울리면
+  //    내가 쓴 글에 내가 알림을 받는다. 다음 바퀴에 `talk_me` 가 답한다.
+  if (!tkMine) return;
+  if (!대화알림켜짐()) return;
+  // ⚠️ 그 방을 보고 있으면 소리도 숫자도 없다. 눈앞에 글이 뜨는 것이 이미
+  //    답이다. (주문은 여기서 반대로 판단한다 — 돈이 들어오는 순간 사장의
+  //    눈은 손님에게 가 있어서, 창이 떠 있는 것과 보고 있는 것이 다르다.
+  //    대화는 그렇지 않다. 읽으려고 연 화면이다.)
+  if (대화방보는중(방)) {
+    // 🔴 다만 **글은 올려 준다.** 이야기 화면에는 자동 새로고침이 없어서,
+    //    여기서 안 그리면 사장은 새 글이 온 줄도 모르고 화면을 보고 앉아
+    //    있게 된다. 「보고 있으니 알릴 필요 없다」는 보고 있는 화면이
+    //    최신일 때만 맞는 말이다.
+    //
+    //    ⚠️ **맨 아래를 보고 있을 때만** 다시 그린다. 위로 올려 옛 글을
+    //       읽는 중에 그리면 화면이 맨 아래로 튀어 읽던 자리를 잃는다.
+    //    ⚠️ 되돌이는 안 생긴다 — 다시 그리면서 부르는 `대화살피기` 는
+    //       이미 아는 글만 보므로 `새글` 이 0 이라 여기까지 못 온다.
+    try {
+      const box = document.getElementById("tk-list");
+      const 맨아래 = !box || box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+      if (맨아래) void talkPaint();
+    } catch {
+      // 못 그려도 다음 새로고침에 나온다. 여기서 던지면 지킴이가 죽는다.
+    }
+    return;
+  }
+
+  말소리();
+  안본대화 += 새글;
+  대화배지그리기();
+}
+
+/* ── 어느 방을 지켜볼까 ────────────────────────────────────────────────
+ *
+ * 🔴 **전부는 못 지킨다.** `talk_rooms` 는 세상에 있는 방을 최대 50개까지
+ *    가져온다. 그걸 다 물어보면 한 바퀴에 릴레이 접속이 150번(방 50 × 릴레이
+ *    3)이다. 하루 종일 켜 두는 프로그램에서 그건 알림이 아니라 공격이다.
+ *
+ * 그래서 **사장이 실제로 여는 방**만 지킨다:
+ *   ① 「레이븐 이야기」(기본 방) — 늘
+ *   ② 최근에 연 방 두 곳       — `localStorage` 에 남겨 다시 켜도 이어진다
+ *
+ * 한 번도 안 연 방은 안 지킨다. 열어 본 적 없는 방의 글은 사장에게 아직
+ * 남의 이야기다 — 그걸 알리면 그게 광고다.
+ */
+const 대화보는방_KEY = "playx-raven-talk-watch";
+
+function 지켜보는방(): string[] {
+  const out = [""]; // 기본 방. 빈 문자열이 곧 「레이븐 이야기」다.
+  try {
+    const v = JSON.parse(localStorage.getItem(대화보는방_KEY) || "[]");
+    if (Array.isArray(v))
+      for (const r of v) {
+        const id = String(r || "");
+        if (id && !out.includes(id)) out.push(id);
+      }
+  } catch {
+    // 저장소가 막힌 기계에서도 기본 방은 지켜진다.
+  }
+  // 지금 열어 둔 방은 저장 전이라도 지킨다.
+  if (tkRoom && !out.includes(tkRoom)) out.push(tkRoom);
+  return out.slice(0, 3);
+}
+
+/// 방을 열었다 → 지켜보는 명단 맨 앞에 둔다.
+function 방지켜보기(room: string) {
+  const id = String(room || "");
+  if (!id) return; // 기본 방은 늘 지키므로 적을 것이 없다
+  try {
+    const v = JSON.parse(localStorage.getItem(대화보는방_KEY) || "[]");
+    const list = (Array.isArray(v) ? v.map((r: any) => String(r || "")) : []).filter(
+      (r) => r && r !== id,
+    );
+    list.unshift(id);
+    localStorage.setItem(대화보는방_KEY, JSON.stringify(list.slice(0, 2)));
+  } catch {
+    // 못 적어도 이번 판은 `지켜보는방()` 의 `tkRoom` 가지가 잡아 준다.
+  }
+}
+
+/// 겹쳐 돌지 않게. 릴레이가 느린 날 한 바퀴가 45초를 넘으면 같은 것을
+/// 두 번 묻게 되고, 그러면 접속만 두 배가 된다.
+let 대화지킴이도는중 = false;
+
+/**
+ * 이야기 화면을 안 보고 있어도 도는 지킴이.
+ *
+ * ⚠️ 이야기 화면에는 「자동 새로고침」이 없다. 그래서 이것이 유일한 눈이다 —
+ *    화면을 열면 `talkPaint` 가 같은 곳(`대화살피기`)으로 결과를 보낸다.
+ *
+ * 45초다. 주문(30초)보다 느리게 둔다 — 말은 30초 늦게 알아도 아무 일도
+ * 안 일어나고, 릴레이는 남의 서버라 덜 두드릴수록 좋다.
+ */
+async function 대화지킴이() {
+  if (!대화알림켜짐()) return; // 꺼 두셨으면 묻지도 않는다
+  if (대화지킴이도는중) return;
+  대화지킴이도는중 = true;
+  try {
+    // 🔴 내가 누구인지부터. 이야기 화면을 한 번도 안 열었으면 `tkMine` 이
+    //    비어 있고, 그 상태로는 **내 글에 내가 알림을 받는다.**
+    if (!tkMine) {
+      try {
+        tkMine = String((await invoke<any>("talk_me"))?.pubkey || "");
+      } catch {
+        // 열쇠를 못 읽으면 이번 바퀴는 넘긴다. `대화살피기` 가 또 막는다.
+      }
+    }
+    for (const 방 of 지켜보는방()) {
+      try {
+        // 30개면 45초 사이에 온 글을 놓칠 일이 없다. 화면(60개)보다 적게
+        // 받는 것은 이건 읽으려는 것이 아니라 **세려는 것**이기 때문이다.
+        const list: any[] = await invoke("talk_read", { room: 방 || null, limit: 30 });
+        대화살피기(방, list);
+      } catch {
+        // 릴레이 한 곳이 죽어도 다음 방은 본다. 조용히 다음 바퀴에 다시 본다.
+      }
+    }
+  } finally {
+    대화지킴이도는중 = false;
+  }
+}
+
+/// 대화 알림 스위치·소리 시험을 잇고, 지킴이 시계를 켠다.
+function 대화알림배선() {
+  const sw = document.getElementById("tk-snd-on") as HTMLInputElement | null;
+  if (sw) {
+    sw.checked = 대화알림켜짐();
+    sw.addEventListener("change", () => {
+      try {
+        localStorage.setItem(대화소리_KEY, sw.checked ? "1" : "0");
+      } catch {}
+      const say = document.getElementById("tk-snd-say");
+      if (say)
+        say.textContent = sw.checked
+          ? "이제 이야기에 새 글이 오면 소리로 알려 드립니다."
+          : "대화 소리를 껐습니다. 주문 소리는 그대로입니다.";
+      // 껐으면 지금 떠 있는 숫자도 같이 내린다. 꺼 놓고 숫자가 남아 있으면
+      // 꺼진 것인지 아닌지 알 수 없다.
+      if (!sw.checked) 대화봤다();
+      // 🔴 다시 켤 때는 **처음부터 시작한다.** 꺼 둔 동안 지킴이가 안 돌아서
+      //    기억이 그때 그대로다. 그냥 켜면 그 사이에 쌓인 글이 통째로 「새
+      //    글」이 되어 켜자마자 「톡」 하고 숫자 40 이 뜬다 — 스위치를 켠 것은
+      //    새 글이 아니다. 앱을 켤 때 첫 바퀴가 조용한 것과 같은 이유다.
+      if (sw.checked) {
+        아는글.clear();
+        첫바퀴읽은방.clear();
+        대화봤다();
+      }
+    });
+  }
+  // 🔴 「소리 들어보기」가 여기에도 있어야 한다. **주문 소리와 나란히 들어
+  //    봐야** 두 소리가 다른 줄 안다 — 그게 이 단추의 진짜 쓸모다.
+  document.getElementById("tk-snd-test")?.addEventListener("click", () => {
+    말소리();
+    const say = document.getElementById("tk-snd-say");
+    if (say)
+      say.textContent =
+        "낮은 「톡」 소리입니다. 위 「새 주문 소리」와 번갈아 눌러 보세요 — 달라야 맞습니다.";
+  });
+
+  // 첫 바퀴가 「이미 아는 글」을 조용히 적는 자리다. 6초 미루는 것은
+  // 주문 지킴이(3초)와 겹치지 않게 하기 위해서다 — 켜자마자 릴레이와 노드를
+  // 동시에 두드리면 느린 컴퓨터에서 첫 화면이 멈춘 것처럼 보인다.
+  setTimeout(() => void 대화지킴이(), 6000);
+  setInterval(() => void 대화지킴이(), 45000);
+}
+
 // ── 주문 ──
 async function loadOrders() {
   // 주문마다 주소가 다르므로 가게 주소 하나로는 못 찾는다. 빈 주소를 넘기면
@@ -12416,6 +12853,9 @@ window.addEventListener("DOMContentLoaded", async () => {
   // 🔴 돈이 들어오면 소리로 부른다. 이 한 줄이 없으면 사장은 주문표를
   //    붙들고 있어야 한다 — 위 「자동 확인」은 화면을 다시 그릴 뿐이다.
   알림배선();
+  // 🔴 대화 알림도 여기서 켠다. 만들어 놓고 이 한 줄을 안 쓰면 이 저장소가
+  //    여러 번 걸린 그 병 — 「러스트·화면은 다 됐는데 아무도 안 부른다」다.
+  대화알림배선();
   // 주문하기 화면은 손님 폰으로 옮겼다.
   $("refresh").addEventListener("click", () => loadAssets(false));
   $("scan").addEventListener("click", startScan);
