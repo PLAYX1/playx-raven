@@ -142,6 +142,11 @@ function busyDone() {
   busyShow(false);
 }
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
+// 🔴 이 창은 우리 화면만 그린다. 지갑 화면(쪽지)은 `127.0.0.1:8790/wallet`
+//    에서 **인터넷 창으로** 열어야 한다 — 그 화면은 12단어를 들고 있어서
+//    `connect-src 'self'` 로 잠겨 있고, 우리 창 안에 끌어들이면 그 잠금이
+//    무슨 의미인지 아무도 알 수 없게 된다.
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { getVersion } from "@tauri-apps/api/app";
 import { listen } from "@tauri-apps/api/event";
 import { check as checkUpdate } from "@tauri-apps/plugin-updater";
@@ -3881,8 +3886,10 @@ function dropJob(): DropJob {
       };
     case "talk":
       return {
-        title: t("글에 붙입니다"),
-        why: t("자산으로 만드는 것이 아닙니다. 파일창고에 올리고 그 주소를 글에 넣습니다 — 값이 들지 않습니다."),
+        title: t("사진을 글에 붙입니다"),
+        // 🔴 놓자마자 나가지 않는다. 입력칸 위에서 기다렸다가 「보내기」를
+        //    눌러야 나간다 — 그 사이에 「이거 얼마예요」를 적을 수 있다.
+        why: t("자산으로 만드는 것이 아닙니다. 입력칸 위에 붙여 두고, 「보내기」를 누르면 글과 함께 나갑니다 — 값이 들지 않습니다."),
         ok: true,
       };
     case "shop":
@@ -3913,9 +3920,13 @@ function dropVeil(on: boolean) {
   v.classList.add("on");
 }
 
-/** 사진인가. 영상은 **안 올린다** — 링크로 받는다. */
+/** 사진인가. 영상은 **안 올린다** — 링크로 받는다.
+ *
+ *  🔴 `heic`·`heif` 를 넣는다. **아이폰 사진의 기본 형식**인데 여기서 빠져
+ *     있어서, 폰에서 옮긴 사진을 떨어뜨리면 「사진만 받습니다」가 떴다.
+ *     러스트(`ext_kind`)는 처음부터 받고 있었다 — 화면만 안 받고 있었다. */
 function looksLikeImage(path: string): boolean {
-  return /\.(jpe?g|png|gif|webp|avif|bmp|svg)$/i.test(path);
+  return /\.(jpe?g|png|gif|webp|avif|heic|heif|bmp|svg)$/i.test(path);
 }
 
 async function onDropped(paths: string[]) {
@@ -3939,6 +3950,23 @@ async function onDropped(paths: string[]) {
   }
 
   const one = files[0];
+
+  // 🔴 「이야기」는 여기서 갈라진다. 예전에는 떨어뜨리는 즉시 파일창고에
+  //    올리고 **게이트웨이 주소 한 줄을 입력칸에 붙였다.** 그러면
+  //    ① 글에 `imeta`·`ipfs` 표가 안 붙어서 우리 화면도 남의 앱도 사진인 줄
+  //       모르고 파란 링크 한 줄로만 보였고,
+  //    ② 사진은 이미 올라갔는데 사장이 안 보내면 아무도 못 볼 사진만
+  //       파일창고에 영영 남았다.
+  //    이제는 **보낼 때 한 번에** 올린다(`talk_photo_post`). 여기서는
+  //    경로만 붙잡아 둔다 — 내용은 안 읽는다(`dropbox.rs` 가 대조한다).
+  if (currentPage === "talk") {
+    const 이름 = one.split(/[\\/]/).pop() || "photo";
+    tkStagePhoto({ name: 이름, size: 0, path: one });
+    $("tk-note").innerHTML =
+      `<span class="ok">${t("사진을 붙였습니다 — 「보내기」를 누르면 나갑니다")}</span>`;
+    return;
+  }
+
   try {
     const added = await invoke<any>("ipfs_add_dropped", { path: one });
     const cid = String(added.cid || "");
@@ -3951,11 +3979,7 @@ async function onDropped(paths: string[]) {
       ($("i-ipfs") as HTMLInputElement).value = cid;
       $("i-preview").innerHTML =
         `<img src="http://127.0.0.1:8080/ipfs/${cid}" alt="" style="max-width:220px;border-radius:8px;margin-top:9px" />`;
-    } else if (currentPage === "talk") {
-      const box = $("tk-text") as HTMLTextAreaElement;
-      box.value = `${box.value}${box.value ? "\n" : ""}https://ipfs.io/ipfs/${cid}`;
-      box.focus();
-      $("tk-note").innerHTML = `<span class="ok">${t("사진을 붙였습니다")}</span>`;
+      // 「이야기」는 위에서 이미 갈라져 나갔다 — 여기로 안 온다.
     } else if (currentPage === "shop") {
       const el = document.getElementById("sh-icon") as HTMLInputElement | null;
       if (el) el.value = cid;
@@ -4384,6 +4408,132 @@ function paintInvite() {
   });
 }
 
+/* ── 받은 글 안의 사진 ─────────────────────────────────────────────
+   러스트가 사진 글에 표를 셋 붙인다(`talk_photo_post`):
+
+     본문   "이거 얼마예요\nhttps://ipfs.io/ipfs/<CID>"
+     imeta  ["imeta", "url …", "m image/jpeg", "x …", "size …"]   ← 남의 앱용
+     ipfs   ["ipfs", "<CID>"]                                     ← 우리 앱용
+
+   🔴 우리는 `ipfs` 표를 보고 **이 컴퓨터의 파일창고**에서 그린다. 남의
+      게이트웨이(ipfs.io)를 거치면 느리고, 우리가 무슨 사진을 보는지 그쪽에
+      다 남는다. 우리 파일창고는 못 가진 사진도 그물에서 받아 온다. */
+
+/** 이 글에 사진이 붙어 있나. 있으면 주소와 종류를 준다. */
+function tkPicOf(e: any): { cid: string; gateway: string; size: number } | null {
+  const tags: any[] = Array.isArray(e?.tags) ? e.tags : [];
+  const cid = String(tags.find((x) => Array.isArray(x) && x[0] === "ipfs")?.[1] || "");
+  // imeta 는 한 표 안에 「열쇠 값」을 띄어쓰기로 이어 붙인다(NIP-92).
+  const imeta: string[] = tags.find((x) => Array.isArray(x) && x[0] === "imeta") || [];
+  const 뽑기 = (k: string) => {
+    const 조각 = imeta.find((s) => typeof s === "string" && s.startsWith(`${k} `));
+    return 조각 ? 조각.slice(k.length + 1).trim() : "";
+  };
+  const url = 뽑기("url");
+  const size = Number(뽑기("size")) || 0;
+  // 우리 표가 없어도 게이트웨이 주소에서 CID 를 꺼낼 수 있다 — 남의 앱
+  // (damus·primal)에서 온 사진도 그러면 그려진다.
+  const 남의것 = url.match(/\/ipfs\/([A-Za-z0-9]+)/)?.[1] || "";
+  const 진짜 = cid || 남의것;
+  if (!진짜) return null;
+  return { cid: 진짜, gateway: url || `https://ipfs.io/ipfs/${진짜}`, size };
+}
+
+/**
+ * 사진 주소 한 줄을 본문에서 뺀다.
+ *
+ * ⚠️ **본문을 고쳐 쓰는 것이 아니다.** 사진을 바로 아래에 그리므로, 같은
+ *    것을 가리키는 주소 한 줄이 글자로 또 있으면 두 번 말하는 셈이다.
+ *    주소 말고 다른 글자는 한 자도 안 건드린다 — 원문이 진짜다.
+ */
+function tkStripPicUrl(content: string, cid: string): string {
+  return content
+    .split("\n")
+    .filter((line) => !(line.trim().includes(`/ipfs/${cid}`) && /^https?:\/\/\S+$/.test(line.trim())))
+    .join("\n")
+    .trim();
+}
+
+/**
+ * 말풍선에 들어갈 사진 조각.
+ *
+ * 🔴 **못 받을 수 있다.** 사진은 보낸 사람 컴퓨터 한 곳에만 있을 수 있고,
+ *    그 컴퓨터가 꺼져 있으면 세상 어디에도 없다. 그때 깨진 그림 아이콘만
+ *    두면 사장은 우리 프로그램이 고장 난 줄 안다. 「사진을 못 받았습니다」와
+ *    **왜 그런지**를 적고, 다시 받을 길과 인터넷 창으로 여는 길을 준다.
+ */
+function tkPicHtml(p: { cid: string; gateway: string; size: number }): string {
+  const local = `http://127.0.0.1:8080/ipfs/${p.cid}`;
+  return (
+    `<div class="picwrap" data-cid="${escapeHtml(p.cid)}" data-gw="${escapeHtml(p.gateway)}">` +
+    `<div class="picwait">${t("사진을 받는 중…")}</div>` +
+    `<img class="bubpic" alt="${t("사진")}" hidden src="${escapeHtml(local)}" />` +
+    `</div>`
+  );
+}
+
+/**
+ * 그려 놓은 사진마다 「받았나·못 받았나」를 지켜본다.
+ *
+ * ⚠️ 파일창고는 없는 사진을 물어보러 그물을 도는 동안 **오류도 안 내고
+ *    그냥 안 답한다.** `onerror` 만 걸어 두면 영영 「받는 중…」이다.
+ *    그래서 25초를 세고, 넘으면 못 받았다고 말한다 — 기다림은 답이 아니다.
+ */
+function tkWatchPics(box: HTMLElement) {
+  box.querySelectorAll<HTMLElement>(".picwrap").forEach((w) => {
+    const img = w.querySelector("img") as HTMLImageElement | null;
+    const wait = w.querySelector(".picwait") as HTMLElement | null;
+    if (!img) return;
+    let 끝났나 = false;
+    const 실패 = (why: string) => {
+      if (끝났나) return;
+      끝났나 = true;
+      const gw = String(w.dataset.gw || "");
+      w.innerHTML =
+        `<div class="picfail"><b>${t("사진을 못 받았습니다")}</b>` +
+        `<span class="picwhy">${escapeHtml(why)}</span>` +
+        `<button data-picretry="1">${t("다시 받기")}</button>` +
+        (gw ? `<button data-picweb="1">${t("인터넷 창에서 열기")}</button>` : "") +
+        `</div>`;
+      const again = w.querySelector("[data-picretry]") as HTMLElement | null;
+      // ⚠️ 말풍선을 누르면 「내 말로」 단추 줄이 열린다. 사진 안의 단추를
+      //    누른 것이 그 줄까지 여닫으면 손이 어디를 눌렀는지 모르게 된다.
+      if (again) again.onclick = (ev) => {
+        ev.stopPropagation();
+        // 다시 그리고 다시 지켜본다. 파일창고를 방금 켰을 수도 있다.
+        w.innerHTML =
+          `<div class="picwait">${t("사진을 받는 중…")}</div>` +
+          `<img class="bubpic" alt="${t("사진")}" hidden ` +
+          `src="http://127.0.0.1:8080/ipfs/${escapeHtml(String(w.dataset.cid || ""))}?t=${Date.now()}" />`;
+        tkWatchPics(w.parentElement || w);
+      };
+      const web = w.querySelector("[data-picweb]") as HTMLElement | null;
+      if (web) web.onclick = (ev) => {
+        ev.stopPropagation();
+        void openUrl(gw);
+      };
+    };
+    img.onload = () => {
+      if (끝났나) return;
+      끝났나 = true;
+      if (wait) wait.remove();
+      img.hidden = false;
+    };
+    // 🔴 **왜** 안 뜨는지를 갈라서 말한다. 원인이 다르면 할 일도 다르다.
+    img.onerror = () =>
+      실패(t("이 컴퓨터의 파일창고가 꺼져 있거나, 보낸 분이 컴퓨터를 끄셔서 사진이 어디에도 남아 있지 않습니다."));
+    // 눌러서 크게 본다. 우리 창은 좁으니 인터넷 창에 맡긴다.
+    img.onclick = (ev) => {
+      ev.stopPropagation();
+      void openUrl(`http://127.0.0.1:8080/ipfs/${String(w.dataset.cid || "")}`);
+    };
+    window.setTimeout(
+      () => 실패(t("25초를 기다렸는데 아직 못 받았습니다. 보낸 분의 컴퓨터가 켜져 있어야 받을 수 있습니다.")),
+      25000,
+    );
+  });
+}
+
 /**
  * 글 목록.
  *
@@ -4471,11 +4621,18 @@ async function talkPaint() {
           ? ""
           : `<time class="tstamp" title="${escapeHtml(new Date(ms).toLocaleString())}">${escapeHtml(tkClock(ms))}</time>`;
 
+        // ④ 사진이 붙어 있으면 말풍선 안에 그린다. 주소 한 줄은 본문에서
+        //    빼고 — 사진을 바로 아래 그리므로 같은 말을 두 번 하는 셈이다.
+        const pic = tkPicOf(e);
+        const 본문 = pic
+          ? tkStripPicUrl(String(e.content || ""), pic.cid)
+          : String(e.content || "");
+
         return (
           day +
           head +
           `<div class="line${mine ? " me" : ""}">
-             <div class="bub${mine ? " me" : ""}" data-say="${id}">${escapeHtml(String(e.content || ""))}</div>
+             <div class="bub${mine ? " me" : ""}" data-say="${id}">${escapeHtml(본문)}${pic ? tkPicHtml(pic) : ""}</div>
              ${clock}
            </div>
            <div class="bubacts${mine ? " r" : ""}" data-acts="${id}">
@@ -4495,6 +4652,9 @@ async function talkPaint() {
       .join("");
     // 새 글이 아래에 있으므로 맨 아래로 내린다. 안 하면 옛날 글만 보인다.
     box.scrollTop = box.scrollHeight;
+    // 🔴 사진은 그려 놓고 **지켜봐야** 한다. 안 지켜보면 「받는 중…」에서
+    //    영영 멈춰 있고, 그건 못 받았다는 말을 안 하는 것과 같다.
+    tkWatchPics(box);
     // 🔴 **말풍선을 누르면 그 글의 단추만 나온다.**
     //
     //    단추 줄은 예전에 `opacity:0` 으로 **자리를 늘 차지**했고(손가락
@@ -4638,10 +4798,129 @@ async function talkKeep(id: string, list: any[]) {
   }
 }
 
+/* ── 사진 보내기 ───────────────────────────────────────────────────
+   러스트(`talk_photo_post`)가 다 만들어 놓았는데 **부르는 자리가 없었다.**
+   이 앱이 여러 번 걸린 그 병이다 — 없는 기능과 안 부르는 기능은 사장에게
+   똑같다.
+
+   ## 사진이 오는 길은 둘뿐이다
+
+   - **끌어다 놓기**: 러스트가 들고 있는 「방금 떨어뜨린 목록」에 있는 것만
+     읽는다(`dropbox.rs`). 그래서 화면은 **경로만** 넘긴다 — 내용을 안 읽으니
+     화면이 뚫려도 `wallet.dat` 을 지목할 수가 없다.
+   - **「사진」 단추**: 브라우저 파일 고르기가 읽어 준 내용을 그대로 넘긴다.
+     애초에 경로가 아니라 내용이라 남의 파일을 가리킬 수가 없다.
+
+   ## 🔴 고르자마자 보내지 않는다
+
+   사진만 덜렁 가는 것이 아니라 「이거 얼마예요」가 같이 가야 한다. 그래서
+   고른 사진은 입력칸 위에서 **기다리고**, 「보내기」를 눌러야 글과 함께
+   나간다. 잘못 고른 것은 「취소」로 무른다. */
+
+/** 보내려고 골라 둔 사진. 둘 중 하나만 채워진다 — 경로(떨어뜨림)나 내용(고름). */
+type TkPhoto = {
+  name: string;
+  size: number;
+  /** 창에 떨어뜨린 파일의 경로. 러스트가 목록과 대조한다. */
+  path?: string;
+  /** 파일 고르기로 읽은 내용. */
+  bytes?: number[];
+  /** 미리보기 주소(`blob:`). 떨어뜨린 것은 내용을 안 읽으므로 없다. */
+  preview?: string;
+};
+let tkPhoto: TkPhoto | null = null;
+/** 보내는 중에 「몇 초째」를 세는 시계. 멈추면 반드시 끈다. */
+let tkPhotoTick: number | undefined;
+
+/** 「2.4MB」·「180KB」. 사람이 읽는 크기 — 바이트 숫자는 아무 말도 안 한다. */
+function tkSize(n: number): string {
+  return n >= 1024 * 1024 ? `${(n / (1024 * 1024)).toFixed(1)}MB` : `${Math.max(1, Math.round(n / 1024))}KB`;
+}
+
+/** 고른 사진을 입력칸 위에 세워 둔다. 아직 안 보낸다. */
+function tkStagePhoto(p: TkPhoto) {
+  // 앞서 고른 것이 있으면 미리보기 주소를 놓아준다. 안 놓으면 고를 때마다
+  // 이 창이 사진 하나씩을 계속 물고 있는다.
+  if (tkPhoto?.preview) URL.revokeObjectURL(tkPhoto.preview);
+  tkPhoto = p;
+  const img = $("tk-photoprev") as HTMLImageElement;
+  if (p.preview) {
+    img.src = p.preview;
+    img.hidden = false;
+  } else {
+    // 🔴 떨어뜨린 사진은 **내용을 안 읽었으므로 미리 못 보여 준다.**
+    //    있는 척 회색 네모를 그리지 않는다. 이름으로 확인하게 한다.
+    img.removeAttribute("src");
+    img.hidden = true;
+  }
+  $("tk-photoname").textContent = p.name;
+  $("tk-photometa").textContent = p.size
+    ? `${tkSize(p.size)} · ${t("「보내기」를 누르면 글과 함께 나갑니다")}`
+    : t("「보내기」를 누르면 글과 함께 나갑니다");
+  $("tk-photoprog").hidden = true;
+  $("tk-photobox").hidden = false;
+  ($("tk-text") as HTMLTextAreaElement).focus();
+}
+
+/** 골라 둔 사진을 무른다. */
+function tkClearPhoto() {
+  if (tkPhoto?.preview) URL.revokeObjectURL(tkPhoto.preview);
+  tkPhoto = null;
+  $("tk-photobox").hidden = true;
+  $("tk-photoprog").hidden = true;
+  ($("tk-photoprev") as HTMLImageElement).removeAttribute("src");
+}
+
+/**
+ * 「사진」 단추. 파일 고르기를 연다.
+ *
+ * ⚠️ 여기서는 크기·종류를 안 막는다. 막는 자리는 러스트 하나뿐이어야 한다
+ *    (`photo_kind`) — 두 곳에 두면 한쪽만 고치는 날이 오고, 그때 화면과
+ *    러스트가 서로 다른 말을 한다. 대신 러스트의 오류 문구가 「무엇을 하면
+ *    되는지」까지 적어 두었으니 그대로 띄운다.
+ */
+function talkPickPhoto() {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "image/*";
+  input.onchange = async () => {
+    const file = input.files?.[0];
+    if (!file) return;
+    try {
+      const bytes = Array.from(new Uint8Array(await file.arrayBuffer()));
+      tkStagePhoto({
+        name: file.name,
+        size: file.size,
+        bytes,
+        preview: URL.createObjectURL(file),
+      });
+    } catch (e) {
+      $("tk-note").innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
+    }
+  };
+  input.click();
+}
+
+/**
+ * 러스트가 준 `say` 를 **그대로** 띄운다.
+ *
+ * 🔴 여기서 문장을 고쳐 쓰지 않는다. 「보냈습니다」로 줄이면 그게 거짓말이다 —
+ *    올린 사진은 처음에 이 컴퓨터 한 곳에만 있고, 사본이 생기기 전에 컴퓨터를
+ *    끄면 상대 화면에서 안 뜬다. 그 사실이 저 문장 안에 들어 있다.
+ *    스스로 사라지지도 않는다. 읽고 닫아야 한다.
+ */
+function tkSaid(msg: string) {
+  if (!msg) return;
+  $("tk-saidtext").textContent = msg;
+  $("tk-said").hidden = false;
+}
+
 async function talkSend() {
   const box = $("tk-text") as HTMLTextAreaElement;
   const text = box.value.trim();
-  if (!text) return;
+  // 사진이 걸려 있으면 글이 비어도 보낸다 — 사진 한 장이 곧 본문인 나이대다.
+  if (!text && !tkPhoto) return;
+  if (tkPhoto) return void talkSendPhoto(text);
   $("tk-note").textContent = t("올리는 중…");
   try {
     await invoke("talk_post", { text, room: tkRoom || null });
@@ -4652,6 +4931,127 @@ async function talkSend() {
     setTimeout(() => void talkPaint(), 1200);
   } catch (e) {
     $("tk-note").innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
+  }
+}
+
+/**
+ * 골라 둔 사진을 실제로 올린다.
+ *
+ * ## ⚠️ 여기가 이 화면에서 제일 오래 걸리는 자리다
+ *
+ * 8MB 사진은 집 인터넷에서 십수 초~1분이 걸린다. 그동안 아무 표시가 없으면
+ * 사장은 **멈춘 줄 알고 한 번 더 누른다** — 그러면 같은 사진이 두 번 올라간다.
+ *
+ * 그래서 세 가지를 한다:
+ *   ① 「보내기」와 「사진」·「취소」를 잠근다. 두 번 누를 길을 없앤다.
+ *   ② 도는 막대 + **몇 초째인지 숫자**. 막대만 돌면 멈춘 것과 구별이 안 된다.
+ *   ③ 오래 걸릴 것을 **미리** 말한다. 예고한 느림은 고장이 아니다.
+ *
+ * 🔴 진짜 퍼센트는 못 보여 준다. 러스트 명령은 한 번에 갔다 오고, 파일창고에
+ *    얼마나 들어갔는지 중간에 알려주지 않는다. **없는 퍼센트를 지어내지
+ *    않는다** — 30%에서 멈춰 있는 막대가 제일 나쁜 거짓말이다.
+ */
+async function talkSendPhoto(text: string) {
+  const p = tkPhoto;
+  if (!p) return;
+  const box = $("tk-text") as HTMLTextAreaElement;
+  const send = $("tk-send") as HTMLButtonElement;
+  const pick = $("tk-photo") as HTMLButtonElement;
+  const cancel = $("tk-photocancel") as HTMLButtonElement;
+  const prog = $("tk-photoprog");
+
+  send.disabled = pick.disabled = cancel.disabled = true;
+  $("tk-note").textContent = "";
+  prog.hidden = false;
+
+  const 시작 = Date.now();
+  const 오래 = p.size > 2 * 1024 * 1024;
+  const 그리기 = () => {
+    const 초 = Math.floor((Date.now() - 시작) / 1000);
+    prog.innerHTML =
+      `<b>${t("사진을 보내는 중…")} ${초}${t("초")}</b>` +
+      (오래
+        ? `<br /><span class="pbmeta">${t("큰 사진은 1분까지 걸립니다. 창을 닫지 마세요.")}</span>`
+        : "") +
+      `<div class="photobar"><i></i></div>`;
+  };
+  그리기();
+  clearInterval(tkPhotoTick);
+  tkPhotoTick = window.setInterval(그리기, 1000);
+
+  // ⚠️ 8MB 짜리 내용을 러스트로 넘기려면 화면이 그것을 한 번 통째로 옮겨
+  //    적어야 하고, 그 몇 초 동안 화면은 아무것도 못 그린다. **먼저 그리고**
+  //    넘긴다 — 안 그러면 「보내는 중」이 뜨기도 전에 창이 굳는다.
+  await new Promise((r) => requestAnimationFrame(() => r(null)));
+
+  try {
+    // 🔴 `path` 와 `bytes` 중 **하나만** 넘긴다. 러스트가 `path` 를 먼저 보므로
+    //    둘 다 넘기면 내용이 조용히 무시된다.
+    const r = await invoke<any>("talk_photo_post", {
+      path: p.path ?? null,
+      name: p.path ? null : p.name,
+      bytes: p.path ? null : (p.bytes ?? null),
+      text,
+      room: tkRoom || null,
+      replyTo: null,
+      replyPub: null,
+    });
+    box.value = "";
+    box.style.height = "auto";
+    tkClearPhoto();
+    // 🔴 응답의 `say` 를 **그대로.** 여기서 요약하면 경고가 사라진다.
+    tkSaid(String(r?.say || ""));
+    setTimeout(() => void talkPaint(), 1200);
+  } catch (e) {
+    // 러스트의 오류 문구는 「무엇을 하면 되는지」까지 적혀 있다(파일창고를
+    // 켜세요·크기를 줄이세요…). 줄이지 말고 그대로 띄운다.
+    // ⚠️ 고른 사진은 **안 지운다.** 파일창고를 켜고 그대로 다시 누를 수 있어야
+    //    한다 — 실패했다고 고른 것까지 뺏으면 처음부터 다시다.
+    $("tk-note").innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
+  } finally {
+    clearInterval(tkPhotoTick);
+    tkPhotoTick = undefined;
+    prog.hidden = true;
+    send.disabled = pick.disabled = cancel.disabled = false;
+  }
+}
+
+/**
+ * 「쪽지」 — 지갑 화면을 인터넷 창에 연다.
+ *
+ * ## 🔴 왜 이 창이 아니라 저기인가
+ *
+ * 1:1 암호 쪽지(NIP-17)는 **지갑 화면에만** 있다. 지갑의 12단어에서 나온
+ * 열쇠로 서명하고 풀기 때문이다. 이 창에는 그 12단어가 없다 — 그리고 없는
+ * 편이 맞다. 12단어를 들고 있는 화면은 `connect-src 'self'` 로 바깥 통로를
+ * 막아 두었고, 우리 창이 그 화면을 품으면 그 잠금이 무의미해진다.
+ *
+ * ## ⚠️ 서버를 먼저 켠다
+ *
+ * 그 화면은 이 컴퓨터의 손님 서버(`127.0.0.1:8790`)가 내준다. 안 켜져 있으면
+ * 인터넷 창에 「연결할 수 없음」만 뜨는데, 그건 사장에게 아무것도 안 알려
+ * 준다. 이미 켜져 있으면 그대로 쓴다.
+ */
+async function talkOpenDm() {
+  const say = $("tk-dmsay");
+  const go = $("tk-dmgo") as HTMLButtonElement;
+  go.disabled = true;
+  say.textContent = t("여는 중…");
+  try {
+    // 20초를 넘기면 멈춘 이유를 말한다. 말없이 기다리게 두지 않는다.
+    await Promise.race([
+      invoke<any>("start_phone_server"),
+      new Promise((_, no) =>
+        setTimeout(() => no(new Error(t("20초 안에 열리지 않았습니다."))), 20000)),
+    ]);
+    await openUrl("http://127.0.0.1:8790/wallet");
+    say.innerHTML =
+      `<span class="ok">${t("인터넷 창에 쪽지 화면을 열었습니다.")}</span> ` +
+      escapeHtml(t("12단어가 아직 없으면 그 화면이 먼저 만들라고 합니다."));
+  } catch (e) {
+    say.innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
+  } finally {
+    go.disabled = false;
   }
 }
 
@@ -12899,6 +13299,24 @@ window.addEventListener("DOMContentLoaded", async () => {
     });
   }
   $("tk-name").addEventListener("click", () => void talkSetName());
+  // 사진. 🔴 러스트(`talk_photo_post`)는 진작 다 돼 있었고 **부르는 이 줄이
+  //    없어서** 사진을 못 보냈다. 만들어 놓고 안 부르는 그 병이다.
+  $("tk-photo").addEventListener("click", () => talkPickPhoto());
+  $("tk-photocancel").addEventListener("click", () => tkClearPhoto());
+  // 「이 컴퓨터를 끄면 상대가 사진을 못 볼 수 있습니다」는 읽고 닫는 말이다.
+  $("tk-saidclose").addEventListener("click", () => {
+    $("tk-said").hidden = true;
+  });
+  // 쪽지. 단추를 누르면 **먼저 무엇이 다른지 읽게** 하고, 그다음에 연다.
+  $("tk-dm").addEventListener("click", () => {
+    const b = $("tk-dmbox");
+    b.hidden = !b.hidden;
+    if (!b.hidden) $("tk-dmsay").textContent = "";
+  });
+  $("tk-dmclose").addEventListener("click", () => {
+    $("tk-dmbox").hidden = true;
+  });
+  $("tk-dmgo").addEventListener("click", () => void talkOpenDm());
   // 안 보기. 🔴 러스트만 있고 여기가 비면 단추가 죽는다 — 이 앱이 여러 번
   //    걸린 병이다. 명단·전체 되돌리기·닫기 세 줄을 반드시 같이 묶는다.
   $("tk-muted").addEventListener("click", () => talkToggleMuted());
