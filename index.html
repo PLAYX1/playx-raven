@@ -168,6 +168,31 @@
       .chathead { display: flex; align-items: center; gap: 10px; padding: 10px 14px;
         border-bottom: 1px solid var(--line); background: var(--side); flex-wrap: wrap; }
       .chathead b { font-size: 15px; }
+      /* 머리줄 단추는 이제 둘뿐이다(초대하기·더 보기). 44px 은 지킨다. */
+      .chathead button { min-height: 44px; }
+
+      /* ── 접어 둔 것들 ──────────────────────────────────────────────
+         🔴 `display` 를 준 자리는 UA 의 `[hidden]{display:none}` 을 이긴다.
+            이 파일에서 같은 덫을 두 번(86행·`.photobox`) 밟았다. */
+      .tkmorebox { display: block; padding: 12px 14px; background: var(--side);
+        border-bottom: 1px solid var(--line); }
+      .tkmorebox[hidden] { display: none; }
+      .tkmorerow { display: flex; gap: 8px; flex-wrap: wrap; }
+      .tkmorerow button { min-height: 44px; padding: 0 16px; font-size: 15px; }
+      .tkmorebox .meta { margin: 10px 0 0; font-size: 14px; line-height: 1.65; }
+      /* 켜고 끄는 줄도 눌리는 자리다 — 글자까지 누를 수 있게 label 로 감쌌다. */
+      .tkauto { display: flex; align-items: center; gap: 10px; margin-top: 12px;
+        min-height: 44px; font-size: 15px; cursor: pointer; }
+      .tkauto input { width: 22px; height: 22px; flex: none; cursor: pointer; }
+
+      /* 처음 세 번만 뜨는 줄. 늘 떠 있으면 안 읽힌다. */
+      .tkfirst { display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+        padding: 11px 14px; background: var(--side);
+        border-bottom: 1px solid var(--line); }
+      .tkfirst[hidden] { display: none; }
+      .tkfirst p { margin: 0; flex: 1; min-width: 200px; font-size: 14.5px;
+        line-height: 1.6; color: var(--muted); }
+      .tkfirst button { flex: none; min-height: 44px; padding: 0 16px; font-size: 15px; }
 
       .msgs { flex: 1; overflow-y: auto; padding: 14px; display: flex;
         flex-direction: column; gap: 3px; }
@@ -2027,43 +2052,78 @@
           </aside>
 
           <div class="chat">
+            <!-- ── 머리줄 ──────────────────────────────────────────────
+                 🔴 **대표님 지적(2026-08-30): "화면이 글로 가득 찼다."**
+
+                 내가 만든 병이다. 「신뢰」를 지키려고 넣은 경고를 **전부
+                 늘 띄웠다.** 머리줄에 단추 다섯, 그 아래 경고문, 목록 아래
+                 안내문 두 줄, 입력칸에는 잘리는 긴 문장.
+
+                 사실이긴 한데 **매번 보이면 안 읽는다.** 안 읽히는 경고는
+                 지키는 게 아무것도 없다 — 신뢰 장치가 오히려 죽는다.
+
+                 그래서 **한 번만 말하고 접는다.** 없앤 것은 하나도 없다.
+                 처음 세 번은 저절로 보이고, 그 뒤로는 「더 보기」 안에 있다.
+
+                 ⚠️ 「초대하기」는 접지 않는다. 방을 만들어도 남을 못 부르면
+                    혼자 쓰는 방이고, 그건 매일 쓰는 자리다
+                    (「헤더는 보이는 게 전부」). -->
             <div class="chathead">
               <b id="tk-title">레이븐 이야기</b>
               <span class="meta" id="tk-me"></span>
               <span style="margin-left:auto"></span>
-              <!-- 🔴 방을 만들어도 남을 부를 길이 없었다. 그러면 혼자 쓰는 방이다. -->
               <span id="tk-invite"></span>
-              <!-- 🔴 「내보내기」가 아니라 「안 보기」다. 이름부터 정직해야
-                   사장이 눌러 놓고 처리됐다고 믿지 않는다. -->
-              <button class="ghost" id="tk-muted">안 보기 명단</button>
-            <!-- 🔴 대표님: "상대방에게 입력을 차단하면 상대방은 입력되도
-                 채팅에 내용이 반영이 안된다고 알려줘야 하지 않나?"
+              <!-- 🔴 「⋯」 하나만 두지 않는다. 40~70대에게 점 세 개는 단추로
+                   안 읽힌다. **글자로** 적는다. -->
+              <button class="ghost" id="tk-more" aria-expanded="false">더 보기</button>
+            </div>
 
-                 맞다. **허공에 대고 말하게 두는 것도 거짓말이다.**
+            <!-- ── 접어 둔 것들 ────────────────────────────────────────
+                 여기 있는 것은 **가끔 쓰는 것**뿐이다. 매일 쓰는 것(쓰기·
+                 보내기·사진·초대)은 전부 밖에 있다. -->
+            <div id="tk-morebox" class="tkmorebox" hidden>
+              <div class="tkmorerow">
+                <!-- 🔴 「내보내기」가 아니라 「안 보기」다. 이름부터 정직해야
+                     사장이 눌러 놓고 처리됐다고 믿지 않는다. -->
+                <button class="ghost" id="tk-muted">안 보기 명단</button>
+                <button class="ghost" id="tk-name">내 이름</button>
+                <!-- 🔴 **1:1 암호 쪽지는 이 창에 없다.** 지갑 화면에만 있다.
+                     길이 없으면 없는 기능이나 마찬가지라 여기서 문을 낸다. -->
+                <button class="ghost" id="tk-dm">쪽지</button>
+                <button class="ghost" id="tk-reload">새로고침</button>
+              </div>
 
-                 ⚠️ 그런데 개별 차단은 못 알린다. 숨긴 것은 내 컴퓨터에만
-                    있고, 상대에게 알리려면 릴레이에 「나는 너를 숨겼다」를
-                    올려야 한다 — 그러면 **모두가 보고 보복이 시작된다.**
-                    카톡은 서버가 하나라 조용히 알릴 수 있지만 우리는 못 한다.
+              <!-- 🔴 **번역을 눌러야만 나오면 아무도 못 쓴다.**
+                   「전세계가 커뮤니티로 서로 도와주는데 있다」는 이 앱의
+                   목적이 글마다 단추 한 번 뒤에 숨어 있었다. 이제 내 말이
+                   아닌 글은 **저절로** 옆에 옮겨 적는다. 끌 수도 있다. -->
+              <label class="tkauto">
+                <input type="checkbox" id="tk-auto" />
+                <span>다른 나라 말은 <b>저절로 옮겨</b> 보여 주기</span>
+              </label>
 
-                 그래서 **차단이 있다는 사실을 모두가 미리 알게** 한다.
-                 개별은 안 알리되, 아무도 「내 말이 반드시 닿는다」고 믿지
-                 않게 된다. 숨긴 사람은 보복을 안 당하고, 숨겨진 사람도
-                 사실을 안다. 탈중앙에서 가능한 유일하게 정직한 방법이다. -->
-              <button class="ghost" id="tk-name">내 이름</button>
-            <!-- 🔴 **1:1 암호 쪽지는 이 창에 없다.** 지갑 화면에만 있다.
-                 길이 없으면 없는 기능이나 마찬가지라 여기서 문을 낸다.
-                 다만 **같은 자리가 아니다** — 다른 열쇠, 다른 이름이다.
-                 그 사실은 누르기 전에 말한다(아래 `tk-dmbox`). -->
-              <button class="ghost" id="tk-dm">쪽지</button>
-            <!-- 🔴 **이름표가 「그 사람」으로 읽힌다**(그록 지적, 2026-08-29).
-                 이름은 누구나 같게 달 수 있다 — 사장 이름을 흉내 낸 사람이
-                 「계좌 바뀌었어요」라고 쓰면 그대로 믿는다.
-                 진짜는 열쇠(공개키)이고, 이름은 그 위에 붙인 딱지일 뿐이다. -->
-            <p class="meta" style="margin-top:6px">
-              ⚠️ 이름은 <b>누구나 같게 달 수 있습니다.</b> 돈이나 주소 이야기는
-              이름만 보고 믿지 마세요.</p>
-              <button class="ghost" id="tk-reload">새로고침</button>
+              <!-- 🔴 이름표가 「그 사람」으로 읽힌다. 이름은 누구나 같게 달 수
+                   있다 — 사장 이름을 흉내 낸 사람이 「계좌 바뀌었어요」라고
+                   쓰면 그대로 믿는다. 진짜는 열쇠이고 이름은 딱지일 뿐이다. -->
+              <p class="meta">⚠️ 이름은 <b>누구나 같게 달 수 있습니다.</b>
+                돈이나 주소 이야기는 이름만 보고 믿지 마세요.</p>
+              <!-- 🔴 대표님: "상대방에게 입력을 차단하면 상대방은 입력되도
+                   반영이 안된다고 알려줘야 하지 않나?" 맞다. 개별 차단은
+                   못 알린다(릴레이에 올리면 모두가 보고 보복이 시작된다).
+                   그래서 **차단이 있다는 사실을 모두가 미리 알게** 한다. -->
+              <p class="meta">여기 쓴 글은 <b>세계 릴레이</b>로 함께 나갑니다.
+                각자 누구를 숨길 수 있어서, 내 글을 모두가 본다는 보장은 없습니다.</p>
+              <p class="meta">글을 <b>누르면</b> 「내 말로」·「간직」·「안 보기」
+                단추가 나옵니다. 사진은 아래 <b>「사진」</b> 단추로 고르거나
+                창에 <b>끌어다 놓으면</b> 됩니다.</p>
+            </div>
+
+            <!-- 처음 세 번만. 🔴 한 번도 안 보이면 그건 없앤 것이고,
+                 매번 보이면 안 읽는다. 세 번은 읽고 기억할 만큼이다. -->
+            <div id="tk-first" class="tkfirst" hidden>
+              <p>⚠️ <b>이름은 누구나 같게 달 수 있습니다.</b> 돈이나 주소
+                이야기는 이름만 보고 믿지 마세요. 글은 세계 릴레이로 나갑니다.</p>
+              <button class="ghost" id="tk-firstok">알겠습니다</button>
             </div>
 
             <!-- ── 쪽지 안내 ────────────────────────────────────────
@@ -2121,7 +2181,7 @@
                  숨긴 기능은 안 적으면 없앤 기능이다. 「내 말로」(번역)와
                  「간직」은 이 앱만 하는 일이라 더 그렇다 — 그게 있는 줄
                  모르면 이 프로그램을 쓸 이유 하나가 통째로 사라진다. -->
-            <p class="talkhint">글을 <b>누르면</b> 「내 말로」·「간직」·「안 보기」 단추가 나옵니다.
+            <p class="talkhint" id="tk-hint" hidden>글을 <b>누르면</b> 「내 말로」·「간직」·「안 보기」 단추가 나옵니다.
               사진은 아래 <b>「사진」</b> 단추로 고르거나, 창에 <b>끌어다 놓으면</b> 됩니다.</p>
 
             <!-- ── 고른 사진 ────────────────────────────────────────
@@ -2148,8 +2208,10 @@
                      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.6"/><path d="M21 16l-5-5-5.5 5.5L8 14l-5 5"/></svg>
                 <span>사진</span>
               </button>
-              <textarea id="tk-text" rows="1"
-                placeholder="여기에 쓰면 세계 릴레이로 함께 나갑니다 — 다만 각자 누구를 숨길 수 있어 모두가 본다는 보장은 없습니다"></textarea>
+              <!-- 🔴 안내문을 입력칸 안에 넣지 않는다. 칸이 좁아서 문장이
+                   중간에 잘렸고, 잘린 경고는 경고가 아니라 잡음이다.
+                   그 내용은 「더 보기」와 처음 세 번 뜨는 줄에 그대로 있다. -->
+              <textarea id="tk-text" rows="1" placeholder="메시지"></textarea>
               <button id="tk-send">보내기</button>
             </div>
             <div class="meta" id="tk-note" style="padding:0 14px 8px"></div>

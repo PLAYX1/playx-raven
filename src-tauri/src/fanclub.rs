@@ -212,6 +212,58 @@ const FIX_INDEX: &str = "자산 색인이 꺼져 있어 몇 분이 가졌는지 
 「이 컴퓨터 → 고급 → 자산 전체 색인」을 켜고 노드를 다시 시작하세요. \
 이미 다 받아 놓은 컴퓨터라면 처음부터 다시 훑느라 몇 시간 걸립니다 — 밤에 켜세요.";
 
+/// 자산 몇 개 중 몇 개에 방이 있나 — **를 사람이 읽는 말로.**
+///
+/// 🔴 셈이 맞는다고 문장이 맞는 것이 아니다. 「자산 2개 중 0개」는 사실이지만
+///    **고장으로 읽힌다**(대표님 지적, 2026-08-30). 방이 없는 것은 상태지
+///    오류가 아니므로, 없을 때는 다음에 할 일을 적는다.
+fn rooms_say(total: usize, with_room: usize) -> String {
+    if total == 0 {
+        return "이 지갑에는 자산이 없습니다. 음반이나 그림을 먼저 자산으로 내셔야 팬클럽 방을 걸 수 있습니다.".into();
+    }
+    if with_room == 0 {
+        return format!(
+            "자산 {total}개가 있습니다. 아직 팬 방은 없습니다 — 방을 열고 싶은 자산에서 「방 만들기」를 누르세요."
+        );
+    }
+    if with_room >= total {
+        return format!("자산 {total}개 모두 팬 방이 있습니다.");
+    }
+    format!("자산 {total}개 중 {with_room}개에 팬 방이 있습니다.")
+}
+
+/// **못 셌을 때의 답.** 오류가 아니라 「아직 모릅니다」다.
+///
+/// 노드가 어디까지 훑었는지를 같이 적는다. 「나중에 다시」만 적으면 사장은
+/// 언제가 나중인지 모르고 오 분마다 누른다 — 87% 라고 적혀 있으면 기다린다.
+///
+/// ⚠️ 진행률을 **못 읽어도** 이 함수는 답을 돌려준다. 진행률은 곁들이인데
+///    그걸 못 읽었다고 팬 수 화면까지 죽으면 같은 병을 한 겹 더 만드는 것이다.
+async fn soft_count(asset: &str, why: &str) -> Value {
+    let 어디까지 = match crate::raven::call_rpc("getblockchaininfo", json!([])).await {
+        Ok(v) => v
+            .get("verificationprogress")
+            .and_then(Value::as_f64)
+            .map(|p| format!("지금 장부를 {:.0}%까지 훑었습니다.", (p * 100.0).min(100.0))),
+        Err(_) => None,
+    };
+    json!({
+        "asset": asset,
+        // 🔴 `null` 이다. `0` 을 주면 화면이 「가진 분이 없습니다」라고 적는다 —
+        //    모르는 것과 없는 것은 다르다.
+        "holders": Value::Null,
+        "counted": false,
+        "say": format!("{asset} — 몇 분이 가졌는지는 아직 못 셌습니다."),
+        "why": match &어디까지 {
+            Some(p) => format!("{why} {p} 다 훑으면 셀 수 있습니다."),
+            None => format!("{why} 노드가 장부를 다 훑으면 셀 수 있습니다."),
+        },
+        // 🔴 **못 세도 공지는 보낼 수 있다.** 이걸 안 적으면 사장이 멈춘다.
+        "ok_without": "이 숫자가 없어도 공지를 보내는 데는 지장이 없습니다.",
+        "limits": limits(),
+    })
+}
+
 /// 가진 사람 수만 뽑는다.
 ///
 /// ## 🔴 주소는 여기서 끝난다
@@ -342,14 +394,20 @@ pub async fn fan_rooms() -> Value {
         .filter(|x| x.get("room_count").and_then(Value::as_i64).unwrap_or(0) > 0)
         .count();
 
+    // 🔴 **「자산 2개 중 0개」는 실패로 읽힌다**(대표님 지적, 2026-08-30).
+    //
+    //    사실은 아무 문제도 없다 — 방을 아직 안 연 것뿐이다. 그런데 「0개」는
+    //    무언가 고장 났다는 소리로 들리고, 사장은 없는 고장을 찾기 시작한다.
+    //    **숫자가 사실이어도 읽히는 뜻이 틀리면 그건 틀린 문장이다.**
+    //
+    //    방이 없는 것은 상태지 오류가 아니므로, 없을 때는 다음에 할 일을
+    //    적는다. 다 있을 때는 「모두」라고 적는다 — 「2개 중 2개」도 셈이다.
     let say = if let Some(w) = &assets_why {
         format!("자산을 읽지 못했습니다: {w}\n노드가 꺼져 있거나 장부를 다시 훑는 중일 수 있습니다. 자산이 없다는 뜻이 아닙니다.")
     } else if let Some(w) = &rooms_why {
         format!("자산은 {}개 읽었지만 방 목록을 읽지 못했습니다: {w}", g.len())
-    } else if g.is_empty() {
-        "이 지갑에는 자산이 없습니다. 음반이나 그림을 먼저 자산으로 내셔야 팬클럽 방을 걸 수 있습니다.".into()
     } else {
-        format!("자산 {}개 중 {}개에 방이 있습니다.", g.len(), with_room)
+        rooms_say(g.len(), with_room)
     };
 
     json!({
@@ -565,16 +623,27 @@ pub async fn fan_announce(
 pub async fn fan_holders(asset: String) -> Result<Value, String> {
     let a = norm_asset(&asset)?;
     // 두 번째 인자가 `onlytotal` 이다. 주소 대신 개수만 달라는 뜻.
-    let v = crate::raven::call_rpc("listaddressesbyasset", json!([a, true])).await?;
+    //
+    // 🔴 **못 세는 것은 고장이 아니다**(대표님 지적, 2026-08-30).
+    //
+    //    「노드가 20초 안에 답하지 않았습니다」가 빨간 글씨로 떴다. 그런데
+    //    팬 수는 **있으면 좋은 숫자**지 팬클럽을 쓰는 조건이 아니다 —
+    //    공지를 보내는 데는 이 숫자가 하나도 안 쓰인다. 빨간 글씨는
+    //    「지금 아무것도 하면 안 된다」는 뜻으로 읽히니, 사장은 멈춘다.
+    //
+    //    그래서 못 셌을 때는 **오류로 던지지 않고** 「아직 못 셌습니다」와
+    //    노드가 어디까지 훑었는지를 같이 돌려준다. 색인이 아예 꺼진 것만
+    //    오류다 — 그건 사람이 켜 줘야 바뀌는 일이기 때문이다.
+    let v = match crate::raven::call_rpc("listaddressesbyasset", json!([a, true])).await {
+        Ok(v) => v,
+        Err(e) => return Ok(soft_count(&a, &format!("노드가 답하지 않았습니다: {e}")).await),
+    };
     // 🔴 색인이 꺼져 있으면 이 노드는 **오류 문장을 정상 응답으로** 준다.
     if needs_index(&v) {
         return Err(FIX_INDEX.into());
     }
     let Some(n) = holders_count(&v) else {
-        return Err(format!(
-            "{a} 을(를) 몇 분이 가졌는지 노드가 숫자로 답하지 않았습니다. \
-             노드가 아직 장부를 훑는 중일 수 있습니다 — 잠시 뒤 다시 눌러 주세요."
-        ));
+        return Ok(soft_count(&a, "노드가 숫자로 답하지 않았습니다.").await);
     };
     Ok(json!({
         "asset": a,
@@ -752,6 +821,39 @@ mod tests {
                 assert_ne!(r["id"], "d1");
             }
         }
+    }
+
+    /// 🔴 **「자산 2개 중 0개」는 고장으로 읽힌다**(대표님 지적, 2026-08-30).
+    ///
+    /// 셈은 맞았다. 그런데 사장은 그 문장을 보고 없는 고장을 찾기 시작했다.
+    /// 방이 없는 것은 **상태**지 오류가 아니다 — 그러면 다음에 할 일을 적어야지
+    /// 「0개」를 적으면 안 된다.
+    #[test]
+    fn 방이_없는_것을_고장처럼_말하지_않는다() {
+        let 말 = super::rooms_say(2, 0);
+        assert!(
+            !말.contains("0개"),
+            "0개라고 적으면 고장으로 읽힌다: {말}"
+        );
+        assert!(
+            말.contains("방 만들기"),
+            "다음에 할 일이 안 적혀 있으면 사장은 멈춘다: {말}"
+        );
+
+        // 다 있을 때 「2개 중 2개」도 셈이다. 「모두」라고 말해야 사람 말이다.
+        let 다있음 = super::rooms_say(2, 2);
+        assert!(다있음.contains("모두"), "{다있음}");
+        assert!(!다있음.contains("중"), "{다있음}");
+
+        // 🔴 **좋은 입력도 통과하는지 같이 본다.** 막는 것만 시험하면
+        //    「전부 뭉뚱그리는 함수」가 만점을 받는다.
+        let 반쯤 = super::rooms_say(3, 1);
+        assert!(반쯤.contains('3') && 반쯤.contains('1'), "{반쯤}");
+
+        // 자산이 아예 없을 때는 방 이야기를 꺼내지 않는다 — 낼 것이 먼저다.
+        let 없음 = super::rooms_say(0, 0);
+        assert!(없음.contains("자산이 없습니다"), "{없음}");
+        assert!(!없음.contains("방 만들기"), "낼 자산도 없는데 방을 권한다: {없음}");
     }
 
     /// 🔴 소유권 표(`이름!`)는 팔 물건이 아니라 발행 권한이다. 목록에 끼면

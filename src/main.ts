@@ -3917,6 +3917,13 @@ function showPage(id: string) {
     // 「되돌렸습니다」는 지난 판의 말이므로 들어올 때 지운다.
     tkJustBack = [];
     talkPaintMuted();
+    // 처음 세 번만 안내를 띄운다. 늘 띄우면 안 읽고, 안 읽히면 없는 것과 같다.
+    tk처음안내();
+    // 들어올 때마다 서랍은 닫힌 채로. 열어 둔 것을 기억하면 「복잡한 화면」이
+    // 그대로 돌아온다.
+    const 서랍 = document.getElementById("tk-morebox");
+    if (서랍) 서랍.hidden = true;
+    document.getElementById("tk-more")?.setAttribute("aria-expanded", "false");
     void talkPaint();
   }
 }
@@ -4346,6 +4353,139 @@ const tkNames = new Map<string, any>();
  * 지금은 **이 컴퓨터에서만** 듣는다 — 화면에도 그렇게 적었다.
  */
 const TK_MUTE_KEY = "playx-raven-talk-mute";
+
+/* ── 대화 화면을 카톡처럼 ────────────────────────────────────────────
+ *
+ * 🔴 **대표님 지적(2026-08-30): "화면이 복잡하다. 심플하지 않다."**
+ *
+ * 원인은 기능이 많아서가 아니라 **내가 경고를 전부 늘 띄운 것**이었다.
+ * 「신뢰」를 지키려고 넣은 문장인데, 매번 보이면 안 읽는다 —
+ * 안 읽히는 경고는 아무것도 안 지킨다. 그래서 **한 번만 말하고 접는다.**
+ *
+ * ⚠️ 없앤 것은 하나도 없다. 접은 것은 「더 보기」 안에 글자로 들어 있고,
+ *    처음 세 번은 저절로 보인다. 「숨긴 기능은 안 적으면 없앤 기능」이라는
+ *    이 파일의 원칙은 그대로다 — 자리를 옮겼을 뿐이다.
+ */
+const TK_본횟수_KEY = "playx-raven-talk-seen";
+const TK_처음몇번 = 3;
+
+/** 이야기 화면을 몇 번 열었나. 세 번까지는 안내를 저절로 보여 준다. */
+function tk본횟수(): number {
+  try {
+    return Number(localStorage.getItem(TK_본횟수_KEY) || "0") || 0;
+  } catch {
+    return TK_처음몇번; // 못 읽으면 안 보여 준다 — 매번 뜨는 것보다 낫다
+  }
+}
+
+/** 화면을 열 때 한 번 부른다. 처음 세 번만 안내가 뜬다. */
+function tk처음안내() {
+  const n = tk본횟수();
+  const 처음 = n < TK_처음몇번;
+  const first = document.getElementById("tk-first");
+  const hint = document.getElementById("tk-hint");
+  if (first) first.hidden = !처음;
+  if (hint) hint.hidden = !처음;
+  if (!처음) return;
+  try {
+    localStorage.setItem(TK_본횟수_KEY, String(n + 1));
+  } catch {
+    /* 못 세어도 화면은 열린다 */
+  }
+}
+
+/* ── 다른 나라 말은 저절로 옮긴다 ───────────────────────────────────
+ *
+ * 대표님: "결국 이 암호화폐의 성패는 전세계가 커뮤니티로 서로 도와주는데
+ * 있는것 같아."
+ *
+ * 그런데 그 기능이 **글마다 단추 한 번 뒤에** 숨어 있었다. 일본 손님이
+ * 쓴 글을 읽으려면 누르고, 다음 글에서 또 누른다. 그러면 아무도 안 쓴다.
+ *
+ * ## 🔴 무엇을 옮기고 무엇을 안 옮기나
+ *
+ * **글자만 보고 정한다.** 한글이 있으면 한국말, 가나가 있으면 일본말,
+ * 한자만 있으면 중국말, 그 밖은 영어로 본다. 내 말과 같으면 **안 부른다** —
+ * 이것이 값을 아끼는 자리다(번역은 우리가 값을 내는 유일한 자리다).
+ *
+ * ⚠️ 짐작이 틀릴 수 있다. 한자만 쓴 한국어 글은 중국말로 읽힌다.
+ *    그때는 옮긴 글이 하나 더 붙을 뿐 **원문은 그대로 남는다** —
+ *    원문이 진짜고 옮긴 것은 곁들이다. 틀려도 잃는 것이 없다.
+ *
+ * ⚠️ 한 번에 열두 개까지만. 서버가 분당 40개에서 막는데, 방에 글이
+ *    백 개면 한 번 그릴 때 다 부르고 **나머지는 전부 실패**한다.
+ *    화면에 보이는 것은 아래쪽이라 **최근 것부터** 옮긴다.
+ */
+const TK_자동옮김_KEY = "playx-raven-talk-auto-tr";
+const TK_한번에 = 12;
+
+function tk자동옮김(): boolean {
+  try {
+    return localStorage.getItem(TK_자동옮김_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+/** 글자만 보고 무슨 말인지 짐작한다. 서버를 안 부르므로 값이 안 든다. */
+function tk무슨말(s: string): "ko" | "ja" | "zh" | "en" {
+  if (/[가-힣ᄀ-ᇿ]/.test(s)) return "ko";
+  // 가나가 하나라도 있으면 일본말이다. 일본 글은 한자와 섞여 있다.
+  if (/[぀-ゟ゠-ヿ]/.test(s)) return "ja";
+  if (/[一-鿿]/.test(s)) return "zh";
+  return "en";
+}
+
+/** 옮길 값이 있는 글인가. 숫자·주소·이모티콘만 있는 줄은 부르지 않는다. */
+function tk옮길만한가(s: string): boolean {
+  const 글 = s.trim();
+  if (글.length < 2) return false;
+  // 글자가 하나도 없으면(주소·숫자·기호뿐) 옮길 것이 없다.
+  if (!/[\p{L}]/u.test(글)) return false;
+  return tk무슨말(글) !== lang;
+}
+
+/**
+ * 지금 그려져 있는 글 중 **내 말이 아닌 것**을 찾아 옮겨 붙인다.
+ *
+ * 이미 옮긴 것(`.tr` 이 붙은 것)은 건너뛴다 — `talkTranslate` 도 같은
+ * 자리를 본다. 두 길이 같은 규칙을 쓰므로 두 번 붙지 않는다.
+ */
+async function tk옮길것찾기() {
+  if (!tk자동옮김()) return;
+  const box = document.getElementById("tk-list");
+  if (!box) return;
+  const 후보: { el: HTMLElement; 글: string }[] = [];
+  box.querySelectorAll<HTMLElement>("[data-say]").forEach((el) => {
+    if (el.querySelector(".tr")) return;
+    if (el.dataset.trDone === "1") return;
+    // 🔴 사진이 붙은 풍선은 **첫 글자 마디만** 본다. 통째로 읽으면 사진
+    //    칸의 「받는 중…」 같은 우리 안내문까지 옮기러 보낸다.
+    const 첫 = el.childNodes[0];
+    const 글 = 첫 && 첫.nodeType === Node.TEXT_NODE ? String(첫.textContent || "").trim() : "";
+    if (!tk옮길만한가(글)) return;
+    후보.push({ el, 글 });
+  });
+  // 🔴 최근 것부터. 화면에 보이는 것은 아래쪽인데, 위에서부터 세면
+  //    한도를 옛날 글로 다 써 버리고 **보이는 글은 하나도 안 옮겨진다.**
+  const 할것 = 후보.slice(-TK_한번에);
+  for (const { el, 글 } of 할것) {
+    // 두 번 부르지 않게 먼저 표시한다. 실패해도 이 판에는 다시 안 부른다 —
+    // 서버가 막고 있는데 계속 두드리면 더 오래 막힌다.
+    el.dataset.trDone = "1";
+    try {
+      const j = await invoke<any>("talk_translate", { text: 글, to: lang });
+      const 옮김 = String(j?.translation || "");
+      // 같은 글이 돌아오면 붙이지 않는다. 같은 말을 두 번 적는 셈이다.
+      if (!옮김 || 옮김.trim() === 글) continue;
+      if (el.querySelector(".tr")) continue;
+      el.insertAdjacentHTML("beforeend", `<div class="tr">${escapeHtml(옮김)}</div>`);
+    } catch {
+      // 🔴 조용히 넘어간다. 옮기기는 **곁들이**다 — 못 옮겼다고 빨간 글씨를
+      //    글마다 띄우면 대화가 오류 목록이 된다. 원문은 그대로 보인다.
+    }
+  }
+}
 
 /** 숨긴 사람. 값에 이름을 같이 둔다 — 숨긴 뒤에는 릴레이에서 이름표를
  *  다시 안 읽으므로, 안 적어 두면 명단이 16진수만 늘어선 표가 된다. */
@@ -4881,6 +5021,9 @@ async function talkPaint() {
     // 🔴 사진은 그려 놓고 **지켜봐야** 한다. 안 지켜보면 「받는 중…」에서
     //    영영 멈춰 있고, 그건 못 받았다는 말을 안 하는 것과 같다.
     tkWatchPics(box);
+    // 🔴 다른 나라 말은 저절로 옮긴다(스위치가 켜져 있을 때만). 그리고 나서
+    //    부른다 — 그려지기 전에 부르면 옮길 글을 하나도 못 찾는다.
+    void tk옮길것찾기();
     // 🔴 **말풍선을 누르면 그 글의 단추만 나온다.**
     //
     //    단추 줄은 예전에 `opacity:0` 으로 **자리를 늘 차지**했고(손가락
@@ -4996,10 +5139,10 @@ async function talkTranslate(id: string, list: any[]) {
       to: lang,
     });
     if (!j?.translation) throw new Error("옮기지 못했습니다");
-    body.insertAdjacentHTML(
-      "beforeend",
-      `<div class="tr" style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);color:var(--muted)">${escapeHtml(String(j.translation))}</div>`
-    );
+    // 모양은 `.tr` 이 정한다. 여기서 또 적으면 저절로 옮긴 글과 다르게 보인다.
+    body.insertAdjacentHTML("beforeend", `<div class="tr">${escapeHtml(String(j.translation))}</div>`);
+    // 저절로 옮기기가 이 글을 또 부르지 않게 표시한다.
+    body.dataset.trDone = "1";
     note.textContent = "";
   } catch (e) {
     note.innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
@@ -5459,6 +5602,16 @@ function fanPaintGroups() {
       const key = escapeHtml(a);
       const rooms = Array.isArray(g.rooms) ? g.rooms : [];
       const need = !!g.need_room;
+      // 🔴 **방이 필요 없는 자산에까지 방을 권하고 있었다**(대표님 지적).
+      //
+      //    지갑에는 내가 낸 음반뿐 아니라 **남에게서 받은 자산**도 들어 있다.
+      //    거기에 「방 만들기」를 걸면, 남의 음반 팬클럽을 내가 여는 꼴이다.
+      //    권하는 것은 **내가 낸 자산**에만 한다 — 팬 방은 낸 사람이 연다.
+      //
+      //    ⚠️ 막는 것은 아니다. 「이야기 → 방 만들기」에서는 어느 자산으로든
+      //       열 수 있다. 여기서 **권하지 않을** 뿐이다.
+      const 내가낸것 = !!g.i_issued;
+      const 권함 = need && 내가낸것;
       return (
         `<div class="fangroup">
            <div class="fanrow">` +
@@ -5473,10 +5626,14 @@ function fanPaintGroups() {
         // 내가 낸 자산인지. 「내가 낸 것」과 「내가 산 것」은 팬클럽에서 뜻이 다르다.
         (g.i_issued ? `<span class="tag">${t("내가 낸 자산")}</span>` : "") +
         `<button class="ghost" data-fanwho="${key}">${t("팬 수 세기")}</button>` +
-        (need ? `<button class="ghost" data-fanroom="${key}">${t("방 만들기")}</button>` : "") +
+        (권함 ? `<button class="ghost" data-fanroom="${key}">${t("방 만들기")}</button>` : "") +
         `</div>` +
-        (need
+        (권함
           ? `<p class="fanrooms">${t("아직 방이 없습니다. 「방 만들기」를 누르면 「이야기」로 가고, 이 자산이 골라져 있습니다.")}</p>`
+          : need
+          ? // 🔴 「방이 없습니다」로 끝내지 않는다. 그러면 고장으로 읽힌다.
+            //    왜 여기서 안 권하는지, 그래도 열 수 있는 길이 어디인지 적는다.
+            `<p class="fanrooms">${t("제가 낸 자산이 아닙니다 — 팬 방은 낸 분이 엽니다. 그래도 여시려면 「이야기 → 방 만들기」에서 이 자산을 고르세요.")}</p>`
           : `<p class="fanrooms">${t("방")} ${rooms.length}${t("곳")} — ` +
             rooms
               .map((r) => escapeHtml(String(r?.name ?? t("이름 없는 방"))))
@@ -5524,8 +5681,13 @@ async function fanCount(asset: string, btn: HTMLButtonElement) {
   btn.textContent = t("세는 중…");
   try {
     const r = await invoke<any>("fan_holders", { asset });
+    // 🔴 못 센 것은 **빨간 글씨가 아니다.** 팬 수는 있으면 좋은 숫자지
+    //    팬클럽을 쓰는 조건이 아니다 — 공지를 보내는 데는 안 쓰인다.
+    //    러스트가 `counted:false` 로 갈라 말해 준다.
     const html =
       `<b>${escapeHtml(String(r?.say ?? ""))}</b>` +
+      (r?.why ? `<p class="meta">${escapeHtml(String(r.why))}</p>` : "") +
+      (r?.ok_without ? `<p class="meta">${escapeHtml(String(r.ok_without))}</p>` : "") +
       (r?.caveat ? `<p class="meta">${escapeHtml(String(r.caveat))}</p>` : "") +
       (r?.privacy ? `<p class="meta">${escapeHtml(String(r.privacy))}</p>` : "");
     fanHolders.set(asset, html);
@@ -13844,6 +14006,37 @@ window.addEventListener("DOMContentLoaded", async () => {
     });
   }
   $("tk-name").addEventListener("click", () => void talkSetName());
+  // ── 접기·펴기 ────────────────────────────────────────────────────
+  // 🔴 단추 다섯을 하나로 접었다. 접은 것은 **없앤 것이 아니다** — 여는
+  //    법이 「더 보기」라고 글자로 적혀 있고, 안에 든 것도 다 글자다.
+  $("tk-more").addEventListener("click", () => {
+    const b = $("tk-morebox");
+    b.hidden = !b.hidden;
+    $("tk-more").setAttribute("aria-expanded", b.hidden ? "false" : "true");
+  });
+  $("tk-firstok").addEventListener("click", () => {
+    $("tk-first").hidden = true;
+    // 눌러서 닫은 것은 「읽었다」는 뜻이다. 세 번을 다 채운 것으로 본다.
+    try {
+      localStorage.setItem(TK_본횟수_KEY, String(TK_처음몇번));
+    } catch {
+      /* 저장 못 해도 이번 판은 닫힌다 */
+    }
+  });
+  // 자동 번역 스위치. 켜면 그 자리에서 이미 그려진 글까지 옮긴다 —
+  // 「켰는데 아무 일도 안 일어난다」가 제일 나쁘다.
+  {
+    const sw = $("tk-auto") as HTMLInputElement;
+    sw.checked = tk자동옮김();
+    sw.addEventListener("change", () => {
+      try {
+        localStorage.setItem(TK_자동옮김_KEY, sw.checked ? "1" : "0");
+      } catch {
+        /* 저장 못 해도 이번 판은 바뀐다 */
+      }
+      if (sw.checked) void tk옮길것찾기();
+    });
+  }
   // 사진. 🔴 러스트(`talk_photo_post`)는 진작 다 돼 있었고 **부르는 이 줄이
   //    없어서** 사진을 못 보냈다. 만들어 놓고 안 부르는 그 병이다.
   $("tk-photo").addEventListener("click", () => talkPickPhoto());
