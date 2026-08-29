@@ -2419,7 +2419,15 @@
           </div>
           <div class="bar">
             <button id="mn-add">품목 추가</button>
-            <button class="ghost" id="mn-save">메뉴판 올리기</button>
+            <button class="ghost" id="mn-save">인터넷에 메뉴판 남기기</button>
+            <!-- 🔴 이름이 「메뉴판 올리기」였다. 사장은 그걸 **「이걸 눌러야
+                 손님이 본다」**로 읽는다. 실제로는 값을 고치는 즉시 손님
+                 화면에 반영된다(600ms). 이 단추는 다른 일이다 —
+                 IPFS 에 사본을 남겨 **우리 컴퓨터가 꺼져 있어도** 남에게
+                 보이게 하는 것. 둘을 구별할 이유가 사장에게는 없으므로
+                 이름과 설명으로 갈라 준다. -->
+            <p class="meta" style="margin-top:6px">손님 화면에는 <b>고치는 즉시</b> 반영됩니다.
+              이 단추는 우리 컴퓨터가 꺼져 있어도 <b>가게 목록에 남게</b> 합니다.</p>
             <label class="check" style="margin:0">
               <span class="meta">가격 단위</span>
               <select id="mn-cur" style="width:auto">
