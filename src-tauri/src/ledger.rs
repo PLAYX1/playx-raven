@@ -55,6 +55,54 @@ fn ledger_dir() -> PathBuf {
     base().join("ledger")
 }
 
+// ─── 어느 지점에서 판 것인가 ─────────────────────────────────────────────
+//
+// 한 컴퓨터로 가게 여러 곳(체인점)을 보게 되면, 장부에 「어느 지점」이
+// 없다는 것이 그때 가서 문제가 된다. 그런데 그때 가서 고치려면 **이미
+// 쌓인 장부에 손을 대야 한다** — 돈이 걸린 기록을 나중에 고쳐 쓰는 것이
+// 여기서 제일 위험한 일이다.
+//
+// 그래서 화면도 기능도 아직 만들지 않고, **자리만 지금 남긴다.** 오늘부터
+// 쓰이는 줄에는 지점 이름이 들어가고, 나중에 지점을 나눌 때 옛 줄을
+// 건드릴 일이 없다.
+
+/// 지점 이름이 없을 때 쓰는 이름.
+///
+/// 옛 줄에는 이 칸이 아예 없다. 그때는 가게가 하나뿐이었으니 그 매출은
+/// 전부 본점 것이 맞다 — 빈 칸으로 두면 지점별 합계에서 통째로 사라진다.
+const 기본지점: &str = "본점";
+
+/// 이 컴퓨터가 지금 어느 가게인지. `shop.json` 의 `name` 이 곧 간판이다.
+///
+/// 파일이 없거나 이름을 아직 안 적었으면 「본점」. 여기서 오류를 내지
+/// 않는 것은 일부러다 — 이름을 안 적었다고 장사가 멈추면 안 된다.
+fn shop_name() -> String {
+    std::fs::read_to_string(base().join("shop.json"))
+        .ok()
+        .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+        .as_ref()
+        .and_then(|v| v.get("name"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or(기본지점)
+        .to_string()
+}
+
+/// 줄 하나가 어느 지점 것인지 읽는다. **옛 장부를 여는 유일한 문이다.**
+///
+/// 🔴 `shop` 칸이 없는 줄(이 기능 이전에 쌓인 전부)을 여기서 「본점」으로
+/// 친다. 이 함수를 거치지 않고 `r["shop"]` 을 직접 보는 자리가 생기면 옛
+/// 매출이 조용히 0 이 된다 — 합계가 틀렸다는 사실조차 화면에 안 뜬다.
+fn row_shop(v: &Value) -> String {
+    v.get("shop")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or(기본지점)
+        .to_string()
+}
+
 // ─── 날짜 ────────────────────────────────────────────────────────────────
 //
 // 표준 라이브러리에는 달력이 없고, 이것 하나 때문에 시간대 데이터베이스를
@@ -206,6 +254,10 @@ pub fn open_order(
             // 그 사실이 증빙에 남아야 나중에 숫자를 다시 세울 수 있다.
             "direct": quote["direct"],
             "table": table,
+            // 주문받은 지점. 결제될 때 이 값이 그대로 장부 줄로 옮겨간다 —
+            // 주문과 결제 사이에 사장이 가게 이름을 바꿔도, 판 곳은 주문받은
+            // 그곳이지 지금 켜져 있는 화면의 이름이 아니다.
+            "shop": shop_name(),
             "quoted_at": at,
         }),
     );
@@ -252,6 +304,10 @@ pub fn settle(address: &str, txid: &str, paid_at: i64, confirmations: i64) -> Op
         "rate_direct": doc["direct"],
         // 몇 번 테이블이 얼마 썼는지. 가게가 실제로 묻는 질문이다.
         "table": doc["table"],
+        // 어느 지점에서 판 것인지. 앱을 껐다 켜는 사이에 쌓인 옛 pending.json
+        // 에는 이 칸이 없으므로 `row_shop` 으로 읽어 「본점」을 채운다 —
+        // 여기서 빈 칸이 나가면 그 매출이 지점별 합계에서 사라진다.
+        "shop": row_shop(&doc),
         "quoted_at": doc["quoted_at"],
         "confirmations": confirmations,
     });
@@ -284,12 +340,17 @@ pub fn record_refund(
         "rvn": -rvn,
         "rate": rate,
         "reason": reason,
+        // 환불도 지점 매출을 줄인다. 판 곳과 물러준 곳이 같은 칸에 있어야
+        // 지점별 합계가 저절로 맞는다.
+        "shop": shop_name(),
     }))
 }
 
 // ─── 읽기 ────────────────────────────────────────────────────────────────
 
-fn read_rows(from_ymd: i64, to_ymd: i64, tz: i64) -> Vec<Value> {
+/// `shop` 이 `None` 이면 지점을 안 가린다 — 전부 센다. 지점을 나누기
+/// 전과 **똑같이** 도는 길이 이것이고, 지금 화면들이 쓰는 길도 이것이다.
+fn read_rows(from_ymd: i64, to_ymd: i64, tz: i64, shop: Option<&str>) -> Vec<Value> {
     let mut rows = Vec::new();
     for m in months_for(from_ymd, to_ymd) {
         let Ok(text) = std::fs::read_to_string(ledger_dir().join(format!("{m}.jsonl"))) else {
@@ -301,15 +362,26 @@ fn read_rows(from_ymd: i64, to_ymd: i64, tz: i64) -> Vec<Value> {
             }
             // 한 줄이 깨져도 나머지는 읽는다. 장부 전체가 안 열리는 것보다
             // 한 줄이 빠지는 편이 낫고, 빠졌다는 사실은 아래에서 센다.
+            // 못 읽는 줄은 지점을 골랐어도 그대로 센다. 어느 지점 것인지
+            // 알 수 없는데 걸러 버리면 「몇 줄을 못 읽었다」는 경고까지
+            // 같이 사라진다 — 합계가 왜 적은지 아무도 못 알아챈다.
             let Ok(v) = serde_json::from_str::<Value>(line) else {
                 rows.push(json!({ "kind": "unreadable" }));
                 continue;
             };
             let at = v["at"].as_i64().unwrap_or(0);
             let ymd = local_ymd(at, tz);
-            if ymd >= from_ymd && ymd <= to_ymd {
-                rows.push(v);
+            if ymd < from_ymd || ymd > to_ymd {
+                continue;
             }
+            // 지점을 골랐으면 그 지점 것만. 칸이 없는 옛 줄은 `row_shop` 이
+            // 「본점」으로 읽으므로, 본점을 고르면 옛 매출도 같이 나온다.
+            if let Some(want) = shop {
+                if row_shop(&v) != want.trim() {
+                    continue;
+                }
+            }
+            rows.push(v);
         }
     }
     rows.sort_by_key(|r| r["at"].as_i64().unwrap_or(0));
@@ -321,9 +393,18 @@ fn read_rows(from_ymd: i64, to_ymd: i64, tz: i64) -> Vec<Value> {
 /// Dates are YYYYMMDD **in the shop's own timezone**, which the screen passes
 /// in as an offset. A shop closing at 1am must see that sale on the day it
 /// happened, not the next one.
+///
+/// `shop` 은 **안 보내도 된다.** 안 보내면(`None`) 지점을 안 가리고 예전과
+/// 똑같이 전부 센다 — 그래서 인자를 맨 뒤에 붙였고, 화면 쪽 기존 호출은
+/// 한 글자도 안 고쳐도 그대로 돈다. 지점 이름을 보내면 그 지점 것만 센다.
 #[tauri::command]
-pub fn ledger_range(from_ymd: i64, to_ymd: i64, tz_offset_min: i64) -> Value {
-    let rows = read_rows(from_ymd, to_ymd, tz_offset_min);
+pub fn ledger_range(
+    from_ymd: i64,
+    to_ymd: i64,
+    tz_offset_min: i64,
+    shop: Option<String>,
+) -> Value {
+    let rows = read_rows(from_ymd, to_ymd, tz_offset_min, shop.as_deref());
 
     let mut sales = 0i64;
     let mut refunds = 0i64;
@@ -404,6 +485,9 @@ pub fn ledger_range(from_ymd: i64, to_ymd: i64, tz_offset_min: i64) -> Value {
     json!({
         "from": from_ymd,
         "to": to_ymd,
+        // 어느 지점으로 걸렀는지 되돌려 준다. 안 걸렀으면 null — 화면이
+        // 「전체」와 「어느 지점」을 헷갈리면 사장이 매출을 잘못 읽는다.
+        "shop": shop,
         "rows": rows,
         "sales": sales,
         "refunds": refunds,
@@ -424,7 +508,10 @@ pub fn ledger_range(from_ymd: i64, to_ymd: i64, tz_offset_min: i64) -> Value {
 /// The same thing as a spreadsheet, because that is what an accountant wants.
 #[tauri::command]
 pub fn ledger_csv(from_ymd: i64, to_ymd: i64, tz_offset_min: i64) -> String {
-    let rows = read_rows(from_ymd, to_ymd, tz_offset_min);
+    // 내보내기는 아직 지점을 안 가린다. 세무 담당자에게 가는 파일은
+    // 「가게가 받은 전부」여야 하고, 지점을 나눠 내보내는 것은 화면이
+    // 생긴 다음에 정할 일이다.
+    let rows = read_rows(from_ymd, to_ymd, tz_offset_min, None);
 
     // 엑셀이 UTF-8 을 알아보게 하는 표식. 없으면 한글이 깨져 나오고, 그러면
     // 세무 담당자는 이 파일을 안 쓴다.
@@ -619,7 +706,18 @@ pub fn ledger_pending() -> Value {
     let p = pending_load();
     let rows: Vec<Value> = p
         .as_object()
-        .map(|m| m.values().cloned().collect())
+        .map(|m| {
+            m.values()
+                .cloned()
+                .map(|mut o| {
+                    // 앱을 껐다 켜기 전에 받아 둔 주문에는 이 칸이 없다.
+                    // 읽을 때 채워 주면 화면은 옛 주문·새 주문을 구분할
+                    // 필요가 없다 — 파일은 append-only 라 손대지 않는다.
+                    o["shop"] = json!(row_shop(&o));
+                    o
+                })
+                .collect()
+        })
         .unwrap_or_default();
     json!({ "count": rows.len(), "orders": rows })
 }
@@ -680,6 +778,97 @@ mod tests {
     }
 }
 
+/// 🔴 **옛 장부는 `shop` 칸이 없다.** 이 시험이 지키는 것은 그 하나다.
+///
+/// 지점 칸은 오늘부터 쌓이는 줄에만 들어간다. 이미 쌓인 줄은 append-only
+/// 라 고쳐 쓰지 않는다 — 돈이 걸린 기록을 나중에 다시 쓰는 것이 여기서
+/// 제일 위험한 일이다. 그러니 **읽는 쪽이 옛 줄을 감당해야** 하고, 감당
+/// 못 하면 지난 매출이 조용히 0 이 된다. 조용히 0 이 되는 것은 사장이
+/// 화면만 보고는 절대 못 알아챈다.
+#[cfg(test)]
+mod 옛장부 {
+    use super::*;
+
+    #[test]
+    fn 지점칸이_없는_옛_줄도_그대로_읽힌다() {
+        // `PLAYX_RAVEN_HOME` 은 프로세스 전역이라 파일을 만지는 시험은
+        // 전부 이 자물쇠를 잡고 들어간다.
+        let _g = crate::paths::TEST_ENV.lock().unwrap_or_else(|e| e.into_inner());
+
+        // ── 파일을 안 만져도 되는 부분부터. 옛 줄의 기본값이 「본점」인가.
+        assert_eq!(row_shop(&json!({})), "본점", "칸이 없는 줄이 본점이 아니다");
+        assert_eq!(row_shop(&json!({ "shop": "   " })), "본점", "빈 이름이 본점이 아니다");
+        assert_eq!(row_shop(&json!({ "shop": " 2호점 " })), "2호점", "이름 양쪽 공백이 안 잘렸다");
+
+        let dir = std::env::temp_dir().join("playx-raven-test-ledger-shop");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("ledger")).unwrap();
+        std::env::set_var("PLAYX_RAVEN_HOME", &dir);
+
+        // 2026-08-20 05:00 UTC = 한국 14시.
+        let at = days_from_civil(2026, 8, 20) * 86_400 + 5 * 3600;
+
+        // 🔴 **옛 형식 그대로** — `shop` 칸이 아예 없는 줄. 이 기능 이전에
+        //    쌓인 장부가 전부 이 모양이다.
+        let 옛줄 = json!({
+            "kind": "sale", "at": at, "address": "Rold", "txid": "old1",
+            "items": [{ "name": "아메리카노", "price": 4500, "qty": 1 }],
+            "amount": 4500.0, "currency": "KRW", "rvn": 1335.0, "rate": 3.3699,
+        });
+        // 오늘부터 쌓이는 줄. 다른 지점에서 팔렸다.
+        let 새줄 = json!({
+            "kind": "sale", "at": at + 60, "address": "Rnew", "txid": "new1",
+            "items": [{ "name": "케이크", "price": 1000, "qty": 1 }],
+            "amount": 1000.0, "currency": "KRW", "rvn": 296.0, "rate": 3.3699,
+            "shop": "2호점",
+        });
+        std::fs::write(
+            dir.join("ledger").join("2026-08.jsonl"),
+            format!("{옛줄}\n{새줄}\n"),
+        )
+        .unwrap();
+
+        // ① 지점을 안 고르면 예전과 똑같다. 옛 줄이 빠지면 여기서 걸린다.
+        let 전부 = ledger_range(20_260_820, 20_260_820, 9 * 60, None);
+        assert_eq!(전부["sales"], 2, "옛 줄이 안 세어졌다");
+        assert_eq!(전부["total"], 5500.0, "옛 매출이 합계에서 빠졌다");
+        assert_eq!(전부["unreadable_rows"], 0, "멀쩡한 줄을 못 읽었다고 한다");
+        assert_eq!(전부["shop"], Value::Null, "안 골랐는데 지점이 골라져 있다");
+
+        // ② 본점을 고르면 **칸이 없는 옛 줄이 여기 들어와야 한다.**
+        //    이게 이 시험의 핵심이다 — 옛 매출이 갈 곳이 없으면 사라진다.
+        let 본점 = ledger_range(20_260_820, 20_260_820, 9 * 60, Some("본점".into()));
+        assert_eq!(본점["sales"], 1, "옛 줄이 본점으로 안 잡혔다");
+        assert_eq!(본점["total"], 4500.0, "옛 매출이 본점 합계에 없다");
+        assert_eq!(본점["by_item"][0]["name"], "아메리카노");
+
+        // ③ 다른 지점을 고르면 그 지점 것만.
+        let 이호점 = ledger_range(20_260_820, 20_260_820, 9 * 60, Some("2호점".into()));
+        assert_eq!(이호점["sales"], 1, "지점 거르기가 안 돈다");
+        assert_eq!(이호점["total"], 1000.0);
+
+        // ④ 없는 지점은 0. ②③ 이 그냥 다 통과시키는 것이 아님을 보인다.
+        assert_eq!(
+            ledger_range(20_260_820, 20_260_820, 9 * 60, Some("없는지점".into()))["sales"],
+            0,
+            "거르는 시늉만 하고 다 통과시킨다"
+        );
+
+        // ⑤ 가게 이름을 못 읽어도 「본점」으로 굴러가야 한다. 이름을 안
+        //    적었다고 장사가 멈추면 안 된다.
+        assert_eq!(shop_name(), "본점", "shop.json 이 없는데 본점이 아니다");
+        std::fs::write(dir.join("shop.json"), "{\"name\":\"  \"}").unwrap();
+        assert_eq!(shop_name(), "본점", "빈 이름이 그대로 쓰였다");
+        std::fs::write(dir.join("shop.json"), "{ 부서진 파일").unwrap();
+        assert_eq!(shop_name(), "본점", "깨진 shop.json 에 걸려 넘어졌다");
+        std::fs::write(dir.join("shop.json"), "{\"name\":\"플레이엑스\"}").unwrap();
+        assert_eq!(shop_name(), "플레이엑스", "적어 둔 가게 이름을 안 쓴다");
+
+        std::env::remove_var("PLAYX_RAVEN_HOME");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
 /// 파일까지 실제로 쓰고 다시 읽는 확인. 진짜 장부를 건드리지 않게 따로 둔다.
 /// `PLAYX_RAVEN_HOME=/tmp/... cargo test --lib -- --ignored --nocapture ledger_roundtrip`
 #[cfg(test)]
@@ -718,7 +907,7 @@ mod roundtrip {
         record_refund("Rtest2222222222222222222222222222", 1500.0, "KRW",
                       445.0, 3.3699, "우유 빠짐", "def456", at + 600).unwrap();
 
-        let r = ledger_range(20_260_820, 20_260_820, 9 * 60);
+        let r = ledger_range(20_260_820, 20_260_820, 9 * 60, None);
         println!("{}", serde_json::to_string_pretty(&r["by_item"]).unwrap());
         assert_eq!(r["sales"], 1);
         assert_eq!(r["refunds"], 1);
@@ -727,7 +916,7 @@ mod roundtrip {
         assert_eq!(r["by_item"][0]["name"], "아메리카노, 아이스");
 
         // 하루 어긋나면 안 보여야 한다 — 날짜 필터가 실제로 도는지.
-        assert_eq!(ledger_range(20_260_819, 20_260_819, 9 * 60)["sales"], 0);
+        assert_eq!(ledger_range(20_260_819, 20_260_819, 9 * 60, None)["sales"], 0);
 
         let csv = ledger_csv(20_260_820, 20_260_820, 9 * 60);
         println!("{csv}");

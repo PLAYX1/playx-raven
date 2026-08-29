@@ -288,8 +288,10 @@ mod tests {
 /// 봐야 하고, 그건 우리가 기억해 둬야 안다.
 ///
 /// ⚠️ 재색인 중에는 「따라잡음 %」가 거의 안 움직인다 — 초반 블록은
+/// ```text
 ///    거래가 적어 작업량 기준으로 0.1% 도 안 되기 때문이다. 그래서
 ///    **블록 수**로 본다. 그게 실제로 나아가는 유일한 표시다.
+/// ```
 use std::sync::Mutex;
 static SEEN: Mutex<Option<(i64, i64)>> = Mutex::new(None); // (블록, 본 시각)
 /// 마지막으로 **제대로 잰** 속도. 화면이 5초마다 묻는데 그 사이에 블록이
@@ -414,7 +416,9 @@ pub fn node_log_tail() -> Value {
 /// 사장은 그걸 보고 「곧 끝나겠네」 하고 기다린다. 며칠이 걸린다.
 ///
 /// ⚠️ 판별법: 따라잡음이 한참 남았는데(`progress` 가 낮은데) 남은 블록이
+/// ```text
 ///    적게 나오면, 그 숫자는 진짜 끝까지의 거리가 아니다.
+/// ```
 pub fn behind_is_honest(progress: f64, behind: i64, blocks: i64) -> bool {
     if progress >= 0.99 {
         return true; // 다 따라잡았으면 남은 것도 진짜다
@@ -450,13 +454,17 @@ mod behind_tests {
 /// 화면은 「노드가 꺼져 있습니다」만 반복했다. **왜 꺼졌는지는 우리가
 /// 안 봤다.** 그런데 노드는 자기 기록에 정확히 적어 놨다:
 ///
+/// ```text
 ///     Corrupted block database detected.
 ///     Please restart with -reindex or -reindex-chainstate to recover.
+/// ```
 ///
 /// 사장이 그 파일을 찾아 열 방법은 없다. **우리가 읽고 고칠 단추를 준다.**
 ///
 /// ⚠️ 마지막 부분만 본다. 옛날에 한 번 났던 오류를 지금 일로 착각하면
+/// ```text
 ///    멀쩡한 노드를 몇 시간 세운다.
+/// ```
 #[tauri::command]
 pub fn chain_broken() -> Value {
     let tail = node_log_tail();
@@ -531,7 +539,9 @@ pub async fn chain_heal() -> Result<Value, String> {
 #[cfg(test)]
 mod heal_tests {
     /// 🔴 **`-reindex` 가 아니라 `-reindex-chainstate`** 여야 한다.
+    /// ```text
     ///    블록 파일은 멀쩡한데 다시 받으면 며칠이 걸린다.
+    /// ```
     #[test]
     fn 블록을_다시_받지_않는다() {
         let src = include_str!("services.rs");
