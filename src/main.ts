@@ -3738,7 +3738,7 @@ async function loadWallet() {
         const amt = typeof t.amount === "number" ? t.amount : 0;
         const incoming = t.category === "receive" || amt >= 0;
         const when = t.time
-          ? new Date(t.time * 1000).toLocaleString("ko-KR", { dateStyle: "short", timeStyle: "short" })
+          ? new Date(t.time * 1000).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })
           : "";
         const what = t.assetName || "RVN";
 
@@ -9769,7 +9769,7 @@ async function loadDoorLog() {
     $("dr-doorlog").innerHTML = rows.length
       ? `<table><thead><tr><th>때</th><th>문</th><th>누구</th><th>결과</th></tr></thead><tbody>${
           rows.slice(0, 60).map((e) => `<tr>
-            <td>${new Date((e.at || 0) * 1000).toLocaleString("ko-KR", { dateStyle: "short", timeStyle: "short" })}</td>
+            <td>${new Date((e.at || 0) * 1000).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}</td>
             <td>${escapeHtml(e.door || "")}</td>
             <td>${escapeHtml(e.who || e.asset || "")}</td>
             <td class="${e.opened ? "ok" : "danger"}">${e.opened ? "열림" : escapeHtml(e.why || "거절")}</td>
@@ -10035,7 +10035,7 @@ async function loadSales() {
        <table><thead><tr><th>때</th><th>내용</th><th class="num">금액</th><th class="num">1RVN</th><th>근거</th></tr></thead>
        <tbody>${rows
          .map((x) => {
-           const when = new Date((x.at || 0) * 1000).toLocaleString("ko-KR", {
+           const when = new Date((x.at || 0) * 1000).toLocaleString(undefined, {
              dateStyle: "short",
              timeStyle: "short",
            });

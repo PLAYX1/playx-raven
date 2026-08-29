@@ -30,7 +30,11 @@
       }
       * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
       body { margin: 0; background: var(--bg); color: var(--fg);
-             font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif;
+             font: 15px/1.6 -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", Roboto,
+        "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic",
+        "Hiragino Sans", "Yu Gothic", "Microsoft YaHei", "PingFang SC",
+        "Noto Sans", "Noto Sans Arabic", "Noto Sans Thai", "Noto Sans Devanagari",
+        sans-serif;
              padding: 0 0 calc(78px + var(--safe-b)); }
       header { padding: 16px 16px 12px; }
       h1 { margin: 0 0 4px; font-size: 19px; letter-spacing: -0.02em; }
@@ -541,7 +545,7 @@
             : "꺼져 있음";
 
           $("err").textContent = "";
-          $("when").textContent = `${new Date().toLocaleTimeString("ko-KR")} 기준`;
+          $("when").textContent = `${new Date().toLocaleTimeString(undefined)} 기준`;
         } catch (e) {
           // 무엇이 실패했는지와 무엇이 아직 맞는지를 구분해 준다. 화면 전체가
           // 빨개지면 방금 본 잔액도 못 믿게 된다.
@@ -781,5 +785,6 @@
         box.addEventListener("keydown", (e) => { if (e.key === "Enter") ask(); });
       })();
     </script>
-</body>
+<script src="/i18n.js"></script>
+  </body>
 </html>

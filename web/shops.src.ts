@@ -337,7 +337,7 @@ function draw(): void {
             ${r.raven ? `<span class="tag" style="border-color:var(--fg);color:var(--fg)">레이븐</span>` : ""}
             ${r.dist != null ? `<span class="tag">${fmtDist(r.dist)}</span>` : ""}
             ${where ? `<span class="tag">${esc(where)}</span>` : ""}
-            <span class="tag">${new Date(e.created_at * 1000).toLocaleDateString("ko-KR")}</span>
+            <span class="tag">${new Date(e.created_at * 1000).toLocaleDateString(undefined)}</span>
           </div>
         </div>
       </div>`;
@@ -680,7 +680,7 @@ function openItem(r: { e: NostrEvent; dist: number | null }): void {
       <div class="tags" style="margin-top:12px">
         ${r.dist != null ? `<span class="tag">${fmtDist(r.dist)}</span>` : ""}
         ${tag(e, "location") ? `<span class="tag">${esc(tag(e, "location"))}</span>` : ""}
-        <span class="tag">${new Date(e.created_at * 1000).toLocaleString("ko-KR")}</span>
+        <span class="tag">${new Date(e.created_at * 1000).toLocaleString(undefined)}</span>
       </div>
       ${contactBlock(e)}
     </div>`;

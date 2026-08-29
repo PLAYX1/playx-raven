@@ -31,7 +31,11 @@
       }
       * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
       body { margin: 0; background: var(--bg); color: var(--fg);
-             font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif;
+             font: 16px/1.6 -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", Roboto,
+        "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic",
+        "Hiragino Sans", "Yu Gothic", "Microsoft YaHei", "PingFang SC",
+        "Noto Sans", "Noto Sans Arabic", "Noto Sans Thai", "Noto Sans Devanagari",
+        sans-serif;
              padding: 18px 16px calc(88px + var(--safe-b)); }
       h1 { margin: 0 0 4px; font-size: 19px; }
       .sub { color: var(--muted); font-size: 13.5px; }
@@ -371,7 +375,7 @@
               load();
             };
           });
-          $("when").textContent = `${new Date().toLocaleTimeString("ko-KR")} 기준 · ${live.length}건`;
+          $("when").textContent = `${new Date().toLocaleTimeString(undefined)} 기준 · ${live.length}건`;
         } catch (e) {
           $("when").textContent = String(e);
         }
@@ -467,5 +471,6 @@
         box.addEventListener("keydown", (e) => { if (e.key === "Enter") ask(); });
       })();
     </script>
-</body>
+<script src="/i18n.js"></script>
+  </body>
 </html>
