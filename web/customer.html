@@ -202,6 +202,17 @@
       .statecard { margin-top: 16px; padding: 16px; border-radius: 12px;
         background: var(--panel); }
       /* 다른 지갑을 쓰는 손님의 길. 44px 보다 크게 — 결제 중에 누른다. */
+      /* 지갑 없는 손님 안내. 펼치기 전에는 한 줄, 펼치면 사실대로. */
+      .nowallet { margin-top: 10px; text-align: left; }
+      .nowallet summary {
+        cursor: pointer;
+        font-size: 15px;          /* 40~70대에게 13px 은 안 읽힌다 */
+        padding: 10px 0;
+        min-height: 44px;         /* 손가락으로 누를 수 있어야 한다 */
+        display: flex;
+        align-items: center;
+      }
+      .nowallet p { font-size: 15px; line-height: 1.7; margin: 8px 0; }
       .copyrow { display: flex; gap: 8px; margin: 10px 0 4px; }
       .copybtn { flex: 1; min-height: 48px; font-size: 15px; border-radius: 10px;
                  border: 1px solid var(--line); background: var(--bg); color: var(--fg);
@@ -363,11 +374,33 @@
         <!-- 🔴 여기서 **금액을 들고 가야** 한다. 빈 지갑 화면으로 보내면
              손님은 12단어를 만들고 나서 「그래서 얼마를 어디로?」에 갇힌다.
              주소로 돌아올 길이 없다. -->
-        <div class="fiat" style="margin-top:8px">
-          지갑이 없으신가요?
-          <a id="p-newwallet" href="https://rvn.ex.erci.se/wallet" target="_blank"
-             rel="noopener">1분이면 만듭니다</a>
-        </div>
+        <!-- 🔴 여기가 **손님을 잃는 자리**였다 (그록 감사 2026-08-29).
+             「1분이면 만듭니다」는 **사실이 아니다.** 12단어를 만들고, 종이에
+             적고, 퀴즈를 풀고, 암호까지 정해야 한다. 그 말을 믿고 시작한
+             손님은 **계산대 앞에 선 채 12단어를 받아 적게 된다.**
+             뒤에 줄이 서 있는데.
+
+             > 손님 목적은 주문인데 첫 성공이 시드 백업이 된다. (그록)
+
+             그래서 **지금 살 수 있는 길을 먼저 주고**, 지갑은 집에서 하시게
+             한다. 못 하는 것을 못 한다고 말하는 편이 붙잡는 것보다 낫다. -->
+        <details class="nowallet" id="p-nowallet">
+          <summary>지갑이 없으신가요?</summary>
+          <p>
+            RVN 으로 내시려면 지갑이 필요합니다. 만드는 데 <b>몇 분</b> 걸리고,
+            <b>12단어를 종이에 적어 두셔야</b> 합니다.
+            <b>계산대에서 하시기엔 깁니다.</b>
+          </p>
+          <p>
+            <b>지금은 가게에 말씀해 주세요.</b> 다른 방법으로 받으실 수 있습니다.
+          </p>
+          <p>
+            지갑은 <b>집에서 천천히</b> 만드시면 됩니다 —
+            <a id="p-newwallet" href="https://rvn.ex.erci.se/wallet" target="_blank"
+               rel="noopener">여기서 만듭니다</a>.
+            다음에 오실 때는 이 단추 하나로 끝납니다.
+          </p>
+        </details>
         <a id="p-qrlink" href="#"><div id="p-qr"></div></a>
         <code id="p-addr"></code>
         <!-- 🔴 **다른 지갑을 쓰는 손님의 길.** 위 QR 은 이 화면을 보고 있는

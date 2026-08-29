@@ -181,6 +181,9 @@ type Screen =
 
 function show(screen: Screen): void {
   document.body.dataset.screen = screen;
+  // 🔴 화면이 바뀌면 설치 단추도 다시 정한다. 안 그러면 `main` 에서 그려진
+  //    단추가 **12단어 화면까지 따라간다.** 그록이 지적한 바로 그 사고다.
+  paintInstall();
   window.scrollTo(0, 0);
 }
 
@@ -710,6 +713,83 @@ function tagOf(e: NostrEvent, name: string): string {
   return e.tags.find((t) => t[0] === name)?.[1] || "";
 }
 
+
+// ── 홈 화면에 추가 ──────────────────────────────────────────────────────
+//
+// 🔴 대표님: "pwa 버튼도 있나?"  없었다.
+//
+// `manifest.json` 은 붙여 놨는데 **「앱으로 설치」 단추가 없었다.** 브라우저가
+// 주소창 구석에 띄우는 작은 아이콘에만 기대고 있었고, **40~70대는 그걸 못 본다.**
+// 만들어 놓고 닿을 길을 안 낸 그 병이 여기에도 있었다.
+//
+// ⚠️ 아이폰 사파리는 이 신호를 안 준다. 그때는 단추 대신 **하는 법을 적는다** —
+//    「공유 → 홈 화면에 추가」. 안드로이드만 되고 아이폰은 조용한 것이 제일 나쁘다.
+
+let installPrompt: any = null;
+
+function paintInstall(): void {
+  const box = document.getElementById("pwa-box");
+  if (!box) return;
+  const standalone =
+    window.matchMedia?.("(display-mode: standalone)")?.matches ||
+    (navigator as any).standalone === true;
+  // 이미 깔고 여신 분께 또 깔라고 하지 않는다.
+  if (standalone) {
+    box.innerHTML = "";
+    return;
+  }
+  // 🔴 **12단어·퀴즈·암호 화면에는 절대 띄우지 않는다.**
+  //
+  //    그록 지적(2026-08-29): 「`pwa-box` 가 섹션 밖에 있어 12단어·퀴즈
+  //    화면에도 뜬다. 40~70대가 잘못 누른다.」 내가 어제 만든 사고다 —
+  //    `<script>` 앞에 뒀는데 그 자리가 **모든 화면 공통**이었다.
+  //
+  //    12단어를 적는 중에 다른 단추가 뜨면 그걸 누르고, 그러면 적던 것을
+  //    잃는다. 시드는 다시 못 만든다.
+  //    ⚠️ 화면은 요소를 감추는 것이 아니라 **`<body>` 의 `data-screen`** 으로
+  //       가른다(`body[data-screen="main"] #s-main`). 요소를 찾으면 틀린다 —
+  //       고치면서 하마터면 또 안 도는 코드를 만들 뻔했다.
+  const screen = document.body.dataset.screen;
+  if (screen !== "main") {
+    box.innerHTML = "";
+    return;
+  }
+  const ios = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  if (installPrompt) {
+    box.innerHTML = `<button id="pwa-go" type="button">홈 화면에 추가</button>
+      <p class="sub">누르면 앱처럼 열립니다. 주소를 다시 안 치셔도 됩니다.</p>`;
+    document.getElementById("pwa-go")!.addEventListener("click", async () => {
+      try {
+        installPrompt.prompt();
+        await installPrompt.userChoice;
+      } catch {
+        /* 사장이 취소했을 뿐이다. 아무 말 안 한다. */
+      }
+      installPrompt = null;
+      paintInstall();
+    });
+  } else if (ios) {
+    // ⚠️ **「아래」라고 쓰면 안 된다.** 이 화면 아래에는 사파리 공유가 아니라
+    //    **우리 탭바(지갑·가게·물건)** 가 있다. 그록 지적 — 40~70대가 그걸
+    //    누른다. 어디를 눌러야 하는지 **사파리라고 이름을 대서** 말한다.
+    box.innerHTML = `<p class="sub"><b>홈 화면에 추가하시려면</b> —
+      <b>사파리 맨 아래(또는 위) 줄</b>의 <b>공유 아이콘(□ 위에 화살표)</b> 을 누르고
+      <b>「홈 화면에 추가」</b> 를 고르세요. 우리 화면 안이 아니라
+      <b>사파리 자체의 단추</b>입니다.</p>`;
+  } else {
+    box.innerHTML = "";
+  }
+}
+
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  installPrompt = e;
+  paintInstall();
+});
+window.addEventListener("appinstalled", () => {
+  installPrompt = null;
+  paintInstall();
+});
 
 // ── 1:1 문의 ────────────────────────────────────────────────────────────
 //
@@ -2350,13 +2430,31 @@ function wire(): void {
     const f = ($("sl-photo") as HTMLInputElement).files?.[0];
     if (!f) return;
     const note = $("sl-photo-note");
-    note.textContent = "사진을 올리는 중…";
+    // 🔴 **고른 즉시 보여 준다.** 올라가기를 기다리는 동안 아무것도 안 보이면
+    //    무엇을 골랐는지 알 수 없고, 잘못 고른 것도 모른다. 대표님이 실제로
+    //    「사진 썸네일이 보여야 올렸는지 판단이 되지 않나」라고 하셨다.
+    //    이 그림은 폰 안에 있는 파일이라 인터넷 없이도 바로 뜬다.
+    const local = URL.createObjectURL(f);
+    note.innerHTML = `<img src="${local}" alt="" class="shot" />
+      <div class="sub">올리는 중…</div>`;
     try {
       const url = await uploadPhoto(f);
       ($("sl-image") as HTMLInputElement).value = url;
       // 올라간 것을 **보여 준다.** 주소만 적히면 제대로 갔는지 알 수 없다.
-      note.innerHTML = `<img src="${escapeHtml(url)}" alt="" class="shot" />
+      note.innerHTML = `<img id="sl-shot" src="${escapeHtml(url)}" alt="" class="shot" />
         <div class="sub">올렸습니다. 다른 사진을 고르시면 바뀝니다.</div>`;
+      // 🔴 **안 열리면 안 열린다고 말한다.** 사진은 남의 서버에 있고 가끔
+      //    안 열린다. 그때 화면이 조용하면 사장은 「올라갔구나」 하고 글을
+      //    올리는데, 손님 화면에는 사진이 없다.
+      const shot = document.getElementById("sl-shot") as HTMLImageElement | null;
+      if (shot) {
+        shot.addEventListener("error", () => {
+          shot.src = local; // 폰 안의 것으로 되돌려 뭘 골랐는지는 보이게
+          note.querySelector(".sub")!.innerHTML =
+            `<span class="err">올리긴 했는데 그 사진이 지금 안 열립니다.</span>` +
+            ` 사진 서버가 느릴 수 있습니다. 잠시 뒤 다시 골라 보세요.`;
+        });
+      }
       // 🔴 사본을 한 부 더 둔다. 사진은 남의 미디어 서버에 있고, 그곳이
       //    닫히면 사라진다 — 우리도 못 되살린다. 이 화면이 **가게 노드에서**
       //    열렸으면 그 노드가 한 부를 갖고 있게 한다.
@@ -2391,6 +2489,9 @@ function secureEnough(): boolean {
 }
 
 function boot(): void {
+  // 🔴 아이폰 사파리는 `beforeinstallprompt` 를 **안 준다.** 그 신호만
+  //    기다리면 아이폰에서는 영영 아무것도 안 나온다. 켤 때 한 번 그린다.
+  paintInstall();
   wire();
 
   if (!secureEnough()) {

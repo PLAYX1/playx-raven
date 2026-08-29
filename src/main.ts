@@ -4101,18 +4101,32 @@ function paintInvite() {
   host.innerHTML = `<button class="ghost" id="tk-inv">${t("초대하기")}</button>`;
   document.getElementById("tk-inv")!.addEventListener("click", async () => {
     const url = inviteLink();
-    // 🔴 **누를 곳을 하나로.** 「복사」와 「보내기」를 나누면 어느 쪽을
-    //    눌러야 할지 묻게 된다. 복사부터 해 두고 어디로 보낼지 고르게 한다.
-    await navigator.clipboard.writeText(url).catch(() => {});
+    // 붙여넣기 좋게 **문구까지** 담는다. 사장이 문장을 지어내지 않아도 된다.
     const msg = `${t("이 방으로 오세요")} — ${name}\n${url}`;
+
+    // 🔴 **폰에서는 OS 공유 시트를 연다.** 대표님: "이야기 방이 sns 공유
+    //    기능 같은 게 없네." 여태 복사만 했다 — 그러면 사장이 카톡을 열고,
+    //    방을 고르고, 붙여넣기까지 해야 한다. 세 걸음이다.
+    //    공유 시트는 **한 번 눌러 카톡·문자·X 로 바로** 간다.
+    //
+    //    ⚠️ 데스크톱과 옛 브라우저에는 이 기능이 없다. 그때는 복사로
+    //       돌아간다 — 없다고 아무 일도 안 하면 그게 제일 나쁘다.
+    const share = (navigator as any).share;
+    if (typeof share === "function") {
+      try {
+        await (navigator as any).share({ title: name, text: msg, url });
+        return; // 보냈으면 창을 또 띄우지 않는다
+      } catch {
+        // 사장이 취소했거나 이 기계가 못 한다. 아래 복사로 간다.
+      }
+    }
+    await navigator.clipboard.writeText(msg).catch(() => {});
     await sure(
       t("초대 링크를 복사했습니다"),
-      `${url}\n\n` +
+      `${msg}\n\n` +
         t("카톡·문자·SNS 어디든 붙여넣으시면 됩니다. 받는 분은 이 프로그램을 깔고 그 방으로 들어옵니다."),
       t("닫기"),
     );
-    // 붙여넣기 좋게 문구까지 담아 둔다. 사장이 문장을 지어내지 않아도 된다.
-    await navigator.clipboard.writeText(msg).catch(() => {});
   });
 }
 

@@ -269,6 +269,13 @@
       .asethead { margin: 18px 0 4px; font-size: 15px; font-weight: 600; }
       #aset-play { width: 100%; margin-top: 10px; min-height: 44px; }
       /* 올린 사진 미리보기. 주소만 적히면 제대로 갔는지 알 수 없다. */
+      .pwabox { padding: 0 16px 12px; }
+      .pwabox button {
+        width: 100%;
+        min-height: 48px;   /* 40~70대에게 작은 단추는 없는 것과 같다 */
+        font-size: 16px;
+      }
+      .pwabox p { margin: 6px 0 0; }
       .shot { width: 100%; max-width: 260px; border-radius: 12px; display: block;
         margin-bottom: 6px; }
       #sl-photo-go { width: 100%; min-height: 48px; font-size: 16px; }
@@ -531,17 +538,29 @@
       </p>
 
       <!-- 🔴 연락처가 없으면 이건 장터가 아니라 게시판이다 — 올려도 안 팔린다.
-           ⚠️ 다만 이 번호는 **전 세계에 공개된다.** 릴레이는 누구나 읽고 봇도
-           읽는다. 지워도 이미 받아 간 곳에는 남는다. 그 사실을 적기 전에
-           먼저 보여 준다. -->
-      <label for="sl-phone">연락받을 번호</label>
-      <input id="sl-phone" inputmode="tel" autocomplete="off" placeholder="010-0000-0000" />
-      <div class="note" style="margin-top:8px">
-        <b>이 번호는 전 세계 누구나 볼 수 있습니다.</b> 나중에 글을 지워도
-        이미 받아 간 곳에는 남습니다.<br />
-        번호를 안 적으셔도 글은 올라가지만, <b>사겠다는 사람이 연락할 방법이
-        없습니다.</b>
+           그런데 **전화번호를 기본으로 두면 안 된다.** 대표님: "전화번호 노출이
+           너무 민감할 것 같은데 당근은 전화번호 안 올리잖아." 맞다.
+           그리고 우리는 이미 **암호화된 쪽지**를 갖고 있다(`nip17.ts`) —
+           지갑 안에서 이미 주고받는다. 장터만 그걸 안 쓰고 있었다. -->
+      <label>연락 방법</label>
+      <div class="note" style="margin-top:4px">
+        <b>쪽지로 받습니다.</b> 이 프로그램 안에서 주고받고,
+        <b>둘만 읽을 수 있습니다</b> — 우리도 릴레이도 못 봅니다.
+        번호를 적지 않으셔도 사겠다는 분이 연락할 수 있습니다.<br />
+        <span class="sub">⚠️ 카톡처럼 소리가 울리진 않습니다.
+        상대가 프로그램을 열어 보면 그동안 온 쪽지가 다 옵니다.</span>
       </div>
+
+      <details style="margin-top:10px">
+        <summary class="sub">전화번호도 함께 적기 (안 적으셔도 됩니다)</summary>
+        <input id="sl-phone" inputmode="tel" autocomplete="off"
+               placeholder="010-0000-0000" style="margin-top:8px" />
+        <div class="note" style="margin-top:8px">
+          <b>이 번호는 전 세계 누구나 볼 수 있습니다.</b> 사람도 보고 기계도 읽어 갑니다.
+          나중에 글을 지워도 <b>이미 받아 간 곳에는 남습니다.</b><br />
+          급히 팔아야 하는 것이 아니면 <b>비워 두시는 편이 낫습니다.</b>
+        </div>
+      </details>
 
       <label>동네 (거리 표시용)</label>
       <div class="priceline">
@@ -650,6 +669,11 @@
       </div>
       <button id="btn-sent-done" class="primary">확인</button>
     </section>
+
+    <!-- 🔴 「앱으로 설치」 단추가 없었다(대표님: "pwa 버튼도 있나?").
+         manifest 는 붙여 놓고 주소창 구석의 작은 아이콘에만 기대고 있었고,
+         40~70대는 그걸 못 본다. 탭 바로 위에 둔다 — 늘 보이는 자리다. -->
+    <div id="pwa-box" class="pwabox"></div>
 
     <script src="/wallet.bundle.js"></script>
       <nav class="tabbar">
