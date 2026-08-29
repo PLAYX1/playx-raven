@@ -42,14 +42,6 @@
 # 넣어 둔다. 새면 남이 가짜 판올림을 밀어넣을 수 있다.
 name: 설치 파일 만들기
 
-# 🔴 판올림 둘이 겹치면 `dist` 를 서로 덮어쓰다 터진다. 실측:
-#    「cannot lock ref 'refs/heads/dist': is at … but expected …」
-#    0.1.6 과 0.1.7 이 겹쳐서 0.1.7 의 올리기가 통째로 실패했다.
-#    앞엣것을 죽이지는 않는다 — 만들던 것은 끝까지 만들고 줄을 선다.
-concurrency:
-  group: release
-  cancel-in-progress: false
-
 on:
   push:
     tags: ["v*"]
@@ -121,8 +113,8 @@ jobs:
           # 🔴 두 번 실패하며 하나씩 늘려 봤는데, 그러다 보면 계속 하나씩
           # 모자란다. Tauri 가 공식으로 적어 둔 목록을 통째로 쓴다.
           #
-          # ⚠️ 「-y」 만으로는 부족했다. 실패해도 계속 가서 링크 단계에서야
-          #    드러났다 — 「set -e」 로 여기서 멈추게 한다.
+          # ⚠️ `-y` 만으로는 부족했다. 실패해도 계속 가서 링크 단계에서야
+          #    드러났다 — `set -e` 로 여기서 멈추게 한다.
           set -e
           sudo apt-get install -y \
             libwebkit2gtk-4.1-dev \
@@ -150,204 +142,36 @@ jobs:
 
       - run: npm ci
 
-      # ── 레이븐 노드를 같이 넣는다 ─────────────────────────────────
+      # 🔴 **앱 안에 박히는 판 번호를 태그에서 넣는다.**
       #
-      # 🔴 사장님께 「먼저 레이븐 코어를 받아 설치하세요」라고 말하는 순간
-      #    문이 닫힌다. 70대 사장이 그걸 하지 않는다. 실제로 그 벽에 걸렸다.
+      #    `tauri.conf.json` 의 `version` 이 앱에 그대로 박히고, 화면과
+      #    업데이터가 그 값을 쓴다. 그런데 빌드가 그걸 안 건드려서,
+      #    `0.1.68` 태그로 만든 앱이 자기를 **`0.1.2`** 라고 말했다.
       #
-      #    실행 중에 내려받는 것과는 다르다. 그건 계속 안 한다 — 무엇을
-      #    받았는지 증명할 수 없다. 여기서 받는 것은 **체크섬을 대조**하고,
-      #    우리가 서명한 설치 파일 **안에** 들어간다.
-      #
-      # 🔴 애플 실리콘 맥은 공식 배포가 없다(win64·linux·osx64[인텔]뿐).
-      #    그래서 맥에서는 이 단계가 그냥 넘어가고, 앱은 사장이 따로 깔아 둔
-      #    것을 찾아 쓴다. 우리가 빌드해 올리면 그때 여기에 더한다.
-      - name: 레이븐 노드 넣기
-        # 🔴 리눅스는 뺀다. AppImage 는 거의 안 눌려서, 넣으면 136MB 가 되고
-        #    깃허브 파일 한도(100MB)를 넘어 **올리기가 통째로 실패**한다.
-        #    릴리스 자산으로 올리면 되지만, 그건 다른 저장소라 토큰이 따로
-        #    필요하다(github.token 은 403). 대표에게 토큰을 만들어 달라고
-        #    하는 대신, 지금은 리눅스만 예전처럼 따로 깔게 둔다.
-        if: matrix.target != 'x86_64-unknown-linux-gnu'
+      #    ⚠️ 파일 이름만 맞고 앱 안이 틀리면 두 가지가 깨진다:
+      #      · 사장이 「몇 판을 쓰는지」를 화면에서 못 본다
+      #      · 업데이터가 옛 번호를 보내 **판올림이 끝나지 않는다**
+      - name: 앱 안에 판 번호 넣기
         shell: bash
         run: |
-          set -euo pipefail
-          B=https://github.com/RavenProject/Ravencoin/releases/download/v4.8.0
-          P=raven-4.8.0-225491298
-          mkdir -p src-tauri/vendor
-          case "${{ matrix.target }}" in
-            x86_64-pc-windows-msvc)
-              F=$P-win64.zip
-              # 2026-08-26 에 손으로 받아 대조한 값이다. 이 값이 안 맞으면
-              # 받은 것이 우리가 확인한 그 파일이 아니다 — 멈춘다.
-              WANT=7b39dface10966fc92703eacd9e562cd61d9c18f1fcad5dcbc196742e0ff1752
-              ;;
-            x86_64-unknown-linux-gnu)
-              F=$P-x86_64-linux-gnu.tar.gz
-              WANT=cb359b6a5b42e47068cd655231484fcc763d2f79eae5ea318b029c704a4dc020
-              ;;
-            x86_64-apple-darwin)
-              # 🔴 인텔 맥은 **노드도 파일창고도 안 들어가고 있었다.**
-              #    설치 파일이 12MB 인 것이 그 증거다(애플 실리콘은 57MB).
-              #    그래서 인텔 맥에 깐 사람만 「하나만 깔면 다 되는」이
-              #    거짓이었다. 공식에 인텔 맥 판(osx64)이 있는데 갈래를
-              #    안 적어서 `*)` 로 빠지고 있었다.
-              #
-              #    2026-08-26 에 받아서 **공식이 적어 둔 .sha256sum 과**
-              #    대조했다. 안에 bin/ravend 가 있는 것도 확인했다.
-              F=$P-osx64.tar.gz
-              WANT=8610c117476697e7f34dedf0b85bf8386c79ecebfa36740eedc1260c7d1d5c5a
-              ;;
-            aarch64-apple-darwin)
-              # 🔴 공식 v4.8.0 에 애플 실리콘 판이 **없다**(win64·linux·osx64[인텔]뿐).
-              #    그래서 우리가 원본 소스에서 직접 빌드해 올려 두었다.
-              #
-              #    기준: RavenProject/Ravencoin v4.8.0-2-g0894f15de, 소스 수정 없음.
-              #    묶인 라이브러리는 맥 기본 둘뿐(libSystem, libc++) — 홈브루도
-              #    boost 도 안 물려 있어 **어느 맥에서나 돈다.** 깨끗한 폴더에서
-              #    기동까지 확인했다.
-              B=https://github.com/PLAYX1/playx-raven-releases/releases/download/vendor-ravend-4.8.0
-              F=ravend-macos-arm64
-              WANT=d008e5ed56497dc394ce32e95f61a5e5b19fb59a0cbb5b6600c7aa3bc69a4806
-              ;;
-            *)
-              echo "이 기계에는 넣을 노드가 없습니다. 넘어갑니다: ${{ matrix.target }}"
-              exit 0
-              ;;
-          esac
-          for try in 1 2 3; do
-            curl -fsSL --retry 2 --retry-delay 3 --max-time 300 "$B/$F" -o node.pkg && break
-            echo "노드 받기 실패 ($try/3). 잠시 뒤 다시 합니다."
-            sleep 5
-          done
-          [ -s node.pkg ] || { echo "🔴 노드를 못 받았습니다."; exit 1; }
-          # 🔴 맥에는 「sha256sum」 이 없다. 」shasum」 뿐이다. 이 줄 때문에
-          #    애플 실리콘 빌드가 통째로 실패했다(exit 127). 맥이 이 줄에
-          #    닿게 된 것은 우리 빌드를 넣으면서부터다 — 그전에는 위에서
-          #    빠져나갔다. 두 이름을 다 본다.
-          if command -v sha256sum >/dev/null; then
-            GOT=$(sha256sum node.pkg | cut -d" " -f1)
-          else
-            GOT=$(shasum -a 256 node.pkg | cut -d" " -f1)
-          fi
-          if [ "$GOT" != "$WANT" ]; then
-            echo "🔴 체크섬이 다릅니다. 받은 것: $GOT / 적힌 것: $WANT"
-            exit 1
-          fi
-          mkdir -p nodetmp
-          case "$F" in
-            *.zip)    unzip -q node.pkg -d nodetmp ;;
-            *.tar.gz) tar -xzf node.pkg -C nodetmp ;;
-            # 우리가 올린 맥 것은 실행 파일 그대로다. 풀 것이 없다.
-            *)        cp node.pkg nodetmp/ravend ;;
-          esac
-          # 「ravend」 하나만 꺼낸다. 지갑 창(raven-qt)은 안 넣는다 — 우리 앱이
-          # 그 일을 하고, 40MB 를 더 받게 할 이유가 없다.
-          BIN=$(find nodetmp -type f \( -name ravend -o -name ravend.exe \) | head -1)
-          if [ -z "$BIN" ]; then
-            echo "🔴 받은 꾸러미 안에 ravend 가 없습니다."
-            exit 1
-          fi
-          cp "$BIN" "src-tauri/vendor/$(basename "$BIN")"
-          chmod +x "src-tauri/vendor/$(basename "$BIN")" || true
-          ls -la src-tauri/vendor/
-      # ── 파일창고(IPFS)도 같이 넣는다 ───────────────────────────────
-      #
-      # 🔴 이 단계를 **만들어 놓고 커밋에서 빠뜨렸다.** 그래서 0.1.5~0.1.12 에
-      #    ravend 만 들어가고 ipfs 는 안 들어갔다. 화면은 「파일창고가
-      #    없습니다」라고 말하고, 사진과 메뉴가 손님에게 안 간다.
-      #
-      # kubo 는 공식 배포에 넷이 다 있다 — 애플 실리콘 맥까지.
-      - name: 파일창고 넣기
-        # 🔴 리눅스는 뺀다. AppImage 는 거의 안 눌려서, 넣으면 136MB 가 되고
-        #    깃허브 파일 한도(100MB)를 넘어 **올리기가 통째로 실패**한다.
-        #    릴리스 자산으로 올리면 되지만, 그건 다른 저장소라 토큰이 따로
-        #    필요하다(github.token 은 403). 대표에게 토큰을 만들어 달라고
-        #    하는 대신, 지금은 리눅스만 예전처럼 따로 깔게 둔다.
-        if: matrix.target != 'x86_64-unknown-linux-gnu'
-        shell: bash
-        run: |
-          set -euo pipefail
-          V=v0.43.0
-          B=https://github.com/ipfs/kubo/releases/download/$V
-          mkdir -p src-tauri/vendor
-          case "${{ matrix.target }}" in
-            x86_64-pc-windows-msvc)
-              F=kubo_${V}_windows-amd64.zip
-              WANT=0486721fc406d36c9d70d16dc3984e70c50d5f1d1c890de3864a6904564080adb3f73546162ad30a8e1ee43024a18bf900fbda2b6c131197351ff2e8b9782178
-              ;;
-            x86_64-unknown-linux-gnu)
-              F=kubo_${V}_linux-amd64.tar.gz
-              WANT=6af21cd24a307d94326807b3d3827064c74fb7122f83b6940af250e6ae40da250e0ec0e1f3551256b78cd204623ed56c32ce735bbe28bdcc787b36943c52458a
-              ;;
-            x86_64-apple-darwin)
-              # 공식이 적어 둔 .sha512 와 대조했다(2026-08-26).
-              F=kubo_${V}_darwin-amd64.tar.gz
-              WANT=7edd038e9208b8024ef14329102a8bc40827c21337bb2d38ea52400c57a04e3c092086a11c9d342b85083a71df4bf77130fd676bdb68628b2d9e8e6f511ee305
-              ;;
-            aarch64-apple-darwin)
-              F=kubo_${V}_darwin-arm64.tar.gz
-              WANT=2377bc886b340087b20d5a9bdd025e5a6ed4b7e910ac04fa0d0e26f5b7e189b31a33f6cc682c0aaec2695a65b8a38d1f5bfce505c2948c0ea08ee64009034ef6
-              ;;
-            *)
-              echo "이 기계용 파일창고 배포가 목록에 없습니다: ${{ matrix.target }}"
-              exit 0
-              ;;
-          esac
-          # 🔴 한 번 실패했다고 조용히 넘어가지 않는다. 2026-08-27 맥에서
-          #    이 줄이 실패해 **파일창고가 안 들어간 판**이 나갈 뻔했다
-          #    (크기 검사가 잡았다). 네트워크는 가끔 끊긴다 — 세 번 해 본다.
-          for try in 1 2 3; do
-            curl -fsSL --retry 2 --retry-delay 3 --max-time 300 "$B/$F" -o ipfs.pkg && break
-            echo "파일창고 받기 실패 ($try/3). 잠시 뒤 다시 합니다."
-            sleep 5
-          done
-          [ -s ipfs.pkg ] || { echo "🔴 파일창고를 못 받았습니다."; exit 1; }
-          # kubo 는 sha512 로 적어 둔다. 맥에는 sha512sum 이 없다.
-          if command -v sha512sum >/dev/null; then
-            GOT=$(sha512sum ipfs.pkg | cut -d" " -f1)
-          else
-            GOT=$(shasum -a 512 ipfs.pkg | cut -d" " -f1)
-          fi
-          if [ "$GOT" != "$WANT" ]; then
-            echo "🔴 체크섬이 다릅니다."
-            echo "   받은 것: $GOT"
-            echo "   적힌 것: $WANT"
-            exit 1
-          fi
-          mkdir -p ipfstmp
-          case "$F" in
-            *.zip)    unzip -q ipfs.pkg -d ipfstmp ;;
-            *.tar.gz) tar -xzf ipfs.pkg -C ipfstmp ;;
-          esac
-          BIN=$(find ipfstmp -type f \( -name ipfs -o -name ipfs.exe \) | head -1)
-          if [ -z "$BIN" ]; then
-            echo "🔴 받은 꾸러미 안에 ipfs 가 없습니다."
-            exit 1
-          fi
-          cp "$BIN" "src-tauri/vendor/$(basename "$BIN")"
-          chmod +x "src-tauri/vendor/$(basename "$BIN")" || true
-
-      # 🔴 파일이 **정말 있을 때만** `resources` 를 켠다. 글로브가 아무것도
-      #    못 찾으면 Tauri 빌드가 통째로 멈춘다(실측:
-      #    "glob pattern … didn't match any files").
-      - name: 같이 넣은 것 등록
-        shell: bash
-        run: |
-          set -euo pipefail
-          ls -la src-tauri/vendor/ || true
-          node -e "
-            const fs=require('fs'), p='src-tauri/tauri.conf.json';
-            const dir='src-tauri/vendor';
-            const have=fs.existsSync(dir)?fs.readdirSync(dir):[];
-            const res=['vendor/ravend*','vendor/ipfs*']
-              .filter(g=>have.some(f=>f.startsWith(g.split('/')[1].replace('*',''))));
-            if (!res.length) { console.log('같이 넣을 것이 없습니다.'); process.exit(0); }
-            const d=JSON.parse(fs.readFileSync(p,'utf8'));
-            d.bundle.resources=res;
-            fs.writeFileSync(p, JSON.stringify(d,null,2)+'\n');
-            console.log('resources:', res.join(' '));
-          "
+          V="${{ inputs.version }}"
+          [ -z "$V" ] && V="${GITHUB_REF_NAME#v}"
+          case "$V" in ""|main|v*) V="0.0.0" ;; esac
+          node -e '
+            const f="src-tauri/tauri.conf.json";
+            const j=JSON.parse(require("fs").readFileSync(f,"utf8"));
+            j.version=process.argv[1];
+            require("fs").writeFileSync(f, JSON.stringify(j,null,2)+"\n");
+            console.log("앱 판 번호:", j.version);
+          ' "$V"
+          # ⚠️ 넣고 나서 **읽어 본다.** 넣었다고 믿으면 오늘 같은 일이 또 난다.
+          node -e '
+            const j=require("./src-tauri/tauri.conf.json");
+            if (j.version !== process.argv[1]) {
+              console.error("판 번호가 안 들어갔습니다:", j.version);
+              process.exit(1);
+            }
+          ' "$V"
 
       - name: 만들기
         env:
@@ -356,23 +180,47 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npx tauri build --target ${{ matrix.target }}
 
-      # 🔴 **맥 「손상되었기 때문에 열 수 없습니다」를 막는다.**
-      # 서명이 `adhoc, linker-signed` 이고 자원 목록이 없으면 맥은
-      # 「서명 없음」이 아니라 **「손상됨」**으로 읽는다 — 그때는
-      # 휴지통 말고 선택지가 없다. 설정만 믿지 않고 만든 것을 열어 본다.
+      # 🔴 **맥에서 「손상되었기 때문에 열 수 없습니다」가 뜨던 사고를 막는다.**
+      #
+      # 2026-08-27: 배포된 맥 앱의 서명이 이랬다 —
+      #
+      #     Signature=adhoc, linker-signed
+      #     code has no resources but signature indicates they must be present
+      #
+      # 안쪽 실행 파일만 링커가 자동으로 서명했고 **껍데기는 서명이 안 됐다.**
+      # 그 서명은 「자원 목록이 있어야 한다」고 말하는데 실제로는 없다.
+      # 맥은 그걸 「서명 없음」이 아니라 **「손상됨」**으로 읽는다.
+      #
+      # 차이가 결정적이다:
+      #   · 확인되지 않은 개발자 → 「그래도 열기」 가 있다. **되돌릴 수 있다.**
+      #   · 손상됨               → 휴지통 말고 선택지가 없다. **거기서 끝난다.**
+      #
+      # 맥에서 받은 사람은 전부 이걸 봤고, 우리 잘못인 줄도 모르고 지웠다.
+      #
+      # `signingIdentity: "-"` 로 고쳤지만 **설정만 믿지 않는다.** 서명은
+      # 조용히 깨지는 종류다 — 오늘도 아무도 오류를 못 봤다. 그래서 만든
+      # 것을 직접 열어 보고, 서명이 유효하지 않으면 **배포를 멈춘다.**
       - name: 맥 서명 검산
         if: startsWith(matrix.os, 'macos')
         shell: bash
         run: |
           set -euo pipefail
           APP=$(find src-tauri/target -name "*.app" -maxdepth 6 -type d | head -1)
-          [ -n "$APP" ] || { echo "🔴 만든 앱을 못 찾았습니다"; exit 1; }
+          if [ -z "$APP" ]; then echo "🔴 만든 앱을 못 찾았습니다"; exit 1; fi
+          echo "검사할 것: $APP"
           codesign -dv --verbose=2 "$APP" 2>&1 | sed 's/^/  /' || true
-          codesign --verify --deep --strict "$APP" || {
-            echo "🔴 서명이 유효하지 않습니다 — 맥에서 「손상됨」이 뜹니다."; exit 1; }
-          [ -f "$APP/Contents/_CodeSignature/CodeResources" ] || {
-            echo "🔴 자원 목록이 없습니다 — 껍데기가 서명 안 됐습니다."; exit 1; }
-          echo "✅ 서명 유효"
+          if ! codesign --verify --deep --strict "$APP"; then
+            echo ""
+            echo "🔴 서명이 유효하지 않습니다 — 이대로 내보내면 맥에서"
+            echo "   「손상되었기 때문에 열 수 없습니다」가 뜨고, 받은 사람은"
+            echo "   휴지통 말고 선택지가 없습니다. 배포를 멈춥니다."
+            exit 1
+          fi
+          if [ ! -f "$APP/Contents/_CodeSignature/CodeResources" ]; then
+            echo "🔴 자원 목록(CodeResources)이 없습니다 — 껍데기가 서명 안 됐습니다."
+            exit 1
+          fi
+          echo "✅ 서명 유효 · 자원 목록 있음"
 
       - name: 만든 것 모으기
         shell: bash
@@ -380,8 +228,8 @@ jobs:
           mkdir -p out
           # 이름을 사람이 읽을 수 있게 바꾼다. 사장이 받은 파일을 보고
           # "이게 내 컴퓨터 것이 맞나" 를 알 수 있어야 한다.
-          # 🔴 「GITHUB_REF_NAME」 은 태그로 돌 때만 판 번호다. 손으로 돌리면
-          # 가지 이름(「main」)이 들어가서 파일이 」…-main-windows.msi」 가 됐다.
+          # 🔴 `GITHUB_REF_NAME` 은 태그로 돌 때만 판 번호다. 손으로 돌리면
+          # 가지 이름(`main`)이 들어가서 파일이 `…-main-windows.msi` 가 됐다.
           # 사장이 받은 파일이 몇 판인지 알 수 없다.
           V="${{ inputs.version }}"
           [ -z "$V" ] && V="${GITHUB_REF_NAME#v}"
@@ -393,81 +241,10 @@ jobs:
               ext="${f##*.}"
               cp "$f" "out/PLAY-X-Raven-${V}-${{ matrix.label }}.${ext}"
             done
-
-          # 🔴 판올림 서명(「.sig」)도 같이 챙긴다.
-          #
-          #    여태 서명 열쇠는 저장소 비밀에 멀쩡히 있었는데
-          #    「createUpdaterArtifacts」 가 꺼져 있어 **서명이 아예 안 만들어졌다.**
-          #    그래서 자동 판올림이 켜져 있는데도 아무도 새 판을 못 받았다 —
-          #    0.1.2 를 쓰는 사람에게 서버가 「최신입니다」라고 답했다.
-          #
-          #    서명이 없으면 Tauri 는 받은 것을 **설치하지 않는다.** 그게 맞다.
-          #    없으면 아무나 가짜 판올림을 밀어 넣는다.
-          find "$B" -maxdepth 3 -type f -name '*.sig' -print0 | while IFS= read -r -d '' f; do
-            base="${f%.sig}"
-            ext="${base##*.}"
-            # 「.tar.gz.sig」 처럼 두 겹인 것은 앞엣것까지 살린다.
-            case "$base" in *.tar.gz) ext="tar.gz" ;; esac
-            cp "$f" "out/PLAY-X-Raven-${V}-${{ matrix.label }}.${ext}.sig"
-            # 맥 판올림은 「.app.tar.gz」 를 받는다. dmg 로는 못 고친다.
-            [ -f "$base" ] && cp "$base" "out/PLAY-X-Raven-${V}-${{ matrix.label }}.${ext}"
-          done
-          ls -la out/
           # 판올림용 묶음과 서명은 이름을 그대로 둔다 — 업데이터가 이 이름을 본다.
           find "$B" -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.sig' \) \
             -exec cp {} out/ \; 2>/dev/null || true
           ls -la out/
-
-      # 🔴 **노드와 파일창고가 진짜 들어갔는지 본다.**
-      #
-      # 2026-08-27: 이 둘을 받는 코드가 통째로 사라진 채 여섯 판이 나갔다.
-      # 설치 파일이 47MB → 7.8MB 로 줄었는데 **빌드는 성공이었다.**
-      #
-      # ⚠️ 처음엔 만든 것의 **크기**로 쟀는데 그게 틀렸다. deb·rpm 은
-      #    xz 압축이라 같은 내용이 82MB(AppImage) → 11MB 가 된다. 멀쩡한
-      #    리눅스 판이 「너무 작다」고 걸렸다. **압축률은 판마다 다르다.**
-      #
-      # 그래서 **넣기 전에 원본이 있는지** 본다. 그게 압축과 무관한 진짜
-      # 확인이고, 없으면 빌드를 시작하기도 전에 멈출 수 있다.
-      # 🔴 **리눅스는 뺀다 — 원래 노드를 안 넣는 것이 설계다.**
-      #    AppImage 는 거의 안 눌려서 넣으면 136MB 가 되고 깃에 못 올린다.
-      #    그래서 「레이븐 노드 넣기」 단계 자체가 리눅스에서 건너뛰어진다.
-      #    그걸 모르고 검사하다가 **멀쩡한 리눅스 빌드를 또 막았다.**
-      #    오늘 세 번째다. 검사를 넣을 때는 막아야 할 것뿐 아니라
-      #    **막지 말아야 할 것**도 반드시 같이 봐야 한다.
-      - name: 노드·파일창고가 준비됐나
-        if: matrix.target != 'x86_64-unknown-linux-gnu'
-        shell: bash
-        run: |
-          set -euo pipefail
-          # 🔴 **`ls a b` 를 쓰면 안 된다.** 맥에는 `ravend` 는 있고
-          #    `ravend.exe` 는 없다. 그때 `ls` 가 「하나 없다」고 1 을 돌려주고,
-          #    `| head` 때문에 `pipefail` 이 걸리고, `set -e` 가 그 자리에서
-          #    죽인다 — **출력 한 줄 없이.** 실제로 맥·리눅스 빌드가 그렇게
-          #    죽었다(2026-08-27). 있는지 없는지만 보는 검사가, 있는 것까지
-          #    못 나가게 막은 것이다.
-          #
-          #    안전장치가 사고를 내면 안전장치가 아니다. 파일이 있는지만 본다.
-          BAD=""
-          for n in ravend ipfs; do
-            F=""
-            for c in "src-tauri/vendor/$n" "src-tauri/vendor/$n.exe"; do
-              if [ -f "$c" ]; then F="$c"; break; fi
-            done
-            if [ -z "$F" ]; then
-              BAD="$BAD $n"
-            else
-              echo "  $(( $(wc -c < "$F") / 1048576 ))MB  $(basename "$F")"
-            fi
-          done
-          if [ -n "$BAD" ]; then
-            echo ""
-            echo "🔴 없습니다:$BAD"
-            echo "   이대로 내보내면 새로 까는 사람은 노드도 파일창고도 없는"
-            echo "   앱을 받습니다. 화면은 「꺼져 있습니다」만 반복합니다."
-            exit 1
-          fi
-          echo "✅ 둘 다 준비됐습니다"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -496,7 +273,7 @@ jobs:
 
       - name: 열쇠 준비
         env:
-          # ⚠️ 이 열쇠는 「playx-raven-releases」 **한 곳에만** 닿는다. 소스
+          # ⚠️ 이 열쇠는 `playx-raven-releases` **한 곳에만** 닿는다. 소스
           # 저장소에는 못 쓴다 — 새더라도 소스가 같이 새지 않게.
           KEY: ${{ secrets.RELEASES_DEPLOY_KEY }}
         run: |
@@ -517,14 +294,26 @@ jobs:
           cd pub
           # 🔴 **지우기 전에 넣을 것이 다 있는지 본다.**
           #
-          #    2026-08-27: 윈도우 하나가 네트워크 오류로 실패했는데 이 단계가
-          #    `if: always()` 로 그대로 돌았고, dist 를 뿌리째 지운 뒤 있는
-          #    것만 올렸다. **맥은 성공했는데 같이 사라졌다.** 전부 404.
+          # 2026-08-27: 윈도우 하나가 네트워크 오류로 실패했는데 이 단계가
+          # `if: always()` 로 그대로 돌았다. 그리고 아래에서 dist 를 **뿌리째
+          # 지우고** 있는 것만 올렸다. 결과:
           #
-          #    하나라도 없으면 옛 dist 를 그대로 두고 덮어쓰기만 한다 —
-          #    **404 보다는 옛 판이 낫다.**
+          #     VERSION            404
+          #     windows.exe/.msi   404
+          #     mac-*.dmg          404      ← 맥은 성공했는데 같이 사라졌다
+          #     SHA256SUMS.txt     남음
+          #
+          # **아무도 아무것도 못 받는 상태**가 됐다. 「하나 때문에 나머지가
+          # 막히면 안 된다」고 만든 규칙이 정반대로 작동했다 — 하나 때문에
+          # 나머지까지 지웠다.
+          #
+          # 그래서 **지우는 것을 조건부로** 만든다. 네 기계 것이 다 있을
+          # 때만 뿌리째 새로 만든다. 하나라도 없으면 **옛 dist 를 그대로 두고**
+          # 있는 것만 덮어쓴다 — 그 기계 사람은 옛 판을 받게 되지만,
+          # **404 보다는 옛 판이 낫다.**
+          NEED="windows.exe windows.msi mac-apple-silicon.dmg mac-intel.dmg linux.AppImage"
           MISSING=""
-          for suffix in windows.exe windows.msi mac-apple-silicon.dmg mac-intel.dmg linux.AppImage; do
+          for suffix in $NEED; do
             ls ../rel/ | grep -q -- "-$suffix$" || MISSING="$MISSING $suffix"
           done
           if [ -n "$MISSING" ]; then
@@ -536,90 +325,7 @@ jobs:
             git rm -rf . >/dev/null 2>&1 || true
             rm -rf ./* .gitignore 2>/dev/null || true
           fi
-          # 🔴 깃허브는 파일 하나가 100MB 를 넘으면 **밀 수 없다.** 노드와
-          #    파일창고를 넣으니 리눅스 설치 파일이 136MB 가 되어 올리기가
-          #    통째로 실패했다(실측 2026-08-26). 앞으로 더 넣으면 윈도우·맥도
-          #    같은 벽에 부딪힌다.
-          #
-          #    큰 것은 깃에 안 담는다. 작은 것(표·판번호·서명)만 담고, 설치
-          #    파일은 **릴리스 자산**으로 올린다 — 거기는 한 파일 2GB 까지다.
-          #    릴리스에 올리는 것은 아래 별도 단계에서 한다.
-          for f in ../rel/*; do
-            [ -f "$f" ] || continue
-            sz=$(wc -c < "$f")
-            if [ "$sz" -lt 95000000 ]; then
-              cp "$f" .
-            else
-              echo "깃에는 안 담습니다(${sz} 바이트): $(basename "$f")"
-            fi
-          done
-
-          # 🔴 판 번호가 안 붙은 이름도 **같이** 올린다.
-          #
-          #    「dist」 는 판올림마다 뿌리째 새로 만든다. 그래서 v0.1.3 을 올린
-          #    순간 0.1.2 파일이 전부 사라졌는데, 랜딩(「public/rvn/index.html」)
-          #    은 그대로 0.1.2 를 가리키고 있었다 — 맥·인텔맥·윈도우·리눅스
-          #    **네 개 전부 404**. 사이트에 온 사람은 아무것도 못 받았다.
-          #
-          #    판마다 남의 저장소 파일 여덟 자리를 손으로 고치는 방식은
-          #    언젠가 또 빠뜨린다. 안 바뀌는 이름을 하나 두고 그걸 가리키게
-          #    한다. 판 번호가 붙은 이름도 그대로 남는다 — 특정 판을 콕
-          #    집어 받아야 할 때가 있다.
-          for f in PLAY-X-Raven-*; do
-            case "$f" in
-              *.md) continue ;;
-            esac
-            latest=$(echo "$f" | sed "s/PLAY-X-Raven-[0-9][0-9.]*-/PLAY-X-Raven-latest-/")
-            [ "$latest" = "$f" ] || cp "$f" "$latest"
-          done
-          # 무엇이 최신인지 기계도 읽을 수 있게 적어 둔다.
-          printf '%s\n' "$V" > VERSION
-
-          # 🔴 자동 판올림이 읽을 표. 서명이 있는 것만 담는다 — 서명 없는
-          #    줄을 담으면 앱이 받아 놓고 설치를 거부한다(더 나쁘다).
-          node -e "
-            const fs=require('fs');
-            const V=process.argv[1];
-            // 🔴 설치 파일은 이제 릴리스 자산이다. 깃 가지 주소를 적으면
-            //    판올림이 없는 파일을 받으러 간다(100MB 넘는 것은 깃에 없다).
-            const R='https://raw.githubusercontent.com/PLAYX1/playx-raven-releases/dist';
-            // 🔴 이름을 **짐작하지 않는다.** 처음엔 「.app.tar.gz」 라고 적었는데
-            //    실제로는 「.tar.gz」 로 떨어져서 맥 둘이 표에서 통째로 빠졌다
-            //    (윈도우·리눅스만 담겼다). 짐작이 틀려도 오류가 안 나고
-            //    **조용히 맥 사장만 판올림을 못 받는다** — 제일 나쁜 종류다.
-            //    그래서 그 자리에 실제로 있는 .sig 를 세어 담는다.
-            const label={
-              'windows':           'windows-x86_64',
-              'mac-apple-silicon': 'darwin-aarch64',
-              'mac-intel':         'darwin-x86_64',
-              'linux':             'linux-x86_64',
-            };
-            // 판올림으로 받을 수 있는 것만. dmg·msi 는 Tauri 가 안 받는다.
-            const okExt=['.tar.gz','.AppImage','.exe'];
-            const platforms={};
-            for (const f of fs.readdirSync('.')) {
-              if (!f.endsWith('.sig')) continue;
-              const base=f.slice(0,-4);
-              if (!fs.existsSync(base)) continue;
-              if (!okExt.some(e=>base.endsWith(e))) continue;
-              const m=base.match(/^PLAY-X-Raven-(.+?)-([a-z-]+)\.(?:tar\.gz|AppImage|exe)$/);
-              if (!m || m[1]!==V) continue;
-              const k=label[m[2]];
-              if (!k || platforms[k]) continue;
-              platforms[k]={
-                signature: fs.readFileSync(f,'utf8').trim(),
-                url: R+'/'+base,
-              };
-            }
-            const out={
-              version: V,
-              notes: '새 판이 나왔습니다.',
-              pub_date: new Date().toISOString(),
-              platforms,
-            };
-            fs.writeFileSync('latest.json', JSON.stringify(out,null,2));
-            console.log('latest.json 에 담긴 기계:', Object.keys(platforms).join(', ') || '없음');
-          " "$V"
+          cp ../rel/* .
           cat > README.md <<EOF
           # PLAY X Raven $V
 
@@ -631,37 +337,32 @@ jobs:
           비교하세요. 다르면 받다가 깨졌거나 누가 바꾼 것이니 **열지 마세요.**
           EOF
           git add -A
-          git commit -q -m "PLAY X Raven $V"
-          # 줄을 세워 두었어도, 손으로 돌린 것과 겹칠 수 있다. 한 번 더 해 본다 —
-          # 여기서 실패하면 만든 설치 파일이 아무 데도 안 올라간다.
-          if ! git push -f origin dist; then
-            echo "한 번 실패했습니다. 다시 받아서 한 번 더 합니다."
-            sleep 10
-            git fetch origin dist || true
-            git push -f origin dist
-          fi
+          git commit -q -m "PLAY X Raven $V" || echo "바뀐 것이 없습니다"
+          git push -f origin dist
 
           # 🔴 **올렸다고 받아지는 것이 아니다.** 오늘 SHA256SUMS 만 올라가고
-          #    파일은 전부 404 였는데 이 단계는 성공으로 끝났다. 아무도
-          #    확인하지 않았고 대표님이 받으려다 아셨다.
+          #    파일은 전부 404 였는데, 이 단계는 성공으로 끝났다. 아무도
+          #    확인하지 않았고, 대표님이 받으려다 아셨다.
+          #
+          #    사람이 실제로 누르는 주소를 그대로 눌러 본다.
           echo "── 진짜 받아지는지 확인 ──"
           B=https://raw.githubusercontent.com/PLAYX1/playx-raven-releases/dist
-          sleep 15
+          sleep 15   # CDN 이 따라오는 데 잠깐 걸린다
           BAD=""
-          for f in VERSION SHA256SUMS.txt PLAY-X-Raven-latest-windows.exe \
-                   PLAY-X-Raven-latest-windows.msi PLAY-X-Raven-latest-mac-apple-silicon.dmg \
-                   PLAY-X-Raven-latest-mac-intel.dmg; do
+          for f in VERSION SHA256SUMS.txt \
+                   PLAY-X-Raven-latest-windows.exe \
+                   PLAY-X-Raven-latest-windows.msi \
+                   PLAY-X-Raven-latest-mac-apple-silicon.dmg \
+                   PLAY-X-Raven-latest-mac-intel.dmg \
+                   PLAY-X-Raven-latest-linux.AppImage; do
             code=$(curl -sIL -o /dev/null -w "%{http_code}" --max-time 60 "$B/$f")
             echo "  $code  $f"
             [ "$code" = "200" ] || BAD="$BAD $f"
           done
-          [ -z "$BAD" ] || { echo "🔴 받아지지 않습니다:$BAD"; exit 1; }
+          if [ -n "$BAD" ]; then
+            echo ""
+            echo "🔴 받아지지 않는 것이 있습니다:$BAD"
+            echo "   이대로 두면 사람들이 404 를 봅니다."
+            exit 1
+          fi
           echo "✅ 전부 받아집니다"
-
-      # ── 설치 파일은 릴리스 자산으로 ────────────────────────────────
-      #
-      # 🔴 깃 가지에는 100MB 를 못 올린다. 릴리스는 한 파일 2GB 까지다.
-      #    노드·파일창고를 넣은 뒤로 리눅스 것이 136MB 라 이 길뿐이다.
-      #
-      #    「latest」 라는 움직이는 태그 하나를 계속 덮어쓴다. 그래야
-      #    랜딩과 판올림이 가리키는 주소가 안 바뀐다.
