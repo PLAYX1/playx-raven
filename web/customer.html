@@ -499,8 +499,25 @@
         );
       }
 
-      const fmt = (n) =>
-        currency === "RVN" ? `${n} RVN` : `${symbol}${Math.round(n).toLocaleString()}`;
+      // 🔴 대표님(2026-08-30): "원화로 입력한 건 원화로 보이면서 RVN 도
+      //    보여줘야 하는데 다 RVN 으로 보여주는 게 아쉽네."
+      //
+      //    실제로는 그냥 **틀린 값**이었다. 이 함수가 **가게 통화로만** 그려서,
+      //    사장이 10,000원짜리 라떼를 넣으면 화면에 **「10 RVN (KRW)」** 로
+      //    나왔다. 숫자는 원화인데 단위는 RVN 이고 괄호에만 KRW 다.
+      //    손님은 **10 RVN(약 3만원)짜리 커피**로 읽는다.
+      //
+      //    → 품목이 자기 통화를 갖고 있으면 **그 통화로** 그린다.
+      const 기호 = (c) => (c === "USD" ? "$" : c === "KRW" ? "₩" : c === "RVN" ? "" : "");
+      const fmt = (n, cur) => {
+        const c = cur || currency;
+        if (c === "RVN") return `${n} RVN`;
+        const sym = 기호(c);
+        const 값 = Math.round(n).toLocaleString();
+        // ⚠️ 기호를 모르는 통화면 **이름을 그대로 적는다.** 아무 기호나
+        //    붙이면 그게 거짓말이 된다.
+        return sym ? `${sym}${값}` : `${값} ${c}`;
+      };
 
       // ── 남의 글자를 화면에 넣기 전에 ──────────────────────────────────
       //
@@ -602,11 +619,16 @@
                          **얼마나 쓸 수 있는지 모른 채** 돈을 낸다.
                          이름에 기대지 않고 메뉴에 적힌 값을 그대로 적는다. -->
                     ${spanOf(it) ? `<div class="span">${spanOf(it)}</div>` : ""}
-                    <div class="pr">${fmt(it.price || 0)}${
-                      // 품목마다 통화가 다를 수 있다. 가게 통화와 다르면 그렇게 적는다.
-                      it.currency && it.currency !== currency ? ` (${esc(it.currency)})` : ""
-                    }</div>
-                    ${rate && currency !== "RVN" ? `<div class="rv">${fmtRvn((it.price || 0) / rate)}</div>` : ""}
+                    <div class="pr">${fmt(it.price || 0, it.currency)}</div>
+                    ${
+                      // 🔴 RVN 환산은 **그 품목의 통화가 가게 통화와 같을 때만**
+                      //    보여준다. 환율(`rate`)은 가게 통화 기준이라, 달러
+                      //    품목에 원화 환율을 곱하면 **엉뚱한 숫자**가 나온다.
+                      //    ⚠️ 모르면 안 보여준다 — 틀린 값을 보여주느니 낫다.
+                      rate && currency !== "RVN" && (!it.currency || it.currency === currency)
+                        ? `<div class="rv">${fmtRvn((it.price || 0) / rate)}</div>`
+                        : ""
+                    }
                     ${
                       // 넉넉할 때 "37개 남음" 은 잡음이다. 서두를 이유가 있을
                       // 때만 말한다.
@@ -660,8 +682,18 @@
         cart[i] = Math.min(cap, Math.max(0, before + d));
         if (cart[i] !== before) { pop($("total")); pop($(`c${i}`)); }
         $(`c${i}`).textContent = cart[i];
+        // 🔴 **통화가 다른 값을 그냥 더하면 안 된다.**
+        //    10,000원짜리와 1달러짜리를 함께 담으면 여태 `10001` 이 나왔다.
+        //    돈이 걸린 자리에서 이건 가장 나쁜 종류의 조용한 오류다.
+        const 담긴통화 = new Set(
+          items.filter((_, k) => (cart[k] || 0) > 0).map((it) => it.currency || currency),
+        );
+        const 섞임 = 담긴통화.size > 1;
         const total = items.reduce((s, it, k) => s + (cart[k] || 0) * (it.price || 0), 0);
-        $("total").textContent = fmt(total);
+        // ⚠️ 섞였으면 **합계를 지어내지 않는다.** 사장에게 물어보라고 한다.
+        $("total").textContent = 섞임
+          ? "값이 다른 돈으로 적혀 있어 합계를 낼 수 없습니다 — 가게에 말씀해 주세요"
+          : fmt(total, [...담긴통화][0]);
         $("totrvn").textContent =
           rate && currency !== "RVN" && total ? fmtRvn(total / rate) : "";
         $("order").disabled = total <= 0 || !openState.open;
