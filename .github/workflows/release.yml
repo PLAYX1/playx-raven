@@ -412,10 +412,10 @@ jobs:
             # 맥 판올림은 「.app.tar.gz」 를 받는다. dmg 로는 못 고친다.
             [ -f "$base" ] && cp "$base" "out/PLAY-X-Raven-${V}-${{ matrix.label }}.${ext}"
           done
-          ls -la out/
-          # 판올림용 묶음과 서명은 이름을 그대로 둔다 — 업데이터가 이 이름을 본다.
-          find "$B" -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.sig' \) \
-            -exec cp {} out/ \; 2>/dev/null || true
+          # ⚠️ 예전엔 여기서 「*.tar.gz 를 전부 담기」를 했다. 그런데 `.deb`
+          #    안에 들어 있는 `control.tar.gz`·`data.tar.gz` 까지 딸려 와서
+          #    배포 가지에 정체 모를 파일 둘이 계속 올라갔다. 이름을 바꿔
+          #    담는 위 두 고리로 판올림에 필요한 것은 이미 다 챙긴다.
           ls -la out/
 
       # 🔴 **노드와 파일창고가 진짜 들어갔는지 본다.**
@@ -657,6 +657,26 @@ jobs:
           done
           [ -z "$BAD" ] || { echo "🔴 받아지지 않습니다:$BAD"; exit 1; }
           echo "✅ 전부 받아집니다"
+
+          # 🔴 **판올림 표가 비어 있으면 여기서 걸린다.**
+          #
+          #    2026-08-21~08-30, 열 판 넘게 이 표의 「platforms」 가 `{}` 인 채로
+          #    나갔다. 설치 파일은 멀쩡히 올라갔고 이 단계까지 전부 초록불이라
+          #    아무도 몰랐다 — 서버는 모두에게 204(「최신입니다」)를 답했고
+          #    사장님들은 눌러도 아무 일이 안 일어나는 판올림 단추를 봤다.
+          #    원인은 `createUpdaterArtifacts` 가 꺼져 있어 서명이 아예 안
+          #    만들어진 것이었다. **비어 있는 것은 성공이 아니다.**
+          echo "── 판올림 표 확인 ──"
+          KINDS=$(node -e "
+            const j=JSON.parse(require('fs').readFileSync('latest.json','utf8'));
+            process.stdout.write(Object.keys(j.platforms||{}).join(' '));
+          ")
+          echo "  담긴 기계: ${KINDS:-없음}"
+          [ -n "$KINDS" ] || {
+            echo "🔴 판올림 표가 비었습니다 — 아무도 새 판을 못 받습니다."
+            echo "   서명(.sig)이 안 만들어졌다는 뜻입니다."
+            echo "   src-tauri/tauri.conf.json 의 bundle.createUpdaterArtifacts 를 보세요."
+            exit 1; }
 
       # ── 설치 파일은 릴리스 자산으로 ────────────────────────────────
       #
