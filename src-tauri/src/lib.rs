@@ -51,6 +51,10 @@ mod paths;
 mod swap;
 mod sweep;
 mod talk;
+// 팬클럽 — 자산(1집·2집·싱글)마다 있는 방을 묶어 보고, 여러 방에 한 번에 공지한다.
+// 방을 잠그는 일 자체는 talk.rs 가 이미 한다. 여기는 그것을 **자산 기준으로**
+// 묶는 껍데기다.
+mod fanclub;
 mod autostart;
 mod mode;
 mod reindex;
@@ -371,6 +375,11 @@ pub fn run() {
             talk::talk_profile_set,
             talk::talk_profiles,
             talk::recovery_status,
+            // 팬클럽. 자산마다 방을 묶어 보고, 여러 방에 한 번에 공지하고,
+            // 몇 분이 가지셨는지 **숫자만** 센다(주소는 안 돌려준다).
+            fanclub::fan_rooms,
+            fanclub::fan_announce,
+            fanclub::fan_holders,
             swap::swap_ready,
             swap::swap_make_lot,
             swap::swap_offer,
