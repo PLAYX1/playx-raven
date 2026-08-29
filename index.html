@@ -1267,6 +1267,11 @@
       overflow-wrap: anywhere; word-break: break-all; user-select: all; }
     .invbtns { display: flex; gap: 8px; flex-wrap: wrap; }
     .invbtns button { min-height: 44px; }
+    /* QR 과 링크를 한 자리에. 손님이 앞에 있으면 QR, 멀면 링크. */
+    .shareqr { display:flex; align-items:center; justify-content:center;
+      min-height:180px; padding:12px; background:#fff; border-radius:12px;
+      margin-bottom:10px; }
+    .shareqr svg { width:100%; max-width:200px; height:auto; }
 </style>
   </head>
   <body>

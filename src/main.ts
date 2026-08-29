@@ -4138,44 +4138,17 @@ function paintInvite() {
     //
     //    ⚠️ OS 가 무엇을 줄지 우리가 모른다. 그러니 **복사는 우리가 준다.**
     //       공유 시트는 있으면 얹는 것이지 기대는 것이 아니다.
-    const has = typeof (navigator as any).share === "function";
-    host.innerHTML =
-      `<button class="ghost" id="tk-inv">${t("초대하기")}</button>` +
-      `<div class="invbox">` +
-      `<p class="meta">${escapeHtml(t("이 링크를 받은 분은 그 방으로 바로 들어옵니다."))}</p>` +
-      // 🔴 링크는 **한 줄에 안 들어간다.** 상자 안에서 접히게 두지 않으면
-      //    창 밖으로 삐져나가 글자가 잘린다(대표님 화면이 그랬다).
-      `<code class="invlink" id="tk-url">${escapeHtml(url)}</code>` +
-      `<div class="invbtns">` +
-      `<button class="primary" id="tk-copy">${t("링크 복사")}</button>` +
-      (has ? `<button class="ghost" id="tk-send">${t("다른 앱으로")}</button>` : "") +
-      `<button class="ghost" id="tk-close">${t("닫기")}</button>` +
-      `</div></div>`;
-
-    const copy = document.getElementById("tk-copy") as HTMLButtonElement;
-    copy.addEventListener("click", async () => {
-      try {
-        await navigator.clipboard.writeText(msg);
-        copy.textContent = t("복사했습니다");
-      } catch {
-        // ⚠️ 클립보드가 막힌 기계도 있다. 그때는 **글자를 골라 준다** —
-        //    아무 일도 안 일어나는 것보다 낫다.
-        const el = document.getElementById("tk-url");
-        if (el) {
-          const r = document.createRange();
-          r.selectNodeContents(el);
-          const sel = window.getSelection();
-          sel?.removeAllRanges();
-          sel?.addRange(r);
-        }
-        copy.textContent = t("직접 복사해 주세요 (⌘C)");
-      }
-      setTimeout(() => (copy.textContent = t("링크 복사")), 2500);
+    // 🔴 대표님: "공유 기능이 QR로도 되고 링크로도 되어야해."
+    //    자리마다 다르게 만들지 않는다 — `shareBox` 하나를 쓴다.
+    //    손님이 앞에 있으면 QR, 멀리 있으면 링크. 둘 다 한 자리에.
+    void shareBox(host, url, msg, name).then(() => {
+      // 닫으면 「초대하기」 단추로 되돌아간다.
+      const back = document.createElement("button");
+      back.className = "ghost";
+      back.textContent = t("닫기");
+      back.addEventListener("click", () => paintInvite());
+      host.querySelector(".invbtns")?.appendChild(back);
     });
-    document.getElementById("tk-send")?.addEventListener("click", () => {
-      void (navigator as any).share({ title: name, text: msg, url }).catch(() => {});
-    });
-    document.getElementById("tk-close")?.addEventListener("click", () => paintInvite());
 
   });
 }
@@ -5807,6 +5780,81 @@ if (typeof document !== "undefined") {
  *
  * ⚠️ 화면을 다시 그려도 살아 있어야 하므로 **문서 전체에 한 번만** 건다.
  */
+/**
+ * 어디서든 같은 방식으로 나눈다 — **QR 과 링크 둘 다.**
+ *
+ * 🔴 대표님: "공유 기능이 QR로도 되고 링크로도 되어야해."
+ *
+ *    여태 자리마다 달랐다. 이야기 방은 링크만, 가게 QR 은 그림만, 물건 팔기는
+ *    SNS 버튼만. 사장은 **같은 일을 자리마다 다르게** 배워야 했다.
+ *
+ *    · **QR** — 손님이 눈앞에 있을 때. 화면을 보여 주면 끝이다
+ *    · **링크** — 손님이 멀리 있을 때. 카톡·문자로 보낸다
+ *
+ *    둘 다 필요하고, 둘 다 **한 자리에** 있어야 한다.
+ *
+ * ⚠️ 공유 시트(`navigator.share`)에 기대지 않는다. 맥 시트에는 「복사」가
+ *    없다(2026-08-29 실측). 복사는 우리가 준다.
+ */
+async function shareBox(host: HTMLElement, url: string, msg: string, name: string): Promise<void> {
+  const has = typeof (navigator as any).share === "function";
+  host.innerHTML =
+    `<div class="invbox">` +
+    `<div class="shareqr" id="sq-qr">${escapeHtml(t("QR 만드는 중…"))}</div>` +
+    `<p class="meta">${escapeHtml(t("손님이 앞에 계시면 이 QR 을 보여 주세요."))}</p>` +
+    `<code class="invlink" id="sq-url">${escapeHtml(url)}</code>` +
+    `<div class="invbtns">` +
+    `<button class="primary" id="sq-copy">${escapeHtml(t("링크 복사"))}</button>` +
+    (has ? `<button class="ghost" id="sq-send">${escapeHtml(t("다른 앱으로"))}</button>` : "") +
+    `<button class="ghost" id="sq-png">${escapeHtml(t("QR 그림 저장"))}</button>` +
+    `</div></div>`;
+
+  // QR 은 늦게 와도 된다 — 링크는 이미 눌러 쓸 수 있다.
+  void invoke<string>("qr_svg", { text: url })
+    .then((svg) => {
+      const box = document.getElementById("sq-qr");
+      if (box) box.innerHTML = svg;
+    })
+    .catch(() => {
+      const box = document.getElementById("sq-qr");
+      // ⚠️ QR 이 안 되어도 **링크는 살아 있다.** 그렇다고 말한다.
+      if (box) box.textContent = t("QR 을 만들지 못했습니다. 아래 링크는 그대로 쓰실 수 있습니다.");
+    });
+
+  const copy = document.getElementById("sq-copy") as HTMLButtonElement | null;
+  copy?.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(msg);
+      copy.textContent = t("복사했습니다");
+    } catch {
+      const el = document.getElementById("sq-url");
+      if (el) {
+        const r = document.createRange();
+        r.selectNodeContents(el);
+        const sel = window.getSelection();
+        sel?.removeAllRanges();
+        sel?.addRange(r);
+      }
+      copy.textContent = t("직접 복사해 주세요");
+    }
+    setTimeout(() => (copy.textContent = t("링크 복사")), 2500);
+  });
+  document.getElementById("sq-send")?.addEventListener("click", () => {
+    void (navigator as any).share({ title: name, text: msg, url }).catch(() => {});
+  });
+  document.getElementById("sq-png")?.addEventListener("click", () => {
+    // 인쇄해서 문에 붙이는 사장이 있다. SVG 를 그대로 내려준다.
+    const svg = document.getElementById("sq-qr")?.innerHTML || "";
+    if (!svg.includes("<svg")) return;
+    const blob = new Blob([svg], { type: "image/svg+xml" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `${name.replace(/[^\w가-힣.-]+/g, "_")}-QR.svg`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+  });
+}
+
 function bindQrCopy(): void {
   document.addEventListener("click", (e) => {
     const el = (e.target as HTMLElement)?.closest?.(".qrurl") as HTMLElement | null;
@@ -9536,8 +9584,32 @@ async function startPhone() {
     ]);
     const oneLink = (url: string) =>
       `<code class="addr qrurl">${escapeHtml(url)}</code>`;
+      // 🔴 **인쇄해서 문에 붙일 QR 이 없었다.**
+      //
+      //    손님 QR 은 `http://192.168.x.x:8790/` — **가게 와이파이에 붙은
+      //    사람만** 열린다. 바깥에서 오는 길은 터널 주소인데 그건 **켤 때마다
+      //    바뀐다.** 그래서 인쇄한 QR 이 내일 죽는다.
+      //
+      //    `rvn.ex.erci.se/s/{자산}` 은 **영원히 같다.** 체인에서 지금 터널
+      //    주소를 찾아 넘겨주고, 가게가 꺼져 있으면 닫혔다고 말한다.
+      //    ⚠️ 체인에 등록한 가게만 이 주소를 갖는다.
+      const chainAsset =
+        (document.getElementById("sh-registered") as HTMLInputElement | null)?.value || "";
+      let foreverQr = "";
+      if (chainAsset) {
+        const foreverUrl = `https://rvn.ex.erci.se/s/${encodeURIComponent(chainAsset)}`;
+        try {
+          const svg = await invoke<string>("qr_svg", { text: foreverUrl });
+          foreverQr =
+            `<div class="qrbox">${svg}<div class="cap"><b>${t("문에 붙이는 QR")}</b>` +
+            `${t("주소가 바뀌지 않습니다. 인쇄해서 붙이세요")}</div>${oneLink(foreverUrl)}</div>`;
+        } catch {
+          /* QR 을 못 만들어도 나머지는 보여 준다 */
+        }
+      }
+
     // 사장·직원·검표 QR에는 각각 다른 열쇠가 들어 있다. 손님 QR만 붙여도 된다.
-    phoneQr =
+    phoneQr = foreverQr +
       `<div class="qrbox">${adminQr}<div class="cap"><b>사장님만</b>돈·발행·설정 전부</div>${oneLink(r.admin_url)}</div>` +
       `<div class="qrbox">${staffQr}<div class="cap"><b>직원</b>주문·회원확인만</div>${oneLink(r.staff_url)}</div>` +
       `<div class="qrbox">${scanQr}<div class="cap"><b>검표 태블릿</b>문 앞에 두는 화면</div>${oneLink(r.scan_url)}</div>` +
