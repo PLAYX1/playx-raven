@@ -18,6 +18,7 @@ mod peers;
 mod sample;
 mod recover;
 mod electrum;
+mod moving;
 mod publicbook;
 mod health;
 mod ipfs;
@@ -251,6 +252,9 @@ pub fn run() {
             pass::remove_member,
             refund::refund,
             refund::refund_payer,
+            moving::move_offer,
+            moving::move_cancel,
+            moving::move_fetch,
             refund::staff_refund,
             ledger::ledger_range,
             ledger::ledger_csv,

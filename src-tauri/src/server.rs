@@ -2704,7 +2704,11 @@ fn build_phone_router(st: ServerState) -> axum::Router {
         .route("/api/scan/check", post(api_scan))
         .route("/api/scan/in", post(api_scan_in))
         // 표를 산 손님을 회원으로 올린다. 문 앞 직원이 이름을 받는 자리다.
-        .route("/api/scan/member", post(api_scan_member));
+        .route("/api/scan/member", post(api_scan_member))
+        // 🔴 가게를 다른 컴퓨터로 옮기는 길. 같은 와이파이의 새 컴퓨터가
+        //    여섯 자리 숫자를 들고 여기로 온다.
+        //    ⚠️ 숫자가 틀리면 옛 컴퓨터가 횟수를 세고, 세 번이면 짐을 버린다.
+        .route("/move/{code}", get(api_move));
 
     let app = customer.merge(admin).with_state(st.clone());
     app
@@ -3860,5 +3864,32 @@ mod bind_probe {
         let _ = super::local_ip();
         println!("[probe] local_ip {:?}", t.elapsed());
         assert!(t.elapsed().as_secs() < 3, "주소 읽기가 느리다");
+    }
+}
+
+/// 이사 짐을 내준다.
+///
+/// ⚠️ 파일을 잠근 암호는 **헤더로** 같이 보낸다. 같은 와이파이 안이고,
+///    숫자를 맞힌 쪽에게만 준다. 숫자를 세 번 틀리면 짐 자체가 사라진다.
+async fn api_move(axum::extract::Path(code): axum::extract::Path<String>) -> impl IntoResponse {
+    match crate::moving::take(&code) {
+        Ok((path, pass)) => match std::fs::read(&path) {
+            Ok(bytes) => (
+                StatusCode::OK,
+                [
+                    ("content-type", "application/zip".to_string()),
+                    ("x-move-pass", pass),
+                ],
+                bytes,
+            )
+                .into_response(),
+            Err(e) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("짐을 읽지 못했습니다: {e}"),
+            )
+                .into_response(),
+        },
+        // 왜 안 되는지 그대로 전한다 — 「세 번 틀렸습니다」 같은 것.
+        Err(msg) => (StatusCode::FORBIDDEN, msg).into_response(),
     }
 }

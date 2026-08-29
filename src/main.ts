@@ -5758,6 +5758,7 @@ const SHOP_FIELDS: Record<string, string> = {
 if (typeof document !== "undefined") {
   window.addEventListener("DOMContentLoaded", () => {
   bindQrCopy();
+  bindMoving();
     for (const page of ["door", "shop", "wallet"]) {
       const 길 = document.querySelectorAll(`[data-page="${page}"],[data-goto="${page}"]`).length;
       if (!길) console.error(`[배선] ${page} 화면으로 가는 길이 하나도 없습니다.`);
@@ -5865,6 +5866,84 @@ async function shareBox(host: HTMLElement, url: string, msg: string, name: strin
     a.download = `${name.replace(/[^\w가-힣.-]+/g, "_")}-QR.svg`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+  });
+}
+
+/**
+ * 가게를 다른 컴퓨터로 옮긴다.
+ *
+ * 🔴 대표님: 노트북은 들고 다녀서 꺼지고, 406호는 계속 켜져 있다.
+ *    손님은 언제 올지 모르니 **가게는 항상 켜진 쪽**에 있어야 한다.
+ *
+ * ⚠️ 사장에게 두 번 판단하게 하지 않는다. 보낼 때 「전부/가게만」을 골랐으면,
+ *    받는 쪽은 **묻지 않고 짐에 든 것을 그대로** 되살린다.
+ */
+function bindMoving(): void {
+  const box = () => document.getElementById("mv-box");
+  const 보내기 = async (what: string) => {
+    const b = box();
+    if (!b) return;
+    b.innerHTML = `<p class="meta">${escapeHtml(t("짐을 싸는 중… 잠시 걸립니다"))}</p>`;
+    try {
+      const r = await invoke<any>("move_offer", { what });
+      const 주소 = (r.hosts || []).slice(0, 3);
+      b.innerHTML =
+        `<div class="invbox">` +
+        `<p class="meta">${escapeHtml(String(r.say || ""))}</p>` +
+        `<p style="font-size:15px;margin:10px 0 4px">${escapeHtml(t("새 컴퓨터에서 「가져오기」를 누르고 아래를 넣으세요."))}</p>` +
+        `<code class="invlink">${escapeHtml(t("컴퓨터 주소"))}: ${escapeHtml(주소.join(t(" 또는 ")))}</code>` +
+        `<div style="font-size:34px;font-weight:700;letter-spacing:6px;text-align:center;margin:12px 0">${escapeHtml(String(r.code))}</div>` +
+        `<p class="meta">${escapeHtml(t("이 숫자는"))} ${escapeHtml(String(r.minutes))}${escapeHtml(t("분 뒤에 사라집니다. 세 번 틀리면 처음부터 다시 하셔야 합니다."))}</p>` +
+        `<div class="invbtns"><button class="ghost" id="mv-cancel">${escapeHtml(t("그만두기"))}</button></div>` +
+        `</div>`;
+      document.getElementById("mv-cancel")?.addEventListener("click", () => {
+        void invoke("move_cancel").catch(() => {});
+        if (box()) box()!.innerHTML = "";
+      });
+    } catch (e) {
+      b.innerHTML = `<p class="danger">${escapeHtml(errText(e))}</p>`;
+    }
+  };
+
+  document.getElementById("mv-all")?.addEventListener("click", () => void 보내기("all"));
+  document.getElementById("mv-shop")?.addEventListener("click", () => void 보내기("shop"));
+
+  document.getElementById("mv-get")?.addEventListener("click", () => {
+    const b = box();
+    if (!b) return;
+    b.innerHTML =
+      `<div class="invbox">` +
+      `<p class="meta">${escapeHtml(t("옛 컴퓨터 화면에 뜬 주소와 숫자를 넣으세요."))}</p>` +
+      `<div class="rm-newbox"><input id="mv-host" placeholder="192.168.0.15" autocomplete="off" /></div>` +
+      `<div class="rm-newbox"><input id="mv-code" placeholder="000000" inputmode="numeric" maxlength="6" autocomplete="off" />` +
+      `<button class="btn" id="mv-go">${escapeHtml(t("가져오기"))}</button></div>` +
+      `<p class="meta" id="mv-say"></p></div>`;
+    const go = async () => {
+      const host = (document.getElementById("mv-host") as HTMLInputElement)?.value.trim() || "";
+      const code = (document.getElementById("mv-code") as HTMLInputElement)?.value.trim() || "";
+      const say = document.getElementById("mv-say");
+      const btn = document.getElementById("mv-go") as HTMLButtonElement | null;
+      if (btn) btn.disabled = true;
+      if (say) say.textContent = t("받는 중… 짐이 크면 몇 분 걸립니다");
+      try {
+        const r = await invoke<any>("move_fetch", { host, code });
+        if (say)
+          say.innerHTML =
+            `<b class="ok">${escapeHtml(t("옮겼습니다."))}</b> ` +
+            // 🔴 이 말을 안 하면 사장이 자산을 새로 만든다. 100 RVN 이 타고
+            //    손님이 아는 QR 이 죽는다.
+            `<b>${escapeHtml(String(r.warn || ""))}</b><br />` +
+            escapeHtml(t("프로그램을 한 번 껐다 켜 주세요."));
+      } catch (e) {
+        if (say) say.innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    };
+    document.getElementById("mv-go")?.addEventListener("click", () => void go());
+    document.getElementById("mv-code")?.addEventListener("keydown", (e) => {
+      if ((e as KeyboardEvent).key === "Enter") void go();
+    });
   });
 }
 

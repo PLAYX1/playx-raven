@@ -2708,6 +2708,24 @@
           <div id="bk-list"></div>
           <div class="row" style="margin-top:12px">
             <button id="bk-go">백업 만들기</button>
+        <!-- 🔴 대표님: 노트북(들고 다님)에서 항상 켜진 컴퓨터로 가게를 옮긴다.
+             여태는 백업 → 파일 옮기기 → 폴더 찾기 → 복구, 네 개의 벽이었다. -->
+        <div class="card" style="margin-top:14px">
+          <h3>가게를 다른 컴퓨터로 옮기기</h3>
+          <p class="meta">같은 인터넷에 있는 컴퓨터로 <b>숫자 여섯 자리</b>만으로 옮깁니다.
+            USB 도 파일 찾기도 없습니다.</p>
+          <div class="row" style="margin-top:10px;flex-wrap:wrap;gap:8px">
+            <button id="mv-all">전부 보내기</button>
+            <button class="ghost" id="mv-shop">가게만 보내기</button>
+            <button class="ghost" id="mv-get">가져오기</button>
+          </div>
+          <p class="meta" style="margin-top:6px">
+            <b>전부</b> — 이 컴퓨터를 그만 쓰실 때. 지갑까지 갑니다<br />
+            <b>가게만</b> — 돈은 이 컴퓨터에 남습니다. 새 컴퓨터는 카운터가 됩니다
+          </p>
+          <div id="mv-box"></div>
+        </div>
+
             <button class="ghost" id="bk-seed">복구 단어 보기</button>
             <span class="meta" id="bk-note"></span>
           </div>
