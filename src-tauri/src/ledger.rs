@@ -45,6 +45,13 @@ use serde_json::{json, Value};
 use std::io::Write;
 use std::path::PathBuf;
 
+/// 장부에 줄을 쓰는 동안 다른 길이 끼어들지 못하게 한다.
+///
+/// ⚠️ 프로그램 안의 두 길(손님 폴링·사장 화면)을 막는다. 파일 잠금이 아니라
+///    프로세스 안 잠금인데, `pending.json` 을 건드리는 것은 이 프로그램뿐이라
+///    그것으로 충분하다.
+static SETTLE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 fn base() -> PathBuf {
     // 시험이 진짜 장부에 쓰지 않게 하는 출구는 `paths` 에 하나로 있다.
     // 규칙이 두 벌이면 언젠가 갈라지고, 갈라진 쪽이 진짜 장부를 건드린다.
@@ -279,6 +286,19 @@ pub fn open_order(
 /// revenue is a worse failure here than missing a row, because a missing row
 /// can be noticed and a duplicated one usually is not.
 pub fn settle(address: &str, txid: &str, paid_at: i64, confirmations: i64) -> Option<Value> {
+    // 🔴 **여기가 이 프로그램에서 가장 위험한 자리다.**
+    //
+    //    장부에 줄을 쓰는 길이 이제 **둘**이다 — 손님 폰이 물어볼 때와,
+    //    사장이 「들어온 주문」을 볼 때(2026-08-29 에 두 번째를 붙였다).
+    //    그런데 아래는 **읽고 → 지우고 → 쓴다**. 둘이 동시에 「읽기」를 하면
+    //    **둘 다 같은 주문을 손에 넣고 둘 다 장부에 적는다.**
+    //
+    //    ⚠️ 매출이 두 배가 되고 **그건 아무도 못 알아챈다.** 빠진 줄은
+    //       눈에 띄지만 늘어난 줄은 안 띈다. 세무서에는 그 숫자가 간다.
+    //
+    //    그래서 이 함수 전체를 한 번에 하나만 지나가게 한다.
+    let _한번에하나 = SETTLE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+
     let mut p = pending_load();
     let doc = p.as_object_mut()?.remove(address)?;
     // 먼저 지운다. 여기서 실패하면 장부에 안 쓰는 쪽을 택한다.
@@ -925,5 +945,84 @@ mod roundtrip {
         assert!(line.contains("\"아메리카노, 아이스\""), "쉼표 있는 품목이 안 감싸졌습니다");
         assert!(line.contains("abc123"));
         assert!(line.contains("직접"));
+    }
+}
+
+#[cfg(test)]
+mod 이중기입 {
+    /// ⚠️ **이 검사만으로는 부족하다.** 경쟁은 타이밍에 의존해서, 잠금을
+    ///    빼고 돌려도 세 번 다 통과했다(2026-08-29 실측). 파일 I/O 가 빨라
+    ///    두 스레드가 어차피 줄을 서기 때문이다.
+    ///
+    ///    **통과는 작동의 증거가 아니다.** 그래서 아래 `잠금이_실제로_걸려_있다`
+    ///    로 코드에 잠금이 있는지도 본다. 이건 늘 잡는다.
+    ///
+    /// 🔴 그록이 「가장 먼저 사고 날 곳」으로 짚은 자리를 박제한다.
+    ///
+    /// 장부에 줄을 쓰는 길이 둘이다(손님 폴링·사장 화면). 잠금이 없으면
+    /// 둘이 동시에 같은 주문을 집어 **각각 장부에 적는다.** 매출이 두 배가
+    /// 되고, 빠진 줄과 달리 **늘어난 줄은 아무도 못 알아챈다.**
+    #[test]
+    fn 두_번_적히지_않는다() {
+        let _g = crate::paths::TEST_ENV.lock().unwrap_or_else(|e| e.into_inner());
+        let tmp = std::env::temp_dir().join(format!("rvn-dup-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        std::env::set_var("PLAYX_RAVEN_HOME", &tmp);
+
+        let addr = "Rdup11111111111111111111111111111";
+        let at = 1_756_000_000i64;
+        super::open_order(
+            addr,
+            &serde_json::json!([{ "name": "커피", "krw": 4500 }]),
+            &serde_json::json!({ "krw_per_rvn": 30.0, "at": at }),
+            at,
+            None,
+        )
+        .unwrap();
+
+        // 두 길이 **동시에** 같은 주문을 집으려 한다.
+        let a = std::thread::spawn(move || super::settle(addr, "tx1", at + 10, 1).is_some());
+        let b = std::thread::spawn(move || super::settle(addr, "tx1", at + 10, 1).is_some());
+        let (x, y) = (a.join().unwrap(), b.join().unwrap());
+
+        assert!(
+            x ^ y,
+            "둘 중 **하나만** 장부에 적어야 합니다. 둘 다 적으면 매출이 두 배가 됩니다."
+        );
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// 🔴 **이쪽이 진짜로 막는 검사다.**
+    ///
+    /// 장부에 줄을 쓰는 길이 둘이라, `settle()` 안에 잠금이 없으면 언젠가
+    /// 둘이 겹친다. 겹치는 순간 매출이 두 배가 되고 **그건 아무도 못 알아챈다.**
+    /// 누가 이 잠금을 지우면 여기서 걸린다.
+    #[test]
+    fn 잠금이_실제로_걸려_있다() {
+        let src = include_str!("ledger.rs");
+        let 코드만: String = src
+            .lines()
+            .filter(|l| {
+                let t = l.trim_start();
+                !t.starts_with("//") && !t.starts_with("///")
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        let f = 코드만
+            .split("pub fn settle(")
+            .nth(1)
+            .and_then(|r| r.split("\npub fn ").next())
+            .unwrap_or("");
+        assert!(f.len() > 100, "settle 을 못 읽었습니다");
+        assert!(
+            f.contains("SETTLE_LOCK.lock()"),
+            "settle() 에 잠금이 없습니다. 장부에 닿는 길이 둘이라, 겹치면 \
+             같은 결제가 두 번 적히고 매출이 두 배가 됩니다."
+        );
+        assert!(
+            코드만.contains("static SETTLE_LOCK"),
+            "SETTLE_LOCK 선언이 사라졌습니다."
+        );
     }
 }
