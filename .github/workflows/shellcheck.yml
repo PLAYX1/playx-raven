@@ -35,7 +35,14 @@ jobs:
                       run = st.get("run")
                       if not run:
                           continue
-                      # GitHub 식 ${{ }} 는 셸이 모른다. 자리표시자로 바꾼다.
+                      # 깃허브 자리표시자는 셸이 모른다. 「X」 로 바꿔 놓고 본다.
+                      #
+                      # 🔴 **이 주석에 그 자리표시자를 그대로 적으면 안 된다.**
+                      #    깃허브는 `run:` 블록 **전체**(주석 포함)에서 그것을
+                      #    찾아 계산하려 든다. 빈 것을 적어 두었더니
+                      #    「An expression was expected」로 **이 검사 자체가
+                      #    한 번도 안 돌았다**(2026-08-21~08-30, 매 푸시 실패).
+                      #    문법을 지키라고 만든 검사가 문법으로 죽어 있었다.
                       sh = re.sub(r"\$\{\{[^}]*\}\}", "X", run)
                       with tempfile.NamedTemporaryFile("w", suffix=".sh", delete=False) as t:
                           t.write(sh); p = t.name
