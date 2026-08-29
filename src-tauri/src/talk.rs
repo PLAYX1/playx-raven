@@ -329,6 +329,351 @@ pub async fn talk_post(
     Ok(json!({ "event": ev, "sent": r }))
 }
 
+/// 사진 한 장의 크기 한계.
+///
+/// ## 🔴 왜 8MB 인가 — 우리 디스크 걱정이 아니라 **받는 사람 걱정**이다
+///
+/// 파일창고에 올린 사진은 처음에 **이 컴퓨터 한 곳에만** 있다. 상대는 그물을
+/// 뒤져 우리 컴퓨터를 찾아내 받아 간다. 집 인터넷의 올리는 속도, 공유기를
+/// 뚫는 시간까지 더하면 실제로 나가는 속도는 초당 몇백 KB다. 8MB 면 그것만도
+/// 십수 초에서 1분이다. 더 크면 상대 화면에서는 「느린 사진」이 아니라
+/// **끝내 안 뜨는 사진**이 된다 — 그리고 보낸 사람은 보낸 줄 안다.
+///
+/// 8MB 는 요즘 폰 사진을 거의 다 담는다(아이폰·갤럭시가 내놓는 JPEG·HEIC 이
+/// 보통 2~6MB). 그래서 **사진은 되고 영상은 안 되는** 선이 여기다. 영상은
+/// 이 길로 나르면 안 된다 — 그건 다른 문제고 다르게 풀어야 한다.
+const PHOTO_MAX: usize = 8 * 1024 * 1024;
+
+/// 사진에 붙이는 글의 한계. 릴레이가 받는 크기(32KB)를 넘기지 않는 선이다.
+const PHOTO_TEXT_MAX: usize = 2000;
+
+/// 이름(확장자)으로 보는 검사.
+///
+/// ⚠️ 이건 **이름만** 본다. 이름은 누구나 바꿀 수 있으니 이것만 믿으면 안 된다 —
+///    안을 보는 검사(`sniff`)와 **둘 다** 통과해야 보낸다.
+///
+/// SVG 는 일부러 뺐다. 그림 파일처럼 보이지만 안에 스크립트를 품을 수 있어서,
+/// 여는 쪽 화면에서 그게 돈다. 사진을 주고받자고 그 문을 열 이유가 없다.
+fn ext_kind(name: &str) -> Option<&'static str> {
+    if !name.contains('.') {
+        return None;
+    }
+    let ext = name.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
+    match ext.as_str() {
+        "jpg" | "jpeg" => Some("image/jpeg"),
+        "png" => Some("image/png"),
+        "gif" => Some("image/gif"),
+        "webp" => Some("image/webp"),
+        "heic" | "heif" => Some("image/heic"),
+        "avif" => Some("image/avif"),
+        _ => None,
+    }
+}
+
+/// 안(첫 몇 바이트)을 보는 검사.
+///
+/// 🔴 이게 없으면 `트로이목마.exe` 를 `사진.jpg` 로 바꿔 놓은 것이 그대로
+///    파일창고에 올라가고, 그건 **공개고 지울 수 없다.**
+///
+/// ⚠️ 한계도 적어 둔다: 우리는 **앞머리만** 본다. 앞은 진짜 JPEG 이고 뒤에
+///    다른 것을 붙여 놓은 파일은 이 검사로 못 가른다. 다만 우리는 그걸
+///    실행하지 않고 그림으로만 보여 주므로, 실용적인 선은 여기다.
+fn sniff(b: &[u8]) -> Option<&'static str> {
+    // 12바이트도 안 되면 어떤 사진도 아니다. 아래에서 b[4..12] 를 보므로
+    // 이 검사가 자리 넘침도 같이 막는다.
+    if b.len() < 12 {
+        return None;
+    }
+    if b.starts_with(&[0xFF, 0xD8, 0xFF]) {
+        return Some("image/jpeg");
+    }
+    if b.starts_with(&[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]) {
+        return Some("image/png");
+    }
+    if b.starts_with(b"GIF87a") || b.starts_with(b"GIF89a") {
+        return Some("image/gif");
+    }
+    // RIFF 는 WAV·AVI 도 쓰는 껍데기다. 8번째부터 WEBP 라고 적혀 있어야 사진이다.
+    if &b[0..4] == b"RIFF" && &b[8..12] == b"WEBP" {
+        return Some("image/webp");
+    }
+    // HEIC·AVIF 는 ISO 상자 형식이라 4번째부터 ftyp, 그다음이 종류다.
+    if &b[4..8] == b"ftyp" {
+        return match &b[8..12] {
+            b"heic" | b"heix" | b"hevc" | b"hevx" | b"heim" | b"heis" | b"hevm" | b"hevs"
+            | b"mif1" | b"msf1" => Some("image/heic"),
+            b"avif" | b"avis" => Some("image/avif"),
+            _ => None,
+        };
+    }
+    None
+}
+
+/// 사람이 읽는 크기.
+fn human_size(n: usize) -> String {
+    if n >= 1024 * 1024 {
+        format!("{:.1}MB", n as f64 / (1024.0 * 1024.0))
+    } else {
+        format!("{}KB", n / 1024)
+    }
+}
+
+/// 이 파일을 사진으로 받아도 되나. 되면 **안을 보고 알아낸** 종류를 돌려준다.
+///
+/// 오류 문구는 전부 「무엇을 하면 되는지」까지 적는다. "거부되었습니다" 만
+/// 뜨면 사장은 사진 보내기를 포기하고 다시 안 온다.
+fn photo_kind(name: &str, bytes: &[u8]) -> Result<&'static str, String> {
+    if bytes.is_empty() {
+        return Err("빈 파일입니다. 사진을 다시 골라 주세요.".into());
+    }
+    if bytes.len() > PHOTO_MAX {
+        return Err(format!(
+            "사진이 너무 큽니다({}). {}MB 까지만 보낼 수 있습니다.\n\
+             이 사진은 우리 컴퓨터에서만 나가기 때문에, 이보다 크면 받는 분 화면에서 \
+             끝내 안 뜹니다. 사진 크기를 줄여서 다시 보내 주세요.",
+            human_size(bytes.len()),
+            PHOTO_MAX / (1024 * 1024),
+        ));
+    }
+    // 🔴 이름과 안을 **둘 다** 본다. 하나만 보면 이름을 바꾼 실행 파일이 지나간다.
+    if ext_kind(name).is_none() {
+        return Err(format!(
+            "사진만 보낼 수 있습니다. 보낼 수 있는 것: JPG · PNG · GIF · WEBP · HEIC · AVIF.\n\
+             고르신 것: {name}"
+        ));
+    }
+    let by_bytes = sniff(bytes).ok_or_else(|| {
+        "사진 파일이 아닙니다. 이름은 사진인데 안은 다른 파일이라 보내지 않았습니다.".to_string()
+    })?;
+    // 이름과 안이 어긋날 수 있다(.jpg 인데 실제로는 PNG). 흔하고 해롭지도 않으니
+    // 막지 않는다 — 다만 **안을 믿는다.** 상대 화면에 넘길 종류는 내용에서 나온 것이다.
+    Ok(by_bytes)
+}
+
+/// 파일창고에 올릴 때 쓸 이름. 사람이 지은 이름을 그대로 믿지 않는다.
+///
+/// `/` 가 들어 있으면 파일창고 안에 엉뚱한 폴더가 생기고, 줄바꿈이 들어 있으면
+/// 올리는 형식 자체가 깨진다.
+fn safe_name(name: &str) -> String {
+    // 글자를 문자열로 적어 둔다(`'"'` 같은 홑따옴표 글자로 안 쓴다). 아래 시험의
+    // 주석 거르개가 홑따옴표 글자를 못 알아보기 때문이다 — 거기 따옴표가 하나
+    // 끼면 그 뒤 주석이 안 걸러진다.
+    const BAD: &str = "/\\\"";
+    let cleaned: String = name
+        .chars()
+        .map(|c| if c.is_control() || BAD.contains(c) { '_' } else { c })
+        .collect();
+    let cleaned = cleaned.trim().to_string();
+    if cleaned.is_empty() {
+        return "photo".into();
+    }
+    cleaned.chars().take(80).collect()
+}
+
+/// **사진 한 장을 방에 올린다.**
+///
+/// ## 왜 이게 있어야 하나
+///
+/// 자문(2026-08): "사진·파일은 이 세대(40~70대) 대화의 본문입니다.
+/// 메뉴·영수증·「이거요」를 못 보내면 첫 방문이 마지막입니다."
+///
+/// 글만 되는 대화방은 이 나이대에게는 **빈 방**이다. 「이거 얼마예요」가
+/// 사진 한 장이고 「여기로 오세요」도 사진 한 장이다.
+///
+/// ## 어떻게 나르나
+///
+/// 사진 자체는 릴레이에 안 넣는다. 릴레이는 **글**을 나르지 사진을 보관하지
+/// 않고, 우리 릴레이는 32KB 에서 자른다 — 넣으면 조용히 버려지고 보낸 사람은
+/// 보낸 줄 안다. 그래서 사진은 파일창고(IPFS)에 두고 **글에는 주소만** 넣는다.
+///
+/// Nostr 관례 그대로다: 본문에 URL 한 줄, `imeta` 태그(NIP-92)에 종류·크기·
+/// 지문. 그러면 damus·primal 같은 남의 앱도 이 사진을 그려 준다.
+/// 우리 앱만 아는 `ipfs` 태그를 하나 더 붙여서, 우리 화면은 남의 게이트웨이
+/// 대신 **이 컴퓨터의 파일창고**에서 곧장 그린다.
+///
+/// ## 🔴 못 하는 것을 못 한다고 말한다
+///
+/// 올린 사진은 처음에 **이 컴퓨터 한 곳에만** 있다. 아직 아무도 사본을 안
+/// 가졌으면, 이 컴퓨터를 끄는 순간 상대 화면에서 사진이 안 뜬다.
+/// 「보냈습니다」로 끝내면 그건 거짓말이다. 그래서 응답에 `say` 를 담아
+/// **화면이 그 말을 그대로 띄우게** 한다.
+///
+/// ## 사진은 어디서 오나 — 두 길뿐이다
+///
+/// - `path`: 창에 **떨어뜨린** 파일. 아무 경로나 받으면 화면이 뚫리는 날
+///   `wallet.dat` 이 공개 파일창고로 올라간다. 그래서 러스트가 들고 있는
+///   「방금 떨어뜨린 목록」에 있는 것만 읽는다(`dropbox.rs`).
+/// - `name` + `bytes`: 화면의 사진 고르기가 읽어 준 내용. 이건 애초에
+///   경로가 아니라 내용이라 남의 파일을 가리킬 수가 없다.
+#[tauri::command]
+pub async fn talk_photo_post(
+    path: Option<String>,
+    name: Option<String>,
+    bytes: Option<Vec<u8>>,
+    text: Option<String>,
+    room: Option<String>,
+    reply_to: Option<String>,
+    reply_pub: Option<String>,
+) -> Result<Value, String> {
+    let text = text.unwrap_or_default().trim().to_string();
+    if text.chars().count() > PHOTO_TEXT_MAX {
+        return Err(format!(
+            "사진에 붙이는 글이 너무 깁니다. {PHOTO_TEXT_MAX}자 아래로 줄여 주세요."
+        ));
+    }
+
+    // 1) 사진을 가져온다.
+    let (fname, raw) = match (path, bytes) {
+        (Some(p), _) => {
+            if !crate::dropbox::was_dropped(&p) {
+                return Err(
+                    "이 파일은 창에 떨어뜨린 것이 아닙니다. 사진을 창에 끌어다 놓거나 \
+                     「사진 고르기」로 골라 주세요."
+                        .into(),
+                );
+            }
+            let pb = std::path::Path::new(&p);
+            let n = pb
+                .file_name()
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_else(|| "photo".into());
+            let b = std::fs::read(pb).map_err(|e| format!("사진을 읽지 못했습니다: {e}"))?;
+            (n, b)
+        }
+        (None, Some(b)) => (name.unwrap_or_else(|| "photo".into()), b),
+        (None, None) => return Err("보낼 사진이 없습니다.".into()),
+    };
+
+    // 2) 사진인가 · 크기가 되나. **올리기 전에** 본다 — 파일창고는 공개고,
+    //    한 번 올라간 것은 되물릴 수 없다.
+    let mime = photo_kind(&fname, &raw)?;
+
+    // 3) 🔴 **자산 방이면 가진 사람만 쓴다** — 이것도 올리기 전에 본다.
+    //    올린 다음에 막으면, 아무도 못 볼 사진만 파일창고에 남는다.
+    //
+    //    ⚠️ 모를 때는 막지 않는다. 노드가 장부를 다시 훑는 중이면
+    //       `listmyassets` 가 답을 못 하는데, 그때 막으면 자기 방에 자기가
+    //       사진을 못 올린다. 재색인은 며칠 걸리기도 한다.
+    if let Some(id) = &room {
+        if let Some(a) = room_asset(id).await {
+            let (has, unknown) = hold_state(&a).await;
+            if !has && unknown.is_none() {
+                return Err(format!(
+                    "이 방은 {a} 을(를) 가진 분들의 방입니다. 아직 갖고 계시지 않습니다."
+                ));
+            }
+        }
+    }
+
+    // 4) 🔴 **파일창고가 꺼져 있으면 여기서 멈춘다.** 켜져 있는 줄 알고
+    //    올리기를 시도하면 「IPFS에 올리지 못했습니다: connection refused」
+    //    라는, 사장에게 아무것도 안 알려 주는 글자가 뜬다.
+    let status = crate::ipfs::ipfs_status().await.unwrap_or(json!({ "running": false }));
+    if !status.get("running").and_then(Value::as_bool).unwrap_or(false) {
+        return Err(
+            "사진을 둘 파일창고가 꺼져 있습니다. 「켜기」를 눌러 파일창고를 켠 다음 \
+             다시 보내 주세요. 글은 지금도 보낼 수 있습니다."
+                .into(),
+        );
+    }
+    // 켜져 있어도 **아무와도 안 이어져 있으면** 밖에서는 못 받는다. 막지는
+    // 않는다 — 방금 켰을 수도 있다. 대신 아래에서 그대로 말한다.
+    let peers = status.get("peers").and_then(Value::as_i64);
+
+    // 5) 파일창고에 올린다. 지문은 올리기 전에 낸다 — `Incoming` 이 내용을 가져간다.
+    use sha2::Digest as _;
+    let sha = hex::encode(sha2::Sha256::digest(&raw));
+    let size = raw.len();
+    let added = crate::upload::ipfs_add_file(crate::upload::Incoming {
+        // 🔴 파일 이름은 파일창고까지만 간다. 글에는 **안 적는다** —
+        //    「김무송_통장사본.jpg」 같은 이름이 세상 모든 릴레이에 남으면 안 된다.
+        name: safe_name(&fname),
+        bytes: raw,
+    })
+    .await?;
+    let cid = added
+        .get("cid")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "파일창고가 사진 주소를 안 돌려줬습니다.".to_string())?
+        .to_string();
+
+    // 6) 글을 만든다.
+    //
+    // 본문에 넣는 주소는 **공개 게이트웨이**다. 우리 집 주소(127.0.0.1)를
+    // 적으면 남의 화면에서는 자기 컴퓨터를 가리키게 되어 아무것도 안 뜬다.
+    // 우리 화면은 아래 `ipfs` 태그를 보고 집 주소로 바꿔 그린다.
+    let gateway = format!("https://ipfs.io/ipfs/{cid}");
+    let content = if text.is_empty() {
+        gateway.clone()
+    } else {
+        format!("{text}\n{gateway}")
+    };
+
+    let sk = key()?;
+    // imeta(NIP-92)는 한 태그 안에 「열쇠 값」을 띄어쓰기로 잇는다.
+    // 이게 있어야 남의 앱이 사진인 줄 알고 접어서 그린다.
+    let imeta = json!([
+        "imeta",
+        format!("url {gateway}"),
+        format!("m {mime}"),
+        format!("x {sha}"),
+        format!("size {size}"),
+    ]);
+    let (kind, tags) = match (&room, &reply_to) {
+        (_, Some(id)) => {
+            let mut t = vec![
+                json!(["e", id, "", "reply"]),
+                json!(["t", TAG]),
+                imeta,
+                json!(["ipfs", cid]),
+            ];
+            if let Some(pk) = &reply_pub {
+                t.push(json!(["p", pk]));
+            }
+            (
+                if room.is_some() { KIND_ROOM_MSG } else { KIND_NOTE },
+                Value::Array(t),
+            )
+        }
+        (Some(id), None) => (
+            KIND_ROOM_MSG,
+            json!([["e", id, "", "root"], ["t", TAG], imeta, ["ipfs", cid]]),
+        ),
+        (None, None) => (KIND_NOTE, json!([["t", TAG], imeta, ["ipfs", cid]])),
+    };
+
+    let ev = crate::shopkey::sign_with(&sk, kind, tags, &content, now())?;
+    // 사진은 이미 올라갔는데 글만 실패할 수 있다. 그때 주소를 안 알려 주면
+    // 사장은 올린 사진을 영영 못 찾는다 — 지운 것도 아닌데.
+    let sent = crate::nostrpub::nostr_publish(ev.clone())
+        .await
+        .map_err(|e| format!("사진은 올라갔는데({cid}) 글을 못 보냈습니다: {e}"))?;
+
+    // 7) 🔴 **되는 척하지 않는다.** 이 말을 화면이 그대로 띄워야 한다.
+    let say = if peers == Some(0) {
+        "사진을 올렸습니다. 다만 지금 이 컴퓨터가 파일창고 그물에 아무와도 이어져 \
+         있지 않아, 밖에 계신 분은 이 사진을 못 받습니다. 잠시 뒤 다시 확인해 주세요."
+    } else {
+        "사진은 지금 이 컴퓨터가 들고 있습니다. 다른 곳에 사본이 생기기 전까지는, \
+         이 컴퓨터를 끄면 상대가 사진을 못 볼 수 있습니다."
+    };
+
+    Ok(json!({
+        "event": ev,
+        "sent": sent,
+        "cid": cid,
+        "mime": mime,
+        "size": size,
+        "sha256": sha,
+        // 우리 화면은 이걸 쓴다. 남의 게이트웨이를 거치지 않으니 빠르고,
+        // 우리가 무슨 사진을 보는지 바깥에 알리지도 않는다.
+        "local_url": format!("http://127.0.0.1:8080/ipfs/{cid}"),
+        "url": gateway,
+        "peers": peers,
+        "say": say,
+    }))
+}
+
 /// 내가 가진 자산 이름들. 방을 만들 때 고르게 하려고 준다.
 ///
 /// 🔴 **하나도 없으면 그렇다고 말한다.** 목록을 비워 두면 사장은 「고장났나」
@@ -675,13 +1020,136 @@ mod tests {
         assert_eq!(a, b, "띄어쓰기나 대소문자가 다르면 열쇠가 달라진다 — 복구가 실패한다");
     }
 
+    // ─────────────────────────────────────────────────────────────────
+    // 사진 보내기
+    // ─────────────────────────────────────────────────────────────────
+
+    /// 진짜 사진들의 앞머리. 시험에서 「진짜」로 쓰는 것들이다.
+    fn 사진들() -> Vec<(&'static str, Vec<u8>, &'static str)> {
+        let 채우기 = |mut v: Vec<u8>| {
+            v.resize(64, 0);
+            v
+        };
+        vec![
+            ("밥.jpg", 채우기(vec![0xFF, 0xD8, 0xFF, 0xE0]), "image/jpeg"),
+            (
+                "메뉴.PNG",
+                채우기(vec![0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]),
+                "image/png",
+            ),
+            ("웃김.gif", 채우기(b"GIF89a....".to_vec()), "image/gif"),
+            (
+                "간판.webp",
+                채우기(b"RIFF\x40\x00\x00\x00WEBP".to_vec()),
+                "image/webp",
+            ),
+            (
+                "폰사진.heic",
+                채우기(b"\x00\x00\x00\x18ftypheic".to_vec()),
+                "image/heic",
+            ),
+            (
+                "새것.avif",
+                채우기(b"\x00\x00\x00\x1cftypavif".to_vec()),
+                "image/avif",
+            ),
+        ]
+    }
+
+    /// 🔴 **좋은 입력이 통과하는지 먼저 본다.** 막는 것만 시험하면, 아무것도
+    ///    안 통과시키는 검사가 만점을 받는다 — 이 저장소에서 실제로 낸 사고다.
+    #[test]
+    fn 진짜_사진은_통과한다() {
+        for (이름, 내용, 종류) in 사진들() {
+            let r = super::photo_kind(이름, &내용);
+            assert_eq!(r, Ok(종류), "{이름} 이 막혔다 — 사진을 못 보낸다");
+        }
+    }
+
+    /// 🔴 이름만 사진인 실행 파일. 이게 지나가면 파일창고에 남고 지울 수 없다.
+    #[test]
+    fn 이름만_바꾼_실행파일은_잡힌다() {
+        let 실행파일들: Vec<(&str, Vec<u8>)> = vec![
+            ("사진.jpg", b"\xcf\xfa\xed\xfe\x0c\x00\x00\x01\x00\x00\x00\x00".to_vec()), // 맥
+            ("사진.png", b"\x7fELF\x02\x01\x01\x00\x00\x00\x00\x00".to_vec()),          // 리눅스
+            ("사진.jpeg", b"MZ\x90\x00\x03\x00\x00\x00\x04\x00\x00\x00".to_vec()),      // 윈도우
+            ("사진.gif", b"#!/bin/sh\nrm -rf /\n".to_vec()),                            // 스크립트
+            ("사진.webp", b"RIFF\x40\x00\x00\x00WAVEfmt ".to_vec()),                    // 소리 파일
+            ("사진.png", b"PK\x03\x04\x14\x00\x00\x00\x08\x00\x00\x00".to_vec()),       // 압축 파일
+        ];
+        for (이름, 내용) in 실행파일들 {
+            assert!(
+                super::photo_kind(이름, &내용).is_err(),
+                "{이름} 이 사진으로 지나갔다 — 실행 파일이 오간다"
+            );
+        }
+    }
+
+    /// 안은 진짜 사진이어도 **이름이 사진이 아니면** 안 받는다.
+    /// 앞은 JPEG 이고 뒤에 딴것을 붙인 파일이 `.command` 로 내려가면 실행된다.
+    #[test]
+    fn 이름이_사진이_아니면_잡힌다() {
+        let 진짜 = {
+            let mut v = vec![0xFF, 0xD8, 0xFF, 0xE0];
+            v.resize(64, 0);
+            v
+        };
+        for 이름 in ["사진.exe", "사진.sh", "사진.command", "사진.svg", "사진", "사진.jpg.exe"] {
+            assert!(
+                super::photo_kind(이름, &진짜).is_err(),
+                "{이름} 이 지나갔다"
+            );
+        }
+        // ⚠️ 되받아 확인: 같은 내용을 사진 이름으로 주면 **통과해야** 한다.
+        //    아니면 위 시험은 「전부 막는 검사」를 칭찬하고 있는 것이다.
+        assert!(super::photo_kind("사진.jpg", &진짜).is_ok());
+    }
+
+    /// 크기. 한 바이트 차이로 갈리는지까지 본다.
+    #[test]
+    fn 큰_사진은_잡히고_딱_맞는_것은_통과한다() {
+        let 만들기 = |n: usize| {
+            let mut v = vec![0xFF, 0xD8, 0xFF, 0xE0];
+            v.resize(n, 0);
+            v
+        };
+        assert!(super::photo_kind("큰.jpg", &만들기(super::PHOTO_MAX)).is_ok(), "딱 맞는 것이 막혔다");
+        let e = super::photo_kind("큰.jpg", &만들기(super::PHOTO_MAX + 1)).unwrap_err();
+        assert!(e.contains("너무 큽니다"), "큰 사진이 지나갔다: {e}");
+        // 왜 안 되는지까지 말해야 한다. "거부" 만 뜨면 사장은 그냥 포기한다.
+        assert!(e.contains("줄여서"), "무엇을 하면 되는지 안 알려 준다: {e}");
+    }
+
+    /// 빈 파일과 너무 짧은 파일. 여기서 자리 넘침이 나면 앱이 죽는다.
+    #[test]
+    fn 빈_파일과_짧은_파일은_잡힌다() {
+        assert!(super::photo_kind("사진.jpg", b"").is_err());
+        assert!(super::photo_kind("사진.jpg", b"\xFF\xD8\xFF").is_err(), "12바이트도 안 되는 것이 지나갔다");
+        // 자리 넘침이 안 나는지도 본다 — 아래 길이들이 sniff 안의 b[4..12] 를 밟는다.
+        for n in 0..16usize {
+            let _ = super::sniff(&vec![0u8; n]);
+        }
+    }
+
+    /// 파일 이름은 파일창고까지만 간다. 폴더를 만들거나 형식을 깨면 안 된다.
+    #[test]
+    fn 파일_이름을_그대로_믿지_않는다() {
+        assert_eq!(super::safe_name("../../wallet.dat"), ".._.._wallet.dat");
+        assert_eq!(super::safe_name("사\n진.jpg"), "사_진.jpg");
+        assert_eq!(super::safe_name("   "), "photo");
+        assert!(super::safe_name(&"가".repeat(300)).chars().count() <= 80);
+    }
+
     /// 우리 릴레이의 저장 규칙이 이 표를 본다. 안 붙이면 **우리가 쓴 글이
     /// 우리 릴레이에 안 남는다.**
     #[test]
     fn 글에는_레이븐_표가_붙는다() {
         let src = include_str!("talk.rs");
         let i = src.find("pub async fn talk_post").expect("쓰는 함수가 있어야 한다");
-        let end = src[i..].find("pub async fn talk_make_room").unwrap_or(src.len() - i);
+        // 🔴 범위를 **talk_post 하나**로 자른다. 예전에는 「다음 함수 이름」으로
+        //    잘랐는데, 그 사이에 다른 함수(사진 보내기)를 넣자 그 함수의 표까지
+        //    같이 세게 됐다 — talk_post 가 표를 안 붙여도 통과하는 시험이 된다.
+        let end = src[i..].find("\n#[tauri::command]").unwrap_or(src.len() - i);
         assert!(
             src[i..i + end].matches("\"t\", TAG").count() >= 2,
             "글에 레이븐 표가 안 붙는다 — 우리 릴레이가 자기 글을 버린다"
@@ -697,6 +1165,198 @@ mod gate_tests {
         let src = include_str!("talk.rs");
         let end = src.find("#[cfg(test)]").unwrap_or(src.len());
         &src[..end]
+    }
+
+    /// 주석을 걷어 낸 코드.
+    ///
+    /// ## 🔴 왜 이게 필요한가 — 이 저장소에서 여러 번 밟은 함정
+    ///
+    /// 아래 시험들은 「코드에 이 검사가 있는가」를 글자로 찾는다. 그런데 우리는
+    /// **주석을 아주 길게 쓴다.** 주석에 「크기를 본다」라고 적어 놓기만 하고
+    /// 실제로 안 보는 코드가, 시험을 통과한다. 시험이 자기 주석을 잡는 것이다.
+    ///
+    /// ⚠️ 반대 함정도 같이 막는다: 주소 안의 `//`(`https://…`)를 주석 시작으로
+    ///    오해하면 코드가 통째로 날아가고, 그러면 **아무 시험도 아무것도 못 찾아**
+    ///    엉뚱하게 실패한다. 그래서 문자열 안은 건드리지 않는다.
+    ///
+    /// ⚠️ 홑따옴표 글자(`'"'` 같은 것)는 안 다룬다 — `&'static str` 의 `'` 와
+    ///    구별하려면 러스트 문법을 다 알아야 한다. 대신 코드 쪽에서 그런 글자를
+    ///    안 쓰기로 했고, 아래 `홑따옴표_따옴표를_안_쓴다` 가 그것을 지킨다.
+    fn 주석빼기(src: &str) -> String {
+        let b: Vec<char> = src.chars().collect();
+        let mut out = String::with_capacity(src.len());
+        let (mut 한줄, mut 여러줄, mut 문자열) = (false, false, false);
+        let mut i = 0;
+        while i < b.len() {
+            let c = b[i];
+            let n = b.get(i + 1).copied().unwrap_or('\0');
+            if 한줄 {
+                if c == '\n' {
+                    한줄 = false;
+                    out.push(c);
+                }
+                i += 1;
+            } else if 여러줄 {
+                if c == '*' && n == '/' {
+                    여러줄 = false;
+                    i += 2;
+                } else {
+                    i += 1;
+                }
+            } else if 문자열 {
+                // 문자열 안에서는 어떤 것도 주석이 아니다. 역슬래시로 escape 한
+                // 따옴표를 닫는 따옴표로 세면 그 뒤가 통째로 어긋난다.
+                if c == '\\' {
+                    out.push(c);
+                    if i + 1 < b.len() {
+                        out.push(n);
+                    }
+                    i += 2;
+                    continue;
+                }
+                if c == '"' {
+                    문자열 = false;
+                }
+                out.push(c);
+                i += 1;
+            } else if c == '/' && n == '/' {
+                한줄 = true;
+                i += 2;
+            } else if c == '/' && n == '*' {
+                여러줄 = true;
+                i += 2;
+            } else {
+                if c == '"' {
+                    문자열 = true;
+                }
+                out.push(c);
+                i += 1;
+            }
+        }
+        out
+    }
+
+    fn 주석뺀_코드() -> String {
+        주석빼기(코드만())
+    }
+
+    /// 🔴 **거르개부터 일부러 깨뜨려 본다.** 거르개가 고장 나면 아래 시험들이
+    ///    전부 거짓으로 통과하거나 전부 거짓으로 실패한다.
+    #[test]
+    fn 주석_거르개가_제대로_거른다() {
+        // (1) 주석은 없어져야 한다 — 안 없어지면 시험이 자기 주석을 잡는다.
+        let s = 주석빼기("let a = 1; // 여기서 PHOTO_MAX 를 본다\nlet b = 2;\n");
+        assert!(!s.contains("PHOTO_MAX"), "주석을 못 걸렀다 — 시험이 주석을 잡는다");
+        assert!(s.contains("let b = 2;"), "주석 뒤 코드까지 지웠다");
+
+        // (2) 문자열 안의 // 는 주석이 아니다 — 이걸 틀리면 주소가 사라진다.
+        let s = 주석빼기("let u = \"https://ipfs.io/ipfs/Qm\"; let v = 3;");
+        assert!(s.contains("https://ipfs.io/ipfs/Qm"), "주소 안의 // 를 주석으로 봤다");
+        assert!(s.contains("let v = 3;"), "주소 뒤 코드가 날아갔다");
+
+        // (3) 여러 줄 주석과 escape 한 따옴표.
+        assert!(!주석빼기("/* 숨김 */ let a = 1;").contains("숨김"));
+        let s = 주석빼기("let a = \"따옴표 \\\" 안\"; // 지움\n");
+        assert!(s.contains("따옴표"), "escape 한 따옴표에서 어긋났다");
+        assert!(!s.contains("지움"), "escape 한 따옴표 뒤 주석을 못 걸렀다");
+    }
+
+    /// 거르개가 못 다루는 글자를 코드가 안 쓰는지 본다. 하나만 끼어도 그 뒤
+    /// 주석이 통째로 안 걸러진다.
+    #[test]
+    fn 홑따옴표_따옴표를_안_쓴다() {
+        let 코드 = 주석뺀_코드();
+        assert!(
+            !코드.contains("'\"'"),
+            "홑따옴표로 감싼 따옴표를 쓰고 있다 — 주석 거르개가 그 뒤로 어긋난다"
+        );
+    }
+
+    /// 사진 보내기 함수의 몸통(주석 뺀 것).
+    fn 사진_함수() -> String {
+        let 코드 = 주석뺀_코드();
+        let i = 코드
+            .find("pub async fn talk_photo_post")
+            .expect("사진 보내는 함수가 있어야 한다");
+        let 뒤 = &코드[i..];
+        let end = 뒤.find("\n#[tauri::command]").unwrap_or(뒤.len());
+        뒤[..end].to_string()
+    }
+
+    /// 🔴 **사진인지 이름과 안을 둘 다 본다.** 하나만 보면 실행 파일이 오간다.
+    #[test]
+    fn 사진인지_이름과_안을_둘_다_본다() {
+        let f = 사진_함수();
+        assert!(f.contains("photo_kind"), "사진인지 안 보고 올리고 있다");
+        let 검사 = {
+            let 코드 = 주석뺀_코드();
+            let i = 코드.find("fn photo_kind").expect("검사 함수가 있어야 한다");
+            코드[i..].to_string()
+        };
+        assert!(검사.contains("ext_kind"), "이름(확장자)을 안 보고 있다");
+        assert!(검사.contains("sniff"), "안(매직 바이트)을 안 보고 있다");
+        assert!(검사.contains("PHOTO_MAX"), "크기를 안 보고 있다");
+    }
+
+    /// 🔴 **검사는 전부 올리기 전에.** 파일창고는 공개고 한 번 올라간 것은
+    ///    되물릴 수 없다. 올린 뒤에 막으면 아무도 못 볼 사진만 남는다.
+    #[test]
+    fn 검사가_모두_올리기_전에_있다() {
+        let f = 사진_함수();
+        let 올림 = f.find("ipfs_add_file").expect("파일창고에 올리는 곳이 있어야 한다");
+        for (무엇, 글자) in [
+            ("사진인지", "photo_kind"),
+            ("방에 쓸 수 있는지", "hold_state"),
+            ("파일창고가 켜져 있는지", "ipfs_status"),
+        ] {
+            let i = f.find(글자).unwrap_or_else(|| panic!("{무엇} 을 안 보고 있다"));
+            assert!(i < 올림, "{무엇} 를 올린 다음에 보고 있다");
+        }
+    }
+
+    /// 🔴 **파일창고가 꺼져 있으면 「켜세요」라고 말한다.** 그냥 올리려 들면
+    ///    connection refused 라는, 사장에게 아무것도 안 알려 주는 글자가 뜬다.
+    #[test]
+    fn 파일창고가_꺼졌으면_켜라고_말한다() {
+        let f = 사진_함수();
+        assert!(f.contains("꺼져 있습니다"), "꺼진 것을 말하지 않는다");
+        assert!(f.contains("켜"), "켜라고 말하지 않는다");
+    }
+
+    /// 🔴 **되는 척하지 않는다.** 올린 사진은 처음에 이 컴퓨터 한 곳에만 있다.
+    ///    「보냈습니다」로 끝내면 그건 거짓말이고, 사장은 사진이 안 뜨는 이유를
+    ///    영영 모른다.
+    #[test]
+    fn 사라질_수_있다고_말한다() {
+        let f = 사진_함수();
+        assert!(
+            f.contains("사본이 생기기 전까지"),
+            "이 컴퓨터를 끄면 안 보일 수 있다는 말을 응답에 안 담고 있다"
+        );
+        assert!(f.contains("\"say\""), "화면이 띄울 말을 안 돌려주고 있다");
+        // 이어진 곳이 없으면 밖에서는 아예 못 받는다. 그것도 갈라서 말한다.
+        assert!(f.contains("peers"), "몇 곳과 이어져 있는지 안 보고 있다");
+    }
+
+    /// 아무 경로나 읽어 주면 화면이 뚫리는 날 `wallet.dat` 이 공개 파일창고로
+    /// 올라간다. 거기서는 지울 수가 없다.
+    #[test]
+    fn 아무_경로나_안_읽는다() {
+        let f = 사진_함수();
+        assert!(
+            f.contains("was_dropped"),
+            "떨어뜨린 파일인지 안 보고 경로를 읽고 있다"
+        );
+    }
+
+    /// 파일 이름은 파일창고까지만. 글(릴레이)에는 안 적는다 —
+    /// 「김무송_통장사본.jpg」 같은 이름이 세상에 남으면 안 된다.
+    #[test]
+    fn 파일_이름을_글에_안_적는다() {
+        let f = 사진_함수();
+        let i = f.find("let content").expect("글 본문을 만드는 곳이 있어야 한다");
+        let 본문 = &f[i..f[i..].find("sign_with").map(|e| i + e).unwrap_or(f.len())];
+        assert!(!본문.contains("fname"), "파일 이름을 글 본문에 적고 있다");
     }
 
     /// 🔴 **모르는 것을 「없다」로 치면 자기 방에 자기가 못 들어간다.**

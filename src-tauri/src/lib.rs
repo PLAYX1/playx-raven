@@ -359,6 +359,8 @@ pub fn run() {
             shopmove::shop_key_move,
             talk::talk_me,
             talk::talk_post,
+            // 사진 보내기. 사진·영수증·「이거요」를 못 보내면 대화방이 빈 방이 된다.
+            talk::talk_photo_post,
             talk::talk_read,
             talk::talk_rooms,
             talk::talk_replies,
