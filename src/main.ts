@@ -5771,6 +5771,7 @@ const SHOP_FIELDS: Record<string, string> = {
 //    켤 때 확인한다 — 길이 없어지면 그 화면은 있어도 없는 것이다.
 if (typeof document !== "undefined") {
   window.addEventListener("DOMContentLoaded", () => {
+  bindQrCopy();
     for (const page of ["door", "shop", "wallet"]) {
       const 길 = document.querySelectorAll(`[data-page="${page}"],[data-goto="${page}"]`).length;
       if (!길) console.error(`[배선] ${page} 화면으로 가는 길이 하나도 없습니다.`);
@@ -5797,6 +5798,39 @@ if (typeof document !== "undefined") {
  * ⚠️ **일하는 것은 안 쉰다.** 자동 발송·백업·정산은 화면과 무관하게 돌아야
  *    한다. 이 함수는 **그리는 것**에만 쓴다.
  */
+/**
+ * QR 창의 주소를 눌러서 복사한다.
+ *
+ * 🔴 **가장 많이 뿌리는 링크인데 복사 버튼이 없었다.** 가게 QR 창의 주소는
+ *    `<code>` 글자일 뿐이었고, 사장은 11.5px 글자를 손으로 긁어야 했다.
+ *    카톡에 보내려면 그것부터 해야 하는데 40~70대에게는 그게 벽이다.
+ *
+ * ⚠️ 화면을 다시 그려도 살아 있어야 하므로 **문서 전체에 한 번만** 건다.
+ */
+function bindQrCopy(): void {
+  document.addEventListener("click", (e) => {
+    const el = (e.target as HTMLElement)?.closest?.(".qrurl") as HTMLElement | null;
+    if (!el) return;
+    const url = (el.textContent || "").trim();
+    if (!url) return;
+    void navigator.clipboard
+      .writeText(url)
+      .then(() => {
+        const 원래 = el.dataset.o || (el.dataset.o = el.textContent || "");
+        el.textContent = t("복사했습니다 — 카톡·문자에 붙여넣으세요");
+        setTimeout(() => (el.textContent = 원래), 2000);
+      })
+      .catch(() => {
+        // 클립보드가 막힌 기계도 있다. 그때는 글자를 골라 준다.
+        const r = document.createRange();
+        r.selectNodeContents(el);
+        const sel = window.getSelection();
+        sel?.removeAllRanges();
+        sel?.addRange(r);
+      });
+  });
+}
+
 function 쉬는중(): boolean {
   return typeof document !== "undefined" && document.hidden === true;
 }

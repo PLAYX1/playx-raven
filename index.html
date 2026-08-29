@@ -1101,7 +1101,11 @@
       .qrcard b { display: block; margin-top: 6px; font-size: 15px; }
       .qrcard span { display: block; font-size: 13px; color: var(--muted); line-height: 1.5; }
       /* QR 이 안 열릴 때 손으로 치게. 한 번 누르면 전체가 잡힌다. */
-      .qrurl { display: block; margin-top: 8px; font-size: 11.5px; line-height: 1.45;
+      /* 🔴 눌러서 복사한다. 11.5px 글자를 손으로 긁게 하면 안 된다 —
+         이건 사장이 가장 많이 뿌리는 링크다. */
+      .qrurl { cursor: pointer; }
+      .qrurl:hover { outline: 2px solid var(--accent); outline-offset: 2px; }
+      .qrurl { display: block; margin-top: 8px; font-size: 13px; line-height: 1.45;
         word-break: break-all; user-select: all; color: var(--text); }
       /* 🔴 열쇠가 든 QR 셋. 붙이면 열쇠를 벽에 붙이는 것이다. */
       .qrcard.haskey { border-color: color-mix(in srgb, var(--warn) 55%, var(--line)); }

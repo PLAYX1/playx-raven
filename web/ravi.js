@@ -30,8 +30,8 @@
   let state = null;
 
   /** 자는 얼굴 · 깬 얼굴. 노드 안에 있는 그림이라 인터넷이 없어도 뜬다. */
-  const FACE_SLEEP = '/faces/raven-sleep.webp';
-  const FACE_HELLO = '/faces/raven-hello.webp';
+  const FACE_SLEEP = '/raven-sleep.webp';
+  const FACE_HELLO = '/raven-hello.webp';
 
   /**
    * 노드에게 "라비 깨어 있나요" 를 묻는다.

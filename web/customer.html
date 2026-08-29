@@ -20,12 +20,16 @@
     <style>
       /* 손님 화면. 매장 조명 아래 서서 한 손으로 쓰는 것을 전제한다. */
       :root {
+        /* 🔴 `--ok` 가 어디에도 없어서 늘 폴백(#1c7a45)이 쓰였다. 어두운
+           바탕에서 명암비 3.2:1 — **밤에 「영업 중」이 안 읽힌다.** */
+        --ok: #1c7a45;
         --bg: #ffffff; --fg: #141518; --muted: #6b7280; --line: #e6e7ea;
         --panel: #fafafb; --accent: #3b3f8f; --warn: #b45309; --ravi: #e7731f; --ravi-soft: #8375ae; --ravi-tint: #fdf1e7;
         --safe-b: env(safe-area-inset-bottom, 0px);
       }
       @media (prefers-color-scheme: dark) {
-        :root { --bg: #101114; --fg: #eceef2; --muted: #9aa0ab; --line: #26282e;
+        :root {
+        --ok: #4ade80; --bg: #101114; --fg: #eceef2; --muted: #9aa0ab; --line: #26282e;
                 --panel: #17191d; --accent: #8d92e8; --warn: #d99b3f;
                 --ravi: #f0913f; --ravi-soft: #a294cb; --ravi-tint: #2a1f18; }
       }
@@ -108,7 +112,7 @@
       /* ⚠️ 본문만 가운데로 모으면 이 줄은 여전히 화면 끝까지 퍼져서
          **금액과 「주문하기」가 따로 논다.** 같이 모은다.
          폰(390px)에서는 560px 제한이 안 걸리므로 그대로다. */
-      .bar { position: fixed; left: 50%; transform: translateX(-50%);
+      .bar { position: fixed; left: 0; right: 0; margin-inline: auto;
              width: 100%; max-width: 560px; bottom: 0; background: var(--bg);
              border-top: 1px solid var(--line); padding: 12px 18px calc(12px + var(--safe-b));
              display: flex; align-items: center; gap: 12px; }
@@ -322,7 +326,7 @@
       <!-- 카톡·텔레그램에 링크를 붙였을 때 뜨는 카드.
          ⚠️ 매장 노드는 자기 주소(192.168.x)라 바깥에서 그림을 못 가져온다.
             그래서 그림은 **웹 주소**를 가리킨다 — 가게 안이든 밖이든 뜬다. -->
-    <link rel="icon" href="/faces/raven-head.webp" />
+    <link rel="icon" href="/raven-head.webp" />
     <meta property="og:type" content="website" />
     <meta property="og:title" content="주문하기" />
     <meta property="og:description" content="QR을 찍으면 이 화면이 뜹니다. 앱을 깔지 않으셔도 됩니다." />
