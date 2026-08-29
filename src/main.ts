@@ -1848,7 +1848,7 @@ function paintRavi() {
 
     if (nodeDown) {
       hi.textContent = nodeWarming
-        ? "노드가 장부를 여는 중이에요. 몇 분 걸려요."
+        ? "노드가 장부를 여는 중이에요. 처음이면 며칠 걸릴 수 있어요 — 남은 시간은 「이 컴퓨터」에서 보여요."
         : "노드가 꺼져 있어요.";
       sub.innerHTML = "결제가 들어와도 확인을 못 합니다. <b>이 컴퓨터</b>에서 켜 주세요.";
     } else if (!shop) {
@@ -2982,7 +2982,7 @@ function bindRestore() {
       }
       const ok = await sure(
         t("노드를 껐다 켤까요?"),
-        t("그래야 적용됩니다. 몇 분 동안 결제 확인이 멈춥니다.")
+        t("그래야 적용됩니다. 그동안 결제 확인이 멈추고, 얼마나 걸릴지는 장부 크기에 따라 다릅니다.")
       );
       if (!ok) {
         say.innerHTML = `<span class="ok">${t("450 MB 로 정했습니다. 다음에 켤 때 적용됩니다.")}</span>`;

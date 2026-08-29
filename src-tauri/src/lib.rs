@@ -19,6 +19,7 @@ mod sample;
 mod recover;
 mod electrum;
 mod moving;
+mod trust;
 mod publicbook;
 mod health;
 mod ipfs;

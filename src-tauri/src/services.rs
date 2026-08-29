@@ -404,7 +404,7 @@ pub async fn services_start() -> Result<Value, String> {
                     "note": if need_reindex {
                         "자산 색인을 만드느라 처음부터 다시 훑습니다 — 몇 시간 걸립니다. 그동안 주문 확인이 멈춥니다."
                     } else {
-                        "따라잡는 데 몇 분 걸립니다"
+                        "따라잡는 중입니다. 처음이면 며칠 걸릴 수 있습니다 — 남은 시간은 「이 컴퓨터 → RVN 노드」에서 보입니다"
                     },
                     "reindexing": need_reindex,
                 }));
