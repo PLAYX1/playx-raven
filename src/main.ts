@@ -793,6 +793,8 @@ async function saveNode() {
 }
 
 async function loadNet() {
+  if (쉬는중()) return; // 창을 안 보는 동안은 그리지 않는다
+
   try {
     const n: any = await invoke("network_state");
     if (n.online) {
@@ -1424,6 +1426,8 @@ function isWarming(err: unknown): boolean {
 let nodeWarming = false;
 
 async function paintStatusDots() {
+  if (쉬는중()) return; // 창을 안 보는 동안은 그리지 않는다
+
   const set = (dot: string, label: string, ok: boolean, text: string) => {
     const d = document.getElementById(dot);
     const t = document.getElementById(label);
@@ -2607,6 +2611,8 @@ async function bootStrip(): Promise<string> {
  * 각 갈래마다 붙이면 열두 군데를 고쳐야 하고, 언젠가 한 곳을 빠뜨린다.
  */
 async function paintPart(): Promise<void> {
+  if (쉬는중()) return; // 창을 안 보는 동안은 그리지 않는다
+
   await paintPartBody();
   const box = document.getElementById("pt-body");
   if (!box || box.querySelector("[data-bootstrip]")) return;
@@ -3609,6 +3615,24 @@ async function sendOwed() {
 let currentPage = "ravi";
 
 function showPage(id: string) {
+  // 🔴 화면을 떠나면 그 화면 때문에 도는 타이머를 끈다.
+  //
+  //    「부품」 화면을 한 번 열었다가 지갑으로 나가면, **앱을 끌 때까지**
+  //    5초마다 노드 RPC 7건을 계속 불렀다(2026-08-29 실측). 하루 종일 켜 두는
+  //    앱에서 이건 그냥 낭비다.
+  //
+  //    ⚠️ 「돕기」 타이머는 여기서 안 끈다 — 돕기는 화면이 아니라 **모드**라,
+  //       다른 화면을 보는 동안에도 돌아야 한다. 대신 장사 모드로 바꿀 때 끈다.
+  try {
+    const 갈곳 = String(id ?? "");
+    if (갈곳 !== "parts" && partTimer !== null) {
+      clearInterval(partTimer);
+      partTimer = null;
+    }
+  } catch {
+    /* 타이머 정리가 실패해도 화면 이동은 막지 않는다 */
+  }
+
   currentPage = id;
   if (id === "ravi") paintRavi();
   paintPageTiles(id);
@@ -5752,6 +5776,29 @@ if (typeof document !== "undefined") {
       if (!길) console.error(`[배선] ${page} 화면으로 가는 길이 하나도 없습니다.`);
     }
   });
+}
+
+/**
+ * 창을 안 보고 있으면 **화면 그리는 일을 쉰다.**
+ *
+ * 🔴 실측(2026-08-29): `document.hidden` 을 보는 코드가 **한 군데도 없었다.**
+ *    사장이 창을 내려놓아도 아래가 계속 돌았다 —
+ *
+ *      4초  채굴 상태      5초  부품 상태(노드 RPC 7건)
+ *      8초  돕기 화면      20초 상태 점            30초 건강·네트워크·주문
+ *
+ *    이 앱은 카운터에 **하루 8~14시간** 켜져 있고, 그 컴퓨터는 대개 낡았다.
+ *    화면을 안 보는 동안 노드를 5초마다 때리는 것이 이 앱에서 가장 비쌌다.
+ *
+ * ⚠️ **타이머를 멈추지 않는다.** 멈췄다 켜는 코드는 「다시 켜는 것을 잊는」
+ *    버그를 부른다. 대신 **그리는 함수가 스스로 쉰다** — 타이머는 돌지만
+ *    아무 일도 안 한다. 창을 다시 보면 다음 주기에 저절로 살아난다.
+ *
+ * ⚠️ **일하는 것은 안 쉰다.** 자동 발송·백업·정산은 화면과 무관하게 돌아야
+ *    한다. 이 함수는 **그리는 것**에만 쓴다.
+ */
+function 쉬는중(): boolean {
+  return typeof document !== "undefined" && document.hidden === true;
 }
 
 const RAVI_SPOTS: Record<string, { page: string; el?: string; say: string }> = {
@@ -8060,6 +8107,8 @@ async function showMiners() {
 }
 
 async function refreshMiner() {
+  if (쉬는중()) return; // 창을 안 보는 동안은 그리지 않는다
+
   // 네트워크가 얼마나 센지. 내 해시가 이 안에서 어느 정도인지 모르면
   // "왜 하나도 안 나오지"의 답을 찾을 수 없다.
   invoke<any>("mining_status")
@@ -9246,6 +9295,8 @@ async function applyLowspec() {
 // 닫힌다"가 정확한 표현이고, 화면은 그걸 그대로 말해야 한다.
 
 async function checkHealth() {
+  if (쉬는중()) return; // 창을 안 보는 동안은 그리지 않는다
+
   try {
     const h = await invoke<any>("service_health", {
       phoneOn: !!serverIp,
@@ -11843,6 +11894,11 @@ async function applyMode(): Promise<void> {
     showPage("helping");
     void paintHelping();
     if (helpTimer === null) helpTimer = window.setInterval(() => void paintHelping(), 8000);
+  } else if (helpTimer !== null) {
+    // 🔴 장사 모드로 바꿔도 「돕기」 타이머가 계속 돌았다 — 끄는 코드가
+    //    파일 어디에도 없었다. 8초마다 노드·릴레이·파일창고·채굴 넷을 부른다.
+    clearInterval(helpTimer);
+    helpTimer = null;
   }
 }
 
@@ -11850,6 +11906,8 @@ let helpTimer: number | null = null;
 
 /** 이 컴퓨터가 지금 무엇을 하고 있는지. */
 async function paintHelping(): Promise<void> {
+  if (쉬는중()) return; // 창을 안 보는 동안은 그리지 않는다
+
   const box = document.getElementById("hp-body");
   if (!box) return;
   const [node, relay, ipfs, mine] = await Promise.all([

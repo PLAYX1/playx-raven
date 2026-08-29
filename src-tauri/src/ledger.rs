@@ -569,9 +569,20 @@ pub async fn ledger_sweep(min_conf: u32) -> Result<Value, String> {
         .map(|m| m.keys().cloned().collect())
         .unwrap_or_default();
 
+    // 🔴 **가볍게 해야 한다.** 이 함수는 주문 화면을 그릴 때마다 도는데,
+    //    주소 하나마다 `incoming_payments` 를 부르면 그 안에서
+    //    `listtransactions` + `getconnectioncount` + 시세 조회가 붙는다.
+    //    대기 주문 40건이면 30초마다 RPC 왕복 80~120회 — 저사양 컴퓨터에서
+    //    이건 「장사하는 사람은 속도가 생명」의 정반대다.
+    //
+    //    그래서 **한 번에 조금씩** 한다. 못 본 것은 다음 번에 본다 —
+    //    장부는 몇 초 늦어도 되지만 화면이 느린 것은 사장이 바로 느낀다.
+    const 한번에: usize = 5;
+
     let mut 적음 = 0usize;
     let mut 기다림 = 0usize;
-    for addr in addrs {
+    let 전체 = addrs.len();
+    for addr in addrs.into_iter().take(한번에) {
         // 체인에 물어본다. 못 물어보면 **넘어간다** — 모르는 것을 결제로
         // 치면 안 된다.
         let Ok(v) = crate::shop::incoming_payments(addr.clone(), min_conf).await else {
@@ -594,7 +605,12 @@ pub async fn ledger_sweep(min_conf: u32) -> Result<Value, String> {
             None => 기다림 += 1,
         }
     }
-    Ok(json!({ "settled": 적음, "waiting": 기다림 }))
+    // 남은 것이 있으면 알려 준다 — 다음 새로고침에서 이어 본다.
+    Ok(json!({
+        "settled": 적음,
+        "waiting": 기다림,
+        "left": 전체.saturating_sub(한번에),
+    }))
 }
 
 /// Orders taken but not paid. Shown so nobody wonders where an order went.
