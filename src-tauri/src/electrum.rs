@@ -55,7 +55,19 @@ const PORT: u16 = 50001;
 /// this is a privacy and convenience trade, not a custody one — and the screen
 /// says which server answered.
 fn public_servers() -> Vec<(&'static str, u16)> {
-    vec![("electrumx.raventag.com", 50002)]
+    // 🔴 2026-08-29 실측: 여기 `("electrumx.raventag.com", 50002)` 가 적혀 있었고
+    //    **한 번도 작동한 적이 없다.** 50002 는 TLS 포트인데 아래 `call_at` 은
+    //    `TcpStream` 으로 **평문**을 보낸다. 붙기는 하지만 답이 오지 않아
+    //    12초를 버리고 실패했다 — 그러면서 화면에는 「대비책이 있다」고 적혀 있었다.
+    //
+    //    ⚠️ TLS 를 붙여도 소용이 적다. 그 서버에게 이웃을 물어보니
+    //       (`server.peers.subscribe`) **자기 하나뿐**이었다. RVN 의 공개
+    //       ElectrumX 는 사실상 한 대라 늘릴 수가 없다.
+    //
+    //    그래서 같은 종류를 늘리는 대신 **다른 종류**를 뒤에 세웠다 —
+    //    `publicbook.rs` 의 Blockbook(HTTP·정식 인증서·다른 운영자).
+    //    여기는 **사장이 자기 것을 적어 넣는 자리**로 남긴다.
+    vec![]
 }
 
 /// Talks to whichever index is reachable, nearest first.
@@ -325,11 +337,28 @@ pub fn wallet_view(address: String) -> Result<Value, String> {
 /// accept a payment even when no index is reachable at all.
 #[tauri::command]
 pub async fn wallet_send_signed(hex: String) -> Result<Value, String> {
-    let txid = crate::raven::call_rpc("sendrawtransaction", json!([hex])).await?;
-    Ok(json!({
-        "txid": txid.as_str().unwrap_or_default(),
-        "note": "이 가게 노드가 네트워크에 알렸습니다.",
-    }))
+    // 🔴 여기에는 대비책이 **아예 없었다.** 노드가 재색인 중이거나 꺼져 있으면
+    //    손님이 **돈을 못 보냈다.** 잔액은 못 봐도 참을 수 있지만 보내지 못하는
+    //    것은 지갑이 아니다.
+    match crate::raven::call_rpc("sendrawtransaction", json!([hex.clone()])).await {
+        Ok(txid) => Ok(json!({
+            "txid": txid.as_str().unwrap_or_default(),
+            "note": "이 가게 노드가 네트워크에 알렸습니다.",
+        })),
+        Err(e) => {
+            // ⚠️ 여기 오는 것은 **이미 서명된 거래**다. 열쇠는 넘어가지 않는다.
+            //    공개처가 할 수 있는 최악은 전달을 안 하는 것이고, 그러면
+            //    거래는 그냥 안 일어난다 — 돈이 사라지지 않는다.
+            let txid = crate::publicbook::broadcast(&hex)
+                .await
+                .map_err(|b| format!("{e} / {b}"))?;
+            Ok(json!({
+                "txid": txid,
+                "note": "이 가게 노드가 답하지 않아 공개 조회처를 통해 알렸습니다.",
+                "via_public": true,
+            }))
+        }
+    }
 }
 
 /// Electrum indexes by script hash, not by address.
@@ -489,5 +518,12 @@ pub async fn chain_address(address: String) -> Result<Value, String> {
     }
 
     // ②·③ 색인이 없으면 Electrum 에 묻는다. 로컬 → 공개 순.
-    wallet_view(address)
+    match wallet_view(address.clone()) {
+        Ok(v) => Ok(v),
+        // ④ 그것마저 없으면 **다른 종류**에 묻는다. 여기까지 와야
+        //    「우리가 다 죽어도 손님은 자기 돈을 본다」가 참이 된다.
+        Err(e) => crate::publicbook::address(&address)
+            .await
+            .map_err(|b| format!("{e} / {b}")),
+    }
 }

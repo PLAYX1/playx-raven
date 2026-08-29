@@ -18,6 +18,7 @@ mod peers;
 mod sample;
 mod recover;
 mod electrum;
+mod publicbook;
 mod health;
 mod ipfs;
 mod ipfsconf;
