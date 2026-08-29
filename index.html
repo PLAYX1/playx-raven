@@ -70,6 +70,69 @@
       nav a.on { border-left-color: var(--brand); background: color-mix(in srgb, var(--brand) 12%, transparent);
                  font-weight: 600; }
       nav a .risk { margin-left: auto; font-size: 14px; color: var(--warn); }
+
+      /* ── 새 주문 알림 ────────────────────────────────────────────────
+         🔴 대표님: "우리 프로그램에 돈 들어오거나 하면 알람 오지? 레이븐코어는
+            알림이 뜨던데 말야."  안 왔다. 소리도 배지도 없어서, 사장은 돈이
+            들어왔는지 알려면 **화면을 붙들고** 있어야 했다.
+
+         배지는 **다른 화면에 있는 사람에게** 하는 말이다. 주문표를 열어 두고
+         보는 사람에게는 새 줄이 뜨는 것 자체가 답이라 배지를 안 올린다.
+         숫자는 「주문표를 마지막으로 본 뒤 들어온 건수」다. */
+      .ordbadge { margin-left: auto; min-width: 21px; height: 21px; padding: 0 6px;
+        border-radius: 999px; background: var(--danger); color: #fff; flex: none;
+        font-size: 13px; font-weight: 700; line-height: 21px; text-align: center;
+        font-variant-numeric: tabular-nums; }
+      /* `display` 를 준 자리는 UA 의 `[hidden]{display:none}` 을 이겨 버린다.
+         그래서 숨김을 여기서 다시 말해 준다 — 안 그러면 0건일 때도 빨간 점이 남는다. */
+      .ordbadge[hidden] { display: none; }
+      /* 탭 안에서는 글자 바로 옆에 붙는다. 여기서 `margin-left:auto` 를 쓰면
+         탭 글자와 배지가 양 끝으로 갈라져 한 덩어리로 안 읽힌다. */
+      .tab .ordbadge { margin-left: 6px; display: inline-block; vertical-align: 1px; }
+
+      /* 🔴 창을 깜빡이게(requestUserAttention) 하는 길은 **막혀 있다.**
+         그건 `src-tauri/capabilities/default.json` 에 권한 한 줄을 더해야 하고,
+         지금 켜져 있는 것은 읽기 전용(is-focused 같은 것)뿐이다. 그래서
+         **화면 안에서 제일 크게** 말한다. 어느 화면을 보고 있든 같은 자리다.
+
+         창을 강제로 앞에 세우지 않는 것은 권한 때문만이 아니다. 사장이 세금
+         계산서를 치고 있는데 창이 튀어나오면 그건 알림이 아니라 사고다.
+         소리로 부르고, 자리는 사장이 정한다. */
+      #neworder { position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
+        z-index: 10000; display: flex; align-items: stretch; max-width: 92vw;
+        background: var(--panel); border: 2px solid var(--danger); border-radius: 12px;
+        box-shadow: 0 10px 30px rgba(0,0,0,.28); overflow: hidden; }
+      #neworder[hidden] { display: none; }
+      #no-go { display: flex; align-items: center; gap: 11px; background: none; border: 0;
+        border-radius: 0; color: var(--text); padding: 12px 16px; font-size: 17px;
+        text-align: left; min-height: 0; }
+      #no-go:hover:not(:disabled) { background: color-mix(in srgb, var(--danger) 10%, transparent);
+        border-color: transparent; }
+      #no-go svg { width: 25px; height: 25px; flex: none; color: var(--danger); }
+      #no-go .no-sub { display: block; font-size: 13.5px; color: var(--muted); font-weight: 400; }
+      #neworder .no-side { display: flex; flex-direction: column;
+        border-left: 1px solid var(--line); }
+      #neworder .no-side button { background: none; border: 0; border-radius: 0;
+        color: var(--muted); font-size: 13px; padding: 6px 12px; min-height: 0; flex: 1; }
+      #neworder .no-side button:hover:not(:disabled) { color: var(--text);
+        background: color-mix(in srgb, var(--danger) 8%, transparent); border-color: transparent; }
+      #neworder .no-side button + button { border-top: 1px solid var(--line); }
+      /* 천천히 숨쉬듯 한 번. 깜빡이는 것은 40~70대 눈에 피로하고,
+         「놀라지 않게」와도 어긋난다. 움직임은 눈길을 끄는 데까지만 쓴다. */
+      @keyframes noglow {
+        50% { box-shadow: 0 10px 30px rgba(0,0,0,.28),
+                          0 0 0 7px color-mix(in srgb, var(--danger) 16%, transparent); } }
+      #neworder:not([hidden]) { animation: noglow 1.9s ease-in-out infinite; }
+      @media (prefers-reduced-motion: reduce) { #neworder { animation: none; } }
+
+      /* `.form label.check` 만 있어서 폼 밖에서는 안 먹었다. 설정의 스위치는
+         카드 안에 있지 폼 안이 아니다. 남의 화면을 건드리지 않게 카드에 묶는다. */
+      #snd-card label.check { display: flex; align-items: center; gap: 9px;
+        font-size: 15px; color: var(--text); cursor: pointer; margin: 10px 0 0; }
+      #snd-card label.check input { width: 18px; height: 18px; flex: none; }
+      #snd-card .row { display: flex; gap: 10px; align-items: center;
+        flex-wrap: wrap; margin-top: 10px; }
+
       .navfoot { margin-top: auto; padding: 8px 16px 0; border-top: 1px solid var(--line); }
       /* 7px 은 곁눈으로 안 보인다. 카운터에서 이걸 들여다보고 있을 사람은 없다. */
       .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%;
@@ -133,6 +196,33 @@
       .bubacts button { min-height: 30px; padding: 0 10px; font-size: 12px;
         border-radius: 8px; border: 1px solid var(--line); background: var(--bg);
         color: var(--muted); cursor: pointer; }
+
+      /* 안 보기 — 숨긴 글이 있을 때 목록 맨 위에 적는 줄.
+         🔴 조용히 지우면 「어제 글이 없어졌다」가 된다. 몇 개인지 적고
+            되돌리는 길을 그 줄에 같이 둔다. */
+      .hidnote { align-self: stretch; margin: 0 0 8px; padding: 9px 12px;
+        border: 1px dashed var(--line); border-radius: 10px;
+        font-size: 14px; color: var(--muted); }
+      .hidnote button { min-height: 32px; padding: 0 12px; margin-left: 4px;
+        font-size: 14px; border-radius: 8px; border: 1px solid var(--line);
+        background: var(--bg); color: var(--text); cursor: pointer; }
+
+      /* 안 보기 명단. ⚠️ 40~70대가 되돌리는 자리다 — 44px·15px 을 지킨다.
+         말풍선 옆 작은 단추(30px·12px) 문법을 여기서는 따르지 않는다. */
+      .mutebox { padding: 14px; border-bottom: 1px solid var(--line);
+        background: var(--side); }
+      .mutewhy { margin: 0 0 6px; font-size: 15px; line-height: 1.65; color: var(--text); }
+      .mutewhy2 { margin: 0 0 10px; font-size: 14px; line-height: 1.6; color: var(--muted); }
+      .muteback { margin: 0 0 8px; font-size: 15px; color: var(--ok); }
+      .mutenone { margin: 0; font-size: 15px; color: var(--muted); }
+      .muterow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+        padding: 8px 0; border-top: 1px solid var(--line); }
+      .mutewho { flex: 1; min-width: 120px; font-size: 15px; font-weight: 600; }
+      .mutewhen { font-size: 13px; color: var(--muted); }
+      .muterow button, .muterow2 button { min-height: 44px; padding: 0 16px;
+        font-size: 15px; border-radius: 10px; border: 1px solid var(--line);
+        background: var(--bg); color: var(--text); cursor: pointer; }
+      .muterow2 { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
 
       .composer { display: flex; gap: 8px; align-items: flex-end;
         padding: 10px 14px; border-top: 1px solid var(--line); background: var(--side); }
@@ -1481,7 +1571,10 @@
       <a data-page="wallet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2.5"/><path d="M3 10.5h18"/><circle cx="17" cy="14.5" r="1.4"/></svg><span>지갑</span></a>
       <a data-page="assets"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg><span>자산</span></a>
       <a data-page="reward"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="9" r="5.5"/><path d="M8.5 13.5L7 21l5-2.5L17 21l-1.5-7.5"/></svg><span>나눠주기</span></a>
-      <a data-page="shop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9l1.6-4.2h12.8L20 9"/><path d="M4.5 9h15v10.5h-15z"/><path d="M9.5 19.5v-6h5v6"/></svg><span>내 가게</span></a>
+      <a data-page="shop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9l1.6-4.2h12.8L20 9"/><path d="M4.5 9h15v10.5h-15z"/><path d="M9.5 19.5v-6h5v6"/></svg><span>내 가게</span><!--
+        🔴 주문은 「내 가게 → 들어온 주문」 안쪽에 있다. 지갑 화면에 있는
+           사장에게 두 칸 안쪽 소식을 전할 자리가 여기밖에 없다. -->
+        <span class="ordbadge" id="nav-orderbadge" hidden aria-label="안 본 새 주문">0</span></a>
       <a data-page="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M8 20.5h8M12 16.5v4"/></svg><span>이 컴퓨터</span></a>
       <div class="navfoot">
         <!-- 🔴 늘 보인다. 신고는 **뭔가 안 될 때** 하는 것이라, 그때 찾아
@@ -1729,9 +1822,32 @@
               <span style="margin-left:auto"></span>
               <!-- 🔴 방을 만들어도 남을 부를 길이 없었다. 그러면 혼자 쓰는 방이다. -->
               <span id="tk-invite"></span>
+              <!-- 🔴 「내보내기」가 아니라 「안 보기」다. 이름부터 정직해야
+                   사장이 눌러 놓고 처리됐다고 믿지 않는다. -->
+              <button class="ghost" id="tk-muted">안 보기 명단</button>
               <button class="ghost" id="tk-name">내 이름</button>
               <button class="ghost" id="tk-reload">새로고침</button>
             </div>
+
+            <!-- 안 보기 명단. 🔴 이 칸의 첫 줄이 이 기능의 전부다 —
+                 무엇이 되고 무엇이 안 되는지를 여기서 못 박는다. -->
+            <div id="tk-mutebox" class="mutebox" hidden>
+              <p class="mutewhy">
+                <b>내 화면에서만 숨깁니다. 그 사람은 계속 쓸 수 있습니다.</b>
+                이 방은 세계에 흩어진 릴레이 수십 곳에 동시에 있어서,
+                방을 만든 사람에게도 남의 글을 지우거나 막을 권한이 없습니다.
+                <b>내보내기는 없습니다</b> — 있는 척하면 그게 거짓말입니다.
+              </p>
+              <p class="mutewhy2">
+                명단은 이 컴퓨터에만 있습니다. 다른 기기에서는 다시 보입니다.
+              </p>
+              <div id="tk-mutelist"></div>
+              <div class="muterow2">
+                <button class="ghost" id="tk-muteall">모두 다시 보기</button>
+                <button class="ghost" id="tk-muteclose">닫기</button>
+              </div>
+            </div>
+
             <div class="msgs" id="tk-list"></div>
             <div class="composer">
               <textarea id="tk-text" rows="1"
@@ -2159,7 +2275,7 @@
           <div id="km-body"><p class="meta">읽는 중…</p></div>
         </details>
         <div class="tabs">
-          <button class="tab on" data-shoptab="orders">들어온 주문</button>
+          <button class="tab on" data-shoptab="orders">들어온 주문<span class="ordbadge" id="or-badge" hidden>0</span></button>
           <button class="tab" data-shoptab="menu">메뉴판</button>
           <!-- 🔴 손님 QR 은 **장사의 전부**인데 「이 컴퓨터」 안쪽에 있었다.
                매일 쓰는 것은 매일 여는 화면에 있어야 한다. -->
@@ -2579,6 +2695,35 @@
             <button class="ghost" id="mode-shop">장사에 쓰기</button>
           </div>
           <p class="meta" id="mode-say" style="margin-top:10px"></p>
+        </div>
+
+        <!-- ── 주문 알림 소리 ──────────────────────────────────────────
+             🔴 **끌 수 있어야 한다.** 이 프로그램은 밤새 켜 두는 컴퓨터에서도
+                돈다(자동 발송·백업·재색인). 아무도 없는 사무실에서 새벽 3시에
+                「딩동」이 울리는 것은 알림이 아니라 민원이다.
+
+             기본은 켜짐이다. 장사하는 사람에게 소리 없는 주문은 놓친 주문이고,
+             「알림이 있는 줄도 몰랐다」가 「시끄러워서 껐다」보다 훨씬 나쁘다.
+             끄는 사람은 한 번 찾아 끄면 되지만, 있는 줄 모르는 사람은 영영
+             모른다.                                                    ── -->
+        <div class="card" id="snd-card">
+          <b>새 주문 소리</b>
+          <p class="meta">
+            손님 주문이 들어오거나 <b>입금이 확인되면</b> 소리로 알려 드립니다.
+            창을 안 보고 계실 때는 한 번 더 울립니다.
+          </p>
+          <label class="check">
+            <input type="checkbox" id="snd-on" checked />
+            <span>주문·입금이 들어오면 소리로 알리기</span>
+          </label>
+          <div class="row">
+            <button class="ghost" id="snd-test">소리 들어보기</button>
+            <span class="meta" id="snd-say" style="margin:0"></span>
+          </div>
+          <p class="meta">
+            밤새 켜 두는 컴퓨터라면 꺼 두세요. 꺼도 <b>주문은 그대로 들어옵니다</b> —
+            소리와 빨간 숫자만 안 나옵니다.
+          </p>
         </div>
 
         <div class="card" id="wd-card">
@@ -3251,6 +3396,34 @@
           단어를 꺼내는 동안 이 컴퓨터에 임시 파일이 잠깐 생겼다가 지워집니다.
           SSD에서는 지운 흔적이 완전히 사라지지 않을 수 있습니다.
         </p>
+      </div>
+    </div>
+
+    <!-- ── 새 주문이 들어왔다 ────────────────────────────────────────────
+         소리로 먼저 부르고, 눈이 화면으로 오면 **여기에 답이 있어야** 한다.
+         소리만 나고 화면이 그대로면 사장은 「방금 뭐였지」 하고 온 화면을
+         뒤진다 — 그건 알림이 아니라 수수께끼다.
+
+         누르면 주문표로 데려간다. 사장이 볼 때까지 안 사라진다 — 3초 뒤
+         꺼지는 안내는 손님을 응대하고 돌아온 사람에게는 없던 것과 같다.
+
+         「소리 끄기」가 여기 붙어 있는 이유: 소리가 거슬리는 순간은 바로
+         지금이고, 그때 설정 화면을 찾아 헤매게 하면 아무도 못 끈다.     ── -->
+    <div id="neworder" hidden role="status">
+      <button type="button" id="no-go">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M18 8.5a6 6 0 1 0-12 0c0 6-2 7.5-2 7.5h16s-2-1.5-2-7.5z"/>
+          <path d="M10.5 19.5a1.8 1.8 0 0 0 3 0"/>
+        </svg>
+        <span>
+          <b id="no-title">새 주문</b>
+          <span class="no-sub" id="no-sub">눌러서 주문표 보기</span>
+        </span>
+      </button>
+      <div class="no-side">
+        <button type="button" id="no-mute">소리 끄기</button>
+        <button type="button" id="no-x">닫기</button>
       </div>
     </div>
 

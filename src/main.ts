@@ -3676,6 +3676,11 @@ function showPage(id: string) {
   if (id === "talk") {
     void talkPaintMe();
     void talkPaintRooms();
+    // 명단은 닫힌 채로 두되 **머리줄 단추에 인원수는 적는다** — 열어 보기
+    // 전에는 내가 누굴 숨겼는지 알 길이 없으면 그것도 숨긴 셈이다.
+    // 「되돌렸습니다」는 지난 판의 말이므로 들어올 때 지운다.
+    tkJustBack = [];
+    talkPaintMuted();
     void talkPaint();
   }
 }
@@ -4050,6 +4055,165 @@ let tkMine = "";
 /** 공개키 → 이름표. 없는 사람은 여기 없다 — **없는 이름을 지어내지 않는다.** */
 const tkNames = new Map<string, any>();
 
+/* ── 안 보기 (차단) ──────────────────────────────────────────────────
+ *
+ * ## 🔴 「내보내기」는 만들지 않았다 — 만들 수 없어서다
+ *
+ * 대표님: "채팅방에 이상한 사람 내보내기 기능이나 차단 기능,
+ *          차단해제 기능도 있어야 하지 않나?"
+ *
+ * 텔레그램은 방을 텔레그램이 갖고 있어서 방장이 사람을 내보낼 수 있다.
+ * 여기는 다르다. 이 방은 **세계에 흩어진 릴레이 수십 곳**에 동시에 있고,
+ * 아무나 아무 릴레이에나 글을 올린다. 방을 만든 사람에게도 남의 글을
+ * 지우거나 막을 권한이 **없다** — 그런 권한을 둘 자리가 없다.
+ *
+ * 그러니 「내보내기」 단추를 다는 것은 **거짓말**이다. 눌러도 그 사람은
+ * 계속 쓴다. 사장은 처리했다고 믿고 있다가 다음 글을 보고 「고장났다」고
+ * 한다. 없는 힘을 있는 척하는 것이 가장 나쁘다.
+ *
+ * ## 할 수 있는 것 — 내 화면에서 안 보기
+ *
+ * 숨기는 것은 **이 컴퓨터 안에서만** 일어난다. 그래서 화면에 그렇게 적는다.
+ *
+ * ## 어디에 저장하나 — `localStorage`
+ *
+ * 이 프로그램은 「이 컴퓨터에서 내가 정한 것」을 전부 `localStorage` 에 둔다
+ * (말 고르기·업데이트 미루기·내 타일). 안 보기도 같은 성격이다 —
+ * 돈도 열쇠도 아니고, 없어져도 글이 다시 보일 뿐 잃는 것이 없다.
+ * 러스트 파일로 옮기면 백업·복구·권한을 다 따라 만들어야 하는데
+ * 그만한 값이 아니다.
+ *
+ * ## ⚠️ Nostr 표준(NIP-51 kind 10000)에 자리는 있는데 못 올린다
+ *
+ * 올리려면 **이 사람의 열쇠로 서명**해야 하는데, 이야기 열쇠는 러스트의
+ * `talkkey.json` 안에만 있고 화면으로 내려오지 않는다(일부러 그렇다).
+ * 서명해 주는 명령이 생기면 그때 다른 앱과 명단을 나눌 수 있다.
+ * 지금은 **이 컴퓨터에서만** 듣는다 — 화면에도 그렇게 적었다.
+ */
+const TK_MUTE_KEY = "playx-raven-talk-mute";
+
+/** 숨긴 사람. 값에 이름을 같이 둔다 — 숨긴 뒤에는 릴레이에서 이름표를
+ *  다시 안 읽으므로, 안 적어 두면 명단이 16진수만 늘어선 표가 된다. */
+type TkMute = { at: number; name: string };
+let tkMuted: Record<string, TkMute> = {};
+
+/** 방금 되돌린 사람. 「눌렀는데 뭐가 바뀌었지?」를 없애려고 한 판만 기억한다. */
+let tkJustBack: string[] = [];
+
+function tkMuteLoad() {
+  try {
+    const v = JSON.parse(localStorage.getItem(TK_MUTE_KEY) || "{}");
+    // 깨진 값이 들어 있어도 이야기 화면은 열려야 한다.
+    if (v && typeof v === "object" && !Array.isArray(v)) tkMuted = v as Record<string, TkMute>;
+  } catch {
+    tkMuted = {};
+  }
+}
+tkMuteLoad();
+
+function tkMuteSave() {
+  try {
+    localStorage.setItem(TK_MUTE_KEY, JSON.stringify(tkMuted));
+  } catch {
+    // 저장을 못 해도 이번 판은 숨겨진다. 다음에 켜면 되돌아올 뿐이다.
+  }
+}
+
+/** 명단에 보일 이름. 숨길 때 적어 둔 이름 → 지금 아는 이름 → 앞자리. */
+function tkMuteName(pk: string): string {
+  const saved = tkMuted[pk]?.name || tkNames.get(pk)?.name || "";
+  return saved ? String(saved) : `${pk.slice(0, 10)}…`;
+}
+
+/**
+ * 이 사람 글을 내 화면에서 숨긴다.
+ *
+ * 🔴 묻는 창에서 **무슨 일이 일어나는지 그대로 적는다.** 「차단하시겠습니까」
+ *    만 적으면 사장은 내보내는 줄 안다.
+ */
+async function talkMute(pk: string) {
+  if (!pk || pk === tkMine) return;
+  const ok = await sure(
+    `${tkMuteName(pk)} ${t("님 안 보기")}`,
+    t("내 화면에서만 숨깁니다. 그 사람은 계속 쓸 수 있고, 다른 사람에게는 그대로 보입니다. 내보내는 것이 아닙니다. 언제든 되돌릴 수 있습니다."),
+    t("안 보기")
+  );
+  if (!ok) return;
+  tkMuted[pk] = { at: Date.now(), name: String(tkNames.get(pk)?.name || "") };
+  tkJustBack = tkJustBack.filter((p) => p !== pk);
+  tkMuteSave();
+  talkPaintMuted();
+  void talkPaint();
+}
+
+/** 되돌리기. 지운 자리에 「되돌렸습니다」를 남긴다 — 조용히 사라지면 불안하다. */
+function talkUnmute(pk: string) {
+  if (!tkMuted[pk]) return;
+  const name = tkMuteName(pk);
+  delete tkMuted[pk];
+  tkMuteSave();
+  if (!tkJustBack.includes(name)) tkJustBack.push(name);
+  talkPaintMuted();
+  void talkPaint();
+}
+
+/** 안 보기 명단을 열고 닫는다. 열 때만 다시 그린다. */
+function talkToggleMuted() {
+  const box = $("tk-mutebox");
+  box.hidden = !box.hidden;
+  if (!box.hidden) talkPaintMuted();
+}
+
+function talkOpenMuted() {
+  $("tk-mutebox").hidden = false;
+  talkPaintMuted();
+}
+
+/**
+ * 안 보기 명단.
+ *
+ * ⚠️ 40~70대 화면이다. 단추는 44px, 글자는 15px 이상 — 여기서만은
+ *    말풍선 옆의 작은 단추 문법을 따르지 않는다. 되돌리는 자리는
+ *    실수 없이 눌려야 한다.
+ */
+function talkPaintMuted() {
+  const list = $("tk-mutelist");
+  const btn = document.getElementById("tk-muted");
+  const keys = Object.keys(tkMuted).sort((a, b) => (tkMuted[b]?.at || 0) - (tkMuted[a]?.at || 0));
+
+  // 머리줄 단추에 몇 명인지 적는다. 안 적으면 명단을 열기 전까지
+  // 내가 누굴 숨겼는지 알 길이 없다.
+  if (btn) btn.textContent = keys.length ? `${t("안 보기")} ${keys.length}` : t("안 보기 명단");
+
+  const back = tkJustBack.length
+    ? `<p class="muteback">${t("다시 보기로 되돌렸습니다")} — ${escapeHtml(tkJustBack.join(", "))}</p>`
+    : "";
+
+  if (!keys.length) {
+    list.innerHTML =
+      back +
+      `<p class="mutenone">${t("안 보기로 한 사람이 없습니다.")}</p>`;
+    return;
+  }
+
+  list.innerHTML =
+    back +
+    keys
+      .map((pk) => {
+        const when = new Date(tkMuted[pk]?.at || 0).toLocaleDateString();
+        return `<div class="muterow">
+            <span class="mutewho" title="${escapeHtml(pk)}">${escapeHtml(tkMuteName(pk))}</span>
+            <span class="mutewhen">${escapeHtml(when)}</span>
+            <button data-unmute="${escapeHtml(pk)}">${t("다시 보기")}</button>
+          </div>`;
+      })
+      .join("");
+
+  list.querySelectorAll("[data-unmute]").forEach((b) => {
+    (b as HTMLElement).onclick = () => talkUnmute(String((b as HTMLElement).dataset.unmute));
+  });
+}
+
 /** 16진수 64자 대신 보여 줄 것. 이름이 있으면 이름, 없으면 앞자리. */
 function tkWho(pk: string): string {
   const p = tkNames.get(pk);
@@ -4189,9 +4353,18 @@ async function talkPaint() {
     await tkLoadNames(list.map((e) => String(e.pubkey || "")));
     // 🔴 오래된 것이 위, 새것이 아래 — 대화창은 그 방향이다. 읽어 온 것은
     //    최신순이라 뒤집는다. 안 뒤집으면 인사가 맨 아래에 있다.
-    const asc = [...list].reverse();
+    const all = [...list].reverse();
+    // 안 보기 한 사람의 글을 뺀다. 🔴 **거른 것을 말없이 없애지 않는다** —
+    //    윗줄에 몇 개를 숨겼는지 적고, 거기서 바로 명단을 열 수 있게 한다.
+    //    그래야 "어제 있던 글이 없어졌다" 가 고장으로 읽히지 않는다.
+    const asc = all.filter((e) => !tkMuted[String(e.pubkey || "")]);
+    const hid = all.length - asc.length;
+    const hidNote = hid
+      ? `<div class="hidnote">${t("안 보기 한 분의 글")} ${hid}${t("개를 숨겼습니다")} ·
+           <button data-openmute="1">${t("명단 보기")}</button></div>`
+      : "";
     let prev = "";
-    box.innerHTML = asc
+    box.innerHTML = hidNote + asc
       .map((e) => {
         const who = String(e.pubkey || "");
         const mine = who === tkMine;
@@ -4205,8 +4378,11 @@ async function talkPaint() {
           `<div class="bub${mine ? " me" : ""}" data-say="${id}">${escapeHtml(String(e.content || ""))}</div>
            <div class="bubacts${mine ? " r" : ""}">
              <button data-tr="${id}">${t("내 말로")}</button>
-             <button data-keep="${id}">${t("간직")}</button>
-             <span class="meta" data-note="${id}"></span>
+             <button data-keep="${id}">${t("간직")}</button>` +
+          // 내 글에는 안 붙인다. 나를 안 보기로 할 이유가 없고,
+          // 눌렀다가 내 글이 사라지면 그것부터 고장으로 읽힌다.
+          (mine ? "" : `<button data-mute="${escapeHtml(who)}">${t("안 보기")}</button>`) +
+          `<span class="meta" data-note="${id}"></span>
            </div>
            <div class="when"${mine ? ' style="text-align:right"' : ""}>${escapeHtml(when)}</div>`
         );
@@ -4219,6 +4395,13 @@ async function talkPaint() {
     });
     box.querySelectorAll("[data-keep]").forEach((b) => {
       (b as HTMLElement).onclick = () => void talkKeep(String((b as HTMLElement).dataset.keep), list);
+    });
+    box.querySelectorAll("[data-mute]").forEach((b) => {
+      (b as HTMLElement).onclick = () => void talkMute(String((b as HTMLElement).dataset.mute));
+    });
+    // 숨겼다는 윗줄에서 바로 명단으로. 되돌리는 길이 한 번에 보여야 한다.
+    box.querySelectorAll("[data-openmute]").forEach((b) => {
+      (b as HTMLElement).onclick = () => talkOpenMuted();
     });
   } catch (e) {
     box.innerHTML = `<p class="meta danger">${escapeHtml(errText(e))}</p>`;
@@ -11877,6 +12060,22 @@ window.addEventListener("DOMContentLoaded", async () => {
     });
   }
   $("tk-name").addEventListener("click", () => void talkSetName());
+  // 안 보기. 🔴 러스트만 있고 여기가 비면 단추가 죽는다 — 이 앱이 여러 번
+  //    걸린 병이다. 명단·전체 되돌리기·닫기 세 줄을 반드시 같이 묶는다.
+  $("tk-muted").addEventListener("click", () => talkToggleMuted());
+  $("tk-muteclose").addEventListener("click", () => {
+    $("tk-mutebox").hidden = true;
+    tkJustBack = [];
+  });
+  $("tk-muteall").addEventListener("click", () => {
+    void (async () => {
+      const n = Object.keys(tkMuted).length;
+      if (!n) return;
+      // 되돌리는 쪽이라 잃는 것은 없지만, 몇 명인지는 알고 눌러야 한다.
+      if (!(await sure(t("모두 다시 보기"), `${n}${t("명의 글이 다시 보입니다.")}`, t("다시 보기")))) return;
+      for (const pk of Object.keys(tkMuted)) talkUnmute(pk);
+    })();
+  });
   // 끌어다 놓기. 🔴 이 셋을 안 묶으면 창에 파일을 떨어뜨려도 아무 일도
   //    안 일어난다 — 만들어 놓고 안 부르는 그 병이다.
   void listen("drop-enter", () => dropVeil(true));
