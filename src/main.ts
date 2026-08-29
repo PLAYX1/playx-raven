@@ -9914,6 +9914,29 @@ async function loadSales() {
     warn.push(`${r.unreadable_rows}줄을 읽지 못했습니다. 장부 파일이 손상됐을 수 있습니다.`);
   if (pending) warn.push(`아직 입금되지 않은 주문 ${pending}건은 매출에 넣지 않았습니다.`);
 
+  // 🔴 대표님 화면: 「매출 0」인데 「들어온 주문」에는 결제된 주문이 있었다.
+  //    기본 범위가 **오늘 하루**라 5일 전 매출은 여기서 0 으로 보인다.
+  //
+  //    범위를 넓히지는 않는다 — 사장이 매일 보는 것은 「오늘 얼마 벌었나」다.
+  //    대신 **0 일 때 길을 알려준다.** 0 이 진짜 0 인지 못 찾은 것인지
+  //    화면만 보고 알 수 없으면, 사장은 장부가 고장 났다고 생각한다.
+  if (!(r.sales || 0) && from === to) {
+    try {
+      const wk = await invoke<any>("ledger_range", {
+        fromYmd: ymdInt(ymdStr(Date.now() - 30 * 86400_000)) || from,
+        toYmd: to,
+        tzOffsetMin: tzMin(),
+      });
+      if (wk?.sales) {
+        warn.push(
+          `오늘은 아직 판매가 없습니다. <b>지난 30일에는 ${wk.sales}건</b> 있습니다 — 위 「30일」을 눌러 보세요.`,
+        );
+      }
+    } catch {
+      /* 못 읽으면 조용히 넘어간다. 없는 말을 지어내지 않는다. */
+    }
+  }
+
   $("sl-sum").innerHTML = `
     <div class="row" style="gap:26px; margin-top:16px; flex-wrap:wrap">
       <div><div class="meta">받은 금액</div>
@@ -10920,6 +10943,18 @@ async function loadOrders() {
   // 주문 라벨이 붙은 입금만 골라 온다 — 4년 전 채굴 기록이 오늘 주문 자리에
   // 앉는 일도 이걸로 막힌다.
   try {
+    // 🔴 **받은 돈을 장부에 적는 일을 여기서도 한다.**
+    //
+    //    여태 장부에 줄을 쓰는 길은 「손님 폰이 물어볼 때」 하나뿐이었고,
+    //    그 판단에 쓰는 표는 **메모리에만** 있었다. 앱을 껐다 켜면 표가 비고,
+    //    체인에 돈이 들어와 있어도 장부에 닿지 못했다 — 손님은 이미 가서
+    //    다시 물어보지 않는다. 그래서 대표님 화면에서 「결제됨」인 주문이
+    //    「매출 0 · 입금 안 됨 1건」으로 동시에 보였다.
+    //
+    //    ⚠️ 실패해도 주문 목록은 그려야 한다. 정산이 안 됐다고 화면이
+    //       비면 사장은 주문이 사라진 줄 안다.
+    await invoke<any>("ledger_sweep", { minConf: 1 }).catch(() => null);
+
     const res = await invoke<any>("incoming_payments", { address: "", minConf: 1 });
     const list: any[] = res.payments || [];
     // 상태를 같이 읽어 온다. 주문이 어디까지 왔는지가 카운터의 전부다.

@@ -531,6 +531,72 @@ pub fn ledger_export(from_ymd: i64, to_ymd: i64, tz_offset_min: i64) -> Result<V
     }))
 }
 
+
+/// 🔴 **받은 돈이 장부에 안 써지고 있었다.**
+///
+/// 대표님 화면(2026-08-29): 「들어온 주문」에는 5일 전 0.01 RVN 이 **결제됨**인데
+/// 「매출·장부」는 전부 0 이고 「아직 입금되지 않은 주문 1건」이라고 적혀 있었다.
+/// 같은 앱이 같은 주문을 놓고 **두 가지로 말하고 있었다.**
+///
+/// ## 왜 그랬나
+///
+/// 장부에 줄을 쓰는 `settle()` 에 닿는 길이 **하나뿐**이었다:
+///
+/// ```text
+/// 손님 폰이 /api/order-state 를 물어봄
+///   → sweep_payments()
+///     → 메모리 맵에 그 주소가 WAITING 일 때만
+///       → settle()
+/// ```
+///
+/// 그 메모리 맵은 **디스크에 없다.** 앱을 껐다 켜면 비고, 그러면 체인에
+/// 돈이 들어와 있어도 장부에 닿는 길이 **끊긴다.** 손님은 이미 가서 폰으로
+/// 다시 물어보지도 않는다.
+///
+/// ## 그래서 사장 쪽에서도 정산한다
+///
+/// 「들어온 주문」을 볼 때마다 **아직 안 적힌 주문을 체인에 직접 물어보고**,
+/// 확인수가 찼으면 장부에 적는다. 손님 폰이 켜져 있든 말든 상관없다.
+///
+/// ⚠️ 두 번 적히면 매출이 부풀고 **그건 아무도 못 알아챈다.** `settle()` 은
+///    적기 전에 pending 에서 먼저 지우므로 두 번째 호출은 쓸 것을 못 찾는다.
+///    그 성질에 기댄다 — 여기서 따로 중복 검사를 하지 않는다.
+#[tauri::command]
+pub async fn ledger_sweep(min_conf: u32) -> Result<Value, String> {
+    let p = pending_load();
+    let addrs: Vec<String> = p
+        .as_object()
+        .map(|m| m.keys().cloned().collect())
+        .unwrap_or_default();
+
+    let mut 적음 = 0usize;
+    let mut 기다림 = 0usize;
+    for addr in addrs {
+        // 체인에 물어본다. 못 물어보면 **넘어간다** — 모르는 것을 결제로
+        // 치면 안 된다.
+        let Ok(v) = crate::shop::incoming_payments(addr.clone(), min_conf).await else {
+            기다림 += 1;
+            continue;
+        };
+        let rows = v.get("payments").and_then(Value::as_array).cloned().unwrap_or_default();
+        let done = rows.iter().find(|r| {
+            r.get("settled").and_then(Value::as_bool).unwrap_or(false)
+        });
+        match done {
+            Some(r) => {
+                let txid = r.get("txid").and_then(Value::as_str).unwrap_or("");
+                let at = r.get("at").and_then(Value::as_i64).unwrap_or_else(|| std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0));
+                let conf = r.get("confirmations").and_then(Value::as_i64).unwrap_or(0);
+                if settle(&addr, txid, at, conf).is_some() {
+                    적음 += 1;
+                }
+            }
+            None => 기다림 += 1,
+        }
+    }
+    Ok(json!({ "settled": 적음, "waiting": 기다림 }))
+}
+
 /// Orders taken but not paid. Shown so nobody wonders where an order went.
 #[tauri::command]
 pub fn ledger_pending() -> Value {

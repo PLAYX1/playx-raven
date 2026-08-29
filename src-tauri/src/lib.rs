@@ -256,6 +256,7 @@ pub fn run() {
             ledger::ledger_csv,
             ledger::ledger_export,
             ledger::ledger_pending,
+            ledger::ledger_sweep,
             refund::staff_refund_limits,
             refund::foreign_spends,
             refund::note_our_tx,
