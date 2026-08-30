@@ -358,6 +358,23 @@ function renderList() {
         자산을 눌러 <b>팔기</b>를 고르면 여기에 나옵니다.</div>`;
   }
 
+  /**
+   * 「이 이름의 주인」 딱지.
+   *
+   * 🔴 소유권 토큰(`PLAYX!`)은 목록에서 **일부러 숨긴다** — 같은 이름이 두
+   *    줄로 늘고 설명하는 게 없어서다(`raven.rs`). 그런데 숨기기만 하고
+   *    **가졌다는 사실을 어디에도 안 적었다.** 대표님: "코어지갑에 내
+   *    소유권 자산은 디자인이 다르게 나오는데 여기는 그냥 단순해서
+   *    소유권인지 판단이 안 서네." 숨긴 것은 다른 자리에서 말해야 한다.
+   *
+   * ⚠️ 뜻을 딱지 하나에 다 못 담는다. 그래서 **눌러 보면 알게** 한다 —
+   *    「주인」이 무엇을 할 수 있는 자리인지가 사람에겐 더 중요하다.
+   */
+  const ownMark = () =>
+    `<span class="ownmark" title="${t(
+      "이 이름의 주인입니다. 더 찍기·붙은 파일 바꾸기·가진 사람 전체에게 공지를 할 수 있습니다. 이 권한은 팔 수 없습니다.",
+    )}">${t("주인")}</span>`;
+
   // 트리. PLAYX / PLAYX/MUSIC / PLAYX#tag 는 한 집안이다.
   const groups = new Map<string, Asset[]>();
   for (const a of shown) {
@@ -383,8 +400,12 @@ function renderList() {
     //    이름 없는 줄은 사람에게 고장으로 읽힌다.
     const leaf = child ? a.name.slice(a.root.length).replace(/^[/#]/, "") : a.name;
     const label = leaf || `${a.name}<span class="selfmark">이 이름 자체</span>`;
+    // 🔴 **주인 표시.** 자식 줄에는 안 붙인다 — 집안 전체가 같은 값이라
+    //    스무 줄에 같은 딱지가 스무 개 뜬다. 그건 정보가 아니라 벽지다.
+    //    집안 머리글(아래)과 홑줄에만 붙는다.
+    const own = !child && a.mine ? ownMark() : "";
     return `<tr data-row="${a.name}" class="${selected === a.name ? "sel" : ""}${child ? " child" : ""}">
-      <td class="name">${child ? '<span class="branch"></span>' : ""}${label}</td>
+      <td class="name">${child ? '<span class="branch"></span>' : ""}${label}${own}</td>
       <td class="num">${fmtQty(a.amount)}</td>
       <td>${badge(a)}</td>
       <td class="act">${act}</td>
@@ -403,7 +424,9 @@ function renderList() {
       //    「PLAYX 자산이 여기 19개 있다는 건가?」라는 질문이 나왔다.
       //    개수는 이름 옆으로 옮기고, 단위도 「개」가 아니라 「종류」라고 쓴다.
       const head = `<tr class="grp" data-grp="${root}">
-        <td class="name"><span class="tri ${open ? "open" : ""}"></span>${root}<span class="cnt">${list.length}종류</span></td>
+        <td class="name"><span class="tri ${open ? "open" : ""}"></span>${root}<span class="cnt">${list.length}종류</span>${
+          list.some((a) => a.mine) ? ownMark() : ""
+        }</td>
         <td class="num"></td>
         <td colspan="2"></td>
       </tr>`;
