@@ -9,6 +9,24 @@
     <meta http-equiv="Content-Security-Policy"
           content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline';
                    img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'" />
+    <!-- 🔴 **안드로이드에서 「앱으로 설치」가 아예 안 떴다**(실측 감사 2026-08-30).
+         이 화면에 설치 상자(`#pwa-box`)는 있는데, 크롬이 설치를 권하려면
+         **manifest 와 서비스워커가 이 화면에 걸려 있어야** 한다. 둘 다
+         `index.html`·`guide.html` 에만 있었다. 그래서 크롬은 신호를 안 쐈고,
+         상자는 영영 빈 채로 지워졌다 — 아이폰 쓰는 분만 안내를 봤다.
+
+         ⚠️ CSP 가 `default-src 'none'` 이라 `manifest-src`·`worker-src` 를
+            **따로 적어야 한다.** 안 적으면 `default-src` 로 떨어져 조용히 막힌다.
+            (오늘만 「조용히 안 도는 것」을 여섯 번 만났다.) -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#e7731f" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="PLAY X Raven" />
+    <!-- 🔴 신고 단추가 소개·안내 화면에만 있었다. **정작 고장이 나는 곳**
+         (지갑·장터)에는 없었다. 데스크톱 앱은 어느 화면에서든 있다. -->
+    <script src="/report.js" defer></script>
     <title>내 지갑</title>
     <style>
       /* 손님 화면. 가게 와이파이만 잡힌 폰에서, 70대도 쓴다.
@@ -197,6 +215,11 @@
       /* 값과 통화를 한 줄로. 기본 select 는 폰에서 작고 줄이 어긋난다. */
       .priceline { display: flex; gap: 8px; }
       .priceline input { flex: 1; min-width: 0; }
+      /* 🔴 **버튼이 줄을 통째로 먹었다**(대표님 화면 2026-08-30).
+         전역 규칙이 `button { width: 100% }` 다. 옆으로 세우는 줄에서
+         그걸 안 풀면 버튼이 100% 를 요구하고 옆 칸이 찌그러진다 —
+         「동네」 줄에서 입력칸이 실처럼 눌렸다. */
+      .priceline button { flex: none; width: auto; margin-bottom: 0; }
       select {
         min-height: 52px; padding: 0 14px; border-radius: 12px;
         border: 1px solid var(--line); background: var(--bg); color: var(--fg);
@@ -242,20 +265,55 @@
       .tabbar a {
         flex: 1; min-height: 56px; display: flex; flex-direction: column;
         align-items: center; justify-content: center; gap: 2px;
-        text-decoration: none; color: var(--muted); font-size: 12.5px;
+        text-decoration: none; color: var(--muted); font-size: 15px;
         -webkit-tap-highlight-color: transparent;
       }
-      .tabbar a.on { color: var(--ravi); font-weight: 600; }
-      .tabbar a svg { width: 22px; height: 22px; }
+      /* 🔴 **색만으로 말하지 않는다.** 색약이면 지금 어디인지 못 본다.
+         밑줄을 같이 둔다 — 색과 모양 둘 다 바뀌어야 표시다. */
+      .tabbar a.on { color: var(--ravi); font-weight: 600;
+                     box-shadow: inset 0 3px 0 var(--ravi); }
+      .tabbar a svg { width: 26px; height: 26px; }
       /* 바가 본문 끝을 가리지 않게. 고정 바는 늘 이 짝이 필요하다. */
       body { padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)); }
+
+      /* ── 🔴 12단어를 적는 중에는 **바를 치운다** ──────────────────────
+         (실측 감사 2026-08-30)
+
+         12단어는 아직 어디에도 저장돼 있지 않다. 화면의 자바스크립트 변수
+         안에만 있다가, 잠금 번호를 정하는 순간에야 기기에 적힌다.
+         그런데 화면 맨 아래에 56px 짜리 링크 넷이 그대로 살아 있었다.
+
+         **한 번만 잘못 누르면 페이지가 통째로 넘어가고, 그 지갑은 영영
+         못 연다.** 12단어는 그 지갑의 전부다.
+
+         같은 이유로 「앱으로 설치」 상자는 이미 이 화면에서 숨겨 두었는데,
+         정작 더 큰 것을 못 봤다. 적는 중·확인 중·되살리는 중·잠금 정하는
+         중에는 나가는 길을 안 둔다.
+
+         ⚠️ 아래 여백도 같이 없앤다. 안 그러면 바가 사라진 자리에 64px
+            짜리 빈 칸만 남아서 「뭔가 없어졌다」로 읽힌다. */
+      body[data-screen="words"]    .tabbar,
+      body[data-screen="quiz"]     .tabbar,
+      body[data-screen="restore"]  .tabbar,
+      body[data-screen="password"] .tabbar { display: none; }
+      body[data-screen="words"],
+      body[data-screen="quiz"],
+      body[data-screen="restore"],
+      body[data-screen="password"] {
+        /* ⚠️ `!important` 는 `tabs.js` 가 바를 키우면서 본문 여백을
+           `!important` 로 덮기 때문이다. 바를 치운 화면에 여백만
+           74px 남으면 「뭔가 없어졌다」로 읽힌다. */
+        padding-bottom: env(safe-area-inset-bottom, 0px) !important; }
       /* 내가 올린 것. 팔린 물건은 흐리게 — 목록에서 바로 구별돼야 한다. */
       .mineitem { padding: 14px 0; border-bottom: 1px solid var(--line); }
       .mineitem.done { opacity: .55; }
       .mineitem .mt { font-weight: 600; font-size: 16px; }
       .minebtns { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
       /* 🔴 44px 미만은 손가락으로 못 누른다. 40~70대가 쓰는 화면이다. */
-      .minebtns button { min-height: 44px; padding: 0 14px; font-size: 15px;
+      /* 🔴 전역 100% 를 안 풀면 `flex-wrap` 때문에 단추가 **한 줄씩** 쌓인다.
+         고치기·팔렸어요·지우기가 세로로 늘어서서 목록이 길어졌다. */
+      .minebtns button { flex: none; width: auto; margin-bottom: 0;
+                         min-height: 44px; padding: 0 14px; font-size: 15px;
         border-radius: 10px; border: 1px solid var(--line);
         background: var(--panel); color: var(--fg); }
       .minebtns button.danger { color: #b3261e; border-color: #f0c8c4; }
@@ -270,7 +328,10 @@
       .aset .nm { font-weight: 600; font-size: 16px; word-break: break-all; }
       .aset .qt { font-size: 14px; color: var(--muted); margin-top: 2px; }
       /* 🔴 44px 미만은 손가락으로 못 누른다. */
-      .aset .open { margin-left: auto; min-height: 44px; padding: 0 14px;
+      /* 🔴 `flex: none` 만 있고 `width: auto` 가 없으면 전역 100% 가
+         **안 줄어드는 기준 너비**가 되어 좁은 폰에서 가로로 넘친다. */
+      .aset .open { flex: none; width: auto; margin-bottom: 0;
+                    margin-left: auto; min-height: 44px; padding: 0 14px;
         border-radius: 10px; border: 1px solid var(--line);
         background: var(--bg); color: var(--fg); font-size: 15px; flex: none; }
       .asethead { margin: 18px 0 4px; font-size: 15px; font-weight: 600; }
@@ -291,19 +352,81 @@
       .roomrow .tag { margin-left: auto; padding: 2px 8px; border-radius: 999px;
                       font-size: 12px; background: rgba(255,107,53,.16); color: var(--ravi); }
       .roomhead { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-      .ghostbtn { padding: 8px 12px; min-height: 44px; border: 1px solid var(--line);
+      .roomhead b { flex: 1; min-width: 0; overflow: hidden;
+                    text-overflow: ellipsis; white-space: nowrap; }
+      /* 🔴 같은 이유로 「← 방 목록」이 줄을 다 먹고 방 이름이 두 줄로
+         접혔다. 이 단추는 옆으로 세우는 자리에만 쓰므로 여기서 푼다. */
+      .ghostbtn { flex: none; width: auto; margin-bottom: 0;
+                  padding: 8px 12px; min-height: 44px; border: 1px solid var(--line);
                   border-radius: 10px; background: transparent; color: inherit; cursor: pointer; }
-      #s-rooms .msgs { max-height: 52vh; overflow-y: auto; padding: 8px;
-                       border: 1px solid var(--line); border-radius: 12px; }
-      #s-rooms .msg { margin-bottom: 12px; }
-      #s-rooms .msg .who { font-size: 13px; color: var(--muted); }
-      #s-rooms .msg .what { font-size: 16px; white-space: pre-wrap; word-break: break-word; }
-      #s-rooms .msg.me .what { color: var(--ravi); }
+      /* ── 대화 ─────────────────────────────────────────────────────
+         🔴 대표님(2026-08-30): "모바일 채팅 화면이 왤케 구리냐.
+            카카오톡이나 텔레그램처럼 되야 하는거 아니야?"
+
+         맞다. 여태는 **회색 상자 안에 글만 쌓았다** — 그건 게시판이지
+         대화가 아니다. 내 말과 남의 말이 구분이 안 되고, 말풍선도 없고,
+         시각도 없었다. 데스크톱 앱에는 진작 있는데 여기만 없었다.
+
+         카톡·텔레그램이 하는 것은 셋이다:
+           ① 내 말은 **오른쪽 색 풍선**, 남의 말은 **왼쪽 흰 풍선**
+           ② 같은 사람이 이어 쓰면 이름을 **한 번만**
+           ③ 시각은 풍선 **옆에** 작게 — 글마다 줄을 하나 더 쓰지 않는다 */
+      /* 🔴 대화가 화면을 다 써야 대화 화면이다. 46vh 로 잘라 두면
+         아래가 텅 비고 「덜 만든 화면」으로 읽힌다. 방에 들어가 있을
+         때는 남는 높이를 대화가 전부 가져간다. */
+      #s-rooms .msgs { flex: 1; min-height: 200px; overflow-y: auto;
+                       padding: 10px; display: flex; flex-direction: column;
+                       gap: 3px; background: var(--panel);
+                       border: 1px solid var(--line); border-radius: 14px; }
+      /* 누가 말했는지. 사람이 바뀔 때만 나온다. */
+      .rwho { font-size: 13px; font-weight: 600; color: var(--muted);
+              margin: 10px 0 3px 4px; }
+      /* 풍선 한 줄 = 풍선 + 시각. 시각이 아래가 아니라 **옆**에 선다. */
+      .rline { display: flex; align-items: flex-end; gap: 6px;
+               max-width: 84%; align-self: flex-start; }
+      /* 🔴 `row-reverse` 만으로는 부족하다 — 풍선이 화면 밖으로 넘쳤다.
+         `justify-content` 로 오른쪽에 붙이고, 풍선이 줄어들 수 있게
+         `min-width: 0` 을 준다(flex 항목 기본은 안 줄어든다). */
+      .rline.me { align-self: flex-end; flex-direction: row-reverse;
+                  justify-content: flex-start; }
+      .rbub { min-width: 0; flex: 0 1 auto; padding: 9px 13px; font-size: 15.5px; line-height: 1.6;
+              white-space: pre-wrap; word-break: break-word;
+              background: var(--bg); border: 1px solid var(--line);
+              border-radius: 16px 16px 16px 5px; }
+      /* 내 말. 색이 채워져야 한눈에 갈린다 — 글자색만 바꾸면 못 알아본다. */
+      .rbub.me { background: var(--accent); color: var(--on-fill);
+                 border-color: transparent; border-radius: 16px 16px 5px 16px; }
+      /* 곁눈으로 스치는 글자라 크기 대신 **대비**를 준다. */
+      .rtime { flex: none; font-size: 12.5px; color: var(--muted);
+               padding-bottom: 3px; white-space: nowrap; }
+      /* 🔴 **방에 들어가면 화면의 주인공은 대화다.**
+         제목과 안내문이 위에 그대로 남아 있으면 대화가 화면 아래
+         절반으로 밀린다 — 카톡은 방에 들어가면 목록 화면 글이 사라진다. */
+      body[data-inroom="1"] #s-rooms > h1,
+      body[data-inroom="1"] #rm-intro { display: none; }
+      /* 방 안에서는 화면을 위아래로 꽉 쓴다 — 대화가 늘어나고
+         입력줄은 늘 맨 아래에 붙는다(카톡·텔레그램이 그렇다). */
+      body[data-inroom="1"] #s-rooms {
+        display: flex; flex-direction: column;
+        height: calc(100vh - 64px - env(safe-area-inset-bottom, 0px));
+        padding-bottom: 10px; }
+      body[data-inroom="1"] #rm-pane { display: flex !important;
+        flex-direction: column; flex: 1; min-height: 0; }
       #s-rooms .composer { display: flex; gap: 8px; margin-top: 10px; }
-      #s-rooms .composer textarea { flex: 1; font-size: 16px; padding: 10px;
+      /* 전역 `textarea{min-height:128px}` 를 여기서 덮는다. 한 줄 쓰는
+         자리에 128px 짜리 칸이 서 있으면 화면 절반을 먹는다. */
+      #s-rooms .composer textarea { flex: 1; min-width: 0; min-height: 48px;
+                                    max-height: 120px; font-size: 16px; padding: 10px;
                                     border: 1px solid var(--line); border-radius: 10px;
                                     background: var(--bg); color: inherit; resize: vertical; }
-      #s-rooms .composer button { min-height: 48px; padding: 0 20px; font-size: 16px; }
+      /* 🔴 **버튼이 줄을 통째로 먹었다**(대표님 화면 2026-08-30).
+         전역 규칙이 `button { width: 100% }` 라, 옆으로 세우는 줄에서
+         그걸 안 풀면 버튼이 100% 를 요구하고 **입력칸이 세 글자 폭으로
+         찌그러진다.** 이야기에 글을 쓸 수가 없었다.
+         `flex: none; width: auto` 로 풀어 준다. */
+      #s-rooms .composer button { flex: none; width: auto; margin-bottom: 0;
+                                  align-self: stretch; min-height: 48px;
+                                  padding: 0 18px; font-size: 16px; }
       .pwabox { padding: 0 16px 12px; }
       .pwabox button {
         width: 100%;
@@ -343,7 +466,7 @@
       <!-- 카톡·텔레그램에 링크를 붙였을 때 뜨는 카드.
          ⚠️ 매장 노드는 자기 주소(192.168.x)라 바깥에서 그림을 못 가져온다.
             그래서 그림은 **웹 주소**를 가리킨다 — 가게 안이든 밖이든 뜬다. -->
-    <link rel="icon" href="/raven-head.webp" />
+    <link rel="icon" href="/raven-face.webp" />
     <meta property="og:type" content="website" />
     <meta property="og:title" content="PLAY X Raven 지갑" />
     <meta property="og:description" content="브라우저에서 바로 열리는 레이븐코인 지갑." />
@@ -355,7 +478,7 @@
   <body data-screen="loading">
     <!-- 번들이 늦어도 화면이 비어 보이지 않게. -->
     <section id="s-loading">
-      <img class="mascot" src="/raven-head.webp" alt="" width="180" />
+      <img class="mascot" src="/raven-face.webp" alt="" width="180" />
       <p class="sub">지갑을 여는 중…</p>
     </section>
 
@@ -535,6 +658,10 @@
           이 지갑은 받고 보내는 일만 합니다.</span>
         </div>
         <div class="note">쓰시던 지갑인데 잔액이 안 보이시나요? 옛 주소가 뒤쪽에 있을 수 있습니다.</div>
+        <!-- 🔴 이 단추가 없으면 **지갑 전체가 안 열린다.** 코드가 켤 때
+             `btn-deep.onclick` 을 널 검사 없이 붙이기 때문이다. 2026-08-30 에
+             이 줄을 실수로 지웠고, 화면이 「지갑을 여는 중…」에서 굳었다.
+             칸 하나가 없어서 앱이 통째로 죽는 자리다 — 지우지 말 것. -->
         <button id="btn-deep">뒤쪽 주소까지 찾아보기</button>
       </div>
 
@@ -733,9 +860,16 @@
          여태 방 대화는 데스크톱 앱에만 있었다. 사람은 폰으로 답한다. -->
     <section id="s-rooms">
       <h1>이야기</h1>
-      <p class="sub">레이븐코인 쓰는 사람들의 방입니다. 회사 서버가 아니라
-        세계 여러 릴레이로 오갑니다. <b>비밀 이야기는 쓰지 마세요.</b><br />
-        ⚠️ 이름은 누구나 같게 달 수 있습니다 — 돈 이야기는 이름만 보고 믿지 마세요.</p>
+      <!-- 🔴 **경고문이 화면 1/4 을 먹고 있었다**(대표님 2026-08-30).
+           카톡을 열면 맨 위에 안내문 넉 줄이 없다. 방 이름과 대화뿐이다.
+
+           사실이 아니어서 지운 게 아니라, **매번 보이면 안 읽어서** 접는다.
+           안 읽히는 경고는 아무것도 안 지킨다. 방 목록에서 한 번 말하고,
+           방 **안에서는 치운다** — 위험한 순간(돈·주소 얘기)에 그 글 옆에
+           붙는 표시가 진짜 방어다(데스크톱 앱이 그렇게 한다). -->
+      <p class="sub" id="rm-intro">레이븐코인 쓰는 사람들의 방입니다.
+        회사 서버가 아니라 세계 여러 릴레이로 오갑니다.
+        <b>비밀 이야기는 쓰지 마세요.</b></p>
       <div id="rm-list"></div>
 
       <div id="rm-pane" style="display:none">
@@ -745,7 +879,7 @@
         </div>
         <div class="msgs" id="rm-msgs"></div>
         <div class="composer">
-          <textarea id="rm-text" rows="2" placeholder="여기에 쓰면 세계 릴레이로 함께 나갑니다 — 다만 각자 누구를 숨길 수 있어 모두가 본다는 보장은 없습니다"></textarea>
+          <textarea id="rm-text" rows="1" placeholder="메시지"></textarea>
           <button id="rm-send">보내기</button>
         </div>
         <p class="sub" id="rm-say"></p>
@@ -784,6 +918,17 @@
       // 손님 폰이 정한 말로 화면을 바꾼다. 없는 문장은 한국어
       // 그대로 둔다 — 빈 자리보다 낫다.
       window.translateDom && translateDom(document.body);
+    </script>
+    <script>
+      // 🔴 안드로이드가 「앱으로 설치」를 권하려면 **서비스워커가 이 화면에
+      //    걸려 있어야** 한다. 없어서 설치 단추가 영영 안 그려졌다.
+      //    `sw.js` 는 일부러 아무것도 캐시하지 않는다 — 지갑 코드를 캐시하면
+      //    보안 수정이 안 먹는다. 설치를 가능하게 하는 것이 이것의 일이다.
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+          navigator.serviceWorker.register('/sw.js').catch(function () {});
+        });
+      }
     </script>
 </body>
 </html>

@@ -861,8 +861,20 @@ async function openRoom(id: string, name: string): Promise<void> {
   roomName = name;
   $("rm-title").textContent = name;
   $("rm-pane").style.display = "";
+  // 🔴 방에 들어가면 제목·안내문을 치운다. 규칙만 CSS 에 두고 이 줄을
+  //    안 쓰면 **아무 일도 안 일어난다** — 이 저장소의 고질병이다.
+  document.body.setAttribute("data-inroom", "1");
   $("rm-list").style.display = "none";
   await loadRoomMsgs();
+}
+
+/** 「오후 3:12」. 대화에서 날짜는 잡음이라 시각만 적는다. */
+function tkClock(ms: number): string {
+  try {
+    return new Date(ms).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  } catch {
+    return "";
+  }
 }
 
 async function loadRoomMsgs(): Promise<void> {
@@ -872,12 +884,24 @@ async function loadRoomMsgs(): Promise<void> {
   const me = nostrSecret() ? nip17.pubOf(nostrSecret()) : "";
   const lines = evs
     .sort((a, b) => Number(a.created_at || 0) - Number(b.created_at || 0))
-    .map((e) => {
+    .map((e, i, asc) => {
       const mine = String(e.pubkey || "") === me;
-      return `<div class="msg ${mine ? "me" : ""}">
-          <div class="who">${mine ? "나" : escapeHtml(String(e.pubkey || "").slice(0, 8))}</div>
-          <div class="what">${escapeHtml(String(e.content || "").slice(0, 800))}</div>
-        </div>`;
+      const who = String(e.pubkey || "");
+      // 🔴 **이건 채팅 화면이어야 한다**(대표님 2026-08-30: "왤케 구리냐").
+      //    회색 상자 안에 글만 쌓으면 게시판이다. 카톡·텔레그램이 하는
+      //    세 가지를 한다: 내 말은 오른쪽 색 풍선 · 남의 말은 왼쪽 흰 풍선 ·
+      //    같은 사람이 이어 쓰면 이름을 한 번만.
+      const 이어짐 = i > 0 && String(asc[i - 1].pubkey || "") === who;
+      const 시각 = tkClock(Number(e.created_at || 0) * 1000);
+      return (
+        (mine || 이어짐
+          ? ""
+          : `<div class="rwho">${escapeHtml(who.slice(0, 8))}</div>`) +
+        `<div class="rline${mine ? " me" : ""}">
+           <div class="rbub${mine ? " me" : ""}">${escapeHtml(String(e.content || "").slice(0, 800))}</div>
+           <time class="rtime">${escapeHtml(시각)}</time>
+         </div>`
+      );
     });
   box.innerHTML = lines.length
     ? lines.join("")
@@ -2773,6 +2797,7 @@ function boot(): void {
   });
   document.getElementById("rm-back")?.addEventListener("click", () => {
     $("rm-pane").style.display = "none";
+    document.body.removeAttribute("data-inroom");
     $("rm-list").style.display = "";
   });
   document.getElementById("rm-send")?.addEventListener("click", () => void sendRoomMsg());
