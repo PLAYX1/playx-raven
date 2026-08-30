@@ -755,6 +755,126 @@ async function askRelay(filter: unknown): Promise<any[]> {
 
 /** 방 목록. */
 
+/* ── 사람 이름표 ──────────────────────────────────────────────────────
+ *
+ * 🔴 **프로필을 만들어 놓고 서로 못 보고 있었다.**
+ *
+ *    대표님(2026-08-30): "모든 사람이 서로 프로필을 서로 보면서 사용하면".
+ *
+ *    앱(가게 컴퓨터)은 `talk_profiles` 로 이름과 얼굴을 가져와 그린다.
+ *    폰은 **공개키 앞 8글자**만 그렸다 — `3f2a91c4…` 는 사람 이름이 아니다.
+ *    올리는 기능은 이미 있는데 볼 데가 없으니 아무도 안 올린다.
+ *
+ * ## 없는 이름을 지어내지 않는다
+ *
+ * 이름이 없는 사람은 **여전히 앞 8글자**다. 빈자리를 「손님」 같은 말로
+ * 채우면 서로 다른 사람이 같은 이름이 되고, 그건 사칭을 우리가 돕는
+ * 것이다. 앱도 같은 규칙이다(`talk.rs`: "없는 이름을 지어내지 않는다").
+ *
+ * ## 한 번 물어본 것은 다시 안 묻는다
+ *
+ * 다시 그릴 때마다 릴레이에 또 물으면, 글 하나 올릴 때마다 방에 있는
+ * 사람 수만큼 왕복이 생긴다. 예전에 번역이 그 병으로 하루 열두 배를
+ * 썼다. **그리는 것과 묻는 것을 가른다** — 그리는 쪽은 이 지도만 본다.
+ */
+const KIND_PROFILE = 0;
+
+/**
+ * 릴레이가 한 번에 받는 글쓴이 수.
+ *
+ * 🔴 `nostrpub.rs` 의 `nostr_query` 가 `.take(10)` 으로 자른다. 릴레이가
+ *    우리를 차단하지 않게 하려는 것이고, **더 보내면 나머지는 조용히
+ *    사라진다.** 그래서 여기서 나눠 묻는다.
+ */
+const 이름표_한번에 = 10;
+
+/** 공개키 → {이름, 얼굴}. 못 찾은 사람도 빈 값으로 넣는다 — 다시 안 묻는다. */
+const 이름표: Map<string, { name: string; picture: string }> = new Map();
+
+/** 얼굴 주소. `https` 만 받는다 — 남이 정하는 값이다. */
+function 안전한얼굴(u: string): string {
+  return /^https:\/\/[^\s"'<>]+$/i.test(u) ? u : "";
+}
+
+/** 아직 안 물어본 사람만 릴레이에 묻는다. 화면을 막지 않는다. */
+async function 이름표받기(pubkeys: string[]): Promise<void> {
+  const 처음 = [...new Set(pubkeys)].filter(
+    (p) => /^[0-9a-f]{64}$/i.test(p) && !이름표.has(p),
+  );
+  if (!처음.length) return;
+  for (let i = 0; i < 처음.length; i += 이름표_한번에) {
+    const 묶음 = 처음.slice(i, i + 이름표_한번에);
+    // 🔴 **묻기 전에 자리를 잡아 둔다.** 못 찾은 사람을 비워 두면 화면을
+    //    그릴 때마다 같은 질문이 다시 나간다.
+    for (const p of 묶음) 이름표.set(p, { name: "", picture: "" });
+    const evs = await askRelay({ kinds: [KIND_PROFILE], authors: 묶음 });
+    for (const e of evs) {
+      const pk = String(e?.pubkey || "");
+      if (!pk) continue;
+      let body: any;
+      try {
+        body = JSON.parse(String(e?.content || ""));
+      } catch {
+        continue;
+      }
+      const name = String(body?.name || "").trim().slice(0, 40);
+      const pic = 안전한얼굴(String(body?.picture || "").trim());
+      if (!name && !pic) continue;
+      이름표.set(pk, { name, picture: pic });
+    }
+  }
+}
+
+/** 화면에 쓸 이름. 없으면 앞 8글자 — 지어내지 않는다. */
+function 부를이름(pub: string): string {
+  return 이름표.get(pub)?.name || pub.slice(0, 8);
+}
+
+/** 이름표 한 칸의 속. 얼굴이 있으면 얼굴, 없으면 이름만. */
+function 이름표속(pub: string): string {
+  const 얼굴 = 이름표.get(pub)?.picture || "";
+  return (
+    (얼굴
+      ? `<img class="rface" src="${escapeHtml(얼굴)}" alt="" loading="lazy" />`
+      : "") + escapeHtml(부를이름(pub))
+  );
+}
+
+/**
+ * 이름표 칸에 붙일 덧클래스.
+ *
+ * 🔴 **16진수와 사람 이름은 같은 색이면 안 된다.** `3f2a91c4` 는 읽으라고
+ *    있는 글자가 아니라 이름이 없을 때의 자리라서 흐린 색이 맞다. 그러나
+ *    「플레이엑스」는 이 화면에서 **가장 먼저 읽어야 하는 정보**다. 흐리게
+ *    두면 손님 눈에는 회색 덩어리 하나가 더 늘 뿐이다(40~70대 저대비 금지).
+ */
+function 이름표클래스(pub: string): string {
+  return 이름표.get(pub)?.name ? " named" : "";
+}
+
+/**
+ * 이미 그려 놓은 화면의 이름표를 채운다.
+ *
+ * 🔴 **그리기 전에 물어보지 않는다.** 이름을 먼저 받으려면 릴레이 왕복이
+ *    하나 더 붙고, 그동안 글이 안 뜬다. 장사하는 사람에게 그 한 번이
+ *    크다 — **글은 늦으면 안 되고, 이름은 늦어도 된다.**
+ *    그래서 8글자로 먼저 그리고, 이름이 오면 그 자리만 바꿔 넣는다.
+ *    통째로 다시 그리지 않으므로 보던 자리도 안 튄다.
+ */
+async function 이름표채우기(box: HTMLElement): Promise<void> {
+  const 칸 = [...box.querySelectorAll<HTMLElement>("[data-who]")];
+  if (!칸.length) return;
+  await 이름표받기(칸.map((el) => String(el.dataset.who || "")));
+  for (const el of 칸) {
+    const pub = String(el.dataset.who || "");
+    const 찾음 = 이름표.get(pub);
+    if (!찾음?.name && !찾음?.picture) continue;
+    el.innerHTML = 이름표속(pub);
+    // 16진수일 때만 고정폭이다. 이름이 들어오면 벗는다(`.tw.named`).
+    if (찾음.name) el.classList.add("named");
+  }
+}
+
 /* ── 팬에게 알리기 ────────────────────────────────────────────────────
  *
  * 🔴 앱(가게 컴퓨터)에만 있던 것을 폰에도 둔다.
@@ -1056,7 +1176,7 @@ async function loadRoomMsgs(): Promise<void> {
       return (
         (mine || 이어짐
           ? ""
-          : `<div class="rwho">${escapeHtml(who.slice(0, 8))}</div>`) +
+          : `<div class="rwho${이름표클래스(who)}" data-who="${escapeHtml(who)}">${이름표속(who)}</div>`) +
         `<div class="rline${mine ? " me" : ""}">
            <div class="rbub${mine ? " me" : ""}">${escapeHtml(글)}${
              사진
@@ -1072,6 +1192,9 @@ async function loadRoomMsgs(): Promise<void> {
     ? lines.join("")
     : `<p class="sub">아직 오간 이야기가 없습니다. 첫 글을 쓰실 수 있습니다.</p>`;
   box.scrollTop = box.scrollHeight;
+  // 이름표는 글을 띄운 뒤에 채운다(위 `이름표채우기` 의 이유). 실패해도
+  // 화면은 그대로 산다 — 그때는 8글자가 남는다.
+  void 이름표채우기(box);
   // 🔴 다시 그릴 때마다 **새로 묶는다.** 목록은 통째로 갈아끼워지므로
   //    한 번만 묶으면 그다음부터 단추가 죽는다.
   box.querySelectorAll<HTMLElement>("[data-rdel]").forEach((b) => {
@@ -1344,8 +1467,10 @@ function renderTalks(): void {
   box.innerHTML = list
     .map((t) => {
       const last = t.lines[t.lines.length - 1];
+      // 이름표는 방과 같은 자리를 쓴다 — `data-who` 가 붙어 있으면
+      // `이름표채우기` 가 그 칸을 이름과 얼굴로 갈아 넣는다.
       return `<div class="talk" data-pub="${escapeHtml(t.pub)}">
-        <div class="tw">${escapeHtml(t.pub.slice(0, 8))}…</div>
+        <div class="tw${이름표클래스(t.pub)}" data-who="${escapeHtml(t.pub)}">${이름표속(t.pub)}</div>
         <div class="tl">${escapeHtml((last?.text || "").slice(0, 40))}</div>
         <div class="tt">${new Date(t.last * 1000).toLocaleDateString()}</div>
       </div>`;
@@ -1354,6 +1479,7 @@ function renderTalks(): void {
   box.querySelectorAll<HTMLElement>(".talk").forEach((el) => {
     el.onclick = () => openTalk(el.dataset.pub!);
   });
+  void 이름표채우기(box);
 }
 
 /** 한 사람과의 대화를 연다. */
