@@ -617,8 +617,25 @@ jobs:
               pub_date: new Date().toISOString(),
               platforms,
             };
+            // 🔴 **비어 있으면 여기서 멈춘다.**
+            //
+            //    이 표가 비면 모든 사장에게 「새 판 없음」(204)이 나간다.
+            //    실제로 그렇게 **열 판 넘게** 아무도 판올림을 못 받았고,
+            //    아무 오류도 안 났기 때문에 몇 주 동안 몰랐다.
+            //
+            //    여태 이 자리는 「없음」이라고 **적기만** 했다. 적어 두는 것은
+            //    막는 것이 아니다 — 아무도 그 줄을 안 읽는다. 올라가기 전에
+            //    끊어야 한다. 빈 표를 올리는 것보다 릴리스가 실패하는 편이
+            //    훨씬 낫다: 실패는 보이고, 빈 표는 안 보인다.
+            const got=Object.keys(platforms);
+            console.log('latest.json 에 담긴 기계:', got.join(', ') || '없음');
+            if (!got.length) {
+              console.error('🔴 판올림 표가 비었습니다. 이대로 올리면 모든 사장이 새 판을 못 받습니다.');
+              console.error('   서명(.sig)이 안 만들어졌을 수 있습니다 — tauri.conf.json 의');
+              console.error('   bundle.createUpdaterArtifacts 가 true 인지 보세요.');
+              process.exit(1);
+            }
             fs.writeFileSync('latest.json', JSON.stringify(out,null,2));
-            console.log('latest.json 에 담긴 기계:', Object.keys(platforms).join(', ') || '없음');
           " "$V"
           cat > README.md <<EOF
           # PLAY X Raven $V
