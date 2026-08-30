@@ -288,6 +288,39 @@ const ts = read("src/main.ts");
   } else ok("라벨이 가리키는 칸 전부 존재");
 }
 
+// ⑨ 태그가 일찍 닫혀 속성이 글자로 새어 나온 것.
+//
+// 🔴 실제로 냈다. 설명을 붙이는 스크립트가 `<button id="near"` 뒤에 `>` 를
+//    하나 끼워 넣었고, 태그가 거기서 닫히는 바람에 원래 있던
+//    `style="flex:1;…"` 이 **화면에 글자로 그대로 나왔다.**
+//
+//        <button id="near"> style="flex:1;padding:12px;…">   ← 깨진 것
+//
+//    브라우저는 오류를 안 낸다. 그냥 글자로 그린다. 그리고 그 단추는
+//    생김새를 잃는다. **배포된 실화면을 찍고 나서야** 봤다 — 그 전 스크린샷
+//    에서는 매번 접힌 아래에 있었다.
+{
+  const 파일들 = [
+    ["index.html", html],
+    ...readdirSync(join(ROOT, "web"))
+      .filter((f) => f.endsWith(".html"))
+      .map((f) => [`web/${f}`, read(`web/${f}`)]),
+  ];
+  const 나쁜것 = [];
+  for (const [이름, 글] of 파일들) {
+    for (const m of 글.matchAll(/<[a-zA-Z]+[^<>]*>\s*[a-zA-Z-]+="/g)) {
+      const 줄 = 글.slice(0, m.index).split("\n").length;
+      나쁜것.push(`${이름}:${줄}  ${m[0].slice(0, 60)}`);
+    }
+  }
+  if (나쁜것.length) {
+    fail(`태그가 일찍 닫힌 곳 ${나쁜것.length}개`, [
+      ...나쁜것,
+      "닫는 > 뒤에 속성이 또 있습니다. 브라우저는 그것을 글자로 그립니다.",
+    ]);
+  } else ok("태그가 일찍 닫힌 곳 없음");
+}
+
 console.log("");
 if (bad) {
   console.log(`검사 실패 — ${bad}가지를 고쳐야 합니다.`);
