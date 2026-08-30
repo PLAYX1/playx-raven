@@ -13642,6 +13642,14 @@ let 소리상자: AudioContext | null = null;
 /// ⚠️ 브라우저·웹뷰는 **사람이 한 번 누르기 전에는 소리를 못 내게** 막는다.
 ///    그래서 첫 손짓에 미리 만들어 둔다(아래 `소리깨우기`). 그걸 안 하면
 ///    첫 주문이 소리 없이 지나가고, 사장은 「역시 안 되네」로 판단한다.
+/** 지금 소리를 낼 수 있는 상태인가. 화면이 **말할 수 있게** 내준다. */
+function 소리상태(): string {
+  const 만들기 = (window as any).AudioContext || (window as any).webkitAudioContext;
+  if (!만들기) return "이 컴퓨터는 소리를 못 냅니다";
+  if (!소리상자) return "아직 준비 전입니다 — 화면을 한 번 누르면 켜집니다";
+  return 소리상자.state === "running" ? "" : "잠겨 있습니다 — 화면을 한 번 누르면 켜집니다";
+}
+
 function 소리준비(): AudioContext | null {
   try {
     if (!소리상자) {
@@ -13685,6 +13693,23 @@ function 한음(ctx: AudioContext, 시작: number, 높이: number, 길이: numbe
 function 알림소리(번: number = 1) {
   const ctx = 소리준비();
   if (!ctx) return;
+  // 🔴 **잠긴 채로 예약하면 아무 소리도 안 난다.**
+  //
+  //    브라우저는 사람이 한 번 누르기 전에는 소리를 막는다. `소리준비` 가
+  //    `resume()` 을 부르지만 그건 **약속(Promise)** 이라 곧바로 풀리지
+  //    않는다. 그 사이에 음을 예약하면 `currentTime` 이 0 에 멈춰 있어서
+  //    **이미 지나간 시각에 예약**되고, 소리는 영영 안 난다.
+  //    오류도 안 난다 — 대표님: "소리가 다 안 나."
+  //
+  //    풀린 뒤에 다시 한 번 울린다. 이미 풀려 있으면 곧바로 간다.
+  if (ctx.state === "suspended") {
+    void ctx.resume().then(() => 음내기(ctx, 번)).catch(() => {});
+    return;
+  }
+  음내기(ctx, 번);
+}
+
+function 음내기(ctx: AudioContext, 번: number) {
   try {
     const 처음 = ctx.currentTime + 0.02;
     for (let i = 0; i < 번; i++) {
@@ -13908,9 +13933,14 @@ function 알림배선() {
   document.getElementById("snd-test")?.addEventListener("click", () => {
     알림소리(1);
     const say = document.getElementById("snd-say");
-    if (say)
-      say.textContent =
-        "「딩—동」 소리가 안 들리면 컴퓨터 볼륨과 스피커를 확인해 주세요.";
+    if (!say) return;
+    // 🔴 여태 「볼륨과 스피커를 확인하세요」라고만 했다. 그런데 진짜 원인은
+    //    대개 **브라우저가 소리를 잠가 둔 것**이다. 볼륨을 아무리 올려도
+    //    안 난다. 엉뚱한 데를 보게 만드는 안내는 없느니만 못하다.
+    const 막힘 = 소리상태();
+    say.textContent = 막힘
+      ? `소리가 ${막힘}.`
+      : "「딩—동」이 안 들리면 컴퓨터 볼륨과 스피커를 확인해 주세요.";
   });
 
   document.getElementById("no-go")?.addEventListener("click", () => {
@@ -13988,6 +14018,16 @@ function 대화알림켜짐(): boolean {
 function 말소리() {
   const ctx = 소리준비();
   if (!ctx) return;
+  // 🔴 주문 소리와 **같은 병**이다. 잠긴 채로 예약하면 이미 지나간 시각에
+  //    걸려 영영 안 난다. 풀린 뒤에 낸다.
+  if (ctx.state === "suspended") {
+    void ctx.resume().then(() => 말소리내기(ctx)).catch(() => {});
+    return;
+  }
+  말소리내기(ctx);
+}
+
+function 말소리내기(ctx: AudioContext) {
   try {
     // 392 = 낮은 솔. 주문의 659·880 보다 한참 아래라 곁눈으로도 갈린다.
     한음(ctx, ctx.currentTime + 0.02, 392.0, 0.34, 0.12);

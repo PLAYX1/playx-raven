@@ -2830,6 +2830,9 @@ pub async fn start_phone_server(
     // 🔴 밀린 개발비를 **사장이 안 눌러도** 스스로 보낸다. 지갑이 풀려 있는
     //    순간에만 나가고, 암호는 어디에도 안 적는다.
     crate::devfee::start_auto_pay();
+    // 🔴 파일 지키기도 같이 켠다. 이건 **지갑을 안 여는** 일이라 자동이
+    //    안전하다 — 오늘 가게 사진이 사라진 것의 처방이다.
+    crate::peers::start_auto_pin();
 
     let ip = local_ip().unwrap_or_else(|| "127.0.0.1".into());
     // QR 에 박히는 값을 기억해 둔다. 나중에 「바뀌었다」를 말하려면 필요하다.
