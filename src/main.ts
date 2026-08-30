@@ -5258,11 +5258,40 @@ async function talkTranslate(id: string, list: any[]) {
   }
 }
 
-/** 지우기 싫은 글을 파일창고에 굳힌다. 여기서부터가 우리만 하는 일이다. */
+/**
+ * 지우기 싫은 글을 파일창고에 굳힌다. 여기서부터가 우리만 하는 일이다.
+ *
+ * ## 🔴 남의 글이면 **먼저 여쭙는다**
+ *
+ * 이 단추는 조건 없이 **모든 글**에 붙는다. 옆의 「안 보기」는 남의 글에만,
+ * 「지우기 요청」은 내 글에만 붙는데 이것만 안 가렸다.
+ *
+ * 그런데 하는 일은 「간직」이라는 말보다 크다 — 그 글이 파일창고에 올라가고
+ * **릴레이가 지워도 남는다.** 주소를 아는 누구나 볼 수 있고,
+ * **쓴 사람은 이 일을 모른다.** 남의 말을 영구히 박제하는 일이다.
+ *
+ * ⚠️ **막지는 않는다.** 그 글은 이미 세계 릴레이에 공개돼 있고, 누구나
+ *    받아다 자기 창고에 넣을 수 있다. 단추를 없애면 우리 화면만 못 하게
+ *    되고 실제로는 아무것도 안 막힌다 — 지키는 척이 제일 나쁘다.
+ *
+ * 그래서 **막는 대신 말한다.** 무슨 일이 일어나는지 알고 누르게 한다.
+ * 「신뢰를 저해하는 행위는 용납하지 않는다」가 이 자리에서 뜻하는 것은
+ * 금지가 아니라 **모르고 하지 않게 하는 것**이다.
+ */
 async function talkKeep(id: string, list: any[]) {
   const note = document.querySelector(`[data-note="${id}"]`) as HTMLElement | null;
   const ev = list.find((e) => String(e.id) === id);
   if (!note || !ev) return;
+  // 내 글은 그냥 굳힌다. 내 말을 내가 보관하는 것은 물어볼 일이 아니다.
+  const 남의글 = String(ev.pubkey || "") !== tkMine;
+  if (남의글) {
+    const ok = await sure(
+      t("남이 쓴 글을 굳힐까요?"),
+      t("파일창고에 올라가서 릴레이가 지워도 남습니다. 주소를 아는 누구나 볼 수 있고, 쓰신 분은 이 일을 모릅니다."),
+      t("굳힙니다"),
+    );
+    if (!ok) return;
+  }
   note.textContent = t("굳히는 중…");
   try {
     const bytes = Array.from(new TextEncoder().encode(JSON.stringify(ev)));
