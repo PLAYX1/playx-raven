@@ -260,6 +260,28 @@ const ts = read("src/main.ts");
   } else ok("색 이름 전부 정의돼 있음");
 }
 
+// ⑩ 판 번호가 세 곳에서 어긋나지 않는가.
+//
+// 🔴 `Cargo.toml` 이 처음 만든 뒤로 **`0.1.0` 그대로**였다. `report.rs` 는
+//    그 값을 읽어 문제 신고에 「PLAY X Raven 0.1.0」을 적는다 — 사장님이
+//    신고를 보내도 **어느 판에서 난 일인지 알 수가 없었다.** 판을 올릴 때
+//    한 곳만 고치기 쉬우니, 어긋나면 여기서 멈춘다.
+{
+  const 읽기 = (f) => read(f);
+  const tauri = (읽기("src-tauri/tauri.conf.json").match(/"version":\s*"([^"]+)"/) || [])[1];
+  const cargo = (읽기("src-tauri/Cargo.toml").match(/^version\s*=\s*"([^"]+)"/m) || [])[1];
+  const pkg = (읽기("package.json").match(/"version":\s*"([^"]+)"/) || [])[1];
+  const 같나 = tauri && tauri === cargo && tauri === pkg;
+  if (!같나) {
+    fail("판 번호가 어긋납니다", [
+      `tauri.conf.json  ${tauri ?? "(못 읽음)"}`,
+      `Cargo.toml       ${cargo ?? "(못 읽음)"}`,
+      `package.json     ${pkg ?? "(못 읽음)"}`,
+      "Cargo.toml 값은 문제 신고에 실립니다. 어긋나면 어느 판인지 못 압니다.",
+    ]);
+  } else ok(`판 번호 세 곳 모두 ${tauri}`);
+}
+
 // ⑧ 없는 칸을 가리키는 라벨.
 //
 // 🔴 위 ① 은 **`index.html`(가게 컴퓨터 화면)만** 본다. 손님 폰 화면
