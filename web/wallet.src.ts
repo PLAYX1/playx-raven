@@ -911,6 +911,128 @@ function 열쇠색(pub: string): number {
   return h;
 }
 
+/* ── 내 이름표 ────────────────────────────────────────────────────────
+ *
+ * 🔴 **읽기만 만들고 쓰기를 안 만들면 아무 일도 안 난다.**
+ *
+ *    폰이 남의 이름과 얼굴을 그리게 됐는데, 폰에서 **자기 이름을 정할
+ *    길이 없었다.** 이름표를 만드는 화면은 가게 컴퓨터 앱에만 있다.
+ *    손님은 대부분 폰이다. 그러면 아무도 이름이 없고, 방금 만든 화면은
+ *    영원히 16진수만 그린다.
+ *
+ * ## 강요하지 않는다
+ *
+ * 이름을 비우면 앞 8글자로 남고 **그게 익명이다.** 비어 있어도 올릴 수
+ * 있게 둔다 — 「이름을 지웠다」도 사람이 할 수 있어야 하는 일이다.
+ *
+ * ## 얼굴은 이미 있는 길로 올린다
+ *
+ * 방에 사진 붙일 때 쓰는 `uploadPhoto()` 를 그대로 쓴다. 새 길을 내지
+ * 않는다 — 길이 둘이면 하나는 반드시 낡는다.
+ */
+
+/** 얼굴 주소. 사진을 올리면 여기에 담겼다가 이름표와 같이 나간다. */
+let 내얼굴 = "";
+
+/** 지금 올라가 있는 내 이름표를 릴레이에서 읽어 칸을 채운다. */
+async function 내이름표읽기(): Promise<void> {
+  let me = "";
+  try {
+    me = nostrPubHex();
+  } catch {
+    return say("me-say", "지갑을 먼저 열어 주세요.", "err");
+  }
+  // 내 것은 캐시를 믿지 않는다. 다른 기계에서 바꿨을 수 있다.
+  이름표.delete(me);
+  await 이름표받기([me]);
+  const 지금 = 이름표.get(me);
+  ($("me-name") as HTMLInputElement).value = 지금?.name || "";
+  내얼굴 = 지금?.picture || "";
+  내얼굴그리기();
+  // 소개(`about`)는 `이름표` 가 안 들고 있다 — 그리는 데 안 쓰기 때문이다.
+  // 여기서만 필요하니 여기서 따로 읽는다.
+  const evs = await askRelay({ kinds: [KIND_PROFILE], authors: [me] });
+  try {
+    const body = JSON.parse(String(evs[0]?.content || "{}"));
+    ($("me-about") as HTMLInputElement).value = String(body?.about || "");
+  } catch {
+    /* 없으면 비워 둔다. 지어내지 않는다. */
+  }
+}
+
+function 내얼굴그리기(): void {
+  const img = $("me-preview") as HTMLImageElement;
+  if (내얼굴) {
+    img.src = 내얼굴;
+    img.hidden = false;
+  } else {
+    img.removeAttribute("src");
+    img.hidden = true;
+  }
+}
+
+async function 내얼굴고르기(f: File): Promise<void> {
+  // 8MB 를 넘으면 올리다 만다. 고르는 자리에서 막는 것이 낫다(방 사진과 같은 값).
+  if (f.size > 8 * 1024 * 1024) {
+    return say("me-say", "사진이 너무 큽니다. 8MB 아래로 골라 주세요.", "err");
+  }
+  say("me-say", "사진 올리는 중…");
+  try {
+    내얼굴 = await uploadPhoto(f);
+    내얼굴그리기();
+    say("me-say", "사진을 올렸습니다. 아래 단추를 눌러야 이름표가 바뀝니다.", "ok");
+  } catch (e: any) {
+    say("me-say", String(e?.message || e), "err");
+  }
+}
+
+/** 이름표(kind 0)를 서명해 릴레이에 올린다. */
+async function 내이름표올리기(): Promise<void> {
+  let sec: Uint8Array;
+  try {
+    sec = nostrSecret();
+  } catch {
+    return say("me-say", "지갑을 먼저 열어 주세요.", "err");
+  }
+  const name = ($("me-name") as HTMLInputElement).value.trim().slice(0, 40);
+  const about = ($("me-about") as HTMLInputElement).value.trim().slice(0, 140);
+  const btn = $("me-save") as HTMLButtonElement;
+  btn.disabled = true;
+  const 옛글 = btn.textContent;
+  btn.textContent = "올리는 중…";
+  try {
+    // 앱(`talk.rs` 의 `talk_profile_set`)과 **같은 모양**이어야 한 사람으로 읽힌다.
+    const ev = signEvent(sec, {
+      kind: KIND_PROFILE,
+      created_at: Math.floor(Date.now() / 1000),
+      tags: [],
+      content: JSON.stringify({ name, about, picture: 내얼굴 }),
+    } as any);
+    const r = await fetch("/api/nostr/publish", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      // ⚠️ 이벤트를 **본문 그대로** 보낸다. `{event: …}` 로 싸면 400 이다
+      //    (한 번 그렇게 틀려서 대화가 통째로 안 갔다).
+      body: JSON.stringify(ev),
+    });
+    if (!r.ok) throw new Error(`릴레이가 ${r.status} 로 답했습니다`);
+    // 화면이 옛 이름을 계속 쓰지 않게 지도를 갱신한다.
+    이름표.set(nostrPubHex(), { name, picture: 내얼굴 });
+    say(
+      "me-say",
+      name
+        ? `이제 「${name}」 으로 보입니다.`
+        : "이름을 비웠습니다. 앞 8글자로 보입니다.",
+      "ok",
+    );
+  } catch (e: any) {
+    say("me-say", String(e?.message || e), "err");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 옛글;
+  }
+}
+
 /**
  * 이미 그려 놓은 화면의 이름표를 채운다.
  *
@@ -3248,6 +3370,19 @@ function boot(): void {
   // 🔴 배선. 화면만 만들고 이 줄을 안 쓰면 아무 일도 안 난다 —
   //    이 저장소가 오늘만 세 번 걸린 병이다.
   document.getElementById("fa-send")?.addEventListener("click", () => void 팬에게알리기());
+  // 내 이름표.
+  document.getElementById("me-save")?.addEventListener("click", () => void 내이름표올리기());
+  document.getElementById("me-pick")?.addEventListener("click", () => {
+    (document.getElementById("me-file") as HTMLInputElement | null)?.click();
+  });
+  document.getElementById("me-file")?.addEventListener("change", (ev) => {
+    const f = (ev.target as HTMLInputElement).files?.[0];
+    if (f) void 내얼굴고르기(f);
+  });
+  // 펼칠 때 지금 이름표를 읽어 온다. 늘 읽으면 안 여는 사람에게도 왕복이 든다.
+  document.getElementById("mebox")?.addEventListener("toggle", () => {
+    if ((document.getElementById("mebox") as HTMLDetailsElement).open) void 내이름표읽기();
+  });
   // 🔴 사진 단추 배선. 화면만 만들고 이 줄을 안 쓰면 **아무 일도 안 난다** —
   //    이 저장소가 오늘만 세 번 걸린 병이다.
   document.getElementById("rm-photo-go")?.addEventListener("click", () => {

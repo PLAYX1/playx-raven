@@ -105,6 +105,13 @@
         font: inherit; font-size: 17px; margin-bottom: 12px;
       }
       textarea { min-height: 128px; line-height: 1.7; resize: vertical; }
+      /* 🔴 **`hidden` 이 안 먹는 자리를 통째로 막는다.**
+         바로 위 `input, textarea { display: block }` 처럼 태그에 `display` 를
+         주면, 브라우저 기본값인 `[hidden]{display:none}` 을 **이겨 버린다.**
+         그래서 `<input hidden>` 이 화면에 그대로 보인다 — 실제로 얼굴 사진
+         칸에서 「사진 고르기」 옆에 「파일 선택」이 하나 더 떴다.
+         한 자리씩 막으면 다음에 또 밟는다. 여기서 한 번에 막는다. */
+      [hidden] { display: none !important; }
       label { display: block; font-size: 15px; color: var(--muted); margin-bottom: 4px; }
 
       .msg { font-size: 15px; margin: 0 0 12px; min-height: 22px; color: var(--muted); }
@@ -446,6 +453,20 @@
                           font-size: 15.5px; }
       .fanbox textarea { min-height: 80px; margin-top: 10px; }
       .fanbox button { margin-bottom: 4px; }
+      /* 내 이름표. 팬 상자와 같은 생김새를 쓴다 — 한 화면에 상자 문법은 하나. */
+      #mebox { margin: 4px 0 16px; padding: 12px 14px; border-radius: 14px;
+               background: var(--panel); border: 1px solid var(--line); }
+      #mebox > summary { cursor: pointer; min-height: 44px;
+                         display: flex; align-items: center; gap: 6px;
+                         font-size: 15.5px; }
+      /* 무엇을 적는 칸인지. 자리표시자만 두면 글자를 넣는 순간 사라진다 —
+         40~70대에게 그건 「내가 뭘 적었더라」가 된다. */
+      .fld { display: block; margin: 12px 0 4px; font-size: 14px;
+             font-weight: 600; color: var(--muted); }
+      .merow { display: flex; align-items: center; gap: 12px; }
+      .merow button { width: auto; margin: 0; padding: 0 16px; }
+      #me-preview { width: 56px; height: 56px; flex: none; border-radius: 50%;
+                    object-fit: cover; border: 1px solid var(--line); }
       .rdelrow { align-self: flex-end; margin: 2px 2px 6px; }
       .rdel { width: auto; min-height: 44px; margin: 0; padding: 0 12px;
               font-size: 13px; font-weight: 400; color: var(--muted);
@@ -463,7 +484,9 @@
                    margin-top: 8px; padding: 9px; border-radius: 12px;
                    background: var(--panel); border: 1px solid var(--line); }
       /* 🔴 `display` 를 준 자리는 UA 의 `[hidden]{display:none}` 을 이긴다.
-         이 파일에서 같은 덫을 이미 밟았다. */
+         이 파일에서 같은 덫을 이미 밟았다.
+         ⚠️ 이 줄은 아래 전역 규칙이 생긴 뒤로는 없어도 되지만, 남겨 둔다 —
+            지우려면 저 규칙이 정말 모든 자리를 덮는지 먼저 확인해야 한다. */
       .rphotobox[hidden] { display: none; }
       .rphotobox img { width: 64px; height: 64px; object-fit: cover; flex: none;
                        border-radius: 9px; border: 1px solid var(--line); }
@@ -968,6 +991,40 @@
         <b>비밀 이야기는 쓰지 마세요.</b><br />
         옛 글은 릴레이가 지울 수 있습니다 — <b>언제까지 남는지는 저희가
         정하지 못합니다.</b> 꼭 남겨야 할 것은 <b>따로 적어 두세요.</b></p>
+      <!-- ── 내 이름표 ──────────────────────────────────────────────
+           🔴 **읽기만 만들고 쓰기를 안 만들었다.**
+
+           방금 폰이 남의 이름과 얼굴을 그리게 됐다. 그런데 **폰에서 자기
+           이름을 정할 길이 없었다** — 이름표를 만드는 화면은 가게 컴퓨터
+           앱에만 있었다. 손님은 대부분 폰이다. 그러면 아무도 이름이 없고,
+           방금 만든 화면은 계속 16진수만 보여 준다.
+
+           ⚠️ **이름은 안 정해도 된다.** 비워 두면 앞 8글자로 남고 그게
+              익명이다. 접어 두는 것도 그래서다 — 대부분은 안 열어도 된다. -->
+      <details id="mebox">
+        <summary><b>내 이름표</b> — 남에게 보이는 이름</summary>
+        <label class="fld" for="me-name">이름</label>
+        <input id="me-name" maxlength="40" placeholder="비워 두면 익명입니다" />
+        <label class="fld" for="me-about">한 줄 소개</label>
+        <input id="me-about" maxlength="140" placeholder="없어도 됩니다" />
+        <!-- ⚠️ `for` 는 실제로 있는 칸을 가리켜야 한다. 없는 id 를 가리키면
+             라벨을 눌러도 **아무 일도 안 난다** — 어르신은 그걸 고장으로 읽는다. -->
+        <label class="fld" for="me-file">얼굴 사진</label>
+        <div class="merow">
+          <button id="me-pick" class="quiet">사진 고르기</button>
+          <img id="me-preview" alt="" hidden />
+        </div>
+        <input id="me-file" type="file" accept="image/*" hidden />
+        <button id="me-save" class="primary">이 이름으로 하기</button>
+        <!-- 정직하게. 우리가 못 지키는 것을 지킨다고 말하지 않는다. -->
+        <p class="sub">이름은 <b>누구나 같게 달 수 있습니다.</b> 그래서 이름
+          옆 색은 이름이 아니라 <b>열쇠</b>에서 나옵니다 — 흉내 낸 사람은
+          색이 다릅니다.<br />
+          이름표는 세계 릴레이에 올라갑니다. 릴레이가 지울 수 있지만
+          <b>12단어만 있으면 언제든 다시 올릴 수 있습니다.</b></p>
+        <div class="msg" id="me-say"></div>
+      </details>
+
       <!-- ── 팬에게 알리기 ──────────────────────────────────────────
            🔴 앱(가게 컴퓨터)에만 있던 것을 폰에도 둔다.
               음악을 냈으면 팬에게 알려야 하는데, **알릴 일은 밖에서

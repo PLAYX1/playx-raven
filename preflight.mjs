@@ -260,6 +260,34 @@ const ts = read("src/main.ts");
   } else ok("색 이름 전부 정의돼 있음");
 }
 
+// ⑧ 없는 칸을 가리키는 라벨.
+//
+// 🔴 위 ① 은 **`index.html`(가게 컴퓨터 화면)만** 본다. 손님 폰 화면
+//    (`web/*.html`)은 아무도 안 봤다 — 방금 거기에 `for="me-pic"` 이라고
+//    적었는데 그런 id 가 없었고, **검사 여덟 개가 전부 초록불이었다.**
+//
+//    `<label for="없는id">` 는 브라우저가 조용히 넘어간다. 라벨을 눌러도
+//    아무 일이 안 나고, 어르신은 그걸 「고장」으로 읽는다. 화면을 직접
+//    눌러 보기 전에는 안 드러난다.
+{
+  const 파일들 = readdirSync(join(ROOT, "web"))
+    .filter((f) => f.endsWith(".html"))
+    .map((f) => [`web/${f}`, read(`web/${f}`)]);
+  const 나쁜것 = [];
+  for (const [이름, 글] of 파일들) {
+    const 있는id = new Set([...글.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]));
+    for (const m of 글.matchAll(/<label[^>]*\bfor="([^"]+)"/g)) {
+      if (!있는id.has(m[1])) 나쁜것.push(`${이름}: for="${m[1]}"`);
+    }
+  }
+  if (나쁜것.length) {
+    fail(`가리키는 칸이 없는 라벨 ${나쁜것.length}개`, [
+      ...나쁜것,
+      "그 라벨은 눌러도 아무 일도 안 합니다. id 를 만들거나 for 를 고치세요.",
+    ]);
+  } else ok("라벨이 가리키는 칸 전부 존재");
+}
+
 console.log("");
 if (bad) {
   console.log(`검사 실패 — ${bad}가지를 고쳐야 합니다.`);
