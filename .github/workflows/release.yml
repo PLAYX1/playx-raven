@@ -606,9 +606,22 @@ jobs:
               if (!m || m[1]!==V) continue;
               const k=label[m[2]];
               if (!k || platforms[k]) continue;
+              // 🔴 **판 번호가 든 이름을 표에 쓰면 안 된다.**
+              //
+              //    `dist` 는 판을 낼 때마다 **강제로 덮어쓴다**(`push -f`).
+              //    그래서 그 가지에는 **최신 판 하나만** 남는다. 사장 앱이
+              //    0.1.90 주소를 받아 든 사이에 0.1.91 이 올라가면, 그 파일은
+              //    이미 지워졌고 「받기」를 누르는 순간 **404** 다.
+              //    2026-08-30 실측: 하루에 판을 여덟 번 내면서 계속 났다.
+              //    대표님 화면: `Download request failed with status: 404`.
+              //
+              //    같은 자리에 **`latest-` 라는 안 변하는 이름**을 이미 올리고
+              //    있었다. 표는 그 이름을 쓴다 — 언제 눌러도 그 자리에 파일이
+              //    있다. 판 번호는 `version` 이 이미 말한다.
+              const stable = base.replace('-'+V+'-', '-latest-');
               platforms[k]={
                 signature: fs.readFileSync(f,'utf8').trim(),
-                url: R+'/'+base,
+                url: R+'/'+(fs.existsSync(stable) ? stable : base),
               };
             }
             const out={
