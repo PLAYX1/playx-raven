@@ -399,6 +399,35 @@
 </style>
     <script src="/i18n.js"></script>
     <script src="/ravi.js"></script>
+    <!-- 「?」를 눌러 설명 보기. 나열하지 않고 **눌러서 물어본다**. -->
+    <script>
+      /* 「?」를 눌렀을 때 무엇을 설명할지. **속성이 아니라 표**로 둔다 —
+         탭 단추처럼 화면이 다시 그리는 자리는 속성이 통째로 날아간다
+         (실측: 파일에 여덟, 화면에 여섯). 표는 누를 때 맞춰 보므로 안 죽는다. */
+      /* 🔴 **좁은 것을 먼저 적는다.** 위에서부터 맞춰 보다가 처음 걸리는
+         것을 쓰므로, `a[href^="/wallet"]` 을 위에 두면 그 아래의
+         「내 물건 올리기」(`/wallet#sell`)까지 삼킨다 — 실제로 제목은
+         「내 물건 올리기」인데 설명은 지갑 것이 떴다. */
+      window.PLAYX_HELP = {
+        '#sellcta': ['내 물건을 팔려고 올립니다.',
+                  '가게를 만들지 않아도 됩니다. 사진과 값만 적으면 됩니다.'],
+        '#q': ['가게 이름을 적으면 그 이름이 든 가게만 남습니다.',
+               '지금 보이는 목록 안에서만 찾습니다. 인터넷을 다시 쓰지 않습니다.'],
+        '#near': ['지금 계신 곳에서 가까운 가게부터 보여 줍니다.',
+                  '위치는 이 폰 안에서만 씁니다. 어디에도 보내지 않습니다.'],
+        '[data-tab="shops"]': ['문을 연 가게들입니다.',
+                  '블록체인에서 그때그때 읽어 옵니다. 이 목록을 가진 회사는 없습니다.'],
+        '[data-tab="items"]': ['사람들이 내놓은 중고 물건입니다.',
+                  '가게가 아니라 개인이 올린 것입니다. 가게를 안 만들어도 올릴 수 있습니다.'],
+        'a[href^="/wallet#rooms"]': ['여럿이 함께 쓰는 방과, 둘만 보는 쪽지가 있습니다.',
+                  '회사 서버가 아니라 세계 여러 릴레이로 오갑니다. 비밀 이야기는 쓰지 마세요.'],
+        'a[href^="/shops#items"]': ['중고 물건을 보는 곳입니다.', ''],
+        'a[href^="/wallet"]': ['내 돈과 12단어가 있는 곳입니다.',
+                  '12단어는 이 지갑을 되살리는 하나뿐인 열쇠입니다. 누구에게도 보여주지 마세요.'],
+        'a[href^="/shops"]': ['가게와 장터를 보는 지금 이 화면입니다.', ''],
+      };
+    </script>
+    <script src="/help.js"></script>
       <!-- 카톡·텔레그램에 링크를 붙였을 때 뜨는 카드.
          ⚠️ 매장 노드는 자기 주소(192.168.x)라 바깥에서 그림을 못 가져온다.
             그래서 그림은 **웹 주소**를 가리킨다 — 가게 안이든 밖이든 뜬다. -->
@@ -439,7 +468,7 @@
 
     <div class="search"><input id="q" placeholder="가게 이름" autocomplete="off" /></div>
     <div class="row" style="display:flex;gap:8px;margin-bottom:12px">
-      <button id="near" style="flex:1;padding:12px;border-radius:10px;border:1px solid var(--line);
+      <button id="near"> style="flex:1;padding:12px;border-radius:10px;border:1px solid var(--line);
               background:var(--panel);color:var(--fg);font-size:14px;font-family:inherit">
         가까운 순으로
       </button>

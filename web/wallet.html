@@ -1078,6 +1078,25 @@
     <div id="pwa-box" class="pwabox"></div>
 
     <script src="/wallet.bundle.js"></script>
+    <script>
+      /* 「?」를 눌러 보는 설명. 좁은 선택자가 이긴다(`help.js` 참고). */
+      window.PLAYX_HELP = {
+        '#btn-new': ['이 폰에 새 지갑을 만듭니다.',
+          '만들면 12단어가 나옵니다. 그 열두 낱말이 이 지갑의 전부입니다 — 종이에 적어 두세요.'],
+        '#btn-restore': ['전에 쓰던 지갑을 12단어로 되살립니다.',
+          '같은 12단어면 어느 기계에서든 같은 지갑이 됩니다.'],
+        '#me-name': ['방과 쪽지에서 남에게 보이는 이름입니다.',
+          '비워 두셔도 됩니다. 그러면 열쇠 앞 8글자로 보이고, 그게 익명입니다.'],
+        '#me-save': ['적은 이름표를 세상에 올립니다.',
+          '이름은 누구나 같게 달 수 있습니다. 그래서 이름 옆 색은 이름이 아니라 열쇠에서 나옵니다.'],
+        '#mebox': ['남에게 보이는 내 이름·얼굴을 정하는 곳입니다.', ''],
+        '#fanbox': ['내 자산을 가진 사람들의 방에 한 번에 알립니다.',
+          '자산이 있는 분만 쓰는 기능입니다.'],
+        'a[href^="/shops"]': ['가게와 중고 물건을 보는 곳입니다.', ''],
+      };
+    </script>
+    <script src="/help.js"></script>
+
       <nav class="tabbar">
       <a href="/wallet" class="tab on" aria-current="page">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"

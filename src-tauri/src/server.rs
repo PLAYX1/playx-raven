@@ -415,6 +415,7 @@ fn customer_path(path: &str) -> bool {
             | "/api/notices"
             | "/i18n.js"
             | "/ravi.js"
+            | "/help.js"
             | "/api/ai-status"
             | "/api/shop-history"
             | "/api/nostr/publish"
@@ -1578,6 +1579,18 @@ async fn api_ravi_js() -> impl IntoResponse {
     )
 }
 
+/// 「?」를 눌러 보는 설명. 손님 폰·사장 폰이 같은 파일을 쓴다.
+///
+/// 🔴 파일을 `web/` 에 두는 것과 **길을 내는 것은 다른 일이다.** 이 저장소는
+///    「만들어 놓고 안 부른다」로 오늘만 여러 번 걸렸다. 길·목록·손잡이
+///    세 군데를 같이 고쳐야 실제로 내려간다.
+async fn api_help_js() -> impl IntoResponse {
+    (
+        [(axum::http::header::CONTENT_TYPE, "application/javascript; charset=utf-8")],
+        include_str!("../../web/help.js"),
+    )
+}
+
 async fn api_ask(State(state): State<ServerState>, Json(body): Json<AskBody>) -> impl IntoResponse {
     let provider = state.ai.lock().map(|a| a.clone()).unwrap_or_default();
     if provider.is_empty() {
@@ -2629,6 +2642,7 @@ fn build_phone_router(st: ServerState) -> axum::Router {
         .route("/api/qr", get(api_qr))
         .route("/i18n.js", get(api_i18n))
         .route("/ravi.js", get(api_ravi_js))
+        .route("/help.js", get(api_help_js))
         // 🔴 장터 사진 사본. 지갑 화면은 브라우저라 Tauri 명령을 못 쓴다 —
         //    같은 와이파이 안에서 이 길로 부른다.
         .route("/api/keepphoto", post(api_keep_photo))
