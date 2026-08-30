@@ -159,6 +159,10 @@ type Asset = {
   ipfs_hash: string | null;
   mine: boolean;
   root: string;
+  /** 쪼갤 수 있는 자릿수. 0 이면 통째로만 오간다. 못 읽었으면 null. */
+  units: number | null;
+  /** 더 찍고 붙은 파일을 바꿀 수 있는가. 못 읽었으면 null. */
+  reissuable: boolean | null;
 };
 // "missing" rather than "dead": twenty seconds without a byte means nobody
 // answered, not that the file is gone. Calling it death would be a diagnosis we
@@ -375,6 +379,39 @@ function renderList() {
       "이 이름의 주인입니다. 더 찍기·붙은 파일 바꾸기·가진 사람 전체에게 공지를 할 수 있습니다. 이 권한은 팔 수 없습니다.",
     )}">${t("주인")}</span>`;
 
+  /**
+   * 이 자산이 **무엇을 못 하는지**를 적는다.
+   *
+   * 🔴 코어 지갑은 단위(`units`)를 들고 있는데 우리는 안 들고 있었다. 그래서
+   *    `SHOP.PLAYX` 가 **1개·쪼갤 수 없음**으로 찍혀서 손님에게 나눠 줄 수
+   *    없다는 사실이 **화면 어디에도 없었다.** 팔로우가 왜 성립 안 하는지
+   *    사장이 알 길이 없었다.
+   *
+   * ⚠️ 할 수 있는 것은 안 적는다. 「쪼갤 수 있음」을 모든 줄에 달면 그건
+   *    벽지다. **막힌 것만** 적는다 — 그게 사장이 알아야 하는 것이다.
+   *
+   * ⚠️ 모르는 것(`null`)은 아무것도 안 적는다. 못 읽은 것을 「쪼갤 수 없음」
+   *    으로 그리면 없는 사실을 만들어 내는 것이다.
+   */
+  const limitMarks = (a: Asset) => {
+    const out: string[] = [];
+    if (a.units === 0) {
+      out.push(
+        `<span class="limitmark" title="${t(
+          "1개 단위로만 오갑니다. 손님에게 조금씩 나눠 줄 수 없어서 팔로우 토큰으로는 못 씁니다. 바꾸려면 재발행(100 RVN)입니다.",
+        )}">${t("쪼갤 수 없음")}</span>`,
+      );
+    }
+    if (a.reissuable === false) {
+      out.push(
+        `<span class="limitmark warn" title="${t(
+          "더 찍을 수도, 붙은 파일을 바꿀 수도 없습니다. 되돌릴 방법이 없습니다.",
+        )}">${t("바꿀 수 없음")}</span>`,
+      );
+    }
+    return out.join("");
+  };
+
   // 트리. PLAYX / PLAYX/MUSIC / PLAYX#tag 는 한 집안이다.
   const groups = new Map<string, Asset[]>();
   for (const a of shown) {
@@ -404,8 +441,11 @@ function renderList() {
     //    스무 줄에 같은 딱지가 스무 개 뜬다. 그건 정보가 아니라 벽지다.
     //    집안 머리글(아래)과 홑줄에만 붙는다.
     const own = !child && a.mine ? ownMark() : "";
+    // 막힌 것은 **자식 줄에도** 적는다. 단위·재발행은 자산마다 다르다 —
+    // 집안이 같다고 같은 값이 아니다(주인 표시와 다른 점이 여기다).
+    const limits = limitMarks(a);
     return `<tr data-row="${a.name}" class="${selected === a.name ? "sel" : ""}${child ? " child" : ""}">
-      <td class="name">${child ? '<span class="branch"></span>' : ""}${label}${own}</td>
+      <td class="name">${child ? '<span class="branch"></span>' : ""}${label}${own}${limits}</td>
       <td class="num">${fmtQty(a.amount)}</td>
       <td>${badge(a)}</td>
       <td class="act">${act}</td>

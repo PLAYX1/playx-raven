@@ -57,6 +57,20 @@ pub struct AssetEntry {
     pub mine: bool,
     /// The part before the first `/` — what groups a family of assets together.
     pub root: String,
+    /// 🔴 **쪼갤 수 있는 자릿수.** 0 이면 통째로만 오간다.
+    ///
+    /// 코어 지갑은 이 값을 들고 있는데(`assetrecord.h` 의 `units`) 우리는
+    /// 안 들고 있었다. 그래서 **`SHOP.PLAYX` 가 1개·단위 0 으로 찍혀 손님
+    /// 에게 나눠 줄 수 없다는 사실이 화면 어디에도 없었다.** 팔로우가 왜
+    /// 성립 안 하는지 사장이 알 길이 없었던 것이다.
+    ///
+    /// 못 읽었으면 `None` — 0 으로 채우면 「쪼갤 수 없음」이라고 거짓말한다.
+    pub units: Option<i64>,
+    /// 🔴 **더 찍고 붙은 파일을 바꿀 수 있는가.**
+    ///
+    /// `false` 면 프로필을 **영영** 못 바꾼다. 100 RVN 을 태우기 전에
+    /// 알아야 하는 값인데 코어 지갑도 이걸 목록에 안 보여 준다.
+    pub reissuable: Option<bool>,
 }
 
 fn data_dir() -> PathBuf {
@@ -306,15 +320,28 @@ pub async fn list_assets() -> Result<Vec<AssetEntry>, String> {
     .await;
     let mut cids: std::collections::HashMap<String, Option<String>> =
         std::collections::HashMap::new();
+    // 단위·재발행은 **같은 응답 안에 이미 들어 있다.** 따로 물으면 자산
+    // 개수만큼 왕복이 또 생긴다 — 위에서 한꺼번에 묻기로 고친 바로 그 병이다.
+    let mut facts: std::collections::HashMap<String, (Option<i64>, Option<bool>)> =
+        std::collections::HashMap::new();
     for (n, r) in fetched {
         // 못 읽었다고 목록에서 빼면 안 된다 — 가진 것은 여전히 진짜고,
         // 붙은 파일이 없을 뿐이다.
-        let cid = r.ok().and_then(|d| {
+        let d = r.ok();
+        let cid = d.as_ref().and_then(|d| {
             d.get("ipfs_hash")
                 .and_then(Value::as_str)
                 .filter(|h| !h.is_empty())
                 .map(str::to_string)
         });
+        // 못 읽었으면 `None` 으로 둔다. 0/false 로 채우면 **모르는 것을
+        // 안다고 말하는 것**이고, 화면은 그걸 사실로 그린다.
+        let units = d.as_ref().and_then(|d| d.get("units").and_then(Value::as_i64));
+        let re = d
+            .as_ref()
+            .and_then(|d| d.get("reissuable").and_then(Value::as_i64))
+            .map(|v| v != 0);
+        facts.insert(n.clone(), (units, re));
         cids.insert(n, cid);
     }
 
@@ -336,12 +363,15 @@ pub async fn list_assets() -> Result<Vec<AssetEntry>, String> {
             .trim_start_matches('$')
             .to_string();
 
+        let (units, reissuable) = facts.get(name.as_str()).copied().unwrap_or((None, None));
         out.push(AssetEntry {
             name: name.clone(),
             amount: amount.as_f64().unwrap_or(0.0),
             ipfs_hash,
             mine: owned_roots.contains(root.as_str()) || owned_roots.contains(name.as_str()),
             root,
+            units,
+            reissuable,
         });
     }
 
