@@ -4225,6 +4225,11 @@ function showPage(id: string) {
   }
   if (id === "reward") void loadReward();
   if (id === "artist") void artistLoad();
+  // 🔴 **여태 모드를 바꿀 때만 그렸다.** 메뉴로 「돕는 중」에 다시 들어오면
+  //    빈 화면이었다 — 8초 타이머가 도는 동안만 채워지고, 장사 모드에서는
+  //    타이머가 꺼져 있어 영영 비어 있었다. 바로 아래 `talk` 주석이 같은
+  //    말을 하고 있는데 이 화면만 빠져 있었다.
+  if (id === "helping") void paintHelping();
   // 간판 열쇠 옮기기. 이미 씨앗 열쇠면 이 안에서 스스로 숨는다.
   if (id === "shop") void paintKeyMove();
   // 🔴 화면을 열 때 부르지 않으면 빈 칸만 보인다. 만들어 놓고 안 부르는
@@ -4562,6 +4567,12 @@ async function paintKeyMove() {
   } catch {
     // 가게가 없거나 노드가 아직 안 따라잡았다. 조용히 감춘다 —
     // 이 칸은 없어도 장사가 된다.
+    box.style.display = "none";
+    return;
+  }
+  // 🔴 빈 답은 `catch` 에 안 걸린다. 그대로 두면 아래에서 던지고,
+  //    **100 RVN 이 걸린 이 칸이 어중간한 채로 남는다.**
+  if (!p || typeof p !== "object") {
     box.style.display = "none";
     return;
   }
@@ -5102,7 +5113,9 @@ async function talkPaintRooms() {
   const box = $("tk-rooms");
   let rooms: any[] = [];
   try {
-    rooms = await invoke("talk_rooms");
+    // `?? []` 가 있어야 한다 — 빈 답이 오면 `catch` 에 안 걸리고 아래
+    // `.map` 에서 던진다. 그 순간 **이야기 화면이 통째로 안 그려진다**.
+    rooms = (await invoke<any[]>("talk_rooms")) ?? [];
   } catch {
     // 방 목록을 못 읽어도 전체 글은 보여야 한다. 조용히 넘어간다.
   }
@@ -11776,7 +11789,18 @@ async function checkHealth() {
              노드 ${h.node ? "켜짐" : "꺼짐"} · IPFS ${h.ipfs ? "켜짐" : "꺼짐"} ·
              폰 ${h.phone ? "켜짐" : "꺼짐"}${h.behind ? ` · ${h.behind} 블록 남음` : ""}
            </div>`;
-  } catch {}
+  } catch (e) {
+    // 🔴 **빈 `catch` 였다.** 그래서 못 물어봤을 때 이 카드가 처음 글자인
+    //    「확인 중…」에 **영원히 남았다.** 사장이 제일 먼저 보는 카드가
+    //    「지금 주문을 받을 수 있나」인데, 그게 안 끝나면 받을 수 있는지
+    //    없는지를 모른다 — 모르는 것이 제일 나쁘다.
+    //    못 물어본 것과 「주문 못 받음」은 다른 말이니, 그렇다고 적는다.
+    $$("hz-card").className = "verdict warn";
+    $$("hz-state").textContent = t("지금 받을 수 있는지 못 알아봤습니다");
+    $$("hz-why").textContent = errText(e);
+    $$("hz-fix").textContent = t("노드가 켜져 있는지 보고, 잠시 뒤 이 화면을 다시 열어 주세요.");
+    $$("hz-extra").innerHTML = "";
+  }
 }
 
 async function refreshAutostart() {
