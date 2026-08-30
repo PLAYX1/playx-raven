@@ -833,7 +833,13 @@ async function makeRoom(): Promise<void> {
     const r = await fetch("/api/nostr/publish", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ event: ev }),
+      // 🔴 **`{ event: ev }` 로 싸서 보내면 서버가 400 을 준다**
+      //    (대표님 화면 2026-08-30: 「릴레이가 400 로 답했습니다」).
+      //    `/api/nostr/publish` 는 이벤트를 **본문 그대로** 기대한다
+      //    (`id`·`sig`·`pubkey`… 를 최상위에서 찾는다). 한 겹 싸면
+      //    「이벤트에 id 가 없습니다」가 되어 **글이 한 번도 안 나갔다.**
+      //    실측: 싸서 보내면 400, 그대로 보내면 릴레이까지 간다.
+      body: JSON.stringify(ev),
     });
     if (!r.ok) throw new Error(`릴레이가 ${r.status} 로 답했습니다`);
     el.value = "";
@@ -906,7 +912,13 @@ async function sendRoomMsg(): Promise<void> {
     const r = await fetch("/api/nostr/publish", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ event: ev }),
+      // 🔴 **`{ event: ev }` 로 싸서 보내면 서버가 400 을 준다**
+      //    (대표님 화면 2026-08-30: 「릴레이가 400 로 답했습니다」).
+      //    `/api/nostr/publish` 는 이벤트를 **본문 그대로** 기대한다
+      //    (`id`·`sig`·`pubkey`… 를 최상위에서 찾는다). 한 겹 싸면
+      //    「이벤트에 id 가 없습니다」가 되어 **글이 한 번도 안 나갔다.**
+      //    실측: 싸서 보내면 400, 그대로 보내면 릴레이까지 간다.
+      body: JSON.stringify(ev),
     });
     if (!r.ok) throw new Error(`릴레이가 ${r.status} 로 답했습니다`);
     el.value = "";
