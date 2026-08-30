@@ -5287,7 +5287,9 @@ async function talkKeep(id: string, list: any[]) {
   if (남의글) {
     const ok = await sure(
       t("남이 쓴 글을 굳힐까요?"),
-      t("파일창고에 올라가서 릴레이가 지워도 남습니다. 주소를 아는 누구나 볼 수 있고, 쓰신 분은 이 일을 모릅니다."),
+      // ⚠️ 「릴레이가 지워도 남습니다」도 과장이었다 — 남는 곳은
+      //    **이 컴퓨터**다. 그 조건을 빼고 말하면 또 다른 거짓말이 된다.
+      t("이 컴퓨터의 파일창고에 사본이 생깁니다. 주소를 아는 누구나 볼 수 있고, 쓰신 분은 이 일을 모릅니다."),
       t("굳힙니다"),
     );
     if (!ok) return;
@@ -5299,7 +5301,14 @@ async function talkKeep(id: string, list: any[]) {
       file: { name: `talk-${id.slice(0, 12)}.json`, bytes },
     });
     note.innerHTML =
-      `<span class="ok">${t("굳혔습니다")} — <code class="addr">${escapeHtml(String(added.cid))}</code></span>`;
+      // 🔴 「굳혔습니다」는 **영구 보관으로 읽힌다**(그록 검증 2026-08-30).
+      //    사실은 「이 컴퓨터의 파일창고에 핀으로 박아 두었다」다.
+      //    핀이라 이 컴퓨터에서는 안 지워지지만, **밖에서 보려면 이
+      //    컴퓨터가 켜져 있어야 한다.** 다른 사람이 받아 갔는지 확인하는
+      //    코드는 이 길에 한 줄도 없다.
+      //    겁주는 말 대신 **할 일 둘**만 남긴다: 주소를 적을 것, 켜 둘 것.
+      `<span class="ok">${t("이 컴퓨터에 두었습니다")} — <code class="addr">${escapeHtml(String(added.cid))}</code></span>` +
+      `<span class="meta"> ${t("주소를 적어 두시고, 다른 분이 보시려면 이 컴퓨터를 켜 두세요.")}</span>`;
   } catch (e) {
     note.innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
   }
@@ -6448,7 +6457,10 @@ function pickIssueFile() {
       ($("i-ipfs") as HTMLInputElement).value = added.cid;
       $("i-preview").innerHTML = file.type.startsWith("image/")
         ? `<img src="http://127.0.0.1:8080/ipfs/${added.cid}" alt="" style="max-width:220px;border-radius:8px;margin-top:9px" />`
-        : `<p class="meta">${file.name} · 올렸습니다</p>`;
+        // 🔴 자산이 가리키는 그림이 사라지면 **자산만 남고 그림이 없어진다.**
+        //    `upload.rs` 첫 줄이 「그게 이 앱이 막으려는 바로 그 실패」라고
+        //    적어 두었는데, 정작 화면은 「올렸습니다」로 끝났다.
+        : `<p class="meta">${file.name} · ${t("이 컴퓨터에 두었습니다")}</p>`;
     } catch (e) {
       $("i-preview").innerHTML = `<p class="meta danger">${e}</p>`;
     }
@@ -8380,7 +8392,12 @@ function pickShopPhotos() {
                   style="width:84px;height:84px;object-fit:cover;border-radius:8px" />`
         )
         .join("");
-      note.textContent = `${out.length}${t("장 올렸습니다. 바꾸셔도 소각은 없습니다.")}`;
+      // 🔴 손님은 이 사진을 **이 가게 서버**(`/ipfs/`)로만 본다.
+      //    가게가 컴퓨터를 끄면 안 보인다. 그런데 「올렸습니다」로만
+      //    끝나서, 사장은 어디 안전한 데 올라간 줄 안다.
+      note.textContent =
+        `${out.length}${t("장 올렸습니다. 바꾸셔도 소각은 없습니다.")} ` +
+        t("손님은 이 컴퓨터를 통해 봅니다 — 꺼 두시면 사진이 안 보입니다.");
     } catch (e) {
       // 사진이 안 올라간 것을 조용히 넘기지 않는다.
       $("sh-picsnote").innerHTML =
