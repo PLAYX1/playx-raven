@@ -5,7 +5,7 @@ name = "playx-raven"
 # 여기가 처음 만든 뒤로 `0.1.0` 그대로였다. 그래서 사장님이 신고를 보내도
 # **어느 판에서 난 일인지 알 수가 없었다** — 신고의 값어치가 절반이 된다.
 # 판을 올릴 때 `tauri.conf.json` 과 **같이** 올린다.
-version = "0.1.99"
+version = "0.2.0"
 description = "레이븐 노드 · IPFS · 채굴 · 자판기 · 가게 계산대를 한 프로그램으로"
 authors = ["PLAY X"]
 edition = "2021"
@@ -74,3 +74,8 @@ tokio = { version = "1", features = ["rt-multi-thread", "net", "macros"] }
 # The owner scans this to reach their own node without typing an IP.
 qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 
+[dev-dependencies]
+# 라우터에 **진짜 요청**을 넣어 보려고만 쓴다(`oneshot`).
+# 손님 화면이 부르는 파일이 실제로 200 으로 나오는지 여기서 잰다.
+# 앱 바이너리에는 안 들어간다.
+tower = { version = "0.5", features = ["util"] }

@@ -117,7 +117,10 @@
       .msg { font-size: 15px; margin: 0 0 12px; min-height: 22px; color: var(--muted); }
       .msg.err { color: var(--warn); }
       .msg.ok  { color: var(--ok); }
-      .note { font-size: 14px; color: var(--muted); line-height: 1.6;
+      /* 🔴 14px 였다. 손님 화면 기준은 15px 이고, 이 상자에 든 것 중에는
+         **12단어를 잃으면 돈을 못 찾는다**는 경고가 있다 — 화면에서 제일
+         중요한 글이 제일 작았다. 폰 390px 실측 2026-08-31. */
+      .note { font-size: 15px; color: var(--muted); line-height: 1.6;
               padding: 12px 12px; border-radius: 11px; background: var(--panel);
               border: 1px solid var(--line); margin-bottom: 16px; }
       .note.warn { color: var(--warn); }

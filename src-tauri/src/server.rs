@@ -3948,6 +3948,48 @@ mod router_builds {
         // 서버를 켜지는 않는다 — 라우터를 만드는 것까지가 패닉이 나는 자리다.
         let _ = super::build_phone_router(st);
     }
+
+    /// 🔴 **손님 화면이 부르는 파일이 진짜로 나오는지** 요청을 보내 본다.
+    ///
+    /// 2026-08-31: `wallet.html`·`shops.html` 이 `/report.js` 를 부르는데
+    /// 노드에는 그 길이 없었다. `/shops.bundle.js`(가게 목록의 알맹이 전부)·
+    /// `/tabs.js`·`/manifest.json` 도 마찬가지였다. **404 는 화면에 아무
+    /// 자국을 안 남긴다** — 우리 서버(rvn.ex.erci.se)로 열면 나오니 우리
+    /// 눈에는 멀쩡했고, 가게 와이파이로 QR 을 찍은 손님만 겪었다.
+    ///
+    /// `preflight.mjs` ⑫ 가 글자로도 보지만, **진짜 응답이 오는지**는
+    /// 여기서만 안다. 길을 딴 라우터(admin)에 잘못 붙이면 글자 검사는
+    /// 통과하고 이 시험만 빨개진다.
+    #[tokio::test]
+    async fn the_screens_get_what_they_ask_for() {
+        use tower::ServiceExt;
+        let app = super::build_phone_router(super::ServerState::default());
+        for path in [
+            "/report.js",
+            "/help.js",
+            "/i18n.js",
+            "/tabs.js",
+            "/manifest.json",
+            "/shops.bundle.js",
+            "/wallet.bundle.js",
+        ] {
+            let res = app
+                .clone()
+                .oneshot(
+                    axum::http::Request::builder()
+                        .uri(path)
+                        .body(axum::body::Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(
+                res.status(),
+                200,
+                "{path} 가 안 나온다 — 손님 화면이 조용히 빈 채로 남는다"
+            );
+        }
+    }
 }
 
 #[cfg(test)]
