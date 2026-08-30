@@ -661,6 +661,15 @@ async function renderPanel() {
   // 공지는 이 자산을 가진 사람에게 간다. 자산의 동사지 가게의 동사가 아니다 —
   // 다만 가게 탭에서도 같은 화면으로 들어갈 수 있게 링크를 남겼다.
   if (a.mine) buttons.push(`<button class="ghost" id="p-notice">공지 보내기</button>`);
+  // 🔴 **나눠주기도 자산의 동사다.** 바로 위 주석이 공지에 대해 정한 규칙이
+  //    그대로 적용된다 — 그런데 나눠주기만 1차 메뉴에 혼자 남아 있었다.
+  //    대표님: "그럼 나눠주기가 자산 탭 안에 들어가야 하는거 아냐?"
+  //
+  //    나눠주기는 **언제나 자산 하나를 고르는 것으로 시작**한다. 고른 자산이
+  //    이미 여기 있는데 다시 이름을 타이핑하게 하는 것은 같은 일을 두 번
+  //    시키는 것이다. 화면은 그대로 두고(옛 길을 끊지 않는다) 여기서 들어가는
+  //    문을 낸다 — 공지가 가게 탭에 링크를 남긴 것과 같다.
+  if (a.mine) buttons.push(`<button class="ghost" id="p-reward">나눠주기</button>`);
   if (kind.available) buttons.push(`<button class="ghost" id="open-ext">이 컴퓨터에서 열기</button>`);
   if (pinned.has(cid)) buttons.push(`<button class="ghost" id="p-unpin">보존 해제</button>`);
   else if (health.get(cid) === "found") buttons.push(`<button id="p-pin">보존</button>`);
@@ -691,6 +700,22 @@ async function renderPanel() {
       const sel = $("nt-ch") as HTMLSelectElement;
       // 고른 자산이 채널 목록에 있으면 그것으로 맞춰 준다.
       if ([...sel.options].some((o) => o.value === a.root)) sel.value = a.root;
+    };
+
+  const rewardBtn = document.getElementById("p-reward");
+  if (rewardBtn)
+    rewardBtn.onclick = () => {
+      showPage("reward");
+      // 🔴 고른 자산을 채워 준다. 안 채우면 방금 고른 것을 **다시 타이핑**해야
+      //    하고, 자산 이름은 길고 대소문자가 있어서 틀리기 쉽다.
+      //    집안의 뿌리로 채운다 — 배당은 뿌리 단위로 하는 일이다.
+      const box = document.getElementById("rw-asset") as HTMLInputElement | null;
+      if (box) {
+        box.value = a.root;
+        // 값을 넣기만 하면 화면이 모른다. 사람이 친 것과 같게 알린다.
+        box.dispatchEvent(new Event("input", { bubbles: true }));
+        box.dispatchEvent(new Event("change", { bubbles: true }));
+      }
     };
 
   const pin = document.getElementById("p-pin");
