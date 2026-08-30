@@ -31,6 +31,71 @@ use serde_json::{json, Value};
 /// 프로필 글의 종류(NIP-01 kind 0). 개인 이름표와 **같은 종류**다 —
 /// 다른 것은 **어느 열쇠가 서명했나**뿐이고, 그게 전부여야 한다.
 const KIND_PROFILE: i64 = 0;
+const NAME_MAX: usize = 40;
+const ABOUT_MAX: usize = 300;
+const LINK_MAX: usize = 300;
+
+/// 손님이 누르는 주소. `https` 만 받는다.
+///
+/// 🔴 이 글자는 **남의 화면에서 눌린다.** `javascript:` 나 `data:` 가
+///    들어오면 우리가 뿌리는 공격이 된다. `http` 도 안 받는다 — 얼굴·이름이
+///    실린 페이지에서 중간자 한 번이면 링크가 바뀐다.
+fn check_website(raw: &str) -> Result<String, String> {
+    let l = raw.trim();
+    if l.is_empty() {
+        return Ok(String::new());
+    }
+    if l.chars().count() > LINK_MAX {
+        return Err("링크가 너무 깁니다.".into());
+    }
+    if l.chars().any(|c| c.is_whitespace() || c.is_control()) {
+        return Err("링크에 띄어쓰기나 줄바꿈이 들어 있습니다. 주소만 붙여넣어 주세요.".into());
+    }
+    let low = l.to_ascii_lowercase();
+    if !low.starts_with("https://") {
+        return Err("링크는 https:// 로 시작해야 합니다.".into());
+    }
+    Ok(l.to_string())
+}
+
+/// 얼굴 주소. 비워도 된다. 있으면 `https` 만.
+fn check_picture(raw: &str) -> Result<String, String> {
+    let p = raw.trim();
+    if p.is_empty() {
+        return Ok(String::new());
+    }
+    if p.chars().count() > 400 {
+        return Err("사진 주소가 너무 깁니다.".into());
+    }
+    if p.chars().any(|c| c.is_whitespace() || c.is_control()) {
+        return Err("사진 주소에 띄어쓰기가 들어 있습니다.".into());
+    }
+    let low = p.to_ascii_lowercase();
+    if !low.starts_with("https://") {
+        return Err("사진 주소는 https:// 로 시작해야 합니다.".into());
+    }
+    Ok(p.to_string())
+}
+
+/// NIP-01 이름표 본문. 우리만 아는 칸을 넣지 않는다 — 넣으면 damus·primal
+/// 에서 안 보인다.
+fn profile_body(name: &str, about: &str, picture: &str, website: &str) -> Result<String, String> {
+    if name.chars().count() > NAME_MAX {
+        return Err("이름이 너무 깁니다. 40자 아래로 줄여 주세요.".into());
+    }
+    if about.chars().count() > ABOUT_MAX {
+        return Err("소개가 너무 깁니다. 300자 아래로 줄여 주세요.".into());
+    }
+    let website = check_website(website)?;
+    let picture = check_picture(picture)?;
+    Ok(json!({
+        "name": name,
+        "about": about,
+        "picture": picture,
+        "website": website,
+    })
+    .to_string())
+}
 
 fn now() -> i64 {
     std::time::SystemTime::now()
@@ -134,34 +199,10 @@ pub async fn artist_profile_set(
     picture: String,
     website: String,
 ) -> Result<Value, String> {
-    let name = name.trim();
-    if name.chars().count() > 40 {
-        return Err("이름이 너무 깁니다. 40자 아래로 줄여 주세요.".into());
-    }
-    let about = about.trim();
-    if about.chars().count() > 300 {
-        return Err("소개가 너무 깁니다. 300자 아래로 줄여 주세요.".into());
-    }
-    // 🔴 링크는 남이 누르는 값이다. `https` 만 받는다 — `javascript:` 가
-    //    들어오면 그건 우리가 뿌리는 공격이 된다.
-    let website = website.trim();
-    if !website.is_empty() && !website.starts_with("https://") {
-        return Err("링크는 https:// 로 시작해야 합니다.".into());
-    }
-    if website.chars().count() > 300 {
-        return Err("링크가 너무 깁니다.".into());
-    }
-
+    let body = profile_body(name.trim(), about.trim(), picture.trim(), website.trim())?;
     let sk = key()?;
-    // NIP-01 의 표준 이름들만 쓴다. 우리만 아는 이름을 지어내면 damus·primal
-    // 같은 남의 앱에서 안 보인다 — 아티스트 이름표는 밖에서도 보여야 한다.
-    let body = json!({
-        "name": name,
-        "about": about,
-        "picture": picture.trim(),
-        "website": website,
-    })
-    .to_string();
+    // ⚠️ 이름표에는 표(`t`)를 안 붙인다. 개인 이름표(`talk_profile_set`)와
+    //    같은 이유 — 붙이면 이야기 목록에 이름표가 섞여 나온다.
     let ev = crate::shopkey::sign_with(&sk, KIND_PROFILE, json!([]), &body, now())?;
     crate::nostrpub::nostr_publish(ev.clone()).await?;
     Ok(ev)
@@ -169,6 +210,8 @@ pub async fn artist_profile_set(
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     /// 🔴 **개인 열쇠와 같아지면 안 된다.** 같아지는 날 개인 대화와
     ///    아티스트가 한 사람으로 묶이고, 그건 되돌릴 수 없다(체인에 박혀 있다).
     #[test]
@@ -177,5 +220,133 @@ mod tests {
         let a = crate::identity::artist_key_from(m, "").unwrap();
         let p = crate::identity::person_key_from(m, "").unwrap();
         assert_ne!(a, p, "아티스트와 사람 열쇠가 같으면 정체성이 묶인다");
+    }
+
+    #[test]
+    fn empty_name_is_allowed() {
+        let b = profile_body("", "한 줄", "", "").unwrap();
+        let v: Value = serde_json::from_str(&b).unwrap();
+        assert_eq!(v["name"], json!(""));
+        assert_eq!(v["about"], json!("한 줄"));
+    }
+
+    #[test]
+    fn nip01_field_names_only() {
+        let b = profile_body("PLAY X", "소개", "https://ipfs.io/ipfs/Qm1", "https://x.com/playx").unwrap();
+        let v: Value = serde_json::from_str(&b).unwrap();
+        assert_eq!(v["name"], json!("PLAY X"));
+        assert_eq!(v["about"], json!("소개"));
+        assert_eq!(v["picture"], json!("https://ipfs.io/ipfs/Qm1"));
+        assert_eq!(v["website"], json!("https://x.com/playx"));
+        let obj = v.as_object().unwrap();
+        assert_eq!(obj.len(), 4, "우리만 아는 칸을 넣으면 남의 앱에서 안 보인다");
+    }
+
+    #[test]
+    fn name_too_long_is_refused() {
+        let long = "가".repeat(NAME_MAX + 1);
+        assert!(profile_body(&long, "", "", "").is_err());
+    }
+
+    #[test]
+    fn about_too_long_is_refused() {
+        let long = "가".repeat(ABOUT_MAX + 1);
+        assert!(profile_body("", &long, "", "").is_err());
+    }
+
+    #[test]
+    fn website_must_be_https() {
+        assert!(check_website("").unwrap().is_empty());
+        assert_eq!(
+            check_website("https://instagram.com/playx").unwrap(),
+            "https://instagram.com/playx"
+        );
+        assert!(check_website("http://instagram.com/playx").is_err());
+        assert!(check_website("javascript:alert(1)").is_err());
+        assert!(check_website("data:text/html,x").is_err());
+        assert!(check_website("https://x.com/a b").is_err());
+        assert!(check_website("ftp://x.com").is_err());
+    }
+
+    #[test]
+    fn picture_must_be_https() {
+        assert!(check_picture("").unwrap().is_empty());
+        assert!(check_picture("https://ipfs.io/ipfs/Qm1").is_ok());
+        assert!(check_picture("http://127.0.0.1:8080/ipfs/Qm1").is_err());
+        assert!(check_picture("javascript:alert(1)").is_err());
+        assert!(check_picture("data:image/png;base64,xx").is_err());
+    }
+
+    /// 올리는 함수가 **아티스트 열쇠**로 서명하는가. 개인 대화 열쇠로
+    /// 바꾸면 체인에 박힌 공개키와 안 맞고, 손님 화면은 이름표를 못 붙인다.
+    #[test]
+    fn 올리는_손은_아티스트_열쇠다() {
+        let src = include_str!("artist.rs");
+        let i = src
+            .find("fn key()")
+            .expect("아티스트 열쇠를 고르는 곳이 있어야 한다");
+        let rest = &src[i..];
+        let end = rest.find("\n///").or_else(|| rest.find("\n#[")).unwrap_or(280);
+        let body = &rest[..end];
+        assert!(
+            body.contains("artist_key"),
+            "아티스트 열쇠를 안 고른다 — 올리면 체인이 가리키는 사람과 다른 사람이 된다"
+        );
+        assert!(
+            !body.contains("person_key"),
+            "사람 열쇠로 고르고 있다 — 개인 대화와 아티스트가 한 사람으로 묶인다"
+        );
+        assert!(
+            !body.contains("talk::"),
+            "이야기 열쇠로 고르고 있다"
+        );
+    }
+
+    /// 이름표에 표(`t`)를 붙이면 이야기 목록에 섞여 나온다.
+    #[test]
+    fn 이름표에는_표를_안_붙인다() {
+        let src = include_str!("artist.rs");
+        let i = src
+            .find("pub async fn artist_profile_set")
+            .expect("올리는 함수가 있어야 한다");
+        let rest = &src[i..];
+        let end = rest.find("\n#[cfg(test)]").unwrap_or(rest.len());
+        let body = &rest[..end];
+        assert!(
+            body.contains("json!([])"),
+            "이름표 태그가 비어 있어야 한다"
+        );
+        assert!(
+            !body.contains("TALK_TAG") && !body.contains("\"t\""),
+            "이름표에 이야기 표를 붙이고 있다"
+        );
+        assert!(
+            body.contains("KIND_PROFILE"),
+            "kind 0 이 아니면 damus·primal 이 이름표로 안 읽는다"
+        );
+    }
+
+    /// 나눠주기를 자산 단추로 내렸다가 못 찾으셨다. 같은 실수를 여기서
+    /// 반복하면 안 된다 — 1차 메뉴에 「내 소개」가 있어야 한다.
+    #[test]
+    fn 화면이_1차_메뉴에_있다() {
+        let html = include_str!("../../index.html");
+        assert!(
+            html.contains("data-page=\"artist\""),
+            "1차 메뉴에 「내 소개」가 없다"
+        );
+        assert!(
+            html.contains("id=\"page-artist\""),
+            "내 소개 화면이 없다"
+        );
+        let nav = html
+            .split("<nav>")
+            .nth(1)
+            .and_then(|r| r.split("</nav>").next())
+            .unwrap_or("");
+        assert!(
+            nav.contains(">내 소개</span>"),
+            "사이드바에 「내 소개」 글자가 없다 — 아이콘만 있으면 40~70대가 못 읽는다"
+        );
     }
 }
