@@ -1,4 +1,5 @@
 mod artist;
+mod auction;
 mod ai;
 mod auto;
 mod boot;
