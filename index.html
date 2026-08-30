@@ -759,7 +759,11 @@
          회색으로 뭉개진다. 검사(preflight ⑦)가 이걸 잡았다. */
       .ownmark { margin-left: 8px; font-size: 12px; font-weight: 700;
                  color: var(--brand); border: 1px solid var(--brand);
-                 border-radius: 6px; padding: 2px 7px; white-space: nowrap; }
+                 border-radius: 6px; padding: 2px 7px 2px 5px; white-space: nowrap;
+                 display: inline-flex; align-items: center; gap: 3px;
+                 vertical-align: middle; }
+      /* 열쇠 그림. 코어 지갑이 관리자 자산에 아이콘을 다는 것과 같은 뜻이다. */
+      .ownmark svg { width: 13px; height: 13px; flex: none; }
       /* 「이 자산이 못 하는 것」. 주인 딱지와 **다른 색**이어야 한다 —
          하나는 내 권한이고 하나는 이 자산의 한계다. 같은 색이면 둘이
          같은 종류의 말로 읽힌다. */

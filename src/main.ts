@@ -374,10 +374,19 @@ function renderList() {
    * ⚠️ 뜻을 딱지 하나에 다 못 담는다. 그래서 **눌러 보면 알게** 한다 —
    *    「주인」이 무엇을 할 수 있는 자리인지가 사람에겐 더 중요하다.
    */
+  // 🔴 코어 지갑은 **그림**으로 표시한다(`assettablemodel.cpp` 의
+  //    `asset_administrator` 아이콘). 대표님: "소유권이 있는 자산이라고
+  //    그림에서 코어 지갑처럼 나오는거 아니였나?"
+  //
+  //    그림만 두지는 않는다 — 이름표 없는 아이콘은 40~70대에게 「저게 뭐지」다.
+  //    **열쇠 그림 + 「주인」** 둘 다 둔다. 그림은 한눈에, 글자는 뜻으로.
   const ownMark = () =>
     `<span class="ownmark" title="${t(
       "이 이름의 주인입니다. 더 찍기·붙은 파일 바꾸기·가진 사람 전체에게 공지를 할 수 있습니다. 이 권한은 팔 수 없습니다.",
-    )}">${t("주인")}</span>`;
+    )}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"` +
+    ` stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` +
+    `<circle cx="8" cy="15" r="4"/><path d="M10.8 12.2 19 4"/><path d="M17 6l2 2"/>` +
+    `<path d="M14.5 8.5l2 2"/></svg>${t("주인")}</span>`;
 
   /**
    * 이 자산이 **무엇을 못 하는지**를 적는다.
@@ -545,6 +554,43 @@ async function unpinOne(cid: string, btn?: HTMLButtonElement) {
   if (selected) renderPanel();
 }
 
+/**
+ * 주인만 쓰는 단추 둘(공지·나눠주기)을 묶는다.
+ *
+ * 🔴 **두 곳에서 그리므로 묶는 것도 한 곳이어야 한다.** 자산에 붙은 파일이
+ *    있으면 아래쪽에서, 없으면 위쪽 갈래에서 그린다. 손잡이를 양쪽에
+ *    복사해 두면 한쪽만 고치는 날이 오고, 그날 단추는 보이는데 눌러도
+ *    아무 일이 안 난다 — 이 저장소가 제일 자주 걸리는 병이다.
+ */
+function wireOwnerButtons(a: Asset) {
+  const noticeBtn = document.getElementById("p-notice");
+  if (noticeBtn)
+    noticeBtn.onclick = async () => {
+      showPage("msg");
+      mtab("send");
+      await loadChannels();
+      const sel = $("nt-ch") as HTMLSelectElement;
+      // 고른 자산이 채널 목록에 있으면 그것으로 맞춰 준다.
+      if ([...sel.options].some((o) => o.value === a.root)) sel.value = a.root;
+    };
+
+  const rewardBtn = document.getElementById("p-reward");
+  if (rewardBtn)
+    rewardBtn.onclick = () => {
+      showPage("reward");
+      // 🔴 고른 자산을 채워 준다. 안 채우면 방금 고른 것을 **다시 타이핑**해야
+      //    하고, 자산 이름은 길고 대소문자가 있어서 틀리기 쉽다.
+      //    집안의 뿌리로 채운다 — 배당은 뿌리 단위로 하는 일이다.
+      const box = document.getElementById("rw-asset") as HTMLInputElement | null;
+      if (box) {
+        box.value = a.root;
+        // 값을 넣기만 하면 화면이 모른다. 사람이 친 것과 같게 알린다.
+        box.dispatchEvent(new Event("input", { bubbles: true }));
+        box.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+    };
+}
+
 async function renderPanel() {
   const a = selected ? assets.get(selected) : null;
   if (!a) { $("panel").className = "panel hidden"; return; }
@@ -556,13 +602,23 @@ async function renderPanel() {
   if (!cid) {
     $("p-cid").textContent = "";
     $("p-body").innerHTML = '<p class="muted">이 자산에는 연결된 파일이 없습니다.</p>';
+    // 🔴 **여기서 일찍 돌아간다.** 그래서 아래에 있는 단추들(공지·나눠주기)이
+    //    **파일 없는 자산에는 하나도 안 나왔다.** 그런데 그 둘은 파일과
+    //    아무 상관이 없다 — 자산을 가진 사람에게 보내는 일이다.
+    //
+    //    실제로 `PLAYX` 가 그 상태였다. 파일이 없어서 「나눠주기」를 넣어
+    //    놓고도 **정작 그 자산에서는 안 보였다.** 대표님이 "아까 자산에서
+    //    나눠주기는 어디 갔어?" 하고 물으신 것이 이것이다.
     $("p-actions").innerHTML =
       `<button id="p-send">보내기</button>` +
-      (a.amount > 0 ? `<button class="ghost" id="p-sell">팔기</button>` : "");
+      (a.amount > 0 ? `<button class="ghost" id="p-sell">팔기</button>` : "") +
+      (a.mine ? `<button class="ghost" id="p-notice">공지 보내기</button>` : "") +
+      (a.mine ? `<button class="ghost" id="p-reward">나눠주기</button>` : "");
     const sb = document.getElementById("p-send");
     if (sb) sb.onclick = () => { showPage("wallet"); openSend("asset", a.name); };
     const lb = document.getElementById("p-sell");
     if (lb) lb.onclick = () => openSell(a);
+    wireOwnerButtons(a);
     return;
   }
 
@@ -691,32 +747,7 @@ async function renderPanel() {
   if (sendBtn) sendBtn.onclick = () => { showPage("wallet"); openSend("asset", a.name); };
   const sellBtn = document.getElementById("p-sell");
   if (sellBtn) sellBtn.onclick = () => openSell(a);
-  const noticeBtn = document.getElementById("p-notice");
-  if (noticeBtn)
-    noticeBtn.onclick = async () => {
-      showPage("msg");
-      mtab("send");
-      await loadChannels();
-      const sel = $("nt-ch") as HTMLSelectElement;
-      // 고른 자산이 채널 목록에 있으면 그것으로 맞춰 준다.
-      if ([...sel.options].some((o) => o.value === a.root)) sel.value = a.root;
-    };
-
-  const rewardBtn = document.getElementById("p-reward");
-  if (rewardBtn)
-    rewardBtn.onclick = () => {
-      showPage("reward");
-      // 🔴 고른 자산을 채워 준다. 안 채우면 방금 고른 것을 **다시 타이핑**해야
-      //    하고, 자산 이름은 길고 대소문자가 있어서 틀리기 쉽다.
-      //    집안의 뿌리로 채운다 — 배당은 뿌리 단위로 하는 일이다.
-      const box = document.getElementById("rw-asset") as HTMLInputElement | null;
-      if (box) {
-        box.value = a.root;
-        // 값을 넣기만 하면 화면이 모른다. 사람이 친 것과 같게 알린다.
-        box.dispatchEvent(new Event("input", { bubbles: true }));
-        box.dispatchEvent(new Event("change", { bubbles: true }));
-      }
-    };
+  wireOwnerButtons(a);
 
   const pin = document.getElementById("p-pin");
   if (pin) pin.onclick = () => pinOne(cid);
