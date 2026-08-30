@@ -8005,8 +8005,13 @@ function arPaintPreview() {
   }
   const img = $("ar-face") as HTMLImageElement;
   const ph = $("ar-ph");
-  if (arPicture) {
-    img.src = arPicture;
+  // 🔴 **방금 고른 사진을 덮어쓰지 않는다.** 이 함수는 이름을 한 글자 칠
+  //    때마다 돈다. `arPicture` 는 `https://ipfs.io/…` 인데 그걸 다시 넣으면
+  //    세계 게이트웨이가 파일을 찾는 20초 동안 **자리가 빈다** — 사장은
+  //    사진이 날아갔다고 본다. 가게 간판에서 똑같이 겪은 사고다.
+  const 보일것 = arPickedPreview || arPicture;
+  if (보일것) {
+    if (img.src !== 보일것) img.src = 보일것;
     img.hidden = false;
     ph.hidden = true;
   } else {
@@ -8017,6 +8022,7 @@ function arPaintPreview() {
 }
 
 async function artistLoad() {
+  arPickedPreview = "";
   arPaintPreview();
   const seal = $("ar-seal");
   seal.className = "arseal muted";
@@ -8061,56 +8067,60 @@ async function artistLoad() {
   }
 }
 
+/** 방금 이 컴퓨터에서 고른 사진(`data:`). 있으면 미리보기는 늘 이걸 쓴다 —
+ *  세계 게이트웨이를 기다리지 않아도 되고, 혼합 콘텐츠에도 안 걸린다. */
+let arPickedPreview = "";
+
 async function artistPick(file: File) {
   if (file.size > 8 * 1024 * 1024) {
     $("ar-picnote").innerHTML = `<span class="danger">${t("사진이 너무 큽니다. 8MB 아래로 골라 주세요.")}</span>`;
     return;
   }
-  $("ar-picnote").textContent = t("사진 올리는 중…");
+  $("ar-picnote").textContent = t("사진 줄이는 중…");
   try {
-    // 🔴 **`ipfs.io` 주소를 저장하면 사진이 안 뜬다.**
-    //
-    //    대표님: "사진 올렸는데 안나와." 이 저장소가 그 이유를 이미 재어
-    //    뒀다(`helping.rs` 첫 주석): `ipfs.io` 는 **301**, `dweb.link` 는 안
-    //    닿는다. 방금 다시 재도 301 이었다. 우리 웹 게이트웨이도 404 다.
-    //    `127.0.0.1:8080` 은 **이 컴퓨터에서만** 열린다 — 손님 폰에서는 빈 자리다.
-    //
-    //    실제로 화면에 뜨는 유일한 것은 **가게 간판이 쓰는 방식**이다 —
-    //    체인에 올라간 아이콘을 열어 보니 `data:image/jpeg;base64,…` 였다.
-    //    사진 자체를 담으므로 **어느 게이트웨이에도 안 매단다.**
-    //
-    //    ⚠️ 그래서 512px 로 줄인다. 원본을 담으면 몇 MB 가 되고, 릴레이가
-    //       한 건 32KB 로 자르는 곳도 있다(`shop.rs` 실측).
+    // 정사각형으로 가운데를 자른다. 얼굴은 어디서나 동그란 자리에 들어간다.
     const bitmap = await createImageBitmap(file);
     const side = Math.min(bitmap.width, bitmap.height);
     const canvas = document.createElement("canvas");
     canvas.width = canvas.height = 512;
     canvas.getContext("2d")!.drawImage(
       bitmap, (bitmap.width - side) / 2, (bitmap.height - side) / 2, side, side, 0, 0, 512, 512);
-    // 🔴 `fetch(dataUrl)` 로 되읽지 않는다. 그건 그림을 두 번 굽는 데다,
-    //    앱의 CSP `connect-src` 를 타는 **네트워크 길**이라 조용히 멈춘다 —
-    //    실제로 여기서 「사진 올리는 중…」인 채로 안 끝났다. 캔버스에서
-    //    한 번에 꺼낸다.
     const blob: Blob = await new Promise((ok, no) =>
       canvas.toBlob((b) => (b ? ok(b) : no(new Error("사진을 못 줄였습니다."))), "image/jpeg", 0.82));
+
+    // 🔴 **미리보기는 `data:` 로 본다.**
+    //
+    //    여태 `http://127.0.0.1:8080/ipfs/…` 을 넣고 있었다. 앱 화면은
+    //    `https` 문맥이라 웹뷰가 그걸 **혼합 콘텐츠로 조용히 막는다** —
+    //    오류도 안 뜨고 자리만 빈다. 대표님이 본 "사진 올렸는데 안나와"가
+    //    이것이다. 게다가 그 주소는 이 컴퓨터에서만 열려서, 애초에
+    //    미리보기 말고는 쓸 데가 없다.
     const dataUrl: string = await new Promise((ok, no) => {
       const r = new FileReader();
       r.onload = () => ok(String(r.result));
       r.onerror = () => no(new Error("사진을 못 읽었습니다."));
       r.readAsDataURL(blob);
     });
-
-    // 파일창고에도 같이 올려 둔다 — 나중에 큰 그림이 필요할 때 쓰고,
-    // 우리 노드가 그걸 지킨다(자동 핀). 다만 **보여 주는 것은 `data:`** 다.
-    const bytes = Array.from(new Uint8Array(await blob.arrayBuffer()));
-    await invoke<any>("ipfs_add_file", { file: { name: "face.jpg", bytes } }).catch(() => null);
-
-    arPicture = dataUrl;
+    arPickedPreview = dataUrl;
     arPaintPreview();
-    const img = $("ar-face") as HTMLImageElement;
-    img.src = dataUrl;
+
+    // 🔴 **팬이 보는 것은 `data:` 가 아니라 주소다.** 릴레이 한 건이 32KB 고
+    //    넘으면 **조용히 버린다**(`relay.rs:76`). 사진을 이름표 안에 담으면
+    //    이름표가 통째로 안 나간다. 그리고 러스트 쪽 문이 `https://` 만
+    //    받는다(`artist.rs` check_picture) — 담는 길은 아예 없다.
+    $("ar-picnote").textContent = t("파일창고에 올리는 중…");
+    const added = await invoke<any>("ipfs_add_file", { file: { name: "face.jpg", bytes: Array.from(new Uint8Array(await blob.arrayBuffer())) } });
+    const cid = String(added?.cid || "");
+    if (!cid) throw new Error("파일창고가 사진 주소를 안 돌려줬습니다. 노드가 켜져 있는지 보세요.");
+
+    // ⚠️ **처음 여는 팬은 20초쯤 기다린다.** 실측(2026-08-31): 이 컴퓨터에서
+    //    갓 올린 파일을 ipfs.io 가 받아 가는 데 19.5초 걸렸다 — 세계에서
+    //    이 파일을 가진 곳이 아직 우리뿐이라 찾는 데 그만큼 든다. 한 번
+    //    받아 가면 그다음은 빠르다. 우리 노드가 계속 켜져 있어야 한다.
+    arPicture = `https://ipfs.io/ipfs/${cid}`;
     $("ar-picnote").innerHTML =
-      `<span class="ok">${t("사진을 올렸습니다. 아래 단추를 눌러야 소개가 바뀝니다.")}</span>`;
+      `<span class="ok">${t("사진 준비됐습니다")} · ${Math.round(blob.size / 1024)}KB</span><br />` +
+      `<span class="meta">${t("아래 「이 소개 올리기」를 눌러야 팬에게 보입니다. 팬 화면에 처음 뜨기까지 20초쯤 걸립니다.")}</span>`;
   } catch (e) {
     $("ar-picnote").innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
   }

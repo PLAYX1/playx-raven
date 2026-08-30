@@ -200,6 +200,7 @@ pub async fn artist_profile_set(
     website: String,
 ) -> Result<Value, String> {
     let body = profile_body(name.trim(), about.trim(), picture.trim(), website.trim())?;
+
     let sk = key()?;
     // ⚠️ 이름표에는 표(`t`)를 안 붙인다. 개인 이름표(`talk_profile_set`)와
     //    같은 이유 — 붙이면 이야기 목록에 이름표가 섞여 나온다.
@@ -211,6 +212,25 @@ pub async fn artist_profile_set(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 🔴 **사진은 주소만 받는다 — 사진 자체를 담으면 안 된다.**
+    ///    담으면 이름표가 32KB 를 넘어 릴레이가 **조용히 버린다**. 그래서
+    ///    화면은 파일창고에 올리고 `https://` 주소만 넣는다. 이 문이 열리면
+    ///    그 약속이 조용히 깨진다.
+    ///
+    ///    ⚠️ 같이 잰다 — **정상 주소는 반드시 통과해야 한다.** 막기만 하는
+    ///       검사는 사장이 사진을 아예 못 올리게 만든다.
+    #[test]
+    fn picture_takes_a_link_not_the_photo_itself() {
+        assert!(check_picture("data:image/jpeg;base64,AAAA").is_err(), "사진을 담는 길이 열렸다");
+        assert!(check_picture("http://ipfs.io/ipfs/Qm123").is_err(), "https 가 아닌데 통과했다");
+        assert_eq!(
+            check_picture("https://ipfs.io/ipfs/QmcBEcFJ2YsS13vbBWg8ZMjPEmqegGeYDxb88JeTx6gcYT").unwrap(),
+            "https://ipfs.io/ipfs/QmcBEcFJ2YsS13vbBWg8ZMjPEmqegGeYDxb88JeTx6gcYT",
+            "화면이 실제로 만드는 주소가 막힌다"
+        );
+        assert_eq!(check_picture("").unwrap(), "", "비우는 것도 사람이 할 수 있어야 한다");
+    }
 
     /// 🔴 **개인 열쇠와 같아지면 안 된다.** 같아지는 날 개인 대화와
     ///    아티스트가 한 사람으로 묶이고, 그건 되돌릴 수 없다(체인에 박혀 있다).

@@ -343,6 +343,41 @@ const ts = read("src/main.ts");
   } else ok("태그가 일찍 닫힌 곳 없음");
 }
 
+// ⑪ 러스트가 **구워 넣는** 파일이 저장소에 실제로 있나.
+//
+// 🔴 2026-08-31: `include_bytes!("../../web/raven-face.webp")` 는 넣고 그림
+//    파일은 안 올렸다. 내 컴퓨터에는 있어서 `cargo test` 366개가 다 통과했고,
+//    올린 뒤 **네 갈래 빌드가 전부** `couldn't read` 로 죽었다.
+//    같은 함정을 전에도 밟았다(blockcache.ts · talk.rs · lib.rs).
+//    여기서 보는 것은 디스크가 아니라 **지금 검사 중인 폴더**다 —
+//    `prepush.sh` 가 「올릴 나무」를 풀어 놓고 이 파일을 돌리므로 잡힌다.
+{
+  const rsFiles = [];
+  const walk = (d) => {
+    for (const e of readdirSync(join(ROOT, d), { withFileTypes: true })) {
+      const rel = `${d}/${e.name}`;
+      if (e.isDirectory()) walk(rel);
+      else if (e.name.endsWith(".rs")) rsFiles.push(rel);
+    }
+  };
+  walk("src-tauri/src");
+  let seen = 0;
+  const missing = [];
+  for (const f of rsFiles) {
+    for (const m of read(f).matchAll(/include_(?:bytes|str)!\(\s*"([^"]+)"/g)) {
+      seen++;
+      try {
+        statSync(join(ROOT, dirname(f), m[1]));
+      } catch {
+        missing.push(`${f} → ${m[1]}`);
+      }
+    }
+  }
+  if (seen === 0) fail("러스트가 굽는 파일을 하나도 못 찾았다 — 이 검사가 헛돈다", []);
+  else if (missing.length) fail("러스트가 굽는 파일이 없다 — 빌드가 죽는다", missing);
+  else ok(`러스트가 굽는 파일 ${seen}개 전부 존재`);
+}
+
 console.log("");
 if (bad) {
   console.log(`검사 실패 — ${bad}가지를 고쳐야 합니다.`);
