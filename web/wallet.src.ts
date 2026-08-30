@@ -2508,6 +2508,30 @@ type MyAsset = { name: string; qty: number };
 /** 주소를 훑을 때 자산도 같이 모은다. */
 let myAssets: Record<string, number> = {};
 
+/* ── 자산을 사람 말로 ──────────────────────────────────────────────────
+ *
+ * 🔴 `SHOP.PLAYX  0.00000001개` 는 40~70대에게 **「이게 뭐야」**다.
+ *    그록: "「구독」이라고 쓰지 마라. **끊기 단추가 없는데 구독이면 거짓**이다."
+ *
+ *    이건 「그 가게 소식을 받는 표」다. 이름은 그렇게 읽히게 하고, 수량은
+ *    숫자 대신 뜻으로 적는다 — 0.00000001 은 사람에게 아무 뜻이 없다.
+ *
+ * ⚠️ 🔴 **아직 끊는 길이 없다.** 이 지갑은 RVN 만 보내고 자산은 보여 주기만
+ *    한다(위 UTXO 거르는 줄이 `!== "RVN"` 을 건너뛴다). 그래서 받은 표를
+ *    돌려줄 수가 없다. **그 사실을 숨기지 않는다** — 열어보면 그대로 적는다.
+ *    그리고 그 길이 생기기 전에는 이 표를 크게 뿌리지 않는다.
+ */
+function 소식표인가(name: string): boolean {
+  // 가게 표는 `SHOP.` 으로 시작하고 나눌 수 있게 찍힌 것이다.
+  return /^SHOP\./i.test(name);
+}
+
+function 자산을사람말로(name: string): string {
+  if (!소식표인가(name)) return name;
+  const 가게 = name.replace(/^SHOP\./i, "");
+  return `${가게} 가게 소식`;
+}
+
 function renderAssets(): void {
   const box = $("myassets");
   if (!box) return;
@@ -2528,8 +2552,10 @@ function renderAssets(): void {
         (a) => `<div class="aset" data-asset="${escapeHtml(a.name)}">
           <img class="art" alt="" src="/faces/raven-head.webp" />
           <div>
-            <div class="nm">${escapeHtml(a.name)}</div>
-            <div class="qt">${a.qty % 1 === 0 ? a.qty : a.qty.toFixed(8).replace(/0+$/, "")}개</div>
+            <div class="nm">${escapeHtml(자산을사람말로(a.name))}</div>
+            <div class="qt">${소식표인가(a.name)
+              ? "가게 소식을 받습니다"
+              : (a.qty % 1 === 0 ? a.qty : a.qty.toFixed(8).replace(/0+$/, "")) + "개"}</div>
           </div>
           <button class="open">열어보기</button>
         </div>`,
@@ -2613,6 +2639,16 @@ async function openAsset(name: string): Promise<void> {
   box.innerHTML = `<div class="sheetin"><p class="sub">여는 중…</p></div>`;
   box.style.display = "";
   let body = `<p class="sub">이 자산에는 딸린 파일이 없습니다.</p>`;
+  // 🔴 가게 소식표는 **무엇인지와, 끊을 수 없다는 것**을 같이 적는다.
+  //    그록: "끊기 단추가 없는데 「구독」이라 하면 거짓이다."
+  //    이 지갑은 RVN 만 보낸다(자산은 보여 주기만) — 그래서 돌려줄 길이
+  //    아직 없다. 숨기면 나중에 「왜 못 끊냐」가 우리 거짓말이 된다.
+  const 소식말 = 소식표인가(name)
+    ? `<p class="sub"><b>${escapeHtml(자산을사람말로(name))}</b><br />
+         이 표를 가지고 계시면 그 가게가 보내는 공지를 받습니다.<br />
+         <b>지금은 끊는 길이 없습니다</b> — 이 지갑이 아직 표를 돌려보내지
+         못합니다. 만들고 있습니다.</p>`
+    : "";
   try {
     const r = await fetch(`/api/chain/asset?name=${encodeURIComponent(name)}`).then((x) => x.json());
     const cid = String(r?.ipfs_hash || "").replace(/[^A-Za-z0-9]/g, "");
@@ -2664,7 +2700,8 @@ async function openAsset(name: string): Promise<void> {
   }
   box.innerHTML = `<div class="sheetin">
       <button class="sheetx" id="sheet-close">닫기</button>
-      <h2 style="margin:0 0 10px;font-size:19px;word-break:break-all">${escapeHtml(name)}</h2>
+      <h2 style="margin:0 0 10px;font-size:19px;word-break:break-all">${escapeHtml(자산을사람말로(name))}</h2>
+      ${소식말}
       ${body}
     </div>`;
   ($("sheet-close") as HTMLElement).onclick = () => (box.style.display = "none");
