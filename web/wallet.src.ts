@@ -877,6 +877,32 @@ function tkClock(ms: number): string {
   }
 }
 
+/**
+ * 이 글에 붙은 사진 주소. 없으면 빈 글자.
+ *
+ * 🔴 **`https` 만 받는다.** 남이 정하는 값이라 `javascript:` 같은 것이
+ *    들어오면 그건 우리가 뿌리는 공격이 된다.
+ *    `data:` 도 안 받는다 — 릴레이 글에 통째로 든 그림은 화면을 죽인다.
+ */
+function 방사진주소(e: any, 본문: string): string {
+  const 안전 = (u: string) =>
+    /^https:\/\/[^\s"'<>]+$/i.test(u) ? u : "";
+  // ① NIP-92 `imeta` — 앱도 남의 Nostr 앱도 이걸 쓴다
+  for (const t of (e?.tags || []) as string[][]) {
+    if (t?.[0] !== "imeta") continue;
+    for (const part of t.slice(1)) {
+      const m = /^url\s+(\S+)$/.exec(String(part || ""));
+      if (m) {
+        const u = 안전(m[1]);
+        if (u) return u;
+      }
+    }
+  }
+  // ② 태그가 없는 옛 글·남의 앱 글. 글 끝의 그림 주소를 본다.
+  const m2 = /(https:\/\/[^\s]+\.(?:png|jpe?g|gif|webp|avif))(?:\?[^\s]*)?/i.exec(본문);
+  return m2 ? 안전(m2[0]) : "";
+}
+
 async function loadRoomMsgs(): Promise<void> {
   const box = $("rm-msgs");
   box.textContent = "읽는 중…";
@@ -893,12 +919,23 @@ async function loadRoomMsgs(): Promise<void> {
       //    같은 사람이 이어 쓰면 이름을 한 번만.
       const 이어짐 = i > 0 && String(asc[i - 1].pubkey || "") === who;
       const 시각 = tkClock(Number(e.created_at || 0) * 1000);
+      // 🔴 사진이 오면 **그림으로 그린다.** 주소만 글자로 두면 아무도
+      //    안 누른다 — 대화에서 사진은 봐야 사진이다.
+      //    주소는 글 끝에 붙어 오고, `imeta` 태그가 사진임을 알려 준다.
+      const 본문원본 = String(e.content || "").slice(0, 800);
+      const 사진 = 방사진주소(e, 본문원본);
+      // 사진을 그릴 때는 본문에서 그 주소 줄을 뺀다 — 같은 것을 두 번 보인다.
+      const 글 = 사진 ? 본문원본.replace(사진, "").trim() : 본문원본;
       return (
         (mine || 이어짐
           ? ""
           : `<div class="rwho">${escapeHtml(who.slice(0, 8))}</div>`) +
         `<div class="rline${mine ? " me" : ""}">
-           <div class="rbub${mine ? " me" : ""}">${escapeHtml(String(e.content || "").slice(0, 800))}</div>
+           <div class="rbub${mine ? " me" : ""}">${escapeHtml(글)}${
+             사진
+               ? `<img class="rpic" src="${escapeHtml(사진)}" alt="${escapeHtml("사진")}" loading="lazy" />`
+               : ""
+           }</div>
            <time class="rtime">${escapeHtml(시각)}</time>
          </div>`
       );
@@ -909,10 +946,28 @@ async function loadRoomMsgs(): Promise<void> {
   box.scrollTop = box.scrollHeight;
 }
 
+/**
+ * 대화에 붙여 보낼 사진. 고르면 여기 서 있다가 「보내기」와 같이 나간다.
+ *
+ * 🔴 고르자마자 안 보낸다 — 무엇을 보내는지 보여 주고, 글을 붙일 틈과
+ *    무를 길을 준다. 앱(데스크톱)이 이미 그렇게 한다.
+ */
+let 방사진: File | null = null;
+
+/** 골라 둔 사진을 무른다. */
+function 방사진지우기(): void {
+  방사진 = null;
+  const box = document.getElementById("rm-photobox");
+  if (box) box.hidden = true;
+  const inp = document.getElementById("rm-photo") as HTMLInputElement | null;
+  if (inp) inp.value = "";
+}
+
 async function sendRoomMsg(): Promise<void> {
   const el = $("rm-text") as HTMLTextAreaElement;
   const text = el.value.trim();
-  if (!text) return;
+  // 사진이 걸려 있으면 글이 비어도 보낸다 — 사진 한 장이 곧 본문인 나이대다.
+  if (!text && !방사진) return;
   const sec = nostrSecret();
   if (!sec) {
     say("rm-say", "지갑을 먼저 열어 주세요. 글은 본인 열쇠로 서명해서 나갑니다.", "err");
@@ -922,6 +977,25 @@ async function sendRoomMsg(): Promise<void> {
   btn.disabled = true;
   say("rm-say", "보내는 중…");
   try {
+    // 사진이 걸려 있으면 **먼저 올린다.** 올라간 주소를 글에 담아야
+    // 서명이 그 사진까지 덮는다 — 서명 뒤에 붙이면 서명이 깨진다.
+    //
+    // 🔴 폰은 IPFS 가 없다. 물건 올리기가 이미 쓰는 길(`uploadPhoto`)을
+    //    그대로 쓴다 — **내 열쇠로 표를 만들어 공개 미디어 서버에 직접**
+    //    올린다. 우리 서버는 「어디로 갈 수 있나」만 알려 준다.
+    //    그래서 12단어 방어선(`connect-src 'self'`)을 안 건드린다.
+    let 사진주소 = "";
+    if (방사진) {
+      say("rm-say", "사진 올리는 중…");
+      사진주소 = await uploadPhoto(방사진);
+      // 🔴 **어디에 두는지 말한다.** 앱(가게 컴퓨터)은 자기 파일창고에
+      //    두지만, 폰은 **공개 미디어 서버**에 둔다 — 조건이 다르다.
+      //    「보냈습니다」로 끝내면 오늘 「굳혔습니다」와 같은 과장이 된다.
+      say("rm-say", "사진은 공개 미디어 서버에 둡니다. 그 서버가 지우면 사라집니다.");
+    }
+    // 글 끝에 주소를 붙인다. 앱(데스크톱)이 쓰는 방식과 같게 맞춘다 —
+    // 어긋나면 앱에서 보낸 사진과 폰에서 보낸 사진이 다르게 그려진다.
+    const 본문 = 사진주소 ? (text ? `${text}\n${사진주소}` : 사진주소) : text;
     // 🔴 서명은 **여기서** 한다. 서버로 가는 것은 이미 서명된 것뿐이고,
     //    개인키는 이 브라우저를 안 떠난다.
     const ev = signEvent(sec, {
@@ -930,8 +1004,10 @@ async function sendRoomMsg(): Promise<void> {
       tags: [
         ["e", roomId, "", "root"],
         ["t", "ravencoin"],
+        // NIP-92. 이게 있어야 **남의 Nostr 앱**도 사진인 줄 알고 그린다.
+        ...(사진주소 ? [["imeta", `url ${사진주소}`]] : []),
       ],
-      content: text,
+      content: 본문,
     } as any);
     const r = await fetch("/api/nostr/publish", {
       method: "POST",
@@ -945,8 +1021,11 @@ async function sendRoomMsg(): Promise<void> {
       body: JSON.stringify(ev),
     });
     if (!r.ok) throw new Error(`릴레이가 ${r.status} 로 답했습니다`);
+    const 사진보냄 = !!방사진;
     el.value = "";
-    say("rm-say", "");
+    방사진지우기();
+    // 사진을 보냈으면 어디에 뒀는지는 남겨 둔다. 그냥 지우면 안 읽는다.
+    if (!사진보냄) say("rm-say", "");
     await loadRoomMsgs();
   } catch (e) {
     say("rm-say", (e as Error)?.message || "보내지 못했습니다.", "err");
@@ -2801,6 +2880,30 @@ function boot(): void {
     $("rm-list").style.display = "";
   });
   document.getElementById("rm-send")?.addEventListener("click", () => void sendRoomMsg());
+  // 🔴 사진 단추 배선. 화면만 만들고 이 줄을 안 쓰면 **아무 일도 안 난다** —
+  //    이 저장소가 오늘만 세 번 걸린 병이다.
+  document.getElementById("rm-photo-go")?.addEventListener("click", () => {
+    (document.getElementById("rm-photo") as HTMLInputElement | null)?.click();
+  });
+  document.getElementById("rm-photocancel")?.addEventListener("click", () => 방사진지우기());
+  document.getElementById("rm-photo")?.addEventListener("change", (ev) => {
+    const f = (ev.target as HTMLInputElement).files?.[0];
+    if (!f) return;
+    // 8MB 를 넘으면 올리다 말고 실패한다. 고르는 자리에서 막는 것이 낫다.
+    if (f.size > 8 * 1024 * 1024) {
+      say("rm-say", "사진이 너무 큽니다(8MB까지). 조금 작은 것으로 골라 주세요.", "err");
+      방사진지우기();
+      return;
+    }
+    방사진 = f;
+    const prev = document.getElementById("rm-photoprev") as HTMLImageElement | null;
+    if (prev) prev.src = URL.createObjectURL(f);
+    const nm = document.getElementById("rm-photoname");
+    if (nm) nm.textContent = `${f.name} · ${Math.max(1, Math.round(f.size / 1024))}KB`;
+    const box = document.getElementById("rm-photobox");
+    if (box) box.hidden = false;
+    say("rm-say", "");
+  });
   document.getElementById("rm-make")?.addEventListener("click", () => void makeRoom());
   document.getElementById("rm-new")?.addEventListener("keydown", (e) => {
     if ((e as KeyboardEvent).key === "Enter") {

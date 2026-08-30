@@ -399,6 +399,28 @@
       /* 곁눈으로 스치는 글자라 크기 대신 **대비**를 준다. */
       .rtime { flex: none; font-size: 12.5px; color: var(--muted);
                padding-bottom: 3px; white-space: nowrap; }
+      /* 말풍선 안의 사진. 폭에 맞춰 줄이고, 눌러서 크게 볼 수 있게. */
+      .rpic { display: block; max-width: 100%; margin-top: 7px;
+              border-radius: 11px; background: var(--panel); }
+      .rbub:has(.rpic) { padding: 7px; }
+      /* 「사진」 단추. 🔴 그림만 두지 않는다 — 글자로 적는다. */
+      .rphotobtn { flex: none; width: auto; margin-bottom: 0;
+                   align-self: stretch; min-height: 48px; padding: 0 14px;
+                   font-size: 15px; font-weight: 500; }
+      /* 고른 사진이 기다리는 자리. */
+      .rphotobox { display: flex; gap: 10px; align-items: flex-start;
+                   margin-top: 8px; padding: 9px; border-radius: 12px;
+                   background: var(--panel); border: 1px solid var(--line); }
+      /* 🔴 `display` 를 준 자리는 UA 의 `[hidden]{display:none}` 을 이긴다.
+         이 파일에서 같은 덫을 이미 밟았다. */
+      .rphotobox[hidden] { display: none; }
+      .rphotobox img { width: 64px; height: 64px; object-fit: cover; flex: none;
+                       border-radius: 9px; border: 1px solid var(--line); }
+      .rpbbody { flex: 1; min-width: 0; }
+      .rpbname { font-size: 14.5px; font-weight: 600; word-break: break-all; }
+      .rpbmeta { margin: 3px 0 0; font-size: 13px; color: var(--muted); }
+      .rphotobox button { flex: none; width: auto; margin-bottom: 0;
+                          min-height: 44px; padding: 0 14px; font-size: 14.5px; }
       /* 🔴 **방에 들어가면 화면의 주인공은 대화다.**
          제목과 안내문이 위에 그대로 남아 있으면 대화가 화면 아래
          절반으로 밀린다 — 카톡은 방에 들어가면 목록 화면 글이 사라진다. */
@@ -886,7 +908,21 @@
           <b id="rm-title"></b>
         </div>
         <div class="msgs" id="rm-msgs"></div>
+        <!-- 🔴 고르자마자 보내지 않는다. 무엇을 보내는지 보여 주고,
+             글을 붙일 틈과 무를 길(취소)을 준다. -->
+        <div id="rm-photobox" class="rphotobox" hidden>
+          <img id="rm-photoprev" alt="" />
+          <div class="rpbbody">
+            <div id="rm-photoname" class="rpbname"></div>
+            <p class="rpbmeta">「보내기」를 누르면 글과 함께 나갑니다.</p>
+          </div>
+          <button id="rm-photocancel" type="button">취소</button>
+        </div>
         <div class="composer">
+          <!-- 🔴 그림만 두지 않는다. 40~70대는 종이클립을 「사진 보내기」로
+               못 읽는다. 글자로 적는다. -->
+          <button id="rm-photo-go" type="button" class="rphotobtn">사진</button>
+          <input id="rm-photo" type="file" accept="image/*" style="display:none" />
           <textarea id="rm-text" rows="1" placeholder="메시지"></textarea>
           <button id="rm-send">보내기</button>
         </div>
