@@ -2599,6 +2599,23 @@ async function 라비살피기() {
     }
   } catch { /* 못 재면 침묵 */ }
 
+  // ③ 아티스트 이름표를 아직 안 올렸다. 체인에는 열쇠만 있고 얼굴이 없다.
+  try {
+    const p = await invoke<any>("artist_profile_get").catch(() => null);
+    if (p && !String(p.name || "").trim()) {
+      out.push({
+        key: "artist",
+        label: t("손님에게 보일 얼굴을 아직 안 올렸습니다"),
+        go: () =>
+          raviPoint({
+            page: "artist",
+            el: "ar-save",
+            say: t("손님이 PLAYX 를 보면 지금 「PLAY X · 플레이엑스」뿐입니다. 얼굴과 이름을 여기 올리면 됩니다 — 공짜입니다."),
+          }),
+      });
+    }
+  } catch { /* 못 재면 침묵 */ }
+
   라비가아는것 = out;
 }
 
@@ -2939,6 +2956,24 @@ function pageTiles(page: string): PageTile[] {
          메뉴로 되돌리지는 않는다. 나눠주기는 **자산에 하는 일**이 맞다.
          대신 이 줄(「지금 할 일」)에 둔다 — 자산을 안 골라도 보이고,
          눌러 들어가면 그 화면이 열린다. */
+      /* 🔴 그록: "백엔드는 이미 있다. 화면이 없다. 1차 메뉴 「내 소개」를 붙여라."
+         진단은 같은데 **자리는 다르게** 간다 — 1차 메뉴는 일곱이고, 오늘
+         나눠주기를 거기서 내린 참이다. 대신 이 줄(「지금 할 일」)에 크게 둔다.
+         자산을 안 골라도 보이고, 200 RVN 태워 만든 자리라 눈에 띄어야 한다. */
+      {
+        icon: I('<circle cx="12" cy="8" r="3.6"/><path d="M4.5 20c0-4 3.4-6.4 7.5-6.4s7.5 2.4 7.5 6.4"/>'),
+        label: "내 아티스트 이름",
+        sub: "얼굴 · 소개 (공짜)",
+        go: () => {
+          const d = document.getElementById("artbox") as HTMLDetailsElement | null;
+          if (d) d.open = true;
+          raviPoint({
+            page: "assets",
+            el: "art-name",
+            say: "손님이 보는 얼굴과 소개입니다. 여기 적는 것은 공짜이고 언제든 바꿉니다 — 체인에는 열쇠만 박혀 있습니다.",
+          });
+        },
+      },
       {
         icon: I('<circle cx="12" cy="9" r="5.5"/><path d="M8.5 13.5L7 21l5-2.5L17 21l-1.5-7.5"/>'),
         label: "나눠주기",
@@ -4269,6 +4304,7 @@ function showPage(id: string) {
     void idLoad();
   }
   if (id === "reward") void loadReward();
+  if (id === "artist") void artistLoad();
   // 간판 열쇠 옮기기. 이미 씨앗 열쇠면 이 안에서 스스로 숨는다.
   if (id === "shop") void paintKeyMove();
   // 🔴 화면을 열 때 부르지 않으면 빈 칸만 보인다. 만들어 놓고 안 부르는
@@ -8003,6 +8039,166 @@ function 쉬는중(): boolean {
   return typeof document !== "undefined" && document.hidden === true;
 }
 
+/* ══ 내 소개 (아티스트 이름표) ═══════════════════════════════════════
+ *
+ * 개인 「내 이름」(`talk_profile_set`, 경로 `7'/0/0`)과 **다른 열쇠**다.
+ * 체인 `PLAYX` 에 박힌 공개키가 여기 열쇠(`7'/2'/0'`)라, 섞으면 손님이
+ * 체인을 보고 찾아도 이름표가 안 붙는다.
+ *
+ * 위 카드가 손님이 보는 장이다. 칸을 치면 위가 바로 바뀐다.
+ */
+
+/** 올린 얼굴 주소. 사진을 고르면 여기에 담겼다가 이름표와 같이 나간다. */
+let arPicture = "";
+
+function arNormWeb(raw: string): string {
+  const s = raw.trim();
+  if (!s) return "";
+  if (/^[a-z][a-z0-9+.-]*:/i.test(s)) return s;
+  return "https://" + s;
+}
+
+function arPaintPreview() {
+  const name = ($("ar-name") as HTMLInputElement).value.trim();
+  const about = ($("ar-about") as HTMLTextAreaElement).value.trim();
+  const web = arNormWeb(($("ar-web") as HTMLInputElement).value);
+  $("ar-nameview").textContent = name || "PLAY X";
+  const aboutEl = $("ar-aboutview");
+  aboutEl.textContent = about || (name ? "" : "플레이엑스");
+  const link = $("ar-linkview") as HTMLAnchorElement;
+  if (web && web.toLowerCase().startsWith("https://")) {
+    link.hidden = false;
+    link.href = web;
+    try {
+      link.textContent = new URL(web).host.replace(/^www\./, "");
+    } catch {
+      link.textContent = web;
+    }
+  } else {
+    link.hidden = true;
+    link.removeAttribute("href");
+    link.textContent = "";
+  }
+  const img = $("ar-face") as HTMLImageElement;
+  const ph = $("ar-ph");
+  if (arPicture) {
+    img.src = arPicture;
+    img.hidden = false;
+    ph.hidden = true;
+  } else {
+    img.removeAttribute("src");
+    img.hidden = true;
+    ph.hidden = false;
+  }
+}
+
+async function artistLoad() {
+  arPaintPreview();
+  const seal = $("ar-seal");
+  seal.className = "arseal muted";
+  seal.textContent = t("확인하는 중…");
+  try {
+    const got = await invoke<any>("artist_profile_get");
+    ($("ar-name") as HTMLInputElement).value = String(got?.name || "");
+    ($("ar-about") as HTMLTextAreaElement).value = String(got?.about || "");
+    ($("ar-web") as HTMLInputElement).value = String(got?.website || "");
+    arPicture = String(got?.picture || "");
+    arPaintPreview();
+  } catch (e) {
+    $("ar-say").innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
+  }
+  try {
+    const chk = await invoke<any>("artist_check", { asset: "PLAYX" });
+    if (chk?.ok) {
+      seal.className = "arseal";
+      seal.textContent = t("PLAYX 주인이 올린 소개입니다");
+    } else {
+      seal.className = "arseal warn";
+      seal.textContent = t(String(chk?.why || "체인이 가리키는 열쇠와 이 컴퓨터가 다릅니다."));
+    }
+  } catch (e) {
+    seal.className = "arseal muted";
+    seal.textContent = errText(e);
+  }
+  const shop = assets.get("SHOP.PLAYX");
+  const qty = $("ar-shopqty");
+  if (shop && shop.amount > 0) {
+    qty.textContent = `SHOP.PLAYX  ${fmtQty(shop.amount)}개 남음`;
+  } else if (shop) {
+    qty.textContent = t("SHOP.PLAYX 가 없습니다. 손님에게 줄 토큰이 없습니다.");
+  } else {
+    qty.textContent = t("SHOP.PLAYX 수량을 아직 못 읽었습니다. 「자산」에서 목록을 열어 주세요.");
+  }
+}
+
+async function artistPick(file: File) {
+  if (file.size > 8 * 1024 * 1024) {
+    $("ar-picnote").innerHTML = `<span class="danger">${t("사진이 너무 큽니다. 8MB 아래로 골라 주세요.")}</span>`;
+    return;
+  }
+  $("ar-picnote").textContent = t("사진 올리는 중…");
+  try {
+    const bytes = Array.from(new Uint8Array(await file.arrayBuffer()));
+    const added = await invoke<any>("ipfs_add_file", { file: { name: file.name, bytes } });
+    const cid = String(added?.cid || "");
+    if (!cid) throw new Error("파일창고가 사진 주소를 안 돌려줬습니다.");
+    arPicture = `https://ipfs.io/ipfs/${cid}`;
+    arPaintPreview();
+    const img = $("ar-face") as HTMLImageElement;
+    img.src = `http://127.0.0.1:8080/ipfs/${cid}`;
+    $("ar-picnote").innerHTML =
+      `<span class="ok">${t("사진을 올렸습니다. 아래 단추를 눌러야 소개가 바뀝니다.")}</span>`;
+  } catch (e) {
+    $("ar-picnote").innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
+  }
+}
+
+async function artistSave() {
+  const btn = $("ar-save") as HTMLButtonElement;
+  const say = $("ar-say");
+  btn.disabled = true;
+  const 옛 = btn.textContent;
+  btn.textContent = t("올리는 중…");
+  say.textContent = "";
+  try {
+    const name = ($("ar-name") as HTMLInputElement).value.trim();
+    const about = ($("ar-about") as HTMLTextAreaElement).value.trim();
+    const website = arNormWeb(($("ar-web") as HTMLInputElement).value);
+    await invoke("artist_profile_set", { name, about, picture: arPicture, website });
+    say.innerHTML = name
+      ? `<span class="ok">${t("올렸습니다. 손님이 이 얼굴·이름으로 봅니다.")}</span>`
+      : `<span class="ok">${t("이름을 비웠습니다. 손님은 자산 이름으로 봅니다.")}</span>`;
+    arPaintPreview();
+  } catch (e) {
+    say.innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 옛;
+  }
+}
+
+function artistGive() {
+  showPage("wallet");
+  openSend("asset", "SHOP.PLAYX");
+}
+
+function bindArtist() {
+  const paint = () => arPaintPreview();
+  $("ar-name").addEventListener("input", paint);
+  $("ar-about").addEventListener("input", paint);
+  $("ar-web").addEventListener("input", paint);
+  $("ar-save").addEventListener("click", () => void artistSave());
+  $("ar-give").addEventListener("click", () => artistGive());
+  const pick = () => ($("ar-file") as HTMLInputElement).click();
+  $("ar-pick").addEventListener("click", pick);
+  $("ar-facebtn").addEventListener("click", pick);
+  $("ar-file").addEventListener("change", () => {
+    const f = ($("ar-file") as HTMLInputElement).files?.[0];
+    if (f) void artistPick(f);
+    ($("ar-file") as HTMLInputElement).value = "";
+  });
+}
+
 const RAVI_SPOTS: Record<string, { page: string; el?: string; say: string }> = {
   "새 자산 만들기": { page: "assets", el: "as-new", say: "회원권·쿠폰·굿즈를 만드는 곳입니다" },
   "가게 열기": { page: "shop", el: "sh-save", say: "손님이 볼 화면을 여는 곳입니다" },
@@ -8026,6 +8222,11 @@ const RAVI_SPOTS: Record<string, { page: string; el?: string; say: string }> = {
     say: "자산을 가진 사람들에게 RVN 을 나눠 주는 곳입니다. 평소에는 「자산」에서 자산을 고르면 나오는 「나눠주기」로 들어오시면 됩니다",
   },
   "내 가게": { page: "shop", say: "주문·메뉴판·출입·매출이 다 여기 있습니다" },
+  "내 소개": {
+    page: "artist",
+    el: "ar-save",
+    say: "손님이 보는 얼굴·이름·소개를 올리는 곳입니다. 「이야기」의 내 이름과 다른 자리입니다",
+  },
   "지갑": { page: "wallet", say: "받은 돈과 보낼 곳입니다" },
   "백업": { page: "settings", el: "bk-go", say: "12단어와 지갑을 지키는 곳입니다" },
   "손님 받기 순서": { page: "shop", el: "sh-flow", say: "무엇이 남았는지 여기 있습니다" },
@@ -8040,6 +8241,7 @@ const RAVI_SPOTS: Record<string, { page: string; el?: string; say: string }> = {
 /** 1차 메뉴의 사람 말 이름. 「어느 탭인지」를 말풍선에 적는다. */
 const PAGE_NAMES: Record<string, string> = {
   ravi: "라비", talk: "이야기", wallet: "지갑", assets: "자산",
+  artist: "내 소개",
   reward: "나눠주기", shop: "내 가게", parts: "이 컴퓨터", msg: "이야기",
   door: "출입", settings: "설정",
 };
@@ -14698,6 +14900,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     });
   }
   $("tk-name").addEventListener("click", () => void talkSetName());
+  bindArtist();
   // ── 접기·펴기 ────────────────────────────────────────────────────
   // 🔴 단추 다섯을 하나로 접었다. 접은 것은 **없앤 것이 아니다** — 여는
   //    법이 「더 보기」라고 글자로 적혀 있고, 안에 든 것도 다 글자다.
