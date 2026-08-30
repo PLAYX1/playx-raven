@@ -754,6 +754,128 @@ async function askRelay(filter: unknown): Promise<any[]> {
 }
 
 /** 방 목록. */
+
+/* ── 팬에게 알리기 ────────────────────────────────────────────────────
+ *
+ * 🔴 앱(가게 컴퓨터)에만 있던 것을 폰에도 둔다.
+ *
+ * 음악을 냈으면 팬에게 알려야 하는데, **알릴 일은 밖에서 생긴다** —
+ * 공연장에서, 이동 중에. 그런데 여태는 컴퓨터 앞에 앉아야만 됐다.
+ *
+ * ## 왜 이것만 폰에서 되나
+ * 앱의 다른 자산 기능은 **노드 지갑**을 쓴다(맞교환·발행·나눠주기·팬 수
+ * 세기 — 전부 `call_rpc`). 폰에는 노드가 없어서 구조적으로 안 된다.
+ * 그런데 **공지는 방에 글을 보내는 것뿐**이다(`fanclub.rs:562` 가
+ * `talk_post` 를 부른다). 그 길은 폰에 이미 있다.
+ *
+ * ## 앱과 같은 규칙을 지킨다
+ * 한 번에 20개 방까지(`MAX_ROOMS`), 글 8000자까지(`TEXT_MAX`),
+ * 링크는 `https` 만. 규칙이 갈라지면 같은 글이 앱에서는 가고 폰에서는
+ * 막히는 일이 생긴다.
+ */
+const 공지_방_최대 = 20;
+const 공지_글_최대 = 8000;
+
+/** 내 자산으로 만든 방들. 앱의 `fan_rooms` 가 하는 일과 같다. */
+async function 내자산방(): Promise<{ id: string; name: string; asset: string }[]> {
+  const 내것 = new Set(Object.keys(myAssets).map((a) => a.trim().toUpperCase()));
+  if (!내것.size) return [];
+  const evs = await askRelay({ kinds: [KIND_ROOM], "#t": ["ravencoin"], limit: 50 });
+  const 본것 = new Set<string>();
+  const out: { id: string; name: string; asset: string }[] = [];
+  for (const e of evs) {
+    const id = String(e?.id || "");
+    if (!id || 본것.has(id)) continue;
+    본것.add(id);
+    let b: any = {};
+    try {
+      b = JSON.parse(e.content || "{}");
+    } catch {
+      /* 모양이 달라도 태그로 찾는다 */
+    }
+    const tags: string[][] = e.tags || [];
+    const asset = String(
+      tags.find((t) => t[0] === "asset")?.[1] || (typeof b.asset === "string" ? b.asset : ""),
+    ).trim().toUpperCase();
+    // 🔴 **내가 가진 자산의 방만.** 남의 방에 공지를 보내면 그건 광고다.
+    if (!asset || !내것.has(asset)) continue;
+    out.push({ id, name: String(b.name || "방"), asset });
+  }
+  return out.slice(0, 공지_방_최대);
+}
+
+/**
+ * 팬 방들에 같은 글을 보낸다.
+ *
+ * 🔴 **한 방이 실패해도 나머지는 보낸다.** 릴레이는 언제든 하나씩 죽고,
+ *    그때마다 전부 멈추면 아무도 안 쓴다. 앱도 같은 판단을 한다.
+ *    그리고 **못 간 곳을 숨기지 않는다** — 갔다고 믿고 있으면 그게 더 나쁘다.
+ */
+async function 팬에게알리기(): Promise<void> {
+  const 글칸 = $("fa-text") as HTMLTextAreaElement;
+  const 링크칸 = $("fa-link") as HTMLInputElement;
+  const 글 = 글칸.value.trim();
+  const 링크 = 링크칸.value.trim();
+  if (!글) return say("fa-say", "보낼 내용이 없습니다.", "err");
+  // 앱과 같은 규칙 — `https` 만. 남이 누를 링크라 그 밖은 안 받는다.
+  if (링크 && !/^https:\/\/[^\s"'<>]+$/i.test(링크))
+    return say("fa-say", "링크는 https 로 시작해야 합니다.", "err");
+  const 본문 = 링크 ? `${글}\n${링크}` : 글;
+  if (본문.length > 공지_글_최대)
+    return say("fa-say", `글이 너무 깁니다(${공지_글_최대}자까지).`, "err");
+  const sec = nostrSecret();
+  if (!sec) return say("fa-say", "지갑을 먼저 열어 주세요.", "err");
+
+  const btn = $("fa-send") as HTMLButtonElement;
+  btn.disabled = true;
+  say("fa-say", "방을 찾는 중…");
+  try {
+    const 방들 = await 내자산방();
+    if (!방들.length) {
+      // 🔴 「없습니다」로 끝내지 않는다. 왜 없는지와 다음에 할 일을 적는다.
+      say(
+        "fa-say",
+        "보낼 방이 없습니다. 내 자산으로 만든 방이 있어야 합니다 — 방은 컴퓨터 프로그램에서 만드실 수 있습니다.",
+        "err",
+      );
+      return;
+    }
+    say("fa-say", `${방들.length}곳에 보내는 중…`);
+    const 못간곳: string[] = [];
+    for (const 방 of 방들) {
+      try {
+        const ev = signEvent(sec, {
+          kind: KIND_ROOM_MSG,
+          created_at: Math.floor(Date.now() / 1000),
+          tags: [["e", 방.id, "", "root"], ["t", "ravencoin"]],
+          content: 본문,
+        } as any);
+        const r = await fetch("/api/nostr/publish", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(ev),
+        });
+        if (!r.ok) throw new Error(String(r.status));
+      } catch {
+        못간곳.push(방.name);
+      }
+    }
+    const 간곳 = 방들.length - 못간곳.length;
+    if (!못간곳.length) {
+      글칸.value = "";
+      링크칸.value = "";
+      say("fa-say", `${간곳}곳에 보냈습니다.`, "ok");
+    } else {
+      // 못 간 곳을 이름으로 적는다. 숫자만 적으면 어디를 다시 보낼지 모른다.
+      say("fa-say", `${간곳}곳에 보냈습니다. 못 간 곳: ${못간곳.join(", ")}`, "err");
+    }
+  } catch (e: any) {
+    say("fa-say", String(e?.message || e), "err");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 async function loadRooms(): Promise<void> {
   const box = $("rm-list");
   box.textContent = "방을 찾는 중…";
@@ -2930,6 +3052,9 @@ function boot(): void {
     $("rm-list").style.display = "";
   });
   document.getElementById("rm-send")?.addEventListener("click", () => void sendRoomMsg());
+  // 🔴 배선. 화면만 만들고 이 줄을 안 쓰면 아무 일도 안 난다 —
+  //    이 저장소가 오늘만 세 번 걸린 병이다.
+  document.getElementById("fa-send")?.addEventListener("click", () => void 팬에게알리기());
   // 🔴 사진 단추 배선. 화면만 만들고 이 줄을 안 쓰면 **아무 일도 안 난다** —
   //    이 저장소가 오늘만 세 번 걸린 병이다.
   document.getElementById("rm-photo-go")?.addEventListener("click", () => {

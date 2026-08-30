@@ -415,6 +415,14 @@
       /* 말풍선 안의 사진. 폭에 맞춰 줄이고, 눌러서 크게 볼 수 있게. */
       /* 「지우기 요청」 — 내 말풍선 아래에 작게. 자주 쓰는 것이 아니라
          작아도 되지만, 44px 은 지킨다(누르는 자리다). */
+      /* 팬에게 알리기. 접어 두되, 펼치면 한 자리에서 끝난다. */
+      .fanbox { margin: 4px 0 16px; padding: 12px 14px; border-radius: 14px;
+                background: var(--panel); border: 1px solid var(--line); }
+      .fanbox > summary { cursor: pointer; min-height: 44px;
+                          display: flex; align-items: center; gap: 6px;
+                          font-size: 15.5px; }
+      .fanbox textarea { min-height: 80px; margin-top: 10px; }
+      .fanbox button { margin-bottom: 4px; }
       .rdelrow { align-self: flex-end; margin: 2px 2px 6px; }
       .rdel { width: auto; min-height: 44px; margin: 0; padding: 0 12px;
               font-size: 13px; font-weight: 400; color: var(--muted);
@@ -929,6 +937,23 @@
         <b>비밀 이야기는 쓰지 마세요.</b><br />
         옛 글은 릴레이가 지울 수 있습니다 — <b>언제까지 남는지는 저희가
         정하지 못합니다.</b> 꼭 남겨야 할 것은 <b>따로 적어 두세요.</b></p>
+      <!-- ── 팬에게 알리기 ──────────────────────────────────────────
+           🔴 앱(가게 컴퓨터)에만 있던 것을 폰에도 둔다.
+              음악을 냈으면 팬에게 알려야 하는데, **알릴 일은 밖에서
+              생긴다** — 공연장에서, 이동 중에. 여태는 컴퓨터 앞에
+              앉아야만 됐다.
+           ⚠️ 접어 둔다. 자산이 있는 사람만 쓰는 일이라 늘 펼쳐 두면
+              대부분에게는 잡음이다. -->
+      <details id="fanbox" class="fanbox">
+        <summary><b>팬에게 알리기</b> — 내 자산 방에 한 번에</summary>
+        <p class="sub" style="margin-top:8px">새 음반·공연처럼 알릴 것이
+          있을 때 씁니다. <b>내 자산으로 만든 방</b>에만 갑니다.</p>
+        <textarea id="fa-text" rows="3" placeholder="알릴 내용"></textarea>
+        <input id="fa-link" inputmode="url" placeholder="링크 (없어도 됩니다)" />
+        <button id="fa-send">보내기</button>
+        <div class="msg" id="fa-say"></div>
+      </details>
+
       <div id="rm-list"></div>
 
       <div id="rm-pane" style="display:none">
@@ -984,7 +1009,7 @@
       <a href="/shops#items" class="tab">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 7h12l1 12H5z"/><path d="M9 7a3 3 0 016 0"/></svg>
-        <span>물건</span>
+        <span>장터</span>
       </a>
     </nav>
     <script>

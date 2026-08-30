@@ -13,6 +13,29 @@
                    connect-src 'self' wss://relay.damus.io wss://nos.lol
                                 wss://relay.primal.net;
                    base-uri 'none'; form-action 'none'; frame-ancestors 'none'" />
+    <!-- 🔴 **안드로이드에서 「앱으로 설치」가 아예 안 떴다**(실측 감사 2026-08-30).
+         이 화면에 설치 상자(`#pwa-box`)는 있는데, 크롬이 설치를 권하려면
+         **manifest 와 서비스워커가 이 화면에 걸려 있어야** 한다. 둘 다
+         `index.html`·`guide.html` 에만 있었다. 그래서 크롬은 신호를 안 쐈고,
+         상자는 영영 빈 채로 지워졌다 — 아이폰 쓰는 분만 안내를 봤다.
+
+         ⚠️ CSP 가 `default-src 'none'` 이라 `manifest-src`·`worker-src` 를
+            **따로 적어야 한다.** 안 적으면 `default-src` 로 떨어져 조용히 막힌다.
+            (오늘만 「조용히 안 도는 것」을 여섯 번 만났다.) -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#e7731f" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="PLAY X Raven" />
+    <!-- 🔴 이 파일은 만들어 놓고 **아무 데서도 안 불렀다**(실측 2026-08-30).
+         탭을 키우고, 밀어서도 옮기게 하고, 지금 어디인지 밑줄로 알려 준다.
+         ⚠️ 바가 감춰진 화면(12단어 적는 중)에서는 밀어도 안 옮긴다 —
+            그 안전장치는 `tabs.js` 안에 있다. -->
+    <script src="/tabs.js" defer></script>
+    <!-- 🔴 신고 단추가 소개·안내 화면에만 있었다. **정작 고장이 나는 곳**
+         (지갑·장터)에는 없었다. 데스크톱 앱은 어느 화면에서든 있다. -->
+    <script src="/report.js" defer></script>
     <title>가게 찾기</title>
     <style>
       :root {
@@ -40,7 +63,9 @@
       .search { margin: 16px 0 12px; }
       .search input { width: 100%; padding: 12px 12px; border-radius: 11px;
                       border: 1px solid var(--line); background: var(--panel); color: var(--fg);
-                      font-size: 15px; font-family: inherit; }
+                      /* 🔴 16px 미만이면 아이폰 사파리가 탭할 때마다 확대한다.
+                         같은 파일의 물건 검색칸은 이미 16px 인데 여기만 빠져 있었다. */
+                      font-size: 16px; font-family: inherit; }
 
       .card { display: flex; gap: 12px; align-items: center; padding: 12px 0;
               border-bottom: 1px solid var(--line); text-decoration: none; color: inherit; }
@@ -91,7 +116,7 @@
       @media (hover: hover) { .back:hover { color: var(--ravi); } }
       /* 지금 어느 탭인지 보이지 않으면 두 번 누른다. */
       .tb.on { background: var(--ravi); border-color: var(--ravi);
-        color: #fff; font-weight: 600; }
+        color: var(--on-fill); font-weight: 600; }
       /* 「가게 / 물건」 을 가르는 탭. 39x22 라 손가락 절반이었다. */
       .tb { min-height: 44px; padding: 0 16px; font-size: 15px; }
 
@@ -183,7 +208,7 @@
          버튼 옆에 있어야 눌린다. */
       .sellcta { display: block; text-align: center; margin: 0 0 16px;
         min-height: 48px; line-height: 48px; border-radius: 12px;
-        background: var(--ravi); color: #fff; font-weight: 600;
+        background: var(--ravi); color: var(--on-fill); font-weight: 600;
         text-decoration: none; font-size: 16px; }
       .sellcta::after { content: " · 공짜"; font-weight: 400; opacity: .85; font-size: 14px; }
       /* ── 물건 카드 ────────────────────────────────────────────────────
@@ -234,11 +259,12 @@
       .tabbar a {
         flex: 1; min-height: 56px; display: flex; flex-direction: column;
         align-items: center; justify-content: center; gap: 2px;
-        text-decoration: none; color: var(--muted); font-size: 12.5px;
+        text-decoration: none; color: var(--muted); font-size: 15px;
         -webkit-tap-highlight-color: transparent;
       }
-      .tabbar a.on { color: var(--ravi); font-weight: 600; }
-      .tabbar a svg { width: 22px; height: 22px; }
+      .tabbar a.on { color: var(--ravi); font-weight: 600;
+                     box-shadow: inset 0 3px 0 var(--ravi); }
+      .tabbar a svg { width: 26px; height: 26px; }
       /* 바가 본문 끝을 가리지 않게. 고정 바는 늘 이 짝이 필요하다. */
       body { padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)); }
       /* ── 물건 자세히 ─────────────────────────────────────────────────
@@ -278,7 +304,10 @@
         box-shadow: 0 4px 16px rgba(0,0,0,.14);
         font-size: 14px; font-weight: 600; color: var(--fg);
         min-height: 48px; cursor: pointer; }
-      .raviask img { width: 32px; height: 32px; border-radius: 999px; }
+      /* 🔴 `object-fit` 이 없으면 세로로 눌려 얼굴이 잘린다. 그림을 정사각
+         정면 얼굴로 바꿨지만, 이 줄이 없으면 다음에 또 같은 일이 난다. */
+      .raviask img { width: 32px; height: 32px; border-radius: 999px;
+                     object-fit: cover; }
       .ravisheet .qa { margin-top: 12px; }
       .ravisheet input { width: 100%; min-height: 48px; padding: 0 14px;
         border: 1px solid var(--line); border-radius: 12px; background: var(--bg);
@@ -321,7 +350,7 @@
         min-height: 56px; border-radius: 14px; font-size: 17px; font-weight: 600;
         text-decoration: none; border: 1px solid var(--line);
         background: var(--panel); color: var(--fg); }
-      .cbtn.call { background: var(--ravi); border-color: var(--ravi); color: #fff; }
+      .cbtn.call { background: var(--ravi); border-color: var(--ravi); color: var(--on-fill); }
       /* 「이 물건 사기」가 이 화면의 주인공이다. 전화보다 위, 더 크게. */
       .cbtn.buy { flex-direction: column; gap: 2px; min-height: 64px;
         background: var(--accent); border-color: var(--accent); color: var(--on-fill); }
@@ -334,7 +363,7 @@
         display: inline-block; min-height: 44px; line-height: 44px; }
       .wakeline { padding: 10px 12px; border-radius: 12px; background: var(--ravi-tint);
         color: var(--fg); font-size: 15px; margin-bottom: 10px; }
-      .keybox .btn.go { background: var(--ravi); border-color: var(--ravi); color: #fff; }
+      .keybox .btn.go { background: var(--ravi); border-color: var(--ravi); color: var(--on-fill); }
       /* 어디서 열쇠를 받나. 다섯 줄이라 표로 두면 눈이 훑는다. */
       .wherelist { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
       .wrow { display: grid; grid-template-columns: 1fr auto auto; gap: 10px;
@@ -360,7 +389,7 @@
         background: var(--bg); color: var(--fg); }
       .itembar button { flex: none; min-height: 48px; padding: 0 16px; font-size: 16px; }
       .itembar button[aria-pressed="true"] { background: var(--ravi);
-        border-color: var(--ravi); color: #fff; }
+        border-color: var(--ravi); color: var(--on-fill); }
       /* 하트. 카드 오른쪽 위에 띄운다 — 카드 안에 두면 물건을 열려다 눌린다. */
       .icard { position: relative; }
       .fav { position: absolute; top: 6px; right: 6px; width: 44px; height: 44px;
@@ -373,7 +402,7 @@
       <!-- 카톡·텔레그램에 링크를 붙였을 때 뜨는 카드.
          ⚠️ 매장 노드는 자기 주소(192.168.x)라 바깥에서 그림을 못 가져온다.
             그래서 그림은 **웹 주소**를 가리킨다 — 가게 안이든 밖이든 뜬다. -->
-    <link rel="icon" href="/raven-head.webp" />
+    <link rel="icon" href="/raven-face.webp" />
     <meta property="og:type" content="website" />
     <meta property="og:title" content="가게와 물건 찾기" />
     <meta property="og:description" content="블록체인에서 직접 읽어 옵니다." />
@@ -389,9 +418,22 @@
 
     <!-- 가게는 체인에, 물건은 릴레이에 있다. 손님에게는 둘 다 "여기서 살 수
          있는 것" 이라 나누는 것은 우리 사정이지 손님 사정이 아니다. -->
-    <div class="tabs" style="display:flex;gap:8px;margin:0 0 12px">
+    <!-- 🔴 **탭이 두 벌이었다**(대표님 2026-08-30).
+         여기 「가게|물건」이 있고 아래 탭바에도 「물건」이 있었다.
+         같은 「물건」인데 위는 즉시 바뀌고 아래는 페이지를 다시 열어서,
+         **같은 것이 두 가지로 움직였다.** 배울 수가 없다.
+
+         이제 「장터」가 자기 탭을 가지므로 여기서 또 가를 이유가 없다.
+         이 화면은 **가게만** 본다.
+         🔴 **그런데 그냥 지우면 장터가 안 열린다.** `#items` 로 들어오면
+            코드가 `[data-tab="items"]` 단추를 **찾아서 누른다**(`An()`).
+            단추가 없으면 아무 일도 안 일어난다 — 아래 탭바의 「장터」가
+            죽는다. 그래서 **보이지 않게 두되 남긴다.**
+            (오늘만 「만들어 놓고 안 부른다」를 세 번 만났다. 이번엔
+             거꾸로 「부르는데 없앨 뻔」했다.) -->
+    <div class="tabs" hidden aria-hidden="true">
       <button class="tb on" data-tab="shops">가게</button>
-      <button class="tb" data-tab="items">물건</button>
+      <button class="tb" data-tab="items">장터</button>
     </div>
     <div class="sub" id="count">불러오는 중…</div>
 
@@ -432,6 +474,32 @@
       // 주소도 남이 정한다. javascript: 같은 것이 들어오면 그건 우리가
       // 뿌리는 공격이 된다. http/https 만 통과시킨다.
       const safeUrl = (u) => (/^https?:\/\//i.test(String(u || "")) ? String(u) : "");
+
+      /**
+       * 🔴 **가게 사진이 빈 칸으로 나왔다** (대표님 2026-08-30).
+       *
+       * 실측: 이 가게의 `icon` 은 17,379바이트짜리 `data:image/jpeg;base64,…`
+       * 다 — 파일창고 올리기가 실패했을 때 사진을 문서 안에 통째로 넣은
+       * 것이다. 그런데 `safeUrl` 은 `http/https` 만 통과시켜서 **어느 경로로도
+       * 화면에 닿지 못했다.** 가게는 사진을 올렸는데 손님은 회색 네모를 봤다.
+       *
+       * ⚠️ 사진 주소를 다루는 규칙이 이 파일에 **두 군데** 따로 있었고
+       *    (여기와 아래 「사진 채우기」) 둘 다 같은 이유로 걸렀다.
+       *    한 곳으로 모은다 — 두 벌이면 고칠 때 한쪽만 고친다.
+       *
+       * 받는 것 셋: `https://` · `data:image/…;base64,` · `Qm…`(파일창고).
+       * `javascript:` 같은 것은 그대로 막는다 — 남이 정하는 값이다.
+       * `svg+xml` 도 안 받는다. `<img>` 안에서는 스크립트가 안 돌지만
+       * 받는 형식을 넓히면 그만큼 확인이 헐거워진다.
+       */
+      const photoSrc = (icon) => {
+        const v = typeof icon === "string" ? icon.trim() : "";
+        if (!v) return "";
+        if (/^https:\/\//i.test(v)) return v;
+        if (/^data:image\/(png|jpe?g|gif|webp|avif);base64,[A-Za-z0-9+/=\s]+$/i.test(v)) return v;
+        if (/^Qm[1-9A-HJ-NP-Za-km-z]{44}(\/[\w.-]{1,40})?$/.test(v)) return `/rvn/api/ipfs/${v}`;
+        return "";
+      };
       const esc = (v) => String(v ?? "")
         .replace(/&/g, "&amp;").replace(/</g, "&lt;")
         .replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
@@ -555,7 +623,7 @@
                 // 이제 누르면 그 가게의 자세한 것이 열린다 — 전화·위치·
                 // 영업시간·길찾기. 닫혀 있어도 「몇 시에 여는지」는 알아야 한다.
                 return `<a class="card" href="#" data-open="${esc(s.asset)}">
-                  ${safeUrl(p.icon) ? `<img src="${esc(safeUrl(p.icon))}" alt="" loading="lazy" />` : `<div class="ph"></div>`}
+                  ${photoSrc(p.icon) ? `<img src="${esc(photoSrc(p.icon))}" alt="" loading="lazy" />` : `<div class="ph"></div>`}
                   <div style="min-width:0">
                     <div class="nm">${esc(p.name || label)}</div>
                     <div class="de">${esc(p.desc || p.location || label)}</div>
@@ -662,9 +730,25 @@
                        style="margin-top:8px;padding:10px 14px;border-radius:10px;
                        border:1px solid var(--line);background:var(--bg);color:var(--fg);
                        font-size:15px;font-family:inherit">길찾기</button>`);
+        // 🔴 **닫혀 있어도 가게는 볼 수 있어야 한다**(대표님 2026-08-30).
+        //
+        //    여태는 문이 닫히면 「지금은 주문을 받지 않습니다」 한 줄뿐이었다.
+        //    그런데 손님이 알고 싶은 것은 **결제만이 아니다** — 뭘 파는지,
+        //    언제 여는지, 어디인지. 그건 문이 닫혀도 그대로다.
+        //
+        //    메뉴는 파일창고(`menu_cid`)에 있어서 **가게 컴퓨터가 꺼져 있어도
+        //    남의 관문으로 읽을 수 있다.** 결제만 막으면 된다.
+        if (p.menu_cid && /^Qm[1-9A-HJ-NP-Za-km-z]{44}$/.test(String(p.menu_cid))) {
+          acts.push(`<a class="orderbtn" style="background:var(--panel);color:var(--fg);
+                        border:1px solid var(--line)"
+                        href="/ipfs/${esc(p.menu_cid)}" target="_blank"
+                        rel="noopener noreferrer">메뉴 보기</a>`);
+        }
         $("sh-acts").innerHTML =
           acts.join(" ") ||
-          `<div class="empty" style="padding:18px 0">지금은 주문을 받지 않습니다.</div>`;
+          // 문이 닫혔다는 것과 **가게가 없다**는 것은 다르다. 갈라 말한다.
+          `<div class="empty" style="padding:18px 0">지금은 주문을 못 받습니다 —
+             가게 컴퓨터가 꺼져 있습니다. 전화나 길찾기는 위에 있습니다.</div>`;
         // 길찾기 단추는 문서 전체에 걸린 처리기가 받는다(아래 `data-go`).
         // 여기서 따로 묶지 않는다 — 두 번 걸면 두 번 열린다.
         $("shopwrap").classList.add("on");
@@ -745,7 +829,18 @@
             // 공지에 만료 시각을 달아 두긴 했지만(NIP-40), 릴레이가 그걸
             // 지킬 의무는 없다. 지키는 곳도 있고 무시하는 곳도 있어서,
             // 릴레이를 믿는 대신 **여기서 다시 센다.**
-            if (live && Date.now() / 1000 - live.at > 2 * 3600) live = null;
+            // 🔴 **2시간은 너무 길다**(대표님 2026-08-30).
+            //
+            //    가게 컴퓨터는 45분마다 「열려 있다」를 알린다(`tunnel.rs`).
+            //    그런데 여기서 2시간을 열림으로 봤다. 노트북은 닫는 순간
+            //    터널이 죽는데, 화면은 최대 두 시간을 「지금 문 열었습니다」로
+            //    말했다 — 손님이 눌러 보면 「사이트에 연결할 수 없음」이다.
+            //
+            //    한 번 걸러도 되게 **한 번 알림 + 여유**(50분)로 줄인다.
+            //    ⚠️ 이래도 최대 50분은 틀릴 수 있다. 진짜로 살아 있는지
+            //       확인하려면 우리 서버가 그 주소를 두드려 봐야 한다
+            //       (화면은 CSP 때문에 못 나간다). 그건 다음 일이다.
+            if (live && Date.now() / 1000 - live.at > 50 * 60) live = null;
             LIVE_CACHE[key] = live;
           }
           if (!live) { el.remove(); continue; }   // 닫혀 있으면 자리를 없앤다
@@ -770,13 +865,9 @@
             const img = card.querySelector("img");
             const icon = typeof p.icon === "string" ? p.icon : "";
             if (img && icon) {
-              const src = /^https:\/\//i.test(icon)
-                ? icon
-                // 폴더 주소 뒤에 파일 이름이 붙는다 — `Qm…/icon.jpg`.
-                // 이름 없이 폴더만 쓰면 그림 대신 목록이 온다.
-                : /^Qm[1-9A-HJ-NP-Za-km-z]{44}(\/[\w.-]{1,40})?$/.test(icon)
-                  ? `/rvn/api/ipfs/${icon}`
-                  : "";
+              // 규칙은 위 `photoSrc` 한 곳에만 둔다. 여기 따로 적었더니
+              // 두 벌이 갈라져서 `data:` 사진이 양쪽에서 걸렸다.
+              const src = photoSrc(icon);
               if (src) img.src = src;
             }
           }
@@ -789,7 +880,14 @@
           a.href = safeUrl(live.url) || "#";
           a.target = "_blank";
           a.rel = "noopener noreferrer";
-          a.textContent = "지금 문 열었습니다 · 주문하러 가기";
+          // 🔴 **「지금」이라고 단정하지 않는다.** 우리가 아는 것은
+          //    「몇 분 전에 열려 있다고 알려 왔다」까지다. 그 사이에 컴퓨터를
+          //    껐을 수 있고, 그때 손님은 브라우저 오류 화면을 본다.
+          //    아는 만큼만 말하면 손님이 스스로 판단한다.
+          const 분 = Math.max(0, Math.round((Date.now() / 1000 - (live.at || 0)) / 60));
+          a.textContent = 분 <= 5
+            ? "방금 문 열었습니다 · 주문하러 가기"
+            : `${분}분 전에 열려 있었습니다 · 주문하러 가기`;
           el.replaceWith(a);
         }
       }
@@ -932,8 +1030,8 @@
       <!-- 손님도 물어볼 수 있어야 한다. 여기 있는 사람은 사장이 아니라
          손님이라 **가게 정보만** 답하는 쪽을 쓴다. -->
     <button class="raviask" id="ravi-ask">
-      <img src="/raven-head.webp" alt="" />
-      <span>Ravi에게 물어보기</span>
+      <img src="/raven-face.webp" alt="" />
+      <span>라비에게 물어보기</span>
     </button>
 
     <nav class="tabbar">
@@ -947,10 +1045,19 @@
              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9l1.5-4h13L20 9"/><path d="M4 9h16v10H4z"/><path d="M9 19v-6h6v6"/></svg>
         <span>가게</span>
       </a>
+      <!-- 🔴 대표님(2026-08-30): "/wallet 에는 이야기 탭이 있는데
+           다른 곳에는 이야기 탭이 안 나오네."
+           맞다. 아래 줄이 화면마다 다르면 **같은 물건으로 안 느껴진다.**
+           지갑과 같은 넷·같은 차례로 맞춘다. -->
+      <a href="/wallet#rooms" class="tab">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 01-9 8.4 9.9 9.9 0 01-4.1-.8L3 21l1.9-4.9a8.4 8.4 0 01-.8-3.6 8.4 8.4 0 018.4-8.4h.5a8.4 8.4 0 018 8v.4z"/></svg>
+        <span>이야기</span>
+      </a>
       <a href="/shops#items" class="tab">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 7h12l1 12H5z"/><path d="M9 7a3 3 0 016 0"/></svg>
-        <span>물건</span>
+        <span>장터</span>
       </a>
     </nav>
     <script>
@@ -969,6 +1076,17 @@
           el.hidden = true;             // 손님에게는 없는 기능이다
         });
       })();
+    </script>
+    <script>
+      // 🔴 안드로이드가 「앱으로 설치」를 권하려면 **서비스워커가 이 화면에
+      //    걸려 있어야** 한다. 없어서 설치 단추가 영영 안 그려졌다.
+      //    `sw.js` 는 일부러 아무것도 캐시하지 않는다 — 지갑 코드를 캐시하면
+      //    보안 수정이 안 먹는다. 설치를 가능하게 하는 것이 이것의 일이다.
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+          navigator.serviceWorker.register('/sw.js').catch(function () {});
+        });
+      }
     </script>
 </body>
 </html>
