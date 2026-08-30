@@ -2745,7 +2745,14 @@ function pageTiles(page: string): PageTile[] {
         icon: I('<circle cx="12" cy="9" r="5.5"/><path d="M8.5 13.5L7 21l5-2.5L17 21l-1.5-7.5"/>'),
         label: "나눠주기",
         sub: "가진 사람들에게",
-        go: () => showPage("reward"),
+        // 🔴 그냥 `showPage` 하면 **화면만 툭 바뀐다.** 라비가 데려갈 때와
+        //    같은 대접을 한다 — 어디로 왔는지 말하고, 첫 칸을 빛나게.
+        go: () =>
+          raviPoint({
+            page: "reward",
+            el: "rw-asset",
+            say: "자산을 가진 사람들에게 RVN 을 나눠 주는 곳입니다. 먼저 어느 자산인지 적습니다.",
+          }),
       },
       /* 🔴 접힌 칸은 **스크롤해도 아무 일이 안 일어난다.** 이 화면에서 이미
          한 번 겪은 병이라(위 두 칸의 주석), 팬클럽도 같은 실수를 안 하게
@@ -7778,8 +7785,49 @@ const RAVI_SPOTS: Record<string, { page: string; el?: string; say: string }> = {
  * ⚠️ 데려가기만 하면 그 화면에도 칸이 여럿이라 또 못 찾는다. 대표님이
  *    실제로 두 번 못 찾으셨다(0.1.50). 그래서 가운데로 올리고 반짝인다.
  */
+/** 1차 메뉴의 사람 말 이름. 「어느 탭인지」를 말풍선에 적는다. */
+const PAGE_NAMES: Record<string, string> = {
+  ravi: "라비", talk: "이야기", wallet: "지갑", assets: "자산",
+  reward: "나눠주기", shop: "내 가게", parts: "이 컴퓨터", msg: "이야기",
+  door: "출입", settings: "설정",
+};
+
+/**
+ * **데려다 준 뒤 라비가 남는다.**
+ *
+ * 🔴 대표님: "메뉴 이동했는데 라비가 따라 다니지도 않는데."
+ *    "뭐 하이라이트도 없고 갑자기 나눠주기가 나오네."
+ *
+ *    둘 다 사실이었고, 둘 다 **적혀 있는데 안 돌던 것**이다:
+ *
+ *    · `spot.say`(라비가 할 말)를 자리 열다섯 곳에 적어 두고 **한 번도
+ *      화면에 안 그렸다.** 그냥 조용히 화면만 바뀌었다.
+ *    · `classList.add("flash")` 를 네 곳에서 부르는데 **`.flash` 를 정의한
+ *      CSS 가 한 곳도 없었다.** 브라우저는 모르는 클래스를 조용히 넘어간다.
+ *
+ * 말풍선은 **화면(page)이 아니라 body 에** 붙는다. 그래야 탭을 옮겨도
+ * 같이 간다 — 라비를 화면으로 만들어 둔 것이 애초에 사라지는 이유였다.
+ */
+function raviBubble(pageId: string, say: string) {
+  document.getElementById("ravibub")?.remove();
+  const box = document.createElement("div");
+  box.className = "ravibub";
+  box.id = "ravibub";
+  const 어디 = PAGE_NAMES[pageId] || pageId;
+  box.innerHTML =
+    `<img src="/raven-face.webp" alt="" />` +
+    `<div class="rb"><div class="rbwhere">${escapeHtml(t("여기는"))} · ${escapeHtml(t(어디))}</div>` +
+    `<div class="rbsay">${escapeHtml(say)}</div></div>` +
+    `<button class="rbx" type="button" aria-label="${escapeHtml(t("닫기"))}">✕</button>`;
+  box.querySelector(".rbx")!.addEventListener("click", () => box.remove());
+  document.body.appendChild(box);
+}
+
 function raviPoint(spot: { page: string; el?: string; say: string }) {
   showPage(spot.page);
+  // 🔴 **말을 먼저 띄운다.** 자리를 못 찾아도 설명은 남아야 한다 —
+  //    데려다 놓고 아무 말도 없으면 「갑자기 화면이 바뀌었다」가 된다.
+  if (spot.say) raviBubble(spot.page, spot.say);
   if (!spot.el) return;
   let tries = 0;
   const look = window.setInterval(() => {
