@@ -830,13 +830,24 @@ function 부를이름(pub: string): string {
   return 이름표.get(pub)?.name || pub.slice(0, 8);
 }
 
-/** 이름표 한 칸의 속. 얼굴이 있으면 얼굴, 없으면 이름만. */
+/**
+ * 이름표 한 칸의 속. 얼굴 → 이름 → (흉내가 있으면) 경고.
+ *
+ * 얼굴 테두리와 이름 색은 **열쇠**에서 나온다(위 「사칭 막기」 참고).
+ */
 function 이름표속(pub: string): string {
-  const 얼굴 = 이름표.get(pub)?.picture || "";
+  const 찾음 = 이름표.get(pub);
+  const 얼굴 = 찾음?.picture || "";
+  const 이름 = 찾음?.name || "";
+  const 겹침 = 이름 ? 겹친이름.get(이름.trim()) : undefined;
   return (
     (얼굴
       ? `<img class="rface" src="${escapeHtml(얼굴)}" alt="" loading="lazy" />`
-      : "") + escapeHtml(부를이름(pub))
+      : "") +
+    escapeHtml(부를이름(pub)) +
+    (겹침
+      ? `<span class="samename" title="이름은 누구나 같게 달 수 있습니다. 색이 다르면 다른 분입니다.">같은 이름 ${겹침}명</span>`
+      : "")
   );
 }
 
@@ -852,6 +863,54 @@ function 이름표클래스(pub: string): string {
   return 이름표.get(pub)?.name ? " named" : "";
 }
 
+/* ── 사칭 막기 ────────────────────────────────────────────────────────
+ *
+ * 🔴 **이름을 보여 주기 시작한 순간 사칭이 가능해진다.**
+ *
+ *    16진수 `3f2a91c4` 는 흉내 낼 수 없다 — 열쇠에서 나오기 때문이다.
+ *    그런데 이름은 **누구나 같게 달 수 있다.** 이름만 그리고 경고를 안
+ *    붙이면, 우리가 사칭을 도와 준 셈이 된다.
+ *
+ *    앱(가게 컴퓨터)에는 이 방어가 처음부터 있었는데(`main.ts` 의
+ *    `tk겹친이름세기`·`.samename`), **폰에는 없었다.** 이름을 폰에 들이면서
+ *    같이 들여야 하는 것이 이것이다.
+ *
+ * ## 두 겹으로 막는다
+ *
+ * ① **열쇠 색** — 이름이 아니라 **열쇠**에서 나온다. 그래서 이름을 똑같이
+ *    베낀 사람은 색이 다르다. 늘 보이는 방어다.
+ * ② **「같은 이름 N명」** — 흉내 내는 사람이 실제로 나타난 **그때만** 뜬다.
+ *    색만으로는 「다른 색이네」로 끝나고 뜻이 안 전해진다.
+ *
+ * ⚠️ 얼굴은 방어가 못 된다. 남의 사진은 주소만 바꿔 그대로 올릴 수 있고,
+ *    같은 사진인지 우리가 확인할 길이 없다. 그래서 **얼굴 테두리에 열쇠
+ *    색을 칠한다** — 얼굴이 색 방어를 가리지 않게.
+ */
+
+/** 지금 화면에 있는 이름 중 **열쇠가 둘 이상인 것** → 그 수. */
+let 겹친이름: Map<string, number> = new Map();
+
+/** 이 화면에 나온 사람들로 겹치는 이름을 다시 센다. */
+function 겹친이름세기(pubkeys: string[]): void {
+  const 이름별열쇠 = new Map<string, Set<string>>();
+  for (const pk of new Set(pubkeys)) {
+    const 이름 = String(이름표.get(pk)?.name || "").trim();
+    if (!이름) continue; // 이름을 안 정한 사람끼리는 겹칠 것이 없다
+    if (!이름별열쇠.has(이름)) 이름별열쇠.set(이름, new Set());
+    이름별열쇠.get(이름)!.add(pk);
+  }
+  겹친이름 = new Map(
+    [...이름별열쇠].filter(([, 들]) => 들.size > 1).map(([n, s]) => [n, s.size]),
+  );
+}
+
+/** 열쇠에서 나온 색상값(0~359). 같은 열쇠 = 늘 같은 색. */
+function 열쇠색(pub: string): number {
+  let h = 0;
+  for (let i = 0; i < pub.length; i++) h = (h * 31 + pub.charCodeAt(i)) % 360;
+  return h;
+}
+
 /**
  * 이미 그려 놓은 화면의 이름표를 채운다.
  *
@@ -864,14 +923,22 @@ function 이름표클래스(pub: string): string {
 async function 이름표채우기(box: HTMLElement): Promise<void> {
   const 칸 = [...box.querySelectorAll<HTMLElement>("[data-who]")];
   if (!칸.length) return;
-  await 이름표받기(칸.map((el) => String(el.dataset.who || "")));
+  const 사람들 = 칸.map((el) => String(el.dataset.who || ""));
+  await 이름표받기(사람들);
+  // 🔴 **이름이 다 들어온 뒤에 센다.** 그리는 도중에 세면 아직 안 온 이름이
+  //    빠져서 「같은 이름」을 못 잡는다 — 그때가 바로 사칭이 지나가는 틈이다.
+  겹친이름세기(사람들);
   for (const el of 칸) {
     const pub = String(el.dataset.who || "");
     const 찾음 = 이름표.get(pub);
     if (!찾음?.name && !찾음?.picture) continue;
     el.innerHTML = 이름표속(pub);
     // 16진수일 때만 고정폭이다. 이름이 들어오면 벗는다(`.tw.named`).
-    if (찾음.name) el.classList.add("named");
+    if (찾음.name) {
+      el.classList.add("named");
+      // 색은 이름이 아니라 열쇠에서. 이름을 베낀 사람은 색이 다르다.
+      el.style.setProperty("--h", String(열쇠색(pub)));
+    }
   }
 }
 

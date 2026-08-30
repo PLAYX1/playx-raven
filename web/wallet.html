@@ -397,8 +397,22 @@
               display: flex; align-items: center; gap: 6px; }
       /* 🔴 이름이 있으면 **읽는 글자**다. 16진수(`3f2a91c4`)는 이름이 없을 때의
          자리라 흐린 색이 맞지만, 사람 이름까지 흐리면 회색 덩어리가 하나 더
-         늘 뿐이다. 이름이 이 화면에서 제일 먼저 읽혀야 한다. */
-      .rwho.named { color: var(--fg); font-size: 14px; }
+         늘 뿐이다. 이름이 이 화면에서 제일 먼저 읽혀야 한다.
+         색(`--h`)은 **이름이 아니라 열쇠**에서 나온다 — 이름을 똑같이 베낀
+         사람은 색이 다르다. 16진수 칸에는 색을 안 준다(그건 이름이 아니다). */
+      .rwho.named, .tw.named { color: hsl(var(--h, 0) 55% 38%); }
+      .rwho.named { font-size: 14px; }
+      @media (prefers-color-scheme: dark) {
+        .rwho.named, .tw.named { color: hsl(var(--h, 0) 60% 72%); } }
+      /* 얼굴은 방어가 못 된다 — 남의 사진은 그대로 베낄 수 있다. 그래서
+         테두리에 열쇠 색을 둘러 색 방어가 얼굴에 가리지 않게 한다. */
+      .named .rface { box-shadow: 0 0 0 2px hsl(var(--h, 0) 55% 45%); }
+      /* 흉내 내는 사람이 실제로 나타난 그때만 뜬다. */
+      .samename { margin-left: 6px; padding: 2px 8px; border-radius: 999px;
+                  font-size: 12px; font-weight: 700; flex: none;
+                  background: #fff4e5; color: #8a4b00; border: 1px solid #f0c893; }
+      @media (prefers-color-scheme: dark) {
+        .samename { background: #3a2a10; color: #ffcf8a; border-color: #6b4a17; } }
       /* 얼굴. 이름표가 늦게 채워지므로 **자리를 먼저 잡아 둔다** —
          `flex: none` 이 없으면 사진이 오는 순간 이름이 밀린다. */
       .rface { width: 22px; height: 22px; flex: none; border-radius: 50%;
@@ -516,7 +530,9 @@
          이름표가 채워지면 `--named` 를 같이 켠다. */
       .tw { font-family: ui-monospace, Menlo, monospace; font-size: 13px; color: var(--muted);
             display: flex; align-items: center; gap: 6px; }
-      .tw.named { font-family: inherit; color: var(--fg); font-size: 14px; }
+      /* ⚠️ 색은 위 `.rwho.named, .tw.named` 가 정한다(열쇠 색). 여기서 `color`
+         를 다시 쓰면 **나중에 오는 이 줄이 이겨서** 열쇠 색이 죽는다. */
+      .tw.named { font-family: inherit; font-size: 14px; }
       .tl { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .tt { font-size: 13px; color: var(--muted); }
       .bubs { max-height: 46vh; overflow-y: auto; display: grid; gap: 8px; }
