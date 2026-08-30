@@ -385,7 +385,9 @@
       /* 🔴 대화가 화면을 다 써야 대화 화면이다. 46vh 로 잘라 두면
          아래가 텅 비고 「덜 만든 화면」으로 읽힌다. 방에 들어가 있을
          때는 남는 높이를 대화가 전부 가져간다. */
-      #s-rooms .msgs { flex: 1; min-height: 200px; overflow-y: auto;
+      /* 🔴 `min-height` 가 크면 그만큼 아래를 밀어낸다. 작은 폰에서는
+         대화가 줄어드는 편이 낫다 — 입력칸이 사라지는 것보다 낫다. */
+      #s-rooms .msgs { flex: 1; min-height: 120px; overflow-y: auto;
                        padding: 10px; display: flex; flex-direction: column;
                        gap: 3px; background: var(--panel);
                        border: 1px solid var(--line); border-radius: 14px; }
@@ -411,6 +413,13 @@
       .rtime { flex: none; font-size: 12.5px; color: var(--muted);
                padding-bottom: 3px; white-space: nowrap; }
       /* 말풍선 안의 사진. 폭에 맞춰 줄이고, 눌러서 크게 볼 수 있게. */
+      /* 「지우기 요청」 — 내 말풍선 아래에 작게. 자주 쓰는 것이 아니라
+         작아도 되지만, 44px 은 지킨다(누르는 자리다). */
+      .rdelrow { align-self: flex-end; margin: 2px 2px 6px; }
+      .rdel { width: auto; min-height: 44px; margin: 0; padding: 0 12px;
+              font-size: 13px; font-weight: 400; color: var(--muted);
+              background: none; border: 0; }
+      .rdel:disabled { opacity: .6; }
       .rpic { display: block; max-width: 100%; margin-top: 7px;
               border-radius: 11px; background: var(--panel); }
       .rbub:has(.rpic) { padding: 7px; }
@@ -439,9 +448,18 @@
       body[data-inroom="1"] #rm-intro { display: none; }
       /* 방 안에서는 화면을 위아래로 꽉 쓴다 — 대화가 늘어나고
          입력줄은 늘 맨 아래에 붙는다(카톡·텔레그램이 그렇다). */
+      /* 🔴 **아이폰에서 입력칸이 화면 밖으로 밀렸다**(대표님 2026-08-30).
+         밀어 내려야 「사진·메시지·보내기」가 보였다.
+
+         `100vh` 는 사파리에서 **주소창을 포함한 높이**다. 주소창이 보이는
+         동안에는 실제 보이는 곳보다 크고, 그만큼 아래가 잘린다.
+         `100dvh`(dynamic)가 지금 보이는 높이다 — 주소창이 접히면 같이 준다.
+         ⚠️ 옛 사파리는 `dvh` 를 모른다. 그래서 `100vh` 를 먼저 적고
+            `100dvh` 로 덮는다 — 모르는 브라우저는 앞줄을 쓴다. */
       body[data-inroom="1"] #s-rooms {
         display: flex; flex-direction: column;
         height: calc(100vh - 64px - env(safe-area-inset-bottom, 0px));
+        height: calc(100dvh - 64px - env(safe-area-inset-bottom, 0px));
         padding-bottom: 10px; }
       body[data-inroom="1"] #rm-pane { display: flex !important;
         flex-direction: column; flex: 1; min-height: 0; }

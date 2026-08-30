@@ -926,6 +926,11 @@ async function loadRoomMsgs(): Promise<void> {
       const 사진 = 방사진주소(e, 본문원본);
       // 사진을 그릴 때는 본문에서 그 주소 줄을 뺀다 — 같은 것을 두 번 보인다.
       const 글 = 사진 ? 본문원본.replace(사진, "").trim() : 본문원본;
+      // 🔴 **내 글은 지워 달라고 할 수 있어야 한다**(대표님 2026-08-30).
+      //    앱에는 있는데 폰에만 없었다.
+      //    ⚠️ 이름이 「삭제」가 아니라 **「지우기 요청」**인 것이 전부다 —
+      //       Nostr 의 지움(kind 5)은 **부탁**이지 명령이 아니고, 릴레이가
+      //       따를 의무가 없다. 「삭제」라 적으면 지워졌다고 믿는데 안 지워진다.
       return (
         (mine || 이어짐
           ? ""
@@ -937,13 +942,53 @@ async function loadRoomMsgs(): Promise<void> {
                : ""
            }</div>
            <time class="rtime">${escapeHtml(시각)}</time>
-         </div>`
+         </div>` +
+        (mine ? `<div class="rdelrow"><button class="rdel" data-rdel="${escapeHtml(String(e.id || ""))}">지우기 요청</button></div>` : "")
       );
     });
   box.innerHTML = lines.length
     ? lines.join("")
     : `<p class="sub">아직 오간 이야기가 없습니다. 첫 글을 쓰실 수 있습니다.</p>`;
   box.scrollTop = box.scrollHeight;
+  // 🔴 다시 그릴 때마다 **새로 묶는다.** 목록은 통째로 갈아끼워지므로
+  //    한 번만 묶으면 그다음부터 단추가 죽는다.
+  box.querySelectorAll<HTMLElement>("[data-rdel]").forEach((b) => {
+    b.onclick = async () => {
+      const id = String(b.dataset.rdel || "");
+      if (!id) return;
+      const sec = nostrSecret();
+      if (!sec) return say("rm-say", "지갑을 먼저 열어 주세요.", "err");
+      // ⚠️ 되돌릴 수 없는 일이라 한 번 여쭙는다. 그리고 **정직하게** 적는다 —
+      //    지워진다고 말하면 안 지워졌을 때 우리가 거짓말한 것이 된다.
+      if (!confirm("지워 달라고 요청할까요?\n따르는 릴레이에서는 사라지지만, 이미 본 사람의 화면과 따르지 않는 릴레이에는 남을 수 있습니다."))
+        return;
+      b.textContent = "요청하는 중…";
+      (b as HTMLButtonElement).disabled = true;
+      try {
+        // kind 5 = 지움 요청. `e` 태그로 어느 글인지 가리킨다(NIP-09).
+        // 앱(`talk.rs:797-799`)과 같은 모양이어야 릴레이가 같게 읽는다.
+        const ev = signEvent(sec, {
+          kind: 5,
+          created_at: Math.floor(Date.now() / 1000),
+          tags: [["e", id]],
+          content: "",
+        } as any);
+        const r = await fetch("/api/nostr/publish", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(ev),
+        });
+        if (!r.ok) throw new Error(`릴레이가 ${r.status} 로 답했습니다`);
+        // 🔴 화면에서 글을 지우지 않는다. 지우면 **지워진 줄 안다.**
+        b.textContent = "지우기 요청함";
+        say("rm-say", "지워 달라고 요청했습니다. 따르는 릴레이에서는 사라지지만, 이미 본 사람의 화면과 따르지 않는 릴레이에는 남을 수 있습니다.");
+      } catch (e: any) {
+        b.textContent = "지우기 요청";
+        (b as HTMLButtonElement).disabled = false;
+        say("rm-say", String(e?.message || e), "err");
+      }
+    };
+  });
 }
 
 /**
