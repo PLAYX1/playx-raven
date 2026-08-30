@@ -150,8 +150,29 @@ pub async fn reissue(
     new_ipfs: Option<String>,
     passphrase: Option<String>,
 ) -> Result<String, String> {
-    if qty <= 0.0 {
-        return Err("수량은 0보다 커야 합니다.".into());
+    // 🔴 **수량 0 은 거절하면 안 된다.**
+    //
+    //    체인은 0 을 받는다 — 레이븐코어 `assets.cpp` 의 `CheckReissueAsset`
+    //    이 `"amount must be 0 or larger"` 라고 직접 적어 놨다. 수량 0 은
+    //    **「아무것도 새로 안 만들고 붙은 파일만 바꾼다」**는 뜻이고, 그게
+    //    필요한 자리가 실제로 있다:
+    //
+    //    * 이미 상한(21,000,000,000)까지 찍은 자산 — `PLAYX` 가 그렇다.
+    //      한 개도 더 못 만드는데 프로필은 붙여야 한다. 여기서 막으면
+    //      **그 자산은 영영 프로필을 못 단다.**
+    //    * 더 찍고 싶지 않은데 붙은 파일만 고치고 싶을 때.
+    //
+    //    우리가 체인보다 엄격할 이유가 없다. 음수만 막는다.
+    if qty < 0.0 {
+        return Err("수량은 0보다 작을 수 없습니다.".into());
+    }
+    // 다만 **아무것도 안 바꾸는 재발행**은 막는다. 수량도 0 이고 붙일 파일도
+    // 없으면 100 RVN 을 태우고 아무 일도 안 난다.
+    if qty == 0.0 && new_ipfs.as_deref().unwrap_or("").trim().is_empty() {
+        return Err(
+            "수량 0 으로 재발행하려면 붙일 파일이 있어야 합니다. 둘 다 없으면 바뀌는 것이 없는데 100 RVN 이 탑니다."
+                .into(),
+        );
     }
     if asset.ends_with('!') {
         return Err("소유권 토큰은 재발행할 수 없습니다.".into());

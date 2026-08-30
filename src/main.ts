@@ -6741,7 +6741,17 @@ async function doIssue() {
   btn.disabled = true;
   btn.textContent = "발행 중…";
   try {
-    const qty = wizKind === "unique" ? 1 : parseFloat(($("i-qty") as HTMLInputElement).value) || 1;
+    // 🔴 **`|| 1` 이 0 을 삼키고 있었다.** `parseFloat("0")` 은 0 이고 0 은
+    //    거짓값이라, 사장이 0 을 적으면 조용히 1 이 나갔다.
+    //
+    //    재발행에서 **수량 0 은 뜻이 있는 값**이다 — 「아무것도 새로 안
+    //    만들고 붙은 파일만 바꾼다」. 이미 상한(21,000,000,000)까지 찍은
+    //    자산은 그 길밖에 없다. 0 이 1 로 바뀌면 노드가 상한 초과로
+    //    거절하고, 화면은 **왜 안 되는지 말하지 못한다.**
+    //
+    //    빈 칸·글자만 1 로 본다. 적은 0 은 0 으로 보낸다.
+    const qtyTyped = parseFloat(($("i-qty") as HTMLInputElement).value);
+    const qty = wizKind === "unique" ? 1 : Number.isFinite(qtyTyped) ? qtyTyped : 1;
     const units = wizKind === "unique" ? 0 : parseInt(($("i-units") as HTMLInputElement).value) || 0;
     let cid = ($("i-ipfs") as HTMLInputElement).value.trim() || null;
     // 🔴 자산에는 IPFS 해시가 **하나**만 박힌다. 사진과 영상 링크를 둘 다
