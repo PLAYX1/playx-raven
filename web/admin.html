@@ -52,7 +52,10 @@
                  text-transform: uppercase; letter-spacing: 0.05em; }
       .big { font-size: 24px; font-weight: 700; letter-spacing: -0.02em;
              font-variant-numeric: tabular-nums; }
-      .detail { color: var(--muted); font-size: 12.5px; margin-top: 4px; }
+      /* 🔴 12.5px 이었다. 사장도 40~70대다 — 「손님 폰에 같은 주문번호가
+         뜹니다」처럼 **주문을 맞춰 보는 설명**이 여기 들어간다.
+         폰 390px 실측 2026-08-31. */
+      .detail { color: var(--muted); font-size: 13px; margin-top: 4px; }
       .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%;
              background: var(--muted); margin-right: 8px; vertical-align: 1px; }
       .dot.ok { background: var(--good); } .dot.no { background: var(--warn); }

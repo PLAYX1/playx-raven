@@ -1,7 +1,7 @@
 {
   "name": "playx-raven",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.2.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "preflight": "node preflight.mjs",
-    "screensweep": "node screensweep.mjs"
+    "screensweep": "node screensweep.mjs",
+    "countercheck": "node countercheck.mjs"
   },
   "dependencies": {
     "@noble/ciphers": "^2.3.0",
