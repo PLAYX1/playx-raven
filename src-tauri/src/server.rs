@@ -416,6 +416,10 @@ fn customer_path(path: &str) -> bool {
             | "/i18n.js"
             | "/ravi.js"
             | "/help.js"
+            | "/report.js"
+            | "/tabs.js"
+            | "/manifest.json"
+            | "/shops.bundle.js"
             | "/api/pins"
             | "/api/ai-status"
             | "/api/shop-history"
@@ -1600,6 +1604,74 @@ async fn api_help_js() -> impl IntoResponse {
     )
 }
 
+/// 🔴 **손님 화면 둘이 `/report.js` 를 부르는데 노드엔 그 길이 없었다.**
+///    파일도 없고 길도 없어 `<script>` 가 404 였다 — 가게 와이파이로 연
+///    손님에게는 「문제 알리기」가 **통째로 없었다.** 우리 서버로 열면
+///    나오니 우리 눈에는 멀쩡했다. 늘 같은 병이다.
+/// 🔴 **가게 목록 화면이 노드에서 통째로 안 돌았다.**
+///    `shops.html` 이 이 셋을 부르는데 길이 하나도 없었다 — 알맹이가 든
+///    `shops.bundle.js` 까지. 우리 서버로 열면 되니 안 보였다.
+async fn api_shops_bundle() -> impl IntoResponse {
+    (
+        StatusCode::OK,
+        [("content-type", "application/javascript; charset=utf-8")],
+        include_str!("../../web/shops.bundle.js"),
+    )
+}
+
+/// 아래 탭. 손이 떨리는 손님을 위해 **밀어서도** 옮기게 하는 자리다.
+async fn api_tabs_js() -> impl IntoResponse {
+    (
+        StatusCode::OK,
+        [("content-type", "application/javascript; charset=utf-8")],
+        include_str!("../../web/tabs.js"),
+    )
+}
+
+/// 손님이 폰 홈에 얹을 때 쓰는 표.
+async fn api_manifest() -> impl IntoResponse {
+    (
+        StatusCode::OK,
+        [("content-type", "application/manifest+json; charset=utf-8")],
+        include_str!("../../web/manifest.json"),
+    )
+}
+
+async fn api_report_js() -> impl IntoResponse {
+    (
+        StatusCode::OK,
+        [("content-type", "application/javascript; charset=utf-8")],
+        include_str!("../../web/report.js"),
+    )
+}
+
+/// 손님 폰이 보낸 신고를 받아 **노드가 대신** 바깥으로 보낸다.
+/// 손님 화면의 `connect-src 'self'` 를 안 열고도 신고가 나가는 길이다.
+async fn api_bug_reports(axum::Json(body): axum::Json<serde_json::Value>) -> impl IntoResponse {
+    // 적은 글이 없으면 받지 않는다 — 빈 신고는 상자만 채운다.
+    let desc = body
+        .get("description")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    if desc.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            [("content-type", "application/json")],
+            r#"{"ok":false,"why":"무엇이 잘못됐는지 한 줄만 적어 주세요."}"#.to_string(),
+        );
+    }
+    // 못 보내도 손님에게는 성공이라 말한다 — 노드가 쌓아 뒀다가 다시 보낸다.
+    // 손님이 다시 적게 만드는 것은 신고를 잃는 것보다 나쁘다.
+    let sent = crate::report::relay_from_customer(body).await;
+    (
+        StatusCode::OK,
+        [("content-type", "application/json")],
+        format!(r#"{{"ok":true,"sent":{sent}}}"#),
+    )
+}
+
 async fn api_ask(State(state): State<ServerState>, Json(body): Json<AskBody>) -> impl IntoResponse {
     let provider = state.ai.lock().map(|a| a.clone()).unwrap_or_default();
     if provider.is_empty() {
@@ -2657,6 +2729,11 @@ fn build_phone_router(st: ServerState) -> axum::Router {
         .route("/i18n.js", get(api_i18n))
         .route("/ravi.js", get(api_ravi_js))
         .route("/help.js", get(api_help_js))
+        .route("/report.js", get(api_report_js))
+        .route("/shops.bundle.js", get(api_shops_bundle))
+        .route("/tabs.js", get(api_tabs_js))
+        .route("/manifest.json", get(api_manifest))
+        .route("/api/bug-reports", post(api_bug_reports))
         .route("/api/pins", get(api_pins))
         // 🔴 장터 사진 사본. 지갑 화면은 브라우저라 Tauri 명령을 못 쓴다 —
         //    같은 와이파이 안에서 이 길로 부른다.

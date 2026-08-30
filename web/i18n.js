@@ -2368,9 +2368,11 @@
     s.textContent =
       /* ⚠️ width 를 못 박는다. 지갑 화면에는 select 를 폭 100% 로 만드는
          규칙이 있어서, 그냥 두면 이 작은 칸이 화면 폭 전체로 늘어난다. */
-      ".langsw{float:right;width:auto!important;margin:2px 8px 0 0;min-height:36px;" +
-      "padding:0 8px;border-radius:999px;border:1px solid rgba(128,128,128,.30);" +
-      "background:transparent;color:#6b7280;font-size:14px;cursor:pointer}" +
+      /* 🔴 36px·14px 였다. 손님 화면 기준은 **44px·15px** 이다 —
+         눈이 어두운 손님이 언어를 못 바꾸는 문제였다(2026-08-31 폰 실측). */
+      ".langsw{float:right;width:auto!important;margin:2px 8px 0 0;min-height:44px;" +
+      "padding:0 10px;border-radius:999px;border:1px solid rgba(128,128,128,.30);" +
+      "background:transparent;color:#6b7280;font-size:15px;cursor:pointer}" +
       "@media(prefers-color-scheme:dark){.langsw{color:#9aa0ab}}";
     document.head.appendChild(s);
 

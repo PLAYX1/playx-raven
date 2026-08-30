@@ -205,8 +205,17 @@ pub async fn artist_profile_set(
     // ⚠️ 이름표에는 표(`t`)를 안 붙인다. 개인 이름표(`talk_profile_set`)와
     //    같은 이유 — 붙이면 이야기 목록에 이름표가 섞여 나온다.
     let ev = crate::shopkey::sign_with(&sk, KIND_PROFILE, json!([]), &body, now())?;
-    crate::nostrpub::nostr_publish(ev.clone()).await?;
-    Ok(ev)
+
+    // 🔴 **어디에 올라갔는지를 버리지 않는다.** 여태 결과를 통째로 흘렸고,
+    //    화면은 한 곳만 받아도 「올렸습니다」라고 똑같이 말했다. damus 는
+    //    실측 다섯 번 중 한두 번만 붙는다(2026-08-31) — 한 곳만 받았으면
+    //    팬 대부분은 아직 옛 이름표를 본다. 그건 사장이 알아야 한다.
+    let sent = crate::nostrpub::nostr_publish(ev.clone()).await?;
+    Ok(json!({
+        "event": ev,
+        "ok": sent.get("ok").cloned().unwrap_or_else(|| json!([])),
+        "failed": sent.get("failed").cloned().unwrap_or_else(|| json!([])),
+    }))
 }
 
 #[cfg(test)]

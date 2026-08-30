@@ -8137,10 +8137,18 @@ async function artistSave() {
     const name = ($("ar-name") as HTMLInputElement).value.trim();
     const about = ($("ar-about") as HTMLTextAreaElement).value.trim();
     const website = arNormWeb(($("ar-web") as HTMLInputElement).value);
-    await invoke("artist_profile_set", { name, about, picture: arPicture, website });
-    say.innerHTML = name
+    const 결과 = await invoke<any>("artist_profile_set", { name, about, picture: arPicture, website });
+    // 🔴 **몇 곳이 받았는지 말한다.** 한 곳만 받았으면 팬 대부분은 아직 옛
+    //    이름표를 본다 — 「올렸습니다」만 적으면 그건 거짓말이 된다.
+    const 받음 = (결과?.ok || []).length;
+    const 안받음 = (결과?.failed || []).length;
+    const 어디 = 안받음 > 0
+      ? `<br /><span class="meta">${t("보낸 곳")} ${받음 + 안받음}${t("곳 중")} ${받음}${t("곳이 받았습니다.")} ` +
+        `${받음 <= 1 ? t("아직 못 본 팬이 있을 수 있으니 잠시 뒤 한 번 더 눌러 주세요.") : t("팬에게 보이는 데는 충분합니다.")}</span>`
+      : "";
+    say.innerHTML = (name
       ? `<span class="ok">${t("올렸습니다. 손님이 이 얼굴·이름으로 봅니다.")}</span>`
-      : `<span class="ok">${t("이름을 비웠습니다. 손님은 자산 이름으로 봅니다.")}</span>`;
+      : `<span class="ok">${t("이름을 비웠습니다. 손님은 자산 이름으로 봅니다.")}</span>`) + 어디;
     arPaintPreview();
   } catch (e) {
     say.innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;

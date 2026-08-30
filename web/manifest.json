@@ -1,0 +1,41 @@
+{
+  "name": "PLAY X Raven",
+  "short_name": "PLAY X Raven",
+  "description": "Ravencoin wallet, shop and rooms — 레이븐 지갑·가게·이야기",
+  "start_url": "/wallet",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#faf7f2",
+  "theme_color": "#e7731f",
+  "lang": "ko",
+  "icons": [
+    {
+      "src": "/rvn-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/rvn-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/rvn-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "지갑",
+      "url": "/wallet"
+    },
+    {
+      "name": "가게 찾기",
+      "url": "/shops"
+    }
+  ],
+  "dir": "ltr"
+}

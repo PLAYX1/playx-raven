@@ -378,6 +378,38 @@ const ts = read("src/main.ts");
   else ok(`러스트가 굽는 파일 ${seen}개 전부 존재`);
 }
 
+// ⑫ 손님 화면이 `<script src>` · `<link href>` 로 부르는 자원이 서버에 있나.
+//
+// 🔴 2026-08-31: `wallet.html` 과 `shops.html` 이 `/report.js` 를 부르는데
+//    노드에는 **파일도 길도 없었다.** 404 는 화면에 아무 자국을 안 남기고,
+//    가게 와이파이로 연 손님에게는 「문제 알리기」가 통째로 없었다.
+//    우리 서버(rvn.ex.erci.se)로 열면 나오니 우리 눈에는 멀쩡했다.
+//
+// ④ 는 `fetch()` 만 보고, 화면 목록에 `wallet.html` 이 없었다. 여기서 둘 다 넓힌다.
+{
+  const server = read("src-tauri/src/server.rs");
+  const routes = new Set([...server.matchAll(/\.route\("([^"]+)"/g)].map((m) => m[1]));
+  // `/{name}` 은 그림을 내주는 자리다. 그 뒤 검사(⑤)가 이름까지 본다.
+  const 그림길 = routes.has("/{name}");
+  const files = readdirSync(join(ROOT, "web")).filter((f) => f.endsWith(".html"));
+  const asked = new Map();
+  for (const f of files) {
+    for (const m of read(`web/${f}`).matchAll(/(?:src|href)="(\/[\w./-]+)"/g)) {
+      if (!asked.has(m[1])) asked.set(m[1], f);
+    }
+  }
+  const missing = [];
+  for (const [path, who] of asked) {
+    if (routes.has(path)) continue;
+    if (그림길 && /^\/[\w-]+\.(webp|png|ico|jpg)$/.test(path)) continue; // `/{name}` 이 받는다
+    missing.push(`${who} → ${path}`);
+  }
+  if (asked.size === 0) fail("손님 화면이 부르는 자원을 하나도 못 찾았다 — 이 검사가 헛돈다", []);
+  else if (missing.length)
+    fail("손님 화면이 부르는 자원의 길이 서버에 없다 — 조용히 404 가 된다", missing);
+  else ok(`손님 화면이 부르는 자원 ${asked.size}개 전부 길이 있음`);
+}
+
 console.log("");
 if (bad) {
   console.log(`검사 실패 — ${bad}가지를 고쳐야 합니다.`);

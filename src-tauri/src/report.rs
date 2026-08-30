@@ -117,6 +117,37 @@ pub async fn report_send(
     }
 }
 
+/// 손님 폰이 보낸 신고를 **가게 노드가 대신 보낸다.**
+///
+/// 🔴 왜 노드를 거치나: 손님 화면(`wallet.html`·`shops.html`)의 CSP 는
+///    `connect-src 'self'` 다. **12단어가 실수로라도 밖으로 못 나가게** 하는
+///    장치라 이걸 열 수는 없다. 그래서 손님 폰은 노드에게만 말하고, 바깥으로
+///    나가는 것은 여기(러스트 클라이언트)가 한다 — CSP 는 손 안 댄다.
+///
+/// 못 보내면 쌓아 둔다. 가게 노드는 늘 켜져 있으니 다음 기회에 나간다.
+pub async fn relay_from_customer(mut payload: Value) -> bool {
+    // 어디서 온 신고인지 남긴다. 이게 없으면 사장 신고와 손님 신고가 섞인다.
+    if let Some(o) = payload.as_object_mut() {
+        let ctx = o
+            .entry("context")
+            .or_insert_with(|| json!({}));
+        if let Some(c) = ctx.as_object_mut() {
+            c.insert("surface".into(), json!("customer-phone"));
+            c.insert("via".into(), json!("shop-node"));
+            c.insert("version".into(), json!(env!("CARGO_PKG_VERSION")));
+            // 서버가 이걸로 앱을 가른다. 없으면 전부 메인 홈으로 섞인다.
+            c.insert("pathname".into(), json!("/rvn"));
+            c.insert("host".into(), json!("rvn.ex.erci.se"));
+        }
+    }
+    if post_once(&payload).await {
+        true
+    } else {
+        park(&payload);
+        false
+    }
+}
+
 /// 켤 때 한 번 부른다. 쌓아 둔 것을 다시 보낸다.
 ///
 /// ⚠️ 보낸 것만 지운다. 통째로 지우면 인터넷이 반쯤 되는 상태에서
