@@ -12494,6 +12494,45 @@ async function healChainAsset(): Promise<void> {
   }
 }
 
+/**
+ * 이미 체인에 올린 가게면 **이름 칸을 채우고 잠근다.**
+ *
+ * 🔴 대표님: "체인 등록 했으면 여기도 나와야 하는거 아냐? 왜 체인에 남은
+ *    이름이 없는데."
+ *
+ *    맞다. 그런데 이건 「안 보인다」보다 훨씬 위험한 상태였다. **빈 칸은
+ *    「아직 안 했구나」로 읽힌다.** 이미 `SHOP.PLAYX` 를 올린 사장이 빈 칸을
+ *    보고 이름을 다시 적어 「가게 등록」을 누르면 — **500 RVN 이 또 탄다.**
+ *    그리고 그 이름은 체인에 영원히 남는다. 되돌릴 수 없다.
+ *
+ *    체인 이름은 **한 번 정하면 못 바꾼다.** 못 바꾸는 칸은 고칠 수 있는
+ *    것처럼 보이면 안 된다. 그래서 채우고, 잠그고, 왜 잠겼는지 적는다.
+ */
+function lockChainName() {
+  const 이미 = ($("sh-registered") as HTMLInputElement | null)?.value.trim() || "";
+  const box = $("sh-asset") as HTMLInputElement | null;
+  if (!box) return;
+  const note = document.getElementById("sh-assetlocked");
+  if (!이미) {
+    box.readOnly = false;
+    if (note) note.remove();
+    return;
+  }
+  // 손님에게 보이는 이름이 아니라 **체인에 박힌 이름**이다. `SHOP.` 은 관례
+  // 접두사라 칸에는 그 뒤만 적어 왔다 — 되쓸 때도 같게 맞춘다.
+  box.value = 이미.replace(/^SHOP\./, "");
+  box.readOnly = true;
+  if (!note) {
+    const p = document.createElement("p");
+    p.id = "sh-assetlocked";
+    p.className = "meta";
+    p.textContent = t(
+      "이미 체인에 올린 이름입니다. 체인 이름은 바꿀 수 없어서 잠가 두었습니다 — 다시 등록하면 RVN 이 또 탑니다.",
+    );
+    box.insertAdjacentElement("afterend", p);
+  }
+}
+
 async function loadShop() {
   let sh: any = null;
   try {
@@ -12526,6 +12565,7 @@ async function loadShop() {
   //    **어느 이름으로 알릴지 몰라 릴레이 공지도 못 올렸다.**
   //    가게가 켜져 있는데도 세상에서 안 보이던 이유 중 하나다.
   if (!sh.chain_asset) void healChainAsset();
+  lockChainName();
   set("mn-cur", sh.currency);
   const chk = (id: string, v: any) => {
     const el = $(id) as HTMLInputElement | null;
