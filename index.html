@@ -788,6 +788,24 @@
       .ravibub .rbx { flex: none; width: 40px; height: 40px; border-radius: 10px;
                       border: 1px solid var(--line); background: var(--bg);
                       color: var(--muted); font: 700 17px/1 system-ui; cursor: pointer; }
+      /* 🔴 `class="fld"` 를 **네 곳이 쓰는데 정의가 한 곳도 없었다.**
+         내가 쓴 것 말고도 셋이 더 있다 — 그동안 그 라벨들은 아무 모양도
+         못 받고 옆 칸에 붙어 흘렀다. 브라우저는 모르는 클래스를 조용히
+         넘어간다(오늘 `.flash` 와 같은 병).
+         라벨은 **줄을 차지해야** 무엇을 적는 칸인지 보인다. */
+      .fld { display: block; margin: 12px 0 4px; font-size: 14px;
+             font-weight: 600; color: var(--muted); }
+      /* 사진 고르기 + 미리보기가 한 줄에 선다. */
+      .merow { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
+      .merow button { width: auto; margin: 0; }
+      #art-preview, #me-preview { width: 56px; height: 56px; flex: none;
+             border-radius: 50%; object-fit: cover; border: 1px solid var(--line); }
+      /* 아티스트 이름표 상자. 다른 접힘 상자와 같은 생김새를 쓴다. */
+      #artbox { margin: 4px 0 16px; padding: 12px 14px; border-radius: 14px;
+                background: var(--side); border: 1px solid var(--line); }
+      #artbox > summary { cursor: pointer; min-height: 44px; display: flex;
+                          align-items: center; gap: 6px; font-size: 15.5px; }
+      #artbox input { display: block; width: 100%; }
       .ownmark { margin-left: 8px; font-size: 12px; font-weight: 700;
                  color: var(--brand); border: 1px solid var(--brand);
                  border-radius: 6px; padding: 2px 7px 2px 5px; white-space: nowrap;
@@ -2354,6 +2372,40 @@
 
         <!-- 숨기지 않는다. 숨기면 옮기지도 않는다. -->
         <div class="warnbox" id="owner-warn" style="display:none"></div>
+
+        <!-- ── 내 아티스트 이름 ────────────────────────────────────────
+             🔴 체인에 **아티스트 열쇠와 받을 주소**를 박았다(200 RVN). 그런데
+             그 열쇠로 얼굴·이름·소개를 안 올리면 손님이 보는 것은 자산 이름
+             뿐이다. **태운 자리가 비어 있는 것**이다.
+
+             ⚠️ 접어 두되 **자산 화면에 늘 보이게** 둔다. 오늘 「나눠주기」를
+                자산을 골라야만 나오게 숨겼다가 대표님이 **두 번** 못 찾으셨다.
+                숨긴 것은 옮긴 것이 아니다.
+
+             ⚠️ 여기 적는 것은 전부 **공짜·즉시·무제한**이다. 체인이 아니라
+                Nostr 로 간다. 100 RVN 은 이미 낸 한 번뿐이다. -->
+        <details id="artbox">
+          <summary><b>내 아티스트 이름</b> — 손님이 보는 얼굴과 소개</summary>
+          <div class="msg" id="art-who"></div>
+          <label class="fld" for="art-name">이름</label>
+          <input id="art-name" maxlength="40" placeholder="플레이엑스" />
+          <label class="fld" for="art-about">소개</label>
+          <input id="art-about" maxlength="300" placeholder="어떤 음악을 하는지 한두 줄" />
+          <label class="fld" for="art-site">링크 (없어도 됩니다)</label>
+          <input id="art-site" maxlength="300" placeholder="https://x.com/..." inputmode="url" />
+          <label class="fld" for="art-file">얼굴 사진</label>
+          <div class="merow">
+            <button id="art-pick" class="ghost">사진 고르기</button>
+            <img id="art-preview" alt="" hidden />
+          </div>
+          <input id="art-file" type="file" accept="image/*" hidden />
+          <button id="art-save" class="primary">이 이름으로 하기</button>
+          <p class="meta">여기 적는 것은 <b>공짜이고 언제든 바꿉니다.</b>
+            체인에는 열쇠와 받을 주소만 박혀 있고, 그건 이미 냈습니다.<br />
+            세계 릴레이에 올라갑니다 — 릴레이가 지워도
+            <b>12단어만 있으면 똑같이 다시 올립니다.</b></p>
+          <div class="msg" id="art-say"></div>
+        </details>
 
         <div class="bar">
           <button id="new-asset">새 자산 만들기</button>

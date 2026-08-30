@@ -1,3 +1,4 @@
+mod artist;
 mod ai;
 mod auto;
 mod boot;
@@ -289,6 +290,10 @@ pub fn run() {
             peers::peer_add,
             peers::peer_remove,
             peers::pin_my_assets,
+            artist::artist_pubkey,
+            artist::artist_check,
+            artist::artist_profile_get,
+            artist::artist_profile_set,
             peers::peer_help,
             recover::node_identity,
             recover::node_rename,

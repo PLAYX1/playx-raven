@@ -631,6 +631,80 @@ function bindPeerHelp() {
   );
 }
 
+/* ── 내 아티스트 이름 ──────────────────────────────────────────────────
+ *
+ * 🔴 체인에 **아티스트 열쇠와 받을 주소**를 박았다(200 RVN 소각). 그런데 그
+ *    열쇠로 얼굴·이름을 안 올리면 손님이 보는 것은 자산 이름뿐이다 —
+ *    **태운 자리가 비어 있다.**
+ *
+ * ⚠️ 여기 적는 것은 전부 **공짜·즉시·무제한**이다. 체인이 아니라 Nostr 다.
+ *
+ * ⚠️ 개인 이름표(`talk_profile_set`)와 **다른 열쇠**를 쓴다. 섞으면 방에서 한
+ *    잡담·1:1 문의가 아티스트와 한 사람으로 묶이고, 그건 체인에 박혀 있어
+ *    되돌릴 수 없다.
+ */
+let 아티스트얼굴 = "";
+
+function 아티스트얼굴그리기() {
+  const img = $("art-preview") as HTMLImageElement;
+  if (아티스트얼굴) { img.src = 아티스트얼굴; img.hidden = false; }
+  else { img.removeAttribute("src"); img.hidden = true; }
+}
+
+/** 체인이 가리키는 열쇠와 이 컴퓨터의 열쇠가 같은가 — **올리기 전에** 말한다. */
+async function 아티스트확인() {
+  const box = $("art-who");
+  try {
+    const r = await invoke<any>("artist_check", { asset: "PLAYX" });
+    if (r?.ok) {
+      box.className = "msg ok";
+      box.textContent = t("체인이 가리키는 열쇠와 같습니다. 여기서 올리면 손님 화면에 붙습니다.");
+    } else {
+      box.className = "msg err";
+      // 🔴 「안 됩니다」로 끝내지 않는다. 왜인지와 다음 할 일을 적는다.
+      box.textContent = String(r?.why || t("확인하지 못했습니다."));
+    }
+  } catch (e: any) {
+    box.className = "msg";
+    box.textContent = String(e?.message || e);
+  }
+}
+
+async function 아티스트읽기() {
+  await 아티스트확인();
+  try {
+    const r = await invoke<any>("artist_profile_get");
+    ($("art-name") as HTMLInputElement).value = String(r?.name || "");
+    ($("art-about") as HTMLInputElement).value = String(r?.about || "");
+    ($("art-site") as HTMLInputElement).value = String(r?.website || "");
+    아티스트얼굴 = String(r?.picture || "");
+    아티스트얼굴그리기();
+  } catch { /* 아직 없으면 빈 채로 둔다. 지어내지 않는다. */ }
+}
+
+async function 아티스트올리기() {
+  const b = $("art-save") as HTMLButtonElement;
+  const say = (m: string, k: "" | "err" | "ok" = "") => {
+    const el = $("art-say"); el.textContent = m; el.className = "msg" + (k ? " " + k : "");
+  };
+  b.disabled = true;
+  const 옛 = b.textContent;
+  b.textContent = t("올리는 중…");
+  try {
+    await invoke("artist_profile_set", {
+      name: ($("art-name") as HTMLInputElement).value,
+      about: ($("art-about") as HTMLInputElement).value,
+      picture: 아티스트얼굴,
+      website: ($("art-site") as HTMLInputElement).value,
+    });
+    say(t("올렸습니다. 손님이 보는 이름이 바뀌었습니다."), "ok");
+  } catch (e: any) {
+    say(String(e?.message || e), "err");
+  } finally {
+    b.disabled = false; b.textContent = 옛;
+  }
+}
+
 async function renderPanel() {
   const a = selected ? assets.get(selected) : null;
   if (!a) { $("panel").className = "panel hidden"; return; }
@@ -14872,6 +14946,64 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("ob-only").addEventListener("click", () => obChoose(true));
   $("ob-also").addEventListener("click", () => obChoose(false));
   $("ob-override").addEventListener("click", () => obChoose(true));
+  // 🔴 **배선.** 화면만 만들고 이 줄을 안 쓰면 아무 일도 안 난다 —
+  //    이 저장소가 오늘만 여러 번 걸린 병이다.
+  document.getElementById("art-save")?.addEventListener("click", () => void 아티스트올리기());
+  document.getElementById("art-pick")?.addEventListener("click", () => {
+    (document.getElementById("art-file") as HTMLInputElement | null)?.click();
+  });
+  document.getElementById("art-file")?.addEventListener("change", async (ev) => {
+    const f = (ev.target as HTMLInputElement).files?.[0];
+    if (!f) return;
+    if (f.size > 8 * 1024 * 1024) {
+      const el = $("art-say");
+      el.textContent = t("사진이 너무 큽니다. 8MB 아래로 골라 주세요.");
+      el.className = "msg err";
+      return;
+    }
+    const el = $("art-say");
+    el.textContent = t("사진 올리는 중…");
+    el.className = "msg";
+    try {
+      // 🔴 가게 간판이 쓰는 방식을 **그대로** 따른다. 길이 둘이면 하나는 낡는다.
+      //    ① 512px 정사각형으로 줄인다 — 원본을 그대로 올리면 몇 MB 가 된다.
+      //    ② IPFS 에 올리고 **주소만** 들고 있는다. 사진 자체를 프로필에 박으면
+      //       바꿀 때마다 프로필이 통째로 바뀐다.
+      //    ③ `ipfs_add_bundle` 은 **폴더** 주소를 준다. 파일 이름까지 붙여야
+      //       그림이 나온다 — 폴더를 그림으로 열면 아무것도 안 뜬다.
+      //
+      //    ⚠️ 주소는 `127.0.0.1` 로 두지 않는다. 그건 **이 컴퓨터에서만** 열린다
+      //       — 손님 폰에서는 빈 자리가 된다. 맨 CID 만 들고, 보는 쪽이 자기
+      //       길로 연다(손님 화면의 `photoSrc` 가 `Qm…` 를 받는다).
+      const bitmap = await createImageBitmap(f);
+      const side = Math.min(bitmap.width, bitmap.height);
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = 512;
+      canvas.getContext("2d")!.drawImage(
+        bitmap, (bitmap.width - side) / 2, (bitmap.height - side) / 2, side, side, 0, 0, 512, 512);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.82);
+      const bin = await (await fetch(dataUrl)).blob();
+      const up = await invoke<any>("ipfs_add_bundle", {
+        files: [{ name: "face.jpg", bytes: [...new Uint8Array(await bin.arrayBuffer())] }],
+        metadata: null,
+      });
+      // 응답 모양이 다르면 `catch` 에도 안 걸리고 조용히 빈 값이 된다. 던진다.
+      if (!up?.cid) throw new Error(t("파일창고가 주소를 주지 않았습니다."));
+      아티스트얼굴 = `${up.cid}/face.jpg`;
+      (($("art-preview") as HTMLImageElement)).src = dataUrl;
+      ($("art-preview") as HTMLImageElement).hidden = false;
+      el.textContent = t("사진을 올렸습니다. 아래 단추를 눌러야 이름표가 바뀝니다.");
+      el.className = "msg ok";
+    } catch (e: any) {
+      el.textContent = String(e?.message || e);
+      el.className = "msg err";
+    }
+  });
+  // 펼칠 때만 읽는다. 안 여는 사람에게 왕복을 물리지 않는다.
+  document.getElementById("artbox")?.addEventListener("toggle", () => {
+    if ((document.getElementById("artbox") as HTMLDetailsElement).open) void 아티스트읽기();
+  });
+
   $("ob-apply").addEventListener("click", obApply);
   $("ob-detail").addEventListener("click", () => {
     const n = $("ob-nums");

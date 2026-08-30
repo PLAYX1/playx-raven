@@ -926,6 +926,18 @@ mod tests {
 
     /// 아티스트 열쇠는 **12단어에서 늘 같은 값**이 나와야 한다.
     /// 이 값이 흔들리면 자산에 박은 공개키가 복구 뒤에 안 맞는다.
+    /// 🔴 시험이 아니라 **한 번 뽑아 보는 자리**다. 아티스트 공개키를
+    ///    체인에 박기 전에 눈으로 확인해야 한다.
+    #[test]
+    #[ignore]
+    fn print_artist_pubkey() {
+        let (words, pass) = super::words_from_node().expect("12단어를 못 읽었습니다");
+        let sk = super::artist_key_from(&words, &pass).expect("아티스트 열쇠 파생 실패");
+        let pk = crate::shopkey::pubkey_of(&sk).expect("공개키 실패");
+        // 🔴 개인키·12단어는 절대 안 찍는다. 공개키만.
+        println!("ARTIST_PUBKEY={pk}");
+    }
+
     #[test]
     fn artist_key_is_stable_from_words() {
         let m = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
