@@ -217,7 +217,7 @@ export const DICT: Record<string, Record<string, string>> = {
       "RVN or an asset name",
     "RVN 보내기":
       "Send RVN",
-    "Ravi에게 물어보기":
+    "라비에게 물어보기":
       "Ask Ravi",
     "USB 는 잃어버리고, 빌려주고, 꽂아 둔 채로 자리를 비웁니다 — 주운 사람이 가게 돈을 가져갑니다.":
       "USB sticks get lost, lent out, and left plugged in while you step away — whoever picks it up takes the shop's money.",
@@ -1792,7 +1792,7 @@ export const DICT: Record<string, Record<string, string>> = {
       "RVNまたはアセット名",
     "RVN 보내기":
       "RVNを送る",
-    "Ravi에게 물어보기":
+    "라비에게 물어보기":
       "Raviに聞いてみる",
     "USB 는 잃어버리고, 빌려주고, 꽂아 둔 채로 자리를 비웁니다 — 주운 사람이 가게 돈을 가져갑니다.":
       "USBはなくし、貸し、挿したまま席を離れます — 拾った人がお店のお金を持って行きます。",
@@ -3367,7 +3367,7 @@ export const DICT: Record<string, Record<string, string>> = {
       "RVN 或资产名称",
     "RVN 보내기":
       "转出 RVN",
-    "Ravi에게 물어보기":
+    "라비에게 물어보기":
       "问问 Ravi",
     "USB 는 잃어버리고, 빌려주고, 꽂아 둔 채로 자리를 비웁니다 — 주운 사람이 가게 돈을 가져갑니다.":
       "U 盘会丢失、被借走、插着就离开座位 —— 捡到的人会拿走店里的钱。",

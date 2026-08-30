@@ -7204,9 +7204,9 @@ async function refreshKeys() {
       lbl.textContent = asleep
         ? (nodeWarming ? "노드가 여는 중이에요" : "노드가 꺼져 있어요")
         : have.length
-          ? "Ravi에게 물어보기"
+          ? "라비에게 물어보기"
           // 키가 없어도 라비는 깨어 있다. 다만 할 수 있는 일이 적다.
-          : "Ravi에게 물어보기";
+          : "라비에게 물어보기";
     }
     // Without a key the AI boxes are dead weight; say why rather than failing
     // on click.
