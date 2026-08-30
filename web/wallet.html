@@ -5,10 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <!-- 손님 폰은 인터넷이 없을 수 있다. 바깥으로 나가는 길을 아예 막아 둔다 —
          코드를 읽어서 "안 나간다"고 믿는 것보다 브라우저가 막는 편이 낫다.
-         connect-src 'self' 라서 12단어가 실수로라도 밖으로 새어 나갈 수 없다. -->
+         connect-src 'self' 라서 12단어가 실수로라도 밖으로 새어 나갈 수 없다.
+
+         🔴 `img-src` 에만 `blob:` 과 `https:` 를 더한다(2026-08-30).
+            사진을 **올리는** 길은 우리 서버를 지나므로 `connect-src` 는
+            그대로 `'self'` 다 — **12단어 방어선은 손대지 않았다.**
+            넓힌 것은 **그리는 것뿐**이다:
+              blob:   고른 사진을 올라가기 전에 보여 주려고(폰 안 파일)
+              https:  올라간 사진과 남이 보낸 사진을 그리려고
+            ⚠️ `<img>` 안에서는 스크립트가 안 돈다. 그리고 코드가
+               **`https` 만** 주소로 받는다(`방사진주소`) — `javascript:` 같은
+               것은 거기서 걸린다. 그림이 새어 나가는 것은 「어떤 사진을
+               봤나」가 그 서버에 남는 것뿐이고, 열쇠는 안 지난다. -->
     <meta http-equiv="Content-Security-Policy"
           content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline';
-                   img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'" />
+                   img-src 'self' data: blob: https:; connect-src 'self'; base-uri 'none'; form-action 'none'" />
     <!-- 🔴 **안드로이드에서 「앱으로 설치」가 아예 안 떴다**(실측 감사 2026-08-30).
          이 화면에 설치 상자(`#pwa-box`)는 있는데, 크롬이 설치를 권하려면
          **manifest 와 서비스워커가 이 화면에 걸려 있어야** 한다. 둘 다
