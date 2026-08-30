@@ -2252,15 +2252,20 @@ function paintRavi() {
 
        맞다. 안 됐다고 알려 주면서 고칠 길이 없으면, 그건 알려 준 것이
        아니라 답답하게 만든 것이다. **줄마다 눌러서 그 자리로 간다.** */
-    noteBox.innerHTML = todo.length
+    // 🔴 라비가 **먼저 아는 것**을 같이 얹는다. 새 창을 만들지 않는다 —
+    //    이 줄이 이미 「누르면 그 자리로 간다」라서, 규칙만 더하면 된다.
+    const 합친것 = [...todo, ...라비가아는것];
+    noteBox.innerHTML = 합친것.length
       ? `<b>${t("아직 안 된 것")}</b> ` +
-        todo.map((x, i) =>
+        합친것.map((x, i) =>
           `<button class="todochip" data-todo="${i}">${escapeHtml(x.label)} →</button>`).join("")
       : "";
-    noteBox.style.display = todo.length ? "" : "none";
+    noteBox.style.display = 합친것.length ? "" : "none";
     noteBox.querySelectorAll<HTMLElement>("[data-todo]").forEach((b) => {
-      b.onclick = () => todo[+b.dataset.todo!].go?.();
+      b.onclick = () => 합친것[+b.dataset.todo!].go?.();
     });
+    // 다음에 라비 화면을 열 때 최신이 되게, 지금 조용히 다시 잰다.
+    void 라비살피기();
   }
 
   const tiles = raviTiles();
@@ -2444,6 +2449,85 @@ async function rpLabel() {
    붙이면 열쇠를 벽에 붙이는 것이다. 그래서 손님 QR 을 크게 하나,
    나머지 셋을 작게 아래에 두고 테두리로 구별한다. */
 /** 아직 안 된 것. 🔴 QR 을 띄우기 **전에**, 물어보지 않고 먼저 말한다. */
+/**
+ * **라비가 먼저 말할 것들** — 재어 둔 사실.
+ *
+ * 🔴 대표님: "사람들은 블록체인이면 인공지능처럼 자동으로 되는걸 원할걸."
+ *
+ *    지금 앱은 **이미 아는데 말을 안 한다.** 색인이 꺼져 나눠주기가 죽는
+ *    것도, 사진을 이 컴퓨터만 들고 있어 노트북을 닫으면 손님 화면이 비는
+ *    것도 앱은 안다. 사장만 모른다.
+ *
+ * ## 말할 것과 안 할 것 (그록과 정한 규칙)
+ *
+ * > **손님이 지금 막히거나 오늘 돈이 안 세어지는 것만 말한다.
+ * > 상태는 묻지 않는다. 고칠 단추 없이 말하지 않는다. 모르면 침묵.**
+ *
+ * 「색인이 꺼져 있다」는 **상태**다. 「나눠주기·팬 수가 안 됩니다」가
+ * 말해야 할 **실패**다.
+ *
+ * ⚠️ **LLM 을 부르지 않는다.** 이 사실들은 이미 잰 값이라 물어볼 것이
+ *    없다. 돈이 들고, 기다리게 되고, 열쇠가 없으면 죽는다 — 그런데 열쇠가
+ *    없어도 장사는 돌아야 한다. 그리고 매일 **같은 문장**이어야 사장이
+ *    단추를 외운다. LLM 이 바꿔 말하면 못 외운다.
+ *
+ * ⚠️ **계산대(주문표)에서는 침묵한다.** 손님이 줄 서 있는 화면을 가리면
+ *    그건 도움이 아니라 방해다.
+ */
+let 라비가아는것: { key: string; label: string; go?: () => void }[] = [];
+
+/** 조용히 재 둔다. 화면을 막지 않게 실패는 그냥 넘긴다. */
+async function 라비살피기() {
+  const out: { key: string; label: string; go?: () => void }[] = [];
+
+  // ① 색인이 꺼져 나눠주기·팬 수가 **죽는다.** 상태가 아니라 실패를 말한다.
+  try {
+    const r = await invoke<any>("reward_ready").catch(() => null);
+    if (r && r.ready === false) {
+      out.push({
+        key: "index",
+        label: t("나눠주기·팬 수를 셀 수 없습니다"),
+        go: () =>
+          raviPoint({
+            page: "reward",
+            el: "rw-gate",
+            say: t(
+              "자산 색인이 꺼져 있어 명단을 못 셉니다. 켜려면 43GB 를 다시 훑고 그동안 노드가 멈춥니다 — 문 닫는 시간에 하세요.",
+            ),
+          }),
+      });
+    }
+  } catch { /* 못 재면 말하지 않는다 */ }
+
+  // ② 사진을 이 컴퓨터만 들고 있다 → 노트북을 닫으면 손님 화면이 빈다.
+  //    peers 도움은 **이 줄에 합친다.** 따로 잔소리하지 않는다.
+  try {
+    const mine = await invoke<any>("pin_list").catch(() => null);
+    const assets = await invoke<any>("list_assets").catch(() => null);
+    const 붙은것 = (Array.isArray(assets) ? assets : [])
+      .filter((a: any) => !String(a?.name || "").endsWith("!"))
+      .filter((a: any) => String(a?.ipfs_hash || "").startsWith("Qm"));
+    const 지킴 = new Set(Array.isArray(mine) ? mine : []);
+    const 안지킴 = 붙은것.filter((a: any) => !지킴.has(a.ipfs_hash));
+    if (안지킴.length) {
+      out.push({
+        key: "pin",
+        label: t("사진을 이 컴퓨터만 들고 있습니다"),
+        go: () =>
+          raviPoint({
+            page: "parts",
+            el: "pn-mine",
+            say: t(
+              "이 컴퓨터를 끄면 손님 화면에서 사진이 사라집니다. 「내 파일 지키기」를 누르시고, 다른 컴퓨터가 있으면 서로 들어 주게 하세요.",
+            ),
+          }),
+      });
+    }
+  } catch { /* 못 재면 침묵 */ }
+
+  라비가아는것 = out;
+}
+
 function shopTodo(): { bad: boolean; label: string; why: string; go?: () => void }[] {
   const val = (id: string) => ($(id) as HTMLInputElement)?.value.trim() || "";
   const name = val("sh-ko") || val("sh-en");
