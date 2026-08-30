@@ -591,6 +591,46 @@ function wireOwnerButtons(a: Asset) {
     };
 }
 
+/** 「서로 파일 지켜 주기」 두 단추. 화면을 다시 그릴 때마다 새로 묶는다. */
+function bindPeerHelp() {
+  const say = (m: string, kind: "" | "err" | "ok" = "") => {
+    const el = document.getElementById("pn-say");
+    if (el) { el.textContent = m; el.className = "msg" + (kind ? " " + kind : ""); }
+  };
+  const 결과 = (r: any) => {
+    const p = (r?.pinned || []).length, f = (r?.failed || []).length;
+    // 숫자만 말하지 않는다 — 「12개 보관 중」은 확인할 수가 없다.
+    const 이름 = (r?.pinned || []).map((x: any) => x.asset).slice(0, 6).join(" · ");
+    return f
+      ? `${p}개를 지킵니다. ${f}개는 못 받았습니다 — 그 파일을 든 컴퓨터가 꺼져 있을 수 있습니다.`
+      : p
+        ? `${p}개를 이 컴퓨터가 지킵니다${이름 ? " — " + 이름 : ""}.`
+        : String(r?.note || "지킬 파일이 없습니다.");
+  };
+  const 누르면 = (id: string, run: () => Promise<any>, 중: string) => {
+    const b = document.getElementById(id) as HTMLButtonElement | null;
+    if (!b) return;
+    b.onclick = async () => {
+      b.disabled = true;
+      const 옛 = b.textContent;
+      b.textContent = 중;
+      try { say(결과(await run()), "ok"); }
+      catch (e: any) { say(String(e?.message || e), "err"); }
+      finally { b.disabled = false; b.textContent = 옛; }
+    };
+  };
+  누르면("pn-mine", () => invoke<any>("pin_my_assets"), t("지키는 중…"));
+  누르면(
+    "pn-help",
+    () => {
+      const url = (document.getElementById("pn-url") as HTMLInputElement | null)?.value.trim() || "";
+      if (!url) throw new Error("그 컴퓨터의 주소를 적어 주세요.");
+      return invoke<any>("peer_help", { url });
+    },
+    t("받는 중…"),
+  );
+}
+
 async function renderPanel() {
   const a = selected ? assets.get(selected) : null;
   if (!a) { $("panel").className = "panel hidden"; return; }
@@ -3641,8 +3681,37 @@ async function paintPartBody(): Promise<void> {
               [t("판"), String(s.version || "—").slice(0, 22)],
             ],
             t("내 컴퓨터에만 있는 창고가 아니라, 손님 폰과 다른 노드가 같이 나눠 갖는 곳입니다.")
-          ) + goto("settings", t("파일창고 설정 열기"));
+          ) +
+          /* 🔴 **서로 보완하는 자리.** 대표님: "탈중앙인데 서로가 보완해
+             가면서 가는 구조가 좋은데 말야. 내 406호 컴퓨터와 내 맥북이
+             서로를 보완해 줄수도 있으면 좋지 않나?"
+
+             맞다. 그리고 이건 겉멋이 아니라 **오늘 난 사고의 처방**이다 —
+             가게 사진이 사라진 것은 그 파일을 **한 대만** 들고 있었기
+             때문이다. 발행하는 노트북은 닫혀 있는 게 맞고(소유권 토큰이
+             사는 자리다), 계산대는 하루 종일 켜져 있다.
+
+             ⚠️ `peers` 기능은 러스트에 **통째로 만들어져 있었는데 화면이
+                없어서 한 번도 안 돌았다.** 만든 것과 보이는 것은 다르다. */
+          `<div class="card" style="margin-top:14px">
+             <h3>${t("서로 파일 지켜 주기")}</h3>
+             <p class="meta">${t(
+               "자산에 붙은 사진·음악은 그 파일을 든 컴퓨터가 켜져 있어야 보입니다. 두 대가 서로 들고 있으면 한 대가 꺼져도 손님에게 보입니다.",
+             )}</p>
+             <div class="row" style="margin-top:10px">
+               <button id="pn-mine">${t("내 파일 지키기")}</button>
+             </div>
+             <label class="fld" style="margin-top:12px">${t("다른 내 컴퓨터 주소")}</label>
+             <input id="pn-url" placeholder="http://192.168.0.5:9111" autocomplete="off" spellcheck="false" />
+             <p class="meta">${t(
+               "그 컴퓨터의 「바깥 연결」에 적힌 주소입니다. 같은 와이파이면 집 주소로도 됩니다.",
+             )}</p>
+             <button class="ghost" id="pn-help">${t("저 컴퓨터 파일도 내가 들기")}</button>
+             <div class="msg" id="pn-say"></div>
+           </div>` +
+          goto("settings", t("파일창고 설정 열기"));
       bindTurnOn("ip-go", "services_start");
+      bindPeerHelp();
     } else if (partOpen === "relay") {
       if (title) title.textContent = "릴레이";
       const r = await invoke<any>("relay_status").catch(() => null);

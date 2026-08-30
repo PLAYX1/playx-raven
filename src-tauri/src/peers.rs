@@ -124,24 +124,42 @@ pub fn peer_remove(address: String) -> Result<Value, String> {
 #[tauri::command]
 pub async fn pin_my_assets() -> Result<Value, String> {
     let assets = crate::raven::list_assets().await?;
+    let cids: Vec<String> = assets
+        .into_iter()
+        .filter(|a| !a.name.ends_with('!'))
+        .filter_map(|a| {
+            let cid = a.ipfs_hash.filter(|h| h.starts_with("Qm"))?;
+            Some(format!("{}\u{1}{}", a.name, cid))
+        })
+        .collect();
+    pin_these(cids).await
+}
+
+/// 이름과 주소가 붙은 목록을 받아 **그것들을 이 컴퓨터가 들고 있게** 한다.
+///
+/// 🔴 내 것만 들어 주면 「서로 보완」이 아니다. 대표님: "내 406호 컴퓨터와
+///    내 맥북이 서로를 보완해 줄수도 있으면 좋지 않나?"
+///
+///    맞다. 그리고 이게 **오늘 난 사고를 근본적으로 막는다** — 가게 사진이
+///    사라진 것은 그 파일을 **한 대만** 들고 있었기 때문이다. 노트북이 닫히면
+///    세상에서 사라진다. 계산대는 하루 종일 켜져 있다.
+async fn pin_these(items: Vec<String>) -> Result<Value, String> {
+    let assets: Vec<(String, String)> = items
+        .into_iter()
+        .filter_map(|s| {
+            let (n, c) = s.split_once('\u{1}')?;
+            Some((n.to_string(), c.to_string()))
+        })
+        .collect();
 
     let mut pinned = Vec::new();
     let mut failed = Vec::new();
-    let mut skipped = 0;
+    let skipped = 0;
 
-    for a in assets {
-        // 오너 토큰은 파일을 갖고 있지 않다.
-        if a.name.ends_with('!') {
-            continue;
-        }
-        let Some(cid) = a.ipfs_hash.as_deref().filter(|h| h.starts_with("Qm")) else {
-            skipped += 1;
-            continue;
-        };
-
-        match crate::ipfs::pin_add(cid.to_string()).await {
-            Ok(true) => pinned.push(json!({ "asset": a.name, "cid": cid })),
-            Ok(false) | Err(_) => failed.push(json!({ "asset": a.name, "cid": cid })),
+    for (name, cid) in assets {
+        match crate::ipfs::pin_add(cid.clone()).await {
+            Ok(true) => pinned.push(json!({ "asset": name, "cid": cid })),
+            Ok(false) | Err(_) => failed.push(json!({ "asset": name, "cid": cid })),
         }
     }
 
@@ -152,3 +170,73 @@ pub async fn pin_my_assets() -> Result<Value, String> {
         "note": "이 컴퓨터가 이 파일들을 계속 갖고 있습니다. 발행한 컴퓨터가 꺼져 있어도 손님 화면에서 열립니다.",
     }))
 }
+
+/// 이 컴퓨터가 들고 있는 자산 파일 목록. **다른 노드가 물어보는 자리다.**
+///
+/// 🔴 숨길 것이 없다. 자산 이름도 IPFS 주소도 **이미 체인에 공개**돼 있다.
+///    여기서 새로 새는 것은 없고, 다만 「이 목록을 한 번에 받는 길」이
+///    없어서 서로 도울 수가 없었을 뿐이다.
+pub async fn my_cids() -> Value {
+    let assets = match crate::raven::list_assets().await {
+        Ok(v) => v,
+        Err(e) => return json!({ "error": e, "items": [] }),
+    };
+    let items: Vec<Value> = assets
+        .into_iter()
+        .filter(|a| !a.name.ends_with('!'))
+        .filter_map(|a| {
+            let cid = a.ipfs_hash.filter(|h| h.starts_with("Qm"))?;
+            Some(json!({ "asset": a.name, "cid": cid }))
+        })
+        .collect();
+    json!({ "items": items })
+}
+
+/// **저쪽 컴퓨터의 파일을 이쪽이 들어 준다.**
+///
+/// 대표님: "탈중앙인데 서로가 보완해 가면서 가는 구조가 좋은데 말야."
+///
+/// 맞다. 그리고 이건 겉멋이 아니라 **오늘 난 사고의 근본 처방**이다 —
+/// 가게 사진이 사라진 것은 그 파일을 **한 대만** 들고 있었기 때문이다.
+/// 발행하는 노트북은 닫혀 있는 게 맞고(소유권 토큰이 사는 자리다), 계산대는
+/// 하루 종일 켜져 있다. 그러면 **켜져 있는 쪽이 들고 있어야** 한다.
+///
+/// ⚠️ **저쪽이 꺼져 있으면 그냥 넘어간다.** 도우려다 이쪽이 멈추면 안 된다.
+#[tauri::command]
+pub async fn peer_help(url: String) -> Result<Value, String> {
+    let base = url.trim().trim_end_matches('/').to_string();
+    if !base.starts_with("http://") && !base.starts_with("https://") {
+        return Err("주소는 http:// 나 https:// 로 시작해야 합니다.".into());
+    }
+    let r = reqwest::Client::new()
+        .get(format!("{base}/api/pins"))
+        .timeout(std::time::Duration::from_secs(20))
+        .send()
+        .await
+        .map_err(|e| format!("그 컴퓨터에 못 닿았습니다 — {e}"))?;
+    let body: Value = r
+        .json()
+        .await
+        .map_err(|e| format!("답을 못 읽었습니다 — {e}"))?;
+    let items: Vec<String> = body
+        .get("items")
+        .and_then(Value::as_array)
+        .map(|a| {
+            a.iter()
+                .filter_map(|x| {
+                    let n = x.get("asset").and_then(Value::as_str)?;
+                    let c = x.get("cid").and_then(Value::as_str)?;
+                    Some(format!("{n}\u{1}{c}"))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    if items.is_empty() {
+        return Ok(json!({
+            "pinned": [], "failed": [], "skipped": 0,
+            "note": "그 컴퓨터에는 파일이 붙은 자산이 없습니다."
+        }));
+    }
+    pin_these(items).await
+}
+

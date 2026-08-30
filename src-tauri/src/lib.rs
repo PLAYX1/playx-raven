@@ -289,6 +289,7 @@ pub fn run() {
             peers::peer_add,
             peers::peer_remove,
             peers::pin_my_assets,
+            peers::peer_help,
             recover::node_identity,
             recover::node_rename,
             recover::restore_survey,
