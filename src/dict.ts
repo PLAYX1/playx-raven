@@ -401,6 +401,44 @@ export const DICT: Record<string, Record<string, string>> = {
       "Even if someone else touches this computer they cannot change the destination; they can only send to your wallet. Changing the address requires the wallet passphrase.",
     "내 가게":
       "My shop",
+    "내 소개":
+      "My page",
+    "손님이 보는 얼굴입니다. 「이야기」의 내 이름과 다른 자리입니다 — 개인 대화와 섞이지 않습니다.":
+      "This is the face customers see. It is not the name in Talk — the two are kept apart so private chat and the artist stay different people.",
+    "PLAYX 주인이 올린 소개입니다":
+      "Posted by the owner of PLAYX",
+    "이 소개 올리기":
+      "Publish this page",
+    "사진 고르기":
+      "Choose a photo",
+    "링크 (없어도 됩니다)":
+      "Link (optional)",
+    "손님에게 보내기":
+      "Send to a guest",
+    "팔로우 토큰":
+      "Follow token",
+    "확인하는 중…":
+      "Checking…",
+    "올리는 중…":
+      "Publishing…",
+    "손님에게 보일 얼굴을 아직 안 올렸습니다":
+      "You have not published a face for guests yet",
+    "손님이 PLAYX 를 보면 지금 「PLAY X · 플레이엑스」뿐입니다. 얼굴과 이름을 여기 올리면 됩니다 — 공짜입니다.":
+      "Guests who look at PLAYX only see “PLAY X · 플레이엑스”. Publish a face and name here — it costs nothing.",
+    "사진을 올렸습니다. 아래 단추를 눌러야 소개가 바뀝니다.":
+      "Photo uploaded. Press the button below to change the page.",
+    "올렸습니다. 손님이 이 얼굴·이름으로 봅니다.":
+      "Published. Guests will see this face and name.",
+    "이름을 비웠습니다. 손님은 자산 이름으로 봅니다.":
+      "Name cleared. Guests will see the asset name.",
+    "사진이 너무 큽니다. 8MB 아래로 골라 주세요.":
+      "The photo is too large. Please choose one under 8MB.",
+    "SHOP.PLAYX 가 없습니다. 손님에게 줄 토큰이 없습니다.":
+      "There is no SHOP.PLAYX. There is nothing to give guests.",
+    "SHOP.PLAYX 수량을 아직 못 읽었습니다. 「자산」에서 목록을 열어 주세요.":
+      "Could not read the SHOP.PLAYX balance yet. Open Assets to load the list.",
+    "손님 주소를 받아 붙여넣고 보냅니다. 가게에서 계산할 때 저절로 따라가지 않습니다 — 모르게 받으면 그게 뭔지 모릅니다.":
+      "Paste the guest’s address and send. It does not ride along with a shop payment — if they receive it without knowing, they will not know what it is.",
     "내 주소 채우기":
       "Fill in my address",
     "내가 만든 것":
@@ -1976,6 +2014,44 @@ export const DICT: Record<string, Record<string, string>> = {
       "他人がこのパソコンを触っても送り先は変えられず、店主のウォレットに送ることしかできません。アドレスを変えるにはウォレットのパスフレーズが必要です。",
     "내 가게":
       "マイショップ",
+    "내 소개":
+      "紹介ページ",
+    "손님이 보는 얼굴입니다. 「이야기」의 내 이름과 다른 자리입니다 — 개인 대화와 섞이지 않습니다.":
+      "お客さまに見える顔です。「トーク」の名前とは別の場所です。個人の会話とアーティストが混ざらないようにしています。",
+    "PLAYX 주인이 올린 소개입니다":
+      "PLAYX の主人が載せた紹介です",
+    "이 소개 올리기":
+      "この紹介を載せる",
+    "사진 고르기":
+      "写真を選ぶ",
+    "링크 (없어도 됩니다)":
+      "リンク（なくてもよい）",
+    "손님에게 보내기":
+      "お客さまに送る",
+    "팔로우 토큰":
+      "フォロートークン",
+    "확인하는 중…":
+      "確認しています…",
+    "올리는 중…":
+      "載せています…",
+    "손님에게 보일 얼굴을 아직 안 올렸습니다":
+      "お客さまに見せる顔をまだ載せていません",
+    "손님이 PLAYX 를 보면 지금 「PLAY X · 플레이엑스」뿐입니다. 얼굴과 이름을 여기 올리면 됩니다 — 공짜입니다.":
+      "PLAYX を見ると今は「PLAY X · 플레이엑스」だけです。顔と名前はここに載せます。無料です。",
+    "사진을 올렸습니다. 아래 단추를 눌러야 소개가 바뀝니다.":
+      "写真を載せました。下のボタンを押さないと紹介は変わりません。",
+    "올렸습니다. 손님이 이 얼굴·이름으로 봅니다.":
+      "載せました。お客さまにはこの顔と名前で見えます。",
+    "이름을 비웠습니다. 손님은 자산 이름으로 봅니다.":
+      "名前を空にしました。お客さまにはアセット名で見えます。",
+    "사진이 너무 큽니다. 8MB 아래로 골라 주세요.":
+      "写真が大きすぎます。8MB以下を選んでください。",
+    "SHOP.PLAYX 가 없습니다. 손님에게 줄 토큰이 없습니다.":
+      "SHOP.PLAYX がありません。お客さまに渡すトークンがありません。",
+    "SHOP.PLAYX 수량을 아직 못 읽었습니다. 「자산」에서 목록을 열어 주세요.":
+      "SHOP.PLAYX の数量をまだ読めませんでした。「資産」で一覧を開いてください。",
+    "손님 주소를 받아 붙여넣고 보냅니다. 가게에서 계산할 때 저절로 따라가지 않습니다 — 모르게 받으면 그게 뭔지 모릅니다.":
+      "お客さまのアドレスを貼って送ります。店の会計に自動では付きません。知らないうちに受け取ると何か分かりません。",
     "내 주소 채우기":
       "自分のアドレスを入れる",
     "내가 만든 것":
@@ -3551,6 +3627,44 @@ export const DICT: Record<string, Record<string, string>> = {
       "即使他人接触这台电脑也无法更改目的地，只能转到您的钱包。更改地址需要钱包密码。",
     "내 가게":
       "我的店",
+    "내 소개":
+      "我的介绍",
+    "손님이 보는 얼굴입니다. 「이야기」의 내 이름과 다른 자리입니다 — 개인 대화와 섞이지 않습니다.":
+      "这是客人看到的面孔。与「对话」里的名字不是同一处——私人聊天和艺人身份分开。",
+    "PLAYX 주인이 올린 소개입니다":
+      "由 PLAYX 主人发布的介绍",
+    "이 소개 올리기":
+      "发布这份介绍",
+    "사진 고르기":
+      "选择照片",
+    "링크 (없어도 됩니다)":
+      "链接（可不填）",
+    "손님에게 보내기":
+      "发给客人",
+    "팔로우 토큰":
+      "关注代币",
+    "확인하는 중…":
+      "正在确认…",
+    "올리는 중…":
+      "正在发布…",
+    "손님에게 보일 얼굴을 아직 안 올렸습니다":
+      "尚未发布给客人看的面孔",
+    "손님이 PLAYX 를 보면 지금 「PLAY X · 플레이엑스」뿐입니다. 얼굴과 이름을 여기 올리면 됩니다 — 공짜입니다.":
+      "客人看 PLAYX 时现在只能看到「PLAY X · 플레이엑스」。在这里发布面孔和名字即可，免费。",
+    "사진을 올렸습니다. 아래 단추를 눌러야 소개가 바뀝니다.":
+      "照片已上传。按下下方按钮后介绍才会更改。",
+    "올렸습니다. 손님이 이 얼굴·이름으로 봅니다.":
+      "已发布。客人将看到这张面孔和这个名字。",
+    "이름을 비웠습니다. 손님은 자산 이름으로 봅니다.":
+      "已清空名字。客人将看到资产名称。",
+    "사진이 너무 큽니다. 8MB 아래로 골라 주세요.":
+      "照片太大。请选择 8MB 以下的图片。",
+    "SHOP.PLAYX 가 없습니다. 손님에게 줄 토큰이 없습니다.":
+      "没有 SHOP.PLAYX。没有可发给客人的代币。",
+    "SHOP.PLAYX 수량을 아직 못 읽었습니다. 「자산」에서 목록을 열어 주세요.":
+      "尚未读到 SHOP.PLAYX 数量。请在「资产」打开列表。",
+    "손님 주소를 받아 붙여넣고 보냅니다. 가게에서 계산할 때 저절로 따라가지 않습니다 — 모르게 받으면 그게 뭔지 모릅니다.":
+      "粘贴客人地址后发送。不会在店内结账时自动附上——不知情地收到，就不知道那是什么。",
     "내 주소 채우기":
       "填入我的地址",
     "내가 만든 것":

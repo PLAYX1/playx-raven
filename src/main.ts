@@ -631,80 +631,6 @@ function bindPeerHelp() {
   );
 }
 
-/* ── 내 아티스트 이름 ──────────────────────────────────────────────────
- *
- * 🔴 체인에 **아티스트 열쇠와 받을 주소**를 박았다(200 RVN 소각). 그런데 그
- *    열쇠로 얼굴·이름을 안 올리면 손님이 보는 것은 자산 이름뿐이다 —
- *    **태운 자리가 비어 있다.**
- *
- * ⚠️ 여기 적는 것은 전부 **공짜·즉시·무제한**이다. 체인이 아니라 Nostr 다.
- *
- * ⚠️ 개인 이름표(`talk_profile_set`)와 **다른 열쇠**를 쓴다. 섞으면 방에서 한
- *    잡담·1:1 문의가 아티스트와 한 사람으로 묶이고, 그건 체인에 박혀 있어
- *    되돌릴 수 없다.
- */
-let 아티스트얼굴 = "";
-
-function 아티스트얼굴그리기() {
-  const img = $("art-preview") as HTMLImageElement;
-  if (아티스트얼굴) { img.src = 아티스트얼굴; img.hidden = false; }
-  else { img.removeAttribute("src"); img.hidden = true; }
-}
-
-/** 체인이 가리키는 열쇠와 이 컴퓨터의 열쇠가 같은가 — **올리기 전에** 말한다. */
-async function 아티스트확인() {
-  const box = $("art-who");
-  try {
-    const r = await invoke<any>("artist_check", { asset: "PLAYX" });
-    if (r?.ok) {
-      box.className = "msg ok";
-      box.textContent = t("체인이 가리키는 열쇠와 같습니다. 여기서 올리면 손님 화면에 붙습니다.");
-    } else {
-      box.className = "msg err";
-      // 🔴 「안 됩니다」로 끝내지 않는다. 왜인지와 다음 할 일을 적는다.
-      box.textContent = String(r?.why || t("확인하지 못했습니다."));
-    }
-  } catch (e: any) {
-    box.className = "msg";
-    box.textContent = String(e?.message || e);
-  }
-}
-
-async function 아티스트읽기() {
-  await 아티스트확인();
-  try {
-    const r = await invoke<any>("artist_profile_get");
-    ($("art-name") as HTMLInputElement).value = String(r?.name || "");
-    ($("art-about") as HTMLInputElement).value = String(r?.about || "");
-    ($("art-site") as HTMLInputElement).value = String(r?.website || "");
-    아티스트얼굴 = String(r?.picture || "");
-    아티스트얼굴그리기();
-  } catch { /* 아직 없으면 빈 채로 둔다. 지어내지 않는다. */ }
-}
-
-async function 아티스트올리기() {
-  const b = $("art-save") as HTMLButtonElement;
-  const say = (m: string, k: "" | "err" | "ok" = "") => {
-    const el = $("art-say"); el.textContent = m; el.className = "msg" + (k ? " " + k : "");
-  };
-  b.disabled = true;
-  const 옛 = b.textContent;
-  b.textContent = t("올리는 중…");
-  try {
-    await invoke("artist_profile_set", {
-      name: ($("art-name") as HTMLInputElement).value,
-      about: ($("art-about") as HTMLInputElement).value,
-      picture: 아티스트얼굴,
-      website: ($("art-site") as HTMLInputElement).value,
-    });
-    say(t("올렸습니다. 손님이 보는 이름이 바뀌었습니다."), "ok");
-  } catch (e: any) {
-    say(String(e?.message || e), "err");
-  } finally {
-    b.disabled = false; b.textContent = 옛;
-  }
-}
-
 async function renderPanel() {
   const a = selected ? assets.get(selected) : null;
   if (!a) { $("panel").className = "panel hidden"; return; }
@@ -729,7 +655,7 @@ async function renderPanel() {
       (a.mine ? `<button class="ghost" id="p-notice">공지 보내기</button>` : "") +
       (a.mine ? `<button class="ghost" id="p-reward">나눠주기</button>` : "");
     const sb = document.getElementById("p-send");
-    if (sb) sb.onclick = () => { showPage("wallet"); openSend("asset", a.name); };
+    if (sb) sb.onclick = () => { showPage("wallet"); void openSend("asset", a.name); };
     const lb = document.getElementById("p-sell");
     if (lb) lb.onclick = () => openSell(a);
     wireOwnerButtons(a);
@@ -858,7 +784,7 @@ async function renderPanel() {
       }
     };
   const sendBtn = document.getElementById("p-send");
-  if (sendBtn) sendBtn.onclick = () => { showPage("wallet"); openSend("asset", a.name); };
+  if (sendBtn) sendBtn.onclick = () => { showPage("wallet"); void openSend("asset", a.name); };
   const sellBtn = document.getElementById("p-sell");
   if (sellBtn) sellBtn.onclick = () => openSell(a);
   wireOwnerButtons(a);
@@ -891,6 +817,18 @@ async function checkOwnerTokens() {
        파는 것과 발행하는 것은 다른 지갑이어야 합니다.<br />
        그래서 이것이 여기 있는 동안 <b>자동 판매를 켤 수 없습니다.</b>`;
   } catch {}
+}
+
+/**
+ * 🔴 **자산 지도는 「자산」 화면이 채운다 — 거길 안 들르면 비어 있다.**
+ *
+ * 그래서 딴 화면에서 자산을 쓰면 조용히 빈 것으로 굴렀다. 아티스트 화면의
+ * 「수량 확인 중…」이 안 끝나던 것도, 「손님에게 보내기」가 **고를 것이 없는
+ * 목록**을 열던 것도 같은 원인이다. 필요하면 여기서 채운다.
+ */
+async function ensureAssets() {
+  if (assets.size > 0) return;
+  await loadAssets(false).catch(() => {});
 }
 
 async function loadAssets(thenScan = true) {
@@ -2909,9 +2847,9 @@ function pageTiles(page: string): PageTile[] {
       { icon: I('<path d="M12 4v11M8 11l4 4 4-4"/><path d="M4.5 19.5h15"/>'),
         label: "받기", sub: "받을 주소 만들기", go: () => $("w-newaddr")?.click() },
       { icon: I('<path d="M12 20V9M8 13l4-4 4 4"/><path d="M4.5 4.5h15"/>'),
-        label: "보내기", sub: "RVN 보내기", go: () => openSend("rvn") },
+        label: "보내기", sub: "RVN 보내기", go: () => void openSend("rvn") },
       { icon: I('<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/>'),
-        label: "자산 보내기", sub: "쿠폰 · 회원권", go: () => openSend("asset") },
+        label: "자산 보내기", sub: "쿠폰 · 회원권", go: () => void openSend("asset") },
       { icon: I('<rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="M3.5 9.5h17M8 14h4"/>'),
         label: "최근 거래", sub: "들어오고 나간 것", go: jump("w-foreign") },
     ];
@@ -2956,24 +2894,6 @@ function pageTiles(page: string): PageTile[] {
          메뉴로 되돌리지는 않는다. 나눠주기는 **자산에 하는 일**이 맞다.
          대신 이 줄(「지금 할 일」)에 둔다 — 자산을 안 골라도 보이고,
          눌러 들어가면 그 화면이 열린다. */
-      /* 🔴 그록: "백엔드는 이미 있다. 화면이 없다. 1차 메뉴 「내 소개」를 붙여라."
-         진단은 같은데 **자리는 다르게** 간다 — 1차 메뉴는 일곱이고, 오늘
-         나눠주기를 거기서 내린 참이다. 대신 이 줄(「지금 할 일」)에 크게 둔다.
-         자산을 안 골라도 보이고, 200 RVN 태워 만든 자리라 눈에 띄어야 한다. */
-      {
-        icon: I('<circle cx="12" cy="8" r="3.6"/><path d="M4.5 20c0-4 3.4-6.4 7.5-6.4s7.5 2.4 7.5 6.4"/>'),
-        label: "내 아티스트 이름",
-        sub: "얼굴 · 소개 (공짜)",
-        go: () => {
-          const d = document.getElementById("artbox") as HTMLDetailsElement | null;
-          if (d) d.open = true;
-          raviPoint({
-            page: "assets",
-            el: "art-name",
-            say: "손님이 보는 얼굴과 소개입니다. 여기 적는 것은 공짜이고 언제든 바꿉니다 — 체인에는 열쇠만 박혀 있습니다.",
-          });
-        },
-      },
       {
         icon: I('<circle cx="12" cy="9" r="5.5"/><path d="M8.5 13.5L7 21l5-2.5L17 21l-1.5-7.5"/>'),
         label: "나눠주기",
@@ -7227,7 +7147,7 @@ const TAIL_CHECK_RVN = 30_000;
 let sendMode: "asset" | "rvn" | null = null;
 let sendPreview: any = null;
 
-function openSend(mode: "asset" | "rvn", preselect?: string) {
+async function openSend(mode: "asset" | "rvn", preselect?: string) {
   sendMode = mode;
   sendPreview = null;
   $("send-review").style.display = "none";
@@ -7247,7 +7167,11 @@ function openSend(mode: "asset" | "rvn", preselect?: string) {
   ($("s-review") as HTMLButtonElement).disabled = true;
 
   if (mode === "asset") {
+    // 🔴 지도가 비어 있으면 **고를 것이 없는 목록**이 뜬다(위 ensureAssets 주석).
+    //    화면은 이미 열렸으니 여기서 기다려도 사장은 안 기다리는 느낌이다.
     const sel = $("s-asset") as HTMLSelectElement;
+    sel.innerHTML = `<option>${t("불러오는 중…")}</option>`;
+    await ensureAssets();
     // Only assets with a positive balance — offering ones you cannot send is
     // an error message disguised as a choice.
     sel.innerHTML = [...assets.values()]
@@ -8120,14 +8044,20 @@ async function artistLoad() {
     seal.className = "arseal muted";
     seal.textContent = errText(e);
   }
-  const shop = assets.get("SHOP.PLAYX");
+  // 🔴 **「자산」 화면을 먼저 열어야만 숫자가 나왔다.** `assets` 는 그 화면이
+  //    채우는 지도라, 여기 바로 온 사장에게는 늘 비어 있다. 화면이 「확인
+  //    중…」에서 영영 멈춘다 — 대표님 화면이 그 상태였다.
+  //    없으면 **여기서 직접 묻는다.** 사장에게 「저기 먼저 다녀오세요」라고
+  //    시키는 것은 안내가 아니다.
   const qty = $("ar-shopqty");
+  await ensureAssets();
+  const shop = assets.get("SHOP.PLAYX");
   if (shop && shop.amount > 0) {
     qty.textContent = `SHOP.PLAYX  ${fmtQty(shop.amount)}개 남음`;
   } else if (shop) {
     qty.textContent = t("SHOP.PLAYX 가 없습니다. 손님에게 줄 토큰이 없습니다.");
   } else {
-    qty.textContent = t("SHOP.PLAYX 수량을 아직 못 읽었습니다. 「자산」에서 목록을 열어 주세요.");
+    qty.textContent = t("SHOP.PLAYX 수량을 못 읽었습니다. 노드가 켜져 있는지 보세요.");
   }
 }
 
@@ -8138,14 +8068,47 @@ async function artistPick(file: File) {
   }
   $("ar-picnote").textContent = t("사진 올리는 중…");
   try {
-    const bytes = Array.from(new Uint8Array(await file.arrayBuffer()));
-    const added = await invoke<any>("ipfs_add_file", { file: { name: file.name, bytes } });
-    const cid = String(added?.cid || "");
-    if (!cid) throw new Error("파일창고가 사진 주소를 안 돌려줬습니다.");
-    arPicture = `https://ipfs.io/ipfs/${cid}`;
+    // 🔴 **`ipfs.io` 주소를 저장하면 사진이 안 뜬다.**
+    //
+    //    대표님: "사진 올렸는데 안나와." 이 저장소가 그 이유를 이미 재어
+    //    뒀다(`helping.rs` 첫 주석): `ipfs.io` 는 **301**, `dweb.link` 는 안
+    //    닿는다. 방금 다시 재도 301 이었다. 우리 웹 게이트웨이도 404 다.
+    //    `127.0.0.1:8080` 은 **이 컴퓨터에서만** 열린다 — 손님 폰에서는 빈 자리다.
+    //
+    //    실제로 화면에 뜨는 유일한 것은 **가게 간판이 쓰는 방식**이다 —
+    //    체인에 올라간 아이콘을 열어 보니 `data:image/jpeg;base64,…` 였다.
+    //    사진 자체를 담으므로 **어느 게이트웨이에도 안 매단다.**
+    //
+    //    ⚠️ 그래서 512px 로 줄인다. 원본을 담으면 몇 MB 가 되고, 릴레이가
+    //       한 건 32KB 로 자르는 곳도 있다(`shop.rs` 실측).
+    const bitmap = await createImageBitmap(file);
+    const side = Math.min(bitmap.width, bitmap.height);
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 512;
+    canvas.getContext("2d")!.drawImage(
+      bitmap, (bitmap.width - side) / 2, (bitmap.height - side) / 2, side, side, 0, 0, 512, 512);
+    // 🔴 `fetch(dataUrl)` 로 되읽지 않는다. 그건 그림을 두 번 굽는 데다,
+    //    앱의 CSP `connect-src` 를 타는 **네트워크 길**이라 조용히 멈춘다 —
+    //    실제로 여기서 「사진 올리는 중…」인 채로 안 끝났다. 캔버스에서
+    //    한 번에 꺼낸다.
+    const blob: Blob = await new Promise((ok, no) =>
+      canvas.toBlob((b) => (b ? ok(b) : no(new Error("사진을 못 줄였습니다."))), "image/jpeg", 0.82));
+    const dataUrl: string = await new Promise((ok, no) => {
+      const r = new FileReader();
+      r.onload = () => ok(String(r.result));
+      r.onerror = () => no(new Error("사진을 못 읽었습니다."));
+      r.readAsDataURL(blob);
+    });
+
+    // 파일창고에도 같이 올려 둔다 — 나중에 큰 그림이 필요할 때 쓰고,
+    // 우리 노드가 그걸 지킨다(자동 핀). 다만 **보여 주는 것은 `data:`** 다.
+    const bytes = Array.from(new Uint8Array(await blob.arrayBuffer()));
+    await invoke<any>("ipfs_add_file", { file: { name: "face.jpg", bytes } }).catch(() => null);
+
+    arPicture = dataUrl;
     arPaintPreview();
     const img = $("ar-face") as HTMLImageElement;
-    img.src = `http://127.0.0.1:8080/ipfs/${cid}`;
+    img.src = dataUrl;
     $("ar-picnote").innerHTML =
       `<span class="ok">${t("사진을 올렸습니다. 아래 단추를 눌러야 소개가 바뀝니다.")}</span>`;
   } catch (e) {
@@ -8177,9 +8140,12 @@ async function artistSave() {
   }
 }
 
-function artistGive() {
+async function artistGive() {
+  // 🔴 채우고 나서 연다. 안 그러면 **고를 것이 하나도 없는 보내기 화면**이
+  //    뜬다 — 사장은 자기에게 토큰이 없다고 읽는다.
+  await ensureAssets();
   showPage("wallet");
-  openSend("asset", "SHOP.PLAYX");
+  void openSend("asset", "SHOP.PLAYX");
 }
 
 function bindArtist() {
@@ -8188,7 +8154,7 @@ function bindArtist() {
   $("ar-about").addEventListener("input", paint);
   $("ar-web").addEventListener("input", paint);
   $("ar-save").addEventListener("click", () => void artistSave());
-  $("ar-give").addEventListener("click", () => artistGive());
+  $("ar-give").addEventListener("click", () => void artistGive());
   const pick = () => ($("ar-file") as HTMLInputElement).click();
   $("ar-pick").addEventListener("click", pick);
   $("ar-facebtn").addEventListener("click", pick);
@@ -13402,7 +13368,9 @@ function renderMenu() {
     const cur = ($("mn-cur") as HTMLSelectElement)?.value || "KRW";
     let bad: string[] = [];
     try {
-      bad = await invoke<string[]>("unsellable", { menu: menuItems });
+      // `?? []` 가 있어야 한다 — 빈 답이 오면 아래 `.length` 에서 던지고,
+      // 그 순간 **메뉴 안내 줄 전체가 조용히 안 그려진다**(오류 창도 안 뜬다).
+      bad = (await invoke<string[]>("unsellable", { menu: menuItems })) ?? [];
     } catch {
       /* 못 물어봤으면 개수만 적는다 */
     }
@@ -14425,8 +14393,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("rs-card").addEventListener("click", showCard);
   $("rs-lost").addEventListener("click", phoneLost);
   $("w-refresh").addEventListener("click", () => { loadWallet(); checkForeign(); });
-  $("w-send-asset").addEventListener("click", () => openSend("asset"));
-  $("w-send-rvn").addEventListener("click", () => openSend("rvn"));
+  $("w-send-asset").addEventListener("click", () => void openSend("asset"));
+  $("w-send-rvn").addEventListener("click", () => void openSend("rvn"));
   $("s-cancel").addEventListener("click", closeSend);
   ["s-addr", "s-qty"].forEach((id) => $(id).addEventListener("input", composeChanged));
   $("s-review").addEventListener("click", reviewSend);
@@ -15189,64 +15157,6 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("ob-only").addEventListener("click", () => obChoose(true));
   $("ob-also").addEventListener("click", () => obChoose(false));
   $("ob-override").addEventListener("click", () => obChoose(true));
-  // 🔴 **배선.** 화면만 만들고 이 줄을 안 쓰면 아무 일도 안 난다 —
-  //    이 저장소가 오늘만 여러 번 걸린 병이다.
-  document.getElementById("art-save")?.addEventListener("click", () => void 아티스트올리기());
-  document.getElementById("art-pick")?.addEventListener("click", () => {
-    (document.getElementById("art-file") as HTMLInputElement | null)?.click();
-  });
-  document.getElementById("art-file")?.addEventListener("change", async (ev) => {
-    const f = (ev.target as HTMLInputElement).files?.[0];
-    if (!f) return;
-    if (f.size > 8 * 1024 * 1024) {
-      const el = $("art-say");
-      el.textContent = t("사진이 너무 큽니다. 8MB 아래로 골라 주세요.");
-      el.className = "msg err";
-      return;
-    }
-    const el = $("art-say");
-    el.textContent = t("사진 올리는 중…");
-    el.className = "msg";
-    try {
-      // 🔴 가게 간판이 쓰는 방식을 **그대로** 따른다. 길이 둘이면 하나는 낡는다.
-      //    ① 512px 정사각형으로 줄인다 — 원본을 그대로 올리면 몇 MB 가 된다.
-      //    ② IPFS 에 올리고 **주소만** 들고 있는다. 사진 자체를 프로필에 박으면
-      //       바꿀 때마다 프로필이 통째로 바뀐다.
-      //    ③ `ipfs_add_bundle` 은 **폴더** 주소를 준다. 파일 이름까지 붙여야
-      //       그림이 나온다 — 폴더를 그림으로 열면 아무것도 안 뜬다.
-      //
-      //    ⚠️ 주소는 `127.0.0.1` 로 두지 않는다. 그건 **이 컴퓨터에서만** 열린다
-      //       — 손님 폰에서는 빈 자리가 된다. 맨 CID 만 들고, 보는 쪽이 자기
-      //       길로 연다(손님 화면의 `photoSrc` 가 `Qm…` 를 받는다).
-      const bitmap = await createImageBitmap(f);
-      const side = Math.min(bitmap.width, bitmap.height);
-      const canvas = document.createElement("canvas");
-      canvas.width = canvas.height = 512;
-      canvas.getContext("2d")!.drawImage(
-        bitmap, (bitmap.width - side) / 2, (bitmap.height - side) / 2, side, side, 0, 0, 512, 512);
-      const dataUrl = canvas.toDataURL("image/jpeg", 0.82);
-      const bin = await (await fetch(dataUrl)).blob();
-      const up = await invoke<any>("ipfs_add_bundle", {
-        files: [{ name: "face.jpg", bytes: [...new Uint8Array(await bin.arrayBuffer())] }],
-        metadata: null,
-      });
-      // 응답 모양이 다르면 `catch` 에도 안 걸리고 조용히 빈 값이 된다. 던진다.
-      if (!up?.cid) throw new Error(t("파일창고가 주소를 주지 않았습니다."));
-      아티스트얼굴 = `${up.cid}/face.jpg`;
-      (($("art-preview") as HTMLImageElement)).src = dataUrl;
-      ($("art-preview") as HTMLImageElement).hidden = false;
-      el.textContent = t("사진을 올렸습니다. 아래 단추를 눌러야 이름표가 바뀝니다.");
-      el.className = "msg ok";
-    } catch (e: any) {
-      el.textContent = String(e?.message || e);
-      el.className = "msg err";
-    }
-  });
-  // 펼칠 때만 읽는다. 안 여는 사람에게 왕복을 물리지 않는다.
-  document.getElementById("artbox")?.addEventListener("toggle", () => {
-    if ((document.getElementById("artbox") as HTMLDetailsElement).open) void 아티스트읽기();
-  });
-
   $("ob-apply").addEventListener("click", obApply);
   $("ob-detail").addEventListener("click", () => {
     const n = $("ob-nums");

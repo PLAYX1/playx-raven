@@ -2224,7 +2224,12 @@ async fn node_can_take_orders() -> (bool, String) {
 //
 // webp 다. 같은 그림이 png 로 263KB, webp 로 16KB — 가게 와이파이에서 이건
 // 취향이 아니라 조건이다. webp 는 2020년 이후 모든 폰에서 열린다.
-const FACES: [(&str, &[u8]); 6] = [
+const FACES: [(&str, &[u8]); 7] = [
+    // 🔴 `face` 가 빠져 있었다. `wallet.html` 이 파비콘과 180px 마스코트로
+    //    이걸 부르는데, **가게 노드에는 안 구워져 있어 둘 다 404** 였다.
+    //    rvn.ex.erci.se 로 열면 나오니 우리 눈에는 멀쩡했고, 가게에서 QR 로
+    //    연 손님만 깨진 그림을 봤다 — 이 시험이 잡으려던 바로 그 사고다.
+    ("face", include_bytes!("../../web/raven-face.webp")),
     ("head", include_bytes!("../../web/raven-head.webp")),
     ("hello", include_bytes!("../../web/raven-hello.webp")),
     ("wait", include_bytes!("../../web/raven-wait.webp")),

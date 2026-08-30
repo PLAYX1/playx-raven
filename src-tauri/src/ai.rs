@@ -362,7 +362,7 @@ Rules:
   "spot" MUST be one of these exact strings. Anything else is silently ignored:
     새 자산 만들기 · 가게 열기 · 문 등록 · 회원 등록 · 이야기 방 만들기 ·
     방 초대하기 · 이 컴퓨터 준비하기 · 노드 상태 · 지갑 · 백업 · 손님 받기 순서 ·
-    나눠주기 · 내 가게
+    나눠주기 · 내 가게 · 내 소개
   Say in "reply" what they will see and what pressing it does, in plain Korean.
   Pair it with "go" only if you need a screen not in that list.
 - "tile_remove" takes one off, matched by its exact label. Only their own tiles can be removed; the built-in ones cannot.
