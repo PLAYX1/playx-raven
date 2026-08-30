@@ -29,6 +29,10 @@
 //! | `m/44'/175'/0'/1/*`   | **돈 · 거스름 주소** | 레이븐코어 · 웹 지갑 |
 //! | `m/44'/175'/7'/0/0`   | **사람** — 대화 · 쪽지 · 이름표 | 웹 지갑(`web/wallet.src.ts`) |
 //! | `m/44'/175'/7'/1'/0'` | **가게 간판** (v2 · 아직 아무도 안 씀) | — |
+//! | `m/44'/175'/7'/2'/0'` | **아티스트 이름** — 체인 자산에 박히는 열쇠 | — |
+//!
+//! 🔴 아티스트 자리(`2'`)는 **둘째·셋째 예명을 위해 `2'/1'`, `2'/2'` … 를
+//! 남겨 둔다.** 늘려도 12단어 하나로 전부 복구된다.
 //!
 //! 씨앗은 BIP39 표준이다: `PBKDF2-HMAC-SHA512(12단어, "mnemonic"+암호, 2048회, 64바이트)`.
 //! 레이븐코어가 쓰는 것과 같은 방식이라 돈 주소가 어느 지갑에서나 맞는다.
@@ -91,6 +95,43 @@ pub const PATH_PERSON: &str = "m/44'/175'/7'/0/0";
 /// 정해만 두고, 옮기는 것은 사장이 값을 보고 고를 일이다.
 pub const PATH_SHOP: &str = "m/44'/175'/7'/1'/0'";
 
+/// 아티스트 이름. **자산에 박아 넣을 공개키가 여기서 나온다.**
+///
+/// # 🔴 왜 사람 열쇠(`PATH_PERSON`)를 쓰면 안 되는가
+///
+/// 아티스트 공개키는 체인 자산(`PLAYX`)의 프로필에 **박힌다.** 체인은
+/// 되돌릴 수 없고, 고치려면 재발행 100 RVN 이다.
+///
+/// 그 자리에 사람 열쇠를 박으면 **개인 대화 정체성과 공개 아티스트
+/// 정체성이 영구히 묶인다.** 방에서 나눈 잡담, 1:1 로 주고받은 문의,
+/// 중고로 판 자전거가 전부 「그 아티스트」와 같은 열쇠가 된다. 팔로우한
+/// 사람 누구나 그 연결을 본다. 한 번 박으면 못 푼다.
+///
+/// 바로 위 `PATH_SHOP` 의 설명이 같은 사고를 이미 기록해 두었다 — 가게
+/// v1 열쇠가 체인에 박혀서, 옮기려면 100 RVN 을 내야 하는 상태다.
+/// **같은 실수를 두 번 하지 않는다.**
+///
+/// # 왜 가게(`PATH_SHOP`)와도 나누는가
+///
+/// 대표님: "가게 하면서 아티스트일수도 있지 않나? 따로 등록하고 싶을수도
+/// 있고 혹은 자기 프로필은 있고 장사는 따로 일수도 있고 말야."
+/// 셋은 **다른 자리**다. 한 사람이 셋을 다 가질 수 있고, 서로 연결되지
+/// 않아야 한다.
+///
+/// # 왜 경화(`'`)인가
+///
+/// `PATH_PERSON` 의 마지막 두 자리가 경화가 아닌 것은 **웹 지갑이 이미
+/// 그 자리에 글을 써 버려서** 맞춘 것이지 고른 것이 아니다(위 경로표
+/// 참고). 아티스트 경로는 아직 아무도 안 쓴다. 제약이 없으니 **안전한
+/// 쪽**을 고른다 — `PATH_SHOP` 과 같다.
+///
+/// # 마지막 자리가 `0'` 인 이유
+///
+/// 한 사람이 예명을 여럿 쓸 수 있다. `2'/1'`, `2'/2'` … 를 **둘째·셋째
+/// 이름으로 남겨 둔다.** 지금 쓰는 것은 첫째뿐이다. 나중에 늘려도 12단어
+/// 하나로 전부 복구된다 — 그것이 이 표의 계약이다.
+pub const PATH_ARTIST: &str = "m/44'/175'/7'/2'/0'";
+
 /// 돈. **여기서 파생하지 않는다** — 표에 적어 두는 것이 전부다.
 /// 돈 주소는 레이븐코어가 만들고 우리는 손대지 않는다.
 pub const PATH_MONEY: &str = "m/44'/175'/0'/0/*";
@@ -121,6 +162,15 @@ const _: () = assert!(
 const _: () = assert!(
     same(PATH_SHOP, "m/44'/175'/7'/1'/0'"),
     "가게 간판 경로를 바꾸면 이미 옮긴 가게가 죽는다."
+);
+const _: () = assert!(
+    same(PATH_ARTIST, "m/44'/175'/7'/2'/0'"),
+    "아티스트 경로를 바꾸면 체인 자산에 박은 공개키가 고아가 된다. 되돌리려면 재발행(100 RVN)이다."
+);
+// 🔴 세 자리가 서로 겹치면 「따로」가 아니게 된다. 문자열이 다른지 여기서 막는다.
+const _: () = assert!(
+    !same(PATH_ARTIST, PATH_PERSON) && !same(PATH_ARTIST, PATH_SHOP),
+    "아티스트·사람·가게는 서로 다른 자리여야 한다. 같으면 정체성이 묶인다."
 );
 const _: () = assert!(
     same(PATH_MONEY, "m/44'/175'/0'/0/*"),
@@ -327,6 +377,19 @@ pub fn shop_key_from(words: &str, passphrase: &str) -> Option<[u8; 32]> {
     derive(&seed_from_words(words, passphrase)?, PATH_SHOP)
 }
 
+/// 12단어에서 **아티스트 열쇠**를 뽑는다. 체인 자산에 박을 공개키가 이것이다.
+#[allow(dead_code)]
+pub fn artist_key_from(words: &str, passphrase: &str) -> Option<[u8; 32]> {
+    derive(&seed_from_words(words, passphrase)?, PATH_ARTIST)
+}
+
+/// 이 노드의 아티스트 열쇠. 12단어를 못 읽으면 `None`.
+#[allow(dead_code)]
+pub fn artist_key() -> Option<[u8; 32]> {
+    let (words, pass) = words_from_node()?;
+    artist_key_from(&words, &pass)
+}
+
 /// 이 노드의 사람 열쇠. 12단어를 못 읽으면 `None`.
 pub fn person_key() -> Option<[u8; 32]> {
     let (words, pass) = words_from_node()?;
@@ -358,6 +421,9 @@ pub fn identity_paths() -> Value {
             { "path": PATH_PERSON, "what": "사람 — 대화 · 쪽지 · 이름표",
               "who": "웹 지갑이 이미 쓰던 자리 · 이제 이 앱도 같은 자리",
               "note": "12단어만 있으면 어느 기계에서도 같은 이름이 나옵니다." },
+            { "path": PATH_ARTIST, "what": "아티스트 이름 — 자산에 박히는 열쇠",
+              "who": "아직 아무도 안 씀",
+              "note": "이 공개키가 체인 자산에 박힙니다. 대화용 사람 열쇠와 일부러 나눴습니다 — 같이 쓰면 개인 대화와 아티스트 이름이 영원히 묶입니다." },
             { "path": PATH_SHOP, "what": "가게 간판 (v2)",
               "who": "아직 아무도 안 씀",
               "note": "지금 가게는 옛 방식 열쇠를 쓰고 그 공개키가 체인에 박혀 있습니다. 옮기려면 재발행(100 RVN)이 필요합니다." },
@@ -844,6 +910,30 @@ mod tests {
         }
         let shop = derive(&seed, PATH_SHOP).unwrap();
         assert_ne!(person, shop, "사람과 가게 간판은 달라야 한다");
+        // 🔴 아티스트 열쇠가 사람·가게·돈 어느 것과도 같으면 안 된다.
+        //    같으면 체인에 박는 순간 그 정체성들이 영구히 묶인다.
+        let artist = derive(&seed, PATH_ARTIST).unwrap();
+        assert_ne!(artist, person, "아티스트와 사람은 달라야 한다");
+        assert_ne!(artist, shop, "아티스트와 가게 간판은 달라야 한다");
+        for i in 0..5 {
+            let money = derive(&seed, &format!("m/44'/175'/0'/0/{i}")).unwrap();
+            assert_ne!(artist, money, "아티스트 열쇠로 돈을 못 움직여야 한다");
+        }
+        // 둘째 예명을 열어 둔 자리도 첫째와 달라야 한다.
+        let artist2 = derive(&seed, "m/44'/175'/7'/2'/1'").unwrap();
+        assert_ne!(artist, artist2, "예명끼리도 달라야 한다");
+    }
+
+    /// 아티스트 열쇠는 **12단어에서 늘 같은 값**이 나와야 한다.
+    /// 이 값이 흔들리면 자산에 박은 공개키가 복구 뒤에 안 맞는다.
+    #[test]
+    fn artist_key_is_stable_from_words() {
+        let m = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        let a = artist_key_from(m, "").unwrap();
+        let b = artist_key_from(m, "").unwrap();
+        assert_eq!(a, b, "같은 12단어면 같은 아티스트 열쇠가 나와야 한다");
+        // 암호가 붙으면 다른 사람이다(BIP39 규칙).
+        assert_ne!(a, artist_key_from(m, "x").unwrap());
     }
 
     /// 옛 방식(표식 해시)과 새 방식이 **다른 값**인지. 같으면 옮길 것이
