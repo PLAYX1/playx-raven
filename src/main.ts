@@ -6204,6 +6204,7 @@ async function paintFlow() {
                 done
                   ? ""
                   : `<button class="${now ? "" : "ghost"}" data-flow="${escapeHtml(String(s.go))}"
+                     data-flow-key="${escapeHtml(String(s.key))}"
                        style="flex-shrink:0">${t(now ? "지금 하기" : "가기")}</button>`
               }
             </div>`;
@@ -6211,7 +6212,31 @@ async function paintFlow() {
         .join("")}
     </div>`;
   host.querySelectorAll("[data-flow]").forEach((b) => {
-    (b as HTMLElement).onclick = () => showPage((b as HTMLElement).dataset.flow!);
+    // 🔴 그냥 `showPage` 만 하면 **화면만 툭 바뀐다.** 대표님: "내 가게 가면
+    //    뭘 어떻게 하는 건지 모르겠어." 데려다 놓고 아무 말도 안 하니 그렇다.
+    //    라비가 데려갈 때와 같은 대접을 한다 — 어디로 왔는지 말하고,
+    //    지금 손댈 칸을 빛나게 한다.
+    (b as HTMLElement).onclick = () => {
+      const key = String((b as HTMLElement).dataset.flowKey || "");
+      const 곳: Record<string, { el: string; say: string }> = {
+        asset: {
+          el: "sh-ko",
+          say: "여기에 가게 이름을 적고 아래 「가게 등록」을 누르시면 됩니다. 한 번만 하면 됩니다.",
+        },
+        shop: {
+          el: "sh-ko",
+          say: "가게 이름·사진·파는 것을 적어 올리면 손님이 폰으로 봅니다.",
+        },
+        door: {
+          el: "dr-doors",
+          say: "회원권을 가진 분이 스스로 들어오게 하는 문입니다. 헬스장·스터디카페에만 필요합니다.",
+        },
+      };
+      const 안내 = 곳[key];
+      const page = (b as HTMLElement).dataset.flow!;
+      if (안내) raviPoint({ page, el: 안내.el, say: 안내.say });
+      else showPage(page);
+    };
   });
 }
 
