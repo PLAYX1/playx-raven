@@ -356,6 +356,25 @@ pub fn tunnel_stop() -> Result<(), String> {
 ///
 /// 가게 이름은 `shop.json` 에서 읽는다. 아직 체인에 등록을 안 했으면 이름이
 /// 없고, 그러면 **아무것도 안 한다** — 알릴 간판이 없는 것이지 오류가 아니다.
+/// 이 주소가 **지금 진짜로 답하는가.**
+///
+/// 임시 터널은 프로세스가 살아 있어도 주소가 먼저 죽는다. 그때 그 주소를
+/// 공지하면 손님만 헛걸음한다. 짧게 두드려 보고, 안 열리면 안 알린다.
+///
+/// ⚠️ 느린 것과 죽은 것은 다르다 — 8초는 기다린다. 가게 와이파이가 느릴 수 있다.
+async fn url_answers(url: &str) -> bool {
+    match reqwest::Client::new()
+        .get(url)
+        .timeout(std::time::Duration::from_secs(8))
+        .send()
+        .await
+    {
+        // 404 라도 서버가 답한 것이다. 우리가 보는 것은 **닿는가**뿐이다.
+        Ok(_) => true,
+        Err(_) => false,
+    }
+}
+
 fn announce_now(url: Option<String>) {
     let asset = std::fs::read_to_string(crate::paths::app_file("shop.json"))
         .ok()
@@ -394,8 +413,19 @@ fn start_heartbeat() {
         return;
     }
     tauri::async_runtime::spawn(async move {
+        // 몇 분이 지났나. 두드리기는 자주, 공지는 드물게 하려고 센다.
+        let mut 돈시간: u32 = 0;
         loop {
-            tokio::time::sleep(std::time::Duration::from_secs(45 * 60)).await;
+            // 🔴 **45분마다 한 번은 너무 드물다.** 주소가 죽으면 그동안
+            //    손님이 QR 을 찍어도 아무 데도 못 간다. 그래서 **5분마다**
+            //    두드려 보고, 공지는 45분에 한 번만 올린다(릴레이가 두 시간에
+            //    지우므로 그 절반 아래면 충분하고, 더 자주 올리면 소음이다).
+            tokio::time::sleep(std::time::Duration::from_secs(5 * 60)).await;
+            돈시간 += 5;
+            let 공지할차례 = 돈시간 >= 45;
+            if 공지할차례 {
+                돈시간 = 0;
+            }
             // 그새 문을 닫았으면 아무것도 안 한다. 닫았다는 공지는 `tunnel_stop`
             // 이 이미 올렸고, 여기서 또 올리면 만료 시각만 뒤로 밀린다.
             // 🔴 **죽은 주소를 다시 알리면 안 된다.** 45분마다 도는 이 심장이
@@ -406,7 +436,42 @@ fn start_heartbeat() {
             let Some(url) = URL.lock().ok().and_then(|g| g.clone()) else {
                 continue;
             };
-            announce_now(Some(url));
+            // 🔴 **프로세스가 도는 것과 그 주소가 답하는 것은 다른 일이다.**
+            //
+            //    2026-08-31 실측: cloudflared 는 13시간째 살아 있는데
+            //    `elimination-either-…trycloudflare.com` 이 **DNS 에서 사라졌다.**
+            //    Cloudflare 가 임시 주소를 거둬 간 것이다. 프로세스만 보는
+            //    위 검사는 통과하고, 앱은 **죽은 주소를 45분마다 계속 공지했다.**
+            //    QR 을 찍은 손님은 아무 데도 못 간다 — 사진이 안 보이는 것보다 나쁘다.
+            //
+            //    그래서 **실제로 두드려 본다.** 안 열리면 알리지 않는다.
+            //    옛 주소를 안 뿌리는 것만으로도 손님이 죽은 링크를 안 본다.
+            if !url_answers(&url).await {
+                // 🔴 **안 알리는 것만으로는 가게가 계속 닫혀 있다.**
+                //    새 주소를 받아 와야 손님이 다시 들어온다. 임시 터널은
+                //    주소가 바뀌므로, 받아 온 뒤 그것을 공지한다.
+                eprintln!("[tunnel] 알린 주소가 죽었습니다. 새로 잡습니다: {url}");
+                let port = crate::server::PORT;
+                let _ = tunnel_stop();
+                match tunnel_start(port) {
+                    Ok(v) => {
+                        let 새주소 = v["url"].as_str().unwrap_or("").to_string();
+                        if 새주소.is_empty() {
+                            eprintln!("[tunnel] 새 주소를 못 받았습니다");
+                        } else {
+                            eprintln!("[tunnel] 새 주소로 알립니다: {새주소}");
+                            announce_now(Some(새주소));
+                        }
+                    }
+                    // 못 잡아도 앱은 계속 돈다. 매장 안 와이파이 장사는 그대로다.
+                    Err(e) => eprintln!("[tunnel] 다시 잡지 못했습니다: {e}"),
+                }
+                continue;
+            }
+            // 살아 있다. 공지는 차례가 됐을 때만 — 매번 올리면 소음이다.
+            if 공지할차례 {
+                announce_now(Some(url));
+            }
         }
     });
 }
@@ -635,6 +700,30 @@ mod alive_tests {
         let i = src.find("c.try_wait()").expect("실제로 부르는 자리가 없다");
         let after: String = src[i..].chars().take(400).collect();
         assert!(after.contains("URL.lock()"), "죽은 뒤 주소를 안 지운다");
+    }
+
+    /// 🔴 **프로세스가 도는 것과 주소가 답하는 것은 다른 일이다.**
+    ///
+    /// 2026-08-31 실측: cloudflared 는 13시간째 살아 있는데
+    /// `elimination-either-…trycloudflare.com` 이 **DNS 에서 사라졌다.**
+    /// Cloudflare 가 임시 주소를 거둬 간 것이다. 프로세스만 보는 검사는
+    /// 통과하고, 앱은 죽은 주소를 45분마다 계속 공지했다 — QR 을 찍은
+    /// 손님은 아무 데도 못 간다.
+    ///
+    /// 심장이 **두드려 보고**, 죽었으면 **새로 잡는** 것을 글자로 지킨다.
+    #[test]
+    fn the_heartbeat_knocks_before_it_announces() {
+        let src = include_str!("tunnel.rs");
+        let i = src.find("fn start_heartbeat").expect("심장이 있어야 한다");
+        let body = &src[i..i + 3000];
+        assert!(
+            body.contains("url_answers(&url).await"),
+            "두드려 보지 않고 공지한다 — 죽은 주소가 계속 나간다"
+        );
+        assert!(
+            body.contains("tunnel_start(port)"),
+            "죽었을 때 새 주소를 안 잡는다 — 가게가 계속 닫혀 있다"
+        );
     }
 
     /// 다시 알리는 심장이 죽은 주소를 뿌리면 안 된다.
