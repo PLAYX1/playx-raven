@@ -117,9 +117,17 @@ const ts = read("src/main.ts");
     .map((f) => read(`src-tauri/src/${f}`))
     .join("\n");
   const all = ts + webFiles;
-  const orphans = registered.filter(
-    (c) => !all.includes(`"${c}"`) && !rust.includes(`${c}(`)
-  );
+  // 🔴 **자기 정의를 「부르는 곳」으로 세고 있었다.** `fn session_list(` 도
+  //    `session_list(` 를 품으므로, 아무도 안 부르는 명령이 전부 통과했다.
+  //    실제로 `classes`(수업·좌석) 4개와 `trade`(업종 템플릿) 2개가 **닿을
+  //    길이 없는 채로** 이 검사를 지나가고 있었다 — 이 검사가 잡으려던
+  //    바로 그것이다. 정의를 뺀 뒤에 센다.
+  const 부름 = (c) => {
+    const 전부 = (rust.match(new RegExp(`\\b${c}\\s*\\(`, "g")) || []).length;
+    const 정의 = (rust.match(new RegExp(`fn\\s+${c}\\s*\\(`, "g")) || []).length;
+    return 전부 - 정의 > 0;
+  };
+  const orphans = registered.filter((c) => !all.includes(`"${c}"`) && !부름(c));
   if (orphans.length) {
     console.log(`\n⚠️  아무도 안 부르는 명령 ${orphans.length}개`);
     console.log(`   ${orphans.join(", ")}`);

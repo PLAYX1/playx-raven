@@ -2915,6 +2915,19 @@ pub async fn start_phone_server(
     // 🔴 파일 지키기도 같이 켠다. 이건 **지갑을 안 여는** 일이라 자동이
     //    안전하다 — 오늘 가게 사진이 사라진 것의 처방이다.
     crate::peers::start_auto_pin();
+    // 🔴 **재시작 전에 결제한 손님을 잃지 않는다.** 어느 주소가 어느
+    //    주문인지는 체인에 안 적혀 있다 — 우리 파일에만 있다. 안 되읽으면
+    //    그 손님의 물건이 자동으로 안 나간다.
+    match restore_orders(&st) {
+        Ok(v) => {
+            let n = v.get("orders").and_then(Value::as_array).map(|a| a.len()).unwrap_or(0);
+            if n > 0 {
+                eprintln!("[phone] 지난 주문 {n}건을 되읽었습니다");
+            }
+        }
+        // 못 읽어도 서버는 켠다. 장사를 멈추는 것이 더 나쁘다.
+        Err(e) => eprintln!("[phone] 지난 주문을 못 읽었습니다: {e}"),
+    }
 
     let ip = local_ip().unwrap_or_else(|| "127.0.0.1".into());
     // QR 에 박히는 값을 기억해 둔다. 나중에 「바뀌었다」를 말하려면 필요하다.
@@ -3193,8 +3206,20 @@ fn persist_orders(state: &ServerState) {
 }
 
 /// Reads them back on startup so a buyer who paid before a restart is not lost.
+///
+/// 🔴 **여태 아무도 안 불렀다.** 함수도 시험도 있는데 부르는 곳이 한 곳도
+///    없어서, 노드를 껐다 켜면 **어느 주소가 어느 주문인지 잊었다.** 그
+///    직전에 결제한 손님은 돈은 체인에 남는데 물건이 자동으로 안 나간다 —
+///    이 함수가 막으려던 바로 그 일이 계속 일어나고 있었다.
+///    이제 손님 폰 서버를 켤 때 스스로 부른다(`start_phone_server`).
 #[tauri::command]
 pub fn load_orders(state: tauri::State<'_, ServerState>) -> Result<Value, String> {
+    restore_orders(&state)
+}
+
+/// 위와 같은 일. 화면이 아니라 **우리 코드가** 부를 수 있게 나눠 둔다 —
+/// `tauri::State` 는 명령 밖에서 못 만든다.
+fn restore_orders(state: &ServerState) -> Result<Value, String> {
     let raw = match std::fs::read_to_string(orders_path()) {
         Ok(r) => r,
         Err(_) => return Ok(json!({ "orders": [] })),
@@ -3947,6 +3972,27 @@ mod router_builds {
         let st = super::ServerState::default();
         // 서버를 켜지는 않는다 — 라우터를 만드는 것까지가 패닉이 나는 자리다.
         let _ = super::build_phone_router(st);
+    }
+
+    /// 🔴 **서버를 켤 때 지난 주문을 되읽는지.**
+    ///
+    /// 어느 주소가 어느 주문인지는 **체인에 안 적혀 있다** — 우리 파일에만
+    /// 있다. 그래서 노드를 껐다 켜면 그 직전에 결제한 손님의 물건이
+    /// 자동으로 안 나갔다. 되읽는 함수는 있었는데 **부르는 곳이 없었다.**
+    ///
+    /// 이 시험은 「켤 때 부른다」를 글자로 확인한다. 서버를 진짜 켜면 포트를
+    /// 잡아야 하고, 그건 다른 세션이 쓰는 포트와 부딪힌다.
+    #[test]
+    fn the_server_restores_past_orders_on_start() {
+        let src = include_str!("server.rs");
+        let start = src
+            .find("pub async fn start_phone_server")
+            .expect("서버 켜는 함수를 못 찾았다 — 이 시험이 헛돈다");
+        let body = &src[start..start + 6000];
+        assert!(
+            body.contains("restore_orders(&st)"),
+            "서버를 켤 때 지난 주문을 안 되읽는다 — 재시작 직전에 결제한 손님의 물건이 안 나간다"
+        );
     }
 
     /// 🔴 **손님 화면이 부르는 파일이 진짜로 나오는지** 요청을 보내 본다.
