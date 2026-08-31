@@ -470,12 +470,32 @@ pub async fn restore_apply(
         }
     }
 
+    // 🔴 **푼 것을 치운다.** 여태 안 치웠다 — 2026-08-31 실측: 8월 24일에
+    //    되돌린 뒤로 `restore-open/` 에 **잠금이 풀린 지갑(2.5MB)·간판
+    //    열쇠·회원 명단·백업 zip** 이 그대로 남아 있었다.
+    //
+    //    백업을 잠그는 이유가 통째로 없어진다. 잠근 파일 옆에 안 잠긴
+    //    사본이 영원히 놓여 있으면, 이 컴퓨터를 가져간 사람은 암호를 몰라도
+    //    다 가진다. `shopkey.json` 하나만 있어도 「이 가게는 지금 여기서
+    //    받습니다」를 손님에게 말할 수 있다.
+    //
+    //    다음 되돌리기가 시작할 때 지우기는 했다. 그런데 **그 사이가 몇 달**이다.
+    청소();
+
     Ok(json!({
         "done": done,
         "failed": failed,
         "restart_app": !done.is_empty(),
         "note": "앱을 다시 켜면 되돌린 내용이 보입니다.",
     }))
+}
+
+/// 되돌리려고 풀어 놓은 것을 지운다.
+///
+/// 실패해도 알리지 않는다 — 되돌리기는 이미 끝났고, 청소가 안 됐다고
+/// 사장에게 겁을 줄 이유가 없다. 다음 되돌리기가 다시 지운다.
+pub fn 청소() {
+    let _ = std::fs::remove_dir_all(dir().join("restore-open"));
 }
 
 /// One page to print and put in a drawer.
@@ -555,6 +575,31 @@ pub fn backup_folders() -> Value {
 
 #[cfg(test)]
 mod tests {
+    /// 🔴 **되돌린 뒤에 푼 것을 치우는가.**
+    ///
+    /// 2026-08-31 실측: 8월 24일에 되돌린 뒤로 `restore-open/` 에
+    /// **잠금 풀린 지갑(2.5MB)·간판 열쇠·회원 명단**이 일주일 넘게
+    /// 남아 있었다. 백업을 잠그는 뜻이 통째로 없어진다 — 잠근 파일 옆에
+    /// 안 잠긴 사본이 놓여 있으면 암호를 몰라도 다 가져간다.
+    #[test]
+    fn a_restore_cleans_up_what_it_unlocked() {
+        let src = include_str!("recover.rs");
+        let i = src
+            .find("pub async fn restore_apply")
+            .expect("되돌리는 함수가 있어야 한다");
+        let body = &src[i..];
+        let end = body.find("\n}\n").unwrap_or(body.len());
+        assert!(
+            body[..end].contains("청소()"),
+            "되돌린 뒤 푼 것을 안 치운다 — 잠금 풀린 지갑이 그대로 남는다"
+        );
+        // 켤 때도 쓸어야 한다. 이미 남은 사람 것도 지워야 하기 때문이다.
+        assert!(
+            include_str!("server.rs").contains("crate::recover::청소()"),
+            "켤 때 안 쓸면, 이미 남아 있는 사람은 영영 남는다"
+        );
+    }
+
     /// 🔴 **잠긴 백업을 이름이 아니라 내용으로 알아본다.**
     ///
     /// 「가게 옮기기」가 통째로 안 됐다. 보내는 쪽은 잠긴 파일을 주는데
