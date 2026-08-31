@@ -228,7 +228,11 @@ pub async fn move_fetch(host: String, code: String) -> Result<Value, String> {
     let tmp = std::env::temp_dir().join(format!("playx-moved-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&tmp);
     std::fs::create_dir_all(&tmp).map_err(|e| format!("자리를 만들지 못했습니다: {e}"))?;
-    let zip = tmp.join("이사.zip");
+    // 🔴 **이름을 사실대로 적는다.** 보내는 쪽은 잠긴 파일을 주는데
+    //    여기서 `이사.zip` 이라 적어서, 푸는 쪽이 확장자를 보고 「안 잠긴
+    //    zip」으로 오해했다. 이름과 내용이 어긋나면 그 거짓말을 나중에
+    //    누군가가 믿는다.
+    let zip = tmp.join("이사.zip.pxlock");
     std::fs::write(&zip, &bytes).map_err(|e| format!("짐을 놓지 못했습니다: {e}"))?;
 
     // 되살리는 일은 기존 복구가 한다. 여기서 새로 만들지 않는다.

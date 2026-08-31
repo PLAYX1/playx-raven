@@ -216,8 +216,20 @@ fn unpack_with(input: &str, pass: &str) -> Result<PathBuf, String> {
     //    `.zip.잠김`)이라 그대로는 zip 이 아니다. 여태 되돌리기는 zip 만 알아서,
     //    잠근 백업을 고르면 「PLAY X Raven 백업이 아닙니다」로 끝났다.
     //    **백업은 만드는 것보다 되돌리는 것이 본업이다.**
+    // 🔴 **이름으로 판단하면 안 된다. 이름은 거짓말을 한다.**
+    //
+    //    「가게 옮기기」가 그래서 통째로 안 됐다. 보내는 쪽은 **잠긴 파일**을
+    //    주는데(`backup_zip` 이 늘 잠근다), 받는 쪽 `move_fetch` 는 그걸
+    //    `이사.zip` 이라는 이름으로 저장한다. 확장자가 `zip` 이라 여기서
+    //    안 풀고 그대로 열려다 「이 파일은 PLAY X Raven 백업이 아닙니다」로
+    //    끝났다 — 대표님이 윈도우에서 본 그 글자다(2026-08-31).
+    //
+    //    파일 앞 여덟 바이트가 `PXRLOCK1` 이면 잠긴 것이다. 그걸 본다.
+    let 잠김 = std::fs::read(&p)
+        .map(|b| b.len() >= 8 && &b[..8] == b"PXRLOCK1")
+        .unwrap_or(false);
     let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("");
-    let p = if ext == "pxlock" || ext == "잠김" {
+    let p = if 잠김 || ext == "pxlock" || ext == "잠김" {
         let opened = scratch.join("backup.zip");
         // 🔴 **암호를 만들어 놓고 쓸 길이 없었다.** 새 컴퓨터에서는 이 컴퓨터의
         //    열쇠 파일이 없으니 「다른 컴퓨터의 자물쇠」라고 답하고 끝났다 —
@@ -543,6 +555,31 @@ pub fn backup_folders() -> Value {
 
 #[cfg(test)]
 mod tests {
+    /// 🔴 **잠긴 백업을 이름이 아니라 내용으로 알아본다.**
+    ///
+    /// 「가게 옮기기」가 통째로 안 됐다. 보내는 쪽은 잠긴 파일을 주는데
+    /// 받는 쪽이 `이사.zip` 으로 저장해서, 확장자만 보던 코드가 안 풀고
+    /// 「이 파일은 PLAY X Raven 백업이 아닙니다」로 끝냈다(2026-08-31 실측).
+    ///
+    /// ⚠️ 같이 잰다 — **안 잠긴 zip 은 그대로 통과해야 한다.** 막기만 하는
+    ///    검사는 멀쩡한 백업까지 못 열게 만든다.
+    #[test]
+    fn a_locked_backup_is_known_by_its_first_bytes_not_its_name() {
+        let 잠긴것 = b"PXRLOCK1\x00\x01\x02\x03";
+        let 보통zip = b"PK\x03\x04\x00\x00\x00\x00";
+        let 잠겼나 = |b: &[u8]| b.len() >= 8 && &b[..8] == b"PXRLOCK1";
+        assert!(잠겼나(잠긴것), "잠긴 파일을 못 알아본다 — 가게 옮기기가 막힌다");
+        assert!(!잠겼나(보통zip), "보통 zip 을 잠겼다고 본다 — 멀쩡한 백업이 안 열린다");
+        assert!(!잠겼나(b"PXR"), "짧은 파일에서 넘치면 안 된다");
+
+        // 받는 쪽이 파일 이름을 사실대로 적는지도 같이 본다.
+        let mv = include_str!("moving.rs");
+        assert!(
+            mv.contains("이사.zip.pxlock"),
+            "받은 짐을 안 잠긴 것처럼 이름 붙인다 — 그 거짓말을 푸는 쪽이 믿는다"
+        );
+    }
+
     use super::*;
 
     #[test]
