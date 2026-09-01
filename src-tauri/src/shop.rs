@@ -542,8 +542,38 @@ pub fn currency() -> String {
 
 /// Writes it, atomically, keeping the previous copy.
 #[tauri::command]
-pub fn shop_save(shop: Value) -> Result<(), String> {
+pub fn shop_save(mut shop: Value) -> Result<(), String> {
     let path = shop_path();
+
+    // 🔴 **없는 값이 있는 값을 지우면 안 된다.**
+    //
+    //    `menu_cid` 는 화면이 메뉴를 파일창고에 올린 뒤에야 생긴다. 그런데
+    //    「내 가게」를 안 열어 본 채로 딴 데서 저장이 일어나면 그 값이
+    //    비어 있고, 통째로 덮어쓰면서 **디스크에 있던 주소까지 지워진다.**
+    //
+    //    실측 2026-08-31: 노드는 `Qm…/menu.json` 을 내주는데 `shop.json` 에는
+    //    `null` 이었다. 그래서 살아 있는 공지에 메뉴 주소가 안 실렸고,
+    //    **가게가 꺼지면 손님이 메뉴를 볼 길이 없었다** — 대표님:
+    //    "바깥 연결이 꺼져 있어도 메뉴판은 나오게 하면 되지 않나?" 맞는 말이고,
+    //    그러려면 이 값이 살아 있어야 한다.
+    //
+    //    비어서 온 칸은 **있던 것을 지키고**, 값이 온 칸만 바꾼다.
+    //    「메뉴를 비웠다」는 뜻으로 지우려면 빈 문자열을 보내면 된다 —
+    //    `null`(안 물어봄)과 `""`(비웠음)은 다른 말이다.
+    if let Ok(old) = std::fs::read_to_string(&path) {
+        if let Ok(prev) = serde_json::from_str::<Value>(&old) {
+            for k in ["menu_cid", "photos_cid", "icon"] {
+                let 새것_비었나 = shop.get(k).map(Value::is_null).unwrap_or(true);
+                let 옛것 = prev.get(k).cloned().filter(|v| !v.is_null());
+                if let (true, Some(v)) = (새것_비었나, 옛것) {
+                    if let Some(o) = shop.as_object_mut() {
+                        o.insert(k.to_string(), v);
+                    }
+                }
+            }
+        }
+    }
+
     if let Some(d) = path.parent() {
         let _ = std::fs::create_dir_all(d);
     }
@@ -1731,6 +1761,46 @@ pub async fn shop_detect_asset() -> Result<Value, String> {
 
 #[cfg(test)]
 mod 되그리기 {
+    /// 🔴 **없는 값이 있는 값을 지우면 안 된다.**
+    ///
+    /// `menu_cid` 는 화면이 메뉴를 올린 뒤에야 생긴다. 「내 가게」를 안 열어
+    /// 본 채로 저장이 일어나면 비어서 오고, 통째로 덮어쓰면 디스크의 주소가
+    /// 사라진다. 그러면 **가게가 꺼졌을 때 손님이 메뉴를 볼 길이 없다**
+    /// (2026-08-31 실측: 노드는 주소를 아는데 shop.json 은 null 이었다).
+    ///
+    /// ⚠️ 같이 잰다 — **일부러 비운 것은 비워져야 한다.** 안 그러면 메뉴를
+    ///    지운 가게가 없는 메뉴를 계속 판다.
+    #[test]
+    fn an_absent_field_does_not_erase_a_saved_one() {
+        use serde_json::{json, Value};
+        let 지킬것 = ["menu_cid", "photos_cid", "icon"];
+        let 지키나 = |새것: &Value, 옛것: &Value, k: &str| -> bool {
+            let 새것_비었나 = 새것.get(k).map(Value::is_null).unwrap_or(true);
+            새것_비었나 && 옛것.get(k).map(|v| !v.is_null()).unwrap_or(false)
+        };
+        let 옛 = json!({ "menu_cid": "Qm1/menu.json", "icon": "Qm2/icon.jpg" });
+
+        // 안 물어봄(null) → 있던 것을 지킨다
+        assert!(지키나(&json!({ "menu_cid": null }), &옛, "menu_cid"));
+        assert!(지키나(&json!({}), &옛, "menu_cid"));
+        // 🔴 비웠음("") → **지워져야 한다.** 아니면 없는 메뉴를 계속 판다
+        assert!(!지키나(&json!({ "menu_cid": "" }), &옛, "menu_cid"));
+        // 새 값이 오면 당연히 그것을 쓴다
+        assert!(!지키나(&json!({ "menu_cid": "Qm9/menu.json" }), &옛, "menu_cid"));
+        // 옛것도 비어 있으면 지킬 것이 없다
+        assert!(!지키나(&json!({}), &json!({}), "menu_cid"));
+
+        // 코드가 실제로 그 세 칸을 지키는지
+        let src = include_str!("shop.rs");
+        for k in 지킬것 {
+            assert!(src.contains(k), "{k} 를 지키는 코드가 없다");
+        }
+        assert!(
+            src.contains(r#"["menu_cid", "photos_cid", "icon"]"#),
+            "지킬 칸 목록이 사라졌다 — 저장 한 번에 주소가 날아간다"
+        );
+    }
+
     /// 🔴 **저장은 되는데 화면에 다시 안 그리는 병.**
     ///
     /// 대표님: "가게 정보 기존에 눌러놓은거 있는데 다시 눌러보면 왜 지금
