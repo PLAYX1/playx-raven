@@ -13735,7 +13735,31 @@ function 음내기(ctx: AudioContext, 번: number) {
 /// 사람이 처음 뭔가 누를 때 소리 상자를 미리 만들어 둔다.
 /// `once: true` 라 한 번 하고 스스로 빠진다.
 function 소리깨우기() {
-  const 한번 = () => void 소리준비();
+  // 🔴 **`resume()` 만으로는 맥 앱에서 안 풀린다.**
+  //
+  //    크롬에서는 `resume()` 이면 되는데, 맥 앱은 크롬이 아니라 **WKWebView**
+  //    다. 거기서는 「사람이 누른 그 순간에 **실제로 무언가를 재생**해야」
+  //    소리가 풀린다. 상태만 `running` 으로 바뀌고 아무 소리도 안 나는
+  //    상태가 된다 — 화면은 「막힘 없음」이라고 말하는데 사장은 못 듣는다.
+  //    (대표님 2026-09-01: "소리도 안 들리는데")
+  //
+  //    그래서 첫 손짓에 **들리지 않는 소리 한 조각**을 실제로 재생한다.
+  //    길이 1샘플·크기 0 이라 사람 귀에는 아무 일도 안 일어난다.
+  const 한번 = () => {
+    const ctx = 소리준비();
+    if (!ctx) return;
+    try {
+      const buf = ctx.createBuffer(1, 1, ctx.sampleRate);
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.connect(ctx.destination);
+      // 손짓과 **같은 차례**에 시작해야 한다. `then` 뒤로 미루면 그 손짓이
+      // 이미 끝난 뒤라 웹뷰가 다시 막는다.
+      src.start(0);
+    } catch {
+      /* 못 해도 그만이다. 뒤에 오는 진짜 소리가 한 번 더 시도한다. */
+    }
+  };
   document.addEventListener("pointerdown", 한번, { once: true, capture: true });
   document.addEventListener("keydown", 한번, { once: true, capture: true });
 }

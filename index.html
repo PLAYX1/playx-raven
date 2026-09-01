@@ -699,8 +699,15 @@
       .form input:focus { outline: none; border-color: var(--brand-light); }
       .form .row { display: flex; gap: 8px; align-items: flex-end; }
       .form .row > div { flex: 1; }
+      /* 🔴 **비어 있으면 자리를 차지하면 안 된다.** 이 상자는 「이 이름을
+         등록하면 RVN 이 얼마나 탑니다」를 적는 칸인데, 가게 이름을 안 쳤을
+         때 안만 비우고 테두리·여백은 그대로 뒀다. 그래서 「돈 받을 주소」
+         아래에 **뜻 없는 빈 네모**가 남았다 — 대표님: "이건 뭐야? 원래
+         버튼인가?" 눌러도 아무 일이 없으니 고장으로 읽힌다.
+         `:empty` 는 안에 아무것도 없을 때만 걸린다. */
       .cost { margin: 16px 0 0; padding: 12px 12px; border: 1px solid var(--line);
               border-radius: 8px; background: var(--panel); font-size: 14px; }
+      .cost:empty { display: none; }
       .cost .burn { font-size: 19px; font-weight: 700; letter-spacing: -0.01em; }
       .confirmbox { margin-top: 12px; padding: 12px; border: 1px solid var(--warn); border-radius: 8px;
                     background: color-mix(in srgb, var(--warn) 8%, transparent); }
