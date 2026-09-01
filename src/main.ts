@@ -15192,6 +15192,31 @@ window.addEventListener("DOMContentLoaded", async () => {
   ["sh-pickup", "sh-delivery"].forEach((id) =>
     $(id)?.addEventListener("change", saveShop)
   );
+  // 🔴 **영업시간·「지금 닫음」·안내문 셋만 저장을 안 불렀다.**
+  //
+  //    대표님: "영업시간도 입력했었는데 왜 저장이 안 되어 있는 거지?"
+  //    실측 2026-08-31: `shop.json` 네 판(8월 23일 것까지) 전부 `hours` 0개.
+  //    **한 번도 저장된 적이 없다.**
+  //
+  //    이름·주소·전화는 `input` 에 `saveShop` 이 붙어 있는데, 시간 칸에는
+  //    `paintHours`(글자만 바꿈)와 `previewOpen`(미리보기)만 붙어 있었다.
+  //    화면에서는 잘 채워지고 「자정 넘겨 영업」까지 뜨니 **된 것처럼
+  //    보인다.** 그래서 아무도 못 알아챈다 — 이 저장소의 그 병이다.
+  //
+  //    ⚠️ 시간 칸은 `drawHours` 가 나중에 그리므로 부모(`sh-hours`)에서 받는다.
+  ["sh-closednow", "sh-closednote"].forEach((id) =>
+    $(id)?.addEventListener("change", saveShop)
+  );
+  $("sh-closednote")?.addEventListener("input", saveShop);
+  $("sh-hours")?.addEventListener("change", saveShop);
+  $("sh-hours")?.addEventListener("input", saveShop);
+  // 🔴 주문 주소·가게 이름도 같았다 — 스냅샷에는 실리는데 저장을 안 불렀다.
+  //    `sh-asset` 은 사장이 치는 중인 이름이라, 안 저장하면 앱을 껐다 켤 때
+  //    사라진다. 체인에 올라간 이름은 `chain_asset` 으로 따로 있으므로
+  //    이걸 저장해도 「등록됨」 판정과는 안 부딪힌다.
+  ["sh-orderurl", "sh-asset"].forEach((id) =>
+    $(id)?.addEventListener("input", saveShop)
+  );
 
   if (!localStorage.getItem(ONBOARD_KEY)) {
     startOnboard();

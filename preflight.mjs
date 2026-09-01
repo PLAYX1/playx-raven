@@ -418,6 +418,39 @@ const ts = read("src/main.ts");
   else ok(`손님 화면이 부르는 자원 ${asked.size}개 전부 길이 있음`);
 }
 
+// ⑬ 저장되는 칸이 **저장을 부르는가.**
+//
+// 🔴 2026-08-31: 영업시간을 아무리 채워도 안 남았다. 화면에서는 잘 채워지고
+//    「자정 넘겨 영업」까지 떠서 **된 것처럼 보인다.** 그런데 `saveShop` 을
+//    부르는 코드가 없었다 — `shop.json` 네 판(8월 23일 것까지) 전부 0개.
+//    같이 찾아보니 **주문 주소(`sh-orderurl`)도** 같았다.
+//
+//    「적어 넣었는데 안 남는다」는 사장이 제일 못 견디는 종류다. 오류도 안
+//    나고, 화면은 채워져 있고, 다음에 열면 비어 있다.
+//
+// 무엇을 보나: `shopSnapshot()` 이 **읽는 칸**(= 저장되는 값)이 `saveShop` 과
+// 이어져 있는지. 날짜 고르기·AI 질문칸처럼 저장 대상이 아닌 것은 스냅샷에
+// 안 들어 있으므로 저절로 빠진다.
+{
+  const from = ts.indexOf("function shopSnapshot");
+  const 스냅 = from < 0 ? "" : ts.slice(from, ts.indexOf("\n}\n", from));
+  // 스냅샷이 직접 읽는 것 + 도우미(`val("...")`)로 읽는 것 둘 다.
+  const 읽는칸 = [
+    ...스냅.matchAll(/\$\("([\w-]+)"\)/g),
+    ...스냅.matchAll(/val\("([\w-]+)"\)/g),
+  ].map((m) => m[1]);
+  // 시간 칸은 `readHours()` 가 `hr-o-*` 를 읽지만, 그 부모(`sh-hours`)에
+  // 귀가 달린다. 부모로 바꿔서 본다.
+  if (스냅.includes("readHours()")) 읽는칸.push("sh-hours");
+  const 이어졌나 = (id) =>
+    new RegExp(`"${id}"[^]{0,500}saveShop|saveShop[^]{0,500}"${id}"`).test(ts);
+  const missing = [...new Set(읽는칸)].filter((id) => !이어졌나(id));
+  if (읽는칸.length === 0) fail("가게 스냅샷을 못 읽었다 — 이 검사가 헛돈다", []);
+  else if (missing.length)
+    fail("저장되는 칸이 저장을 안 부른다 — 적어 넣어도 안 남는다", missing);
+  else ok(`저장되는 칸 ${new Set(읽는칸).size}개가 전부 저장을 부름`);
+}
+
 console.log("");
 if (bad) {
   console.log(`검사 실패 — ${bad}가지를 고쳐야 합니다.`);
