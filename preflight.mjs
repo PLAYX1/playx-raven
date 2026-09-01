@@ -32,7 +32,17 @@ import { fileURLToPath } from "node:url";
 //    path.join 이 그걸 `D:\D:\a\...` 로 붙여, 맥·리눅스는 되고 윈도우만
 //    「index.html 이 없다」로 설치 파일이 안 만들어졌다(0.1.1 실측).
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const read = (p) => readFileSync(join(ROOT, p), "utf8");
+// 🔴 **윈도우는 줄바꿈이 `\r\n` 이다.** 깃이 체크아웃할 때 바꿔 놓는다.
+//
+//    그래서 `"\n}\n"` 으로 함수 끝을 찾는 검사가 **윈도우에서만** 못 찾고
+//    파일 끝까지 읽었다(실측: 1,277자짜리가 94,934자가 됐다). 그 결과 엉뚱한
+//    id 를 한 뭉치 물고 와서 「저장을 안 부른다」고 거짓 보고했고,
+//    **0.2.8 윈도우 판이 그것 때문에 안 만들어졌다.** 맥·리눅스는 통과했다.
+//
+//    글자 수로 거리를 재는 검사도 같이 틀어진다 — 줄마다 한 글자씩 늘어나므로.
+//    여기서 한 번 맞춰 두면 **모든 검사가** 같은 것을 본다.
+//    (이 파일은 전에도 윈도우에서만 깨진 적이 있다 — `new URL().pathname`)
+const read = (p) => readFileSync(join(ROOT, p), "utf8").replace(/\r\n/g, "\n");
 
 let bad = 0;
 const fail = (title, lines) => {
