@@ -64,6 +64,8 @@ mod tests {
             ("devfee.rs", include_str!("devfee.rs")),
             ("refund.rs", include_str!("refund.rs")),
             ("wallet.rs", include_str!("wallet.rs")),
+            // 경매는 낙찰금을 우리가 안 만진다. 그 약속을 여기서 지킨다.
+            ("auction.rs", include_str!("auction.rs")),
         ]
     }
 
