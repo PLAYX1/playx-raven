@@ -3058,8 +3058,14 @@ function openBuyFromHash(): boolean {
   } catch {
     return false;
   }
-  buying = { to, rvn, what };
+  // 🔴 **순서가 중요하다.** `openSend()` 안에서 `buying = null` 을 한다
+  //    (한 번 산 뒤 그냥 보내기에도 개발비가 붙는 것을 막는 줄이다).
+  //    그래서 **먼저 세우면 곧바로 지워진다** — 2026-09-06 실측: 화면에는
+  //    개발비 1% 가 뜨는데 서명에는 안 들어가서, 웹에서 물건을 사도
+  //    **개발비가 한 푼도 안 걷히고 있었다.** 반드시 `openSend()` 뒤에 세운다.
+  //    시험 `사는_중_표시는_보내기_화면을_연_뒤에_세운다` 가 이 순서를 지킨다.
   openSend();
+  buying = { to, rvn, what };
   // 결제 중에는 「전부 넣기」를 감춘다. 금액이 이미 정해져 있고, 그 자리에
   // 「수수료 빼고」가 보이면 개발비를 빼는 단추로 읽힌다.
   const max = document.getElementById("btn-send-max");
