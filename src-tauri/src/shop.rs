@@ -1049,11 +1049,12 @@ pub fn fee_config() -> (f64, String) {
 /// 12단어를 잃으면 여기 쌓인 수수료도 같이 잃는다.** 이 값을 고치는 사람은
 /// 위 명령을 다시 돌려서 `isvalid: true` 를 눈으로 확인하고 바꿀 것.
 ///
-/// 사장은 `fee.json` 으로 이 값을 덮어쓰거나 아예 끌 수 있다. 못 끄는 것은
-/// 수수료가 아니라 세금이고, 오픈소스에서 세금은 포크로 사라진다.
+/// ⚠️ 이 줄에 예전에는 「사장은 `fee.json` 으로 덮어쓰거나 끌 수 있다」고
+/// 적혀 있었다. **지금은 거짓말이다** — 그 스위치는 2026-08-23 에 없앴고
+/// `fee_config()` 는 파일을 아예 읽지 않는다. 주소를 바꾸는 길도 없다.
 const PLATFORM_ADDRESS: &str = "RLFnbkjmf1VCVq7D9TZvRp7fv6W97rm2cB";
 
-/// 사장이 보고 끄는 화면용.
+/// 사장이 **보기만** 하는 화면용. 끄는 자리가 아니다 — `on` 은 늘 참이다.
 #[tauri::command]
 pub fn fee_read() -> Value {
     let (rate, addr) = fee_config();
