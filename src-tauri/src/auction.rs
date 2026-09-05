@@ -92,6 +92,14 @@ pub fn bind_message(nostr_pk: &str, asset: &str, addr: &str, auction_id: &str) -
 ///
 /// ⚠️ **화면에 미리 적어야 한다.** 낙찰된 뒤에 알게 되면 그게 신뢰를 깬다.
 ///    `winner_pays()` 가 그 한 숫자를 준다.
+///
+/// 🔴 **배선하는 사람에게 — 반드시 이 요율을 넘겨라.**
+/// ```ignore
+/// swap_take(hex, true, passphrase, Some(auction::SETTLE_FEE_RATE))
+/// ```
+/// 마지막 인자를 빼면 `fee_config()` 의 **1%** 가 걷힌다. 그러면 화면은
+/// 10% 라 적고 체인은 1% 를 가져간다 — 돈에서 제일 나쁜 종류의 어긋남이다.
+/// 시험 `the_advertised_rate_must_be_collectable` 이 이걸 지킨다.
 pub const SETTLE_FEE_RATE: f64 = 0.10;
 
 /// 낙찰 수수료 (RVN). 사토시 자리에서 반올림한다.
@@ -340,5 +348,37 @@ mod tests {
     fn the_start_floor_keeps_the_fee_collectable() {
         assert!(settle_fee(MIN_START_RVN) >= crate::swap::MIN_DEV_FEE,
                 "시작가 하한에서 수수료가 먼지보다 작다 — 한 푼도 못 걷는다");
+    }
+
+    /// 🔴 **화면에 적은 요율을 실제로 걷을 수 있어야 한다.**
+    ///
+    /// 2026-09-06 에 실제로 밟았다: 10% 를 상수로 넣어 놓고 걷는 길인
+    /// `swap_take` 는 요율을 받을 자리가 없었다. 그대로 배선했으면 화면은
+    /// 10%, 체인은 1% 였다. 이 시험은 **소스를 읽어서** 그 자리가 아직
+    /// 있는지 본다 — 없어지면 여기가 먼저 빨개진다.
+    #[test]
+    fn the_advertised_rate_must_be_collectable() {
+        let src = include_str!("swap.rs");
+        assert!(src.contains("fee_rate: Option<f64>"),
+                "swap_take 가 요율을 못 받는다 — 경매 10% 는 화면에만 남는다");
+        assert!(src.contains("pub async fn swap_check_at"),
+                "요율을 골라 계산하는 길이 사라졌다");
+        assert!(src.contains("rate.unwrap_or(기본요율)"),
+                "요율을 안 주면 기본으로 떨어지는 안전장치가 사라졌다");
+    }
+
+    /// 화면에 보이는 한 숫자가 체인이 실제로 요구하는 값과 같아야 한다.
+    /// `swap` 이 만드는 식과 **같은 식**으로 여기서도 센다.
+    #[test]
+    fn the_shown_total_matches_what_the_chain_will_ask() {
+        for price in [1.0, 12.0, 137.5, 1000.0] {
+            let 체인이_셀_값 = {
+                let fee = (price * SETTLE_FEE_RATE * 1e8).round() / 1e8;
+                price + fee + crate::swap::FEE
+            };
+            let 화면 = winner_pays(price);
+            assert!((화면 - 체인이_셀_값).abs() < 1e-8,
+                    "{price} RVN 판: 화면 {화면}, 체인 {체인이_셀_값}");
+        }
     }
 }

@@ -270,6 +270,18 @@ fn check_offer_shape(dec: &Value, pay_to: &str, price: f64) -> Result<(), String
 /// **아직 안 팔린 것인지**까지 답해야 한다.
 #[tauri::command]
 pub async fn swap_check(hex: String) -> Result<Value, String> {
+    swap_check_at(hex, None).await
+}
+
+/// 같은 검사인데 **요율을 골라 쓴다.** 경매처럼 자리마다 요율이 다른 곳에서 쓴다.
+///
+/// 🔴 **왜 생겼나 (2026-09-06).** 경매 낙찰 수수료 10% 를 `auction.rs` 에 상수로
+///    넣어 놓고, 정작 걷는 길인 `swap_take` 는 요율을 받을 자리가 없었다.
+///    그대로 배선했으면 **화면은 10% 라 적고 체인은 1% 만 걷는다.**
+///    돈에서 화면과 실제가 다른 것이 제일 나쁘다.
+///
+/// `rate` 를 안 주면 `fee_config()` 그대로다 — 기존 동작과 한 글자도 안 다르다.
+pub async fn swap_check_at(hex: String, rate: Option<f64>) -> Result<Value, String> {
     let dec = call_rpc("decoderawtransaction", json!([hex.clone()])).await?;
     let vin = dec["vin"].as_array().cloned().unwrap_or_default();
     let vout = dec["vout"].as_array().cloned().unwrap_or_default();
@@ -317,7 +329,8 @@ pub async fn swap_check(hex: String) -> Result<Value, String> {
     //    줄이는 쪽(파는 사람이 99% 만 받게)으로 만들면, 우리 앱이 아닌 다른
     //    프로그램으로 사는 사람이 나타났을 때 **파는 사람만 1% 를 조용히
     //    잃는다.** 얹는 쪽은 그런 일이 없다 — 못 걷을 뿐 아무도 안 다친다.
-    let (rate, fee_addr) = crate::shop::fee_config();
+    let (기본요율, fee_addr) = crate::shop::fee_config();
+    let rate = rate.unwrap_or(기본요율);
     let fee = (price * rate * 1e8).round() / 1e8;
 
     Ok(json!({
@@ -326,6 +339,7 @@ pub async fn swap_check(hex: String) -> Result<Value, String> {
         "amount": amount,
         "price": price,
         "fee": fee,
+        "fee_rate": rate,
         "fee_address": fee_addr,
         "total": price + fee,
         "seller": seller,
@@ -342,12 +356,17 @@ pub async fn swap_check(hex: String) -> Result<Value, String> {
 /// 「이렇게 나갑니다」를 보여 주고 사람이 누를 때 보낸다 — 돈이 오가는 일에
 /// 미리보기 없는 단추를 두지 않는다.
 #[tauri::command]
+/// ⚠️ `fee_rate` — 경매처럼 자리마다 요율이 다를 때만 준다.
+/// 안 주면 `fee_config()` 그대로다(가게·일반 맞교환은 그래서 아무것도 안 바뀐다).
+/// 🔴 **화면에 적은 요율과 반드시 같은 값을 줘라.** 다르면 손님이 낸 값과
+///    체인이 가져간 값이 달라진다.
 pub async fn swap_take(
     hex: String,
     broadcast: bool,
     passphrase: Option<String>,
+    fee_rate: Option<f64>,
 ) -> Result<Value, String> {
-    let info = swap_check(hex.clone()).await?;
+    let info = swap_check_at(hex.clone(), fee_rate).await?;
     if !info["ok"].as_bool().unwrap_or(false) {
         return Err(info["why"].as_str().unwrap_or("쓸 수 없는 제안입니다.").to_string());
     }
