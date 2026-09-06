@@ -558,6 +558,36 @@ const ts = read("src/main.ts");
   }
 }
 
+/* ⑰ **없는 칸에 단추를 잇고 있지 않은가.**
+ *
+ * `getElementById("rm-make")?.addEventListener(...)` — 이 물음표가
+ * 「그 칸이 화면에 없다」는 사실을 **조용히 삼킨다.** 오류도 안 나고
+ * 단추만 영영 안 먹는다.
+ *
+ * 2026-09-06: `rm-new`·`rm-make` 가 화면에 없어서 **방을 한 번도 만들 수 없었다.**
+ * 그런데 팬 관리가 「자산으로 만든 방」에 기대고 있었다 — 기둥이 없는데
+ * 그 위에 기능을 올려 둔 셈이었다. 신고가 아니라 대표 질문으로 드러났다.
+ *
+ * 화면에서 만들어 붙이는 칸은 여기서 못 본다. 그래서 **`addEventListener` 를
+ * 거는 자리만** 본다 — 그게 조용히 죽는 자리다.
+ */
+{
+  const html = read("web/wallet.html");
+  const src = read("web/wallet.src.ts");
+  if (html && src) {
+    const 있는칸 = new Set([...html.matchAll(/id="([A-Za-z0-9_-]+)"/g)].map((m) => m[1]));
+    const 없는데_잇는것 = [];
+    for (const m of src.matchAll(/getElementById\("([^"]+)"\)\?\.addEventListener/g))
+      if (!있는칸.has(m[1])) 없는데_잇는것.push(m[1]);
+    if (없는데_잇는것.length)
+      fail("없는 칸에 단추를 잇는다 (눌러도 아무 일이 없다)", [
+        `화면에 없는 id: ${[...new Set(없는데_잇는것)].join(", ")}`,
+        "`?.` 가 삼켜서 오류도 안 난다. 칸을 화면에 만들거나, 잇는 줄을 지워라",
+      ]);
+    else ok("코드가 단추를 잇는 칸이 전부 화면에 있음");
+  }
+}
+
 console.log("");
 if (bad) {
   console.log(`검사 실패 — ${bad}가지를 고쳐야 합니다.`);

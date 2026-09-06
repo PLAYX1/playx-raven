@@ -1071,6 +1071,28 @@
         <div class="msg" id="fa-say"></div>
       </details>
 
+      <!-- 🔴 **방을 만드는 칸이 없었다.** `makeRoom()` 도 그 단추를 잇는 줄도
+           코드에 있는데 `rm-new`·`rm-make` 가 화면에 없어서
+           `getElementById(...)?.` 의 물음표가 조용히 삼켰다 —
+           오류도 없이 **한 번도 만들어진 적이 없다**(실측 2026-09-06).
+           팬 관리가 「자산으로 만든 방」에 기대는데 그 방을 못 만들고 있었다. -->
+      <details class="fold">
+        <summary>방 만들기</summary>
+        <p class="sub">
+          같은 것을 좋아하는 사람들이 모이는 자리입니다. 만든 사람은 본인 열쇠로
+          서명합니다 — 회사가 만드는 것이 아닙니다.
+        </p>
+        <input id="rm-new" maxlength="40" placeholder="방 이름 (예: 필연 소장한 분들)" />
+        <!-- 자산으로 잠그면 그 자산을 가진 사람만 오는 방이 된다.
+             내 자산이 없으면 이 칸은 아예 안 보인다(빈 목록을 보여 주지 않는다). -->
+        <div id="rm-assetbox" style="display:none">
+          <label class="sub" for="rm-asset">이 자산을 가진 분만 (선택)</label>
+          <select id="rm-asset"><option value="">누구나 들어오는 방</option></select>
+        </div>
+        <button id="rm-make" class="primary">방 만들기</button>
+        <div class="msg" id="rm-say"></div>
+      </details>
+
       <div id="rm-list"></div>
 
       <div id="rm-pane" style="display:none">

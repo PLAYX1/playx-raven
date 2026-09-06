@@ -1185,7 +1185,35 @@ async function 팬에게알리기(): Promise<void> {
   }
 }
 
+/**
+ * 방을 자산으로 잠글 수 있게 고르는 칸을 채운다.
+ *
+ * 🔴 자산이 하나도 없으면 **칸 자체를 안 보여 준다.** 빈 목록을 내밀면
+ *    「고장인가」로 읽힌다 — 이 저장소가 반복해서 밟은 실수다.
+ */
+function 자산칸채우기(): void {
+  const box = document.getElementById("rm-assetbox");
+  const sel = document.getElementById("rm-asset") as HTMLSelectElement | null;
+  if (!box || !sel) return;
+  const 이름들 = Object.entries(myAssets)
+    .filter(([, qty]) => Number(qty) > 0)
+    .map(([name]) => name)
+    .sort();
+  if (!이름들.length) { box.style.display = "none"; return; }
+  const 고른것 = sel.value;
+  while (sel.options.length > 1) sel.remove(1);
+  for (const n of 이름들) {
+    const o = document.createElement("option");
+    o.value = n;
+    o.textContent = n;
+    sel.appendChild(o);
+  }
+  if (고른것) sel.value = 고른것;
+  box.style.display = "";
+}
+
 async function loadRooms(): Promise<void> {
+  자산칸채우기();
   const box = $("rm-list");
   box.textContent = "방을 찾는 중…";
   const evs = await askRelay({ kinds: [KIND_ROOM], "#t": ["ravencoin"], limit: 50 });
@@ -1233,9 +1261,11 @@ async function loadRooms(): Promise<void> {
  *    되고 **만들기는 데스크톱 앱에만** 있었다. 폰만 가진 사람은 남이 만든 방에
  *    들어가는 것밖에 못 했다.
  *
- * ⚠️ 자산으로 잠그는 방(회원 전용)은 여기서 안 만든다. 폰에서는 자기 자산
- *    목록을 못 볼 수도 있어서(공개 조회처는 자산을 못 본다) 고르라고 하면
- *    빈 칸만 보인다. **이름만 정하면 누구나 들어오는 방**이 생긴다.
+ * 자산으로 잠그면 그 자산을 가진 사람만 오는 방이 된다 — **팬 관리가 여기 기댄다.**
+ * 🔴 예전 주석은 「폰에서는 자기 자산 목록을 못 본다」고 적혀 있었는데
+ *    지금은 사실이 아니다. `fetchAddress()` 가 `myAssets` 를 채우고,
+ *    공개 노드도 `listassetbalancesbyaddress` 를 답한다(실측 2026-09-06).
+ *    그래서 자산이 있을 때만 고르는 칸을 보여 준다 — 없으면 아예 안 보인다.
  */
 async function makeRoom(): Promise<void> {
   const el = $("rm-new") as HTMLInputElement;
@@ -1250,6 +1280,7 @@ async function makeRoom(): Promise<void> {
     say("rm-say", "지갑을 먼저 열어 주세요. 방은 본인 열쇠로 서명해서 만듭니다.", "err");
     return;
   }
+  const 잠글자산 = (($("rm-asset") as HTMLSelectElement | null)?.value || "").trim().toUpperCase();
   const btn = $("rm-make") as HTMLButtonElement;
   btn.disabled = true;
   say("rm-say", "방을 만드는 중…");
@@ -1258,8 +1289,12 @@ async function makeRoom(): Promise<void> {
     const ev = signEvent(sec, {
       kind: KIND_ROOM,
       created_at: Math.floor(Date.now() / 1000),
-      tags: [["t", "ravencoin"]],
-      content: JSON.stringify({ name, about: "" }),
+      // 자산 태그가 붙으면 `내자산방()` 이 이 방을 「내 방」으로 본다 →
+      // 「팬에게 알리기」가 이 방으로 나간다. 안 붙으면 누구나 들어오는 방.
+      tags: 잠글자산
+        ? [["t", "ravencoin"], ["asset", 잠글자산]]
+        : [["t", "ravencoin"]],
+      content: JSON.stringify({ name, about: "", asset: 잠글자산 || undefined }),
     } as any);
     const r = await fetch("/api/nostr/publish", {
       method: "POST",
