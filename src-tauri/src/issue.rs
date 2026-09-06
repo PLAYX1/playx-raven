@@ -123,8 +123,14 @@ pub fn validate_name(name: String) -> Value {
         }
     }
 
-    if name.len() > 31 {
-        problems.push("이름은 31자를 넘을 수 없습니다".into());
+    // 🔴 31 이 아니라 **30** 이다. 코어의 `MAX_NAME_LENGTH = 31` 은 주석에
+    //    "excluding owner tag ('!')" 라 적혀 있고, 검사는
+    //    `assets.cpp:370` 의 `name.size() > MAX_NAME_LENGTH - 1` 이다 —
+    //    "Assets and sub-assets need to leave one extra char for OWNER indicator".
+    //    31 로 적혀 있던 동안, 정확히 31자인 이름은 이 검사를 통과한 뒤
+    //    노드가 영어로 거절했다. 사람은 왜 안 되는지 알 수 없었다.
+    if name.len() > 30 {
+        problems.push("이름은 30자를 넘을 수 없습니다 (주인 표시 `!` 자리를 한 칸 비웁니다)".into());
     }
 
     json!({
