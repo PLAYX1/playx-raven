@@ -611,6 +611,30 @@ const ts = read("src/main.ts");
   }
 }
 
+/* ⑲ **주인 자격을 옮길 길이 있는가.**
+ *
+ * `send_asset` 은 `!` 로 끝나는 것을 막는다. 옳다 — 실수로 나가면 그 이름으로
+ * 남이 무한히 찍고 되돌릴 수 없다. 자산 목록도 일부러 숨긴다.
+ *
+ * 🔴 그런데 막아 놓고 **다른 문을 안 만들면 아예 못 옮긴다.**
+ *    2026-09-06 실측: 406호의 `PLAYX/MUSIC!` 을 이 컴퓨터로 가져오려는데
+ *    목록에도 안 뜨고 보내기도 막혀 있었다. 지갑을 합칠 방법이 없었다.
+ *    막는 것과 길을 없애는 것은 다르다.
+ */
+{
+  const send = read("src-tauri/src/send.rs");
+  const ts = read("src/main.ts");
+  if (send && ts) {
+    const 없는것 = [];
+    if (!/fn move_owner_token/.test(send)) 없는것.push("러스트에 옮기는 명령이 없다");
+    if (!/confirm_name/.test(send)) 없는것.push("이름을 그대로 다시 치게 하지 않는다 — 체크 하나로 나가면 안 된다");
+    if (!/invoke<string>\("move_owner_token"/.test(ts)) 없는것.push("화면이 그 명령을 안 부른다");
+    if (!/id="owner-move"/.test(ts)) 없는것.push("누를 단추가 없다");
+    if (없는것.length) fail("주인 자격을 옮길 길이 없다", 없는것);
+    else ok("주인 자격을 옮기는 문이 있음 (이름을 그대로 쳐야 열린다)");
+  }
+}
+
 console.log("");
 if (bad) {
   console.log(`검사 실패 — ${bad}가지를 고쳐야 합니다.`);

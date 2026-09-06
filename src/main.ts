@@ -815,8 +815,61 @@ async function checkOwnerTokens() {
       `<b>소유권 토큰이 이 컴퓨터에 있습니다 — ${owned.join(", ")}</b><br />
        이 컴퓨터가 털리면 재고뿐 아니라 <b>이 자산을 무한히 찍고 설명을 바꿀 권리</b>까지 넘어갑니다.
        파는 것과 발행하는 것은 다른 지갑이어야 합니다.<br />
-       그래서 이것이 여기 있는 동안 <b>자동 판매를 켤 수 없습니다.</b>`;
+       그래서 이것이 여기 있는 동안 <b>자동 판매를 켤 수 없습니다.</b><br />
+       <button id="owner-move" class="ghost" style="margin-top:10px">주인 자격 옮기기</button>`;
+    const btn = document.getElementById("owner-move");
+    if (btn) btn.onclick = () => void moveOwnerToken(owned);
   } catch {}
+}
+
+/**
+ * 🔴 **주인 자격을 옮기는 유일한 문.**
+ *
+ * 보통 보내기(`send_asset`)는 `!` 로 끝나는 것을 막는다. 옳다 — 실수로 나가면
+ * 그 이름으로 남이 무한히 찍고 되돌릴 수 없다.
+ *
+ * 그런데 막아 놓고 **다른 문을 안 만들었다.** 그래서 지갑을 합치려 해도
+ * 옮길 방법이 아예 없었다(실측 2026-09-06: 406호의 `PLAYX/MUSIC!` 을
+ * 가져오려는데 목록에도 안 뜨고 보내기도 막혀 있었다).
+ *
+ * ⚠️ 그래서 이 문은 **일부러만 열린다.** 이름을 글자 그대로 다시 쳐야 한다 —
+ *    고르는 목록을 두지 않는다. 「이해했습니다」 체크는 그냥 눌린다.
+ */
+async function moveOwnerToken(owned: string[]): Promise<void> {
+  const 이름 = owned.length === 1
+    ? owned[0]
+    : await ask("어느 주인 자격입니까", `이 컴퓨터에 있는 것: ${owned.join(", ")}`);
+  if (!이름) return;
+  const asset = String(이름).trim();
+  if (!owned.includes(asset)) {
+    await ask("없는 이름입니다", `이 컴퓨터에 「${asset}」 은 없습니다.`);
+    return;
+  }
+  const to = await ask(
+    "어느 주소로 옮길까요",
+    "받는 지갑의 주소입니다. 한 글자만 틀려도 영영 못 되찾습니다 — 앞뒤 네 글자를 눈으로 대조하세요.",
+  );
+  if (!to) return;
+  const 확인 = await ask(
+    "정말 옮깁니까",
+    `옮기면 「${asset}」 로 새 자산을 만들 권리가 **그 지갑으로 넘어갑니다.** 되돌릴 수 없습니다.\n` +
+      `계속하려면 아래에 「${asset}」 을 글자 그대로 적어 주세요.`,
+  );
+  if (!확인) return;
+  const pass = await ask("지갑 암호", "한 번만 열고 바로 잠급니다.", { password: true });
+  try {
+    const txid = await invoke<string>("move_owner_token", {
+      asset,
+      confirmName: String(확인).trim(),
+      toAddress: String(to).trim(),
+      passphrase: pass,
+    });
+    await ask("옮겼습니다", `거래번호 ${txid}\n블록에 담기면 저쪽 지갑에서 보입니다.`);
+    void checkOwnerTokens();
+    void loadAssets(false);
+  } catch (e) {
+    await ask("옮기지 못했습니다", String(e));
+  }
 }
 
 /**

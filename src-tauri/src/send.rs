@@ -170,6 +170,67 @@ where
 }
 
 /// Sends an asset. Irreversible once it confirms.
+
+/// **주인 자격을 옮긴다.** 보통 보내기와 **다른 문**이다.
+///
+/// 🔴 왜 따로 두나 — `send_asset` 은 `!` 로 끝나는 것을 막는다. 옳다.
+///    실수로 나가면 그 이름으로 남이 무한히 찍는다. 되돌릴 수 없다.
+///
+///    그런데 막아 놓고 **다른 문을 안 만들었다.** 그래서 지갑을 합치려고 해도
+///    옮길 방법이 아예 없었다(실측 2026-09-06: 406호의 `PLAYX/MUSIC!` 을
+///    가져오려는데 목록에도 안 뜨고 보내기도 막혀 있었다).
+///
+/// 🔴 그래서 이 문은 **일부러만 열린다**:
+///    · 이름을 **글자 그대로** 다시 쳐야 한다. 목록에서 고르는 길이 없다
+///    · 자기 지갑의 주인 자격이 아니면 거절한다
+///    · 받는 주소를 다시 확인한다
+#[tauri::command]
+pub async fn move_owner_token(
+    asset: String,
+    confirm_name: String,
+    to_address: String,
+    passphrase: Option<String>,
+) -> Result<String, String> {
+    let asset = asset.trim().to_string();
+    if !asset.ends_with('!') {
+        return Err("주인 자격이 아닙니다. 보통 자산은 「보내기」로 보내세요.".into());
+    }
+    // 🔴 이름을 그대로 다시 치게 한다. 「이해했습니다」 체크는 그냥 눌린다.
+    if confirm_name.trim() != asset {
+        return Err(format!(
+            "확인이 맞지 않습니다. 옮기려면 「{asset}」 을 글자 그대로 적어 주세요."
+        ));
+    }
+    // 내가 가진 것인지 본다. 없는 것을 보내려 하면 노드가 알 수 없는 말을 한다.
+    let owned = call_rpc("listmyassets", json!([])).await?;
+    let has = owned
+        .as_object()
+        .map(|m| m.contains_key(&asset))
+        .unwrap_or(false);
+    if !has {
+        return Err(format!("이 컴퓨터 지갑에 「{asset}」 이 없습니다."));
+    }
+    let addr = check_address(to_address.clone()).await?;
+    if !addr["valid"].as_bool().unwrap_or(false) {
+        return Err("받는 주소가 올바르지 않습니다.".into());
+    }
+
+    with_unlocked(passphrase, || async {
+        let result = call_rpc(
+            "transfer",
+            json!([asset, 1, to_address, "", 0, "", ""]),
+        )
+        .await?;
+        Ok(result
+            .as_array()
+            .and_then(|a| a.first())
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string())
+    })
+    .await
+}
+
 #[tauri::command]
 pub async fn send_asset(
     asset: String,

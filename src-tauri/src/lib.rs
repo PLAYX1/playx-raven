@@ -360,6 +360,7 @@ pub fn run() {
             health::autostart_disable,
             health::service_health,
             health::money_status,
+            send::move_owner_token,
             place::parse_coords,
             place::distance_m,
             place::directions_links,
