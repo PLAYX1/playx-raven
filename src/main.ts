@@ -6779,8 +6779,15 @@ function wizGo(step: number) {
   }
   // 「더 찍기」는 다시 잠글 수 있고, 자격 증명은 그 개념이 없다.
   const reBox = $("i-reissuable").closest("label") as HTMLElement | null;
-  if (reBox) reBox.style.display = ["qualifier", "bulk"].includes(wizKind) ? "none" : "";
-  $("i-reissue-note").style.display = ["qualifier", "bulk"].includes(wizKind) ? "none" : "";
+  // 🔴 `unique` 가 빠져 있었다. 체인은 고유 자산에 재발행이 켜져 있으면
+  //    "Invalid parameters for issuing a unique asset" 로 **거절**한다
+  //    (`Ravencoin/src/rpc/assets.cpp:559`). 그런데 이 칸은 기본이 켜짐이라,
+  //    고유 자산을 고른 사람은 아무것도 안 건드려도 발행이 실패했다.
+  //    숨기는 것으로는 모자라다 — 값도 같이 꺼야 보내는 값이 맞다.
+  const 재발행_못고르는 = ["qualifier", "bulk", "unique"].includes(wizKind);
+  if (reBox) reBox.style.display = 재발행_못고르는 ? "none" : "";
+  $("i-reissue-note").style.display = 재발행_못고르는 ? "none" : "";
+  if (재발행_못고르는) ($("i-reissuable") as HTMLInputElement).checked = false;
   renderExtra();
 
   if (wizStep === 5) renderSummary();
@@ -7030,7 +7037,11 @@ function renderSummary() {
       //    막으면 멀쩡한 발행이 죽는다. 그래서 **그림이 뜻을 갖는 종류에서만**,
       //    벽이 아니라 **손으로 한 번 인정**하게 한다.
       const 파일_영영_못붙임 = !cid && (wizKind === "unique" || !re);
-      const 표지가_뜻있는_종류 = ["root", "sub", "unique", "bulk"].includes(wizKind);
+      // 🔴 처음엔 unique·bulk 도 넣었다. 그런데 체인이 그 둘의 재발행을 **강제로**
+      //    끄므로(`rpc/assets.cpp:559`) 상자가 **언제나** 뜬다. 늘 뜨는 경고는
+      //    벽지가 되어 안 읽히고, 그러면 "경고만 하고 통과" 로 되돌아간다.
+      //    사람이 재발행을 **고를 수 있는** 종류에서만 묻는다.
+      const 표지가_뜻있는_종류 = ["root", "sub"].includes(wizKind);
       const 표지없음_인정필요 = 파일_영영_못붙임 && 표지가_뜻있는_종류;
       $("i-after").innerHTML = ok
         ? `<div class="afterbox">

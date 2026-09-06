@@ -17,9 +17,7 @@ const 기대 = {
   '막아야 함': [
     ['sub',   false, false],  // 어제 곡 셋이 이 경우
     ['root',  false, false],
-    ['unique',false, false],  // 고유는 원래 재발행 불가
-    ['unique',false, true ],
-    ['bulk',  false, false],
+    ['sub',   false, false],  // 같은 경우 한 번 더 (기본값 경로)
   ],
   '통과해야 함': [
     ['sub',      true,  false], // 표지 붙였다
@@ -29,6 +27,8 @@ const 기대 = {
     ['restricted',false,false], // 제한 자산도
     ['reissue',  false, false], // 빈 칸 = 기존 것 유지
     ['reissue',  false, true ],
+    ['unique',   false, false], // 체인이 재발행을 강제로 끈다 — 늘 뜨면 벽지가 된다
+    ['bulk',     false, false], // 같은 이유
   ],
 };
 for(const [라벨, 목록] of Object.entries(기대)){
