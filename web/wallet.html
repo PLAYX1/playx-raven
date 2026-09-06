@@ -122,6 +122,9 @@
       /* 🔴 14px 였다. 손님 화면 기준은 15px 이고, 이 상자에 든 것 중에는
          **12단어를 잃으면 돈을 못 찾는다**는 경고가 있다 — 화면에서 제일
          중요한 글이 제일 작았다. 폰 390px 실측 2026-08-31. */
+      .incoming { margin-top: 8px; font-size: 14px; color: var(--warn);
+                  background: var(--warn-tint, rgba(180,83,9,.10));
+                  border-radius: 9px; padding: 8px 11px; line-height: 1.5; }
       .note { font-size: 15px; color: var(--muted); line-height: 1.6;
               padding: 12px 12px; border-radius: 11px; background: var(--panel);
               border: 1px solid var(--line); margin-bottom: 16px; }
@@ -730,6 +733,8 @@
       <div class="card">
         <div class="idx">잔액</div>
         <div class="bal"><span id="balance">0</span><span class="u">RVN</span></div>
+      <!-- 🔴 오는 중인 돈. 없으면 숨는다 — 늘 떠 있는 0 은 잡음이다. -->
+      <div class="incoming" id="incoming" style="display:none"></div>
       </div>
 
       <!-- 🔴 여기가 없어서 **산 자산이 지갑에 안 보였다.** 회원권을 사도

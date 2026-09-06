@@ -92,6 +92,8 @@ interface ChainReply {
   /** 자산 이름 → 수량. 노드가 RVN 과 **갈라서** 준다.
    *  🔴 안 가르면 회원권 1장이 1 RVN 으로 세어진다. */
   assets?: Record<string, number>;
+  /** 아직 블록에 안 담긴 입금(RVN). 0 이면 오는 것이 없다. */
+  incoming?: number;
   error?: string;
 }
 
@@ -387,6 +389,11 @@ async function fetchAddress(address: string): Promise<ChainReply> {
       myAssets[name] = (myAssets[name] || 0) + Number(qty || 0);
     }
   }
+  // 🔴 **오는 중인 돈.** 주소를 여러 개 쓰므로 여기서 모은다.
+  //    이게 없어서 폰 지갑은 돈이 오고 있어도 「0 RVN」만 보여 줬다 —
+  //    보낸 사람은 보냈는데 받는 사람은 아무것도 모른다. 그 몇 분이
+  //    「잘못 보냈나」로 읽히고 두 번 보내는 사고로 이어진다(대표 지적).
+  들어오는중 += Number(j?.incoming || 0);
   return j;
 }
 
@@ -2498,6 +2505,7 @@ async function refresh(deep: boolean): Promise<void> {
   try {
     // 🔴 비우고 시작한다. 안 그러면 새로고침할 때마다 수량이 두 배가 된다.
     myAssets = {};
+    들어오는중 = 0;
     scan = await scanAddresses(hdKey, deep, (done) => {
       say("scan-status", `주소 ${done}개까지 확인했습니다…`);
     });
@@ -2542,6 +2550,8 @@ type MyAsset = { name: string; qty: number };
 
 /** 주소를 훑을 때 자산도 같이 모은다. */
 let myAssets: Record<string, number> = {};
+/** 아직 블록에 안 담긴 입금 합계(RVN). 훑을 때마다 0 에서 다시 센다. */
+let 들어오는중 = 0;
 
 /* ── 자산을 사람 말로 ──────────────────────────────────────────────────
  *
@@ -2777,6 +2787,18 @@ function renderMain(): void {
 
   const total = totalSats();
   $("balance").textContent = fromSats(total);
+
+  // 오는 중인 돈이 있으면 잔액 밑에 적는다. **없으면 아무것도 안 적는다** —
+  // 늘 떠 있는 0 은 잡음이다.
+  const 오는칸 = $("incoming");
+  if (오는칸) {
+    if (들어오는중 > 0) {
+      오는칸.textContent = `들어오는 중 ${들어오는중.toFixed(8).replace(/0+$/, "").replace(/\.$/, "")} RVN · 블록에 담기면 잔액이 됩니다`;
+      오는칸.style.display = "";
+    } else {
+      오는칸.style.display = "none";
+    }
+  }
 
   renderAssets();
 
