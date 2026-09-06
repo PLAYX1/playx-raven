@@ -842,7 +842,7 @@ async function moveOwnerToken(owned: string[]): Promise<void> {
   if (!이름) return;
   const asset = String(이름).trim();
   if (!owned.includes(asset)) {
-    await ask("없는 이름입니다", `이 컴퓨터에 「${asset}」 은 없습니다.`);
+    await say("없는 이름입니다", `이 컴퓨터에 「${asset}」 은 없습니다.`);
     return;
   }
   const to = await ask(
@@ -864,11 +864,11 @@ async function moveOwnerToken(owned: string[]): Promise<void> {
       toAddress: String(to).trim(),
       passphrase: pass,
     });
-    await ask("옮겼습니다", `거래번호 ${txid}\n블록에 담기면 저쪽 지갑에서 보입니다.`);
+    await say("옮겼습니다", `블록에 담기면 저쪽 지갑에서 보입니다.\n\n거래번호\n${txid}`);
     void checkOwnerTokens();
     void loadAssets(false);
   } catch (e) {
-    await ask("옮기지 못했습니다", String(e));
+    await say("옮기지 못했습니다", String(e));
   }
 }
 
