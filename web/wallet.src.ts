@@ -2819,10 +2819,15 @@ function renderMain(): void {
     img.src = `/api/qr?text=${encodeURIComponent(uri)}`;
   };
   drawRecv();
-  const amtBtn = $("btn-recv-amt");
-  if (amtBtn) amtBtn.onclick = drawRecv;
+  // 🔴 「담기」 단추를 없앴다. 이름만 봐서는 뜻이 안 잡히고(대표 지적),
+  //    **금액을 치면 어차피 QR 이 저절로 바뀐다** — 단추는 할 일이 없었다.
+  //    치는 대로 바로 반영되게 `input` 도 듣는다. `change` 만 들으면
+  //    칸 밖을 눌러야 바뀌어서 「안 먹네」로 읽힌다.
   const amtIn = $("recv-amt") as HTMLInputElement | null;
-  if (amtIn) amtIn.onchange = drawRecv;
+  if (amtIn) {
+    amtIn.oninput = drawRecv;
+    amtIn.onchange = drawRecv;
+  }
   img.alt = "받을 주소 QR";
 
   // 훑는 동안에만 진행을 말한다. 다 끝난 뒤에도 "주소 20개 확인" 이 남아
