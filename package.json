@@ -10,7 +10,8 @@
     "tauri": "tauri",
     "preflight": "node preflight.mjs",
     "screensweep": "node screensweep.mjs",
-    "countercheck": "node countercheck.mjs"
+    "countercheck": "node countercheck.mjs",
+    "check:issue-gate": "node scripts/check-issue-gate.mjs"
   },
   "dependencies": {
     "@noble/ciphers": "^2.3.0",

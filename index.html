@@ -1742,6 +1742,13 @@
       .ab-get { margin-top: 10px; font-size: 15px; color: var(--text); line-height: 1.6; }
       .ab-never { margin-top: 12px; font-size: 14px; color: var(--warn); }
       .ab-never ul { margin: 6px 0 0; padding-left: 18px; line-height: 1.7; }
+      /* 표지 없이 내는 것을 손으로 인정하는 상자. 40~70대가 쓰므로 누를 곳을
+         44px 로 잡고, 글자는 15px 이상. 경고색 테두리로 예사 칸과 구별한다. */
+      .ab-ack { display: flex; gap: 10px; align-items: flex-start; margin-top: 12px;
+        padding: 12px 14px; min-height: 44px; border: 1px solid var(--warn);
+        border-radius: 10px; font-size: 15px; line-height: 1.6; cursor: pointer; }
+      .ab-ack input { width: 22px; height: 22px; margin: 2px 0 0; flex: 0 0 auto; cursor: pointer; }
+      .ab-ack b { color: var(--warn); }
       /* 되돌릴 수 없는 일 앞의 취소 창. 체크박스와 다른 점은
          **시간이 흐르는 것을 보게** 한다는 것이다 — 습관으로는 통과 못 한다. */
       .holdbox { margin-top: 12px; padding: 16px; border-radius: 14px;

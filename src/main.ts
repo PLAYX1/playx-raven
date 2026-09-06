@@ -7020,6 +7020,18 @@ function renderSummary() {
         forever.push("재발행을 껐으므로 수량과 파일을 영원히 못 바꿉니다");
       }
       if (!cid) forever.push("파일을 안 붙이셨습니다 — 나중에 붙이려면 재발행이 켜져 있어야 합니다");
+
+      // 🔴 2026-09-07: 곡 셋을 `has_ipfs:0` + `reissuable:0` 으로 내보냈다.
+      //    화면은 위 한 줄로 경고했지만 그냥 통과시켰고, 그 셋에는 **영원히**
+      //    표지를 못 붙인다. 100 RVN 씩 태우고 되돌릴 방법이 없다.
+      //
+      //    그렇다고 전부 막으면 안 된다 — 자격 증명·제한 자산은 그림이 필요
+      //    없고, 「더 찍기」의 빈 파일칸은 "이미 붙은 것을 그대로 둔다" 는 뜻이다.
+      //    막으면 멀쩡한 발행이 죽는다. 그래서 **그림이 뜻을 갖는 종류에서만**,
+      //    벽이 아니라 **손으로 한 번 인정**하게 한다.
+      const 파일_영영_못붙임 = !cid && (wizKind === "unique" || !re);
+      const 표지가_뜻있는_종류 = ["root", "sub", "unique", "bulk"].includes(wizKind);
+      const 표지없음_인정필요 = 파일_영영_못붙임 && 표지가_뜻있는_종류;
       $("i-after").innerHTML = ok
         ? `<div class="afterbox">
              <div class="ab-row"><span>지금 지갑</span><b>${rvn(have)} RVN</b></div>
@@ -7031,11 +7043,24 @@ function renderSummary() {
              <div class="ab-never">되돌릴 수 없는 것<ul>${
                forever.map((t) => `<li>${escapeHtml(t)}</li>`).join("")
              }</ul></div>
+             ${
+               표지없음_인정필요
+                 ? `<label class="ab-ack"><input type="checkbox" id="i-nofile-ack" />
+                      <span>표지 없이 냅니다. <b>이 자산에는 영원히 그림을 못 붙입니다.</b></span>
+                    </label>`
+                 : ""
+             }
            </div>`
         : "";
 
       const go = $("wz-next") as HTMLButtonElement;
-      go.disabled = !ok;
+      const 인정했나 = () =>
+        !표지없음_인정필요 || !!($("i-nofile-ack") as HTMLInputElement | null)?.checked;
+      go.disabled = !ok || !인정했나();
+      // 상자를 켜고 끄면 버튼도 같이 따라와야 한다. 안 그러면 켜도 못 누른다.
+      ($("i-nofile-ack") as HTMLInputElement | null)?.addEventListener("change", () => {
+        go.disabled = !ok || !인정했나();
+      });
       // 이 단계의 「다음」은 되돌릴 수 없는 발행이다. 앞 단계들과 글자가
       // 같으면 손이 습관대로 누른다. 대가를 버튼 안에 둔다.
       go.textContent = `발행하기 · ${need.toLocaleString(undefined, { maximumFractionDigits: 2 })} RVN 소각`;

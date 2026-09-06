@@ -635,6 +635,31 @@ const ts = read("src/main.ts");
   }
 }
 
+/* ⑳ **표지 없이 영영 못 붙이는 발행을 손으로 인정하게 하는가.**
+ *
+ * 🔴 2026-09-07 실측: `PLAYX/SONG` 곡 셋이 `has_ipfs:0` + `reissuable:0` 으로
+ *    나갔다. 화면은 "파일을 안 붙이셨습니다" 한 줄만 적고 그냥 통과시켰고,
+ *    그 셋에는 **영원히** 표지를 못 붙인다. 100 RVN 씩 태우고 못 되돌린다.
+ *
+ * 🔴 그런데 전부 막으면 안 된다 — 자격 증명·제한 자산은 그림이 필요 없고,
+ *    「더 찍기」의 빈 파일칸은 "이미 붙은 것을 그대로 둔다" 는 뜻이다.
+ *    `scripts/check-issue-gate.mjs` 가 그 진리표를 양쪽으로 돌린다.
+ */
+{
+  const ts = read("src/main.ts");
+  const html = read("index.html");
+  if (ts && html) {
+    const 없는것 = [];
+    if (!/표지없음_인정필요/.test(ts)) 없는것.push("인정이 필요한 경우를 안 가린다");
+    if (!/id="i-nofile-ack"/.test(ts)) 없는것.push("인정 상자를 안 그린다");
+    if (!/go\.disabled = !ok \|\| !인정했나\(\)/.test(ts)) 없는것.push("상자를 안 켜도 발행 단추가 눌린다");
+    if (!/addEventListener\("change"/.test(ts)) 없는것.push("상자를 켜도 단추가 안 풀린다");
+    if (!/\.ab-ack/.test(html)) 없는것.push("상자에 모양이 없다 — 안 보이거나 누를 곳이 작다");
+    if (없는것.length) fail("표지 없는 영구 발행을 그냥 통과시킨다", 없는것);
+    else ok("표지 없이 영영 못 붙이는 발행은 손으로 인정해야 열림");
+  }
+}
+
 console.log("");
 if (bad) {
   console.log(`검사 실패 — ${bad}가지를 고쳐야 합니다.`);
