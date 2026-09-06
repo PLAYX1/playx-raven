@@ -139,7 +139,14 @@
       <!-- 카톡·텔레그램에 링크를 붙였을 때 뜨는 카드.
          ⚠️ 매장 노드는 자기 주소(192.168.x)라 바깥에서 그림을 못 가져온다.
             그래서 그림은 **웹 주소**를 가리킨다 — 가게 안이든 밖이든 뜬다. -->
-    <link rel="icon" href="/raven-head.webp" />
+    <!-- 🔴 아이콘은 한 벌로 맞춘다. 화면마다 다른 걸 부르고 있었다 —
+         어떤 화면은 `raven-face.webp`(마스코트 그림), 어떤 화면은 `rvn-icon-192.png`.
+         사람은 **탭의 그림으로** 우리 화면을 찾는다.
+         ⚠️ 매장 노드는 아이콘 파일을 아직 안 내보낸다(예전부터 그랬다).
+            웹에서는 뜨고 노드에서는 기본 그림이다. -->
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon-32.png" sizes="32x32" />
+    <link rel="icon" href="/rvn-icon-192.png" sizes="192x192" />
     <meta property="og:type" content="website" />
     <meta property="og:title" content="물건 사기" />
     <meta property="og:description" content="레이븐코인으로 바로 삽니다." />

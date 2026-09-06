@@ -419,6 +419,9 @@ fn customer_path(path: &str) -> bool {
             | "/report.js"
             | "/tabs.js"
             | "/wallet-boot.js"
+            | "/icon.svg"
+            | "/favicon-32.png"
+            | "/rvn-icon-192.png"
             | "/manifest.json"
             | "/shops.bundle.js"
             | "/api/pins"
@@ -1644,6 +1647,35 @@ async fn api_wallet_boot_js() -> impl IntoResponse {
     )
 }
 
+/// 탭·홈 화면에 뜨는 아이콘 한 벌.
+///
+/// 🔴 사람은 **탭의 그림으로** 우리 화면을 찾는다. 여태 화면마다 다른 것을
+///    부르고 있었고(마스코트 그림 / png / 없음), 노드에는 길이 아예 없어서
+///    계산대에서는 기본 지구본이 떴다. 화면과 같이 바이너리에 굽는다.
+async fn api_icon_svg() -> impl IntoResponse {
+    (
+        StatusCode::OK,
+        [("content-type", "image/svg+xml; charset=utf-8")],
+        include_str!("../../web/icon.svg"),
+    )
+}
+
+async fn api_icon_32() -> impl IntoResponse {
+    (
+        StatusCode::OK,
+        [("content-type", "image/png")],
+        include_bytes!("../../web/favicon-32.png").as_slice(),
+    )
+}
+
+async fn api_icon_192() -> impl IntoResponse {
+    (
+        StatusCode::OK,
+        [("content-type", "image/png")],
+        include_bytes!("../../web/icon-192.png").as_slice(),
+    )
+}
+
 /// 손님이 폰 홈에 얹을 때 쓰는 표.
 async fn api_manifest() -> impl IntoResponse {
     (
@@ -2749,6 +2781,9 @@ fn build_phone_router(st: ServerState) -> axum::Router {
         .route("/shops.bundle.js", get(api_shops_bundle))
         .route("/tabs.js", get(api_tabs_js))
         .route("/wallet-boot.js", get(api_wallet_boot_js))
+        .route("/icon.svg", get(api_icon_svg))
+        .route("/favicon-32.png", get(api_icon_32))
+        .route("/rvn-icon-192.png", get(api_icon_192))
         .route("/manifest.json", get(api_manifest))
         .route("/api/bug-reports", post(api_bug_reports))
         .route("/api/pins", get(api_pins))
@@ -4038,6 +4073,9 @@ mod router_builds {
             "/i18n.js",
             "/tabs.js",
             "/wallet-boot.js",
+            "/icon.svg",
+            "/favicon-32.png",
+            "/rvn-icon-192.png",
             "/manifest.json",
             "/shops.bundle.js",
             "/wallet.bundle.js",
