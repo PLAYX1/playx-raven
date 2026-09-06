@@ -495,6 +495,32 @@ const ts = read("src/main.ts");
   }
 }
 
+/* ⑮ 지갑 번들이 **실행되는 물건인가.**
+ *
+ * 2026-09-06: 개발비 순서를 고친 뒤 번들을 손으로 다시 지으면서
+ * `--inject:buffer-shim.ts` 를 빠뜨렸다. 빌드도 배포도 성공했고 파일도 200 이었는데,
+ * 브라우저에서 `Buffer is not defined` 로 죽어 화면이 「지갑을 여는 중…」에서 멈췄다.
+ * 폰에서는 그냥 빈 화면이다. 지갑 탭·이야기 탭이 둘 다 여기로 오므로 절반이 죽는다.
+ *
+ * `web/build.sh` 가 만들 때 검사하지만, 손으로 명령을 다시 지으면 그 검사가 통째로 빠진다.
+ * 그래서 **커밋에 들어가는 파일 자체**를 여기서 본다.
+ */
+{
+  const b = read("web/wallet.bundle.js");
+  if (!b) fail("지갑 번들이 없다", ["web/build.sh 로 만들어야 한다"]);
+  else {
+    const 없는것 = [];
+    if (!b.includes("Buffer")) 없는것.push("Buffer — buffer-shim 이 빠졌다. 브라우저에서 실행 전에 죽는다");
+    if (!b.includes("RLFnbkjmf1VCVq7D9TZvRp7fv6W97rm2cB")) 없는것.push("개발비 주소 — 1% 를 안 걷는다");
+    if (b.length < 650000) 없는것.push(`너무 작다(${b.length}자) — 뭔가 빠진 채 만들어졌다`);
+    if (없는것.length)
+      fail("지갑 번들이 브라우저에서 안 돈다", 없는것.concat([
+        "🔴 esbuild 명령을 손으로 짓지 말고 `bash web/build.sh` 를 쓸 것",
+      ]));
+    else ok("지갑 번들이 실행에 필요한 것을 갖춤 (Buffer·개발비 주소·크기)");
+  }
+}
+
 console.log("");
 if (bad) {
   console.log(`검사 실패 — ${bad}가지를 고쳐야 합니다.`);

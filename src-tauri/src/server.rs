@@ -418,6 +418,7 @@ fn customer_path(path: &str) -> bool {
             | "/help.js"
             | "/report.js"
             | "/tabs.js"
+            | "/wallet-boot.js"
             | "/manifest.json"
             | "/shops.bundle.js"
             | "/api/pins"
@@ -1628,6 +1629,21 @@ async fn api_tabs_js() -> impl IntoResponse {
     )
 }
 
+/// 지갑 화면이 켜질 때 하는 세 가지 — 도움말 표·번역·앱 설치 등록.
+///
+/// 🔴 원래는 `wallet.html` 안의 인라인 스크립트였다. 그 화면의 CSP 는
+///    `script-src 'self'` 라서(12단어가 든 화면이니 맞다) **셋 다 안 돌고 있었다.**
+///    오류는 콘솔에만 남아 화면은 멀쩡해 보였다 — 「?」 설명이 안 뜨고,
+///    안드로이드에서 「앱으로 설치」가 안 떴다. 번역은 `i18n.js` 가 스스로
+///    부르고 있어서 살아 있었다(실측 2026-09-06).
+async fn api_wallet_boot_js() -> impl IntoResponse {
+    (
+        StatusCode::OK,
+        [("content-type", "application/javascript; charset=utf-8")],
+        include_str!("../../web/wallet-boot.js"),
+    )
+}
+
 /// 손님이 폰 홈에 얹을 때 쓰는 표.
 async fn api_manifest() -> impl IntoResponse {
     (
@@ -2732,6 +2748,7 @@ fn build_phone_router(st: ServerState) -> axum::Router {
         .route("/report.js", get(api_report_js))
         .route("/shops.bundle.js", get(api_shops_bundle))
         .route("/tabs.js", get(api_tabs_js))
+        .route("/wallet-boot.js", get(api_wallet_boot_js))
         .route("/manifest.json", get(api_manifest))
         .route("/api/bug-reports", post(api_bug_reports))
         .route("/api/pins", get(api_pins))
@@ -4020,6 +4037,7 @@ mod router_builds {
             "/help.js",
             "/i18n.js",
             "/tabs.js",
+            "/wallet-boot.js",
             "/manifest.json",
             "/shops.bundle.js",
             "/wallet.bundle.js",
