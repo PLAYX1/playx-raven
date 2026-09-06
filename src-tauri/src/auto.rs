@@ -278,6 +278,14 @@ pub async fn auto_fulfil(
 
         let confs = tx.get("confirmations").and_then(Value::as_i64).unwrap_or(0);
         let paid = tx.get("amount").and_then(Value::as_f64).unwrap_or(0.0);
+        // 🔴 입금 거래 id 를 들고 간다. 우리 몫을 적기 전에 **그 거래에 이미
+        //    개발비 출력이 들어 있는지** 봐야 하기 때문이다(우리 지갑으로 낸 손님).
+        //    안 보고 적으면 같은 1% 를 두 번 떼는 셈이다.
+        let pay_txid = tx
+            .get("txid")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
 
         if offer.asset.ends_with('!') {
             skipped.push(json!({ "address": addr, "asset": offer.asset, "why": "소유권 토큰은 자동으로 보내지 않습니다" }));
@@ -327,7 +335,7 @@ pub async fn auto_fulfil(
             }));
             continue;
         }
-        need_wallet.push((offer, addr.to_string(), paid));
+        need_wallet.push((offer, addr.to_string(), paid, pay_txid));
     }
 
     if need_wallet.is_empty() {
@@ -354,7 +362,7 @@ pub async fn auto_fulfil(
         call_rpc("walletpassphrase", json!([pass, 60])).await?;
     }
 
-    for (offer, addr, paid) in need_wallet {
+    for (offer, addr, paid, pay_txid) in need_wallet {
         // 보내기 *전에* 표시한다. 보낸 뒤에 표시하면, 전송이 성공했는데
         // 그 사이 앱이 죽는 순간 다음 주기가 같은 주문을 또 보낸다.
         // 못 보낸 것은 사람이 보고 고칠 수 있지만, 두 번 보낸 것은 못 되돌린다.
@@ -376,6 +384,33 @@ pub async fn auto_fulfil(
                     .to_string();
                 add_sent(&offer.asset, offer.qty);
                 crate::refund::remember_ours(&txid);
+
+                // 🔴 **우리 몫을 여기서 적는다.** 여태 자판기 판매는 1% 가
+                //    한 푼도 안 걷혔다 — `accrue` 를 부르는 곳이 온 코드에
+                //    `sweep_payments` 하나뿐이었고, 그 루프는 `order_state` 에
+                //    있는 주문만 봤다. 자판기 주문은 거기 안 들어간다.
+                //    (실측 2026-09-06: 개발비 주소 수령 0건)
+                //
+                //    적는 시점은 **물건이 실제로 나간 뒤**다. 주문이 들어왔을 때
+                //    적으면 결제하지 않고 떠난 손님의 1% 를 가게에 물리게 된다.
+                //
+                //    적기만 하고 보내지 않는다 — 보내려면 지갑을 열어야 하는데,
+                //    가게 컴퓨터의 지갑을 24시간 풀어 두는 것보다 며칠 늦게
+                //    받는 편이 낫다. `accrue` 는 주소로 중복을 막으므로
+                //    다음 주기에 또 돌아도 두 번 적히지 않는다.
+                let (rate, _fee_addr) = crate::shop::fee_config();
+                let fee = ((offer.rvn * rate) * 1e8).round() / 1e8;
+                if fee > 0.0 {
+                    // 손님이 우리 지갑으로 냈다면 그 거래에 이미 개발비 출력이 있다.
+                    // 거래를 못 읽으면(노드가 끊겼다면) 받은 금액으로 가늠한다.
+                    let on_chain = match crate::devfee::fee_in_tx(&pay_txid, fee).await {
+                        Some(v) => v,
+                        None => crate::devfee::already_on_chain(paid, offer.rvn, fee),
+                    };
+                    if !on_chain {
+                        crate::devfee::accrue(&addr, fee).await;
+                    }
+                }
                 sent.push(json!({
                     "address": addr, "asset": offer.asset, "qty": offer.qty,
                     "to": offer.deliver_to, "paid": paid, "txid": txid,

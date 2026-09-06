@@ -516,4 +516,42 @@ mod tests {
         let short = vec![vout(99.0, "Rshop"), vout(0.1, us)];
         assert!(!tx_pays_us(&short, 1.0, us), "모자란 액수를 낸 것으로 치면 안 된다");
     }
+
+    /// 🔴 **우리 몫을 적는 자리가 몇 군데인지 세어 둔다.**
+    ///
+    /// 2026-09-06 실측: 개발비 주소 수령 **0건**. 원인은 `accrue` 를 부르는 곳이
+    /// 온 코드에 `sweep_payments` **하나뿐**이었고, 그 루프가 `order_state` 에
+    /// 있는 주문만 봤다는 것이다. 자판기 주문은 거기 안 들어간다 —
+    /// 그래서 자판기·온라인 판매는 1% 가 한 푼도 안 걷혔다.
+    ///
+    /// 화면에는 「1%」라고 적혀 있었고 코드에도 계산이 있었다. 다만 **부르는 줄이
+    /// 없었다.** 이 시험은 그 줄이 사라지면 빨개진다.
+    #[test]
+    fn every_way_money_comes_in_writes_our_share() {
+        let auto = include_str!("auto.rs");
+        let server = include_str!("server.rs");
+
+        assert!(
+            auto.contains("devfee::accrue"),
+            "자판기 판매가 우리 몫을 안 적는다 — auto.rs 에 accrue 호출이 없다.\n             화면에는 1% 라고 적히는데 장부에는 한 줄도 안 남는다."
+        );
+        assert!(
+            server.contains("devfee::accrue"),
+            "가게 주문이 우리 몫을 안 적는다 — server.rs 에 accrue 호출이 없다."
+        );
+
+        // 물건이 나가기 **전에** 적으면, 전송이 실패한 주문의 1% 를 가게에 물린다.
+        let 보낸뒤 = auto.find("remember_ours");
+        let 적는곳 = auto.find("devfee::accrue");
+        assert!(
+            matches!((보낸뒤, 적는곳), (Some(a), Some(b)) if b > a),
+            "자판기가 물건을 보내기 **전에** 우리 몫을 적는다 — 실패한 주문까지 물린다."
+        );
+
+        // 두 번 떼지 않는지: 체인에 이미 있는지 보고 적어야 한다.
+        assert!(
+            auto.contains("fee_in_tx"),
+            "자판기가 체인을 안 보고 적는다 — 우리 지갑으로 낸 손님에게서 1% 를 두 번 뗀다."
+        );
+    }
 }
