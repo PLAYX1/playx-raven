@@ -3553,7 +3553,20 @@ async function showLockedOrOpen(vault: Vault): Promise<void> {
 
 // 화면이 있을 때만 붙는다. 없으면(테스트) 아래 순수 함수만 꺼내 쓴다 —
 // 돈을 세는 부분은 브라우저 없이도 검사할 수 있어야 한다.
-if (typeof document !== "undefined") boot();
+//
+// 🔴 **화면이 다 그려진 뒤에 붙인다.** 이 번들의 `<script>` 는 `wallet.html` 중간에
+//    있어서, 그대로 돌면 **그 아래 것들이 아직 없다.** `getElementById(...)?.` 의
+//    물음표가 그 사실을 조용히 삼킨다 — 오류도 안 나고 단추만 안 먹는다.
+//
+//    실제로 **아래 탭 막대가 번들보다 뒤에 있어서 「이야기」 탭이 한 번도 안 붙었다.**
+//    눌러도 아무 일이 없었다(실측 2026-09-06: 번들보다 앞인 「새 지갑 만들기」는
+//    붙고, 뒤인 「이야기」만 안 붙었다). 신고로 들어온 바로 그 증상이다.
+//
+//    ⚠️ 이 화면에는 인라인 `onclick` 이 하나도 없다(확인함). 그래서 미뤄도 안전하다.
+if (typeof document !== "undefined") {
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+  else boot();
+}
 
 export {
   toSats, fromSats, normalizeUtxos, selectCoins, selectAll,

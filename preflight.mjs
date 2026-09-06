@@ -521,6 +521,43 @@ const ts = read("src/main.ts");
   }
 }
 
+/* ⑯ 번들이 **아직 없는 것**을 붙잡고 있지 않은가.
+ *
+ * `wallet.bundle.js` 의 `<script>` 는 `wallet.html` **중간**에 있다. 그래서 그 아래
+ * 요소들은 번들이 돌 때 아직 없다. `getElementById("x")?.addEventListener(...)` 의
+ * 물음표가 그 사실을 **조용히 삼킨다** — 오류도 안 나고 단추만 안 먹는다.
+ *
+ * 2026-09-06: 아래 탭 막대가 번들보다 뒤에 있어서 **「이야기」 탭이 한 번도 안 붙었다.**
+ * 눌러도 아무 일이 없었고, 신고로 들어왔다. 지금은 `boot()` 을 DOMContentLoaded 뒤로
+ * 미뤄서 고쳤다. 이 검사는 **그 미룸이 사라지면** 잡는다.
+ */
+{
+  const html = read("web/wallet.html");
+  const src = read("web/wallet.src.ts");
+  if (html && src) {
+    const 미룬다 = /readyState === "loading"[\s\S]{0,120}DOMContentLoaded[\s\S]{0,40}boot/.test(src);
+    const 번들 = html.indexOf("wallet.bundle.js");
+    const 뒤에있는 = new Set();
+    if (번들 > 0)
+      for (const m of html.matchAll(/id="([A-Za-z0-9_-]+)"/g))
+        if (m.index > 번들) 뒤에있는.add(m[1]);
+    const 붙잡는것 = new Set([
+      ...[...src.matchAll(/getElementById\("([^"]+)"\)/g)].map((m) => m[1]),
+      ...[...src.matchAll(/\$\("([^"]+)"\)/g)].map((m) => m[1]),
+    ]);
+    const 위험 = [...뒤에있는].filter((id) => 붙잡는것.has(id)).sort();
+    if (위험.length && !미룬다)
+      fail("번들이 아직 없는 것을 붙잡는다 (단추가 조용히 안 먹는다)", [
+        `번들 <script> 뒤에 있는데 코드가 붙잡는 것: ${위험.join(", ")}`,
+        "`?.` 가 삼켜서 오류도 안 난다. `boot()` 을 DOMContentLoaded 뒤로 미루거나",
+        "그 요소를 번들 <script> 위로 올려라",
+      ]);
+    else if (위험.length)
+      ok(`번들 뒤에 있는 ${위험.length}개를 화면이 다 그려진 뒤에 붙임 (${위험.join(", ")})`);
+    else ok("번들이 붙잡는 것이 전부 번들보다 위에 있음");
+  }
+}
+
 console.log("");
 if (bad) {
   console.log(`검사 실패 — ${bad}가지를 고쳐야 합니다.`);
