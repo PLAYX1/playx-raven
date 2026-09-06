@@ -1,4 +1,5 @@
 mod artist;
+mod auction;
 mod ai;
 mod auto;
 mod boot;
@@ -358,6 +359,7 @@ pub fn run() {
             health::autostart_enable,
             health::autostart_disable,
             health::service_health,
+            health::money_status,
             place::parse_coords,
             place::distance_m,
             place::directions_links,

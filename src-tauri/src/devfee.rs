@@ -190,6 +190,28 @@ pub fn refund_credit(refunded_rvn: f64) -> f64 {
 /// ⚠️ 시세를 못 얻어도 **적는 것은 멈추지 않는다.** 1% 기록을 통째로
 ///    빠뜨리는 것이 시세 한 칸 비는 것보다 훨씬 나쁘다. 대신 **0 을 적지
 ///    않는다** — 0 을 적으면 나중에 「그때 0원이었다」로 읽힌다.
+/// 장부를 그대로 보여 준다 — 화면이 「돈이 도는가」를 판단할 수 있게.
+///
+/// 🔴 숫자만 주지 않고 **마지막으로 적힌 때**를 같이 준다. 「쌓인 것 0」은
+///    「아직 안 팔렸다」일 수도, **「걷는 길이 끊어졌다」**일 수도 있다.
+///    그 둘은 완전히 다른 문제이고, 마지막 시각이 그것을 가른다.
+pub fn snapshot() -> Value {
+    let v = read();
+    let hist = v["history"].as_array().cloned().unwrap_or_default();
+    let last = hist.last().and_then(|e| e.get("at").cloned());
+    json!({
+        "owed": v["owed"].as_f64().unwrap_or(0.0),
+        "sent_total": v["sent_total"].as_f64().unwrap_or(0.0),
+        "count": hist.len(),
+        "last_at": last,
+        "why": if hist.is_empty() {
+            "아직 한 번도 안 걷혔습니다. 판 것이 없으면 정상이고, 팔았는데도 0 이면 걷는 길이 끊어진 것입니다."
+        } else {
+            "걷히고 있습니다."
+        },
+    })
+}
+
 pub async fn accrue(order_addr: &str, fee_rvn: f64) {
     if fee_rvn <= 0.0 {
         return;
@@ -553,5 +575,26 @@ mod tests {
             auto.contains("fee_in_tx"),
             "자판기가 체인을 안 보고 적는다 — 우리 지갑으로 낸 손님에게서 1% 를 두 번 뗀다."
         );
+    }
+
+    /// 🔴 「쌓인 것 0」이 두 가지 뜻이라는 것을 화면이 가릴 수 있어야 한다.
+    ///    ① 아직 안 팔렸다 → 정상
+    ///    ② 팔았는데도 0 → **걷는 길이 끊어졌다**
+    ///    마지막으로 적힌 때가 그 둘을 가른다. 그래서 snapshot 이 그걸 준다.
+    #[test]
+    fn the_ledger_says_whether_money_is_flowing() {
+        let s = snapshot();
+        for k in ["owed", "sent_total", "count", "last_at", "why"] {
+            assert!(s.get(k).is_some(), "장부 요약에 `{k}` 가 없다 — 화면이 판단을 못 한다");
+        }
+        let why = s["why"].as_str().unwrap_or("");
+        assert!(!why.is_empty(), "숫자만 주면 사장은 판단을 못 한다. 뜻을 같이 적어야 한다");
+        // 한 번도 안 걷혔으면 그 사실을 **그 문장 안에서** 말해야 한다
+        if s["count"].as_u64() == Some(0) {
+            assert!(
+                why.contains("끊어진") || why.contains("한 번도"),
+                "0 인데 그 뜻을 안 알려 준다: {why}"
+            );
+        }
     }
 }

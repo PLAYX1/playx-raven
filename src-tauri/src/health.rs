@@ -248,3 +248,78 @@ pub async fn service_health(phone_on: bool, tunnel_on: bool) -> Value {
         "tunnel": tunnel_on,
     })
 }
+
+/// **돈이 도는지 한눈에.**
+///
+/// 🔴 왜 필요한가 — 이 저장소의 병은 「만들었는데 조용히 안 도는 것」이다.
+/// 2026-09-06 하루에만 여섯 개를 찾았고, 그중 하나는 **개발비 1% 가 한 푼도
+/// 안 걷히던 것**이었다. 화면에는 「1%」라고 떠 있었고 계산 코드도 있었는데
+/// 부르는 줄이 없었다. 대표가 물어봐야 알 수 있는 상태였다.
+///
+/// 그래서 **묻지 않아도 보이게** 한다. 각 줄은 「살았나/죽었나」와
+/// **그게 무슨 뜻인지**를 같이 말한다. 숫자만 던지면 사장은 판단을 못 한다.
+#[tauri::command]
+pub async fn money_status() -> Value {
+    // ── 노드 ──────────────────────────────────────────────
+    let node = call_rpc("getblockchaininfo", json!([])).await;
+    let (blocks, behind) = node
+        .as_ref()
+        .ok()
+        .map(|v| {
+            let b = v.get("blocks").and_then(|x| x.as_u64()).unwrap_or(0);
+            let h = v.get("headers").and_then(|x| x.as_u64()).unwrap_or(0);
+            (b, h.saturating_sub(b))
+        })
+        .unwrap_or((0, 0));
+
+    // ── 지갑 ──────────────────────────────────────────────
+    let w = call_rpc("getwalletinfo", json!([])).await.ok();
+    let balance = w.as_ref().and_then(|v| v.get("balance")?.as_f64()).unwrap_or(0.0);
+    // `unlocked_until` 이 없으면 **암호가 안 걸린 지갑**이다. 0 이면 잠김.
+    let unlocked_until = w.as_ref().and_then(|v| v.get("unlocked_until")?.as_i64());
+    let wallet_state = match unlocked_until {
+        None => "no_passphrase",
+        Some(0) => "locked",
+        Some(_) => "unlocked",
+    };
+
+    // ── 우리 몫 장부 ───────────────────────────────────────
+    let ledger = crate::devfee::snapshot();
+
+    // ── 자산 ──────────────────────────────────────────────
+    // 곡을 냈는지, 몇 장 남았는지. `listmyassets` 는 색인 없이도 된다.
+    let mine = call_rpc("listmyassets", json!([])).await.ok();
+    let mut songs: Vec<Value> = Vec::new();
+    if let Some(m) = mine.as_ref().and_then(|v| v.as_object()) {
+        for (name, qty) in m {
+            if name.starts_with("PLAYX/SONG/") && !name.ends_with('!') {
+                songs.push(json!({ "name": name, "left": qty.as_f64().unwrap_or(0.0) }));
+            }
+        }
+    }
+    songs.sort_by(|a, b| a["name"].as_str().cmp(&b["name"].as_str()));
+
+    json!({
+        "node": {
+            "ok": node.is_ok(),
+            "blocks": blocks,
+            "behind": behind,
+            "why": if node.is_err() { "노드가 꺼져 있습니다. 결제 확인이 안 됩니다." }
+                   else if behind > 20 { "따라잡는 중입니다. 방금 들어온 결제가 아직 안 보일 수 있습니다." }
+                   else { "정상입니다." },
+        },
+        "wallet": {
+            "state": wallet_state,
+            "rvn": balance,
+            "why": match wallet_state {
+                "locked" => "잠겨 있습니다. 자산을 보내려면 잠깐 열어야 합니다.",
+                "unlocked" => "열려 있습니다. 볼일이 끝나면 잠그는 편이 안전합니다.",
+                _ => "암호가 걸려 있지 않습니다. 걸어 두시는 편이 안전합니다.",
+            },
+        },
+        // 🔴 여기가 핵심이다. 「쌓인 것 0 · 보낸 것 0」이 오래 이어지면
+        //    걷는 길이 어딘가 끊어진 것이다.
+        "our_share": ledger,
+        "songs": songs,
+    })
+}

@@ -588,6 +588,29 @@ const ts = read("src/main.ts");
   }
 }
 
+/* ⑱ **「지금 상태」가 화면에 실제로 그려지는가.**
+ *
+ * 이 카드를 만든 이유가 「만들었는데 조용히 안 도는 것」을 잡기 위해서다.
+ * 그런데 이 카드 자체가 그 병에 걸리면 웃긴 일이 된다 —
+ * 자리(HTML)·그리는 함수·**부르는 줄** 셋이 다 있어야 한다.
+ */
+{
+  const html = read("index.html");
+  const ts = read("src/main.ts");
+  if (html && ts) {
+    const 없는것 = [];
+    if (!html.includes('id="money-status"')) 없는것.push("화면에 자리(#money-status)가 없다");
+    if (!html.includes('id="ms-body"')) 없는것.push("내용을 넣을 칸(#ms-body)이 없다");
+    if (!/function drawMoneyStatus/.test(ts)) 없는것.push("그리는 함수가 없다");
+    if (!/invoke<any>\("money_status"\)/.test(ts)) 없는것.push("러스트 명령을 안 부른다");
+    // 정의만 있고 부르는 곳이 없으면 영영 안 그려진다
+    const 부름 = (ts.match(/drawMoneyStatus\(\)/g) || []).length;
+    if (부름 < 2) 없는것.push("함수를 정의만 하고 부르는 줄이 없다");
+    if (없는것.length) fail("「지금 상태」가 화면에 안 뜬다", 없는것);
+    else ok("「지금 상태」 카드가 자리·함수·부르는 줄을 다 갖춤");
+  }
+}
+
 console.log("");
 if (bad) {
   console.log(`검사 실패 — ${bad}가지를 고쳐야 합니다.`);

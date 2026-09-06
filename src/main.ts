@@ -2202,6 +2202,73 @@ function raviTiles(): Tile[] {
   ]);
 }
 
+
+/* ══ 지금 상태 ═══════════════════════════════════════════════════════
+ *
+ * 🔴 이 저장소의 병은 **「만들었는데 조용히 안 도는 것」**이다.
+ *    2026-09-06 하루에만 여섯 개를 찾았고, 그중 하나는 **개발비 1% 가
+ *    한 푼도 안 걷히던 것**이었다. 화면에는 「1%」가 떠 있었고 계산 코드도
+ *    있었는데 **부르는 줄이 없었다.** 대표가 물어봐야만 알 수 있었다.
+ *
+ *    그래서 묻지 않아도 보이게 첫 화면에 둔다.
+ *
+ * ⚠️ 숫자만 던지지 않는다. **그게 무슨 뜻인지**를 옆에 적는다 —
+ *    「쌓인 것 0」은 「아직 안 팔렸다」일 수도 「걷는 길이 끊어졌다」일 수도 있고,
+ *    그 둘은 완전히 다른 문제다.
+ */
+function 줄(이름: string, 값: string, 등급: "good" | "warn" | "bad", 왜: string): string {
+  return `<div class="ms-line">
+    <span class="ms-name">${escapeHtml(이름)}</span>
+    <span class="ms-val ${등급}">${escapeHtml(값)}</span>
+    <span class="ms-why">${escapeHtml(왜)}</span>
+  </div>`;
+}
+
+async function drawMoneyStatus(): Promise<void> {
+  const body = document.getElementById("ms-body");
+  const when = document.getElementById("ms-when");
+  if (!body) return;
+  let s: any;
+  try {
+    s = await invoke<any>("money_status");
+  } catch (e) {
+    // 🔴 못 읽은 것을 「정상」으로 그리지 않는다. 그게 제일 나쁜 거짓말이다.
+    body.innerHTML = 줄("상태", "못 읽음", "bad", `${e}`);
+    return;
+  }
+  const 줄들: string[] = [];
+
+  const n = s.node || {};
+  줄들.push(
+    n.ok
+      ? 줄("노드", n.behind > 20 ? `${n.behind}블록 뒤` : `블록 ${Number(n.blocks).toLocaleString()}`,
+           n.behind > 20 ? "warn" : "good", String(n.why || ""))
+      : 줄("노드", "꺼짐", "bad", String(n.why || "")),
+  );
+
+  const w = s.wallet || {};
+  const 지갑글 = w.state === "locked" ? "잠김" : w.state === "unlocked" ? "열림" : "암호 없음";
+  줄들.push(줄("지갑", `${지갑글} · ${Number(w.rvn || 0).toLocaleString()} RVN`,
+                w.state === "unlocked" ? "warn" : "good", String(w.why || "")));
+
+  // 🔴 여기가 핵심이다.
+  const o = s.our_share || {};
+  const 건수 = Number(o.count || 0);
+  줄들.push(줄("우리 몫",
+    `${Number(o.owed || 0)} RVN 쌓임 · ${건수}건`,
+    건수 === 0 ? "warn" : "good",
+    String(o.why || "")));
+
+  const songs: any[] = Array.isArray(s.songs) ? s.songs : [];
+  줄들.push(songs.length
+    ? 줄("낸 곡", `${songs.length}곡 · ${songs.reduce((a, x) => a + Number(x.left || 0), 0)}장 남음`,
+         "good", songs.map((x) => String(x.name).replace("PLAYX/SONG/", "")).join(" · "))
+    : 줄("낸 곡", "없음", "warn", "아직 자산으로 낸 곡이 없습니다."));
+
+  body.innerHTML = 줄들.join("");
+  if (when) when.textContent = new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
+}
+
 /** 라비 화면을 그린다. 상태가 바뀔 때마다 다시 부른다. */
 function paintRavi() {
   const box = $("ravi-tiles");
@@ -14430,6 +14497,11 @@ async function loadOrders() {
 // ── 가게 찾기 ──
 window.addEventListener("DOMContentLoaded", async () => {
   loadHealth();
+  // 🔴 **부르는 줄.** 화면만 만들고 이 줄을 안 쓰면 오늘만 여섯 번 본 그 병이다.
+  //    켤 때 한 번, 그리고 1분마다. 이 프로그램에는 이미 타이머가 여럿이라
+  //    자주 물어보지 않는다 — 돈이 도는지는 초 단위로 볼 것이 아니다.
+  void drawMoneyStatus();
+  setInterval(() => void drawMoneyStatus(), 60_000);
   let nameTimer: any;
   $("i-name").addEventListener("input", () => {
     clearTimeout(nameTimer);
