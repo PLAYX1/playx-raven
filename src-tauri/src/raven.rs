@@ -398,9 +398,35 @@ pub async fn wallet_balance() -> Result<Value, String> {
 }
 
 /// Recent wallet activity, newest first.
+///
+/// 🔴 **자산은 여기 안 나온다.** 코어의 `listtransactions` 는 자산 배열을
+///    만들어 놓고 **버린다**(`Ravencoin/src/wallet/rpcwallet.cpp:1790-1795`).
+///    그래서 「자산을 보냈는데 장부에 안 보인다」가 된다.
+///    자산까지 보려면 아래 `wallet_since` 를 쓴다.
 #[tauri::command]
 pub async fn recent_transactions(count: u32) -> Result<Value, String> {
     call_rpc("listtransactions", json!(["*", count, 0, true])).await
+}
+
+/// 지난번 이후로 지갑에 생긴 일 — **RVN 과 자산 둘 다.**
+///
+/// 코어 지갑은 돈이 들어오면 그 자리에서 보여 주고 소리를 낸다. 우리는 그게
+/// 없어서, 대표님이 폰으로 보낸 RVN 이 들어오는지 화면만 보고는 알 수 없었다.
+///
+/// `listsinceblock` 은 `listtransactions` 와 달리 **`asset_transactions` 를
+/// 함께 준다**(실측 2026-09-07: RVN 126건 + 자산 83건). 색인이 없어도 된다.
+/// `block` 을 비우면 처음부터, 주면 그 뒤로 생긴 것만 온다 — 그래서 이걸
+/// 반복해서 부르면 「새로 생긴 것」만 골라낼 수 있다.
+///
+/// 돌려주는 것에 `lastblock` 이 들어 있다. 다음 번에 그걸 그대로 넣으면 된다.
+#[tauri::command]
+pub async fn wallet_since(block: Option<String>) -> Result<Value, String> {
+    let args = match block.as_deref() {
+        Some(b) if !b.is_empty() => json!([b, 1, true]),
+        // 처음에는 기준이 없다. 지갑 전체를 한 번 읽어 「이미 본 것」을 채운다.
+        _ => json!([]),
+    };
+    call_rpc("listsinceblock", args).await
 }
 
 /// What has arrived at one address, counting only confirmed payments.

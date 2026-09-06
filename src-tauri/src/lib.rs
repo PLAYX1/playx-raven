@@ -94,6 +94,7 @@ pub fn run() {
             raven::new_address,
             raven::wallet_balance,
             raven::recent_transactions,
+            raven::wallet_since,
             raven::received_by_address,
             raven::wallet_lock_state,
             ipfs::ipfs_status,

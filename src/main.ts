@@ -4441,7 +4441,7 @@ async function loadWallet() {
   }
 
   try {
-    const txs: any[] = await invoke("recent_transactions", { count: 15 });
+    const txs: any[] = await 최근거래_모아읽기(15);
     $("w-txs").innerHTML = txs
       .slice()
       .reverse()
@@ -4451,7 +4451,7 @@ async function loadWallet() {
         const when = t.time
           ? new Date(t.time * 1000).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })
           : "";
-        const what = t.assetName || "RVN";
+        const what = t.asset_name || "RVN";
 
         // Bitcoin-derived chains cannot tell you who paid — a received entry only
         // knows which of *our* addresses it landed on. That is precisely why
@@ -7347,9 +7347,101 @@ const TAIL_CHECK_RVN = 30_000;
 let sendMode: "asset" | "rvn" | null = null;
 let sendPreview: any = null;
 
+/// 장부에 **자산까지** 담아 읽는다.
+///
+/// 🔴 여태 `recent_transactions`(=`listtransactions`) 만 읽었다. 그런데 코어의
+///    그 RPC 는 자산 배열을 만들어 놓고 **버린다**(`rpcwallet.cpp:1790-1795`).
+///    그래서 100장을 보내고도 「최근 거래」에 아무것도 안 떴다 — 대표님이
+///    「자산 보냈는데 장부에 안 보이나」 하신 게 이것이다.
+///    `listsinceblock` 은 `asset_transactions` 를 함께 준다(실측: 자산 83건).
+async function 최근거래_모아읽기(개수: number): Promise<any[]> {
+  try {
+    const r: any = await invoke("wallet_since", { block: null });
+    const rvn: any[] = Array.isArray(r?.transactions) ? r.transactions : [];
+    const 자산: any[] = Array.isArray(r?.asset_transactions) ? r.asset_transactions : [];
+    return [...rvn, ...자산]
+      .sort((a, b) => (Number(b?.time) || 0) - (Number(a?.time) || 0))
+      .slice(0, 개수)
+      .reverse(); // 그리는 쪽이 다시 뒤집으므로 여기서 맞춰 둔다
+  } catch {
+    // 옛 길로 물러선다. 자산은 안 보이지만 RVN 은 보인다 — 빈 화면보다 낫다.
+    try { return await invoke<any[]>("recent_transactions", { count: 개수 }); } catch { return []; }
+  }
+}
+
+/// 새로 들어온 것을 그 자리에서 알린다 — 코어 지갑이 하는 그것.
+///
+/// 🔴 여태 없었다. 폰에서 RVN 을 보내도 화면은 그대로였고, 들어왔는지
+///    새로고침을 눌러 봐야 알 수 있었다. 「돈이 들어오는지 판단이 안 선다」.
+///
+/// `listsinceblock` 에 지난번 `lastblock` 을 넣으면 **그 뒤에 생긴 것만** 온다.
+/// 첫 번째 호출은 「이미 있던 것」을 기억만 하고 소리를 내지 않는다 — 켤 때마다
+/// 지난 2년치가 울리면 그건 알림이 아니라 소음이다.
+let 감시_마지막블록: string | null = null;
+let 감시_첫바퀴 = true;
+let 감시타이머: number | null = null;
+
+async function 지갑감시() {
+  let r: any;
+  try {
+    r = await invoke("wallet_since", { block: 감시_마지막블록 });
+  } catch {
+    return; // 노드가 잠깐 안 받을 수 있다. 다음 바퀴에 다시 본다.
+  }
+  const 다음 = typeof r?.lastblock === "string" ? r.lastblock : null;
+  const rvn: any[] = Array.isArray(r?.transactions) ? r.transactions : [];
+  const 자산: any[] = Array.isArray(r?.asset_transactions) ? r.asset_transactions : [];
+
+  if (감시_첫바퀴) {
+    감시_첫바퀴 = false;
+    감시_마지막블록 = 다음;
+    return;
+  }
+
+  const 들어온것 = [...rvn, ...자산].filter((t) => t?.category === "receive");
+  감시_마지막블록 = 다음;
+  if (!들어온것.length) return;
+
+  // 화면을 새 사실로 맞춘다. 잔액과 자산 목록 둘 다 — 자산이 들어왔는데
+  // 목록이 옛것이면 「보이는데 못 쓰는」 상태가 된다.
+  loadWallet();
+  void loadAssets(false);
+
+  // 소리는 대표님이 켜 두셨을 때만. 끈 것을 우리가 되살리지 않는다.
+  if (알림켜짐()) 알림소리(1);
+
+  const 첫 = 들어온것[0];
+  const 무엇 = 첫?.asset_name || "RVN";
+  const 얼마 = Number(첫?.amount) || 0;
+  const 더 = 들어온것.length > 1 ? ` 외 ${들어온것.length - 1}건` : "";
+  살짝알림(`${무엇} ${얼마.toLocaleString()} 이 들어왔습니다${더}`);
+}
+
+/// 화면을 가리지 않고 알리는 한 줄. 확인을 누르게 하지 않는다 —
+/// 돈이 들어온 것은 사장이 지금 무언가 해야 하는 일이 아니다.
+function 살짝알림(글: string) {
+  let 상자 = document.getElementById("live-note");
+  if (!상자) {
+    상자 = document.createElement("div");
+    상자.id = "live-note";
+    document.body.appendChild(상자);
+  }
+  상자.textContent = 글;
+  상자.classList.add("on");
+  window.setTimeout(() => 상자?.classList.remove("on"), 8000);
+}
+
+/** 보내기 화면을 열 때마다 「고치기」를 되살린다.
+ *  한 번 보낸 뒤 숨긴 것을 안 되살리면, 그 다음부터는 영영 못 고친다. */
+function 고치기_되살리기() {
+  const back = $("s-back") as HTMLElement | null;
+  if (back) back.style.display = "";
+}
+
 async function openSend(mode: "asset" | "rvn", preselect?: string) {
   sendMode = mode;
   sendPreview = null;
+  고치기_되살리기();
   $("send-review").style.display = "none";
   $("send-compose").style.display = "";
   $("s-result").innerHTML = "";
@@ -7543,8 +7635,19 @@ async function doSend() {
        <p class="meta">확인되기까지 몇 분 걸립니다. 되돌릴 수 없습니다.</p></div>`;
     $("r-tailbox").style.display = "none";
     $("r-passbox").style.display = "none";
+    // 🔴 보낸 뒤에는 고칠 것이 없다. 체인은 되돌리지 않는다.
+    //    그런데 「고치기」가 그대로 남아 있어서, 방금 보낸 것을 되돌리거나
+    //    바꿀 수 있는 것처럼 보였다. 되돌릴 수 없는 일 옆에 되돌릴 수 있어
+    //    보이는 단추를 두면 안 된다.
+    const back = $("s-back") as HTMLElement | null;
+    if (back) back.style.display = "none";
     sendPreview = null;
     loadWallet();
+    // 🔴 여태 `loadWallet()` 만 불렀다. 그래서 RVN 잔액은 줄어드는데
+    //    **자산 목록은 옛날 그대로**였다 — 100장을 다 보내고도 목록에는
+    //    100장이 그대로 있었고, 다시 보내려다 「보유 0」을 만났다.
+    //    자산을 보냈으면 자산 목록도 다시 읽어야 한다.
+    void loadAssets(false);
   } catch (e) {
     $("s-result").innerHTML = `<div class="warnbox" style="margin-top:12px">${e}</div>`;
     // 실패했으니 다시 누를 수 있어야 하고, 라벨도 금액으로 돌아와야 한다.
@@ -15456,6 +15559,10 @@ window.addEventListener("DOMContentLoaded", async () => {
   //    처리도 안 돈다 — 대화창 위에 대화창으로 가는 단추가 떠 있었다.
   showPage("ravi");
   loadAssets();
+  // 코어 지갑처럼 들어오는 것을 그 자리에서 알린다. 레이븐 블록이 약 60초라
+  // 15초면 늦지 않고, 노드를 두드리는 부담도 작다.
+  void 지갑감시();
+  if (!감시타이머) 감시타이머 = window.setInterval(() => void 지갑감시(), 15000);
   // 🔴 **맨 마지막**에 부른다. 이걸 먼저 부르면 아직 안 그려진 메뉴를
   //    숨기려 들고, 그러면 「돕기」로 골라도 가게 메뉴가 남는다.
   void applyMode();
