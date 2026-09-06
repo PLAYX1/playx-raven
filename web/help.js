@@ -59,6 +59,12 @@
       background:var(--bg,#fff);color:var(--fg,#111);font:700 19px/1 system-ui;cursor:pointer;
       box-shadow:0 1px 4px rgba(0,0,0,.12)}
     .hlp-btn.on{background:#384192;color:#fff;border-color:#384192}
+    /* 🔴 이 단추는 화면에 **고정**돼 있어서, 흐름 안에서 오른쪽에 붙는 것들 위에
+       그대로 올라탄다. 실측(2026-09-06): 지갑 첫 화면에서 「문제 알리기」의
+       글자 절반을 덮고 있었다 — 눌러야 할 것을 가리는 건 안 된다.
+       끼어든 쪽이 자리를 비켜 준다. 44px + 여백 = 58px.
+       ⚠️ 이 화면에 「?」가 없으면 이 규칙도 없다(그때는 비켜 줄 이유가 없다). */
+    .rphead{margin-right:58px!important}
     /* 설명 보기 중임을 **늘 보이게** 한다. 모드에 들어간 줄 모르면
        「단추가 안 먹는다」로 읽힌다 — 그게 제일 나쁜 오해다. */
     .hlp-bar{position:fixed;left:0;right:0;top:0;z-index:59;background:#384192;color:#fff;
