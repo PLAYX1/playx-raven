@@ -1749,6 +1749,12 @@
         border-radius: 10px; font-size: 15px; line-height: 1.6; cursor: pointer; }
       .ab-ack input { width: 22px; height: 22px; margin: 2px 0 0; flex: 0 0 auto; cursor: pointer; }
       .ab-ack b { color: var(--warn); }
+      /* 못 누르는 이유. 잠긴 단추만 있고 까닭이 없으면 사람은 프로그램이
+         고장 났다고 생각한다. 다음에 할 일을 굵게 적는다. */
+      .ab-block { margin-top: 12px; padding: 12px 14px; border-radius: 10px;
+        border: 1px solid var(--danger); background: color-mix(in srgb, var(--danger) 8%, transparent);
+        color: var(--text); font-size: 15px; line-height: 1.6; }
+      .ab-block b { color: var(--danger); }
       /* 되돌릴 수 없는 일 앞의 취소 창. 체크박스와 다른 점은
          **시간이 흐르는 것을 보게** 한다는 것이다 — 습관으로는 통과 못 한다. */
       .holdbox { margin-top: 12px; padding: 16px; border-radius: 14px;

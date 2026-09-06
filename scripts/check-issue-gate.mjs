@@ -40,5 +40,31 @@ for(const [라벨, 목록] of Object.entries(기대)){
     console.log(`  ${ok?'✅':'🔴'} ${라벨.padEnd(8)} ${k.padEnd(11)} 파일=${c?'있음':'없음'} 재발행=${r?'켬':'끔'} → 인정상자 ${got?'뜸':'안뜸'}`);
   }
 }
+
+// ── 「노래」 프리셋: 인정 상자가 아니라 **벽**이어야 한다 ────────────────
+const m3 = src.match(/const 표지필수_안붙임 = (.+);/);
+const m4 = src.match(/const 표지없음_인정필요 = (.+);/);
+if(!m3||!m4){ console.log('🔴 프리셋 조건을 소스에서 못 찾음'); process.exit(1); }
+const 프리셋판정 = (wizPreset, cid, wizKind, re) => {
+  const 파일_영영_못붙임 = !cid && (wizKind === "unique" || !re);
+  const 표지가_뜻있는_종류 = ["root","sub"].includes(wizKind);
+  const 표지필수_안붙임 = eval(m3[1]);
+  const 표지없음_인정필요 = eval(m4[1]);
+  return { 벽: 표지필수_안붙임, 상자: 표지없음_인정필요 };
+};
+const 노래 = { cover_required: true, kind: 'sub' };
+console.log('');
+const 프리셋기대 = [
+  ['노래 · 표지 없음',  노래, '',      'sub', false, true,  false], // 벽만
+  ['노래 · 표지 있음',  노래, 'Qm1',   'sub', false, false, false], // 둘 다 아님
+  ['직접 sub · 표지없음', null, '',     'sub', false, false, true ], // 상자만
+];
+for(const [라벨,ps,cid,k,re,벽기대,상자기대] of 프리셋기대){
+  const r = 프리셋판정(ps, cid, k, re);
+  const okk = r.벽===벽기대 && r.상자===상자기대;
+  if(!okk) bad++;
+  console.log(`  ${okk?'✅':'🔴'} ${라벨.padEnd(20)} 벽=${r.벽?'예':'아니오'} 상자=${r.상자?'예':'아니오'}`);
+}
+
 console.log(bad ? `\n🔴 ${bad}건 틀림` : '\n✅ 전부 맞음 — 막을 것은 막고 통과할 것은 통과');
 process.exit(bad?1:0);

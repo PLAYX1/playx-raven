@@ -50,6 +50,39 @@ pub const BURN_REISSUE: f64 = 100.0;
 #[tauri::command]
 pub fn asset_kinds() -> Value {
     json!([
+        // 🔴 사람 말이 먼저 온다.
+        //
+        // 아래 일곱은 **레이븐코인 용어**다. 노래를 내려는 사람이 「내 노래는
+        // 하위 자산이구나」를 스스로 알아내야 했다. 표준을 아는 사람이
+        // 없어서가 아니라, 우리가 체인 말로 물었기 때문이다.
+        //
+        // `preset` 이 붙은 항목은 고르는 순간 종류·수량·단위·재발행·이름틀이
+        // 저절로 채워진다. **발행이 나가는 길은 그대로다** — 안쪽에서는
+        // `kind` 값 그대로 도는 평범한 하위 자산이다. 새 길을 내지 않는다.
+        //
+        // 한 종류로 시작한다. 책·게임·티켓을 같이 얹으면 고를 것이 열둘이 되고,
+        // 티켓은 고유 자산이라 발행 모양 자체가 다르다(수량 1 강제·재발행 불가).
+        {
+            "id": "song", "name": "노래", "burn": crate::issue::BURN_SUB,
+            "form": "PLAYX/SONG/제목", "one_line": "한 곡을 한정판으로 냅니다. 산 사람이 팬이 됩니다.",
+            "when": [
+                "곡을 한정 수량으로 팔 때",
+                "산 사람에게 나중에 소식을 보내고 싶을 때"
+            ],
+            "examples": [
+                { "case": "낱곡", "name": "PLAYX/SONG/INEVITABLE", "why": "필연 100장. 산 사람 지갑이 소식 채널을 자동 구독합니다" },
+                { "case": "제목", "name": "제목은 로마자 19자까지", "why": "한글은 자산 이름에 못 씁니다. 전체 30자가 한계입니다" }
+            ],
+            "not_for": "아직 안 만든 곡. 표지를 안 붙이면 영원히 못 붙입니다.",
+            "preset": {
+                "kind": "sub",
+                "name_prefix": "PLAYX/SONG/",
+                "qty": 100,
+                "units": 0,
+                "reissuable": false,
+                "cover_required": true
+            }
+        },
         {
             "id": "root", "name": "루트 자산", "burn": crate::issue::BURN_ROOT,
             "form": "PLAYX", "one_line": "새 이름 하나. 이 아래로 모든 것이 갈라집니다.",

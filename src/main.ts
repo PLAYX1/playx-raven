@@ -6689,6 +6689,10 @@ let issueCheck: any = null;
 let wizStep = 1;
 type WizKind = "root" | "sub" | "unique" | "reissue" | "bulk" | "qualifier" | "restricted";
 let wizKind: WizKind = "root";
+/** 사람 말 종류(「노래」 등)를 고르면 채워지는 값들. 안 고르면 null 이고
+ *  그때는 여태와 똑같이 돈다. 발행이 나가는 길은 이것과 무관하다. */
+let wizPreset: any = null;
+let wizKindList: any[] = [];
 /** 이미 있는 자산을 고르는 종류. 이름이 **남아 있으면** 안 되고 **있어야** 한다. */
 const NEEDS_EXISTING: WizKind[] = ["reissue", "bulk"];
 const BURN: Record<string, number> = {
@@ -6706,6 +6710,7 @@ const KIND_KO: Record<string, string> = {
 /// 옆에 두면 "나한테 필요한가"를 스스로 답할 수 있다.
 async function renderKinds() {
   const kinds: any[] = await invoke<any>("asset_kinds").catch(() => []);
+  wizKindList = kinds;
   $("wz-kinds").innerHTML = kinds
     .map(
       (k) => `<div class="choice" data-kind="${k.id}">
@@ -6723,7 +6728,19 @@ async function renderKinds() {
 
   document.querySelectorAll("[data-kind]").forEach((c) => {
     (c as HTMLElement).onclick = () => {
-      wizKind = (c as HTMLElement).dataset.kind as any;
+      const id = (c as HTMLElement).dataset.kind as string;
+      const 고른것 = wizKindList.find((k) => k.id === id);
+      wizPreset = 고른것?.preset || null;
+      // 프리셋이 있으면 **안쪽 종류**로 바꾼다. 「노래」는 결국 하위 자산이다.
+      wizKind = (wizPreset?.kind || id) as WizKind;
+      if (wizPreset) {
+        // 🔴 값을 넣기만 하고 `input` 을 쏘지 않는다. 쏘면 아직 제목을 안 친
+        //    상태에서 「이름이 틀렸습니다」가 빨갛게 떠서, 시작하자마자 혼난다.
+        ($("i-name") as HTMLInputElement).value = wizPreset.name_prefix || "";
+        ($("i-qty") as HTMLInputElement).value = String(wizPreset.qty ?? 1);
+        ($("i-units") as HTMLInputElement).value = String(wizPreset.units ?? 0);
+        ($("i-reissuable") as HTMLInputElement).checked = !!wizPreset.reissuable;
+      }
       document.querySelectorAll("[data-kind]").forEach((x) => x.classList.toggle("on", x === c));
       // 고른 것만 사례가 펼쳐진다. 전부 펼치면 첫 화면이 벽이 된다.
       wizGate();
@@ -6735,6 +6752,7 @@ async function openWizard() {
   await renderKinds();
   wizStep = 1;
   wizKind = "root";
+  wizPreset = null;
   issueCheck = null;
   document.querySelectorAll("[data-kind]").forEach((c) => c.classList.remove("on"));
   ["i-name", "i-ipfs", "i-confirm"].forEach((id) => (($(id) as HTMLInputElement).value = ""));
@@ -7042,7 +7060,13 @@ function renderSummary() {
       //    벽지가 되어 안 읽히고, 그러면 "경고만 하고 통과" 로 되돌아간다.
       //    사람이 재발행을 **고를 수 있는** 종류에서만 묻는다.
       const 표지가_뜻있는_종류 = ["root", "sub"].includes(wizKind);
-      const 표지없음_인정필요 = 파일_영영_못붙임 && 표지가_뜻있는_종류;
+
+      // 🔴 「노래」처럼 사람 말로 고른 것은 **인정 상자가 아니라 벽**이다.
+      //    표지 없는 노래는 아무도 안 산다. 고르라고 물으면 고르지 않고
+      //    누르는 사람이 나오고, 그 자산은 영원히 표지가 없다.
+      //    직접 고르기(종류 일곱)는 그대로 상자로 남는다 — 쓰임을 우리가 모른다.
+      const 표지필수_안붙임 = !!wizPreset?.cover_required && !cid;
+      const 표지없음_인정필요 = !표지필수_안붙임 && 파일_영영_못붙임 && 표지가_뜻있는_종류;
       $("i-after").innerHTML = ok
         ? `<div class="afterbox">
              <div class="ab-row"><span>지금 지갑</span><b>${rvn(have)} RVN</b></div>
@@ -7054,6 +7078,13 @@ function renderSummary() {
              <div class="ab-never">되돌릴 수 없는 것<ul>${
                forever.map((t) => `<li>${escapeHtml(t)}</li>`).join("")
              }</ul></div>
+             ${
+               표지필수_안붙임
+                 ? `<div class="ab-block">표지를 붙이셔야 합니다.
+                      <b>3단계로 돌아가 표지 그림을 고르세요.</b><br />
+                      지금 안 붙이면 이 노래에는 영원히 표지를 못 답니다.</div>`
+                 : ""
+             }
              ${
                표지없음_인정필요
                  ? `<label class="ab-ack"><input type="checkbox" id="i-nofile-ack" />
@@ -7067,7 +7098,7 @@ function renderSummary() {
       const go = $("wz-next") as HTMLButtonElement;
       const 인정했나 = () =>
         !표지없음_인정필요 || !!($("i-nofile-ack") as HTMLInputElement | null)?.checked;
-      go.disabled = !ok || !인정했나();
+      go.disabled = !ok || !인정했나() || 표지필수_안붙임;
       // 상자를 켜고 끄면 버튼도 같이 따라와야 한다. 안 그러면 켜도 못 누른다.
       ($("i-nofile-ack") as HTMLInputElement | null)?.addEventListener("change", () => {
         go.disabled = !ok || !인정했나();
