@@ -143,20 +143,55 @@ pub async fn pin_my_assets() -> Result<Value, String> {
 ///    맞다. 그리고 이게 **오늘 난 사고를 근본적으로 막는다** — 가게 사진이
 ///    사라진 것은 그 파일을 **한 대만** 들고 있었기 때문이다. 노트북이 닫히면
 ///    세상에서 사라진다. 계산대는 하루 종일 켜져 있다.
+/// 한 번에 받아 줄 최대 개수. 이게 없으면 상대가 만 개를 보내도 다 붙든다.
+const MAX_HELP: usize = 200;
+
+/// 🔴 **남이 준 CID 를 그대로 믿으면 안 된다.**
+///
+/// 여기는 다른 컴퓨터의 `/api/pins` 가 준 목록을 받는다. 그 컴퓨터가
+/// 우리 것이 아닐 수도 있고, 우리 것이라도 뚫렸을 수 있다. 예전에는
+/// **개수도 체인 대조도 없이** 받은 CID 를 전부 붙들었다 —
+/// 가짜 주소 하나로 남의 디스크를 채울 수 있었다(실측 2026-09-08).
+///
+/// 그래서 `helping.rs` 가 이미 쓰고 있는 규칙을 여기에도 적용한다:
+/// **체인이 그 CID 를 가리킬 때만 붙든다.** 자산 이름으로 체인에 묻고
+/// (`getassetdata`), 거기 적힌 `ipfs_hash` 와 글자 그대로 같아야 한다.
+/// 체인은 500 RVN 을 태워야 한 줄이 적히므로, 이것만으로 장난이 비싸진다.
 async fn pin_these(items: Vec<String>) -> Result<Value, String> {
     let assets: Vec<(String, String)> = items
         .into_iter()
+        .take(MAX_HELP)
         .filter_map(|s| {
             let (n, c) = s.split_once('\u{1}')?;
-            Some((n.to_string(), c.to_string()))
+            // CIDv0 만 받는다. 레이븐 이름표는 34바이트라 `Qm…` 뿐이다.
+            let c = c.trim();
+            if !(c.len() == 46 && c.starts_with("Qm")) {
+                return None;
+            }
+            Some((n.trim().to_string(), c.to_string()))
         })
         .collect();
 
     let mut pinned = Vec::new();
     let mut failed = Vec::new();
-    let skipped = 0;
+    let mut skipped = 0usize;
 
     for (name, cid) in assets {
+        // ── 체인 대조. 못 물어보면 **붙들지 않는다.** ──
+        //    「확인 못 함」과 「맞음」을 같게 취급하면 검사가 없는 것과 같다.
+        let 체인해시 = match crate::raven::call_rpc("getassetdata", json!([name.clone()])).await {
+            Ok(d) => d
+                .get("ipfs_hash")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string(),
+            Err(_) => String::new(),
+        };
+        if 체인해시.is_empty() || 체인해시 != cid {
+            skipped += 1;
+            continue;
+        }
+
         match crate::ipfs::pin_add(cid.clone()).await {
             Ok(true) => pinned.push(json!({ "asset": name, "cid": cid })),
             Ok(false) | Err(_) => failed.push(json!({ "asset": name, "cid": cid })),
@@ -167,7 +202,7 @@ async fn pin_these(items: Vec<String>) -> Result<Value, String> {
         "pinned": pinned,
         "failed": failed,
         "no_file": skipped,
-        "note": "이 컴퓨터가 이 파일들을 계속 갖고 있습니다. 발행한 컴퓨터가 꺼져 있어도 손님 화면에서 열립니다.",
+        "note": "체인이 가리키는 것만 받았습니다. 이 컴퓨터가 계속 갖고 있으니, 발행한 컴퓨터가 꺼져 있어도 손님 화면에서 열립니다.",
     }))
 }
 

@@ -15898,7 +15898,44 @@ async function paintHelping(): Promise<void> {
          "이 노드는 아직 남의 지갑 잔액을 대신 답해 주지 못합니다. 주소 색인이 꺼져 있기 때문입니다. 켜면 이 컴퓨터가 실제로 남을 돕게 됩니다."
        )}</p>
        <button data-part-go="node" style="margin-top:12px">${t("주소 색인 켜기")}</button>
+     </div>` +
+    /* 🔴 **만들어 놓고 아무도 안 부르던 것**(실측 2026-09-08).
+          `helping.rs` 의 `help_round()` 는 체인에서 가게 목록을 읽고
+          (`listassets SHOP.*`), 각 가게의 사진을 받아 이 컴퓨터가 들고 있게
+          한다 — sha256 으로 대조하고, 4MB·40개 상한을 지킨다. 제대로 만들어
+          놓고 `lib.rs` 에 등록만 하고 **부르는 줄이 하나도 없었다.**
+          「돕기」가 상태만 보여 주고 실제로 돕지는 않고 있었던 것이다. */
+    `<div class="card"><b>${t("가게 사진 대신 들어 주기")}</b>
+       <p class="meta" style="margin-top:8px">${t(
+         "체인에 올라온 가게들의 사진을 이 컴퓨터가 함께 들고 있습니다. 그 가게 컴퓨터가 꺼져 있어도 손님 화면에서 사진이 열립니다. 체인이 가리키는 것만, 하나에 4MB까지만 받습니다."
+       )}</p>
+       <div id="hp-round-out" class="meta" style="margin-top:8px"></div>
+       <button id="hp-round" style="margin-top:12px">${t("지금 한 바퀴 돕기")}</button>
      </div>`;
+
+  /* 그린 뒤에 잇는다. 안 이으면 눌러도 아무 일이 없다. */
+  const 단추 = document.getElementById("hp-round") as HTMLButtonElement | null;
+  if (단추) {
+    단추.onclick = async () => {
+      const 자리 = document.getElementById("hp-round-out");
+      단추.disabled = true;
+      if (자리) 자리.textContent = t("체인에서 가게를 읽는 중…");
+      try {
+        const r = await invoke<any>("help_round");
+        /* 숫자를 정직하게 적는다. 「도왔습니다」만 적으면 아무것도 안 해도
+           같은 글이 뜬다 — 그건 화면이 거짓말하는 것이다. */
+        if (자리)
+          자리.textContent = t("가게 {a}곳 · 받은 조각 {b}개 · 사진 없는 가게 {c}곳")
+            .replace("{a}", String(r?.shops ?? 0))
+            .replace("{b}", String(r?.fetched ?? 0))
+            .replace("{c}", String(r?.skipped ?? 0));
+      } catch (e) {
+        if (자리) 자리.textContent = errText(e);
+      } finally {
+        단추.disabled = false;
+      }
+    };
+  }
 }
 
 // 🔴 판 번호가 화면에 `v0.1` 로 **박혀** 있었다. 어느 판을 쓰는지 사장도

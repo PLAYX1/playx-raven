@@ -660,6 +660,31 @@ const ts = read("src/main.ts");
   }
 }
 
+/* ㉑ 남이 준 CID 를 그대로 붙들지 않는가.
+ *
+ * 🔴 2026-09-08 실측: `peer_help(url)` 이 그 주소의 `/api/pins` 가 준 CID 를
+ *    **개수도 체인 대조도 없이** 전부 pin 했다. 가짜 주소 하나로 남의
+ *    디스크를 채울 수 있었다. 이건 오류를 안 내고 조용히 도는 종류다 —
+ *    디스크가 찰 때까지 아무 화면에도 안 나온다.
+ *
+ * 🔴 그리고 **좋은 것도 통과해야 한다.** 체인이 가리키는 진짜 파일은
+ *    받아 줘야 「서로 지켜 준다」가 성립한다. 그쪽은
+ *    `scripts/check-peer-help.mjs` 가 양쪽으로 돌린다.
+ */
+{
+  const rs = read("src-tauri/src/peers.rs");
+  if (rs) {
+    const 없는것 = [];
+    if (!/const MAX_HELP: usize = \d+;/.test(rs)) 없는것.push("한 번에 받는 개수에 상한이 없다");
+    if (!/\.take\(MAX_HELP\)/.test(rs)) 없는것.push("상한을 정해 놓고 안 쓴다");
+    if (!/c\.len\(\) == 46 && c\.starts_with\("Qm"\)/.test(rs)) 없는것.push("CID 모양을 안 본다");
+    if (!/call_rpc\("getassetdata"/.test(rs)) 없는것.push("체인에 안 물어본다 — 남의 말만 믿는다");
+    if (!/체인해시\.is_empty\(\) \|\| 체인해시 != cid/.test(rs)) 없는것.push("체인 해시와 대조하지 않는다");
+    if (없는것.length) fail("남이 준 CID 를 그대로 붙든다", 없는것);
+    else ok("남이 준 CID 는 체인이 가리킬 때만 붙듦 (개수 상한 있음)");
+  }
+}
+
 console.log("");
 if (bad) {
   console.log(`검사 실패 — ${bad}가지를 고쳐야 합니다.`);
