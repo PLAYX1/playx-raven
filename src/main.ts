@@ -10434,6 +10434,116 @@ async function fulfil(sale: any) {
   }
 }
 
+/* ══ 웹에서 산 사람에게 보내기 ═══════════════════════════════════════════
+   🔴 **왜 이게 필요한가**(실측 2026-09-08): `rvn.ex.erci.se` 에서 돈을 내면
+      `delivery_status='queued'` 가 적히는데, **그 줄을 읽는 코드가 어디에도
+      없었다.** 사람이 돈을 내고 아무것도 못 받는 상태였다.
+
+   🔴 **왜 웹이 직접 안 보내나.** 웹이 체인에 쓰려면 노드 열쇠가 Vercel 에
+      있어야 하고, 그건 웹이 뚫리면 지갑이 뚫린다는 뜻이다. 열쇠가 필요한
+      일은 열쇠가 있는 이곳에서 한다.
+
+   🔴 **왜 자동으로 안 보내나.** `vending.rs` 가 적어 둔 이유를 그대로 따른다 —
+      보내려면 지갑이 열려 있어야 하고, 열린 채 둔 지갑은 그 방에 있는 누구나
+      비울 수 있다. 그래서 **사람이 누를 때만** 나간다. 암호는 그때 한 번
+      받아서 30초만 열고 바로 잠근다(`fulfil_sale`). */
+let 웹주문들: any[] = [];
+
+function 배송열쇠읽기(): string {
+  try { return localStorage.getItem("playx.delivery.token") || ""; } catch { return ""; }
+}
+
+async function 배송열쇠받기(): Promise<string> {
+  let 열쇠 = 배송열쇠읽기();
+  if (열쇠) return 열쇠;
+  열쇠 = (await ask("배송 열쇠", "이 컴퓨터에만 저장됩니다. Vercel 의 RVN_DELIVERY_TOKEN 과 같은 값입니다.", { password: true })) || "";
+  if (열쇠) { try { localStorage.setItem("playx.delivery.token", 열쇠); } catch {} }
+  return 열쇠;
+}
+
+async function 웹주문확인(물어봐도되나 = false) {
+  const 열쇠 = 물어봐도되나 ? await 배송열쇠받기() : 배송열쇠읽기();
+  if (!열쇠) {
+    /* 열쇠가 없으면 칸을 숨긴다. 「0건」이라고 적으면 주문이 없는 것과
+       못 읽은 것을 구별할 수 없다. */
+    $("wo-wrap").style.display = 물어봐도되나 ? "" : "none";
+    if (물어봐도되나) $("wo-note").textContent = "배송 열쇠가 있어야 목록을 읽습니다.";
+    return;
+  }
+  try {
+    const r = await fetch("https://rvn.ex.erci.se/api/rvn/deliveries", {
+      headers: { "x-rvn-delivery-token": 열쇠 },
+    });
+    if (r.status === 401) {
+      // 틀린 열쇠는 지운다 — 안 지우면 다음에도 같은 틀린 열쇠로 시도한다.
+      try { localStorage.removeItem("playx.delivery.token"); } catch {}
+      throw new Error("열쇠가 맞지 않습니다. 다시 넣어 주세요.");
+    }
+    const d = await r.json().catch(() => ({}) as any);
+    if (!r.ok || !d.ok) throw new Error(d.error || `서버 ${r.status}`);
+    웹주문들 = Array.isArray(d.items) ? d.items : [];
+    $("wo-wrap").style.display = 웹주문들.length || 물어봐도되나 ? "" : "none";
+    $("wo-note").textContent = 웹주문들.length
+      ? `${웹주문들.length}건이 기다리고 있습니다. 보낼 때마다 지갑 암호를 한 번 받습니다.`
+      : "기다리는 주문이 없습니다.";
+    $("wo-list").innerHTML = 웹주문들
+      .map((o, i) => `<tr>
+          <td>${escapeHtml(o.title || o.asset)}<div class="meta">${escapeHtml(o.asset)}</div></td>
+          <td><code class="addr">${escapeHtml(o.to)}</code></td>
+          <td class="act"><button data-webdeliver="${i}">보내기</button></td>
+        </tr>`)
+      .join("");
+    /* 🔴 그린 뒤에 반드시 잇는다. 오늘 이 저장소에서 되풀이해 찾은 병이
+       「만들었는데 아무도 안 부른다」였다. */
+    $("wo-list")
+      .querySelectorAll("[data-webdeliver]")
+      .forEach((b) => {
+        (b as HTMLElement).onclick = () => 웹주문보내기(+(b as HTMLElement).dataset.webdeliver!);
+      });
+  } catch (e: any) {
+    $("wo-wrap").style.display = "";
+    $("wo-note").textContent = String(e?.message || e);
+    $("wo-list").innerHTML = "";
+  }
+}
+
+async function 웹주문보내기(i: number) {
+  const o = 웹주문들[i];
+  if (!o) return;
+  const 열쇠 = 배송열쇠읽기();
+  if (!열쇠) { await 웹주문확인(true); return; }
+
+  /* 암호는 잠겨 있을 때만, 그때 한 번만 받는다. 우리는 저장하지 않는다. */
+  const lock = await invoke<any>("wallet_lock_state").catch(() => null);
+  const pass = lock?.unlocked
+    ? null
+    : await ask("지갑 암호", "한 번만 열고 바로 잠급니다.", { password: true });
+  if (!lock?.unlocked && !pass) return;
+
+  try {
+    const txid = await invoke<string>("fulfil_sale", {
+      asset: o.asset,
+      qty: Number(o.qty) || 1,
+      toAddress: String(o.to),
+      passphrase: pass,
+    });
+    /* 🔴 **보낸 뒤에만** 알린다. 먼저 알리고 전송이 실패하면 그 주문은
+       목록에서 빠지는데 사람은 못 받는다 — 영영 사라진다. */
+    await fetch("https://rvn.ex.erci.se/api/rvn/deliveries", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-rvn-delivery-token": 열쇠 },
+      body: JSON.stringify({ id: o.id, txid }),
+    }).catch(() => {});
+    $("wo-result").innerHTML =
+      `<div class="card" style="margin-top:12px"><h3>보냈습니다</h3>
+       <div class="kv"><b>트랜잭션</b><code class="addr">${escapeHtml(txid)}</code></div></div>`;
+    웹주문확인();
+    loadAssets(false);
+  } catch (e) {
+    $("wo-result").innerHTML = `<div class="warnbox" style="margin-top:12px">${escapeHtml(String(e))}</div>`;
+  }
+}
+
 /// 자동 발송. 사장이 안 보고 있어도 도는 유일한 돈 관련 동작이라,
 /// 무엇을 보냈고 무엇을 왜 못 보냈는지 화면에 남긴다.
 async function autoRound() {
@@ -12765,6 +12875,12 @@ async function previewOpen() {
   } catch {}
 }
 
+(() => {
+  /* 「다시 확인」은 열쇠를 물어봐도 되는 자리다 — 사장이 스스로 누른 것이므로. */
+  const b = document.getElementById("wo-refresh");
+  if (b) (b as HTMLElement).onclick = () => void 웹주문확인(true);
+})();
+
 function shopTab(which: string) {
   document.querySelectorAll("[data-shoptab]").forEach((b) => {
     (b as HTMLElement).classList.toggle("on", (b as HTMLElement).dataset.shoptab === which);
@@ -12778,7 +12894,7 @@ function shopTab(which: string) {
     주문봤다();
     loadOrders();
   }
-  if (which === "sales") loadSales();
+  if (which === "sales") { loadSales(); void 웹주문확인(); }
   if (which === "mine") {
     previewOpen();
     // 🔴 여태 `loadShop()` 은 **앱 켤 때 한 번**만 돌았다. 탭을 눌러도 다시
