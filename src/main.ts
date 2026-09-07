@@ -4330,6 +4330,10 @@ function showPage(id: string) {
   document.querySelectorAll("nav a").forEach((a) =>
     a.classList.toggle("on", (a as HTMLElement).dataset.page === id));
   if (id === "wallet") loadWallet();
+  /* 🔴 웹 주문 칸은 **자산 화면**(page-assets)의 자판기 아래에 있다.
+     처음에 「가게」 화면의 탭에 걸었는데 서로 다른 화면이라 평생 안 불렸다.
+     이 저장소에서 되풀이해 찾은 병(만들었는데 안 부른다)을 그대로 저질렀다. */
+  if (id === "assets") void 웹주문확인();
   if (id === "shop") void paintFlow();
   if (id === "settings") {
     loadNode();
@@ -10464,10 +10468,14 @@ async function 배송열쇠받기(): Promise<string> {
 async function 웹주문확인(물어봐도되나 = false) {
   const 열쇠 = 물어봐도되나 ? await 배송열쇠받기() : 배송열쇠읽기();
   if (!열쇠) {
-    /* 열쇠가 없으면 칸을 숨긴다. 「0건」이라고 적으면 주문이 없는 것과
-       못 읽은 것을 구별할 수 없다. */
-    $("wo-wrap").style.display = 물어봐도되나 ? "" : "none";
-    if (물어봐도되나) $("wo-note").textContent = "배송 열쇠가 있어야 목록을 읽습니다.";
+    /* 🔴 여기서 칸을 숨기면 **열쇠를 넣을 방법이 없어진다** —
+       열쇠를 묻는 「다시 확인」 단추가 바로 이 칸 안에 있기 때문이다.
+       그래서 숨기지 않고, 무엇을 해야 하는지 적는다.
+       「0건」이라고 쓰지 않는다 — 주문이 없는 것과 못 읽은 것은 다르다. */
+    $("wo-wrap").style.display = "";
+    $("wo-note").textContent =
+      "웹(rvn.ex.erci.se)에서 산 사람에게 보내려면 배송 열쇠가 필요합니다. 「다시 확인」을 누르세요.";
+    $("wo-list").innerHTML = "";
     return;
   }
   try {
@@ -12876,9 +12884,15 @@ async function previewOpen() {
 }
 
 (() => {
-  /* 「다시 확인」은 열쇠를 물어봐도 되는 자리다 — 사장이 스스로 누른 것이므로. */
-  const b = document.getElementById("wo-refresh");
-  if (b) (b as HTMLElement).onclick = () => void 웹주문확인(true);
+  /* 「다시 확인」은 열쇠를 물어봐도 되는 자리다 — 사장이 스스로 누른 것이므로.
+     🔴 화면이 다 그려진 뒤에 잇는다. 파일이 읽히는 즉시 이으면
+        아직 그 단추가 없어서 조용히 안 이어진다. */
+  const 잇기 = () => {
+    const b = document.getElementById("wo-refresh");
+    if (b) (b as HTMLElement).onclick = () => void 웹주문확인(true);
+  };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", 잇기);
+  else 잇기();
 })();
 
 function shopTab(which: string) {
@@ -12894,7 +12908,7 @@ function shopTab(which: string) {
     주문봤다();
     loadOrders();
   }
-  if (which === "sales") { loadSales(); void 웹주문확인(); }
+  if (which === "sales") loadSales();
   if (which === "mine") {
     previewOpen();
     // 🔴 여태 `loadShop()` 은 **앱 켤 때 한 번**만 돌았다. 탭을 눌러도 다시
