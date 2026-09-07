@@ -7333,11 +7333,31 @@ async function doIssue() {
         toAddress: null,
       });
     }
+    /* 🔴 대표 지시: 「playx raven 에다가 만들면 바로 판매할 수 있게」.
+       여태 이 앱의 발행은 **아무 데도 안 적혔다** — 우리 서버를 부르는 줄이
+       하나도 없어서, 아무리 내도 rvn.ex.erci.se 상점에도 게임 장터에도
+       나타나지 않았다. 만들고 파는 길이 여기서 끊겨 있었다.
+
+       자동으로 올리지 않는 이유 하나: **값을 모르면 못 판다.** 값 없는 줄이
+       상점에 서면 사람은 「얼마인지 물어봐야 하나」에서 멈춘다.
+       그래서 한 번 묻고, 넣으면 그 자리에서 올라간다. */
     $("i-result").innerHTML =
       `<div class="card" style="margin-top:12px"><h3>발행했습니다</h3>
-       <div class="kv"><b>자산</b><span>${issueCheck.name}</span></div>
+       <div class="kv"><b>자산</b><span>${escapeHtml(issueCheck.name)}</span></div>
        <div class="kv"><b>트랜잭션</b><code class="addr">${txid}</code></div>
-       <p class="meta">확인되기까지 몇 분 걸립니다.</p></div>`;
+       <p class="meta">확인되기까지 몇 분 걸립니다.</p>
+       <div class="sellnow">
+         <h4>바로 팔기</h4>
+         <p class="meta">값을 넣으면 <b>rvn.ex.erci.se 상점</b>과
+            <b>레이븐홀드 장터</b>에 함께 올라갑니다. 나중에 해도 됩니다.</p>
+         <label>값 (RVN)</label>
+         <input id="sell-rvn" type="number" min="1" step="1" placeholder="예: 100" />
+         <label>보여줄 이름</label>
+         <input id="sell-title" type="text" maxlength="60" value="${escapeHtml(issueCheck.name)}" />
+         <button id="sell-list" type="button">상점에 올리기</button>
+         <div id="sell-say" class="meta"></div>
+       </div></div>`;
+    바로팔기배선(issueCheck.name, wizKind);
     btn.textContent = "닫기";
     btn.disabled = false;
     // 빈 폼에 남겨 두지 않는다. 만든 자산이 있는 목록으로 돌려보낸다.
@@ -7353,6 +7373,51 @@ async function doIssue() {
     btn.textContent = wasLabel || `발행하기 · ${BURN[wizKind]} RVN 소각`;
     btn.disabled = false;
   }
+}
+
+/** 발행 직후 「바로 팔기」. 값을 넣으면 상점·게임 장터에 함께 올라간다. */
+function 바로팔기배선(asset: string, kind: string) {
+  const 종류 = kind === "unique" ? "game" : asset.includes("/SONG/") ? "song"
+             : asset.includes("/BOOK/") ? "book" : asset.includes("/TICKET/") ? "ticket" : "other";
+  const 말 = (t: string) => { const e = $("sell-say"); if (e) e.textContent = t; };
+  const btn = $("sell-list") as HTMLButtonElement | null;
+  if (!btn) return;
+  btn.onclick = async () => {
+    const rvn = parseFloat(($("sell-rvn") as HTMLInputElement).value);
+    const title = ($("sell-title") as HTMLInputElement).value.trim();
+    if (!Number.isFinite(rvn) || rvn <= 0) { 말("값을 넣어 주세요. 값 없는 물건은 상점에 못 세웁니다."); return; }
+    if (!title) { 말("보여줄 이름을 넣어 주세요."); return; }
+
+    /* 진열 열쇠는 이 컴퓨터에만 둔다. 서버가 이걸로 「우리 앱이 맞다」를 가린다 —
+       없으면 아무나 우리 상점에 아무 물건이나 올릴 수 있다. */
+    let 열쇠 = "";
+    try { 열쇠 = localStorage.getItem("playx.listing.token") || ""; } catch {}
+    if (!열쇠) {
+      열쇠 = (await ask("상점 진열 열쇠", "이 컴퓨터에만 저장됩니다. 서버가 이걸로 우리 앱인지 가립니다.", { password: true })) || "";
+      if (!열쇠) return;
+      try { localStorage.setItem("playx.listing.token", 열쇠); } catch {}
+    }
+
+    btn.disabled = true; 말("올리는 중…");
+    try {
+      // 받을 주소는 이 지갑에서 새로 만든다. 주문마다 다른 주소가 곧 주문번호다.
+      const payTo = await invoke<string>("new_address", { label: "store" });
+      const r = await fetch("https://rvn.ex.erci.se/api/rvn/listing", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-rvn-listing-token": 열쇠 },
+        body: JSON.stringify({ asset, kind: 종류, title, rvn, payTo, by: "PLAY X" }),
+      });
+      const d = await r.json().catch(() => ({}) as any);
+      if (!r.ok || !d.ok) throw new Error(d.error || `서버 ${r.status}`);
+      말("올렸습니다. 상점과 레이븐홀드 장터에 함께 보입니다.");
+      btn.textContent = "올렸습니다";
+    } catch (e: any) {
+      // 열쇠가 틀렸으면 지운다 — 안 지우면 다음에도 같은 틀린 열쇠로 시도한다.
+      if (String(e?.message || e).includes("열쇠")) { try { localStorage.removeItem("playx.listing.token"); } catch {} }
+      말(`올리지 못했습니다 — ${e?.message || e}`);
+      btn.disabled = false;
+    }
+  };
 }
 
 // ── 보내기 ────────────────────────────────────────────────────────────────
