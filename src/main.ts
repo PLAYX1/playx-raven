@@ -6711,9 +6711,30 @@ const KIND_KO: Record<string, string> = {
 async function renderKinds() {
   const kinds: any[] = await invoke<any>("asset_kinds").catch(() => []);
   wizKindList = kinds;
+
+  /* 🔴 「책」·「티켓」을 고르고 여덟 칸을 다 채운 뒤에야 노드가 영어로 거절하면,
+     사람은 **왜 안 되는지 모른다.** 하위 자산은 부모의 주인 토큰이 이 지갑에
+     있어야 낼 수 있다. 그 사실을 **고르기 전에** 말한다.
+
+     ⚠️ 목록을 못 읽었을 때는 아무것도 막지 않는다. 노드가 잠깐 안 받는 것을
+     「낼 수 없음」으로 바꿔 버리면, 멀쩡한 발행을 우리가 막는 꼴이다. */
+  let 가진주인표: string[] | null = null;
+  try {
+    가진주인표 = await invoke<string[]>("owner_tokens");
+  } catch {
+    가진주인표 = null;
+  }
+  const 못내는이유 = (k: any): string | null => {
+    if (!가진주인표 || !k?.needs_owner) return null;
+    if (가진주인표.includes(k.needs_owner)) return null;
+    const 부모 = String(k.needs_owner).replace(/!$/, "");
+    return `아직 못 냅니다 — 이 지갑에 <code>${escapeHtml(k.needs_owner)}</code> 이 없습니다.
+            먼저 <b>하위 자산</b>으로 <code>${escapeHtml(부모)}</code> 을 한 번 만드세요(100 RVN).
+            그러면 그 아래로 얼마든지 낼 수 있습니다.`;
+  };
   $("wz-kinds").innerHTML = kinds
     .map(
-      (k) => `<div class="choice" data-kind="${k.id}">
+      (k) => `<div class="choice${못내는이유(k) ? " blocked" : ""}" data-kind="${k.id}">
         <b>${k.name} <span class="form">${k.form}</span></b>
         <span>${k.one_line} · <b>${k.burn.toLocaleString()} RVN 소각</b></span>
         <div class="ex">
@@ -6722,12 +6743,14 @@ async function renderKinds() {
             .join("")}
         </div>
         <div class="no">이럴 땐 쓰지 마세요 — ${k.not_for}</div>
+        ${못내는이유(k) ? `<div class="cant">${못내는이유(k)}</div>` : ""}
       </div>`
     )
     .join("");
 
   document.querySelectorAll("[data-kind]").forEach((c) => {
     (c as HTMLElement).onclick = () => {
+      if ((c as HTMLElement).classList.contains("blocked")) return; // 못 내는 것은 고를 수 없다
       const id = (c as HTMLElement).dataset.kind as string;
       const 고른것 = wizKindList.find((k) => k.id === id);
       wizPreset = 고른것?.preset || null;

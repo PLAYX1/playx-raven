@@ -74,9 +74,70 @@ pub fn asset_kinds() -> Value {
                 { "case": "제목", "name": "제목은 로마자 19자까지", "why": "한글은 자산 이름에 못 씁니다. 전체 30자가 한계입니다" }
             ],
             "not_for": "아직 안 만든 곡. 표지를 안 붙이면 영원히 못 붙입니다.",
+            "needs_owner": "PLAYX/SONG!",
             "preset": {
                 "kind": "sub",
                 "name_prefix": "PLAYX/SONG/",
+                "qty": 100,
+                "units": 0,
+                "reissuable": false,
+                "cover_required": true
+            }
+        },
+        {
+            "id": "game_item", "name": "게임 아이템", "burn": crate::issue::BURN_UNIQUE,
+            "form": "PLAYX/GAME#이름", "one_line": "레이븐홀드에서 쓰는 물건 한 점. 세상에 하나뿐입니다.",
+            "when": [
+                "게임 안에서 쓸 물건을 팔 때",
+                "번호가 값어치를 만드는 물건일 때"
+            ],
+            "examples": [
+                { "case": "장식", "name": "PLAYX/GAME#LAMP001", "why": "별빛 탁상 장식 1번. 산 사람 방에 놓입니다" },
+                { "case": "번호", "name": "#LAMP002 · #LAMP003", "why": "같은 물건도 번호가 다르면 다른 물건입니다" }
+            ],
+            "not_for": "여럿이 똑같이 갖는 물건. 그건 살 이유가 없습니다 — 수량 있는 하위 자산으로 내세요.",
+            "needs_owner": "PLAYX/GAME!",
+            "preset": {
+                "kind": "unique",
+                "name_prefix": "PLAYX/GAME#",
+                "qty": 1,
+                "units": 0,
+                "reissuable": false,
+                "cover_required": true
+            }
+        },
+        {
+            "id": "book", "name": "책", "burn": crate::issue::BURN_SUB,
+            "form": "PLAYX/BOOK/제목", "one_line": "한 권을 한정판으로. 산 사람이 독자가 됩니다.",
+            "when": ["책을 한정 수량으로 팔 때"],
+            "examples": [
+                { "case": "책", "name": "PLAYX/BOOK/PILATES1", "why": "표지와 본문을 붙여 냅니다" },
+                { "case": "제목", "name": "제목은 로마자 18자까지", "why": "한글은 자산 이름에 못 씁니다. 전체 30자가 한계입니다" }
+            ],
+            "not_for": "아직 안 쓴 책. 표지를 안 붙이면 영원히 못 붙입니다.",
+            "needs_owner": "PLAYX/BOOK!",
+            "preset": {
+                "kind": "sub",
+                "name_prefix": "PLAYX/BOOK/",
+                "qty": 100,
+                "units": 0,
+                "reissuable": false,
+                "cover_required": true
+            }
+        },
+        {
+            "id": "ticket", "name": "티켓", "burn": crate::issue::BURN_SUB,
+            "form": "PLAYX/TICKET/날짜", "one_line": "공연·행사 입장권. 좌석 수만큼 냅니다.",
+            "when": ["행사 입장권을 미리 팔 때"],
+            "examples": [
+                { "case": "공연", "name": "PLAYX/TICKET/20261024", "why": "그날 입장권. 수량이 곧 좌석 수입니다" },
+                { "case": "확인", "name": "입구에서 지갑을 봅니다", "why": "가진 사람만 들어옵니다" }
+            ],
+            "not_for": "좌석 번호가 다 달라야 하는 공연. 그건 고유 자산 여러 개입니다.",
+            "needs_owner": "PLAYX/TICKET!",
+            "preset": {
+                "kind": "sub",
+                "name_prefix": "PLAYX/TICKET/",
                 "qty": 100,
                 "units": 0,
                 "reissuable": false,
