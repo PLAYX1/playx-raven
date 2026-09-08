@@ -89,7 +89,73 @@ pub async fn ipfs_add_file(file: Incoming) -> Result<Value, String> {
 /// the pictures were uploaded with the menu, and falls back to the gateway path
 /// otherwise. Returns `None` for anything that is not a menu, so other kinds of
 /// bundle are unaffected.
+/// 곡 한 장. 자산 주소를 열면 **표지와 가사가 보이게** 한다.
+///
+/// 🔴 왜 필요한가(실측 2026-09-08): 먼저 낸 곡 셋은 체인에 그림조차 없어서
+///    (`has_ipfs:0`) 산 사람 지갑에는 `PLAYX/SONG/INEVITABLE 100` 이라는
+///    **글자만** 보인다. 표지를 붙여도 그림 한 장일 뿐, 가사도 만든 사람도 없다.
+///    대표: "자산으로 주면 노래도 나오고 앨범 표지도 있고 가사도 있고
+///    좀 뭐가 있어야 하는 거 아냐?" — 맞다.
+///
+/// 🔴 **우리가 없어져도 남아야 한다.** 이 프로젝트가 수수료를 가르는 기준이
+///    「우리가 빠져도 되는가」다. 소유 증명이라면 우리 서버가 죽어도 남아야
+///    하므로, 표지·가사·만든 사람을 **IPFS 폴더 안에** 둔다. 우리 페이지
+///    주소는 「있는 동안 더 볼 수 있는 곳」으로만 덧붙인다.
+///
+/// ⚠️ 노래 파일 자체는 안 넣는다. 곡당 3~5MB 를 영구히 드는 것은 별도 결정이다.
+fn render_song(doc: &Value) -> Option<String> {
+    let song = doc.get("playx_song")?;
+    let g = |k: &str| song.get(k).and_then(Value::as_str).unwrap_or("").to_string();
+    let esc = |s: &str| {
+        s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
+    };
+    let title = g("title");
+    if title.is_empty() {
+        return None;
+    }
+    let artist = g("artist");
+    let cover = g("cover");            // 같은 폴더 안의 파일 이름
+    let lyrics = g("lyrics");
+    let credits = g("credits");
+    let listen = g("listen");          // 우리 페이지. 없어도 된다.
+    let asset = g("asset");
+
+    let 가사 = if lyrics.trim().is_empty() {
+        String::new()
+    } else {
+        format!("<h2>가사</h2><pre class=\"ly\">{}</pre>", esc(&lyrics))
+    };
+    let 크레딧 = if credits.trim().is_empty() {
+        String::new()
+    } else {
+        format!("<h2>만든 사람</h2><pre class=\"ly\">{}</pre>", esc(&credits))
+    };
+    let 표지 = if cover.trim().is_empty() {
+        String::new()
+    } else {
+        format!("<img class=\"cv\" src=\"{}\" alt=\"\">", esc(&cover))
+    };
+    let 들으러 = if listen.trim().is_empty() {
+        String::new()
+    } else {
+        format!(
+            "<p class=\"go\"><a href=\"{}\" target=\"_blank\" rel=\"noopener noreferrer\">노래 듣기 · 악보 보기</a><br>             <small>이 주소는 만든 곳이 살아 있는 동안 열립니다. 위의 표지와 가사는 이 폴더 안에 있어 그와 무관하게 남습니다.</small></p>",
+            esc(&listen)
+        )
+    };
+    let 이름표 = if asset.trim().is_empty() { String::new() } else { format!("<p class=\"as\">{}</p>", esc(&asset)) };
+
+    Some(format!(
+        "<!doctype html><html lang=\"ko\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>{t} — {a}</title><style>:root{{color-scheme:dark}}body{{margin:0;background:#12141c;color:#e9e5da;font:16px/1.7 -apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Noto Sans KR',system-ui,sans-serif}}main{{max-width:640px;margin:0 auto;padding:24px 18px 64px}}.cv{{width:100%;border-radius:14px;display:block;margin-bottom:20px}}h1{{font-size:26px;margin:0 0 4px}}.ar{{color:#9fb3ad;margin:0 0 6px;font-size:16px}}.as{{color:#6b7284;font-size:13px;margin:0 0 20px;word-break:break-all}}h2{{font-size:15px;color:#9fb3ad;margin:26px 0 8px;letter-spacing:.04em}}.ly{{white-space:pre-wrap;font:15px/1.9 inherit;margin:0}}.go{{margin-top:26px;padding-top:18px;border-top:1px solid #2a2f3d}}.go a{{color:#7fd6c0;font-size:16px}}.go small{{color:#6b7284;font-size:13px;line-height:1.6;display:block;margin-top:8px}}</style></head><body><main>{cv}<h1>{t}</h1><p class=\"ar\">{a}</p>{as}{ly}{cr}{go}</main></body></html>",
+        t = esc(&title), a = esc(&artist), cv = 표지, as = 이름표, ly = 가사, cr = 크레딧, go = 들으러
+    ))
+}
+
 fn render_page(doc: &Value) -> Option<String> {
+    // 곡이면 곡 화면으로. 없으면 아래 메뉴판으로 떨어진다.
+    if let Some(page) = render_song(doc) {
+        return Some(page);
+    }
     let menu = doc.get("playx_menu")?;
     let currency = menu.get("currency").and_then(Value::as_str).unwrap_or("KRW");
     let unit = match currency {

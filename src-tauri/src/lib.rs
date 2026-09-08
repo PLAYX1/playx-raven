@@ -228,6 +228,7 @@ pub fn run() {
             auto::auto_usage,
             auto::auto_enable,
             auto::auto_disable,
+            auto::auto_deliver_web,
             auto::exposure,
             auto::owner_tokens,
             auto::confirmation_policy,

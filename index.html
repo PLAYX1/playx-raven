@@ -4230,6 +4230,28 @@
           <label style="margin-top:14px">영상 링크 <span class="meta">(선택)</span>
             <input id="i-video" placeholder="유튜브 등 영상 주소를 그대로 붙여넣으세요"
                    autocomplete="off" spellcheck="false" /></label>
+          <!-- 🔴 노래를 낼 때만 보인다. 대표 지적(2026-09-08):
+               "자산으로 주면 노래도 나오고 앨범 표지도 있고 가사도 있고
+                좀 뭐가 있어야 하는 거 아냐?" / "play 페이지가 없어지면
+                자산이 안 남지 않나? html 안에 다시 만들어 넣어야 하는 거 아냐?"
+               맞다. 여기 적은 것은 **IPFS 폴더 안의 html 로 구워진다** —
+               우리 서버가 사라져도 표지와 가사는 그 주소에서 열린다. -->
+          <div id="i-songrow" hidden>
+            <label style="margin-top:14px">곡 제목 <span class="meta">(한글로 적으셔도 됩니다)</span>
+              <input id="i-songtitle" placeholder="예: 필연 (Inevitable)" autocomplete="off" /></label>
+            <label style="margin-top:14px">만든 사람 <span class="meta">(자산에 새겨집니다)</span>
+              <input id="i-artist" placeholder="예: PLAY X" autocomplete="off" /></label>
+            <label style="margin-top:14px">가사 <span class="meta">(선택 · 자산에 새겨집니다)</span>
+              <textarea id="i-lyrics" rows="6" placeholder="여기에 붙여넣으면 산 사람 지갑에서 표지와 함께 보입니다"
+                        style="width:100%;font:16px/1.7 inherit;padding:10px;resize:vertical"></textarea></label>
+            <label style="margin-top:14px">들을 수 있는 곳 <span class="meta">(선택)</span>
+              <input id="i-listen" placeholder="예: https://rvn.ex.erci.se/play/r/inevitable" autocomplete="off" /></label>
+            <div class="meta">
+              표지와 가사는 <b>파일창고(IPFS)에 함께 저장</b>됩니다. 우리 서버가 없어져도 남습니다.<br>
+              「들을 수 있는 곳」만 우리 주소이고, 그건 살아 있는 동안만 열립니다.
+            </div>
+          </div>
+
           <div class="meta">
             영상 파일은 안 올립니다 — <b>주소만</b> 자산에 붙습니다.
             그래서 어디에 올리셨든 상관없고, 나중에 <b>주소만 갈아 끼울 수</b> 있습니다.

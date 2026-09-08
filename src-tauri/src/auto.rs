@@ -549,6 +549,91 @@ pub async fn auto_enable(passphrase: String) -> Result<Value, String> {
 }
 
 /// Turns it off and forgets the passphrase.
+/// 웹(rvn.ex.erci.se)에서 산 사람에게 **자동으로** 보낸다.
+///
+/// 🔴 대표 지시(2026-09-08): "난 자동을 원해 / 그냥 프로그램이 돈이 들어오면
+///    분석해서 보내주면 되는 거 아님?" — 맞다. 다만 **새 스위치를 만들지 않는다.**
+///    자판기의 「자동 발송」이 켜져 있을 때만 돈다. 그 스위치는 이미
+///      · 암호를 **디스크가 아니라 메모리에만** 들고 있고(`AUTO_PASS`)
+///      · 앱을 끄면 사라지고
+///      · 켤 때 "이 컴퓨터에 N RVN 있습니다. 털리면 이만큼입니다"를 보여 준다
+///    똑같은 것을 두 번 만들면 안전장치도 두 벌이 되고, 한 벌은 반드시 낡는다.
+///
+/// 🔴 **자동이 위험한 이유는 그대로다.** 지갑이 열려 있어야 보낼 수 있고,
+///    열린 지갑은 그 컴퓨터를 쓸 수 있는 사람이면 누구나 쓸 수 있다.
+///    그래서 자동은 **끌 수 있는 선택**이지 기본값이 아니다.
+///
+/// 🔴 **하루 한도를 자판기와 같이 쓴다**(`sent_today`/`add_sent`). 자산별로
+///    센다. 한도를 넘으면 자동은 멈추고 사람이 봐야 한다 — 무언가 잘못됐을 때
+///    자동이 밤새 지갑을 비우는 것을 막는 유일한 장치다.
+#[tauri::command]
+pub async fn auto_deliver_web(
+    items: Vec<Value>,
+    daily_cap: f64,
+) -> Result<Value, String> {
+    let pass = match armed_pass() {
+        Some(p) => p,
+        // 자동이 꺼져 있으면 아무것도 안 한다. 여기서 암호를 묻지 않는다.
+        None => return Ok(json!({ "sent": [], "skipped": [], "armed": false })),
+    };
+
+    let mut sent = Vec::new();
+    let mut skipped = Vec::new();
+
+    for it in items.iter().take(20) {
+        let id = it.get("id").and_then(Value::as_str).unwrap_or("").to_string();
+        let asset = it.get("asset").and_then(Value::as_str).unwrap_or("").to_string();
+        let to = it.get("to").and_then(Value::as_str).unwrap_or("").to_string();
+        let qty = it.get("qty").and_then(Value::as_f64).unwrap_or(1.0);
+
+        if id.is_empty() || asset.is_empty() || to.is_empty() || qty <= 0.0 {
+            skipped.push(json!({ "id": id, "why": "보낼 정보가 모자랍니다" }));
+            continue;
+        }
+        // 🔴 주소가 틀리면 자산이 영영 사라진다. 보내기 전에 노드에 묻는다.
+        let 주소맞나 = crate::send::check_address(to.clone())
+            .await
+            .map(|v| v["valid"].as_bool().unwrap_or(false))
+            .unwrap_or(false);
+        if !주소맞나 {
+            skipped.push(json!({ "id": id, "asset": asset, "why": "받을 주소가 올바르지 않습니다" }));
+            continue;
+        }
+        // 자판기와 같은 하루 한도.
+        if sent_today(&asset) + qty > daily_cap {
+            skipped.push(json!({
+                "id": id, "asset": asset, "why": "오늘 한도를 넘었습니다",
+                "sent_today": sent_today(&asset), "cap": daily_cap,
+            }));
+            continue;
+        }
+
+        // 30초만 열고 바로 잠근다.
+        if let Err(e) = call_rpc("walletpassphrase", json!([pass, 30])).await {
+            skipped.push(json!({ "id": id, "asset": asset, "why": format!("지갑을 못 열었습니다 — {e}") }));
+            break; // 암호가 틀리면 나머지도 다 실패한다. 헛돌지 않는다.
+        }
+        let r = call_rpc("transfer", json!([asset, qty, to, "", 0, "", ""])).await;
+        let _ = call_rpc("walletlock", json!([])).await;
+
+        match r {
+            Ok(v) => {
+                let txid = v.as_array().and_then(|a| a.first()).and_then(Value::as_str).unwrap_or("").to_string();
+                if txid.is_empty() {
+                    skipped.push(json!({ "id": id, "asset": asset, "why": "전송 번호를 못 받았습니다" }));
+                } else {
+                    crate::refund::remember_ours(&txid);
+                    add_sent(&asset, qty);
+                    sent.push(json!({ "id": id, "asset": asset, "qty": qty, "to": to, "txid": txid }));
+                }
+            }
+            Err(e) => skipped.push(json!({ "id": id, "asset": asset, "why": e })),
+        }
+    }
+
+    Ok(json!({ "sent": sent, "skipped": skipped, "armed": true }))
+}
+
 #[tauri::command]
 pub fn auto_disable() {
     if let Ok(mut g) = AUTO_PASS.lock() {

@@ -6696,6 +6696,9 @@ let wizKind: WizKind = "root";
 /** 사람 말 종류(「노래」 등)를 고르면 채워지는 값들. 안 고르면 null 이고
  *  그때는 여태와 똑같이 돈다. 발행이 나가는 길은 이것과 무관하다. */
 let wizPreset: any = null;
+/* 고른 프리셋의 id. `wizKind` 는 발행 방식(sub/unique)이라 종류를 못 가린다 —
+   노래인지 티켓인지는 이것으로 안다. */
+let wizPresetId = "";
 let wizKindList: any[] = [];
 /** 이미 있는 자산을 고르는 종류. 이름이 **남아 있으면** 안 되고 **있어야** 한다. */
 const NEEDS_EXISTING: WizKind[] = ["reissue", "bulk"];
@@ -6758,8 +6761,12 @@ async function renderKinds() {
       const id = (c as HTMLElement).dataset.kind as string;
       const 고른것 = wizKindList.find((k) => k.id === id);
       wizPreset = 고른것?.preset || null;
+      wizPresetId = id;
       // 프리셋이 있으면 **안쪽 종류**로 바꾼다. 「노래」는 결국 하위 자산이다.
       wizKind = (wizPreset?.kind || id) as WizKind;
+      /* 노래일 때만 가사·만든사람 칸을 보인다. 다른 것에는 쓸모없는 칸이
+         늘어나면 그것도 22개 메뉴와 같은 잡음이 된다. */
+      { const r = document.getElementById("i-songrow"); if (r) (r as HTMLElement).hidden = id !== "song"; }
       if (wizPreset) {
         // 🔴 값을 넣기만 하고 `input` 을 쏘지 않는다. 쏘면 아직 제목을 안 친
         //    상태에서 「이름이 틀렸습니다」가 빨갛게 떠서, 시작하자마자 혼난다.
@@ -7271,6 +7278,35 @@ async function doIssue() {
     // 🔴 자산에는 IPFS 해시가 **하나**만 박힌다. 사진과 영상 링크를 둘 다
     //    담으려면 그 둘을 적은 쪽지를 만들어 그 쪽지 주소를 박아야 한다.
     //    사진만 있으면 쪽지를 안 만든다 — 한 겹 덜 거치는 쪽이 빠르다.
+    /* 🔴 **노래는 쪽지를 만든다.** 표지 그림 하나만 박으면 산 사람 지갑에
+       그림 한 장만 남고 가사도 만든 사람도 없다. 폴더로 묶어 그 안에
+       `index.html` 을 구워 넣으면, 자산 주소를 여는 것만으로 표지와 가사가
+       보인다 — **우리 서버가 사라져도** 그 폴더는 남는다.
+       (대표 지적 2026-09-08: "play 페이지가 없어지면 자산이 안 남지 않나?") */
+    const 가사 = ($("i-lyrics") as HTMLTextAreaElement)?.value.trim() || "";
+    const 만든이 = ($("i-artist") as HTMLInputElement)?.value.trim() || "";
+    const 들을곳 = ($("i-listen") as HTMLInputElement)?.value.trim() || "";
+    if (wizPresetId === "song" && (가사 || 만든이 || 들을곳)) {
+      const up = await invoke<any>("ipfs_add_bundle", {
+        files: [],
+        metadata: {
+          name: issueCheck.name,
+          image: cid || "",              // 표준 이름. 남의 지갑도 이걸 읽는다
+          playx_song: {
+            title: ($("i-songtitle") as HTMLInputElement)?.value.trim() || issueCheck.name,
+            artist: 만든이,
+            /* 표지는 이미 올라간 CID 를 게이트웨이 주소로 가리킨다.
+               폴더 안에 그림을 또 넣으면 같은 파일이 두 벌이 된다. */
+            cover: cid ? `https://ipfs.io/ipfs/${cid}` : "",
+            lyrics: 가사,
+            listen: 들을곳,
+            asset: issueCheck.name,
+          },
+        },
+      });
+      cid = String(up.cid || cid || "");
+    }
+
     const video = ($("i-video") as HTMLInputElement)?.value.trim() || "";
     if (video) {
       const up = await invoke<any>("ipfs_add_bundle", {
@@ -10571,6 +10607,12 @@ async function autoRound() {
       loadAssets(false);
     }
 
+    /* 🔴 웹(rvn.ex.erci.se)에서 산 사람에게도 **같은 회전에서** 보낸다.
+       대표 지시(2026-09-08): "난 자동을 원해".
+       새 스위치를 만들지 않는다 — 자판기의 「자동 발송」이 켜져 있을 때만
+       돈다. 안전장치(메모리 암호·하루 한도·노출 금액)를 그대로 쓴다. */
+    void 웹자동배송();
+
     const skipped: any[] = (r.skipped || []).filter((s: any) => s.why !== "확인 대기");
     $("vd-result").innerHTML =
       (sent.length
@@ -10585,6 +10627,52 @@ async function autoRound() {
         : "") +
       (r.error ? `<div class="warnbox" style="margin-top:12px">${r.error}</div>` : "");
   } catch {}
+}
+
+/** 웹 주문을 자동으로 보낸다. 자동 발송이 켜져 있을 때만 돈다. */
+async function 웹자동배송() {
+  const 열쇠 = 배송열쇠읽기();
+  if (!열쇠) return;                       // 열쇠가 없으면 목록 자체를 못 읽는다
+  try {
+    const r = await fetch("https://rvn.ex.erci.se/api/rvn/deliveries", {
+      headers: { "x-rvn-delivery-token": 열쇠 },
+    });
+    if (!r.ok) return;
+    const d = await r.json().catch(() => ({}) as any);
+    const items: any[] = Array.isArray(d.items) ? d.items : [];
+    if (!items.length) return;
+
+    /* 하루 한도. 자판기와 같은 뜻이다 — 무언가 잘못됐을 때 자동이 밤새
+       지갑을 비우는 것을 막는다. 화면에서 바꿀 수 있게 하는 것은 다음 일이고,
+       지금은 넉넉하되 무한은 아닌 값으로 둔다. */
+    const res = await invoke<any>("auto_deliver_web", { items, dailyCap: 200 });
+    if (!res?.armed) return;               // 자동이 꺼져 있으면 조용히 만다
+
+    /* 🔴 **보낸 뒤에만** 웹에 알린다. 먼저 알리고 전송이 실패하면 그 주문은
+       목록에서 빠지는데 사람은 못 받는다 — 영영 사라진다. */
+    for (const s of res.sent || []) {
+      await fetch("https://rvn.ex.erci.se/api/rvn/deliveries", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-rvn-delivery-token": 열쇠 },
+        body: JSON.stringify({ id: s.id, txid: s.txid }),
+      }).catch(() => {});
+    }
+    if ((res.sent || []).length) {
+      웹주문확인();
+      loadAssets(false);
+    }
+    /* 못 보낸 것은 화면에 남긴다. 왜 안 나갔는지 말하지 않으면
+       고장난 것과 구별되지 않는다. */
+    const 막힌것: any[] = res.skipped || [];
+    if (막힌것.length) {
+      $("wo-result").innerHTML =
+        `<div class="warnbox" style="margin-top:12px"><b>사람이 봐야 하는 것</b><br>` +
+        막힌것.map((x: any) => `${escapeHtml(x.asset || x.id || "")} — ${escapeHtml(x.why || "")}`).join("<br>") +
+        `</div>`;
+    }
+  } catch {
+    /* 그물이 끊겨도 자판기 쪽 자동은 계속 돌아야 한다. */
+  }
 }
 
 async function toggleAuto() {
