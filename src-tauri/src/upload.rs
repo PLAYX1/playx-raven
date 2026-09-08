@@ -89,23 +89,31 @@ pub async fn ipfs_add_file(file: Incoming) -> Result<Value, String> {
 /// the pictures were uploaded with the menu, and falls back to the gateway path
 /// otherwise. Returns `None` for anything that is not a menu, so other kinds of
 /// bundle are unaffected.
-/// 곡 한 장. 자산 주소를 열면 **표지와 가사가 보이게** 한다.
+/// 자산 한 장. 주소를 열면 **표지와 내용이 보이게** 한다.
 ///
 /// 🔴 왜 필요한가(실측 2026-09-08): 먼저 낸 곡 셋은 체인에 그림조차 없어서
 ///    (`has_ipfs:0`) 산 사람 지갑에는 `PLAYX/SONG/INEVITABLE 100` 이라는
-///    **글자만** 보인다. 표지를 붙여도 그림 한 장일 뿐, 가사도 만든 사람도 없다.
-///    대표: "자산으로 주면 노래도 나오고 앨범 표지도 있고 가사도 있고
-///    좀 뭐가 있어야 하는 거 아냐?" — 맞다.
+///    **글자만** 보인다. 대표: "자산으로 주면 노래도 나오고 앨범 표지도 있고
+///    가사도 있고 좀 뭐가 있어야 하는 거 아냐?"
 ///
 /// 🔴 **우리가 없어져도 남아야 한다.** 이 프로젝트가 수수료를 가르는 기준이
-///    「우리가 빠져도 되는가」다. 소유 증명이라면 우리 서버가 죽어도 남아야
-///    하므로, 표지·가사·만든 사람을 **IPFS 폴더 안에** 둔다. 우리 페이지
-///    주소는 「있는 동안 더 볼 수 있는 곳」으로만 덧붙인다.
+///    「우리가 빠져도 되는가」다. 그래서 표지·내용을 **IPFS 폴더 안에** 두고,
+///    우리 페이지 주소는 「있는 동안 더 볼 수 있는 곳」으로만 덧붙인다.
 ///
-/// ⚠️ 노래 파일 자체는 안 넣는다. 곡당 3~5MB 를 영구히 드는 것은 별도 결정이다.
+/// 🔴 **직접 고친 것이 있으면 그것을 그대로 쓴다**(`html`). 대표: "내 마음대로
+///    수정도 가능하고" — 템플릿은 시작점이지 감옥이 아니다.
+///
+/// ⚠️ 노래·책 파일 자체는 안 넣는다. 곡당 3~5MB 를 영구히 드는 것은 별도 결정이다.
 fn render_song(doc: &Value) -> Option<String> {
-    let song = doc.get("playx_song")?;
-    let g = |k: &str| song.get(k).and_then(Value::as_str).unwrap_or("").to_string();
+    let a = doc.get("playx_asset").or_else(|| doc.get("playx_song"))?;
+    let g = |k: &str| a.get(k).and_then(Value::as_str).unwrap_or("").to_string();
+
+    // 손으로 고친 것이 있으면 템플릿을 건너뛴다.
+    let 손질 = g("html");
+    if !손질.trim().is_empty() {
+        return Some(손질);
+    }
+
     let esc = |s: &str| {
         s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
     };
@@ -113,31 +121,47 @@ fn render_song(doc: &Value) -> Option<String> {
     if title.is_empty() {
         return None;
     }
-    let artist = g("artist");
-    let cover = g("cover");            // 같은 폴더 안의 파일 이름
-    let lyrics = g("lyrics");
+    let kind = g("kind");
+    let maker = g("maker");
+    let cover = g("cover");
+    let body = g("body");          // 가사·소개·설명 — 종류마다 부르는 이름이 다르다
     let credits = g("credits");
-    let listen = g("listen");          // 우리 페이지. 없어도 된다.
+    let listen = g("listen");
     let asset = g("asset");
-    /* 🔴 고른 「느낌」. 화면에서 고른 것과 여기서 굽는 것이 **같은 표**를 써야
-       한다 — 미리보기와 실제가 다르면 미리보기가 거짓말이 된다.
+    let note = g("note");          // 티켓의 날짜·장소 같은 한 줄
+
+    /* 🔴 화면에서 고른 것과 여기서 굽는 것이 **같은 표**를 써야 한다 —
+       미리보기와 실제가 다르면 미리보기가 거짓말이 된다.
        (같은 네 가지가 `main.ts` 의 `느낌표` 에도 있다. 하나를 고치면 둘 다 고친다.) */
     let (bg, fg, dim, accent) = match g("theme").as_str() {
         "paper" => ("#f4f1ea", "#1c1b18", "#6b675e", "#8a5a2b"),
         "warm"  => ("#241a17", "#f2e6dc", "#b79a86", "#e2915c"),
         "mint"  => ("#0f1f1c", "#e4f2ec", "#8fb3a8", "#5fd0a8"),
-        _       => ("#12141c", "#e9e5da", "#9fb3ad", "#7fd6c0"),   // night
+        _       => ("#12141c", "#e9e5da", "#9fb3ad", "#7fd6c0"),
     };
 
-    let 가사 = if lyrics.trim().is_empty() {
+    // 종류마다 부르는 이름이 다르다. 「가사」라고 적힌 책은 이상하다.
+    let (본문제목, 만든이제목, 표지비율) = match kind.as_str() {
+        "book"   => ("소개", "지은이", "3 / 4"),
+        "ticket" => ("안내", "여는 곳", "16 / 9"),
+        "game"   => ("설명", "만든 사람", "1 / 1"),
+        _        => ("가사", "만든 사람", "1 / 1"),
+    };
+
+    let 본문 = if body.trim().is_empty() {
         String::new()
     } else {
-        format!("<h2>가사</h2><pre class=\"ly\">{}</pre>", esc(&lyrics))
+        format!("<h2>{}</h2><pre class=\"ly\">{}</pre>", 본문제목, esc(&body))
     };
     let 크레딧 = if credits.trim().is_empty() {
         String::new()
     } else {
-        format!("<h2>만든 사람</h2><pre class=\"ly\">{}</pre>", esc(&credits))
+        format!("<h2>{}</h2><pre class=\"ly\">{}</pre>", 만든이제목, esc(&credits))
+    };
+    let 한줄 = if note.trim().is_empty() {
+        String::new()
+    } else {
+        format!("<p class=\"nt\">{}</p>", esc(&note))
     };
     let 표지 = if cover.trim().is_empty() {
         String::new()
@@ -147,17 +171,43 @@ fn render_song(doc: &Value) -> Option<String> {
     let 들으러 = if listen.trim().is_empty() {
         String::new()
     } else {
+        let 말 = match kind.as_str() {
+            "book"   => "책 보러 가기",
+            "ticket" => "자세히 보기",
+            "game"   => "레이븐홀드에서 보기",
+            _        => "노래 듣기 · 악보 보기",
+        };
         format!(
-            "<p class=\"go\"><a href=\"{}\" target=\"_blank\" rel=\"noopener noreferrer\">노래 듣기 · 악보 보기</a><br>             <small>이 주소는 만든 곳이 살아 있는 동안 열립니다. 위의 표지와 가사는 이 폴더 안에 있어 그와 무관하게 남습니다.</small></p>",
-            esc(&listen)
+            "<p class=\"go\"><a href=\"{}\" target=\"_blank\" rel=\"noopener noreferrer\">{}</a><br>\
+             <small>이 주소는 만든 곳이 살아 있는 동안 열립니다. 위의 표지와 내용은 이 폴더 안에 있어 그와 무관하게 남습니다.</small></p>",
+            esc(&listen), 말
         )
     };
     let 이름표 = if asset.trim().is_empty() { String::new() } else { format!("<p class=\"as\">{}</p>", esc(&asset)) };
+    let 만든이줄 = if maker.trim().is_empty() { String::new() } else { format!("<p class=\"ar\">{}</p>", esc(&maker)) };
 
     Some(format!(
-        "<!doctype html><html lang=\"ko\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>{t} — {a}</title><style>:root{{color-scheme:dark}}body{{margin:0;background:{bg};color:{fg};font:16px/1.7 -apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Noto Sans KR',system-ui,sans-serif}}main{{max-width:640px;margin:0 auto;padding:24px 18px 64px}}.cv{{width:100%;border-radius:14px;display:block;margin-bottom:20px}}h1{{font-size:26px;margin:0 0 4px}}.ar{{color:{dim};margin:0 0 6px;font-size:16px}}.as{{color:{dim};opacity:.72;font-size:13px;margin:0 0 20px;word-break:break-all}}h2{{font-size:15px;color:{dim};margin:26px 0 8px;letter-spacing:.04em}}.ly{{white-space:pre-wrap;font:15px/1.9 inherit;margin:0}}.go{{margin-top:26px;padding-top:18px;border-top:1px solid {dim}44}}.go a{{color:{accent};font-size:16px}}.go small{{color:{dim};opacity:.8;font-size:13px;line-height:1.6;display:block;margin-top:8px}}</style></head><body><main>{cv}<h1>{t}</h1><p class=\"ar\">{a}</p>{as}{ly}{cr}{go}</main></body></html>",
-        t = esc(&title), a = esc(&artist), cv = 표지, as = 이름표, ly = 가사, cr = 크레딧, go = 들으러,
-        bg = bg, fg = fg, dim = dim, accent = accent
+        "<!doctype html><html lang=\"ko\"><head><meta charset=\"utf-8\">\
+<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\
+<title>{t}</title>\
+<style>\
+:root{{color-scheme:light dark}}\
+body{{margin:0;background:{bg};color:{fg};font:16px/1.7 -apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Noto Sans KR',system-ui,sans-serif}}\
+main{{max-width:640px;margin:0 auto;padding:28px 18px 72px}}\
+.cv{{width:100%;aspect-ratio:{ratio};object-fit:cover;border-radius:14px;display:block;margin-bottom:22px}}\
+h1{{font-size:28px;line-height:1.3;margin:0 0 6px;letter-spacing:-.01em}}\
+.ar{{color:{dim};margin:0 0 6px;font-size:16px}}\
+.nt{{color:{accent};margin:0 0 6px;font-size:15px}}\
+.as{{color:{dim};opacity:.72;font-size:13px;margin:0 0 22px;word-break:break-all}}\
+h2{{font-size:13px;color:{dim};margin:28px 0 8px;letter-spacing:.1em;text-transform:none}}\
+.ly{{white-space:pre-wrap;font:15px/1.9 inherit;margin:0}}\
+.go{{margin-top:30px;padding-top:18px;border-top:1px solid {dim}44}}\
+.go a{{color:{accent};font-size:16px}}\
+.go small{{color:{dim};opacity:.8;font-size:13px;line-height:1.6;display:block;margin-top:8px}}\
+</style></head><body><main>{cv}<h1>{t}</h1>{ar}{nt}{as}{ly}{cr}{go}</main></body></html>",
+        t = esc(&title), cv = 표지, ar = 만든이줄, nt = 한줄, as = 이름표,
+        ly = 본문, cr = 크레딧, go = 들으러,
+        bg = bg, fg = fg, dim = dim, accent = accent, ratio = 표지비율
     ))
 }
 

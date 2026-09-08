@@ -4237,11 +4237,13 @@
                맞다. 여기 적은 것은 **IPFS 폴더 안의 html 로 구워진다** —
                우리 서버가 사라져도 표지와 가사는 그 주소에서 열린다. -->
           <div id="i-songrow" hidden>
-            <label style="margin-top:14px">곡 제목 <span class="meta">(한글로 적으셔도 됩니다)</span>
+            <label style="margin-top:14px"><span id="lbl-title">제목</span> <span class="meta">(한글로 적으셔도 됩니다)</span>
               <input id="i-songtitle" placeholder="예: 필연 (Inevitable)" autocomplete="off" /></label>
-            <label style="margin-top:14px">만든 사람 <span class="meta">(자산에 새겨집니다)</span>
+            <label style="margin-top:14px"><span id="lbl-maker">만든 사람</span> <span class="meta">(자산에 새겨집니다)</span>
               <input id="i-artist" placeholder="예: PLAY X" autocomplete="off" /></label>
-            <label style="margin-top:14px">가사 <span class="meta">(선택 · 자산에 새겨집니다)</span>
+            <label style="margin-top:14px" id="lbl-noterow" hidden>한 줄 안내 <span class="meta">(날짜·장소 등)</span>
+              <input id="i-note" placeholder="예: 2026년 10월 4일 · 의왕 계원대학로 34" autocomplete="off" /></label>
+            <label style="margin-top:14px"><span id="lbl-body">가사</span> <span class="meta">(선택 · 자산에 새겨집니다)</span>
               <textarea id="i-lyrics" rows="6" placeholder="여기에 붙여넣으면 산 사람 지갑에서 표지와 함께 보입니다"
                         style="width:100%;font:16px/1.7 inherit;padding:10px;resize:vertical"></textarea></label>
             <label style="margin-top:14px">들을 수 있는 곳 <span class="meta">(선택)</span>
@@ -4272,6 +4274,7 @@
                 <button type="button" data-ravi="lyrics">가사 다듬기</button>
                 <button type="button" data-ravi="credits">만든 사람 적기</button>
                 <button type="button" data-ravi="title">제목 다듬기</button>
+                <button type="button" data-ravi="html">디자인 고쳐 줘</button>
               </div>
               <div class="meta" id="i-ravi-say" style="margin-top:8px"></div>
             </div>
@@ -4280,6 +4283,15 @@
               <div class="meta" style="margin-bottom:8px">
                 이렇게 만들어집니다 — <b>산 사람 지갑에서 이 화면이 열립니다</b>
               </div>
+              <div class="mnacts" style="margin-bottom:8px">
+                <button type="button" id="i-edit-html">직접 고치기</button>
+                <button type="button" id="i-edit-reset" hidden>템플릿으로 되돌리기</button>
+              </div>
+              <!-- 🔴 대표: "내 마음대로 수정도 가능하고 말이야".
+                   템플릿은 시작점이지 감옥이 아니다. 여기를 채우면 위의 칸들
+                   대신 이것이 그대로 구워진다. 라비에게 물어 고칠 수 있다. -->
+              <textarea id="i-html" rows="10" hidden spellcheck="false"
+                        style="width:100%;font:13px/1.6 ui-monospace,Menlo,monospace;padding:10px;resize:vertical"></textarea>
               <iframe id="i-songview" title="미리보기"
                       style="width:100%;height:420px;border:1px solid var(--line);border-radius:12px;background:#12141c"></iframe>
             </div>

@@ -6766,7 +6766,19 @@ async function renderKinds() {
       wizKind = (wizPreset?.kind || id) as WizKind;
       /* 노래일 때만 가사·만든사람 칸을 보인다. 다른 것에는 쓸모없는 칸이
          늘어나면 그것도 22개 메뉴와 같은 잡음이 된다. */
-      { const r = document.getElementById("i-songrow"); if (r) (r as HTMLElement).hidden = id !== "song"; }
+      { /* 🔴 노래만 꾸미게 두면 책·티켓·게임은 이름만 있는 자산이 된다.
+       대표: "노래 말고도 다른 것들도 템플릿이 있으면 좋을 듯". 넷 다 연다. */
+      const r = document.getElementById("i-songrow");
+      const 됨 = !!종류말[id];
+      if (r) (r as HTMLElement).hidden = !됨;
+      if (됨) {
+        const m = 종류말[id];
+        const t = (x: string, v: string) => { const e = document.getElementById(x); if (e) e.textContent = v; };
+        t("lbl-title", m.title); t("lbl-maker", m.maker); t("lbl-body", m.body);
+        const nr = document.getElementById("lbl-noterow"); if (nr) (nr as HTMLElement).hidden = !m.note;
+        곡미리보기();
+      }
+    }
       if (wizPreset) {
         // 🔴 값을 넣기만 하고 `input` 을 쏘지 않는다. 쏘면 아직 제목을 안 친
         //    상태에서 「이름이 틀렸습니다」가 빨갛게 떠서, 시작하자마자 혼난다.
@@ -7286,22 +7298,27 @@ async function doIssue() {
     const 가사 = ($("i-lyrics") as HTMLTextAreaElement)?.value.trim() || "";
     const 만든이 = ($("i-artist") as HTMLInputElement)?.value.trim() || "";
     const 들을곳 = ($("i-listen") as HTMLInputElement)?.value.trim() || "";
-    if (wizPresetId === "song" && (가사 || 만든이 || 들을곳)) {
+    const 한줄안내 = ($("i-note") as HTMLInputElement)?.value.trim() || "";
+    const 손댄html = ($("i-html") as HTMLTextAreaElement)?.value.trim() || "";
+    if (종류말[wizPresetId] && (가사 || 만든이 || 들을곳 || 한줄안내 || 손댄html)) {
       const up = await invoke<any>("ipfs_add_bundle", {
         files: [],
         metadata: {
           name: issueCheck.name,
           image: cid || "",              // 표준 이름. 남의 지갑도 이걸 읽는다
-          playx_song: {
+          playx_asset: {
+            kind: 종류키(),
             title: ($("i-songtitle") as HTMLInputElement)?.value.trim() || issueCheck.name,
-            artist: 만든이,
+            maker: 만든이,
             /* 표지는 이미 올라간 CID 를 게이트웨이 주소로 가리킨다.
                폴더 안에 그림을 또 넣으면 같은 파일이 두 벌이 된다. */
             cover: cid ? `https://ipfs.io/ipfs/${cid}` : "",
-            lyrics: 가사,
+            body: 가사,
             listen: 들을곳,
             asset: issueCheck.name,
             theme: 고른느낌,
+            note: 한줄안내,
+            html: 손댄html,
           },
         },
       });
@@ -10644,12 +10661,27 @@ const 느낌표: Record<string, [string, string, string, string]> = {
 };
 let 고른느낌 = "night";
 
+/* 종류마다 부르는 이름이 다르다. 「가사」라고 적힌 책은 이상하다.
+   ⚠️ 러스트 `upload.rs::render_song` 의 같은 표와 맞춰 둔다. */
+const 종류말: Record<string, { body: string; maker: string; ratio: string; note: boolean; title: string }> = {
+  song:      { body: "가사", maker: "만든 사람", ratio: "1 / 1",  note: false, title: "곡 제목" },
+  book:      { body: "소개", maker: "지은이",   ratio: "3 / 4",  note: false, title: "책 제목" },
+  ticket:    { body: "안내", maker: "여는 곳",  ratio: "16 / 9", note: true,  title: "티켓 이름" },
+  game_item: { body: "설명", maker: "만든 사람", ratio: "1 / 1",  note: false, title: "물건 이름" },
+};
+const 종류키 = () => (wizPresetId === "game_item" ? "game" : wizPresetId || "song");
+
 function 곡페이지그리기(): string {
   const v = (id: string) => (document.getElementById(id) as HTMLInputElement | HTMLTextAreaElement | null)?.value.trim() || "";
   const [bg, fg, dim, accent] = 느낌표[고른느낌] || 느낌표.night;
-  const 제목 = v("i-songtitle") || v("i-name") || "곡 제목";
+  const 말 = 종류말[wizPresetId] || 종류말.song;
+  const 제목 = v("i-songtitle") || v("i-name") || 말.title;
   const 만든이 = v("i-artist");
+  const 한줄 = v("i-note");
   const 가사 = v("i-lyrics");
+  /* 직접 고친 것이 있으면 그것을 그대로 보여 준다 — 실제로 구워지는 것과 같다. */
+  const 손질 = v("i-html");
+  if (손질) return 손질;
   const 들을곳 = v("i-listen");
   const 자산 = v("i-name");
   const cid = v("i-ipfs");
@@ -10659,9 +10691,9 @@ function 곡페이지그리기(): string {
 <style>:root{color-scheme:light dark}
 body{margin:0;background:${bg};color:${fg};font:16px/1.7 -apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Noto Sans KR',system-ui,sans-serif}
 main{max-width:640px;margin:0 auto;padding:24px 18px 64px}
-.cv{width:100%;border-radius:14px;display:block;margin-bottom:20px}
+.cv{width:100%;aspect-ratio:${말.ratio};object-fit:cover;border-radius:14px;display:block;margin-bottom:22px}
 h1{font-size:26px;margin:0 0 4px}
-.ar{color:${dim};margin:0 0 6px;font-size:16px}
+.ar{color:${dim};margin:0 0 6px;font-size:16px}\n.nt{color:${accent};margin:0 0 6px;font-size:15px}
 .as{color:${dim};opacity:.72;font-size:13px;margin:0 0 20px;word-break:break-all}
 h2{font-size:15px;color:${dim};margin:26px 0 8px;letter-spacing:.04em}
 .ly{white-space:pre-wrap;font:15px/1.9 inherit;margin:0}
@@ -10671,7 +10703,8 @@ h2{font-size:15px;color:${dim};margin:26px 0 8px;letter-spacing:.04em}
 ${cid ? `<img class="cv" src="https://ipfs.io/ipfs/${e(cid)}" alt="">` : ""}
 <h1>${e(제목)}</h1>${만든이 ? `<p class="ar">${e(만든이)}</p>` : ""}
 ${자산 ? `<p class="as">${e(자산)}</p>` : ""}
-${가사 ? `<h2>가사</h2><pre class="ly">${e(가사)}</pre>` : ""}
+${한줄 ? `<p class="nt">${e(한줄)}</p>` : ""}
+${가사 ? `<h2>${말.body}</h2><pre class="ly">${e(가사)}</pre>` : ""}
 ${들을곳 ? `<p class="go"><a href="${e(들을곳)}">노래 듣기 · 악보 보기</a><br><small>이 주소는 만든 곳이 살아 있는 동안 열립니다. 위의 표지와 가사는 이 폴더 안에 있어 그와 무관하게 남습니다.</small></p>` : ""}
 </main></body></html>`;
 }
@@ -10691,12 +10724,76 @@ function 곡미리보기(){
        태우는 일은 절대 없어야 한다.
        ⚠️ 답을 그대로 칸에 넣고, 사람이 고쳐 쓸 수 있게 둔다. 지어낸 것을
           그대로 체인에 새기면 되돌릴 수 없다. */
+    /* 「직접 고치기」 — 템플릿을 시작점으로 열어 준다. 빈 종이를 주면
+       대부분 그 자리에서 멈춘다. */
+    {
+      const 열기 = document.getElementById("i-edit-html");
+      const 되돌리기 = document.getElementById("i-edit-reset");
+      const 칸 = document.getElementById("i-html") as HTMLTextAreaElement | null;
+      if (열기 && 칸) {
+        열기.addEventListener("click", () => {
+          if (!칸.value.trim()) 칸.value = 곡페이지그리기();  // 지금 모양을 그대로 담아 준다
+          칸.hidden = false;
+          (열기 as HTMLElement).hidden = true;
+          if (되돌리기) (되돌리기 as HTMLElement).hidden = false;
+          곡미리보기();
+        });
+        칸.addEventListener("input", 곡미리보기);
+      }
+      if (되돌리기 && 칸) {
+        되돌리기.addEventListener("click", () => {
+          칸.value = "";
+          칸.hidden = true;
+          (되돌리기 as HTMLElement).hidden = true;
+          const 열 = document.getElementById("i-edit-html"); if (열) (열 as HTMLElement).hidden = false;
+          곡미리보기();
+        });
+      }
+    }
+
     document.querySelectorAll("#i-ravi-help [data-ravi]").forEach((b) => {
       (b as HTMLElement).onclick = async () => {
         const 무엇 = (b as HTMLElement).dataset.ravi || "";
         const 말 = document.getElementById("i-ravi-say");
         const v = (id: string) => (document.getElementById(id) as HTMLInputElement | HTMLTextAreaElement | null)?.value.trim() || "";
         const 제목 = v("i-songtitle") || v("i-name");
+        if (무엇 === "html") {
+          const 칸 = document.getElementById("i-html") as HTMLTextAreaElement | null;
+          if (!칸) return;
+          if (!칸.value.trim()) 칸.value = 곡페이지그리기();
+          const 바람 = await ask("어떻게 고칠까요?", "예: 글자를 크게 · 표지를 둥글게 · 가사를 가운데로", {});
+          if (!바람) return;
+          if (말) 말.textContent = "라비가 고치는 중…";
+          (b as HTMLButtonElement).disabled = true;
+          try {
+            const r = await invoke<any>("ai_ask_owner", {
+              provider: aiProvider,
+              question:
+                "아래 HTML 한 장을 요청대로 고쳐 주세요. **완성된 HTML 한 장만** 주세요 — 설명·코드표시(```)를 붙이지 마세요. " +
+                "바깥 파일을 부르지 마세요(스크립트·글꼴·CDN 금지). 글자 내용은 바꾸지 마세요.\n\n요청: " +
+                바람 + "\n\n---\n" + 칸.value,
+            });
+            let 답 = String(r?.text || "").trim().replace(/^```[a-z]*\n?|```$/g, "").trim();
+            /* 🔴 바깥 것을 부르는 코드는 잘라낸다. 이 페이지는 남의 지갑에서
+               열린다 — 스크립트가 들어가면 우리가 그 사람에게 코드를 배달하는 것이다. */
+            if (/<script|onerror=|onload=|javascript:/i.test(답)) {
+              if (말) 말.textContent = "라비 답에 스크립트가 있어 쓰지 않았습니다. 다시 부탁해 보세요.";
+            } else if (!/<html|<body|<main/i.test(답)) {
+              if (말) 말.textContent = "온전한 화면이 아니어서 쓰지 않았습니다. 다시 부탁해 보세요.";
+            } else {
+              칸.value = 답; 칸.hidden = false;
+              const 열 = document.getElementById("i-edit-html"); if (열) (열 as HTMLElement).hidden = true;
+              const 되 = document.getElementById("i-edit-reset"); if (되) (되 as HTMLElement).hidden = false;
+              곡미리보기();
+              if (말) 말.textContent = "고쳤습니다. 마음에 안 들면 「템플릿으로 되돌리기」를 누르세요.";
+            }
+          } catch (e) {
+            if (말) 말.textContent = errText(e);
+          } finally {
+            (b as HTMLButtonElement).disabled = false;
+          }
+          return;
+        }
         const 물음 =
           무엇 === "lyrics"
             ? `아래 가사의 줄바꿈과 띄어쓰기만 다듬어 주세요. 노랫말을 바꾸거나 새로 짓지 마세요. 결과만 주세요.\n\n${v("i-lyrics")}`
