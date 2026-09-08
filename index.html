@@ -4246,6 +4246,43 @@
                         style="width:100%;font:16px/1.7 inherit;padding:10px;resize:vertical"></textarea></label>
             <label style="margin-top:14px">들을 수 있는 곳 <span class="meta">(선택)</span>
               <input id="i-listen" placeholder="예: https://rvn.ex.erci.se/play/r/inevitable" autocomplete="off" /></label>
+
+            <!-- 🔴 대표 지적(2026-09-08): "사람들은 html 을 못하니 맥 Pages 나
+                 키노트처럼 편리하게 편집할 수 있게" — 맞다. 칸만 채우게 하고
+                 결과를 안 보여 주면, 무엇이 만들어지는지 모르는 채로 RVN 을
+                 태우게 된다. Pages 의 핵심은 빈 종이가 아니라
+                 **템플릿을 고르고, 채우면서, 바로 보이는 것**이다. -->
+            <div style="margin-top:18px">
+              <div class="meta" style="margin-bottom:8px">느낌 고르기</div>
+              <div class="mnacts" id="i-themes">
+                <button type="button" data-theme="night" class="on">밤</button>
+                <button type="button" data-theme="paper">종이</button>
+                <button type="button" data-theme="warm">노을</button>
+                <button type="button" data-theme="mint">민트</button>
+              </div>
+            </div>
+
+            <!-- 🔴 대표: "html 은 누구나 볼 수 있고 라비 AI 의 도움을 받으면
+                 얼마든지 가능하니" / "라비가 보조로 있어야 해".
+                 맞다 — 빈 칸을 보고 쓰라고 하면 대부분 그 자리에서 멈춘다.
+                 라비는 **채워 넣기만** 한다. 발행은 사람이 누른다. -->
+            <div style="margin-top:16px">
+              <div class="meta" style="margin-bottom:8px">라비에게 맡기기 <span style="opacity:.7">(칸을 채워 줍니다. 고쳐 쓰셔도 됩니다)</span></div>
+              <div class="mnacts" id="i-ravi-help">
+                <button type="button" data-ravi="lyrics">가사 다듬기</button>
+                <button type="button" data-ravi="credits">만든 사람 적기</button>
+                <button type="button" data-ravi="title">제목 다듬기</button>
+              </div>
+              <div class="meta" id="i-ravi-say" style="margin-top:8px"></div>
+            </div>
+
+            <div style="margin-top:14px">
+              <div class="meta" style="margin-bottom:8px">
+                이렇게 만들어집니다 — <b>산 사람 지갑에서 이 화면이 열립니다</b>
+              </div>
+              <iframe id="i-songview" title="미리보기"
+                      style="width:100%;height:420px;border:1px solid var(--line);border-radius:12px;background:#12141c"></iframe>
+            </div>
             <div class="meta">
               표지와 가사는 <b>파일창고(IPFS)에 함께 저장</b>됩니다. 우리 서버가 없어져도 남습니다.<br>
               「들을 수 있는 곳」만 우리 주소이고, 그건 살아 있는 동안만 열립니다.

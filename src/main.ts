@@ -7301,6 +7301,7 @@ async function doIssue() {
             lyrics: 가사,
             listen: 들을곳,
             asset: issueCheck.name,
+            theme: 고른느낌,
           },
         },
       });
@@ -10628,6 +10629,115 @@ async function autoRound() {
       (r.error ? `<div class="warnbox" style="margin-top:12px">${r.error}</div>` : "");
   } catch {}
 }
+
+/* ══ 곡 자산 꾸미기 — Pages 처럼 보면서 만든다 ═══════════════════════════
+   🔴 대표 지적(2026-09-08): "사람들은 html 을 못하니 맥 Pages 나 키노트처럼
+      편리하게 편집할 수 있게" — 칸만 채우게 하고 결과를 안 보여 주면,
+      무엇이 만들어지는지 모르는 채로 RVN 을 태우게 된다.
+   ⚠️ 여기 색표는 러스트 `upload.rs::render_song` 과 **같은 값**이어야 한다.
+      미리보기와 실제가 다르면 미리보기가 거짓말이 된다. 하나를 고치면 둘 다 고친다. */
+const 느낌표: Record<string, [string, string, string, string]> = {
+  night: ["#12141c", "#e9e5da", "#9fb3ad", "#7fd6c0"],
+  paper: ["#f4f1ea", "#1c1b18", "#6b675e", "#8a5a2b"],
+  warm:  ["#241a17", "#f2e6dc", "#b79a86", "#e2915c"],
+  mint:  ["#0f1f1c", "#e4f2ec", "#8fb3a8", "#5fd0a8"],
+};
+let 고른느낌 = "night";
+
+function 곡페이지그리기(): string {
+  const v = (id: string) => (document.getElementById(id) as HTMLInputElement | HTMLTextAreaElement | null)?.value.trim() || "";
+  const [bg, fg, dim, accent] = 느낌표[고른느낌] || 느낌표.night;
+  const 제목 = v("i-songtitle") || v("i-name") || "곡 제목";
+  const 만든이 = v("i-artist");
+  const 가사 = v("i-lyrics");
+  const 들을곳 = v("i-listen");
+  const 자산 = v("i-name");
+  const cid = v("i-ipfs");
+  const e = (x: string) => escapeHtml(x);
+  return `<!doctype html><html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>${e(제목)}</title>
+<style>:root{color-scheme:light dark}
+body{margin:0;background:${bg};color:${fg};font:16px/1.7 -apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Noto Sans KR',system-ui,sans-serif}
+main{max-width:640px;margin:0 auto;padding:24px 18px 64px}
+.cv{width:100%;border-radius:14px;display:block;margin-bottom:20px}
+h1{font-size:26px;margin:0 0 4px}
+.ar{color:${dim};margin:0 0 6px;font-size:16px}
+.as{color:${dim};opacity:.72;font-size:13px;margin:0 0 20px;word-break:break-all}
+h2{font-size:15px;color:${dim};margin:26px 0 8px;letter-spacing:.04em}
+.ly{white-space:pre-wrap;font:15px/1.9 inherit;margin:0}
+.go{margin-top:26px;padding-top:18px;border-top:1px solid ${dim}44}
+.go a{color:${accent};font-size:16px}
+.go small{color:${dim};opacity:.8;font-size:13px;display:block;margin-top:8px}</style></head><body><main>
+${cid ? `<img class="cv" src="https://ipfs.io/ipfs/${e(cid)}" alt="">` : ""}
+<h1>${e(제목)}</h1>${만든이 ? `<p class="ar">${e(만든이)}</p>` : ""}
+${자산 ? `<p class="as">${e(자산)}</p>` : ""}
+${가사 ? `<h2>가사</h2><pre class="ly">${e(가사)}</pre>` : ""}
+${들을곳 ? `<p class="go"><a href="${e(들을곳)}">노래 듣기 · 악보 보기</a><br><small>이 주소는 만든 곳이 살아 있는 동안 열립니다. 위의 표지와 가사는 이 폴더 안에 있어 그와 무관하게 남습니다.</small></p>` : ""}
+</main></body></html>`;
+}
+
+function 곡미리보기(){
+  const f = document.getElementById("i-songview") as HTMLIFrameElement | null;
+  if (f) f.srcdoc = 곡페이지그리기();
+}
+
+(() => {
+  const 잇기 = () => {
+    for (const id of ["i-songtitle","i-artist","i-lyrics","i-listen","i-ipfs","i-name"]) {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener("input", 곡미리보기);
+    }
+    /* 🔴 라비는 **채워 넣기만** 한다. 발행은 사람이 누른다 — AI 가 RVN 을
+       태우는 일은 절대 없어야 한다.
+       ⚠️ 답을 그대로 칸에 넣고, 사람이 고쳐 쓸 수 있게 둔다. 지어낸 것을
+          그대로 체인에 새기면 되돌릴 수 없다. */
+    document.querySelectorAll("#i-ravi-help [data-ravi]").forEach((b) => {
+      (b as HTMLElement).onclick = async () => {
+        const 무엇 = (b as HTMLElement).dataset.ravi || "";
+        const 말 = document.getElementById("i-ravi-say");
+        const v = (id: string) => (document.getElementById(id) as HTMLInputElement | HTMLTextAreaElement | null)?.value.trim() || "";
+        const 제목 = v("i-songtitle") || v("i-name");
+        const 물음 =
+          무엇 === "lyrics"
+            ? `아래 가사의 줄바꿈과 띄어쓰기만 다듬어 주세요. 노랫말을 바꾸거나 새로 짓지 마세요. 결과만 주세요.\n\n${v("i-lyrics")}`
+            : 무엇 === "credits"
+            ? `노래 「${제목}」의 크레딧을 적는 짧은 형식을 만들어 주세요. 예: "작사·작곡 000 / 노래 000". 이름은 비워 두고 형식만 주세요.`
+            : `노래 제목 「${제목}」을 자산 소개에 쓸 한 줄로 다듬어 주세요. 지어내지 말고 있는 제목만 정리해 주세요. 결과만 주세요.`;
+        if (무엇 === "lyrics" && !v("i-lyrics")) {
+          if (말) 말.textContent = "가사를 먼저 붙여넣어 주세요. 라비는 없는 가사를 지어내지 않습니다.";
+          return;
+        }
+        if (말) 말.textContent = "라비가 보는 중…";
+        (b as HTMLButtonElement).disabled = true;
+        try {
+          const r = await invoke<any>("ai_ask_owner", { provider: aiProvider, question: 물음 });
+          const 답 = String(r?.text || "").trim();
+          if (!답) throw new Error("답이 비었습니다");
+          const 넣을곳 = 무엇 === "lyrics" ? "i-lyrics" : 무엇 === "credits" ? "i-artist" : "i-songtitle";
+          const el = document.getElementById(넣을곳) as HTMLInputElement | HTMLTextAreaElement | null;
+          if (el) { el.value = 답; el.dispatchEvent(new Event("input")); }
+          if (말) 말.textContent = "채웠습니다. 마음에 안 들면 직접 고치세요.";
+        } catch (e) {
+          if (말) 말.textContent = errText(e);
+        } finally {
+          (b as HTMLButtonElement).disabled = false;
+        }
+      };
+    });
+
+    document.querySelectorAll("#i-themes [data-theme]").forEach((b) => {
+      (b as HTMLElement).onclick = () => {
+        고른느낌 = (b as HTMLElement).dataset.theme || "night";
+        document.querySelectorAll("#i-themes [data-theme]").forEach((x) => x.classList.remove("on"));
+        (b as HTMLElement).classList.add("on");
+        곡미리보기();
+      };
+    });
+    곡미리보기();
+  };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", 잇기);
+  else 잇기();
+})();
 
 /** 웹 주문을 자동으로 보낸다. 자동 발송이 켜져 있을 때만 돈다. */
 async function 웹자동배송() {

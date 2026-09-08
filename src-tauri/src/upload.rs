@@ -119,6 +119,15 @@ fn render_song(doc: &Value) -> Option<String> {
     let credits = g("credits");
     let listen = g("listen");          // 우리 페이지. 없어도 된다.
     let asset = g("asset");
+    /* 🔴 고른 「느낌」. 화면에서 고른 것과 여기서 굽는 것이 **같은 표**를 써야
+       한다 — 미리보기와 실제가 다르면 미리보기가 거짓말이 된다.
+       (같은 네 가지가 `main.ts` 의 `느낌표` 에도 있다. 하나를 고치면 둘 다 고친다.) */
+    let (bg, fg, dim, accent) = match g("theme").as_str() {
+        "paper" => ("#f4f1ea", "#1c1b18", "#6b675e", "#8a5a2b"),
+        "warm"  => ("#241a17", "#f2e6dc", "#b79a86", "#e2915c"),
+        "mint"  => ("#0f1f1c", "#e4f2ec", "#8fb3a8", "#5fd0a8"),
+        _       => ("#12141c", "#e9e5da", "#9fb3ad", "#7fd6c0"),   // night
+    };
 
     let 가사 = if lyrics.trim().is_empty() {
         String::new()
@@ -146,8 +155,9 @@ fn render_song(doc: &Value) -> Option<String> {
     let 이름표 = if asset.trim().is_empty() { String::new() } else { format!("<p class=\"as\">{}</p>", esc(&asset)) };
 
     Some(format!(
-        "<!doctype html><html lang=\"ko\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>{t} — {a}</title><style>:root{{color-scheme:dark}}body{{margin:0;background:#12141c;color:#e9e5da;font:16px/1.7 -apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Noto Sans KR',system-ui,sans-serif}}main{{max-width:640px;margin:0 auto;padding:24px 18px 64px}}.cv{{width:100%;border-radius:14px;display:block;margin-bottom:20px}}h1{{font-size:26px;margin:0 0 4px}}.ar{{color:#9fb3ad;margin:0 0 6px;font-size:16px}}.as{{color:#6b7284;font-size:13px;margin:0 0 20px;word-break:break-all}}h2{{font-size:15px;color:#9fb3ad;margin:26px 0 8px;letter-spacing:.04em}}.ly{{white-space:pre-wrap;font:15px/1.9 inherit;margin:0}}.go{{margin-top:26px;padding-top:18px;border-top:1px solid #2a2f3d}}.go a{{color:#7fd6c0;font-size:16px}}.go small{{color:#6b7284;font-size:13px;line-height:1.6;display:block;margin-top:8px}}</style></head><body><main>{cv}<h1>{t}</h1><p class=\"ar\">{a}</p>{as}{ly}{cr}{go}</main></body></html>",
-        t = esc(&title), a = esc(&artist), cv = 표지, as = 이름표, ly = 가사, cr = 크레딧, go = 들으러
+        "<!doctype html><html lang=\"ko\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>{t} — {a}</title><style>:root{{color-scheme:dark}}body{{margin:0;background:{bg};color:{fg};font:16px/1.7 -apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Noto Sans KR',system-ui,sans-serif}}main{{max-width:640px;margin:0 auto;padding:24px 18px 64px}}.cv{{width:100%;border-radius:14px;display:block;margin-bottom:20px}}h1{{font-size:26px;margin:0 0 4px}}.ar{{color:{dim};margin:0 0 6px;font-size:16px}}.as{{color:{dim};opacity:.72;font-size:13px;margin:0 0 20px;word-break:break-all}}h2{{font-size:15px;color:{dim};margin:26px 0 8px;letter-spacing:.04em}}.ly{{white-space:pre-wrap;font:15px/1.9 inherit;margin:0}}.go{{margin-top:26px;padding-top:18px;border-top:1px solid {dim}44}}.go a{{color:{accent};font-size:16px}}.go small{{color:{dim};opacity:.8;font-size:13px;line-height:1.6;display:block;margin-top:8px}}</style></head><body><main>{cv}<h1>{t}</h1><p class=\"ar\">{a}</p>{as}{ly}{cr}{go}</main></body></html>",
+        t = esc(&title), a = esc(&artist), cv = 표지, as = 이름표, ly = 가사, cr = 크레딧, go = 들으러,
+        bg = bg, fg = fg, dim = dim, accent = accent
     ))
 }
 
