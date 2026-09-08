@@ -2683,7 +2683,11 @@
         <div id="wo-wrap" style="display:none">
           <div class="bar" style="margin-top:16px">
             <h3 style="font-size:14px;margin:0;margin-right:auto">웹에서 산 사람에게 보낼 것</h3>
-            <button class="ghost" id="wo-refresh">다시 확인</button>
+            <!-- 🔴 바로 위 자산 목록에도 「다시 확인」이 있어서 같은 화면에 같은 글자가
+                 둘이었다(대표 지적 2026-09-08: 「다시 확인 버튼이 두개라 헷갈리네」).
+                 하는 일이 다르면 글자도 달라야 한다. 이건 웹 주문을 가져오는 단추다. -->
+            <button class="ghost" id="wo-key">열쇠 바꾸기</button>
+            <button class="ghost" id="wo-refresh">웹 주문 가져오기</button>
           </div>
           <div class="meta" id="wo-note"></div>
           <table>

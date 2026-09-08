@@ -10474,7 +10474,7 @@ async function 웹주문확인(물어봐도되나 = false) {
        「0건」이라고 쓰지 않는다 — 주문이 없는 것과 못 읽은 것은 다르다. */
     $("wo-wrap").style.display = "";
     $("wo-note").textContent =
-      "웹(rvn.ex.erci.se)에서 산 사람에게 보내려면 배송 열쇠가 필요합니다. 「다시 확인」을 누르세요.";
+      "웹(rvn.ex.erci.se)에서 산 사람에게 보내려면 배송 열쇠가 필요합니다. 아래 「웹 주문 가져오기」를 누르세요.";
     $("wo-list").innerHTML = "";
     return;
   }
@@ -10490,10 +10490,14 @@ async function 웹주문확인(물어봐도되나 = false) {
     const d = await r.json().catch(() => ({}) as any);
     if (!r.ok || !d.ok) throw new Error(d.error || `서버 ${r.status}`);
     웹주문들 = Array.isArray(d.items) ? d.items : [];
-    $("wo-wrap").style.display = 웹주문들.length || 물어봐도되나 ? "" : "none";
+    /* 🔴 여기서 **성공하면 칸을 숨기고 있었다**(대표 지적 2026-09-08:
+       「다시 확인 눌러도 배송열쇠 입력란 안나오네 아까 입력한게 유효한가?」).
+       열쇠가 맞아 「0건」을 받아오면 칸이 사라져서, 잘 된 것과 고장난 것을
+       화면으로 구별할 수 없었다. 열쇠를 넣은 뒤에는 **늘 보인다.** */
+    $("wo-wrap").style.display = "";
     $("wo-note").textContent = 웹주문들.length
       ? `${웹주문들.length}건이 기다리고 있습니다. 보낼 때마다 지갑 암호를 한 번 받습니다.`
-      : "기다리는 주문이 없습니다.";
+      : "열쇠가 확인됐습니다. 지금 기다리는 주문은 없습니다 — 웹에서 누가 사면 여기에 뜹니다.";
     $("wo-list").innerHTML = 웹주문들
       .map((o, i) => `<tr>
           <td>${escapeHtml(o.title || o.asset)}<div class="meta">${escapeHtml(o.asset)}</div></td>
@@ -12890,6 +12894,20 @@ async function previewOpen() {
   const 잇기 = () => {
     const b = document.getElementById("wo-refresh");
     if (b) (b as HTMLElement).onclick = () => void 웹주문확인(true);
+    /* 열쇠를 바꾸거나 지울 길이 없었다 — 한 번 잘못 넣으면 되돌릴 방법이
+       화면에 없다. 틀린 열쇠는 401 일 때만 지워지는데, 그물이 끊기면
+       401 도 안 온다. */
+    const k = document.getElementById("wo-key");
+    if (k) (k as HTMLElement).onclick = async () => {
+      const 지금 = 배송열쇠읽기();
+      const 새것 = await ask("배송 열쇠", 지금 ? "이미 넣어 두신 것이 있습니다. 새로 넣으면 바뀝니다. 비우고 확인을 누르면 지웁니다." : "Vercel 의 RVN_DELIVERY_TOKEN 과 같은 값입니다. 이 컴퓨터에만 저장됩니다.", { password: true });
+      if (새것 === null) return;                    // 취소
+      try {
+        if (새것) localStorage.setItem("playx.delivery.token", 새것);
+        else localStorage.removeItem("playx.delivery.token");
+      } catch {}
+      void 웹주문확인(false);
+    };
   };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", 잇기);
   else 잇기();
