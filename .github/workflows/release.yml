@@ -322,7 +322,7 @@ jobs:
           # 자동 판올림이 검사할 서명. 없으면 만들어지긴 하는데 판올림이 안 된다.
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: npx tauri build --target ${{ matrix.target }}
+        run: npx tauri build --target ${{ matrix.target }} --verbose
 
       # 🔴 **맥 「손상되었기 때문에 열 수 없습니다」를 막는다.**
       # 서명이 `adhoc, linker-signed` 이고 자원 목록이 없으면 맥은
