@@ -9,8 +9,10 @@ process.env.RV_BACKUP_FIXTURE_ROOT=path.join(root,'artifacts/backup-storage-fixt
 fs.mkdirSync(process.env.RV_BACKUP_FIXTURE_ROOT,{recursive:true});
 const artifacts=path.join(root,'artifacts');
 const harness=path.join(artifacts,'backup-storage-harness');
-const helper=fs.readFileSync('src-tauri/src/backup_storage.rs','utf8');
-const current=fs.readFileSync('src-tauri/src/lockbox.rs','utf8');
+// Git's Windows checkout can use CRLF. Mutate normalized fixture copies only;
+// keep the checked-in production sources untouched on every host.
+const helper=fs.readFileSync('src-tauri/src/backup_storage.rs','utf8').replaceAll('\r\n','\n');
+const current=fs.readFileSync('src-tauri/src/lockbox.rs','utf8').replaceAll('\r\n','\n');
 const legacyKeyFunction="pub fn key_get_or_make() -> Result<[u8; 32], String> {\n    let p = key_path();\n    if let Ok(raw) = std::fs::read_to_string(&p) {\n        let bytes = from_paper(raw.trim())?;\n        return Ok(bytes);\n    }\n    // 새로 만든다.\n    use rand::RngCore;\n    let mut k = [0u8; 32];\n    rand::thread_rng().fill_bytes(&mut k);\n    if let Some(d) = p.parent() {\n        let _ = std::fs::create_dir_all(d);\n    }\n    std::fs::write(&p, to_paper(&k)).map_err(|e| format!(\"열쇠를 두지 못했습니다: {e}\"))?;\n    lock_down(&p);\n    Ok(k)\n}\n\n/// 파일 권한을 주인만 읽게 좁힌다.\nfn lock_down(p: &std::path::Path) {\n    #[cfg(unix)]\n    {\n        use std::os::unix::fs::PermissionsExt;\n        let _ = std::fs::set_permissions(p, std::fs::Permissions::from_mode(0o600));\n    }\n    #[cfg(not(unix))]\n    {\n        let _ = p; // 윈도우는 사용자 폴더 권한을 그대로 따른다.\n    }\n}\n\n";
 fs.mkdirSync(path.join(harness,'src'),{recursive:true});
 fs.writeFileSync(path.join(harness,'Cargo.toml'),"[package]\nname = \"ravenvault-backup-synthetic-tests\"\nversion = \"0.0.0\"\nedition = \"2021\"\n[workspace]\n[dependencies]\naes-gcm = \"0.10\"\nargon2 = \"0.5\"\nrand = \"0.8\"\nhex = \"0.4\"\nserde_json = \"1\"\n");
