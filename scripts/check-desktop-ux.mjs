@@ -101,7 +101,9 @@ try {
     assert.deepEqual(await page.evaluate(()=>window.__RV_OPENED),['https://ravenvault.ex.erci.se/wallet/']);
     await page.screenshot({path:resolve(out,`phone-entry-${language}-${width}x${height}.png`)});
     await page.$eval('#rv-phone-info',e=>e.open=false);
-    await page.$eval('#ravi-tiles button:first-child',e=>e.click());
+    // 가게가 없으면 첫 칸은 「가게 만들기」(대표님 결정), 폰 거래는 그다음 칸이다.
+    assert.match(await page.$eval('#ravi-tiles button:first-child',e=>e.innerText),language==='ko'?/가게 만들기/:/./);
+    await page.$eval('#ravi-tiles button:nth-child(2)',e=>e.click());
     await page.waitForFunction(()=>document.querySelector('#phone-tx-panel').open);
     await page.screenshot({path:resolve(out,`transaction-input-${language}-${width}x${height}.png`)});
     const put=async value=>page.$eval('#phone-tx-code',(e,value)=>{e.value=value;e.dispatchEvent(new Event('input',{bubbles:true}));},value);

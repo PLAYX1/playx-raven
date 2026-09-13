@@ -2184,11 +2184,16 @@ function raviTiles(): Tile[] {
   const val = (id: string) => ($(id) as HTMLInputElement)?.value.trim() || "";
   const hasShop = !!(val("sh-ko") || val("sh-en"));
 
-  // Keep shop setup available beside the phone transaction action.
+  /* 🔴 가게가 아직 없으면 **가게 만들기가 맨 앞**이다.
+     대표님 지적: "주문 관련 한 것은 있는데 가게 만들기는 없나?"
+     맞다 — 오늘 매출·들어온 주문은 가게가 있어야 뜻이 있는 것인데,
+     정작 가게를 만드는 자리가 없었다. 없는 사람에게 첫 칸은 그것이다.
+     (폰 거래 보내기는 가게가 있는 사람에게만 맨 앞이 된다.) */
   const first: Tile[] = hasShop ? [] : [{
     icon: I('<path d="M4 9l1.6-4.2h12.8L20 9"/><path d="M4.5 9h15v10.5h-15z"/><path d="M9.5 19.5v-6h5v6"/><path d="M12 3.5v2M10.5 4.5h3"/>'),
     label: "가게 만들기",
     sub: "여기서 시작합니다",
+    lead: true,
     do: () => { showPage("shop"); shopTab("mine");
       // 「가게 정보 · 처음 한 번」은 접혀 있다. 여기로 온 사람에게는 펼쳐 준다.
       const d = document.querySelector<HTMLDetailsElement>("#shoptab-mine details.onceoff");
@@ -2197,15 +2202,15 @@ function raviTiles(): Tile[] {
     },
   }];
 
-  return ([
+  return first.concat([
     {
-      lead: true,
+      lead: !first.length,
       icon: I('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 9h18M8 15h3M16 13h2"/>'),
       label: t("폰에서 서명한 거래 보내기"),
       sub: t("열쇠는 폰에, 전파는 내 노드로"),
       do: () => { const panel = $("phone-tx-panel") as HTMLDetailsElement; panel.open = true; panel.scrollIntoView({behavior:"smooth"}); $("phone-tx-code").focus(); },
     },
-  ] as Tile[]).concat(first, [
+  ] as Tile[], [
     {
       icon: I('<path d="M4 19V9M10 19V5M16 19v-7M21 19H3"/>'),
       label: "오늘 얼마",
@@ -2357,8 +2362,8 @@ function paintRavi() {
   const nodeDown = !(nodeUp ?? true);
   const face = $("ravi-face") as HTMLImageElement | null;
   if (face) {
-    // The phone, landing page and desktop share the full Ravi + GPU artwork.
-    face.src = "/raven-hello.webp";
+    // 깨어 있으면 폰·랜딩과 같은 **전신 라비(GPU)**, 노드가 꺼지면 자는 그림.
+    face.src = nodeDown ? "/raven-sleep.webp" : "/raven-hello.webp";
     face.classList.toggle("asleep", nodeDown);
   }
   const hi = $("ravi-hello");
@@ -2377,8 +2382,9 @@ function paintRavi() {
         : "노드가 꺼져 있어요.";
       sub.innerHTML = "결제가 들어와도 확인을 못 합니다. <b>이 컴퓨터</b>에서 켜 주세요.";
     } else if (!shop) {
-      hi.textContent = t("안녕하세요, 라비입니다.");
-      sub.textContent = t("내 노드로 조회하고, 폰에서 서명한 거래를 보냅니다.");
+      // 가게가 없는 사람에게는 **가게 이야기부터** 한다(대표님 결정 유지).
+      hi.textContent = "가게부터 만들까요?";
+      sub.textContent = "이름 하나면 시작됩니다. 나머지는 나중에 채우셔도 됩니다.";
     } else if (!aiProvider) {
       hi.textContent = shop;
       sub.innerHTML = "아래 아이콘은 지금 바로 됩니다. 말로 시키시려면 <b>이 컴퓨터 → AI 열쇠</b>를 한 번만 넣어 주세요.";
