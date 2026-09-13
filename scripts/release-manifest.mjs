@@ -13,7 +13,7 @@ export async function prepareRelease(source, destination, version) {
   for (const suffix of Object.keys(platforms)) if (!files.includes(prefix + suffix + '.sig')) throw new Error(`Missing updater signature: ${suffix}`);
   const assets = [];
   for (const name of files) {
-    if (!name.startsWith(prefix) || !/^PLAY-X-Raven-[\d.]+-(?:windows|mac-apple-silicon|mac-intel|linux)\.(?:exe|msi|dmg|AppImage|deb|tar\.gz)(?:\.sig)?$/.test(name)) throw new Error(`Unexpected release file: ${name}`);
+    if (!name.startsWith(prefix) || !/^PLAY-X-Raven-[\d.]+-(?:windows|mac-apple-silicon|mac-intel|linux)\.(?:exe|msi|dmg|AppImage|deb|rpm|tar\.gz)(?:\.sig)?$/.test(name)) throw new Error(`Unexpected release file: ${name}`);
     const info = await stat(path.join(source, name));
     if (!info.isFile() || info.size < 1 || info.size >= 95_000_000) throw new Error(`Unsupported release file size: ${name}`);
     const data = await readFile(path.join(source, name));

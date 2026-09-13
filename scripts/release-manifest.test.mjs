@@ -34,3 +34,10 @@ test('invalid version and malformed signature fail before writing',()=>fixture(a
   await assert.rejects(prepareRelease(source,out,'0.4.0'),/Malformed updater signature/);
   await assert.rejects(readFile(path.join(out,'latest.json')));
 }));
+test('Linux RPM output produced by the real Tauri build is preserved',()=>fixture(async(source,out)=>{
+  const name='PLAY-X-Raven-0.4.0-linux.rpm';
+  await writeFile(path.join(source,name),'synthetic rpm');
+  const {paths}=await prepareRelease(source,out,'0.4.0');
+  assert.ok(paths.includes('v0.4.0/'+name));
+  assert.equal(await readFile(path.join(out,'v0.4.0',name),'utf8'),'synthetic rpm');
+}));
