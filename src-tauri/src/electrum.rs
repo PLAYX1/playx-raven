@@ -385,7 +385,7 @@ fn address_to_scripthash(address: &str) -> Result<String, String> {
     Ok(hex::encode(digest))
 }
 
-fn base58check(s: &str) -> Result<Vec<u8>, String> {
+pub(crate) fn base58check(s: &str) -> Result<Vec<u8>, String> {
     const ALPHABET: &[u8] = b"123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
     let mut num: Vec<u8> = vec![0];
     for c in s.bytes() {

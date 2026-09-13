@@ -147,6 +147,7 @@ import { open as pickFile } from "@tauri-apps/plugin-dialog";
 //    `connect-src 'self'` 로 잠겨 있고, 우리 창 안에 끌어들이면 그 잠금이
 //    무슨 의미인지 아무도 알 수 없게 된다.
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { openRavenVaultWallet, RAVENVAULT_SITE, LEGACY_LOCAL_WALLET } from "./desktop-links";
 import { getVersion } from "@tauri-apps/api/app";
 import { listen } from "@tauri-apps/api/event";
 import { check as checkUpdate } from "@tauri-apps/plugin-updater";
@@ -1312,7 +1313,7 @@ async function doRestore() {
     //
     //    `잠김` 은 옛 이름이다. 이미 그렇게 만들어 둔 백업이 있으니 계속 받는다.
     filters: [
-      { name: "PLAY X Raven 백업", extensions: ["pxlock", "zip", "잠김"] },
+      { name: "RavenVault Desktop 백업", extensions: ["pxlock", "zip", "잠김"] },
       { name: "모든 파일", extensions: ["*"] },
     ],
     defaultPath: undefined,
@@ -2158,6 +2159,16 @@ type Tile = {
 const I = (d: string) =>
   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 
+async function openWebWallet(): Promise<void> {
+  const note = $("rv-web-note");
+  try {
+    await openRavenVaultWallet(openUrl);
+    if (note) note.textContent = t("브라우저에 RavenVault를 열었습니다. 파일을 가져온 뒤 오프라인에서 다시 열어 확인하세요.");
+  } catch {
+    if (note) note.textContent = t("브라우저를 열지 못했습니다. 주소창에 ravenvault.ex.erci.se/wallet/를 입력하세요.");
+  }
+}
+
 function raviTiles(): Tile[] {
   const closed = ($("sh-closednow") as HTMLInputElement | null)?.checked ?? false;
   const val = (id: string) => ($(id) as HTMLInputElement)?.value.trim() || "";
@@ -2181,6 +2192,12 @@ function raviTiles(): Tile[] {
   }];
 
   return first.concat([
+    {
+      icon: I('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 9h18M8 15h3M16 13h2"/>'),
+      label: "RavenVault 웹 지갑",
+      sub: "오프라인 파일 · 음악 · 문서",
+      do: () => openWebWallet(),
+    },
     {
       icon: I('<path d="M4 19V9M10 19V5M16 19v-7M21 19H3"/>'),
       label: "오늘 얼마",
@@ -6060,7 +6077,7 @@ async function talkOpenDm() {
       new Promise((_, no) =>
         setTimeout(() => no(new Error(t("20초 안에 열리지 않았습니다."))), 20000)),
     ]);
-    await openUrl("http://127.0.0.1:8790/wallet");
+    await openUrl(LEGACY_LOCAL_WALLET);
     say.innerHTML =
       `<span class="ok">${t("인터넷 창에 쪽지 화면을 열었습니다.")}</span> ` +
       escapeHtml(t("12단어가 아직 없으면 그 화면이 먼저 만들라고 합니다."));
@@ -7966,8 +7983,8 @@ function renderKeyRows(st: any, models: any) {
           ? // 모델 이름은 회사가 예고 없이 바꾼다. 우리 배포를 기다리지 않고
             // 직접 고칠 수 있어야 한다.
             `<div class="keyrow"><span class="who">${label}</span>
-               <input id="model-${p}" value="${models?.[p]?.model || ""}"
-                      placeholder="${models?.[p]?.default || ""}" autocomplete="off" spellcheck="false" />
+               <input id="model-${p}" value="${escapeHtml(models?.[p]?.model || "")}"
+                      placeholder="${escapeHtml(models?.[p]?.default || "")}" autocomplete="off" spellcheck="false" />
                <button class="ghost" data-delkey="${p}">지우기</button></div>`
           : `<div class="keyrow"><span class="who">${label}</span>
                <input id="key-${p}" type="password" placeholder="${ph}" autocomplete="off" />
@@ -7975,7 +7992,7 @@ function renderKeyRows(st: any, models: any) {
       )
       .join("") +
     (st.custom
-      ? `<div class="keyrow"><span class="who">${st.custom_label || "커스텀"}</span>
+      ? `<div class="keyrow"><span class="who">${escapeHtml(st.custom_label || "커스텀")}</span>
            <span class="saved">저장됨</span>
            <button class="ghost" data-delkey="custom">지우기</button></div>`
       : "");
@@ -8017,11 +8034,11 @@ async function refreshKeys() {
     // one would show up as a surprise bill on the wrong account.
     const sel = $("ai-pick") as HTMLSelectElement;
     const previous = sel.value;
-    sel.innerHTML = have.map((p) => `<option value="${p}">${labelOf(p)}</option>`).join("");
+    sel.innerHTML = have.map((p) => `<option value="${p}">${escapeHtml(labelOf(p))}</option>`).join("");
     if (have.includes(previous)) sel.value = previous;
     aiProvider = sel.value || null;
 
-    $("key-note").textContent = have.length ? `${have.length}곳 연결됨` : "아직 없습니다";
+    $("key-note").textContent = have.length ? "AI 설정이 있습니다. 연결은 아직 확인하지 않았습니다." : "아직 없습니다";
     // 대화창은 쓸 수 있는 곳이 하나라도 있을 때만 의미가 있다.
     // 🔴 여태 API 키가 없으면 이 버튼을 **숨겼다.** 그러면 Ravi 가 있다는
     // 것을 알 길이 없다 — 키를 넣을 이유도 못 만난다.
@@ -8117,7 +8134,7 @@ async function saveKeys() {
     }
     await refreshKeys();
   } catch (e) {
-    $("key-note").innerHTML = `<span style="color:var(--bad)">${e}</span>`;
+    $("key-note").textContent = errText(e);
   }
   btn.disabled = false;
 }
@@ -15430,6 +15447,12 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("ms-months").addEventListener("change", recalcPeriod);
   $("ms-save").addEventListener("click", saveMember);
   $("key-save").addEventListener("click", saveKeys);
+  $("rv-webwallet").addEventListener("click", () => void openWebWallet());
+  $("rv-web-home").addEventListener("click", () => {
+    void openUrl(RAVENVAULT_SITE).catch(() => {
+      $("rv-web-note").textContent = t("브라우저를 열지 못했습니다. 주소창에 ravenvault.ex.erci.se/wallet/를 입력하세요.");
+    });
+  });
   $("ord-reset").addEventListener("click", resetOrder);
   loadOrder();
   $("ai-shop-go").addEventListener("click", aiFillShop);

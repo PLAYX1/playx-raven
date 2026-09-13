@@ -149,7 +149,25 @@ fn rpc_gate() -> &'static tokio::sync::Semaphore {
     GATE.get_or_init(|| tokio::sync::Semaphore::new(4))
 }
 
+#[derive(Debug)]
+pub(crate) struct RpcFailure {
+    pub code: Option<i64>,
+    pub message: String,
+}
+impl From<String> for RpcFailure {
+    fn from(message: String) -> Self { Self { code: None, message } }
+}
+impl From<&str> for RpcFailure {
+    fn from(message: &str) -> Self { message.to_string().into() }
+}
+
 pub async fn call_rpc(method: &str, params: Value) -> Result<Value, String> {
+    call_rpc_detailed(method, params).await.map_err(|error| error.message)
+}
+
+/// Preserve numeric RPC error codes for public chain adapters without exposing
+/// node credentials, configuration paths, or raw RPC errors to browsers.
+pub(crate) async fn call_rpc_detailed(method: &str, params: Value) -> Result<Value, RpcFailure> {
     let cookie = read_cookie()?;
     let (user, pass) = cookie
         .split_once(':')
@@ -209,14 +227,14 @@ pub async fn call_rpc(method: &str, params: Value) -> Result<Value, String> {
                         .into(),
                 );
             }
-            return Err(format!("{method}: {msg}"));
+            return Err(RpcFailure { code: err.get("code").and_then(Value::as_i64), message: format!("{method}: {msg}") });
         }
     }
 
-    parsed
+    Ok(parsed
         .get("result")
         .cloned()
-        .ok_or_else(|| format!("{method}: response had no result"))
+        .ok_or_else(|| format!("{method}: response had no result"))?)
 }
 
 #[derive(Deserialize)]

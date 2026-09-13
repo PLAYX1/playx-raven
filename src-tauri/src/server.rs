@@ -1148,9 +1148,12 @@ struct AddrQuery {
 async fn chain_address_route(
     axum::extract::Query(q): axum::extract::Query<AddrQuery>,
 ) -> impl IntoResponse {
+    if q.address.len() > 35 || q.address.len() < 26 {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "error": "Check the Ravencoin address and retry." })));
+    }
     match crate::electrum::chain_address(q.address).await {
         Ok(v) => (StatusCode::OK, Json(v)),
-        Err(e) => (StatusCode::BAD_GATEWAY, Json(json!({ "error": e }))),
+        Err(_) => (StatusCode::BAD_GATEWAY, Json(json!({ "error": "Check the local node or configured public address index, then retry." }))),
     }
 }
 
@@ -1166,13 +1169,7 @@ struct SendBody {
 /// this endpoint can move the shop's own money — it only forwards bytes that
 /// were signed by keys we do not have.
 async fn chain_send_route(Json(b): Json<SendBody>) -> impl IntoResponse {
-    if b.hex.len() > 200_000 {
-        return (StatusCode::BAD_REQUEST, Json(json!({ "error": "거래가 너무 큽니다" })));
-    }
-    match crate::raven::call_rpc("sendrawtransaction", json!([b.hex])).await {
-        Ok(v) => (StatusCode::OK, Json(json!({ "txid": v.as_str().unwrap_or_default() }))),
-        Err(e) => (StatusCode::BAD_REQUEST, Json(json!({ "error": e }))),
-    }
+    crate::companion::broadcast_hex(b.hex).await
 }
 
 /// Fetches one file from the local IPFS gateway and hands it on.
@@ -1324,33 +1321,7 @@ async fn api_notices(State(state): State<ServerState>) -> impl IntoResponse {
 /// 🔴 손님 폰도 부르는 경로다. `getassetdata` 는 체인에 이미 공개된 값만
 /// 주므로 숨길 것이 없지만, **이름을 그대로 넘기지 않는다** — 레이븐 자산
 /// 이름은 대문자·숫자·`._/` 뿐이고, 그 밖의 글자가 RPC 로 들어가면 안 된다.
-async fn api_chain_asset(
-    Query(q): Query<std::collections::HashMap<String, String>>,
-) -> impl IntoResponse {
-    let name = q.get("name").cloned().unwrap_or_default();
-    let ok = !name.is_empty()
-        && name.len() <= 64
-        && name
-            .chars()
-            .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || "._/#!".contains(c));
-    if !ok {
-        return (StatusCode::BAD_REQUEST, Json(json!({ "error": "자산 이름이 아닙니다" })));
-    }
-    match crate::raven::call_rpc("getassetdata", json!([name])).await {
-        Ok(v) => (
-            StatusCode::OK,
-            Json(json!({
-                "name": v.get("name").and_then(Value::as_str).unwrap_or_default(),
-                "ipfs_hash": v.get("ipfs_hash").and_then(Value::as_str).unwrap_or_default(),
-                "units": v.get("units").and_then(Value::as_i64).unwrap_or(0),
-                "reissuable": v.get("reissuable").and_then(Value::as_i64).unwrap_or(0) == 1,
-            })),
-        ),
-        // 없는 자산과 노드가 죽은 것은 다르지만, 화면이 할 일은 같다 —
-        // 딸린 것이 없다고 보여 준다.
-        Err(_) => (StatusCode::OK, Json(json!({ "name": name, "ipfs_hash": "" }))),
-    }
-}
+
 
 /// 손님 폰이 "이게 그림이냐 음악이냐" 를 묻는 자리.
 ///
@@ -1547,7 +1518,7 @@ async fn api_owner_ask(
         return (
             StatusCode::SERVICE_UNAVAILABLE,
             Json(json!({
-                "error": "라비가 아직 자고 있어요. 가게 컴퓨터의 PLAY X Raven → 설정 → AI 에서 한 번만 넣어 주세요."
+                "error": "라비가 아직 자고 있어요. 가게 컴퓨터의 RavenVault Desktop → 설정 → AI 에서 한 번만 넣어 주세요."
             })),
         );
     }
@@ -2749,7 +2720,13 @@ async fn api_scan_member(
 /// 함수로 두면 시험이 이걸 한 번 만들어 볼 수 있다 — 그러면 다음 사람은
 /// 배포가 아니라 시험에서 걸린다.
 fn build_phone_router(st: ServerState) -> axum::Router {
+    let chain = crate::companion::router()
+        .route("/api/chain/address", get(chain_address_route))
+        .route("/api/chain/send", post(chain_send_route))
+        .layer(axum::extract::DefaultBodyLimit::max(210_000))
+        .layer(axum::middleware::from_fn(crate::companion::browser_boundary));
     let customer = Router::new()
+        .merge(chain)
         .route("/", get(customer_page))
         // 사진을 우리가 대신 내준다.
         //
@@ -2766,9 +2743,8 @@ fn build_phone_router(st: ServerState) -> axum::Router {
         // 손님 지갑. 인증 없이 — 손님에게 토큰을 요구하면 그건 주문이 아니라
         // 로그인이다. 열쇠는 브라우저 안에만 있고 서버로 오지 않는다.
         .route("/wallet", get(wallet_page))
+        .route("/legacy-wallet", get(wallet_page))
         .route("/wallet.bundle.js", get(wallet_bundle))
-        .route("/api/chain/address", get(chain_address_route))
-        .route("/api/chain/send", post(chain_send_route))
         .route("/api/shop", get(api_shop))
         .route("/api/ask", post(api_ask))
         .route("/api/owner-ask", post(api_owner_ask))
@@ -2817,7 +2793,6 @@ fn build_phone_router(st: ServerState) -> axum::Router {
         // 화면에 아무 표시도 안 남기고 조용히 빈 목록이 됐다.
         .route("/api/chain/shops", get(api_shops))
         .route("/api/ipfs-kind", get(api_ipfs_kind))
-        .route("/api/chain/asset", get(api_chain_asset))
         .route("/api/notices", get(api_notices))
         .route("/api/shop-profile", get(api_shop_profile))
         .route("/api/directions", get(api_directions))

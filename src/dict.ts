@@ -32,6 +32,8 @@
  * 🔴 열쇠는 **공백을 고르게 편 한 줄**이어야 한다. 원본 HTML 에서 줄바꿈으로
  *    쪼개진 문장도 찾을 때 한 줄로 펴서 비교하기 때문이다.
  */
+import { DESKTOP_COPY } from "./desktop-copy";
+
 export const DICT: Record<string, Record<string, string>> = {
   ko: {},
   en: {
@@ -47,8 +49,8 @@ export const DICT: Record<string, Record<string, string>> = {
       " uploaded. Changing them costs nothing.",
     "올려 두신 사진입니다. 다시 고르시면 통째로 바뀝니다.":
       "These are your uploaded photos. Choosing again replaces all of them.",
-    "PLAY X Raven 을 무엇으로 쓰실 건가요?":
-      "What will you use PLAY X Raven for?",
+    "RavenVault Desktop을 무엇으로 쓰실 건가요?":
+      "What will you use RavenVault Desktop for?",
     "한 번만 여쭙습니다. 나중에 「이 컴퓨터」에서 바꾸실 수 있고, 바꿔도 아무것도 지워지지 않습니다.":
       "We ask once. You can change it later under “This computer”, and nothing is deleted when you do.",
     "레이븐코인을 돕고 싶어요":
@@ -209,8 +211,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "IPFS gateway",
     "Ollama는":
       "Ollama runs",
-    "PLAY X Raven 백업":
-      "PLAY X Raven backup",
+    "RavenVault Desktop 백업":
+      "RavenVault Desktop backup",
     "PLAYX 수수료":
       "PLAYX fee",
     "RVN 또는 자산 이름":
@@ -1660,8 +1662,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "枚アップしました。変更に費用はかかりません。",
     "올려 두신 사진입니다. 다시 고르시면 통째로 바뀝니다.":
       "アップ済みの写真です。選び直すと全部入れ替わります。",
-    "PLAY X Raven 을 무엇으로 쓰실 건가요?":
-      "PLAY X Raven を何に使いますか?",
+    "RavenVault Desktop을 무엇으로 쓰실 건가요?":
+      "RavenVault Desktop を何に使いますか?",
     "한 번만 여쭙습니다. 나중에 「이 컴퓨터」에서 바꾸실 수 있고, 바꿔도 아무것도 지워지지 않습니다.":
       "一度だけお尋ねします。あとで「このコンピュータ」で変更でき、変更しても何も消えません。",
     "레이븐코인을 돕고 싶어요":
@@ -1822,8 +1824,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "IPFSゲートウェイ",
     "Ollama는":
       "Ollamaは",
-    "PLAY X Raven 백업":
-      "PLAY X Raven バックアップ",
+    "RavenVault Desktop 백업":
+      "RavenVault Desktop バックアップ",
     "PLAYX 수수료":
       "PLAYX手数料",
     "RVN 또는 자산 이름":
@@ -3273,8 +3275,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "张已上传。更换不收费。",
     "올려 두신 사진입니다. 다시 고르시면 통째로 바뀝니다.":
       "这些是已上传的照片。重新选择会全部替换。",
-    "PLAY X Raven 을 무엇으로 쓰실 건가요?":
-      "您打算用 PLAY X Raven 做什么?",
+    "RavenVault Desktop을 무엇으로 쓰실 건가요?":
+      "您打算用 RavenVault Desktop 做什么?",
     "한 번만 여쭙습니다. 나중에 「이 컴퓨터」에서 바꾸실 수 있고, 바꿔도 아무것도 지워지지 않습니다.":
       "只问一次。之后可在「这台电脑」中更改，更改不会删除任何内容。",
     "레이븐코인을 돕고 싶어요":
@@ -3435,8 +3437,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "IPFS 网关",
     "Ollama는":
       "Ollama",
-    "PLAY X Raven 백업":
-      "PLAY X Raven 备份",
+    "RavenVault Desktop 백업":
+      "RavenVault Desktop 备份",
     "PLAYX 수수료":
       "PLAYX 手续费",
     "RVN 또는 자산 이름":
@@ -4874,3 +4876,24 @@ export const DICT: Record<string, Record<string, string>> = {
       "密钥太短。请再看一下写在纸上的那串。",
   },
 };
+
+// RavenVault Desktop review: explicit AI disclosure and configuration status.
+Object.assign(DICT.en, {
+  "AI로 보낼 내용을 확인하세요.": "Review what will be sent to AI.",
+  "화면 채우기는 질문·현재 가게와 메뉴·최근 대화를 함께 보냅니다. 그냥 묻기는 질문을 보내며, 두 곳에 묻기는 두 제공자에게 같은 질문을 보냅니다. 클라우드 제공자는 인터넷이 필요합니다. 이 컴퓨터의 AI는 미리 설치한 로컬 서버가 필요합니다.": "Fill a form sends your question, current shop and menu, and recent conversation. Ask a question sends your question; Ask two providers sends it to both. Cloud providers require internet. AI on this computer requires a local server installed beforehand.",
+  "AI 설정이 있습니다. 연결은 아직 확인하지 않았습니다.": "AI is configured. The connection has not been checked yet."
+});
+Object.assign(DICT.ja, {
+  "AI로 보낼 내용을 확인하세요.": "AIに送る内容を確認してください。",
+  "화면 채우기는 질문·현재 가게와 메뉴·최근 대화를 함께 보냅니다. 그냥 묻기는 질문을 보내며, 두 곳에 묻기는 두 제공자에게 같은 질문을 보냅니다. 클라우드 제공자는 인터넷이 필요합니다. 이 컴퓨터의 AI는 미리 설치한 로컬 서버가 필요합니다.": "「画面に入力」は質問、現在の店舗とメニュー、最近の会話を送ります。「質問する」は質問を、「2社に質問」は同じ質問を両方に送ります。クラウドAIにはインターネットが必要です。このコンピュータのAIには、あらかじめインストールしたローカルサーバーが必要です。",
+  "AI 설정이 있습니다. 연결은 아직 확인하지 않았습니다.": "AIの設定があります。接続はまだ確認していません。"
+});
+Object.assign(DICT.zh, {
+  "AI로 보낼 내용을 확인하세요.": "请确认将发送给 AI 的内容。",
+  "화면 채우기는 질문·현재 가게와 메뉴·최근 대화를 함께 보냅니다. 그냥 묻기는 질문을 보내며, 두 곳에 묻기는 두 제공자에게 같은 질문을 보냅니다. 클라우드 제공자는 인터넷이 필요합니다. 이 컴퓨터의 AI는 미리 설치한 로컬 서버가 필요합니다.": "“填写界面”会发送您的问题、当前店铺和菜单以及近期对话。“提问”会发送问题，“向两家提问”会将同一问题发送给两家服务商。云端 AI 需要互联网。本机 AI 需要预先安装的本地服务器。",
+  "AI 설정이 있습니다. 연결은 아직 확인하지 않았습니다.": "已配置 AI，尚未检查连接。"
+});
+
+for (const [source, values] of Object.entries(DESKTOP_COPY)) {
+  (["en", "ja", "zh"] as const).forEach((language, index) => { DICT[language][source] = values[index]; });
+}

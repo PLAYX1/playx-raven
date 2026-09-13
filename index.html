@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>PLAY X Raven</title>
+    <title>RavenVault Desktop</title>
     <style>
       :root {
         --bg: #fbfbfe; --panel: #fff; --line: #dde3f0; --text: #161d2b; --ravi: #e7731f; --ravi-soft: #8375ae; --ravi-tint: #fdf1e7;
@@ -1842,7 +1842,36 @@
       min-height:180px; padding:12px; background:#fff; border-radius:12px;
       margin-bottom:10px; }
     .shareqr svg { width:100%; max-width:200px; height:auto; }
-</style>
+
+      /* RavenVault Desktop review: 64px targets and 16px reading text.
+         Preserve existing colours, assets, element IDs, and behavior. */
+      body { font-size: 16px; }
+      main { min-width: 0; }
+      nav { width: 216px; }
+      nav a { min-height: 64px; font-size: 16px; }
+      .brand { gap: 10px; padding-inline: 12px; }
+      .brandravi { width: 48px; box-shadow: none; }
+      .brand h1 { font-size: 16px; line-height: 1.4; }
+      .brand > div { overflow-wrap: anywhere; }
+      #page-ravi .tile { min-height: 112px; font-size: 16px; }
+      #page-ravi .tile .tsub, #page-ravi .meta, #page-ravi .lede,
+      #page-ravi #chat-log, #page-ravi #chat-log:empty::before,
+      #page-ravi .raviTodo, #keyrows, #key-note, .keyask .who { font-size: 16px; }
+      #page-ravi .chat-mode { flex-wrap: wrap; }
+      #page-ravi .chat-mode button, #chat-go, #chat-q, #key-save, #ai-pick,
+      .keyrow input, .keyrow button, .keyask input, .keyask button,
+      #cu-url, #cu-model, #cu-label, #cu-key, #appver, #upnag {
+        min-height: 64px !important; font-size: 16px !important;
+      }
+      .keyask { flex-wrap: wrap; }
+      .keyask input { min-width: 180px; }
+      #page-ravi .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      #rv-webwallet, #rv-web-home { min-height: 64px; font-size: 16px; }
+      #rv-webwallet { margin: 8px 12px; white-space: normal; text-align: left; }
+      .rv-web-info { padding: 16px; border: 1px solid var(--line); border-radius: 16px; margin: 16px 0; }
+      .rv-web-info p { font-size: 16px; margin: 8px 0; overflow-wrap: anywhere; }
+      @media (max-width: 900px) { nav { width: 192px; } }
+    </style>
   </head>
   <body>
     <!-- 창을 잡는 띠. 제목줄을 없앴기 때문에 이게 없으면 창이 안 움직인다. -->
@@ -1865,7 +1894,7 @@
                동안 사람은 아무것도 못 하므로, 여기가 인사할 자리다. -->
           <img src="/raven-hello.webp" alt="" width="150"
                style="display:block;margin:0 auto 12px;border-radius:16px" />
-          <div class="ob-brand">PLAY X Raven</div>
+          <div class="ob-brand">RavenVault Desktop</div>
           <div class="ob-lead">노드·사진 창고·지갑·계산대를 한 프로그램에서 씁니다.</div>
           <div class="ob-scan" id="ob-scanning">이 컴퓨터에 맞게 살펴보는 중…</div>
         </div>
@@ -1963,7 +1992,7 @@
     <div id="hello" style="display:none;position:fixed;inset:0;z-index:9000;
          background:var(--bg);overflow:auto;padding:48px 24px">
       <div style="max-width:720px;margin:0 auto">
-        <h1 style="font-size:26px;margin:0 0 8px">PLAY X Raven 을 무엇으로 쓰실 건가요?</h1>
+        <h1 style="font-size:26px;margin:0 0 8px">RavenVault Desktop을 무엇으로 쓰실 건가요?</h1>
         <p class="meta" style="margin:0 0 28px;font-size:15px">
           한 번만 여쭙습니다. 나중에 「이 컴퓨터」에서 바꾸실 수 있고, 바꿔도 아무것도 지워지지 않습니다.
         </p>
@@ -1997,7 +2026,7 @@
                  온전한 `raven-hello`(420x481)로 바꾼다 — 아래 GPU 가 보인다. -->
             <img src="/raven-hello.webp" alt="" class="brandravi" data-tauri-drag-region />
         <div data-tauri-drag-region>
-          <h1 data-tauri-drag-region>PLAY X Raven</h1>
+          <h1 data-tauri-drag-region>RavenVault Desktop</h1>
           <!-- 🔴 판 번호 **자체가 단추**다. 예전에는 새 버전이 있을 때만
                아래 알림이 나타나서, 없을 때는 확인할 길이 아예 없었다.
                그리고 그 알림은 켜고 8초 뒤에 뜬다 — 그전에 궁금한 사람은
@@ -2054,6 +2083,7 @@
               그들이 매일 여는 화면이 바로 「내 가게」다. 카페 사장은 평생
               안 쓴다 — 그 사람 눈앞에서 치우는 것이기도 하다.
            <a data-page="door"> 는 여기 있었다. -->
+      <button type="button" class="ghost" id="rv-webwallet">웹 지갑 · 파일</button>
       <a data-page="wallet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2.5"/><path d="M3 10.5h18"/><circle cx="17" cy="14.5" r="1.4"/></svg><span>지갑</span></a>
       <a data-page="assets"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg><span>자산</span></a>
       <!-- 🔴 아티스트 이름표는 **1차 메뉴**다.
@@ -2761,6 +2791,13 @@
         <!-- 아직 안 된 것 한 줄. 눌러 보고 알게 하면 헛걸음이다. -->
         <div class="warnbox raviTodo" id="ravi-todo" style="display:none"></div>
         <div class="tiles" id="ravi-tiles"></div>
+        <details class="rv-web-info">
+          <summary style="min-height:64px;display:flex;align-items:center;cursor:pointer">웹 지갑 · 오프라인 파일</summary>
+          <p>웹 지갑은 브라우저에 별도로 저장됩니다. Desktop 지갑과 기존 쪽지·결제 지갑은 그대로 사용합니다.</p>
+          <p>처음 한 번 인터넷으로 열어 설치하고 파일을 가져오세요. 보관한 음악·영상·문서는 오프라인에서 열 수 있습니다. 거래 확정에는 연결된 노드가 필요합니다.</p>
+          <p id="rv-web-note" role="status" aria-live="polite">같은 컴퓨터의 노드를 연결하려면 웹 지갑 설정에 http://127.0.0.1:8790을 입력하세요. 노드와 손님 서버가 켜져 있어야 합니다.</p>
+          <button id="rv-web-home" class="ghost" type="button">RavenVault 홈페이지</button>
+        </details>
 
         <div id="ravi-chatwrap">
       <div id="chat">
@@ -3986,8 +4023,10 @@
           <div class="card" style="margin-top:12px">
             <h3>AI 도우미</h3>
             <div class="warnbox" style="font-size: 14px">
-              <b>이 기능만 이 컴퓨터 밖으로 나갑니다.</b> 나머지는 전부 127.0.0.1 안에서 돕니다.
-              입력한 문장만 가고, 지갑·개인키·자산 목록은 보내지 않습니다.
+              <b>AI로 보낼 내용을 확인하세요.</b>
+              화면 채우기는 질문·현재 가게와 메뉴·최근 대화를 함께 보냅니다.
+              그냥 묻기는 질문을 보내며, 두 곳에 묻기는 두 제공자에게 같은 질문을 보냅니다.
+              클라우드 제공자는 인터넷이 필요합니다. 이 컴퓨터의 AI는 미리 설치한 로컬 서버가 필요합니다.
             </div>
             <div id="keyrows"></div>
             <details style="margin-top:12px">
@@ -4001,6 +4040,8 @@
                 <div><label>키 (없으면 비움)</label><input id="cu-key" type="password" autocomplete="off" /></div>
               </div>
               <div class="meta" style="margin-top:8px">Ollama는 <code>http://127.0.0.1:11434/v1</code>, 키 없음.</div>
+              <p class="meta" style="font-size:16px">HTTP는 이 컴퓨터 또는 사설망의 무키 AI만 허용합니다. 로컬 AI를 선택하면 실패해도 클라우드로 질문을 넘기지 않습니다.</p>
+              <p class="meta" style="font-size:16px">같은 HTTPS 주소에서 키 칸을 비우면 기존 키를 유지합니다. 주소를 바꾸면 키를 다시 입력하세요. 삭제는 위의 지우기 단추를 누르세요.</p>
             </details>
             <div class="row" style="margin-top:12px">
               <button class="ghost" id="key-save">저장</button>

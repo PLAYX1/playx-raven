@@ -1,6 +1,8 @@
 mod artist;
 mod auction;
 mod ai;
+mod ai_endpoint;
+mod companion;
 mod auto;
 mod boot;
 mod awake;
@@ -477,7 +479,7 @@ pub fn run() {
             use tauri::tray::TrayIconBuilder;
             use tauri::Manager;
 
-            let open = MenuItem::with_id(app, "open", "PLAY X Raven 열기", true, None::<&str>)?;
+            let open = MenuItem::with_id(app, "open", "RavenVault Desktop 열기", true, None::<&str>)?;
             // "종료" 라고만 쓰면 창 닫기와 같은 것으로 읽힌다. 무엇이 멈추는지 쓴다.
             let quit = MenuItem::with_id(
                 app,
@@ -490,7 +492,7 @@ pub fn run() {
 
             TrayIconBuilder::with_id("main")
                 .icon(app.default_window_icon().cloned().ok_or("아이콘 없음")?)
-                .tooltip("PLAY X Raven — 가게가 돌고 있습니다")
+                .tooltip("RavenVault Desktop — 가게가 돌고 있습니다")
                 .menu(&menu)
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, e| match e.id().as_ref() {

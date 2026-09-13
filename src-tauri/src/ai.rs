@@ -11,15 +11,56 @@
 //! stored on this machine with owner-only permissions, and it is sent to the
 //! provider they chose and nowhere else.
 //!
-//! ## This is the one thing in the app that leaves the machine
-//!
-//! Everything else talks to 127.0.0.1. When AI help is used, the text typed
-//! into the box goes to Anthropic or OpenAI. The UI has to say so before the
-//! first call, because a wallet that quietly ships data to a third party has
-//! broken a promise the rest of the app makes.
+//! AI sends the selected task's question and disclosed form/context to the
+//! configured provider. Node peers, IPFS and shop publication have their own
+//! network paths. A local AI choice must never silently fall back to the cloud.
 
 use serde_json::{json, Value};
 use std::path::PathBuf;
+static CUSTOM_GATE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn remove_key(path: &std::path::Path) -> Result<(), String> {
+    match std::fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(_) => Err("이전 API 키를 지우지 못했습니다. 설정 폴더 권한을 확인하세요.".into()),
+    }
+}
+
+fn write_private(path: &std::path::Path, bytes: &[u8]) -> Result<(), String> {
+    use std::io::Write;
+    let pending = path.with_extension(format!("pending-{:016x}", rand::random::<u64>()));
+    let result = (|| -> std::io::Result<()> {
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)] { use std::os::unix::fs::OpenOptionsExt; options.mode(0o600); }
+        let mut file = options.open(&pending)?;
+        file.write_all(bytes)?;
+        file.sync_all()?;
+        drop(file);
+        std::fs::rename(&pending, path)
+    })();
+    if result.is_err() { let _ = std::fs::remove_file(&pending); }
+    result.map_err(|_| "AI 설정을 저장하지 못했습니다. 설정 폴더 권한과 여유 공간을 확인하세요.".to_string())
+}
+
+fn save_key(provider: &str, key: &str) -> Result<(), String> {
+    if key.len() > 4096 || key.chars().any(char::is_control) {
+        return Err("API 키를 줄바꿈 없이 다시 입력하세요.".into());
+    }
+    let path = key_path(provider);
+    if key.trim().is_empty() { remove_key(&path) } else { write_private(&path, key.trim().as_bytes()) }
+}
+
+/// Snapshot both files under the same lock as settings updates. A new endpoint
+/// never gets the old endpoint's key, including partial-write failures.
+fn custom_request_settings() -> Result<(String, String, String), String> {
+    let _guard = CUSTOM_GATE.lock().map_err(|_| "AI 설정을 다시 저장해 주세요.".to_string())?;
+    let (_, base, model) = custom_config().ok_or_else(|| "커스텀 제공자가 설정되지 않았습니다.".to_string())?;
+    let key = read_key("custom").unwrap_or_default();
+    let base = crate::ai_endpoint::validate(&base, &model, &key)?;
+    Ok((base, model, key))
+}
 
 fn config_dir() -> PathBuf {
     crate::paths::app_dir()
@@ -135,9 +176,10 @@ pub fn delete_api_key(provider: String) -> Result<(), String> {
     if !known(&provider) {
         return Err("알 수 없는 제공자입니다.".into());
     }
-    let _ = std::fs::remove_file(key_path(&provider));
+    let _guard = if provider == "custom" { Some(CUSTOM_GATE.lock().map_err(|_| "AI 설정을 다시 저장해 주세요.".to_string())?) } else { None };
+    remove_key(&key_path(&provider))?;
     if provider == "custom" {
-        let _ = std::fs::remove_file(config_dir().join("custom.json"));
+        remove_key(&config_dir().join("custom.json"))?;
     }
     Ok(())
 }
@@ -151,21 +193,12 @@ pub fn save_api_key(provider: String, key: String) -> Result<(), String> {
     let dir = config_dir();
     std::fs::create_dir_all(&dir).map_err(|e| format!("설정 폴더를 만들지 못했습니다: {e}"))?;
 
-    let path = key_path(&provider);
-    if key.trim().is_empty() {
-        let _ = std::fs::remove_file(&path);
-        return Ok(());
+    let _guard = if provider == "custom" { Some(CUSTOM_GATE.lock().map_err(|_| "AI 설정을 다시 저장해 주세요.".to_string())?) } else { None };
+    if provider == "custom" && !key.trim().is_empty() {
+        let (_, base, model) = custom_config().ok_or_else(|| "커스텀 제공자가 설정되지 않았습니다.".to_string())?;
+        crate::ai_endpoint::validate(&base, &model, &key)?;
     }
-    std::fs::write(&path, key.trim()).map_err(|e| format!("키를 저장하지 못했습니다: {e}"))?;
-
-    // 0600. The default would let every account on this machine read it, and on
-    // a shop counter PC that is not a theoretical concern.
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
-    }
-    Ok(())
+    save_key(&provider, &key)
 }
 
 /// Which providers have a key stored. Never returns the keys themselves.
@@ -206,33 +239,36 @@ pub fn save_custom_provider(
     model: String,
     key: String,
 ) -> Result<(), String> {
+    let _guard = CUSTOM_GATE.lock().map_err(|_| "AI 설정을 다시 저장해 주세요.".to_string())?;
     let dir = config_dir();
     std::fs::create_dir_all(&dir).map_err(|e| format!("설정 폴더를 만들지 못했습니다: {e}"))?;
 
     if base_url.trim().is_empty() {
-        let _ = std::fs::remove_file(dir.join("custom.json"));
-        let _ = std::fs::remove_file(key_path("custom"));
+        remove_key(&key_path("custom"))?;
+        remove_key(&dir.join("custom.json"))?;
         return Ok(());
     }
-    // Trailing slashes turn into "//chat/completions", which some servers 404 on.
-    let base = base_url.trim().trim_end_matches('/').to_string();
+    let base = crate::ai_endpoint::validate(&base_url, &model, &key)?;
+    let previous = custom_config().map(|v| v.1);
+    let same_destination = previous.as_deref() == Some(base.as_str());
+    // Empty HTTPS key preserves a key only for the identical endpoint. Before
+    // changing destinations, remove the old key; fail closed if that fails.
+    if !same_destination || base.starts_with("http://") { remove_key(&key_path("custom"))?; }
 
     let doc = json!({
         "label": if label.trim().is_empty() { base.clone() } else { label.trim().to_string() },
         "base_url": base,
         "model": model.trim(),
     });
-    std::fs::write(
-        dir.join("custom.json"),
-        serde_json::to_vec_pretty(&doc).map_err(|e| e.to_string())?,
-    )
-    .map_err(|e| format!("저장하지 못했습니다: {e}"))?;
+    write_private(&dir.join("custom.json"), &serde_json::to_vec_pretty(&doc).map_err(|e| e.to_string())?)?;
 
     // A locally-run model needs no key, so an empty one is valid here.
-    save_api_key("custom".into(), key)
+    if !key.trim().is_empty() { save_key("custom", &key)?; }
+    Ok(())
 }
 
 fn read_key(provider: &str) -> Result<String, String> {
+    if !known(provider) { return Err("알 수 없는 제공자입니다.".into()); }
     std::fs::read_to_string(key_path(provider))
         .map(|s| s.trim().to_string())
         .map_err(|_| "API 키가 저장되어 있지 않습니다. 설정에서 넣어 주세요.".to_string())
@@ -476,10 +512,15 @@ pub async fn ai_fill(provider: String, task: String, input: String) -> Result<Va
     if input.trim().is_empty() {
         return Err("무엇을 만들지 적어 주세요.".into());
     }
-    let key = read_key(&provider)?;
+    // A configured local OpenAI-compatible model may intentionally have no key.
+    let key = if provider == "custom" {
+        String::new()
+    } else {
+        read_key(&provider)?
+    };
     let system = instructions(&task)?;
 
-    let client = reqwest::Client::new();
+    let client = crate::ai_endpoint::client()?;
     let text = match provider.as_str() {
         "anthropic" => {
             let body = json!({
@@ -563,8 +604,7 @@ pub async fn ai_fill(provider: String, task: String, input: String) -> Result<Va
                 .to_string()
         }
         "custom" => {
-            let (_, base, model) =
-                custom_config().ok_or_else(|| "커스텀 제공자가 설정되지 않았습니다.".to_string())?;
+            let (base, model, key) = custom_request_settings()?;
             openai_compatible(&client, &base, &model, &key, system, &input, true).await?
         }
         _ => return Err("알 수 없는 제공자입니다.".into()),
@@ -587,6 +627,7 @@ async fn openai_compatible(
     input: &str,
     want_json: bool,
 ) -> Result<String, String> {
+    let base = crate::ai_endpoint::validate(base, model, key)?;
     let mut body = json!({
         "model": model,
         "messages": [
@@ -747,7 +788,24 @@ pub fn ai_order_save(customer: bool, order: Vec<String>) -> Result<Value, String
     Ok(ai_order_read())
 }
 
+fn provider_available(provider: &str) -> bool {
+    if provider == "custom" {
+        custom_config().is_some()
+    } else {
+        read_key(provider).map(|k| !k.is_empty()).unwrap_or(false)
+    }
+}
+
 fn try_order(preferred: &str, customer: bool) -> Vec<String> {
+    // Choosing a local/custom endpoint must not silently send a failed request
+    // to a cloud provider whose key happens to be stored on this computer.
+    if preferred == "custom" {
+        return if provider_available("custom") {
+            vec!["custom".to_string()]
+        } else {
+            Vec::new()
+        };
+    }
     // 사장이 끌어다 놓은 순서가 있으면 그것이 이긴다. 없으면 기본값.
     let dragged = saved_order(customer);
     let base: Vec<String> = if dragged.is_empty() {
@@ -766,14 +824,14 @@ fn try_order(preferred: &str, customer: bool) -> Vec<String> {
         b
     };
     let mut out: Vec<String> = Vec::new();
-    if !preferred.is_empty() && read_key(preferred).map(|k| !k.is_empty()).unwrap_or(false) {
+    if !preferred.is_empty() && provider_available(preferred) {
         out.push(preferred.to_string());
     }
     for p in &base {
         if out.iter().any(|x| x == p) {
             continue;
         }
-        if read_key(p).map(|k| !k.is_empty()).unwrap_or(false) {
+        if provider_available(p) {
             out.push(p.clone());
         }
     }
@@ -825,11 +883,11 @@ pub async fn ai_answer_any(
 /// own questions, and the two-provider comparison. Copying the five
 /// provider branches three times is how they drift apart.
 pub async fn ai_raw(provider: String, system: String, input: String) -> Result<String, String> {
-    let key = read_key(&provider).unwrap_or_default();
+    let key = if provider == "custom" { String::new() } else { read_key(&provider)? };
     if key.is_empty() && provider != "custom" {
         return Err("API 키가 저장되어 있지 않습니다.".into());
     }
-    let client = reqwest::Client::new();
+    let client = crate::ai_endpoint::client()?;
     match provider.as_str() {
         "anthropic" => {
             let body = json!({
@@ -906,8 +964,7 @@ pub async fn ai_raw(provider: String, system: String, input: String) -> Result<S
                 .to_string())
         }
         "custom" => {
-            let (_, base, model) =
-                custom_config().ok_or_else(|| "커스텀 제공자가 설정되지 않았습니다.".to_string())?;
+            let (base, model, key) = custom_request_settings()?;
             openai_compatible(&client, &base, &model, &key, &system, &input, false).await
         }
         _ => Err("알 수 없는 제공자입니다.".into()),
@@ -923,7 +980,7 @@ pub async fn ai_answer(
     if question.trim().is_empty() {
         return Err("질문이 비어 있습니다.".into());
     }
-    let key = read_key(&provider).unwrap_or_default();
+    let key = if provider == "custom" { String::new() } else { read_key(&provider)? };
     if key.is_empty() && provider != "custom" {
         return Err("API 키가 저장되어 있지 않습니다.".into());
     }
@@ -1025,6 +1082,53 @@ mod order_pref_tests {
 
     /// 나중에 제공자가 하나 늘었는데 옛 목록을 저장해 둔 가게에서 그곳이
     /// **영원히 안 쓰이면**, 키를 넣어도 아무 일이 없다. 조용해서 더 나쁘다.
+    #[test]
+    #[ignore]
+    fn custom_keyless_stays_local_even_when_cloud_keys_exist() {
+        with_home("rv-custom-local", || {
+            save_custom_provider("Synthetic local".into(), "http://127.0.0.1:11434/v1".into(), "synthetic".into(), "".into()).unwrap();
+            save_api_key("openai".into(), "synthetic-not-a-real-key".into()).unwrap();
+            assert_eq!(try_order("custom", false), vec!["custom"]);
+            assert_eq!(try_order("custom", true), vec!["custom"]);
+            assert!(custom_request_settings().unwrap().2.is_empty());
+            delete_api_key("custom".into()).unwrap();
+            assert!(try_order("custom", false).is_empty(), "An unavailable selected local provider must not switch to cloud");
+        });
+    }
+
+    #[test]
+    #[ignore]
+    fn custom_destination_change_does_not_reuse_a_previous_key() {
+        with_home("rv-custom-origin", || {
+            save_custom_provider("Synthetic".into(), "https://alpha.example/v1".into(), "synthetic-a".into(), "synthetic-not-a-real-key".into()).unwrap();
+            save_custom_provider("Synthetic".into(), "https://alpha.example/v1".into(), "synthetic-b".into(), "".into()).unwrap();
+            assert_eq!(custom_request_settings().unwrap().2, "synthetic-not-a-real-key", "A model-only edit must preserve the same endpoint key");
+            save_custom_provider("Synthetic".into(), "https://beta.example/v1".into(), "synthetic-b".into(), "".into()).unwrap();
+            let (base, _, key) = custom_request_settings().unwrap();
+            assert_eq!(base, "https://beta.example/v1");assert!(key.is_empty(), "A new destination must never inherit a previous key");
+            assert!(save_custom_provider("Synthetic".into(), "http://192.168.1.5:8000/v1".into(), "synthetic".into(), "synthetic-not-a-real-key".into()).is_err());
+            assert_eq!(custom_request_settings().unwrap().0, "https://beta.example/v1");
+            assert!(read_key("../unknown").is_err());
+        });
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[ignore]
+    fn custom_key_is_private_at_creation_and_failure_preserves_existing_files() {
+        use std::os::unix::fs::PermissionsExt;
+        with_home("rv-custom-private", || {
+            save_custom_provider("Synthetic".into(), "https://alpha.example/v1".into(), "synthetic".into(), "synthetic-not-a-real-key".into()).unwrap();
+            assert_eq!(std::fs::metadata(key_path("custom")).unwrap().permissions().mode() & 0o777, 0o600);
+            let config = std::fs::read(config_dir().join("custom.json")).unwrap();
+            let destination = config_dir().join("synthetic-directory");std::fs::create_dir(&destination).unwrap();
+            assert!(write_private(&destination, b"synthetic").is_err());
+            assert_eq!(std::fs::read(config_dir().join("custom.json")).unwrap(), config);
+            assert_eq!(custom_request_settings().unwrap().2, "synthetic-not-a-real-key");
+            assert!(std::fs::read_dir(config_dir()).unwrap().all(|entry| !entry.unwrap().file_name().to_string_lossy().contains("pending-")));
+        });
+    }
+
     #[test]
     #[ignore]
     fn a_provider_added_later_still_gets_tried() {
@@ -1147,7 +1251,7 @@ pub async fn ai_ask_owner(provider: String, question: String) -> Result<Value, S
         return Err("API 키가 하나도 없습니다. 설정에서 넣어 주세요.".into());
     }
     let sys = format!(
-        "You are the assistant inside PLAY X Raven, talking to the shop owner in Korean.\n\
+        "You are the assistant inside RavenVault Desktop, talking to the shop owner in Korean.\n\
          Be concrete and brief — 3~6 sentences unless they ask for more.\n{}",
         crate::knowledge::owner_brief()
     );

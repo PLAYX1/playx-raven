@@ -1,45 +1,4 @@
-# 맥·윈도우·리눅스 설치 파일을 만들어 공개 저장소에 올린다.
-#
-# 🔴 왜 깃허브에서 만드나 — **한 대의 컴퓨터로는 셋을 못 만든다.**
-# 리눅스 빌드에는 `webkit2gtk` 가 필요한데 그건 리눅스에만 있고, 윈도우
-# 빌드에는 WebView2 와 MSVC 링커가 필요한데 그건 윈도우에만 있다. 실측으로
-# 확인했다(맥에 webkit2gtk 없음). 그래서 세 기계가 각각 자기 것을 만든다.
-#
-# ## 어디에 올리나
-#
-# `PLAYX1/playx-raven-releases` — **파일만 담는 공개 저장소**다.
-# 소스가 있는 `playx-raven` 은 비공개로 남는다.
-#
-# 왜 나눴나:
-#   - 비공개 저장소의 릴리스 파일은 **로그인 없이는 안 열린다.** 사장에게
-#     깃허브 계정을 만들라고 할 수는 없다.
-#   - `playx` 본체에 넣으면 판올림마다 30MB 씩 저장소가 커지고, 한 번 커지면
-#     못 줄인다(지금 이미 .git 이 721MB).
-#
-# 사장은 깃허브 화면을 볼 일이 없다 — rvn.ex.erci.se 의 단추가 파일을 바로
-# 받는다. 깃허브 화면은 "어느 파일을 눌러야 하지" 로 사람을 잃는 자리다.
-#
-# ## 왜 PAT(개인 토큰) 를 안 쓰나
-#
-# 깃허브는 **토큰을 API 로 만들 수 없다**(`POST /user/tokens` → 404). 사람이
-# 브라우저에서 만들어야 하고, 그건 자동화가 끊기는 자리다.
-#
-# 대신 **배포키(SSH)** 를 쓴다. gh 로 넣을 수 있고, 무엇보다 **범위가 저장소
-# 하나**다. 개인 토큰은 그 사람의 모든 저장소에 닿지만 이 열쇠는
-# `playx-raven-releases` 에만 닿는다 — 그리고 거기엔 설치 파일밖에 없다.
-#
-# 그래서 릴리스 API 대신 **git push** 로 올린다. 배포키는 git 만 되고 API 는
-# 안 된다. 파일은 `raw.githubusercontent.com` 이 그대로 내어 준다.
-#
-# ⚠️ 판올림마다 `dist` 가지를 **뿌리째 새로 만든다**(orphan). 옛 판을 쌓아
-# 두면 저장소가 판올림마다 40MB 씩 커지고 되돌릴 수 없다. 사람은 늘 최신을
-# 받고, 자동 판올림도 우리 서버가 알려주는 최신 주소를 쓴다.
-#
-# ## ⚠️ 서명
-#
-# 자동 판올림은 `TAURI_SIGNING_PRIVATE_KEY` 로 서명된 것만 설치한다.
-# 그 열쇠는 **이 저장소에 없다**(`~/.playx-raven/updater.key`). 저장소 비밀로
-# 넣어 둔다. 새면 남이 가짜 판올림을 밀어넣을 수 있다.
+# RavenVault Desktop: preserve updater identity and every published version.
 name: 설치 파일 만들기
 
 # 🔴 판올림 둘이 겹치면 `dist` 를 서로 덮어쓰다 터진다. 실측:
@@ -149,6 +108,15 @@ jobs:
           node-version: 20
 
       - run: npm ci
+
+      - name: Validate version and release manifest checks
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        shell: bash
+        run: |
+          node --test scripts/release-manifest.test.mjs
+          node --input-type=module -e "import fs from 'node:fs'; const v=process.env.RELEASE_VERSION || process.env.GITHUB_REF_NAME.replace(/^v/,''); if(!/^\d+\.\d+\.\d+$/.test(v) || JSON.parse(fs.readFileSync('package.json')).version!==v || JSON.parse(fs.readFileSync('src-tauri/tauri.conf.json')).version!==v) throw Error('Release version must match source');"
+
 
       # ── 레이븐 노드를 같이 넣는다 ─────────────────────────────────
       #
@@ -375,6 +343,8 @@ jobs:
           echo "✅ 서명 유효"
 
       - name: 만든 것 모으기
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
         shell: bash
         run: |
           mkdir -p out
@@ -383,9 +353,8 @@ jobs:
           # 🔴 「GITHUB_REF_NAME」 은 태그로 돌 때만 판 번호다. 손으로 돌리면
           # 가지 이름(「main」)이 들어가서 파일이 」…-main-windows.msi」 가 됐다.
           # 사장이 받은 파일이 몇 판인지 알 수 없다.
-          V="${{ inputs.version }}"
-          [ -z "$V" ] && V="${GITHUB_REF_NAME#v}"
-          [ -z "$V" ] || [ "$V" = "main" ] && V="0.0.0-dev"
+          set -euo pipefail
+          V="${RELEASE_VERSION:-${GITHUB_REF_NAME#v}}"
           B="src-tauri/target/${{ matrix.target }}/release/bundle"
           find "$B" -maxdepth 2 -type f \
             \( -name '*.dmg' -o -name '*.msi' -o -name '*.exe' -o -name '*.AppImage' -o -name '*.deb' \) \
@@ -476,242 +445,62 @@ jobs:
 
   publish:
     needs: build
-    # 🔴 하나가 실패해도 나머지는 올린다. 넷을 다 기다리면 윈도우 하나 때문에
-    # 맥 사장이 못 받는다. 무엇이 빠졌는지는 릴리스 설명에 적는다.
-    if: always()
+    # Keep the current release if any platform failed.
+    if: success()
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4   # 이 저장소가 아니라 열쇠 준비용 셸만 쓴다
-        with: { fetch-depth: 0 }
-
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
       - uses: actions/download-artifact@v4
         with:
           path: all
-
-      - name: 한 곳에 모으고 해시 적기
+      - name: Collect complete signed release
         run: |
-          mkdir -p rel && find all -type f -exec cp {} rel/ \;
-          cd rel && sha256sum * > SHA256SUMS.txt || true
-          ls -la
-
-      - name: 열쇠 준비
+          set -euo pipefail
+          mkdir rel
+          find all -type f -exec cp {} rel/ \;
+      - name: Prepare existing release-repository credential
         env:
-          # ⚠️ 이 열쇠는 「playx-raven-releases」 **한 곳에만** 닿는다. 소스
-          # 저장소에는 못 쓴다 — 새더라도 소스가 같이 새지 않게.
           KEY: ${{ secrets.RELEASES_DEPLOY_KEY }}
         run: |
-          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
           printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          # 처음 보는 서버라고 물어보면 거기서 멈춘다. 깃허브 지문을 미리 넣는다.
           ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
-
-      - name: 공개 저장소에 올리기
+      - name: Publish complete version without replacing previous artifacts
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
         run: |
-          V="${{ inputs.version }}"
-          [ -z "$V" ] && V="${GITHUB_REF_NAME#v}"
-          [ -z "$V" ] || [ "$V" = "main" ] && V="0.0.0-dev"
-          git config --global user.name playx1
-          git config --global user.email playexercise@gmail.com
-          git clone --depth 1 git@github.com:PLAYX1/playx-raven-releases.git pub
+          set -euo pipefail
+          V="${RELEASE_VERSION:-${GITHUB_REF_NAME#v}}"
+          git clone --depth 1 --branch dist git@github.com:PLAYX1/playx-raven-releases.git pub
+          node scripts/release-manifest.mjs rel pub "$V"
           cd pub
-          # 🔴 **지우기 전에 넣을 것이 다 있는지 본다.**
-          #
-          #    2026-08-27: 윈도우 하나가 네트워크 오류로 실패했는데 이 단계가
-          #    `if: always()` 로 그대로 돌았고, dist 를 뿌리째 지운 뒤 있는
-          #    것만 올렸다. **맥은 성공했는데 같이 사라졌다.** 전부 404.
-          #
-          #    하나라도 없으면 옛 dist 를 그대로 두고 덮어쓰기만 한다 —
-          #    **404 보다는 옛 판이 낫다.**
-          MISSING=""
-          for suffix in windows.exe windows.msi mac-apple-silicon.dmg mac-intel.dmg linux.AppImage; do
-            ls ../rel/ | grep -q -- "-$suffix$" || MISSING="$MISSING $suffix"
-          done
-          if [ -n "$MISSING" ]; then
-            echo "⚠️ 빠진 것:$MISSING — dist 를 지우지 않고 덮어쓰기만 합니다"
-            git checkout dist 2>/dev/null || git checkout --orphan dist
-          else
-            echo "✅ 다섯 개가 다 있습니다 — 뿌리째 새로 만듭니다"
-            git checkout --orphan dist
-            git rm -rf . >/dev/null 2>&1 || true
-            rm -rf ./* .gitignore 2>/dev/null || true
-          fi
-          # 🔴 깃허브는 파일 하나가 100MB 를 넘으면 **밀 수 없다.** 노드와
-          #    파일창고를 넣으니 리눅스 설치 파일이 136MB 가 되어 올리기가
-          #    통째로 실패했다(실측 2026-08-26). 앞으로 더 넣으면 윈도우·맥도
-          #    같은 벽에 부딪힌다.
-          #
-          #    큰 것은 깃에 안 담는다. 작은 것(표·판번호·서명)만 담고, 설치
-          #    파일은 **릴리스 자산**으로 올린다 — 거기는 한 파일 2GB 까지다.
-          #    릴리스에 올리는 것은 아래 별도 단계에서 한다.
-          for f in ../rel/*; do
-            [ -f "$f" ] || continue
-            sz=$(wc -c < "$f")
-            if [ "$sz" -lt 95000000 ]; then
-              cp "$f" .
-            else
-              echo "깃에는 안 담습니다(${sz} 바이트): $(basename "$f")"
-            fi
-          done
-
-          # 🔴 판 번호가 안 붙은 이름도 **같이** 올린다.
-          #
-          #    「dist」 는 판올림마다 뿌리째 새로 만든다. 그래서 v0.1.3 을 올린
-          #    순간 0.1.2 파일이 전부 사라졌는데, 랜딩(「public/rvn/index.html」)
-          #    은 그대로 0.1.2 를 가리키고 있었다 — 맥·인텔맥·윈도우·리눅스
-          #    **네 개 전부 404**. 사이트에 온 사람은 아무것도 못 받았다.
-          #
-          #    판마다 남의 저장소 파일 여덟 자리를 손으로 고치는 방식은
-          #    언젠가 또 빠뜨린다. 안 바뀌는 이름을 하나 두고 그걸 가리키게
-          #    한다. 판 번호가 붙은 이름도 그대로 남는다 — 특정 판을 콕
-          #    집어 받아야 할 때가 있다.
-          for f in PLAY-X-Raven-*; do
-            case "$f" in
-              *.md) continue ;;
-            esac
-            latest=$(echo "$f" | sed "s/PLAY-X-Raven-[0-9][0-9.]*-/PLAY-X-Raven-latest-/")
-            [ "$latest" = "$f" ] || cp "$f" "$latest"
-          done
-          # 무엇이 최신인지 기계도 읽을 수 있게 적어 둔다.
-          printf '%s\n' "$V" > VERSION
-
-          # 🔴 자동 판올림이 읽을 표. 서명이 있는 것만 담는다 — 서명 없는
-          #    줄을 담으면 앱이 받아 놓고 설치를 거부한다(더 나쁘다).
-          node -e "
-            const fs=require('fs');
-            const V=process.argv[1];
-            // 🔴 설치 파일은 이제 릴리스 자산이다. 깃 가지 주소를 적으면
-            //    판올림이 없는 파일을 받으러 간다(100MB 넘는 것은 깃에 없다).
-            const R='https://raw.githubusercontent.com/PLAYX1/playx-raven-releases/dist';
-            // 🔴 이름을 **짐작하지 않는다.** 처음엔 「.app.tar.gz」 라고 적었는데
-            //    실제로는 「.tar.gz」 로 떨어져서 맥 둘이 표에서 통째로 빠졌다
-            //    (윈도우·리눅스만 담겼다). 짐작이 틀려도 오류가 안 나고
-            //    **조용히 맥 사장만 판올림을 못 받는다** — 제일 나쁜 종류다.
-            //    그래서 그 자리에 실제로 있는 .sig 를 세어 담는다.
-            const label={
-              'windows':           'windows-x86_64',
-              'mac-apple-silicon': 'darwin-aarch64',
-              'mac-intel':         'darwin-x86_64',
-              'linux':             'linux-x86_64',
-            };
-            // 판올림으로 받을 수 있는 것만. dmg·msi 는 Tauri 가 안 받는다.
-            const okExt=['.tar.gz','.AppImage','.exe'];
-            const platforms={};
-            for (const f of fs.readdirSync('.')) {
-              if (!f.endsWith('.sig')) continue;
-              const base=f.slice(0,-4);
-              if (!fs.existsSync(base)) continue;
-              if (!okExt.some(e=>base.endsWith(e))) continue;
-              const m=base.match(/^PLAY-X-Raven-(.+?)-([a-z-]+)\.(?:tar\.gz|AppImage|exe)$/);
-              if (!m || m[1]!==V) continue;
-              const k=label[m[2]];
-              if (!k || platforms[k]) continue;
-              // 🔴 **판 번호가 든 이름을 표에 쓰면 안 된다.**
-              //
-              //    `dist` 는 판을 낼 때마다 **강제로 덮어쓴다**(`push -f`).
-              //    그래서 그 가지에는 **최신 판 하나만** 남는다. 사장 앱이
-              //    0.1.90 주소를 받아 든 사이에 0.1.91 이 올라가면, 그 파일은
-              //    이미 지워졌고 「받기」를 누르는 순간 **404** 다.
-              //    2026-08-30 실측: 하루에 판을 여덟 번 내면서 계속 났다.
-              //    대표님 화면: `Download request failed with status: 404`.
-              //
-              //    같은 자리에 **`latest-` 라는 안 변하는 이름**을 이미 올리고
-              //    있었다. 표는 그 이름을 쓴다 — 언제 눌러도 그 자리에 파일이
-              //    있다. 판 번호는 `version` 이 이미 말한다.
-              const stable = base.replace('-'+V+'-', '-latest-');
-              platforms[k]={
-                signature: fs.readFileSync(f,'utf8').trim(),
-                url: R+'/'+(fs.existsSync(stable) ? stable : base),
-              };
-            }
-            const out={
-              version: V,
-              notes: '새 판이 나왔습니다.',
-              pub_date: new Date().toISOString(),
-              platforms,
-            };
-            // 🔴 **비어 있으면 여기서 멈춘다.**
-            //
-            //    이 표가 비면 모든 사장에게 「새 판 없음」(204)이 나간다.
-            //    실제로 그렇게 **열 판 넘게** 아무도 판올림을 못 받았고,
-            //    아무 오류도 안 났기 때문에 몇 주 동안 몰랐다.
-            //
-            //    여태 이 자리는 「없음」이라고 **적기만** 했다. 적어 두는 것은
-            //    막는 것이 아니다 — 아무도 그 줄을 안 읽는다. 올라가기 전에
-            //    끊어야 한다. 빈 표를 올리는 것보다 릴리스가 실패하는 편이
-            //    훨씬 낫다: 실패는 보이고, 빈 표는 안 보인다.
-            const got=Object.keys(platforms);
-            console.log('latest.json 에 담긴 기계:', got.join(', ') || '없음');
-            if (!got.length) {
-              console.error('🔴 판올림 표가 비었습니다. 이대로 올리면 모든 사장이 새 판을 못 받습니다.');
-              console.error('   서명(.sig)이 안 만들어졌을 수 있습니다 — tauri.conf.json 의');
-              console.error('   bundle.createUpdaterArtifacts 가 true 인지 보세요.');
-              process.exit(1);
-            }
-            fs.writeFileSync('latest.json', JSON.stringify(out,null,2));
-          " "$V"
-          cat > README.md <<EOF
-          # PLAY X Raven $V
-
-          가게 컴퓨터용 **설치 파일만** 있습니다. 소스는 여기 없습니다.
-
-          받으시는 곳: <https://rvn.ex.erci.se>
-
-          받은 파일이 맞는지 확인하시려면 \`SHA256SUMS.txt\` 의 값과
-          비교하세요. 다르면 받다가 깨졌거나 누가 바꾼 것이니 **열지 마세요.**
-          EOF
-          git add -A
-          git commit -q -m "PLAY X Raven $V"
-          # 줄을 세워 두었어도, 손으로 돌린 것과 겹칠 수 있다. 한 번 더 해 본다 —
-          # 여기서 실패하면 만든 설치 파일이 아무 데도 안 올라간다.
-          if ! git push -f origin dist; then
-            echo "한 번 실패했습니다. 다시 받아서 한 번 더 합니다."
-            sleep 10
-            git fetch origin dist || true
-            git push -f origin dist
-          fi
-
-          # 🔴 **올렸다고 받아지는 것이 아니다.** 오늘 SHA256SUMS 만 올라가고
-          #    파일은 전부 404 였는데 이 단계는 성공으로 끝났다. 아무도
-          #    확인하지 않았고 대표님이 받으려다 아셨다.
-          echo "── 진짜 받아지는지 확인 ──"
-          B=https://raw.githubusercontent.com/PLAYX1/playx-raven-releases/dist
-          sleep 15
-          BAD=""
-          for f in VERSION SHA256SUMS.txt PLAY-X-Raven-latest-windows.exe \
-                   PLAY-X-Raven-latest-windows.msi PLAY-X-Raven-latest-mac-apple-silicon.dmg \
-                   PLAY-X-Raven-latest-mac-intel.dmg; do
-            code=$(curl -sIL -o /dev/null -w "%{http_code}" --max-time 60 "$B/$f")
-            echo "  $code  $f"
-            [ "$code" = "200" ] || BAD="$BAD $f"
-          done
-          [ -z "$BAD" ] || { echo "🔴 받아지지 않습니다:$BAD"; exit 1; }
-          echo "✅ 전부 받아집니다"
-
-          # 🔴 **판올림 표가 비어 있으면 여기서 걸린다.**
-          #
-          #    2026-08-21~08-30, 열 판 넘게 이 표의 「platforms」 가 `{}` 인 채로
-          #    나갔다. 설치 파일은 멀쩡히 올라갔고 이 단계까지 전부 초록불이라
-          #    아무도 몰랐다 — 서버는 모두에게 204(「최신입니다」)를 답했고
-          #    사장님들은 눌러도 아무 일이 안 일어나는 판올림 단추를 봤다.
-          #    원인은 `createUpdaterArtifacts` 가 꺼져 있어 서명이 아예 안
-          #    만들어진 것이었다. **비어 있는 것은 성공이 아니다.**
-          echo "── 판올림 표 확인 ──"
-          KINDS=$(node -e "
-            const j=JSON.parse(require('fs').readFileSync('latest.json','utf8'));
-            process.stdout.write(Object.keys(j.platforms||{}).join(' '));
-          ")
-          echo "  담긴 기계: ${KINDS:-없음}"
-          [ -n "$KINDS" ] || {
-            echo "🔴 판올림 표가 비었습니다 — 아무도 새 판을 못 받습니다."
-            echo "   서명(.sig)이 안 만들어졌다는 뜻입니다."
-            echo "   src-tauri/tauri.conf.json 의 bundle.createUpdaterArtifacts 를 보세요."
-            exit 1; }
-
-      # ── 설치 파일은 릴리스 자산으로 ────────────────────────────────
-      #
-      # 🔴 깃 가지에는 100MB 를 못 올린다. 릴리스는 한 파일 2GB 까지다.
-      #    노드·파일창고를 넣은 뒤로 리눅스 것이 136MB 라 이 길뿐이다.
-      #
-      #    「latest」 라는 움직이는 태그 하나를 계속 덮어쓴다. 그래야
-      #    랜딩과 판올림이 가리키는 주소가 안 바뀐다.
+          git config user.name playx1
+          git config user.email playexercise@gmail.com
+          git add --pathspec-from-file=../release-paths.txt
+          git commit -m "RavenVault Desktop $V"
+          git push origin HEAD:dist
+      - name: Verify public version and every updater URL
+        run: |
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          const expected=JSON.parse(fs.readFileSync('pub/latest.json','utf8'));
+          const base='https://raw.githubusercontent.com/PLAYX1/playx-raven-releases/dist/';
+          for(let attempt=0;attempt<6;attempt++) {
+            try {
+              const live=await fetch(base+'latest.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw Error('Manifest unavailable');return r.json();});
+              if(live.version!==expected.version || Object.keys(live.platforms).length!==4) throw Error('Release metadata not visible yet');
+              for(const item of [...Object.values(live.platforms),...live.installers]) {
+                const r=await fetch(item.url,{method:'HEAD'});
+                if(!r.ok)throw Error('Installer not available: '+item.url);
+              }
+              console.log('All four updater platforms and five installers are publicly available: '+live.version);
+              process.exit(0);
+            } catch(e) { if(attempt===5)throw e; await new Promise(r=>setTimeout(r,10000)); }
+          }
+          JS
