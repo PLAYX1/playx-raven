@@ -25,7 +25,7 @@ On this Mac, 23 tests passed. Five mutations each produced assertion failures an
 
 Other checks cover an external node-style lock while fake RPC fails, exclusion until guard drop, same-process second-open prevention, a separate app session/scratch lock, preparation/previous-copy/readback/rename/flush failures, source identity and content changes, symlinks, directory/lock substitution, repeated previous copies, empty/missing/invalid records, exact partial success reporting, synthetic ZIP extraction, duplicate/traversal rejection, and complete/invalid/legacy backup listing.
 
-No actual wallet database, app screen, node shutdown, or LAN move was tested. Linux and Windows execution remains a release CI requirement; Mac success is not evidence those platforms passed.
+No actual wallet database, node shutdown, or LAN move was tested by this harness. The later [0.4.1 release run](https://github.com/PLAYX1/playx-raven/actions/runs/34772777228) passed this harness on Windows (21 tests), Linux (23), and both Mac build runners (23 each). The Intel Mac binary was cross-built on an Apple Silicon runner, not executed on Intel hardware. All four installer builds and the publication push succeeded; the run's final public metadata check failed during a short-lived CDN cache delay. Subsequent public checks verified all seven file hashes, all four updater signatures, tamper rejection, and both update domains. See `BACKUP-UPGRADE-DELIVERY.md` for the separate browser UI evidence and the exact release source.
 
 ## Production behavior and limits
 

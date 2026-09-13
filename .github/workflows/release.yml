@@ -19,12 +19,38 @@ on:
       version:
         description: "판 번호 (예: 0.1.1)"
         required: true
+      verify_only:
+        description: "게시된 판만 확인 (빌드·서명·게시 안 함)"
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
 
 jobs:
+  verify:
+    if: inputs.verify_only == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Test public verification
+        run: node --test scripts/verify-published-release.test.mjs
+      - name: Verify existing public release
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: node scripts/verify-published-release.mjs "$RELEASE_VERSION"
+
   build:
+    if: inputs.verify_only != true
     strategy:
       # 🔴 한 기계가 실패해도 나머지는 끝까지 만든다. 기본값은 하나가 죽으면
       # 전부 취소인데, 그러면 윈도우 하나 때문에 맥·리눅스까지 못 받는다.
@@ -497,21 +523,9 @@ jobs:
           git commit -m "RavenVault Desktop $V"
           git push origin HEAD:dist
       - name: Verify public version and every updater URL
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
         run: |
-          node --input-type=module <<'JS'
-          import fs from 'node:fs';
-          const expected=JSON.parse(fs.readFileSync('pub/latest.json','utf8'));
-          const base='https://raw.githubusercontent.com/PLAYX1/playx-raven-releases/dist/';
-          for(let attempt=0;attempt<6;attempt++) {
-            try {
-              const live=await fetch(base+'latest.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw Error('Manifest unavailable');return r.json();});
-              if(live.version!==expected.version || Object.keys(live.platforms).length!==4) throw Error('Release metadata not visible yet');
-              for(const item of [...Object.values(live.platforms),...live.installers]) {
-                const r=await fetch(item.url,{method:'HEAD'});
-                if(!r.ok)throw Error('Installer not available: '+item.url);
-              }
-              console.log('All four updater platforms and five installers are publicly available: '+live.version);
-              process.exit(0);
-            } catch(e) { if(attempt===5)throw e; await new Promise(r=>setTimeout(r,10000)); }
-          }
-          JS
+          set -euo pipefail
+          V="${RELEASE_VERSION:-${GITHUB_REF_NAME#v}}"
+          node scripts/verify-published-release.mjs "$V"
