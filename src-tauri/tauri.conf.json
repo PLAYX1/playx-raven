@@ -46,6 +46,8 @@
     ],
     "windows": {
       "wix": {
+        "upgradeCode": "693df2cf-3ab4-5924-9965-a3bf71d75a61",
+        "template": "installer/wix-ravenvault.wxs",
         "language": [
           "ko-KR",
           "en-US"
@@ -54,6 +56,7 @@
         "dialogImagePath": "icons/wix-dialog.bmp"
       },
       "nsis": {
+        "template": "installer/nsis-ravenvault.nsi",
         "installerIcon": "icons/icon.ico",
         "uninstallerIcon": "icons/icon.ico",
         "headerImage": "icons/nsis-header.bmp",

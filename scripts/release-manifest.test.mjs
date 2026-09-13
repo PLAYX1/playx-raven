@@ -38,6 +38,21 @@ test('Linux RPM output produced by the real Tauri build is preserved',()=>fixtur
   const name='PLAY-X-Raven-0.4.0-linux.rpm';
   await writeFile(path.join(source,name),'synthetic rpm');
   const {paths}=await prepareRelease(source,out,'0.4.0');
-  assert.ok(paths.includes('v0.4.0/'+name));
+  assert.ok(paths.includes(path.join('v0.4.0',name)));
   assert.equal(await readFile(path.join(out,'v0.4.0',name),'utf8'),'synthetic rpm');
+}));
+test('RavenVault keeps the original wallet, updater and Windows MSI identity',async()=>{
+  const config=JSON.parse(await readFile(new URL('../src-tauri/tauri.conf.json',import.meta.url),'utf8'));
+  assert.equal(config.identifier,'se.erci.ex.playx.raven');
+  assert.equal(config.bundle.windows.wix.upgradeCode,'693df2cf-3ab4-5924-9965-a3bf71d75a61');
+  assert.deepEqual(config.plugins.updater.endpoints,['https://rvn.ex.erci.se/update/{{target}}/{{arch}}/{{current_version}}']);
+  assert.equal(config.plugins.updater.dangerousInsecureTransportProtocol,false);
+});
+test('publishing an older or equal version cannot downgrade a newer public update',()=>fixture(async(source,out)=>{
+  await writeFile(path.join(out,'latest.json'),JSON.stringify({version:'0.4.1'}));
+  await assert.rejects(prepareRelease(source,out,'0.4.0'),/must be newer/);
+  assert.equal(JSON.parse(await readFile(path.join(out,'latest.json'),'utf8')).version,'0.4.1');
+  await assert.rejects(readFile(path.join(out,'v0.4.0','manifest.json')));
+  await writeFile(path.join(out,'latest.json'),JSON.stringify({version:'0.4.0'}));
+  await assert.rejects(prepareRelease(source,out,'0.4.0'),/must be newer/);
 }));

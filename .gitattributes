@@ -1,0 +1,2 @@
+# Keep the reviewed upstream installer bytes stable on Windows runners.
+src-tauri/installer/* text eol=lf

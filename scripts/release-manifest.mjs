@@ -22,6 +22,12 @@ export async function prepareRelease(source, destination, version) {
   // Never replace a previously published version. Old updater metadata stays usable.
   const versionDir = path.join(destination, `v${version}`);
   try { await stat(versionDir); throw new Error('Version already exists; use a new version'); } catch (e) { if (e.code !== 'ENOENT') throw e; }
+  try {
+    const current = JSON.parse(await readFile(path.join(destination, 'latest.json'), 'utf8')).version;
+    if (typeof current !== 'string' || !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(current)) throw new Error('Invalid currently published version');
+    const old = current.split('.').map(Number), next = version.split('.').map(Number);
+    if (next.reduce((order, n, i) => order || Math.sign(n - old[i]), 0) <= 0) throw new Error('Release must be newer than the currently published version');
+  } catch (e) { if (e.code !== 'ENOENT') throw e; }
   const base = `https://raw.githubusercontent.com/PLAYX1/playx-raven-releases/dist/v${version}`;
   const manifest = { version, notes: 'RavenVault Desktop: 웹 지갑 연결, 팬 소식, 오프라인 도구와 새 디자인. 기존 지갑과 가게 기록을 유지합니다.', pub_date: new Date().toISOString(), platforms: {}, installers: [] };
   for (const [suffix, platform] of Object.entries(platforms)) {
