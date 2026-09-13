@@ -27,6 +27,46 @@
 use serde_json::{json, Value};
 use std::path::PathBuf;
 
+#[path = "restore_lock.rs"]
+mod restore_lock;
+
+// Serializes unpack/restore/cleanup without holding a non-Send MutexGuard
+// across the RPC await. DataDirGuard separately excludes other node processes.
+static RESTORE_BUSY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+struct RestoreOperation {
+    session: Option<restore_lock::RestoreSessionGuard>,
+}
+impl RestoreOperation {
+    fn begin() -> Result<Self, String> {
+        use std::sync::atomic::Ordering;
+        RESTORE_BUSY
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .map_err(|_| "다른 복원이 진행 중입니다. 끝난 뒤 다시 시도해 주세요.".to_string())?;
+        match restore_lock::RestoreSessionGuard::acquire(&dir()) {
+            Ok(session) => Ok(Self {
+                session: Some(session),
+            }),
+            Err(error) => {
+                RESTORE_BUSY.store(false, Ordering::Release);
+                Err(error)
+            }
+        }
+    }
+    fn check(&self) -> Result<(), String> {
+        self.session
+            .as_ref()
+            .ok_or("복원 잠금을 다시 확인해 주세요.")?
+            .check()
+    }
+}
+impl Drop for RestoreOperation {
+    fn drop(&mut self) {
+        // Close the POSIX record-lock FD BEFORE allowing another local opener.
+        drop(self.session.take());
+        RESTORE_BUSY.store(false, std::sync::atomic::Ordering::Release);
+    }
+}
+
 fn dir() -> PathBuf {
     crate::paths::app_dir()
 }
@@ -201,83 +241,102 @@ fn unpack_if_zip(input: &str) -> Result<PathBuf, String> {
 /// 암호를 받아서 푼다. 빈 문자열이면 이 컴퓨터의 열쇠만 쓴다.
 fn unpack_with(input: &str, pass: &str) -> Result<PathBuf, String> {
     let p = PathBuf::from(input);
+    let scratch = dir().join("restore-open");
+    if let (Ok(source), Ok(temporary)) =
+        (std::fs::canonicalize(&p), std::fs::canonicalize(&scratch))
+    {
+        if source.starts_with(temporary) {
+            return Err(
+                "임시 복원 폴더는 백업 원본으로 사용할 수 없습니다. 원래 백업 파일을 골라 주세요."
+                    .into(),
+            );
+        }
+    }
     if p.is_dir() {
         return Ok(p);
     }
     if !p.is_file() {
         return Err("파일도 폴더도 아닙니다.".into());
     }
+    cleanup_opened().map_err(|e| {
+        format!("이전 임시 파일을 정리하지 못했습니다. 저장 폴더를 확인해 주세요: {e}")
+    })?;
+    std::fs::create_dir_all(dir()).map_err(|e| e.to_string())?;
+    let mut builder = std::fs::DirBuilder::new();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        builder.mode(0o700);
+    }
+    builder.create(&scratch).map_err(|e| e.to_string())?;
 
-    let scratch = dir().join("restore-open");
-    let _ = std::fs::remove_dir_all(&scratch);
-    std::fs::create_dir_all(&scratch).map_err(|e| e.to_string())?;
-
-    // 🔴 **잠근 백업을 먼저 푼다.** 우리가 만드는 백업은 `.zip.pxlock`(옛 이름은
-    //    `.zip.잠김`)이라 그대로는 zip 이 아니다. 여태 되돌리기는 zip 만 알아서,
-    //    잠근 백업을 고르면 「PLAY X Raven 백업이 아닙니다」로 끝났다.
-    //    **백업은 만드는 것보다 되돌리는 것이 본업이다.**
-    // 🔴 **이름으로 판단하면 안 된다. 이름은 거짓말을 한다.**
-    //
-    //    「가게 옮기기」가 그래서 통째로 안 됐다. 보내는 쪽은 **잠긴 파일**을
-    //    주는데(`backup_zip` 이 늘 잠근다), 받는 쪽 `move_fetch` 는 그걸
-    //    `이사.zip` 이라는 이름으로 저장한다. 확장자가 `zip` 이라 여기서
-    //    안 풀고 그대로 열려다 「이 파일은 PLAY X Raven 백업이 아닙니다」로
-    //    끝났다 — 대표님이 윈도우에서 본 그 글자다(2026-08-31).
-    //
-    //    파일 앞 여덟 바이트가 `PXRLOCK1` 이면 잠긴 것이다. 그걸 본다.
-    let 잠김 = std::fs::read(&p)
-        .map(|b| b.len() >= 8 && &b[..8] == b"PXRLOCK1")
-        .unwrap_or(false);
-    let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("");
-    let p = if 잠김 || ext == "pxlock" || ext == "잠김" {
-        let opened = scratch.join("backup.zip");
-        // 🔴 **암호를 만들어 놓고 쓸 길이 없었다.** 새 컴퓨터에서는 이 컴퓨터의
-        //    열쇠 파일이 없으니 「다른 컴퓨터의 자물쇠」라고 답하고 끝났다 —
-        //    정확히 백업이 필요한 그 상황에서 막힌다. 암호를 받는다.
+    let result = (|| {
+        // 🔴 **잠근 백업을 먼저 푼다.** 우리가 만드는 백업은 `.zip.pxlock`(옛 이름은
+        //    `.zip.잠김`)이라 그대로는 zip 이 아니다. 여태 되돌리기는 zip 만 알아서,
+        //    잠근 백업을 고르면 「PLAY X Raven 백업이 아닙니다」로 끝났다.
+        //    **백업은 만드는 것보다 되돌리는 것이 본업이다.**
+        // 🔴 **이름으로 판단하면 안 된다. 이름은 거짓말을 한다.**
         //
-        //    순서: ① 이 컴퓨터 열쇠 ② 사장이 친 암호. 같은 컴퓨터에서는
-        //    ①에서 바로 열리므로 암호를 안 물어본다.
-        let raw = std::fs::read(&p).map_err(|e| format!("읽지 못했습니다: {e}"))?;
-        let mut done = false;
-        if let Ok(k) = crate::lockbox::key_get_or_make() {
-            if crate::lockbox::unlock_file(&p, &opened, &k).is_ok() {
-                done = true;
+        //    「가게 옮기기」가 그래서 통째로 안 됐다. 보내는 쪽은 **잠긴 파일**을
+        //    주는데(`backup_zip` 이 늘 잠근다), 받는 쪽 `move_fetch` 는 그걸
+        //    `이사.zip` 이라는 이름으로 저장한다. 확장자가 `zip` 이라 여기서
+        //    안 풀고 그대로 열려다 「이 파일은 PLAY X Raven 백업이 아닙니다」로
+        //    끝났다 — 대표님이 윈도우에서 본 그 글자다(2026-08-31).
+        //
+        //    파일 앞 여덟 바이트가 `PXRLOCK1` 이면 잠긴 것이다. 그걸 본다.
+        let 잠김 = std::fs::read(&p)
+            .map(|b| b.len() >= 8 && &b[..8] == b"PXRLOCK1")
+            .unwrap_or(false);
+        let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("");
+        let p = if 잠김 || ext == "pxlock" || ext == "잠김" {
+            let opened = scratch.join("backup.zip");
+            // 🔴 **암호를 만들어 놓고 쓸 길이 없었다.** 새 컴퓨터에서는 이 컴퓨터의
+            //    열쇠 파일이 없으니 「다른 컴퓨터의 자물쇠」라고 답하고 끝났다 —
+            //    정확히 백업이 필요한 그 상황에서 막힌다. 암호를 받는다.
+            //
+            //    순서: ① 이 컴퓨터 열쇠 ② 사장이 친 암호. 같은 컴퓨터에서는
+            //    ①에서 바로 열리므로 암호를 안 물어본다.
+            let raw = std::fs::read(&p).map_err(|e| format!("읽지 못했습니다: {e}"))?;
+            let mut done = false;
+            if let Ok(k) = crate::lockbox::key_get_or_make() {
+                if crate::lockbox::unlock_file(&p, &opened, &k).is_ok() {
+                    done = true;
+                }
             }
-        }
-        if !done {
-            if pass.trim().is_empty() {
-                return Err("이 백업은 다른 컴퓨터에서 만든 것입니다. 그때 정하신 암호를 넣어 주세요.".into());
-            }
-            let (_body, env) = crate::lockbox::strip_wrap(&raw);
-            let env = env.ok_or_else(|| {
+            if !done {
+                if pass.trim().is_empty() {
+                    return Err(
+                        "이 백업은 다른 컴퓨터에서 만든 것입니다. 그때 정하신 암호를 넣어 주세요."
+                            .into(),
+                    );
+                }
+                let (_body, env) = crate::lockbox::strip_wrap(&raw);
+                let env = env.ok_or_else(|| {
                 "이 백업에는 암호로 여는 길이 없습니다. 만든 컴퓨터의 열쇠(9agn-…)가 있어야 합니다.".to_string()
             })?;
-            let k = crate::lockbox::unwrap_key(env, pass)?;
-            crate::lockbox::unlock_file(&p, &opened, &k)
-                .map_err(|_| "암호는 맞는데 파일이 손상됐습니다.".to_string())?;
-        }
-        opened
-    } else {
-        p
-    };
-
-    let file = std::fs::File::open(&p).map_err(|e| format!("열지 못했습니다: {e}"))?;
-    let mut zip = zip::ZipArchive::new(file)
-        .map_err(|_| "이 파일은 PLAY X Raven 백업이 아닙니다.".to_string())?;
-
-    for i in 0..zip.len() {
-        let mut entry = zip.by_index(i).map_err(|e| e.to_string())?;
-        // 압축 파일 안의 경로는 믿지 않는다. `../../` 이 들어 있으면 압축을 푸는
-        // 것만으로 남의 파일을 덮어쓴다. 파일 이름만 쓴다.
-        let Some(name) = entry.enclosed_name().and_then(|n| n.file_name().map(|f| f.to_owned()))
-        else {
-            continue;
+                let k = crate::lockbox::unwrap_key(env, pass)?;
+                crate::lockbox::unlock_file(&p, &opened, &k)
+                    .map_err(|_| "암호는 맞는데 파일이 손상됐습니다.".to_string())?;
+            }
+            opened
+        } else {
+            p
         };
-        let out = scratch.join(name);
-        let mut w = std::fs::File::create(&out).map_err(|e| e.to_string())?;
-        std::io::copy(&mut entry, &mut w).map_err(|e| e.to_string())?;
+
+        restore_files::extract_archive(&p, &scratch)?;
+        Ok(scratch.clone())
+    })();
+    match result {
+        Ok(path) => Ok(path),
+        Err(error) => {
+            if let Err(cleanup) = std::fs::remove_dir_all(&scratch) {
+                return Err(format!(
+                    "{error}; 임시 복원 폴더를 정리해 주세요: {cleanup}"
+                ));
+            }
+            Err(error)
+        }
     }
-    Ok(scratch)
 }
 
 /// Reads a backup folder and says what is inside, in counts a person can check.
@@ -287,12 +346,12 @@ fn unpack_with(input: &str, pass: &str) -> Result<PathBuf, String> {
 /// Restoring the wrong night's folder is the mistake this exists to catch.
 #[tauri::command]
 pub fn restore_survey(folder: String, pass: Option<String>) -> Result<Value, String> {
+    let _operation = RestoreOperation::begin()?;
     // 폴더든 zip 이든 여기서 같아진다.
     let dir = unpack_with(&folder, pass.as_deref().unwrap_or(""))?;
 
     let count_in = |file: &str, key: &str| -> Option<usize> {
-        let v: Value =
-            serde_json::from_str(&std::fs::read_to_string(dir.join(file)).ok()?).ok()?;
+        let v: Value = serde_json::from_str(&std::fs::read_to_string(dir.join(file)).ok()?).ok()?;
         Some(v.get(key)?.as_array()?.len())
     };
 
@@ -329,32 +388,46 @@ pub fn restore_survey(folder: String, pass: Option<String>) -> Result<Value, Str
         }));
     }
     if let Some(n) = count_in("passes.json", "passes") {
-        items.push(json!({ "key": "passes", "what": "회원", "detail": format!("{n}명"),
-                           "why": "이름·기간·남은 횟수" }));
+        items.push(
+            json!({ "key": "passes", "what": "회원", "detail": format!("{n}명"),
+                           "why": "이름·기간·남은 횟수" }),
+        );
     }
     if let Some(n) = count_in("tickets.json", "tickets") {
-        items.push(json!({ "key": "tickets", "what": "이용권", "detail": format!("{n}장"),
-                           "why": "카운터에서 판 표 — 잃으면 손님이 산 표가 사라집니다" }));
+        items.push(
+            json!({ "key": "tickets", "what": "이용권", "detail": format!("{n}장"),
+                           "why": "카운터에서 판 표 — 잃으면 손님이 산 표가 사라집니다" }),
+        );
     }
     if let Some(n) = count_in("bookings.json", "bookings") {
-        items.push(json!({ "key": "bookings", "what": "예약", "detail": format!("{n}건"),
-                           "why": "잃으면 손님은 오는데 가게가 모릅니다" }));
+        items.push(
+            json!({ "key": "bookings", "what": "예약", "detail": format!("{n}건"),
+                           "why": "잃으면 손님은 오는데 가게가 모릅니다" }),
+        );
     }
     if let Some(n) = count_in("sessions.json", "sessions") {
-        items.push(json!({ "key": "sessions", "what": "수업", "detail": format!("{n}개 회차"),
-                           "why": "신청자와 대기자" }));
+        items.push(
+            json!({ "key": "sessions", "what": "수업", "detail": format!("{n}개 회차"),
+                           "why": "신청자와 대기자" }),
+        );
     }
     if dir.join("fills.json").exists() {
-        items.push(json!({ "key": "fills", "what": "발송 기록", "detail": "있음",
-                           "why": "이게 없으면 복구 뒤 같은 자산을 한 번 더 보냅니다" }));
+        items.push(
+            json!({ "key": "fills", "what": "발송 기록", "detail": "있음",
+                           "why": "이게 없으면 복구 뒤 같은 자산을 한 번 더 보냅니다" }),
+        );
     }
     if dir.join("orders.json").exists() {
-        items.push(json!({ "key": "orders", "what": "주문 주소", "detail": "있음",
-                           "why": "손님이 적은 받을 주소" }));
+        items.push(
+            json!({ "key": "orders", "what": "주문 주소", "detail": "있음",
+                           "why": "손님이 적은 받을 주소" }),
+        );
     }
     if dir.join("sweep.json").exists() {
-        items.push(json!({ "key": "sweep", "what": "자동 송금", "detail": "있음",
-                           "why": "금고로 옮기는 설정" }));
+        items.push(
+            json!({ "key": "sweep", "what": "자동 송금", "detail": "있음",
+                           "why": "금고로 옮기는 설정" }),
+        );
     }
 
     // 어느 날 것인지가 "복원해도 되나"의 절반이다. 폴더면 폴더 이름이 날짜고,
@@ -377,125 +450,671 @@ pub fn restore_survey(folder: String, pass: Option<String>) -> Result<Value, Str
     }))
 }
 
-/// Puts a backup back.
-///
-/// `keys` selects what to restore, so a shop that only lost its member list does
-/// not have to touch its wallet. The wallet is the one that can go badly, so it
-/// carries its own conditions rather than riding along with the rest.
+/// Restores only after the replacement and a unique previous copy verify.
 #[tauri::command]
 pub async fn restore_apply(
     folder: String,
     keys: Vec<String>,
     pass: Option<String>,
 ) -> Result<Value, String> {
+    let operation = RestoreOperation::begin()?;
+    let app_target = dir();
+    let wallet_target = raven_dir();
     let src = unpack_with(&folder, pass.as_deref().unwrap_or(""))?;
-    let want = |k: &str| keys.iter().any(|x| x == k);
-
-    let mut done = Vec::new();
-    let mut failed = Vec::new();
-
-    // ── 지갑 ──
-    if want("wallet") && src.join("wallet.dat").exists() {
-        // 노드가 돌고 있으면 절대 안 된다. 실행 중인 지갑 파일을 갈아 끼우면
-        // 열리기는 하는데 내용이 틀린 지갑이 나오고, 그건 안 열리는 것보다 나쁘다.
-        let node_up = crate::raven::call_rpc("getblockchaininfo", json!([]))
+    if std::fs::symlink_metadata(src.join(".backup-complete.json")).is_ok() && !crate::backup::complete_snapshot(&src) {
+        let _ = cleanup_opened();
+        return Err("백업 내용이 완료 기록과 다릅니다. 현재 파일은 바꾸지 않았습니다. 다른 백업을 골라 주세요.".into());
+    }
+    // RPC failure is ambiguous (authentication, timeout, shutdown). The compatible
+    // datadir lock, acquired below AFTER this await, provides exclusion instead.
+    let rpc_responding = if keys.iter().any(|key| key == "wallet") {
+        crate::raven::call_rpc("getblockchaininfo", json!([]))
             .await
-            .is_ok();
-        if node_up {
-            failed.push(json!({
-                "what": "지갑",
-                "why": "노드가 켜져 있습니다. 먼저 노드를 끄고 다시 하세요 — 켜진 채로 바꾸면 지갑이 깨집니다.",
-            }));
-        } else {
-            let dest = raven_dir().join("wallet.dat");
-            // 지금 것을 먼저 치운다. 잘못된 폴더를 되돌리는 것은 아침 9시에
-            // 줄을 세워 두고 흔히 하는 실수고, 이전 파일이 없으면 그 실수는
-            // 영구적이며 돈이다.
-            let mut kept: Option<String> = None;
-            if dest.exists() {
-                let aside = raven_dir().join("wallet.dat.before-restore");
-                match std::fs::rename(&dest, &aside) {
-                    Ok(_) => kept = Some(aside.to_string_lossy().to_string()),
-                    Err(e) => {
-                        failed.push(json!({ "what": "지갑", "why": format!("지금 지갑을 치우지 못했습니다: {e}") }));
-                        return Ok(json!({ "done": done, "failed": failed }));
+            .is_ok()
+    } else {
+        false
+    };
+    operation.check()?;
+    if dir() != app_target
+        || (keys.iter().any(|key| key == "wallet") && raven_dir() != wallet_target)
+    {
+        let _ = cleanup_opened();
+        return Err(
+            "복원 중 대상 폴더 설정이 바뀌었습니다. 대상 폴더를 확인하고 다시 시도해 주세요."
+                .into(),
+        );
+    }
+    let result = restore_files::apply(&src, &app_target, &wallet_target, &keys, rpc_responding);
+    // Run the internal cleanup while our operation gate is held.
+    let cleanup = cleanup_opened();
+    let mut result = result;
+    if let Err(error) = cleanup {
+        result["cleanup_warning"] = json!(format!("복원 임시 파일을 지우지 못했습니다. 이 컴퓨터를 안전하게 보관하고 다시 정리해 주세요: {error}"));
+    }
+    Ok(result)
+}
+
+// BEGIN RESTORE FILE SAFETY (also compiled by the standalone synthetic harness)
+mod restore_files {
+    use super::restore_lock::{self, DataDirGuard};
+    use serde_json::{json, Value};
+    use sha2::{Digest, Sha256};
+    use std::fs::{self, File, OpenOptions};
+    use std::io::{self, Read, Seek, SeekFrom, Write};
+    use std::path::{Path, PathBuf};
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    type Hook<'a> = dyn FnMut(&str, &Path) -> io::Result<()> + 'a;
+
+    #[derive(Debug)]
+    pub(super) struct RestoreError {
+        pub why: String,
+        pub previous: Option<PathBuf>,
+        pub changed: bool,
+    }
+
+    fn error(why: impl ToString) -> RestoreError {
+        RestoreError {
+            why: why.to_string(),
+            previous: None,
+            changed: false,
+        }
+    }
+
+    fn regular_file(path: &Path) -> io::Result<File> {
+        let meta = fs::symlink_metadata(path)?;
+        if !meta.is_file() || meta.file_type().is_symlink() {
+            return Err(io::Error::other(
+                "일반 파일만 되돌릴 수 있습니다. 다른 백업을 골라 주세요.",
+            ));
+        }
+        let mut options = OpenOptions::new();
+        options.read(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
+        }
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::{MetadataExt, OpenOptionsExt};
+            use windows_sys::Win32::Storage::FileSystem::*;
+            if meta.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+                return Err(io::Error::other(
+                    "바로가기 파일 대신 원본 파일을 골라 주세요.",
+                ));
+            }
+            options.custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
+        }
+        let file = options.open(path)?;
+        if !file.metadata()?.is_file() || !restore_lock::same_file_at(&file, path)? {
+            return Err(io::Error::other(
+                "파일이 바뀌었습니다. 백업을 다시 골라 주세요.",
+            ));
+        }
+        Ok(file)
+    }
+
+    fn hash(file: &mut File) -> io::Result<[u8; 32]> {
+        file.seek(SeekFrom::Start(0))?;
+        let mut digest = Sha256::new();
+        let mut buffer = [0u8; 65536];
+        loop {
+            let count = file.read(&mut buffer)?;
+            if count == 0 {
+                break;
+            }
+            digest.update(&buffer[..count]);
+        }
+        Ok(digest.finalize().into())
+    }
+
+    fn new_file(destination: &Path, suffix: &str) -> io::Result<(PathBuf, File)> {
+        let parent = destination
+            .parent()
+            .ok_or_else(|| io::Error::other("missing destination directory"))?;
+        let name = destination
+            .file_name()
+            .ok_or_else(|| io::Error::other("missing destination name"))?
+            .to_string_lossy();
+        for _ in 0..64 {
+            let sequence = NEXT.fetch_add(1, Ordering::Relaxed);
+            let path = parent.join(format!(
+                ".{name}.{suffix}-{}-{sequence}",
+                std::process::id()
+            ));
+            let mut options = OpenOptions::new();
+            options.read(true).write(true).create_new(true);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt;
+                options.mode(0o600);
+            }
+            match options.open(&path) {
+                Ok(file) => return Ok((path, file)),
+                Err(e) if e.kind() == io::ErrorKind::AlreadyExists => continue,
+                Err(e) => return Err(e),
+            }
+        }
+        Err(io::Error::other(
+            "보존 파일 자리를 만들지 못했습니다. 저장 공간을 확인해 주세요.",
+        ))
+    }
+
+    fn copy_checked(
+        source: &mut File,
+        destination: &Path,
+        suffix: &str,
+        hook: &mut Hook<'_>,
+    ) -> io::Result<(PathBuf, [u8; 32])> {
+        let (path, mut out) = new_file(destination, suffix)?;
+        let result = (|| {
+            source.seek(SeekFrom::Start(0))?;
+            let mut digest = Sha256::new();
+            let mut buffer = [0u8; 65536];
+            loop {
+                let count = source.read(&mut buffer)?;
+                if count == 0 {
+                    break;
+                }
+                out.write_all(&buffer[..count])?;
+                digest.update(&buffer[..count]);
+                hook(suffix, &path)?;
+            }
+            out.sync_all()?;
+            let expected: [u8; 32] = digest.finalize().into();
+            hook("verify-copy", &path)?;
+            if hash(&mut out)? != expected || hash(source)? != expected {
+                return Err(io::Error::other(
+                    "복사한 내용이 원본과 다릅니다. 다른 백업이나 저장 장치를 확인해 주세요.",
+                ));
+            }
+            Ok(expected)
+        })();
+        drop(out);
+        match result {
+            Ok(digest) => Ok((path, digest)),
+            Err(error) => {
+                // Only this create_new file; never delete a previous good copy.
+                if let Err(cleanup) = fs::remove_file(&path) {
+                    return Err(io::Error::other(format!(
+                        "{error}; 임시 파일 정리가 필요합니다: {} ({cleanup})",
+                        path.display()
+                    )));
+                }
+                Err(error)
+            }
+        }
+    }
+
+    fn sync_directory(directory: &Path) -> io::Result<()> {
+        #[cfg(unix)]
+        {
+            restore_lock::open_directory(directory)?.sync_all()
+        }
+        // Prepared file data is flushed on Windows. FlushFileBuffers cannot
+        // flush directories; ReplaceFileW has no supported write-through flag.
+        #[cfg(not(unix))]
+        {
+            let _ = directory;
+            Ok(())
+        }
+    }
+
+    fn replace(
+        stage: &Path,
+        destination: &Path,
+        had_destination: bool,
+        previous: &mut Option<PathBuf>,
+        changed: &mut bool,
+    ) -> io::Result<()> {
+        #[cfg(unix)]
+        {
+            if !had_destination {
+                // Atomic create-if-absent: never replace a file created by a
+                // writer after the earlier metadata check.
+                fs::hard_link(stage, destination)?;
+                *changed = true;
+                fs::remove_file(stage)?;
+                return Ok(());
+            }
+            use std::ffi::CString;
+            use std::os::unix::ffi::OsStrExt;
+            let from = CString::new(stage.as_os_str().as_bytes()).map_err(io::Error::other)?;
+            let to = CString::new(destination.as_os_str().as_bytes()).map_err(io::Error::other)?;
+            #[cfg(target_vendor = "apple")]
+            let result = unsafe { libc::renamex_np(from.as_ptr(), to.as_ptr(), libc::RENAME_SWAP) };
+            #[cfg(target_os = "linux")]
+            let result = unsafe {
+                libc::syscall(
+                    libc::SYS_renameat2,
+                    libc::AT_FDCWD,
+                    from.as_ptr(),
+                    libc::AT_FDCWD,
+                    to.as_ptr(),
+                    libc::RENAME_EXCHANGE,
+                ) as i32
+            };
+            #[cfg(not(any(target_vendor = "apple", target_os = "linux")))]
+            let result = {
+                return Err(io::Error::other(
+                    "이 운영체제는 원본을 보존하는 원자 교환을 지원하지 않습니다.",
+                ));
+            };
+            if result != 0 {
+                return Err(io::Error::last_os_error());
+            }
+            // The actual overwritten inode is now at stage, including a normal
+            // writer's last rename between verification and this syscall.
+            *changed = true;
+            *previous = Some(stage.to_path_buf());
+            use std::os::unix::fs::PermissionsExt;
+            regular_file(stage)?.set_permissions(fs::Permissions::from_mode(0o600))?;
+            regular_file(stage)?.sync_all()?;
+            Ok(())
+        }
+        #[cfg(windows)]
+        {
+            use std::os::windows::ffi::OsStrExt;
+            use windows_sys::Win32::Storage::FileSystem::{
+                MoveFileExW, ReplaceFileW, MOVEFILE_WRITE_THROUGH,
+            };
+            let wide = |path: &Path| {
+                path.as_os_str()
+                    .encode_wide()
+                    .chain(Some(0))
+                    .collect::<Vec<u16>>()
+            };
+            let from = wide(stage);
+            let to = wide(destination);
+            if !had_destination {
+                // No MOVEFILE_REPLACE_EXISTING: a concurrent new file wins.
+                if unsafe { MoveFileExW(from.as_ptr(), to.as_ptr(), MOVEFILE_WRITE_THROUGH) } == 0 {
+                    return Err(io::Error::last_os_error());
+                }
+                *changed = true;
+                return Ok(());
+            }
+            let (backup, placeholder) = new_file(destination, "before-restore-at-replace")?;
+            drop(placeholder);
+            fs::remove_file(&backup)?;
+            let backup_wide = wide(&backup);
+            // ReplaceFileW saves the file actually replaced. Do not set its
+            // unsupported REPLACEFILE_WRITE_THROUGH flag or ignore ACL errors.
+            let success = unsafe {
+                ReplaceFileW(
+                    to.as_ptr(),
+                    from.as_ptr(),
+                    backup_wide.as_ptr(),
+                    0,
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                )
+            } != 0;
+            let error = io::Error::last_os_error();
+            if backup.is_file() {
+                *previous = Some(backup.clone());
+                *changed = true;
+            }
+            if !success {
+                // ERROR_UNABLE_TO_MOVE_REPLACEMENT_2 can leave the old file at
+                // backup. Keep it, and best-effort restore its original name
+                // without overwriting any concurrent writer. Never report OK.
+                if backup.is_file()
+                    && matches!(fs::symlink_metadata(destination), Err(ref e) if e.kind() == io::ErrorKind::NotFound)
+                {
+                    let _ = fs::hard_link(&backup, destination);
+                }
+                return Err(error);
+            }
+            *changed = true;
+            if !backup.is_file() {
+                return Err(io::Error::other("교체한 이전 파일을 확인하지 못했습니다. 노드를 켜지 말고 보존 파일을 확인해 주세요."));
+            }
+            Ok(())
+        }
+        #[cfg(not(any(unix, windows)))]
+        {
+            let _ = (stage, destination, had_destination, previous, changed);
+            Err(io::Error::other("unsupported atomic replacement platform"))
+        }
+    }
+
+    pub(super) fn install(
+        source: &Path,
+        destination: &Path,
+        json_file: bool,
+        guard: &mut dyn FnMut() -> Result<(), String>,
+        hook: &mut Hook<'_>,
+    ) -> Result<Option<PathBuf>, RestoreError> {
+        guard().map_err(error)?;
+        let parent = destination
+            .parent()
+            .ok_or_else(|| error("대상 폴더를 다시 골라 주세요."))?;
+        let parent = fs::canonicalize(parent).map_err(error)?;
+        let directory = restore_lock::open_directory(&parent).map_err(error)?;
+        let dest = parent.join(
+            destination
+                .file_name()
+                .ok_or_else(|| error("대상 파일 이름을 확인해 주세요."))?,
+        );
+        let mut input = regular_file(source).map_err(error)?;
+        if input.metadata().map_err(error)?.len() == 0 {
+            return Err(error("백업 파일이 비어 있습니다. 다른 백업을 골라 주세요."));
+        }
+        let mut old = match fs::symlink_metadata(&dest) {
+            Ok(_) => Some(regular_file(&dest).map_err(error)?),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => None,
+            Err(e) => return Err(error(e)),
+        };
+        if restore_lock::same_file_at(&input, &dest).unwrap_or(false) {
+            return Err(error(
+                "백업과 현재 파일이 같습니다. 다른 백업을 골라 주세요.",
+            ));
+        }
+        let (stage, expected) =
+            copy_checked(&mut input, &dest, "restore-stage", hook).map_err(error)?;
+        let mut previous: Option<PathBuf> = None;
+        let mut changed = false;
+        let result: Result<(), String> = (|| {
+            if json_file {
+                let file = regular_file(&stage).map_err(|e| e.to_string())?;
+                serde_json::from_reader::<_, Value>(file).map_err(|_| {
+                    "백업 문서가 올바른 JSON이 아닙니다. 다른 백업을 골라 주세요.".to_string()
+                })?;
+            }
+            let old_hash = if let Some(file) = old.as_mut() {
+                let (path, digest) =
+                    copy_checked(file, &dest, "before-restore", hook).map_err(|e| e.to_string())?;
+                previous = Some(path);
+                sync_directory(&parent).map_err(|e| e.to_string())?;
+                Some(digest)
+            } else {
+                None
+            };
+            hook("before-replace", &stage).map_err(|e| e.to_string())?;
+            guard()?;
+            if !restore_lock::same_file_at(&directory, &parent).unwrap_or(false)
+                || fs::canonicalize(destination.parent().unwrap())
+                    .ok()
+                    .as_ref()
+                    != Some(&parent)
+                || !restore_lock::same_file_at(&input, source).unwrap_or(false)
+                || hash(&mut input).map_err(|e| e.to_string())? != expected
+            {
+                return Err("복원 중 원본이나 대상 폴더가 바뀌었습니다. 파일을 확인하고 다시 시도해 주세요.".into());
+            }
+            match old.as_mut() {
+                Some(file) => {
+                    if !restore_lock::same_file_at(file, &dest).unwrap_or(false)
+                        || Some(hash(file).map_err(|e| e.to_string())?) != old_hash
+                    {
+                        return Err(
+                            "현재 파일이 복원 중 바뀌었습니다. 작업을 끝낸 뒤 다시 시도해 주세요."
+                                .into(),
+                        );
+                    }
+                }
+                None => match fs::symlink_metadata(&dest) {
+                    Err(e) if e.kind() == io::ErrorKind::NotFound => {}
+                    _ => return Err(
+                        "대상에 새 파일이 생겼습니다. 현재 파일을 확인한 뒤 다시 시도해 주세요."
+                            .into(),
+                    ),
+                },
+            }
+            if hash(&mut regular_file(&stage).map_err(|e| e.to_string())?)
+                .map_err(|e| e.to_string())?
+                != expected
+            {
+                return Err(
+                    "복원 준비본이 바뀌었습니다. 다른 저장 위치에서 다시 시도해 주세요.".into(),
+                );
+            }
+            hook("replace", &stage).map_err(|e| e.to_string())?;
+            // Atomically preserve the file actually replaced, including a
+            // normal JSON writer that finishes after our last check.
+            replace(&stage, &dest, old.is_some(), &mut previous, &mut changed)
+                .map_err(|e| e.to_string())?;
+            hook("after-replace", &dest).map_err(|e| e.to_string())?;
+            sync_directory(&parent).map_err(|e| e.to_string())?;
+            guard()?;
+            if hash(&mut regular_file(&dest).map_err(|e| e.to_string())?)
+                .map_err(|e| e.to_string())?
+                != expected
+            {
+                return Err("교체 후 파일을 확인하지 못했습니다. 보존한 이전 파일로 확인하기 전에는 노드를 켜지 마세요.".into());
+            }
+            Ok(())
+        })();
+        if let Err(why) = result {
+            let mut why = why;
+            if !changed {
+                if let Err(e) = fs::remove_file(&stage) {
+                    if e.kind() != io::ErrorKind::NotFound {
+                        why.push_str(&format!(
+                            "; 임시 파일 정리가 필요합니다: {} ({e})",
+                            stage.display()
+                        ));
                     }
                 }
             }
-            match std::fs::copy(src.join("wallet.dat"), &dest) {
-                Ok(_) => done.push(json!({
-                    "what": "지갑",
-                    "note": "노드를 켜면 적용됩니다.",
-                    "previous": kept,
-                })),
-                Err(e) => failed.push(json!({ "what": "지갑", "why": e.to_string() })),
+            return Err(RestoreError {
+                why,
+                previous,
+                changed,
+            });
+        }
+        Ok(previous)
+    }
+
+    pub(super) fn apply(
+        source: &Path,
+        app_dir: &Path,
+        raven_dir: &Path,
+        keys: &[String],
+        rpc_responding: bool,
+    ) -> Value {
+        let mut done = Vec::new();
+        let mut failed = Vec::new();
+        let mut changed = false;
+        let mut record = |label: &str, result: Result<Option<PathBuf>, RestoreError>| match result {
+            Ok(previous) => {
+                changed = true;
+                done.push(json!({"what": label, "previous": previous,
+                        "note": if label == "지갑" { "노드를 켜면 적용됩니다. 지갑의 유효성은 노드가 확인합니다." } else { "" }}));
+            }
+            Err(error) => {
+                changed |= error.changed;
+                failed.push(json!({"what": label, "why": error.why,
+                        "previous": error.previous, "changed": error.changed}));
+            }
+        };
+        if keys.iter().any(|key| key == "wallet") {
+            let result = (|| {
+                if rpc_responding {
+                    return Err(error(
+                        "노드가 응답하고 있습니다. 노드를 완전히 종료한 뒤 다시 시도해 주세요.",
+                    ));
+                }
+                let guard = DataDirGuard::acquire(raven_dir).map_err(error)?;
+                let from = source.join("wallet.dat");
+                let destination = guard.directory().join("wallet.dat");
+                guard
+                    .check_wallet_paths(&from, &destination)
+                    .map_err(error)?;
+                install(
+                    &from,
+                    &destination,
+                    false,
+                    &mut || guard.check_wallet_paths(&from, &destination),
+                    &mut |_, _| Ok(()),
+                )
+            })();
+            record("지갑", result);
+        }
+        for (key, name, label) in [
+            ("shop", "shop.json", "가게"),
+            ("shop", "shopkey.json", "가게 간판 열쇠"),
+            ("passes", "passes.json", "회원"),
+            ("tickets", "tickets.json", "이용권"),
+            ("bookings", "bookings.json", "예약"),
+            ("sessions", "sessions.json", "수업"),
+            ("orders", "orders.json", "주문 주소"),
+            ("fills", "fills.json", "발송 기록"),
+            ("sweep", "sweep.json", "자동 송금 설정"),
+        ] {
+            if !keys.iter().any(|requested| requested == key) {
+                continue;
+            }
+            let from = source.join(name);
+            // Older shop backups did not include a shop key. Other explicitly
+            // selected missing files are failures, not silently successful skips.
+            if name == "shopkey.json" && !from.exists() {
+                continue;
+            }
+            let result = fs::create_dir_all(app_dir).map_err(error).and_then(|_| {
+                install(
+                    &from,
+                    &app_dir.join(name),
+                    true,
+                    &mut || Ok(()),
+                    &mut |_, _| Ok(()),
+                )
+            });
+            record(label, result);
+        }
+        let ok = failed.is_empty() && !done.is_empty();
+        json!({"ok": ok, "done": done, "failed": failed, "restart_app": changed,
+            "status": if ok { "complete" } else if changed { "partial" } else { "failed" },
+            "note": if ok { "앱을 다시 켜면 되돌린 내용이 보입니다." }
+                else if changed { "일부만 되돌렸습니다. 실패한 항목과 이전 파일 위치를 확인해 주세요." }
+                else { "되돌린 항목이 없습니다. 실패한 항목을 확인하고 다시 시도해 주세요." }})
+    }
+    pub(super) fn extract_archive(path: &Path, scratch: &Path) -> Result<(), String> {
+        let mut zip = zip::ZipArchive::new(regular_file(path).map_err(|e| e.to_string())?)
+            .map_err(|_| "이 파일은 PLAY X Raven 백업이 아닙니다.".to_string())?;
+        if zip.len() > 1024 {
+            return Err("백업 항목이 너무 많습니다. 다른 백업을 골라 주세요.".into());
+        }
+        let mut names = std::collections::HashSet::new();
+        let mut total = 0u64;
+        for i in 0..zip.len() {
+            let mut entry = zip.by_index(i).map_err(|e| e.to_string())?;
+            if entry.is_dir() {
+                continue;
+            }
+            if entry
+                .unix_mode()
+                .is_some_and(|mode| mode & 0o170000 != 0 && mode & 0o170000 != 0o100000)
+            {
+                return Err(
+                    "백업에 일반 파일이 아닌 항목이 있습니다. 다른 백업을 골라 주세요.".into(),
+                );
+            }
+            let name = entry
+                .enclosed_name()
+                .and_then(|name| name.file_name().map(|name| name.to_owned()))
+                .ok_or_else(|| {
+                    "백업 경로가 올바르지 않습니다. 다른 백업을 골라 주세요.".to_string()
+                })?;
+            if !names.insert(name.clone()) {
+                return Err(
+                    "백업에 같은 이름의 파일이 둘 있습니다. 다른 백업을 골라 주세요.".into(),
+                );
+            }
+            total = total
+                .checked_add(entry.size())
+                .ok_or("백업 크기를 확인하지 못했습니다.")?;
+            if total > 4 * 1024 * 1024 * 1024 {
+                return Err(
+                    "백업 크기가 4 GB를 넘습니다. 필요한 파일만 있는 백업을 골라 주세요.".into(),
+                );
+            }
+            let mut options = OpenOptions::new();
+            options.write(true).create_new(true);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt;
+                options.mode(0o600);
+            }
+            let mut output = options
+                .open(scratch.join(name))
+                .map_err(|e| e.to_string())?;
+            let limit = entry.size();
+            let actual = io::copy(&mut entry.by_ref().take(limit + 1), &mut output)
+                .map_err(|e| e.to_string())?;
+            if actual != limit {
+                return Err("백업 파일 크기가 맞지 않습니다. 다른 백업을 골라 주세요.".into());
+            }
+            output.sync_all().map_err(|e| e.to_string())?;
+        }
+        Ok(())
+    }
+
+    pub(super) fn backup_list(root: &Path, verify: &dyn Fn(&Path) -> bool) -> Value {
+        let mut rows = Vec::new();
+        if let Ok(entries) = fs::read_dir(root) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if !entry.file_type().map(|kind| kind.is_dir()).unwrap_or(false) {
+                    continue;
+                }
+                let name = entry.file_name().to_string_lossy().to_string();
+                let bytes = name.as_bytes();
+                let date = bytes.len() >= 10
+                    && bytes[4] == b'-'
+                    && bytes[7] == b'-'
+                    && bytes[..4].iter().all(u8::is_ascii_digit)
+                    && bytes[5..7].iter().all(u8::is_ascii_digit)
+                    && bytes[8..10].iter().all(u8::is_ascii_digit);
+                let retry = name.get(10..).is_some_and(|suffix| {
+                    suffix.is_empty()
+                        || suffix.strip_prefix("-retry-").is_some_and(|hex| {
+                            !hex.is_empty() && hex.bytes().all(|byte| byte.is_ascii_hexdigit())
+                        })
+                });
+                if !date || !retry {
+                    continue;
+                }
+                let marker = fs::symlink_metadata(path.join(".backup-complete.json")).is_ok();
+                let complete = marker && verify(&path);
+                rows.push(json!({
+                    "day": name, "path": path, "wallet": path.join("wallet.dat").is_file(),
+                    "complete": complete,
+                    "verification": if complete { "complete" } else if marker { "invalid" } else { "legacy" },
+                    "warning": if complete { "" } else if marker {
+                        "백업 내용이 완료 기록과 다릅니다. 다른 백업을 골라 주세요."
+                    } else { "이전 형식의 백업입니다. 완전한 백업인지 아직 검증되지 않았습니다." },
+                }));
             }
         }
+        rows.sort_by(|a, b| {
+            b["day"]
+                .as_str()
+                .unwrap_or("")
+                .cmp(a["day"].as_str().unwrap_or(""))
+        });
+        json!({ "root": root, "folders": rows })
     }
-
-    // ── 나머지는 그냥 파일이다. 노드와 무관하고 언제든 된다.
-    //
-    // 🔴 `shopkey.json` 은 가게 간판 열쇠다. 백업에는 들어 있었는데 되돌리기가
-    //    안 가져왔다. 새 컴퓨터는 켤 때 새 열쇠를 만들어 버리고, 체인에 적힌
-    //    공개키와 안 맞아 「지금 여기서 주문받습니다」가 영원히 안 올라간다.
-    //    가게를 되돌리면 열쇠도 같이 온다. 따로 고르게 하지 않는다.
-    for (key, file, label) in [
-        ("shop", "shop.json", "가게"),
-        ("shop", "shopkey.json", "가게 간판 열쇠"),
-        ("passes", "passes.json", "회원"),
-        ("tickets", "tickets.json", "이용권"),
-        ("bookings", "bookings.json", "예약"),
-        ("sessions", "sessions.json", "수업"),
-        ("orders", "orders.json", "주문 주소"),
-        ("fills", "fills.json", "발송 기록"),
-        ("sweep", "sweep.json", "자동 송금 설정"),
-    ] {
-        if !want(key) {
-            continue;
-        }
-        let from = src.join(file);
-        if !from.exists() {
-            continue;
-        }
-        let to = dir().join(file);
-        let _ = std::fs::create_dir_all(dir());
-        // 여기도 지금 것을 남긴다. 회원 명단을 잘못 덮으면 사람들이 문 앞에서
-        // 알게 된다.
-        if to.exists() {
-            let _ = std::fs::copy(&to, to.with_extension("json.before-restore"));
-        }
-        match std::fs::copy(&from, &to) {
-            Ok(_) => done.push(json!({ "what": label, "note": "" })),
-            Err(e) => failed.push(json!({ "what": label, "why": e.to_string() })),
-        }
-    }
-
-    // 🔴 **푼 것을 치운다.** 여태 안 치웠다 — 2026-08-31 실측: 8월 24일에
-    //    되돌린 뒤로 `restore-open/` 에 **잠금이 풀린 지갑(2.5MB)·간판
-    //    열쇠·회원 명단·백업 zip** 이 그대로 남아 있었다.
-    //
-    //    백업을 잠그는 이유가 통째로 없어진다. 잠근 파일 옆에 안 잠긴
-    //    사본이 영원히 놓여 있으면, 이 컴퓨터를 가져간 사람은 암호를 몰라도
-    //    다 가진다. `shopkey.json` 하나만 있어도 「이 가게는 지금 여기서
-    //    받습니다」를 손님에게 말할 수 있다.
-    //
-    //    다음 되돌리기가 시작할 때 지우기는 했다. 그런데 **그 사이가 몇 달**이다.
-    청소();
-
-    Ok(json!({
-        "done": done,
-        "failed": failed,
-        "restart_app": !done.is_empty(),
-        "note": "앱을 다시 켜면 되돌린 내용이 보입니다.",
-    }))
 }
+// END RESTORE FILE SAFETY
 
 /// 되돌리려고 풀어 놓은 것을 지운다.
 ///
-/// 실패해도 알리지 않는다 — 되돌리기는 이미 끝났고, 청소가 안 됐다고
-/// 사장에게 겁을 줄 이유가 없다. 다음 되돌리기가 다시 지운다.
+/// Active restore reports cleanup failure. Startup cleanup is best effort and
+/// takes the same app/session lock so it cannot erase another active restore.
+fn cleanup_opened() -> std::io::Result<()> {
+    match std::fs::remove_dir_all(dir().join("restore-open")) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        result => result,
+    }
+}
 pub fn 청소() {
-    let _ = std::fs::remove_dir_all(dir().join("restore-open"));
+    if let Ok(_operation) = RestoreOperation::begin() {
+        let _ = cleanup_opened();
+    }
 }
 
 /// One page to print and put in a drawer.
@@ -553,24 +1172,7 @@ pub fn phone_lost_plan() -> Value {
 /// Where the backups actually are, and how stale.
 #[tauri::command]
 pub fn backup_folders() -> Value {
-    let root = dir().join("backups");
-    let mut rows: Vec<Value> = Vec::new();
-    if let Ok(rd) = std::fs::read_dir(&root) {
-        for e in rd.flatten() {
-            if !e.path().is_dir() {
-                continue;
-            }
-            let name = e.file_name().to_string_lossy().to_string();
-            let has_wallet = e.path().join("wallet.dat").exists();
-            rows.push(json!({
-                "day": name,
-                "path": e.path().to_string_lossy(),
-                "wallet": has_wallet,
-            }));
-        }
-    }
-    rows.sort_by(|a, b| b["day"].as_str().unwrap_or("").cmp(a["day"].as_str().unwrap_or("")));
-    json!({ "root": root.to_string_lossy(), "folders": rows })
+    restore_files::backup_list(&dir().join("backups"), &crate::backup::complete_snapshot)
 }
 
 #[cfg(test)]
@@ -590,7 +1192,7 @@ mod tests {
         let body = &src[i..];
         let end = body.find("\n}\n").unwrap_or(body.len());
         assert!(
-            body[..end].contains("청소()"),
+            body[..end].contains("cleanup_opened()"),
             "되돌린 뒤 푼 것을 안 치운다 — 잠금 풀린 지갑이 그대로 남는다"
         );
         // 켤 때도 쓸어야 한다. 이미 남은 사람 것도 지워야 하기 때문이다.
@@ -613,8 +1215,14 @@ mod tests {
         let 잠긴것 = b"PXRLOCK1\x00\x01\x02\x03";
         let 보통zip = b"PK\x03\x04\x00\x00\x00\x00";
         let 잠겼나 = |b: &[u8]| b.len() >= 8 && &b[..8] == b"PXRLOCK1";
-        assert!(잠겼나(잠긴것), "잠긴 파일을 못 알아본다 — 가게 옮기기가 막힌다");
-        assert!(!잠겼나(보통zip), "보통 zip 을 잠겼다고 본다 — 멀쩡한 백업이 안 열린다");
+        assert!(
+            잠겼나(잠긴것),
+            "잠긴 파일을 못 알아본다 — 가게 옮기기가 막힌다"
+        );
+        assert!(
+            !잠겼나(보통zip),
+            "보통 zip 을 잠겼다고 본다 — 멀쩡한 백업이 안 열린다"
+        );
         assert!(!잠겼나(b"PXR"), "짧은 파일에서 넘치면 안 된다");
 
         // 받는 쪽이 파일 이름을 사실대로 적는지도 같이 본다.
@@ -636,7 +1244,10 @@ mod tests {
     fn the_recovery_card_has_no_secrets() {
         let card = recovery_card().to_string();
         for bad in ["passphrase", "seed", "mnemonic", "private", "암호는"] {
-            assert!(!card.contains(bad), "복구 카드에 비밀이 들어갔습니다: {bad}");
+            assert!(
+                !card.contains(bad),
+                "복구 카드에 비밀이 들어갔습니다: {bad}"
+            );
         }
     }
 }

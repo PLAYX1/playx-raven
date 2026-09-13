@@ -1,0 +1,40 @@
+{
+  "passed": true,
+  "results": [
+    {
+      "case": "normal",
+      "exit": 0,
+      "assertion_failure": false
+    },
+    {
+      "case": "no-node-lock",
+      "exit": 1,
+      "assertion_failure": true
+    },
+    {
+      "case": "move-original-first",
+      "exit": 1,
+      "assertion_failure": true
+    },
+    {
+      "case": "drop-previous",
+      "exit": 1,
+      "assertion_failure": true
+    },
+    {
+      "case": "move-always-success",
+      "exit": 1,
+      "assertion_failure": true
+    },
+    {
+      "case": "plain-rename",
+      "exit": 1,
+      "assertion_failure": true
+    },
+    {
+      "case": "normal",
+      "exit": 0,
+      "assertion_failure": false
+    }
+  ]
+}

@@ -1,5 +1,24 @@
 /** Korean source copy + English, Japanese and Simplified Chinese. User text is not translated here. */
 export const DESKTOP_COPY: Record<string, [string, string, string]> = {
+  "폴더에서 되돌리기": ["Restore from folder", "フォルダーから復元", "从文件夹恢复"],
+  "되돌릴 백업 폴더를 고르세요": ["Choose a backup folder to restore", "復元するバックアップフォルダーを選んでください", "请选择要恢复的备份文件夹"],
+
+  "되돌리기를 완료했습니다": ["Restore completed", "復元が完了しました", "恢复已完成"],
+  "일부만 되돌렸습니다": ["Only some items were restored", "一部の項目のみ復元しました", "仅恢复了部分项目"],
+  "되돌리기를 완료하지 못했습니다": ["Restore did not complete", "復元を完了できませんでした", "未能完成恢复"],
+  "보존한 이전 파일을 확인하기 전에는 지우지 마세요.": ["Do not delete the preserved previous files before checking them.", "保管した以前のファイルは、確認するまで削除しないでください。", "确认保留的原文件前，请勿删除它们。"],
+  "일부 파일이 바뀌었습니다. 보존한 이전 파일을 확인하기 전에는 노드를 켜지 마세요.": ["Some files changed. Do not start the node before checking the preserved previous files.", "一部のファイルが変更されました。保管した以前のファイルを確認するまで、ノードを起動しないでください。", "部分文件已更改。确认保留的原文件前，请勿启动节点。"],
+
+  "컴퓨터 간 직접 이사는 호환성 점검 중입니다. 암호화한 백업 파일을 USB로 옮긴 뒤 새 컴퓨터에서 되돌리기를 사용하세요.": ["Direct computer transfer is undergoing compatibility checks. Copy an encrypted backup to USB, then restore it on the new computer.", "コンピュータ間の直接移行は互換性を確認中です。暗号化したバックアップをUSBで移し、新しいコンピュータで復元してください。", "电脑间直接迁移正在进行兼容性检查。请通过 USB 复制加密备份，再在新电脑上恢复。"],
+  "자동 백업의 로컬 사본에는 추가 암호화가 없습니다. 컴퓨터 계정과 디스크 잠금을 사용하세요. 직접 만든 백업 파일은 암호화합니다.": ["Local automatic backups have no additional encryption. Protect your computer account and disk. Manual backup files are encrypted.", "自動バックアップのローカルコピーは追加暗号化されません。アカウントとディスクを保護してください。手動バックアップは暗号化されます。", "自动备份的本地副本没有额外加密。请保护电脑账户并加密磁盘。手动备份文件会加密。"],
+  "백업을 열려면 백업 암호 또는 백업 열쇠가 필요합니다. 지갑 복구 단어와는 다릅니다. 백업 파일과 별도로 안전하게 보관하세요.": ["Opening a backup requires its backup password or backup key. These are different from wallet recovery words. Store them safely, separately from the backup file.", "バックアップを開くには専用のパスワードまたはキーが必要です。ウォレットの復元単語とは異なります。ファイルとは別の安全な場所に保管してください。", "打开备份需要备份密码或备份密钥，与钱包助记词不同。请将其与备份文件分开安全保管。"],
+
+  "지갑을 포함한 백업을 검증하고 잠갔습니다": ["Wallet backup verified and encrypted", "ウォレットを含むバックアップを検証し、暗号化しました", "已验证并加密包含钱包的备份"],
+  "아래 파일을 담았습니다. 백업 파일과 백업 암호 또는 백업 열쇠를 별도로 보관하세요.": ["The files below are included. Store the backup file separately from its backup password or backup key.", "以下のファイルを保存しました。バックアップファイルとバックアップ用のパスワードまたはキーは別々に保管してください。", "包含以下文件。请将备份文件与备份密码或备份密钥分开保管。"],
+  "브라우저·PWA 지갑과 파일, IPFS 원본, AI API 키는 이 백업에 포함되지 않습니다.": ["Browser and PWA wallets and files, original IPFS files, and AI API keys are not included in this backup.", "ブラウザ・PWAのウォレットとファイル、IPFSの元ファイル、AI APIキーはこのバックアップに含まれません。", "此备份不包含浏览器及 PWA 钱包和文件、IPFS 原始文件或 AI API 密钥。"],
+  "지갑이 포함된 백업을 확인하지 못했습니다. 노드 연결을 확인한 뒤 다시 백업하세요.": ["Could not verify that the backup includes your wallet. Check the node connection and back up again.", "ウォレットを含むバックアップを確認できませんでした。ノードの接続を確認し、再度バックアップしてください。", "无法确认备份包含钱包。请检查节点连接，然后重新备份。"],
+  "자동 백업을 확인하지 못했습니다. 노드 연결을 확인하고 백업을 다시 실행하세요.": ["Could not verify the automatic backup. Check the node connection and run the backup again.", "自動バックアップを確認できませんでした。ノードの接続を確認し、再度バックアップしてください。", "无法确认自动备份。请检查节点连接并重新运行备份。"],
+
   "같은 HTTPS 주소에서 키 칸을 비우면 기존 키를 유지합니다. 주소를 바꾸면 키를 다시 입력하세요. 삭제는 위의 지우기 단추를 누르세요.": ["An empty key field keeps the existing key only at the same HTTPS address. Re-enter the key when changing the address. Use Delete above to remove it.", "同じ HTTPS アドレスでは、キー欄を空にすると保存済みのキーを維持します。アドレス変更時はキーを入力し直してください。削除するには上の「削除」を押してください。", "仅在 HTTPS 地址不变时，密钥栏留空才会保留原有密钥。更改地址后请重新输入密钥。如需移除，请点击上方的删除按钮。"],
   "RavenVault 웹 지갑": ["RavenVault web wallet", "RavenVault ウェブウォレット", "RavenVault 网页钱包"],
   "웹 지갑 · 파일": ["Web wallet · Files", "ウェブウォレット・ファイル", "网页钱包 · 文件"],

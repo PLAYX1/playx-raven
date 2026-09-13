@@ -30,6 +30,17 @@
 
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
+use std::io::{Read, Write};
+use crate::backup_storage::{Workspace, publish_file};
+
+// Manual, automatic and phone-triggered backups must not publish concurrently.
+static BACKUP_GATE: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+const COMPLETE_FILE: &str = ".backup-complete.json";
+
+fn backup_gate() -> Result<tokio::sync::MutexGuard<'static, ()>, String> {
+    BACKUP_GATE.try_lock().map_err(|_| "다른 백업이 진행 중입니다. 끝난 뒤 다시 눌러 주세요.".into())
+}
+
 
 fn home() -> PathBuf {
     crate::paths::home()
@@ -120,9 +131,12 @@ pub fn backup_survey() -> Value {
         "items": rows,
         // 안 담는 것도 화면에 보여야 한다. 안 보이면 담긴 줄 안다.
         "excluded": [
-            { "name": "AI 열쇠", "why": "백업 폴더가 새면 요금이 청구됩니다. 복구 뒤 다시 넣으세요 — 30초입니다." },
+            { "name": "AI 열쇠", "why": "복구 뒤 설정에서 다시 입력하세요." },
+            { "name": "브라우저·PWA 지갑과 파일", "why": "해당 웹앱에서 별도로 내보내세요." },
+            { "name": "IPFS 원본·블록체인", "why": "IPFS 원본은 별도로 보관하고, 블록체인은 노드에서 다시 동기화하세요." },
         ],
         "last": last_backup(),
+        "automatic": std::fs::read(app_dir().join("backup-auto-status.json")).ok().and_then(|b| serde_json::from_slice::<Value>(&b).ok()),
     })
 }
 
@@ -151,73 +165,11 @@ pub async fn backup_now(dest: String) -> Result<Value, String> {
         return Err("폴더가 아닙니다. 저장할 폴더를 고르세요.".into());
     }
 
-    let mut done = Vec::new();
-    let mut failed = Vec::new();
-
-    // 노드에게 정합성 있는 사본을 만들게 한다. 실행 중인 파일을 그냥 복사하면
-    // 겉보기엔 멀쩡하고 복구할 때 비어 있는 파일이 나온다.
-    let wallet_dest = dir.join("wallet.dat");
-    match crate::raven::call_rpc(
-        "backupwallet",
-        json!([wallet_dest.to_string_lossy().to_string()]),
-    )
-    .await
-    {
-        Ok(_) => done.push(json!({ "name": "wallet.dat", "path": wallet_dest.to_string_lossy() })),
-        Err(e) => failed.push(json!({ "name": "wallet.dat", "why": e })),
-    }
-
-    for (name, src, _) in manifest() {
-        if !src.exists() {
-            continue;
-        }
-        match std::fs::copy(&src, dir.join(name)) {
-            Ok(_) => done.push(json!({ "name": name, "path": dir.join(name).to_string_lossy() })),
-            Err(e) => failed.push(json!({ "name": name, "why": e.to_string() })),
-        }
-    }
-
-    // 백업 폴더에 경고를 같이 남긴다. 몇 달 뒤 이 폴더를 여는 사람은 지금
-    // 이 화면을 기억하지 못하고, 그때가 바로 두 번째 노드를 켜는 순간이다.
-    let readme = "PLAY X Raven 백업\n\
-        \n\
-        wallet.dat 은 이 가게의 열쇠입니다.\n\
-        \n\
-        ⚠ 절대 하면 안 되는 것\n\
-        이 wallet.dat 을 다른 컴퓨터에서 '동시에' 켜지 마세요.\n\
-        두 노드가 같은 지갑을 쓰면 같은 주소를 두 번 나눠 주고,\n\
-        서로 다른 거래에 서명해서 돈을 잃습니다.\n\
-        \n\
-        원래 컴퓨터가 완전히 죽었을 때만, 그리고 그 컴퓨터가\n\
-        꺼져 있는 것을 확인한 뒤에 이 사본을 쓰세요.\n\
-        \n\
-        passes.json 은 회원 명단입니다. 체인에는 회원번호만 있고\n\
-        이름·기간·남은 횟수는 이 파일에만 있습니다.\n\
-        \n\
-        shop.json 은 가게 그 자체입니다 — 이름·메뉴·가격·사진.\n\
-        sessions.json 은 수업 신청자와 대기자 명단입니다.\n\
-        fills.json 은 이미 보낸 주문 기록입니다. 이 파일 없이 복구하면\n\
-        자동 발송이 같은 자산을 한 번 더 보냅니다. 반드시 같이 되돌리세요.\n\
-        \n\
-        이 폴더에 AI 열쇠는 들어 있지 않습니다. 복구한 뒤 설정에서\n\
-        다시 넣으시면 됩니다.\n";
-    let _ = std::fs::write(dir.join(README_NAME), readme);
-
-    // 언제 했는지를 남긴다. "백업하세요"는 아무도 안 누르고, "12일 지났습니다"는
-    // 누른다.
-    if failed.is_empty() {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_secs() as i64)
-            .unwrap_or(0);
-        let _ = std::fs::write(
-            stamp_path(),
-            serde_json::to_vec(&json!({ "at": now, "dest": dest, "count": done.len() }))
-                .unwrap_or_default(),
-        );
-    }
-
-    Ok(json!({ "done": done, "failed": failed, "dest": dest, "last": last_backup() }))
+    let _gate = backup_gate()?;
+    let prepared = prepare_backup(true).await?;
+    // A folder export is a complete new generation, never a merge over an old one.
+    let dest = unique_generation(&dir, "RavenVault");
+    store_folder(&prepared, &dest)
 }
 
 /// Is another Ravencoin node already using this wallet?
@@ -430,122 +382,91 @@ pub fn usb_lock_set(lock: bool) -> Result<Value, String> {
 
 #[tauri::command]
 pub async fn backup_auto(now_unix: i64) -> Value {
-    let day = now_unix - (now_unix % 86_400);
+    let _gate = match backup_gate() {
+        Ok(guard) => guard,
+        Err(e) => return json!({"skipped": e}),
+    };
+    let external = external_drives()["drives"].as_array().cloned().unwrap_or_default();
+    let clouds = cloud_folders()["folders"].as_array().cloned().unwrap_or_default();
+    remember_auto_result(auto_to(now_unix, external, clouds).await)
+}
+
+fn remember_auto_result(mut result: Value) -> Value {
+    // Return the current failure even when the status file itself cannot be saved.
+    if std::fs::write(app_dir().join("backup-auto-status.json"), result.to_string()).is_err() {
+        let warning = result["warning"].as_str().unwrap_or("");
+        result["warning"] = json!(format!("{warning} 백업 상태를 저장하지 못했습니다. 설정 폴더의 여유 공간과 권한을 확인하세요.").trim());
+    }
+    result
+}
+
+async fn auto_to(now_unix: i64, external: Vec<Value>, clouds: Vec<Value>) -> Value {
+    let stamp = day_name(now_unix - now_unix.rem_euclid(86_400));
     let root = app_dir().join("backups");
-
-    // 오늘 것이 이미 있으면 아무것도 하지 않는다. 앱을 하루에 다섯 번 켜는
-    // 가게에서 다섯 벌을 만들면 보관 세대가 하루로 줄어든다.
-    let stamp = day_name(day);
-    let dest = root.join(&stamp);
-    // 폴더가 있다는 것과 백업이 됐다는 것은 다르다. 노드가 꺼진 채 시도하면
-    // 폴더만 생기고 지갑은 못 담는데, 그걸 "오늘 했음"으로 세면 그날은
-    // 노드가 켜진 뒤에도 영영 다시 시도하지 않는다.
-    if dest.join("wallet.dat").exists() {
-        return json!({ "skipped": "오늘 것이 이미 있습니다", "dest": dest.to_string_lossy() });
+    let completed = complete_day(&root, &stamp);
+    let already_complete = completed.is_some();
+    let dest = completed.unwrap_or_else(|| {
+        let first = root.join(&stamp);
+        if first.exists() { unique_generation(&root, &format!("{stamp}-retry")) } else { first }
+    });
+    let external: Vec<_> = external.into_iter().filter(|d| d["writable"] == true).collect();
+    if already_complete
+        && external.iter().all(|d| d["path"].as_str().is_some_and(|path| daily_copy_complete(&PathBuf::from(path).join(BACKUP_DIR), usb_should_lock(), &stamp)))
+        && clouds.iter().all(|d| d["path"].as_str().is_some_and(|path| daily_copy_complete(&PathBuf::from(path).join(BACKUP_DIR), true, &stamp)))
+    {
+        return json!({"skipped": "오늘의 검증된 백업이 있습니다", "dest": dest.to_string_lossy(), "local_complete": true});
     }
-    if std::fs::create_dir_all(&dest).is_err() {
-        return json!({ "error": "백업 폴더를 만들지 못했습니다" });
-    }
-
-    let r = backup_now(dest.to_string_lossy().to_string()).await;
-
-    // 오래된 세대를 정리한다. 이름이 날짜라 글자 순서가 곧 시간 순서다.
-    if let Ok(rd) = std::fs::read_dir(&root) {
-        let mut dirs: Vec<String> = rd
-            .filter_map(|e| e.ok())
-            .filter(|e| e.path().is_dir())
-            .map(|e| e.file_name().to_string_lossy().to_string())
-            .collect();
-        dirs.sort();
-        while dirs.len() > 7 {
-            let old = dirs.remove(0);
-            let _ = std::fs::remove_dir_all(root.join(old));
+    // Finish the entire snapshot before touching any existing generation.
+    let prepared = match prepare_backup(true).await {
+        Ok(v) => v,
+        Err(e) => return json!({"error": e, "local_complete": already_complete}),
+    };
+    if !already_complete {
+        if let Err(e) = std::fs::create_dir_all(&root) {
+            return json!({"error": format!("백업 폴더를 만들지 못했습니다. 여유 공간과 권한을 확인하세요: {e}")});
         }
-    }
-
-    // 꽂혀 있는 외장이 있으면 거기에도 한 벌. 묻지 않는다 — 물으면 아무도
-    // 안 넣고, 안 넣은 백업은 디스크와 함께 죽는다.
-    //
-    // 이름은 고정이다. 날짜별로 쌓이면 USB 가 지저분해지고, 급할 때 어느 것을
-    // 잡아야 하는지 모른다. 대신 덮어쓰기 직전 것 하나만 옆으로 밀어 둔다 —
-    // 오늘 아침에 실수로 명단을 지웠다면, 덮어쓴 순간 그 실수가 유일한 사본이
-    // 되기 때문이다. 두 개에서 멈추고 더는 늘지 않는다.
-    let mut outside: Vec<Value> = Vec::new();
-    for d in external_drives()["drives"].as_array().cloned().unwrap_or_default() {
-        if !d["writable"].as_bool().unwrap_or(false) {
-            continue;
+        if let Err(e) = store_folder(&prepared, &dest) {
+            return json!({"error": e, "local_complete": false});
         }
-        let Some(root) = d["path"].as_str() else { continue };
-        let folder = PathBuf::from(root).join(BACKUP_DIR);
-        if std::fs::create_dir_all(&folder).is_err() {
-            continue;
-        }
-        roll_previous(&folder, "PLAYXRaven");
-        // USB 에는 지갑도 넣는다. 손에 쥐고 서랍에 넣는 물건이라 클라우드와 다르다.
-        //
-        // 🔴 그래도 **기본은 잠근다.** USB 는 잃어버리고, 빌려주고, 컴퓨터에
-        // 꽂아 둔 채로 자리를 비운다. 클라우드보다 안전한 것이 아니라
-        // **다른 방식으로 위험하다.**
-        //
-        // 열쇠는 클라우드와 같은 것이다(`lockbox`) — 종이에 적힌 그 하나로
-        // 두 곳을 다 연다. 두 개면 하나를 잃는다.
-        let Ok(v) = backup_zip_plain(folder.to_string_lossy().to_string(), "".into(), true).await else {
-            continue;
-        };
-        let plain = PathBuf::from(v["path"].as_str().unwrap_or_default());
-        if usb_should_lock() {
-            let Ok(key) = crate::lockbox::key_get_or_make() else {
-                // 잠글 열쇠를 못 만들면 **벗은 채로 두지 않는다.**
-                let _ = std::fs::remove_file(&plain);
-                outside.push(json!({
-                    "drive": d["name"], "locked": false,
-                    "why": "자물쇠 열쇠를 만들지 못해 USB 에 올리지 않았습니다",
-                }));
-                continue;
-            };
-            let locked = plain.with_extension(LOCKED_EXT);
-            match crate::lockbox::lock_file(&plain, &locked, &key) {
-                Ok(()) => {
-                    let _ = std::fs::remove_file(&plain);
-                    outside.push(json!({
-                        "drive": d["name"], "path": locked.to_string_lossy(), "locked": true,
-                    }));
-                }
-                Err(e) => {
-                    let _ = std::fs::remove_file(&plain);
-                    outside.push(json!({
-                        "drive": d["name"], "locked": false,
-                        "why": format!("잠그지 못해 올리지 않았습니다: {e}"),
-                    }));
-                }
-            }
-        } else {
-            // 사장이 일부러 끈 경우. 급할 때 열쇠 없이 바로 쓰려는 뜻이고,
-            // 그건 그 사람이 정할 일이다 — 다만 화면이 그 뜻을 적어 둔다.
-            outside.push(json!({
-                "drive": d["name"], "path": plain.to_string_lossy(), "locked": false,
-            }));
-        }
+        prune_complete_generations(&root);
     }
-
-    let cloud = copy_to_cloud(&stamp).await;
-
-    match r {
-        Ok(v) => json!({
-            "cloud": cloud,
-            "made": stamp,
-            "result": v,
-            "dest": dest.to_string_lossy(),
-            "outside": outside,
-            "note": match (outside.is_empty(), cloud.is_empty()) {
-                (true, true) => "이 컴퓨터 안에만 저장했습니다. 디스크가 죽으면 백업도 같이 죽습니다 — USB를 꽂아 두시거나 원드라이브·구글드라이브를 켜 두면 거기도 자동으로 남깁니다.",
-                (true, false) => "클라우드에도 남겼습니다. 클라우드 사본은 잠겨 있습니다.",
-                (false, true) => "이 컴퓨터와 외장 디스크 양쪽에 남겼습니다.",
-                (false, false) => "이 컴퓨터·외장 디스크·클라우드 세 곳에 남겼습니다. 클라우드 사본은 잠겨 있습니다.",
-            },
-        }),
-        Err(e) => json!({ "error": e }),
+    let mut outside = Vec::new();
+    for drive in external {
+        let Some(path) = drive["path"].as_str() else { continue };
+        let folder = PathBuf::from(path).join(BACKUP_DIR);
+        let result = std::fs::create_dir_all(&folder).map_err(|e| e.to_string())
+            .and_then(|_| publish_daily(&prepared, &folder, usb_should_lock(), &stamp));
+        outside.push(match result {
+            Ok(v) => json!({"ok": true, "drive": drive["name"], "path": v["path"], "locked": v["locked"]}),
+            Err(e) => json!({"ok": false, "drive": drive["name"], "why": e}),
+        });
     }
+    let mut cloud = Vec::new();
+    for place in clouds {
+        let Some(path) = place["path"].as_str() else { continue };
+        let folder = PathBuf::from(path).join(BACKUP_DIR);
+        let result = std::fs::create_dir_all(&folder).map_err(|e| e.to_string())
+            .and_then(|_| publish_daily(&prepared, &folder, true, &stamp));
+        cloud.push(match result {
+            Ok(v) => json!({"ok": true, "where": place["name"], "path": v["path"], "wallet": true, "locked": true}),
+            Err(e) => json!({"ok": false, "where": place["name"], "wallet": false, "why": e}),
+        });
+    }
+    let usb_ok = outside.iter().any(|v| v["ok"] == true);
+    let cloud_ok = cloud.iter().any(|v| v["ok"] == true);
+    let failed = outside.iter().chain(cloud.iter()).any(|v| v["ok"] != true);
+    json!({
+        "made": if already_complete { Value::Null } else { json!(stamp) },
+        "dest": dest.to_string_lossy(), "local_complete": true,
+        "outside": outside, "cloud": cloud,
+        "warning": if failed { "일부 외부 백업을 저장하지 못했습니다. 연결과 여유 공간을 확인하고 다시 백업하세요." } else { "" },
+        "note": match (usb_ok, cloud_ok) {
+            (false, false) => "이 컴퓨터의 백업만 확인했습니다. USB 등 별도 기기에도 백업하세요.",
+            (true, false) => "이 컴퓨터와 외장 디스크에 백업을 저장했습니다.",
+            (false, true) => "이 컴퓨터와 클라우드 동기화 폴더에 저장했습니다. 클라우드 업로드 완료는 동기화 앱에서 확인하세요.",
+            (true, true) => "이 컴퓨터·외장 디스크·클라우드 동기화 폴더에 저장했습니다. 클라우드 업로드 완료는 동기화 앱에서 확인하세요.",
+        },
+    })
 }
 
 /// `2026-08-18` from a unix day, without pulling in a date library.
@@ -568,35 +489,6 @@ fn day_name(day_unix: i64) -> String {
 
 #[cfg(test)]
 mod seal_tests {
-    /// 🔴 사장이 직접 누른 백업이 **암호 없이** 놓여 있었다(실측: iCloud 의
-    /// zip 에서 `shopkey.json` 이 그대로 나왔다). 자동 백업만 잠그고 있었다.
-    ///
-    /// `shopkey.json` 은 가게 간판 열쇠다. 이걸 가진 사람은 「이 가게는 지금
-    /// 여기서 주문받습니다」를 **사장 이름으로 서명**할 수 있고, 손님 돈이
-    /// 그리로 간다. 소유권 토큰을 훔칠 필요조차 없다.
-    #[test]
-    fn 직접_누른_백업도_잠긴다() {
-        let src = include_str!("backup.rs");
-        // 명령이 잠그는 길을 반드시 지나야 한다.
-        let cmd = src.find("pub async fn backup_zip(").expect("명령이 있어야 한다");
-        // 🔴 바이트로 자르면 한글 가운데를 갈라 터진다. 글자 단위로 센다.
-        let tail: String = src[cmd..].chars().take(400).collect();
-        assert!(tail.contains("seal(&plain)"), "직접 누른 백업이 안 잠기고 있다");
-        // 잠근 뒤 평문을 지워야 한다. 남으면 자물쇠는 장식이다.
-        assert!(
-            src.contains("let _ = std::fs::remove_file(plain);"),
-            "잠근 뒤 평문을 지우는 줄이 없다"
-        );
-        // 안쪽(자동 백업)은 두 번 잠그면 안 된다.
-        assert!(src.contains("backup_zip_plain("), "안쪽 함수가 분리돼 있어야 한다");
-        // 🔴 바탕화면은 기본값이 아니다. 화면 공유·수리 맡기기에 가장 먼저
-        //    노출되는 자리이고, 이 파일에는 지갑과 간판 열쇠가 들어 있다.
-        // 🔴 금지 문자열을 그대로 적으면 **자기 자신을 읽고** 걸린다.
-        //    조각으로 나눠 붙인다(같은 함정을 두 번째로 밟았다).
-        let banned = format!("home().join(\"Desk{}\")", "top");
-        assert!(!src.contains(&banned), "백업 기본값이 다시 바탕화면이 됐다");
-    }
-
     /// 윈도우·리눅스 백업이 맥 경로만 보면, 원드라이브가 켜져 있는데
     /// "클라우드가 없습니다"가 되고 USB 도 못 찾는다.
     #[test]
@@ -664,173 +556,259 @@ mod tests {
 /// 여기서 주문받습니다」를 **사장 이름으로 서명**할 수 있고, 손님 돈이 그리로
 /// 간다. **소유권 토큰을 훔칠 필요조차 없다.** zip 은 옮기라고 만든 물건이라
 /// "이미 이 컴퓨터에 있으니 괜찮다"는 논리가 성립하지 않는다.
-async fn seal(plain: &std::path::Path) -> Result<PathBuf, String> {
-    let key = crate::lockbox::key_get_or_make()
-        .map_err(|e| format!("자물쇠 열쇠를 만들지 못했습니다: {e}"))?;
-    let locked = plain.with_extension(LOCKED_EXT);
-    crate::lockbox::lock_file(plain, &locked, &key)
-        .map_err(|e| format!("백업을 잠그지 못했습니다: {e}"))?;
-    // 🔴 잠근 사본을 만들었으면 평문은 **반드시** 지운다. 남겨 두면
-    //    자물쇠는 장식이 되고, 사장은 잠갔다고 믿는다.
-    let _ = std::fs::remove_file(plain);
-    Ok(locked)
+struct PreparedBackup {
+    workspace: Workspace,
+    inside: Vec<Value>,
+    encrypted: Option<bool>,
 }
 
-/// 사장이 「백업 하기」를 누를 때 부르는 것. **잠근 사본만 남긴다.**
+fn file_digest(path: &Path) -> Result<(u64, String), String> {
+    use sha2::{Digest, Sha256};
+    let mut file = std::fs::File::open(path).map_err(|e| format!("파일을 읽지 못했습니다. 권한을 확인하세요: {e}"))?;
+    if !file.metadata().map_err(|e| e.to_string())?.is_file() {
+        return Err("백업 항목이 파일이 아닙니다. 원본 파일을 확인하세요.".into());
+    }
+    let mut hasher = Sha256::new();
+    let mut len = 0;
+    let mut buffer = [0; 65536];
+    loop {
+        let count = file.read(&mut buffer).map_err(|e| e.to_string())?;
+        if count == 0 { break; }
+        hasher.update(&buffer[..count]);
+        len += count as u64;
+    }
+    Ok((len, hex::encode(hasher.finalize())))
+}
+
+async fn prepare_backup(include_wallet: bool) -> Result<PreparedBackup, String> {
+    let workspace = Workspace::new(&app_dir())?;
+    let mut inside = Vec::new();
+    if include_wallet {
+        let wallet = workspace.path().join("wallet.dat");
+        crate::raven::call_rpc("backupwallet", json!([wallet.to_string_lossy()])).await
+            .map_err(|_| "지갑을 백업하지 못했습니다. 노드가 켜져 있고 연결되는지 확인한 뒤 다시 백업하세요. 기존 백업은 교체하지 않았습니다.".to_string())?;
+        let (size, sha256) = file_digest(&wallet)?;
+        if size == 0 { return Err("노드가 빈 지갑 사본을 만들었습니다. 노드 상태를 확인한 뒤 다시 백업하세요.".into()); }
+        inside.push(json!({"name": "wallet.dat", "what": "지갑 열쇠", "size": size, "sha256": sha256}));
+    }
+    for (name, source, what) in manifest() {
+        match std::fs::metadata(&source) {
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(e) => return Err(format!("{name}을 확인하지 못했습니다. 파일 권한을 확인하세요: {e}")),
+            Ok(meta) if !meta.is_file() => return Err(format!("{name}이 파일이 아닙니다. 원본을 확인하세요.")),
+            Ok(_) => (),
+        }
+        let target = workspace.path().join(name);
+        std::fs::copy(&source, &target).map_err(|e| format!("{name}을 담지 못했습니다. 파일 권한과 여유 공간을 확인하세요: {e}"))?;
+        // A partially written ledger must not silently become the newest backup.
+        let file = std::fs::File::open(&target).map_err(|e| e.to_string())?;
+        serde_json::from_reader::<_, Value>(file)
+            .map_err(|_| format!("{name}의 내용을 읽지 못했습니다. 원본을 확인한 뒤 다시 백업하세요."))?;
+        let (size, sha256) = file_digest(&target)?;
+        inside.push(json!({"name": name, "what": what, "size": size, "sha256": sha256}));
+    }
+    let encrypted = if include_wallet {
+        crate::raven::call_rpc("getwalletinfo", json!([])).await.ok().map(|v| v.get("unlocked_until").is_some())
+    } else { None };
+    Ok(PreparedBackup { workspace, inside, encrypted })
+}
+
+fn backup_readme(prepared: &PreparedBackup) -> String {
+    let names = prepared.inside.iter().filter_map(|v| v["name"].as_str()).collect::<Vec<_>>().join("\n");
+    format!("RavenVault Desktop / PLAY X Raven backup\n\nIncluded files / 포함한 파일:\n{names}\n\nNot included / 포함하지 않음: blockchain, IPFS media, browser/PWA wallet and files, AI API keys.\n블록체인, IPFS 원본, 브라우저/PWA 지갑과 파일, AI API 키는 별도로 보관하세요.\n\nRestore / 되돌리기: 앱의 [이 컴퓨터] → [되돌리기]에서 이 백업을 고르세요.\n다른 컴퓨터에서는 백업 암호 또는 백업 열쇠가 필요합니다. 지갑 복구 단어와는 다릅니다.\n지갑을 복원하기 전에 Ravencoin 노드를 완전히 종료하세요. 같은 지갑을 여러 컴퓨터에서 동시에 사용하지 마세요.\n")
+}
+
+fn write_archive(prepared: &PreparedBackup, out: &Path) -> Result<(), String> {
+    let file = std::fs::File::create(out).map_err(|e| e.to_string())?;
+    let mut zip = zip::ZipWriter::new(file);
+    let opts: zip::write::FileOptions<()> = zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+    for entry in &prepared.inside {
+        let name = entry["name"].as_str().ok_or("백업 파일 이름을 확인하지 못했습니다")?;
+        let mut file = std::fs::File::open(prepared.workspace.path().join(name)).map_err(|e| format!("{name}을 읽지 못했습니다: {e}"))?;
+        zip.start_file(name, opts).map_err(|e| format!("{name}을 담지 못했습니다: {e}"))?;
+        let count = std::io::copy(&mut file, &mut zip).map_err(|e| format!("{name}을 끝까지 담지 못했습니다: {e}"))?;
+        if Some(count) != entry["size"].as_u64() { return Err(format!("{name}의 크기가 바뀌었습니다. 다시 백업하세요.")); }
+    }
+    zip.start_file(README_NAME, opts).map_err(|e| e.to_string())?;
+    zip.write_all(backup_readme(prepared).as_bytes()).map_err(|e| e.to_string())?;
+    zip.finish().map_err(|e| format!("백업 파일을 마무리하지 못했습니다: {e}"))?.sync_all().map_err(|e| e.to_string())?;
+    verify_archive(prepared, out)
+}
+
+fn verify_archive(prepared: &PreparedBackup, path: &Path) -> Result<(), String> {
+    use sha2::{Digest, Sha256};
+    let mut archive = zip::ZipArchive::new(std::fs::File::open(path).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+    if archive.len() != prepared.inside.len() + 1 { return Err("백업 파일 수가 맞지 않습니다. 다시 백업하세요.".into()); }
+    for entry in &prepared.inside {
+        let name = entry["name"].as_str().ok_or("백업 파일 이름이 없습니다")?;
+        let mut file = archive.by_name(name).map_err(|_| format!("백업에서 {name}을 찾지 못했습니다. 다시 백업하세요."))?;
+        let mut hash = Sha256::new();
+        let mut count = 0u64;
+        let mut buffer = [0; 65536];
+        loop {
+            let n = file.read(&mut buffer).map_err(|e| format!("백업 파일이 손상되었습니다. 다시 백업하세요: {e}"))?;
+            if n == 0 { break; }
+            hash.update(&buffer[..n]); count += n as u64;
+        }
+        if Some(count) != entry["size"].as_u64() || entry["sha256"] != hex::encode(hash.finalize()) {
+            return Err(format!("백업의 {name}이 원본 사본과 다릅니다. 다시 백업하세요."));
+        }
+    }
+    let mut readme = String::new();
+    archive.by_name(README_NAME).map_err(|e| e.to_string())?.read_to_string(&mut readme).map_err(|e| e.to_string())?;
+    if readme != backup_readme(prepared) { return Err("백업 안내문을 확인하지 못했습니다. 다시 백업하세요.".into()); }
+    Ok(())
+}
+
+fn record_backup(dest: &Path, count: usize) -> Option<String> {
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    std::fs::write(stamp_path(), json!({"at": now, "dest": dest.to_string_lossy(), "count": count}).to_string()).err()
+        .map(|_| "백업 파일은 저장했지만 완료 시각을 기록하지 못했습니다. 설정 폴더 권한을 확인하세요.".into())
+}
+
+fn publish_archive(prepared: &PreparedBackup, picked: &Path, label: &str, locked: bool) -> Result<Value, String> {
+    if !picked.is_dir() { return Err("폴더가 아닙니다. 저장할 폴더를 고르세요.".into()); }
+    // Retain the existing backup folder and filename conventions.
+    let out_dir = picked.join("PLAY X Raven 백업");
+    let safe_label: String = label.trim().chars().take(48).map(|c| if c.is_alphanumeric() || c == '-' { c } else { '_' }).collect();
+    let stem = if safe_label.is_empty() { "PLAYXRaven".to_owned() } else { format!("PLAYXRaven-{safe_label}") };
+    let output_workspace = Workspace::new(prepared.workspace.path())?;
+    let plain = output_workspace.path().join("archive.zip");
+    write_archive(prepared, &plain)?;
+    let staged = if locked {
+        let key = crate::lockbox::key_get_or_make()?;
+        let sealed = output_workspace.path().join("archive.zip.pxlock");
+        crate::lockbox::lock_file(&plain, &sealed, &key)?;
+        // Read the encrypted output back before replacing any existing backup.
+        let check = output_workspace.path().join("verify.zip");
+        crate::lockbox::unlock_file(&sealed, &check, &key)?;
+        verify_archive(prepared, &check)?;
+        std::fs::remove_file(&check).map_err(|e| e.to_string())?;
+        std::fs::remove_file(&plain).map_err(|e| e.to_string())?;
+        sealed
+    } else { plain };
+    let extension = if locked { LOCKED_EXT } else { "zip" };
+    let out = out_dir.join(format!("{stem}.{extension}"));
+    std::fs::create_dir_all(&out_dir).map_err(|e| format!("백업 폴더를 만들지 못했습니다: {e}"))?;
+    publish_file(&staged, &out)?;
+    let size = std::fs::metadata(&out).map_err(|e| e.to_string())?.len();
+    let wallet_included = prepared.inside.iter().any(|v| v["name"] == "wallet.dat");
+    let stamp_warning = if wallet_included { record_backup(&out, prepared.inside.len()) } else { None };
+    Ok(json!({
+        "path": out.to_string_lossy(), "folder": out_dir.to_string_lossy(), "pretty": pretty_place(&out_dir),
+        "name": out.file_name().unwrap_or_default().to_string_lossy(), "size": size,
+        "size_text": format!("{:.1} MB", size as f64 / 1_048_576.0),
+        "inside": prepared.inside, "wallet_included": wallet_included, "wallet_encrypted": prepared.encrypted,
+        "locked": locked, "verified": true,
+        "warning": stamp_warning.unwrap_or_else(|| if !locked { "암호화하지 않은 백업입니다. 다른 사람이 열 수 없도록 보관하세요.".into() } else { String::new() }),
+    }))
+}
+
+// Keep yesterday's external copy: a six-hour retry must not rotate a
+// destination that already has this day's verified copy.
+fn daily_archive_paths(picked: &Path, locked: bool) -> (PathBuf, PathBuf) {
+    let extension = if locked { LOCKED_EXT } else { "zip" };
+    let latest = picked.join("PLAY X Raven 백업").join(format!("PLAYXRaven.{extension}"));
+    let receipt = latest.with_file_name(format!(".PLAYXRaven.{extension}.complete.json"));
+    (latest, receipt)
+}
+
+fn daily_copy_complete(picked: &Path, locked: bool, day: &str) -> bool {
+    let (latest, receipt) = daily_archive_paths(picked, locked);
+    let prior = std::fs::read(&receipt).ok().and_then(|b| serde_json::from_slice::<Value>(&b).ok());
+    prior.is_some_and(|v| v["day"] == day && file_digest(&latest).is_ok_and(|(size, hash)| v["size"] == size && v["sha256"] == hash))
+}
+
+fn publish_daily(prepared: &PreparedBackup, picked: &Path, locked: bool, day: &str) -> Result<Value, String> {
+    let (latest, receipt) = daily_archive_paths(picked, locked);
+    if daily_copy_complete(picked, locked, day) {
+        return Ok(json!({"path": latest.to_string_lossy(), "locked": locked, "skipped": true}));
+    }
+    let result = publish_archive(prepared, picked, "", locked)?;
+    let (size, sha256) = file_digest(&latest)?;
+    let stage = Workspace::new(prepared.workspace.path())?;
+    let record = stage.path().join("receipt.json");
+    std::fs::write(&record, json!({"day": day, "size": size, "sha256": sha256}).to_string()).map_err(|e| e.to_string())?;
+    publish_file(&record, &receipt)?;
+    Ok(result)
+}
+
+/// The public command never returns success for an omitted requested wallet.
 #[tauri::command]
 pub async fn backup_zip(dest_folder: String, label: String, include_wallet: bool) -> Result<Value, String> {
-    let mut v = backup_zip_plain(dest_folder, label, include_wallet).await?;
-    let plain = PathBuf::from(v["path"].as_str().unwrap_or_default());
-    let locked = seal(&plain).await?;
-    v["path"] = json!(locked.to_string_lossy());
-    v["name"] = json!(locked.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default());
-    v["locked"] = json!(true);
-    Ok(v)
+    let _gate = backup_gate()?;
+    let picked = if dest_folder.trim().is_empty() { default_backup_parent() } else { PathBuf::from(dest_folder) };
+    if !picked.is_dir() { return Err("폴더가 아닙니다. 저장할 폴더를 고르세요.".into()); }
+    let prepared = prepare_backup(include_wallet).await?;
+    publish_archive(&prepared, &picked, &label, true)
 }
 
-/// 잠그지 않은 zip 을 만든다. **자동 백업이 쓰는 안쪽 함수**다 —
-/// 그쪽은 만든 뒤에 스스로 잠그므로 여기서 두 번 잠그면 안 된다.
-async fn backup_zip_plain(dest_folder: String, label: String, include_wallet: bool) -> Result<Value, String> {
-    // 🔴 **바탕화면을 기본값으로 두지 않는다.** 실제로 사장이 백업을 누르고
-    //    「어디 갔는지 모르겠다」고 겪었다. 고를 곳이 넷(iCloud·다른 클라우드·
-    //    직접 고르기·아무것도 안 고름=바탕화면)이면 그렇게 된다.
-    //
-    //    바탕화면은 특히 나쁘다. 화면 공유·원격 지원·수리 맡기기·자동 정리에
-    //    가장 먼저 노출되는 자리이고, 이 파일에는 지갑과 간판 열쇠가 들어 있다.
-    //
-    //    비워서 부르면 **늘 같은 한 곳**이다. 「내 서류함/PLAY X Raven 백업」.
-    //    윈도우·맥·리눅스 모두 서류함. 원드라이브가 서류함을 옮긴 컴퓨터는
-    //    그 자리 자체가 클라우드라, 따로 고르지 않아도 같이 간다.
-    let picked = if dest_folder.trim().is_empty() {
-        default_backup_parent()
-    } else {
-        PathBuf::from(&dest_folder)
-    };
-    if !picked.is_dir() {
-        return Err("폴더가 아닙니다. 저장할 폴더를 고르세요.".into());
+fn unique_generation(parent: &Path, prefix: &str) -> PathBuf {
+    parent.join(format!("{prefix}-{:016x}", rand::random::<u64>()))
+}
+
+fn complete_day(root: &Path, stamp: &str) -> Option<PathBuf> {
+    let entries = std::fs::read_dir(root).ok()?;
+    entries.flatten().map(|e| e.path()).find(|path| {
+        let name = path.file_name().unwrap_or_default().to_string_lossy();
+        (name == stamp || name.starts_with(&format!("{stamp}-retry-"))) && complete_snapshot(path)
+    })
+}
+
+fn store_folder(prepared: &PreparedBackup, dir: &Path) -> Result<Value, String> {
+    // Publish an entire directory only after every file passes readback checks.
+    // Earlier complete or partial directories are never modified by a retry.
+    if dir.try_exists().map_err(|e| e.to_string())? {
+        return Err("이 백업 폴더에는 이미 자료가 있습니다. 새 폴더를 골라 다시 백업하세요.".into());
     }
-
-    // 🔴 고른 폴더 안에 **우리 폴더를 하나 만들고** 거기 넣는다.
-    //
-    // iCloud Drive 나 드롭박스 루트에 zip 을 그냥 뿌리면, 몇 달 뒤 그 폴더는
-    // 정체를 알 수 없는 파일들로 찬다. 사장은 그걸 지운다 — 그리고 지운 것이
-    // 지갑 백업이었다는 것은 지갑이 필요해진 날에 안다.
-    //
-    // 바탕화면만 예외로 둘까 하다가 두지 않았다. 규칙이 자리마다 다르면
-    // "내 백업이 어디 있더라" 가 또 생긴다. 늘 같은 이름의 폴더에 있다.
-    let out_dir = picked.join("PLAY X Raven 백업");
-    std::fs::create_dir_all(&out_dir)
-        .map_err(|e| format!("백업 폴더를 만들지 못했습니다: {e}"))?;
-
-    // 지갑은 노드가 만들어야 정합성이 있다. 임시로 뽑아 넣고 지운다.
-    let staging = app_dir().join("zip-staging");
-    let _ = std::fs::remove_dir_all(&staging);
-    std::fs::create_dir_all(&staging).map_err(|e| e.to_string())?;
-    let wallet_tmp = staging.join("wallet.dat");
-    let wallet_ok = include_wallet
-        && crate::raven::call_rpc(
-            "backupwallet",
-            json!([wallet_tmp.to_string_lossy().to_string()]),
-        )
-        .await
-        .is_ok();
-
-    let encrypted = crate::raven::call_rpc("getwalletinfo", json!([]))
-        .await
-        .ok()
-        .map(|i| i.get("unlocked_until").is_some())
-        .unwrap_or(false);
-
-    let safe_label: String = label
-        .trim()
-        .chars()
-        .map(|c| if c.is_alphanumeric() || c == '-' { c } else { '_' })
-        .collect();
-    let stem = if safe_label.is_empty() {
-        "PLAYXRaven".to_string()
-    } else {
-        format!("PLAYXRaven-{safe_label}")
-    };
-    let name = format!("{stem}.zip");
-    let out = out_dir.join(&name);
-
-    // 🔴 날짜가 이름에 붙어 날마다 새 파일이 쌓이고 있었다. 몇 달이면 폴더가
-    // zip 으로 차고, 사장은 어느 것이 최신인지 모른 채 아무거나 지운다.
-    //
-    // 자동 복사와 같은 규칙으로 맞춘다 — **지금 것 하나 + 직전 것 하나.**
-    // 직전 것을 남기는 이유는, 백업이 도는 중에 컴퓨터가 꺼지면 새 파일이
-    // 반쯤 쓰인 채 남기 때문이다. 그때 돌아갈 자리가 있어야 한다.
-    // 날짜는 파일 이름이 아니라 **zip 안 설명서**에 적힌다.
-    roll_previous(&out_dir, &stem);
-
-    let file = std::fs::File::create(&out).map_err(|e| format!("만들지 못했습니다: {e}"))?;
-    let mut zip = zip::ZipWriter::new(file);
-    let opts: zip::write::FileOptions<()> =
-        zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
-
-    let mut inside = Vec::new();
-    let mut add = |zip: &mut zip::ZipWriter<std::fs::File>, name: &str, path: &Path| -> bool {
-        let Ok(bytes) = std::fs::read(path) else {
-            return false;
-        };
-        use std::io::Write;
-        if zip.start_file(name, opts).is_err() {
-            return false;
-        }
-        zip.write_all(&bytes).is_ok()
-    };
-
-    if wallet_ok && add(&mut zip, "wallet.dat", &wallet_tmp) {
-        inside.push(json!({ "name": "wallet.dat", "what": "지갑 열쇠" }));
+    let parent = dir.parent().ok_or("백업 폴더를 다시 고르세요.")?;
+    let staged = Workspace::new(parent)?;
+    let mut done = Vec::new();
+    for entry in &prepared.inside {
+        let name = entry["name"].as_str().ok_or("백업 파일 이름이 없습니다")?;
+        let target = staged.path().join(name);
+        std::fs::copy(prepared.workspace.path().join(name), &target).map_err(|e| format!("{name}을 저장하지 못했습니다. 여유 공간을 확인하세요: {e}"))?;
+        std::fs::OpenOptions::new().read(true).write(true).open(&target).and_then(|f| f.sync_all()).map_err(|e| e.to_string())?;
+        done.push(json!({"name": name, "path": dir.join(name).to_string_lossy()}));
     }
-    for (fname, path, why) in manifest() {
-        if path.exists() && add(&mut zip, fname, &path) {
-            inside.push(json!({ "name": fname, "what": why }));
-        }
-    }
+    let readme = staged.path().join(README_NAME);
+    std::fs::write(&readme, backup_readme(prepared)).map_err(|e| e.to_string())?;
+    let marker = staged.path().join(COMPLETE_FILE);
+    std::fs::write(&marker, json!({"version": 1, "files": prepared.inside}).to_string()).map_err(|e| e.to_string())?;
+    for path in [&readme, &marker] { std::fs::OpenOptions::new().read(true).write(true).open(path).and_then(|f| f.sync_all()).map_err(|e| e.to_string())?; }
+    if !complete_snapshot(staged.path()) { return Err("백업을 검증하지 못했습니다. 여유 공간과 파일 권한을 확인한 뒤 다시 백업하세요.".into()); }
+    #[cfg(unix)]
+    std::fs::File::open(staged.path()).and_then(|f| f.sync_all()).map_err(|e| e.to_string())?;
+    std::fs::rename(staged.path(), dir).map_err(|e| format!("새 백업 폴더를 저장하지 못했습니다. 기존 백업은 보존했습니다. 다른 폴더를 골라 주세요: {e}"))?;
+    #[cfg(unix)]
+    std::fs::File::open(parent).and_then(|f| f.sync_all()).map_err(|e| e.to_string())?;
+    if !complete_snapshot(dir) { return Err("저장한 백업을 확인하지 못했습니다. 기존 백업은 지우지 말고 다시 백업하세요.".into()); }
+    let warning = record_backup(dir, done.len());
+    Ok(json!({"done": done, "failed": [], "dest": dir.to_string_lossy(), "complete": true, "last": last_backup(), "warning": warning}))
+}
 
-    // 안내문도 같이 넣는다. 몇 달 뒤 이 파일을 여는 사람은 오늘 화면을 기억하지
-    // 못한다.
-    let readme = format!(
-        "PLAY X Raven 백업\n\n         이 파일 하나에 가게 전부가 들어 있습니다.\n\n         새 컴퓨터에서 되돌리는 법\n         1. 레이븐 노드와 PLAY X Raven 을 설치합니다.\n         2. 노드는 아직 켜지 마세요.\n         3. 앱에서 [이 컴퓨터] → [되돌리기] 로 이 파일을 고릅니다.\n         4. 회원 수와 메뉴 개수가 맞는지 보고 되돌립니다.\n         5. 노드를 켭니다.\n\n         {}\n\n         이 백업을 다른 컴퓨터에서 동시에 켜지 마세요. 두 노드가 같은 지갑을 쓰면\n         같은 주소를 두 번 나눠 주고 돈을 잃습니다. 원래 컴퓨터가 완전히 죽었을\n         때만 쓰세요.\n",
-        if encrypted {
-            "지갑에 암호가 걸려 있습니다. 이 파일을 주워도 암호 없이는 못 씁니다."
-        } else {
-            "⚠ 지갑에 암호가 없습니다. 이 파일을 주운 사람은 그대로 돈을 쓸 수 있습니다."
-        }
-    );
-    use std::io::Write;
-    if zip.start_file(README_NAME, opts).is_ok() {
-        let _ = zip.write_all(readme.as_bytes());
-    }
-    zip.finish().map_err(|e| format!("마무리하지 못했습니다: {e}"))?;
-    let _ = std::fs::remove_dir_all(&staging);
+pub(crate) fn complete_snapshot(dir: &Path) -> bool {
+    let Some(marker) = std::fs::read(dir.join(COMPLETE_FILE)).ok().and_then(|b| serde_json::from_slice::<Value>(&b).ok()) else { return false };
+    let Some(files) = marker["files"].as_array() else { return false };
+    if marker["version"] != 1 || !files.iter().any(|v| v["name"] == "wallet.dat" && v["size"].as_u64().unwrap_or(0) > 0) { return false; }
+    let allowed: Vec<_> = manifest().into_iter().map(|v| v.0).chain(["wallet.dat"]).collect();
+    files.iter().all(|v| {
+        let Some(name) = v["name"].as_str().filter(|n| allowed.contains(n)) else { return false };
+        file_digest(&dir.join(name)).map(|(size, hash)| v["size"] == size && v["sha256"] == hash).unwrap_or(false)
+    })
+}
 
-    let size = std::fs::metadata(&out).map(|m| m.len()).unwrap_or(0);
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0);
-    let _ = std::fs::write(
-        stamp_path(),
-        serde_json::to_vec(&json!({ "at": now, "dest": out.to_string_lossy(), "count": inside.len() }))
-            .unwrap_or_default(),
-    );
-
-    Ok(json!({
-        "path": out.to_string_lossy(),
-        "folder": out_dir.to_string_lossy(),
-        "pretty": pretty_place(&out_dir),
-        "name": name,
-        "size": size,
-        "size_text": format!("{:.1} MB", size as f64 / 1_048_576.0),
-        "inside": inside,
-        "wallet_included": wallet_ok,
-        "wallet_encrypted": encrypted,
-        "warning": if encrypted { "" } else {
-            "이 지갑에는 암호가 없습니다. 이 파일을 주운 사람은 그대로 돈을 쓸 수 있습니다 — 암호를 먼저 거는 편이 좋습니다."
-        },
-    }))
+fn prune_complete_generations(root: &Path) {
+    let Ok(entries) = std::fs::read_dir(root) else { return };
+    let mut complete: Vec<_> = entries.flatten().filter(|e| {
+        let name = e.file_name().to_string_lossy().to_string();
+        (name.len() == 10 || name.get(10..).is_some_and(|suffix| suffix.starts_with("-retry-")))
+            && name.chars().take(10).enumerate().all(|(i,c)| if i == 4 || i == 7 { c == '-' } else { c.is_ascii_digit() })
+            && complete_snapshot(&e.path())
+    }).collect();
+    complete.sort_by_key(|e| e.file_name());
+    let excess = complete.len().saturating_sub(7);
+    for entry in complete.into_iter().take(excess) { let _ = std::fs::remove_dir_all(entry.path()); }
 }
 
 /// Storage that is not this computer.
@@ -951,22 +929,6 @@ fn list_external() -> Vec<Value> {
     }
     add_children(Path::new("/mnt"));
     rows
-}
-
-/// Slides the current backup aside before it is overwritten.
-///
-/// Fixed names, exactly two files, never more. The one thing a single
-/// overwritten copy cannot survive is a mistake made this morning — delete the
-/// member list, let the backup run, and the good copy is gone. Keeping the
-/// immediately previous one costs one file and covers that.
-fn roll_previous(folder: &Path, stem: &str) {
-    let latest = folder.join(format!("{stem}.zip"));
-    if !latest.exists() {
-        return;
-    }
-    let prev = folder.join(format!("{stem}-이전.zip"));
-    let _ = std::fs::remove_file(&prev);
-    let _ = std::fs::rename(&latest, &prev);
 }
 
 /// Folders that already sync themselves off this machine.
@@ -1280,78 +1242,4 @@ fn pretty_place(path: &Path) -> String {
         return s;
     }
     resolved.to_string_lossy().replace('\\', "/")
-}
-
-/// Puts a copy where the disk dying cannot reach it.
-///
-/// ## Why the wallet does not go to the cloud
-///
-/// Everything else here is operating data — a member list, a menu, which orders
-/// shipped. Losing it closes the shop for a day; leaking it embarrasses. The
-/// wallet is different in kind: it is the money, and a copy in iCloud means the
-/// money is protected by an Apple ID, which is a password and a text message.
-/// That is not the bar a shop's takings should sit behind, and the owner never
-/// agreed to it — they agreed to "back up my shop".
-///
-/// So the cloud copy carries the shop and not the keys. The keys go on a USB
-/// stick and on the paper with the twelve words. Different failure, different
-/// place.
-async fn copy_to_cloud(stamp: &str) -> Vec<Value> {
-    let mut out = Vec::new();
-    for f in cloud_folders()["folders"].as_array().cloned().unwrap_or_default() {
-        let Some(root) = f["path"].as_str() else { continue };
-        let folder = PathBuf::from(root).join(BACKUP_DIR);
-        if std::fs::create_dir_all(&folder).is_err() {
-            continue;
-        }
-        roll_previous(&folder, "PLAYXRaven");
-
-        // 🔴 여태 「지갑 암호가 걸려 있으면 클라우드에 올린다」였다. 방향은
-        // 맞지만 **기준이 낮았다.** 레이븐코인 지갑 암호는 2011년 방식이라
-        // (SHA-512 25,000회) GPU 한 장이 초당 8만 개를 시험한다 —
-        // `raven` 같은 암호는 **2.5초**에 뚫린다. 그리고 사장이 무엇을
-        // 넣었는지 우리는 모른다.
-        //
-        // 그래서 이제 **지갑을 늘 넣되, 우리가 한 번 더 잠근다**(`lockbox`).
-        // 열쇠는 무작위 32바이트라 맞힐 방법이 없다.
-        //
-        // 지갑을 빼지 않는 이유: 그게 있어야 컴퓨터가 죽었을 때 가게가
-        // 살아난다. **노인은 종이 12단어를 잃어버린다** — 그게 실제로 겪는
-        // 일이고, 잃을 확률이 더 높은 쪽을 없애는 것은 안전이 아니다.
-        let Ok(key) = crate::lockbox::key_get_or_make() else {
-            // 열쇠를 못 만들면 **올리지 않는다.** 잠그지 못한 지갑을
-            // 클라우드에 두느니 오늘 사본이 없는 편이 낫다.
-            out.push(json!({
-                "where": f["name"], "wallet": false,
-                "why": "자물쇠 열쇠를 만들지 못해 오늘은 올리지 않았습니다",
-            }));
-            continue;
-        };
-        let Ok(v) = backup_zip_plain(folder.to_string_lossy().to_string(), "".into(), true).await else {
-            continue;
-        };
-        let plain = PathBuf::from(v["path"].as_str().unwrap_or_default());
-        let locked = plain.with_extension(LOCKED_EXT);
-        match crate::lockbox::lock_file(&plain, &locked, &key) {
-            Ok(()) => {
-                // 🔴 잠근 뒤 **원본을 지운다.** 남겨 두면 클라우드에 잠긴 것과
-                // 안 잠긴 것이 나란히 올라가고, 자물쇠는 장식이 된다.
-                let _ = std::fs::remove_file(&plain);
-                out.push(json!({
-                    "where": f["name"], "path": locked.to_string_lossy(),
-                    "wallet": true, "locked": true,
-                    "why": "",
-                }));
-            }
-            Err(e) => {
-                // 잠그지 못했으면 원본도 치운다. 벗은 채로 남기지 않는다.
-                let _ = std::fs::remove_file(&plain);
-                out.push(json!({
-                    "where": f["name"], "wallet": false,
-                    "why": format!("잠그지 못해 올리지 않았습니다: {e}"),
-                }));
-            }
-        }
-    }
-    out
 }

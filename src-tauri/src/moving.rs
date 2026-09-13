@@ -254,8 +254,11 @@ pub async fn move_fetch(host: String, code: String) -> Result<Value, String> {
         .await?;
 
     let _ = std::fs::remove_dir_all(&tmp);
+    // Receiving an archive is not the same as restoring every selected item.
+    let complete = restore_complete(&out);
     Ok(json!({
-        "ok": true,
+        "ok": complete,
+        "status": if complete { "complete" } else { out.get("status").and_then(Value::as_str).unwrap_or("failed") },
         "restored": out,
         // 🔴 이 말을 꼭 화면에 띄워야 한다. 안 그러면 사장이 자산을 새로 만든다.
         "warn": "가게 자산을 새로 만들지 마세요. 같은 지갑이면 그대로 따라옵니다. \
@@ -332,3 +335,10 @@ mod tests {
         );
     }
 }
+
+// BEGIN MOVE RESTORE STATUS (compiled by the synthetic restore harness)
+fn restore_complete(out: &Value) -> bool {
+    out.get("failed").and_then(Value::as_array).is_some_and(|items| items.is_empty())
+        && out.get("done").and_then(Value::as_array).is_some_and(|items| !items.is_empty())
+}
+// END MOVE RESTORE STATUS

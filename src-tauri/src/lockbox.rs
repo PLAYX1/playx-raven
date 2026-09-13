@@ -64,32 +64,55 @@ fn key_path() -> PathBuf {
 /// 것과 같다.
 pub fn key_get_or_make() -> Result<[u8; 32], String> {
     let p = key_path();
-    if let Ok(raw) = std::fs::read_to_string(&p) {
-        let bytes = from_paper(raw.trim())?;
-        return Ok(bytes);
+    match std::fs::read_to_string(&p) {
+        Ok(raw) => return from_paper(raw.trim()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(format!("기존 백업 열쇠를 읽지 못했습니다. 파일 권한을 확인하세요. 열쇠는 바꾸지 않았습니다: {e}")),
     }
-    // 새로 만든다.
+    ensure_no_existing_envelope()?;
+    // Only absence permits creation. create_new prevents another process's key
+    // from being overwritten between the read and the write.
     use rand::RngCore;
+    use std::io::Write;
     let mut k = [0u8; 32];
     rand::thread_rng().fill_bytes(&mut k);
     if let Some(d) = p.parent() {
-        let _ = std::fs::create_dir_all(d);
+        std::fs::create_dir_all(d).map_err(|e| format!("백업 열쇠 폴더를 만들지 못했습니다. 폴더 권한을 확인하세요: {e}"))?;
     }
-    std::fs::write(&p, to_paper(&k)).map_err(|e| format!("열쇠를 두지 못했습니다: {e}"))?;
-    lock_down(&p);
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)] {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = match options.open(&p) {
+        Ok(file) => file,
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+            let raw = std::fs::read_to_string(&p).map_err(|e| format!("다른 백업 작업이 만든 열쇠를 아직 읽지 못했습니다. 잠시 뒤 다시 시도하세요: {e}"))?;
+            return from_paper(raw.trim());
+        }
+        Err(e) => return Err(format!("백업 열쇠를 저장하지 못했습니다. 폴더 권한을 확인하세요: {e}")),
+    };
+    file.write_all(to_paper(&k).as_bytes())
+        .and_then(|_| file.sync_all())
+        .map_err(|e| format!("새 백업 열쇠를 끝까지 저장하지 못했습니다. 백업을 중단했습니다: {e}"))?;
+    drop(file);
+    let saved = std::fs::read_to_string(&p).map_err(|e| format!("저장한 백업 열쇠를 확인하지 못했습니다. 백업을 중단했습니다: {e}"))?;
+    if from_paper(saved.trim())? != k {
+        return Err("저장한 백업 열쇠가 일치하지 않습니다. 백업을 중단했습니다. 파일 권한을 확인하세요.".into());
+    }
     Ok(k)
 }
 
-/// 파일 권한을 주인만 읽게 좁힌다.
-fn lock_down(p: &std::path::Path) {
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(p, std::fs::Permissions::from_mode(0o600));
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = p; // 윈도우는 사용자 폴더 권한을 그대로 따른다.
+fn ensure_no_existing_envelope() -> Result<(), String> {
+    // An existing envelope wraps the previous key. Generating another key
+    // would produce backups that local verification can open but the user's
+    // saved password cannot recover on another computer. Even an unreadable,
+    // empty, or dangling-link envelope must not be treated as absent.
+    match std::fs::symlink_metadata(wrap_path()) {
+        Ok(_) => Err("기존 백업 암호 정보는 남아 있지만 백업 열쇠가 없습니다. 새 열쇠를 만들지 않았습니다. 기존 백업 파일과 암호 정보를 보존하고, 종이에 적어 둔 백업 열쇠 또는 기존 백업 암호로 복구해 주세요.".into()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(format!("기존 백업 암호 정보가 있는지 확인하지 못했습니다. 새 열쇠를 만들지 않았습니다. 폴더 권한을 확인한 뒤 다시 시도하세요: {e}")),
     }
 }
 
@@ -282,6 +305,17 @@ fn pass_read() -> Option<Vec<u8>> {
     std::fs::read(wrap_path()).ok().filter(|v| !v.is_empty())
 }
 
+// Absence is allowed for legacy key-only backups; an unreadable or malformed
+// existing envelope must not silently remove the user's password recovery path.
+fn pass_read_checked() -> Result<Option<Vec<u8>>, String> {
+    match std::fs::read(wrap_path()) {
+        Ok(bytes) if bytes.len() == 4 + 16 + 12 + 32 + 16 && bytes.starts_with(WRAP_MAGIC) => Ok(Some(bytes)),
+        Ok(_) => Err("저장된 백업 암호 정보가 손상됐습니다. 기존 백업 열쇠와 파일을 보존하고 암호 설정을 확인하세요.".into()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(format!("저장된 백업 암호 정보를 읽지 못했습니다. 폴더 권한을 확인한 뒤 다시 백업하세요: {e}")),
+    }
+}
+
 /// 암호를 정한다. 한 번 정하면 **그 뒤 모든 백업**에 붙는다.
 #[tauri::command]
 pub async fn backup_pass_set(pass: String, wallet_pass: Option<String>) -> Result<Value, String> {
@@ -297,7 +331,7 @@ pub async fn backup_pass_set(pass: String, wallet_pass: Option<String>) -> Resul
     // 확인은 **지갑 암호**로 받는다. 옛 백업 암호를 물으면, 잊어버려서
     // 바꾸려는 사람을 막게 된다 — 그게 바꾸는 이유의 절반이다.
     // 지갑에 암호가 없으면 확인할 것이 없으므로 그냥 통과시킨다.
-    if pass_read().is_some() {
+    if pass_read_checked()?.is_some() {
         let encrypted = crate::raven::wallet_lock_state()
             .await
             .ok()
@@ -335,6 +369,7 @@ pub fn lock_file(src: &std::path::Path, dst: &std::path::Path, key: &[u8; 32]) -
     use argon2::Argon2;
     use rand::RngCore;
 
+    let wrap = pass_read_checked()?;
     let plain = std::fs::read(src).map_err(|e| format!("읽지 못했습니다: {e}"))?;
 
     let mut salt = [0u8; 16];
@@ -356,7 +391,6 @@ pub fn lock_file(src: &std::path::Path, dst: &std::path::Path, key: &[u8; 32]) -
     // 하나만 옮겨지고 나머지가 남는 일이 생긴다.
     // 🔴 암호가 정해져 있으면 **열쇠구멍을 하나 더** 넣는다. 파일 뒤에 붙고,
     //    없으면 예전과 똑같은 파일이라 옛 백업도 그대로 열린다.
-    let wrap = pass_read();
     let mut out = Vec::with_capacity(8 + 16 + 12 + sealed.len());
     out.extend_from_slice(MAGIC);
     out.extend_from_slice(&salt);
@@ -385,7 +419,12 @@ pub fn unlock_file(
         return Err("이 프로그램이 잠근 파일이 아닙니다.".into());
     }
     // 뒤에 붙은 열쇠구멍을 떼어낸다. 없으면 예전 파일이다.
-    let raw = strip_wrap(&raw).0.to_vec();
+    let raw = strip_wrap(&raw).0;
+    // A crafted trailer can strip nearly the entire file. Re-check after it,
+    // before any slice; the AES-GCM authentication tag is also required.
+    if raw.len() < 8 + 16 + 12 + 16 || &raw[..8] != MAGIC {
+        return Err("백업 파일이 잘렸거나 손상됐습니다. 이전 백업 파일을 골라 주세요.".into());
+    }
     let salt = &raw[8..24];
     let nonce_b = &raw[24..36];
     let body = &raw[36..];
@@ -557,5 +596,204 @@ mod pass_tests {
         let (only, none) = strip_wrap(&body);
         assert_eq!(only, &body[..]);
         assert!(none.is_none());
+    }
+}
+
+#[cfg(test)]
+mod backup_safety_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+
+    struct Fixture {
+        path: PathBuf,
+        old: Option<std::ffi::OsString>,
+        _guard: std::sync::MutexGuard<'static, ()>,
+    }
+    impl Fixture {
+        fn new() -> Self {
+            let guard = crate::paths::TEST_ENV.lock().unwrap_or_else(|e| e.into_inner());
+            let root = PathBuf::from(std::env::var_os("RV_BACKUP_FIXTURE_ROOT")
+                .expect("Set RV_BACKUP_FIXTURE_ROOT to a dedicated repository fixture directory"));
+            assert!(root.is_absolute() && root.is_dir());
+            let path = root.join(format!("lockbox-{}-{}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
+            std::fs::create_dir(&path).unwrap();
+            let old = std::env::var_os("PLAYX_RAVEN_HOME");
+            std::env::set_var("PLAYX_RAVEN_HOME", &path);
+            Self { path, old, _guard: guard }
+        }
+    }
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            if let Some(old) = &self.old { std::env::set_var("PLAYX_RAVEN_HOME", old); }
+            else { std::env::remove_var("PLAYX_RAVEN_HOME"); }
+            let _ = std::fs::remove_dir_all(&self.path);
+        }
+    }
+
+    #[test]
+    fn key_read_failure_preserves_existing_bytes() {
+        let fixture = Fixture::new();
+        let path = fixture.path.join("cloud-backup.key");
+        let invalid_utf8 = [0xff, 0xfe, 0xfd, 0x00];
+        std::fs::write(&path, invalid_utf8).unwrap();
+        assert!(key_get_or_make().is_err(), "A read error must not replace the existing key");
+        assert_eq!(std::fs::read(path).unwrap(), invalid_utf8);
+    }
+
+    #[test]
+    fn missing_key_with_existing_envelope_never_creates_a_mismatched_key() {
+        let fixture = Fixture::new();
+        let key_path = fixture.path.join("cloud-backup.key");
+        let envelope_path = fixture.path.join("backup-key-envelope");
+        let backup_path = fixture.path.join("existing.pxlock");
+        let envelope = hex::decode(ENVELOPE).unwrap();
+        let backup = hex::decode(LEGACY).unwrap();
+        std::fs::write(&envelope_path, &envelope).unwrap();
+        std::fs::write(&backup_path, &backup).unwrap();
+        assert!(!key_path.exists());
+        assert!(key_get_or_make().is_err(), "An orphaned password envelope must never be paired with a newly generated key");
+        assert!(!key_path.exists(), "The missing key must remain missing until explicitly recovered");
+        assert_eq!(std::fs::read(&envelope_path).unwrap(), envelope);
+        assert_eq!(std::fs::read(&backup_path).unwrap(), backup);
+        // Restoring the original synthetic key preserves the existing format
+        // and lets the password envelope recover that same key again.
+        std::fs::write(&key_path, to_paper(&[7u8; 32])).unwrap();
+        assert_eq!(key_get_or_make().unwrap(), [7u8; 32]);
+        assert_eq!(unwrap_key(&envelope, "synthetic-only-passphrase").unwrap(), [7u8; 32]);
+    }
+
+    #[test]
+    fn missing_key_does_not_ignore_an_empty_directory_or_link_envelope() {
+        let fixture = Fixture::new();
+        let key = fixture.path.join("cloud-backup.key");
+        let envelope = fixture.path.join("backup-key-envelope");
+        std::fs::write(&envelope, b"").unwrap();
+        assert!(key_get_or_make().is_err());
+        assert!(!key.exists());
+        assert_eq!(std::fs::read(&envelope).unwrap(), b"");
+        std::fs::remove_file(&envelope).unwrap();
+        std::fs::create_dir(&envelope).unwrap();
+        assert!(key_get_or_make().is_err());
+        assert!(!key.exists());
+        assert!(envelope.is_dir());
+        std::fs::remove_dir(&envelope).unwrap();
+        #[cfg(unix)] {
+            std::os::unix::fs::symlink(fixture.path.join("missing-envelope-target"), &envelope).unwrap();
+            assert!(key_get_or_make().is_err());
+            assert!(!key.exists());
+            assert!(std::fs::symlink_metadata(envelope).unwrap().file_type().is_symlink());
+        }
+    }
+
+    #[test]
+    fn malformed_envelope_returns_error_without_panic_or_destination_change() {
+        let fixture = Fixture::new();
+        let input = fixture.path.join("malformed.pxlock");
+        let output = fixture.path.join("existing.bin");
+        let mut raw = b"PXRLOCK1".to_vec();
+        raw.extend_from_slice(&[0u8; 28]);
+        raw.extend_from_slice(&28u32.to_le_bytes());
+        raw.extend_from_slice(b"PXWEND12");
+        assert_eq!(raw.len(), 48);
+        std::fs::write(&input, raw).unwrap();
+        std::fs::write(&output, b"previous synthetic bytes").unwrap();
+        let result = std::panic::catch_unwind(|| unlock_file(&input, &output, &[7u8; 32]));
+        assert!(result.is_ok(), "Malformed envelope must return Err instead of panicking");
+        assert!(result.unwrap().is_err());
+        assert_eq!(std::fs::read(output).unwrap(), b"previous synthetic bytes");
+    }
+
+    // Generated once by the unmodified released lock_file/wrap_key functions
+    // from the synthetic plaintext below and the explicit test key [7; 32].
+    // Keeping ciphertext bytes fixed detects format/KDF compatibility changes.
+    const LEGACY: &str = "5058524c4f434b312ced56544b055a13d82f2d5f3d29b79e40423aac0290fc4f8aae7b9d209ec9546876a7fface78dc6d45bc5d643c13c6c48aa932091227e538cb73e3955f42047ad17a66a855122bf3a45605545408e1e0ad0";
+    const ENVELOPE: &str = "505857312ab6c176a59df3725a46a8c33f443bde13641d0d62967026fb644833e0a93ef1e906cef9e6afde78b444ae112b9b3c4a879e712da4fc227afd60a5e1000ad65f20a46c92ae9ecea48a5c5157";
+
+    #[test]
+    fn released_plain_and_password_envelope_formats_still_open() {
+        let fixture = Fixture::new();
+        let expected = b"RavenVault synthetic legacy backup v1\n";
+        let legacy = hex::decode(LEGACY).unwrap();
+        let envelope = hex::decode(ENVELOPE).unwrap();
+        let key = unwrap_key(&envelope, "synthetic-only-passphrase").unwrap();
+        assert_eq!(key, [7u8; 32]);
+        assert!(unwrap_key(&envelope, "wrong synthetic passphrase").is_err());
+        let mut wrapped = legacy.clone();
+        wrapped.extend_from_slice(&envelope);
+        wrapped.extend_from_slice(&(envelope.len() as u32).to_le_bytes());
+        wrapped.extend_from_slice(b"PXWEND12");
+        for (name, bytes) in [("legacy.zip.잠김", legacy), ("wrapped.zip.pxlock", wrapped)] {
+            let source = fixture.path.join(name);
+            let output = fixture.path.join("opened.bin");
+            std::fs::write(&source, bytes).unwrap();
+            std::fs::write(&output, b"original destination").unwrap();
+            assert!(unlock_file(&source, &output, &[8u8; 32]).is_err());
+            assert_eq!(std::fs::read(&output).unwrap(), b"original destination");
+            unlock_file(&source, &output, &key).unwrap();
+            assert_eq!(std::fs::read(output).unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn new_files_roundtrip_and_tampering_never_overwrites_destination() {
+        let fixture = Fixture::new();
+        let input = fixture.path.join("plain.bin");
+        let encrypted = fixture.path.join("new.pxlock");
+        let output = fixture.path.join("output.bin");
+        let key = [7u8; 32];
+        std::fs::write(&input, b"new synthetic contents").unwrap();
+        std::fs::write(fixture.path.join("backup-key-envelope"), hex::decode(ENVELOPE).unwrap()).unwrap();
+        lock_file(&input, &encrypted, &key).unwrap();
+        let raw = std::fs::read(&encrypted).unwrap();
+        let (body, envelope) = strip_wrap(&raw);
+        assert_eq!(unwrap_key(envelope.unwrap(), "synthetic-only-passphrase").unwrap(), key);
+        unlock_file(&encrypted, &output, &key).unwrap();
+        assert_eq!(std::fs::read(&output).unwrap(), b"new synthetic contents");
+        for position in [8, 24, 36, body.len() - 1] {
+            let mut broken = raw.clone(); broken[position] ^= 1;
+            std::fs::write(&encrypted, broken).unwrap();
+            std::fs::write(&output, b"keep this destination").unwrap();
+            assert!(unlock_file(&encrypted, &output, &key).is_err());
+            assert_eq!(std::fs::read(&output).unwrap(), b"keep this destination");
+        }
+    }
+
+    #[test]
+    fn missing_key_is_created_once_and_existing_invalid_keys_are_never_replaced() {
+        let fixture = Fixture::new();
+        let key = key_get_or_make().unwrap();
+        let path = fixture.path.join("cloud-backup.key");
+        let saved = std::fs::read(&path).unwrap();
+        assert_eq!(key_get_or_make().unwrap(), key);
+        assert_eq!(std::fs::read(&path).unwrap(), saved);
+        #[cfg(unix)] {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o600);
+        }
+        for invalid in [b"".as_slice(), b"invalid synthetic key".as_slice()] {
+            std::fs::write(&path, invalid).unwrap();
+            assert!(key_get_or_make().is_err());
+            assert_eq!(std::fs::read(&path).unwrap(), invalid);
+        }
+    }
+
+    #[test]
+    fn unreadable_or_malformed_password_envelope_preserves_existing_backup() {
+        let fixture = Fixture::new();
+        let source = fixture.path.join("plain.bin");
+        let output = fixture.path.join("existing.pxlock");
+        let envelope = fixture.path.join("backup-key-envelope");
+        std::fs::write(&source, b"synthetic source").unwrap();
+        std::fs::write(&output, b"previous encrypted synthetic backup").unwrap();
+        std::fs::create_dir(&envelope).unwrap();
+        assert!(lock_file(&source, &output, &[7u8; 32]).is_err());
+        assert_eq!(std::fs::read(&output).unwrap(), b"previous encrypted synthetic backup");
+        std::fs::remove_dir(&envelope).unwrap();
+        for invalid in [b"".as_slice(), b"PXW1 incomplete".as_slice()] {
+            std::fs::write(&envelope, invalid).unwrap();
+            assert!(lock_file(&source, &output, &[7u8; 32]).is_err());
+            assert_eq!(std::fs::read(&output).unwrap(), b"previous encrypted synthetic backup");
+        }
     }
 }

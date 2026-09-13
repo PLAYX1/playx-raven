@@ -2929,13 +2929,14 @@ checksum = "f6b464fbc74e149a392436b17d523f769e057cb6877f6a5c4618bc6f11800548"
 
 [[package]]
 name = "playx-raven"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "aes-gcm",
  "argon2",
  "axum",
  "futures-util",
  "hex",
+ "libc",
  "open",
  "qrcode",
  "rand 0.8.7",
@@ -2953,6 +2954,7 @@ dependencies = [
  "tokio",
  "tokio-tungstenite 0.24.0",
  "tower",
+ "windows-sys 0.61.2",
  "zip 2.4.2",
 ]
 

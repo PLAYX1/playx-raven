@@ -14,6 +14,7 @@ mod setupflow;
 mod quiet;
 mod helping;
 mod backup;
+mod backup_storage;
 mod classes;
 mod conf;
 mod door;

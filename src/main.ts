@@ -1,3 +1,4 @@
+import { requireWalletBackup, restoreIsComplete } from "./backup-result";
 import { invoke as rawInvoke } from "@tauri-apps/api/core";
 
 /**
@@ -1297,22 +1298,22 @@ async function sampleClear() {
   }
 }
 
-async function doRestore() {
+async function doRestore(directory = false) {
   // 경로를 타이핑하게 하지 않는다. 이 파일 3,457행에 내가 직접 적어 둔 문장이
   // "폴더 경로를 타이핑하게 하는 것은 백업을 안 하게 하는 가장 확실한 방법"
   // 인데, 만들 때만 지키고 **되돌릴 때는 안 지키고 있었다.**
   // 파일 고르기는 OS 가 한다 — 사람은 파인더에서 눈으로 찾는 데 익숙하다.
   const where = await pickFile({
-    title: "되돌릴 백업을 고르세요",
+    title: t(directory ? "되돌릴 백업 폴더를 고르세요" : "되돌릴 백업을 고르세요"),
     multiple: false,
-    directory: false,
+    directory,
     // 🔴 `zip` 만 적어 뒀더니, 잠근 백업(`.zip.pxlock`)이 **회색으로 뜨고
     //    「열기」가 안 눌렸다.** 백업은 만드는 것보다 **되돌리는 것**이 본업인데
     //    거르개 한 줄 때문에 되돌릴 수가 없었다. 만들 때 쓰는 이름을 바꾸면
     //    여는 쪽도 같이 바꿔야 한다 — 그걸 놓쳤다.
     //
     //    `잠김` 은 옛 이름이다. 이미 그렇게 만들어 둔 백업이 있으니 계속 받는다.
-    filters: [
+    filters: directory ? undefined : [
       { name: "RavenVault Desktop 백업", extensions: ["pxlock", "zip", "잠김"] },
       { name: "모든 파일", extensions: ["*"] },
     ],
@@ -1340,19 +1341,19 @@ async function doRestore() {
       r = await invoke("restore_survey", { folder: where, pass: rsPass });
     }
     if (r.empty) {
-      $("rs-result").innerHTML = `<div class="warnbox" style="margin-top:11px">${r.note}</div>`;
+      $("rs-result").innerHTML = `<div class="warnbox" style="margin-top:11px">${escapeHtml(String(r.note || ""))}</div>`;
       return;
     }
     // 무엇이 들어 있는지 먼저 눈으로 확인하게 한다. 되돌린 뒤에 알면 늦는다.
     $("rs-result").innerHTML =
-      `<div class="card" style="margin-top:11px"><h3>${r.day} 백업</h3>` +
+      `<div class="card" style="margin-top:11px"><h3>${escapeHtml(String(r.day || ""))} 백업</h3>` +
       r.items
         .map(
           (i: any) =>
-            `<div class="kv"><b>${i.what} ${i.detail}</b><span>${i.why}</span></div>`
+            `<div class="kv"><b>${escapeHtml(String(i.what))} ${escapeHtml(String(i.detail))}</b><span>${escapeHtml(String(i.why))}</span></div>`
         )
         .join("") +
-      `<p class="meta">${r.note}</p>
+      `<p class="meta">${escapeHtml(String(r.note || ""))}</p>
        <button id="rs-go" style="margin-top:10px">이대로 되돌리기</button></div>`;
     $("rs-go").addEventListener("click", async () => {
       const keys = r.items.map((i: any) => i.key);
@@ -1362,22 +1363,30 @@ async function doRestore() {
         "되돌립니다"
       );
       if (!ok) return;
-      const res: any = await invoke("restore_apply", {
-        folder: where.trim(),
-        keys,
-        pass: rsPass || null,
-      });
-      $("rs-result").innerHTML =
-        `<div class="card" style="margin-top:11px"><h3>되돌렸습니다</h3>` +
-        (res.done || []).map((d: any) => `<div class="kv"><b>${d.what}</b><span>${d.note || "완료"}</span></div>`).join("") +
-        ((res.failed || []).length
-          ? `<div class="warnbox" style="margin-top:9px">` +
-            res.failed.map((f: any) => `${f.what} — ${f.why}`).join("<br>") + `</div>`
-          : "") +
-        `<p class="meta">${res.note}</p></div>`;
+      const button = $("rs-go") as HTMLButtonElement;
+      button.disabled = true;
+      try {
+        const res: any = await invoke("restore_apply", { folder: where.trim(), keys, pass: rsPass || null });
+        const done: any[] = Array.isArray(res?.done) ? res.done : [];
+        const failed: any[] = Array.isArray(res?.failed) ? res.failed : [];
+        const complete = restoreIsComplete(res);
+        const title = complete ? "되돌리기를 완료했습니다" : done.length ? "일부만 되돌렸습니다" : "되돌리기를 완료하지 못했습니다";
+        const previous = [...done, ...failed].filter(item => typeof item.previous === "string" && item.previous);
+        $("rs-result").innerHTML =
+          `<div class="card" style="margin-top:11px"><h3>${t(title)}</h3>` +
+          done.map(d => `<div class="kv"><b>${escapeHtml(String(d.what))}</b><span>${escapeHtml(String(d.note || t("완료")))}</span></div>`).join("") +
+          (failed.length ? `<div class="warnbox">${failed.map(f => `${escapeHtml(String(f.what))} — ${escapeHtml(String(f.why))}`).join("<br>")}</div>` : "") +
+          (previous.length ? `<p>${t("보존한 이전 파일을 확인하기 전에는 지우지 마세요.")}</p>` + previous.map(p => `<div class="kv"><b>${escapeHtml(String(p.what))}</b><code style="overflow-wrap:anywhere">${escapeHtml(p.previous)}</code></div>`).join("") : "") +
+          (!complete && failed.some(f => f.changed) ? `<div class="warnbox">${t("일부 파일이 바뀌었습니다. 보존한 이전 파일을 확인하기 전에는 노드를 켜지 마세요.")}</div>` : "") +
+          (res?.cleanup_warning ? `<div class="warnbox">${escapeHtml(String(res.cleanup_warning))}</div>` : "") +
+          `<p class="meta">${escapeHtml(String(res?.note || ""))}</p></div>`;
+      } catch (e) {
+        $("rs-result").innerHTML = `<div class="warnbox">${escapeHtml(errText(e))}</div>`;
+      } finally { button.disabled = false; }
+
     });
   } catch (e) {
-    $("rs-result").innerHTML = `<div class="warnbox" style="margin-top:11px">${e}</div>`;
+    $("rs-result").innerHTML = `<div class="warnbox" style="margin-top:11px">${escapeHtml(errText(e))}</div>`;
   }
 }
 
@@ -11947,17 +11956,17 @@ async function newAddrWithName() {
 // 체인은 지갑을 복구해 주지 않는다. 자산은 체인에 있지만 그걸 움직일 열쇠는
 // 이 파일 하나뿐이고, 잃으면 자산이 남아 있는 채로 영원히 못 만진다.
 
+let latestAutomaticBackupIssue = "";
 async function loadBackup() {
   try {
     const b = await invoke<any>("backup_survey");
     $("bk-list").innerHTML = (b.items || [])
-      .map(
-        (i: any) =>
-          `<div class="kv"><b>${i.name}</b><span>${
-            i.exists ? fmtBytes(i.size) : "<span class='warn'>없음</span>"
-          } — ${i.why}</span></div>`
-      )
-      .join("");
+      .map((i: any) => `<div class="kv"><b>${escapeHtml(String(i.name))}</b><span>${
+        i.exists ? fmtBytes(i.size) : "<span class='warn'>없음</span>"
+      } — ${escapeHtml(String(i.why))}</span></div>`).join("") +
+      `<p class="meta">${t("브라우저·PWA 지갑과 파일, IPFS 원본, AI API 키는 이 백업에 포함되지 않습니다.")}</p>`;
+    const issue = latestAutomaticBackupIssue || b.automatic?.error || b.automatic?.warning;
+    if (issue) $("bk-list").innerHTML += `<div class="warnbox">${escapeHtml(String(issue))}</div>`;
   } catch {}
 }
 
@@ -12097,7 +12106,7 @@ async function loadPlaces() {
           directory: true,
           multiple: false,
         }).catch(() => null);
-        if (typeof dir === "string") void doBackup(dir);
+        if (typeof dir === "string") void doBackup(dir).catch(() => {});
       };
   } catch {
     $("bk-places").textContent = "";
@@ -12106,7 +12115,7 @@ async function loadPlaces() {
 
 async function doBackup(destFolder = ""): Promise<string> {
   // 아무것도 묻지 않는다. 폴더 경로를 타이핑하게 하는 것은 백업을 안 하게 하는
-  // 가장 확실한 방법이었다. 바탕화면에 파일 하나로 만들고, 어디 뒀는지 알려준다.
+  // 가장 확실한 방법이었다. 선택한 폴더에 파일 하나로 만들고, 실제 위치를 알려준다.
   const node: any = await invoke("node_identity").catch(() => ({}));
   // 날짜를 이름에 넣지 않는다. 넣으면 날마다 새 파일이 되어 회전이 안 걸리고
   // 폴더가 zip 으로 찬다. 언제 만든 백업인지는 zip 안 설명서에 적혀 있다.
@@ -12114,7 +12123,7 @@ async function doBackup(destFolder = ""): Promise<string> {
 
   $("bk-note").textContent = "백업 중…";
   try {
-    const r = await invoke<any>("backup_zip", { destFolder, label, includeWallet: true });
+    const r = requireWalletBackup(await invoke("backup_zip", { destFolder, label, includeWallet: true }));
     // 🔴 **어디에 만들었는지 짐작해서 적지 않는다.** 「바탕화면에 있습니다」로
     //    박아 뒀는데 기본 폴더를 서류함으로 바꾸자 그 문장이 거짓말이 됐고,
     //    사장은 바탕화면을 뒤졌다. 러스트가 돌려준 **진짜 경로**를 읽는다.
@@ -12124,20 +12133,21 @@ async function doBackup(destFolder = ""): Promise<string> {
     const whereText = pretty ? `${pretty} 에 있습니다.` : "만들었습니다.";
     $("bk-result").innerHTML =
       `<div class="card" style="margin-top:11px">
-         <h3>파일 하나로 만들었습니다</h3>
-         <div class="kv"><b>${r.name}</b><span>${r.size_text}</span></div>
-         <p class="meta">${escapeHtml(whereText)} 이 파일 하나만 USB나 다른 컴퓨터에 옮겨 두시면
-           됩니다 — 가게 전부가 들어 있습니다.</p>
-         ${(r.inside || []).map((i: any) => `<div class="kv"><b>${i.name}</b><span>${i.what}</span></div>`).join("")}
+         <h3>${t("지갑을 포함한 백업을 검증하고 잠갔습니다")}</h3>
+         <div class="kv"><b>${escapeHtml(r.name)}</b><span>${escapeHtml(r.size_text)}</span></div>
+         <p class="meta">${escapeHtml(whereText)}</p>
+         <p>${t("아래 파일을 담았습니다. 백업 파일과 백업 암호 또는 백업 열쇠를 별도로 보관하세요.")}</p>
+         <p class="meta">${t("브라우저·PWA 지갑과 파일, IPFS 원본, AI API 키는 이 백업에 포함되지 않습니다.")}</p>
+         ${(r.inside || []).map((i: any) => `<div class="kv"><b>${escapeHtml(i.name)}</b><span>${escapeHtml(i.what)}</span></div>`).join("")}
        </div>` +
       (r.warning
-        ? `<div class="warnbox" style="margin-top:9px">${r.warning}</div>`
+        ? `<div class="warnbox" style="margin-top:9px">${escapeHtml(r.warning)}</div>`
         : "");
     $("bk-note").textContent = "";
     // 누른 줄이 「무엇을」 만들었는지 말할 수 있게 이름을 돌려준다.
     return String(r.size_text || "");
   } catch (e) {
-    $("bk-result").innerHTML = `<div class="warnbox" style="margin-top:11px">${e}</div>`;
+    $("bk-result").innerHTML = `<div class="warnbox" style="margin-top:11px">${escapeHtml(errText(e))}</div>`;
     $("bk-note").textContent = "";
     // 🔴 삼켜서 「됐다」로 보이게 하면 안 된다. 누른 줄이 빨갛게 되어야 한다.
     throw e;
@@ -15296,7 +15306,8 @@ window.addEventListener("DOMContentLoaded", async () => {
     if ((e as KeyboardEvent).key === "Escape" && askResolve) askClose(null);
   });
   $("nd-name").addEventListener("change", saveNode);
-  $("rs-pick").addEventListener("click", doRestore);
+  $("rs-pick").addEventListener("click", () => void doRestore());
+  $("rs-folder").addEventListener("click", () => void doRestore(true));
   $("sp-fill").addEventListener("click", () => sampleFill(false));
   $("sp-clear").addEventListener("click", sampleClear);
   $("rs-card").addEventListener("click", showCard);
@@ -15466,7 +15477,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   refreshSwitchState();
   // 이벤트 객체가 목적지 인자로 넘어가지 않게 감싼다. 안 감쌌으면
   // destFolder 에 MouseEvent 가 들어갔을 것이다 — 타입 검사가 잡았다.
-  $("bk-go").addEventListener("click", () => void doBackup());
+  $("bk-go").addEventListener("click", () => void doBackup().catch(() => {}));
   $("bk-seed").addEventListener("click", showSeed);
   $("sd-close").addEventListener("click", () => {
     // 화면에 남겨 두지 않는다. 자리를 비운 사이 누가 볼 수 있다.
@@ -16025,7 +16036,16 @@ window.addEventListener("DOMContentLoaded", async () => {
   // 백업이 없다 — 계산대는 원래 안 끄는 물건이다. 그래서 여섯 시간마다 두드리고,
   // 오늘 것이 이미 있으면 아무 일도 하지 않는다.
   const backupTick = () =>
-    invoke("backup_auto", { nowUnix: Math.floor(Date.now() / 1000) }).catch(() => {});
+    invoke<any>("backup_auto", { nowUnix: Math.floor(Date.now() / 1000) })
+      .then(r => {
+        latestAutomaticBackupIssue = [r?.error, r?.warning].filter(Boolean).join(" ");
+        if (latestAutomaticBackupIssue) {
+          const note = document.getElementById("bk-note");
+          if (note) note.textContent = latestAutomaticBackupIssue;
+          void loadBackup();
+        }
+      })
+      .catch(() => { const note = document.getElementById("bk-note"); if (note) note.textContent = t("자동 백업을 확인하지 못했습니다. 노드 연결을 확인하고 백업을 다시 실행하세요."); });
   backupTick();
   setInterval(backupTick, 6 * 60 * 60 * 1000);
   // 인터넷이 끊기는 것은 화면을 열어 볼 때가 아니라 장사 중에 일어난다.

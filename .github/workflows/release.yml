@@ -109,6 +109,17 @@ jobs:
 
       - run: npm ci
 
+      # Synthetic fixtures only: never start the app or a Ravencoin node.
+      # These must pass on each host before any installer is published.
+      - name: Verify backup preservation and restore exclusion
+        shell: bash
+        run: |
+          set -e
+          node scripts/check-backup-result.mjs
+          node scripts/check-backup-safety.mjs
+          node scripts/verify-backup-storage.mjs
+          cargo test --manifest-path qa/restore-safety/Cargo.toml -- --test-threads=1
+
       - name: Validate version and release manifest checks
         env:
           RELEASE_VERSION: ${{ inputs.version }}

@@ -29,7 +29,7 @@ export async function prepareRelease(source, destination, version) {
     if (next.reduce((order, n, i) => order || Math.sign(n - old[i]), 0) <= 0) throw new Error('Release must be newer than the currently published version');
   } catch (e) { if (e.code !== 'ENOENT') throw e; }
   const base = `https://raw.githubusercontent.com/PLAYX1/playx-raven-releases/dist/v${version}`;
-  const manifest = { version, notes: 'RavenVault Desktop: 웹 지갑 연결, 팬 소식, 오프라인 도구와 새 디자인. 기존 지갑과 가게 기록을 유지합니다.', pub_date: new Date().toISOString(), platforms: {}, installers: [] };
+  const manifest = { version, notes: 'RavenVault Desktop: 지갑 누락 차단, 암호화 백업 검증, 이전 사본 보존과 노드 잠금 확인 복원. 기존 지갑 데이터 위치와 업데이트 식별자를 유지합니다.', pub_date: new Date().toISOString(), platforms: {}, installers: [] };
   for (const [suffix, platform] of Object.entries(platforms)) {
     const signature = (await readFile(path.join(source, prefix + suffix + '.sig'), 'utf8')).trim();
     if (!/^[A-Za-z0-9+/=\r\n]+$/.test(signature) || signature.length < 100 || signature.length > 2048) throw new Error(`Malformed updater signature: ${suffix}`);
