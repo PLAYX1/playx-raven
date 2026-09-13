@@ -10,9 +10,10 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const read = relative => readFileSync(path.join(root, relative), 'utf8');
 const config = JSON.parse(read('src-tauri/tauri.conf.json'));
 let nsis = read('src-tauri/installer/nsis-ravenvault.nsi');
-const wix = read('src-tauri/installer/wix-ravenvault.wxs');
+let wix = read('src-tauri/installer/wix-ravenvault.wxs');
 if (process.argv.includes('--mutant-registry')) nsis = nsis.replace('!define MANUPRODUCTKEY "${MANUKEY}\\${LEGACYPRODUCTNAME}"', '!define MANUPRODUCTKEY "${MANUKEY}\\${PRODUCTNAME}"');
 if (process.argv.includes('--mutant-shortcut')) nsis = nsis.replace('  ${If} $0 = 1\n    ${If} ${FileExists}', '  ${If} 1 = 1\n    ${If} ${FileExists}');
+if (process.argv.includes('--mutant-wix-registry')) wix = wix.replaceAll('Key="Software\\\\{{manufacturer}}\\PLAY X Raven"', 'Key="Software\\\\{{manufacturer}}\\\\PLAY X Raven"');
 const compiler = JSON.parse(read('node_modules/@tauri-apps/cli/package.json'));
 assert.equal(compiler.version, '2.11.4', 'Review vendored templates before changing the Tauri CLI');
 assert.equal(config.productName, 'RavenVault Desktop');
@@ -179,14 +180,55 @@ assert.match(functionBody('CreateOrUpdateStartMenuShortcut'), /RavenVaultMigrate
 assert.match(functionBody('CreateOrUpdateDesktopShortcut'), /RavenVaultMigrateLegacyShortcut "\$DESKTOP"/);
 console.log('PASS actual shortcut macro only migrates this install; unrelated targets, occupied names and removed shortcuts preserved');
 
+// Use the actual Rust renderer pinned by tauri-cli-v2.11.4/Cargo.lock. Tauri's
+// msi/mod.rs first registers no_escape, then renders its output a second time
+// through a fresh default Handlebars. String substitution/path normalization
+// would hide invalid literal double backslashes (the original ICE03 defect).
+function renderWixKeys(templates) {
+  const temporary = mkdtempSync(path.join(root, 'src-tauri/installer/.render-'));
+  try {
+    const manifest = '[package]\nname = "rv-wix-render-check"\nversion = "0.0.0"\nedition = "2021"\n\n[workspace]\n\n[[bin]]\nname = "rv-wix-render-check"\npath = "main.rs"\n\n[dependencies]\nhandlebars = "=6.3.0"\nserde_json = "1"\n';
+    const program = [
+      'use handlebars::Handlebars;',
+      'use serde_json::Value;',
+      'fn main() {',
+      ' let input: Value = serde_json::from_reader(std::io::stdin()).unwrap();',
+      ' let mut first = Handlebars::new(); first.register_escape_fn(handlebars::no_escape);',
+      ' let second = Handlebars::new();',
+      ' let output: Vec<String> = input["templates"].as_array().unwrap().iter().map(|value| {',
+      '   first.register_template_string("main.wxs", value.as_str().unwrap()).unwrap();',
+      '   let rendered = first.render("main.wxs", &input["data"]).unwrap();',
+      '   second.render_template(&rendered, &input["data"]).unwrap()',
+      ' }).collect();',
+      ' println!("{}", serde_json::to_string(&output).unwrap());',
+      '}',
+    ].join('\n');
+    writeFileSync(path.join(temporary, 'Cargo.toml'), manifest);
+    writeFileSync(path.join(temporary, 'main.rs'), program);
+    const output = execFileSync('cargo', ['run', '--quiet', '--manifest-path', path.join(temporary, 'Cargo.toml'), '--target-dir', path.join(temporary, 'target')], {
+      cwd: temporary, encoding: 'utf8', timeout: 180_000, maxBuffer: 2 * 1024 * 1024,
+      input: JSON.stringify({ templates, data: { manufacturer: 'erci', product_name: config.productName } }),
+    });
+    return JSON.parse(output);
+  } finally { rmSync(temporary, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
+}
+const keyTemplates = [...wix.matchAll(/\bKey="([^"]*PLAY X Raven)"/g)].map(m => m[1]);
+assert.equal(keyTemplates.length, 6);
+const renderedKeys = renderWixKeys(keyTemplates);
+assert.deepEqual(renderedKeys, Array(6).fill(legacyKey), 'Actual Tauri Handlebars output must have exactly one registry separator; never normalize malformed keys');
+assert.ok(renderedKeys.every(key => !key.includes('\\\\')));
+console.log('PASS Rust Handlebars 6.3.0 with Tauri two-pass escape settings renders all six exact registry keys');
+
+const renderedBySource = new Map(keyTemplates.map((key, i) => [key, renderedKeys[i]]));
 const installProperty = wix.match(/<Property Id="INSTALLDIR">([\s\S]*?)<\/Property>/)[1];
 const searches = [...installProperty.matchAll(/<RegistrySearch\b([^>]+)\/>/g)].map(match => Object.fromEntries([...match[1].matchAll(/(\w+)="([^"]*)"/g)].map(v => [v[1], v[2]])));
 assert.equal(searches.length, 2);
 function wixInstallDir(registry) {
   let location;
   for (const search of searches) {
-    const key = search.Key.replaceAll('{{manufacturer}}', 'erci').replaceAll('{{product_name}}', config.productName);
-    const found = registry.get(reg(search.Root, key, search.Name ?? '')); if (found) location = found;
+    const key = renderedBySource.get(search.Key); assert.equal(key, legacyKey);
+    // Registry names are case-insensitive, but separators must remain literal.
+    const found = registry.get(`${search.Root.toUpperCase()}|${key.toLowerCase()}|${(search.Name ?? '').toLowerCase()}`); if (found) location = found;
   }
   return location;
 }
@@ -194,7 +236,7 @@ assert.equal(wixInstallDir(new Map([[reg('HKCU', legacyKey, 'InstallDir'), custo
 assert.equal(wixInstallDir(new Map([[reg('HKCU', legacyKey), 'C:\\Synthetic NSIS'], [reg('HKCU', legacyKey, 'InstallDir'), customDir]])), customDir);
 assert.equal(wixInstallDir(new Map([[reg('HKCU', legacyKey), 'C:\\Synthetic NSIS']])), 'C:\\Synthetic NSIS');
 assert.ok(!wix.includes('Key="Software\\\\{{manufacturer}}\\\\{{product_name}}"'));
-assert.equal(wix.match(/Key="Software\\\\\{\{manufacturer\}\}\\\\PLAY X Raven"/g)?.length, 6);
+assert.equal(wix.split('Key="Software\\\\{{manufacturer}}\\PLAY X Raven"').length - 1, 6);
 assert.match(wix, /Name="\{\{product_name\}\}"/); assert.match(wix, /UpgradeCode="\{\{upgrade_code\}\}"/);
 console.log('PASS actual WiX registry searches preserve custom MSI path and original MSI-over-NSIS priority; all six saved/search keys stable');
 
@@ -209,7 +251,7 @@ restored = restored.replace(/; RavenVault compatibility: rename only a shortcut[
 restored = restored.replaceAll('  !insertmacro RavenVaultMigrateLegacyShortcut "$SMPROGRAMS\\$AppStartMenuFolder"\n', '').replaceAll('  !insertmacro RavenVaultMigrateLegacyShortcut "$SMPROGRAMS"\n', '').replaceAll('  !insertmacro RavenVaultMigrateLegacyShortcut "$DESKTOP"\n', '');
 const digest = value => createHash('sha256').update(value).digest('hex');
 assert.equal(digest(restored), '20f4ecc730defb71f1342eaeaec4021df13be3d843abba0effe88ea5835fa079', 'Unexpected NSIS change beyond the documented patch');
-const restoredWix = wix.split('\n').slice(5).join('\n').replaceAll('Key="Software\\\\{{manufacturer}}\\\\PLAY X Raven"', 'Key="Software\\\\{{manufacturer}}\\\\{{product_name}}"');
+const restoredWix = wix.split('\n').slice(5).join('\n').replaceAll('Key="Software\\\\{{manufacturer}}\\PLAY X Raven"', 'Key="Software\\\\{{manufacturer}}\\\\{{product_name}}"');
 assert.equal(digest(restoredWix), 'e371a01628a06730828f9bd24111feacb8bec53c250ccec4b46df756fe0a0198', 'Unexpected WiX change beyond legacy registry keys');
 assert.equal(digest(read('src-tauri/installer/LICENSE-MIT')), '9dd42ea92cff2ede5cd477cbfcce051b2d0115c0ac7f368ee88cb545055dff1d');
 console.log('PASS unmodified portions exactly match the official CLI 2.11.4 source hashes and MIT license');
