@@ -1,0 +1,115 @@
+
+running 1 test
+test companion::tests::previous_transaction_is_verified_against_actual_bytes ... FAILED
+
+failures:
+
+---- companion::tests::previous_transaction_is_verified_against_actual_bytes stdout ----
+
+thread 'companion::tests::previous_transaction_is_verified_against_actual_bytes' (109518457) panicked at src/companion.rs:758:9:
+A different transaction hash must not be accepted
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    companion::tests::previous_transaction_is_verified_against_actual_bytes
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 436 filtered out; finished in 0.00s
+
+   Compiling playx-raven v0.4.1 (/Users/gimmusong/wt-ravenvault-desktop-ux/src-tauri)
+warning: unused import: `super::*`
+   --> src/report.rs:195:9
+    |
+195 |     use super::*;
+    |         ^^^^^^^^
+    |
+    = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: duplicated attribute
+   --> src/relay.rs:613:5
+    |
+613 |     #[test]
+    |     ^^^^^^^
+    |
+    = note: `#[warn(duplicate_macro_attributes)]` on by default
+
+warning: unused import: `BufRead`
+  --> src/tunnel.rs:31:15
+   |
+31 | use std::io::{BufRead, BufReader};
+   |               ^^^^^^^
+
+warning: variable does not need to be mutable
+  --> src/quiet.rs:25:9
+   |
+25 |     let mut c = std::process::Command::new(program);
+   |         ----^
+   |         |
+   |         help: remove this `mut`
+   |
+   = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `title`
+  --> src/report.rs:75:5
+   |
+75 |     title: String,
+   |     ^^^^^ help: if this is intentional, prefix it with an underscore: `_title`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: value assigned to `cur` is never read
+    --> src/server.rs:3125:19
+     |
+3125 |     let mut cur = String::new();
+     |                   ^^^^^^^^^^^^^ this value is reassigned later and never used
+...
+3129 |             cur = line.split(':').next().unwrap_or("").trim().to_string();
+     |             --- `cur` is overwritten here before the previous value is read
+     |
+     = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `unpack_if_zip` is never used
+   --> src/recover.rs:237:4
+    |
+237 | fn unpack_if_zip(input: &str) -> Result<PathBuf, String> {
+    |    ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: field `what` is never read
+  --> src/moving.rs:60:5
+   |
+54 | struct 짐 {
+   |        -- field in this struct
+...
+60 |     what: String,
+   |     ^^^^
+
+warning: constant `BURN_TAG` is never used
+  --> src/issue2.rs:32:11
+   |
+32 | pub const BURN_TAG: f64 = 0.1;
+   |           ^^^^^^^^
+
+warning: constant `ROLES` is never used
+  --> src/roles.rs:34:11
+   |
+34 | pub const ROLES: [&str; 4] = ["owner", "staff", "scanner", "customer"];
+   |           ^^^^^
+
+warning: function `fee_path` is never used
+    --> src/shop.rs:1007:4
+     |
+1007 | fn fee_path() -> std::path::PathBuf {
+     |    ^^^^^^^^
+
+warning: function `only_shop_kinds_are_taken` is never used
+   --> src/relay.rs:647:8
+    |
+647 |     fn only_shop_kinds_are_taken() {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `playx-raven` (lib test) generated 12 warnings (run `cargo fix --lib -p playx-raven --tests` to apply 3 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.41s
+     Running unittests src/lib.rs (target/debug/deps/playx_raven_lib-dc68e8410eec953d)
+error: test failed, to rerun pass `--lib`

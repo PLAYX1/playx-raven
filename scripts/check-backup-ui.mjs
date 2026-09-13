@@ -7,7 +7,7 @@ import { resolve, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer-core';
 const root = fileURLToPath(new URL('../', import.meta.url)), dist = resolve(root, 'dist');
-const out = resolve(root, 'artifacts/backup-ui');
+const out = resolve(root, 'artifacts/claude-desktop-ux/backup-ui');
 const profile = resolve(out, 'synthetic-browser-profile');
 mkdirSync(out, {recursive:true});
 assert.ok(!existsSync(profile), 'A new isolated browser profile is required');
@@ -62,12 +62,14 @@ try {
     }, language);
     await page.goto(origin + '/', {waitUntil:'networkidle0'});
     await page.addStyleTag({content:'#onboard,#hello{display:none!important}'});
-    await page.waitForFunction(() => !!document.querySelector('#rv-webwallet'));
-    await page.$eval('#rv-webwallet', e => e.click());
+    await page.$eval('nav [data-page="ravi"]', e => e.click());
+    await page.$eval('#rv-phone-info', e => {e.open=true;});
+    await page.waitForFunction(() => !!document.querySelector('#rv-phone-open'));
+    await page.$eval('#rv-phone-open', e => e.click());
     await page.waitForFunction(() => window.__RV_OPENED.length > 0);
     assert.deepEqual(await page.evaluate(() => window.__RV_OPENED), ['https://ravenvault.ex.erci.se/wallet/']);
     const measures = await page.evaluate(() => {
-      const button = document.querySelector('#rv-webwallet'), box=button.getBoundingClientRect();
+      const button = document.querySelector('#rv-phone-open'), box=button.getBoundingClientRect();
       return { label:button.textContent, width:box.width, height:box.height, font:parseFloat(getComputedStyle(button).fontSize), overflow:document.documentElement.scrollWidth-innerWidth, title:document.title };
     });
     assert.equal(measures.title,'RavenVault Desktop'); assert.ok(measures.height>=64);assert.ok(measures.width>=64);assert.ok(measures.font>=16);assert.equal(measures.overflow,0);

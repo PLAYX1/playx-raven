@@ -1,3 +1,4 @@
+import { wirePhoneTransaction } from "./phone-transaction";
 import { requireWalletBackup, restoreIsComplete } from "./backup-result";
 import { invoke as rawInvoke } from "@tauri-apps/api/core";
 
@@ -148,7 +149,7 @@ import { open as pickFile } from "@tauri-apps/plugin-dialog";
 //    `connect-src 'self'` 로 잠겨 있고, 우리 창 안에 끌어들이면 그 잠금이
 //    무슨 의미인지 아무도 알 수 없게 된다.
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { openRavenVaultWallet, RAVENVAULT_SITE, LEGACY_LOCAL_WALLET } from "./desktop-links";
+import { openRavenVaultWallet, RAVENVAULT_WALLET, LEGACY_LOCAL_WALLET } from "./desktop-links";
 import { getVersion } from "@tauri-apps/api/app";
 import { listen } from "@tauri-apps/api/event";
 import { check as checkUpdate } from "@tauri-apps/plugin-updater";
@@ -2172,7 +2173,7 @@ async function openWebWallet(): Promise<void> {
   const note = $("rv-web-note");
   try {
     await openRavenVaultWallet(openUrl);
-    if (note) note.textContent = t("브라우저에 RavenVault를 열었습니다. 파일을 가져온 뒤 오프라인에서 다시 열어 확인하세요.");
+    if (note) note.textContent = t("브라우저에 RavenVault를 열었습니다.");
   } catch {
     if (note) note.textContent = t("브라우저를 열지 못했습니다. 주소창에 ravenvault.ex.erci.se/wallet/를 입력하세요.");
   }
@@ -2183,15 +2184,11 @@ function raviTiles(): Tile[] {
   const val = (id: string) => ($(id) as HTMLInputElement)?.value.trim() || "";
   const hasShop = !!(val("sh-ko") || val("sh-en"));
 
-  /* 🔴 가게가 아직 없으면 **가게 만들기가 맨 앞**이다.
-     대표님 지적: "주문 관련 한 것은 있는데 가게 만들기는 없나?"
-     맞다 — 오늘 매출·들어온 주문은 가게가 있어야 뜻이 있는 것인데,
-     정작 가게를 만드는 자리가 없었다. 없는 사람에게 첫 칸은 그것이다. */
+  // Keep shop setup available beside the phone transaction action.
   const first: Tile[] = hasShop ? [] : [{
     icon: I('<path d="M4 9l1.6-4.2h12.8L20 9"/><path d="M4.5 9h15v10.5h-15z"/><path d="M9.5 19.5v-6h5v6"/><path d="M12 3.5v2M10.5 4.5h3"/>'),
     label: "가게 만들기",
     sub: "여기서 시작합니다",
-    lead: true,
     do: () => { showPage("shop"); shopTab("mine");
       // 「가게 정보 · 처음 한 번」은 접혀 있다. 여기로 온 사람에게는 펼쳐 준다.
       const d = document.querySelector<HTMLDetailsElement>("#shoptab-mine details.onceoff");
@@ -2200,13 +2197,15 @@ function raviTiles(): Tile[] {
     },
   }];
 
-  return first.concat([
+  return ([
     {
+      lead: true,
       icon: I('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 9h18M8 15h3M16 13h2"/>'),
-      label: "RavenVault 웹 지갑",
-      sub: "오프라인 파일 · 음악 · 문서",
-      do: () => openWebWallet(),
+      label: t("폰에서 서명한 거래 보내기"),
+      sub: t("열쇠는 폰에, 전파는 내 노드로"),
+      do: () => { const panel = $("phone-tx-panel") as HTMLDetailsElement; panel.open = true; panel.scrollIntoView({behavior:"smooth"}); $("phone-tx-code").focus(); },
     },
+  ] as Tile[]).concat(first, [
     {
       icon: I('<path d="M4 19V9M10 19V5M16 19v-7M21 19H3"/>'),
       label: "오늘 얼마",
@@ -2358,9 +2357,8 @@ function paintRavi() {
   const nodeDown = !(nodeUp ?? true);
   const face = $("ravi-face") as HTMLImageElement | null;
   if (face) {
-    // 깨어 있으면 **정면 얼굴**, 자면 자는 그림. 헤더(전신)와 다른 그림이라
-    // 한 화면에 같은 것이 둘로 보이지 않는다.
-    face.src = nodeDown ? "/raven-sleep.webp" : "/raven-face.webp";
+    // The phone, landing page and desktop share the full Ravi + GPU artwork.
+    face.src = "/raven-hello.webp";
     face.classList.toggle("asleep", nodeDown);
   }
   const hi = $("ravi-hello");
@@ -2379,9 +2377,8 @@ function paintRavi() {
         : "노드가 꺼져 있어요.";
       sub.innerHTML = "결제가 들어와도 확인을 못 합니다. <b>이 컴퓨터</b>에서 켜 주세요.";
     } else if (!shop) {
-      // 가게가 없는 사람에게는 **가게 이야기부터** 한다.
-      hi.textContent = "가게부터 만들까요?";
-      sub.textContent = "이름 하나면 시작됩니다. 나머지는 나중에 채우셔도 됩니다.";
+      hi.textContent = t("안녕하세요, 라비입니다.");
+      sub.textContent = t("내 노드로 조회하고, 폰에서 서명한 거래를 보냅니다.");
     } else if (!aiProvider) {
       hi.textContent = shop;
       sub.innerHTML = "아래 아이콘은 지금 바로 됩니다. 말로 시키시려면 <b>이 컴퓨터 → AI 열쇠</b>를 한 번만 넣어 주세요.";
@@ -15458,10 +15455,12 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("ms-months").addEventListener("change", recalcPeriod);
   $("ms-save").addEventListener("click", saveMember);
   $("key-save").addEventListener("click", saveKeys);
-  $("rv-webwallet").addEventListener("click", () => void openWebWallet());
-  $("rv-web-home").addEventListener("click", () => {
-    void openUrl(RAVENVAULT_SITE).catch(() => {
-      $("rv-web-note").textContent = t("브라우저를 열지 못했습니다. 주소창에 ravenvault.ex.erci.se/wallet/를 입력하세요.");
+  wirePhoneTransaction(invoke, t);
+  $("rv-phone-open").addEventListener("click", () => void openWebWallet());
+  $("rv-phone-info").addEventListener("toggle", () => {
+    if (!($("rv-phone-info") as HTMLDetailsElement).open || $("rv-phone-qr").querySelector("svg")) return;
+    void invoke<string>("qr_svg", {text:RAVENVAULT_WALLET}).then(svg => { $("rv-phone-qr").innerHTML = svg; }).catch(() => {
+      $("rv-phone-qr").textContent = t("QR을 만들지 못했습니다. 아래 주소를 폰에서 열어 주세요.");
     });
   });
   $("ord-reset").addEventListener("click", resetOrder);

@@ -436,6 +436,8 @@ pub fn run() {
             tunnel::open_share,
             tunnel::share_targets,
             server::qr_svg,
+            companion::phone_transaction_review,
+            companion::phone_transaction_send,
             server::rotate_role_token,
             server::logout_all_phones,
             server::remote_admin_get,

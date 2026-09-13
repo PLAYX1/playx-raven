@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "chain": "main",
+  "height": 1000,
+  "headers": 1001,
+  "bestBlockHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "syncing": true,
+  "progress": 0.99,
+  "hashrate": 123456.0,
+  "peers": {
+    "total": 3,
+    "inbound": 1,
+    "outbound": 2,
+    "transports": [
+      {
+        "network": "ipv4",
+        "count": 1
+      },
+      {
+        "network": "ipv6",
+        "count": 1
+      },
+      {
+        "network": "onion",
+        "count": 1
+      }
+    ]
+  },
+  "observedAt": 1789327623256,
+  "scope": "local-node-peers"
+}

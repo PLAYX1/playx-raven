@@ -1,0 +1,80 @@
+[
+  {
+    "name": "tsc",
+    "command": "npx tsc --noEmit -p tsconfig.json",
+    "environment": {
+      "NODE_OPTIONS": "--max-old-space-size=8192"
+    },
+    "exitCode": 0,
+    "seconds": 1.32,
+    "log": "tsc.log"
+  },
+  {
+    "name": "build",
+    "command": "npm run build",
+    "environment": {},
+    "exitCode": 0,
+    "seconds": 2.11,
+    "log": "build.log"
+  },
+  {
+    "name": "cargo-check",
+    "command": "cargo check --tests --offline --manifest-path src-tauri/Cargo.toml",
+    "environment": {},
+    "exitCode": 0,
+    "seconds": 2.51,
+    "log": "cargo-check.log"
+  },
+  {
+    "name": "cargo-companion",
+    "command": "cargo test --offline --manifest-path src-tauri/Cargo.toml companion",
+    "environment": {
+      "RV_DESKTOP_UX_ARTIFACTS": "/Users/gimmusong/wt-ravenvault-desktop-ux/artifacts/claude-desktop-ux"
+    },
+    "exitCode": 0,
+    "seconds": 6.38,
+    "log": "cargo-companion.log"
+  },
+  {
+    "name": "integration",
+    "command": "node scripts/check-desktop-integration.mjs",
+    "environment": {},
+    "exitCode": 0,
+    "seconds": 0.2,
+    "log": "integration.log"
+  },
+  {
+    "name": "phone-transaction",
+    "command": "node scripts/check-phone-transaction.mjs",
+    "environment": {},
+    "exitCode": 0,
+    "seconds": 0.08,
+    "log": "phone-transaction.log"
+  },
+  {
+    "name": "backup-ui",
+    "command": "node scripts/check-backup-ui.mjs",
+    "environment": {},
+    "exitCode": 0,
+    "seconds": 5.46,
+    "log": "backup-ui.log"
+  },
+  {
+    "name": "desktop-ux",
+    "command": "node scripts/check-desktop-ux.mjs",
+    "environment": {},
+    "exitCode": 0,
+    "seconds": 13.5,
+    "log": "desktop-ux.log",
+    "note": "Re-run after strengthening the actual home tile click and zero runtime error assertions; exit 0."
+  },
+  {
+    "name": "mutation",
+    "command": "node scripts/check-desktop-mutation.mjs",
+    "exitCode": 1,
+    "expectedExitCode": 1,
+    "innerCargoExitCode": 101,
+    "log": "mutation.log",
+    "note": "Executed before this final sweep; hash-binding mutant failed for its intended assertion, source restored, final companion tests above are green."
+  }
+]

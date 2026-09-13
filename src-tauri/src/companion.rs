@@ -17,6 +17,21 @@ use std::{
     sync::OnceLock,
 };
 
+mod network;
+mod phone;
+#[tauri::command]
+pub(crate) async fn phone_transaction_review(code: String) -> Result<Value, String> {
+    phone::phone_transaction_review(code).await
+}
+#[tauri::command]
+pub(crate) async fn phone_transaction_send(
+    code: String,
+    expected_txid: String,
+    confirmed: bool,
+) -> Result<Value, String> {
+    phone::phone_transaction_send(code, expected_txid, confirmed).await
+}
+
 const MAX_COINS: usize = 200;
 const MAX_RAW_BYTES: usize = 1_000_000;
 const MAX_SAFE: u64 = 9_007_199_254_740_991;
@@ -490,12 +505,24 @@ pub(crate) async fn asset_route(Query(q): Query<HashMap<String, String>>) -> Res
 }
 async fn capabilities() -> Json<Value> {
     Json(
-        json!({ "version": 1, "chain": true, "discovery": true, "assets": true, "auctions": false }),
+        json!({ "version": 1, "chain": true, "discovery": true, "assets": true, "network": true, "auctions": false }),
     )
 }
 
 pub(crate) fn router<S: Clone + Send + Sync + 'static>() -> Router<S> {
+    router_with_rpc(std::sync::Arc::new(Local))
+}
+fn router_with_rpc<S: Clone + Send + Sync + 'static, R: ChainRpc + Send + 'static>(
+    r: std::sync::Arc<R>,
+) -> Router<S> {
     Router::new()
+        .route(
+            "/api/network",
+            get(move || {
+                let r = r.clone();
+                async move { response(network::snapshot(&*r).await) }
+            }),
+        )
         .route("/api/capabilities", get(capabilities))
         .route("/api/chain/history", get(history_route))
         .route("/api/chain/coins", get(coins_route))
@@ -508,12 +535,22 @@ pub(crate) async fn broadcast_hex(raw: String) -> Response {
     if raw.len() > 200_000 || outputs(&raw).is_err() {
         return bad();
     }
-    response(async {
-        let expected = txid(&raw)?; synced(&Local).await?;
-        let result = rpc(&Local, "sendrawtransaction", json!([raw])).await?;
-        if result != expected { return Err("Broadcast result differs from the signed transaction; check its status before retrying."); }
-        Ok(json!({ "txid": expected }))
-    }.await)
+    response(broadcast(&Local, &raw).await)
+}
+// Shared relay path for the phone HTTP adapter and the desktop confirmation action.
+async fn broadcast(r: &impl ChainRpc, raw: &str) -> Answer {
+    let expected = txid(raw)?;
+    synced(r)
+        .await
+        .map_err(|_| "메인넷 노드의 연결과 동기화 상태를 확인하세요.")?;
+    let result = r
+        .call("sendrawtransaction", json!([raw]))
+        .await
+        .map_err(|e| phone::relay_error(&e))?;
+    if result != expected {
+        return Err("전파 결과를 확인 못 했습니다. 다시 보내기 전에 거래 ID로 확인하세요.");
+    }
+    Ok(json!({"txid":expected}))
 }
 
 fn origin_allowed(origin: &str, host: &str) -> bool {
@@ -582,21 +619,23 @@ pub(crate) async fn browser_boundary(request: Request, next: Next) -> Response {
         r
     } else {
         static GATE: OnceLock<tokio::sync::Semaphore> = OnceLock::new();
-        let Ok(_permit) = GATE
+        let permit = GATE
             .get_or_init(|| tokio::sync::Semaphore::new(8))
-            .try_acquire()
-        else {
-            return (
+            .try_acquire();
+        if let Ok(_permit) = permit {
+            match tokio::time::timeout(std::time::Duration::from_secs(18), next.run(request)).await
+            {
+                Ok(r) => r,
+                Err(_) => response(Err(
+                    "The local node took too long; let it finish synchronizing and retry.",
+                )),
+            }
+        } else {
+            (
                 StatusCode::TOO_MANY_REQUESTS,
                 Json(json!({ "error": "The local node is busy; retry shortly." })),
             )
-                .into_response();
-        };
-        match tokio::time::timeout(std::time::Duration::from_secs(18), next.run(request)).await {
-            Ok(r) => r,
-            Err(_) => response(Err(
-                "The local node took too long; let it finish synchronizing and retry.",
-            )),
+                .into_response()
         }
     };
     if let Some(origin) = origin {
@@ -905,6 +944,7 @@ mod tests {
             serde_json::from_slice(&to_bytes(answer.into_body(), 4096).await.unwrap()).unwrap();
         assert_eq!(body["auctions"], false);
         assert_eq!(body["discovery"], true);
+        assert_eq!(body["network"], true);
         let answer = app()
             .oneshot(
                 Request::builder()
@@ -952,5 +992,177 @@ mod tests {
             "http://192.168.1.1:8790",
             "192.168.1.1:8790"
         ));
+    }
+    #[tokio::test]
+    async fn network_route_matches_phone_contract_and_cors_with_mock_rpc() {
+        let mut info = chain();
+        info["headers"] = json!(1001);
+        info["verificationprogress"] = json!(0.99);
+        info["initialblockdownload"] = json!(true);
+        let f = std::sync::Arc::new(Fake::new(vec![
+            ("getblockchaininfo", json!([]), info),
+            (
+                "getpeerinfo",
+                json!([]),
+                json!([{"inbound":true,"addr":"1.2.3.4:8767"},{"inbound":false,"addr":"[::1]:8767"},{"inbound":false,"addr":"example.onion:8767"}]),
+            ),
+            (
+                "getmininginfo",
+                json!([]),
+                json!({"networkhashps":123456.0}),
+            ),
+        ]));
+        let app = router_with_rpc::<(), _>(f.clone()).layer(middleware::from_fn(browser_boundary));
+        let answer = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/network")
+                    .header("origin", "https://ravenvault.ex.erci.se")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(answer.status(), StatusCode::OK);
+        assert_eq!(
+            answer.headers()["access-control-allow-origin"],
+            "https://ravenvault.ex.erci.se"
+        );
+        assert_eq!(answer.headers()["cache-control"], "no-store");
+        let body: Value =
+            serde_json::from_slice(&to_bytes(answer.into_body(), 4096).await.unwrap()).unwrap();
+        if let Ok(folder) = std::env::var("RV_DESKTOP_UX_ARTIFACTS") {
+            std::fs::write(
+                std::path::Path::new(&folder).join("network-snapshot.json"),
+                serde_json::to_string_pretty(&body).unwrap(),
+            )
+            .unwrap();
+        }
+        assert_eq!(body["version"], 1);
+        assert_eq!(body["scope"], "local-node-peers");
+        assert_eq!(body["height"], 1000);
+        assert_eq!(body["headers"], 1001);
+        assert_eq!(body["syncing"], true);
+        assert_eq!(body["progress"], 0.99);
+        assert_eq!(body["hashrate"], 123456.0);
+        assert_eq!(body["peers"]["total"], 3);
+        assert_eq!(body["peers"]["inbound"], 1);
+        assert_eq!(body["peers"]["outbound"], 2);
+        assert_eq!(
+            body["peers"]["transports"],
+            json!([{"network":"ipv4","count":1},{"network":"ipv6","count":1},{"network":"onion","count":1}])
+        );
+        assert!(body["observedAt"].as_u64().unwrap() > 0);
+        f.done();
+    }
+    #[tokio::test]
+    async fn network_unready_errors_have_json_and_cors_and_other_origins_never_call_rpc() {
+        let f = std::sync::Arc::new(Fake(Mutex::new(VecDeque::from([(
+            "getblockchaininfo",
+            json!([]),
+            Err("Synthetic node unavailable".into()),
+        )]))));
+        let app = router_with_rpc::<(), _>(f.clone()).layer(middleware::from_fn(browser_boundary));
+        let answer = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/network")
+                    .header("origin", "https://attacker.example")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(answer.status(), StatusCode::FORBIDDEN);
+        assert!(answer
+            .headers()
+            .get("access-control-allow-origin")
+            .is_none());
+        let answer = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/network")
+                    .header("origin", "https://ravenvault.ex.erci.se")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(answer.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(
+            answer.headers()["access-control-allow-origin"],
+            "https://ravenvault.ex.erci.se"
+        );
+        let body: Value =
+            serde_json::from_slice(&to_bytes(answer.into_body(), 4096).await.unwrap()).unwrap();
+        assert!(body["error"].as_str().unwrap().contains("local node"));
+        f.done();
+    }
+    #[tokio::test]
+    async fn network_missing_optional_measurements_are_unknown() {
+        let mut info = chain();
+        info["headers"] = json!(1000);
+        info["verificationprogress"] = json!(1.0);
+        let f = Fake::new(vec![
+            ("getblockchaininfo", json!([]), info),
+            ("getpeerinfo", json!([]), json!([{"addr":"unknown"}])),
+            ("getmininginfo", json!([]), json!({})),
+        ]);
+        let v = network::snapshot(&f).await.unwrap();
+        assert!(v["peers"].is_null());
+        assert!(v["hashrate"].is_null());
+        f.done();
+        let f = Fake::new(vec![("getblockchaininfo", json!([]), chain())]);
+        assert!(network::snapshot(&f).await.is_err());
+        f.done();
+    }
+    #[test]
+    fn desktop_ux_qr_uses_existing_public_url_generator() {
+        let svg = crate::server::qr_svg("https://ravenvault.ex.erci.se/wallet/".into()).unwrap();
+        assert!(svg.contains("<svg"));
+        if let Ok(folder) = std::env::var("RV_DESKTOP_UX_ARTIFACTS") {
+            std::fs::write(std::path::Path::new(&folder).join("phone-url-qr.svg"), svg).unwrap();
+        }
+    }
+    #[tokio::test]
+    async fn network_is_get_only_and_allows_browser_preflight_without_rpc() {
+        let f = std::sync::Arc::new(Fake::new(vec![]));
+        let app = router_with_rpc::<(), _>(f.clone()).layer(middleware::from_fn(browser_boundary));
+        let preflight = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("OPTIONS")
+                    .uri("/api/network")
+                    .header("origin", "https://ravenvault.ex.erci.se")
+                    .header("access-control-request-method", "GET")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(preflight.status(), StatusCode::NO_CONTENT);
+        assert_eq!(
+            preflight.headers()["access-control-allow-private-network"],
+            "true"
+        );
+        let denied = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/network")
+                    .header("origin", "https://ravenvault.ex.erci.se")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(denied.status(), StatusCode::METHOD_NOT_ALLOWED);
+        assert_eq!(
+            denied.headers()["access-control-allow-origin"],
+            "https://ravenvault.ex.erci.se"
+        );
+        f.done();
     }
 }

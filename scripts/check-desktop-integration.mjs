@@ -16,9 +16,13 @@ await assert.rejects(links.openRavenVaultWallet(async () => { throw Error('synth
 console.log('PASS actual open adapter: canonical entry, no secret query, error propagated, legacy origin preserved');
 
 const ui = read('src/main.ts'), html = read('index.html');
-assert.match(ui, /rv-webwallet[\s\S]{0,100}addEventListener\("click", \(\) => void openWebWallet\(\)\)/);
+assert.match(ui, /rv-phone-open[\s\S]{0,100}addEventListener\("click", \(\) => void openWebWallet\(\)\)/);
 assert.match(ui, /await openUrl\(LEGACY_LOCAL_WALLET\)/);
-assert.match(html, /id="rv-webwallet"/);
+assert.doesNotMatch(html, /id="rv-webwallet"/);
+assert.doesNotMatch(ui, /\$\("rv-webwallet"\)/);
+assert.doesNotMatch(ui, /label: "RavenVault 웹 지갑"/);
+assert.equal((html.match(/id="rv-phone-open"/g) || []).length, 1);
+assert.match(html, /id="ravi-face" src="\/raven-hello.webp"/);
 const config = JSON.parse(read('src-tauri/tauri.conf.json'));
 const previous = JSON.parse(execFileSync('git', ['show', 'v0.3.8:src-tauri/tauri.conf.json'], { encoding: 'utf8' }));
 assert.equal(config.productName, 'RavenVault Desktop');
