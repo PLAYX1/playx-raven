@@ -196,7 +196,7 @@ pub fn autostart_set(on: bool) -> Result<bool, String> {
                     .map_err(|e| format!("자동 시작 폴더를 만들지 못했습니다: {e}"))?;
             }
             let body = format!(
-                "[Desktop Entry]\nType=Application\nName=PLAY X Raven\n\
+                "[Desktop Entry]\nType=Application\nName=RavenVault Desktop\n\
                  Exec={}\nX-GNOME-Autostart-enabled=true\nTerminal=false\n",
                 exe.to_string_lossy()
             );

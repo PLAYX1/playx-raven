@@ -994,7 +994,7 @@ mod restore_files {
     }
     pub(super) fn extract_archive(path: &Path, scratch: &Path) -> Result<(), String> {
         let mut zip = zip::ZipArchive::new(regular_file(path).map_err(|e| e.to_string())?)
-            .map_err(|_| "이 파일은 PLAY X Raven 백업이 아닙니다.".to_string())?;
+            .map_err(|_| "이 파일은 RavenVault Desktop 백업이 아닙니다.".to_string())?;
         if zip.len() > 1024 {
             return Err("백업 항목이 너무 많습니다. 다른 백업을 골라 주세요.".into());
         }

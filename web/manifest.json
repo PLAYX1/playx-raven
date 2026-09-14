@@ -1,6 +1,6 @@
 {
-  "name": "PLAY X Raven",
-  "short_name": "PLAY X Raven",
+  "name": "RavenVault Desktop",
+  "short_name": "RavenVault Desktop",
   "description": "Ravencoin wallet, shop and rooms — 레이븐 지갑·가게·이야기",
   "start_url": "/wallet",
   "scope": "/",

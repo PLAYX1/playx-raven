@@ -7,13 +7,14 @@ export const installerSuffixes = ['windows.exe','windows.msi','mac-apple-silicon
 const platforms = { 'windows.exe':'windows-x86_64', 'mac-apple-silicon.tar.gz':'darwin-aarch64', 'mac-intel.tar.gz':'darwin-x86_64', 'linux.AppImage':'linux-x86_64' };
 export async function prepareRelease(source, destination, version) {
   if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version)) throw new Error('Invalid release version');
-  const prefix = `PLAY-X-Raven-${version}-`, files = (await readdir(source)).sort();
+  const files = (await readdir(source)).sort();
+  const prefix = files.some(name => name.startsWith(`RavenVault-Desktop-${version}-`)) ? `RavenVault-Desktop-${version}-` : `PLAY-X-Raven-${version}-`;
   const required = [...new Set([...installerSuffixes, ...Object.keys(platforms)])];
   for (const suffix of required) if (!files.includes(prefix + suffix)) throw new Error(`Missing installer: ${suffix}`);
   for (const suffix of Object.keys(platforms)) if (!files.includes(prefix + suffix + '.sig')) throw new Error(`Missing updater signature: ${suffix}`);
   const assets = [];
   for (const name of files) {
-    if (!name.startsWith(prefix) || !/^PLAY-X-Raven-[\d.]+-(?:windows|mac-apple-silicon|mac-intel|linux)\.(?:exe|msi|dmg|AppImage|deb|rpm|tar\.gz)(?:\.sig)?$/.test(name)) throw new Error(`Unexpected release file: ${name}`);
+    if (!name.startsWith(prefix) || !/^(?:RavenVault-Desktop|PLAY-X-Raven)-[\d.]+-(?:windows|mac-apple-silicon|mac-intel|linux)\.(?:exe|msi|dmg|AppImage|deb|rpm|tar\.gz)(?:\.sig)?$/.test(name)) throw new Error(`Unexpected release file: ${name}`);
     const info = await stat(path.join(source, name));
     if (!info.isFile() || info.size < 1 || info.size >= 95_000_000) throw new Error(`Unsupported release file size: ${name}`);
     const data = await readFile(path.join(source, name));
@@ -45,7 +46,9 @@ export async function prepareRelease(source, destination, version) {
     const from = path.join(source, item.name), immutable = path.join(`v${version}`, item.name), alias = item.name.replace(prefix, 'PLAY-X-Raven-latest-');
     await copyFile(from, path.join(destination, immutable));
     await copyFile(from, path.join(destination, alias));
-    paths.push(immutable, alias);
+    const newAlias = item.name.replace(prefix, "RavenVault-Desktop-latest-");
+    await copyFile(from, path.join(destination, newAlias));
+    paths.push(immutable, alias, newAlias);
   }
   const sums = assets.map(a => `${a.sha256}  v${version}/${a.name}`).join('\n') + '\n';
   const metadata = { 'latest.json': JSON.stringify(manifest, null, 2) + '\n', 'VERSION': version + '\n', 'SHA256SUMS.txt': sums, 'README.md': `# RavenVault Desktop ${version}\n\n공식 설치 안내: https://ravenvault.ex.erci.se/download/\n\nPLAY X Raven의 지갑·가게 데이터와 업데이트 서명을 이어받습니다. 버전별 파일은 보존합니다.\n` };

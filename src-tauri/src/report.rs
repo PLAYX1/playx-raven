@@ -104,7 +104,7 @@ pub async fn report_send(
         "description": desc,
         "category": category,
         "page_url": "https://rvn.ex.erci.se/rvn",
-        "device_info": format!("PLAY X Raven {} · {} {}",
+        "device_info": format!("RavenVault Desktop {} · {} {}",
             env!("CARGO_PKG_VERSION"), std::env::consts::OS, std::env::consts::ARCH),
         "context": ctx,
     });

@@ -1,0 +1,13 @@
+{
+  "cargo-electrum": 2,
+  "cargo-recover": 7,
+  "cargo-prep": 4,
+  "cargo-awake": 4,
+  "cargo-services": 9,
+  "cargo-report": 4,
+  "cargo-autostart": 4,
+  "cargo-companion": 18,
+  "cargo-knowledge": 3,
+  "cargo-devfee": 10,
+  "cargo-backup": 2
+}

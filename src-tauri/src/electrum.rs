@@ -147,7 +147,7 @@ fn call(method: &str, params: Value) -> Result<Value, String> {
 pub fn electrum_status() -> Value {
     match call(
         "server.version",
-        json!(["PLAY X Raven", ["1.4", "1.4.2"]]),
+        json!(["RavenVault Desktop", ["1.4", "1.4.2"]]),
     ) {
         Ok(v) => json!({
             "running": true,

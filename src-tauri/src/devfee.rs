@@ -372,7 +372,7 @@ pub async fn fee_pay() -> Result<Value, String> {
 
     let txid = crate::raven::call_rpc(
         "sendtoaddress",
-        json!([addr, owed, "PLAY X 개발비", "", false]),
+        json!([addr, owed, "RavenVault Desktop 개발비", "", false]),
     )
     .await?;
     let txid = txid.as_str().unwrap_or_default().to_string();

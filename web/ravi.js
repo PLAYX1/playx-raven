@@ -64,7 +64,7 @@
         <div class="rt">${say('라비가 자고 있어요')}</div>
         <div class="rs">
           ${say('라비는 가게 컴퓨터의 열쇠로 깨어납니다.')}<br />
-          <b>${say('가게 컴퓨터 → PLAY X Raven → 설정 → AI')}</b><br />
+          <b>${say('가게 컴퓨터 → RavenVault Desktop → 설정 → AI')}</b><br />
           ${say('거기서 한 번만 넣으면 이 폰에서도 깨어납니다.')}
         </div>
       </div>`;

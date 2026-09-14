@@ -119,3 +119,20 @@ test('verify-only workflow cannot build, sign, or publish and shares the postpub
   assert.equal((workflow.match(/run: node scripts\/verify-published-release\.mjs/g) ?? []).length, 1);
   assert.match(workflow, /Verify public version and every updater URL[\s\S]*node scripts\/verify-published-release\.mjs "\$V"/);
 });
+
+test('new RavenVault Desktop URLs pass the same immutable manifest and HEAD checks',async()=>{
+  const renamed=()=>JSON.parse(JSON.stringify(manifest()).replaceAll('PLAY-X-Raven-','RavenVault-Desktop-'));
+  const f=fixture({latest:renamed,immutable:renamed});
+  const result=await verifyPublishedRelease(version,{...f,cacheWaitMs:0});
+  assert.equal(result.artifacts,21);
+  assert.equal(f.calls.filter(c=>c.method==='HEAD'&&c.url.includes('/PLAY-X-Raven-latest-')).length,7);
+  assert.equal(f.calls.filter(c=>c.method==='HEAD'&&c.url.includes('/RavenVault-Desktop-latest-')).length,7);
+  const bad=renamed();bad.platforms['darwin-aarch64'].url=bad.platforms['darwin-aarch64'].url.replace(version,'9.9.9');
+  assert.throws(()=>validatePublishedManifest(bad,version),/Invalid immutable updater URL/);
+});
+
+test('new release verification fails if an old latest alias disappears',async()=>{
+  const renamed=()=>JSON.parse(JSON.stringify(manifest()).replaceAll('PLAY-X-Raven-','RavenVault-Desktop-'));
+  const f=fixture({latest:renamed,immutable:renamed,head:url=>url.includes('/PLAY-X-Raven-latest-')?404:200});
+  await assert.rejects(verifyPublishedRelease(version,{...f,cacheWaitMs:0}),/Artifact unavailable/);
+});

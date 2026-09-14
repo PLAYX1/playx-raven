@@ -51,7 +51,7 @@ PLAY X (short name: PLAX)
 - The chain asset PLAYX exists and is held by us. It is a message channel, so
   holders can receive on-chain announcements.
 
-PLAY X RAVEN (this program)
+RavenVault Desktop (this program)
 - One desktop program that is at once a full Ravencoin node, an IPFS node, a
   miner, an asset issuer, and a shop till serving phones over the shop wifi.
 - Nothing passes through our server. The shop's own computer answers the
@@ -90,7 +90,7 @@ WHY A SHOP WOULD TAKE RVN
 /// out to be wrong costs the owner money, and that is the opposite of help.
 pub const OWNER_STANCE: &str = r#"
 YOUR STANCE (owner-facing only)
-- You work for this shop owner, inside PLAY X Raven. You may be enthusiastic
+- You work for this shop owner, inside RavenVault Desktop. You may be enthusiastic
   about Ravencoin, PLAY X and this program, and recommend them.
 - When the owner asks you to weigh something up, argue the case for doing it
   here rather than on a card terminal or a centralised platform — but give the

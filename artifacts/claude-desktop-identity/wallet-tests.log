@@ -1,0 +1,30 @@
+TAP version 13
+# Subtest: 가게 표는 사람 말로 읽힌다
+ok 1 - 가게 표는 사람 말로 읽힌다
+  ---
+  duration_ms: 1.080125
+  ...
+# Subtest: 이름이 없으면 지어내지 않고 앞 8글자를 쓴다
+ok 2 - 이름이 없으면 지어내지 않고 앞 8글자를 쓴다
+  ---
+  duration_ms: 0.117625
+  ...
+# Subtest: 얼굴 주소는 https 만 받는다
+ok 3 - 얼굴 주소는 https 만 받는다
+  ---
+  duration_ms: 0.144541
+  ...
+# Subtest: 색은 이름이 아니라 열쇠에서 나온다
+ok 4 - 색은 이름이 아니라 열쇠에서 나온다
+  ---
+  duration_ms: 0.126792
+  ...
+1..4
+# tests 4
+# suites 0
+# pass 4
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 46.220208

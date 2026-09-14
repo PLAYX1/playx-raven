@@ -4,11 +4,11 @@ import { mkdtemp, writeFile, mkdir, rm, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { prepareRelease, installerSuffixes } from './release-manifest.mjs';
-async function fixture(fn) {
+async function fixture(fn, brand = "PLAY-X-Raven") {
   const dir = await mkdtemp(path.join(tmpdir(), 'ravenvault-release-')), source=path.join(dir,'in'), out=path.join(dir,'out');
   await mkdir(source); await mkdir(out);
-  for (const suffix of new Set([...installerSuffixes,'mac-apple-silicon.tar.gz','mac-intel.tar.gz'])) await writeFile(path.join(source,`PLAY-X-Raven-0.4.0-${suffix}`),`synthetic installer ${suffix}`);
-  for (const suffix of ['windows.exe','mac-apple-silicon.tar.gz','mac-intel.tar.gz','linux.AppImage']) await writeFile(path.join(source,`PLAY-X-Raven-0.4.0-${suffix}.sig`),Buffer.from('synthetic signature '.repeat(20)).toString('base64'));
+  for (const suffix of new Set([...installerSuffixes,'mac-apple-silicon.tar.gz','mac-intel.tar.gz'])) await writeFile(path.join(source,`${brand}-0.4.0-${suffix}`),`synthetic installer ${suffix}`);
+  for (const suffix of ['windows.exe','mac-apple-silicon.tar.gz','mac-intel.tar.gz','linux.AppImage']) await writeFile(path.join(source,`${brand}-0.4.0-${suffix}.sig`),Buffer.from('synthetic signature '.repeat(20)).toString('base64'));
   try { await fn(source,out); } finally { await rm(dir,{recursive:true,force:true}); }
 }
 test('all platforms publish immutable version URLs, hashes, aliases and preserve older files',()=>fixture(async(source,out)=>{
@@ -56,3 +56,17 @@ test('publishing an older or equal version cannot downgrade a newer public updat
   await writeFile(path.join(out,'latest.json'),JSON.stringify({version:'0.4.0'}));
   await assert.rejects(prepareRelease(source,out,'0.4.0'),/must be newer/);
 }));
+
+ test('new installer brand keeps both latest aliases and old immutable files',()=>fixture(async(source,out)=>{
+   await mkdir(path.join(out,'v0.3.9'));
+   const old=path.join(out,'v0.3.9','PLAY-X-Raven-0.3.9-windows.exe');
+   await writeFile(old,'old published bytes');
+   const {manifest,paths}=await prepareRelease(source,out,'0.4.0');
+   assert.ok(Object.values(manifest.platforms).every(p=>p.url.includes('/RavenVault-Desktop-0.4.0-')));
+   for(const item of manifest.installers) {
+     const suffix=item.platform;
+     assert.deepEqual(await readFile(path.join(out,`PLAY-X-Raven-latest-${suffix}`)),await readFile(path.join(out,`RavenVault-Desktop-latest-${suffix}`)));
+     assert.ok(paths.includes(`PLAY-X-Raven-latest-${suffix}`));
+   }
+   assert.equal(await readFile(old,'utf8'),'old published bytes');
+ },'RavenVault-Desktop'));

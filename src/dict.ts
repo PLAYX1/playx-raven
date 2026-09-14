@@ -425,8 +425,6 @@ export const DICT: Record<string, Record<string, string>> = {
       "Publishing…",
     "손님에게 보일 얼굴을 아직 안 올렸습니다":
       "You have not published a face for guests yet",
-    "손님이 PLAYX 를 보면 지금 「PLAY X · 플레이엑스」뿐입니다. 얼굴과 이름을 여기 올리면 됩니다 — 공짜입니다.":
-      "Guests who look at PLAYX only see “PLAY X · 플레이엑스”. Publish a face and name here — it costs nothing.",
     "사진을 올렸습니다. 아래 단추를 눌러야 소개가 바뀝니다.":
       "Photo uploaded. Press the button below to change the page.",
     "올렸습니다. 손님이 이 얼굴·이름으로 봅니다.":
@@ -2038,8 +2036,6 @@ export const DICT: Record<string, Record<string, string>> = {
       "載せています…",
     "손님에게 보일 얼굴을 아직 안 올렸습니다":
       "お客さまに見せる顔をまだ載せていません",
-    "손님이 PLAYX 를 보면 지금 「PLAY X · 플레이엑스」뿐입니다. 얼굴과 이름을 여기 올리면 됩니다 — 공짜입니다.":
-      "PLAYX を見ると今は「PLAY X · 플레이엑스」だけです。顔と名前はここに載せます。無料です。",
     "사진을 올렸습니다. 아래 단추를 눌러야 소개가 바뀝니다.":
       "写真を載せました。下のボタンを押さないと紹介は変わりません。",
     "올렸습니다. 손님이 이 얼굴·이름으로 봅니다.":
@@ -3651,8 +3647,6 @@ export const DICT: Record<string, Record<string, string>> = {
       "正在发布…",
     "손님에게 보일 얼굴을 아직 안 올렸습니다":
       "尚未发布给客人看的面孔",
-    "손님이 PLAYX 를 보면 지금 「PLAY X · 플레이엑스」뿐입니다. 얼굴과 이름을 여기 올리면 됩니다 — 공짜입니다.":
-      "客人看 PLAYX 时现在只能看到「PLAY X · 플레이엑스」。在这里发布面孔和名字即可，免费。",
     "사진을 올렸습니다. 아래 단추를 눌러야 소개가 바뀝니다.":
       "照片已上传。按下下方按钮后介绍才会更改。",
     "올렸습니다. 손님이 이 얼굴·이름으로 봅니다.":

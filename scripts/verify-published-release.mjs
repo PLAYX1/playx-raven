@@ -25,8 +25,8 @@ function exactKeys(value, keys, name) {
     throw new InvalidRelease(`Invalid ${name} fields`);
   }
 }
-function artifactUrl(version, suffix) {
-  return `${PUBLIC_BASE}v${version}/PLAY-X-Raven-${version}-${suffix}`;
+function artifactUrls(version, suffix) {
+  return ["PLAY-X-Raven", "RavenVault-Desktop"].map(brand => `${PUBLIC_BASE}v${version}/${brand}-${version}-${suffix}`);
 }
 
 // Return a canonical projection, so JSON property / installer ordering is immaterial.
@@ -45,7 +45,7 @@ export function validatePublishedManifest(value, expectedVersion) {
   for (const [platform, suffix] of Object.entries(PLATFORMS)) {
     const item = value.platforms[platform];
     exactKeys(item, ['signature', 'url'], 'updater item');
-    if (item.url !== artifactUrl(expectedVersion, suffix)) throw new InvalidRelease(`Invalid immutable updater URL: ${platform}`);
+    if (!artifactUrls(expectedVersion, suffix).includes(item.url)) throw new InvalidRelease(`Invalid immutable updater URL: ${platform}`);
     const signature = typeof item.signature === 'string' ? item.signature.replace(/[\r\n]/g, '') : '';
     if (signature.length < 100 || signature.length > 2048 || !/^[A-Za-z0-9+/]+={0,2}$/.test(signature) || Buffer.from(signature, 'base64').toString('base64') !== signature) {
       throw new InvalidRelease(`Invalid updater signature encoding: ${platform}`);
@@ -58,7 +58,7 @@ export function validatePublishedManifest(value, expectedVersion) {
     if (found.length !== 1) throw new InvalidRelease(`Missing or duplicate installer: ${suffix}`);
     const item = found[0];
     exactKeys(item, ['platform', 'url', 'bytes', 'sha256'], 'installer');
-    if (item.url !== artifactUrl(expectedVersion, suffix)) throw new InvalidRelease(`Invalid immutable installer URL: ${suffix}`);
+    if (!artifactUrls(expectedVersion, suffix).includes(item.url)) throw new InvalidRelease(`Invalid immutable installer URL: ${suffix}`);
     if (!Number.isSafeInteger(item.bytes) || item.bytes < 1 || item.bytes >= MAX_ARTIFACT_BYTES) throw new InvalidRelease(`Invalid installer size: ${suffix}`);
     if (typeof item.sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(item.sha256)) throw new InvalidRelease(`Invalid installer hash: ${suffix}`);
     return { platform: suffix, url: item.url, bytes: item.bytes, sha256: item.sha256 };
@@ -124,6 +124,16 @@ async function attemptVerification(version, fetcher, signal) {
   if (JSON.stringify(latest) !== JSON.stringify(immutable)) throw new InvalidRelease('Latest and immutable release manifests disagree');
   const artifacts = new Map(Object.values(latest.platforms).map(item => [item.url, { url: item.url }]));
   for (const item of latest.installers) artifacts.set(item.url, { url: item.url, bytes: item.bytes });
+  // Future branded releases must keep the old download links live, too.
+  for (const item of [...artifacts.values()]) {
+    const prefix = `${PUBLIC_BASE}v${version}/RavenVault-Desktop-${version}-`;
+    if (!item.url.startsWith(prefix)) continue;
+    const suffix = item.url.slice(prefix.length);
+    for (const brand of ['PLAY-X-Raven', 'RavenVault-Desktop']) {
+      const url = `${PUBLIC_BASE}${brand}-latest-${suffix}`;
+      artifacts.set(url, { ...item, url });
+    }
+  }
   const items = [...artifacts.values()];
   let cursor = 0;
   await Promise.all(Array.from({ length: Math.min(4, items.length) }, async () => {

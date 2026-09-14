@@ -16,7 +16,7 @@
                    style-src 'unsafe-inline'; img-src 'self' data: http: https:;
                    connect-src 'self'; base-uri 'none'; form-action 'none';
                    frame-ancestors 'none'" />
-    <title>내 노드</title>
+    <title>RavenVault Desktop · 내 노드</title>
     <style>
       :root {
         --bg: #ffffff; --fg: #141518; --muted: #6b7280; --line: #e6e7ea;
@@ -218,6 +218,7 @@
 </style>
   </head>
   <body>
+    <div class="desktop-local-brand" translate="no" style="font:700 16px/1.5 system-ui,sans-serif;padding:12px 16px;background:#fff;color:#111;border-bottom:1px solid #d6d6d6">RavenVault Desktop</div>
     <header>
       <h1 id="title">내 가게</h1>
       <div class="sub" id="when">불러오는 중…</div>
@@ -634,7 +635,7 @@
         if (!aiProvider) {
           add("me", msg); $("ai-q").value = "";
           return add("ai",
-            "라비가 아직 자고 있어요. 가게 컴퓨터의 PLAY X Raven → 설정 → AI 에서 " +
+            "라비가 아직 자고 있어요. 가게 컴퓨터의 RavenVault Desktop → 설정 → AI 에서 " +
             "한 번만 넣어 주시면 이 폰에서도 깨어납니다. (폰에는 넣지 않으셔도 됩니다)");
         }
         $("ai-q").value = "";

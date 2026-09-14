@@ -1,0 +1,6 @@
+PASS actual NSIS restore code preserves legacy HKCU/HKLM paths and uninstall identity while displaying RavenVault
+PASS actual MSI discovery loop accepts old/new names with matching publisher; original uninstall ordering retained
+PASS actual shortcut macro only migrates this install; unrelated targets, occupied names and removed shortcuts preserved
+PASS Rust Handlebars 6.3.0 with Tauri two-pass escape settings renders all six exact registry keys
+PASS actual WiX registry searches preserve custom MSI path and original MSI-over-NSIS priority; all six saved/search keys stable
+PASS unmodified portions exactly match the official CLI 2.11.4 source hashes and MIT license

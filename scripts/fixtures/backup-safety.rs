@@ -17,6 +17,29 @@ mod safety_tests {
     }
 
     #[tokio::test]
+    async fn both_backup_folder_names_preserve_and_restore_archive_bytes() {
+        for folder_name in ["PLAY X Raven 백업", "RavenVault Desktop 백업"] {
+            let dest = reset(1);
+            let folder = dest.join(folder_name);
+            std::fs::create_dir_all(&folder).unwrap();
+            std::fs::write(app_dir().join("shop.json"), b"{}").unwrap();
+            let first = backup_zip(dest.to_string_lossy().into(), "".into(), true).await.unwrap();
+            let archive = PathBuf::from(first["path"].as_str().unwrap());
+            assert_eq!(archive.parent().unwrap(), folder);
+            let first_bytes = std::fs::read(&archive).unwrap();
+            backup_zip(dest.to_string_lossy().into(), "".into(), true).await.unwrap();
+            assert_eq!(std::fs::read(folder.join("PLAYXRaven-이전.zip.pxlock")).unwrap(), first_bytes);
+            let key = crate::lockbox::key_get_or_make().unwrap();
+            let opened = dest.join("synthetic.zip");
+            crate::lockbox::unlock_file(&archive, &opened, &key).unwrap();
+            let mut zip = zip::ZipArchive::new(std::fs::File::open(opened).unwrap()).unwrap();
+            let mut wallet = Vec::new();
+            zip.by_name("wallet.dat").unwrap().read_to_end(&mut wallet).unwrap();
+            assert_eq!(wallet, b"synthetic wallet bytes, never a real wallet");
+        }
+    }
+
+    #[tokio::test]
     async fn wallet_failure_preserves_both_previous_files_and_completion_time() {
         for mode in [0, 2, 3] {
             let dest = reset(mode);
@@ -78,7 +101,7 @@ mod safety_tests {
         let dest = reset(1);
         std::fs::create_dir(app_dir().join("cloud-backup.key")).unwrap();
         assert!(backup_zip(dest.to_string_lossy().into(), "".into(), true).await.is_err());
-        assert!(!dest.join("PLAY X Raven 백업/PLAYXRaven.zip.pxlock").exists());
+        assert!(!external_backup_dir(&dest).join("PLAYXRaven.zip.pxlock").exists());
         assert!(!stamp_path().exists());
     }
 

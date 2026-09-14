@@ -293,7 +293,7 @@ async function bioEnrol(): Promise<{ id: string; secret: string } | null> {
   const cred = (await navigator.credentials.create({
     publicKey: {
       challenge: crypto.getRandomValues(new Uint8Array(32)),
-      rp: { name: "PLAY X Raven 지갑" },
+      rp: { name: "RavenVault Desktop 지갑" },
       user: {
         // 계정이 없는 지갑이다. 서버에 보낼 신원이 없으므로 고정값을 쓴다.
         id: new TextEncoder().encode("playx-raven-wallet"),

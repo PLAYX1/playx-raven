@@ -1,0 +1,2317 @@
+[
+  {
+    "file": ".github/workflows/release.yml",
+    "line": 214,
+    "text": "B=https://github.com/PLAYX1/playx-raven-releases/releases/download/vendor-ravend-4.8.0"
+  },
+  {
+    "file": ".github/workflows/release.yml",
+    "line": 517,
+    "text": "git clone --depth 1 --branch dist git@github.com:PLAYX1/playx-raven-releases.git pub"
+  },
+  {
+    "file": ".github/workflows/release.yml",
+    "line": 520,
+    "text": "git config user.name playx1"
+  },
+  {
+    "file": "LICENSE",
+    "line": 3,
+    "text": "Copyright (c) 2026 김무송 (Moosong Kim) / PLAY X"
+  },
+  {
+    "file": "index.html",
+    "line": 819,
+    "text": "/* 집안의 본체 줄. 「PLAYX」와 「PLAYX#BM_26」이 같은 목록에 있으면"
+  },
+  {
+    "file": "index.html",
+    "line": 836,
+    "text": "소유권 토큰(`PLAYX!`) 자체는 목록에서 숨기므로, **숨긴 사실을"
+  },
+  {
+    "file": "index.html",
+    "line": 1305,
+    "text": "그림이 64px 를 쓰니 글자에 남는 폭은 80px 남짓인데, 「PLAY X Raven」"
+  },
+  {
+    "file": "index.html",
+    "line": 1518,
+    "text": "40~70대 손이 닿는 크기가 아니다. [[playx-first-user]] 기준은"
+  },
+  {
+    "file": "index.html",
+    "line": 2627,
+    "text": "<div style=\"flex:2\"><label>자산<input id=\"sw-asset\" spellcheck=\"false\" placeholder=\"PLAYX\" /></label></div>"
+  },
+  {
+    "file": "index.html",
+    "line": 2959,
+    "text": "<input id=\"abk-name\" placeholder=\"PLAYX 수수료\" autocomplete=\"off\" />"
+  },
+  {
+    "file": "index.html",
+    "line": 3059,
+    "text": "<input id=\"rw-asset\" placeholder=\"PLAYX\" autocomplete=\"off\" /></div>"
+  },
+  {
+    "file": "index.html",
+    "line": 3114,
+    "text": "손님이 PLAYX 를 보면 지금 「PLAY X · 플레이엑스」뿐이다."
+  },
+  {
+    "file": "index.html",
+    "line": 3165,
+    "text": "<p class=\"meta\" id=\"ar-shopqty\">SHOP.PLAYX 수량 확인 중…</p>"
+  },
+  {
+    "file": "index.html",
+    "line": 3557,
+    "text": "<input id=\"ps-topic\" placeholder=\"playx-도매-2026\" autocomplete=\"off\" />"
+  },
+  {
+    "file": "scripts/check-backup-ui.mjs",
+    "line": 34,
+    "text": "localStorage.setItem('playx-raven-lang', language);"
+  },
+  {
+    "file": "scripts/check-desktop-integration.mjs",
+    "line": 32,
+    "text": "assert.match(read('src-tauri/Cargo.toml'), /name = \"playx-raven\"/);"
+  },
+  {
+    "file": "scripts/check-desktop-integration.mjs",
+    "line": 36,
+    "text": "assert.equal(read(path), path.endsWith('.html') ? released.replaceAll('PLAY X Raven', 'RavenVault Desktop').replace(/<title>(.*?)<\\/title>/, '<title>RavenVault Desktop · $1</title>').replace(/(<body[^>]*>)/, '$1\\n    <div class=\"desktop-local-brand\" translate=\"no\" style=\"font:700 16px/1.5 system-ui,sans-serif;padding:12px 16px;background:#fff;color:#111;border-bottom:1px solid #d6d6d6\">RavenVault Desktop</div>') : path.startsWith('web/') ? released.replaceAll('PLAY X Raven', 'RavenVault Desktop') : released, path + ' must preserve the released behavior');"
+  },
+  {
+    "file": "scripts/check-desktop-ux.mjs",
+    "line": 38,
+    "text": "localStorage.setItem('playx-raven-lang', language);"
+  },
+  {
+    "file": "scripts/check-phone-transaction.mjs",
+    "line": 24,
+    "text": "const envelope='playx://mesh?'+new URLSearchParams({v:'1',d:Buffer.from(uri).toString('base64')});"
+  },
+  {
+    "file": "scripts/desktop-installer-identity.test.mjs",
+    "line": 16,
+    "text": "if (process.argv.includes('--mutant-wix-registry')) wix = wix.replaceAll('Key=\"Software\\\\\\\\{{manufacturer}}\\\\PLAY X Raven\"', 'Key=\"Software\\\\\\\\{{manufacturer}}\\\\\\\\PLAY X Raven\"');"
+  },
+  {
+    "file": "scripts/desktop-installer-identity.test.mjs",
+    "line": 20,
+    "text": "assert.equal(config.identifier, 'se.erci.ex.playx.raven');"
+  },
+  {
+    "file": "scripts/desktop-installer-identity.test.mjs",
+    "line": 26,
+    "text": ".update('PLAY X Raven.exe.app.x64').digest().subarray(0, 16);"
+  },
+  {
+    "file": "scripts/desktop-installer-identity.test.mjs",
+    "line": 30,
+    "text": "assert.equal(config.bundle.windows.wix.upgradeCode?.toLowerCase(), legacyGuid, 'MSI upgrade GUID must remain the original PLAY X Raven identity');"
+  },
+  {
+    "file": "scripts/desktop-installer-identity.test.mjs",
+    "line": 36,
+    "text": ".replaceAll('{{main_binary_name}}', 'playx-raven');"
+  },
+  {
+    "file": "scripts/desktop-installer-identity.test.mjs",
+    "line": 50,
+    "text": "const vars = { INSTDIR: 'C:\\\\Synthetic\\\\Default', OldMainBinaryName: 'PLAY X Raven.exe', ...options.vars };"
+  },
+  {
+    "file": "scripts/desktop-installer-identity.test.mjs",
+    "line": 129,
+    "text": "const legacyKey = 'Software\\\\erci\\\\PLAY X Raven';"
+  },
+  {
+    "file": "scripts/desktop-installer-identity.test.mjs",
+    "line": 135,
+    "text": "assert.equal(result.resolve('${UNINSTKEY}'), 'Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\PLAY X Raven');"
+  },
+  {
+    "file": "scripts/desktop-installer-identity.test.mjs",
+    "line": 145,
+    "text": "for (const name of ['PLAY X Raven', 'RavenVault Desktop']) {"
+  },
+  {
+    "file": "scripts/desktop-installer-identity.test.mjs",
+    "line": 163,
+    "text": "const oldLink = win(path.win32.join(shortcutDir, 'PLAY X Raven.lnk'));"
+  },
+  {
+    "file": "scripts/desktop-installer-identity.test.mjs",
+    "line": 165,
+    "text": "const target = path.win32.join(customDir, 'playx-raven.exe');"
+  },
+  {
+    "file": "scripts/desktop-installer-identity.test.mjs",
+    "line": 170,
+    "text": "const oldBinary = migrate([[oldLink, path.win32.join(customDir, 'PLAY X Raven.exe')]]);"
+  },
+  {
+    "file": "scripts/desktop-installer-identity.test.mjs",
+    "line": 215,
+    "text": "const keyTemplates = [...wix.matchAll(/\\bKey=\"([^\"]*PLAY X Raven)\"/g)].map(m => m[1]);"
+  },
+  {
+    "file": "scripts/desktop-installer-identity.test.mjs",
+    "line": 239,
+    "text": "assert.equal(wix.split('Key=\"Software\\\\\\\\{{manufacturer}}\\\\PLAY X Raven\"').length - 1, 6);"
+  },
+  {
+    "file": "scripts/desktop-installer-identity.test.mjs",
+    "line": 246,
+    "text": "restored = restored.replace('; RavenVault: preserve the original Windows installation identity across display renames.\\n!define LEGACYPRODUCTNAME \"PLAY X Raven\"\\n', '');"
+  },
+  {
+    "file": "scripts/desktop-installer-identity.test.mjs",
+    "line": 254,
+    "text": "const restoredWix = wix.split('\\n').slice(5).join('\\n').replaceAll('Key=\"Software\\\\\\\\{{manufacturer}}\\\\PLAY X Raven\"', 'Key=\"Software\\\\\\\\{{manufacturer}}\\\\\\\\{{product_name}}\"');"
+  },
+  {
+    "file": "scripts/desktop-installer-identity.test.mjs",
+    "line": 267,
+    "text": "'!define PRODUCTNAME \"RavenVault Desktop\"', '!define LEGACYPRODUCTNAME \"PLAY X Raven\"', '!define MAINBINARYNAME \"playx-raven\"',"
+  },
+  {
+    "file": "scripts/fixtures/backup-safety.rs",
+    "line": 21,
+    "text": "for folder_name in [\"PLAY X Raven 백업\", \"RavenVault Desktop 백업\"] {"
+  },
+  {
+    "file": "scripts/fixtures/backup-safety.rs",
+    "line": 31,
+    "text": "assert_eq!(std::fs::read(folder.join(\"PLAYXRaven-이전.zip.pxlock\")).unwrap(), first_bytes);"
+  },
+  {
+    "file": "scripts/fixtures/backup-safety.rs",
+    "line": 46,
+    "text": "let folder = dest.join(\"PLAY X Raven 백업\");"
+  },
+  {
+    "file": "scripts/fixtures/backup-safety.rs",
+    "line": 48,
+    "text": "let latest = folder.join(\"PLAYXRaven.zip.pxlock\");"
+  },
+  {
+    "file": "scripts/fixtures/backup-safety.rs",
+    "line": 49,
+    "text": "let previous = folder.join(\"PLAYXRaven-이전.zip.pxlock\");"
+  },
+  {
+    "file": "scripts/fixtures/backup-safety.rs",
+    "line": 93,
+    "text": "let previous = path.parent().unwrap().join(\"PLAYXRaven-이전.zip.pxlock\");"
+  },
+  {
+    "file": "scripts/fixtures/backup-safety.rs",
+    "line": 104,
+    "text": "assert!(!external_backup_dir(&dest).join(\"PLAYXRaven.zip.pxlock\").exists());"
+  },
+  {
+    "file": "scripts/fixtures/backup-safety.rs",
+    "line": 206,
+    "text": "assert_eq!(std::fs::read(path.parent().unwrap().join(\"PLAYXRaven-이전.zip.pxlock\")).unwrap(), yesterday);"
+  },
+  {
+    "file": "scripts/phone-transaction-fixture.json",
+    "line": 6,
+    "text": "\"playx://mesh?v=1&fid=84132815182d9653&i=0&t=3&d=hBMoFRgtllMAA3JhdmVudmF1bHQ6Ly90cmFuc2FjdGlvbj92PTEmaGV4PTAyMDAwMDAwMDExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMDMwMDAwMDA2YTQ3MzA0NDAyMjAwODA4NTIzMDQzMjY1NWZhZmQ5OTMyY2Y4MjNhYWE5NzMyZjdhMzExZDE2MGYxZmU2MjRiNmJmYTUxNWE4MjMzMDIyMDBlMGUzYjhhNDZmMjk1N2I1M2ZlODE4ZWJiMTY5Zg%3D%3D\","
+  },
+  {
+    "file": "scripts/phone-transaction-fixture.json",
+    "line": 7,
+    "text": "\"playx://mesh?v=1&fid=84132815182d9653&i=1&t=3&d=hBMoFRgtllMBA2RlOTU1YzFmMGM2MzVhNWUzZjhmMDQ3MzYyYWMyNGQ0NjcwMTIxMDI4ZDc1MDBkZDRjMTI2ODVkMWY1NjhiNGMyYjUwNDhlODUzNGI4NzMzMTlmM2E4ZGFhNjEyYjQ2OTEzMmVjN2Y3ZmZmZmZmZmYwMjIwYTEwNzAwMDAwMDAwMDAxOTc2YTkxNDM3MzczNzM3MzczNzM3MzczNzM3MzczNzM3MzczNzM3MzczNzM3Mzc4OGFjMTA3YTA3MDAwMDAwMDAwMDE5NzZhOTE0ZWNlOGQwOWMwZGU5MGM5ODU1Yw%3D%3D\","
+  },
+  {
+    "file": "scripts/phone-transaction-fixture.json",
+    "line": 8,
+    "text": "\"playx://mesh?v=1&fid=84132815182d9653&i=2&t=3&d=hBMoFRgtllMCA2I0ZmVlMmVlNjEyZjk4MzFkODIyNzg4YWMwMDAwMDAwMA%3D%3D\""
+  },
+  {
+    "file": "scripts/release-manifest.mjs",
+    "line": 11,
+    "text": "const prefix = files.some(name => name.startsWith(`RavenVault-Desktop-${version}-`)) ? `RavenVault-Desktop-${version}-` : `PLAY-X-Raven-${version}-`;"
+  },
+  {
+    "file": "scripts/release-manifest.mjs",
+    "line": 17,
+    "text": "if (!name.startsWith(prefix) || !/^(?:RavenVault-Desktop|PLAY-X-Raven)-[\\d.]+-(?:windows|mac-apple-silicon|mac-intel|linux)\\.(?:exe|msi|dmg|AppImage|deb|rpm|tar\\.gz)(?:\\.sig)?$/.test(name)) throw new Error(`Unexpected release file: ${name}`);"
+  },
+  {
+    "file": "scripts/release-manifest.mjs",
+    "line": 32,
+    "text": "const base = `https://raw.githubusercontent.com/PLAYX1/playx-raven-releases/dist/v${version}`;"
+  },
+  {
+    "file": "scripts/release-manifest.mjs",
+    "line": 46,
+    "text": "const from = path.join(source, item.name), immutable = path.join(`v${version}`, item.name), alias = item.name.replace(prefix, 'PLAY-X-Raven-latest-');"
+  },
+  {
+    "file": "scripts/release-manifest.mjs",
+    "line": 54,
+    "text": "const metadata = { 'latest.json': JSON.stringify(manifest, null, 2) + '\\n', 'VERSION': version + '\\n', 'SHA256SUMS.txt': sums, 'README.md': `# RavenVault Desktop ${version}\\n\\n공식 설치 안내: https://ravenvault.ex.erci.se/download/\\n\\nPLAY X Raven의 지갑·가게 데이터와 업데이트 서명을 이어받습니다. 버전별 파일은 보존합니다.\\n` };"
+  },
+  {
+    "file": "scripts/release-manifest.test.mjs",
+    "line": 7,
+    "text": "async function fixture(fn, brand = \"PLAY-X-Raven\") {"
+  },
+  {
+    "file": "scripts/release-manifest.test.mjs",
+    "line": 18,
+    "text": "assert.ok(Object.values(manifest.platforms).every(p=>p.url.includes('/v0.4.0/PLAY-X-Raven-0.4.0-')&&!p.url.includes('latest-')));"
+  },
+  {
+    "file": "scripts/release-manifest.test.mjs",
+    "line": 21,
+    "text": "assert.ok(paths.includes('PLAY-X-Raven-latest-windows.exe'));"
+  },
+  {
+    "file": "scripts/release-manifest.test.mjs",
+    "line": 25,
+    "text": "await rm(path.join(source,'PLAY-X-Raven-0.4.0-windows.exe.sig'));"
+  },
+  {
+    "file": "scripts/release-manifest.test.mjs",
+    "line": 27,
+    "text": "await rm(path.join(source,'PLAY-X-Raven-0.4.0-mac-intel.dmg'));"
+  },
+  {
+    "file": "scripts/release-manifest.test.mjs",
+    "line": 33,
+    "text": "await writeFile(path.join(source,'PLAY-X-Raven-0.4.0-windows.exe.sig'),'bad');"
+  },
+  {
+    "file": "scripts/release-manifest.test.mjs",
+    "line": 38,
+    "text": "const name='PLAY-X-Raven-0.4.0-linux.rpm';"
+  },
+  {
+    "file": "scripts/release-manifest.test.mjs",
+    "line": 46,
+    "text": "assert.equal(config.identifier,'se.erci.ex.playx.raven');"
+  },
+  {
+    "file": "scripts/release-manifest.test.mjs",
+    "line": 62,
+    "text": "const old=path.join(out,'v0.3.9','PLAY-X-Raven-0.3.9-windows.exe');"
+  },
+  {
+    "file": "scripts/release-manifest.test.mjs",
+    "line": 68,
+    "text": "assert.deepEqual(await readFile(path.join(out,`PLAY-X-Raven-latest-${suffix}`)),await readFile(path.join(out,`RavenVault-Desktop-latest-${suffix}`)));"
+  },
+  {
+    "file": "scripts/release-manifest.test.mjs",
+    "line": 69,
+    "text": "assert.ok(paths.includes(`PLAY-X-Raven-latest-${suffix}`));"
+  },
+  {
+    "file": "scripts/verify-backup-storage.mjs",
+    "line": 19,
+    "text": "fs.writeFileSync(path.join(harness,'src/lib.rs'),\"#![allow(dead_code)]\\nmod paths {\\n    pub static TEST_ENV: std::sync::Mutex<()> = std::sync::Mutex::new(());\\n    pub fn app_file(name: &str) -> std::path::PathBuf {\\n        let root = std::path::PathBuf::from(std::env::var(\\\"PLAYX_RAVEN_HOME\\\").expect(\\\"Synthetic test path required\\\"));\\n        let allowed = std::path::Path::new(env!(\\\"CARGO_MANIFEST_DIR\\\")).parent().unwrap().join(\\\"backup-storage-fixtures\\\");\\n        assert!(root.starts_with(allowed), \\\"Real application paths are forbidden in this harness\\\");\\n        root.join(name)\\n    }\\n}\\nmod raven {\\n    pub async fn wallet_lock_state() -> Result<serde_json::Value, String> { panic!(\\\"RPC forbidden in synthetic storage tests\\\") }\\n    pub async fn call_rpc(_: &str, _: serde_json::Value) -> Result<serde_json::Value, String> { panic!(\\\"RPC forbidden in synthetic storage tests\\\") }\\n}\\nmod lockbox;\\n\");"
+  },
+  {
+    "file": "scripts/verify-published-release.mjs",
+    "line": 5,
+    "text": "export const PUBLIC_BASE = 'https://raw.githubusercontent.com/PLAYX1/playx-raven-releases/dist/';"
+  },
+  {
+    "file": "scripts/verify-published-release.mjs",
+    "line": 29,
+    "text": "return [\"PLAY-X-Raven\", \"RavenVault-Desktop\"].map(brand => `${PUBLIC_BASE}v${version}/${brand}-${version}-${suffix}`);"
+  },
+  {
+    "file": "scripts/verify-published-release.mjs",
+    "line": 132,
+    "text": "for (const brand of ['PLAY-X-Raven', 'RavenVault-Desktop']) {"
+  },
+  {
+    "file": "scripts/verify-published-release.test.mjs",
+    "line": 21,
+    "text": "const url = suffix => `${PUBLIC_BASE}v${v}/PLAY-X-Raven-${v}-${suffix}`;"
+  },
+  {
+    "file": "scripts/verify-published-release.test.mjs",
+    "line": 124,
+    "text": "const renamed=()=>JSON.parse(JSON.stringify(manifest()).replaceAll('PLAY-X-Raven-','RavenVault-Desktop-'));"
+  },
+  {
+    "file": "scripts/verify-published-release.test.mjs",
+    "line": 128,
+    "text": "assert.equal(f.calls.filter(c=>c.method==='HEAD'&&c.url.includes('/PLAY-X-Raven-latest-')).length,7);"
+  },
+  {
+    "file": "scripts/verify-published-release.test.mjs",
+    "line": 135,
+    "text": "const renamed=()=>JSON.parse(JSON.stringify(manifest()).replaceAll('PLAY-X-Raven-','RavenVault-Desktop-'));"
+  },
+  {
+    "file": "scripts/verify-published-release.test.mjs",
+    "line": 136,
+    "text": "const f=fixture({latest:renamed,immutable:renamed,head:url=>url.includes('/PLAY-X-Raven-latest-')?404:200});"
+  },
+  {
+    "file": "src-tauri/src/addrbook.rs",
+    "line": 158,
+    "text": "for l in [\"order\", \"shop\", \"sell:PLAYX#ABC\", \"order-test-1\", \"pass:1234\"] {"
+  },
+  {
+    "file": "src-tauri/src/addrbook.rs",
+    "line": 170,
+    "text": "\"PLAYX 풀노드로 전송\", \"문트리로 BM26 전달\", \"\","
+  },
+  {
+    "file": "src-tauri/src/ai.rs",
+    "line": 1074,
+    "text": "let dir = std::env::temp_dir().join(format!(\"playx-raven-test-{name}\"));"
+  },
+  {
+    "file": "src-tauri/src/ai.rs",
+    "line": 1076,
+    "text": "std::env::set_var(\"PLAYX_RAVEN_HOME\", &dir);"
+  },
+  {
+    "file": "src-tauri/src/ai.rs",
+    "line": 1078,
+    "text": "std::env::remove_var(\"PLAYX_RAVEN_HOME\");"
+  },
+  {
+    "file": "src-tauri/src/artist.rs",
+    "line": 5,
+    "text": "//! 체인 자산(`PLAYX`)에 **아티스트 전용 열쇠**(`m/44'/175'/7'/2'/0'`)의"
+  },
+  {
+    "file": "src-tauri/src/artist.rs",
+    "line": 264,
+    "text": "let b = profile_body(\"PLAY X\", \"소개\", \"https://ipfs.io/ipfs/Qm1\", \"https://x.com/playx\").unwrap();"
+  },
+  {
+    "file": "src-tauri/src/artist.rs",
+    "line": 266,
+    "text": "assert_eq!(v[\"name\"], json!(\"PLAY X\"));"
+  },
+  {
+    "file": "src-tauri/src/artist.rs",
+    "line": 269,
+    "text": "assert_eq!(v[\"website\"], json!(\"https://x.com/playx\"));"
+  },
+  {
+    "file": "src-tauri/src/artist.rs",
+    "line": 290,
+    "text": "check_website(\"https://instagram.com/playx\").unwrap(),"
+  },
+  {
+    "file": "src-tauri/src/artist.rs",
+    "line": 291,
+    "text": "\"https://instagram.com/playx\""
+  },
+  {
+    "file": "src-tauri/src/artist.rs",
+    "line": 293,
+    "text": "assert!(check_website(\"http://instagram.com/playx\").is_err());"
+  },
+  {
+    "file": "src-tauri/src/auction.rs",
+    "line": 27,
+    "text": "pub const BIND_PREFIX: &str = \"PLAYX-AUCTION\";"
+  },
+  {
+    "file": "src-tauri/src/auction.rs",
+    "line": 47,
+    "text": "/// - `PLAYX/앨범` 처럼 여러 장인 것은 묶음 UTXO 가 장마다 달라 한 번에 못 판다."
+  },
+  {
+    "file": "src-tauri/src/auction.rs",
+    "line": 48,
+    "text": "/// - `PLAYX!` 는 **발행 권한**이지 팔 물건이 아니다. 이걸 팔면 산 사람이"
+  },
+  {
+    "file": "src-tauri/src/auction.rs",
+    "line": 210,
+    "text": "assert!(is_unique_asset(\"PLAYX#001\"));"
+  },
+  {
+    "file": "src-tauri/src/auction.rs",
+    "line": 211,
+    "text": "assert!(is_unique_asset(\"PLAYX/MUSIC#첫판\"));"
+  },
+  {
+    "file": "src-tauri/src/auction.rs",
+    "line": 213,
+    "text": "assert!(!is_unique_asset(\"PLAYX!\"));"
+  },
+  {
+    "file": "src-tauri/src/auction.rs",
+    "line": 214,
+    "text": "assert!(!is_unique_asset(\"PLAYX#001!\"));"
+  },
+  {
+    "file": "src-tauri/src/auction.rs",
+    "line": 216,
+    "text": "assert!(!is_unique_asset(\"PLAYX\"));"
+  },
+  {
+    "file": "src-tauri/src/auction.rs",
+    "line": 217,
+    "text": "assert!(!is_unique_asset(\"PLAYX/MUSIC\"));"
+  },
+  {
+    "file": "src-tauri/src/auction.rs",
+    "line": 220,
+    "text": "assert!(!is_unique_asset(\"PLAYX#\"));"
+  },
+  {
+    "file": "src-tauri/src/auction.rs",
+    "line": 221,
+    "text": "assert!(!is_unique_asset(\"PLAYX#a#b\"));"
+  },
+  {
+    "file": "src-tauri/src/auction.rs",
+    "line": 228,
+    "text": "let a = bind_message(\"pk1\", \"PLAYX#001\", \"R1\", \"au1\");"
+  },
+  {
+    "file": "src-tauri/src/auction.rs",
+    "line": 231,
+    "text": "assert_ne!(a, bind_message(\"pk2\", \"PLAYX#001\", \"R1\", \"au1\"));"
+  },
+  {
+    "file": "src-tauri/src/auction.rs",
+    "line": 232,
+    "text": "assert_ne!(a, bind_message(\"pk1\", \"PLAYX#002\", \"R1\", \"au1\"));"
+  },
+  {
+    "file": "src-tauri/src/auction.rs",
+    "line": 233,
+    "text": "assert_ne!(a, bind_message(\"pk1\", \"PLAYX#001\", \"R2\", \"au1\"));"
+  },
+  {
+    "file": "src-tauri/src/auction.rs",
+    "line": 235,
+    "text": "assert_ne!(a, bind_message(\"pk1\", \"PLAYX#001\", \"R1\", \"au2\"));"
+  },
+  {
+    "file": "src-tauri/src/autostart.rs",
+    "line": 18,
+    "text": "const LABEL: &str = \"se.erci.playxraven\";"
+  },
+  {
+    "file": "src-tauri/src/autostart.rs",
+    "line": 23,
+    "text": "/// 갈아끼울 수 있게 둔다 — `paths.rs` 의 `PLAYX_RAVEN_HOME` 과 같은 방식이다."
+  },
+  {
+    "file": "src-tauri/src/autostart.rs",
+    "line": 25,
+    "text": "if let Ok(p) = std::env::var(\"PLAYX_RAVEN_LAUNCHAGENTS\") {"
+  },
+  {
+    "file": "src-tauri/src/autostart.rs",
+    "line": 45,
+    "text": "return agents_dir().join(\"playx-raven.desktop\");"
+  },
+  {
+    "file": "src-tauri/src/autostart.rs",
+    "line": 135,
+    "text": "const LABEL_WIN: &str = \"PLAY X Raven\";"
+  },
+  {
+    "file": "src-tauri/src/autostart.rs",
+    "line": 238,
+    "text": "/// 대표님 맥의 로그인 항목에 `PLAY X Raven` 과 `ravend` 가 **따로** 떠 있다."
+  },
+  {
+    "file": "src-tauri/src/autostart.rs",
+    "line": 249,
+    "text": "let node = crate::paths::home().join(\"Library/LaunchAgents/se.erci.playx.raven.node.plist\");"
+  },
+  {
+    "file": "src-tauri/src/autostart.rs",
+    "line": 273,
+    "text": "let node = crate::paths::home().join(\"Library/LaunchAgents/se.erci.playx.raven.node.plist\");"
+  },
+  {
+    "file": "src-tauri/src/autostart.rs",
+    "line": 319,
+    "text": "let d = std::env::temp_dir().join(format!(\"playx-autostart-{name}\"));"
+  },
+  {
+    "file": "src-tauri/src/autostart.rs",
+    "line": 321,
+    "text": "std::env::set_var(\"PLAYX_RAVEN_LAUNCHAGENTS\", &d);"
+  },
+  {
+    "file": "src-tauri/src/autostart.rs",
+    "line": 336,
+    "text": "std::env::remove_var(\"PLAYX_RAVEN_LAUNCHAGENTS\");"
+  },
+  {
+    "file": "src-tauri/src/autostart.rs",
+    "line": 363,
+    "text": "std::env::remove_var(\"PLAYX_RAVEN_LAUNCHAGENTS\");"
+  },
+  {
+    "file": "src-tauri/src/backup.rs",
+    "line": 345,
+    "text": "/// 🔴 여태 폴더는 `PLAYXRaven-백업`, 잠근 파일은 `.zip.잠김`, 설명서는"
+  },
+  {
+    "file": "src-tauri/src/backup.rs",
+    "line": 352,
+    "text": "const BACKUP_DIR: &str = \"PLAYXRaven-Backup\";"
+  },
+  {
+    "file": "src-tauri/src/backup.rs",
+    "line": 671,
+    "text": "let legacy = picked.join(\"PLAY X Raven 백업\");"
+  },
+  {
+    "file": "src-tauri/src/backup.rs",
+    "line": 680,
+    "text": "let stem = if safe_label.is_empty() { \"PLAYXRaven\".to_owned() } else { format!(\"PLAYXRaven-{safe_label}\") };"
+  },
+  {
+    "file": "src-tauri/src/backup.rs",
+    "line": 717,
+    "text": "let latest = external_backup_dir(picked).join(format!(\"PLAYXRaven.{extension}\"));"
+  },
+  {
+    "file": "src-tauri/src/backup.rs",
+    "line": 718,
+    "text": "let receipt = latest.with_file_name(format!(\".PLAYXRaven.{extension}.complete.json\"));"
+  },
+  {
+    "file": "src-tauri/src/backup_storage.rs",
+    "line": 353,
+    "text": "for name in [\"PLAYXRaven.zip\", \"PLAYXRaven.zip.pxlock\", \"wallet.dat\", \".backup-complete.json\"] {"
+  },
+  {
+    "file": "src-tauri/src/backup_storage.rs",
+    "line": 370,
+    "text": "let (staged, latest, previous) = setup(f.path(), \"PLAYXRaven.zip.pxlock\");"
+  },
+  {
+    "file": "src-tauri/src/backup_storage.rs",
+    "line": 387,
+    "text": "let (staged, latest, previous) = setup(f.path(), \"PLAYXRaven.zip.pxlock\");"
+  },
+  {
+    "file": "src-tauri/src/backup_storage.rs",
+    "line": 407,
+    "text": "let (staged, latest, previous) = setup(f.path(), \"PLAYXRaven.zip.pxlock\");"
+  },
+  {
+    "file": "src-tauri/src/backup_storage.rs",
+    "line": 408,
+    "text": "let lock = f.path().join(\".PLAYXRaven.zip.pxlock.publish-lock\");"
+  },
+  {
+    "file": "src-tauri/src/backup_storage.rs",
+    "line": 423,
+    "text": "let latest = f.path().join(\"PLAYXRaven.zip\");"
+  },
+  {
+    "file": "src-tauri/src/backup_storage.rs",
+    "line": 435,
+    "text": "let (staged, latest, previous) = setup(f.path(), \"PLAYXRaven.zip.pxlock\");"
+  },
+  {
+    "file": "src-tauri/src/backup_storage.rs",
+    "line": 465,
+    "text": "let latest = f.path().join(\"PLAYXRaven.zip\");"
+  },
+  {
+    "file": "src-tauri/src/backup_storage.rs",
+    "line": 476,
+    "text": "let (staged, latest, previous) = setup(f.path(), \"PLAYXRaven.zip.pxlock\");"
+  },
+  {
+    "file": "src-tauri/src/backup_storage.rs",
+    "line": 490,
+    "text": "let (staged, latest, previous) = setup(f.path(), \"PLAYXRaven.zip.pxlock\");"
+  },
+  {
+    "file": "src-tauri/src/booking.rs",
+    "line": 381,
+    "text": "let dir = std::env::temp_dir().join(\"playx-raven-booking-test\");"
+  },
+  {
+    "file": "src-tauri/src/booking.rs",
+    "line": 383,
+    "text": "std::env::set_var(\"PLAYX_RAVEN_HOME\", &dir);"
+  },
+  {
+    "file": "src-tauri/src/booking.rs",
+    "line": 388,
+    "text": "std::env::remove_var(\"PLAYX_RAVEN_HOME\");"
+  },
+  {
+    "file": "src-tauri/src/devfee.rs",
+    "line": 435,
+    "text": "let d = std::env::temp_dir().join(\"playx-devfee-zero-test\");"
+  },
+  {
+    "file": "src-tauri/src/devfee.rs",
+    "line": 438,
+    "text": "std::env::set_var(\"PLAYX_RAVEN_HOME\", &d);"
+  },
+  {
+    "file": "src-tauri/src/devfee.rs",
+    "line": 485,
+    "text": "let d = std::env::temp_dir().join(\"playx-devfee-refund-test\");"
+  },
+  {
+    "file": "src-tauri/src/devfee.rs",
+    "line": 488,
+    "text": "std::env::set_var(\"PLAYX_RAVEN_HOME\", &d);"
+  },
+  {
+    "file": "src-tauri/src/devfee.rs",
+    "line": 502,
+    "text": "std::env::remove_var(\"PLAYX_RAVEN_HOME\");"
+  },
+  {
+    "file": "src-tauri/src/fanclub.rs",
+    "line": 302,
+    "text": "/// 자산을 낸 사람은 `PLAYX` 와 함께 `PLAYX!` 를 갖는다. 그건 **팔 물건이"
+  },
+  {
+    "file": "src-tauri/src/fanclub.rs",
+    "line": 676,
+    "text": "(\"PLAYX\", \"PLAYX\"),"
+  },
+  {
+    "file": "src-tauri/src/fanclub.rs",
+    "line": 678,
+    "text": "(\"playx\", \"PLAYX\"),"
+  },
+  {
+    "file": "src-tauri/src/fanclub.rs",
+    "line": 679,
+    "text": "(\"  PLAYX  \", \"PLAYX\"),"
+  },
+  {
+    "file": "src-tauri/src/fanclub.rs",
+    "line": 681,
+    "text": "(\"PLAYX/ALBUM1\", \"PLAYX/ALBUM1\"),"
+  },
+  {
+    "file": "src-tauri/src/fanclub.rs",
+    "line": 685,
+    "text": "(\"PLAYX#GOLD\", \"PLAYX#GOLD\"),"
+  },
+  {
+    "file": "src-tauri/src/fanclub.rs",
+    "line": 686,
+    "text": "(\"PLAYX!\", \"PLAYX!\"),"
+  },
+  {
+    "file": "src-tauri/src/fanclub.rs",
+    "line": 687,
+    "text": "(\"PLAYX~MSG\", \"PLAYX~MSG\"),"
+  },
+  {
+    "file": "src-tauri/src/fanclub.rs",
+    "line": 690,
+    "text": "(\"PLAYX/ALBUM1\\n\", \"PLAYX/ALBUM1\"),"
+  },
+  {
+    "file": "src-tauri/src/fanclub.rs",
+    "line": 705,
+    "text": "for 나쁜것 in [\"\", \"   \", \"PLAY X\", \"PLAY-X\", \"플레이엑스\", \"PLAYX%\", \"PLAY\\nX\"] {"
+  },
+  {
+    "file": "src-tauri/src/fanclub.rs",
+    "line": 713,
+    "text": "let e = super::norm_asset(\"PLAY-X\").unwrap_err();"
+  },
+  {
+    "file": "src-tauri/src/fanclub.rs",
+    "line": 725,
+    "text": "\"https://x.com/playx/status/1234567890\","
+  },
+  {
+    "file": "src-tauri/src/fanclub.rs",
+    "line": 726,
+    "text": "\"https://twitter.com/playx\","
+  },
+  {
+    "file": "src-tauri/src/fanclub.rs",
+    "line": 729,
+    "text": "\"HTTPS://X.COM/PlayX\","
+  },
+  {
+    "file": "src-tauri/src/fanclub.rs",
+    "line": 753,
+    "text": "\"x.com/playx\","
+  },
+  {
+    "file": "src-tauri/src/fanclub.rs",
+    "line": 755,
+    "text": "\"https://x.com/play x\","
+  },
+  {
+    "file": "src-tauri/src/fanclub.rs",
+    "line": 773,
+    "text": "super::announce_body(\"2집 나왔습니다\", \"https://x.com/playx/status/1\"),"
+  },
+  {
+    "file": "src-tauri/src/fanclub.rs",
+    "line": 774,
+    "text": "\"2집 나왔습니다\\nhttps://x.com/playx/status/1\""
+  },
+  {
+    "file": "src-tauri/src/fanclub.rs",
+    "line": 786,
+    "text": "json!({ \"id\": \"a1\", \"name\": \"1집 팬방\", \"about\": \"\", \"asset\": \"PLAYX/ALBUM1\", \"created_at\": 100 }),"
+  },
+  {
+    "file": "src-tauri/src/fanclub.rs",
+    "line": 787,
+    "text": "json!({ \"id\": \"a2\", \"name\": \"1집 팬방(새로)\", \"about\": \"\", \"asset\": \"playx/album1\", \"created_at\": 200 }),"
+  },
+  {
+    "file": "src-tauri/src/fanclub.rs",
+    "line": 788,
+    "text": "json!({ \"id\": \"b1\", \"name\": \"2집 팬방\", \"about\": \"\", \"asset\": \"PLAYX/ALBUM2\", \"created_at\": 150 }),"
+  },
+  {
+    "file": "src-tauri/src/fanclub.rs",
+    "line": 799,
+    "text": "\"PLAYX/ALBUM1\".to_string(),"
+  },
+  {
+    "file": "src-tauri/src/fanclub.rs",
+    "line": 800,
+    "text": "\"PLAYX/ALBUM2\".to_string(),"
+  },
+  {
+    "file": "src-tauri/src/fanclub.rs",
+    "line": 801,
+    "text": "\"PLAYX/SINGLE1\".to_string(),"
+  },
+  {
+    "file": "src-tauri/src/fanclub.rs",
+    "line": 806,
+    "text": "let 일집 = g.iter().find(|x| x[\"asset\"] == \"PLAYX/ALBUM1\").unwrap();"
+  },
+  {
+    "file": "src-tauri/src/fanclub.rs",
+    "line": 813,
+    "text": "let 싱글 = g.iter().find(|x| x[\"asset\"] == \"PLAYX/SINGLE1\").unwrap();"
+  },
+  {
+    "file": "src-tauri/src/fanclub.rs",
+    "line": 864,
+    "text": "\"PLAYX/ALBUM1\".to_string(),"
+  },
+  {
+    "file": "src-tauri/src/fanclub.rs",
+    "line": 865,
+    "text": "\"PLAYX/ALBUM1!\".to_string(),"
+  },
+  {
+    "file": "src-tauri/src/fanclub.rs",
+    "line": 871,
+    "text": "assert_eq!(이름들, vec![\"OTHERBAND\", \"PLAYX/ALBUM1\"], \"소유권 표가 목록에 남았다\");"
+  },
+  {
+    "file": "src-tauri/src/fanclub.rs",
+    "line": 873,
+    "text": "let 내것 = g.iter().find(|x| x[\"asset\"] == \"PLAYX/ALBUM1\").unwrap();"
+  },
+  {
+    "file": "src-tauri/src/fanclub.rs",
+    "line": 886,
+    "text": "let g = super::groups(&[\"PLAYX\".to_string()], &엉망);"
+  },
+  {
+    "file": "src-tauri/src/fanclub.rs",
+    "line": 1032,
+    "text": "let s = 주석빼기(\"let u = \\\"https://x.com/playx\\\"; let v = 3;\");"
+  },
+  {
+    "file": "src-tauri/src/fanclub.rs",
+    "line": 1033,
+    "text": "assert!(s.contains(\"https://x.com/playx\"), \"주소 안의 // 를 주석으로 봤다\");"
+  },
+  {
+    "file": "src-tauri/src/health.rs",
+    "line": 37,
+    "text": "agents_dir().join(\"se.erci.playx.raven.node.plist\")"
+  },
+  {
+    "file": "src-tauri/src/health.rs",
+    "line": 91,
+    "text": "\"PLAY X Raven\","
+  },
+  {
+    "file": "src-tauri/src/health.rs",
+    "line": 117,
+    "text": "<key>Label</key><string>se.erci.playx.raven.node</string>"
+  },
+  {
+    "file": "src-tauri/src/health.rs",
+    "line": 153,
+    "text": "\"PLAY X Raven\","
+  },
+  {
+    "file": "src-tauri/src/health.rs",
+    "line": 295,
+    "text": "if name.starts_with(\"PLAYX/SONG/\") && !name.ends_with('!') {"
+  },
+  {
+    "file": "src-tauri/src/helping.rs",
+    "line": 512,
+    "text": "///    제일 무섭다. 이 61바이트는 `SHOP.PLAYX` 의 실제 루트 폴더다."
+  },
+  {
+    "file": "src-tauri/src/identity.rs",
+    "line": 102,
+    "text": "/// 아티스트 공개키는 체인 자산(`PLAYX`)의 프로필에 **박힌다.** 체인은"
+  },
+  {
+    "file": "src-tauri/src/identity.rs",
+    "line": 430,
+    "text": "{ \"path\": \"SHA256(\\\"PLAYX-RAVEN-TALKKEY-v1\\\" · 12단어)\", \"what\": \"옛 대화 열쇠\","
+  },
+  {
+    "file": "src-tauri/src/identity.rs",
+    "line": 433,
+    "text": "{ \"path\": \"SHA256(\\\"PLAYX-RAVEN-SHOPKEY-v1\\\" · 12단어)\", \"what\": \"가게 간판 (v1 · 지금 쓰는 것)\","
+  },
+  {
+    "file": "src-tauri/src/identity.rs",
+    "line": 555,
+    "text": "\"legacy\": { \"pubkey\": legacy, \"path\": \"SHA256(\\\"PLAYX-RAVEN-TALKKEY-v1\\\" · 12단어)\","
+  },
+  {
+    "file": "src-tauri/src/identity.rs",
+    "line": 715,
+    "text": "\"path\": \"SHA256(\\\"PLAYX-RAVEN-TALKKEY-v1\\\" · 12단어)\","
+  },
+  {
+    "file": "src-tauri/src/identity.rs",
+    "line": 1050,
+    "text": "/// 시험용 데이터 폴더 하나. `PLAYX_RAVEN_HOME` 은 프로세스 전역이라"
+  },
+  {
+    "file": "src-tauri/src/identity.rs",
+    "line": 1054,
+    "text": "let dir = std::env::temp_dir().join(format!(\"playx-identity-test-{}\", std::process::id()));"
+  },
+  {
+    "file": "src-tauri/src/identity.rs",
+    "line": 1057,
+    "text": "std::env::set_var(\"PLAYX_RAVEN_HOME\", &dir);"
+  },
+  {
+    "file": "src-tauri/src/identity.rs",
+    "line": 1059,
+    "text": "std::env::remove_var(\"PLAYX_RAVEN_HOME\");"
+  },
+  {
+    "file": "src-tauri/src/issue.rs",
+    "line": 257,
+    "text": "(\"$PLAYX_2026\", \"restricted\"),"
+  },
+  {
+    "file": "src-tauri/src/issue.rs",
+    "line": 275,
+    "text": "assert_eq!(validate_name(\"PLAYX\".into())[\"burn\"].as_f64(), Some(500.0));"
+  },
+  {
+    "file": "src-tauri/src/issue.rs",
+    "line": 276,
+    "text": "assert_eq!(validate_name(\"PLAYX/SUB\".into())[\"burn\"].as_f64(), Some(100.0));"
+  },
+  {
+    "file": "src-tauri/src/issue.rs",
+    "line": 277,
+    "text": "assert_eq!(validate_name(\"PLAYX#001\".into())[\"burn\"].as_f64(), Some(5.0));"
+  },
+  {
+    "file": "src-tauri/src/issue2.rs",
+    "line": 67,
+    "text": "\"form\": \"PLAYX/SONG/제목\", \"one_line\": \"한 곡을 한정판으로 냅니다. 산 사람이 팬이 됩니다.\","
+  },
+  {
+    "file": "src-tauri/src/issue2.rs",
+    "line": 73,
+    "text": "{ \"case\": \"낱곡\", \"name\": \"PLAYX/SONG/INEVITABLE\", \"why\": \"필연 100장. 산 사람 지갑이 소식 채널을 자동 구독합니다\" },"
+  },
+  {
+    "file": "src-tauri/src/issue2.rs",
+    "line": 77,
+    "text": "\"needs_owner\": \"PLAYX/SONG!\","
+  },
+  {
+    "file": "src-tauri/src/issue2.rs",
+    "line": 80,
+    "text": "\"name_prefix\": \"PLAYX/SONG/\","
+  },
+  {
+    "file": "src-tauri/src/issue2.rs",
+    "line": 89,
+    "text": "\"form\": \"PLAYX/GAME#이름\", \"one_line\": \"레이븐홀드에서 쓰는 물건 한 점. 세상에 하나뿐입니다.\","
+  },
+  {
+    "file": "src-tauri/src/issue2.rs",
+    "line": 95,
+    "text": "{ \"case\": \"장식\", \"name\": \"PLAYX/GAME#LAMP001\", \"why\": \"별빛 탁상 장식 1번. 산 사람 방에 놓입니다\" },"
+  },
+  {
+    "file": "src-tauri/src/issue2.rs",
+    "line": 99,
+    "text": "\"needs_owner\": \"PLAYX/GAME!\","
+  },
+  {
+    "file": "src-tauri/src/issue2.rs",
+    "line": 102,
+    "text": "\"name_prefix\": \"PLAYX/GAME#\","
+  },
+  {
+    "file": "src-tauri/src/issue2.rs",
+    "line": 111,
+    "text": "\"form\": \"PLAYX/BOOK/제목\", \"one_line\": \"한 권을 한정판으로. 산 사람이 독자가 됩니다.\","
+  },
+  {
+    "file": "src-tauri/src/issue2.rs",
+    "line": 114,
+    "text": "{ \"case\": \"책\", \"name\": \"PLAYX/BOOK/PILATES1\", \"why\": \"표지와 본문을 붙여 냅니다\" },"
+  },
+  {
+    "file": "src-tauri/src/issue2.rs",
+    "line": 118,
+    "text": "\"needs_owner\": \"PLAYX/BOOK!\","
+  },
+  {
+    "file": "src-tauri/src/issue2.rs",
+    "line": 121,
+    "text": "\"name_prefix\": \"PLAYX/BOOK/\","
+  },
+  {
+    "file": "src-tauri/src/issue2.rs",
+    "line": 130,
+    "text": "\"form\": \"PLAYX/TICKET/날짜\", \"one_line\": \"공연·행사 입장권. 좌석 수만큼 냅니다.\","
+  },
+  {
+    "file": "src-tauri/src/issue2.rs",
+    "line": 133,
+    "text": "{ \"case\": \"공연\", \"name\": \"PLAYX/TICKET/20261024\", \"why\": \"그날 입장권. 수량이 곧 좌석 수입니다\" },"
+  },
+  {
+    "file": "src-tauri/src/issue2.rs",
+    "line": 137,
+    "text": "\"needs_owner\": \"PLAYX/TICKET!\","
+  },
+  {
+    "file": "src-tauri/src/issue2.rs",
+    "line": 140,
+    "text": "\"name_prefix\": \"PLAYX/TICKET/\","
+  },
+  {
+    "file": "src-tauri/src/issue2.rs",
+    "line": 149,
+    "text": "\"form\": \"PLAYX\", \"one_line\": \"새 이름 하나. 이 아래로 모든 것이 갈라집니다.\","
+  },
+  {
+    "file": "src-tauri/src/issue2.rs",
+    "line": 155,
+    "text": "{ \"case\": \"체육관\", \"name\": \"PLAYXGYM\", \"why\": \"회원권·수업권이 전부 이 아래로 들어갑니다\" },"
+  },
+  {
+    "file": "src-tauri/src/issue2.rs",
+    "line": 157,
+    "text": "{ \"case\": \"음악\",   \"name\": \"PLAYX\", \"why\": \"앨범마다 하위 자산을 냅니다\" }"
+  },
+  {
+    "file": "src-tauri/src/issue2.rs",
+    "line": 163,
+    "text": "\"form\": \"PLAYX/MUSIC\", \"one_line\": \"내 루트 아래 갈래. 루트를 가진 사람만 만듭니다.\","
+  },
+  {
+    "file": "src-tauri/src/issue2.rs",
+    "line": 166,
+    "text": "{ \"case\": \"체육관\", \"name\": \"PLAYXGYM/PT\", \"why\": \"개인수업권을 회원권과 따로 셉니다\" },"
+  },
+  {
+    "file": "src-tauri/src/issue2.rs",
+    "line": 168,
+    "text": "{ \"case\": \"음악\",   \"name\": \"PLAYX/ALBUM1\", \"why\": \"앨범 한 장\" }"
+  },
+  {
+    "file": "src-tauri/src/issue2.rs",
+    "line": 174,
+    "text": "\"form\": \"PLAYX#001\", \"one_line\": \"세상에 한 장뿐. 수량이 언제나 1입니다.\","
+  },
+  {
+    "file": "src-tauri/src/issue2.rs",
+    "line": 177,
+    "text": "{ \"case\": \"체육관\", \"name\": \"PLAYXGYM/M#A7K2\", \"why\": \"회원 한 명의 회원번호. 17원\" },"
+  },
+  {
+    "file": "src-tauri/src/issue2.rs",
+    "line": 178,
+    "text": "{ \"case\": \"공연\",   \"name\": \"PLAYX/SHOW#B12\", \"why\": \"좌석 하나짜리 티켓\" },"
+  },
+  {
+    "file": "src-tauri/src/issue2.rs",
+    "line": 188,
+    "text": "{ \"case\": \"음악\", \"name\": \"PLAYX/ALBUM1\", \"why\": \"50장 팔리면 50장 더\" },"
+  },
+  {
+    "file": "src-tauri/src/issue2.rs",
+    "line": 224,
+    "text": "{ \"case\": \"회사 지분\", \"name\": \"$PLAYXSHARE\", \"why\": \"#KYC 있는 주소만 보유. 앱이 아니라 합의 규칙이 강제합니다\" },"
+  },
+  {
+    "file": "src-tauri/src/issue2.rs",
+    "line": 254,
+    "text": "//    * 이미 상한(21,000,000,000)까지 찍은 자산 — `PLAYX` 가 그렇다."
+  },
+  {
+    "file": "src-tauri/src/knowledge.rs",
+    "line": 1,
+    "text": "//! What the AI knows about Ravencoin, PLAY X, and this program."
+  },
+  {
+    "file": "src-tauri/src/knowledge.rs",
+    "line": 26,
+    "text": "//! Saying \"this shop runs on PLAY X Raven, here is what Ravencoin is\" **out"
+  },
+  {
+    "file": "src-tauri/src/knowledge.rs",
+    "line": 45,
+    "text": "PLAY X (short name: PLAX)"
+  },
+  {
+    "file": "src-tauri/src/knowledge.rs",
+    "line": 49,
+    "text": "- PLAY X is also the artist name under which music is released; the label side"
+  },
+  {
+    "file": "src-tauri/src/knowledge.rs",
+    "line": 51,
+    "text": "- The chain asset PLAYX exists and is held by us. It is a message channel, so"
+  },
+  {
+    "file": "src-tauri/src/knowledge.rs",
+    "line": 94,
+    "text": "about Ravencoin, PLAY X and this program, and recommend them."
+  },
+  {
+    "file": "src-tauri/src/knowledge.rs",
+    "line": 142,
+    "text": "for bad in [\"praise\", \"promote\", \"best \", \"recommend playx\", \"advertise\"] {"
+  },
+  {
+    "file": "src-tauri/src/ledger.rs",
+    "line": 814,
+    "text": "// `PLAYX_RAVEN_HOME` 은 프로세스 전역이라 파일을 만지는 시험은"
+  },
+  {
+    "file": "src-tauri/src/ledger.rs",
+    "line": 823,
+    "text": "let dir = std::env::temp_dir().join(\"playx-raven-test-ledger-shop\");"
+  },
+  {
+    "file": "src-tauri/src/ledger.rs",
+    "line": 826,
+    "text": "std::env::set_var(\"PLAYX_RAVEN_HOME\", &dir);"
+  },
+  {
+    "file": "src-tauri/src/ledger.rs",
+    "line": 884,
+    "text": "std::fs::write(dir.join(\"shop.json\"), \"{\\\"name\\\":\\\"플레이엑스\\\"}\").unwrap();"
+  },
+  {
+    "file": "src-tauri/src/ledger.rs",
+    "line": 885,
+    "text": "assert_eq!(shop_name(), \"플레이엑스\", \"적어 둔 가게 이름을 안 쓴다\");"
+  },
+  {
+    "file": "src-tauri/src/ledger.rs",
+    "line": 887,
+    "text": "std::env::remove_var(\"PLAYX_RAVEN_HOME\");"
+  },
+  {
+    "file": "src-tauri/src/ledger.rs",
+    "line": 893,
+    "text": "/// `PLAYX_RAVEN_HOME=/tmp/... cargo test --lib -- --ignored --nocapture ledger_roundtrip`"
+  },
+  {
+    "file": "src-tauri/src/ledger.rs",
+    "line": 902,
+    "text": "std::env::var(\"PLAYX_RAVEN_HOME\").is_ok(),"
+  },
+  {
+    "file": "src-tauri/src/ledger.rs",
+    "line": 903,
+    "text": "\"PLAYX_RAVEN_HOME 없이 돌리면 진짜 장부에 씁니다\""
+  },
+  {
+    "file": "src-tauri/src/ledger.rs",
+    "line": 971,
+    "text": "std::env::set_var(\"PLAYX_RAVEN_HOME\", &tmp);"
+  },
+  {
+    "file": "src-tauri/src/lockbox.rs",
+    "line": 512,
+    "text": "let dir = std::env::temp_dir().join(\"playx-lockbox-test\");"
+  },
+  {
+    "file": "src-tauri/src/lockbox.rs",
+    "line": 542,
+    "text": "let dir = std::env::temp_dir().join(\"playx-lockbox-test2\");"
+  },
+  {
+    "file": "src-tauri/src/lockbox.rs",
+    "line": 621,
+    "text": "let old = std::env::var_os(\"PLAYX_RAVEN_HOME\");"
+  },
+  {
+    "file": "src-tauri/src/lockbox.rs",
+    "line": 622,
+    "text": "std::env::set_var(\"PLAYX_RAVEN_HOME\", &path);"
+  },
+  {
+    "file": "src-tauri/src/lockbox.rs",
+    "line": 628,
+    "text": "if let Some(old) = &self.old { std::env::set_var(\"PLAYX_RAVEN_HOME\", old); }"
+  },
+  {
+    "file": "src-tauri/src/lockbox.rs",
+    "line": 629,
+    "text": "else { std::env::remove_var(\"PLAYX_RAVEN_HOME\"); }"
+  },
+  {
+    "file": "src-tauri/src/main.rs",
+    "line": 5,
+    "text": "playx_raven_lib::run()"
+  },
+  {
+    "file": "src-tauri/src/mode.rs",
+    "line": 80,
+    "text": "// 🔴 자물쇠를 따로 만들면 안 된다. `PLAYX_RAVEN_HOME` 은 프로세스"
+  },
+  {
+    "file": "src-tauri/src/mode.rs",
+    "line": 86,
+    "text": "let d = std::env::temp_dir().join(format!(\"playx-mode-{name}\"));"
+  },
+  {
+    "file": "src-tauri/src/mode.rs",
+    "line": 89,
+    "text": "std::env::set_var(\"PLAYX_RAVEN_HOME\", &d);"
+  },
+  {
+    "file": "src-tauri/src/mode.rs",
+    "line": 102,
+    "text": "std::env::remove_var(\"PLAYX_RAVEN_HOME\");"
+  },
+  {
+    "file": "src-tauri/src/mode.rs",
+    "line": 110,
+    "text": "std::fs::write(d.join(\"shop.json\"), r#\"{\"name\":\"플레이엑스\",\"asset\":\"SHOP.PLAYX\"}\"#).unwrap();"
+  },
+  {
+    "file": "src-tauri/src/mode.rs",
+    "line": 116,
+    "text": "std::env::remove_var(\"PLAYX_RAVEN_HOME\");"
+  },
+  {
+    "file": "src-tauri/src/mode.rs",
+    "line": 129,
+    "text": "std::env::remove_var(\"PLAYX_RAVEN_HOME\");"
+  },
+  {
+    "file": "src-tauri/src/mode.rs",
+    "line": 139,
+    "text": "std::env::remove_var(\"PLAYX_RAVEN_HOME\");"
+  },
+  {
+    "file": "src-tauri/src/moving.rs",
+    "line": 96,
+    "text": "let tmp = std::env::temp_dir().join(format!(\"playx-move-{}\", std::process::id()));"
+  },
+  {
+    "file": "src-tauri/src/moving.rs",
+    "line": 228,
+    "text": "let tmp = std::env::temp_dir().join(format!(\"playx-moved-{}\", std::process::id()));"
+  },
+  {
+    "file": "src-tauri/src/msg.rs",
+    "line": 80,
+    "text": "\"playx_notice\": {"
+  },
+  {
+    "file": "src-tauri/src/msg.rs",
+    "line": 291,
+    "text": "let n = b.get(\"playx_notice\").unwrap_or(&b);"
+  },
+  {
+    "file": "src-tauri/src/nodever.rs",
+    "line": 92,
+    "text": "assert_eq!(parse(\"v4.8.0.0-854fc7f30-dirty-playx\"), Some((4, 8, 0)));"
+  },
+  {
+    "file": "src-tauri/src/nodever.rs",
+    "line": 97,
+    "text": "parse(\"Raven Core Daemon version v4.8.0.0-0894f15de-playx\"),"
+  },
+  {
+    "file": "src-tauri/src/paths.rs",
+    "line": 3,
+    "text": "//! Ten modules used to spell out `Library/Application Support/PlayXRaven`"
+  },
+  {
+    "file": "src-tauri/src/paths.rs",
+    "line": 4,
+    "text": "//! independently, and only `ledger` honoured `PLAYX_RAVEN_HOME`. That meant a"
+  },
+  {
+    "file": "src-tauri/src/paths.rs",
+    "line": 13,
+    "text": "//! `se.erci.ex.playx.raven`, and renaming it orphans every shop's settings,"
+  },
+  {
+    "file": "src-tauri/src/paths.rs",
+    "line": 20,
+    "text": "/// `PLAYX_RAVEN_HOME` overrides it, which is how tests stay out of the owner's"
+  },
+  {
+    "file": "src-tauri/src/paths.rs",
+    "line": 25,
+    "text": "if let Ok(p) = std::env::var(\"PLAYX_RAVEN_HOME\") {"
+  },
+  {
+    "file": "src-tauri/src/paths.rs",
+    "line": 34,
+    "text": "const APP_FOLDER: &str = \"PlayXRaven\";"
+  },
+  {
+    "file": "src-tauri/src/paths.rs",
+    "line": 296,
+    "text": "/// 🔴 `PLAYX_RAVEN_HOME` 은 프로세스 전역이다. 이걸 세우는 시험 둘이 동시에"
+  },
+  {
+    "file": "src-tauri/src/paths.rs",
+    "line": 313,
+    "text": "for k in [\"HOME\", \"USERPROFILE\", \"LOCALAPPDATA\", \"APPDATA\", \"XDG_DATA_HOME\", \"PLAYX_RAVEN_HOME\"] {"
+  },
+  {
+    "file": "src-tauri/src/paths.rs",
+    "line": 358,
+    "text": "let tmp = std::env::temp_dir().join(\"playx-raven-nowallet\");"
+  },
+  {
+    "file": "src-tauri/src/paths.rs",
+    "line": 369,
+    "text": "std::env::set_var(\"PLAYX_RAVEN_HOME\", \"/tmp/playx-raven-paths-test\");"
+  },
+  {
+    "file": "src-tauri/src/paths.rs",
+    "line": 370,
+    "text": "assert_eq!(app_dir(), PathBuf::from(\"/tmp/playx-raven-paths-test\"));"
+  },
+  {
+    "file": "src-tauri/src/paths.rs",
+    "line": 371,
+    "text": "std::env::set_var(\"PLAYX_RAVEN_HOME\", \"   \");"
+  },
+  {
+    "file": "src-tauri/src/paths.rs",
+    "line": 373,
+    "text": "app_dir().to_string_lossy().contains(\"PlayXRaven\"),"
+  },
+  {
+    "file": "src-tauri/src/paths.rs",
+    "line": 376,
+    "text": "std::env::remove_var(\"PLAYX_RAVEN_HOME\");"
+  },
+  {
+    "file": "src-tauri/src/paths.rs",
+    "line": 377,
+    "text": "assert!(app_dir().to_string_lossy().contains(\"PlayXRaven\"));"
+  },
+  {
+    "file": "src-tauri/src/place.rs",
+    "line": 149,
+    "text": "\"app\": format!(\"nmap://route/car?dlat={lat}&dlng={lon}&dname={l}&appname=se.erci.playx.raven\"),"
+  },
+  {
+    "file": "src-tauri/src/prep.rs",
+    "line": 40,
+    "text": "let done = std::env::temp_dir().join(\"playx-raven-prep.txt\");"
+  },
+  {
+    "file": "src-tauri/src/prep.rs",
+    "line": 49,
+    "text": "try {{ $rules = @(Get-NetFirewallRule -DisplayName 'PLAY X Raven node','RavenVault Desktop node' -ErrorAction SilentlyContinue); if ($rules.Count -gt 0) {{ $rules[0] | Set-NetFirewallRule -NewDisplayName 'RavenVault Desktop node' -Direction Inbound -Program '{node}' -Action Allow -ErrorAction Stop; $rules | Select-Object -Skip 1 | Remove-NetFirewallRule -ErrorAction Stop }} else {{ New-NetFirewallRule -Name 'se.erci.playxraven.node' -DisplayName 'RavenVault Desktop node' -Direction Inbound -Program '{node}' -Action Allow -ErrorAction Stop | Out-Null }}; $r += 'fw-node=ok' }} catch {{ $r += 'fw-node=' + $_.Exception.Message }}"
+  },
+  {
+    "file": "src-tauri/src/prep.rs",
+    "line": 50,
+    "text": "try {{ $rules = @(Get-NetFirewallRule -DisplayName 'PLAY X Raven files','RavenVault Desktop files' -ErrorAction SilentlyContinue); if ($rules.Count -gt 0) {{ $rules[0] | Set-NetFirewallRule -NewDisplayName 'RavenVault Desktop files' -Direction Inbound -Program '{ipfs}' -Action Allow -ErrorAction Stop; $rules | Select-Object -Skip 1 | Remove-NetFirewallRule -ErrorAction Stop }} else {{ New-NetFirewallRule -Name 'se.erci.playxraven.files' -DisplayName 'RavenVault Desktop files' -Direction Inbound -Program '{ipfs}' -Action Allow -ErrorAction Stop | Out-Null }}; $r += 'fw-ipfs=' + 'ok' }} catch {{ $r += 'fw-ipfs=' + $_.Exception.Message }}"
+  },
+  {
+    "file": "src-tauri/src/prep.rs",
+    "line": 60,
+    "text": "let script = std::env::temp_dir().join(\"playx-raven-prep.ps1\");"
+  },
+  {
+    "file": "src-tauri/src/raven.rs",
+    "line": 52,
+    "text": "/// `ASSET!`, and only the issuer holds it. So holding `PLAYX!` means PLAYX"
+  },
+  {
+    "file": "src-tauri/src/raven.rs",
+    "line": 53,
+    "text": "/// is ours; holding only `PLAYX` means somebody sent it to us. This matters"
+  },
+  {
+    "file": "src-tauri/src/raven.rs",
+    "line": 63,
+    "text": "/// 안 들고 있었다. 그래서 **`SHOP.PLAYX` 가 1개·단위 0 으로 찍혀 손님"
+  },
+  {
+    "file": "src-tauri/src/raven.rs",
+    "line": 368,
+    "text": "// The owner token itself is bookkeeping, not a holding. Showing `PLAYX`"
+  },
+  {
+    "file": "src-tauri/src/raven.rs",
+    "line": 369,
+    "text": "// and `PLAYX!` as two rows doubles the list and explains nothing."
+  },
+  {
+    "file": "src-tauri/src/raven.rs",
+    "line": 375,
+    "text": "// A unique asset PLAYX#tag and a sub-asset PLAYX/MUSIC both belong to"
+  },
+  {
+    "file": "src-tauri/src/raven.rs",
+    "line": 376,
+    "text": "// the PLAYX family, and both are ours if we hold PLAYX!."
+  },
+  {
+    "file": "src-tauri/src/recover.rs",
+    "line": 276,
+    "text": "//    잠근 백업을 고르면 「PLAY X Raven 백업이 아닙니다」로 끝났다."
+  },
+  {
+    "file": "src-tauri/src/recover.rs",
+    "line": 283,
+    "text": "//    안 풀고 그대로 열려다 「이 파일은 PLAY X Raven 백업이 아닙니다」로"
+  },
+  {
+    "file": "src-tauri/src/recover.rs",
+    "line": 1209,
+    "text": "/// 「이 파일은 PLAY X Raven 백업이 아닙니다」로 끝냈다(2026-08-31 실측)."
+  },
+  {
+    "file": "src-tauri/src/reindex_run.rs",
+    "line": 21,
+    "text": "//! ③ 🔴 그런데 **launchd 가 먼저 끼어든다.** `se.erci.playx.raven.node.plist`"
+  },
+  {
+    "file": "src-tauri/src/reindex_run.rs",
+    "line": 36,
+    "text": "std::path::PathBuf::from(home).join(\"Library/LaunchAgents/se.erci.playx.raven.node.plist\")"
+  },
+  {
+    "file": "src-tauri/src/reindex_run.rs",
+    "line": 218,
+    "text": "let assets_ok = crate::raven::call_rpc(\"listaddressesbyasset\", json!([\"SHOP.PLAYX\"]))"
+  },
+  {
+    "file": "src-tauri/src/relay.rs",
+    "line": 273,
+    "text": "/// ② `#ravencoin` · `#rvn` · `#playx` 같은 표를 단 글."
+  },
+  {
+    "file": "src-tauri/src/relay.rs",
+    "line": 298,
+    "text": "const MARKS: [&str; 6] = [\"ravencoin\", \"rvn\", \"playx\", \"레이븐\", \"raven\", \"asset\"];"
+  },
+  {
+    "file": "src-tauri/src/relay.rs",
+    "line": 575,
+    "text": "assert!(smells_bad(&base(r#\"{\"name\":\"플레이엑스\"}\"#, \"shop:SHOP.PLAYX\")).is_none());"
+  },
+  {
+    "file": "src-tauri/src/relay.rs",
+    "line": 576,
+    "text": "assert!(smells_bad(&base(\"\", \"SHOP.PLAYX\")).is_none(), \"빈 것도 모양은 맞다\");"
+  },
+  {
+    "file": "src-tauri/src/relay.rs",
+    "line": 578,
+    "text": "assert!(smells_bad(&base(\"여기에 아무 말이나 적는다\", \"shop:SHOP.PLAYX\")).is_some());"
+  },
+  {
+    "file": "src-tauri/src/relay.rs",
+    "line": 585,
+    "text": "assert!(smells_bad(&base(&big, \"shop:SHOP.PLAYX\")).is_some());"
+  },
+  {
+    "file": "src-tauri/src/relay.rs",
+    "line": 661,
+    "text": "\"tags\": [[\"d\", \"SHOP.PLAYX\"]],"
+  },
+  {
+    "file": "src-tauri/src/relay.rs",
+    "line": 667,
+    "text": "assert!(matches(&e, &json!({ \"#d\": [\"SHOP.PLAYX\"] })));"
+  },
+  {
+    "file": "src-tauri/src/send.rs",
+    "line": 6,
+    "text": "//! Merging them behind a dropdown is how \"PLAYX, 50\" becomes \"RVN, 50\"."
+  },
+  {
+    "file": "src-tauri/src/send.rs",
+    "line": 180,
+    "text": "///    옮길 방법이 아예 없었다(실측 2026-09-06: 406호의 `PLAYX/MUSIC!` 을"
+  },
+  {
+    "file": "src-tauri/src/server.rs",
+    "line": 340,
+    "text": ".get(\"x-playx-token\")"
+  },
+  {
+    "file": "src-tauri/src/server.rs",
+    "line": 484,
+    "text": ".get(\"x-playx-token\")"
+  },
+  {
+    "file": "src-tauri/src/server.rs",
+    "line": 3631,
+    "text": "// `/s/SHOP.PLAYX` 는 404 였다 — 라우트는 멀쩡히 도는데"
+  },
+  {
+    "file": "src-tauri/src/services.rs",
+    "line": 53,
+    "text": "/// 설치 폴더(`...\\PLAY X Raven\\vendor\\ipfs.exe`)에서 띄우고, 앱을 닫아도"
+  },
+  {
+    "file": "src-tauri/src/services.rs",
+    "line": 103,
+    "text": "// 맥: PLAY X Raven.app/Contents/MacOS/ 옆의 Resources/"
+  },
+  {
+    "file": "src-tauri/src/shop.rs",
+    "line": 154,
+    "text": "other.insert(\"playx_shop\".into(), json!(true));"
+  },
+  {
+    "file": "src-tauri/src/shop.rs",
+    "line": 223,
+    "text": "\"playx_menu\": {"
+  },
+  {
+    "file": "src-tauri/src/shop.rs",
+    "line": 985,
+    "text": "assert_eq!(full_shop_name(\"  shop.playx  \"), \"SHOP.PLAYX\");"
+  },
+  {
+    "file": "src-tauri/src/shop.rs",
+    "line": 987,
+    "text": "assert!(!full_shop_name(\"SHOP.PLAYX\").starts_with(\"SHOP.SHOP\"));"
+  },
+  {
+    "file": "src-tauri/src/shop.rs",
+    "line": 1044,
+    "text": "///   \"account\": \"PLAY X 1% 수수료\","
+  },
+  {
+    "file": "src-tauri/src/shop.rs",
+    "line": 1088,
+    "text": "/// account \"PLAY X 1% 수수료\", hdkeypath m/44'/175'/0'/0/63)."
+  },
+  {
+    "file": "src-tauri/src/shop.rs",
+    "line": 1094,
+    "text": "let dir = std::env::temp_dir().join(\"playx-raven-test-feeaddr\");"
+  },
+  {
+    "file": "src-tauri/src/shop.rs",
+    "line": 1096,
+    "text": "std::env::set_var(\"PLAYX_RAVEN_HOME\", &dir);"
+  },
+  {
+    "file": "src-tauri/src/shop.rs",
+    "line": 1112,
+    "text": "std::env::remove_var(\"PLAYX_RAVEN_HOME\");"
+  },
+  {
+    "file": "src-tauri/src/shop.rs",
+    "line": 1159,
+    "text": "let dir = std::env::temp_dir().join(\"playx-raven-test-fee\");"
+  },
+  {
+    "file": "src-tauri/src/shop.rs",
+    "line": 1162,
+    "text": "std::env::set_var(\"PLAYX_RAVEN_HOME\", &dir);"
+  },
+  {
+    "file": "src-tauri/src/shop.rs",
+    "line": 1177,
+    "text": "std::env::remove_var(\"PLAYX_RAVEN_HOME\");"
+  },
+  {
+    "file": "src-tauri/src/shop.rs",
+    "line": 1212,
+    "text": "let dir = std::env::temp_dir().join(\"playx-raven-test-cap\");"
+  },
+  {
+    "file": "src-tauri/src/shop.rs",
+    "line": 1214,
+    "text": "std::env::set_var(\"PLAYX_RAVEN_HOME\", &dir);"
+  },
+  {
+    "file": "src-tauri/src/shop.rs",
+    "line": 1216,
+    "text": "std::env::remove_var(\"PLAYX_RAVEN_HOME\");"
+  },
+  {
+    "file": "src-tauri/src/shop.rs",
+    "line": 1223,
+    "text": "let dir = std::env::temp_dir().join(\"playx-raven-test-cap2\");"
+  },
+  {
+    "file": "src-tauri/src/shop.rs",
+    "line": 1226,
+    "text": "std::env::set_var(\"PLAYX_RAVEN_HOME\", &dir);"
+  },
+  {
+    "file": "src-tauri/src/shop.rs",
+    "line": 1233,
+    "text": "std::env::remove_var(\"PLAYX_RAVEN_HOME\");"
+  },
+  {
+    "file": "src-tauri/src/shop.rs",
+    "line": 1484,
+    "text": "/// 것은 `SHOP.PLAYX` 라는 글자뿐이다 — 가게 이름도, 돈 받을 주소도, 지금"
+  },
+  {
+    "file": "src-tauri/src/shop.rs",
+    "line": 1632,
+    "text": "for key in [\"delivery\", \"pickup\", \"playx_shop\"] {"
+  },
+  {
+    "file": "src-tauri/src/shop.rs",
+    "line": 1655,
+    "text": "json!({ \"asset\": \"SHOP.PLAYX\", \"ipfs_hash\": \"Qm1\", \"block\": 3_500_000 })"
+  },
+  {
+    "file": "src-tauri/src/shop.rs",
+    "line": 1660,
+    "text": "\"asset_data\": { \"name\": \"플레이엑스\", \"description\": \"동네 가게\" },"
+  },
+  {
+    "file": "src-tauri/src/shop.rs",
+    "line": 1677,
+    "text": "assert_eq!(out[\"name\"], json!(\"플레이엑스\"));"
+  },
+  {
+    "file": "src-tauri/src/shop.rs",
+    "line": 1693,
+    "text": "assert_eq!(out[\"asset\"], json!(\"SHOP.PLAYX\"));"
+  },
+  {
+    "file": "src-tauri/src/shop.rs",
+    "line": 1701,
+    "text": "assert_eq!(out[\"asset\"], json!(\"SHOP.PLAYX\"));"
+  },
+  {
+    "file": "src-tauri/src/shop.rs",
+    "line": 1717,
+    "text": "/// 체인에 `SHOP.PLAYX` 가 멀쩡히 있고, 지갑에 소유권 토큰 `SHOP.PLAYX!` 도"
+  },
+  {
+    "file": "src-tauri/src/shop.rs",
+    "line": 1738,
+    "text": "// 소유권 토큰만 본다. 수량 1개짜리 `SHOP.PLAYX` 를 갖고 있는 것은"
+  },
+  {
+    "file": "src-tauri/src/shopkey.rs",
+    "line": 5,
+    "text": "//! 가게는 체인의 자산(`SHOP.PLAYX`)이고, 그 안에는 이름·전화·돈 받을 주소처럼"
+  },
+  {
+    "file": "src-tauri/src/shopkey.rs",
+    "line": 46,
+    "text": "//! 이 열쇠를 가진 사람은 「SHOP.PLAYX 는 지금 여기서 주문받습니다」를 쓸 수"
+  },
+  {
+    "file": "src-tauri/src/shopkey.rs",
+    "line": 157,
+    "text": "pub const SEED_TAG: &str = \"PLAYX-RAVEN-SHOPKEY-v1\";"
+  },
+  {
+    "file": "src-tauri/src/shopkey.rs",
+    "line": 166,
+    "text": "pub const SEED_TAG_TALK: &str = \"PLAYX-RAVEN-TALKKEY-v1\";"
+  },
+  {
+    "file": "src-tauri/src/shopkey.rs",
+    "line": 189,
+    "text": "same(SEED_TAG, \"PLAYX-RAVEN-SHOPKEY-v1\"),"
+  },
+  {
+    "file": "src-tauri/src/shopkey.rs",
+    "line": 193,
+    "text": "same(SEED_TAG_TALK, \"PLAYX-RAVEN-TALKKEY-v1\"),"
+  },
+  {
+    "file": "src-tauri/src/shopkey.rs",
+    "line": 360,
+    "text": "/// 「SHOP.PLAYX 는 지금 여기서 주문받습니다」를 릴레이에 올린다."
+  },
+  {
+    "file": "src-tauri/src/talk.rs",
+    "line": 1095,
+    "text": "let shop = crate::shopkey::derive_tagged(\"PLAYX-RAVEN-SHOPKEY-v1\", w, \"\");"
+  },
+  {
+    "file": "src-tauri/src/ticket.rs",
+    "line": 451,
+    "text": "let dir = std::env::temp_dir().join(\"playx-raven-ticket-test\");"
+  },
+  {
+    "file": "src-tauri/src/ticket.rs",
+    "line": 453,
+    "text": "std::env::set_var(\"PLAYX_RAVEN_HOME\", &dir);"
+  },
+  {
+    "file": "src-tauri/src/ticket.rs",
+    "line": 456,
+    "text": "std::env::remove_var(\"PLAYX_RAVEN_HOME\");"
+  },
+  {
+    "file": "src-tauri/src/upload.rs",
+    "line": 95,
+    "text": "///    (`has_ipfs:0`) 산 사람 지갑에는 `PLAYX/SONG/INEVITABLE 100` 이라는"
+  },
+  {
+    "file": "src-tauri/src/upload.rs",
+    "line": 108,
+    "text": "let a = doc.get(\"playx_asset\").or_else(|| doc.get(\"playx_song\"))?;"
+  },
+  {
+    "file": "src-tauri/src/upload.rs",
+    "line": 219,
+    "text": "let menu = doc.get(\"playx_menu\")?;"
+  },
+  {
+    "file": "src-tauri/tauri.conf.json",
+    "line": 5,
+    "text": "\"identifier\": \"se.erci.ex.playx.raven\","
+  },
+  {
+    "file": "src/desktop-copy.ts",
+    "line": 73,
+    "text": "\"SHOP.PLAYX 수량을 못 읽었습니다. 노드가 켜져 있는지 보세요.\": [\"Could not read the SHOP.PLAYX amount. Check that the node is on.\", \"SHOP.PLAYX の数量を読み取れません。ノードの起動を確認してください。\", \"无法读取 SHOP.PLAYX 数量。请确认节点已开启。\"],"
+  },
+  {
+    "file": "src/dict.ts",
+    "line": 216,
+    "text": "\"PLAYX 수수료\":"
+  },
+  {
+    "file": "src/dict.ts",
+    "line": 217,
+    "text": "\"PLAYX fee\","
+  },
+  {
+    "file": "src/dict.ts",
+    "line": 228,
+    "text": "\"playx-도매-2026\":"
+  },
+  {
+    "file": "src/dict.ts",
+    "line": 229,
+    "text": "\"playx-wholesale-2026\","
+  },
+  {
+    "file": "src/dict.ts",
+    "line": 410,
+    "text": "\"PLAYX 주인이 올린 소개입니다\":"
+  },
+  {
+    "file": "src/dict.ts",
+    "line": 411,
+    "text": "\"Posted by the owner of PLAYX\","
+  },
+  {
+    "file": "src/dict.ts",
+    "line": 436,
+    "text": "\"SHOP.PLAYX 가 없습니다. 손님에게 줄 토큰이 없습니다.\":"
+  },
+  {
+    "file": "src/dict.ts",
+    "line": 437,
+    "text": "\"There is no SHOP.PLAYX. There is nothing to give guests.\","
+  },
+  {
+    "file": "src/dict.ts",
+    "line": 438,
+    "text": "\"SHOP.PLAYX 수량을 아직 못 읽었습니다. 「자산」에서 목록을 열어 주세요.\":"
+  },
+  {
+    "file": "src/dict.ts",
+    "line": 439,
+    "text": "\"Could not read the SHOP.PLAYX balance yet. Open Assets to load the list.\","
+  },
+  {
+    "file": "src/dict.ts",
+    "line": 1827,
+    "text": "\"PLAYX 수수료\":"
+  },
+  {
+    "file": "src/dict.ts",
+    "line": 1828,
+    "text": "\"PLAYX手数料\","
+  },
+  {
+    "file": "src/dict.ts",
+    "line": 1839,
+    "text": "\"playx-도매-2026\":"
+  },
+  {
+    "file": "src/dict.ts",
+    "line": 1840,
+    "text": "\"playx-卸-2026\","
+  },
+  {
+    "file": "src/dict.ts",
+    "line": 2021,
+    "text": "\"PLAYX 주인이 올린 소개입니다\":"
+  },
+  {
+    "file": "src/dict.ts",
+    "line": 2022,
+    "text": "\"PLAYX の主人が載せた紹介です\","
+  },
+  {
+    "file": "src/dict.ts",
+    "line": 2047,
+    "text": "\"SHOP.PLAYX 가 없습니다. 손님에게 줄 토큰이 없습니다.\":"
+  },
+  {
+    "file": "src/dict.ts",
+    "line": 2048,
+    "text": "\"SHOP.PLAYX がありません。お客さまに渡すトークンがありません。\","
+  },
+  {
+    "file": "src/dict.ts",
+    "line": 2049,
+    "text": "\"SHOP.PLAYX 수량을 아직 못 읽었습니다. 「자산」에서 목록을 열어 주세요.\":"
+  },
+  {
+    "file": "src/dict.ts",
+    "line": 2050,
+    "text": "\"SHOP.PLAYX の数量をまだ読めませんでした。「資産」で一覧を開いてください。\","
+  },
+  {
+    "file": "src/dict.ts",
+    "line": 3438,
+    "text": "\"PLAYX 수수료\":"
+  },
+  {
+    "file": "src/dict.ts",
+    "line": 3439,
+    "text": "\"PLAYX 手续费\","
+  },
+  {
+    "file": "src/dict.ts",
+    "line": 3450,
+    "text": "\"playx-도매-2026\":"
+  },
+  {
+    "file": "src/dict.ts",
+    "line": 3451,
+    "text": "\"playx-批发-2026\","
+  },
+  {
+    "file": "src/dict.ts",
+    "line": 3632,
+    "text": "\"PLAYX 주인이 올린 소개입니다\":"
+  },
+  {
+    "file": "src/dict.ts",
+    "line": 3633,
+    "text": "\"由 PLAYX 主人发布的介绍\","
+  },
+  {
+    "file": "src/dict.ts",
+    "line": 3658,
+    "text": "\"SHOP.PLAYX 가 없습니다. 손님에게 줄 토큰이 없습니다.\":"
+  },
+  {
+    "file": "src/dict.ts",
+    "line": 3659,
+    "text": "\"没有 SHOP.PLAYX。没有可发给客人的代币。\","
+  },
+  {
+    "file": "src/dict.ts",
+    "line": 3660,
+    "text": "\"SHOP.PLAYX 수량을 아직 못 읽었습니다. 「자산」에서 목록을 열어 주세요.\":"
+  },
+  {
+    "file": "src/dict.ts",
+    "line": 3661,
+    "text": "\"尚未读到 SHOP.PLAYX 数量。请在「资产」打开列表。\","
+  },
+  {
+    "file": "src/i18n.ts",
+    "line": 34,
+    "text": "const KEY = \"playx-raven-lang\";"
+  },
+  {
+    "file": "src/main.ts",
+    "line": 186,
+    "text": "const HEALTH_KEY = \"playx-raven-health\";"
+  },
+  {
+    "file": "src/main.ts",
+    "line": 371,
+    "text": "* 🔴 소유권 토큰(`PLAYX!`)은 목록에서 **일부러 숨긴다** — 같은 이름이 두"
+  },
+  {
+    "file": "src/main.ts",
+    "line": 398,
+    "text": "*    `SHOP.PLAYX` 가 **1개·쪼갤 수 없음**으로 찍혀서 손님에게 나눠 줄 수"
+  },
+  {
+    "file": "src/main.ts",
+    "line": 427,
+    "text": "// 트리. PLAYX / PLAYX/MUSIC / PLAYX#tag 는 한 집안이다."
+  },
+  {
+    "file": "src/main.ts",
+    "line": 446,
+    "text": "// 🔴 그런데 **집안의 본체**(`PLAYX` 자신)는 앞부분을 지우고 나면 아무것도"
+  },
+  {
+    "file": "src/main.ts",
+    "line": 476,
+    "text": "//    「PLAYX 자산이 여기 19개 있다는 건가?」라는 질문이 나왔다."
+  },
+  {
+    "file": "src/main.ts",
+    "line": 652,
+    "text": "//    실제로 `PLAYX` 가 그 상태였다. 파일이 없어서 「나눠주기」를 넣어"
+  },
+  {
+    "file": "src/main.ts",
+    "line": 835,
+    "text": "* 옮길 방법이 아예 없었다(실측 2026-09-06: 406호의 `PLAYX/MUSIC!` 을"
+  },
+  {
+    "file": "src/main.ts",
+    "line": 2104,
+    "text": "localStorage.setItem(\"playx-raven-update-snooze\", String(Date.now()));"
+  },
+  {
+    "file": "src/main.ts",
+    "line": 2143,
+    "text": "const MYTILE_KEY = \"playx-ravi-mytiles\";"
+  },
+  {
+    "file": "src/main.ts",
+    "line": 2348,
+    "text": "\"good\", songs.map((x) => String(x.name).replace(\"PLAYX/SONG/\", \"\")).join(\" · \"))"
+  },
+  {
+    "file": "src/main.ts",
+    "line": 4859,
+    "text": "const TK_MUTE_KEY = \"playx-raven-talk-mute\";"
+  },
+  {
+    "file": "src/main.ts",
+    "line": 4873,
+    "text": "const TK_본횟수_KEY = \"playx-raven-talk-seen\";"
+  },
+  {
+    "file": "src/main.ts",
+    "line": 4923,
+    "text": "const TK_자동옮김_KEY = \"playx-raven-talk-auto-tr\";"
+  },
+  {
+    "file": "src/main.ts",
+    "line": 7353,
+    "text": "playx_asset: {"
+  },
+  {
+    "file": "src/main.ts",
+    "line": 7438,
+    "text": "/* 🔴 대표 지시: 「playx raven 에다가 만들면 바로 판매할 수 있게」."
+  },
+  {
+    "file": "src/main.ts",
+    "line": 7496,
+    "text": "try { 열쇠 = localStorage.getItem(\"playx.listing.token\") || \"\"; } catch {}"
+  },
+  {
+    "file": "src/main.ts",
+    "line": 7500,
+    "text": "try { localStorage.setItem(\"playx.listing.token\", 열쇠); } catch {}"
+  },
+  {
+    "file": "src/main.ts",
+    "line": 7518,
+    "text": "if (String(e?.message || e).includes(\"열쇠\")) { try { localStorage.removeItem(\"playx.listing.token\"); } catch {} }"
+  },
+  {
+    "file": "src/main.ts",
+    "line": 8463,
+    "text": "* 체인 `PLAYX` 에 박힌 공개키가 여기 열쇠(`7'/2'/0'`)라, 섞으면 손님이"
+  },
+  {
+    "file": "src/main.ts",
+    "line": 8535,
+    "text": "const chk = await invoke<any>(\"artist_check\", { asset: \"PLAYX\" });"
+  },
+  {
+    "file": "src/main.ts",
+    "line": 8538,
+    "text": "seal.textContent = t(\"PLAYX 주인이 올린 소개입니다\");"
+  },
+  {
+    "file": "src/main.ts",
+    "line": 8554,
+    "text": "const shop = assets.get(\"SHOP.PLAYX\");"
+  },
+  {
+    "file": "src/main.ts",
+    "line": 8556,
+    "text": "qty.textContent = `SHOP.PLAYX  ${fmtQty(shop.amount)}개 남음`;"
+  },
+  {
+    "file": "src/main.ts",
+    "line": 8558,
+    "text": "qty.textContent = t(\"SHOP.PLAYX 가 없습니다. 손님에게 줄 토큰이 없습니다.\");"
+  },
+  {
+    "file": "src/main.ts",
+    "line": 8560,
+    "text": "qty.textContent = t(\"SHOP.PLAYX 수량을 못 읽었습니다. 노드가 켜져 있는지 보세요.\");"
+  },
+  {
+    "file": "src/main.ts",
+    "line": 8660,
+    "text": "void openSend(\"asset\", \"SHOP.PLAYX\");"
+  },
+  {
+    "file": "src/main.ts",
+    "line": 10556,
+    "text": "try { return localStorage.getItem(\"playx.delivery.token\") || \"\"; } catch { return \"\"; }"
+  },
+  {
+    "file": "src/main.ts",
+    "line": 10563,
+    "text": "if (열쇠) { try { localStorage.setItem(\"playx.delivery.token\", 열쇠); } catch {} }"
+  },
+  {
+    "file": "src/main.ts",
+    "line": 10586,
+    "text": "try { localStorage.removeItem(\"playx.delivery.token\"); } catch {}"
+  },
+  {
+    "file": "src/main.ts",
+    "line": 11035,
+    "text": "const n = m.notice?.playx_notice || {};"
+  },
+  {
+    "file": "src/main.ts",
+    "line": 12210,
+    "text": "const ONBOARD_KEY = \"playx-onboarded\";"
+  },
+  {
+    "file": "src/main.ts",
+    "line": 12212,
+    "text": "const PHONE_KEY = \"playx-phone-on\";"
+  },
+  {
+    "file": "src/main.ts",
+    "line": 13247,
+    "text": "if (새것) localStorage.setItem(\"playx.delivery.token\", 새것);"
+  },
+  {
+    "file": "src/main.ts",
+    "line": 13248,
+    "text": "else localStorage.removeItem(\"playx.delivery.token\");"
+  },
+  {
+    "file": "src/main.ts",
+    "line": 13639,
+    "text": "//    터널이 켜질 때 「SHOP.PLAYX 는 지금 여기서 주문받습니다」를 올린다."
+  },
+  {
+    "file": "src/main.ts",
+    "line": 13808,
+    "text": "*    「아직 안 했구나」로 읽힌다.** 이미 `SHOP.PLAYX` 를 올린 사장이 빈 칸을"
+  },
+  {
+    "file": "src/main.ts",
+    "line": 13865,
+    "text": "//    실측(2026-08-25): 체인에 `SHOP.PLAYX` 가 멀쩡히 있고 지갑에"
+  },
+  {
+    "file": "src/main.ts",
+    "line": 13866,
+    "text": "//    소유권 토큰 `SHOP.PLAYX!` 도 있는데, `shop.json` 의 `chain_asset`"
+  },
+  {
+    "file": "src/main.ts",
+    "line": 14500,
+    "text": "const 소리설정_KEY = \"playx-raven-order-sound\";"
+  },
+  {
+    "file": "src/main.ts",
+    "line": 14897,
+    "text": "const 대화소리_KEY = \"playx-raven-talk-sound\";"
+  },
+  {
+    "file": "src/main.ts",
+    "line": 15075,
+    "text": "const 대화보는방_KEY = \"playx-raven-talk-watch\";"
+  },
+  {
+    "file": "src/phone-transaction-qr.ts",
+    "line": 19,
+    "text": "if(line.length>200000 || u.protocol!=='playx:' || u.hostname!=='mesh' || u.pathname || u.username || u.password || u.port || u.hash || p.get('v')!=='1')throw Error(BAD);"
+  },
+  {
+    "file": "web/admin.html",
+    "line": 366,
+    "text": "const H = { \"x-playx-token\": token, \"content-type\": \"application/json\" };"
+  },
+  {
+    "file": "web/customer.html",
+    "line": 943,
+    "text": "tag: \"playx-order\","
+  },
+  {
+    "file": "web/help.js",
+    "line": 30,
+    "text": "*     window.PLAYX_HELP = {"
+  },
+  {
+    "file": "web/help.js",
+    "line": 51,
+    "text": "if (window.__playxHelp) return;"
+  },
+  {
+    "file": "web/help.js",
+    "line": 52,
+    "text": "window.__playxHelp = true;"
+  },
+  {
+    "file": "web/help.js",
+    "line": 126,
+    "text": "const map = window.PLAYX_HELP;"
+  },
+  {
+    "file": "web/help.js",
+    "line": 220,
+    "text": "const sels = [\"[data-help]\"].concat(Object.keys(window.PLAYX_HELP || {}));"
+  },
+  {
+    "file": "web/i18n.js",
+    "line": 285,
+    "text": "\"만든 사람 김무송 · PLAY X (PLAX)\":"
+  },
+  {
+    "file": "web/i18n.js",
+    "line": 286,
+    "text": "\"Made by KIM, MOOSONG · PLAY X (PLAX)\","
+  },
+  {
+    "file": "web/i18n.js",
+    "line": 1039,
+    "text": "\"만든 사람 김무송 · PLAY X (PLAX)\":"
+  },
+  {
+    "file": "web/i18n.js",
+    "line": 1040,
+    "text": "\"制作：KIM, MOOSONG・PLAY X（PLAX）\","
+  },
+  {
+    "file": "web/i18n.js",
+    "line": 1793,
+    "text": "\"만든 사람 김무송 · PLAY X (PLAX)\":"
+  },
+  {
+    "file": "web/i18n.js",
+    "line": 1794,
+    "text": "\"制作：KIM, MOOSONG · PLAY X（PLAX）\","
+  },
+  {
+    "file": "web/i18n.js",
+    "line": 2286,
+    "text": "var saved = localStorage.getItem(\"playx-raven-lang\");"
+  },
+  {
+    "file": "web/i18n.js",
+    "line": 2417,
+    "text": "localStorage.setItem(\"playx-raven-lang\", l);"
+  },
+  {
+    "file": "web/report.js",
+    "line": 5,
+    "text": "* 본체(playx)에는 이미 신고 장치가 있다(5손가락 → BugReportSheet → px_bug_reports)."
+  },
+  {
+    "file": "web/scan.html",
+    "line": 175,
+    "text": "const H = { \"x-playx-token\": token, \"content-type\": \"application/json\" };"
+  },
+  {
+    "file": "web/shops.html",
+    "line": 411,
+    "text": "window.PLAYX_HELP = {"
+  },
+  {
+    "file": "web/shops.html",
+    "line": 951,
+    "text": "const MAPKEY = \"playx-map-app\";"
+  },
+  {
+    "file": "web/shops.src.ts",
+    "line": 179,
+    "text": "// 🔴 `playx` 가 빠져 있었다. `sellPublish` 는 우리 글에 `[\"t\",\"playx\"]` 를"
+  },
+  {
+    "file": "web/shops.src.ts",
+    "line": 181,
+    "text": "return e.tags.some((t) => t[0] === \"t\" && /^(rvn|ravencoin|playx)$/i.test(t[1] || \"\"));"
+  },
+  {
+    "file": "web/shops.src.ts",
+    "line": 230,
+    "text": "const FAV_KEY = \"playx-fav\";"
+  },
+  {
+    "file": "web/shops.src.ts",
+    "line": 613,
+    "text": "const cur = localStorage.getItem(\"playx-lang\")"
+  },
+  {
+    "file": "web/shops.src.ts",
+    "line": 712,
+    "text": "// `isRaven` 이 보는 것: 값이 RVN 이거나, `t` 태그가 rvn·ravencoin·playx."
+  },
+  {
+    "file": "web/staff.html",
+    "line": 245,
+    "text": "const H = { \"x-playx-token\": token, \"content-type\": \"application/json\" };"
+  },
+  {
+    "file": "web/tabs.js",
+    "line": 42,
+    "text": "[[playx-first-user]] 기준은 본문 15px 이상, 터치 48px 이상이다."
+  },
+  {
+    "file": "web/wallet-boot.js",
+    "line": 7,
+    "text": "*      · 「?」 설명이 안 떴다 — `help.js` 가 읽는 `PLAYX_HELP` 가 안 세워졌다"
+  },
+  {
+    "file": "web/wallet-boot.js",
+    "line": 22,
+    "text": "window.PLAYX_HELP = {"
+  },
+  {
+    "file": "web/wallet.src.ts",
+    "line": 54,
+    "text": "const STORE_KEY = \"playx.raven.wallet.v1\";"
+  },
+  {
+    "file": "web/wallet.src.ts",
+    "line": 59,
+    "text": "const NO_LOCK = \"\\u0000playx-open-wallet\";"
+  },
+  {
+    "file": "web/wallet.src.ts",
+    "line": 262,
+    "text": "const PRF_SALT = new TextEncoder().encode(\"playx.raven.wallet.prf.v1\");"
+  },
+  {
+    "file": "web/wallet.src.ts",
+    "line": 299,
+    "text": "id: new TextEncoder().encode(\"playx-raven-wallet\"),"
+  },
+  {
+    "file": "web/wallet.src.ts",
+    "line": 866,
+    "text": "*    「플레이엑스」는 이 화면에서 **가장 먼저 읽어야 하는 정보**다. 흐리게"
+  },
+  {
+    "file": "web/wallet.src.ts",
+    "line": 2316,
+    "text": "const d = editing || `playx-${Date.now().toString(36)}-${Math.floor("
+  },
+  {
+    "file": "web/wallet.src.ts",
+    "line": 2324,
+    "text": "[\"t\", \"playx\"],"
+  },
+  {
+    "file": "web/wallet.src.ts",
+    "line": 2558,
+    "text": "* 🔴 `SHOP.PLAYX  0.00000001개` 는 40~70대에게 **「이게 뭐야」**다."
+  },
+  {
+    "file": "web/wallet.test.mjs",
+    "line": 59,
+    "text": "// 🔴 `SHOP.PLAYX 0.00000001개` 는 40~70대에게 「이게 뭐야」다."
+  },
+  {
+    "file": "web/wallet.test.mjs",
+    "line": 60,
+    "text": "assert.equal(자산을사람말로(\"SHOP.PLAYX\"), \"PLAYX 가게 소식\");"
+  },
+  {
+    "file": "web/wallet.test.mjs",
+    "line": 61,
+    "text": "assert.equal(소식표인가(\"SHOP.PLAYX\"), true);"
+  },
+  {
+    "file": "web/wallet.test.mjs",
+    "line": 63,
+    "text": "assert.equal(자산을사람말로(\"PLAYX\"), \"PLAYX\");"
+  },
+  {
+    "file": "web/wallet.test.mjs",
+    "line": 64,
+    "text": "assert.equal(자산을사람말로(\"PLAYX/MUSIC\"), \"PLAYX/MUSIC\");"
+  },
+  {
+    "file": "web/wallet.test.mjs",
+    "line": 65,
+    "text": "assert.equal(소식표인가(\"PLAYX\"), false);"
+  },
+  {
+    "file": "web/wallet.test.mjs",
+    "line": 73,
+    "text": "[\"aaaa1111bbbb2222\", { name: \"플레이엑스\", picture: \"\" }],"
+  },
+  {
+    "file": "web/wallet.test.mjs",
+    "line": 75,
+    "text": "assert.equal(f(\"aaaa1111bbbb2222\"), \"플레이엑스\");"
+  }
+]

@@ -2352,6 +2352,19 @@ async function drawMoneyStatus(): Promise<void> {
   if (when) when.textContent = new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
 }
 
+/** Read existing commands only; unknown balances never become zero. */
+async function refreshOverview() {
+  const [node, wallet] = await Promise.allSettled([invoke<any>("node_status"), invoke<any>("wallet_balance")]);
+  const n = node.status === "fulfilled" ? node.value : null;
+  const progress = n?.progress;
+  $("overview-node").textContent = n && typeof progress === "number" && Number.isFinite(progress)
+    ? progress < 0.9999 ? `${t("동기화")} ${Math.max(0, Math.min(100, progress * 100)).toFixed(1)}%` : t("켜짐")
+    : nodeUp === false ? t("꺼짐") : t("확인 못 함");
+  const confirmed = wallet.status === "fulfilled" ? wallet.value?.confirmed : undefined;
+  $("overview-balance").textContent = typeof confirmed === "number" && Number.isFinite(confirmed) && confirmed >= 0
+    ? `${confirmed.toLocaleString(lang, {maximumFractionDigits:8})} RVN` : t("확인 못 함");
+}
+
 /** 라비 화면을 그린다. 상태가 바뀔 때마다 다시 부른다. */
 function paintRavi() {
   const box = $("ravi-tiles");
@@ -2359,6 +2372,7 @@ function paintRavi() {
 
   // 자는 얼굴의 뜻은 한 곳에서만 정한다 — **노드가 꺼졌을 때**다.
   // AI 열쇠가 없는 것은 잠이 아니다(장사는 전부 돈다).
+  void refreshOverview();
   const nodeDown = !(nodeUp ?? true);
   const face = $("ravi-face") as HTMLImageElement | null;
   if (face) {
@@ -2376,6 +2390,7 @@ function paintRavi() {
     const val = (id: string) => ($(id) as HTMLInputElement)?.value.trim() || "";
     const shop = val("sh-ko") || val("sh-en");
 
+    hi.setAttribute("translate", shop && !nodeDown ? "no" : "yes");
     if (nodeDown) {
       hi.textContent = nodeWarming
         ? "노드가 장부를 여는 중이에요. 처음이면 며칠 걸릴 수 있어요 — 남은 시간은 「이 컴퓨터」에서 보여요."
@@ -2419,7 +2434,7 @@ function paintRavi() {
     noteBox.innerHTML = 합친것.length
       ? `<b>${t("아직 안 된 것")}</b> ` +
         합친것.map((x, i) =>
-          `<button class="todochip" data-todo="${i}">${escapeHtml(x.label)} →</button>`).join("")
+          `<button class="todochip" data-todo="${i}"><span>${escapeHtml(x.label)}</span><span aria-hidden="true"> →</span></button>`).join("")
       : "";
     noteBox.style.display = 합친것.length ? "" : "none";
     noteBox.querySelectorAll<HTMLElement>("[data-todo]").forEach((b) => {
@@ -2697,7 +2712,7 @@ async function 라비살피기() {
           raviPoint({
             page: "artist",
             el: "ar-save",
-            say: t("손님이 PLAYX 를 보면 지금 「PLAY X · 플레이엑스」뿐입니다. 얼굴과 이름을 여기 올리면 됩니다 — 공짜입니다."),
+            say: t("아직 이름이 없습니다. 얼굴과 이름을 여기 올리면 됩니다 — 공짜입니다."),
           }),
       });
     }
@@ -7492,7 +7507,7 @@ function 바로팔기배선(asset: string, kind: string) {
       const r = await fetch("https://rvn.ex.erci.se/api/rvn/listing", {
         method: "POST",
         headers: { "content-type": "application/json", "x-rvn-listing-token": 열쇠 },
-        body: JSON.stringify({ asset, kind: 종류, title, rvn, payTo, by: "PLAY X" }),
+        body: JSON.stringify({ asset, kind: 종류, title, rvn, payTo, by: ($("ar-name") as HTMLInputElement).value.trim() }),
       });
       const d = await r.json().catch(() => ({}) as any);
       if (!r.ok || !d.ok) throw new Error(d.error || `서버 ${r.status}`);
@@ -8077,7 +8092,8 @@ async function refreshKeys() {
     // 그때는 결제 확인이 안 되므로 자는 것이 사실이다.
     // AI 열쇠가 없는 것은 "잠"이 아니라 **"아직 못 하는 일이 있음"** 이고,
     // 그건 눌렀을 때 그 자리에서 말한다(`chatNeedsKey`).
-    const nodeDown = !(nodeUp ?? true);
+    void refreshOverview();
+  const nodeDown = !(nodeUp ?? true);
     const asleep = nodeDown;
     $("chat-open").classList.toggle("asleep", asleep);
     const img = $("chat-open").querySelector("img");
@@ -8464,9 +8480,9 @@ function arPaintPreview() {
   const name = ($("ar-name") as HTMLInputElement).value.trim();
   const about = ($("ar-about") as HTMLTextAreaElement).value.trim();
   const web = arNormWeb(($("ar-web") as HTMLInputElement).value);
-  $("ar-nameview").textContent = name || "PLAY X";
+  $("ar-nameview").textContent = name || t("아직 이름이 없습니다");
   const aboutEl = $("ar-aboutview");
-  aboutEl.textContent = about || (name ? "" : "플레이엑스");
+  aboutEl.textContent = about || "";
   const link = $("ar-linkview") as HTMLAnchorElement;
   if (web && web.toLowerCase().startsWith("https://")) {
     link.hidden = false;
@@ -15563,27 +15579,27 @@ window.addEventListener("DOMContentLoaded", async () => {
   loadIpfsConf();
   checkHealth();
   setInterval(() => void quietly(checkHealth), 30000);
-  /* ── 말 고르는 자리 ────────────────────────────────────────────
-     🔴 여태 이 프로그램은 **한국어뿐**이었다. 손님 화면은 네 나라 말인데
-     사장 화면만 한국어라, 한국어를 못 읽는 사장은 아예 못 쓴다.
-
-     자동 판정은 그대로 둔다(처음 켠 사람에게 말부터 고르라고 묻지 않는다).
-     바꿀 길만 더한다 — 「문제 알리기」 바로 위, 늘 보이는 자리다. */
-  (() => {
-    const sel = document.createElement("select");
-    sel.className = "langsw";
-    sel.setAttribute("aria-label", "Language");
-    (Object.keys(LANG_NAMES) as (keyof typeof LANG_NAMES)[]).forEach((k) => {
-      const o = document.createElement("option");
-      o.value = k;
-      o.textContent = LANG_NAMES[k];
-      if (k === lang) o.selected = true;
-      sel.appendChild(o);
-    });
-    sel.onchange = () => setLang(sel.value as typeof lang);
-    const foot = document.querySelector(".navfoot");
-    foot?.parentNode?.insertBefore(sel, foot);
-  })();
+  const languageMenu = $("desktop-language-menu");
+  const languageButton = $("desktop-preferences");
+  const closeLanguages = () => { languageMenu.hidden = true; languageButton.setAttribute("aria-expanded", "false"); };
+  languageButton.onclick = () => { languageMenu.hidden = !languageMenu.hidden; languageButton.setAttribute("aria-expanded", String(!languageMenu.hidden)); };
+  document.querySelectorAll<HTMLButtonElement>("[data-language]").forEach(button => {
+    button.onclick = () => setLang(button.dataset.language as typeof lang);
+  });
+  $("desktop-settings-go").onclick = () => { closeLanguages(); showPage("settings"); document.querySelector("main")!.scrollTop = 0; };
+  document.addEventListener("keydown", event => { if (event.key === "Escape") { closeLanguages(); languageButton.focus(); } });
+  document.addEventListener("click", event => { if (!(event.target as Element).closest(".desktop-header")) closeLanguages(); });
+  const syncLanguage = () => {
+    $("desktop-language-name").textContent = LANG_NAMES[lang];
+    document.querySelectorAll<HTMLButtonElement>("[data-language]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.language === lang)));
+    const name = ($("ar-name") as HTMLInputElement)?.value?.trim();
+    if (!name) $("ar-nameview").textContent = t("아직 이름이 없습니다");
+    void refreshOverview();
+  };
+  window.addEventListener("desktop-language-change", syncLanguage);
+  syncLanguage();
+  $("overview-receive").onclick = () => { showPage("wallet"); $("w-newaddr").scrollIntoView(); $("w-newaddr").focus(); };
+  $("overview-phone").onclick = () => { const panel = $("phone-tx-panel") as HTMLDetailsElement; panel.open = true; panel.scrollIntoView(); $("phone-tx-code").focus(); };
 
   $("fee-send").addEventListener("click", () => void sendOwed());
   void paintFeePick();

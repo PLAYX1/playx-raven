@@ -615,7 +615,7 @@ async fn prepare_backup(include_wallet: bool) -> Result<PreparedBackup, String> 
 
 fn backup_readme(prepared: &PreparedBackup) -> String {
     let names = prepared.inside.iter().filter_map(|v| v["name"].as_str()).collect::<Vec<_>>().join("\n");
-    format!("RavenVault Desktop / PLAY X Raven backup\n\nIncluded files / 포함한 파일:\n{names}\n\nNot included / 포함하지 않음: blockchain, IPFS media, browser/PWA wallet and files, AI API keys.\n블록체인, IPFS 원본, 브라우저/PWA 지갑과 파일, AI API 키는 별도로 보관하세요.\n\nRestore / 되돌리기: 앱의 [이 컴퓨터] → [되돌리기]에서 이 백업을 고르세요.\n다른 컴퓨터에서는 백업 암호 또는 백업 열쇠가 필요합니다. 지갑 복구 단어와는 다릅니다.\n지갑을 복원하기 전에 Ravencoin 노드를 완전히 종료하세요. 같은 지갑을 여러 컴퓨터에서 동시에 사용하지 마세요.\n")
+    format!("RavenVault Desktop backup\n\nIncluded files / 포함한 파일:\n{names}\n\nNot included / 포함하지 않음: blockchain, IPFS media, browser/PWA wallet and files, AI API keys.\n블록체인, IPFS 원본, 브라우저/PWA 지갑과 파일, AI API 키는 별도로 보관하세요.\n\nRestore / 되돌리기: 앱의 [이 컴퓨터] → [되돌리기]에서 이 백업을 고르세요.\n다른 컴퓨터에서는 백업 암호 또는 백업 열쇠가 필요합니다. 지갑 복구 단어와는 다릅니다.\n지갑을 복원하기 전에 Ravencoin 노드를 완전히 종료하세요. 같은 지갑을 여러 컴퓨터에서 동시에 사용하지 마세요.\n")
 }
 
 fn write_archive(prepared: &PreparedBackup, out: &Path) -> Result<(), String> {
@@ -666,10 +666,16 @@ fn record_backup(dest: &Path, count: usize) -> Option<String> {
         .map(|_| "백업 파일은 저장했지만 완료 시각을 기록하지 못했습니다. 설정 폴더 권한을 확인하세요.".into())
 }
 
+// Keep existing destinations and receipts together. No rename or rotation of old backups.
+fn external_backup_dir(picked: &Path) -> PathBuf {
+    let legacy = picked.join("PLAY X Raven 백업");
+    if legacy.is_dir() { legacy } else { picked.join("RavenVault Desktop 백업") }
+}
+
 fn publish_archive(prepared: &PreparedBackup, picked: &Path, label: &str, locked: bool) -> Result<Value, String> {
     if !picked.is_dir() { return Err("폴더가 아닙니다. 저장할 폴더를 고르세요.".into()); }
     // Retain the existing backup folder and filename conventions.
-    let out_dir = picked.join("PLAY X Raven 백업");
+    let out_dir = external_backup_dir(picked);
     let safe_label: String = label.trim().chars().take(48).map(|c| if c.is_alphanumeric() || c == '-' { c } else { '_' }).collect();
     let stem = if safe_label.is_empty() { "PLAYXRaven".to_owned() } else { format!("PLAYXRaven-{safe_label}") };
     let output_workspace = Workspace::new(prepared.workspace.path())?;
@@ -708,7 +714,7 @@ fn publish_archive(prepared: &PreparedBackup, picked: &Path, label: &str, locked
 // destination that already has this day's verified copy.
 fn daily_archive_paths(picked: &Path, locked: bool) -> (PathBuf, PathBuf) {
     let extension = if locked { LOCKED_EXT } else { "zip" };
-    let latest = picked.join("PLAY X Raven 백업").join(format!("PLAYXRaven.{extension}"));
+    let latest = external_backup_dir(picked).join(format!("PLAYXRaven.{extension}"));
     let receipt = latest.with_file_name(format!(".PLAYXRaven.{extension}.complete.json"));
     (latest, receipt)
 }

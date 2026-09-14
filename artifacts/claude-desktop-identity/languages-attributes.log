@@ -1,0 +1,27 @@
+{
+  "screens": 80,
+  "remaining": 24,
+  "unique": [
+    "메시지",
+    "비워 두면 자산 이름으로 보입니다",
+    "한두 줄이면 됩니다",
+    "암호 (10글자 이상)"
+  ]
+}
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: Non-Korean screens contain Korean text
+
+18 !== 0
+
+    at file:///Users/gimmusong/wt-ravenvault-desktop-ux/scripts/check-desktop-languages.mjs:146:10 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 18,
+  expected: 0,
+  operator: 'strictEqual'
+}
+
+Node.js v20.20.0

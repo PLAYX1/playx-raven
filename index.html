@@ -1881,11 +1881,44 @@
       .rv-web-info { padding: 16px; border: 1px solid var(--line); border-radius: 16px; margin: 16px 0; }
       .rv-web-info p { font-size: 16px; margin: 8px 0; overflow-wrap: anywhere; }
       @media (max-width: 900px) { nav { width: 172px; } }
+
+      :root { color-scheme: light; --bg:#fff; --panel:#fff; --text:#111; --muted:#4a4a4a; --line:#d6d6d6; --ravi:#e7731f; --side:#fff; }
+      body { padding-top:110px; }
+      nav, main { padding-top:12px; }
+      .desktop-header { position:fixed; top:34px; left:0; right:0; height:76px; z-index:49; display:flex; align-items:center; justify-content:space-between; padding:6px 24px; background:#fff; border-bottom:1px solid var(--line); gap:16px; }
+      .desktop-logo { display:flex; align-items:center; gap:12px; font-size:22px; }
+      .desktop-logo img { width:40px; height:40px; object-fit:contain; }
+      #desktop-preferences { display:flex; align-items:center; gap:10px; border-radius:16px; background:#fff; color:#111; min-height:64px; font-size:16px; border:1px solid var(--line); }
+      .desktop-header svg, .overview svg { width:24px; height:24px; flex:none; }
+      #desktop-language-menu { position:absolute; right:24px; top:76px; width:360px; background:#fff; border:1px solid var(--line); border-radius:16px; padding:16px; box-shadow:0 8px 24px #0002; }
+      #desktop-language-menu[hidden] { display:none; }
+      .desktop-language-options { display:flex; gap:8px; flex-wrap:wrap; }
+      .desktop-language-options button, #desktop-settings-go { min-height:64px; font-size:16px; background:#fff; color:#111; border:1px solid var(--line); }
+      .desktop-language-options button[aria-pressed="true"] { border:2px solid var(--ravi); background:#fff5ec; }
+      #desktop-settings-go { width:100%; margin-top:12px; }
+      .overview { border:1px solid var(--line); border-radius:16px; padding:16px; margin-bottom:16px; }
+      .overview h2 { margin:0 0 8px; font-size:22px; font-weight:750; }
+      .overview-values { display:flex; gap:32px; margin-bottom:12px; }
+      .overview-values div { display:flex; gap:12px; align-items:baseline; flex-wrap:wrap; }
+      .overview-values span { color:var(--muted); font-size:16px; }
+      .overview-values strong { font-size:22px; }
+      .overview-actions { display:flex; gap:12px; }
+      .overview-actions button { min-height:64px; display:flex; align-items:center; justify-content:center; gap:10px; font-size:16px; border-radius:16px; }
+      #overview-receive { flex:1; background:var(--ravi); border-color:var(--ravi); color:#fff; }
+      #overview-phone { flex:2; background:#fff; color:#111; border:1px solid var(--line); }
+      main :is(p, label, input, textarea, select, button, summary, .meta, .lede), .todochip { font-size:16px !important; }
+      main :is(button, summary), .todochip { min-height:64px !important; }
+      main button { overflow-wrap:anywhere; }
     </style>
   </head>
   <body>
     <!-- 창을 잡는 띠. 제목줄을 없앴기 때문에 이게 없으면 창이 안 움직인다. -->
     <div class="titlebar" data-tauri-drag-region></div>
+    <header class="desktop-header" data-tauri-drag-region>
+      <div class="desktop-logo" data-tauri-drag-region><img src="/raven-head.webp" alt="" data-tauri-drag-region/><strong data-tauri-drag-region>RavenVault Desktop</strong></div>
+      <button id="desktop-preferences" type="button" aria-expanded="false" aria-controls="desktop-language-menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4M5 5l3 3m8 8l3 3M5 19l3-3M16 8l3-3"/></svg><span>설정</span><span aria-hidden="true">·</span><span id="desktop-language-name" translate="no">한국어</span></button>
+      <div id="desktop-language-menu" hidden><div class="desktop-language-options" translate="no"><button data-language="ko">한국어</button><button data-language="en">English</button><button data-language="ja">日本語</button><button data-language="zh">简体中文</button></div><button id="desktop-settings-go">설정으로</button></div>
+    </header>
 
     <!-- ── 첫 실행 ───────────────────────────────────────────────────
          이 프로그램은 노드이자 IPFS이자 지갑이자 계산대다. 첫 화면이
@@ -2775,16 +2808,17 @@
            아이콘을 누르면 그 말이 라비에게 그대로 간다 — 누르든 말하든
            같은 길이라 배울 것이 하나뿐이다. -->
       <section class="page on" id="page-ravi">
+        <div class="overview" aria-labelledby="overview-title">
+          <h2 id="overview-title">한눈에</h2>
+          <div class="overview-values"><div><span>내 노드</span><strong id="overview-node">확인 못 함</strong></div><div><span>확정 잔액</span><strong id="overview-balance">확인 못 함</strong></div></div>
+          <div class="overview-actions"><button id="overview-receive"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m-5-5 5 5 5-5M4 17v4h16v-4"/></svg><span>받기</span></button><button id="overview-phone"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M10 17h4"/></svg><span>폰에서 서명한 거래 보내기</span></button></div>
+        </div>
         <!-- 🔴 **돈이 도는지 한눈에.**
              이 저장소의 병은 「만들었는데 조용히 안 도는 것」이다. 2026-09-06
              하루에만 여섯 개를 찾았고 그중 하나는 개발비 1% 가 한 푼도 안
              걷히던 것이었다 — 화면에는 「1%」가 떠 있었고 계산 코드도 있었는데
              부르는 줄이 없었다. 대표가 물어봐야만 알 수 있는 상태였다.
              그래서 **묻지 않아도 보이게** 첫 화면에 둔다. -->
-        <div class="card" id="money-status" style="margin-bottom:14px">
-          <div class="ms-row"><b>지금 상태</b><span class="meta" id="ms-when"></span></div>
-          <div id="ms-body" class="meta">읽는 중…</div>
-        </div>
         <div class="ravihero">
           <img id="ravi-face" src="/raven-hello.webp" alt="" />
           <div class="ravihi">
@@ -2797,8 +2831,12 @@
         <!-- 🔴 타일은 여덟 개까지다. 더 늘리면 다시 '찾는 화면'이 된다.
              왼쪽 넷은 열쇠 없이도 되는 것, 오른쪽 넷은 라비가 하는 것. -->
         <!-- 아직 안 된 것 한 줄. 눌러 보고 알게 하면 헛걸음이다. -->
-        <div class="warnbox raviTodo" id="ravi-todo" style="display:none"></div>
         <div class="tiles" id="ravi-tiles"></div>
+        <div class="warnbox raviTodo" id="ravi-todo" style="display:none"></div>        <div class="card" id="money-status" style="margin-bottom:14px">
+          <div class="ms-row"><b>지금 상태</b><span class="meta" id="ms-when"></span></div>
+          <div id="ms-body" class="meta">읽는 중…</div>
+        </div>
+
         <details class="rv-web-info" id="phone-tx-panel">
           <summary>폰에서 서명한 거래 보내기</summary>
           <p>열쇠는 폰에 남습니다. 이 컴퓨터는 내용을 확인하고 내 노드로 전파합니다.</p>
@@ -3094,8 +3132,8 @@
                 <path d="M5.6 19.2c1.3-3.5 3.6-5.2 6.4-5.2s5.1 1.7 6.4 5.2"/>
               </svg>
             </button>
-            <div class="arname" id="ar-nameview">PLAY X</div>
-            <p class="arabout" id="ar-aboutview">플레이엑스</p>
+            <div class="arname" id="ar-nameview" translate="no">아직 이름이 없습니다</div>
+            <p class="arabout" id="ar-aboutview" translate="no"></p>
             <a class="arlink" id="ar-linkview" hidden target="_blank" rel="noopener noreferrer"></a>
             <div class="arseal muted" id="ar-seal">확인하는 중…</div>
           </div>
@@ -3103,7 +3141,7 @@
           <div class="arform">
             <h3>고치기</h3>
             <label class="fld" for="ar-name">이름</label>
-            <input id="ar-name" maxlength="40" placeholder="비워 두면 자산 이름으로 보입니다" />
+            <input id="ar-name" maxlength="40" placeholder="표시할 이름" />
             <label class="fld" for="ar-about">소개</label>
             <textarea id="ar-about" maxlength="300" placeholder="한두 줄이면 됩니다"></textarea>
             <label class="fld" for="ar-web">링크 (없어도 됩니다)</label>
@@ -3566,6 +3604,7 @@
       </section>
 
       <section class="page" id="page-settings">
+        <div class="card desktop-language-settings"><h2>설정 · 언어</h2><div class="desktop-language-options" translate="no"><button data-language="ko">한국어</button><button data-language="en">English</button><button data-language="ja">日本語</button><button data-language="zh">简体中文</button></div><p>언어는 바로 바뀌며 다음 실행에도 기억합니다.</p><p>Mac에서 기존 앱의 파일 이름은 그대로 남을 수 있습니다. 앱 안의 이름은 RavenVault Desktop입니다.</p></div>
         <h2 class="title">이 컴퓨터</h2>
 
         <!-- ── 자주 쓰는 것부터 ──────────────────────────────────────────
@@ -4299,7 +4338,7 @@
             <label style="margin-top:14px"><span id="lbl-title">제목</span> <span class="meta">(한글로 적으셔도 됩니다)</span>
               <input id="i-songtitle" placeholder="예: 필연 (Inevitable)" autocomplete="off" /></label>
             <label style="margin-top:14px"><span id="lbl-maker">만든 사람</span> <span class="meta">(자산에 새겨집니다)</span>
-              <input id="i-artist" placeholder="예: PLAY X" autocomplete="off" /></label>
+              <input id="i-artist" placeholder="예: 내 이름" autocomplete="off" /></label>
             <label style="margin-top:14px" id="lbl-noterow" hidden>한 줄 안내 <span class="meta">(날짜·장소 등)</span>
               <input id="i-note" placeholder="예: 2026년 10월 4일 · 의왕 계원대학로 34" autocomplete="off" /></label>
             <label style="margin-top:14px"><span id="lbl-body">가사</span> <span class="meta">(선택 · 자산에 새겨집니다)</span>

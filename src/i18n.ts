@@ -58,21 +58,23 @@ export function t(s: string): string {
   return (d && d[s]) || s;
 }
 
-/** 말을 바꾼다. 화면을 통째로 다시 그리는 것이 가장 확실하다. */
+/** Change language without losing navigation, drafts, or reviewed transactions. */
 export function setLang(l: Lang) {
   try {
     localStorage.setItem(KEY, l);
   } catch {
     /* 저장 못 해도 이번 판은 바뀐다 */
   }
-  location.reload();
+  lang = l;
+  translateDom();
+  window.dispatchEvent(new Event("desktop-language-change"));
 }
 
 export const LANG_NAMES: Record<Lang, string> = {
   ko: "한국어",
   en: "English",
   ja: "日本語",
-  zh: "中文",
+  zh: "简体中文",
 };
 
 /**
@@ -83,42 +85,49 @@ export const LANG_NAMES: Record<Lang, string> = {
  * 정확히 그 일이 났다 — 짧은 말은 다 옮겨졌는데 긴 안내문 열두 개만
  * 한국어로 남았고, 사전에는 다 있었다. **찾을 때만** 공백을 고르게 편다.
  */
-export function translateDom(root?: Node) {
-  if (lang === "ko") return;
-  const d = DICT[lang];
-  if (!d) return;
-
-  const walker = document.createTreeWalker(root || document.body, NodeFilter.SHOW_TEXT);
+const originals = new WeakMap<Node, { source: string; rendered: string }>();
+const attributes = new WeakMap<Element, Map<string, { source: string; rendered: string }>>();
+const canonical = new Map<string, string>();
+for (const locale of ["en", "ja", "zh"] as const) {
+  for (const [source, rendered] of Object.entries(DICT[locale])) {
+    if (!canonical.has(rendered)) canonical.set(rendered, source);
+  }
+}
+function renderCopy(raw: string, previous?: {source: string; rendered: string}) {
+  const key = raw.trim().replace(/\s+/g, " ");
+  const source = previous?.rendered === raw ? previous.source : (canonical.get(key) || key);
+  const rendered = raw.replace(raw.trim(), t(source));
+  return { source, rendered };
+}
+export function translateDom(root: Node = document.body) {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   let n: Node | null;
   while ((n = walker.nextNode())) {
-    const tag = n.parentNode?.nodeName;
-    // 화면에 안 보이는 글자는 건드릴 이유가 없다.
-    if (tag === "SCRIPT" || tag === "STYLE") continue;
-    const raw = (n.nodeValue || "").trim();
-    if (!raw) continue;
-    const k = raw.replace(/\s+/g, " ");
-    const to = d[k];
-    if (to) n.nodeValue = (n.nodeValue || "").replace(raw, to);
+    if (n.parentElement?.closest('script, style, [translate="no"], textarea, input')) continue;
+    const raw = n.nodeValue || "";
+    if (!raw.trim()) continue;
+    const next = renderCopy(raw, originals.get(n));
+    originals.set(n, next);
+    if (raw !== next.rendered) n.nodeValue = next.rendered;
   }
-
-  const box = (root && (root as Element).querySelectorAll ? (root as Element) : document);
-  box.querySelectorAll("[placeholder]").forEach((e) => {
-    const p = e.getAttribute("placeholder") || "";
-    const to = d[p.replace(/\s+/g, " ")];
-    if (to) e.setAttribute("placeholder", to);
+  const box = root instanceof Element ? root : document;
+  box.querySelectorAll('[placeholder], [title], [aria-label]').forEach(e => {
+    if (e.closest('[translate="no"]')) return;
+    const saved = attributes.get(e) || new Map();
+    for (const attr of ["placeholder", "title", "aria-label"]) {
+      const raw = e.getAttribute(attr);
+      if (!raw) continue;
+      const next = renderCopy(raw, saved.get(attr));
+      saved.set(attr, next);
+      if (raw !== next.rendered) e.setAttribute(attr, next.rendered);
+    }
+    attributes.set(e, saved);
   });
-  box.querySelectorAll("[title]").forEach((e) => {
-    const p = e.getAttribute("title") || "";
-    const to = d[p.replace(/\s+/g, " ")];
-    if (to) e.setAttribute("title", to);
-  });
-
   document.documentElement.lang = lang;
 }
 
 /** 켤 때 한 번 부른다. 그 뒤로는 화면이 바뀔 때마다 저절로 따라간다. */
 export function startI18n() {
-  if (lang === "ko") return;
   const run = () => {
     try {
       translateDom(document.body);

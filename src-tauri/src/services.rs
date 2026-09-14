@@ -274,7 +274,7 @@ pub async fn services_status() -> Value {
             "install": if cfg!(target_os = "macos") {
                 "레이븐 노드를 설치해 주세요. 애플 실리콘 맥은 공식 배포가 없어 아직 같이 넣지 못합니다."
             } else {
-                "노드가 없습니다. PLAY X Raven 을 다시 받아 설치하시면 같이 들어옵니다."
+                "노드가 없습니다. RavenVault Desktop 을 다시 받아 설치하시면 같이 들어옵니다."
             },
             // 못 찾았으면 어디를 봤는지 같이 준다. 사장이 자기 설치 자리를
             // 알려 주면 그 자리를 다음 판에 넣을 수 있다.
@@ -293,11 +293,11 @@ pub async fn services_status() -> Value {
             //    거의 없다. 그래도 올 수 있으니(옛 판을 쓰거나, 우리가 넣은
             //    것을 지웠거나) 사람이 할 수 있는 말로 적는다.
             "install": if cfg!(target_os = "windows") {
-                "파일창고가 없습니다. PLAY X Raven 을 다시 받아 설치하시면 같이 들어옵니다."
+                "파일창고가 없습니다. RavenVault Desktop 을 다시 받아 설치하시면 같이 들어옵니다."
             } else if cfg!(target_os = "macos") {
-                "파일창고가 없습니다. PLAY X Raven 을 다시 받아 설치하시면 같이 들어옵니다. (직접 깔려면 brew install ipfs)"
+                "파일창고가 없습니다. RavenVault Desktop 을 다시 받아 설치하시면 같이 들어옵니다. (직접 깔려면 brew install ipfs)"
             } else {
-                "파일창고가 없습니다. PLAY X Raven 을 다시 받아 설치하시면 같이 들어옵니다."
+                "파일창고가 없습니다. RavenVault Desktop 을 다시 받아 설치하시면 같이 들어옵니다."
             },
         },
     })

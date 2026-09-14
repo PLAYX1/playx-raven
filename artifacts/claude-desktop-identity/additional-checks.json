@@ -1,0 +1,32 @@
+[
+  {
+    "command": "node --test web/wallet.test.mjs",
+    "exit": 0,
+    "log": "wallet-tests.log"
+  },
+  {
+    "command": "node scripts/check-desktop-integration.mjs",
+    "exit": 0,
+    "log": "integration-webauthn.log"
+  },
+  {
+    "command": "NODE_OPTIONS=--max-old-space-size=8192 npx tsc --noEmit -p tsconfig.json",
+    "exit": 0,
+    "log": "tsc-final.log"
+  },
+  {
+    "command": "NODE_OPTIONS=--max-old-space-size=8192 npm run build",
+    "exit": 0,
+    "log": "build-layout-final.log"
+  },
+  {
+    "command": "cargo check --tests --offline --manifest-path src-tauri/Cargo.toml",
+    "exit": 0,
+    "log": "cargo-check-final.log"
+  },
+  {
+    "command": "node scripts/check-desktop-languages.mjs --no-live",
+    "exit": 0,
+    "log": "languages-layout-final.log"
+  }
+]

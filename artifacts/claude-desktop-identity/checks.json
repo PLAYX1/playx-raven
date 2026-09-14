@@ -1,0 +1,146 @@
+[
+  {
+    "command": "node scripts/check-backup-safety.mjs",
+    "exit": 0,
+    "seconds": 11.15,
+    "log": "check-backup-safety.log"
+  },
+  {
+    "command": "node scripts/verify-backup-storage.mjs",
+    "exit": 0,
+    "seconds": 16.93,
+    "log": "verify-backup-storage.log"
+  },
+  {
+    "command": "node scripts/check-phone-transaction.mjs",
+    "exit": 0,
+    "seconds": 0.12,
+    "log": "check-phone-transaction.log"
+  },
+  {
+    "command": "cargo check --tests --offline --manifest-path src-tauri/Cargo.toml",
+    "exit": 0,
+    "seconds": 3.17,
+    "log": "cargo-check.log"
+  },
+  {
+    "command": "cargo test --offline --manifest-path src-tauri/Cargo.toml backup:: -- --test-threads=1",
+    "exit": 0,
+    "seconds": 15.48,
+    "log": "cargo-backup.log"
+  },
+  {
+    "command": "cargo test --offline --manifest-path src-tauri/Cargo.toml recover:: -- --test-threads=1",
+    "exit": 0,
+    "seconds": 0.6,
+    "log": "cargo-recover.log"
+  },
+  {
+    "command": "cargo test --offline --manifest-path src-tauri/Cargo.toml autostart:: -- --test-threads=1",
+    "exit": 0,
+    "seconds": 0.27,
+    "log": "cargo-autostart.log"
+  },
+  {
+    "command": "cargo test --offline --manifest-path src-tauri/Cargo.toml companion:: -- --test-threads=1",
+    "exit": 0,
+    "seconds": 0.32,
+    "log": "cargo-companion.log"
+  },
+  {
+    "command": "cargo test --offline --manifest-path src-tauri/Cargo.toml services:: -- --test-threads=1",
+    "exit": 0,
+    "seconds": 0.29,
+    "log": "cargo-services.log"
+  },
+  {
+    "command": "cargo test --offline --manifest-path src-tauri/Cargo.toml report:: -- --test-threads=1",
+    "exit": 0,
+    "seconds": 0.31,
+    "log": "cargo-report.log"
+  },
+  {
+    "command": "cargo test --offline --manifest-path src-tauri/Cargo.toml electrum:: -- --test-threads=1",
+    "exit": 0,
+    "seconds": 0.28,
+    "log": "cargo-electrum.log"
+  },
+  {
+    "command": "cargo test --offline --manifest-path src-tauri/Cargo.toml awake:: -- --test-threads=1",
+    "exit": 0,
+    "seconds": 0.28,
+    "log": "cargo-awake.log"
+  },
+  {
+    "command": "cargo test --offline --manifest-path src-tauri/Cargo.toml devfee:: -- --test-threads=1",
+    "exit": 0,
+    "seconds": 0.46,
+    "log": "cargo-devfee.log"
+  },
+  {
+    "command": "cargo test --offline --manifest-path src-tauri/Cargo.toml prep:: -- --test-threads=1",
+    "exit": 0,
+    "seconds": 0.32,
+    "log": "cargo-prep.log"
+  },
+  {
+    "command": "cargo test --offline --manifest-path src-tauri/Cargo.toml knowledge:: -- --test-threads=1",
+    "exit": 0,
+    "seconds": 0.3,
+    "log": "cargo-knowledge.log"
+  },
+  {
+    "command": "npx tsc --noEmit -p tsconfig.json",
+    "exit": 0,
+    "seconds": 1.56,
+    "log": "tsc.log"
+  },
+  {
+    "command": "npm run build",
+    "exit": 0,
+    "seconds": 2.36,
+    "log": "build.log"
+  },
+  {
+    "command": "node scripts/check-desktop-integration.mjs",
+    "exit": 0,
+    "seconds": 0.23,
+    "log": "check-desktop-integration.log"
+  },
+  {
+    "command": "node scripts/check-desktop-ux.mjs",
+    "exit": 0,
+    "seconds": 13.54,
+    "log": "check-desktop-ux.log"
+  },
+  {
+    "command": "node scripts/check-backup-ui.mjs",
+    "exit": 0,
+    "seconds": 5.8,
+    "log": "check-backup-ui.log"
+  },
+  {
+    "command": "node scripts/desktop-installer-identity.test.mjs",
+    "exit": 0,
+    "seconds": 8.1,
+    "log": "desktop-installer-identity.test.log"
+  },
+  {
+    "command": "node scripts/release-manifest.test.mjs",
+    "exit": 0,
+    "seconds": 0.13,
+    "log": "release-manifest.test.log"
+  },
+  {
+    "command": "node scripts/verify-published-release.test.mjs",
+    "exit": 0,
+    "seconds": 0.11,
+    "log": "verify-published-release.test.log"
+  },
+  {
+    "command": "node scripts/check-desktop-languages.mjs",
+    "exit": 0,
+    "seconds": 74.34,
+    "log": "check-desktop-languages.log"
+  }
+]

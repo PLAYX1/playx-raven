@@ -139,7 +139,7 @@ fn hold() {
         if let Ok(c) = std::process::Command::new("systemd-inhibit")
             .args([
                 "--what=idle:sleep",
-                "--who=PLAY X Raven",
+                "--who=RavenVault Desktop",
                 "--why=가게가 입금을 기다립니다",
                 "sleep",
                 "infinity",
