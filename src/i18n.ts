@@ -24,7 +24,8 @@
  *
  * 사장이 직접 적은 것(가게 이름·메뉴 이름·자산 이름)은 **절대 안 옮긴다.**
  * 「제육볶음」을 우리가 옮기면 손님이 카운터에서 그 말을 하고 아무도 못
- * 알아듣는다. 사전에 없으면 그대로 나오므로 저절로 지켜진다.
+ * 알아듣는다. 사용자 데이터의 표시 요소에는 translate="no"를 붙인다. 사전 일치 여부는
+ * 앱 문구와 사용자 글을 구분하는 근거가 될 수 없다.
  */
 
 import { DICT } from "./dict";
@@ -85,32 +86,54 @@ export const LANG_NAMES: Record<Lang, string> = {
  * 정확히 그 일이 났다 — 짧은 말은 다 옮겨졌는데 긴 안내문 열두 개만
  * 한국어로 남았고, 사전에는 다 있었다. **찾을 때만** 공백을 고르게 편다.
  */
+/** App-authored HTML fragments carry their source; user strings never use this. */
+export function copyHtml(source: string): string {
+  const escape = (value: string) => value.replace(/[&<>"']/g, c => ({"&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"}[c]!));
+  return `<span data-desktop-copy="${escape(source)}">${escape(t(source))}</span>`;
+}
+
+// Explicit JS copy keeps its render function on the exact Text node. A user
+// edit replaces that node, so it can never inherit another string's origin.
+const textRenderers = new WeakMap<Node, { render: () => string; language: Lang }>();
+export function setCopyText(element: Element, render: () => string) {
+  const node = document.createTextNode(render());
+  textRenderers.set(node, {render, language: lang});
+  element.replaceChildren(node);
+}
+
 const originals = new WeakMap<Node, { source: string; rendered: string }>();
 const attributes = new WeakMap<Element, Map<string, { source: string; rendered: string }>>();
-const canonical = new Map<string, string>();
-for (const locale of ["en", "ja", "zh"] as const) {
-  for (const [source, rendered] of Object.entries(DICT[locale])) {
-    if (!canonical.has(rendered)) canonical.set(rendered, source);
-  }
-}
 function renderCopy(raw: string, previous?: {source: string; rendered: string}) {
   const key = raw.trim().replace(/\s+/g, " ");
-  const source = previous?.rendered === raw ? previous.source : (canonical.get(key) || key);
+  const source = previous?.rendered === raw ? previous.source : key;
   const rendered = raw.replace(raw.trim(), t(source));
   return { source, rendered };
 }
 export function translateDom(root: Node = document.body) {
+  const box = root instanceof Element ? root : document;
+  box.querySelectorAll<HTMLElement>('[data-desktop-copy]').forEach(element => {
+    if (element.closest('[translate="no"]')) return;
+    const rendered = t(element.dataset.desktopCopy!);
+    if (element.textContent !== rendered) element.textContent = rendered;
+  });
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   let n: Node | null;
   while ((n = walker.nextNode())) {
-    if (n.parentElement?.closest('script, style, [translate="no"], textarea, input')) continue;
+    const binding = textRenderers.get(n);
+    if (binding) {
+      if (binding.language !== lang) {
+        n.nodeValue = binding.render();
+        binding.language = lang;
+      }
+      continue;
+    }
+    if (n.parentElement?.closest('script, style, [translate="no"], [data-desktop-copy], textarea, input')) continue;
     const raw = n.nodeValue || "";
     if (!raw.trim()) continue;
     const next = renderCopy(raw, originals.get(n));
     originals.set(n, next);
     if (raw !== next.rendered) n.nodeValue = next.rendered;
   }
-  const box = root instanceof Element ? root : document;
   box.querySelectorAll('[placeholder], [title], [aria-label]').forEach(e => {
     if (e.closest('[translate="no"]')) return;
     const saved = attributes.get(e) || new Map();

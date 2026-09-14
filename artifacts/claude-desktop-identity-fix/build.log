@@ -1,0 +1,44 @@
+
+> playx-raven@0.4.2 build
+> node preflight.mjs && tsc && vite build
+
+✅ 화면이 부르는 칸 555개 전부 존재
+✅ 화면이 부르는 명령 264개 전부 등록됨
+
+⚠️  아무도 안 부르는 명령 69개
+   received_by_address, repo_size, tag_address, addresses_with_tag, address_restrictions, freeze, unfreeze, untag_address, tags_for_address, can_receive, transfer_ownership, build_metadata, rehearse_stop, watch_add, recv_qr, sign_message, verify_message, abandon_tx, tx_detail, fee_rate_set, keypool_fill, send_from, channels_mine, channel_leave, trade_list, reward_cancel, reward_status, pay_order, broadcast_message, sellable_assets, auto_usage, confirmation_policy, rebuild_delivered, subscribe, rebuild_members, remove_member, note_our_tx, backup_now, cloud_unlock, peer_add, peer_remove, artist_pubkey, backup_folders, exclusive_check, address_pool, electrum_status, wallet_send_signed, holds_asset, chain_ipfs_link, session_save, session_list, session_book, session_cancel, session_remove, recommend_setup, distance_m, talk_replies, recovery_status, awake_status, autostart_audit, autostart_tidy, rotate_role_token, address_check, hours_save, is_open, set_manual, role_limits, withdraw_offer, load_orders
+   화면이 없거나, 만들다 만 기능입니다. (배포는 막지 않습니다)
+✅ 손님 화면이 부르는 길 21개 전부 존재
+✅ 화면이 부르는 그림 5개 전부 존재
+✅ 경로 모양 정상 (axum 이 받아들이는 형태)
+✅ id 665개 전부 하나뿐
+✅ 색 이름 전부 정의돼 있음
+✅ 판 번호 세 곳 모두 0.4.2
+✅ 라벨이 가리키는 칸 전부 존재
+✅ 태그가 일찍 닫힌 곳 없음
+✅ 러스트가 굽는 파일 159개 전부 존재
+✅ 손님 화면이 부르는 자원 20개 전부 길이 있음
+✅ 저장되는 칸 16개가 전부 저장을 부름
+✅ 웹 지갑이 물건 살 때 개발비를 붙임 (사는 중 표시가 화면을 연 뒤에 선다)
+✅ 지갑 번들이 실행에 필요한 것을 갖춤 (Buffer·개발비 주소·크기)
+✅ 번들 뒤에 있는 1개를 화면이 다 그려진 뒤에 붙임 (tab-rooms)
+✅ 코드가 단추를 잇는 칸이 전부 화면에 있음
+✅ 「지금 상태」 카드가 자리·함수·부르는 줄을 다 갖춤
+✅ 주인 자격을 옮기는 문이 있음 (이름을 그대로 쳐야 열린다)
+✅ 표지 없이 영영 못 붙이는 발행은 손으로 인정해야 열림
+✅ 남이 준 CID 는 체인이 가리킬 때만 붙듦 (개수 상한 있음)
+
+검사 통과 — 조용히 안 도는 곳 없음.
+vite v6.4.3 building for production...
+transforming...
+✓ 20 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                304.56 kB │ gzip:  79.95 kB
+dist/assets/index-Mf2xWlam.js  594.51 kB │ gzip: 200.60 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 561ms

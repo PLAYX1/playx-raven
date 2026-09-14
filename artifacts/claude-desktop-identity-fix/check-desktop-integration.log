@@ -1,0 +1,3 @@
+PASS actual open adapter: canonical entry, no secret query, error propagated, legacy origin preserved
+PASS update identity/data paths + released node/mining/IPFS/shop/artist/auction/legacy wallet remain intact
+PASS 223 new phrases have English/Japanese/Chinese translations; Korean is the source

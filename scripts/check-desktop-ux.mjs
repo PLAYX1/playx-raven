@@ -8,9 +8,9 @@ import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer-core';
 import jsQR from 'jsqr';
 const root = fileURLToPath(new URL('../', import.meta.url)), dist = resolve(root, 'dist');
-const out = resolve(root, 'artifacts/claude-desktop-ux');
+const out = resolve(root, process.env.RV_UI_ARTIFACTS || 'artifacts/claude-desktop-ux');
 const fixture=JSON.parse(readFileSync(resolve(root,'scripts/phone-transaction-fixture.json'),'utf8'));
-const qr=readFileSync(resolve(out,'phone-url-qr.svg'),'utf8');
+const qr=readFileSync(resolve(root,'artifacts/claude-desktop-ux/phone-url-qr.svg'),'utf8');
 const profile = resolve(out, 'ux-browser-profile');
 mkdirSync(out, {recursive:true});
 assert.ok(!existsSync(profile), 'A new isolated browser profile is required');
@@ -83,10 +83,10 @@ try {
     await page.$eval('nav [data-page="ravi"]', e => e.click());
     await page.waitForFunction(()=>document.querySelector('#ravi-tiles').children.length>0);
     const measures=await page.evaluate(()=>{
-      const nav=document.querySelector('nav').getBoundingClientRect(),side=document.querySelector('.brandravi').getBoundingClientRect(),hero=document.querySelector('#ravi-face').getBoundingClientRect();
-      return {nav:nav.width,sidebarWidth:side.width,heroWidth:hero.width,sidebarFits:side.left>=nav.left&&side.right<=nav.right,overflow:document.documentElement.scrollWidth-innerWidth,sideSrc:document.querySelector('.brandravi').getAttribute('src'),heroSrc:document.querySelector('#ravi-face').getAttribute('src')};
+      const nav=document.querySelector('nav').getBoundingClientRect(),side=document.querySelector('nav .brand').getBoundingClientRect(),hero=document.querySelector('#ravi-face').getBoundingClientRect();
+      return {nav:nav.width,sidebarWidth:side.width,heroWidth:hero.width,sidebarFits:side.left>=nav.left&&side.right<=nav.right,overflow:document.documentElement.scrollWidth-innerWidth,duplicateBrand:!!document.querySelector('nav .brandravi,nav h1'),heroSrc:document.querySelector('#ravi-face').getAttribute('src')};
     });
-    assert.equal(measures.nav,172);assert.equal(measures.overflow,0);assert.ok(measures.sidebarFits);assert.ok(measures.sidebarWidth>=100);assert.ok(measures.heroWidth>=180);assert.equal(measures.sideSrc,'/raven-hello.webp');assert.equal(measures.heroSrc,measures.sideSrc);
+    assert.equal(measures.nav,172);assert.equal(measures.overflow,0);assert.ok(measures.sidebarFits);assert.ok(measures.heroWidth>=180);assert.equal(measures.duplicateBrand,false);assert.equal(measures.heroSrc,'/raven-hello.webp');
     assert.equal(await page.$('#rv-webwallet'),null);
     if(language!=='ko')await page.waitForFunction(()=>!/가게 만들기/.test(document.querySelector('#ravi-tiles').innerText));
     await page.screenshot({path:resolve(out,`ravi-${language}-${width}x${height}.png`)});
@@ -101,9 +101,9 @@ try {
     assert.deepEqual(await page.evaluate(()=>window.__RV_OPENED),['https://ravenvault.ex.erci.se/wallet/']);
     await page.screenshot({path:resolve(out,`phone-entry-${language}-${width}x${height}.png`)});
     await page.$eval('#rv-phone-info',e=>e.open=false);
-    // 가게가 없으면 첫 칸은 「가게 만들기」(대표님 결정), 폰 거래는 그다음 칸이다.
+    // 가게가 없으면 첫 칸은 「가게 만들기」(대표님 결정), 폰 거래는 한눈에 띠에서 연다.
     assert.match(await page.$eval('#ravi-tiles button:first-child',e=>e.innerText),language==='ko'?/가게 만들기/:/./);
-    await page.$eval('#ravi-tiles button:nth-child(2)',e=>e.click());
+    await page.$eval('#overview-phone',e=>e.click());
     await page.waitForFunction(()=>document.querySelector('#phone-tx-panel').open);
     await page.screenshot({path:resolve(out,`transaction-input-${language}-${width}x${height}.png`)});
     const put=async value=>page.$eval('#phone-tx-code',(e,value)=>{e.value=value;e.dispatchEvent(new Event('input',{bubbles:true}));},value);

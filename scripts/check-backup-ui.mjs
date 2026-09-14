@@ -7,7 +7,7 @@ import { resolve, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer-core';
 const root = fileURLToPath(new URL('../', import.meta.url)), dist = resolve(root, 'dist');
-const out = resolve(root, 'artifacts/claude-desktop-ux/backup-ui');
+const out = resolve(root, process.env.RV_UI_ARTIFACTS || 'artifacts/claude-desktop-ux/backup-ui');
 const profile = resolve(out, 'synthetic-browser-profile');
 mkdirSync(out, {recursive:true});
 assert.ok(!existsSync(profile), 'A new isolated browser profile is required');

@@ -33,7 +33,7 @@ assert.match(read('src-tauri/Cargo.toml'), /name = "playx-raven"/);
 assert.equal(read('src-tauri/src/paths.rs'), execFileSync('git', ['show', 'v0.3.8:src-tauri/src/paths.rs'], { encoding: 'utf8' }));
 for (const path of ['src-tauri/src/mining.rs', 'src-tauri/src/ipfs.rs', 'src-tauri/src/boot.rs', 'src-tauri/src/auto.rs', 'src-tauri/src/shop.rs', 'src-tauri/src/auction.rs', 'src-tauri/src/artist.rs', 'web/wallet.src.ts', 'web/wallet.bundle.js', 'web/wallet.html', 'web/buy.html']) {
   const released = execFileSync('git', ['show', 'v0.3.8:' + path], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 });
-  assert.equal(read(path), path.endsWith('.html') ? released.replaceAll('PLAY X Raven', 'RavenVault Desktop').replace(/<title>(.*?)<\/title>/, '<title>RavenVault Desktop · $1</title>').replace(/(<body[^>]*>)/, '$1\n    <div class="desktop-local-brand" translate="no" style="font:700 16px/1.5 system-ui,sans-serif;padding:12px 16px;background:#fff;color:#111;border-bottom:1px solid #d6d6d6">RavenVault Desktop</div>') : path.startsWith('web/') ? released.replaceAll('PLAY X Raven', 'RavenVault Desktop') : released, path + ' must preserve the released behavior');
+  assert.equal(read(path), path.endsWith('.html') ? released.replaceAll('PLAY X Raven', 'RavenVault Desktop').replace(/<title>.*?<\/title>/, '<title>RavenVault</title>').replaceAll('content="RavenVault Desktop"', 'content="RavenVault"').replaceAll('content="RavenVault Desktop 지갑"', 'content="RavenVault 지갑"') : path.startsWith('web/') ? released.replaceAll('PLAY X Raven', 'RavenVault Desktop') : released, path + ' must preserve the released behavior');
 }
 console.log('PASS update identity/data paths + released node/mining/IPFS/shop/artist/auction/legacy wallet remain intact');
 

@@ -1,5 +1,6 @@
 /** Korean source copy + English, Japanese and Simplified Chinese. User text is not translated here. */
 export const DESKTOP_COPY: Record<string, [string, string, string]> = {
+  "확인 대기 중": ["Pending confirmation", "承認待ち", "等待确认"],
   "이 자산에는 아직 프로필이 안 붙어 있습니다.": ["This asset has no profile yet.", "この資産にはまだプロフィールがありません。", "此资产尚无个人资料。"],
   "체인 프로필에 열쇠가 안 적혀 있습니다.": ["The on-chain profile has no key.", "チェーン上のプロフィールにキーがありません。", "链上个人资料中没有密钥。"],
   "체인이 가리키는 열쇠와 이 컴퓨터의 열쇠가 다릅니다. 12단어가 같은지 확인해 주세요.": ["The on-chain key differs from this computer’s key. Check that the recovery words match.", "チェーン上のキーとこのコンピュータのキーが異なります。復元単語が同じか確認してください。", "链上密钥与此电脑的密钥不同。请检查助记词是否一致。"],

@@ -1,0 +1,26 @@
+[
+  {
+    "language": "ko",
+    "width": 1120,
+    "wallet_balance": 1,
+    "node_status": 1
+  },
+  {
+    "language": "en",
+    "width": 1120,
+    "wallet_balance": 1,
+    "node_status": 1
+  },
+  {
+    "language": "ja",
+    "width": 1120,
+    "wallet_balance": 1,
+    "node_status": 1
+  },
+  {
+    "language": "zh",
+    "width": 1120,
+    "wallet_balance": 1,
+    "node_status": 1
+  }
+]

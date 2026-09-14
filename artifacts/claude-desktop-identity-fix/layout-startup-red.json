@@ -1,0 +1,16 @@
+{
+  "screens": [],
+  "startup": [
+    {
+      "language": "ko",
+      "width": 1120,
+      "wallet_balance": 5,
+      "node_status": 6
+    }
+  ],
+  "idle": {
+    "wallet_balance": 3,
+    "node_status": 6,
+    "money_status": 1
+  }
+}

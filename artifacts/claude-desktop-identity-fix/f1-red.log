@@ -1,0 +1,47 @@
+{
+  "changed": 630,
+  "checks": 88,
+  "startup": [
+    {
+      "language": "ko",
+      "width": 1120,
+      "wallet_balance": 6,
+      "node_status": 7
+    },
+    {
+      "language": "en",
+      "width": 1120,
+      "wallet_balance": 6,
+      "node_status": 7
+    },
+    {
+      "language": "ja",
+      "width": 1120,
+      "wallet_balance": 6,
+      "node_status": 7
+    },
+    {
+      "language": "zh",
+      "width": 1120,
+      "wallet_balance": 6,
+      "node_status": 7
+    }
+  ]
+}
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: User content must never be translated
+
+630 !== 0
+
+    at file:///Users/gimmusong/wt-ravenvault-desktop-ux/scripts/check-desktop-languages.mjs:209:12 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 630,
+  expected: 0,
+  operator: 'strictEqual'
+}
+
+Node.js v20.20.0

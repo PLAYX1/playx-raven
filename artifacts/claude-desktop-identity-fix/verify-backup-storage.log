@@ -1,0 +1,11 @@
+backup-storage-green-compile: PASS
+backup-storage-green: PASS
+backup-storage-overwrite-mutant-compile: PASS
+backup-storage-overwrite-mutant: expected assertion failure; verification exit 1
+lockbox-green: PASS
+lockbox-original-key-red: expected assertion failure; verification exit 1
+lockbox-original-envelope-red: expected assertion failure; verification exit 1
+lockbox-envelope-read-mutant: expected assertion failure; verification exit 1
+lockbox-orphaned-envelope-mutant: expected assertion failure; verification exit 1
+lockbox-format-mutant: expected assertion failure; verification exit 1
+PASS: production source remained unchanged; all deliberate regressions were rejected; fixture directory is empty

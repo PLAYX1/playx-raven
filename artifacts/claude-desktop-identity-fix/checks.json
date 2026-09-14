@@ -1,0 +1,158 @@
+[
+  {
+    "name": "check-desktop-integration",
+    "command": "node scripts/check-desktop-integration.mjs",
+    "exit": 0,
+    "seconds": 0.549
+  },
+  {
+    "name": "tsc",
+    "command": "NODE_OPTIONS=--max-old-space-size=8192 npx tsc --noEmit -p tsconfig.json",
+    "exit": 0,
+    "seconds": 10.611
+  },
+  {
+    "name": "check-backup-safety",
+    "command": "node scripts/check-backup-safety.mjs",
+    "exit": 0,
+    "seconds": 20.867
+  },
+  {
+    "name": "cargo-test-backup",
+    "command": "RV_BACKUP_FIXTURE_ROOT=\"$PWD/artifacts/claude-desktop-identity-fix/rust-fixtures\" cargo test --offline --manifest-path src-tauri/Cargo.toml backup -- --test-threads=1",
+    "exit": 0,
+    "seconds": 22.651
+  },
+  {
+    "name": "cargo-test-recover",
+    "command": "cargo test --offline --manifest-path src-tauri/Cargo.toml recover -- --test-threads=1",
+    "exit": 0,
+    "seconds": 1.05
+  },
+  {
+    "name": "cargo-test-autostart",
+    "command": "cargo test --offline --manifest-path src-tauri/Cargo.toml autostart -- --test-threads=1",
+    "exit": 0,
+    "seconds": 0.339
+  },
+  {
+    "name": "cargo-test-companion",
+    "command": "cargo test --offline --manifest-path src-tauri/Cargo.toml companion -- --test-threads=1",
+    "exit": 0,
+    "seconds": 0.507
+  },
+  {
+    "name": "check-backup-ui",
+    "command": "node scripts/check-backup-ui.mjs",
+    "exit": 0,
+    "seconds": 24.677
+  },
+  {
+    "name": "cargo-test-services",
+    "command": "cargo test --offline --manifest-path src-tauri/Cargo.toml services:: -- --test-threads=1",
+    "exit": 0,
+    "seconds": 0.431
+  },
+  {
+    "name": "cargo-test-report",
+    "command": "cargo test --offline --manifest-path src-tauri/Cargo.toml report:: -- --test-threads=1",
+    "exit": 0,
+    "seconds": 0.36
+  },
+  {
+    "name": "cargo-test-electrum",
+    "command": "cargo test --offline --manifest-path src-tauri/Cargo.toml electrum:: -- --test-threads=1",
+    "exit": 0,
+    "seconds": 0.312
+  },
+  {
+    "name": "cargo-test-awake",
+    "command": "cargo test --offline --manifest-path src-tauri/Cargo.toml awake:: -- --test-threads=1",
+    "exit": 0,
+    "seconds": 0.306
+  },
+  {
+    "name": "cargo-test-devfee",
+    "command": "cargo test --offline --manifest-path src-tauri/Cargo.toml devfee:: -- --test-threads=1",
+    "exit": 0,
+    "seconds": 0.495
+  },
+  {
+    "name": "cargo-test-prep",
+    "command": "cargo test --offline --manifest-path src-tauri/Cargo.toml prep:: -- --test-threads=1",
+    "exit": 0,
+    "seconds": 0.353
+  },
+  {
+    "name": "cargo-test-knowledge",
+    "command": "cargo test --offline --manifest-path src-tauri/Cargo.toml knowledge:: -- --test-threads=1",
+    "exit": 0,
+    "seconds": 0.335
+  },
+  {
+    "name": "verify-backup-storage",
+    "command": "node scripts/verify-backup-storage.mjs",
+    "exit": 0,
+    "seconds": 12.855
+  },
+  {
+    "name": "check-phone-transaction",
+    "command": "node scripts/check-phone-transaction.mjs",
+    "exit": 0,
+    "seconds": 0.097
+  },
+  {
+    "name": "desktop-installer-identity.test",
+    "command": "node scripts/desktop-installer-identity.test.mjs",
+    "exit": 0,
+    "seconds": 9.063
+  },
+  {
+    "name": "release-manifest.test",
+    "command": "node scripts/release-manifest.test.mjs",
+    "exit": 0,
+    "seconds": 0.143
+  },
+  {
+    "name": "verify-published-release.test",
+    "command": "node scripts/verify-published-release.test.mjs",
+    "exit": 0,
+    "seconds": 0.087
+  },
+  {
+    "name": "check-desktop-ux",
+    "command": "node scripts/check-desktop-ux.mjs",
+    "exit": 0,
+    "seconds": 47.908
+  },
+  {
+    "name": "layout-green",
+    "command": "node scripts/check-desktop-identity-fix.mjs",
+    "exit": 0
+  },
+  {
+    "name": "layout-baseline",
+    "command": "node scripts/check-desktop-identity-fix.mjs --baseline",
+    "exit": 0
+  },
+  {
+    "name": "check-desktop-languages",
+    "command": "node scripts/check-desktop-languages.mjs",
+    "exit": 0
+  },
+  {
+    "name": "build",
+    "command": "npm run build",
+    "exit": 0
+  },
+  {
+    "name": "cargo-check",
+    "command": "cargo check --tests --offline --manifest-path src-tauri/Cargo.toml",
+    "exit": 0
+  },
+  {
+    "name": "diff-check",
+    "command": "git diff --check",
+    "exit": 0
+  }
+]

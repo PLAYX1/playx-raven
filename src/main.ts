@@ -108,6 +108,25 @@ document.addEventListener("keydown", () => (lastTouch = Date.now()), true);
 const BUSY_MAX_MS = 12_000;
 let busyGuard: number | undefined;
 
+// Share the first read across independent startup renderers, including reads
+// scheduled in later microtasks. Never cache a write or a periodic refresh.
+let startupReads: Map<string, Promise<any>> | null = new Map();
+const endStartupReads = () => { startupReads = null; };
+window.setTimeout(endStartupReads, 1500);
+document.addEventListener("click", endStartupReads, {capture:true, once:true});
+document.addEventListener("keydown", endStartupReads, {capture:true, once:true});
+function readNative<T>(cmd: string, args?: any): Promise<T> {
+  if (!startupReads || args || !["wallet_balance", "node_status"].includes(cmd)) return rawInvoke<T>(cmd, args);
+  let pending = startupReads.get(cmd);
+  if (!pending) {
+    pending = rawInvoke<T>(cmd, args);
+    startupReads.set(cmd, pending);
+    // A failed read must be retryable by the next caller.
+    void pending.catch(() => startupReads?.delete(cmd));
+  }
+  return pending;
+}
+
 async function invoke<T = any>(cmd: string, args?: any): Promise<T> {
   // 이 부름이 사람이 시킨 것인가. **시작할 때 정하고 끝까지 그대로 쓴다** —
   // 끝날 때 다시 재면 그사이 손을 댔는지에 따라 셈이 어긋난다.
@@ -124,7 +143,7 @@ async function invoke<T = any>(cmd: string, args?: any): Promise<T> {
     }
   }
   try {
-    return (await rawInvoke<T>(cmd, args)) as T;
+    return (await readNative<T>(cmd, args)) as T;
   } finally {
     if (mine) {
       busyCount--;
@@ -154,7 +173,7 @@ import { getVersion } from "@tauri-apps/api/app";
 import { listen } from "@tauri-apps/api/event";
 import { check as checkUpdate } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
-import { t, lang, setLang, LANG_NAMES, startI18n } from "./i18n";
+import { copyHtml, setCopyText, t, lang, setLang, LANG_NAMES, startI18n } from "./i18n";
 
 type Asset = {
   name: string;
@@ -389,7 +408,7 @@ function renderList() {
     )}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"` +
     ` stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` +
     `<circle cx="8" cy="15" r="4"/><path d="M10.8 12.2 19 4"/><path d="M17 6l2 2"/>` +
-    `<path d="M14.5 8.5l2 2"/></svg>${t("주인")}</span>`;
+    `<path d="M14.5 8.5l2 2"/></svg>${copyHtml("주인")}</span>`;
 
   /**
    * 이 자산이 **무엇을 못 하는지**를 적는다.
@@ -411,14 +430,14 @@ function renderList() {
       out.push(
         `<span class="limitmark" title="${t(
           "1개 단위로만 오갑니다. 손님에게 조금씩 나눠 줄 수 없어서 팔로우 토큰으로는 못 씁니다. 바꾸려면 재발행(100 RVN)입니다.",
-        )}">${t("쪼갤 수 없음")}</span>`,
+        )}">${copyHtml("쪼갤 수 없음")}</span>`,
       );
     }
     if (a.reissuable === false) {
       out.push(
         `<span class="limitmark warn" title="${t(
           "더 찍을 수도, 붙은 파일을 바꿀 수도 없습니다. 되돌릴 방법이 없습니다.",
-        )}">${t("바꿀 수 없음")}</span>`,
+        )}">${copyHtml("바꿀 수 없음")}</span>`,
       );
     }
     return out.join("");
@@ -448,7 +467,7 @@ function renderList() {
     //    숫자(209억)가 붙어 있었다 — 「뭐가 뭔지 헷갈린다」의 정체가 이것이다.
     //    이름 없는 줄은 사람에게 고장으로 읽힌다.
     const leaf = child ? a.name.slice(a.root.length).replace(/^[/#]/, "") : a.name;
-    const label = leaf || `${a.name}<span class="selfmark">이 이름 자체</span>`;
+    const label = `<span translate="no">${escapeHtml(leaf || a.name)}</span>` + (leaf ? "" : `<span class="selfmark">이 이름 자체</span>`);
     // 🔴 **주인 표시.** 자식 줄에는 안 붙인다 — 집안 전체가 같은 값이라
     //    스무 줄에 같은 딱지가 스무 개 뜬다. 그건 정보가 아니라 벽지다.
     //    집안 머리글(아래)과 홑줄에만 붙는다.
@@ -476,7 +495,7 @@ function renderList() {
       //    「PLAYX 자산이 여기 19개 있다는 건가?」라는 질문이 나왔다.
       //    개수는 이름 옆으로 옮기고, 단위도 「개」가 아니라 「종류」라고 쓴다.
       const head = `<tr class="grp" data-grp="${root}">
-        <td class="name"><span class="tri ${open ? "open" : ""}"></span>${root}<span class="cnt">${list.length}종류</span>${
+        <td class="name"><span class="tri ${open ? "open" : ""}"></span><span translate="no">${escapeHtml(root)}</span><span class="cnt">${list.length}종류</span>${
           list.some((a) => a.mine) ? ownMark() : ""
         }</td>
         <td class="num"></td>
@@ -638,6 +657,7 @@ async function renderPanel() {
   const a = selected ? assets.get(selected) : null;
   if (!a) { $("panel").className = "panel hidden"; return; }
   $("panel").className = "panel";
+  $("p-name").setAttribute("translate", "no");
   $("p-name").textContent = a.name;
   $("p-amount").textContent = `수량 ${fmtQty(a.amount)}`;
 
@@ -727,10 +747,10 @@ async function renderPanel() {
     if (meta) {
       $("p-body").innerHTML =
         (meta.icon ? `<img src="${meta.icon}" alt="" />` : "") +
-        (meta.name ? `<div style="font-size:15px;font-weight:600;margin-top:8px">${meta.name}</div>` : "") +
-        (meta.description ? `<p class="meta" style="line-height:1.7">${meta.description}</p>` : "") +
-        (meta.issuer ? `<div class="kv"><b>발행자</b><span>${meta.issuer}</span></div>` : "") +
-        (meta.website ? `<div class="kv"><b>웹사이트</b><span>${meta.website}</span></div>` : "") +
+        (meta.name ? `<div style="font-size:15px;font-weight:600;margin-top:8px" translate="no">${escapeHtml(meta.name)}</div>` : "") +
+        (meta.description ? `<p class="meta" style="line-height:1.7" translate="no">${escapeHtml(meta.description)}</p>` : "") +
+        (meta.issuer ? `<div class="kv"><b>발행자</b><span translate="no">${escapeHtml(meta.issuer)}</span></div>` : "") +
+        (meta.website ? `<div class="kv"><b>웹사이트</b><span translate="no">${escapeHtml(meta.website)}</span></div>` : "") +
         // 🔴 붙여 놓고 안 보여 주면 붙인 뜻이 없다. 이 저장소의 그 병이다.
         videoEmbed(String(meta.video_url || meta.videoUrl || "")) +
         `<p class="meta">RIP-0014 메타데이터</p>`;
@@ -1082,7 +1102,7 @@ async function idLoad() {
   // 다시 읽는 동안에는 단추를 감춘다. 옛 상태로 눌리면 안 된다.
   adopt.style.display = "none";
   legacy.style.display = "none";
-  body.innerHTML = `<p class="meta">${t("읽는 중…")}</p>`;
+  body.innerHTML = `<p class="meta">${copyHtml("읽는 중…")}</p>`;
 
   let s: any;
   try {
@@ -1101,10 +1121,10 @@ async function idLoad() {
   //    12단어를 못 읽은 날 사장이 멀쩡한 이름을 바꾸려 든다.
   const verdict =
     same === true
-      ? `<span class="ok">${t("이 컴퓨터와 폰·웹 지갑이 같은 사람입니다.")}</span>`
+      ? `<span class="ok">${copyHtml("이 컴퓨터와 폰·웹 지갑이 같은 사람입니다.")}</span>`
       : same === false
-        ? `<span class="warn">${t("이 컴퓨터와 폰·웹 지갑이 다른 사람으로 보입니다.")}</span>`
-        : `<span class="muted">${t("같은 사람인지 확인할 수 없습니다.")}</span>`;
+        ? `<span class="warn">${copyHtml("이 컴퓨터와 폰·웹 지갑이 다른 사람으로 보입니다.")}</span>`
+        : `<span class="muted">${copyHtml("같은 사람인지 확인할 수 없습니다.")}</span>`;
 
   body.innerHTML =
     `<p style="font-size:15px;margin:10px 0 12px"><b>${verdict}</b></p>` +
@@ -1116,12 +1136,12 @@ async function idLoad() {
     (canon
       ? ""
       : `<div class="warnbox" style="margin-top:10px">
-           <b>${t("12단어를 읽지 못했습니다.")}</b>
-           ${t("지갑이 잠겨 있으면 열어 주세요. 12단어로 만든 지갑이 아니면, 이 이름은 백업 파일이 유일한 사본입니다 — 파일을 잃으면 이 이름으로 다시 못 돌아옵니다.")}
+           <b>${copyHtml("12단어를 읽지 못했습니다.")}</b>
+           ${copyHtml("지갑이 잠겨 있으면 열어 주세요. 12단어로 만든 지갑이 아니면, 이 이름은 백업 파일이 유일한 사본입니다 — 파일을 잃으면 이 이름으로 다시 못 돌아옵니다.")}
          </div>`) +
     // 옛 이름. 있고 지금 이름과 다를 때만 말한다.
     (leg && leg !== nowPk
-      ? `<h3 class="grouphead">${t("옛 이름")}</h3>` +
+      ? `<h3 class="grouphead">${copyHtml("옛 이름")}</h3>` +
         idKeyRow(t("옛 방식"), leg, "") +
         // 🔴 `history_why` 는 「글이 있다 / 없다 / 못 물어봤다」 셋을 갈라
         //    말한다. 릴레이가 잠깐 죽은 날 「없다」로 읽으면, 남의 글이
@@ -1131,10 +1151,10 @@ async function idLoad() {
           : "")
       : "") +
     // 가게 간판 열쇠. 이름을 합쳐도 **이건 안 따라온다** — 그 사실을 여기서 못 박는다.
-    `<h3 class="grouphead">${t("가게 간판 열쇠")}</h3>` +
+    `<h3 class="grouphead">${copyHtml("가게 간판 열쇠")}</h3>` +
     (s?.shop?.exists
       ? `<p class="meta">${escapeHtml(String(s.shop.why ?? ""))}</p>`
-      : `<p class="meta">${t("아직 가게 간판 열쇠가 없습니다.")}</p>`) +
+      : `<p class="meta">${copyHtml("아직 가게 간판 열쇠가 없습니다.")}</p>`) +
     (s?.shop_note ? `<p class="meta">${escapeHtml(String(s.shop_note))}</p>` : "");
 
   // 단추는 **할 수 있을 때만** 보인다. 눌러도 「바꿀 것이 없습니다」만
@@ -1150,7 +1170,7 @@ async function idPaths() {
     const p = await invoke<any>("identity_paths");
     const rows: any[] = Array.isArray(p?.rows) ? p.rows : [];
     box.innerHTML =
-      `<p class="meta">${t("씨앗")} — ${escapeHtml(String(p?.seed ?? ""))}</p>` +
+      `<p class="meta">${copyHtml("씨앗")} — ${escapeHtml(String(p?.seed ?? ""))}</p>` +
       rows
         .map(
           (r) =>
@@ -1191,16 +1211,16 @@ async function idAdopt() {
   );
   if (!ok) return;
   const say = $("id-say");
-  say.innerHTML = `<p class="meta">${t("바꾸는 중…")}</p>`;
+  say.innerHTML = `<p class="meta">${copyHtml("바꾸는 중…")}</p>`;
   try {
     const r = await invoke<any>("identity_adopt_person_key");
     say.innerHTML =
       `<div class="card" style="margin-top:12px">
-         <p style="margin:0;font-size:15px"><span class="ok">${t("이름을 합쳤습니다.")}</span></p>` +
+         <p style="margin:0;font-size:15px"><span class="ok">${copyHtml("이름을 합쳤습니다.")}</span></p>` +
       idKeyRow(t("새 이름"), r?.pubkey, "") +
       // 열쇠 파일이 아예 없던 경우에는 옛 이름이 없다. 없으면 빈 줄을 안 만든다.
       (r?.old_pubkey ? idKeyRow(t("옛 이름"), r.old_pubkey, "") : "") +
-      `<p class="meta">${t("잇는 글")} ${Number(r?.linked ?? 0)}${t("개를 릴레이에 남겼습니다.")}</p>` +
+      `<p class="meta">${copyHtml("잇는 글")} ${Number(r?.linked ?? 0)}${copyHtml("개를 릴레이에 남겼습니다.")}</p>` +
       (r?.kept ? `<p class="meta">${escapeHtml(String(r.kept))}</p>` : "") +
       (r?.note ? `<p class="meta">${escapeHtml(String(r.note))}</p>` : "") +
       `</div>`;
@@ -1225,12 +1245,12 @@ async function idLegacy() {
   );
   if (!ok) return;
   const say = $("id-say");
-  say.innerHTML = `<p class="meta">${t("되돌리는 중…")}</p>`;
+  say.innerHTML = `<p class="meta">${copyHtml("되돌리는 중…")}</p>`;
   try {
     const r = await invoke<any>("identity_restore_legacy_key");
     say.innerHTML =
       `<div class="card" style="margin-top:12px">
-         <p style="margin:0;font-size:15px"><span class="ok">${t("옛 이름으로 돌아왔습니다.")}</span></p>` +
+         <p style="margin:0;font-size:15px"><span class="ok">${copyHtml("옛 이름으로 돌아왔습니다.")}</span></p>` +
       idKeyRow(t("지금 이름"), r?.pubkey, "") +
       (r?.kept ? `<p class="meta">${escapeHtml(String(r.kept))}</p>` : "") +
       (r?.note ? `<p class="meta">${escapeHtml(String(r.note))}</p>` : "") +
@@ -1374,11 +1394,11 @@ async function doRestore(directory = false) {
         const title = complete ? "되돌리기를 완료했습니다" : done.length ? "일부만 되돌렸습니다" : "되돌리기를 완료하지 못했습니다";
         const previous = [...done, ...failed].filter(item => typeof item.previous === "string" && item.previous);
         $("rs-result").innerHTML =
-          `<div class="card" style="margin-top:11px"><h3>${t(title)}</h3>` +
+          `<div class="card" style="margin-top:11px"><h3>${copyHtml(title)}</h3>` +
           done.map(d => `<div class="kv"><b>${escapeHtml(String(d.what))}</b><span>${escapeHtml(String(d.note || t("완료")))}</span></div>`).join("") +
           (failed.length ? `<div class="warnbox">${failed.map(f => `${escapeHtml(String(f.what))} — ${escapeHtml(String(f.why))}`).join("<br>")}</div>` : "") +
-          (previous.length ? `<p>${t("보존한 이전 파일을 확인하기 전에는 지우지 마세요.")}</p>` + previous.map(p => `<div class="kv"><b>${escapeHtml(String(p.what))}</b><code style="overflow-wrap:anywhere">${escapeHtml(p.previous)}</code></div>`).join("") : "") +
-          (!complete && failed.some(f => f.changed) ? `<div class="warnbox">${t("일부 파일이 바뀌었습니다. 보존한 이전 파일을 확인하기 전에는 노드를 켜지 마세요.")}</div>` : "") +
+          (previous.length ? `<p>${copyHtml("보존한 이전 파일을 확인하기 전에는 지우지 마세요.")}</p>` + previous.map(p => `<div class="kv"><b>${escapeHtml(String(p.what))}</b><code style="overflow-wrap:anywhere">${escapeHtml(p.previous)}</code></div>`).join("") : "") +
+          (!complete && failed.some(f => f.changed) ? `<div class="warnbox">${copyHtml("일부 파일이 바뀌었습니다. 보존한 이전 파일을 확인하기 전에는 노드를 켜지 마세요.")}</div>` : "") +
           (res?.cleanup_warning ? `<div class="warnbox">${escapeHtml(String(res.cleanup_warning))}</div>` : "") +
           `<p class="meta">${escapeHtml(String(res?.note || ""))}</p></div>`;
       } catch (e) {
@@ -1987,20 +2007,20 @@ async function doInstall(up: any) {
   try {
     if (nag) {
       nag.disabled = true;
-      nag.textContent = t("받는 중…");
+      setCopyText(nag, () => t("받는 중…"));
     }
     await up.downloadAndInstall((e: any) => {
       // 얼마나 왔는지 말한다. 큰 파일이라 아무 말이 없으면 멎은 줄 안다.
       if (e?.event === "Progress" && nag) {
-        nag.textContent = t("받는 중…");
+        setCopyText(nag, () => t("받는 중…"));
       }
-      if (e?.event === "Finished" && nag) nag.textContent = t("설치 중…");
+      if (e?.event === "Finished" && nag) setCopyText(nag, () => t("설치 중…"));
     });
     await relaunch();
   } catch (e) {
     if (nag) {
       nag.disabled = false;
-      nag.textContent = t("새 버전 받기");
+      setCopyText(nag, () => t("새 버전 받기"));
     }
     await sure(t("받지 못했습니다"), errText(e), t("닫기"));
   }
@@ -2012,7 +2032,7 @@ async function checkNow() {
   //    자기가 쓰는 판이 무엇인지 그 순간 못 본다. 아래 단추가 답한다.
   if (nag) {
     nag.classList.remove("new");
-    nag.textContent = t("확인 중…");
+    setCopyText(nag, () => t("확인 중…"));
   }
   await checkForUpdate(true);
   // 새 버전이 있으면 설치 칸으로 데려간다. 없으면 단추가 「최신 버전」이라
@@ -2033,7 +2053,7 @@ async function checkForUpdate(quiet = true) {
       if (nag) {
         nag.hidden = false;
         nag.classList.remove("new");
-        nag.textContent = t("최신 버전");
+        setCopyText(nag, () => t("최신 버전"));
         nag.onclick = () => void checkNow();
       }
       if (!quiet) $("up-note").textContent = "지금이 최신입니다.";
@@ -2048,7 +2068,7 @@ async function checkForUpdate(quiet = true) {
       // 🔴 이때만 눈에 띄게 한다. 최신일 때도 주황이면 늘 할 일이 있는
       //    것처럼 보이고, 그러면 진짜 있을 때 안 보인다.
       nag.classList.add("new");
-      nag.textContent = t("새 버전 받기");
+      setCopyText(nag, () => t("새 버전 받기"));
       // 🔴 **이름이 「받기」면 받아야 한다.** 여태 화면만 옮겼다 —
       //    사장은 눌렀는데 아무 일도 안 일어난다고 겪었고, 실제 설치는
       //    저 아래 「받아서 설치」를 **또** 눌러야 했다. 그 칸이 화면
@@ -2111,7 +2131,7 @@ async function checkForUpdate(quiet = true) {
     if (nag2) {
       nag2.hidden = false;
       nag2.classList.remove("new");
-      nag2.textContent = t("확인 못 했습니다");
+      setCopyText(nag2, () => t("확인 못 했습니다"));
       nag2.onclick = () => void checkNow();
     }
     if (!quiet) $("up-note").textContent = "확인하지 못했습니다. 인터넷을 확인해 주세요.";
@@ -2173,9 +2193,9 @@ async function openWebWallet(): Promise<void> {
   const note = $("rv-web-note");
   try {
     await openRavenVaultWallet(openUrl);
-    if (note) note.textContent = t("브라우저에 RavenVault를 열었습니다.");
+    if (note) setCopyText(note, () => t("브라우저에 RavenVault를 열었습니다."));
   } catch {
-    if (note) note.textContent = t("브라우저를 열지 못했습니다. 주소창에 ravenvault.ex.erci.se/wallet/를 입력하세요.");
+    if (note) setCopyText(note, () => t("브라우저를 열지 못했습니다. 주소창에 ravenvault.ex.erci.se/wallet/를 입력하세요."));
   }
 }
 
@@ -2188,7 +2208,7 @@ function raviTiles(): Tile[] {
      대표님 지적: "주문 관련 한 것은 있는데 가게 만들기는 없나?"
      맞다 — 오늘 매출·들어온 주문은 가게가 있어야 뜻이 있는 것인데,
      정작 가게를 만드는 자리가 없었다. 없는 사람에게 첫 칸은 그것이다.
-     (폰 거래 보내기는 가게가 있는 사람에게만 맨 앞이 된다.) */
+     폰 거래 보내기는 한눈에 띠에서 연다. */
   const first: Tile[] = hasShop ? [] : [{
     icon: I('<path d="M4 9l1.6-4.2h12.8L20 9"/><path d="M4.5 9h15v10.5h-15z"/><path d="M9.5 19.5v-6h5v6"/><path d="M12 3.5v2M10.5 4.5h3"/>'),
     label: "가게 만들기",
@@ -2203,14 +2223,6 @@ function raviTiles(): Tile[] {
   }];
 
   return first.concat([
-    {
-      lead: !first.length,
-      icon: I('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 9h18M8 15h3M16 13h2"/>'),
-      label: t("폰에서 서명한 거래 보내기"),
-      sub: t("열쇠는 폰에, 전파는 내 노드로"),
-      do: () => { const panel = $("phone-tx-panel") as HTMLDetailsElement; panel.open = true; panel.scrollIntoView({behavior:"smooth"}); $("phone-tx-code").focus(); },
-    },
-  ] as Tile[], [
     {
       icon: I('<path d="M4 19V9M10 19V5M16 19v-7M21 19H3"/>'),
       label: "오늘 얼마",
@@ -2357,12 +2369,12 @@ async function refreshOverview() {
   const [node, wallet] = await Promise.allSettled([invoke<any>("node_status"), invoke<any>("wallet_balance")]);
   const n = node.status === "fulfilled" ? node.value : null;
   const progress = n?.progress;
-  $("overview-node").textContent = n && typeof progress === "number" && Number.isFinite(progress)
+  setCopyText($("overview-node"), () => n && typeof progress === "number" && Number.isFinite(progress)
     ? progress < 0.9999 ? `${t("동기화")} ${Math.max(0, Math.min(100, progress * 100)).toFixed(1)}%` : t("켜짐")
-    : nodeUp === false ? t("꺼짐") : t("확인 못 함");
+    : nodeUp === false ? t("꺼짐") : t("확인 못 함"));
   const confirmed = wallet.status === "fulfilled" ? wallet.value?.confirmed : undefined;
-  $("overview-balance").textContent = typeof confirmed === "number" && Number.isFinite(confirmed) && confirmed >= 0
-    ? `${confirmed.toLocaleString(lang, {maximumFractionDigits:8})} RVN` : t("확인 못 함");
+  setCopyText($("overview-balance"), () => typeof confirmed === "number" && Number.isFinite(confirmed) && confirmed >= 0
+    ? `${confirmed.toLocaleString(lang, {maximumFractionDigits:8})} RVN` : t("확인 못 함"));
 }
 
 /** 라비 화면을 그린다. 상태가 바뀔 때마다 다시 부른다. */
@@ -2411,8 +2423,8 @@ function paintRavi() {
       const onChain = !!($("sh-registered") as HTMLInputElement)?.value.trim();
       sub.innerHTML = onChain
         ? t("무엇을 할까요? 아래를 누르거나, 그냥 말씀하세요.")
-        : `${t("무엇을 할까요? 아래를 누르거나, 그냥 말씀하세요.")}
-           <span class="ravinote">${t("아직 이 컴퓨터에만 있습니다 — 손님은 QR 로 옵니다.")}</span>`;
+        : `${copyHtml("무엇을 할까요? 아래를 누르거나, 그냥 말씀하세요.")}
+           <span class="ravinote">${copyHtml("아직 이 컴퓨터에만 있습니다 — 손님은 QR 로 옵니다.")}</span>`;
     }
   }
 
@@ -2432,7 +2444,7 @@ function paintRavi() {
     //    이 줄이 이미 「누르면 그 자리로 간다」라서, 규칙만 더하면 된다.
     const 합친것 = [...todo, ...라비가아는것];
     noteBox.innerHTML = 합친것.length
-      ? `<b>${t("아직 안 된 것")}</b> ` +
+      ? `<b>${copyHtml("아직 안 된 것")}</b> ` +
         합친것.map((x, i) =>
           `<button class="todochip" data-todo="${i}"><span>${escapeHtml(x.label)}</span><span aria-hidden="true"> →</span></button>`).join("")
       : "";
@@ -2454,8 +2466,8 @@ function paintRavi() {
       // 지워지는 것과 안 지워지는 것이 같아 보이면 손이 멈춘다.
       const x = t.mine ? `<span class="tilex" data-del="${escapeHtml(t.label)}" title="이 단추 지우기">×</span>` : "";
       return `<button class="${cls}" data-tile="${i}">${x}${t.icon}` +
-             `<span>${escapeHtml(t.label)}</span>` +
-             `<span class="tsub">${escapeHtml(t.sub)}</span></button>`;
+             `<span${t.mine ? ' translate="no"' : ""}>${escapeHtml(t.label)}</span>` +
+             `<span class="tsub"${t.mine ? ' translate="no"' : ""}>${escapeHtml(t.sub)}</span></button>`;
     })
     .join("");
 
@@ -2559,11 +2571,11 @@ function openReport(prefill = "") {
   // 🔴 값이 섞인 문장이라 화면 걷기로는 못 옮긴다 — 조각으로 쪼개져서
   //    사전 열쇠와 안 맞는다. 이런 자리만 `t()` 로 직접 옮긴다.
   $("rp-what").innerHTML =
-    `${t("같이 보내는 것")} — <b>${escapeHtml(rpScreen())}</b> ${t("화면")} · ` +
+    `${copyHtml("같이 보내는 것")} — <b>${escapeHtml(rpScreen())}</b> ${copyHtml("화면")} · ` +
     // 판 번호는 화면에 이미 있다(사이드바 로고 옆). 없는 이름을 새로
     // 만들면 두 곳이 어긋난다.
     `${rpErrors.length ? `${rpErrors.length}${t("건의 오류")}` : t("오류 없음")} · ` +
-    `${t("판")} ${document.querySelector(".brand span")?.textContent || "?"}<br />` +
+    `${copyHtml("판")} ${document.querySelector(".brand span")?.textContent || "?"}<br />` +
     `${t("지갑 12단어·열쇠·주소·잔액은 보내지 않습니다.")}`;
   wrap.style.display = "flex";
   setTimeout(() => text.focus(), 60);
@@ -2801,15 +2813,15 @@ async function openQrSheet() {
   const todo = shopTodo();
   const todoHtml = todo.length
     ? `<div class="warnbox" style="margin-bottom:14px">
-         <b>${t("아직 안 된 것이 있습니다")}</b>
+         <b>${copyHtml("아직 안 된 것이 있습니다")}</b>
          ${todo.map((x, i) =>
            `<div style="margin-top:8px">• <b>${escapeHtml(x.label)}</b><br />
               <span class="meta">${escapeHtml(x.why)}</span>
-              ${x.go ? ` <button class="ghost" data-todo="${i}" style="min-height:32px;padding:0 10px;margin-left:4px">${t("고치러 가기")}</button>` : ""}
+              ${x.go ? ` <button class="ghost" data-todo="${i}" style="min-height:32px;padding:0 10px;margin-left:4px">${copyHtml("고치러 가기")}</button>` : ""}
             </div>`).join("")}
        </div>`
     : "";
-  body.innerHTML = todoHtml + `<div class="meta">${t("여는 중…")}</div>`;
+  body.innerHTML = todoHtml + `<div class="meta">${copyHtml("여는 중…")}</div>`;
   body.querySelectorAll<HTMLElement>("[data-todo]").forEach((b) => {
     b.onclick = () => todo[+b.dataset.todo!].go?.();
   });
@@ -2855,29 +2867,29 @@ async function openQrSheet() {
     body.innerHTML = todoHtml +
       `<div class="qrmain">${custQr}
          <div>
-           <b style="font-size:19px">${t("손님")}</b>
+           <b style="font-size:19px">${copyHtml("손님")}</b>
            <div class="meta" style="margin-top:6px;font-size:15px;line-height:1.7">
-             ${t("카운터에 붙이세요. 이 QR 에는 열쇠가 없어 누가 봐도 괜찮습니다.")}<br />
+             ${copyHtml("카운터에 붙이세요. 이 QR 에는 열쇠가 없어 누가 봐도 괜찮습니다.")}<br />
              ${escapeHtml(r.ip)}:${escapeHtml(String(r.port))} ·
-             ${t("폰을 같은 와이파이에 붙이고 찍으세요")}
+             ${copyHtml("폰을 같은 와이파이에 붙이고 찍으세요")}
              <span id="qr-ips"></span>
            </div>
            ${qrLinks(r.customer_url)}
          </div>
        </div>` +
       `<div class="meta" style="margin-bottom:8px">
-         🔴 ${t("아래 셋에는 열쇠가 들어 있습니다. 붙이지 말고, 찍을 때만 보여 주세요.")}
-         ${t("QR 이 안 열리면 아래 주소를 폰 브라우저에 치세요.")}
+         🔴 ${copyHtml("아래 셋에는 열쇠가 들어 있습니다. 붙이지 말고, 찍을 때만 보여 주세요.")}
+         ${copyHtml("QR 이 안 열리면 아래 주소를 폰 브라우저에 치세요.")}
        </div>` +
       `<div class="qrothers">
-         <div class="qrcard haskey">${adminQr}<b>${t("사장님만")}</b>
-           <span>${t("돈·발행·설정 전부")}</span>
+         <div class="qrcard haskey">${adminQr}<b>${copyHtml("사장님만")}</b>
+           <span>${copyHtml("돈·발행·설정 전부")}</span>
            ${qrLinks(r.admin_url)}</div>
-         <div class="qrcard haskey">${staffQr}<b>${t("직원")}</b>
-           <span>${t("주문·회원확인만")}</span>
+         <div class="qrcard haskey">${staffQr}<b>${copyHtml("직원")}</b>
+           <span>${copyHtml("주문·회원확인만")}</span>
            ${qrLinks(r.staff_url)}</div>
-         <div class="qrcard haskey">${scanQr}<b>${t("검표 태블릿")}</b>
-           <span>${t("문 앞에 두는 화면")}</span>
+         <div class="qrcard haskey">${scanQr}<b>${copyHtml("검표 태블릿")}</b>
+           <span>${copyHtml("문 앞에 두는 화면")}</span>
            ${qrLinks(r.scan_url)}</div>
        </div>` +
       // 🔴 여기는 「이 컴퓨터 → 손님 폰으로 받기 에 있습니다」라고만 적혀
@@ -2888,17 +2900,17 @@ async function openQrSheet() {
       //    찾아가라고 적는 대신 **여기서 바로 뽑는다.** 손님 QR 을 보러 온
       //    사람이 찾는 것이 그것이다.
       `<div class="tblbox">
-         <b>${t("테이블마다 다른 QR")}</b>
-         <span class="meta" style="margin-left:8px">${t("안 쓰셔도 됩니다")}</span>
+         <b>${copyHtml("테이블마다 다른 QR")}</b>
+         <span class="meta" style="margin-left:8px">${copyHtml("안 쓰셔도 됩니다")}</span>
          <div class="meta" style="margin:4px 0 8px">
-           ${t("위의 손님 QR 하나로도 장사가 됩니다.")}
-           ${t("테이블이 있는 가게만, 자리마다 다른 QR 을 붙이면 어느 자리 주문인지 저절로 찍힙니다.")}<br />
-           ${t("번호를 쉼표나 띄어쓰기로 적으세요. 인쇄용 한 장이 만들어집니다.")}
+           ${copyHtml("위의 손님 QR 하나로도 장사가 됩니다.")}
+           ${copyHtml("테이블이 있는 가게만, 자리마다 다른 QR 을 붙이면 어느 자리 주문인지 저절로 찍힙니다.")}<br />
+           ${copyHtml("번호를 쉼표나 띄어쓰기로 적으세요. 인쇄용 한 장이 만들어집니다.")}
          </div>
          <div class="row" style="gap:8px">
            <input id="tbl-list" placeholder="1 2 3 4 5 · 창가 · 룸A" autocomplete="off"
                   style="flex:1;min-width:0" />
-           <button class="ghost" id="tbl-print" style="flex:none">${t("만들기")}</button>
+           <button class="ghost" id="tbl-print" style="flex:none">${copyHtml("만들기")}</button>
          </div>
          <div class="meta" id="tbl-note" style="margin-top:8px"></div>
        </div>`;
@@ -2921,8 +2933,8 @@ async function openQrSheet() {
       const box = document.getElementById("qr-ips");
       if (box && extraIps.length >= 2) {
         box.innerHTML =
-          `<br /><b>${t("이 컴퓨터는 주소가 둘 이상입니다")}</b> —
-           ${t("위 QR 이 안 열리면 폰 브라우저에 이 주소를 쳐 보세요:")}<br />` +
+          `<br /><b>${copyHtml("이 컴퓨터는 주소가 둘 이상입니다")}</b> —
+           ${copyHtml("위 QR 이 안 열리면 폰 브라우저에 이 주소를 쳐 보세요:")}<br />` +
           extraIps
             .map((ip) => `<code class="addr">http://${escapeHtml(ip)}:${r.port}</code>`)
             .join(" · ");
@@ -2935,8 +2947,8 @@ async function openQrSheet() {
     //    작게 아래에 둔다(신고할 때 이 줄이 쓸모 있다).
     body.innerHTML = todoHtml +
       `<div class="warnbox">
-         <b>${t("손님 폰 서버를 켜지 못했습니다.")}</b><br />
-         ${t("노드가 켜져 있는지 보시고, 잠시 뒤에 다시 눌러 주세요.")}
+         <b>${copyHtml("손님 폰 서버를 켜지 못했습니다.")}</b><br />
+         ${copyHtml("노드가 켜져 있는지 보시고, 잠시 뒤에 다시 눌러 주세요.")}
        </div>
        <div class="meta" style="margin-top:10px">${escapeHtml(errText(e))}</div>`;
   }
@@ -3153,8 +3165,8 @@ function paintPageTiles(page: string) {
   const tiles = pageTiles(page);
   host.innerHTML = tiles
     .map((x, i) => `<button class="tile" data-pt="${i}">${x.icon}` +
-      `<span>${escapeHtml(t(x.label))}</span>` +
-      `<span class="tsub">${escapeHtml(t(x.sub))}</span></button>`)
+      `<span>${copyHtml(x.label)}</span>` +
+      `<span class="tsub">${copyHtml(x.sub)}</span></button>`)
     .join("");
   host.querySelectorAll<HTMLElement>("[data-pt]").forEach((b) => {
     b.onclick = () => tiles[+b.dataset.pt!].go();
@@ -3238,7 +3250,7 @@ function toggleDot(which: Part) {
  *    무엇이 꺼졌는지 아는 것보다 켜는 것이 목적이다.
  */
 function turnOnBtn(id: string): string {
-  return `<button id="${id}" style="margin-top:12px">${t("지금 켜기")}</button>
+  return `<button id="${id}" style="margin-top:12px">${copyHtml("지금 켜기")}</button>
           <div class="meta" id="${id}-say" style="margin-top:10px"></div>`;
 }
 
@@ -3249,12 +3261,12 @@ function bindTurnOn(id: string, cmd: string) {
   b.addEventListener("click", async () => {
     (b as HTMLButtonElement).disabled = true;
     const say = document.getElementById(`${id}-say`);
-    if (say) say.textContent = t("켜는 중…");
+    if (say) setCopyText(say, () => t("켜는 중…"));
     try {
       const r = await invoke<any>(cmd);
       // 못 켰으면 이유를 그대로 보여 준다. 조용히 실패하면 또 누른다.
       const why = (r?.skipped || []).map((x: any) => `${x.what}: ${x.why}`).join(" · ");
-      if (say) say.textContent = why || t("켰습니다. 잠시 뒤 다시 봐 주세요.");
+      if (say) setCopyText(say, () => why || t("켰습니다. 잠시 뒤 다시 봐 주세요."));
     } catch (e) {
       if (say) say.textContent = String((e as Error)?.message || e);
     }
@@ -3294,13 +3306,13 @@ async function bootStrip(): Promise<string> {
   return (
     `<div class="card" data-bootstrip style="margin-bottom:14px">` +
     (notes.length
-      ? `<div class="meta">${t("켤 때 대신 해 둔 일")}<br />${notes
+      ? `<div class="meta">${copyHtml("켤 때 대신 해 둔 일")}<br />${notes
           .map((n) => `· ${escapeHtml(n)}`)
           .join("<br />")}</div>`
       : "") +
     (bad.length
       ? `<div class="meta" style="color:var(--warn);margin-top:${notes.length ? 8 : 0}px">` +
-        `${t("이건 못 켰습니다")}<br />${bad.map((n) => `· ${escapeHtml(n)}`).join("<br />")}</div>`
+        `${copyHtml("이건 못 켰습니다")}<br />${bad.map((n) => `· ${escapeHtml(n)}`).join("<br />")}</div>`
       : "") +
     `</div>`
   );
@@ -3341,9 +3353,9 @@ async function speedCard(): Promise<string> {
     //    칸이 통째로 사라졌고, 사장은 「빠르게 따라잡기가 안 보인다」만
     //    겪었다. 왜 안 보이는지 화면 어디에도 없었다.
     return `<div class="card" style="margin-top:12px">
-        <h3>${t("빠르게 따라잡기")}</h3>
+        <h3>${copyHtml("빠르게 따라잡기")}</h3>
         <p class="meta danger">${escapeHtml(errText(e))}</p>
-        <p class="meta">${t("「노드 설정 열기」에서 「메모리 사용」을 2000 이상으로 직접 정하셔도 됩니다.")}</p>
+        <p class="meta">${copyHtml("「노드 설정 열기」에서 「메모리 사용」을 2000 이상으로 직접 정하셔도 됩니다.")}</p>
       </div>`;
   }
   try {
@@ -3351,22 +3363,22 @@ async function speedCard(): Promise<string> {
     // 것이 있는지 없는지 알 수 없다.
     if (!s?.worth_it) {
       return `<div class="card" style="margin-top:12px">
-          <h3>${t("빠르게 따라잡기")}</h3>
-          <div class="kv"><b>${t("지금 메모리")}</b><span>${Number(s?.now ?? 0).toLocaleString()} MB</span></div>
-          <p class="meta"><span class="ok">${t("이미 넉넉합니다. 더 올려도 크게 안 빨라집니다.")}</span></p>
+          <h3>${copyHtml("빠르게 따라잡기")}</h3>
+          <div class="kv"><b>${copyHtml("지금 메모리")}</b><span>${Number(s?.now ?? 0).toLocaleString()} MB</span></div>
+          <p class="meta"><span class="ok">${copyHtml("이미 넉넉합니다. 더 올려도 크게 안 빨라집니다.")}</span></p>
         </div>`;
     }
     // 🔴 칸 제목과 단추 이름을 **같게** 둔다. 달라서 「그 단추가 이건가」를
     //    묻게 됐다. 같은 것을 두 이름으로 부르면 안 된다 — 오늘만 두 번째다.
     return `<div class="card" style="margin-top:12px;border-color:var(--brand)">
-        <h3>${t("빠르게 따라잡기")}</h3>
-        <p class="meta">${t("노드에 메모리를 더 주면 장부를 훨씬 빨리 훑습니다.")}</p>
-        <div class="kv"><b>${t("지금 메모리")}</b><span>${Number(s.now).toLocaleString()} MB</span></div>
-        <div class="kv"><b>${t("권하는 값")}</b><span><b>${Number(s.suggest).toLocaleString()} MB</b></span></div>
+        <h3>${copyHtml("빠르게 따라잡기")}</h3>
+        <p class="meta">${copyHtml("노드에 메모리를 더 주면 장부를 훨씬 빨리 훑습니다.")}</p>
+        <div class="kv"><b>${copyHtml("지금 메모리")}</b><span>${Number(s.now).toLocaleString()} MB</span></div>
+        <div class="kv"><b>${copyHtml("권하는 값")}</b><span><b>${Number(s.suggest).toLocaleString()} MB</b></span></div>
         <p class="meta">${escapeHtml(String(s.why || ""))}</p>
-        ${s.measured ? "" : `<p class="meta warn">${t("이 컴퓨터의 메모리를 못 읽어서 8GB 로 셈했습니다. 실제와 다르면 「노드 설정 열기」에서 직접 정하세요.")}</p>`}
+        ${s.measured ? "" : `<p class="meta warn">${copyHtml("이 컴퓨터의 메모리를 못 읽어서 8GB 로 셈했습니다. 실제와 다르면 「노드 설정 열기」에서 직접 정하세요.")}</p>`}
         <div class="row" style="margin-top:10px">
-          <button id="nd-fast">${t("빠르게 따라잡기")}</button>
+          <button id="nd-fast">${copyHtml("빠르게 따라잡기")}</button>
           <span class="meta" id="nd-fastsay"></span>
         </div>
       </div>`;
@@ -3420,13 +3432,11 @@ let prepBusy = false;
 
 function prepCard(behind: number): string {
   return `<div class="card" style="margin-top:12px">
-      <h3>${t("이 컴퓨터 준비하기")}</h3>
-      <p class="meta">${t(
-        "백신 검사에서 빼기 · 방화벽 열기 · 메모리 넉넉히 주기 · 켤 때 같이 켜기 — 한 번에 해 드립니다."
-      )}</p>
-      <p class="meta">${t("관리자 권한을 묻는 창이 한 번 뜹니다. 「예」를 눌러 주십시오.")}</p>
+      <h3>${copyHtml("이 컴퓨터 준비하기")}</h3>
+      <p class="meta">${copyHtml("백신 검사에서 빼기 · 방화벽 열기 · 메모리 넉넉히 주기 · 켤 때 같이 켜기 — 한 번에 해 드립니다.")}</p>
+      <p class="meta">${copyHtml("관리자 권한을 묻는 창이 한 번 뜹니다. 「예」를 눌러 주십시오.")}</p>
       <div class="row" style="margin-top:10px">
-        <button id="pc-go"${prepBusy ? " disabled" : ""}>${t("한 번에 준비하기")}</button>
+        <button id="pc-go"${prepBusy ? " disabled" : ""}>${copyHtml("한 번에 준비하기")}</button>
         <span class="meta" id="pc-say">${prepSay}</span>
       </div>
       <div id="pc-out">${prepOut}</div>
@@ -3445,22 +3455,12 @@ function slowCard(behind: number, rate: number): string {
   const day = behind / rate / 86400;
   if (day < 7) return "";
   return `<div class="card" style="margin-top:12px;border-color:var(--warn)">
-      <h3>${t("이대로면 너무 오래 걸립니다")}</h3>
-      <p class="meta">${t("지금 속도로는")} ${Math.round(day)}${t(
-        "일 걸립니다. 아래 셋 중 하나가 원인인 경우가 대부분입니다."
-      )}</p>
-      <div class="kv"><b>${t("① 디스크")}</b><span>${t(
-        "HDD 면 SSD 보다 20~50배 느립니다. 작업 관리자 → 성능 → 디스크 에서 보실 수 있습니다."
-      )}</span></div>
-      <div class="kv"><b>${t("② 백신")}</b><span>${t(
-        "장부 폴더를 검사에서 빼야 합니다 — 위 「한 번에 준비하기」가 해 드립니다."
-      )}</span></div>
-      <div class="kv"><b>${t("③ 색인")}</b><span>${t(
-        "「이 노드로 지갑도 열기」를 켜 두면 여러 배 느려집니다. 급하시면 다 따라잡은 뒤에 켜셔도 됩니다."
-      )}</span></div>
-      <p class="meta" style="margin-top:10px">${t(
-        "그리고 다 따라잡기 전에도 가게는 여실 수 있습니다 — 노드가 따라잡는 동안에는 결제가 늦게 보일 뿐입니다."
-      )}</p>
+      <h3>${copyHtml("이대로면 너무 오래 걸립니다")}</h3>
+      <p class="meta">${copyHtml("지금 속도로는")} ${Math.round(day)}${copyHtml("일 걸립니다. 아래 셋 중 하나가 원인인 경우가 대부분입니다.")}</p>
+      <div class="kv"><b>${copyHtml("① 디스크")}</b><span>${copyHtml("HDD 면 SSD 보다 20~50배 느립니다. 작업 관리자 → 성능 → 디스크 에서 보실 수 있습니다.")}</span></div>
+      <div class="kv"><b>${copyHtml("② 백신")}</b><span>${copyHtml("장부 폴더를 검사에서 빼야 합니다 — 위 「한 번에 준비하기」가 해 드립니다.")}</span></div>
+      <div class="kv"><b>${copyHtml("③ 색인")}</b><span>${copyHtml("「이 노드로 지갑도 열기」를 켜 두면 여러 배 느려집니다. 급하시면 다 따라잡은 뒤에 켜셔도 됩니다.")}</span></div>
+      <p class="meta" style="margin-top:10px">${copyHtml("그리고 다 따라잡기 전에도 가게는 여실 수 있습니다 — 노드가 따라잡는 동안에는 결제가 늦게 보일 뿐입니다.")}</p>
     </div>`;
 }
 
@@ -3504,7 +3504,7 @@ function bindPrep(behind: number) {
          <p class="meta" style="margin-top:10px">${escapeHtml(String(r?.manual || ""))}</p>
          <div class="row" style="margin-top:6px">
            <code style="font-size:12px;word-break:break-all">${escapeHtml(prepFolder)}</code>
-           <button class="ghost" id="pc-copy">${t("폴더 주소 복사")}</button>
+           <button class="ghost" id="pc-copy">${copyHtml("폴더 주소 복사")}</button>
          </div>`;
       prepSay = escapeHtml(
         Number(r?.failed || 0) === 0
@@ -3557,13 +3557,13 @@ async function stallCard(): Promise<string> {
     const s = await invoke<any>("sync_stalled");
     if (!s?.known || !s.stalled) return "";
     return `<div class="card" style="margin-top:12px;border-color:var(--warn)">
-        <h3>${t("진행이 멈춰 있습니다")}</h3>
-        <div class="kv"><b>${t("블록")}</b><span>${Number(s.blocks).toLocaleString()}</span></div>
-        <div class="kv"><b>${t("안 움직인 시간")}</b><span>${Number(s.quiet_min)}${t("분")}</span></div>
-        <p class="meta">${t("확인하실 것 — ① 이 컴퓨터의 남은 디스크 공간(장부에 40GB 넘게 듭니다) ② 노드를 껐다 켜 보기. 재색인은 이어서 합니다.")}</p>
+        <h3>${copyHtml("진행이 멈춰 있습니다")}</h3>
+        <div class="kv"><b>${copyHtml("블록")}</b><span>${Number(s.blocks).toLocaleString()}</span></div>
+        <div class="kv"><b>${copyHtml("안 움직인 시간")}</b><span>${Number(s.quiet_min)}${copyHtml("분")}</span></div>
+        <p class="meta">${copyHtml("확인하실 것 — ① 이 컴퓨터의 남은 디스크 공간(장부에 40GB 넘게 듭니다) ② 노드를 껐다 켜 보기. 재색인은 이어서 합니다.")}</p>
         <div class="row" style="margin-top:10px">
-          <button class="ghost" id="nd-restart">${t("노드 껐다 켜기")}</button>
-          <button class="ghost" id="nd-log">${t("노드가 뭐 하는지 보기")}</button>
+          <button class="ghost" id="nd-restart">${copyHtml("노드 껐다 켜기")}</button>
+          <button class="ghost" id="nd-log">${copyHtml("노드가 뭐 하는지 보기")}</button>
           <span class="meta" id="nd-restartsay"></span>
         </div>
         <div id="nd-logbox"></div>
@@ -3585,7 +3585,7 @@ function bindLog() {
   if (!b) return;
   b.addEventListener("click", async () => {
     const box = $("nd-logbox");
-    box.innerHTML = `<p class="meta">${t("읽는 중…")}</p>`;
+    box.innerHTML = `<p class="meta">${copyHtml("읽는 중…")}</p>`;
     try {
       const r = await invoke<any>("node_log_tail");
       if (!r?.ok) {
@@ -3600,12 +3600,12 @@ function bindLog() {
              (r.lines || []).join("\n")
            )}</pre>
          <div class="row" style="margin-top:8px">
-           <button class="ghost" id="nd-logcopy">${t("이 글자 복사")}</button>
+           <button class="ghost" id="nd-logcopy">${copyHtml("이 글자 복사")}</button>
            <span class="meta" id="nd-logsay"></span>
          </div>`;
       $("nd-logcopy").addEventListener("click", async () => {
         await navigator.clipboard.writeText((r.lines || []).join("\n")).catch(() => {});
-        $("nd-logsay").textContent = t("복사했습니다");
+        setCopyText($("nd-logsay"), () => t("복사했습니다"));
       });
     } catch (e) {
       box.innerHTML = `<p class="meta danger">${escapeHtml(errText(e))}</p>`;
@@ -3619,12 +3619,12 @@ function bindRestart() {
   b.addEventListener("click", async () => {
     (b as HTMLButtonElement).disabled = true;
     const say = $("nd-restartsay");
-    say.textContent = t("다시 켜는 중…");
+    setCopyText(say, () => t("다시 켜는 중…"));
     try {
       await invoke("services_stop").catch(() => {});
       await new Promise((r) => setTimeout(r, 3000));
       await invoke("services_start").catch(() => {});
-      say.innerHTML = `<span class="ok">${t("다시 켰습니다")}</span>`;
+      say.innerHTML = `<span class="ok">${copyHtml("다시 켰습니다")}</span>`;
       setTimeout(() => void paintPart(), 5000);
     } catch (e) {
       (b as HTMLButtonElement).disabled = false;
@@ -3639,12 +3639,12 @@ async function restoreCard(): Promise<string> {
     const now = Number(s?.now ?? 450);
     if (now <= 450) return "";
     return `<div class="card" style="margin-top:12px">
-        <h3>${t("메모리 되돌리기")}</h3>
-        <div class="kv"><b>${t("지금")}</b><span>${now.toLocaleString()} MB</span></div>
-        <div class="kv"><b>${t("되돌릴 값")}</b><span>450 MB</span></div>
-        <p class="meta">${t("다 따라잡았습니다. 이제 이만큼 필요 없습니다 — 계산대 메모리를 노드가 계속 물고 있으면 주문 화면이 느려집니다.")}</p>
+        <h3>${copyHtml("메모리 되돌리기")}</h3>
+        <div class="kv"><b>${copyHtml("지금")}</b><span>${now.toLocaleString()} MB</span></div>
+        <div class="kv"><b>${copyHtml("되돌릴 값")}</b><span>450 MB</span></div>
+        <p class="meta">${copyHtml("다 따라잡았습니다. 이제 이만큼 필요 없습니다 — 계산대 메모리를 노드가 계속 물고 있으면 주문 화면이 느려집니다.")}</p>
         <div class="row" style="margin-top:10px">
-          <button class="ghost" id="nd-back">${t("메모리 되돌리기")}</button>
+          <button class="ghost" id="nd-back">${copyHtml("메모리 되돌리기")}</button>
           <span class="meta" id="nd-backsay"></span>
         </div>
       </div>`;
@@ -3664,7 +3664,7 @@ function bindRestore() {
     try {
       const r = await invoke<any>("dbcache_restore");
       if (!r?.changed) {
-        say.innerHTML = `<span class="ok">${t("이미 기본값입니다")}</span>`;
+        say.innerHTML = `<span class="ok">${copyHtml("이미 기본값입니다")}</span>`;
         return;
       }
       const ok = await sure(
@@ -3672,14 +3672,14 @@ function bindRestore() {
         t("그래야 적용됩니다. 그동안 결제 확인이 멈추고, 얼마나 걸릴지는 장부 크기에 따라 다릅니다.")
       );
       if (!ok) {
-        say.innerHTML = `<span class="ok">${t("450 MB 로 정했습니다. 다음에 켤 때 적용됩니다.")}</span>`;
+        say.innerHTML = `<span class="ok">${copyHtml("450 MB 로 정했습니다. 다음에 켤 때 적용됩니다.")}</span>`;
         return;
       }
-      say.textContent = t("다시 켜는 중…");
+      setCopyText(say, () => t("다시 켜는 중…"));
       await invoke("services_stop").catch(() => {});
       await new Promise((r) => setTimeout(r, 3000));
       await invoke("services_start").catch(() => {});
-      say.innerHTML = `<span class="ok">${t("다시 켰습니다")}</span>`;
+      say.innerHTML = `<span class="ok">${copyHtml("다시 켰습니다")}</span>`;
       setTimeout(() => void paintPart(), 4000);
     } catch (e) {
       (b as HTMLButtonElement).disabled = false;
@@ -3699,17 +3699,17 @@ function bindSpeed() {
       // 🔴 「다시 켜야 한다」를 반드시 말한다. 안 그러면 값만 바꿔 놓고
       //    「똑같이 느리다」고 겪는다.
       say.innerHTML =
-        `<span class="ok">${Number(r.set).toLocaleString()} MB ${t("로 정했습니다")}</span>`;
+        `<span class="ok">${Number(r.set).toLocaleString()} MB ${copyHtml("로 정했습니다")}</span>`;
       const ok = await sure(
         t("노드를 껐다 켤까요?"),
         t("그래야 적용됩니다. 재색인은 이어서 합니다 — 처음부터 다시 하지 않습니다. 몇 분 동안 결제 확인이 멈춥니다.")
       );
       if (!ok) return;
-      say.textContent = t("다시 켜는 중…");
+      setCopyText(say, () => t("다시 켜는 중…"));
       await invoke("services_stop").catch(() => {});
       await new Promise((r) => setTimeout(r, 3000));
       await invoke("services_start").catch(() => {});
-      say.innerHTML = `<span class="ok">${t("다시 켰습니다")}</span>`;
+      say.innerHTML = `<span class="ok">${copyHtml("다시 켰습니다")}</span>`;
       setTimeout(() => void paintPart(), 4000);
     } catch (e) {
       (b as HTMLButtonElement).disabled = false;
@@ -3746,8 +3746,8 @@ async function paintPartBody(): Promise<void> {
         if (warming) {
           box.innerHTML =
             `<div class="card">
-               <h3>${t("노드가 시작하는 중입니다")}</h3>
-               <p class="meta">${t("장부를 확인하고 있습니다. 몇 분 걸립니다 — 그동안 아무것도 안 하셔도 됩니다.")}</p>
+               <h3>${copyHtml("노드가 시작하는 중입니다")}</h3>
+               <p class="meta">${copyHtml("장부를 확인하고 있습니다. 몇 분 걸립니다 — 그동안 아무것도 안 하셔도 됩니다.")}</p>
                <p class="meta" style="opacity:.7">${escapeHtml(msg.slice(0, 120))}</p>
              </div>`;
           setTimeout(() => void paintPart(), 5000);
@@ -3769,16 +3769,12 @@ async function paintPartBody(): Promise<void> {
         if (brk?.broken) {
           box.innerHTML =
             `<div class="card" style="border-color:var(--warn)">
-               <h3>${t("장부가 깨졌습니다")}</h3>
-               <p class="meta">${t(
-                 "그래서 노드가 켜질 때마다 그 자리를 만나 스스로 꺼집니다. 「지금 켜기」를 눌러도 소용이 없습니다."
-               )}</p>
-               <p class="meta">${t(
-                 "계산을 다시 하면 고쳐집니다. 블록 파일은 그대로 쓰므로 다시 받지 않습니다 — 몇 시간 걸릴 수 있고, 그동안 컴퓨터를 켜 두시면 됩니다."
-               )}</p>
+               <h3>${copyHtml("장부가 깨졌습니다")}</h3>
+               <p class="meta">${copyHtml("그래서 노드가 켜질 때마다 그 자리를 만나 스스로 꺼집니다. 「지금 켜기」를 눌러도 소용이 없습니다.")}</p>
+               <p class="meta">${copyHtml("계산을 다시 하면 고쳐집니다. 블록 파일은 그대로 쓰므로 다시 받지 않습니다 — 몇 시간 걸릴 수 있고, 그동안 컴퓨터를 켜 두시면 됩니다.")}</p>
                <div class="row" style="margin-top:12px">
-                 <button id="nd-heal">${t("장부 고치기")}</button>
-                 <button class="ghost" id="nd-log">${t("노드가 뭐 하는지 보기")}</button>
+                 <button id="nd-heal">${copyHtml("장부 고치기")}</button>
+                 <button class="ghost" id="nd-log">${copyHtml("노드가 뭐 하는지 보기")}</button>
                  <span class="meta" id="nd-say"></span>
                </div>
                <div id="nd-logbox"></div>
@@ -3792,10 +3788,10 @@ async function paintPartBody(): Promise<void> {
             if (!ok) return;
             const b = document.getElementById("nd-heal") as HTMLButtonElement;
             b.disabled = true;
-            $("nd-say").textContent = t("시작하는 중…");
+            setCopyText($("nd-say"), () => t("시작하는 중…"));
             try {
               const r = await invoke<any>("chain_heal");
-              $("nd-say").textContent = String(r?.note || t("시작했습니다."));
+              setCopyText($("nd-say"), () => String(r?.note || t("시작했습니다.")));
             } catch (e) {
               b.disabled = false;
               $("nd-say").innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
@@ -3805,16 +3801,16 @@ async function paintPartBody(): Promise<void> {
         }
         box.innerHTML =
           `<div class="card">
-             <h3>${t("노드가 꺼져 있습니다")}</h3>
-             <p class="meta">${t("결제 확인도 색인도 이 노드가 합니다.")}</p>
+             <h3>${copyHtml("노드가 꺼져 있습니다")}</h3>
+             <p class="meta">${copyHtml("결제 확인도 색인도 이 노드가 합니다.")}</p>
              ${
                n.installed
-                 ? `<p class="meta">${t("프로그램은 있습니다")} — <code class="addr">${escapeHtml(String(n.path || ""))}</code></p>
-                    <button id="nd-go" style="margin-top:12px">${t("지금 켜기")}</button>`
-                 : `<p class="meta" style="color:var(--warn)">${t("노드 프로그램을 찾지 못했습니다.")}</p>
+                 ? `<p class="meta">${copyHtml("프로그램은 있습니다")} — <code class="addr">${escapeHtml(String(n.path || ""))}</code></p>
+                    <button id="nd-go" style="margin-top:12px">${copyHtml("지금 켜기")}</button>`
+                 : `<p class="meta" style="color:var(--warn)">${copyHtml("노드 프로그램을 찾지 못했습니다.")}</p>
                     <p class="meta">${escapeHtml(String(n.install || ""))}</p>` +
                    (looked.length
-                     ? `<details style="margin-top:10px"><summary class="meta">${t("어디를 봤는지 보기")}</summary>
+                     ? `<details style="margin-top:10px"><summary class="meta">${copyHtml("어디를 봤는지 보기")}</summary>
                           <div class="meta" style="margin-top:6px;line-height:1.8">
                             ${looked.slice(0, 24).map((x) => `<code class="addr">${escapeHtml(x)}</code>`).join("<br />")}
                           </div></details>`
@@ -3826,7 +3822,7 @@ async function paintPartBody(): Promise<void> {
         if (go) {
           go.addEventListener("click", async () => {
             (go as HTMLButtonElement).disabled = true;
-            $("nd-say").textContent = t("켜는 중…");
+            setCopyText($("nd-say"), () => t("켜는 중…"));
             try {
               const r = await invoke<any>("services_start");
               // 🔴 못 켠 이유를 **그대로 보여 준다.** 레이븐 코어가 켜져 있어서
@@ -3835,7 +3831,7 @@ async function paintPartBody(): Promise<void> {
                 .filter((x: any) => x?.what === "노드")
                 .map((x: any) => String(x.why || ""))
                 .join(" ");
-              $("nd-say").textContent = why || t("켰습니다. 잠시 뒤 다시 봐 주세요.");
+              setCopyText($("nd-say"), () => why || t("켰습니다. 잠시 뒤 다시 봐 주세요."));
             } catch (e) {
               $("nd-say").textContent = String((e as Error)?.message || e);
             }
@@ -3906,7 +3902,7 @@ async function paintPartBody(): Promise<void> {
         //    알게 되면 그 며칠이 통째로 버려진다.
         (nv?.ok === false
           ? `<div class="card" style="margin-top:12px;border-color:var(--danger)">
-               <h3>${t("이 노드 판으로는 끝까지 못 갑니다")}</h3>
+               <h3>${copyHtml("이 노드 판으로는 끝까지 못 갑니다")}</h3>
                <p class="meta">${escapeHtml(String(nv?.say || ""))}</p>
                <p class="meta"><code class="addr">${escapeHtml(String(nv?.path || ""))}</code></p>
              </div>`
@@ -3971,19 +3967,15 @@ async function paintPartBody(): Promise<void> {
              ⚠️ `peers` 기능은 러스트에 **통째로 만들어져 있었는데 화면이
                 없어서 한 번도 안 돌았다.** 만든 것과 보이는 것은 다르다. */
           `<div class="card" style="margin-top:14px">
-             <h3>${t("서로 파일 지켜 주기")}</h3>
-             <p class="meta">${t(
-               "자산에 붙은 사진·음악은 그 파일을 든 컴퓨터가 켜져 있어야 보입니다. 두 대가 서로 들고 있으면 한 대가 꺼져도 손님에게 보입니다.",
-             )}</p>
+             <h3>${copyHtml("서로 파일 지켜 주기")}</h3>
+             <p class="meta">${copyHtml("자산에 붙은 사진·음악은 그 파일을 든 컴퓨터가 켜져 있어야 보입니다. 두 대가 서로 들고 있으면 한 대가 꺼져도 손님에게 보입니다.")}</p>
              <div class="row" style="margin-top:10px">
-               <button id="pn-mine">${t("내 파일 지키기")}</button>
+               <button id="pn-mine">${copyHtml("내 파일 지키기")}</button>
              </div>
-             <label class="fld" style="margin-top:12px">${t("다른 내 컴퓨터 주소")}</label>
+             <label class="fld" style="margin-top:12px">${copyHtml("다른 내 컴퓨터 주소")}</label>
              <input id="pn-url" placeholder="http://192.168.0.5:9111" autocomplete="off" spellcheck="false" />
-             <p class="meta">${t(
-               "그 컴퓨터의 「바깥 연결」에 적힌 주소입니다. 같은 와이파이면 집 주소로도 됩니다.",
-             )}</p>
-             <button class="ghost" id="pn-help">${t("저 컴퓨터 파일도 내가 들기")}</button>
+             <p class="meta">${copyHtml("그 컴퓨터의 「바깥 연결」에 적힌 주소입니다. 같은 와이파이면 집 주소로도 됩니다.")}</p>
+             <button class="ghost" id="pn-help">${copyHtml("저 컴퓨터 파일도 내가 들기")}</button>
              <div class="msg" id="pn-say"></div>
            </div>` +
           goto("settings", t("파일창고 설정 열기"));
@@ -4033,8 +4025,8 @@ async function paintPartBody(): Promise<void> {
         `<label class="card" style="display:flex;align-items:center;gap:12px;cursor:pointer">
            <input type="checkbox" id="pt-autostart" ${auto ? "checked" : ""}
                   style="width:22px;height:22px;flex:none">
-           <span><b style="display:block">${t("컴퓨터를 켜면 저절로 시작")}</b>
-           <span class="meta">${t("정전이나 재시작 뒤에도 손님 QR 이 살아 있습니다.")}</span></span>
+           <span><b style="display:block">${copyHtml("컴퓨터를 켜면 저절로 시작")}</b>
+           <span class="meta">${copyHtml("정전이나 재시작 뒤에도 손님 QR 이 살아 있습니다.")}</span></span>
          </label>` +
         // 🔴 여기에 **켜는 단추가 있어야 한다.** 「설정 열기 →」 로 보냈더니
         //    「이 컴퓨터」 화면이 나와서 어디서 켜라는 건지 알 수가 없었다.
@@ -4043,7 +4035,7 @@ async function paintPartBody(): Promise<void> {
            <button id="pt-out-go" style="min-height:48px;font-size:16px">
              ${o?.running ? t("바깥 연결 끄기") : o?.installed ? t("지금 켜기") : t("준비물 받고 켜기")}
            </button>
-           ${o?.url ? `<button class="ghost" id="pt-out-copy" style="min-height:48px">${t("주소 복사")}</button>` : ""}
+           ${o?.url ? `<button class="ghost" id="pt-out-copy" style="min-height:48px">${copyHtml("주소 복사")}</button>` : ""}
          </div>
          <p class="meta" id="pt-out-say" style="margin-top:8px">${escapeHtml(outSay)}</p>`;
 
@@ -4216,15 +4208,13 @@ async function indexCard(): Promise<string> {
     can = true;
   }
   return `<div class="card">
-      <b>${t("주소 색인 — 이 노드로 지갑도 열기")}</b>
-      <p class="meta" style="margin-top:8px">${t(
-        "지금은 손님 지갑이 잔액을 우리 서버 한 곳에 묻습니다. 이걸 켜면 이 컴퓨터가 직접 답합니다. 대신 한 번 다시 훑어야 하고, 그동안 입금 확인이 멈춥니다."
-      )}</p>
+      <b>${copyHtml("주소 색인 — 이 노드로 지갑도 열기")}</b>
+      <p class="meta" style="margin-top:8px">${copyHtml("지금은 손님 지갑이 잔액을 우리 서버 한 곳에 묻습니다. 이걸 켜면 이 컴퓨터가 직접 답합니다. 대신 한 번 다시 훑어야 하고, 그동안 입금 확인이 멈춥니다.")}</p>
       <p class="meta" style="margin-top:8px"><b>${escapeHtml(say)}</b></p>
       ${can ? `<label style="display:flex;align-items:center;gap:10px;margin-top:12px;cursor:pointer">
         <input type="checkbox" id="rx-arm" ${st.armed ? "checked" : ""} style="width:22px;height:22px;flex:none">
-        <span>${t("한가해지면 알아서 시작하기")}</span></label>
-      <button id="rx-now" style="margin-top:12px">${t("지금 시작")}</button>` : ""}
+        <span>${copyHtml("한가해지면 알아서 시작하기")}</span></label>
+      <button id="rx-now" style="margin-top:12px">${copyHtml("지금 시작")}</button>` : ""}
       <p class="meta" id="rx-say" style="margin-top:8px"></p>
     </div>`;
 }
@@ -4281,7 +4271,7 @@ function bindTableQr() {
     const raw = ($("tbl-list") as HTMLInputElement).value.trim();
     // 쉼표·띄어쓰기·줄바꿈 아무거나 받는다. 사장이 형식을 외우게 하지 않는다.
     const tables = raw ? raw.split(/[,\s]+/).filter(Boolean) : ["카운터"];
-    note.textContent = t("만드는 중…");
+    setCopyText(note, () => t("만드는 중…"));
     try {
       // 주소를 지금 다시 읽는다. 서버를 켤 때 잡은 값을 쓰면, 공유기가 새
       // 주소를 준 뒤에 인쇄한 QR 이 죽은 주소를 가리킨다.
@@ -4314,11 +4304,11 @@ async function paintOwed() {
     const btn = $("fee-send") as HTMLButtonElement;
     // 🔴 못 보내는 이유를 눌러 보고 알게 하지 않는다. 미리 말한다.
     btn.disabled = !o.ready || owed < 0.01;
-    $("fee-sendsay").textContent = !o.ready
+    setCopyText($("fee-sendsay"), () => !o.ready
       ? t("보낼 주소가 아직 정해지지 않았습니다.")
       : owed < 0.01
         ? t("아직 보낼 만큼 쌓이지 않았습니다.")
-        : `${o.count || 0}${t("건에서 쌓였습니다.")}`;
+        : `${o.count || 0}${t("건에서 쌓였습니다.")}`);
   } catch {
     box.style.display = "none";
   }
@@ -4328,10 +4318,10 @@ async function sendOwed() {
   const btn = $("fee-send") as HTMLButtonElement;
   const say = $("fee-sendsay");
   btn.disabled = true;
-  say.textContent = t("보내는 중…");
+  setCopyText(say, () => t("보내는 중…"));
   try {
     const r = await invoke<any>("fee_pay");
-    say.innerHTML = `<span class="ok">${t("보냈습니다")} — ${r.sent} RVN</span>`;
+    say.innerHTML = `<span class="ok">${copyHtml("보냈습니다")} — ${r.sent} RVN</span>`;
   } catch (e) {
     // 실패해도 장부는 안 줄어든다. 다시 누르면 된다고 말해 준다.
     say.innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
@@ -4433,9 +4423,9 @@ async function loadWallet() {
     $("w-confirmed").textContent = `${b.confirmed.toLocaleString(undefined, { maximumFractionDigits: 8 })} RVN`;
     // Unconfirmed money is shown apart from spendable money on purpose: a shop
     // that ships on an unconfirmed payment can be paid with one that never lands.
-    $("w-unconfirmed").textContent = b.unconfirmed
-      ? `확인 대기 중 ${b.unconfirmed.toLocaleString(undefined, { maximumFractionDigits: 8 })} RVN`
-      : "";
+    setCopyText($("w-unconfirmed"), () => b.unconfirmed
+      ? `${t("확인 대기 중")} ${b.unconfirmed.toLocaleString(lang, { maximumFractionDigits: 8 })} RVN`
+      : "");
   } catch (e) {
     $("w-confirmed").textContent = "—";
     $("w-unconfirmed").textContent = errText(e);
@@ -4586,8 +4576,8 @@ function videoEmbed(raw: string): string {
   }
   if (!src) {
     return `<a class="btn ghost" href="${escapeHtml(url)}" target="_blank" rel="noreferrer noopener"
-              style="display:inline-flex;margin-top:10px">${t("영상 열기")} →</a>
-            <div class="meta">${t("이곳은 화면 안에서 못 틀어서 새 창으로 엽니다.")}</div>`;
+              style="display:inline-flex;margin-top:10px">${copyHtml("영상 열기")} →</a>
+            <div class="meta">${copyHtml("이곳은 화면 안에서 못 틀어서 새 창으로 엽니다.")}</div>`;
   }
   // 🔴 `sandbox` 를 안 건다. 유튜브·비메오 플레이어는 스크립트로 도는데
   //    막으면 검은 네모만 나온다. 대신 `referrerpolicy` 로 우리 주소를
@@ -4694,7 +4684,7 @@ async function onDropped(paths: string[]) {
     const 이름 = one.split(/[\\/]/).pop() || "photo";
     tkStagePhoto({ name: 이름, size: 0, path: one });
     $("tk-note").innerHTML =
-      `<span class="ok">${t("사진을 붙였습니다 — 「보내기」를 누르면 나갑니다")}</span>`;
+      `<span class="ok">${copyHtml("사진을 붙였습니다 — 「보내기」를 누르면 나갑니다")}</span>`;
     return;
   }
 
@@ -4715,7 +4705,7 @@ async function onDropped(paths: string[]) {
       const el = document.getElementById("sh-icon") as HTMLInputElement | null;
       if (el) el.value = cid;
       $("sh-refreshsay").innerHTML =
-        `<span class="ok">${t("가게 사진으로 넣었습니다. 「바뀐 것 손님에게 알리기」를 눌러 주세요.")}</span>`;
+        `<span class="ok">${copyHtml("가게 사진으로 넣었습니다. 「바뀐 것 손님에게 알리기」를 눌러 주세요.")}</span>`;
     }
   } catch (e) {
     await sure(t("올리지 못했습니다"), errText(e), t("닫기"));
@@ -4753,31 +4743,31 @@ async function paintKeyMove() {
   const max = Number(p.max_add || 0);
   const blocked = p.blocked ? String(p.blocked) : "";
   body.innerHTML =
-    `<p class="meta">${t("지금 간판 열쇠는 무작위로 만들어졌습니다. 이 컴퓨터의 백업 파일이 유일한 사본이라, 그 파일을 잃으면 「지금 여기서 주문받습니다」를 영영 못 고칩니다.")}</p>
-     <div class="kv"><b>${t("가게")}</b><span><code class="addr">${escapeHtml(String(p.asset))}</code></span></div>
-     <div class="kv"><b>${t("지금 열쇠")}</b><span><code class="addr">${escapeHtml(String(p.now_pubkey || "").slice(0, 16))}…</code></span></div>
-     <div class="kv"><b>${t("새 열쇠")}</b><span><code class="addr">${escapeHtml(String(p.new_pubkey || "—").slice(0, 16))}…</code> ${t("(12단어에서)")}</span></div>
-     <div class="kv"><b>${t("지금 수량")}</b><span>${Number(p.amount || 0).toLocaleString()}${t("개")}</span></div>
+    `<p class="meta">${copyHtml("지금 간판 열쇠는 무작위로 만들어졌습니다. 이 컴퓨터의 백업 파일이 유일한 사본이라, 그 파일을 잃으면 「지금 여기서 주문받습니다」를 영영 못 고칩니다.")}</p>
+     <div class="kv"><b>${copyHtml("가게")}</b><span><code class="addr">${escapeHtml(String(p.asset))}</code></span></div>
+     <div class="kv"><b>${copyHtml("지금 열쇠")}</b><span><code class="addr">${escapeHtml(String(p.now_pubkey || "").slice(0, 16))}…</code></span></div>
+     <div class="kv"><b>${copyHtml("새 열쇠")}</b><span><code class="addr">${escapeHtml(String(p.new_pubkey || "—").slice(0, 16))}…</code> ${copyHtml("(12단어에서)")}</span></div>
+     <div class="kv"><b>${copyHtml("지금 수량")}</b><span>${Number(p.amount || 0).toLocaleString()}${copyHtml("개")}</span></div>
      ${blocked ? `<p class="meta danger" style="margin-top:10px">${escapeHtml(blocked)}</p>` : `
-     <label style="margin-top:12px">${t("이참에 더 찍을 수량")}
+     <label style="margin-top:12px">${copyHtml("이참에 더 찍을 수량")}
        <input id="km-qty" type="number" min="0" step="1" value="${max}" /></label>
      <div class="meta">
-       ${t("넣을 수 있는 최대")} <b>${max.toLocaleString()}</b>${t("개")} —
-       ${t("상한은 210억인데 이미 있는 것만큼 빼야 합니다. 넘으면 거래가 통째로 실패합니다.")}
+       ${copyHtml("넣을 수 있는 최대")} <b>${max.toLocaleString()}</b>${copyHtml("개")} —
+       ${copyHtml("상한은 210억인데 이미 있는 것만큼 빼야 합니다. 넘으면 거래가 통째로 실패합니다.")}
      </div>
      <div class="note" style="margin-top:12px">
-       <b>${t("일어나는 일")}</b>
+       <b>${copyHtml("일어나는 일")}</b>
        <div class="meta" style="margin-top:6px;line-height:1.9">
-         · ${t("100 RVN 이 소각됩니다. 돌아오지 않습니다.")}<br />
-         · ${t("가게 정보를 그대로 가져와 열쇠 한 줄만 바꿔 다시 새깁니다 — 다른 정보는 안 잃습니다.")}<br />
-         · ${t("체인에 새긴 뒤에야 열쇠 파일을 바꿉니다. 실패하면 아무것도 안 바뀝니다.")}<br />
-         · ${t("옛 열쇠는 지우지 않고 옆에 남깁니다.")}<br />
-         · ${t("「재발행 가능」은 켠 채로 둡니다 — 끄면 결제 주소도 영영 못 바꿉니다.")}<br />
-         · ${t("확인되기까지 몇 분 걸리고, 그동안 손님 화면은 옛 정보를 봅니다.")}
+         · ${copyHtml("100 RVN 이 소각됩니다. 돌아오지 않습니다.")}<br />
+         · ${copyHtml("가게 정보를 그대로 가져와 열쇠 한 줄만 바꿔 다시 새깁니다 — 다른 정보는 안 잃습니다.")}<br />
+         · ${copyHtml("체인에 새긴 뒤에야 열쇠 파일을 바꿉니다. 실패하면 아무것도 안 바뀝니다.")}<br />
+         · ${copyHtml("옛 열쇠는 지우지 않고 옆에 남깁니다.")}<br />
+         · ${copyHtml("「재발행 가능」은 켠 채로 둡니다 — 끄면 결제 주소도 영영 못 바꿉니다.")}<br />
+         · ${copyHtml("확인되기까지 몇 분 걸리고, 그동안 손님 화면은 옛 정보를 봅니다.")}
        </div>
      </div>
      <div class="row" style="margin-top:12px">
-       <button id="km-go">${t("100 RVN 소각하고 바꾸기")}</button>
+       <button id="km-go">${copyHtml("100 RVN 소각하고 바꾸기")}</button>
        <span class="meta" id="km-note"></span>
      </div>`}`;
   const go = document.getElementById("km-go");
@@ -4788,7 +4778,7 @@ async function doKeyMove(p: any) {
   const qty = parseFloat(($("km-qty") as HTMLInputElement)?.value || "0") || 0;
   const max = Number(p.max_add || 0);
   if (qty > max) {
-    $("km-note").innerHTML = `<span class="danger">${t("넣을 수 있는 최대를 넘었습니다")} — ${max.toLocaleString()}</span>`;
+    $("km-note").innerHTML = `<span class="danger">${copyHtml("넣을 수 있는 최대를 넘었습니다")} — ${max.toLocaleString()}</span>`;
     return;
   }
   const ok = await sure(
@@ -4801,11 +4791,11 @@ async function doKeyMove(p: any) {
   if (!(await ensureUnlocked(t("체인에 새기려면 지갑을 열어야 합니다.")))) return;
   const btn = $("km-go") as HTMLButtonElement;
   btn.disabled = true;
-  $("km-note").textContent = t("새기는 중… 몇 분 걸립니다");
+  setCopyText($("km-note"), () => t("새기는 중… 몇 분 걸립니다"));
   try {
     const r = await invoke<any>("shop_key_move", { qty, passphrase: null });
     $("km-note").innerHTML =
-      `<span class="ok">${t("새겼습니다")} — <code class="addr">${escapeHtml(String(r.txid)).slice(0, 20)}…</code></span>`;
+      `<span class="ok">${copyHtml("새겼습니다")} — <code class="addr">${escapeHtml(String(r.txid)).slice(0, 20)}…</code></span>`;
   } catch (e) {
     btn.disabled = false;
     $("km-note").innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
@@ -4980,7 +4970,7 @@ async function tk옮길것찾기() {
     //    이 두 줄이 없으면 새 글 하나에 열두 번씩 값을 낸다.
     const 있던것 = tk옮긴것.get(id);
     if (있던것 !== undefined) {
-      if (있던것) el.insertAdjacentHTML("beforeend", `<div class="tr">${escapeHtml(있던것)}</div>`);
+      if (있던것) el.insertAdjacentHTML("beforeend", `<div class="tr" translate="no">${escapeHtml(있던것)}</div>`);
       return;
     }
     if (el.dataset.trDone === "1") return;
@@ -5010,7 +5000,7 @@ async function tk옮길것찾기() {
       }
       tk옮긴것.set(id, 옮김);
       if (el.querySelector(".tr")) continue;
-      el.insertAdjacentHTML("beforeend", `<div class="tr">${escapeHtml(옮김)}</div>`);
+      el.insertAdjacentHTML("beforeend", `<div class="tr" translate="no">${escapeHtml(옮김)}</div>`);
     } catch {
       // 🔴 조용히 넘어간다. 옮기기는 **곁들이**다 — 못 옮겼다고 빨간 글씨를
       //    글마다 띄우면 대화가 오류 목록이 된다. 원문은 그대로 보인다.
@@ -5113,16 +5103,16 @@ function talkPaintMuted() {
 
   // 머리줄 단추에 몇 명인지 적는다. 안 적으면 명단을 열기 전까지
   // 내가 누굴 숨겼는지 알 길이 없다.
-  if (btn) btn.textContent = keys.length ? `${t("안 보기")} ${keys.length}` : t("안 보기 명단");
+  if (btn) setCopyText(btn, () => keys.length ? `${t("안 보기")} ${keys.length}` : t("안 보기 명단"));
 
   const back = tkJustBack.length
-    ? `<p class="muteback">${t("다시 보기로 되돌렸습니다")} — ${escapeHtml(tkJustBack.join(", "))}</p>`
+    ? `<p class="muteback">${copyHtml("다시 보기로 되돌렸습니다")} — ${escapeHtml(tkJustBack.join(", "))}</p>`
     : "";
 
   if (!keys.length) {
     list.innerHTML =
       back +
-      `<p class="mutenone">${t("안 보기로 한 사람이 없습니다.")}</p>`;
+      `<p class="mutenone">${copyHtml("안 보기로 한 사람이 없습니다.")}</p>`;
     return;
   }
 
@@ -5134,7 +5124,7 @@ function talkPaintMuted() {
         return `<div class="muterow">
             <span class="mutewho" title="${escapeHtml(pk)}">${escapeHtml(tkMuteName(pk))}</span>
             <span class="mutewhen">${escapeHtml(when)}</span>
-            <button data-unmute="${escapeHtml(pk)}">${t("다시 보기")}</button>
+            <button data-unmute="${escapeHtml(pk)}">${copyHtml("다시 보기")}</button>
           </div>`;
       })
       .join("");
@@ -5201,11 +5191,11 @@ function tkWho(pk: string): string {
     const 이름 = String(p.name);
     const 겹침 = tk겹친이름.get(이름.trim());
     return (
-      escapeHtml(이름) +
+      `<span translate="no">${escapeHtml(이름)}</span>` +
       // 🔴 흉내 내는 사람이 나타난 **그때** 뜬다. 색(`--h`)이 이미 열쇠에서
       //    나오지만, 색만으로는 「다른 색이네」로 끝나고 뜻이 안 전해진다.
       (겹침
-        ? `<span class="samename" title="${t("이름은 누구나 같게 달 수 있습니다. 색이 다르면 다른 분입니다.")}">${t("같은 이름")} ${겹침}${t("명")}</span>`
+        ? `<span class="samename" title="${t("이름은 누구나 같게 달 수 있습니다. 색이 다르면 다른 분입니다.")}">${copyHtml("같은 이름")} ${겹침}${copyHtml("명")}</span>`
         : "")
     );
   }
@@ -5265,11 +5255,11 @@ async function talkPaintMe() {
     tkMine = String(me.pubkey || "");
     await tkLoadNames([tkMine]);
     const mine = tkNames.get(tkMine);
-    const shown = mine?.name ? escapeHtml(String(mine.name)) : t("이름 없음");
+    const shown = mine?.name ? `<span translate="no">${escapeHtml(String(mine.name))}</span>` : t("이름 없음");
     // 머리줄은 좁다. 긴 설명은 「내 이름」 단추 안에서 말한다.
     $("tk-me").innerHTML =
       `<b>${shown}</b>` +
-      (me.recoverable ? "" : ` <span class="warn">${t("· 백업 파일이 유일한 사본")}</span>`);
+      (me.recoverable ? "" : ` <span class="warn">${copyHtml("· 백업 파일이 유일한 사본")}</span>`);
   } catch (e) {
     $("tk-me").innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
   }
@@ -5290,12 +5280,12 @@ async function talkPaintRooms() {
   tkRoomNames = new Map(rooms.map((r) => [String(r.id), String(r.name)]));
   paintInvite();
   box.innerHTML =
-    `<button class="room${tkRoom ? "" : " on"}" data-room="">${t("레이븐 이야기")}</button>` +
+    `<button class="room${tkRoom ? "" : " on"}" data-room="">${copyHtml("레이븐 이야기")}</button>` +
     rooms
       .map(
         (r) =>
           `<button class="room${tkRoom === String(r.id) ? " on" : ""}" data-room="${escapeHtml(String(r.id))}"
-             title="${escapeHtml(String(r.about || ""))}">${escapeHtml(String(r.name))}` +
+             title="${escapeHtml(String(r.about || ""))}" translate="no">${escapeHtml(String(r.name))}` +
           // 🔴 자산 방인 것을 **들어가기 전에** 알려 준다. 글을 다 쓰고
           //    보내기를 눌렀을 때 「못 씁니다」가 뜨면 그건 우리 잘못이다.
           (r.asset
@@ -5309,9 +5299,9 @@ async function talkPaintRooms() {
       tkRoom = String((b as HTMLElement).dataset.room || "");
       // 한 번 연 방은 나가 있어도 지켜본다 — 그 방에 새 글이 오면 알린다.
       방지켜보기(tkRoom);
-      $("tk-title").textContent = tkRoom
+      setCopyText($("tk-title"), () => tkRoom
         ? tkRoomNames.get(tkRoom) || t("방")
-        : t("레이븐 이야기");
+        : t("레이븐 이야기"));
       paintInvite();
       void talkPaintRooms();
       void talkPaint();
@@ -5341,7 +5331,7 @@ function paintInvite() {
   const host = document.getElementById("tk-invite");
   if (!host) return;
   const name = tkRoom ? tkRoomNames.get(tkRoom) || t("방") : t("레이븐 이야기");
-  host.innerHTML = `<button class="ghost" id="tk-inv">${t("초대하기")}</button>`;
+  host.innerHTML = `<button class="ghost" id="tk-inv">${copyHtml("초대하기")}</button>`;
   document.getElementById("tk-inv")!.addEventListener("click", () => {
     const url = inviteLink();
     // 붙여넣기 좋게 **문구까지** 담는다. 사장이 문장을 지어내지 않아도 된다.
@@ -5364,7 +5354,7 @@ function paintInvite() {
       // 닫으면 「초대하기」 단추로 되돌아간다.
       const back = document.createElement("button");
       back.className = "ghost";
-      back.textContent = t("닫기");
+      setCopyText(back, () => t("닫기"));
       back.addEventListener("click", () => paintInvite());
       host.querySelector(".invbtns")?.appendChild(back);
     });
@@ -5430,7 +5420,7 @@ function tkPicHtml(p: { cid: string; gateway: string; size: number }): string {
   const local = `http://127.0.0.1:8080/ipfs/${p.cid}`;
   return (
     `<div class="picwrap" data-cid="${escapeHtml(p.cid)}" data-gw="${escapeHtml(p.gateway)}">` +
-    `<div class="picwait">${t("사진을 받는 중…")}</div>` +
+    `<div class="picwait">${copyHtml("사진을 받는 중…")}</div>` +
     `<img class="bubpic" alt="${t("사진")}" hidden src="${escapeHtml(local)}" />` +
     `</div>`
   );
@@ -5454,10 +5444,10 @@ function tkWatchPics(box: HTMLElement) {
       끝났나 = true;
       const gw = String(w.dataset.gw || "");
       w.innerHTML =
-        `<div class="picfail"><b>${t("사진을 못 받았습니다")}</b>` +
+        `<div class="picfail"><b>${copyHtml("사진을 못 받았습니다")}</b>` +
         `<span class="picwhy">${escapeHtml(why)}</span>` +
-        `<button data-picretry="1">${t("다시 받기")}</button>` +
-        (gw ? `<button data-picweb="1">${t("인터넷 창에서 열기")}</button>` : "") +
+        `<button data-picretry="1">${copyHtml("다시 받기")}</button>` +
+        (gw ? `<button data-picweb="1">${copyHtml("인터넷 창에서 열기")}</button>` : "") +
         `</div>`;
       const again = w.querySelector("[data-picretry]") as HTMLElement | null;
       // ⚠️ 말풍선을 누르면 「내 말로」 단추 줄이 열린다. 사진 안의 단추를
@@ -5466,7 +5456,7 @@ function tkWatchPics(box: HTMLElement) {
         ev.stopPropagation();
         // 다시 그리고 다시 지켜본다. 파일창고를 방금 켰을 수도 있다.
         w.innerHTML =
-          `<div class="picwait">${t("사진을 받는 중…")}</div>` +
+          `<div class="picwait">${copyHtml("사진을 받는 중…")}</div>` +
           `<img class="bubpic" alt="${t("사진")}" hidden ` +
           `src="http://127.0.0.1:8080/ipfs/${escapeHtml(String(w.dataset.cid || ""))}?t=${Date.now()}" />`;
         tkWatchPics(w.parentElement || w);
@@ -5511,7 +5501,7 @@ async function talkPaint() {
   //    사장이 다른 방을 누르면 `tkRoom` 이 바뀌어, 아래에서 이 목록을
   //    엉뚱한 방의 것으로 세게 된다.
   const 읽은방 = tkRoom;
-  box.innerHTML = `<div class="meta" style="margin:auto">${t("세계 릴레이에서 읽는 중…")}</div>`;
+  box.innerHTML = `<div class="meta" style="margin:auto">${copyHtml("세계 릴레이에서 읽는 중…")}</div>`;
   try {
     const list: any[] = await invoke("talk_read", { room: 읽은방 || null, limit: 60 });
     // 🔴 알림 판단은 **한 곳**에만 둔다. 화면이 읽은 것도 지킴이가 읽은 것도
@@ -5523,7 +5513,7 @@ async function talkPaint() {
     if (!list.length) {
       box.innerHTML =
         `<div class="meta" style="margin:auto;text-align:center;line-height:1.9">` +
-        `${t("아직 글이 없습니다.")}<br />${t("첫 글을 올려 보세요 — 세계 릴레이로 함께 나갑니다.")}</div>`;
+        `${copyHtml("아직 글이 없습니다.")}<br />${copyHtml("첫 글을 올려 보세요 — 세계 릴레이로 함께 나갑니다.")}</div>`;
       return;
     }
     // 🔴 이름표를 **먼저** 가져온다. 안 그러면 화면에 16진수가 한 번
@@ -5538,8 +5528,8 @@ async function talkPaint() {
     const asc = all.filter((e) => !tkMuted[String(e.pubkey || "")]);
     const hid = all.length - asc.length;
     const hidNote = hid
-      ? `<div class="hidnote">${t("안 보기 한 분의 글")} ${hid}${t("개를 숨겼습니다")} ·
-           <button data-openmute="1">${t("명단 보기")}</button></div>`
+      ? `<div class="hidnote">${copyHtml("안 보기 한 분의 글")} ${hid}${copyHtml("개를 숨겼습니다")} ·
+           <button data-openmute="1">${copyHtml("명단 보기")}</button></div>`
       : "";
     // 앞뒤 글을 봐야 「이름을 또 적을까」·「시각을 찍을까」를 정할 수 있다.
     // 그래서 map 안에서 옆 글을 꺼내 쓴다.
@@ -5602,28 +5592,28 @@ async function talkPaint() {
         //    내가 쓴 것을 나에게 조심하라고 하는 것은 잡음이다.
         const 조심 =
           !mine && tk돈이야기인가(본문)
-            ? `<p class="moneywarn">${t("돈·주소가 적힌 글입니다. 이름은 누구나 같게 달 수 있으니, 보내기 전에 다른 길로 한 번 확인하세요.")}</p>`
+            ? `<p class="moneywarn">${copyHtml("돈·주소가 적힌 글입니다. 이름은 누구나 같게 달 수 있으니, 보내기 전에 다른 길로 한 번 확인하세요.")}</p>`
             : "";
 
         return (
           day +
           head +
           `<div class="line${mine ? " me" : ""}">
-             <div class="bub${mine ? " me" : ""}" data-say="${id}">${escapeHtml(본문)}${pic ? tkPicHtml(pic) : ""}</div>
+             <div class="bub${mine ? " me" : ""}" data-say="${id}"><span translate="no">${escapeHtml(본문)}</span>${pic ? tkPicHtml(pic) : ""}</div>
              ${clock}
            </div>` +
           조심 +
           `
            <div class="bubacts${mine ? " r" : ""}" data-acts="${id}">
-             <button data-tr="${id}">${t("내 말로")}</button>
-             <button data-keep="${id}">${t("간직")}</button>` +
+             <button data-tr="${id}">${copyHtml("내 말로")}</button>
+             <button data-keep="${id}">${copyHtml("간직")}</button>` +
           // 내 글에는 안 붙인다. 나를 안 보기로 할 이유가 없고,
           // 눌렀다가 내 글이 사라지면 그것부터 고장으로 읽힌다.
-          (mine ? "" : `<button data-mute="${escapeHtml(who)}">${t("안 보기")}</button>`) +
+          (mine ? "" : `<button data-mute="${escapeHtml(who)}">${copyHtml("안 보기")}</button>`) +
             // 🔴 내 글에만. 이름이 「삭제」가 아니라 **「지우기 요청」**인 것이
             //    전부다 — Nostr 의 지움은 **부탁**이지 명령이 아니고, 릴레이가
             //    따를 의무가 없다. 「삭제」라 적으면 지워졌다고 믿는데 안 지워진다.
-            (mine ? `<button data-del="${id}">${t("지우기 요청")}</button>` : "") +
+            (mine ? `<button data-del="${id}">${copyHtml("지우기 요청")}</button>` : "") +
           `<span class="meta" data-note="${id}"></span>
            </div>`
         );
@@ -5675,7 +5665,7 @@ async function talkPaint() {
         try {
           const r = await invoke<any>("talk_delete_request", { id: gid });
           // 🔴 글을 화면에서 없애지 않는다. 없애면 지워진 줄 안다.
-          (b as HTMLElement).textContent = t("지우기 요청함");
+          setCopyText((b as HTMLElement), () => t("지우기 요청함"));
           (b as HTMLButtonElement).disabled = true;
           if (note) note.textContent = String(r?.say || "");
         } catch (e) {
@@ -5720,11 +5710,11 @@ async function talkSetName() {
   const about = (await ask(t("한 줄 소개"), t("비워 두셔도 됩니다."), {
     value: String(now?.about || ""),
   })) || "";
-  $("tk-note").textContent = t("올리는 중…");
+  setCopyText($("tk-note"), () => t("올리는 중…"));
   try {
     await invoke("talk_profile_set", { name, about, picture: String(now?.picture || "") });
     tkNames.set(tkMine, { name, about, picture: now?.picture || "" });
-    $("tk-note").innerHTML = `<span class="ok">${t("이름을 정했습니다")}</span>`;
+    $("tk-note").innerHTML = `<span class="ok">${copyHtml("이름을 정했습니다")}</span>`;
     void talkPaintMe();
     void talkPaint();
   } catch (e) {
@@ -5740,7 +5730,7 @@ async function talkTranslate(id: string, list: any[]) {
   if (!note || !body || !ev) return;
   // 두 번 눌러도 두 번 붙지 않는다.
   if (body.querySelector(".tr")) return;
-  note.textContent = t("옮기는 중…");
+  setCopyText(note, () => t("옮기는 중…"));
   try {
     // 🔴 화면이 직접 부르면 **CORS 로 막힌다.** 앱의 출처는
     //    `tauri://localhost` 라, 브라우저가 rvn.ex.erci.se 로 나가는 것을
@@ -5753,7 +5743,7 @@ async function talkTranslate(id: string, list: any[]) {
     });
     if (!j?.translation) throw new Error("옮기지 못했습니다");
     // 모양은 `.tr` 이 정한다. 여기서 또 적으면 저절로 옮긴 글과 다르게 보인다.
-    body.insertAdjacentHTML("beforeend", `<div class="tr">${escapeHtml(String(j.translation))}</div>`);
+    body.insertAdjacentHTML("beforeend", `<div class="tr" translate="no">${escapeHtml(String(j.translation))}</div>`);
     // 🔴 **손으로 옮긴 것도 같은 자리에 기억한다.** 두 길이 따로 기억하면
     //    다시 그릴 때 저절로 옮기기가 같은 글을 또 부른다 — 값을 두 번 낸다.
     tk옮긴것.set(id, String(j.translation));
@@ -5800,7 +5790,7 @@ async function talkKeep(id: string, list: any[]) {
     );
     if (!ok) return;
   }
-  note.textContent = t("굳히는 중…");
+  setCopyText(note, () => t("굳히는 중…"));
   try {
     const bytes = Array.from(new TextEncoder().encode(JSON.stringify(ev)));
     const added = await invoke<any>("ipfs_add_file", {
@@ -5813,8 +5803,8 @@ async function talkKeep(id: string, list: any[]) {
       //    컴퓨터가 켜져 있어야 한다.** 다른 사람이 받아 갔는지 확인하는
       //    코드는 이 길에 한 줄도 없다.
       //    겁주는 말 대신 **할 일 둘**만 남긴다: 주소를 적을 것, 켜 둘 것.
-      `<span class="ok">${t("이 컴퓨터에 두었습니다")} — <code class="addr">${escapeHtml(String(added.cid))}</code></span>` +
-      `<span class="meta"> ${t("주소를 적어 두시고, 다른 분이 보시려면 이 컴퓨터를 켜 두세요.")}</span>`;
+      `<span class="ok">${copyHtml("이 컴퓨터에 두었습니다")} — <code class="addr">${escapeHtml(String(added.cid))}</code></span>` +
+      `<span class="meta"> ${copyHtml("주소를 적어 두시고, 다른 분이 보시려면 이 컴퓨터를 켜 두세요.")}</span>`;
   } catch (e) {
     note.innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
   }
@@ -5875,10 +5865,11 @@ function tkStagePhoto(p: TkPhoto) {
     img.removeAttribute("src");
     img.hidden = true;
   }
+  $("tk-photoname").setAttribute("translate", "no");
   $("tk-photoname").textContent = p.name;
-  $("tk-photometa").textContent = p.size
+  setCopyText($("tk-photometa"), () => p.size
     ? `${tkSize(p.size)} · ${t("「보내기」를 누르면 글과 함께 나갑니다")}`
-    : t("「보내기」를 누르면 글과 함께 나갑니다");
+    : t("「보내기」를 누르면 글과 함께 나갑니다"));
   $("tk-photoprog").hidden = true;
   $("tk-photobox").hidden = false;
   ($("tk-text") as HTMLTextAreaElement).focus();
@@ -5957,8 +5948,8 @@ function tk임시풍선(text: string): HTMLElement | null {
   const wrap = document.createElement("div");
   wrap.className = "line me pending";
   wrap.innerHTML =
-    `<div class="bub me">${escapeHtml(text)}</div>` +
-    `<time class="tstamp">${escapeHtml(t("보내는 중"))}</time>`;
+    `<div class="bub me" translate="no">${escapeHtml(text)}</div>` +
+    `<time class="tstamp">${copyHtml("보내는 중")}</time>`;
   box.appendChild(wrap);
   box.scrollTop = box.scrollHeight;
   return wrap;
@@ -6029,9 +6020,9 @@ async function talkSendPhoto(text: string) {
   const 그리기 = () => {
     const 초 = Math.floor((Date.now() - 시작) / 1000);
     prog.innerHTML =
-      `<b>${t("사진을 보내는 중…")} ${초}${t("초")}</b>` +
+      `<b>${copyHtml("사진을 보내는 중…")} ${초}${copyHtml("초")}</b>` +
       (오래
-        ? `<br /><span class="pbmeta">${t("큰 사진은 1분까지 걸립니다. 창을 닫지 마세요.")}</span>`
+        ? `<br /><span class="pbmeta">${copyHtml("큰 사진은 1분까지 걸립니다. 창을 닫지 마세요.")}</span>`
         : "") +
       `<div class="photobar"><i></i></div>`;
   };
@@ -6096,7 +6087,7 @@ async function talkOpenDm() {
   const say = $("tk-dmsay");
   const go = $("tk-dmgo") as HTMLButtonElement;
   go.disabled = true;
-  say.textContent = t("여는 중…");
+  setCopyText(say, () => t("여는 중…"));
   try {
     // 20초를 넘기면 멈춘 이유를 말한다. 말없이 기다리게 두지 않는다.
     await Promise.race([
@@ -6106,7 +6097,7 @@ async function talkOpenDm() {
     ]);
     await openUrl(LEGACY_LOCAL_WALLET);
     say.innerHTML =
-      `<span class="ok">${t("인터넷 창에 쪽지 화면을 열었습니다.")}</span> ` +
+      `<span class="ok">${copyHtml("인터넷 창에 쪽지 화면을 열었습니다.")}</span> ` +
       escapeHtml(t("12단어가 아직 없으면 그 화면이 먼저 만들라고 합니다."));
   } catch (e) {
     say.innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
@@ -6140,30 +6131,30 @@ async function talkNewRoom() {
   ($("tk-nname") as HTMLInputElement).focus();
 
   const sel = $("tk-nasset") as HTMLSelectElement;
-  sel.innerHTML = `<option value="">${t("누구나 (자산 없이)")}</option>`;
-  $("tk-nhint").textContent = t("자산 목록을 읽는 중…");
+  sel.innerHTML = `<option value="" data-desktop-copy="누구나 (자산 없이)">누구나 (자산 없이)</option>`;
+  setCopyText($("tk-nhint"), () => t("자산 목록을 읽는 중…"));
   try {
     const r = await invoke<any>("talk_my_assets");
     const list: string[] = r?.assets || [];
     sel.innerHTML =
-      `<option value="">${t("누구나 (자산 없이)")}</option>` +
+      `<option value="" data-desktop-copy="누구나 (자산 없이)">누구나 (자산 없이)</option>` +
       list.map((a) => `<option value="${escapeHtml(a)}">${escapeHtml(a)}</option>`).join("");
     // 🔴 **없는 것과 못 읽은 것을 가른다.** 노드가 장부를 훑는 중이면
     //    자산이 없는 게 아니라 아직 모르는 것이다.
-    $("tk-nhint").textContent = r?.ok
+    setCopyText($("tk-nhint"), () => r?.ok
       ? list.length
         ? t("고르시면 그 자산을 가진 분만 이 방에 글을 씁니다. 넘기면 그 순간 끊깁니다.")
         : t("가진 자산이 없습니다 — 누구나 들어오는 방이 됩니다.")
-      : t("지금은 자산을 확인할 수 없습니다(노드가 따라잡는 중). 누구나 들어오는 방으로 만드실 수 있습니다.");
+      : t("지금은 자산을 확인할 수 없습니다(노드가 따라잡는 중). 누구나 들어오는 방으로 만드실 수 있습니다."));
   } catch {
-    $("tk-nhint").textContent = t("자산을 확인하지 못했습니다.");
+    setCopyText($("tk-nhint"), () => t("자산을 확인하지 못했습니다."));
   }
 }
 
 async function talkMakeRoomGo() {
   const name = ($("tk-nname") as HTMLInputElement).value.trim();
   if (!name) {
-    $("tk-nsay").innerHTML = `<span class="danger">${t("방 이름을 적어 주세요")}</span>`;
+    $("tk-nsay").innerHTML = `<span class="danger">${copyHtml("방 이름을 적어 주세요")}</span>`;
     ($("tk-nname") as HTMLInputElement).focus();
     return;
   }
@@ -6172,12 +6163,12 @@ async function talkMakeRoomGo() {
   const b = $("tk-nmake") as HTMLButtonElement;
   b.disabled = true;
   // 누른 즉시 말한다. 아무 표시 없이 기다리게 두지 않는다.
-  $("tk-nsay").textContent = t("만드는 중…");
+  setCopyText($("tk-nsay"), () => t("만드는 중…"));
   try {
     await invoke("talk_make_room", { name, about, asset });
     $("tk-newbox").hidden = true;
     await talkPaintRooms();
-    $("tk-note").innerHTML = `<span class="ok">${t("방을 만들었습니다")}</span>`;
+    $("tk-note").innerHTML = `<span class="ok">${copyHtml("방을 만들었습니다")}</span>`;
   } catch (e) {
     $("tk-nsay").innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
   } finally {
@@ -6242,7 +6233,7 @@ function fanPaintLimits(limits: unknown) {
   // 못 받았으면 있던 말을 지우지 않는다. 빈 칸이 되면 「없다」로 읽힌다.
   if (!rows.length) return;
   $("fan-limits").innerHTML =
-    `<b>${t("먼저 아셔야 할 것")}</b>` +
+    `<b>${copyHtml("먼저 아셔야 할 것")}</b>` +
     rows.map((v) => `<p>${escapeHtml(v)}</p>`).join("");
 }
 
@@ -6250,15 +6241,15 @@ function fanPaintLimits(limits: unknown) {
 function fanPaintPicked() {
   const picked = fanGroups.filter((g) => fanPicked.has(g.asset));
   const rooms = picked.reduce((n, g) => n + (Number(g.room_count) || 0), 0);
-  $("fan-picked").textContent = picked.length
+  setCopyText($("fan-picked"), () => picked.length
     ? `${t("고른 자산")} ${picked.length} · ${t("보낼 방")} ${rooms}${t("곳")}`
-    : t("아직 고른 자산이 없습니다.");
+    : t("아직 고른 자산이 없습니다."));
 }
 
 async function fanLoad(force = false) {
   if (fanLoaded && !force) return;
   const say = $("fan-say");
-  say.textContent = t("불러오는 중…");
+  setCopyText(say, () => t("불러오는 중…"));
   let r: any;
   try {
     r = await invoke<any>("fan_rooms");
@@ -6315,17 +6306,17 @@ function fanPaintGroups() {
                <input type="checkbox" data-fanpick="${key}"${fanPicked.has(a) ? " checked" : ""} />
                <span>${key}</span></label>`) +
         // 내가 낸 자산인지. 「내가 낸 것」과 「내가 산 것」은 팬클럽에서 뜻이 다르다.
-        (g.i_issued ? `<span class="tag">${t("내가 낸 자산")}</span>` : "") +
-        `<button class="ghost" data-fanwho="${key}">${t("팬 수 세기")}</button>` +
-        (권함 ? `<button class="ghost" data-fanroom="${key}">${t("방 만들기")}</button>` : "") +
+        (g.i_issued ? `<span class="tag">${copyHtml("내가 낸 자산")}</span>` : "") +
+        `<button class="ghost" data-fanwho="${key}">${copyHtml("팬 수 세기")}</button>` +
+        (권함 ? `<button class="ghost" data-fanroom="${key}">${copyHtml("방 만들기")}</button>` : "") +
         `</div>` +
         (권함
-          ? `<p class="fanrooms">${t("아직 방이 없습니다. 「방 만들기」를 누르면 「이야기」로 가고, 이 자산이 골라져 있습니다.")}</p>`
+          ? `<p class="fanrooms">${copyHtml("아직 방이 없습니다. 「방 만들기」를 누르면 「이야기」로 가고, 이 자산이 골라져 있습니다.")}</p>`
           : need
           ? // 🔴 「방이 없습니다」로 끝내지 않는다. 그러면 고장으로 읽힌다.
             //    왜 여기서 안 권하는지, 그래도 열 수 있는 길이 어디인지 적는다.
-            `<p class="fanrooms">${t("제가 낸 자산이 아닙니다 — 팬 방은 낸 분이 엽니다. 그래도 여시려면 「이야기 → 방 만들기」에서 이 자산을 고르세요.")}</p>`
-          : `<p class="fanrooms">${t("방")} ${rooms.length}${t("곳")} — ` +
+            `<p class="fanrooms">${copyHtml("제가 낸 자산이 아닙니다 — 팬 방은 낸 분이 엽니다. 그래도 여시려면 「이야기 → 방 만들기」에서 이 자산을 고르세요.")}</p>`
+          : `<p class="fanrooms">${copyHtml("방")} ${rooms.length}${copyHtml("곳")} — ` +
             rooms
               .map((r) => escapeHtml(String(r?.name ?? t("이름 없는 방"))))
               .join(" · ") +
@@ -6369,7 +6360,7 @@ async function fanCount(asset: string, btn: HTMLButtonElement) {
   );
   const wasLabel = btn.textContent;
   btn.disabled = true;
-  btn.textContent = t("세는 중…");
+  setCopyText(btn, () => t("세는 중…"));
   try {
     const r = await invoke<any>("fan_holders", { asset });
     // 🔴 못 센 것은 **빨간 글씨가 아니다.** 팬 수는 있으면 좋은 숫자지
@@ -6421,7 +6412,7 @@ async function fanMakeRoom(asset: string) {
     // 🔴 **못 골랐으면 못 골랐다고 말한다.** 조용히 「누구나」로 두면
     //    사장은 자산 방을 만든 줄 알고 아무나 쓸 수 있는 방을 만든다.
     $("tk-nsay").innerHTML =
-      `<span class="danger">${escapeHtml(asset)} ${t("을(를) 자산 목록에서 못 찾았습니다. 노드가 장부를 훑는 중일 수 있습니다 — 자산 칸을 직접 확인해 주세요.")}</span>`;
+      `<span class="danger">${escapeHtml(asset)} ${copyHtml("을(를) 자산 목록에서 못 찾았습니다. 노드가 장부를 훑는 중일 수 있습니다 — 자산 칸을 직접 확인해 주세요.")}</span>`;
   }
   $("tk-newbox").scrollIntoView({ behavior: "smooth", block: "center" });
 }
@@ -6437,7 +6428,7 @@ function fanPaintResult(r: any) {
     // 러스트가 쓴 한 줄. 몇 곳에 가고 몇 곳에 못 갔는지가 여기 들어 있다.
     `<p style="margin:0;font-size:15px">${escapeHtml(String(r?.say ?? ""))}</p>` +
     (sent.length
-      ? `<h3 class="grouphead">${t("간 곳")} ${sent.length}${t("곳")}</h3>` +
+      ? `<h3 class="grouphead">${copyHtml("간 곳")} ${sent.length}${copyHtml("곳")}</h3>` +
         sent
           .map(
             (x) =>
@@ -6450,7 +6441,7 @@ function fanPaintResult(r: any) {
     //    방을 먼저 만들지 판단이 선다.
     (failed.length
       ? `<div class="fanfail">
-           <b class="danger">${t("못 간 곳")} ${failed.length}${t("곳")}</b>` +
+           <b class="danger">${copyHtml("못 간 곳")} ${failed.length}${copyHtml("곳")}</b>` +
         failed
           .map(
             (x) =>
@@ -6471,11 +6462,11 @@ async function fanSend() {
   const link = ($("fan-link") as HTMLInputElement).value.trim();
   const res = $("fan-result");
   if (!assets.length) {
-    res.innerHTML = `<p class="meta"><span class="danger">${t("어느 자산의 방에 보낼지 골라 주세요.")}</span></p>`;
+    res.innerHTML = `<p class="meta"><span class="danger">${copyHtml("어느 자산의 방에 보낼지 골라 주세요.")}</span></p>`;
     return;
   }
   if (!text) {
-    res.innerHTML = `<p class="meta"><span class="danger">${t("보낼 내용이 없습니다.")}</span></p>`;
+    res.innerHTML = `<p class="meta"><span class="danger">${copyHtml("보낼 내용이 없습니다.")}</span></p>`;
     ($("fan-text") as HTMLTextAreaElement).focus();
     return;
   }
@@ -6494,7 +6485,7 @@ async function fanSend() {
 
   const b = $("fan-send") as HTMLButtonElement;
   b.disabled = true;
-  res.innerHTML = `<p class="meta">${t("보내는 중…")}</p>`;
+  res.innerHTML = `<p class="meta">${copyHtml("보내는 중…")}</p>`;
   try {
     // 링크는 안 적었으면 `null`. 빈 문자열도 러스트가 받지만, 「안 넣었다」를
     // 값으로 말하는 쪽이 정직하다.
@@ -6541,15 +6532,13 @@ async function paintFlow() {
   }
   setupState = d;
   if (d?.ready) {
-    host.innerHTML = `<p class="meta" style="margin:0 0 10px">${t(
-      "손님 받을 준비가 됐습니다."
-    )}</p>`;
+    host.innerHTML = `<p class="meta" style="margin:0 0 10px">${copyHtml("손님 받을 준비가 됐습니다.")}</p>`;
     return;
   }
   const icon = (st: string) =>
     st === "done" ? "✓" : st === "unknown" ? "?" : "·";
   host.innerHTML = `<div class="card" style="margin:0 0 14px">
-      <h3>${t("손님을 받으시려면")}</h3>
+      <h3>${copyHtml("손님을 받으시려면")}</h3>
       ${(d?.steps || [])
         .map((s: any, i: number) => {
           const now = s.key === d.next;
@@ -6560,8 +6549,8 @@ async function paintFlow() {
                 done ? icon(s.state) : i + 1
               }</b>
               <div style="flex:1;min-width:0">
-                <b>${escapeHtml(t(s.title))}</b>
-                <p class="meta" style="margin:2px 0 0">${escapeHtml(t(s.why))}</p>
+                <b>${copyHtml(s.title)}</b>
+                <p class="meta" style="margin:2px 0 0">${copyHtml(s.why)}</p>
                 <p class="meta" style="margin:2px 0 0;opacity:.8">${escapeHtml(String(s.note || ""))}</p>
               </div>
               ${
@@ -6569,7 +6558,7 @@ async function paintFlow() {
                   ? ""
                   : `<button class="${now ? "" : "ghost"}" data-flow="${escapeHtml(String(s.go))}"
                      data-flow-key="${escapeHtml(String(s.key))}"
-                       style="flex-shrink:0">${t(now ? "지금 하기" : "가기")}</button>`
+                       style="flex-shrink:0">${copyHtml(now ? "지금 하기" : "가기")}</button>`
               }
             </div>`;
         })
@@ -6618,7 +6607,7 @@ async function swapReady() {
   try {
     const r = await invoke<any>("swap_ready", { asset, amount });
     if (r.ready) {
-      note.innerHTML = `<span class="ok">${t("팔 준비가 됐습니다")} — ${t("가진 것")} ${Number(r.have).toLocaleString()}</span>`;
+      note.innerHTML = `<span class="ok">${copyHtml("팔 준비가 됐습니다")} — ${copyHtml("가진 것")} ${Number(r.have).toLocaleString()}</span>`;
       lot.style.display = "none";
     } else {
       note.innerHTML = `<span class="warn">${escapeHtml(String(r.why || ""))}</span>`;
@@ -6636,7 +6625,7 @@ async function swapMakeLot() {
   try {
     const r = await invoke<any>("swap_make_lot", { asset, amount, passphrase: null });
     $("sw-ready").innerHTML = r.already
-      ? `<span class="ok">${t("이미 준비돼 있습니다")}</span>`
+      ? `<span class="ok">${copyHtml("이미 준비돼 있습니다")}</span>`
       : `<span class="ok">${escapeHtml(String(r.note || ""))}</span>`;
   } catch (e) {
     $("sw-ready").innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
@@ -6649,24 +6638,24 @@ async function swapMakeOffer() {
   const price = parseFloat(($("sw-price") as HTMLInputElement).value) || 0;
   const box = $("sw-offer");
   if (!(await ensureUnlocked("제안에 서명하려면 지갑을 열어야 합니다."))) return;
-  box.innerHTML = `<p class="meta">${t("만드는 중…")}</p>`;
+  box.innerHTML = `<p class="meta">${copyHtml("만드는 중…")}</p>`;
   try {
     const r = await invoke<any>("swap_offer", { asset, amount, price, passphrase: null });
     box.innerHTML =
       `<div class="card" style="margin-top:12px">
-         <h3>${t("제안을 만들었습니다")}</h3>
-         <div class="kv"><b>${t("파는 것")}</b><span>${escapeHtml(asset)} ${amount.toLocaleString()}${t("개")}</span></div>
-         <div class="kv"><b>${t("받을 돈")}</b><span>${price.toLocaleString()} RVN</span></div>
-         <p class="meta">🔴 ${t("이 글자만으로는 아무 일도 안 일어납니다. 사는 사람이 RVN 을 붙여야 거래가 됩니다 — 그래서 아무 데나 보내셔도 됩니다.")}</p>
+         <h3>${copyHtml("제안을 만들었습니다")}</h3>
+         <div class="kv"><b>${copyHtml("파는 것")}</b><span>${escapeHtml(asset)} ${amount.toLocaleString()}${copyHtml("개")}</span></div>
+         <div class="kv"><b>${copyHtml("받을 돈")}</b><span>${price.toLocaleString()} RVN</span></div>
+         <p class="meta">🔴 ${copyHtml("이 글자만으로는 아무 일도 안 일어납니다. 사는 사람이 RVN 을 붙여야 거래가 됩니다 — 그래서 아무 데나 보내셔도 됩니다.")}</p>
          <textarea readonly rows="3" id="sw-out">${escapeHtml(String(r.hex))}</textarea>
          <div class="row" style="margin-top:10px">
-           <button class="ghost" id="sw-copy">${t("글자 복사")}</button>
+           <button class="ghost" id="sw-copy">${copyHtml("글자 복사")}</button>
            <span class="meta" id="sw-copied"></span>
          </div>
        </div>`;
     $("sw-copy").addEventListener("click", async () => {
       await navigator.clipboard.writeText(String(r.hex)).catch(() => {});
-      $("sw-copied").textContent = t("복사했습니다");
+      setCopyText($("sw-copied"), () => t("복사했습니다"));
     });
   } catch (e) {
     box.innerHTML = `<p class="meta danger">${escapeHtml(errText(e))}</p>`;
@@ -6678,7 +6667,7 @@ async function swapLook() {
   const hex = ($("sw-hex") as HTMLTextAreaElement).value.trim();
   const box = $("sw-take");
   if (!hex) return;
-  box.innerHTML = `<p class="meta">${t("체인에 물어보는 중…")}</p>`;
+  box.innerHTML = `<p class="meta">${copyHtml("체인에 물어보는 중…")}</p>`;
   try {
     const r = await invoke<any>("swap_check", { hex });
     if (!r.ok) {
@@ -6687,13 +6676,13 @@ async function swapLook() {
     }
     box.innerHTML =
       `<div class="card" style="margin-top:12px">
-         <div class="kv"><b>${t("받는 것")}</b><span>${escapeHtml(String(r.asset))} ${Number(r.amount).toLocaleString()}${t("개")}</span></div>
-         <div class="kv"><b>${t("파는 사람에게")}</b><span>${Number(r.price).toLocaleString()} RVN</span></div>
-         <div class="kv"><b>${t("개발비 1%")}</b><span>${Number(r.fee || 0).toLocaleString()} RVN</span></div>
-         <div class="kv"><b>${t("모두")}</b><span><b>${Number(r.total || r.price).toLocaleString()} RVN</b></span></div>
-         <div class="kv"><b>${t("한 개당")}</b><span>${Number(r.each).toLocaleString()} RVN</span></div>
-         <p class="meta">${t("한 거래 안에서 동시에 오갑니다. 먼저 보내지 않습니다.")}</p>
-         <div class="row" style="margin-top:12px"><button id="sw-buy">${t("사기")}</button>
+         <div class="kv"><b>${copyHtml("받는 것")}</b><span>${escapeHtml(String(r.asset))} ${Number(r.amount).toLocaleString()}${copyHtml("개")}</span></div>
+         <div class="kv"><b>${copyHtml("파는 사람에게")}</b><span>${Number(r.price).toLocaleString()} RVN</span></div>
+         <div class="kv"><b>${copyHtml("개발비 1%")}</b><span>${Number(r.fee || 0).toLocaleString()} RVN</span></div>
+         <div class="kv"><b>${copyHtml("모두")}</b><span><b>${Number(r.total || r.price).toLocaleString()} RVN</b></span></div>
+         <div class="kv"><b>${copyHtml("한 개당")}</b><span>${Number(r.each).toLocaleString()} RVN</span></div>
+         <p class="meta">${copyHtml("한 거래 안에서 동시에 오갑니다. 먼저 보내지 않습니다.")}</p>
+         <div class="row" style="margin-top:12px"><button id="sw-buy">${copyHtml("사기")}</button>
            <span class="meta" id="sw-note"></span></div>
        </div>`;
     $("sw-buy").addEventListener("click", () => void swapBuy(hex, r));
@@ -6709,7 +6698,7 @@ async function swapLook() {
  */
 async function swapBuy(hex: string, info: any) {
   if (!(await ensureUnlocked("살 때 내 몫을 서명하려면 지갑을 열어야 합니다."))) return;
-  $("sw-note").textContent = t("조립하는 중…");
+  setCopyText($("sw-note"), () => t("조립하는 중…"));
   try {
     const dry = await invoke<any>("swap_take", { hex, broadcast: false, passphrase: null });
     const ok = await sure(
@@ -6721,7 +6710,7 @@ async function swapBuy(hex: string, info: any) {
     );
     if (!ok) { $("sw-note").textContent = ""; return; }
     const r = await invoke<any>("swap_take", { hex, broadcast: true, passphrase: null });
-    $("sw-note").innerHTML = `<span class="ok">${t("보냈습니다")} — ${escapeHtml(String(r.txid)).slice(0, 20)}…</span>`;
+    $("sw-note").innerHTML = `<span class="ok">${copyHtml("보냈습니다")} — ${escapeHtml(String(r.txid)).slice(0, 20)}…</span>`;
     void loadAssets(false);
   } catch (e) {
     $("sw-note").innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
@@ -7058,7 +7047,7 @@ function pickIssueFile() {
         // 🔴 자산이 가리키는 그림이 사라지면 **자산만 남고 그림이 없어진다.**
         //    `upload.rs` 첫 줄이 「그게 이 앱이 막으려는 바로 그 실패」라고
         //    적어 두었는데, 정작 화면은 「올렸습니다」로 끝났다.
-        : `<p class="meta">${file.name} · ${t("이 컴퓨터에 두었습니다")}</p>`;
+        : `<p class="meta">${file.name} · ${copyHtml("이 컴퓨터에 두었습니다")}</p>`;
     } catch (e) {
       $("i-preview").innerHTML = `<p class="meta danger">${e}</p>`;
     }
@@ -7073,6 +7062,7 @@ function renderSummary() {
   const cid = ($("i-ipfs") as HTMLInputElement).value.trim();
 
   $("i-r-kind").textContent = KIND_KO[wizKind];
+  $("i-r-name").setAttribute("translate", "no");
   $("i-r-name").textContent = issueCheck?.name || "";
   const tags = wizKind === "bulk" ? bulkTags() : [];
   $("i-r-qty").innerHTML =
@@ -7445,7 +7435,7 @@ async function doIssue() {
        그래서 한 번 묻고, 넣으면 그 자리에서 올라간다. */
     $("i-result").innerHTML =
       `<div class="card" style="margin-top:12px"><h3>발행했습니다</h3>
-       <div class="kv"><b>자산</b><span>${escapeHtml(issueCheck.name)}</span></div>
+       <div class="kv"><b>자산</b><span translate="no">${escapeHtml(issueCheck.name)}</span></div>
        <div class="kv"><b>트랜잭션</b><code class="addr">${txid}</code></div>
        <p class="meta">확인되기까지 몇 분 걸립니다.</p>
        <div class="sellnow">
@@ -7652,13 +7642,13 @@ async function openSend(mode: "asset" | "rvn", preselect?: string) {
     // 🔴 지도가 비어 있으면 **고를 것이 없는 목록**이 뜬다(위 ensureAssets 주석).
     //    화면은 이미 열렸으니 여기서 기다려도 사장은 안 기다리는 느낌이다.
     const sel = $("s-asset") as HTMLSelectElement;
-    sel.innerHTML = `<option>${t("불러오는 중…")}</option>`;
+    sel.innerHTML = `<option data-desktop-copy="불러오는 중…">불러오는 중…</option>`;
     await ensureAssets();
     // Only assets with a positive balance — offering ones you cannot send is
     // an error message disguised as a choice.
     sel.innerHTML = [...assets.values()]
       .filter((a) => a.amount > 0)
-      .map((a) => `<option value="${a.name}">${a.name} — ${fmtQty(a.amount)}</option>`)
+      .map((a) => `<option value="${a.name}" translate="no">${escapeHtml(a.name)} — ${fmtQty(a.amount)}</option>`)
       .join("");
     if (preselect) sel.value = preselect;
   }
@@ -8092,8 +8082,9 @@ async function refreshKeys() {
     // 그때는 결제 확인이 안 되므로 자는 것이 사실이다.
     // AI 열쇠가 없는 것은 "잠"이 아니라 **"아직 못 하는 일이 있음"** 이고,
     // 그건 눌렀을 때 그 자리에서 말한다(`chatNeedsKey`).
+    // Keep the existing 20-second status refresh; startup reads are shared.
     void refreshOverview();
-  const nodeDown = !(nodeUp ?? true);
+    const nodeDown = !(nodeUp ?? true);
     const asleep = nodeDown;
     $("chat-open").classList.toggle("asleep", asleep);
     const img = $("chat-open").querySelector("img");
@@ -8177,7 +8168,7 @@ async function saveKeys() {
 const chatHistory: any[] = [];
 
 function chatSay(who: "me" | "ai" | "did", text: string) {
-  chatPut(who, escapeHtml(text).replace(/\n/g, "<br />"));
+  chatPut(who, `<span${who === "me" ? ' translate="no"' : ""}>${escapeHtml(text).replace(/\n/g, "<br />")}</span>`);
 }
 
 /// 이미 escape 된 HTML 을 넣을 때. 나눠 둔 이유: `chatSay` 는 textContent 라
@@ -8296,13 +8287,13 @@ async function shareBox(host: HTMLElement, url: string, msg: string, name: strin
   const has = typeof (navigator as any).share === "function";
   host.innerHTML =
     `<div class="invbox">` +
-    `<div class="shareqr" id="sq-qr">${escapeHtml(t("QR 만드는 중…"))}</div>` +
-    `<p class="meta">${escapeHtml(t("손님이 앞에 계시면 이 QR 을 보여 주세요."))}</p>` +
+    `<div class="shareqr" id="sq-qr">${copyHtml("QR 만드는 중…")}</div>` +
+    `<p class="meta">${copyHtml("손님이 앞에 계시면 이 QR 을 보여 주세요.")}</p>` +
     `<code class="invlink" id="sq-url">${escapeHtml(url)}</code>` +
     `<div class="invbtns">` +
-    `<button class="primary" id="sq-copy">${escapeHtml(t("링크 복사"))}</button>` +
-    (has ? `<button class="ghost" id="sq-send">${escapeHtml(t("다른 앱으로"))}</button>` : "") +
-    `<button class="ghost" id="sq-png">${escapeHtml(t("QR 그림 저장"))}</button>` +
+    `<button class="primary" id="sq-copy">${copyHtml("링크 복사")}</button>` +
+    (has ? `<button class="ghost" id="sq-send">${copyHtml("다른 앱으로")}</button>` : "") +
+    `<button class="ghost" id="sq-png">${copyHtml("QR 그림 저장")}</button>` +
     `</div></div>`;
 
   // QR 은 늦게 와도 된다 — 링크는 이미 눌러 쓸 수 있다.
@@ -8314,14 +8305,14 @@ async function shareBox(host: HTMLElement, url: string, msg: string, name: strin
     .catch(() => {
       const box = document.getElementById("sq-qr");
       // ⚠️ QR 이 안 되어도 **링크는 살아 있다.** 그렇다고 말한다.
-      if (box) box.textContent = t("QR 을 만들지 못했습니다. 아래 링크는 그대로 쓰실 수 있습니다.");
+      if (box) setCopyText(box, () => t("QR 을 만들지 못했습니다. 아래 링크는 그대로 쓰실 수 있습니다."));
     });
 
   const copy = document.getElementById("sq-copy") as HTMLButtonElement | null;
   copy?.addEventListener("click", async () => {
     try {
       await navigator.clipboard.writeText(msg);
-      copy.textContent = t("복사했습니다");
+      setCopyText(copy, () => t("복사했습니다"));
     } catch {
       const el = document.getElementById("sq-url");
       if (el) {
@@ -8331,9 +8322,9 @@ async function shareBox(host: HTMLElement, url: string, msg: string, name: strin
         sel?.removeAllRanges();
         sel?.addRange(r);
       }
-      copy.textContent = t("직접 복사해 주세요");
+      setCopyText(copy, () => t("직접 복사해 주세요"));
     }
-    setTimeout(() => (copy.textContent = t("링크 복사")), 2500);
+    setTimeout(() => (setCopyText(copy, () => t("링크 복사"))), 2500);
   });
   document.getElementById("sq-send")?.addEventListener("click", () => {
     void (navigator as any).share({ title: name, text: msg, url }).catch(() => {});
@@ -8365,18 +8356,18 @@ function bindMoving(): void {
   const 보내기 = async (what: string) => {
     const b = box();
     if (!b) return;
-    b.innerHTML = `<p class="meta">${escapeHtml(t("짐을 싸는 중… 잠시 걸립니다"))}</p>`;
+    b.innerHTML = `<p class="meta">${copyHtml("짐을 싸는 중… 잠시 걸립니다")}</p>`;
     try {
       const r = await invoke<any>("move_offer", { what });
       const 주소 = (r.hosts || []).slice(0, 3);
       b.innerHTML =
         `<div class="invbox">` +
         `<p class="meta">${escapeHtml(String(r.say || ""))}</p>` +
-        `<p style="font-size:15px;margin:10px 0 4px">${escapeHtml(t("새 컴퓨터에서 「가져오기」를 누르고 아래를 넣으세요."))}</p>` +
-        `<code class="invlink">${escapeHtml(t("컴퓨터 주소"))}: ${escapeHtml(주소.join(t(" 또는 ")))}</code>` +
+        `<p style="font-size:15px;margin:10px 0 4px">${copyHtml("새 컴퓨터에서 「가져오기」를 누르고 아래를 넣으세요.")}</p>` +
+        `<code class="invlink">${copyHtml("컴퓨터 주소")}: ${escapeHtml(주소.join(t(" 또는 ")))}</code>` +
         `<div style="font-size:34px;font-weight:700;letter-spacing:6px;text-align:center;margin:12px 0">${escapeHtml(String(r.code))}</div>` +
-        `<p class="meta">${escapeHtml(t("이 숫자는"))} ${escapeHtml(String(r.minutes))}${escapeHtml(t("분 뒤에 사라집니다. 세 번 틀리면 처음부터 다시 하셔야 합니다."))}</p>` +
-        `<div class="invbtns"><button class="ghost" id="mv-cancel">${escapeHtml(t("그만두기"))}</button></div>` +
+        `<p class="meta">${copyHtml("이 숫자는")} ${escapeHtml(String(r.minutes))}${copyHtml("분 뒤에 사라집니다. 세 번 틀리면 처음부터 다시 하셔야 합니다.")}</p>` +
+        `<div class="invbtns"><button class="ghost" id="mv-cancel">${copyHtml("그만두기")}</button></div>` +
         `</div>`;
       document.getElementById("mv-cancel")?.addEventListener("click", () => {
         void invoke("move_cancel").catch(() => {});
@@ -8395,10 +8386,10 @@ function bindMoving(): void {
     if (!b) return;
     b.innerHTML =
       `<div class="invbox">` +
-      `<p class="meta">${escapeHtml(t("옛 컴퓨터 화면에 뜬 주소와 숫자를 넣으세요."))}</p>` +
+      `<p class="meta">${copyHtml("옛 컴퓨터 화면에 뜬 주소와 숫자를 넣으세요.")}</p>` +
       `<div class="rm-newbox"><input id="mv-host" placeholder="192.168.0.15" autocomplete="off" /></div>` +
       `<div class="rm-newbox"><input id="mv-code" placeholder="000000" inputmode="numeric" maxlength="6" autocomplete="off" />` +
-      `<button class="btn" id="mv-go">${escapeHtml(t("가져오기"))}</button></div>` +
+      `<button class="btn" id="mv-go">${copyHtml("가져오기")}</button></div>` +
       `<p class="meta" id="mv-say"></p></div>`;
     const go = async () => {
       const host = (document.getElementById("mv-host") as HTMLInputElement)?.value.trim() || "";
@@ -8406,12 +8397,12 @@ function bindMoving(): void {
       const say = document.getElementById("mv-say");
       const btn = document.getElementById("mv-go") as HTMLButtonElement | null;
       if (btn) btn.disabled = true;
-      if (say) say.textContent = t("받는 중… 짐이 크면 몇 분 걸립니다");
+      if (say) setCopyText(say, () => t("받는 중… 짐이 크면 몇 분 걸립니다"));
       try {
         const r = await invoke<any>("move_fetch", { host, code });
         if (say)
           say.innerHTML =
-            `<b class="ok">${escapeHtml(t("옮겼습니다."))}</b> ` +
+            `<b class="ok">${copyHtml("옮겼습니다.")}</b> ` +
             // 🔴 이 말을 안 하면 사장이 자산을 새로 만든다. 100 RVN 이 타고
             //    손님이 아는 QR 이 죽는다.
             `<b>${escapeHtml(String(r.warn || ""))}</b><br />` +
@@ -8439,7 +8430,7 @@ function bindQrCopy(): void {
       .writeText(url)
       .then(() => {
         const 원래 = el.dataset.o || (el.dataset.o = el.textContent || "");
-        el.textContent = t("복사했습니다 — 카톡·문자에 붙여넣으세요");
+        setCopyText(el, () => t("복사했습니다 — 카톡·문자에 붙여넣으세요"));
         setTimeout(() => (el.textContent = 원래), 2000);
       })
       .catch(() => {
@@ -8480,7 +8471,7 @@ function arPaintPreview() {
   const name = ($("ar-name") as HTMLInputElement).value.trim();
   const about = ($("ar-about") as HTMLTextAreaElement).value.trim();
   const web = arNormWeb(($("ar-web") as HTMLInputElement).value);
-  $("ar-nameview").textContent = name || t("아직 이름이 없습니다");
+  setCopyText($("ar-nameview"), () => name || t("아직 이름이 없습니다"));
   const aboutEl = $("ar-aboutview");
   aboutEl.textContent = about || "";
   const link = $("ar-linkview") as HTMLAnchorElement;
@@ -8520,7 +8511,7 @@ async function artistLoad() {
   arPaintPreview();
   const seal = $("ar-seal");
   seal.className = "arseal muted";
-  seal.textContent = t("확인하는 중…");
+  setCopyText(seal, () => t("확인하는 중…"));
   try {
     const got = await invoke<any>("artist_profile_get");
     ($("ar-name") as HTMLInputElement).value = String(got?.name || "");
@@ -8535,10 +8526,10 @@ async function artistLoad() {
     const chk = await invoke<any>("artist_check", { asset: "PLAYX" });
     if (chk?.ok) {
       seal.className = "arseal";
-      seal.textContent = t("PLAYX 주인이 올린 소개입니다");
+      setCopyText(seal, () => t("PLAYX 주인이 올린 소개입니다"));
     } else {
       seal.className = "arseal warn";
-      seal.textContent = t(String(chk?.why || "체인이 가리키는 열쇠와 이 컴퓨터가 다릅니다."));
+      setCopyText(seal, () => t(String(chk?.why || "체인이 가리키는 열쇠와 이 컴퓨터가 다릅니다.")));
     }
   } catch (e) {
     seal.className = "arseal muted";
@@ -8555,9 +8546,9 @@ async function artistLoad() {
   if (shop && shop.amount > 0) {
     qty.textContent = `SHOP.PLAYX  ${fmtQty(shop.amount)}개 남음`;
   } else if (shop) {
-    qty.textContent = t("SHOP.PLAYX 가 없습니다. 손님에게 줄 토큰이 없습니다.");
+    setCopyText(qty, () => t("SHOP.PLAYX 가 없습니다. 손님에게 줄 토큰이 없습니다."));
   } else {
-    qty.textContent = t("SHOP.PLAYX 수량을 못 읽었습니다. 노드가 켜져 있는지 보세요.");
+    setCopyText(qty, () => t("SHOP.PLAYX 수량을 못 읽었습니다. 노드가 켜져 있는지 보세요."));
   }
 }
 
@@ -8567,10 +8558,10 @@ let arPickedPreview = "";
 
 async function artistPick(file: File) {
   if (file.size > 8 * 1024 * 1024) {
-    $("ar-picnote").innerHTML = `<span class="danger">${t("사진이 너무 큽니다. 8MB 아래로 골라 주세요.")}</span>`;
+    $("ar-picnote").innerHTML = `<span class="danger">${copyHtml("사진이 너무 큽니다. 8MB 아래로 골라 주세요.")}</span>`;
     return;
   }
-  $("ar-picnote").textContent = t("사진 줄이는 중…");
+  setCopyText($("ar-picnote"), () => t("사진 줄이는 중…"));
   try {
     // 정사각형으로 가운데를 자른다. 얼굴은 어디서나 동그란 자리에 들어간다.
     const bitmap = await createImageBitmap(file);
@@ -8602,7 +8593,7 @@ async function artistPick(file: File) {
     //    넘으면 **조용히 버린다**(`relay.rs:76`). 사진을 이름표 안에 담으면
     //    이름표가 통째로 안 나간다. 그리고 러스트 쪽 문이 `https://` 만
     //    받는다(`artist.rs` check_picture) — 담는 길은 아예 없다.
-    $("ar-picnote").textContent = t("파일창고에 올리는 중…");
+    setCopyText($("ar-picnote"), () => t("파일창고에 올리는 중…"));
     const added = await invoke<any>("ipfs_add_file", { file: { name: "face.jpg", bytes: Array.from(new Uint8Array(await blob.arrayBuffer())) } });
     const cid = String(added?.cid || "");
     if (!cid) throw new Error("파일창고가 사진 주소를 안 돌려줬습니다. 노드가 켜져 있는지 보세요.");
@@ -8613,8 +8604,8 @@ async function artistPick(file: File) {
     //    받아 가면 그다음은 빠르다. 우리 노드가 계속 켜져 있어야 한다.
     arPicture = `https://ipfs.io/ipfs/${cid}`;
     $("ar-picnote").innerHTML =
-      `<span class="ok">${t("사진 준비됐습니다")} · ${Math.round(blob.size / 1024)}KB</span><br />` +
-      `<span class="meta">${t("아래 「이 소개 올리기」를 눌러야 팬에게 보입니다. 팬 화면에 처음 뜨기까지 20초쯤 걸립니다.")}</span>`;
+      `<span class="ok">${copyHtml("사진 준비됐습니다")} · ${Math.round(blob.size / 1024)}KB</span><br />` +
+      `<span class="meta">${copyHtml("아래 「이 소개 올리기」를 눌러야 팬에게 보입니다. 팬 화면에 처음 뜨기까지 20초쯤 걸립니다.")}</span>`;
   } catch (e) {
     $("ar-picnote").innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
   }
@@ -8625,7 +8616,7 @@ async function artistSave() {
   const say = $("ar-say");
   btn.disabled = true;
   const 옛 = btn.textContent;
-  btn.textContent = t("올리는 중…");
+  setCopyText(btn, () => t("올리는 중…"));
   say.textContent = "";
   try {
     const name = ($("ar-name") as HTMLInputElement).value.trim();
@@ -8637,12 +8628,12 @@ async function artistSave() {
     const 받음 = (결과?.ok || []).length;
     const 안받음 = (결과?.failed || []).length;
     const 어디 = 안받음 > 0
-      ? `<br /><span class="meta">${t("보낸 곳")} ${받음 + 안받음}${t("곳 중")} ${받음}${t("곳이 받았습니다.")} ` +
+      ? `<br /><span class="meta">${copyHtml("보낸 곳")} ${받음 + 안받음}${copyHtml("곳 중")} ${받음}${copyHtml("곳이 받았습니다.")} ` +
         `${받음 <= 1 ? t("아직 못 본 팬이 있을 수 있으니 잠시 뒤 한 번 더 눌러 주세요.") : t("팬에게 보이는 데는 충분합니다.")}</span>`
       : "";
     say.innerHTML = (name
-      ? `<span class="ok">${t("올렸습니다. 손님이 이 얼굴·이름으로 봅니다.")}</span>`
-      : `<span class="ok">${t("이름을 비웠습니다. 손님은 자산 이름으로 봅니다.")}</span>`) + 어디;
+      ? `<span class="ok">${copyHtml("올렸습니다. 손님이 이 얼굴·이름으로 봅니다.")}</span>`
+      : `<span class="ok">${copyHtml("이름을 비웠습니다. 손님은 자산 이름으로 봅니다.")}</span>`) + 어디;
     arPaintPreview();
   } catch (e) {
     say.innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
@@ -8748,7 +8739,7 @@ function raviBubble(pageId: string, say: string) {
   const 어디 = PAGE_NAMES[pageId] || pageId;
   box.innerHTML =
     `<img src="/raven-face.webp" alt="" />` +
-    `<div class="rb"><div class="rbwhere">${escapeHtml(t("여기는"))} · ${escapeHtml(t(어디))}</div>` +
+    `<div class="rb"><div class="rbwhere">${copyHtml("여기는")} · ${copyHtml(어디)}</div>` +
     `<div class="rbsay">${escapeHtml(say)}</div></div>` +
     `<button class="rbx" type="button" aria-label="${escapeHtml(t("닫기"))}">✕</button>`;
   box.querySelector(".rbx")!.addEventListener("click", () => box.remove());
@@ -9488,7 +9479,7 @@ function pickShopPhotos() {
     const files = [...(input.files || [])];
     if (!files.length) return;
     const note = $("sh-picsnote");
-    note.textContent = t("줄이는 중…");
+    setCopyText(note, () => t("줄이는 중…"));
     try {
       // 긴 쪽 1200px. 가게 안 사진은 크게 볼 일이 없고, 손님 폰에서 빨리
       // 떠야 한다. 원본을 그대로 올리면 한 장에 몇 MB 다.
@@ -9511,7 +9502,7 @@ function pickShopPhotos() {
         });
       }
       if (!out.length) throw new Error("읽을 수 있는 사진이 없습니다.");
-      note.textContent = t("올리는 중…");
+      setCopyText(note, () => t("올리는 중…"));
       const up = await invoke<any>("ipfs_add_bundle", { files: out, metadata: null });
       if (!up?.cid) throw new Error("파일창고가 주소를 주지 않았습니다.");
       shopPhotosCid = up.cid;
@@ -9525,9 +9516,8 @@ function pickShopPhotos() {
       // 🔴 손님은 이 사진을 **이 가게 서버**(`/ipfs/`)로만 본다.
       //    가게가 컴퓨터를 끄면 안 보인다. 그런데 「올렸습니다」로만
       //    끝나서, 사장은 어디 안전한 데 올라간 줄 안다.
-      note.textContent =
-        `${out.length}${t("장 올렸습니다. 바꾸셔도 소각은 없습니다.")} ` +
-        t("손님은 이 컴퓨터를 통해 봅니다 — 꺼 두시면 사진이 안 보입니다.");
+      setCopyText(note, () => `${out.length}${t("장 올렸습니다. 바꾸셔도 소각은 없습니다.")} ` +
+        t("손님은 이 컴퓨터를 통해 봅니다 — 꺼 두시면 사진이 안 보입니다."));
     } catch (e) {
       // 사진이 안 올라간 것을 조용히 넘기지 않는다.
       $("sh-picsnote").innerHTML =
@@ -9545,7 +9535,7 @@ function pickShopPhoto() {
   input.onchange = async () => {
     const file = input.files?.[0];
     if (!file) return;
-    $("sh-picnote").textContent = t("줄이는 중…");
+    setCopyText($("sh-picnote"), () => t("줄이는 중…"));
     try {
       const bitmap = await createImageBitmap(file);
 
@@ -9569,7 +9559,7 @@ function pickShopPhoto() {
       //    프로필이 통째로 바뀌고, 체인에 반영하려면 재발행(100 RVN)이다.
       //    IPFS 에 따로 올리고 **주소만** 들고 있으면, 사진 교체는 새 주소를
       //    릴레이에 올리는 것으로 끝난다 — 소각 0원.
-      $("sh-picnote").textContent = t("올리는 중…");
+      setCopyText($("sh-picnote"), () => t("올리는 중…"));
       let cid = "";
       let picFail = "";
       try {
@@ -9600,7 +9590,7 @@ function pickShopPhoto() {
       $("sh-picprev").innerHTML =
         `<img src="${dataUrl}" alt="" style="max-width:180px;border-radius:8px;margin-top:8px" />`;
       if (cid) {
-        $("sh-picnote").textContent = t("정사각형으로 잘라 올렸습니다. 나중에 바꾸셔도 소각은 없습니다.");
+        setCopyText($("sh-picnote"), () => t("정사각형으로 잘라 올렸습니다. 나중에 바꾸셔도 소각은 없습니다."));
       } else {
         // 괄호 안 작은 글씨로 적으면 사장은 그냥 넘어간다. 문제로 보이게 한다.
         $("sh-picnote").innerHTML =
@@ -9676,7 +9666,7 @@ function memberCard(m: any, big: boolean): string {
       <div class="meta" style="margin-top:4px">
         ${m.age != null ? `${m.age}세 · ` : ""}${
           m.visit_count
-            ? `${t("여태")} ${m.visit_count}${t("번")} · ${t("최근 30일")} <b>${m.visits_30d ?? 0}${t("번")}</b>` +
+            ? `${copyHtml("여태")} ${m.visit_count}${copyHtml("번")} · ${copyHtml("최근 30일")} <b>${m.visits_30d ?? 0}${copyHtml("번")}</b>` +
               (m.last_visit ? ` · ${t("마지막")} ${agoDays(m.last_visit)}` : "")
             : t("아직 한 번도 안 오셨습니다")
         }
@@ -9704,15 +9694,15 @@ function memberCard(m: any, big: boolean): string {
  */
 async function showBookings() {
   const box = $("dr-hits");
-  box.innerHTML = `<div class="meta" style="padding:14px 0">${t("불러오는 중…")}</div>`;
+  box.innerHTML = `<div class="meta" style="padding:14px 0">${copyHtml("불러오는 중…")}</div>`;
   try {
     const r = await invoke<any>("booking_list", { nowUnix: Math.floor(Date.now() / 1000) });
     const rows: any[] = r.bookings || [];
     if (!rows.length) {
       box.innerHTML =
         `<div class="card" style="margin-top:12px">
-           <h3 style="margin-top:0">${t("잡힌 예약이 없습니다")}</h3>
-           <p class="meta">${t("메뉴판에 「예약 받는 것」을 넣고 손님이 시간을 고르면 여기에 뜹니다.")}</p>
+           <h3 style="margin-top:0">${copyHtml("잡힌 예약이 없습니다")}</h3>
+           <p class="meta">${copyHtml("메뉴판에 「예약 받는 것」을 넣고 손님이 시간을 고르면 여기에 뜹니다.")}</p>
          </div>`;
       return;
     }
@@ -9726,17 +9716,17 @@ async function showBookings() {
     box.innerHTML =
       `<table class="tbl" style="margin-top:12px">
          <thead><tr>
-           <th>${t("언제")}</th><th class="num">${t("걸리는 시간")}</th>
-           <th>${t("상태")}</th><th></th>
+           <th>${copyHtml("언제")}</th><th class="num">${copyHtml("걸리는 시간")}</th>
+           <th>${copyHtml("상태")}</th><th></th>
          </tr></thead>
          <tbody>${rows
            .map((b) => {
              const paid = b.state === "paid";
              return `<tr class="${paid ? "" : "muted"}">
                <td>${when(b.at)}</td>
-               <td class="num">${b.minutes}${t("분")}</td>
-               <td>${paid ? `<span class="ok">${t("결제됨")}</span>` : t("고르는 중 — 안 올 수 있음")}</td>
-               <td class="act"><button class="ghost" data-bcancel="${escapeHtml(b.addr || "")}">${t("취소")}</button></td>
+               <td class="num">${b.minutes}${copyHtml("분")}</td>
+               <td>${paid ? `<span class="ok">${copyHtml("결제됨")}</span>` : t("고르는 중 — 안 올 수 있음")}</td>
+               <td class="act"><button class="ghost" data-bcancel="${escapeHtml(b.addr || "")}">${copyHtml("취소")}</button></td>
              </tr>`;
            })
            .join("")}</tbody>
@@ -9776,7 +9766,7 @@ async function showBookings() {
  */
 async function showPasses() {
   const box = $("dr-hits");
-  box.innerHTML = `<div class="meta" style="padding:14px 0">${t("불러오는 중…")}</div>`;
+  box.innerHTML = `<div class="meta" style="padding:14px 0">${copyHtml("불러오는 중…")}</div>`;
   try {
     const r = await invoke<any>("ticket_list", { nowUnix: Math.floor(Date.now() / 1000) });
     const rows: any[] = r.tickets || [];
@@ -9784,8 +9774,8 @@ async function showPasses() {
       // 빈 화면은 실패가 아니라 안내다. 어떻게 하면 여기 뜨는지 적는다.
       box.innerHTML =
         `<div class="card" style="margin-top:12px">
-           <h3 style="margin-top:0">${t("아직 판 이용권이 없습니다")}</h3>
-           <p class="meta">${t("메뉴판에 「기간 이용권」을 넣고 손님이 사면 여기에 쌓입니다.")}</p>
+           <h3 style="margin-top:0">${copyHtml("아직 판 이용권이 없습니다")}</h3>
+           <p class="meta">${copyHtml("메뉴판에 「기간 이용권」을 넣고 손님이 사면 여기에 쌓입니다.")}</p>
          </div>`;
       return;
     }
@@ -9794,8 +9784,8 @@ async function showPasses() {
     box.innerHTML =
       `<table class="tbl" style="margin-top:12px">
          <thead><tr>
-           <th>${t("표 번호")}</th><th>${t("품목")}</th>
-           <th>${t("언제까지")}</th><th class="num">${t("남은 날")}</th><th>${t("들어온 횟수")}</th>
+           <th>${copyHtml("표 번호")}</th><th>${copyHtml("품목")}</th>
+           <th>${copyHtml("언제까지")}</th><th class="num">${copyHtml("남은 날")}</th><th>${copyHtml("들어온 횟수")}</th>
          </tr></thead>
          <tbody>${rows
            .map(
@@ -9809,7 +9799,7 @@ async function showPasses() {
            )
            .join("")}</tbody>
        </table>
-       <p class="meta" style="margin-top:8px">${t("총")} ${rows.length}${t("장")}</p>`;
+       <p class="meta" style="margin-top:8px">${copyHtml("총")} ${rows.length}${copyHtml("장")}</p>`;
   } catch (e) {
     box.innerHTML = `<div class="warnbox" style="margin-top:12px">${escapeHtml(errText(e))}</div>`;
   }
@@ -9834,8 +9824,8 @@ function bindMemberCards(root: string) {
       const btn = b as HTMLButtonElement;
       const was = btn.textContent || "";
       btn.disabled = true;
-      btn.textContent = t("여는 중…");
-      $("dr-note").textContent = t("확인하고 문을 여는 중입니다…");
+      setCopyText(btn, () => t("여는 중…"));
+      setCopyText($("dr-note"), () => t("확인하고 문을 여는 중입니다…"));
       try {
         const asset = (b as HTMLElement).dataset.in!;
         await invoke("check_in", { asset, nowUnix: nowSec() });
@@ -9950,7 +9940,7 @@ async function loadMembers() {
     const group = (title: string, rows: any[], why: string) =>
       rows.length
         ? `<div class="mgroup"><div class="mgrouphead">${title}
-             <span class="meta">${rows.length}${t("명")}</span></div>
+             <span class="meta">${rows.length}${copyHtml("명")}</span></div>
              ${why ? `<div class="meta" style="margin-bottom:8px">${why}</div>` : ""}
              ${rows.map((m) => memberCard(m, false)).join("")}</div>`
         : "";
@@ -9961,8 +9951,7 @@ async function loadMembers() {
         group(t("끝난 회원"), over, t("지우지 않았습니다 — 다시 오시면 그대로 이어집니다."))
       : emptyWithRaven("아직 등록된 회원이 없습니다.<br />「회원 등록」으로 첫 회원을 넣어 보세요.", "hello");
     bindMemberCards("dr-list");
-    $("dr-note").textContent =
-      `${t("다니는 중")} ${live.length}${t("명")} · ${t("끝남")} ${over.length}${t("명")}`;
+    setCopyText($("dr-note"), () => `${t("다니는 중")} ${live.length}${t("명")} · ${t("끝남")} ${over.length}${t("명")}`);
   } catch (e) {
     $("dr-note").innerHTML = `<span class="danger">${e}</span>`;
   }
@@ -10599,7 +10588,7 @@ async function 웹주문확인(물어봐도되나 = false) {
       : "열쇠가 확인됐습니다. 지금 기다리는 주문은 없습니다 — 웹에서 누가 사면 여기에 뜹니다.";
     $("wo-list").innerHTML = 웹주문들
       .map((o, i) => `<tr>
-          <td>${escapeHtml(o.title || o.asset)}<div class="meta">${escapeHtml(o.asset)}</div></td>
+          <td translate="no">${escapeHtml(o.title || o.asset)}<div class="meta">${escapeHtml(o.asset)}</div></td>
           <td><code class="addr">${escapeHtml(o.to)}</code></td>
           <td class="act"><button data-webdeliver="${i}">보내기</button></td>
         </tr>`)
@@ -11102,26 +11091,26 @@ async function doRefund(payAddress: string, suggested: number) {
   const needPass = !!(lock?.encrypted && !lock?.unlocked);
   box.innerHTML =
     `<div class="card" style="margin-top:12px">
-       <h3>${t("환불하기")}</h3>
-       <p class="meta">${t("받은 금액은")} ${suggested} RVN ${t("입니다. 일부만 돌려주시려면 더 적게 넣으세요.")}</p>
+       <h3>${copyHtml("환불하기")}</h3>
+       <p class="meta">${copyHtml("받은 금액은")} ${suggested} RVN ${copyHtml("입니다. 일부만 돌려주시려면 더 적게 넣으세요.")}</p>
        <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
-         <label class="meta" for="rf-amt">${t("얼마를 돌려드릴까요? (RVN)")}</label>
+         <label class="meta" for="rf-amt">${copyHtml("얼마를 돌려드릴까요? (RVN)")}</label>
          <input id="rf-amt" inputmode="decimal" value="${suggested}" />
-         <label class="meta" for="rf-to">${t("어느 주소로 돌려드릴까요?")}</label>
+         <label class="meta" for="rf-to">${copyHtml("어느 주소로 돌려드릴까요?")}</label>
          <input id="rf-to" placeholder="R..." autocomplete="off" spellcheck="false" />
-         <p class="meta" id="rf-fromsay">${t("보낸 주소를 찾는 중…")}</p>
-         <label class="meta" for="rf-why">${t("사유 (내 지갑에만 남습니다)")}</label>
+         <p class="meta" id="rf-fromsay">${copyHtml("보낸 주소를 찾는 중…")}</p>
+         <label class="meta" for="rf-why">${copyHtml("사유 (내 지갑에만 남습니다)")}</label>
          <input id="rf-why" value="${t("주문 취소")}" />
          ${
            needPass
-             ? `<label class="meta" for="rf-pass">${t("지갑 암호")}</label>
+             ? `<label class="meta" for="rf-pass">${copyHtml("지갑 암호")}</label>
                 <input id="rf-pass" type="password" autocomplete="off" />`
              : ""
          }
        </div>
        <div class="row" style="margin-top:12px">
-         <button id="rf-go">${t("돌려주기")}</button>
-         <button class="ghost" id="rf-cancel">${t("취소")}</button>
+         <button id="rf-go">${copyHtml("돌려주기")}</button>
+         <button class="ghost" id="rf-cancel">${copyHtml("취소")}</button>
          <span class="meta" id="rf-say"></span>
        </div>
      </div>`;
@@ -11150,7 +11139,7 @@ async function doRefund(payAddress: string, suggested: number) {
       const el = $("rf-to") as HTMLInputElement;
       if (!el.value.trim()) el.value = String(a);
       say.innerHTML =
-        `<b>${t("이 돈을 보낸 주소입니다")}</b> — ` +
+        `<b>${copyHtml("이 돈을 보낸 주소입니다")}</b> — ` +
         t("맞는지 손님과 확인해 주세요. 거래소에서 보낸 돈이면 이 주소로 돌려주시면 안 됩니다.");
     } catch {
       say.innerHTML = t("보낸 주소를 찾지 못했습니다. 손님에게 물어봐 주세요.");
@@ -11165,11 +11154,11 @@ async function doRefund(payAddress: string, suggested: number) {
     const reason = ($("rf-why") as HTMLInputElement).value.trim();
     const pass = needPass ? ($("rf-pass") as HTMLInputElement).value : null;
     if (!(amount > 0)) {
-      $("rf-say").innerHTML = `<span class="danger">${t("금액을 확인해 주세요")}</span>`;
+      $("rf-say").innerHTML = `<span class="danger">${copyHtml("금액을 확인해 주세요")}</span>`;
       return;
     }
     if (!to) {
-      $("rf-say").innerHTML = `<span class="danger">${t("받을 주소가 필요합니다")}</span>`;
+      $("rf-say").innerHTML = `<span class="danger">${copyHtml("받을 주소가 필요합니다")}</span>`;
       ($("rf-to") as HTMLInputElement).focus();
       return;
     }
@@ -11181,7 +11170,7 @@ async function doRefund(payAddress: string, suggested: number) {
     if (!ok) return;
     const b = $("rf-go") as HTMLButtonElement;
     b.disabled = true;
-    $("rf-say").textContent = t("보내는 중…");
+    setCopyText($("rf-say"), () => t("보내는 중…"));
     try {
       const r = await invoke<any>("refund", {
         toAddress: to,
@@ -11190,9 +11179,9 @@ async function doRefund(payAddress: string, suggested: number) {
         passphrase: pass,
       });
       box.innerHTML =
-        `<div class="card" style="margin-top:12px"><h3>${t("환불했습니다")}</h3>
-         <div class="kv"><b>${t("금액")}</b><span>${r.amount} RVN</span></div>
-         <div class="kv"><b>${t("거래 번호")}</b><code class="addr">${escapeHtml(String(r.txid))}</code></div></div>`;
+        `<div class="card" style="margin-top:12px"><h3>${copyHtml("환불했습니다")}</h3>
+         <div class="kv"><b>${copyHtml("금액")}</b><span>${r.amount} RVN</span></div>
+         <div class="kv"><b>${copyHtml("거래 번호")}</b><code class="addr">${escapeHtml(String(r.txid))}</code></div></div>`;
       loadWallet();
     } catch (e) {
       b.disabled = false;
@@ -11403,7 +11392,7 @@ async function showMiners() {
     const list: any[] = await invoke("mac_miners");
     $("mn-miners").innerHTML = list
       .map(
-        (m) => `<div class="kv"><b>${escapeHtml(m.name)}</b>
+        (m) => `<div class="kv"><b translate="no">${escapeHtml(m.name)}</b>
           <span>${escapeHtml(m.what)} <button class="ghost" data-getminer="${escapeHtml(m.url)}">받으러 가기</button></span></div>`,
       )
       .join("");
@@ -11983,7 +11972,7 @@ async function loadBackup() {
       .map((i: any) => `<div class="kv"><b>${escapeHtml(String(i.name))}</b><span>${
         i.exists ? fmtBytes(i.size) : "<span class='warn'>없음</span>"
       } — ${escapeHtml(String(i.why))}</span></div>`).join("") +
-      `<p class="meta">${t("브라우저·PWA 지갑과 파일, IPFS 원본, AI API 키는 이 백업에 포함되지 않습니다.")}</p>`;
+      `<p class="meta">${copyHtml("브라우저·PWA 지갑과 파일, IPFS 원본, AI API 키는 이 백업에 포함되지 않습니다.")}</p>`;
     const issue = latestAutomaticBackupIssue || b.automatic?.error || b.automatic?.warning;
     if (issue) $("bk-list").innerHTML += `<div class="warnbox">${escapeHtml(String(issue))}</div>`;
   } catch {}
@@ -12152,11 +12141,11 @@ async function doBackup(destFolder = ""): Promise<string> {
     const whereText = pretty ? `${pretty} 에 있습니다.` : "만들었습니다.";
     $("bk-result").innerHTML =
       `<div class="card" style="margin-top:11px">
-         <h3>${t("지갑을 포함한 백업을 검증하고 잠갔습니다")}</h3>
+         <h3>${copyHtml("지갑을 포함한 백업을 검증하고 잠갔습니다")}</h3>
          <div class="kv"><b>${escapeHtml(r.name)}</b><span>${escapeHtml(r.size_text)}</span></div>
          <p class="meta">${escapeHtml(whereText)}</p>
-         <p>${t("아래 파일을 담았습니다. 백업 파일과 백업 암호 또는 백업 열쇠를 별도로 보관하세요.")}</p>
-         <p class="meta">${t("브라우저·PWA 지갑과 파일, IPFS 원본, AI API 키는 이 백업에 포함되지 않습니다.")}</p>
+         <p>${copyHtml("아래 파일을 담았습니다. 백업 파일과 백업 암호 또는 백업 열쇠를 별도로 보관하세요.")}</p>
+         <p class="meta">${copyHtml("브라우저·PWA 지갑과 파일, IPFS 원본, AI API 키는 이 백업에 포함되지 않습니다.")}</p>
          ${(r.inside || []).map((i: any) => `<div class="kv"><b>${escapeHtml(i.name)}</b><span>${escapeHtml(i.what)}</span></div>`).join("")}
        </div>` +
       (r.warning
@@ -12637,9 +12626,9 @@ async function checkHealth() {
     //    없는지를 모른다 — 모르는 것이 제일 나쁘다.
     //    못 물어본 것과 「주문 못 받음」은 다른 말이니, 그렇다고 적는다.
     $$("hz-card").className = "verdict warn";
-    $$("hz-state").textContent = t("지금 받을 수 있는지 못 알아봤습니다");
+    setCopyText($$("hz-state"), () => t("지금 받을 수 있는지 못 알아봤습니다"));
     $$("hz-why").textContent = errText(e);
-    $$("hz-fix").textContent = t("노드가 켜져 있는지 보고, 잠시 뒤 이 화면을 다시 열어 주세요.");
+    setCopyText($$("hz-fix"), () => t("노드가 켜져 있는지 보고, 잠시 뒤 이 화면을 다시 열어 주세요."));
     $$("hz-extra").innerHTML = "";
   }
 }
@@ -12823,8 +12812,8 @@ async function startPhone() {
         try {
           const svg = await invoke<string>("qr_svg", { text: foreverUrl });
           foreverQr =
-            `<div class="qrbox">${svg}<div class="cap"><b>${t("문에 붙이는 QR")}</b>` +
-            `${t("주소가 바뀌지 않습니다. 인쇄해서 붙이세요")}</div>${oneLink(foreverUrl)}</div>`;
+            `<div class="qrbox">${svg}<div class="cap"><b>${copyHtml("문에 붙이는 QR")}</b>` +
+            `${copyHtml("주소가 바뀌지 않습니다. 인쇄해서 붙이세요")}</div>${oneLink(foreverUrl)}</div>`;
         } catch {
           /* QR 을 못 만들어도 나머지는 보여 준다 */
         }
@@ -12977,13 +12966,13 @@ function labelShopNav() {
   //    「내 가게」만 아이콘이 없었다 — 가게 이름을 넣는 순간 사라진 것이다.
   //    글자가 든 <span> 만 갈아 끼운다.
   const label = link?.querySelector("span");
-  if (label) label.textContent = name || "내 가게";
+  if (label) { label.setAttribute("translate", name ? "no" : "yes"); label.textContent = name || "내 가게"; }
   else if (link) link.textContent = name || "내 가게";
   // 라비 화면의 인사말과 「아직 안 된 것」 줄도 같이 따라가야 한다.
   // 안 그러면 가게를 만들어 놓고도 첫 화면은 「가게부터 만들까요?」 그대로다.
   if (document.getElementById("ravi-tiles")) paintRavi();
   const title = document.querySelector("#page-shop .title");
-  if (title) title.textContent = name || "내 가게";
+  if (title) { title.setAttribute("translate", name ? "no" : "yes"); title.textContent = name || "내 가게"; }
   paintChainMark();
 }
 
@@ -13019,7 +13008,7 @@ function paintChainMark() {
   const btn = document.getElementById("sh-refresh");
   if (btn) btn.style.display = asset ? "" : "none";
   el.className = asset ? "chainmark on" : "chainmark";
-  el.textContent = asset ? `체인에 등록됨 · ${asset}` : t("이 컴퓨터에만 있습니다");
+  setCopyText(el, () => asset ? `체인에 등록됨 · ${asset}` : t("이 컴퓨터에만 있습니다"));
   el.title = asset
     ? ""
     : t("손님은 QR 로 옵니다. 장터에서 찾게 하려면 아래에서 등록하세요.");
@@ -13189,14 +13178,14 @@ function paintHours() {
     if (!say) continue;
     if (o && c) {
       // 자정을 넘기는 것도 말해 준다 — 밤 6시 열고 새벽 2시 닫기.
-      say.textContent = c <= o ? t("자정 넘겨 영업") : "";
+      setCopyText(say, () => c <= o ? t("자정 넘겨 영업") : "");
       say.className = "hrsay ok";
     } else if (!o && !c) {
-      say.textContent = t("쉬는 날");
+      setCopyText(say, () => t("쉬는 날"));
       say.className = "hrsay";
     } else {
       // 🔴 반쪽짜리는 저장되지 않는다. 그 사실을 그 자리에서 말한다.
-      say.textContent = t("한쪽만 적혀서 저장되지 않습니다");
+      setCopyText(say, () => t("한쪽만 적혀서 저장되지 않습니다"));
       say.className = "hrsay warn";
     }
   }
@@ -13396,7 +13385,7 @@ async function loadSales() {
        <table><thead><tr><th>품목</th><th class="num">수량</th><th class="num">금액</th></tr></thead>
        <tbody>${items
          .map(
-           (i) => `<tr><td>${escapeHtml(i.name)}</td>
+           (i) => `<tr><td translate="no">${escapeHtml(i.name)}</td>
              <td class="num">${fmtQty(i.qty)}</td>
              <td class="num">${money(i.amount)}</td></tr>`,
          )
@@ -13718,7 +13707,7 @@ async function healIcon(): Promise<void> {
     if (!up?.cid) throw new Error("파일창고가 주소를 주지 않았습니다.");
     shopIcon = `${up.cid}/icon.jpg`;
     const note = $("sh-picnote");
-    if (note) note.textContent = t("사진을 파일창고에 올렸습니다.");
+    if (note) setCopyText(note, () => t("사진을 파일창고에 올렸습니다."));
     void saveShop();
   } catch (e) {
     const note = $("sh-picnote");
@@ -13830,9 +13819,9 @@ function lockChainName() {
     const p = document.createElement("p");
     p.id = "sh-assetlocked";
     p.className = "meta";
-    p.textContent = t(
+    setCopyText(p, () => t(
       "이미 체인에 올린 이름입니다. 체인 이름은 바꿀 수 없어서 잠가 두었습니다 — 다시 등록하면 RVN 이 또 탑니다.",
-    );
+    ));
     box.insertAdjacentElement("afterend", p);
   }
 }
@@ -14088,9 +14077,9 @@ async function sayPrice(i: number) {
     try {
       const r = await invoke<any>("rvn_rate", { currency: cur });
       const rvn = v / Number(r?.rate || 0);
-      el.textContent = Number.isFinite(rvn) && rvn > 0
+      setCopyText(el, () => Number.isFinite(rvn) && rvn > 0
         ? `${t("지금 시세로")} ${rvn.toLocaleString(undefined, { maximumFractionDigits: 0 })} RVN`
-        : "";
+        : "");
     } catch {
       el.textContent = "";
     }
@@ -14098,7 +14087,7 @@ async function sayPrice(i: number) {
   }
   if (v < MIN_RVN) {
     el.innerHTML =
-      `<span class="needspan">${t("너무 작아 손님이 못 보냅니다 — 제일 작은 값은 0.01 RVN 입니다.")}</span>`;
+      `<span class="needspan">${copyHtml("너무 작아 손님이 못 보냅니다 — 제일 작은 값은 0.01 RVN 입니다.")}</span>`;
     return;
   }
   // 🔴 **지금 시세로 얼마인지 적어 준다.** 사장은 「1286 RVN」이 얼마인지
@@ -14108,7 +14097,7 @@ async function sayPrice(i: number) {
     const r = await invoke<any>("rvn_rate", { currency: "KRW" });
     const won = v * Number(r?.rate || 0);
     if (won > 0) {
-      el.textContent = `${t("지금 시세로")} ${Math.round(won).toLocaleString()}${t("원")}`;
+      setCopyText(el, () => `${t("지금 시세로")} ${Math.round(won).toLocaleString()}${t("원")}`);
       return;
     }
   } catch {
@@ -14116,8 +14105,7 @@ async function sayPrice(i: number) {
   }
   // 여덟 자리를 넘는 자리는 체인에서 잘린다. 잘린다고 미리 말해 준다.
   const cut = Math.round(v * 1e8) / 1e8;
-  el.textContent =
-    cut !== v ? `${t("체인에는")} ${cut} RVN ${t("으로 올라갑니다")}` : "";
+  setCopyText(el, () => cut !== v ? `${t("체인에는")} ${cut} RVN ${t("으로 올라갑니다")}` : "");
 }
 
 /** 「8월 23일에 사면 9월 22일까지」 — 사장이 카운터에서 할 말 그대로. */
@@ -14128,7 +14116,7 @@ async function saySpan(i: number) {
   const months = Number(it.pass_months || 0);
   const days = Number(it.pass_days || 0);
   if (months <= 0 && days <= 0) {
-    el.innerHTML = `<span class="needspan">${t("기간을 골라 주세요")}</span>`;
+    el.innerHTML = `<span class="needspan">${copyHtml("기간을 골라 주세요")}</span>`;
     return;
   }
   try {
@@ -14139,7 +14127,7 @@ async function saySpan(i: number) {
       extraDays: months > 0 && days <= 0 ? 0 : days,
     });
     const fmt = (v: number) => `${Math.floor(v / 100) % 100}월 ${v % 100}일`;
-    el.textContent = `${t("오늘 사면")} ${fmt(p.end)}${t("까지")} (${p.days}${t("일")})`;
+    setCopyText(el, () => `${t("오늘 사면")} ${fmt(p.end)}${t("까지")} (${p.days}${t("일")})`);
   } catch {
     el.textContent = "";
   }
@@ -14286,7 +14274,7 @@ function renderMenu() {
     const count = menuItems.length ? `${t("품목")} ${menuItems.length}${t("개")}` : "";
     note.innerHTML = !bad.length
       ? count
-      : `${count} · <span class="needspan">${t("값이 없어 손님에게 안 보이는 것")} ${bad.length}${t("개")}</span>
+      : `${count} · <span class="needspan">${copyHtml("값이 없어 손님에게 안 보이는 것")} ${bad.length}${copyHtml("개")}</span>
          <span class="meta">— ${escapeHtml(bad.slice(0, 4).join(", "))}${bad.length > 4 ? "…" : ""}</span>`;
     // 🔴 「원으로 하세요」라고 권하지 않는다. 어느 쪽이 맞는지는 사장이 무엇을
     //    지키고 싶은가에 달렸고, 그건 우리가 정할 일이 아니다.
@@ -15274,7 +15262,7 @@ async function loadOrders() {
           //    줄 선 손님 앞에서 그 반 박자가 한 번 더 누르게 만든다.
           const 원래 = el.textContent || "";
           el.setAttribute("disabled", "true");
-          el.textContent = t("보내는 중…");
+          setCopyText(el, () => t("보내는 중…"));
           try {
             // "나왔다"를 누르는 순간 손님 폰이 울린다. 그래서 이 버튼은
             // 실수로 눌리면 안 되는 자리에 있어야 하고, 되돌릴 수 있어야 한다.
@@ -15448,13 +15436,13 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("dr-books").addEventListener("click", () => void showBookings());
   $("sh-refresh").addEventListener("click", async () => {
     const say = $("sh-refreshsay");
-    say.textContent = t("알리는 중…");
+    setCopyText(say, () => t("알리는 중…"));
     try {
       const r = await invoke<any>("shop_refresh");
       const n = (r?.ok || []).length;
       // 몇 곳이 받았는지 적는다. 「알렸습니다」만 뜨면 한 곳도 안 받았을 때와
       // 구별이 안 된다 — 릴레이는 늘 하나씩 죽는다.
-      say.innerHTML = `<span class="ok">${t("알렸습니다")} — ${t("릴레이")} ${n}${t("곳")}</span>`;
+      say.innerHTML = `<span class="ok">${copyHtml("알렸습니다")} — ${copyHtml("릴레이")} ${n}${copyHtml("곳")}</span>`;
     } catch (e) {
       say.innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
     }
@@ -15482,7 +15470,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("rv-phone-info").addEventListener("toggle", () => {
     if (!($("rv-phone-info") as HTMLDetailsElement).open || $("rv-phone-qr").querySelector("svg")) return;
     void invoke<string>("qr_svg", {text:RAVENVAULT_WALLET}).then(svg => { $("rv-phone-qr").innerHTML = svg; }).catch(() => {
-      $("rv-phone-qr").textContent = t("QR을 만들지 못했습니다. 아래 주소를 폰에서 열어 주세요.");
+      setCopyText($("rv-phone-qr"), () => t("QR을 만들지 못했습니다. 아래 주소를 폰에서 열어 주세요."));
     });
   });
   $("ord-reset").addEventListener("click", resetOrder);
@@ -15593,8 +15581,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     $("desktop-language-name").textContent = LANG_NAMES[lang];
     document.querySelectorAll<HTMLButtonElement>("[data-language]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.language === lang)));
     const name = ($("ar-name") as HTMLInputElement)?.value?.trim();
-    if (!name) $("ar-nameview").textContent = t("아직 이름이 없습니다");
-    void refreshOverview();
+    if (!name) setCopyText($("ar-nameview"), () => t("아직 이름이 없습니다"));
   };
   window.addEventListener("desktop-language-change", syncLanguage);
   syncLanguage();
@@ -16045,7 +16032,7 @@ window.addEventListener("DOMContentLoaded", async () => {
           const p = document.createElement("div");
           p.className = "warnbox";
           p.style.marginTop = "10px";
-          p.textContent = `${t("손님 폰 서버를 켜지 못했습니다")} — ${t(lastPhoneError)}`;
+          setCopyText(p, () => `${t("손님 폰 서버를 켜지 못했습니다")} — ${t(lastPhoneError)}`);
           box.appendChild(p);
         }
       });
@@ -16066,7 +16053,7 @@ window.addEventListener("DOMContentLoaded", async () => {
           void loadBackup();
         }
       })
-      .catch(() => { const note = document.getElementById("bk-note"); if (note) note.textContent = t("자동 백업을 확인하지 못했습니다. 노드 연결을 확인하고 백업을 다시 실행하세요."); });
+      .catch(() => { const note = document.getElementById("bk-note"); if (note) setCopyText(note, () => t("자동 백업을 확인하지 못했습니다. 노드 연결을 확인하고 백업을 다시 실행하세요.")); });
   backupTick();
   setInterval(backupTick, 6 * 60 * 60 * 1000);
   // 인터넷이 끊기는 것은 화면을 열어 볼 때가 아니라 장사 중에 일어난다.
@@ -16270,11 +16257,9 @@ async function paintHelping(): Promise<void> {
     ) +
     // 🔴 정직하게. 지금은 색인이 꺼져 있어서 이 노드가 남의 지갑을 돕지는
     //    못한다. 돕고 있다고 적으면 안 된다.
-    `<div class="card"><b>${t("아직 못 하고 있는 것")}</b>
-       <p class="meta" style="margin-top:8px">${t(
-         "이 노드는 아직 남의 지갑 잔액을 대신 답해 주지 못합니다. 주소 색인이 꺼져 있기 때문입니다. 켜면 이 컴퓨터가 실제로 남을 돕게 됩니다."
-       )}</p>
-       <button data-part-go="node" style="margin-top:12px">${t("주소 색인 켜기")}</button>
+    `<div class="card"><b>${copyHtml("아직 못 하고 있는 것")}</b>
+       <p class="meta" style="margin-top:8px">${copyHtml("이 노드는 아직 남의 지갑 잔액을 대신 답해 주지 못합니다. 주소 색인이 꺼져 있기 때문입니다. 켜면 이 컴퓨터가 실제로 남을 돕게 됩니다.")}</p>
+       <button data-part-go="node" style="margin-top:12px">${copyHtml("주소 색인 켜기")}</button>
      </div>` +
     /* 🔴 **만들어 놓고 아무도 안 부르던 것**(실측 2026-09-08).
           `helping.rs` 의 `help_round()` 는 체인에서 가게 목록을 읽고
@@ -16282,12 +16267,10 @@ async function paintHelping(): Promise<void> {
           한다 — sha256 으로 대조하고, 4MB·40개 상한을 지킨다. 제대로 만들어
           놓고 `lib.rs` 에 등록만 하고 **부르는 줄이 하나도 없었다.**
           「돕기」가 상태만 보여 주고 실제로 돕지는 않고 있었던 것이다. */
-    `<div class="card"><b>${t("가게 사진 대신 들어 주기")}</b>
-       <p class="meta" style="margin-top:8px">${t(
-         "체인에 올라온 가게들의 사진을 이 컴퓨터가 함께 들고 있습니다. 그 가게 컴퓨터가 꺼져 있어도 손님 화면에서 사진이 열립니다. 체인이 가리키는 것만, 하나에 4MB까지만 받습니다."
-       )}</p>
+    `<div class="card"><b>${copyHtml("가게 사진 대신 들어 주기")}</b>
+       <p class="meta" style="margin-top:8px">${copyHtml("체인에 올라온 가게들의 사진을 이 컴퓨터가 함께 들고 있습니다. 그 가게 컴퓨터가 꺼져 있어도 손님 화면에서 사진이 열립니다. 체인이 가리키는 것만, 하나에 4MB까지만 받습니다.")}</p>
        <div id="hp-round-out" class="meta" style="margin-top:8px"></div>
-       <button id="hp-round" style="margin-top:12px">${t("지금 한 바퀴 돕기")}</button>
+       <button id="hp-round" style="margin-top:12px">${copyHtml("지금 한 바퀴 돕기")}</button>
      </div>`;
 
   /* 그린 뒤에 잇는다. 안 이으면 눌러도 아무 일이 없다. */
@@ -16296,16 +16279,16 @@ async function paintHelping(): Promise<void> {
     단추.onclick = async () => {
       const 자리 = document.getElementById("hp-round-out");
       단추.disabled = true;
-      if (자리) 자리.textContent = t("체인에서 가게를 읽는 중…");
+      if (자리) setCopyText(자리, () => t("체인에서 가게를 읽는 중…"));
       try {
         const r = await invoke<any>("help_round");
         /* 숫자를 정직하게 적는다. 「도왔습니다」만 적으면 아무것도 안 해도
            같은 글이 뜬다 — 그건 화면이 거짓말하는 것이다. */
         if (자리)
-          자리.textContent = t("가게 {a}곳 · 받은 조각 {b}개 · 사진 없는 가게 {c}곳")
+          setCopyText(자리, () => t("가게 {a}곳 · 받은 조각 {b}개 · 사진 없는 가게 {c}곳")
             .replace("{a}", String(r?.shops ?? 0))
             .replace("{b}", String(r?.fetched ?? 0))
-            .replace("{c}", String(r?.skipped ?? 0));
+            .replace("{c}", String(r?.skipped ?? 0)));
       } catch (e) {
         if (자리) 자리.textContent = errText(e);
       } finally {

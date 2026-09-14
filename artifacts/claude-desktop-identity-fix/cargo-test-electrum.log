@@ -1,0 +1,221 @@
+warning: unused import: `BufRead`
+  --> src/tunnel.rs:31:15
+   |
+31 | use std::io::{BufRead, BufReader};
+   |               ^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+  --> src/quiet.rs:25:9
+   |
+25 |     let mut c = std::process::Command::new(program);
+   |         ----^
+   |         |
+   |         help: remove this `mut`
+   |
+   = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `title`
+  --> src/report.rs:75:5
+   |
+75 |     title: String,
+   |     ^^^^^ help: if this is intentional, prefix it with an underscore: `_title`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: value assigned to `cur` is never read
+    --> src/server.rs:3125:19
+     |
+3125 |     let mut cur = String::new();
+     |                   ^^^^^^^^^^^^^ this value is reassigned later and never used
+...
+3129 |             cur = line.split(':').next().unwrap_or("").trim().to_string();
+     |             --- `cur` is overwritten here before the previous value is read
+     |
+     = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `MIN_START_RVN` is never used
+  --> src/auction.rs:23:11
+   |
+23 | pub const MIN_START_RVN: f64 = 1.0;
+   |           ^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `BIND_PREFIX` is never used
+  --> src/auction.rs:27:11
+   |
+27 | pub const BIND_PREFIX: &str = "PLAYX-AUCTION";
+   |           ^^^^^^^^^^^
+
+warning: function `min_next` is never used
+  --> src/auction.rs:36:8
+   |
+36 | pub fn min_next(current: f64) -> f64 {
+   |        ^^^^^^^^
+
+warning: function `is_unique_asset` is never used
+  --> src/auction.rs:50:8
+   |
+50 | pub fn is_unique_asset(name: &str) -> bool {
+   |        ^^^^^^^^^^^^^^^
+
+warning: function `bind_message` is never used
+  --> src/auction.rs:69:8
+   |
+69 | pub fn bind_message(nostr_pk: &str, asset: &str, addr: &str, auction_id: &str) -> String {
+   |        ^^^^^^^^^^^^
+
+warning: constant `SETTLE_FEE_RATE` is never used
+   --> src/auction.rs:103:11
+    |
+103 | pub const SETTLE_FEE_RATE: f64 = 0.10;
+    |           ^^^^^^^^^^^^^^^
+
+warning: function `settle_fee` is never used
+   --> src/auction.rs:112:8
+    |
+112 | pub fn settle_fee(price: f64) -> f64 {
+    |        ^^^^^^^^^^
+
+warning: function `winner_pays` is never used
+   --> src/auction.rs:125:8
+    |
+125 | pub fn winner_pays(price: f64) -> f64 {
+    |        ^^^^^^^^^^^
+
+warning: function `preview_need` is never used
+   --> src/auction.rs:134:8
+    |
+134 | pub fn preview_need(price: f64, rate: f64) -> f64 {
+    |        ^^^^^^^^^^^^
+
+warning: struct `Bid` is never constructed
+   --> src/auction.rs:141:12
+    |
+141 | pub struct Bid {
+    |            ^^^
+
+warning: function `rank_top` is never used
+   --> src/auction.rs:163:8
+    |
+163 | pub fn rank_top<'a>(bids: &'a [Bid], auction_id: &str, start_price: f64) -> Option<&'a Bid> {
+    |        ^^^^^^^^
+
+warning: constant `CUSTODY_MARKS` is never used
+  --> src/noncustody.rs:37:11
+   |
+37 | pub const CUSTODY_MARKS: &[&str] = &[
+   |           ^^^^^^^^^^^^^
+
+warning: constant `EXCHANGE_MARKS` is never used
+  --> src/noncustody.rs:46:11
+   |
+46 | pub const EXCHANGE_MARKS: &[&str] = &[
+   |           ^^^^^^^^^^^^^^
+
+warning: constant `BANNED` is never used
+  --> src/wording.rs:26:11
+   |
+26 | pub const BANNED: &[&str] = &[
+   |           ^^^^^^
+
+warning: function `risky` is never used
+  --> src/wording.rs:32:8
+   |
+32 | pub fn risky(text: &str) -> Vec<&'static str> {
+   |        ^^^^^
+
+warning: function `unpack_if_zip` is never used
+   --> src/recover.rs:237:4
+    |
+237 | fn unpack_if_zip(input: &str) -> Result<PathBuf, String> {
+    |    ^^^^^^^^^^^^^
+
+warning: field `what` is never read
+  --> src/moving.rs:60:5
+   |
+54 | struct 짐 {
+   |        -- field in this struct
+...
+60 |     what: String,
+   |     ^^^^
+
+warning: constant `BURN_TAG` is never used
+  --> src/issue2.rs:32:11
+   |
+32 | pub const BURN_TAG: f64 = 0.1;
+   |           ^^^^^^^^
+
+warning: constant `ROLES` is never used
+  --> src/roles.rs:34:11
+   |
+34 | pub const ROLES: [&str; 4] = ["owner", "staff", "scanner", "customer"];
+   |           ^^^^^
+
+warning: function `release` is never used
+   --> src/stock.rs:148:8
+    |
+148 | pub fn release(address: &str) {
+    |        ^^^^^^^
+
+warning: function `fee_path` is never used
+    --> src/shop.rs:1007:4
+     |
+1007 | fn fee_path() -> std::path::PathBuf {
+     |    ^^^^^^^^
+
+warning: unused import: `super::*`
+   --> src/report.rs:195:9
+    |
+195 |     use super::*;
+    |         ^^^^^^^^
+    |
+    = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: duplicated attribute
+   --> src/relay.rs:613:5
+    |
+613 |     #[test]
+    |     ^^^^^^^
+    |
+    = note: `#[warn(duplicate_macro_attributes)]` on by default
+
+warning: unused import: `BufRead`
+  --> src/tunnel.rs:31:15
+   |
+31 | use std::io::{BufRead, BufReader};
+   |               ^^^^^^^
+
+warning: function `unpack_if_zip` is never used
+   --> src/recover.rs:237:4
+    |
+237 | fn unpack_if_zip(input: &str) -> Result<PathBuf, String> {
+    |    ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `only_shop_kinds_are_taken` is never used
+   --> src/relay.rs:647:8
+    |
+647 |     fn only_shop_kinds_are_taken() {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `playx-raven` (lib) generated 25 warnings (run `cargo fix --lib -p playx-raven` to apply 2 suggestions)
+warning: `playx-raven` (lib test) generated 12 warnings (7 duplicates) (run `cargo fix --lib -p playx-raven --tests` to apply 1 suggestion)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.26s
+     Running unittests src/lib.rs (src-tauri/target/debug/deps/playx_raven_lib-a4afaa11f4c39b80)
+
+running 2 tests
+test electrum::tests::a_real_address_decodes_to_21_bytes ... ok
+test electrum::tests::a_wrong_address_is_caught_not_emptied ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 435 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (src-tauri/target/debug/deps/playx_raven-2c8f8dad5998a7f0)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

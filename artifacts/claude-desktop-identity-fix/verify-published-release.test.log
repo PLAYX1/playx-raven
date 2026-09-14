@@ -1,0 +1,65 @@
+TAP version 13
+# Subtest: exact four updater platforms / five installers produce only seven deduplicated artifact HEAD requests
+ok 1 - exact four updater platforms / five installers produce only seven deduplicated artifact HEAD requests
+  ---
+  duration_ms: 17.033167
+  ...
+# Subtest: 50 seconds of stale raw cache recovers without rebuilding or publishing
+ok 2 - 50 seconds of stale raw cache recovers without rebuilding or publishing
+  ---
+  duration_ms: 1.76025
+  ...
+# Subtest: cache may remain stale for fifteen minutes; final bounded attempt succeeds
+ok 3 - cache may remain stale for fifteen minutes; final bounded attempt succeeds
+  ---
+  duration_ms: 11.633584
+  ...
+# Subtest: permanently wrong version fails after bounded retries
+ok 4 - permanently wrong version fails after bounded retries
+  ---
+  duration_ms: 0.9035
+  ...
+# Subtest: missing public artifact fails instead of reporting a successful release
+ok 5 - missing public artifact fails instead of reporting a successful release
+  ---
+  duration_ms: 0.944333
+  ...
+# Subtest: schema, exact platform identities and immutable URLs reject malformed public metadata
+ok 6 - schema, exact platform identities and immutable URLs reject malformed public metadata
+  ---
+  duration_ms: 0.326458
+  ...
+# Subtest: same-version metadata mismatch is rejected before any artifact request
+ok 7 - same-version metadata mismatch is rejected before any artifact request
+  ---
+  duration_ms: 0.37625
+  ...
+# Subtest: oversized manifest and a nonresponsive public request fail within limits
+ok 8 - oversized manifest and a nonresponsive public request fail within limits
+  ---
+  duration_ms: 5.115292
+  ...
+# Subtest: verify-only workflow cannot build, sign, or publish and shares the postpublish verifier
+ok 9 - verify-only workflow cannot build, sign, or publish and shares the postpublish verifier
+  ---
+  duration_ms: 1.188458
+  ...
+# Subtest: new RavenVault Desktop URLs pass the same immutable manifest and HEAD checks
+ok 10 - new RavenVault Desktop URLs pass the same immutable manifest and HEAD checks
+  ---
+  duration_ms: 0.903959
+  ...
+# Subtest: new release verification fails if an old latest alias disappears
+ok 11 - new release verification fails if an old latest alias disappears
+  ---
+  duration_ms: 1.316
+  ...
+1..11
+# tests 11
+# suites 0
+# pass 11
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 49.621584

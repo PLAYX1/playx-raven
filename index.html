@@ -1882,9 +1882,12 @@
       .rv-web-info p { font-size: 16px; margin: 8px 0; overflow-wrap: anywhere; }
       @media (max-width: 900px) { nav { width: 172px; } }
 
-      :root { color-scheme: light; --bg:#fff; --panel:#fff; --text:#111; --muted:#4a4a4a; --line:#d6d6d6; --ravi:#e7731f; --side:#fff; }
+      :root { color-scheme: light; --bg:#fff; --panel:#fff; --text:#111; --muted:#4a4a4a; --line:#d6d6d6; --ravi:#e7731f; --side:#fff; --faint:#626262; --ravi-soft:#75639b; --ravi-tint:#fdf1e7; --brand:#384192; --brand-light:#5874cf; --ok:#226b43; --warn:#96601a; --danger:#b32b22; }
       body { padding-top:110px; }
       nav, main { padding-top:12px; }
+      nav .brand { padding:0 12px 12px; display:block; }
+      nav .brand > div { min-width:0; }
+      #upnag { width:100%; white-space:normal; overflow-wrap:anywhere; }
       .desktop-header { position:fixed; top:34px; left:0; right:0; height:76px; z-index:49; display:flex; align-items:center; justify-content:space-between; padding:6px 24px; background:#fff; border-bottom:1px solid var(--line); gap:16px; }
       .desktop-logo { display:flex; align-items:center; gap:12px; font-size:22px; }
       .desktop-logo img { width:40px; height:40px; object-fit:contain; }
@@ -1904,7 +1907,7 @@
       .overview-values strong { font-size:22px; }
       .overview-actions { display:flex; gap:12px; }
       .overview-actions button { min-height:64px; display:flex; align-items:center; justify-content:center; gap:10px; font-size:16px; border-radius:16px; }
-      #overview-receive { flex:1; background:var(--ravi); border-color:var(--ravi); color:#fff; }
+      #overview-receive { flex:1; background:#fff; color:#111; border:1px solid var(--line); }
       #overview-phone { flex:2; background:#fff; color:#111; border:1px solid var(--line); }
       main :is(p, label, input, textarea, select, button, summary, .meta, .lede), .todochip { font-size:16px !important; }
       main :is(button, summary), .todochip { min-height:64px !important; }
@@ -1916,7 +1919,7 @@
     <div class="titlebar" data-tauri-drag-region></div>
     <header class="desktop-header" data-tauri-drag-region>
       <div class="desktop-logo" data-tauri-drag-region><img src="/raven-head.webp" alt="" data-tauri-drag-region/><strong data-tauri-drag-region>RavenVault Desktop</strong></div>
-      <button id="desktop-preferences" type="button" aria-expanded="false" aria-controls="desktop-language-menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4M5 5l3 3m8 8l3 3M5 19l3-3M16 8l3-3"/></svg><span>설정</span><span aria-hidden="true">·</span><span id="desktop-language-name" translate="no">한국어</span></button>
+      <button id="desktop-preferences" type="button" aria-expanded="false" aria-controls="desktop-language-menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 7h4m4 0h8M4 17h8m4 0h4" stroke-linecap="round"/><circle cx="10" cy="7" r="2"/><circle cx="14" cy="17" r="2"/></svg><span>설정</span><span aria-hidden="true">·</span><span id="desktop-language-name" translate="no">한국어</span></button>
       <div id="desktop-language-menu" hidden><div class="desktop-language-options" translate="no"><button data-language="ko">한국어</button><button data-language="en">English</button><button data-language="ja">日本語</button><button data-language="zh">简体中文</button></div><button id="desktop-settings-go">설정으로</button></div>
     </header>
 
@@ -2064,12 +2067,7 @@
 
     <nav>
       <div class="brand" data-tauri-drag-region>
-        <!-- 🔴 여기는 `raven-head`(360x275, **얼굴만 잘라 둔 그림**)였다.
-                 대표님: "라비와 GPU 그래픽카드 전체가 보이면 좋겠다".
-                 온전한 `raven-hello`(420x481)로 바꾼다 — 아래 GPU 가 보인다. -->
-            <img src="/raven-hello.webp" alt="" class="brandravi" data-tauri-drag-region />
-        <div data-tauri-drag-region>
-          <h1 data-tauri-drag-region>RavenVault Desktop</h1>
+        <div>
           <!-- 🔴 판 번호 **자체가 단추**다. 예전에는 새 버전이 있을 때만
                아래 알림이 나타나서, 없을 때는 확인할 길이 아예 없었다.
                그리고 그 알림은 켜고 8초 뒤에 뜬다 — 그전에 궁금한 사람은

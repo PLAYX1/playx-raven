@@ -1,0 +1,93 @@
+{
+  "screens": [
+    {
+      "language": "ko",
+      "width": 1120,
+      "height": 780,
+      "overflow": 0,
+      "navWidth": 172,
+      "duplicateBrand": false,
+      "receiveBg": "rgb(255, 255, 255)",
+      "phoneBg": "rgb(255, 255, 255)",
+      "firstLead": true,
+      "phoneTiles": 0
+    },
+    {
+      "language": "en",
+      "width": 1120,
+      "height": 780,
+      "overflow": 0,
+      "navWidth": 172,
+      "duplicateBrand": false,
+      "receiveBg": "rgb(255, 255, 255)",
+      "phoneBg": "rgb(255, 255, 255)",
+      "firstLead": true,
+      "phoneTiles": 0
+    },
+    {
+      "language": "ko",
+      "width": 1440,
+      "height": 900,
+      "overflow": 0,
+      "navWidth": 172,
+      "duplicateBrand": false,
+      "receiveBg": "rgb(255, 255, 255)",
+      "phoneBg": "rgb(255, 255, 255)",
+      "firstLead": true,
+      "phoneTiles": 0
+    },
+    {
+      "language": "en",
+      "width": 1440,
+      "height": 900,
+      "overflow": 0,
+      "navWidth": 172,
+      "duplicateBrand": false,
+      "receiveBg": "rgb(255, 255, 255)",
+      "phoneBg": "rgb(255, 255, 255)",
+      "firstLead": true,
+      "phoneTiles": 0
+    }
+  ],
+  "startup": [
+    {
+      "language": "ko",
+      "width": 1120,
+      "wallet_balance": 1,
+      "node_status": 1
+    },
+    {
+      "language": "en",
+      "width": 1120,
+      "wallet_balance": 1,
+      "node_status": 1
+    },
+    {
+      "language": "ko",
+      "width": 1440,
+      "wallet_balance": 1,
+      "node_status": 1
+    },
+    {
+      "language": "en",
+      "width": 1440,
+      "wallet_balance": 1,
+      "node_status": 1
+    }
+  ],
+  "idle": {
+    "wallet_balance": 3,
+    "node_status": 6,
+    "money_status": 1
+  },
+  "dark": {
+    "bg": "#fff",
+    "faint": "#626262",
+    "tint": "#fdf1e7"
+  },
+  "customer": {
+    "title": "RavenVault",
+    "band": false,
+    "overflow": 0
+  }
+}
