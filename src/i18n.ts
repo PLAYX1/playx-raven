@@ -59,6 +59,19 @@ export function t(s: string): string {
   return (d && d[s]) || s;
 }
 
+/**
+ * 값이 끼는 문장. 사전 열쇠는 `"{0}분 전"` 처럼 값 자리를 비운 한국어 원문이다.
+ * 값은 **계산된 그대로** 끼운다 — 숫자를 다시 만들지 않는다(틀린 숫자보다
+ * 한국어가 낫다는 원칙을 지키려고 번역은 문장 틀만 바꾼다).
+ * 번역에 `{n}` 이 빠져 있으면 원문 틀을 쓴다.
+ */
+export function tf(source: string, ...values: unknown[]): string {
+  const fill = (template: string) => template.replace(/\{(\d+)\}/g, (_, i) => String(values[Number(i)] ?? ""));
+  const translated = t(source);
+  const complete = values.every((_, i) => translated.includes(`{${i}}`));
+  return fill(complete ? translated : source);
+}
+
 /** Change language without losing navigation, drafts, or reviewed transactions. */
 export function setLang(l: Lang) {
   try {
@@ -101,13 +114,20 @@ export function setCopyText(element: Element, render: () => string) {
   element.replaceChildren(node);
 }
 
-const originals = new WeakMap<Node, { source: string; rendered: string }>();
-const attributes = new WeakMap<Element, Map<string, { source: string; rendered: string }>>();
-function renderCopy(raw: string, previous?: {source: string; rendered: string}) {
-  const key = raw.trim().replace(/\s+/g, " ");
-  const source = previous?.rendered === raw ? previous.source : key;
-  const rendered = raw.replace(raw.trim(), t(source));
-  return { source, rendered };
+type Rendered = { source: string; rendered: string; lead: string; trail: string };
+const originals = new WeakMap<Node, Rendered>();
+const attributes = new WeakMap<Element, Map<string, Rendered>>();
+// 🔴 앞뒤 공백은 **처음 본 원문의 것**을 기억한다. 번역값이 공백으로 시작하면
+//    (「개」→" items") 다시 돌 때마다 공백이 한 칸씩 늘어났다(2026-09-14 실측).
+function renderCopy(raw: string, previous?: Rendered): Rendered {
+  if (previous?.rendered === raw) {
+    const rendered = previous.lead + t(previous.source) + previous.trail;
+    return { ...previous, rendered };
+  }
+  const lead = raw.match(/^\s*/)![0];
+  const trail = raw.slice(lead.length).match(/\s*$/)![0];
+  const source = raw.trim().replace(/\s+/g, " ");
+  return { source, rendered: lead + t(source) + trail, lead, trail };
 }
 export function translateDom(root: Node = document.body) {
   const box = root instanceof Element ? root : document;
