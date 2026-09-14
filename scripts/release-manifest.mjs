@@ -30,7 +30,7 @@ export async function prepareRelease(source, destination, version) {
     if (next.reduce((order, n, i) => order || Math.sign(n - old[i]), 0) <= 0) throw new Error('Release must be newer than the currently published version');
   } catch (e) { if (e.code !== 'ENOENT') throw e; }
   const base = `https://raw.githubusercontent.com/PLAYX1/playx-raven-releases/dist/v${version}`;
-  const manifest = { version, notes: 'RavenVault Desktop 0.4.2: 폰에서 서명한 거래를 확인 후 내 노드로 보내기, 네트워크 상태 연결, 폰에서 RavenVault 쓰기 QR 한 곳으로 정리, 라비 그림 통일. 기존 지갑 데이터 위치와 업데이트 식별자를 유지합니다.', pub_date: new Date().toISOString(), platforms: {}, installers: [] };
+  const manifest = { version, notes: 'RavenVault Desktop 0.4.3: 모든 화면 위 RavenVault Desktop 머리줄과 설정·언어 단추, 라비 홈 「한눈에」(노드·확정 잔액·받기·폰 거래 보내기), 네 언어 즉시 전환(사용자 글은 번역하지 않음), PLAY X Raven 표시 이름 정리. 기존 지갑 데이터 위치와 업데이트 식별자를 유지합니다.', pub_date: new Date().toISOString(), platforms: {}, installers: [] };
   for (const [suffix, platform] of Object.entries(platforms)) {
     const signature = (await readFile(path.join(source, prefix + suffix + '.sig'), 'utf8')).trim();
     if (!/^[A-Za-z0-9+/=\r\n]+$/.test(signature) || signature.length < 100 || signature.length > 2048) throw new Error(`Malformed updater signature: ${suffix}`);
