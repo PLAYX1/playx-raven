@@ -6986,7 +6986,7 @@ async function checkIssueName() {
   // 고른 종류와 이름이 어긋나면 사람이 의도한 것과 다른 게 만들어진다.
   if (["root", "sub", "unique"].includes(wizKind) && v.kind !== wizKind) {
     note.innerHTML =
-      `<span class="danger">${tf("{0}을 고르셨는데 이 이름은 {1} 형태입니다.", KIND_KO[wizKind], KIND_KO[v.kind])}` +
+      `<span class="danger">${tf("{0}을 고르셨는데 이 이름은 {1} 형태입니다.", t(KIND_KO[wizKind]), t(KIND_KO[v.kind]))}` +
       (wizKind === "sub" ? " 하위는 <code>루트/이름</code>" : wizKind === "unique" ? " 고유는 <code>루트#태그</code>" : " 루트는 <code>/</code>나 <code>#</code> 없이") +
       "</span>";
     return;
@@ -9027,7 +9027,7 @@ async function chatAsk(q: string) {
 }
 
 async function chatDebate(q: string) {
-  chatHtml("ai", "<span class=\"muted\">두 곳에 묻는 중…</span>");
+  chatHtml("ai", "<span class=\"muted\" data-thinking=\"1\">두 곳에 묻는 중…</span>");
   try {
     const r = await invoke<any>("ai_debate", { question: q });
     chatPopThinking();
@@ -11318,7 +11318,7 @@ async function calcMining() {
       </div>
       <div class="meta">
         ${tf("네트워크 전체의 {0}% · 혼자 캐면 블록 하나에 평균 {1} 걸립니다 — 그래서 풀에 들어갑니다", (r.share * 100).toExponential(1), !Number.isFinite(solo) ? "—"
-          : solo > 36500 ? "100년 넘게"
+          : solo > 36500 ? t("100년 넘게")
           : solo > 365 ? tf("{0}년", (solo / 365).toFixed(0))
           : tf("{0}일", solo.toFixed(0)))}
       </div>
@@ -11575,7 +11575,7 @@ async function loadIpfsConf() {
           try {
             await invoke("ipfs_config_write", { key, value, isJson });
             $("if-result").innerHTML =
-              `<div class="meta ok" style="margin-top:9px">${tf("{0} → {1} · IPFS를 다시 켜야 적용됩니다", key, value)}</div>`;
+              `<div class="meta ok" style="margin-top:9px">${tf("{0} → {1} · IPFS를 다시 켜야 적용됩니다", escapeHtml(key), escapeHtml(value))}</div>`;
           } catch (err) {
             $("if-result").innerHTML = `<div class="warnbox" style="margin-top:9px">${err}</div>`;
           }
@@ -12367,9 +12367,9 @@ async function obChoose(shopOnly: boolean) {
       const before = cur[k] ?? DEFAULTS[k] ?? 0;
       const set = k in cur;
       const same = Number(before) === Number(v);
-      const name = WORDS[k] || k;
+      const name = WORDS[k] ? t(WORDS[k]) : k;
       if (same) return `<div>${tf("{0} — 지금과 같습니다 ({1})", name, v)}</div>`;
-      return `<div>${name} — <b>${before}${set ? "" : " (기본값)"} → ${v}</b></div>`;
+      return `<div>${name} — <b>${before}${set ? "" : ` (${t("기본값")})`} → ${v}</b></div>`;
     });
   // 장부 크기는 숫자 두 개보다 이 한 줄이 정확하다.
   rows.unshift(
@@ -14817,7 +14817,7 @@ function 알림배선() {
     //    안 난다. 엉뚱한 데를 보게 만드는 안내는 없느니만 못하다.
     const 막힘 = 소리상태();
     say.textContent = 막힘
-      ? tf("소리가 {0}.", 막힘)
+      ? tf("소리가 {0}.", t(막힘))
       : "「딩—동」이 안 들리면 컴퓨터 볼륨과 스피커를 확인해 주세요.";
   });
 
