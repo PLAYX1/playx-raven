@@ -10,7 +10,7 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "withGlobalTauri": true,
+    "withGlobalTauri": false,
     "windows": [
       {
         "title": "RavenVault Desktop",
@@ -29,7 +29,19 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": {
+        "default-src": "'self'",
+        "script-src": "'self'",
+        "style-src": "'self' 'unsafe-inline'",
+        "img-src": "'self' data: blob: https: http://127.0.0.1:8080 http://127.0.0.1:8790",
+        "media-src": "'self' data: blob: https: http://127.0.0.1:8080 http://127.0.0.1:8790",
+        "font-src": "'self' data:",
+        "frame-src": "https://www.youtube.com https://player.vimeo.com http://127.0.0.1:8080 http://127.0.0.1:8790",
+        "connect-src": "'self' ipc: http://ipc.localhost data: blob: ws://localhost:1420 https://rvn.ex.erci.se",
+        "object-src": "'none'",
+        "base-uri": "'self'",
+        "form-action": "'none'"
+      }
     }
   },
   "bundle": {

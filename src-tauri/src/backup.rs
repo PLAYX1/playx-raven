@@ -222,14 +222,11 @@ pub async fn address_pool(count: u32, label: String) -> Result<Value, String> {
 
 /// The wallet's recovery words.
 ///
-/// Ravencoin does have them — `dumpwallet` writes `# mnemonic:` into its output
-/// — but only through that file, which is the problem: the same file contains
-/// every private key in the wallet, in plain text, on disk.
-///
-/// So this writes to a path only this user can read, extracts the one line it
-/// needs, then overwrites the file with random bytes before deleting it.
-/// Overwriting is not a guarantee on an SSD — wear levelling can leave the old
-/// blocks intact — and the UI says so rather than implying the file is gone.
+/// 🔴 여태 `dumpwallet` 으로 파일을 쓰고 그 안의 `# mnemonic:` 줄을 읽었다.
+/// 그 파일에는 **지갑의 모든 개인키가 평문으로** 들어 있었고, 덮어쓰고 지워도
+/// SSD 에는 흔적이 남는다. 노드에는 단어만 돌려주는 `getmywords` 가 있고
+/// 이 앱의 다른 곳(shopkey·identity·talk)은 이미 그것을 쓴다. 이제 디스크에
+/// 아무것도 쓰지 않는다.
 ///
 /// Returned as words to display once. No clipboard: anything on this machine
 /// can read the clipboard, and a recovery phrase that has been copied is a
@@ -264,26 +261,32 @@ pub async fn reveal_seed(passphrase: String) -> Result<Value, String> {
             }
         })?;
 
-    let tmp = app_dir().join(".seed.tmp");
-    let _ = std::fs::create_dir_all(app_dir());
-    let dump = crate::raven::call_rpc(
-        "dumpwallet",
-        json!([tmp.to_string_lossy().to_string()]),
-    )
-    .await;
+    // 단어만 받는다. 파일도, 로그도 없다.
+    let got = crate::raven::call_rpc("getmywords", json!([])).await;
     let _ = crate::raven::call_rpc("walletlock", json!([])).await;
-    dump?;
-
-    let text = std::fs::read_to_string(&tmp).unwrap_or_default();
-    let mnemonic = text
-        .lines()
-        .find(|l| l.starts_with("# mnemonic:"))
-        .map(|l| l.trim_start_matches("# mnemonic:").trim().to_string());
-    let has_passphrase = text
-        .lines()
-        .any(|l| l.starts_with("# mnemonic passphrase:") && l.split(':').nth(1).map(|v| !v.trim().is_empty()).unwrap_or(false));
-
-    shred(&tmp);
+    // 잠긴 것과 단어가 없는 것은 다른 말이다(talk.rs 와 같은 구분). 다른 기능이
+    // 그 사이에 지갑을 다시 잠갔을 수 있다 — 그때 「단어가 없다」고 하면
+    // 사장은 멀쩡한 지갑을 옛 지갑으로 알고 엉뚱한 백업을 한다.
+    let got = got.map_err(|e| {
+        if e.contains("passphrase") || e.contains("unlock") || e.contains("잠") {
+            "지갑이 그새 다시 잠겼습니다. 한 번 더 눌러 주세요.".to_string()
+        } else if e.contains("mnemonic") || e.contains("bip39") || e.contains("words") {
+            "이 지갑에는 복구 단어가 없습니다. 예전 방식으로 만들어진 지갑이면 \
+             wallet.dat 파일 자체를 백업해야 합니다."
+                .to_string()
+        } else {
+            e
+        }
+    })?;
+    let mnemonic = got
+        .get("word_list")
+        .and_then(Value::as_str)
+        .map(|m| m.trim().to_string());
+    let has_passphrase = got
+        .get("passphrase")
+        .and_then(Value::as_str)
+        .map(|p| !p.is_empty())
+        .unwrap_or(false);
 
     match mnemonic.filter(|m| !m.is_empty()) {
         Some(m) => {
@@ -302,18 +305,6 @@ pub async fn reveal_seed(passphrase: String) -> Result<Value, String> {
                 .into(),
         ),
     }
-}
-
-/// Overwrites a file before removing it.
-fn shred(path: &std::path::Path) {
-    if let Ok(meta) = std::fs::metadata(path) {
-        let len = meta.len() as usize;
-        // 같은 길이의 난수로 덮는다. SSD에서는 원본 블록이 남을 수 있어
-        // 완전한 삭제는 아니고, 화면에서도 그렇게 말한다.
-        let junk: Vec<u8> = (0..len).map(|i| (i * 31 + 7) as u8).collect();
-        let _ = std::fs::write(path, junk);
-    }
-    let _ = std::fs::remove_file(path);
 }
 
 /// A backup nobody has to remember.

@@ -403,6 +403,7 @@ fn customer_path(path: &str) -> bool {
     matches!(
         path,
         "/" | "/wallet"
+            | "/legacy-wallet"
             | "/wallet.bundle.js"
             | "/buy"
             | "/shops"
@@ -443,6 +444,18 @@ fn customer_path(path: &str) -> bool {
             | "/api/paid"
             | "/api/chain/address"
             | "/api/chain/send"
+            // RavenVault 웹 지갑이 이 노드에 붙을 때 읽는 공개 체인 길(companion).
+            // 문 앞 검문(outside_gate)이 생기기 전에도 바깥에 열려 있었다.
+            | "/api/network"
+            | "/api/capabilities"
+            | "/api/chain/history"
+            | "/api/chain/coins"
+            | "/api/chain/coin"
+            | "/api/chain/transaction"
+            // 손님 화면의 오류 신고. 손님이 밖에서 써도 된다(크기는 처리기가 자른다).
+            // `/api/keepphoto` 는 넣지 않는다 — 이 컴퓨터가 아무 주소나 받아 오게
+            // 되는 길이라 가게 안에서만 연다. 손님 지갑은 403 이면 조용히 넘어간다.
+            | "/api/bug-reports"
     ) || path.starts_with("/ipfs/")
         // 캐릭터 그림. 이걸 막으면 밖에서 연 손님 화면만 그림이 빠진다.
         || (path.starts_with("/raven-") && (path.ends_with(".webp") || path.ends_with(".png")))
@@ -1511,8 +1524,13 @@ struct AskBody {
 /// 폰에 키를 넣지 않는 이유는 `web/ravi.js` 첫 주석에 적어 뒀다.
 async fn api_owner_ask(
     State(state): State<ServerState>,
+    headers: HeaderMap,
     Json(body): Json<AskBody>,
 ) -> impl IntoResponse {
+    // 사장 열쇠와 하루 예산을 쓰는 질문이다. 사장·직원 폰(토큰)만 묻는다.
+    if !authed_for(&state, &headers, &json!({}), "/api/owner-ask") {
+        return (StatusCode::UNAUTHORIZED, Json(json!({ "error": "사장이나 직원 화면에서만 물을 수 있어요." })));
+    }
     let provider = state.ai.lock().map(|a| a.clone()).unwrap_or_default();
     if provider.is_empty() {
         return (
@@ -1679,6 +1697,14 @@ async fn api_bug_reports(axum::Json(body): axum::Json<serde_json::Value>) -> imp
             StatusCode::BAD_REQUEST,
             [("content-type", "application/json")],
             r#"{"ok":false,"why":"무엇이 잘못됐는지 한 줄만 적어 주세요."}"#.to_string(),
+        );
+    }
+    // 바깥에서도 열린 길이다. 못 보낸 신고는 파일에 쌓이므로 크기를 자른다.
+    if desc.chars().count() > 2000 || body.to_string().len() > 64_000 {
+        return (
+            StatusCode::PAYLOAD_TOO_LARGE,
+            [("content-type", "application/json")],
+            r#"{"ok":false,"why":"신고가 너무 깁니다. 짧게 줄여 주세요."}"#.to_string(),
         );
     }
     // 못 보내도 손님에게는 성공이라 말한다 — 노드가 쌓아 뒀다가 다시 보낸다.
@@ -2843,8 +2869,30 @@ fn build_phone_router(st: ServerState) -> axum::Router {
         //    ⚠️ 숫자가 틀리면 옛 컴퓨터가 횟수를 세고, 세 번이면 짐을 버린다.
         .route("/move/{code}", get(api_move));
 
-    let app = customer.merge(admin).with_state(st.clone());
+    // 🔴 바깥(터널)에서 온 요청은 손님 경로만 받는다. 이 규칙을 핸들러마다 기억하게
+    //    두었더니 `/api/owner-ask`·`/api/keepphoto`·`/api/bug-reports`·`/move/{code}` 가
+    //    검사 없이 인터넷에 열려 있었다. 이제 라우터 한 곳에서 모든 경로에 건다.
+    let app = customer
+        .merge(admin)
+        .layer(axum::middleware::from_fn_with_state(st.clone(), outside_gate))
+        .with_state(st.clone());
     app
+}
+
+/// 문 앞 검문. 바깥(터널)에서 온 요청은 손님 길만 들어온다.
+///
+/// 🔴 여태 이 검사는 **각 처리기가 스스로** 불렀다. 새 길을 만들면서 한 줄을
+/// 빠뜨리면 그 길은 조용히 인터넷에 열렸다(`/api/owner-ask` 가 그랬다).
+/// 이제 라우터 전체에 한 번 건다. 처리기 안의 검사는 그대로 둔다 — 두 겹이다.
+async fn outside_gate(
+    State(state): State<ServerState>,
+    req: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    if outside_blocked(&state, req.headers(), req.uri().path()) {
+        return (StatusCode::FORBIDDEN, "이 주소는 가게 안에서만 열립니다.").into_response();
+    }
+    next.run(req).await
 }
 
 /// Starts the server. Returns the token and the URLs to put on screen.
@@ -4038,6 +4086,36 @@ mod router_builds {
     /// `preflight.mjs` ⑫ 가 글자로도 보지만, **진짜 응답이 오는지**는
     /// 여기서만 안다. 길을 딴 라우터(admin)에 잘못 붙이면 글자 검사는
     /// 통과하고 이 시험만 빨개진다.
+    /// 바깥에서 온 요청은 사장·직원·이사 길에 닿지 못하고, 손님 길과
+    /// 웹 지갑 연결 길은 그대로 열린다. 가게 안(사설 주소)은 막지 않는다.
+    #[tokio::test]
+    async fn the_outside_only_reaches_customer_paths() {
+        use tower::ServiceExt;
+        let app = super::build_phone_router(super::ServerState::default());
+        let status = |host: &'static str, path: &'static str| {
+            let app = app.clone();
+            async move {
+                app.oneshot(
+                    axum::http::Request::builder()
+                        .uri(path)
+                        .header("host", host)
+                        .body(axum::body::Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap()
+                .status()
+            }
+        };
+        for path in ["/admin", "/staff", "/scan", "/api/admin/status", "/api/scan/check", "/move/123456", "/api/owner-ask", "/api/keepphoto"] {
+            assert_eq!(status("shop.example.com", path).await, axum::http::StatusCode::FORBIDDEN, "{path} 가 바깥에 열려 있다");
+        }
+        for path in ["/", "/wallet", "/api/capabilities", "/report.js"] {
+            assert_ne!(status("shop.example.com", path).await, axum::http::StatusCode::FORBIDDEN, "{path} 가 바깥에서 막혔다");
+        }
+        assert_ne!(status("192.168.0.10:8790", "/admin").await, axum::http::StatusCode::FORBIDDEN, "가게 안에서 사장 화면이 막혔다");
+    }
+
     #[tokio::test]
     async fn the_screens_get_what_they_ask_for() {
         use tower::ServiceExt;

@@ -267,8 +267,38 @@ function escapeHtml(s: unknown): string {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
+
+// 🔴 자산 설명의 그림 주소는 발행한 사람이 적는다. 누구나 자산을 만들어 아무에게나
+//    보낼 수 있으니, 그림으로만 읽히는 주소만 쓴다.
+function safeImageUrl(raw: unknown): string {
+  const url = String(raw ?? "").trim();
+  if (/^data:image\/(png|jpe?g|gif|webp);base64,[a-z0-9+/=]+$/i.test(url)) return url;
+  if (/^ipfs:\/\/[a-z0-9]+(\/[\w.-]+)*$/i.test(url)) return `http://127.0.0.1:8080/ipfs/${url.slice(7)}`;
+  try {
+    const u = new URL(url);
+    return u.protocol === "https:" ? u.href : "";
+  } catch {
+    return "";
+  }
+}
+
+// 창의 CSP 가 인라인 onerror 를 막는다. 그림이 실패하면 여기서 한 번에 처리한다.
+document.addEventListener(
+  "error",
+  (event) => {
+    const img = event.target;
+    if (!(img instanceof HTMLImageElement)) return;
+    if (img.dataset.onfail === "remove") img.remove();
+    else if (img.dataset.onfail === "nopic") {
+      img.style.display = "none";
+      img.parentElement?.classList.add("nopic");
+    }
+  },
+  true
+);
 
 /// 러스트에서 올라온 오류 글을 화면에 올리기 전에.
 ///
@@ -728,7 +758,7 @@ async function renderPanel() {
       `<div class="dirlist">${entries
         .map(
           (e) =>
-            `<div class="direntry"><span>${e.is_dir ? "폴더 " : ""}${e.name}</span>` +
+            `<div class="direntry"><span>${e.is_dir ? "폴더 " : ""}${escapeHtml(e.name)}</span>` +
             `<span class="meta">${e.size ? fmtBytes(e.size) : ""}</span></div>`
         )
         .join("")}</div>`;
@@ -740,7 +770,7 @@ async function renderPanel() {
     );
     if (meta) {
       $("p-body").innerHTML =
-        (meta.icon ? `<img src="${meta.icon}" alt="" />` : "") +
+        (safeImageUrl(meta.icon) ? `<img src="${escapeHtml(safeImageUrl(meta.icon))}" alt="" />` : "") +
         (meta.name ? `<div style="font-size:15px;font-weight:600;margin-top:8px" translate="no">${escapeHtml(meta.name)}</div>` : "") +
         (meta.description ? `<p class="meta" style="line-height:1.7" translate="no">${escapeHtml(meta.description)}</p>` : "") +
         (meta.issuer ? `<div class="kv"><b>발행자</b><span translate="no">${escapeHtml(meta.issuer)}</span></div>` : "") +
@@ -1309,7 +1339,7 @@ async function sampleClear() {
       : `<div class="card" style="margin-top:11px"><h3>지울 시험용 자료가 없습니다</h3></div>`;
     loadShop();
   } catch (e) {
-    $("sp-result").innerHTML = `<div class="warnbox" style="margin-top:11px">${e}</div>`;
+    $("sp-result").innerHTML = `<div class="warnbox" style="margin-top:11px">${escapeHtml(errText(e))}</div>`;
   }
 }
 
@@ -1435,11 +1465,11 @@ async function showCard() {
         const r = await invoke<any>("recovery_card_print", { nowYmd: ymd });
         note.textContent = `${r.say} (${r.path})`;
       } catch (e) {
-        note.innerHTML = `<span class="danger">${e}</span>`;
+        note.innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
       }
     });
   } catch (e) {
-    $("rs-result").innerHTML = `<div class="warnbox" style="margin-top:11px">${e}</div>`;
+    $("rs-result").innerHTML = `<div class="warnbox" style="margin-top:11px">${escapeHtml(errText(e))}</div>`;
   }
 }
 
@@ -2319,7 +2349,7 @@ async function drawMoneyStatus(): Promise<void> {
     s = await invoke<any>("money_status");
   } catch (e) {
     // 🔴 못 읽은 것을 「정상」으로 그리지 않는다. 그게 제일 나쁜 거짓말이다.
-    body.innerHTML = 줄("상태", "못 읽음", "bad", `${e}`);
+    body.innerHTML = 줄("상태", "못 읽음", "bad", `${escapeHtml(errText(e))}`);
     return;
   }
   const 줄들: string[] = [];
@@ -4506,7 +4536,7 @@ async function loadWallet() {
       })
       .join("") || '<tr><td colspan="3" class="muted">거래 내역이 없습니다</td></tr>';
   } catch (e) {
-    $("w-txs").innerHTML = `<tr><td colspan="3" class="muted">${e}</td></tr>`;
+    $("w-txs").innerHTML = `<tr><td colspan="3" class="muted">${escapeHtml(errText(e))}</td></tr>`;
   }
 }
 
@@ -7040,7 +7070,7 @@ function pickIssueFile() {
         //    적어 두었는데, 정작 화면은 「올렸습니다」로 끝났다.
         : `<p class="meta">${file.name} · ${copyHtml("이 컴퓨터에 두었습니다")}</p>`;
     } catch (e) {
-      $("i-preview").innerHTML = `<p class="meta danger">${e}</p>`;
+      $("i-preview").innerHTML = `<p class="meta danger">${escapeHtml(errText(e))}</p>`;
     }
   };
   input.click();
@@ -7449,7 +7479,7 @@ async function doIssue() {
       loadAssets(false);
     };
   } catch (e) {
-    $("i-result").innerHTML = `<div class="warnbox" style="margin-top:12px">${e}</div>`;
+    $("i-result").innerHTML = `<div class="warnbox" style="margin-top:12px">${escapeHtml(errText(e))}</div>`;
     // 정상 경로와 같은 글자로 되돌린다. 예전에는 여기서만 소각량을 말해서,
     // 대가를 실패한 뒤에야 보게 되어 있었다.
     btn.textContent = wasLabel || tf("발행하기 · {0} RVN 소각", BURN[wizKind]);
@@ -7668,7 +7698,7 @@ async function reviewSend() {
   try {
     sendPreview = await invoke<any>("preview_send", { address, asset, amount });
   } catch (e) {
-    $("s-addrnote").innerHTML = `<span style="color:var(--bad)">${e}</span>`;
+    $("s-addrnote").innerHTML = `<span style="color:var(--bad)">${escapeHtml(errText(e))}</span>`;
     btn.textContent = "검토";
     btn.disabled = false;
     return;
@@ -7819,7 +7849,7 @@ async function doSend() {
     //    자산을 보냈으면 자산 목록도 다시 읽어야 한다.
     void loadAssets(false);
   } catch (e) {
-    $("s-result").innerHTML = `<div class="warnbox" style="margin-top:12px">${e}</div>`;
+    $("s-result").innerHTML = `<div class="warnbox" style="margin-top:12px">${escapeHtml(errText(e))}</div>`;
     // 실패했으니 다시 누를 수 있어야 하고, 라벨도 금액으로 돌아와야 한다.
     // "보내는 중…" 이 남아 있으면 얼마를 보내려던 건지 사라진다.
     btn.textContent = wasLabel || "보내기";
@@ -9384,7 +9414,7 @@ async function aiFillShop() {
     labelShopNav();
     await checkShopName();
   } catch (e) {
-    $("ai-shop-note").innerHTML = `<span style="color:var(--bad)">${e}</span>`;
+    $("ai-shop-note").innerHTML = `<span style="color:var(--bad)">${escapeHtml(errText(e))}</span>`;
   }
 }
 
@@ -9403,7 +9433,7 @@ async function aiFillMenu() {
     renderMenu();
     $("ai-menu-note").textContent = tf("{0}개 넣었습니다. 사진은 직접 올리세요.", items.length);
   } catch (e) {
-    $("ai-menu-note").innerHTML = `<span style="color:var(--bad)">${e}</span>`;
+    $("ai-menu-note").innerHTML = `<span style="color:var(--bad)">${escapeHtml(errText(e))}</span>`;
   }
 }
 
@@ -9451,7 +9481,7 @@ async function fillSample() {
       "샘플이 폰에서 보입니다. <b>등록 버튼은 누르지 마세요</b> — 500 RVN이 소각됩니다.";
     showPage("settings");
   } catch (e) {
-    $("ai-shop-note").innerHTML = `<span style="color:var(--bad)">${e}</span>`;
+    $("ai-shop-note").innerHTML = `<span style="color:var(--bad)">${escapeHtml(errText(e))}</span>`;
   }
 }
 
@@ -9913,7 +9943,7 @@ async function doorSearch() {
       : `<p class="muted" style="margin-top:14px">찾지 못했습니다. 이름 일부나 전화 뒷자리로 다시 쳐보세요.</p>`;
     bindMemberCards("dr-hits");
   } catch (e) {
-    $("dr-hits").innerHTML = `<p class="danger">${e}</p>`;
+    $("dr-hits").innerHTML = `<p class="danger">${escapeHtml(errText(e))}</p>`;
   }
 }
 
@@ -9949,7 +9979,7 @@ async function loadMembers() {
     bindMemberCards("dr-list");
     setCopyText($("dr-note"), () => `${t("다니는 중")} ${live.length}${t("명")} · ${t("끝남")} ${over.length}${t("명")}`);
   } catch (e) {
-    $("dr-note").innerHTML = `<span class="danger">${e}</span>`;
+    $("dr-note").innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
   }
 }
 
@@ -10139,7 +10169,7 @@ async function saveMember() {
     loadMembers();
     doorSearch();
   } catch (e) {
-    $("ms-result").innerHTML = `<div class="warnbox" style="margin-top:12px">${e}</div>`;
+    $("ms-result").innerHTML = `<div class="warnbox" style="margin-top:12px">${escapeHtml(errText(e))}</div>`;
   }
   btn.disabled = false;
 }
@@ -10242,7 +10272,7 @@ async function doEncrypt() {
     }
     loadWallet();
   } catch (e) {
-    $("enc-result").innerHTML = `<div class="warnbox" style="margin-top:12px">${e}</div>`;
+    $("enc-result").innerHTML = `<div class="warnbox" style="margin-top:12px">${escapeHtml(errText(e))}</div>`;
     btn.disabled = false;
   }
 }
@@ -10518,7 +10548,7 @@ async function fulfil(sale: any) {
     checkSales();
     loadAssets(false);
   } catch (e) {
-    $("vd-result").innerHTML = `<div class="warnbox" style="margin-top:12px">${e}</div>`;
+    $("vd-result").innerHTML = `<div class="warnbox" style="margin-top:12px">${escapeHtml(errText(e))}</div>`;
   }
 }
 
@@ -10952,7 +10982,7 @@ async function toggleAuto() {
         ` 있습니다. 털리면 이만큼입니다.`
       : "";
   } catch (e) {
-    $("vd-autonote").innerHTML = `<span class="danger">${e}</span>`;
+    $("vd-autonote").innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
   }
 }
 
@@ -10982,7 +11012,7 @@ async function loadChannels() {
       : "보낼 수 있는 채널이 없습니다. 자산을 발행하면 그 자산이 채널이 됩니다.";
     ($("nt-go") as HTMLButtonElement).disabled = !list.length;
   } catch (e) {
-    $("nt-chnote").innerHTML = `<span class="danger">${e}</span>`;
+    $("nt-chnote").innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
   }
 }
 
@@ -11003,7 +11033,7 @@ async function sendNotice() {
     ($("nt-title") as HTMLInputElement).value = "";
     ($("nt-body") as HTMLInputElement).value = "";
   } catch (e) {
-    $("nt-result").innerHTML = `<div class="warnbox" style="margin-top:12px">${e}</div>`;
+    $("nt-result").innerHTML = `<div class="warnbox" style="margin-top:12px">${escapeHtml(errText(e))}</div>`;
   }
   $("nt-note").textContent = "";
   btn.disabled = false;
@@ -11028,7 +11058,7 @@ async function loadInbox() {
       : `<p class="muted">받은 공지가 없습니다. 어떤 자산을 갖고 있으면 그 발행자의 공지가 여기 옵니다.</p>`;
     $("in-note").textContent = tf("{0}건", list.length);
   } catch (e) {
-    $("in-note").innerHTML = `<span class="danger">${e}</span>`;
+    $("in-note").innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
   }
 }
 
@@ -11055,7 +11085,7 @@ async function sendDirect() {
     ($("ps-text") as HTMLInputElement).value = "";
     $("ps-note").innerHTML = `<span class="ok">보냈습니다.</span> 상대가 켜져 있어야 받습니다.`;
   } catch (e) {
-    $("ps-note").innerHTML = `<span class="danger">${e}</span>`;
+    $("ps-note").innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
   }
 }
 
@@ -11272,7 +11302,7 @@ async function loadMining() {
     calcMining();
     showPowerCurve();
   } catch (e) {
-    $("mine-note").innerHTML = `<span class="danger">${e}</span>`;
+    $("mine-note").innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
   }
 }
 
@@ -11330,7 +11360,7 @@ async function calcMining() {
       }
     </div>`;
   } catch (e) {
-    $("mn-calc").innerHTML = `<div class="warnbox">${e}</div>`;
+    $("mn-calc").innerHTML = `<div class="warnbox">${escapeHtml(errText(e))}</div>`;
   }
 }
 
@@ -11340,7 +11370,7 @@ async function makeMiningAddress() {
     await renderMinerSetup();
     $("mine-note").innerHTML = `<span class="ok">주소를 만들었습니다</span>`;
   } catch (e) {
-    $("mine-note").innerHTML = `<span class="danger">${e}</span>`;
+    $("mine-note").innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
   }
 }
 
@@ -11455,7 +11485,7 @@ async function startMiner() {
     note.innerHTML = `<span class="ok">${tf("켰습니다 — {0}", escapeHtml(r.note || ""))}</span>`;
     await refreshMiner();
   } catch (e) {
-    note.innerHTML = `<span class="danger">${e}</span>`;
+    note.innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
   }
 }
 
@@ -11464,7 +11494,7 @@ async function stopMiner() {
     const r: any = await invoke("miner_stop");
     $("mn-runnote").textContent = r.was_running ? "껐습니다." : "캐고 있지 않았습니다.";
   } catch (e) {
-    $("mn-runnote").innerHTML = `<span class="danger">${e}</span>`;
+    $("mn-runnote").innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
   }
   await refreshMiner();
 }
@@ -11518,7 +11548,7 @@ async function loadMiningIncome() {
          위에서 만든 주소를 마이너에 넣고 돌리면 여기 뜹니다.</p>`;
     $("mn-incomenote").textContent = "";
   } catch (e) {
-    $("mn-incomenote").innerHTML = `<span class="danger">${e}</span>`;
+    $("mn-incomenote").innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
   }
 }
 
@@ -11577,7 +11607,7 @@ async function loadIpfsConf() {
             $("if-result").innerHTML =
               `<div class="meta ok" style="margin-top:9px">${tf("{0} → {1} · IPFS를 다시 켜야 적용됩니다", escapeHtml(key), escapeHtml(value))}</div>`;
           } catch (err) {
-            $("if-result").innerHTML = `<div class="warnbox" style="margin-top:9px">${err}</div>`;
+            $("if-result").innerHTML = `<div class="warnbox" style="margin-top:9px">${escapeHtml(errText(err))}</div>`;
           }
         };
       });
@@ -11594,12 +11624,12 @@ async function loadIpfsConf() {
                보존한 파일은 그대로입니다.</div>`;
             loadIpfsConf();
           } catch (err) {
-            $("if-result").innerHTML = `<div class="warnbox" style="margin-top:10px">${err}</div>`;
+            $("if-result").innerHTML = `<div class="warnbox" style="margin-top:10px">${escapeHtml(errText(err))}</div>`;
           }
         };
       });
   } catch (e) {
-    $("if-note").innerHTML = `<span class="danger">${e}</span>`;
+    $("if-note").innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
   }
 }
 
@@ -11663,7 +11693,7 @@ async function loadConf() {
       ? `<p class="meta" style="margin-top:12px">${tf("이 앱이 관리하지 않는 줄 {0}개는 그대로 둡니다:", cur.others.length)} <code>${cur.others.join("</code> <code>")}</code></p>`
       : "";
   } catch (e) {
-    $("cf-note").innerHTML = `<span class="danger">${e}</span>`;
+    $("cf-note").innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
   }
 }
 
@@ -11723,7 +11753,7 @@ async function saveConf() {
        이전 설정은 <code>raven.conf.bak</code> 로 남겼습니다.</p></div>`;
     $("cf-note").textContent = "";
   } catch (e) {
-    $("cf-result").innerHTML = `<div class="warnbox" style="margin-top:12px">${e}</div>`;
+    $("cf-result").innerHTML = `<div class="warnbox" style="margin-top:12px">${escapeHtml(errText(e))}</div>`;
   }
 }
 
@@ -12162,7 +12192,7 @@ async function showSeed() {
     $("sd-words").innerHTML =
       `<div class="seedgrid">` +
       (r.words || [])
-        .map((w: string, i: number) => `<div class="seedword"><i>${i + 1}</i>${w}</div>`)
+        .map((w: string, i: number) => `<div class="seedword"><i>${i + 1}</i>${escapeHtml(w)}</div>`)
         .join("") +
       `</div>`;
     // 시드 뒤에 추가 암호가 걸려 있으면 단어만 적어 둔 사람은 나중에 못 연다.
@@ -12172,7 +12202,7 @@ async function showSeed() {
       : "";
     $("seedsheet").classList.remove("hidden");
   } catch (e) {
-    $("bk-result").innerHTML = `<div class="warnbox" style="margin-top:11px">${e}</div>`;
+    $("bk-result").innerHTML = `<div class="warnbox" style="margin-top:11px">${escapeHtml(errText(e))}</div>`;
   }
 }
 
@@ -12681,7 +12711,7 @@ async function toggleRemoteAdmin() {
     const r = await invoke<any>("remote_admin_set", { on: !remoteAdmin });
     remoteAdmin = !!r.on;
   } catch (e) {
-    $$("ra-detail").innerHTML = `<span class="danger">${e}</span>`;
+    $$("ra-detail").innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
     return;
   }
   await refreshRemoteAdmin();
@@ -12754,7 +12784,7 @@ async function toggleTunnel() {
     await refreshTunnel();
     $$("tn-detail").textContent = "";
   } catch (e) {
-    $$("tn-detail").innerHTML = `<span class="danger">${e}</span>`;
+    $$("tn-detail").innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
   }
   if (btn) btn.disabled = false;
 }
@@ -12831,7 +12861,7 @@ async function startPhone() {
          </div>
        </div>`;
   } catch (e) {
-    phoneQr = `<div class="warnbox" style="width:100%">${e}</div>`;
+    phoneQr = `<div class="warnbox" style="width:100%">${escapeHtml(errText(e))}</div>`;
   }
   renderSwitches();
 }
@@ -13052,7 +13082,7 @@ async function loadDoors() {
           // 열렸는지 안 열렸는지 문 앞에 가서 봐야 한다.
           $("dw-note").innerHTML = `<span class="ok">${tf("닿았습니다 — {0}", escapeHtml(JSON.stringify(v)))}</span> (문은 열지 않았습니다)`;
         } catch (e) {
-          $("dw-note").innerHTML = `<span class="danger">${e}</span>`;
+          $("dw-note").innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
         }
       };
     });
@@ -13066,7 +13096,7 @@ async function loadDoors() {
       };
     });
   } catch (e) {
-    $("dr-doorlist").innerHTML = `<div class="warnbox">${e}</div>`;
+    $("dr-doorlist").innerHTML = `<div class="warnbox">${escapeHtml(errText(e))}</div>`;
   }
   loadDoorLog();
 }
@@ -13079,7 +13109,7 @@ async function openDoor(doorId: string, reason: string) {
     });
     $("dw-note").innerHTML = `<span class="ok">${tf("{0} 열렸습니다 — {1}초 뒤 닫힙니다", escapeHtml(r.name || t("문")), r.seconds ?? "")}</span>`;
   } catch (e) {
-    $("dw-note").innerHTML = `<span class="danger">${e}</span>`;
+    $("dw-note").innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
   }
   loadDoorLog();
 }
@@ -13119,7 +13149,7 @@ async function saveDoor() {
     ($("dw-pass") as HTMLInputElement).value = "";
     loadDoors();
   } catch (e) {
-    note.innerHTML = `<span class="danger">${e}</span>`;
+    note.innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
   }
 }
 
@@ -13484,7 +13514,7 @@ async function makeShopAddress() {
     ($("sh-addr") as HTMLInputElement).value = shopAddress;
     gateShop();
   } catch (e) {
-    $("sh-result").innerHTML = `<div class="warnbox" style="margin-top:12px">${e}</div>`;
+    $("sh-result").innerHTML = `<div class="warnbox" style="margin-top:12px">${escapeHtml(errText(e))}</div>`;
   }
 }
 
@@ -13588,7 +13618,7 @@ async function registerShop() {
        <p class="meta">확인되면 전 세계 어느 노드에서도 이 가게가 보입니다.</p></div>`;
     $("sh-confirmbox").style.display = "none";
   } catch (e) {
-    $("sh-result").innerHTML = `<div class="warnbox" style="margin-top:12px">${e}</div>`;
+    $("sh-result").innerHTML = `<div class="warnbox" style="margin-top:12px">${escapeHtml(errText(e))}</div>`;
     btn.disabled = false;
   }
   btn.textContent = "가게 등록";
@@ -13899,8 +13929,8 @@ async function loadShop() {
     if (box) {
       box.innerHTML = Array.from({ length: 12 }, (_, i) => {
         const n = String(i + 1).padStart(2, "0");
-        return `<img src="http://127.0.0.1:8080/ipfs/${shopPhotosCid}/${n}.jpg" alt=""
-                 onerror="this.remove()"
+        return `<img src="http://127.0.0.1:8080/ipfs/${escapeHtml(shopPhotosCid)}/${n}.jpg" alt=""
+                 data-onfail="remove"
                  style="width:84px;height:84px;object-fit:cover;border-radius:8px" />`;
       }).join("");
     }
@@ -14136,8 +14166,8 @@ function renderMenu() {
               //
               //    8790 은 이미 켜져 있고 20초를 기다려 준다. 그리고 실패해도
               //    자리를 안 없앤다 — 다시 그리면 다시 시도한다.
-              ? `<img src="http://127.0.0.1:8790/ipfs/${it.image}" alt="" loading="lazy"
-                      onerror="this.style.display='none';this.parentElement.classList.add('nopic')" />`
+              ? `<img src="http://127.0.0.1:8790/ipfs/${escapeHtml(it.image)}" alt="" loading="lazy"
+                      data-onfail="nopic" />`
               : "사진"
           }
         </div>
@@ -14331,7 +14361,7 @@ function pickImage(index: number) {
         $("mn-note").innerHTML = `<span class="ok">사진을 올렸습니다</span>`;
       }, 80);
     } catch (e) {
-      $("mn-note").innerHTML = `<span style="color:var(--bad)">${e}</span>`;
+      $("mn-note").innerHTML = `<span style="color:var(--bad)">${escapeHtml(errText(e))}</span>`;
     }
   };
   input.click();
@@ -14425,7 +14455,7 @@ async function saveMenu() {
         }
     });
   } catch (e) {
-    $("mn-result").innerHTML = `<div class="warnbox" style="margin-top:12px">${e}</div>`;
+    $("mn-result").innerHTML = `<div class="warnbox" style="margin-top:12px">${escapeHtml(errText(e))}</div>`;
   }
 }
 
@@ -15258,7 +15288,7 @@ async function loadOrders() {
             await invoke("set_order_state", { address: el.dataset.state, newState: el.dataset.to });
             loadOrders();
           } catch (e) {
-            $("or-note").innerHTML = `<span style="color:var(--bad)">${e}</span>`;
+            $("or-note").innerHTML = `<span style="color:var(--bad)">${escapeHtml(errText(e))}</span>`;
             // 🔴 글자를 되돌린다. 「보내는 중…」인 채로 굳어 있으면
             //    사장은 아직 도는 줄 알고 하염없이 기다린다.
             el.textContent = 원래;
@@ -15267,7 +15297,7 @@ async function loadOrders() {
         };
       });
   } catch (e) {
-    $("or-note").innerHTML = `<span style="color:var(--bad)">${e}</span>`;
+    $("or-note").innerHTML = `<span style="color:var(--bad)">${escapeHtml(errText(e))}</span>`;
   }
 }
 
@@ -15398,7 +15428,7 @@ window.addEventListener("DOMContentLoaded", async () => {
       const v: any = await invoke("door_probe", { id: "__probe__", cnonce: newCnonce() });
       $("dw-note").innerHTML = `<span class="ok">${tf("닿았습니다 — {0}", escapeHtml(JSON.stringify(v)))}</span> (문은 열지 않았습니다)`;
     } catch (e) {
-      $("dw-note").innerHTML = `<span class="danger">${e}</span>`;
+      $("dw-note").innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
     } finally {
       // 확인용 항목은 목록에 남기지 않는다.
       await invoke("door_remove", { id: "__probe__" }).catch(() => {});

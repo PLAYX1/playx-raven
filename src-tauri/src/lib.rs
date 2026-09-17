@@ -52,6 +52,7 @@ mod walletx;
 mod wiring;
 mod knowledge;
 mod nostrpub;
+mod app_folder;
 mod paths;
 mod swap;
 mod sweep;
@@ -464,6 +465,8 @@ pub fn run() {
             server::set_order_state,
         ])
         .setup(|app| {
+            // 앱 자료 폴더를 이 사용자 전용으로 잠근다(다른 계정이 열쇠·장부를 못 읽게).
+            app_folder::harden();
             // 🔴 「장사」면 이 컴퓨터가 잠들지 않게 붙잡는다. 노드를 앱에서
             //    떼어 놓는 것만으로는 부족하다 — 컴퓨터가 자면 노드도 멈추고,
             //    밤새 들어온 입금이 아침까지 확인되지 않는다.

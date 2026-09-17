@@ -472,11 +472,24 @@ pub async fn ipfs_keep_url(url: String) -> Value {
     if !r.status().is_success() {
         return json!({ "kept": false, "why": format!("{}", r.status()) });
     }
-    let Ok(bytes) = r.bytes().await else {
-        return json!({ "kept": false, "why": "사진을 다 받지 못했습니다" });
-    };
-    if bytes.len() > MAX {
+    // 🔴 다 받은 뒤에 크기를 보면 수 GB 파일 하나로 메모리가 먼저 터진다.
+    //    알려 준 크기로 먼저 거르고, 받는 도중에도 넘으면 멈춘다.
+    if r.content_length().is_some_and(|n| n > MAX as u64) {
         return json!({ "kept": false, "why": "사진이 너무 큽니다" });
+    }
+    let mut r = r;
+    let mut bytes: Vec<u8> = Vec::new();
+    loop {
+        match r.chunk().await {
+            Ok(Some(part)) => {
+                if bytes.len() + part.len() > MAX {
+                    return json!({ "kept": false, "why": "사진이 너무 큽니다" });
+                }
+                bytes.extend_from_slice(&part);
+            }
+            Ok(None) => break,
+            Err(_) => return json!({ "kept": false, "why": "사진을 다 받지 못했습니다" }),
+        }
     }
 
     let name = url.rsplit('/').next().unwrap_or("photo").to_string();
