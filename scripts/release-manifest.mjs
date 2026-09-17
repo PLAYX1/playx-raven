@@ -30,7 +30,7 @@ export async function prepareRelease(source, destination, version) {
     if (next.reduce((order, n, i) => order || Math.sign(n - old[i]), 0) <= 0) throw new Error('Release must be newer than the currently published version');
   } catch (e) { if (e.code !== 'ENOENT') throw e; }
   const base = `https://raw.githubusercontent.com/PLAYX1/playx-raven-releases/dist/v${version}`;
-  const manifest = { version, notes: 'RavenVault Desktop 0.4.3: 모든 화면 위 RavenVault Desktop 머리줄과 설정·언어 단추, 라비 홈 「한눈에」(노드·확정 잔액·받기·폰 거래 보내기), 네 언어 즉시 전환과 화면 전체 영어·일본어·중국어 번역(사용자 글은 번역하지 않음), PLAY X Raven 표시 이름 정리. 기존 지갑 데이터 위치와 업데이트 식별자를 유지합니다.', pub_date: new Date().toISOString(), platforms: {}, installers: [] };
+  const manifest = { version, notes: 'RavenVault Desktop 0.4.4 보안 수리: 창 보안 정책(CSP)과 외부 글자 이스케이프, 손님 폰 서버를 인터넷(터널)에서 열 때 손님 화면과 웹 지갑 연결만 허용, 앱 자료 폴더·코어 폴더를 본인 계정 전용으로 잠금, 복구 단어 보기가 더 이상 개인키 임시 파일을 만들지 않음, 사진 사본 크기 제한. 기존 지갑·가게 데이터 위치는 그대로입니다.', pub_date: new Date().toISOString(), platforms: {}, installers: [] };
   for (const [suffix, platform] of Object.entries(platforms)) {
     const signature = (await readFile(path.join(source, prefix + suffix + '.sig'), 'utf8')).trim();
     if (!/^[A-Za-z0-9+/=\r\n]+$/.test(signature) || signature.length < 100 || signature.length > 2048) throw new Error(`Malformed updater signature: ${suffix}`);
