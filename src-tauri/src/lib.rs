@@ -37,6 +37,10 @@ mod place;
 mod price;
 mod refund;
 mod issue;
+mod issue_unknown;
+mod create;
+mod create_history;
+mod certificate;
 mod ledger;
 mod issue2;
 mod raven;
@@ -115,6 +119,26 @@ pub fn run() {
             issue::validate_name,
             issue::name_taken,
             issue::issue_asset,
+            create::create_status,
+            create::create_names_taken,
+            create::create_issue,
+            create::create_tx_state,
+            create::create_dropped_fingerprint,
+            create_history::create_fingerprints,
+            create_history::create_history_begin,
+            create_history::create_history_details,
+            create_history::create_history_list,
+            create_history::create_history_get,
+            create_history::create_history_forget,
+            create_history::create_history_restart,
+            create_history::create_resolve,
+            create_history::create_unresolved,
+            issue_unknown::issue_unknown_mark,
+            issue_unknown::issue_unknown_clear,
+            issue_unknown::issue_unknown_check,
+            create_history::create_resolve_not_sent,
+            certificate::create_print,
+            certificate::create_certificate_preview,
             issue2::asset_kinds,
             issue2::reissue,
             issue2::issue_many_unique,
@@ -252,7 +276,8 @@ pub fn run() {
             msg::pubsub_send,
             pass::today_ymd,
             pass::member_number,
-            pass::save_member,
+            pass::member_save,
+            pass::member_save_precheck,
             pass::list_members,
             pass::check_in_lookup,
             pass::check_in,
@@ -306,6 +331,7 @@ pub fn run() {
             peers::peer_add,
             peers::peer_remove,
             peers::pin_my_assets,
+            peers::cid_alive,
             artist::artist_pubkey,
             artist::artist_check,
             artist::artist_profile_get,
@@ -477,6 +503,21 @@ pub fn run() {
             // 앱 자료 폴더를 이 사용자 전용으로 잠근다(다른 계정이 열쇠·장부를 못 읽게).
             app_folder::harden();
             tauri::async_runtime::spawn(member_privacy::run_cleanup());
+            // 「만들기」 기록 정리 — 보관 기간 지난 받는 사람 이름, 7일 지난 인쇄 파일,
+            // 기록에 없는 인쇄 파일, 쓰다 만 파일. 켤 때 한 번, 그 뒤 하루에 한 번.
+            tauri::async_runtime::spawn(async {
+                loop {
+                    let _ = tauri::async_runtime::spawn_blocking(|| {
+                        let now = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .map(|d| d.as_secs() as i64)
+                            .unwrap_or(0);
+                        create_history::tidy(now)
+                    })
+                    .await;
+                    tokio::time::sleep(std::time::Duration::from_secs(24 * 60 * 60)).await;
+                }
+            });
             // 🔴 「장사」면 이 컴퓨터가 잠들지 않게 붙잡는다. 노드를 앱에서
             //    떼어 놓는 것만으로는 부족하다 — 컴퓨터가 자면 노드도 멈추고,
             //    밤새 들어온 입금이 아침까지 확인되지 않는다.

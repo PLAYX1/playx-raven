@@ -76,7 +76,10 @@ mod safety_tests {
         assert_eq!(first["wallet_included"], true);
         assert_eq!(first["verified"], true);
         assert_eq!(first["locked"], true);
-        assert_eq!(first["inside"].as_array().unwrap().len(), 10);
+        // 앱 파일 전부(0.4.5부터 만든 기록 create_history.json 포함) + 지갑 하나
+        assert_eq!(first["inside"].as_array().unwrap().len(), manifest().len() + 1);
+        assert_eq!(manifest().len(), 10);
+        assert!(first["inside"].to_string().contains("create_history.json"));
         let path = PathBuf::from(first["path"].as_str().unwrap());
         let first_bytes = std::fs::read(&path).unwrap();
         assert!(first_bytes.starts_with(b"PXRLOCK1"));

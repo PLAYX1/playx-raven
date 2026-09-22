@@ -292,7 +292,10 @@ pub fn member_number(root: String, seed: String) -> String {
 /// `expires` and `visits_total` are the contract, and they live here precisely
 /// because they change: a freeze moves the date, a refund shortens it, a
 /// promotion adds visits. None of that touches the chain.
-#[tauri::command]
+///
+/// ⚠️ 동의를 보지 않으므로 **시험에서만** 쓴다. 화면(IPC)은 동의를 보는 `member_save` 를,
+///    직원·검표 길은 `ticket_to_member` 를 쓴다 — 다시 명령으로 열지 말 것.
+#[cfg(test)]
 #[allow(clippy::too_many_arguments)]
 pub fn save_member(
     asset: String,
@@ -314,6 +317,187 @@ pub fn save_member(
     let mut rows = load();
     put_member(&mut rows, asset, name, phone, kind, expires, visits_total, note, now_unix, extra)?;
     save(&rows)
+}
+
+/// 사장이 이 컴퓨터에서 회원을 등록·고친다(「회원 등록」 시트의 「저장」).
+///
+/// 🔴 직원 폰·검표 태블릿은 표를 회원으로 올릴 때 **손님 동의와 동의문 판(版)**을
+///    받는다(`ticket_to_member`). 사장 화면도 같은 규칙을 따른다:
+///
+/// 1. **가게가 정한 수집 범위**를 여기서 지킨다(화면 말만 믿지 않는다).
+///    `none` 새 개인정보 거절 · `name` 전화번호 안 받음 · `name_last4` 끝 4자리만 ·
+///    `name_phone` 전체. 생년·성별·비상 연락처(`extra`)는 `name_phone` 에서만 받는다
+///    — 동의문(v4)에 그 셋이 적힌 것도 그 수준뿐이다.
+/// 2. **새로 적는 개인정보에는 유효한 동의가 있어야 한다.** 새 회원은 물론, 보관
+///    기간이 지나 지워진 줄(`redacted`)이나 장부 복구로 빈 채 생긴 줄에 이름·전화를
+///    처음 적을 때도. 생년·성별·비상 연락처는 v4 동의가 있어야 한다.
+/// 3. 증거(`consent_at`·`consent_version`)는 **러스트 시계로 여기서만** 적는다(화면이
+///    보낸 것은 버린다). 이미 지금 판(v4)으로 동의한 회원을 고칠 때는 **처음 증거를
+///    그대로 둔다** — 저장할 때마다 동의 시각이 바뀌면 증거가 아니다.
+///
+/// ⚠️ 이미 있는 값을 그대로 두거나 고치는 것(전화 오타)은 동의 없이도 된다. 0.4.3 때
+///    적어 둔 값은 수집 범위가 바뀌어도 **조용히 지우지 않는다** — 바꾼 값에만 새 규칙.
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub fn member_save(
+    asset: String,
+    name: String,
+    phone: String,
+    kind: String,
+    expires: i64,
+    visits_total: i64,
+    note: String,
+    now_unix: i64,
+    extra: Option<Value>,
+    consent: bool,
+    consent_version: Option<String>,
+) -> Result<(), String> {
+    let policy = member_policy()?;
+    let _guard = STORE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let mut rows = load();
+    let existing = rows.iter().find(|r| r.get("asset").and_then(Value::as_str) == Some(asset.as_str())).cloned();
+    let (name, phone, extra) = plan_member(existing.as_ref(), name, phone, extra, consent, consent_version.as_deref(), &policy)?;
+    put_member(&mut rows, asset, name, phone, kind, expires, visits_total, note, now_unix, extra)?;
+    save(&rows)
+}
+
+/// 새 회원을 체인에 찍기(5 RVN) **전에** 같은 규칙으로 미리 본다. 저장은 안 한다.
+/// 🔴 찍은 뒤에 `member_save` 가 거절하면 RVN 만 타고 명단에는 없는 번호가 남는다.
+#[tauri::command]
+pub fn member_save_precheck(
+    name: String,
+    phone: String,
+    extra: Option<Value>,
+    consent: bool,
+    consent_version: Option<String>,
+) -> Result<(), String> {
+    let policy = member_policy()?;
+    plan_member(None, name, phone, extra, consent, consent_version.as_deref(), &policy).map(|_| ())
+}
+
+fn member_policy() -> Result<crate::member_privacy::Policy, String> {
+    crate::member_privacy::member_privacy_get()
+        .map_err(|_| "MEMBER_POLICY_UNAVAILABLE: 회원 정보 설정을 읽지 못했어요. 설정 → 회원 정보에서 다시 저장한 뒤 해 주세요.".to_string())
+}
+
+/// 수집 범위·동의·증거를 적용한 (이름, 전화, 추가 항목). 규칙은 `member_save` 위 설명.
+fn plan_member(
+    existing: Option<&Value>,
+    name: String,
+    phone: String,
+    extra: Option<Value>,
+    consent: bool,
+    consent_version: Option<&str>,
+    policy: &crate::member_privacy::Policy,
+) -> Result<(String, String, Option<Value>), String> {
+    use crate::member_privacy::CONSENT_VERSION;
+    if consent && consent_version != Some(CONSENT_VERSION) {
+        return Err("CONSENT_VERSION_STALE: 동의 내용이 바뀌었어요. 다시 읽고 동의해 주세요.".into());
+    }
+    let mut extra_in = match extra {
+        Some(Value::Object(m)) => m,
+        Some(Value::Null) | None => serde_json::Map::new(),
+        Some(_) => return Err("추가 항목을 확인해 주세요.".into()),
+    };
+    extra_in.remove("consent_at");
+    extra_in.remove("consent_version");
+    if name.chars().any(char::is_control) || phone.chars().any(char::is_control) {
+        return Err("이름과 전화번호에는 제어문자를 넣을 수 없습니다.".into());
+    }
+    let redacted = existing.map(|r| r["redacted"] == true).unwrap_or(false);
+    let text = |k: &str| existing.and_then(|r| r[k].as_str()).unwrap_or("").trim().to_string();
+    // 지워진 줄의 옛 동의는 이미 쓴 동의다 — 새로 적으려면 새로 받아야 한다.
+    let evidence: Option<String> = if redacted {
+        None
+    } else {
+        existing.and_then(|r| {
+            let e = r.get("extra")?;
+            e.get("consent_at")?.as_i64()?;
+            e.get("consent_version")?.as_str().map(str::to_string)
+        })
+    };
+    let old_name = if redacted { String::new() } else { text("name") };
+    let old_phone = if redacted { String::new() } else { text("phone") };
+    let old_extra = if redacted {
+        serde_json::Map::new()
+    } else {
+        existing.and_then(|r| r["extra"].as_object().cloned()).unwrap_or_default()
+    };
+
+    // ── 1. 수집 범위 ──
+    let name = name.trim().to_string();
+    if policy.level == "none" && !name.is_empty() && name != old_name {
+        return Err("MEMBER_INFO_OFF: 이 가게는 회원 정보를 받지 않습니다(설정 → 회원 정보).".into());
+    }
+    let phone = phone.trim().to_string();
+    let phone = if phone == old_phone || phone.is_empty() {
+        phone
+    } else {
+        match policy.level.as_str() {
+            // 전화를 안 받는 가게 — 새 번호는 적지 않고, 예전에 적힌 것은 지우지 않는다.
+            "none" | "name" => old_phone.clone(),
+            "name_last4" => {
+                let digits: String = phone.chars().filter(char::is_ascii_digit).collect();
+                if digits.is_empty() {
+                    return Err("전화번호의 숫자를 적어 주세요.".into());
+                }
+                digits[digits.len().saturating_sub(4)..].to_string()
+            }
+            _ => {
+                if phone.chars().count() > 20
+                    || !phone.chars().all(|c| c.is_ascii_digit() || c == '-' || c == ' ' || c == '+')
+                    || !phone.chars().any(|c| c.is_ascii_digit())
+                {
+                    return Err("전화번호를 확인해 주세요.".into());
+                }
+                phone
+            }
+        }
+    };
+    let blank = |v: &Value| v.is_null() || v.as_str().map(|s| s.trim().is_empty()).unwrap_or(false);
+    let mut extra_out = serde_json::Map::new();
+    let mut added_extra = false;
+    for (k, v) in extra_in {
+        let old = old_extra.get(&k).cloned().unwrap_or(Value::Null);
+        if v == old {
+            continue; // 그대로 — 예전 값을 지킨다(put_member 가 합친다)
+        }
+        if blank(&v) {
+            extra_out.insert(k, json!("")); // 지우는 것은 언제나 된다
+            continue;
+        }
+        if policy.level != "name_phone" {
+            return Err("MEMBER_FIELD_OFF: 이 가게 설정으로는 생년·성별·비상 연락처를 받지 않아요(설정 → 회원 정보에서 「이름·전화 전체」일 때만).".into());
+        }
+        if blank(&old) {
+            added_extra = true;
+        }
+        extra_out.insert(k, v);
+    }
+
+    // ── 2. 새로 적는 개인정보에는 동의 ──
+    let added_basic = (old_name.is_empty() && !name.is_empty()) || (old_phone.is_empty() && !phone.is_empty());
+    let has_basic = evidence.is_some();
+    let has_current = evidence.as_deref() == Some(CONSENT_VERSION);
+    if !consent && ((added_basic && !has_basic) || (added_extra && !has_current) || existing.is_none() || redacted) {
+        return Err("CONSENT_REQUIRED: 새로 적는 개인정보가 있어요. 회원에게 동의를 받았는지 확인해 주세요.".into());
+    }
+
+    // ── 3. 증거 — 이미 지금 판으로 동의했으면 처음 것을 그대로 둔다 ──
+    if consent && !has_current {
+        extra_out.insert("consent_at".into(), json!(rust_now()));
+        extra_out.insert("consent_version".into(), json!(CONSENT_VERSION));
+    }
+    let extra = if extra_out.is_empty() { None } else { Some(Value::Object(extra_out)) };
+    Ok((name, phone, extra))
+}
+
+/// 동의 증거에 적는 시각 — 화면(웹뷰) 시계가 아니라 이 컴퓨터의 시계.
+pub(crate) fn rust_now() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1122,6 +1306,111 @@ mod days_left_tests {
         for text in ["a".repeat(300), "가".repeat(300)] {
             assert_eq!(clean_memo(&text).unwrap(), text);
         }
+    }
+
+    /// 사장 화면의 회원 등록도 직원·검표 길과 같이 동의를 받는다.
+    #[test]
+    fn 사장이_등록하는_새_회원도_동의가_있어야_들어간다() {
+        crate::member_privacy::tests::in_sandbox(|| {
+            crate::member_privacy::member_privacy_set("name_phone".into(), 6).unwrap();
+            let v4 = Some(crate::member_privacy::CONSENT_VERSION.to_string());
+            let save = |asset: &str, consent: bool, version: Option<String>, extra: Option<Value>| {
+                member_save(asset.into(), "Synthetic Member".into(), "000-0000-7391".into(), "period".into(),
+                    20261231, 0, "".into(), 77, extra, consent, version)
+            };
+            assert!(save("NEW-1", false, None, None).unwrap_err().starts_with("CONSENT_REQUIRED: "));
+            assert!(load().is_empty(), "동의 없이 거절된 회원이 장부에 남으면 안 된다");
+            assert!(save("NEW-1", true, Some("member-privacy-v3".into()), None).unwrap_err().starts_with("CONSENT_VERSION_STALE: "));
+            assert!(save("NEW-1", true, None, None).unwrap_err().starts_with("CONSENT_VERSION_STALE: "));
+            // 화면이 증거를 흉내 내 보내도 버린다.
+            assert!(save("NEW-1", false, None, Some(json!({"consent_at": 1, "consent_version": crate::member_privacy::CONSENT_VERSION}))).is_err());
+            save("NEW-1", true, v4.clone(), Some(json!({"birth_year": "1990", "consent_at": 1}))).unwrap();
+            let row = load()[0].clone();
+            assert_eq!(row["extra"]["consent_version"], crate::member_privacy::CONSENT_VERSION);
+            let at = row["extra"]["consent_at"].as_i64().unwrap();
+            assert!(at != 77 && at != 1 && (rust_now() - at).abs() < 60, "증거는 러스트 시계다 — 화면의 now_unix 가 아니다");
+            assert_eq!(row["extra"]["birth_year"], "1990");
+            // 이미 있는 회원은 동의 없이 고칠 수 있고, 예전 동의 증거는 그대로 남는다.
+            member_save("NEW-1".into(), "Synthetic Edited".into(), "000-0000-7391".into(), "period".into(),
+                20261231, 0, "".into(), 88, None, false, None).unwrap();
+            let row = load()[0].clone();
+            assert_eq!(row["name"], "Synthetic Edited");
+            assert_eq!(row["extra"]["consent_at"], at);
+            // 동의 칸을 다시 켜고 저장해도 처음 증거를 덮어쓰지 않는다.
+            let mut old = load();
+            old[0]["extra"]["consent_at"] = json!(1_700_000_000);
+            save_rows_for_test(&old);
+            member_save("NEW-1".into(), "Synthetic Edited".into(), "000-0000-7391".into(), "period".into(),
+                20261231, 0, "".into(), 99, None, true, v4.clone()).unwrap();
+            assert_eq!(load()[0]["extra"]["consent_at"], 1_700_000_000, "이미 v4 로 동의한 증거는 저장할 때마다 바뀌면 안 된다");
+        });
+    }
+
+    /// 가게가 정한 수집 범위를 사장 화면에서도 지킨다 — 화면 말이 아니라 러스트가.
+    #[test]
+    fn 사장_화면도_가게가_정한_수집_범위를_지킨다() {
+        crate::member_privacy::tests::in_sandbox(|| {
+            let v4 = Some(crate::member_privacy::CONSENT_VERSION.to_string());
+            let save = |asset: &str, phone: &str, extra: Option<Value>, consent: bool| {
+                member_save(asset.into(), "Synthetic Member".into(), phone.into(), "period".into(),
+                    20261231, 0, "".into(), 77, extra, consent, if consent { v4.clone() } else { None })
+            };
+            let phone_of = |asset: &str| load().iter().find(|r| r["asset"] == asset).map(|r| r["phone"].clone()).unwrap();
+            crate::member_privacy::member_privacy_set("none".into(), 6).unwrap();
+            assert!(save("L-NONE", "", None, true).unwrap_err().starts_with("MEMBER_INFO_OFF: "));
+            crate::member_privacy::member_privacy_set("name".into(), 6).unwrap();
+            save("L-NAME", "000-0000-7391", None, true).unwrap();
+            assert_eq!(phone_of("L-NAME"), "", "이름만 받는 가게는 전화를 적지 않는다");
+            crate::member_privacy::member_privacy_set("name_last4".into(), 6).unwrap();
+            save("L-LAST4", "000-0000-7391", None, true).unwrap();
+            assert_eq!(phone_of("L-LAST4"), "7391");
+            assert!(save("L-LAST4B", "000-0000-7392", Some(json!({"birth_year": "1990"})), true)
+                .unwrap_err().starts_with("MEMBER_FIELD_OFF: "), "생년·성별·비상 연락처는 name_phone 에서만");
+            crate::member_privacy::member_privacy_set("name_phone".into(), 6).unwrap();
+            save("L-FULL", "000-0000-7391", Some(json!({"birth_year": "1990", "emergency": "000-0000-7392"})), true).unwrap();
+            assert_eq!(phone_of("L-FULL"), "000-0000-7391");
+            // 범위를 줄여도 예전에 적힌 값은 조용히 지우지 않는다 — 바꾼 값에만 새 규칙.
+            crate::member_privacy::member_privacy_set("name_last4".into(), 6).unwrap();
+            member_save("L-FULL".into(), "Synthetic Member".into(), "000-0000-7391".into(), "punch".into(),
+                20261231, 10, "".into(), 78, Some(json!({"birth_year": "1990"})), false, None).unwrap();
+            let row = load().into_iter().find(|r| r["asset"] == "L-FULL").unwrap();
+            assert_eq!(row["phone"], "000-0000-7391");
+            assert_eq!(row["extra"]["emergency"], "000-0000-7392");
+            assert_eq!(row["kind"], "punch");
+        });
+    }
+
+    /// 보관 기간으로 지워진 줄·장부 복구로 빈 채 생긴 줄에 이름을 다시 적으려면 새 동의.
+    #[test]
+    fn 지워진_줄과_빈_줄에_개인정보를_다시_적으려면_새_동의가_있어야_한다() {
+        crate::member_privacy::tests::in_sandbox(|| {
+            crate::member_privacy::member_privacy_set("name_phone".into(), 6).unwrap();
+            let v4 = Some(crate::member_privacy::CONSENT_VERSION.to_string());
+            member_save("OLD-1".into(), "Synthetic Member".into(), "000-0000-7391".into(), "period".into(),
+                20200101, 0, "".into(), 1_600_000_000, None, true, v4.clone()).unwrap();
+            assert_eq!(redact_expired_members(1_800_000_000, 6).unwrap(), 1);
+            assert_eq!(load()[0]["redacted"], true);
+            let refill = |consent: bool| member_save("OLD-1".into(), "Synthetic Again".into(), "000-0000-7391".into(), "period".into(),
+                20301231, 0, "".into(), 1_800_000_001, None, consent, if consent { v4.clone() } else { None });
+            assert!(refill(false).unwrap_err().starts_with("CONSENT_REQUIRED: "), "지워진 줄의 옛 동의로는 다시 적지 못한다");
+            refill(true).unwrap();
+            let row = load()[0].clone();
+            assert_eq!(row["name"], "Synthetic Again");
+            assert!(row.get("redacted").is_none());
+            // 장부 복구로 생긴 빈 줄(동의 증거 없음)
+            let mut rows = load();
+            rows.push(json!({"asset": "BLANK-1", "name": "", "phone": "", "kind": "period", "expires": 0,
+                "visits_total": 0, "visits_used": 0, "frozen_at": 0, "note": "장부 복구", "issued": 1, "updated": 1}));
+            save_rows_for_test(&rows);
+            let blank = |consent: bool| member_save("BLANK-1".into(), "Synthetic Blank".into(), "".into(), "period".into(),
+                20301231, 0, "".into(), 2, None, consent, if consent { v4.clone() } else { None });
+            assert!(blank(false).unwrap_err().starts_with("CONSENT_REQUIRED: "));
+            blank(true).unwrap();
+        });
+    }
+
+    fn save_rows_for_test(rows: &[Value]) {
+        save(rows).unwrap();
     }
 
     fn synthetic_member(asset: &str, kind: &str) {

@@ -483,7 +483,7 @@ fn first_txid(v: Value) -> String {
 }
 
 /// Unlocks for one operation, then locks again.
-async fn with_wallet<F, Fut>(passphrase: Option<String>, body: F) -> Result<String, String>
+pub(crate) async fn with_wallet<F, Fut>(passphrase: Option<String>, body: F) -> Result<String, String>
 where
     F: FnOnce() -> Fut,
     Fut: std::future::Future<Output = Result<String, String>>,

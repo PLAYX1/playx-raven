@@ -165,8 +165,8 @@ mod tests {
     #[test]
     fn a_persons_own_label_is_never_hidden() {
         for l in [
-            "NewravenMoosong", "윤경 바이낸스", "망고팜", "디센트무송",
-            "김무송 작은 지갑", "무송레이븐바이낸스", "nowpayment",
+            "NewravenMain", "가족 바이낸스", "망고팜", "디센트 지갑",
+            "작은 지갑", "레이븐바이낸스", "nowpayment",
             "PLAYX 풀노드로 전송", "문트리로 BM26 전달", "",
         ] {
             assert!(!is_machine_label(l), "{l} 가 숨겨진다");

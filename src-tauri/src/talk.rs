@@ -678,7 +678,7 @@ pub async fn talk_photo_post(
     let size = raw.len();
     let added = crate::upload::ipfs_add_file(crate::upload::Incoming {
         // 🔴 파일 이름은 파일창고까지만 간다. 글에는 **안 적는다** —
-        //    「김무송_통장사본.jpg」 같은 이름이 세상 모든 릴레이에 남으면 안 된다.
+        //    「홍길동_통장사본.jpg」 같은 이름이 세상 모든 릴레이에 남으면 안 된다.
         name: safe_name(&fname),
         bytes: raw,
     })
@@ -1442,7 +1442,7 @@ mod gate_tests {
     }
 
     /// 파일 이름은 파일창고까지만. 글(릴레이)에는 안 적는다 —
-    /// 「김무송_통장사본.jpg」 같은 이름이 세상에 남으면 안 된다.
+    /// 「홍길동_통장사본.jpg」 같은 이름이 세상에 남으면 안 된다.
     #[test]
     fn 파일_이름을_글에_안_적는다() {
         let f = 사진_함수();

@@ -463,8 +463,9 @@ pub fn ticket_to_member(
         0,
         format!("카운터에서 산 {item}"),
         now_unix,
+        // 🔴 증거 시각은 이 컴퓨터의 시계로 — 화면이 보낸 `now_unix` 가 아니라.
         Some(json!({
-            "consent_at": now_unix,
+            "consent_at": crate::pass::rust_now(),
             "consent_version": crate::member_privacy::CONSENT_VERSION,
         })),
         first_memo, Some(groups),
@@ -596,7 +597,9 @@ mod tests {
                 let row = members["members"].as_array().unwrap().iter().find(|r| r["asset"] == code).unwrap();
                 assert_eq!(row["phone"], expected);
                 assert_eq!(row["name"].as_str().unwrap().chars().count(), 40);
-                assert_eq!(row["extra"]["consent_at"], NOON);
+                // 증거 시각은 러스트 시계다 — 부른 쪽이 준 NOON 이 아니다.
+                let at = row["extra"]["consent_at"].as_i64().unwrap();
+                assert!(at != NOON && (crate::pass::rust_now() - at).abs() < 60, "consent_at = 이 컴퓨터의 지금");
                 assert_eq!(row["extra"]["consent_version"], crate::member_privacy::CONSENT_VERSION);
                 assert!(read_rows().iter().find(|r| r["code"] == code).unwrap().get("name").is_none());
             }

@@ -124,15 +124,91 @@ pub fn peer_remove(address: String) -> Result<Value, String> {
 #[tauri::command]
 pub async fn pin_my_assets() -> Result<Value, String> {
     let assets = crate::raven::list_assets().await?;
-    let cids: Vec<String> = assets
+    // 🔴 「만들기」의 원본 지문은 파일이 아니다 — 올린 적이 없어서 붙들 것이 없다.
+    //    예전에는 지문마다 5분씩 기다렸다(50장이면 몇 시간). 이 컴퓨터가 지문으로
+    //    만든 것은 기록에 있으니 여기서 뺀다.
+    let fingerprints = crate::create_history::fingerprint_set();
+    let cids: Vec<String> = file_cids(assets.into_iter().map(|a| (a.name, a.ipfs_hash)), &fingerprints)
         .into_iter()
-        .filter(|a| !a.name.ends_with('!'))
-        .filter_map(|a| {
-            let cid = a.ipfs_hash.filter(|h| h.starts_with("Qm"))?;
-            Some(format!("{}\u{1}{}", a.name, cid))
-        })
+        .map(|(name, cid)| format!("{name}\u{1}{cid}"))
         .collect();
     pin_these(cids).await
+}
+
+/// 자산 목록에서 **파일을 가리키는 것만** — 주인 표·빈 해시·이 컴퓨터가 만든
+/// 원본 지문을 뺀다. 보존(`pin_my_assets`)과 공개 목록(`my_cids`)이 같은 잣대를 쓴다.
+fn file_cids(
+    assets: impl IntoIterator<Item = (String, Option<String>)>,
+    fingerprints: &std::collections::HashSet<String>,
+) -> Vec<(String, String)> {
+    assets
+        .into_iter()
+        .filter(|(name, _)| !name.ends_with('!'))
+        .filter_map(|(name, hash)| {
+            let cid = hash.filter(|h| h.starts_with("Qm") && !fingerprints.contains(h))?;
+            Some((name, cid))
+        })
+        .collect()
+}
+
+/// 방금 찾지 못한 주소 — 한동안 다시 묻지 않는다.
+///
+/// 🔴 남(폰·다른 컴퓨터)이 만든 원본 지문은 모양으로 가려낼 수 없다. 그대로
+///    `pin_add` 를 부르면 하나마다 5분을 기다린다. 먼저 20초만 물어보고(자산
+///    화면의 「확인」과 같은 잣대), 없으면 6시간 동안은 건너뛴다.
+static MISSED: std::sync::Mutex<Option<std::collections::HashMap<String, std::time::Instant>>> =
+    std::sync::Mutex::new(None);
+const MISS_QUIET: std::time::Duration = std::time::Duration::from_secs(6 * 3600);
+
+fn recently_missed(cid: &str) -> bool {
+    MISSED
+        .lock()
+        .ok()
+        .and_then(|g| g.as_ref().and_then(|m| m.get(cid).map(|t| t.elapsed() < MISS_QUIET)))
+        .unwrap_or(false)
+}
+
+fn note_missed(cid: &str) {
+    if let Ok(mut g) = MISSED.lock() {
+        let m = g.get_or_insert_with(Default::default);
+        if m.len() > 5_000 {
+            m.clear();
+        }
+        m.insert(cid.to_string(), std::time::Instant::now());
+    }
+}
+
+/// 로컬 파일창고(kubo) HTTP API. `ipfs.rs` 와 같은 주소다(그 파일은 0.3.8 그대로 둔다).
+const IPFS_API: &str = "http://127.0.0.1:5001/api/v0";
+
+/// 이 주소를 지금 누가 들고 있나 — **뿌리 블록 하나만** 묻는다.
+///
+/// 🔴 `cat?length=1`(ipfs::check_alive)로 물으면 **폴더는 늘 「없음」**이다. kubo 의
+///    `cat` 은 폴더에 「this dag node is a directory」 오류를 낸다. 곡·영상 묶음은
+///    `wrap-with-directory` 로 올린 폴더라서, 그 잣대로는 보존도 서로 돕기도 영영
+///    건너뛰었다(0.4.5 검수에서 잡힘). `block/stat` 은 파일이든 폴더든 뿌리 블록만
+///    확인한다 — 폴더와 파일을 똑같이 대한다.
+pub(crate) async fn root_alive_at(api: &str, cid: &str, timeout_secs: u64) -> bool {
+    let response = reqwest::Client::new()
+        .post(format!("{api}/block/stat?arg={cid}"))
+        .timeout(std::time::Duration::from_secs(timeout_secs))
+        .send()
+        .await;
+    matches!(response, Ok(r) if r.status().is_success())
+}
+
+async fn root_alive(cid: &str, timeout_secs: u64) -> bool {
+    root_alive_at(IPFS_API, cid, timeout_secs).await
+}
+
+/// 자산 화면의 「확인」 — 파일이든 폴더든 찾을 수 있나. (`check_alive` 대신)
+#[tauri::command]
+pub async fn cid_alive(cid: String, timeout_secs: u64) -> Result<bool, String> {
+    let cid = cid.trim();
+    if !(cid.len() == 46 && cid.starts_with("Qm") && cid.bytes().all(|b| b.is_ascii_alphanumeric())) {
+        return Ok(false);
+    }
+    Ok(root_alive(cid, timeout_secs.clamp(1, 60)).await)
 }
 
 /// 이름과 주소가 붙은 목록을 받아 **그것들을 이 컴퓨터가 들고 있게** 한다.
@@ -175,8 +251,15 @@ async fn pin_these(items: Vec<String>) -> Result<Value, String> {
     let mut pinned = Vec::new();
     let mut failed = Vec::new();
     let mut skipped = 0usize;
+    let mut fingerprints_skipped = 0usize;
+    let fingerprints = crate::create_history::fingerprint_set();
 
     for (name, cid) in assets {
+        // 이 컴퓨터가 원본 지문으로 만든 것 — 파일이 아니다.
+        if fingerprints.contains(&cid) {
+            fingerprints_skipped += 1;
+            continue;
+        }
         // ── 체인 대조. 못 물어보면 **붙들지 않는다.** ──
         //    「확인 못 함」과 「맞음」을 같게 취급하면 검사가 없는 것과 같다.
         let 체인해시 = match crate::raven::call_rpc("getassetdata", json!([name.clone()])).await {
@@ -192,9 +275,25 @@ async fn pin_these(items: Vec<String>) -> Result<Value, String> {
             continue;
         }
 
+        // 한 번 못 찾은 것은 한동안 묻지 않고, 처음 묻는 것도 20초만 기다린다.
+        // 파일이 살아 있으면 첫 바이트는 금방 온다 — 그때만 붙든다.
+        if recently_missed(&cid) {
+            failed.push(json!({ "asset": name, "cid": cid }));
+            continue;
+        }
+        if !root_alive(&cid, 20).await {
+            note_missed(&cid);
+            failed.push(json!({ "asset": name, "cid": cid }));
+            continue;
+        }
+
         match crate::ipfs::pin_add(cid.clone()).await {
             Ok(true) => pinned.push(json!({ "asset": name, "cid": cid })),
-            Ok(false) | Err(_) => failed.push(json!({ "asset": name, "cid": cid })),
+            // 붙들지 못했으면 한동안 다시 묻지 않는다 — 안 그러면 돌 때마다 5분씩 기다린다.
+            Ok(false) | Err(_) => {
+                note_missed(&cid);
+                failed.push(json!({ "asset": name, "cid": cid }));
+            }
         }
     }
 
@@ -202,6 +301,7 @@ async fn pin_these(items: Vec<String>) -> Result<Value, String> {
         "pinned": pinned,
         "failed": failed,
         "no_file": skipped,
+        "fingerprints": fingerprints_skipped,
         "note": "체인이 가리키는 것만 받았습니다. 이 컴퓨터가 계속 갖고 있으니, 발행한 컴퓨터가 꺼져 있어도 손님 화면에서 열립니다.",
     }))
 }
@@ -216,13 +316,12 @@ pub async fn my_cids() -> Value {
         Ok(v) => v,
         Err(e) => return json!({ "error": e, "items": [] }),
     };
-    let items: Vec<Value> = assets
+    // 🔴 원본 지문은 「이 컴퓨터가 들고 있는 파일」이 아니다. 목록에 올리면 남의
+    //    컴퓨터가 그걸 받으려고 몇 분씩 기다린다.
+    let fingerprints = crate::create_history::fingerprint_set();
+    let items: Vec<Value> = file_cids(assets.into_iter().map(|a| (a.name, a.ipfs_hash)), &fingerprints)
         .into_iter()
-        .filter(|a| !a.name.ends_with('!'))
-        .filter_map(|a| {
-            let cid = a.ipfs_hash.filter(|h| h.starts_with("Qm"))?;
-            Some(json!({ "asset": a.name, "cid": cid }))
-        })
+        .map(|(asset, cid)| json!({ "asset": asset, "cid": cid }))
         .collect();
     json!({ "items": items })
 }
@@ -302,3 +401,76 @@ pub fn start_auto_pin() {
     });
 }
 
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    const FP: &str = "QmcwUFCZ8saJgoE6D9LEgVqtteCbVcdzWFcGzuhe7VTeW7";
+    const FILE: &str = "QmQ9SC6m3JMtK2ciA5Ds8yVq6o9h6x5zZ8kcN2d5wV8aXb";
+
+    /// 🔴 이 컴퓨터가 만든 원본 지문은 보존·공개 목록 어디에도 「파일」로 안 나간다.
+    ///    진짜 파일과 주인 표 규칙은 그대로다.
+    #[test]
+    fn 원본_지문은_보존과_공개_목록에서_빠진다() {
+        crate::create_history::tests::sandbox(|_| {
+            crate::create_history::remember_fingerprint(FP).unwrap();
+            let fps = crate::create_history::fingerprint_set();
+            let rows = vec![
+                ("HANBIT#SURYO260923-1".to_string(), Some(FP.to_string())),
+                ("PLAYX/SONG/INEVITABLE".to_string(), Some(FILE.to_string())),
+                ("PLAYX!".to_string(), Some(FILE.to_string())),
+                ("PLAYX".to_string(), None),
+                ("ODD".to_string(), Some("bafyfoo".to_string())),
+            ];
+            let out = super::file_cids(rows, &fps);
+            assert_eq!(out, vec![("PLAYX/SONG/INEVITABLE".to_string(), FILE.to_string())]);
+
+            // 붙드는 쪽도 지문이면 체인·파일창고에 묻지도 않고 넘어간다(여기서 네트워크를 부르면 시험이 멈춘다).
+            let r = tauri::async_runtime::block_on(super::pin_these(vec![format!("HANBIT#SURYO260923-1\u{1}{FP}")])).unwrap();
+            assert_eq!(r["fingerprints"], json!(1));
+            assert_eq!(r["pinned"], json!([]));
+            assert_eq!(r["failed"], json!([]));
+        });
+    }
+
+    /// 폴더(곡·영상 묶음)도 파일과 똑같이 「있음」이어야 한다. 가짜 파일창고를 띄워
+    /// kubo 처럼 `cat` 은 폴더에 오류를 내게 하고, 뿌리 블록 확인이 폴더·파일을 다
+    /// 살리는지, 없는 것만 「없음」인지 본다. 진짜 파일창고·네트워크는 안 부른다.
+    #[test]
+    fn 폴더_주소도_파일처럼_살아_있다고_본다() {
+        use axum::{extract::Query, http::StatusCode, routing::post, Router};
+        use std::collections::HashMap;
+        const DIR: &str = "QmFolderBundleSongAndCoverWrapWithDirectory00";
+        const FILE: &str = "QmPlainFileCoverImageNotAFolder0000000000000";
+        const GONE: &str = "QmNobodyHoldsThisAnymore000000000000000000000";
+        tauri::async_runtime::block_on(async {
+            let known = |q: &HashMap<String, String>| matches!(q.get("arg").map(String::as_str), Some(DIR) | Some(FILE));
+            let app = Router::new()
+                .route("/api/v0/block/stat", post(move |Query(q): Query<HashMap<String, String>>| async move {
+                    if known(&q) { (StatusCode::OK, "{\"Key\":\"x\",\"Size\":1}") } else { (StatusCode::INTERNAL_SERVER_ERROR, "block not found") }
+                }))
+                .route("/api/v0/cat", post(|Query(q): Query<HashMap<String, String>>| async move {
+                    if q.get("arg").map(String::as_str) == Some(DIR) { (StatusCode::INTERNAL_SERVER_ERROR, "this dag node is a directory") } else { (StatusCode::OK, "x") }
+                }));
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let addr = listener.local_addr().unwrap();
+            tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+            let api = format!("http://{addr}/api/v0");
+            // 예전 잣대(cat)는 폴더를 「없음」으로 봤다 — 이 가짜가 kubo 와 같게 구는지부터.
+            let cat = reqwest::Client::new().post(format!("{api}/cat?arg={DIR}&length=1")).send().await.unwrap();
+            assert!(!cat.status().is_success(), "가짜 파일창고도 폴더에 cat 오류를 내야 시험이 된다");
+            assert!(super::root_alive_at(&api, DIR, 5).await, "폴더 묶음은 살아 있다");
+            assert!(super::root_alive_at(&api, FILE, 5).await, "보통 파일도 그대로 살아 있다");
+            assert!(!super::root_alive_at(&api, GONE, 5).await, "아무도 없는 것만 「없음」");
+        });
+    }
+
+    #[test]
+    fn 못_찾은_주소는_한동안_다시_묻지_않는다() {
+        let cid = "QmTestMissedAddressForBackoffOnly000000000000";
+        assert!(!super::recently_missed(cid));
+        super::note_missed(cid);
+        assert!(super::recently_missed(cid));
+    }
+}

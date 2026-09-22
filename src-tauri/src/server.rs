@@ -1300,6 +1300,20 @@ async fn chain_send_route(Json(b): Json<SendBody>) -> impl IntoResponse {
 }
 
 /// Fetches one file from the local IPFS gateway and hands it on.
+/// 🔴 `/ipfs/…` 는 **아무 CID 나** 가게 주소(출처)로 내준다. 남이 만든 HTML 이 여기서
+///    스크립트를 돌리면 같은 출처의 직원 열쇠(`localStorage` 의 `rv-staff-t`)를 읽을 수
+///    있다 — 직원이 그런 링크 하나만 열어도. 그래서 모든 답에 `sandbox`(스크립트·같은
+///    출처 없음)와 `nosniff` 를 붙인다. 가게가 만드는 메뉴판·자산 한 장 페이지는 원래
+///    스크립트가 없다(upload.rs). 그림·소리·JSON 을 불러 쓰는 손님 화면은 영향이 없다 —
+///    CSP 는 문서로 열 때만 걸린다.
+fn relay_headers(kind: String) -> [(header::HeaderName, String); 3] {
+    [
+        (header::CONTENT_TYPE, kind),
+        (header::CONTENT_SECURITY_POLICY, "sandbox".to_string()),
+        (header::X_CONTENT_TYPE_OPTIONS, "nosniff".to_string()),
+    ]
+}
+
 async fn ipfs_relay(
     axum::extract::Path(path): axum::extract::Path<String>,
     axum::extract::RawQuery(q): axum::extract::RawQuery,
@@ -1307,7 +1321,7 @@ async fn ipfs_relay(
     // 경로에 .. 이 들어오면 게이트웨이 밖을 가리킬 수 있다. CID 는 그런 글자를
     // 쓰지 않으므로 그냥 거절한다.
     if path.contains("..") {
-        return (StatusCode::BAD_REQUEST, [(header::CONTENT_TYPE, "text/plain".to_string())], Vec::new());
+        return (StatusCode::BAD_REQUEST, relay_headers("text/plain".to_string()), Vec::new());
     }
 
     // 🔴 **물음표 뒤를 버리고 있었다.** 그래서 `?format=raw`(블록 그대로
@@ -1347,19 +1361,19 @@ async fn ipfs_relay(
             match r.bytes().await {
                 Ok(b) => (
                     StatusCode::OK,
-                    [(header::CONTENT_TYPE, kind)],
+                    relay_headers(kind),
                     b.to_vec(),
                 ),
                 Err(_) => (
                     StatusCode::BAD_GATEWAY,
-                    [(header::CONTENT_TYPE, "text/plain".to_string())],
+                    relay_headers("text/plain".to_string()),
                     Vec::new(),
                 ),
             }
         }
         _ => (
             StatusCode::NOT_FOUND,
-            [(header::CONTENT_TYPE, "text/plain".to_string())],
+            relay_headers("text/plain".to_string()),
             Vec::new(),
         ),
     }
@@ -4064,6 +4078,21 @@ mod outside {
                 "{f} 가 헤더를 안 받습니다"
             );
         }
+    }
+
+    /// 검수 — `/ipfs/…` 로 내주는 남의 HTML 이 가게 출처에서 스크립트를 못 돌리게.
+    #[test]
+    fn 파일창고_중계는_스크립트를_가둔다() {
+        use axum::{http::header, response::IntoResponse};
+        use super::{ipfs_relay, relay_headers};
+        // 로컬 게이트웨이가 없는 시험에서는 「못 찾음」 길로 간다 — 그 길도 같은 머리말이어야 한다.
+        let r = tauri::async_runtime::block_on(async {
+            ipfs_relay(axum::extract::Path("QmNotHereForTests0000000000000000000000000000/index.html".into()), axum::extract::RawQuery(None)).await.into_response()
+        });
+        assert_eq!(r.headers().get(header::CONTENT_SECURITY_POLICY).unwrap(), "sandbox");
+        assert_eq!(r.headers().get(header::X_CONTENT_TYPE_OPTIONS).unwrap(), "nosniff");
+        let h = relay_headers("text/html".into());
+        assert!(h.iter().any(|(k, v)| *k == header::CONTENT_SECURITY_POLICY && v == "sandbox"));
     }
 
     /// 바깥에 열리는 것은 손님 쪽뿐이다. 여기 실수로 관리 경로가 끼면

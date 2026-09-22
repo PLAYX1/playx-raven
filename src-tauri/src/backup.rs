@@ -90,6 +90,10 @@ fn manifest() -> Vec<(&'static str, PathBuf, &'static str)> {
          "잡힌 예약 — 잃으면 손님은 오는데 가게가 모릅니다"),
         ("passes.json", app_dir().join("passes.json"),
          "회원 명단 — 체인은 회원번호만 알고 이름도 기간도 모릅니다"),
+        // 「만들기」 기록. 증명서 받는 사람 이름은 체인에 없고 여기에만 있다 — 잃으면
+        // 다시 인쇄할 때 이름 칸이 비고, 원본 지문을 파일로 알고 보존하려 든다.
+        ("create_history.json", app_dir().join("create_history.json"),
+         "만든 기록 — 증명서 받는 사람 이름과 원본 지문은 체인에 없고 여기에만 있습니다"),
         ("sessions.json", app_dir().join("sessions.json"),
          "수업 신청자와 대기자 — 잃으면 그날 문 앞에서 알게 됩니다"),
         ("orders.json", app_dir().join("orders.json"),

@@ -747,7 +747,7 @@ mod tests {
             "javascript:alert(1)",
             "JavaScript:alert(1)",
             "data:text/html,<script>1</script>",
-            "file:///Users/gimmusong/wallet.dat",
+            "file:///Users/someone/wallet.dat",
             "ftp://example.com/a",
             // 주소만 덜렁 적으면 링크가 안 걸린다.
             "x.com/playx",

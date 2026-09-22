@@ -1,4 +1,6 @@
 import { wirePhoneTransaction } from "./phone-transaction";
+import { FINGERPRINT_GUESS, wireCreate, type CreateApi } from "./create-page";
+import { verifyLink } from "./easy-create";
 import { requireWalletBackup, restoreIsComplete } from "./backup-result";
 import { invoke as rawInvoke } from "@tauri-apps/api/core";
 
@@ -194,6 +196,11 @@ type Health = "unknown" | "checking" | "found" | "missing";
 const assets = new Map<string, Asset>();
 const health = new Map<string, Health>();
 let pinned = new Set<string>();
+/** 이 컴퓨터가 「만들기」로 새긴 원본 지문(파일 SHA-256). 파일창고 주소처럼 생겼지만
+ *  올린 적이 없는 해시다 — 확인·보존·미리보기를 하지 않고 「원본 지문」으로 적는다.
+ *  남이 만든 지문은 모양으로 가려낼 수 없어서 여기 없다(그때는 정직하게 「못 찾음」). */
+let fingerprints = new Set<string>();
+const isFingerprint = (cid: string | null | undefined) => !!cid && fingerprints.has(cid);
 let selected: string | null = null;
 let assetFilter: "all" | "mine" | "got" | "selling" = "all";
 const collapsed = new Set<string>();
@@ -310,7 +317,8 @@ document.addEventListener(
 /// 곳(`.slice()`)도 마찬가지다 — 자른 뒤에는 열쇠와 안 맞는다. 그래서
 /// **화면에 올리기 전에** 여기서 옮긴다.
 function errText(e: unknown): string {
-  return t(String(e).trim());
+  // 「보냈는지 모름」 표지는 화면이 알아보는 데만 쓴다 — 사람에게는 문장만.
+  return t(String(e).trim().replace(/SENT_UNKNOWN: /g, ""));
 }
 
 function fmtQty(n: number): string {
@@ -346,6 +354,7 @@ function fmtRemaining(ms: number): string {
 function badge(a: Asset): string {
   const cid = a.ipfs_hash;
   if (!cid) return '<span class="muted">파일 없음</span>';
+  if (isFingerprint(cid)) return `<span class="muted" title="${escapeHtml(t("파일 대신 원본 지문만 새겼어요. 올린 파일이 없어서 확인·보존할 것이 없어요."))}">${copyHtml("원본 지문")}</span>`;
   if (pinned.has(cid)) return '<span class="ok">보존 중</span>';
   const s = health.get(cid) ?? "unknown";
   if (s === "found") return '<span class="warn">이 컴퓨터에 없음</span>';
@@ -356,11 +365,14 @@ function badge(a: Asset): string {
 
 function renderList() {
   const rows = [...assets.values()];
-  const withFile = rows.filter((a) => a.ipfs_hash);
+  // 원본 지문은 파일이 아니다 — 「파일 있음」에 세지 않는다.
+  const withFile = rows.filter((a) => a.ipfs_hash && !isFingerprint(a.ipfs_hash));
+  const printed = rows.filter((a) => isFingerprint(a.ipfs_hash)).length;
   const savable = withFile.filter((a) => health.get(a.ipfs_hash!) === "found" && !pinned.has(a.ipfs_hash!));
 
   $("summary").textContent =
-    tf("자산 {0}개 · 파일 있음 {1}개 · 보존 중 {2}개", rows.length, withFile.length, withFile.filter(a => pinned.has(a.ipfs_hash!)).length);
+    tf("자산 {0}개 · 파일 있음 {1}개 · 보존 중 {2}개", rows.length, withFile.length, withFile.filter(a => pinned.has(a.ipfs_hash!)).length) +
+    (printed ? tf(" · 원본 지문 {0}개", printed) : "");
 
   const scanBtn = $("scan") as HTMLButtonElement;
   if (scan.running) {
@@ -476,7 +488,7 @@ function renderList() {
 
   const rowHtml = (a: Asset, child: boolean) => {
     const cid = a.ipfs_hash;
-    const canSave = cid && health.get(cid) === "found" && !pinned.has(cid);
+    const canSave = cid && !isFingerprint(cid) && health.get(cid) === "found" && !pinned.has(cid);
     // Viewing and preserving are separate gestures on purpose. If one click
     // could mean either, every click needs a moment of thought first.
     const act = canSave
@@ -647,11 +659,12 @@ function bindPeerHelp() {
     const p = (r?.pinned || []).length, f = (r?.failed || []).length;
     // 숫자만 말하지 않는다 — 「12개 보관 중」은 확인할 수가 없다.
     const 이름 = (r?.pinned || []).map((x: any) => x.asset).slice(0, 6).join(" · ");
-    return f
+    const 지문 = Number(r?.fingerprints || 0) ? " " + tf("원본 지문 {0}개는 파일이 아니라 건너뛰었습니다.", Number(r.fingerprints)) : "";
+    return (f
       ? tf("{0}개를 지킵니다. {1}개는 못 받았습니다 — 그 파일을 든 컴퓨터가 꺼져 있을 수 있습니다.", p, f)
       : p
         ? tf("{0}개를 이 컴퓨터가 지킵니다{1}.", p, 이름 ? " — " + 이름 : "")
-        : String(r?.note || "지킬 파일이 없습니다.");
+        : String(r?.note || "지킬 파일이 없습니다.")) + 지문;
   };
   const 누르면 = (id: string, run: () => Promise<any>, 중: string) => {
     const b = document.getElementById(id) as HTMLButtonElement | null;
@@ -686,9 +699,18 @@ async function renderPanel() {
   $("p-amount").textContent = tf("수량 {0}", fmtQty(a.amount));
 
   const cid = a.ipfs_hash;
-  if (!cid) {
+  if (!cid || isFingerprint(cid)) {
     $("p-cid").textContent = "";
-    $("p-body").innerHTML = '<p class="muted">이 자산에는 연결된 파일이 없습니다.</p>';
+    // 🔴 원본 지문은 파일창고에 없다. 예전에는 여기서 25초를 기다린 뒤 「나중에 다시
+    //    나타날 수 있습니다」라고 했다 — 영영 안 나타나는 것을.
+    $("p-body").innerHTML = cid
+      ? `<p class="meta">${copyHtml("원본 지문")}</p><code class="addr" translate="no">${escapeHtml(cid)}</code>
+         <p class="muted">${copyHtml("이 자산에는 파일 대신 원본 지문이 새겨져 있어요. 원본 파일은 올리지 않아서, 만든 사람의 컴퓨터에만 있어요.")}</p>
+         <p class="meta">${copyHtml("원본 파일이 맞는지 보려면 확인 페이지에 그 파일을 넣어 지문이 같은지 보세요.")}</p>
+         <button class="ghost" id="p-verify">${copyHtml("확인 페이지 열기")}</button>`
+      : '<p class="muted">이 자산에는 연결된 파일이 없습니다.</p>';
+    const vb = document.getElementById("p-verify");
+    if (vb) vb.onclick = () => void openUrl(verifyLink(a.name)).catch(() => {});
     // 🔴 **여기서 일찍 돌아간다.** 그래서 아래에 있는 단추들(공지·나눠주기)이
     //    **파일 없는 자산에는 하나도 안 나왔다.** 그런데 그 둘은 파일과
     //    아무 상관이 없다 — 자산을 가진 사람에게 보내는 일이다.
@@ -724,8 +746,11 @@ async function renderPanel() {
   if (selected !== a.name) return; // 사용자가 그 사이 다른 행을 골랐다
 
   if (!kind.available) {
+    // 🔴 「나중에 다시 나타날 수 있다」고 약속하지 않는다. 폰이나 다른 컴퓨터가
+    //    「만들기」로 새긴 원본 지문도 이 모양이고, 그것은 영영 안 나타난다.
     $("p-body").innerHTML =
-      '<p class="muted">지금은 이 파일을 찾지 못했습니다. 나중에 다시 나타날 수 있습니다.</p>';
+      `<p class="muted">${copyHtml("지금은 이 파일을 찾지 못했습니다.")}</p>
+       <p class="meta">${copyHtml("이 파일을 든 컴퓨터가 꺼져 있을 수도 있고, 파일 대신 원본 지문만 새긴 자산일 수도 있어요. 원본 지문이면 파일은 여기서 나타나지 않고, 확인 페이지에서 원본 파일로 대조해요.")}</p>`;
   } else if (kind.is_image) {
     // Seeing the image is what makes someone press 보존. Text cannot do that.
     $("p-body").innerHTML = `<img src="${kind.url}" alt="" />
@@ -938,6 +963,7 @@ async function loadAssets(thenScan = true) {
     assets.clear();
     list.forEach((a) => assets.set(a.name, a));
     pinned = new Set(await invoke<string[]>("pin_list"));
+    fingerprints = new Set(await invoke<string[]>("create_fingerprints").catch(() => [] as string[]));
     checkOwnerTokens();
     renderList();
     if (thenScan) startScan();
@@ -953,6 +979,7 @@ async function startScan() {
 
   const targets = [...assets.values()]
     .filter((a) => a.ipfs_hash && !pinned.has(a.ipfs_hash))   // 보존 중인 건 물어볼 필요가 없다
+    .filter((a) => !isFingerprint(a.ipfs_hash))                // 원본 지문은 파일창고에 없다 — 20초씩 기다릴 이유가 없다
     .filter((a) => health.get(a.ipfs_hash!) !== "found")
     .map((a) => ({ name: a.name, cid: a.ipfs_hash! }));
 
@@ -970,7 +997,7 @@ async function startScan() {
 
     const t0 = performance.now();
     try {
-      const found = await invoke<boolean>("check_alive", { cid: t.cid, timeoutSecs: 20 });
+      const found = await invoke<boolean>("cid_alive", { cid: t.cid, timeoutSecs: 20 }); // 폴더(곡·영상 묶음)도 「있음」으로 — cat 은 폴더에 오류를 낸다
       health.set(t.cid, found ? "found" : "missing");
     } catch {
       health.set(t.cid, "missing");
@@ -989,7 +1016,7 @@ async function startScan() {
 
 async function pinAll() {
   const targets = [...assets.values()]
-    .filter((a) => a.ipfs_hash && health.get(a.ipfs_hash) === "found" && !pinned.has(a.ipfs_hash))
+    .filter((a) => a.ipfs_hash && !isFingerprint(a.ipfs_hash) && health.get(a.ipfs_hash) === "found" && !pinned.has(a.ipfs_hash))
     .map((a) => a.ipfs_hash!);
   for (const cid of targets) {
     try { await invoke("pin_add", { cid }); pinned.add(cid); renderList(); } catch {}
@@ -1030,6 +1057,7 @@ function ask(
   input.value = opts.value ?? "";
   ($("ask-yes") as HTMLButtonElement).textContent = opts.ok ?? "확인";
   $("ask-no").style.display = "";
+  $("ask-alt").style.display = "none";
   $("askwrap").classList.add("on");
   // 열자마자 칠 수 있어야 한다. 칸을 찾아 누르게 하면 그만큼 느려진다.
   setTimeout(() => input.focus(), 30);
@@ -1043,8 +1071,23 @@ function sure(title: string, message = "", ok = "네"): Promise<boolean> {
   $("ask-input").style.display = "none";
   ($("ask-yes") as HTMLButtonElement).textContent = ok;
   $("ask-no").style.display = "";
+  $("ask-alt").style.display = "none";
   $("askwrap").classList.add("on");
   return new Promise((res) => (askResolve = (v) => res(v !== null)));
+}
+
+const ASK_ALT = "\u0000ask-alt";
+/// 둘 중 하나를 고른다(그리고 취소). 고른 쪽 `"yes"`·`"alt"`, 취소면 null.
+function choose(title: string, message: string, yes: string, alt: string): Promise<"yes" | "alt" | null> {
+  $("ask-title").textContent = title;
+  $("ask-msg").textContent = message;
+  $("ask-input").style.display = "none";
+  ($("ask-yes") as HTMLButtonElement).textContent = yes;
+  ($("ask-alt") as HTMLButtonElement).textContent = alt;
+  $("ask-alt").style.display = "";
+  $("ask-no").style.display = "";
+  $("askwrap").classList.add("on");
+  return new Promise((res) => (askResolve = (v) => res(v === null ? null : v === ASK_ALT ? "alt" : "yes")));
 }
 
 /// 알리기만. 되돌릴 것이 없을 때.
@@ -1054,6 +1097,7 @@ function say(title: string, message = ""): Promise<unknown> {
   $("ask-input").style.display = "none";
   ($("ask-yes") as HTMLButtonElement).textContent = "알겠습니다";
   $("ask-no").style.display = "none";
+  $("ask-alt").style.display = "none";
   $("askwrap").classList.add("on");
   return new Promise((res) => (askResolve = () => res(null)));
 }
@@ -3053,6 +3097,10 @@ function pageTiles(page: string): PageTile[] {
   }
   if (page === "assets") {
     return [
+      /* 🔴 쉬운 길을 맨 앞에. 이름 규칙·소각액을 몰라도 고르고 적기만 하면 된다.
+         자유롭게 이름을 정하는 「새 자산 만들기」는 바로 옆에 그대로 둔다. */
+      { icon: I('<path d="M7 3.5h7l4 4V20a.5.5 0 01-.5.5h-10A.5.5 0 017 20z"/><path d="M14 3.5V8h4M10 13l1.6 1.6L15 11"/>'),
+        label: "만들기", sub: "증명서 · 티켓 · 작품", go: () => showPage("create") },
       { icon: I('<path d="M12 5v14M5 12h14"/>'),
         label: "새 자산 만들기", sub: "쿠폰 · 회원권 · 굿즈", go: () => $("new-asset")?.click() },
       { icon: I('<path d="M20 12a8 8 0 11-2.3-5.6"/><path d="M20 4v4h-4"/>'),
@@ -4354,6 +4402,9 @@ async function sendOwed() {
 /** 지금 열려 있는 화면. 끌어다 놓기가 **자리마다 다르게** 굴려면 필요하다. */
 let currentPage = "ravi";
 
+/** 「만들기」 화면 들어가기 — 화면이 준비되면 채운다. */
+let createApi: CreateApi | undefined;
+
 function showPage(id: string) {
   // 🔴 화면을 떠나면 그 화면 때문에 도는 타이머를 끈다.
   //
@@ -4403,6 +4454,7 @@ function showPage(id: string) {
     void idLoad();
   }
   if (id === "reward") void loadReward();
+  if (id === "create") createApi?.enter();
   if (id === "artist") void artistLoad();
   // 🔴 **여태 모드를 바꿀 때만 그렸다.** 메뉴로 「돕는 중」에 다시 들어오면
   //    빈 화면이었다 — 8초 타이머가 도는 동안만 채워지고, 장사 모드에서는
@@ -4622,8 +4674,14 @@ function dropJob(): DropJob {
   switch (currentPage) {
     case "assets":
       return {
-        title: t("새 자산으로 발행합니다"),
-        why: t("파일이 파일창고에 올라가고, 이어서 이름을 정하는 화면이 열립니다. RVN 이 소각되는 것은 마지막에 한 번 더 여쭙습니다."),
+        title: t("새 자산 또는 증명서"),
+        why: t("사진은 새 자산을 만드는 화면을 열고, 파일은 「발행하기」를 누를 때 공개로 올라갑니다. 문서(PDF·한글·워드)는 증명서 만들기로 이어지고, 올리지 않고 지문만 적어요."),
+        ok: true,
+      };
+    case "create":
+      return {
+        title: t("이 문서로 증명서 만들기"),
+        why: t("PDF·한글·워드·사진 파일을 놓으면 지문만 만들어 적어요. 파일은 어디에도 올리지 않아요."),
         ok: true,
       };
     case "talk":
@@ -4641,10 +4699,11 @@ function dropJob(): DropJob {
         ok: true,
       };
     default:
+      // 🔴 문서는 어디에 놓아도 「증명서 만들기」로 이어진다(놓은 뒤에 한 번 묻는다).
       return {
-        title: t("여기서는 받지 않습니다"),
-        why: t("「자산」에 놓으면 발행하고, 「이야기」에 놓으면 글에 붙입니다."),
-        ok: false,
+        title: t("문서라면 증명서를 만들 수 있어요"),
+        why: t("PDF·한글·워드·사진 파일을 놓으면 「이 문서로 증명서 만들기」를 여쭤요. 파일은 올리지 않고 지문만 적어요."),
+        ok: true,
       };
   }
 }
@@ -4660,6 +4719,22 @@ function dropVeil(on: boolean) {
   $("dropveil-p").textContent = j.why;
   v.classList.toggle("no", !j.ok);
   v.classList.add("on");
+}
+
+/** 증명서의 원본이 될 수 있는 문서인가 — PDF·한글(hwp·hwpx)·워드(docx)·사진(png·jpg). */
+function looksLikeDocument(path: string): boolean {
+  return /\.(pdf|hwp|hwpx|docx|png|jpe?g)$/i.test(path);
+}
+
+/** 떨어뜨린 문서로 「만들기」를 연다. 🔴 **파일은 어디에도 안 올린다** — 지문만 만든다. */
+async function certificateFromDropped(path: string): Promise<void> {
+  try {
+    const fp = await invoke<{ fingerprint: string; name: string }>("create_dropped_fingerprint", { path });
+    showPage("create");
+    createApi?.startWithDocument(fp);
+  } catch (e) {
+    await sure(t("지문을 만들지 못했어요"), errText(e), t("닫기"));
+  }
 }
 
 /** 사진인가. 영상은 **안 올린다** — 링크로 받는다.
@@ -4678,6 +4753,46 @@ async function onDropped(paths: string[]) {
 
   const vids = paths.filter((p) => /\.(mp4|mov|avi|mkv|webm|m4v)$/i.test(p));
   const files = paths.filter(looksLikeImage);
+  const docs = paths.filter(looksLikeDocument);
+
+  // ── 문서 → 증명서. 「만들기」 화면이면 바로, 다른 화면이면 한 번 묻는다. ──
+  //    사진(png·jpg)은 원래 하던 일(새 자산·글에 붙이기·가게 사진)이 먼저고,
+  //    자산 화면에서만 둘 중 하나를 고르게 한다.
+  const 문서 = docs.find((p) => !looksLikeImage(p));
+  if (currentPage === "create") {
+    if (docs.length) { await certificateFromDropped(docs[0]); return; }
+    await sure(t("이 파일로는 증명서를 만들 수 없어요"), t("PDF·한글(hwp·hwpx)·워드(docx)·사진(png·jpg) 파일을 놓아 주세요."), t("알겠습니다"));
+    return;
+  }
+  if (문서) {
+    const 이름 = 문서.split(/[\\/]/).pop() || "";
+    if (await sure(t("이 문서로 증명서 만들기"), `${tf("「{0}」의 지문만 만들어 증명서에 적어요. 파일은 어디에도 올리지 않아요.", 이름)}\n${t(FINGERPRINT_GUESS)}`, t("이 문서로 증명서 만들기"))) {
+      await certificateFromDropped(문서);
+    }
+    return;
+  }
+  if (currentPage === "assets" && docs.length && files.length) {
+    const 이름 = docs[0].split(/[\\/]/).pop() || "";
+    const 고름 = await choose(
+      t("이 사진으로 무엇을 할까요?"),
+      tf("「{0}」 — 증명서는 지문만 적고 사진을 올리지 않아요. 새 자산은 「발행하기」를 누를 때 사진이 공개로 올라가고 지울 수 없어요.", 이름),
+      t("이 문서로 증명서 만들기"),
+      t("사진으로 새 자산 만들기"),
+    );
+    if (고름 === null) return;
+    if (고름 === "yes") { await certificateFromDropped(docs[0]); return; }
+  }
+  if (currentPage !== "assets" && currentPage !== "talk" && currentPage !== "shop") {
+    if (docs.length) {
+      const 이름 = docs[0].split(/[\\/]/).pop() || "";
+      if (await sure(t("이 문서로 증명서 만들기"), `${tf("「{0}」의 지문만 만들어 증명서에 적어요. 파일은 어디에도 올리지 않아요.", 이름)}\n${t(FINGERPRINT_GUESS)}`, t("이 문서로 증명서 만들기"))) {
+        await certificateFromDropped(docs[0]);
+      }
+      return;
+    }
+    await sure(t("여기서는 받지 않습니다"), t("「자산」에 놓으면 발행하고, 「이야기」에 놓으면 글에 붙입니다. 문서는 「만들기」에 놓으면 증명서가 돼요."), t("알겠습니다"));
+    return;
+  }
   if (vids.length && !files.length) {
     await sure(
       t("영상은 올리지 않습니다"),
@@ -4709,20 +4824,21 @@ async function onDropped(paths: string[]) {
     return;
   }
 
+  if (currentPage === "assets") {
+    // 마법사를 열고 **파일을 붙인 상태**로 시작한다. 다시 고르게 하면 끌어다 놓은
+    // 뜻이 없다. 🔴 다만 **올리지는 않는다** — 「발행하기」 뒤에 올린다(wizPendingFile).
+    await openWizard();
+    wizPendingFile = { name: one.split(/[\\/]/).pop() || "file", path: one };
+    wizPaintPending();
+    return;
+  }
+
   try {
     const added = await invoke<any>("ipfs_add_dropped", { path: one });
     const cid = String(added.cid || "");
     if (!cid) throw new Error(t("올리지 못했습니다"));
 
-    if (currentPage === "assets") {
-      // 마법사를 열고 **이미 올라간 상태**로 시작한다. 다시 고르게 하면
-      // 끌어다 놓은 뜻이 없다.
-      openWizard();
-      ($("i-ipfs") as HTMLInputElement).value = cid;
-      $("i-preview").innerHTML =
-        `<img src="http://127.0.0.1:8080/ipfs/${cid}" alt="" style="max-width:220px;border-radius:8px;margin-top:9px" />`;
-      // 「이야기」는 위에서 이미 갈라져 나갔다 — 여기로 안 온다.
-    } else if (currentPage === "shop") {
+    if (currentPage === "shop") {
       const el = document.getElementById("sh-icon") as HTMLInputElement | null;
       if (el) el.value = cid;
       $("sh-refreshsay").innerHTML =
@@ -6785,13 +6901,17 @@ async function renderKinds() {
   } catch {
     가진주인표 = null;
   }
+  // 🔴 예전에는 「먼저 하위 자산으로 PLAYX/SONG 을 만드세요(100 RVN)」라고 했다. 거짓이다 —
+  //    PLAYX/SONG 은 PLAYX 의 주인 표가 있어야 만들 수 있고, 그건 PLAY X 레이블에만 있다.
+  //    그대로 따라 하면 노드가 거절하거나, 엉뚱한 이름에 RVN 을 태운다. 사실대로 말하고
+  //    내 이름으로 만드는 길(「만들기」)을 가리킨다.
   const 못내는이유 = (k: any): string | null => {
     if (!가진주인표 || !k?.needs_owner) return null;
     if (가진주인표.includes(k.needs_owner)) return null;
-    const 부모 = String(k.needs_owner).replace(/!$/, "");
-    return `아직 못 냅니다 — 이 지갑에 <code>${escapeHtml(k.needs_owner)}</code> 이 없습니다.
-            먼저 <b>하위 자산</b>으로 <code>${escapeHtml(부모)}</code> 을 한 번 만드세요(100 RVN).
-            그러면 그 아래로 얼마든지 낼 수 있습니다.`;
+    const 뿌리 = String(k.needs_owner).split("/")[0].replace(/!$/, "");
+    return `${tf("이 틀은 {0} 레이블 전용이에요 — {1} 이름의 주인 표가 있는 지갑만 낼 수 있어요.", 뿌리 === "PLAYX" ? "PLAY X" : escapeHtml(뿌리), escapeHtml(뿌리))}
+            ${copyHtml("내 이름으로 증명서·티켓·작품을 내려면 「만들기」를 쓰세요.")}
+            <button type="button" class="link" data-wz-to-create>${copyHtml("「만들기」로 가기")}</button>`;
   };
   $("wz-kinds").innerHTML = kinds
     .map(
@@ -6809,7 +6929,17 @@ async function renderKinds() {
     )
     .join("");
 
-  document.querySelectorAll("[data-kind]").forEach((c) => {
+  // 🔴 **마법사 안의 칸만** 잡는다. `[data-kind]` 는 메뉴판의 품목 종류 단추와
+  //    「만들기」의 증명서·티켓·작품 단추에도 붙어 있다. 문서 전체를 잡으면 마법사를
+  //    한 번 연 뒤로 그 단추들이 마법사 손잡이로 덮인다.
+  document.querySelectorAll<HTMLElement>("#wz-kinds [data-wz-to-create]").forEach((b) => {
+    b.onclick = (e) => {
+      e.stopPropagation();
+      $("wiz").classList.add("hidden");
+      showPage("create");
+    };
+  });
+  document.querySelectorAll("#wz-kinds [data-kind]").forEach((c) => {
     (c as HTMLElement).onclick = () => {
       if ((c as HTMLElement).classList.contains("blocked")) return; // 못 내는 것은 고를 수 없다
       const id = (c as HTMLElement).dataset.kind as string;
@@ -6841,7 +6971,7 @@ async function renderKinds() {
         ($("i-units") as HTMLInputElement).value = String(wizPreset.units ?? 0);
         ($("i-reissuable") as HTMLInputElement).checked = !!wizPreset.reissuable;
       }
-      document.querySelectorAll("[data-kind]").forEach((x) => x.classList.toggle("on", x === c));
+      document.querySelectorAll("#wz-kinds [data-kind]").forEach((x) => x.classList.toggle("on", x === c));
       // 고른 것만 사례가 펼쳐진다. 전부 펼치면 첫 화면이 벽이 된다.
       wizGate();
     };
@@ -6854,8 +6984,11 @@ async function openWizard() {
   wizKind = "root";
   wizPreset = null;
   issueCheck = null;
-  document.querySelectorAll("[data-kind]").forEach((c) => c.classList.remove("on"));
+  wizDone = false;
+  ($("wz-next") as HTMLButtonElement).onclick = wizNext;
+  document.querySelectorAll("#wz-kinds [data-kind]").forEach((c) => c.classList.remove("on"));
   ["i-name", "i-ipfs", "i-confirm"].forEach((id) => (($(id) as HTMLInputElement).value = ""));
+  wizClearPending();
   ($("i-qty") as HTMLInputElement).value = "1";
   ($("i-units") as HTMLInputElement).value = "0";
   ($("i-reissuable") as HTMLInputElement).checked = true;
@@ -6964,6 +7097,7 @@ function burnNow(): number {
 
 function wizGate() {
   const next = $("wz-next") as HTMLButtonElement;
+  if (wizDone) { next.disabled = false; return; } // 끝난 뒤의 단추는 「닫기」다
   if (wizStep === 1) next.disabled = !document.querySelector(".choice.on");
   else if (wizStep === 2) next.disabled = !issueCheck;
   else if (wizStep === 5) {
@@ -7052,26 +7186,55 @@ async function checkIssueName() {
   wizGate();
 }
 
+/**
+ * 마법사에서 고른(또는 떨어뜨린) 파일 — 🔴 **「발행하기」를 누르기 전에는 올리지 않는다.**
+ *
+ * 예전에는 고르는 순간 파일창고에 올리고 붙들었다. 마법사를 닫아도, 이름에서 막혀
+ * 그만둬도 **공개 사본이 남았고 지울 수 없었다** — 경고도 없었다. 그래서 고른
+ * 파일은 여기 붙잡아 두기만 하고, 8초 취소 창이 지난 뒤(`doIssue`)에 올린다.
+ */
+let wizPendingFile: { name: string; file?: File; path?: string; previewUrl?: string } | null = null;
+
+function wizClearPending() {
+  if (wizPendingFile?.previewUrl) URL.revokeObjectURL(wizPendingFile.previewUrl);
+  wizPendingFile = null;
+}
+
+/** 고른 파일을 보여 준다 — 아직 안 올렸다는 것과, 올리면 무엇이 되는지를 같이. */
+function wizPaintPending() {
+  const p = wizPendingFile;
+  if (!p) { $("i-preview").innerHTML = ""; return; }
+  $("i-preview").innerHTML =
+    (p.previewUrl ? `<img src="${escapeHtml(p.previewUrl)}" alt="" style="max-width:220px;border-radius:8px;margin-top:9px" />` : "") +
+    `<p class="meta"><span translate="no">${escapeHtml(p.name)}</span> · ${copyHtml("아직 올리지 않았어요 — 「발행하기」를 누를 때 올라가요")}</p>` +
+    `<div class="warnbox" style="margin-top:8px;font-size:13px">${copyHtml("올린 파일은 누구나 볼 수 있게 공개되고 지울 수 없어요 — 전화·주소·생년월일이 든 문서는 올리지 마세요.")}</div>`;
+}
+
+/** 붙잡아 둔 파일을 이제 올린다. `doIssue` 가 취소 창 뒤에서만 부른다. */
+async function wizUploadPending(): Promise<string> {
+  const p = wizPendingFile;
+  if (!p) return "";
+  const added = p.path
+    ? await invoke<any>("ipfs_add_dropped", { path: p.path })
+    : await invoke<any>("ipfs_add_file", { file: { name: p.name, bytes: Array.from(new Uint8Array(await p.file!.arrayBuffer())) } });
+  const cid = String(added?.cid || "");
+  if (!cid) throw new Error(t("올리지 못했습니다"));
+  ($("i-ipfs") as HTMLInputElement).value = cid;
+  wizClearPending();
+  return cid;
+}
+
 function pickIssueFile() {
   const input = document.createElement("input");
   input.type = "file";
-  input.onchange = async () => {
+  input.onchange = () => {
     const file = input.files?.[0];
     if (!file) return;
-    $("i-preview").innerHTML = `<p class="meta">올리는 중…</p>`;
-    try {
-      const bytes = Array.from(new Uint8Array(await file.arrayBuffer()));
-      const added = await invoke<any>("ipfs_add_file", { file: { name: file.name, bytes } });
-      ($("i-ipfs") as HTMLInputElement).value = added.cid;
-      $("i-preview").innerHTML = file.type.startsWith("image/")
-        ? `<img src="http://127.0.0.1:8080/ipfs/${added.cid}" alt="" style="max-width:220px;border-radius:8px;margin-top:9px" />`
-        // 🔴 자산이 가리키는 그림이 사라지면 **자산만 남고 그림이 없어진다.**
-        //    `upload.rs` 첫 줄이 「그게 이 앱이 막으려는 바로 그 실패」라고
-        //    적어 두었는데, 정작 화면은 「올렸습니다」로 끝났다.
-        : `<p class="meta">${file.name} · ${copyHtml("이 컴퓨터에 두었습니다")}</p>`;
-    } catch (e) {
-      $("i-preview").innerHTML = `<p class="meta danger">${escapeHtml(errText(e))}</p>`;
-    }
+    wizClearPending();
+    ($("i-ipfs") as HTMLInputElement).value = "";
+    wizPendingFile = { name: file.name, file, previewUrl: file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined };
+    wizPaintPending();
+    곡미리보기();
   };
   input.click();
 }
@@ -7080,7 +7243,9 @@ function renderSummary() {
   const qty = parseFloat(($("i-qty") as HTMLInputElement).value) || 1;
   const units = parseInt(($("i-units") as HTMLInputElement).value) || 0;
   const re = ($("i-reissuable") as HTMLInputElement).checked;
-  const cid = ($("i-ipfs") as HTMLInputElement).value.trim();
+  // 고른 파일은 아직 안 올렸지만 「붙인 것」이다 — 없다고 경고하면 거짓이다.
+  const cid = ($("i-ipfs") as HTMLInputElement).value.trim() || (wizPendingFile ? "pending" : "");
+  const fileLabel = wizPendingFile ? tf("{0} · 발행할 때 올립니다", wizPendingFile.name) : ($("i-ipfs") as HTMLInputElement).value.trim();
 
   $("i-r-kind").textContent = KIND_KO[wizKind];
   $("i-r-name").setAttribute("translate", "no");
@@ -7096,13 +7261,13 @@ function renderSummary() {
             (re ? "다음에도 더 찍을 수 있음" : '<b class="danger">이번이 마지막 — 영원히 잠깁니다</b>')
           : tf("{0} · 소수점 {1}자리 · ", qty.toLocaleString(), units) +
             (re ? "재발행 가능" : '<b class="danger">재발행 불가 — 되돌릴 수 없음</b>');
-  $("i-r-file").textContent = cid || "없음";
+  $("i-r-file").textContent = fileLabel || t("없음");
   // 제한 자산은 **누가 받을 수 있는지**가 수량보다 중요하다. 요약에 없으면
   // 검증식을 잘못 적은 채로 1,500 RVN 을 태우게 된다.
   if (wizKind === "restricted") {
     const v = ($("x-verifier") as HTMLInputElement)?.value.trim() || "";
     $("i-r-file").innerHTML =
-      `${escapeHtml(cid || "파일 없음")}<br /><b>받을 수 있는 주소</b>: <code>${escapeHtml(v)}</code>` +
+      `${escapeHtml(fileLabel || t("파일 없음"))}<br /><b>받을 수 있는 주소</b>: <code>${escapeHtml(v)}</code>` +
       ` 딱지가 붙은 곳만`;
   }
 
@@ -7294,6 +7459,16 @@ function holdBeforeDoing(what: string, cost: string, seconds = 8): Promise<boole
       $("i-result") ||
       document.body;
     host.prepend(box);
+    // 🔴 그릴 자리가 안 보이면(닫힌 마법사 속 등) **시작하지 않는다.** 안 보이는 8초 창은
+    //    취소할 수 없는 발행이다 — 검수에서 닫힌 창 속에서 8초가 흐르고 발행이 또 나갔다.
+    if (box.getClientRects().length === 0) {
+      box.remove();
+      done(false);
+      return;
+    }
+    // 🔴 780px 창에서는 확인 화면 아래에 그려져 **화면 밖**이었다(검수). 안 보이는 취소
+    //    단추는 없는 것과 같다 — 가운데로 끌어온다.
+    try { box.scrollIntoView({ block: "center", behavior: "smooth" }); } catch { /* 옛 웹뷰 */ }
     const t = setInterval(() => {
       left -= 1;
       if (left <= 0) {
@@ -7310,24 +7485,100 @@ function holdBeforeDoing(what: string, cost: string, seconds = 8): Promise<boole
   });
 }
 
-async function doIssue() {
-  if (!issueCheck) return;
-  // 발행은 500 RVN 을 태운다. 잠겨 있으면 여기서 멈추고 이유를 말한다.
-  if (!(await ensureUnlocked("자산을 발행하려면 지갑을 열어야 합니다."))) return;
+/** 발행이 도는 중 — 두 번 누르면 두 번 올리고 두 번 재발행했다(검수). */
+let wizIssuing = false;
+/** 🔴 이 마법사의 발행은 끝났다(성공이든 「보냈는지 모름」이든). 다시 열기 전에는 보내지 않는다. */
+let wizDone = false;
+/** 보냈는지 모르는 발행(이름 → 그때 시각) — 러스트 기록(`issue_unknown.json`)을 못 읽을 때의 뒷받침. */
+const wizUnknown = new Map<string, number>();
 
-  // 🔴 취소 창. `issue` RPC 는 만들고 곧바로 뿌리므로, 되돌릴 수 있는
-  // 마지막 순간이 **여기**다. 마법사가 「다음」을 네 번 누르게 하고, 손이
-  // 그 리듬에 들어가면 다섯 번째도 누른다 — 그 다섯 번째가 500 RVN 이다.
-  const ok = await holdBeforeDoing(
-    tf("「{0}」 을 만듭니다", issueCheck.name),
-    tf("{0} RVN 이 타고, 이 이름은 영원히 바뀌지 않습니다", BURN[wizKind]),
-  );
-  if (!ok) return;
+/** 보냈는지 확인할 때 지갑에서 찾을 이름. 여러 개 한 번에는 첫 고유 이름, 자격 증명은 #, 제한은 $. */
+function wizProbe(name: string): string {
+  if (wizKind === "bulk") { const tag = bulkTags()[0]; return tag ? `${name}#${tag}` : name; }
+  if (wizKind === "qualifier") return name.startsWith("#") ? name : `#${name}`;
+  if (wizKind === "restricted") return name.startsWith("$") ? name : `$${name}`;
+  return name;
+}
+
+/** 발행을 끝낸 창 — 「닫기」 하나만 남긴다. 🔴 issueCheck 를 비워 doIssue 가 다시 못 돈다. */
+function wizFinish(btn: HTMLButtonElement) {
+  wizDone = true;
+  issueCheck = null;
+  btn.textContent = t("닫기");
+  btn.disabled = false;
+  ($("wz-back") as HTMLButtonElement).style.visibility = "hidden";
+  btn.onclick = () => {
+    $("wiz").classList.add("hidden");
+    btn.onclick = wizNext;
+    loadAssets(false);
+  };
+}
+
+async function doIssue() {
+  // 🔴 첫 줄에서 막는다. 잠금 해제·8초 창 동안에도 「다음」이 눌려 doIssue 가 두 번 돌았다.
+  //    끝난 창(wizDone)도 막는다 — 「닫기」를 누르는데 발행이 또 나갔다(검수 W2).
+  if (wizIssuing || wizDone || !issueCheck || $("wiz").classList.contains("hidden")) return;
+  wizIssuing = true;
   const btn = $("wz-next") as HTMLButtonElement;
   const wasLabel = btn.textContent;
   btn.disabled = true;
-  btn.textContent = "발행 중…";
+  let finished = false;
+  let pass: string | null = null;
+  let marked = false;
+  const name = issueCheck.name;
+  const probe = wizProbe(name);
+  const warn = (html: string) => { $("i-result").innerHTML = `<div class="warnbox" style="margin-top:12px">${html}</div>`; };
   try {
+    // 🔴 보냈는지 모르는 것이 있나 — 앱을 다시 켜도 러스트 기록이 기억한다. 지갑의 확인 0
+    //    거래도 같이 본다(더 찍기는 이름이 이미 있어 이름으로는 못 가린다). 못 읽으면 보내지 않는다.
+    let known: { state?: string } | null = null;
+    try {
+      known = await invoke<{ state?: string } | null>("issue_unknown_check", { name, kind: wizKind, probe });
+    } catch (e) {
+      warn(`${copyHtml("지난 발행이 기록됐는지 확인하지 못해 보내지 않았어요.")} ${escapeHtml(errText(e))}`);
+      return;
+    }
+    const since = wizUnknown.get(name);
+    if (known?.state === "unknown" || known?.state === "sending" || (known?.state !== "landed" && since !== undefined && Date.now() - since < 30 * 60_000)) {
+      warn(copyHtml("이 발행은 보냈는지 아직 몰라요. 같은 것을 다시 보내지 마세요 — 몇 분 뒤 자산 화면에서 기록됐는지 확인해 주세요."));
+      return;
+    }
+    if (known?.state === "pending") {
+      warn(copyHtml("지갑에 아직 기록 중인 같은 발행이 있어요(확인 0). 기록된 뒤에 다시 해 주세요."));
+      return;
+    }
+    if (known?.state === "landed") {
+      wizUnknown.delete(name);
+      warn(copyHtml("지난번 발행이 지갑에 기록돼 있어요. 자산 화면에서 먼저 확인해 주세요 — 정말 한 번 더 하려면 다시 누르세요."));
+      return;
+    }
+
+    // 발행은 500 RVN 을 태운다. 잠겨 있으면 여기서 멈추고 이유를 말한다.
+    // 파일을 올려야 하면 올리는 동안 다시 잠기지 않게 넉넉히 연다 — 그리고 발행 직전에 또 본다.
+    const usesFile = !["bulk", "qualifier"].includes(wizKind);
+    const lock0: any = await invoke("wallet_lock_state").catch(() => null);
+    if (lock0?.encrypted && !lock0?.unlocked) {
+      pass = await ask("지갑 암호", "자산을 발행하려면 지갑을 열어야 합니다.", { password: true });
+      if (!pass) return;
+      try {
+        await invoke("unlock_for", { passphrase: pass, seconds: usesFile && wizPendingFile ? 300 : 60 });
+      } catch (e) {
+        await sure(t("지갑을 열지 못했습니다"), errText(e), t("닫기"));
+        return;
+      }
+    }
+
+    // 🔴 취소 창. `issue` RPC 는 만들고 곧바로 뿌리므로, 되돌릴 수 있는
+    // 마지막 순간이 **여기**다. 마법사가 「다음」을 네 번 누르게 하고, 손이
+    // 그 리듬에 들어가면 다섯 번째도 누른다 — 그 다섯 번째가 500 RVN 이다.
+    // 암호를 묻는 사이 창을 닫았으면 여기서 멈춘다 — 8초 창이 다른 화면에 뜨지 않게.
+    if ($("wiz").classList.contains("hidden")) return;
+    const ok = await holdBeforeDoing(
+      tf("「{0}」 을 만듭니다", name),
+      tf("{0} RVN 이 타고, 이 이름은 영원히 바뀌지 않습니다", BURN[wizKind]),
+    );
+    if (!ok) return;
+    btn.textContent = "발행 중…";
     // 🔴 **`|| 1` 이 0 을 삼키고 있었다.** `parseFloat("0")` 은 0 이고 0 은
     //    거짓값이라, 사장이 0 을 적으면 조용히 1 이 나갔다.
     //
@@ -7341,6 +7592,15 @@ async function doIssue() {
     const qty = wizKind === "unique" ? 1 : Number.isFinite(qtyTyped) ? qtyTyped : 1;
     const units = wizKind === "unique" ? 0 : parseInt(($("i-units") as HTMLInputElement).value) || 0;
     let cid = ($("i-ipfs") as HTMLInputElement).value.trim() || null;
+    // 🔴 붙잡아 둔 파일은 **지금** 올린다 — 취소 창이 지난 뒤, 발행 바로 앞.
+    //    그만둔 마법사가 공개 사본을 남기지 않게 하는 자리가 여기다.
+    //    파일을 안 쓰는 종류(여러 개 한 번에·자격 증명)는 올리지 않는다 — 쓰지도 않을
+    //    파일을 영원히 공개할 이유가 없다.
+    if (!cid && wizPendingFile && usesFile) {
+      btn.textContent = t("파일 올리는 중…");
+      cid = await wizUploadPending();
+      btn.textContent = "발행 중…";
+    }
     // 🔴 자산에는 IPFS 해시가 **하나**만 박힌다. 사진과 영상 링크를 둘 다
     //    담으려면 그 둘을 적은 쪽지를 만들어 그 쪽지 주소를 박아야 한다.
     //    사진만 있으면 쪽지를 안 만든다 — 한 겹 덜 거치는 쪽이 빠르다.
@@ -7393,6 +7653,28 @@ async function doIssue() {
       cid = String(up.cid || cid || "");
     }
     const re = ($("i-reissuable") as HTMLInputElement).checked;
+
+    // 🔴 올리는 동안 지갑이 다시 잠겼을 수 있다. 발행 직전에 한 번 더 보고, 우리가 연
+    //    지갑이면 같은 암호로 조용히 다시 연다 — 잠겨서 발행이 실패하면 파일만 공개된다.
+    const lock1: any = await invoke("wallet_lock_state").catch(() => null);
+    if (lock1?.encrypted && !lock1?.unlocked) {
+      if (pass) await invoke("unlock_for", { passphrase: pass, seconds: 60 });
+      else if (!(await ensureUnlocked("자산을 발행하려면 지갑을 열어야 합니다."))) {
+        throw new Error(t("지갑이 잠겨 있어 발행하지 않았어요."));
+      }
+    }
+    pass = null;
+    // 창이 그사이 닫혔으면 보내지 않는다 — 안 보이는 발행은 없어야 한다.
+    if ($("wiz").classList.contains("hidden")) return;
+
+    // 🔴 보내기 **직전**에 적는다(이름·종류·시각). 최대 3분 기다리는 동안 앱을 꺼도 다시
+    //    켜면 이 기록이 같은 발행을 막는다. 못 적으면 보내지 않는다.
+    await invoke("issue_unknown_mark", { name, kind: wizKind, probe, state: "sending" });
+    marked = true;
+    const note = document.createElement("p");
+    note.className = "meta";
+    setCopyText(note, () => t("보내는 중 — 창을 닫지 마세요 (최대 3분)"));
+    $("i-result").append(note);
 
     // 🔴 여기가 **언제나 `issue_asset` 하나였다.** 화면은 일곱을 고르게 하고,
     //    실행은 하나만 했다. 고른 것이 무엇이든 평범한 발행이 나갔고,
@@ -7469,21 +7751,37 @@ async function doIssue() {
          <button id="sell-list" type="button">상점에 올리기</button>
          <div id="sell-say" class="meta"></div>
        </div></div>`;
-    바로팔기배선(issueCheck.name, wizKind);
-    btn.textContent = "닫기";
-    btn.disabled = false;
+    바로팔기배선(name, wizKind);
+    finished = true;
+    marked = false;
+    void invoke("issue_unknown_clear", { name }).catch(() => {});
     // 빈 폼에 남겨 두지 않는다. 만든 자산이 있는 목록으로 돌려보낸다.
-    btn.onclick = () => {
-      $("wiz").classList.add("hidden");
-      ($("wz-next") as HTMLButtonElement).onclick = wizNext;
-      loadAssets(false);
-    };
+    wizFinish(btn);
   } catch (e) {
+    const raw = String(e instanceof Error ? e.message : e ?? "");
+    if (/^SENT_UNKNOWN: /.test(raw) && marked) {
+      // 🔴 「실패」가 아니다 — 노드가 이미 보냈을 수 있다. 같은 발행을 다시 열지 않는다.
+      //    러스트 기록에도 남긴다 — 앱을 다시 켜도 같은 발행을 막는다.
+      wizUnknown.set(name, Date.now());
+      marked = false;
+      void invoke("issue_unknown_mark", { name, kind: wizKind, probe, state: "unknown" }).catch(() => {});
+      $("i-result").innerHTML = `<div class="warnbox" style="margin-top:12px"><b>${copyHtml("보냈는지 아직 몰라요 — 기록될 때까지 기다려 주세요")}</b><br />${copyHtml("노드가 제때 답하지 않았어요. 이미 보냈을 수 있으니 다시 보내지 마세요. 몇 분 뒤 자산 화면에서 기록됐는지 확인해 주세요.")}</div>`;
+      finished = true;
+      wizFinish(btn);
+      return;
+    }
+    // 분명히 안 나갔다(노드가 거절) — 보내기 전 기록을 지운다.
+    if (marked) { marked = false; void invoke("issue_unknown_clear", { name }).catch(() => {}); }
     $("i-result").innerHTML = `<div class="warnbox" style="margin-top:12px">${escapeHtml(errText(e))}</div>`;
-    // 정상 경로와 같은 글자로 되돌린다. 예전에는 여기서만 소각량을 말해서,
-    // 대가를 실패한 뒤에야 보게 되어 있었다.
-    btn.textContent = wasLabel || tf("발행하기 · {0} RVN 소각", BURN[wizKind]);
-    btn.disabled = false;
+  } finally {
+    pass = null;
+    wizIssuing = false;
+    if (!finished) {
+      // 정상 경로와 같은 글자로 되돌린다. 예전에는 여기서만 소각량을 말해서,
+      // 대가를 실패한 뒤에야 보게 되어 있었다.
+      btn.textContent = wasLabel || tf("발행하기 · {0} RVN 소각", BURN[wizKind]);
+      btn.disabled = false;
+    }
   }
 }
 
@@ -10491,6 +10789,54 @@ async function addMemberMemo() {
   finally { button.disabled = false; }
 }
 
+/** 동의문 판(版) — 러스트(`member_privacy::CONSENT_VERSION`)가 정한다. 화면은 받아 둘 뿐. */
+let msConsentVersion = "";
+/** 가게가 정한 회원 정보 수집 범위. 못 읽었으면 null — 새 회원은 등록하지 않는다. */
+let msPolicyLevel: string | null = null;
+
+/** 회원 시트의 동의 칸. 동의문은 가게가 정한 수집 범위·보관 기간 그대로 보여 준다.
+ *  칸도 수집 범위를 따른다(러스트가 다시 지킨다): 전화는 「이름만」·「받지 않음」이면
+ *  감추고, 생년·성별·비상 연락처는 「이름·전화 전체」일 때만 보인다. */
+async function paintMemberConsent(existing: any | null) {
+  const box = $("ms-consent") as HTMLInputElement;
+  box.checked = false;
+  const text = $("ms-consent-text");
+  text.textContent = "";
+  try {
+    const st = await invoke<any>("member_privacy_state");
+    msConsentVersion = String(st?.consent_version || "");
+    msPolicyLevel = st?.policy?.level ? String(st.policy.level) : null;
+    const words = st?.consent_text?.[lang] || st?.consent_text?.ko || "";
+    text.textContent = words;
+  } catch {
+    msConsentVersion = "";
+    msPolicyLevel = null;
+  }
+  const level = msPolicyLevel;
+  const phoneIn = $("ms-phone") as HTMLInputElement;
+  $("ms-phone-wrap").hidden = level === "name" || level === "none";
+  phoneIn.placeholder = level === "name_last4" ? t("끝 4자리만 남아요") : "010-…";
+  const extras = level === "name_phone";
+  $("ms-extra-row").hidden = !extras;
+  $("ms-extra-note").hidden = !extras;
+  const note = $("ms-policy-note");
+  note.classList.toggle("danger", level === null || level === "none");
+  setCopyText(note, () => level === null
+    ? t("회원 정보 설정을 읽지 못했어요 — 설정 → 회원 정보에서 다시 저장한 뒤 새 회원을 등록해 주세요.")
+    : level === "none" ? t("이 가게는 회원 정보를 받지 않는 설정이에요(설정 → 회원 정보).") : "");
+  // 🔴 이미 지금 판으로 동의한 회원은 칸을 켜 두는 대신 「언제 받았는지」를 보여 준다.
+  //    켜 둔 채 저장하면 예전에는 저장할 때마다 동의 시각이 새로 적혔다(증거가 아니다).
+  const ev = existing?.redacted === true ? null : existing?.extra;
+  const current = !!ev?.consent_at && !!msConsentVersion && ev?.consent_version === msConsentVersion;
+  $("ms-consent-label").hidden = current;
+  const done = $("ms-consent-done");
+  done.hidden = !current;
+  if (current) {
+    const when = new Date(Number(ev.consent_at) * 1000).toLocaleDateString(lang);
+    setCopyText(done, () => tf("{0}에 동의를 받았어요.", when));
+  }
+}
+
 async function openMember(asset?: string): Promise<void> {
   msEditing = asset || null;
   $("ms-memos").classList.toggle("hidden", !asset);
@@ -10514,6 +10860,7 @@ async function openMember(asset?: string): Promise<void> {
     // 정보가 정리된 회원에게는 분류를 붙일 수 없다(서버도 거절한다). 칩을 숨긴다.
     msGroupsSel = m ? memberGroupsOf(m) : [];
     renderMsGroups(!!m && m.redacted !== true);
+    await paintMemberConsent(m || null);
     if (m) {
       set("ms-name", m.name);
       set("ms-phone", m.phone);
@@ -10532,6 +10879,7 @@ async function openMember(asset?: string): Promise<void> {
     }
   } else {
     ["ms-name", "ms-phone", "ms-note", "ms-birth", "ms-emg"].forEach((id) => set(id, ""));
+    await paintMemberConsent(null);
     await groupsReady;
     renderMsGroups(true);
     ($("ms-gender") as HTMLSelectElement).value = "";
@@ -10614,9 +10962,42 @@ async function saveMember() {
     $("ms-note2").innerHTML = `<span class="danger">이름을 넣어 주세요</span>`;
     return;
   }
+  // 🔴 새 회원은 동의가 먼저다 — 체인에 회원번호를 찍기(5 RVN) **전에** 멈춘다.
+  const consent = !$("ms-consent-label").hidden && ($("ms-consent") as HTMLInputElement).checked;
+  if (!msEditing && (msPolicyLevel === null || !msConsentVersion)) {
+    $("ms-note2").innerHTML = `<span class="danger">${copyHtml("회원 정보 설정을 읽지 못했어요 — 설정 → 회원 정보에서 다시 저장한 뒤 새 회원을 등록해 주세요.")}</span>`;
+    return;
+  }
+  if (!msEditing && !consent) {
+    $("ms-note2").innerHTML = `<span class="danger">${copyHtml("회원에게 동의를 받았는지 확인해 주세요")}</span>`;
+    ($("ms-consent") as HTMLInputElement).focus();
+    return;
+  }
+  // 체육관마다 다른 것들. 빈 칸은 안 보낸다 — 보내면 예전 값을 빈 값으로
+  // 덮어쓴다(러스트가 「이번에 온 것만」 합치기 때문).
+  const memberExtra = (() => {
+    const e: Record<string, string> = {};
+    for (const [k, id] of [
+      ["birth_year", "ms-birth"],
+      ["gender", "ms-gender"],
+      ["emergency", "ms-emg"],
+    ] as const) {
+      const v = val(id);
+      if (v) e[k] = v;
+    }
+    return Object.keys(e).length ? e : null;
+  })();
   btn.disabled = true;
 
   try {
+    // 🔴 새 회원은 러스트가 같은 규칙(수집 범위·동의)으로 **먼저** 본다 — 번호를 찍은(5 RVN)
+    //    뒤에 거절되면 RVN 만 타고 명단에 없는 번호가 남는다.
+    if (!msEditing) {
+      await invoke("member_save_precheck", {
+        name: val("ms-name"), phone: val("ms-phone"), extra: memberExtra,
+        consent, consentVersion: consent ? msConsentVersion : null,
+      });
+    }
     // 고른 번호가 있으면 그걸 쓴다. 없을 때만 새로 찍는다.
     let asset = msEditing || ($("ms-num") as HTMLSelectElement)?.value || null;
     if (!asset) {
@@ -10663,7 +11044,9 @@ async function saveMember() {
       });
     }
 
-    await invoke("save_member", {
+    await invoke("member_save", {
+      consent,
+      consentVersion: consent ? msConsentVersion : null,
       asset,
       name: val("ms-name"),
       phone: val("ms-phone"),
@@ -10672,20 +11055,7 @@ async function saveMember() {
       visitsTotal: parseInt(val("ms-visits")) || 0,
       note: val("ms-note"),
       nowUnix: nowSec(),
-      // 체육관마다 다른 것들. 빈 칸은 안 보낸다 — 보내면 예전 값을 빈 값으로
-      // 덮어쓴다(러스트가 「이번에 온 것만」 합치기 때문).
-      extra: (() => {
-        const e: Record<string, string> = {};
-        for (const [k, id] of [
-          ["birth_year", "ms-birth"],
-          ["gender", "ms-gender"],
-          ["emergency", "ms-emg"],
-        ] as const) {
-          const v = val(id);
-          if (v) e[k] = v;
-        }
-        return Object.keys(e).length ? e : null;
-      })(),
+      extra: memberExtra,
     });
 
     // 새 회원은 번호가 이제 생겼다. 등록할 때 고른 분류를 붙인다.
@@ -10710,7 +11080,8 @@ async function saveMember() {
     loadMembers();
     doorSearch();
   } catch (e) {
-    $("ms-result").innerHTML = `<div class="warnbox" style="margin-top:12px">${escapeHtml(errText(e))}</div>`;
+    // 러스트 오류 앞의 표지(CONSENT_REQUIRED: 등)는 떼고 문장만 보인다.
+    $("ms-result").innerHTML = `<div class="warnbox" style="margin-top:12px">${escapeHtml(t(String(e).trim().replace(/^[A-Z_]+: /, "")))}</div>`;
   }
   btn.disabled = false;
 }
@@ -14976,6 +15347,7 @@ async function saveMenu() {
          <button class="ghost" data-openmenu="${up.cid}">브라우저에서 열기</button>
          <button class="ghost" data-copymenu="${up.cid}">주소 복사</button>
        </div>
+       <div class="meta" id="mn-copynote" style="margin-top:6px"></div>
        <div class="kv" style="margin-top:9px"><b>주소</b><code class="addr">${up.cid}</code></div>
        <p class="meta">손님이 보는 것과 같은 화면입니다. 가게 프로필을 갱신하면 손님 폰에도 나갑니다.
          이 컴퓨터가 켜져 있는 한 유지됩니다.</p></div>`;
@@ -14986,14 +15358,32 @@ async function saveMenu() {
           url: `http://127.0.0.1:8080/ipfs/${(b as HTMLElement).dataset.openmenu}/`,
         }).catch((e) => say(t("열지 못했습니다"), errText(e)));
     });
+    // 🔴 여기서 `127.0.0.1:8080` 을 복사하고 있었다 — **사장 자기 컴퓨터**에서만 열리는
+    //    주소다. 손님·직원에게 보내면 아무것도 안 열린다. 판매 링크·QR 과 같은 길
+    //    (`public_base`: 바깥 연결이 켜져 있으면 그 주소, 아니면 가게 와이파이 주소)로
+    //    우리 서버의 파일창고 중계(`/ipfs/…`)를 가리킨다. 그런 주소가 없으면 복사하지
+    //    않고 그렇다고 말한다.
     $("mn-result").querySelectorAll("[data-copymenu]").forEach((b) => {
-      (b as HTMLElement).onclick = () =>
-        {
-          const url = `http://127.0.0.1:8080/ipfs/${(b as HTMLElement).dataset.copymenu}/`;
-          navigator.clipboard.writeText(url);
-          (b as HTMLElement).textContent = "복사했습니다";
-          setTimeout(() => ((b as HTMLElement).textContent = "주소 복사"), 1500);
+      (b as HTMLElement).onclick = async () => {
+        const note = document.getElementById("mn-copynote");
+        const cid = (b as HTMLElement).dataset.copymenu!;
+        if (!serverIp) {
+          if (note) note.innerHTML = `<span class="danger">${copyHtml("아직 다른 사람이 열 수 있는 주소가 없어요. 「손님 폰으로 받기」를 켜면 가게 와이파이 주소가, 「바깥에서도 열리게」를 켜면 어디서나 열리는 주소가 생겨요.")}</span>`;
+          return;
         }
+        try {
+          const base = await invoke<any>("public_base", { localIp: serverIp, port: 8790 });
+          const url = `${String(base.base).replace(/\/+$/, "")}/ipfs/${cid}/`;
+          await navigator.clipboard.writeText(url);
+          (b as HTMLElement).textContent = t("복사했습니다");
+          setTimeout(() => ((b as HTMLElement).textContent = t("주소 복사")), 1500);
+          if (note) note.innerHTML = base.public
+            ? `<span class="ok">${copyHtml("어디서나 열리는 주소를 복사했어요.")}</span> <code class="addr" translate="no">${escapeHtml(url)}</code>`
+            : `<span class="warn">${copyHtml("가게 와이파이 안에서만 열리는 주소예요. 바깥에서도 열리게 하려면 「바깥에서도 열리게」를 켜 주세요.")}</span> <code class="addr" translate="no">${escapeHtml(url)}</code>`;
+        } catch (e) {
+          if (note) note.innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
+        }
+      };
     });
   } catch (e) {
     $("mn-result").innerHTML = `<div class="warnbox" style="margin-top:12px">${escapeHtml(errText(e))}</div>`;
@@ -15858,6 +16248,10 @@ window.addEventListener("DOMContentLoaded", async () => {
   // 이름을 그대로 다시 치는 것이 확인이다. "이해했습니다" 체크는 그냥 눌린다.
   $("i-confirm").addEventListener("input", wizGate);
   $("i-upload").addEventListener("click", pickIssueFile);
+  // 주소를 직접 적으면 붙잡아 둔 파일은 놓는다 — 둘 중 무엇이 올라갈지 헷갈리지 않게.
+  $("i-ipfs").addEventListener("input", () => {
+    if (wizPendingFile && ($("i-ipfs") as HTMLInputElement).value.trim()) { wizClearPending(); wizPaintPending(); }
+  });
   document.querySelectorAll("nav a").forEach((a) => {
     (a as HTMLElement).onclick = () => showPage((a as HTMLElement).dataset.page!);
   });
@@ -15866,6 +16260,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     askClose(($("ask-input") as HTMLInputElement).value)
   );
   $("ask-no").addEventListener("click", () => askClose(null));
+  $("ask-alt").addEventListener("click", () => askClose(ASK_ALT));
   $("ask-input").addEventListener("keydown", (e) => {
     if ((e as KeyboardEvent).key === "Enter") askClose(($("ask-input") as HTMLInputElement).value);
   });
@@ -16046,6 +16441,20 @@ window.addEventListener("DOMContentLoaded", async () => {
   void loadMemberPrivacy();
   $("key-save").addEventListener("click", saveKeys);
   wirePhoneTransaction(invoke, t);
+  createApi = wireCreate({
+    invoke, t, go: showPage, openLink: (url) => void openUrl(url),
+    hold: (what, cost) => holdBeforeDoing(what, cost),
+    sure: (title, message, ok) => sure(title, message, ok),
+    // 🔴 방금 만든 티켓은 한 블록 동안 목록에 없다. 없는 것으로 팔기 창을 열면
+    //    「보유 0」으로 막히거나, 못 보낼 것을 파는 셈이 된다 — 그때는 거짓을 돌려 말하게 한다.
+    sell: async (name) => {
+      await loadAssets(false).catch(() => {});
+      const a = assets.get(name);
+      if (!a || !(a.amount > 0)) return false;
+      await openSell(a);
+      return true;
+    },
+  });
   $("rv-phone-open").addEventListener("click", () => void openWebWallet());
   $("rv-phone-info").addEventListener("toggle", () => {
     if (!($("rv-phone-info") as HTMLDetailsElement).open || $("rv-phone-qr").querySelector("svg")) return;
@@ -16341,7 +16750,10 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("mn-kindno").addEventListener("click", () => {
     $("mn-kindwrap").style.display = "none";
   });
-  document.querySelectorAll("[data-kind]").forEach((b) => {
+  // 🔴 **메뉴판의 종류 단추만.** 문서 전체의 `[data-kind]` 를 잡으면 「만들기」의
+  //    증명서·티켓·작품 단추를 누를 때마다 메뉴판에 빈 품목 줄이 하나씩 생겼다
+  //    (화면에는 안 보이고, 사장이 나중에 메뉴를 고치면 그대로 저장된다).
+  document.querySelectorAll("#mn-kindwrap [data-kind]").forEach((b) => {
     (b as HTMLElement).onclick = () => {
       const kind = (b as HTMLElement).dataset.kind!;
       const row: any = { name: "", price: null, image: null, kind };
@@ -16551,8 +16963,11 @@ window.addEventListener("DOMContentLoaded", async () => {
     $(id).addEventListener("input", () => void swapReady())
   );
   $("wz-cancel").addEventListener("click", () => $("wiz").classList.add("hidden"));
-  $("wz-back").addEventListener("click", () => wizGo(wizStep - 1));
-  $("wz-next").addEventListener("click", wizNext);
+  $("wz-back").addEventListener("click", () => { if (!wizDone) wizGo(wizStep - 1); });
+  // 🔴 「다음」 단추의 손잡이는 **하나만**(onclick). 예전에는 여기서 addEventListener 로도
+  //    붙여, 발행 뒤 「닫기」로 바꿔 끼워도 이 손잡이가 남아 한 번 누르면 창을 닫으면서
+  //    같은 발행을 또 보냈다(검수 W2·W3·W5).
+  ($("wz-next") as HTMLButtonElement).onclick = wizNext;
   $("sl-cancel").addEventListener("click", () => $("sellsheet").classList.add("hidden"));
   $("sl-go").addEventListener("click", listOffer);
   $("sl-cur").addEventListener("change", sellRate);

@@ -126,6 +126,35 @@ fn conf_rpc_auth() -> Option<(String, String)> {
 /// an error instead of a screen that says "확인 중…" until someone force-quits.
 const RPC_TIMEOUT_SECS: u64 = 20;
 
+/// 코인·자산이 움직이는 부름. 노드가 거래를 만들고 서명하고 퍼뜨리느라 20초를
+/// 넘길 수 있다(지갑이 크거나, 따라잡는 중이거나).
+///
+/// 🔴 20초에 끊으면 **노드는 이미 보냈는데 화면은 「실패」**라고 했다. 사장은 다시
+///    눌렀고, 같은 묶음이 두 번 태워졌다(0.4.5 검수 S5 — 최대 250 RVN 두 번).
+///    그래서 이 부름들은 길게 기다리고, 그래도 시간이 넘으면 「실패」가 아니라
+///    **「보냈는지 모름」**(`SENT_UNKNOWN: `)으로 돌려준다. 부르는 쪽은 그 말을 보면
+///    다시 보내지 말고 체인·지갑에서 확인해야 한다.
+const SEND_METHODS: &[&str] = &[
+    "issue", "issueunique", "reissue", "transfer", "transferfromaddress", "transferfromaddresses",
+    "sendtoaddress", "sendmany", "sendfromaddress", "sendrawtransaction",
+    "issuequalifierasset", "issuerestrictedasset", "reissuerestrictedasset", "transferqualifier",
+    "addtagtoaddress", "removetagfromaddress", "freezeaddress", "unfreezeaddress",
+    "freezerestrictedasset", "unfreezerestrictedasset",
+];
+pub const SEND_TIMEOUT_SECS: u64 = 180;
+/// 보냈는지 모를 때 오류 글자 앞에 붙는다. 화면·기록이 이것을 보고 다시 보내기를 막는다.
+pub const SENT_UNKNOWN: &str = "SENT_UNKNOWN: ";
+
+pub(crate) fn is_send_method(method: &str) -> bool {
+    SEND_METHODS.contains(&method)
+}
+
+fn sent_unknown_message(method: &str, secs: u64) -> String {
+    format!(
+        "{SENT_UNKNOWN}노드가 {secs}초 안에 답하지 않았어요 ({method}). 보냈는지 아직 몰라요 — 기록될 때까지 기다려 주세요. 같은 것을 다시 보내지 마세요."
+    )
+}
+
 /// One HTTP client for the whole app.
 ///
 /// `Client::new()` per call built a fresh connection pool every time and threw
@@ -185,14 +214,21 @@ pub(crate) async fn call_rpc_detailed(method: &str, params: Value) -> Result<Val
     // 그래서 동시에 4개까지만 보낸다 — 줄 서는 쪽이 우리가 되게 한다.
     let _permit = rpc_gate().acquire().await.map_err(|e| e.to_string())?;
 
+    let send = is_send_method(method);
+    let secs = if send { SEND_TIMEOUT_SECS } else { RPC_TIMEOUT_SECS };
     let response = client()
         .post(rpc_url())
         .basic_auth(user, Some(pass))
         .json(&body)
+        .timeout(std::time::Duration::from_secs(secs))
         .send()
         .await
         .map_err(|e| {
-            if e.is_timeout() {
+            // 닿지도 못했으면(연결 거부) 안 보낸 것이 확실하다. 그 밖에 보내는 부름이
+            // 도중에 끊기면 노드가 받았는지 모른다.
+            if send && !e.is_connect() {
+                sent_unknown_message(method, secs)
+            } else if e.is_timeout() {
                 // 타임아웃이 없던 시절, 노드가 한 번 늦으면 화면이 "확인 중…"에서
                 // 영영 멈췄다. 멈춘 화면은 고장난 화면과 구별되지 않는다.
                 format!("노드가 {RPC_TIMEOUT_SECS}초 안에 답하지 않았습니다 ({method}). 따라잡는 중이거나 바쁠 수 있습니다.")
@@ -201,10 +237,16 @@ pub(crate) async fn call_rpc_detailed(method: &str, params: Value) -> Result<Val
             }
         })?;
 
-    let parsed: Value = response
-        .json()
-        .await
-        .map_err(|e| format!("Node returned something that is not JSON: {e}"))?;
+    // 인증에서 막힌 답(401·403)은 노드가 부름을 읽지도 않은 것이다 — 모름이 아니다.
+    let refused = matches!(response.status().as_u16(), 401 | 403);
+    let parsed: Value = response.json().await.map_err(|e| {
+        if send && !refused {
+            // 답을 받다가 끊겼다 — 노드는 이미 보냈을 수 있다.
+            sent_unknown_message(method, secs)
+        } else {
+            format!("Node returned something that is not JSON: {e}")
+        }
+    })?;
 
     // A JSON-RPC error arrives with HTTP 500 and a populated "error" field, so
     // surface the node's own message instead of a status code.
@@ -571,5 +613,25 @@ mod conf_tests {
         assert!(src.contains(&format!("\"rpc{}\"", "password")));
         // 포트를 옮겨 뒀을 수도 있다.
         assert!(src.contains(&format!("\"rpc{}\"", "port")), "포트가 못 박혀 있으면 빈 자리를 두드린다");
+    }
+}
+
+#[cfg(test)]
+mod send_timeout_tests {
+    /// 검수 S5 — 코인이 움직이는 부름은 오래 기다리고, 끝내 모르면 「실패」가 아니라
+    /// 「보냈는지 모름」으로 말한다. 읽기 부름은 예전처럼 20초.
+    #[test]
+    fn 보내는_부름은_길게_기다리고_모르면_모른다고_말한다() {
+        for m in ["issue", "issueunique", "reissue", "transfer", "sendtoaddress", "sendrawtransaction", "issuequalifierasset"] {
+            assert!(super::is_send_method(m), "{m}");
+        }
+        for m in ["getassetdata", "listmyassets", "getbalance", "getwalletinfo", "walletpassphrase"] {
+            assert!(!super::is_send_method(m), "{m}");
+        }
+        assert!(super::SEND_TIMEOUT_SECS >= 120);
+        let msg = super::sent_unknown_message("issueunique", super::SEND_TIMEOUT_SECS);
+        assert!(msg.starts_with(super::SENT_UNKNOWN));
+        assert!(msg.contains("보냈는지 아직 몰라요"));
+        assert!(!msg.contains("실패"));
     }
 }

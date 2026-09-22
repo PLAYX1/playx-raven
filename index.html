@@ -549,6 +549,100 @@
       h2.title { font-size: 19px; letter-spacing: -0.02em; margin: 0 0 4px; }
       .lede { color: var(--muted); font-size: 14px; margin: 0 0 16px; }
 
+      /* ── 만들기 ─────────────────────────────────────────────────
+         고르고, 제목과 장수만 적으면 끝. 이름 규칙·비용은 앱이 정한다. */
+      #page-create { max-width: 620px; }
+      /* 단계마다 한 칸만 보인다. 아래 display 규칙이 hidden 을 이기지 않게. */
+      #page-create [hidden] { display: none !important; }
+      .cr-kinds { display: grid; gap: 10px; margin: 8px 0 16px; }
+      .cr-kind { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left;
+        padding: 16px 18px; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 12px; }
+      .cr-kind b { font-size: 18px; }
+      .cr-kind span { color: var(--muted); font-size: 14px; line-height: 1.55; }
+      .cr-kind:hover, .cr-kind:focus-visible { border-color: var(--ravi); }
+      .cr-form { display: grid; gap: 12px; }
+      .cr-form label { display: grid; gap: 4px; font-size: 14px; }
+      #page-create .card h3 { font-size: 17px; color: var(--text); margin: 0 0 6px; }
+      #page-create .card label { display: grid; gap: 4px; font-size: 14px; margin-top: 8px; }
+      #page-create .card p { margin: 4px 0; }
+      #page-create .cr-cost { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; margin: 4px 0; font-variant-numeric: tabular-nums; }
+      #page-create .cr-name { font-size: 17px; font-weight: 700; word-break: break-all; }
+      .cr-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+      .cr-qr { display: flex; justify-content: center; padding: 10px 0; }
+      .cr-qr svg { width: 200px; height: 200px; background: #fff; padding: 8px; border-radius: 8px; }
+      .cr-warn { color: var(--warn); }
+      .msconsent { margin-top: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; }
+      .msconsent .meta { margin-top: 6px; white-space: pre-line; line-height: 1.6; }
+      /* 증명서 폼은 미리보기가 옆에 붙는다 — Pages 처럼 채우면서 바로 본다. */
+      #page-create.cr-wide { max-width: 980px; }
+      .cr-formgrid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; align-items: start; }
+      #page-create.cr-wide .cr-formgrid { grid-template-columns: minmax(0, 1fr) 300px; }
+      .cr-fields { display: grid; gap: 4px; min-width: 0; }
+      .cr-fields textarea { width: 100%; font: 15px/1.6 inherit; padding: 9px 10px; resize: vertical; box-sizing: border-box; }
+      .cr-two { display: grid; grid-template-columns: 160px minmax(0, 1fr); gap: 12px; }
+      .cr-private { border-left: 3px solid var(--ravi); padding-left: 10px; margin-top: 10px !important; }
+      .cr-historyhead { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: -4px 0 16px; }
+      .cr-historyhead .meta:last-child { flex-basis: 100%; }
+      /* 양식 셋 — 작은 종이 그림으로 고른다 */
+      .cr-tpls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 6px 0 4px; }
+      .cr-tpls button { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 8px 9px;
+        background: var(--panel); color: var(--text); border: 1.5px solid var(--line); border-radius: 12px; }
+      .cr-tpls button.on { border-color: var(--ravi); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ravi) 22%, transparent); }
+      .cr-tpls button:hover:not(:disabled) { background: var(--panel); color: var(--text); border-color: var(--ravi); }
+      .cr-tpls button:focus-visible { outline: 2px solid var(--ravi); outline-offset: 2px; }
+      .cr-tpls b { font-size: 14px; }
+      .cr-tplpic { position: relative; display: block; width: 54px; height: 76px; background: #fff; border-radius: 3px;
+        box-shadow: 0 1px 3px rgba(0,0,0,.25); overflow: hidden; }
+      .cr-tplpic i { position: absolute; left: 50%; transform: translateX(-50%); height: 3px; border-radius: 2px; background: #c9c3b8; }
+      .cr-tplpic i:nth-child(1) { top: 22px; width: 30px; background: #2b2926; height: 4px; }
+      .cr-tplpic i:nth-child(2) { top: 38px; width: 22px; }
+      .cr-tplpic i:nth-child(3) { top: 58px; width: 26px; }
+      .tp-course { outline: 1.5px solid #7a5a2b; outline-offset: -5px; }
+      .tp-course::after { content: ""; position: absolute; inset: 7px; border: .5px solid #7a5a2b; }
+      .tp-proof::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 6px; background: #1f3b5c; }
+      .tp-proof i { left: 14px !important; transform: none !important; }
+      .tp-proof i:nth-child(1) { background: #1f3b5c !important; width: 28px !important; }
+      .tp-thanks { background: #fbf6ef !important; }
+      .tp-thanks::after { content: ""; position: absolute; inset: 5px; border: 1px solid #6c2a37; border-radius: 3px; }
+      .tp-thanks i:nth-child(1) { background: #6c2a37 !important; }
+      /* 미리보기 종이 — A4(794×1123px)를 300px 로 줄여 보인다 */
+      .cr-previewcol { position: sticky; top: 12px; }
+      .cr-paper { width: 300px; height: 424px; overflow: hidden; border-radius: 4px; background: #fff;
+        box-shadow: 0 1px 2px rgba(0,0,0,.18), 0 10px 30px rgba(0,0,0,.22); }
+      .cr-paper iframe { width: 794px; height: 1123px; border: 0; transform: scale(.3778); transform-origin: 0 0; pointer-events: none; background: #fff; }
+      /* 원하던 이름을 누가 쓴다 — 그 누가 나일 수 있다 */
+      .cr-mine { margin: 12px 0 4px; padding: 12px 14px; border: 1px solid var(--warn); border-radius: 10px;
+        background: color-mix(in srgb, var(--warn) 8%, transparent); }
+      .cr-mine h4 { margin: 0 0 4px; font-size: 15px; }
+      .cr-choose { display: flex !important; grid-template-columns: none; align-items: flex-start; gap: 8px !important; margin-top: 10px !important; font-weight: 600; }
+      .cr-choose input { width: auto; margin-top: 3px; }
+      /* 완료 — 왼쪽은 한 사람씩, 오른쪽은 고른 사람의 QR */
+      .cr-done-grid { display: grid; grid-template-columns: minmax(0, 1fr) 240px; gap: 18px; align-items: start; margin-top: 10px; }
+      .cr-done-one { display: flex; justify-content: center; margin-top: 10px; }
+      .cr-done-side { display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; }
+      .cr-done-side .cr-name { font-size: 14px !important; font-family: ui-monospace, Menlo, monospace; }
+      .cr-who { font-size: 17px; font-weight: 700; margin: 0 !important; min-height: 1.4em; }
+      .cr-list { list-style: none; margin: 0; padding: 0; max-height: 330px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
+      .cr-list li + li { border-top: 1px solid var(--line); }
+      .cr-row, .cr-hrow { width: 100%; display: grid; grid-template-columns: 28px minmax(0, .8fr) minmax(0, 1.2fr); gap: 10px; align-items: center;
+        padding: 9px 12px; background: transparent; color: var(--text); border: 0; border-radius: 0; text-align: left; min-height: 0; }
+      .cr-row[aria-current="true"] { background: color-mix(in srgb, var(--ravi) 16%, transparent); }
+      .cr-no { color: var(--muted); font-variant-numeric: tabular-nums; }
+      .cr-person { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .cr-chain { font: 12.5px/1.4 ui-monospace, Menlo, monospace; color: var(--muted); overflow-wrap: anywhere; }
+      .cr-fp { font: 12px/1.5 ui-monospace, Menlo, monospace; overflow-wrap: anywhere; }
+      .cr-hlist { list-style: none; margin: 10px 0 0; padding: 0; border: 1px solid var(--line); border-radius: 10px; }
+      .cr-hlist li + li { border-top: 1px solid var(--line); }
+      .cr-hrow { grid-template-columns: minmax(0, 1fr) auto; padding: 11px 14px; }
+      .cr-hmain { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+      .cr-hmain b { font-size: 15px; }
+      .cr-hmeta { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; color: var(--muted); font-size: 13px; }
+      .cr-hrow:hover, .cr-row:hover { background: color-mix(in srgb, var(--ravi) 10%, transparent); }
+      @media (max-width: 860px) {
+        #page-create.cr-wide .cr-formgrid, .cr-done-grid { grid-template-columns: minmax(0, 1fr); }
+        .cr-previewcol { position: static; }
+      }
+
       .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
       .card { background: var(--panel); border: 1px solid var(--line); border-radius: 9px; padding: 12px 12px; }
       .card h3 { font-size: 14px; margin: 0 0 4px; color: var(--muted); font-weight: 600; }
@@ -2084,6 +2178,7 @@
         <input id="ask-input" autocomplete="off" />
         <div class="askrow">
           <button class="ghost" id="ask-no">취소</button>
+          <button class="ghost" id="ask-alt" style="display:none"></button>
           <button id="ask-yes">확인</button>
         </div>
       </div>
@@ -2395,7 +2490,7 @@
 
           <div class="row">
             <div style="flex:1"><label>이름<input id="ms-name" autocomplete="off" /></label></div>
-            <div style="flex:1"><label>전화<input id="ms-phone" autocomplete="off" placeholder="010-…" /></label></div>
+            <div style="flex:1" id="ms-phone-wrap"><label>전화<input id="ms-phone" autocomplete="off" placeholder="010-…" /></label></div>
           </div>
 
           <label>종류
@@ -2409,7 +2504,8 @@
                비상연락처, 어린이 체육관은 보호자 이름을 받는다. 고정 칸으로
                박으면 안 쓰는 칸이 늘 비어 있거나 필요한 칸이 없다.
                셋 다 **선택**이고, 안 적으면 그 회원에게는 아예 없는 값이다. -->
-          <div class="row" style="gap:8px;margin-top:10px">
+          <!-- 생년·성별·비상 연락처는 가게가 「이름·전화 전체」를 받을 때만 — 동의문(v4)에 적힌 수준. -->
+          <div class="row" id="ms-extra-row" style="gap:8px;margin-top:10px">
             <div style="max-width:140px">
               <label>태어난 해 <span class="meta">(선택)</span></label>
               <input id="ms-birth" type="number" min="1900" max="2100" step="1"
@@ -2428,7 +2524,7 @@
               <input id="ms-emg" placeholder="보호자·가족" autocomplete="off" />
             </div>
           </div>
-          <div class="meta" style="margin-top:4px">
+          <div class="meta" id="ms-extra-note" style="margin-top:4px">
             태어난 해를 적으시면 <b>나이가 저절로 계산</b>됩니다 —
             손으로 적으면 해가 바뀌어도 안 늘어납니다.
           </div>
@@ -2471,6 +2567,14 @@
             <div id="ms-memo-list"></div>
           </section>
 
+          <!-- 🔴 직원·검표 길은 손님 동의를 받는데 사장 길만 없었다. 새 회원은 이 칸이 켜져야 저장된다. -->
+          <div class="msconsent" id="ms-consent-box">
+            <div class="meta" id="ms-policy-note"></div>
+            <label class="check" id="ms-consent-label" style="margin:0"><input type="checkbox" id="ms-consent" />
+              <span>회원에게 동의를 받았어요</span></label>
+            <div class="meta" id="ms-consent-done" hidden></div>
+            <div class="meta" id="ms-consent-text" translate="no"></div>
+          </div>
           <div class="warnbox" id="ms-chain" style="font-size:13px">
             회원번호를 체인에 하나 찍습니다 (<b>5 RVN · 약 17원</b>).
             이름·기간·정지는 <b>이 가게 컴퓨터와 그 백업에</b> 저장됩니다 — 체인에 올리면 지울 수 없고,
@@ -3165,6 +3269,77 @@
 
       <!-- ── 가게: 벤딩머신과 메뉴판은 같은 일이다 ── -->
       <!-- 배당. 자산을 내는 것은 쉽고, 가질 이유를 만드는 것이 어렵다. -->
+      <section class="page" id="page-create">
+        <button class="ghost" id="cr-back" type="button">← 자산</button>
+        <h2 class="title">만들기</h2>
+        <p class="lede">증명서·티켓·작품을 만듭니다. 고르고, 제목과 장수만 적으면 됩니다.</p>
+        <div class="cr-kinds" id="cr-kinds">
+          <button class="cr-kind" type="button" data-kind="certificate"><b>증명서</b><span>수료증·상장·보증서. 한 장에 하나씩, 진짜인지 누구나 확인해요.</span></button>
+          <button class="cr-kind" type="button" data-kind="ticket"><b>티켓</b><span>공연·수업·입장권. 여러 장을 한 번에 만들어 나눠 줘요.</span></button>
+          <button class="cr-kind" type="button" data-kind="work"><b>작품</b><span>그림·음악·사진. 한정판 몇 장을 만들어 원본을 증명해요.</span></button>
+        </div>
+        <div class="cr-historyhead" id="cr-history-open-wrap">
+          <button class="ghost" id="cr-history-open" type="button">만든 것 보기</button>
+          <span class="meta" id="cr-history-count"></span>
+          <span class="meta">문서(PDF·한글·워드·사진)를 이 창에 끌어다 놓아도 증명서를 만들 수 있어요.</span>
+        </div>
+        <div class="card cr-form" id="cr-form" hidden>
+          <div class="cr-formgrid">
+            <div class="cr-fields">
+              <h3 id="cr-form-title">만들기</h3>
+              <div class="cr-tpls" id="cr-tpls" role="radiogroup" aria-label="양식">
+                <button type="button" role="radio" data-cr-tpl="course"><span class="cr-tplpic tp-course" aria-hidden="true"><i></i><i></i><i></i></span><b>수료증</b></button>
+                <button type="button" role="radio" data-cr-tpl="proof"><span class="cr-tplpic tp-proof" aria-hidden="true"><i></i><i></i><i></i></span><b>증명서</b></button>
+                <button type="button" role="radio" data-cr-tpl="thanks"><span class="cr-tplpic tp-thanks" aria-hidden="true"><i></i><i></i><i></i></span><b>감사장</b></button>
+              </div>
+              <label>제목<input id="cr-title" maxlength="80" autocomplete="off" placeholder="예: 필라테스 지도자 과정" /></label>
+              <p class="meta" id="cr-title-say">제목은 로마자로 바뀌어 증서 번호(체인 이름)에 들어가요. 받는 사람 이름은 제목에 넣지 마세요.</p>
+              <label id="cr-recipients-wrap">받는 사람 (한 줄에 한 명)<textarea id="cr-recipients" rows="4" autocomplete="off" spellcheck="false" placeholder="김하늘&#10;이바다"></textarea></label>
+              <p class="meta" id="cr-recipients-say"></p>
+              <label id="cr-count-wrap"><span id="cr-count-label">몇 장</span><input id="cr-count" type="number" min="1" step="1" value="1" /></label>
+              <div class="cr-two" id="cr-doc-fields">
+                <label>발급일<input id="cr-date" type="date" /></label>
+                <label>발급자 이름<input id="cr-issuer" maxlength="80" autocomplete="off" placeholder="예: 한빛 필라테스 아카데미" /></label>
+              </div>
+              <label id="cr-desc-wrap">설명 (선택)<textarea id="cr-desc" rows="3" maxlength="400"></textarea></label>
+              <label id="cr-signer-wrap">서명 이름 (선택)<input id="cr-signer" maxlength="60" autocomplete="off" placeholder="예: 대표 홍길동" /></label>
+              <div id="cr-who-wrap">
+                <label id="cr-brand-wrap" hidden>누구 이름으로<select id="cr-brand"></select></label>
+                <div id="cr-maker-wrap">
+                  <label>만드는 사람 이름 (예: 홍길동, 한빛 필라테스)<input id="cr-maker" maxlength="40" autocomplete="off" /></label>
+                  <p class="meta" id="cr-maker-say"></p>
+                </div>
+              </div>
+              <div id="cr-file-wrap">
+                <label><span id="cr-file-label">사진·파일 붙이기 (선택)</span><input id="cr-file" type="file" /></label>
+                <p class="meta"><span id="cr-file-say">파일은 올리지 않아요. 이 컴퓨터에서 지문만 만들어 체인에 새겨요.</span>
+                  <button class="link" id="cr-file-clear" type="button" hidden>파일 빼기</button></p>
+              </div>
+              <p class="meta cr-private" id="cr-private-say">받는 사람·발급자·설명은 체인에 올리지 않아요. 인쇄하는 종이와 이 컴퓨터에만 남아요.</p>
+              <div class="cr-actions">
+                <button id="cr-check" type="button">확인하기</button>
+                <button class="ghost" id="cr-kind-back" type="button">다른 것 고르기</button>
+                <button id="cr-edit-save" type="button" hidden>고친 내용 저장</button>
+                <button class="ghost" id="cr-edit-cancel" type="button" hidden>그만두기</button>
+              </div>
+            </div>
+            <div class="cr-previewcol" id="cr-preview-wrap">
+              <!-- 틀 안에서는 스크립트가 못 돈다(allow-scripts 없음). allow-same-origin 은 빈 출처(opaque)에서 저장소를 읽다 나는
+                   SecurityError(화면 검사 도구가 모든 틀에 넣는 스크립트)를 없애려는 것 — 틀 안 스크립트가 없으니 부모에
+                   닿을 길도 없다. 내용은 러스트가 이스케이프해 그린 증서뿐. -->
+              <div class="cr-paper"><iframe id="cr-preview" title="미리보기" sandbox="allow-same-origin" tabindex="-1"></iframe></div>
+              <p class="meta">미리보기 · 인쇄하면 이 모양이에요 (A4 한 장에 한 사람)</p>
+            </div>
+          </div>
+        </div>
+        <div class="card" id="cr-review" hidden></div>
+        <div class="holdhost" id="cr-hold"></div>
+        <div class="card" id="cr-wait" hidden></div>
+        <div class="card" id="cr-done" hidden></div>
+        <div class="card" id="cr-history" hidden></div>
+        <p class="meta" id="cr-say" role="status" aria-live="polite"></p>
+      </section>
+
       <section class="page" id="page-reward">
         <h2 class="title">나눠주기</h2>
         <p class="lede">자산을 가진 사람들에게 나눠 줍니다. 회원권·조합원 토큰에 씁니다.</p>
@@ -4434,9 +4609,13 @@
         <div class="wstep" data-step="3">
           <p class="meta">파일이 자산의 얼굴입니다. 없어도 발행은 됩니다.</p>
           <div class="row">
-            <input id="i-ipfs" placeholder="파일을 고르면 여기 자동으로 채워집니다" autocomplete="off" spellcheck="false" />
+            <input id="i-ipfs" placeholder="파일창고 주소를 알면 붙여넣으세요" autocomplete="off" spellcheck="false" />
             <button class="ghost" id="i-upload">파일 고르기</button>
           </div>
+          <!-- 🔴 고르는 순간 올리던 것을 「발행하기」 뒤로 미뤘다. 그래도 무엇이 되는지는
+               고르기 **전에** 말한다 — 올라간 파일은 공개고 되돌릴 수 없다. -->
+          <div class="warnbox" style="font-size:13px;margin-top:10px">고른 파일은 「발행하기」를 누를 때 파일창고에 올라가요.
+            올라간 파일은 누구나 볼 수 있게 공개되고 지울 수 없어요 — 전화·주소·생년월일이 든 문서는 올리지 마세요.</div>
           <div id="i-preview"></div>
           <!-- 🔴 영상은 **올리지 않고 링크만** 받는다.
                ① 계산대 PC 가 영상을 나르면 손님 열 명에 가게 인터넷이 죽는다.

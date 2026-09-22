@@ -3,7 +3,9 @@ use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 
 // Bump this version whenever the consent wording changes.
-pub const CONSENT_VERSION: &str = "member-privacy-v3";
+// v4 (0.4.5): 「이름·전화 전체」 수준에 (적은 경우) 생년·성별·비상 연락처를 적었다 —
+// 사장 화면이 그 셋을 받는데 동의문에는 없었다. 그 셋은 이 수준에서만 받는다.
+pub const CONSENT_VERSION: &str = "member-privacy-v4";
 static LOCK: Mutex<()> = Mutex::new(());
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -31,7 +33,12 @@ pub fn consent_text(policy: &Policy) -> serde_json::Value {
     let items = match policy.level.as_str() {
         "name" => ["이름을 받습니다.", "We collect your name.", "氏名を収集します。", "收集姓名。"],
         "name_last4" => ["이름과 전화번호 끝 4자리를 받습니다.", "We collect your name and the last 4 digits of your phone number.", "氏名と電話番号の下4桁を収集します。", "收集姓名和电话号码后4位。"],
-        "name_phone" => ["이름과 전화번호 전체를 받습니다.", "We collect your name and full phone number.", "氏名と電話番号全体を収集します。", "收集姓名和完整电话号码。"],
+        "name_phone" => [
+            "이름과 전화번호 전체, (적은 경우) 생년·성별·비상 연락처를 받습니다.",
+            "We collect your name, full phone number and, if provided, birth year, gender and emergency contact.",
+            "氏名と電話番号全体、（記入した場合）生年・性別・緊急連絡先を収集します。",
+            "收集姓名、完整电话号码，以及（如填写）出生年份、性别和紧急联系人。",
+        ],
         _ => ["이 가게는 회원 정보를 받지 않습니다.", "This shop does not collect member information.", "この店は会員情報を収集しません。", "本店不收集会员信息。"],
     };
     let n = policy.retention_months;
@@ -335,6 +342,14 @@ pub(crate) mod tests {
                     };
                     assert_eq!(text.contains(memo), level != 0);
                     assert_eq!(text.contains(sensitive), level != 0);
+                    // v4 — 생년·성별·비상 연락처는 「이름·전화 전체」 동의문에만 있고, 그 수준에서만 받는다.
+                    let extras = match lang {
+                        "ko" => "생년·성별·비상 연락처",
+                        "en" => "birth year, gender and emergency contact",
+                        "ja" => "生年・性別・緊急連絡先",
+                        _ => "出生年份、性别和紧急联系人",
+                    };
+                    assert_eq!(text.contains(extras), level == 3, "{lang} level {level}");
                 }
             }
         }

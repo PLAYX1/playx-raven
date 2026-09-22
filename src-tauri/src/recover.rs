@@ -393,6 +393,12 @@ pub fn restore_survey(folder: String, pass: Option<String>) -> Result<Value, Str
                            "why": "이름·기간·남은 횟수" }),
         );
     }
+    if let Some(n) = count_in("create_history.json", "entries") {
+        items.push(
+            json!({ "key": "create", "what": "만든 기록", "detail": format!("{n}건"),
+                           "why": "증명서 받는 사람 이름·다시 인쇄 — 체인에는 없습니다" }),
+        );
+    }
     if let Some(n) = count_in("tickets.json", "tickets") {
         items.push(
             json!({ "key": "tickets", "what": "이용권", "detail": format!("{n}장"),
@@ -964,6 +970,7 @@ mod restore_files {
             ("orders", "orders.json", "주문 주소"),
             ("fills", "fills.json", "발송 기록"),
             ("sweep", "sweep.json", "자동 송금 설정"),
+            ("create", "create_history.json", "만든 기록"),
         ] {
             if !keys.iter().any(|requested| requested == key) {
                 continue;
@@ -971,7 +978,7 @@ mod restore_files {
             let from = source.join(name);
             // Older shop backups did not include a shop key. Other explicitly
             // selected missing files are failures, not silently successful skips.
-            if name == "shopkey.json" && !from.exists() {
+            if (name == "shopkey.json" || name == "create_history.json") && !from.exists() {
                 continue;
             }
             let result = fs::create_dir_all(app_dir).map_err(error).and_then(|_| {
