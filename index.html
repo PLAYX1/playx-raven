@@ -1083,6 +1083,49 @@
       .msoon { margin-top: 8px; padding: 8px 12px; border-radius: 7px; font-size: 14px;
                background: color-mix(in srgb, var(--warn) 13%, transparent); color: var(--warn); }
       .mrow { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+      /* ── 회원 분류 · 명단 거르기 ──
+         아이폰 설정처럼: 줄 목록, 눌러서 바로 고치기, 둥근 알약 칩. 색은 기존 토큰만. */
+      .mgroups { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+      .mgchip { display: inline-block; padding: 1px 10px; border-radius: 999px; font-size: 13px; line-height: 1.7;
+                color: var(--text); background: color-mix(in srgb, var(--brand) 12%, transparent);
+                border: 1px solid color-mix(in srgb, var(--brand) 30%, transparent); }
+      .chips { display: flex; gap: 8px; overflow-x: auto; flex-wrap: nowrap; padding: 2px 0 6px;
+               scrollbar-width: thin; overscroll-behavior-x: contain; }
+      .chips.wrap { flex-wrap: wrap; overflow-x: visible; }
+      .chips[hidden] { display: none; }
+      button.chip { flex: none; min-height: 44px; padding: 0 16px; border-radius: 999px; font-size: 15px;
+                    white-space: nowrap; background: transparent; color: var(--text); border: 1px solid var(--line); }
+      button.chip:hover:not(:disabled) { background: var(--side); border-color: var(--brand-light); }
+      button.chip[aria-pressed="true"] { background: var(--brand); border-color: var(--brand); color: #fff; }
+      button.chip[aria-pressed="true"]:hover:not(:disabled) { background: var(--brand-light); border-color: var(--brand-light); }
+      .chip .n { margin-left: 6px; font-variant-numeric: tabular-nums; opacity: .8; }
+      .rtools { margin: 20px 0 4px; }
+      .rtools[hidden] { display: none; }
+      .rtools input { width: 100%; max-width: 520px; font: inherit; font-size: 16px; padding: 12px 14px;
+                      border-radius: 12px; border: 1px solid var(--line); background: var(--panel); color: var(--text); }
+      .rtools input:focus { outline: none; border-color: var(--brand-light); }
+      .rtools .chips { margin-top: 10px; }
+      .rcount { font-size: 16px; font-weight: 600; margin: 12px 0 0; }
+      .rempty { margin-top: 16px; padding: 20px; border: 1px dashed var(--line); border-radius: 12px; font-size: 15px; }
+      .rempty button { margin-top: 12px; }
+      .gpanel { max-width: 620px; margin: 0 0 20px; padding: 18px; background: var(--panel);
+                border: 1px solid var(--line); border-radius: 12px; }
+      .gpanel h3 { margin: 0 0 4px; }
+      .glist { margin-top: 12px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--bg); }
+      .grow { display: flex; align-items: center; gap: 8px; min-height: 52px; padding: 4px 6px 4px 8px; }
+      .grow + .grow, #mg-rows:not(:empty) + .grow { border-top: 1px solid var(--line); }
+      .grow input { flex: 1; min-width: 0; font: inherit; font-size: 16px; padding: 10px 8px; border-radius: 8px;
+                    border: 1px solid transparent; background: transparent; color: var(--text); }
+      .grow input:hover:not(:disabled) { border-color: var(--line); }
+      .grow input:focus { outline: none; border-color: var(--brand-light); background: var(--panel); }
+      .grow button { flex: none; font-size: 15px; }
+      button.ghost.gdel { color: var(--danger); border-color: transparent; }
+      button.ghost.gdel:hover:not(:disabled) { background: color-mix(in srgb, var(--danger) 10%, transparent); border-color: transparent; }
+      #mg-status.bad, #ms-gnote.bad { color: var(--danger); }
+      #mg-status.good, #ms-gnote.good { color: var(--ok); }
+      #ms-groups { margin: 4px 0 12px; }
+      #ms-groups[hidden] { display: none; }
+      #ms-groups .mslabel { font-size: 15px; color: var(--text); margin-bottom: 6px; }
       /* ── 시트: 목록을 덮는다. 나가는 길은 취소뿐. ── */
       .sheet { position: fixed; inset: 0; z-index: 60; background: rgba(10,14,22,0.55);
                display: flex; align-items: flex-start; justify-content: center;
@@ -2210,7 +2253,7 @@
         <h2 class="title">출입 · 회원</h2>
         <p class="lede">이름·전화 뒷자리·회원번호 아무거나 치면 됩니다.</p>
 
-        <div class="panel" style="margin:20px 0;padding:18px;max-width:620px">
+        <div class="panel" style="margin:20px 0;padding:18px;max-width:620px;width:auto;position:static">
           <h3>회원 정보 설정</h3>
           <p class="lede">문 앞에서 회원으로 등록할 때 받는 정보를 정합니다.</p>
           <label for="mp-level">회원 정보 받기</label>
@@ -2232,6 +2275,23 @@
           <div class="meta" id="mp-status" role="status"></div>
           <p class="meta" id="mp-consent" translate="no"></p>
           <div class="meta" id="mp-cleanup" role="status"></div>
+        </div>
+
+        <!-- 회원 분류. 바꿀 때마다 바로 저장한다 — 「저장」 단추를 찾게 하지 않는다. -->
+        <div class="gpanel" id="mg-panel">
+          <h3>분류</h3>
+          <p class="meta" style="margin:0">성인반·어린이반·PT처럼 회원을 나눠 보세요.</p>
+          <div class="glist">
+            <div id="mg-rows"></div>
+            <div class="grow">
+              <input id="mg-new" maxlength="12" autocomplete="off" spellcheck="false"
+                     placeholder="+ 분류 추가" aria-label="+ 분류 추가" />
+              <button id="mg-add">추가</button>
+            </div>
+          </div>
+          <div class="meta" id="mg-limit" hidden>분류는 20개까지 만들 수 있어요</div>
+          <div class="meta" id="mg-status" role="status" aria-live="polite"></div>
+          <p class="meta">건강 상태 같은 민감한 내용은 분류 이름으로 쓰지 마세요.</p>
         </div>
 
         <input id="dr-q" placeholder="홍길동 · 5678 · A7K2" autocomplete="off"
@@ -2293,6 +2353,13 @@
           <h3 style="margin-top:24px">드나든 기록</h3>
           <p class="meta">열린 것과 <b>거절된 것</b>을 같이 남깁니다 — "왜 안 열렸지"가 카운터에서 제일 자주 나오는 질문입니다.</p>
           <div id="dr-doorlog"></div>
+        </div>
+        <!-- 전체 명단 도구줄. 거르기는 이 컴퓨터 안에서만 한다. -->
+        <div class="rtools" id="dr-rtools" hidden>
+          <input type="search" id="dr-rq" autocomplete="off" spellcheck="false"
+                 placeholder="이름·번호·전화 뒷자리·메모·분류로 찾기" aria-label="명단에서 찾기" />
+          <div class="chips" id="dr-stchips" role="group" aria-label="상태"></div>
+          <div class="chips" id="dr-grchips" role="group" aria-label="분류" hidden></div>
         </div>
         <div id="dr-list"></div>
       </section>
@@ -2369,6 +2436,12 @@
           <div id="ms-punch" style="display:none">
             <label>횟수<input id="ms-visits" type="number" min="1" value="10" /></label>
           </div>
+
+          <section id="ms-groups" hidden>
+            <div class="mslabel">분류</div>
+            <div class="chips wrap" id="ms-gchips" role="group" aria-label="분류"></div>
+            <div class="meta" id="ms-gnote" role="status" aria-live="polite"></div>
+          </section>
 
           <label>메모<input id="ms-note" autocomplete="off" placeholder="상담 내용, 주의사항" /></label>
           <section id="ms-memos" class="hidden">

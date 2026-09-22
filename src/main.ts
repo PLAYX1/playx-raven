@@ -9666,6 +9666,14 @@ function fmtYmd(v: number): string {
   return `${s.slice(0, 4)}.${s.slice(4, 6)}.${s.slice(6, 8)}`;
 }
 
+/** 카드의 분류 칩 한 줄. 분류 이름은 사장이 적은 글이라 옮기지 않는다. */
+function memberGroupChips(m: any): string {
+  const groups: string[] = Array.isArray(m?.groups) ? m.groups.filter((g: unknown) => typeof g === "string") : [];
+  return groups.length
+    ? `<div class="mgroups">${groups.map((g) => `<span class="mgchip" translate="no">${escapeHtml(g)}</span>`).join("")}</div>`
+    : "";
+}
+
 function memberCard(m: any, big: boolean): string {
   const ok = m.valid;
   const sub =
@@ -9682,6 +9690,7 @@ function memberCard(m: any, big: boolean): string {
       <div class="mhead">
         <div>
           <div class="mname"${m.name ? ' translate="no"' : ""}>${m.name ? escapeHtml(m.name) : copyHtml("(이름 없음)")}</div>
+          ${memberGroupChips(m)}
           <div class="msub">${sub}</div>
           ${m.note ? `<div class="msub" translate="no">${escapeHtml(m.note)}</div>` : ""}
         </div>
@@ -10010,21 +10019,154 @@ async function deleteMember() {
   } finally { button.disabled = false; }
 }
 
-async function loadMembers() {
-  if ($("dr-list").innerHTML === "") return;
-  try {
-    const r = await invoke<any>("list_members", { nowUnix: nowSec() });
-    const list: any[] = r.members || [];
+// ── 전체 명단 · 거르기 ──
+//
+// 거르기는 **이 컴퓨터 안에서만** 한다. 명단은 이미 한 번 받아 왔고, 칠 때마다
+// 다시 부르면 느리고 깜박인다. 고른 칩과 검색어는 명단을 다시 불러와도 남는다 —
+// 입장 한 번 누를 때마다 사장이 조건을 다시 고르게 하면 안 된다.
+
+/** 「분류 없음」 칩. 분류 이름에는 제어문자가 못 들어가서(서버가 거절) 겹치지 않는다. */
+const NO_GROUP = "\u0000none";
+type RosterStatus = "" | "active" | "ending" | "over";
+let rosterAll: any[] = [];
+const rosterView: { q: string; status: RosterStatus; group: string | null } = { q: "", status: "", group: null };
+let rosterTimer: any;
+
+function memberGroupsOf(m: any): string[] {
+  return Array.isArray(m?.groups) ? m.groups.filter((g: unknown) => typeof g === "string") : [];
+}
+
+const foldText = (v: unknown) => String(v ?? "").normalize("NFKC").toLowerCase();
+
+/** 이름·회원번호·메모(비고 포함)·분류 이름, 그리고 숫자만 치면 전화 뒷자리. */
+function memberMatches(m: any, q: string): boolean {
+  const needle = foldText(q).trim();
+  if (!needle) return true;
+  const memos = Array.isArray(m?.memos) ? m.memos.map((x: any) => x?.text) : [];
+  const hay = [m?.name, m?.asset, m?.note, ...memos, ...memberGroupsOf(m)].map(foldText).join("\n");
+  if (hay.includes(needle)) return true;
+  const digits = needle.replace(/[\s-]/g, "");
+  if (/^\d+$/.test(digits)) {
+    const phone = String(m?.phone ?? "").replace(/\D/g, "");
+    if (phone && phone.endsWith(digits)) return true;
+  }
+  return false;
+}
+
+function rosterFiltering(): boolean {
+  return !!rosterView.q.trim() || !!rosterView.status || rosterView.group !== null;
+}
+
+function clearRosterFilter() {
+  rosterView.q = "";
+  rosterView.status = "";
+  rosterView.group = null;
+  ($("dr-rq") as HTMLInputElement).value = "";
+  renderRoster();
+}
+
+/** 둥근 알약 칩 하나. 앱 문구는 render 로(언어가 바뀌면 따라간다), 사장이 적은 이름은 user 로. */
+function pillChip(
+  label: { render?: () => string; user?: string },
+  on: boolean,
+  onTap: () => void,
+  count?: number,
+): HTMLButtonElement {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "chip";
+  b.setAttribute("aria-pressed", String(on));
+  const name = document.createElement("span");
+  if (label.user != null) {
+    name.setAttribute("translate", "no");
+    name.textContent = label.user;
+  } else if (label.render) {
+    setCopyText(name, label.render);
+  }
+  b.append(name);
+  if (count != null) {
+    const n = document.createElement("span");
+    n.className = "n";
+    n.textContent = String(count);
+    b.append(n);
+  }
+  b.addEventListener("click", onTap);
+  return b;
+}
+
+/** 가로 스크롤 줄을 다시 그려도 보던 자리를 잃지 않게. */
+function fillChipRow(row: HTMLElement, chips: HTMLElement[]) {
+  const x = row.scrollLeft;
+  row.replaceChildren(...chips);
+  row.scrollLeft = x;
+}
+
+function renderRoster() {
+  const box = $("dr-list");
+  $("dr-rtools").hidden = !rosterAll.length;
+  if (!rosterAll.length) {
+    box.innerHTML = emptyWithRaven("아직 등록된 회원이 없습니다.<br />「회원 등록」으로 첫 회원을 넣어 보세요.", "hello");
+    return;
+  }
+  // 지워진 분류를 고른 채로 남아 있으면 영영 0명이다.
+  if (rosterView.group !== null && rosterView.group !== NO_GROUP && !shopGroups.includes(rosterView.group)) {
+    rosterView.group = null;
+  }
+
+  const q = rosterView.q;
+  const byQ = rosterAll.filter((m) => memberMatches(m, q));
+  const inGroup = (m: any) =>
+    rosterView.group === null
+      ? true
+      : rosterView.group === NO_GROUP
+        ? !memberGroupsOf(m).length
+        : memberGroupsOf(m).includes(rosterView.group);
+  const inStatus = (m: any) => !rosterView.status || m.status === rosterView.status;
+
+  // 칩의 숫자는 「이 칩을 누르면 몇 명이 남나」다 — 다른 줄에서 고른 조건은 같이 건다.
+  const forStatus = byQ.filter(inGroup);
+  const pickStatus = (s: RosterStatus) => () => {
+    rosterView.status = rosterView.status === s ? "" : s;
+    renderRoster();
+  };
+  const statuses: [RosterStatus, string][] = [
+    ["", "전체"], ["active", "다니는 중"], ["ending", "곧 끝나요"], ["over", "끝났어요"],
+  ];
+  fillChipRow(
+    $("dr-stchips"),
+    statuses.map(([s, label]) =>
+      pillChip({ render: () => t(label) }, rosterView.status === s, s ? pickStatus(s) : () => { rosterView.status = ""; renderRoster(); },
+        s ? forStatus.filter((m) => m.status === s).length : forStatus.length)),
+  );
+
+  const grRow = $("dr-grchips");
+  grRow.hidden = !shopGroups.length;
+  if (shopGroups.length) {
+    const forGroup = byQ.filter(inStatus);
+    const pickGroup = (g: string | null) => () => {
+      rosterView.group = g === null || rosterView.group === g ? null : g;
+      renderRoster();
+    };
+    fillChipRow(grRow, [
+      pillChip({ render: () => t("전체") }, rosterView.group === null, pickGroup(null), forGroup.length),
+      ...shopGroups.map((g) =>
+        pillChip({ user: g }, rosterView.group === g, pickGroup(g), forGroup.filter((m) => memberGroupsOf(m).includes(g)).length)),
+      pillChip({ render: () => t("분류 없음") }, rosterView.group === NO_GROUP, pickGroup(NO_GROUP),
+        forGroup.filter((m) => !memberGroupsOf(m).length).length),
+    ]);
+  }
+
+  if (!rosterFiltering()) {
     // 🔴 **만료된 회원과 다니는 회원을 섞어 두면 안 된다.** 명단이 길어질수록
     //    사장이 찾는 것은 「지금 다니는 사람」인데, 그 사이에 작년에 끊은
     //    사람이 끼어 있으면 매번 눈으로 걸러야 한다.
     //
     //    끝난 회원을 지우지도 않는다 — 다시 오는 사람이 많고, 그때 옛 기록이
     //    있으면 「예전에 다니셨죠」가 된다. 나누기만 한다.
-    const live = list.filter((m) => m.valid);
+    const live = rosterAll.filter((m) => m.valid);
     const ending = live.filter((m) => m.kind === "period" && m.days_left <= 7);
     const going = live.filter((m) => !ending.includes(m));
-    const over = list.filter((m) => !m.valid);
+    const over = rosterAll.filter((m) => !m.valid);
 
     const group = (title: string, rows: any[], why: string) =>
       rows.length
@@ -10034,15 +10176,244 @@ async function loadMembers() {
              ${rows.map((m) => memberCard(m, false)).join("")}</div>`
         : "";
 
-    $("dr-list").innerHTML = list.length
-      ? group(t("곧 끝납니다"), ending, t("지금 카운터에서 말씀드리면 대개 갱신하십니다.")) +
-        group(t("다니는 중"), going, "") +
-        group(t("끝난 회원"), over, t("회원권과 출입 기록은 남습니다. 보관기간이 지난 개인정보는 자동 삭제됩니다."))
-      : emptyWithRaven("아직 등록된 회원이 없습니다.<br />「회원 등록」으로 첫 회원을 넣어 보세요.", "hello");
+    box.innerHTML =
+      group(t("곧 끝납니다"), ending, t("지금 카운터에서 말씀드리면 대개 갱신하십니다.")) +
+      group(t("다니는 중"), going, "") +
+      group(t("끝난 회원"), over, t("회원권과 출입 기록은 남습니다. 보관기간이 지난 개인정보는 자동 삭제됩니다."));
     bindMemberCards("dr-list");
-    setCopyText($("dr-note"), () => `${t("다니는 중")} ${live.length}${t("명")} · ${t("끝남")} ${over.length}${t("명")}`);
+    return;
+  }
+
+  const hits = byQ.filter(inGroup).filter(inStatus);
+  if (!hits.length) {
+    const empty = document.createElement("div");
+    empty.className = "rempty";
+    const msg = document.createElement("div");
+    setCopyText(msg, () => t("조건에 맞는 회원이 없어요"));
+    const clear = document.createElement("button");
+    clear.className = "ghost";
+    setCopyText(clear, () => t("조건 지우기"));
+    clear.addEventListener("click", clearRosterFilter);
+    empty.append(msg, clear);
+    box.replaceChildren(empty);
+    return;
+  }
+  box.innerHTML = hits.map((m) => memberCard(m, false)).join("");
+  const count = document.createElement("div");
+  count.className = "rcount";
+  setCopyText(count, () => tf("{0}명", hits.length));
+  box.prepend(count);
+  bindMemberCards("dr-list");
+}
+
+async function loadMembers() {
+  if ($("dr-list").innerHTML === "") return;
+  try {
+    const [r, groups] = await Promise.all([
+      invoke<any>("list_members", { nowUnix: nowSec() }),
+      invoke<string[]>("member_groups_get").catch(() => null),
+    ]);
+    rosterAll = r.members || [];
+    // 사장이 분류 이름을 고치는 중이면 그 줄을 다시 그리지 않는다 — 치던 글자가 날아간다.
+    if (Array.isArray(groups) && !$("mg-panel").contains(document.activeElement)) {
+      shopGroups = groups;
+      renderGroupRows();
+    }
+    renderRoster();
+    const live = rosterAll.filter((m) => m.valid).length;
+    const over = rosterAll.length - live;
+    setCopyText($("dr-note"), () => `${t("다니는 중")} ${live}${t("명")} · ${t("끝남")} ${over}${t("명")}`);
   } catch (e) {
     $("dr-note").innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
+  }
+}
+
+// ── 회원 분류 관리 ──
+//
+// 아이폰 설정처럼 줄 목록. 이름을 눌러 바로 고치고, 바뀔 때마다 저장한다.
+// 저장은 한 줄로 세운다 — 빨리 두 번 고치면 앞의 것이 뒤의 것을 덮어쓰지 않게.
+
+const GROUP_MAX = 20;
+const MEMBER_GROUP_MAX = 5;
+let shopGroups: string[] = [];
+let groupSaving: Promise<unknown> = Promise.resolve();
+const groupStatusTimers = new WeakMap<HTMLElement, ReturnType<typeof setTimeout>>();
+
+/** 서버 오류 「GROUP_INVALID: …」 에서 사람에게 보일 한 문장만. */
+function groupErr(e: unknown): string {
+  const raw = String(e ?? "").trim();
+  const m = raw.match(/^(GROUP_INVALID|NOT_MEMBER|MEMBER_REDACTED):\s*([\s\S]*)$/);
+  const reason = m ? m[2].trim() : raw;
+  return reason ? t(reason) : t("분류를 저장하지 못했어요.");
+}
+
+function groupStatus(el: HTMLElement, render: () => string, bad: boolean) {
+  clearTimeout(groupStatusTimers.get(el));
+  el.classList.toggle("bad", bad);
+  el.classList.toggle("good", !bad);
+  setCopyText(el, render);
+  // 성공은 짧게 보이고 사라진다. 실패는 사장이 읽을 때까지 남긴다.
+  if (!bad) groupStatusTimers.set(el, setTimeout(() => { el.textContent = ""; el.classList.remove("good"); }, 2200));
+}
+
+function renderGroupRows() {
+  const rows = $("mg-rows");
+  rows.replaceChildren();
+  shopGroups.forEach((name) => {
+    const row = document.createElement("div");
+    row.className = "grow";
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = name;
+    input.maxLength = 12;
+    input.autocomplete = "off";
+    input.spellcheck = false;
+    input.setAttribute("aria-label", t("분류 이름"));
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); input.blur(); }
+      else if (e.key === "Escape") { input.value = name; input.blur(); }
+    });
+    // change 는 글자가 실제로 바뀌고 칸을 벗어날 때(엔터 포함) 한 번 온다.
+    input.addEventListener("change", () => void renameGroup(name, input));
+    const del = document.createElement("button");
+    del.className = "ghost gdel";
+    setCopyText(del, () => t("지우기"));
+    del.addEventListener("click", () => void deleteGroup(name));
+    row.append(input, del);
+    rows.append(row);
+  });
+  const full = shopGroups.length >= GROUP_MAX;
+  ($("mg-new") as HTMLInputElement).disabled = full;
+  ($("mg-add") as HTMLButtonElement).disabled = full;
+  $("mg-limit").hidden = !full;
+}
+
+/** next 는 **저장 차례가 왔을 때의** 목록으로 계산한다. null 이면 할 일이 없다. */
+function saveGroups(next: (cur: string[]) => { groups: string[]; renames: [string, string][] } | null): Promise<boolean> {
+  const run = async (): Promise<boolean> => {
+    const plan = next(shopGroups);
+    if (!plan) { renderGroupRows(); return false; }
+    try {
+      shopGroups = await invoke<string[]>("member_groups_set", { groups: plan.groups, renames: plan.renames });
+      renderGroupRows();
+      groupStatus($("mg-status"), () => t("저장했어요"), false);
+      // 이름 바꾸기·지우기는 회원들에게 붙은 분류도 바꾼다. 보이는 명단을 맞춘다.
+      void loadMembers();
+      void doorSearch();
+      return true;
+    } catch (e) {
+      renderGroupRows(); // 마지막으로 저장된 목록으로 되돌린다
+      groupStatus($("mg-status"), () => groupErr(e), true);
+      return false;
+    }
+  };
+  const p = groupSaving.then(run, run);
+  groupSaving = p;
+  return p;
+}
+
+function renameGroup(old: string, input: HTMLInputElement) {
+  const name = input.value.trim();
+  if (!name || name === old) { input.value = old; return; }
+  return saveGroups((cur) => {
+    const i = cur.indexOf(old);
+    if (i < 0) return null;
+    const groups = [...cur];
+    groups[i] = name;
+    return { groups, renames: [[old, name]] };
+  });
+}
+
+async function deleteGroup(name: string) {
+  const yes = await sure(tf("'{0}' 분류를 지울까요? 회원들에게서도 빠집니다.", name), "", t("지우기"));
+  if (!yes) return;
+  await saveGroups((cur) => (cur.includes(name) ? { groups: cur.filter((g) => g !== name), renames: [] } : null));
+}
+
+async function addGroup() {
+  const input = $("mg-new") as HTMLInputElement;
+  const name = input.value.trim();
+  if (!name) { input.focus(); return; }
+  if (shopGroups.length >= GROUP_MAX) {
+    groupStatus($("mg-status"), () => t("분류는 20개까지 만들 수 있어요"), true);
+    return;
+  }
+  const ok = await saveGroups((cur) => ({ groups: [...cur, name], renames: [] }));
+  if (ok) {
+    input.value = "";
+    // 여러 개를 이어서 넣게 칸을 그대로 잡아 둔다.
+    if (!input.disabled) input.focus();
+  }
+}
+
+async function loadGroups() {
+  try {
+    shopGroups = await invoke<string[]>("member_groups_get");
+    renderGroupRows();
+  } catch (e) {
+    groupStatus($("mg-status"), () => errText(e) || t("분류를 읽지 못했어요."), true);
+  }
+}
+
+// ── 회원 시트의 분류 칩 ──
+let msGroupsSel: string[] = [];
+let msGroupsBusy = false;
+
+function renderMsGroups(show: boolean) {
+  const section = $("ms-groups");
+  section.hidden = !show;
+  if (!show) return;
+  const box = $("ms-gchips");
+  if (!shopGroups.length) {
+    box.replaceChildren();
+    groupStatusNeutral($("ms-gnote"), () => t("아직 분류가 없어요. 「출입 · 회원」의 「분류」에서 먼저 만들어 주세요."));
+    return;
+  }
+  box.replaceChildren(
+    ...shopGroups.map((g) => pillChip({ user: g }, msGroupsSel.includes(g), () => void toggleMsGroup(g))),
+  );
+}
+
+function groupStatusNeutral(el: HTMLElement, render: () => string) {
+  clearTimeout(groupStatusTimers.get(el));
+  el.classList.remove("bad", "good");
+  setCopyText(el, render);
+}
+
+async function toggleMsGroup(g: string) {
+  if (msGroupsBusy) return;
+  const note = $("ms-gnote");
+  const on = msGroupsSel.includes(g);
+  if (!on && msGroupsSel.length >= MEMBER_GROUP_MAX) {
+    groupStatus(note, () => t("분류는 한 회원에 5개까지 고를 수 있어요"), true);
+    return;
+  }
+  const next = on ? msGroupsSel.filter((x) => x !== g) : [...msGroupsSel, g];
+  const asset = msEditing;
+  const prev = msGroupsSel;
+  msGroupsSel = next;
+  renderMsGroups(true);
+  if (!asset) {
+    // 새 회원은 아직 번호가 없다. 저장할 때 같이 붙인다.
+    groupStatusNeutral(note, () => t("저장하면 이 분류가 붙어요"));
+    return;
+  }
+  msGroupsBusy = true;
+  try {
+    const r = await invoke<any>("member_groups_assign", { asset, groups: next, nowUnix: nowSec() });
+    if (msEditing !== asset) return;
+    msGroupsSel = Array.isArray(r?.groups) ? r.groups : next;
+    renderMsGroups(true);
+    groupStatus(note, () => t("저장했어요"), false);
+    void loadMembers();
+    void doorSearch();
+  } catch (e) {
+    if (msEditing !== asset) return;
+    msGroupsSel = prev;
+    renderMsGroups(true);
+    groupStatus(note, () => groupErr(e), true);
+  } finally {
+    msGroupsBusy = false;
   }
 }
 
@@ -10122,11 +10493,19 @@ async function openMember(asset?: string): Promise<void> {
   $("ms-chain").style.display = asset ? "none" : "";
   $("ms-result").innerHTML = "";
   $("ms-note2").textContent = "";
+  msGroupsSel = [];
+  groupStatusNeutral($("ms-gnote"), () => "");
+  $("ms-groups").hidden = true;
+  // 시트를 열 때마다 분류 목록을 새로 읽는다 — 다른 창(직원 화면)에서 바뀌었을 수 있다.
+  const groupsReady = invoke<string[]>("member_groups_get").then((g) => { shopGroups = g; }).catch(() => {});
 
   const set = (id: string, v: any) => (($(id) as HTMLInputElement).value = v ?? "");
   if (asset) {
-    const r = await invoke<any>("list_members", { nowUnix: nowSec() });
+    const [r] = await Promise.all([invoke<any>("list_members", { nowUnix: nowSec() }), groupsReady]);
     const m = (r.members || []).find((x: any) => x.asset === asset);
+    // 정보가 정리된 회원에게는 분류를 붙일 수 없다(서버도 거절한다). 칩을 숨긴다.
+    msGroupsSel = m ? memberGroupsOf(m) : [];
+    renderMsGroups(!!m && m.redacted !== true);
     if (m) {
       set("ms-name", m.name);
       set("ms-phone", m.phone);
@@ -10145,6 +10524,8 @@ async function openMember(asset?: string): Promise<void> {
     }
   } else {
     ["ms-name", "ms-phone", "ms-note", "ms-birth", "ms-emg"].forEach((id) => set(id, ""));
+    await groupsReady;
+    renderMsGroups(true);
     ($("ms-gender") as HTMLSelectElement).value = "";
     await loadUnclaimed();
     // 오늘 시작, 한 달. 시작일을 강제하지는 않는다 — 금요일에 결제하고
@@ -10298,6 +10679,24 @@ async function saveMember() {
         return Object.keys(e).length ? e : null;
       })(),
     });
+
+    // 새 회원은 번호가 이제 생겼다. 등록할 때 고른 분류를 붙인다.
+    if (!msEditing && msGroupsSel.length) {
+      try {
+        await invoke("member_groups_assign", { asset, groups: msGroupsSel, nowUnix: nowSec() });
+      } catch (e) {
+        // 회원은 저장됐다. 시트를 「고치기」로 바꿔 두면 칩을 다시 누르는 것으로 끝난다.
+        msEditing = asset;
+        $("ms-title").textContent = "회원 고치기";
+        $("ms-chain").style.display = "none";
+        $("ms-delete").style.display = "";
+        groupStatus($("ms-gnote"), () => tf("회원은 저장했지만 분류를 붙이지 못했어요: {0}", groupErr(e)), true);
+        loadMembers();
+        doorSearch();
+        btn.disabled = false;
+        return;
+      }
+    }
 
     $("msheet").classList.add("hidden");
     loadMembers();
@@ -15607,6 +16006,21 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("in-load").addEventListener("click", loadInbox);
   $("ps-go").addEventListener("click", sendDirect);
   loadChannels();
+  $("dr-rq").addEventListener("input", () => {
+    clearTimeout(rosterTimer);
+    rosterTimer = setTimeout(() => {
+      rosterView.q = ($("dr-rq") as HTMLInputElement).value;
+      renderRoster();
+    }, 200);
+  });
+  $("mg-add").addEventListener("click", () => void addGroup());
+  $("mg-new").addEventListener("keydown", (e) => {
+    if ((e as KeyboardEvent).key === "Enter" && !(e as KeyboardEvent).isComposing) {
+      e.preventDefault();
+      void addGroup();
+    }
+  });
+  void loadGroups();
   $("dr-all").addEventListener("click", () => {
     $("dr-list").innerHTML = "<p class=\"muted\">불러오는 중…</p>";
     loadMembers();
