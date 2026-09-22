@@ -167,10 +167,34 @@ pub fn save_member(
     extra: Option<Value>,
 ) -> Result<(), String> {
     let _guard = STORE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let mut rows = load();
+    put_member(&mut rows, asset, name, phone, kind, expires, visits_total, note, now_unix, extra)?;
+    save(&rows)
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn insert_member_if_absent(
+    asset: String, name: String, phone: String, kind: String, expires: i64,
+    visits_total: i64, note: String, now_unix: i64, extra: Option<Value>,
+) -> Result<(), String> {
+    // Never take STORE_LOCK while holding the ticket lock: cleanup uses STORE -> ticket.
+    let _guard = STORE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let mut rows = load();
+    if rows.iter().any(|row| row["asset"].as_str() == Some(asset.as_str())) {
+        return Err("이미 회원으로 등록된 표입니다.".into());
+    }
+    put_member(&mut rows, asset, name, phone, kind, expires, visits_total, note, now_unix, extra)?;
+    save(&rows)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn put_member(
+    rows: &mut Vec<Value>, asset: String, name: String, phone: String, kind: String,
+    expires: i64, visits_total: i64, note: String, now_unix: i64, extra: Option<Value>,
+) -> Result<(), String> {
     if name.trim().is_empty() {
         return Err("이름이 필요합니다.".into());
     }
-    let mut rows = load();
 
     // Keep whatever is already known — visits used, freezes — so editing a
     // phone number cannot silently reset someone's remaining sessions.
@@ -229,12 +253,12 @@ pub fn save_member(
         "issued": issued,
         "updated": now_unix,
     }));
-    save(&rows)
+    Ok(())
 }
 
 /// Remove identifying data after calendar-month retention; keep the contract and visits.
 /// The UTC calendar agrees with the existing pass expiry helpers. The deadline day
-/// itself is included. Punch cards and period passes with no expiry are excluded.
+/// itself is included. Period passes use expiry; other passes use the latest activity.
 pub fn redact_expired_members(now_unix: i64, retention_months: u32) -> Result<usize, String> {
     if !matches!(retention_months, 3 | 6 | 12) {
         return Err("회원 정보 보관 개월 수가 올바르지 않습니다.".into());
@@ -244,17 +268,28 @@ pub fn redact_expired_members(now_unix: i64, retention_months: u32) -> Result<us
     let bytes = match std::fs::read(store_path()) {
         Ok(bytes) => bytes,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(0),
-        Err(e) => return Err(e.to_string()),
+        Err(_) => return Err("회원 장부를 읽지 못했습니다.".into()),
     };
-    let data: Value = serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
+    let data: Value = serde_json::from_slice(&bytes).map_err(|_| "회원 장부를 읽지 못했습니다.".to_string())?;
     let mut rows = data.get("passes").and_then(Value::as_array).cloned()
-        .ok_or_else(|| "회원 장부 형식이 올바르지 않습니다.".to_string())?;
+        .ok_or_else(|| "회원 장부를 읽지 못했습니다.".to_string())?;
     let today = ymd(now_unix);
     let mut count = 0;
     for row in &mut rows {
-        if row["redacted"] == true || row["kind"] != "period" { continue; }
+        if row["redacted"] == true { continue; }
         let expires = row["expires"].as_i64().unwrap_or(0);
-        if expires <= 0 || add_months(expires, retention_months as i64) > today { continue; }
+        let base = if row["kind"] == "period" && expires > 0 {
+            expires
+        } else {
+            let visit = row["visits"].as_array().and_then(|v| v.last())
+                .and_then(Value::as_i64).unwrap_or(0);
+            let activity = visit.max(row["updated"].as_i64().unwrap_or(0))
+                .max(row["issued"].as_i64().unwrap_or(0));
+            // No usable date means we cannot safely decide that retention has elapsed.
+            if activity <= 0 { continue; }
+            ymd(activity)
+        };
+        if add_months(base, retention_months as i64) > today { continue; }
         row["name"] = json!("");
         row["phone"] = json!("");
         row["note"] = json!("");
@@ -732,6 +767,35 @@ mod days_left_tests {
     /// 내일 끝나는 회원에게 아무 말도 못 하고 있었다는 뜻이고, 갱신은
     /// 그 한마디에서 일어난다.
     #[test]
+    fn retention_uses_latest_activity_and_inclusive_deadline() {
+        crate::member_privacy::tests::in_sandbox(|| {
+            let old = days_from_ymd(20260228) * 86400;
+            let recent = days_from_ymd(20260801) * 86400;
+            let mut rows = Vec::new();
+            for kind in ["punch", "period"] {
+                for (label, visit, updated, issued, due) in [
+                    ("old", old, old, old, true),
+                    ("recent-visit", recent, old, old, false),
+                    ("recent-update", old, recent, old, false),
+                    ("recent-issue", old, old, recent, false),
+                    ("missing", 0, 0, 0, false),
+                ] {
+                    rows.push(json!({"asset":format!("{kind}-{label}"), "kind":kind, "expires":0,
+                        "name":"Synthetic Member", "visits":[visit], "updated":updated, "issued":issued, "due":due}));
+                }
+            }
+            rows.push(json!({"asset":"all-missing", "kind":"punch", "name":"Synthetic Member"}));
+            save(&rows).unwrap();
+            assert_eq!(redact_expired_members(days_from_ymd(20260827) * 86400, 6).unwrap(), 0);
+            assert_eq!(load(), rows);
+            assert_eq!(redact_expired_members(days_from_ymd(20260828) * 86400, 6).unwrap(), 2);
+            for row in load() {
+                assert_eq!(row["redacted"] == true, row["due"] == true);
+            }
+        });
+    }
+
+    #[test]
     fn retention_redacts_only_due_period_members_and_keeps_history() {
         crate::member_privacy::tests::in_sandbox(|| {
             let now = days_from_ymd(20260828) * 86400;
@@ -750,10 +814,10 @@ mod days_left_tests {
             save(&rows).unwrap();
             std::fs::write(crate::paths::app_file("tickets.json"),
                 serde_json::to_vec(&json!({"tickets":[{"code":"old","name":"Kim","promoted":true}]})).unwrap()).unwrap();
-            assert_eq!(redact_expired_members(now, 6).unwrap(), 2);
+            assert_eq!(redact_expired_members(now, 6).unwrap(), 4);
             let after = load();
             for (before, row) in rows.iter().zip(after.iter()) {
-                if before["asset"] == "old" || before["asset"] == "boundary" {
+                if before["asset"] != "future" {
                     for key in ["name", "phone", "note"] { assert_eq!(row[key], ""); }
                     assert_eq!(row["extra"], json!({"consent_at":42,"consent_version":"v1"}));
                     assert_eq!(row["redacted"], true);

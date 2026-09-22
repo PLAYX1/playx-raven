@@ -658,7 +658,7 @@ export const DESKTOP_COPY: Record<string, [string, string, string]> = {
   "명": [" people", "人", "人"],
   "명단 굳히기": ["Save the list for good", "名簿を固定保存", "永久保存名单"],
   "명단 보기": ["View list", "名簿を見る", "查看名单"],
-  "명단은 이 컴퓨터에만 있습니다. 다른 기기에서는 다시 보입니다.": ["The list is only on this computer. They'll show again on other devices.", "名簿はこのパソコンにだけあります。他の端末ではまた表示されます。", "名单只保存在这台电脑上。在其他设备上仍会显示。"],
+  "명단은 이 가게 컴퓨터와 그 백업에 저장됩니다. 다른 기기에서는 다시 보입니다.": ["The list is stored on this shop's computer and its backups. People hidden here will appear again on other devices.", "リストはこの店のコンピューターとそのバックアップに保存されます。他の端末では再び表示されます。", "名单保存在本店电脑及其备份中。在其他设备上仍会显示。"],
   "명의 글이 다시 보입니다.": [" people's posts will show again.", "人の投稿が再び表示されます。", "人的内容将重新显示。"],
   "몇 개월 연장할까요?": ["Extend by how many months?", "何か月延長しますか?", "延长几个月?"],
   "몇 시간 걸릴 수 있습니다. 그동안 결제 확인이 안 됩니다. 블록 파일은 다시 받지 않습니다.": ["This may take a few hours. Payments can't be confirmed meanwhile. Block files won't be downloaded again.", "数時間かかることがあります。その間は支払いを確認できません。ブロックファイルは再ダウンロードしません。", "可能需要几个小时。期间无法确认付款。区块文件不会重新下载。"],

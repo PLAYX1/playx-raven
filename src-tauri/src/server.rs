@@ -2800,16 +2800,6 @@ async fn api_scan_in(
     }
 }
 
-#[derive(serde::Deserialize)]
-struct MemberBody {
-    code: String,
-    name: String,
-    #[serde(default)]
-    phone: String,
-    #[serde(default)]
-    consent: bool,
-}
-
 /// 표를 회원으로 올린다(이름·전화 기록).
 ///
 /// `/api/scan/member` 자체 권한으로 검사하여 owner·staff·scanner를 허용한다.
@@ -2817,18 +2807,38 @@ struct MemberBody {
 async fn api_scan_member(
     State(state): State<ServerState>,
     headers: HeaderMap,
-    Json(body): Json<MemberBody>,
+    body: axum::body::Bytes,
 ) -> impl IntoResponse {
     if let Err(reason) = authed_for_reason(&state, &headers, &json!({}), "/api/scan/member") {
         return (StatusCode::UNAUTHORIZED, Json(auth_fail_json(reason)));
     }
-    match crate::ticket::ticket_to_member(body.code, body.name, body.phone, body.consent, now_unix()) {
+    // 인증 → 본문 형식 → 동의 → 버전 → 정책과 나머지 검증 순서다.
+    // Bytes로 받아 깨진 JSON과 불리언이 아닌 동의도 JSON 오류로 돌려준다.
+    let invalid = || (StatusCode::BAD_REQUEST, Json(json!({
+        "error": "회원 등록 정보를 확인해 주세요.", "code": "MEMBER_REGISTRATION_FAILED"
+    })));
+    let body: Value = match serde_json::from_slice(&body) {
+        Ok(body) => body,
+        Err(_) => return invalid(),
+    };
+    let (Some(code), Some(name)) = (body["code"].as_str(), body["name"].as_str()) else {
+        return invalid();
+    };
+    let phone = match body.get("phone") {
+        None => "",
+        Some(value) => match value.as_str() { Some(phone) => phone, None => return invalid() },
+    };
+    let consent = body["consent"].as_bool().unwrap_or(false);
+    let version = body["consent_version"].as_str().unwrap_or_default();
+    match crate::ticket::ticket_to_member(code.into(), name.into(), phone.into(), consent, version.into(), now_unix()) {
         Ok(v) => (StatusCode::OK, Json(v)),
         Err(e) => {
             let (status, code, message) = if let Some(message) = e.strip_prefix("MEMBER_INFO_OFF: ") {
                 (StatusCode::FORBIDDEN, "MEMBER_INFO_OFF", message)
             } else if let Some(message) = e.strip_prefix("CONSENT_REQUIRED: ") {
                 (StatusCode::BAD_REQUEST, "CONSENT_REQUIRED", message)
+            } else if let Some(message) = e.strip_prefix("CONSENT_VERSION_STALE: ") {
+                (StatusCode::BAD_REQUEST, "CONSENT_VERSION_STALE", message)
             } else {
                 (StatusCode::BAD_REQUEST, "MEMBER_REGISTRATION_FAILED", e.as_str())
             };
@@ -2845,7 +2855,11 @@ async fn api_scan_member_policy(
         return (StatusCode::UNAUTHORIZED, Json(auth_fail_json(reason)));
     }
     match crate::member_privacy::member_privacy_get() {
-        Ok(policy) => (StatusCode::OK, Json(json!(policy))),
+        Ok(policy) => (StatusCode::OK, Json(json!({
+            "level": policy.level, "retention_months": policy.retention_months,
+            "consent_version": crate::member_privacy::CONSENT_VERSION,
+            "consent_text": crate::member_privacy::consent_text(&policy),
+        }))),
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({
             "error": "회원 정보 설정을 읽지 못했습니다.", "code": "MEMBER_POLICY_UNAVAILABLE"
         }))),
@@ -4775,28 +4789,60 @@ mod order_persistence_tests {
         for role in ["staff", "scanner", "owner"] {
             let (status, policy) = request(&st, "/api/scan/member-policy", "GET", Some(role), "localhost", json!({})).await;
             assert_eq!(status, StatusCode::OK);
-            assert_eq!(policy, json!({"level":"name_last4", "retention_months":6}));
+            assert_eq!(policy, json!({"level":"name_last4", "retention_months":6,
+                "consent_version": crate::member_privacy::CONSENT_VERSION,
+                "consent_text": crate::member_privacy::consent_text(&crate::member_privacy::Policy::default())}));
         }
         let (status, body) = request(&st, "/api/scan/member-policy", "GET", None, "localhost", json!({})).await;
         assert_eq!(status, StatusCode::UNAUTHORIZED);
         assert_eq!(body["code"], "BAD_TOKEN");
-        for consent in [None, Some(false)] {
-            let mut body = json!({"code":"test", "name":"Kim", "phone":"1234"});
+        for (role, expected_status, expected_code) in [
+            (None, StatusCode::UNAUTHORIZED, "BAD_TOKEN"),
+            (Some("staff"), StatusCode::BAD_REQUEST, "MEMBER_REGISTRATION_FAILED"),
+        ] {
+            let mut req = axum::http::Request::builder().uri("/api/scan/member")
+                .method("POST").header("host", "localhost").header("content-type", "application/json");
+            if let Some(role) = role {
+                req = req.header("x-playx-token", st.role_tokens.lock().unwrap()[role].clone());
+            }
+            let response = build_phone_router(st.clone())
+                .oneshot(req.body(axum::body::Body::from("{invalid synthetic JSON")).unwrap()).await.unwrap();
+            assert_eq!(response.status(), expected_status);
+            let bytes = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+            let body: Value = serde_json::from_slice(&bytes).unwrap();
+            assert_eq!(body["code"], expected_code);
+        }
+        for consent in [None, Some(json!(false)), Some(json!("true")), Some(json!(1))] {
+            let mut body = json!({"code":"test", "name":"Synthetic Member", "phone":"1234"});
             if let Some(consent) = consent { body["consent"] = json!(consent); }
             let (status, body) = request(&st, "/api/scan/member", "POST", Some("staff"), "localhost", body).await;
             assert_eq!(status, StatusCode::BAD_REQUEST);
             assert_eq!(body["code"], "CONSENT_REQUIRED");
         }
+        for version in [None, Some(json!("member-privacy-v1")), Some(json!(1))] {
+            let mut body = json!({"code":"test", "name":"Synthetic Member", "consent":true});
+            if let Some(version) = version { body["consent_version"] = version; }
+            let (status, body) = request(&st, "/api/scan/member", "POST", Some("staff"), "localhost", body).await;
+            assert_eq!(status, StatusCode::BAD_REQUEST);
+            assert_eq!(body["code"], "CONSENT_VERSION_STALE");
+        }
+        for field in ["code", "name", "phone"] {
+            let mut body = json!({"code":"test", "name":"Synthetic Member", "phone":"1234", "consent":false});
+            body[field] = json!(123);
+            let (status, body) = request(&st, "/api/scan/member", "POST", Some("staff"), "localhost", body).await;
+            assert_eq!(status, StatusCode::BAD_REQUEST);
+            assert_eq!(body["code"], "MEMBER_REGISTRATION_FAILED");
+        }
         crate::member_privacy::member_privacy_set("none".into(), 6).unwrap();
         let (status, body) = request(&st, "/api/scan/member", "POST", Some("staff"), "localhost",
-            json!({"code":"test", "name":"Kim", "consent":true})).await;
+            json!({"code":"test", "name":"Synthetic Member", "consent":true, "consent_version":crate::member_privacy::CONSENT_VERSION})).await;
         assert_eq!(status, StatusCode::FORBIDDEN);
         assert_eq!(body["code"], "MEMBER_INFO_OFF");
         crate::member_privacy::member_privacy_set("name".into(), 3).unwrap();
         let issued = crate::ticket::issue_for_order("policy-test", &json!([{"name":"Pass", "qty":1}]),
             &json!([{"name":"Pass", "pass_months":1}]), now_unix());
         let (status, body) = request(&st, "/api/scan/member", "POST", Some("staff"), "localhost",
-            json!({"code":issued[0]["code"], "name":"Kim", "phone":"12345678", "consent":true})).await;
+            json!({"code":issued[0]["code"], "name":"Synthetic Member", "phone":"12345678", "consent":true, "consent_version":crate::member_privacy::CONSENT_VERSION})).await;
         assert_eq!(status, StatusCode::OK, "{body}");
         let (status, body) = request(&st, "/api/scan/in", "POST", Some("staff"), "localhost", json!({"asset":"test"})).await;
         assert_eq!(status, StatusCode::UNAUTHORIZED);

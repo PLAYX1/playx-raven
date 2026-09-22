@@ -9921,11 +9921,30 @@ async function loadMemberPrivacy() {
   const controls = ["mp-level", "mp-retention", "mp-save"];
   controls.forEach((id) => ($(id) as HTMLInputElement).disabled = true);
   try {
-    const policy = await invoke<{ level: string; retention_months: number }>("member_privacy_get");
-    ($("mp-level") as HTMLSelectElement).value = policy.level;
-    ($("mp-retention") as HTMLSelectElement).value = String(policy.retention_months);
+    const state = await invoke<{
+      policy: { level: string; retention_months: number } | null;
+      policy_error: string | null;
+      consent_version: string;
+      consent_text: Record<string, string> | null;
+      last_cleanup: { at: number; ok: boolean; redacted: number; error: string | null } | null;
+    }>("member_privacy_state");
+    if (state.policy) {
+      ($("mp-level") as HTMLSelectElement).value = state.policy.level;
+      ($("mp-retention") as HTMLSelectElement).value = String(state.policy.retention_months);
+    }
+    // 손상된 설정도 화면에서 다시 저장할 수 있어야 한다.
     controls.forEach((id) => ($(id) as HTMLInputElement).disabled = false);
-    $("mp-status").textContent = "";
+    $("mp-status").classList.toggle("danger", !!state.policy_error);
+    setCopyText($("mp-status"), () => state.policy_error
+      ? t("회원 정보 설정 파일이 손상되었어요. 설정을 다시 저장해 주세요.") : "");
+    setCopyText($("mp-consent"), () => state.consent_text?.[lang] || state.consent_text?.ko || "");
+    const cleanup = state.last_cleanup;
+    $("mp-cleanup").classList.toggle("danger", !!cleanup && !cleanup.ok);
+    setCopyText($("mp-cleanup"), () => !cleanup
+      ? t("아직 자동 정리를 하지 않았어요")
+      : cleanup.ok
+        ? tf("마지막 자동 정리: {0} · {1}명 정리", new Date(cleanup.at * 1000).toLocaleString(lang), cleanup.redacted)
+        : tf("마지막 자동 정리가 실패했어요: {0} 하루 뒤 다시 시도해요.", t(cleanup.error || "정리 중 오류가 났습니다.")));
   } catch {
     setCopyText($("mp-status"), () => t("회원 정보 설정을 읽지 못했습니다."));
   }
@@ -9939,6 +9958,7 @@ async function saveMemberPrivacy() {
       level: ($("mp-level") as HTMLSelectElement).value,
       retentionMonths: Number(($("mp-retention") as HTMLSelectElement).value),
     });
+    await loadMemberPrivacy();
     setCopyText($("mp-status"), () => t("회원 정보 설정을 저장했습니다."));
   } catch {
     setCopyText($("mp-status"), () => t("회원 정보 설정을 저장하지 못했습니다."));

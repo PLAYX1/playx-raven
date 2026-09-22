@@ -190,10 +190,7 @@
         memberPolicy = policy;
         $("v-phone").style.display = policy.level === "name" ? "none" : "";
         $("v-phone").placeholder = tr(policy.level === "name_phone" ? "전화 전체" : "전화 뒷자리 4자리");
-        const collected = {name: "이름만", name_last4: "이름·전화 뒷자리", name_phone: "이름·전화"};
-        $("v-policy").textContent = tr("받는 것: {0} / 쓰는 곳: 회원 확인과 출입 / 보관: 회원권이 끝나고 {1}개월 뒤 자동 삭제 / 이 컴퓨터에만 저장돼요")
-          .replace("{0}", tr(collected[policy.level] || "안 받음"))
-          .replace("{1}", String(policy.retention_months));
+        $("v-policy").textContent = policy.consent_text[window.PXLANG] || policy.consent_text.ko;
       }
       $("v-consent").onchange = () => {
         $("v-save").disabled = savingMember || !$("v-consent").checked || !memberPolicy || memberPolicy.level === "none";
@@ -305,7 +302,8 @@
           const r = await fetch("/api/scan/member", {
             method: "POST", headers: H,
             body: JSON.stringify({
-              code: selected.asset, name, phone: $("v-phone").value.trim(), consent: $("v-consent").checked,
+              code: selected.asset, name, phone: $("v-phone").value, consent: $("v-consent").checked,
+              consent_version: memberPolicy.consent_version,
             }),
           }).then((x) => x.json());
           if (current !== selected) return;
@@ -313,6 +311,11 @@
             $("v-member").style.display = "none";
             $("v-form").style.display = "none";
             throw new Error(tr("이 가게는 회원 정보를 받지 않습니다."));
+          }
+          if (r.code === "CONSENT_VERSION_STALE") {
+            clearConsent();
+            await loadMemberPolicy();
+            throw new Error(tr("동의 내용이 바뀌었어요. 다시 읽고 동의해 주세요."));
           }
           if (r.code === "CONSENT_REQUIRED") {
             clearConsent();
@@ -329,7 +332,7 @@
           if (current === selected) $("v-detail").textContent = String(e.message || e);
         } finally {
           savingMember = false;
-          $("v-save").disabled = !$("v-consent").checked;
+          $("v-save").disabled = !$("v-consent").checked || !memberPolicy || memberPolicy.level === "none";
         }
       };
 

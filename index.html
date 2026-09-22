@@ -2226,10 +2226,12 @@
             <option value="6">6개월</option>
             <option value="12">12개월</option>
           </select>
-          <p class="meta">기간권이 끝난 뒤 이름·전화·메모·추가 정보를 자동 삭제합니다. 회원번호와 출입·동의 기록은 남습니다. 횟수권은 자동 삭제하지 않습니다.</p>
+          <p class="meta">기간권은 종료 후, 횟수권과 종료일 없는 이용권은 마지막 이용 후 설정한 보관 기간이 지나면 이름·전화·메모·추가 정보를 자동 삭제합니다. 회원번호와 출입·동의 기록은 남습니다.</p>
           <button class="ghost" id="mp-save" disabled>회원 정보 설정 저장</button>
           <button class="ghost" id="mp-reload">다시 읽어오기</button>
           <div class="meta" id="mp-status" role="status"></div>
+          <p class="meta" id="mp-consent" translate="no"></p>
+          <div class="meta" id="mp-cleanup" role="status"></div>
         </div>
 
         <input id="dr-q" placeholder="홍길동 · 5678 · A7K2" autocomplete="off"
@@ -2372,7 +2374,7 @@
 
           <div class="warnbox" id="ms-chain" style="font-size:13px">
             회원번호를 체인에 하나 찍습니다 (<b>5 RVN · 약 17원</b>).
-            이름·기간·정지는 <b>이 컴퓨터에만</b> 저장됩니다 — 체인에 올리면 지울 수 없고,
+            이름·기간·정지는 <b>이 가게 컴퓨터와 그 백업에</b> 저장됩니다 — 체인에 올리면 지울 수 없고,
             누구나 회원 명단과 계약 종료일을 볼 수 있게 됩니다.
           </div>
 
@@ -2542,7 +2544,7 @@
                 <b>내보내기는 없습니다</b> — 있는 척하면 그게 거짓말입니다.
               </p>
               <p class="mutewhy2">
-                명단은 이 컴퓨터에만 있습니다. 다른 기기에서는 다시 보입니다.
+                명단은 이 가게 컴퓨터와 그 백업에 저장됩니다. 다른 기기에서는 다시 보입니다.
               </p>
               <div id="tk-mutelist"></div>
               <div class="muterow2">

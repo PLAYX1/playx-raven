@@ -182,6 +182,7 @@ pub fn run() {
             ticket::ticket_list,
             ticket::ticket_to_member,
             member_privacy::member_privacy_get,
+            member_privacy::member_privacy_state,
             member_privacy::member_privacy_set,
             relay::relay_status,
             devfee::fee_pay,
