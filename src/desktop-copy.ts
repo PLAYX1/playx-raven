@@ -1,5 +1,6 @@
 /** Korean source copy + English, Japanese and Simplified Chinese. User text is not translated here. */
 export const DESKTOP_COPY: Record<string, [string, string, string]> = {
+  "비고 (한 줄)": ["Note (one line)", "備考（1行）", "备注（一行）"],
   "메모 추가": ["Add memo", "メモを追加", "添加备注"],
   "건강 상태 같은 민감한 정보는 적지 마세요": ["Do not write sensitive information such as health conditions.", "健康状態などの機微な情報は記入しないでください。", "请勿填写健康状况等敏感信息。"],
   "메모 (선택)": ["Memo (optional)", "メモ（任意）", "备注（选填）"],

@@ -10435,19 +10435,26 @@ function renderMemberMemos(asset: string, memos: MemberMemo[]) {
     empty.className = "meta";
     setCopyText(empty, () => t("아직 메모가 없습니다"));
     list.append(empty);
+    return;
   }
-  memos.forEach((memo, index) => {
+  // 새 메모가 맨 위. 지울 때는 서버가 원래 순서의 index 와 at 을 둘 다 맞춰 본다.
+  const box = document.createElement("div");
+  box.className = "msmemo-list";
+  memos.map((memo, index) => ({ memo, index })).sort((a, b) => b.memo.at - a.memo.at).forEach(({ memo, index }) => {
     const row = document.createElement("div");
-    const meta = document.createElement("div");
-    meta.className = "meta";
-    const who = { owner: "사장", staff: "직원", scanner: "문 앞" }[memo.by];
-    setCopyText(meta, () => `${new Date(memo.at * 1000).toLocaleString()} · ${t(who)}`);
+    row.className = "msmemo";
+    const body = document.createElement("div");
+    body.className = "mtxt";
     const text = document.createElement("p");
     // 사용자가 적은 메모는 HTML로 해석하거나 자동 번역하지 않는다.
     text.setAttribute("translate", "no");
     text.textContent = memo.text;
+    const meta = document.createElement("div");
+    meta.className = "meta";
+    const who = { owner: "사장", staff: "직원", scanner: "문 앞" }[memo.by];
+    setCopyText(meta, () => `${new Date(memo.at * 1000).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} · ${t(who)}`);
+    body.append(text, meta);
     const button = document.createElement("button");
-    button.className = "ghost small";
     setCopyText(button, () => t("지우기"));
     button.onclick = async () => {
       if (msEditing !== asset || !confirm(t("이 메모를 지울까요?"))) return;
@@ -10461,9 +10468,10 @@ function renderMemberMemos(asset: string, memos: MemberMemo[]) {
       } catch (error) { if (msEditing === asset) memberMemoError(error); }
       finally { button.disabled = false; }
     };
-    row.append(meta, text, button);
-    list.append(row);
+    row.append(body, button);
+    box.append(row);
   });
+  list.append(box);
 }
 
 async function addMemberMemo() {
