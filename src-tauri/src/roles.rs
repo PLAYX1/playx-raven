@@ -97,6 +97,8 @@ pub fn allowed(role: &str, path: &str) -> bool {
                 || path == "/api/scan/member-policy"
                 || path == "/api/scan/member-info"
                 || path == "/api/scan/member-memo"
+                || path == "/api/scan/member-groups"
+                || path == "/api/scan/member-search"
                 // 라비에게 묻기. 직원도 "부분 환불은 어떻게 하나요" 를 물을 수
                 // 있어야 한다 — 못 물으면 사장에게 전화하고, 그 사이 손님이 선다.
                 //
@@ -138,8 +140,10 @@ mod tests {
 
     #[test]
     fn member_registration_roles() {
-        for path in ["/api/scan/member", "/api/scan/member-policy", "/api/scan/member-info", "/api/scan/member-memo"] {
+        for path in ["/api/scan/member", "/api/scan/member-policy", "/api/scan/member-info", "/api/scan/member-memo", "/api/scan/member-groups", "/api/scan/member-search"] {
+            assert!(allowed("owner", path));
             assert!(allowed("staff", path));
+            assert!(!allowed("staff", &format!("{path}-extra")));
             assert!(allowed("scanner", path));
             assert!(!allowed("customer", path));
         }

@@ -150,7 +150,61 @@ pub fn member_info(asset: &str, _now_unix: i64) -> Result<Value, String> {
     Ok(json!({ "code": asset, "name": if redacted { "" } else { row["name"].as_str().unwrap_or("") },
         "until": row["expires"].as_i64().unwrap_or(0), "kind": kind, "visits_left": visits_left,
         "memos": if redacted { Vec::new() } else { row["memos"].as_array().cloned().unwrap_or_default() },
-        "redacted": redacted }))
+        "groups": row_groups(row), "redacted": redacted }))
+}
+
+fn row_groups(row: &Value) -> Vec<String> {
+    if row["redacted"] == true { return Vec::new(); }
+    row["groups"].as_array().map(|values| values.iter()
+        .filter_map(Value::as_str).map(str::to_string).collect()).unwrap_or_default()
+}
+
+pub fn assign_groups(asset: &str, groups: Vec<String>, _now_unix: i64) -> Result<Value, String> {
+    crate::member_privacy::with_member_groups(|allowed| {
+        let groups = crate::member_privacy::clean_member_groups(&groups, allowed)?;
+        let _guard = STORE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let mut rows = load();
+        let row = rows.iter_mut().find(|r| r["asset"].as_str() == Some(asset))
+            .ok_or_else(|| "NOT_MEMBER: 회원이 아닌 표입니다.".to_string())?;
+        if row["redacted"] == true {
+            return Err("MEMBER_REDACTED: 이미 정보가 지워진 회원입니다.".into());
+        }
+        row["groups"] = json!(groups);
+        // Like append_memo, do not change updated: administrative classification
+        // must not extend retention, whose activity calculation includes updated.
+        save(&rows)?;
+        Ok(json!({ "code": asset, "groups": groups }))
+    })
+}
+
+#[tauri::command]
+pub fn member_groups_assign(asset: String, groups: Vec<String>, now_unix: i64) -> Result<Value, String> {
+    assign_groups(&asset, groups, now_unix)
+}
+
+// Caller holds GROUPS_LOCK. Acquire STORE_LOCK second and save the whole ledger once.
+pub(crate) fn reconcile_member_groups(
+    allowed: &[String], renames: &[(String, String)], persist_groups: impl FnOnce() -> Result<(), String>,
+) -> Result<(), String> {
+    let _guard = STORE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    // Refuse to replace a corrupt ledger with an empty roster.
+    let mut rows = match std::fs::read(store_path()) {
+        Ok(bytes) => serde_json::from_slice::<Value>(&bytes).ok()
+            .and_then(|v| v["passes"].as_array().cloned())
+            .ok_or_else(|| "회원 장부를 읽지 못했습니다.".to_string())?,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+        Err(_) => return Err("회원 장부를 읽지 못했습니다.".into()),
+    };
+    for row in &mut rows {
+        let mut groups = Vec::new();
+        for old in row_groups(row) {
+            let new = renames.iter().find(|(from, _)| from == &old).map(|(_, to)| to).unwrap_or(&old);
+            if allowed.contains(new) && !groups.contains(new) { groups.push(new.clone()); }
+        }
+        row["groups"] = json!(groups);
+    }
+    persist_groups()?;
+    save(&rows)
 }
 
 #[tauri::command]
@@ -260,19 +314,23 @@ pub fn save_member(
 pub fn insert_member_if_absent(
     asset: String, name: String, phone: String, kind: String, expires: i64,
     visits_total: i64, note: String, now_unix: i64, extra: Option<Value>,
-    first_memo: Option<(String, String)>,
+    first_memo: Option<(String, String)>, groups: Option<Vec<String>>,
 ) -> Result<(), String> {
-    // Never take STORE_LOCK while holding the ticket lock: cleanup uses STORE -> ticket.
-    let _guard = STORE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    let mut rows = load();
-    if rows.iter().any(|row| row["asset"].as_str() == Some(asset.as_str())) {
-        return Err("이미 회원으로 등록된 표입니다.".into());
-    }
-    put_member(&mut rows, asset, name, phone, kind, expires, visits_total, note, now_unix, extra)?;
-    if let Some((by, text)) = first_memo {
-        rows.last_mut().unwrap()["memos"] = json!([{ "at": now_unix, "by": by, "text": text }]);
-    }
-    save(&rows)
+    crate::member_privacy::with_member_groups(|allowed| {
+        let groups = crate::member_privacy::clean_member_groups(&groups.unwrap_or_default(), allowed)?;
+        // Never take STORE_LOCK while holding the ticket lock: cleanup uses STORE -> ticket.
+        let _guard = STORE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let mut rows = load();
+        if rows.iter().any(|row| row["asset"].as_str() == Some(asset.as_str())) {
+            return Err("이미 회원으로 등록된 표입니다.".into());
+        }
+        put_member(&mut rows, asset, name, phone, kind, expires, visits_total, note, now_unix, extra)?;
+        if let Some((by, text)) = first_memo {
+            rows.last_mut().unwrap()["memos"] = json!([{ "at": now_unix, "by": by, "text": text }]);
+        }
+        rows.last_mut().unwrap()["groups"] = json!(groups);
+        save(&rows)
+    })
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -342,6 +400,7 @@ fn put_member(
         // 언제 왔는지. 없으면 정보를 한 번 고칠 때마다 출석이 사라진다.
         "visits": old_visits,
         "memos": old_memos,
+        "groups": existing.as_ref().map(row_groups).unwrap_or_default(),
         "issued": issued,
         "updated": now_unix,
     }));
@@ -386,6 +445,7 @@ pub fn redact_expired_members(now_unix: i64, retention_months: u32) -> Result<us
         row["phone"] = json!("");
         row["note"] = json!("");
         row["memos"] = json!([]);
+        row["groups"] = json!([]);
         // Extra is owner-defined free text. Keep only consent evidence, not
         // guessed field names: emergency contacts and birthdays also identify people.
         let mut extra = serde_json::Map::new();
@@ -422,14 +482,14 @@ pub fn list_members(now_unix: i64) -> Result<Value, String> {
     Ok(json!({ "members": out, "today": today }))
 }
 
-fn decorate(r: &Value, today: i64) -> Value {
+fn member_validity(r: &Value, today: i64) -> (bool, &'static str) {
     let kind = r.get("kind").and_then(Value::as_str).unwrap_or("period");
     let expires = r.get("expires").and_then(Value::as_i64).unwrap_or(0);
     let frozen = r.get("frozen_at").and_then(Value::as_i64).unwrap_or(0) > 0;
     let total = r.get("visits_total").and_then(Value::as_i64).unwrap_or(0);
     let used = r.get("visits_used").and_then(Value::as_i64).unwrap_or(0);
 
-    let (ok, why) = if frozen {
+    if frozen {
         (false, "정지 중")
     } else if kind == "punch" {
         if used < total {
@@ -441,10 +501,29 @@ fn decorate(r: &Value, today: i64) -> Value {
         (true, "")
     } else {
         (false, "기한이 지났습니다")
-    };
+    }
+}
 
+// Same buckets as the owner roster: invalid (including frozen/exhausted) = over;
+// valid period passes with <= 7 calendar days left (expiry day included) = ending;
+// all other valid passes, including punch cards with remaining visits = active.
+fn member_status(r: &Value, today: i64) -> &'static str {
+    if !member_validity(r, today).0 { "over" }
+    else if r["kind"] == "period"
+        && days_from_ymd(r["expires"].as_i64().unwrap_or(0)) - days_from_ymd(today) <= 7 { "ending" }
+    else { "active" }
+}
+
+fn decorate(r: &Value, today: i64) -> Value {
+    let kind = r["kind"].as_str().unwrap_or("period");
+    let expires = r["expires"].as_i64().unwrap_or(0);
+    let total = r["visits_total"].as_i64().unwrap_or(0);
+    let used = r["visits_used"].as_i64().unwrap_or(0);
+    let (ok, why) = member_validity(r, today);
     let mut o = r.clone();
     if let Some(m) = o.as_object_mut() {
+        m.insert("groups".into(), json!(row_groups(r)));
+        m.insert("status".into(), json!(member_status(r, today)));
         m.insert("valid".into(), json!(ok));
         m.insert("why".into(), json!(why));
         m.insert("left".into(), json!((total - used).max(0)));
@@ -494,6 +573,54 @@ fn decorate(r: &Value, today: i64) -> Value {
         );
     }
     o
+}
+
+pub fn search_members(q: &str, group: Option<&str>, status: Option<&str>, now_unix: i64) -> Result<Value, String> {
+    crate::member_privacy::with_member_groups(|allowed| {
+        let invalid = || "QUERY_INVALID: 검색어와 분류·상태 조건을 확인해 주세요.".to_string();
+        let query = q.trim();
+        if q.chars().any(char::is_control)
+            || (!query.is_empty() && !(2..=20).contains(&query.chars().count()))
+            || (query.is_empty() && group.is_none() && status.is_none())
+            || group.is_some_and(|g| !allowed.iter().any(|v| v == g))
+            || status.is_some_and(|s| !matches!(s, "active" | "ending" | "over")) {
+            return Err(invalid());
+        }
+        let _guard = STORE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let mut rows = load();
+        // Match list_members' latest-updated-first order, including stable ties.
+        rows.sort_by_key(|r| std::cmp::Reverse(r["updated"].as_i64().unwrap_or(0)));
+        let name_query = query.to_lowercase();
+        let asset_query = query.to_uppercase();
+        let phone_query = query.len() == 4 && query.bytes().all(|c| c.is_ascii_digit());
+        let today = ymd(now_unix);
+        let mut results = Vec::new();
+        for row in rows {
+            if row["redacted"] == true { continue; }
+            let groups = row_groups(&row);
+            let row_status = member_status(&row, today);
+            if group.is_some_and(|g| !groups.iter().any(|v| v == g))
+                || status.is_some_and(|s| s != row_status) { continue; }
+            let name = row["name"].as_str().unwrap_or("");
+            let asset = row["asset"].as_str().unwrap_or("");
+            let phone: String = row["phone"].as_str().unwrap_or("").chars().filter(char::is_ascii_digit).collect();
+            if !query.is_empty() && !name.to_lowercase().contains(&name_query)
+                && !asset.to_uppercase().contains(&asset_query)
+                && !(phone_query && phone.ends_with(query)) { continue; }
+            let kind = row["kind"].as_str().unwrap_or("period");
+            let visits_left = if kind == "punch" {
+                Some(row["visits_total"].as_i64().unwrap_or(0)
+                    .saturating_sub(row["visits_used"].as_i64().unwrap_or(0)).max(0))
+            } else { None };
+            // Explicit allowlist: never return phone (even its tail), memos, note or extra.
+            results.push(json!({ "code": asset, "name": name, "until": row["expires"].as_i64().unwrap_or(0),
+                "kind": kind, "visits_left": visits_left, "groups": groups, "status": row_status }));
+            if results.len() == 31 { break; }
+        }
+        let more = results.len() > 30;
+        results.truncate(30);
+        Ok(json!({ "results": results, "more": more }))
+    })
 }
 
 /// The door. Name, phone tail, or member number — whatever staff can type fast.
@@ -852,6 +979,103 @@ pub fn remove_member(asset: String) -> Result<(), String> {
 #[cfg(test)]
 mod days_left_tests {
     use super::*;
+
+    #[test]
+    fn groups_survive_edits_rename_delete_and_do_not_extend_retention() {
+        use crate::member_privacy::member_groups_set;
+        crate::member_privacy::tests::in_sandbox(|| {
+            member_groups_set(vec!["Alpha".into(), "Beta".into()], None).unwrap();
+            synthetic_member("SYNTHETIC", "punch");
+            assert!(assign_groups("MISSING", vec![], 99).unwrap_err().starts_with("NOT_MEMBER: "));
+            assert!(assign_groups("SYNTHETIC", vec!["Unknown".into()], 99).unwrap_err().starts_with("GROUP_INVALID: "));
+            let value = member_groups_assign("SYNTHETIC".into(), vec![" Alpha ".into(), "Beta".into(), "Alpha".into()], 99).unwrap();
+            assert_eq!(value, json!({"code":"SYNTHETIC","groups":["Alpha","Beta"]}));
+            append_memo("SYNTHETIC", "owner", "synthetic memo", 100).unwrap();
+            assert_eq!(load()[0]["updated"], 42);
+            save_member("SYNTHETIC".into(), "Synthetic Edited".into(), "0000".into(),
+                "punch".into(), 20260101, 10, "".into(), 42, None).unwrap();
+            assert_eq!(member_info("SYNTHETIC", 42).unwrap()["groups"], json!(["Alpha","Beta"]));
+            member_groups_set(vec!["Gamma".into(), "Beta".into()], Some(vec![("Alpha".into(), "Gamma".into())])).unwrap();
+            assert_eq!(load()[0]["groups"], json!(["Gamma", "Beta"]));
+            assert_eq!(list_members(42).unwrap()["members"][0]["groups"], json!(["Gamma", "Beta"]));
+            assert_eq!(check_in_lookup("Synthetic".into(), 42).unwrap()["matches"][0]["groups"], json!(["Gamma", "Beta"]));
+            member_groups_set(vec!["Gamma".into()], None).unwrap();
+            assert_eq!(load()[0]["groups"], json!(["Gamma"]));
+            assert_eq!(load()[0]["updated"], 42);
+            assert!(member_groups_set(vec!["Gamma".into()], Some(vec![("Unknown".into(), "Gamma".into())])).is_err());
+        });
+    }
+
+    #[test]
+    fn group_renames_are_simultaneous_and_do_not_overwrite_corrupt_ledger() {
+        use crate::member_privacy::{member_groups_set, member_groups_get};
+        crate::member_privacy::tests::in_sandbox(|| {
+            member_groups_set(vec!["Alpha".into(), "Beta".into()], None).unwrap();
+            synthetic_member("SYNTHETIC", "period");
+            assign_groups("SYNTHETIC", vec!["Alpha".into(), "Beta".into()], 42).unwrap();
+            member_groups_set(vec!["Alpha".into(), "Beta".into()], Some(vec![
+                ("Alpha".into(), "Beta".into()), ("Beta".into(), "Alpha".into())])).unwrap();
+            assert_eq!(load()[0]["groups"], json!(["Beta", "Alpha"]));
+            member_groups_set(vec!["Beta".into()], Some(vec![("Alpha".into(), "Beta".into())])).unwrap();
+            assert_eq!(load()[0]["groups"], json!(["Beta"]));
+            std::fs::write(store_path(), b"synthetic corrupt ledger").unwrap();
+            assert!(member_groups_set(vec![], None).is_err());
+            assert_eq!(member_groups_get().unwrap(), vec!["Beta"]);
+            assert_eq!(std::fs::read_to_string(store_path()).unwrap(), "synthetic corrupt ledger");
+        });
+    }
+
+    #[test]
+    fn group_cleanup_and_removal_erase_live_and_backup_data() {
+        crate::member_privacy::tests::in_sandbox(|| {
+            crate::member_privacy::member_groups_set(vec!["SyntheticTag".into()], None).unwrap();
+            synthetic_member("SYNTHETIC", "period");
+            assign_groups("SYNTHETIC", vec!["SyntheticTag".into()], 42).unwrap();
+            assert_eq!(redact_expired_members(days_from_ymd(20260828) * 86400, 6).unwrap(), 1);
+            assert_eq!(member_info("SYNTHETIC", 42).unwrap()["groups"], json!([]));
+            assert_eq!(list_members(42).unwrap()["members"][0]["groups"], json!([]));
+            assert_eq!(check_in_lookup("SYNTHETIC".into(), 42).unwrap()["matches"][0]["groups"], json!([]));
+            assert!(assign_groups("SYNTHETIC", vec![], 42).unwrap_err().starts_with("MEMBER_REDACTED: "));
+            for path in [store_path(), dir().join("passes.json.bak")] {
+                let raw = std::fs::read_to_string(path).unwrap();
+                let data: Value = serde_json::from_str(&raw).unwrap();
+                assert_eq!(data["passes"][0]["groups"], json!([]));
+                assert!(!raw.contains("SyntheticTag"));
+            }
+            synthetic_member("DELETE", "period");
+            assign_groups("DELETE", vec!["SyntheticTag".into()], 42).unwrap();
+            remove_member("DELETE".into()).unwrap();
+            for path in [store_path(), dir().join("passes.json.bak")] {
+                let raw = std::fs::read_to_string(path).unwrap();
+                assert!(!raw.contains("SyntheticTag"));
+                assert!(!raw.contains("DELETE"));
+            }
+        });
+    }
+
+    #[test]
+    fn search_status_matches_roster_calendar_and_punch_boundaries() {
+        let today = 20260831;
+        for (kind, expires, total, used, frozen, expected) in [
+            ("period", 20260830, 0, 0, 0, "over"),
+            ("period", 20260831, 0, 0, 0, "ending"),
+            ("period", 20260907, 0, 0, 0, "ending"),
+            ("period", 20260908, 0, 0, 0, "active"),
+            ("period", 20260908, 0, 0, today, "over"),
+            ("period", 0, 0, 0, 0, "over"),
+            ("punch", 20200101, 10, 9, 0, "active"),
+            ("punch", 20990101, 10, 10, 0, "over"),
+            ("punch", 20990101, 10, 9, today, "over"),
+        ] {
+            let row = json!({"kind":kind,"expires":expires,"visits_total":total,"visits_used":used,"frozen_at":frozen});
+            let roster = decorate(&row, today);
+            let existing_bucket = if roster["valid"] != true { "over" }
+                else if kind == "period" && roster["days_left"].as_i64().unwrap() <= 7 { "ending" }
+                else { "active" };
+            assert_eq!(member_status(&row, today), expected);
+            assert_eq!(roster["status"], existing_bucket);
+        }
+    }
 
     #[test]
     fn memo_cleaning_counts_characters_and_rejects_controls() {

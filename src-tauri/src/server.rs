@@ -2861,7 +2861,7 @@ async fn api_scan_member(
     };
     let consent = body["consent"].as_bool().unwrap_or(false);
     let version = body["consent_version"].as_str().unwrap_or_default();
-    match crate::ticket::ticket_to_member(code.into(), name.into(), phone.into(), consent, version.into(), memo.into(), role, now_unix()) {
+    match crate::ticket::ticket_to_member(code.into(), name.into(), phone.into(), consent, version.into(), memo.into(), role, now_unix(), body.get("groups").cloned()) {
         Ok(v) => (StatusCode::OK, Json(v)),
         Err(e) => {
             let (status, code, message) = if let Some(message) = e.strip_prefix("MEMBER_INFO_OFF: ") {
@@ -2870,6 +2870,8 @@ async fn api_scan_member(
                 (StatusCode::BAD_REQUEST, "CONSENT_REQUIRED", message)
             } else if let Some(message) = e.strip_prefix("CONSENT_VERSION_STALE: ") {
                 (StatusCode::BAD_REQUEST, "CONSENT_VERSION_STALE", message)
+            } else if let Some(message) = e.strip_prefix("GROUP_INVALID: ") {
+                (StatusCode::BAD_REQUEST, "GROUP_INVALID", message)
             } else if let Some(message) = e.strip_prefix("MEMO_INVALID: ") {
                 (StatusCode::BAD_REQUEST, "MEMO_INVALID", message)
             } else {
@@ -2952,6 +2954,66 @@ async fn api_scan_member_memo(
     }
 }
 
+async fn api_scan_member_groups(
+    State(state): State<ServerState>, headers: HeaderMap, body: axum::body::Bytes,
+) -> impl IntoResponse {
+    if let Err(reason) = authed_for_reason(&state, &headers, &json!({}), "/api/scan/member-groups") {
+        return (StatusCode::UNAUTHORIZED, Json(auth_fail_json(reason)));
+    }
+    if let Err(error) = member_info_policy() { return error; }
+    let invalid = || member_api_error(StatusCode::BAD_REQUEST, "GROUP_INVALID", "분류 입력을 확인해 주세요.");
+    let body: Value = match serde_json::from_slice(&body) {
+        Ok(body) => body,
+        Err(_) => return invalid(),
+    };
+    let (Some(code), Some(groups)) = (body["code"].as_str(), body.get("groups")) else { return invalid(); };
+    let groups = match crate::member_privacy::parse_member_groups(groups) {
+        Ok(groups) => groups,
+        Err(_) => return invalid(),
+    };
+    let Some(code) = member_code(code) else {
+        return member_api_error(StatusCode::BAD_REQUEST, "CODE_INVALID", "회원 번호를 확인해 주세요.");
+    };
+    match crate::pass::assign_groups(&code, groups, now_unix()) {
+        Ok(value) => (StatusCode::OK, Json(value)),
+        Err(error) => {
+            let (code, message) = error.split_once(": ").unwrap_or(("GROUP_SAVE_FAILED", &error));
+            let status = match code {
+                "NOT_MEMBER" => StatusCode::NOT_FOUND,
+                "MEMBER_REDACTED" => StatusCode::CONFLICT,
+                "GROUP_INVALID" => StatusCode::BAD_REQUEST,
+                _ => StatusCode::INTERNAL_SERVER_ERROR,
+            };
+            member_api_error(status, code, message)
+        }
+    }
+}
+
+async fn api_scan_member_search(
+    State(state): State<ServerState>, headers: HeaderMap,
+    query: Result<Query<std::collections::HashMap<String, String>>, axum::extract::rejection::QueryRejection>,
+) -> impl IntoResponse {
+    if let Err(reason) = authed_for_reason(&state, &headers, &json!({}), "/api/scan/member-search") {
+        return (StatusCode::UNAUTHORIZED, Json(auth_fail_json(reason)));
+    }
+    if let Err(error) = member_info_policy() { return error; }
+    let Query(query) = match query {
+        Ok(query) => query,
+        Err(_) => return member_api_error(StatusCode::BAD_REQUEST, "QUERY_INVALID", "검색 조건을 확인해 주세요."),
+    };
+    match crate::pass::search_members(query.get("q").map(String::as_str).unwrap_or_default(),
+        query.get("group").map(String::as_str), query.get("status").map(String::as_str), now_unix()) {
+        Ok(value) => (StatusCode::OK, Json(value)),
+        Err(error) => {
+            if let Some(message) = error.strip_prefix("QUERY_INVALID: ") {
+                member_api_error(StatusCode::BAD_REQUEST, "QUERY_INVALID", message)
+            } else {
+                member_api_error(StatusCode::INTERNAL_SERVER_ERROR, "MEMBER_POLICY_UNAVAILABLE", "회원 분류 설정을 읽지 못했습니다.")
+            }
+        }
+    }
+}
+
 async fn api_scan_member_policy(
     State(state): State<ServerState>,
     headers: HeaderMap,
@@ -2959,9 +3021,10 @@ async fn api_scan_member_policy(
     if let Err(reason) = authed_for_reason(&state, &headers, &json!({}), "/api/scan/member-policy") {
         return (StatusCode::UNAUTHORIZED, Json(auth_fail_json(reason)));
     }
-    match crate::member_privacy::member_privacy_get() {
-        Ok(policy) => (StatusCode::OK, Json(json!({
-            "level": policy.level, "retention_months": policy.retention_months,
+    match crate::member_privacy::member_privacy_get().and_then(|policy|
+        crate::member_privacy::member_groups_get().map(|groups| (policy, groups))) {
+        Ok((policy, groups)) => (StatusCode::OK, Json(json!({
+            "groups": groups, "level": policy.level, "retention_months": policy.retention_months,
             "consent_version": crate::member_privacy::CONSENT_VERSION,
             "consent_text": crate::member_privacy::consent_text(&policy),
         }))),
@@ -3101,6 +3164,8 @@ fn build_phone_router(st: ServerState) -> axum::Router {
         .route("/api/scan/member-info", get(api_scan_member_info))
         .route("/api/scan/member-memo", post(api_scan_member_memo))
         .route("/api/scan/member-policy", get(api_scan_member_policy))
+        .route("/api/scan/member-groups", post(api_scan_member_groups))
+        .route("/api/scan/member-search", get(api_scan_member_search))
         // 🔴 가게를 다른 컴퓨터로 옮기는 길. 같은 와이파이의 새 컴퓨터가
         //    여섯 자리 숫자를 들고 여기로 온다.
         //    ⚠️ 숫자가 틀리면 옛 컴퓨터가 횟수를 세고, 세 번이면 짐을 버린다.
@@ -4954,6 +5019,239 @@ mod order_persistence_tests {
     }
 
     #[tokio::test]
+    async fn member_groups_roles_validation_policy_and_remote_gate() {
+        let _home = TestHome::new();
+        let st = ServerState::default();
+        st.role_tokens.lock().unwrap().insert("customer".into(), "synthetic-customer-token".into());
+        crate::member_privacy::member_groups_set(vec!["Alpha".into()], None).unwrap();
+        crate::pass::save_member("ROOT/M#ABCD".into(), "Synthetic A".into(), "010-5550-7391".into(),
+            "period".into(), 20990101, 0, "".into(), now_unix(), None).unwrap();
+        let path = "/api/scan/member-groups";
+        for role in ["owner", "staff", "scanner"] {
+            let (status, body) = request(&st, path, "POST", Some(role), "localhost",
+                json!({"code":" root/m#abcd ","groups":[" Alpha ","Alpha"]})).await;
+            assert_eq!(status, StatusCode::OK, "{body}");
+            assert_eq!(body, json!({"code":"ROOT/M#ABCD","groups":["Alpha"]}));
+        }
+        for (role, code) in [(None, "BAD_TOKEN"), (Some("customer"), "FORBIDDEN_ROLE")] {
+            let (status, body) = request_raw(&st, path, "POST", role, "localhost", "{broken".into()).await;
+            assert_eq!(status, StatusCode::UNAUTHORIZED);
+            assert_eq!(body["code"], code);
+            assert!(body["error"].is_string());
+        }
+        for raw in ["{broken".to_string(), "[]".into(), "null".into(),
+            json!({"code":"ROOT/M#ABCD"}).to_string(),
+            json!({"code":"ROOT/M#ABCD","groups":null}).to_string(),
+            json!({"code":"ROOT/M#ABCD","groups":"Alpha"}).to_string(),
+            json!({"code":"ROOT/M#ABCD","groups":[1]}).to_string(),
+            json!({"code":"ROOT/M#ABCD","groups":["Unknown"]}).to_string(),
+            json!({"code":"ROOT/M#ABCD","groups":vec!["Alpha";6]}).to_string(),
+            json!({"code":7,"groups":[]}).to_string(),
+        ] {
+            let (status, body) = request_raw(&st, path, "POST", Some("staff"), "localhost", raw).await;
+            assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+            assert_eq!(body["code"], "GROUP_INVALID");
+            assert!(body["error"].is_string());
+        }
+        for (code, expected_status, expected_code) in [
+            ("bad code", StatusCode::BAD_REQUEST, "CODE_INVALID"),
+            ("", StatusCode::BAD_REQUEST, "CODE_INVALID"),
+            ("MISSING", StatusCode::NOT_FOUND, "NOT_MEMBER"),
+        ] {
+            let (status, body) = request(&st, path, "POST", Some("staff"), "localhost", json!({"code":code,"groups":[]})).await;
+            assert_eq!(status, expected_status);
+            assert_eq!(body["code"], expected_code);
+            assert!(body["error"].is_string());
+        }
+        let (status, info) = request(&st, "/api/scan/member-info?code=ROOT/M%23ABCD", "GET", Some("staff"), "localhost", json!({})).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(info["groups"], json!(["Alpha"]));
+        crate::pass::save_member("ROOT/M#ABCD".into(), "Synthetic A".into(), "010-5550-7391".into(),
+            "period".into(), 20200101, 0, "".into(), now_unix(), None).unwrap();
+        crate::pass::redact_expired_members(now_unix(), 6).unwrap();
+        let (status, body) = request(&st, path, "POST", Some("staff"), "localhost", json!({"code":"ROOT/M#ABCD","groups":[]})).await;
+        assert_eq!(status, StatusCode::CONFLICT);
+        assert_eq!(body["code"], "MEMBER_REDACTED");
+        let (status, info) = request(&st, "/api/scan/member-info?code=ROOT/M%23ABCD", "GET", Some("staff"), "localhost", json!({})).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(info["redacted"], true);
+        assert_eq!(info["groups"], json!([]));
+        let (status, body) = request(&st, path, "POST", Some("owner"), "shop.example", json!({"code":"MISSING","groups":[]})).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+        assert_eq!(body["code"], "REMOTE_OFF");
+        crate::member_privacy::member_privacy_set("none".into(), 6).unwrap();
+        let (status, body) = request_raw(&st, path, "POST", Some("staff"), "localhost", "{broken".into()).await;
+        assert_eq!(status, StatusCode::FORBIDDEN);
+        assert_eq!(body["code"], "MEMBER_INFO_OFF");
+    }
+
+    #[tokio::test]
+    async fn member_search_roles_validation_policy_and_remote_gate() {
+        let _home = TestHome::new();
+        let st = ServerState::default();
+        st.role_tokens.lock().unwrap().insert("customer".into(), "synthetic-customer-token".into());
+        crate::member_privacy::member_groups_set(vec!["Alpha".into()], None).unwrap();
+        for role in ["owner", "staff", "scanner"] {
+            let (status, body) = request(&st, "/api/scan/member-search?q=Synthetic", "GET", Some(role), "localhost", json!({})).await;
+            assert_eq!(status, StatusCode::OK);
+            assert_eq!(body, json!({"results":[],"more":false}));
+        }
+        for (role, code) in [(None, "BAD_TOKEN"), (Some("customer"), "FORBIDDEN_ROLE")] {
+            let (status, body) = request(&st, "/api/scan/member-search", "GET", role, "localhost", json!({})).await;
+            assert_eq!(status, StatusCode::UNAUTHORIZED);
+            assert_eq!(body["code"], code);
+        }
+        for query in ["", "?q=", "?q=%20%20", "?q=A", "?q=ABCDEFGHIJKLMNOPQRSTU", "?q=ab%09",
+            "?q=%00ab", "?q=A&group=Alpha", "?status=unknown", "?group=Unknown", "?status=", "?group="] {
+            let (status, body) = request(&st, &format!("/api/scan/member-search{query}"), "GET", Some("staff"), "localhost", json!({})).await;
+            assert_eq!(status, StatusCode::BAD_REQUEST, "{query}: {body}");
+            assert_eq!(body["code"], "QUERY_INVALID");
+            assert!(body["error"].is_string());
+        }
+        for query in ["?q=AB", "?q=ABCDEFGHIJKLMNOPQRST", "?q=%EA%B0%80%EB%82%98", "?q=%20%20&group=Alpha"] {
+            let (status, _) = request(&st, &format!("/api/scan/member-search{query}"), "GET", Some("staff"), "localhost", json!({})).await;
+            assert_eq!(status, StatusCode::OK, "{query}");
+        }
+        // Twenty Unicode characters are valid even though they occupy sixty bytes.
+        for (count, expected) in [(20, StatusCode::OK), (21, StatusCode::BAD_REQUEST)] {
+            let path = format!("/api/scan/member-search?q={}", "%EA%B0%80".repeat(count));
+            let (status, body) = request(&st, &path, "GET", Some("staff"), "localhost", json!({})).await;
+            assert_eq!(status, expected);
+            if count == 21 { assert_eq!(body["code"], "QUERY_INVALID"); }
+        }
+        let (status, body) = request(&st, "/api/scan/member-search?q=Synthetic", "GET", Some("owner"), "shop.example", json!({})).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+        assert_eq!(body["code"], "REMOTE_OFF");
+        crate::member_privacy::member_privacy_set("none".into(), 6).unwrap();
+        let (status, body) = request(&st, "/api/scan/member-search", "GET", Some("staff"), "localhost", json!({})).await;
+        assert_eq!(status, StatusCode::FORBIDDEN);
+        assert_eq!(body["code"], "MEMBER_INFO_OFF");
+    }
+
+    // Check the entire serialized response, not merely an absent phone field.
+    fn assert_search_has_no_private_data(body: &Value) {
+        let raw = body.to_string();
+        for forbidden in ["010-5550-7391", "01055507391", "5550", "7391", "phone", "memo", "note", "extra", "synthetic private"] {
+            assert!(!raw.contains(forbidden), "search leaked {forbidden}: {raw}");
+        }
+    }
+
+    #[tokio::test]
+    async fn member_search_matches_filters_redaction_limit_and_never_exposes_phone() {
+        let _home = TestHome::new();
+        let st = ServerState::default();
+        let now = now_unix();
+        crate::member_privacy::member_groups_set(vec!["Alpha".into(), "Beta".into()], None).unwrap();
+        for (index, code, name, kind, expiry, visits, group) in [
+            (0, "ROOT/M#ABCD", "Synthetic A", "period", 20990101, 0, "Alpha"),
+            (1, "ROOT/M#EFGH", "Synthetic B", "period", crate::pass::today_ymd(now + 86400), 0, "Beta"),
+            (2, "ROOT/M#JKLM", "Synthetic C", "punch", 0, 0, "Beta"),
+            (3, "ROOT/M#NPQR", "Synthetic D", "punch", 0, 8, "Alpha"),
+            (4, "ROOT/M#STUV", "Synthetic Redacted", "period", 20200101, 0, "Alpha"),
+        ] {
+            crate::pass::save_member(code.into(), name.into(), "010-5550-7391".into(), kind.into(), expiry, visits,
+                "synthetic private note".into(), now + index, Some(json!({"private":"synthetic private extra"}))).unwrap();
+            crate::pass::append_memo(code, "staff", "synthetic private memo", now).unwrap();
+            crate::pass::assign_groups(code, vec![group.into()], now).unwrap();
+        }
+        assert_eq!(crate::pass::redact_expired_members(now, 6).unwrap(), 1);
+        for (query, expected) in [
+            ("?q=sYnThEtIc%20a", vec!["ROOT/M#ABCD"]),
+            ("?q=m%23abcd", vec!["ROOT/M#ABCD"]),
+            ("?q=7391", vec!["ROOT/M#NPQR", "ROOT/M#JKLM", "ROOT/M#EFGH", "ROOT/M#ABCD"]),
+            ("?q=391", vec![]), ("?q=5550", vec![]), ("?q=01055507391", vec![]),
+            ("?group=Alpha", vec!["ROOT/M#NPQR", "ROOT/M#ABCD"]),
+            ("?status=active", vec!["ROOT/M#NPQR", "ROOT/M#ABCD"]),
+            ("?status=ending", vec!["ROOT/M#EFGH"]), ("?status=over", vec!["ROOT/M#JKLM"]),
+            ("?q=Synthetic&group=Beta&status=ending", vec!["ROOT/M#EFGH"]),
+            ("?q=STUV", vec![]), ("?q=Redacted", vec![]),
+        ] {
+            let (status, body) = request(&st, &format!("/api/scan/member-search{query}"), "GET", Some("staff"), "localhost", json!({})).await;
+            assert_eq!(status, StatusCode::OK, "{query}: {body}");
+            assert_eq!(body["more"], false);
+            assert_search_has_no_private_data(&body);
+            let rows = body["results"].as_array().unwrap();
+            let codes: Vec<_> = rows.iter().map(|r| r["code"].as_str().unwrap()).collect();
+            assert_eq!(codes, expected, "{query}");
+            let roster = crate::pass::list_members(now).unwrap();
+            for row in rows {
+                assert_eq!(row.as_object().unwrap().len(), 7);
+                let original = roster["members"].as_array().unwrap().iter().find(|r| r["asset"] == row["code"]).unwrap();
+                assert_eq!(row["status"], original["status"]);
+                assert_eq!(row["until"], original["expires"]);
+                assert_eq!(row["groups"], original["groups"]);
+                if row["kind"] == "punch" { assert_eq!(row["visits_left"], original["left"]); }
+                else { assert!(row["visits_left"].is_null()); }
+            }
+        }
+        for i in 0..31 {
+            crate::pass::save_member(format!("BATCH-{i:02}"), format!("Synthetic Batch {i:02}"), "010-5550-7391".into(),
+                "period".into(), 20990101, 0, "synthetic private note".into(), now + i, None).unwrap();
+        }
+        let (status, body) = request(&st, "/api/scan/member-search?q=Batch", "GET", Some("scanner"), "localhost", json!({})).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body["results"].as_array().unwrap().len(), 30);
+        assert_eq!(body["more"], true);
+        assert_eq!(body["results"][0]["code"], "BATCH-30");
+        assert_eq!(body["results"][29]["code"], "BATCH-01");
+        assert_search_has_no_private_data(&body);
+        crate::pass::remove_member("BATCH-30".into()).unwrap();
+        let (status, body) = request(&st, "/api/scan/member-search?q=Batch", "GET", Some("scanner"), "localhost", json!({})).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body["results"].as_array().unwrap().len(), 30);
+        assert_eq!(body["more"], false);
+        assert_search_has_no_private_data(&body);
+    }
+
+    #[tokio::test]
+    async fn member_registration_and_policy_groups_validate_and_persist() {
+        let _home = TestHome::new();
+        let st = ServerState::default();
+        crate::member_privacy::member_groups_set(vec!["Alpha".into()], None).unwrap();
+        let (status, policy) = request(&st, "/api/scan/member-policy", "GET", Some("scanner"), "localhost", json!({})).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(policy["groups"], json!(["Alpha"]));
+        let tickets = crate::ticket::issue_for_order("synthetic-groups", &json!([{"name":"Pass","qty":1}]),
+            &json!([{"name":"Pass","pass_months":1}]), now_unix());
+        let registration = json!({"code":tickets[0]["code"], "name":"Synthetic A", "phone":"0000", "consent":true,
+            "consent_version":crate::member_privacy::CONSENT_VERSION, "groups":[" Alpha ","Alpha"]});
+        for invalid in [json!(["Unknown"]), json!(null), json!("Alpha"), json!([1]), json!(vec!["Alpha";6])] {
+            let mut input = registration.clone();
+            input["groups"] = invalid;
+            let (status, body) = request(&st, "/api/scan/member", "POST", Some("staff"), "localhost", input).await;
+            assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+            assert_eq!(body["code"], "GROUP_INVALID");
+            assert!(body["error"].is_string());
+        }
+        // Invalid groups cannot preempt consent, version or the disabled policy.
+        for (consent, version, level, expected_status, expected_code) in [
+            (false, "stale", "none", StatusCode::BAD_REQUEST, "CONSENT_REQUIRED"),
+            (true, "stale", "none", StatusCode::BAD_REQUEST, "CONSENT_VERSION_STALE"),
+            (true, crate::member_privacy::CONSENT_VERSION, "none", StatusCode::FORBIDDEN, "MEMBER_INFO_OFF"),
+        ] {
+            crate::member_privacy::member_privacy_set(level.into(), 6).unwrap();
+            let mut input = registration.clone();
+            input["consent"] = json!(consent);
+            input["consent_version"] = json!(version);
+            input["groups"] = json!(7);
+            let (status, body) = request(&st, "/api/scan/member", "POST", Some("staff"), "localhost", input).await;
+            assert_eq!(status, expected_status);
+            assert_eq!(body["code"], expected_code);
+        }
+        crate::member_privacy::member_privacy_set("name_last4".into(), 6).unwrap();
+        let (status, body) = request(&st, "/api/scan/member", "POST", Some("staff"), "localhost", registration).await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        assert_eq!(crate::pass::member_info(body["code"].as_str().unwrap(), now_unix()).unwrap()["groups"], json!(["Alpha"]));
+        std::fs::write(crate::paths::app_file("member_groups.json"), b"synthetic corrupt groups").unwrap();
+        for path in ["/api/scan/member-policy", "/api/scan/member-search?q=Synthetic"] {
+            let (status, body) = request(&st, path, "GET", Some("staff"), "localhost", json!({})).await;
+            assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+            assert_eq!(body["code"], "MEMBER_POLICY_UNAVAILABLE");
+            assert!(body["error"].is_string());
+        }
+    }
+
+    #[tokio::test]
     async fn member_memos_use_real_roles_and_http_codes() {
         let _home = TestHome::new();
         let st = ServerState::default();
@@ -4995,7 +5293,7 @@ mod order_persistence_tests {
             let (status, info) = request(&st, "/api/scan/member-info?code=%20root/m%23abcd%20", "GET", Some(role), "localhost", json!({})).await;
             assert_eq!(status, StatusCode::OK, "{info}");
             assert_eq!(info, json!({"code":asset,"name":"Synthetic Member","until":20260101,
-                "kind":"punch","visits_left":10,"memos":body["memos"],"redacted":false}));
+                "kind":"punch","visits_left":10,"memos":body["memos"],"groups":[],"redacted":false}));
             assert!(info.get("phone").is_none());
         }
         for raw in ["{invalid synthetic JSON".to_string(), json!({"code":asset,"text":""}).to_string(),
@@ -5060,7 +5358,7 @@ mod order_persistence_tests {
         for role in ["staff", "scanner", "owner"] {
             let (status, policy) = request(&st, "/api/scan/member-policy", "GET", Some(role), "localhost", json!({})).await;
             assert_eq!(status, StatusCode::OK);
-            assert_eq!(policy, json!({"level":"name_last4", "retention_months":6,
+            assert_eq!(policy, json!({"groups":[], "level":"name_last4", "retention_months":6,
                 "consent_version": crate::member_privacy::CONSENT_VERSION,
                 "consent_text": crate::member_privacy::consent_text(&crate::member_privacy::Policy::default())}));
         }

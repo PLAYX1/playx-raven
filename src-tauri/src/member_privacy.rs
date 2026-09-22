@@ -112,6 +112,105 @@ pub fn member_privacy_set(level: String, retention_months: u32) -> Result<Policy
     Ok(policy)
 }
 
+// Lock order: GROUPS_LOCK -> pass::STORE_LOCK -> ticket lock. Never acquire
+// GROUPS_LOCK from inside a ledger operation. Hold it through validation and save
+// so assignments/registration cannot race a rename or deletion.
+static GROUPS_LOCK: Mutex<()> = Mutex::new(());
+
+#[derive(Serialize, Deserialize)]
+struct GroupList { groups: Vec<String> }
+
+pub fn validate_group_list(groups: &[String]) -> Result<Vec<String>, String> {
+    if groups.len() > 20 {
+        return Err("GROUP_INVALID: 분류는 20개까지 만들 수 있습니다.".into());
+    }
+    let mut clean = Vec::new();
+    for value in groups {
+        let name = value.trim();
+        if value.chars().any(char::is_control) || !(1..=12).contains(&name.chars().count()) {
+            return Err("GROUP_INVALID: 분류 이름은 제어문자 없이 1~12자로 적어 주세요.".into());
+        }
+        if clean.iter().any(|old| old == name) {
+            return Err("GROUP_INVALID: 같은 분류 이름을 두 번 쓸 수 없습니다.".into());
+        }
+        clean.push(name.to_string());
+    }
+    Ok(clean)
+}
+
+pub fn clean_member_groups(list: &[String], allowed: &[String]) -> Result<Vec<String>, String> {
+    // Limit the submitted array too, even if duplicates would reduce its size.
+    if list.len() > 5 {
+        return Err("GROUP_INVALID: 회원 분류는 5개까지 지정할 수 있습니다.".into());
+    }
+    let mut clean = Vec::new();
+    for value in list {
+        let name = value.trim();
+        if value.chars().any(char::is_control) || !allowed.iter().any(|v| v == name) {
+            return Err("GROUP_INVALID: 가게 목록에 있는 분류를 골라 주세요.".into());
+        }
+        if !clean.iter().any(|v| v == name) { clean.push(name.to_string()); }
+    }
+    Ok(clean)
+}
+
+pub fn parse_member_groups(value: &serde_json::Value) -> Result<Vec<String>, String> {
+    serde_json::from_value::<Vec<String>>(value.clone())
+        .map_err(|_| "GROUP_INVALID: 분류는 문자열 배열로 보내 주세요.".into())
+}
+
+fn read_groups() -> Result<Vec<String>, String> {
+    let bytes = match std::fs::read(crate::paths::app_file("member_groups.json")) {
+        Ok(bytes) => bytes,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(_) => return Err("회원 분류 설정을 읽지 못했습니다.".into()),
+    };
+    let list: GroupList = serde_json::from_slice(&bytes)
+        .map_err(|_| "회원 분류 설정이 손상되었습니다.".to_string())?;
+    validate_group_list(&list.groups)
+        .map_err(|_| "회원 분류 설정이 손상되었습니다.".to_string())
+}
+
+pub(crate) fn with_member_groups<T>(f: impl FnOnce(&[String]) -> Result<T, String>) -> Result<T, String> {
+    let _guard = GROUPS_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    f(&read_groups()?)
+}
+
+#[tauri::command]
+pub fn member_groups_get() -> Result<Vec<String>, String> {
+    with_member_groups(|groups| Ok(groups.to_vec()))
+}
+
+#[tauri::command]
+pub fn member_groups_set(groups: Vec<String>, renames: Option<Vec<(String, String)>>) -> Result<Vec<String>, String> {
+    let groups = validate_group_list(&groups)?;
+    // IPC contract: renames is an optional array of [oldName, newName] pairs.
+    // Apply each pair once to the original value (including swaps), not as a chain.
+    let renames: Vec<_> = renames.unwrap_or_default().into_iter()
+        .map(|(old, new)| (old.trim().to_string(), new.trim().to_string())).collect();
+    with_member_groups(|old_groups| {
+        let mut seen = std::collections::HashSet::new();
+        for (old, new) in &renames {
+            if !old_groups.contains(old) || !groups.contains(new) || !seen.insert(old) {
+                return Err("GROUP_INVALID: 이름 바꾸기의 이전·새 분류와 중복을 확인해 주세요.".into());
+            }
+        }
+        crate::pass::reconcile_member_groups(&groups, &renames, || {
+            let dir = crate::paths::app_dir();
+            std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+            let path = crate::paths::app_file("member_groups.json");
+            let tmp = crate::paths::app_file("member_groups.json.tmp");
+            let bytes = serde_json::to_vec_pretty(&GroupList { groups: groups.clone() }).map_err(|e| e.to_string())?;
+            std::fs::write(&tmp, bytes).map_err(|e| e.to_string())?;
+            if path.exists() {
+                std::fs::copy(&path, dir.join("member_groups.json.bak")).map_err(|e| e.to_string())?;
+            }
+            std::fs::rename(tmp, path).map_err(|e| e.to_string())
+        })?;
+        Ok(groups.clone())
+    })
+}
+
 pub fn run_cleanup_once(now: i64) -> CleanupResult {
     let outcome = member_privacy_get().map_err(|_| SETTINGS_ERROR)
         .and_then(|policy| crate::pass::redact_expired_members(now, policy.retention_months)
@@ -171,6 +270,51 @@ pub(crate) mod tests {
         std::env::set_var("PLAYX_RAVEN_HOME", &dir);
         f()
     }
+    #[test]
+    fn group_list_validation_limits_unicode_controls_and_duplicates() {
+        let twenty: Vec<_> = (0..20).map(|i| format!("분류{i}")).collect();
+        assert_eq!(validate_group_list(&twenty).unwrap(), twenty);
+        assert_eq!(validate_group_list(&[format!(" {} ", "가".repeat(12))]).unwrap(), vec!["가".repeat(12)]);
+        for list in [
+            (0..21).map(|i| format!("분류{i}")).collect(), vec!["가".repeat(13)],
+            vec!["".into()], vec!["  ".into()], vec!["a".into(), " a ".into()],
+            vec!["a\n".into()], vec!["a\t".into()], vec!["a\0".into()], vec!["a\u{7f}".into()],
+        ] {
+            assert!(validate_group_list(&list).unwrap_err().starts_with("GROUP_INVALID: "));
+        }
+        assert_eq!(validate_group_list(&["A".into(), "a".into()]).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn member_group_validation_deduplicates_and_limits_submitted_values() {
+        let allowed: Vec<_> = (0..6).map(|i| format!("Group{i}")).collect();
+        assert_eq!(clean_member_groups(&[" Group0 ".into(), "Group0".into()], &allowed).unwrap(), vec!["Group0"]);
+        assert_eq!(clean_member_groups(&allowed[..5], &allowed).unwrap().len(), 5);
+        for list in [allowed.clone(), vec!["Group0".into(); 6], vec!["missing".into()], vec!["".into()]] {
+            assert!(clean_member_groups(&list, &allowed).unwrap_err().starts_with("GROUP_INVALID: "));
+        }
+        for value in [serde_json::json!(null), serde_json::json!({}), serde_json::json!([1]), serde_json::json!("Group0")] {
+            assert!(parse_member_groups(&value).unwrap_err().starts_with("GROUP_INVALID: "));
+        }
+    }
+
+    #[test]
+    fn groups_roundtrip_backup_and_corruption_fail_closed() {
+        in_sandbox(|| {
+            assert!(member_groups_get().unwrap().is_empty());
+            assert_eq!(member_groups_set(vec![" First ".into()], None).unwrap(), vec!["First"]);
+            assert_eq!(member_groups_get().unwrap(), vec!["First"]);
+            member_groups_set(vec!["Second".into()], None).unwrap();
+            let backup: serde_json::Value = serde_json::from_slice(&std::fs::read(crate::paths::app_file("member_groups.json.bak")).unwrap()).unwrap();
+            assert_eq!(backup, serde_json::json!({"groups":["First"]}));
+            assert!(!crate::paths::app_file("member_groups.json.tmp").exists());
+            for bad in ["bad", "{}", r#"{"groups":[1]}"#, r#"{"groups":["a","a"]}"#] {
+                std::fs::write(crate::paths::app_file("member_groups.json"), bad).unwrap();
+                assert!(member_groups_get().is_err());
+            }
+        });
+    }
+
     #[test]
     fn consent_covers_every_language_level_and_retention() {
         for months in [3, 6, 12] {
