@@ -127,6 +127,13 @@
         button:active, .btn:active { transform: none; }
         button:active::after, .pop, .shimmer, .risein { animation: none; }
       }
+      /* 문 앞 등록 때 고르는 분류. 태블릿이라 손가락 크기 그대로. */
+      .vchips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+      .vchips:empty { display: none; }
+      .vchips button { width: auto; margin: 0; min-height: 48px; padding: 0 18px; border-radius: 999px;
+                       border: 1px solid var(--line); background: transparent; color: var(--fg);
+                       font-size: 17px; font-weight: 500; }
+      .vchips button.on { background: var(--fg); border-color: var(--fg); color: var(--bg); font-weight: 600; }
 </style>
   </head>
   <body>
@@ -153,6 +160,7 @@
         <input id="v-name" placeholder="이름" autocomplete="off" maxlength="40" />
         <input id="v-phone" placeholder="전화 뒷자리도 됩니다" autocomplete="off"
                inputmode="tel" />
+        <div class="vchips" id="v-groups" aria-label="분류"></div>
         <input id="v-memo" placeholder="메모 (선택)" autocomplete="off" maxlength="300" />
         <p id="v-policy" class="detail"></p>
         <label><input id="v-consent" type="checkbox" style="width:auto;margin:16px 8px 0 0;padding:0" />손님이 동의했어요</label>
@@ -177,7 +185,27 @@
       }
       const H = { "x-playx-token": token, "content-type": "application/json" };
 
-      let current = null, timer, memberPolicy = null, savingMember = false, checkSerial = 0;
+      let current = null, timer, memberPolicy = null, savingMember = false, checkSerial = 0, vGroups = [];
+      // 분류 칩. 이름은 사장이 친 글자라 textContent 로만 넣는다.
+      function renderGroups() {
+        const box = $("v-groups");
+        box.replaceChildren();
+        const list = (memberPolicy && memberPolicy.groups) || [];
+        vGroups = vGroups.filter((g) => list.includes(g));
+        for (const g of list) {
+          const b = document.createElement("button");
+          b.type = "button";
+          b.textContent = g;
+          b.className = vGroups.includes(g) ? "on" : "";
+          b.setAttribute("aria-pressed", vGroups.includes(g) ? "true" : "false");
+          b.onclick = () => {
+            if (vGroups.includes(g)) vGroups = vGroups.filter((x) => x !== g);
+            else if (vGroups.length < 5) vGroups.push(g);
+            renderGroups();
+          };
+          box.appendChild(b);
+        }
+      }
       const tr = (s) => window.t ? window.t(s) : s;
       function clearConsent() {
         $("v-consent").checked = false;
@@ -192,6 +220,7 @@
         $("v-phone").style.display = policy.level === "name" ? "none" : "";
         $("v-phone").placeholder = tr(policy.level === "name_phone" ? "전화 전체" : "전화 뒷자리 4자리");
         $("v-policy").textContent = policy.consent_text[window.PXLANG] || policy.consent_text.ko;
+        renderGroups();
       }
       $("v-consent").onchange = () => {
         $("v-save").disabled = savingMember || !$("v-consent").checked || !memberPolicy || memberPolicy.level === "none";
@@ -281,6 +310,7 @@
         $("v-name").value = "";
         $("v-phone").value = "";
         $("v-memo").value = "";
+        vGroups = [];
         try {
           await loadMemberPolicy();
           if (current !== selected) return;
@@ -306,6 +336,7 @@
             body: JSON.stringify({
               code: selected.asset, name, phone: $("v-phone").value, consent: $("v-consent").checked,
               consent_version: memberPolicy.consent_version, memo: $("v-memo").value,
+              groups: vGroups,
             }),
           }).then((x) => x.json());
           if (current !== selected) return;
@@ -324,6 +355,10 @@
             throw new Error(tr("손님의 동의를 확인해 주세요."));
           }
           if (r.code === "MEMO_INVALID") throw new Error(tr("메모는 1~300자 한 줄로 적어 주세요."));
+          if (r.code === "GROUP_INVALID") {
+            await loadMemberPolicy();
+            throw new Error(tr("분류가 바뀌었어요. 다시 골라 주세요."));
+          }
           if (r.error) throw new Error(tr(r.error));
           $("v-who").textContent = r.name;
           clearConsent();
@@ -331,6 +366,7 @@
           $("v-form").style.display = "none";
           $("v-member").style.display = "none";
           $("v-name").value = ""; $("v-phone").value = ""; $("v-memo").value = "";
+          vGroups = []; renderGroups();
         } catch (e) {
           if (current === selected) $("v-detail").textContent = String(e.message || e);
         } finally {
@@ -364,6 +400,7 @@
         $("v-name").value = "";
         $("v-phone").value = "";
         $("v-memo").value = "";
+        vGroups = []; renderGroups();
         $("v-form").style.display = "none";
         $("v-member").style.display = "none";
         $("q").value = "";

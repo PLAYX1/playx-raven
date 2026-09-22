@@ -17,6 +17,14 @@
                    connect-src 'self'; base-uri 'none'; form-action 'none';
                    frame-ancestors 'none'" />
     <title>RavenVault Desktop · 주문</title>
+    <!-- 아이폰 직원은 앱이 없다(iOS 앱을 못 낸다). 홈 화면에 추가하면 앱처럼 열리게 한다. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="가게 직원" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0d0f13" media="(prefers-color-scheme: dark)" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
     <style>
       /* 직원 화면. 손이 젖어 있고, 한 손이고, 뒤에 줄이 서 있다. */
       :root {
@@ -24,12 +32,18 @@
         --panel: #f7f8fb; --accent: #384192; --warn: #96601a; --ok: #1c7a45; --ravi: #e7731f; --ravi-soft: #8375ae; --ravi-tint: #fdf1e7;
         --on-fill: #ffffff;
         --safe-b: env(safe-area-inset-bottom, 0px);
+        --safe-t: env(safe-area-inset-top, 0px);
+        /* 회원 탭(아이폰 목록 모양). 채움·구분선·고른 칩. */
+        --fill: #eef0f5; --sep: #e3e6ee; --chip-on: #384192; --on-chip: #ffffff;
+        --ending: #b3620f; --over: #6b7280; --scrim: rgba(12, 14, 20, .38); --seg-on: #ffffff;
       }
       @media (prefers-color-scheme: dark) {
         :root { --bg: #0d0f13; --fg: #eceef2; --muted: #b3bdd6; --line: #2a2f3a;
                 --panel: #171a21; --accent: #7a90de; --warn: #e0ad50; --ok: #4fbe83;
                 --on-fill: #101216;
-                --ravi: #f0913f; --ravi-soft: #a294cb; --ravi-tint: #2a1f18; }
+                --ravi: #f0913f; --ravi-soft: #a294cb; --ravi-tint: #2a1f18;
+                --fill: #1d212a; --sep: #262b36; --chip-on: #7a90de; --on-chip: #0d0f13;
+                --ending: #eaa24f; --over: #9aa3b5; --scrim: rgba(0, 0, 0, .55); --seg-on: #3b4150; }
       }
       * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
       body { margin: 0; background: var(--bg); color: var(--fg);
@@ -168,10 +182,178 @@
         font-weight: 600; border: 0; border-radius: 12px;
         background: var(--ravi); color: #fff; }
       .ravibox.ravi-asleep img { filter: saturate(.55) opacity(.85); }
+
+      /* ══ 회원 탭 — 아이폰처럼 ═══════════════════════════════════════════
+         기준: 한 화면에 할 일 하나, 친 즉시 결과, 누르는 곳 44px 이상,
+         입력칸 16px 이상(작으면 사파리가 확대한다), 다음 단추는 엄지 자리. */
+      /* 언어 고르기가 제목 옆에 떠 있다(float). 회원 판이 그 옆으로 말려 들어가지 않게. */
+      #p-member { clear: both; }
+      .mtop { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+      .search { flex: 1; display: flex; align-items: center; gap: 8px; min-height: 48px;
+                padding: 0 14px; border-radius: 12px; background: var(--fill); }
+      .search svg { flex: none; width: 18px; height: 18px; color: var(--muted); }
+      .search input { flex: 1; min-width: 0; margin: 0; padding: 12px 0; border: 0;
+                      background: transparent; font-size: 17px; outline: none; }
+      .search input::-webkit-search-cancel-button { -webkit-appearance: none; }
+      .xbtn { flex: none; width: 44px; height: 44px; margin-right: -12px; border: 0;
+              background: none; color: var(--muted); font-size: 20px; line-height: 1;
+              display: none; cursor: pointer; }
+      .search.has .xbtn { display: block; }
+      .addbtn { flex: none; min-height: 48px; padding: 0 16px; border: 0; border-radius: 12px;
+                background: var(--accent); color: var(--on-fill); font: 600 16px/1 inherit;
+                font-family: inherit; cursor: pointer; white-space: nowrap; }
+
+      /* 상태 고르기 = 아이폰 세그먼트. 분류 = 가로로 미는 칩. */
+      .seg { display: flex; gap: 2px; margin-top: 12px; padding: 2px; border-radius: 12px;
+             background: var(--fill); }
+      .seg button { flex: 1; min-height: 44px; border: 0; border-radius: 10px; background: none;
+                    color: var(--fg); font: 500 15px/1.2 inherit; font-family: inherit; cursor: pointer; }
+      .seg button.on { background: var(--seg-on); font-weight: 700;
+                       box-shadow: 0 1px 3px rgba(0,0,0,.12), 0 0 0 .5px rgba(0,0,0,.04); }
+      .seg.dim { opacity: .45; }
+      .chips { display: flex; gap: 8px; margin: 12px -16px 0; padding: 0 16px 2px;
+               overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+      .chips::-webkit-scrollbar { display: none; }
+      .chips:empty { display: none; }
+      .chip { flex: none; min-height: 44px; padding: 0 16px; border-radius: 999px;
+              border: 1px solid var(--line); background: transparent; color: var(--fg);
+              font: 500 15px/1 inherit; font-family: inherit; cursor: pointer; white-space: nowrap; }
+      .chip.on { background: var(--chip-on); border-color: var(--chip-on); color: var(--on-chip); font-weight: 600; }
+      .chip:disabled { opacity: .45; }
+
+      /* 목록 = 아이폰 설정 앱 모양: 둥근 판 하나 + 가는 구분선 + 오른쪽 › */
+      .list { margin-top: 16px; border-radius: 14px; background: var(--panel); overflow: hidden; }
+      .list:empty { display: none; }
+      .row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 64px;
+             padding: 10px 12px 10px 16px; border: 0; border-radius: 0; background: none;
+             color: var(--fg); text-align: left; font-family: inherit; cursor: pointer; }
+      .row + .row { box-shadow: inset 0 .5px 0 var(--sep); }
+      .row .dot { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--ok); }
+      .row .dot.ending { background: var(--ending); } .row .dot.over { background: var(--over); }
+      .row .txt { flex: 1; min-width: 0; }
+      .row .nm { display: block; font-size: 17px; font-weight: 600; line-height: 1.35;
+                 overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .row .ds { display: block; margin-top: 2px; font-size: 14px; color: var(--muted); line-height: 1.4;
+                 overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .row .chev { flex: none; color: var(--muted); font-size: 22px; line-height: 1; opacity: .6; }
+      .row:active { background: var(--fill); transform: none; }
+      .hint { margin-top: 12px; padding: 0 4px; font-size: 14px; color: var(--muted); line-height: 1.6; }
+      .blank { margin-top: 24px; padding: 28px 20px; border-radius: 14px; background: var(--panel);
+               text-align: center; }
+      .blank .bt { font-size: 17px; font-weight: 600; }
+      .blank .bs { margin-top: 6px; font-size: 15px; color: var(--muted); line-height: 1.6; }
+      .blank button { margin-top: 16px; }
+
+      /* 한 화면(회원 보기·새 회원)이 탭 위를 덮는다. 아이폰처럼 옆·아래에서 들어온다. */
+      .screen { position: fixed; inset: 0; z-index: 30; display: flex; flex-direction: column;
+                background: var(--bg); transform: translateX(100%); visibility: hidden;
+                transition: transform .34s cubic-bezier(.32,.72,0,1), visibility 0s linear .34s; }
+      .screen.up { transform: translateY(100%); }
+      .screen.open { transform: none; visibility: visible;
+                     transition: transform .34s cubic-bezier(.32,.72,0,1), visibility 0s; }
+      .bar { flex: none; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
+             min-height: 52px; padding: var(--safe-t) 4px 0; border-bottom: .5px solid var(--sep); }
+      .bar .ttl { font-size: 17px; font-weight: 600; text-align: center; white-space: nowrap;
+                  overflow: hidden; text-overflow: ellipsis; max-width: 56vw; }
+      .bar .lnk { justify-self: start; min-height: 44px; padding: 0 12px; border: 0; background: none;
+                  color: var(--accent); font: 400 17px/1 inherit; font-family: inherit; cursor: pointer; }
+      .bar .dots { justify-self: end; display: flex; gap: 6px; padding-right: 16px; }
+      .bar .dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--line); }
+      .bar .dots i.on { background: var(--accent); }
+      .body { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
+              padding: 20px 16px calc(120px + var(--safe-b)); }
+      .foot { position: absolute; left: 0; right: 0; bottom: 0; padding: 12px 16px calc(12px + var(--safe-b));
+              background: linear-gradient(to top, var(--bg) 72%, transparent); }
+      .primary { display: block; width: 100%; min-height: 54px; border: 0; border-radius: 14px;
+                 background: var(--accent); color: var(--on-fill); font: 600 17px/1.2 inherit;
+                 font-family: inherit; cursor: pointer; }
+      .primary:disabled { opacity: .38; }
+      .secondary { display: block; width: 100%; min-height: 50px; margin-top: 8px; border: 0;
+                   background: none; color: var(--accent); font: 500 17px/1.2 inherit;
+                   font-family: inherit; cursor: pointer; }
+
+      .step h2 { margin: 0; font-size: 26px; line-height: 1.25; letter-spacing: -.01em; }
+      .step .lead { margin-top: 6px; font-size: 16px; color: var(--muted); line-height: 1.6; }
+      .field { display: block; margin-top: 20px; }
+      .field > span { display: block; font-size: 14px; font-weight: 600; color: var(--muted);
+                      margin: 0 4px 6px; }
+      .field input { margin: 0; min-height: 54px; font-size: 18px; border-radius: 12px;
+                     border: 1px solid var(--line); background: var(--bg); }
+      .field input:focus { outline: none; border-color: var(--accent);
+                           box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+      .field input.code { text-transform: uppercase; letter-spacing: .08em; font-weight: 600; }
+      .check { margin-top: 10px; min-height: 22px; padding: 0 4px; font-size: 15px; line-height: 1.5; }
+      .check.ok { color: var(--ok); } .check.no { color: var(--warn); } .check.wait { color: var(--muted); }
+      .small { margin: 6px 4px 0; font-size: 13.5px; color: var(--muted); line-height: 1.55; }
+      .consent { margin-top: 16px; padding: 16px; border-radius: 14px; background: var(--panel);
+                 font-size: 16px; line-height: 1.7; white-space: pre-wrap; }
+      .agree { display: flex; align-items: center; gap: 14px; width: 100%; min-height: 60px;
+               margin-top: 16px; padding: 12px 16px; border: 1px solid var(--line); border-radius: 14px;
+               background: var(--bg); color: var(--fg); font: 600 17px/1.4 inherit; font-family: inherit;
+               text-align: left; cursor: pointer; }
+      .agree .box { flex: none; width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--line);
+                    display: grid; place-items: center; color: transparent; font-size: 16px; }
+      .agree[aria-checked="true"] { border-color: var(--accent); }
+      .agree[aria-checked="true"] .box { background: var(--accent); border-color: var(--accent); color: var(--on-fill); }
+      .banner { margin-top: 16px; padding: 12px 14px; border-radius: 12px; font-size: 15px; line-height: 1.6;
+                background: color-mix(in srgb, var(--warn) 14%, transparent); color: var(--fg); }
+      .banner:empty { display: none; }
+
+      .done { text-align: center; padding-top: 32px; }
+      .done .mark { width: 88px; height: 88px; margin: 0 auto; border-radius: 50%; background: var(--ok);
+                    color: var(--on-fill); display: grid; place-items: center; font-size: 46px;
+                    animation: markin .5s cubic-bezier(.34,1.56,.64,1) both; }
+      @keyframes markin { from { transform: scale(.4); opacity: 0; } to { transform: none; opacity: 1; } }
+      .done h2 { margin-top: 20px; }
+      .done .who { margin-top: 12px; font-size: 22px; font-weight: 700; }
+      .done .lead { margin-top: 4px; }
+
+      .card { padding: 20px 16px; border-radius: 16px; background: var(--panel); }
+      .card .big { font-size: 28px; font-weight: 700; line-height: 1.25; word-break: keep-all; }
+      .pill { display: inline-block; margin-top: 8px; padding: 4px 12px; border-radius: 999px;
+              font-size: 14px; font-weight: 600; background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok); }
+      .pill.ending { background: color-mix(in srgb, var(--ending) 16%, transparent); color: var(--ending); }
+      .pill.over { background: color-mix(in srgb, var(--over) 16%, transparent); color: var(--over); }
+      .card .meta { margin-top: 10px; font-size: 16px; color: var(--muted); line-height: 1.6; }
+      .sec { margin: 28px 4px 8px; font-size: 14px; font-weight: 600; color: var(--muted);
+             letter-spacing: .02em; }
+      .memoadd { display: flex; gap: 8px; }
+      .memoadd input { flex: 1; min-width: 0; margin: 0; min-height: 50px; font-size: 17px; }
+      .memoadd button { flex: none; min-height: 50px; padding: 0 18px; border: 0; border-radius: 12px;
+                        background: var(--accent); color: var(--on-fill); font: 600 16px/1 inherit;
+                        font-family: inherit; cursor: pointer; }
+      .memoadd button:disabled { opacity: .38; }
+      .memos { margin-top: 12px; border-radius: 14px; background: var(--panel); overflow: hidden; }
+      .memos:empty { display: none; }
+      .memo { padding: 12px 16px; }
+      .memo + .memo { box-shadow: inset 0 .5px 0 var(--sep); }
+      .memo .mt { font-size: 16px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+      .memo .mm { margin-top: 4px; font-size: 13.5px; color: var(--muted); }
+
+      .toast { position: fixed; left: 50%; bottom: calc(88px + var(--safe-b)); z-index: 60;
+               transform: translate(-50%, 16px); opacity: 0; pointer-events: none;
+               max-width: calc(100vw - 32px); padding: 12px 18px; border-radius: 999px;
+               background: var(--fg); color: var(--bg); font-size: 15px; font-weight: 600;
+               box-shadow: 0 8px 24px rgba(0,0,0,.18);
+               transition: opacity .2s ease, transform .2s ease; }
+      .toast.on { opacity: 1; transform: translate(-50%, 0); }
+      .a2hs { display: flex; align-items: flex-start; gap: 12px; margin-top: 12px; padding: 14px 8px 14px 16px;
+              border-radius: 14px; background: color-mix(in srgb, var(--accent) 10%, var(--bg));
+              font-size: 15px; line-height: 1.6; }
+      .a2hs .t { flex: 1; }
+      .a2hs button { flex: none; min-height: 44px; min-width: 44px; border: 0; background: none;
+                     color: var(--muted); font-size: 20px; cursor: pointer; }
+      body.lock { overflow: hidden; }
+      /* hidden 속성이 .secondary{display:block} 에 지지 않게. */
+      [hidden] { display: none !important; }
+      @media (prefers-reduced-motion: reduce) {
+        .screen, .screen.open, .toast { transition: none; }
+        .done .mark { animation: none; }
+      }
 </style>
   </head>
   <body>
-    <div class="desktop-local-brand" translate="no" style="font:700 16px/1.5 system-ui,sans-serif;padding:12px 16px;background:#fff;color:#111;border-bottom:1px solid #d6d6d6">RavenVault Desktop</div>
+    <div class="desktop-local-brand" translate="no" style="font:700 16px/1.5 system-ui,sans-serif;padding:12px 16px;background:var(--bg,#fff);color:var(--fg,#111);border-bottom:1px solid var(--line,#d6d6d6)">RavenVault Desktop</div>
     <h1 id="title">주문</h1>
     <div class="sub" id="when">불러오는 중…</div>
 
@@ -195,8 +377,28 @@
     </div>
 
     <div class="pane" id="p-member">
-      <input id="mq" placeholder="이름 · 전화 뒷자리" autocomplete="off" />
-      <div id="mres"></div>
+      <div id="m-a2hs"></div>
+      <div id="m-main">
+        <div class="mtop">
+          <label class="search" id="m-search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
+            <input id="mq" type="search" inputmode="search" enterkeyhint="search"
+                   placeholder="이름 · 번호 · 전화 끝 4자리" autocomplete="off"
+                   autocorrect="off" autocapitalize="off" spellcheck="false" aria-label="회원 찾기" />
+            <button class="xbtn" id="mq-x" type="button" aria-label="지우기">×</button>
+          </label>
+          <button class="addbtn" id="m-new" type="button">+ 새 회원</button>
+        </div>
+        <div class="seg" id="m-seg" role="tablist" aria-label="상태">
+          <button type="button" class="on" data-st="active">다니는 중</button>
+          <button type="button" data-st="ending">곧 끝나요</button>
+          <button type="button" data-st="over">끝났어요</button>
+        </div>
+        <div class="chips" id="m-groups" aria-label="분류"></div>
+        <div class="list" id="m-list"></div>
+        <div id="m-empty"></div>
+        <p class="hint" id="m-hint"></p>
+      </div>
     </div>
     <!-- 직원도 라비에게 묻는다. 🔴 여기에도 **키 칸이 없다** — 직원 폰에
          키가 들어가면 그건 이미 사장의 키가 아니다. 답은 노드가 만든다.
@@ -218,12 +420,81 @@
 
     <p class="note">
       이 화면에서는 <b>지갑도 설정도 볼 수 없습니다.</b><br />
-      주문을 넘기고, 회원을 확인하고, <b>한도 안에서 환불</b>만 됩니다.
+      주문을 넘기고, 회원을 찾고 등록하고, <b>한도 안에서 환불</b>만 됩니다.
     </p>
+
+    <!-- 회원 보기 -->
+    <section class="screen" id="s-member" aria-hidden="true" aria-labelledby="sm-ttl">
+      <div class="bar">
+        <button class="lnk" id="sm-back" type="button">‹ 회원</button>
+        <div class="ttl" id="sm-ttl"></div>
+        <div></div>
+      </div>
+      <div class="body" id="sm-body"></div>
+    </section>
+
+    <!-- 새 회원 (한 단계씩) -->
+    <section class="screen up" id="s-reg" aria-hidden="true" aria-labelledby="sr-ttl">
+      <div class="bar">
+        <button class="lnk" id="sr-cancel" type="button">취소</button>
+        <div class="ttl" id="sr-ttl">새 회원</div>
+        <div class="dots" id="sr-dots" aria-hidden="true"><i></i><i></i><i></i></div>
+      </div>
+      <div class="body">
+        <div class="step" data-step="1">
+          <h2>표 번호를 적어 주세요</h2>
+          <p class="lead">손님 폰의 표 화면에 적힌 번호예요.</p>
+          <label class="field"><span>표 번호</span>
+            <input id="r-code" class="code" autocomplete="off" autocorrect="off" autocapitalize="characters"
+                   spellcheck="false" enterkeyhint="next" maxlength="64" placeholder="예: K7P2QM4X" />
+          </label>
+          <div class="check" id="r-code-check" role="status" aria-live="polite"></div>
+        </div>
+        <div class="step" data-step="2" hidden>
+          <h2>손님 정보</h2>
+          <p class="lead" id="r-info-lead"></p>
+          <label class="field"><span>이름</span>
+            <input id="r-name" autocomplete="off" autocorrect="off" enterkeyhint="next" maxlength="40" />
+          </label>
+          <label class="field" id="r-phone-f"><span id="r-phone-l">전화 끝 4자리</span>
+            <input id="r-phone" autocomplete="off" enterkeyhint="next" />
+          </label>
+          <div class="field" id="r-groups-f" hidden><span>분류 (안 골라도 돼요)</span>
+            <div class="chips" id="r-groups"></div>
+          </div>
+          <label class="field"><span>메모 (안 적어도 돼요)</span>
+            <input id="r-memo" autocomplete="off" maxlength="300" enterkeyhint="done" />
+          </label>
+          <p class="small">건강 상태 같은 민감한 정보는 적지 마세요.</p>
+          <div class="banner" id="r-info-msg" role="alert"></div>
+        </div>
+        <div class="step" data-step="3" hidden>
+          <h2>손님께 보여 주세요</h2>
+          <p class="lead" id="r-keep"></p>
+          <div class="consent" id="r-consent"></div>
+          <button class="agree" id="r-agree" type="button" role="checkbox" aria-checked="false">
+            <span class="box" aria-hidden="true">✓</span><span>손님이 위 내용에 동의했어요</span>
+          </button>
+          <div class="banner" id="r-consent-msg" role="alert"></div>
+        </div>
+        <div class="step done" data-step="4" hidden>
+          <div class="mark" aria-hidden="true">✓</div>
+          <h2 id="r-done-t">회원으로 등록했어요</h2>
+          <div class="who" id="r-done-name"></div>
+          <p class="lead" id="r-done-until"></p>
+        </div>
+      </div>
+      <div class="foot">
+        <button class="primary" id="r-go" type="button" disabled>다음</button>
+        <button class="secondary" id="r-alt" type="button" hidden>회원 보기</button>
+      </div>
+    </section>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
     <nav>
       <button class="on" data-p="orders">주문</button>
-      <button data-p="member">회원 확인</button>
+      <button data-p="member">회원</button>
       <button data-p="refund">환불</button>
       <button data-p="ravi">라비</button>
     </nav>
@@ -237,10 +508,24 @@
 
       const $ = (id) => document.getElementById(id);
       const q = new URLSearchParams(location.search).get("t");
-      const token = q || sessionStorage.getItem("ft") || "";
+      const keep = {
+        get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+        set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+        del(k) { try { localStorage.removeItem(k); } catch {} },
+      };
+      // 아이폰은 「홈 화면에 추가」한 앱과 사파리가 **저장소를 따로** 쓴다.
+      // 사파리에서 주소의 열쇠를 지워 버리면, 홈 화면에 추가한 앱은 열쇠 없이
+      // 열린다(직원은 「연결이 풀렸다」만 본다). 그래서 아이폰 사파리에서만
+      // 주소에 열쇠를 남겨 둔다 — 직원 자기 폰이고, 사장이 언제든 끊을 수 있다.
+      const IOS = /iP(hone|ad|od)/.test(navigator.userAgent) ||
+        (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+      const STANDALONE = navigator.standalone === true ||
+        (window.matchMedia && matchMedia("(display-mode: standalone)").matches);
+      const token = q || keep.get("rv-staff-t") || sessionStorage.getItem("ft") || "";
       if (q) {
         sessionStorage.setItem("ft", token);
-        history.replaceState(null, "", "/staff");
+        keep.set("rv-staff-t", token);
+        if (!(IOS && !STANDALONE)) history.replaceState(null, "", "/staff");
       }
       const H = { "x-playx-token": token, "content-type": "application/json" };
 
@@ -264,7 +549,10 @@
             p.classList.toggle("on", p.id === `p-${b.dataset.p}`)
           );
           $("title").textContent =
-            { orders: "주문", member: "회원 확인", refund: "환불" }[b.dataset.p] || "주문";
+            { orders: "주문", member: "회원", refund: "환불", ravi: "라비" }[b.dataset.p] || "주문";
+          // 「몇 시 기준 · 몇 건」은 주문 줄이다. 다른 탭에서는 숨긴다.
+          $("when").hidden = b.dataset.p !== "orders";
+          if (b.dataset.p === "member") Members.open();
           if (b.dataset.p === "refund") loadLimits();
         };
       });
@@ -384,35 +672,556 @@
         }
       }
 
-      let mt;
-      $("mq").oninput = () => {
-        clearTimeout(mt);
-        mt = setTimeout(findMember, 250);
-      };
-
-      async function findMember() {
-        const query = $("mq").value.trim();
-        if (query.length < 2) { $("mres").innerHTML = ""; return; }
-        try {
-          const r = await fetch("/api/scan/check", {
-            method: "POST", headers: H, body: JSON.stringify({ query }),
-          }).then((x) => x.json());
-          $("mres").innerHTML = r.found
-            ? `<div class="mrow">
-                 <div class="nm">${esc(r.name || "")}</div>
-                 <div class="st ${r.valid ? "ok" : "no"}">
-                   ${r.valid ? "들어오셔도 됩니다" : r.why || "안 됩니다"}
-                   ${r.valid && r.kind === "punch" ? ` · ${r.left}회 남음` : ""}
-                 </div>
-               </div>`
-            : `<div class="mrow"><div class="st no">찾지 못했습니다</div></div>`;
-        } catch (e) {
-          $("mres").innerHTML = `<div class="mrow"><div class="st no">${e}</div></div>      `;
-        }
-      }
-
       load();
       setInterval(load, 20000);
+    </script>
+
+    <script>
+      /* ══ 회원 탭 ═════════════════════════════════════════════════════
+         아이폰 직원이 앱 없이 쓰는 자리다. 이 주소는 가게 와이파이의 http 라서
+         사파리가 카메라를 열어 주지 않는다 — 그래서 **찍는 대신 친다.**
+         이름·번호·전화 끝 4자리, 친 즉시 결과가 뜬다.
+
+         🔴 이름·메모·분류는 사람이 친 글자다. 전부 textContent 로만 넣는다.
+         🔴 이 화면은 전화번호를 받지 않는다(서버가 애초에 안 준다). */
+      const Members = (() => {
+        const tr = (s) => (window.t ? window.t(s) : s);
+        const tf = (s, ...v) => tr(s).replace(/\{(\d)\}/g, (_, i) => String(v[i] ?? ""));
+        // i18n.js 가 이 스크립트보다 늦게 읽힌다. 언어는 쓸 때 본다.
+        const loc = () => ({ ko: "ko-KR", en: "en-US", ja: "ja-JP", zh: "zh-CN" }[window.PXLANG || "ko"] || "ko-KR");
+        const el = (tag, cls, text) => {
+          const n = document.createElement(tag);
+          if (cls) n.className = cls;
+          if (text !== undefined) n.textContent = text;
+          return n;
+        };
+        const button = (cls, text, onclick) => {
+          const b = el("button", cls, text);
+          b.type = "button";
+          if (onclick) b.addEventListener("click", onclick);
+          return b;
+        };
+
+        // ── 서버 부르기: 네트워크 끊김과 거절을 구분한다 ───────────────
+        // query 는 따로 받는다 — 경로를 글자 그대로 두어야 직원 권한 시험
+        // (roles.rs staff_screen_can_reach_everything_it_calls)이 진짜 경로를 본다.
+        async function call(path, body, query) {
+          let r;
+          try {
+            r = await fetch(query ? `${path}?${query}` : path, body
+              ? { method: "POST", headers: H, body: JSON.stringify(body) }
+              : { headers: H });
+          } catch { return { net: true, status: 0, body: {}, code: "" }; }
+          let j = {};
+          try { j = await r.json(); } catch {}
+          return { net: false, status: r.status, ok: r.ok, body: j || {}, code: (j && j.code) || "" };
+        }
+
+        // ── 날짜 ────────────────────────────────────────────────────
+        const ymdDate = (v) => new Date(Math.floor(v / 10000), Math.floor(v / 100) % 100 - 1, v % 100);
+        const longDate = (v) => new Intl.DateTimeFormat(loc(), { year: "numeric", month: "long", day: "numeric" }).format(ymdDate(v));
+        const shortDate = (v) => new Intl.DateTimeFormat(loc(), { month: "short", day: "numeric" }).format(ymdDate(v));
+        const until = (v, long) => (v ? tf("{0}까지", long ? longDate(v) : shortDate(v)) : tr("끝나는 날이 없어요"));
+        const when = (unix) => new Intl.DateTimeFormat(loc(), { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(unix * 1000));
+        const WHO = { owner: "사장님", staff: "직원", scanner: "문 앞" };
+        const STATUS = { active: "다니는 중", ending: "곧 끝나요", over: "끝났어요" };
+        function statusOf(m) {
+          if (m.kind === "punch") return (m.visits_left ?? 0) > 0 ? "active" : "over";
+          if (!m.until) return "active";
+          const today = new Date(); today.setHours(0, 0, 0, 0);
+          const days = Math.round((ymdDate(m.until) - today) / 86400000);
+          return days < 0 ? "over" : days <= 7 ? "ending" : "active";
+        }
+        const describe = (m) => [
+          m.kind === "punch" && m.visits_left !== null ? tf("{0}회 남음", m.visits_left) : until(m.until),
+          ...(m.groups || []),
+        ].join(" · ");
+
+        // ── 알림 한 줄 ─────────────────────────────────────────────
+        let toastTimer;
+        function toast(text) {
+          const t = $("toast");
+          t.textContent = text;
+          t.classList.add("on");
+          clearTimeout(toastTimer);
+          toastTimer = setTimeout(() => t.classList.remove("on"), 1800);
+        }
+
+        // ── 막힘(연결·권한·설정) 은 화면 전체로 크게 알린다 ──────────────
+        function blocked(res) {
+          if (res.net) return { t: "가게 컴퓨터에 닿지 못했어요", s: "폰이 가게 와이파이에 연결됐는지 확인해 주세요." };
+          if (res.status === 401 && res.code === "REMOTE_OFF") return { t: "가게 안에서만 열려요", s: "가게 와이파이에 연결한 뒤 다시 열어 주세요." };
+          if (res.status === 401) {
+            if (res.code === "BAD_TOKEN") keep.del("rv-staff-t");
+            return { t: "연결이 풀렸어요", s: "가게 컴퓨터의 「직원 QR」을 폰 카메라로 다시 찍어 주세요." };
+          }
+          if (res.code === "MEMBER_INFO_OFF") return { t: "이 가게는 회원 정보를 받지 않아요", s: "사장님이 가게 컴퓨터에서 바꿀 수 있어요." };
+          if (res.code === "MEMBER_POLICY_UNAVAILABLE" || res.status >= 500) return { t: "가게 컴퓨터의 회원 설정을 읽지 못했어요", s: "사장님께 가게 컴퓨터를 확인해 달라고 말씀해 주세요." };
+          if (res.status === 404 && !res.code) return { t: "가게 앱을 최신으로 올려 주세요", s: "가게 컴퓨터의 RavenVault Desktop 을 업데이트하면 회원 기능이 열려요." };
+          return null;
+        }
+        function showBlank(box, info, action) {
+          box.replaceChildren();
+          const b = el("div", "blank");
+          b.append(el("div", "bt", tr(info.t)), el("div", "bs", tr(info.s)));
+          if (action) b.append(action);
+          box.append(b);
+        }
+
+        // ── 목록 ───────────────────────────────────────────────────
+        let policy = null, status = "active", group = "", serial = 0, timer;
+        async function loadPolicy() {
+          const res = await call("/api/scan/member-policy");
+          if (res.ok) policy = res.body;
+          return res;
+        }
+        function renderGroupChips() {
+          const box = $("m-groups");
+          box.replaceChildren();
+          const groups = (policy && policy.groups) || [];
+          if (!groups.length) { group = ""; return; }
+          if (group && !groups.includes(group)) group = "";
+          const all = button("chip" + (group ? "" : " on"), tr("모든 분류"), () => { group = ""; renderGroupChips(); search(); });
+          box.append(all);
+          for (const g of groups) {
+            box.append(button("chip" + (group === g ? " on" : ""), g, () => { group = group === g ? "" : g; renderGroupChips(); search(); }));
+          }
+        }
+        function row(m) {
+          const r = button("row");
+          const st = m.status || statusOf(m);
+          const dot = el("span", "dot " + st);
+          dot.setAttribute("aria-label", tr(STATUS[st]));
+          const txt = el("span", "txt");
+          txt.append(el("span", "nm", m.name || "—"), el("span", "ds", describe(m)));
+          r.append(dot, txt, el("span", "chev", "›"));
+          r.setAttribute("aria-label", `${m.name} · ${tr(STATUS[st])} · ${describe(m)}`);
+          r.addEventListener("click", () => Detail.open(m.code));
+          return r;
+        }
+        async function search() {
+          const qv = $("mq").value.trim();
+          $("m-search").classList.toggle("has", !!$("mq").value);
+          $("m-seg").classList.toggle("dim", qv.length >= 2);
+          const list = $("m-list"), empty = $("m-empty"), hint = $("m-hint");
+          hint.textContent = "";
+          if (qv.length === 1) {
+            list.replaceChildren(); empty.replaceChildren();
+            hint.textContent = tr("두 글자 이상 쳐 주세요. 전화는 끝 4자리예요.");
+            return;
+          }
+          const params = new URLSearchParams();
+          // 이름을 칠 때는 상태를 가리지 않는다 — 끊은 회원도 찾아야 한다.
+          if (qv) params.set("q", qv); else params.set("status", status);
+          if (group) params.set("group", group);
+          const my = ++serial;
+          const res = await call("/api/scan/member-search", null, params.toString());
+          if (my !== serial) return;
+          const stop = blocked(res);
+          if (stop) { list.replaceChildren(); showBlank(empty, stop); return; }
+          if (!res.ok) {
+            list.replaceChildren();
+            showBlank(empty, { t: "찾지 못했어요", s: res.body.error || "검색어를 바꿔 다시 해 보세요." });
+            return;
+          }
+          const rows = res.body.results || [];
+          list.replaceChildren(...rows.map(row));
+          empty.replaceChildren();
+          if (!rows.length) {
+            const add = button("primary", tr("새 회원 등록"), () => Register.open());
+            showBlank(empty, qv
+              ? { t: tf("‘{0}’ 회원이 없어요", qv), s: "표를 산 손님이면 새 회원으로 등록해 주세요." }
+              : { t: tf("{0} 회원이 없어요", tr(STATUS[status])), s: group ? "다른 분류를 골라 보세요." : "표를 산 손님을 회원으로 등록해 보세요." },
+              add);
+          }
+          if (res.body.more) hint.textContent = tr("30명까지 보여요. 이름을 더 쳐 보세요.");
+        }
+        async function open() {
+          const res = await loadPolicy();
+          const stop = blocked(res);
+          if (stop) {
+            $("m-list").replaceChildren();
+            showBlank($("m-empty"), stop);
+            return;
+          }
+          renderGroupChips();
+          search();
+        }
+
+        $("mq").addEventListener("input", () => {
+          clearTimeout(timer);
+          $("m-search").classList.toggle("has", !!$("mq").value);
+          timer = setTimeout(search, 250);
+        });
+        $("mq").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); $("mq").blur(); } });
+        $("mq-x").addEventListener("click", (e) => { e.preventDefault(); $("mq").value = ""; search(); $("mq").focus(); });
+        $("m-seg").querySelectorAll("[data-st]").forEach((b) => b.addEventListener("click", () => {
+          status = b.dataset.st;
+          $("m-seg").querySelectorAll("[data-st]").forEach((x) => x.classList.toggle("on", x === b));
+          if ($("mq").value.trim().length >= 2) { $("mq").value = ""; }
+          search();
+        }));
+        $("m-new").addEventListener("click", () => Register.open());
+
+        // ── 홈 화면에 추가 안내(아이폰 사파리에서 처음 한 번) ───────────
+        if (IOS && !STANDALONE && !keep.get("rv-staff-a2hs")) {
+          const box = el("div", "a2hs");
+          const t = el("div", "t");
+          const b1 = el("b", "", tr("홈 화면에 추가하면 앱처럼 열려요"));
+          t.append(b1, el("br"), document.createTextNode(tr("아래 공유 단추(□↑)를 누르고 「홈 화면에 추가」를 고르세요.")));
+          const x = button("", "×", () => { keep.set("rv-staff-a2hs", "1"); box.remove(); });
+          x.setAttribute("aria-label", tr("닫기"));
+          box.append(t, x);
+          $("m-a2hs").append(box);
+        }
+
+        // ── 화면 열고 닫기 ─────────────────────────────────────────
+        function show(id, on) {
+          const s = $(id);
+          s.classList.toggle("open", on);
+          s.setAttribute("aria-hidden", on ? "false" : "true");
+          document.body.classList.toggle("lock", !!document.querySelector(".screen.open"));
+        }
+
+        return { open, search, call, blocked, showBlank, toast, show, tr, tf, el, button, until, when, WHO, STATUS, statusOf,
+                 policy: () => policy, loadPolicy, refresh: () => { renderGroupChips(); search(); } };
+      })();
+
+      /* ── 회원 보기: 이름·기간·분류·메모. 메모는 **덧붙이기만** 한다. ── */
+      const Detail = (() => {
+        const M = Members, tr = M.tr, tf = M.tf, el = M.el;
+        let code = "", info = null, busy = false, doubt = false;
+
+        async function open(c) {
+          code = c; info = null; doubt = false;
+          $("sm-ttl").textContent = "";
+          const body = $("sm-body");
+          body.replaceChildren(el("div", "card shimmer", " "));
+          M.show("s-member", true);
+          await load();
+        }
+        async function load() {
+          const body = $("sm-body");
+          const res = await M.call("/api/scan/member-info", null, "code=" + encodeURIComponent(code));
+          const stop = M.blocked(res);
+          if (stop) return M.showBlank(body, stop);
+          if (res.code === "NOT_MEMBER") {
+            const reg = M.button("primary", tr("회원으로 등록하기"), () => { close(); Register.open(code); });
+            return M.showBlank(body, { t: "아직 회원이 아닌 표예요", s: "손님 동의를 받고 회원으로 등록할 수 있어요." }, reg);
+          }
+          if (!res.ok) return M.showBlank(body, { t: "회원 정보를 불러오지 못했어요", s: res.body.error || "잠시 뒤 다시 열어 주세요." });
+          info = res.body;
+          render();
+        }
+        function render() {
+          const body = $("sm-body");
+          body.replaceChildren();
+          $("sm-ttl").textContent = info.redacted ? tr("지워진 회원") : info.name;
+          if (info.redacted) {
+            return M.showBlank(body, { t: "보관 기간이 지나 정보가 지워진 회원이에요", s: "회원번호와 출입 기록만 남아 있어요." });
+          }
+          const st = M.statusOf(info);
+          const card = el("div", "card");
+          card.append(el("div", "big", info.name), el("span", "pill " + st, tr(M.STATUS[st])));
+          const meta = [M.until(info.until, true)];
+          if (info.kind === "punch" && info.visits_left !== null) meta.push(tf("{0}회 남음", info.visits_left));
+          meta.push(tf("회원번호 {0}", info.code));
+          card.append(el("div", "meta", meta.join(" · ")));
+          body.append(card);
+
+          // 분류: 누르면 바로 저장된다.
+          const groups = (M.policy() && M.policy().groups) || [];
+          body.append(el("div", "sec", tr("분류")));
+          if (!groups.length) {
+            body.append(el("p", "small", tr("사장님이 가게 컴퓨터에서 분류를 만들면 여기서 고를 수 있어요.")));
+          } else {
+            const chips = el("div", "chips");
+            chips.style.flexWrap = "wrap"; chips.style.margin = "0"; chips.style.padding = "0";
+            for (const g of groups) {
+              const on = (info.groups || []).includes(g);
+              const b = M.button("chip" + (on ? " on" : ""), g, () => toggleGroup(g, b));
+              b.setAttribute("aria-pressed", on ? "true" : "false");
+              chips.append(b);
+            }
+            body.append(chips);
+          }
+
+          // 메모
+          body.append(el("div", "sec", tr("메모")));
+          const add = el("div", "memoadd");
+          const input = el("input");
+          input.id = "sm-memo"; input.maxLength = 300; input.autocomplete = "off"; input.enterKeyHint = "send";
+          input.placeholder = tr("메모 추가");
+          input.setAttribute("aria-label", tr("메모 추가"));
+          const go = M.button("", tr("적기"), () => addMemo(input, go));
+          go.disabled = true;
+          input.addEventListener("input", () => { go.disabled = doubt || busy || !input.value.trim(); });
+          input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !go.disabled) { e.preventDefault(); addMemo(input, go); } });
+          add.append(input, go);
+          body.append(add, el("p", "small", tr("건강 상태 같은 민감한 정보는 적지 마세요.")));
+          const msg = el("div", "banner"); msg.id = "sm-msg"; msg.setAttribute("role", "alert");
+          body.append(msg);
+          if (doubt) showDoubt(input, go);
+          const list = el("div", "memos");
+          const memos = (info.memos || []).slice().sort((a, b) => b.at - a.at);
+          for (const m of memos) {
+            const d = el("div", "memo");
+            d.append(el("div", "mt", m.text), el("div", "mm", `${M.when(m.at)} · ${tr(M.WHO[m.by] || "직원")}`));
+            list.append(d);
+          }
+          body.append(list);
+          if (!memos.length) body.append(el("p", "small", tr("아직 메모가 없어요.")));
+        }
+        async function toggleGroup(g, b) {
+          if (busy) return;
+          const before = (info.groups || []).slice();
+          const next = before.includes(g) ? before.filter((x) => x !== g) : [...before, g];
+          if (next.length > 5) return M.toast(tr("분류는 한 사람에 5개까지 고를 수 있어요"));
+          busy = true;
+          b.classList.toggle("on"); b.setAttribute("aria-pressed", b.classList.contains("on") ? "true" : "false");
+          const res = await M.call("/api/scan/member-groups", { code: info.code, groups: next });
+          busy = false;
+          if (res.ok) { info.groups = res.body.groups; M.toast("✓ " + tr("저장했어요")); M.search(); return; }
+          b.classList.toggle("on"); b.setAttribute("aria-pressed", b.classList.contains("on") ? "true" : "false");
+          const stop = M.blocked(res);
+          if (res.code === "MEMBER_REDACTED") { info.redacted = true; return render(); }
+          if (res.code === "GROUP_INVALID") {
+            await M.loadPolicy(); M.refresh();
+            M.toast(tr("분류가 바뀌었어요. 다시 골라 주세요."));
+            return render();
+          }
+          M.toast(tr(stop ? stop.t : (res.body.error || "저장하지 못했어요")));
+        }
+        function showDoubt(input, go) {
+          const msg = $("sm-msg");
+          msg.replaceChildren(el("span", "", tr("적혔는지 확인하지 못했어요. 다시 불러와서 확인해 주세요.")));
+          const again = M.button("secondary", tr("다시 불러오기"), async () => { doubt = false; await load(); });
+          again.style.marginTop = "4px";
+          msg.append(again);
+          go.disabled = true;
+        }
+        async function addMemo(input, go) {
+          const text = input.value.replace(/\s+/g, " ").trim();
+          if (!text || busy || doubt) return;
+          busy = true; go.disabled = true;
+          const res = await M.call("/api/scan/member-memo", { code: info.code, text });
+          busy = false;
+          if (res.net) {
+            // 메모는 덧붙이기라 자동으로 다시 보내면 두 번 적힌다. 확인부터.
+            doubt = true;
+            return showDoubt(input, go);
+          }
+          if (res.ok) {
+            info.memos = res.body.memos;
+            input.value = "";
+            M.toast("✓ " + tr("메모를 적었어요"));
+            return render();
+          }
+          const stop = M.blocked(res);
+          if (stop) return M.showBlank($("sm-body"), stop);
+          if (res.code === "MEMBER_REDACTED") { info.redacted = true; return render(); }
+          const why = res.code === "MEMO_LIMIT" ? "메모가 너무 많아요. 사장님이 가게 컴퓨터에서 정리해 주세요."
+            : res.code === "MEMO_INVALID" ? "메모는 300자까지 한 줄로 적어 주세요."
+            : res.code === "NOT_MEMBER" ? "아직 회원이 아닌 표예요"
+            : (res.body.error || "메모를 적지 못했어요");
+          $("sm-msg").textContent = tr(why);
+          go.disabled = !input.value.trim();
+        }
+        function close() { M.show("s-member", false); }
+        $("sm-back").addEventListener("click", close);
+        return { open, close };
+      })();
+
+      /* ── 새 회원: 표 번호 → 손님 정보 → 동의 → 끝. 한 화면에 한 가지. ── */
+      const Register = (() => {
+        const M = Members, tr = M.tr, tf = M.tf, el = M.el;
+        let step = 1, ticket = null, groups = [], agreed = false, sending = false, unsure = false, checkSerial = 0, codeTimer;
+
+        function setStep(n) {
+          step = n;
+          document.querySelectorAll("#s-reg .step").forEach((s) => { s.hidden = Number(s.dataset.step) !== n; });
+          document.querySelectorAll("#sr-dots i").forEach((d, i) => d.classList.toggle("on", i < n));
+          $("sr-dots").style.visibility = n > 3 ? "hidden" : "visible";
+          $("sr-cancel").textContent = tr(n === 1 || n > 3 ? (n > 3 ? "닫기" : "취소") : "‹ 이전");
+          $("r-alt").hidden = n !== 4;
+          sync();
+        }
+        function phoneOk() {
+          const lv = M.policy() && M.policy().level, v = $("r-phone").value;
+          if (lv === "name") return true;
+          if (lv === "name_last4") return /^\d{4}$/.test(v);
+          return v.length <= 20 && /\d/.test(v) && /^[\d+\- ]+$/.test(v.trim());
+        }
+        function sync() {
+          const go = $("r-go");
+          if (step === 1) { go.textContent = tr("다음"); go.disabled = !ticket; }
+          if (step === 2) { go.textContent = tr("다음"); go.disabled = !$("r-name").value.trim() || !phoneOk(); }
+          if (step === 3) { go.textContent = tr(sending ? "등록하는 중…" : unsure ? "다시 보내기" : "등록하기"); go.disabled = !agreed || sending; }
+          if (step === 4) { go.textContent = tr("다음 손님"); go.disabled = false; }
+        }
+        function applyPolicy() {
+          const p = M.policy();
+          const lv = p.level;
+          $("r-phone-f").hidden = lv === "name";
+          const ph = $("r-phone");
+          if (lv === "name_last4") {
+            $("r-phone-l").textContent = tr("전화 끝 4자리");
+            ph.type = "text"; ph.inputMode = "numeric"; ph.maxLength = 4; ph.placeholder = "0000";
+            ph.setAttribute("pattern", "[0-9]*");
+          } else {
+            $("r-phone-l").textContent = tr("전화번호");
+            ph.type = "tel"; ph.inputMode = "tel"; ph.maxLength = 20; ph.placeholder = "010-0000-0000";
+            ph.removeAttribute("pattern");
+          }
+          $("r-info-lead").textContent = tr(lv === "name" ? "이름만 받아요." : lv === "name_last4" ? "이름과 전화 끝 4자리를 받아요." : "이름과 전화번호를 받아요.");
+          const box = $("r-groups");
+          box.replaceChildren();
+          groups = groups.filter((g) => (p.groups || []).includes(g));
+          $("r-groups-f").hidden = !(p.groups || []).length;
+          box.style.flexWrap = "wrap"; box.style.margin = "0"; box.style.padding = "0";
+          for (const g of p.groups || []) {
+            const b = M.button("chip" + (groups.includes(g) ? " on" : ""), g, () => {
+              if (groups.includes(g)) groups = groups.filter((x) => x !== g);
+              else if (groups.length >= 5) return M.toast(tr("분류는 한 사람에 5개까지 고를 수 있어요"));
+              else groups.push(g);
+              b.classList.toggle("on", groups.includes(g));
+              b.setAttribute("aria-pressed", groups.includes(g) ? "true" : "false");
+            });
+            b.setAttribute("aria-pressed", groups.includes(g) ? "true" : "false");
+            box.append(b);
+          }
+          $("r-consent").textContent = (p.consent_text && (p.consent_text[window.PXLANG] || p.consent_text.ko)) || "";
+          $("r-keep").textContent = tr("손님이 읽고 동의하면 아래를 눌러 주세요.");
+        }
+        function setAgree(v) {
+          agreed = v;
+          $("r-agree").setAttribute("aria-checked", v ? "true" : "false");
+          sync();
+        }
+        function clearAll() {
+          ticket = null; groups = []; unsure = false; sending = false;
+          for (const id of ["r-code", "r-name", "r-phone", "r-memo"]) $(id).value = "";
+          for (const id of ["r-code-check", "r-info-msg", "r-consent-msg"]) $(id).textContent = "";
+          setAgree(false);
+        }
+        async function open(prefill) {
+          clearAll();
+          const res = await M.loadPolicy();
+          const stop = M.blocked(res);
+          if (stop) { M.toast(tr(stop.t)); return; }
+          applyPolicy();
+          setStep(1);
+          M.show("s-reg", true);
+          if (prefill) { $("r-code").value = prefill; checkCode(); }
+          setTimeout(() => $("r-code").focus(), 360);
+        }
+        function close() { M.show("s-reg", false); clearAll(); }
+
+        // 표 번호를 치는 동안 맞는 표인지 바로 알려 준다.
+        async function checkCode() {
+          ticket = null; sync();
+          const code = $("r-code").value.trim().toUpperCase();
+          const out = $("r-code-check");
+          out.className = "check";
+          out.replaceChildren();
+          // 표 번호는 8글자 무작위다. 다 치기 전에 「없는 표」라고 하면 겁을 준다.
+          if (code.length < 8) return;
+          out.className = "check wait"; out.textContent = tr("확인하는 중…");
+          const my = ++checkSerial;
+          const res = await M.call("/api/scan/check", { query: code });
+          if (my !== checkSerial) return;
+          const stop = M.blocked(res);
+          if (stop) { out.className = "check no"; out.textContent = tr(stop.t); return; }
+          const r = res.body || {};
+          const same = String(r.asset || "").toUpperCase() === code;
+          if (r.found && same && r.kind === "pass") {
+            ticket = { code, item: r.name || tr("이용권"), until: r.until || 0 };
+            out.className = "check ok";
+            out.textContent = "✓ " + [ticket.item, ticket.until ? M.until(ticket.until) : ""].filter(Boolean).join(" · ");
+          } else if (r.found && same) {
+            out.className = "check no";
+            out.append(document.createTextNode(tr("이미 회원으로 등록된 표예요.") + " "));
+            const see = M.button("lnk", tr("회원 보기"), () => { close(); Detail.open(code); });
+            see.style.cssText = "border:0;background:none;color:var(--accent);font:inherit;min-height:44px;padding:0 4px;cursor:pointer";
+            out.append(see);
+          } else {
+            out.className = "check no";
+            out.textContent = tr("그런 표가 없어요. 번호를 다시 확인해 주세요.");
+          }
+          sync();
+        }
+
+        async function submit() {
+          if (sending || !agreed || !ticket) return;
+          sending = true; sync();
+          $("r-consent-msg").textContent = "";
+          const p = M.policy();
+          const res = await M.call("/api/scan/member", {
+            code: ticket.code, name: $("r-name").value, phone: p.level === "name" ? "" : $("r-phone").value,
+            consent: true, consent_version: p.consent_version,
+            memo: $("r-memo").value.replace(/\s+/g, " ").trim(), groups,
+          });
+          sending = false;
+          if (res.net) {
+            // 이미 적혔을 수도 있다. 다시 보내도 서버가 두 번 등록하지 않는다.
+            unsure = true;
+            $("r-consent-msg").textContent = tr("등록됐는지 확인하지 못했어요. 와이파이를 확인하고 다시 보내 주세요.");
+            return sync();
+          }
+          if (res.ok) return finish(res.body, false);
+          const err = res.body.error || "";
+          if (unsure && /이미 회원으로 등록된 표/.test(err)) return finish({ name: $("r-name").value.trim(), until: ticket.until, code: ticket.code }, true);
+          unsure = false;
+          const stop = M.blocked(res);
+          if (stop) { close(); M.toast(tr(stop.t)); return; }
+          if (res.code === "CONSENT_VERSION_STALE" || res.code === "CONSENT_REQUIRED") {
+            const before = p.level;
+            await M.loadPolicy(); applyPolicy(); setAgree(false);
+            if (M.policy().level !== before) { setStep(2); $("r-info-msg").textContent = tr("받는 정보가 바뀌었어요. 다시 적어 주세요."); return; }
+            $("r-consent-msg").textContent = tr("동의 내용이 바뀌었어요. 손님께 다시 보여 주세요.");
+            return sync();
+          }
+          if (res.code === "GROUP_INVALID") {
+            await M.loadPolicy(); applyPolicy(); setStep(2);
+            $("r-info-msg").textContent = tr("분류가 바뀌었어요. 다시 골라 주세요.");
+            return;
+          }
+          if (res.code === "MEMO_INVALID") { setStep(2); $("r-info-msg").textContent = tr("메모는 300자까지 한 줄로 적어 주세요."); return; }
+          if (/그런 표가 없/.test(err)) { setStep(1); $("r-code-check").className = "check no"; $("r-code-check").textContent = tr("그런 표가 없어요. 번호를 다시 확인해 주세요."); ticket = null; return sync(); }
+          if (/이미 회원으로 등록된 표/.test(err)) { setStep(1); checkCode(); return; }
+          if (/이름|전화/.test(err)) { setStep(2); $("r-info-msg").textContent = tr(err); return; }
+          $("r-consent-msg").textContent = tr(err || "등록하지 못했어요. 잠시 뒤 다시 해 주세요.");
+          sync();
+        }
+        function finish(r, already) {
+          $("r-done-t").textContent = tr(already ? "이미 회원으로 등록돼 있어요" : "회원으로 등록했어요");
+          $("r-done-name").textContent = r.name;
+          $("r-done-until").textContent = M.until(r.until, true);
+          ticket = { ...ticket, code: r.code || ticket.code };
+          setStep(4);
+          M.search();
+        }
+
+        $("r-code").addEventListener("input", () => { clearTimeout(codeTimer); ticket = null; sync(); codeTimer = setTimeout(checkCode, 300); });
+        $("r-code").addEventListener("keydown", (e) => { if (e.key === "Enter" && ticket) { e.preventDefault(); $("r-go").click(); } });
+        for (const id of ["r-name", "r-phone"]) $(id).addEventListener("input", () => { $("r-info-msg").textContent = ""; sync(); });
+        $("r-name").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); (M.policy().level === "name" ? $("r-memo") : $("r-phone")).focus(); } });
+        $("r-phone").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); $("r-memo").focus(); } });
+        $("r-memo").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); $("r-memo").blur(); } });
+        $("r-agree").addEventListener("click", () => { setAgree(!agreed); $("r-consent-msg").textContent = ""; });
+        $("r-go").addEventListener("click", () => {
+          if (step === 1 && ticket) { setStep(2); setTimeout(() => $("r-name").focus(), 50); }
+          else if (step === 2 && !$("r-go").disabled) { setAgree(false); setStep(3); $("s-reg").querySelector(".body").scrollTop = 0; }
+          else if (step === 3) submit();
+          else if (step === 4) { clearAll(); setStep(1); setTimeout(() => $("r-code").focus(), 50); }
+        });
+        $("r-alt").addEventListener("click", () => { const c = ticket && ticket.code; close(); if (c) Detail.open(c); });
+        $("sr-cancel").addEventListener("click", () => {
+          if (step === 2 || step === 3) { if (!sending) setStep(step - 1); }
+          else close();
+        });
+        return { open, close };
+      })();
     </script>
       <script src="/ravi.js"></script>
 
