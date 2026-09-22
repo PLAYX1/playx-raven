@@ -111,7 +111,14 @@ pub fn allowed(role: &str, path: &str) -> bool {
                 || path == "/ravi.js"
                 || path == "/staff"
         }
-        "scanner" => path.starts_with("/api/scan/") || path == "/scan",
+        // 🔴 문 앞 태블릿은 하루 종일 아무나 만진다. 「회원 명단」을 못 보는 것이
+        //    약속이다(위 카탈로그 cannot). 접두어로 열면 새로 생긴 회원 찾기·보기·
+        //    메모·분류까지 딸려 열린다 — 실제로 0.4.4 검수에서 그렇게 열려 있었다.
+        //    그래서 태블릿 화면(web/scan.html)이 부르는 길만 이름으로 연다.
+        "scanner" => matches!(
+            path,
+            "/scan" | "/api/scan/check" | "/api/scan/in" | "/api/scan/member" | "/api/scan/member-policy"
+        ),
         // 손님 경로는 토큰이 없다. 여기 오는 일 자체가 없어야 한다.
         _ => false,
     }
@@ -144,8 +151,15 @@ mod tests {
             assert!(allowed("owner", path));
             assert!(allowed("staff", path));
             assert!(!allowed("staff", &format!("{path}-extra")));
-            assert!(allowed("scanner", path));
             assert!(!allowed("customer", path));
+        }
+        // 문 앞 태블릿: 등록은 되고, 명단·메모·분류는 안 된다.
+        for path in ["/scan", "/api/scan/check", "/api/scan/in", "/api/scan/member", "/api/scan/member-policy"] {
+            assert!(allowed("scanner", path), "{path}");
+        }
+        for path in ["/api/scan/member-info", "/api/scan/member-memo", "/api/scan/member-groups", "/api/scan/member-search",
+                     "/api/scan/member-extra", "/api/scan/anything-new", "/api/admin/orders", "/staff"] {
+            assert!(!allowed("scanner", path), "{path}");
         }
         assert!(!allowed("staff", "/api/scan/in"));
     }

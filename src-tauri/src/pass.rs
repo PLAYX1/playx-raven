@@ -203,8 +203,11 @@ pub(crate) fn reconcile_member_groups(
         }
         row["groups"] = json!(groups);
     }
-    persist_groups()?;
-    save(&rows)
+    // 장부를 먼저, 분류 목록을 나중에. 분류 목록 저장이 실패해도 같은 바꾸기를
+    // 다시 하면 옛 이름이 목록에 남아 있어 통과하고, 장부는 이미 새 이름이라
+    // 그대로 남는다. 반대 순서면 재시도가 GROUP_INVALID 로 막혀 옛 이름이 영영 남는다.
+    save(&rows)?;
+    persist_groups()
 }
 
 #[tauri::command]
@@ -226,6 +229,9 @@ pub fn member_memo_delete(asset: String, at: i64, index: usize) -> Result<Value,
     memos.remove(index);
     row["memos"] = json!(memos);
     save(&rows)?;
+    // save 는 지우기 전 판을 .bak 로 남긴다. 손님이 지워 달라 해서 지운 메모가
+    // 백업에 남으면 지운 것이 아니다 — 회원 한 명 지우기와 같은 방식으로 덮는다.
+    rewrite_backup(&rows)?;
     Ok(json!({ "code": asset, "memos": memos }))
 }
 
@@ -428,6 +434,9 @@ pub fn redact_expired_members(now_unix: i64, retention_months: u32) -> Result<us
     let mut count = 0;
     for row in &mut rows {
         if row["redacted"] == true { continue; }
+        // 정지 중인 회원은 아직 계약 중이다(장기 부상 정지 등). 만료일이
+        // 오래전이어도 지우지 않는다 — 정지를 풀면 그때부터 다시 센다.
+        if row["frozen_at"].as_i64().unwrap_or(0) > 0 { continue; }
         let expires = row["expires"].as_i64().unwrap_or(0);
         let base = if row["kind"] == "period" && expires > 0 {
             expires
@@ -1075,6 +1084,30 @@ mod days_left_tests {
             assert_eq!(member_status(&row, today), expected);
             assert_eq!(roster["status"], existing_bucket);
         }
+    }
+
+    #[test]
+    fn deleted_memo_leaves_no_copy_in_backup_and_frozen_members_are_kept() {
+        crate::member_privacy::tests::in_sandbox(|| {
+            synthetic_member("SYNTHETIC", "period");
+            append_memo("SYNTHETIC", "owner", "synthetic secret memo", 100).unwrap();
+            append_memo("SYNTHETIC", "owner", "synthetic keep memo", 101).unwrap();
+            member_memo_delete("SYNTHETIC".into(), 100, 0).unwrap();
+            for path in [store_path(), dir().join("passes.json.bak")] {
+                let raw = std::fs::read_to_string(&path).unwrap();
+                assert!(!raw.contains("synthetic secret memo"), "{path:?}");
+                assert!(raw.contains("synthetic keep memo"), "{path:?}");
+            }
+            let mut rows = load();
+            rows[0]["frozen_at"] = json!(20260101);
+            save(&rows).unwrap();
+            assert_eq!(redact_expired_members(days_from_ymd(20300101) * 86400, 6).unwrap(), 0);
+            assert_eq!(load()[0]["name"], "Synthetic Member");
+            let mut rows = load();
+            rows[0]["frozen_at"] = json!(0);
+            save(&rows).unwrap();
+            assert_eq!(redact_expired_members(days_from_ymd(20300101) * 86400, 6).unwrap(), 1);
+        });
     }
 
     #[test]

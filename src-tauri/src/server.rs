@@ -5027,7 +5027,12 @@ mod order_persistence_tests {
         crate::pass::save_member("ROOT/M#ABCD".into(), "Synthetic A".into(), "000-0000-7391".into(),
             "period".into(), 20990101, 0, "".into(), now_unix(), None).unwrap();
         let path = "/api/scan/member-groups";
-        for role in ["owner", "staff", "scanner"] {
+        // 문 앞 태블릿(scanner)은 분류를 못 바꾼다 — 아무나 만지는 자리다.
+        let (status, body) = request(&st, path, "POST", Some("scanner"), "localhost",
+            json!({"code":"ROOT/M#ABCD","groups":["Alpha"]})).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+        assert_eq!(body["code"], "FORBIDDEN_ROLE");
+        for role in ["owner", "staff"] {
             let (status, body) = request(&st, path, "POST", Some(role), "localhost",
                 json!({"code":" root/m#abcd ","groups":[" Alpha ","Alpha"]})).await;
             assert_eq!(status, StatusCode::OK, "{body}");
@@ -5091,7 +5096,11 @@ mod order_persistence_tests {
         let st = ServerState::default();
         st.role_tokens.lock().unwrap().insert("customer".into(), "synthetic-customer-token".into());
         crate::member_privacy::member_groups_set(vec!["Alpha".into()], None).unwrap();
-        for role in ["owner", "staff", "scanner"] {
+        // 문 앞 태블릿(scanner)은 명단을 훑지 못한다.
+        let (status, body) = request(&st, "/api/scan/member-search?status=active", "GET", Some("scanner"), "localhost", json!({})).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+        assert_eq!(body["code"], "FORBIDDEN_ROLE");
+        for role in ["owner", "staff"] {
             let (status, body) = request(&st, "/api/scan/member-search?q=Synthetic", "GET", Some(role), "localhost", json!({})).await;
             assert_eq!(status, StatusCode::OK);
             assert_eq!(body, json!({"results":[],"more":false}));
@@ -5188,7 +5197,7 @@ mod order_persistence_tests {
             crate::pass::save_member(format!("BATCH-{i:02}"), format!("Synthetic Batch {i:02}"), "000-0000-7391".into(),
                 "period".into(), 20990101, 0, "synthetic private note".into(), now + i, None).unwrap();
         }
-        let (status, body) = request(&st, "/api/scan/member-search?q=Batch", "GET", Some("scanner"), "localhost", json!({})).await;
+        let (status, body) = request(&st, "/api/scan/member-search?q=Batch", "GET", Some("staff"), "localhost", json!({})).await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(body["results"].as_array().unwrap().len(), 30);
         assert_eq!(body["more"], true);
@@ -5196,7 +5205,7 @@ mod order_persistence_tests {
         assert_eq!(body["results"][29]["code"], "BATCH-01");
         assert_search_has_no_private_data(&body);
         crate::pass::remove_member("BATCH-30".into()).unwrap();
-        let (status, body) = request(&st, "/api/scan/member-search?q=Batch", "GET", Some("scanner"), "localhost", json!({})).await;
+        let (status, body) = request(&st, "/api/scan/member-search?q=Batch", "GET", Some("staff"), "localhost", json!({})).await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(body["results"].as_array().unwrap().len(), 30);
         assert_eq!(body["more"], false);
@@ -5282,7 +5291,13 @@ mod order_persistence_tests {
                 assert_eq!(body["code"], if role.is_some() { "FORBIDDEN_ROLE" } else { "BAD_TOKEN" });
             }
         }
-        for (index, role) in ["staff", "scanner", "owner"].iter().enumerate() {
+        // 문 앞 태블릿(scanner)은 메모를 읽지도 쓰지도 못한다.
+        for (path, method) in [("/api/scan/member-memo", "POST"), ("/api/scan/member-info?code=ROOT/M%23ABCD", "GET")] {
+            let (status, body) = request(&st, path, method, Some("scanner"), "localhost", json!({"code":asset,"text":"synthetic"})).await;
+            assert_eq!(status, StatusCode::UNAUTHORIZED, "{path}");
+            assert_eq!(body["code"], "FORBIDDEN_ROLE");
+        }
+        for (index, role) in ["staff", "owner"].iter().enumerate() {
             let (status, body) = request(&st, "/api/scan/member-memo", "POST", Some(role), "localhost",
                 json!({"code":" root/m#abcd ","text":format!("synthetic memo {role}")})).await;
             assert_eq!(status, StatusCode::OK, "{body}");
@@ -5306,11 +5321,11 @@ mod order_persistence_tests {
             assert_eq!(status, StatusCode::BAD_REQUEST);
             assert_eq!(body["code"], "MEMO_INVALID");
         }
-        let (status, body) = request(&st, "/api/scan/member-memo", "POST", Some("scanner"), "localhost",
+        let (status, body) = request(&st, "/api/scan/member-memo", "POST", Some("staff"), "localhost",
             json!({"code":"MISSING","text":"synthetic"})).await;
         assert_eq!(status, StatusCode::NOT_FOUND);
         assert_eq!(body["code"], "NOT_MEMBER");
-        for i in 3..50 { crate::pass::append_memo(asset, "staff", &format!("synthetic limit {i}"), now_unix()).unwrap(); }
+        for i in 2..50 { crate::pass::append_memo(asset, "staff", &format!("synthetic limit {i}"), now_unix()).unwrap(); }
         let (status, body) = request(&st, "/api/scan/member-memo", "POST", Some("staff"), "localhost",
             json!({"code":asset,"text":"synthetic overflow"})).await;
         assert_eq!(status, StatusCode::BAD_REQUEST);
@@ -5318,7 +5333,7 @@ mod order_persistence_tests {
         crate::pass::save_member("REDACTED".into(), "Synthetic Member".into(), "0000".into(),
             "period".into(), 20200101, 0, "".into(), 1, None).unwrap();
         crate::pass::redact_expired_members(now_unix(), 6).unwrap();
-        let (status, body) = request(&st, "/api/scan/member-memo", "POST", Some("scanner"), "localhost",
+        let (status, body) = request(&st, "/api/scan/member-memo", "POST", Some("staff"), "localhost",
             json!({"code":"REDACTED","text":"synthetic blocked"})).await;
         assert_eq!(status, StatusCode::CONFLICT);
         assert_eq!(body["code"], "MEMBER_REDACTED");
