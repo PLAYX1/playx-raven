@@ -50,7 +50,7 @@ pub fn role_catalogue() -> Value {
         },
         {
             "id": "staff", "name": "직원",
-            "can": ["들어온 주문 처리", "메뉴 품절 표시", "회원 출입 확인", "회원 정보 보기"],
+            "can": ["들어온 주문 처리", "메뉴 품절 표시", "회원 출입 확인", "회원 정보 보기", "회원으로 등록"],
             "cannot": ["지갑·잔액", "송금·환불", "자산 발행", "설정 변경", "회원권 발급"],
             "where": "직원 폰이나 주방 태블릿.",
             "danger": false
@@ -92,6 +92,9 @@ pub fn allowed(role: &str, path: &str) -> bool {
                 // 손님이 내민 표가 진짜인지 보는 것까지. 확인(check)만 열고
                 // 입장 처리(in)는 열지 않는다 — 읽는 일과 쓰는 일은 다르다.
                 || path == "/api/scan/check"
+                // 이름·전화를 받는 등록은 닫혀 있었지만, 이제 사장이 수집 범위를 정하므로 직원에게도 연다.
+                || path == "/api/scan/member"
+                || path == "/api/scan/member-policy"
                 // 라비에게 묻기. 직원도 "부분 환불은 어떻게 하나요" 를 물을 수
                 // 있어야 한다 — 못 물으면 사장에게 전화하고, 그 사이 손님이 선다.
                 //
@@ -130,6 +133,17 @@ pub fn role_limits(role: String) -> Value {
 #[cfg(test)]
 mod tests {
     use super::allowed;
+
+    #[test]
+    fn member_registration_roles() {
+        for path in ["/api/scan/member", "/api/scan/member-policy"] {
+            assert!(allowed("staff", path));
+            assert!(allowed("scanner", path));
+            assert!(!allowed("customer", path));
+        }
+        assert!(!allowed("staff", "/api/scan/in"));
+    }
+
 
     /// 직원 화면은 브라우저가 그대로 읽는다. TypeScript 문법이 한 줄이라도
     /// 있으면 그 줄에서 스크립트가 멈추고, 주문 목록은 "불러오는 중…" 에

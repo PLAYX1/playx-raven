@@ -2210,6 +2210,28 @@
         <h2 class="title">출입 · 회원</h2>
         <p class="lede">이름·전화 뒷자리·회원번호 아무거나 치면 됩니다.</p>
 
+        <div class="panel" style="margin:20px 0;padding:18px;max-width:620px">
+          <h3>회원 정보 설정</h3>
+          <p class="lede">문 앞에서 회원으로 등록할 때 받는 정보를 정합니다.</p>
+          <label for="mp-level">회원 정보 받기</label>
+          <select id="mp-level" disabled>
+            <option value="none">안 받음</option>
+            <option value="name">이름만</option>
+            <option value="name_last4">이름+전화 뒷자리 4자리</option>
+            <option value="name_phone">이름+전화 전체</option>
+          </select>
+          <label for="mp-retention">회원 정보 보관</label>
+          <select id="mp-retention" disabled>
+            <option value="3">3개월</option>
+            <option value="6">6개월</option>
+            <option value="12">12개월</option>
+          </select>
+          <p class="meta">기간권이 끝난 뒤 이름·전화·메모·추가 정보를 자동 삭제합니다. 회원번호와 출입·동의 기록은 남습니다. 횟수권은 자동 삭제하지 않습니다.</p>
+          <button class="ghost" id="mp-save" disabled>회원 정보 설정 저장</button>
+          <button class="ghost" id="mp-reload">다시 읽어오기</button>
+          <div class="meta" id="mp-status" role="status"></div>
+        </div>
+
         <input id="dr-q" placeholder="홍길동 · 5678 · A7K2" autocomplete="off"
                style="font-size:19px;padding:16px 16px;max-width:520px" />
         <div id="dr-hits"></div>
@@ -2357,6 +2379,7 @@
           <div class="sheet-foot">
             <span class="meta" id="ms-note2"></span>
             <button id="ms-save">저장</button>
+            <button class="ghost" id="ms-delete" style="display:none">회원 한 명 지금 지우기</button>
           </div>
           <div id="ms-result"></div>
         </div>

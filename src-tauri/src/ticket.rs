@@ -100,6 +100,34 @@ fn save(rows: &[Value]) -> Result<(), String> {
     .map_err(|e| format!("표를 저장하지 못했습니다: {e}"))
 }
 
+/// Remove legacy promotion-name copies; new promotions no longer create them.
+pub(crate) fn redact_member_names(assets: &[String]) -> Result<(), String> {
+    let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let bytes = match std::fs::read(file()) {
+        Ok(bytes) => bytes,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(e.to_string()),
+    };
+    let mut data: Value = serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
+    let rows = data.get_mut("tickets").and_then(Value::as_array_mut)
+        .ok_or_else(|| "표 장부 형식이 올바르지 않습니다.".to_string())?;
+    let mut changed = false;
+    for row in rows {
+        if assets.iter().any(|a| row["code"].as_str() == Some(a.as_str())) {
+            if let Some(obj) = row.as_object_mut() {
+                changed |= obj.remove("name").is_some();
+            }
+        }
+    }
+    if changed {
+        let tmp = crate::paths::app_file("tickets.json.privacy.tmp");
+        std::fs::write(&tmp, serde_json::to_vec_pretty(&data).map_err(|e| e.to_string())?)
+            .map_err(|e| e.to_string())?;
+        std::fs::rename(tmp, file()).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 /// 이 이용권이 언제까지인가. **달력으로** 센다.
 ///
 /// 산 날이 1일째다. 그래서 하루권은 그날 하루, 한달권은 다음 달 같은 날의
@@ -350,8 +378,39 @@ pub fn ticket_to_member(
     code: String,
     name: String,
     phone: String,
+    consent: bool,
     now_unix: i64,
 ) -> Result<Value, String> {
+    let policy = crate::member_privacy::member_privacy_get()?;
+    if policy.level == "none" {
+        return Err("MEMBER_INFO_OFF: 이 가게는 회원 정보를 받지 않습니다.".into());
+    }
+    if !consent {
+        return Err("CONSENT_REQUIRED: 손님의 동의를 확인해 주세요.".into());
+    }
+    if name.chars().any(char::is_control) {
+        return Err("이름에는 제어문자를 넣을 수 없습니다.".into());
+    }
+    let name: String = name.trim().chars().take(40).collect();
+    let phone = match policy.level.as_str() {
+        "name" => String::new(),
+        "name_last4" => {
+            let digits: String = phone.chars().filter(char::is_ascii_digit).collect();
+            if digits.is_empty() {
+                return Err("전화번호의 숫자를 적어 주세요.".into());
+            }
+            digits[digits.len().saturating_sub(4)..].to_string()
+        }
+        "name_phone" => {
+            if phone.chars().any(char::is_control) || phone.trim().is_empty()
+                || !phone.chars().all(|c| c.is_ascii_digit() || c == '-' || c == ' ' || c == '+')
+                || !phone.chars().any(|c| c.is_ascii_digit()) {
+                return Err("전화번호를 확인해 주세요.".into());
+            }
+            phone.trim().to_string()
+        }
+        _ => unreachable!("validated policy"),
+    };
     if name.trim().is_empty() {
         return Err("이름을 적어 주세요.".into());
     }
@@ -384,9 +443,10 @@ pub fn ticket_to_member(
         0,
         format!("카운터에서 산 {item}"),
         now_unix,
-        // 문 앞에서는 이름·전화만 받는다. 나머지는 사장이 나중에 채운다 —
-        // 줄이 선 자리에서 생년월일까지 물으면 손님이 돌아선다.
-        None,
+        Some(json!({
+            "consent_at": now_unix,
+            "consent_version": crate::member_privacy::CONSENT_VERSION,
+        })),
     )?;
 
     with_rows(|rows| {
@@ -396,7 +456,8 @@ pub fn ticket_to_member(
         {
             if let Some(m) = r.as_object_mut() {
                 m.insert("promoted".into(), json!(true));
-                m.insert("name".into(), json!(name.trim()));
+                // 이름은 회원 장부에만 저장한다. 표에 개인정보 사본을 만들지 않는다.
+                m.remove("name");
             }
         }
     });
@@ -426,6 +487,46 @@ pub fn ticket_list(now_unix: i64) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn promotion_enforces_collection_consent_and_validation() {
+        crate::member_privacy::tests::in_sandbox(|| {
+            let make = |id: &str| one(id, "한달권", NOON)["code"].as_str().unwrap().to_string();
+            let code = make("blocked");
+            crate::member_privacy::member_privacy_set("none".into(), 6).unwrap();
+            assert!(ticket_to_member(code.clone(), "Kim".into(), "1234".into(), true, NOON)
+                .unwrap_err().starts_with("MEMBER_INFO_OFF:"));
+            crate::member_privacy::member_privacy_set("name".into(), 6).unwrap();
+            assert!(ticket_to_member(code.clone(), "Kim".into(), "".into(), false, NOON)
+                .unwrap_err().starts_with("CONSENT_REQUIRED:"));
+            for name in ["a\nb", "a\tb", "\nKim", " "] {
+                assert!(ticket_to_member(code.clone(), name.into(), "".into(), true, NOON).is_err());
+            }
+            for (level, input, expected) in [
+                ("name", "010-1234-5678", ""),
+                ("name_last4", "010-1234-5678", "5678"),
+                ("name_last4", "12", "12"),
+                ("name_phone", "010-1234-5678", "010-1234-5678"),
+            ] {
+                crate::member_privacy::member_privacy_set(level.into(), 6).unwrap();
+                let code = make(&format!("{level}-{input}"));
+                ticket_to_member(code.clone(), format!(" {} ", "김".repeat(45)), input.into(), true, NOON).unwrap();
+                let members = crate::pass::list_members(NOON).unwrap();
+                let row = members["members"].as_array().unwrap().iter().find(|r| r["asset"] == code).unwrap();
+                assert_eq!(row["phone"], expected);
+                assert_eq!(row["name"].as_str().unwrap().chars().count(), 40);
+                assert_eq!(row["extra"]["consent_at"], NOON);
+                assert_eq!(row["extra"]["consent_version"], crate::member_privacy::CONSENT_VERSION);
+                assert!(read_rows().iter().find(|r| r["code"] == code).unwrap().get("name").is_none());
+            }
+            for (level, phones) in [("name_last4", vec!["", "abc"]), ("name_phone", vec!["", "12\n34", "abc"])] {
+                crate::member_privacy::member_privacy_set(level.into(), 6).unwrap();
+                for phone in phones {
+                    assert!(ticket_to_member(code.clone(), "Kim".into(), phone.into(), true, NOON).is_err());
+                }
+            }
+        });
+    }
 
     fn menu() -> Value {
         json!([

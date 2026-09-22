@@ -2806,25 +2806,49 @@ struct MemberBody {
     name: String,
     #[serde(default)]
     phone: String,
+    #[serde(default)]
+    consent: bool,
 }
 
 /// 표를 회원으로 올린다(이름·전화 기록).
 ///
-/// `/api/scan/in` 권한으로 검사하므로 직원(staff) 폰은 이 경로를 열 수 없다.
-/// 검표(scanner)는 `/api/scan/` 전체가 허용되어 문 앞 무인 태블릿에서도
-/// 표를 회원으로 승격할 수 있다. 직원이 이름을 받아 적는다는 원래 의도와
-/// 실제 허용 역할이 다르다. 동작은 유지하며, 권한 변경은 대표가 결정한다.
+/// `/api/scan/member` 자체 권한으로 검사하여 owner·staff·scanner를 허용한다.
+/// 수집 범위와 동의는 HTTP와 IPC 모두 ticket_to_member에서 강제한다.
 async fn api_scan_member(
     State(state): State<ServerState>,
     headers: HeaderMap,
     Json(body): Json<MemberBody>,
 ) -> impl IntoResponse {
-    if let Err(reason) = authed_for_reason(&state, &headers, &json!({}), "/api/scan/in") {
+    if let Err(reason) = authed_for_reason(&state, &headers, &json!({}), "/api/scan/member") {
         return (StatusCode::UNAUTHORIZED, Json(auth_fail_json(reason)));
     }
-    match crate::ticket::ticket_to_member(body.code, body.name, body.phone, now_unix()) {
+    match crate::ticket::ticket_to_member(body.code, body.name, body.phone, body.consent, now_unix()) {
         Ok(v) => (StatusCode::OK, Json(v)),
-        Err(e) => (StatusCode::BAD_REQUEST, Json(json!({ "error": e }))),
+        Err(e) => {
+            let (status, code, message) = if let Some(message) = e.strip_prefix("MEMBER_INFO_OFF: ") {
+                (StatusCode::FORBIDDEN, "MEMBER_INFO_OFF", message)
+            } else if let Some(message) = e.strip_prefix("CONSENT_REQUIRED: ") {
+                (StatusCode::BAD_REQUEST, "CONSENT_REQUIRED", message)
+            } else {
+                (StatusCode::BAD_REQUEST, "MEMBER_REGISTRATION_FAILED", e.as_str())
+            };
+            (status, Json(json!({ "error": message, "code": code })))
+        }
+    }
+}
+
+async fn api_scan_member_policy(
+    State(state): State<ServerState>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    if let Err(reason) = authed_for_reason(&state, &headers, &json!({}), "/api/scan/member-policy") {
+        return (StatusCode::UNAUTHORIZED, Json(auth_fail_json(reason)));
+    }
+    match crate::member_privacy::member_privacy_get() {
+        Ok(policy) => (StatusCode::OK, Json(json!(policy))),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({
+            "error": "회원 정보 설정을 읽지 못했습니다.", "code": "MEMBER_POLICY_UNAVAILABLE"
+        }))),
     }
 }
 
@@ -2955,6 +2979,7 @@ fn build_phone_router(st: ServerState) -> axum::Router {
         .route("/api/scan/in", post(api_scan_in))
         // 표를 산 손님을 회원으로 올린다. 문 앞 직원이 이름을 받는 자리다.
         .route("/api/scan/member", post(api_scan_member))
+        .route("/api/scan/member-policy", get(api_scan_member_policy))
         // 🔴 가게를 다른 컴퓨터로 옮기는 길. 같은 와이파이의 새 컴퓨터가
         //    여섯 자리 숫자를 들고 여기로 온다.
         //    ⚠️ 숫자가 틀리면 옛 컴퓨터가 횟수를 세고, 세 번이면 짐을 버린다.
@@ -4741,6 +4766,45 @@ mod order_persistence_tests {
             .await
             .unwrap();
         (status, serde_json::from_slice(&bytes).unwrap())
+    }
+
+    #[tokio::test]
+    async fn member_policy_and_registration_return_real_http_codes() {
+        let _home = TestHome::new();
+        let st = ServerState::default();
+        for role in ["staff", "scanner", "owner"] {
+            let (status, policy) = request(&st, "/api/scan/member-policy", "GET", Some(role), "localhost", json!({})).await;
+            assert_eq!(status, StatusCode::OK);
+            assert_eq!(policy, json!({"level":"name_last4", "retention_months":6}));
+        }
+        let (status, body) = request(&st, "/api/scan/member-policy", "GET", None, "localhost", json!({})).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+        assert_eq!(body["code"], "BAD_TOKEN");
+        for consent in [None, Some(false)] {
+            let mut body = json!({"code":"test", "name":"Kim", "phone":"1234"});
+            if let Some(consent) = consent { body["consent"] = json!(consent); }
+            let (status, body) = request(&st, "/api/scan/member", "POST", Some("staff"), "localhost", body).await;
+            assert_eq!(status, StatusCode::BAD_REQUEST);
+            assert_eq!(body["code"], "CONSENT_REQUIRED");
+        }
+        crate::member_privacy::member_privacy_set("none".into(), 6).unwrap();
+        let (status, body) = request(&st, "/api/scan/member", "POST", Some("staff"), "localhost",
+            json!({"code":"test", "name":"Kim", "consent":true})).await;
+        assert_eq!(status, StatusCode::FORBIDDEN);
+        assert_eq!(body["code"], "MEMBER_INFO_OFF");
+        crate::member_privacy::member_privacy_set("name".into(), 3).unwrap();
+        let issued = crate::ticket::issue_for_order("policy-test", &json!([{"name":"Pass", "qty":1}]),
+            &json!([{"name":"Pass", "pass_months":1}]), now_unix());
+        let (status, body) = request(&st, "/api/scan/member", "POST", Some("staff"), "localhost",
+            json!({"code":issued[0]["code"], "name":"Kim", "phone":"12345678", "consent":true})).await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        let (status, body) = request(&st, "/api/scan/in", "POST", Some("staff"), "localhost", json!({"asset":"test"})).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+        assert_eq!(body["code"], "FORBIDDEN_ROLE");
+        std::fs::write(crate::paths::app_file("member_privacy.json"), b"invalid").unwrap();
+        let (status, body) = request(&st, "/api/scan/member-policy", "GET", Some("staff"), "localhost", json!({})).await;
+        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(body["code"], "MEMBER_POLICY_UNAVAILABLE");
     }
 
     #[tokio::test]

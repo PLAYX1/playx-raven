@@ -9917,6 +9917,49 @@ async function doorSearch() {
   }
 }
 
+async function loadMemberPrivacy() {
+  const controls = ["mp-level", "mp-retention", "mp-save"];
+  controls.forEach((id) => ($(id) as HTMLInputElement).disabled = true);
+  try {
+    const policy = await invoke<{ level: string; retention_months: number }>("member_privacy_get");
+    ($("mp-level") as HTMLSelectElement).value = policy.level;
+    ($("mp-retention") as HTMLSelectElement).value = String(policy.retention_months);
+    controls.forEach((id) => ($(id) as HTMLInputElement).disabled = false);
+    $("mp-status").textContent = "";
+  } catch {
+    setCopyText($("mp-status"), () => t("회원 정보 설정을 읽지 못했습니다."));
+  }
+}
+
+async function saveMemberPrivacy() {
+  const button = $("mp-save") as HTMLButtonElement;
+  button.disabled = true;
+  try {
+    await invoke("member_privacy_set", {
+      level: ($("mp-level") as HTMLSelectElement).value,
+      retentionMonths: Number(($("mp-retention") as HTMLSelectElement).value),
+    });
+    setCopyText($("mp-status"), () => t("회원 정보 설정을 저장했습니다."));
+  } catch {
+    setCopyText($("mp-status"), () => t("회원 정보 설정을 저장하지 못했습니다."));
+  } finally { button.disabled = false; }
+}
+
+async function deleteMember() {
+  const asset = msEditing;
+  if (!asset || !confirm(t("이 회원의 정보와 출입 기록을 모두 지울까요? 되돌릴 수 없습니다."))) return;
+  const button = $("ms-delete") as HTMLButtonElement;
+  button.disabled = true;
+  try {
+    await invoke("remove_member", { asset });
+    $("msheet").classList.add("hidden");
+    msEditing = null;
+    await Promise.all([doorSearch(), loadMembers()]);
+  } catch {
+    setCopyText($("ms-result"), () => t("회원 정보를 지우지 못했습니다."));
+  } finally { button.disabled = false; }
+}
+
 async function loadMembers() {
   if ($("dr-list").innerHTML === "") return;
   try {
@@ -9944,7 +9987,7 @@ async function loadMembers() {
     $("dr-list").innerHTML = list.length
       ? group(t("곧 끝납니다"), ending, t("지금 카운터에서 말씀드리면 대개 갱신하십니다.")) +
         group(t("다니는 중"), going, "") +
-        group(t("끝난 회원"), over, t("지우지 않았습니다 — 다시 오시면 그대로 이어집니다."))
+        group(t("끝난 회원"), over, t("회원권과 출입 기록은 남습니다. 보관기간이 지난 개인정보는 자동 삭제됩니다."))
       : emptyWithRaven("아직 등록된 회원이 없습니다.<br />「회원 등록」으로 첫 회원을 넣어 보세요.", "hello");
     bindMemberCards("dr-list");
     setCopyText($("dr-note"), () => `${t("다니는 중")} ${live.length}${t("명")} · ${t("끝남")} ${over.length}${t("명")}`);
@@ -9955,6 +9998,7 @@ async function loadMembers() {
 
 async function openMember(asset?: string): Promise<void> {
   msEditing = asset || null;
+  $("ms-delete").style.display = asset ? "" : "none";
   $("ms-title").textContent = asset ? "회원 고치기" : "회원 등록";
   $("ms-chain").style.display = asset ? "none" : "";
   $("ms-result").innerHTML = "";
@@ -15453,6 +15497,10 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("ms-start").addEventListener("change", recalcPeriod);
   $("ms-months").addEventListener("change", recalcPeriod);
   $("ms-save").addEventListener("click", saveMember);
+  $("ms-delete").addEventListener("click", deleteMember);
+  $("mp-save").addEventListener("click", saveMemberPrivacy);
+  $("mp-reload").addEventListener("click", loadMemberPrivacy);
+  void loadMemberPrivacy();
   $("key-save").addEventListener("click", saveKeys);
   wirePhoneTransaction(invoke, t);
   $("rv-phone-open").addEventListener("click", () => void openWebWallet());

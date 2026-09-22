@@ -51,6 +51,9 @@ use crate::raven::call_rpc;
 use serde_json::{json, Value};
 use std::path::PathBuf;
 
+// Serialize ledger read-modify-write operations with the daily privacy cleanup.
+static STORE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 fn dir() -> PathBuf {
     crate::paths::app_dir()
 }
@@ -163,6 +166,7 @@ pub fn save_member(
     // 정해 주면 안 쓰는 칸이 늘 비어 있거나, 필요한 칸이 없다.
     extra: Option<Value>,
 ) -> Result<(), String> {
+    let _guard = STORE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     if name.trim().is_empty() {
         return Err("이름이 필요합니다.".into());
     }
@@ -226,6 +230,60 @@ pub fn save_member(
         "updated": now_unix,
     }));
     save(&rows)
+}
+
+/// Remove identifying data after calendar-month retention; keep the contract and visits.
+/// The UTC calendar agrees with the existing pass expiry helpers. The deadline day
+/// itself is included. Punch cards and period passes with no expiry are excluded.
+pub fn redact_expired_members(now_unix: i64, retention_months: u32) -> Result<usize, String> {
+    if !matches!(retention_months, 3 | 6 | 12) {
+        return Err("회원 정보 보관 개월 수가 올바르지 않습니다.".into());
+    }
+    let _guard = STORE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    // Do not turn an unreadable/corrupt ledger into an empty one during cleanup.
+    let bytes = match std::fs::read(store_path()) {
+        Ok(bytes) => bytes,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(0),
+        Err(e) => return Err(e.to_string()),
+    };
+    let data: Value = serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
+    let mut rows = data.get("passes").and_then(Value::as_array).cloned()
+        .ok_or_else(|| "회원 장부 형식이 올바르지 않습니다.".to_string())?;
+    let today = ymd(now_unix);
+    let mut count = 0;
+    for row in &mut rows {
+        if row["redacted"] == true || row["kind"] != "period" { continue; }
+        let expires = row["expires"].as_i64().unwrap_or(0);
+        if expires <= 0 || add_months(expires, retention_months as i64) > today { continue; }
+        row["name"] = json!("");
+        row["phone"] = json!("");
+        row["note"] = json!("");
+        // Extra is owner-defined free text. Keep only consent evidence, not
+        // guessed field names: emergency contacts and birthdays also identify people.
+        let mut extra = serde_json::Map::new();
+        for key in ["consent_at", "consent_version"] {
+            if let Some(value) = row.get("extra").and_then(|e| e.get(key)) {
+                extra.insert(key.into(), value.clone());
+            }
+        }
+        row["extra"] = Value::Object(extra);
+        row["redacted"] = json!(true);
+        row["redacted_at"] = json!(now_unix);
+        count += 1;
+    }
+    let assets: Vec<String> = rows.iter().filter(|r| r["redacted"] == true)
+        .filter_map(|r| r["asset"].as_str().map(str::to_string)).collect();
+    if count > 0 { save(&rows)?; }
+    if !assets.is_empty() {
+        // The normal .bak contains the previous (identifying) version. Replace
+        // it atomically with the sanitized snapshot, also on retry after failure.
+        let tmp = dir().join("passes.json.bak.tmp");
+        std::fs::write(&tmp, serde_json::to_vec_pretty(&json!({ "passes": rows }))
+            .map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+        std::fs::rename(tmp, dir().join("passes.json.bak")).map_err(|e| e.to_string())?;
+        crate::ticket::redact_member_names(&assets)?;
+    }
+    Ok(count)
 }
 
 /// Everyone, with validity worked out for today.
@@ -344,6 +402,7 @@ pub fn check_in_lookup(query: String, now_unix: i64) -> Result<Value, String> {
 /// have been admitted is a count nobody can reconcile later.
 #[tauri::command]
 pub fn check_in(asset: String, now_unix: i64) -> Result<Value, String> {
+    let _guard = STORE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let today = ymd(now_unix);
     let mut rows = load();
 
@@ -390,6 +449,7 @@ pub fn check_in(asset: String, now_unix: i64) -> Result<Value, String> {
 /// arguing about dates at the counter.
 #[tauri::command]
 pub fn set_frozen(asset: String, frozen: bool, now_unix: i64) -> Result<Value, String> {
+    let _guard = STORE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let today = ymd(now_unix);
     let mut rows = load();
     let Some(idx) = rows
@@ -488,6 +548,7 @@ pub fn period_end(from_ymd: i64, months: i64, extra_days: i64) -> Value {
 /// which is the entire reason it does not carry a date.
 #[tauri::command]
 pub fn extend(asset: String, days: i64, months: i64, now_unix: i64) -> Result<Value, String> {
+    let _guard = STORE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let today = ymd(now_unix);
     let mut rows = load();
     let Some(idx) = rows
@@ -514,6 +575,7 @@ pub fn extend(asset: String, days: i64, months: i64, now_unix: i64) -> Result<Va
 /// Adds sessions to a punch card.
 #[tauri::command]
 pub fn add_visits(asset: String, count: i64, now_unix: i64) -> Result<Value, String> {
+    let _guard = STORE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let today = ymd(now_unix);
     let mut rows = load();
     let Some(idx) = rows
@@ -603,6 +665,7 @@ pub async fn rebuild_members(root: String, now_unix: i64) -> Result<Value, Strin
     let owned = call_rpc("listmyassets", json!([])).await?;
     let prefix = format!("{}/M#", root.trim().trim_end_matches('/').to_uppercase());
 
+    let _guard = STORE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let known: Vec<String> = load()
         .iter()
         .filter_map(|r| r.get("asset").and_then(Value::as_str).map(str::to_string))
@@ -653,6 +716,7 @@ pub async fn rebuild_members(root: String, now_unix: i64) -> Result<Value, Strin
 /// not imply otherwise. This only stops this door from recognising it.
 #[tauri::command]
 pub fn remove_member(asset: String) -> Result<(), String> {
+    let _guard = STORE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let mut rows = load();
     rows.retain(|r| r.get("asset").and_then(Value::as_str) != Some(asset.as_str()));
     save(&rows)
@@ -667,6 +731,48 @@ mod days_left_tests {
     /// 「7일 안에 만료」 안내가 **영영 안 뜬다** — 70 도 99 도 7 보다 크다.
     /// 내일 끝나는 회원에게 아무 말도 못 하고 있었다는 뜻이고, 갱신은
     /// 그 한마디에서 일어난다.
+    #[test]
+    fn retention_redacts_only_due_period_members_and_keeps_history() {
+        crate::member_privacy::tests::in_sandbox(|| {
+            let now = days_from_ymd(20260828) * 86400;
+            let mut rows = Vec::new();
+            for (asset, kind, expires) in [
+                ("old", "period", 20260131), ("boundary", "period", 20260228),
+                ("future", "period", 20260301), ("punch", "punch", 20200101),
+                ("no-expiry", "period", 0),
+            ] {
+                rows.push(json!({"asset":asset, "name":"Kim", "phone":"1234", "note":"private memo",
+                    "kind":kind, "expires":expires, "visits_total":10, "visits_used":2,
+                    "frozen_at":0, "issued":42, "updated":43, "visits":[44,45],
+                    "extra":{"emergency":"contact", "birth_year":1990, "custom_name":"Kim",
+                             "consent_at":42, "consent_version":"v1"}}));
+            }
+            save(&rows).unwrap();
+            std::fs::write(crate::paths::app_file("tickets.json"),
+                serde_json::to_vec(&json!({"tickets":[{"code":"old","name":"Kim","promoted":true}]})).unwrap()).unwrap();
+            assert_eq!(redact_expired_members(now, 6).unwrap(), 2);
+            let after = load();
+            for (before, row) in rows.iter().zip(after.iter()) {
+                if before["asset"] == "old" || before["asset"] == "boundary" {
+                    for key in ["name", "phone", "note"] { assert_eq!(row[key], ""); }
+                    assert_eq!(row["extra"], json!({"consent_at":42,"consent_version":"v1"}));
+                    assert_eq!(row["redacted"], true);
+                    assert_eq!(row["redacted_at"], now);
+                    for key in ["asset","kind","expires","visits_total","visits_used","frozen_at","issued","updated","visits"] {
+                        assert_eq!(row[key], before[key], "{key}");
+                    }
+                } else { assert_eq!(row, before); }
+            }
+            assert_eq!(redact_expired_members(now + 3600, 6).unwrap(), 0);
+            assert_eq!(load(), after);
+            let backup: Value = serde_json::from_slice(&std::fs::read(dir().join("passes.json.bak")).unwrap()).unwrap();
+            assert_eq!(backup["passes"], json!(after));
+            let tickets: Value = serde_json::from_slice(&std::fs::read(crate::paths::app_file("tickets.json")).unwrap()).unwrap();
+            assert!(tickets["tickets"][0].get("name").is_none());
+            assert_eq!(add_months(20260831, 6), 20270228);
+        });
+    }
+
     #[test]
     fn days_left_counts_real_days_not_digits() {
         let row = json!({ "kind": "period", "expires": 20_260_922 });

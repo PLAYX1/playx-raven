@@ -150,10 +150,12 @@
            직원과 마주 본다. 헬스장 회원 관리가 시작되는 자리다. -->
       <button class="ghost" id="v-member" style="display:none">회원으로 등록</button>
       <div id="v-form" style="display:none">
-        <input id="v-name" placeholder="이름" autocomplete="off" />
+        <input id="v-name" placeholder="이름" autocomplete="off" maxlength="40" />
         <input id="v-phone" placeholder="전화 뒷자리도 됩니다" autocomplete="off"
                inputmode="tel" />
-        <button id="v-save">저장</button>
+        <p id="v-policy" class="detail"></p>
+        <label><input id="v-consent" type="checkbox" style="width:auto;margin:16px 8px 0 0;padding:0" />손님이 동의했어요</label>
+        <button id="v-save" disabled>저장</button>
       </div>
       <button class="ghost" id="v-next">다음 사람</button>
     </div>
@@ -174,10 +176,36 @@
       }
       const H = { "x-playx-token": token, "content-type": "application/json" };
 
-      let current = null, timer;
+      let current = null, timer, memberPolicy = null, savingMember = false, checkSerial = 0;
+      const tr = (s) => window.t ? window.t(s) : s;
+      function clearConsent() {
+        $("v-consent").checked = false;
+        $("v-save").disabled = true;
+      }
+      async function loadMemberPolicy() {
+        memberPolicy = null;
+        const response = await fetch("/api/scan/member-policy", { headers: H });
+        const policy = await response.json();
+        if (!response.ok) throw new Error(tr("회원 정보 설정을 읽지 못했습니다."));
+        memberPolicy = policy;
+        $("v-phone").style.display = policy.level === "name" ? "none" : "";
+        $("v-phone").placeholder = tr(policy.level === "name_phone" ? "전화 전체" : "전화 뒷자리 4자리");
+        const collected = {name: "이름만", name_last4: "이름·전화 뒷자리", name_phone: "이름·전화"};
+        $("v-policy").textContent = tr("받는 것: {0} / 쓰는 곳: 회원 확인과 출입 / 보관: 회원권이 끝나고 {1}개월 뒤 자동 삭제 / 이 컴퓨터에만 저장돼요")
+          .replace("{0}", tr(collected[policy.level] || "안 받음"))
+          .replace("{1}", String(policy.retention_months));
+      }
+      $("v-consent").onchange = () => {
+        $("v-save").disabled = savingMember || !$("v-consent").checked || !memberPolicy || memberPolicy.level === "none";
+      };
 
       $("q").oninput = () => {
         clearTimeout(timer);
+        checkSerial++;
+        current = null;
+        clearConsent();
+        $("v-member").style.display = "none";
+        $("v-form").style.display = "none";
         const v = $("q").value.trim();
         if (v.length < 2) { $("v").className = "verdict"; return; }
         timer = setTimeout(check, 250);
@@ -185,11 +213,17 @@
 
       async function check() {
         const query = $("q").value.trim();
+        const serial = ++checkSerial;
+        current = null;
+        $("v-member").style.display = "none";
+        $("v-form").style.display = "none";
+        clearConsent();
         try {
           const r = await fetch("/api/scan/check", {
             method: "POST", headers: H, body: JSON.stringify({ query }),
           }).then((x) => x.json());
 
+          if (serial !== checkSerial) return;
           if (!r.found) {
             current = null;
             $("v").className = "verdict no on";
@@ -228,38 +262,74 @@
           $("v-in").style.display = ok ? "" : "none";
           // 이름이 아직 없는 표에만. 회원으로 올라간 표는 서버가 회원으로
           // 답하므로 여기 안 온다.
-          $("v-member").style.display = r.kind === "pass" ? "" : "none";
+          if (r.kind === "pass") {
+            try {
+              await loadMemberPolicy();
+              if (current === r) $("v-member").style.display = memberPolicy.level === "none" ? "none" : "";
+            } catch { /* Policy failure hides registration; ticket checks still work. */ }
+          }
           $("v-form").style.display = "none";
         } catch (e) {
+          if (serial !== checkSerial) return;
           $("v").className = "verdict no on";
           $("v-big").textContent = "확인 실패";
           $("v-detail").textContent = String(e);
         }
       }
 
-      $("v-member").onclick = () => {
-        $("v-form").style.display = "block";
-        $("v-name").focus();
+      $("v-member").onclick = async () => {
+        const selected = current;
+        clearConsent();
+        $("v-name").value = "";
+        $("v-phone").value = "";
+        try {
+          await loadMemberPolicy();
+          if (current !== selected) return;
+          if (memberPolicy.level === "none") {
+            $("v-member").style.display = "none";
+            $("v-detail").textContent = tr("이 가게는 회원 정보를 받지 않습니다.");
+            return;
+          }
+          $("v-form").style.display = "block";
+          $("v-name").focus();
+        } catch (e) { $("v-detail").textContent = String(e.message || e); }
       };
       $("v-save").onclick = async () => {
-        if (!current) return;
+        if (!current || !$("v-consent").checked || savingMember) return;
         const name = $("v-name").value.trim();
         if (!name) { $("v-name").focus(); return; }
+        const selected = current;
+        savingMember = true;
+        $("v-save").disabled = true;
         try {
           const r = await fetch("/api/scan/member", {
             method: "POST", headers: H,
             body: JSON.stringify({
-              code: current.asset, name, phone: $("v-phone").value.trim(),
+              code: selected.asset, name, phone: $("v-phone").value.trim(), consent: $("v-consent").checked,
             }),
           }).then((x) => x.json());
-          if (r.error) throw new Error(r.error);
-          $("v-who").textContent = name;
+          if (current !== selected) return;
+          if (r.code === "MEMBER_INFO_OFF") {
+            $("v-member").style.display = "none";
+            $("v-form").style.display = "none";
+            throw new Error(tr("이 가게는 회원 정보를 받지 않습니다."));
+          }
+          if (r.code === "CONSENT_REQUIRED") {
+            clearConsent();
+            throw new Error(tr("손님의 동의를 확인해 주세요."));
+          }
+          if (r.error) throw new Error(tr(r.error));
+          $("v-who").textContent = r.name;
+          clearConsent();
           $("v-detail").textContent = "회원으로 등록했습니다";
           $("v-form").style.display = "none";
           $("v-member").style.display = "none";
           $("v-name").value = ""; $("v-phone").value = "";
         } catch (e) {
-          $("v-detail").textContent = String(e.message || e);
+          if (current === selected) $("v-detail").textContent = String(e.message || e);
+        } finally {
+          savingMember = false;
+          $("v-save").disabled = !$("v-consent").checked;
         }
       };
 
@@ -282,6 +352,13 @@
       };
 
       function reset() {
+        checkSerial++;
+        clearTimeout(timer);
+        clearConsent();
+        $("v-name").value = "";
+        $("v-phone").value = "";
+        $("v-form").style.display = "none";
+        $("v-member").style.display = "none";
         $("q").value = "";
         $("v").className = "verdict";
         current = null;
