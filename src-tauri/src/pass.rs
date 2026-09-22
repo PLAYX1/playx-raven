@@ -51,6 +51,9 @@ use crate::raven::call_rpc;
 use serde_json::{json, Value};
 use std::path::PathBuf;
 
+const MEMO_MAX_CHARS: usize = 300;
+const MEMO_MAX_COUNT: usize = 50;
+
 // Serialize ledger read-modify-write operations with the daily privacy cleanup.
 static STORE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
@@ -89,6 +92,87 @@ fn save(rows: &[Value]) -> Result<(), String> {
         let _ = std::fs::copy(&path, dir().join("passes.json.bak"));
     }
     std::fs::rename(&tmp, &path).map_err(|e| format!("저장하지 못했습니다: {e}"))
+}
+
+// 삭제된 개인정보가 이전 장부 사본에 남지 않게 원자적으로 덮어쓴다.
+fn rewrite_backup(rows: &[Value]) -> Result<(), String> {
+    let tmp = dir().join("passes.json.bak.tmp");
+    std::fs::write(&tmp, serde_json::to_vec_pretty(&json!({ "passes": rows }))
+        .map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+    std::fs::rename(tmp, dir().join("passes.json.bak")).map_err(|e| e.to_string())
+}
+
+pub fn clean_memo(text: &str) -> Result<String, String> {
+    let text = text.replace("\r\n", " ").replace(['\r', '\n'], " ");
+    if text.chars().any(char::is_control) {
+        return Err("MEMO_INVALID: 메모에는 제어문자를 넣을 수 없습니다.".into());
+    }
+    let text = text.trim();
+    if !(1..=MEMO_MAX_CHARS).contains(&text.chars().count()) {
+        return Err("MEMO_INVALID: 메모는 1~300자 한 줄로 적어 주세요.".into());
+    }
+    Ok(text.to_string())
+}
+
+pub fn append_memo(asset: &str, by: &str, text: &str, now_unix: i64) -> Result<Vec<Value>, String> {
+    if !matches!(by, "owner" | "staff" | "scanner") {
+        return Err("MEMO_INVALID: 메모 작성 권한을 확인해 주세요.".into());
+    }
+    let text = clean_memo(text)?;
+    let _guard = STORE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let mut rows = load();
+    let row = rows.iter_mut().find(|r| r["asset"].as_str() == Some(asset))
+        .ok_or_else(|| "NOT_MEMBER: 회원이 아닌 표입니다.".to_string())?;
+    if row["redacted"] == true {
+        return Err("MEMBER_REDACTED: 이미 정보가 지워진 회원입니다.".into());
+    }
+    let mut memos = row["memos"].as_array().cloned().unwrap_or_default();
+    if memos.len() >= MEMO_MAX_COUNT {
+        return Err("MEMO_LIMIT: 메모는 한 회원에 50개까지 적을 수 있습니다.".into());
+    }
+    memos.push(json!({ "at": now_unix, "by": by, "text": text }));
+    row["memos"] = json!(memos);
+    save(&rows)?;
+    Ok(memos)
+}
+
+pub fn member_info(asset: &str, _now_unix: i64) -> Result<Value, String> {
+    let _guard = STORE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let rows = load();
+    let row = rows.iter().find(|r| r["asset"].as_str() == Some(asset))
+        .ok_or_else(|| "NOT_MEMBER: 회원이 아닌 표입니다.".to_string())?;
+    let redacted = row["redacted"] == true;
+    let kind = row["kind"].as_str().unwrap_or("period");
+    let visits_left = if kind == "punch" {
+        Some(row["visits_total"].as_i64().unwrap_or(0)
+            .saturating_sub(row["visits_used"].as_i64().unwrap_or(0)).max(0))
+    } else { None };
+    Ok(json!({ "code": asset, "name": if redacted { "" } else { row["name"].as_str().unwrap_or("") },
+        "until": row["expires"].as_i64().unwrap_or(0), "kind": kind, "visits_left": visits_left,
+        "memos": if redacted { Vec::new() } else { row["memos"].as_array().cloned().unwrap_or_default() },
+        "redacted": redacted }))
+}
+
+#[tauri::command]
+pub fn member_memo_add(asset: String, text: String, now_unix: i64) -> Result<Value, String> {
+    let memos = append_memo(&asset, "owner", &text, now_unix)?;
+    Ok(json!({ "code": asset, "memos": memos }))
+}
+
+#[tauri::command]
+pub fn member_memo_delete(asset: String, at: i64, index: usize) -> Result<Value, String> {
+    let _guard = STORE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let mut rows = load();
+    let row = rows.iter_mut().find(|r| r["asset"].as_str() == Some(asset.as_str()))
+        .ok_or_else(|| "NOT_MEMBER: 회원이 아닌 표입니다.".to_string())?;
+    let mut memos = row["memos"].as_array().cloned().unwrap_or_default();
+    if memos.get(index).and_then(|m| m["at"].as_i64()) != Some(at) {
+        return Err("메모가 바뀌었습니다. 다시 열어 주세요.".into());
+    }
+    memos.remove(index);
+    row["memos"] = json!(memos);
+    save(&rows)?;
+    Ok(json!({ "code": asset, "memos": memos }))
 }
 
 /// Local calendar day as YYYYMMDD.
@@ -176,6 +260,7 @@ pub fn save_member(
 pub fn insert_member_if_absent(
     asset: String, name: String, phone: String, kind: String, expires: i64,
     visits_total: i64, note: String, now_unix: i64, extra: Option<Value>,
+    first_memo: Option<(String, String)>,
 ) -> Result<(), String> {
     // Never take STORE_LOCK while holding the ticket lock: cleanup uses STORE -> ticket.
     let _guard = STORE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
@@ -184,6 +269,9 @@ pub fn insert_member_if_absent(
         return Err("이미 회원으로 등록된 표입니다.".into());
     }
     put_member(&mut rows, asset, name, phone, kind, expires, visits_total, note, now_unix, extra)?;
+    if let Some((by, text)) = first_memo {
+        rows.last_mut().unwrap()["memos"] = json!([{ "at": now_unix, "by": by, "text": text }]);
+    }
     save(&rows)
 }
 
@@ -222,6 +310,9 @@ fn put_member(
         .as_ref()
         .and_then(|r| r.get("visits").cloned())
         .unwrap_or_else(|| json!([]));
+    // 회원 정보를 고쳐도 직원들이 남긴 메모는 보존한다.
+    let old_memos = existing.as_ref().and_then(|r| r.get("memos").cloned())
+        .unwrap_or_else(|| json!([]));
     // 이번에 안 보낸 항목은 예전 것을 지킨다. 전화번호만 고치러 왔다가
     // 생년월일이 지워지면 안 된다.
     let mut merged = existing
@@ -250,6 +341,7 @@ fn put_member(
         "extra": Value::Object(merged),
         // 언제 왔는지. 없으면 정보를 한 번 고칠 때마다 출석이 사라진다.
         "visits": old_visits,
+        "memos": old_memos,
         "issued": issued,
         "updated": now_unix,
     }));
@@ -293,6 +385,7 @@ pub fn redact_expired_members(now_unix: i64, retention_months: u32) -> Result<us
         row["name"] = json!("");
         row["phone"] = json!("");
         row["note"] = json!("");
+        row["memos"] = json!([]);
         // Extra is owner-defined free text. Keep only consent evidence, not
         // guessed field names: emergency contacts and birthdays also identify people.
         let mut extra = serde_json::Map::new();
@@ -312,10 +405,7 @@ pub fn redact_expired_members(now_unix: i64, retention_months: u32) -> Result<us
     if !assets.is_empty() {
         // The normal .bak contains the previous (identifying) version. Replace
         // it atomically with the sanitized snapshot, also on retry after failure.
-        let tmp = dir().join("passes.json.bak.tmp");
-        std::fs::write(&tmp, serde_json::to_vec_pretty(&json!({ "passes": rows }))
-            .map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
-        std::fs::rename(tmp, dir().join("passes.json.bak")).map_err(|e| e.to_string())?;
+        rewrite_backup(&rows)?;
         crate::ticket::redact_member_names(&assets)?;
     }
     Ok(count)
@@ -754,13 +844,122 @@ pub fn remove_member(asset: String) -> Result<(), String> {
     let _guard = STORE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let mut rows = load();
     rows.retain(|r| r.get("asset").and_then(Value::as_str) != Some(asset.as_str()));
-    save(&rows)
+    save(&rows)?;
+    rewrite_backup(&rows)
 }
 
 
 #[cfg(test)]
 mod days_left_tests {
     use super::*;
+
+    #[test]
+    fn memo_cleaning_counts_characters_and_rejects_controls() {
+        assert_eq!(clean_memo("  synthetic\r\nmemo\rnext\nline  ").unwrap(), "synthetic memo next line");
+        for text in ["", "  ", "\r\n", "memo\t", "memo\0", "memo\u{7f}"] {
+            assert!(clean_memo(text).unwrap_err().starts_with("MEMO_INVALID: "));
+        }
+        for text in ["a".repeat(301), "가".repeat(301)] {
+            assert!(clean_memo(&text).is_err());
+        }
+        for text in ["a".repeat(300), "가".repeat(300)] {
+            assert_eq!(clean_memo(&text).unwrap(), text);
+        }
+    }
+
+    fn synthetic_member(asset: &str, kind: &str) {
+        save_member(asset.into(), "Synthetic Member".into(), "0000".into(), kind.into(),
+            20260101, 10, "synthetic legacy note".into(), 42,
+            Some(json!({"consent_version":"member-privacy-v2"}))).unwrap();
+    }
+
+    #[test]
+    fn memos_survive_edits_enforce_limits_and_guard_deletion() {
+        crate::member_privacy::tests::in_sandbox(|| {
+            assert!(append_memo("MISSING", "staff", "synthetic", 1).unwrap_err().starts_with("NOT_MEMBER:"));
+            synthetic_member("ROOT/M#ABCD", "punch");
+            assert!(append_memo("ROOT/M#ABCD", "customer", "synthetic", 1).unwrap_err().starts_with("MEMO_INVALID:"));
+            for i in 0..50 {
+                assert_eq!(append_memo("ROOT/M#ABCD", "staff", &format!("synthetic {i}"), i).unwrap().len(), i as usize + 1);
+            }
+            assert!(append_memo("ROOT/M#ABCD", "staff", "synthetic overflow", 51).unwrap_err().starts_with("MEMO_LIMIT:"));
+            synthetic_member("ROOT/M#ABCD", "punch");
+            let info = member_info("ROOT/M#ABCD", 42).unwrap();
+            assert_eq!(info["memos"].as_array().unwrap().len(), 50);
+            assert_eq!(info["visits_left"], 10);
+            assert_eq!(info["until"], 20260101);
+            assert!(info.get("phone").is_none());
+            assert_eq!(load()[0]["extra"]["consent_version"], "member-privacy-v2");
+            assert_eq!(load()[0]["note"], "synthetic legacy note");
+            assert!(member_memo_delete("ROOT/M#ABCD".into(), 9, 0).is_err());
+            assert!(member_memo_delete("ROOT/M#ABCD".into(), 0, 50).is_err());
+            let result = member_memo_delete("ROOT/M#ABCD".into(), 0, 0).unwrap();
+            assert_eq!(result["memos"].as_array().unwrap().len(), 49);
+            assert!(member_memo_delete("ROOT/M#ABCD".into(), 0, 0).is_err());
+            let result = member_memo_add("ROOT/M#ABCD".into(), "synthetic owner memo".into(), 52).unwrap();
+            assert_eq!(result["memos"][49]["by"], "owner");
+            assert_eq!(result["memos"][49]["at"], 52);
+        });
+    }
+
+    #[test]
+    fn concurrent_memos_keep_every_append() {
+        crate::member_privacy::tests::in_sandbox(|| {
+            synthetic_member("SYNTHETIC", "period");
+            let barrier = std::sync::Barrier::new(8);
+            std::thread::scope(|scope| {
+                for thread in 0..8 {
+                    let barrier = &barrier;
+                    scope.spawn(move || {
+                        barrier.wait();
+                        for i in 0..5 {
+                            append_memo("SYNTHETIC", "scanner", &format!("synthetic {thread}-{i}"), 42).unwrap();
+                        }
+                    });
+                }
+            });
+            let info = member_info("SYNTHETIC", 42).unwrap();
+            let memos = info["memos"].as_array().unwrap();
+            assert_eq!(memos.len(), 40);
+            for thread in 0..8 {
+                for i in 0..5 {
+                    assert!(memos.iter().any(|memo| memo["text"] == format!("synthetic {thread}-{i}")));
+                }
+            }
+            assert!(info["visits_left"].is_null());
+        });
+    }
+
+    #[test]
+    fn privacy_cleanup_and_removal_erase_memos_from_backup() {
+        crate::member_privacy::tests::in_sandbox(|| {
+            synthetic_member("SYNTHETIC", "period");
+            append_memo("SYNTHETIC", "staff", "synthetic private memo", 42).unwrap();
+            assert_eq!(redact_expired_members(days_from_ymd(20260828) * 86400, 6).unwrap(), 1);
+            assert_eq!(load()[0]["memos"], json!([]));
+            let info = member_info("SYNTHETIC", 42).unwrap();
+            assert_eq!(info["name"], "");
+            assert_eq!(info["memos"], json!([]));
+            assert_eq!(info["redacted"], true);
+            assert!(info.get("phone").is_none());
+            assert!(append_memo("SYNTHETIC", "staff", "synthetic", 43).unwrap_err().starts_with("MEMBER_REDACTED:"));
+            for path in [store_path(), dir().join("passes.json.bak")] {
+                let raw = std::fs::read_to_string(path).unwrap();
+                assert!(!raw.contains("synthetic private memo"));
+                assert!(!raw.contains("Synthetic Member"));
+            }
+            synthetic_member("DELETE", "period");
+            append_memo("DELETE", "owner", "synthetic deleted memo", 42).unwrap();
+            remove_member("DELETE".into()).unwrap();
+            assert!(member_info("DELETE", 42).unwrap_err().starts_with("NOT_MEMBER:"));
+            for path in [store_path(), dir().join("passes.json.bak")] {
+                let raw = std::fs::read_to_string(path).unwrap();
+                assert!(!raw.contains("synthetic deleted memo"));
+                assert!(!raw.contains("Synthetic Member"));
+                assert!(!raw.contains("DELETE"));
+            }
+        });
+    }
 
     /// 🔴 `YYYYMMDD` 끼리 빼면 날짜가 안 나온다. 한 달권이 「99일 남음」이 되고,
     /// 「7일 안에 만료」 안내가 **영영 안 뜬다** — 70 도 99 도 7 보다 크다.

@@ -95,6 +95,8 @@ pub fn allowed(role: &str, path: &str) -> bool {
                 // 이름·전화를 받는 등록은 닫혀 있었지만, 이제 사장이 수집 범위를 정하므로 직원에게도 연다.
                 || path == "/api/scan/member"
                 || path == "/api/scan/member-policy"
+                || path == "/api/scan/member-info"
+                || path == "/api/scan/member-memo"
                 // 라비에게 묻기. 직원도 "부분 환불은 어떻게 하나요" 를 물을 수
                 // 있어야 한다 — 못 물으면 사장에게 전화하고, 그 사이 손님이 선다.
                 //
@@ -136,7 +138,7 @@ mod tests {
 
     #[test]
     fn member_registration_roles() {
-        for path in ["/api/scan/member", "/api/scan/member-policy"] {
+        for path in ["/api/scan/member", "/api/scan/member-policy", "/api/scan/member-info", "/api/scan/member-memo"] {
             assert!(allowed("staff", path));
             assert!(allowed("scanner", path));
             assert!(!allowed("customer", path));

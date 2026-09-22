@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 
 // Bump this version whenever the consent wording changes.
-pub const CONSENT_VERSION: &str = "member-privacy-v2";
+pub const CONSENT_VERSION: &str = "member-privacy-v3";
 static LOCK: Mutex<()> = Mutex::new(());
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -35,12 +35,23 @@ pub fn consent_text(policy: &Policy) -> serde_json::Value {
         _ => ["이 가게는 회원 정보를 받지 않습니다.", "This shop does not collect member information.", "この店は会員情報を収集しません。", "本店不收集会员信息。"],
     };
     let n = policy.retention_months;
-    serde_json::json!({
+    let mut text = serde_json::json!({
         "ko": format!("{} 출입과 회원 확인에 사용합니다. 기간권의 회원 정보는 종료 후 {n}개월 뒤 자동 삭제합니다. 횟수권과 종료일이 없는 이용권의 회원 정보는 마지막 이용 후 {n}개월 뒤 자동 삭제합니다. 이 가게 컴퓨터와 그 백업에 저장됩니다. 언제든 가게에 삭제를 요청할 수 있습니다.", items[0]),
         "en": format!("{} We use it for entry and member identification. Member information for period passes is automatically deleted {n} months after the pass ends. Member information for punch cards and passes without an end date is automatically deleted {n} months after last use. Information is stored on this shop's computer and its backups. You can ask the shop to delete it at any time.", items[1]),
         "ja": format!("{} 入退場と会員確認に使用します。期間券の会員情報は終了から{n}か月後に自動削除します。回数券と終了日のない利用券の会員情報は最終利用から{n}か月後に自動削除します。この店のコンピューターとそのバックアップに保存します。いつでも店に削除を依頼できます。", items[2]),
         "zh": format!("{} 用于出入和会员身份确认。期限卡的会员信息在到期{n}个月后自动删除。次卡和无到期日的卡的会员信息在最后使用{n}个月后自动删除。信息保存在本店电脑及其备份中。您可以随时要求本店删除。", items[3]),
-    })
+    });
+    if policy.level != "none" {
+        for (lang, memo) in [
+            ("ko", "직원이 적는 메모(이용 관련 사항)도 받습니다.\n건강 상태 같은 민감한 정보는 적지 마세요."),
+            ("en", "We also collect notes written by staff (about your use of the shop).\nDo not write sensitive information such as health conditions."),
+            ("ja", "スタッフが記入するメモ（利用に関する事項）も収集します。\n健康状態などの機微な情報は記入しないでください。"),
+            ("zh", "也收集员工填写的备注（与使用相关的事项）。\n请勿填写健康状况等敏感信息。"),
+        ] {
+            text[lang] = serde_json::json!(format!("{}\n{memo}", text[lang].as_str().unwrap()));
+        }
+    }
+    text
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -167,11 +178,19 @@ pub(crate) mod tests {
                 .map(|level| consent_text(&Policy { level: (*level).into(), retention_months: months })).collect();
             for lang in ["ko", "en", "ja", "zh"] {
                 let mut unique = std::collections::HashSet::new();
-                for text in &texts {
+                for (level, text) in texts.iter().enumerate() {
                     let text = text[lang].as_str().unwrap();
                     assert!(!text.is_empty());
                     assert!(text.contains(&months.to_string()));
                     assert!(unique.insert(text));
+                    let (memo, sensitive) = match lang {
+                        "ko" => ("직원이 적는 메모(이용 관련 사항)", "건강 상태 같은 민감한 정보는 적지 마세요."),
+                        "en" => ("notes written by staff (about your use of the shop)", "Do not write sensitive information such as health conditions."),
+                        "ja" => ("スタッフが記入するメモ（利用に関する事項）", "健康状態などの機微な情報は記入しないでください。"),
+                        _ => ("员工填写的备注（与使用相关的事项）", "请勿填写健康状况等敏感信息。"),
+                    };
+                    assert_eq!(text.contains(memo), level != 0);
+                    assert_eq!(text.contains(sensitive), level != 0);
                 }
             }
         }

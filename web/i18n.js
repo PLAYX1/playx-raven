@@ -15,6 +15,8 @@
   var DICT = {
     ko: {},
     en: {
+      "메모는 1~300자 한 줄로 적어 주세요.": "Write a single-line memo of 1–300 characters.",
+      "메모 (선택)": "Memo (optional)",
       "회원 정보 설정": "Member information settings",
     "기간권은 종료 후, 횟수권과 종료일 없는 이용권은 마지막 이용 후 설정한 보관 기간이 지나면 이름·전화·메모·추가 정보를 자동 삭제합니다. 회원번호와 출입·동의 기록은 남습니다.": "After the retention period, names, phone numbers, notes and extra information are automatically deleted. Retention starts at expiry for period passes, or last use for punch cards and passes without an end date. Member numbers, visits and consent records remain.",
     "동의 내용이 바뀌었어요. 다시 읽고 동의해 주세요.": "The consent text has changed. Please read it and agree again.",
@@ -806,6 +808,8 @@
         "The assistant answers only from what this shop uploaded. When in doubt, ask the shop.",
     },
     ja: {
+      "메모는 1~300자 한 줄로 적어 주세요.": "メモは1〜300文字の1行で入力してください。",
+      "메모 (선택)": "メモ（任意）",
       "회원 정보 설정": "会員情報の設定",
     "기간권은 종료 후, 횟수권과 종료일 없는 이용권은 마지막 이용 후 설정한 보관 기간이 지나면 이름·전화·메모·추가 정보를 자동 삭제합니다. 회원번호와 출입·동의 기록은 남습니다.": "期間券は終了後、回数券と終了日のない利用券は最終利用後、設定した保存期間が過ぎると氏名・電話・メモ・追加情報を自動削除します。会員番号と入退場・同意記録は残ります。",
     "동의 내용이 바뀌었어요. 다시 읽고 동의해 주세요.": "同意内容が変わりました。もう一度読んで同意してください。",
@@ -1597,6 +1601,8 @@
         "店舗が登録した情報のみで回答します。不明な点は店舗にご確認ください。",
     },
     zh: {
+      "메모는 1~300자 한 줄로 적어 주세요.": "请用1至300个字符填写单行备注。",
+      "메모 (선택)": "备注（选填）",
       "회원 정보 설정": "会员信息设置",
     "기간권은 종료 후, 횟수권과 종료일 없는 이용권은 마지막 이용 후 설정한 보관 기간이 지나면 이름·전화·메모·추가 정보를 자동 삭제합니다. 회원번호와 출입·동의 기록은 남습니다.": "期限卡到期后，次卡和无到期日的卡最后使用后，超过设定保留期限时自动删除姓名、电话、备注和额外信息。会员编号、出入和同意记录保留。",
     "동의 내용이 바뀌었어요. 다시 읽고 동의해 주세요.": "同意内容已更改。请重新阅读并同意。",

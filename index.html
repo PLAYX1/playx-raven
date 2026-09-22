@@ -2371,6 +2371,14 @@
           </div>
 
           <label>메모<input id="ms-note" autocomplete="off" placeholder="상담 내용, 주의사항" /></label>
+          <section id="ms-memos" class="hidden">
+            <div id="ms-memo-list"></div>
+            <div class="row" style="gap:8px">
+              <input id="ms-memo-new" maxlength="300" autocomplete="off" placeholder="메모 (선택)" aria-label="메모 (선택)" />
+              <button id="ms-memo-add" class="ghost">메모 추가</button>
+            </div>
+            <div class="meta">건강 상태 같은 민감한 정보는 적지 마세요</div>
+          </section>
 
           <div class="warnbox" id="ms-chain" style="font-size:13px">
             회원번호를 체인에 하나 찍습니다 (<b>5 RVN · 약 17원</b>).

@@ -153,6 +153,7 @@
         <input id="v-name" placeholder="이름" autocomplete="off" maxlength="40" />
         <input id="v-phone" placeholder="전화 뒷자리도 됩니다" autocomplete="off"
                inputmode="tel" />
+        <input id="v-memo" placeholder="메모 (선택)" autocomplete="off" maxlength="300" />
         <p id="v-policy" class="detail"></p>
         <label><input id="v-consent" type="checkbox" style="width:auto;margin:16px 8px 0 0;padding:0" />손님이 동의했어요</label>
         <button id="v-save" disabled>저장</button>
@@ -279,6 +280,7 @@
         clearConsent();
         $("v-name").value = "";
         $("v-phone").value = "";
+        $("v-memo").value = "";
         try {
           await loadMemberPolicy();
           if (current !== selected) return;
@@ -303,7 +305,7 @@
             method: "POST", headers: H,
             body: JSON.stringify({
               code: selected.asset, name, phone: $("v-phone").value, consent: $("v-consent").checked,
-              consent_version: memberPolicy.consent_version,
+              consent_version: memberPolicy.consent_version, memo: $("v-memo").value,
             }),
           }).then((x) => x.json());
           if (current !== selected) return;
@@ -321,13 +323,14 @@
             clearConsent();
             throw new Error(tr("손님의 동의를 확인해 주세요."));
           }
+          if (r.code === "MEMO_INVALID") throw new Error(tr("메모는 1~300자 한 줄로 적어 주세요."));
           if (r.error) throw new Error(tr(r.error));
           $("v-who").textContent = r.name;
           clearConsent();
           $("v-detail").textContent = "회원으로 등록했습니다";
           $("v-form").style.display = "none";
           $("v-member").style.display = "none";
-          $("v-name").value = ""; $("v-phone").value = "";
+          $("v-name").value = ""; $("v-phone").value = ""; $("v-memo").value = "";
         } catch (e) {
           if (current === selected) $("v-detail").textContent = String(e.message || e);
         } finally {
@@ -360,6 +363,7 @@
         clearConsent();
         $("v-name").value = "";
         $("v-phone").value = "";
+        $("v-memo").value = "";
         $("v-form").style.display = "none";
         $("v-member").style.display = "none";
         $("q").value = "";

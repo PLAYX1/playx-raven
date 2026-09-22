@@ -10016,8 +10016,77 @@ async function loadMembers() {
   }
 }
 
+type MemberMemo = { at: number; by: "owner" | "staff" | "scanner"; text: string };
+
+function memberMemoError(error: unknown) {
+  const message = String(error);
+  const source = message.startsWith("MEMO_INVALID:") ? "메모는 1~300자 한 줄로 적어 주세요."
+    : message.startsWith("MEMO_LIMIT:") ? "메모는 한 회원에 50개까지 적을 수 있습니다."
+    : message === "메모가 바뀌었습니다. 다시 열어 주세요." ? message : "메모를 저장하지 못했습니다.";
+  setCopyText($("ms-result"), () => t(source));
+}
+
+function renderMemberMemos(asset: string, memos: MemberMemo[]) {
+  const list = $("ms-memo-list");
+  list.replaceChildren();
+  if (!memos.length) {
+    const empty = document.createElement("p");
+    empty.className = "meta";
+    setCopyText(empty, () => t("아직 메모가 없습니다"));
+    list.append(empty);
+  }
+  memos.forEach((memo, index) => {
+    const row = document.createElement("div");
+    const meta = document.createElement("div");
+    meta.className = "meta";
+    const who = { owner: "사장", staff: "직원", scanner: "문 앞" }[memo.by];
+    setCopyText(meta, () => `${new Date(memo.at * 1000).toLocaleString()} · ${t(who)}`);
+    const text = document.createElement("p");
+    // 사용자가 적은 메모는 HTML로 해석하거나 자동 번역하지 않는다.
+    text.setAttribute("translate", "no");
+    text.textContent = memo.text;
+    const button = document.createElement("button");
+    button.className = "ghost small";
+    setCopyText(button, () => t("지우기"));
+    button.onclick = async () => {
+      if (msEditing !== asset || !confirm(t("이 메모를 지울까요?"))) return;
+      button.disabled = true;
+      try {
+        const result = await invoke<{ memos: MemberMemo[] }>("member_memo_delete", { asset, at: memo.at, index });
+        if (msEditing === asset) {
+          $("ms-result").textContent = "";
+          renderMemberMemos(asset, result.memos);
+        }
+      } catch (error) { if (msEditing === asset) memberMemoError(error); }
+      finally { button.disabled = false; }
+    };
+    row.append(meta, text, button);
+    list.append(row);
+  });
+}
+
+async function addMemberMemo() {
+  const asset = msEditing;
+  if (!asset) return;
+  const button = $("ms-memo-add") as HTMLButtonElement;
+  const input = $("ms-memo-new") as HTMLInputElement;
+  button.disabled = true;
+  try {
+    const result = await invoke<{ memos: MemberMemo[] }>("member_memo_add", { asset, text: input.value, nowUnix: nowSec() });
+    if (msEditing === asset) {
+      input.value = "";
+      $("ms-result").textContent = "";
+      renderMemberMemos(asset, result.memos);
+    }
+  } catch (error) { if (msEditing === asset) memberMemoError(error); }
+  finally { button.disabled = false; }
+}
+
 async function openMember(asset?: string): Promise<void> {
   msEditing = asset || null;
+  $("ms-memos").classList.toggle("hidden", !asset);
+  $("ms-memo-list").replaceChildren();
+  ($("ms-memo-new") as HTMLInputElement).value = "";
   $("ms-delete").style.display = asset ? "" : "none";
   $("ms-title").textContent = asset ? "회원 고치기" : "회원 등록";
   $("ms-chain").style.display = asset ? "none" : "";
@@ -10037,6 +10106,7 @@ async function openMember(asset?: string): Promise<void> {
       ($("ms-months") as HTMLSelectElement).value = "0";
       set("ms-visits", m.visits_total || 10);
       set("ms-note", m.note);
+      renderMemberMemos(asset, m.memos || []);
       // 추가 항목도 되살린다. 안 하면 전화번호만 고치러 열었다가 저장하는
       // 순간 생년·성별이 빈 값으로 덮인다.
       set("ms-birth", m.extra?.birth_year);
@@ -15518,6 +15588,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("ms-months").addEventListener("change", recalcPeriod);
   $("ms-save").addEventListener("click", saveMember);
   $("ms-delete").addEventListener("click", deleteMember);
+  $("ms-memo-add").addEventListener("click", addMemberMemo);
   $("mp-save").addEventListener("click", saveMemberPrivacy);
   $("mp-reload").addEventListener("click", loadMemberPrivacy);
   void loadMemberPrivacy();

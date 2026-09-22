@@ -267,6 +267,8 @@ pub fn run() {
             pass::rebuild_members,
             pass::unclaimed_numbers,
             pass::remove_member,
+            pass::member_memo_add,
+            pass::member_memo_delete,
             refund::refund,
             refund::refund_payer,
             moving::move_offer,

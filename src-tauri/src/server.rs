@@ -2809,9 +2809,10 @@ async fn api_scan_member(
     headers: HeaderMap,
     body: axum::body::Bytes,
 ) -> impl IntoResponse {
-    if let Err(reason) = authed_for_reason(&state, &headers, &json!({}), "/api/scan/member") {
-        return (StatusCode::UNAUTHORIZED, Json(auth_fail_json(reason)));
-    }
+    let role = match authed_for_reason(&state, &headers, &json!({}), "/api/scan/member") {
+        Ok(role) => role,
+        Err(reason) => return (StatusCode::UNAUTHORIZED, Json(auth_fail_json(reason))),
+    };
     // 인증 → 본문 형식 → 동의 → 버전 → 정책과 나머지 검증 순서다.
     // Bytes로 받아 깨진 JSON과 불리언이 아닌 동의도 JSON 오류로 돌려준다.
     let invalid = || (StatusCode::BAD_REQUEST, Json(json!({
@@ -2828,9 +2829,13 @@ async fn api_scan_member(
         None => "",
         Some(value) => match value.as_str() { Some(phone) => phone, None => return invalid() },
     };
+    let memo = match body.get("memo") {
+        None => "",
+        Some(value) => match value.as_str() { Some(memo) => memo, None => return invalid() },
+    };
     let consent = body["consent"].as_bool().unwrap_or(false);
     let version = body["consent_version"].as_str().unwrap_or_default();
-    match crate::ticket::ticket_to_member(code.into(), name.into(), phone.into(), consent, version.into(), now_unix()) {
+    match crate::ticket::ticket_to_member(code.into(), name.into(), phone.into(), consent, version.into(), memo.into(), role, now_unix()) {
         Ok(v) => (StatusCode::OK, Json(v)),
         Err(e) => {
             let (status, code, message) = if let Some(message) = e.strip_prefix("MEMBER_INFO_OFF: ") {
@@ -2839,10 +2844,84 @@ async fn api_scan_member(
                 (StatusCode::BAD_REQUEST, "CONSENT_REQUIRED", message)
             } else if let Some(message) = e.strip_prefix("CONSENT_VERSION_STALE: ") {
                 (StatusCode::BAD_REQUEST, "CONSENT_VERSION_STALE", message)
+            } else if let Some(message) = e.strip_prefix("MEMO_INVALID: ") {
+                (StatusCode::BAD_REQUEST, "MEMO_INVALID", message)
             } else {
                 (StatusCode::BAD_REQUEST, "MEMBER_REGISTRATION_FAILED", e.as_str())
             };
             (status, Json(json!({ "error": message, "code": code })))
+        }
+    }
+}
+
+// 표 번호와 ROOT/M#ABCD 형식의 회원 번호를 함께 받는다.
+fn member_code(code: &str) -> Option<String> {
+    let code = code.trim().to_uppercase();
+    if (1..=64).contains(&code.len()) && code.bytes().all(|c|
+        c.is_ascii_uppercase() || c.is_ascii_digit() || b"#/._-".contains(&c)) {
+        Some(code)
+    } else { None }
+}
+
+fn member_api_error(status: StatusCode, code: &str, message: &str) -> (StatusCode, Json<Value>) {
+    (status, Json(json!({ "error": message, "code": code })))
+}
+
+fn member_info_policy() -> Result<(), (StatusCode, Json<Value>)> {
+    match crate::member_privacy::member_privacy_get() {
+        Ok(policy) if policy.level == "none" => Err(member_api_error(
+            StatusCode::FORBIDDEN, "MEMBER_INFO_OFF", "이 가게는 회원 정보를 받지 않습니다.")),
+        Ok(_) => Ok(()),
+        Err(_) => Err(member_api_error(StatusCode::INTERNAL_SERVER_ERROR,
+            "MEMBER_POLICY_UNAVAILABLE", "회원 정보 설정을 읽지 못했습니다.")),
+    }
+}
+
+async fn api_scan_member_info(
+    State(state): State<ServerState>, headers: HeaderMap, Query(query): Query<std::collections::HashMap<String, String>>,
+) -> impl IntoResponse {
+    if let Err(reason) = authed_for_reason(&state, &headers, &json!({}), "/api/scan/member-info") {
+        return (StatusCode::UNAUTHORIZED, Json(auth_fail_json(reason)));
+    }
+    if let Err(error) = member_info_policy() { return error; }
+    let Some(code) = query.get("code").and_then(|code| member_code(code)) else {
+        return member_api_error(StatusCode::BAD_REQUEST, "CODE_INVALID", "회원 번호를 확인해 주세요.");
+    };
+    match crate::pass::member_info(&code, now_unix()) {
+        Ok(info) => (StatusCode::OK, Json(info)),
+        Err(error) => member_api_error(StatusCode::NOT_FOUND, "NOT_MEMBER",
+            error.strip_prefix("NOT_MEMBER: ").unwrap_or(&error)),
+    }
+}
+
+async fn api_scan_member_memo(
+    State(state): State<ServerState>, headers: HeaderMap, body: axum::body::Bytes,
+) -> impl IntoResponse {
+    let role = match authed_for_reason(&state, &headers, &json!({}), "/api/scan/member-memo") {
+        Ok(role) => role,
+        Err(reason) => return (StatusCode::UNAUTHORIZED, Json(auth_fail_json(reason))),
+    };
+    let invalid = || member_api_error(StatusCode::BAD_REQUEST, "MEMO_INVALID",
+        "메모는 1~300자 한 줄로 적어 주세요.");
+    let body: Value = match serde_json::from_slice(&body) {
+        Ok(body) => body,
+        Err(_) => return invalid(),
+    };
+    if let Err(error) = member_info_policy() { return error; }
+    let (Some(code), Some(text)) = (body["code"].as_str().and_then(member_code), body["text"].as_str()) else {
+        return invalid();
+    };
+    match crate::pass::append_memo(&code, &role, text, now_unix()) {
+        Ok(memos) => (StatusCode::OK, Json(json!({ "code": code, "memos": memos }))),
+        Err(error) => {
+            let (code, message) = error.split_once(": ").unwrap_or(("MEMO_SAVE_FAILED", &error));
+            let status = match code {
+                "NOT_MEMBER" => StatusCode::NOT_FOUND,
+                "MEMBER_REDACTED" => StatusCode::CONFLICT,
+                "MEMO_INVALID" | "MEMO_LIMIT" => StatusCode::BAD_REQUEST,
+                _ => StatusCode::INTERNAL_SERVER_ERROR,
+            };
+            member_api_error(status, code, message)
         }
     }
 }
@@ -2993,6 +3072,8 @@ fn build_phone_router(st: ServerState) -> axum::Router {
         .route("/api/scan/in", post(api_scan_in))
         // 표를 산 손님을 회원으로 올린다. 문 앞 직원이 이름을 받는 자리다.
         .route("/api/scan/member", post(api_scan_member))
+        .route("/api/scan/member-info", get(api_scan_member_info))
+        .route("/api/scan/member-memo", post(api_scan_member_memo))
         .route("/api/scan/member-policy", get(api_scan_member_policy))
         // 🔴 가게를 다른 컴퓨터로 옮기는 길. 같은 와이파이의 새 컴퓨터가
         //    여섯 자리 숫자를 들고 여기로 온다.
@@ -4758,6 +4839,12 @@ mod order_persistence_tests {
         host: &str,
         body: Value,
     ) -> (StatusCode, Value) {
+        request_raw(st, path, method, role, host, body.to_string()).await
+    }
+
+    async fn request_raw(
+        st: &ServerState, path: &str, method: &str, role: Option<&str>, host: &str, body: String,
+    ) -> (StatusCode, Value) {
         let mut req = axum::http::Request::builder()
             .uri(path)
             .method(method)
@@ -4772,7 +4859,7 @@ mod order_persistence_tests {
             req = req.header("x-playx-token", token);
         }
         let response = build_phone_router(st.clone())
-            .oneshot(req.body(axum::body::Body::from(body.to_string())).unwrap())
+            .oneshot(req.body(axum::body::Body::from(body)).unwrap())
             .await
             .unwrap();
         let status = response.status();
@@ -4780,6 +4867,106 @@ mod order_persistence_tests {
             .await
             .unwrap();
         (status, serde_json::from_slice(&bytes).unwrap())
+    }
+
+    #[tokio::test]
+    async fn member_memos_use_real_roles_and_http_codes() {
+        let _home = TestHome::new();
+        let st = ServerState::default();
+        st.role_tokens.lock().unwrap().insert("customer".into(), "synthetic-customer-token".into());
+        let asset = "ROOT/M#ABCD";
+        crate::pass::save_member(asset.into(), "Synthetic Member".into(), "0000".into(),
+            "punch".into(), 20260101, 10, "".into(), now_unix(), None).unwrap();
+        for (path, expected) in [
+            ("/api/scan/member-info", "CODE_INVALID"),
+            ("/api/scan/member-info?code=", "CODE_INVALID"),
+            ("/api/scan/member-info?code=bad%20code", "CODE_INVALID"),
+            ("/api/scan/member-info?code=%EA%B0%80", "CODE_INVALID"),
+            ("/api/scan/member-info?code=missing", "NOT_MEMBER"),
+        ] {
+            let (status, body) = request(&st, path, "GET", Some("staff"), "localhost", json!({})).await;
+            assert_eq!(status, if expected == "NOT_MEMBER" { StatusCode::NOT_FOUND } else { StatusCode::BAD_REQUEST });
+            assert_eq!(body["code"], expected);
+            assert!(body["error"].is_string());
+        }
+        let long_path = format!("/api/scan/member-info?code={}", "A".repeat(65));
+        let (status, body) = request(&st, &long_path, "GET", Some("staff"), "localhost", json!({})).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(body["code"], "CODE_INVALID");
+        for role in [None, Some("customer")] {
+            for (path, method) in [("/api/scan/member-info?code=ROOT/M%23ABCD", "GET"), ("/api/scan/member-memo", "POST")] {
+                let (status, body) = request(&st, path, method, role, "localhost", json!({"code":asset,"text":"synthetic denied memo"})).await;
+                assert_eq!(status, StatusCode::UNAUTHORIZED);
+                assert_eq!(body["code"], if role.is_some() { "FORBIDDEN_ROLE" } else { "BAD_TOKEN" });
+            }
+        }
+        for (index, role) in ["staff", "scanner", "owner"].iter().enumerate() {
+            let (status, body) = request(&st, "/api/scan/member-memo", "POST", Some(role), "localhost",
+                json!({"code":" root/m#abcd ","text":format!("synthetic memo {role}")})).await;
+            assert_eq!(status, StatusCode::OK, "{body}");
+            assert_eq!(body["code"], asset);
+            assert_eq!(body["memos"].as_array().unwrap().len(), index + 1);
+            assert_eq!(body["memos"][index]["by"], *role);
+            assert!(body["memos"][index]["at"].is_i64());
+            let (status, info) = request(&st, "/api/scan/member-info?code=%20root/m%23abcd%20", "GET", Some(role), "localhost", json!({})).await;
+            assert_eq!(status, StatusCode::OK, "{info}");
+            assert_eq!(info, json!({"code":asset,"name":"Synthetic Member","until":20260101,
+                "kind":"punch","visits_left":10,"memos":body["memos"],"redacted":false}));
+            assert!(info.get("phone").is_none());
+        }
+        for raw in ["{invalid synthetic JSON".to_string(), json!({"code":asset,"text":""}).to_string(),
+            json!({"code":asset,"text":"가".repeat(301)}).to_string(),
+            json!({"code":asset,"text":"synthetic\tbad"}).to_string(),
+            json!({"code":123,"text":"synthetic"}).to_string(),
+            json!({"code":asset,"text":123}).to_string(),
+            json!({"code":"bad code","text":"synthetic"}).to_string()] {
+            let (status, body) = request_raw(&st, "/api/scan/member-memo", "POST", Some("staff"), "localhost", raw).await;
+            assert_eq!(status, StatusCode::BAD_REQUEST);
+            assert_eq!(body["code"], "MEMO_INVALID");
+        }
+        let (status, body) = request(&st, "/api/scan/member-memo", "POST", Some("scanner"), "localhost",
+            json!({"code":"MISSING","text":"synthetic"})).await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        assert_eq!(body["code"], "NOT_MEMBER");
+        for i in 3..50 { crate::pass::append_memo(asset, "staff", &format!("synthetic limit {i}"), now_unix()).unwrap(); }
+        let (status, body) = request(&st, "/api/scan/member-memo", "POST", Some("staff"), "localhost",
+            json!({"code":asset,"text":"synthetic overflow"})).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(body["code"], "MEMO_LIMIT");
+        crate::pass::save_member("REDACTED".into(), "Synthetic Member".into(), "0000".into(),
+            "period".into(), 20200101, 0, "".into(), 1, None).unwrap();
+        crate::pass::redact_expired_members(now_unix(), 6).unwrap();
+        let (status, body) = request(&st, "/api/scan/member-memo", "POST", Some("scanner"), "localhost",
+            json!({"code":"REDACTED","text":"synthetic blocked"})).await;
+        assert_eq!(status, StatusCode::CONFLICT);
+        assert_eq!(body["code"], "MEMBER_REDACTED");
+        for role in ["staff", "scanner", "owner"] {
+            let tickets = crate::ticket::issue_for_order(&format!("synthetic-memo-{role}"),
+                &json!([{"name":"Synthetic Pass","qty":1}]), &json!([{"name":"Synthetic Pass","pass_months":1}]), now_unix());
+            let code = tickets[0]["code"].as_str().unwrap();
+            for (memo, expected) in [(json!(123), "MEMBER_REGISTRATION_FAILED"), (json!("synthetic\tbad"), "MEMO_INVALID")] {
+                let (status, body) = request(&st, "/api/scan/member", "POST", Some(role), "localhost",
+                    json!({"code":code,"name":"Synthetic Member","phone":"0000","consent":true,
+                        "consent_version":crate::member_privacy::CONSENT_VERSION,"memo":memo})).await;
+                assert_eq!(status, StatusCode::BAD_REQUEST);
+                assert_eq!(body["code"], expected);
+                assert!(crate::pass::member_info(code, now_unix()).is_err());
+            }
+            let (status, body) = request(&st, "/api/scan/member", "POST", Some(role), "localhost",
+                json!({"code":code,"name":"Synthetic Member","phone":"0000","consent":true,
+                    "consent_version":crate::member_privacy::CONSENT_VERSION,"memo":"synthetic first memo"})).await;
+            assert_eq!(status, StatusCode::OK, "{body}");
+            let info = crate::pass::member_info(code, now_unix()).unwrap();
+            assert_eq!(info["memos"][0]["by"], role);
+            assert_eq!(info["memos"][0]["text"], "synthetic first memo");
+            assert!(info["visits_left"].is_null());
+        }
+        crate::member_privacy::member_privacy_set("none".into(), 6).unwrap();
+        for (path, method) in [("/api/scan/member-info?code=ROOT/M%23ABCD", "GET"), ("/api/scan/member-memo", "POST")] {
+            let (status, body) = request(&st, path, method, Some("staff"), "localhost", json!({})).await;
+            assert_eq!(status, StatusCode::FORBIDDEN);
+            assert_eq!(body["code"], "MEMBER_INFO_OFF");
+        }
     }
 
     #[tokio::test]

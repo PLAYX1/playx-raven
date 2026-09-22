@@ -1,5 +1,8 @@
 /** Korean source copy + English, Japanese and Simplified Chinese. User text is not translated here. */
 export const DESKTOP_COPY: Record<string, [string, string, string]> = {
+  "메모 추가": ["Add memo", "メモを追加", "添加备注"],
+  "건강 상태 같은 민감한 정보는 적지 마세요": ["Do not write sensitive information such as health conditions.", "健康状態などの機微な情報は記入しないでください。", "请勿填写健康状况等敏感信息。"],
+  "메모 (선택)": ["Memo (optional)", "メモ（任意）", "备注（选填）"],
   "확인 대기 중": ["Pending confirmation", "承認待ち", "等待确认"],
   "이 자산에는 아직 프로필이 안 붙어 있습니다.": ["This asset has no profile yet.", "この資産にはまだプロフィールがありません。", "此资产尚无个人资料。"],
   "체인 프로필에 열쇠가 안 적혀 있습니다.": ["The on-chain profile has no key.", "チェーン上のプロフィールにキーがありません。", "链上个人资料中没有密钥。"],
