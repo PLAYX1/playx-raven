@@ -30,7 +30,7 @@ export async function prepareRelease(source, destination, version) {
     if (next.reduce((order, n, i) => order || Math.sign(n - old[i]), 0) <= 0) throw new Error('Release must be newer than the currently published version');
   } catch (e) { if (e.code !== 'ENOENT') throw e; }
   const base = `https://raw.githubusercontent.com/PLAYX1/playx-raven-releases/dist/v${version}`;
-  const manifest = { version, notes: 'RavenVault Desktop 0.4.4 보안 수리: 창 보안 정책(CSP)과 외부 글자 이스케이프, 손님 폰 서버를 인터넷(터널)에서 열 때 손님 화면과 웹 지갑 연결만 허용, 앱 자료 폴더·코어 폴더를 본인 계정 전용으로 잠금, 복구 단어 보기가 더 이상 개인키 임시 파일을 만들지 않음, 사진 사본 크기 제한. 기존 지갑·가게 데이터 위치는 그대로입니다.', pub_date: new Date().toISOString(), platforms: {}, installers: [] };
+  const manifest = { version, notes: 'RavenVault Desktop 0.4.4 — 가게 회원 관리와 보안 수리. 회원: 표를 산 손님을 동의를 받고 회원으로 등록(받을 정보·보관 기간은 사장이 정함, 기간이 지나면 이름·전화·메모 자동 삭제), 회원 메모와 분류(성인반·PT 등), 이름·번호·전화 끝 4자리·메모로 찾기, 아이폰 직원도 앱 없이 직원 화면(사파리)에서 회원 찾기·등록·메모. 가게: 다시 켜도 주문과 번호표를 기억. 보안: 창 보안 정책(CSP)과 외부 글자 이스케이프, 인터넷(터널)에서는 손님 화면과 웹 지갑 연결만 허용, 앱 자료 폴더를 본인 계정 전용으로 잠금, 복구 단어 보기가 개인키 임시 파일을 만들지 않음. 기존 지갑·가게 데이터 위치는 그대로입니다.', pub_date: new Date().toISOString(), platforms: {}, installers: [] };
   for (const [suffix, platform] of Object.entries(platforms)) {
     const signature = (await readFile(path.join(source, prefix + suffix + '.sig'), 'utf8')).trim();
     if (!/^[A-Za-z0-9+/=\r\n]+$/.test(signature) || signature.length < 100 || signature.length > 2048) throw new Error(`Malformed updater signature: ${suffix}`);

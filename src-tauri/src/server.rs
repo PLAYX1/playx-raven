@@ -5024,7 +5024,7 @@ mod order_persistence_tests {
         let st = ServerState::default();
         st.role_tokens.lock().unwrap().insert("customer".into(), "synthetic-customer-token".into());
         crate::member_privacy::member_groups_set(vec!["Alpha".into()], None).unwrap();
-        crate::pass::save_member("ROOT/M#ABCD".into(), "Synthetic A".into(), "010-5550-7391".into(),
+        crate::pass::save_member("ROOT/M#ABCD".into(), "Synthetic A".into(), "000-0000-7391".into(),
             "period".into(), 20990101, 0, "".into(), now_unix(), None).unwrap();
         let path = "/api/scan/member-groups";
         for role in ["owner", "staff", "scanner"] {
@@ -5066,7 +5066,7 @@ mod order_persistence_tests {
         let (status, info) = request(&st, "/api/scan/member-info?code=ROOT/M%23ABCD", "GET", Some("staff"), "localhost", json!({})).await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(info["groups"], json!(["Alpha"]));
-        crate::pass::save_member("ROOT/M#ABCD".into(), "Synthetic A".into(), "010-5550-7391".into(),
+        crate::pass::save_member("ROOT/M#ABCD".into(), "Synthetic A".into(), "000-0000-7391".into(),
             "period".into(), 20200101, 0, "".into(), now_unix(), None).unwrap();
         crate::pass::redact_expired_members(now_unix(), 6).unwrap();
         let (status, body) = request(&st, path, "POST", Some("staff"), "localhost", json!({"code":"ROOT/M#ABCD","groups":[]})).await;
@@ -5131,7 +5131,7 @@ mod order_persistence_tests {
     // Check the entire serialized response, not merely an absent phone field.
     fn assert_search_has_no_private_data(body: &Value) {
         let raw = body.to_string();
-        for forbidden in ["010-5550-7391", "01055507391", "5550", "7391", "phone", "memo", "note", "extra", "synthetic private"] {
+        for forbidden in ["000-0000-7391", "00000007391", "7391", "phone", "memo", "note", "extra", "synthetic private"] {
             assert!(!raw.contains(forbidden), "search leaked {forbidden}: {raw}");
         }
     }
@@ -5149,7 +5149,7 @@ mod order_persistence_tests {
             (3, "ROOT/M#NPQR", "Synthetic D", "punch", 0, 8, "Alpha"),
             (4, "ROOT/M#STUV", "Synthetic Redacted", "period", 20200101, 0, "Alpha"),
         ] {
-            crate::pass::save_member(code.into(), name.into(), "010-5550-7391".into(), kind.into(), expiry, visits,
+            crate::pass::save_member(code.into(), name.into(), "000-0000-7391".into(), kind.into(), expiry, visits,
                 "synthetic private note".into(), now + index, Some(json!({"private":"synthetic private extra"}))).unwrap();
             crate::pass::append_memo(code, "staff", "synthetic private memo", now).unwrap();
             crate::pass::assign_groups(code, vec![group.into()], now).unwrap();
@@ -5159,7 +5159,7 @@ mod order_persistence_tests {
             ("?q=sYnThEtIc%20a", vec!["ROOT/M#ABCD"]),
             ("?q=m%23abcd", vec!["ROOT/M#ABCD"]),
             ("?q=7391", vec!["ROOT/M#NPQR", "ROOT/M#JKLM", "ROOT/M#EFGH", "ROOT/M#ABCD"]),
-            ("?q=391", vec![]), ("?q=5550", vec![]), ("?q=01055507391", vec![]),
+            ("?q=391", vec![]), ("?q=0000", vec![]), ("?q=00000007391", vec![]),
             ("?group=Alpha", vec!["ROOT/M#NPQR", "ROOT/M#ABCD"]),
             ("?status=active", vec!["ROOT/M#NPQR", "ROOT/M#ABCD"]),
             ("?status=ending", vec!["ROOT/M#EFGH"]), ("?status=over", vec!["ROOT/M#JKLM"]),
@@ -5185,7 +5185,7 @@ mod order_persistence_tests {
             }
         }
         for i in 0..31 {
-            crate::pass::save_member(format!("BATCH-{i:02}"), format!("Synthetic Batch {i:02}"), "010-5550-7391".into(),
+            crate::pass::save_member(format!("BATCH-{i:02}"), format!("Synthetic Batch {i:02}"), "000-0000-7391".into(),
                 "period".into(), 20990101, 0, "synthetic private note".into(), now + i, None).unwrap();
         }
         let (status, body) = request(&st, "/api/scan/member-search?q=Batch", "GET", Some("scanner"), "localhost", json!({})).await;
