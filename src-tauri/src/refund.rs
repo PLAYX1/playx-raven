@@ -217,20 +217,31 @@ fn round_limit(v: f64) -> f64 {
 
 /// 이 가게 돈으로 환산한 한도. (1건, 하루)
 ///
-/// 환율이 안 잡히면 한도를 열지 않고 원화 기본값으로 되돌아간다 — 한도를
-/// 못 계산했다고 무제한으로 여는 것은 정반대 방향의 실수다.
+/// 환율이 안 잡히면: 원화 가게는 원화 기본값으로, **그 밖의 가게는 직원 환불을
+/// 닫는다**(한도 0).
+///
+/// 🔴 2026-09-23 까지는 어느 나라든 원화 숫자(30,000·100,000)로 되돌아갔다. 그런데
+///    환불 금액은 가게 돈으로 센다 — 유로 가게에서 환율 조회가 한 번 실패하면
+///    직원이 **3만 유로**까지 환불할 수 있었다. 한도를 못 계산했다고 여는 것은
+///    정반대 방향의 실수다.
 async fn staff_limits() -> (f64, f64, String) {
     let cur = crate::shop::currency();
     if cur == "USD" {
         return (STAFF_ONCE_USD, STAFF_DAY_USD, cur);
     }
-    match crate::price::fiat_per_usd_public(&cur).await {
+    let fx = crate::price::fiat_per_usd_public(&cur).await;
+    limits_from_fx(&cur, fx)
+}
+
+fn limits_from_fx(cur: &str, fx: Option<f64>) -> (f64, f64, String) {
+    match fx.filter(|v| v.is_finite() && *v > 0.0) {
         Some(fx) => (
             round_limit(STAFF_ONCE_USD * fx),
             round_limit(STAFF_DAY_USD * fx),
-            cur,
+            cur.to_string(),
         ),
-        None => (30_000.0, 100_000.0, "KRW".into()),
+        None if cur == "KRW" => (30_000.0, 100_000.0, "KRW".into()),
+        None => (0.0, 0.0, cur.to_string()),
     }
 }
 
@@ -283,6 +294,9 @@ pub async fn staff_refund(
     }
     let (once, per_day, cur) = staff_limits().await;
     let unit = crate::price::symbol_for(&cur);
+    if once <= 0.0 {
+        return Err("환율을 읽지 못해 직원 환불을 잠시 멈췄습니다. 사장님께 부탁하세요.".into());
+    }
     if krw > once {
         return Err(format!(
             "직원은 한 번에 {unit}{once:.0} 까지 환불할 수 있습니다. 이 건은 사장님께 부탁하세요."
@@ -375,6 +389,22 @@ mod tests {
             assert!(once > 0.0 && day > 0.0, "fx {fx} 에서 한도가 0 이 됐습니다");
             assert!(once <= day, "fx {fx}: 1건 {once} 가 하루 {day} 보다 큽니다");
         }
+    }
+
+    #[test]
+    fn unknown_rate_closes_staff_refunds_outside_won() {
+        // 원화 가게만 원화 기본값. 다른 나라 가게에 원화 숫자를 한도로 주면
+        // 3만 유로·3만 달러가 열린다.
+        assert_eq!(limits_from_fx("KRW", None), (30_000.0, 100_000.0, "KRW".into()));
+        for cur in ["EUR", "JPY", "GBP", "THB", "VND"] {
+            let (once, day, c) = limits_from_fx(cur, None);
+            assert_eq!((once, day), (0.0, 0.0), "{cur}");
+            assert_eq!(c, cur);
+            assert_eq!(limits_from_fx(cur, Some(0.0)).0, 0.0, "{cur}: 0 환율");
+            assert_eq!(limits_from_fx(cur, Some(f64::NAN)).0, 0.0, "{cur}: NaN 환율");
+        }
+        let (once, day, c) = limits_from_fx("JPY", Some(155.0));
+        assert!(once > 0.0 && once <= day && c == "JPY");
     }
 
     #[test]
