@@ -92,6 +92,12 @@ pub struct ServerState {
     /// whether their coffee is being made or waiting on the counter, and the
     /// only way they find out today is by asking.
     order_state: Arc<Mutex<std::collections::HashMap<String, (String, i64, u32)>>>,
+    /// 복원했지만 장부로 확인이 안 된 paid 이상 상태의 주소. 직원 화면에는
+    /// 남기되 손님 폰에는 "unknown" 으로 답해 파일만으로 결제를 만들지 않는다.
+    unverified_paid: Arc<Mutex<std::collections::HashSet<String>>>,
+    /// 번호표가 나온 결제 확인 시각. 이후 상태 변경으로 갱신되는 at 대신
+    /// 이 시각 근처의 장부를 대조해 며칠 걸린 주문도 확인한다.
+    order_paid_at: Arc<Mutex<std::collections::HashMap<String, i64>>>,
     /// 주문을 만든 시각들. 스팸을 막는 유일한 근거다.
     ///
     /// 🔴 이 자물쇠가 없으면 낯선 사람이 와이파이만 잡고 `/api/order` 를
@@ -241,6 +247,44 @@ fn tokens_path() -> std::path::PathBuf {
     crate::paths::app_file("tokens.json")
 }
 
+/// 임시 파일을 생성할 때부터 0600 으로 열고, 내용을 sync_all 한 뒤 rename 한다.
+/// 가능하면 디렉터리도 fsync 해 정전 뒤에도 새 파일 이름이 남게 한다.
+fn atomic_write_0600(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    if let Some(d) = path.parent() {
+        std::fs::create_dir_all(d)?;
+    }
+    let tmp = path.with_extension(format!(
+        "{}.tmp",
+        path.extension().and_then(|e| e.to_str()).unwrap_or("tmp")
+    ));
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options.open(&tmp)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        // 이전 실행이 남긴 임시 파일도 내용을 쓰기 전에 권한을 조인다.
+        file.set_permissions(std::fs::Permissions::from_mode(0o600))?;
+    }
+    file.write_all(bytes)?;
+    file.sync_all()?;
+    drop(file);
+    std::fs::rename(&tmp, path)?;
+    #[cfg(unix)]
+    if let Some(d) = path.parent() {
+        if let Ok(dir) = std::fs::File::open(d) {
+            let _ = dir.sync_all();
+        }
+    }
+    Ok(())
+}
+
 fn load_tokens() -> Option<(String, std::collections::HashMap<String, String>)> {
     let v: Value = serde_json::from_str(&std::fs::read_to_string(tokens_path()).ok()?).ok()?;
     let owner = v.get("owner")?.as_str()?.to_string();
@@ -262,27 +306,13 @@ fn load_tokens() -> Option<(String, std::collections::HashMap<String, String>)> 
 
 fn save_tokens(owner: &str, roles: &std::collections::HashMap<String, String>) {
     let path = tokens_path();
-    if let Some(d) = path.parent() {
-        let _ = std::fs::create_dir_all(d);
-    }
     let doc = json!({
         "owner": owner,
         "staff": roles.get("staff").cloned().unwrap_or_default(),
         "scanner": roles.get("scanner").cloned().unwrap_or_default(),
     });
-    let tmp = path.with_extension("json.tmp");
-    if serde_json::to_vec_pretty(&doc)
-        .ok()
-        .and_then(|b| std::fs::write(&tmp, b).ok())
-        .is_some()
-    {
-        let _ = std::fs::rename(&tmp, &path);
-        // 이 파일은 가게 화면을 여는 열쇠다. 노드의 .cookie 와 같은 급으로 잠근다.
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
-        }
+    if let Ok(bytes) = serde_json::to_vec_pretty(&doc) {
+        let _ = atomic_write_0600(&path, &bytes);
     }
 }
 
@@ -690,11 +720,6 @@ async fn admin_set_state(
     if body.from.as_ref().is_some_and(|from| from != current) {
         return (StatusCode::CONFLICT, Json(json!({ "code": "STALE", "state": current })));
     }
-    if body.state == "paid" && current != "paid" {
-        return (StatusCode::FORBIDDEN, Json(json!({
-            "error": "결제 확인은 이 화면에서 하지 않습니다.", "code": "PAID_IS_SYSTEM_ONLY",
-        })));
-    }
     let ni = STATES.iter().position(|s| *s == body.state).unwrap();
     if !(ni == ci || ni == ci + 1 || ni + 1 == ci) {
         return (StatusCode::BAD_REQUEST, Json(json!({
@@ -734,17 +759,21 @@ async fn admin_states(State(st): State<ServerState>, headers: HeaderMap) -> impl
     }
     let m = st.order_state.lock().map(|m| m.clone()).unwrap_or_default();
     let tables = st.order_table.lock().map(|t| t.clone()).unwrap_or_default();
+    let unverified = st.unverified_paid.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    let sold = crate::ledger::recent_sold_index(now_unix());
+    let pending = crate::ledger::pending_index();
     let rows: Vec<Value> = m
         .iter()
         .map(|(addr, (s, at, t))| {
             let paid = STATES.contains(&s.as_str());
             let order = if paid {
-                crate::ledger::settled_order(addr, *at)
+                sold.get(addr)
             } else {
-                crate::ledger::pending_order(addr)
-            }.unwrap_or(Value::Null);
+                pending.get(addr)
+            }.unwrap_or(&Value::Null);
             json!({
                 "address": addr, "state": s, "at": at, "ticket": t,
+                "unverified": unverified.contains(addr),
                 // 자리로 가져다주는 가게는 번호를 부르지 않는다.
                 "table": tables.get(addr),
                 "items": order.get("items").cloned().unwrap_or(json!([])),
@@ -892,6 +921,9 @@ async fn sweep_payments(st: &ServerState) {
         // 사람들이 번호를 가져가서, 카운터에서 부르는 번호가 띄엄띄엄해진다.
         let ticket = next_ticket(st);
         m.insert(addr.to_string(), ("paid".into(), now_unix(), ticket));
+        if let Ok(mut p) = st.order_paid_at.lock() {
+            p.insert(addr.to_string(), now_unix());
+        }
 
         // 여기가 매출이 생기는 순간이고, 장부에 적히는 유일한 순간이다.
         // 주문했을 때가 아니라 돈이 들어왔을 때 — 결제하지 않고 떠난 주문까지
@@ -1046,6 +1078,9 @@ async fn api_order_state(
         found = peek(&st);
     }
 
+    if st.unverified_paid.lock().unwrap_or_else(|e| e.into_inner()).contains(&addr) {
+        found = None;
+    }
     match found {
         Some((s, at, t)) => (
             StatusCode::OK,
@@ -2773,10 +2808,12 @@ struct MemberBody {
     phone: String,
 }
 
-/// 표를 회원으로 올린다.
+/// 표를 회원으로 올린다(이름·전화 기록).
 ///
-/// 직원 권한으로 충분하다 — 이름을 받아 적는 것은 직원의 본업이고, 여기서
-/// 사장 열쇠를 요구하면 문 앞에서 아무도 못 한다.
+/// `/api/scan/in` 권한으로 검사하므로 직원(staff) 폰은 이 경로를 열 수 없다.
+/// 검표(scanner)는 `/api/scan/` 전체가 허용되어 문 앞 무인 태블릿에서도
+/// 표를 회원으로 승격할 수 있다. 직원이 이름을 받아 적는다는 원래 의도와
+/// 실제 허용 역할이 다르다. 동작은 유지하며, 권한 변경은 대표가 결정한다.
 async fn api_scan_member(
     State(state): State<ServerState>,
     headers: HeaderMap,
@@ -2950,6 +2987,8 @@ pub async fn start_phone_server(
         claims: state.claims.clone(),
         sent: state.sent.clone(),
         order_state: state.order_state.clone(),
+        unverified_paid: state.unverified_paid.clone(),
+        order_paid_at: state.order_paid_at.clone(),
         next_ticket: state.next_ticket.clone(),
         ticket_day: state.ticket_day.clone(),
         last_sweep: state.last_sweep.clone(),
@@ -3305,6 +3344,7 @@ struct SavedOrder {
     expect: Option<f64>,
     until: Option<i64>,
     fee: Option<f64>,
+    paid_at: Option<i64>,
 }
 
 // 같은 임시 파일을 동시에 덮어쓰거나 옛 스냅샷이 나중에 저장되는 것을 막는다.
@@ -3340,6 +3380,11 @@ fn persist_order_state(state: &ServerState) {
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .clone();
+    let paid_ats = state
+        .order_paid_at
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
     // next_ticket() 과 같은 순서로 읽어 날짜와 다음 번호를 한 쌍으로 보존한다.
     let day = state.ticket_day.lock().unwrap_or_else(|e| e.into_inner());
     let next = state.next_ticket.lock().unwrap_or_else(|e| e.into_inner());
@@ -3356,6 +3401,7 @@ fn persist_order_state(state: &ServerState) {
                 expect: expects.get(&address).copied(),
                 until: untils.get(&address).copied(),
                 fee: fees.get(&address).copied(),
+                paid_at: paid_ats.get(&address).copied(),
                 address,
                 state,
                 at,
@@ -3366,21 +3412,8 @@ fn persist_order_state(state: &ServerState) {
     drop(next);
     drop(day);
     let path = order_state_path();
-    if let Some(d) = path.parent() {
-        let _ = std::fs::create_dir_all(d);
-    }
-    let tmp = path.with_extension("json.tmp");
-    if serde_json::to_vec_pretty(&doc)
-        .ok()
-        .and_then(|b| std::fs::write(&tmp, b).ok())
-        .is_some()
-    {
-        let _ = std::fs::rename(&tmp, &path);
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
-        }
+    if let Ok(bytes) = serde_json::to_vec_pretty(&doc) {
+        let _ = atomic_write_0600(&path, &bytes);
     }
 }
 
@@ -3401,9 +3434,13 @@ fn restore_order_state(state: &ServerState) {
     *state.next_ticket.lock().unwrap_or_else(|e| e.into_inner()) = doc.next_ticket;
     *state.ticket_day.lock().unwrap_or_else(|e| e.into_inner()) = doc.ticket_day;
     for row in doc.orders {
+        let mut unverified = false;
         if STATES.contains(&row.state.as_str()) {
-            if !crate::ledger::was_sold_near(&row.address, row.at) {
-                continue;
+            let near = row.paid_at.unwrap_or(row.at);
+            if !crate::ledger::was_sold_near(&row.address, near) {
+                unverified = true;
+                let prefix: String = row.address.chars().take(8).collect();
+                eprintln!("[phone] 주문 {prefix}… 를 {} 로 복원했지만 장부에서 못 찾아 unverified 로 남깁니다", row.state);
             }
         } else if ![WAITING, SHORT, EXPIRED].contains(&row.state.as_str()) {
             continue;
@@ -3439,6 +3476,14 @@ fn restore_order_state(state: &ServerState) {
                 .order_fee
                 .lock()
                 .unwrap_or_else(|e| e.into_inner())
+                .insert(row.address.clone(), v);
+        }
+        if unverified {
+            state.unverified_paid.lock().unwrap_or_else(|e| e.into_inner())
+                .insert(row.address.clone());
+        }
+        if let Some(v) = row.paid_at {
+            state.order_paid_at.lock().unwrap_or_else(|e| e.into_inner())
                 .insert(row.address, v);
         }
     }
@@ -3699,6 +3744,8 @@ impl Default for ServerState {
             claims: Arc::new(Mutex::new(std::collections::HashMap::new())),
             sent: Arc::new(Mutex::new(std::collections::HashSet::new())),
             order_state: Arc::new(Mutex::new(std::collections::HashMap::new())),
+            unverified_paid: Arc::new(Mutex::new(std::collections::HashSet::new())),
+            order_paid_at: Arc::new(Mutex::new(std::collections::HashMap::new())),
             next_ticket: Arc::new(Mutex::new(1)),
             ticket_day: Arc::new(Mutex::new(0)),
             last_sweep: Arc::new(Mutex::new(0)),
@@ -4455,6 +4502,7 @@ mod order_persistence_tests {
         let st = ServerState::default();
         let at = now_unix();
         sale("real-sale", at);
+        st.order_paid_at.lock().unwrap().insert("real-sale".into(), at);
         for (address, status) in [
             ("waiting-order", WAITING),
             ("real-sale", "paid"),
@@ -4486,6 +4534,11 @@ mod order_persistence_tests {
             *st.order_fee.lock().unwrap(),
             *restored.order_fee.lock().unwrap()
         );
+        assert_eq!(
+            *st.order_paid_at.lock().unwrap(),
+            *restored.order_paid_at.lock().unwrap()
+        );
+        assert!(restored.unverified_paid.lock().unwrap().is_empty());
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -4539,8 +4592,8 @@ mod order_persistence_tests {
         assert_eq!(next_ticket(&tomorrow), 1);
     }
 
-    #[test]
-    fn forged_paid_states_and_their_metadata_are_discarded() {
+    #[tokio::test]
+    async fn forged_paid_states_are_kept_but_marked_unverified() {
         let _home = TestHome::new();
         let at = now_unix();
         sale("real-sale", at);
@@ -4551,6 +4604,8 @@ mod order_persistence_tests {
                     "ticket": 9, "table": "12", "expect": 1.0, "until": at + 300, "fee": 0.01 }));
             }
         }
+        orders.push(json!({ "address": "invalid-state", "state": "invalid", "at": at,
+            "ticket": 9, "table": "12", "expect": 1.0, "until": at + 300, "fee": 0.01 }));
         std::fs::write(
             order_state_path(),
             json!({ "version": 1, "saved_at": at,
@@ -4560,14 +4615,86 @@ mod order_persistence_tests {
         .unwrap();
         let st = ServerState::default();
         restore_order_state(&st);
-        assert_eq!(st.order_state.lock().unwrap().len(), 1);
+        assert_eq!(st.order_state.lock().unwrap().len(), STATES.len() + 1);
         assert_eq!(st.order_state.lock().unwrap()["real-sale"].0, "done");
-        assert_eq!(st.order_table.lock().unwrap().len(), 1);
-        assert_eq!(st.order_expect.lock().unwrap().len(), 1);
-        assert_eq!(st.order_until.lock().unwrap().len(), 1);
-        assert_eq!(st.order_fee.lock().unwrap().len(), 1);
+        assert_eq!(st.order_table.lock().unwrap().len(), STATES.len() + 1);
+        assert_eq!(st.order_expect.lock().unwrap().len(), STATES.len() + 1);
+        assert_eq!(st.order_until.lock().unwrap().len(), STATES.len() + 1);
+        assert_eq!(st.order_fee.lock().unwrap().len(), STATES.len() + 1);
+        assert_eq!(st.unverified_paid.lock().unwrap().len(), STATES.len());
+        assert!(!st.unverified_paid.lock().unwrap().contains("real-sale"));
+        assert!(st.order_paid_at.lock().unwrap().is_empty()); // 구형 파일은 at 으로 대조한다.
         assert_eq!(*st.next_ticket.lock().unwrap(), 10);
         assert_eq!(*st.ticket_day.lock().unwrap(), 123);
+
+        let (status, value) = request(
+            &st, "/api/admin/states", "GET", Some("staff"), "localhost", json!({}),
+        ).await;
+        assert_eq!(status, StatusCode::OK);
+        let rows = value["orders"].as_array().unwrap();
+        assert_eq!(rows.len(), STATES.len() + 1);
+        for row in rows {
+            assert_eq!(row["unverified"], row["address"] != "real-sale");
+        }
+        for state in STATES {
+            let address = format!("forged-{state}");
+            assert_eq!(st.order_state.lock().unwrap()[&address], (state.into(), at, 9));
+            assert!(st.unverified_paid.lock().unwrap().contains(&address));
+            assert_eq!(st.order_table.lock().unwrap()[&address], "12");
+            assert_eq!(st.order_expect.lock().unwrap()[&address], 1.0);
+            assert_eq!(st.order_until.lock().unwrap()[&address], at + 300);
+            assert_eq!(st.order_fee.lock().unwrap()[&address], 0.01);
+            let (status, value) = request(
+                &st, &format!("/api/order-state?a={address}"), "GET", None, "localhost", json!({}),
+            ).await;
+            assert_eq!(status, StatusCode::OK);
+            assert_eq!(value, json!({"state": "unknown", "ticket": 0}));
+        }
+        let (status, value) = request(
+            &st, "/api/order-state?a=real-sale", "GET", None, "localhost", json!({}),
+        ).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(value["state"], "done");
+        assert_eq!(value["ticket"], 9);
+    }
+
+    #[tokio::test]
+    async fn paid_at_verifies_orders_completed_days_after_payment() {
+        let _home = TestHome::new();
+        let st = ServerState::default();
+        let at = now_unix();
+        let paid_at = at - 3 * 86_400;
+        sale("slow-order", paid_at);
+        insert(&st, "slow-order", "done", at);
+        st.order_paid_at.lock().unwrap().insert("slow-order".into(), paid_at);
+        assert!(!crate::ledger::was_sold_near("slow-order", at));
+        assert!(crate::ledger::was_sold_near("slow-order", paid_at));
+        persist_order_state(&st);
+        let restored = ServerState::default();
+        restore_order_state(&restored);
+        assert_eq!(restored.order_state.lock().unwrap()["slow-order"], ("done".into(), at, 7));
+        assert_eq!(restored.order_paid_at.lock().unwrap()["slow-order"], paid_at);
+        assert!(restored.unverified_paid.lock().unwrap().is_empty());
+        let (status, value) = request(
+            &restored, "/api/admin/states", "GET", Some("staff"), "localhost", json!({}),
+        ).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(value["orders"][0]["unverified"], false);
+        assert_eq!(value["orders"][0]["amount"], 9000.0);
+    }
+
+    #[test]
+    fn saved_tokens_are_private_and_leave_no_temporary_file() {
+        let _home = TestHome::new();
+        let st = ServerState::default();
+        save_tokens(&st.token.lock().unwrap(), &st.role_tokens.lock().unwrap());
+        assert!(load_tokens().is_some());
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(std::fs::metadata(tokens_path()).unwrap().permissions().mode() & 0o777, 0o600);
+        }
+        assert!(!tokens_path().with_extension("json.tmp").exists());
     }
 
     #[test]
@@ -4683,6 +4810,7 @@ mod order_persistence_tests {
             assert_eq!(*st.order_state.lock().unwrap(), before);
         }
         sale("order", at);
+        st.order_paid_at.lock().unwrap().insert("order".into(), at - 30);
         for (ci, current) in STATES.iter().enumerate() {
             for (ni, target) in STATES.iter().enumerate() {
                 for from in [None, Some(*current)] {
@@ -4696,10 +4824,7 @@ mod order_persistence_tests {
                         json!({"address":"order", "state":target, "from":from}),
                     )
                     .await;
-                    if *target == "paid" && *current != "paid" {
-                        assert_eq!(status, StatusCode::FORBIDDEN);
-                        assert_eq!(value["code"], "PAID_IS_SYSTEM_ONLY");
-                    } else if ci.abs_diff(ni) > 1 {
+                    if ci.abs_diff(ni) > 1 {
                         assert_eq!(status, StatusCode::BAD_REQUEST);
                         assert_eq!(value["code"], "SKIPPED_STATE");
                     } else {
@@ -4708,6 +4833,7 @@ mod order_persistence_tests {
                         let restored = ServerState::default();
                         restore_order_state(&restored);
                         assert_eq!(restored.order_state.lock().unwrap()["order"].0, *target);
+                        assert_eq!(restored.order_paid_at.lock().unwrap()["order"], at - 30);
                     }
                 }
             }

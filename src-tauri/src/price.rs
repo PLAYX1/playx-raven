@@ -320,7 +320,7 @@ fn needs_cross_rate(cur: &str, direct_available: bool) -> bool {
     }
 }
 
-async fn cross_rate(cur: &str) -> Result<Value, String> {
+async fn cross_rate(cur: &str, reason: Option<&str>) -> Result<Value, String> {
     let Some((usd, usd_src, spread, dropped)) = blend(usd_ticks().await, MIN_USD_VOLUME) else {
         return Err(
             "지금은 RVN 시세를 가져오지 못했습니다. RVN 금액으로만 받을 수 있습니다.".into(),
@@ -331,6 +331,10 @@ async fn cross_rate(cur: &str) -> Result<Value, String> {
             "{cur} 환율을 가져오지 못했습니다. 이 통화를 아직 지원하지 않거나, 환율 기관이 지금 응답하지 않습니다."
         ));
     };
+    let mut dropped = dropped;
+    if let Some(reason) = reason {
+        dropped.push(reason.to_string());
+    }
     Ok(json!({
         "currency": cur,
         "rate": usd * fx,
@@ -381,7 +385,11 @@ pub async fn rvn_rate(currency: String) -> Result<Value, String> {
     };
 
     if needs_cross_rate(&cur, blended.is_some()) {
-        return cross_rate(&cur).await;
+        return if cur == "KRW" {
+            cross_rate(&cur, Some("KRW 직접시장(업비트·빗썸) 응답 없음/거래 없음 — 달러 경유로 전환")).await
+        } else {
+            cross_rate(&cur, None).await
+        };
     }
 
     let Some((rate, sources, spread, dropped)) = blended else {
@@ -473,6 +481,22 @@ mod tests {
         assert!(!needs_cross_rate("KRW", direct.is_some()));
         assert!(!needs_cross_rate("USD", false));
         assert!(needs_cross_rate("JPY", false));
+    }
+
+    #[test]
+    fn krw_cross_rate_reports_why_direct_markets_were_skipped() {
+        let source = include_str!("price.rs");
+        let body = source.split("pub async fn rvn_rate(").nth(1).unwrap()
+            .split("let Some((rate, sources, spread, dropped))").next().unwrap();
+        let compact: String = body.chars().filter(|c| !c.is_whitespace()).collect();
+        assert!(compact.contains(concat!(
+            "ifcur==\"KRW\"{cross_rate(&cur,Some(\"",
+            "KRW직접시장(업비트·빗썸)응답없음/거래없음—달러경유로전환",
+            "\")).await}else{cross_rate(&cur,None).await}"
+        )));
+        let cross = source.split("async fn cross_rate(").nth(1).unwrap()
+            .split("/// What one RVN").next().unwrap();
+        assert!(cross.contains("dropped.push(reason.to_string())"));
     }
 
     #[test]
