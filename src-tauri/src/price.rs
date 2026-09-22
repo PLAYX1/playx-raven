@@ -311,6 +311,45 @@ fn symbol_of(cur: &str) -> String {
     .to_string()
 }
 
+// 직접 시장이 없는 통화와, 직접 KRW 시장이 모두 멎은 경우만 달러를 거친다.
+fn needs_cross_rate(cur: &str, direct_available: bool) -> bool {
+    match cur {
+        "KRW" => !direct_available,
+        "USD" => false,
+        _ => true,
+    }
+}
+
+async fn cross_rate(cur: &str) -> Result<Value, String> {
+    let Some((usd, usd_src, spread, dropped)) = blend(usd_ticks().await, MIN_USD_VOLUME) else {
+        return Err(
+            "지금은 RVN 시세를 가져오지 못했습니다. RVN 금액으로만 받을 수 있습니다.".into(),
+        );
+    };
+    let Some((fx, fx_src)) = fiat_per_usd(cur).await else {
+        return Err(format!(
+            "{cur} 환율을 가져오지 못했습니다. 이 통화를 아직 지원하지 않거나, 환율 기관이 지금 응답하지 않습니다."
+        ));
+    };
+    Ok(json!({
+        "currency": cur,
+        "rate": usd * fx,
+        // 두 단계였다는 사실과 각 단계의 출처를 값에 붙여 보낸다.
+        // 화면과 장부가 이걸 그대로 보여 주므로, 나중에 이 숫자가
+        // 어떻게 나왔는지 다시 세울 수 있다.
+        "sources": [format!("{} (RVN/USD)", usd_src.join("·")), fx_src],
+        // 달러 단계의 불일치를 그대로 물려받는다. 여기서 0 으로 적으면
+        // 거래소가 갈라져 있어도 화면은 안정된 값처럼 보인다.
+        "spread": spread,
+        "unstable": spread > 0.02,
+        "dropped": dropped,
+        "direct": false,
+        "usd_rate": usd,
+        "fx": fx,
+        "symbol": symbol_of(cur),
+    }))
+}
+
 /// What one RVN is worth in the given currency.
 ///
 /// Two independent sources per currency, averaged. One exchange can lag, go
@@ -324,6 +363,9 @@ fn symbol_of(cur: &str) -> String {
 #[tauri::command]
 pub async fn rvn_rate(currency: String) -> Result<Value, String> {
     let cur = currency.to_uppercase();
+    if cur.len() != 3 || !cur.bytes().all(|b| b.is_ascii_uppercase()) {
+        return Err(format!("{cur} 는 통화 코드가 아닙니다. JPY·EUR 처럼 세 글자로 적어 주세요."));
+    }
 
     let blended = match cur.as_str() {
         "KRW" => blend(
@@ -335,43 +377,12 @@ pub async fn rvn_rate(currency: String) -> Result<Value, String> {
         ),
         "USD" => blend(usd_ticks().await, MIN_USD_VOLUME),
         // 직접 시장이 없는 통화. 달러를 거쳐 간다.
-        _ => {
-            if cur.len() != 3 || !cur.bytes().all(|b| b.is_ascii_uppercase()) {
-                return Err(format!(
-                    "{cur} 는 통화 코드가 아닙니다. JPY·EUR 처럼 세 글자로 적어 주세요."
-                ));
-            }
-            let Some((usd, usd_src, spread, dropped)) =
-                blend(usd_ticks().await, MIN_USD_VOLUME)
-            else {
-                return Err(
-                    "지금은 RVN 시세를 가져오지 못했습니다. RVN 금액으로만 받을 수 있습니다.".into(),
-                );
-            };
-            let Some((fx, fx_src)) = fiat_per_usd(&cur).await else {
-                return Err(format!(
-                    "{cur} 환율을 가져오지 못했습니다. 이 통화를 아직 지원하지 않거나, 환율 기관이 지금 응답하지 않습니다."
-                ));
-            };
-            return Ok(json!({
-                "currency": cur,
-                "rate": usd * fx,
-                // 두 단계였다는 사실과 각 단계의 출처를 값에 붙여 보낸다.
-                // 화면과 장부가 이걸 그대로 보여 주므로, 나중에 이 숫자가
-                // 어떻게 나왔는지 다시 세울 수 있다.
-                "sources": [format!("{} (RVN/USD)", usd_src.join("·")), fx_src],
-                // 달러 단계의 불일치를 그대로 물려받는다. 여기서 0 으로 적으면
-                // 거래소가 갈라져 있어도 화면은 안정된 값처럼 보인다.
-                "spread": spread,
-                "unstable": spread > 0.02,
-                "dropped": dropped,
-                "direct": false,
-                "usd_rate": usd,
-                "fx": fx,
-                "symbol": symbol_of(&cur),
-            }));
-        }
+        _ => None,
     };
+
+    if needs_cross_rate(&cur, blended.is_some()) {
+        return cross_rate(&cur).await;
+    }
 
     let Some((rate, sources, spread, dropped)) = blended else {
         return Err(format!(
@@ -450,6 +461,20 @@ mod tests {
     /// 실제로 재서 나온 값이다. 업비트 USDT-RVN 은 24시간 거래대금 0,
     /// 마지막 체결 11시간 전에 0.002358 을 계속 내보내고 있었고, 바이낸스는
     /// 245,114 USDT 를 거래하며 0.00281 이었다.
+    #[test]
+    fn dead_krw_markets_select_the_usd_cross_rate() {
+        for ticks in [vec![(t(3.0, 0.0), "업비트"), (t(3.1, 0.0), "빗썸")],
+                      vec![(None, "업비트"), (None, "빗썸")]] {
+            let direct = blend(ticks, MIN_KRW_VOLUME);
+            assert!(direct.is_none());
+            assert!(needs_cross_rate("KRW", direct.is_some()));
+        }
+        let direct = blend(vec![(t(3.0, 1e9), "업비트"), (None, "빗썸")], MIN_KRW_VOLUME);
+        assert!(!needs_cross_rate("KRW", direct.is_some()));
+        assert!(!needs_cross_rate("USD", false));
+        assert!(needs_cross_rate("JPY", false));
+    }
+
     #[test]
     fn a_market_with_no_trading_is_not_a_price() {
         let (rate, sources, spread, dropped) = blend(

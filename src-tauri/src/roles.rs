@@ -18,9 +18,13 @@
 //! staff member who leaves takes nothing with them: revoke that one token and
 //! their screen stops working while the counter keeps running.
 //!
-//! Tokens are minted per role at start-up and can be rotated individually.
-//! None of them is stored — a restart invalidates every screen, which is the
-//! right default for devices that live in a shop.
+//! All three role tokens (owner, staff, scanner) are saved at
+//! `server.rs::tokens_path()` (`tokens.json`, Unix permissions 0600) and reused
+//! on restart. `rotate_role_token` rotates staff or scanner individually;
+//! `logout_all_phones` (the lost-phone button) rotates all three. Both update
+//! the saved values. Shop devices restart daily, including after power cuts:
+//! logging every phone out would lock an unattended counter with no monitor
+//! out of its own screens, because nobody could display a fresh QR code.
 //!
 //! ## What a role cannot do is enforced by the router
 //!
