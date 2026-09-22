@@ -7578,6 +7578,9 @@ async function doIssue() {
       tf("{0} RVN 이 타고, 이 이름은 영원히 바뀌지 않습니다", BURN[wizKind]),
     );
     if (!ok) return;
+    // 🔴 8초 창 **도중에** 마법사 「취소」를 누르면 창만 닫히고 8초는 흘러 `ok` 가 왔다 —
+    //    그 뒤 파일이 공개로 올라갔다(검수 R3). 다 센 뒤에 한 번 더 본다.
+    if ($("wiz").classList.contains("hidden")) return;
     btn.textContent = "발행 중…";
     // 🔴 **`|| 1` 이 0 을 삼키고 있었다.** `parseFloat("0")` 은 0 이고 0 은
     //    거짓값이라, 사장이 0 을 적으면 조용히 1 이 나갔다.
@@ -7600,6 +7603,8 @@ async function doIssue() {
       btn.textContent = t("파일 올리는 중…");
       cid = await wizUploadPending();
       btn.textContent = "발행 중…";
+      // 올리는 동안 창을 닫았으면 가사·영상 쪽지까지 공개하지 않는다.
+      if ($("wiz").classList.contains("hidden")) return;
     }
     // 🔴 자산에는 IPFS 해시가 **하나**만 박힌다. 사진과 영상 링크를 둘 다
     //    담으려면 그 둘을 적은 쪽지를 만들어 그 쪽지 주소를 박아야 한다.

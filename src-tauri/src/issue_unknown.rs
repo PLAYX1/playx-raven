@@ -7,6 +7,7 @@
 //! - 분명히 끝나면(성공·거절) 지운다. 시간 초과면 `unknown` 으로 둔다.
 //! - 다시 보내기 전에 지갑 거래(확인 0 포함)를 본다. 더 찍기는 이름이 이미 있어서
 //!   「이름이 있나」로는 못 가린다 — 그 자산의 새 발행·재발행 기록이 지갑에 보이는지 본다.
+//!   자산 줄은 `listsinceblock` 의 `asset_transactions` 에만 있다(`raven::wallet_asset_txs`).
 //! - 한 시간 넘게 지갑 어디에도 안 보이면 안 나간 것으로 보고 지운다(만들기와 같은 기준).
 
 use serde_json::{json, Value};
@@ -201,7 +202,8 @@ pub async fn issue_unknown_check(name: String, kind: String, probe: Option<Strin
         None => row.as_ref().and_then(|r| r["probe"].as_str().map(str::to_string)).unwrap_or_else(|| name.clone()),
     };
     let kind = row.as_ref().and_then(|r| r["kind"].as_str().map(str::to_string)).unwrap_or(kind);
-    let txs = crate::raven::call_rpc("listtransactions", json!(["*", 500, 0, true])).await?;
+    // 🔴 `listtransactions` 가 아니다 — 거기엔 자산 줄이 없어 늘 빈손이었다(검수 R3-1).
+    let txs = crate::raven::wallet_asset_txs().await?;
     let sending_now = sending_set(|s| s.contains(&name));
     let state = decide(row.as_ref(), sending_now, &txs, &probe, &kind, now());
     if matches!(state, "landed" | "gave-up") {
@@ -237,6 +239,26 @@ mod tests {
         // 기억이 없어도 확인 0 인 같은 재발행이 있으면 기다린다(앱이 보내다 꺼진 경우).
         assert_eq!(decide(None, false, &landed, "MYSHOP", "reissue", at + 60), "pending");
         assert_eq!(decide(None, false, &none, "MYSHOP", "reissue", at + 60), "none");
+    }
+
+    /// 검수 R3-1 — 진짜 4.8 노드는 자산 줄을 `listsinceblock` 의 `asset_transactions` 에만 준다.
+    /// 그 답을 그대로 넣어 「기록됨」「기록 중」을 알아보는지 본다.
+    #[test]
+    fn 진짜_노드_모양에서_재발행을_알아본다() {
+        let at = 1_800_000_000;
+        let row = json!({ "name": "MYSHOP", "kind": "reissue", "probe": "MYSHOP", "state": "unknown", "at": at });
+        let node = |conf: i64| json!({
+            "transactions": [{ "category": "send", "address": "RChange", "amount": -100, "confirmations": conf, "time": at + 2 }],
+            "asset_transactions": [{ "asset_type": "reissue_asset", "asset_name": "MYSHOP", "amount": 1000,
+                "destination": "RMine", "vout": 2, "category": "receive", "confirmations": conf,
+                "time": at + 2, "timereceived": at + 2, "abandoned": false }],
+            "removed": [], "lastblock": "00"
+        });
+        let landed = crate::raven::asset_transactions_of(node(1)).unwrap();
+        assert_eq!(decide(Some(&row), false, &landed, "MYSHOP", "reissue", at + 60), "landed");
+        assert_eq!(decide(Some(&row), false, &landed, "MYSHOP", "reissue", at + 7_200), "landed", "한 시간 뒤에도 기록은 기록");
+        let pending = crate::raven::asset_transactions_of(node(0)).unwrap();
+        assert_eq!(decide(None, false, &pending, "MYSHOP", "reissue", at + 60), "pending");
     }
 
     #[test]

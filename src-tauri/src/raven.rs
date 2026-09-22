@@ -489,6 +489,25 @@ pub async fn wallet_since(block: Option<String>) -> Result<Value, String> {
     call_rpc("listsinceblock", args).await
 }
 
+/// 지갑 전체의 **자산** 거래 줄(확인 0·버린 것 포함) — 발행·재발행·보낸 자산을 찾을 때.
+///
+/// 🔴 `listtransactions` 에는 자산 줄이 없다(위 `recent_transactions` 참고). 그걸 읽은
+///    「보냈는지 모름」 확인은 진짜 노드에서 늘 빈손이었고, 한 시간 뒤 같은 더 찍기가
+///    또 나갈 수 있었다(검수 R3-1). 줄마다 asset_name·asset_type·amount·destination·
+///    category·confirmations·time·abandoned 가 있다(rpcwallet.cpp ListTransactions).
+pub async fn wallet_asset_txs() -> Result<Value, String> {
+    asset_transactions_of(call_rpc("listsinceblock", json!([])).await?)
+}
+
+/// `listsinceblock` 답에서 자산 줄만. 모양이 다르면 오류 — 「못 읽음」을 「없음」으로
+/// 넘기면 이미 나간 발행·배송을 또 보낸다.
+pub(crate) fn asset_transactions_of(mut v: Value) -> Result<Value, String> {
+    match v.get_mut("asset_transactions").map(Value::take) {
+        Some(rows @ Value::Array(_)) => Ok(rows),
+        _ => Err("지갑의 자산 기록을 읽지 못했어요. 노드가 따라잡은 뒤 다시 해 주세요.".into()),
+    }
+}
+
 /// What has arrived at one address, counting only confirmed payments.
 ///
 /// This is how an order gets matched to a payment: each order has its own

@@ -469,8 +469,11 @@ pub async fn owner_tokens() -> Result<Vec<String>, String> {
 pub async fn rebuild_delivered(orders: Vec<Value>) -> Result<Value, String> {
     // The whole wallet history, not a 200-row window: an order from last week
     // scrolls out of that window and comes back looking unfulfilled.
-    let txs = call_rpc("listtransactions", json!(["*", 1000, 0, true])).await?;
-    let list = txs.as_array().cloned().unwrap_or_default();
+    //
+    // 🔴 `listtransactions` 에는 자산 줄이 없다 — 여기가 늘 「아무것도 안 보냄」이었다.
+    //    기록 파일을 잃으면 이미 보낸 주문을 또 보낼 수 있었다(검수 R3). 자산 줄은
+    //    `listsinceblock` 에 있고, 받는 주소는 `address` 가 아니라 `destination` 이다.
+    let list = crate::raven::wallet_asset_txs().await?;
 
     let mut done = Vec::new();
     for o in &orders {
@@ -481,18 +484,27 @@ pub async fn rebuild_delivered(orders: Vec<Value>) -> Result<Value, String> {
             continue;
         }
 
-        let delivered = list.iter().any(|tx| {
-            tx.get("category").and_then(Value::as_str) == Some("send")
-                && tx.get("asset_name").and_then(Value::as_str) == Some(asset)
-                && tx.get("address").and_then(Value::as_str) == Some(to)
-        });
-        if delivered {
+        if asset_went_to(&list, asset, to) {
             mark_filled(pay_addr);
             done.push(json!({ "address": pay_addr, "asset": asset }));
         }
     }
 
     Ok(json!({ "delivered": done, "count": done.len() }))
+}
+
+/// 이 자산이 이 주소로 나갔나 — 지갑 자산 줄(`raven::wallet_asset_txs`)에서.
+///
+/// 확인 0 도 나간 것으로 친다(두 번 보내지 않게). 버린 거래·밀려난 거래(확인 < 0)는
+/// 안 나간 것이다 — 그 주문은 아직 받을 것이 남았다.
+fn asset_went_to(asset_txs: &Value, asset: &str, to: &str) -> bool {
+    asset_txs.as_array().into_iter().flatten().any(|tx| {
+        tx.get("category").and_then(Value::as_str) == Some("send")
+            && tx.get("asset_name").and_then(Value::as_str) == Some(asset)
+            && tx.get("destination").or_else(|| tx.get("address")).and_then(Value::as_str) == Some(to)
+            && tx.get("abandoned").and_then(Value::as_bool) != Some(true)
+            && tx.get("confirmations").and_then(Value::as_i64).unwrap_or(0) >= 0
+    })
 }
 
 /// Today's automatic total per asset, for the screen that shows the cap.
@@ -667,4 +679,39 @@ pub async fn exposure() -> Result<Value, String> {
         "krw": krw,
         "armed": armed,
     }))
+}
+
+#[cfg(test)]
+mod rebuild_tests {
+    use super::*;
+
+    /// 검수 R3 — 진짜 4.8 노드 모양: 자산 줄은 `asset_transactions` 에만, 받는 주소는
+    /// `destination`. 예전 코드(`listtransactions`·`address`)는 여기서 늘 거짓이었다.
+    #[test]
+    fn 보낸_자산은_destination_으로_찾는다() {
+        let node = json!({
+            "transactions": [{ "category": "send", "address": "RBuyer1", "amount": -0.01, "confirmations": 3 }],
+            "asset_transactions": [
+                { "asset_type": "transfer_asset", "asset_name": "SHOP/TEA", "amount": 1, "destination": "RBuyer1",
+                  "vout": 1, "category": "send", "confirmations": 3, "time": 1_800_000_000, "abandoned": false },
+                { "asset_type": "transfer_asset", "asset_name": "SHOP/CAKE", "amount": 1, "destination": "RBuyer2",
+                  "vout": 1, "category": "send", "confirmations": 0, "time": 1_800_000_100, "abandoned": true },
+                { "asset_type": "transfer_asset", "asset_name": "SHOP/BUN", "amount": 1, "destination": "RBuyer3",
+                  "vout": 1, "category": "send", "confirmations": 0, "time": 1_800_000_200, "abandoned": false }
+            ]
+        });
+        let rows = crate::raven::asset_transactions_of(node).unwrap();
+        assert!(asset_went_to(&rows, "SHOP/TEA", "RBuyer1"));
+        assert!(!asset_went_to(&rows, "SHOP/TEA", "RBuyer2"), "다른 주소는 아니다");
+        assert!(!asset_went_to(&rows, "SHOP/CAKE", "RBuyer2"), "버린 거래는 안 나간 것");
+        assert!(asset_went_to(&rows, "SHOP/BUN", "RBuyer3"), "확인 0 도 나간 것 — 두 번 보내지 않는다");
+    }
+
+    /// `listtransactions` 모양(배열)을 받으면 「없음」이 아니라 오류다.
+    #[test]
+    fn 자산_줄이_없는_답은_오류다() {
+        let flat = json!([{ "category": "send", "address": "RBuyer1", "amount": -0.01 }]);
+        assert!(crate::raven::asset_transactions_of(flat).is_err());
+        assert!(crate::raven::asset_transactions_of(json!({ "transactions": [] })).is_err());
+    }
 }
