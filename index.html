@@ -2210,6 +2210,30 @@
         <h2 class="title">출입 · 회원</h2>
         <p class="lede">이름·전화 뒷자리·회원번호 아무거나 치면 됩니다.</p>
 
+        <div class="panel" style="margin:20px 0;padding:18px;max-width:620px">
+          <h3>회원 정보 설정</h3>
+          <p class="lede">문 앞에서 회원으로 등록할 때 받는 정보를 정합니다.</p>
+          <label for="mp-level">회원 정보 받기</label>
+          <select id="mp-level" disabled>
+            <option value="none">안 받음</option>
+            <option value="name">이름만</option>
+            <option value="name_last4">이름+전화 뒷자리 4자리</option>
+            <option value="name_phone">이름+전화 전체</option>
+          </select>
+          <label for="mp-retention">회원 정보 보관</label>
+          <select id="mp-retention" disabled>
+            <option value="3">3개월</option>
+            <option value="6">6개월</option>
+            <option value="12">12개월</option>
+          </select>
+          <p class="meta">기간권은 종료 후, 횟수권과 종료일 없는 이용권은 마지막 이용 후 설정한 보관 기간이 지나면 이름·전화·메모·추가 정보를 자동 삭제합니다. 회원번호와 출입·동의 기록은 남습니다.</p>
+          <button class="ghost" id="mp-save" disabled>회원 정보 설정 저장</button>
+          <button class="ghost" id="mp-reload">다시 읽어오기</button>
+          <div class="meta" id="mp-status" role="status"></div>
+          <p class="meta" id="mp-consent" translate="no"></p>
+          <div class="meta" id="mp-cleanup" role="status"></div>
+        </div>
+
         <input id="dr-q" placeholder="홍길동 · 5678 · A7K2" autocomplete="off"
                style="font-size:19px;padding:16px 16px;max-width:520px" />
         <div id="dr-hits"></div>
@@ -2347,16 +2371,25 @@
           </div>
 
           <label>메모<input id="ms-note" autocomplete="off" placeholder="상담 내용, 주의사항" /></label>
+          <section id="ms-memos" class="hidden">
+            <div id="ms-memo-list"></div>
+            <div class="row" style="gap:8px">
+              <input id="ms-memo-new" maxlength="300" autocomplete="off" placeholder="메모 (선택)" aria-label="메모 (선택)" />
+              <button id="ms-memo-add" class="ghost">메모 추가</button>
+            </div>
+            <div class="meta">건강 상태 같은 민감한 정보는 적지 마세요</div>
+          </section>
 
           <div class="warnbox" id="ms-chain" style="font-size:13px">
             회원번호를 체인에 하나 찍습니다 (<b>5 RVN · 약 17원</b>).
-            이름·기간·정지는 <b>이 컴퓨터에만</b> 저장됩니다 — 체인에 올리면 지울 수 없고,
+            이름·기간·정지는 <b>이 가게 컴퓨터와 그 백업에</b> 저장됩니다 — 체인에 올리면 지울 수 없고,
             누구나 회원 명단과 계약 종료일을 볼 수 있게 됩니다.
           </div>
 
           <div class="sheet-foot">
             <span class="meta" id="ms-note2"></span>
             <button id="ms-save">저장</button>
+            <button class="ghost" id="ms-delete" style="display:none">회원 한 명 지금 지우기</button>
           </div>
           <div id="ms-result"></div>
         </div>
@@ -2519,7 +2552,7 @@
                 <b>내보내기는 없습니다</b> — 있는 척하면 그게 거짓말입니다.
               </p>
               <p class="mutewhy2">
-                명단은 이 컴퓨터에만 있습니다. 다른 기기에서는 다시 보입니다.
+                명단은 이 가게 컴퓨터와 그 백업에 저장됩니다. 다른 기기에서는 다시 보입니다.
               </p>
               <div id="tk-mutelist"></div>
               <div class="muterow2">

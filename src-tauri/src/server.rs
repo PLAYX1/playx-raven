@@ -92,6 +92,12 @@ pub struct ServerState {
     /// whether their coffee is being made or waiting on the counter, and the
     /// only way they find out today is by asking.
     order_state: Arc<Mutex<std::collections::HashMap<String, (String, i64, u32)>>>,
+    /// 복원했지만 장부로 확인이 안 된 paid 이상 상태의 주소. 직원 화면에는
+    /// 남기되 손님 폰에는 "unknown" 으로 답해 파일만으로 결제를 만들지 않는다.
+    unverified_paid: Arc<Mutex<std::collections::HashSet<String>>>,
+    /// 번호표가 나온 결제 확인 시각. 이후 상태 변경으로 갱신되는 at 대신
+    /// 이 시각 근처의 장부를 대조해 며칠 걸린 주문도 확인한다.
+    order_paid_at: Arc<Mutex<std::collections::HashMap<String, i64>>>,
     /// 주문을 만든 시각들. 스팸을 막는 유일한 근거다.
     ///
     /// 🔴 이 자물쇠가 없으면 낯선 사람이 와이파이만 잡고 `/api/order` 를
@@ -241,6 +247,44 @@ fn tokens_path() -> std::path::PathBuf {
     crate::paths::app_file("tokens.json")
 }
 
+/// 임시 파일을 생성할 때부터 0600 으로 열고, 내용을 sync_all 한 뒤 rename 한다.
+/// 가능하면 디렉터리도 fsync 해 정전 뒤에도 새 파일 이름이 남게 한다.
+fn atomic_write_0600(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    if let Some(d) = path.parent() {
+        std::fs::create_dir_all(d)?;
+    }
+    let tmp = path.with_extension(format!(
+        "{}.tmp",
+        path.extension().and_then(|e| e.to_str()).unwrap_or("tmp")
+    ));
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options.open(&tmp)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        // 이전 실행이 남긴 임시 파일도 내용을 쓰기 전에 권한을 조인다.
+        file.set_permissions(std::fs::Permissions::from_mode(0o600))?;
+    }
+    file.write_all(bytes)?;
+    file.sync_all()?;
+    drop(file);
+    std::fs::rename(&tmp, path)?;
+    #[cfg(unix)]
+    if let Some(d) = path.parent() {
+        if let Ok(dir) = std::fs::File::open(d) {
+            let _ = dir.sync_all();
+        }
+    }
+    Ok(())
+}
+
 fn load_tokens() -> Option<(String, std::collections::HashMap<String, String>)> {
     let v: Value = serde_json::from_str(&std::fs::read_to_string(tokens_path()).ok()?).ok()?;
     let owner = v.get("owner")?.as_str()?.to_string();
@@ -262,27 +306,13 @@ fn load_tokens() -> Option<(String, std::collections::HashMap<String, String>)> 
 
 fn save_tokens(owner: &str, roles: &std::collections::HashMap<String, String>) {
     let path = tokens_path();
-    if let Some(d) = path.parent() {
-        let _ = std::fs::create_dir_all(d);
-    }
     let doc = json!({
         "owner": owner,
         "staff": roles.get("staff").cloned().unwrap_or_default(),
         "scanner": roles.get("scanner").cloned().unwrap_or_default(),
     });
-    let tmp = path.with_extension("json.tmp");
-    if serde_json::to_vec_pretty(&doc)
-        .ok()
-        .and_then(|b| std::fs::write(&tmp, b).ok())
-        .is_some()
-    {
-        let _ = std::fs::rename(&tmp, &path);
-        // 이 파일은 가게 화면을 여는 열쇠다. 노드의 .cookie 와 같은 급으로 잠근다.
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
-        }
+    if let Ok(bytes) = serde_json::to_vec_pretty(&doc) {
+        let _ = atomic_write_0600(&path, &bytes);
     }
 }
 
@@ -476,22 +506,54 @@ fn outside_blocked(state: &ServerState, headers: &HeaderMap, path: &str) -> bool
     !state.remote_admin.lock().map(|v| *v).unwrap_or(false)
 }
 
-/// Is this request allowed to reach this path?
-fn authed_for(state: &ServerState, headers: &HeaderMap, q: &Value, path: &str) -> bool {
-    if outside_blocked(state, headers, path) {
-        return false;
-    }
-    match role_of(state, headers, q) {
-        Some(r) => crate::roles::allowed(&r, path),
-        None => false,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AuthFail {
+    RemoteOff,
+    BadToken,
+    ForbiddenRole,
+}
+
+impl AuthFail {
+    fn code(self) -> &'static str {
+        match self {
+            Self::RemoteOff => "REMOTE_OFF",
+            Self::BadToken => "BAD_TOKEN",
+            Self::ForbiddenRole => "FORBIDDEN_ROLE",
+        }
     }
 }
 
-fn admin_authed(state: &ServerState, headers: &HeaderMap, q: &Value) -> bool {
-    // 사장 경로는 손님 경로가 아니므로, 바깥에서 오면 이 한 줄이 전부 막는다.
-    // 관리까지 열기로 한 가게만 통과한다.
+fn auth_fail_json(f: AuthFail) -> Value {
+    json!({ "error": "권한 없음", "code": f.code() })
+}
+
+fn authed_for_reason(
+    state: &ServerState,
+    headers: &HeaderMap,
+    q: &Value,
+    path: &str,
+) -> Result<String, AuthFail> {
+    if outside_blocked(state, headers, path) {
+        return Err(AuthFail::RemoteOff);
+    }
+    match role_of(state, headers, q) {
+        Some(r) if crate::roles::allowed(&r, path) => Ok(r),
+        Some(_) => Err(AuthFail::ForbiddenRole),
+        None => Err(AuthFail::BadToken),
+    }
+}
+
+fn authed_for(state: &ServerState, headers: &HeaderMap, q: &Value, path: &str) -> bool {
+    authed_for_reason(state, headers, q, path).is_ok()
+}
+
+fn admin_authed_reason(
+    state: &ServerState,
+    headers: &HeaderMap,
+    q: &Value,
+) -> Result<(), AuthFail> {
     if outside_blocked(state, headers, "/admin") {
-        return false;
+        return Err(AuthFail::RemoteOff);
     }
     let given = headers
         .get("x-playx-token")
@@ -502,7 +564,17 @@ fn admin_authed(state: &ServerState, headers: &HeaderMap, q: &Value) -> bool {
         .or_else(|| q.get("t").and_then(Value::as_str).map(str::to_string))
         .unwrap_or_default();
     let owner = state.token.lock().map(|t| t.clone()).unwrap_or_default();
-    token_ok(&owner, &given)
+    if token_ok(&owner, &given) {
+        Ok(())
+    } else if role_of(state, headers, q).is_some() {
+        Err(AuthFail::ForbiddenRole)
+    } else {
+        Err(AuthFail::BadToken)
+    }
+}
+
+fn admin_authed(state: &ServerState, headers: &HeaderMap, q: &Value) -> bool {
+    admin_authed_reason(state, headers, q).is_ok()
 }
 
 // ── 손님 ──────────────────────────────────────────────────────────────────
@@ -628,6 +700,8 @@ async fn api_claim(
 struct StateBody {
     address: String,
     state: String,
+    #[serde(default)]
+    from: Option<String>,
 }
 
 async fn admin_set_state(
@@ -637,8 +711,8 @@ async fn admin_set_state(
 ) -> impl IntoResponse {
     // 주문 상태를 넘기는 것은 직원의 본업이다. 여기서 사장 토큰만 받으면 직원
     // 화면은 로그인에 성공한 뒤 아무것도 못 하는 화면이 된다 — 실제로 그랬다.
-    if !authed_for(&st, &headers, &json!({}), "/api/admin/state") {
-        return (StatusCode::UNAUTHORIZED, Json(json!({ "error": "권한 없음" })));
+    if let Err(reason) = authed_for_reason(&st, &headers, &json!({}), "/api/admin/state") {
+        return (StatusCode::UNAUTHORIZED, Json(auth_fail_json(reason)));
     }
     if !STATES.contains(&body.state.as_str()) {
         return (StatusCode::BAD_REQUEST, Json(json!({ "error": "알 수 없는 상태" })));
@@ -648,12 +722,31 @@ async fn admin_set_state(
         Ok(m) => m,
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "잠금 실패" }))),
     };
-    let ticket = m.get(&body.address).map(|(_, _, t)| *t).unwrap_or_else(|| next_ticket(&st));
+    let Some((current, _, ticket)) = m.get(&body.address) else {
+        return (StatusCode::NOT_FOUND, Json(json!({ "error": "그런 주문이 없습니다." })));
+    };
+    let Some(ci) = STATES.iter().position(|s| *s == current) else {
+        return (StatusCode::CONFLICT, Json(json!({
+            "error": "결제가 확인된 주문만 처리할 수 있습니다.", "code": "NOT_PAID", "state": current,
+        })));
+    };
+    if body.from.as_ref().is_some_and(|from| from != current) {
+        return (StatusCode::CONFLICT, Json(json!({ "code": "STALE", "state": current })));
+    }
+    let ni = STATES.iter().position(|s| *s == body.state).unwrap();
+    if !(ni == ci || ni == ci + 1 || ni + 1 == ci) {
+        return (StatusCode::BAD_REQUEST, Json(json!({
+            "error": "한 단계씩만 옮길 수 있습니다.", "code": "SKIPPED_STATE",
+        })));
+    }
+    let ticket = *ticket;
     m.insert(body.address.clone(), (body.state.clone(), now_unix(), ticket));
 
     // 하루 200건짜리 가게면 이 표는 1년에 7만 줄이 된다. 아무도 지우지 않아서
     // 그랬다. 어제 끝난 주문을 계산대가 들고 있을 이유가 없다.
     prune_old(&mut m, 500);
+    drop(m);
+    persist_order_state(&st);
 
     (StatusCode::OK, Json(json!({ "ok": true, "ticket": ticket })))
 }
@@ -674,18 +767,32 @@ fn prune_old(m: &mut std::collections::HashMap<String, (String, i64, u32)>, keep
 
 /// Every order with a state, for the shop screen.
 async fn admin_states(State(st): State<ServerState>, headers: HeaderMap) -> impl IntoResponse {
-    if !authed_for(&st, &headers, &json!({}), "/api/admin/states") {
-        return (StatusCode::UNAUTHORIZED, Json(json!({ "error": "권한 없음" })));
+    if let Err(reason) = authed_for_reason(&st, &headers, &json!({}), "/api/admin/states") {
+        return (StatusCode::UNAUTHORIZED, Json(auth_fail_json(reason)));
     }
     let m = st.order_state.lock().map(|m| m.clone()).unwrap_or_default();
     let tables = st.order_table.lock().map(|t| t.clone()).unwrap_or_default();
+    let unverified = st.unverified_paid.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    let sold = crate::ledger::recent_sold_index(now_unix());
+    let pending = crate::ledger::pending_index();
     let rows: Vec<Value> = m
         .iter()
         .map(|(addr, (s, at, t))| {
+            let paid = STATES.contains(&s.as_str());
+            let order = if paid {
+                sold.get(addr)
+            } else {
+                pending.get(addr)
+            }.unwrap_or(&Value::Null);
             json!({
                 "address": addr, "state": s, "at": at, "ticket": t,
+                "unverified": unverified.contains(addr),
                 // 자리로 가져다주는 가게는 번호를 부르지 않는다.
                 "table": tables.get(addr),
+                "items": order.get("items").cloned().unwrap_or(json!([])),
+                "amount": order[if paid { "amount" } else { "krw" }],
+                "currency": order["currency"],
+                "ordered_at": order["quoted_at"],
             })
         })
         .collect();
@@ -827,6 +934,9 @@ async fn sweep_payments(st: &ServerState) {
         // 사람들이 번호를 가져가서, 카운터에서 부르는 번호가 띄엄띄엄해진다.
         let ticket = next_ticket(st);
         m.insert(addr.to_string(), ("paid".into(), now_unix(), ticket));
+        if let Ok(mut p) = st.order_paid_at.lock() {
+            p.insert(addr.to_string(), now_unix());
+        }
 
         // 여기가 매출이 생기는 순간이고, 장부에 적히는 유일한 순간이다.
         // 주문했을 때가 아니라 돈이 들어왔을 때 — 결제하지 않고 떠난 주문까지
@@ -941,6 +1051,7 @@ async fn sweep_payments(st: &ServerState) {
     //    흉내 낼 수 있지만 **우리 주소로 간 출력은 흉내 낼 수 없다.**
     //    노드가 못 답할 때만 금액으로 어림잡는다.
     drop(m);
+    persist_order_state(st);
     if !fee_later.is_empty() {
         // 🔴 이 함수 안에서 `.await` 를 하면 서버 손잡이로 못 쓴다(컴파일이
         //    막았다). 떼어 내서 따로 돌린다 — 손님을 기다리게 할 이유도 없다.
@@ -980,6 +1091,9 @@ async fn api_order_state(
         found = peek(&st);
     }
 
+    if st.unverified_paid.lock().unwrap_or_else(|e| e.into_inner()).contains(&addr) {
+        found = None;
+    }
     match found {
         Some((s, at, t)) => (
             StatusCode::OK,
@@ -1048,8 +1162,8 @@ async fn api_paid(
 /// Deliberately one call. A phone on shop wifi checking six endpoints to answer
 /// "is my shop alive" is six chances to look broken.
 async fn admin_machine(State(st): State<ServerState>, headers: HeaderMap) -> impl IntoResponse {
-    if !admin_authed(&st, &headers, &json!({})) {
-        return (StatusCode::UNAUTHORIZED, Json(json!({ "error": "권한 없음" })));
+    if let Err(reason) = admin_authed_reason(&st, &headers, &json!({})) {
+        return (StatusCode::UNAUTHORIZED, Json(auth_fail_json(reason)));
     }
     let services = crate::services::services_status().await;
     let net = crate::raven::network_state().await;
@@ -1075,8 +1189,8 @@ async fn admin_machine(State(st): State<ServerState>, headers: HeaderMap) -> imp
 /// by accident, and `services.rs` already refuses to touch processes it did not
 /// start.
 async fn admin_machine_start(State(st): State<ServerState>, headers: HeaderMap) -> impl IntoResponse {
-    if !admin_authed(&st, &headers, &json!({})) {
-        return (StatusCode::UNAUTHORIZED, Json(json!({ "error": "권한 없음" })));
+    if let Err(reason) = admin_authed_reason(&st, &headers, &json!({})) {
+        return (StatusCode::UNAUTHORIZED, Json(auth_fail_json(reason)));
     }
     match crate::services::open_shop().await {
         Ok(v) => (StatusCode::OK, Json(v)),
@@ -1089,8 +1203,8 @@ async fn admin_machine_start(State(st): State<ServerState>, headers: HeaderMap) 
 /// The owner of a headless machine has no other way to do this, and a backup
 /// nobody can trigger is a backup that does not happen.
 async fn admin_backup(State(st): State<ServerState>, headers: HeaderMap) -> impl IntoResponse {
-    if !admin_authed(&st, &headers, &json!({})) {
-        return (StatusCode::UNAUTHORIZED, Json(json!({ "error": "권한 없음" })));
+    if let Err(reason) = admin_authed_reason(&st, &headers, &json!({})) {
+        return (StatusCode::UNAUTHORIZED, Json(auth_fail_json(reason)));
     }
     match crate::backup::backup_zip(String::new(), String::new(), true).await {
         Ok(v) => (StatusCode::OK, Json(v)),
@@ -1102,8 +1216,8 @@ async fn staff_refund_limits_route(
     State(st): State<ServerState>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
-    if !authed_for(&st, &headers, &json!({}), "/api/staff/refund/limits") {
-        return (StatusCode::UNAUTHORIZED, Json(json!({ "error": "권한 없음" })));
+    if let Err(reason) = authed_for_reason(&st, &headers, &json!({}), "/api/staff/refund/limits") {
+        return (StatusCode::UNAUTHORIZED, Json(auth_fail_json(reason)));
     }
     (StatusCode::OK, Json(crate::refund::staff_refund_limits(now_unix()).await))
 }
@@ -1126,8 +1240,8 @@ async fn staff_refund_route(
     headers: HeaderMap,
     Json(b): Json<StaffRefundBody>,
 ) -> impl IntoResponse {
-    if !authed_for(&st, &headers, &json!({}), "/api/staff/refund") {
-        return (StatusCode::UNAUTHORIZED, Json(json!({ "error": "권한 없음" })));
+    if let Err(reason) = authed_for_reason(&st, &headers, &json!({}), "/api/staff/refund") {
+        return (StatusCode::UNAUTHORIZED, Json(auth_fail_json(reason)));
     }
     match crate::refund::staff_refund(b.to, b.krw, b.reason, now_unix(), b.passphrase).await {
         Ok(v) => (StatusCode::OK, Json(v)),
@@ -2172,6 +2286,7 @@ async fn api_order(
         }
     }
 
+    persist_order_state(&state);
     (
         StatusCode::OK,
         Json(json!({
@@ -2417,8 +2532,8 @@ async fn admin_page(
 }
 
 async fn admin_status(State(state): State<ServerState>, headers: HeaderMap) -> impl IntoResponse {
-    if !admin_authed(&state, &headers, &json!({})) {
-        return (StatusCode::UNAUTHORIZED, Json(json!({ "error": "권한 없음" })));
+    if let Err(reason) = admin_authed_reason(&state, &headers, &json!({})) {
+        return (StatusCode::UNAUTHORIZED, Json(auth_fail_json(reason)));
     }
 
     let asked = state.ask_budget.lock().map(|b| b.1).unwrap_or(0);
@@ -2436,8 +2551,8 @@ async fn admin_status(State(state): State<ServerState>, headers: HeaderMap) -> i
 }
 
 async fn admin_orders(State(state): State<ServerState>, headers: HeaderMap) -> impl IntoResponse {
-    if !authed_for(&state, &headers, &json!({}), "/api/admin/orders") {
-        return (StatusCode::UNAUTHORIZED, Json(json!({ "error": "권한 없음" })));
+    if let Err(reason) = authed_for_reason(&state, &headers, &json!({}), "/api/admin/orders") {
+        return (StatusCode::UNAUTHORIZED, Json(auth_fail_json(reason)));
     }
     // 주문마다 주소가 다르므로 가게 주소 하나로는 못 찾는다. 빈 문자열을
     // 넘기면 주문 라벨이 붙은 입금 전부를 가져온다.
@@ -2462,8 +2577,8 @@ async fn admin_publish(
     headers: HeaderMap,
     Json(body): Json<PublishBody>,
 ) -> impl IntoResponse {
-    if !admin_authed(&state, &headers, &json!({})) {
-        return (StatusCode::UNAUTHORIZED, Json(json!({ "error": "권한 없음" })));
+    if let Err(reason) = admin_authed_reason(&state, &headers, &json!({})) {
+        return (StatusCode::UNAUTHORIZED, Json(auth_fail_json(reason)));
     }
     if let Ok(mut s) = state.shop.lock() {
         *s = body.shop.clone();
@@ -2482,8 +2597,8 @@ async fn admin_publish(
 /// What the owner currently has published, so the phone can edit it rather than
 /// starting from an empty form and wiping what the desktop set.
 async fn admin_shop(State(state): State<ServerState>, headers: HeaderMap) -> impl IntoResponse {
-    if !admin_authed(&state, &headers, &json!({})) {
-        return (StatusCode::UNAUTHORIZED, Json(json!({ "error": "권한 없음" })));
+    if let Err(reason) = admin_authed_reason(&state, &headers, &json!({})) {
+        return (StatusCode::UNAUTHORIZED, Json(auth_fail_json(reason)));
     }
     let shop = state.shop.lock().map(|s| s.clone()).unwrap_or(json!({}));
     let ai = state.ai.lock().map(|a| a.clone()).unwrap_or_default();
@@ -2491,8 +2606,8 @@ async fn admin_shop(State(state): State<ServerState>, headers: HeaderMap) -> imp
 }
 
 async fn admin_assets(State(state): State<ServerState>, headers: HeaderMap) -> impl IntoResponse {
-    if !admin_authed(&state, &headers, &json!({})) {
-        return (StatusCode::UNAUTHORIZED, Json(json!({ "error": "권한 없음" })));
+    if let Err(reason) = admin_authed_reason(&state, &headers, &json!({})) {
+        return (StatusCode::UNAUTHORIZED, Json(auth_fail_json(reason)));
     }
     match crate::raven::list_assets().await {
         Ok(v) => (StatusCode::OK, Json(json!({ "assets": v }))),
@@ -2513,8 +2628,8 @@ async fn admin_ai(
     headers: HeaderMap,
     Json(body): Json<AdminAiBody>,
 ) -> impl IntoResponse {
-    if !admin_authed(&st, &headers, &json!({})) {
-        return (StatusCode::UNAUTHORIZED, Json(json!({ "error": "권한 없음" })));
+    if let Err(reason) = admin_authed_reason(&st, &headers, &json!({})) {
+        return (StatusCode::UNAUTHORIZED, Json(auth_fail_json(reason)));
     }
     match crate::ai::ai_chat(body.provider, body.message, body.state, body.history).await {
         Ok(v) => (StatusCode::OK, Json(v)),
@@ -2544,8 +2659,8 @@ async fn admin_issue(
     headers: HeaderMap,
     Json(body): Json<IssueBody>,
 ) -> impl IntoResponse {
-    if !admin_authed(&state, &headers, &json!({})) {
-        return (StatusCode::UNAUTHORIZED, Json(json!({ "error": "권한 없음" })));
+    if let Err(reason) = admin_authed_reason(&state, &headers, &json!({})) {
+        return (StatusCode::UNAUTHORIZED, Json(auth_fail_json(reason)));
     }
     if body.confirm.trim() != body.name.trim() {
         return (
@@ -2631,8 +2746,8 @@ async fn api_scan(
     headers: HeaderMap,
     Json(body): Json<ScanBody>,
 ) -> impl IntoResponse {
-    if !authed_for(&state, &headers, &json!({}), "/api/scan/check") {
-        return (StatusCode::UNAUTHORIZED, Json(json!({ "error": "권한 없음" })));
+    if let Err(reason) = authed_for_reason(&state, &headers, &json!({}), "/api/scan/check") {
+        return (StatusCode::UNAUTHORIZED, Json(auth_fail_json(reason)));
     }
     let now = now_unix();
 
@@ -2693,8 +2808,8 @@ async fn api_scan_in(
     headers: HeaderMap,
     Json(body): Json<ScanInBody>,
 ) -> impl IntoResponse {
-    if !authed_for(&state, &headers, &json!({}), "/api/scan/in") {
-        return (StatusCode::UNAUTHORIZED, Json(json!({ "error": "권한 없음" })));
+    if let Err(reason) = authed_for_reason(&state, &headers, &json!({}), "/api/scan/in") {
+        return (StatusCode::UNAUTHORIZED, Json(auth_fail_json(reason)));
     }
     let now = now_unix();
     // 표 번호면 표를 쓴다. 못 쓰는 표는 `ticket_use` 가 거절한다 —
@@ -2711,29 +2826,148 @@ async fn api_scan_in(
     }
 }
 
-#[derive(serde::Deserialize)]
-struct MemberBody {
-    code: String,
-    name: String,
-    #[serde(default)]
-    phone: String,
-}
-
-/// 표를 회원으로 올린다.
+/// 표를 회원으로 올린다(이름·전화 기록).
 ///
-/// 직원 권한으로 충분하다 — 이름을 받아 적는 것은 직원의 본업이고, 여기서
-/// 사장 열쇠를 요구하면 문 앞에서 아무도 못 한다.
+/// `/api/scan/member` 자체 권한으로 검사하여 owner·staff·scanner를 허용한다.
+/// 수집 범위와 동의는 HTTP와 IPC 모두 ticket_to_member에서 강제한다.
 async fn api_scan_member(
     State(state): State<ServerState>,
     headers: HeaderMap,
-    Json(body): Json<MemberBody>,
+    body: axum::body::Bytes,
 ) -> impl IntoResponse {
-    if !authed_for(&state, &headers, &json!({}), "/api/scan/in") {
-        return (StatusCode::UNAUTHORIZED, Json(json!({ "error": "권한 없음" })));
-    }
-    match crate::ticket::ticket_to_member(body.code, body.name, body.phone, now_unix()) {
+    let role = match authed_for_reason(&state, &headers, &json!({}), "/api/scan/member") {
+        Ok(role) => role,
+        Err(reason) => return (StatusCode::UNAUTHORIZED, Json(auth_fail_json(reason))),
+    };
+    // 인증 → 본문 형식 → 동의 → 버전 → 정책과 나머지 검증 순서다.
+    // Bytes로 받아 깨진 JSON과 불리언이 아닌 동의도 JSON 오류로 돌려준다.
+    let invalid = || (StatusCode::BAD_REQUEST, Json(json!({
+        "error": "회원 등록 정보를 확인해 주세요.", "code": "MEMBER_REGISTRATION_FAILED"
+    })));
+    let body: Value = match serde_json::from_slice(&body) {
+        Ok(body) => body,
+        Err(_) => return invalid(),
+    };
+    let (Some(code), Some(name)) = (body["code"].as_str(), body["name"].as_str()) else {
+        return invalid();
+    };
+    let phone = match body.get("phone") {
+        None => "",
+        Some(value) => match value.as_str() { Some(phone) => phone, None => return invalid() },
+    };
+    let memo = match body.get("memo") {
+        None => "",
+        Some(value) => match value.as_str() { Some(memo) => memo, None => return invalid() },
+    };
+    let consent = body["consent"].as_bool().unwrap_or(false);
+    let version = body["consent_version"].as_str().unwrap_or_default();
+    match crate::ticket::ticket_to_member(code.into(), name.into(), phone.into(), consent, version.into(), memo.into(), role, now_unix()) {
         Ok(v) => (StatusCode::OK, Json(v)),
-        Err(e) => (StatusCode::BAD_REQUEST, Json(json!({ "error": e }))),
+        Err(e) => {
+            let (status, code, message) = if let Some(message) = e.strip_prefix("MEMBER_INFO_OFF: ") {
+                (StatusCode::FORBIDDEN, "MEMBER_INFO_OFF", message)
+            } else if let Some(message) = e.strip_prefix("CONSENT_REQUIRED: ") {
+                (StatusCode::BAD_REQUEST, "CONSENT_REQUIRED", message)
+            } else if let Some(message) = e.strip_prefix("CONSENT_VERSION_STALE: ") {
+                (StatusCode::BAD_REQUEST, "CONSENT_VERSION_STALE", message)
+            } else if let Some(message) = e.strip_prefix("MEMO_INVALID: ") {
+                (StatusCode::BAD_REQUEST, "MEMO_INVALID", message)
+            } else {
+                (StatusCode::BAD_REQUEST, "MEMBER_REGISTRATION_FAILED", e.as_str())
+            };
+            (status, Json(json!({ "error": message, "code": code })))
+        }
+    }
+}
+
+// 표 번호와 ROOT/M#ABCD 형식의 회원 번호를 함께 받는다.
+fn member_code(code: &str) -> Option<String> {
+    let code = code.trim().to_uppercase();
+    if (1..=64).contains(&code.len()) && code.bytes().all(|c|
+        c.is_ascii_uppercase() || c.is_ascii_digit() || b"#/._-".contains(&c)) {
+        Some(code)
+    } else { None }
+}
+
+fn member_api_error(status: StatusCode, code: &str, message: &str) -> (StatusCode, Json<Value>) {
+    (status, Json(json!({ "error": message, "code": code })))
+}
+
+fn member_info_policy() -> Result<(), (StatusCode, Json<Value>)> {
+    match crate::member_privacy::member_privacy_get() {
+        Ok(policy) if policy.level == "none" => Err(member_api_error(
+            StatusCode::FORBIDDEN, "MEMBER_INFO_OFF", "이 가게는 회원 정보를 받지 않습니다.")),
+        Ok(_) => Ok(()),
+        Err(_) => Err(member_api_error(StatusCode::INTERNAL_SERVER_ERROR,
+            "MEMBER_POLICY_UNAVAILABLE", "회원 정보 설정을 읽지 못했습니다.")),
+    }
+}
+
+async fn api_scan_member_info(
+    State(state): State<ServerState>, headers: HeaderMap, Query(query): Query<std::collections::HashMap<String, String>>,
+) -> impl IntoResponse {
+    if let Err(reason) = authed_for_reason(&state, &headers, &json!({}), "/api/scan/member-info") {
+        return (StatusCode::UNAUTHORIZED, Json(auth_fail_json(reason)));
+    }
+    if let Err(error) = member_info_policy() { return error; }
+    let Some(code) = query.get("code").and_then(|code| member_code(code)) else {
+        return member_api_error(StatusCode::BAD_REQUEST, "CODE_INVALID", "회원 번호를 확인해 주세요.");
+    };
+    match crate::pass::member_info(&code, now_unix()) {
+        Ok(info) => (StatusCode::OK, Json(info)),
+        Err(error) => member_api_error(StatusCode::NOT_FOUND, "NOT_MEMBER",
+            error.strip_prefix("NOT_MEMBER: ").unwrap_or(&error)),
+    }
+}
+
+async fn api_scan_member_memo(
+    State(state): State<ServerState>, headers: HeaderMap, body: axum::body::Bytes,
+) -> impl IntoResponse {
+    let role = match authed_for_reason(&state, &headers, &json!({}), "/api/scan/member-memo") {
+        Ok(role) => role,
+        Err(reason) => return (StatusCode::UNAUTHORIZED, Json(auth_fail_json(reason))),
+    };
+    let invalid = || member_api_error(StatusCode::BAD_REQUEST, "MEMO_INVALID",
+        "메모는 1~300자 한 줄로 적어 주세요.");
+    let body: Value = match serde_json::from_slice(&body) {
+        Ok(body) => body,
+        Err(_) => return invalid(),
+    };
+    if let Err(error) = member_info_policy() { return error; }
+    let (Some(code), Some(text)) = (body["code"].as_str().and_then(member_code), body["text"].as_str()) else {
+        return invalid();
+    };
+    match crate::pass::append_memo(&code, &role, text, now_unix()) {
+        Ok(memos) => (StatusCode::OK, Json(json!({ "code": code, "memos": memos }))),
+        Err(error) => {
+            let (code, message) = error.split_once(": ").unwrap_or(("MEMO_SAVE_FAILED", &error));
+            let status = match code {
+                "NOT_MEMBER" => StatusCode::NOT_FOUND,
+                "MEMBER_REDACTED" => StatusCode::CONFLICT,
+                "MEMO_INVALID" | "MEMO_LIMIT" => StatusCode::BAD_REQUEST,
+                _ => StatusCode::INTERNAL_SERVER_ERROR,
+            };
+            member_api_error(status, code, message)
+        }
+    }
+}
+
+async fn api_scan_member_policy(
+    State(state): State<ServerState>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    if let Err(reason) = authed_for_reason(&state, &headers, &json!({}), "/api/scan/member-policy") {
+        return (StatusCode::UNAUTHORIZED, Json(auth_fail_json(reason)));
+    }
+    match crate::member_privacy::member_privacy_get() {
+        Ok(policy) => (StatusCode::OK, Json(json!({
+            "level": policy.level, "retention_months": policy.retention_months,
+            "consent_version": crate::member_privacy::CONSENT_VERSION,
+            "consent_text": crate::member_privacy::consent_text(&policy),
+        }))),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({
+            "error": "회원 정보 설정을 읽지 못했습니다.", "code": "MEMBER_POLICY_UNAVAILABLE"
+        }))),
     }
 }
 
@@ -2864,6 +3098,9 @@ fn build_phone_router(st: ServerState) -> axum::Router {
         .route("/api/scan/in", post(api_scan_in))
         // 표를 산 손님을 회원으로 올린다. 문 앞 직원이 이름을 받는 자리다.
         .route("/api/scan/member", post(api_scan_member))
+        .route("/api/scan/member-info", get(api_scan_member_info))
+        .route("/api/scan/member-memo", post(api_scan_member_memo))
+        .route("/api/scan/member-policy", get(api_scan_member_policy))
         // 🔴 가게를 다른 컴퓨터로 옮기는 길. 같은 와이파이의 새 컴퓨터가
         //    여섯 자리 숫자를 들고 여기로 온다.
         //    ⚠️ 숫자가 틀리면 옛 컴퓨터가 횟수를 세고, 세 번이면 짐을 버린다.
@@ -2890,6 +3127,11 @@ async fn outside_gate(
     next: axum::middleware::Next,
 ) -> axum::response::Response {
     if outside_blocked(&state, req.headers(), req.uri().path()) {
+        // 폰 앱·직원 웹은 `/api/*` 의 401 REMOTE_OFF JSON 으로 「원격 관리 꺼짐」을 안내한다.
+        // 화면 길(HTML)은 사람이 읽는 글로 막는다.
+        if req.uri().path().starts_with("/api/") {
+            return (StatusCode::UNAUTHORIZED, Json(auth_fail_json(AuthFail::RemoteOff))).into_response();
+        }
         return (StatusCode::FORBIDDEN, "이 주소는 가게 안에서만 열립니다.").into_response();
     }
     next.run(req).await
@@ -2918,6 +3160,8 @@ pub async fn start_phone_server(
         claims: state.claims.clone(),
         sent: state.sent.clone(),
         order_state: state.order_state.clone(),
+        unverified_paid: state.unverified_paid.clone(),
+        order_paid_at: state.order_paid_at.clone(),
         next_ticket: state.next_ticket.clone(),
         ticket_day: state.ticket_day.clone(),
         last_sweep: state.last_sweep.clone(),
@@ -3008,6 +3252,8 @@ pub async fn start_phone_server(
         // 못 읽어도 서버는 켠다. 장사를 멈추는 것이 더 나쁘다.
         Err(e) => eprintln!("[phone] 지난 주문을 못 읽었습니다: {e}"),
     }
+    // 재시작 전 주문 상태도 되읽는다.
+    restore_order_state(&st);
 
     let ip = local_ip().unwrap_or_else(|| "127.0.0.1".into());
     // QR 에 박히는 값을 기억해 둔다. 나중에 「바뀌었다」를 말하려면 필요하다.
@@ -3247,6 +3493,175 @@ pub fn pending_claims(state: tauri::State<'_, ServerState>) -> Result<Value, Str
     Ok(json!({ "claims": out }))
 }
 
+/// 카운터 주문 상태와 번호표를 재시작 뒤에도 기억한다.
+fn order_state_path() -> std::path::PathBuf {
+    crate::paths::app_file("order-state.json")
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct SavedOrderState {
+    version: u32,
+    saved_at: i64,
+    next_ticket: u32,
+    ticket_day: i64,
+    orders: Vec<SavedOrder>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct SavedOrder {
+    address: String,
+    state: String,
+    at: i64,
+    ticket: u32,
+    table: Option<String>,
+    expect: Option<f64>,
+    until: Option<i64>,
+    fee: Option<f64>,
+    paid_at: Option<i64>,
+}
+
+// 같은 임시 파일을 동시에 덮어쓰거나 옛 스냅샷이 나중에 저장되는 것을 막는다.
+static ORDER_STATE_SAVE: Mutex<()> = Mutex::new(());
+
+fn persist_order_state(state: &ServerState) {
+    let _save = ORDER_STATE_SAVE.lock().unwrap_or_else(|e| e.into_inner());
+    let now = now_unix();
+    // 주문 생성 쪽은 부가 정보 → 상태 순서로 잠그기도 하므로,
+    // 각 표를 복사하고 잠금을 놓은 뒤 다음 표를 읽는다.
+    let orders = state
+        .order_state
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
+    let tables = state
+        .order_table
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
+    let expects = state
+        .order_expect
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
+    let untils = state
+        .order_until
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
+    let fees = state
+        .order_fee
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
+    let paid_ats = state
+        .order_paid_at
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
+    // next_ticket() 과 같은 순서로 읽어 날짜와 다음 번호를 한 쌍으로 보존한다.
+    let day = state.ticket_day.lock().unwrap_or_else(|e| e.into_inner());
+    let next = state.next_ticket.lock().unwrap_or_else(|e| e.into_inner());
+    let doc = SavedOrderState {
+        version: 1,
+        saved_at: now,
+        next_ticket: *next,
+        ticket_day: *day,
+        orders: orders
+            .into_iter()
+            .filter(|(_, (s, at, _))| s != "done" || now.saturating_sub(*at) <= 7 * 86_400)
+            .map(|(address, (state, at, ticket))| SavedOrder {
+                table: tables.get(&address).cloned(),
+                expect: expects.get(&address).copied(),
+                until: untils.get(&address).copied(),
+                fee: fees.get(&address).copied(),
+                paid_at: paid_ats.get(&address).copied(),
+                address,
+                state,
+                at,
+                ticket,
+            })
+            .collect(),
+    };
+    drop(next);
+    drop(day);
+    let path = order_state_path();
+    if let Ok(bytes) = serde_json::to_vec_pretty(&doc) {
+        let _ = atomic_write_0600(&path, &bytes);
+    }
+}
+
+fn restore_order_state(state: &ServerState) {
+    let path = order_state_path();
+    let Ok(bytes) = std::fs::read(&path) else {
+        return;
+    };
+    let doc: SavedOrderState = match serde_json::from_slice(&bytes) {
+        Ok(doc) => doc,
+        Err(_) => {
+            let corrupt = path.with_extension(format!("json.corrupt-{}", now_unix()));
+            let _ = std::fs::rename(&path, corrupt);
+            eprintln!("[phone] 주문 상태 파일이 손상되어 별도 보존하고 빈 상태로 시작합니다");
+            return;
+        }
+    };
+    *state.next_ticket.lock().unwrap_or_else(|e| e.into_inner()) = doc.next_ticket;
+    *state.ticket_day.lock().unwrap_or_else(|e| e.into_inner()) = doc.ticket_day;
+    for row in doc.orders {
+        let mut unverified = false;
+        if STATES.contains(&row.state.as_str()) {
+            let near = row.paid_at.unwrap_or(row.at);
+            if !crate::ledger::was_sold_near(&row.address, near) {
+                unverified = true;
+                let prefix: String = row.address.chars().take(8).collect();
+                eprintln!("[phone] 주문 {prefix}… 를 {} 로 복원했지만 장부에서 못 찾아 unverified 로 남깁니다", row.state);
+            }
+        } else if ![WAITING, SHORT, EXPIRED].contains(&row.state.as_str()) {
+            continue;
+        }
+        state
+            .order_state
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(row.address.clone(), (row.state, row.at, row.ticket));
+        if let Some(v) = row.table {
+            state
+                .order_table
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(row.address.clone(), v);
+        }
+        if let Some(v) = row.expect {
+            state
+                .order_expect
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(row.address.clone(), v);
+        }
+        if let Some(v) = row.until {
+            state
+                .order_until
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(row.address.clone(), v);
+        }
+        if let Some(v) = row.fee {
+            state
+                .order_fee
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(row.address.clone(), v);
+        }
+        if unverified {
+            state.unverified_paid.lock().unwrap_or_else(|e| e.into_inner())
+                .insert(row.address.clone());
+        }
+        if let Some(v) = row.paid_at {
+            state.order_paid_at.lock().unwrap_or_else(|e| e.into_inner())
+                .insert(row.address, v);
+        }
+    }
+}
+
 /// Where the buyer's orders live between restarts.
 fn orders_path() -> std::path::PathBuf {
     crate::paths::app_file("orders.json")
@@ -3375,6 +3790,8 @@ pub fn set_order_state(
     let mut m = state.order_state.lock().map_err(|_| "잠금 실패")?;
     let ticket = m.get(&address).map(|(_, _, t)| *t).unwrap_or_else(|| next_ticket(&state));
     m.insert(address, (new_state, now_unix(), ticket));
+    drop(m);
+    persist_order_state(&state);
     Ok(ticket)
 }
 
@@ -3500,6 +3917,8 @@ impl Default for ServerState {
             claims: Arc::new(Mutex::new(std::collections::HashMap::new())),
             sent: Arc::new(Mutex::new(std::collections::HashSet::new())),
             order_state: Arc::new(Mutex::new(std::collections::HashMap::new())),
+            unverified_paid: Arc::new(Mutex::new(std::collections::HashSet::new())),
+            order_paid_at: Arc::new(Mutex::new(std::collections::HashMap::new())),
             next_ticket: Arc::new(Mutex::new(1)),
             ticket_day: Arc::new(Mutex::new(0)),
             last_sweep: Arc::new(Mutex::new(0)),
@@ -3915,6 +4334,11 @@ mod ticket_tests {
     #[test]
     fn there_is_only_one_place_that_hands_out_numbers() {
         let src = code_only();
+        // 저장·복원은 카운터를 읽거나 되놓을 뿐 번호를 발급하지 않는다.
+        // 새 영속화 함수를 빼고, 실행 중 번호를 배분하는 자리는 계속 하나인지 본다.
+        let start = src.find("fn order_state_path()").unwrap();
+        let end = src.find("fn orders_path()").unwrap();
+        let src = format!("{}{}", &src[..start], &src[end..]);
         assert_eq!(
             src.matches("next_ticket.lock()").count(),
             1,
@@ -4049,6 +4473,7 @@ mod router_builds {
     /// 배포가 아니라 **여기서** 빨갛게 뜬다.
     #[tokio::test]
     async fn the_phone_router_can_actually_be_built() {
+        let _home = super::order_persistence_tests::TestHome::new();
         let st = super::ServerState::default();
         // 서버를 켜지는 않는다 — 라우터를 만드는 것까지가 패닉이 나는 자리다.
         let _ = super::build_phone_router(st);
@@ -4108,7 +4533,8 @@ mod router_builds {
             }
         };
         for path in ["/admin", "/staff", "/scan", "/api/admin/status", "/api/scan/check", "/move/123456", "/api/owner-ask", "/api/keepphoto"] {
-            assert_eq!(status("shop.example.com", path).await, axum::http::StatusCode::FORBIDDEN, "{path} 가 바깥에 열려 있다");
+            let expected = if path.starts_with("/api/") { axum::http::StatusCode::UNAUTHORIZED } else { axum::http::StatusCode::FORBIDDEN };
+            assert_eq!(status("shop.example.com", path).await, expected, "{path} 가 바깥에 열려 있다");
         }
         for path in ["/", "/wallet", "/api/capabilities", "/report.js"] {
             assert_ne!(status("shop.example.com", path).await, axum::http::StatusCode::FORBIDDEN, "{path} 가 바깥에서 막혔다");
@@ -4118,6 +4544,7 @@ mod router_builds {
 
     #[tokio::test]
     async fn the_screens_get_what_they_ask_for() {
+        let _home = super::order_persistence_tests::TestHome::new();
         use tower::ServiceExt;
         let app = super::build_phone_router(super::ServerState::default());
         for path in [
@@ -4202,5 +4629,634 @@ async fn api_move(axum::extract::Path(code): axum::extract::Path<String>) -> imp
         },
         // 왜 안 되는지 그대로 전한다 — 「세 번 틀렸습니다」 같은 것.
         Err(msg) => (StatusCode::FORBIDDEN, msg).into_response(),
+    }
+}
+
+#[cfg(test)]
+mod order_persistence_tests {
+    use super::*;
+    use tower::ServiceExt;
+
+    pub(super) struct TestHome {
+        dir: std::path::PathBuf,
+        _lock: std::sync::MutexGuard<'static, ()>,
+    }
+
+    impl TestHome {
+        pub(super) fn new() -> Self {
+            let lock = crate::paths::TEST_ENV
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
+            let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("target")
+                .join(format!("test-order-state-{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(&dir).unwrap();
+            std::env::set_var("PLAYX_RAVEN_HOME", &dir);
+            Self { dir, _lock: lock }
+        }
+    }
+
+    impl Drop for TestHome {
+        fn drop(&mut self) {
+            std::env::remove_var("PLAYX_RAVEN_HOME");
+            let _ = std::fs::remove_dir_all(&self.dir);
+        }
+    }
+
+    fn open(address: &str, at: i64) {
+        crate::ledger::open_order(
+            address,
+            &json!([{ "name": "커피", "options": ["아이스"], "qty": 2 }]),
+            &json!({ "amount": 9000.0, "currency": "KRW", "rvn": 3000.0 }),
+            at,
+            Some("12"),
+        )
+        .unwrap();
+    }
+
+    fn sale(address: &str, at: i64) {
+        open(address, at - 30);
+        assert!(crate::ledger::settle(address, "test-sale", at, 1).is_some());
+    }
+
+    fn insert(st: &ServerState, address: &str, status: &str, at: i64) {
+        st.order_state
+            .lock()
+            .unwrap()
+            .insert(address.into(), (status.into(), at, 7));
+        st.order_table
+            .lock()
+            .unwrap()
+            .insert(address.into(), "12".into());
+        st.order_expect
+            .lock()
+            .unwrap()
+            .insert(address.into(), 3000.0);
+        st.order_until
+            .lock()
+            .unwrap()
+            .insert(address.into(), at + 300);
+        st.order_fee.lock().unwrap().insert(address.into(), 30.0);
+    }
+
+    #[test]
+    fn waiting_and_real_paid_orders_roundtrip_with_all_metadata() {
+        let _home = TestHome::new();
+        let st = ServerState::default();
+        let at = now_unix();
+        sale("real-sale", at);
+        st.order_paid_at.lock().unwrap().insert("real-sale".into(), at);
+        for (address, status) in [
+            ("waiting-order", WAITING),
+            ("real-sale", "paid"),
+            ("short-order", SHORT),
+            ("expired-order", EXPIRED),
+        ] {
+            insert(&st, address, status, at);
+        }
+        persist_order_state(&st);
+        let restored = ServerState::default();
+        restore_order_state(&restored);
+        assert_eq!(
+            *st.order_state.lock().unwrap(),
+            *restored.order_state.lock().unwrap()
+        );
+        assert_eq!(
+            *st.order_table.lock().unwrap(),
+            *restored.order_table.lock().unwrap()
+        );
+        assert_eq!(
+            *st.order_expect.lock().unwrap(),
+            *restored.order_expect.lock().unwrap()
+        );
+        assert_eq!(
+            *st.order_until.lock().unwrap(),
+            *restored.order_until.lock().unwrap()
+        );
+        assert_eq!(
+            *st.order_fee.lock().unwrap(),
+            *restored.order_fee.lock().unwrap()
+        );
+        assert_eq!(
+            *st.order_paid_at.lock().unwrap(),
+            *restored.order_paid_at.lock().unwrap()
+        );
+        assert!(restored.unverified_paid.lock().unwrap().is_empty());
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(
+                std::fs::metadata(order_state_path())
+                    .unwrap()
+                    .permissions()
+                    .mode()
+                    & 0o777,
+                0o600
+            );
+        }
+        assert!(!order_state_path().with_extension("json.tmp").exists());
+    }
+
+    #[test]
+    fn corrupt_file_is_preserved_and_missing_file_is_harmless() {
+        let home = TestHome::new();
+        let st = ServerState::default();
+        restore_order_state(&st);
+        let broken = "{ broken order state";
+        std::fs::write(order_state_path(), broken).unwrap();
+        restore_order_state(&st);
+        assert!(st.order_state.lock().unwrap().is_empty());
+        assert!(!order_state_path().exists());
+        let file = std::fs::read_dir(&home.dir)
+            .unwrap()
+            .flatten()
+            .find(|e| {
+                e.file_name()
+                    .to_string_lossy()
+                    .starts_with("order-state.json.corrupt-")
+            })
+            .expect("손상 파일을 보존해야 한다");
+        assert_eq!(std::fs::read_to_string(file.path()).unwrap(), broken);
+    }
+
+    #[test]
+    fn ticket_counter_survives_restart_and_resets_on_new_day() {
+        let _home = TestHome::new();
+        let st = ServerState::default();
+        let previous = next_ticket(&st);
+        persist_order_state(&st);
+        let restored = ServerState::default();
+        restore_order_state(&restored);
+        assert_eq!(next_ticket(&restored), previous + 1);
+        *restored.ticket_day.lock().unwrap() -= 1;
+        persist_order_state(&restored);
+        let tomorrow = ServerState::default();
+        restore_order_state(&tomorrow);
+        assert_eq!(next_ticket(&tomorrow), 1);
+    }
+
+    #[tokio::test]
+    async fn forged_paid_states_are_kept_but_marked_unverified() {
+        let _home = TestHome::new();
+        let at = now_unix();
+        sale("real-sale", at);
+        let mut orders = vec![];
+        for status in STATES {
+            for address in [format!("forged-{status}"), "real-sale".into()] {
+                orders.push(json!({ "address": address, "state": status, "at": at,
+                    "ticket": 9, "table": "12", "expect": 1.0, "until": at + 300, "fee": 0.01 }));
+            }
+        }
+        orders.push(json!({ "address": "invalid-state", "state": "invalid", "at": at,
+            "ticket": 9, "table": "12", "expect": 1.0, "until": at + 300, "fee": 0.01 }));
+        std::fs::write(
+            order_state_path(),
+            json!({ "version": 1, "saved_at": at,
+            "next_ticket": 10, "ticket_day": 123, "orders": orders })
+            .to_string(),
+        )
+        .unwrap();
+        let st = ServerState::default();
+        restore_order_state(&st);
+        assert_eq!(st.order_state.lock().unwrap().len(), STATES.len() + 1);
+        assert_eq!(st.order_state.lock().unwrap()["real-sale"].0, "done");
+        assert_eq!(st.order_table.lock().unwrap().len(), STATES.len() + 1);
+        assert_eq!(st.order_expect.lock().unwrap().len(), STATES.len() + 1);
+        assert_eq!(st.order_until.lock().unwrap().len(), STATES.len() + 1);
+        assert_eq!(st.order_fee.lock().unwrap().len(), STATES.len() + 1);
+        assert_eq!(st.unverified_paid.lock().unwrap().len(), STATES.len());
+        assert!(!st.unverified_paid.lock().unwrap().contains("real-sale"));
+        assert!(st.order_paid_at.lock().unwrap().is_empty()); // 구형 파일은 at 으로 대조한다.
+        assert_eq!(*st.next_ticket.lock().unwrap(), 10);
+        assert_eq!(*st.ticket_day.lock().unwrap(), 123);
+
+        let (status, value) = request(
+            &st, "/api/admin/states", "GET", Some("staff"), "localhost", json!({}),
+        ).await;
+        assert_eq!(status, StatusCode::OK);
+        let rows = value["orders"].as_array().unwrap();
+        assert_eq!(rows.len(), STATES.len() + 1);
+        for row in rows {
+            assert_eq!(row["unverified"], row["address"] != "real-sale");
+        }
+        for state in STATES {
+            let address = format!("forged-{state}");
+            assert_eq!(st.order_state.lock().unwrap()[&address], (state.into(), at, 9));
+            assert!(st.unverified_paid.lock().unwrap().contains(&address));
+            assert_eq!(st.order_table.lock().unwrap()[&address], "12");
+            assert_eq!(st.order_expect.lock().unwrap()[&address], 1.0);
+            assert_eq!(st.order_until.lock().unwrap()[&address], at + 300);
+            assert_eq!(st.order_fee.lock().unwrap()[&address], 0.01);
+            let (status, value) = request(
+                &st, &format!("/api/order-state?a={address}"), "GET", None, "localhost", json!({}),
+            ).await;
+            assert_eq!(status, StatusCode::OK);
+            assert_eq!(value, json!({"state": "unknown", "ticket": 0}));
+        }
+        let (status, value) = request(
+            &st, "/api/order-state?a=real-sale", "GET", None, "localhost", json!({}),
+        ).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(value["state"], "done");
+        assert_eq!(value["ticket"], 9);
+    }
+
+    #[tokio::test]
+    async fn paid_at_verifies_orders_completed_days_after_payment() {
+        let _home = TestHome::new();
+        let st = ServerState::default();
+        let at = now_unix();
+        let paid_at = at - 3 * 86_400;
+        sale("slow-order", paid_at);
+        insert(&st, "slow-order", "done", at);
+        st.order_paid_at.lock().unwrap().insert("slow-order".into(), paid_at);
+        assert!(!crate::ledger::was_sold_near("slow-order", at));
+        assert!(crate::ledger::was_sold_near("slow-order", paid_at));
+        persist_order_state(&st);
+        let restored = ServerState::default();
+        restore_order_state(&restored);
+        assert_eq!(restored.order_state.lock().unwrap()["slow-order"], ("done".into(), at, 7));
+        assert_eq!(restored.order_paid_at.lock().unwrap()["slow-order"], paid_at);
+        assert!(restored.unverified_paid.lock().unwrap().is_empty());
+        let (status, value) = request(
+            &restored, "/api/admin/states", "GET", Some("staff"), "localhost", json!({}),
+        ).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(value["orders"][0]["unverified"], false);
+        assert_eq!(value["orders"][0]["amount"], 9000.0);
+    }
+
+    #[test]
+    fn saved_tokens_are_private_and_leave_no_temporary_file() {
+        let _home = TestHome::new();
+        let st = ServerState::default();
+        save_tokens(&st.token.lock().unwrap(), &st.role_tokens.lock().unwrap());
+        assert!(load_tokens().is_some());
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(std::fs::metadata(tokens_path()).unwrap().permissions().mode() & 0o777, 0o600);
+        }
+        assert!(!tokens_path().with_extension("json.tmp").exists());
+    }
+
+    #[test]
+    fn only_done_older_than_seven_days_is_omitted_from_disk() {
+        let _home = TestHome::new();
+        let st = ServerState::default();
+        insert(&st, "old-done", "done", now_unix() - 8 * 86_400);
+        insert(&st, "recent-done", "done", now_unix() - 6 * 86_400);
+        insert(&st, "old-waiting", WAITING, now_unix() - 8 * 86_400);
+        persist_order_state(&st);
+        let saved: SavedOrderState =
+            serde_json::from_slice(&std::fs::read(order_state_path()).unwrap()).unwrap();
+        assert_eq!(saved.orders.len(), 2);
+        assert!(saved.orders.iter().all(|r| r.address != "old-done"));
+    }
+
+    async fn request(
+        st: &ServerState,
+        path: &str,
+        method: &str,
+        role: Option<&str>,
+        host: &str,
+        body: Value,
+    ) -> (StatusCode, Value) {
+        request_raw(st, path, method, role, host, body.to_string()).await
+    }
+
+    async fn request_raw(
+        st: &ServerState, path: &str, method: &str, role: Option<&str>, host: &str, body: String,
+    ) -> (StatusCode, Value) {
+        let mut req = axum::http::Request::builder()
+            .uri(path)
+            .method(method)
+            .header("host", host)
+            .header("content-type", "application/json");
+        if let Some(role) = role {
+            let token = if role == "owner" {
+                st.token.lock().unwrap().clone()
+            } else {
+                st.role_tokens.lock().unwrap()[role].clone()
+            };
+            req = req.header("x-playx-token", token);
+        }
+        let response = build_phone_router(st.clone())
+            .oneshot(req.body(axum::body::Body::from(body)).unwrap())
+            .await
+            .unwrap();
+        let status = response.status();
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        (status, serde_json::from_slice(&bytes).unwrap())
+    }
+
+    #[tokio::test]
+    async fn member_memos_use_real_roles_and_http_codes() {
+        let _home = TestHome::new();
+        let st = ServerState::default();
+        st.role_tokens.lock().unwrap().insert("customer".into(), "synthetic-customer-token".into());
+        let asset = "ROOT/M#ABCD";
+        crate::pass::save_member(asset.into(), "Synthetic Member".into(), "0000".into(),
+            "punch".into(), 20260101, 10, "".into(), now_unix(), None).unwrap();
+        for (path, expected) in [
+            ("/api/scan/member-info", "CODE_INVALID"),
+            ("/api/scan/member-info?code=", "CODE_INVALID"),
+            ("/api/scan/member-info?code=bad%20code", "CODE_INVALID"),
+            ("/api/scan/member-info?code=%EA%B0%80", "CODE_INVALID"),
+            ("/api/scan/member-info?code=missing", "NOT_MEMBER"),
+        ] {
+            let (status, body) = request(&st, path, "GET", Some("staff"), "localhost", json!({})).await;
+            assert_eq!(status, if expected == "NOT_MEMBER" { StatusCode::NOT_FOUND } else { StatusCode::BAD_REQUEST });
+            assert_eq!(body["code"], expected);
+            assert!(body["error"].is_string());
+        }
+        let long_path = format!("/api/scan/member-info?code={}", "A".repeat(65));
+        let (status, body) = request(&st, &long_path, "GET", Some("staff"), "localhost", json!({})).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(body["code"], "CODE_INVALID");
+        for role in [None, Some("customer")] {
+            for (path, method) in [("/api/scan/member-info?code=ROOT/M%23ABCD", "GET"), ("/api/scan/member-memo", "POST")] {
+                let (status, body) = request(&st, path, method, role, "localhost", json!({"code":asset,"text":"synthetic denied memo"})).await;
+                assert_eq!(status, StatusCode::UNAUTHORIZED);
+                assert_eq!(body["code"], if role.is_some() { "FORBIDDEN_ROLE" } else { "BAD_TOKEN" });
+            }
+        }
+        for (index, role) in ["staff", "scanner", "owner"].iter().enumerate() {
+            let (status, body) = request(&st, "/api/scan/member-memo", "POST", Some(role), "localhost",
+                json!({"code":" root/m#abcd ","text":format!("synthetic memo {role}")})).await;
+            assert_eq!(status, StatusCode::OK, "{body}");
+            assert_eq!(body["code"], asset);
+            assert_eq!(body["memos"].as_array().unwrap().len(), index + 1);
+            assert_eq!(body["memos"][index]["by"], *role);
+            assert!(body["memos"][index]["at"].is_i64());
+            let (status, info) = request(&st, "/api/scan/member-info?code=%20root/m%23abcd%20", "GET", Some(role), "localhost", json!({})).await;
+            assert_eq!(status, StatusCode::OK, "{info}");
+            assert_eq!(info, json!({"code":asset,"name":"Synthetic Member","until":20260101,
+                "kind":"punch","visits_left":10,"memos":body["memos"],"redacted":false}));
+            assert!(info.get("phone").is_none());
+        }
+        for raw in ["{invalid synthetic JSON".to_string(), json!({"code":asset,"text":""}).to_string(),
+            json!({"code":asset,"text":"가".repeat(301)}).to_string(),
+            json!({"code":asset,"text":"synthetic\tbad"}).to_string(),
+            json!({"code":123,"text":"synthetic"}).to_string(),
+            json!({"code":asset,"text":123}).to_string(),
+            json!({"code":"bad code","text":"synthetic"}).to_string()] {
+            let (status, body) = request_raw(&st, "/api/scan/member-memo", "POST", Some("staff"), "localhost", raw).await;
+            assert_eq!(status, StatusCode::BAD_REQUEST);
+            assert_eq!(body["code"], "MEMO_INVALID");
+        }
+        let (status, body) = request(&st, "/api/scan/member-memo", "POST", Some("scanner"), "localhost",
+            json!({"code":"MISSING","text":"synthetic"})).await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        assert_eq!(body["code"], "NOT_MEMBER");
+        for i in 3..50 { crate::pass::append_memo(asset, "staff", &format!("synthetic limit {i}"), now_unix()).unwrap(); }
+        let (status, body) = request(&st, "/api/scan/member-memo", "POST", Some("staff"), "localhost",
+            json!({"code":asset,"text":"synthetic overflow"})).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(body["code"], "MEMO_LIMIT");
+        crate::pass::save_member("REDACTED".into(), "Synthetic Member".into(), "0000".into(),
+            "period".into(), 20200101, 0, "".into(), 1, None).unwrap();
+        crate::pass::redact_expired_members(now_unix(), 6).unwrap();
+        let (status, body) = request(&st, "/api/scan/member-memo", "POST", Some("scanner"), "localhost",
+            json!({"code":"REDACTED","text":"synthetic blocked"})).await;
+        assert_eq!(status, StatusCode::CONFLICT);
+        assert_eq!(body["code"], "MEMBER_REDACTED");
+        for role in ["staff", "scanner", "owner"] {
+            let tickets = crate::ticket::issue_for_order(&format!("synthetic-memo-{role}"),
+                &json!([{"name":"Synthetic Pass","qty":1}]), &json!([{"name":"Synthetic Pass","pass_months":1}]), now_unix());
+            let code = tickets[0]["code"].as_str().unwrap();
+            for (memo, expected) in [(json!(123), "MEMBER_REGISTRATION_FAILED"), (json!("synthetic\tbad"), "MEMO_INVALID")] {
+                let (status, body) = request(&st, "/api/scan/member", "POST", Some(role), "localhost",
+                    json!({"code":code,"name":"Synthetic Member","phone":"0000","consent":true,
+                        "consent_version":crate::member_privacy::CONSENT_VERSION,"memo":memo})).await;
+                assert_eq!(status, StatusCode::BAD_REQUEST);
+                assert_eq!(body["code"], expected);
+                assert!(crate::pass::member_info(code, now_unix()).is_err());
+            }
+            let (status, body) = request(&st, "/api/scan/member", "POST", Some(role), "localhost",
+                json!({"code":code,"name":"Synthetic Member","phone":"0000","consent":true,
+                    "consent_version":crate::member_privacy::CONSENT_VERSION,"memo":"synthetic first memo"})).await;
+            assert_eq!(status, StatusCode::OK, "{body}");
+            let info = crate::pass::member_info(code, now_unix()).unwrap();
+            assert_eq!(info["memos"][0]["by"], role);
+            assert_eq!(info["memos"][0]["text"], "synthetic first memo");
+            assert!(info["visits_left"].is_null());
+        }
+        crate::member_privacy::member_privacy_set("none".into(), 6).unwrap();
+        for (path, method) in [("/api/scan/member-info?code=ROOT/M%23ABCD", "GET"), ("/api/scan/member-memo", "POST")] {
+            let (status, body) = request(&st, path, method, Some("staff"), "localhost", json!({})).await;
+            assert_eq!(status, StatusCode::FORBIDDEN);
+            assert_eq!(body["code"], "MEMBER_INFO_OFF");
+        }
+    }
+
+    #[tokio::test]
+    async fn member_policy_and_registration_return_real_http_codes() {
+        let _home = TestHome::new();
+        let st = ServerState::default();
+        for role in ["staff", "scanner", "owner"] {
+            let (status, policy) = request(&st, "/api/scan/member-policy", "GET", Some(role), "localhost", json!({})).await;
+            assert_eq!(status, StatusCode::OK);
+            assert_eq!(policy, json!({"level":"name_last4", "retention_months":6,
+                "consent_version": crate::member_privacy::CONSENT_VERSION,
+                "consent_text": crate::member_privacy::consent_text(&crate::member_privacy::Policy::default())}));
+        }
+        let (status, body) = request(&st, "/api/scan/member-policy", "GET", None, "localhost", json!({})).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+        assert_eq!(body["code"], "BAD_TOKEN");
+        for (role, expected_status, expected_code) in [
+            (None, StatusCode::UNAUTHORIZED, "BAD_TOKEN"),
+            (Some("staff"), StatusCode::BAD_REQUEST, "MEMBER_REGISTRATION_FAILED"),
+        ] {
+            let mut req = axum::http::Request::builder().uri("/api/scan/member")
+                .method("POST").header("host", "localhost").header("content-type", "application/json");
+            if let Some(role) = role {
+                req = req.header("x-playx-token", st.role_tokens.lock().unwrap()[role].clone());
+            }
+            let response = build_phone_router(st.clone())
+                .oneshot(req.body(axum::body::Body::from("{invalid synthetic JSON")).unwrap()).await.unwrap();
+            assert_eq!(response.status(), expected_status);
+            let bytes = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+            let body: Value = serde_json::from_slice(&bytes).unwrap();
+            assert_eq!(body["code"], expected_code);
+        }
+        for consent in [None, Some(json!(false)), Some(json!("true")), Some(json!(1))] {
+            let mut body = json!({"code":"test", "name":"Synthetic Member", "phone":"1234"});
+            if let Some(consent) = consent { body["consent"] = json!(consent); }
+            let (status, body) = request(&st, "/api/scan/member", "POST", Some("staff"), "localhost", body).await;
+            assert_eq!(status, StatusCode::BAD_REQUEST);
+            assert_eq!(body["code"], "CONSENT_REQUIRED");
+        }
+        for version in [None, Some(json!("member-privacy-v1")), Some(json!(1))] {
+            let mut body = json!({"code":"test", "name":"Synthetic Member", "consent":true});
+            if let Some(version) = version { body["consent_version"] = version; }
+            let (status, body) = request(&st, "/api/scan/member", "POST", Some("staff"), "localhost", body).await;
+            assert_eq!(status, StatusCode::BAD_REQUEST);
+            assert_eq!(body["code"], "CONSENT_VERSION_STALE");
+        }
+        for field in ["code", "name", "phone"] {
+            let mut body = json!({"code":"test", "name":"Synthetic Member", "phone":"1234", "consent":false});
+            body[field] = json!(123);
+            let (status, body) = request(&st, "/api/scan/member", "POST", Some("staff"), "localhost", body).await;
+            assert_eq!(status, StatusCode::BAD_REQUEST);
+            assert_eq!(body["code"], "MEMBER_REGISTRATION_FAILED");
+        }
+        crate::member_privacy::member_privacy_set("none".into(), 6).unwrap();
+        let (status, body) = request(&st, "/api/scan/member", "POST", Some("staff"), "localhost",
+            json!({"code":"test", "name":"Synthetic Member", "consent":true, "consent_version":crate::member_privacy::CONSENT_VERSION})).await;
+        assert_eq!(status, StatusCode::FORBIDDEN);
+        assert_eq!(body["code"], "MEMBER_INFO_OFF");
+        crate::member_privacy::member_privacy_set("name".into(), 3).unwrap();
+        let issued = crate::ticket::issue_for_order("policy-test", &json!([{"name":"Pass", "qty":1}]),
+            &json!([{"name":"Pass", "pass_months":1}]), now_unix());
+        let (status, body) = request(&st, "/api/scan/member", "POST", Some("staff"), "localhost",
+            json!({"code":issued[0]["code"], "name":"Synthetic Member", "phone":"12345678", "consent":true, "consent_version":crate::member_privacy::CONSENT_VERSION})).await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        let (status, body) = request(&st, "/api/scan/in", "POST", Some("staff"), "localhost", json!({"asset":"test"})).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+        assert_eq!(body["code"], "FORBIDDEN_ROLE");
+        std::fs::write(crate::paths::app_file("member_privacy.json"), b"invalid").unwrap();
+        let (status, body) = request(&st, "/api/scan/member-policy", "GET", Some("staff"), "localhost", json!({})).await;
+        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(body["code"], "MEMBER_POLICY_UNAVAILABLE");
+    }
+
+    #[tokio::test]
+    async fn auth_failures_have_distinct_json_codes() {
+        let _home = TestHome::new();
+        let st = ServerState::default();
+        for (path, role, host, body, code) in [
+            (
+                "/api/admin/state",
+                None,
+                "localhost",
+                json!({"address":"a", "state":"paid"}),
+                "BAD_TOKEN",
+            ),
+            (
+                "/api/admin/publish",
+                Some("staff"),
+                "localhost",
+                json!({"shop":{}, "ai":""}),
+                "FORBIDDEN_ROLE",
+            ),
+            (
+                "/api/admin/state",
+                Some("owner"),
+                "shop.example",
+                json!({"address":"a", "state":"paid"}),
+                "REMOTE_OFF",
+            ),
+        ] {
+            let (status, value) = request(&st, path, "POST", role, host, body).await;
+            assert_eq!(status, StatusCode::UNAUTHORIZED);
+            assert_eq!(value["code"], code);
+        }
+    }
+
+    #[tokio::test]
+    async fn admin_state_checks_existence_payment_staleness_and_every_transition() {
+        let _home = TestHome::new();
+        let st = ServerState::default();
+        let at = now_unix();
+        for (current, target, from, expected, code) in [
+            (None, "invalid", None, 400, None),
+            (None, "paid", None, 404, None),
+            (Some(WAITING), "paid", None, 409, Some("NOT_PAID")),
+            (Some(SHORT), "making", None, 409, Some("NOT_PAID")),
+            (Some(EXPIRED), "done", None, 409, Some("NOT_PAID")),
+            (Some("making"), "ready", Some("paid"), 409, Some("STALE")),
+        ] {
+            st.order_state.lock().unwrap().clear();
+            if let Some(current) = current {
+                insert(&st, "order", current, at);
+            }
+            let before = st.order_state.lock().unwrap().clone();
+            let (status, value) = request(
+                &st,
+                "/api/admin/state",
+                "POST",
+                Some("owner"),
+                "localhost",
+                json!({"address":"order", "state":target, "from":from}),
+            )
+            .await;
+            assert_eq!(status.as_u16(), expected);
+            if let Some(code) = code {
+                assert_eq!(value["code"], code);
+            }
+            assert_eq!(*st.order_state.lock().unwrap(), before);
+        }
+        sale("order", at);
+        st.order_paid_at.lock().unwrap().insert("order".into(), at - 30);
+        for (ci, current) in STATES.iter().enumerate() {
+            for (ni, target) in STATES.iter().enumerate() {
+                for from in [None, Some(*current)] {
+                    insert(&st, "order", current, at);
+                    let (status, value) = request(
+                        &st,
+                        "/api/admin/state",
+                        "POST",
+                        Some("staff"),
+                        "localhost",
+                        json!({"address":"order", "state":target, "from":from}),
+                    )
+                    .await;
+                    if ci.abs_diff(ni) > 1 {
+                        assert_eq!(status, StatusCode::BAD_REQUEST);
+                        assert_eq!(value["code"], "SKIPPED_STATE");
+                    } else {
+                        assert_eq!(status, StatusCode::OK);
+                        assert_eq!(value["ticket"], 7);
+                        let restored = ServerState::default();
+                        restore_order_state(&restored);
+                        assert_eq!(restored.order_state.lock().unwrap()["order"].0, *target);
+                        assert_eq!(restored.order_paid_at.lock().unwrap()["order"], at - 30);
+                    }
+                }
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn admin_states_uses_sale_or_pending_details_and_empty_defaults() {
+        let _home = TestHome::new();
+        let st = ServerState::default();
+        let at = now_unix();
+        sale("sold", at);
+        open("pending", at - 30);
+        insert(&st, "sold", "ready", at);
+        insert(&st, "pending", WAITING, at);
+        insert(&st, "missing", "done", at);
+        let (status, value) = request(
+            &st,
+            "/api/admin/states",
+            "GET",
+            Some("staff"),
+            "localhost",
+            json!({}),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        for row in value["orders"].as_array().unwrap() {
+            assert_eq!(row["table"], "12");
+            if row["address"] == "missing" {
+                assert_eq!(row["items"], json!([]));
+                for key in ["amount", "currency", "ordered_at"] {
+                    assert!(row[key].is_null());
+                }
+            } else {
+                assert_eq!(
+                    row["items"],
+                    json!([{ "name":"커피", "options":["아이스"], "qty":2 }])
+                );
+                assert_eq!(row["amount"], 9000.0);
+                assert_eq!(row["currency"], "KRW");
+                assert_eq!(row["ordered_at"], at - 30);
+            }
+        }
     }
 }

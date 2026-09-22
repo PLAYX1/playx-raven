@@ -100,6 +100,34 @@ fn save(rows: &[Value]) -> Result<(), String> {
     .map_err(|e| format!("표를 저장하지 못했습니다: {e}"))
 }
 
+/// Remove legacy promotion-name copies; new promotions no longer create them.
+pub(crate) fn redact_member_names(assets: &[String]) -> Result<(), String> {
+    let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let bytes = match std::fs::read(file()) {
+        Ok(bytes) => bytes,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(e.to_string()),
+    };
+    let mut data: Value = serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
+    let rows = data.get_mut("tickets").and_then(Value::as_array_mut)
+        .ok_or_else(|| "표 장부 형식이 올바르지 않습니다.".to_string())?;
+    let mut changed = false;
+    for row in rows {
+        if assets.iter().any(|a| row["code"].as_str() == Some(a.as_str())) {
+            if let Some(obj) = row.as_object_mut() {
+                changed |= obj.remove("name").is_some();
+            }
+        }
+    }
+    if changed {
+        let tmp = crate::paths::app_file("tickets.json.privacy.tmp");
+        std::fs::write(&tmp, serde_json::to_vec_pretty(&data).map_err(|e| e.to_string())?)
+            .map_err(|e| e.to_string())?;
+        std::fs::rename(tmp, file()).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 /// 이 이용권이 언제까지인가. **달력으로** 센다.
 ///
 /// 산 날이 1일째다. 그래서 하루권은 그날 하루, 한달권은 다음 달 같은 날의
@@ -350,11 +378,55 @@ pub fn ticket_to_member(
     code: String,
     name: String,
     phone: String,
+    consent: bool,
+    consent_version: String,
+    memo: String,
+    by: String,
     now_unix: i64,
 ) -> Result<Value, String> {
+    // HTTP는 인증과 본문 형식을 먼저 검사한다. 두 경로 모두 동의 → 동의문 버전 →
+    // 수집 정책(안 받음 포함) → 입력값과 표 순서로 검사한다.
+    if !consent {
+        return Err("CONSENT_REQUIRED: 손님의 동의를 확인해 주세요.".into());
+    }
+    if consent_version != crate::member_privacy::CONSENT_VERSION {
+        return Err("CONSENT_VERSION_STALE: 동의 내용이 바뀌었어요. 다시 읽고 동의해 주세요.".into());
+    }
+    let policy = crate::member_privacy::member_privacy_get()?;
+    if policy.level == "none" {
+        return Err("MEMBER_INFO_OFF: 이 가게는 회원 정보를 받지 않습니다.".into());
+    }
+    if matches!(policy.level.as_str(), "name_last4" | "name_phone") && phone.chars().count() > 20 {
+        return Err("전화번호를 확인해 주세요.".into());
+    }
+    if name.chars().any(char::is_control) {
+        return Err("이름에는 제어문자를 넣을 수 없습니다.".into());
+    }
+    let name: String = name.trim().chars().take(40).collect();
+    let phone = match policy.level.as_str() {
+        "name" => String::new(),
+        "name_last4" => {
+            let digits: String = phone.chars().filter(char::is_ascii_digit).collect();
+            if digits.is_empty() {
+                return Err("전화번호의 숫자를 적어 주세요.".into());
+            }
+            digits[digits.len().saturating_sub(4)..].to_string()
+        }
+        "name_phone" => {
+            if phone.chars().any(char::is_control) || phone.trim().is_empty()
+                || !phone.chars().all(|c| c.is_ascii_digit() || c == '-' || c == ' ' || c == '+')
+                || !phone.chars().any(|c| c.is_ascii_digit()) {
+                return Err("전화번호를 확인해 주세요.".into());
+            }
+            phone.trim().to_string()
+        }
+        _ => unreachable!("validated policy"),
+    };
     if name.trim().is_empty() {
         return Err("이름을 적어 주세요.".into());
     }
+    let by = if matches!(by.as_str(), "owner" | "staff" | "scanner") { by } else { "owner".into() };
+    let first_memo = if memo.trim().is_empty() { None } else { Some((by, crate::pass::clean_memo(&memo)?)) };
     let want = code.trim().to_uppercase();
 
     let (item, until) = {
@@ -375,7 +447,7 @@ pub fn ticket_to_member(
     // 회원 번호 자리에 **표 번호를 그대로** 쓴다. 손님이 이미 그 번호가
     // 적힌 화면을 들고 있고, 문 앞에서 찍는 QR 도 그것이다. 새 번호를 주면
     // 손님이 든 표와 명단이 어긋난다.
-    crate::pass::save_member(
+    crate::pass::insert_member_if_absent(
         want.clone(),
         name.trim().to_string(),
         phone.trim().to_string(),
@@ -384,9 +456,11 @@ pub fn ticket_to_member(
         0,
         format!("카운터에서 산 {item}"),
         now_unix,
-        // 문 앞에서는 이름·전화만 받는다. 나머지는 사장이 나중에 채운다 —
-        // 줄이 선 자리에서 생년월일까지 물으면 손님이 돌아선다.
-        None,
+        Some(json!({
+            "consent_at": now_unix,
+            "consent_version": crate::member_privacy::CONSENT_VERSION,
+        })),
+        first_memo,
     )?;
 
     with_rows(|rows| {
@@ -396,7 +470,8 @@ pub fn ticket_to_member(
         {
             if let Some(m) = r.as_object_mut() {
                 m.insert("promoted".into(), json!(true));
-                m.insert("name".into(), json!(name.trim()));
+                // 이름은 회원 장부에만 저장한다. 표에 개인정보 사본을 만들지 않는다.
+                m.remove("name");
             }
         }
     });
@@ -426,6 +501,106 @@ pub fn ticket_list(now_unix: i64) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn promotion_stores_memo_only_in_member_ledger() {
+        crate::member_privacy::tests::in_sandbox(|| {
+            let version = crate::member_privacy::CONSENT_VERSION;
+            for by in ["owner", "staff", "scanner", "invalid"] {
+                let code = one(&format!("synthetic-memo-{by}"), "한달권", NOON)["code"].as_str().unwrap().to_string();
+                for memo in ["synthetic\tbad".into(), "가".repeat(301)] {
+                    let error = ticket_to_member(code.clone(), "Synthetic Member".into(), "0000".into(),
+                        true, version.into(), memo, by.into(), NOON).unwrap_err();
+                    assert!(error.starts_with("MEMO_INVALID:"));
+                    assert!(crate::pass::member_info(&code, NOON).unwrap_err().starts_with("NOT_MEMBER:"));
+                }
+                let memo = format!("synthetic first memo {by}");
+                ticket_to_member(code.clone(), "Synthetic Member".into(), "0000".into(),
+                    true, version.into(), memo.clone(), by.into(), NOON).unwrap();
+                let info = crate::pass::member_info(&code, NOON).unwrap();
+                assert_eq!(info["memos"], json!([{"at":NOON, "by":if by == "invalid" { "owner" } else { by }, "text":memo}]));
+                let raw = std::fs::read_to_string(crate::paths::app_file("tickets.json")).unwrap();
+                assert!(!raw.contains(&memo));
+                assert!(!raw.contains("Synthetic Member"));
+            }
+        });
+    }
+
+    #[test]
+    fn promotion_version_phone_limits_and_concurrent_insert() {
+        crate::member_privacy::tests::in_sandbox(|| {
+            let version = crate::member_privacy::CONSENT_VERSION;
+            let code = one("synthetic-validation", "한달권", NOON)["code"].as_str().unwrap().to_string();
+            for level in ["name_phone", "name_last4"] {
+                crate::member_privacy::member_privacy_set(level.into(), 6).unwrap();
+                assert!(ticket_to_member(code.clone(), "Synthetic Member".into(), "0".repeat(21), true,
+                    version.into(), "".into(), "owner".into(), NOON).is_err());
+            }
+            for stale in ["", "member-privacy-v1"] {
+                assert!(ticket_to_member(code.clone(), "Synthetic Member".into(), "0000".into(), true,
+                    stale.into(), "".into(), "owner".into(), NOON).unwrap_err().starts_with("CONSENT_VERSION_STALE: "));
+            }
+            crate::member_privacy::member_privacy_set("name_phone".into(), 6).unwrap();
+            ticket_to_member(code, "Synthetic Member".into(), "0".repeat(20), true, version.into(), "".into(), "owner".into(), NOON).unwrap();
+            for i in 0..8 {
+                let code = one(&format!("synthetic-race-{i}"), "한달권", NOON)["code"].as_str().unwrap().to_string();
+                let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
+                let threads: Vec<_> = (0..2).map(|_| {
+                    let code = code.clone();
+                    let barrier = barrier.clone();
+                    std::thread::spawn(move || {
+                        barrier.wait();
+                        ticket_to_member(code, "Synthetic Member".into(), "0000".into(), true, version.into(), "".into(), "owner".into(), NOON)
+                    })
+                }).collect();
+                let results: Vec<_> = threads.into_iter().map(|t| t.join().unwrap()).collect();
+                assert_eq!(results.iter().filter(|r| r.is_ok()).count(), 1);
+                assert_eq!(results.iter().filter(|r| r.is_err()).count(), 1);
+                let members = crate::pass::list_members(NOON).unwrap();
+                assert_eq!(members["members"].as_array().unwrap().iter().filter(|r| r["asset"] == code).count(), 1);
+            }
+        });
+    }
+
+    #[test]
+    fn promotion_enforces_collection_consent_and_validation() {
+        crate::member_privacy::tests::in_sandbox(|| {
+            let make = |id: &str| one(id, "한달권", NOON)["code"].as_str().unwrap().to_string();
+            let code = make("blocked");
+            crate::member_privacy::member_privacy_set("none".into(), 6).unwrap();
+            assert!(ticket_to_member(code.clone(), "Synthetic Member".into(), "0000".into(), true, crate::member_privacy::CONSENT_VERSION.into(), "".into(), "owner".into(), NOON)
+                .unwrap_err().starts_with("MEMBER_INFO_OFF:"));
+            crate::member_privacy::member_privacy_set("name".into(), 6).unwrap();
+            assert!(ticket_to_member(code.clone(), "Synthetic Member".into(), "".into(), false, crate::member_privacy::CONSENT_VERSION.into(), "".into(), "owner".into(), NOON)
+                .unwrap_err().starts_with("CONSENT_REQUIRED:"));
+            for name in ["a\nb", "a\tb", "\nSynthetic Member", " "] {
+                assert!(ticket_to_member(code.clone(), name.into(), "".into(), true, crate::member_privacy::CONSENT_VERSION.into(), "".into(), "owner".into(), NOON).is_err());
+            }
+            for (level, input, expected) in [
+                ("name", "000-0000-0000", ""),
+                ("name_last4", "000-0000-0000", "0000"),
+                ("name_last4", "00", "00"),
+                ("name_phone", "000-0000-0000", "000-0000-0000"),
+            ] {
+                crate::member_privacy::member_privacy_set(level.into(), 6).unwrap();
+                let code = make(&format!("{level}-{input}"));
+                ticket_to_member(code.clone(), format!(" {} ", "가".repeat(45)), input.into(), true, crate::member_privacy::CONSENT_VERSION.into(), "".into(), "owner".into(), NOON).unwrap();
+                let members = crate::pass::list_members(NOON).unwrap();
+                let row = members["members"].as_array().unwrap().iter().find(|r| r["asset"] == code).unwrap();
+                assert_eq!(row["phone"], expected);
+                assert_eq!(row["name"].as_str().unwrap().chars().count(), 40);
+                assert_eq!(row["extra"]["consent_at"], NOON);
+                assert_eq!(row["extra"]["consent_version"], crate::member_privacy::CONSENT_VERSION);
+                assert!(read_rows().iter().find(|r| r["code"] == code).unwrap().get("name").is_none());
+            }
+            for (level, phones) in [("name_last4", vec!["", "abc"]), ("name_phone", vec!["", "00\n00", "abc"])] {
+                crate::member_privacy::member_privacy_set(level.into(), 6).unwrap();
+                for phone in phones {
+                    assert!(ticket_to_member(code.clone(), "Synthetic Member".into(), phone.into(), true, crate::member_privacy::CONSENT_VERSION.into(), "".into(), "owner".into(), NOON).is_err());
+                }
+            }
+        });
+    }
 
     fn menu() -> Value {
         json!([

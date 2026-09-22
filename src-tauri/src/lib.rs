@@ -32,6 +32,7 @@ mod ipfsconf;
 mod mining;
 mod msg;
 mod pass;
+mod member_privacy;
 mod place;
 mod price;
 mod refund;
@@ -181,6 +182,9 @@ pub fn run() {
             ticket::ticket_use,
             ticket::ticket_list,
             ticket::ticket_to_member,
+            member_privacy::member_privacy_get,
+            member_privacy::member_privacy_state,
+            member_privacy::member_privacy_set,
             relay::relay_status,
             devfee::fee_pay,
             shopkey::shop_announce,
@@ -264,6 +268,8 @@ pub fn run() {
             pass::rebuild_members,
             pass::unclaimed_numbers,
             pass::remove_member,
+            pass::member_memo_add,
+            pass::member_memo_delete,
             refund::refund,
             refund::refund_payer,
             moving::move_offer,
@@ -467,6 +473,7 @@ pub fn run() {
         .setup(|app| {
             // 앱 자료 폴더를 이 사용자 전용으로 잠근다(다른 계정이 열쇠·장부를 못 읽게).
             app_folder::harden();
+            tauri::async_runtime::spawn(member_privacy::run_cleanup());
             // 🔴 「장사」면 이 컴퓨터가 잠들지 않게 붙잡는다. 노드를 앱에서
             //    떼어 놓는 것만으로는 부족하다 — 컴퓨터가 자면 노드도 멈추고,
             //    밤새 들어온 입금이 아침까지 확인되지 않는다.

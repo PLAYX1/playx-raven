@@ -216,6 +216,48 @@ fn pending_path() -> PathBuf {
     base().join("pending.json")
 }
 
+/// 주문 상태 파일의 결제 주장을 실제 판매 장부와 대조한다.
+pub fn was_sold_near(address: &str, near_unix: i64) -> bool {
+    settled_order(address, near_unix).is_some()
+}
+
+/// 같은 주소의 실제 판매 줄(품목·금액·통화·주문시각 포함).
+pub fn settled_order(address: &str, near_unix: i64) -> Option<serde_json::Value> {
+    let tz = 0;
+    let from = local_ymd(near_unix.saturating_sub(2 * 86_400), tz);
+    let to = local_ymd(near_unix.saturating_add(2 * 86_400), tz);
+    read_rows(from, to, tz, None)
+        .into_iter()
+        .find(|r| r["kind"] == "sale" && r["address"].as_str() == Some(address))
+}
+
+/// 미결제 주문을 pending.json 변경 없이 읽는다.
+pub fn pending_order(address: &str) -> Option<serde_json::Value> {
+    pending_load().as_object()?.get(address).cloned()
+}
+
+/// 최근 14일 판매 줄을 한 번 읽어 주소로 색인한다. 주문 상태의 7일 정리보다 넉넉하다.
+pub fn recent_sold_index(now_unix: i64) -> std::collections::HashMap<String, Value> {
+    let tz = 0;
+    let from = local_ymd(now_unix.saturating_sub(14 * 86_400), tz);
+    let to = local_ymd(now_unix, tz);
+    read_rows(from, to, tz, None)
+        .into_iter()
+        .filter(|r| r["kind"] == "sale")
+        .filter_map(|r| r["address"].as_str().map(|a| (a.to_string(), r.clone())))
+        .collect()
+}
+
+/// pending.json 을 한 번만 읽어 주소로 색인한다.
+pub fn pending_index() -> std::collections::HashMap<String, Value> {
+    pending_load()
+        .as_object()
+        .cloned()
+        .unwrap_or_default()
+        .into_iter()
+        .collect()
+}
+
 fn pending_load() -> Value {
     std::fs::read_to_string(pending_path())
         .ok()

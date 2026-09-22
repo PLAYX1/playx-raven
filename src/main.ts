@@ -9947,6 +9947,69 @@ async function doorSearch() {
   }
 }
 
+async function loadMemberPrivacy() {
+  const controls = ["mp-level", "mp-retention", "mp-save"];
+  controls.forEach((id) => ($(id) as HTMLInputElement).disabled = true);
+  try {
+    const state = await invoke<{
+      policy: { level: string; retention_months: number } | null;
+      policy_error: string | null;
+      consent_version: string;
+      consent_text: Record<string, string> | null;
+      last_cleanup: { at: number; ok: boolean; redacted: number; error: string | null } | null;
+    }>("member_privacy_state");
+    if (state.policy) {
+      ($("mp-level") as HTMLSelectElement).value = state.policy.level;
+      ($("mp-retention") as HTMLSelectElement).value = String(state.policy.retention_months);
+    }
+    // 손상된 설정도 화면에서 다시 저장할 수 있어야 한다.
+    controls.forEach((id) => ($(id) as HTMLInputElement).disabled = false);
+    $("mp-status").classList.toggle("danger", !!state.policy_error);
+    setCopyText($("mp-status"), () => state.policy_error
+      ? t("회원 정보 설정 파일이 손상되었어요. 설정을 다시 저장해 주세요.") : "");
+    setCopyText($("mp-consent"), () => state.consent_text?.[lang] || state.consent_text?.ko || "");
+    const cleanup = state.last_cleanup;
+    $("mp-cleanup").classList.toggle("danger", !!cleanup && !cleanup.ok);
+    setCopyText($("mp-cleanup"), () => !cleanup
+      ? t("아직 자동 정리를 하지 않았어요")
+      : cleanup.ok
+        ? tf("마지막 자동 정리: {0} · {1}명 정리", new Date(cleanup.at * 1000).toLocaleString(lang), cleanup.redacted)
+        : tf("마지막 자동 정리가 실패했어요: {0} 하루 뒤 다시 시도해요.", t(cleanup.error || "정리 중 오류가 났습니다.")));
+  } catch {
+    setCopyText($("mp-status"), () => t("회원 정보 설정을 읽지 못했습니다."));
+  }
+}
+
+async function saveMemberPrivacy() {
+  const button = $("mp-save") as HTMLButtonElement;
+  button.disabled = true;
+  try {
+    await invoke("member_privacy_set", {
+      level: ($("mp-level") as HTMLSelectElement).value,
+      retentionMonths: Number(($("mp-retention") as HTMLSelectElement).value),
+    });
+    await loadMemberPrivacy();
+    setCopyText($("mp-status"), () => t("회원 정보 설정을 저장했습니다."));
+  } catch {
+    setCopyText($("mp-status"), () => t("회원 정보 설정을 저장하지 못했습니다."));
+  } finally { button.disabled = false; }
+}
+
+async function deleteMember() {
+  const asset = msEditing;
+  if (!asset || !confirm(t("이 회원의 정보와 출입 기록을 모두 지울까요? 되돌릴 수 없습니다."))) return;
+  const button = $("ms-delete") as HTMLButtonElement;
+  button.disabled = true;
+  try {
+    await invoke("remove_member", { asset });
+    $("msheet").classList.add("hidden");
+    msEditing = null;
+    await Promise.all([doorSearch(), loadMembers()]);
+  } catch {
+    setCopyText($("ms-result"), () => t("회원 정보를 지우지 못했습니다."));
+  } finally { button.disabled = false; }
+}
+
 async function loadMembers() {
   if ($("dr-list").innerHTML === "") return;
   try {
@@ -9974,7 +10037,7 @@ async function loadMembers() {
     $("dr-list").innerHTML = list.length
       ? group(t("곧 끝납니다"), ending, t("지금 카운터에서 말씀드리면 대개 갱신하십니다.")) +
         group(t("다니는 중"), going, "") +
-        group(t("끝난 회원"), over, t("지우지 않았습니다 — 다시 오시면 그대로 이어집니다."))
+        group(t("끝난 회원"), over, t("회원권과 출입 기록은 남습니다. 보관기간이 지난 개인정보는 자동 삭제됩니다."))
       : emptyWithRaven("아직 등록된 회원이 없습니다.<br />「회원 등록」으로 첫 회원을 넣어 보세요.", "hello");
     bindMemberCards("dr-list");
     setCopyText($("dr-note"), () => `${t("다니는 중")} ${live.length}${t("명")} · ${t("끝남")} ${over.length}${t("명")}`);
@@ -9983,8 +10046,78 @@ async function loadMembers() {
   }
 }
 
+type MemberMemo = { at: number; by: "owner" | "staff" | "scanner"; text: string };
+
+function memberMemoError(error: unknown) {
+  const message = String(error);
+  const source = message.startsWith("MEMO_INVALID:") ? "메모는 1~300자 한 줄로 적어 주세요."
+    : message.startsWith("MEMO_LIMIT:") ? "메모는 한 회원에 50개까지 적을 수 있습니다."
+    : message === "메모가 바뀌었습니다. 다시 열어 주세요." ? message : "메모를 저장하지 못했습니다.";
+  setCopyText($("ms-result"), () => t(source));
+}
+
+function renderMemberMemos(asset: string, memos: MemberMemo[]) {
+  const list = $("ms-memo-list");
+  list.replaceChildren();
+  if (!memos.length) {
+    const empty = document.createElement("p");
+    empty.className = "meta";
+    setCopyText(empty, () => t("아직 메모가 없습니다"));
+    list.append(empty);
+  }
+  memos.forEach((memo, index) => {
+    const row = document.createElement("div");
+    const meta = document.createElement("div");
+    meta.className = "meta";
+    const who = { owner: "사장", staff: "직원", scanner: "문 앞" }[memo.by];
+    setCopyText(meta, () => `${new Date(memo.at * 1000).toLocaleString()} · ${t(who)}`);
+    const text = document.createElement("p");
+    // 사용자가 적은 메모는 HTML로 해석하거나 자동 번역하지 않는다.
+    text.setAttribute("translate", "no");
+    text.textContent = memo.text;
+    const button = document.createElement("button");
+    button.className = "ghost small";
+    setCopyText(button, () => t("지우기"));
+    button.onclick = async () => {
+      if (msEditing !== asset || !confirm(t("이 메모를 지울까요?"))) return;
+      button.disabled = true;
+      try {
+        const result = await invoke<{ memos: MemberMemo[] }>("member_memo_delete", { asset, at: memo.at, index });
+        if (msEditing === asset) {
+          $("ms-result").textContent = "";
+          renderMemberMemos(asset, result.memos);
+        }
+      } catch (error) { if (msEditing === asset) memberMemoError(error); }
+      finally { button.disabled = false; }
+    };
+    row.append(meta, text, button);
+    list.append(row);
+  });
+}
+
+async function addMemberMemo() {
+  const asset = msEditing;
+  if (!asset) return;
+  const button = $("ms-memo-add") as HTMLButtonElement;
+  const input = $("ms-memo-new") as HTMLInputElement;
+  button.disabled = true;
+  try {
+    const result = await invoke<{ memos: MemberMemo[] }>("member_memo_add", { asset, text: input.value, nowUnix: nowSec() });
+    if (msEditing === asset) {
+      input.value = "";
+      $("ms-result").textContent = "";
+      renderMemberMemos(asset, result.memos);
+    }
+  } catch (error) { if (msEditing === asset) memberMemoError(error); }
+  finally { button.disabled = false; }
+}
+
 async function openMember(asset?: string): Promise<void> {
   msEditing = asset || null;
+  $("ms-memos").classList.toggle("hidden", !asset);
+  $("ms-memo-list").replaceChildren();
+  ($("ms-memo-new") as HTMLInputElement).value = "";
+  $("ms-delete").style.display = asset ? "" : "none";
   $("ms-title").textContent = asset ? "회원 고치기" : "회원 등록";
   $("ms-chain").style.display = asset ? "none" : "";
   $("ms-result").innerHTML = "";
@@ -10003,6 +10136,7 @@ async function openMember(asset?: string): Promise<void> {
       ($("ms-months") as HTMLSelectElement).value = "0";
       set("ms-visits", m.visits_total || 10);
       set("ms-note", m.note);
+      renderMemberMemos(asset, m.memos || []);
       // 추가 항목도 되살린다. 안 하면 전화번호만 고치러 열었다가 저장하는
       // 순간 생년·성별이 빈 값으로 덮인다.
       set("ms-birth", m.extra?.birth_year);
@@ -15483,6 +15617,11 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("ms-start").addEventListener("change", recalcPeriod);
   $("ms-months").addEventListener("change", recalcPeriod);
   $("ms-save").addEventListener("click", saveMember);
+  $("ms-delete").addEventListener("click", deleteMember);
+  $("ms-memo-add").addEventListener("click", addMemberMemo);
+  $("mp-save").addEventListener("click", saveMemberPrivacy);
+  $("mp-reload").addEventListener("click", loadMemberPrivacy);
+  void loadMemberPrivacy();
   $("key-save").addEventListener("click", saveKeys);
   wirePhoneTransaction(invoke, t);
   $("rv-phone-open").addEventListener("click", () => void openWebWallet());
