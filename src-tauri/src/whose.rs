@@ -15,7 +15,8 @@
 //! 빈 값이면 키풀에서 새 키). 발행할 때마다 주인 표의 주소가 바뀌니, 「주인 표를
 //! 가진 주소」로 발행자를 알아보는 공유 카드의 인증이 매번 깨졌다. 그래서 발행할 때
 //! 주인 표가 **지금 있는 주소**를 `change_address` 로 넣어 제자리로 돌아오게 한다
-//! (`owner_pin` · `with_change`).
+//! (`owner_pin` · `with_change`). 자격 붙이기·떼기(`#TAG` 자신을 씀)와
+//! 동결·해제(`NAME!` 를 씀)도 같은 규칙이다.
 //!
 //! ## 여기서 부르는 노드 명령은 전부 읽기다
 //!
@@ -266,16 +267,18 @@ pub fn owner_places(ops: &[Outpoint], seen: &[Option<Seen>]) -> Vec<Value> {
         .collect()
 }
 
-/// 표 하나의 조각들이 **한 주소에만, 확인된 채로** 있으면 그 주소.
+/// 표 하나의 조각들이 **모두 한 주소에** 있으면 그 주소. 확인 0 이어도 고정한다.
 ///
-/// 아니면 이유: `not_found`(지갑에 없음) · `unknown`(따라가지 못함) ·
-/// `many`(두 주소 이상) · `unconfirmed`(확인 0 만 있음).
+/// 🔴 확인 0 을 빼면 연달아 발행할 때(새 브랜드 직후, 한 블록 안에 두 번) 두 번째가
+///    다시 `""` 로 나가 표가 새 거스름 주소로 옮겨진다. 한 주소면 확인 전이어도 그
+///    주소는 이 지갑 것이다 — `locate` 가 `validateaddress` 로 한 번 더 본다.
+///
+/// 아니면 이유: `not_found`(지갑에 없음) · `unknown`(따라가지 못함) · `many`(두 주소 이상).
 pub fn pin_from(seen: &[Option<Seen>]) -> Result<String, &'static str> {
     if seen.is_empty() {
         return Err("not_found");
     }
     let mut addrs: Vec<&str> = Vec::new();
-    let mut confirmed = false;
     for s in seen {
         let Some(s) = s else { return Err("unknown") };
         if s.addresses.is_empty() {
@@ -286,11 +289,9 @@ pub fn pin_from(seen: &[Option<Seen>]) -> Result<String, &'static str> {
                 addrs.push(a);
             }
         }
-        confirmed |= s.confirmations >= 1;
     }
     match addrs.as_slice() {
-        [one] if confirmed => Ok(one.to_string()),
-        [_] => Err("unconfirmed"),
+        [one] => Ok(one.to_string()),
         _ => Err("many"),
     }
 }
@@ -310,6 +311,15 @@ pub fn pin_from(seen: &[Option<Seen>]) -> Result<String, &'static str> {
 /// | `reissue` | `PLAYX` · `$SHARE` | `PLAYX!` · `SHARE!` |
 /// | `issuerestrictedasset` | `$SHARE` | `SHARE!` |
 /// | `issuequalifierasset` | `#KYC/#KR` | `#KYC` (자격 증명은 주인 표 대신 자기 자신을 쓴다) |
+/// | `addtagtoaddress` · `removetagfromaddress` | `#KYC` · `#KYC/#KR` | 그 자격 표 자신 |
+/// | `freezeaddress` · `unfreezeaddress` | `$SHARE` | `SHARE!` |
+/// | `freezerestrictedasset` · `unfreezerestrictedasset` | `$SHARE` | `SHARE!` |
+///
+/// 붙이기·떼기·동결·해제의 「쓰는 표」는 레이븐코어 `rpc/assets.cpp` 에서 직접 확인했다:
+/// `UpdateAddressTag` 는 `CAssetTransfer(tag_name, 1 * COIN, …)` 을 change_address 로,
+/// `UpdateAddressRestriction`·`UpdateGlobalRestrictedAsset` 는
+/// `CAssetTransfer(restricted_name.substr(1) + OWNER_TAG, …)` 을 change_address 로 보낸다.
+/// 비워 두면 둘 다 `CreateNewChangeAddress` — 새 거스름 주소로 옮겨진다.
 pub fn parent_token(method: &str, name: &str) -> Option<String> {
     let name = name.trim();
     if name.is_empty() {
@@ -319,6 +329,15 @@ pub fn parent_token(method: &str, name: &str) -> Option<String> {
         "issueunique" => Some(format!("{name}!")),
         "reissue" | "issuerestrictedasset" => Some(format!("{}!", name.trim_start_matches('$'))),
         "issuequalifierasset" => name.rfind('/').filter(|&i| i > 0).map(|i| name[..i].to_string()),
+        // 코어가 하는 대로 고친 이름: `#` 가 없으면 앞에 붙이고, 첫 `/` 뒤에도 붙인다.
+        "addtagtoaddress" | "removetagfromaddress" => Some(if name.starts_with('#') {
+            name.to_string()
+        } else {
+            format!("#{}", name.replacen('/', "/#", 1))
+        }),
+        "freezeaddress" | "unfreezeaddress" | "freezerestrictedasset" | "unfreezerestrictedasset" => {
+            Some(format!("{}!", name.trim_start_matches('$'))).filter(|t| t.len() > 1)
+        }
         "issue" => {
             if name.starts_with(['#', '$']) {
                 None
@@ -334,11 +353,15 @@ pub fn parent_token(method: &str, name: &str) -> Option<String> {
     }
 }
 
-/// 발행 명령에서 `change_address` 가 몇 번째 인자인가(rpc/assets.cpp 의 인자 표).
+/// 명령에서 `change_address` 가 몇 번째 인자인가(rpc/assets.cpp 의 인자 표).
 pub fn change_slot(method: &str) -> Option<usize> {
     match method {
         "issue" | "reissue" | "issuequalifierasset" => Some(3),
         "issueunique" | "issuerestrictedasset" => Some(4),
+        // tag_name/asset_name, address, change_address, asset_data
+        "addtagtoaddress" | "removetagfromaddress" | "freezeaddress" | "unfreezeaddress" => Some(2),
+        // asset_name, change_address, asset_data
+        "freezerestrictedasset" | "unfreezerestrictedasset" => Some(1),
         _ => None,
     }
 }
@@ -360,7 +383,7 @@ pub struct Pin {
     pub token: Option<String>,
     /// 그 표가 지금 있는 내 주소. `None` 이면 `""` 로 보낸다(노드가 새 거스름 주소로).
     pub address: Option<String>,
-    /// 못 고정한 까닭: `not_found` · `unknown` · `many` · `unconfirmed` · `not_mine`.
+    /// 못 고정한 까닭: `not_found` · `unknown` · `many` · `not_mine`.
     pub why: Option<&'static str>,
 }
 
@@ -708,10 +731,13 @@ mod tests {
     }
 
     #[test]
-    fn 한_주소에_확인된_채로_있을_때만_고정한다() {
+    fn 한_주소에_있으면_확인_0_이어도_고정한다() {
         assert_eq!(pin_from(&[txout(A, 3)]), Ok(A.to_string()));
-        assert_eq!(pin_from(&[txout(A, 3), txout(A, 0)]), Ok(A.to_string()), "같은 주소, 확인된 조각이 있다");
-        assert_eq!(pin_from(&[txout(A, 0)]), Err("unconfirmed"));
+        assert_eq!(pin_from(&[txout(A, 3), txout(A, 0)]), Ok(A.to_string()), "같은 주소, 확인 섞임");
+        // 연달아 발행 — 앞 발행이 방금 돌려보낸 표(확인 0)도 그 주소에 그대로 둔다.
+        assert_eq!(pin_from(&[txout(A, 0)]), Ok(A.to_string()));
+        assert_eq!(pin_from(&[txout(A, 0), txout(A, 0)]), Ok(A.to_string()));
+        assert_eq!(pin_from(&[txout(A, 0), txout(B, 0)]), Err("many"));
         assert_eq!(pin_from(&[txout(A, 3), txout(B, 3)]), Err("many"));
         assert_eq!(pin_from(&[txout(A, 3), None]), Err("unknown"));
         assert_eq!(pin_from(&[]), Err("not_found"));
@@ -769,6 +795,36 @@ mod tests {
         // 모르는 명령·짧은 인자는 손대지 않는다.
         assert_eq!(with_change("transfer", json!(["X", 1, B]), A), json!(["X", 1, B]));
         assert_eq!(with_change("issue", json!(["X"]), A), json!(["X"]));
+    }
+
+    #[test]
+    fn 붙이기_떼기_동결_해제도_쓰는_표를_제자리로() {
+        // 쓰는 표 — rpc/assets.cpp 의 UpdateAddressTag / UpdateAddressRestriction /
+        // UpdateGlobalRestrictedAsset 가 change_address 로 보내는 것.
+        for m in ["addtagtoaddress", "removetagfromaddress"] {
+            assert_eq!(parent_token(m, "#KYC").as_deref(), Some("#KYC"), "{m}");
+            assert_eq!(parent_token(m, "#KYC/#KR").as_deref(), Some("#KYC/#KR"), "{m}: 하위 자격은 그 자신");
+            assert_eq!(parent_token(m, "KYC/KR").as_deref(), Some("#KYC/#KR"), "{m}: 코어처럼 # 를 붙인다");
+        }
+        for m in ["freezeaddress", "unfreezeaddress", "freezerestrictedasset", "unfreezerestrictedasset"] {
+            assert_eq!(parent_token(m, "$SHARE").as_deref(), Some("SHARE!"), "{m}");
+            assert_eq!(parent_token(m, "$"), None, "{m}: 이름 없음");
+        }
+        // 거스름 자리 — 인자 표 그대로(자산 자료 칸은 비어 있으면 아예 안 보낸다).
+        let p = with_change("addtagtoaddress", json!(["#KYC", B, ""]), A);
+        assert_eq!(p, json!(["#KYC", B, A]), "받는 주소는 그대로, 거스름은 셋째");
+        let p = with_change("removetagfromaddress", json!(["#KYC", B, ""]), A);
+        assert_eq!(p, json!(["#KYC", B, A]));
+        let p = with_change("freezeaddress", json!(["$SHARE", B, ""]), A);
+        assert_eq!(p, json!(["$SHARE", B, A]));
+        let p = with_change("unfreezeaddress", json!(["$SHARE", B, ""]), A);
+        assert_eq!(p, json!(["$SHARE", B, A]));
+        let p = with_change("freezerestrictedasset", json!(["$SHARE", ""]), A);
+        assert_eq!(p, json!(["$SHARE", A]), "전체 동결은 둘째");
+        let p = with_change("unfreezerestrictedasset", json!(["$SHARE", ""]), A);
+        assert_eq!(p, json!(["$SHARE", A]));
+        // 못 찾았으면 예전처럼 "" — 노드가 새 거스름 주소를 만든다.
+        assert_eq!(with_change("freezeaddress", json!(["$SHARE", B, ""]), ""), json!(["$SHARE", B, ""]));
     }
 
     #[test]

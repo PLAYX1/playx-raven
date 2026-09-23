@@ -386,17 +386,24 @@ pub async fn tag_address(
     tag: String,
     address: String,
     passphrase: Option<String>,
-) -> Result<String, String> {
+) -> Result<Value, String> {
     let t = if tag.starts_with('#') { tag } else { format!("#{tag}") };
     let check = crate::send::check_address(address.clone()).await?;
     if !check["valid"].as_bool().unwrap_or(false) {
         return Err("주소가 올바르지 않습니다.".into());
     }
-    with_wallet(passphrase, || async {
-        let r = call_rpc("addtagtoaddress", json!([t, address, "", ""])).await?;
+    // 붙일 때 쓰는 자격 표(`#TAG` 자신)가 change_address 로 돌아온다 — 지금 있는 주소로(보내기 전에 읽기).
+    let pin = crate::whose::owner_pin("addtagtoaddress", &t).await;
+    // 🔴 자산 자료(asset_data) 칸에 "" 를 넣으면 코어가 「Invalid asset data hash」로 거절한다 —
+    //    rpc/assets.cpp 는 그 칸이 **있기만 하면** DecodeAssetData 로 풀고 비면 throw 한다.
+    //    그래서 비어 있으면 칸 자체를 보내지 않는다.
+    let txid = with_wallet(passphrase, || async {
+        let params = crate::whose::with_change("addtagtoaddress", json!([t, address, ""]), pin.change());
+        let r = call_rpc("addtagtoaddress", params).await?;
         Ok(first_txid(r))
     })
-    .await
+    .await?;
+    Ok(crate::whose::issued(txid, &pin))
 }
 
 /// Creates a restricted asset. Only addresses satisfying `verifier` may hold it.
@@ -476,22 +483,31 @@ pub async fn freeze(
     address: Option<String>,
     whole_asset: bool,
     passphrase: Option<String>,
-) -> Result<String, String> {
+) -> Result<Value, String> {
     if !asset.starts_with('$') {
         return Err("제한 자산($로 시작하는 것)만 동결할 수 있습니다.".into());
     }
-    with_wallet(passphrase, || async {
-        let r = if whole_asset {
-            call_rpc("freezerestrictedasset", json!([asset, "", ""])).await?
-        } else {
-            let a = address
-                .clone()
-                .ok_or_else(|| "동결할 주소가 필요합니다.".to_string())?;
-            call_rpc("freezeaddress", json!([asset, a, "", ""])).await?
+    let method = if whole_asset { "freezerestrictedasset" } else { "freezeaddress" };
+    let target = if whole_asset {
+        None
+    } else {
+        Some(address.ok_or_else(|| "동결할 주소가 필요합니다.".to_string())?)
+    };
+    // `$NAME` 을 동결할 때 쓰는 `NAME!` 가 change_address 로 돌아온다 — 지금 있는 주소로(보내기 전에 읽기).
+    let pin = crate::whose::owner_pin(method, &asset).await;
+    // 🔴 자산 자료(asset_data) 칸에 "" 를 넣으면 코어가 「Invalid asset data hash」로 거절한다 —
+    //    rpc/assets.cpp 는 그 칸이 **있기만 하면** DecodeAssetData 로 풀고 비면 throw 한다.
+    //    그래서 비어 있으면 칸 자체를 보내지 않는다.
+    let txid = with_wallet(passphrase, || async {
+        let params = match &target {
+            None => json!([asset, ""]),
+            Some(a) => json!([asset, a, ""]),
         };
+        let r = call_rpc(method, crate::whose::with_change(method, params, pin.change())).await?;
         Ok(first_txid(r))
     })
-    .await
+    .await?;
+    Ok(crate::whose::issued(txid, &pin))
 }
 
 fn first_txid(v: Value) -> String {
@@ -546,22 +562,31 @@ pub async fn unfreeze(
     address: Option<String>,
     whole_asset: bool,
     passphrase: Option<String>,
-) -> Result<String, String> {
+) -> Result<Value, String> {
     if !asset.starts_with('$') {
         return Err("제한 자산($로 시작하는 것)만 해당됩니다.".into());
     }
-    with_wallet(passphrase, || async {
-        let r = if whole_asset {
-            call_rpc("unfreezerestrictedasset", json!([asset, "", ""])).await?
-        } else {
-            let a = address
-                .clone()
-                .ok_or_else(|| "해제할 주소가 필요합니다.".to_string())?;
-            call_rpc("unfreezeaddress", json!([asset, a, "", ""])).await?
+    let method = if whole_asset { "unfreezerestrictedasset" } else { "unfreezeaddress" };
+    let target = if whole_asset {
+        None
+    } else {
+        Some(address.ok_or_else(|| "해제할 주소가 필요합니다.".to_string())?)
+    };
+    // 해제도 `NAME!` 를 쓰고 돌려받는다 — 지금 있는 주소로(보내기 전에 읽기).
+    let pin = crate::whose::owner_pin(method, &asset).await;
+    // 🔴 자산 자료(asset_data) 칸에 "" 를 넣으면 코어가 「Invalid asset data hash」로 거절한다 —
+    //    rpc/assets.cpp 는 그 칸이 **있기만 하면** DecodeAssetData 로 풀고 비면 throw 한다.
+    //    그래서 비어 있으면 칸 자체를 보내지 않는다.
+    let txid = with_wallet(passphrase, || async {
+        let params = match &target {
+            None => json!([asset, ""]),
+            Some(a) => json!([asset, a, ""]),
         };
+        let r = call_rpc(method, crate::whose::with_change(method, params, pin.change())).await?;
         Ok(first_txid(r))
     })
-    .await
+    .await?;
+    Ok(crate::whose::issued(txid, &pin))
 }
 
 /// Takes a tag back off an address.
@@ -575,13 +600,20 @@ pub async fn untag_address(
     tag: String,
     address: String,
     passphrase: Option<String>,
-) -> Result<String, String> {
+) -> Result<Value, String> {
     let t = if tag.starts_with('#') { tag } else { format!("#{tag}") };
-    with_wallet(passphrase, || async {
-        let r = call_rpc("removetagfromaddress", json!([t, address, "", ""])).await?;
+    // 뗄 때도 자격 표(`#TAG` 자신)를 쓰고 돌려받는다 — 지금 있는 주소로(보내기 전에 읽기).
+    let pin = crate::whose::owner_pin("removetagfromaddress", &t).await;
+    // 🔴 자산 자료(asset_data) 칸에 "" 를 넣으면 코어가 「Invalid asset data hash」로 거절한다 —
+    //    rpc/assets.cpp 는 그 칸이 **있기만 하면** DecodeAssetData 로 풀고 비면 throw 한다.
+    //    그래서 비어 있으면 칸 자체를 보내지 않는다.
+    let txid = with_wallet(passphrase, || async {
+        let params = crate::whose::with_change("removetagfromaddress", json!([t, address, ""]), pin.change());
+        let r = call_rpc("removetagfromaddress", params).await?;
         Ok(first_txid(r))
     })
-    .await
+    .await?;
+    Ok(crate::whose::issued(txid, &pin))
 }
 
 /// Which tags one address carries.
@@ -655,6 +687,33 @@ mod owner_pin_tests {
             let with = body.find("whose::with_change(").unwrap_or_else(|| panic!("{func}: 거스름 자리를 안 채운다"));
             assert!(body[with..].trim_start_matches("whose::with_change(").trim_start().starts_with(&format!("\"{method}\"")), "{func}: 다른 명령의 자리표를 쓴다");
             assert!(body.contains("whose::issued(txid, &pin)"), "{func}: 결과에 고정 여부를 안 적는다");
+        }
+    }
+
+    /// 붙이기·떼기·동결·해제도 같은 규칙 — 쓰는 표(`#TAG` · `NAME!`)를 지금 있는 주소로.
+    /// 그리고 비어 있는 자산 자료 칸(`""`)을 보내지 않는다(코어가 거절한다).
+    #[test]
+    fn 붙이기_떼기_동결_해제도_주인_표를_제자리로() {
+        let src = include_str!("issue2.rs");
+        let src = &src[..src.find("#[cfg(test)]").unwrap()];
+        for (func, methods, pin_call) in [
+            ("pub async fn tag_address(", &["addtagtoaddress"][..], "whose::owner_pin(\"addtagtoaddress\""),
+            ("pub async fn untag_address(", &["removetagfromaddress"][..], "whose::owner_pin(\"removetagfromaddress\""),
+            ("pub async fn freeze(", &["freezerestrictedasset", "freezeaddress"][..], "whose::owner_pin(method"),
+            ("pub async fn unfreeze(", &["unfreezerestrictedasset", "unfreezeaddress"][..], "whose::owner_pin(method"),
+        ] {
+            let i = src.find(func).unwrap_or_else(|| panic!("{func} 가 없다"));
+            let body = &src[i..i + src[i..].find("\n}\n").unwrap()];
+            for m in methods {
+                assert!(body.contains(&format!("\"{m}\"")), "{func}: {m} 가 없다");
+            }
+            let pin = body.find(pin_call).unwrap_or_else(|| panic!("{func}: 쓰는 표 자리를 안 읽는다"));
+            let send = body.find("with_wallet(").unwrap_or_else(|| panic!("{func}: 보내는 자리가 없다"));
+            assert!(pin < send, "{func}: 보내기 뒤에서 읽는다");
+            assert!(body.contains("pin.change()"), "{func}: 읽은 자리를 넣지 않는다");
+            assert!(body.contains("whose::with_change("), "{func}: 거스름 자리를 안 채운다");
+            assert!(body.contains("whose::issued(txid, &pin)"), "{func}: 결과에 고정 여부를 안 적는다");
+            assert!(!body.contains(", \"\", \"\"])"), "{func}: 빈 자산 자료 칸을 보낸다 — 코어가 거절한다");
         }
     }
 }
