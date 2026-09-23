@@ -1698,6 +1698,72 @@
       /* 판 번호가 11.5px 이었다. 읽을 글자는 12.5px 아래로 두지 않는다. */
       .brand span { font-size: 13px !important; }
 
+      /* ── 주소 확인 · 내 주인 표 (0.4.6) ─────────────────────────
+         답은 첫 줄 하나로 끝나야 한다 — 크게, 색과 그림을 같이(색만으로 말하지 않는다).
+         단추·칸은 44px, 글자 16px. 색은 토큰만 써서 어두운 화면에서도 같이 바뀐다. */
+      .whose, .owntok { margin-top: 12px; }
+      .whose h3, .owntok h3 { margin: 0 0 2px; font-size: 17px; }
+      .whose-row { display: flex; gap: 8px; margin-top: 10px; }
+      .whose-row input { flex: 1; min-width: 0; min-height: 44px; font-size: 16px; margin: 0;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .whose-row button { flex: none; min-height: 44px; min-width: 76px; font-size: 16px; }
+      #whose-out:empty { display: none; }
+      #whose-out { margin-top: 12px; }
+      .whose-res { border-radius: 12px; padding: 14px 16px; border: 1px solid var(--line);
+        background: var(--panel); }
+      .whose-res.ok { border-color: color-mix(in srgb, var(--ok) 55%, var(--line));
+        background: color-mix(in srgb, var(--ok) 8%, var(--panel)); }
+      .whose-res.warn { border-color: color-mix(in srgb, var(--warn) 60%, var(--line));
+        background: color-mix(in srgb, var(--warn) 9%, var(--panel)); }
+      .whose-res.no { border-color: color-mix(in srgb, var(--danger) 50%, var(--line));
+        background: color-mix(in srgb, var(--danger) 7%, var(--panel)); }
+      .whose-head { display: flex; align-items: center; gap: 10px; font-size: 20px; line-height: 1.35; }
+      .whose-head svg { width: 28px; height: 28px; flex: none; }
+      .whose-head.ok { color: var(--ok); } .whose-head.warn { color: var(--warn); } .whose-head.no { color: var(--danger); }
+      .whose-head b { color: var(--text); font-weight: 700; }
+      .whose-kind { margin: 6px 0 0 38px; font-size: 16px; font-weight: 600; }
+      .whose-why { display: block; font-weight: 400; font-size: 15px; color: var(--muted); }
+      .whose-res > .meta { margin-left: 38px; font-size: 15px; }
+      .whose-addr { display: block; margin: 8px 0 0 38px; font-size: 14px; color: var(--muted); }
+      .whose-have { margin: 12px 0 0 38px; padding-top: 10px; border-top: 1px dashed var(--line); }
+      .whose-havehead { font-size: 14px; color: var(--muted); font-weight: 600; }
+      .whose-list { list-style: none; margin: 6px 0 0; padding: 0; }
+      .whose-item { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 6px 0;
+        font-size: 16px; border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
+      .whose-item:last-child { border-bottom: 0; }
+      .whose-asset { font-weight: 600; overflow-wrap: anywhere; }
+      .whose-qty { margin-left: auto; font-variant-numeric: tabular-nums; }
+      .whose-tag { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; padding: 2px 8px;
+        border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+      .whose-tag svg { width: 15px; height: 15px; }
+      .whose-tag.own { color: var(--ravi); border-color: color-mix(in srgb, var(--ravi) 50%, var(--line)); }
+      .whose-tag.wait { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 50%, var(--line)); }
+      .whose-err, .owntok .warn { color: var(--warn); }
+      .whose-res .whose-rule { margin-left: 38px; font-size: 13px; }
+      /* 라비 말풍선 안에서는 조금 작게 — 말풍선이 화면을 다 먹지 않게. */
+      #chat-log .whose-res { margin: 2px 0; padding: 10px 12px; }
+      #chat-log .whose-head { font-size: 17px; }
+      #chat-log .whose-head svg { width: 22px; height: 22px; }
+      #chat-log .whose-kind, #chat-log .whose-addr, #chat-log .whose-have,
+      #chat-log .whose-res > .meta, #chat-log .whose-res .whose-rule { margin-left: 32px; }
+      .own-row { padding: 12px 0; border-bottom: 1px solid var(--line); }
+      .own-row:last-child { border-bottom: 0; padding-bottom: 2px; }
+      .own-line { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 16px; }
+      .own-line svg { width: 20px; height: 20px; color: var(--ravi); flex: none; }
+      .own-name { font-size: 17px; }
+      .own-what { font-size: 14px; color: var(--ravi); padding: 2px 9px; border-radius: 999px;
+        border: 1px solid color-mix(in srgb, var(--ravi) 45%, var(--line)); }
+      .own-where { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; margin-top: 6px; font-size: 15px; }
+      .own-label { color: var(--muted); }
+      .own-at { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+      .own-at code { font-size: 15px; }
+      .own-at button { min-height: 44px; padding: 0 12px; font-size: 14px; }
+      .own-say { font-size: 14px; }
+      @media (max-width: 620px) {
+        .whose-head { font-size: 18px; }
+        .whose-kind, .whose-addr, .whose-have, .whose-res > .meta, .whose-res .whose-rule { margin-left: 0; }
+      }
+
       /* 방금 간 자리. 1.6초만 빛난다 — 어디로 갔는지 눈이 따라가야 한다. */
       .justwent { animation: wentglow 1.6s ease-out; border-radius: 12px; }
       @keyframes wentglow {
@@ -3131,6 +3197,27 @@
             </div>
           </div>
         </div>
+
+        <!-- 0.4.6 「이 주소가 내 것인가」. 대표님 PLAYX! 가 거스름 주소 33번에 있었는데
+             앱에서 찾을 길이 없었다 — 주소록은 받기 주소만, 자산 목록은 주인 표를 숨긴다.
+             한 칸에 한 일: 붙여 넣으면 바로 답한다. 판정은 노드(validateaddress). -->
+        <section class="card whose" id="whose-card" aria-labelledby="whose-title">
+          <h3 id="whose-title">주소 확인</h3>
+          <p class="meta">붙여 넣으면 이 지갑 주소인지 바로 알려 드려요.</p>
+          <div class="whose-row">
+            <input id="whose-in" placeholder="R… 주소를 붙여 넣으세요" aria-label="확인할 주소"
+                   autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="text" />
+            <button id="whose-go" type="button">확인</button>
+          </div>
+          <div id="whose-out" aria-live="polite"></div>
+        </section>
+
+        <!-- 내 주인 표(이름 끝이 !). 자산 목록에서는 그대로 숨긴다 — 여기서만 「발행 권한 열쇠」로.
+             🔴 보내기 단추는 일부러 없다. 보내면 그 이름의 발행 권한이 넘어간다. -->
+        <section class="card owntok" id="owner-card" aria-labelledby="owner-title" hidden>
+          <h3 id="owner-title">내 주인 표</h3>
+          <div id="owner-list"></div>
+        </section>
 
         <!-- 암호 걸기. 발행과 같은 급의 비가역 동작이라 같은 마찰을 준다. -->
         <div class="sendbox" id="encbox" style="display:none">

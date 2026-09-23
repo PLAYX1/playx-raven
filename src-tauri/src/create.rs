@@ -45,13 +45,21 @@ fn is_cid(s: &str) -> bool {
 }
 
 /// 약속한 모양인지 보고, 부를 노드 명령과 인자를 돌려준다. 노드는 부르지 않는다.
+///
+/// `owner_at` 은 브랜드 주인 표(`BRAND!`)가 **지금 있는 내 주소**다(`whose::owner_pin`).
+/// 티켓·작품은 그 표를 쓰고 되돌려 받는데, 거스름 주소(`change_address`)를 비워 두면
+/// 노드가 표를 **새 거스름 주소로 옮긴다** — 그러면 「인증된 발행자」 판정이 매번 깨진다.
+/// 그래서 그 자리를 넣어 표가 제자리로 돌아오게 한다. 못 읽었으면 `None` → 예전처럼 `""`.
+/// 이름 등록(brand)은 새 표를 만드는 발행이라 쓰지 않는다.
 pub fn plan_call(
     step: &str,
     brand: &str,
     names: &[String],
     quantity: u64,
     ipfs_hash: Option<&str>,
+    owner_at: Option<&str>,
 ) -> Result<(&'static str, Value), String> {
+    let change = owner_at.unwrap_or("");
     if !is_brand(brand) {
         return Err("브랜드 이름을 확인해 주세요.".into());
     }
@@ -81,7 +89,7 @@ pub fn plan_call(
             }
             Ok((
                 "issue",
-                json!([name, quantity, "", "", 0, true, ipfs_hash.is_some(), ipfs_hash.unwrap_or("")]),
+                json!([name, quantity, "", change, 0, true, ipfs_hash.is_some(), ipfs_hash.unwrap_or("")]),
             ))
         }
         "uniques" => {
@@ -106,7 +114,7 @@ pub fn plan_call(
                 Some(cid) => json!(vec![cid; tags.len()]),
                 None => Value::Null,
             };
-            Ok(("issueunique", json!([brand, tags, hashes, "", ""])))
+            Ok(("issueunique", json!([brand, tags, hashes, "", change])))
         }
         _ => Err("알 수 없는 만들기 단계입니다.".into()),
     }
@@ -194,6 +202,9 @@ pub async fn create_names_taken(names: Vec<String>) -> Result<Vec<bool>, String>
 ///    화면이 「실패」라고 하고 단추를 다시 열어, 같은 묶음을 두 번 태웠다.
 ///
 /// 원본 지문은 노드가 받았거나(거래 번호) 받았을지 모를 때만 지문 목록에 적는다.
+///
+/// 돌려주는 것: `{ txid, owner_token, owner_pinned, owner_address, owner_why }`
+/// (`whose::issued`). `owner_pinned: false` 면 표를 제자리에 못 뒀다 — 발행은 나갔다.
 #[tauri::command]
 pub async fn create_issue(
     step: String,
@@ -203,8 +214,14 @@ pub async fn create_issue(
     ipfs_hash: Option<String>,
     passphrase: Option<String>,
     history_id: Option<String>,
-) -> Result<String, String> {
-    let (method, params) = plan_call(&step, &brand, &names, quantity, ipfs_hash.as_deref())?;
+) -> Result<Value, String> {
+    // 모양부터 본다(노드는 안 부른다). 틀린 모양이면 주인 표 자리도 읽지 않는다.
+    let (method, _) = plan_call(&step, &brand, &names, quantity, ipfs_hash.as_deref(), None)?;
+    // 🔴 주인 표 자리는 **보내는 흐름보다 앞에서** 읽는다 — 한 번에 하나(ISSUE_BUSY)·
+    //    「보내는 중」 기록·보냈는지 모름(SENT_UNKNOWN) 전에. 읽기만 하고, 못 읽어도
+    //    오류가 아니다(예전처럼 `""` 로 보내고 결과에 `owner_pinned: false`).
+    let pin = crate::whose::owner_pin(method, if step == "ticket" { &names[0] } else { &brand }).await;
+    let (method, params) = plan_call(&step, &brand, &names, quantity, ipfs_hash.as_deref(), pin.address.as_deref())?;
     // 🔴 한 번에 하나만(두 번째 방어선). 화면이 막아도 두 번 부름이 겹치면 이름이
     //    다른 두 묶음이 둘 다 나갔다(검수 R5).
     let _flight = Flight::take()?;
@@ -260,7 +277,7 @@ pub async fn create_issue(
             crate::create_history::mark_done(id, &names, &txid)
         };
     }
-    Ok(txid)
+    Ok(crate::whose::issued(txid, &pin))
 }
 
 /// 만들기 발행이 도는 중인가. `sending` 기록이 「보내는 중」인지 「보내다 꺼진 것」인지 가른다.
@@ -385,48 +402,59 @@ mod tests {
     use serde_json::json;
 
     const CID: &str = "QmcwUFCZ8saJgoE6D9LEgVqtteCbVcdzWFcGzuhe7VTeW7";
+    /// 누가 봐도 가짜인 시험 주소 — 브랜드 주인 표가 있다고 치는 자리.
+    const OWNER_AT: &str = "RTestOwnerTokenHomeXXXXXXXXXXXXXXX";
     fn v(names: &[&str]) -> Vec<String> {
         names.iter().map(|s| s.to_string()).collect()
     }
 
     #[test]
     fn 브랜드는_하나_소수0_재발행가능() {
-        let (m, p) = plan_call("brand", "HANBIT", &[], 0, None).unwrap();
+        let (m, p) = plan_call("brand", "HANBIT", &[], 0, None, None).unwrap();
         assert_eq!(m, "issue");
         assert_eq!(p, json!(["HANBIT", 1, "", "", 0, true, false, ""]));
-        assert!(plan_call("brand", "RAVEN", &[], 0, None).is_err());
-        assert!(plan_call("brand", "hanbit", &[], 0, None).is_err());
-        assert!(plan_call("brand", "AB", &[], 0, None).is_err());
-        assert!(plan_call("brand", "HANBIT", &v(&["X"]), 0, None).is_err());
+        // 이름 등록은 새 주인 표를 만든다 — 옮길 표가 없으니 거스름 자리를 넣지 않는다.
+        let (_, p) = plan_call("brand", "HANBIT", &[], 0, None, Some(OWNER_AT)).unwrap();
+        assert_eq!(p, json!(["HANBIT", 1, "", "", 0, true, false, ""]));
+        assert!(plan_call("brand", "RAVEN", &[], 0, None, None).is_err());
+        assert!(plan_call("brand", "hanbit", &[], 0, None, None).is_err());
+        assert!(plan_call("brand", "AB", &[], 0, None, None).is_err());
+        assert!(plan_call("brand", "HANBIT", &v(&["X"]), 0, None, None).is_err());
     }
 
     #[test]
     fn 티켓은_브랜드_아래_하위자산() {
-        let (m, p) = plan_call("ticket", "HANBIT", &v(&["HANBIT/GONGYEON260917"]), 300, Some(CID)).unwrap();
+        // 🔴 주인 표(HANBIT!)가 있는 주소를 거스름 자리에 넣는다 — 표가 제자리로 돌아온다.
+        let (m, p) = plan_call("ticket", "HANBIT", &v(&["HANBIT/GONGYEON260917"]), 300, Some(CID), Some(OWNER_AT)).unwrap();
         assert_eq!(m, "issue");
+        assert_eq!(p, json!(["HANBIT/GONGYEON260917", 300, "", OWNER_AT, 0, true, true, CID]));
+        // 자리를 못 읽었으면 예전처럼 비워서 보낸다(발행은 막지 않는다).
+        let (_, p) = plan_call("ticket", "HANBIT", &v(&["HANBIT/GONGYEON260917"]), 300, Some(CID), None).unwrap();
         assert_eq!(p, json!(["HANBIT/GONGYEON260917", 300, "", "", 0, true, true, CID]));
-        assert!(plan_call("ticket", "HANBIT", &v(&["OTHER/GONGYEON"]), 1, None).is_err());
-        assert!(plan_call("ticket", "HANBIT", &v(&["HANBIT/x"]), 1, None).is_err());
-        assert!(plan_call("ticket", "HANBIT", &v(&["HANBIT/A"]), 0, None).is_err());
-        assert!(plan_call("ticket", "HANBIT", &v(&["HANBIT/A"]), 1_000_001, None).is_err());
-        assert!(plan_call("ticket", "HANBIT", &v(&["HANBIT/A", "HANBIT/B"]), 1, None).is_err());
+        assert!(plan_call("ticket", "HANBIT", &v(&["OTHER/GONGYEON"]), 1, None, None).is_err());
+        assert!(plan_call("ticket", "HANBIT", &v(&["HANBIT/x"]), 1, None, None).is_err());
+        assert!(plan_call("ticket", "HANBIT", &v(&["HANBIT/A"]), 0, None, None).is_err());
+        assert!(plan_call("ticket", "HANBIT", &v(&["HANBIT/A"]), 1_000_001, None, None).is_err());
+        assert!(plan_call("ticket", "HANBIT", &v(&["HANBIT/A", "HANBIT/B"]), 1, None, None).is_err());
     }
 
     #[test]
     fn 여러_장은_한_거래_지문은_장마다() {
         let names = v(&["HANBIT#BADAGEU260917-1", "HANBIT#BADAGEU260917-2"]);
-        let (m, p) = plan_call("uniques", "HANBIT", &names, 0, Some(CID)).unwrap();
+        let (m, p) = plan_call("uniques", "HANBIT", &names, 0, Some(CID), Some(OWNER_AT)).unwrap();
         assert_eq!(m, "issueunique");
-        assert_eq!(p, json!(["HANBIT", ["BADAGEU260917-1", "BADAGEU260917-2"], [CID, CID], "", ""]));
-        let (_, p) = plan_call("uniques", "HANBIT", &names[..1], 0, None).unwrap();
+        // issueunique root [tags] [hashes] to_address change_address — 받는 곳은 새 주소, 표는 제자리.
+        assert_eq!(p, json!(["HANBIT", ["BADAGEU260917-1", "BADAGEU260917-2"], [CID, CID], "", OWNER_AT]));
+        let (_, p) = plan_call("uniques", "HANBIT", &names[..1], 0, None, None).unwrap();
         assert_eq!(p[2], json!(null));
-        assert!(plan_call("uniques", "HANBIT", &v(&["HANBIT#A-1", "HANBIT#A-1"]), 0, None).is_err());
-        assert!(plan_call("uniques", "HANBIT", &v(&["HANBIT/A"]), 0, None).is_err());
-        assert!(plan_call("uniques", "HANBIT", &v(&["HANBIT#a b"]), 0, None).is_err());
+        assert_eq!(p[4], json!(""), "자리를 못 읽었으면 예전처럼 비운다");
+        assert!(plan_call("uniques", "HANBIT", &v(&["HANBIT#A-1", "HANBIT#A-1"]), 0, None, None).is_err());
+        assert!(plan_call("uniques", "HANBIT", &v(&["HANBIT/A"]), 0, None, None).is_err());
+        assert!(plan_call("uniques", "HANBIT", &v(&["HANBIT#a b"]), 0, None, None).is_err());
         let many: Vec<String> = (1..=51).map(|i| format!("HANBIT#A-{i}")).collect();
-        assert!(plan_call("uniques", "HANBIT", &many, 0, None).is_err());
-        assert!(plan_call("uniques", "HANBIT", &v(&["HANBIT#A-1"]), 0, Some("QmBad")).is_err());
-        assert!(plan_call("mint", "HANBIT", &v(&["HANBIT#A-1"]), 0, None).is_err());
+        assert!(plan_call("uniques", "HANBIT", &many, 0, None, None).is_err());
+        assert!(plan_call("uniques", "HANBIT", &v(&["HANBIT#A-1"]), 0, Some("QmBad"), None).is_err());
+        assert!(plan_call("mint", "HANBIT", &v(&["HANBIT#A-1"]), 0, None, None).is_err());
     }
 
     /// 화면(easy-create.ts)·폰·확인 페이지와 **같은 지문**이 나와야 한다.
@@ -460,5 +488,20 @@ mod tests {
         assert!(!super::issuing_now());
         let again = super::Flight::take();
         assert!(again.is_ok(), "끝난 뒤에는 다시 보낼 수 있다");
+    }
+
+    /// 🔴 주인 표 자리 읽기는 보내는 흐름(한 번에 하나·「보내는 중」 기록·보냈는지 모름)
+    ///    **앞에** 있다. 읽다가 늦은 것이 「보냈는지 모름」 창 안에 섞이면 안 된다.
+    #[test]
+    fn 주인_표_자리는_보내는_흐름_앞에서_읽는다() {
+        let src = include_str!("create.rs");
+        let i = src.find("pub async fn create_issue(").unwrap();
+        let body = &src[i..i + src[i..].find("\n}\n").unwrap()];
+        let pin = body.find("whose::owner_pin(").expect("주인 표 자리를 읽어야 한다");
+        for later in ["Flight::take()", "unknown_pending_error()", "mark_sending(", "issue_now("] {
+            let at = body.find(later).unwrap_or_else(|| panic!("{later} 가 없다"));
+            assert!(pin < at, "주인 표 자리를 {later} 뒤에서 읽는다");
+        }
+        assert!(body.contains("pin.address.as_deref()"), "읽은 자리를 발행 인자에 넣어야 한다");
     }
 }

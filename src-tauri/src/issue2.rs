@@ -235,6 +235,10 @@ pub fn asset_kinds() -> Value {
 /// `new_ipfs` is optional — passing it rewrites what every existing holder's
 /// token points at, which is powerful and easy to do by accident, so the UI
 /// asks separately rather than bundling it into "reissue".
+///
+/// 돌려주는 것: `{ txid, owner_token, owner_pinned, … }`(`whose::issued`).
+/// 더 찍기는 `NAME!` 를 쓰고 돌려받는다. 거스름 자리를 비우면 노드가 그 표를 새
+/// 거스름 주소로 옮기므로, 표가 **지금 있는 주소**를 넣어 제자리로 돌린다(0.4.6).
 #[tauri::command]
 pub async fn reissue(
     asset: String,
@@ -243,7 +247,7 @@ pub async fn reissue(
     keep_reissuable: bool,
     new_ipfs: Option<String>,
     passphrase: Option<String>,
-) -> Result<String, String> {
+) -> Result<Value, String> {
     // 🔴 **수량 0 은 거절하면 안 된다.**
     //
     //    체인은 0 을 받는다 — 레이븐코어 `assets.cpp` 의 `CheckReissueAsset`
@@ -289,22 +293,29 @@ pub async fn reissue(
             .to_string(),
     };
 
-    with_wallet(passphrase, || async {
+    // 🔴 주인 표 자리는 보내기 **전에** 읽는다(읽기만, 실패해도 막지 않는다).
+    let pin = crate::whose::owner_pin("reissue", &asset).await;
+    let txid = with_wallet(passphrase, || async {
         // reissue "asset_name" qty "to_address" "change_address"
         //         ( reissuable ) ( new_units ) "( new_ipfs )"
-        let params = json!([
-            asset,
-            qty,
-            to,
-            "",
-            keep_reissuable,
-            -1, // units unchanged
-            new_ipfs.clone().unwrap_or_default(),
-        ]);
+        let params = crate::whose::with_change(
+            "reissue",
+            json!([
+                asset,
+                qty,
+                to,
+                "",
+                keep_reissuable,
+                -1, // units unchanged
+                new_ipfs.clone().unwrap_or_default(),
+            ]),
+            pin.change(),
+        );
         let r = call_rpc("reissue", params).await?;
         Ok(first_txid(r))
     })
-    .await
+    .await?;
+    Ok(crate::whose::issued(txid, &pin))
 }
 
 /// Issues many uniques at once — `ROOT#a`, `ROOT#b`, …
@@ -318,7 +329,7 @@ pub async fn issue_many_unique(
     tags: Vec<String>,
     to_address: Option<String>,
     passphrase: Option<String>,
-) -> Result<String, String> {
+) -> Result<Value, String> {
     if tags.is_empty() {
         return Err("만들 태그가 없습니다.".into());
     }
@@ -329,11 +340,15 @@ pub async fn issue_many_unique(
     }
 
     let to = to_address.unwrap_or_default();
-    with_wallet(passphrase, || async {
-        let r = call_rpc("issueunique", json!([root, tags, Value::Null, to, ""])).await?;
+    // 🔴 `ROOT!` 를 쓰고 돌려받는다 — 지금 있는 주소로 돌아오게(보내기 전에 읽기).
+    let pin = crate::whose::owner_pin("issueunique", &root).await;
+    let txid = with_wallet(passphrase, || async {
+        let params = crate::whose::with_change("issueunique", json!([root, tags, Value::Null, to, ""]), pin.change());
+        let r = call_rpc("issueunique", params).await?;
         Ok(first_txid(r))
     })
-    .await
+    .await?;
+    Ok(crate::whose::issued(txid, &pin))
 }
 
 /// Creates a qualifier — a tag that can be put on addresses.
@@ -346,17 +361,22 @@ pub async fn issue_qualifier(
     name: String,
     qty: f64,
     passphrase: Option<String>,
-) -> Result<String, String> {
+) -> Result<Value, String> {
     let n = if name.starts_with('#') {
         name
     } else {
         format!("#{name}")
     };
-    with_wallet(passphrase, || async {
-        let r = call_rpc("issuequalifierasset", json!([n, qty, "", "", false, ""])).await?;
+    // 하위 자격(`#A/#B`)은 부모 `#A` 를 쓰고 돌려받는다 — 지금 있는 주소로.
+    // 맨 위 자격(`#A`)은 쓰는 표가 없다(`owner_pinned: null`).
+    let pin = crate::whose::owner_pin("issuequalifierasset", &n).await;
+    let txid = with_wallet(passphrase, || async {
+        let params = crate::whose::with_change("issuequalifierasset", json!([n, qty, "", "", false, ""]), pin.change());
+        let r = call_rpc("issuequalifierasset", params).await?;
         Ok(first_txid(r))
     })
-    .await
+    .await?;
+    Ok(crate::whose::issued(txid, &pin))
 }
 
 /// Puts a qualifier tag on an address, so it can hold the matching restricted
@@ -395,7 +415,7 @@ pub async fn issue_restricted(
     reissuable: bool,
     ipfs_hash: Option<String>,
     passphrase: Option<String>,
-) -> Result<String, String> {
+) -> Result<Value, String> {
     let n = if name.starts_with('$') { name } else { format!("${name}") };
     if verifier.trim().is_empty() {
         return Err("자격 조건이 비어 있습니다. 아무도 가질 수 없는 자산이 됩니다.".into());
@@ -405,9 +425,11 @@ pub async fn issue_restricted(
         return Err("받는 주소가 올바르지 않습니다.".into());
     }
 
-    with_wallet(passphrase, || async {
+    // `$NAME` 은 `NAME!` 를 쓰고 돌려받는다 — 지금 있는 주소로(보내기 전에 읽기).
+    let pin = crate::whose::owner_pin("issuerestrictedasset", &n).await;
+    let txid = with_wallet(passphrase, || async {
         let has_ipfs = ipfs_hash.as_ref().map(|s| !s.is_empty()).unwrap_or(false);
-        let r = call_rpc(
+        let params = crate::whose::with_change(
             "issuerestrictedasset",
             json!([
                 n,
@@ -420,11 +442,13 @@ pub async fn issue_restricted(
                 has_ipfs,
                 ipfs_hash.clone().unwrap_or_default(),
             ]),
-        )
-        .await?;
+            pin.change(),
+        );
+        let r = call_rpc("issuerestrictedasset", params).await?;
         Ok(first_txid(r))
     })
-    .await
+    .await?;
+    Ok(crate::whose::issued(txid, &pin))
 }
 
 /// Which addresses carry a tag.
@@ -603,4 +627,34 @@ pub async fn can_receive(address: String, asset: String) -> Result<Value, String
             None => "확인하지 못했습니다. 보내 보면 체인이 거절할 수 있습니다.",
         },
     }))
+}
+
+#[cfg(test)]
+mod owner_pin_tests {
+    /// 🔴 부모 주인 표를 쓰는 발행 넷(더 찍기·고유 여러 개·하위 자격·제한 자산)이
+    ///    전부 표가 **지금 있는 주소**를 거스름 자리에 넣는다. 하나라도 `""` 로 남으면
+    ///    노드가 그 표를 새 거스름 주소로 옮기고, 「인증된 발행자」 판정이 깨진다.
+    ///    읽기는 보내는 부름보다 앞이다.
+    #[test]
+    fn 네_발행_모두_주인_표를_제자리로() {
+        let src = include_str!("issue2.rs");
+        let src = &src[..src.find("#[cfg(test)]").unwrap()];
+        for (func, method) in [
+            ("pub async fn reissue(", "reissue"),
+            ("pub async fn issue_many_unique(", "issueunique"),
+            ("pub async fn issue_qualifier(", "issuequalifierasset"),
+            ("pub async fn issue_restricted(", "issuerestrictedasset"),
+        ] {
+            let i = src.find(func).unwrap_or_else(|| panic!("{func} 가 없다"));
+            let body = &src[i..i + src[i..].find("\n}\n").unwrap()];
+            let pin = body.find(&format!("whose::owner_pin(\"{method}\"")).unwrap_or_else(|| panic!("{func}: 주인 표 자리를 안 읽는다"));
+            // 보내는 부름은 전부 `with_wallet` 안에서 나간다.
+            let send = body.find("with_wallet(").unwrap_or_else(|| panic!("{func}: 보내는 자리가 없다"));
+            assert!(pin < send, "{func}: 보내기 뒤에서 읽는다");
+            assert!(body.contains("pin.change()"), "{func}: 읽은 자리를 넣지 않는다");
+            let with = body.find("whose::with_change(").unwrap_or_else(|| panic!("{func}: 거스름 자리를 안 채운다"));
+            assert!(body[with..].trim_start_matches("whose::with_change(").trim_start().starts_with(&format!("\"{method}\"")), "{func}: 다른 명령의 자리표를 쓴다");
+            assert!(body.contains("whose::issued(txid, &pin)"), "{func}: 결과에 고정 여부를 안 적는다");
+        }
+    }
 }

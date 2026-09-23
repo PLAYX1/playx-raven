@@ -176,6 +176,10 @@ import { listen } from "@tauri-apps/api/event";
 import { check as checkUpdate } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { copyHtml, setCopyText, t, tf, lang, setLang, LANG_NAMES, startI18n } from "./i18n";
+import {
+  issuedOf, looksLikeAddress, ownerRowsHtml, OWNER_NOT_PINNED, whoseHtml, whoseQuestion,
+  type Issued, type OwnerRow, type WhoseResult,
+} from "./whose";
 
 type Asset = {
   name: string;
@@ -3093,6 +3097,9 @@ function pageTiles(page: string): PageTile[] {
         label: "자산 보내기", sub: "쿠폰 · 회원권", go: () => void openSend("asset") },
       { icon: I('<rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="M3.5 9.5h17M8 14h4"/>'),
         label: "최근 거래", sub: "들어오고 나간 것", go: jump("w-foreign") },
+      /* 0.4.6 — 「내 지갑 주소인지」. 거스름 주소는 주소록에 없어서 찾을 길이 없었다. */
+      { icon: I('<circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5M8 10.6l1.8 1.8 3.2-3.4"/>'),
+        label: "주소 확인", sub: "내 지갑 주소인지", go: jump("whose-in") },
     ];
   }
   if (page === "assets") {
@@ -4491,6 +4498,8 @@ function showPage(id: string) {
 
 /* ── 지갑 ─────────────────────────────────────────────────── */
 async function loadWallet() {
+  // 주인 표 줄은 따로 읽는다 — 느려도 잔액·잠금이 기다리지 않게.
+  void paintOwners();
   try {
     const b: any = await invoke("wallet_balance");
     $("w-confirmed").textContent = `${b.confirmed.toLocaleString(undefined, { maximumFractionDigits: 8 })} RVN`;
@@ -4601,6 +4610,88 @@ async function makeAddress() {
     $("w-copy").onclick = () => navigator.clipboard.writeText(addr);
   } catch (e) {
     say(t("주소를 만들지 못했습니다"), errText(e));
+  }
+}
+
+/* ── 주소 확인 · 내 주인 표 (0.4.6) ─────────────────────────────
+   🔴 대표님이 자기 PLAYX! 가 있는 주소를 앱에서 못 찾았다 — 받기 주소가 아니라
+   **거스름 주소 33번**이었고, 주소록은 받기 주소만, 자산 목록은 주인 표를 숨긴다.
+   그래서 한 칸: 붙여 넣으면 바로 「내 지갑 주소예요 · 거스름 주소 33번」.
+   판정은 노드(`validateaddress`)가 한다. 읽기만 한다 — 보내는 것은 없다.
+   🔴 주인 표 줄에는 **보내기 단추가 없다.** 보내면 발행 권한이 넘어간다. */
+let whoseLast: WhoseResult | null = null;
+let whoseSeq = 0;
+
+async function checkWhose(raw?: string) {
+  const input = $("whose-in") as HTMLInputElement;
+  if (raw !== undefined) input.value = raw;
+  const text = input.value.trim();
+  const out = $("whose-out");
+  const seq = ++whoseSeq;
+  if (!text) { whoseLast = null; out.innerHTML = ""; return; }
+  out.innerHTML = `<p class="meta">${copyHtml("확인 중…")}</p>`;
+  try {
+    const r = await invoke<WhoseResult | null>("addr_whose", { address: text });
+    if (seq !== whoseSeq) return;          // 그사이 다른 주소를 넣었다 — 옛 답을 그리지 않는다
+    if (!r || typeof r !== "object" || !r.state) throw new Error(t("노드가 답하지 않았어요."));
+    whoseLast = r;
+    out.innerHTML = whoseHtml(r);
+  } catch (e) {
+    if (seq !== whoseSeq) return;
+    whoseLast = null;
+    out.innerHTML = `<div class="warnbox">${copyHtml("노드에 묻지 못했어요.")} ${escapeHtml(errText(e))}</div>`;
+  }
+}
+
+let ownersLast: OwnerRow[] = [];
+let ownersPartial = false;
+let ownersFailed = false;
+
+/** 내 주인 표마다 보관 주소. 없으면 칸째 숨긴다 — 못 읽었으면 숨기지 않고 그렇다고 말한다. */
+async function paintOwners() {
+  try {
+    const r = await invoke<{ tokens?: OwnerRow[]; partial?: boolean } | null>("owner_tokens_where");
+    ownersLast = Array.isArray(r?.tokens) ? r!.tokens! : [];
+    ownersPartial = !!r?.partial;
+    ownersFailed = false;
+  } catch {
+    ownersFailed = ownersLast.length > 0;
+  }
+  renderOwners();
+}
+
+function renderOwners() {
+  const card = $("owner-card");
+  card.hidden = !ownersLast.length && !ownersFailed;
+  let html = ownerRowsHtml(ownersLast);
+  if (ownersPartial) html += `<p class="meta">${copyHtml("주인 표 조각이 많아 일부만 확인했어요.")}</p>`;
+  if (ownersFailed) html += `<p class="meta warn">${copyHtml("주인 표 자리를 다시 읽지 못했어요. 위 주소는 지난번에 읽은 것이에요.")}</p>`;
+  $("owner-list").innerHTML = html;
+}
+
+/** 라비가 규칙으로 답한 말풍선 — 언어가 바뀌면 다시 그린다(값이 끼는 줄이 있다). */
+const raviWhoseSaid: { box: HTMLElement; r: WhoseResult }[] = [];
+
+/**
+ * 라비에게 「R… 내 거야?」 — **AI 를 부르지 않는다.** 이 컴퓨터의 노드에 바로 묻는
+ * 규칙 계산이다. 그래서 AI 열쇠가 없어도 되고, 답에 「AI」라고 적지 않는다.
+ * (라비 첫 화면의 `do` 칸과 같은 원칙 — 열쇠 없이 되는 일은 AI 를 거치지 않는다.)
+ */
+async function raviWhose(address: string) {
+  chatHtml("ai", `<span class="muted" data-thinking="1">${copyHtml("노드에 묻는 중…")}</span>`);
+  try {
+    const r = await invoke<WhoseResult | null>("addr_whose", { address });
+    chatPopThinking();
+    if (!r || typeof r !== "object" || !r.state) throw new Error(t("노드가 답하지 않았어요."));
+    chatHtml("ai", whoseHtml(r, "ravi"));
+    const box = $("chat-log").lastElementChild?.querySelector<HTMLElement>(".msgtxt");
+    if (box) {
+      raviWhoseSaid.push({ box, r });
+      if (raviWhoseSaid.length > 20) raviWhoseSaid.shift();
+    }
+  } catch (e) {
+    chatPopThinking();
+    chatHtml("ai", `<span class="warn">${copyHtml("노드에 묻지 못했어요.")} ${escapeHtml(errText(e))}</span>`);
   }
 }
 
@@ -7672,6 +7763,10 @@ async function doIssue() {
     // 창이 그사이 닫혔으면 보내지 않는다 — 안 보이는 발행은 없어야 한다.
     if ($("wiz").classList.contains("hidden")) return;
 
+    // 🔴 주인 표 자리는 「보내는 중」을 적기 **전에** 읽어 둔다(0.4.6). 하위·고유·더 찍기는
+    //    부모 주인 표를 쓰고 돌려받는데, 거스름 자리를 비우면 노드가 그 표를 새 거스름 주소로
+    //    옮긴다. 읽기만 하고, 못 읽어도 막지 않는다 — 러스트가 예전처럼 비워서 보낸다.
+    await invoke("owner_pin_ready", { kind: wizKind, name }).catch(() => null);
     // 🔴 보내기 **직전**에 적는다(이름·종류·시각). 최대 3분 기다리는 동안 앱을 꺼도 다시
     //    켜면 이 기록이 같은 발행을 막는다. 못 적으면 보내지 않는다.
     await invoke("issue_unknown_mark", { name, kind: wizKind, probe, state: "sending" });
@@ -7685,33 +7780,32 @@ async function doIssue() {
     //    실행은 하나만 했다. 고른 것이 무엇이든 평범한 발행이 나갔고,
     //    자격 증명·제한 자산은 노드가 영어로 거절했다.
     //    러스트에는 넷 다 이미 있었다 — 부르는 줄이 없었을 뿐이다.
-    let txid: string;
+    // 발행 명령은 0.4.6 부터 `{ txid, owner_pinned, … }` 를 돌려준다(`issuedOf`).
+    let issued: Issued;
     if (wizKind === "reissue") {
-      txid = await invoke<string>("reissue", {
+      issued = issuedOf(await invoke<unknown>("reissue", {
         asset: issueCheck.name,
         qty,
         toAddress: null,
         keepReissuable: re,
         newIpfs: cid,
         passphrase: null,
-      });
+      }));
     } else if (wizKind === "bulk") {
-      const r = await invoke<any>("issue_many_unique", {
+      issued = issuedOf(await invoke<unknown>("issue_many_unique", {
         root: issueCheck.name,
         tags: bulkTags(),
         toAddress: null,
         passphrase: null,
-      });
-      txid = typeof r === "string" ? r : String(r?.txid || r?.[0] || "");
+      }));
     } else if (wizKind === "qualifier") {
-      const r = await invoke<any>("issue_qualifier", {
+      issued = issuedOf(await invoke<unknown>("issue_qualifier", {
         name: issueCheck.name,
         qty,
         passphrase: null,
-      });
-      txid = typeof r === "string" ? r : String(r?.txid || r?.[0] || "");
+      }));
     } else if (wizKind === "restricted") {
-      const r = await invoke<any>("issue_restricted", {
+      issued = issuedOf(await invoke<unknown>("issue_restricted", {
         name: issueCheck.name,
         qty,
         verifier: ($("x-verifier") as HTMLInputElement).value.trim(),
@@ -7720,18 +7814,20 @@ async function doIssue() {
         reissuable: re,
         ipfsHash: cid,
         passphrase: null,
-      });
-      txid = typeof r === "string" ? r : String(r?.txid || r?.[0] || "");
+      }));
     } else {
-      txid = await invoke<string>("issue_asset", {
+      issued = issuedOf(await invoke<unknown>("issue_asset", {
         name: issueCheck.name,
         qty,
         units,
         reissuable: re,
         ipfsHash: cid,
         toAddress: null,
-      });
+      }));
     }
+    const txid = issued.txid;
+    // 주인 표를 제자리에 못 뒀으면 한 줄로 알린다 — 발행은 나갔다.
+    const ownerNote = issued.ownerPinned === false ? `<p class="meta warn">${copyHtml(OWNER_NOT_PINNED)}</p>` : "";
     /* 🔴 대표 지시: 「playx raven 에다가 만들면 바로 판매할 수 있게」.
        여태 이 앱의 발행은 **아무 데도 안 적혔다** — 우리 서버를 부르는 줄이
        하나도 없어서, 아무리 내도 rvn.ex.erci.se 상점에도 게임 장터에도
@@ -7743,8 +7839,8 @@ async function doIssue() {
     $("i-result").innerHTML =
       `<div class="card" style="margin-top:12px"><h3>발행했습니다</h3>
        <div class="kv"><b>자산</b><span translate="no">${escapeHtml(issueCheck.name)}</span></div>
-       <div class="kv"><b>트랜잭션</b><code class="addr">${txid}</code></div>
-       <p class="meta">확인되기까지 몇 분 걸립니다.</p>
+       <div class="kv"><b>트랜잭션</b><code class="addr">${escapeHtml(txid)}</code></div>
+       <p class="meta">확인되기까지 몇 분 걸립니다.</p>${ownerNote}
        <div class="sellnow">
          <h4>바로 팔기</h4>
          <p class="meta">값을 넣으면 <b>rvn.ex.erci.se 상점</b>과
@@ -9467,6 +9563,14 @@ function chatNeedsKey() {
 async function chatSend() {
   const q = ($("chat-q") as HTMLInputElement).value.trim();
   if (!q) return;
+  // 🔴 「R… 내 거야?」는 AI 에게 보내지 않는다 — 노드가 정확히 아는 것을 AI 가 짐작하게
+  //    두면 안 된다. 열쇠가 없어도, 어느 모드든 규칙으로 바로 답한다(0.4.6).
+  const whoseAddr = whoseQuestion(q);
+  if (whoseAddr) {
+    ($("chat-q") as HTMLInputElement).value = "";
+    chatSay("me", q);
+    return void raviWhose(whoseAddr);
+  }
   if (!aiProvider) {
     chatSay("me", q);
     ($("chat-q") as HTMLInputElement).value = "";
@@ -12837,6 +12941,7 @@ async function loadAddrBook() {
               <span class="bl">${fmtQty(x.balance || 0)}</span>
               <button class="ghost" data-copy="${escapeHtml(x.address)}">복사</button>
               <button class="ghost" data-name="${escapeHtml(x.address)}">이름</button>
+              <button class="ghost" data-whose="${escapeHtml(x.address)}">${copyHtml("주소 확인")}</button>
             </div>`,
           )
           .join("")
@@ -12849,6 +12954,15 @@ async function loadAddrBook() {
           await navigator.clipboard.writeText(b.dataset.copy || "");
           b.textContent = "복사됨";
           setTimeout(() => (b.textContent = "복사"), 1400);
+        };
+      });
+    // 이 주소가 받기 몇 번인지·거스름인지, 거기 무엇이 있는지 — 위의 「주소 확인」 칸에서.
+    $("abk-list")
+      .querySelectorAll<HTMLElement>("[data-whose]")
+      .forEach((b) => {
+        b.onclick = () => {
+          void checkWhose(b.dataset.whose || "");
+          $("whose-card").scrollIntoView({ behavior: "smooth", block: "start" });
         };
       });
     $("abk-list")
@@ -14494,7 +14608,8 @@ async function registerShop() {
     const up = await invoke<any>("ipfs_add_bundle", { files: [], metadata: profile });
 
     const asset = $("sh-confirmname").textContent!;
-    const txid = await invoke<string>("issue_asset", {
+    // 가게 이름은 루트 발행이다 — 새 주인 표를 만든다(옮길 표 없음). 답의 모양만 맞춘다.
+    const txid = issuedOf(await invoke<unknown>("issue_asset", {
       name: asset,
       // 🔴 여태 **1개·나눌 수 없음**으로 찍었다. 그러면 이 자산을 손님에게
       //    나눠 줄 수가 없고, 그래서 **팔로우가 성립하지 않는다.**
@@ -14511,7 +14626,7 @@ async function registerShop() {
       reissuable: true, // 프로필을 나중에 고치려면 재발행이 필요하다
       ipfsHash: up.cid,
       toAddress: null,
-    });
+    })).txid;
 
     // 🔴 이 줄이 없으면 노드는 자기 가게의 체인 이름을 영영 모른다 — 터널을
     //    켜도 「누구의 주소인지」를 못 적어서 아무것도 공지하지 못한다.
@@ -16280,6 +16395,41 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("rs-card").addEventListener("click", showCard);
   $("rs-lost").addEventListener("click", phoneLost);
   $("w-refresh").addEventListener("click", () => { loadWallet(); checkForeign(); });
+  // 주소 확인 — 붙여 넣거나 다 치면 **바로** 묻는다. 「확인」·Enter 도 된다.
+  $("whose-go").addEventListener("click", () => void checkWhose());
+  $("whose-in").addEventListener("keydown", (e) => {
+    if ((e as KeyboardEvent).key === "Enter") void checkWhose();
+  });
+  let whoseTimer: number | undefined;
+  $("whose-in").addEventListener("input", () => {
+    clearTimeout(whoseTimer);
+    const v = ($("whose-in") as HTMLInputElement).value;
+    if (!v.trim()) { whoseSeq++; whoseLast = null; $("whose-out").innerHTML = ""; return; }
+    if (looksLikeAddress(v)) whoseTimer = window.setTimeout(() => void checkWhose(), 120);
+  });
+  // 주인 표 줄: 복사 · 그 주소 확인. 보내기는 없다.
+  $("owner-list").addEventListener("click", async (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-owncopy],[data-owncheck]");
+    if (!b) return;
+    if (b.dataset.owncheck) {
+      void checkWhose(b.dataset.owncheck);
+      $("whose-card").scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(b.dataset.owncopy || "");
+      setCopyText(b, () => t("복사됨"));
+    } catch {
+      setCopyText(b, () => t("복사하지 못했어요"));
+    }
+    setTimeout(() => setCopyText(b, () => t("복사")), 1400);
+  });
+  // 값이 끼는 줄(받기 3번 · 거스름 33번 · PLAYX 아래에…)은 언어가 바뀌면 다시 그린다.
+  window.addEventListener("desktop-language-change", () => {
+    if (whoseLast) $("whose-out").innerHTML = whoseHtml(whoseLast);
+    renderOwners();
+    for (const said of raviWhoseSaid) if (said.box.isConnected) said.box.innerHTML = whoseHtml(said.r, "ravi");
+  });
   $("w-send-asset").addEventListener("click", () => void openSend("asset"));
   $("w-send-rvn").addEventListener("click", () => void openSend("rvn"));
   $("s-cancel").addEventListener("click", closeSend);

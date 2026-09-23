@@ -130,45 +130,34 @@ pub async fn refund(
 /// Called on a timer while the shop screen is open. Ignores everything we sent,
 /// so a busy day of automatic fulfilment produces no noise — an alert that
 /// fires forty times on the first night is an alert the owner turns off.
+///
+/// 🔴 **주인 표가 나가도 경보를 못 했다(0.4.6 에서 고침).** 예전에는
+///    `listtransactions` 만 봤는데, 레이븐 4.8 의 그 명령은 자산 줄을 만들어 놓고
+///    **버린다**(rpcwallet.cpp:1790). 그래서 이 목록의 「소유권 토큰이 나갔습니다」는
+///    한 번도 켜질 수 없었다. 자산 줄은 `listsinceblock` 의 `asset_transactions` 에
+///    있고, 받는 주소는 `address` 가 아니라 `destination` 이다.
+///
+///    타이머로 불리므로 지갑 전체를 읽지 않는다 — `since_hours` 앞쯤의 블록부터만
+///    (`listsinceblock <그 블록>`). 우리가 보낸 거래(`OURS`)는 예전처럼 뺀다.
 #[tauri::command]
 pub async fn foreign_spends(since_hours: i64) -> Result<Value, String> {
-    let txs = call_rpc("listtransactions", json!(["*", 200, 0, true])).await?;
-    let list = txs.as_array().cloned().unwrap_or_default();
-
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0);
-    let cutoff = now - since_hours * 3600;
+    let hours = since_hours.clamp(0, MAX_WATCH_HOURS);
+    let cutoff = now - hours * 3600;
+
+    let tip = call_rpc("getblockcount", json!([])).await?.as_u64().unwrap_or(0);
+    let args = match start_height(tip, hours) {
+        Some(h) => json!([call_rpc("getblockhash", json!([h])).await?, 1, true]),
+        // 체인이 짧다(연습 체인 등) — 처음부터 읽어도 얼마 안 된다.
+        None => json!([]),
+    };
+    let since = call_rpc("listsinceblock", args).await?;
 
     let ours = OURS.lock().ok().and_then(|g| g.clone()).unwrap_or_default();
-    let mut found = Vec::new();
-
-    for tx in &list {
-        if tx.get("category").and_then(Value::as_str) != Some("send") {
-            continue;
-        }
-        let time = tx.get("time").and_then(Value::as_i64).unwrap_or(0);
-        if time < cutoff {
-            continue;
-        }
-        let txid = tx.get("txid").and_then(Value::as_str).unwrap_or("");
-        if ours.contains(txid) {
-            continue;
-        }
-
-        let asset = tx.get("asset_name").and_then(Value::as_str);
-        found.push(json!({
-            "txid": txid,
-            "time": time,
-            "address": tx.get("address"),
-            "amount": tx.get("amount").and_then(Value::as_f64).map(f64::abs),
-            "asset": asset,
-            // An ownership token leaving is the worst thing on this list: it
-            // hands over the right to mint that asset forever.
-            "is_owner_token": asset.map(|a| a.ends_with('!')).unwrap_or(false),
-        }));
-    }
+    let found = spends_not_ours(&since, cutoff, &ours)?;
 
     // 앱을 껐다 켜면 우리가 보낸 것도 "남이 보낸 것"으로 보인다. 그걸 침입으로
     // 읽으면 안 되므로, 목록이 신뢰할 만한 구간을 함께 알려 준다.
@@ -180,6 +169,61 @@ pub async fn foreign_spends(since_hours: i64) -> Result<Value, String> {
             "앱을 켠 뒤 이 앱이 보낸 기록이 아직 없어, 아래 목록에 정상 출금이 섞일 수 있습니다."
         },
     }))
+}
+
+/// 한 달보다 길게는 안 본다. 타이머가 지갑 전체를 읽는 길이 되면 안 된다.
+const MAX_WATCH_HOURS: i64 = 24 * 31;
+
+/// `hours` 시간 전쯤의 블록 높이. 레이븐은 1분에 한 블록이 목표지만 빨리 나올 때가
+/// 있어 넉넉히(1.25배 + 30블록) 거슬러 간다 — 넘치는 것은 아래에서 시각으로 거른다.
+/// 체인이 그보다 짧으면 `None`(처음부터).
+fn start_height(tip: u64, hours: i64) -> Option<u64> {
+    let back = (hours.max(0) as u64) * 60 * 5 / 4 + 30;
+    tip.checked_sub(back)
+}
+
+/// `listsinceblock` 답에서 **우리가 안 보낸** 보냄 줄 — RVN 줄과 자산 줄 둘 다.
+///
+/// 자산 줄을 못 읽으면 오류다. 「못 읽음」을 「없음」으로 넘기면 주인 표가 나간 날
+/// 조용하다.
+fn spends_not_ours(since: &Value, cutoff: i64, ours: &HashSet<String>) -> Result<Vec<Value>, String> {
+    let rvn = since
+        .get("transactions")
+        .and_then(Value::as_array)
+        .ok_or("지갑 기록을 읽지 못했어요. 노드가 따라잡은 뒤 다시 해 주세요.")?;
+    let assets = crate::raven::asset_transactions_of(since.clone())?;
+    let mut found = Vec::new();
+    for (tx, asset_row) in rvn
+        .iter()
+        .map(|t| (t, false))
+        .chain(assets.as_array().map(Vec::as_slice).unwrap_or(&[]).iter().map(|t| (t, true)))
+    {
+        if tx.get("category").and_then(Value::as_str) != Some("send") {
+            continue;
+        }
+        let time = tx.get("time").and_then(Value::as_i64).unwrap_or(0);
+        if time < cutoff {
+            continue;
+        }
+        let txid = tx.get("txid").and_then(Value::as_str).unwrap_or("");
+        if ours.contains(txid) {
+            continue;
+        }
+        let asset = tx.get("asset_name").and_then(Value::as_str);
+        // 자산 줄의 받는 주소는 `destination` 이다(RVN 줄은 `address`).
+        let address = if asset_row { tx.get("destination") } else { tx.get("address") };
+        found.push(json!({
+            "txid": txid,
+            "time": time,
+            "address": address,
+            "amount": tx.get("amount").and_then(Value::as_f64).map(f64::abs),
+            "asset": asset,
+            // An ownership token leaving is the worst thing on this list: it
+            // hands over the right to mint that asset forever.
+            "is_owner_token": asset.map(|a| a.ends_with('!')).unwrap_or(false),
+        }));
+    }
+    Ok(found)
 }
 
 // ── 직원 환불 한도 ────────────────────────────────────────────────────────
@@ -405,6 +449,93 @@ mod tests {
         }
         let (once, day, c) = limits_from_fx("JPY", Some(155.0));
         assert!(once > 0.0 && once <= day && c == "JPY");
+    }
+
+    /// 레이븐 4.8 `listsinceblock <hash> 1 true` 의 모양 그대로(rpcwallet.cpp
+    /// ListTransactions · WalletTxToJSON). 주소·거래 번호는 누가 봐도 가짜다.
+    fn since_fixture(now: i64) -> Value {
+        let tx = |c: char| c.to_string().repeat(64);
+        json!({
+            "transactions": [
+                { "account": "", "address": "RTestSomeoneElseXXXXXXXXXXXXXXXXXX", "category": "send",
+                  "amount": -12.5, "vout": 0, "fee": -0.0226, "confirmations": 3,
+                  "blockhash": "00".repeat(32), "blockindex": 4, "blocktime": now - 300,
+                  "txid": tx('a'), "walletconflicts": [], "time": now - 320, "timereceived": now - 320,
+                  "bip125-replaceable": "no", "abandoned": false },
+                { "account": "", "address": "RTestMyOwnReceiveXXXXXXXXXXXXXXXXX", "category": "receive",
+                  "amount": 3.0, "label": "", "vout": 1, "confirmations": 3,
+                  "blockhash": "00".repeat(32), "blockindex": 5, "blocktime": now - 300,
+                  "txid": tx('b'), "walletconflicts": [], "time": now - 320, "timereceived": now - 320,
+                  "bip125-replaceable": "no" }
+            ],
+            "asset_transactions": [
+                // 🔴 주인 표가 남의 주소로 나갔다 — 이게 이 목록의 존재 이유다.
+                { "asset_type": "transfer_asset", "asset_name": "TESTBRAND!", "amount": 1.0, "message": "",
+                  "destination": "RTestThiefAddressXXXXXXXXXXXXXXXXX", "vout": 1, "category": "send",
+                  "confirmations": 0, "trusted": true, "txid": tx('c'), "walletconflicts": [],
+                  "time": now - 60, "timereceived": now - 60, "bip125-replaceable": "no", "abandoned": false },
+                // 우리가 보낸 자산 — 빼야 한다.
+                { "asset_type": "transfer_asset", "asset_name": "TESTBRAND/TICKET", "amount": 2.0, "message": "",
+                  "destination": "RTestCustomerXXXXXXXXXXXXXXXXXXXXX", "vout": 0, "category": "send",
+                  "confirmations": 1, "blockhash": "00".repeat(32), "blockindex": 2, "blocktime": now - 100,
+                  "txid": tx('d'), "walletconflicts": [], "time": now - 100, "timereceived": now - 100,
+                  "bip125-replaceable": "no", "abandoned": false },
+                // 받은 자산은 출금이 아니다.
+                { "asset_type": "transfer_asset", "asset_name": "GIFT", "amount": 5.0, "message": "",
+                  "destination": "RTestMyOwnReceiveXXXXXXXXXXXXXXXXX", "vout": 0, "category": "receive",
+                  "confirmations": 1, "txid": tx('e'), "walletconflicts": [], "time": now - 50,
+                  "timereceived": now - 50, "bip125-replaceable": "no", "abandoned": false },
+                // 창 밖(오래전) — 시각으로 거른다.
+                { "asset_type": "transfer_asset", "asset_name": "OLDBRAND!", "amount": 1.0, "message": "",
+                  "destination": "RTestLongAgoXXXXXXXXXXXXXXXXXXXXXX", "vout": 1, "category": "send",
+                  "confirmations": 900, "txid": tx('f'), "walletconflicts": [], "time": now - 90_000,
+                  "timereceived": now - 90_000, "bip125-replaceable": "no", "abandoned": false }
+            ],
+            "removed": [],
+            "assets_removed": [],
+            "lastblock": "00".repeat(32)
+        })
+    }
+
+    #[test]
+    fn 주인_표가_나가면_경보한다() {
+        let now = 1_787_100_000_i64;
+        let ours: HashSet<String> = ["d".repeat(64)].into_iter().collect();
+        let got = spends_not_ours(&since_fixture(now), now - 24 * 3600, &ours).unwrap();
+        assert_eq!(got.len(), 2, "{got:?}");
+        assert_eq!(got[0]["asset"], Value::Null, "RVN 줄");
+        assert_eq!(got[0]["amount"], 12.5);
+        assert_eq!(got[0]["address"], "RTestSomeoneElseXXXXXXXXXXXXXXXXXX");
+        assert_eq!(got[1]["asset"], "TESTBRAND!");
+        assert_eq!(got[1]["is_owner_token"], true);
+        // 자산 줄의 받는 주소는 destination 에서 온다.
+        assert_eq!(got[1]["address"], "RTestThiefAddressXXXXXXXXXXXXXXXXX");
+        // 우리가 보낸 것이면 조용하다.
+        let ours: HashSet<String> = ["c".repeat(64), "d".repeat(64), "a".repeat(64)].into_iter().collect();
+        assert!(spends_not_ours(&since_fixture(now), now - 24 * 3600, &ours).unwrap().is_empty());
+    }
+
+    #[test]
+    fn 자산_줄을_못_읽으면_없다고_하지_않는다() {
+        let mut v = since_fixture(1_787_100_000);
+        v.as_object_mut().unwrap().remove("asset_transactions");
+        assert!(spends_not_ours(&v, 0, &HashSet::new()).is_err());
+        assert!(spends_not_ours(&json!({}), 0, &HashSet::new()).is_err());
+    }
+
+    #[test]
+    fn 지갑_전체가_아니라_그_시간_앞쯤부터_읽는다() {
+        // 24시간 ≈ 1,440블록. 넉넉히 1,830블록 앞.
+        assert_eq!(start_height(3_000_000, 24), Some(3_000_000 - 1_830));
+        assert_eq!(start_height(100, 24), None, "짧은 체인은 처음부터");
+        assert_eq!(start_height(3_000_000, -5), Some(3_000_000 - 30));
+        assert!(MAX_WATCH_HOURS <= 24 * 31);
+        // 타이머가 부르는 자리에 전체 읽기(`listtransactions`·빈 listsinceblock)가 없다.
+        let src = include_str!("refund.rs");
+        let i = src.find("pub async fn foreign_spends(").unwrap();
+        let body = &src[i..i + src[i..].find("\n}\n").unwrap()];
+        assert!(!body.contains("listtransactions"), "자산 줄이 빠지는 명령을 다시 쓰고 있다");
+        assert!(body.contains("getblockhash"), "시작 블록을 정해야 한다");
     }
 
     #[test]

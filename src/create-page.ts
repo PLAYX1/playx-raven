@@ -14,6 +14,7 @@
  *   · 티켓은 끝나면 「팔기」로 이어진다.
  */
 import { lang, setCopyText, tf } from "./i18n";
+import { issuedOf, OWNER_NOT_PINNED } from "./whose";
 import {
   MAX_COPIES, MAX_TICKETS, brandCandidates, brandFrom, fileFingerprint, findFreeRun, itemNames,
   parseDraft, parseRecipients, todayYmd, totalRvn, validBrand, verifyLink,
@@ -477,7 +478,8 @@ export function wireCreate(deps: CreateDeps): CreateApi {
       }) || undefined;
       tell(() => t(SENDING_NOTE));
       if (r.needsBrand) {
-        const txid = await invoke<string>("create_issue", { step: "brand", brand: r.brand, names: [], quantity: 0, ipfsHash: null, passphrase, historyId });
+        // 0.4.6 부터 `{ txid, owner_pinned, … }` — 이름 등록은 새 주인 표를 만드는 발행이다.
+        const txid = issuedOf(await invoke<unknown>("create_issue", { step: "brand", brand: r.brand, names: [], quantity: 0, ipfsHash: null, passphrase, historyId })).txid;
         quiet();
         saveDraft({ version: 1, kind: r.kind, title: r.title, count: r.count, brand: r.brand, stage: "brand-sent", txid, fingerprint: r.fingerprint || undefined, updatedAt: Date.now(), historyId });
         paintWait();
@@ -509,11 +511,15 @@ export function wireCreate(deps: CreateDeps): CreateApi {
   }
   async function finish(k: CreateKind, title: string, count: number, brand: string, fp: string, names: string[], passphrase: string | null, historyId?: string) {
     const step = k === "ticket" ? "ticket" : "uniques";
-    const txid = await invoke<string>("create_issue", { step, brand, names, quantity: k === "ticket" ? count : 0, ipfsHash: fp || null, passphrase, historyId: historyId ?? null });
+    // 티켓·작품은 브랜드 주인 표(BRAND!)를 쓰고 돌려받는다. 러스트가 표가 지금 있는 주소를
+    // 거스름 자리에 넣는다(0.4.6) — 못 넣었으면 발행은 나갔고, 한 줄로 알린다.
+    const issued = issuedOf(await invoke<unknown>("create_issue", { step, brand, names, quantity: k === "ticket" ? count : 0, ipfsHash: fp || null, passphrase, historyId: historyId ?? null }));
+    const txid = issued.txid;
     quiet();
     const draft: CreateDraft = { version: 1, kind: k, title, count, brand, stage: "done", txid: txid || "", fingerprint: fp || undefined, names, updatedAt: Date.now(), historyId };
     saveDraft(draft);
     await paintDone(await entryOf(draft));
+    if (issued.ownerPinned === false) tell(() => t(OWNER_NOT_PINNED));
   }
   /** 이어하기 표에서 기록을 찾는다. 기록이 없으면(옛 표) 표만으로 그린다 — 인쇄는 못 한다. */
   async function entryOf(d: CreateDraft): Promise<CreateEntry> {

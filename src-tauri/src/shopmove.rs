@@ -171,7 +171,7 @@ pub async fn shop_key_move(qty: f64, passphrase: Option<String>) -> Result<Value
     // ── 체인에 새긴다 ─────────────────────────────────────────────
     let to = crate::raven::call_rpc("getnewaddress", json!([])).await?;
     let to = to.as_str().unwrap_or_default().to_string();
-    let txid = crate::issue2::reissue(
+    let issued = crate::issue2::reissue(
         asset.clone(),
         qty,
         Some(to),
@@ -183,6 +183,7 @@ pub async fn shop_key_move(qty: f64, passphrase: Option<String>) -> Result<Value
         passphrase,
     )
     .await?;
+    let txid = issued["txid"].as_str().unwrap_or_default().to_string();
 
     // ── 여기까지 왔으면 체인이 새 공개키를 가리킨다. 이제 파일을 바꾼다 ──
     crate::shopkey::install_seed_key()?;
@@ -193,6 +194,8 @@ pub async fn shop_key_move(qty: f64, passphrase: Option<String>) -> Result<Value
         "qty": qty,
         "cid": new_cid,
         "pubkey": new_pk,
+        // 가게 주인 표를 제자리에 뒀는지(0.4.6). false 면 노드가 새 거스름 주소로 옮겼을 수 있다.
+        "owner_pinned": issued["owner_pinned"],
         "note": "체인에 새겼습니다. 확인되기까지 몇 분 걸리고, 그동안 손님 화면은 옛 정보를 볼 수 있습니다.",
     }))
 }

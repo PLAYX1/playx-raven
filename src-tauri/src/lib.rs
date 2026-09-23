@@ -49,6 +49,8 @@ mod roles;
 mod send;
 mod setup;
 mod addrbook;
+// 「이 주소가 내 것인가」·내 주인 표가 있는 주소·발행 때 주인 표를 제자리로(0.4.6).
+mod whose;
 mod rewards;
 mod stock;
 mod booking;
@@ -187,6 +189,9 @@ pub fn run() {
             rehearse::rehearse_status,
             rehearse::rehearse_issue,
             addrbook::addr_book,
+            whose::addr_whose,
+            whose::owner_tokens_where,
+            whose::owner_pin_ready,
             addrbook::watch_add,
             addrbook::recv_qr,
             walletx::sign_message,

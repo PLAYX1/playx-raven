@@ -67,6 +67,7 @@ mod tests {
                 "issue2" => include_str!("issue2.rs"),
                 "upload" => include_str!("upload.rs"),
                 "nostrpub" => include_str!("nostrpub.rs"),
+                "whose" => include_str!("whose.rs"),
                 _ => continue,
             };
             checked += 1;

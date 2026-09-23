@@ -311,7 +311,7 @@ pub fn create_history_begin(entry: Value) -> Result<String, String> {
     }
     let title = clean_line(entry.get("title"), 80, "제목")?.ok_or("무엇을 만드는지 제목을 적어 주세요.")?;
     let brand = entry.get("brand").and_then(Value::as_str).unwrap_or("");
-    if crate::create::plan_call("brand", brand, &[], 0, None).is_err() {
+    if crate::create::plan_call("brand", brand, &[], 0, None, None).is_err() {
         return Err("브랜드 이름을 확인해 주세요.".into());
     }
     let count = entry.get("count").and_then(Value::as_u64).unwrap_or(0);

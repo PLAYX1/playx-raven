@@ -175,6 +175,10 @@ pub async fn name_taken(name: String) -> Result<bool, String> {
 /// `reissuable` defaults to true at the call site for a reason: false is the
 /// door that locks behind you, and a default should never be the irreversible
 /// option.
+///
+/// 돌려주는 것: `{ txid, owner_token, owner_pinned, … }`(`whose::issued`).
+/// 하위·고유 발행은 부모 주인 표를 쓰고 돌려받는다 — 그 표가 **지금 있는 주소**를
+/// 거스름 자리에 넣어 제자리로 돌아오게 한다(0.4.6). 루트는 새 표를 만드므로 해당 없음.
 #[tauri::command]
 pub async fn issue_asset(
     name: String,
@@ -183,7 +187,7 @@ pub async fn issue_asset(
     reissuable: bool,
     ipfs_hash: Option<String>,
     to_address: Option<String>,
-) -> Result<String, String> {
+) -> Result<Value, String> {
     let check = validate_name(name.clone());
     if !check["valid"].as_bool().unwrap_or(false) {
         return Err(format!(
@@ -218,17 +222,24 @@ pub async fn issue_asset(
         return Err("이미 존재하는 이름입니다. 자산 이름은 영구적이라 다시 쓸 수 없습니다.".into());
     }
 
+    // 🔴 주인 표 자리는 보내기 **전에** 읽는다(읽기만, 실패해도 막지 않는다).
+    let pin = crate::whose::owner_pin("issue", &name).await;
+
     // issue "name" qty "to_address" "change_address" units reissuable has_ipfs "ipfs_hash"
-    let params = json!([
-        name,
-        qty,
-        to_address.unwrap_or_default(),
-        "",
-        units,
-        reissuable,
-        ipfs_hash.is_some(),
-        ipfs_hash.unwrap_or_default(),
-    ]);
+    let params = crate::whose::with_change(
+        "issue",
+        json!([
+            name,
+            qty,
+            to_address.unwrap_or_default(),
+            "",
+            units,
+            reissuable,
+            ipfs_hash.is_some(),
+            ipfs_hash.unwrap_or_default(),
+        ]),
+        pin.change(),
+    );
 
     let result = call_rpc("issue", params).await?;
     let txid = result
@@ -238,7 +249,7 @@ pub async fn issue_asset(
         .unwrap_or("")
         .to_string();
     crate::refund::remember_ours(&txid);
-    Ok(txid)
+    Ok(crate::whose::issued(txid, &pin))
 }
 
 #[cfg(test)]
@@ -286,6 +297,19 @@ mod name_tests {
                 "{bad} 를 통과시켰다"
             );
         }
+    }
+
+    /// 🔴 하위·고유 발행은 부모 주인 표를 **지금 있는 주소**로 돌려보낸다.
+    ///    거스름 자리(`change_address`)가 늘 `""` 이면 노드가 표를 새 주소로 옮긴다.
+    #[test]
+    fn 하위_발행은_주인_표를_제자리로() {
+        let src = include_str!("issue.rs");
+        let i = src.find("pub async fn issue_asset").unwrap();
+        let body = &src[i..i + src[i..].find("#[cfg(test)]").unwrap()];
+        let pin = body.find("whose::owner_pin(\"issue\"").expect("주인 표 자리를 읽어야 한다");
+        let send = body.find("call_rpc(\"issue\"").unwrap();
+        assert!(pin < send, "보내기 전에 읽어야 한다");
+        assert!(body.contains("whose::with_change(\n        \"issue\"") && body.contains("pin.change()"), "읽은 자리를 거스름 자리에 넣어야 한다");
     }
 
     /// 평범한 발행 문으로 자격 증명·제한 자산이 새어 나가면 노드가 영어로
