@@ -33,6 +33,24 @@ assert.match(read('src-tauri/Cargo.toml'), /name = "playx-raven"/);
 assert.equal(read('src-tauri/src/paths.rs'), execFileSync('git', ['show', 'v0.3.8:src-tauri/src/paths.rs'], { encoding: 'utf8' }));
 for (const path of ['src-tauri/src/mining.rs', 'src-tauri/src/ipfs.rs', 'src-tauri/src/boot.rs', 'src-tauri/src/auto.rs', 'src-tauri/src/shop.rs', 'src-tauri/src/auction.rs', 'src-tauri/src/artist.rs', 'web/wallet.src.ts', 'web/wallet.bundle.js', 'web/wallet.html', 'web/buy.html']) {
   const released = execFileSync('git', ['show', 'v0.3.8:' + path], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 });
+  if (path === 'src-tauri/src/auto.rs') {
+    // 0.4.5 의 유일한 의도된 변경: rebuild_delivered 가 자산 줄을 listsinceblock 에서 읽는다
+    // (listtransactions 에는 자산 줄이 없어 기록 파일을 잃으면 이미 보낸 주문을 또 보냈다).
+    // 그 구간과 그 시험 묶음만 빼고 나머지는 0.3.8 과 글자까지 같아야 한다.
+    const cut = (s) => {
+      const a = s.indexOf('pub async fn rebuild_delivered');
+      const b = s.indexOf("/// Today's automatic total per asset");
+      assert.ok(a > 0 && b > a, 'auto.rs: rebuild_delivered 구간을 찾지 못했다');
+      const t = s.indexOf('\n#[cfg(test)]\nmod rebuild_tests');
+      return s.slice(0, a) + s.slice(b, t > b ? t : undefined);
+    };
+    const now = read(path);
+    const fixed = now.slice(now.indexOf('pub async fn rebuild_delivered'), now.indexOf("/// Today's automatic total per asset"));
+    assert.match(fixed, /crate::raven::wallet_asset_txs\(\)/, 'auto.rs: rebuild_delivered 는 wallet_asset_txs 로 읽어야 한다');
+    assert.match(fixed, /fn asset_went_to\(/, 'auto.rs: asset_went_to 가 있어야 한다');
+    assert.equal(cut(now), cut(released), path + ' must preserve the released behavior outside the 0.4.5 rebuild_delivered fix');
+    continue;
+  }
   assert.equal(read(path), path.endsWith('.html') ? released.replaceAll('PLAY X Raven', 'RavenVault Desktop').replace(/<title>.*?<\/title>/, '<title>RavenVault</title>').replaceAll('content="RavenVault Desktop"', 'content="RavenVault"').replaceAll('content="RavenVault Desktop 지갑"', 'content="RavenVault 지갑"') : path.startsWith('web/') ? released.replaceAll('PLAY X Raven', 'RavenVault Desktop') : released, path + ' must preserve the released behavior');
 }
 console.log('PASS update identity/data paths + released node/mining/IPFS/shop/artist/auction/legacy wallet remain intact');
