@@ -2219,7 +2219,7 @@
       main :is(button, summary), .todochip { min-height:64px !important; }
       main button { overflow-wrap:anywhere; }
 
-      /* ── 0.4.8-B 지갑 첫 배치 · 받기 ─────────────────────
+      /* ── 0.4.8-B 지갑 첫 배치 · 받기 · 보내기 ─────────────────────
          처음 쓰는 사람의 순서: 내 돈이 얼마 → 받기 · 보내기(큰 단추 둘) → 나머지(작은 줄).
          🔴 style 속성은 쓰지 않는다(앱 CSP 가 막는다 — style-attrs.ts). 전부 여기 클래스로. */
       #w-incoming-note[hidden], #overview-incoming-row[hidden] { display:none !important; }
@@ -2244,6 +2244,25 @@
       .wrecv-addr { display:block; font-size:16px; line-height:1.5; padding:10px 12px; border-radius:8px;
                     background:var(--ravi-tint); color:var(--text); overflow-wrap:anywhere; word-break:break-all; user-select:all; }
       .wrecv-btns { display:flex; flex-wrap:wrap; gap:8px; margin:10px 0 6px; }
+      .wpick { margin-bottom:12px; }
+      .pickhead { font-size:15px; font-weight:650; color:var(--text); margin-bottom:6px; }
+      .picksub { font-size:14px; color:var(--muted); margin:8px 0 4px; }
+      .payees { display:flex; flex-wrap:wrap; gap:8px; }
+      button.payee { display:inline-flex; flex-direction:column; align-items:flex-start; justify-content:center;
+                     gap:2px; text-align:left; padding:8px 14px; max-width:100%; }
+      button.payee b { font-weight:650; }
+      button.payee code { font-size:13px; color:var(--muted); }
+      .review .rtotal { font-size:18px; font-weight:650; }
+      .review .warn { color:var(--warn); }
+      .wdone { margin-top:12px; }
+      .wdone-amt { font-size:28px; font-weight:650; letter-spacing:-0.01em; margin:2px 0 8px; }
+      .wdone-more { margin:8px 0; }
+      .wdone-more .kv { flex-wrap:wrap; }
+      .wdone-more code.addr { overflow-wrap:anywhere; word-break:break-all; }
+      .wsave { margin-top:12px; padding-top:12px; border-top:1px solid var(--line); }
+      .wsave label { display:block; margin-bottom:6px; }
+      .wsave-row { display:flex; gap:8px; flex-wrap:wrap; }
+      .wsave-row input { flex:1 1 220px; min-width:0; }
     </style>
   </head>
   <body>
@@ -3320,6 +3339,8 @@
           <div class="row" id="s-assetrow">
             <label>보낼 자산<select id="s-asset"></select></label>
           </div>
+          <!-- 0.4.8-B 받을 사람 고르기 — 저장한 사람 · 최근 보낸 곳. 고르면 아래 칸에 넣기만 한다. -->
+          <div class="wpick" id="s-pick"></div>
           <label>받는 주소<input id="s-addr" placeholder="R…" autocomplete="off" spellcheck="false" /></label>
           <div class="meta" id="s-addrnote"></div>
           <label id="s-qtylabel">수량<input id="s-qty" type="number" min="0" step="any" /></label>
@@ -3329,7 +3350,8 @@
           </div>
         </div>
 
-        <!-- 검토. 누구에게 · 무엇을 · 얼마. 보내기 버튼은 여기에만 있다. -->
+        <!-- 검토. 누구에게 · 무엇을 · 얼마. 보내기 버튼은 여기에만 있다.
+             0.4.8-B 수수료 · 합계를 더했다 — 받는 분이 받는 금액과 내 지갑에서 나가는 돈을 따로. -->
         <div class="sendbox" id="send-review" style="display:none">
           <div class="sendhead"><span>보내기 전 확인</span><button class="ghost" id="s-back">고치기</button></div>
 
@@ -3339,7 +3361,11 @@
             <div class="rk">무엇을</div>
             <div class="rv" id="r-what"></div>
             <div class="rk">얼마</div>
-            <div class="rv big" id="r-amount"></div>
+            <div class="rv"><div class="big" id="r-amount"></div><div class="meta">받는 분이 받는 금액</div></div>
+            <div class="rk">수수료</div>
+            <div class="rv"><div id="r-fee"></div><div class="meta" id="r-feenote"></div></div>
+            <div class="rk">합계</div>
+            <div class="rv"><div class="rtotal" id="r-total"></div><div class="meta">내 지갑에서 나가는 돈</div></div>
           </div>
 
           <div id="r-warn"></div>

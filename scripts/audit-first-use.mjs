@@ -77,6 +77,8 @@ function mockScript(state) {
           S.addrN++; S.recv = 'RGz' + String(S.addrN).padStart(3, '1') + 'fakeAddrForAuditXyzAbcdef'; return { address: S.recv, reused: false, mine: true };
         case 'receive_qr_save': return { path: a.path };
         case 'plugin:dialog|save': return null;
+        // 0.4.8-B 수수료 — 노드가 읽기로 계산한 값(가짜). 서명·전파 없음.
+        case 'send_fee': return { fee: 0.00226, amount: Number(a.amount), total: Math.round((Number(a.amount) + 0.00226) * 1e8) / 1e8, short: false };
         case 'wallet_since': return { lastblock: 'b' + S.block, transactions: S.txs, asset_transactions: [] };
         case 'recent_transactions': return S.txs;
         case 'addr_book': return { rows: [] };
@@ -297,6 +299,7 @@ try {
     await x.tap('#s-review', '검토');
     const review = (await x.text('#send-review')).replace(/\s+/g, ' ');
     x.note(`검토 화면에 수수료: ${/수수료/.test(review) ? '있음' : '없음'} · 원화: ${/원|₩|KRW/.test(review) ? '있음' : '없음'}`);
+    if (await x.page.$('#r-fee')) x.note(`수수료 줄: ${(await x.text('#r-fee')).trim()} · 합계: ${(await x.text('#r-total')).trim()} · 보내기 전 send_rvn 부름: ${(await x.S()).calls.includes('send_rvn') ? '있음(!)' : '없음'}`);
     await x.shot('review');
     await x.tap('#s-go', '보내기');
     await x.wait(500);

@@ -183,8 +183,10 @@ import {
   issuedOf, looksLikeAddress, ownerRowsHtml, OWNER_NOT_PINNED, whoseHtml, whoseQuestion,
   type Issued, type OwnerRow, type WhoseResult,
 } from "./whose";
-// 0.4.8-B — 지갑 받기(주소 · QR · 복사).
-import { RECEIVE_MESSAGE, receiveHtml } from "./wallet-easy";
+// 0.4.8-B — 지갑 받기 · 보내기(수수료 · 받을 사람).
+import {
+  loadPayees, payeeName, pickerHtml, receiveHtml, recentPayees, RECEIVE_MESSAGE, savePayee, sentHtml,
+} from "./wallet-easy";
 
 type Asset = {
   name: string;
@@ -8174,6 +8176,8 @@ async function openSend(mode: "asset" | "rvn", preselect?: string) {
   $("s-addrnote").textContent = "";
   $("s-held").textContent = "";
   ($("s-review") as HTMLButtonElement).disabled = true;
+  void paintPicker();
+  $("send-compose").scrollIntoView({ behavior: "smooth", block: "nearest" });
 
   if (mode === "asset") {
     // 🔴 지도가 비어 있으면 **고를 것이 없는 목록**이 뜬다(위 ensureAssets 주석).
@@ -8198,8 +8202,56 @@ function closeSend() {
   $("send-review").style.display = "none";
 }
 
+/* 「받을 사람 고르기」(0.4.8-B · RV3 🔴6) — 저장한 사람(이 컴퓨터에만)과 지갑 기록의 최근 보낸 곳 5곳.
+   🔴 고르면 주소 칸에 **넣기만** 한다. 검토·확인·끝 네 글자는 그대로 거친다. 복사해 붙이지 않으니
+      클립보드 바꿔치기(보내기 확인 주석)도 끼어들 틈이 없다. */
+let pickSeq = 0;
+async function paintPicker() {
+  const host = $("s-pick");
+  const seq = ++pickSeq;
+  const saved = loadPayees();
+  host.innerHTML = pickerHtml(saved, [], copyHtml, escapeHtml);
+  const txs = await invoke<any[]>("recent_transactions", { count: 100 }).catch(() => []);
+  if (seq !== pickSeq) return;
+  host.innerHTML = pickerHtml(saved, recentPayees(Array.isArray(txs) ? txs : [], saved), copyHtml, escapeHtml);
+}
+
+let pickedAddr = "";
+function pickPayee(address: string) {
+  const input = $("s-addr") as HTMLInputElement;
+  input.value = address;
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  pickedAddr = address;
+  const name = payeeName(address);
+  setCopyText($("s-addrnote"), () => (name ? tf("받을 사람: {0}", name) : ""));
+  ($("s-qty") as HTMLInputElement).focus();
+}
+
+/** 수수료 한 줄 — RVN 은 노드에 읽기로만 묻는다(`sendfee.rs`, 서명·전파 없음). 못 구하면 지어내지 않는다. */
+const FEE_UNKNOWN = "수수료는 노드가 정해요(보통 0.01 RVN 안팎).";
+function paintSendFee(fee: any, amount: number, asset: string | null) {
+  const feeBox = $("r-fee"), feeNote = $("r-feenote"), total = $("r-total");
+  const known = !asset && fee && typeof fee.fee === "number" && Number.isFinite(fee.fee) && fee.short !== true;
+  if (known) {
+    setCopyText(feeBox, () => `${fmtQty(fee.fee)} RVN`);
+    setCopyText(feeNote, () => t("노드가 지금 계산한 값이에요. 보낼 때 노드가 다시 계산해 아주 조금 다를 수 있어요."));
+    setCopyText(total, () => `${fmtQty(Number(fee.total ?? amount + fee.fee))} RVN`);
+    return;
+  }
+  setCopyText(feeBox, () => t(FEE_UNKNOWN));
+  setCopyText(feeNote, () => asset ? t("수수료는 RVN 으로 내요.")
+    : fee?.short === true ? t("수수료까지 합치면 잔액이 모자라요. 금액을 조금 줄여 주세요.")
+    : t("이번 수수료를 노드에 묻지 못했어요."));
+  setCopyText(total, () => asset ? tf("{0} {1} + 수수료(RVN)", fmtQty(amount), asset) : tf("{0} RVN + 수수료", fmtQty(amount)));
+}
+
 function composeChanged() {
   const addr = ($("s-addr") as HTMLInputElement).value.trim();
+  // 고른 뒤 주소를 손으로 고치면 「받을 사람: 이름」은 더 이상 맞지 않는다 — 지운다.
+  if (pickedAddr && addr !== pickedAddr) {
+    pickedAddr = "";
+    $("s-addrnote").textContent = "";
+  }
   const qty = parseFloat(($("s-qty") as HTMLInputElement).value);
   ($("s-review") as HTMLButtonElement).disabled = !(addr.length > 20 && qty > 0);
 }
@@ -8233,9 +8285,13 @@ async function reviewSend() {
   const h = sendPreview.history || {};
   // The name is the check a human can actually perform. When there is no name,
   // that absence *is* the warning — it is not drawn as a neutral blank.
-  $("r-who").innerHTML = h.label
-    ? `<b>${h.label}</b>`
-    : `<span style="color:var(--warn)">처음 보내는 주소</span>`;
+  // 0.4.8-B — 이 컴퓨터에 저장한 받을 사람 이름도 보여 준다. 🔴 그래도 「처음 보내는 주소」 경고는
+  //    노드의 보낸 기록(h.known)으로만 정한다 — 이름을 저장했다고 경고를 끄지 않는다.
+  const who = String(h.label || payeeName(address) || "");
+  const first = `<span class="warn">${copyHtml("처음 보내는 주소")}</span>`;
+  $("r-who").innerHTML = who
+    ? `<b translate="no">${escapeHtml(who)}</b>${h.known ? "" : ` · ${first}`}`
+    : first;
   $("r-addr").textContent = address;
   $("r-hist").textContent = h.known
     ? tf("지난번 {0} · {1}", h.last_amount ?? "?", h.last_time ? ago(h.last_time) : "")
@@ -8288,7 +8344,15 @@ async function reviewSend() {
       `${escapeHtml(head)}<b class="masked" aria-label="가려진 네 글자">••••</b>`;
   }
 
-  const lock = await invoke<any>("wallet_lock_state").catch(() => null);
+  // 수수료는 잠금 상태와 같이 묻는다(기다림을 한 번으로). RVN 만 — 자산은 「노드가 정해요」.
+  setCopyText($("r-fee"), () => t("수수료 계산 중…"));
+  $("r-feenote").textContent = "";
+  $("r-total").textContent = "";
+  const [lock, fee] = await Promise.all([
+    invoke<any>("wallet_lock_state").catch(() => null),
+    asset ? Promise.resolve(null) : invoke<any>("send_fee", { address, amount }).catch(() => null),
+  ]);
+  paintSendFee(fee, amount, asset);
   const needPass = lock && lock.encrypted && !lock.unlocked;
   $("r-passbox").style.display = needPass ? "" : "none";
   ($("s-pass") as HTMLInputElement).value = "";
@@ -8328,6 +8392,13 @@ async function doSend() {
   btn.disabled = true;
   btn.textContent = "보내는 중…";
   const pass = ($("s-pass") as HTMLInputElement).value || null;
+  // 결과 화면에 쓸 것 — 보낸 뒤에는 sendPreview 를 비운다.
+  const sent = {
+    address: String(sendPreview.address),
+    amount: fmtQty(Number(sendPreview.amount)),
+    what: sendMode === "asset" ? String(sendPreview.asset) : "RVN",
+    isMine: sendPreview.is_mine === true,
+  };
 
   try {
     const txid =
@@ -8345,11 +8416,28 @@ async function doSend() {
             passphrase: pass,
           });
 
-    $("s-result").innerHTML =
-      `<div class="card" style="margin-top:12px"><h3>보냈습니다</h3>
-       <div class="kv"><b>받는 곳</b><code class="addr">${sendPreview.address}</code></div>
-       <div class="kv"><b>트랜잭션</b><code class="addr">${txid}</code></div>
-       <p class="meta">확인되기까지 몇 분 걸립니다. 되돌릴 수 없습니다.</p></div>`;
+    // 🔴 0.4.8-B — 결과가 「트랜잭션 + 64자」였다(RV3 T05). 사람이 확인할 것은 **얼마를 누구에게**다.
+    //    거래 번호는 「자세히」 안으로. 이름이 없으면 그 자리에서 붙여 저장하게 한다(이 컴퓨터에만).
+    const name = payeeName(sent.address);
+    $("s-result").innerHTML = sentHtml({
+      amount: sent.amount, what: sent.what, address: sent.address, name, txid: String(txid ?? ""),
+      canSave: !name && !sent.isMine,
+    }, copyHtml, escapeHtml);
+    const saveBtn = document.getElementById("s-saveok");
+    if (saveBtn) {
+      saveBtn.onclick = () => {
+        const input = $("s-savename") as HTMLInputElement;
+        const note = $("s-savenote");
+        try {
+          savePayee(sent.address, input.value);
+          input.disabled = true;
+          (saveBtn as HTMLButtonElement).disabled = true;
+          setCopyText(note, () => t("저장했어요. 다음에 보낼 때 「받을 사람 고르기」에 나와요."));
+        } catch {
+          setCopyText(note, () => t("이름을 한 글자 이상 적어 주세요."));
+        }
+      };
+    }
     $("r-tailbox").style.display = "none";
     $("r-passbox").style.display = "none";
     // 🔴 보낸 뒤에는 고칠 것이 없다. 체인은 되돌리지 않는다.
@@ -16497,6 +16585,10 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("w-receive").addEventListener("click", () => void openReceive());
   $("w-go-txs").addEventListener("click", () => jumpToEl("w-txs"));
   $("w-go-whose").addEventListener("click", () => jumpToEl("whose-in"));
+  $("s-pick").addEventListener("click", (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLElement>("[data-payee]");
+    if (b?.dataset.payee) pickPayee(b.dataset.payee);
+  });
   $("ask-yes").addEventListener("click", () =>
     askClose(($("ask-input") as HTMLInputElement).value)
   );

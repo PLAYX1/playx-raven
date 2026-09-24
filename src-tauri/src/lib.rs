@@ -52,8 +52,9 @@ mod setup;
 mod addrbook;
 // 「이 주소가 내 것인가」·내 주인 표가 있는 주소·발행 때 주인 표를 제자리로(0.4.6).
 mod whose;
-// 0.4.8-B 지갑 「받기」(안 받은 주소 다시 쓰기·QR 저장).
+// 0.4.8-B 지갑 「받기」(안 받은 주소 다시 쓰기·QR 저장)와 보내기 확인의 수수료 한 줄.
 mod receive;
+mod sendfee;
 mod rewards;
 mod stock;
 mod booking;
@@ -205,6 +206,7 @@ pub fn run() {
             whose::addr_whose,
             receive::receive_address,
             receive::receive_qr_save,
+            sendfee::send_fee,
             whose::owner_tokens_where,
             whose::owner_pin_ready,
             addrbook::watch_add,
