@@ -6,6 +6,7 @@ import { FINGERPRINT_GUESS, wireCreate, type CreateApi } from "./create-page";
 import { verifyLink } from "./easy-create";
 import { requireWalletBackup, restoreIsComplete } from "./backup-result";
 import { paintWalletNotes, walletWelcome } from "./wallet-notes";
+import { wireSeedCheck } from "./seed-check";
 import { invoke as rawInvoke } from "@tauri-apps/api/core";
 
 /**
@@ -4447,7 +4448,7 @@ function showPage(id: string) {
   document.querySelectorAll("nav a").forEach((a) =>
     a.classList.toggle("on", (a as HTMLElement).dataset.page === id));
   if (id === "wallet") loadWallet();
-  // 0.4.8 — 지갑 화면 맨 위 알림 줄(「지갑이 준비됐어요」). 배치는 안 건드리고 칸 하나만.
+  // 0.4.8 — 지갑 화면 맨 위 알림 줄(「지갑이 준비됐어요」·복구 단어 확인). 배치는 안 건드리고 칸 하나만.
   if (id === "wallet") void paintWalletNotes(walletNotes);
   /* 🔴 웹 주문 칸은 **자산 화면**(page-assets)의 자판기 아래에 있다.
      처음에 「가게」 화면의 탭에 걸었는데 서로 다른 화면이라 평생 안 불렸다.
@@ -13239,31 +13240,8 @@ async function doBackup(destFolder = ""): Promise<string> {
   }
 }
 
-async function showSeed() {
-  const pass = await ask(
-    "지갑 암호",
-    "복구 단어가 화면에 뜹니다. 주변에 사람이 없는지 먼저 보세요.",
-    { password: true }
-  );
-  if (!pass) return;
-  try {
-    const r = await invoke<any>("reveal_seed", { passphrase: pass });
-    $("sd-words").innerHTML =
-      `<div class="seedgrid">` +
-      (r.words || [])
-        .map((w: string, i: number) => `<div class="seedword"><i>${i + 1}</i>${escapeHtml(w)}</div>`)
-        .join("") +
-      `</div>`;
-    // 시드 뒤에 추가 암호가 걸려 있으면 단어만 적어 둔 사람은 나중에 못 연다.
-    $("sd-extra").innerHTML = r.has_extra_passphrase
-      ? `<span class="danger">이 지갑에는 단어 외에 추가 암호가 걸려 있습니다.
-         그 암호도 함께 기억해야 복구됩니다.</span>`
-      : "";
-    $("seedsheet").classList.remove("hidden");
-  } catch (e) {
-    $("bk-result").innerHTML = `<div class="warnbox" style="margin-top:11px">${escapeHtml(errText(e))}</div>`;
-  }
-}
+/* 복구 단어 보기는 0.4.8 부터 한 흐름이다(`seed-check.ts`) — 암호가 없으면 그 창에서
+   만들고, 노드를 다시 켜고, 단어를 보고, 2·6·10번째를 묻는다. 암호 관문은 그대로다. */
 
 
 
@@ -16679,12 +16657,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   // 이벤트 객체가 목적지 인자로 넘어가지 않게 감싼다. 안 감쌌으면
   // destFolder 에 MouseEvent 가 들어갔을 것이다 — 타입 검사가 잡았다.
   $("bk-go").addEventListener("click", () => void doBackup().catch(() => {}));
-  $("bk-seed").addEventListener("click", showSeed);
-  $("sd-close").addEventListener("click", () => {
-    // 화면에 남겨 두지 않는다. 자리를 비운 사이 누가 볼 수 있다.
-    $("sd-words").innerHTML = "";
-    $("seedsheet").classList.add("hidden");
-  });
+  // 🔴 「이 컴퓨터 › 백업」의 단추도 지갑 화면 알림 줄과 **같은 흐름**으로 간다(0.4.8).
+  $("bk-seed").addEventListener("click", () => seedCheck.open());
   void paintStatusDots();
   // 🔴 켤 때마다 본다.
   //
@@ -17441,7 +17415,18 @@ let helpTimer: number | null = null;
 
 /** 지금 고른 모드(`mode_get`). 못 읽었거나 안 골랐으면 빈 글자. */
 let modeNow = "";
-const walletNotes = { invoke, mode: () => modeNow };
+/** 복구 단어 적어 두기 창(0.4.8). 여는 곳은 지갑 화면 알림 줄과 「이 컴퓨터 › 백업」. */
+const seedCheck = wireSeedCheck({
+  invoke,
+  mode: () => modeNow,
+  changed: () => {
+    if (currentPage === "wallet") {
+      loadWallet();
+      void paintWalletNotes(walletNotes);
+    }
+  },
+});
+const walletNotes = { invoke, mode: () => modeNow, openSeedCheck: () => seedCheck.open() };
 
 /**
  * 「지갑」 모드면 왼쪽 메뉴의 지갑을 **맨 위**로 올린다. 다른 모드로 바꾸면

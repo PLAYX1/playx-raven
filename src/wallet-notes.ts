@@ -1,19 +1,22 @@
 /* 지갑 화면 맨 위의 알림 줄(0.4.8-A).
  *
- * 지갑 화면의 배치(잔액·받기·보내기)는 건드리지 않고, 제목 아래에 칸 하나를
- * 끼워 넣는다 — 이 파일이 그 칸만 쓴다.
+ * 두 줄뿐이다. 지갑 화면의 배치(잔액·받기·보내기)는 건드리지 않고, 제목 아래에
+ * 칸 하나를 끼워 넣는다 — 이 파일이 그 칸만 쓴다.
  *
  *   · 「지갑이 준비됐어요」 — 「지갑으로 쓸래요」를 고르고 처음 들어왔을 때만.
  *     🔴 노드가 아직 장부를 여는 중이면 **그렇다고** 말한다. 준비 안 된 지갑을
  *        준비됐다고 하면 잔액 0 을 보고 돈이 사라진 줄 안다.
+ *   · 「복구 단어를 아직 확인하지 않으셨어요 · 지금 확인」 — 확인하면 사라진다.
  */
-import { setCopyText, t, tf } from "./i18n";
+import { copyHtml, setCopyText, t, tf } from "./i18n";
+import { seedChecked } from "./seed-check";
 
 type Invoke = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 
 export type WalletNotesDeps = {
   invoke: Invoke;
   mode: () => string;
+  openSeedCheck: () => void;
 };
 
 /** 이번에 켠 동안 「준비됐어요」를 말할 차례인가. 저장하지 않는다 — 첫 착지에만. */
@@ -64,6 +67,23 @@ export async function paintWalletNotes(deps: WalletNotesDeps): Promise<void> {
     setCopyText(ready, () => line.say());
   } else if (ready) {
     ready.remove();
+  }
+
+  // ── 복구 단어 확인 ──
+  let seed = el.querySelector<HTMLElement>("#w-seednote");
+  if (seedChecked()) {
+    seed?.remove();
+    return;
+  }
+  if (!seed) {
+    seed = document.createElement("div");
+    seed.id = "w-seednote";
+    seed.className = "wnote warn";
+    seed.innerHTML =
+      `<span>${copyHtml("복구 단어를 아직 확인하지 않으셨어요")}</span>` +
+      `<button class="ghost" id="w-seedgo" type="button">${copyHtml("지금 확인")}</button>`;
+    seed.querySelector("button")?.addEventListener("click", () => deps.openSeedCheck());
+    el.append(seed);
   }
 }
 

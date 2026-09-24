@@ -62,11 +62,13 @@ function mockScript(state) {
           irreversible: !(a && a.shopOnly), reasons: ['노트북으로 보여 공간을 아낍니다'], machine: { free_disk_gb: 200 }, ipfs_profile: 'lowpower' };
         case 'conf_read': return { values: {} };
         case 'apply_setup': case 'open_shop': return null;
-        case 'node_status': return { blocks: 1000, headers: 1000, progress: 1, peers: 3 };
+        // 암호를 걸면 진짜 노드는 스스로 꺼진다 — 다시 켤 때까지 연결이 안 된다(0.4.8-A2 흐름이 이걸 기다린다).
+        case 'node_status': if (S.nodeDown) throw 'Could not connect to the server (connection refused)'; return { blocks: 1000, headers: 1000, progress: 1, peers: 3 };
         case 'money_status': throw 'Synthetic status unavailable';
         case 'wallet_balance': return { confirmed: S.confirmed, unconfirmed: S.unconfirmed };
-        case 'wallet_lock_state': return { encrypted: S.encrypted, unlocked: S.unlocked };
-        case 'encrypt_wallet': S.encrypted = true; return null;
+        case 'wallet_lock_state': if (S.nodeDown) throw 'Could not connect to the server (connection refused)'; return { encrypted: S.encrypted, unlocked: S.unlocked };
+        case 'encrypt_wallet': S.encrypted = true; S.nodeDown = true; return { encrypted: true, node_stopped: true, sure: true };
+        case 'services_start': S.nodeDown = false; S.started = (S.started || 0) + 1; return { started: [{ what: '노드' }], skipped: [] };
         case 'reveal_seed':
           if (!S.encrypted) throw '이 지갑에는 아직 암호가 없습니다. 「지갑」 화면에서 암호를 먼저 걸어 주세요 — 암호를 건 뒤 복구 단어를 볼 수 있습니다.';
           return { words: ${JSON.stringify(FAKE_WORDS)}, has_extra_passphrase: false };
@@ -213,6 +215,38 @@ try {
     x.note(`「이 컴퓨터」 첫 줄 칸: ${tiles.join(' / ')}`);
     await x.tap(`#pt-settings [data-pt="${i}"]`, '백업 칸');
     await x.tap('#bk-seed', '복구 단어 보기');
+    if (await x.page.waitForSelector('#sdw-body [data-step], #sdw-body:not(:empty)', { visible: true, timeout: 3000 }).catch(() => null)) {
+      // 0.4.8-A2: 한 창에서 ① 암호 만들기 → 노드 다시 켜기 → ② 단어 보기 → ③ 2·6·10번째 확인.
+      await x.page.waitForFunction(() => ['lock', 'reveal'].includes(document.getElementById('sdw-body')?.dataset.step || '') && !!document.querySelector('#sdw-new, #sdw-pass'), { timeout: 6000 });
+      if (await x.visible('#sdw-new')) {
+        x.note(`암호 만들기 안내: ${(await x.text('#sdw-body')).replace(/\s+/g, ' ').slice(0, 200)}`);
+        await x.type('#sdw-new', 'Correct-Horse-9', '새 암호');
+        await x.type('#sdw-new2', 'Correct-Horse-9', '새 암호 다시');
+        await x.type('#sdw-confirm', (await x.text('#sdw-body pre.conf')).trim(), '문장 입력');
+        await x.tap('#sdw-lock-go', '암호 걸고 계속');
+        const t0 = Date.now();
+        await x.page.waitForSelector('#sdw-pass', { visible: true, timeout: 30000 }).catch(() => null);
+        x.r.waitedSecs += Math.round((Date.now() - t0) / 100) / 10;
+        x.note(`노드 다시 켜기 기다림 ${Math.round((Date.now() - t0) / 100) / 10}초 — 가짜 노드는 곧바로(실제 1~2분) · 저절로 다음 단계: ${(await x.visible('#sdw-pass')) ? '예' : '아니오'} · services_start ${(await x.S()).started || 0}번`);
+      }
+      await x.type('#sdw-pass', 'Correct-Horse-9', '지갑 암호');
+      await x.tap('#sdw-show', '단어 보기');
+      // 가짜 단어라도 단어가 보이는 화면은 캡처하지 않는다.
+      await x.tap('#sdw-written', '다 적었어요');
+      const asked = await x.page.$$eval('[data-sdw-at]', (es) => es.map((e) => Number(e.dataset.sdwAt)));
+      x.note(`확인 질문(몇 번째 단어 등): ${asked.length ? `있음 — ${asked.join('·')}번째` : '없음'}`);
+      // 적어 둔 종이를 보고 답한다 — 이 시험에서는 가짜 단어 목록이 그 종이다.
+      for (const n of asked) await x.type(`[data-sdw-at="${n}"]`, FAKE_WORDS[n - 1], `${n}번째 단어`);
+      await x.tap('#sdw-check', '확인');
+      const done = await x.has(/적어 두셨어요/);
+      x.note(`끝: ${done ? '「적어 두셨어요」' : '확인 실패'} · 남긴 것: ${await x.page.evaluate(() => localStorage.getItem('rv-seed-checked') || '(없음)')}`);
+      await x.tap('#sdw-done', '닫기');
+      await x.tap('nav a[data-page="wallet"]', '지갑 메뉴(알림 줄이 사라졌나 보기)');
+      x.note(`지갑 화면 「복구 단어를 아직 확인하지 않으셨어요」: ${(await x.visible('#w-seednote')) ? '남아 있음' : '사라짐'}`);
+      x.r.clicks--; // 위 지갑 메뉴는 확인하려고 누른 것 — 과제 누름에서 뺀다.
+      return done;
+    }
+    // 0.4.7 까지의 옛 흐름(비교용으로 그대로 둔다).
     await x.type('#ask-input', 'nopassword', '지갑 암호(없는데 물음)');
     await x.tap('#ask-yes', '확인');
     const msg = (await x.text('#bk-result')).trim();
@@ -226,6 +260,7 @@ try {
     x.note(`암호 걸기 안내: ${(await x.text('#encbox')).replace(/\s+/g, ' ').slice(0, 200)}`);
     await x.tap('#enc-go', '암호 걸기 실행');
     await x.wait(600);
+    await x.page.evaluate(() => { window.__S.nodeDown = false; }); // 옛 흐름: 사람이 노드를 따로 다시 켰다고 친다
     await x.tap('nav a[data-page="settings"]', '이 컴퓨터');
     await x.tap(`#pt-settings [data-pt="${i}"]`, '백업 칸');
     await x.tap('#bk-seed', '복구 단어 보기');

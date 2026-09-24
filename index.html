@@ -5045,21 +5045,14 @@
       </div>
     </div>
 
-    <!-- 복구 단어. 한 번 보여주고 닫는다. -->
-    <div id="seedsheet" class="sheet hidden">
+    <!-- 복구 단어 적어 두기(0.4.8). 한 창에서 ① 암호(없으면 만들기) ② 단어 보기 ③ 2·6·10번째 확인.
+         내용은 `seed-check.ts` 가 그린다. 단어는 창을 닫으면 지운다 — 이 창은 캡처하지 않는다.
+         (옛 창의 「임시 파일이 잠깐 생겼다 지워진다」는 말은 뺐다 — 지금은 `getmywords` 라 파일을 안 쓴다.) -->
+    <div id="sdw" class="sheet hidden" role="dialog" aria-modal="true" aria-labelledby="sdw-title">
       <div class="sheet-box">
-        <div class="sheet-head"><span>복구 단어</span><button class="ghost" id="sd-close">닫기</button></div>
-        <div class="warnbox">
-          <b>이 단어를 아는 사람은 지갑 전부를 가져갈 수 있습니다.</b><br />
-          사진 찍지 마세요. 메모 앱에 적지 마세요. 남에게 보여주지 마세요.<br />
-          <b>종이에 적어</b> 이 컴퓨터가 아닌 곳에 두세요.
-        </div>
-        <div id="sd-words"></div>
-        <div class="meta" id="sd-extra"></div>
-        <p class="meta">
-          단어를 꺼내는 동안 이 컴퓨터에 임시 파일이 잠깐 생겼다가 지워집니다.
-          SSD에서는 지운 흔적이 완전히 사라지지 않을 수 있습니다.
-        </p>
+        <div class="sheet-head"><span id="sdw-title">복구 단어 적어 두기</span><button class="ghost" id="sdw-close">닫기</button></div>
+        <div class="steps" id="sdw-steps" aria-hidden="true"><i></i><i></i><i></i></div>
+        <div id="sdw-body"></div>
       </div>
     </div>
 
