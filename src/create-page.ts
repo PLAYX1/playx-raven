@@ -757,7 +757,8 @@ export function wireCreate(deps: CreateDeps): CreateApi {
     b.chunks.forEach((c, i) => {
       const li = document.createElement("li");
       li.className = c === now ? "now" : c.state === "done" ? "done" : c.state === "bad" ? "bad" : "";
-      const state = c === now ? "보내는 중…" : c.state === "done" ? "보냄" : c.state === "bad" ? "안 나감" : "기다림";
+      // 「보냄」은 앱 사전에서 송금(送金)이라 묶음 상태는 따로 「보냈어요」.
+      const state = c === now ? "보내는 중" : c.state === "done" ? "보냈어요" : c.state === "bad" ? "안 나감" : c.state === "unknown" ? "보냈는지 모름" : "기다림";
       li.append(node("span", () => tf("{0}번째 묶음 · {1}장", i + 1, c.idx.length)), node("span", state));
       list.append(li);
     });

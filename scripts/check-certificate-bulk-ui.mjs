@@ -151,7 +151,7 @@ async function openApp({ width = 1280, height = 900, language = 'ko', spendable 
           case 'create_history_forget': S.history = S.history.filter((e) => e.id !== args.id); return null;
           case 'create_history_get': return S.history.find((e) => e.id === args.id) ?? null;
           case 'create_issue': {
-            await wait(250);
+            await wait(S.issueWait ?? 250);
             const n = S.calls.filter((c) => c.command === 'create_issue').length;
             if (S.issueFail && S.issueFail.at === n) { const f = S.issueFail; S.issueFail = null; throw f.error; }
             const e = S.history.find((x) => x.id === args.historyId);
@@ -541,8 +541,13 @@ try {
       await page.evaluate(() => { window.__S.spendable = 300; });
       await page.evaluate(() => document.querySelectorAll('#cr-review .cr-actions button')[1].click());
       await page.waitForSelector('#cr-make:not([disabled])');
+      // 보내는 중 화면(묶음 진행)도 본다 — 노드를 3초 붙잡아 둔다.
+      await page.evaluate(() => { window.__S.issueWait = 3000; });
       await page.$eval('#cr-make', (e) => e.click());
       await hold(page);
+      await page.waitForSelector('#cr-wait .cr-chunks li.now', { visible: true, timeout: 10000 });
+      const sending = await hangul();
+      assert.deepEqual(sending, [], `${language} 보내는 중 화면에 남은 한국어: ${sending.join(' | ')}`);
       await page.waitForFunction(() => document.querySelectorAll('#cr-done .cr-list li').length === 50, { timeout: 30000 });
       const done = (await hangul()).filter((x) => !/^수강생\d+$/.test(x));
       assert.deepEqual(done, [], `${language} 결과 화면에 남은 한국어: ${done.join(' | ')}`);
