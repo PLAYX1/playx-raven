@@ -330,6 +330,14 @@ pub fn tunnel_start(port: u16) -> Result<Value, String> {
     }
 }
 
+/// 이 앱이 띄운 터널이 지금 붙어 있나. 네트워크에 묻지 않는다 — 우리가 쥔 자식만 본다.
+///
+/// 「지갑」으로 바꿀 때(`mode_set`) 켜져 있을 때만 끄려고 둔다. 꺼져 있는데
+/// `tunnel_stop` 을 부르면 「닫았다」는 알림이 릴레이로 나간다.
+pub fn ours_running() -> bool {
+    CHILD.lock().map(|g| g.is_some()).unwrap_or(false)
+}
+
 /// Closes the public address.
 #[tauri::command]
 pub fn tunnel_stop() -> Result<(), String> {

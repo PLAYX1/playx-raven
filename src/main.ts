@@ -5,6 +5,7 @@ import { wirePhoneTransaction } from "./phone-transaction";
 import { FINGERPRINT_GUESS, wireCreate, type CreateApi } from "./create-page";
 import { verifyLink } from "./easy-create";
 import { requireWalletBackup, restoreIsComplete } from "./backup-result";
+import { paintWalletNotes, walletWelcome } from "./wallet-notes";
 import { invoke as rawInvoke } from "@tauri-apps/api/core";
 
 /**
@@ -4446,6 +4447,8 @@ function showPage(id: string) {
   document.querySelectorAll("nav a").forEach((a) =>
     a.classList.toggle("on", (a as HTMLElement).dataset.page === id));
   if (id === "wallet") loadWallet();
+  // 0.4.8 — 지갑 화면 맨 위 알림 줄(「지갑이 준비됐어요」). 배치는 안 건드리고 칸 하나만.
+  if (id === "wallet") void paintWalletNotes(walletNotes);
   /* 🔴 웹 주문 칸은 **자산 화면**(page-assets)의 자판기 아래에 있다.
      처음에 「가게」 화면의 탭에 걸었는데 서로 다른 화면이라 평생 안 불렸다.
      이 저장소에서 되풀이해 찾은 병(만들었는데 안 부른다)을 그대로 저질렀다. */
@@ -13289,9 +13292,28 @@ type ObStep = "scan" | "use" | "verdict";
 /// 이 프로그램이 처음 켜졌을 때 할 일은 이 컴퓨터를 얼마나 쓸지 정하는 것뿐이다.
 /// 가게를 만드는 것은 [내 가게]를 누른 사람의 일이고, 그 화면이 이미 간판·메뉴·
 /// 사진을 다 갖고 있다.
-function obDone() {
+async function obDone() {
   localStorage.setItem(ONBOARD_KEY, "1");
   $("onboard").classList.add("hidden");
+  // 🔴 0.4.8 — **고른 대로 내려앉는다.** 여태 무조건 가게 화면이었다(RV3 T01):
+  //    지갑을 만들려던 사람도, 돕겠다던 사람도 「가게 만들기」 앞에 섰다.
+  //    못 읽으면(또는 아직 안 골랐으면) 예전처럼 가게 — 고르면 applyMode 가 옮긴다.
+  let mode = "";
+  try {
+    const m = await invoke<any>("mode_get");
+    if (m?.chosen) mode = String(m.mode || "");
+  } catch {
+    /* 모르면 예전 자리 */
+  }
+  if (mode === "wallet") {
+    walletWelcome();
+    showPage("wallet");
+    return;
+  }
+  if (mode === "help") {
+    showPage("helping");
+    return;
+  }
   showPage("shop");
   // 가게가 아직 없으면 주문 탭은 빈 화면이다. 그 화면이 첫인상이면 사람은
   // 무엇을 해야 하는지 모른 채 앱을 닫는다. 가게를 만드는 탭으로 연다 —
@@ -13359,7 +13381,7 @@ async function startOnboard() {
     try {
       await invoke("open_shop");
     } catch {}
-    obDone();
+    void obDone();
     return;
   }
 
@@ -13389,7 +13411,7 @@ async function obChoose(shopOnly: boolean) {
   }
   if (!obRec) {
     // 기계를 못 읽어도 쓸 수는 있어야 한다. 설정은 [이 컴퓨터]에서 언제든 한다.
-    obDone();
+    void obDone();
     return;
   }
 
@@ -13480,7 +13502,7 @@ async function obApply() {
     await invoke("open_shop").catch(() => {});
   } catch {}
   btn.textContent = "이대로 켜기";
-  obDone();
+  void obDone();
 }
 
 // ── 이 컴퓨터: 능력 스위치 ────────────────────────────────────────────────
@@ -16795,7 +16817,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   void paintWalletDir();
 
   // 「이 컴퓨터」에서 언제든 바꾼다.
-  for (const [id, pick] of [["mode-help", "help"], ["mode-shop", "shop"]] as const) {
+  for (const [id, pick] of [["mode-wallet", "wallet"], ["mode-help", "help"], ["mode-shop", "shop"]] as const) {
     const el = document.getElementById(id);
     if (!el) continue;
     el.addEventListener("click", async () => {
@@ -16803,9 +16825,12 @@ window.addEventListener("DOMContentLoaded", async () => {
       try {
         await invoke("mode_set", { mode: pick });
         await applyMode();
-        if (say) say.textContent = pick === "help"
+        if (say) setCopyText(say, () => t(pick === "help"
           ? "돕기로 바꿨습니다. 가게 정보는 그대로 있습니다."
-          : "장사로 바꿨습니다.";
+          : pick === "wallet"
+            // 러스트가 우리가 켠 파일창고·바깥 연결을 끈다(mode_set) — 한 일을 그대로 말한다.
+            ? "지갑으로만 쓰기로 바꿨습니다. 이 앱이 켠 파일창고·바깥 연결은 껐고, 가게 정보는 그대로 있습니다."
+            : "장사로 바꿨습니다."));
       } catch (e) {
         if (say) say.textContent = errText(e);
       }
@@ -16813,13 +16838,15 @@ window.addEventListener("DOMContentLoaded", async () => {
   }
 
   // 첫 실행 갈림길. 고르면 그 자리에서 화면이 바뀐다.
-  for (const [id, pick] of [["hello-help", "help"], ["hello-shop", "shop"]] as const) {
+  for (const [id, pick] of [["hello-wallet", "wallet"], ["hello-help", "help"], ["hello-shop", "shop"]] as const) {
     const el = document.getElementById(id);
     if (!el) continue;
     el.addEventListener("click", async () => {
       const say = document.getElementById("hello-say");
       try {
         await invoke("mode_set", { mode: pick });
+        // 지갑을 고른 사람에게는 처음 내려앉는 지갑 화면에서 「준비됐어요」를 말한다.
+        if (pick === "wallet") walletWelcome();
         await applyMode();
       } catch (e) {
         if (say) say.textContent = errText(e);
@@ -17195,7 +17222,15 @@ window.addEventListener("DOMContentLoaded", async () => {
     } catch {
       /* 못 읽었으면 켜지 않는다. 아래 저장된 선택은 그대로 본다. */
     }
-    if (localStorage.getItem(PHONE_KEY) === "1" || hasShop) {
+    // 🔴 0.4.8 — 「지갑」을 고른 컴퓨터는 손님 서버(릴레이가 그 안에 있다)를 알아서
+    //    안 연다(러스트 lib.rs 와 같은 약속). 쓰는 화면이 누를 때 스스로 연다.
+    let walletOnly = false;
+    try {
+      walletOnly = (await invoke<any>("mode_get"))?.mode === "wallet";
+    } catch {
+      /* 모르면 예전처럼 */
+    }
+    if ((localStorage.getItem(PHONE_KEY) === "1" || hasShop) && !walletOnly) {
       // 🔴 **조용히 삼키지 않는다.** 여태 `.catch(() => {})` 였다. 서버가 안
       //    켜져도 아무 말이 없었고, 화면에는 「손님이 주문할 곳이 없습니다」만
       //    떴다. 왜 안 켜졌는지는 아무 데도 안 적혔다 — 나도 못 찾았다.
@@ -17352,7 +17387,10 @@ async function applyMode(): Promise<void> {
   }
   if (hello) hello.style.display = "none";
 
+  modeNow = String(m.mode || "");
   const help = m.mode === "help";
+  // 0.4.8 — 받고 보내고 보관만 하는 사람. 가게·돕는 중은 숨기고 지갑이 맨 위다.
+  const wallet = m.mode === "wallet";
   const show = (page: string, on: boolean) => {
     const a = document.querySelector<HTMLElement>(`nav a[data-page="${page}"]`);
     if (a) a.style.display = on ? "" : "none";
@@ -17375,16 +17413,19 @@ async function applyMode(): Promise<void> {
     const el = document.getElementById(id);
     if (el) el.style.display = help ? "" : "none";
   });
-  for (const [id, pick] of [["mode-help", "help"], ["mode-shop", "shop"]] as const) {
+  for (const [id, pick] of [["mode-wallet", "wallet"], ["mode-help", "help"], ["mode-shop", "shop"]] as const) {
     const el = document.getElementById(id);
     if (el) el.classList.toggle("on", m.mode === pick);
   }
   // 「돕기」에서 감추는 것은 **가게 하나뿐**이다. 자산·배당은 레이븐코인
-  // 그 자체라 돕는 사람도 쓴다 — 장사 기능이 아니다.
-  show("shop", !help);
+  // 그 자체라 돕는 사람도 쓴다 — 장사 기능이 아니다. 「지갑」도 같다.
+  show("shop", !help && !wallet);
   // `door` 는 큰 메뉴에서 내렸다(「내 가게」 안에 있다). 감출 것이 없다.
+  walletFirst(wallet);
 
-  if (help) {
+  if (wallet) {
+    showPage("wallet");
+  } else if (help) {
     showPage("helping");
     void paintHelping();
     if (helpTimer === null) helpTimer = window.setInterval(() => void paintHelping(), 8000);
@@ -17397,6 +17438,27 @@ async function applyMode(): Promise<void> {
 }
 
 let helpTimer: number | null = null;
+
+/** 지금 고른 모드(`mode_get`). 못 읽었거나 안 골랐으면 빈 글자. */
+let modeNow = "";
+const walletNotes = { invoke, mode: () => modeNow };
+
+/**
+ * 「지갑」 모드면 왼쪽 메뉴의 지갑을 **맨 위**로 올린다. 다른 모드로 바꾸면
+ * 원래 자리로 돌려 놓는다 — 자리를 기억해 두지 않으면 돌아갈 곳을 모른다.
+ */
+let walletNavHome: { parent: Node; next: Node | null } | null = null;
+function walletFirst(on: boolean) {
+  const a = document.querySelector<HTMLElement>('nav a[data-page="wallet"]');
+  const top = document.querySelector<HTMLElement>("nav a[data-page]");
+  if (!a || !a.parentNode) return;
+  if (!walletNavHome) walletNavHome = { parent: a.parentNode, next: a.nextSibling };
+  if (on) {
+    if (top && top !== a) top.before(a);
+  } else if (walletNavHome.parent !== a.parentNode || a.nextSibling !== walletNavHome.next) {
+    walletNavHome.parent.insertBefore(a, walletNavHome.next);
+  }
+}
 
 /** 이 컴퓨터가 지금 무엇을 하고 있는지. */
 async function paintHelping(): Promise<void> {

@@ -308,8 +308,19 @@ pub async fn services_status() -> Value {
 /// Attaching to something already up is the normal case and produces no output
 /// — a shop that had its node running should see nothing happen, not a second
 /// node fighting for the same wallet file.
+///
+/// `only: "node"` 이면 **노드만** 켠다(0.4.8). 지갑에 암호를 걸면 노드가 꺼지는데,
+/// 복구 단어 흐름이 그 자리에서 노드를 다시 켤 때 쓴다 — 지갑으로만 쓰는
+/// 컴퓨터에서 파일창고까지 덩달아 켜지 않게. 안 주면 예전처럼 둘 다.
 #[tauri::command]
-pub async fn services_start() -> Result<Value, String> {
+pub async fn services_start(only: Option<String>) -> Result<Value, String> {
+    let files = only.as_deref().map(str::trim) != Some("node");
+    start_parts(files).await
+}
+
+/// 노드를 켜고, `files` 면 파일창고도 켠다. 켤 때(`boot.rs`)와 첫 실행
+/// (`open_shop`)은 모드를 보고(`mode::autostart_now`) 여기로 온다.
+pub async fn start_parts(files: bool) -> Result<Value, String> {
     let status = services_status().await;
     let mut started = Vec::new();
     let mut skipped = Vec::new();
@@ -416,7 +427,10 @@ pub async fn services_start() -> Result<Value, String> {
     }
 
     // ── ipfs ──
-    if status["ipfs"]["running"].as_bool().unwrap_or(false) {
+    if !files {
+        // 🔴 지갑으로만 쓰는 컴퓨터(0.4.8)는 파일창고를 알아서 안 켠다. 못 켠 것이
+        //    아니라 안 켠 것이라 「못 켰습니다」 목록에도 안 넣는다.
+    } else if status["ipfs"]["running"].as_bool().unwrap_or(false) {
         skipped.push(json!({ "what": "IPFS", "why": "이미 켜져 있습니다" }));
     } else if let Some(path) = which("ipfs") {
         // `--migrate` because a kubo upgrade otherwise stops at a prompt nobody
@@ -643,6 +657,29 @@ fn remember(name: &str, child: Child) {
     }
 }
 
+/// 우리가 띄운 것 가운데 **이름이 같은 것 하나만** 끈다(`"ipfs"`).
+///
+/// 첫 실행에서는 모드를 고르기 전에 파일창고가 이미 켜진다. 그 뒤에 「지갑」을
+/// 고르면 이것으로 끈다(`mode_set`). 사람이 따로 켜 둔 것은 우리 목록에 없어서
+/// 안 건드린다. 노드는 여기로 끄지 않는다 — 그건 `stop_on_exit` 의 정중한 문으로.
+pub fn stop_ours(name: &str) {
+    if name == "node" {
+        return;
+    }
+    if let Ok(mut g) = OURS.lock() {
+        if let Some(list) = g.as_mut() {
+            list.retain_mut(|(n, child)| {
+                if n != name {
+                    return true;
+                }
+                let _ = child.kill();
+                let _ = child.wait();
+                false
+            });
+        }
+    }
+}
+
 /// Stops only what this app started.
 #[tauri::command]
 pub fn services_stop() -> Result<Value, String> {
@@ -694,9 +731,12 @@ pub fn stop_on_exit() {
 ///
 /// Ordered by dependency: the node first, because IPFS coming up without a node
 /// gives a shop that can show pictures and take no money.
+///
+/// 첫 실행이 부른다. 🔴 「지갑」을 고른 사람(0.4.8)에게는 **노드만** 켠다 —
+/// 이름은 옛것이지만, 여기서 파일창고까지 켜면 고르자마자 약속이 깨진다.
 #[tauri::command]
 pub async fn open_shop() -> Result<Value, String> {
-    let svc = services_start().await?;
+    let svc = start_parts(crate::mode::autostart_now().files).await?;
 
     // Give the node a moment to open its RPC port before anything asks it a
     // question — the first health check otherwise reports "down" on a node that

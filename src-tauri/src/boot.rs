@@ -226,18 +226,19 @@ pub async fn run() -> Value {
     // 파일창고 저장소부터. 이게 없으면 아래 `services_start` 가 띄워도
     // 곧바로 죽는다 — 그리고 죽은 줄 모르고 「켰습니다」라고 답한다.
     let mut ipfs_note: Option<String> = None;
-    if !ipfs_repo_ready() && crate::services::which("ipfs").is_some() {
+    let parts = crate::mode::autostart_now(); // 0.4.8 — 「지갑」은 노드만 알아서 켠다(mode.rs)
+    if parts.files && !ipfs_repo_ready() && crate::services::which("ipfs").is_some() {
         match ipfs_init() {
             Ok(()) => notes.push("파일창고를 처음 준비했습니다".into()),
             Err(e) => ipfs_note = Some(format!("파일창고를 준비하지 못했습니다: {e}")),
         }
     }
 
-    let r = crate::services::services_start().await;
+    let r = crate::services::start_parts(parts.files).await;
 
     // 손님 화면이 뜬 뒤에 바깥 길을 연다. 순서가 바뀌면 터널이 죽은
     // 포트를 가리킨다.
-    if let Some(n) = prep_tunnel() {
+    if let Some(n) = parts.outside.then(prep_tunnel).flatten() {
         notes.push(n);
     }
 

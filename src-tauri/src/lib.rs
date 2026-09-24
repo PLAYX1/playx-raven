@@ -676,7 +676,13 @@ pub fn run() {
 
             // 창 JS가 늦게 뜨거나 안 떠도 손님·직원 화면은 열려 있어야 한다.
             // 계산대는 화면이 아니라 포트다.
-            {
+            //
+            // 🔴 「지갑」을 고른 컴퓨터(0.4.8)는 손님 서버를 알아서 안 연다 — 그 안에
+            //    릴레이가 있어서, 열면 받고 보내려고 켠 노트북이 남의 공지를 나른다.
+            //    쓰는 화면(손님 QR·쪽지)은 누를 때 스스로 연다. 다만 그 서버가 켤 때
+            //    하던 **청소**(되돌리기가 풀어 놓은 지갑·열쇠 치우기)는 모드와
+            //    상관없이 해야 한다 — 그래서 여기서 따로 부른다.
+            if crate::mode::autostart_now().phone {
                 let handle = app.handle().clone();
                 tauri::async_runtime::spawn(async move {
                     let state = handle.state::<server::ServerState>();
@@ -684,6 +690,8 @@ pub fn run() {
                         eprintln!("[phone] 자동 시작 실패: {e}");
                     }
                 });
+            } else {
+                tauri::async_runtime::spawn_blocking(crate::recover::청소);
             }
 
             // 🔴 노드와 파일창고도 **묻지 않고 켠다.**

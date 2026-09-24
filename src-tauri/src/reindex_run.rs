@@ -528,7 +528,7 @@ pub async fn chain_heal() -> Result<Value, String> {
     // 꺼져 있으면 그냥 켠다. 켜져 있으면 껐다 켠다 — 어느 쪽이든 새 인자로 뜬다.
     let _ = crate::services::services_stop();
     tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-    let r = crate::services::services_start().await;
+    let r = crate::services::services_start(None).await;
     Ok(json!({
         "ok": r.is_ok(),
         "note": "계산을 다시 하기 시작했습니다. 블록 파일은 다시 받지 않습니다 — \

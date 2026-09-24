@@ -33,6 +33,23 @@ assert.match(read('src-tauri/Cargo.toml'), /name = "playx-raven"/);
 assert.equal(read('src-tauri/src/paths.rs'), execFileSync('git', ['show', 'v0.3.8:src-tauri/src/paths.rs'], { encoding: 'utf8' }));
 for (const path of ['src-tauri/src/mining.rs', 'src-tauri/src/ipfs.rs', 'src-tauri/src/boot.rs', 'src-tauri/src/auto.rs', 'src-tauri/src/shop.rs', 'src-tauri/src/auction.rs', 'src-tauri/src/artist.rs', 'web/wallet.src.ts', 'web/wallet.bundle.js', 'web/wallet.html', 'web/buy.html']) {
   const released = execFileSync('git', ['show', 'v0.3.8:' + path], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 });
+  if (path === 'src-tauri/src/boot.rs') {
+    // 0.4.8-A1 의 유일한 의도된 변경: 켤 때 모드를 보고(「지갑」은 노드만) 파일창고·바깥 연결을 켠다.
+    // 아래 세 자리를 0.3.8 글자로 되돌리면 파일 전체가 0.3.8 과 글자까지 같아야 한다 — 다른 곳이 바뀌면 여기서 걸린다.
+    const now = read(path);
+    const intended = [
+      ['    let parts = crate::mode::autostart_now(); // 0.4.8 — 「지갑」은 노드만 알아서 켠다(mode.rs)\n    if parts.files && !ipfs_repo_ready()', '    if !ipfs_repo_ready()'],
+      ['    let r = crate::services::start_parts(parts.files).await;', '    let r = crate::services::services_start().await;'],
+      ['    if let Some(n) = parts.outside.then(prep_tunnel).flatten() {', '    if let Some(n) = prep_tunnel() {'],
+    ];
+    let back = now;
+    for (const [changed, original] of intended) {
+      assert.equal(back.split(changed).length, 2, 'boot.rs: 0.4.8 의 모드 확인 줄이 정확히 한 번 있어야 한다 — ' + changed.slice(0, 60));
+      back = back.replace(changed, original);
+    }
+    assert.equal(back, released, path + ' must preserve the released behavior outside the 0.4.8 wallet-mode autostart gate');
+    continue;
+  }
   if (path === 'src-tauri/src/auto.rs') {
     // 0.4.5 의 유일한 의도된 변경: rebuild_delivered 가 자산 줄을 listsinceblock 에서 읽는다
     // (listtransactions 에는 자산 줄이 없어 기록 파일을 잃으면 이미 보낸 주문을 또 보냈다).

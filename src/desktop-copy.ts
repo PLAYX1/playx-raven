@@ -1907,4 +1907,13 @@ export const DESKTOP_COPY: Record<string, [string, string, string]> = {
   "주인 표 조각이 많아 일부만 확인했어요.": ["There are many owner-token pieces, so only some were checked.", "オーナートークンの断片が多いため、一部だけ確認しました。", "所有权代币片段较多，仅检查了一部分。"],
   "주인 표 자리를 다시 읽지 못했어요. 위 주소는 지난번에 읽은 것이에요.": ["Couldn't re-read where the owner tokens are. The addresses above are from the last read.", "オーナートークンの場所を読み直せませんでした。上のアドレスは前回読んだものです。", "未能重新读取所有权代币的位置。上面的地址是上次读取的结果。"],
   "복사하지 못했어요": ["Couldn't copy", "コピーできませんでした", "无法复制"],
+  /* 0.4.8-A — 첫 질문의 「지갑」 · 지갑 첫 착지 한 줄 */
+  "지갑으로 쓸래요": ["Use it as a wallet", "ウォレットとして使う", "用作钱包"],
+  "받고 보내고 보관만 합니다. 쓸 때 켜시면 되고, 켜면 밀린 기록을 따라잡습니다.": ["Just receive, send and keep. Open it when you need it; it catches up on what it missed.", "受け取り・送金・保管だけです。使うときに起動すれば、たまった記録に追いつきます。", "只用于收款、转账和保管。需要时打开即可，打开后会补齐未同步的记录。"],
+  "지갑으로만 쓰기": ["Wallet only", "ウォレットだけ", "仅用作钱包"],
+  "지갑으로만 쓰기로 바꿨습니다. 이 앱이 켠 파일창고·바깥 연결은 껐고, 가게 정보는 그대로 있습니다.": ["Switched to wallet only. File storage and the external connection this app started are now off; your shop information is kept.", "ウォレットだけに切り替えました。このアプリが起動したファイル保管庫と外部接続は停止しました。店舗情報はそのまま残っています。", "已切换为仅用作钱包。本应用开启的文件存储和外部连接已关闭，店铺信息保持不变。"],
+  "지갑이 준비됐어요. 받기·보내기를 바로 쓰실 수 있어요.": ["Your wallet is ready. You can receive and send right away.", "ウォレットの準備ができました。受け取り・送金をすぐに使えます。", "钱包已就绪，可以立即收款和转账。"],
+  "지갑이 준비됐어요. 지금은 장부를 따라잡는 중({0}%)이라 잔액이 다 맞기까지 시간이 걸려요. 받을 주소는 지금 만들어도 돼요.": ["Your wallet is ready. It is still catching up with the ledger ({0}%), so the balance may take a while to be complete. You can already create a receiving address.", "ウォレットの準備ができました。いまは台帳に追いついている途中（{0}%）なので、残高がそろうまで時間がかかります。受取アドレスは今すぐ作れます。", "钱包已就绪。目前仍在同步账本（{0}%），余额完全准确还需要一些时间。现在就可以创建收款地址。"],
+  "지갑을 여는 중이에요 — 장부를 여는 데 몇 분 걸릴 수 있어요. 열리면 이 줄이 바뀌어요.": ["Opening your wallet — opening the ledger can take a few minutes. This line will change when it is open.", "ウォレットを開いています — 台帳を開くのに数分かかることがあります。開くとこの行が変わります。", "正在打开钱包——打开账本可能需要几分钟。打开后这一行会更新。"],
+  "지갑이 아직 열리지 않았어요 — 레이븐 프로그램이 켜지는 중이거나 꺼져 있어요. 왼쪽 아래 연결 점을 눌러 보세요.": ["Your wallet isn't open yet — the Ravencoin program is starting or turned off. Click the connection dot at the bottom left.", "ウォレットはまだ開いていません — Ravencoin のプログラムが起動中か停止しています。左下の接続ドットを押してください。", "钱包尚未打开——Ravencoin 程序正在启动或已关闭。请点击左下角的连接圆点。"],
 };

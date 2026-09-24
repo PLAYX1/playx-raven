@@ -185,7 +185,9 @@ try {
   await task('T01', '지갑 만들기', { ...baseState(), onboarded: false, mode: null, confirmed: 0 }, async (x) => {
     x.note(`첫 화면 선택지: ${(await x.text('#hello')).replace(/\s+/g, ' ').slice(0, 160)}`);
     x.note(`「지갑」이라는 선택지: ${(await x.has(/지갑으로 쓸|지갑 만들기|새 지갑/)) ? '있음' : '없음'}`);
-    await x.tap('#hello-help', '레이븐코인을 돕고 싶어요');
+    // 0.4.8-A1: 지갑을 만들려는 사람은 「지갑으로 쓸래요」를 누른다. 그 단추가 없는 판(0.4.7)은 예전처럼 「돕기」.
+    if (await x.visible('#hello-wallet')) await x.tap('#hello-wallet', '지갑으로 쓸래요');
+    else await x.tap('#hello-help', '레이븐코인을 돕고 싶어요');
     await x.wait(1800, '「살펴보는 중」 1.4초');
     await x.tap('#ob-also', '다른 일도 합니다');
     await x.wait(600);
@@ -196,7 +198,9 @@ try {
     const page = await x.page.evaluate(() => document.querySelector('.page.on')?.id || '');
     x.note(`설정 뒤 떨어진 화면: ${page}`);
     x.note(`「지갑이 생겼다」는 말: ${(await x.has(/지갑이 (생겼|만들어졌|준비)/)) ? '있음' : '없음'}`);
-    await x.tap('nav a[data-page="wallet"]', '지갑 메뉴');
+    // 이미 지갑 화면이면 사람은 메뉴를 또 누르지 않는다(같은 규칙: 안 보이면 누른다).
+    if (page !== 'page-wallet') await x.tap('nav a[data-page="wallet"]', '지갑 메뉴');
+    x.note(`왼쪽 메뉴 맨 위: ${await x.page.$eval('nav a[data-page]', (a) => a.dataset.page).catch(() => '?')}`);
     x.note(`지갑 화면 잔액 칸: ${(await x.text('#w-confirmed')).trim()}`);
     return true;
   });
