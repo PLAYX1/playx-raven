@@ -13,6 +13,7 @@
  *     먼저 묻고, 새 이름으로 가는 것은 손으로 고른 뒤에만 열린다.
  *   · 티켓은 끝나면 「팔기」로 이어진다.
  */
+import { setStyledSrcdoc } from "./srcdoc-style";
 import { lang, setCopyText, tf } from "./i18n";
 import { issuedOf, OWNER_NOT_PINNED } from "./whose";
 import {
@@ -305,7 +306,7 @@ export function wireCreate(deps: CreateDeps): CreateApi {
     };
     try {
       const html = await invoke<string>("create_certificate_preview", { entry, lang });
-      if (mine === previewTicket) preview.srcdoc = html;
+      if (mine === previewTicket) setStyledSrcdoc(preview, html);
     } catch { /* 미리보기는 덤이다 — 칸 검사는 확인하기가 한다 */ }
   }
   window.addEventListener("desktop-language-change", () => { paintTemplates(); schedulePreview(); });

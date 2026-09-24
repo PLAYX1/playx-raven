@@ -1,3 +1,4 @@
+import { setStyledSrcdoc } from "./srcdoc-style";
 import { wirePhoneTransaction } from "./phone-transaction";
 import { FINGERPRINT_GUESS, wireCreate, type CreateApi } from "./create-page";
 import { verifyLink } from "./easy-create";
@@ -11792,7 +11793,7 @@ ${들을곳 ? `<p class="go"><a href="${e(들을곳)}">노래 듣기 · 악보 �
 
 function 곡미리보기(){
   const f = document.getElementById("i-songview") as HTMLIFrameElement | null;
-  if (f) f.srcdoc = 곡페이지그리기();
+  if (f) setStyledSrcdoc(f, 곡페이지그리기());
 }
 
 (() => {
