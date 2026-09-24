@@ -1948,4 +1948,11 @@ export const DESKTOP_COPY: Record<string, [string, string, string]> = {
   "적어 두셨어요.": ["You've written them down.", "書き留めました。", "已抄写好。"],
   "그 종이가 이 지갑의 열쇠예요. 이 컴퓨터가 고장 나도 그 단어가 있으면 되살릴 수 있어요.": ["That paper is the key to this wallet. Even if this computer breaks, those words can bring it back.", "その紙がこのウォレットの鍵です。このコンピュータが壊れても、その単語があれば復元できます。", "那张纸就是这个钱包的钥匙。即使这台电脑坏了，凭这些单词也能恢复钱包。"],
   "종이는 이 컴퓨터와 다른 곳에 두세요. 사진으로 찍어 두지 마세요.": ["Keep the paper somewhere other than this computer. Don't take a photo of it.", "紙はこのコンピュータとは別の場所に保管してください。写真に撮らないでください。", "请把纸条放在这台电脑以外的地方，不要拍照保存。"],
+  /* 0.4.8-A4 — 연결 점 하나 */
+  "연결됨": ["Connected", "接続中", "已连接"],
+  "끊김": ["Disconnected", "切断", "已断开"],
+  "장부 여는 중": ["Opening ledger", "台帳を開いています", "正在打开账本"],
+  "따라잡는 중 {0}%": ["Catching up {0}%", "追いついています {0}%", "正在同步 {0}%"],
+  "손님 화면 꺼짐": ["Customer page off", "お客様画面が停止中", "顾客页面已关闭"],
+  "바깥 연결 끊김": ["External connection down", "外部接続が切れています", "外部连接已断开"],
 };

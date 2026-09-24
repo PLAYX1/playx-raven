@@ -2001,6 +2001,11 @@
       .okline { color: var(--ok); }
       /* 단어 칸은 끌어 고르기를 막는다 — 복사를 권하지 않는다(안내는 위 경고 그대로). */
       .sdw-words { user-select: none; -webkit-user-select: none; }
+      /* 연결 점 하나. 접혀 있으면 다섯 줄은 숨긴다(따라잡기 막대는 남긴다 — 말이 없는 막대다). */
+      .navfoot.folded .dotrow:not(.dotsum) { display: none; }
+      .dotsum { font-weight: 600; }
+      .dot.warn { background: var(--warn); box-shadow: 0 0 0 3px color-mix(in srgb, var(--warn) 22%, transparent); }
+      .dot.bad { background: var(--danger); box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 22%, transparent); }
 
       /* 말 고르기. 사이드바 아래, 「문제 알리기」 바로 위. */
       .langsw { display: block; width: calc(100% - 24px); margin: 0 12px 8px;
@@ -2500,7 +2505,7 @@
            사장에게 두 칸 안쪽 소식을 전할 자리가 여기밖에 없다. -->
         <span class="ordbadge" id="nav-orderbadge" hidden aria-label="안 본 새 주문">0</span></a>
       <a data-page="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M8 20.5h8M12 16.5v4"/></svg><span>이 컴퓨터</span></a>
-      <div class="navfoot">
+      <div class="navfoot folded" id="navfoot">
         <!-- 🔴 늘 보인다. 신고는 **뭔가 안 될 때** 하는 것이라, 그때 찾아
              헤매게 하면 안 한다. 어느 화면에서 막혔든 같은 자리다. -->
         <button id="rp-open" class="reportlink" type="button">문제 알리기</button>
@@ -2518,6 +2523,14 @@
              켜짐/꺼짐만 여기서 말하고, **자세한 것과 설정은 오른쪽 화면**에서
              본다 — 172px 사이드바에 우겨넣으면 글자가 한 줄에 한 자씩 흐른다.
              실제로 그렇게 깨져 있었다. -->
+        <!-- 🔴 0.4.8-A4 — 다섯 점(노드·채굴·파일창고·릴레이·바깥 연결)이 모든 화면 왼쪽에서
+             늘 전문용어를 보였다(RV3 🔴10). 처음 쓰는 사람에게는 전부 모르는 말이다.
+             이제 **점 하나 + 사람 말**(연결됨·장부 여는 중·끊김)만 보이고, 누르면 아래 다섯 줄이
+             펼쳐진다. 다섯 줄의 id·동작은 그대로 둔다 — 다른 코드가 그 칸을 부른다.
+             가게 모드에서 사장이 알아야 할 것(바깥 연결·손님 화면 꺼짐)은 이 점의 색으로 말한다. -->
+        <button type="button" class="dotrow dotsum" id="d-sum-row" aria-expanded="false" aria-controls="navfoot">
+          <span class="dot off" id="d-sum"></span><span id="d-sum-t">확인 중…</span>
+        </button>
         <button type="button" class="dotrow" id="d-node-row">
           <span class="dot off" id="d-node"></span><span id="d-node-t">RVN 노드</span>
         </button>

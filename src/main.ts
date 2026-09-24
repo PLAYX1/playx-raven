@@ -1977,6 +1977,61 @@ function isWarming(err: unknown): boolean {
 /** 표시등이 「시작하는 중」을 아는가. 라비도 이 값을 본다. */
 let nodeWarming = false;
 
+/* ── 0.4.8-A4 연결 점 하나 ─────────────────────────────────────
+   다섯 점이 읽은 것을 모아 **사람 말 하나**로 줄인다. 거짓말은 안 한다:
+   노드가 꺼졌으면 「끊김」(빨강), 여는 중이면 「장부 여는 중」, 따라잡는 중이면
+   그 퍼센트(주황), 다 되면 「연결됨」(초록). 가게 모드에서만 손님이 못 들어오는
+   것(손님 화면·바깥 연결 꺼짐)을 주황으로 알린다 — 돕기·지갑에는 할 말이 아니다. */
+type DotSum = { node: "unknown" | "ok" | "sync" | "warm" | "down"; pct: number; relay: boolean | null; out: boolean | null };
+const dotSum: DotSum = { node: "unknown", pct: 0, relay: null, out: null };
+
+/** 점 하나의 색과 말. 순서가 곧 급함이다. */
+function sumOfDots(s: DotSum, mode: string): { cls: "on" | "warn" | "bad" | "off"; say: () => string } {
+  if (s.node === "unknown") return { cls: "off", say: () => t("확인 중…") };
+  if (s.node === "down") return { cls: "bad", say: () => t("끊김") };
+  if (s.node === "warm") return { cls: "warn", say: () => t("장부 여는 중") };
+  if (mode === "shop" && s.relay === false) return { cls: "warn", say: () => t("손님 화면 꺼짐") };
+  if (s.node === "sync") {
+    const p = s.pct.toFixed(1);
+    return { cls: "warn", say: () => tf("따라잡는 중 {0}%", p) };
+  }
+  if (mode === "shop" && s.out === false) return { cls: "warn", say: () => t("바깥 연결 끊김") };
+  return { cls: "on", say: () => t("연결됨") };
+}
+
+function paintDotSum() {
+  const d = document.getElementById("d-sum");
+  const label = document.getElementById("d-sum-t");
+  const r = sumOfDots(dotSum, modeNow);
+  if (d) d.className = `dot ${r.cls}`;
+  if (label) setCopyText(label, r.say);
+}
+
+/** 점을 누르면 다섯 줄을 펼치고 접는다. 이 사람이 펼쳐 둔 것은 기억한다(이 컴퓨터에만). */
+function wireDotSum() {
+  const foot = document.getElementById("navfoot");
+  const row = document.getElementById("d-sum-row");
+  if (!foot || !row) return;
+  const set = (open: boolean) => {
+    foot.classList.toggle("folded", !open);
+    row.setAttribute("aria-expanded", String(open));
+  };
+  try {
+    set(localStorage.getItem("rv-dots-open") === "1");
+  } catch {
+    set(false);
+  }
+  row.addEventListener("click", () => {
+    const open = foot.classList.contains("folded");
+    set(open);
+    try {
+      localStorage.setItem("rv-dots-open", open ? "1" : "0");
+    } catch {
+      /* 기억 못 해도 이번엔 펼쳐진다 */
+    }
+  });
+}
+
 async function paintStatusDots() {
   if (쉬는중()) return; // 창을 안 보는 동안은 그리지 않는다
 
@@ -2001,6 +2056,8 @@ async function paintStatusDots() {
     setSyncBar(synced ? null : pct);
     nodeUp = true;
     nodeWarming = false;
+    dotSum.node = synced ? "ok" : "sync";
+    dotSum.pct = pct;
   } catch (e) {
     // 🔴 답을 못 받은 것과 꺼진 것은 **다르다.** 「장부 여는 중」이라는
     //    답이 왔다면 그건 살아 있다는 뜻이다.
@@ -2013,7 +2070,9 @@ async function paintStatusDots() {
     );
     setSyncBar(null);
     nodeUp = false;
+    dotSum.node = nodeWarming ? "warm" : "down";
   }
+  paintDotSum();
   // 노드 상태가 바뀌면 라비 얼굴도 따라 바뀐다.
   paintRaviFace();
   void refreshKeys().catch(() => {});
@@ -2032,8 +2091,10 @@ async function paintStatusDots() {
       try {
         const r = await invoke<any>("relay_status");
         set("d-relay", "d-relay-t", !!r?.running, r?.running ? "릴레이 켜짐" : "릴레이 꺼짐");
+        dotSum.relay = !!r?.running;
       } catch {
         set("d-relay", "d-relay-t", false, "릴레이 꺼짐");
+        dotSum.relay = false;
       }
       // 🔴 바깥에서 손님이 들어올 수 있는가. 위의 넷이 다 초록이어도 이게
       //    꺼져 있으면 **가게 밖에서는 아무도 못 들어온다.**
@@ -2045,6 +2106,8 @@ async function paintStatusDots() {
         outUp = false;
         set("d-out", "d-out-t", false, "바깥 연결 꺼짐");
       }
+      dotSum.out = outUp;
+      paintDotSum();
     })();
   } catch {
     set("d-ipfs", "d-ipfs-t", false, "파일창고(IPFS) 꺼짐");
@@ -16757,6 +16820,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("fee-send").addEventListener("click", () => void sendOwed());
   void paintFeePick();
   $("d-node-row").addEventListener("click", () => toggleDot("node"));
+  wireDotSum();
   $("d-mine-row").addEventListener("click", () => toggleDot("mine"));
   $("d-relay-row").addEventListener("click", () => toggleDot("relay"));
   $("d-out-row").addEventListener("click", () => toggleDot("out"));
@@ -17362,6 +17426,7 @@ async function applyMode(): Promise<void> {
   if (hello) hello.style.display = "none";
 
   modeNow = String(m.mode || "");
+  paintDotSum();
   const help = m.mode === "help";
   // 0.4.8 — 받고 보내고 보관만 하는 사람. 가게·돕는 중은 숨기고 지갑이 맨 위다.
   const wallet = m.mode === "wallet";
