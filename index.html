@@ -804,11 +804,10 @@
          망설이거나, 매일 눌러 무시하게 된다. 여기만 다르게 둔다. */
       button.harm { background: var(--danger); border-color: var(--danger); color: #fff; }
       button.harm:hover:not(:disabled) { filter: brightness(1.08); }
-      /* 다크모드의 --danger 는 밝은 살구색이라 흰 글씨가 안 읽힌다. 경고
-         버튼이 안 읽히면 경고가 아니라 장식이다. */
-      @media (prefers-color-scheme: dark) {
-        button.harm { color: #2a0d0b; }
-      }
+      /* 0.4.8-A6 — 예전에는 OS 가 어두운 모드면 여기서 글자를 검정(#2a0d0b)으로 바꿨다(살구색
+         --danger 를 가정). 그런데 앱은 아래 `:root { color-scheme: light; … --danger:#b32b22 }` 로
+         **밝게 고정**이라 바탕은 진한 빨강 그대로였고, 빨강 위 검정 글자(대비 약 2.8:1)가 됐다.
+         덮어쓰기를 뺀다 — 흰 글자 on #b32b22 는 약 6.4:1. */
       button.link { background: none; border: none; color: var(--brand-light); padding: 0 4px; font-size: 14px; min-height: 0; }
       /* 전역 `button` 보다 뒤에 둔다. 앞에 두면 파란 단추가 얼굴을 덮는다. */
       button.arface { width: 148px; height: 148px; margin: 0 auto 18px; padding: 0;
