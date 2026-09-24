@@ -18,26 +18,41 @@ import { lang, setCopyText, tf } from "./i18n";
 import { issuedOf, OWNER_NOT_PINNED } from "./whose";
 import {
   MAX_COPIES, MAX_TICKETS, brandCandidates, brandFrom, fileFingerprint, findFreeRun, itemNames,
-  parseDraft, parseRecipients, todayYmd, totalRvn, validBrand, verifyLink,
+  parseDraft, parseRecipients, recipientSlots, runOf, todayYmd, totalRvn, validBrand, verifyLink,
   type CertTemplate, type CreateDraft, type CreateKind,
 } from "./easy-create";
+import { wireBulk, type Line } from "./cert-bulk";
 
 type Invoke = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 type Status = { brands: string[]; pending: string[]; spendable: number; locked: boolean };
+/** 표로 올린 줄의 칸(받는 사람 말고) — 러스트 create_history 의 `rows`. */
+type RowCells = { course: string; grade: string; number: string; date: string };
 type Details = {
   template?: CertTemplate; recipients: string[]; issued_on: string; issuer: string; signer: string;
   description: string; file_name: string; lang: string; display_title?: string;
+  photo_slot?: boolean; rows?: RowCells[];
+};
+/** 한 번에 여러 장 — 50장씩 나눠 한 조각에 기록 하나·발행 한 번. */
+type Chunk = { idx: number[]; state: "todo" | "done" | "bad" | "unknown"; historyId?: string; names?: string[]; txid?: string; why?: string };
+type Batch = {
+  title: string; brand: string; fingerprint: string; base: Details; photoSlot: boolean;
+  /** 확인할 때 굳힌 줄(표를 더 고쳐도 보내는 중인 묶음은 안 바뀐다). */
+  lines: { row: Line["row"]; photo: string | null }[];
+  chunks: Chunk[]; usedRuns: Set<number>; date: Date; started?: number; finished?: number;
 };
 type Review = {
   kind: CreateKind; title: string; count: number; brand: string; wanted: string; needsBrand: boolean;
   names: string[]; total: number; fingerprint: string; fileName: string; details: Details;
+  /** 첫 조각의 사진(이름 등록과 함께 가는 경우). */
+  photos?: (string | null)[];
+  batch?: Batch;
 };
 /** 러스트의 만든 기록 한 줄(create_history.rs). 받는 사람 이름이 들어 있다 — 화면에만 그린다. */
 export type CreateEntry = {
   id: string | null; status?: string; kind: CreateKind; title: string; display_title?: string; brand: string;
   count: number; names: string[]; fingerprint?: string | null; file_name?: string; template?: CertTemplate;
   recipients?: string[]; issued_on?: string; issuer?: string; signer?: string; description?: string;
-  txid?: string; done_at?: number; at?: number; lang?: string;
+  txid?: string; done_at?: number; at?: number; lang?: string; photo_slot?: boolean;
 };
 export type CreateDeps = {
   invoke: Invoke;
@@ -50,14 +65,24 @@ export type CreateDeps = {
   sure: (title: string, message: string, ok: string) => Promise<boolean>;
   /** 그 자산의 팔기 창을 연다. 아직 목록에 없으면 거짓. */
   sell: (asset: string) => Promise<boolean>;
+  /** 설정에서 고른 AI(라비). 열쇠가 없으면 null. */
+  aiProvider: () => string | null;
 };
 export type CreateApi = {
   enter: () => void;
   /** 창에 떨어뜨린 문서로 증명서 만들기를 연다. 파일은 올리지 않고 지문만. */
   startWithDocument: (doc: { fingerprint: string; name: string }) => void;
+  /** 증명서 폼이 열려 있을 때 떨어뜨린 명단 표·사진. 받았으면 참. */
+  dropFiles: (paths: string[]) => Promise<boolean>;
+  /** 지금 명단 표·사진을 받을 수 있나(증명서 폼이 열려 있다). */
+  acceptsRoster: () => boolean;
+  /** 확인 표로 만드는 중인가 — 사진 한 장을 놓으면 그 줄 사진으로 본다. */
+  rosterActive: () => boolean;
 };
 
 const DRAFT_KEY = "playx-raven-create-draft";
+/** 확인 표 한 번에 — cert-types 의 MAX_ROSTER_ROWS 와 같다. */
+const MAX_BATCH_ROWS = 500;
 const ISSUER_KEY = "playx-raven-create-issuer";
 const POLL_MS = 20_000;
 /** 지문은 공개된다 — 짧거나 양식이 정해진 문서는 지문만으로 내용을 맞춰 볼 수 있다. */
@@ -87,6 +112,17 @@ export function wireCreate(deps: CreateDeps): CreateApi {
   let fingerprint = "", fileName = "", busy = false, timer: number | undefined, epoch = 0;
   /** 고치는 중인 기록 — 있으면 폼은 「인쇄할 내용 고치기」다(체인은 안 건드린다). */
   let editing: CreateEntry | null = null;
+  /** 한 번에 여러 장 — 확인한 뒤 보내는 중이거나 멈춘 묶음(메모리에만. 이름이 들어 있다). */
+  let batch: Batch | null = null;
+  /** 묶음을 보내는 중 — 화면을 떠났다 돌아와도 「보내는 중」 기록을 「모름」으로 보지 않는다. */
+  let batchRunning = false;
+  const bulk = wireBulk({
+    invoke, t, sure: deps.sure, aiProvider: deps.aiProvider,
+    title: () => titleIn.value, issuedOn: () => dateIn.value || todayYmd(), template: () => template, issuer: () => issuerIn.value,
+    setBody: (text) => { descIn.value = text; },
+    onChange: () => schedulePreview(),
+    onModeChange: () => paintRecipientsSay(),
+  });
 
   const loadDraft = (): CreateDraft | null => { try { return parseDraft(localStorage.getItem(DRAFT_KEY)); } catch { return null; } };
   const saveDraft = (d: CreateDraft | null) => { try { d ? localStorage.setItem(DRAFT_KEY, JSON.stringify(d)) : localStorage.removeItem(DRAFT_KEY); } catch { /* 이어하기만 못 할 뿐 */ } };
@@ -165,6 +201,7 @@ export function wireCreate(deps: CreateDeps): CreateApi {
     try { issuerIn.value = localStorage.getItem(ISSUER_KEY) || ""; } catch { issuerIn.value = ""; }
     fileIn.value = ""; fingerprint = ""; fileName = "";
     paintFileSay();
+    bulk.reset();
   }
   function paintKindFields() {
     const cert = kind === "certificate", editMode = !!editing;
@@ -172,6 +209,9 @@ export function wireCreate(deps: CreateDeps): CreateApi {
     for (const id of ["cr-tpls", "cr-recipients-wrap", "cr-doc-fields", "cr-desc-wrap", "cr-signer-wrap", "cr-private-say", "cr-preview-wrap"]) {
       el(id).hidden = !(cert || (editMode && editing?.kind === "work" && id !== "cr-tpls"));
     }
+    // 로고·도장·사진 칸은 증명서(고치기 포함)에. 표 도구는 새로 만들 때만.
+    el("cr-look").hidden = !(cert || (editMode && editing?.kind === "certificate"));
+    bulk.setEditMode(editMode);
     // 고치기에서는 체인에 이미 있는 것(장수·이름·파일)을 못 바꾼다 — 칸을 감춘다.
     for (const id of ["cr-count-wrap", "cr-who-wrap", "cr-file-wrap"]) el(id).hidden = editMode;
     el("cr-check").hidden = editMode; el("cr-kind-back").hidden = editMode;
@@ -220,6 +260,7 @@ export function wireCreate(deps: CreateDeps): CreateApi {
       tell(() => tf("노드 지갑을 읽지 못했습니다: {0}", errText(e)));
     }
     paintMaker();
+    void bulk.loadMarks();
     schedulePreview();
   }
   function paintMaker() {
@@ -241,10 +282,15 @@ export function wireCreate(deps: CreateDeps): CreateApi {
     const people = parseRecipients(recipientsIn.value);
     const out = el("cr-recipients-say");
     const cert = kind === "certificate" && !editing;
+    // 확인 표로 만들 때는 장수 = 발행할 줄 수. 장수 칸은 감추고 안내는 표가 한다.
+    const bulkOn = cert && bulk.active();
+    el("cr-count-wrap").hidden = !!editing || bulkOn;
+    page.classList.toggle("cr-bulk", bulkOn);
+    if (bulkOn) return;
     // 받는 사람을 적으면 장수는 사람 수다 — 두 칸이 어긋날 수 없게 장수 칸을 잠근다.
     countIn.disabled = cert && people.length > 0;
     if (cert && people.length) countIn.value = String(Math.min(people.length, MAX_COPIES));
-    if (people.length > MAX_COPIES) setCopyText(out, () => tf("받는 사람은 한 번에 {0}명까지예요. 나눠서 만들어 주세요.", MAX_COPIES));
+    if (people.length > MAX_COPIES) setCopyText(out, () => tf("{0}명이 넘으면 「표 올리기」로 한 번에 만들 수 있어요(500줄까지, 50장씩 나눠 보내요).", MAX_COPIES));
     else if (people.length) setCopyText(out, () => tf("{0}명 · 한 사람에 한 장씩 {0}장을 만들어요.", people.length));
     else if (editing) out.replaceChildren();
     else setCopyText(out, () => t("비워 두면 이름 칸이 빈 줄로 인쇄돼요. 손으로 적을 수 있어요."));
@@ -252,6 +298,8 @@ export function wireCreate(deps: CreateDeps): CreateApi {
   makerIn.addEventListener("input", () => { paintMaker(); schedulePreview(); });
   recipientsIn.addEventListener("input", () => { paintRecipientsSay(); schedulePreview(); });
   for (const input of [titleIn, dateIn, issuerIn, signerIn, descIn, countIn]) input.addEventListener("input", schedulePreview);
+  titleIn.addEventListener("input", () => bulk.refreshIssued());
+  dateIn.addEventListener("change", () => bulk.refreshIssued());
   brandSel.addEventListener("change", schedulePreview);
   el("cr-tpls").querySelectorAll<HTMLButtonElement>("[data-cr-tpl]").forEach((b) => b.addEventListener("click", () => {
     template = (b.dataset.crTpl as CertTemplate) || "course";
@@ -278,12 +326,15 @@ export function wireCreate(deps: CreateDeps): CreateApi {
   function detailsNow(): Details {
     return {
       template: kind === "certificate" || editing?.kind === "certificate" ? template : undefined,
-      recipients: parseRecipients(recipientsIn.value).slice(0, MAX_COPIES),
+      // 고치기는 줄이 곧 차례 — 빈 줄도 자리를 지킨다(러스트 clean_details 도 같다).
+      recipients: (editing ? recipientSlots : parseRecipients)(recipientsIn.value).slice(0, MAX_COPIES),
       issued_on: dateIn.value || todayYmd(),
       issuer: issuerIn.value.trim(), signer: signerIn.value.trim(), description: descIn.value.trim(),
-      file_name: fileName, lang,
+      file_name: fileName, lang, photo_slot: bulk.photoSlot(),
     };
   }
+  /** 확인 표 한 줄의 칸(받는 사람 말고). 빈 발급일은 위의 발급일을 쓴다(러스트 render). */
+  const cellsOf = (row: Line["row"]): RowCells => ({ course: row.course, grade: row.grade, number: row.number, date: row.date });
 
   /* ── 미리보기 — 채우면서 바로 본다 ─────────────────────────────── */
   let previewTimer: number | undefined, previewTicket = 0;
@@ -300,16 +351,61 @@ export function wireCreate(deps: CreateDeps): CreateApi {
       const brand = (status?.brands.length ? brandSel.value : brandFrom(makerIn.value)) || "MYNAME";
       try { name = itemNames({ kind: "certificate", brand: validBrand(brand) ? brand : "MYNAME", title: titleIn.value, date: new Date(), count: 1, run: 0 })[0]; } catch { name = "MYNAME#CERT-1"; }
     }
-    const entry = {
+    // 확인 표로 만들 때는 고른 줄(처음엔 첫 줄)을 그 줄의 과정·번호·사진과 함께 그린다.
+    const line = !editing && kind === "certificate" ? bulk.selected() : null;
+    const details = line
+      ? { ...d, recipients: line.row.recipient ? [line.row.recipient] : [], rows: [cellsOf(line.row)] }
+      : { ...d, recipients: d.recipients.slice(0, 1) };
+    const entry: Record<string, unknown> = {
       kind: editing?.kind || kind, title: titleIn.value.trim() || t("제목"), fingerprint: editing ? editing.fingerprint || "" : fingerprint,
-      names: [name], details: { ...d, recipients: d.recipients.slice(0, 1) },
+      names: [name], details,
     };
+    if (line?.photo && d.photo_slot) entry.preview_photo = line.photo;
+    const lines = bulk.lines();
+    const at = line ? lines.indexOf(line) : -1;
+    setCopyText(el("cr-preview-say"), () => at >= 0
+      ? tf("미리보기 · {0}번째 줄 · 표에서 줄을 누르면 그 사람으로 바뀌어요", at + 1)
+      : t("미리보기 · 인쇄하면 이 모양이에요 (A4 한 장에 한 사람)"));
     try {
-      const html = await invoke<string>("create_certificate_preview", { entry, lang });
-      if (mine === previewTicket) setStyledSrcdoc(preview, html);
+      const [html, fonts] = await Promise.all([invoke<string>("create_certificate_preview", { entry, lang }), bulk.fontCss()]);
+      if (mine === previewTicket) setStyledSrcdoc(preview, html, fonts);
     } catch { /* 미리보기는 덤이다 — 칸 검사는 확인하기가 한다 */ }
   }
   window.addEventListener("desktop-language-change", () => { paintTemplates(); schedulePreview(); });
+  // 미리보기 종이는 칸 폭에 맞춰 준다(좁은 창·폰 폭) — A4(794px) 문서를 그 폭으로 줄인다.
+  const paper = preview.parentElement as HTMLElement;
+  new ResizeObserver(() => {
+    const w = paper.clientWidth;
+    if (w > 0) preview.style.transform = `scale(${w / 794})`;
+  }).observe(paper);
+
+  /* ── 한 번에 여러 장 — 50장씩 조각 ─────────────────────────────── */
+  /** 확인할 때의 줄을 굳혀 조각으로 나눈다. 받는 사람 이름이 들어 있어 메모리에만 둔다. */
+  function batchOf(title: string, brand: string, base: Details, roster: Line[], pick: number[], date: Date): Batch {
+    const lines = pick.map((i) => ({ row: { ...roster[i].row }, photo: roster[i].photo }));
+    const chunks: Chunk[] = [];
+    for (let at = 0; at < lines.length; at += MAX_COPIES) {
+      chunks.push({ idx: lines.slice(at, at + MAX_COPIES).map((_, k) => at + k), state: "todo" });
+    }
+    return { title, brand, fingerprint, base, photoSlot: !!base.photo_slot, lines, chunks, usedRuns: new Set(), date };
+  }
+  /** 남은 조각의 소각 + 수수료 합(RVN). 이름 등록이 필요하면 첫 조각에 500 RVN. */
+  /** 🔴 보냈는지 모르는 조각(unknown)은 「남은 것」이 아니다 — 체인에 있을 수 있다. */
+  const isLeft = (c: Chunk) => c.state === "todo" || c.state === "bad";
+  const chunkOf = (id?: string | null) => (batch && id ? batch.chunks.find((c) => c.historyId === id) ?? null : null);
+  function batchTotal(b: Batch, needsBrand: boolean): number {
+    const left = b.chunks.filter(isLeft);
+    const sum = left.reduce((a, c, i) => a + totalRvn("certificate", c.idx.length, needsBrand && i === 0), 0);
+    return Math.round(sum * 1e8) / 1e8;
+  }
+  const leftRows = (b: Batch) => b.chunks.filter(isLeft).reduce((a, c) => a + c.idx.length, 0);
+  const doneRows = (b: Batch) => b.chunks.filter((c) => c.state === "done").reduce((a, c) => a + c.idx.length, 0);
+  function chunkDetails(b: Batch, c: Chunk): Details {
+    return { ...b.base, recipients: c.idx.map((i) => b.lines[i].row.recipient), rows: c.idx.map((i) => cellsOf(b.lines[i].row)) };
+  }
+  function chunkPhotos(b: Batch, c: Chunk): (string | null)[] {
+    return c.idx.map((i) => (b.photoSlot ? b.lines[i].photo : null));
+  }
 
   /* ── 3. 확인 ─────────────────────────────────────────────────────── */
   async function check() {
@@ -322,12 +418,19 @@ export function wireCreate(deps: CreateDeps): CreateApi {
       const title = titleIn.value.trim().slice(0, 80);
       if (!title) throw new Error(t("무엇을 만드는지 제목을 적어 주세요."));
       const details = detailsNow();
-      const people = parseRecipients(recipientsIn.value);
+      // 확인 표(표 올리기·붙여넣기·사진·라비)로 만들면 발행할 줄만 — 50장씩 나눠 보낸다.
+      const roster = kind === "certificate" && bulk.active() ? bulk.lines() : null;
+      // 🔴 방금(보냈는지 모름이 풀린 것 포함) 만든 줄을 다시 만들지 않게 — 기록을 지금 다시 읽고 고른다.
+      if (roster) { await bulk.refreshIssuedNow(); if (ticket !== epoch) return; }
+      const pick = roster ? bulk.issuable() : [];
+      if (roster && !pick.length) throw new Error(t("발행할 줄이 없어요. 확인 표에서 받는 사람을 채우거나 발행 체크를 켜 주세요."));
+      const people = roster ? pick.map((i) => roster[i].row.recipient) : parseRecipients(recipientsIn.value);
       // 🔴 제목은 로마자로 바뀌어 체인 이름에 영원히 남는다. 받는 사람 이름이 섞이면 안 된다.
       if (people.some((p) => p.length >= 2 && title.includes(p))) throw new Error(t("제목에 받는 사람 이름이 들어 있어요. 제목은 증서 번호(체인)에 들어가니, 이름은 받는 사람 칸에만 적어 주세요."));
-      if (kind === "certificate" && people.length > MAX_COPIES) throw new Error(tf("받는 사람은 한 번에 {0}명까지예요. 나눠서 만들어 주세요.", MAX_COPIES));
+      if (!roster && kind === "certificate" && people.length > MAX_COPIES) throw new Error(tf("받는 사람은 한 번에 {0}명까지예요. 나눠서 만들어 주세요.", MAX_COPIES));
       if (people.some((p) => p.length > 60)) throw new Error(t("받는 사람 이름은 60자까지 적을 수 있어요."));
-      const count = kind === "certificate" && people.length ? people.length : Number(countIn.value), max = kind === "ticket" ? MAX_TICKETS : MAX_COPIES;
+      const count = roster ? pick.length : kind === "certificate" && people.length ? people.length : Number(countIn.value);
+      const max = roster ? MAX_BATCH_ROWS : kind === "ticket" ? MAX_TICKETS : MAX_COPIES;
       if (!Number.isInteger(count) || count < 1 || count > max) throw new Error(tf("1부터 {0}까지 적어 주세요.", max.toLocaleString("en-US")));
       const s = await loadStatus();
       const pending = s.pending ?? [];
@@ -354,6 +457,21 @@ export function wireCreate(deps: CreateDeps): CreateApi {
         if (!brand) throw new Error(tf("{0} 이름은 이미 쓰이고 있어요. 폰이나 다른 컴퓨터에서 만든 내 이름이라면 그 주인 표 「{1}!」를 이 컴퓨터로 옮겨 주세요. 아니라면 다른 이름을 적어 주세요.", wanted, wanted));
       }
       const date = new Date();
+      if (roster) {
+        const b = batchOf(title, brand, details, roster, pick, date);
+        const first = b.chunks[0].idx.length;
+        const { names } = needsBrand
+          ? { names: itemNames({ kind, brand, title, date, count: first, run: 0 }) }
+          : await findFreeRun((run) => itemNames({ kind, brand, title, date, count: first, run }), (probe) => invoke<boolean[]>("create_names_taken", { names: probe }));
+        if (ticket !== epoch) return;
+        // 이름 등록과 함께 가는 첫 조각은 예전 흐름(등록 → 기다림 → 마저 만들기)을 그대로 탄다.
+        review = {
+          kind, title, count: first, brand, wanted, needsBrand, names, total: batchTotal(b, needsBrand), fingerprint, fileName,
+          details: chunkDetails(b, b.chunks[0]), photos: chunkPhotos(b, b.chunks[0]), batch: b,
+        };
+        paintReview(review, s);
+        return;
+      }
       const copies = kind === "ticket" ? 1 : count;
       const { names } = needsBrand
         ? { names: itemNames({ kind, brand, title, date, count: copies, run: 0 }) }
@@ -374,7 +492,33 @@ export function wireCreate(deps: CreateDeps): CreateApi {
       node("h3", "이렇게 만들어요"),
       data("p", `${t(KIND_NAME[r.kind])} · ${r.title}`),
     ];
-    if (r.kind === "certificate") {
+    const b = r.batch;
+    if (b) {
+      // 🔴 돈이 드는 곳 — 장수 · 체인 수수료 합계 · 지갑 잔액을 크게. 모자라면 아래에서 단추가 잠긴다.
+      const n = leftRows(b), chunks = b.chunks.filter((c) => c.state !== "done").length;
+      parts.push(node("p", () => tf("양식 · {0}", t(TEMPLATE_NAME[r.details.template || "course"])), "meta"));
+      const bill = document.createElement("div");
+      bill.className = "cr-bill";
+      const cell = (big: HTMLElement, small: string, cls = "") => {
+        const d = document.createElement("div");
+        if (cls) d.className = cls;
+        d.append(big, node("span", small));
+        return d;
+      };
+      bill.append(
+        cell(node("b", () => tf("{0}장", n.toLocaleString("en-US"))), "발행할 증서"),
+        cell(data("b", `${rvnText(r.total)} RVN`), "체인 수수료 합계"),
+        cell(data("b", `${rvnText(s.spendable)} RVN`), "지갑 잔액", s.spendable < r.total ? "short" : ""),
+      );
+      parts.push(bill);
+      parts.push(node("p", () => tf("한 장에 {0} RVN이 체인에 태워지고, 보낼 때마다 네트워크 수수료가 조금 붙어요 · {1}번에 나눠 보내요(한 번에 {2}장까지).", 5, chunks, MAX_COPIES), "meta"));
+      const withPhoto = b.photoSlot ? b.lines.filter((l) => l.photo).length : 0;
+      if (withPhoto) parts.push(node("p", () => tf("사진 {0}장을 함께 인쇄해요 · 사진은 이 컴퓨터에만 둬요.", withPhoto), "meta"));
+      parts.push(node("p", "받는 사람·과정·사진은 체인에 올리지 않아요. 인쇄하는 종이와 이 컴퓨터에만 남아요.", "meta"));
+      if (r.needsBrand && chunks > 1) {
+        parts.push(node("p", () => tf("처음 한 번은 이름 등록이 먼저예요 — 등록과 함께 첫 {0}장을 만들고, 기록되면(1~2분) 「나머지 이어서 만들기」로 {1}장을 더 만들어요.", r.count, n - r.count), "meta"));
+      }
+    } else if (r.kind === "certificate") {
       const people = r.details.recipients;
       parts.push(node("p", () => tf("양식 · {0}", t(TEMPLATE_NAME[r.details.template || "course"])), "meta"));
       if (people.length) {
@@ -383,13 +527,14 @@ export function wireCreate(deps: CreateDeps): CreateApi {
       }
       parts.push(node("p", "받는 사람·발급자·설명은 체인에 올리지 않아요. 인쇄하는 종이와 이 컴퓨터에만 남아요.", "meta"));
     }
+    const shown = b ? leftRows(b) : r.names.length;
     parts.push(
       node("p", r.kind === "certificate" ? "증서 번호(체인에 새겨질 이름)" : "체인에 새겨질 이름", "meta"),
-      data("p", r.names.length > 1 ? tf("{0} 외 {1}장", r.names[0], r.names.length - 1) : r.names[0], "cr-name"),
+      data("p", shown > 1 ? tf("{0} 외 {1}장", r.names[0], shown - 1) : r.names[0], "cr-name"),
     );
     parts.push(node("p", r.fingerprint ? () => tf("파일 지문을 함께 새겨요 · {0}", r.fileName) : () => t("파일 없이 만들어요."), "meta"));
     if (r.kind === "ticket") parts.push(node("p", () => tf("티켓 {0}장 · 나중에 더 만들 수 있어요", r.count.toLocaleString("en-US")), "meta"));
-    parts.push(node("p", "필요한 RVN", "meta"), data("p", `${r.total.toLocaleString("en-US", { maximumFractionDigits: 2 })} RVN`, "cr-cost"));
+    if (!b) parts.push(node("p", "필요한 RVN", "meta"), data("p", `${r.total.toLocaleString("en-US", { maximumFractionDigits: 2 })} RVN`, "cr-cost"));
     if (r.needsBrand) parts.push(node("p", () => tf("처음 한 번은 이름 {0} 등록(500 RVN)이 들어가요. 다음부터는 만드는 값만 들어요.", r.brand), "meta"));
     parts.push(node("p", "이 RVN은 네트워크에 태워져 이름과 기록을 지키는 데 쓰여요. 저희가 받는 돈이 아니에요.", "meta"));
 
@@ -438,7 +583,10 @@ export function wireCreate(deps: CreateDeps): CreateApi {
         parts.push(label);
       }
       if (r.needsBrand) parts.push(node("p", "두 번 진행해요. 먼저 이름 등록, 기록된 뒤에 만들기.", "meta"));
-      const makeBtn = button(r.needsBrand ? "이름 등록하고 만들기" : "만들기", () => void make(r, pass));
+      const makeBtn = r.needsBrand || !b
+        ? button(r.needsBrand ? "이름 등록하고 만들기" : "만들기", () => void make(r, pass))
+        : node("button", () => tf("{0}장 만들기", leftRows(b).toLocaleString("en-US")));
+      if (b && !r.needsBrand) { makeBtn.setAttribute("type", "button"); makeBtn.addEventListener("click", () => void make(r, pass)); }
       makeBtn.id = "cr-make";
       const gate = () => {
         const typedOk = !typed || typed.value.trim().toUpperCase() === r.brand;
@@ -460,14 +608,17 @@ export function wireCreate(deps: CreateDeps): CreateApi {
   async function make(r: Review, pass: HTMLInputElement | null) {
     if (busy) return;
     if (loadDraft()?.stage === "sent-unknown") { paintUnknown(); return; }
+    if (r.batch && !r.needsBrand) { await makeBatch(r, pass); return; }
     busy = true; quiet();
     const makeBtn = document.getElementById("cr-make") as HTMLButtonElement | null;
     if (makeBtn) makeBtn.disabled = true;
     let historyId: string | undefined;
     try {
       // 🔴 되돌릴 수 없는 일 앞의 8초. 이름 등록은 500 RVN 이고 이름은 영원하다.
+      // 여러 장이면 지금 태우는 것은 이름 등록 + 첫 조각뿐이다(나머지는 이어서 만들 때 다시 묻는다).
+      const now = r.batch ? totalRvn("certificate", r.count, true) : r.total;
       const ok = r.needsBrand
-        ? await deps.hold(tf("이름 「{0}」을(를) 등록해요", r.brand), tf("{0} RVN이 태워지고, 이 이름은 영원히 바뀌지 않아요", rvnText(r.total)))
+        ? await deps.hold(tf("이름 「{0}」을(를) 등록해요", r.brand), tf("{0} RVN이 태워지고, 이 이름은 영원히 바뀌지 않아요", rvnText(now)))
         : await deps.hold(tf("「{0}」을(를) 만들어요", r.title), tf("{0} RVN이 태워지고 되돌릴 수 없어요", rvnText(r.total)));
       if (!ok) { if (makeBtn) makeBtn.disabled = false; return; }
       const passphrase = pass?.value || null;
@@ -477,6 +628,9 @@ export function wireCreate(deps: CreateDeps): CreateApi {
       historyId = await invoke<string>("create_history_begin", {
         entry: { kind: r.kind, title: r.title, brand: r.brand, count: r.count, fingerprint: r.fingerprint || null, details: r.details },
       }) || undefined;
+      // 사진은 기록과 같은 자리에(0600) — 못 두면 만들지 않는다(아래 catch 가 기록을 지운다).
+      if (historyId && r.photos?.some(Boolean)) await invoke("create_photos_save", { id: historyId, photos: r.photos });
+      if (r.batch && historyId) { batch = r.batch; batch.chunks[0].historyId = historyId; }
       tell(() => t(SENDING_NOTE));
       if (r.needsBrand) {
         // 0.4.6 부터 `{ txid, owner_pinned, … }` — 이름 등록은 새 주인 표를 만드는 발행이다.
@@ -522,6 +676,250 @@ export function wireCreate(deps: CreateDeps): CreateApi {
     await paintDone(await entryOf(draft));
     if (issued.ownerPinned === false) tell(() => t(OWNER_NOT_PINNED));
   }
+  /* ── 4-1. 여러 장 — 조각마다 기록 하나 · 발행 한 번 ───────────────── */
+  async function makeBatch(r: Review, pass: HTMLInputElement | null) {
+    const b = r.batch!;
+    busy = true; quiet();
+    const makeBtn = document.getElementById("cr-make") as HTMLButtonElement | null;
+    if (makeBtn) makeBtn.disabled = true;
+    let passphrase: string | null = null;
+    try {
+      const ok = await deps.hold(tf("「{0}」 {1}장을 만들어요", r.title, leftRows(b).toLocaleString("en-US")), tf("{0} RVN이 태워지고 되돌릴 수 없어요", rvnText(r.total)));
+      if (!ok) { if (makeBtn) makeBtn.disabled = false; return; }
+      passphrase = pass?.value || null;
+      if (pass) pass.value = "";
+      if (r.details.issuer) { try { localStorage.setItem(ISSUER_KEY, r.details.issuer); } catch { /* 기억만 못 할 뿐 */ } }
+      batch = b;
+      await runBatch(b, passphrase);
+    } finally {
+      passphrase = null;
+      busy = false;
+    }
+  }
+  /** 남은 조각을 차례로 보낸다. 🔴 보냈는지 모르면 멈추고 그 화면으로(두 번 태우지 않게),
+   *  분명히 안 나갔으면 그 조각의 기록을 지우고 멈춘다 — 「이어서 만들기」는 남은 조각만. */
+  async function runBatch(b: Batch, passphrase: string | null) {
+    b.started ??= Date.now();
+    batchRunning = true;
+    try { await sendChunks(b, passphrase); } finally { batchRunning = false; }
+  }
+  async function sendChunks(b: Batch, passphrase: string | null) {
+    for (const c of b.chunks) {
+      // 🔴 보낼 것은 「아직」인 조각뿐. 보냈는지 모르는(unknown) 조각을 다시 보내면 같은 사람
+      //    50명이 두 번 태워진다(검수 09-24 — 250 RVN).
+      if (c.state !== "todo") continue;
+      if (loadDraft()?.stage === "sent-unknown") { paintUnknown(); return; }
+      paintBatchProgress(b, c);
+      let historyId: string | undefined;
+      try {
+        historyId = await invoke<string>("create_history_begin", {
+          entry: { kind: "certificate", title: b.title, brand: b.brand, count: c.idx.length, fingerprint: b.fingerprint || null, details: chunkDetails(b, c) },
+        }) || undefined;
+        c.historyId = historyId;
+        const photos = chunkPhotos(b, c);
+        if (historyId && photos.some(Boolean)) await invoke("create_photos_save", { id: historyId, photos });
+        const { run, names } = await findFreeRun(
+          (n) => itemNames({ kind: "certificate", brand: b.brand, title: b.title, date: b.date, count: c.idx.length, run: n }),
+          (probe) => invoke<boolean[]>("create_names_taken", { names: probe }),
+          b.usedRuns,
+        );
+        b.usedRuns.add(run);
+        c.names = names;
+        const issued = issuedOf(await invoke<unknown>("create_issue", { step: "uniques", brand: b.brand, names, quantity: 0, ipfsHash: b.fingerprint || null, passphrase, historyId: historyId ?? null }));
+        c.txid = issued.txid; c.state = "done"; c.why = undefined;
+      } catch (e) {
+        if (sentUnknown(e)) {
+          c.state = "unknown";
+          saveDraft({ version: 1, kind: "certificate", title: b.title, count: c.idx.length, brand: b.brand, stage: "sent-unknown", step: "uniques", txid: "", fingerprint: b.fingerprint || undefined, names: c.names ?? [], updatedAt: Date.now(), historyId });
+          paintUnknown();
+          return;
+        }
+        // 분명히 안 나갔다 — 받는 사람 이름·사진이 든 시작 기록을 남기지 않는다.
+        if (historyId) await invoke("create_history_forget", { id: historyId }).catch(() => {});
+        c.historyId = undefined; c.names = undefined; c.state = "bad"; c.why = errText(e);
+        if (/^SENT_UNKNOWN_PENDING: /.test(rawText(e)) && (await adoptUnresolved())) { paintUnknown(); return; }
+        break;
+      }
+    }
+    b.finished = Date.now();
+    bulk.refreshIssued();
+    await paintBatchDone(b);
+  }
+  function paintBatchProgress(b: Batch, now: Chunk) {
+    const total = b.lines.length, done = doneRows(b);
+    const bar = document.createElement("div");
+    bar.className = "cr-prog";
+    const fill = document.createElement("i");
+    fill.style.width = `${Math.round((done / Math.max(1, total)) * 100)}%`;
+    bar.append(fill);
+    const list = document.createElement("ol");
+    list.className = "cr-chunks";
+    b.chunks.forEach((c, i) => {
+      const li = document.createElement("li");
+      li.className = c === now ? "now" : c.state === "done" ? "done" : c.state === "bad" ? "bad" : "";
+      const state = c === now ? "보내는 중…" : c.state === "done" ? "보냄" : c.state === "bad" ? "안 나감" : "기다림";
+      li.append(node("span", () => tf("{0}번째 묶음 · {1}장", i + 1, c.idx.length)), node("span", state));
+      list.append(li);
+    });
+    waitBox.replaceChildren(
+      node("h3", () => tf("{0}장을 만드는 중이에요", total.toLocaleString("en-US"))),
+      node("p", "창을 닫지 마세요 — 50장씩 나눠 보내요. 한 묶음에 보통 몇 초, 노드가 바쁘면 더 걸려요.", "meta"),
+      bar,
+      node("p", () => tf("{0} / {1}장", done, total), "meta"),
+      list,
+    );
+    show("wait");
+  }
+  /** 이름 등록과 함께 첫 조각을 만든 뒤 — 나머지 조각을 다시 확인(잔액·암호)하고 이어서. */
+  async function resumeBatch() {
+    const b = batch;
+    if (!b || busy) return;
+    quiet();
+    try {
+      const s = await loadStatus();
+      if (!s.brands.includes(b.brand)) throw new Error(t("이름 등록이 아직 기록되지 않았어요. 1~2분 뒤에 다시 눌러 주세요."));
+      // 🔴 보냈는지 모르는 조각이 있으면 이어서 만들지 않는다 — 그 화면에서 풀려야 한다.
+      if (b.chunks.some((c) => c.state === "unknown") || loadDraft()?.stage === "sent-unknown") {
+        if (loadDraft()?.stage === "sent-unknown") paintUnknown();
+        throw new Error(t("보냈는지 아직 모르는 묶음이 있어요. 기록될 때까지 기다린 뒤 이어서 만들어 주세요."));
+      }
+      for (const c of b.chunks) if (c.state === "bad") { c.state = "todo"; c.why = undefined; }
+      const next = b.chunks.find((c) => c.state === "todo");
+      if (!next) { await paintBatchDone(b); return; }
+      const { names } = await findFreeRun(
+        (n) => itemNames({ kind: "certificate", brand: b.brand, title: b.title, date: b.date, count: next.idx.length, run: n }),
+        (probe) => invoke<boolean[]>("create_names_taken", { names: probe }),
+        b.usedRuns,
+      );
+      review = {
+        kind: "certificate", title: b.title, count: leftRows(b), brand: b.brand, wanted: b.brand, needsBrand: false, names,
+        total: batchTotal(b, false), fingerprint: b.fingerprint, fileName, details: chunkDetails(b, next), batch: b,
+      };
+      paintReview(review, s);
+    } catch (e) {
+      tellError(e);
+    }
+  }
+  /** 한 묶음이 체인에 나갔다(이름 등록과 함께 간 첫 묶음, 보냈는지 모름이 풀린 묶음). */
+  function markChunkDone(c: Chunk, names: string[]) {
+    c.state = "done"; c.names = names; c.why = undefined;
+    if (batch) batch.started ??= Date.now();
+    const run = runOf(names[0] ?? "");
+    if (run >= 0) batch?.usedRuns.add(run);
+    bulk.refreshIssued();
+  }
+  type Made = { c: Chunk; j: number; row: Line["row"]; name: string };
+  const madeRows = (b: Batch): Made[] => b.chunks.flatMap((c) => (c.state === "done" && c.names ? c.idx.map((i, j) => ({ c, j, row: b.lines[i].row, name: c.names![j] })) : []));
+  async function saveList(b: Batch, ext: "xlsx" | "csv") {
+    const rows = madeRows(b);
+    const first = rows[0]?.c.historyId;
+    if (!first) return;
+    try {
+      const m = await import("./cert-roster");
+      const issued = rows.map(({ c, row, name }) => ({
+        recipient: row.recipient, course: row.course || b.title, grade: row.grade, date: row.date || b.base.issued_on,
+        number: row.number, asset: name, txid: c.txid ?? "", verifyUrl: verifyLink(name),
+      }));
+      const bytes = ext === "xlsx" ? m.resultXlsx(issued) : m.resultCsv(issued);
+      let bin = "";
+      for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+      await invoke("certificate_file_save", { kind: "list", name: `${first}.${ext}`, data: btoa(bin), open: true });
+      tell(() => t("번호 목록 표를 열었어요. 받는 사람 이름이 든 파일이라 먼저 이 컴퓨터의 앱 폴더에 만들었어요 — 열린 프로그램에서 원하는 곳에 저장해 주세요."));
+    } catch (e) {
+      tell(() => errText(e));
+    }
+  }
+  async function paintBatchDone(b: Batch) {
+    const made = madeRows(b);
+    const total = b.lines.length, left = total - made.length;
+    const stopped = b.chunks.find((c) => c.state === "bad");
+    let index = 0;
+    const qr = document.createElement("div"), current = data("p", "", "cr-name"), who = data("p", "", "cr-who");
+    qr.className = "cr-qr";
+    const list = document.createElement("ol");
+    list.className = "cr-list";
+    const rowsEl: HTMLButtonElement[] = [];
+    const paint = async () => {
+      rowsEl.forEach((x, i) => x.setAttribute("aria-current", i === index ? "true" : "false"));
+      current.textContent = made[index]?.name ?? "";
+      who.textContent = made[index]?.row.recipient ?? "";
+      try {
+        const svg = await invoke<string>("qr_svg", { text: verifyLink(made[index].name) });
+        qr.innerHTML = svg.startsWith("<svg") || svg.startsWith("<?xml") ? svg : "";
+      } catch { qr.replaceChildren(); }
+    };
+    made.forEach((m, i) => {
+      const li = document.createElement("li");
+      li.className = "cr-li2";
+      const x = document.createElement("button");
+      x.type = "button"; x.className = "cr-row";
+      x.append(data("span", String(i + 1), "cr-no"), data("span", m.row.recipient || "—", "cr-person"), data("span", m.name, "cr-chain"));
+      x.addEventListener("click", () => { index = i; void paint(); });
+      const one = button("이 사람만", () => void printOne(m.c.historyId!, m.j), true);
+      one.className = "ghost cr-one";
+      rowsEl.push(x); li.append(x, one); list.append(li);
+    });
+    const secs = b.started && b.finished ? Math.max(1, Math.round((b.finished - b.started) / 1000)) : 0;
+    const head: HTMLElement[] = [
+      node("h3", () => (left ? tf("{0}장 중 {1}장을 만들었어요", total, made.length) : tf("{0}장을 만들었어요", made.length))),
+      node("p", "블록에 기록되면 누구나 이 링크로 진짜인지 확인할 수 있어요. 보통 1~2분 걸려요.", "meta"),
+      node("p", () => [`${t("증명서")} · ${b.title}`, tf("{0}번에 나눠 보냈어요", b.chunks.filter((c) => c.state === "done").length), secs ? tf("걸린 시간 {0}초", secs) : ""].filter(Boolean).join(" · ")),
+    ];
+    if (left) {
+      const why = stopped?.why ? ` — ${stopped.why}` : "";
+      head.push(node("p", () => tf("나머지 {0}장은 안 나갔어요{1}. 이미 만든 줄은 다시 만들지 않아요.", left, why), "cr-warn"));
+    }
+    const ids = b.chunks.filter((c) => c.state === "done" && c.historyId).map((c) => c.historyId!);
+    const primary = actionsRow();
+    if (left) primary.append(button(tf("나머지 {0}장 이어서 만들기", left), () => void resumeBatch()));
+    if (made.length) {
+      primary.append(
+        node("button", () => tf("전체 인쇄 · PDF로 저장 ({0}장)", made.length)),
+        button("번호 목록 표 받기 (엑셀)", () => void saveList(b, "xlsx"), true),
+      );
+      const all = primary.children[primary.children.length - 2] as HTMLButtonElement;
+      all.type = "button";
+      all.addEventListener("click", () => void printMany(ids));
+    }
+    const secondary = actionsRow(
+      button("링크 복사", async () => {
+        try { await navigator.clipboard.writeText(verifyLink(made[index].name)); tell(() => t("링크를 복사했어요.")); } catch { tell(() => t("복사하지 못했어요. QR을 보여 주세요.")); }
+      }, true),
+      button("확인 페이지 열기", () => openLink(verifyLink(made[index].name)), true),
+      button("CSV로 받기", () => void saveList(b, "csv"), true),
+      button("하나 더 만들기", () => { saveDraft(null); batch = null; resetForm(); show("kinds"); }, true),
+      button("만든 것 보기", () => void paintHistory(), true),
+    );
+    const side = document.createElement("div");
+    side.className = "cr-done-side";
+    side.append(qr, who, current);
+    const grid = document.createElement("div");
+    grid.className = "cr-done-grid";
+    grid.append(list, side);
+    const notes = [
+      node("p", "「전체 인쇄」는 한 파일에 A4 여러 쪽 — 인쇄 창에서 「PDF로 저장」하면 묶음 PDF 하나가 돼요. 「이 사람만」은 그 사람 한 장만 열어요.", "meta"),
+      node("p", "받는 사람 이름·사진은 확인 페이지(/verify)에 나오지 않아요. 번호와 QR로 진짜인지만 확인해요.", "meta"),
+    ];
+    doneBox.replaceChildren(...head, ...(made.length ? [grid] : []), ...notes, primary, secondary);
+    show("done");
+    if (made.length) await paint();
+  }
+  async function printOne(id: string, index: number) {
+    tell(() => t("인쇄할 파일을 만드는 중…"));
+    try {
+      await invoke("create_print", { id, lang, index });
+      tell(() => t("브라우저에서 열었어요. ⌘P(윈도우는 Ctrl+P)를 누르면 인쇄하거나 「PDF로 저장」할 수 있어요."));
+    } catch (err) { tell(() => errText(err)); }
+  }
+  async function printMany(ids: string[]) {
+    if (!ids.length) return;
+    tell(() => t("인쇄할 파일을 만드는 중…"));
+    try {
+      await invoke("create_print_many", { ids, lang });
+      tell(() => t("브라우저에서 열었어요. ⌘P(윈도우는 Ctrl+P)를 누르면 인쇄하거나 「PDF로 저장」할 수 있어요."));
+    } catch (err) { tell(() => errText(err)); }
+  }
+
   /** 이어하기 표에서 기록을 찾는다. 기록이 없으면(옛 표) 표만으로 그린다 — 인쇄는 못 한다. */
   async function entryOf(d: CreateDraft): Promise<CreateEntry> {
     if (d.historyId) {
@@ -586,6 +984,16 @@ export function wireCreate(deps: CreateDeps): CreateApi {
     const giveUp = button("안 나갔어요 — 처음부터 다시", () => void (async () => {
       try {
         if (d.historyId) await invoke("create_resolve_not_sent", { id: d.historyId });
+        // 여러 장 중 한 묶음이었다 — 그 묶음만 「아직」으로 돌리고 묶음 화면으로(나머지는 그대로).
+        const c = chunkOf(d.historyId);
+        if (c && batch) {
+          clearInterval(timer); timer = undefined;
+          saveDraft(null);
+          if (d.historyId) await invoke("create_history_forget", { id: d.historyId }).catch(() => {});
+          c.state = "todo"; c.historyId = undefined; c.names = undefined; c.why = undefined;
+          await paintBatchDone(batch);
+          return;
+        }
         await startOver(d);
       } catch (e) { tell(() => errText(e)); }
     })(), true);
@@ -641,7 +1049,13 @@ export function wireCreate(deps: CreateDeps): CreateApi {
           } else {
             const done: CreateDraft = { ...cur, stage: "done", updatedAt: Date.now() };
             saveDraft(done);
-            await paintDone(await entryOf(done));
+            const entry = await entryOf(done);
+            // 여러 장 중 한 묶음이었다 — 그 묶음을 「보냄」으로 적고 묶음 화면으로(남은 것은 이어서 만들기).
+            const c = chunkOf(cur.historyId);
+            if (c && batch && batch.chunks.length > 1) {
+              markChunkDone(c, entry.names ?? cur.names ?? []);
+              await paintBatchDone(batch);
+            } else await paintDone(entry);
           }
           return;
         }
@@ -673,6 +1087,14 @@ export function wireCreate(deps: CreateDeps): CreateApi {
     }
     saveDraft(null);
     if (st === "started" && cur.historyId) await invoke("create_history_forget", { id: cur.historyId }).catch(() => {});
+    const c = chunkOf(cur.historyId);
+    if (c && batch) {
+      // 그 묶음은 안 나갔다 — 「아직」으로 돌리고 묶음 화면으로(이미 보낸 묶음은 그대로).
+      c.state = "todo"; c.historyId = undefined; c.names = undefined; c.why = undefined;
+      await paintBatchDone(batch);
+      tell(() => t("보내지 않았어요 — 내용을 확인하고 다시 만들어 주세요."));
+      return;
+    }
     if (titleIn.value.trim()) { show("form"); await check(); } else show("kinds");
     tell(() => t("보내지 않았어요 — 내용을 확인하고 다시 만들어 주세요."));
   }
@@ -716,6 +1138,8 @@ export function wireCreate(deps: CreateDeps): CreateApi {
       } catch (e) {
         if (!sentUnknown(e)) throw e;
         quiet();
+        const c = chunkOf(d.historyId);
+        if (c) { c.state = "unknown"; c.names = names; }
         saveDraft({ ...d, stage: "sent-unknown", step: d.kind === "ticket" ? "ticket" : "uniques", txid: "", names, updatedAt: Date.now() });
         paintUnknown();
       }
@@ -730,6 +1154,10 @@ export function wireCreate(deps: CreateDeps): CreateApi {
   async function paintDone(e: CreateEntry) {
     const names = e.names ?? [];
     const people = e.recipients ?? [];
+    // 여러 장 중 한 묶음(이름 등록과 함께 간 첫 묶음 등) — 묶음에 적고, 남은 조각이 있으면 이어서 만들 단추를 낸다.
+    const mine = chunkOf(e.id);
+    const b = mine ? batch : null;
+    if (mine && mine.state !== "done") markChunkDone(mine, names);
     let index = 0;
     const qr = document.createElement("div"), current = data("p", "", "cr-name"), who = data("p", "", "cr-who");
     qr.className = "cr-qr";
@@ -757,6 +1185,7 @@ export function wireCreate(deps: CreateDeps): CreateApi {
 
     const printable = !!e.id && (e.kind === "certificate" || e.kind === "work");
     const primary = actionsRow();
+    if (b && leftRows(b) > 0) primary.append(button(tf("나머지 {0}장 이어서 만들기", leftRows(b)), () => void resumeBatch()));
     if (printable) {
       primary.append(button(names.length > 1 ? "모두 인쇄 · PDF로 저장" : "인쇄 · PDF로 저장", () => void printEntry(e)));
     }
@@ -774,7 +1203,7 @@ export function wireCreate(deps: CreateDeps): CreateApi {
     );
     if (printable) secondary.append(button("인쇄할 내용 고치기", () => void openEdit(e), true));
     secondary.append(
-      button("하나 더 만들기", () => { saveDraft(null); resetForm(); show("kinds"); }, true),
+      button("하나 더 만들기", () => { saveDraft(null); batch = null; resetForm(); show("kinds"); }, true),
       button("만든 것 보기", () => void paintHistory(), true),
     );
     if (e.id) {
@@ -837,6 +1266,7 @@ export function wireCreate(deps: CreateDeps): CreateApi {
     recipientsIn.value = (e.recipients ?? []).join("\n");
     dateIn.value = e.issued_on || todayYmd();
     issuerIn.value = e.issuer || ""; signerIn.value = e.signer || ""; descIn.value = e.description || "";
+    bulk.setPhotoSlot(!!e.photo_slot);
     paintKindFields();
     show("form");
     schedulePreview();
@@ -845,7 +1275,7 @@ export function wireCreate(deps: CreateDeps): CreateApi {
     if (!editing?.id || busy) return;
     busy = true; quiet();
     try {
-      const people = parseRecipients(recipientsIn.value);
+      const people = recipientSlots(recipientsIn.value);
       if (people.length > editing.names.length) throw new Error(tf("받는 사람은 {0}명까지 적을 수 있어요 — 만든 장수만큼이에요.", editing.names.length));
       const d = { ...detailsNow(), display_title: titleIn.value.trim() !== editing.title ? titleIn.value.trim() : "", file_name: editing.file_name || "" };
       const saved = await invoke<CreateEntry>("create_history_details", { id: editing.id, details: d });
@@ -923,6 +1353,8 @@ export function wireCreate(deps: CreateDeps): CreateApi {
 
   /** 화면을 열 때마다 — 하던 것이 있으면 그 자리에서. */
   async function enter() {
+    // 묶음을 보내는 중이면 그 화면 그대로 — 끝나면 저절로 결과로 간다.
+    if (batchRunning) { show("wait"); return; }
     quiet();
     // 🔴 보내는 도중 앱이 꺼지면 이어하기 표에는 아무것도 없다 — 러스트 기록이 기억한다(검수 S10).
     if (await adoptUnresolved()) { paintUnknown(); return; }
@@ -935,6 +1367,7 @@ export function wireCreate(deps: CreateDeps): CreateApi {
     show("kinds");
   }
   async function startWithDocument(doc: { fingerprint: string; name: string }) {
+    if (batchRunning) { show("wait"); tell(() => t("여러 장을 보내는 중이에요. 끝난 뒤에 문서를 다시 놓아 주세요.")); return; }
     if (await adoptUnresolved()) {
       paintUnknown();
       tell(() => t("보냈는지 아직 모르는 만들기가 있어요. 기록될 때까지 기다린 뒤 「다시 확인」을 눌러 주세요."));
@@ -952,6 +1385,12 @@ export function wireCreate(deps: CreateDeps): CreateApi {
       tell(() => t("이름 등록을 기다리는 중이에요. 끝난 뒤에 문서를 다시 놓아 주세요."));
       return;
     }
+    // 증명서 폼을 쓰는 중이면(표·사진 포함) 원본 문서의 지문만 붙인다 — 채우던 칸과 명단을 날리지 않는다.
+    if (page.classList.contains("on") && !form.hidden && kind === "certificate" && !editing) {
+      fingerprint = doc.fingerprint; fileName = doc.name;
+      paintFileSay(); schedulePreview();
+      return;
+    }
     resetForm();
     fingerprint = doc.fingerprint; fileName = doc.name;
     paintFileSay();
@@ -959,5 +1398,10 @@ export function wireCreate(deps: CreateDeps): CreateApi {
     //    제목은 로마자로 바뀌어 체인 이름(영원히 공개)에 들어간다.
     void openForm("certificate").then(schedulePreview);
   }
-  return { enter, startWithDocument };
+  return {
+    enter, startWithDocument,
+    dropFiles: (paths) => bulk.dropPaths(paths),
+    acceptsRoster: () => page.classList.contains("on") && !form.hidden && kind === "certificate" && !editing,
+    rosterActive: () => bulk.active(),
+  };
 }

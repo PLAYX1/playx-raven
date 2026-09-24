@@ -607,7 +607,8 @@
       .tp-thanks i:nth-child(1) { background: #6c2a37 !important; }
       /* 미리보기 종이 — A4(794×1123px)를 300px 로 줄여 보인다 */
       .cr-previewcol { position: sticky; top: 12px; }
-      .cr-paper { width: 300px; height: 424px; overflow: hidden; border-radius: 4px; background: #fff;
+      /* 폭은 칸에 맞춰 줄고(최대 300px) 높이는 A4 비율. 틀의 배율은 create-page.ts 가 폭에서 잰다. */
+      .cr-paper { width: min(300px, 100%); aspect-ratio: 794 / 1123; overflow: hidden; border-radius: 4px; background: #fff;
         box-shadow: 0 1px 2px rgba(0,0,0,.18), 0 10px 30px rgba(0,0,0,.22); }
       .cr-paper iframe { width: 794px; height: 1123px; border: 0; transform: scale(.3778); transform-origin: 0 0; pointer-events: none; background: #fff; }
       /* 원하던 이름을 누가 쓴다 — 그 누가 나일 수 있다 */
@@ -638,9 +639,92 @@
       .cr-hmain b { font-size: 15px; }
       .cr-hmeta { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; color: var(--muted); font-size: 13px; }
       .cr-hrow:hover, .cr-row:hover { background: color-mix(in srgb, var(--ravi) 10%, transparent); }
+      /* 로고 · 도장 · 사진 칸 */
+      .cr-look { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 10px; margin: 6px 0 8px; }
+      .cr-mark { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; grid-template-areas: "pic text pick" "pic text clear";
+        align-items: center; gap: 0 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; }
+      .cr-markpic { grid-area: pic; width: 44px; height: 44px; border-radius: 8px; background: #fff center / contain no-repeat;
+        border: 1px dashed var(--line); }
+      .cr-markpic.on { border-style: solid; }
+      .cr-marktext { grid-area: text; display: flex; flex-direction: column; gap: 1px; min-width: 0; font-size: 14px; }
+      .cr-marktext .meta { font-size: 12px; margin: 0; }
+      .cr-mark button.ghost { grid-area: pick; min-height: 36px; padding: 4px 12px; }
+      .cr-mark button.link { grid-area: clear; justify-self: end; font-size: 13px; }
+      .cr-switch { grid-column: 1 / -1; display: flex !important; align-items: center; gap: 8px !important; font-weight: 600; }
+      .cr-switch input { width: auto; margin: 0; }
+      /* 받는 사람 — 표 도구줄 · 확인 표 */
+      .cr-recwrap { display: grid; gap: 6px; }
+      .cr-rosterbar { display: flex; flex-wrap: wrap; gap: 6px; }
+      .cr-rosterbar button { min-height: 36px; padding: 4px 12px; font-size: 13.5px; }
+      button.cr-ravi { border-color: color-mix(in srgb, var(--ravi) 55%, var(--line)); }
+      .cr-roster { display: grid; gap: 6px; margin-top: 4px; }
+      .cr-rosterhead { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
+      .cr-rosterhead b { font-size: 15px; }
+      .cr-map { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; padding: 10px; border: 1px solid var(--line);
+        border-radius: 10px; background: color-mix(in srgb, var(--ravi) 5%, transparent); }
+      .cr-map label { font-size: 13px !important; }
+      .cr-map .cr-maphelp { grid-column: 1 / -1; margin: 0; }
+      .cr-tablewrap { max-height: 460px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
+      .cr-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+      .cr-table th { position: sticky; top: 0; z-index: 1; background: var(--panel); text-align: left; font-weight: 600; font-size: 12.5px;
+        color: var(--muted); padding: 7px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+      .cr-table td { padding: 3px 4px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+      .cr-table tr:last-child td { border-bottom: 0; }
+      .cr-table tr.sel td { background: color-mix(in srgb, var(--ravi) 14%, transparent); }
+      .cr-table tr.off td { opacity: .5; }
+      .cr-table tr.bad td.cr-c-state { color: var(--danger); }
+      .cr-table input[type="text"] { width: 100%; min-width: 60px; padding: 5px 6px; font-size: 13.5px; border-radius: 6px; box-sizing: border-box; }
+      .cr-table input[type="checkbox"] { width: auto; margin: 0 4px; }
+      .cr-table td.cr-c-no { color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; padding-right: 6px; }
+      .cr-table .cr-c-recipient { min-width: 110px; }
+      .cr-table .cr-c-course { min-width: 140px; }
+      .cr-table .cr-c-grade { width: 64px; }
+      .cr-table .cr-c-date { width: 108px; }
+      .cr-table .cr-c-number { width: 110px; }
+      button.cr-thumb { display: block; width: 27px; height: 36px; min-height: 0; padding: 0; border-radius: 3px;
+        background: var(--side) center / cover no-repeat; border: 1px solid var(--line); cursor: pointer; }
+      button.cr-thumb:hover:not(:disabled) { background-color: var(--side); background-size: cover; background-position: center; border-color: var(--ravi); }
+      button.cr-thumb.none { border-style: dashed; }
+      .cr-c-state { font-size: 12.5px; line-height: 1.35; min-width: 120px; }
+      .cr-c-state .w { color: var(--warn); }
+      .cr-c-state .e { color: var(--danger); font-weight: 600; }
+      .cr-c-state .ok { color: var(--muted); }
+      /* 본문 · 라비 문구 */
+      .cr-descwrap { display: grid; gap: 4px; }
+      .cr-desclabel { font-size: 14px; }
+      .cr-phrasebar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+      .cr-phrasebar button { min-height: 36px; padding: 4px 12px; font-size: 13.5px; }
+      .cr-phrases { display: grid; gap: 6px; }
+      .cr-phrases:empty { display: none; }
+      .cr-phrases button { text-align: left; min-height: 0; padding: 8px 12px; line-height: 1.5; font-size: 14px; white-space: normal; }
+      .cr-phrases .meta { margin: 0; }
+      /* 여러 장 — 발행 전 합계 · 진행 */
+      .cr-bill { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 10px 0; }
+      .cr-bill > div { padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; }
+      .cr-bill b { display: block; font-size: 24px; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+      .cr-bill span { color: var(--muted); font-size: 13px; }
+      .cr-bill .short { border-color: var(--warn); }
+      .cr-bill .short b { color: var(--warn); }
+      .cr-prog { height: 10px; border-radius: 99px; background: var(--side); overflow: hidden; margin: 10px 0 6px; }
+      .cr-prog i { display: block; height: 100%; width: 0; background: var(--ravi); transition: width .3s; }
+      .cr-chunks { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; font-size: 13.5px; }
+      .cr-chunks li { display: flex; justify-content: space-between; gap: 10px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; }
+      .cr-chunks li.done { color: var(--muted); }
+      .cr-chunks li.now { border-color: var(--ravi); }
+      .cr-chunks li.bad { border-color: var(--danger); color: var(--danger); }
+      .cr-list li.cr-li2 { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+      .cr-list li.cr-li2 .cr-one { min-height: 32px; padding: 2px 10px; margin-right: 8px; font-size: 13px; }
+      #page-create.cr-wide.cr-bulk { max-width: 1140px; }
       @media (max-width: 860px) {
         #page-create.cr-wide .cr-formgrid, .cr-done-grid { grid-template-columns: minmax(0, 1fr); }
-        .cr-previewcol { position: static; }
+        .cr-previewcol { position: static; display: flex; flex-direction: column; align-items: center; }
+      }
+      /* 폰 폭 — 만드는 칸이 위, 줄인 미리보기가 아래 */
+      @media (max-width: 520px) {
+        .cr-look, .cr-bill { grid-template-columns: minmax(0, 1fr); }
+        .cr-two { grid-template-columns: minmax(0, 1fr); }
+        .cr-paper { width: min(240px, 100%); }
+        .cr-tpls { gap: 6px; }
       }
 
       .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
@@ -3379,16 +3463,63 @@
                 <button type="button" role="radio" data-cr-tpl="proof"><span class="cr-tplpic tp-proof" aria-hidden="true"><i></i><i></i><i></i></span><b>증명서</b></button>
                 <button type="button" role="radio" data-cr-tpl="thanks"><span class="cr-tplpic tp-thanks" aria-hidden="true"><i></i><i></i><i></i></span><b>감사장</b></button>
               </div>
+              <div class="cr-look" id="cr-look">
+                <div class="cr-mark" data-mark="logo">
+                  <span class="cr-markpic" id="cr-logo-pic" aria-hidden="true"></span>
+                  <span class="cr-marktext"><b>발급처 로고</b><span class="meta" id="cr-logo-say">투명 PNG · 한 번 올리면 다음에도 써요</span></span>
+                  <button class="ghost" id="cr-logo-pick" type="button">올리기</button>
+                  <button class="link" id="cr-logo-clear" type="button" hidden>빼기</button>
+                  <input id="cr-logo-in" type="file" accept="image/png,image/jpeg,image/webp" hidden />
+                </div>
+                <div class="cr-mark" data-mark="stamp">
+                  <span class="cr-markpic" id="cr-stamp-pic" aria-hidden="true"></span>
+                  <span class="cr-marktext"><b>도장</b><span class="meta" id="cr-stamp-say">서명 칸 위에 찍혀요</span></span>
+                  <button class="ghost" id="cr-stamp-pick" type="button">올리기</button>
+                  <button class="link" id="cr-stamp-clear" type="button" hidden>빼기</button>
+                  <input id="cr-stamp-in" type="file" accept="image/png,image/jpeg,image/webp" hidden />
+                </div>
+                <label class="cr-switch"><input id="cr-photo-slot" type="checkbox" /><span>사진 칸 쓰기 <span class="meta">(왼쪽 위 3×4cm 증명사진)</span></span></label>
+              </div>
               <label>제목<input id="cr-title" maxlength="80" autocomplete="off" placeholder="예: 필라테스 지도자 과정" /></label>
               <p class="meta" id="cr-title-say">제목은 로마자로 바뀌어 증서 번호(체인 이름)에 들어가요. 받는 사람 이름은 제목에 넣지 마세요.</p>
-              <label id="cr-recipients-wrap">받는 사람 (한 줄에 한 명)<textarea id="cr-recipients" rows="4" autocomplete="off" spellcheck="false" placeholder="김하늘&#10;이바다"></textarea></label>
-              <p class="meta" id="cr-recipients-say"></p>
+              <div id="cr-recipients-wrap" class="cr-recwrap">
+                <label id="cr-recipients-box">받는 사람 (한 줄에 한 명 · 엑셀에서 여러 칸을 복사해 붙여도 돼요)<textarea id="cr-recipients" rows="4" autocomplete="off" spellcheck="false" placeholder="김하늘&#10;이바다"></textarea></label>
+                <div class="cr-rosterbar" id="cr-rosterbar">
+                  <button class="ghost" id="cr-roster-pick" type="button">표 올리기</button>
+                  <button class="ghost" id="cr-sample" type="button">샘플 표 받기</button>
+                  <button class="ghost" id="cr-photos-pick" type="button">사진 한꺼번에</button>
+                  <button class="ghost" id="cr-photodir-pick" type="button">사진 폴더</button>
+                  <button class="ghost cr-ravi" id="cr-ai-roster" type="button">명단 사진 읽기 · 라비</button>
+                  <input id="cr-roster-in" type="file" accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv" hidden />
+                  <input id="cr-photos-in" type="file" accept="image/*,.heic,.heif" multiple hidden />
+                  <input id="cr-photodir-in" type="file" webkitdirectory multiple hidden />
+                  <input id="cr-ai-roster-in" type="file" accept="image/png,image/jpeg,image/webp,.heic,.heif" hidden />
+                </div>
+                <p class="meta" id="cr-recipients-say"></p>
+                <div class="cr-roster" id="cr-roster" hidden>
+                  <div class="cr-rosterhead">
+                    <b id="cr-roster-sum"></b>
+                    <span class="cr-rosteracts">
+                      <button class="link" id="cr-map-toggle" type="button">열 다시 맞추기</button>
+                      <button class="link" id="cr-roster-clear" type="button">명단 비우기</button>
+                    </span>
+                  </div>
+                  <div class="cr-map" id="cr-map" hidden></div>
+                  <div class="cr-tablewrap" id="cr-tablewrap"><table class="cr-table" id="cr-table"></table></div>
+                  <p class="meta" id="cr-roster-say" role="status" aria-live="polite"></p>
+                </div>
+              </div>
               <label id="cr-count-wrap"><span id="cr-count-label">몇 장</span><input id="cr-count" type="number" min="1" step="1" value="1" /></label>
               <div class="cr-two" id="cr-doc-fields">
                 <label>발급일<input id="cr-date" type="date" /></label>
                 <label>발급자 이름<input id="cr-issuer" maxlength="80" autocomplete="off" placeholder="예: 한빛 필라테스 아카데미" /></label>
               </div>
-              <label id="cr-desc-wrap">설명 (선택)<textarea id="cr-desc" rows="3" maxlength="400"></textarea></label>
+              <div id="cr-desc-wrap" class="cr-descwrap">
+                <label for="cr-desc" class="cr-desclabel"><span>본문 (선택) <span class="meta">— {이름}·{과정} 은 줄마다 바뀌어 들어가요</span></span></label>
+                <textarea id="cr-desc" rows="3" maxlength="400"></textarea>
+                <div class="cr-phrasebar"><button class="ghost cr-ravi" id="cr-ai-phrase" type="button">문구 도와줘 · 라비</button><span class="meta" id="cr-phrase-say"></span></div>
+                <div class="cr-phrases" id="cr-phrases"></div>
+              </div>
               <label id="cr-signer-wrap">서명 이름 (선택)<input id="cr-signer" maxlength="60" autocomplete="off" placeholder="예: 대표 홍길동" /></label>
               <div id="cr-who-wrap">
                 <label id="cr-brand-wrap" hidden>누구 이름으로<select id="cr-brand"></select></label>
@@ -3415,7 +3546,7 @@
                    SecurityError(화면 검사 도구가 모든 틀에 넣는 스크립트)를 없애려는 것 — 틀 안 스크립트가 없으니 부모에
                    닿을 길도 없다. 내용은 러스트가 이스케이프해 그린 증서뿐. -->
               <div class="cr-paper"><iframe id="cr-preview" title="미리보기" sandbox="allow-same-origin" tabindex="-1"></iframe></div>
-              <p class="meta">미리보기 · 인쇄하면 이 모양이에요 (A4 한 장에 한 사람)</p>
+              <p class="meta" id="cr-preview-say">미리보기 · 인쇄하면 이 모양이에요 (A4 한 장에 한 사람)</p>
             </div>
           </div>
         </div>

@@ -34,6 +34,7 @@
  */
 import { DESKTOP_COPY } from "./desktop-copy";
 import { CREATE_COPY } from "./create-copy";
+import { CERT_COPY } from "./cert-copy";
 
 export const DICT: Record<string, Record<string, string>> = {
   ko: {},
@@ -5027,6 +5028,6 @@ Object.assign(DICT.zh, {
   "AI 설정이 있습니다. 연결은 아직 확인하지 않았습니다.": "已配置 AI，尚未检查连接。"
 });
 
-for (const [source, values] of [...Object.entries(DESKTOP_COPY), ...Object.entries(CREATE_COPY)]) {
+for (const [source, values] of [...Object.entries(DESKTOP_COPY), ...Object.entries(CREATE_COPY), ...Object.entries(CERT_COPY)]) {
   (["en", "ja", "zh"] as const).forEach((language, index) => { DICT[language][source] = values[index]; });
 }

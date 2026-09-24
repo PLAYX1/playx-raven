@@ -4771,6 +4771,13 @@ function dropJob(): DropJob {
         ok: true,
       };
     case "create":
+      if (createApi?.acceptsRoster()) {
+        return {
+          title: t("명단 표·사진을 확인 표에 넣어요"),
+          why: t("엑셀·CSV 명단, 사진 여러 장이나 사진 폴더를 놓으면 확인 표에 넣어요(사진은 파일 이름으로 짝지어요). 문서 한 개는 지문만 적어요. 어디에도 올리지 않아요."),
+          ok: true,
+        };
+      }
       return {
         title: t("이 문서로 증명서 만들기"),
         why: t("PDF·한글·워드·사진 파일을 놓으면 지문만 만들어 적어요. 파일은 어디에도 올리지 않아요."),
@@ -4852,6 +4859,12 @@ async function onDropped(paths: string[]) {
   //    자산 화면에서만 둘 중 하나를 고르게 한다.
   const 문서 = docs.find((p) => !looksLikeImage(p));
   if (currentPage === "create") {
+    // 증명서 폼이 열려 있으면 명단 표·여러 사진·사진 폴더는 확인 표로(한 번에 여러 장).
+    // 사진 한 장만 놓은 것은 예전처럼 「원본 문서」(지문)로 — 표를 쓰는 중이면 그 줄 사진으로.
+    const tableOrMany = paths.some((p) => /\.(xlsx|xls|csv)$/i.test(p)) || files.length > 1 || paths.some((p) => !/\.[^\\/]+$/.test(p));
+    if (createApi?.acceptsRoster() && (tableOrMany || (files.length && docs.length === files.length && createApi.rosterActive()))) {
+      if (await createApi.dropFiles(paths)) return;
+    }
     if (docs.length) { await certificateFromDropped(docs[0]); return; }
     await sure(t("이 파일로는 증명서를 만들 수 없어요"), t("PDF·한글(hwp·hwpx)·워드(docx)·사진(png·jpg) 파일을 놓아 주세요."), t("알겠습니다"));
     return;
@@ -16610,6 +16623,7 @@ window.addEventListener("DOMContentLoaded", async () => {
       await openSell(a);
       return true;
     },
+    aiProvider: () => aiProvider,
   });
   $("rv-phone-open").addEventListener("click", () => void openWebWallet());
   $("rv-phone-info").addEventListener("toggle", () => {

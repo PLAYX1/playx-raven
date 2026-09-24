@@ -33,6 +33,14 @@ const found = await m.findFreeRun(run => m.itemNames({ kind: 'work', brand: 'HAN
   async names => { asked.push(...names); return names.map(n => n === 'HANBIT#A260917-1'); });
 assert.equal(found.run, 1);
 assert.deepEqual(asked.slice(0, 2), ['HANBIT#A260917-1', 'HANBIT#A260917-3']);
+// 한 묶음 안에서 방금 쓴 차례(0·1)는 체인에 아직 안 보여도 건너뛴다 — 두 번째 50장이 같은 이름을 고르지 않게.
+const next = await m.findFreeRun(run => m.itemNames({ kind: 'certificate', brand: 'HANBIT', title: 'a', date: DAY, count: 50, run }),
+  async names => names.map(() => false), new Set([0, 1]));
+assert.equal(next.run, 2);
+assert.equal(next.names[49], 'HANBIT#A260917C-50');
+assert.equal(m.runOf(next.names[49]), 2);
+assert.equal(m.runOf('HANBIT#A260917-3'), 0);
+assert.equal(m.runOf('HANBIT#A260917I-3'), -1, 'I 는 차례 글자가 아니다');
 
 // 지문 — 폰·확인 페이지와 같은 CIDv0 (원본 SHA-256).
 const bytes = Buffer.from('synthetic artwork bytes for RavenVault create test\n');

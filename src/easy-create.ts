@@ -82,6 +82,13 @@ export function dateCode(date: Date): string {
   return two(date.getFullYear() % 100) + two(date.getMonth() + 1) + two(date.getDate());
 }
 
+/** 체인 이름에서 차례(run)를 되읽는다 — `BRAND#SLUG260924C-12` → 2. 모르면 -1. */
+export function runOf(name: string): number {
+  const m = /\d{6}([A-Z]?)-\d+$/.exec(name);
+  if (!m) return -1;
+  return m[1] ? RUN_LETTERS.indexOf(m[1]) + 1 || -1 : 0;
+}
+
 export function runSuffix(run: number): string {
   if (!Number.isInteger(run) || run < 0 || run > RUN_LETTERS.length) throw new Error("같은 날 같은 제목으로는 더 만들 수 없습니다. 제목을 바꿔 주세요.");
   return run === 0 ? "" : RUN_LETTERS[run - 1];
@@ -109,8 +116,11 @@ export function totalRvn(kind: CreateKind, copies: number, needsBrand: boolean):
 export async function findFreeRun(
   make: (run: number) => string[],
   taken: (names: string[]) => Promise<boolean[]>,
+  /** 이번 묶음에서 이미 쓴 차례 — 방금 보낸 것은 아직 체인에 안 보일 수 있다. */
+  skip: ReadonlySet<number> = new Set(),
 ): Promise<{ run: number; names: string[] }> {
   for (let run = 0; run < MAX_RUNS; run++) {
+    if (skip.has(run)) continue;
     const names = make(run);
     // BRAND 아래는 BRAND! 주인만 발행한다 — 겹치는 건 내 예전 발행뿐이라 처음·끝만 본다.
     const probes = names.length > 1 ? [names[0], names[names.length - 1]] : names;
@@ -187,6 +197,14 @@ export const CERT_TEMPLATES: CertTemplate[] = ["course", "proof", "thanks"];
 /** 받는 사람 칸 — 한 줄에 한 명. 빈 줄은 뺀다. 이름은 체인에 안 간다. */
 export function parseRecipients(text: string): string[] {
   return String(text ?? "").split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+}
+
+/** 고치기(이미 만든 기록) — 줄이 곧 차례다. 빈 줄도 자리를 지키고("") 끝의 빈 줄만 뗀다.
+ *  🔴 가운데 빈 줄을 당기면 뒤 사람 이름이 앞 사람의 체인 이름·사진·번호와 붙는다. */
+export function recipientSlots(text: string): string[] {
+  const out = String(text ?? "").split(/\r?\n/).map((s) => s.trim());
+  while (out.length && !out[out.length - 1]) out.pop();
+  return out;
 }
 
 /** 오늘(이 컴퓨터 시각) — 발급일 칸의 기본값. */
