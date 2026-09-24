@@ -73,6 +73,14 @@ function mockScript(state) {
           if (!S.encrypted) throw '이 지갑에는 아직 암호가 없습니다. 「지갑」 화면에서 암호를 먼저 걸어 주세요 — 암호를 건 뒤 복구 단어를 볼 수 있습니다.';
           return { words: ${JSON.stringify(FAKE_WORDS)}, has_extra_passphrase: false };
         case 'new_address': S.addrN++; return 'RGz' + String(S.addrN).padStart(3, '0') + 'fakeAddrForAuditOnlyXyzAb';
+        // 0.4.8-B 받기 — 안 받은 「받기」 주소가 있으면 그것, 없거나 새로 만들라면 새 주소(노드가 내 것이라 확인).
+        //   진짜 주소처럼 base58 글자만(0·O·I·l 없음) — 화면이 주소 모양을 한 번 더 본다.
+        case 'receive_address': if (!(a && a.fresh) && S.recv) return { address: S.recv, reused: true, mine: true };
+          S.addrN++; S.recv = 'RGz' + String(S.addrN).padStart(3, '1') + 'fakeAddrForAuditXyzAbcdef'; return { address: S.recv, reused: false, mine: true };
+        case 'receive_qr_save': return { path: a.path };
+        case 'plugin:dialog|save': return null;
+        // 0.4.8-B 수수료 — 노드가 읽기로 계산한 값(가짜). 서명·전파 없음.
+        case 'send_fee': return { fee: 0.00226, amount: Number(a.amount), total: Math.round((Number(a.amount) + 0.00226) * 1e8) / 1e8, short: false };
         case 'wallet_since': return { lastblock: 'b' + S.block, transactions: S.txs, asset_transactions: [] };
         case 'recent_transactions': return S.txs;
         case 'addr_book': return { rows: [] };
@@ -274,20 +282,34 @@ try {
   });
 
   // 3) 친구에게 내 주소 보내기.
+  //    0.4.8-B — 지갑 화면의 큰 「받기」가 바로 주소를 보여 준다(옛 판은 「받을 주소 만들기」를 또 눌렀다).
+  //    옛 dist 에서도 돌도록 「받기」가 없으면 옛 길로 간다.
   await task('T03', '내 주소를 친구에게', baseState(), async (x) => {
     const first = await x.page.evaluate(() => document.querySelector('.page.on')?.id || '');
     x.note(`켠 뒤 첫 화면: ${first} · 첫 화면에 「받기」: ${(await x.visible('#overview-receive')) ? '있음' : '없음'}`);
     if (await x.visible('#overview-receive')) await x.tap('#overview-receive', '첫 화면 받기');
-    else await x.tap('nav a[data-page="wallet"]', '지갑 메뉴');
+    else {
+      await x.tap('nav a[data-page="wallet"]', '지갑 메뉴');
+      if (await x.page.$('#w-receive')) await x.tap('#w-receive', '지갑 받기');
+    }
     const addrBefore = await x.has(/RGz\d{3}/);
     x.note(`「받기」 누른 직후 주소가 보임: ${addrBefore ? '예' : '아니오 — 주소 만들기 단추를 또 눌러야 함'}`);
-    await x.tap('#w-newaddr', '받을 주소 만들기');
-    const box = await x.page.evaluate(() => { const c = document.getElementById('w-copy')?.closest('.card, div'); return c ? { qr: !!c.querySelector('svg rect, canvas, img[src*="qr"], .qr'), text: c.innerText.slice(0, 120) } : null; });
-    x.note(`주소 옆 QR: ${box?.qr ? '있음' : '없음'} · 공유 단추: ${(await x.has(/공유/)) ? '있음' : '없음'}`);
+    if (!addrBefore) await x.tap('#w-newaddr', '받을 주소 만들기');
+    // 「주소 옆」 = 복사 단추가 든 **같은 카드**(없으면 바로 위 칸). 0.4.8-B 는 QR 이 카드 왼쪽, 단추가 오른쪽 줄에 있다.
+    const box = await x.page.evaluate(() => { const b = document.getElementById('w-copy'); const c = b?.closest('.card') || b?.closest('div'); return c ? { qr: !!c.querySelector('svg rect, canvas, img[src*="qr"], .qr'), text: c.innerText.slice(0, 120) } : null; });
+    x.note(`주소 옆 QR: ${box?.qr ? '있음' : '없음'} · 공유 단추: ${(await x.has(/공유/)) ? '있음' : '없음'} · 메시지로 복사: ${(await x.page.$('#w-copymsg')) ? '있음' : '없음'} · QR 그림 저장: ${(await x.page.$('#w-qrsave')) ? '있음' : '없음'}`);
     await x.shot('address');
+    const a1 = ((await x.text('#w-addr')).match(/RGz\d{3}\w+/) || [''])[0];
     await x.tap('#w-copy', '복사');
-    await x.tap('#w-newaddr', '받을 주소 만들기(한 번 더)');
-    x.note(`다시 누르면 새 주소: ${(await x.has(/RGz002/)) ? '예(주소가 바뀜)' : '아니오'}`);
+    if (await x.page.$('#w-receive')) {
+      // 친구에게 준 주소가 다시 들어와도 그대로인가 — 아직 받은 적 없는 주소면 다시 쓴다.
+      await x.tap('#w-receive', '받기(한 번 더)');
+      const a2 = ((await x.text('#w-addr')).match(/RGz\d{3}\w+/) || [''])[0];
+      x.note(`다시 「받기」: ${a1 && a1 === a2 ? '같은 주소(아직 안 받은 주소를 다시 씀)' : `주소가 바뀜 ${a1} → ${a2}`} · 새 주소는 「새 주소 만들기」를 따로 누를 때만`);
+    } else {
+      await x.tap('#w-newaddr', '받을 주소 만들기(한 번 더)');
+      x.note(`다시 누르면 새 주소: ${(await x.has(/RGz002/)) ? '예(주소가 바뀜)' : '아니오'}`);
+    }
     return true;
   });
 
@@ -298,7 +320,7 @@ try {
     await x.wait(16500, '지갑 살피기는 15초마다');
     const note = (await x.text('#live-note')).trim();
     x.note(`알림 띠: ${note || '(없음)'} · 소리/OS 알림: 앱 안 띠만`);
-    x.note(`첫 화면 잔액: ${(await x.text('#overview-balance')).replace(/\s+/g, ' ').slice(0, 60)}`);
+    x.note(`첫 화면 잔액: ${(await x.text('#overview-balance')).replace(/\s+/g, ' ').slice(0, 60)} · 들어오는 중: ${(await x.page.$eval('#overview-incoming-row', (e) => !e.hidden).catch(() => false)) ? (await x.page.$eval('#overview-incoming', (e) => e.textContent.trim())) : '(없음)'}`);
     await x.shot('toast');
     await x.tap('nav a[data-page="wallet"]', '지갑 메뉴');
     x.note(`지갑 화면: 사용 가능 ${(await x.text('#w-confirmed')).trim()} · ${(await x.text('#w-unconfirmed')).trim()}`);
@@ -316,6 +338,7 @@ try {
     await x.tap('#s-review', '검토');
     const review = (await x.text('#send-review')).replace(/\s+/g, ' ');
     x.note(`검토 화면에 수수료: ${/수수료/.test(review) ? '있음' : '없음'} · 원화: ${/원|₩|KRW/.test(review) ? '있음' : '없음'}`);
+    if (await x.page.$('#r-fee')) x.note(`수수료 줄: ${(await x.text('#r-fee')).trim()} · 합계: ${(await x.text('#r-total')).trim()} · 보내기 전 send_rvn 부름: ${(await x.S()).calls.includes('send_rvn') ? '있음(!)' : '없음'}`);
     await x.shot('review');
     await x.tap('#s-go', '보내기');
     await x.wait(500);
@@ -392,18 +415,22 @@ try {
   });
 
   // 11) 라비에게 묻기 — AI 열쇠 없는 처음 상태.
+  //    0.4.8-B — 판정은 **마지막 라비 말풍선**으로 한다. 화면 어딘가에 「열쇠」라는 글자가 있는지가 아니라
+  //    (열쇠 넣는 단추는 늘 있다), 물은 것에 답했는지 · 답 대신 열쇠만 요구했는지.
   await task('T11', '라비에게 질문', baseState(), async (x) => {
     if (!(await x.visible('#chat-q'))) await x.tap('nav a[data-page="ravi"]', '라비 메뉴');
     x.note(`기본 모드: ${(await x.page.$eval('[data-mode].on, [data-mode][aria-pressed="true"]', (e) => e.innerText).catch(() => '?'))}`);
     await x.type('#chat-q', '보낼 때 수수료가 얼마예요?', '질문');
     await x.tap('#chat-go', '보내기');
     await x.wait(1500);
-    const txt = (await x.page.evaluate(() => document.getElementById('page-ravi')?.innerText || '')).replace(/\s+/g, ' ');
-    const keyAsk = /열쇠|API|키를/.test(txt);
-    x.note(`답 대신 열쇠 요구: ${keyAsk ? '예' : '아니오'}`);
+    const last = (await x.page.evaluate(() => [...document.querySelectorAll('#chat-log .msg.ai')].pop()?.innerText || '')).replace(/\s+/g, ' ');
+    const answered = /수수료/.test(last) && /RVN|노드/.test(last) && !/없는 질문/.test(last);
+    const keyOnly = !answered && /열쇠|API|키를/.test(last);
+    x.note(`라비 답: ${last.slice(0, 140)}`);
+    x.note(`답 대신 열쇠 요구: ${keyOnly ? '예' : '아니오'} · 「AI 아님」 표시: ${/AI 아님/.test(last) ? '있음' : '없음'} · 열쇠 넣는 곳(라비 화면 안): ${(await x.page.$('#ravi-keyopen, .keyask input')) ? '있음' : '없음'}`);
     await x.shot('answer');
-    if (keyAsk) x.r.stuck.push('AI 열쇠(유료 계정·가입)가 없으면 질문에 답을 못 받음');
-    return !keyAsk;
+    if (!answered) x.r.stuck.push(keyOnly ? 'AI 열쇠(유료 계정·가입)가 없으면 질문에 답을 못 받음' : '질문에 대한 답이 없음');
+    return answered;
   });
 
   // 12) 보내기 직전 그만두기.

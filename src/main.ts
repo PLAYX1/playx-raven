@@ -169,7 +169,7 @@ function busyDone() {
   busyGuard = undefined;
   busyShow(false);
 }
-import { open as pickFile } from "@tauri-apps/plugin-dialog";
+import { open as pickFile, save as pickSavePath } from "@tauri-apps/plugin-dialog";
 // 🔴 이 창은 우리 화면만 그린다. 지갑 화면(쪽지)은 `127.0.0.1:8790/wallet`
 //    에서 **인터넷 창으로** 열어야 한다 — 그 화면은 12단어를 들고 있어서
 //    `connect-src 'self'` 로 잠겨 있고, 우리 창 안에 끌어들이면 그 잠금이
@@ -185,6 +185,11 @@ import {
   issuedOf, looksLikeAddress, ownerRowsHtml, OWNER_NOT_PINNED, whoseHtml, whoseQuestion,
   type Issued, type OwnerRow, type WhoseResult,
 } from "./whose";
+// 0.4.8-B — 지갑 첫 배치(잔액·받기·보내기)와 열쇠 없는 라비의 안내 답.
+import {
+  loadPayees, payeeName, pickerHtml, receiveHtml, recentPayees, RECEIVE_MESSAGE, savePayee, sentHtml,
+} from "./wallet-easy";
+import { guideById, guideHtml, guideMissHtml, matchGuide, providerOfKey, type GuideGo } from "./ravi-guide";
 
 type Asset = {
   name: string;
@@ -2575,6 +2580,14 @@ async function refreshOverview() {
   const confirmed = wallet.status === "fulfilled" ? wallet.value?.confirmed : undefined;
   setCopyText($("overview-balance"), () => typeof confirmed === "number" && Number.isFinite(confirmed) && confirmed >= 0
     ? `${confirmed.toLocaleString(lang, {maximumFractionDigits:8})} RVN` : t("확인 못 함"));
+  /* 🔴 0.4.8-B — 방금 받은 10 RVN 이 여기서는 **0** 으로만 보였다(RV3 T04). 확정 잔액에 섞지는
+     않는다(확인 전 돈을 쓸 수 있는 돈처럼 보이면 안 된다) — 옆에 「들어오는 중」으로 따로 적는다.
+     같은 `wallet_balance` 답을 쓴다(켤 때 읽는 횟수를 늘리지 않는다). */
+  const incoming = wallet.status === "fulfilled" ? Number(wallet.value?.unconfirmed) : NaN;
+  const row = document.getElementById("overview-incoming-row");
+  const show = Number.isFinite(incoming) && incoming > 0;
+  if (row) row.hidden = !show;
+  if (show) setCopyText($("overview-incoming"), () => `${incoming.toLocaleString(lang, { maximumFractionDigits: 8 })} RVN`);
 }
 
 /** 라비 화면을 그린다. 상태가 바뀔 때마다 다시 부른다. */
@@ -3218,21 +3231,10 @@ function pageTiles(page: string): PageTile[] {
       setTimeout(() => el.classList.remove("justwent"), 1600);
     }, 60);
   };
-  if (page === "wallet") {
-    return [
-      { icon: I('<path d="M12 4v11M8 11l4 4 4-4"/><path d="M4.5 19.5h15"/>'),
-        label: "받기", sub: "받을 주소 만들기", go: () => $("w-newaddr")?.click() },
-      { icon: I('<path d="M12 20V9M8 13l4-4 4 4"/><path d="M4.5 4.5h15"/>'),
-        label: "보내기", sub: "RVN 보내기", go: () => void openSend("rvn") },
-      { icon: I('<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/>'),
-        label: "자산 보내기", sub: "쿠폰 · 회원권", go: () => void openSend("asset") },
-      { icon: I('<rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="M3.5 9.5h17M8 14h4"/>'),
-        label: "최근 거래", sub: "들어오고 나간 것", go: jump("w-foreign") },
-      /* 0.4.6 — 「내 지갑 주소인지」. 거스름 주소는 주소록에 없어서 찾을 길이 없었다. */
-      { icon: I('<circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5M8 10.6l1.8 1.8 3.2-3.4"/>'),
-        label: "주소 확인", sub: "내 지갑 주소인지", go: jump("whose-in") },
-    ];
-  }
+  /* 🔴 0.4.8-B — 지갑은 큰 아이콘 줄을 **없앴다.** 타일 다섯(받기·보내기·자산 보내기·최근 거래·
+     주소 확인)이 잔액보다 먼저 나와서, 처음 쓰는 사람은 「내 돈이 얼마인지」를 찾아 내려가야 했다
+     (RV3 T04). 이제 잔액 카드가 맨 위에 있고 그 안에 큰 단추 「받기」「보내기」, 나머지는 작은 줄로
+     있다(index.html `#w-balance`). 여기서 다시 그리면 같은 단추가 둘씩 된다. */
   if (page === "assets") {
     return [
       /* 🔴 쉬운 길을 맨 앞에. 이름 규칙·소각액을 몰라도 고르고 적기만 하면 된다.
@@ -4638,12 +4640,17 @@ async function loadWallet() {
     $("w-confirmed").textContent = `${b.confirmed.toLocaleString(undefined, { maximumFractionDigits: 8 })} RVN`;
     // Unconfirmed money is shown apart from spendable money on purpose: a shop
     // that ships on an unconfirmed payment can be paid with one that never lands.
-    setCopyText($("w-unconfirmed"), () => b.unconfirmed
-      ? `${t("확인 대기 중")} ${b.unconfirmed.toLocaleString(lang, { maximumFractionDigits: 8 })} RVN`
+    // 🔴 0.4.8-B — 「확인 대기 중」은 처음 쓰는 사람에게 「내 돈인지 아닌지」가 안 읽혔다(RV3 T04).
+    //    「들어오는 중」으로 부르고, 언제 쓸 수 있게 되는지 한 줄을 붙인다. 합치지는 않는다.
+    const incoming = Number(b.unconfirmed) > 0;
+    setCopyText($("w-unconfirmed"), () => incoming
+      ? `${t("들어오는 중")} ${b.unconfirmed.toLocaleString(lang, { maximumFractionDigits: 8 })} RVN`
       : "");
+    $("w-incoming-note").hidden = !incoming;
   } catch (e) {
     $("w-confirmed").textContent = "—";
     $("w-unconfirmed").textContent = errText(e);
+    $("w-incoming-note").hidden = true;
   }
 
   try {
@@ -4734,16 +4741,102 @@ async function loadWallet() {
   }
 }
 
-async function makeAddress() {
+/* ── 받기 (0.4.8-B · RV3 🔴5) ────────────────────────────────────────
+   🔴 여태 「받기」를 눌러도 주소가 안 나오고 「받을 주소 만들기」를 또 눌러야 했다. QR 도 없었고,
+   누를 때마다 **새 주소**가 나와 「아까 친구에게 준 주소가 틀렸나」가 됐다(RV3 T03).
+   이제 누르면 바로: 「받기」로 만든 주소 중 아직 한 번도 안 받은 것(없으면 새로) — 러스트
+   `receive.rs` 가 고르고, **노드가 이 지갑 주소라고 확인한 것만** 돌려준다.
+   공유 창은 흉내 내지 않는다(데스크톱에는 폰 같은 공유 창이 없다) — 「메시지로 복사」가 대신한다. */
+let recvSeq = 0;
+
+/** 그 자리로 데려간다 — 감싼 접힌 칸을 펼치고, 가운데로, 잠깐 빛나게(`pageTiles` 의 jump 와 같은 문법). */
+function jumpToEl(id: string) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  for (let up: HTMLElement | null = el; up; up = up.parentElement) if (up instanceof HTMLDetailsElement) up.open = true;
+  setTimeout(() => {
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    (el as HTMLInputElement).focus?.();
+    el.classList.add("justwent");
+    setTimeout(() => el.classList.remove("justwent"), 1600);
+  }, 60);
+}
+
+async function copyInto(btn: HTMLElement, text: string, label: string) {
   try {
-    const addr = await invoke<string>("new_address", { label: "" });
-    $("w-addr").innerHTML =
-      `<div class="card"><h3>받을 주소</h3><code class="addr">${addr}</code>
-       <div style="margin-top:8px"><button class="ghost" id="w-copy">복사</button></div></div>`;
-    $("w-copy").onclick = () => navigator.clipboard.writeText(addr);
-  } catch (e) {
-    say(t("주소를 만들지 못했습니다"), errText(e));
+    await navigator.clipboard.writeText(text);
+    setCopyText(btn, () => t("복사했습니다"));
+  } catch {
+    // 막혀 있으면 주소 글자를 골라 두고 직접 복사하게 한다. 조용히 실패하지 않는다.
+    const el = document.getElementById("w-addr-text");
+    if (el) {
+      const r = document.createRange();
+      r.selectNodeContents(el);
+      const sel = window.getSelection();
+      sel?.removeAllRanges();
+      sel?.addRange(r);
+    }
+    setCopyText(btn, () => t("직접 복사해 주세요"));
   }
+  setTimeout(() => setCopyText(btn, () => t(label)), 2200);
+}
+
+async function openReceive(fresh = false) {
+  // 한 번에 하나 — 보내기 칸이 열려 있으면 닫는다(받기와 보내기가 한 화면에 섞이면 오송금 자리다).
+  closeSend();
+  const host = $("w-addr");
+  const seq = ++recvSeq;
+  host.innerHTML = `<section class="card wrecv"><h3>${copyHtml("받을 주소")}</h3>` +
+    `<p class="meta">${copyHtml(fresh ? "새 주소를 만드는 중…" : "주소를 준비하는 중…")}</p></section>`;
+  host.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  let r: any;
+  try {
+    r = await invoke<any>("receive_address", { fresh });
+  } catch (e) {
+    if (seq !== recvSeq) return;
+    host.innerHTML = `<div class="warnbox">${copyHtml("주소를 만들지 못했습니다")} ${escapeHtml(errText(e))}</div>`;
+    return;
+  }
+  if (seq !== recvSeq) return;
+  const addr = String(r?.address ?? "").trim();
+  // 🔴 노드가 「이 지갑 것」이라고 한 것만 보여 준다. 모양이 이상하거나 확인이 없으면 안 그린다.
+  if (!looksLikeAddress(addr) || r?.mine !== true) {
+    host.innerHTML = `<div class="warnbox">${copyHtml("노드가 이 주소를 이 지갑의 받는 주소로 확인해 주지 않았어요. 보여 드리지 않을게요.")}</div>`;
+    return;
+  }
+  host.innerHTML = receiveHtml(addr, r?.reused === true, copyHtml, escapeHtml);
+  void invoke<string>("qr_svg", { text: addr })
+    .then((svg) => {
+      const box = document.getElementById("w-qr");
+      if (box && seq === recvSeq) box.innerHTML = svg;
+    })
+    .catch(() => {
+      const box = document.getElementById("w-qr");
+      // QR 이 안 돼도 주소는 살아 있다. 그렇다고 말한다.
+      if (box) setCopyText(box, () => t("QR 을 만들지 못했습니다. 주소는 그대로 쓰실 수 있습니다."));
+    });
+  const note = $("w-recv-note");
+  $("w-copy").onclick = () => void copyInto($("w-copy"), addr, "주소 복사");
+  $("w-copymsg").onclick = () => void copyInto($("w-copymsg"), tf(RECEIVE_MESSAGE, addr), "메시지로 복사");
+  $("w-newaddr").onclick = () => void openReceive(true);
+  $("w-recv-close").onclick = () => { recvSeq++; host.innerHTML = ""; };
+  $("w-qrsave").onclick = async () => {
+    // 저장 창은 OS 가 띄운다. 그림 내용은 러스트가 주소로 다시 만든다(화면이 주는 글자를 쓰지 않는다).
+    let path: string | null = null;
+    try {
+      path = await pickSavePath({ defaultPath: `RVN-${addr.slice(0, 8)}.svg`, filters: [{ name: "SVG", extensions: ["svg"] }] });
+    } catch (e) {
+      setCopyText(note, () => errText(e));
+      return;
+    }
+    if (!path) return; // 그만뒀다
+    try {
+      const saved = await invoke<any>("receive_qr_save", { address: addr, path });
+      note.innerHTML = `${copyHtml("QR 그림을 저장했어요.")} <code translate="no">${escapeHtml(String(saved?.path ?? path))}</code>`;
+    } catch (e) {
+      setCopyText(note, () => errText(e));
+    }
+  };
 }
 
 /* ── 주소 확인 · 내 주인 표 (0.4.6) ─────────────────────────────
@@ -8160,6 +8253,8 @@ async function 지갑감시() {
   // 목록이 옛것이면 「보이는데 못 쓰는」 상태가 된다.
   loadWallet();
   void loadAssets(false);
+  // 0.4.8-B 라비 첫 화면 「한눈에」의 「들어오는 중」도 — 20초 바퀴를 기다리지 않게(들어올 때만 한 번).
+  void refreshOverview();
 
   // 소리는 대표님이 켜 두셨을 때만. 끈 것을 우리가 되살리지 않는다.
   if (알림켜짐()) 알림소리(1);
@@ -8200,17 +8295,20 @@ async function openSend(mode: "asset" | "rvn", preselect?: string) {
   $("send-compose").style.display = "";
   $("s-result").innerHTML = "";
   $("s-mode").textContent = mode === "asset" ? "자산 보내기" : "RVN 보내기";
-  // 🔴 두 버튼 중 하나만 클래스가 없어 **항상** 진하게 그려지고 있었다.
-  // 선택 상태가 아니라 그냥 스타일인데, RVN 을 눌러도 「자산 보내기」가 계속
-  // 진하니 "자산 탭이 열렸다" 로 읽혔다. 이제 열린 쪽만 표시한다.
-  $("w-send-asset").classList.toggle("ghost", mode !== "asset");
-  $("w-send-rvn").classList.toggle("ghost", mode !== "rvn");
+  // 🔴 여태 두 단추 중 열린 쪽만 진하게(ghost 를 뺐다) 칠했다. 0.4.8-B 부터 「보내기」는 잔액 카드의
+  //    큰 단추라 늘 진하다 — 열린 쪽은 aria-pressed 로만 알린다(화면 읽기용). 받기 칸은 닫는다.
+  $("w-send-asset").setAttribute("aria-pressed", String(mode === "asset"));
+  $("w-send-rvn").setAttribute("aria-pressed", String(mode === "rvn"));
+  recvSeq++;
+  $("w-addr").innerHTML = "";
   $("s-assetrow").style.display = mode === "asset" ? "" : "none";
   ($("s-addr") as HTMLInputElement).value = "";
   ($("s-qty") as HTMLInputElement).value = "";
   $("s-addrnote").textContent = "";
   $("s-held").textContent = "";
   ($("s-review") as HTMLButtonElement).disabled = true;
+  void paintPicker();
+  $("send-compose").scrollIntoView({ behavior: "smooth", block: "nearest" });
 
   if (mode === "asset") {
     // 🔴 지도가 비어 있으면 **고를 것이 없는 목록**이 뜬다(위 ensureAssets 주석).
@@ -8235,8 +8333,56 @@ function closeSend() {
   $("send-review").style.display = "none";
 }
 
+/* 「받을 사람 고르기」(0.4.8-B · RV3 🔴6) — 저장한 사람(이 컴퓨터에만)과 지갑 기록의 최근 보낸 곳 5곳.
+   🔴 고르면 주소 칸에 **넣기만** 한다. 검토·확인·끝 네 글자는 그대로 거친다. 복사해 붙이지 않으니
+      클립보드 바꿔치기(보내기 확인 주석)도 끼어들 틈이 없다. */
+let pickSeq = 0;
+async function paintPicker() {
+  const host = $("s-pick");
+  const seq = ++pickSeq;
+  const saved = loadPayees();
+  host.innerHTML = pickerHtml(saved, [], copyHtml, escapeHtml);
+  const txs = await invoke<any[]>("recent_transactions", { count: 100 }).catch(() => []);
+  if (seq !== pickSeq) return;
+  host.innerHTML = pickerHtml(saved, recentPayees(Array.isArray(txs) ? txs : [], saved), copyHtml, escapeHtml);
+}
+
+let pickedAddr = "";
+function pickPayee(address: string) {
+  const input = $("s-addr") as HTMLInputElement;
+  input.value = address;
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  pickedAddr = address;
+  const name = payeeName(address);
+  setCopyText($("s-addrnote"), () => (name ? tf("받을 사람: {0}", name) : ""));
+  ($("s-qty") as HTMLInputElement).focus();
+}
+
+/** 수수료 한 줄 — RVN 은 노드에 읽기로만 묻는다(`sendfee.rs`, 서명·전파 없음). 못 구하면 지어내지 않는다. */
+const FEE_UNKNOWN = "수수료는 노드가 정해요(보통 0.01 RVN 안팎).";
+function paintSendFee(fee: any, amount: number, asset: string | null) {
+  const feeBox = $("r-fee"), feeNote = $("r-feenote"), total = $("r-total");
+  const known = !asset && fee && typeof fee.fee === "number" && Number.isFinite(fee.fee) && fee.short !== true;
+  if (known) {
+    setCopyText(feeBox, () => `${fmtQty(fee.fee)} RVN`);
+    setCopyText(feeNote, () => t("노드가 지금 계산한 값이에요. 보낼 때 노드가 다시 계산해 아주 조금 다를 수 있어요."));
+    setCopyText(total, () => `${fmtQty(Number(fee.total ?? amount + fee.fee))} RVN`);
+    return;
+  }
+  setCopyText(feeBox, () => t(FEE_UNKNOWN));
+  setCopyText(feeNote, () => asset ? t("수수료는 RVN 으로 내요.")
+    : fee?.short === true ? t("수수료까지 합치면 잔액이 모자라요. 금액을 조금 줄여 주세요.")
+    : t("이번 수수료를 노드에 묻지 못했어요."));
+  setCopyText(total, () => asset ? tf("{0} {1} + 수수료(RVN)", fmtQty(amount), asset) : tf("{0} RVN + 수수료", fmtQty(amount)));
+}
+
 function composeChanged() {
   const addr = ($("s-addr") as HTMLInputElement).value.trim();
+  // 고른 뒤 주소를 손으로 고치면 「받을 사람: 이름」은 더 이상 맞지 않는다 — 지운다.
+  if (pickedAddr && addr !== pickedAddr) {
+    pickedAddr = "";
+    $("s-addrnote").textContent = "";
+  }
   const qty = parseFloat(($("s-qty") as HTMLInputElement).value);
   ($("s-review") as HTMLButtonElement).disabled = !(addr.length > 20 && qty > 0);
 }
@@ -8270,9 +8416,13 @@ async function reviewSend() {
   const h = sendPreview.history || {};
   // The name is the check a human can actually perform. When there is no name,
   // that absence *is* the warning — it is not drawn as a neutral blank.
-  $("r-who").innerHTML = h.label
-    ? `<b>${h.label}</b>`
-    : `<span style="color:var(--warn)">처음 보내는 주소</span>`;
+  // 0.4.8-B — 이 컴퓨터에 저장한 받을 사람 이름도 보여 준다. 🔴 그래도 「처음 보내는 주소」 경고는
+  //    노드의 보낸 기록(h.known)으로만 정한다 — 이름을 저장했다고 경고를 끄지 않는다.
+  const who = String(h.label || payeeName(address) || "");
+  const first = `<span class="warn">${copyHtml("처음 보내는 주소")}</span>`;
+  $("r-who").innerHTML = who
+    ? `<b translate="no">${escapeHtml(who)}</b>${h.known ? "" : ` · ${first}`}`
+    : first;
   $("r-addr").textContent = address;
   $("r-hist").textContent = h.known
     ? tf("지난번 {0} · {1}", h.last_amount ?? "?", h.last_time ? ago(h.last_time) : "")
@@ -8325,7 +8475,15 @@ async function reviewSend() {
       `${escapeHtml(head)}<b class="masked" aria-label="가려진 네 글자">••••</b>`;
   }
 
-  const lock = await invoke<any>("wallet_lock_state").catch(() => null);
+  // 수수료는 잠금 상태와 같이 묻는다(기다림을 한 번으로). RVN 만 — 자산은 「노드가 정해요」.
+  setCopyText($("r-fee"), () => t("수수료 계산 중…"));
+  $("r-feenote").textContent = "";
+  $("r-total").textContent = "";
+  const [lock, fee] = await Promise.all([
+    invoke<any>("wallet_lock_state").catch(() => null),
+    asset ? Promise.resolve(null) : invoke<any>("send_fee", { address, amount }).catch(() => null),
+  ]);
+  paintSendFee(fee, amount, asset);
   const needPass = lock && lock.encrypted && !lock.unlocked;
   $("r-passbox").style.display = needPass ? "" : "none";
   ($("s-pass") as HTMLInputElement).value = "";
@@ -8365,6 +8523,13 @@ async function doSend() {
   btn.disabled = true;
   btn.textContent = "보내는 중…";
   const pass = ($("s-pass") as HTMLInputElement).value || null;
+  // 결과 화면에 쓸 것 — 보낸 뒤에는 sendPreview 를 비운다.
+  const sent = {
+    address: String(sendPreview.address),
+    amount: fmtQty(Number(sendPreview.amount)),
+    what: sendMode === "asset" ? String(sendPreview.asset) : "RVN",
+    isMine: sendPreview.is_mine === true,
+  };
 
   try {
     const txid =
@@ -8382,11 +8547,28 @@ async function doSend() {
             passphrase: pass,
           });
 
-    $("s-result").innerHTML =
-      `<div class="card" style="margin-top:12px"><h3>보냈습니다</h3>
-       <div class="kv"><b>받는 곳</b><code class="addr">${sendPreview.address}</code></div>
-       <div class="kv"><b>트랜잭션</b><code class="addr">${txid}</code></div>
-       <p class="meta">확인되기까지 몇 분 걸립니다. 되돌릴 수 없습니다.</p></div>`;
+    // 🔴 0.4.8-B — 결과가 「트랜잭션 + 64자」였다(RV3 T05). 사람이 확인할 것은 **얼마를 누구에게**다.
+    //    거래 번호는 「자세히」 안으로. 이름이 없으면 그 자리에서 붙여 저장하게 한다(이 컴퓨터에만).
+    const name = payeeName(sent.address);
+    $("s-result").innerHTML = sentHtml({
+      amount: sent.amount, what: sent.what, address: sent.address, name, txid: String(txid ?? ""),
+      canSave: !name && !sent.isMine,
+    }, copyHtml, escapeHtml);
+    const saveBtn = document.getElementById("s-saveok");
+    if (saveBtn) {
+      saveBtn.onclick = () => {
+        const input = $("s-savename") as HTMLInputElement;
+        const note = $("s-savenote");
+        try {
+          savePayee(sent.address, input.value);
+          input.disabled = true;
+          (saveBtn as HTMLButtonElement).disabled = true;
+          setCopyText(note, () => t("저장했어요. 다음에 보낼 때 「받을 사람 고르기」에 나와요."));
+        } catch {
+          setCopyText(note, () => t("이름을 한 글자 이상 적어 주세요."));
+        }
+      };
+    }
     $("r-tailbox").style.display = "none";
     $("r-passbox").style.display = "none";
     // 🔴 보낸 뒤에는 고칠 것이 없다. 체인은 되돌리지 않는다.
@@ -8628,12 +8810,15 @@ async function refreshKeys() {
     sel.innerHTML = have.map((p) => `<option value="${p}">${escapeHtml(labelOf(p))}</option>`).join("");
     if (have.includes(previous)) sel.value = previous;
     aiProvider = sel.value || null;
+    // 0.4.8-B — 라비 화면의 「AI 열쇠 넣기」는 열쇠가 없을 때만 보인다.
+    const keyOpen = document.getElementById("ravi-keyopen");
+    if (keyOpen) keyOpen.hidden = !!aiProvider;
 
     $("key-note").textContent = have.length ? "AI 설정이 있습니다. 연결은 아직 확인하지 않았습니다." : "아직 없습니다";
     // 대화창은 쓸 수 있는 곳이 하나라도 있을 때만 의미가 있다.
     // 🔴 여태 API 키가 없으면 이 버튼을 **숨겼다.** 그러면 Ravi 가 있다는
     // 것을 알 길이 없다 — 키를 넣을 이유도 못 만난다.
-    // 키가 없을 때는 대화창 안에서 그 자리에 넣게 되어 있으므로(chatNeedsKey),
+    // 키가 없을 때는 대화창이 라비 안내로 답하고 그 자리에서 열쇠를 넣게 되어 있으므로(raviGuide·openKeyCard),
     // 버튼은 **늘 보인다.**
     // 🔴 **여기서 무조건 켜면 안 된다.** `showPage` 가 라비 화면에서 숨긴
     //    것을 이 줄이 도로 켰다. 그러면 대화창 위에 그리로 가는 단추가
@@ -8655,7 +8840,7 @@ async function refreshKeys() {
     // 자는 얼굴은 **진짜로 장사가 멈춘 상태**에만 쓴다 — 노드가 꺼졌을 때.
     // 그때는 결제 확인이 안 되므로 자는 것이 사실이다.
     // AI 열쇠가 없는 것은 "잠"이 아니라 **"아직 못 하는 일이 있음"** 이고,
-    // 그건 눌렀을 때 그 자리에서 말한다(`chatNeedsKey`).
+    // 그건 물었을 때 그 자리에서 말한다(`raviGuide` — 라비 안내로 답하고 열쇠 넣는 곳을 보여 준다).
     // Keep the existing 20-second status refresh; startup reads are shared.
     void refreshOverview();
     const nodeDown = !(nodeUp ?? true);
@@ -9556,7 +9741,10 @@ function applyActions(actions: any[]): string[] {
 
 // 무엇을 시킬 것인가. 여태 이 창은 양식 채우기 전용이라, 사장님이 "이거 어떻게
 // 생각해" 라고 물으면 엉뚱하게 메뉴를 고쳤다.
-let chatMode: "fill" | "ask" | "debate" = "fill";
+// 🔴 0.4.8-B — 기본은 「그냥 묻기」. 처음 쓰는 사람은 채울 화면이 아니라 물을 것을 들고 온다
+//    (RV3 T11). 「화면 채우기」는 그대로 고를 수 있고, 한 번 고르면 이 컴퓨터가 기억한다.
+const CHAT_MODE_KEY = "playx-raven-chat-mode";
+let chatMode: "fill" | "ask" | "debate" = "ask";
 
 /// 지금 무엇을 시키는 중인지. 이름만으로는 모자란다 —
 /// 「둘에게」가 무엇 둘인지 대표가 물었고, 그건 이름이 틀렸다는 뜻이다.
@@ -9577,12 +9765,25 @@ const MODE_HINT: Record<string, string> = {
   debate: "커피값을 4500원으로 올릴까?",
 };
 
-function setChatMode(m: "fill" | "ask" | "debate") {
+/** 고른 모드를 단추·안내 칸에만 입힌다(말풍선은 안 남긴다) — 켤 때 쓴다. */
+function paintChatMode(m: "fill" | "ask" | "debate") {
   chatMode = m;
   $("chat-mode")
     .querySelectorAll<HTMLElement>("[data-mode]")
     .forEach((b) => b.classList.toggle("on", b.dataset.mode === m));
   ($("chat-q") as HTMLInputElement).placeholder = MODE_HINT[m];
+}
+
+/** 켤 때 — 사장이 고른 적이 있으면 그것(가게에서 「화면 채우기」를 골라 둔 사장), 없으면 「그냥 묻기」. */
+function restoreChatMode() {
+  let saved: string | null = null;
+  try { saved = localStorage.getItem(CHAT_MODE_KEY); } catch { /* 못 읽으면 기본값 */ }
+  paintChatMode(saved === "fill" || saved === "debate" || saved === "ask" ? saved : "ask");
+}
+
+function setChatMode(m: "fill" | "ask" | "debate") {
+  paintChatMode(m);
+  try { localStorage.setItem(CHAT_MODE_KEY, m); } catch { /* 이번 판은 바뀐다 */ }
 
   // 🔴 모드를 바꿀 때마다 안내가 **쌓이고 있었다.** 같은 말이 두 번 세 번
   // 남아, 방금 무엇을 고른 건지 알 수 없게 된다.
@@ -9636,83 +9837,111 @@ function chatPopThinking() {
   if (last && last.querySelector("[data-thinking]")) last.remove();
 }
 
-/// 키가 없으면 **그 자리에서** 넣게 한다.
-///
-/// 여태 `if (!q || !aiProvider) return;` 이었다 — 사장이 질문을 치고 보내기를
-/// 눌러도 **아무 일도 안 일어났다.** 조용한 실패는 고장으로 읽히고, 고장으로
-/// 읽힌 기능은 다시 안 눌린다. 설정 화면으로 보내는 것도 답이 아니다 —
-/// 하려던 말을 들고 다른 화면으로 가면 거기서 뭘 하려 했는지 잊는다.
-/// 키가 없으면 Ravi 는 **자고 있다.**
-///
-/// 대표: "라비는 api 로 구동되니까 자고 있다가 API 셋업을 마치면 눈을 뜨는 거지"
-///
-/// 이 비유가 맞는 이유: 사장에게 "API 키가 없습니다" 는 오류로 읽히고,
-/// 오류로 읽힌 화면은 다시 안 눌린다. **자고 있다**는 고장이 아니라 상태고,
-/// 깨우는 방법이 있다는 뜻이다.
-function chatNeedsKey() {
-  const rows = Object.entries(PROVIDERS)
-    .map(
-      ([p, [label, ph, console_]]) =>
-        `<div class="keyask">
-           <span class="who">${escapeHtml(label)}</span>
-           <input type="password" data-k="${p}" placeholder="${escapeHtml(ph)}" autocomplete="off" />
-           <button class="ghost" data-console="${escapeHtml(console_)}">받기</button>
-         </div>`,
-    )
-    .join("");
-  chatHtml(
-    "ai",
-    `<div class="wake">
-       <img src="/raven-sleep.webp" alt="" />
-       <div>
-         <b>말로 시키려면 열쇠가 하나 필요해요.</b><br />
-         <span class="muted">주문·결제·QR·정산은 <b>지금도 전부 됩니다</b> —
-         이건 그 위에 얹는 도우미예요. AI 회사에서 열쇠를 하나 받아
-         넣으시면 말로 설정하고 물어보실 수 있어요.</span>
-       </div>
-     </div>
-     <div class="muted" style="margin-top:10px;font-size:13px">
-       [받기] 를 누르면 그 회사 페이지가 열립니다. 가입하고 키를 복사해
-       아래 칸에 붙여 넣으세요.<br />
-       키는 <b>이 컴퓨터에만</b> 저장됩니다(0600). 우리 서버로 가지 않아요.
-     </div>
-     ${rows}
-     <button id="keyask-save" style="margin-top:10px;width:100%">깨우기</button>`,
-  );
+/* ── 열쇠 없는 라비 · AI 열쇠 넣기 (0.4.8-B · RV3 🔴7) ──────────────────────────
+   여태 열쇠가 없으면 무엇을 물어도 「열쇠가 하나 필요해요」와 칸 다섯 개만 나왔다(`chatNeedsKey`).
+   질문에는 답이 없었다 — 처음 쓰는 사람이 제일 먼저 묻는 것(받기·보내기·수수료…)에도.
 
-  const log = $("chat-log");
-  log.querySelectorAll<HTMLElement>("[data-console]").forEach((b) => {
-    b.onclick = () =>
-      void invoke("open_external", { url: b.dataset.console }).catch(() => {});
+   대표 결정(2026-09-25): 무료 서버 AI 는 만들지 않는다. 그래서
+   ① 열쇠가 없으면 **라비 안내**(정해 둔 답, `ravi-guide.ts`)로 답한다 — 머리에 「라비 안내 · AI 아님」.
+   ② 열쇠 넣는 곳은 라비 화면 안에: 회사마다 「어디서 받나요」, 붙여 넣는 칸 **하나**, 저장.
+      저장은 「이 컴퓨터 › AI 열쇠」와 **같은 명령**(`save_api_key`, 0600 파일)이다 — 방식은 안 바꾼다.
+   🔴 열쇠 칸은 password 칸이고, 어디에도 적지(로그) 않는다. 저장이 끝나면 칸을 비운다. */
+let keyPick = "anthropic";
+
+function keyCardHtml(): string {
+  const rows = Object.entries(PROVIDERS)
+    .map(([p, [label, , console_]]) =>
+      `<div class="kc-row${p === keyPick ? " on" : ""}" data-kc-row="${escapeHtml(p)}">` +
+      `<button type="button" class="ghost kc-pick" data-kc-pick="${escapeHtml(p)}" aria-pressed="${p === keyPick}" translate="no">${escapeHtml(label)}</button>` +
+      `<button type="button" class="ghost kc-where" data-kc-where="${escapeHtml(console_)}">${copyHtml("어디서 받나요")} ↗</button>` +
+      `</div>`)
+    .join("");
+  const ph = PROVIDERS[keyPick]?.[1] || "";
+  return `<section class="card keycard" aria-labelledby="kc-title">` +
+    `<div class="kc-head"><h3 id="kc-title">${copyHtml("AI 열쇠 넣기")}</h3>` +
+    `<button type="button" class="ghost" data-kc="close">${copyHtml("닫기")}</button></div>` +
+    `<p class="meta">${copyHtml("열쇠가 있으면 라비가 AI 로 무엇이든 답해요. 열쇠는 AI 회사에서 각자 받아요(요금은 회사마다 달라요).")}</p>` +
+    `<div class="kc-list" role="group" aria-label="AI 회사">${rows}</div>` +
+    `<label class="kc-label" for="kc-key">${copyHtml("받은 열쇠를 여기에 붙여 넣으세요")}</label>` +
+    `<div class="kc-in"><input id="kc-key" type="password" autocomplete="off" spellcheck="false" placeholder="${escapeHtml(ph)}" />` +
+    `<button type="button" id="kc-save">${copyHtml("저장")}</button></div>` +
+    `<p class="meta">${copyHtml("열쇠는 이 컴퓨터에만 저장돼요. AI 에게 물을 때만 고른 회사로 함께 보내지고, 우리 서버로는 가지 않아요.")}</p>` +
+    `<p class="meta kc-note" id="kc-note" aria-live="polite"></p>` +
+    `<p class="meta">${copyHtml("내 컴퓨터에서 돌리는 AI 나 다른 곳은 「이 컴퓨터 › AI 열쇠」에서 넣어요.")}</p>` +
+    `</section>`;
+}
+
+function openKeyCard() {
+  const host = $("ravi-key");
+  host.innerHTML = keyCardHtml();
+  host.hidden = false;
+  host.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  ($("kc-key") as HTMLInputElement).focus();
+}
+
+function closeKeyCard() {
+  const host = $("ravi-key");
+  host.hidden = true;
+  host.innerHTML = "";
+}
+
+function pickKeyProvider(p: string) {
+  if (!PROVIDERS[p]) return;
+  keyPick = p;
+  document.querySelectorAll<HTMLElement>("#ravi-key [data-kc-row]").forEach((row) => {
+    const on = row.dataset.kcRow === p;
+    row.classList.toggle("on", on);
+    row.querySelector("[data-kc-pick]")?.setAttribute("aria-pressed", String(on));
   });
-  const save = document.getElementById("keyask-save");
-  if (save)
-    save.onclick = async () => {
-      let put = 0;
-      for (const el of log.querySelectorAll<HTMLInputElement>("[data-k]")) {
-        const v = el.value.trim();
-        if (!v) continue;
-        try {
-          await invoke("save_api_key", { provider: el.dataset.k, key: v });
-          put++;
-          el.value = "";
-        } catch (e) {
-          chatHtml("ai", `<span class="warn">${escapeHtml(errText(e))}</span>`);
-        }
-      }
-      if (!put) return chatSay("ai", "칸이 비어 있어요. 키를 붙여넣고 다시 눌러 주세요.");
-      await refreshKeys();
-      // 깨어나는 순간을 보여 준다. "됐어요" 한 줄보다 이게 기억에 남는다.
-      chatHtml(
-        "ai",
-        `<div class="wake awake">
-           <img src="/raven-hello.webp" alt="" />
-           <div><b>안녕하세요, 라비예요.</b><br />
-             <span class="muted">무엇이든 물어보세요. 가게 일이면 화면도 채워 드려요.</span>
-           </div>
-         </div>`,
-      );
-    };
+  const input = document.getElementById("kc-key") as HTMLInputElement | null;
+  if (input) input.placeholder = PROVIDERS[p][1];
+}
+
+async function saveKeyCard() {
+  const input = $("kc-key") as HTMLInputElement;
+  const note = $("kc-note");
+  const key = input.value.trim();
+  if (!key) return void setCopyText(note, () => t("칸이 비어 있어요. 키를 붙여넣고 다시 눌러 주세요."));
+  const btn = $("kc-save") as HTMLButtonElement;
+  btn.disabled = true;
+  try {
+    await invoke("save_api_key", { provider: keyPick, key });
+    input.value = "";
+    await refreshKeys();
+    const label = PROVIDERS[keyPick]?.[0] || keyPick;
+    closeKeyCard();
+    // 깨어나는 순간을 보여 준다. "됐어요" 한 줄보다 이게 기억에 남는다.
+    chatHtml("ai",
+      `<div class="wake awake"><img src="/raven-hello.webp" alt="" />` +
+      `<div><b>${copyHtml("안녕하세요, 라비예요.")}</b><br />` +
+      `<span class="muted">${tf("{0} 열쇠를 저장했어요. 이제 무엇이든 물어보세요.", `<span translate="no">${escapeHtml(label)}</span>`)}</span></div></div>`);
+  } catch (e) {
+    setCopyText(note, () => errText(e));
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/** 열쇠가 없을 때의 답 — 정해 둔 안내. 맞는 게 없으면 모른다고 말한다. */
+function raviGuide(q: string) {
+  const topic = matchGuide(q);
+  chatHtml("ai", topic ? guideHtml(topic, copyHtml) : guideMissHtml(copyHtml));
+}
+
+/** 안내 답 아래 단추가 데려가는 곳. */
+function raviGo(to: GuideGo) {
+  const jumpTo = jumpToEl;
+  switch (to) {
+    case "receive": showPage("wallet"); void openReceive(); return;
+    case "send": showPage("wallet"); void openSend("rvn"); return;
+    case "wallet": showPage("wallet"); return;
+    case "txs": showPage("wallet"); jumpTo("w-txs"); return;
+    case "backup": showPage("settings"); jumpTo(document.getElementById("bk-seed") ? "bk-seed" : "bk-go"); return;
+    case "create": showPage("create"); return;
+    case "assets": showPage("assets"); return;
+    case "node": toggleDot("node"); return;
+    case "key": openKeyCard(); return;
+  }
 }
 
 async function chatSend() {
@@ -9729,7 +9958,7 @@ async function chatSend() {
   if (!aiProvider) {
     chatSay("me", q);
     ($("chat-q") as HTMLInputElement).value = "";
-    return chatNeedsKey();
+    return raviGuide(q);
   }
   ($("chat-q") as HTMLInputElement).value = "";
   chatSay("me", q);
@@ -16526,7 +16755,14 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.querySelectorAll("nav a").forEach((a) => {
     (a as HTMLElement).onclick = () => showPage((a as HTMLElement).dataset.page!);
   });
-  $("w-newaddr").addEventListener("click", makeAddress);
+  // 0.4.8-B 잔액 카드 — 큰 단추 「받기」, 작은 줄 「최근 거래」「주소 확인」. (「보내기」는 아래 w-send-rvn)
+  $("w-receive").addEventListener("click", () => void openReceive());
+  $("w-go-txs").addEventListener("click", () => jumpToEl("w-txs"));
+  $("w-go-whose").addEventListener("click", () => jumpToEl("whose-in"));
+  $("s-pick").addEventListener("click", (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLElement>("[data-payee]");
+    if (b?.dataset.payee) pickPayee(b.dataset.payee);
+  });
   $("ask-yes").addEventListener("click", () =>
     askClose(($("ask-input") as HTMLInputElement).value)
   );
@@ -16877,7 +17113,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   };
   window.addEventListener("desktop-language-change", syncLanguage);
   syncLanguage();
-  $("overview-receive").onclick = () => { showPage("wallet"); $("w-newaddr").scrollIntoView(); $("w-newaddr").focus(); };
+  $("overview-receive").onclick = () => { showPage("wallet"); void openReceive(); };
   $("overview-phone").onclick = () => { const panel = $("phone-tx-panel") as HTMLDetailsElement; panel.open = true; panel.scrollIntoView(); $("phone-tx-code").focus(); };
 
   $("fee-send").addEventListener("click", () => void sendOwed());
@@ -16996,6 +17232,40 @@ window.addEventListener("DOMContentLoaded", async () => {
     .forEach((b) => {
       b.onclick = () => setChatMode(b.dataset.mode as "fill" | "ask" | "debate");
     });
+  restoreChatMode();
+  // 0.4.8-B 라비 안내 답의 단추 · AI 열쇠 넣기 카드.
+  $("chat-log").addEventListener("click", (e) => {
+    const el = e.target as HTMLElement;
+    const go = el.closest<HTMLElement>("[data-guide-go]");
+    if (go) return raviGo(go.dataset.guideGo as GuideGo);
+    const topic = el.closest<HTMLElement>("[data-guide-topic]");
+    const g = topic ? guideById(topic.dataset.guideTopic || "") : null;
+    if (g) chatHtml("ai", guideHtml(g, copyHtml));
+  });
+  $("ravi-keyopen").addEventListener("click", openKeyCard);
+  $("ravi-key").addEventListener("click", (e) => {
+    const el = e.target as HTMLElement;
+    const pick = el.closest<HTMLElement>("[data-kc-pick]");
+    if (pick) return pickKeyProvider(pick.dataset.kcPick || "");
+    const where = el.closest<HTMLElement>("[data-kc-where]");
+    if (where) {
+      // 공식 콘솔 주소만 연다(`open_external` 이 아는 곳만 연다).
+      void invoke("open_external", { url: where.dataset.kcWhere }).catch((err) =>
+        setCopyText($("kc-note"), () => errText(err)));
+      return;
+    }
+    if (el.closest("[data-kc='close']")) return closeKeyCard();
+    if (el.closest("#kc-save")) void saveKeyCard();
+  });
+  $("ravi-key").addEventListener("input", (e) => {
+    const el = e.target as HTMLInputElement;
+    if (el.id !== "kc-key") return;
+    const p = providerOfKey(el.value);
+    if (p && p !== keyPick) pickKeyProvider(p);
+  });
+  $("ravi-key").addEventListener("keydown", (e) => {
+    if ((e as KeyboardEvent).key === "Enter" && (e.target as HTMLElement).id === "kc-key") void saveKeyCard();
+  });
   $("chat-q").addEventListener("keydown", (e) => {
     if ((e as KeyboardEvent).key === "Enter") chatSend();
   });

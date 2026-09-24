@@ -1,0 +1,45 @@
+{
+ "dist": "/Users/gimmusong/wt-rv-desktop-048b/dist",
+ "languages": {
+  "ko": {
+   "walletHangul": [],
+   "receiveHangul": [],
+   "pickHangul": [],
+   "reviewHangul": [],
+   "resultHangul": [],
+   "guideHangul": [],
+   "keyHangul": [],
+   "errors": []
+  },
+  "en": {
+   "walletHangul": [],
+   "receiveHangul": [],
+   "pickHangul": [],
+   "reviewHangul": [],
+   "resultHangul": [],
+   "guideHangul": [],
+   "keyHangul": [],
+   "errors": []
+  },
+  "ja": {
+   "walletHangul": [],
+   "receiveHangul": [],
+   "pickHangul": [],
+   "reviewHangul": [],
+   "resultHangul": [],
+   "guideHangul": [],
+   "keyHangul": [],
+   "errors": []
+  },
+  "zh": {
+   "walletHangul": [],
+   "receiveHangul": [],
+   "pickHangul": [],
+   "reviewHangul": [],
+   "resultHangul": [],
+   "guideHangul": [],
+   "keyHangul": [],
+   "errors": []
+  }
+ }
+}

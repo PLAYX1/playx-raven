@@ -27,6 +27,8 @@ fn is_machine_label(l: &str) -> bool {
         || l.starts_with("sell:")
         || l.starts_with("order-test")
         || l.starts_with("pass:")
+        // 0.4.8-B 지갑 「받기」가 만든 주소(`receive.rs`). 사람이 붙인 이름이 아니다.
+        || l == crate::receive::RECEIVE_LABEL
 }
 
 /// 주소 하나에 이름을 붙인다. 이미 있는 이름을 다시 붙여도 된다.
@@ -155,7 +157,7 @@ mod tests {
     /// 묻힌다. 실측: 대표님 지갑 56줄 중 40줄이 `order` 였다.
     #[test]
     fn our_own_labels_are_not_address_book_entries() {
-        for l in ["order", "shop", "sell:PLAYX#ABC", "order-test-1", "pass:1234"] {
+        for l in ["order", "shop", "sell:PLAYX#ABC", "order-test-1", "pass:1234", crate::receive::RECEIVE_LABEL] {
             assert!(is_machine_label(l), "{l} 를 기계 이름으로 못 알아본다");
         }
     }
