@@ -376,18 +376,22 @@ try {
   });
 
   // 11) 라비에게 묻기 — AI 열쇠 없는 처음 상태.
+  //    0.4.8-B — 판정은 **마지막 라비 말풍선**으로 한다. 화면 어딘가에 「열쇠」라는 글자가 있는지가 아니라
+  //    (열쇠 넣는 단추는 늘 있다), 물은 것에 답했는지 · 답 대신 열쇠만 요구했는지.
   await task('T11', '라비에게 질문', baseState(), async (x) => {
     if (!(await x.visible('#chat-q'))) await x.tap('nav a[data-page="ravi"]', '라비 메뉴');
     x.note(`기본 모드: ${(await x.page.$eval('[data-mode].on, [data-mode][aria-pressed="true"]', (e) => e.innerText).catch(() => '?'))}`);
     await x.type('#chat-q', '보낼 때 수수료가 얼마예요?', '질문');
     await x.tap('#chat-go', '보내기');
     await x.wait(1500);
-    const txt = (await x.page.evaluate(() => document.getElementById('page-ravi')?.innerText || '')).replace(/\s+/g, ' ');
-    const keyAsk = /열쇠|API|키를/.test(txt);
-    x.note(`답 대신 열쇠 요구: ${keyAsk ? '예' : '아니오'}`);
+    const last = (await x.page.evaluate(() => [...document.querySelectorAll('#chat-log .msg.ai')].pop()?.innerText || '')).replace(/\s+/g, ' ');
+    const answered = /수수료/.test(last) && /RVN|노드/.test(last) && !/없는 질문/.test(last);
+    const keyOnly = !answered && /열쇠|API|키를/.test(last);
+    x.note(`라비 답: ${last.slice(0, 140)}`);
+    x.note(`답 대신 열쇠 요구: ${keyOnly ? '예' : '아니오'} · 「AI 아님」 표시: ${/AI 아님/.test(last) ? '있음' : '없음'} · 열쇠 넣는 곳(라비 화면 안): ${(await x.page.$('#ravi-keyopen, .keyask input')) ? '있음' : '없음'}`);
     await x.shot('answer');
-    if (keyAsk) x.r.stuck.push('AI 열쇠(유료 계정·가입)가 없으면 질문에 답을 못 받음');
-    return !keyAsk;
+    if (!answered) x.r.stuck.push(keyOnly ? 'AI 열쇠(유료 계정·가입)가 없으면 질문에 답을 못 받음' : '질문에 대한 답이 없음');
+    return answered;
   });
 
   // 12) 보내기 직전 그만두기.

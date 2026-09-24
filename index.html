@@ -2219,10 +2219,10 @@
       main :is(button, summary), .todochip { min-height:64px !important; }
       main button { overflow-wrap:anywhere; }
 
-      /* ── 0.4.8-B 지갑 첫 배치 · 받기 · 보내기 ─────────────────────
+      /* ── 0.4.8-B 지갑 첫 배치 · 받기 · 보내기 · 라비 안내 ─────────────────────
          처음 쓰는 사람의 순서: 내 돈이 얼마 → 받기 · 보내기(큰 단추 둘) → 나머지(작은 줄).
          🔴 style 속성은 쓰지 않는다(앱 CSP 가 막는다 — style-attrs.ts). 전부 여기 클래스로. */
-      #w-incoming-note[hidden], #overview-incoming-row[hidden] { display:none !important; }
+      #w-incoming-note[hidden], #overview-incoming-row[hidden], #ravi-key[hidden], #ravi-keyopen[hidden] { display:none !important; }
       .wbal { padding:20px; margin-bottom:14px; max-width:760px; }
       .wbal .big { font-size:36px; margin-top:2px; }
       .wincoming { margin-top:6px; font-size:18px; font-weight:650; color:var(--ravi); }
@@ -2236,8 +2236,8 @@
       .wlock { margin:14px 0; max-width:760px; }
       #page-wallet .sendbox { max-width:760px; }
       .wrecv { margin-bottom:14px; max-width:760px; }
-      .wrecv-head { display:flex; align-items:center; justify-content:space-between; gap:12px; }
-      .wrecv-head h3 { margin:0; }
+      .wrecv-head, .kc-head { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+      .wrecv-head h3, .kc-head h3 { margin:0; }
       .wrecv-body { display:flex; gap:18px; align-items:flex-start; flex-wrap:wrap; margin-top:10px; }
       .wrecv-qr { flex:0 0 212px; min-height:212px; margin:0; border:1px solid var(--line); }
       .wrecv-side { flex:1 1 280px; min-width:0; }
@@ -2263,6 +2263,21 @@
       .wsave label { display:block; margin-bottom:6px; }
       .wsave-row { display:flex; gap:8px; flex-wrap:wrap; }
       .wsave-row input { flex:1 1 220px; min-width:0; }
+      /* 라비 안내 — 「AI 아님」 표지가 늘 먼저 보인다. */
+      .guidebadge { display:inline-block; font-size:13px; font-weight:650; color:var(--ravi-soft);
+                    border:1px solid currentColor; border-radius:999px; padding:1px 10px; margin-bottom:6px; }
+      .guide p { margin:4px 0; }
+      .guidego { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+      #page-ravi .chat-mode .keyopen { margin-right:auto; color:var(--ravi); font-weight:650; }
+      #ravi-key { padding:4px 12px 12px; border-top:1px solid var(--line); }
+      .keycard { border:0; padding:8px 4px 0; }
+      .kc-list { display:grid; gap:6px; margin:10px 0; }
+      .kc-row { display:flex; gap:8px; flex-wrap:wrap; }
+      .kc-row .kc-pick { flex:1 1 220px; justify-content:flex-start; text-align:left; }
+      .kc-row.on .kc-pick { border-color:var(--ravi); box-shadow:inset 0 0 0 1px var(--ravi); background:var(--ravi-tint); font-weight:650; }
+      .kc-label { display:block; margin-top:6px; }
+      .kc-in { display:flex; gap:8px; flex-wrap:wrap; margin:6px 0 8px; }
+      .kc-in input { flex:1 1 260px; min-width:0; }
     </style>
   </head>
   <body>
@@ -3288,16 +3303,20 @@
         <!-- 여태 이 창은 양식 채우기 전용이었다. 사장님이 "이거 어떻게 생각해"
              라고 물으면 엉뚱하게 메뉴를 고쳤다. 무엇을 시키는지 먼저 고르게 한다. -->
         <div class="chat-mode" id="chat-mode">
-          <button class="on" data-mode="fill" title="말로 알려주면 화면을 채웁니다">화면 채우기</button>
-          <button data-mode="ask" title="무엇이든 물어봅니다. 화면은 안 건드립니다">그냥 묻기</button>
+          <!-- 0.4.8-B 열쇠가 없을 때만 보인다(refreshKeys). 없어도 라비 안내로 답한다. -->
+          <button type="button" class="keyopen" id="ravi-keyopen" hidden>AI 열쇠 넣기</button>
+          <button data-mode="fill" title="말로 알려주면 화면을 채웁니다">화면 채우기</button>
+          <button class="on" data-mode="ask" title="무엇이든 물어봅니다. 화면은 안 건드립니다">그냥 묻기</button>
           <button data-mode="debate" title="서로 다른 AI 두 곳에 같은 것을 묻습니다">두 곳에 묻기</button>
         </div>
 
         <div id="chat-log"></div>
         <div class="chat-in">
-          <input id="chat-q" placeholder="아이스 아메리카노 4500원 넣어줘" autocomplete="off" />
+          <input id="chat-q" placeholder="레이븐코인으로 받으면 뭐가 좋아?" autocomplete="off" />
           <button id="chat-go">보내기</button>
         </div>
+        <!-- 0.4.8-B AI 열쇠 넣기 카드(라비 화면 안에서 바로). 그리는 것은 main.ts openKeyCard. -->
+        <div id="ravi-key" hidden></div>
       </div>
         </div>
       </section>

@@ -183,10 +183,11 @@ import {
   issuedOf, looksLikeAddress, ownerRowsHtml, OWNER_NOT_PINNED, whoseHtml, whoseQuestion,
   type Issued, type OwnerRow, type WhoseResult,
 } from "./whose";
-// 0.4.8-B — 지갑 받기 · 보내기(수수료 · 받을 사람).
+// 0.4.8-B — 지갑 첫 배치(잔액·받기·보내기)와 열쇠 없는 라비의 안내 답.
 import {
   loadPayees, payeeName, pickerHtml, receiveHtml, recentPayees, RECEIVE_MESSAGE, savePayee, sentHtml,
 } from "./wallet-easy";
+import { guideById, guideHtml, guideMissHtml, matchGuide, providerOfKey, type GuideGo } from "./ravi-guide";
 
 type Asset = {
   name: string;
@@ -8679,12 +8680,15 @@ async function refreshKeys() {
     sel.innerHTML = have.map((p) => `<option value="${p}">${escapeHtml(labelOf(p))}</option>`).join("");
     if (have.includes(previous)) sel.value = previous;
     aiProvider = sel.value || null;
+    // 0.4.8-B — 라비 화면의 「AI 열쇠 넣기」는 열쇠가 없을 때만 보인다.
+    const keyOpen = document.getElementById("ravi-keyopen");
+    if (keyOpen) keyOpen.hidden = !!aiProvider;
 
     $("key-note").textContent = have.length ? "AI 설정이 있습니다. 연결은 아직 확인하지 않았습니다." : "아직 없습니다";
     // 대화창은 쓸 수 있는 곳이 하나라도 있을 때만 의미가 있다.
     // 🔴 여태 API 키가 없으면 이 버튼을 **숨겼다.** 그러면 Ravi 가 있다는
     // 것을 알 길이 없다 — 키를 넣을 이유도 못 만난다.
-    // 키가 없을 때는 대화창 안에서 그 자리에 넣게 되어 있으므로(chatNeedsKey),
+    // 키가 없을 때는 대화창이 라비 안내로 답하고 그 자리에서 열쇠를 넣게 되어 있으므로(raviGuide·openKeyCard),
     // 버튼은 **늘 보인다.**
     // 🔴 **여기서 무조건 켜면 안 된다.** `showPage` 가 라비 화면에서 숨긴
     //    것을 이 줄이 도로 켰다. 그러면 대화창 위에 그리로 가는 단추가
@@ -8706,7 +8710,7 @@ async function refreshKeys() {
     // 자는 얼굴은 **진짜로 장사가 멈춘 상태**에만 쓴다 — 노드가 꺼졌을 때.
     // 그때는 결제 확인이 안 되므로 자는 것이 사실이다.
     // AI 열쇠가 없는 것은 "잠"이 아니라 **"아직 못 하는 일이 있음"** 이고,
-    // 그건 눌렀을 때 그 자리에서 말한다(`chatNeedsKey`).
+    // 그건 물었을 때 그 자리에서 말한다(`raviGuide` — 라비 안내로 답하고 열쇠 넣는 곳을 보여 준다).
     // Keep the existing 20-second status refresh; startup reads are shared.
     void refreshOverview();
     const nodeDown = !(nodeUp ?? true);
@@ -9607,7 +9611,10 @@ function applyActions(actions: any[]): string[] {
 
 // 무엇을 시킬 것인가. 여태 이 창은 양식 채우기 전용이라, 사장님이 "이거 어떻게
 // 생각해" 라고 물으면 엉뚱하게 메뉴를 고쳤다.
-let chatMode: "fill" | "ask" | "debate" = "fill";
+// 🔴 0.4.8-B — 기본은 「그냥 묻기」. 처음 쓰는 사람은 채울 화면이 아니라 물을 것을 들고 온다
+//    (RV3 T11). 「화면 채우기」는 그대로 고를 수 있고, 한 번 고르면 이 컴퓨터가 기억한다.
+const CHAT_MODE_KEY = "playx-raven-chat-mode";
+let chatMode: "fill" | "ask" | "debate" = "ask";
 
 /// 지금 무엇을 시키는 중인지. 이름만으로는 모자란다 —
 /// 「둘에게」가 무엇 둘인지 대표가 물었고, 그건 이름이 틀렸다는 뜻이다.
@@ -9628,12 +9635,25 @@ const MODE_HINT: Record<string, string> = {
   debate: "커피값을 4500원으로 올릴까?",
 };
 
-function setChatMode(m: "fill" | "ask" | "debate") {
+/** 고른 모드를 단추·안내 칸에만 입힌다(말풍선은 안 남긴다) — 켤 때 쓴다. */
+function paintChatMode(m: "fill" | "ask" | "debate") {
   chatMode = m;
   $("chat-mode")
     .querySelectorAll<HTMLElement>("[data-mode]")
     .forEach((b) => b.classList.toggle("on", b.dataset.mode === m));
   ($("chat-q") as HTMLInputElement).placeholder = MODE_HINT[m];
+}
+
+/** 켤 때 — 사장이 고른 적이 있으면 그것(가게에서 「화면 채우기」를 골라 둔 사장), 없으면 「그냥 묻기」. */
+function restoreChatMode() {
+  let saved: string | null = null;
+  try { saved = localStorage.getItem(CHAT_MODE_KEY); } catch { /* 못 읽으면 기본값 */ }
+  paintChatMode(saved === "fill" || saved === "debate" || saved === "ask" ? saved : "ask");
+}
+
+function setChatMode(m: "fill" | "ask" | "debate") {
+  paintChatMode(m);
+  try { localStorage.setItem(CHAT_MODE_KEY, m); } catch { /* 이번 판은 바뀐다 */ }
 
   // 🔴 모드를 바꿀 때마다 안내가 **쌓이고 있었다.** 같은 말이 두 번 세 번
   // 남아, 방금 무엇을 고른 건지 알 수 없게 된다.
@@ -9687,83 +9707,111 @@ function chatPopThinking() {
   if (last && last.querySelector("[data-thinking]")) last.remove();
 }
 
-/// 키가 없으면 **그 자리에서** 넣게 한다.
-///
-/// 여태 `if (!q || !aiProvider) return;` 이었다 — 사장이 질문을 치고 보내기를
-/// 눌러도 **아무 일도 안 일어났다.** 조용한 실패는 고장으로 읽히고, 고장으로
-/// 읽힌 기능은 다시 안 눌린다. 설정 화면으로 보내는 것도 답이 아니다 —
-/// 하려던 말을 들고 다른 화면으로 가면 거기서 뭘 하려 했는지 잊는다.
-/// 키가 없으면 Ravi 는 **자고 있다.**
-///
-/// 대표: "라비는 api 로 구동되니까 자고 있다가 API 셋업을 마치면 눈을 뜨는 거지"
-///
-/// 이 비유가 맞는 이유: 사장에게 "API 키가 없습니다" 는 오류로 읽히고,
-/// 오류로 읽힌 화면은 다시 안 눌린다. **자고 있다**는 고장이 아니라 상태고,
-/// 깨우는 방법이 있다는 뜻이다.
-function chatNeedsKey() {
-  const rows = Object.entries(PROVIDERS)
-    .map(
-      ([p, [label, ph, console_]]) =>
-        `<div class="keyask">
-           <span class="who">${escapeHtml(label)}</span>
-           <input type="password" data-k="${p}" placeholder="${escapeHtml(ph)}" autocomplete="off" />
-           <button class="ghost" data-console="${escapeHtml(console_)}">받기</button>
-         </div>`,
-    )
-    .join("");
-  chatHtml(
-    "ai",
-    `<div class="wake">
-       <img src="/raven-sleep.webp" alt="" />
-       <div>
-         <b>말로 시키려면 열쇠가 하나 필요해요.</b><br />
-         <span class="muted">주문·결제·QR·정산은 <b>지금도 전부 됩니다</b> —
-         이건 그 위에 얹는 도우미예요. AI 회사에서 열쇠를 하나 받아
-         넣으시면 말로 설정하고 물어보실 수 있어요.</span>
-       </div>
-     </div>
-     <div class="muted" style="margin-top:10px;font-size:13px">
-       [받기] 를 누르면 그 회사 페이지가 열립니다. 가입하고 키를 복사해
-       아래 칸에 붙여 넣으세요.<br />
-       키는 <b>이 컴퓨터에만</b> 저장됩니다(0600). 우리 서버로 가지 않아요.
-     </div>
-     ${rows}
-     <button id="keyask-save" style="margin-top:10px;width:100%">깨우기</button>`,
-  );
+/* ── 열쇠 없는 라비 · AI 열쇠 넣기 (0.4.8-B · RV3 🔴7) ──────────────────────────
+   여태 열쇠가 없으면 무엇을 물어도 「열쇠가 하나 필요해요」와 칸 다섯 개만 나왔다(`chatNeedsKey`).
+   질문에는 답이 없었다 — 처음 쓰는 사람이 제일 먼저 묻는 것(받기·보내기·수수료…)에도.
 
-  const log = $("chat-log");
-  log.querySelectorAll<HTMLElement>("[data-console]").forEach((b) => {
-    b.onclick = () =>
-      void invoke("open_external", { url: b.dataset.console }).catch(() => {});
+   대표 결정(2026-09-25): 무료 서버 AI 는 만들지 않는다. 그래서
+   ① 열쇠가 없으면 **라비 안내**(정해 둔 답, `ravi-guide.ts`)로 답한다 — 머리에 「라비 안내 · AI 아님」.
+   ② 열쇠 넣는 곳은 라비 화면 안에: 회사마다 「어디서 받나요」, 붙여 넣는 칸 **하나**, 저장.
+      저장은 「이 컴퓨터 › AI 열쇠」와 **같은 명령**(`save_api_key`, 0600 파일)이다 — 방식은 안 바꾼다.
+   🔴 열쇠 칸은 password 칸이고, 어디에도 적지(로그) 않는다. 저장이 끝나면 칸을 비운다. */
+let keyPick = "anthropic";
+
+function keyCardHtml(): string {
+  const rows = Object.entries(PROVIDERS)
+    .map(([p, [label, , console_]]) =>
+      `<div class="kc-row${p === keyPick ? " on" : ""}" data-kc-row="${escapeHtml(p)}">` +
+      `<button type="button" class="ghost kc-pick" data-kc-pick="${escapeHtml(p)}" aria-pressed="${p === keyPick}" translate="no">${escapeHtml(label)}</button>` +
+      `<button type="button" class="ghost kc-where" data-kc-where="${escapeHtml(console_)}">${copyHtml("어디서 받나요")} ↗</button>` +
+      `</div>`)
+    .join("");
+  const ph = PROVIDERS[keyPick]?.[1] || "";
+  return `<section class="card keycard" aria-labelledby="kc-title">` +
+    `<div class="kc-head"><h3 id="kc-title">${copyHtml("AI 열쇠 넣기")}</h3>` +
+    `<button type="button" class="ghost" data-kc="close">${copyHtml("닫기")}</button></div>` +
+    `<p class="meta">${copyHtml("열쇠가 있으면 라비가 AI 로 무엇이든 답해요. 열쇠는 AI 회사에서 각자 받아요(요금은 회사마다 달라요).")}</p>` +
+    `<div class="kc-list" role="group" aria-label="AI 회사">${rows}</div>` +
+    `<label class="kc-label" for="kc-key">${copyHtml("받은 열쇠를 여기에 붙여 넣으세요")}</label>` +
+    `<div class="kc-in"><input id="kc-key" type="password" autocomplete="off" spellcheck="false" placeholder="${escapeHtml(ph)}" />` +
+    `<button type="button" id="kc-save">${copyHtml("저장")}</button></div>` +
+    `<p class="meta">${copyHtml("열쇠는 이 컴퓨터에만 저장돼요. AI 에게 물을 때만 고른 회사로 함께 보내지고, 우리 서버로는 가지 않아요.")}</p>` +
+    `<p class="meta kc-note" id="kc-note" aria-live="polite"></p>` +
+    `<p class="meta">${copyHtml("내 컴퓨터에서 돌리는 AI 나 다른 곳은 「이 컴퓨터 › AI 열쇠」에서 넣어요.")}</p>` +
+    `</section>`;
+}
+
+function openKeyCard() {
+  const host = $("ravi-key");
+  host.innerHTML = keyCardHtml();
+  host.hidden = false;
+  host.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  ($("kc-key") as HTMLInputElement).focus();
+}
+
+function closeKeyCard() {
+  const host = $("ravi-key");
+  host.hidden = true;
+  host.innerHTML = "";
+}
+
+function pickKeyProvider(p: string) {
+  if (!PROVIDERS[p]) return;
+  keyPick = p;
+  document.querySelectorAll<HTMLElement>("#ravi-key [data-kc-row]").forEach((row) => {
+    const on = row.dataset.kcRow === p;
+    row.classList.toggle("on", on);
+    row.querySelector("[data-kc-pick]")?.setAttribute("aria-pressed", String(on));
   });
-  const save = document.getElementById("keyask-save");
-  if (save)
-    save.onclick = async () => {
-      let put = 0;
-      for (const el of log.querySelectorAll<HTMLInputElement>("[data-k]")) {
-        const v = el.value.trim();
-        if (!v) continue;
-        try {
-          await invoke("save_api_key", { provider: el.dataset.k, key: v });
-          put++;
-          el.value = "";
-        } catch (e) {
-          chatHtml("ai", `<span class="warn">${escapeHtml(errText(e))}</span>`);
-        }
-      }
-      if (!put) return chatSay("ai", "칸이 비어 있어요. 키를 붙여넣고 다시 눌러 주세요.");
-      await refreshKeys();
-      // 깨어나는 순간을 보여 준다. "됐어요" 한 줄보다 이게 기억에 남는다.
-      chatHtml(
-        "ai",
-        `<div class="wake awake">
-           <img src="/raven-hello.webp" alt="" />
-           <div><b>안녕하세요, 라비예요.</b><br />
-             <span class="muted">무엇이든 물어보세요. 가게 일이면 화면도 채워 드려요.</span>
-           </div>
-         </div>`,
-      );
-    };
+  const input = document.getElementById("kc-key") as HTMLInputElement | null;
+  if (input) input.placeholder = PROVIDERS[p][1];
+}
+
+async function saveKeyCard() {
+  const input = $("kc-key") as HTMLInputElement;
+  const note = $("kc-note");
+  const key = input.value.trim();
+  if (!key) return void setCopyText(note, () => t("칸이 비어 있어요. 키를 붙여넣고 다시 눌러 주세요."));
+  const btn = $("kc-save") as HTMLButtonElement;
+  btn.disabled = true;
+  try {
+    await invoke("save_api_key", { provider: keyPick, key });
+    input.value = "";
+    await refreshKeys();
+    const label = PROVIDERS[keyPick]?.[0] || keyPick;
+    closeKeyCard();
+    // 깨어나는 순간을 보여 준다. "됐어요" 한 줄보다 이게 기억에 남는다.
+    chatHtml("ai",
+      `<div class="wake awake"><img src="/raven-hello.webp" alt="" />` +
+      `<div><b>${copyHtml("안녕하세요, 라비예요.")}</b><br />` +
+      `<span class="muted">${tf("{0} 열쇠를 저장했어요. 이제 무엇이든 물어보세요.", `<span translate="no">${escapeHtml(label)}</span>`)}</span></div></div>`);
+  } catch (e) {
+    setCopyText(note, () => errText(e));
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/** 열쇠가 없을 때의 답 — 정해 둔 안내. 맞는 게 없으면 모른다고 말한다. */
+function raviGuide(q: string) {
+  const topic = matchGuide(q);
+  chatHtml("ai", topic ? guideHtml(topic, copyHtml) : guideMissHtml(copyHtml));
+}
+
+/** 안내 답 아래 단추가 데려가는 곳. */
+function raviGo(to: GuideGo) {
+  const jumpTo = jumpToEl;
+  switch (to) {
+    case "receive": showPage("wallet"); void openReceive(); return;
+    case "send": showPage("wallet"); void openSend("rvn"); return;
+    case "wallet": showPage("wallet"); return;
+    case "txs": showPage("wallet"); jumpTo("w-txs"); return;
+    case "backup": showPage("settings"); jumpTo(document.getElementById("bk-seed") ? "bk-seed" : "bk-go"); return;
+    case "create": showPage("create"); return;
+    case "assets": showPage("assets"); return;
+    case "node": toggleDot("node"); return;
+    case "key": openKeyCard(); return;
+  }
 }
 
 async function chatSend() {
@@ -9780,7 +9828,7 @@ async function chatSend() {
   if (!aiProvider) {
     chatSay("me", q);
     ($("chat-q") as HTMLInputElement).value = "";
-    return chatNeedsKey();
+    return raviGuide(q);
   }
   ($("chat-q") as HTMLInputElement).value = "";
   chatSay("me", q);
@@ -17056,6 +17104,40 @@ window.addEventListener("DOMContentLoaded", async () => {
     .forEach((b) => {
       b.onclick = () => setChatMode(b.dataset.mode as "fill" | "ask" | "debate");
     });
+  restoreChatMode();
+  // 0.4.8-B 라비 안내 답의 단추 · AI 열쇠 넣기 카드.
+  $("chat-log").addEventListener("click", (e) => {
+    const el = e.target as HTMLElement;
+    const go = el.closest<HTMLElement>("[data-guide-go]");
+    if (go) return raviGo(go.dataset.guideGo as GuideGo);
+    const topic = el.closest<HTMLElement>("[data-guide-topic]");
+    const g = topic ? guideById(topic.dataset.guideTopic || "") : null;
+    if (g) chatHtml("ai", guideHtml(g, copyHtml));
+  });
+  $("ravi-keyopen").addEventListener("click", openKeyCard);
+  $("ravi-key").addEventListener("click", (e) => {
+    const el = e.target as HTMLElement;
+    const pick = el.closest<HTMLElement>("[data-kc-pick]");
+    if (pick) return pickKeyProvider(pick.dataset.kcPick || "");
+    const where = el.closest<HTMLElement>("[data-kc-where]");
+    if (where) {
+      // 공식 콘솔 주소만 연다(`open_external` 이 아는 곳만 연다).
+      void invoke("open_external", { url: where.dataset.kcWhere }).catch((err) =>
+        setCopyText($("kc-note"), () => errText(err)));
+      return;
+    }
+    if (el.closest("[data-kc='close']")) return closeKeyCard();
+    if (el.closest("#kc-save")) void saveKeyCard();
+  });
+  $("ravi-key").addEventListener("input", (e) => {
+    const el = e.target as HTMLInputElement;
+    if (el.id !== "kc-key") return;
+    const p = providerOfKey(el.value);
+    if (p && p !== keyPick) pickKeyProvider(p);
+  });
+  $("ravi-key").addEventListener("keydown", (e) => {
+    if ((e as KeyboardEvent).key === "Enter" && (e.target as HTMLElement).id === "kc-key") void saveKeyCard();
+  });
   $("chat-q").addEventListener("keydown", (e) => {
     if ((e as KeyboardEvent).key === "Enter") chatSend();
   });
