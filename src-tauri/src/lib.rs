@@ -38,6 +38,7 @@ mod price;
 mod refund;
 mod issue;
 mod issue_unknown;
+mod cert_assets;
 mod create;
 mod create_history;
 mod certificate;
@@ -140,7 +141,17 @@ pub fn run() {
             issue_unknown::issue_unknown_check,
             create_history::create_resolve_not_sent,
             certificate::create_print,
+            certificate::create_print_many,
+            certificate::certificate_file_save,
+            certificate::certificate_sample_open,
             certificate::create_certificate_preview,
+            cert_assets::certificate_font_css,
+            cert_assets::certificate_marks,
+            cert_assets::certificate_mark_save,
+            cert_assets::certificate_mark_clear,
+            cert_assets::create_photos_save,
+            cert_assets::create_dropped_read,
+            cert_assets::create_dropped_read_in,
             issue2::asset_kinds,
             issue2::reissue,
             issue2::issue_many_unique,
@@ -250,6 +261,7 @@ pub fn run() {
             ai::ai_ask_owner,
             ai::ai_order_save,
             ai::ai_fill,
+            ai::ai_read_image,
             ai::ai_answer,
             ai::ai_answer_any,
             ai::ai_chat,

@@ -7,6 +7,10 @@
 //
 // 증서 HTML 은 Rust render() 가 만든 그대로를 쓴다(cargo 견본 시험이 파일로 떨어뜨린다).
 // CARGO_TARGET_DIR 를 넘기면 그 빌드 폴더를 쓴다.
+//
+// RV2(09-24): 글꼴을 앱에 넣었다(cert-fonts/). 미리보기는 글꼴 CSS 를 따로 한 번 받아 같이 붙이고,
+// 인쇄 파일은 글꼴이 data: 로 들어 있다 — 둘 다 「RV Cert Serif」로 그려지는지, 이름이 가운데 축에
+// 있는지, PDF 에 그 글꼴이 박히는지까지 본다.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -53,38 +57,50 @@ try {
   const tab = await browser.newPage();
   async function show(html, styled) {
     await tab.goto(origin, { waitUntil: 'load' });
-    await tab.evaluate((h, s) => new Promise(done => {
+    await tab.evaluate((h, s, fonts) => new Promise(done => {
       const f = document.getElementById('cr-preview');
       f.addEventListener('load', () => setTimeout(done, 50), { once: true });
-      if (s) RV.setStyledSrcdoc(f, h); else f.srcdoc = h;
-    }), html, styled);
+      if (s) RV.setStyledSrcdoc(f, h, fonts); else f.srcdoc = h;
+    }), html, styled, FONTS);
     const frame = tab.frames().find(f => f !== tab.mainFrame());
-    return frame.evaluate(() => {
+    return frame.evaluate(async () => {
+      await document.fonts.ready;
       const sheet = document.querySelector('.sheet'), b = getComputedStyle(document.body);
-      return { font: b.fontFamily, sheetH: Math.round(sheet.getBoundingClientRect().height) };
+      const s = sheet.getBoundingClientRect(), n = document.querySelector('.name')?.getBoundingClientRect();
+      return {
+        font: b.fontFamily, sheetH: Math.round(s.height),
+        loaded: [...document.fonts].filter(f => f.status === 'loaded').map(f => f.family),
+        offCenter: n ? Math.abs((n.left + n.right) / 2 - (s.left + s.right) / 2) : 999,
+      };
     });
   }
+  const FONTS = fs.readFileSync(path.join(samples, 'fonts.css'), 'utf8');
   for (const t of ['course', 'proof', 'thanks']) {
-    const html = fs.readFileSync(path.join(samples, `preview-${t}.txt`), 'utf8');
+    const html = fs.readFileSync(path.join(samples, `preview-${t}-short.txt`), 'utf8');
     await ok(`${t}: 대조군(srcdoc 만)은 CSP 에 막힌다 — 하네스가 0.4.5 고장을 재현`, async () => {
       const m = await show(html, false);
       assert.ok(m.sheetH < 1000, `막히지 않았다: ${JSON.stringify(m)}`);
     });
-    await ok(`${t}: 도우미를 쓰면 A4 한 장(794×1123)으로 그린다`, async () => {
+    await ok(`${t}: 도우미를 쓰면 A4 한 장(794×1123), 앱에 넣은 글꼴, 이름이 가운데 축`, async () => {
       const m = await show(html, true);
       assert.ok(m.sheetH >= 1110 && m.sheetH <= 1124, JSON.stringify(m));
       assert.doesNotMatch(m.font, /^(Times|-webkit-standard|serif)\b/, `브라우저 기본 글꼴이다: ${m.font}`);
+      assert.ok(m.loaded.some(f => /RV Cert Serif/.test(f)), `앱 글꼴이 안 불렸다: ${m.loaded}`);
+      assert.ok(m.offCenter <= 2, `이름이 가운데에서 ${m.offCenter}px 벗어났다`);
     });
   }
   // 인쇄 = 같은 render() 결과. CSP 없는 파일로 열리므로 그대로 PDF 로 뽑아 쪽 수를 센다.
-  for (const [file, pages] of [['course-1.html', 1], ['course-3.html', 3], ['proof-3.html', 3], ['thanks-3.html', 3], ['course-en.html', 1]]) {
-    await ok(`인쇄 ${file}: PDF ${pages}쪽(한 사람 = A4 한 쪽)`, async () => {
+  const PRINTS = [['course-3.html', 3], ['proof-3.html', 3], ['thanks-3.html', 3], ['course-en.html', 1], ['work-1.html', 1]];
+  for (const t of ['course', 'proof', 'thanks']) for (const v of ['short', 'long', 'latin']) PRINTS.push([`${t}-${v}.html`, 1]);
+  for (const [file, pages] of PRINTS) {
+    await ok(`인쇄 ${file}: PDF ${pages}쪽(한 사람 = A4 한 쪽), 글꼴이 PDF 에 박힌다`, async () => {
       const p = await browser.newPage();
       await p.goto('file://' + path.join(samples, file), { waitUntil: 'load' });
       const pdf = Buffer.from(await p.pdf({ preferCSSPageSize: true, printBackground: true })).toString('latin1');
       await p.close();
       const n = (pdf.match(/\/Type\s*\/Page(?!s)/g) || []).length;
       assert.equal(n, pages, `${file}: ${n}쪽`);
+      assert.match(pdf, /RVCertSerif/, '앱 글꼴이 PDF 에 안 박혔다(컴퓨터 글꼴로 그렸다)');
       const box = pdf.match(/\/MediaBox\s*\[\s*0\s+0\s+([\d.]+)\s+([\d.]+)\s*\]/);
       assert.ok(box && Math.abs(+box[1] - 595.28) < 2 && Math.abs(+box[2] - 841.89) < 2, `A4 세로가 아니다: ${box?.[0]}`);
     });

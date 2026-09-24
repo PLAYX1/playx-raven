@@ -405,6 +405,59 @@ Rules:
 - Only emit actions the owner actually asked for. Do not tidy, rename, or "improve" things they did not mention.
 - If they just want to talk, think something through, or ask what something is, answer in "reply" with an empty actions array. You are their assistant, not only a form filler."#
         }
+        // 증서 본문 문구 세 가지. 사람이 하나 고르고 고쳐 쓴다 — 라비는 제안만.
+        //
+        // 사실을 지어내지 못하게 하는 줄이 가장 중요하다. 「120시간」「우수한
+        // 성적」은 발급처가 책임지는 말이라, 입력에 없는 것이 증서에 찍히면 그
+        // 거짓말은 발급처 이름으로 나간다. 슬롭 단어는 `AI_SLOP` 과 같은 목록이고
+        // (시험이 어긋남을 잡는다), 그런 문구는 생성 뒤 `strip_slop` 이 버린다.
+        "cert_phrases" => {
+            r#"You suggest the body text of a certificate. The input is JSON: {"template":"course|proof|thanks","title":"","issuer":"","lang":"ko|en|ja|zh"}. Produce JSON only, no prose, no markdown fence:
+{"phrases":["","",""]}
+A person picks one phrase and may edit it before anything is printed. These are options, not the decision.
+Rules:
+- Exactly 3 phrases. Each is one or two sentences and at most 90 characters.
+- Write in the language given by "lang": ko Korean, en English, ja Japanese, zh Chinese. If "lang" is missing or anything else, write Korean.
+- Tone follows "template" (use course if it is missing or unknown):
+  * course: completion (수료). The person completed the course.
+  * proof: neutral attestation (증명). State the fact plainly. No warmth, no praise, no wishes.
+  * thanks: warm gratitude (감사). Thank the person for what they did, in plain words.
+- The three must be meaningfully different, in this order: 1) short and plain, 2) the standard formal wording, 3) warmer and a little fuller. For proof the third is fuller but stays neutral.
+- Placeholders, copied literally with their braces: {이름} is the recipient's name, {과정} is the course. At least one of the three must use {이름}. In English, Japanese and Chinese write {name} and {course} instead (Latin letters, exactly as written); the program replaces them.
+- Where the course belongs in a sentence, prefer {과정} (or {course}) to retyping the title, because each recipient's course is filled in per person.
+- Korean: put 님 straight after {이름} ("{이름}님은", "{이름}님께") so the particle fits any name. After {과정}, choose 을/를 to fit the given title.
+- Use the issuer's name exactly as given, or leave it out. Do not translate, shorten or decorate it.
+- Formal register, as on a real certificate: Korean 합니다체 ("…수료하였기에 이 증서를 드립니다", "…임을 증명합니다"); Japanese and Chinese in formal written style; English plain and formal.
+- Do not invent facts that are not in the input: no hours, sessions, dates, periods, grades, scores, ranks or awards. "수료하였습니다" is fine; "120시간의 과정을 우수한 성적으로 수료" is not. Never claim or imply a licence or qualification (자격 취득, 면허, licensed, qualified) unless the title itself says so.
+- No praise slop. Never use these words; the program throws away any phrase that contains one: 정성을, 정성껏, 최고의, 특별한, 자랑하, 선사하, 풍미, 가득한, 프리미엄, 진정한, 완벽한, 감동, 명품, 일품, 엄선한, 깊은 맛. No inflated praise in any language either (탁월한, 훌륭한, 눈부신, 위대한, outstanding, exceptional, remarkable, incredible). Warmth comes from plain words ("덕분에", "고맙습니다", "thank you for"), not adjectives.
+- No emoji, no markdown, no quotation marks around a phrase, no line breaks inside a phrase.
+- If title or issuer is empty, write phrases that do not need it."#
+        }
+        // 종이 명단 사진 → 표. `ai_read_image` 만 이 안내를 쓴다.
+        //
+        // 여기서 틀린 이름은 보기에 멀쩡해서 그대로 인쇄된다. 빈칸은 확인 표에서
+        // 사람이 채우지만, 그럴듯하게 고쳐 쓴 이름은 아무도 다시 보지 않는다.
+        // 그래서 「고치지 말 것」「모르면 unsure 에 넣을 것」을 가장 세게 적는다.
+        "cert_roster_photo" => {
+            r#"You transcribe a photo of a paper roster (an attendance sheet, a sign-up list, a class register) so a person can issue certificates from it. Produce JSON only, no prose, no markdown fence:
+{"rows":[{"recipient":"","course":"","grade":"","date":"","number":"","note":""}],"unsure":[],"why":""}
+A person checks every row in a table before anything is issued. A blank they can fill in; a wrong name that looks right gets printed. So when in doubt, say so. Do not smooth it over.
+Fields, one row per person:
+- recipient: the person's name exactly as written, in the script it is written in.
+- course: the course, class or programme for that person, from their line or from the sheet's title if it names one for everyone. Else "".
+- grade: a grade, level or belt written for that person (e.g. 2급, 초급). Else "".
+- date: a date written for that person or for the whole sheet. Output YYYY-MM-DD only when year, month and day are all clearly readable; otherwise copy it as written. Else "".
+- number: a certificate, member or registration number written for that person (e.g. PLNE-2026-001). Not a plain running count 1, 2, 3 that only numbers the lines. Else "".
+- note: anything else written on that person's line, briefly and as written. Else "".
+Rules:
+- Transcribe exactly as written. Never guess a missing letter, never correct spelling, never translate or romanise. A ditto mark (〃, 상동, 同上) means the value on the line above; copy that value.
+- Never invent rows. One row per person line, top to bottom in the sheet's order. Do not merge two lines or split one.
+- Skip header rows, column titles, totals, signatures, stamps, page numbers, empty lines, and any line that is crossed out.
+- If you cannot read a name confidently, write your best reading and put that row's 0-based index in "unsure". Never drop a person because the name is hard to read.
+- Leave a field "" when it is not there or not readable. No placeholders like "N/A", "-", "?" or "unknown".
+- At most 500 rows.
+- "why" is "" for a roster. If the image is not a roster or list of people, return {"rows":[],"unsure":[],"why":"<one short Korean sentence saying what the image shows instead>"}. If it is a roster but too blurry to read, return no rows and say that in "why" in one short Korean sentence."#
+        }
         _ => return Err("알 수 없는 작업입니다.".into()),
     })
 }
@@ -479,6 +532,20 @@ fn strip_slop(mut v: Value) -> Value {
     }
     if let Some(obj) = v.as_object_mut() {
         clean(obj, &["description_ko", "description", "description_en", "reply"]);
+        // 증서 문구 후보(`cert_phrases`). 슬롭이 든 후보는 빼고 나머지만 보여
+        // 준다 — 셋이 다 안 남을 수 있고, 화면은 남은 것만 내놓으면 된다.
+        // 예의상 고르는 후보에 「최고의」가 섞여 있으면 그대로 인쇄된다.
+        if let Some(list) = obj.get_mut("phrases").and_then(Value::as_array_mut) {
+            let kept: Vec<Value> = list
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::trim)
+                .filter(|s| !s.is_empty() && !is_slop(s))
+                .take(3)
+                .map(|s| Value::String(s.to_string()))
+                .collect();
+            *list = kept;
+        }
         if let Some(items) = obj.get_mut("items").and_then(Value::as_array_mut) {
             for it in items {
                 if let Some(m) = it.as_object_mut() {
@@ -509,6 +576,11 @@ fn unfence(text: &str) -> &str {
 /// the feature worked and produced nothing.
 #[tauri::command]
 pub async fn ai_fill(provider: String, task: String, input: String) -> Result<Value, String> {
+    // 명단 사진 안내는 그림이 있어야 뜻이 있고, 결과가 사람 이름이라 따로
+    // 다듬는 길(`ai_read_image`)을 탄다. 글로 부르면 그 길을 건너뛴다.
+    if task == "cert_roster_photo" {
+        return Err("명단 사진은 사진 읽기로 넣어 주세요.".into());
+    }
     if input.trim().is_empty() {
         return Err("무엇을 만들지 적어 주세요.".into());
     }
@@ -627,12 +699,30 @@ async fn openai_compatible(
     input: &str,
     want_json: bool,
 ) -> Result<String, String> {
+    openai_compatible_content(client, base, model, key, system, Value::String(input.to_string()), want_json).await
+}
+
+/// Same transport, but the user turn is any JSON `content` — a plain string
+/// (every text task, byte-for-byte the same body as before), or the
+/// `[{"type":"text"…},{"type":"image_url"…}]` array a photo needs. One function
+/// so the endpoint check, the keyless-local rule and the error shape cannot
+/// drift apart between text and image calls.
+#[allow(clippy::too_many_arguments)]
+async fn openai_compatible_content(
+    client: &reqwest::Client,
+    base: &str,
+    model: &str,
+    key: &str,
+    system: &str,
+    content: Value,
+    want_json: bool,
+) -> Result<String, String> {
     let base = crate::ai_endpoint::validate(base, model, key)?;
     let mut body = json!({
         "model": model,
         "messages": [
             { "role": "system", "content": system },
-            { "role": "user", "content": input },
+            { "role": "user", "content": content },
         ],
     });
     if want_json {
@@ -673,6 +763,253 @@ async fn openai_compatible(
         .and_then(Value::as_str)
         .unwrap_or("")
         .to_string())
+}
+
+// ── 종이 명단 사진 읽기 ─────────────────────────────────────────────────────
+
+/// 사진은 6MB 까지. 휴대폰 사진 한 장이 넉넉히 들어가고, 그보다 크면 제공자
+/// 쪽에서 먼저 거절한다.
+const ROSTER_PHOTO_MAX_BYTES: usize = 6 * 1024 * 1024;
+const ROSTER_PHOTO_ASK: &str = "이 명단을 표로 옮겨 주세요.";
+const ROSTER_FIELDS: [&str; 6] = ["recipient", "course", "grade", "date", "number", "note"];
+const ROSTER_MAX_ROWS: usize = 500;
+const ROSTER_MAX_CELL: usize = 120;
+const ROSTER_MAX_WHY: usize = 200;
+
+/// 종이 명단(출석부·신청서·수강생 명단) 사진을 증서 발급 표로 옮긴다.
+///
+/// 🔴 사진에는 사람 이름이 적혀 있다. 그래서 이 함수는:
+/// - 사용자가 단추를 **누를 때만** 불린다. 사진은 그때 한 번만 이 컴퓨터를
+///   떠나고, 미리 보내거나 뒤에서 다시 보내는 일은 없다.
+/// - 한 번 누르면 **정확히 한 번** 부른다. 재시도도, 다른 제공자로 넘기기도
+///   없다(`ai_answer_any` 와 다르다) — 실패하면 오류를 보여 주고 멈춘다.
+///   사람이 고른 제공자 한 곳 말고는 사진을 받는 곳이 없어야 한다.
+/// - 사용자 **자신의 API 키**로, 사용자가 고른 제공자에게만 보낸다.
+/// - 결과는 곧장 발급되지 않는다. 언제나 확인 표를 거쳐 사람이 고치고 누른다.
+///   읽기 어려운 이름은 `unsure` 로 표에 표시된다.
+///
+/// 이름을 다루므로 `strip_slop` 을 타지 않는다 — 「최고봉」 같은 이름이 지워지면
+/// 안 된다. 대신 `sanitize_roster` 가 모양만 다듬는다(칸 여섯·길이·줄 수).
+#[tauri::command]
+pub async fn ai_read_image(provider: String, task: String, image: String) -> Result<Value, String> {
+    // 네트워크 전에 전부 거른다: 작업 → 그림 → 제공자·키.
+    if task != "cert_roster_photo" {
+        return Err("알 수 없는 작업입니다.".into());
+    }
+    let system = instructions(&task)?;
+    let (bytes, mime) = crate::cert_assets::image_from_data_url(&image, ROSTER_PHOTO_MAX_BYTES)?;
+    drop(image);
+    // 검사를 통과한 바이트를 다시 인코딩해서 보낸다. 느슨하게 적힌 base64
+    // (패딩 빠짐 등)도 통과하는 검사라, 이렇게 해야 컴퓨터를 떠나는 것이
+    // 정확히 검사한 그 그림이고 제공자도 표준 base64 를 받는다.
+    let b64 = crate::cert_assets::b64_encode(&bytes);
+    drop(bytes);
+    let data_url = format!("data:{mime};base64,{b64}");
+
+    // A configured local OpenAI-compatible model may intentionally have no key.
+    let key = if provider == "custom" { String::new() } else { read_key(&provider)? };
+    let client = crate::ai_endpoint::client()?;
+    let openai_content = || {
+        json!([
+            { "type": "text", "text": ROSTER_PHOTO_ASK },
+            { "type": "image_url", "image_url": { "url": data_url } },
+        ])
+    };
+
+    let text = match provider.as_str() {
+        "anthropic" => {
+            let body = json!({
+                "model": model_for("anthropic"),
+                // 한 사람에 몇십 토큰. 긴 명단은 잘릴 수 있고, 그러면 아래에서
+                // 「나눠 찍어 보세요」로 알린다 — 몰래 이어 부르지 않는다.
+                "max_tokens": 4000,
+                "system": system,
+                "messages": [{
+                    "role": "user",
+                    "content": [
+                        { "type": "image", "source": { "type": "base64", "media_type": mime, "data": b64 } },
+                        { "type": "text", "text": ROSTER_PHOTO_ASK },
+                    ],
+                }],
+            });
+            let response = client
+                .post("https://api.anthropic.com/v1/messages")
+                .header("x-api-key", key)
+                .header("anthropic-version", "2023-06-01")
+                .json(&body)
+                .timeout(std::time::Duration::from_secs(120))
+                .send()
+                .await
+                .map_err(|e| format!("연결하지 못했습니다: {e}"))?;
+            let parsed: Value = response
+                .json()
+                .await
+                .map_err(|e| format!("응답을 읽지 못했습니다: {e}"))?;
+            if let Some(err) = parsed.get("error") {
+                return Err(format!(
+                    "제공자 오류: {}",
+                    err.get("message").and_then(Value::as_str).unwrap_or("알 수 없음")
+                ));
+            }
+            parsed
+                .get("content")
+                .and_then(Value::as_array)
+                .and_then(|a| a.first())
+                .and_then(|c| c.get("text"))
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string()
+        }
+        p if openai_compat(p).is_some() => {
+            let (base, _) = openai_compat(p).unwrap();
+            let model = model_for(p);
+            openai_compatible_content(&client, base, &model, &key, system, openai_content(), true).await?
+        }
+        "google" => {
+            let body = json!({
+                "systemInstruction": { "parts": [{ "text": system }] },
+                "contents": [{
+                    "role": "user",
+                    "parts": [
+                        { "inline_data": { "mime_type": mime, "data": b64 } },
+                        { "text": ROSTER_PHOTO_ASK },
+                    ],
+                }],
+                "generationConfig": { "responseMimeType": "application/json" },
+            });
+            // The key goes in a header rather than the query string: URLs end up
+            // in logs and error messages in a way headers do not.
+            let response = client
+                .post(format!("https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent", model_for("google")))
+                .header("x-goog-api-key", key)
+                .json(&body)
+                .timeout(std::time::Duration::from_secs(120))
+                .send()
+                .await
+                .map_err(|e| format!("연결하지 못했습니다: {e}"))?;
+            let parsed: Value = response
+                .json()
+                .await
+                .map_err(|e| format!("응답을 읽지 못했습니다: {e}"))?;
+            if let Some(err) = parsed.get("error") {
+                return Err(format!(
+                    "제공자 오류: {}",
+                    err.get("message").and_then(Value::as_str).unwrap_or("알 수 없음")
+                ));
+            }
+            parsed
+                .get("candidates")
+                .and_then(Value::as_array)
+                .and_then(|a| a.first())
+                .and_then(|c| c.get("content"))
+                .and_then(|c| c.get("parts"))
+                .and_then(Value::as_array)
+                .and_then(|p| p.first())
+                .and_then(|p| p.get("text"))
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string()
+        }
+        "custom" => {
+            let (base, model, key) = custom_request_settings()?;
+            openai_compatible_content(&client, &base, &model, &key, system, openai_content(), true).await?
+        }
+        _ => return Err("알 수 없는 제공자입니다.".into()),
+    };
+
+    // 형식이 틀리면 빈 표를 돌려주지 않는다 — 「읽었는데 아무도 없다」로 보여
+    // 사람이 명단이 비었다고 믿게 된다. 오류로 알리고, 받은 글 앞부분을 붙인다.
+    let unreadable = || {
+        let head: String = text.chars().take(600).collect();
+        format!("AI가 명단을 표로 옮기지 못했습니다. 명단이 길면 반씩 나눠 찍어 다시 눌러 보세요.\n\n{head}")
+    };
+    let parsed: Value = serde_json::from_str(unfence(&text)).map_err(|_| unreadable())?;
+    sanitize_roster(&parsed).ok_or_else(unreadable)
+}
+
+/// Unicode "format" characters that are invisible but change how a name is
+/// shown or matched: zero-width space, LRM/RLM, bidi embeddings and overrides,
+/// bidi isolates, BOM. A name carrying one looks right on the certificate and
+/// then fails every search. ZWJ/ZWNJ are left alone — some scripts need them.
+fn is_invisible_format(c: char) -> bool {
+    matches!(c, '\u{200B}' | '\u{200E}' | '\u{200F}' | '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}' | '\u{FEFF}')
+}
+
+/// One cell of a transcribed roster: trimmed, no control or invisible
+/// direction characters, at most `max` characters. Anything that is not text
+/// becomes "" — except a number, which some models return for 번호 or 점수 and
+/// which is copied as its digits.
+fn roster_cell(v: Option<&Value>, max: usize) -> String {
+    let raw = match v {
+        Some(Value::String(s)) => s.as_str(),
+        Some(Value::Number(n)) => return roster_cell(Some(&Value::String(n.to_string())), max),
+        _ => return String::new(),
+    };
+    // A line break inside a name becomes a space, not nothing: "Kim\nMinsu"
+    // is two words, and gluing them would change the name.
+    let cleaned: String = raw
+        .chars()
+        .filter_map(|c| {
+            if c.is_control() {
+                c.is_whitespace().then_some(' ')
+            } else if is_invisible_format(c) {
+                None
+            } else {
+                Some(c)
+            }
+        })
+        .collect();
+    let capped: String = cleaned.trim().chars().take(max).collect();
+    capped.trim_end().to_string()
+}
+
+/// Brings a model's roster reply into exactly the shape the confirmation table
+/// reads: `{"rows":[{six string fields}],"unsure":[row indices],"why":""}`.
+///
+/// Shape only, never content — no slop filter, no spelling fixes, because every
+/// value here is something written on paper about a real person. Rows that are
+/// not objects or are entirely empty are dropped, and `unsure` indices are
+/// moved to follow the rows that remain, so a flag never lands on the wrong
+/// person. `None` when there is no `rows` array at all: an unusable reply must
+/// be an error, not an empty roster.
+fn sanitize_roster(v: &Value) -> Option<Value> {
+    let rows_in = v.get("rows")?.as_array()?;
+    let mut rows: Vec<Value> = Vec::new();
+    // Model's row index → our row index, for the rows we kept.
+    let mut moved: Vec<Option<usize>> = vec![None; rows_in.len()];
+    for (i, row) in rows_in.iter().enumerate() {
+        if rows.len() >= ROSTER_MAX_ROWS {
+            break;
+        }
+        let Some(obj) = row.as_object() else { continue };
+        let mut out = serde_json::Map::new();
+        for field in ROSTER_FIELDS {
+            out.insert(field.to_string(), Value::String(roster_cell(obj.get(field), ROSTER_MAX_CELL)));
+        }
+        if out.values().all(|x| x.as_str() == Some("")) {
+            continue;
+        }
+        moved[i] = Some(rows.len());
+        rows.push(Value::Object(out));
+    }
+    let mut unsure: Vec<usize> = v
+        .get("unsure")
+        .and_then(Value::as_array)
+        .map(|a| {
+            a.iter()
+                .filter_map(Value::as_u64)
+                .filter_map(|i| usize::try_from(i).ok())
+                .filter_map(|i| moved.get(i).copied().flatten())
+                .collect()
+        })
+        .unwrap_or_default();
+    unsure.sort_unstable();
+    unsure.dedup();
+    Some(json!({
+        "rows": rows,
+        "unsure": unsure,
+        "why": roster_cell(v.get("why"), ROSTER_MAX_WHY),
+    }))
 }
 
 /// Answers a customer's question from the shop's own information.
@@ -1058,6 +1395,204 @@ mod issue_guide_tests {
     fn it_must_say_what_cannot_be_undone() {
         let t = instructions("issue").expect("issue 작업이 없습니다");
         assert!(t.contains("permanent"), "되돌릴 수 없는 것을 말하게 하지 않습니다");
+    }
+}
+
+#[cfg(test)]
+mod cert_ai_tests {
+    use super::*;
+
+    /// 🔴 이 시험들의 제공자는 **없는 이름**이다. 거르기가 망가져 통과해 버려도
+    /// 키를 읽는 자리에서 막혀, 시험이 진짜 제공자를 부를 길이 아예 없다.
+    const NO_NETWORK: &str = "__no_network_in_tests__";
+
+    fn png_url(body: &[u8]) -> String {
+        format!("data:image/png;base64,{}", crate::cert_assets::b64_encode(body))
+    }
+
+    #[test]
+    fn both_certificate_tasks_have_a_schema() {
+        let p = instructions("cert_phrases").expect("cert_phrases 작업이 없습니다");
+        assert!(p.contains("\"phrases\""), "문구 모양이 안내에 없습니다");
+        assert!(p.contains("{이름}") && p.contains("{name}"), "자리표시가 안내에 없습니다");
+        let r = instructions("cert_roster_photo").expect("cert_roster_photo 작업이 없습니다");
+        assert!(r.contains("\"rows\"") && r.contains("\"unsure\""), "명단 모양이 안내에 없습니다");
+        for f in ROSTER_FIELDS {
+            assert!(r.contains(&format!("\"{f}\"")), "명단 칸 {f} 가 안내에 없습니다");
+        }
+    }
+
+    /// 프롬프트의 금지어 목록과 `AI_SLOP` 이 어긋나면, 모델은 모르는 단어 때문에
+    /// 문구를 통째로 버림받는다. 한쪽만 고치면 여기서 걸린다.
+    #[test]
+    fn the_phrase_prompt_names_every_slop_word() {
+        let p = instructions("cert_phrases").unwrap();
+        for w in AI_SLOP {
+            assert!(p.contains(w), "금지어 「{w}」 가 cert_phrases 안내에 없습니다");
+        }
+    }
+
+    #[test]
+    fn slop_phrases_are_dropped_and_the_rest_kept() {
+        let v = strip_slop(json!({ "phrases": [
+            "  {이름}님은 {과정}을 수료하였습니다. ",
+            "{이름}님의 최고의 노력에 감사드립니다.",
+            "",
+            7,
+            "위 사람은 {과정}을 마쳤음을 증명합니다.",
+            "{이름}님께 고마운 마음을 전합니다.",
+            "넷째 후보는 버립니다.",
+        ]}));
+        assert_eq!(
+            v["phrases"],
+            json!([
+                "{이름}님은 {과정}을 수료하였습니다.",
+                "위 사람은 {과정}을 마쳤음을 증명합니다.",
+                "{이름}님께 고마운 마음을 전합니다.",
+            ])
+        );
+    }
+
+    #[tokio::test]
+    async fn a_wrong_task_is_refused_before_anything_else() {
+        let png = png_url(b"\x89PNG\r\n\x1a\n\0\0\0\0");
+        for task in ["cert_phrases", "shop", "", "CERT_ROSTER_PHOTO"] {
+            let e = ai_read_image(NO_NETWORK.into(), task.into(), png.clone()).await.unwrap_err();
+            assert_eq!(e, "알 수 없는 작업입니다.", "작업 {task:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn only_real_png_or_jpeg_leaves_the_checks() {
+        let svg = format!(
+            "data:image/svg+xml;base64,{}",
+            crate::cert_assets::b64_encode(b"<svg xmlns=\"http://www.w3.org/2000/svg\"><script>alert(1)</script></svg>")
+        );
+        let bad = [
+            "data:text/plain;base64,aGVsbG8=".to_string(),
+            "https://example.invalid/roster.png".to_string(),
+            "".to_string(),
+            svg,
+            // PNG 라고 적었지만 속은 GIF.
+            png_url(b"GIF89a\x01\0\x01\0\0\0\0"),
+            // JPEG 라고 적었지만 머리가 없다.
+            format!("data:image/jpeg;base64,{}", crate::cert_assets::b64_encode(b"not a jpeg")),
+            "data:image/png;base64,@@@@".to_string(),
+        ];
+        for url in bad {
+            let e = ai_read_image(NO_NETWORK.into(), "cert_roster_photo".into(), url.clone()).await.unwrap_err();
+            assert!(e.contains("그림"), "{url:.40} 이 그림 검사에서 걸리지 않았습니다: {e}");
+        }
+    }
+
+    /// 거르기가 진짜 PNG 까지 막으면 기능이 죽는다. 통과한 뒤 모르는 제공자에서
+    /// 멈추는지 본다 — 여기도 네트워크 전이다.
+    #[tokio::test]
+    async fn a_real_png_passes_and_an_unknown_provider_stops_it() {
+        let e = ai_read_image(NO_NETWORK.into(), "cert_roster_photo".into(), png_url(b"\x89PNG\r\n\x1a\n\0\0\0\0"))
+            .await
+            .unwrap_err();
+        assert_eq!(e, "알 수 없는 제공자입니다.");
+    }
+
+    #[tokio::test]
+    async fn the_roster_task_cannot_go_through_the_text_path() {
+        let e = ai_fill(NO_NETWORK.into(), "cert_roster_photo".into(), "홍길동".into()).await.unwrap_err();
+        assert!(e.contains("사진"), "{e}");
+    }
+
+    #[test]
+    fn the_sanitiser_keeps_six_string_fields_only() {
+        let v = sanitize_roster(&json!({
+            "rows": [{
+                "recipient": "  김하늘 ",
+                "course": "필라테스 지도자 과정",
+                "grade": 2,
+                "date": "2026-09-24",
+                "number": null,
+                "note": "우수",
+                "phone": "010-0000-0000",
+                "photo": "x.jpg",
+            }],
+            "unsure": [],
+            "why": "",
+            "extra": true,
+        }))
+        .unwrap();
+        assert_eq!(
+            v,
+            json!({
+                "rows": [{
+                    "recipient": "김하늘", "course": "필라테스 지도자 과정", "grade": "2",
+                    "date": "2026-09-24", "number": "", "note": "우수",
+                }],
+                "unsure": [],
+                "why": "",
+            })
+        );
+    }
+
+    #[test]
+    fn the_sanitiser_caps_rows_and_cells() {
+        let rows: Vec<Value> = (0..600).map(|i| json!({ "recipient": format!("사람{i}") })).collect();
+        let v = sanitize_roster(&json!({ "rows": rows, "unsure": [499, 500, 599] })).unwrap();
+        assert_eq!(v["rows"].as_array().unwrap().len(), ROSTER_MAX_ROWS);
+        assert_eq!(v["rows"][499]["recipient"], json!("사람499"));
+        assert_eq!(v["unsure"], json!([499]), "잘린 줄을 가리키는 표시는 남으면 안 됩니다");
+
+        let long = "가".repeat(300);
+        let v = sanitize_roster(&json!({ "rows": [{ "recipient": long, "note": "a\u{0}b\tc\u{202E}d\u{200B}e" }], "why": "x".repeat(500) })).unwrap();
+        assert_eq!(v["rows"][0]["recipient"].as_str().unwrap().chars().count(), ROSTER_MAX_CELL);
+        assert_eq!(v["rows"][0]["note"], json!("ab cde"));
+        assert_eq!(v["why"].as_str().unwrap().chars().count(), ROSTER_MAX_WHY);
+    }
+
+    #[test]
+    fn unsure_follows_the_rows_that_remain() {
+        let v = sanitize_roster(&json!({
+            "rows": [
+                { "recipient": "가" },
+                "not a row",
+                { "recipient": "", "course": "  " },
+                { "recipient": "나" },
+                { "recipient": "다" },
+            ],
+            // 3 = 「나」, 4 = 「다」. 1·2 는 버린 줄, 나머지는 잘못된 값.
+            "unsure": [4, 3, 3, 1, 2, -1, 5, 99, "0", 0.5, null],
+        }))
+        .unwrap();
+        let names: Vec<&str> = v["rows"].as_array().unwrap().iter().map(|r| r["recipient"].as_str().unwrap()).collect();
+        assert_eq!(names, ["가", "나", "다"]);
+        assert_eq!(v["unsure"], json!([1, 2]), "표시가 다른 사람에게 옮겨 붙었습니다");
+    }
+
+    /// 이 길은 `strip_slop` 을 타지 않는다. 이름·비고에 「최고」「정성을」이
+    /// 들어 있어도 한 글자도 바뀌면 안 된다.
+    #[test]
+    fn names_with_slop_words_are_untouched() {
+        let v = sanitize_roster(&json!({
+            "rows": [
+                { "recipient": "최고봉", "note": "최고의 정성을 다함" },
+                { "recipient": "정성을", "course": "특별한 과정" },
+            ],
+            "unsure": [0],
+        }))
+        .unwrap();
+        assert_eq!(v["rows"][0]["recipient"], json!("최고봉"));
+        assert_eq!(v["rows"][0]["note"], json!("최고의 정성을 다함"));
+        assert_eq!(v["rows"][1]["recipient"], json!("정성을"));
+        assert_eq!(v["rows"][1]["course"], json!("특별한 과정"));
+        assert_eq!(v["unsure"], json!([0]));
+    }
+
+    #[test]
+    fn a_reply_without_rows_is_an_error_not_an_empty_roster() {
+        assert!(sanitize_roster(&json!([{ "recipient": "가" }])).is_none());
+        assert!(sanitize_roster(&json!({ "people": [] })).is_none());
+        assert!(sanitize_roster(&json!({ "rows": "가, 나" })).is_none());
+        let empty = sanitize_roster(&json!({ "rows": [], "unsure": [], "why": "명단이 아니라 풍경 사진입니다." })).unwrap();
+        assert_eq!(empty["rows"], json!([]));
+        assert_eq!(empty["why"], json!("명단이 아니라 풍경 사진입니다."));
     }
 }
 

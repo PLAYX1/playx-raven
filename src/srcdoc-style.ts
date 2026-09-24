@@ -9,7 +9,7 @@
  *    그래서 미리보기와 인쇄 파일이 같은 render() 결과·같은 CSS 를 쓴다.
  */
 
-const latest = new WeakMap<HTMLIFrameElement, string>();
+const latest = new WeakMap<HTMLIFrameElement, { html: string; extra: string }>();
 
 /** 문서 안의 <style>…</style> 글자를 모두 이어 붙인다. */
 export function styleText(html: string): string {
@@ -18,16 +18,25 @@ export function styleText(html: string): string {
   return css;
 }
 
-/** 이미 불러온 srcdoc 문서에 그 HTML 의 스타일을 붙인다. 옛 웹뷰면 조용히 넘긴다(미리보기는 덤). */
-export function adoptSrcdocStyles(frame: HTMLIFrameElement, html: string): boolean {
+/**
+ * 이미 불러온 srcdoc 문서에 그 HTML 의 스타일을 붙인다. 옛 웹뷰면 조용히 넘긴다(미리보기는 덤).
+ * `extra` 는 문서 스타일 앞에 따로 붙일 CSS — 증서 글꼴(@font-face, data:)처럼 문서에 넣지 않고
+ * 한 번 받아 두는 것.
+ */
+export function adoptSrcdocStyles(frame: HTMLIFrameElement, html: string, extra = ""): boolean {
   const w = frame.contentWindow as (Window & typeof globalThis) | null;
   const d = frame.contentDocument;
   const css = styleText(html);
   if (!w || !d || !css) return false;
   try {
-    const sheet = new w.CSSStyleSheet();
-    sheet.replaceSync(css);
-    d.adoptedStyleSheets = [sheet];
+    const sheets: CSSStyleSheet[] = [];
+    for (const text of [extra, css]) {
+      if (!text) continue;
+      const sheet = new w.CSSStyleSheet();
+      sheet.replaceSync(text);
+      sheets.push(sheet);
+    }
+    d.adoptedStyleSheets = sheets;
     return true;
   } catch {
     return false;
@@ -35,12 +44,13 @@ export function adoptSrcdocStyles(frame: HTMLIFrameElement, html: string): boole
 }
 
 /** srcdoc 을 바꾸고, 문서가 뜨면 스타일을 붙인다. 같은 틀에 몇 번을 불러도 듣는 것은 하나. */
-export function setStyledSrcdoc(frame: HTMLIFrameElement, html: string): void {
+export function setStyledSrcdoc(frame: HTMLIFrameElement, html: string, extra = ""): void {
   if (!latest.has(frame)) {
     frame.addEventListener("load", () => {
-      adoptSrcdocStyles(frame, latest.get(frame) || "");
+      const now = latest.get(frame);
+      adoptSrcdocStyles(frame, now?.html || "", now?.extra || "");
     });
   }
-  latest.set(frame, html);
+  latest.set(frame, { html, extra });
   frame.srcdoc = html;
 }

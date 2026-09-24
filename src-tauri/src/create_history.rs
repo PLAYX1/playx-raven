@@ -48,7 +48,8 @@ const PRINT_KEEP_SECS: u64 = 7 * 24 * 3600;
 /// 가게가 보관 기간을 정한 적 없으면 받는 사람 이름 등을 이만큼 둔다.
 const DEFAULT_KEEP_MONTHS: u32 = 12;
 /// 보관 기간이 지나면 지우는 칸 — 사람을 알아볼 수 있는 것들.
-const PERSONAL_KEYS: [&str; 5] = ["recipients", "issuer", "signer", "description", "file_name"];
+/// `rows` 는 표로 올린 줄마다의 과정·등급·번호·비고 — 사진처럼 그 사람을 알아볼 수 있다.
+const PERSONAL_KEYS: [&str; 6] = ["recipients", "rows", "issuer", "signer", "description", "file_name"];
 pub const MAX_RECIPIENTS: usize = crate::create::MAX_COPIES;
 
 static LOCK: Mutex<()> = Mutex::new(());
@@ -252,10 +253,14 @@ pub fn clean_details(d: &Value, kind: &str) -> Result<Map<String, Value>, String
         if arr.len() > MAX_RECIPIENTS {
             return Err(format!("받는 사람은 한 번에 {MAX_RECIPIENTS}명까지예요."));
         }
+        // 🔴 빈 줄도 **자리를 지킨다**("") — 표의 칸(rows)·사진(<차례>.img)·체인 이름이 차례로
+        //    짝지어져 있어, 중간 한 줄을 비웠다고 앞으로 당기면 뒤 사람 이름이 앞 사람 사진·번호와
+        //    붙어 인쇄된다(검수 09-24). 끝의 빈 줄만 뗀다.
         for v in arr {
-            if let Some(name) = clean_line(Some(v), 60, "받는 사람 이름")? {
-                recipients.push(name);
-            }
+            recipients.push(clean_line(Some(v), 60, "받는 사람 이름")?.unwrap_or_default());
+        }
+        while recipients.last().is_some_and(String::is_empty) {
+            recipients.pop();
         }
     }
     if kind != "ticket" {
@@ -281,6 +286,39 @@ pub fn clean_details(d: &Value, kind: &str) -> Result<Map<String, Value>, String
     if let Some(lang) = d.get("lang").and_then(Value::as_str) {
         if matches!(lang, "ko" | "en" | "ja" | "zh") {
             out.insert("lang".into(), json!(lang));
+        }
+    }
+    if kind == "certificate" {
+        if let Some(on) = d.get("photo_slot").and_then(Value::as_bool) {
+            out.insert("photo_slot".into(), json!(on));
+        }
+        // 표로 올린 줄마다의 칸 — 받는 사람과 같은 차례. 모두 비어 있으면 적지 않는다.
+        if let Some(list) = d.get("rows") {
+            let arr = list.as_array().ok_or("명단 표를 확인해 주세요.")?;
+            if arr.len() > MAX_RECIPIENTS {
+                return Err(format!("받는 사람은 한 번에 {MAX_RECIPIENTS}명까지예요."));
+            }
+            let mut rows = Vec::with_capacity(arr.len());
+            let mut any = false;
+            for (i, r) in arr.iter().enumerate() {
+                let mut row = Map::new();
+                for (key, max, what) in [("course", 80, "과정"), ("grade", 30, "등급"), ("number", 40, "번호"), ("note", 120, "비고")] {
+                    if let Some(s) = clean_line(r.get(key), max, what)? {
+                        row.insert(key.into(), json!(s));
+                    }
+                }
+                if let Some(day) = r.get("date").and_then(Value::as_str).filter(|s| !s.is_empty()) {
+                    if !valid_ymd(day) {
+                        return Err(format!("{}번째 줄 발급일을 확인해 주세요.", i + 1));
+                    }
+                    row.insert("date".into(), json!(day));
+                }
+                any |= !row.is_empty();
+                rows.push(Value::Object(row));
+            }
+            if any {
+                out.insert("rows".into(), json!(rows));
+            }
         }
     }
     Ok(out)
@@ -341,6 +379,7 @@ pub fn create_history_begin(entry: Value) -> Result<String, String> {
     for (k, v) in details {
         row[k] = v;
     }
+    let mut dropped: Vec<String> = Vec::new();
     with_store(|store| {
         // 🔴 보냈는지 모르는 것이 있으면 새로 시작하지 않는다 — 같은 묶음을 두 번 태운다.
         if let Some(u) = unresolved_in(store) {
@@ -349,14 +388,22 @@ pub fn create_history_begin(entry: Value) -> Result<String, String> {
         let entries = store["entries"].as_array_mut().unwrap();
         // 그만둔 것(끝나지 않고 한 달 넘은 것)은 지운다 — 받는 사람 이름이 남지 않게.
         // 보냈는지 모르는 것은 지우지 않는다(체인에 있을 수 있다).
-        entries.retain(|e| e["status"] == "done" || is_unresolved(e) || at - e["at"].as_i64().unwrap_or(0) < ABANDONED_AFTER_SECS);
+        let keep = |e: &Value| e["status"] == "done" || is_unresolved(e) || at - e["at"].as_i64().unwrap_or(0) < ABANDONED_AFTER_SECS;
+        dropped.extend(entries.iter().filter(|e| !keep(e)).filter_map(|e| e["id"].as_str().map(str::to_string)));
+        entries.retain(keep);
         entries.push(row);
         if entries.len() > MAX_ENTRIES {
             let extra = entries.len() - MAX_ENTRIES;
+            dropped.extend(entries[..extra].iter().filter_map(|e| e["id"].as_str().map(str::to_string)));
             entries.drain(..extra);
         }
         Ok(())
     })?;
+    // 기록에서 빠진 줄의 사진·인쇄 파일도 같이(검수 09-24 — 사진만 영영 남을 뻔했다).
+    for gone in &dropped {
+        remove_prints(gone);
+        crate::cert_assets::forget_photos(gone);
+    }
     Ok(id)
 }
 
@@ -606,6 +653,19 @@ pub fn create_history_details(id: String, details: Value) -> Result<Value, Strin
         if let Some(l) = clean.get("lang") {
             e["lang"] = l.clone();
         }
+        // 표 칸·사진 칸은 **보낸 때만** 바꾼다 — 한 장짜리 고치기 화면은 이것을 모른다.
+        for key in ["rows", "photo_slot"] {
+            if details.get(key).is_some() {
+                match clean.get(key) {
+                    Some(v) => e[key] = v.clone(),
+                    None => {
+                        if let Some(m) = e.as_object_mut() {
+                            m.remove(key);
+                        }
+                    }
+                }
+            }
+        }
         Ok(e.clone())
     })
 }
@@ -648,7 +708,8 @@ pub fn create_history_forget(id: String) -> Result<(), String> {
         store["entries"].as_array_mut().unwrap().retain(|e| e["id"].as_str() != Some(id.as_str()));
         Ok(())
     })?;
-    let _ = std::fs::remove_file(crate::certificate::print_path(&id));
+    remove_prints(&id);
+    crate::cert_assets::forget_photos(&id);
     Ok(())
 }
 
@@ -738,7 +799,8 @@ pub fn purge_expired(now_unix: i64) -> Result<usize, String> {
         Ok(())
     })?;
     for id in &cleared {
-        let _ = std::fs::remove_file(crate::certificate::print_path(id));
+        remove_prints(id);
+        crate::cert_assets::forget_photos(id);
     }
     Ok(cleared.len())
 }
@@ -753,21 +815,83 @@ fn is_hex(s: &str, len: usize) -> bool {
 
 /// 인쇄 폴더에서 **우리가 쓴 이름**만 알아본다.
 /// `certificate-<32hex>.html` → `Some((id, false))`, `certificate-<32hex>.pending-<16hex>` → `Some((id, true))`.
+/// 한 사람 한 장(`-<차례>.html`)과 묶음 파일(`-all.html`·`-list.xlsx`·`-list.csv`)도 그 id 로.
 fn printout_name(name: &str) -> Option<(&str, bool)> {
     let rest = name.strip_prefix("certificate-")?;
     let (id, tail) = rest.split_at(rest.len().min(32));
     if !is_hex(id, 32) {
         return None;
     }
-    if tail == ".html" {
-        return Some((id, false));
+    // 쓰다 만 파일 — `write_private` 가 확장자 자리에 `.pending-<16hex>` 를 붙인 것.
+    if let Some((stem, pend)) = tail.rsplit_once(".pending-") {
+        return (is_hex(pend, 16) && (stem.is_empty() || matches!(stem, "-all" | "-list") || one_stem(stem))).then_some((id, true));
     }
-    let pend = tail.strip_prefix(".pending-")?;
-    is_hex(pend, 16).then_some((id, true))
+    (tail == ".html" || shared_tail(tail) || one_tail(tail)).then_some((id, false))
+}
+
+/// 여러 기록의 이름이 같이 든 파일 — 전체 묶음 인쇄 · 번호 목록 표(쓰다 만 것 포함).
+fn shared_tail(tail: &str) -> bool {
+    matches!(tail, "-all.html" | "-list.xlsx" | "-list.csv")
+        || tail.rsplit_once(".pending-").is_some_and(|(stem, pend)| matches!(stem, "-all" | "-list") && is_hex(pend, 16))
+}
+
+/// 한 사람 한 장의 차례 — `-1` … `-500`.
+fn one_stem(stem: &str) -> bool {
+    stem.strip_prefix('-')
+        .map(|n| !n.is_empty() && n.len() <= 3 && n.bytes().all(|b| b.is_ascii_digit()) && !n.starts_with('0'))
+        .unwrap_or(false)
+}
+
+/// 한 사람 한 장 — `-1.html` … `-500.html`.
+fn one_tail(tail: &str) -> bool {
+    tail.strip_suffix(".html").is_some_and(one_stem)
+}
+
+/// 그 기록의 인쇄 파일을 모두 지운다 — 한 사람 한 장까지. 묶음 파일은 다른 기록의
+/// 이름도 들어 있어 **누구 것이든** 통째로 지운다(다시 누르면 다시 만든다).
+/// 바로가기인 폴더·파일은 따라가지 않는다(`tidy` 와 같은 원칙).
+pub fn remove_prints(id: &str) {
+    let printouts = crate::paths::app_dir().join("printouts");
+    match std::fs::symlink_metadata(&printouts) {
+        Ok(m) if m.file_type().is_dir() => {}
+        _ => return,
+    }
+    let Ok(dir) = std::fs::read_dir(&printouts) else { return };
+    for f in dir.flatten() {
+        let name = f.file_name().to_string_lossy().to_string();
+        let Some((owner, _)) = printout_name(&name) else { continue };
+        let shared = shared_tail(&name["certificate-".len() + 32..]);
+        if (owner == id || shared) && f.metadata().map(|m| m.file_type().is_file()).unwrap_or(false) {
+            let _ = std::fs::remove_file(f.path());
+        }
+    }
 }
 
 fn older_than(meta: &std::fs::Metadata, secs: u64) -> bool {
     meta.modified().ok().and_then(|t| t.elapsed().ok()).map(|age| age.as_secs() >= secs).unwrap_or(false)
+}
+
+/// 기록에 없는 사진 폴더(`create-photos/<id>`) — 기록이 망가져 새로 시작했거나 오래돼 빠진 것.
+/// 🔴 사람 얼굴이다. 기록을 못 읽으면(망가짐) 아무것도 지우지 않는다. 방금 만든 폴더는
+///    기록보다 늦게 생길 수 있어 10분 지난 것만. 바로가기는 따라가지 않는다.
+fn sweep_orphan_photos(app: &std::path::Path) {
+    let root = app.join("create-photos");
+    if !std::fs::symlink_metadata(&root).map(|m| m.file_type().is_dir()).unwrap_or(false) {
+        return;
+    }
+    let ids: HashSet<String> = {
+        let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let Ok(store) = load() else { return };
+        store["entries"].as_array().map(|a| a.iter().filter_map(|e| e["id"].as_str().map(str::to_string)).collect()).unwrap_or_default()
+    };
+    let Ok(dir) = std::fs::read_dir(&root) else { return };
+    for d in dir.flatten() {
+        let name = d.file_name().to_string_lossy().to_string();
+        let Ok(meta) = d.metadata() else { continue };
+        if is_hex(&name, 32) && meta.file_type().is_dir() && !ids.contains(&name) && older_than(&meta, PENDING_KEEP_SECS) {
+            let _ = std::fs::remove_dir_all(d.path());
+        }
+    }
 }
 
 /// 켤 때(그리고 하루에 한 번) — 보관 기간 지난 이름 지우기, 7일 지난 인쇄 파일과
@@ -790,6 +914,7 @@ pub fn tidy(now_unix: i64) {
         }
     }
     let app = crate::paths::app_dir();
+    sweep_orphan_photos(&app);
     {
         // 만든 기록의 쓰다 만 파일 — 자물쇠를 쥐면 지금 쓰는 사람이 없다.
         let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
@@ -1055,6 +1180,92 @@ pub(crate) mod tests {
             aged(&mine, 8 * 24 * 3600);
             tidy(now());
             assert!(!mine.exists(), "7일 지난 인쇄 파일은 지운다");
+        });
+    }
+
+    /// 검수 09-24 — 중간 빈 줄을 당기면 뒤 사람 이름이 앞 사람 사진·번호와 붙는다.
+    #[test]
+    fn 받는_사람_빈_줄은_자리를_지키고_끝_빈_줄만_뗀다() {
+        sandbox(|_| {
+            let id = create_history_begin(json!({
+                "kind": "certificate", "title": "필라테스 지도자 과정", "brand": "HANBIT", "count": 4,
+                "details": { "template": "course", "recipients": ["김하늘", "", "박바다", "", " "], "issued_on": "2026-09-23" }
+            }))
+            .unwrap();
+            assert_eq!(create_history_get(id).unwrap()["recipients"], json!(["김하늘", "", "박바다"]));
+        });
+    }
+
+    /// 검수 09-24 — 묶음 인쇄·목록 표·한 장 인쇄도 `write_private` 가 쓰다 만 이름을 남긴다.
+    #[test]
+    fn 쓰다_만_인쇄_파일_이름을_알아본다() {
+        let id = "a".repeat(32);
+        for tail in ["", "-all", "-list", "-12"] {
+            let name = format!("certificate-{id}{tail}.pending-0123456789abcdef");
+            assert_eq!(printout_name(&name), Some((id.as_str(), true)), "{name}");
+        }
+        for bad in ["-0", "-1234", "-x", "-all-list"] {
+            let name = format!("certificate-{id}{bad}.pending-0123456789abcdef");
+            assert_eq!(printout_name(&name), None, "{name}");
+        }
+        assert_eq!(printout_name(&format!("certificate-{id}-all.pending-0123")), None, "16자리 아님");
+        assert!(shared_tail("-list.pending-0123456789abcdef"));
+    }
+
+    /// 검수 09-24 — 기록에서 빠진 사진 폴더는 켤 때 지운다(얼굴이다).
+    #[test]
+    fn 기록에_없는_사진_폴더는_정리할_때_지운다() {
+        sandbox(|dir| {
+            let aged = |p: &std::path::Path| {
+                let t = std::time::SystemTime::now() - std::time::Duration::from_secs(20 * 60);
+                std::fs::File::open(p).unwrap().set_modified(t).unwrap();
+            };
+            let id = begin_certificate(&["김하늘"]);
+            let root = dir.join("create-photos");
+            let mine = root.join(&id);
+            let gone = root.join("0".repeat(32));
+            let fresh = root.join("1".repeat(32));
+            let odd = root.join("not-an-id");
+            for d in [&mine, &gone, &fresh, &odd] {
+                std::fs::create_dir_all(d).unwrap();
+                std::fs::write(d.join("0.img"), [0xFF, 0xD8, 0xFF]).unwrap();
+            }
+            for d in [&mine, &gone, &odd] {
+                aged(d);
+            }
+            tidy(now());
+            assert!(mine.exists(), "기록에 있는 것은 둔다");
+            assert!(!gone.exists(), "기록에 없는 것은 지운다");
+            assert!(fresh.exists(), "방금 만든 것은 10분 둔다");
+            assert!(odd.exists(), "이름 모양이 다르면 안 지운다");
+            // 기록이 망가져 못 읽으면 아무것도 안 지운다.
+            std::fs::write(dir.join(FILE), b"{broken").unwrap();
+            let gone2 = root.join("2".repeat(32));
+            std::fs::create_dir_all(&gone2).unwrap();
+            aged(&gone2);
+            sweep_orphan_photos(dir);
+            assert!(gone2.exists());
+        });
+    }
+
+    /// 검수 09-24 — 새로 시작할 때 오래돼 빠지는 기록의 사진도 같이 지운다.
+    #[test]
+    fn 그만둔_기록이_빠질_때_사진도_지운다() {
+        sandbox(|dir| {
+            let old = begin_certificate(&["김하늘"]);
+            let photos = dir.join("create-photos").join(&old);
+            std::fs::create_dir_all(&photos).unwrap();
+            std::fs::write(photos.join("0.img"), [0xFF, 0xD8, 0xFF]).unwrap();
+            with_store(|store| {
+                for e in store["entries"].as_array_mut().unwrap() {
+                    e["at"] = json!(now() - ABANDONED_AFTER_SECS - 10);
+                }
+                Ok(())
+            })
+            .unwrap();
+            let _new = begin_certificate(&["이바다"]);
+            assert!(create_history_get(old).is_err());
+            assert!(!photos.exists());
         });
     }
 
