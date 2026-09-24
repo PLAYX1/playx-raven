@@ -48,6 +48,17 @@ assert.equal(m.fingerprintOf(new Uint8Array(createHash('sha256').update(bytes).d
 assert.equal(await m.fileFingerprint(new Blob([bytes])), 'QmcwUFCZ8saJgoE6D9LEgVqtteCbVcdzWFcGzuhe7VTeW7');
 assert.equal(m.verifyLink('HANBIT#A-1'), 'https://ravenvault.ex.erci.se/verify/?a=HANBIT%23A-1');
 
+// 0.4.8-A5 받은 증서를 사람 말로 — 만든 이름을 거꾸로 읽으면 같은 발급자·날짜·번호가 나와야 한다.
+assert.deepEqual(m.readItemName('HANBIT#SURYO260924-1'), { issuer: 'HANBIT', tag: 'SURYO260924-1', date: '2026-09-24', number: 1 });
+assert.deepEqual(m.readItemName(longest[49]), { issuer: 'ABCDEFGHIJKL', tag: 'ABCDEFGH260917Z-50', date: '2026-09-17', number: 50 });
+assert.deepEqual(m.readItemName('PLAYX/SUB#A2B260101C-7'), { issuer: 'PLAYX/SUB', tag: 'A2B260101C-7', date: '2026-01-01', number: 7 });
+// 규칙에 안 맞으면 지어내지 않는다.
+assert.deepEqual(m.readItemName('ART#MONA'), { issuer: 'ART', tag: 'MONA', date: null, number: null });
+assert.deepEqual(m.readItemName('ART#X261399-2'), { issuer: 'ART', tag: 'X261399-2', date: null, number: null }, '13월 99일은 날짜가 아니다');
+assert.equal(m.readItemName('HANBIT/GONGYEON260917C'), null, '티켓은 # 가 없다');
+assert.equal(m.readItemName('PLAYX'), null);
+assert.equal(m.readItemName('#X'), null);
+
 // 이어하기 기록 — 손상은 버린다.
 const draft = { version: 1, kind: 'work', title: '그림', count: 3, brand: 'HANBIT', stage: 'brand-sent', txid: 'ab'.repeat(32), updatedAt: 1 };
 assert.deepEqual(m.parseDraft(JSON.stringify(draft)), draft);

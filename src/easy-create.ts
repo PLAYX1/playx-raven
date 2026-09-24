@@ -155,6 +155,28 @@ export function verifyLink(name: string): string {
   return `${VERIFY_URL}?a=${encodeURIComponent(name)}`;
 }
 
+/** 체인 이름을 사람 말로 읽은 것(0.4.8-A5). */
+export type ItemParts = { issuer: string; tag: string; date: string | null; number: number | null };
+
+/**
+ * 증서·작품 이름(`BRAND#SLUG260924-1`)을 **위 규칙대로** 거꾸로 읽는다 —
+ * 발급자(`#` 앞, 부모 이름) · 발급일(이름 속 YYMMDD) · 번호(`-N`).
+ *
+ * 🔴 규칙대로 붙은 것만 읽는다. 날짜 자리가 달이 13 이거나 모양이 다르면 날짜·번호를
+ *    **지어내지 않고** null 로 둔다 — 남이 손으로 지은 `ART#MONA` 같은 이름도 온다.
+ * `#` 가 없으면(티켓·일반 자산) null.
+ */
+export function readItemName(name: string): ItemParts | null {
+  const at = String(name ?? "").lastIndexOf("#");
+  if (at <= 0 || at === name.length - 1) return null;
+  const issuer = name.slice(0, at), tag = name.slice(at + 1);
+  const m = /(\d{2})(\d{2})(\d{2})[A-Z]?-(\d+)$/.exec(tag);
+  if (!m) return { issuer, tag, date: null, number: null };
+  const month = Number(m[2]), day = Number(m[3]);
+  const date = month >= 1 && month <= 12 && day >= 1 && day <= 31 ? `20${m[1]}-${m[2]}-${m[3]}` : null;
+  return { issuer, tag, date, number: date ? Number(m[4]) : null };
+}
+
 /* ── 이어서 하기 ─────────────────────────────────────────────────────
    이름 등록을 보내고 창을 닫아도, 다시 열면 기다림 화면에서 이어진다.
    비밀은 없다 — 제목·장수·브랜드·거래 번호·파일 지문뿐.

@@ -1955,4 +1955,12 @@ export const DESKTOP_COPY: Record<string, [string, string, string]> = {
   "따라잡는 중 {0}%": ["Catching up {0}%", "追いついています {0}%", "正在同步 {0}%"],
   "손님 화면 꺼짐": ["Customer page off", "お客様画面が停止中", "顾客页面已关闭"],
   "바깥 연결 끊김": ["External connection down", "外部接続が切れています", "外部连接已断开"],
+  /* 0.4.8-A5 — 받은 증서를 사람 말로 */
+  "발급자": ["Issuer", "発行者", "发行方"],
+  "{0} 발급 · {1}번": ["Issued by {0} · No. {1}", "{0} 発行 · {1}番", "{0} 发行 · 第 {1} 号"],
+  "{0} 발급": ["Issued by {0}", "{0} 発行", "{0} 发行"],
+  "진짜인지 확인": ["Check it's genuine", "本物か確認", "验证真伪"],
+  "공개 확인 페이지가 인터넷 창에서 열려요.": ["The public verification page opens in your browser.", "公開の確認ページがブラウザで開きます。", "将在浏览器中打开公开验证页面。"],
+  "이 컴퓨터가 만든 것이에요. 제목·받는 사람은 이 컴퓨터의 발행 기록에만 있어요.": ["This computer made it. The title and recipient exist only in this computer's issuing record.", "このコンピュータで作ったものです。タイトルと受取人はこのコンピュータの発行記録にだけあります。", "这是本机创建的。标题和接收人只保存在本机的发行记录中。"],
+  "제목·받는 사람 이름은 체인에 올라가지 않아요. 발급한 곳에서 받은 종이나 파일로 확인하세요.": ["Titles and recipient names are not put on the chain. Check them on the paper or file you received from the issuer.", "タイトルや受取人の名前はチェーンに載りません。発行元から受け取った紙やファイルで確認してください。", "标题和接收人姓名不会写入链上。请以发行方给您的纸质或文件为准。"],
 };

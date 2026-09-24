@@ -3,7 +3,7 @@ import "./style-attrs";
 import { setStyledSrcdoc } from "./srcdoc-style";
 import { wirePhoneTransaction } from "./phone-transaction";
 import { FINGERPRINT_GUESS, wireCreate, type CreateApi } from "./create-page";
-import { verifyLink } from "./easy-create";
+import { readItemName, verifyLink } from "./easy-create";
 import { requireWalletBackup, restoreIsComplete } from "./backup-result";
 import { paintWalletNotes, walletWelcome } from "./wallet-notes";
 import { wireSeedCheck } from "./seed-check";
@@ -699,6 +699,66 @@ function bindPeerHelp() {
   );
 }
 
+/**
+ * 증서·작품(`#`)을 **사람 말로 먼저**(0.4.8-A5, RV3 T06·T09).
+ *
+ * 🔴 여태 받은 증서는 `HANBIT#SURYO260924-1` 같은 체인 이름뿐이었다 — 제목도 발급자도
+ *    없어서 무엇인지 몰랐고, 파일 없이 만든 증서에는 진짜인지 확인하는 단추도 없었다.
+ *    이름 규칙(`easy-create.ts`)대로 발급자·발급일·번호를 읽고, 이 컴퓨터가 만든 것이면
+ *    발행 기록에서 제목·받는 사람을 꺼낸다. 🔴 받는 사람·제목은 체인에 없다 — 남이
+ *    만든 것은 지어내지 않고 그렇다고 말한다.
+ */
+async function paintHuman(a: Asset): Promise<boolean> {
+  const box = $("p-human");
+  const parts = readItemName(a.name);
+  if (!parts) {
+    box.innerHTML = "";
+    $("p-name").setAttribute("translate", "no");
+    $("p-name").textContent = a.name;
+    return false;
+  }
+  let made: any = null;
+  let at = -1;
+  try {
+    const list = await invoke<any[]>("create_history_list");
+    made = (list || []).find((e) => Array.isArray(e?.names) && e.names.includes(a.name)) || null;
+    at = made ? made.names.indexOf(a.name) : -1;
+  } catch {
+    /* 기록을 못 읽어도 이름에서 읽은 것은 보여 준다 */
+  }
+  if (selected !== a.name) return true;
+  const title = String(made?.display_title || made?.title || "");
+  const who = at >= 0 ? String(made?.recipients?.[at] || "") : "";
+  const day = String((at >= 0 && made?.rows?.[at]?.date) || made?.issued_on || parts.date || "");
+  const issuerName = String(made?.issuer || "");
+  // 머리: 제목을 알면 제목, 모르면 「발급자 · 번호」. 사용자·체인 글자는 옮기지 않는다.
+  const head = $("p-name");
+  if (title) {
+    head.setAttribute("translate", "no");
+    head.textContent = title;
+  } else {
+    head.removeAttribute("translate");
+    setCopyText(head, () => (parts.number !== null ? tf("{0} 발급 · {1}번", parts.issuer, parts.number) : tf("{0} 발급", parts.issuer)));
+  }
+  const kv = (label: string, value: string) =>
+    `<div class="kv"><b>${copyHtml(label)}</b><span translate="no">${escapeHtml(value)}</span></div>`;
+  box.innerHTML =
+    kv("발급자", issuerName ? `${issuerName} (${parts.issuer})` : parts.issuer) +
+    (day ? kv("발급일", day) : "") +
+    (parts.number !== null ? kv("번호", String(parts.number)) : "") +
+    (who ? kv("받는 사람", who) : "") +
+    (made
+      ? `<p class="meta">${copyHtml("이 컴퓨터가 만든 것이에요. 제목·받는 사람은 이 컴퓨터의 발행 기록에만 있어요.")}</p>`
+      : `<p class="meta">${copyHtml("제목·받는 사람 이름은 체인에 올라가지 않아요. 발급한 곳에서 받은 종이나 파일로 확인하세요.")}</p>`) +
+    `<div class="verifyrow"><button class="ghost" id="p-verify" type="button">${copyHtml("진짜인지 확인")}</button>
+       <span class="meta">${copyHtml("공개 확인 페이지가 인터넷 창에서 열려요.")}</span></div>` +
+    `<p class="chainname">${copyHtml("체인 이름")} <code translate="no">${escapeHtml(a.name)}</code></p>`;
+  const vb = document.getElementById("p-verify");
+  // 확인 페이지가 `?a=` 를 받아 곧바로 찾는다(release-site verify.js).
+  if (vb) vb.onclick = () => void openUrl(verifyLink(a.name)).catch(() => {});
+  return true;
+}
+
 async function renderPanel() {
   const a = selected ? assets.get(selected) : null;
   if (!a) { $("panel").className = "panel hidden"; return; }
@@ -706,6 +766,8 @@ async function renderPanel() {
   $("p-name").setAttribute("translate", "no");
   $("p-name").textContent = a.name;
   $("p-amount").textContent = tf("수량 {0}", fmtQty(a.amount));
+  const human = await paintHuman(a);
+  if (selected !== a.name) return;
 
   const cid = a.ipfs_hash;
   if (!cid || isFingerprint(cid)) {
@@ -716,9 +778,10 @@ async function renderPanel() {
       ? `<p class="meta">${copyHtml("원본 지문")}</p><code class="addr" translate="no">${escapeHtml(cid)}</code>
          <p class="muted">${copyHtml("이 자산에는 파일 대신 원본 지문이 새겨져 있어요. 원본 파일은 올리지 않아서, 만든 사람의 컴퓨터에만 있어요.")}</p>
          <p class="meta">${copyHtml("원본 파일이 맞는지 보려면 확인 페이지에 그 파일을 넣어 지문이 같은지 보세요.")}</p>
-         <button class="ghost" id="p-verify">${copyHtml("확인 페이지 열기")}</button>`
+         ${human ? "" : `<button class="ghost" id="p-verify">${copyHtml("확인 페이지 열기")}</button>`}`
       : '<p class="muted">이 자산에는 연결된 파일이 없습니다.</p>';
-    const vb = document.getElementById("p-verify");
+    // 증서·작품이면 위 사람 말 칸에 「진짜인지 확인」이 이미 있다 — 같은 단추를 둘 두지 않는다.
+    const vb = human ? null : document.getElementById("p-verify");
     if (vb) vb.onclick = () => void openUrl(verifyLink(a.name)).catch(() => {});
     // 🔴 **여기서 일찍 돌아간다.** 그래서 아래에 있는 단추들(공지·나눠주기)이
     //    **파일 없는 자산에는 하나도 안 나왔다.** 그런데 그 둘은 파일과

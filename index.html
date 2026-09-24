@@ -2006,6 +2006,15 @@
       .dotsum { font-weight: 600; }
       .dot.warn { background: var(--warn); box-shadow: 0 0 0 3px color-mix(in srgb, var(--warn) 22%, transparent); }
       .dot.bad { background: var(--danger); box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 22%, transparent); }
+      /* 받은 증서를 사람 말로(자산 패널). 체인 이름은 작게 — 필요한 사람만 본다. */
+      #p-human:empty { display: none; }
+      #p-human { margin: 4px 0 10px; }
+      #p-human .kv { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; font-size: 15px; }
+      #p-human .kv b { font-weight: 600; color: var(--muted); }
+      #p-human .chainname { font-size: 12.5px; color: var(--faint); margin-top: 8px; overflow-wrap: anywhere; }
+      #p-human .chainname code { font-size: 12.5px; }
+      #p-human .verifyrow { margin-top: 10px; }
+      #p-human .verifyrow .meta { display: block; margin-top: 4px; }
 
       /* 말 고르기. 사이드바 아래, 「문제 알리기」 바로 위. */
       .langsw { display: block; width: calc(100% - 24px); margin: 0 12px 8px;
@@ -3213,6 +3222,9 @@
               <div id="p-name"></div>
               <button id="p-close" title="닫기 (Esc)">×</button>
             </div>
+            <!-- 0.4.8-A5 — 증서·작품(`#`)이면 발급자·발급일·번호·(내가 만든 것이면) 받는 사람을
+                 **먼저** 보여 주고, 체인 이름은 작게 아래로. 「진짜인지 확인」도 여기. -->
+            <div id="p-human"></div>
             <div id="p-amount"></div>
             <div id="p-cid"></div>
             <div id="p-body"></div>
