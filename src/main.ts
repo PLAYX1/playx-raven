@@ -167,7 +167,7 @@ function busyDone() {
   busyGuard = undefined;
   busyShow(false);
 }
-import { open as pickFile } from "@tauri-apps/plugin-dialog";
+import { open as pickFile, save as pickSavePath } from "@tauri-apps/plugin-dialog";
 // 🔴 이 창은 우리 화면만 그린다. 지갑 화면(쪽지)은 `127.0.0.1:8790/wallet`
 //    에서 **인터넷 창으로** 열어야 한다 — 그 화면은 12단어를 들고 있어서
 //    `connect-src 'self'` 로 잠겨 있고, 우리 창 안에 끌어들이면 그 잠금이
@@ -183,6 +183,8 @@ import {
   issuedOf, looksLikeAddress, ownerRowsHtml, OWNER_NOT_PINNED, whoseHtml, whoseQuestion,
   type Issued, type OwnerRow, type WhoseResult,
 } from "./whose";
+// 0.4.8-B — 지갑 받기(주소 · QR · 복사).
+import { RECEIVE_MESSAGE, receiveHtml } from "./wallet-easy";
 
 type Asset = {
   name: string;
@@ -4606,6 +4608,14 @@ async function loadWallet() {
   }
 }
 
+/* ── 받기 (0.4.8-B · RV3 🔴5) ────────────────────────────────────────
+   🔴 여태 「받기」를 눌러도 주소가 안 나오고 「받을 주소 만들기」를 또 눌러야 했다. QR 도 없었고,
+   누를 때마다 **새 주소**가 나와 「아까 친구에게 준 주소가 틀렸나」가 됐다(RV3 T03).
+   이제 누르면 바로: 「받기」로 만든 주소 중 아직 한 번도 안 받은 것(없으면 새로) — 러스트
+   `receive.rs` 가 고르고, **노드가 이 지갑 주소라고 확인한 것만** 돌려준다.
+   공유 창은 흉내 내지 않는다(데스크톱에는 폰 같은 공유 창이 없다) — 「메시지로 복사」가 대신한다. */
+let recvSeq = 0;
+
 /** 그 자리로 데려간다 — 감싼 접힌 칸을 펼치고, 가운데로, 잠깐 빛나게(`pageTiles` 의 jump 와 같은 문법). */
 function jumpToEl(id: string) {
   const el = document.getElementById(id);
@@ -4619,16 +4629,81 @@ function jumpToEl(id: string) {
   }, 60);
 }
 
-async function makeAddress() {
+async function copyInto(btn: HTMLElement, text: string, label: string) {
   try {
-    const addr = await invoke<string>("new_address", { label: "" });
-    $("w-addr").innerHTML =
-      `<div class="card"><h3>받을 주소</h3><code class="addr">${addr}</code>
-       <div style="margin-top:8px"><button class="ghost" id="w-copy">복사</button></div></div>`;
-    $("w-copy").onclick = () => navigator.clipboard.writeText(addr);
-  } catch (e) {
-    say(t("주소를 만들지 못했습니다"), errText(e));
+    await navigator.clipboard.writeText(text);
+    setCopyText(btn, () => t("복사했습니다"));
+  } catch {
+    // 막혀 있으면 주소 글자를 골라 두고 직접 복사하게 한다. 조용히 실패하지 않는다.
+    const el = document.getElementById("w-addr-text");
+    if (el) {
+      const r = document.createRange();
+      r.selectNodeContents(el);
+      const sel = window.getSelection();
+      sel?.removeAllRanges();
+      sel?.addRange(r);
+    }
+    setCopyText(btn, () => t("직접 복사해 주세요"));
   }
+  setTimeout(() => setCopyText(btn, () => t(label)), 2200);
+}
+
+async function openReceive(fresh = false) {
+  // 한 번에 하나 — 보내기 칸이 열려 있으면 닫는다(받기와 보내기가 한 화면에 섞이면 오송금 자리다).
+  closeSend();
+  const host = $("w-addr");
+  const seq = ++recvSeq;
+  host.innerHTML = `<section class="card wrecv"><h3>${copyHtml("받을 주소")}</h3>` +
+    `<p class="meta">${copyHtml(fresh ? "새 주소를 만드는 중…" : "주소를 준비하는 중…")}</p></section>`;
+  host.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  let r: any;
+  try {
+    r = await invoke<any>("receive_address", { fresh });
+  } catch (e) {
+    if (seq !== recvSeq) return;
+    host.innerHTML = `<div class="warnbox">${copyHtml("주소를 만들지 못했습니다")} ${escapeHtml(errText(e))}</div>`;
+    return;
+  }
+  if (seq !== recvSeq) return;
+  const addr = String(r?.address ?? "").trim();
+  // 🔴 노드가 「이 지갑 것」이라고 한 것만 보여 준다. 모양이 이상하거나 확인이 없으면 안 그린다.
+  if (!looksLikeAddress(addr) || r?.mine !== true) {
+    host.innerHTML = `<div class="warnbox">${copyHtml("노드가 이 주소를 이 지갑의 받는 주소로 확인해 주지 않았어요. 보여 드리지 않을게요.")}</div>`;
+    return;
+  }
+  host.innerHTML = receiveHtml(addr, r?.reused === true, copyHtml, escapeHtml);
+  void invoke<string>("qr_svg", { text: addr })
+    .then((svg) => {
+      const box = document.getElementById("w-qr");
+      if (box && seq === recvSeq) box.innerHTML = svg;
+    })
+    .catch(() => {
+      const box = document.getElementById("w-qr");
+      // QR 이 안 돼도 주소는 살아 있다. 그렇다고 말한다.
+      if (box) setCopyText(box, () => t("QR 을 만들지 못했습니다. 주소는 그대로 쓰실 수 있습니다."));
+    });
+  const note = $("w-recv-note");
+  $("w-copy").onclick = () => void copyInto($("w-copy"), addr, "주소 복사");
+  $("w-copymsg").onclick = () => void copyInto($("w-copymsg"), tf(RECEIVE_MESSAGE, addr), "메시지로 복사");
+  $("w-newaddr").onclick = () => void openReceive(true);
+  $("w-recv-close").onclick = () => { recvSeq++; host.innerHTML = ""; };
+  $("w-qrsave").onclick = async () => {
+    // 저장 창은 OS 가 띄운다. 그림 내용은 러스트가 주소로 다시 만든다(화면이 주는 글자를 쓰지 않는다).
+    let path: string | null = null;
+    try {
+      path = await pickSavePath({ defaultPath: `RVN-${addr.slice(0, 8)}.svg`, filters: [{ name: "SVG", extensions: ["svg"] }] });
+    } catch (e) {
+      setCopyText(note, () => errText(e));
+      return;
+    }
+    if (!path) return; // 그만뒀다
+    try {
+      const saved = await invoke<any>("receive_qr_save", { address: addr, path });
+      note.innerHTML = `${copyHtml("QR 그림을 저장했어요.")} <code translate="no">${escapeHtml(String(saved?.path ?? path))}</code>`;
+    } catch (e) {
+      setCopyText(note, () => errText(e));
+    }
+  };
 }
 
 /* ── 주소 확인 · 내 주인 표 (0.4.6) ─────────────────────────────
@@ -8088,9 +8163,11 @@ async function openSend(mode: "asset" | "rvn", preselect?: string) {
   $("s-result").innerHTML = "";
   $("s-mode").textContent = mode === "asset" ? "자산 보내기" : "RVN 보내기";
   // 🔴 여태 두 단추 중 열린 쪽만 진하게(ghost 를 뺐다) 칠했다. 0.4.8-B 부터 「보내기」는 잔액 카드의
-  //    큰 단추라 늘 진하다 — 열린 쪽은 aria-pressed 로만 알린다(화면 읽기용).
+  //    큰 단추라 늘 진하다 — 열린 쪽은 aria-pressed 로만 알린다(화면 읽기용). 받기 칸은 닫는다.
   $("w-send-asset").setAttribute("aria-pressed", String(mode === "asset"));
   $("w-send-rvn").setAttribute("aria-pressed", String(mode === "rvn"));
+  recvSeq++;
+  $("w-addr").innerHTML = "";
   $("s-assetrow").style.display = mode === "asset" ? "" : "none";
   ($("s-addr") as HTMLInputElement).value = "";
   ($("s-qty") as HTMLInputElement).value = "";
@@ -16417,7 +16494,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     (a as HTMLElement).onclick = () => showPage((a as HTMLElement).dataset.page!);
   });
   // 0.4.8-B 잔액 카드 — 큰 단추 「받기」, 작은 줄 「최근 거래」「주소 확인」. (「보내기」는 아래 w-send-rvn)
-  $("w-receive").addEventListener("click", () => void makeAddress());
+  $("w-receive").addEventListener("click", () => void openReceive());
   $("w-go-txs").addEventListener("click", () => jumpToEl("w-txs"));
   $("w-go-whose").addEventListener("click", () => jumpToEl("whose-in"));
   $("ask-yes").addEventListener("click", () =>
@@ -16774,7 +16851,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   };
   window.addEventListener("desktop-language-change", syncLanguage);
   syncLanguage();
-  $("overview-receive").onclick = () => { showPage("wallet"); void makeAddress(); };
+  $("overview-receive").onclick = () => { showPage("wallet"); void openReceive(); };
   $("overview-phone").onclick = () => { const panel = $("phone-tx-panel") as HTMLDetailsElement; panel.open = true; panel.scrollIntoView(); $("phone-tx-code").focus(); };
 
   $("fee-send").addEventListener("click", () => void sendOwed());

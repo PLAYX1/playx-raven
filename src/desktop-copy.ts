@@ -1907,7 +1907,22 @@ export const DESKTOP_COPY: Record<string, [string, string, string]> = {
   "주인 표 조각이 많아 일부만 확인했어요.": ["There are many owner-token pieces, so only some were checked.", "オーナートークンの断片が多いため、一部だけ確認しました。", "所有权代币片段较多，仅检查了一部分。"],
   "주인 표 자리를 다시 읽지 못했어요. 위 주소는 지난번에 읽은 것이에요.": ["Couldn't re-read where the owner tokens are. The addresses above are from the last read.", "オーナートークンの場所を読み直せませんでした。上のアドレスは前回読んだものです。", "未能重新读取所有权代币的位置。上面的地址是上次读取的结果。"],
   "복사하지 못했어요": ["Couldn't copy", "コピーできませんでした", "无法复制"],
-  /* 0.4.8-B — 지갑 첫 배치(잔액·받기·보내기) */
+  /* 0.4.8-B — 지갑 첫 배치(잔액·받기·보내기) · 받기 QR */
   "들어오는 중": ["Incoming", "入金中", "入账中"],
   "네트워크에 기록되면(보통 몇 분) 사용 가능으로 옮겨져요.": ["Once recorded on the network (usually a few minutes), it moves to Available.", "ネットワークに記録されると（通常数分）、利用可能に移ります。", "记录到网络后（通常几分钟），会转入可用。"],
+  "주소를 만들지 못했습니다.": ["Could not create an address.", "アドレスを作成できませんでした。", "无法创建地址。"],
+  "받을 주소 QR": ["Receiving address QR", "受取アドレスのQR", "收款地址二维码"],
+  "이 컴퓨터의 노드가 확인한 내 지갑 주소예요. 레이븐코인(RVN)과 레이븐 자산만 받을 수 있어요.": ["Your wallet address, confirmed by this computer's node. It can receive only Ravencoin (RVN) and Ravencoin assets.", "このパソコンのノードが確認した自分のウォレットのアドレスです。受け取れるのはRavencoin（RVN）とRavencoinの資産だけです。", "这是本机节点确认的我的钱包地址。只能接收 Ravencoin（RVN）和 Ravencoin 资产。"],
+  "메시지로 복사": ["Copy as message", "メッセージとしてコピー", "复制为消息"],
+  "아직 받은 적 없는 주소라 다시 보여 드려요. 돈이 들어오면 다음에는 새 주소가 나와요.": ["This address hasn't received anything yet, so it is shown again. After money arrives, you'll get a new address next time.", "まだ一度も受け取っていないアドレスなので、もう一度表示しています。入金があると、次回は新しいアドレスになります。", "此地址还没有收到过款项，所以再次显示。收到款项后，下次会显示新地址。"],
+  "새로 만든 주소예요. 돈이 들어올 때까지 「받기」를 누르면 이 주소가 다시 나와요.": ["This is a new address. Until money arrives, pressing Receive shows this address again.", "新しく作ったアドレスです。入金があるまでは「受け取る」を押すとこのアドレスが表示されます。", "这是新建的地址。收到款项之前，按「收款」会再次显示此地址。"],
+  "새 주소 만들기": ["Create new address", "新しいアドレスを作る", "新建地址"],
+  "제 레이븐코인(RVN) 받는 주소예요: {0}": ["My Ravencoin (RVN) receiving address: {0}", "私のRavencoin（RVN）受取アドレスです：{0}", "我的 Ravencoin（RVN）收款地址：{0}"],
+  "새 주소를 만드는 중…": ["Creating a new address…", "新しいアドレスを作成中…", "正在新建地址…"],
+  "주소를 준비하는 중…": ["Preparing your address…", "アドレスを準備中…", "正在准备地址…"],
+  "노드가 이 주소를 이 지갑의 받는 주소로 확인해 주지 않았어요. 보여 드리지 않을게요.": ["The node did not confirm this as this wallet's receiving address, so it is not shown.", "ノードがこのアドレスをこのウォレットの受取アドレスとして確認しなかったため、表示しません。", "节点未确认这是此钱包的收款地址，因此不予显示。"],
+  "QR 을 만들지 못했습니다. 주소는 그대로 쓰실 수 있습니다.": ["Could not create the QR code. You can still use the address.", "QRを作成できませんでした。アドレスはそのまま使えます。", "无法生成二维码。地址仍可照常使用。"],
+  "QR 그림을 저장했어요.": ["QR image saved.", "QR画像を保存しました。", "二维码图片已保存。"],
+  "저장할 곳을 다시 골라 주세요.": ["Please choose where to save again.", "保存先をもう一度選んでください。", "请重新选择保存位置。"],
+  "같은 이름의 파일이 이미 있어요. 다른 이름으로 저장해 주세요.": ["A file with that name already exists. Please save with a different name.", "同じ名前のファイルがすでにあります。別の名前で保存してください。", "已有同名文件。请用其他名称保存。"],
 };

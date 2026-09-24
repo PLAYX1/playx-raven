@@ -2219,7 +2219,7 @@
       main :is(button, summary), .todochip { min-height:64px !important; }
       main button { overflow-wrap:anywhere; }
 
-      /* ── 0.4.8-B 지갑 첫 배치 ─────────────────────
+      /* ── 0.4.8-B 지갑 첫 배치 · 받기 ─────────────────────
          처음 쓰는 사람의 순서: 내 돈이 얼마 → 받기 · 보내기(큰 단추 둘) → 나머지(작은 줄).
          🔴 style 속성은 쓰지 않는다(앱 CSP 가 막는다 — style-attrs.ts). 전부 여기 클래스로. */
       #w-incoming-note[hidden], #overview-incoming-row[hidden] { display:none !important; }
@@ -2235,6 +2235,15 @@
       .wmore button { flex:1 1 auto; }
       .wlock { margin:14px 0; max-width:760px; }
       #page-wallet .sendbox { max-width:760px; }
+      .wrecv { margin-bottom:14px; max-width:760px; }
+      .wrecv-head { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+      .wrecv-head h3 { margin:0; }
+      .wrecv-body { display:flex; gap:18px; align-items:flex-start; flex-wrap:wrap; margin-top:10px; }
+      .wrecv-qr { flex:0 0 212px; min-height:212px; margin:0; border:1px solid var(--line); }
+      .wrecv-side { flex:1 1 280px; min-width:0; }
+      .wrecv-addr { display:block; font-size:16px; line-height:1.5; padding:10px 12px; border-radius:8px;
+                    background:var(--ravi-tint); color:var(--text); overflow-wrap:anywhere; word-break:break-all; user-select:all; }
+      .wrecv-btns { display:flex; flex-wrap:wrap; gap:8px; margin:10px 0 6px; }
     </style>
   </head>
   <body>
@@ -3299,7 +3308,7 @@
           </div>
         </section>
 
-        <!-- 받을 주소. 그리는 것은 main.ts. -->
+        <!-- 받기 칸(누르면 바로 주소 · QR · 복사). 그리는 것은 main.ts openReceive. -->
         <div id="w-addr"></div>
 
         <!-- 작성. 자산과 RVN은 같은 폼을 쓰지 않는다 — 무엇을 보내는지가

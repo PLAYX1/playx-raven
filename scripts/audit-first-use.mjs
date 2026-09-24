@@ -71,6 +71,12 @@ function mockScript(state) {
           if (!S.encrypted) throw '이 지갑에는 아직 암호가 없습니다. 「지갑」 화면에서 암호를 먼저 걸어 주세요 — 암호를 건 뒤 복구 단어를 볼 수 있습니다.';
           return { words: ${JSON.stringify(FAKE_WORDS)}, has_extra_passphrase: false };
         case 'new_address': S.addrN++; return 'RGz' + String(S.addrN).padStart(3, '0') + 'fakeAddrForAuditOnlyXyzAb';
+        // 0.4.8-B 받기 — 안 받은 「받기」 주소가 있으면 그것, 없거나 새로 만들라면 새 주소(노드가 내 것이라 확인).
+        //   진짜 주소처럼 base58 글자만(0·O·I·l 없음) — 화면이 주소 모양을 한 번 더 본다.
+        case 'receive_address': if (!(a && a.fresh) && S.recv) return { address: S.recv, reused: true, mine: true };
+          S.addrN++; S.recv = 'RGz' + String(S.addrN).padStart(3, '1') + 'fakeAddrForAuditXyzAbcdef'; return { address: S.recv, reused: false, mine: true };
+        case 'receive_qr_save': return { path: a.path };
+        case 'plugin:dialog|save': return null;
         case 'wallet_since': return { lastblock: 'b' + S.block, transactions: S.txs, asset_transactions: [] };
         case 'recent_transactions': return S.txs;
         case 'addr_book': return { rows: [] };
