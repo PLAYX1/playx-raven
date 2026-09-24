@@ -1,0 +1,64 @@
+{
+ "mode": "after",
+ "csp": true,
+ "dist": "/Users/gimmusong/wt-rv-desktop-rv3/dist",
+ "pages": {
+  "ravi": {
+   "withStyle": 285,
+   "unapplied": 0,
+   "leaked": []
+  },
+  "wallet": {
+   "withStyle": 285,
+   "unapplied": 0,
+   "leaked": []
+  },
+  "assets": {
+   "withStyle": 285,
+   "unapplied": 0,
+   "leaked": []
+  },
+  "create": {
+   "withStyle": 285,
+   "unapplied": 0,
+   "leaked": []
+  },
+  "talk": {
+   "withStyle": 285,
+   "unapplied": 0,
+   "leaked": []
+  },
+  "shop": {
+   "withStyle": 286,
+   "unapplied": 0,
+   "leaked": []
+  },
+  "door": {
+   "missing": true
+  },
+  "helping": {
+   "withStyle": 286,
+   "unapplied": 0,
+   "leaked": []
+  },
+  "reward": {
+   "missing": true
+  },
+  "artist": {
+   "withStyle": 286,
+   "unapplied": 0,
+   "leaked": []
+  },
+  "settings": {
+   "withStyle": 288,
+   "unapplied": 0,
+   "leaked": []
+  }
+ },
+ "hold": {
+  "fillPx": 184,
+  "barPx": 584,
+  "text": "5초 뒤에 시작합니다"
+ },
+ "errors": []
+}

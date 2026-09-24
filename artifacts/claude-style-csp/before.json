@@ -1,0 +1,115 @@
+{
+ "mode": "before",
+ "csp": true,
+ "dist": "/Users/gimmusong/wt-rv-desktop-cert/dist",
+ "pages": {
+  "ravi": {
+   "withStyle": 285,
+   "unapplied": 277,
+   "leaked": [
+    "qrwrap",
+    "rpwrap",
+    "A",
+    "ravi-todo"
+   ]
+  },
+  "wallet": {
+   "withStyle": 285,
+   "unapplied": 277,
+   "leaked": [
+    "qrwrap",
+    "rpwrap",
+    "A",
+    "w-lock-now",
+    "encbox",
+    "enc-warn-change",
+    "enc-old-row",
+    "send-compose",
+    "send-review",
+    "r-tailbox",
+    "r-passbox"
+   ]
+  },
+  "assets": {
+   "withStyle": 285,
+   "unapplied": 277,
+   "leaked": [
+    "qrwrap",
+    "rpwrap",
+    "A",
+    "owner-warn",
+    "wo-wrap"
+   ]
+  },
+  "create": {
+   "withStyle": 285,
+   "unapplied": 277,
+   "leaked": [
+    "qrwrap",
+    "rpwrap",
+    "A"
+   ]
+  },
+  "talk": {
+   "withStyle": 285,
+   "unapplied": 277,
+   "leaked": [
+    "qrwrap",
+    "rpwrap",
+    "A"
+   ]
+  },
+  "shop": {
+   "withStyle": 286,
+   "unapplied": 277,
+   "leaked": [
+    "qrwrap",
+    "rpwrap",
+    "A",
+    "sh-refresh"
+   ]
+  },
+  "door": {
+   "missing": true
+  },
+  "helping": {
+   "withStyle": 286,
+   "unapplied": 277,
+   "leaked": [
+    "qrwrap",
+    "rpwrap",
+    "on"
+   ]
+  },
+  "reward": {
+   "missing": true
+  },
+  "artist": {
+   "withStyle": 286,
+   "unapplied": 277,
+   "leaked": [
+    "qrwrap",
+    "rpwrap",
+    "A"
+   ]
+  },
+  "settings": {
+   "withStyle": 288,
+   "unapplied": 277,
+   "leaked": [
+    "qrwrap",
+    "rpwrap",
+    "A",
+    "up-box",
+    "bp-again",
+    "mn-custom"
+   ]
+  }
+ },
+ "hold": {
+  "fillPx": 584,
+  "barPx": 584,
+  "text": "6초 뒤에 시작합니다"
+ },
+ "errors": []
+}

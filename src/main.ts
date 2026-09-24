@@ -1,3 +1,5 @@
+// 🔴 맨 먼저 — 앱 CSP(Tauri nonce) 가 막는 style="…" 속성을 CSSOM 으로 되살린다(src/style-attrs.ts).
+import "./style-attrs";
 import { setStyledSrcdoc } from "./srcdoc-style";
 import { wirePhoneTransaction } from "./phone-transaction";
 import { FINGERPRINT_GUESS, wireCreate, type CreateApi } from "./create-page";
@@ -7529,18 +7531,27 @@ function holdBeforeDoing(what: string, cost: string, seconds = 8): Promise<boole
     const box = document.createElement("div");
     box.className = "holdbox";
     let left = seconds;
-    const paint = () => {
-      box.innerHTML = `
+    // 🔴 막대는 CSSOM 으로 채운다. 예전에는 1초마다 innerHTML 로 `<i style="width:…">` 를 다시
+    //    그렸는데, 앱 CSP(Tauri nonce)가 style 속성을 막아 **막대가 한 번도 안 찼다**(RV3).
+    //    한 번 그리고 폭·글자만 바꾼다 — 다시 그리지 않으니 CSS 전환(1초)도 매끄럽게 이어진다.
+    box.innerHTML = `
         <div class="hb-top">${escapeHtml(what)}</div>
         <div class="hb-cost">${escapeHtml(cost)}</div>
-        <div class="hb-bar"><i style="width:${((seconds - left) / seconds) * 100}%"></i></div>
-        <div class="hb-left">${tf("{0}초 뒤에 시작합니다", left)}</div>
+        <div class="hb-bar" role="progressbar" aria-valuemin="0" aria-valuemax="${seconds}"><i></i></div>
+        <div class="hb-left" aria-live="polite"></div>
         <button class="hb-cancel">그만두기</button>`;
-      (box.querySelector(".hb-cancel") as HTMLElement).onclick = () => {
-        clearInterval(t);
-        box.remove();
-        done(false);
-      };
+    const bar = box.querySelector(".hb-bar") as HTMLElement;
+    const fill = box.querySelector(".hb-bar i") as HTMLElement;
+    const leftText = box.querySelector(".hb-left") as HTMLElement;
+    (box.querySelector(".hb-cancel") as HTMLElement).onclick = () => {
+      clearInterval(t);
+      box.remove();
+      done(false);
+    };
+    const paint = () => {
+      fill.style.width = `${((seconds - left) / seconds) * 100}%`;
+      bar.setAttribute("aria-valuenow", String(seconds - left));
+      leftText.textContent = tf("{0}초 뒤에 시작합니다", left);
     };
     paint();
     // 지금 열려 있는 화면 안에 그린다. 화면 밖에 그리면 스크롤 위치에

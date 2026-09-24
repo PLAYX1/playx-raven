@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>RavenVault Desktop</title>
     <style>
+      /* 🔴 앱 CSP(Tauri nonce)는 style="…" 속성을 막는다 — src/style-attrs.ts 가 CSSOM 으로 되살리기
+         전 첫 그림에서 숨긴 것이 번쩍 보이지 않게, 숨김만은 여기서 먼저. */
+      [style*="display:none"], [style*="display: none"] { display: none; }
       :root {
         --bg: #fbfbfe; --panel: #fff; --line: #dde3f0; --text: #161d2b; --ravi: #e7731f; --ravi-soft: #8375ae; --ravi-tint: #fdf1e7;
         /* 보조 텍스트를 흐리게 해서 위계를 만들면, 가게 형광등 아래 노안에는
