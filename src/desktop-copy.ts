@@ -1907,4 +1907,7 @@ export const DESKTOP_COPY: Record<string, [string, string, string]> = {
   "주인 표 조각이 많아 일부만 확인했어요.": ["There are many owner-token pieces, so only some were checked.", "オーナートークンの断片が多いため、一部だけ確認しました。", "所有权代币片段较多，仅检查了一部分。"],
   "주인 표 자리를 다시 읽지 못했어요. 위 주소는 지난번에 읽은 것이에요.": ["Couldn't re-read where the owner tokens are. The addresses above are from the last read.", "オーナートークンの場所を読み直せませんでした。上のアドレスは前回読んだものです。", "未能重新读取所有权代币的位置。上面的地址是上次读取的结果。"],
   "복사하지 못했어요": ["Couldn't copy", "コピーできませんでした", "无法复制"],
+  /* 0.4.8-B — 지갑 첫 배치(잔액·받기·보내기) */
+  "들어오는 중": ["Incoming", "入金中", "入账中"],
+  "네트워크에 기록되면(보통 몇 분) 사용 가능으로 옮겨져요.": ["Once recorded on the network (usually a few minutes), it moves to Available.", "ネットワークに記録されると（通常数分）、利用可能に移ります。", "记录到网络后（通常几分钟），会转入可用。"],
 };

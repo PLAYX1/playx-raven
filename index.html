@@ -2218,6 +2218,23 @@
       main :is(p, label, input, textarea, select, button, summary, .meta, .lede), .todochip { font-size:16px !important; }
       main :is(button, summary), .todochip { min-height:64px !important; }
       main button { overflow-wrap:anywhere; }
+
+      /* ── 0.4.8-B 지갑 첫 배치 ─────────────────────
+         처음 쓰는 사람의 순서: 내 돈이 얼마 → 받기 · 보내기(큰 단추 둘) → 나머지(작은 줄).
+         🔴 style 속성은 쓰지 않는다(앱 CSP 가 막는다 — style-attrs.ts). 전부 여기 클래스로. */
+      #w-incoming-note[hidden], #overview-incoming-row[hidden] { display:none !important; }
+      .wbal { padding:20px; margin-bottom:14px; max-width:760px; }
+      .wbal .big { font-size:36px; margin-top:2px; }
+      .wincoming { margin-top:6px; font-size:18px; font-weight:650; color:var(--ravi); }
+      .wincoming:empty { display:none; }
+      .wmain { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:16px; }
+      .wmain button { display:flex; align-items:center; justify-content:center; gap:10px;
+                      min-height:72px !important; font-size:18px !important; font-weight:650; border-radius:14px; }
+      .wmain svg { width:26px; height:26px; flex:none; }
+      .wmore { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+      .wmore button { flex:1 1 auto; }
+      .wlock { margin:14px 0; max-width:760px; }
+      #page-wallet .sendbox { max-width:760px; }
     </style>
   </head>
   <body>
@@ -3189,7 +3206,7 @@
       <section class="page on" id="page-ravi">
         <div class="overview" aria-labelledby="overview-title">
           <h2 id="overview-title">한눈에</h2>
-          <div class="overview-values"><div><span>내 노드</span><strong id="overview-node">확인 못 함</strong></div><div><span>확정 잔액</span><strong id="overview-balance">확인 못 함</strong></div></div>
+          <div class="overview-values"><div><span>내 노드</span><strong id="overview-node">확인 못 함</strong></div><div><span>확정 잔액</span><strong id="overview-balance">확인 못 함</strong></div><div id="overview-incoming-row" hidden><span>들어오는 중</span><strong id="overview-incoming"></strong></div></div>
           <div class="overview-actions"><button id="overview-receive"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m-5-5 5 5 5-5M4 17v4h16v-4"/></svg><span>받기</span></button><button id="overview-phone"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M10 17h4"/></svg><span>폰에서 서명한 거래 보내기</span></button></div>
         </div>
         <!-- 🔴 **돈이 도는지 한눈에.**
@@ -3260,28 +3277,101 @@
       <section class="page" id="page-wallet">
         <h2 class="title">지갑</h2>
         <p class="lede">이 앱과 레이븐 코어는 같은 지갑을 씁니다. 동시에 열 수 없습니다.</p>
-        <!-- 큰 아이콘 줄. 라비 화면과 같은 문법 — 위는 「지금 할 일」. -->
-        <div class="tiles pagetiles" id="pt-wallet"></div>
-
-        <!-- 받을 주소록. 코어에는 있고 여기엔 없던 것이다.
-             ⚠️ HD 지갑에는 "진짜 주소" 가 없다 — 씨앗 하나에서 주소가 무한히
-             나오고 전부 같은 지갑이다. 그래서 "내 주소 하나" 를 고르라고 하지
-             않고, **무엇에 쓰는 주소인지 이름을 붙이게** 한다. 나중에 세무에서
-             매출과 수수료를 갈라 보려면 그 이름이 유일한 단서다. -->
-        <div class="cards">
-          <div class="card">
-            <h3>사용 가능</h3>
-            <div class="big" id="w-confirmed">—</div>
-            <div class="detail" id="w-unconfirmed"></div>
+        <!-- 🔴 0.4.8-B **잔액 · 받기 · 보내기가 먼저.** 여태 큰 타일 다섯(받기·보내기·자산 보내기·
+             최근 거래·주소 확인)이 맨 위에 있고 잔액은 그 아래였다. 처음 쓰는 사람은 「내 돈이 얼마」를
+             찾아 내려갔고, 받은 10 RVN 은 「확인 대기 중」이라는 낯선 말 아래 있었다(RV3 T04).
+             나머지 셋은 아래 작은 줄로 — 없앤 것은 없다. -->
+        <section class="card wbal" id="w-balance" aria-labelledby="w-bal-title">
+          <h3 id="w-bal-title">사용 가능</h3>
+          <div class="big" id="w-confirmed">—</div>
+          <!-- 확인 전 돈은 **따로** 적는다. 합치면 아직 안 온 돈을 쓸 수 있는 돈처럼 읽는다. -->
+          <div class="wincoming" id="w-unconfirmed"></div>
+          <p class="meta" id="w-incoming-note" hidden>네트워크에 기록되면(보통 몇 분) 사용 가능으로 옮겨져요.</p>
+          <div class="wmain">
+            <button type="button" id="w-receive"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4v11M8 11l4 4 4-4"/><path d="M4.5 19.5h15"/></svg><span>받기</span></button>
+            <button type="button" id="w-send-rvn"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V9M8 13l4-4 4 4"/><path d="M4.5 4.5h15"/></svg><span>보내기</span></button>
           </div>
-          <div class="card">
-            <h3>지갑 잠금</h3>
-            <div class="state" id="w-lock">확인 중…</div>
-            <div class="detail" id="w-lock-detail"></div>
-            <div class="row" style="margin-top:8px">
-              <button class="ghost" id="w-enc">암호 걸기</button>
-              <button class="ghost" id="w-lock-now" style="display:none">지금 잠그기</button>
+          <div class="wmore">
+            <button type="button" class="ghost" id="w-send-asset">자산 보내기</button>
+            <button type="button" class="ghost" id="w-go-txs">최근 거래</button>
+            <button type="button" class="ghost" id="w-go-whose">주소 확인</button>
+            <button type="button" class="ghost" id="w-refresh">새로고침</button>
+          </div>
+        </section>
+
+        <!-- 받을 주소. 그리는 것은 main.ts. -->
+        <div id="w-addr"></div>
+
+        <!-- 작성. 자산과 RVN은 같은 폼을 쓰지 않는다 — 무엇을 보내는지가
+             드롭다운 한 칸으로 바뀌면 그게 오송금이 되는 자리다.
+             0.4.8-B 잔액 카드 바로 아래로 올렸다 — 「보내기」를 누르고 아래로 찾아 내려가지 않게. -->
+        <div class="sendbox" id="send-compose" style="display:none">
+          <div class="sendhead"><span id="s-mode"></span><button class="ghost" id="s-cancel">취소</button></div>
+
+          <div class="row" id="s-assetrow">
+            <label>보낼 자산<select id="s-asset"></select></label>
+          </div>
+          <label>받는 주소<input id="s-addr" placeholder="R…" autocomplete="off" spellcheck="false" /></label>
+          <div class="meta" id="s-addrnote"></div>
+          <label id="s-qtylabel">수량<input id="s-qty" type="number" min="0" step="any" /></label>
+          <div class="meta" id="s-held"></div>
+          <div class="row" style="margin-top:12px">
+            <button id="s-review" disabled>검토</button>
+          </div>
+        </div>
+
+        <!-- 검토. 누구에게 · 무엇을 · 얼마. 보내기 버튼은 여기에만 있다. -->
+        <div class="sendbox" id="send-review" style="display:none">
+          <div class="sendhead"><span>보내기 전 확인</span><button class="ghost" id="s-back">고치기</button></div>
+
+          <div class="review">
+            <div class="rk">누구에게</div>
+            <div class="rv"><div id="r-who"></div><code class="addr" id="r-addr"></code><div class="meta" id="r-hist"></div></div>
+            <div class="rk">무엇을</div>
+            <div class="rv" id="r-what"></div>
+            <div class="rk">얼마</div>
+            <div class="rv big" id="r-amount"></div>
+          </div>
+
+          <div id="r-warn"></div>
+
+          <!-- 🔴 이 확인은 문구 하나로 살고 죽는다.
+               예전 문구는 "이 주소 끝 4자리를 입력하세요" 였다. 사람은 우리
+               화면에 뜬 주소를 보고 그 4자리를 친다 — 그런데 클립보드가 이미
+               바뀌었다면 화면에 뜬 것이 공격자 주소라, 공격자 주소의 4자리를
+               정확히 치고 확인이 통과한다. 아무것도 막지 못한다.
+               막으려면 **원본**과 비교하게 해야 한다. -->
+          <div id="r-tailbox" style="display:none">
+            <div class="meta">
+              처음 보내는 주소입니다. <b>끝 네 글자를 일부러 가려 두었습니다</b> —
+              화면을 보고 적으시면 이 확인이 아무 소용이 없기 때문입니다.<br />
+              <b>받는 분이 알려 준 원본</b>(문자·영수증·카운터 화면)을 보시고,
+              그 <b>끝 네 글자</b>를 적어 주세요. 앞부분이 화면과 같은지도 눈으로
+              맞춰 보세요.
             </div>
+            <div class="tail4" id="r-tailshow"></div>
+            <input id="s-tail" maxlength="4" inputmode="text" autocomplete="off"
+                   spellcheck="false" placeholder="원본의 끝 4자리" />
+            <div class="meta" id="s-tailwarn"></div>
+          </div>
+          <div id="r-passbox" style="display:none">
+            <div class="meta">지갑이 잠겨 있습니다. 이 한 번만 열고 곧바로 다시 잠급니다.</div>
+            <input id="s-pass" type="password" autocomplete="off" placeholder="지갑 암호" />
+          </div>
+
+          <div class="row" style="margin-top:12px">
+            <button id="s-go" disabled>보내기</button>
+          </div>
+          <div id="s-result"></div>
+        </div>
+
+        <div class="card wlock">
+          <h3>지갑 잠금</h3>
+          <div class="state" id="w-lock">확인 중…</div>
+          <div class="detail" id="w-lock-detail"></div>
+          <div class="row" style="margin-top:8px">
+            <button class="ghost" id="w-enc">암호 걸기</button>
+            <button class="ghost" id="w-lock-now" style="display:none">지금 잠그기</button>
           </div>
         </div>
 
@@ -3343,14 +3433,11 @@
           <div id="enc-result"></div>
         </div>
 
-        <div class="bar">
-          <button id="w-send-asset" class="ghost">자산 보내기</button>
-          <button id="w-send-rvn" class="ghost">RVN 보내기</button>
-          <button id="w-newaddr" class="ghost">받을 주소 만들기</button>
-          <button id="w-refresh" class="ghost">새로고침</button>
-        </div>
-        <div id="w-addr"></div>
-
+        <!-- 받을 주소록. 코어에는 있고 여기엔 없던 것이다.
+             ⚠️ HD 지갑에는 "진짜 주소" 가 없다 — 씨앗 하나에서 주소가 무한히
+             나오고 전부 같은 지갑이다. 그래서 "내 주소 하나" 를 고르라고 하지
+             않고, **무엇에 쓰는 주소인지 이름을 붙이게** 한다. 나중에 세무에서
+             매출과 수수료를 갈라 보려면 그 이름이 유일한 단서다. -->
         <details class="advanced" id="abk">
           <summary>받을 주소록 <span class="meta" id="abk-sum"></span></summary>
           <div class="row" style="margin-top:12px">
@@ -3369,68 +3456,6 @@
             수십 줄이 되어 직접 붙인 이름이 묻힙니다.
           </p>
         </details>
-
-        <!-- 작성. 자산과 RVN은 같은 폼을 쓰지 않는다 — 무엇을 보내는지가
-             드롭다운 한 칸으로 바뀌면 그게 오송금이 되는 자리다. -->
-        <div class="sendbox" id="send-compose" style="display:none">
-          <div class="sendhead"><span id="s-mode"></span><button class="ghost" id="s-cancel">취소</button></div>
-
-          <div class="row" id="s-assetrow">
-            <label>보낼 자산<select id="s-asset"></select></label>
-          </div>
-          <label>받는 주소<input id="s-addr" placeholder="R…" autocomplete="off" spellcheck="false" /></label>
-          <div class="meta" id="s-addrnote"></div>
-          <label id="s-qtylabel">수량<input id="s-qty" type="number" min="0" step="any" /></label>
-          <div class="meta" id="s-held"></div>
-          <div class="row" style="margin-top:12px">
-            <button id="s-review" disabled>검토</button>
-          </div>
-        </div>
-
-        <!-- 검토. 누구에게 · 무엇을 · 얼마. 보내기 버튼은 여기에만 있다. -->
-        <div class="sendbox" id="send-review" style="display:none">
-          <div class="sendhead"><span>보내기 전 확인</span><button class="ghost" id="s-back">고치기</button></div>
-
-          <div class="review">
-            <div class="rk">누구에게</div>
-            <div class="rv"><div id="r-who"></div><code class="addr" id="r-addr"></code><div class="meta" id="r-hist"></div></div>
-            <div class="rk">무엇을</div>
-            <div class="rv" id="r-what"></div>
-            <div class="rk">얼마</div>
-            <div class="rv big" id="r-amount"></div>
-          </div>
-
-          <div id="r-warn"></div>
-
-          <!-- 🔴 이 확인은 문구 하나로 살고 죽는다.
-               예전 문구는 "이 주소 끝 4자리를 입력하세요" 였다. 사람은 우리
-               화면에 뜬 주소를 보고 그 4자리를 친다 — 그런데 클립보드가 이미
-               바뀌었다면 화면에 뜬 것이 공격자 주소라, 공격자 주소의 4자리를
-               정확히 치고 확인이 통과한다. 아무것도 막지 못한다.
-               막으려면 **원본**과 비교하게 해야 한다. -->
-          <div id="r-tailbox" style="display:none">
-            <div class="meta">
-              처음 보내는 주소입니다. <b>끝 네 글자를 일부러 가려 두었습니다</b> —
-              화면을 보고 적으시면 이 확인이 아무 소용이 없기 때문입니다.<br />
-              <b>받는 분이 알려 준 원본</b>(문자·영수증·카운터 화면)을 보시고,
-              그 <b>끝 네 글자</b>를 적어 주세요. 앞부분이 화면과 같은지도 눈으로
-              맞춰 보세요.
-            </div>
-            <div class="tail4" id="r-tailshow"></div>
-            <input id="s-tail" maxlength="4" inputmode="text" autocomplete="off"
-                   spellcheck="false" placeholder="원본의 끝 4자리" />
-            <div class="meta" id="s-tailwarn"></div>
-          </div>
-          <div id="r-passbox" style="display:none">
-            <div class="meta">지갑이 잠겨 있습니다. 이 한 번만 열고 곧바로 다시 잠급니다.</div>
-            <input id="s-pass" type="password" autocomplete="off" placeholder="지갑 암호" />
-          </div>
-
-          <div class="row" style="margin-top:12px">
-            <button id="s-go" disabled>보내기</button>
-          </div>
-          <div id="s-result"></div>
-        </div>
 
         <div id="w-foreign"></div>
 

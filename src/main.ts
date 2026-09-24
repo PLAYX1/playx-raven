@@ -2447,6 +2447,14 @@ async function refreshOverview() {
   const confirmed = wallet.status === "fulfilled" ? wallet.value?.confirmed : undefined;
   setCopyText($("overview-balance"), () => typeof confirmed === "number" && Number.isFinite(confirmed) && confirmed >= 0
     ? `${confirmed.toLocaleString(lang, {maximumFractionDigits:8})} RVN` : t("확인 못 함"));
+  /* 🔴 0.4.8-B — 방금 받은 10 RVN 이 여기서는 **0** 으로만 보였다(RV3 T04). 확정 잔액에 섞지는
+     않는다(확인 전 돈을 쓸 수 있는 돈처럼 보이면 안 된다) — 옆에 「들어오는 중」으로 따로 적는다.
+     같은 `wallet_balance` 답을 쓴다(켤 때 읽는 횟수를 늘리지 않는다). */
+  const incoming = wallet.status === "fulfilled" ? Number(wallet.value?.unconfirmed) : NaN;
+  const row = document.getElementById("overview-incoming-row");
+  const show = Number.isFinite(incoming) && incoming > 0;
+  if (row) row.hidden = !show;
+  if (show) setCopyText($("overview-incoming"), () => `${incoming.toLocaleString(lang, { maximumFractionDigits: 8 })} RVN`);
 }
 
 /** 라비 화면을 그린다. 상태가 바뀔 때마다 다시 부른다. */
@@ -3090,21 +3098,10 @@ function pageTiles(page: string): PageTile[] {
       setTimeout(() => el.classList.remove("justwent"), 1600);
     }, 60);
   };
-  if (page === "wallet") {
-    return [
-      { icon: I('<path d="M12 4v11M8 11l4 4 4-4"/><path d="M4.5 19.5h15"/>'),
-        label: "받기", sub: "받을 주소 만들기", go: () => $("w-newaddr")?.click() },
-      { icon: I('<path d="M12 20V9M8 13l4-4 4 4"/><path d="M4.5 4.5h15"/>'),
-        label: "보내기", sub: "RVN 보내기", go: () => void openSend("rvn") },
-      { icon: I('<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/>'),
-        label: "자산 보내기", sub: "쿠폰 · 회원권", go: () => void openSend("asset") },
-      { icon: I('<rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="M3.5 9.5h17M8 14h4"/>'),
-        label: "최근 거래", sub: "들어오고 나간 것", go: jump("w-foreign") },
-      /* 0.4.6 — 「내 지갑 주소인지」. 거스름 주소는 주소록에 없어서 찾을 길이 없었다. */
-      { icon: I('<circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5M8 10.6l1.8 1.8 3.2-3.4"/>'),
-        label: "주소 확인", sub: "내 지갑 주소인지", go: jump("whose-in") },
-    ];
-  }
+  /* 🔴 0.4.8-B — 지갑은 큰 아이콘 줄을 **없앴다.** 타일 다섯(받기·보내기·자산 보내기·최근 거래·
+     주소 확인)이 잔액보다 먼저 나와서, 처음 쓰는 사람은 「내 돈이 얼마인지」를 찾아 내려가야 했다
+     (RV3 T04). 이제 잔액 카드가 맨 위에 있고 그 안에 큰 단추 「받기」「보내기」, 나머지는 작은 줄로
+     있다(index.html `#w-balance`). 여기서 다시 그리면 같은 단추가 둘씩 된다. */
   if (page === "assets") {
     return [
       /* 🔴 쉬운 길을 맨 앞에. 이름 규칙·소각액을 몰라도 고르고 적기만 하면 된다.
@@ -4508,12 +4505,17 @@ async function loadWallet() {
     $("w-confirmed").textContent = `${b.confirmed.toLocaleString(undefined, { maximumFractionDigits: 8 })} RVN`;
     // Unconfirmed money is shown apart from spendable money on purpose: a shop
     // that ships on an unconfirmed payment can be paid with one that never lands.
-    setCopyText($("w-unconfirmed"), () => b.unconfirmed
-      ? `${t("확인 대기 중")} ${b.unconfirmed.toLocaleString(lang, { maximumFractionDigits: 8 })} RVN`
+    // 🔴 0.4.8-B — 「확인 대기 중」은 처음 쓰는 사람에게 「내 돈인지 아닌지」가 안 읽혔다(RV3 T04).
+    //    「들어오는 중」으로 부르고, 언제 쓸 수 있게 되는지 한 줄을 붙인다. 합치지는 않는다.
+    const incoming = Number(b.unconfirmed) > 0;
+    setCopyText($("w-unconfirmed"), () => incoming
+      ? `${t("들어오는 중")} ${b.unconfirmed.toLocaleString(lang, { maximumFractionDigits: 8 })} RVN`
       : "");
+    $("w-incoming-note").hidden = !incoming;
   } catch (e) {
     $("w-confirmed").textContent = "—";
     $("w-unconfirmed").textContent = errText(e);
+    $("w-incoming-note").hidden = true;
   }
 
   try {
@@ -4602,6 +4604,19 @@ async function loadWallet() {
   } catch (e) {
     $("w-txs").innerHTML = `<tr><td colspan="3" class="muted">${escapeHtml(errText(e))}</td></tr>`;
   }
+}
+
+/** 그 자리로 데려간다 — 감싼 접힌 칸을 펼치고, 가운데로, 잠깐 빛나게(`pageTiles` 의 jump 와 같은 문법). */
+function jumpToEl(id: string) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  for (let up: HTMLElement | null = el; up; up = up.parentElement) if (up instanceof HTMLDetailsElement) up.open = true;
+  setTimeout(() => {
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    (el as HTMLInputElement).focus?.();
+    el.classList.add("justwent");
+    setTimeout(() => el.classList.remove("justwent"), 1600);
+  }, 60);
 }
 
 async function makeAddress() {
@@ -8030,6 +8045,8 @@ async function 지갑감시() {
   // 목록이 옛것이면 「보이는데 못 쓰는」 상태가 된다.
   loadWallet();
   void loadAssets(false);
+  // 0.4.8-B 라비 첫 화면 「한눈에」의 「들어오는 중」도 — 20초 바퀴를 기다리지 않게(들어올 때만 한 번).
+  void refreshOverview();
 
   // 소리는 대표님이 켜 두셨을 때만. 끈 것을 우리가 되살리지 않는다.
   if (알림켜짐()) 알림소리(1);
@@ -8070,11 +8087,10 @@ async function openSend(mode: "asset" | "rvn", preselect?: string) {
   $("send-compose").style.display = "";
   $("s-result").innerHTML = "";
   $("s-mode").textContent = mode === "asset" ? "자산 보내기" : "RVN 보내기";
-  // 🔴 두 버튼 중 하나만 클래스가 없어 **항상** 진하게 그려지고 있었다.
-  // 선택 상태가 아니라 그냥 스타일인데, RVN 을 눌러도 「자산 보내기」가 계속
-  // 진하니 "자산 탭이 열렸다" 로 읽혔다. 이제 열린 쪽만 표시한다.
-  $("w-send-asset").classList.toggle("ghost", mode !== "asset");
-  $("w-send-rvn").classList.toggle("ghost", mode !== "rvn");
+  // 🔴 여태 두 단추 중 열린 쪽만 진하게(ghost 를 뺐다) 칠했다. 0.4.8-B 부터 「보내기」는 잔액 카드의
+  //    큰 단추라 늘 진하다 — 열린 쪽은 aria-pressed 로만 알린다(화면 읽기용).
+  $("w-send-asset").setAttribute("aria-pressed", String(mode === "asset"));
+  $("w-send-rvn").setAttribute("aria-pressed", String(mode === "rvn"));
   $("s-assetrow").style.display = mode === "asset" ? "" : "none";
   ($("s-addr") as HTMLInputElement).value = "";
   ($("s-qty") as HTMLInputElement).value = "";
@@ -16400,7 +16416,10 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.querySelectorAll("nav a").forEach((a) => {
     (a as HTMLElement).onclick = () => showPage((a as HTMLElement).dataset.page!);
   });
-  $("w-newaddr").addEventListener("click", makeAddress);
+  // 0.4.8-B 잔액 카드 — 큰 단추 「받기」, 작은 줄 「최근 거래」「주소 확인」. (「보내기」는 아래 w-send-rvn)
+  $("w-receive").addEventListener("click", () => void makeAddress());
+  $("w-go-txs").addEventListener("click", () => jumpToEl("w-txs"));
+  $("w-go-whose").addEventListener("click", () => jumpToEl("whose-in"));
   $("ask-yes").addEventListener("click", () =>
     askClose(($("ask-input") as HTMLInputElement).value)
   );
@@ -16755,7 +16774,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   };
   window.addEventListener("desktop-language-change", syncLanguage);
   syncLanguage();
-  $("overview-receive").onclick = () => { showPage("wallet"); $("w-newaddr").scrollIntoView(); $("w-newaddr").focus(); };
+  $("overview-receive").onclick = () => { showPage("wallet"); void makeAddress(); };
   $("overview-phone").onclick = () => { const panel = $("phone-tx-panel") as HTMLDetailsElement; panel.open = true; panel.scrollIntoView(); $("phone-tx-code").focus(); };
 
   $("fee-send").addEventListener("click", () => void sendOwed());

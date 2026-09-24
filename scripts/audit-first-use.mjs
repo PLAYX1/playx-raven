@@ -235,20 +235,34 @@ try {
   });
 
   // 3) 친구에게 내 주소 보내기.
+  //    0.4.8-B — 지갑 화면의 큰 「받기」가 바로 주소를 보여 준다(옛 판은 「받을 주소 만들기」를 또 눌렀다).
+  //    옛 dist 에서도 돌도록 「받기」가 없으면 옛 길로 간다.
   await task('T03', '내 주소를 친구에게', baseState(), async (x) => {
     const first = await x.page.evaluate(() => document.querySelector('.page.on')?.id || '');
     x.note(`켠 뒤 첫 화면: ${first} · 첫 화면에 「받기」: ${(await x.visible('#overview-receive')) ? '있음' : '없음'}`);
     if (await x.visible('#overview-receive')) await x.tap('#overview-receive', '첫 화면 받기');
-    else await x.tap('nav a[data-page="wallet"]', '지갑 메뉴');
+    else {
+      await x.tap('nav a[data-page="wallet"]', '지갑 메뉴');
+      if (await x.page.$('#w-receive')) await x.tap('#w-receive', '지갑 받기');
+    }
     const addrBefore = await x.has(/RGz\d{3}/);
     x.note(`「받기」 누른 직후 주소가 보임: ${addrBefore ? '예' : '아니오 — 주소 만들기 단추를 또 눌러야 함'}`);
-    await x.tap('#w-newaddr', '받을 주소 만들기');
-    const box = await x.page.evaluate(() => { const c = document.getElementById('w-copy')?.closest('.card, div'); return c ? { qr: !!c.querySelector('svg rect, canvas, img[src*="qr"], .qr'), text: c.innerText.slice(0, 120) } : null; });
-    x.note(`주소 옆 QR: ${box?.qr ? '있음' : '없음'} · 공유 단추: ${(await x.has(/공유/)) ? '있음' : '없음'}`);
+    if (!addrBefore) await x.tap('#w-newaddr', '받을 주소 만들기');
+    // 「주소 옆」 = 복사 단추가 든 **같은 카드**(없으면 바로 위 칸). 0.4.8-B 는 QR 이 카드 왼쪽, 단추가 오른쪽 줄에 있다.
+    const box = await x.page.evaluate(() => { const b = document.getElementById('w-copy'); const c = b?.closest('.card') || b?.closest('div'); return c ? { qr: !!c.querySelector('svg rect, canvas, img[src*="qr"], .qr'), text: c.innerText.slice(0, 120) } : null; });
+    x.note(`주소 옆 QR: ${box?.qr ? '있음' : '없음'} · 공유 단추: ${(await x.has(/공유/)) ? '있음' : '없음'} · 메시지로 복사: ${(await x.page.$('#w-copymsg')) ? '있음' : '없음'} · QR 그림 저장: ${(await x.page.$('#w-qrsave')) ? '있음' : '없음'}`);
     await x.shot('address');
+    const a1 = ((await x.text('#w-addr')).match(/RGz\d{3}\w+/) || [''])[0];
     await x.tap('#w-copy', '복사');
-    await x.tap('#w-newaddr', '받을 주소 만들기(한 번 더)');
-    x.note(`다시 누르면 새 주소: ${(await x.has(/RGz002/)) ? '예(주소가 바뀜)' : '아니오'}`);
+    if (await x.page.$('#w-receive')) {
+      // 친구에게 준 주소가 다시 들어와도 그대로인가 — 아직 받은 적 없는 주소면 다시 쓴다.
+      await x.tap('#w-receive', '받기(한 번 더)');
+      const a2 = ((await x.text('#w-addr')).match(/RGz\d{3}\w+/) || [''])[0];
+      x.note(`다시 「받기」: ${a1 && a1 === a2 ? '같은 주소(아직 안 받은 주소를 다시 씀)' : `주소가 바뀜 ${a1} → ${a2}`} · 새 주소는 「새 주소 만들기」를 따로 누를 때만`);
+    } else {
+      await x.tap('#w-newaddr', '받을 주소 만들기(한 번 더)');
+      x.note(`다시 누르면 새 주소: ${(await x.has(/RGz002/)) ? '예(주소가 바뀜)' : '아니오'}`);
+    }
     return true;
   });
 
@@ -259,7 +273,7 @@ try {
     await x.wait(16500, '지갑 살피기는 15초마다');
     const note = (await x.text('#live-note')).trim();
     x.note(`알림 띠: ${note || '(없음)'} · 소리/OS 알림: 앱 안 띠만`);
-    x.note(`첫 화면 잔액: ${(await x.text('#overview-balance')).replace(/\s+/g, ' ').slice(0, 60)}`);
+    x.note(`첫 화면 잔액: ${(await x.text('#overview-balance')).replace(/\s+/g, ' ').slice(0, 60)} · 들어오는 중: ${(await x.page.$eval('#overview-incoming-row', (e) => !e.hidden).catch(() => false)) ? (await x.page.$eval('#overview-incoming', (e) => e.textContent.trim())) : '(없음)'}`);
     await x.shot('toast');
     await x.tap('nav a[data-page="wallet"]', '지갑 메뉴');
     x.note(`지갑 화면: 사용 가능 ${(await x.text('#w-confirmed')).trim()} · ${(await x.text('#w-unconfirmed')).trim()}`);
