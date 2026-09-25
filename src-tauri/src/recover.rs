@@ -39,6 +39,11 @@ struct RestoreOperation {
 impl RestoreOperation {
     fn begin() -> Result<Self, String> {
         use std::sync::atomic::Ordering;
+        // 0.4.9 — 복구 단어로 되살리는 동안 지갑 자리에는 파일이 없거나 방금 만든 것이다.
+        //    그 사이 백업 파일 되돌리기가 끼어들면 무엇이 옆에 놓였는지 아무도 모른다.
+        if crate::words_restore::file_restore_blocked() {
+            return Err("복구 단어로 지갑을 되살리는 중입니다. 끝나거나 되돌린 뒤 다시 시도해 주세요.".into());
+        }
         RESTORE_BUSY
             .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
             .map_err(|_| "다른 복원이 진행 중입니다. 끝난 뒤 다시 시도해 주세요.".to_string())?;
@@ -65,6 +70,39 @@ impl Drop for RestoreOperation {
         drop(self.session.take());
         RESTORE_BUSY.store(false, std::sync::atomic::Ordering::Release);
     }
+}
+
+/// 0.4.9 — 12단어 되살리기가 `wallet.dat` 이름을 바꿀 때 **백업 파일 되돌리기와 같은 문**을 쓴다.
+///
+/// 같은 프로세스 안의 복원(`RESTORE_BUSY`) · 다른 RavenVault(`RestoreSessionGuard`) ·
+/// 노드(`DataDirGuard` = 코어와 같은 `.lock`) 셋을 다 쥔 채로만 `f` 가 돈다. 노드가 떠 있으면
+/// `.lock` 을 못 잡아 여기서 멈춘다 — 떠 있는 노드 밑에서 지갑 파일을 바꾸는 일은 없다.
+pub(crate) fn with_datadir_locked<T>(
+    session_dir: &std::path::Path,
+    datadir: &std::path::Path,
+    f: impl FnOnce(&std::path::Path) -> Result<T, String>,
+) -> Result<T, String> {
+    use std::sync::atomic::Ordering;
+    RESTORE_BUSY
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .map_err(|_| "다른 복원이 진행 중입니다. 끝난 뒤 다시 시도해 주세요.".to_string())?;
+    let out = (|| {
+        let session = restore_lock::RestoreSessionGuard::acquire(session_dir)?;
+        let guard = restore_lock::DataDirGuard::acquire(datadir)?;
+        guard.check()?;
+        let r = f(guard.directory());
+        // POSIX 기록 잠금은 파일을 닫을 때 풀린다. 노드 잠금을 먼저 놓는다.
+        drop(guard);
+        drop(session);
+        r
+    })();
+    RESTORE_BUSY.store(false, Ordering::Release);
+    out
+}
+
+/// 노드 폴더의 `.lock` 을 지금 아무도 안 쥐고 있나(= 노드가 완전히 꺼졌나). 잡았다가 바로 놓는다.
+pub(crate) fn datadir_free(datadir: &std::path::Path) -> bool {
+    restore_lock::DataDirGuard::acquire(datadir).is_ok()
 }
 
 fn dir() -> PathBuf {

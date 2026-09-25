@@ -197,6 +197,13 @@ pub async fn call_rpc(method: &str, params: Value) -> Result<Value, String> {
 /// Preserve numeric RPC error codes for public chain adapters without exposing
 /// node credentials, configuration paths, or raw RPC errors to browsers.
 pub(crate) async fn call_rpc_detailed(method: &str, params: Value) -> Result<Value, RpcFailure> {
+    // 🔴 0.4.9 — 지갑을 되살리며 옛 거래를 찾는 동안(`rescanblockchain`) 코어는 `cs_main` 을
+    //    쥐고 있어 거의 모든 질문이 20초 뒤 시간 초과로 끝난다. 그 사이 주기 질문 네 개가
+    //    대기열(`rpc_gate`)을 막고, 화면은 「노드가 답하지 않습니다」로 고장처럼 보인다.
+    //    그래서 **묻지 않고 바로** 「되살리는 중」이라고 답한다. 멈추기·끄기만 지나간다.
+    if crate::words_restore::rescanning() && !matches!(method, "abortrescan" | "stop") {
+        return Err(crate::words_restore::RESCANNING_SAY.into());
+    }
     let cookie = read_cookie()?;
     let (user, pass) = cookie
         .split_once(':')
@@ -277,6 +284,40 @@ pub(crate) async fn call_rpc_detailed(method: &str, params: Value) -> Result<Val
         .get("result")
         .cloned()
         .ok_or_else(|| format!("{method}: response had no result"))?)
+}
+
+/// 오래 걸리는 부름 하나(0.4.9 — `rescanblockchain`). 몇 시간이 걸릴 수 있다.
+///
+/// 🔴 위 `call_rpc` 와 다른 점 둘: ① 되살리는 중 문을 거치지 않는다(이 부름이 바로 그 일이다)
+///    ② 동시에 넷까지의 대기열(`rpc_gate`)을 **쥐지 않는다** — 몇 시간 동안 한 자리를 막으면
+///    나머지 화면이 셋으로 버틴다. 끊겨도 노드 안의 훑기는 계속되므로, 부르는 쪽이
+///    `debug.log` 와 뒤이은 질문으로 끝났는지 판단한다(words_restore.rs).
+pub(crate) async fn call_rpc_long(method: &str, params: Value, secs: u64) -> Result<Value, String> {
+    let cookie = read_cookie()?;
+    let (user, pass) = cookie
+        .split_once(':')
+        .ok_or_else(|| "Malformed .cookie file".to_string())?;
+    let body = json!({ "jsonrpc": "1.0", "id": "raven-studio", "method": method, "params": params });
+    let response = client()
+        .post(rpc_url())
+        .basic_auth(user, Some(pass))
+        .json(&body)
+        .timeout(std::time::Duration::from_secs(secs))
+        .send()
+        .await
+        .map_err(|e| format!("노드와의 연결이 끊겼습니다 ({method}): {}", if e.is_timeout() { "시간 초과" } else { "연결" }))?;
+    let parsed: Value = response
+        .json()
+        .await
+        .map_err(|_| format!("노드와의 연결이 끊겼습니다 ({method})"))?;
+    if let Some(err) = parsed.get("error").filter(|e| !e.is_null()) {
+        let msg = err.get("message").and_then(Value::as_str).unwrap_or("unknown error");
+        return Err(format!("{method}: {msg}"));
+    }
+    parsed
+        .get("result")
+        .cloned()
+        .ok_or_else(|| format!("{method}: response had no result"))
 }
 
 #[derive(Deserialize)]

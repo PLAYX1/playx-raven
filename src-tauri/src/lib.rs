@@ -92,6 +92,9 @@ mod upload;
 mod spec;
 mod lockbox;
 mod rehearse;
+// 0.4.9 — 복구 단어(12단어)로 지갑 되살리기. 검사·주소(words) · 흐름(words_restore).
+mod words;
+mod words_restore;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -364,6 +367,14 @@ pub fn run() {
             recover::node_rename,
             recover::restore_survey,
             recover::restore_apply,
+            words_restore::words_restore_preflight,
+            words_restore::words_restore_check,
+            words_restore::words_restore_start,
+            words_restore::words_restore_status,
+            words_restore::words_restore_rescan,
+            words_restore::words_restore_abort,
+            words_restore::words_restore_undo,
+            words_restore::words_restore_close,
             recover::recovery_card,
             recover::recovery_card_print,
             recover::phone_lost_plan,
@@ -711,6 +722,19 @@ pub fn run() {
             //    늦어지고, 그게 「응답하지 않습니다」로 보인다.
             {
                 tauri::async_runtime::spawn(async move {
+                    // 🔴 0.4.9 — **완전히 새 컴퓨터**(지갑 파일도 장부도 없고 첫 질문도 아직)에서는
+                    //    노드 첫 시작을 첫 질문 뒤로 미룬다. 켜자마자 켜면 몇 초 안에 무작위 지갑이
+                    //    생기고, 「전에 쓰던 지갑이 있어요」를 고른 사람은 그것을 먼저 옆에 둬야 한다.
+                    //    미루면 버릴 지갑이 아예 안 생기고 되살린 뒤 재검사가 0에 가깝다(설계서 10절 ④).
+                    //    첫 질문에 답하면(모드를 고르면) 곧바로 예전처럼 켠다.
+                    let brand_new = !crate::mode::mode_get()["chosen"].as_bool().unwrap_or(false)
+                        && !crate::paths::has_wallet(&crate::paths::raven_dir())
+                        && !crate::paths::datadir_status()["has_chain"].as_bool().unwrap_or(false);
+                    if brand_new {
+                        while !crate::mode::mode_get()["chosen"].as_bool().unwrap_or(false) {
+                            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                        }
+                    }
                     let r = boot::run().await;
                     boot::remember(r);
                 });

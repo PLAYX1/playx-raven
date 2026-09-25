@@ -40,7 +40,7 @@ fn plist_path() -> std::path::PathBuf {
 ///
 /// 파일은 지우지 않는다 — 지우면 재색인이 끝난 뒤 노드 자동 시작이 사라지고,
 /// 사장은 그걸 눈치채지 못한 채 다음 정전에 가게가 멈춘다.
-fn agent_hold() -> bool {
+pub(crate) fn agent_hold() -> bool {
     let p = plist_path();
     if !p.is_file() {
         return false;
@@ -52,7 +52,7 @@ fn agent_hold() -> bool {
     true
 }
 
-fn agent_release() {
+pub(crate) fn agent_release() {
     let p = plist_path();
     if p.is_file() {
         let _ = crate::quiet::cmd("launchctl")
@@ -99,6 +99,10 @@ pub fn reindex_state() -> Value {
 /// 사장이 「지금 바로」를 눌렀을 수도 있고, 그건 사장의 판단이다.
 #[tauri::command]
 pub async fn reindex_start() -> Result<Value, String> {
+    // 0.4.9 — 복구 단어로 되살리는 중에는 노드를 끄고 켜지 않는다(words_restore.rs).
+    if let Some(why) = crate::words_restore::node_start_hold() {
+        return Err(why);
+    }
     if RUNNING.swap(true, Ordering::Relaxed) {
         return Err("이미 다시 훑고 있습니다.".into());
     }
@@ -373,6 +377,11 @@ pub async fn sync_stalled() -> Value {
 #[tauri::command]
 pub fn node_log_tail() -> Value {
     let p = crate::paths::raven_dir().join("debug.log");
+    // 🔴 0.4.9 — 복구 단어로 되살리는 동안과 끝난 직후(사람이 「닫기」를 누르기 전)에는 노드 기록을
+    //    보이지도, 「이 글자 복사」로 내보내지도 않는다(설계서 부록 A 3·4).
+    if crate::words_restore::log_hidden() {
+        return json!({ "ok": false, "why": "지갑을 되살리는 동안과 끝난 직후에는 노드 기록을 보여 드리지 않습니다 — 복구 단어가 섞일 수 있어서입니다." });
+    }
     let Ok(meta) = std::fs::metadata(&p) else {
         return json!({ "ok": false, "why": "노드 기록 파일을 찾지 못했습니다.", "path": p.to_string_lossy() });
     };
@@ -393,7 +402,8 @@ pub fn node_log_tail() -> Value {
     }
     let text = String::from_utf8_lossy(&buf);
     let lines: Vec<&str> = text.lines().rev().take(40).collect();
-    let tail: Vec<String> = lines.into_iter().rev().map(|s| s.to_string()).collect();
+    // `mnemonic` 이 든 줄(틀린 복구 단어를 받은 코어가 남기는 줄)은 언제나 가린다.
+    let tail: Vec<String> = lines.into_iter().rev().map(crate::words_restore::mask_line).collect();
     json!({
         "ok": true,
         "path": p.to_string_lossy(),

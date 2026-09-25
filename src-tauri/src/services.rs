@@ -326,7 +326,12 @@ pub async fn start_parts(files: bool) -> Result<Value, String> {
     let mut skipped = Vec::new();
 
     // ── node ──
-    if status["node"]["running"].as_bool().unwrap_or(false) {
+    // 🔴 0.4.9 — 복구 단어로 되살리는 동안(지갑 자리가 비어 있거나 단어로 만드는 중) 노드를 켜면
+    //    무작위 새 지갑이 먼저 생기고 단어는 조용히 무시된다(설계서 F2·F19). 켤 때·「지금 켜기」·
+    //    첫 실행이 전부 이 함수를 지나므로 여기 한 곳에서 막는다.
+    if let Some(why) = crate::words_restore::node_start_hold() {
+        skipped.push(json!({ "what": "노드", "why": why }));
+    } else if status["node"]["running"].as_bool().unwrap_or(false) {
         skipped.push(json!({ "what": "노드", "why": "이미 켜져 있습니다" }));
     } else if let Some(path) = which("ravend") {
         let datadir = crate::paths::raven_dir().to_string_lossy().to_string();
@@ -388,12 +393,20 @@ pub async fn start_parts(files: bool) -> Result<Value, String> {
         //
         // ⚠️ 한 번만 붙인다. 표시를 지우고 붙이므로 다음 켜기에는 안 붙는다 —
         //    성공했는데 또 붙이면 매번 다시 계산하게 된다.
+        // 0.4.9 — 장부를 아껴 쓰는(prune) 컴퓨터에서 12단어로 되살리면 옛 블록이 없어 훑을 수가
+        //    없다. 사람이 「장부를 처음부터 다시 받으며 되살리기」를 고른 때만 한 번 붙인다 —
+        //    다시 받는 동안 붙는 블록마다 지갑이 제 거래를 잡는다(설계서 F13). 표시는 지우고 붙인다.
+        let words_reindex = crate::paths::app_file("words-reindex");
+        let need_words_reindex = words_reindex.exists();
+        if need_words_reindex {
+            let _ = std::fs::remove_file(&words_reindex);
+        }
         let heal = crate::paths::app_file("chainstate-heal");
         let need_heal = heal.exists();
         if need_heal {
             let _ = std::fs::remove_file(&heal);
             cmd.arg("-reindex-chainstate");
-        } else if need_reindex {
+        } else if need_reindex || need_words_reindex {
             cmd.arg("-reindex");
         }
         match spawn_node(cmd, &datadir).await {
@@ -633,6 +646,11 @@ async fn spawn_node_inner(cmd: &mut Command) -> Result<Option<Child>, String> {
 /// 있는 것이 없다. 이건 사실 가장 흔한 경우고 — 레이븐 코어를 쓰시던 분이
 /// 코어를 켜 둔 채 이 앱을 여는 것 — 답도 한 줄이다.
 fn node_why(raw: &str) -> String {
+    // 🔴 0.4.9 — 틀린 복구 단어를 받은 코어는 단어 전체를 오류 문장에 넣는다(설계서 F7). 그 문장이
+    //    여기서 화면 오류가 되고 「문제 알리기」에 실린다. 그런 줄은 통째로 바꾼다 — 앞 200자도 안 옮긴다.
+    if crate::words_restore::masks_node_error(raw) {
+        return "노드가 켜지지 않았습니다. 복구 단어 설정 문제로 보입니다 — 내용은 보안을 위해 옮기지 않습니다.".into();
+    }
     let low = raw.to_lowercase();
     if low.contains("cannot obtain a lock") || low.contains("probably already running") {
         return "레이븐 코어가 이미 켜져 있습니다. 같은 지갑은 한 프로그램만 쓸 수 있습니다. \
@@ -724,6 +742,12 @@ pub fn stop_on_exit() {
             r
         });
     }
+    // 0.4.9 — 옛 거래를 찾는 중이면 노드는 **죽이지 않는다**(윈도우는 우리가 띄운 노드를 `kill` 한다).
+    //    `stop` 을 받은 코어는 훑기를 마친 뒤 스스로 닫힌다. 끊기면 다음 실행에서 [이어 찾기].
+    if crate::words_restore::rescanning() {
+        stop_ours("ipfs");
+        return;
+    }
     let _ = services_stop();
 }
 
@@ -802,6 +826,18 @@ mod tests {
         // 사장이 할 수 있는 일이 아닌 말은 안 나와야 한다.
         assert!(!said.contains("lock"), "영어 원문을 그대로 보이면 안 된다");
         assert!(!said.contains("datadir"));
+    }
+
+    /// 🔴 0.4.9 — 틀린 복구 단어를 받은 코어의 오류 문장이 화면·신고로 새지 않는다.
+    #[test]
+    fn 복구_단어가_든_오류는_옮기지_않는다() {
+        let words = "legal winner thank year wave sausage worth useful legal winner thank yellow";
+        let core = format!("Error: SetMnemonic: invalid {}: `{words}`", "mnemonic");
+        let said = node_why(&core);
+        for w in words.split(' ') {
+            assert!(!said.contains(w), "오류 문장에 단어가 샜다: {said}");
+        }
+        assert!(said.contains("보안"));
     }
 
     #[test]

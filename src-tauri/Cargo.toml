@@ -85,4 +85,5 @@ tower = { version = "0.5", features = ["util"] }
 libc = "0.2"
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_System_IO"] }
+# 0.4.9 — 복구 단어를 노드에 건네는 이름 있는 파이프(현재 사용자만 · 원격 거부). words_restore.rs `win_pipe`.
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_System_IO", "Win32_System_Pipes", "Win32_Security", "Win32_Security_Authorization"] }
