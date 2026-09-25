@@ -79,7 +79,7 @@ impl PeerBook {
 pub enum Received {
     Accepted { peer: String, message: Value, mode: &'static str },
     Denied { peer: String, message: Value, reason: &'static str, reply: ChatEvent },
-    Unpaired { peer: String, name: String },
+    Unpaired { peer: String, room: String },
     /// 조용히 버림. `re` 는 이미 본 요청 id(재전송) — 캐시한 답을 다시 보낼 수 있게.
     Drop { reason: &'static str, re: Option<String>, peer: Option<String> },
 }
@@ -134,9 +134,9 @@ pub fn receive(book: &mut PeerBook, keys: &DeviceKeys, v: &Value, now: i64, spen
     peer.last_used = now;
 
     if t == "unpair" {
-        let name = peer.name.clone();
+        let room = peer.ch_room.clone();
         book.remove(&sign);
-        return Received::Unpaired { peer: sign, name };
+        return Received::Unpaired { peer: sign, room };
     }
     let perms = peer.perms.to_value();
     match authorize(&perms, &t, &message["body"], spent_today_rvn(&sign)) {

@@ -3307,6 +3307,8 @@ pub async fn start_phone_server(
     eprintln!("[phone] bind 끝, 주소 읽는 중");
     // 릴레이가 받은 것을 5초에 한 번 디스크에 내린다.
     crate::relay::start_saver();
+    // RV6 폰 연결: 연결된 폰이 있으면 그 통로(허락 시간·요청 만료·통로 바뀜 알림)를 돌린다.
+    crate::pairing::net::start();
     // 🔴 밀린 개발비를 **사장이 안 눌러도** 스스로 보낸다. 지갑이 풀려 있는
     //    순간에만 나가고, 암호는 어디에도 안 적는다.
     crate::devfee::start_auto_pay();
@@ -3516,6 +3518,11 @@ fn wifi_ip(ifconfig: &str) -> Option<String> {
         }
     }
     None
+}
+
+/// RV6 폰 연결 QR 의 `l`(같은 Wi-Fi 직통) 주소에 쓴다.
+pub(crate) fn lan_ip() -> Option<String> {
+    local_ip()
 }
 
 fn local_ip() -> Option<String> {
