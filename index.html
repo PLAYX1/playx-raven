@@ -2000,6 +2000,34 @@
       .okline { color: var(--ok); }
       /* 단어 칸은 끌어 고르기를 막는다 — 복사를 권하지 않는다(안내는 위 경고 그대로). */
       .sdw-words { user-select: none; -webkit-user-select: none; }
+      /* 0.4.9 복구 단어로 되살리기(words-restore.ts). 첫 질문 위에서도 열린다. */
+      #wrs.sheet { z-index: 9500; }
+      .hellorestore { margin: 10px 0 18px; font-size: 15px; color: var(--muted); }
+      .linkbtn { background: none; border: 0; padding: 4px 2px; min-height: 0; color: var(--brand);
+                 font-size: 15px; text-decoration: underline; cursor: pointer; }
+      .wrs-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 0 6px; }
+      .wrs-cell { display: flex; align-items: center; gap: 6px; margin: 0; }
+      .sheet-box label.wrs-cell { margin: 0; }
+      .wrs-cell i { color: var(--faint); font-style: normal; font-size: 13px; min-width: 18px; text-align: right; }
+      .sheet-box label.wrs-cell input { margin: 0; min-width: 0; font-family: ui-monospace, SFMono-Regular, monospace; }
+      .wrs-cell input.bad { border-color: var(--warn); background: color-mix(in srgb, var(--warn) 10%, var(--bg)); }
+      /* 가리기는 type=password 가 아니다 — 암호 관리자가 저장을 권하지 않게. */
+      .wrs-masked input, .wrs-secret:not(.wrs-shown) { -webkit-text-security: disc; }
+      .wrs-sug { display: flex; gap: 6px; flex-wrap: wrap; min-height: 34px; }
+      .wrs-sug button { min-height: 32px; padding: 2px 10px; font-family: ui-monospace, SFMono-Regular, monospace; }
+      .wrs-extra summary { cursor: pointer; color: var(--muted); font-size: 14px; }
+      .wrs-when { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; }
+      .wrs-when legend { font-size: 14px; color: var(--muted); padding: 0 4px; }
+      .sheet-box .wrs-when label { display: flex; align-items: center; gap: 8px; margin: 6px 0; color: var(--text); }
+      .sheet-box .wrs-when label input { display: inline-block; width: auto; margin: 0; }
+      .wrs-list { margin: 0 0 12px; padding-left: 20px; line-height: 2; }
+      .wrs-list li { color: var(--faint); }
+      .wrs-list li.did { color: var(--ok); }
+      .wrs-list li.did::marker { content: "✓ "; }
+      .wrs-list li.now { color: var(--text); font-weight: 600; }
+      .wrs-bar { height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; margin: 8px 0; }
+      .wrs-bar i { display: block; height: 100%; width: 2%; background: var(--brand); transition: width .6s ease; }
+      @media (max-width: 520px) { .wrs-grid { grid-template-columns: repeat(2, 1fr); } }
       /* 연결 점 하나. 접혀 있으면 다섯 줄은 숨긴다(따라잡기 막대는 남긴다 — 말이 없는 막대다). */
       .navfoot.folded .dotrow:not(.dotsum) { display: none; }
       .dotsum { font-weight: 600; }
@@ -2460,6 +2488,10 @@
           <b>지갑으로 쓸래요</b>
           <span class="meta">받고 보내고 보관만 합니다. 쓸 때 켜시면 되고, 켜면 밀린 기록을 따라잡습니다.</span>
         </button>
+        <!-- 0.4.9 — 전에 쓰던 지갑이 있는 사람. 새 컴퓨터에서는 여기서 되살리는 것이 가장 싸다(노드 첫 시작도 이 질문 뒤로 미룬다). -->
+        <p class="hellorestore">전에 쓰던 지갑이 있어요 →
+          <button type="button" class="linkbtn" id="hello-restore-words">복구 단어 12개로</button> ·
+          <button type="button" class="linkbtn" id="hello-restore-file">백업 파일로</button></p>
 
         <button id="hello-help" class="ghost hellopick">
           <b>레이븐코인을 돕고 싶어요</b>
@@ -3402,6 +3434,7 @@
             <button type="button" class="ghost" id="w-send-asset">자산 보내기</button>
             <button type="button" class="ghost" id="w-go-txs">최근 거래</button>
             <button type="button" class="ghost" id="w-go-whose">주소 확인</button>
+            <button type="button" class="ghost" id="w-restore-words">12단어로 되살리기</button>
             <button type="button" class="ghost" id="w-refresh">새로고침</button>
           </div>
         </section>
@@ -4579,6 +4612,7 @@
           <div class="row" style="margin-top:16px">
             <button class="ghost" id="rs-pick">백업에서 되돌리기</button>
             <button class="ghost" id="rs-folder">폴더에서 되돌리기</button>
+            <button class="ghost" id="rs-words">복구 단어로 되살리기</button>
             <button class="ghost" id="rs-card">복구 카드 인쇄</button>
             <button class="ghost" id="rs-lost">폰을 잃어버렸어요</button>
             <button class="ghost" id="up-check">새 버전 확인</button>
@@ -5156,6 +5190,16 @@
         <div class="sheet-head"><span id="sdw-title">복구 단어 적어 두기</span><button class="ghost" id="sdw-close">닫기</button></div>
         <div class="steps" id="sdw-steps" aria-hidden="true"><i></i><i></i><i></i></div>
         <div id="sdw-body"></div>
+      </div>
+    </div>
+
+    <!-- 0.4.9 복구 단어(12단어)로 지갑 되살리기 — 안내 · 단어 · 확인 · 진행 · 끝(words-restore.ts).
+         🔴 첫 질문(#hello, z 9000) 위에서도 열려야 한다. 열려 있는 동안 창 캡처를 막는다. -->
+    <div id="wrs" class="sheet hidden" role="dialog" aria-modal="true" aria-labelledby="wrs-title">
+      <div class="sheet-box">
+        <div class="sheet-head"><span id="wrs-title">복구 단어로 지갑 되살리기</span><button class="ghost" id="wrs-close">닫기</button></div>
+        <div class="steps" id="wrs-steps" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+        <div id="wrs-body"></div>
       </div>
     </div>
 

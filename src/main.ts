@@ -7,6 +7,7 @@ import { readItemName, verifyLink } from "./easy-create";
 import { requireWalletBackup, restoreIsComplete } from "./backup-result";
 import { paintWalletNotes, walletWelcome } from "./wallet-notes";
 import { wireSeedCheck } from "./seed-check";
+import { wireWordsRestore } from "./words-restore";
 import { invoke as rawInvoke } from "@tauri-apps/api/core";
 
 /**
@@ -17021,6 +17022,17 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("bk-go").addEventListener("click", () => void doBackup().catch(() => {}));
   // 🔴 「이 컴퓨터 › 백업」의 단추도 지갑 화면 알림 줄과 **같은 흐름**으로 간다(0.4.8).
   $("bk-seed").addEventListener("click", () => seedCheck.open());
+  // 0.4.9 복구 단어(12단어)로 되살리기 — 입구 셋: 첫 질문 · 지갑 화면 · 「이 컴퓨터 › 백업」.
+  $("rs-words").addEventListener("click", () => wordsRestore.open());
+  $("w-restore-words").addEventListener("click", () => wordsRestore.open());
+  $("hello-restore-words").addEventListener("click", () => wordsRestore.open());
+  $("hello-restore-file").addEventListener("click", () => {
+    // 첫 질문은 그대로 남는다(다음 실행에서 다시 묻는다). 지금은 되돌리기 칸으로 데려간다.
+    const hello = document.getElementById("hello");
+    if (hello) hello.style.display = "none";
+    showPage("settings");
+    jumpToEl("rs-pick");
+  });
   void paintStatusDots();
   // 🔴 켤 때마다 본다.
   //
@@ -17735,6 +17747,9 @@ window.addEventListener("DOMContentLoaded", async () => {
   void invoke("reindex_progress").catch(() => null);
   void reindexTick();
   window.setInterval(() => void reindexTick(), 60_000);
+  // 0.4.9 — 되살리기가 중간에 멈춰 있으면(노드를 못 켜는 상태) 먼저 알리고, 「마감 뒤 찾기」 예약을 1분마다 본다.
+  wordsRestore.checkOnStart();
+  window.setInterval(() => wordsRestore.tick(), 60_000);
   // Status is cheap; the IPFS scan is not, and is deliberately not on a timer.
 });
 
@@ -17825,6 +17840,27 @@ const seedCheck = wireSeedCheck({
   },
 });
 const walletNotes = { invoke, mode: () => modeNow, openSeedCheck: () => seedCheck.open() };
+/** 복구 단어로 지갑 되살리기(0.4.9). 여는 곳은 첫 질문 · 지갑 화면 · 「이 컴퓨터 › 백업」. */
+const wordsRestore = wireWordsRestore({
+  invoke,
+  mode: () => modeNow,
+  changed: () => {
+    if (currentPage === "wallet") loadWallet();
+  },
+  openBackup: () => { showPage("settings"); jumpToEl("bk-go"); },
+  openEncrypt: () => {
+    const hello = document.getElementById("hello");
+    if (hello) hello.style.display = "none";
+    showPage("wallet");
+    jumpToEl("w-enc");
+  },
+  openFileRestore: () => {
+    const hello = document.getElementById("hello");
+    if (hello) hello.style.display = "none";
+    showPage("settings");
+    jumpToEl("rs-pick");
+  },
+});
 
 /**
  * 「지갑」 모드면 왼쪽 메뉴의 지갑을 **맨 위**로 올린다. 다른 모드로 바꾸면
