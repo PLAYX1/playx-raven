@@ -63,11 +63,14 @@ const ts = read("src/main.ts");
 {
   const haveHtml = new Set([...html.matchAll(/\sid="([\w-]+)"/g)].map((m) => m[1]));
   // 화면을 코드가 만들어 넣는 것도 있다(`innerHTML` 안의 id). 그것도 센다.
-  const madeByCode = new Set([...ts.matchAll(/id="([\w-]+)"/g)].map((m) => m[1]));
+  // 🔴 main.ts 만 보면 안 된다 — 0.4.8 에서 받기 칸(wallet-easy.ts)처럼 **다른 모듈이 만들고
+  //    main.ts 가 부르는** 칸을 「없는 칸」으로 잡아 공개 빌드가 통째로 멈췄다. src 의 .ts 전부를 센다.
+  const allTs = readdirSync(join(ROOT, "src")).filter((f) => f.endsWith(".ts")).map((f) => read("src/" + f)).join("\n");
+  const madeByCode = new Set([...allTs.matchAll(/id="([\w-]+)"/g)].map((m) => m[1]));
   // 🔴 그중에는 **번호를 붙여 만드는 것**이 있다 — `id="hr-o-${d}"` 처럼.
   //    이걸 못 보면 멀쩡한 코드를 「없는 칸을 부른다」고 잡는다. 거짓 경보를
   //    한 번 내면 다음부터 아무도 이 검사를 안 본다.
-  const madePrefix = [...ts.matchAll(/id="([\w-]+?)-?\$\{/g)].map((m) => m[1]);
+  const madePrefix = [...allTs.matchAll(/id="([\w-]+?)-?\$\{/g)].map((m) => m[1]);
   const asked = new Set(
     [...ts.matchAll(/\$\$?\(\s*[`"]([\w-]+)[`"]\s*\)/g)].map((m) => m[1])
   );
