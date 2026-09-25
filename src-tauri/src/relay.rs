@@ -530,7 +530,36 @@ fn take_pairing_event(e: &Value) -> Option<(bool, String)> {
 ///
 /// REQ 에는 저장분(+연결 방 메모리분)을 주고 EOSE 를 보낸 뒤, **구독을 열어 둔다** —
 /// 그 뒤로 들어오는 맞는 글을 바로 밀어 준다(CLOSE 하거나 연결이 끊길 때까지).
+/// 한꺼번에 붙어 있을 수 있는 연결 수. 폰 몇 대·손님 화면·다른 가게면 넉넉하다.
+/// 🔴 없으면 같은 Wi-Fi(또는 터널)의 누군가가 소켓을 수천 개 열어 계산대 메모리를 다 쓴다.
+const MAX_CONNS: usize = 64;
+static OPEN_CONNS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// 연결 한 자리. 떨어질 때(연결이 끝날 때) 자리를 돌려준다.
+struct ConnSlot;
+impl ConnSlot {
+    fn take() -> Option<Self> {
+        use std::sync::atomic::Ordering::SeqCst;
+        OPEN_CONNS
+            .fetch_update(SeqCst, SeqCst, |n| (n < MAX_CONNS).then_some(n + 1))
+            .ok()
+            .map(|_| ConnSlot)
+    }
+}
+impl Drop for ConnSlot {
+    fn drop(&mut self) {
+        OPEN_CONNS.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
 pub async fn serve(mut ws: WebSocket) {
+    let Some(_slot) = ConnSlot::take() else {
+        let _ = ws
+            .send(Message::Text(json!(["NOTICE", "지금 연결이 너무 많습니다. 잠시 뒤에 다시 붙어 주세요."]).to_string().into()))
+            .await;
+        let _ = ws.send(Message::Close(None)).await;
+        return;
+    };
     // 🔴 **한 연결이 쏟아붓는 것을 막는다.** 서명이 맞는 글은 누구나 얼마든지
     // 만들 수 있다(열쇠 하나면 된다). 막지 않으면 한 사람이 5,000개를 채워
     // **이 가게의 진짜 공지를 밀어내고**, 그 사이 디스크와 CPU 를 다 쓴다.
@@ -727,6 +756,21 @@ mod tests {
 
     /// 🔴 서명이 틀린 글을 받아 두면, 아무나 남의 이름으로 「이 가게는 여기서
     /// 주문받습니다」를 올리고 우리가 그것을 손님에게 나른다.
+    #[test]
+    fn connection_slots_are_capped_and_returned() {
+        let before = OPEN_CONNS.load(std::sync::atomic::Ordering::SeqCst);
+        let mut held = Vec::new();
+        while let Some(s) = ConnSlot::take() {
+            held.push(s);
+            assert!(held.len() <= MAX_CONNS);
+        }
+        assert_eq!(OPEN_CONNS.load(std::sync::atomic::Ordering::SeqCst), MAX_CONNS);
+        drop(held.pop());
+        assert!(ConnSlot::take().is_some(), "끝난 연결의 자리는 돌아온다");
+        drop(held);
+        assert_eq!(OPEN_CONNS.load(std::sync::atomic::Ordering::SeqCst), before);
+    }
+
     #[test]
     fn a_forged_event_is_refused() {
         let e = json!({

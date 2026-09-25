@@ -311,6 +311,28 @@ fn unpaired_device_is_blocked_immediately_both_directions() {
     assert!(d.rooms(now).contains(&p.room.as_ref().unwrap().id));
 }
 
+#[test]
+fn re_pairing_the_same_phone_remembers_the_old_room() {
+    // 같은 폰을 다시 연결(권한 바꾸기)하면 옛 통로 방은 빠지지만, 하루 동안 「연결 방」으로 남아
+    // 그 방으로 늦게 온 글을 릴레이가 디스크에 쓰지 않는다.
+    let (mut d, mut p, _) = paired(full());
+    let old = p.room.as_ref().unwrap().id.clone();
+    let now = T0 + 10_000;
+    let code2 = [9u8; 16];
+    d.host.show_qr(&d.keys, "Office Mac", None, &[], now, code2).unwrap();
+    let hello = p.hello(&d.keys, &code2, "Pixel 8", now + 1000);
+    let w = d.handle_event(&hello, now + 1000);
+    assert!(matches!(w.as_slice(), [Work::Changed]), "{w:?}");
+    let (ev, _) = d.approve(&full(), "Office Mac", None, &[], now + 2000, SealOpts::default()).unwrap();
+    assert_eq!(p.open(&ev)["t"], "accept");
+    let new = p.room.as_ref().unwrap().id.clone();
+    assert_ne!(old, new);
+    assert_eq!(d.book.peers.len(), 1);
+    assert!(!d.live_rooms(now + 2000).contains(&old), "옛 방은 더 듣지 않는다");
+    let rooms = d.rooms(now + 2000);
+    assert!(rooms.contains(&old) && rooms.contains(&new), "옛 방도 하루 동안 연결 방");
+}
+
 // ── 권한 ────────────────────────────────────────────────────────────────────
 
 fn denied_reason(p: &Phone, w: &[Work]) -> String {

@@ -143,7 +143,7 @@ pub async fn pairing_approve(view: bool, request: bool, money: String, daily_lim
     let now = now_ms();
     let res = net::with_desk(false, |d| {
         let name = d.desk_name(shop_name().as_deref());
-        let r = d.host.approve(&d.keys, &mut d.book, &perms, &name, lan.as_deref(), &relays, now, proto::SealOpts::default());
+        let r = d.approve(&perms, &name, lan.as_deref(), &relays, now, proto::SealOpts::default());
         if r.is_ok() {
             d.settings.last_routes = Some(json!({ "lan": lan, "relays": relays }));
             let _ = d.save_settings();

@@ -364,6 +364,17 @@ impl Desk {
         }
     }
 
+    /// 사장의 「허락」. 같은 폰을 다시 연결하면 옛 통로 방이 빠지는데, 끊기와 같이 하루 동안
+    /// 「연결 방」으로 기억해야 그 방으로 늦게 오는 글이 가게 글처럼 디스크에 남지 않는다.
+    #[allow(clippy::too_many_arguments)]
+    pub fn approve(&mut self, perms: &Perms, desk_name: &str, lan: Option<&str>, relays: &[String], now: i64, opts: SealOpts) -> R<(ChatEvent, Peer)> {
+        let before = self.book.rooms();
+        let r = self.host.approve(&self.keys, &mut self.book, perms, desk_name, lan, relays, now, opts);
+        let after = self.book.rooms();
+        self.recent_pair_rooms.extend(before.into_iter().filter(|x| !after.contains(x)).map(|x| (x, now)));
+        r
+    }
+
     pub fn forget_peer(&mut self, peer: &str) {
         // 끊은 뒤에 그 방으로 오는 글도 디스크에 남지 않게 하루 동안 「연결 방」으로 기억한다.
         if let Some(p) = self.book.get(peer) {
