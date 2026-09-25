@@ -18,6 +18,7 @@
  * 🔴 암호도 들고 있지 않는다. ①에서 친 암호를 ②에서 한 번 더 치게 한다 —
  *    방금 만든 암호를 기억하는지 보는 셈이기도 하다.
  */
+import { protectScreen } from "./content-guard";
 import { copyHtml, setCopyText, t, tf } from "./i18n";
 
 type Invoke = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
@@ -100,6 +101,7 @@ export function wireSeedCheck(deps: SeedCheckDeps): { open: () => void } {
     forget();
     if (body) body.replaceChildren();
     sheet?.classList.add("hidden");
+    void protectScreen(false);
   };
   document.getElementById("sdw-close")?.addEventListener("click", close);
 
@@ -367,6 +369,7 @@ export function wireSeedCheck(deps: SeedCheckDeps): { open: () => void } {
     run++;
     forget();
     sheet?.classList.remove("hidden");
+    void protectScreen(true); // 단어가 뜨기 전에 가린다(content-guard.ts)
     show("reveal", `<p class="meta">${copyHtml("지갑을 확인하는 중…")}</p>`);
     const mine = run;
     let encrypted: boolean | null = null;
