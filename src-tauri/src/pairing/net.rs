@@ -139,13 +139,13 @@ pub fn start() {
             let mut works = Vec::new();
             with_open_desk(&mut |d| works = d.tick(now));
             // 지갑이 풀렸으면 기다리던 폰 승인 보내기를 다시(30초마다 본다).
-            if n % 6 == 0 {
+            if n.is_multiple_of(6) {
                 let has = { let mut h = false; with_open_desk(&mut |d| h = d.requests.iter().any(|r| r.status == "waiting_unlock")); h };
                 if has && !RealBackend.wallet_locked().await.unwrap_or(true) {
                     with_open_desk(&mut |d| works.extend(d.retry_unlock(now)));
                 }
             }
-            if n % 2 == 0 {
+            if n.is_multiple_of(2) {
                 let mut extra = Vec::new();
                 let mut any = false;
                 with_open_desk(&mut |d| {
@@ -233,11 +233,11 @@ async fn client(url: String, mut rx: tokio::sync::mpsc::UnboundedReceiver<Cmd>) 
                 continue;
             }
         };
-        if !rooms.is_empty() && ws.send(Message::Text(req_for(&rooms).into())).await.is_err() {
+        if !rooms.is_empty() && ws.send(Message::Text(req_for(&rooms))).await.is_err() {
             continue;
         }
         while let Some(v) = outbox.pop_front() {
-            let _ = ws.send(Message::Text(json!(["EVENT", v]).to_string().into())).await;
+            let _ = ws.send(Message::Text(json!(["EVENT", v]).to_string())).await;
         }
         loop {
             tokio::select! {
@@ -260,12 +260,12 @@ async fn client(url: String, mut rx: tokio::sync::mpsc::UnboundedReceiver<Cmd>) 
                 },
                 c = rx.recv() => match c {
                     None => { let _ = ws.close(None).await; return; }
-                    Some(Cmd::Publish(v)) => { let _ = ws.send(Message::Text(json!(["EVENT", v]).to_string().into())).await; }
+                    Some(Cmd::Publish(v)) => { let _ = ws.send(Message::Text(json!(["EVENT", v]).to_string())).await; }
                     Some(Cmd::Rooms(r)) => {
                         if r != rooms {
                             rooms = r;
-                            let _ = ws.send(Message::Text(json!(["CLOSE", "rv6"]).to_string().into())).await;
-                            if !rooms.is_empty() { let _ = ws.send(Message::Text(req_for(&rooms).into())).await; }
+                            let _ = ws.send(Message::Text(json!(["CLOSE", "rv6"]).to_string())).await;
+                            if !rooms.is_empty() { let _ = ws.send(Message::Text(req_for(&rooms))).await; }
                         }
                     }
                 },

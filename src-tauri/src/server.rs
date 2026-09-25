@@ -3307,8 +3307,6 @@ pub async fn start_phone_server(
     eprintln!("[phone] bind 끝, 주소 읽는 중");
     // 릴레이가 받은 것을 5초에 한 번 디스크에 내린다.
     crate::relay::start_saver();
-    // RV6 폰 연결: 연결된 폰이 있으면 그 통로(허락 시간·요청 만료·통로 바뀜 알림)를 돌린다.
-    crate::pairing::net::start();
     // 🔴 밀린 개발비를 **사장이 안 눌러도** 스스로 보낸다. 지갑이 풀려 있는
     //    순간에만 나가고, 암호는 어디에도 안 적는다.
     crate::devfee::start_auto_pay();
@@ -3335,6 +3333,8 @@ pub async fn start_phone_server(
     }
     // 재시작 전 주문 상태도 되읽는다.
     restore_order_state(&st);
+    // RV6 폰 연결(연결한 적이 있을 때만 장부를 연다).
+    crate::pairing::net::start();
 
     let ip = local_ip().unwrap_or_else(|| "127.0.0.1".into());
     // QR 에 박히는 값을 기억해 둔다. 나중에 「바뀌었다」를 말하려면 필요하다.

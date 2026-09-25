@@ -76,6 +76,7 @@ impl PeerBook {
 // ── §5 받기 규칙 ────────────────────────────────────────────────────────────
 
 #[derive(Debug)]
+#[allow(dead_code)] // reason 은 시험·기록용
 pub enum Received {
     Accepted { peer: String, message: Value, mode: &'static str },
     Denied { peer: String, message: Value, reason: &'static str, reply: ChatEvent },
@@ -149,6 +150,7 @@ pub fn receive(book: &mut PeerBook, keys: &DeviceKeys, v: &Value, now: i64, spen
 }
 
 /// 연결된 폰에게 봉해서 보낸다. `id` 를 안 주면 새 무작위 요청 id.
+#[allow(clippy::too_many_arguments)]
 pub fn send(book: &mut PeerBook, keys: &DeviceKeys, sign: &str, t: &str, body: Value, now: i64, id: Option<&str>, opts: SealOpts) -> R<(ChatEvent, Value)> {
     let peer = book.get_mut(sign).ok_or(PairingError("unknown_device"))?;
     let id = id.map(String::from).unwrap_or_else(new_request_id);
@@ -204,6 +206,7 @@ impl Drop for Slot {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)] // reason 은 시험·기록용
 pub enum HelloOutcome {
     Pending(PendingApproval),
     Rejected { reason: &'static str, reply: ChatEvent },
@@ -323,6 +326,7 @@ impl Host {
     }
 
     /// 사장이 「허락」. **이** 권한으로 등록하고 ACCEPT(seq 1)를 봉한다.
+    #[allow(clippy::too_many_arguments)]
     pub fn approve(&mut self, keys: &DeviceKeys, book: &mut PeerBook, perms: &Perms, desk_name: &str, lan: Option<&str>, relays: &[String], now: i64, opts: SealOpts) -> R<(ChatEvent, Peer)> {
         self.gc(now);
         let slot = self.slot.as_mut().ok_or(PairingError("no_pending"))?;

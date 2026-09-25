@@ -577,6 +577,7 @@ pub fn is_perms(v: &Value) -> bool {
         && safe_int(&o["daily_limit_rvn"]).map(|n| n >= 0).unwrap_or(false)
 }
 impl Perms {
+    #[allow(dead_code)] // 시험 벡터가 쓴다
     pub fn from_value(v: &Value) -> R<Self> {
         if !is_perms(v) {
             return fail("bad_perms");
@@ -607,6 +608,7 @@ pub enum Direction {
 }
 
 #[derive(Clone, Debug)]
+#[allow(dead_code)] // ts·build_hello 는 폰 쪽 모양 — 시험(폰 흉내)이 쓴다
 pub struct Hello {
     pub phone_sign: String,
     pub phone_dh: String,
@@ -614,6 +616,7 @@ pub struct Hello {
     pub want: Vec<String>,
     pub ts: i64,
 }
+#[allow(dead_code)]
 pub fn build_hello(h: &Hello) -> R<Value> {
     let v = json!({ "v": 1, "t": "hello", "phone_sign": h.phone_sign, "phone_dh": h.phone_dh, "name": h.name, "want": h.want, "ts": h.ts });
     parse_hello(&v)?;
@@ -732,6 +735,7 @@ pub enum Decision {
     Deny(&'static str),
 }
 impl Decision {
+    #[allow(dead_code)] // 시험 벡터 비교용
     pub fn to_value(&self) -> Value {
         match self {
             Decision::Allow(m) => json!({ "allow": true, "mode": m }),
@@ -742,7 +746,7 @@ impl Decision {
 
 /// RVN(소수 8자리까지, 0…21e9) → 사토시. 정확히 나타낼 수 없으면 None. 폰 `rvnToSats`.
 pub fn rvn_to_sats(x: f64) -> Option<u64> {
-    if !x.is_finite() || x < 0.0 || x > 21e9 {
+    if !x.is_finite() || !(0.0..=21e9).contains(&x) {
         return None;
     }
     let s = format!("{x:.8}");
