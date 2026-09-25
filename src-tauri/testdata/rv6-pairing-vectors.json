@@ -1,0 +1,837 @@
+{
+  "spec": "docs/RV6-pairing-protocol.md v1",
+  "notes": [
+    "\"‖\" = raw bytes: ASCII label, then c (16 B) and keys (32 B each).",
+    "HKDF-SHA256, L=32. code_key salt is the empty string. sas = u32_be(first 4 bytes) mod 1e6, 6-digit zero padded.",
+    "Events: kind 42, tags [[\"e\",room],[\"t\",\"ravenvault\"]], content \"rvchat1:<nonce hex48>:<ciphertext+tag hex>\", XChaCha20-Poly1305, aad = JSON [1,room,pubkey,created_at] (no spaces), created_at = floor(ts_ms/1000).",
+    "id = sha256(JSON [0,pubkey,created_at,42,tags,content]); sig = BIP340 with the given aux (production uses fresh random aux).",
+    "plaintext is JSON with keys in the order shown; receivers must parse, not compare strings."
+  ],
+  "sets": [
+    {
+      "label": "A",
+      "inputs": {
+        "desk_sign_sk": "039531d957872948181a59ab643654ced7d16f11f4f7c9d1c5d7b8965b1b0f6a",
+        "desk_dh_sk": "7e0e221502be34c183c0a2e5630ffb020e3477e34c17d41e00cc3980262a48a3",
+        "phone_sign_sk": "54293ff389d26acf1cee4c50c1f36c9c913b0cc678130e3483af87b1f8e96e1c",
+        "phone_dh_sk": "637f8df8eec50caa37218dccae25912d7e68028c49907307527ed1ac401b6cbc",
+        "code": "f7c5159a5e60a4b708e8de55e557bb89",
+        "expires_at": 1800000120,
+        "desk_name": "Office Mac",
+        "phone_name": "Pixel 8",
+        "want": [
+          "view"
+        ],
+        "lan": "ws://192.168.0.10:8790/api/relay",
+        "relays": [],
+        "perms": {
+          "view": true,
+          "request": false,
+          "money": "desktop",
+          "daily_limit_rvn": 0
+        }
+      },
+      "desk": {
+        "sign_pub": "7120d7109120c58a2e11f8f97db8a33877abccb7a1b57706514092b2c495fe34",
+        "dh_pub": "e1d1f3810782b1ee732200a87a66961131bce8038f44b205c05182e28148e25f",
+        "fingerprint": "06FC-4826-19"
+      },
+      "phone": {
+        "sign_pub": "db2354d37e4b45c17a7002fd72eb1eaaf653fb2706c90edf490f39dfc0e00f51",
+        "dh_pub": "c5e23b756af72cc8f3df6bfc62f48cc45ff3a41f17be87c0920f0ba08c504712",
+        "fingerprint": "94D5-8E13-6F"
+      },
+      "qr": "ravenvault://pair?v=1&s=7120d7109120c58a2e11f8f97db8a33877abccb7a1b57706514092b2c495fe34&x=e1d1f3810782b1ee732200a87a66961131bce8038f44b205c05182e28148e25f&c=f7c5159a5e60a4b708e8de55e557bb89&e=1800000120&n=Office%20Mac&l=ws://192.168.0.10:8790/api/relay",
+      "code_key": "8e95a66f539add35e1fa9a596531d7a88dcd0f724fef3a5715ad0a49e5f8a419",
+      "pair_room": "a6a6546395c6064b652f21b383f4ad2ea98496e1301c8d06d9f2e284e780fbe5",
+      "shared": "238c1181402f144cc9cacbbc10ca07b82228d96b544a46826c37f27bfb992133",
+      "th": "8659e39d296e3a4189f86ec3070687e49f721e229223ceccfcfb23ea93fb38ec",
+      "ch_key": "90bd950308a31a90257e3e215731f02334f2f08b94c3f88cd38f4254537604a3",
+      "ch_room": "0be77c95310aaa2e7f0ebbb0c239c3161cc03aaf232f92dbc5e6177c96a2a9bf",
+      "sas": "625639",
+      "hello": {
+        "ts": 1800000001500,
+        "nonce": "8bd73e97f23743454c5b4a8b1700920ac6ac6f6ed851559a",
+        "aux": "f4bb0062be0f4f731a87577b6558375f0a052378aef46f9984e434b70c7b2c7c",
+        "plaintext": "{\"v\":1,\"t\":\"hello\",\"phone_sign\":\"db2354d37e4b45c17a7002fd72eb1eaaf653fb2706c90edf490f39dfc0e00f51\",\"phone_dh\":\"c5e23b756af72cc8f3df6bfc62f48cc45ff3a41f17be87c0920f0ba08c504712\",\"name\":\"Pixel 8\",\"want\":[\"view\"],\"ts\":1800000001500}",
+        "event": {
+          "pubkey": "db2354d37e4b45c17a7002fd72eb1eaaf653fb2706c90edf490f39dfc0e00f51",
+          "created_at": 1800000001,
+          "kind": 42,
+          "tags": [
+            [
+              "e",
+              "a6a6546395c6064b652f21b383f4ad2ea98496e1301c8d06d9f2e284e780fbe5"
+            ],
+            [
+              "t",
+              "ravenvault"
+            ]
+          ],
+          "content": "rvchat1:8bd73e97f23743454c5b4a8b1700920ac6ac6f6ed851559a:03f0d47173e0bbc05b0bccef987360dd5f77ccb27ac9e78582f73bb92ec1090509ab33f5776782e76741ea75a1fdd01dc277a4024da6de878bf673f0c8dbcfe0da90b1c298ce79b02aa2d7a7c920be07f24beb9d761679f92eb08d27cbe095caaf658b4f462984079489939871a85784fada576e73868de214455bff156825fa67cb4a2c3fb1df656dd8885746ecf551b06213804e6423f0587195324c1ec169f17835a92d84e92fcf13d881ca1ebe1c2fd3d322d57b83a781228dee6aab23f04195ff63fa3b9137b20471aacc361a2d0cabe3f4333044a074e5f8c514795d3ef76005ac5b6265e702f73d0c1c109a089ca1b87e57",
+          "id": "96bc349d0e587a6d29e5cee2d08832557f66c2cefba0b3013783f1f23625b491",
+          "sig": "d39865065857422df9214fadd3340a06c4e6fead13d34c79adcd95ddab039f6c276b30c32fc73cf211073aed356baff06f6105e0b65f49b73e168574eef03eda"
+        }
+      },
+      "accept": {
+        "ts": 1800000030000,
+        "nonce": "55d2701ca3e9f4184f8d2232b6478f04367857da52028937",
+        "aux": "8239a897140689e5b396ba416c195fd1d11e69d6df3988d23480a7e6100b2e63",
+        "plaintext": "{\"v\":1,\"t\":\"accept\",\"perms\":{\"view\":true,\"request\":false,\"money\":\"desktop\",\"daily_limit_rvn\":0},\"desk_name\":\"Office Mac\",\"lan\":\"ws://192.168.0.10:8790/api/relay\",\"relays\":[],\"ts\":1800000030000,\"seq\":1}",
+        "event": {
+          "pubkey": "7120d7109120c58a2e11f8f97db8a33877abccb7a1b57706514092b2c495fe34",
+          "created_at": 1800000030,
+          "kind": 42,
+          "tags": [
+            [
+              "e",
+              "0be77c95310aaa2e7f0ebbb0c239c3161cc03aaf232f92dbc5e6177c96a2a9bf"
+            ],
+            [
+              "t",
+              "ravenvault"
+            ]
+          ],
+          "content": "rvchat1:55d2701ca3e9f4184f8d2232b6478f04367857da52028937:3399bed098332e43b9d74177fef651b39a0028dafcd77cc8694366a85f7599f7938a928f6ee506bfa0f9193cbc037cecb1110a8184660b25c7d4223ffd9eaa31c23430e20da0b9173cd03dad94f8f173030573d85e606922fe5a7f8bd197e24f304a35041cc75b5a8859843e07fc7c983219fe7c73e9bd9b695a9df7f084b6f4d97a28d59daf5c23f6fac384051ba304d86a96120442de5a82fbf1b4961224b389b487752a20be8483b5d7312814e563f850f1f45f6c0ff40f9426f5766c9b605c1e198a01e0ee357c71e8ac22046602742771ae2b06e56f73",
+          "id": "f07a5a49c15d292158d8919a5dfd2f4a17893bd067cf7c455fa4db7e3272989f",
+          "sig": "11c48a067e19884394118f43014a7d4bf7b332cffdcfd33e5fab156c4f2608506f4c2b47e40d7b143f5b50967e7fd08846d0cb21b0e79c427823abfa51518a63"
+        }
+      },
+      "reject": {
+        "ts": 1800000031000,
+        "nonce": "98c1afeef4ae5ef95015908b89eccbae2535fb026240cceb",
+        "aux": "120fdfbf2645c45d8493c9df4aeafcd1d5f7a533af41dc393d71166834090500",
+        "plaintext": "{\"v\":1,\"t\":\"reject\",\"re\":\"96bc349d0e587a6d29e5cee2d08832557f66c2cefba0b3013783f1f23625b491\",\"reason\":\"code_used\"}",
+        "event": {
+          "pubkey": "7120d7109120c58a2e11f8f97db8a33877abccb7a1b57706514092b2c495fe34",
+          "created_at": 1800000031,
+          "kind": 42,
+          "tags": [
+            [
+              "e",
+              "a6a6546395c6064b652f21b383f4ad2ea98496e1301c8d06d9f2e284e780fbe5"
+            ],
+            [
+              "t",
+              "ravenvault"
+            ]
+          ],
+          "content": "rvchat1:98c1afeef4ae5ef95015908b89eccbae2535fb026240cceb:93e9336801fc8aa735d8ca977aae28cca9dfee8d0023474eb03a462d76906a8ebce12c98b4ba0e22fa08370805409dfbfca09c0e277e55c75243186e605ccee1cfffd8f297327fd20efe8441bf1439c2b3d9362eef010737fdff9bd0dd6d04744cb3a65cd59714b0c5d4799b3a43c453bde2125b2470d71d4ab3b0677e60b87ab6",
+          "id": "366c264a551c47104b943f0439b12cb541837c9bf1000ae1d64d3c054ea50fd1",
+          "sig": "61760564ab5241b735ec8a93cf6c5549f0ddfa81a3ea1f09b71885a486f499a4a033f221a9a3c507735c56efd9739baa36e6a5f93dd0cad6dd72c2d22268ea39"
+        }
+      },
+      "request": {
+        "ts": 1800000060000,
+        "nonce": "700a16d0672cd042b0e687fdc04e18d239b061ea740159ae",
+        "aux": "863bd01da3a56631c14f8d1f0ec1523f618263e0158061e6609279ac6f32052f",
+        "plaintext": "{\"v\":1,\"t\":\"view.wallet\",\"id\":\"08df7a2945491dff456deac59ff5afbe\",\"seq\":1,\"ts\":1800000060000,\"body\":{}}",
+        "event": {
+          "pubkey": "db2354d37e4b45c17a7002fd72eb1eaaf653fb2706c90edf490f39dfc0e00f51",
+          "created_at": 1800000060,
+          "kind": 42,
+          "tags": [
+            [
+              "e",
+              "0be77c95310aaa2e7f0ebbb0c239c3161cc03aaf232f92dbc5e6177c96a2a9bf"
+            ],
+            [
+              "t",
+              "ravenvault"
+            ]
+          ],
+          "content": "rvchat1:700a16d0672cd042b0e687fdc04e18d239b061ea740159ae:da98563ffd13eeee9a8002f7f6b08384385fd5a063ad5467e7d84cccb490581608868a1dbd752eec3baea00d6950cb2325bb3a1f71f5213c8f9a6503dce7b7a1352aec0654d84cad489077313607d10324ec25f47538fcfde40fb2b26667f9889ab8e42a05c16f7484e543b37a03ab8742b879682d62",
+          "id": "2d7c35385abcac401cc3ed61433646a765bfbd76961fe7f6ba0955fdd6047873",
+          "sig": "7f769007e1dff70212084f0e9e2054df549d080570cfc76ead88f12efd519b786b371f2eac5dbe15ed346a6361048dc84305824235029a8206cc54533b59d7d1"
+        }
+      },
+      "decision": {
+        "allow": true,
+        "mode": "process"
+      },
+      "answer": {
+        "ts": 1800000061000,
+        "nonce": "34bf286252c9688dcb25d73209b4431431a89de8c224cb7a",
+        "aux": "945b5dbba21fc95f4ae4e0ebc1f1ce718aadb3d0a9f6cb3b3bbb63df3e00921a",
+        "plaintext": "{\"v\":1,\"t\":\"view.wallet.r\",\"id\":\"6f142e72e853d9d075352f9ddb81cd0d\",\"seq\":2,\"ts\":1800000061000,\"body\":{\"re\":\"08df7a2945491dff456deac59ff5afbe\"}}",
+        "event": {
+          "pubkey": "7120d7109120c58a2e11f8f97db8a33877abccb7a1b57706514092b2c495fe34",
+          "created_at": 1800000061,
+          "kind": 42,
+          "tags": [
+            [
+              "e",
+              "0be77c95310aaa2e7f0ebbb0c239c3161cc03aaf232f92dbc5e6177c96a2a9bf"
+            ],
+            [
+              "t",
+              "ravenvault"
+            ]
+          ],
+          "content": "rvchat1:34bf286252c9688dcb25d73209b4431431a89de8c224cb7a:f43a11c7ead2bf61243d295ac3712efdd928850c92c25f9aa080de2059ddd8ca933a0f2e391dfce9a599e28f1d18a060c8b934e8b89dc416ce17b44e8e3036dcd63835aa5debff9d1a6ce7cbab3491d93df9ae66ffde0100ecde5ac4e50ac69df108a6a266c98cb2e45c64aad113fd0847b18f804cbcebb3dae4e00975bc424767a7e5f6eb353ff472a5cf29414ded10a473961e3521f235fecf44278f6f57",
+          "id": "a92714f457cc2a6087468cf1f5dfe94ae93d39617564ec9563825a994d8504b9",
+          "sig": "34dd60239df17bcaea59ee39a5c4a8f264771afb59443a90225b96fb1c29892a714a41803b7dde8910807e7bca715a2e392e5cff7224c0a5a15afc9d75f0860a"
+        }
+      }
+    },
+    {
+      "label": "B",
+      "inputs": {
+        "desk_sign_sk": "115e909580433b357bd296004a23861d76ab31a1c9c24d7728c6ad8d48900469",
+        "desk_dh_sk": "71ac4f132722fc4664bc104348b3c9e805d32a1d2c946f3bab09ee167cc7d614",
+        "phone_sign_sk": "cc830696c25e22d85b1d41308004b065ccadada061d113686e9f299834289edb",
+        "phone_dh_sk": "dfbf084df2eec3b2b94da5bc383dc7592c40ac1f16d2e177c95035503aee125f",
+        "code": "95c41348d8ccf53031fee53b86e001d5",
+        "expires_at": 1800000243,
+        "desk_name": "사장님 맥북",
+        "phone_name": "김사장 아이폰",
+        "want": [
+          "view",
+          "request"
+        ],
+        "lan": "ws://10.0.0.5:18790/relay",
+        "relays": [
+          "wss://quiet-owl-1234.trycloudflare.com/relay",
+          "wss://ravenvault.ex.erci.se/api/relay"
+        ],
+        "perms": {
+          "view": true,
+          "request": true,
+          "money": "phone",
+          "daily_limit_rvn": 100
+        }
+      },
+      "desk": {
+        "sign_pub": "0cf9ecea14cf0668e958b0d001126c0af62833a1762953c14802aa81cf4fc684",
+        "dh_pub": "542eff16e7550cfd1c6272228360d85436ed58e8867fb3e9f8bd9cf689aa9a2f",
+        "fingerprint": "72C9-10D9-7C"
+      },
+      "phone": {
+        "sign_pub": "c132349ed2d50aa629feefd1da703f6b05125b76e60f2540e0f03be001ad1b46",
+        "dh_pub": "23f9622641bc179139df4d4e436e57568e27ffe9b2c8b59a06f4e57ca4428c54",
+        "fingerprint": "D00C-6DC8-F3"
+      },
+      "qr": "ravenvault://pair?v=1&s=0cf9ecea14cf0668e958b0d001126c0af62833a1762953c14802aa81cf4fc684&x=542eff16e7550cfd1c6272228360d85436ed58e8867fb3e9f8bd9cf689aa9a2f&c=95c41348d8ccf53031fee53b86e001d5&e=1800000243&n=%EC%82%AC%EC%9E%A5%EB%8B%98%20%EB%A7%A5%EB%B6%81&l=ws://10.0.0.5:18790/relay&r=wss://quiet-owl-1234.trycloudflare.com/relay&r=wss://ravenvault.ex.erci.se/api/relay",
+      "code_key": "6a80a0b30a7c60a07f7b03265bc0c339a0a6e7716a55c42c9eaf92aaf336fe6f",
+      "pair_room": "5a617823ee26714bf4eedb8bacfd74c7c5d7a3515fb6ae878b46478f4f322b89",
+      "shared": "1c6f1745a70e57629a775c808316dc3f4981233879e6c63b47d25ba8b676bf7c",
+      "th": "973924fbd082b71840b202ec4e697863e4f849b880dac1de5fbd86e06ce4a101",
+      "ch_key": "bd341ff46e108c14ee8222007ad05ddc4055f63dd9f691ccd77e2d13371d95ce",
+      "ch_room": "a52775f8c694e69561c1866debbfa0ce16cf66680fe09786000affe8c77386ef",
+      "sas": "535632",
+      "hello": {
+        "ts": 1800000124956,
+        "nonce": "d1780f7f6a5181bb62e9acb08851949cbf326cf592c4c104",
+        "aux": "824463dab2de775bbe06fe2e24ed760c379ff466616b6057d9b81930f9aea773",
+        "plaintext": "{\"v\":1,\"t\":\"hello\",\"phone_sign\":\"c132349ed2d50aa629feefd1da703f6b05125b76e60f2540e0f03be001ad1b46\",\"phone_dh\":\"23f9622641bc179139df4d4e436e57568e27ffe9b2c8b59a06f4e57ca4428c54\",\"name\":\"김사장 아이폰\",\"want\":[\"view\",\"request\"],\"ts\":1800000124956}",
+        "event": {
+          "pubkey": "c132349ed2d50aa629feefd1da703f6b05125b76e60f2540e0f03be001ad1b46",
+          "created_at": 1800000124,
+          "kind": 42,
+          "tags": [
+            [
+              "e",
+              "5a617823ee26714bf4eedb8bacfd74c7c5d7a3515fb6ae878b46478f4f322b89"
+            ],
+            [
+              "t",
+              "ravenvault"
+            ]
+          ],
+          "content": "rvchat1:d1780f7f6a5181bb62e9acb08851949cbf326cf592c4c104:e4d396ab0c1c4b44dde31e3e0f7e1587e86ae253951b77e71afb2edda5ac7f2363634be6de03fb7c81f1d7ce9a96ec54ccfcf696ba39c7f6ad162881deb47219945f2f3dfb1cff311c74600565bcd3f04b97ca36105b90717feb90cc19a23c8e44f3541fbe14d33d8d72629948b8edca94c88ba5b8bea4414a3801d540ca2d637a9219e5c19eaec509187280bef45537f2e95b4a0b486b58b9f3265160b9106cf8c5c2436fff2ef3f904a4e7010ebccb45cdc0264f18ce50eafa668e5272c5fc2c9cfc47b715df29ff03d873566036c787c1901ecd3b7b036f23bb9ea718ad8f92a5843317234b387a490ae1c61e7276ba18181b1ef9788adb281b4a83fe37ded05720e8e5a1e9a702b0f6",
+          "id": "a3f10ee9203dbdf737318591083420d9f00af36f613125d71f659216990ab9bd",
+          "sig": "4f9b81a25f6e9eb9b06f0d79b53f8b210aaa610b035a2509fb36934680899ecf093e48637348d69ff3e2ae0bbf6fa11037b4dc46b260461a18c18a4bdd7d4a7f"
+        }
+      },
+      "accept": {
+        "ts": 1800000153456,
+        "nonce": "727dac74f8251d60610b114f71ad7b700e07afd329b70823",
+        "aux": "8fb168cf909639920d73d472ce32ba9ab8a6f67eb21a1662ab20f3ba5e9a700c",
+        "plaintext": "{\"v\":1,\"t\":\"accept\",\"perms\":{\"view\":true,\"request\":true,\"money\":\"phone\",\"daily_limit_rvn\":100},\"desk_name\":\"사장님 맥북\",\"lan\":\"ws://10.0.0.5:18790/relay\",\"relays\":[\"wss://quiet-owl-1234.trycloudflare.com/relay\",\"wss://ravenvault.ex.erci.se/api/relay\"],\"ts\":1800000153456,\"seq\":1}",
+        "event": {
+          "pubkey": "0cf9ecea14cf0668e958b0d001126c0af62833a1762953c14802aa81cf4fc684",
+          "created_at": 1800000153,
+          "kind": 42,
+          "tags": [
+            [
+              "e",
+              "a52775f8c694e69561c1866debbfa0ce16cf66680fe09786000affe8c77386ef"
+            ],
+            [
+              "t",
+              "ravenvault"
+            ]
+          ],
+          "content": "rvchat1:727dac74f8251d60610b114f71ad7b700e07afd329b70823:64f1702269df643ad2fbc5a01b33e8d7896be2e7c6cadcc6c59d4b54da6c3b896daf20e5b88727cb56c6b3a1958fd70d05c31bf28046a63d54e033b42697f9ed7983e8a1729b03e7aa94e14fe9a2711b3e1a1253d0882476aff4750d993d4caca360e81c2f8e431868dbad5f127c55dca4213ec4d3a365a5fdca3f48e63150e62b4bff4f1aaacdeeb90b78a222dc996e98105c0052ce2b343e26d466e608a451abbcb021320f779441824ad6f2438de5c7dd6ed96f375727fb0ddc18af0b97e19ae24a10586e71cc33b1d7c885df8702db4efe9cd320f9e96ee8924fd626fe2647022d6997a730905f716ab6abd72c4cb8729dede5ad5279bc22cef3f31dd3dfdcab79b41d75998c4ef1861ada93d7608ed8bf534dcc564adb4d24fdb60dac9843c59c9774dac3bbc12f067355",
+          "id": "4181d7fc876fbd9b433e199d1fb13211471f296696aa0a102042f0be5d24702f",
+          "sig": "f45e83ee014727b16dedb4a3035987bb2ad803b5b939e1e7cd5ee73257a08777cf1fcc0b9ee4f19f66e4f1a084036030459d2fe9498d5ff9e079fe600320ec35"
+        }
+      },
+      "reject": {
+        "ts": 1800000154456,
+        "nonce": "069117d38464e4c7dac0e1225e7e82145a40614febb41933",
+        "aux": "acda0c0737129530a1f70d42969c0df31efd157fbfde293c52b08930aa7f8197",
+        "plaintext": "{\"v\":1,\"t\":\"reject\",\"re\":\"a3f10ee9203dbdf737318591083420d9f00af36f613125d71f659216990ab9bd\",\"reason\":\"code_used\"}",
+        "event": {
+          "pubkey": "0cf9ecea14cf0668e958b0d001126c0af62833a1762953c14802aa81cf4fc684",
+          "created_at": 1800000154,
+          "kind": 42,
+          "tags": [
+            [
+              "e",
+              "5a617823ee26714bf4eedb8bacfd74c7c5d7a3515fb6ae878b46478f4f322b89"
+            ],
+            [
+              "t",
+              "ravenvault"
+            ]
+          ],
+          "content": "rvchat1:069117d38464e4c7dac0e1225e7e82145a40614febb41933:ac902aaf6fba2da518d4a2d720ea28d90d6f7cfdd7cffcc032811914590b75ae190c405573a7a6a29907c8626d2d7fb8eb577da887f142b814dc4084a4d6eb179a87df36c7dc46868ac391b6054833062ab40c50bd4acef5ba6004bbd9e7e4c8e1b5b5784154abab95cf3b5869d5080f1a4501b5ef65622c2641d234b0a8e64960",
+          "id": "8dce90de1fd0a1605c38ac7f3daf6fdc0e8627c585116d0f8d10b1fdeb4bf9ad",
+          "sig": "ab5e87c6aebc970895fbaa13700034a39c27441d898b239d088443b94def7d1ba37d7650ec45fa34c24a02850a57b8de2e2d1e7aab8a10278d6873ec8c39320e"
+        }
+      },
+      "request": {
+        "ts": 1800000183456,
+        "nonce": "6c3284d4eec8a6d173da893a4ed678ebec9b9b5485b2f6f8",
+        "aux": "9c5c99ffa89fe9ff8d4a1b0c4ca408d3d2eded1577b3fcaa5b1ca650b29c3fb1",
+        "plaintext": "{\"v\":1,\"t\":\"req.send\",\"id\":\"56e54c923fe37821f73d30d5fe47d1b0\",\"seq\":1,\"ts\":1800000183456,\"body\":{\"to\":\"RXissueAssetXXXXXXXXXXXXXXXXXhhZGt\",\"amount_rvn\":12.5,\"approved_on_phone\":true}}",
+        "event": {
+          "pubkey": "c132349ed2d50aa629feefd1da703f6b05125b76e60f2540e0f03be001ad1b46",
+          "created_at": 1800000183,
+          "kind": 42,
+          "tags": [
+            [
+              "e",
+              "a52775f8c694e69561c1866debbfa0ce16cf66680fe09786000affe8c77386ef"
+            ],
+            [
+              "t",
+              "ravenvault"
+            ]
+          ],
+          "content": "rvchat1:6c3284d4eec8a6d173da893a4ed678ebec9b9b5485b2f6f8:be1cbc64cce362718353cfafb7ade0a48f225db8297276ed9f80c4100658fffe866886c41b98f9b494a924ef47b29f064a6de15b439d5b5902566034f1a7adcc751b87b625abbf8a8ce870029b9a61b920d31ce4e7371346cbfa0e2968e5a627fb15e05abfa75ecd9ebacb1816ae00d8871fba2c646d93a19d7b357d035137ca11d462fa9f0b1b9d24ad4209e09fef7b7f5d2f108dee5adaf70cd40b1f067b5d8e520488a172d8469644b4540521a9d88294b80fc34ce20ac7207bb9bb2b556d34a0ca3824decd",
+          "id": "e3a0401e06c6fe482d69c08d7a7da32d65bf70825d0e3dd02003e35c3f7edbea",
+          "sig": "bc722acc885b4ec4ea303ce0045d3191af8a723b71338fb71ca6ac313fe3a074bede67700990fb7fee9221e5a99033bdb09eb0ac89cda7a3eb0488a63c33e1de"
+        }
+      },
+      "decision": {
+        "allow": true,
+        "mode": "auto"
+      },
+      "answer": {
+        "ts": 1800000184456,
+        "nonce": "64443a04270d16a1ab09338c86312830457dea06396dd505",
+        "aux": "c37881ec466d6a86f1709dcbd3b144c1f00512a2c0c8893c5ad76024f3ea9e3c",
+        "plaintext": "{\"v\":1,\"t\":\"req.status\",\"id\":\"4d0634a29a28e42f1fb7b42439580a99\",\"seq\":2,\"ts\":1800000184456,\"body\":{\"re\":\"56e54c923fe37821f73d30d5fe47d1b0\",\"state\":\"auto\"}}",
+        "event": {
+          "pubkey": "0cf9ecea14cf0668e958b0d001126c0af62833a1762953c14802aa81cf4fc684",
+          "created_at": 1800000184,
+          "kind": 42,
+          "tags": [
+            [
+              "e",
+              "a52775f8c694e69561c1866debbfa0ce16cf66680fe09786000affe8c77386ef"
+            ],
+            [
+              "t",
+              "ravenvault"
+            ]
+          ],
+          "content": "rvchat1:64443a04270d16a1ab09338c86312830457dea06396dd505:105605760ed94ae386a6bf92d36f4991503e2fe56c0780acae707f1a93193984735c9935d04fd3b5936b82d56f0e3095a2c1679860b7499fdc8d7916534ad591ea4a7e925b970f6bc1a8b906374449ccf0f91579ba587cdcdc5925e7718df0015ecde09ef326b6e213d707947cef0ed9f995b1841c5a192f2745d2992a78b93d1097bfc7f6a8021f067fda1018bd9f02f4341be7987e798ccd11656303967d6440f757e6429ca65d118f90",
+          "id": "c48745bdf139bef373c560edf39f273bbf040316b17551b1bd2b039bb49456e9",
+          "sig": "b22927041044ee56c09fc2789f4603d4fb36d3f4547c0231a7085528383ecdda04e380ebbbf69d51298af2a0dbd92ad0f27382c4ef6ab9e9f19db27e57d888c5"
+        }
+      }
+    },
+    {
+      "label": "C",
+      "inputs": {
+        "desk_sign_sk": "389dd488604000fdfc1e09eabb0f2748048f6e06ea2a4076d103e325e0b437f3",
+        "desk_dh_sk": "7fda7385693cb6ed5c6ede94b43014848d7e82f1361dc1333cb739db24cfc01a",
+        "phone_sign_sk": "28064ed5e0252c496837ed3753e43297d2a1d269315d6867b273fd085a0b9207",
+        "phone_dh_sk": "be54c3ef1a267bb283ce9b5f1490c3a5035f63e2b52e6d34a6eec13a7f55e5fc",
+        "code": "419eecb5a920544a4aea01b513437a36",
+        "expires_at": 1800086519,
+        "desk_name": "Kim's PC (2)",
+        "phone_name": "Galaxy S24 / 가게",
+        "want": [
+          "view",
+          "request",
+          "money"
+        ],
+        "lan": null,
+        "relays": [
+          "wss://a.example.com/relay",
+          "wss://b.example.org:8443/api/relay",
+          "wss://c.example.net/relay"
+        ],
+        "perms": {
+          "view": false,
+          "request": true,
+          "money": "desktop",
+          "daily_limit_rvn": 0
+        }
+      },
+      "desk": {
+        "sign_pub": "6b6d055ce2e9258d0b547dd8b8dd882414d72f46dafd68641d56c0bf689404cb",
+        "dh_pub": "3e665fc5b1ac453be2416032babc4e23f45bfcaf1b06b1f0ab6663aa4eb5f155",
+        "fingerprint": "94B9-58AB-C6"
+      },
+      "phone": {
+        "sign_pub": "bc74da64f7ece71452396a569d17018be9260ce966be4469daeacfd1d58f6648",
+        "dh_pub": "d52229351a961e747745e1b3e2b663870da656bf83c0793234e4b767ddad5c50",
+        "fingerprint": "E445-982C-AD"
+      },
+      "qr": "ravenvault://pair?v=1&s=6b6d055ce2e9258d0b547dd8b8dd882414d72f46dafd68641d56c0bf689404cb&x=3e665fc5b1ac453be2416032babc4e23f45bfcaf1b06b1f0ab6663aa4eb5f155&c=419eecb5a920544a4aea01b513437a36&e=1800086519&n=Kim's%20PC%20(2)&r=wss://a.example.com/relay&r=wss://b.example.org:8443/api/relay&r=wss://c.example.net/relay",
+      "code_key": "07dbd6fd94a5c0bb1f1b5fdf24b6bfb20b51156b5c196761da9f7feab5c4025b",
+      "pair_room": "309ffd28c2f07dad40484cfceef29ab0e3ee733c7d8b632b04a965ac1fcc646b",
+      "shared": "c5f31178f257011c9636fc26f1ce833eef72d2c30d680eefbf6aebfb89f8b11a",
+      "th": "fc6e9f070142d55e9e534ea541e2188c45e32203415b5cebcf28997653aca1d5",
+      "ch_key": "59bb415bac210b420c688ed9be8df0bef1e3b32abe0faf4bd1908d051d67bed1",
+      "ch_room": "d819cb049f4a18a2f77427f63b2ed4e87b57056e0e71ef0d2568f2f375613454",
+      "sas": "792444",
+      "hello": {
+        "ts": 1800086401499,
+        "nonce": "ba467b01f961f4f7b7148a25eca9ca87aae7ae9062db3867",
+        "aux": "2ff063e769ffbe2bc4218810f51bc74a358af81b3c6cafa318432fe66d55eb6a",
+        "plaintext": "{\"v\":1,\"t\":\"hello\",\"phone_sign\":\"bc74da64f7ece71452396a569d17018be9260ce966be4469daeacfd1d58f6648\",\"phone_dh\":\"d52229351a961e747745e1b3e2b663870da656bf83c0793234e4b767ddad5c50\",\"name\":\"Galaxy S24 / 가게\",\"want\":[\"view\",\"request\",\"money\"],\"ts\":1800086401499}",
+        "event": {
+          "pubkey": "bc74da64f7ece71452396a569d17018be9260ce966be4469daeacfd1d58f6648",
+          "created_at": 1800086401,
+          "kind": 42,
+          "tags": [
+            [
+              "e",
+              "309ffd28c2f07dad40484cfceef29ab0e3ee733c7d8b632b04a965ac1fcc646b"
+            ],
+            [
+              "t",
+              "ravenvault"
+            ]
+          ],
+          "content": "rvchat1:ba467b01f961f4f7b7148a25eca9ca87aae7ae9062db3867:e31f2054bc96a08f8b133ecfe1a1123ccd84bfa466e41020dfeff412813b9a085ac0af48d23cb0ed3c3f05ae1ff16295b4bd0a595d951b51549889da0859010ab1cf81ed90836f1557f72bbe1a0dd6ef6618b5f4c801a8813ff00caabeee94f8743550f04a159fed7bbdaaca2da4e43d8025cc00c0e2f6e9ed320520e99d939e5673fd3afdc1619d42f278e34f21cd37a7abad30d0f0dbfc37ea47260803d7b12ccb73a5f619e4f33b190d74cdbeb6a8963b141bc6f1a6e6f850de895e60469695cc8cb6e3321cb48dce9bbf5a29e93a1baf478ebb06580e9bd1c74f67dc2ebcb26393dc2f76ca717355e1c1d268b9090738ce660234f145261c27f1d01549966ef541dfc57041221fdc3a227270f8a7c7ea34",
+          "id": "c39e41b2b79797b6ea9babd84c8a00513a57167044f3c91d78f98c7f7f5f4d0f",
+          "sig": "be2d897343c5e592dda4b67349643b8f24cd41b7720a0814a57d02e38780579c0bcf049c0a1cf2032a4bbeba50d3b78150ef54bf3440e1458192d219cab101dd"
+        }
+      },
+      "accept": {
+        "ts": 1800086429999,
+        "nonce": "2649b50d5c8fb8862650fec1a166abc97bdc1ea60e8d8f28",
+        "aux": "3f9edf939563f059810a6a1e85454772e228d7edbebb9ddf38d522ef4bfd26c0",
+        "plaintext": "{\"v\":1,\"t\":\"accept\",\"perms\":{\"view\":false,\"request\":true,\"money\":\"desktop\",\"daily_limit_rvn\":0},\"desk_name\":\"Kim's PC (2)\",\"lan\":null,\"relays\":[\"wss://a.example.com/relay\",\"wss://b.example.org:8443/api/relay\",\"wss://c.example.net/relay\"],\"ts\":1800086429999,\"seq\":1}",
+        "event": {
+          "pubkey": "6b6d055ce2e9258d0b547dd8b8dd882414d72f46dafd68641d56c0bf689404cb",
+          "created_at": 1800086429,
+          "kind": 42,
+          "tags": [
+            [
+              "e",
+              "d819cb049f4a18a2f77427f63b2ed4e87b57056e0e71ef0d2568f2f375613454"
+            ],
+            [
+              "t",
+              "ravenvault"
+            ]
+          ],
+          "content": "rvchat1:2649b50d5c8fb8862650fec1a166abc97bdc1ea60e8d8f28:7ecf41d5ed44a41eddadc4327d33807bb1371c930347c30aea8013f80c850141964f210e7030a29782a3af0aa07a753e2e8e8ccca0b03574f5769294fc05910694f0f00a92969705631e6a21ed664db3d800fbe33831670028192579842a2d38e88ca1aa942634a0fb8da59d346171181c3756b477f6a18da5d89c7b4e25119a6592475cd72932910ab4ce86336e52293935d87da438b7b854d46ed731f8b3d27c17836fe30ff6a22329b6041a775c98c7c43ee25e79fed701424c03340f510b15cdb4057c0e7e7d32242cf80cc9fb000fb812eae56975ca7185d2dad86c1c2ffbf665bb06caa44898f38b22b6f7049ec70512a0e8515c0b20e5c371ae9d1aac390f5ea96e4c287cbbaf53a9ea53bd591b84a9c6f1e16de689",
+          "id": "9ece6ddd0f553c126f4bfecfc92fbb46136c0a9316a30d90646655ef7a70dde2",
+          "sig": "aca2e805ccb6892833ca6a8c08b3f0110d08709fcb678c44e1427d2d7fa7ae2bfced8e01312bd1acaa6aafa3864981944237aa2f3c682881451f165b6ff96de1"
+        }
+      },
+      "reject": {
+        "ts": 1800086430999,
+        "nonce": "284d23c0dd79c1f129dcef4fe4072ad570de10dfe57f0f95",
+        "aux": "461764b7e41f2f7a2e24a9d7ac51ac0f88a6b47c4275509d3cb247f64940f1e7",
+        "plaintext": "{\"v\":1,\"t\":\"reject\",\"re\":\"c39e41b2b79797b6ea9babd84c8a00513a57167044f3c91d78f98c7f7f5f4d0f\",\"reason\":\"code_used\"}",
+        "event": {
+          "pubkey": "6b6d055ce2e9258d0b547dd8b8dd882414d72f46dafd68641d56c0bf689404cb",
+          "created_at": 1800086430,
+          "kind": 42,
+          "tags": [
+            [
+              "e",
+              "309ffd28c2f07dad40484cfceef29ab0e3ee733c7d8b632b04a965ac1fcc646b"
+            ],
+            [
+              "t",
+              "ravenvault"
+            ]
+          ],
+          "content": "rvchat1:284d23c0dd79c1f129dcef4fe4072ad570de10dfe57f0f95:5a0a8995168fa23026fa7a7760ff270c7e725f4c9f306f84669db8de6e56843c28933cd4872d234fdc1c2d453b2c974538503f42406fb0706e3804e9867ecdbc673eed7917153c22e8286ea3bd1981aa5b92e6ad07bf7a4d8b0f0e5bd169d1605ddc18e2e9e7667918e67066b78c352322df83b676aadc72e6c1e059e638009268",
+          "id": "5681008a79aa238efb59a6d22fec587a283e68356f9ef52b4ce11d0fa12d4904",
+          "sig": "8d1f2eb77d5e64742dceaa06682d09d703ca7a513df4cc4c125747692fd2a0d2a1c56f1af24beeb38cef3659827ab89dfcf9acb13cffe80ee55c5800532921b6"
+        }
+      },
+      "request": {
+        "ts": 1800086459999,
+        "nonce": "f1fd1e1489ae3f67ebe2466beee8997efa072fd1d8026bf6",
+        "aux": "3d39a802e42ec2ea8acd1e16bcbbefc06106556794b3a0d45e94f09f659b57b5",
+        "plaintext": "{\"v\":1,\"t\":\"req.cert\",\"id\":\"5f0ceb0c02bafe57f6cd1701a21d6521\",\"seq\":1,\"ts\":1800086459999,\"body\":{\"title\":\"수료증\",\"count\":50,\"names\":[\"홍길동\",\"Jane \\\"JJ\\\" Doe\"]}}",
+        "event": {
+          "pubkey": "bc74da64f7ece71452396a569d17018be9260ce966be4469daeacfd1d58f6648",
+          "created_at": 1800086459,
+          "kind": 42,
+          "tags": [
+            [
+              "e",
+              "d819cb049f4a18a2f77427f63b2ed4e87b57056e0e71ef0d2568f2f375613454"
+            ],
+            [
+              "t",
+              "ravenvault"
+            ]
+          ],
+          "content": "rvchat1:f1fd1e1489ae3f67ebe2466beee8997efa072fd1d8026bf6:f4cb3900f944ea68838c187d630d6241d20835e8443c001ad54bc1f518000a113b5fe70c208c105368c68b0699f8cdcbeb2d6822b1018dcc99cc47a42e21811ca188fed238ae4426c9e3990755dadaf7da587a53594656576e3f1857ea4e9a3575bfcb78c7532ff0ff7dd8f89d67835ff7e43ad2fc6a2fb07a9cfae94acd350112be1446713f2e0db078f8f3f552cae8b49e2914da745a05a5f864a428220588970da1abd7ccb3ce3ac36af7efc3224a754fb70e1ccf8fbb31",
+          "id": "4ea084123ef423b5d31504ad1b284a0f16780c1c992a581726e35ec1db8805d0",
+          "sig": "ca1e91fab808518371c3995b787d92c28efc507acaeca599db6117ec181453bcb3aea55c2463abc7eac3c16d7d1c35bf973b713908fb20133c6426f3349c5414"
+        }
+      },
+      "decision": {
+        "allow": true,
+        "mode": "desktop_confirm"
+      },
+      "answer": {
+        "ts": 1800086460999,
+        "nonce": "58bf20dc69740f758f3c6965c5efcfdadd75f8494d337df5",
+        "aux": "ed1a868b7d5f2b881e8ed85f4681351426b9a1231ee4b7cb6f1bc2830a8b3e98",
+        "plaintext": "{\"v\":1,\"t\":\"req.status\",\"id\":\"b09b5df301bdcfd9b3ac8b115dacb745\",\"seq\":2,\"ts\":1800086460999,\"body\":{\"re\":\"5f0ceb0c02bafe57f6cd1701a21d6521\",\"state\":\"desktop_confirm\"}}",
+        "event": {
+          "pubkey": "6b6d055ce2e9258d0b547dd8b8dd882414d72f46dafd68641d56c0bf689404cb",
+          "created_at": 1800086460,
+          "kind": 42,
+          "tags": [
+            [
+              "e",
+              "d819cb049f4a18a2f77427f63b2ed4e87b57056e0e71ef0d2568f2f375613454"
+            ],
+            [
+              "t",
+              "ravenvault"
+            ]
+          ],
+          "content": "rvchat1:58bf20dc69740f758f3c6965c5efcfdadd75f8494d337df5:3e44664222b84e086b47650af81dd8c2cbcfe83f9a63177af8c9f0ada3d70c79cb7245787d9cb89e330d74bc4a989ced8953a15efdb4d6d4c21af7cfd72d1ca424bbaa9a1f0401211890d3cf03282c74fc1d87e898428436f18a781a3c94642307c45d598ec429d9b5f19ca3378586ffdd2488b49fe61289510da112b49049f1d3f3b20b741c6b0882f2683bca812979cdd13ffabe02ed97bc36c836294c17b071422934b677d5e8ba82c77e5a61f521c134b94c7139",
+          "id": "f217d6eed068b08d771cd2ec06f9549a0150b8bb2339b5fc248dd762002ad971",
+          "sig": "3f80d98b6d59edfc4378a52a7f42bbbf94fc966956bc9d6d4d0eeabc1c56ea961fd5c5a4232eb875e107312f5053474d93221842a322a7c20185f7959155ccdd"
+        }
+      }
+    }
+  ],
+  "authorize": [
+    {
+      "perms": {
+        "view": true,
+        "request": false,
+        "money": "desktop",
+        "daily_limit_rvn": 0
+      },
+      "t": "ping",
+      "body": {},
+      "spent_today_rvn": 0,
+      "expect": {
+        "allow": true,
+        "mode": "process"
+      }
+    },
+    {
+      "perms": {
+        "view": true,
+        "request": false,
+        "money": "desktop",
+        "daily_limit_rvn": 0
+      },
+      "t": "view.wallet",
+      "body": {},
+      "spent_today_rvn": 0,
+      "expect": {
+        "allow": true,
+        "mode": "process"
+      }
+    },
+    {
+      "perms": {
+        "view": false,
+        "request": false,
+        "money": "desktop",
+        "daily_limit_rvn": 0
+      },
+      "t": "view.certs",
+      "body": {},
+      "spent_today_rvn": 0,
+      "expect": {
+        "allow": false,
+        "reason": "not_permitted"
+      }
+    },
+    {
+      "perms": {
+        "view": true,
+        "request": false,
+        "money": "desktop",
+        "daily_limit_rvn": 0
+      },
+      "t": "req.cert",
+      "body": {},
+      "spent_today_rvn": 0,
+      "expect": {
+        "allow": false,
+        "reason": "not_permitted"
+      }
+    },
+    {
+      "perms": {
+        "view": true,
+        "request": true,
+        "money": "desktop",
+        "daily_limit_rvn": 0
+      },
+      "t": "req.cert",
+      "body": {},
+      "spent_today_rvn": 0,
+      "expect": {
+        "allow": true,
+        "mode": "desktop_confirm"
+      }
+    },
+    {
+      "perms": {
+        "view": true,
+        "request": true,
+        "money": "desktop",
+        "daily_limit_rvn": 0
+      },
+      "t": "req.guestqr",
+      "body": {},
+      "spent_today_rvn": 0,
+      "expect": {
+        "allow": true,
+        "mode": "process"
+      }
+    },
+    {
+      "perms": {
+        "view": true,
+        "request": false,
+        "money": "phone",
+        "daily_limit_rvn": 1000
+      },
+      "t": "req.send",
+      "body": {
+        "to": "RXissueAssetXXXXXXXXXXXXXXXXXhhZGt",
+        "amount_rvn": 1,
+        "approved_on_phone": true
+      },
+      "spent_today_rvn": 0,
+      "expect": {
+        "allow": false,
+        "reason": "not_permitted"
+      }
+    },
+    {
+      "perms": {
+        "view": true,
+        "request": true,
+        "money": "desktop",
+        "daily_limit_rvn": 1000
+      },
+      "t": "req.send",
+      "body": {
+        "to": "RXissueAssetXXXXXXXXXXXXXXXXXhhZGt",
+        "amount_rvn": 5,
+        "approved_on_phone": true
+      },
+      "spent_today_rvn": 0,
+      "expect": {
+        "allow": true,
+        "mode": "desktop_confirm"
+      }
+    },
+    {
+      "perms": {
+        "view": true,
+        "request": true,
+        "money": "desktop",
+        "daily_limit_rvn": 0
+      },
+      "t": "req.send",
+      "body": {
+        "to": "RXissueAssetXXXXXXXXXXXXXXXXXhhZGt",
+        "amount_rvn": 5000
+      },
+      "spent_today_rvn": 0,
+      "expect": {
+        "allow": true,
+        "mode": "desktop_confirm"
+      }
+    },
+    {
+      "perms": {
+        "view": true,
+        "request": true,
+        "money": "phone",
+        "daily_limit_rvn": 100
+      },
+      "t": "req.send",
+      "body": {
+        "to": "RXissueAssetXXXXXXXXXXXXXXXXXhhZGt",
+        "amount_rvn": 40
+      },
+      "spent_today_rvn": 0,
+      "expect": {
+        "allow": true,
+        "mode": "desktop_confirm"
+      }
+    },
+    {
+      "perms": {
+        "view": true,
+        "request": true,
+        "money": "phone",
+        "daily_limit_rvn": 100
+      },
+      "t": "req.send",
+      "body": {
+        "to": "RXissueAssetXXXXXXXXXXXXXXXXXhhZGt",
+        "amount_rvn": 40,
+        "approved_on_phone": true
+      },
+      "spent_today_rvn": 60,
+      "expect": {
+        "allow": true,
+        "mode": "auto"
+      }
+    },
+    {
+      "perms": {
+        "view": true,
+        "request": true,
+        "money": "phone",
+        "daily_limit_rvn": 100
+      },
+      "t": "req.send",
+      "body": {
+        "to": "RXissueAssetXXXXXXXXXXXXXXXXXhhZGt",
+        "amount_rvn": 40.00000001,
+        "approved_on_phone": true
+      },
+      "spent_today_rvn": 60,
+      "expect": {
+        "allow": false,
+        "reason": "over_limit"
+      }
+    },
+    {
+      "perms": {
+        "view": true,
+        "request": true,
+        "money": "phone",
+        "daily_limit_rvn": 100
+      },
+      "t": "req.send",
+      "body": {
+        "to": "RXissueAssetXXXXXXXXXXXXXXXXXhhZGt",
+        "amount_rvn": 1,
+        "approved_on_phone": true,
+        "asset": "RAVENQA#ONE"
+      },
+      "spent_today_rvn": 0,
+      "expect": {
+        "allow": true,
+        "mode": "desktop_confirm"
+      }
+    },
+    {
+      "perms": {
+        "view": true,
+        "request": true,
+        "money": "phone",
+        "daily_limit_rvn": 0
+      },
+      "t": "req.send",
+      "body": {
+        "to": "RXissueAssetXXXXXXXXXXXXXXXXXhhZGt",
+        "amount_rvn": 1e-8,
+        "approved_on_phone": true
+      },
+      "spent_today_rvn": 0,
+      "expect": {
+        "allow": false,
+        "reason": "over_limit"
+      }
+    },
+    {
+      "perms": {
+        "view": true,
+        "request": true,
+        "money": "phone",
+        "daily_limit_rvn": 100
+      },
+      "t": "req.send",
+      "body": {
+        "to": "RXissueAssetXXXXXXXXXXXXXXXXXhhZGt",
+        "amount_rvn": 0.123456789,
+        "approved_on_phone": true
+      },
+      "spent_today_rvn": 0,
+      "expect": {
+        "allow": false,
+        "reason": "bad_request"
+      }
+    },
+    {
+      "perms": {
+        "view": true,
+        "request": true,
+        "money": "phone",
+        "daily_limit_rvn": 100
+      },
+      "t": "req.send",
+      "body": {
+        "to": "RXissueAssetXXXXXXXXXXXXXXXXXhhZGt",
+        "amount_rvn": 0
+      },
+      "spent_today_rvn": 0,
+      "expect": {
+        "allow": false,
+        "reason": "bad_request"
+      }
+    },
+    {
+      "perms": {
+        "view": true,
+        "request": true,
+        "money": "phone",
+        "daily_limit_rvn": 100
+      },
+      "t": "relays",
+      "body": {},
+      "spent_today_rvn": 0,
+      "expect": {
+        "allow": false,
+        "reason": "unknown_type"
+      }
+    },
+    {
+      "perms": {
+        "view": true,
+        "request": true,
+        "money": "phone",
+        "daily_limit_rvn": 100
+      },
+      "t": "view.wallet.r",
+      "body": {},
+      "spent_today_rvn": 0,
+      "expect": {
+        "allow": false,
+        "reason": "unknown_type"
+      }
+    }
+  ],
+  "x25519_reject_peer_pubs": [
+    "0000000000000000000000000000000000000000000000000000000000000000",
+    "0100000000000000000000000000000000000000000000000000000000000000",
+    "e0eb7a7c3b41b8ae1656e3faf19fc46ada098deb9c32b1fd866205165f49b800",
+    "5f9c95bca3508c24b1d0b1559c83ef5b04445cc4581c8e86d8224eddd09f1157",
+    "ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f"
+  ]
+}

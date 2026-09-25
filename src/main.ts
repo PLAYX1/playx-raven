@@ -2,6 +2,7 @@
 import "./style-attrs";
 import { setStyledSrcdoc } from "./srcdoc-style";
 import { wirePhoneTransaction } from "./phone-transaction";
+import { wirePairing } from "./pairing-ui";
 import { FINGERPRINT_GUESS, wireCreate, type CreateApi } from "./create-page";
 import { readItemName, verifyLink } from "./easy-create";
 import { requireWalletBackup, restoreIsComplete } from "./backup-result";
@@ -8548,6 +8549,8 @@ async function doSend() {
             passphrase: pass,
           });
 
+    // RV6: 폰 요청으로 채운 보내기였다면 폰에 「완료」를 알린다(pairing-ui.ts 가 맞춰 본다).
+    window.dispatchEvent(new CustomEvent("rv-sent", { detail: { txid: String(txid ?? ""), address: sent.address, amount: Number(sendPreview.amount), what: sent.what } }));
     // 🔴 0.4.8-B — 결과가 「트랜잭션 + 64자」였다(RV3 T05). 사람이 확인할 것은 **얼마를 누구에게**다.
     //    거래 번호는 「자세히」 안으로. 이름이 없으면 그 자리에서 붙여 저장하게 한다(이 컴퓨터에만).
     const name = payeeName(sent.address);
@@ -16984,6 +16987,9 @@ window.addEventListener("DOMContentLoaded", async () => {
   void loadMemberPrivacy();
   $("key-save").addEventListener("click", saveKeys);
   wirePhoneTransaction(invoke, t);
+  // RV6 폰 연결(설정 › 「폰 연결」) — 카드·알림은 pairing-ui.ts 가 스스로 만든다.
+  wirePairing((title, message) => sure(title, message, t("연결 끊기")));
+  window.addEventListener("rv-go", (e) => { const d = String((e as CustomEvent).detail ?? ""); if (d === "qr") void openQrSheet(); else showPage(d); });
   createApi = wireCreate({
     invoke, t, go: showPage, openLink: (url) => void openUrl(url),
     hold: (what, cost) => holdBeforeDoing(what, cost),

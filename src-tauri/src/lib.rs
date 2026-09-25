@@ -64,6 +64,7 @@ mod wiring;
 mod knowledge;
 mod nostrpub;
 mod app_folder;
+mod pairing;
 mod paths;
 mod swap;
 mod sweep;
@@ -106,6 +107,17 @@ pub fn run() {
         // The owner token is minted once per run and lives only in memory.
         .manage(server::ServerState::default())
         .invoke_handler(tauri::generate_handler![
+            pairing::pairing_state,
+            pairing::pairing_show_qr,
+            pairing::pairing_cancel_qr,
+            pairing::pairing_approve,
+            pairing::pairing_reject,
+            pairing::pairing_unpair,
+            pairing::pairing_request_open,
+            pairing::pairing_request_done,
+            pairing::pairing_request_decline,
+            pairing::pairing_set_public_backup,
+            pairing::pairing_waiting,
             raven::node_status,
             raven::network_state,
             raven::list_assets,

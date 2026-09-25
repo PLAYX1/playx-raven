@@ -96,7 +96,9 @@ const ts = read("src/main.ts");
   const registered = new Set(
     [...lib.matchAll(/^\s+(?:\w+::)?(\w+),\s*$/gm)].map((m) => m[1])
   );
-  const called = new Set([...ts.matchAll(/invoke<[^>]*>\("(\w+)"|invoke\("(\w+)"/g)]
+  // 🔴 main.ts 만 보면 다른 모듈(pairing-ui.ts 등)이 부르는 명령을 못 본다 — src 의 .ts 전부.
+  const srcTs = readdirSync(join(ROOT, "src")).filter((f) => f.endsWith(".ts")).map((f) => read("src/" + f)).join("\n");
+  const called = new Set([...srcTs.matchAll(/invoke<[^>]*>\("(\w+)"|invoke\("(\w+)"/g)]
     .map((m) => m[1] || m[2])
     .filter(Boolean));
   const missing = [...called].filter((c) => !registered.has(c));
@@ -129,7 +131,7 @@ const ts = read("src/main.ts");
     .filter((f) => f.endsWith(".rs") && f !== "lib.rs")
     .map((f) => read(`src-tauri/src/${f}`))
     .join("\n");
-  const all = ts + webFiles;
+  const all = readdirSync(join(ROOT, "src")).filter((f) => f.endsWith(".ts")).map((f) => read("src/" + f)).join("\n") + webFiles;
   // 🔴 **자기 정의를 「부르는 곳」으로 세고 있었다.** `fn session_list(` 도
   //    `session_list(` 를 품으므로, 아무도 안 부르는 명령이 전부 통과했다.
   //    실제로 `classes`(수업·좌석) 4개와 `trade`(업종 템플릿) 2개가 **닿을

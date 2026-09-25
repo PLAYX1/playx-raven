@@ -1,0 +1,28 @@
+/* 설정 › 「폰 연결」(RV6). style="…" 속성 대신 여기서만 모양을 준다(CSP nonce 가 속성을 막는다). */
+#rvp-card [hidden], #rvp-notice[hidden] { display: none !important; }
+#rvp-card h3 { margin: 18px 0 6px; font-size: 16px; }
+#rvp-card .rvp-want { color: var(--warn); font-weight: 600; }
+#rvp-card .rvp-qrbox { margin-top: 12px; }
+#rvp-card #rvp-qrarea { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; margin-top: 6px; }
+#rvp-card .rvp-qr { width: 280px; height: 280px; padding: 6px; background: #fff; border: 1px solid var(--line); border-radius: 10px; flex: none; }
+#rvp-card .rvp-qr svg { width: 100%; height: 100%; display: block; }
+#rvp-card .rvp-qrside { flex: 1 1 260px; min-width: 0; }
+#rvp-card .rvp-qrside p { margin: 0 0 8px; }
+#rvp-card .rvp-pending { margin-top: 14px; padding: 14px 16px; border: 2px solid var(--brand); border-radius: 10px; background: color-mix(in srgb, var(--brand) 6%, var(--panel)); }
+#rvp-card .rvp-pending h3 { margin-top: 0; font-size: 18px; }
+#rvp-card .rvp-name { font-size: 18px; font-weight: 700; overflow-wrap: anywhere; }
+#rvp-card .rvp-sas { font-size: 40px; font-weight: 800; letter-spacing: .12em; margin: 8px 0; font-variant-numeric: tabular-nums; }
+#rvp-card .rvp-perms { border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; margin: 10px 0; }
+#rvp-card .rvp-perms legend { font-weight: 700; padding: 0 4px; }
+#rvp-card .rvp-perms label { display: flex; gap: 8px; align-items: center; margin: 6px 0; flex-wrap: wrap; }
+#rvp-card .rvp-sub { font-weight: 700; margin: 12px 0 2px; }
+#rvp-card .rvp-limit input { width: 110px; }
+#rvp-card .rvp-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+#rvp-card .rvp-item { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 10px 0; border-top: 1px solid var(--line); flex-wrap: wrap; }
+#rvp-card .rvp-itemmain { flex: 1 1 280px; min-width: 0; overflow-wrap: anywhere; }
+#rvp-card .rvp-itemmain p { margin: 2px 0 0; }
+#rvp-card .rvp-detail { margin-top: 10px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; }
+#rvp-card .rvp-detail dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 8px 0; }
+#rvp-card .rvp-detail dd { margin: 0; overflow-wrap: anywhere; }
+#rvp-card .rvp-public { display: flex; gap: 8px; align-items: center; margin-top: 16px; }
+#rvp-notice { position: fixed; right: 18px; bottom: 18px; z-index: 50; box-shadow: 0 6px 20px rgba(0,0,0,.18); }

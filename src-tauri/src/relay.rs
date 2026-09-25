@@ -127,6 +127,14 @@ fn with<T>(f: impl FnOnce(&mut Vec<Value>) -> T) -> T {
     out
 }
 
+/// 읽기만 한다 — 저장할 것이 생긴 게 아니므로 디스크 쓰기 표시를 안 켠다
+/// (폰이 몇 초마다 REQ 로 물어도 `relay-events.json` 을 다시 쓰지 않게).
+fn peek<T>(f: impl FnOnce(&Vec<Value>) -> T) -> T {
+    let mut g = STORE.lock().unwrap_or_else(|e| e.into_inner());
+    let v = g.get_or_insert_with(load);
+    f(v)
+}
+
 /// 이 글이 진짜인가. **서명을 우리가 확인한다.**
 ///
 /// 🔴 안 하면 아무나 남의 이름으로 「이 가게는 여기서 주문받습니다」를 올릴
@@ -456,15 +464,103 @@ fn store(e: Value) -> (bool, String) {
     })
 }
 
+// ── 연결 방(RV6) — 디스크에 안 쓰는 이벤트 ─────────────────────────────────
+//
+// 🔴 폰↔데스크톱 연결 이벤트는 `relay-events.json` 에 **남기지 않는다.** 내용은 봉해져
+//    있지만 「언제 어느 기기끼리」는 남기 때문이다. 메모리에만, 24시간, 최대 2,000개.
+
+const EPHEMERAL_MAX: usize = 2_000;
+const EPHEMERAL_TTL_SECS: i64 = 24 * 3600;
+/// 한 연결이 1분에 올릴 수 있는 연결 이벤트(규격 §7: 1분 180개).
+const PAIR_PER_MINUTE: usize = 180;
+/// 한 연결이 동시에 열어 둘 수 있는 구독.
+const MAX_SUBS: usize = 16;
+
+static EPHEMERAL: Mutex<std::collections::VecDeque<Value>> = Mutex::new(std::collections::VecDeque::new());
+static LIVE: std::sync::OnceLock<tokio::sync::broadcast::Sender<Value>> = std::sync::OnceLock::new();
+
+/// 열린 구독에 바로 밀어 주는 방송. 느린 연결은 밀린 것을 잃는다(최대 256개 뒤처짐) —
+/// 그래도 다음 REQ 에서 저장분·메모리분으로 다시 받는다.
+fn live() -> &'static tokio::sync::broadcast::Sender<Value> {
+    LIVE.get_or_init(|| tokio::sync::broadcast::channel(256).0)
+}
+
+fn now_secs() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
+}
+
+/// 연결 방 이벤트를 메모리에 두고 열린 구독에 밀어 준다. 디스크에는 안 쓴다.
+pub fn publish_ephemeral(e: Value) {
+    {
+        let mut g = EPHEMERAL.lock().unwrap_or_else(|x| x.into_inner());
+        let cut = now_secs() - EPHEMERAL_TTL_SECS;
+        g.retain(|x| x.get("created_at").and_then(Value::as_i64).unwrap_or(0) >= cut);
+        if g.iter().any(|x| x.get("id") == e.get("id")) {
+            return;
+        }
+        g.push_back(e.clone());
+        while g.len() > EPHEMERAL_MAX {
+            g.pop_front();
+        }
+    }
+    let _ = live().send(e);
+}
+
+fn room_of(e: &Value) -> &str {
+    e.get("tags").and_then(|t| t.get(0)).and_then(|t| t.get(1)).and_then(Value::as_str).unwrap_or("")
+}
+
+/// 연결 방 글이면 서명을 확인하고(메모리에 두고·연결 쪽에 넘기고) 답을 준다. 아니면 None.
+fn take_pairing_event(e: &Value) -> Option<(bool, String)> {
+    if e.get("kind").and_then(Value::as_i64) != Some(42) || !crate::pairing::net::is_pairing_room(room_of(e)) {
+        return None;
+    }
+    if crate::pairing::proto::verify_chat_event(e).is_err() {
+        return Some((false, "invalid: 서명이 맞지 않습니다".into()));
+    }
+    publish_ephemeral(e.clone());
+    crate::pairing::net::on_event(e.clone());
+    Some((true, String::new()))
+}
+
 /// 손님·다른 가게가 붙는 자리. `wss://…/relay`
+///
+/// REQ 에는 저장분(+연결 방 메모리분)을 주고 EOSE 를 보낸 뒤, **구독을 열어 둔다** —
+/// 그 뒤로 들어오는 맞는 글을 바로 밀어 준다(CLOSE 하거나 연결이 끊길 때까지).
 pub async fn serve(mut ws: WebSocket) {
     // 🔴 **한 연결이 쏟아붓는 것을 막는다.** 서명이 맞는 글은 누구나 얼마든지
     // 만들 수 있다(열쇠 하나면 된다). 막지 않으면 한 사람이 5,000개를 채워
     // **이 가게의 진짜 공지를 밀어내고**, 그 사이 디스크와 CPU 를 다 쓴다.
     //
     // 한 번 붙어서 200개까지. 더 보내려면 다시 붙어야 하고, 그건 눈에 띈다.
+    // (연결 방 글은 오래 붙어 있는 폰이 쓰므로 따로 1분 180개로 센다.)
     let mut sent = 0usize;
-    while let Some(Ok(msg)) = ws.recv().await {
+    let mut pair_times: std::collections::VecDeque<std::time::Instant> = Default::default();
+    let mut subs: Vec<(String, Vec<Value>)> = Vec::new();
+    let mut rx = live().subscribe();
+    loop {
+        let msg = tokio::select! {
+            m = ws.recv() => m,
+            pushed = rx.recv() => {
+                match pushed {
+                    Ok(e) => {
+                        let hits: Vec<String> = subs.iter().filter(|(_, fs)| fs.iter().any(|f| matches(&e, f))).map(|(id, _)| id.clone()).collect();
+                        for id in hits {
+                            if ws.send(Message::Text(json!(["EVENT", id, e]).to_string().into())).await.is_err() {
+                                return;
+                            }
+                        }
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {}
+                    Err(_) => {}
+                }
+                continue;
+            }
+        };
+        let Some(Ok(msg)) = msg else { break };
         let Message::Text(txt) = msg else { continue };
         // 아주 큰 글은 안 받는다. 사진을 통째로 밀어 넣는 길이 된다.
         if txt.len() > 256 * 1024 {
@@ -482,8 +578,20 @@ pub async fn serve(mut ws: WebSocket) {
             "EVENT" => {
                 let Some(e) = a.get(1).cloned() else { continue };
                 let id = e.get("id").and_then(Value::as_str).unwrap_or("").to_string();
-                sent += 1;
-                if sent > 200 {
+                let pairing = e.get("kind").and_then(Value::as_i64) == Some(42)
+                    && crate::pairing::net::is_pairing_room(room_of(&e));
+                let limited = if pairing {
+                    let now = std::time::Instant::now();
+                    while pair_times.front().map(|t| now.duration_since(*t).as_secs() >= 60).unwrap_or(false) {
+                        pair_times.pop_front();
+                    }
+                    pair_times.push_back(now);
+                    pair_times.len() > PAIR_PER_MINUTE
+                } else {
+                    sent += 1;
+                    sent > 200
+                };
+                if limited {
                     let _ = ws
                         .send(Message::Text(
                             json!(["OK", id, false, "rate-limited: 한 번에 너무 많습니다"])
@@ -493,7 +601,17 @@ pub async fn serve(mut ws: WebSocket) {
                         .await;
                     continue;
                 }
-                let (ok, why) = store(e);
+                let (ok, why) = match take_pairing_event(&e) {
+                    Some(r) => r,
+                    None => {
+                        let r = store(e.clone());
+                        // 새로 저장한 것만 열린 구독에 민다(「이미 있습니다」·「옛 글」은 안 민다).
+                        if r.0 && r.1.is_empty() {
+                            let _ = live().send(e);
+                        }
+                        r
+                    }
+                };
                 let _ = ws
                     .send(Message::Text(
                         json!(["OK", id, ok, why]).to_string().into(),
@@ -502,25 +620,34 @@ pub async fn serve(mut ws: WebSocket) {
             }
             "REQ" => {
                 let Some(sub) = a.get(1).and_then(Value::as_str) else { continue };
+                let sub = sub.chars().take(64).collect::<String>();
                 // 걸러 낼 조건이 여럿 올 수 있다. 하나라도 맞으면 보낸다.
-                let filters: Vec<Value> = a.as_array().map(|x| x[2..].to_vec()).unwrap_or_default();
-                let hits = with(|v| {
-                    let mut out: Vec<Value> = v
-                        .iter()
+                let filters: Vec<Value> = a.as_array().map(|x| x.iter().skip(2).take(10).cloned().collect()).unwrap_or_default();
+                let mut hits = peek(|v| {
+                    v.iter()
                         .filter(|e| filters.iter().any(|f| matches(e, f)))
                         .cloned()
-                        .collect();
-                    // 최신이 먼저. 손님 화면이 첫 줄만 봐도 맞게.
-                    out.sort_by_key(|e| -(e.get("created_at").and_then(Value::as_i64).unwrap_or(0)));
-                    let cap = filters
-                        .iter()
-                        .filter_map(|f| f.get("limit").and_then(Value::as_u64))
-                        .max()
-                        .unwrap_or(200)
-                        .min(500) as usize;
-                    out.truncate(cap);
-                    out
+                        .collect::<Vec<Value>>()
                 });
+                {
+                    let g = EPHEMERAL.lock().unwrap_or_else(|x| x.into_inner());
+                    let cut = now_secs() - EPHEMERAL_TTL_SECS;
+                    hits.extend(
+                        g.iter()
+                            .filter(|e| e.get("created_at").and_then(Value::as_i64).unwrap_or(0) >= cut)
+                            .filter(|e| filters.iter().any(|f| matches(e, f)))
+                            .cloned(),
+                    );
+                }
+                // 최신이 먼저. 손님 화면이 첫 줄만 봐도 맞게.
+                hits.sort_by_key(|e| -(e.get("created_at").and_then(Value::as_i64).unwrap_or(0)));
+                let cap = filters
+                    .iter()
+                    .filter_map(|f| f.get("limit").and_then(Value::as_u64))
+                    .max()
+                    .unwrap_or(200)
+                    .min(500) as usize;
+                hits.truncate(cap);
                 for e in hits {
                     let _ = ws
                         .send(Message::Text(
@@ -532,9 +659,19 @@ pub async fn serve(mut ws: WebSocket) {
                 let _ = ws
                     .send(Message::Text(json!(["EOSE", sub]).to_string().into()))
                     .await;
+                // 구독을 열어 둔다(같은 이름이면 바꾼다). 한 연결에 16개까지 — 넘으면 가장 옛것을 닫는다.
+                subs.retain(|(id, _)| *id != sub);
+                subs.push((sub, filters));
+                while subs.len() > MAX_SUBS {
+                    subs.remove(0);
+                }
             }
-            // 구독을 끊는다. 우리는 지금 것만 주고 끝내므로 할 일이 없다.
-            "CLOSE" => {}
+            // 구독을 끊는다.
+            "CLOSE" => {
+                if let Some(sub) = a.get(1).and_then(Value::as_str) {
+                    subs.retain(|(id, _)| id != sub);
+                }
+            }
             _ => {}
         }
     }
@@ -668,5 +805,84 @@ mod tests {
         assert!(!matches(&e, &json!({ "#d": ["SHOP.OTHER"] })));
         // 아무 조건도 없으면 다 맞는다.
         assert!(matches(&e, &json!({})));
+    }
+
+    /// RV6: 열린 구독은 새 글을 **바로** 받는다(REQ→EOSE 뒤에도). 연결 방 글은 디스크
+    /// 저장소에 안 들어가고 메모리에만 있다. CLOSE 한 구독에는 안 간다.
+    #[tokio::test]
+    async fn live_push_and_pairing_rooms_stay_off_disk() {
+        use futures_util::{SinkExt, StreamExt};
+        use tokio_tungstenite::tungstenite::Message as M;
+        let _g = crate::paths::TEST_ENV.lock().unwrap_or_else(|e| e.into_inner());
+        let home = std::env::temp_dir().join(format!("rv6-relay-{}", std::process::id()));
+        std::fs::create_dir_all(&home).unwrap();
+        std::env::set_var("PLAYX_RAVEN_HOME", &home);
+
+        let app = axum::Router::new().route(
+            "/api/relay",
+            axum::routing::get(|ws: axum::extract::ws::WebSocketUpgrade| async { ws.on_upgrade(serve) }),
+        );
+        let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = l.local_addr().unwrap();
+        tokio::spawn(async move { axum::serve(l, app).await.unwrap() });
+        let url = format!("ws://{addr}/api/relay");
+
+        use crate::pairing::proto::*;
+        let keys = DeviceKeys::generate().unwrap();
+        let pair = Room { key: [5u8; 32], id: "ab".repeat(32) };
+        let chat = Room { key: [6u8; 32], id: "cd".repeat(32) };
+        crate::pairing::net::test_mark_room(&pair.id);
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64;
+        let pe = seal_text(&pair, &keys, "{\"v\":1}", now, SealOpts::default()).unwrap().to_value();
+        let ce = seal_text(&chat, &keys, "hello raven", now, SealOpts::default()).unwrap().to_value();
+
+        let (mut a, _) = tokio_tungstenite::connect_async(url.as_str()).await.unwrap();
+        a.send(M::Text(json!(["REQ", "s1", { "kinds": [42], "#e": [pair.id, chat.id] }]).to_string().into())).await.unwrap();
+        type Ws = tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
+        async fn next(a: &mut Ws) -> Option<Value> {
+            match tokio::time::timeout(std::time::Duration::from_secs(3), a.next()).await {
+                Ok(Some(Ok(M::Text(t)))) => Some(serde_json::from_str::<Value>(&t).unwrap()),
+                _ => None,
+            }
+        }
+        assert_eq!(next(&mut a).await.unwrap(), json!(["EOSE", "s1"]));
+
+        let (mut b, _) = tokio_tungstenite::connect_async(url.as_str()).await.unwrap();
+        for e in [&pe, &ce] {
+            b.send(M::Text(json!(["EVENT", e]).to_string().into())).await.unwrap();
+            let ok = next(&mut b).await.unwrap();
+            assert_eq!(ok[2], true, "{ok}");
+        }
+        // A 는 둘 다 바로 받는다.
+        let got1 = next(&mut a).await.expect("live push 1");
+        let got2 = next(&mut a).await.expect("live push 2");
+        let ids: Vec<Value> = vec![got1[2]["id"].clone(), got2[2]["id"].clone()];
+        assert!(ids.contains(&pe["id"]) && ids.contains(&ce["id"]), "{ids:?}");
+
+        // 연결 방 글: 디스크 저장소에는 없고 메모리에만. 대화 방 글: 저장소에 있다.
+        assert!(!peek(|v| v.iter().any(|x| x["id"] == pe["id"])), "pairing event must not be persisted");
+        assert!(peek(|v| v.iter().any(|x| x["id"] == ce["id"])));
+        assert!(EPHEMERAL.lock().unwrap().iter().any(|x| x["id"] == pe["id"]));
+
+        // 새로 붙은 C 가 REQ 하면 메모리분도 받는다.
+        let (mut c, _) = tokio_tungstenite::connect_async(url.as_str()).await.unwrap();
+        c.send(M::Text(json!(["REQ", "s2", { "#e": [pair.id] }]).to_string().into())).await.unwrap();
+        assert_eq!(next(&mut c).await.unwrap()[2]["id"], pe["id"]);
+        assert_eq!(next(&mut c).await.unwrap(), json!(["EOSE", "s2"]));
+
+        // CLOSE 한 구독에는 더 안 간다.
+        a.send(M::Text(json!(["CLOSE", "s1"]).to_string().into())).await.unwrap();
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        let pe2 = seal_text(&pair, &keys, "{\"v\":2}", now, SealOpts::default()).unwrap().to_value();
+        b.send(M::Text(json!(["EVENT", pe2]).to_string().into())).await.unwrap();
+        assert_eq!(next(&mut b).await.unwrap()[2], true);
+        assert_eq!(next(&mut c).await.unwrap()[2]["id"], pe2["id"], "open sub still gets it");
+        assert!(next(&mut a).await.is_none(), "closed sub gets nothing");
+        // 서명 틀린 연결 방 글은 거절.
+        let mut bad = pe2.clone();
+        bad["sig"] = json!("0".repeat(128));
+        b.send(M::Text(json!(["EVENT", bad]).to_string().into())).await.unwrap();
+        assert_eq!(next(&mut b).await.unwrap()[2], false);
+        std::env::remove_var("PLAYX_RAVEN_HOME");
     }
 }

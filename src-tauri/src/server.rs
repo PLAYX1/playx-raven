@@ -3333,6 +3333,8 @@ pub async fn start_phone_server(
     }
     // 재시작 전 주문 상태도 되읽는다.
     restore_order_state(&st);
+    // RV6 폰 연결(연결한 적이 있을 때만 장부를 연다).
+    crate::pairing::net::start();
 
     let ip = local_ip().unwrap_or_else(|| "127.0.0.1".into());
     // QR 에 박히는 값을 기억해 둔다. 나중에 「바뀌었다」를 말하려면 필요하다.
@@ -3516,6 +3518,11 @@ fn wifi_ip(ifconfig: &str) -> Option<String> {
         }
     }
     None
+}
+
+/// RV6 폰 연결 QR 의 `l`(같은 Wi-Fi 직통) 주소에 쓴다.
+pub(crate) fn lan_ip() -> Option<String> {
+    local_ip()
 }
 
 fn local_ip() -> Option<String> {

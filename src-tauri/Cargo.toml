@@ -64,6 +64,12 @@ serde = { version = "1", features = ["derive"] }
 # 묶는 것이라, 순서가 뒤집히면 파는 사람의 서명이 **엉뚱한 출력**에 붙는다.
 # 조용히 돈이 새는 자리다. (swap.rs 에서 조립 뒤에 한 번 더 확인한다.)
 serde_json = { version = "1", features = ["preserve_order"] }
+# RV6 폰↔데스크톱 연결(pairing.rs). 🔴 직접 만든 암호 없음 — 검증된 것만.
+#   x25519: 두 기기가 통로 열쇠를 합의 · xchacha20poly1305: 봉함 · hkdf+sha2: 열쇠 뽑기.
+#   서명은 위의 secp256k1(BIP340 schnorr)을 그대로 쓴다.
+x25519-dalek = { version = "2", features = ["static_secrets"] }
+chacha20poly1305 = "0.10"
+hkdf = "0.12"
 # Serves the phone screens — the owner's remote control and the customer's
 # order page — from this machine over the local network. Tauri already pulls in
 # tokio, so this adds a router and nothing heavier.
