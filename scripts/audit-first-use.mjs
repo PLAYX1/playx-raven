@@ -114,6 +114,13 @@ function mockScript(state) {
         case 'qr_svg': return '<svg viewBox="0 0 10 10"><rect width="10" height="10"/></svg>';
         case 'plugin:opener|open_url': case 'open_external': S.opened.push(a.url || a); return null;
         case 'plugin:dialog|open': return '/synthetic/backup.zip.pxlock';
+        // 0.4.9 12단어 되살리기 — 새 컴퓨터(지갑·장부 없음). 단어는 공개 BIP39 시험 벡터, 러스트 대신 같은지 한 번만 본다.
+        case 'words_restore_preflight': return { running: false, brand_new: true, wallet_file: false, wallet: null, has_value: false, need_confirm: false, branch: 'new', blocked: null, state: null, busy: false, rescanning: false, shop: false };
+        case 'words_restore_check': return a.words === S.vec ? { ok: true, count: 12, first: 'RXjfKKWn31FQPaLmjnS6nhEGmfmKNZNVTP', same_wallet: null, history: 'unknown' } : { ok: false, kind: 'checksum', message: '' };
+        case 'words_restore_start': S.restored = a.words === S.vec; return { started: true };
+        case 'words_restore_status': S.wn = (S.wn || 0) + 1; return S.wn < 2 ? { busy: true, state: { stage: 'creating' } }
+          : { busy: false, state: { stage: 'done', branch: 'new', aside: null, result: { balance: 0, assets: 0, certs: 0, txcount: 0, encrypted: false } } };
+        case 'words_restore_close': return { closed: true };
         case 'restore_survey': return { day: '2026-09-20', items: [{ key: 'wallet', what: '지갑', detail: '', why: '' }], empty: false, note: '' };
         case 'restore_apply': return { ok: true, status: 'complete', done: [{ what: '지갑' }], failed: [], note: '' };
         case 'backup_survey': return { items: [], automatic: null };
@@ -146,7 +153,8 @@ async function task(id, name, state, fn) {
     r.screens++;
     for (const w of JARGON) if (txt.includes(w)) { if (!seen.has(w)) seen.add(w); r.jargon[w] = (r.jargon[w] || 0) + 1; }
   };
-  const shot = async (label) => { await page.screenshot({ path: resolve(out, `${runName}-${id}-${label}.png`) }); };
+  // 🔴 복구 단어를 치는 과제(state.noShots)는 **막혀도 캡처하지 않는다** — 09-25 사고: 가져오기 화면 캡처에 단어가 찍혔다.
+  const shot = async (label) => { if (state.noShots) return; await page.screenshot({ path: resolve(out, `${runName}-${id}-${label}.png`) }); };
   const ctx = {
     page, r,
     async tap(sel, label = sel) {
@@ -394,24 +402,28 @@ try {
     return (await x.S()).opened.length > 0;
   });
 
-  // 10) 다른 컴퓨터에서 되살리기 — 12단어만 적어 둔 사람.
-  await task('T10', '다른 기기에서 복구', { ...baseState(), onboarded: false, mode: null, confirmed: 0 }, async (x) => {
-    const words = await x.has(/복구 단어로|12단어로 (되살|복구|가져)|단어를 (넣|입력)/);
-    x.note(`첫 화면에 「복구 단어로 되살리기」: ${words ? '있음' : '없음'}`);
-    await x.tap('#hello-help', '레이븐코인을 돕고 싶어요');
-    await x.wait(1800);
-    x.note(`첫 안내에 복구 단어 입력: ${(await x.page.$('#onboard textarea, #onboard input[type=text]:not(#ob-confirm)')) ? '있음' : '없음'}`);
-    await x.tap('#ob-also', '다른 일도 합니다');
-    await x.wait(600);
-    await x.type('#ob-confirm', '오래된 것만 남김', '되돌릴 수 없는 문장');
-    x.note('⚠️ 여기서 장부 정리(prune)를 고르면 「12단어로 되살려도 옛 거래를 못 찾는다」는 경고가 이미 뜸');
-    await x.tap('#ob-apply', '이대로 켜기');
-    await x.wait(800);
-    await x.tap('nav a[data-page="settings"]', '이 컴퓨터');
-    const hasWordsInput = await x.page.$('textarea#rs-words, #restore-words');
-    x.note(`「이 컴퓨터」에 12단어 입력 칸: ${hasWordsInput ? '있음' : '없음 — 백업 파일(.zip.pxlock)로만 되살림'}`);
-    if (!hasWordsInput) x.r.stuck.push('12단어만 적어 둔 사람은 데스크톱에서 되살릴 길이 없음');
-    return !!hasWordsInput;
+  // 10) 다른 컴퓨터에서 되살리기 — 12단어만 적어 둔 사람. 0.4.9: 첫 질문의 「전에 쓰던 지갑이 있어요 → 복구 단어 12개로」.
+  //     단어는 공개 BIP39 시험 벡터(Trezor)만. 🔴 이 과제는 캡처하지 않는다(noShots) — 막혀도.
+  const T10_VEC = 'legal winner thank year wave sausage worth useful legal winner thank yellow';
+  await task('T10', '다른 기기에서 복구', { ...baseState(), onboarded: false, mode: null, confirmed: 0, vec: T10_VEC, noShots: true }, async (x) => {
+    x.note(`첫 화면에 「복구 단어로 되살리기」: ${(await x.has(/복구 단어 12개로|12단어로 (되살|복구)/)) ? '있음' : '없음'}`);
+    await x.tap('#hello-restore-words', '전에 쓰던 지갑이 있어요 → 복구 단어 12개로');
+    await x.tap('#wrs-go', '단어 넣기');
+    const words = T10_VEC.split(' ');
+    // 사람처럼 칸마다 친다(스페이스로 다음 칸) — 첫 칸만 누르고 나머지는 이어서.
+    await x.tap('[data-wrs-at="1"]', '첫 칸');
+    for (const w of words) { await x.page.keyboard.type(w); await x.page.keyboard.press('Space'); }
+    x.r.typed += words.length;
+    await x.tap('#wrs-check', '확인');
+    await x.tap('#wrs-start', '되살리기 시작');
+    await x.page.waitForFunction(() => /되살렸습니다/.test(document.getElementById('wrs-body')?.innerText || ''), { timeout: 15000 });
+    const left = await x.page.evaluate((w) => [...document.querySelectorAll('input')].some((i) => i.value.includes(w)) || document.body.innerHTML.includes(w), 'sausage');
+    x.note(`시작 뒤 화면·칸에 단어 남음: ${left ? '예(!)' : '아니오'} · 끝 화면 지갑 암호 권함: ${(await x.has(/지갑 암호 걸기/)) ? '있음' : '없음'}`);
+    await x.tap('#wrs-finish', '닫기');
+    const S = await x.S();
+    if (!S.restored) x.r.stuck.push('넣은 단어가 되살리기에 그대로 가지 않음');
+    if (left) x.r.stuck.push('시작 뒤에도 단어가 화면에 남음');
+    return !!S.restored && !left;
   });
 
   // 11) 라비에게 묻기 — AI 열쇠 없는 처음 상태.
