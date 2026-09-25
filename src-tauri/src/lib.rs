@@ -64,6 +64,7 @@ mod wiring;
 mod knowledge;
 mod nostrpub;
 mod app_folder;
+mod pairing;
 mod paths;
 mod swap;
 mod sweep;
