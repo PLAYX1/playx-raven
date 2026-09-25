@@ -1,0 +1,285 @@
+{
+  "spec": "docs/RV-shop-lan-seal-v1.md v1",
+  "notes": [
+    "hex is lowercase. \"‖\" = raw bytes. shared = X25519(eph_sk, desk_pub); key = HKDF-SHA256(ikm=shared, salt=SHA256(utf8(token)), info=\"rv-shop-seal-v1\", L=32).",
+    "aad_req = \"rv-shop-seal-v1/req\" ‖ eph_pub ‖ desk_pub; aad_res = \"rv-shop-seal-v1/res\" ‖ eph_pub ‖ n_req. AEAD = XChaCha20-Poly1305.",
+    "request plaintext = JSON {\"v\":1,\"m\",\"path\",\"ts\",\"nonce\",\"body\"} with ts = floor(now_ms/1000); response plaintext = {\"v\":1,\"status\",\"body\"?} (body omitted when the inner answer is not JSON).",
+    "Receivers parse JSON; they never compare plaintext strings. Synthetic keys/tokens/people only."
+  ],
+  "sealed_paths": [
+    "/api/scan/check",
+    "/api/scan/member",
+    "/api/scan/member-info",
+    "/api/scan/member-memo",
+    "/api/scan/member-policy",
+    "/api/scan/member-groups",
+    "/api/scan/member-search",
+    "/api/admin/states",
+    "/api/admin/state"
+  ],
+  "legacy_plain_paths": [
+    "/api/admin/states",
+    "/api/admin/state"
+  ],
+  "ts_window_s": 300,
+  "replay_ttl_s": 600,
+  "desk_sk": "d13f75b2a7b7505369be51ed0f06e2bf21585b8662c18e77ca612b2070f62611",
+  "desk_pub": "f08752d8d7b93eb568eb31466ae1920f250aef9dcbe76f10e2f471ef18bf1d57",
+  "tokens": {
+    "owner": "29964d59c76198c0a5be6c9e1234d124f3b5d0041dbc5ce2393739c3f541b6c9",
+    "staff": "1784d8e1f1352fefaeae4ef38febd2af9b7ca9de658db5e61ff024467088a571",
+    "scanner": "scanner-\"quoted\"-token\\x"
+  },
+  "cases": [
+    {
+      "label": "policy",
+      "role": "staff",
+      "now_ms": 1800000000000,
+      "eph_sk": "fce7e7377c182537bf062b37e119b687a1944e2b9353a173866c555ecbb3e5c6",
+      "eph_pub": "a1378528383f9654d4059123ad0e5667bb814783c39c2b7ac42cc18a5226cb16",
+      "n": "33238ec1a1a0c93dc68c9277cea011f5861ee51b7ed03bcb",
+      "nonce": "8bd4b3408c562908e119c51a2ca7a2ff",
+      "shared": "0bb343cc15a3dd7498fb1d1a27cee2aaf3eb24aab69328a25cd04cac6dcf3a71",
+      "token_salt": "801a59f39c661b02ac4996443a86f5df61da833ec2f4219f852298f897f1f6bb",
+      "key": "5e4fa92b02968a761fae8991d07ad48ea0a4afd27f4fa7390f4d887430f11b34",
+      "plaintext": "{\"v\":1,\"m\":\"GET\",\"path\":\"/api/scan/member-policy\",\"ts\":1800000000,\"nonce\":\"8bd4b3408c562908e119c51a2ca7a2ff\",\"body\":null}",
+      "envelope": {
+        "v": 1,
+        "eph": "a1378528383f9654d4059123ad0e5667bb814783c39c2b7ac42cc18a5226cb16",
+        "n": "33238ec1a1a0c93dc68c9277cea011f5861ee51b7ed03bcb",
+        "ct": "18b18ec7fcd68e663bddcb27728bc34e22569a6fefecfeb74fc92ddc1c695f4759abecb156b191cc3493135948f1f259f3d09811e897d7c7dd4cc68b86511c7d01e1a9883549360628d7d222500b0cfff9ba4583f372e5da7bbc53a8c8c41e7820ae7e5eba717c2caf164e5d7c72fc06d9fdabc7f5f8d0d2dc358717f5ec5cb84c5922db11ee23022b"
+      },
+      "answer": {
+        "status": 200,
+        "body": {
+          "groups": [],
+          "level": "name_last4",
+          "retention_months": 6,
+          "consent_version": "member-privacy-v2",
+          "consent_text": {
+            "ko": "동의 내용"
+          }
+        }
+      },
+      "answer_plaintext": "{\"v\":1,\"status\":200,\"body\":{\"groups\":[],\"level\":\"name_last4\",\"retention_months\":6,\"consent_version\":\"member-privacy-v2\",\"consent_text\":{\"ko\":\"동의 내용\"}}}",
+      "res_n": "09dc7ca34b958d46119159f1423f0e04d6c58ab239802cd8",
+      "response": {
+        "v": 1,
+        "n": "09dc7ca34b958d46119159f1423f0e04d6c58ab239802cd8",
+        "ct": "771a71889bae000b8efa8f433dfe37cb34766bbaea85e3840f96ded8aac2adfc4755fca72be491c4ec010c5e78a2e45ae6634dec026eeac07513c97ce604942737555fc025affb3c0c0eb8fdd37c382327db05cc5b95dca3e599221ec0bf24bd9d5419d96646efb1f1f6aabb20bb514cb47a63528607635ba2afdda1815aad5b98fbcd3c47bd787dfbdadcf7b3c93d9b3443866efe68749884c44d33a6f850e790b96967661c048634fbdcbf4c60b7"
+      }
+    },
+    {
+      "label": "register",
+      "role": "staff",
+      "now_ms": 1800000001234,
+      "eph_sk": "7b8fa0d8787e3e179f2c9a9a05c0702bcb9ddf333f9d6d89440eab0fc0a80071",
+      "eph_pub": "10c4f9e3848e1279e1c0d659e20d1392f54d4a7d8c5dfbc423ccdbcba047fc02",
+      "n": "494c9a6ac7641ba866e8b70baf411aea274e52218fe00790",
+      "nonce": "346ae5f64fe67ac3a58f0684c33bfab2",
+      "shared": "2072eba326650623119874d93c67fce9f406e5f4beea21958a0553e264c4786c",
+      "token_salt": "801a59f39c661b02ac4996443a86f5df61da833ec2f4219f852298f897f1f6bb",
+      "key": "23ba758689efad49b7dd1cd6a896eae122e6c319a3279edbe4d2114441c4db4d",
+      "plaintext": "{\"v\":1,\"m\":\"POST\",\"path\":\"/api/scan/member\",\"ts\":1800000001,\"nonce\":\"346ae5f64fe67ac3a58f0684c33bfab2\",\"body\":{\"code\":\"T-SYNTH-1\",\"name\":\"홍길동\",\"phone\":\"010-0000-1234\",\"consent\":true,\"consent_version\":\"member-privacy-v2\",\"memo\":\"창가 자리 \\\"좋아함\\\"\"}}",
+      "envelope": {
+        "v": 1,
+        "eph": "10c4f9e3848e1279e1c0d659e20d1392f54d4a7d8c5dfbc423ccdbcba047fc02",
+        "n": "494c9a6ac7641ba866e8b70baf411aea274e52218fe00790",
+        "ct": "95bcc6529e78f3cc2034ac5f4e98ab18cbeeec37bbccd14f209e74e78227180404b9f46a73127cad98e0812f9645d9f4f28efc1d812638f60627eee42676dc67510eb9ad0e79054dc84c3afe1c1bfb34d63ad5e6bb13abf37e120c7fbdcce1a4edf4f650f0bec56bc5ea060d1359acc6fa1b9cacc27f2a2ca86b94ad969868bcf30627b9fac8c2c75e8933c823a586c450dc0167a05c6c607197252dab5151f3c86fa1dd30c05b8b529e8dbb973c93618594dc8bd46c5c940ffc572f92d105a43feef50a99aa8713f3557618c9541c0f7fa93b37f3754bfd1899fd80ef1fcb63e2f0cd2d1cddbf08ee715db59a309c9ee721feadcb4d7b5a53fe287d6222ecb45e534c6568312cd9addef7fc7003438e69946f72c64ffec9"
+      },
+      "answer": {
+        "status": 200,
+        "body": {
+          "code": "T-SYNTH-1",
+          "name": "홍길동",
+          "until": 20261231
+        }
+      },
+      "answer_plaintext": "{\"v\":1,\"status\":200,\"body\":{\"code\":\"T-SYNTH-1\",\"name\":\"홍길동\",\"until\":20261231}}",
+      "res_n": "b184c7ae382edc3768310a10896134c9c420ae06afa416da",
+      "response": {
+        "v": 1,
+        "n": "b184c7ae382edc3768310a10896134c9c420ae06afa416da",
+        "ct": "09c655440407d7cdb0b156cb5ebb7e824eb2728d35c97597c920614e9fcb2796c71ca5cabea44e14b3ee2709321dfbd1d5782b238b3d228a39901fa2b2d769b63c3c5b0c79d27f736fae57d9bd4da2c5dcbe58aea2a12caeaf232c53a0e641c661911461"
+      }
+    },
+    {
+      "label": "check",
+      "role": "scanner",
+      "now_ms": 1800000059999,
+      "eph_sk": "ba5ef1bf7bfe774632d88ebd999ae7990ec16c53d78c3afe84bc5868e8b6aea2",
+      "eph_pub": "eba206e2fb8e1ba01a98d30bdfc54c84c1b93ae14700c1b1881debc513de9f5d",
+      "n": "1f882ec7ed8cfde154c7a8a9783c0b7f20124edef41090ae",
+      "nonce": "b0ed4b3a167e9aceea6bcf9cd75921c6",
+      "shared": "94bfccd65884148c0481fca51caab0ab420aad055c87b977de5ae90a368be248",
+      "token_salt": "7bd38c0fa4890b61c6c2fc214f9890ebf9726fac68c7646f60d61df3ed9a2cdc",
+      "key": "2c533dab37300f135fe83622739351b8a6426449f1dcc58f4965e93f906516c5",
+      "plaintext": "{\"v\":1,\"m\":\"POST\",\"path\":\"/api/scan/check\",\"ts\":1800000059,\"nonce\":\"b0ed4b3a167e9aceea6bcf9cd75921c6\",\"body\":{\"query\":\"ROOT/M#ABCD\"}}",
+      "envelope": {
+        "v": 1,
+        "eph": "eba206e2fb8e1ba01a98d30bdfc54c84c1b93ae14700c1b1881debc513de9f5d",
+        "n": "1f882ec7ed8cfde154c7a8a9783c0b7f20124edef41090ae",
+        "ct": "c1a86858e320242f83cc85c1cdfc8652784c1a1dff39c7136239161fdec801a23e67364a57799484c5177803584c01443017aabddf2bd5599ba09c0911f75a30e67dae5c639e4d5f3566ce16f632863aff2e82222a18c110c7976932fc118b630ea8cd3df8d9cf13cfe4734dc8a195040aaa67adb7a0b031211bffd69f28dfd782d9aa5391730342093557bbb45bcfde036f99e9d9"
+      },
+      "answer": {
+        "status": 200,
+        "body": {
+          "found": true,
+          "kind": "member",
+          "name": "Synthetic A",
+          "valid": true,
+          "why": null,
+          "left": 3,
+          "asset": "ROOT/M#ABCD"
+        }
+      },
+      "answer_plaintext": "{\"v\":1,\"status\":200,\"body\":{\"found\":true,\"kind\":\"member\",\"name\":\"Synthetic A\",\"valid\":true,\"why\":null,\"left\":3,\"asset\":\"ROOT/M#ABCD\"}}",
+      "res_n": "11263687ded4e10a28b418ac9d46bbbbdaf8751bd5d92e00",
+      "response": {
+        "v": 1,
+        "n": "11263687ded4e10a28b418ac9d46bbbbdaf8751bd5d92e00",
+        "ct": "36dd9a38c710daf5f9e6e3b76e6363a04d733097dbf2869886388d00076344a736c4ea5f800b34a6e8f6483d92ef00f5f94e7c83360820229ec922fe48b2d4709dc6baf6c60c0153909bc6c850993d95665a49aee047cfbc5ab738dcb00a5e1ca3edf0e8b3705134d8e0a55e3a176c33552187938183339f8c9bf9d87ac02245ecce6772befe93cb48e3d8bb8c7e04d2d7fb1fb9b3cd"
+      }
+    },
+    {
+      "label": "info-not-json",
+      "role": "staff",
+      "now_ms": 1800000120000,
+      "eph_sk": "b1215751aa9f2f2d5007dc097098b6fcd9dd353790edbc6be7ad04b58c26711e",
+      "eph_pub": "42613ada38e1e7a5f1a506dfadbd893fb43c189479eaa0abf01260a7ec3d030c",
+      "n": "dfb276eb4aed7ccdd1d5cadb2da2f540fcb1524e0866bb3f",
+      "nonce": "98346bf3c9bed15b4da9a31f3949c180",
+      "shared": "c65521376230b305433ca57e368774c598c9616200d649ea37b9b6fe0333bc0c",
+      "token_salt": "801a59f39c661b02ac4996443a86f5df61da833ec2f4219f852298f897f1f6bb",
+      "key": "561aab92e478f39ab3fed0ec120e2a3c26c3a77ee3f6ae25b17a696c88ff798f",
+      "plaintext": "{\"v\":1,\"m\":\"GET\",\"path\":\"/api/scan/member-info?code=ROOT%2FM%23ABCD\",\"ts\":1800000120,\"nonce\":\"98346bf3c9bed15b4da9a31f3949c180\",\"body\":null}",
+      "envelope": {
+        "v": 1,
+        "eph": "42613ada38e1e7a5f1a506dfadbd893fb43c189479eaa0abf01260a7ec3d030c",
+        "n": "dfb276eb4aed7ccdd1d5cadb2da2f540fcb1524e0866bb3f",
+        "ct": "4172fb86c263c8a09ff19b26103ddc482ebf56db3e61fe28eb106763a9e14844999ff73bbcd585d5945cb7522bad7275c03bb382da18ed9537b9989ce5dc9f49e226ec49246c74a13160fad2cf50bfa206e4d8b8a10ca3fa171b343d595ca8c47db39590a4fb4689997747ab0535f64ede81d129bbedd4b375c1b757b6c01f750757d3f41ab55f31be02e3568f26a2d4725824f66810a874ebc46711"
+      },
+      "answer": {
+        "status": 500
+      },
+      "answer_plaintext": "{\"v\":1,\"status\":500}",
+      "res_n": "0b53e31616f8e8ee13859bec3f12f3befe3b098e0b5a6849",
+      "response": {
+        "v": 1,
+        "n": "0b53e31616f8e8ee13859bec3f12f3befe3b098e0b5a6849",
+        "ct": "58b67551817f5c83d6e435e22c14a5800224abdcb771e0abd14fa7657b8b1637587ba3d2"
+      }
+    },
+    {
+      "label": "order-step",
+      "role": "owner",
+      "now_ms": 1800000180000,
+      "eph_sk": "357f916334293d431d11ef497679145378cc7d91df9e179e9806f21baf1033f9",
+      "eph_pub": "6b7794d7fcd722a29b8a06d489e84ab770dfdbf8bd9e4b991d294ab67fa1da13",
+      "n": "1b9dd5c0c16670d2824e9656d34b423e13bd960bc77861b9",
+      "nonce": "21fec06c42f9dacc5331674a87419307",
+      "shared": "9114fee4d1faa5588f2f897a126becfbd1661732a34fcd781b4d5b670e0d4703",
+      "token_salt": "4c95e899fd4800a6ff4224f57adbb3cfda1230a43960f9199912a41df1b530ac",
+      "key": "e24f63d20a29d78760730a1ec6b276db45d46472cf022c2b6fbf2c555e00f0ac",
+      "plaintext": "{\"v\":1,\"m\":\"POST\",\"path\":\"/api/admin/state\",\"ts\":1800000180,\"nonce\":\"21fec06c42f9dacc5331674a87419307\",\"body\":{\"address\":\"RSynthAddr\",\"state\":\"making\",\"from\":\"paid\"}}",
+      "envelope": {
+        "v": 1,
+        "eph": "6b7794d7fcd722a29b8a06d489e84ab770dfdbf8bd9e4b991d294ab67fa1da13",
+        "n": "1b9dd5c0c16670d2824e9656d34b423e13bd960bc77861b9",
+        "ct": "eb36a299c6c7f817859f154aa064894d350a15f56b709a4d8af3c8b53842d6bfe304d8e6681db2ade9b1d7b58a629b464acaa97155ad617fcb1d287c82e5c3ea8354e0449080d37a99d6e7f7f9bc29dd3d0871f0ff8311aa2b65a81199fe212910688b4a54ec04844fc5f4c2f520c38bee9e850aa4e838469503b1e816baf0b0aaabf272da4459c9cf997032fac4a7fc646f26fb5e7770c988ee7da0dbaf08b5a380c2de3bc386b5192287697633a55a14bfa97a3bea"
+      },
+      "answer": {
+        "status": 409,
+        "body": {
+          "code": "STALE",
+          "state": "ready"
+        }
+      },
+      "answer_plaintext": "{\"v\":1,\"status\":409,\"body\":{\"code\":\"STALE\",\"state\":\"ready\"}}",
+      "res_n": "499925203ce16604292d9b60332b0c024734ca4928b3dfc2",
+      "response": {
+        "v": 1,
+        "n": "499925203ce16604292d9b60332b0c024734ca4928b3dfc2",
+        "ct": "3696108abdb0d46eaed6f393ff449eb5b06db2b69dbf118b90f1846dde6446a90cf4b3ad6ed309e4fbf5571322c54ee7f2fcb62a6c374f4f5fce9f3f29d166c8fcd083d26f798a91ab390e04"
+      }
+    }
+  ],
+  "interop": [
+    {
+      "label": "interop-info",
+      "role": "staff",
+      "now_ms": 1800000000000,
+      "eph_sk": "e26aa8932b9e6963bc14534b9f081b085ee9dd649688bf5ef9e2b81fcd4930e3",
+      "eph_pub": "3c45631b237d49cd463add5ad29942839a7692042032fa235ea0378365ff056c",
+      "n": "3419ef12dd25c76c56a74bb31c47a0f907c8f16b8cdfc2ae",
+      "nonce": "f3d2a4b5fa727886b2c8577a1e03e458",
+      "shared": "1e30f93f441d37cc242711fc5979e2f35eb19fb76c899ec8ea3e64d3bab32461",
+      "token_salt": "801a59f39c661b02ac4996443a86f5df61da833ec2f4219f852298f897f1f6bb",
+      "key": "525a78aa32469016738f8e5cfe3beb0510bb08fb8663dae6248e22df8f1b36af",
+      "plaintext": "{\"v\":1,\"m\":\"GET\",\"path\":\"/api/scan/member-info?code=ROOT%2FM%23ABCD\",\"ts\":1800000000,\"nonce\":\"f3d2a4b5fa727886b2c8577a1e03e458\",\"body\":null}",
+      "envelope": {
+        "v": 1,
+        "eph": "3c45631b237d49cd463add5ad29942839a7692042032fa235ea0378365ff056c",
+        "n": "3419ef12dd25c76c56a74bb31c47a0f907c8f16b8cdfc2ae",
+        "ct": "c96046d744b558563db7c57355c35558cfb1db8d8463b8a746dfeef05b7e168efafb8356900aa2b487a7c51d75025ca7fdc9712a259a584e31a4b6def633030fa95d99a05efa4cbb7ca6933dd54e36a2a7d648ae9e2d5c661a0439dd60d062a1a1a0ef9a52f9eff0a37110491e0b9b9edba48bf282688fb6aae11bad1ea05f3affb2d21d94292e6fb6bf34d22f3c8a436c77c2cc8a060210a36a2961"
+      }
+    },
+    {
+      "label": "interop-memo",
+      "role": "staff",
+      "now_ms": 1800000000500,
+      "eph_sk": "7ff9efca1cc7fdeae5b5ccca961e7eac89fe2bdfdf524f8cf8ce5fc05ae2d2e1",
+      "eph_pub": "ca90af83b8f090642d8af0a3829d9e77bba79746249f641ead4b682b1a521f11",
+      "n": "1f5a566fd2e403908f895a3947c7a1a62598f9d6fa52ae10",
+      "nonce": "613f0bc4b0e3062cf7fbf575a5f25237",
+      "shared": "ef0eeb0bf3d52817182658f5c4a545f81eea47f6c3288c9a40ddecfe07306e4a",
+      "token_salt": "801a59f39c661b02ac4996443a86f5df61da833ec2f4219f852298f897f1f6bb",
+      "key": "57348b67bed7594f54105398257ba5b5c0c15e80b49fb7c7ddec2a12b4e001ed",
+      "plaintext": "{\"v\":1,\"m\":\"POST\",\"path\":\"/api/scan/member-memo\",\"ts\":1800000000,\"nonce\":\"613f0bc4b0e3062cf7fbf575a5f25237\",\"body\":{\"code\":\"ROOT/M#ABCD\",\"text\":\"합성 메모 synthetic\"}}",
+      "envelope": {
+        "v": 1,
+        "eph": "ca90af83b8f090642d8af0a3829d9e77bba79746249f641ead4b682b1a521f11",
+        "n": "1f5a566fd2e403908f895a3947c7a1a62598f9d6fa52ae10",
+        "ct": "2bac63ae00d04766e0bc8048161bc47b982a608027a97152366775ce2c0d94a3779ab746600a5460a1528b29229f52902305613fc150fd88839f94b368e83a8e2e412a1b4b60b057e308eb82e100418178413b9095de6404eaa83b8d2e349028fc9342a7a689b2cd55ebdae602a8b96c0998fb117dcea3d06aaf6c232067cb59851a254c4c92f320c7fe29d0936f93d16ac61f02af57a33634aaafd44858c9ed98a26ff3055805052bf19397f88b6e2b5c1d867ce4916372427cd5"
+      }
+    },
+    {
+      "label": "interop-scanner-info",
+      "role": "scanner",
+      "now_ms": 1800000001000,
+      "eph_sk": "9e575422800c5694969efce60ad634062e4ca49dab8c5c43dd7a008553b77ca0",
+      "eph_pub": "0b59d9d8e5befadfbe9053b1c9df493b0e50f9d72b475f9a13e7d4331ea51b64",
+      "n": "dcf4da1059849285b28110a093e29d11b4d9278b320afa7c",
+      "nonce": "7775dd6122d1ef36ecad7071dd7db7d4",
+      "shared": "85ae6aed7d6647f56dd82eb81f7f06be25111da5c444f719746466a46ddd315f",
+      "token_salt": "7bd38c0fa4890b61c6c2fc214f9890ebf9726fac68c7646f60d61df3ed9a2cdc",
+      "key": "ccd9e8d6384cd052c8dacc17baae2da332e7cc6efc61827574eb2d8eceeed001",
+      "plaintext": "{\"v\":1,\"m\":\"GET\",\"path\":\"/api/scan/member-info?code=ROOT%2FM%23ABCD\",\"ts\":1800000001,\"nonce\":\"7775dd6122d1ef36ecad7071dd7db7d4\",\"body\":null}",
+      "envelope": {
+        "v": 1,
+        "eph": "0b59d9d8e5befadfbe9053b1c9df493b0e50f9d72b475f9a13e7d4331ea51b64",
+        "n": "dcf4da1059849285b28110a093e29d11b4d9278b320afa7c",
+        "ct": "6afe3c86000a4475cb20e59196ac4a4d362907d74c75172f99f48106b1dc4a05b3f94fdfc1db0de57e4c22d2a22766c3e78943d03959eccfb034525beb1b19f9bd8ef6c29be0019f5fc38a8007f0eb558c91ed1364756bc30ed39eb107407cf0f0753ba1c47c7dcc4cfab920a12b491fb6d23a7f2a7b0b28a7325be538966f6134bf09d9820a77ebde373bdc2d24a415c44b7a9194235c5b6f44c7a4"
+      }
+    },
+    {
+      "label": "interop-register",
+      "role": "scanner",
+      "now_ms": 1800000002000,
+      "eph_sk": "24dfa5c5729e2f4a84685b5d168bf89b83c72d5546593c6f6816fac882085f07",
+      "eph_pub": "0873867dbdcd2150dfe591fb1ede6c59a30b8b8c2a3632a2383e3f75c9852647",
+      "n": "ce2791d9c0bf04ebf4e69eeb5b1257ef74d5eea98ef8ef17",
+      "nonce": "11a9f115f69cc695cafb5e092e742a42",
+      "shared": "f7da87d57c4b8f629d6e9bee49119108d005dd144b8707e03a92a50f2c636159",
+      "token_salt": "7bd38c0fa4890b61c6c2fc214f9890ebf9726fac68c7646f60d61df3ed9a2cdc",
+      "key": "a888193ce8b86a4cafbf61358c368eb5b91180698aca7a2ab6dddbc980f0927a",
+      "plaintext": "{\"v\":1,\"m\":\"POST\",\"path\":\"/api/scan/member\",\"ts\":1800000002,\"nonce\":\"11a9f115f69cc695cafb5e092e742a42\",\"body\":{\"code\":\"NOSUCHTICKET\",\"name\":\"합성 손님\",\"phone\":\"1234\",\"consent\":true,\"consent_version\":\"member-privacy-v2\"}}",
+      "envelope": {
+        "v": 1,
+        "eph": "0873867dbdcd2150dfe591fb1ede6c59a30b8b8c2a3632a2383e3f75c9852647",
+        "n": "ce2791d9c0bf04ebf4e69eeb5b1257ef74d5eea98ef8ef17",
+        "ct": "e67721571e426d48850c55541f636a4324d618fb9eea52e38a1b1627c17925e8a68716ec3bad2f8a0de8274d73d17c666c020877b55d4ba35d6574ae26ab538457e5b93cbad5960b2501c1ff2aa91cec2225835b46cdbc6f555bfc2719321b45fe43f1487690f4ba795bf56f14640b986f6ebb6feca216dcbde074f4300bbeffc84d7da9af8ddcb4ae47661bce0bbdac2914756db34133f0095aae92a8ef177fc7bba92569e57cae97d4cc21643fb070c57d1905804d76e75b237dec7cd9ca874dd5f9b7d01bea1b6a047cac55266ff64f05cbe6ac3b491f1b494ea3de0a1780b3013a11f0bb7334785dc8c7a6db7d0aa7"
+      }
+    }
+  ]
+}

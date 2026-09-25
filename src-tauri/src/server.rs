@@ -158,6 +158,11 @@ pub struct ServerState {
     /// answers all of them, because the sweep is not per-address — it reads the
     /// wallet's recent receives once and updates every order at the same time.
     last_sweep: Arc<Mutex<i64>>,
+    /// 봉함 요청의 nonce → 본 시각. 재전송을 막는다(`shopseal::admit`). 복호화에 성공한
+    /// 요청만 들어가므로 토큰 없는 사람은 채울 수 없다.
+    seal_seen: Arc<Mutex<std::collections::HashMap<String, i64>>>,
+    /// (횟수, 마지막 시각) — 옛 폰·브라우저가 손님 정보를 **평문으로** 보낸 것. 설정 화면의 경고 한 줄.
+    plain_seen: Arc<Mutex<(u64, i64)>>,
 }
 
 /// The states an order actually passes through in a shop.
@@ -249,7 +254,7 @@ fn tokens_path() -> std::path::PathBuf {
 
 /// 임시 파일을 생성할 때부터 0600 으로 열고, 내용을 sync_all 한 뒤 rename 한다.
 /// 가능하면 디렉터리도 fsync 해 정전 뒤에도 새 파일 이름이 남게 한다.
-fn atomic_write_0600(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
+pub(crate) fn atomic_write_0600(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
     use std::io::Write;
     if let Some(d) = path.parent() {
         std::fs::create_dir_all(d)?;
@@ -3048,6 +3053,135 @@ async fn api_scan_member_policy(
     }
 }
 
+// ── 봉함(직원·검표 폰) ─────────────────────────────────────────────────────
+//
+// RavenVault `docs/RV-shop-lan-seal-v1.md`. 폰은 토큰을 보내지 않는다 — 봉투만 보낸다.
+// 여기서 열어 **기존 처리기에 그대로** 넣고, 그 답을 다시 봉해 돌려준다.
+
+fn seal_plain_error(status: StatusCode, code: &str) -> axum::response::Response {
+    (status, Json(json!({ "code": code }))).into_response()
+}
+
+async fn api_scan_sealed(
+    State(state): State<ServerState>,
+    headers: HeaderMap,
+    body: axum::body::Bytes,
+) -> axum::response::Response {
+    use tower::ServiceExt;
+    if body.len() > crate::shopseal::MAX_ENVELOPE {
+        return seal_plain_error(StatusCode::BAD_REQUEST, "SEAL_BAD");
+    }
+    let Ok(env) = serde_json::from_slice::<Value>(&body) else {
+        return seal_plain_error(StatusCode::BAD_REQUEST, "SEAL_BAD");
+    };
+    let desk = match crate::shopseal::desk_key() {
+        Ok(k) => k,
+        Err(e) => {
+            eprintln!("[shopseal] {e}");
+            return seal_plain_error(StatusCode::INTERNAL_SERVER_ERROR, "SEAL_UNAVAILABLE");
+        }
+    };
+    let mut tokens = vec![("owner".to_string(), state.token.lock().map(|t| t.clone()).unwrap_or_default())];
+    if let Ok(m) = state.role_tokens.lock() {
+        for r in ["staff", "scanner"] {
+            tokens.push((r.to_string(), m.get(r).cloned().unwrap_or_default()));
+        }
+    }
+    let opened = match crate::shopseal::open_request(desk.secret(), &tokens, &env) {
+        Ok(o) => o,
+        Err(crate::shopseal::OpenFail::Malformed) => return seal_plain_error(StatusCode::BAD_REQUEST, "SEAL_BAD"),
+        // 옛 401 과 같은 코드 — 폰은 「연결 QR 다시 찍기」를 안내한다.
+        Err(crate::shopseal::OpenFail::NoToken) => {
+            return (StatusCode::UNAUTHORIZED, Json(auth_fail_json(AuthFail::BadToken))).into_response()
+        }
+        Err(crate::shopseal::OpenFail::BadPlain(ctx)) => {
+            return Json(crate::shopseal::seal_response(&ctx, 400, Some(&json!({ "code": "SEAL_BAD" })), None)).into_response()
+        }
+    };
+    drop(tokens);
+    let gate = {
+        let mut seen = state.seal_seen.lock().unwrap_or_else(|e| e.into_inner());
+        crate::shopseal::admit(&opened, crate::shopseal::now(), &mut seen)
+    };
+    if let Err((status, code)) = gate {
+        return Json(crate::shopseal::seal_response(&opened.ctx, status, Some(&json!({ "code": code })), None)).into_response();
+    }
+    // 안쪽 요청: 원래 Host(바깥 검문이 다시 보도록) + 맞은 토큰(이 컴퓨터 안에서만) + 봉함 표시.
+    let inner_body = if opened.method == "POST" { serde_json::to_vec(&opened.body).unwrap_or_default() } else { Vec::new() };
+    let mut builder = axum::http::Request::builder()
+        .method(opened.method.as_str())
+        .uri(opened.path.as_str())
+        .header("x-playx-token", opened.token.as_str())
+        .header("content-type", "application/json");
+    if let Some(host) = headers.get("host") {
+        builder = builder.header("host", host.clone());
+    }
+    let Ok(mut req) = builder.body(axum::body::Body::from(inner_body)) else {
+        return Json(crate::shopseal::seal_response(&opened.ctx, 400, Some(&json!({ "code": "SEAL_BAD" })), None)).into_response();
+    };
+    req.extensions_mut().insert(crate::shopseal::SealedInner);
+    let resp = match build_phone_router(state.clone()).oneshot(req).await {
+        Ok(r) => r,
+        Err(never) => match never {},
+    };
+    let status = resp.status().as_u16();
+    let bytes = axum::body::to_bytes(resp.into_body(), 1_000_000).await.unwrap_or_default();
+    let inner: Option<Value> = serde_json::from_slice(&bytes).ok();
+    Json(crate::shopseal::seal_response(&opened.ctx, status, inner.as_ref(), None)).into_response()
+}
+
+/// 옛 폰(vc4)·브라우저 화면이 **평문으로** 손님 정보 길을 부르면 센다. 사장이 막기를 켰으면 막는다.
+///
+/// 유효한 토큰을 든 요청만 센다 — 아무나 두드린 것까지 세면 경고가 부풀어 믿을 수 없게 된다.
+/// 봉함에서 풀려 들어온 안쪽 요청은 `SealedInner` 확장값이 있어 여기를 그냥 지나간다.
+async fn plain_member_gate(
+    State(state): State<ServerState>,
+    req: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    let personal = crate::shopseal::PERSONAL_PLAIN_PATHS.contains(&req.uri().path());
+    if personal && req.extensions().get::<crate::shopseal::SealedInner>().is_none() && role_of(&state, req.headers(), &json!({})).is_some() {
+        if let Ok(mut g) = state.plain_seen.lock() {
+            g.0 += 1;
+            g.1 = now_unix();
+        }
+        if crate::shopseal::block_plain() {
+            return (StatusCode::FORBIDDEN, Json(json!({
+                "error": "이 가게는 암호 없는 연결을 막았습니다. 폰 앱과 가게 앱을 새 판으로 올린 뒤 연결 QR 을 다시 찍어 주세요.",
+                "code": "SEAL_REQUIRED",
+            }))).into_response();
+        }
+    }
+    next.run(req).await
+}
+
+/// 직원·검표 QR 주소. `k` 는 이 컴퓨터의 봉함 공개키 — 없으면(키를 못 읽으면) 옛 모양 그대로.
+fn role_urls(ip: &str, staff_t: &str, scan_t: &str, desk_pub: Option<&str>) -> (String, String) {
+    let k = desk_pub.map(|k| format!("&k={k}")).unwrap_or_default();
+    (
+        format!("http://{ip}:{PORT}/staff?t={staff_t}{k}"),
+        format!("http://{ip}:{PORT}/scan?t={scan_t}{k}"),
+    )
+}
+
+/// 설정 화면: 봉함 준비 여부, 옛 평문 횟수, 막기 설정.
+#[tauri::command]
+pub fn shop_seal_state(state: tauri::State<'_, ServerState>) -> Value {
+    let (count, last) = state.plain_seen.lock().map(|g| *g).unwrap_or((0, 0));
+    json!({
+        "ready": crate::shopseal::desk_key().is_ok(),
+        "plain_count": count,
+        "plain_last_at": last,
+        "block_plain": crate::shopseal::block_plain(),
+    })
+}
+
+#[tauri::command]
+pub fn shop_seal_block_set(on: bool) -> Result<Value, String> {
+    crate::shopseal::set_block_plain(on)?;
+    Ok(json!({ "block_plain": crate::shopseal::block_plain() }))
+}
+
 /// 손님·사장 화면의 길을 전부 엮는다.
 ///
 /// 🔴 **떼어낸 이유가 있다.** axum 은 잘못된 경로를 컴파일 때가 아니라
@@ -3180,6 +3314,8 @@ fn build_phone_router(st: ServerState) -> axum::Router {
         .route("/api/scan/member-policy", get(api_scan_member_policy))
         .route("/api/scan/member-groups", post(api_scan_member_groups))
         .route("/api/scan/member-search", get(api_scan_member_search))
+        // 🔴 직원·검표 폰의 봉함 길. 토큰이 선에 안 실린다(docs/RV-shop-lan-seal-v1.md).
+        .route(crate::shopseal::SEAL_PATH, post(api_scan_sealed))
         // 🔴 가게를 다른 컴퓨터로 옮기는 길. 같은 와이파이의 새 컴퓨터가
         //    여섯 자리 숫자를 들고 여기로 온다.
         //    ⚠️ 숫자가 틀리면 옛 컴퓨터가 횟수를 세고, 세 번이면 짐을 버린다.
@@ -3190,6 +3326,8 @@ fn build_phone_router(st: ServerState) -> axum::Router {
     //    검사 없이 인터넷에 열려 있었다. 이제 라우터 한 곳에서 모든 경로에 건다.
     let app = customer
         .merge(admin)
+        // 안쪽(먼저 붙인 것이 안쪽): 평문 손님 정보 세기·막기 → 바깥: 문 앞 검문.
+        .layer(axum::middleware::from_fn_with_state(st.clone(), plain_member_gate))
         .layer(axum::middleware::from_fn_with_state(st.clone(), outside_gate))
         .with_state(st.clone());
     app
@@ -3249,6 +3387,8 @@ pub async fn start_phone_server(
         order_expect: state.order_expect.clone(),
         order_until: state.order_until.clone(),
         order_times: state.order_times.clone(),
+        seal_seen: state.seal_seen.clone(),
+        plain_seen: state.plain_seen.clone(),
     };
     let owner_token = st.token.lock().map(|t| t.clone()).unwrap_or_default();
     if owner_token.is_empty() {
@@ -3354,13 +3494,22 @@ pub async fn start_phone_server(
         })
         .unwrap_or_default();
 
+    // 봉함 공개키. 못 읽으면 QR 은 옛 모양이고, 새 폰은 회원 기능을 거절한다(평문으로 안 보낸다).
+    let desk_pub = match crate::shopseal::desk_key() {
+        Ok(k) => Some(k.public_hex()),
+        Err(e) => {
+            eprintln!("[phone] 봉함 키 없음: {e}");
+            None
+        }
+    };
+    let (staff_url, scan_url) = role_urls(&ip, &staff_t, &scan_t, desk_pub.as_deref());
     Ok(json!({
         "running": true,
         "port": PORT,
         "customer_url": format!("http://{ip}:{PORT}/"),
         "platform_url": format!("http://{ip}:{PORT}/shops"),
-        "staff_url": format!("http://{ip}:{PORT}/staff?t={staff_t}"),
-        "scan_url": format!("http://{ip}:{PORT}/scan?t={scan_t}"),
+        "staff_url": staff_url,
+        "scan_url": scan_url,
         "admin_url": format!("http://{ip}:{PORT}/admin?t={owner_token}"),
         "ip": ip,
     }))
@@ -4013,6 +4162,8 @@ impl Default for ServerState {
             order_expect: Arc::new(Mutex::new(std::collections::HashMap::new())),
             order_until: Arc::new(Mutex::new(std::collections::HashMap::new())),
             order_times: Arc::new(Mutex::new(Vec::new())),
+            seal_seen: Arc::new(Mutex::new(std::collections::HashMap::new())),
+            plain_seen: Arc::new(Mutex::new((0, 0))),
         }
     }
 }
@@ -4594,7 +4745,9 @@ mod router_builds {
         let start = src
             .find("pub async fn start_phone_server")
             .expect("서버 켜는 함수를 못 찾았다 — 이 시험이 헛돈다");
-        let body = &src[start..start + 6000];
+        // 글자 경계에서 자른다 — 고정 바이트로 자르면 한글 한가운데서 패닉한다.
+        let end = (start + 6000..src.len()).find(|i| src.is_char_boundary(*i)).unwrap_or(src.len());
+        let body = &src[start..end];
         assert!(
             body.contains("restore_orders(&st)"),
             "서버를 켤 때 지난 주문을 안 되읽는다 — 재시작 직전에 결제한 손님의 물건이 안 나간다"
@@ -5607,5 +5760,193 @@ mod order_persistence_tests {
                 assert_eq!(row["ordered_at"], at - 30);
             }
         }
+    }
+}
+
+/// 폰(TS)이 봉한 요청을 **진짜 라우터**에 넣는다 — RavenVault `docs/RV-shop-lan-seal-v1.md`.
+/// 벡터는 `testdata/rv-shop-seal-vectors.json`(폰 `core/shop-remote/seal-vectors.json` 복사본, 합성 값만).
+#[cfg(test)]
+mod shop_seal_interop {
+    use super::order_persistence_tests::TestHome;
+    use super::*;
+    use crate::shopseal::{install_key_for_test, open_response, set_test_now, Ctx};
+    use tower::ServiceExt;
+
+    fn vectors() -> Value {
+        serde_json::from_str(include_str!("../testdata/rv-shop-seal-vectors.json")).unwrap()
+    }
+    fn h<const N: usize>(v: &Value) -> [u8; N] {
+        crate::pairing::proto::unhex(v.as_str().unwrap(), "t").unwrap()
+    }
+    fn ctx(c: &Value) -> Ctx {
+        Ctx::from_parts(h(&c["key"]), h(&c["eph_pub"]), h(&c["n"]))
+    }
+    /// 벡터의 토큰·키를 심은 가게. 회원 한 명(합성)을 만들어 둔다.
+    fn shop(v: &Value) -> ServerState {
+        let st = ServerState::default();
+        *st.token.lock().unwrap() = v["tokens"]["owner"].as_str().unwrap().into();
+        for r in ["staff", "scanner"] {
+            st.role_tokens.lock().unwrap().insert(r.into(), v["tokens"][r].as_str().unwrap().into());
+        }
+        install_key_for_test(h(&v["desk_sk"]));
+        crate::pass::save_member("ROOT/M#ABCD".into(), "Synthetic A".into(), "000-0000-7391".into(),
+            "period".into(), 20990101, 0, "".into(), now_unix(), None).unwrap();
+        st
+    }
+    async fn raw(st: &ServerState, method: &str, path: &str, host: &str, token: Option<&str>, body: String) -> (StatusCode, Value) {
+        let mut req = axum::http::Request::builder().uri(path).method(method).header("host", host).header("content-type", "application/json");
+        if let Some(t) = token {
+            req = req.header("x-playx-token", t);
+        }
+        let resp = build_phone_router(st.clone()).oneshot(req.body(axum::body::Body::from(body)).unwrap()).await.unwrap();
+        let status = resp.status();
+        let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        (status, serde_json::from_slice(&bytes).unwrap_or(Value::Null))
+    }
+    async fn sealed(st: &ServerState, env: &Value) -> (StatusCode, Value) {
+        raw(st, "POST", "/api/scan/sealed", "192.168.0.10:8790", None, env.to_string()).await
+    }
+    fn case<'a>(v: &'a Value, set: &str, label: &str) -> &'a Value {
+        v[set].as_array().unwrap().iter().find(|c| c["label"] == label).unwrap()
+    }
+
+    #[tokio::test]
+    async fn ts_sealed_requests_reach_the_real_member_handlers() {
+        let _home = TestHome::new();
+        let v = vectors();
+        let st = shop(&v);
+
+        // 회원 보기(직원) — 진짜 `api_scan_member_info` 가 답하고, 답은 봉해져 온다.
+        let c = case(&v, "interop", "interop-info");
+        set_test_now(Some(c["now_ms"].as_i64().unwrap() / 1000));
+        let (status, env) = sealed(&st, &c["envelope"]).await;
+        assert_eq!(status, StatusCode::OK);
+        assert!(!env.to_string().contains("Synthetic"), "the answer is not readable on the wire");
+        let ans = open_response(&ctx(c), &env).unwrap();
+        assert_eq!(ans["status"], 200, "{ans}");
+        assert_eq!(ans["body"]["name"], "Synthetic A");
+        assert_eq!(ans["body"]["code"], "ROOT/M#ABCD");
+
+        // 같은 봉투를 다시 → 재전송. 이유도 봉해서 온다.
+        let (status, env) = sealed(&st, &c["envelope"]).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(open_response(&ctx(c), &env).unwrap()["body"]["code"], "SEAL_REPLAY");
+
+        // 메모 적기(직원) — 쓰는 길도 진짜 처리기가 받는다.
+        let c = case(&v, "interop", "interop-memo");
+        set_test_now(Some(c["now_ms"].as_i64().unwrap() / 1000));
+        let ans = open_response(&ctx(c), &sealed(&st, &c["envelope"]).await.1).unwrap();
+        assert_eq!(ans["status"], 200, "{ans}");
+        let memos = ans["body"]["memos"].as_array().unwrap();
+        assert!(memos.iter().any(|m| m["text"] == "합성 메모 synthetic" && m["by"] == "staff"), "{ans}");
+
+        // 검표 태블릿은 회원 보기를 못 한다 — 역할 검사는 원래 자리(roles::allowed)에서 돈다.
+        let c = case(&v, "interop", "interop-scanner-info");
+        set_test_now(Some(c["now_ms"].as_i64().unwrap() / 1000));
+        let ans = open_response(&ctx(c), &sealed(&st, &c["envelope"]).await.1).unwrap();
+        assert_eq!(ans["status"], 401);
+        assert_eq!(ans["body"]["code"], "FORBIDDEN_ROLE");
+
+        // 검표의 회원 등록(없는 표) — 진짜 등록 처리기의 거절이 그대로 봉해져 온다.
+        let c = case(&v, "interop", "interop-register");
+        set_test_now(Some(c["now_ms"].as_i64().unwrap() / 1000));
+        let ans = open_response(&ctx(c), &sealed(&st, &c["envelope"]).await.1).unwrap();
+        assert_eq!(ans["status"], 400, "{ans}");
+        assert!(ans["body"]["code"].is_string());
+        set_test_now(None);
+    }
+
+    #[tokio::test]
+    async fn clock_wrong_token_tamper_and_outside_are_refused() {
+        let _home = TestHome::new();
+        let v = vectors();
+        let st = shop(&v);
+        let c = case(&v, "cases", "policy");
+        let ts = c["now_ms"].as_i64().unwrap() / 1000;
+
+        // 시계가 5분 넘게 다르면 봉해진 SEAL_CLOCK. 기억하지도 않는다(아래에서 다시 통과).
+        set_test_now(Some(ts + 301));
+        let ans = open_response(&ctx(c), &sealed(&st, &c["envelope"]).await.1).unwrap();
+        assert_eq!((ans["status"].as_u64(), ans["body"]["code"].as_str()), (Some(401), Some("SEAL_CLOCK")));
+        set_test_now(Some(ts - 301));
+        let ans = open_response(&ctx(c), &sealed(&st, &c["envelope"]).await.1).unwrap();
+        assert_eq!(ans["body"]["code"], "SEAL_CLOCK");
+        set_test_now(Some(ts));
+        let ans = open_response(&ctx(c), &sealed(&st, &c["envelope"]).await.1).unwrap();
+        assert_eq!(ans["status"], 200);
+        assert_eq!(ans["body"]["consent_version"], crate::member_privacy::CONSENT_VERSION);
+
+        // 변조: 어느 토큰으로도 안 열린다 → 평문 401 BAD_TOKEN(옛 코드 그대로).
+        let reg = case(&v, "cases", "register");
+        set_test_now(Some(reg["now_ms"].as_i64().unwrap() / 1000));
+        let mut bad = reg["envelope"].clone();
+        let ct = bad["ct"].as_str().unwrap().to_string();
+        bad["ct"] = json!(format!("{}{}", if &ct[..1] == "0" { "1" } else { "0" }, &ct[1..]));
+        let (status, body) = sealed(&st, &bad).await;
+        assert_eq!((status, body["code"].as_str()), (StatusCode::UNAUTHORIZED, Some("BAD_TOKEN")));
+        // 봉투 모양이 틀리면 평문 400.
+        let (status, body) = raw(&st, "POST", "/api/scan/sealed", "192.168.0.10:8790", None, "{nope".into()).await;
+        assert_eq!((status, body["code"].as_str()), (StatusCode::BAD_REQUEST, Some("SEAL_BAD")));
+        // 직원 토큰을 바꾸면(잃어버린 폰 끊기) 그 폰의 봉투는 더는 안 열린다.
+        st.role_tokens.lock().unwrap().insert("staff".into(), "rotated-synthetic-token".into());
+        let (status, body) = sealed(&st, &reg["envelope"]).await;
+        assert_eq!((status, body["code"].as_str()), (StatusCode::UNAUTHORIZED, Some("BAD_TOKEN")));
+        // 바깥(터널)에서는 봉함 길도 원격 관리가 꺼져 있으면 닫혀 있다.
+        let (status, body) = raw(&st, "POST", "/api/scan/sealed", "quiet-owl.trycloudflare.com", None, reg["envelope"].to_string()).await;
+        assert_eq!((status, body["code"].as_str()), (StatusCode::UNAUTHORIZED, Some("REMOTE_OFF")));
+        set_test_now(None);
+    }
+
+    #[tokio::test]
+    async fn old_plaintext_is_counted_and_blocked_only_when_the_owner_says_so() {
+        let _home = TestHome::new();
+        let v = vectors();
+        let st = shop(&v);
+        let staff = v["tokens"]["staff"].as_str().unwrap().to_string();
+        let host = "192.168.0.10:8790";
+        // 옛 폰의 평문 회원 보기: 기본은 받되 센다.
+        let (status, _) = raw(&st, "GET", "/api/scan/member-info?code=ROOT%2FM%23ABCD", host, Some(&staff), String::new()).await;
+        assert_eq!(status, StatusCode::OK);
+        let (status, _) = raw(&st, "POST", "/api/scan/check", host, Some(&staff), json!({"query":"ROOT/M#ABCD"}).to_string()).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(st.plain_seen.lock().unwrap().0, 2);
+        // 토큰 없는 두드림은 세지 않는다(경고가 부풀면 아무도 안 믿는다). 주문은 손님 정보가 아니라 안 센다.
+        let _ = raw(&st, "GET", "/api/scan/member-info?code=X", host, None, String::new()).await;
+        let (status, _) = raw(&st, "GET", "/api/admin/states", host, Some(&staff), String::new()).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(st.plain_seen.lock().unwrap().0, 2);
+
+        // 사장이 막기를 켜면 평문 손님 정보 길은 403 SEAL_REQUIRED, 주문은 그대로.
+        crate::shopseal::set_block_plain(true).unwrap();
+        let (status, body) = raw(&st, "POST", "/api/scan/member", host, Some(&staff), json!({"code":"x","name":"n"}).to_string()).await;
+        assert_eq!((status, body["code"].as_str()), (StatusCode::FORBIDDEN, Some("SEAL_REQUIRED")));
+        let (status, _) = raw(&st, "GET", "/api/admin/states", host, Some(&staff), String::new()).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(st.plain_seen.lock().unwrap().0, 3);
+        // 봉함은 막기와 상관없이 지나간다 — 안쪽 요청은 확장값 표시가 있어 평문으로 안 센다.
+        let c = case(&v, "interop", "interop-info");
+        set_test_now(Some(c["now_ms"].as_i64().unwrap() / 1000));
+        let ans = open_response(&ctx(c), &sealed(&st, &c["envelope"]).await.1).unwrap();
+        assert_eq!(ans["status"], 200, "{ans}");
+        assert_eq!(st.plain_seen.lock().unwrap().0, 3);
+        // 네트워크에서 온 머리글로는 봉함 표시를 흉내 낼 수 없다(표시는 요청 확장값이다).
+        let mut req = axum::http::Request::builder().uri("/api/scan/member-info?code=ROOT%2FM%23ABCD").method("GET")
+            .header("host", host).header("x-playx-token", staff.as_str()).header("sealedinner", "1");
+        req = req.header("x-rv-sealed", "1");
+        let resp = build_phone_router(st.clone()).oneshot(req.body(axum::body::Body::empty()).unwrap()).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+        crate::shopseal::set_block_plain(false).unwrap();
+        set_test_now(None);
+    }
+
+    #[test]
+    fn staff_and_scanner_qr_carry_the_seal_key_and_keep_old_params() {
+        let (staff, scan) = role_urls("192.168.0.10", "aa", "bb", Some(&"cd".repeat(32)));
+        assert_eq!(staff, format!("http://192.168.0.10:{PORT}/staff?t=aa&k={}", "cd".repeat(32)));
+        assert_eq!(scan, format!("http://192.168.0.10:{PORT}/scan?t=bb&k={}", "cd".repeat(32)));
+        let (staff, scan) = role_urls("192.168.0.10", "aa", "bb", None);
+        assert_eq!((staff.as_str(), scan.as_str()), (format!("http://192.168.0.10:{PORT}/staff?t=aa").as_str(), format!("http://192.168.0.10:{PORT}/scan?t=bb").as_str()));
+        // 봉함 길은 같은 가게 망에서만(손님 길 아님).
+        assert!(!customer_path("/api/scan/sealed"));
     }
 }

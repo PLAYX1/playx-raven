@@ -79,11 +79,9 @@ axum = { version = "0.8", features = ["ws"] }
 tokio = { version = "1", features = ["rt-multi-thread", "net", "macros"] }
 # The owner scans this to reach their own node without typing an IP.
 qrcode = { version = "0.14", default-features = false, features = ["svg"] }
-
-[dev-dependencies]
-# 라우터에 **진짜 요청**을 넣어 보려고만 쓴다(`oneshot`).
-# 손님 화면이 부르는 파일이 실제로 200 으로 나오는지 여기서 잰다.
-# 앱 바이너리에는 안 들어간다.
+# 라우터에 **진짜 요청**을 넣는다(`oneshot`). 시험 전용이었지만, 이제 봉함 길
+# (`/api/scan/sealed`)이 열어 낸 요청을 기존 처리기에 그대로 넣는 데도 쓴다.
+# axum 이 이미 쓰는 판이라 새로 받거나 새로 짓는 코드는 없다.
 tower = { version = "0.5", features = ["util"] }
 
 # Match Raven Core / Boost file_lock; std File::try_lock uses flock on Unix.

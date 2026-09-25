@@ -2688,6 +2688,13 @@
           <div class="meta" id="mp-status" role="status"></div>
           <p class="meta" id="mp-consent" translate="no"></p>
           <div class="meta" id="mp-cleanup" role="status"></div>
+          <!-- 직원·검표 폰의 손님 정보는 이제 암호로 오간다(봉함). 옛 폰·브라우저 화면이
+               아직 평문으로 보내면 한 줄로 알리고, 막을지는 사장이 고른다(기본 꺼짐). -->
+          <div class="meta" id="mp-seal" role="status"></div>
+          <label class="check" style="display:flex;align-items:center;gap:9px;margin-top:8px">
+            <input type="checkbox" id="mp-seal-block" style="width:18px;height:18px;flex:none" disabled />
+            <span>옛 폰의 암호 없는 연결 막기</span></label>
+          <p class="meta">켜면 옛 폰 앱과, 폰 브라우저로 연 직원·검표 화면의 표 확인·회원 기능이 멈춥니다. 새 폰 앱은 그대로 됩니다.</p>
         </div>
 
         <!-- 회원 분류. 바꿀 때마다 바로 저장한다 — 「저장」 단추를 찾게 하지 않는다. -->

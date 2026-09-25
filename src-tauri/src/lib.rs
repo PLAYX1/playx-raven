@@ -86,6 +86,7 @@ mod services;
 mod shop;
 mod shopkey;
 mod shopmove;
+mod shopseal;
 mod devfee;
 mod ticket;
 mod relay;
@@ -524,6 +525,8 @@ pub fn run() {
             server::logout_all_phones,
             server::remote_admin_get,
             server::remote_admin_set,
+            server::shop_seal_state,
+            server::shop_seal_block_set,
             server::table_qr_sheet,
             server::address_check,
             server::now_ip,

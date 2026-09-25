@@ -4585,6 +4585,8 @@ function showPage(id: string) {
      이 저장소에서 되풀이해 찾은 병(만들었는데 안 부른다)을 그대로 저질렀다. */
   if (id === "assets") void 웹주문확인();
   if (id === "shop") void paintFlow();
+  // 옛 폰 평문 경고는 열 때마다 다시 센다 — 켜 둔 동안 폰이 계속 보냈을 수 있다.
+  if (id === "door") void loadSealGuard();
   if (id === "settings") {
     loadNode();
     loadNet();
@@ -10782,6 +10784,45 @@ async function loadMemberPrivacy() {
   } catch {
     setCopyText($("mp-status"), () => t("회원 정보 설정을 읽지 못했습니다."));
   }
+}
+
+/** 직원·검표 폰 봉함: 옛 폰·브라우저의 평문 손님 정보 한 줄 경고 + 막기 설정(기본 꺼짐). */
+async function loadSealGuard() {
+  const box = $("mp-seal-block") as HTMLInputElement;
+  box.disabled = true;
+  try {
+    const st = await invoke<{ ready: boolean; plain_count: number; plain_last_at: number; block_plain: boolean }>("shop_seal_state");
+    box.checked = !!st.block_plain;
+    box.disabled = false;
+    const warn = st.plain_count > 0 || !st.ready;
+    $("mp-seal").classList.toggle("danger", warn);
+    setCopyText($("mp-seal"), () => !st.ready
+      ? t("직원 폰 암호 열쇠를 읽지 못했어요. 새 폰 앱의 회원 기능이 멈춰 있어요.")
+      : st.plain_count > 0
+        ? st.block_plain
+          ? tf("옛 폰이나 브라우저 화면이 손님 정보를 암호 없이 보내려 해서 막았어요: {0}번 · 마지막 {1}",
+            st.plain_count, new Date(st.plain_last_at * 1000).toLocaleString(lang))
+          : tf("옛 폰이나 브라우저 화면이 손님 정보를 암호 없이 보냈어요: {0}번 · 마지막 {1}",
+            st.plain_count, new Date(st.plain_last_at * 1000).toLocaleString(lang))
+        : "");
+  } catch {
+    setCopyText($("mp-seal"), () => t("직원 폰 암호 설정을 읽지 못했습니다."));
+  }
+}
+
+async function saveSealGuard() {
+  const box = $("mp-seal-block") as HTMLInputElement;
+  const want = box.checked;
+  box.disabled = true;
+  try {
+    await invoke("shop_seal_block_set", { on: want });
+  } catch {
+    box.checked = !want;
+    setCopyText($("mp-seal"), () => t("직원 폰 암호 설정을 저장하지 못했습니다."));
+    box.disabled = false;
+    return;
+  }
+  await loadSealGuard();
 }
 
 async function saveMemberPrivacy() {
@@ -16983,8 +17024,10 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("ms-delete").addEventListener("click", deleteMember);
   $("ms-memo-add").addEventListener("click", addMemberMemo);
   $("mp-save").addEventListener("click", saveMemberPrivacy);
-  $("mp-reload").addEventListener("click", loadMemberPrivacy);
+  $("mp-reload").addEventListener("click", () => { void loadMemberPrivacy(); void loadSealGuard(); });
   void loadMemberPrivacy();
+  $("mp-seal-block").addEventListener("change", saveSealGuard);
+  void loadSealGuard();
   $("key-save").addEventListener("click", saveKeys);
   wirePhoneTransaction(invoke, t);
   // RV6 폰 연결(설정 › 「폰 연결」) — 카드·알림은 pairing-ui.ts 가 스스로 만든다.
