@@ -86,7 +86,22 @@ pub async fn process(works: Vec<Work>) {
         return;
     }
     let lock = |f: &mut dyn FnMut(&mut Desk)| with_open_desk(f);
-    run_work(works, &lock, &RealBackend, &publish, &super::now_ms).await;
+    run_work(works, &lock, backend(), &publish, &super::now_ms).await;
+}
+
+/// 시험(e2e)만 가짜 노드로 바꿔 끼운다. 🔴 `cfg(test)` 밖에서는 언제나 진짜 노드다.
+#[cfg(test)]
+pub static TEST_BACKEND: std::sync::OnceLock<Box<dyn Backend>> = std::sync::OnceLock::new();
+/// 시험(e2e)만: 같은 Wi-Fi 통로 주소를 이것으로 알린다(사설 IP 모양 그대로 — 검사는 안 푼다).
+#[cfg(test)]
+pub static TEST_LAN: Mutex<Option<String>> = Mutex::new(None);
+
+fn backend() -> &'static dyn Backend {
+    #[cfg(test)]
+    if let Some(b) = TEST_BACKEND.get() {
+        return b.as_ref();
+    }
+    &RealBackend
 }
 
 /// 데스크톱이 봉한 답을 내보낸다 — 이 컴퓨터 릴레이(메모리, 열린 구독에 바로) + 바깥 릴레이.
@@ -103,7 +118,13 @@ pub fn publish(ev: ChatEvent) {
 
 /// 폰에게 알려 줄 통로: 같은 Wi-Fi(`l`) + 바깥(`r`, 최대 3).
 pub fn routes(extra: &[String]) -> (Option<String>, Vec<String>) {
-    let lan = if crate::server::relay_live() {
+    #[cfg(test)]
+    let test_lan = TEST_LAN.lock().unwrap_or_else(|e| e.into_inner()).clone().filter(|u| is_lan_relay_url(u));
+    #[cfg(not(test))]
+    let test_lan: Option<String> = None;
+    let lan = if test_lan.is_some() {
+        test_lan
+    } else if crate::server::relay_live() {
         crate::server::lan_ip().map(|ip| format!("ws://{ip}:{}/api/relay", crate::server::PORT)).filter(|u| is_lan_relay_url(u))
     } else {
         None
@@ -141,7 +162,7 @@ pub fn start() {
             // 지갑이 풀렸으면 기다리던 폰 승인 보내기를 다시(30초마다 본다).
             if n.is_multiple_of(6) {
                 let has = { let mut h = false; with_open_desk(&mut |d| h = d.requests.iter().any(|r| r.status == "waiting_unlock")); h };
-                if has && !RealBackend.wallet_locked().await.unwrap_or(true) {
+                if has && !backend().wallet_locked().await.unwrap_or(true) {
                     with_open_desk(&mut |d| works.extend(d.retry_unlock(now)));
                 }
             }

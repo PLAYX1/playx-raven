@@ -22,6 +22,8 @@ pub mod proto;
 #[cfg(test)]
 mod tests_attack;
 #[cfg(test)]
+mod tests_e2e;
+#[cfg(test)]
 mod tests_vectors;
 
 use proto::Perms;
