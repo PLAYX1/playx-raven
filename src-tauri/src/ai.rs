@@ -48,8 +48,63 @@ fn save_key(provider: &str, key: &str) -> Result<(), String> {
     if key.len() > 4096 || key.chars().any(char::is_control) {
         return Err("API 키를 줄바꿈 없이 다시 입력하세요.".into());
     }
-    let path = key_path(provider);
-    if key.trim().is_empty() { remove_key(&path) } else { write_private(&path, key.trim().as_bytes()) }
+    if key.trim().is_empty() { return delete_key(provider); }
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    {
+        return store_in_credential(&credential(provider)?, provider, key.trim());
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    write_private(&key_path(provider), key.trim().as_bytes())
+}
+
+fn last4(key: &str) -> String { key.chars().rev().take(4).collect::<String>().chars().rev().collect() }
+fn last4_path(provider: &str) -> PathBuf { config_dir().join(format!("{provider}.last4")) }
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+fn credential(provider: &str) -> Result<keyring::Entry, String> {
+    keyring::Entry::new("se.erci.ravenvault.desktop.ai", provider)
+        .map_err(|_| "OS 보안 저장소를 열지 못했습니다.".to_string())
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+fn store_in_credential(entry: &keyring::Entry, provider: &str, key: &str) -> Result<(), String> {
+    entry.set_password(key).map_err(|_| "OS 보안 저장소에 API 키를 저장하지 못했습니다.".to_string())?;
+    write_private(&last4_path(provider), last4(key).as_bytes())
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+fn delete_in_credential(entry: &keyring::Entry, provider: &str) -> Result<(), String> {
+    match entry.delete_credential() {
+        Ok(()) | Err(keyring::Error::NoEntry) => {},
+        Err(_) => return Err("OS 보안 저장소에서 API 키를 지우지 못했습니다.".into()),
+    }
+    remove_key(&last4_path(provider))?;
+    remove_key(&key_path(provider))
+}
+
+fn delete_key(provider: &str) -> Result<(), String> {
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    {
+        return delete_in_credential(&credential(provider)?, provider);
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    remove_key(&key_path(provider))
+}
+
+fn key_status(provider: &str) -> (bool, String) {
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    {
+        // Status reads stay silent: only a legacy file needs the one-time migration.
+        if key_path(provider).exists() { let _ = read_key(provider); }
+        let suffix = std::fs::read_to_string(last4_path(provider)).unwrap_or_default();
+        return (last4_path(provider).exists() || key_path(provider).exists(), suffix);
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        let key = read_key(provider).ok();
+        let suffix = key.as_deref().map(last4).unwrap_or_default();
+        (key.is_some(), suffix)
+    }
 }
 
 /// Snapshot both files under the same lock as settings updates. A new endpoint
@@ -177,7 +232,7 @@ pub fn delete_api_key(provider: String) -> Result<(), String> {
         return Err("알 수 없는 제공자입니다.".into());
     }
     let _guard = if provider == "custom" { Some(CUSTOM_GATE.lock().map_err(|_| "AI 설정을 다시 저장해 주세요.".to_string())?) } else { None };
-    remove_key(&key_path(&provider))?;
+    delete_key(&provider)?;
     if provider == "custom" {
         remove_key(&config_dir().join("custom.json"))?;
     }
@@ -204,14 +259,22 @@ pub fn save_api_key(provider: String, key: String) -> Result<(), String> {
 /// Which providers have a key stored. Never returns the keys themselves.
 #[tauri::command]
 pub fn api_key_status() -> Value {
+    let mut suffixes = serde_json::Map::new();
+    let mut present = serde_json::Map::new();
+    for provider in ["anthropic", "openai", "google", "groq", "xai", "custom"] {
+        let (has, suffix) = key_status(provider);
+        present.insert(provider.into(), json!(has));
+        suffixes.insert(provider.into(), json!(suffix));
+    }
     json!({
-        "anthropic": key_path("anthropic").exists(),
-        "openai": key_path("openai").exists(),
-        "google": key_path("google").exists(),
-        "groq": key_path("groq").exists(),
-        "xai": key_path("xai").exists(),
+        "anthropic": present["anthropic"],
+        "openai": present["openai"],
+        "google": present["google"],
+        "groq": present["groq"],
+        "xai": present["xai"],
         "custom": custom_config().is_some(),
         "custom_label": custom_config().map(|c| c.0).unwrap_or_default(),
+        "last4": suffixes,
     })
 }
 
@@ -244,7 +307,7 @@ pub fn save_custom_provider(
     std::fs::create_dir_all(&dir).map_err(|e| format!("설정 폴더를 만들지 못했습니다: {e}"))?;
 
     if base_url.trim().is_empty() {
-        remove_key(&key_path("custom"))?;
+        delete_key("custom")?;
         remove_key(&dir.join("custom.json"))?;
         return Ok(());
     }
@@ -253,7 +316,7 @@ pub fn save_custom_provider(
     let same_destination = previous.as_deref() == Some(base.as_str());
     // Empty HTTPS key preserves a key only for the identical endpoint. Before
     // changing destinations, remove the old key; fail closed if that fails.
-    if !same_destination || base.starts_with("http://") { remove_key(&key_path("custom"))?; }
+    if !same_destination || base.starts_with("http://") { delete_key("custom")?; }
 
     let doc = json!({
         "label": if label.trim().is_empty() { base.clone() } else { label.trim().to_string() },
@@ -269,9 +332,72 @@ pub fn save_custom_provider(
 
 fn read_key(provider: &str) -> Result<String, String> {
     if !known(provider) { return Err("알 수 없는 제공자입니다.".into()); }
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    {
+        return migrate_legacy_into_credential(&credential(provider)?, provider);
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     std::fs::read_to_string(key_path(provider))
         .map(|s| s.trim().to_string())
         .map_err(|_| "API 키가 저장되어 있지 않습니다. 설정에서 넣어 주세요.".to_string())
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+fn migrate_legacy_into_credential(entry: &keyring::Entry, provider: &str) -> Result<String, String> {
+    if let Ok(key) = entry.get_password() { return Ok(key); }
+    let path = key_path(provider);
+    let old = std::fs::read_to_string(&path)
+        .map_err(|_| "API 키가 저장되어 있지 않습니다. 설정에서 넣어 주세요.".to_string())?;
+    let old = old.trim().to_string();
+    entry.set_password(&old).map_err(|_| "OS 보안 저장소로 옮기지 못했습니다.".to_string())?;
+    if entry.get_password().ok().as_deref() == Some(old.as_str()) {
+        if write_private(&last4_path(provider), last4(&old).as_bytes()).is_ok() {
+            if let Ok(mut file) = std::fs::OpenOptions::new().write(true).open(&path) {
+                use std::io::Write;
+                if file.write_all(&vec![0; old.len()]).is_ok() && file.sync_all().is_ok() {
+                    let _ = remove_key(&path);
+                }
+            }
+        }
+    }
+    Ok(old)
+}
+
+#[cfg(all(test, any(target_os = "macos", target_os = "windows")))]
+mod keyring_tests {
+    use super::*;
+
+    #[test]
+    #[ignore = "uses the process-wide test data directory; run alone"]
+    fn mock_store_delete_migrate_and_status_never_expose_the_key() {
+        let _guard = crate::paths::TEST_ENV.lock().unwrap_or_else(|e| e.into_inner());
+        let dir = std::env::temp_dir().join("rv-ai-keyring-mock-v2");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::env::set_var("PLAYX_RAVEN_HOME", &dir);
+        keyring::set_default_credential_builder(keyring::mock::default_credential_builder());
+        let entry = credential("openai").unwrap();
+        store_in_credential(&entry, "openai", "synthetic-key-1234").unwrap();
+        assert_eq!(entry.get_password().unwrap(), "synthetic-key-1234");
+        assert_eq!(std::fs::read_to_string(last4_path("openai")).unwrap(), "1234");
+        assert!(!key_path("openai").exists());
+        let status = api_key_status().to_string();
+        assert!(status.contains("1234"));
+        assert!(!status.contains("synthetic-key-1234"));
+        delete_in_credential(&entry, "openai").unwrap();
+        assert!(!last4_path("openai").exists());
+        assert!(entry.get_password().is_err());
+
+        write_private(&key_path("groq"), b"synthetic-old-5678").unwrap();
+        let old_entry = credential("groq").unwrap();
+        assert_eq!(migrate_legacy_into_credential(&old_entry, "groq").unwrap(), "synthetic-old-5678");
+        assert_eq!(old_entry.get_password().unwrap(), "synthetic-old-5678");
+        assert_eq!(std::fs::read_to_string(last4_path("groq")).unwrap(), "5678");
+        assert!(!key_path("groq").exists());
+        assert!(!api_key_status().to_string().contains("synthetic-old-5678"));
+        std::env::remove_var("PLAYX_RAVEN_HOME");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
 
 /// What we want back, per task. Kept as an explicit schema in the prompt rather
