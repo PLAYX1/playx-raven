@@ -1,5 +1,13 @@
 /** Korean source copy + English, Japanese and Simplified Chinese. User text is not translated here. */
 export const DESKTOP_COPY: Record<string, [string, string, string]> = {
+  "라비": ["Ravi", "ラビ", "拉比"],
+  "AI 도우미 · 물어본 것만 봐요": ["AI assistant · Sees only what you ask", "AIアシスタント · 質問した内容だけ見ます", "AI 助手 · 只看您提出的问题"],
+  "AI 키를 넣으면 라비가 깨어나요": ["Add an AI key to wake Ravi", "AIキーを入れるとラビが目を覚まします", "添加 AI 密钥后拉比就会醒来"],
+  "무엇을 도와드릴까요? 보내기·받기·백업·대화 무엇이든 물어보세요.": ["How can I help? Ask about sending, receiving, backup, or chats.", "何をお手伝いしましょうか？送る・受け取る・バックアップ・会話について聞いてください。", "需要什么帮助？发送、接收、备份或聊天都可以问我。"],
+  "라비에게 시킬 수 있는 일": ["Things Ravi can do", "ラビに頼めること", "拉比能帮您做的事"],
+  "새 메시지 ↓": ["New messages ↓", "新しいメッセージ ↓", "新消息 ↓"],
+  "아티스트": ["Artist", "アーティスト", "艺术家"],
+  "키 지우기": ["Delete key", "キーを削除", "删除密钥"],
   "화면 밝기": ["Appearance", "画面の明るさ", "屏幕外观"],
   "시스템": ["System", "システム", "跟随系统"],
   "밝게": ["Light", "ライト", "浅色"],

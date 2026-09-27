@@ -2407,7 +2407,7 @@
       #page-talk .composer { background:var(--panel); border-top:1px solid var(--line); padding:10px 16px; }
       #page-talk .bub { font-size:16px; line-height:1.5; border-radius:20px 20px 20px 6px; background:var(--panel); border:1px solid var(--line); }
       #page-talk .bub.me { border:0; border-radius:20px 20px 6px 20px; }
-      .rv-avatar { display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; flex:none; border-radius:50%; background:hsl(var(--h) 45% 78%); color:#15161D; font-size:14px; font-weight:700; }
+      .rv-avatar { display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; flex:none; border-radius:50%; background:hsl(var(--h, 150) 45% 78%); color:#15161D; font-size:14px; font-weight:700; }
       .rv-person { padding:28px 18px; border-left:1px solid var(--line); background:var(--panel); overflow:auto; }
       .rv-person h3 { margin:12px 0 4px; font-size:20px; }
       .rv-person p { color:var(--muted); font-size:14px; }
@@ -2433,14 +2433,82 @@
       .rv-home-balance { background:#15161D !important; color:#F7F6F3; }
       .rv-home-balance .overview { border:0; padding:0; margin:0; }
       .rv-home-balance .overview h2 { font-size:15px; color:#C9CAD2; }
-      .rv-home-balance #overview-balance { font-size:48px; font-variant-numeric:tabular-nums; }
+      .rv-home-balance #overview-balance { font-size:56px; font-variant-numeric:tabular-nums; line-height:1.15; }
       .rv-home-balance .overview-values { display:block; }
       .rv-home-balance .overview-values > div { display:block; margin:10px 0; }
       .rv-home-balance .overview-values span { display:block; color:#C9CAD2; }
       .rv-home-balance button { margin-top:10px; }
       .rv-home-entry { padding:12px 0; border-bottom:1px solid var(--line); font-size:16px; }
       .rv-home-entry small { display:block; color:var(--muted); font-size:14px; }
+      .rv-home-balance { padding:32px !important; position:relative; overflow:hidden; }
+      .rv-home-balance::before { content:""; position:absolute; width:240px; height:240px; right:-60px; top:-60px; border:40px solid #E2702A; border-radius:50%; opacity:.16; pointer-events:none; }
+      .rv-home-balance .overview-actions button { min-height:52px; padding:0 24px; border-radius:16px; }
+      .rv-home-balance #rv-home-send { min-height:52px; min-width:130px; background:#E2702A; color:#15161D; font-weight:700; }
+      .rv-home-safety { padding:28px !important; }
+      .rv-home-activity, .rv-home-chats { padding:26px 28px !important; }
+      .rv-home-entry { display:flex; align-items:center; gap:14px; }
+      .rv-home-entry .rv-home-icon { width:44px; height:44px; border-radius:14px; display:grid; place-items:center; flex:none; background:var(--ravi-tint); color:var(--ravi-soft); font-size:22px; }
+      .rv-home-entry .rv-home-icon.receive { background:color-mix(in srgb, var(--ok) 15%, var(--panel)); color:var(--ok); }
+      .rv-home-entry .rv-home-tx-main { min-width:0; flex:1; }
+      .rv-home-entry strong.ok { color:var(--ok); }
       @media(max-width:900px) { .rv-home-grid { grid-template-columns:1fr; } #page-home { padding:24px; } }
+      /* v2 desktop rail: the same 76px navigation on every page. */
+      body > nav, .rv-talk-layout nav { width:76px; min-width:76px; background:#15161D; color:#ECEDF3; padding:18px 0; align-items:center; gap:2px; }
+      body > nav a, .rv-talk-layout nav a { width:56px; min-height:56px; height:56px; box-sizing:border-box; display:flex; align-items:center; justify-content:center; padding:14px; margin:0; border:0; border-radius:16px; color:#ECEDF3; flex:none; }
+      body > nav a.on, .rv-talk-layout nav a.on { background:#2A2C38; color:#FFFFFF; }
+      body > nav a > span:not(.ordbadge), body > nav .brand, .rv-talk-layout nav a > span:not(.ordbadge) { display:none; }
+      body > nav svg { width:24px; height:24px; flex:none; }
+      body > nav .ravi-face { flex:none; }
+      body > nav .navfoot { width:76px; box-sizing:border-box; padding:8px 0; display:flex; flex-direction:column; align-items:center; }
+      body > nav .reportlink { width:44px; height:44px; overflow:hidden; white-space:nowrap; font-size:0; padding:0; margin:0 0 10px; color:#ECEDF3; border-color:#3A3C49; }
+      body > nav .reportlink::before { content:"!"; display:grid; place-items:center; font-size:18px; font-weight:700; height:100%; }
+      body > nav .dotsum { width:44px; height:44px; padding:0; display:grid; place-items:center; }
+      body > nav .dotsum #d-sum-t { display:none; }
+      body > nav .dotrow:not(.dotsum) { width:44px; height:40px; min-height:40px; padding:0; justify-content:center; }
+      body > nav .dotrow:not(.dotsum) span:last-child { display:none; }
+      body > nav .syncbar { width:40px; }
+      #page-talk .talkwrap { grid-template-columns:360px minmax(360px,1fr) 320px; }
+      #page-talk .msgs { padding:22px 36px; }
+      #page-talk .bub.me { background:var(--my-bubble); color:var(--my-text); border:0; }
+      #page-talk .bub.me *, #page-talk .bub.me .picwait { color:inherit; }
+      #page-talk .bub.me .bubpic { background:transparent; }
+      #page-talk .chat { position:relative; border:0; border-radius:0; }
+      #page-talk .rv-person { padding:28px 24px; }
+      #rv-person-avatar { width:64px; height:64px; font-size:26px; }
+      .tk-new-messages { position:absolute; left:50%; bottom:96px; z-index:5; transform:translateX(-50%); padding:8px 18px; border-radius:999px; background:var(--ravi); color:#15161D; box-shadow:0 4px 16px #0003; }
+      .tk-new-messages[hidden] { display:none; }
+      #page-ravi { display:flex; flex-direction:column; gap:14px; padding:24px 32px; }
+      #page-ravi:not(.on) { display:none; }
+      #page-ravi .ravihero { order:0; max-width:850px; width:100%; margin:0 auto; padding:14px 18px; box-sizing:border-box; border:1px solid var(--line); border-radius:20px; background:var(--panel); align-items:center; }
+      #page-ravi .ravihero .ravi-face { width:48px !important; height:48px !important; margin-right:14px; border-radius:16px !important; }
+      #page-ravi .ravihero h2 { margin:0; font-size:18px; }
+      #page-ravi .ravihero .lede { margin:0; font-size:14px; color:var(--ravi-soft); }
+      #page-ravi .ravi-role { margin:0; font-size:13px; color:var(--muted); }
+      #page-ravi #ravi-chatwrap { order:1; width:100%; }
+      #page-ravi #chat { min-height:530px; background:var(--panel); }
+      #page-ravi #chat-log { order:1; min-height:220px; max-height:420px; padding:18px 20px; background:var(--bg); }
+      #page-ravi .msg { max-width:75%; padding:11px 14px; border-radius:20px 20px 20px 6px; font-size:16px; line-height:1.55; }
+      #page-ravi .msg.ai { background:var(--ravi-tint); border:0; }
+      #page-ravi .msg.me { border-radius:20px 20px 6px 20px; background:var(--my-bubble); color:var(--my-text); }
+      #page-ravi .rv-quick { order:2; margin:0; max-width:none; padding:10px 14px; }
+      #page-ravi .rv-quick button { height:40px; padding:0 14px; color:var(--ravi-soft); }
+      #page-ravi #rv-send-card { order:3; margin:0 14px 10px; max-width:none; background:var(--panel); }
+      #page-ravi .chat-in { order:4; background:var(--panel); padding:10px 12px 16px; }
+      #page-ravi .chat-in input { height:48px; border:1px solid var(--line); background:var(--bg); color:var(--text); }
+      #page-ravi .chat-in button { height:48px; border-radius:14px; }
+      #page-ravi #chat-mode { order:5; }
+      #page-ravi #ravi-key { order:0; background:var(--panel); }
+      #page-ravi #ravi-key .kc-list { grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); }
+      #page-ravi #ravi-key .kc-row { display:flex; gap:2px; }
+      #page-ravi #ravi-key .kc-pick { flex:1; min-width:0; }
+      #page-ravi #ravi-key .kc-where { flex:none; }
+      #page-ravi .rv-ravi-actions { order:2; max-width:850px; width:100%; margin:0 auto; box-sizing:border-box; border:1px solid var(--line); background:var(--panel); border-radius:16px; padding:12px 18px; }
+      #page-ravi .rv-ravi-actions summary { cursor:pointer; font-weight:600; }
+      #page-ravi .rv-ravi-actions .tiles { margin-top:14px; }
+      #page-ravi > .rv-web-info { order:3; max-width:850px; width:100%; margin:0 auto; }
+      #ravi-key-last4 { font-size:14px; color:var(--muted); }
+      #ravi-key-delete[hidden] { display:none; }
+      @media(max-width:1160px) { #page-talk .talkwrap { grid-template-columns:300px minmax(320px,1fr); } }
     </style>
   </head>
   <body>
@@ -2677,7 +2745,7 @@
            내 이름」은 **개인 열쇠**(`7'/0/0`)다. 여기 열쇠는 아티스트
            (`7'/2'/0'`)라 자리를 나누려고 경로를 나눈 것이다. 같은 글자를
            쓰면 다시 한 사람으로 묶인다. -->
-      <a data-page="artist"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="3.2"/><path d="M5.6 19.2c1.3-3.5 3.6-5.2 6.4-5.2s5.1 1.7 6.4 5.2"/></svg><span>내 소개</span></a>
+      <a data-page="artist"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="3.2"/><path d="M5.6 19.2c1.3-3.5 3.6-5.2 6.4-5.2s5.1 1.7 6.4 5.2"/></svg><span>아티스트</span></a>
       <!-- 🔴 「나눠주기」를 1차 메뉴에서 내린다.
 
            대표님: "그럼 나눠주기가 자산 탭 안에 들어가야 하는거 아냐?"
@@ -3170,6 +3238,7 @@
             </div>
 
             <div class="msgs" id="tk-list"></div>
+            <button id="tk-new-messages" class="tk-new-messages" type="button" hidden>새 메시지 ↓</button>
             <!-- 🔴 단추를 말풍선 뒤로 숨겼으면 **꺼내는 법을 적어야 한다.**
                  숨긴 기능은 안 적으면 없앤 기능이다. 「내 말로」(번역)와
                  「간직」은 이 앱만 하는 일이라 더 그렇다 — 그게 있는 줄
@@ -3481,21 +3550,16 @@
         <div class="ravihero">
           <span id="ravi-face"></span>
           <div class="ravihi">
-            <h2 id="ravi-hello">안녕하세요, 라비입니다.</h2>
-            <p id="ravi-sub" class="lede">무엇을 할까요? 아래를 누르거나, 그냥 말씀하세요.</p>
-            <p class="ravi-role">물어보고 시키는 곳. AI는 직접 켤 때만 사용합니다.</p>
+            <h2 id="ravi-hello">라비</h2>
+            <p id="ravi-sub" class="lede">AI 키를 넣으면 라비가 깨어나요</p>
+            <p class="ravi-role">AI 도우미 · 물어본 것만 봐요</p>
+            <span id="ravi-key-last4" aria-live="polite"></span><button id="ravi-key-delete" class="ghost" type="button" hidden>키 지우기</button>
           </div>
         </div>
 
         <!-- 🔴 타일은 여덟 개까지다. 더 늘리면 다시 '찾는 화면'이 된다.
              왼쪽 넷은 열쇠 없이도 되는 것, 오른쪽 넷은 라비가 하는 것. -->
         <!-- 아직 안 된 것 한 줄. 눌러 보고 알게 하면 헛걸음이다. -->
-        <div class="tiles" id="ravi-tiles"></div>
-        <div class="warnbox raviTodo" id="ravi-todo" style="display:none"></div>        <div class="card" id="money-status" style="margin-bottom:14px">
-          <div class="ms-row"><b>지금 상태</b><span class="meta" id="ms-when"></span></div>
-          <div id="ms-body" class="meta">읽는 중…</div>
-        </div>
-
         <details class="rv-web-info" id="phone-tx-panel">
           <summary>폰에서 서명한 거래 보내기</summary>
           <p>열쇠는 폰에 남습니다. 이 컴퓨터는 내용을 확인하고 내 노드로 전파합니다.</p>
@@ -3518,15 +3582,6 @@
           <p id="rv-web-note" role="status" aria-live="polite"></p>
         </details>
 
-        <div class="rv-quick"><button type="button" data-rv-question="지갑 잔액을 어떻게 확인하나요?">잔액 확인</button><button type="button" data-rv-question="백업은 어떻게 하나요?">백업 방법</button><button type="button" data-rv-question="폰을 어떻게 연결하나요?">폰 연결</button><button id="rv-send-request" type="button">RVN 보내기 요청</button></div>
-        <div id="rv-send-card" class="card" hidden>
-          <h3>보내기 요청 확인</h3><p>라비는 직접 보내지 않아요. 받는 사람과 금액을 적고 수수료를 확인하세요.</p>
-          <label>받는 주소 <input id="rv-send-to" autocomplete="off" /></label>
-          <label>금액 (RVN) <input id="rv-send-amount" type="number" min="0" step="any" /></label>
-          <button id="rv-send-check" type="button">수수료 확인</button>
-          <p id="rv-send-summary" role="status"></p>
-          <button id="rv-send-continue" type="button" hidden>기존 보내기 화면에서 직접 확정</button>
-        </div>
         <div id="ravi-chatwrap">
       <div id="chat">
         <!-- 여태 이 창은 양식 채우기 전용이었다. 사장님이 "이거 어떻게 생각해"
@@ -3540,6 +3595,16 @@
         </div>
 
         <div id="chat-log"></div>
+        <div class="rv-quick"><button type="button" data-rv-question="지갑 잔액을 어떻게 확인하나요?">잔액 확인</button><button type="button" data-rv-question="백업은 어떻게 하나요?">백업 방법</button><button type="button" data-rv-question="폰을 어떻게 연결하나요?">폰 연결</button><button id="rv-send-request" type="button">RVN 보내기 요청</button></div>
+        <div id="rv-send-card" class="card" hidden>
+          <h3>보내기 요청 확인</h3><p>라비는 직접 보내지 않아요. 받는 사람과 금액을 적고 수수료를 확인하세요.</p>
+          <label>받는 주소 <input id="rv-send-to" autocomplete="off" /></label>
+          <label>금액 (RVN) <input id="rv-send-amount" type="number" min="0" step="any" /></label>
+          <button id="rv-send-check" type="button">수수료 확인</button>
+          <p id="rv-send-summary" role="status"></p>
+          <button id="rv-send-continue" type="button" hidden>기존 보내기 화면에서 직접 확정</button>
+        </div>
+
         <div class="chat-in">
           <button id="rv-voice" type="button" hidden>말로 묻기</button><input id="chat-q" placeholder="레이븐코인으로 받으면 뭐가 좋아?" autocomplete="off" />
           <button id="chat-go">보내기</button>
@@ -3548,6 +3613,14 @@
         <div id="ravi-key" hidden></div>
       </div>
         </div>
+        <details class="rv-ravi-actions"><summary>라비에게 시킬 수 있는 일</summary>
+        <div class="tiles" id="ravi-tiles"></div>
+        <div class="warnbox raviTodo" id="ravi-todo" style="display:none"></div>        <div class="card" id="money-status" style="margin-bottom:14px">
+          <div class="ms-row"><b>지금 상태</b><span class="meta" id="ms-when"></span></div>
+          <div id="ms-body" class="meta">읽는 중…</div>
+        </div>
+
+        </details>
       </section>
 
       <section class="page" id="page-wallet">

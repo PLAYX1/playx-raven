@@ -22,11 +22,11 @@ function applyRaviCharacter(): void {
 async function animateRavi(hasKey: boolean): Promise<void> {
   const sequence = ++raviAnimation;
   const pause = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
-  if (!hasKey) { setAllRaviMood("thinking"); await pause(650); if (sequence === raviAnimation) setAllRaviMood("sleep"); return; }
+  if (!hasKey) { const hello = document.getElementById("ravi-hello"); if (hello) hello.textContent = t("라비"); setAllRaviMood("thinking"); await pause(650); if (sequence === raviAnimation) setAllRaviMood("sleep"); return; }
   const hello = document.getElementById("ravi-hello");
   const previous = hello?.textContent || "";
   if (hello) hello.textContent = t("빠밤!");
-  for (const [mood, ms] of [["surprised", 500], ["wake", 650], ["happy", 850], ["normal", 0]] as [RaviMood, number][]) {
+  for (const [mood, ms] of [["surprised", 650], ["wake", 900], ["happy", 1200], ["normal", 0]] as [RaviMood, number][]) {
     if (sequence !== raviAnimation) return;
     setAllRaviMood(mood);
     if (ms) await pause(ms);
@@ -2108,6 +2108,8 @@ function paintDotSum() {
   const r = sumOfDots(dotSum, modeNow);
   if (d) d.className = `dot ${r.cls}`;
   if (label) setCopyText(label, r.say);
+  const row = document.getElementById("d-sum-row");
+  if (row) { row.title = r.say(); row.setAttribute("aria-label", r.say()); }
 }
 
 /** 점을 누르면 다섯 줄을 펼치고 접는다. 이 사람이 펼쳐 둔 것은 기억한다(이 컴퓨터에만). */
@@ -2630,48 +2632,16 @@ function paintRavi() {
   const box = $("ravi-tiles");
   if (!box) return;
 
-  // 자는 얼굴의 뜻은 한 곳에서만 정한다 — **노드가 꺼졌을 때**다.
-  // AI 열쇠가 없는 것은 잠이 아니다(장사는 전부 돈다).
+  // 라비의 표정은 AI 키 상태를 따른다. 가게 도구는 아래 접힌 영역에서 계속 쓴다.
   void refreshOverview();
-  const nodeDown = !(nodeUp ?? true);
   // The shared RaviFace component follows AI key availability, not node state.
   setAllRaviMood(raviState);
   const hi = $("ravi-hello");
   const sub = $("ravi-sub");
   if (hi && sub) {
-    /* 🔴 가게를 만들었으면 **그 이름이 여기 뜬다.**
-       대표님 지적: "가게 만들면 가게 이름이 보이는 화면과 통합되어야 하지
-       않나?" 맞다 — 매일 여는 화면에 자기 가게 이름이 없으면, 이 프로그램이
-       내 가게의 것이라는 느낌이 안 든다. 왼쪽 메뉴에만 있었다. */
-    const val = (id: string) => ($(id) as HTMLInputElement)?.value.trim() || "";
-    const shop = val("sh-ko") || val("sh-en");
-
-    hi.setAttribute("translate", shop && !nodeDown ? "no" : "yes");
-    if (nodeDown) {
-      hi.textContent = nodeWarming
-        ? "노드가 장부를 여는 중이에요. 처음이면 며칠 걸릴 수 있어요 — 남은 시간은 「이 컴퓨터」에서 보여요."
-        : "노드가 꺼져 있어요.";
-      sub.innerHTML = "결제가 들어와도 확인을 못 합니다. <b>이 컴퓨터</b>에서 켜 주세요.";
-    } else if (!shop) {
-      // 가게가 없는 사람에게는 **가게 이야기부터** 한다(대표님 결정 유지).
-      hi.textContent = "가게부터 만들까요?";
-      sub.textContent = "이름 하나면 시작됩니다. 나머지는 나중에 채우셔도 됩니다.";
-    } else if (!aiProvider) {
-      hi.textContent = shop;
-      sub.innerHTML = "아래 아이콘은 지금 바로 됩니다. 말로 시키시려면 <b>이 컴퓨터 → AI 열쇠</b>를 한 번만 넣어 주세요.";
-    } else {
-      hi.textContent = shop;
-      // 🔴 체인 등록 전에는 그렇다고 말한다. 이름만 적어 둔 가게에 「무엇을
-      //    할까요?」만 뜨면, 다 끝난 줄 알고 손님이 장터에서 찾기를 기다린다.
-      //    영영 안 나온다 — 등록을 안 했기 때문이다.
-      const onChain = !!($("sh-registered") as HTMLInputElement)?.value.trim();
-      sub.innerHTML = onChain
-        ? t("무엇을 할까요? 아래를 누르거나, 그냥 말씀하세요.")
-        : `${copyHtml("무엇을 할까요? 아래를 누르거나, 그냥 말씀하세요.")}
-           <span class="ravinote">${copyHtml("아직 이 컴퓨터에만 있습니다 — 손님은 QR 로 옵니다.")}</span>`;
-    }
+    hi.textContent = t("라비");
+    sub.textContent = aiProvider ? t("AI 도우미 · 물어본 것만 봐요") : t("AI 키를 넣으면 라비가 깨어나요");
   }
-
   /* 🔴 아직 안 된 것이 있으면 **타일에 적어 둔다.** 눌러 보고 알게 하면
      그 사람은 이미 한 번 헛걸음한 것이다. 대표님 지적이 정확했다 —
      가게 등록을 안 했으면 QR 을 눌러도 소용이 없는데, 눌러야만 알았다. */
@@ -4607,7 +4577,9 @@ async function paintHome(): Promise<void> {
   const safe = document.getElementById("rv-home-safe");
   if (safe) safe.textContent = nodeUp ? t("노드와 연결됨") : t("노드 상태를 확인하세요");
   try {
-    const txs: any[] = await 최근거래_모아읽기(4);
+    const recent: unknown = await invoke("recent_transactions", { count: 4 }).catch(() => null);
+    const txs: any[] = (Array.isArray(recent) && recent.length ? recent : await 최근거래_모아읽기(4))
+      .sort((a, b) => Number(b?.time || 0) - Number(a?.time || 0));
     const received = txs.find(tx => tx.category === "receive");
     if (received?.txid && lastReceivedHomeTx && received.txid !== lastReceivedHomeTx) {
       setAllRaviMood("surprised");
@@ -4619,7 +4591,8 @@ async function paintHome(): Promise<void> {
       const amount = Number(tx.amount || 0);
       const checks = Math.max(0, Number(tx.confirmations || 0));
       const state = checks >= 6 ? t("확인 완료") : tf("확인 중 {0}/6", checks);
-      return `<div class="rv-home-entry">${copyHtml(received ? "받음" : "보냄")} · ${escapeHtml(String(tx.asset_name || "RVN"))} · ${escapeHtml(amount.toLocaleString(lang))}<small>${escapeHtml(state)}</small></div>`;
+      const when = Number(tx.time) > 0 ? new Date(Number(tx.time) * 1000).toLocaleString(lang, { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" }) : "";
+      return `<div class="rv-home-entry"><span class="rv-home-icon ${received ? "receive" : "send"}" aria-hidden="true">${received ? "↓" : "↑"}</span><span class="rv-home-tx-main">${copyHtml(received ? "받음" : "보냄")} · ${escapeHtml(String(tx.asset_name || "RVN"))}<small>${escapeHtml(when)} · ${escapeHtml(state)}</small></span><strong class="${received ? "ok" : ""}">${received ? "+" : "−"}${escapeHtml(Math.abs(amount).toLocaleString(lang))}</strong></div>`;
     }).join("") || `<p>${copyHtml("최근 거래가 없습니다")}</p>`;
   } catch { $("rv-home-txs").textContent = t("거래 내역을 읽지 못했습니다"); }
   try {
@@ -5813,16 +5786,16 @@ const TK_이음 = 5 * 60 * 1000;
 async function talkPaintMe() {
   try {
     const me = await invoke<any>("talk_me");
-    tkMine = String(me.pubkey || "");
+    tkMine = String(me?.pubkey || "");
     await tkLoadNames([tkMine]);
     const mine = tkNames.get(tkMine);
-    const shown = mine?.name ? `<span translate="no">${escapeHtml(String(mine.name))}</span>` : t("이름 없음");
+    const shown = mine?.name ? `<span translate="no">${escapeHtml(String(mine.name))}</span>` : "";
     // 머리줄은 좁다. 긴 설명은 「내 이름」 단추 안에서 말한다.
     $("tk-me").innerHTML =
-      `<b>${shown}</b>` +
-      (me.recoverable ? "" : ` <span class="warn">${copyHtml("· 백업 파일이 유일한 사본")}</span>`);
+      (shown ? `<b>${shown}</b>` : "") +
+      (me && !me.recoverable ? ` <span class="warn">${copyHtml("· 백업 파일이 유일한 사본")}</span>` : "");
   } catch (e) {
-    $("tk-me").innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
+    $("tk-me").textContent = "";
   }
 }
 
@@ -5834,7 +5807,8 @@ async function talkPaintRooms() {
   try {
     // `?? []` 가 있어야 한다 — 빈 답이 오면 `catch` 에 안 걸리고 아래
     // `.map` 에서 던진다. 그 순간 **이야기 화면이 통째로 안 그려진다**.
-    rooms = (await invoke<any[]>("talk_rooms")) ?? [];
+    const result: unknown = await invoke("talk_rooms");
+    rooms = Array.isArray(result) ? result : [];
   } catch {
     // 방 목록을 못 읽어도 전체 글은 보여야 한다. 조용히 넘어간다.
   }
@@ -5858,6 +5832,8 @@ async function talkPaintRooms() {
   box.querySelectorAll("[data-room]").forEach((b) => {
     (b as HTMLElement).onclick = () => {
       tkRoom = String((b as HTMLElement).dataset.room || "");
+      delete $("tk-list").dataset.loaded;
+      $("tk-new-messages").hidden = true;
       // 한 번 연 방은 나가 있어도 지켜본다 — 그 방에 새 글이 오면 알린다.
       방지켜보기(tkRoom);
       setCopyText($("tk-title"), () => tkRoom
@@ -5867,6 +5843,9 @@ async function talkPaintRooms() {
       void talkPaintRooms();
       void talkPaint();
       $("rv-person-name").textContent = tkRoom ? tkRoomNames.get(tkRoom) || t("방") : t("레이븐 이야기");
+      const avatar = $("rv-person-avatar");
+      avatar.textContent = ($("rv-person-name").textContent || "레").slice(0, 1);
+      avatar.style.setProperty("--h", String(tkHue(tkRoom || "raven")));
       $("rv-person-key").textContent = tkRoom;
     };
   });
@@ -6064,9 +6043,12 @@ async function talkPaint() {
   //    사장이 다른 방을 누르면 `tkRoom` 이 바뀌어, 아래에서 이 목록을
   //    엉뚱한 방의 것으로 세게 된다.
   const 읽은방 = tkRoom;
-  box.innerHTML = `<div class="meta" style="margin:auto">${copyHtml("세계 릴레이에서 읽는 중…")}</div>`;
+  const wasAtBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80 || !box.dataset.loaded;
+  const previousTop = box.scrollTop;
+  if (!box.dataset.loaded) box.innerHTML = `<div class="meta" style="margin:auto">${copyHtml("세계 릴레이에서 읽는 중…")}</div>`;
   try {
-    const list: any[] = await invoke("talk_read", { room: 읽은방 || null, limit: 60 });
+    const result: unknown = await invoke("talk_read", { room: 읽은방 || null, limit: 60 });
+    const list: any[] = Array.isArray(result) ? result : [];
     // 🔴 알림 판단은 **한 곳**에만 둔다. 화면이 읽은 것도 지킴이가 읽은 것도
     //    같은 곳(`대화살피기`)으로 보낸다 — 두 곳에 나눠 두면 한쪽만 고치는
     //    날이 온다. 주문 알림의 `주문살피기` 와 같은 배치다.
@@ -6082,9 +6064,9 @@ async function talkPaint() {
     // 🔴 이름표를 **먼저** 가져온다. 안 그러면 화면에 16진수가 한 번
     //    떴다가 이름으로 바뀌는데, 그 깜빡임이 「고장났나」로 읽힌다.
     await tkLoadNames(list.map((e) => String(e.pubkey || "")));
-    // 🔴 오래된 것이 위, 새것이 아래 — 대화창은 그 방향이다. 읽어 온 것은
-    //    최신순이라 뒤집는다. 안 뒤집으면 인사가 맨 아래에 있다.
-    const all = [...list].reverse();
+    if (읽은방 !== tkRoom) return;
+    // 릴레이가 어느 방향으로 답해도 오래된 것이 위에 오도록 시각으로 정렬한다.
+    const all = [...list].sort((a, b) => Number(a?.created_at || 0) - Number(b?.created_at || 0));
     // 안 보기 한 사람의 글을 뺀다. 🔴 **거른 것을 말없이 없애지 않는다** —
     //    윗줄에 몇 개를 숨겼는지 적고, 거기서 바로 명단을 열 수 있게 한다.
     //    그래야 "어제 있던 글이 없어졌다" 가 고장으로 읽히지 않는다.
@@ -6183,7 +6165,9 @@ async function talkPaint() {
       })
       .join("");
     // 새 글이 아래에 있으므로 맨 아래로 내린다. 안 하면 옛날 글만 보인다.
-    box.scrollTop = box.scrollHeight;
+    box.dataset.loaded = "1";
+    if (wasAtBottom) { box.scrollTop = box.scrollHeight; $("tk-new-messages").hidden = true; }
+    else { box.scrollTop = previousTop; if (box.scrollHeight > box.clientHeight) $("tk-new-messages").hidden = false; }
     // 🔴 사진은 그려 놓고 **지켜봐야** 한다. 안 지켜보면 「받는 중…」에서
     //    영영 멈춰 있고, 그건 못 받았다는 말을 안 하는 것과 같다.
     tkWatchPics(box);
@@ -6255,7 +6239,7 @@ async function tkLoadNames(pubkeys: string[]) {
   if (!want.length) return;
   try {
     const got: any = await invoke("talk_profiles", { pubkeys: want });
-    for (const [pk, p] of Object.entries(got || {})) tkNames.set(pk, p);
+    for (const [pk, p] of Object.entries(got && typeof got === "object" && !Array.isArray(got) ? got : {})) tkNames.set(pk, p);
     // 못 찾은 사람도 적어 둔다 — 안 그러면 화면을 그릴 때마다 또 묻는다.
     for (const p of want) if (!tkNames.has(p)) tkNames.set(p, null);
   } catch {
@@ -8304,13 +8288,18 @@ async function 최근거래_모아읽기(개수: number): Promise<any[]> {
     const r: any = await invoke("wallet_since", { block: null });
     const rvn: any[] = Array.isArray(r?.transactions) ? r.transactions : [];
     const 자산: any[] = Array.isArray(r?.asset_transactions) ? r.asset_transactions : [];
-    return [...rvn, ...자산]
+    const combined = [...rvn, ...자산];
+    if (!combined.length) {
+      const recent: unknown = await invoke("recent_transactions", { count: 개수 });
+      return Array.isArray(recent) ? recent : [];
+    }
+    return combined
       .sort((a, b) => (Number(b?.time) || 0) - (Number(a?.time) || 0))
       .slice(0, 개수)
       .reverse(); // 그리는 쪽이 다시 뒤집으므로 여기서 맞춰 둔다
   } catch {
     // 옛 길로 물러선다. 자산은 안 보이지만 RVN 은 보인다 — 빈 화면보다 낫다.
-    try { return await invoke<any[]>("recent_transactions", { count: 개수 }); } catch { return []; }
+    try { const recent: unknown = await invoke("recent_transactions", { count: 개수 }); return Array.isArray(recent) ? recent : []; } catch { return []; }
   }
 }
 
@@ -8899,7 +8888,7 @@ function renderKeyRows(st: any, models: any) {
 
 async function refreshKeys() {
   try {
-    const st = await invoke<any>("api_key_status");
+    const st = (await invoke<any>("api_key_status")) || {};
     const models = await invoke<any>("model_settings").catch(() => ({}));
     renderKeyRows(st, models);
     const have = [...Object.keys(PROVIDERS), "custom"].filter((p) => st[p]);
@@ -8914,9 +8903,21 @@ async function refreshKeys() {
     sel.innerHTML = have.map((p) => `<option value="${p}">${escapeHtml(labelOf(p))}</option>`).join("");
     if (have.includes(previous)) sel.value = previous;
     aiProvider = sel.value || null;
+    const raviSub = document.getElementById("ravi-sub");
+    if (raviSub) raviSub.textContent = aiProvider ? t("AI 도우미 · 물어본 것만 봐요") : t("AI 키를 넣으면 라비가 깨어나요");
     // 0.4.8-B — 라비 화면의 「AI 열쇠 넣기」는 열쇠가 없을 때만 보인다.
     const keyOpen = document.getElementById("ravi-keyopen");
     if (keyOpen) keyOpen.hidden = !!aiProvider;
+    const keyHost = document.getElementById("ravi-key");
+    if (keyHost && !aiProvider && keyHost.hidden) {
+      keyHost.innerHTML = keyCardHtml();
+      keyHost.hidden = false;
+    }
+    if (keyHost && aiProvider && !keyHost.hidden) closeKeyCard();
+    const last4 = document.getElementById("ravi-key-last4");
+    if (last4) last4.textContent = aiProvider && st.last4?.[aiProvider] ? `····${String(st.last4[aiProvider])}` : "";
+    const deleteButton = document.getElementById("ravi-key-delete");
+    if (deleteButton) deleteButton.hidden = !aiProvider;
 
     $("key-note").textContent = have.length ? "AI 설정이 있습니다. 연결은 아직 확인하지 않았습니다." : "아직 없습니다";
     // 대화창은 쓸 수 있는 곳이 하나라도 있을 때만 의미가 있다.
@@ -9925,9 +9926,9 @@ function keyCardHtml(): string {
     `<button type="button" class="ghost" data-kc="close">${copyHtml("닫기")}</button></div>` +
     `<p class="meta">${copyHtml("열쇠가 있으면 라비가 AI 로 무엇이든 답해요. 열쇠는 AI 회사에서 각자 받아요(요금은 회사마다 달라요).")}</p>` +
     `<div class="kc-list" role="group" aria-label="AI 회사">${rows}</div>` +
-    `<label class="kc-label" for="kc-key">${copyHtml("받은 열쇠를 여기에 붙여 넣으세요")}</label>` +
-    `<div class="kc-in"><input id="kc-key" type="password" autocomplete="off" spellcheck="false" placeholder="${escapeHtml(ph)}" />` +
-    `<button type="button" id="kc-save">${copyHtml("저장")}</button></div>` +
+    `<label class="kc-label" for="ravi-key-input">${copyHtml("받은 열쇠를 여기에 붙여 넣으세요")}</label>` +
+    `<div class="kc-in"><input id="ravi-key-input" type="password" autocomplete="off" spellcheck="false" placeholder="${escapeHtml(ph)}" />` +
+    `<button type="button" id="ravi-key-save">${copyHtml("저장")}</button></div>` +
     `<p class="meta">${copyHtml("열쇠는 이 컴퓨터에만 저장돼요. AI 에게 물을 때만 고른 회사로 함께 보내지고, 우리 서버로는 가지 않아요.")}</p>` +
     `<p class="meta kc-note" id="kc-note" aria-live="polite"></p>` +
     `<p class="meta">${copyHtml("내 컴퓨터에서 돌리는 AI 나 다른 곳은 「이 컴퓨터 › AI 열쇠」에서 넣어요.")}</p>` +
@@ -9939,7 +9940,7 @@ function openKeyCard() {
   host.innerHTML = keyCardHtml();
   host.hidden = false;
   host.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  ($("kc-key") as HTMLInputElement).focus();
+  ($("ravi-key-input") as HTMLInputElement).focus();
 }
 
 function closeKeyCard() {
@@ -9956,16 +9957,16 @@ function pickKeyProvider(p: string) {
     row.classList.toggle("on", on);
     row.querySelector("[data-kc-pick]")?.setAttribute("aria-pressed", String(on));
   });
-  const input = document.getElementById("kc-key") as HTMLInputElement | null;
+  const input = document.getElementById("ravi-key-input") as HTMLInputElement | null;
   if (input) input.placeholder = PROVIDERS[p][1];
 }
 
 async function saveKeyCard() {
-  const input = $("kc-key") as HTMLInputElement;
+  const input = $("ravi-key-input") as HTMLInputElement;
   const note = $("kc-note");
   const key = input.value.trim();
   if (!key) return void setCopyText(note, () => t("칸이 비어 있어요. 키를 붙여넣고 다시 눌러 주세요."));
-  const btn = $("kc-save") as HTMLButtonElement;
+  const btn = $("ravi-key-save") as HTMLButtonElement;
   btn.disabled = true;
   try {
     await invoke("save_api_key", { provider: keyPick, key });
@@ -16566,6 +16567,11 @@ function 대화살피기(room: string, list: any[]) {
     return;
   }
   if (새글 <= 0) return;
+  if (대화방보는중(방)) {
+    // 소리를 꺼도 보고 있는 방은 갱신한다. talkPaint가 읽던 위치를 보존한다.
+    if (document.getElementById("tk-list")) void talkPaint();
+    return;
+  }
   // ⚠️ 내가 누구인지 아직 모르면 **아무것도 안 한다.** 모르는 채로 울리면
   //    내가 쓴 글에 내가 알림을 받는다. 다음 바퀴에 `talk_me` 가 답한다.
   if (!tkMine) return;
@@ -16574,26 +16580,6 @@ function 대화살피기(room: string, list: any[]) {
   //    답이다. (주문은 여기서 반대로 판단한다 — 돈이 들어오는 순간 사장의
   //    눈은 손님에게 가 있어서, 창이 떠 있는 것과 보고 있는 것이 다르다.
   //    대화는 그렇지 않다. 읽으려고 연 화면이다.)
-  if (대화방보는중(방)) {
-    // 🔴 다만 **글은 올려 준다.** 이야기 화면에는 자동 새로고침이 없어서,
-    //    여기서 안 그리면 사장은 새 글이 온 줄도 모르고 화면을 보고 앉아
-    //    있게 된다. 「보고 있으니 알릴 필요 없다」는 보고 있는 화면이
-    //    최신일 때만 맞는 말이다.
-    //
-    //    ⚠️ **맨 아래를 보고 있을 때만** 다시 그린다. 위로 올려 옛 글을
-    //       읽는 중에 그리면 화면이 맨 아래로 튀어 읽던 자리를 잃는다.
-    //    ⚠️ 되돌이는 안 생긴다 — 다시 그리면서 부르는 `대화살피기` 는
-    //       이미 아는 글만 보므로 `새글` 이 0 이라 여기까지 못 온다.
-    try {
-      const box = document.getElementById("tk-list");
-      const 맨아래 = !box || box.scrollHeight - box.scrollTop - box.clientHeight < 80;
-      if (맨아래) void talkPaint();
-    } catch {
-      // 못 그려도 다음 새로고침에 나온다. 여기서 던지면 지킴이가 죽는다.
-    }
-    return;
-  }
-
   말소리();
   안본대화 += 새글;
   대화배지그리기();
@@ -16661,7 +16647,7 @@ let 대화지킴이도는중 = false;
  * 안 일어나고, 릴레이는 남의 서버라 덜 두드릴수록 좋다.
  */
 async function 대화지킴이() {
-  if (!대화알림켜짐()) return; // 꺼 두셨으면 묻지도 않는다
+  if (!대화알림켜짐() && currentPage !== "talk") return;
   if (대화지킴이도는중) return;
   대화지킴이도는중 = true;
   try {
@@ -16678,8 +16664,8 @@ async function 대화지킴이() {
       try {
         // 30개면 45초 사이에 온 글을 놓칠 일이 없다. 화면(60개)보다 적게
         // 받는 것은 이건 읽으려는 것이 아니라 **세려는 것**이기 때문이다.
-        const list: any[] = await invoke("talk_read", { room: 방 || null, limit: 30 });
-        대화살피기(방, list);
+        const result: unknown = await invoke("talk_read", { room: 방 || null, limit: 30 });
+        대화살피기(방, Array.isArray(result) ? result : []);
       } catch {
         // 릴레이 한 곳이 죽어도 다음 방은 본다. 조용히 다음 바퀴에 다시 본다.
       }
@@ -16847,6 +16833,20 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.querySelectorAll(".ravi-static-face").forEach(slot => slot.replaceWith(raviFace("sleep", 40)));
   const raviNav = document.querySelector('nav a[data-page="ravi"]');
   raviNav?.querySelector("svg")?.replaceWith(raviFace("sleep", 36));
+  document.querySelectorAll<HTMLElement>('nav a[data-page]').forEach(link => {
+    const label = link.querySelector("span")?.textContent?.trim() || link.dataset.page || "";
+    link.title = t(label);
+    link.setAttribute("aria-label", t(label));
+  });
+  $("rp-open").title = t("문제 알리기");
+  $("rp-open").setAttribute("aria-label", t("문제 알리기"));
+  $("d-sum-row").title = t("연결됨");
+  $("d-sum-row").setAttribute("aria-label", t("연결됨"));
+  document.querySelectorAll<HTMLElement>("nav .dotrow:not(.dotsum)").forEach(row => {
+    const label = row.querySelector<HTMLElement>("[id$='-t']")?.textContent?.trim() || "";
+    row.title = t(label);
+    row.setAttribute("aria-label", t(label));
+  });
   $("rv-room-ravi-face").appendChild(raviFace("sleep", 50, { round: true }));
   applyRaviCharacter();
   $("rv-room-ravi").onclick = () => showPage("ravi");
@@ -16921,7 +16921,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   });
   document.querySelectorAll("nav a").forEach((a) => {
     const label = a.querySelector("span")?.textContent?.trim();
-    if (label) { a.setAttribute("aria-label", label); a.setAttribute("title", label); }
+    if (label) { a.setAttribute("aria-label", t(label)); a.setAttribute("title", t(label)); }
     (a as HTMLElement).onclick = () => showPage((a as HTMLElement).dataset.page!);
   });
   // 0.4.8-B 잔액 카드 — 큰 단추 「받기」, 작은 줄 「최근 거래」「주소 확인」. (「보내기」는 아래 w-send-rvn)
@@ -17418,6 +17418,7 @@ window.addEventListener("DOMContentLoaded", async () => {
       b.onclick = () => setChatMode(b.dataset.mode as "fill" | "ask" | "debate");
     });
   restoreChatMode();
+  if (!$("chat-log").children.length) chatSay("ai", t("무엇을 도와드릴까요? 보내기·받기·백업·대화 무엇이든 물어보세요."));
   // 0.4.8-B 라비 안내 답의 단추 · AI 열쇠 넣기 카드.
   $("chat-log").addEventListener("click", (e) => {
     const el = e.target as HTMLElement;
@@ -17428,6 +17429,12 @@ window.addEventListener("DOMContentLoaded", async () => {
     if (g) chatHtml("ai", guideHtml(g, copyHtml));
   });
   $("ravi-keyopen").addEventListener("click", openKeyCard);
+  $("ravi-key-delete").addEventListener("click", async () => {
+    if (!aiProvider) return;
+    const provider = aiProvider;
+    await invoke("delete_api_key", { provider });
+    await refreshKeys();
+  });
   $("ravi-key").addEventListener("click", (e) => {
     const el = e.target as HTMLElement;
     const pick = el.closest<HTMLElement>("[data-kc-pick]");
@@ -17440,16 +17447,16 @@ window.addEventListener("DOMContentLoaded", async () => {
       return;
     }
     if (el.closest("[data-kc='close']")) return closeKeyCard();
-    if (el.closest("#kc-save")) void saveKeyCard();
+    if (el.closest("#ravi-key-save")) void saveKeyCard();
   });
   $("ravi-key").addEventListener("input", (e) => {
     const el = e.target as HTMLInputElement;
-    if (el.id !== "kc-key") return;
+    if (el.id !== "ravi-key-input") return;
     const p = providerOfKey(el.value);
     if (p && p !== keyPick) pickKeyProvider(p);
   });
   $("ravi-key").addEventListener("keydown", (e) => {
-    if ((e as KeyboardEvent).key === "Enter" && (e.target as HTMLElement).id === "kc-key") void saveKeyCard();
+    if ((e as KeyboardEvent).key === "Enter" && (e.target as HTMLElement).id === "ravi-key-input") void saveKeyCard();
   });
   $("chat-q").addEventListener("keydown", (e) => {
     if ((e as KeyboardEvent).key === "Enter") chatSend();
@@ -17580,6 +17587,11 @@ window.addEventListener("DOMContentLoaded", async () => {
   // 이야기. 🔴 러스트만 만들고 이 다섯 줄을 안 쓰면 오늘 하루 종일 고친
   //    그 병이 그대로 반복된다.
   $("tk-send").addEventListener("click", () => void talkSend());
+  $("tk-new-messages").addEventListener("click", () => {
+    const list = $("tk-list");
+    list.scrollTop = list.scrollHeight;
+    $("tk-new-messages").hidden = true;
+  });
   $("tk-reload").addEventListener("click", () => void talkPaint());
   $("tk-newroom").addEventListener("click", () => void talkNewRoom());
   $("tk-nmake").addEventListener("click", () => void talkMakeRoomGo());

@@ -31,6 +31,7 @@ function eyes(m: RaviMood): string {
 }
 export function setMood(el: HTMLElement, mood: RaviMood): void {
   el.dataset.mood = mood;
+  el.dataset.raviMood = mood;
   el.setAttribute("role", "img");
   el.setAttribute("aria-label", names[mood]);
   el.classList.toggle("rv-bob", mood !== "sleep");
