@@ -91,3 +91,8 @@ libc = "0.2"
 [target.'cfg(windows)'.dependencies]
 # 0.4.9 — 복구 단어를 노드에 건네는 이름 있는 파이프(현재 사용자만 · 원격 거부). words_restore.rs `win_pipe`.
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_System_IO", "Win32_System_Pipes", "Win32_Security", "Win32_Security_Authorization"] }
+
+# 라비 AI 키는 OS 보안 저장소(맥 키체인·윈도 자격 증명 관리자)에만 둔다.
+# 리눅스는 CI 에 dbus 가 없어 기존 0600 파일을 그대로 쓴다(ai.rs cfg).
+[target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
+keyring = { version = "3", features = ["apple-native", "windows-native"] }
