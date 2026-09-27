@@ -334,7 +334,12 @@ fn read_key(provider: &str) -> Result<String, String> {
     if !known(provider) { return Err("알 수 없는 제공자입니다.".into()); }
     #[cfg(any(target_os = "macos", target_os = "windows"))]
     {
-        return migrate_legacy_into_credential(&credential(provider)?, provider);
+        return match credential(provider) {
+            Ok(entry) => migrate_legacy_into_credential(&entry, provider),
+            Err(_) => std::fs::read_to_string(key_path(provider))
+                .map(|key| key.trim().to_string())
+                .map_err(|_| "API 키가 저장되어 있지 않습니다. 설정에서 넣어 주세요.".to_string()),
+        };
     }
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     std::fs::read_to_string(key_path(provider))
@@ -349,7 +354,8 @@ fn migrate_legacy_into_credential(entry: &keyring::Entry, provider: &str) -> Res
     let old = std::fs::read_to_string(&path)
         .map_err(|_| "API 키가 저장되어 있지 않습니다. 설정에서 넣어 주세요.".to_string())?;
     let old = old.trim().to_string();
-    entry.set_password(&old).map_err(|_| "OS 보안 저장소로 옮기지 못했습니다.".to_string())?;
+    // If the OS store is unavailable, retain and use the old 0600 file.
+    if entry.set_password(&old).is_err() { return Ok(old); }
     if entry.get_password().ok().as_deref() == Some(old.as_str()) {
         if write_private(&last4_path(provider), last4(&old).as_bytes()).is_ok() {
             if let Ok(mut file) = std::fs::OpenOptions::new().write(true).open(&path) {
