@@ -62,3 +62,21 @@
 - `node scripts/check-desktop-languages.mjs; echo rc=$?` → `rc=1`, `AssertionError: A new isolated browser profile is required`.
 - `node scripts/check-desktop-ux.mjs; echo rc=$?` → `rc=1`, 같은 격리 프로필 오류.
 - 기존 시험은 지우거나 건너뛰지 않았고, 디자인에 고정된 시험도 수정하지 않았다. 이번 환경에서는 새 Chrome 캡처를 만들 수 없어 라비 키 저장·삭제와 밝게/어둡게 레이아웃을 실제 창에서 다시 확인해야 한다. 프로토콜·암호·릴레이 주소·송금 확정 로직은 변경하지 않았다.
+
+## 3차 · 라비 AI 키 보안 저장 수리 (2026-09-28)
+
+### 바꾼 것
+
+- 16자 미만 키 저장을 거절하고, 끝 4자리는 16자 이상인 키에만 표시한다. 기존 짧은 키의 `.last4` 값은 상태 조회에서 노출하지 않고 정리한다.
+- `KEY_LOCK` 하나가 키 읽기·이전·저장·삭제·상태 조회와 custom 목적지 저장을 직렬화한다. 상태 조회는 이전을 수행하지 않으며, 이전은 앱 시작과 키 사용 직전에 수행한다.
+- `KeyStore`로 저장소를 분리했다. 운영은 맥·윈도 OS 보안 저장소와 Linux 파일, 시험은 항상 메모리 저장소를 사용한다. 기본 설정 폴더의 기존 service 이름은 유지하고, 별도 설정 폴더는 경로 SHA-256 앞 8자리로 service를 분리한다.
+- 이전은 `NoEntry`와 읽기 오류를 구분하고, 저장소에 키가 있어도 남은 옛 파일을 정리한다. 저장 때도 옛 `.key`를 지우며, 0 덮어쓰기가 실패해도 삭제를 시도한다. 삭제는 저장소·`.last4`·`.key`를 모두 시도하고 오류를 합친다. `.deleted` 표식이 남은 옛 키의 자동 이전을 막고 새 저장이 성공하면 제거한다.
+- 상태를 `configured`, `has_key`, `available`, `last4`로 분리했다. 라비의 잠/깨움과 제공자 선택은 키가 있는 제공자 또는 키 없는 로컬 custom의 `available`을 사용한다. 저장 실패, 화면 이동, 카드 닫기에도 키 입력을 비우며 실패 시 재입력을 안내한다.
+- 외부 제공자 오류와 응답 파싱 오류에 키 문자열, 앞 8자, 끝 8자를 `[키 가림]`으로 바꾸는 공통 함수를 적용했다.
+
+### 시험
+
+- `RV_BACKUP_FIXTURE_ROOT=/tmp/claude-501/rvfix CARGO_TARGET_DIR=/Users/gimmusong/wt-rv-desktop-049-target cargo test --offline ai::` → `rc=0`, 27개 통과·7개 기존 ignored.
+- 기존 ignored 7개를 메모리 저장소로 단독 실행: `rc=0`, 7개 통과.
+- `node preflight.mjs && npx tsc && npx vite build --configLoader runner`: `rc=0`.
+- 메모리 저장소 시험에 짧은 키, 접미사, 이전 각 실패 단계, 삭제 부분 실패, 저장·이전 교차, 데이터 폴더 격리, 오류 문구 가림을 포함했다. OS 키체인을 사용하는 시험은 없다.

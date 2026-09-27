@@ -27,8 +27,10 @@ pub fn app_dir() -> PathBuf {
             return PathBuf::from(p);
         }
     }
-    base().join(APP_FOLDER)
+    default_app_dir()
 }
+
+pub fn default_app_dir() -> PathBuf { base().join(APP_FOLDER) }
 
 /// 폴더 이름. 번들 identifier 와 짝이라 절대 바꾸지 않는다.
 const APP_FOLDER: &str = "PlayXRaven";

@@ -4624,6 +4624,10 @@ function showPage(id: string) {
     /* 타이머 정리가 실패해도 화면 이동은 막지 않는다 */
   }
 
+  if (currentPage !== id) {
+    document.querySelectorAll<HTMLInputElement>('#keyrows input[type="password"], #cu-key, #ravi-key-input').forEach(input => { input.value = ""; });
+    if (currentPage === "ravi") closeKeyCard();
+  }
   currentPage = id;
   document.body.classList.toggle("rv-talk-layout", id === "talk");
   if (id === "ravi") paintRavi();
@@ -8839,13 +8843,13 @@ async function resetOrder() {
 }
 
 function renderKeyRows(st: any, models: any) {
-  aiKeyed = st || {};
+  aiKeyed = st.available || {};
   renderOrder("customer");
   renderOrder("owner");
   $("keyrows").innerHTML =
     Object.entries(PROVIDERS)
       .map(([p, [label, ph, console_]]) =>
-        st[p]
+        st.has_key?.[p]
           ? // 모델 이름은 회사가 예고 없이 바꾼다. 우리 배포를 기다리지 않고
             // 직접 고칠 수 있어야 한다.
             `<div class="keyrow"><span class="who">${label} · ····${escapeHtml(String(st.last4?.[p] || ""))}</span>
@@ -8859,7 +8863,7 @@ function renderKeyRows(st: any, models: any) {
       .join("") +
     (st.custom
       ? `<div class="keyrow"><span class="who">${escapeHtml(st.custom_label || "커스텀")}</span>
-           <span class="saved">····${escapeHtml(String(st.last4?.custom || ""))}</span>
+           <span class="saved">${st.has_key?.custom ? `····${escapeHtml(String(st.last4?.custom || ""))}` : "키 없음"}</span>
            <button class="ghost" data-delkey="custom">지우기</button></div>`
       : "");
 
@@ -8891,7 +8895,7 @@ async function refreshKeys() {
     const st = (await invoke<any>("api_key_status")) || {};
     const models = await invoke<any>("model_settings").catch(() => ({}));
     renderKeyRows(st, models);
-    const have = [...Object.keys(PROVIDERS), "custom"].filter((p) => st[p]);
+    const have = [...Object.keys(PROVIDERS), "custom"].filter((p) => st.available?.[p]);
     const labelOf = (p: string) =>
       p === "custom" ? st.custom_label || "커스텀" : PROVIDERS[p][0];
 
@@ -8930,7 +8934,7 @@ async function refreshKeys() {
     //    떠 있고, 오른쪽 아래 내용을 가린다(그록 감사 2026-08-27).
     //    지금 어느 화면인지 보고 정한다.
     void refreshOverview();
-    const keyed = Object.keys(PROVIDERS).some(provider => st[provider]) || !!st.last4?.custom;
+    const keyed = [...Object.keys(PROVIDERS), "custom"].some(provider => st.available?.[provider]);
     if (lastKeyState === null) setAllRaviMood(keyed ? "normal" : "sleep");
     else if (keyed !== lastKeyState) void animateRavi(keyed);
     lastKeyState = keyed;
@@ -8997,9 +9001,11 @@ async function saveKeys() {
     }
     await refreshKeys();
   } catch (e) {
-    $("key-note").textContent = errText(e);
+    $("key-note").textContent = `${errText(e)} 다시 넣어 주세요`;
+  } finally {
+    document.querySelectorAll<HTMLInputElement>('#keyrows input[type="password"], #cu-key').forEach(input => { input.value = ""; });
+    btn.disabled = false;
   }
-  btn.disabled = false;
 }
 
 // ── AI 대화 ──
@@ -9945,6 +9951,8 @@ function openKeyCard() {
 
 function closeKeyCard() {
   const host = $("ravi-key");
+  const input = document.getElementById("ravi-key-input") as HTMLInputElement | null;
+  if (input) input.value = "";
   host.hidden = true;
   host.innerHTML = "";
 }
@@ -9958,7 +9966,7 @@ function pickKeyProvider(p: string) {
     row.querySelector("[data-kc-pick]")?.setAttribute("aria-pressed", String(on));
   });
   const input = document.getElementById("ravi-key-input") as HTMLInputElement | null;
-  if (input) input.placeholder = PROVIDERS[p][1];
+  if (input) { input.value = ""; input.placeholder = PROVIDERS[p][1]; }
 }
 
 async function saveKeyCard() {
@@ -9980,8 +9988,9 @@ async function saveKeyCard() {
       `<div><b>${copyHtml("안녕하세요, 라비예요.")}</b><br />` +
       `<span class="muted">${tf("{0} 열쇠를 저장했어요. 이제 무엇이든 물어보세요.", `<span translate="no">${escapeHtml(label)}</span>`)}</span></div></div>`);
   } catch (e) {
-    setCopyText(note, () => errText(e));
+    setCopyText(note, () => `${errText(e)} 다시 넣어 주세요`);
   } finally {
+    input.value = "";
     btn.disabled = false;
   }
 }

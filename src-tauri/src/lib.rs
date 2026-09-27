@@ -551,6 +551,7 @@ pub fn run() {
         .setup(|app| {
             // 앱 자료 폴더를 이 사용자 전용으로 잠근다(다른 계정이 열쇠·장부를 못 읽게).
             app_folder::harden();
+            ai::migrate_keys_on_start();
             tauri::async_runtime::spawn(member_privacy::run_cleanup());
             // 「만들기」 기록 정리 — 보관 기간 지난 받는 사람 이름, 7일 지난 인쇄 파일,
             // 기록에 없는 인쇄 파일, 쓰다 만 파일. 켤 때 한 번, 그 뒤 하루에 한 번.
