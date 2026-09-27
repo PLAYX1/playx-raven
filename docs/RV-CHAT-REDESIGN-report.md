@@ -96,3 +96,18 @@
 - `node preflight.mjs && npx tsc && npx vite build --configLoader runner; echo rc=$?` → `rc=0`.
 - 새 화면 캡처 시도는 이 환경의 `127.0.0.1` 바인딩 `EPERM`으로 실패했다. 서버 없이 Chrome을 띄우는 재시도도 브라우저 프로세스 실행 단계에서 실패했다. 따라서 이번 수정의 시각 검수는 기존 실제 Chrome 캡처와 CSS·DOM 경로 확인에 한정된다.
 - `ai.rs` 키 저장 로직과 `package.json`은 변경하지 않았다. 새 `style` 속성은 추가하지 않았다.
+
+## 5차 · 키 저장 재검토 수리 (2026-09-28)
+
+### 바꾼 것
+
+- 데이터 폴더의 `ai-keys.lock`을 `std::fs::File::lock()`으로 배타 잠그고 프로세스 내부 `KEY_LOCK`과 함께 키 읽기·이전·저장·삭제·상태 조회·custom 설정 저장에 적용했다. 이전 쓰기 직전에도 삭제 표식을 다시 확인한다. 삭제 표식이 남으면 저장소의 키가 실제로 남아 있어도 읽기와 상태에서 제외한다.
+- 데이터 폴더를 정규화한 절대 경로로 식별하고 SHA-256 앞 16바이트를 service 접미사로 사용한다. 기본 폴더의 기존 service 이름은 유지한다. 비기본 폴더의 옛 공통 service 키는 다른 폴더의 키일 수 있어 새 service로 옮기지 않는다. **비기본 폴더 사용자는 키를 다시 넣어야 함.**
+- 옛 `.last4`는 저장소 키에서 접미사를 계산한 뒤 제거한다. 16자 미만의 옛 `.key`는 저장소로 옮기지 않고 0 덮어쓰기와 삭제를 시도한다. 시작 시 이전은 별도 스레드에서 수행하며, 상태 조회는 옛 파일의 유효한 키도 사용 가능 상태에 반영한다.
+- 키 저장 후 옛 파일·접미사 정리가 실패하면 저장 성공과 `warning`을 함께 반환한다. 화면은 성공으로 처리하고 상태를 새로 읽는다. AI 정상 응답의 문자열 필드와 일반 대화 내용에도 키 전체 및 앞뒤 8자 가림을 적용한다.
+
+### 시험
+
+- 메모리 저장소 시험에 OS 저장소 삭제 실패 주입 뒤 부활 방지, 별도 파일 핸들의 잠금 경쟁, 서로 다른 작업 폴더의 동일 상대 경로 식별자, 정상 응답 키 가림, 짧은 옛 키 제거, 정리 경고 및 옛 파일 상태 fallback을 추가했다. 실제 OS 자격 증명은 조회하지 않았다.
+- `RV_BACKUP_FIXTURE_ROOT=/tmp/claude-501/rvfix CARGO_TARGET_DIR=/Users/gimmusong/wt-rv-desktop-049-target cargo test --offline ai::` → 34개 통과, 기존 ignored 7개, `rc=0`.
+- `node preflight.mjs && npx tsc && npx vite build --configLoader runner` → `rc=0`.

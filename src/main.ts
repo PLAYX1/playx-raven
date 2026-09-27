@@ -8923,7 +8923,7 @@ async function refreshKeys() {
     const deleteButton = document.getElementById("ravi-key-delete");
     if (deleteButton) deleteButton.hidden = !aiProvider;
 
-    $("key-note").textContent = have.length ? "AI 설정이 있습니다. 연결은 아직 확인하지 않았습니다." : "아직 없습니다";
+    $("key-note").textContent = st.warning || (have.length ? "AI 설정이 있습니다. 연결은 아직 확인하지 않았습니다." : "아직 없습니다");
     // 대화창은 쓸 수 있는 곳이 하나라도 있을 때만 의미가 있다.
     // 🔴 여태 API 키가 없으면 이 버튼을 **숨겼다.** 그러면 Ravi 가 있다는
     // 것을 알 길이 없다 — 키를 넣을 이유도 못 만난다.
@@ -8979,29 +8979,34 @@ async function showRate() {
 async function saveKeys() {
   const btn = $("key-save") as HTMLButtonElement;
   btn.disabled = true;
+  const warnings: string[] = [];
   try {
     const cu = ($("cu-url") as HTMLInputElement).value.trim();
     if (cu) {
-      await invoke("save_custom_provider", {
+      const result = await invoke<{ warning?: string }>("save_custom_provider", {
         label: ($("cu-label") as HTMLInputElement).value.trim(),
         baseUrl: cu,
         model: ($("cu-model") as HTMLInputElement).value.trim(),
         key: ($("cu-key") as HTMLInputElement).value.trim(),
       });
+      if (result.warning) warnings.push(result.warning);
       ($("cu-key") as HTMLInputElement).value = "";
     }
     for (const p of Object.keys(PROVIDERS)) {
       const el = document.getElementById(`key-${p}`) as HTMLInputElement | null;
       if (el && el.value.trim()) {
-        await invoke("save_api_key", { provider: p, key: el.value.trim() });
+        const result = await invoke<{ warning?: string }>("save_api_key", { provider: p, key: el.value.trim() });
+        if (result.warning) warnings.push(result.warning);
         el.value = "";
       }
       const m = document.getElementById(`model-${p}`) as HTMLInputElement | null;
       if (m) await invoke("save_model", { provider: p, model: m.value.trim() });
     }
     await refreshKeys();
+    if (warnings.length) $("key-note").textContent = `키가 저장됐습니다. ${warnings.join("; ")}`;
   } catch (e) {
-    $("key-note").textContent = `${errText(e)} 다시 넣어 주세요`;
+    await refreshKeys().catch(() => {});
+    $("key-note").textContent = `${errText(e)} 다시 확인해 주세요`;
   } finally {
     document.querySelectorAll<HTMLInputElement>('#keyrows input[type="password"], #cu-key').forEach(input => { input.value = ""; });
     btn.disabled = false;

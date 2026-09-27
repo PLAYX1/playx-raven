@@ -17,9 +17,32 @@
 
 use serde_json::{json, Value};
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 static KEY_LOCK: Mutex<()> = Mutex::new(());
 const MISSING_KEY: &str = "API 키가 저장되어 있지 않습니다. 설정에서 넣어 주세요.";
+
+// Keep the file handle alive for the whole critical section. File::lock is an
+// OS lock, so a second app process cannot race a migration or destination edit.
+struct KeyGuard {
+    _process: MutexGuard<'static, ()>,
+    _file: std::fs::File,
+}
+fn lock_keys() -> Result<KeyGuard, String> {
+    let process = KEY_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = config_dir();
+    std::fs::create_dir_all(&dir).map_err(|_| "AI 설정 폴더를 열지 못했습니다.".to_string())?;
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true).write(true).create(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let file = options.open(dir.join("ai-keys.lock"))
+        .map_err(|_| "AI 키 잠금 파일을 열지 못했습니다.".to_string())?;
+    file.lock().map_err(|_| "AI 키 잠금을 얻지 못했습니다.".to_string())?;
+    Ok(KeyGuard { _process: process, _file: file })
+}
 
 #[derive(Debug, PartialEq, Eq)]
 enum StoreError {
@@ -117,13 +140,23 @@ impl KeyStore for FileStore {
 }
 
 fn service_name() -> String {
+    service_name_for(config_dir(), std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")))
+}
+fn service_name_for(dir: PathBuf, cwd: PathBuf) -> String {
     use sha2::{Digest, Sha256};
     let base = "se.erci.ravenvault.desktop.ai";
-    if config_dir() == crate::paths::default_app_dir() {
+    if absolute_data_dir_at(dir.clone(), &cwd) == absolute_data_dir_at(crate::paths::default_app_dir(), &cwd) {
         return base.into();
     }
-    let digest = Sha256::digest(config_dir().to_string_lossy().as_bytes());
-    format!("{base}.{}", hex::encode(&digest[..4]))
+    let digest = Sha256::digest(absolute_data_dir_at(dir, &cwd).to_string_lossy().as_bytes());
+    format!("{base}.{}", hex::encode(&digest[..16]))
+}
+fn absolute_data_dir_at(path: PathBuf, cwd: &std::path::Path) -> PathBuf {
+    path.canonicalize().unwrap_or_else(|_| {
+        if path.is_absolute() { path.clone() } else {
+            cwd.join(path)
+        }
+    })
 }
 fn store(provider: &str) -> Result<Box<dyn KeyStore>, String> {
     #[cfg(test)]
@@ -190,6 +223,15 @@ fn redact_external_error(message: &str, key: &str) -> String {
     redacted
 }
 
+fn redact_value(value: &mut Value, key: &str) {
+    match value {
+        Value::String(s) => *s = redact_external_error(s, key),
+        Value::Array(items) => for item in items { redact_value(item, key); },
+        Value::Object(fields) => for item in fields.values_mut() { redact_value(item, key); },
+        _ => {}
+    }
+}
+
 fn last4(key: &str) -> String {
     if key.chars().count() < 16 {
         return String::new();
@@ -209,7 +251,7 @@ fn deleted_path(provider: &str) -> PathBuf {
     config_dir().join(format!("{provider}.deleted"))
 }
 
-fn save_key_locked(provider: &str, key: &str) -> Result<(), String> {
+fn save_key_locked(provider: &str, key: &str) -> Result<Option<String>, String> {
     if key.len() > 4096 || key.chars().any(char::is_control) {
         return Err("API 키를 줄바꿈 없이 다시 입력하세요.".into());
     }
@@ -220,12 +262,19 @@ fn save_key_locked(provider: &str, key: &str) -> Result<(), String> {
     if key.chars().count() < 16 {
         return Err("키가 너무 짧아요".into());
     }
+    // If a previous deletion left a tombstone, an old file cannot be allowed
+    // to become a fallback after the new key clears that tombstone.
+    if deleted_path(provider).exists() && key_path(provider).exists() {
+        remove_legacy_key(&key_path(provider))?;
+    }
     store(provider)?
         .set(key)
         .map_err(|_| "API 키를 보안 저장소에 저장하지 못했습니다.".to_string())?;
     // The key is durable already. Attempt metadata and legacy cleanup independently.
     let mut errors = Vec::new();
-    if let Err(e) = write_private(&last4_path(provider), last4(key).as_bytes()) { errors.push(e); }
+    // The suffix is derived from the store on demand; old .last4 files are
+    // untrusted and can contain an entire short key.
+    if let Err(e) = remove_key(&last4_path(provider)) { errors.push(e); }
     #[cfg(any(test, target_os = "macos", target_os = "windows"))]
     if let Err(e) = remove_legacy_key(&key_path(provider)) { errors.push(e); }
     #[cfg(any(test, target_os = "macos", target_os = "windows"))]
@@ -235,7 +284,10 @@ fn save_key_locked(provider: &str, key: &str) -> Result<(), String> {
     if can_unmark {
         if let Err(e) = remove_key(&deleted_path(provider)) { errors.push(e); }
     }
-    if errors.is_empty() { Ok(()) } else { Err(errors.join("; ")) }
+    if deleted_path(provider).exists() {
+        return Err("키는 저장됐지만 삭제 표식을 정리하지 못했습니다. 다시 저장해 주세요.".into());
+    }
+    Ok((!errors.is_empty()).then(|| errors.join("; ")))
 }
 
 #[cfg(test)]
@@ -257,19 +309,18 @@ fn remove_legacy_key(path: &std::path::Path) -> Result<(), String> {
 }
 
 fn delete_key_locked(provider: &str) -> Result<(), String> {
+    let s = store(provider)?;
+    delete_key_with_store_locked(provider, &*s)
+}
+fn delete_key_with_store_locked(provider: &str, s: &dyn KeyStore) -> Result<(), String> {
     let mut errors = Vec::new();
     if let Err(e) = write_private(&deleted_path(provider), b"deleted") {
         errors.push(e);
     }
-    match store(provider) {
-        Ok(s) => {
-            if let Err(e) = s.delete() {
-                if e != StoreError::NoEntry {
-                    errors.push("보안 저장소의 키를 지우지 못했습니다.".into());
-                }
-            }
+    if let Err(e) = s.delete() {
+        if e != StoreError::NoEntry {
+            errors.push("보안 저장소의 키를 지우지 못했습니다.".into());
         }
-        Err(e) => errors.push(e),
     }
     for path in [last4_path(provider), key_path(provider)] {
         if let Err(e) = remove_key(&path) {
@@ -289,6 +340,12 @@ fn migrate_locked(provider: &str, s: &dyn KeyStore) -> Result<Option<String>, St
         remove_legacy_key(&path)?;
         return Ok(None);
     }
+    if let Ok(old) = std::fs::read_to_string(&path) {
+        if old.trim().chars().count() < 16 {
+            remove_legacy_key(&path)?;
+            remove_key(&last4_path(provider))?;
+        }
+    }
     let existing = s.get();
     let stored = match existing {
         Ok(key) => Some(key),
@@ -298,6 +355,7 @@ fn migrate_locked(provider: &str, s: &dyn KeyStore) -> Result<Option<String>, St
         }
     };
     if !path.exists() {
+        remove_key(&last4_path(provider))?;
         return Ok(stored);
     }
     let key = if let Some(key) = stored {
@@ -308,8 +366,12 @@ fn migrate_locked(provider: &str, s: &dyn KeyStore) -> Result<Option<String>, St
             .trim()
             .to_string();
         if old.chars().count() < 16 {
-            return Ok(Some(old));
+            remove_legacy_key(&path)?;
+            remove_key(&last4_path(provider))?;
+            return Ok(None);
         }
+        // A delete in another process may have completed before this write.
+        if deleted_path(provider).exists() { return Ok(None); }
         if s.set(&old).is_err() {
             return Ok(Some(old));
         }
@@ -318,19 +380,16 @@ fn migrate_locked(provider: &str, s: &dyn KeyStore) -> Result<Option<String>, St
         }
         old
     };
-    if key.chars().count() >= 16 {
-        write_private(&last4_path(provider), last4(&key).as_bytes())?;
-    } else {
-        remove_key(&last4_path(provider))?;
-    }
+    remove_key(&last4_path(provider))?;
     remove_legacy_key(&path)?;
     Ok(Some(key))
 }
 
 pub fn migrate_keys_on_start() {
-    let _guard = KEY_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    for provider in ["anthropic", "openai", "google", "groq", "xai", "custom"] {
-        if let Ok(s) = store(provider) {
+    std::thread::spawn(|| {
+        let Ok(_guard) = lock_keys() else { return };
+        for provider in ["anthropic", "openai", "google", "groq", "xai", "custom"] {
+            if let Ok(s) = store(provider) {
             #[cfg(any(test, target_os = "macos", target_os = "windows"))]
             {
                 let _ = migrate_locked(provider, &*s);
@@ -339,39 +398,69 @@ pub fn migrate_keys_on_start() {
             {
                 let _ = s;
             }
+            }
         }
-    }
+    });
 }
 
 fn read_key_locked(provider: &str) -> Result<String, String> {
     if !known(provider) {
         return Err("알 수 없는 제공자입니다.".into());
     }
+    if deleted_path(provider).exists() {
+        let _ = remove_legacy_key(&key_path(provider));
+        return Err(MISSING_KEY.into());
+    }
     let s = store(provider)?;
     #[cfg(any(test, target_os = "macos", target_os = "windows"))]
     {
-        if let Some(key) = migrate_locked(provider, &*s)? {
-            return Ok(key);
+        match migrate_locked(provider, &*s) {
+            Ok(Some(key)) => return Ok(key),
+            Err(error) => {
+                if let Ok(key) = s.get() { return Ok(key); }
+                if let Some(key) = legacy_fallback(provider) { return Ok(key); }
+                return Err(error);
+            }
+            Ok(None) => {}
         }
     }
     s.get().map_err(|_| MISSING_KEY.into())
 }
+#[cfg(any(test, target_os = "macos", target_os = "windows"))]
+fn legacy_fallback(provider: &str) -> Option<String> {
+    if deleted_path(provider).exists() { return None; }
+    std::fs::read_to_string(key_path(provider)).ok()
+        .map(|key| key.trim().to_string())
+        .filter(|key| key.chars().count() >= 16)
+}
 fn read_key(provider: &str) -> Result<String, String> {
-    let _guard = KEY_LOCK
-        .lock()
-        .map_err(|_| "AI 설정을 다시 저장해 주세요.".to_string())?;
+    if !known(provider) { return Err("알 수 없는 제공자입니다.".into()); }
+    let _guard = lock_keys()?;
     read_key_locked(provider)
 }
 
 fn key_status_locked(provider: &str) -> (bool, String) {
+    if deleted_path(provider).exists() {
+        let _ = remove_legacy_key(&key_path(provider));
+        let _ = remove_key(&last4_path(provider));
+        return (false, String::new());
+    }
     let key = store(provider)
-        .and_then(|s| s.get().map_err(|_| MISSING_KEY.to_string()))
+        .and_then(|s| {
+            #[cfg(any(test, target_os = "macos", target_os = "windows"))]
+            { Ok(migrate_locked(provider, &*s).ok().flatten()
+                .or_else(|| s.get().ok())
+                .or_else(|| legacy_fallback(provider))) }
+            #[cfg(all(not(test), not(any(target_os = "macos", target_os = "windows"))))]
+            { s.get().map(Some).map_err(|_| MISSING_KEY.to_string()) }
+        })
         .ok();
+    let key = key.flatten();
     let has = key.as_ref().is_some_and(|k| !k.is_empty());
     let suffix = key.as_deref().map(last4).unwrap_or_default();
     // Clean unsafe metadata left by old versions; never use it as evidence of a key.
     if let Ok(old) = std::fs::read_to_string(last4_path(provider)) {
-        if old.chars().count() != 4 || key.as_ref().is_some_and(|k| k.chars().count() < 16) {
+        if old.chars().count() <= 4 || key.is_none() || key.as_ref().is_some_and(|k| k.chars().count() < 16) {
             let _ = remove_key(&last4_path(provider));
         }
     }
@@ -379,9 +468,7 @@ fn key_status_locked(provider: &str) -> (bool, String) {
 }
 
 fn custom_request_settings() -> Result<(String, String, String), String> {
-    let _guard = KEY_LOCK
-        .lock()
-        .map_err(|_| "AI 설정을 다시 저장해 주세요.".to_string())?;
+    let _guard = lock_keys()?;
     let (_, base, model) =
         custom_config().ok_or_else(|| "커스텀 제공자가 설정되지 않았습니다.".to_string())?;
     let key = read_key_locked("custom").unwrap_or_default();
@@ -502,9 +589,7 @@ pub fn delete_api_key(provider: String) -> Result<(), String> {
     if !known(&provider) {
         return Err("알 수 없는 제공자입니다.".into());
     }
-    let _guard = KEY_LOCK
-        .lock()
-        .map_err(|_| "AI 설정을 다시 저장해 주세요.".to_string())?;
+    let _guard = lock_keys()?;
     let mut errors = Vec::new();
     if let Err(e) = delete_key_locked(&provider) {
         errors.push(e);
@@ -522,13 +607,11 @@ pub fn delete_api_key(provider: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn save_api_key(provider: String, key: String) -> Result<(), String> {
+pub fn save_api_key(provider: String, key: String) -> Result<Value, String> {
     if !known(&provider) {
         return Err("알 수 없는 제공자입니다.".into());
     }
-    let _guard = KEY_LOCK
-        .lock()
-        .map_err(|_| "AI 설정을 다시 저장해 주세요.".to_string())?;
+    let _guard = lock_keys()?;
     let dir = config_dir();
     std::fs::create_dir_all(&dir).map_err(|e| format!("설정 폴더를 만들지 못했습니다: {e}"))?;
     if !key.trim().is_empty() && key.trim().chars().count() < 16 { return Err("키가 너무 짧아요".into()); }
@@ -537,19 +620,19 @@ pub fn save_api_key(provider: String, key: String) -> Result<(), String> {
             custom_config().ok_or_else(|| "커스텀 제공자가 설정되지 않았습니다.".to_string())?;
         crate::ai_endpoint::validate(&base, &model, &key)?;
     }
-    save_key_locked(&provider, &key)
+    Ok(json!({ "warning": save_key_locked(&provider, &key)? }))
 }
 
 #[tauri::command]
 pub fn api_key_status() -> Value {
-    let _guard = KEY_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let guard = lock_keys();
     let mut suffixes = serde_json::Map::new();
     let mut present = serde_json::Map::new();
     let mut available = serde_json::Map::new();
     let mut configuration = serde_json::Map::new();
-    let custom = custom_config();
+    let custom = if guard.is_ok() { custom_config() } else { None };
     for provider in ["anthropic", "openai", "google", "groq", "xai", "custom"] {
-        let (has, suffix) = key_status_locked(provider);
+        let (has, suffix) = if guard.is_ok() { key_status_locked(provider) } else { (false, String::new()) };
         present.insert(provider.into(), json!(has));
         suffixes.insert(provider.into(), json!(suffix));
         configuration.insert(provider.into(), json!(if provider == "custom" { custom.is_some() } else { has }));
@@ -569,6 +652,7 @@ pub fn api_key_status() -> Value {
         "custom": custom.is_some(),
         "custom_label": custom.map(|c| c.0).unwrap_or_default(),
         "last4": suffixes,
+        "warning": guard.as_ref().err(),
     })
 }
 
@@ -595,10 +679,8 @@ pub fn save_custom_provider(
     base_url: String,
     model: String,
     key: String,
-) -> Result<(), String> {
-    let _guard = KEY_LOCK
-        .lock()
-        .map_err(|_| "AI 설정을 다시 저장해 주세요.".to_string())?;
+) -> Result<Value, String> {
+    let _guard = lock_keys()?;
     let dir = config_dir();
     std::fs::create_dir_all(&dir).map_err(|e| format!("설정 폴더를 만들지 못했습니다: {e}"))?;
 
@@ -606,7 +688,7 @@ pub fn save_custom_provider(
     if base_url.trim().is_empty() {
         delete_key_locked("custom")?;
         remove_key(&dir.join("custom.json"))?;
-        return Ok(());
+        return Ok(json!({ "warning": null }));
     }
     let base = crate::ai_endpoint::validate(&base_url, &model, &key)?;
     let previous = custom_config().map(|v| v.1);
@@ -628,10 +710,10 @@ pub fn save_custom_provider(
     )?;
 
     // A locally-run model needs no key, so an empty one is valid here.
-    if !key.trim().is_empty() {
-        save_key_locked("custom", &key)?;
-    }
-    Ok(())
+    let warning = if !key.trim().is_empty() {
+        save_key_locked("custom", &key)?
+    } else { None };
+    Ok(json!({ "warning": warning }))
 }
 
 #[cfg(test)]
@@ -697,6 +779,53 @@ mod key_security_tests {
     }
 
     #[test]
+    fn short_legacy_key_is_removed_without_migration() {
+        home("short-legacy", || {
+            write_private(&key_path("openai"), b"abcd").unwrap();
+            write_private(&last4_path("openai"), b"abcd").unwrap();
+            assert!(read_key("openai").is_err());
+            assert!(!key_path("openai").exists());
+            assert!(!last4_path("openai").exists());
+            assert!(store("openai").unwrap().get().is_err());
+            write_private(&key_path("openai"), b"short").unwrap();
+            let mut unavailable = ScenarioStore::new(None);
+            unavailable.fail_get = true;
+            assert!(migrate_locked("openai", &unavailable).is_err());
+            assert!(!key_path("openai").exists());
+        });
+    }
+
+    #[test]
+    fn saved_key_reports_metadata_cleanup_as_warning() {
+        home("save-warning", || {
+            std::fs::create_dir(last4_path("openai")).unwrap();
+            let result = save_api_key("openai".into(), OLD.into()).unwrap();
+            assert!(result["warning"].as_str().is_some());
+            assert_eq!(api_key_status()["available"]["openai"], true);
+            assert_eq!(read_key("openai").unwrap(), OLD);
+        });
+        home("legacy-save-warning", || {
+            write_private(&key_path("openai"), OLD.as_bytes()).unwrap();
+            FAIL_LEGACY_REMOVE.store(true, std::sync::atomic::Ordering::SeqCst);
+            let new_key = "synthetic-new-key-5678";
+            let result = save_api_key("openai".into(), new_key.into()).unwrap();
+            assert!(result["warning"].as_str().is_some());
+            assert_eq!(read_key("openai").unwrap(), new_key);
+        });
+    }
+
+    #[test]
+    fn legacy_file_is_available_before_cleanup_finishes() {
+        home("legacy-status", || {
+            write_private(&key_path("openai"), OLD.as_bytes()).unwrap();
+            FAIL_LEGACY_REMOVE.store(true, std::sync::atomic::Ordering::SeqCst);
+            let status = api_key_status();
+            assert_eq!(status["available"]["openai"], true);
+            assert_eq!(status["last4"]["openai"], "1234");
+        });
+    }
+
+    #[test]
     fn migration_failure_stages_preserve_legacy_file() {
         home("stages", || {
             let path = key_path("openai");
@@ -747,6 +876,59 @@ mod key_security_tests {
     }
 
     #[test]
+    fn failed_store_delete_keeps_the_tombstone_effective() {
+        home("failed-store-delete", || {
+            let mut scenario = ScenarioStore::new(Some(OLD));
+            scenario.fail_delete = true;
+            store("groq").unwrap().set(OLD).unwrap();
+            write_private(&key_path("groq"), OLD.as_bytes()).unwrap();
+            let _guard = lock_keys().unwrap();
+            assert!(delete_key_with_store_locked("groq", &scenario).is_err());
+            assert!(deleted_path("groq").exists());
+            assert_eq!(migrate_locked("groq", &scenario).unwrap(), None);
+            assert!(read_key_locked("groq").is_err());
+            assert_eq!(key_status_locked("groq"), (false, String::new()));
+            assert!(!key_path("groq").exists());
+        });
+    }
+
+    #[test]
+    fn distinct_file_handles_contend_for_the_same_lock() {
+        home("file-lock", || {
+            use std::sync::mpsc;
+            use std::time::Duration;
+            let path = config_dir().join("ai-keys.lock");
+            let first = std::fs::OpenOptions::new().read(true).write(true).create(true).open(&path).unwrap();
+            first.lock().unwrap();
+            let (acquired_tx, acquired_rx) = mpsc::channel();
+            let second = std::thread::spawn(move || {
+                let file = std::fs::OpenOptions::new().read(true).write(true).open(path).unwrap();
+                file.lock().unwrap();
+                acquired_tx.send(()).unwrap();
+            });
+            assert!(acquired_rx.recv_timeout(Duration::from_millis(100)).is_err());
+            drop(first);
+            acquired_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+            second.join().unwrap();
+        });
+    }
+
+    #[test]
+    fn relative_data_folder_depends_on_working_directory() {
+        home("relative", || {
+            let root = config_dir();
+            let a = root.join("a");
+            let b = root.join("b");
+            std::fs::create_dir_all(&a).unwrap();
+            std::fs::create_dir_all(&b).unwrap();
+            let first = service_name_for(PathBuf::from("profile"), a);
+            let second = service_name_for(PathBuf::from("profile"), b);
+            assert_ne!(first, second);
+            assert_eq!(first.rsplit('.').next().unwrap().len(), 32);
+        });
+    }
+
+    #[test]
     fn save_and_migrate_cross_without_overwriting_new_key() {
         home("racing", || {
             write_private(&key_path("xai"), OLD.as_bytes()).unwrap();
@@ -791,6 +973,16 @@ mod key_security_tests {
         let key = "abcdefgh12345678ZYXWVUTS";
         let output = redact_external_error(&format!("{key} abcdefgh ZYXWVUTS"), key);
         assert_eq!(output, "[키 가림] [키 가림] [키 가림]");
+    }
+
+    #[test]
+    fn successful_response_fields_redact_the_key() {
+        let key = "abcdefgh12345678ZYXWVUTS";
+        let mut answer = json!({ "reply": key, "actions": [{ "text": "abcdefgh" }] });
+        redact_value(&mut answer, key);
+        assert_eq!(answer["reply"], "[키 가림]");
+        assert_eq!(answer["actions"][0]["text"], "[키 가림]");
+        assert_eq!(redact_external_error(&format!("hello {key}"), key), "hello [키 가림]");
     }
 }
 
@@ -1216,6 +1408,7 @@ pub async fn ai_fill(provider: String, task: String, input: String) -> Result<Va
 
     serde_json::from_str::<Value>(unfence(&text))
         .map(strip_slop)
+        .map(|mut value| { redact_value(&mut value, &disclosure_key); value })
         .map_err(|_| redact_external_error(&format!("AI가 알아볼 수 없는 형식으로 답했습니다:\n\n{text}"), &disclosure_key))
 }
 
@@ -1297,15 +1490,15 @@ async fn openai_compatible_content(
                 .unwrap_or("알 수 없음")
         ), &key));
     }
-    Ok(parsed
+    let content = parsed
         .get("choices")
         .and_then(Value::as_array)
         .and_then(|a| a.first())
         .and_then(|c| c.get("message"))
         .and_then(|m| m.get("content"))
         .and_then(Value::as_str)
-        .unwrap_or("")
-        .to_string())
+        .unwrap_or("");
+    Ok(redact_external_error(content, key))
 }
 
 // ── 종이 명단 사진 읽기 ─────────────────────────────────────────────────────
@@ -1482,7 +1675,10 @@ pub async fn ai_read_image(provider: String, task: String, image: String) -> Res
         redact_external_error(&format!("AI가 명단을 표로 옮기지 못했습니다. 명단이 길면 반씩 나눠 찍어 다시 눌러 보세요.\n\n{head}"), &disclosure_key)
     };
     let parsed: Value = serde_json::from_str(unfence(&text)).map_err(|_| unreadable())?;
-    sanitize_roster(&parsed).ok_or_else(unreadable)
+    sanitize_roster(&parsed).map(|mut value| {
+        redact_value(&mut value, &disclosure_key);
+        value
+    }).ok_or_else(unreadable)
 }
 
 /// Unicode "format" characters that are invisible but change how a name is
@@ -1804,8 +2000,9 @@ pub async fn ai_raw(provider: String, system: String, input: String) -> Result<S
     if key.is_empty() && provider != "custom" {
         return Err("API 키가 저장되어 있지 않습니다.".into());
     }
+    let mut disclosure_key = key.clone();
     let client = crate::ai_endpoint::client()?;
-    match provider.as_str() {
+    let answer = match provider.as_str() {
         "anthropic" => {
             let body = json!({
                 "model": model_for("anthropic"),
@@ -1889,10 +2086,12 @@ pub async fn ai_raw(provider: String, system: String, input: String) -> Result<S
         }
         "custom" => {
             let (base, model, key) = custom_request_settings()?;
+            disclosure_key = key.clone();
             openai_compatible(&client, &base, &model, &key, &system, &input, false).await
         }
         _ => Err("알 수 없는 제공자입니다.".into()),
-    }
+    }?;
+    Ok(redact_external_error(&answer, &disclosure_key))
 }
 
 #[tauri::command]
