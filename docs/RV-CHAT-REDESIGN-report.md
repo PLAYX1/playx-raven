@@ -35,3 +35,30 @@
 - 전체 화면 시험과 Rust 포트 시험을 localhost 바인딩 및 격리 브라우저가 가능한 환경에서 다시 돌려야 한다.
 - OS 보안 저장소의 실제 권한창과 Windows 경로는 모의 시험만 확인했다. 맥·윈도 실기기에서 이전 키 실패 복구까지 검수해야 한다.
 - 폰과 웹/PWA, 소개 웹 배포는 이 데스크톱 레인의 변경 범위 밖이다.
+
+## 2차 · 데스크톱 v2 결함 수리 (2026-09-28)
+
+실제 Chrome 캡처 `docs/rv-chat/shots-r1/desk-light-talk.png`, `desk-dark-talk.png`, `desk-light-home.png`, `desk-light-ravi.png`, `desk-wake-1.png`를 열어 비교했다.
+
+### 바꾼 것
+
+- 내 말풍선은 밝게 `#15161D`/흰 글자, 어둡게 `#E2702A`/먹색 글자로 대화창의 더 구체적인 CSS 선택자에 명시했다. 사진 풍선도 글자색을 이어받는다.
+- 릴레이 응답 순서에 기대지 않고 `created_at` 오름차순으로 그린다. 처음 열면 아래로 내리고, 위를 읽는 동안 새 글이 오면 위치를 유지하며 「새 메시지 ↓」 단추를 보여 준다. 대화 소리를 꺼도 열린 방의 글은 갱신한다. `talk_read`의 null/빈 응답은 빈 대화 안내로 처리한다.
+- 라비 화면은 얼굴·이름·키 상태, 기존 AI 대화, 추천 질문, 입력줄을 먼저 보여 준다. 가게 타일과 상태 카드는 아래 「라비에게 시킬 수 있는 일」에 접어 두어 기능을 유지했다. 음성 단추는 브라우저 SpeechRecognition 지원 시에만 나타나며, RVN 요청은 수수료 확인 카드에서 기존 보내기 확정 화면으로 이어진다.
+- 키 입력·저장·삭제의 ID와 끝 4자리 표시를 연결했다. 저장 뒤 입력값을 비우고 `빠밤! → surprised → wake → happy → normal`을 약 2.75초에 보여 준다. 마지막 키를 지우면 sleep으로 돌아간다. 표정 요소에 `data-ravi-mood`를 넣었다.
+- 모든 화면의 메뉴를 76px 아이콘 레일로 맞췄다. 좁은 아래쪽은 신고 아이콘과 상태 점으로 표시하고 툴팁·접근성 이름을 달았다. 서로 다른 기능이 같은 「내 소개」였던 아티스트 메뉴 이름을 「아티스트」로 고쳤다.
+- 이야기 머리의 의미 없는 「이름 없음」을 숨기고, 오른쪽 방 정보의 아바타를 64px 색 원과 이름으로 맞췄다. 홈 최근 활동은 `recent_transactions`의 `category`, `amount`, `confirmations`, `time`을 사용해 최신순으로 표시한다. `talk_me`·`talk_profiles`·`talk_rooms`의 null도 안전하게 처리한다.
+- 홈 카드의 28/32px 여백, 56px 잔액 글자, 52px 동작 단추, 활동 행과 320px 정보 칸 등 `v2-Desktop`·`v2-DesktopHome` 숫자를 다시 적용했다. 새 문구는 한국어·영어·일본어·중국어 간체에 넣었다.
+
+### 디자인에 있지만 뺀 것
+
+1차의 제외 항목을 그대로 유지했다. 입력 중·읽음·반응·인용·일반 파일 첨부는 실제 전송 기능이 없어 넣지 않았다. 공개 방을 비공개라고 표시하지 않았고, 라비가 송금을 직접 확정하지 않는다.
+
+### 시험과 남은 일
+
+- `npm run build; echo rc=$?` → `rc=1`. Vite 설정 임시 파일을 공유 `node_modules/.vite-temp`에 쓰려다 `EPERM: operation not permitted`.
+- `node preflight.mjs && npx tsc && npx vite build --configLoader runner; echo rc=$?` → `rc=0`.
+- `node scripts/check-style-csp.mjs; echo rc=$?` → `rc=1`, `listen EPERM: operation not permitted 127.0.0.1`.
+- `node scripts/check-desktop-languages.mjs; echo rc=$?` → `rc=1`, `AssertionError: A new isolated browser profile is required`.
+- `node scripts/check-desktop-ux.mjs; echo rc=$?` → `rc=1`, 같은 격리 프로필 오류.
+- 기존 시험은 지우거나 건너뛰지 않았고, 디자인에 고정된 시험도 수정하지 않았다. 이번 환경에서는 새 Chrome 캡처를 만들 수 없어 라비 키 저장·삭제와 밝게/어둡게 레이아웃을 실제 창에서 다시 확인해야 한다. 프로토콜·암호·릴레이 주소·송금 확정 로직은 변경하지 않았다.
