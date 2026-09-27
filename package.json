@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node preflight.mjs && tsc && vite build --configLoader runner",
+    "build": "node preflight.mjs && tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
     "preflight": "node preflight.mjs",
