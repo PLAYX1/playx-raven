@@ -80,3 +80,19 @@
 - 기존 ignored 7개를 메모리 저장소로 단독 실행: `rc=0`, 7개 통과.
 - `node preflight.mjs && npx tsc && npx vite build --configLoader runner`: `rc=0`.
 - 메모리 저장소 시험에 짧은 키, 접미사, 이전 각 실패 단계, 삭제 부분 실패, 저장·이전 교차, 데이터 폴더 격리, 오류 문구 가림을 포함했다. OS 키체인을 사용하는 시험은 없다.
+
+## 4차 · 데스크톱 작은 화면 결함 (2026-09-28)
+
+### 확인하고 고친 것
+
+- `docs/rv-chat/shots-r2/desk-light-ravi.png`, `desk-wake-4.png`, `desk-light-talk.png`, `desk-light-home.png`를 직접 확인했다. 라비 제공자 이름은 그리드의 좁은 칸에 눌려 세로로 쪼개졌고, 왼쪽 라비 선택 칸에는 얼굴이 보이지 않았다.
+- 제공자 다섯 단추를 최소 글자 폭의 한 줄 칩으로 만들고, 좁아지면 다음 줄로 감기게 했다. 고른 제공자의 「어디서 받나요 ↗」는 칩 아래 한 줄 링크로 옮겼다. 선택을 바꾸면 링크의 공식 콘솔 주소와 입력칸 예시도 함께 바뀐다.
+- 라비 머리의 중복 역할 문구를 한 줄로 줄였다. 왼쪽 메뉴의 라비 얼굴을 가리던 `span` 숨김 선택자를 고치고 현재 표정의 `RaviFace`를 24px로 표시한다. 나머지 메뉴의 SVG 24px와 선택 배경은 기존 캡처 및 `showPage` 선택 상태 코드로 확인했다.
+- 대화 머리의 「초대하기」「더 보기」와 경고 띠의 「알겠습니다」를 40px 높이·14px 글자로 맞췄다. 공통 64px/16px 강제 규칙보다 구체적인 규칙을 써서 이 세 단추에만 적용한다.
+- 맨 위 34px 띠는 `titleBarStyle: Overlay`와 `hiddenTitle: true`인 macOS 창의 드래그 영역(`data-tauri-drag-region`)이다. 일반 Chrome 캡처에는 신호등 단추가 없어 빈 띠로 보이지만 실제 앱의 제목줄 자리이므로 유지했다.
+
+### 시험과 제한
+
+- `node preflight.mjs && npx tsc && npx vite build --configLoader runner; echo rc=$?` → `rc=0`.
+- 새 화면 캡처 시도는 이 환경의 `127.0.0.1` 바인딩 `EPERM`으로 실패했다. 서버 없이 Chrome을 띄우는 재시도도 브라우저 프로세스 실행 단계에서 실패했다. 따라서 이번 수정의 시각 검수는 기존 실제 Chrome 캡처와 CSS·DOM 경로 확인에 한정된다.
+- `ai.rs` 키 저장 로직과 `package.json`은 변경하지 않았다. 새 `style` 속성은 추가하지 않았다.

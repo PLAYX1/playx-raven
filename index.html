@@ -182,7 +182,7 @@
       .chathead { display: flex; align-items: center; gap: 10px; padding: 10px 14px;
         border-bottom: 1px solid var(--line); background: var(--side); flex-wrap: wrap; }
       .chathead b { font-size: 15px; }
-      /* 머리줄 단추는 이제 둘뿐이다(초대하기·더 보기). 44px 은 지킨다. */
+      /* 머리줄 단추는 이제 둘뿐이다(초대하기·더 보기). */
       .chathead button { min-height: 44px; }
 
       /* ── 접어 둔 것들 ──────────────────────────────────────────────
@@ -2252,7 +2252,6 @@
       #phone-tx-preview h4 { border-top: 1px solid var(--line); padding-top: 12px; }
       #page-ravi .ravihero img { width: 184px; height:auto; object-fit:contain; box-shadow:none; }
       .ravihi { min-width:0; }
-      .ravi-role { font-size:16px; color:var(--muted); }
       #rv-phone-qr { max-width:224px; min-height:0; }
       #rv-phone-qr:empty { display:none; }
       .rv-web-info { padding: 16px; border: 1px solid var(--line); border-radius: 16px; margin: 16px 0; }
@@ -2342,10 +2341,7 @@
       #page-ravi .chat-mode .keyopen { margin-right:auto; color:var(--ravi); font-weight:650; }
       #ravi-key { padding:4px 12px 12px; border-top:1px solid var(--line); }
       .keycard { border:0; padding:8px 4px 0; }
-      .kc-list { display:grid; gap:6px; margin:10px 0; }
-      .kc-row { display:flex; gap:8px; flex-wrap:wrap; }
-      .kc-row .kc-pick { flex:1 1 220px; justify-content:flex-start; text-align:left; }
-      .kc-row.on .kc-pick { border-color:var(--ravi); box-shadow:inset 0 0 0 1px var(--ravi); background:var(--ravi-tint); font-weight:650; }
+      .kc-list { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0 4px; }
       .kc-label { display:block; margin-top:6px; }
       .kc-in { display:flex; gap:8px; flex-wrap:wrap; margin:6px 0 8px; }
       .kc-in input { flex:1 1 260px; min-width:0; }
@@ -2395,7 +2391,7 @@
       .rv-talk-layout nav { width:76px; background:#15161D; align-items:center; padding:20px 0; }
       .rv-talk-layout nav a { width:56px; height:56px; padding:14px; margin:2px 0; border:0; border-radius:16px; color:#ECEDF3; }
       .rv-talk-layout nav a.on { background:#2A2C38; }
-      .rv-talk-layout nav a > span:not(.ordbadge), .rv-talk-layout nav .brand { display:none; }
+      .rv-talk-layout nav a > span:not(.ordbadge):not(.ravi-face), .rv-talk-layout nav .brand { display:none; }
       .rv-talk-layout nav svg { width:24px; height:24px; flex:none; }
       #page-talk .talkwrap { display:grid; grid-template-columns:360px minmax(360px,1fr) 260px; height:100%; max-width:none; gap:0; background:var(--bg); }
       #page-talk .rooms { width:auto; min-width:0; border-right:1px solid var(--line); background:var(--panel); padding:0 10px 16px; overflow-y:auto; }
@@ -2456,9 +2452,9 @@
       body > nav, .rv-talk-layout nav { width:76px; min-width:76px; background:#15161D; color:#ECEDF3; padding:18px 0; align-items:center; gap:2px; }
       body > nav a, .rv-talk-layout nav a { width:56px; min-height:56px; height:56px; box-sizing:border-box; display:flex; align-items:center; justify-content:center; padding:14px; margin:0; border:0; border-radius:16px; color:#ECEDF3; flex:none; }
       body > nav a.on, .rv-talk-layout nav a.on { background:#2A2C38; color:#FFFFFF; }
-      body > nav a > span:not(.ordbadge), body > nav .brand, .rv-talk-layout nav a > span:not(.ordbadge) { display:none; }
+      body > nav a > span:not(.ordbadge):not(.ravi-face), body > nav .brand, .rv-talk-layout nav a > span:not(.ordbadge):not(.ravi-face) { display:none; }
       body > nav svg { width:24px; height:24px; flex:none; }
-      body > nav .ravi-face { flex:none; }
+      body > nav .ravi-face { display:inline-block; width:24px; height:24px; flex:none; border-radius:7px; }
       body > nav .navfoot { width:76px; box-sizing:border-box; padding:8px 0; display:flex; flex-direction:column; align-items:center; }
       body > nav .reportlink { width:44px; height:44px; overflow:hidden; white-space:nowrap; font-size:0; padding:0; margin:0 0 10px; color:#ECEDF3; border-color:#3A3C49; }
       body > nav .reportlink::before { content:"!"; display:grid; place-items:center; font-size:18px; font-weight:700; height:100%; }
@@ -2483,7 +2479,6 @@
       #page-ravi .ravihero .ravi-face { width:48px !important; height:48px !important; margin-right:14px; border-radius:16px !important; }
       #page-ravi .ravihero h2 { margin:0; font-size:18px; }
       #page-ravi .ravihero .lede { margin:0; font-size:14px; color:var(--ravi-soft); }
-      #page-ravi .ravi-role { margin:0; font-size:13px; color:var(--muted); }
       #page-ravi #ravi-chatwrap { order:1; width:100%; }
       #page-ravi #chat { min-height:530px; background:var(--panel); }
       #page-ravi #chat-log { order:1; min-height:220px; max-height:420px; padding:18px 20px; background:var(--bg); }
@@ -2498,10 +2493,12 @@
       #page-ravi .chat-in button { height:48px; border-radius:14px; }
       #page-ravi #chat-mode { order:5; }
       #page-ravi #ravi-key { order:0; background:var(--panel); }
-      #page-ravi #ravi-key .kc-list { grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); }
-      #page-ravi #ravi-key .kc-row { display:flex; gap:2px; }
-      #page-ravi #ravi-key .kc-pick { flex:1; min-width:0; }
-      #page-ravi #ravi-key .kc-where { flex:none; }
+      #page-ravi #ravi-key .kc-pick { flex:0 0 auto; width:max-content; min-width:max-content; min-height:40px !important; padding:0 12px; white-space:nowrap; overflow-wrap:normal; font-size:14px !important; }
+      #page-ravi #ravi-key .kc-pick.on { border-color:var(--ravi); box-shadow:inset 0 0 0 1px var(--ravi); background:var(--ravi-tint); font-weight:650; }
+      #page-ravi #ravi-key .kc-help { margin:0 0 12px; font-size:14px; white-space:nowrap; }
+      #page-ravi #ravi-key .kc-where { min-height:0 !important; padding:0; border:0; background:none; color:var(--ravi-soft); font-size:14px !important; text-decoration:underline; text-underline-offset:2px; white-space:nowrap; overflow-wrap:normal; }
+      #page-talk .chathead :is(#tk-inv, #tk-more), #page-talk #tk-firstok { height:40px; min-height:40px !important; padding:0 14px; font-size:14px !important; line-height:1.4; white-space:nowrap; overflow-wrap:normal; }
+      #page-talk .chathead :is(#tk-inv, #tk-more) { flex:none; }
       #page-ravi .rv-ravi-actions { order:2; max-width:850px; width:100%; margin:0 auto; box-sizing:border-box; border:1px solid var(--line); background:var(--panel); border-radius:16px; padding:12px 18px; }
       #page-ravi .rv-ravi-actions summary { cursor:pointer; font-weight:600; }
       #page-ravi .rv-ravi-actions .tiles { margin-top:14px; }
@@ -2701,7 +2698,7 @@
            주소·잔액·보내기 같은 것부터 보였다. 사장이 아침에 하는 일은
            그게 아니다. 물어보고 시키는 것이 먼저다. -->
       <a data-page="home" class="on" aria-label="홈"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 11l8-6.5 8 6.5V20H4z"/></svg><span>홈</span></a>
-      <a data-page="ravi">
+      <a data-page="ravi" aria-label="라비">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M12 3.5c-4 0-7 2.6-7 6 0 1.9 1 3.6 2.6 4.7L7 19l3.4-1.7c.5.1 1 .1 1.6.1 4 0 7-2.6 7-6s-3-6-7-6z"/>
@@ -3552,7 +3549,6 @@
           <div class="ravihi">
             <h2 id="ravi-hello">라비</h2>
             <p id="ravi-sub" class="lede">AI 키를 넣으면 라비가 깨어나요</p>
-            <p class="ravi-role">AI 도우미 · 물어본 것만 봐요</p>
             <span id="ravi-key-last4" aria-live="polite"></span><button id="ravi-key-delete" class="ghost" type="button" hidden>키 지우기</button>
           </div>
         </div>

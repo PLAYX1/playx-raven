@@ -9919,19 +9919,19 @@ function chatPopThinking() {
 let keyPick = "anthropic";
 
 function keyCardHtml(): string {
-  const rows = Object.entries(PROVIDERS)
-    .map(([p, [label, , console_]]) =>
-      `<div class="kc-row${p === keyPick ? " on" : ""}" data-kc-row="${escapeHtml(p)}">` +
-      `<button type="button" class="ghost kc-pick" data-kc-pick="${escapeHtml(p)}" aria-pressed="${p === keyPick}" translate="no">${escapeHtml(label)}</button>` +
-      `<button type="button" class="ghost kc-where" data-kc-where="${escapeHtml(console_)}">${copyHtml("어디서 받나요")} ↗</button>` +
-      `</div>`)
+  const picks = Object.entries(PROVIDERS)
+    .map(([p, [label]]) =>
+      `<button type="button" class="ghost kc-pick${p === keyPick ? " on" : ""}" data-kc-pick="${escapeHtml(p)}" aria-pressed="${p === keyPick}" translate="no">${escapeHtml(label)}</button>`)
     .join("");
   const ph = PROVIDERS[keyPick]?.[1] || "";
+  const [pickedLabel, , pickedConsole] = PROVIDERS[keyPick];
   return `<section class="card keycard" aria-labelledby="kc-title">` +
     `<div class="kc-head"><h3 id="kc-title">${copyHtml("AI 열쇠 넣기")}</h3>` +
     `<button type="button" class="ghost" data-kc="close">${copyHtml("닫기")}</button></div>` +
     `<p class="meta">${copyHtml("열쇠가 있으면 라비가 AI 로 무엇이든 답해요. 열쇠는 AI 회사에서 각자 받아요(요금은 회사마다 달라요).")}</p>` +
-    `<div class="kc-list" role="group" aria-label="AI 회사">${rows}</div>` +
+    `<div class="kc-list" role="group" aria-label="AI 회사">${picks}</div>` +
+    `<div class="kc-help"><span id="kc-selected-name" translate="no">${escapeHtml(pickedLabel)}</span> · ` +
+    `<button type="button" class="kc-where" data-kc-where="${escapeHtml(pickedConsole)}">${copyHtml("어디서 받나요")} ↗</button></div>` +
     `<label class="kc-label" for="ravi-key-input">${copyHtml("받은 열쇠를 여기에 붙여 넣으세요")}</label>` +
     `<div class="kc-in"><input id="ravi-key-input" type="password" autocomplete="off" spellcheck="false" placeholder="${escapeHtml(ph)}" />` +
     `<button type="button" id="ravi-key-save">${copyHtml("저장")}</button></div>` +
@@ -9960,11 +9960,13 @@ function closeKeyCard() {
 function pickKeyProvider(p: string) {
   if (!PROVIDERS[p]) return;
   keyPick = p;
-  document.querySelectorAll<HTMLElement>("#ravi-key [data-kc-row]").forEach((row) => {
-    const on = row.dataset.kcRow === p;
-    row.classList.toggle("on", on);
-    row.querySelector("[data-kc-pick]")?.setAttribute("aria-pressed", String(on));
+  document.querySelectorAll<HTMLElement>("#ravi-key [data-kc-pick]").forEach((pick) => {
+    const on = pick.dataset.kcPick === p;
+    pick.classList.toggle("on", on);
+    pick.setAttribute("aria-pressed", String(on));
   });
+  $("kc-selected-name").textContent = PROVIDERS[p][0];
+  ($("ravi-key").querySelector("[data-kc-where]") as HTMLElement).dataset.kcWhere = PROVIDERS[p][2];
   const input = document.getElementById("ravi-key-input") as HTMLInputElement | null;
   if (input) { input.value = ""; input.placeholder = PROVIDERS[p][1]; }
 }
@@ -16841,7 +16843,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("rv-onboard-face").appendChild(raviFace("sleep", 150));
   document.querySelectorAll(".ravi-static-face").forEach(slot => slot.replaceWith(raviFace("sleep", 40)));
   const raviNav = document.querySelector('nav a[data-page="ravi"]');
-  raviNav?.querySelector("svg")?.replaceWith(raviFace("sleep", 36));
+  raviNav?.querySelector("svg")?.replaceWith(raviFace("sleep", 24));
   document.querySelectorAll<HTMLElement>('nav a[data-page]').forEach(link => {
     const label = link.querySelector("span")?.textContent?.trim() || link.dataset.page || "";
     link.title = t(label);
