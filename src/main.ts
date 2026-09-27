@@ -1,5 +1,38 @@
 // 🔴 맨 먼저 — 앱 CSP(Tauri nonce) 가 막는 style="…" 속성을 CSSOM 으로 되살린다(src/style-attrs.ts).
 import "./style-attrs";
+import { raviFace, setMood, RAVI_CHARACTERS, type RaviMood } from "./ravi-face";
+let raviState: RaviMood = "sleep";
+let lastKeyState: boolean | null = null;
+let raviAnimation = 0;
+function setAllRaviMood(mood: RaviMood): void {
+  raviState = mood;
+  document.querySelectorAll<HTMLElement>(".ravi-face").forEach(face => setMood(face, mood));
+}
+function applyRaviCharacter(): void {
+  const selected = RAVI_CHARACTERS.find(character => character.id === localStorage.getItem("rv-ravi-character")) || RAVI_CHARACTERS[0];
+  document.querySelectorAll<HTMLElement>(".ravi-face").forEach(face => {
+    if (face.closest("#rv-profile-characters")) return;
+    face.style.background = selected.background;
+    face.dataset.characterFilter = selected.filter;
+    const img = face.querySelector<HTMLImageElement>("img");
+    if (img) img.src = selected.image;
+    setMood(face, raviState);
+  });
+}
+async function animateRavi(hasKey: boolean): Promise<void> {
+  const sequence = ++raviAnimation;
+  const pause = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
+  if (!hasKey) { setAllRaviMood("thinking"); await pause(650); if (sequence === raviAnimation) setAllRaviMood("sleep"); return; }
+  const hello = document.getElementById("ravi-hello");
+  const previous = hello?.textContent || "";
+  if (hello) hello.textContent = t("빠밤!");
+  for (const [mood, ms] of [["surprised", 500], ["wake", 650], ["happy", 850], ["normal", 0]] as [RaviMood, number][]) {
+    if (sequence !== raviAnimation) return;
+    setAllRaviMood(mood);
+    if (ms) await pause(ms);
+  }
+  if (hello) hello.textContent = previous;
+}
 import { setStyledSrcdoc } from "./srcdoc-style";
 import { wirePhoneTransaction } from "./phone-transaction";
 import { wirePairing } from "./pairing-ui";
@@ -2601,12 +2634,8 @@ function paintRavi() {
   // AI 열쇠가 없는 것은 잠이 아니다(장사는 전부 돈다).
   void refreshOverview();
   const nodeDown = !(nodeUp ?? true);
-  const face = $("ravi-face") as HTMLImageElement | null;
-  if (face) {
-    // 깨어 있으면 폰·랜딩과 같은 **전신 라비(GPU)**, 노드가 꺼지면 자는 그림.
-    face.src = nodeDown ? "/raven-sleep.webp" : "/raven-hello.webp";
-    face.classList.toggle("asleep", nodeDown);
-  }
+  // The shared RaviFace component follows AI key availability, not node state.
+  setAllRaviMood(raviState);
   const hi = $("ravi-hello");
   const sub = $("ravi-sub");
   if (hi && sub) {
@@ -4542,7 +4571,63 @@ async function sendOwed() {
 
 
 /** 지금 열려 있는 화면. 끌어다 놓기가 **자리마다 다르게** 굴려면 필요하다. */
-let currentPage = "ravi";
+let currentPage = "home";
+let lastReceivedHomeTx: string | null = null;
+
+async function paintProfile(): Promise<void> {
+  const selected = localStorage.getItem("rv-ravi-character") || RAVI_CHARACTERS[0].id;
+  $("rv-profile-characters").innerHTML = "";
+  for (const character of RAVI_CHARACTERS) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.setAttribute("aria-pressed", String(character.id === selected));
+    const face = raviFace(raviState, 56, { round: true });
+    face.style.background = character.background;
+    face.dataset.characterFilter = character.filter;
+    const img = face.querySelector<HTMLImageElement>("img");
+    if (img) img.src = character.image;
+    setMood(face, raviState);
+    button.append(face, document.createTextNode(t(character.name)));
+    button.onclick = () => { localStorage.setItem("rv-ravi-character", character.id); applyRaviCharacter(); void paintProfile(); };
+    $("rv-profile-characters").append(button);
+  }
+  $("rv-profile-face").replaceChildren(raviFace(raviState, 116, { round: true }));
+  applyRaviCharacter();
+  ($("rv-profile-color") as HTMLInputElement).value = localStorage.getItem("rv-profile-color") || "#EFEAF8";
+  try {
+    const me = await invoke<any>("talk_me");
+    const key = String(me.pubkey || "");
+    const profiles = await invoke<any>("talk_profiles", { pubkeys: [key] });
+    ($("rv-profile-name") as HTMLInputElement).value = String(profiles?.[key]?.name || "");
+  } catch { /* Profile name can be set while relays are unavailable. */ }
+}
+
+async function paintHome(): Promise<void> {
+  void refreshOverview();
+  const safe = document.getElementById("rv-home-safe");
+  if (safe) safe.textContent = nodeUp ? t("노드와 연결됨") : t("노드 상태를 확인하세요");
+  try {
+    const txs: any[] = await 최근거래_모아읽기(4);
+    const received = txs.find(tx => tx.category === "receive");
+    if (received?.txid && lastReceivedHomeTx && received.txid !== lastReceivedHomeTx) {
+      setAllRaviMood("surprised");
+      setTimeout(() => setAllRaviMood(aiProvider ? "normal" : "sleep"), 1300);
+    }
+    if (received?.txid) lastReceivedHomeTx = String(received.txid);
+    $("rv-home-txs").innerHTML = txs.map(tx => {
+      const received = tx.category === "receive";
+      const amount = Number(tx.amount || 0);
+      const checks = Math.max(0, Number(tx.confirmations || 0));
+      const state = checks >= 6 ? t("확인 완료") : tf("확인 중 {0}/6", checks);
+      return `<div class="rv-home-entry">${copyHtml(received ? "받음" : "보냄")} · ${escapeHtml(String(tx.asset_name || "RVN"))} · ${escapeHtml(amount.toLocaleString(lang))}<small>${escapeHtml(state)}</small></div>`;
+    }).join("") || `<p>${copyHtml("최근 거래가 없습니다")}</p>`;
+  } catch { $("rv-home-txs").textContent = t("거래 내역을 읽지 못했습니다"); }
+  try {
+    const rooms: any[] = await invoke("talk_rooms");
+    $("rv-home-rooms").innerHTML = `<div class="rv-home-entry">${copyHtml("라비")} · ${copyHtml("AI 도우미")}</div>` +
+      (Array.isArray(rooms) ? rooms.slice(0, 3).map(room => `<div class="rv-home-entry" translate="no">${escapeHtml(String(room.name || ""))}</div>`).join("") : "");
+  } catch { $("rv-home-rooms").textContent = t("대화를 읽지 못했습니다"); }
+}
 
 /** 「만들기」 화면 들어가기 — 화면이 준비되면 채운다. */
 let createApi: CreateApi | undefined;
@@ -4567,13 +4652,11 @@ function showPage(id: string) {
   }
 
   currentPage = id;
+  document.body.classList.toggle("rv-talk-layout", id === "talk");
   if (id === "ravi") paintRavi();
+  if (id === "home") void paintHome();
+  if (id === "profile") void paintProfile();
   paintPageTiles(id);
-  // 🔴 라비 화면에서는 떠 있는 「Ravi에게 물어보기」를 숨긴다.
-  //    대화창이 바로 앞에 있는데 그리로 가는 단추가 그 위에 떠 있으면,
-  //    같은 것이 둘로 보이고 오른쪽 아래 내용을 가린다.
-  const fab = document.getElementById("chat-open");
-  if (fab) fab.style.display = id === "ravi" ? "none" : "";
   document.querySelectorAll(".page").forEach((p) => p.classList.toggle("on", p.id === `page-${id}`));
   document.querySelectorAll("nav a").forEach((a) =>
     a.classList.toggle("on", (a as HTMLElement).dataset.page === id));
@@ -4786,6 +4869,7 @@ async function copyInto(btn: HTMLElement, text: string, label: string) {
 }
 
 async function openReceive(fresh = false) {
+  await showBackupReminder();
   // 한 번에 하나 — 보내기 칸이 열려 있으면 닫는다(받기와 보내기가 한 화면에 섞이면 오송금 자리다).
   closeSend();
   const host = $("w-addr");
@@ -4841,6 +4925,12 @@ async function openReceive(fresh = false) {
       setCopyText(note, () => errText(e));
     }
   };
+}
+
+async function showBackupReminder(): Promise<void> {
+  if (localStorage.getItem("rv-v2-backup-reminded")) return;
+  const seen = await sure(t("백업 안내"), t("지갑과 대화 열쇠를 잃지 않도록 백업해 두세요. 설정에서 백업할 수 있어요."), t("알겠습니다"));
+  if (seen) localStorage.setItem("rv-v2-backup-reminded", "1");
 }
 
 /* ── 주소 확인 · 내 주인 표 (0.4.6) ─────────────────────────────
@@ -5513,7 +5603,7 @@ function tkMuteSave() {
 /** 명단에 보일 이름. 숨길 때 적어 둔 이름 → 지금 아는 이름 → 앞자리. */
 function tkMuteName(pk: string): string {
   const saved = tkMuted[pk]?.name || tkNames.get(pk)?.name || "";
-  return saved ? String(saved) : `${pk.slice(0, 10)}…`;
+  return saved ? String(saved) : `${t("레이븐")} #${pk.slice(0, 4).toUpperCase()}`;
 }
 
 /**
@@ -5593,7 +5683,7 @@ function talkPaintMuted() {
       .map((pk) => {
         const when = new Date(tkMuted[pk]?.at || 0).toLocaleDateString();
         return `<div class="muterow">
-            <span class="mutewho" title="${escapeHtml(pk)}">${escapeHtml(tkMuteName(pk))}</span>
+            <span class="mutewho">${escapeHtml(tkMuteName(pk))}</span>
             <span class="mutewhen">${escapeHtml(when)}</span>
             <button data-unmute="${escapeHtml(pk)}">${copyHtml("다시 보기")}</button>
           </div>`;
@@ -5672,7 +5762,7 @@ function tkWho(pk: string): string {
   }
   // 🔴 이름을 안 정한 사람. `.key` 는 **색을 안 받는다** — 열쇠 앞자리는
   //    이름이 아니라서, 거기에 사람 색을 칠하면 「이게 이름이구나」로 읽힌다.
-  return `<span class="key">${escapeHtml(pk.slice(0, 10))}…</span>`;
+  return `<span class="key">${copyHtml("레이븐")} #${escapeHtml(pk.slice(0, 4).toUpperCase())}</span>`;
 }
 
 /**
@@ -5776,6 +5866,8 @@ async function talkPaintRooms() {
       paintInvite();
       void talkPaintRooms();
       void talkPaint();
+      $("rv-person-name").textContent = tkRoom ? tkRoomNames.get(tkRoom) || t("방") : t("레이븐 이야기");
+      $("rv-person-key").textContent = tkRoom;
     };
   });
 }
@@ -6036,7 +6128,7 @@ async function talkPaint() {
         const head =
           mine || 이어짐
             ? ""
-            : `<div class="who" style="--h:${tkHue(who)}">${tkWho(who)}</div>`;
+            : `<div class="who" style="--h:${tkHue(who)}"><span class="rv-avatar" aria-hidden="true">${escapeHtml((tkNames.get(who)?.name || "레").slice(0,1))}</span> ${tkWho(who)}</div>`;
 
         // ③ 시각은 **덩어리의 마지막 글 옆에** 한 번. 한 사람이 세 줄을
         //    이어 쓰면 시각도 세 번 찍혔는데, 그게 글마다 메타 줄이 붙는
@@ -6420,7 +6512,7 @@ function tk임시풍선(text: string): HTMLElement | null {
   wrap.className = "line me pending";
   wrap.innerHTML =
     `<div class="bub me" translate="no">${escapeHtml(text)}</div>` +
-    `<time class="tstamp">${copyHtml("보내는 중")}</time>`;
+    `<time class="tstamp rv-send-status">${copyHtml("보내는 중…")}</time>`;
   box.appendChild(wrap);
   box.scrollTop = box.scrollHeight;
   return wrap;
@@ -6442,15 +6534,17 @@ async function talkSend() {
     // 또렷해진다. 「올렸습니다」 같은 알림은 안 띄운다 — 풍선이 곧 답이다.
     임시?.classList.remove("pending");
     const 시각 = 임시?.querySelector(".tstamp");
-    if (시각) 시각.textContent = tkClock(Date.now());
+    if (시각) 시각.textContent = t("✓ 전달됨");
+    void showBackupReminder();
     // 🔴 두 번 다시 그린다. 릴레이가 느리면 1.2초에는 아직 안 돌아와서
     //    붙여 둔 풍선만 사라진다 — 방금 쓴 말이 눈앞에서 없어지는 셈이다.
     setTimeout(() => void talkPaint(), 1200);
     setTimeout(() => void talkPaint(), 4000);
   } catch (e) {
     // 🔴 못 갔으면 지운다. 그리고 **글을 돌려준다** — 다시 치게 만들지 않는다.
-    임시?.remove();
-    box.value = text;
+    임시?.classList.remove("pending");
+    const retry = 임시?.querySelector(".tstamp");
+    if (retry) { retry.textContent = t("못 보냈어요 · 다시 보내기"); (retry as HTMLElement).onclick = () => { 임시?.remove(); box.value = text; void talkSend(); }; }
     box.style.height = "auto";
     $("tk-note").innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
   }
@@ -8411,6 +8505,7 @@ async function reviewSend() {
   btn.disabled = false;
 
   if (!sendPreview.valid) {
+    setAllRaviMood("worried");
     $("s-addrnote").innerHTML =
       `<span style="color:var(--bad)">이 체인의 주소가 아닙니다. 한 글자라도 틀리면 이렇게 나옵니다.</span>`;
     return;
@@ -8513,6 +8608,7 @@ function gateSend() {
     needTail && tail.length >= 4 && !tailOk
       ? `<span class="danger">원본과 다릅니다. 주소가 바뀌었을 수 있으니 보내지 마세요.</span>`
       : "";
+  if (needTail && tail.length >= 4 && !tailOk) setAllRaviMood("worried");
   // 대가를 버튼에 박는다. 누르는 순간 손이 보는 것은 옆의 설명문이 아니라
   // 버튼이고, 체인에 나간 전송은 되돌릴 방법이 없다.
   const amt = Number(sendPreview.amount ?? sendPreview.rvn ?? 0);
@@ -8550,6 +8646,8 @@ async function doSend() {
             comment: null,
             passphrase: pass,
           });
+    setAllRaviMood("happy");
+    setTimeout(() => setAllRaviMood(aiProvider ? "normal" : "sleep"), 1400);
 
     // RV6: 폰 요청으로 채운 보내기였다면 폰에 「완료」를 알린다(pairing-ui.ts 가 맞춰 본다).
     window.dispatchEvent(new CustomEvent("rv-sent", { detail: { txid: String(txid ?? ""), address: sent.address, amount: Number(sendPreview.amount), what: sent.what } }));
@@ -8761,7 +8859,7 @@ function renderKeyRows(st: any, models: any) {
         st[p]
           ? // 모델 이름은 회사가 예고 없이 바꾼다. 우리 배포를 기다리지 않고
             // 직접 고칠 수 있어야 한다.
-            `<div class="keyrow"><span class="who">${label}</span>
+            `<div class="keyrow"><span class="who">${label} · ····${escapeHtml(String(st.last4?.[p] || ""))}</span>
                <input id="model-${p}" value="${escapeHtml(models?.[p]?.model || "")}"
                       placeholder="${escapeHtml(models?.[p]?.default || "")}" autocomplete="off" spellcheck="false" />
                <button class="ghost" data-delkey="${p}">지우기</button></div>`
@@ -8772,7 +8870,7 @@ function renderKeyRows(st: any, models: any) {
       .join("") +
     (st.custom
       ? `<div class="keyrow"><span class="who">${escapeHtml(st.custom_label || "커스텀")}</span>
-           <span class="saved">저장됨</span>
+           <span class="saved">····${escapeHtml(String(st.last4?.custom || ""))}</span>
            <button class="ghost" data-delkey="custom">지우기</button></div>`
       : "");
 
@@ -8830,39 +8928,11 @@ async function refreshKeys() {
     //    것을 이 줄이 도로 켰다. 그러면 대화창 위에 그리로 가는 단추가
     //    떠 있고, 오른쪽 아래 내용을 가린다(그록 감사 2026-08-27).
     //    지금 어느 화면인지 보고 정한다.
-    {
-      const onRavi = document.getElementById("page-ravi")?.classList.contains("on");
-      $("chat-open").style.display = onRavi ? "none" : "";
-    }
-    // 🔴 「자고 있다」의 뜻을 바꾼다.
-    //
-    // 여태 **API 키가 없으면** 라비가 잤다. 그리고 화면은 이렇게 말했다:
-    // "Ravi 는 AI 회사의 열쇠 하나로 깨어납니다."
-    //
-    // 사장이 그 말에서 읽는 것은 **"이 프로그램의 본체는 남의 회사다"** 이다.
-    // 그건 사실이 아닐 뿐 아니라(계산대·주문·QR·정산은 키 없이 전부 돈다),
-    // 소스를 열고 "아무 회사도 안 낀다" 고 말하는 것과 정면으로 부딪힌다.
-    //
-    // 자는 얼굴은 **진짜로 장사가 멈춘 상태**에만 쓴다 — 노드가 꺼졌을 때.
-    // 그때는 결제 확인이 안 되므로 자는 것이 사실이다.
-    // AI 열쇠가 없는 것은 "잠"이 아니라 **"아직 못 하는 일이 있음"** 이고,
-    // 그건 물었을 때 그 자리에서 말한다(`raviGuide` — 라비 안내로 답하고 열쇠 넣는 곳을 보여 준다).
-    // Keep the existing 20-second status refresh; startup reads are shared.
     void refreshOverview();
-    const nodeDown = !(nodeUp ?? true);
-    const asleep = nodeDown;
-    $("chat-open").classList.toggle("asleep", asleep);
-    const img = $("chat-open").querySelector("img");
-    if (img) (img as HTMLImageElement).src = asleep ? "/raven-sleep.webp" : "/raven-head.webp";
-    const lbl = $("chat-open").querySelector("span");
-    if (lbl) {
-      lbl.textContent = asleep
-        ? (nodeWarming ? "노드가 여는 중이에요" : "노드가 꺼져 있어요")
-        : have.length
-          ? "라비에게 물어보기"
-          // 키가 없어도 라비는 깨어 있다. 다만 할 수 있는 일이 적다.
-          : "라비에게 물어보기";
-    }
+    const keyed = Object.keys(PROVIDERS).some(provider => st[provider]) || !!st.last4?.custom;
+    if (lastKeyState === null) setAllRaviMood(keyed ? "normal" : "sleep");
+    else if (keyed !== lastKeyState) void animateRavi(keyed);
+    lastKeyState = keyed;
     // Without a key the AI boxes are dead weight; say why rather than failing
     // on click.
     // 🔴 글자로 판단하지 않는다 — 화면이 영어·일본어로 번역되면 「설정에서」로
@@ -8958,8 +9028,10 @@ function chatPut(who: "me" | "ai" | "did", html: string) {
   // 대화가 도구 출력이 아니라 대화로 읽힌다.
   div.innerHTML =
     who === "ai"
-      ? `<img class="msgravi" src="/raven-head.webp" alt="" /><div class="msgtxt">${html}</div>`
+      ? `<span class="msgravi"></span><div class="msgtxt">${html}</div>`
       : `<div class="msgtxt">${html}</div>`;
+  if (who === "ai") div.querySelector(".msgravi")?.replaceWith(raviFace(raviState, 32, { round: true }));
+  div.querySelectorAll(".ravi-mount").forEach(slot => slot.replaceWith(raviFace(raviState, 64)));
   $("chat-log").appendChild(div);
   $("chat-log").scrollTop = $("chat-log").scrollHeight;
 }
@@ -9511,10 +9583,11 @@ function raviBubble(pageId: string, say: string) {
   box.id = "ravibub";
   const 어디 = PAGE_NAMES[pageId] || pageId;
   box.innerHTML =
-    `<img src="/raven-face.webp" alt="" />` +
+    `<span class="ravi-mount"></span>` +
     `<div class="rb"><div class="rbwhere">${copyHtml("여기는")} · ${copyHtml(어디)}</div>` +
     `<div class="rbsay">${escapeHtml(say)}</div></div>` +
     `<button class="rbx" type="button" aria-label="${escapeHtml(t("닫기"))}">✕</button>`;
+  box.querySelector(".ravi-mount")?.replaceWith(raviFace(raviState, 40, { round: true }));
   box.querySelector(".rbx")!.addEventListener("click", () => box.remove());
   document.body.appendChild(box);
 }
@@ -9539,28 +9612,8 @@ function raviPoint(spot: { page: string; el?: string; say: string }) {
   }, 120);
 }
 
-/**
- * **라비 얼굴이 지금 상황을 말한다.**
- *
- * 대표님: "라비의 동적 인터랙티브 움직임이 프로그램의 감정을 표현하듯이
- *          움직이면 사람들에게 더 사랑받을 것 같은데."
- *
- * 그림은 이미 일곱 장 있었다(happy·worry·wait·sleep·hello·face·head).
- * **만들어 놓고 두 장만 쓰고 있었다** — 이 저장소에서 오늘만 스무 번 본 병이다.
- *
- * ⚠️ 얼굴로 **거짓말하지 않는다.** 노드가 죽었는데 웃고 있으면 사장은
- *    괜찮은 줄 안다. 걱정스러우면 걱정스러운 얼굴이어야 한다.
- */
-function raviMood(): string {
-  if (!nodeUp && !nodeWarming) return "/raven-worry.webp";
-  if (nodeWarming) return "/raven-wait.webp";
-  if (setupState && !setupState.ready) return "/raven-hello.webp";
-  return "/raven-happy.webp";
-}
-
 function paintRaviFace() {
-  const img = document.querySelector<HTMLImageElement>("#chat-open img");
-  if (img) img.src = raviMood();
+  setAllRaviMood(raviState);
 }
 
 function applyActions(actions: any[]): string[] {
@@ -9802,10 +9855,12 @@ function setChatMode(m: "fill" | "ask" | "debate") {
     log.prepend(intro);
   }
   intro.innerHTML =
-    `<img class="msgravi" src="/raven-head.webp" alt="" /><div class="msgtxt">${MODE_SAY[m]}</div>`;
+    `<span class="msgravi"></span><div class="msgtxt">${MODE_SAY[m]}</div>`;
+  intro.querySelector(".msgravi")?.replaceWith(raviFace(raviState, 32, { round: true }));
 }
 
 async function chatAsk(q: string) {
+  setAllRaviMood("thinking");
   chatHtml("ai", "<span class=\"muted\" data-thinking=\"1\">생각하는 중…</span>");
   try {
     const r = await invoke<any>("ai_ask_owner", { provider: aiProvider, question: q });
@@ -9818,6 +9873,7 @@ async function chatAsk(q: string) {
 }
 
 async function chatDebate(q: string) {
+  setAllRaviMood("thinking");
   chatHtml("ai", "<span class=\"muted\" data-thinking=\"1\">두 곳에 묻는 중…</span>");
   try {
     const r = await invoke<any>("ai_debate", { question: q });
@@ -9837,6 +9893,7 @@ async function chatDebate(q: string) {
 
 // "생각하는 중…" 을 지운다. 남겨 두면 대화가 기다림으로 채워진다.
 function chatPopThinking() {
+  setAllRaviMood(aiProvider ? "normal" : "sleep");
   const log = $("chat-log");
   const last = log.lastElementChild;
   // 🔴 글자(「중…」)로 찾으면 영어·일본어 화면에서 못 찾아 기다림 말풍선이 남는다.
@@ -9918,7 +9975,7 @@ async function saveKeyCard() {
     closeKeyCard();
     // 깨어나는 순간을 보여 준다. "됐어요" 한 줄보다 이게 기억에 남는다.
     chatHtml("ai",
-      `<div class="wake awake"><img src="/raven-hello.webp" alt="" />` +
+      `<div class="wake awake"><span class="ravi-mount"></span>` +
       `<div><b>${copyHtml("안녕하세요, 라비예요.")}</b><br />` +
       `<span class="muted">${tf("{0} 열쇠를 저장했어요. 이제 무엇이든 물어보세요.", `<span translate="no">${escapeHtml(label)}</span>`)}</span></div></div>`);
   } catch (e) {
@@ -16779,6 +16836,71 @@ async function loadOrders() {
 
 // ── 가게 찾기 ──
 window.addEventListener("DOMContentLoaded", async () => {
+  const theme = $("rv-theme") as HTMLSelectElement;
+  const savedTheme = localStorage.getItem("ravenvault-theme");
+  theme.value = ["light", "dark"].includes(savedTheme || "") ? savedTheme! : "system";
+  document.documentElement.dataset.theme = theme.value;
+  theme.onchange = () => { document.documentElement.dataset.theme = theme.value; localStorage.setItem("ravenvault-theme", theme.value); };
+  $("ravi-face").replaceWith(Object.assign(raviFace("sleep", 184), { id: "ravi-face" }));
+  $("rv-desktop-logo").replaceWith(raviFace("sleep", 40));
+  $("rv-onboard-face").appendChild(raviFace("sleep", 150));
+  document.querySelectorAll(".ravi-static-face").forEach(slot => slot.replaceWith(raviFace("sleep", 40)));
+  const raviNav = document.querySelector('nav a[data-page="ravi"]');
+  raviNav?.querySelector("svg")?.replaceWith(raviFace("sleep", 36));
+  $("rv-room-ravi-face").appendChild(raviFace("sleep", 50, { round: true }));
+  applyRaviCharacter();
+  $("rv-room-ravi").onclick = () => showPage("ravi");
+  $("rv-profile-save").onclick = async () => {
+    const name = ($("rv-profile-name") as HTMLInputElement).value.trim();
+    const color = ($("rv-profile-color") as HTMLInputElement).value;
+    if (!name) { $("rv-profile-note").textContent = t("이름을 적어 주세요"); return; }
+    try {
+      const me = await invoke<any>("talk_me");
+      const pk = String(me.pubkey || "");
+      const existing = await invoke<any>("talk_profiles", { pubkeys: [pk] }).catch(() => ({}));
+      await invoke("talk_profile_set", { name, about: String(existing?.[pk]?.about || ""), picture: String(existing?.[pk]?.picture || "") });
+      localStorage.setItem("rv-profile-color", color);
+      $("rv-person-avatar").style.background = color;
+      $("rv-profile-note").textContent = t("이름을 저장했습니다");
+    } catch (e) { $("rv-profile-note").textContent = errText(e); }
+  };
+  $("rv-add-friend").onclick = () => { showPage("settings"); document.getElementById("rvp-card")?.scrollIntoView(); };
+  document.querySelectorAll<HTMLButtonElement>("[data-rv-question]").forEach(button => {
+    button.onclick = () => { ($("chat-q") as HTMLInputElement).value = button.dataset.rvQuestion || ""; void chatSend(); };
+  });
+  $("rv-send-request").onclick = () => { $("rv-send-card").hidden = false; $("rv-send-to").focus(); };
+  ["rv-send-to", "rv-send-amount"].forEach(id => $(id).addEventListener("input", () => { $("rv-send-continue").hidden = true; $("rv-send-summary").textContent = ""; }));
+  $("rv-send-check").onclick = async () => {
+    const address = ($("rv-send-to") as HTMLInputElement).value.trim();
+    const amount = Number(($("rv-send-amount") as HTMLInputElement).value);
+    if (!address || !Number.isFinite(amount) || amount <= 0) { $("rv-send-summary").textContent = t("받는 주소와 금액을 확인해 주세요"); return; }
+    try {
+      const preview = await invoke<any>("preview_send", { address, asset: null, amount });
+      if (!preview?.valid || !preview?.enough) { $("rv-send-summary").textContent = t("주소 또는 잔액을 확인해 주세요"); return; }
+      const fee = await invoke<any>("send_fee", { address, amount });
+      if (typeof fee?.fee !== "number" || fee.short) { $("rv-send-summary").textContent = t("수수료를 확인하지 못했습니다. 지갑 화면에서 다시 시도해 주세요"); return; }
+      const name = payeeName(address) || t("이름 없음");
+      $("rv-send-summary").textContent = `${t("받는 사람")}: ${name} · ${amount} RVN · ${t("수수료")}: ${fee.fee} RVN`;
+      $("rv-send-continue").hidden = false;
+    } catch (e) { $("rv-send-summary").textContent = errText(e); }
+  };
+  $("rv-send-continue").onclick = async () => {
+    const address = ($("rv-send-to") as HTMLInputElement).value.trim();
+    const amount = ($("rv-send-amount") as HTMLInputElement).value;
+    showPage("wallet");
+    await openSend("rvn");
+    ($("s-addr") as HTMLInputElement).value = address;
+    ($("s-qty") as HTMLInputElement).value = amount;
+    composeChanged();
+    // The original review recalculates fee and requires the owner's existing confirmation.
+    await reviewSend();
+  };
+  const Speech = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+  if (Speech) {
+    const voice = $("rv-voice") as HTMLButtonElement;
+    voice.hidden = false;
+    voice.onclick = () => { const recognition = new Speech(); recognition.lang = lang; recognition.onresult = (event: any) => { ($("chat-q") as HTMLInputElement).value = String(event.results?.[0]?.[0]?.transcript || ""); }; recognition.start(); };
+  }
   loadHealth();
   // 🔴 **부르는 줄.** 화면만 만들고 이 줄을 안 쓰면 오늘만 여섯 번 본 그 병이다.
   //    켤 때 한 번, 그리고 1분마다. 이 프로그램에는 이미 타이머가 여럿이라
@@ -16798,6 +16920,8 @@ window.addEventListener("DOMContentLoaded", async () => {
     if (wizPendingFile && ($("i-ipfs") as HTMLInputElement).value.trim()) { wizClearPending(); wizPaintPending(); }
   });
   document.querySelectorAll("nav a").forEach((a) => {
+    const label = a.querySelector("span")?.textContent?.trim();
+    if (label) { a.setAttribute("aria-label", label); a.setAttribute("title", label); }
     (a as HTMLElement).onclick = () => showPage((a as HTMLElement).dataset.page!);
   });
   // 0.4.8-B 잔액 카드 — 큰 단추 「받기」, 작은 줄 「최근 거래」「주소 확인」. (「보내기」는 아래 w-send-rvn)
@@ -17176,6 +17300,9 @@ window.addEventListener("DOMContentLoaded", async () => {
   syncLanguage();
   $("overview-receive").onclick = () => { showPage("wallet"); void openReceive(); };
   $("overview-phone").onclick = () => { const panel = $("phone-tx-panel") as HTMLDetailsElement; panel.open = true; panel.scrollIntoView(); $("phone-tx-code").focus(); };
+  $("rv-home-send").onclick = () => { showPage("wallet"); void openSend("rvn"); };
+  $("rv-home-backup").onclick = () => showPage("settings");
+  $("rv-home-chat").onclick = () => showPage("talk");
 
   $("fee-send").addEventListener("click", () => void sendOwed());
   void paintFeePick();
@@ -17283,10 +17410,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   // 지난번에 못 보낸 것을 조용히 다시 보낸다. 한 번 보내고 마는
   // 신고는 안 하느니만 못하다 — 사장은 보냈다고 여긴다.
   void invoke("report_flush").then(() => rpLabel()).catch(() => rpLabel());
-  $("chat-open").addEventListener("click", () => {
-    showPage("ravi");
-    ($("chat-q") as HTMLInputElement)?.focus();
-  });
+
   $("chat-go").addEventListener("click", chatSend);
   $("chat-mode")
     .querySelectorAll<HTMLElement>("[data-mode]")
@@ -17782,7 +17906,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   // 🔴 `paintRavi()` 만 부르면 안 된다. 첫 화면이 HTML 에서 이미 켜져
   //    있어 `showPage` 를 안 지나가고, 그러면 떠 있는 단추를 숨기는
   //    처리도 안 돈다 — 대화창 위에 대화창으로 가는 단추가 떠 있었다.
-  showPage("ravi");
+  showPage("home");
   loadAssets();
   // 코어 지갑처럼 들어오는 것을 그 자리에서 알린다. 레이븐 블록이 약 60초라
   // 15초면 늦지 않고, 노드를 두드리는 부담도 작다.

@@ -2349,15 +2349,107 @@
       .kc-label { display:block; margin-top:6px; }
       .kc-in { display:flex; gap:8px; flex-wrap:wrap; margin:6px 0 8px; }
       .kc-in input { flex:1 1 260px; min-width:0; }
+      /* RavenVault v2 — 밤 까마귀 */
+      @font-face { font-family: "IBM Plex Sans KR"; src: url("/fonts/IBMPlexSansKR-Regular.woff2") format("woff2"); font-weight: 400; font-display: swap; }
+      @font-face { font-family: "IBM Plex Sans KR"; src: url("/fonts/IBMPlexSansKR-Medium.woff2") format("woff2"); font-weight: 500; font-display: swap; }
+      @font-face { font-family: "IBM Plex Sans KR"; src: url("/fonts/IBMPlexSansKR-SemiBold.woff2") format("woff2"); font-weight: 600; font-display: swap; }
+      @font-face { font-family: "IBM Plex Sans KR"; src: url("/fonts/IBMPlexSansKR-Bold.woff2") format("woff2"); font-weight: 700; font-display: swap; }
+      :root { color-scheme: light; --bg:#F7F6F3; --panel:#FFFFFF; --side:#F2F0EB; --line:#E6E3DC; --text:#15161D; --muted:#5B5E6B; --faint:#5B5E6B; --brand:#15161D; --brand-light:#30323E; --ravi:#E2702A; --ravi-soft:#B4531C; --ravi-tint:#FBE7DA; --ok:#1F7A4D; --warn:#8A5A00; --danger:#A5160F; --my-bubble:#15161D; --my-text:#FFFFFF; }
+      @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --bg:#0F1016; --panel:#15161D; --side:#1C1E29; --line:#2A2D3A; --text:#ECEDF3; --muted:#A3A7B7; --faint:#A3A7B7; --brand:#E2702A; --brand-light:#F0A777; --ravi:#E2702A; --ravi-soft:#F0A777; --ravi-tint:#2A1D18; --ok:#6FD1A0; --warn:#F2C36A; --danger:#A5160F; --my-bubble:#E2702A; --my-text:#15161D; } }
+      :root[data-theme="dark"] { color-scheme: dark; --bg:#0F1016; --panel:#15161D; --side:#1C1E29; --line:#2A2D3A; --text:#ECEDF3; --muted:#A3A7B7; --faint:#A3A7B7; --brand:#E2702A; --brand-light:#F0A777; --ravi:#E2702A; --ravi-soft:#F0A777; --ravi-tint:#2A1D18; --ok:#6FD1A0; --warn:#F2C36A; --danger:#A5160F; --my-bubble:#E2702A; --my-text:#15161D; }
+      body { font: 16px/1.6 "IBM Plex Sans KR", system-ui, sans-serif; }
+      .desktop-header, #desktop-preferences, #desktop-language-menu, #overview-receive, #overview-phone { background:var(--panel); color:var(--text); }
+      #desktop-language-menu label { display:block; font-size:16px; margin:14px 0 6px; }
+      #rv-theme { width:100%; min-height:44px; border:1px solid var(--line); border-radius:14px; background:var(--panel); color:var(--text); font:inherit; padding:8px 12px; }
+      button.harm, button.harm:hover:not(:disabled) { background:#A5160F; border-color:#A5160F; color:#FFFFFF; }
+      button { border-radius:14px; }
+      .card, input, textarea, select { border-radius:14px; }
+      .ravi-face { position:relative; display:inline-block; flex:none; overflow:hidden; background:#9686C9; vertical-align:middle; }
+      .ravi-face img, .ravi-face svg { position:absolute; left:0; top:0; width:100%; height:100%; }
+      @keyframes rvblink { 0%,90%,100%{transform:scaleY(0)}94%{transform:scaleY(1)} }
+      .rv-lid { transform-box:fill-box; transform-origin:50% 0%; animation:rvblink 4.2s infinite; }
+      .rv-lid2 { animation-delay:.05s; }
+      @keyframes rvz { 0%{opacity:0;transform:translate(0,0) scale(.7)}30%{opacity:1}100%{opacity:0;transform:translate(26px,-60px) scale(1.2)} }
+      .rv-z { animation:rvz 2.6s infinite ease-out; } .rv-z2 { animation-delay:.9s; } .rv-z3 { animation-delay:1.8s; }
+      @keyframes rvpop { 0%{transform:scale(.4);opacity:0}60%{transform:scale(1.15);opacity:1}100%{transform:scale(1)} }
+      .rv-pop { transform-box:fill-box; transform-origin:50% 50%; animation:rvpop .45s ease-out both; }
+      @keyframes rvbob { 0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)} }
+      .rv-bob { animation:rvbob 2.4s infinite ease-in-out; }
+      @keyframes rvthink { 0%,100%{opacity:.3}50%{opacity:1} }
+      .rv-t1 { animation:rvthink 1.2s infinite; } .rv-t2 { animation:rvthink 1.2s .2s infinite; } .rv-t3 { animation:rvthink 1.2s .4s infinite; }
+      @media (prefers-reduced-motion: reduce) { .rv-lid,.rv-z,.rv-pop,.rv-bob,.rv-t1,.rv-t2,.rv-t3 { animation:none !important; } }
+      #chat-open { display:none !important; }
+      #page-ravi #chat { position:static; width:auto; border:1px solid var(--line); border-radius:20px; min-height:420px; max-width:850px; margin:0 auto; overflow:hidden; }
+      #page-ravi #chat-log { max-height:360px; }
+      #page-ravi .msg.me, .bub.me { background:var(--my-bubble); color:var(--my-text); }
+      #page-ravi .ravihero .ravi-face { margin-right:22px; }
+      #page-ravi .ravihero .ravi-face img { width:100%; height:100%; object-fit:cover; }
+      .rv-quick { display:flex; gap:8px; flex-wrap:wrap; max-width:850px; margin:12px auto; }
+      .rv-quick button { background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:999px; }
+      #rv-send-card { max-width:850px; margin:12px auto; }
+      #rv-send-card[hidden], #rv-send-continue[hidden] { display:none !important; }
+      #rv-send-card label { display:block; margin:10px 0; font-size:16px; }
+      #rv-send-card input { display:block; width:100%; min-height:48px; padding:10px 14px; font:inherit; background:var(--panel); color:var(--text); border:1px solid var(--line); }
+      #rv-voice[hidden] { display:none !important; }
+      #page-talk { padding:0; overflow:hidden; }
+      .rv-talk-layout nav { width:76px; background:#15161D; align-items:center; padding:20px 0; }
+      .rv-talk-layout nav a { width:56px; height:56px; padding:14px; margin:2px 0; border:0; border-radius:16px; color:#ECEDF3; }
+      .rv-talk-layout nav a.on { background:#2A2C38; }
+      .rv-talk-layout nav a > span:not(.ordbadge), .rv-talk-layout nav .brand { display:none; }
+      .rv-talk-layout nav svg { width:24px; height:24px; flex:none; }
+      #page-talk .talkwrap { display:grid; grid-template-columns:360px minmax(360px,1fr) 260px; height:100%; max-width:none; gap:0; background:var(--bg); }
+      #page-talk .rooms { width:auto; min-width:0; border-right:1px solid var(--line); background:var(--panel); padding:0 10px 16px; overflow-y:auto; }
+      #page-talk .roomhead { font-size:26px; padding:26px 12px 14px; font-weight:700; }
+      #page-talk .room { min-height:64px; border-radius:16px; text-align:left; font-size:16px; }
+      #page-talk .chat { min-width:0; background:var(--bg); }
+      #page-talk .chathead { min-height:80px; background:var(--panel); border-bottom:1px solid var(--line); padding:0 28px; }
+      #page-talk .msgs { padding:16px 28px; }
+      #page-talk .composer { background:var(--panel); border-top:1px solid var(--line); padding:10px 16px; }
+      #page-talk .bub { font-size:16px; line-height:1.5; border-radius:20px 20px 20px 6px; background:var(--panel); border:1px solid var(--line); }
+      #page-talk .bub.me { border:0; border-radius:20px 20px 6px 20px; }
+      .rv-avatar { display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; flex:none; border-radius:50%; background:hsl(var(--h) 45% 78%); color:#15161D; font-size:14px; font-weight:700; }
+      .rv-person { padding:28px 18px; border-left:1px solid var(--line); background:var(--panel); overflow:auto; }
+      .rv-person h3 { margin:12px 0 4px; font-size:20px; }
+      .rv-person p { color:var(--muted); font-size:14px; }
+      .rv-person details { border-top:1px solid var(--line); padding:14px 0; }
+      .rv-person code { overflow-wrap:anywhere; user-select:all; }
+      .rv-profile-card { max-width:650px; padding:28px; }
+      .rv-profile-card label { display:block; font-size:16px; margin:14px 0; }
+      .rv-profile-card label input:not([type="color"]) { display:block; min-height:48px; width:100%; font:inherit; padding:10px; border:1px solid var(--line); color:var(--text); background:var(--panel); }
+      #rv-profile-characters { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin:14px 0; }
+      #rv-profile-characters button { display:grid; place-items:center; gap:4px; border:1px solid var(--line); background:var(--panel); color:var(--text); }
+      #rv-profile-characters button[aria-pressed="true"] { border:3px solid var(--ravi); }
+      .rv-public { color:var(--warn); font-size:14px; font-weight:600; }
+      .rv-room-ravi { width:100%; display:flex; gap:12px; align-items:center; margin:8px 0; padding:10px 12px; border:0; background:var(--side); color:var(--text); text-align:left; }
+      .rv-room-ravi span:last-child { display:grid; }
+      .rv-room-ravi small { color:var(--muted); }
+      .rv-send-status { color:var(--muted); font-size:13px; }
+      @media (max-width:1160px) { #page-talk .talkwrap { grid-template-columns:300px minmax(320px,1fr); } .rv-person { display:none; } }
+      #page-home { padding:36px 44px; }
+      #page-home h1 { font-size:32px; margin:0 0 24px; }
+      .rv-home-grid { display:grid; grid-template-columns:minmax(0,1.55fr) minmax(0,1fr); gap:28px; }
+      .rv-home-grid > div { min-width:0; border:1px solid var(--line); background:var(--panel); border-radius:28px; padding:28px; }
+      .rv-home-grid h2 { font-size:18px; margin:0 0 18px; }
+      .rv-home-balance { background:#15161D !important; color:#F7F6F3; }
+      .rv-home-balance .overview { border:0; padding:0; margin:0; }
+      .rv-home-balance .overview h2 { font-size:15px; color:#C9CAD2; }
+      .rv-home-balance #overview-balance { font-size:48px; font-variant-numeric:tabular-nums; }
+      .rv-home-balance .overview-values { display:block; }
+      .rv-home-balance .overview-values > div { display:block; margin:10px 0; }
+      .rv-home-balance .overview-values span { display:block; color:#C9CAD2; }
+      .rv-home-balance button { margin-top:10px; }
+      .rv-home-entry { padding:12px 0; border-bottom:1px solid var(--line); font-size:16px; }
+      .rv-home-entry small { display:block; color:var(--muted); font-size:14px; }
+      @media(max-width:900px) { .rv-home-grid { grid-template-columns:1fr; } #page-home { padding:24px; } }
     </style>
   </head>
   <body>
     <!-- 창을 잡는 띠. 제목줄을 없앴기 때문에 이게 없으면 창이 안 움직인다. -->
     <div class="titlebar" data-tauri-drag-region></div>
     <header class="desktop-header" data-tauri-drag-region>
-      <div class="desktop-logo" data-tauri-drag-region><img src="/raven-head.webp" alt="" data-tauri-drag-region/><strong data-tauri-drag-region>RavenVault Desktop</strong></div>
+      <div class="desktop-logo" data-tauri-drag-region><span id="rv-desktop-logo"></span><strong data-tauri-drag-region>RavenVault Desktop</strong></div>
       <button id="desktop-preferences" type="button" aria-expanded="false" aria-controls="desktop-language-menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 7h4m4 0h8M4 17h8m4 0h4" stroke-linecap="round"/><circle cx="10" cy="7" r="2"/><circle cx="14" cy="17" r="2"/></svg><span>설정</span><span aria-hidden="true">·</span><span id="desktop-language-name" translate="no">한국어</span></button>
-      <div id="desktop-language-menu" hidden><div class="desktop-language-options" translate="no"><button data-language="ko">한국어</button><button data-language="en">English</button><button data-language="ja">日本語</button><button data-language="zh">简体中文</button></div><button id="desktop-settings-go">설정으로</button></div>
+      <div id="desktop-language-menu" hidden><label for="rv-theme">화면 밝기</label><select id="rv-theme"><option value="system">시스템</option><option value="light">밝게</option><option value="dark">어둡게</option></select><div class="desktop-language-options" translate="no"><button data-language="ko">한국어</button><button data-language="en">English</button><button data-language="ja">日本語</button><button data-language="zh">简体中文</button></div><button id="desktop-settings-go">설정으로</button></div>
     </header>
 
     <!-- ── 첫 실행 ───────────────────────────────────────────────────
@@ -2375,8 +2467,7 @@
         <div class="ob-step on" data-ob="scan">
           <!-- 새 사장이 이 프로그램에서 제일 먼저 보는 화면이다. 살펴보는
                동안 사람은 아무것도 못 하므로, 여기가 인사할 자리다. -->
-          <img src="/raven-hello.webp" alt="" width="150"
-               style="display:block;margin:0 auto 12px;border-radius:16px" />
+          <span id="rv-onboard-face"></span>
           <div class="ob-brand">RavenVault Desktop</div>
           <div class="ob-lead">노드·사진 창고·지갑·계산대를 한 프로그램에서 씁니다.</div>
           <div class="ob-scan" id="ob-scanning">이 컴퓨터에 맞게 살펴보는 중…</div>
@@ -2541,12 +2632,14 @@
       <!-- 🔴 첫 자리는 라비다. 여태 첫 화면이 지갑이었는데, 켜자마자
            주소·잔액·보내기 같은 것부터 보였다. 사장이 아침에 하는 일은
            그게 아니다. 물어보고 시키는 것이 먼저다. -->
-      <a data-page="ravi" class="on">
+      <a data-page="home" class="on" aria-label="홈"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 11l8-6.5 8 6.5V20H4z"/></svg><span>홈</span></a>
+      <a data-page="ravi">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M12 3.5c-4 0-7 2.6-7 6 0 1.9 1 3.6 2.6 4.7L7 19l3.4-1.7c.5.1 1 .1 1.6.1 4 0 7-2.6 7-6s-3-6-7-6z"/>
           <circle cx="10" cy="9.2" r="1"/><path d="M14.5 9.2h2"/>
         </svg><span>라비</span></a>
+      <a data-page="profile" aria-label="내 소개"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-5 16-5 16 0"/></svg><span>내 소개</span></a>
       <!-- 「돕기」로 고른 사람에게만 보인다. mode.rs 를 읽어 main.ts 가 켠다. -->
       <a data-page="helping" style="display:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-4.4-7-9.5A3.9 3.9 0 0 1 12 8a3.9 3.9 0 0 1 7 3.5C19 16.6 12 21 12 21z"/></svg><span>돕는 중</span></a>
       <!-- 🔴 **하루 종일 쓰는 것이 왼쪽에 없었다.** 체육관·도장 관장의 본업은
@@ -2911,11 +3004,22 @@
            예전에는 글이 큰 카드로 세로로 쌓이고 카드마다 단추 두 개가
            붙어 있었다. 그건 대화가 아니라 서류 목록으로 읽힌다.
            말풍선은 촘촘하고, 손대는 것은 얹었을 때만 나온다. -->
+      <section class="page" id="page-profile">
+        <h1>내 소개</h1>
+        <div class="card rv-profile-card">
+          <span id="rv-profile-face"></span>
+          <p>이름표는 공개됩니다. 사진은 이 화면에 올리지 않아요.</p>
+          <label>내 이름 <input id="rv-profile-name" maxlength="40" autocomplete="nickname" /></label>
+          <label>내 색 <input id="rv-profile-color" type="color" value="#EFEAF8" /></label>
+          <h2>라비 캐릭터 고르기</h2><div id="rv-profile-characters"></div>
+          <button id="rv-profile-save" type="button">저장</button><p id="rv-profile-note" role="status"></p>
+        </div>
+      </section>
       <section class="page" id="page-talk">
         <div class="talkwrap">
           <aside class="rooms">
             <div class="roomhead">방</div>
-            <div id="tk-rooms"></div>
+            <button id="rv-room-ravi" class="rv-room-ravi" type="button"><span id="rv-room-ravi-face"></span><span><b>라비</b><small>AI 도우미</small></span></button><div id="tk-rooms"></div>
             <button class="ghost" id="tk-newroom">+ 방 만들기</button>
             <!-- 🔴 모달을 연달아 띄우지 않는다. 「다음, 다음, 다음」은
                  40~70대에게 제일 나쁜 흐름이다. 한 자리에서 끝낸다. -->
@@ -2958,7 +3062,7 @@
                     혼자 쓰는 방이고, 그건 매일 쓰는 자리다
                     (「헤더는 보이는 게 전부」). -->
             <div class="chathead">
-              <b id="tk-title">레이븐 이야기</b>
+              <b id="tk-title">레이븐 이야기</b><span class="rv-public">공개 방 · 누구나 읽을 수 있어요</span>
               <span class="meta" id="tk-me"></span>
               <span style="margin-left:auto"></span>
               <span id="tk-invite"></span>
@@ -3111,6 +3215,14 @@
               <button id="tk-saidclose">알겠습니다</button>
             </div>
           </div>
+          <aside class="rv-person" aria-label="방 정보">
+            <span id="rv-person-avatar" class="rv-avatar">레</span>
+            <h3 id="rv-person-name">레이븐 이야기</h3>
+            <p>공개 방 · 누구나 읽을 수 있어요</p>
+            <button id="rv-add-friend" class="ghost" type="button">친구 추가</button>
+            <p>폰에서 QR 로 친구를 추가해요.</p>
+            <details><summary>고급</summary><code id="rv-person-key"></code></details>
+          </aside>
         </div>
       </section>
 
@@ -3345,12 +3457,21 @@
            그리고 말로 하기 싫은 날을 위해 위에 **큰 아이콘**을 뒀다.
            아이콘을 누르면 그 말이 라비에게 그대로 간다 — 누르든 말하든
            같은 길이라 배울 것이 하나뿐이다. -->
-      <section class="page on" id="page-ravi">
-        <div class="overview" aria-labelledby="overview-title">
+      <section class="page on" id="page-home">
+        <h1>홈</h1>
+        <div class="rv-home-grid">
+          <div class="rv-home-balance">        <div class="overview" aria-labelledby="overview-title">
           <h2 id="overview-title">한눈에</h2>
           <div class="overview-values"><div><span>내 노드</span><strong id="overview-node">확인 못 함</strong></div><div><span>확정 잔액</span><strong id="overview-balance">확인 못 함</strong></div><div id="overview-incoming-row" hidden><span>들어오는 중</span><strong id="overview-incoming"></strong></div></div>
           <div class="overview-actions"><button id="overview-receive"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m-5-5 5 5 5-5M4 17v4h16v-4"/></svg><span>받기</span></button><button id="overview-phone"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M10 17h4"/></svg><span>폰에서 서명한 거래 보내기</span></button></div>
         </div>
+<button id="rv-home-send" type="button">보내기</button></div>
+          <div class="rv-home-safety"><h2>안전 상태</h2><p id="rv-home-safe">상태를 확인하는 중…</p><button id="rv-home-backup" class="ghost" type="button">백업 확인</button></div>
+          <div class="rv-home-activity"><h2>최근 활동</h2><div id="rv-home-txs"></div></div>
+          <div class="rv-home-chats"><h2>최근 대화</h2><div id="rv-home-rooms"></div><button id="rv-home-chat" class="ghost" type="button">대화 열기</button></div>
+        </div>
+      </section>
+      <section class="page" id="page-ravi">
         <!-- 🔴 **돈이 도는지 한눈에.**
              이 저장소의 병은 「만들었는데 조용히 안 도는 것」이다. 2026-09-06
              하루에만 여섯 개를 찾았고 그중 하나는 개발비 1% 가 한 푼도 안
@@ -3358,7 +3479,7 @@
              부르는 줄이 없었다. 대표가 물어봐야만 알 수 있는 상태였다.
              그래서 **묻지 않아도 보이게** 첫 화면에 둔다. -->
         <div class="ravihero">
-          <img id="ravi-face" src="/raven-hello.webp" alt="" />
+          <span id="ravi-face"></span>
           <div class="ravihi">
             <h2 id="ravi-hello">안녕하세요, 라비입니다.</h2>
             <p id="ravi-sub" class="lede">무엇을 할까요? 아래를 누르거나, 그냥 말씀하세요.</p>
@@ -3397,6 +3518,15 @@
           <p id="rv-web-note" role="status" aria-live="polite"></p>
         </details>
 
+        <div class="rv-quick"><button type="button" data-rv-question="지갑 잔액을 어떻게 확인하나요?">잔액 확인</button><button type="button" data-rv-question="백업은 어떻게 하나요?">백업 방법</button><button type="button" data-rv-question="폰을 어떻게 연결하나요?">폰 연결</button><button id="rv-send-request" type="button">RVN 보내기 요청</button></div>
+        <div id="rv-send-card" class="card" hidden>
+          <h3>보내기 요청 확인</h3><p>라비는 직접 보내지 않아요. 받는 사람과 금액을 적고 수수료를 확인하세요.</p>
+          <label>받는 주소 <input id="rv-send-to" autocomplete="off" /></label>
+          <label>금액 (RVN) <input id="rv-send-amount" type="number" min="0" step="any" /></label>
+          <button id="rv-send-check" type="button">수수료 확인</button>
+          <p id="rv-send-summary" role="status"></p>
+          <button id="rv-send-continue" type="button" hidden>기존 보내기 화면에서 직접 확정</button>
+        </div>
         <div id="ravi-chatwrap">
       <div id="chat">
         <!-- 여태 이 창은 양식 채우기 전용이었다. 사장님이 "이거 어떻게 생각해"
@@ -3411,7 +3541,7 @@
 
         <div id="chat-log"></div>
         <div class="chat-in">
-          <input id="chat-q" placeholder="레이븐코인으로 받으면 뭐가 좋아?" autocomplete="off" />
+          <button id="rv-voice" type="button" hidden>말로 묻기</button><input id="chat-q" placeholder="레이븐코인으로 받으면 뭐가 좋아?" autocomplete="off" />
           <button id="chat-go">보내기</button>
         </div>
         <!-- 0.4.8-B AI 열쇠 넣기 카드(라비 화면 안에서 바로). 그리는 것은 main.ts openKeyCard. -->
@@ -4529,7 +4659,7 @@
              고급 설정을 열어 헤맨다. -->
         <div class="card easycard" id="easy-setup">
           <div class="easyhead">
-            <img src="/raven-head.webp" alt="" />
+            <span class="ravi-static-face"></span>
             <div>
               <h3 style="margin:0">쉬운 설정</h3>
               <div class="muted sm">이 컴퓨터를 보고 제가 정해 드릴게요.</div>
@@ -4961,7 +5091,7 @@
                ⚠️ 라비는 **고르고 채우기만** 한다. 소각은 5단계에서 사장이
                   이름을 직접 쳐야 열린다. 500 RVN 이 타고 이름은 영원하다. -->
           <div class="aiask">
-            <img src="/raven-head.webp" alt="" class="ravihead" />
+            <span class="ravi-static-face"></span>
             <div style="flex:1">
               <label style="display:block;font-size:14px;color:var(--muted)">
                 무엇을 만들고 싶으신지 말로 적어 보세요
@@ -5237,12 +5367,6 @@
         <button type="button" id="no-x">닫기</button>
       </div>
     </div>
-
-    <!-- ── AI 대화. 폼을 고칠 뿐, 발행·전송은 못 한다 ── -->
-    <button id="chat-open">
-      <img src="/raven-head.webp" alt="" />
-      <span>라비에게 물어보기</span>
-    </button>
 
     <script type="module" src="/src/main.ts"></script>
     <!-- 끌고 오는 동안만 보인다. 무슨 일이 일어날지 여기서 말한다. -->
