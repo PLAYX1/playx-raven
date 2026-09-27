@@ -1,11 +1,11 @@
 {
   "name": "playx-raven",
   "private": true,
-  "version": "0.4.9",
+  "version": "0.5.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node preflight.mjs && tsc && vite build",
+    "build": "node preflight.mjs && tsc && vite build --configLoader runner",
     "preview": "vite preview",
     "tauri": "tauri",
     "preflight": "node preflight.mjs",

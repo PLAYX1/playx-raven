@@ -30,7 +30,7 @@ export async function prepareRelease(source, destination, version) {
     if (next.reduce((order, n, i) => order || Math.sign(n - old[i]), 0) <= 0) throw new Error('Release must be newer than the currently published version');
   } catch (e) { if (e.code !== 'ENOENT') throw e; }
   const base = `https://raw.githubusercontent.com/PLAYX1/playx-raven-releases/dist/v${version}`;
-  const manifest = { version, notes: 'RavenVault Desktop 0.4.9 — 0.4.8 다음 판입니다. 12단어로 지갑 되살리기: 복구 단어(12·24단어)만 적어 둔 분도 데스크톱에서 지갑을 되살릴 수 있습니다. 첫 질문 「복구 단어 12개로」, 지갑 메뉴, 백업 되돌리기 화면에서 시작합니다. 단어를 칠 때 자동 완성과 단어 목록·체크섬 검사를 해서 틀린 단어를 그 자리에서 알려 줍니다. 폰·웹 RavenVault 와 같은 단어면 같은 주소가 나옵니다. 지금 쓰는 지갑은 지우거나 덮지 않고 옆에 둡니다 — 돈이 있는 지갑이면 백업을 먼저 권합니다. 되살린 뒤 옛 거래를 다시 찾아 잔액·자산·증서를 보여 줍니다(장부 전체를 가진 컴퓨터는 30분~2시간, 가게 모드는 마감 뒤가 기본). 단어는 화면 캡처가 막히고, 시작을 누르면 칸에서 지워지며, 로그·오류 보고·파일 어디에도 남지 않습니다. 되살린 뒤에는 지갑 암호를 걸어 두세요. 기존 지갑·가게 데이터 위치는 그대로입니다.', pub_date: new Date().toISOString(), platforms: {}, installers: [] };
+  const manifest = { version, notes: 'RavenVault Desktop 0.5.0 — 새 모습 밤 까마귀, 표정이 바뀌는 라비, 어두운 화면과 쉬운 대화 화면을 담았습니다. 라비 AI 키는 맥과 윈도 보안 저장소에 보관합니다. 폰 연결(RV6)과 가게 직원 폰 봉함을 사용할 수 있습니다. 지갑과 가게 자료는 그대로 이어집니다.', pub_date: new Date().toISOString(), platforms: {}, installers: [] };
   for (const [suffix, platform] of Object.entries(platforms)) {
     const signature = (await readFile(path.join(source, prefix + suffix + '.sig'), 'utf8')).trim();
     if (!/^[A-Za-z0-9+/=\r\n]+$/.test(signature) || signature.length < 100 || signature.length > 2048) throw new Error(`Malformed updater signature: ${suffix}`);
