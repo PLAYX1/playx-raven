@@ -2517,6 +2517,14 @@
       body > nav .navfoot { width:100%; }
       body > nav .reportlink { text-align:center; word-break:keep-all; width:80px; height:auto; min-height:44px; font-size:11.5px; line-height:1.2; white-space:normal; padding:6px 4px; display:flex; flex-direction:column; align-items:center; gap:2px; }
       body > nav .reportlink::before { font-size:16px; height:auto; }
+      /* 대표 2026-09-28: "0.5.0 에서 업데이트 버튼이 어디 있는지 모르겠네" — 0.5.0 레일이 .brand(판 번호·업데이트 단추)를 통째로 숨겼다. 그림·제목만 숨기고 두 단추는 레일 맨 위에 보인다. */
+      :is(body > nav, .rv-talk-layout nav) .brand { display:block; width:80px; box-sizing:border-box; padding:0 0 10px; margin:0 auto; text-align:center; }
+      :is(body > nav, .rv-talk-layout nav) .brand .brandravi, :is(body > nav, .rv-talk-layout nav) .brand h1 { display:none; }
+      :is(body > nav, .rv-talk-layout nav) .brand > div { min-width:0; }
+      :is(body > nav, .rv-talk-layout nav) #appver { display:block; width:100%; min-height:0 !important; margin:0 0 4px; padding:2px 0; font-size:11px !important; color:#B9BBC8; background:none; border:0; text-align:center; }
+      :is(body > nav, .rv-talk-layout nav) #upnag { display:block; width:100%; min-height:30px !important; margin:0; padding:4px; font-size:11px !important; line-height:1.2; white-space:normal; word-break:keep-all; color:#ECEDF3; background:transparent; border:1px solid #3A3C49; border-radius:10px; }
+      :is(body > nav, .rv-talk-layout nav) #upnag.new { background:var(--ravi, #e7731f); border-color:var(--ravi, #e7731f); color:#15161D; font-weight:700; }
+      :is(body > nav, .rv-talk-layout nav) #upnag[hidden] { display:none; }
       @media(max-width:1160px) { #page-talk .talkwrap { grid-template-columns:300px minmax(320px,1fr); } }
     </style>
   </head>
