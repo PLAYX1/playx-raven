@@ -57,9 +57,9 @@ try{
    assert.ok(calls.wallet_balance<=2&&calls.node_status<=2,'Startup reads are shared');
    const geometry=await page.evaluate(()=>{
     const nav=document.querySelector('nav'),main=document.querySelector('main'),rec=document.querySelector('#overview-receive'),phone=document.querySelector('#overview-phone');
-    return{overflow:Math.max(document.documentElement.scrollWidth-innerWidth,main.scrollWidth-main.clientWidth,nav.scrollWidth-nav.clientWidth),navWidth:nav.getBoundingClientRect().width,duplicateBrand:!!nav.querySelector('h1,.brandravi'),receiveBg:getComputedStyle(rec).backgroundColor,phoneBg:getComputedStyle(phone).backgroundColor,firstLead:document.querySelector('#ravi-tiles > button').classList.contains('leadtile'),phoneTiles:[...document.querySelectorAll('#ravi-tiles button')].filter(e=>e.textContent.includes(document.querySelector('#overview-phone span').textContent)).length};
+    return{overflow:Math.max(document.documentElement.scrollWidth-innerWidth,main.scrollWidth-main.clientWidth,nav.scrollWidth-nav.clientWidth),navWidth:nav.getBoundingClientRect().width,navFootWidth:nav.querySelector('.navfoot').getBoundingClientRect().width,navClientWidth:nav.clientWidth,duplicateBrand:!!nav.querySelector('h1,.brandravi'),navLabelVisible:getComputedStyle(nav.querySelector('a[data-page="home"] > span')).display!=='none',homeVisible:document.querySelector('#page-home').classList.contains('on'),receiveBg:getComputedStyle(rec).backgroundColor,phoneBg:getComputedStyle(phone).backgroundColor,firstLead:document.querySelector('#ravi-tiles > button').classList.contains('leadtile'),phoneTiles:[...document.querySelectorAll('#ravi-tiles button')].filter(e=>e.textContent.includes(document.querySelector('#overview-phone span').textContent)).length};
    });
-   assert.equal(geometry.overflow,0);assert.equal(geometry.navWidth,172);assert.equal(geometry.duplicateBrand,false);assert.equal(geometry.receiveBg,'rgb(255, 255, 255)');assert.equal(geometry.phoneBg,geometry.receiveBg);assert.equal(geometry.firstLead,true);assert.equal(geometry.phoneTiles,0);
+   assert.equal(geometry.overflow,0);assert.equal(geometry.navWidth,88);assert.ok(geometry.navFootWidth<=geometry.navClientWidth,'하단 메뉴가 레일 안에 들어와야 한다');assert.equal(geometry.duplicateBrand,false);assert.equal(geometry.navLabelVisible,true);assert.equal(geometry.homeVisible,true);assert.equal(geometry.receiveBg,'rgb(255, 255, 255)');assert.equal(geometry.phoneBg,geometry.receiveBg);assert.equal(geometry.firstLead,true);assert.equal(geometry.phoneTiles,0);
    evidence.screens.push({language,width,height,...geometry});
    await page.screenshot({path:resolve(out,`ravi-${language}-${width}x${height}.png`)});
    await page.$eval('#desktop-preferences',e=>e.click());await page.screenshot({path:resolve(out,`settings-menu-${language}-${width}x${height}.png`)});
@@ -76,7 +76,7 @@ try{
  if(!baseline){
   const{context,page,errors}=await open('ko',1120,780,true);
   const tokens=await page.evaluate(()=>{const c=getComputedStyle(document.documentElement);return{bg:c.getPropertyValue('--bg'),faint:c.getPropertyValue('--faint'),tint:c.getPropertyValue('--ravi-tint')};});
-  assert.deepEqual(tokens,{bg:'#fff',faint:'#626262',tint:'#fdf1e7'});evidence.dark=tokens;
+  assert.deepEqual(tokens,{bg:'#0F1016',faint:'#A3A7B7',tint:'#2A1D18'});evidence.dark=tokens;
   await page.screenshot({path:resolve(out,'ravi-ko-dark-1120x780.png')});assert.deepEqual(errors,[]);await context.close();
   const phone=await open('ko',390,844,false,true);
   evidence.customer=await phone.page.evaluate(()=>({title:document.title,band:!!document.querySelector('.desktop-local-brand'),overflow:document.documentElement.scrollWidth-innerWidth}));

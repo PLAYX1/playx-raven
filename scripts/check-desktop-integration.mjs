@@ -22,7 +22,8 @@ assert.doesNotMatch(html, /id="rv-webwallet"/);
 assert.doesNotMatch(ui, /\$\("rv-webwallet"\)/);
 assert.doesNotMatch(ui, /label: "RavenVault 웹 지갑"/);
 assert.equal((html.match(/id="rv-phone-open"/g) || []).length, 1);
-assert.match(html, /id="ravi-face" src="\/raven-hello.webp"/);
+assert.match(html, /<span id="ravi-face"><\/span>/);
+assert.match(ui, /\$\("ravi-face"\)\.replaceWith\(Object\.assign\(raviFace\("sleep", 184\), \{ id: "ravi-face" \}\)\)/);
 const config = JSON.parse(read('src-tauri/tauri.conf.json'));
 const previous = JSON.parse(execFileSync('git', ['show', 'v0.3.8:src-tauri/tauri.conf.json'], { encoding: 'utf8' }));
 assert.equal(config.productName, 'RavenVault Desktop');
@@ -30,7 +31,9 @@ assert.equal(config.app.windows[0].title, 'RavenVault Desktop');
 assert.equal(config.identifier, previous.identifier);
 assert.deepEqual(config.plugins.updater, previous.plugins.updater);
 assert.match(read('src-tauri/Cargo.toml'), /name = "playx-raven"/);
-assert.equal(read('src-tauri/src/paths.rs'), execFileSync('git', ['show', 'v0.3.8:src-tauri/src/paths.rs'], { encoding: 'utf8' }));
+const paths = read('src-tauri/src/paths.rs');
+assert.match(paths, /pub fn default_app_dir\(\) -> PathBuf \{ base\(\)\.join\(APP_FOLDER\) \}/);
+assert.equal(paths.replace('    default_app_dir()\n', '    base().join(APP_FOLDER)\n').replace('\npub fn default_app_dir() -> PathBuf { base().join(APP_FOLDER) }\n', ''), execFileSync('git', ['show', 'v0.3.8:src-tauri/src/paths.rs'], { encoding: 'utf8' }));
 for (const path of ['src-tauri/src/mining.rs', 'src-tauri/src/ipfs.rs', 'src-tauri/src/boot.rs', 'src-tauri/src/auto.rs', 'src-tauri/src/shop.rs', 'src-tauri/src/auction.rs', 'src-tauri/src/artist.rs', 'web/wallet.src.ts', 'web/wallet.bundle.js', 'web/wallet.html', 'web/buy.html']) {
   const released = execFileSync('git', ['show', 'v0.3.8:' + path], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 });
   if (path === 'src-tauri/src/boot.rs') {

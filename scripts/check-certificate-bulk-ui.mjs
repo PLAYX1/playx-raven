@@ -126,7 +126,7 @@ async function openApp({ width = 1280, height = 900, language = 'ko', spendable 
           case 'plugin:app|version': return '0.4.7';
           case 'money_status': throw 'Synthetic status unavailable';
           case 'node_status': return { blocks: 1000, headers: 1000, progress: 1, peers: 3 };
-          case 'api_key_status': return cfg.keys;
+          case 'api_key_status': return { configured: cfg.keys, has_key: cfg.keys, available: cfg.keys, last4: {} };
           case 'model_settings': return {};
           case 'list_assets': case 'pin_list': case 'my_channels': return [];
           case 'artist_profile_get': return { name: '', about: '', picture: '', website: '' };

@@ -70,7 +70,7 @@ function mock(state) {
           if (S.feeMode === 'short') return { fee: null, short: true, amount: Number(a.amount) };
           return { fee: 0.00226, amount: Number(a.amount), total: Math.round((Number(a.amount) + 0.00226) * 1e8) / 1e8, short: false };
         case 'send_rvn': S.sent++; return 'cd'.repeat(32);
-        case 'api_key_status': return S.keys;
+        case 'api_key_status': return { configured: S.keys, has_key: S.keys, available: S.keys, last4: {} };
         case 'model_settings': return {};
         case 'save_api_key': S.keys[a.provider] = true; S.savedProvider = a.provider; S.savedLen = String(a.key).length; return null;
         case 'open_external': S.opened.push(a.url); return null;
@@ -153,6 +153,11 @@ try {
 
     // ── B2 받기: 누르면 바로 주소 · QR · 복사 두 가지 · 다시 누르면 같은 주소 ──
     await tap(page, '#w-receive');
+    // 0.5.0 asks for a one-time backup reminder before requesting an address.
+    // Acknowledge the real dialog so this still checks the receive flow.
+    await page.waitForSelector('#askwrap.on');
+    assert.match(await page.$eval('#ask-msg', (e) => e.textContent), /백업|back up|バックアップ|备份/i);
+    await tap(page, '#ask-yes');
     await page.waitForSelector('#w-addr-text');
     assert.equal(await page.$eval('#w-addr-text', (e) => e.textContent), RECV1);
     assert.ok(await page.$('#w-qr svg rect'), 'QR');

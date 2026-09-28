@@ -111,3 +111,24 @@
 - 메모리 저장소 시험에 OS 저장소 삭제 실패 주입 뒤 부활 방지, 별도 파일 핸들의 잠금 경쟁, 서로 다른 작업 폴더의 동일 상대 경로 식별자, 정상 응답 키 가림, 짧은 옛 키 제거, 정리 경고 및 옛 파일 상태 fallback을 추가했다. 실제 OS 자격 증명은 조회하지 않았다.
 - `RV_BACKUP_FIXTURE_ROOT=/tmp/claude-501/rvfix CARGO_TARGET_DIR=/Users/gimmusong/wt-rv-desktop-049-target cargo test --offline ai::` → 34개 통과, 기존 ignored 7개, `rc=0`.
 - `node preflight.mjs && npx tsc && npx vite build --configLoader runner` → `rc=0`.
+
+## 6차 · 0.5.1 공개 전 검사 판정 (2026-09-28)
+
+받기 주소 실패를 먼저 조사했다. 0.5.0은 받기 전에 백업 안내를 한 번 띄우며, 확인 후에만 `receive_address`를 부른다. 기존 검사는 이 창을 닫지 않고 주소를 기다렸다. 주소 자체는 노드가 `mine: true`로 확인한 경우에만 그려지며, 합성 주소도 이 조건을 만족한다. 따라서 로그의 30초 대기는 앱의 주소 생성 실패를 입증하지 않는다. 검사에 안내 확인과 주소·QR·재사용 확인을 함께 남겼다.
+
+| 검사 | 판정 | 코드 근거 | 고친 것 | 0.5.0 영향 |
+| --- | --- | --- | --- | --- |
+| `check-wallet-easy` | 낡은 검사 | `src/main.ts:4848-4873`, `src/main.ts:4907-4911`: 받기 전 일회성 백업 안내; `scripts/check-wallet-easy.mjs:155-162`: 검사에서 확인 후 주소 검증 | 백업 안내의 실제 문구와 확인 단추를 검증하고 진행. AI 키 상태 모의 응답도 현재 `available` 계약으로 갱신 | 주소가 안 보이는 결함은 확인되지 않음. 처음 한 번 안내를 확인해야 하는 것은 0.5.0의 의도된 흐름 |
+| `check-certificate-bulk-ui` | 낡은 검사 | `src/main.ts:8893-8909`: `api_key_status.available`에서 제공자 선택; `src/cert-bulk.ts:727-741`: 제공자가 없으면 내장 문구를 보여 주고 `ai_fill`을 부르지 않음 | 모의 키 상태를 현재 `configured`·`has_key`·`available` 형식으로 변경. AI 문구에 이름이 빠지는 기존 검증 유지 | 없음. 실제 키 상태 명령은 현재 형식을 반환함 |
+| `check-desktop-identity-fix` | 앱 결함과 낡은 검사 | `index.html:2511-2518`: v2 레일은 88px인데 하단 영역도 고정 88px이어서 스크롤바가 차지한 1px만큼 넘칠 수 있음; `scripts/check-desktop-identity-fix.mjs:58-79`: 이전 172px 레일·밝은 색 토큰을 기대 | 하단 영역을 레일의 가용 폭 `100%`로 수정. 검사는 넘침 0, 하단 영역 폭, 88px 레일·보이는 메뉴 이름·홈·밤 색을 확인하도록 갱신. 시작 읽기 횟수와 유휴 주기 검증 유지 | 있음. 기존 로그에서 1120×780 화면의 가로 넘침 1px 관측. 수정 후 브라우저 재검증 필요 |
+| `check-desktop-integration` | 낡은 검사 | `index.html:3560`, `src/main.ts:16846`: `ravi-face` 자리를 `RaviFace`로 교체; `src-tauri/src/paths.rs:24-33`: 기본 데이터 경로를 같은 식으로 분리 | 정적 얼굴 그림 대신 실제 컴포넌트 연결을 검증. 경로의 이전 동작은 `default_app_dir()` 한 단계만 되돌려 0.3.8과 비교. 나머지 노드·지갑 보존 검증 유지 | 없음. 경로 계산은 동일하고 얼굴만 v2 설계로 변경 |
+| `check-backup-ui` | 환경 | `scripts/check-backup-ui.mjs:10-14`: 남은 `synthetic-browser-profile`을 거부 | 남은 폴더를 지우고 다시 실행. 그 뒤 `listen EPERM 127.0.0.1`로 막힘; 검사 코드는 변경하지 않음 | 없음 |
+
+`check-desktop-mutation`은 의도된 `rc=1` 그대로 두었다. 지갑 서명·송금·복구 로직과 `package.json`은 변경하지 않았다.
+
+### 시험
+
+- `node scripts/check-desktop-integration.mjs >/tmp/o.txt 2>&1; rc=$?; echo rc=$rc` → `rc=0` (실제 링크 어댑터, 경로와 기존 서비스 보존, 2246개 번역 항목).
+- `check-backup-ui`의 잔여 프로필을 지운 뒤 `node scripts/check-backup-ui.mjs` → `rc=1`, `listen EPERM: operation not permitted 127.0.0.1`. 첫 재시도에서 한 단계 깊은 폴더가 남아 있음을 찾아 정확한 경로를 지운 뒤 얻은 결과다.
+- `check-wallet-easy` → `rc=1`, 같은 localhost `EPERM`. `check-desktop-identity-fix` → `rc=1`, 같은 localhost `EPERM`. `check-certificate-bulk-ui` → `rc=1`, Chrome 프로세스 실행 실패. 따라서 이 세 UI 수정은 코드 경로와 정적 검사로 판정했으며 실제 브라우저 통과는 아직 확인하지 못했다.
+- `node preflight.mjs && npx tsc && npx vite build --configLoader runner; echo rc=$?` → `rc=0`.
