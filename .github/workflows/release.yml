@@ -354,30 +354,147 @@ jobs:
             console.log('resources:', res.join(' '));
           "
 
-      - name: 만들기
+      # resources 안의 실행 파일은 Tauri가 자동으로 개별 서명하지 않는다.
+      - name: 맥 서명·공증 재료 확인 및 포함 실행 파일 서명
+        if: startsWith(matrix.os, 'macos')
+        shell: bash
         env:
-          # 자동 판올림이 검사할 서명. 없으면 만들어지긴 하는데 판올림이 안 된다.
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
+        run: |
+          set -euo pipefail
+          for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_API_ISSUER APPLE_API_KEY APPLE_API_KEY_P8_BASE64; do
+            if [ -z "${!name:-}" ]; then
+              echo "🔴 맥 공개 빌드에 필요한 $name 시크릿이 비었습니다."
+              exit 1
+            fi
+          done
+          [[ "$APPLE_SIGNING_IDENTITY" == "Developer ID Application:"*"(FSF7LXFW6L)" ]] || {
+            echo "🔴 Developer ID Application 서명 신원과 팀 ID를 확인하세요."; exit 1;
+          }
+          [[ "$APPLE_API_KEY" =~ ^[A-Za-z0-9]+$ ]] || { echo "🔴 APPLE_API_KEY 형식이 잘못됐습니다."; exit 1; }
+          key_path="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY}.p8"
+          umask 077
+          printf '%s' "$APPLE_API_KEY_P8_BASE64" | base64 -D > "$key_path"
+          [ -s "$key_path" ] || { echo "🔴 공증 API 키 파일을 만들지 못했습니다."; exit 1; }
+          echo "APPLE_API_KEY_PATH=$key_path" >> "$GITHUB_ENV"
+          certificate_path="$RUNNER_TEMP/ravenvault-developer-id.p12"
+          keychain_path="$RUNNER_TEMP/ravenvault-build.keychain-db"
+          keychain_password=$(openssl rand -hex 24)
+          printf '%s' "$APPLE_CERTIFICATE" | base64 -D > "$certificate_path"
+          [ -s "$certificate_path" ] || { echo "🔴 서명 인증서 파일을 만들지 못했습니다."; exit 1; }
+          security create-keychain -p "$keychain_password" "$keychain_path"
+          security default-keychain -s "$keychain_path"
+          security list-keychains -d user -s "$keychain_path"
+          security unlock-keychain -p "$keychain_password" "$keychain_path"
+          security set-keychain-settings -t 3600 -u "$keychain_path"
+          security import "$certificate_path" -k "$keychain_path" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain_path"
+          rm -f "$certificate_path"
+          for binary in src-tauri/vendor/ravend src-tauri/vendor/ipfs; do
+            [ -f "$binary" ] || { echo "🔴 포함 실행 파일이 없습니다: $binary"; exit 1; }
+            codesign --force --sign "$APPLE_SIGNING_IDENTITY" --options runtime --timestamp "$binary"
+            codesign --verify --strict --verbose=2 "$binary"
+          done
+
+      - name: 맥 만들기·앱 서명·공증
+        if: startsWith(matrix.os, 'macos')
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_PATH: ${{ env.APPLE_API_KEY_PATH }}
+        run: npx tauri build --target ${{ matrix.target }} --verbose
+
+      - name: 다른 운영체제 만들기
+        if: ${{ !startsWith(matrix.os, 'macos') }}
+        env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npx tauri build --target ${{ matrix.target }} --verbose
 
-      # 🔴 **맥 「손상되었기 때문에 열 수 없습니다」를 막는다.**
-      # 서명이 `adhoc, linker-signed` 이고 자원 목록이 없으면 맥은
-      # 「서명 없음」이 아니라 **「손상됨」**으로 읽는다 — 그때는
-      # 휴지통 말고 선택지가 없다. 설정만 믿지 않고 만든 것을 열어 본다.
-      - name: 맥 서명 검산
+      # Tauri는 앱을 공증·staple한다. 배포할 DMG도 별도로 공증·staple한다.
+      - name: 맥 DMG 공증·staple
+        if: startsWith(matrix.os, 'macos')
+        shell: bash
+        env:
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_PATH: ${{ env.APPLE_API_KEY_PATH }}
+        run: |
+          set -euo pipefail
+          bundle="src-tauri/target/${{ matrix.target }}/release/bundle"
+          shopt -s nullglob
+          dmg_files=("$bundle"/dmg/*.dmg)
+          [ "${#dmg_files[@]}" -eq 1 ] || { echo "🔴 DMG가 정확히 하나여야 합니다."; exit 1; }
+          xcrun notarytool submit "${dmg_files[0]}" --key "$APPLE_API_KEY_PATH" --key-id "$APPLE_API_KEY" --issuer "$APPLE_API_ISSUER" --wait
+          xcrun stapler staple "${dmg_files[0]}"
+
+      - name: 맥 앱·DMG·updater 서명 및 공증 검산
         if: startsWith(matrix.os, 'macos')
         shell: bash
         run: |
           set -euo pipefail
-          APP=$(find src-tauri/target -name "*.app" -maxdepth 6 -type d | head -1)
-          [ -n "$APP" ] || { echo "🔴 만든 앱을 못 찾았습니다"; exit 1; }
-          codesign -dv --verbose=2 "$APP" 2>&1 | sed 's/^/  /' || true
-          codesign --verify --deep --strict "$APP" || {
-            echo "🔴 서명이 유효하지 않습니다 — 맥에서 「손상됨」이 뜹니다."; exit 1; }
-          [ -f "$APP/Contents/_CodeSignature/CodeResources" ] || {
-            echo "🔴 자원 목록이 없습니다 — 껍데기가 서명 안 됐습니다."; exit 1; }
-          echo "✅ 서명 유효"
+          bundle="src-tauri/target/${{ matrix.target }}/release/bundle"
+          app="$bundle/macos/RavenVault Desktop.app"
+          [ -d "$app" ] || { echo "🔴 만든 앱을 못 찾았습니다."; exit 1; }
+          check_code() {
+            local path="$1" details
+            codesign --verify --deep --strict --verbose=2 "$path"
+            details=$(codesign -dv --verbose=2 "$path" 2>&1)
+            printf '%s\n' "$details" | grep -Fx 'TeamIdentifier=FSF7LXFW6L' >/dev/null || {
+              echo "🔴 Developer ID 팀이 아닙니다: $path"; exit 1;
+            }
+            printf '%s\n' "$details" | grep -E '^flags=.*\(runtime\)' >/dev/null || {
+              echo "🔴 hardened runtime이 없습니다: $path"; exit 1;
+            }
+          }
+          check_gatekeeper() {
+            local kind="$1" path="$2" result
+            result=$(spctl -a -vvv -t "$kind" "$path" 2>&1) || {
+              printf '%s\n' "$result"; exit 1;
+            }
+            printf '%s\n' "$result"
+            [[ "$result" == *accepted* && "$result" == *'source=Notarized Developer ID'* ]] || {
+              echo "🔴 Gatekeeper가 공증된 Developer ID로 인정하지 않습니다: $path"; exit 1;
+            }
+          }
+          check_app() {
+            local path="$1" binary
+            check_code "$path"
+            for binary in ravend ipfs; do
+              [ -f "$path/Contents/Resources/vendor/$binary" ] || {
+                echo "🔴 앱에 포함 실행 파일이 없습니다: $binary"; exit 1;
+              }
+              check_code "$path/Contents/Resources/vendor/$binary"
+            done
+            check_gatekeeper exec "$path"
+          }
+          xcrun stapler validate "$app"
+          check_app "$app"
+          shopt -s nullglob
+          dmg_files=("$bundle"/dmg/*.dmg)
+          [ "${#dmg_files[@]}" -eq 1 ] || exit 1
+          xcrun stapler validate "${dmg_files[0]}"
+          check_gatekeeper install "${dmg_files[0]}"
+          updater_files=()
+          while IFS= read -r -d '' file; do updater_files+=("$file"); done < <(find "$bundle" -type f -name '*.app.tar.gz' -print0)
+          [ "${#updater_files[@]}" -eq 1 ] || { echo "🔴 맥 updater 압축본이 정확히 하나여야 합니다."; exit 1; }
+          unpacked=$(mktemp -d "$RUNNER_TEMP/rv-updater.XXXXXX")
+          trap 'rm -rf "$unpacked"' EXIT
+          tar -xzf "${updater_files[0]}" -C "$unpacked"
+          unpacked_apps=()
+          while IFS= read -r -d '' file; do unpacked_apps+=("$file"); done < <(find "$unpacked" -type d -name '*.app' -prune -print0)
+          [ "${#unpacked_apps[@]}" -eq 1 ] || { echo "🔴 updater 앱이 정확히 하나여야 합니다."; exit 1; }
+          check_app "${unpacked_apps[0]}"
 
       - name: 만든 것 모으기
         env:

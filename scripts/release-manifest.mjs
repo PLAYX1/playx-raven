@@ -30,7 +30,7 @@ export async function prepareRelease(source, destination, version) {
     if (next.reduce((order, n, i) => order || Math.sign(n - old[i]), 0) <= 0) throw new Error('Release must be newer than the currently published version');
   } catch (e) { if (e.code !== 'ENOENT') throw e; }
   const base = `https://raw.githubusercontent.com/PLAYX1/playx-raven-releases/dist/v${version}`;
-  const manifest = { version, notes: 'RavenVault Desktop 0.5.1 — 왼쪽 메뉴의 아이콘 아래에 이름(지갑·홈·라비·이야기 등)이 늘 보입니다. 선택한 칸은 굵은 글씨로, 안 읽은 수는 오른쪽 위에 표시합니다. 한국어·영어·일본어·중국어 모두 이름이 잘리지 않습니다. 왼쪽 위 업데이트 단추(판 번호·새 버전 받기)가 다시 보입니다. 라비 AI 키를 붙여 넣으면 칸이 지워지던 문제(다른 회사 키일 때)를 고쳤고, 지갑 거래 목록의 「받음·보냄」과 날짜가 고른 언어로 나옵니다. 0.5.0 의 새 모습 밤 까마귀·라비 표정·어두운 화면·대화 화면·AI 키 보안 저장소는 그대로입니다.', pub_date: new Date().toISOString(), platforms: {}, installers: [] };
+  const manifest = { version, notes: 'RavenVault Desktop 0.5.2 — 맥에서 보안 승인 없이 바로 열립니다(애플 정식 개발자 서명·공증). 0.5.1에서 왼쪽 메뉴 이름과 업데이트 단추 표시를 복구하고, AI 키 입력칸·지갑 거래 목록의 다국어 표시를 고쳤습니다.', pub_date: new Date().toISOString(), platforms: {}, installers: [] };
   for (const [suffix, platform] of Object.entries(platforms)) {
     const signature = (await readFile(path.join(source, prefix + suffix + '.sig'), 'utf8')).trim();
     if (!/^[A-Za-z0-9+/=\r\n]+$/.test(signature) || signature.length < 100 || signature.length > 2048) throw new Error(`Malformed updater signature: ${suffix}`);
