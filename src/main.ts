@@ -16845,7 +16845,15 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.documentElement.dataset.theme = theme.value;
   theme.onchange = () => { document.documentElement.dataset.theme = theme.value; localStorage.setItem("ravenvault-theme", theme.value); };
   $("ravi-face").replaceWith(Object.assign(raviFace("sleep", 184), { id: "ravi-face" }));
-  $("rv-desktop-logo").replaceWith(raviFace("sleep", 40));
+  // 대표 09-29: 머리글 라비와 메뉴 라비가 같은 얼굴이라 헷갈린다 → 머리글 라비도 라비 화면을 연다.
+  const logoBtn = document.createElement("button");
+  logoBtn.type = "button";
+  logoBtn.className = "rv-logo-btn";
+  logoBtn.title = t("라비");
+  logoBtn.setAttribute("aria-label", t("라비"));
+  logoBtn.appendChild(raviFace("sleep", 40));
+  logoBtn.onclick = () => showPage("ravi");
+  $("rv-desktop-logo").replaceWith(logoBtn);
   $("rv-onboard-face").appendChild(raviFace("sleep", 150));
   document.querySelectorAll(".ravi-static-face").forEach(slot => slot.replaceWith(raviFace("sleep", 40)));
   const raviNav = document.querySelector('nav a[data-page="ravi"]');

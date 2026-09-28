@@ -2267,6 +2267,9 @@
       .desktop-header { position:fixed; top:34px; left:0; right:0; height:76px; z-index:49; display:flex; align-items:center; justify-content:space-between; padding:6px 24px; background:#fff; border-bottom:1px solid var(--line); gap:16px; }
       .desktop-logo { display:flex; align-items:center; gap:12px; font-size:22px; }
       .desktop-logo img { width:40px; height:40px; object-fit:contain; }
+      .rv-logo-btn { display:inline-flex; padding:0; margin:0; min-height:0; border:0; border-radius:12px; background:none; cursor:pointer; line-height:0; }
+      .rv-logo-btn:hover { box-shadow:0 0 0 3px rgba(231,115,31,.35); }
+      .rv-logo-btn:focus-visible { outline:2px solid var(--ravi, #e7731f); outline-offset:2px; }
       #desktop-preferences { display:flex; align-items:center; gap:10px; border-radius:16px; background:#fff; color:#111; min-height:64px; font-size:16px; border:1px solid var(--line); }
       .desktop-header svg, .overview svg { width:24px; height:24px; flex:none; }
       #desktop-language-menu { position:absolute; right:24px; top:76px; width:360px; background:#fff; border:1px solid var(--line); border-radius:16px; padding:16px; box-shadow:0 8px 24px #0002; }
@@ -2525,6 +2528,9 @@
       :is(body > nav, .rv-talk-layout nav) #upnag { display:block; width:100%; min-height:30px !important; margin:0; padding:4px; font-size:11px !important; line-height:1.2; white-space:normal; word-break:keep-all; color:#ECEDF3; background:transparent; border:1px solid #3A3C49; border-radius:10px; }
       :is(body > nav, .rv-talk-layout nav) #upnag.new { background:var(--ravi, #e7731f); border-color:var(--ravi, #e7731f); color:#15161D; font-weight:700; }
       :is(body > nav, .rv-talk-layout nav) #upnag[hidden] { display:none; }
+      /* 대표 09-29: "이 점들도 뭔지 모르겠어" — 0.5.0 레일이 상태 점의 이름을 숨겼다. 메뉴처럼 점 아래에 이름을 늘 보인다(접힘 상태는 .navfoot.folded 가 그대로 숨긴다). */
+      :is(body > nav, .rv-talk-layout nav) .dotrow { width:80px; height:auto; min-height:40px; padding:4px 0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; }
+      :is(body > nav, .rv-talk-layout nav) .dotsum #d-sum-t, :is(body > nav, .rv-talk-layout nav) .dotrow:not(.dotsum) span:last-child { display:block; font-size:11px !important; line-height:1.2; color:#B9BBC8; text-align:center; white-space:normal; word-break:keep-all; }
       @media(max-width:1160px) { #page-talk .talkwrap { grid-template-columns:300px minmax(320px,1fr); } }
     </style>
   </head>
