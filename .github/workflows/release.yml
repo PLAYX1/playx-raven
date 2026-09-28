@@ -445,20 +445,28 @@ jobs:
           set -euo pipefail
           bundle="src-tauri/target/${{ matrix.target }}/release/bundle"
           app="$bundle/macos/RavenVault Desktop.app"
+          echo "검산: 앱 경로 확인"
           [ -d "$app" ] || { echo "🔴 만든 앱을 못 찾았습니다."; exit 1; }
           check_code() {
             local path="$1" details
+            echo "검산: 코드 서명 무결성 — $path"
             codesign --verify --deep --strict --verbose=2 "$path"
-            details=$(codesign -dv --verbose=2 "$path" 2>&1)
+            echo "검산: 코드 서명 정보 — $path"
+            details=$(codesign -dv --verbose=2 "$path" 2>&1) || {
+              printf '%s\n' "$details"; exit 1;
+            }
+            echo "검산: Developer ID 팀 — $path"
             printf '%s\n' "$details" | grep -Fx 'TeamIdentifier=FSF7LXFW6L' >/dev/null || {
               echo "🔴 Developer ID 팀이 아닙니다: $path"; exit 1;
             }
+            echo "검산: hardened runtime — $path"
             printf '%s\n' "$details" | grep -E 'flags=0x[0-9a-fA-F]+\([^)]*runtime[^)]*\)' >/dev/null || {
               echo "🔴 hardened runtime이 없습니다: $path"; exit 1;
             }
           }
           check_gatekeeper() {
             local kind="$1" path="$2" result
+            echo "검산: Gatekeeper ($kind) — $path"
             result=$(spctl -a -vvv -t "$kind" "$path" 2>&1) || {
               printf '%s\n' "$result"; exit 1;
             }
@@ -471,6 +479,7 @@ jobs:
             local path="$1" binary
             check_code "$path"
             for binary in ravend ipfs; do
+              echo "검산: 포함 실행 파일 — $binary"
               [ -f "$path/Contents/Resources/vendor/$binary" ] || {
                 echo "🔴 앱에 포함 실행 파일이 없습니다: $binary"; exit 1;
               }
@@ -478,19 +487,26 @@ jobs:
             done
             check_gatekeeper exec "$path"
           }
+          echo "검산: 앱 공증 티켓"
           xcrun stapler validate "$app"
           check_app "$app"
           shopt -s nullglob
+          echo "검산: DMG 파일 수"
           dmg_files=("$bundle"/dmg/*.dmg)
-          [ "${#dmg_files[@]}" -eq 1 ] || exit 1
+          [ "${#dmg_files[@]}" -eq 1 ] || { echo "🔴 DMG가 정확히 하나여야 합니다."; exit 1; }
+          echo "검산: DMG 공증 티켓"
           xcrun stapler validate "${dmg_files[0]}"
           check_gatekeeper install "${dmg_files[0]}"
+          echo "검산: updater 압축본 파일 수"
           updater_files=()
           while IFS= read -r -d '' file; do updater_files+=("$file"); done < <(find "$bundle" -type f -name '*.app.tar.gz' -print0)
           [ "${#updater_files[@]}" -eq 1 ] || { echo "🔴 맥 updater 압축본이 정확히 하나여야 합니다."; exit 1; }
+          echo "검산: updater 임시 폴더 생성"
           unpacked=$(mktemp -d "$RUNNER_TEMP/rv-updater.XXXXXX")
           trap 'rm -rf "$unpacked"' EXIT
+          echo "검산: updater 압축 해제"
           tar -xzf "${updater_files[0]}" -C "$unpacked"
+          echo "검산: updater 앱 파일 수"
           unpacked_apps=()
           while IFS= read -r -d '' file; do unpacked_apps+=("$file"); done < <(find "$unpacked" -type d -name '*.app' -prune -print0)
           [ "${#unpacked_apps[@]}" -eq 1 ] || { echo "🔴 updater 앱이 정확히 하나여야 합니다."; exit 1; }
