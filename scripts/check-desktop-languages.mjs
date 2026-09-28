@@ -103,14 +103,16 @@ try {
       await new Promise(r=>setTimeout(r,400));
       const take=async (area,selector,expected,property='textContent')=>{
         const actual=await page.$$eval(selector,(es,property)=>es.map(e=>e[property]),property);
-        probes.push({language,area,expected,actual,changed:expected.filter((s,i)=>s!==actual[i]).length});
+        // 0.5.0 부터 대화는 오래된 글이 위(v2). 이 검사는 「번역 안 됨」을 보므로 순서가 아니라 같은 글자들이 그대로 있는지 센다.
+        const left=[...actual];
+        probes.push({language,area,expected,actual,changed:expected.filter(s=>{const i=left.indexOf(s);if(i<0)return true;left.splice(i,1);return false;}).length+left.length});
       };
       await take('Nostr posts','#tk-list [data-say]',[...samples].reverse());
       await take('Asset names','#assets td.name', await page.$$eval('#assets tr[data-row]',es=>es.map(e=>e.dataset.row)));
       await take('Menu names','#mn-items [data-mn="name"]',samples,'value');
       await page.$eval('nav [data-page="ravi"]',e=>e.click());
       await new Promise(r=>setTimeout(r,400));
-      await take('Shop name','#ravi-hello',['사진']);
+      // 0.5.0(v2): 라비 머리는 늘 「라비」다 — 가게 이름 인사말(#ravi-hello)이 없어져 가게 이름 확인은 뺐다.
       // Verifier's unmarked foreign text reproduction, including attribute nodes.
       const foreign=samples.filter(s=>!/[가-힣]/.test(s));
       await page.evaluate(samples=>{
@@ -127,7 +129,7 @@ try {
         await take('Nostr retained across '+next,'#tk-list [data-say]',[...samples].reverse());
         await take('Assets retained across '+next,'#assets td.name',await page.$$eval('#assets tr[data-row]',es=>es.map(e=>e.dataset.row)));
         await take('Menu retained across '+next,'#mn-items [data-mn="name"]',samples,'value');
-        await take('Shop retained across '+next,'#ravi-hello',['사진']);
+        // 0.5.0(v2): 가게 이름 인사말 없음(위 참고).
       }
       // Every ambiguous reverse translation must retain its distinct source.
       const reverse=new Map();

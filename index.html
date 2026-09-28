@@ -2471,6 +2471,8 @@
       #page-talk .chat { position:relative; border:0; border-radius:0; }
       #page-talk .rv-person { padding:28px 24px; }
       #rv-person-avatar { width:64px; height:64px; font-size:26px; }
+      /* 머리글자는 방 이름(사용자 자료)에서 온다 — 글자 칸이 아니라 ::before 로 그려 번역기가 손대지 않게. */
+      #rv-person-avatar::before { content: attr(data-initial); }
       .tk-new-messages { position:absolute; left:50%; bottom:96px; z-index:5; transform:translateX(-50%); padding:8px 18px; border-radius:999px; background:var(--ravi); color:#15161D; box-shadow:0 4px 16px #0003; }
       .tk-new-messages[hidden] { display:none; }
       #page-ravi { display:flex; flex-direction:column; gap:14px; padding:24px 32px; }
@@ -3292,7 +3294,7 @@
             </div>
           </div>
           <aside class="rv-person" aria-label="방 정보">
-            <span id="rv-person-avatar" class="rv-avatar">레</span>
+            <span id="rv-person-avatar" class="rv-avatar" data-initial="레" aria-hidden="true"></span>
             <h3 id="rv-person-name">레이븐 이야기</h3>
             <p>공개 방 · 누구나 읽을 수 있어요</p>
             <button id="rv-add-friend" class="ghost" type="button">친구 추가</button>

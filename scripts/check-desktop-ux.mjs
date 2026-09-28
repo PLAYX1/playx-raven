@@ -86,7 +86,7 @@ try {
       const nav=document.querySelector('nav').getBoundingClientRect(),side=document.querySelector('nav .brand').getBoundingClientRect(),hero=document.querySelector('#ravi-face').getBoundingClientRect();
       return {nav:nav.width,sidebarWidth:side.width,heroWidth:hero.width,sidebarFits:side.left>=nav.left&&side.right<=nav.right,overflow:document.documentElement.scrollWidth-innerWidth,duplicateBrand:!!document.querySelector('nav .brandravi,nav h1'),heroSrc:document.querySelector('#ravi-face').getAttribute('src')};
     });
-    assert.equal(measures.nav,172);assert.equal(measures.overflow,0);assert.ok(measures.sidebarFits);assert.ok(measures.heroWidth>=180);assert.equal(measures.duplicateBrand,false);assert.equal(measures.heroSrc,'/raven-hello.webp');
+    assert.equal(measures.nav,88); // 0.5.1: 모든 화면 같은 88px 레일(아이콘+이름)assert.equal(measures.overflow,0);assert.ok(measures.sidebarFits);assert.ok(measures.heroWidth>=180);assert.equal(measures.duplicateBrand,false);assert.equal(measures.heroSrc,'/raven-hello.webp');
     assert.equal(await page.$('#rv-webwallet'),null);
     if(language!=='ko')await page.waitForFunction(()=>!/가게 만들기/.test(document.querySelector('#ravi-tiles').innerText));
     await page.screenshot({path:resolve(out,`ravi-${language}-${width}x${height}.png`)});
@@ -102,7 +102,7 @@ try {
     await page.screenshot({path:resolve(out,`phone-entry-${language}-${width}x${height}.png`)});
     await page.$eval('#rv-phone-info',e=>e.open=false);
     // 가게가 없으면 첫 칸은 「가게 만들기」(대표님 결정), 폰 거래는 한눈에 띠에서 연다.
-    assert.match(await page.$eval('#ravi-tiles button:first-child',e=>e.innerText),language==='ko'?/가게 만들기/:/./);
+    assert.match(await page.$eval('#ravi-tiles button:first-child',e=>e.textContent),language==='ko'?/가게 만들기/:/./);
     await page.$eval('#overview-phone',e=>e.click());
     await page.waitForFunction(()=>document.querySelector('#phone-tx-panel').open);
     await page.screenshot({path:resolve(out,`transaction-input-${language}-${width}x${height}.png`)});

@@ -5848,7 +5848,7 @@ async function talkPaintRooms() {
       void talkPaint();
       $("rv-person-name").textContent = tkRoom ? tkRoomNames.get(tkRoom) || t("방") : t("레이븐 이야기");
       const avatar = $("rv-person-avatar");
-      avatar.textContent = ($("rv-person-name").textContent || "레").slice(0, 1);
+      avatar.dataset.initial = ($("rv-person-name").textContent || "레").slice(0, 1);
       avatar.style.setProperty("--h", String(tkHue(tkRoom || "raven")));
       $("rv-person-key").textContent = tkRoom;
     };
