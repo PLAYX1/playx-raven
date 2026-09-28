@@ -2505,6 +2505,16 @@
       #page-ravi > .rv-web-info { order:3; max-width:850px; width:100%; margin:0 auto; }
       #ravi-key-last4 { font-size:14px; color:var(--muted); }
       #ravi-key-delete[hidden] { display:none; }
+      /* 대표 2026-09-28: "왼쪽이 너무 미니멀해서 무슨 기능인지 모르겠어" — 아이콘 아래에 이름을 늘 보인다. */
+      body > nav, .rv-talk-layout nav { width:88px; min-width:88px; }
+      body > nav a, .rv-talk-layout nav a { width:80px; height:auto; min-height:58px; flex-direction:column; gap:4px; padding:8px 4px; border-radius:14px; }
+      body > nav a > span:not(.ordbadge):not(.ravi-face), .rv-talk-layout nav a > span:not(.ordbadge):not(.ravi-face) { display:block; max-width:100%; font-size:11px; letter-spacing:-0.01em; line-height:1.2; font-weight:500; text-align:center; white-space:normal; word-break:keep-all; overflow-wrap:anywhere; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; color:#B9BBC8; }
+      body > nav a.on > span:not(.ordbadge):not(.ravi-face), .rv-talk-layout nav a.on > span:not(.ordbadge):not(.ravi-face) { color:#FFFFFF; font-weight:650; }
+      body > nav a { position:relative; }
+      body > nav a .ordbadge { position:absolute; top:4px; right:8px; }
+      body > nav .navfoot { width:88px; }
+      body > nav .reportlink { text-align:center; word-break:keep-all; width:80px; height:auto; min-height:44px; font-size:11.5px; line-height:1.2; white-space:normal; padding:6px 4px; display:flex; flex-direction:column; align-items:center; gap:2px; }
+      body > nav .reportlink::before { font-size:16px; height:auto; }
       @media(max-width:1160px) { #page-talk .talkwrap { grid-template-columns:300px minmax(320px,1fr); } }
     </style>
   </head>
