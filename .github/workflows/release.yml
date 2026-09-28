@@ -453,7 +453,7 @@ jobs:
             printf '%s\n' "$details" | grep -Fx 'TeamIdentifier=FSF7LXFW6L' >/dev/null || {
               echo "🔴 Developer ID 팀이 아닙니다: $path"; exit 1;
             }
-            printf '%s\n' "$details" | grep -E '^flags=.*\(runtime\)' >/dev/null || {
+            printf '%s\n' "$details" | grep -E 'flags=0x[0-9a-fA-F]+\([^)]*runtime[^)]*\)' >/dev/null || {
               echo "🔴 hardened runtime이 없습니다: $path"; exit 1;
             }
           }
