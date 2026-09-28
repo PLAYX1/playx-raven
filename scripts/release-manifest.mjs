@@ -30,7 +30,7 @@ export async function prepareRelease(source, destination, version) {
     if (next.reduce((order, n, i) => order || Math.sign(n - old[i]), 0) <= 0) throw new Error('Release must be newer than the currently published version');
   } catch (e) { if (e.code !== 'ENOENT') throw e; }
   const base = `https://raw.githubusercontent.com/PLAYX1/playx-raven-releases/dist/v${version}`;
-  const manifest = { version, notes: 'RavenVault Desktop 0.5.2 — 맥에서 보안 승인 없이 바로 열립니다(애플 정식 개발자 서명·공증). 위 머리글의 라비를 눌러도 라비가 열리고, 왼쪽 아래 상태 점에 이름(노드·채굴·파일창고 등)이 보입니다. 0.5.1에서 왼쪽 메뉴 이름과 업데이트 단추 표시를 복구하고, AI 키 입력칸·지갑 거래 목록의 다국어 표시를 고쳤습니다.', pub_date: new Date().toISOString(), platforms: {}, installers: [] };
+  const manifest = { version, notes: 'RavenVault Desktop 0.5.2 — 맥에서 보안 승인 없이 바로 열립니다(애플 정식 개발자 서명·공증). 위 머리글의 라비를 눌러도 라비가 열리고, 왼쪽 아래 상태 점에 이름(노드·채굴·파일창고 등)이 보입니다. 업데이트 뒤 처음 라비를 열 때 맥이 「키체인 접근 허용」을 한 번 물으면 「항상 허용」을 눌러 주세요(저장한 AI 키를 그대로 씁니다). 0.5.1에서 왼쪽 메뉴 이름과 업데이트 단추 표시를 복구하고, AI 키 입력칸·지갑 거래 목록의 다국어 표시를 고쳤습니다.', pub_date: new Date().toISOString(), platforms: {}, installers: [] };
   for (const [suffix, platform] of Object.entries(platforms)) {
     const signature = (await readFile(path.join(source, prefix + suffix + '.sig'), 'utf8')).trim();
     if (!/^[A-Za-z0-9+/=\r\n]+$/.test(signature) || signature.length < 100 || signature.length > 2048) throw new Error(`Malformed updater signature: ${suffix}`);

@@ -60,3 +60,11 @@ macOS `keyring`은 `security-framework`의 `set_generic_password`/`find_generic_
 - `cargo check --locked` rc=0, 루트 `node preflight.mjs` rc=0, YAML 파싱 rc=0, 워크플로의 bash 단계 문법 rc=0, `git diff --check` rc=0. 비어 있는 Apple 시크릿에 대한 공개 빌드 차단도 예상대로 rc=1이었다. `scripts/preflight.mjs`는 없고 루트 `preflight.mjs`를 실행했다. `actionlint`는 설치되지 않았다.
 - `npm run build`는 rc=2. 현재 환경에서 npm registry와 SheetJS CDN DNS 조회가 실패하여 `npm ci`가 의존성을 설치하지 못했다. 다른 체크아웃의 기존 `node_modules`를 이 작업 폴더로 복사해 재시도했지만 그 복사본에도 `xlsx`가 없어 TypeScript가 `Cannot find module 'xlsx'`로 멈췄다. 소스 수정에 의한 실패로 해석할 근거는 없다. 네트워크가 열리는 CI에서 정확한 잠금 파일로 `npm ci && npm run build` 재검증이 필요하다.
 - `node --test scripts/release-manifest.test.mjs`의 릴리스 테스트는 통과했다. 통합 실행한 `scripts/desktop-installer-identity.test.mjs`는 테스트가 임시 Cargo 프로젝트의 `handlebars`를 가져오려다 crates.io DNS 실패로 중단됐다.
+
+## 실측 결과 (2026-09-29, 세션)
+
+- GitHub Secrets 6개 등록(값 비노출): APPLE_CERTIFICATE·APPLE_CERTIFICATE_PASSWORD(대표 직접)·APPLE_SIGNING_IDENTITY·APPLE_API_ISSUER·APPLE_API_KEY·APPLE_API_KEY_P8_BASE64(fastlane ASC 키 재사용).
+- 로컬 애플 실리콘 서명·공증 빌드: 앱 `spctl -t exec` accepted · `source=Notarized Developer ID` · TeamIdentifier FSF7LXFW6L · hardened runtime · staple OK. dmg `notarytool` Accepted → staple → `spctl -t install` accepted.
+- 연속성(대표 맥, 실제 0.5.1 ad-hoc 설치본 → 공증 0.5.2 로 교체): 첫 라비 열기에 「키체인 접근 허용」 대화상자 1회 → 허용 후 기존 Google AI 키 그대로 읽힘, 라비 깨어 있음. 파일 데이터(지갑·노드·앱 설정) 영향 없음. 릴리스 노트에 「항상 허용」 안내 추가.
+- 업데이터 서명 키(TAURI_SIGNING)는 그대로라 0.5.1 → 0.5.2 자동 업데이트 서명 검증 경로는 변화 없음. 인텔 대상은 CI 검사 단계가 확인.
+- 0.5.2 에 대표 요청 2건 추가: 머리글 라비 → 라비 화면, 왼쪽 아래 상태 점 이름 표시.
