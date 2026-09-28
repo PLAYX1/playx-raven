@@ -256,14 +256,15 @@ try {
     await page.$eval('nav a[data-page="ravi"]', (e) => e.click());
     await tap(page, '#ravi-keyopen');
     assert.equal(await page.$$eval('#ravi-key input', (es) => es.length), 1, '붙여 넣는 칸은 하나');
-    assert.equal(await page.$$eval('#ravi-key [data-kc-where]', (es) => es.length), 5, '회사마다 「어디서 받나요」');
+    assert.equal(await page.$$eval('#ravi-key [data-kc-where]', (es) => es.length), 1, '0.5.0: 고른 회사 아래 「어디서 받나요」 한 줄(회사를 바꾸면 그 회사 콘솔로 바뀐다)');
     R.keyHangul = lang === 'ko' ? [] : await hangul(page, '#ravi-key');
     assert.deepEqual(await styleAttrs(page, '#ravi-key'), []);
+    await tap(page, '#ravi-key [data-kc-pick="groq"]');
     await tap(page, '#ravi-key [data-kc-where*="groq"]');
     await tap(page, '#ravi-key [data-kc-pick="openai"]');
-    await page.type('#kc-key', FAKE_KEY);
+    await page.type('#ravi-key-input', FAKE_KEY);
     assert.equal(await page.$eval('#ravi-key [aria-pressed="true"]', (e) => e.dataset.kcPick), 'anthropic', '붙여 넣은 열쇠의 앞머리로 회사를 알아본다');
-    await tap(page, '#kc-save');
+    await tap(page, '#ravi-key-save');
     const S3 = await page.evaluate(() => window.__S);
     assert.equal(S3.savedProvider, 'anthropic');
     assert.equal(S3.savedLen, FAKE_KEY.length);

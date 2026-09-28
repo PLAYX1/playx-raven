@@ -51,7 +51,7 @@ try {
               name:'Synthetic <img src=x onerror="window.__RV_BAD=true">.zip.pxlock',size_text:'1 MB',pretty:'Synthetic destination',
               inside:window.__BACKUP_MODE === 'missing' ? [] : [{name:'wallet.dat',what:'Synthetic wallet fixture',size:42}]};
           }
-          if (command === 'api_key_status') return {openai:true,custom:true,custom_label:'<img src=x onerror="window.__RV_BAD=true">'};
+          if (command === 'api_key_status') return {openai:true,custom:true,custom_label:'<img src=x onerror="window.__RV_BAD=true">',has_key:{openai:true},available:{openai:true,custom:true},configured:{openai:true,custom:true},last4:{openai:'k9Q2'}}; // 0.5.0: 키 상태는 has_key·available·last4 로 나뉜다(ai.rs api_key_status)
           if (command === 'model_settings') return {openai:{model:'synthetic" onfocus="window.__RV_BAD=true',default:'synthetic-model'}};
           if (command === 'list_assets' || command === 'pin_list' || command === 'my_channels') return [];
           if (command === 'artist_profile_get') return {name:'',about:'',picture:'',website:''};

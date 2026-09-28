@@ -4773,7 +4773,7 @@ async function loadWallet() {
         const amt = typeof t.amount === "number" ? t.amount : 0;
         const incoming = t.category === "receive" || amt >= 0;
         const when = t.time
-          ? new Date(t.time * 1000).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })
+          ? new Date(t.time * 1000).toLocaleString(lang, { dateStyle: "short", timeStyle: "short" })
           : "";
         const what = t.asset_name || "RVN";
 
@@ -4782,7 +4782,7 @@ async function loadWallet() {
         // orders get their own address: the address becomes the order number.
         const addr = t.address || "";
         const addrLine = addr
-          ? `<div class="meta">${incoming ? "받은 주소" : "보낸 주소"} <code>${addr.slice(0, 12)}…${addr.slice(-6)}</code></div>`
+          ? `<div class="meta">${copyHtml(incoming ? "받은 주소" : "보낸 주소")} <code>${addr.slice(0, 12)}…${addr.slice(-6)}</code></div>`
           : "";
         // A label is whatever this wallet wrote down locally — an order tag, a
         // note. It never travelled on-chain, so it is ours and only ours.
@@ -4791,7 +4791,7 @@ async function loadWallet() {
 
         return `<tr data-txid="${t.txid || ""}">
           <td>
-            <div>${incoming ? "받음" : "보냄"} · ${what}</div>
+            <div>${copyHtml(incoming ? "받음" : "보냄")} · ${escapeHtml(what)}</div>
             ${addrLine}${noteLine}
             <div class="meta">${when}</div>
           </td>
@@ -9962,7 +9962,8 @@ function closeKeyCard() {
   host.innerHTML = "";
 }
 
-function pickKeyProvider(p: string) {
+/** clear=true 는 사람이 회사를 직접 고른 때만 — 붙여 넣은 키로 회사를 알아본 때(자동)는 칸을 지우면 방금 붙인 키가 사라진다(0.5.0 결함). */
+function pickKeyProvider(p: string, clear = true) {
   if (!PROVIDERS[p]) return;
   keyPick = p;
   document.querySelectorAll<HTMLElement>("#ravi-key [data-kc-pick]").forEach((pick) => {
@@ -9973,7 +9974,7 @@ function pickKeyProvider(p: string) {
   $("kc-selected-name").textContent = PROVIDERS[p][0];
   ($("ravi-key").querySelector("[data-kc-where]") as HTMLElement).dataset.kcWhere = PROVIDERS[p][2];
   const input = document.getElementById("ravi-key-input") as HTMLInputElement | null;
-  if (input) { input.value = ""; input.placeholder = PROVIDERS[p][1]; }
+  if (input) { if (clear) input.value = ""; input.placeholder = PROVIDERS[p][1]; }
 }
 
 async function saveKeyCard() {
@@ -17469,7 +17470,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     const el = e.target as HTMLInputElement;
     if (el.id !== "ravi-key-input") return;
     const p = providerOfKey(el.value);
-    if (p && p !== keyPick) pickKeyProvider(p);
+    if (p && p !== keyPick) pickKeyProvider(p, false);
   });
   $("ravi-key").addEventListener("keydown", (e) => {
     if ((e as KeyboardEvent).key === "Enter" && (e.target as HTMLElement).id === "ravi-key-input") void saveKeyCard();
