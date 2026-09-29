@@ -4575,29 +4575,37 @@ async function paintProfile(): Promise<void> {
 /// 0.6.0-A2 — 홈의 「오늘 가게」 카드. 가게를 만든 사람에게만 보인다.
 /// 이미 있는 장부(ledger_range·ledger_pending)와 새 주문 숫자만 읽는다 — 새 계산·새 저장 없음.
 /// 발송·환불·공동구매 줄은 그 기능이 생길 때 여기에 더한다(RV7 §14.3-1).
+let homeTodaySeq = 0;
 async function paintHomeToday(): Promise<void> {
   const box = document.getElementById("rv-home-today");
   const body = document.getElementById("rv-home-today-body");
   if (!box || !body) return;
+  const seq = ++homeTodaySeq; // 늦게 끝난 옛 호출이 새 숫자를 덮지 않게
   try {
     const sh = await invoke<any>("shop_load").catch(() => null);
-    if (!sh || !Object.keys(sh).length) { box.hidden = true; return; }
+    // 가게 유무는 기존 코드와 같은 기준(이름이 있는가)으로 판정한다.
+    if (!sh || !(sh.name || sh.name_en)) { if (seq === homeTodaySeq) box.hidden = true; return; }
     const ymd = todayYmd();
     const r: any = await invoke("ledger_range", { fromYmd: ymd, toYmd: ymd, tzOffsetMin: tzMin() });
     const pend: any = await invoke("ledger_pending").catch(() => null);
+    if (seq !== homeTodaySeq) return;
+    // 🔴 통화가 섞였거나 못 읽은 줄이 있으면 합계를 확정 금액처럼 보이지 않는다(매출 화면과 같은 기준).
+    const doubtful = !!r?.mixed_currency || !!r?.unreadable_rows;
     const cur = r?.currency ? " " + String(r.currency) : "";
-    const money = Number(r?.total || 0).toLocaleString(undefined, { maximumFractionDigits: 2 }) + cur;
+    const money = doubtful
+      ? t("매출 화면에서 확인")
+      : Number(r?.total || 0).toLocaleString(lang, { maximumFractionDigits: 2 }) + cur;
     const row = (label: string, value: string) =>
       `<div class="rv-home-entry"><span>${escapeHtml(label)}</span><b>${escapeHtml(value)}</b></div>`;
     body.innerHTML =
       row(t("오늘 받은 금액"), money) +
       row(tf("판매 {0}건", Number(r?.sales || 0)), "") +
-      row(tf("새 주문 {0}건", 안본주문), "") +
+      row(tf("안 본 새 주문 {0}건", 안본주문), "") +
       row(tf("입금 대기 {0}건", Number(pend?.count || 0)), "");
     box.hidden = false;
   } catch {
     // 장부를 못 읽었으면 조용히 접는다. 없는 숫자를 지어내지 않는다.
-    box.hidden = true;
+    if (seq === homeTodaySeq) box.hidden = true;
   }
 }
 
@@ -4635,47 +4643,41 @@ async function paintHome(): Promise<void> {
 /** 「만들기」 화면 들어가기 — 화면이 준비되면 채운다. */
 let createApi: CreateApi | undefined;
 
-/// 0.6.0 — 왼쪽 메뉴 「더 보기」. 늘 보이는 것은 홈·라비·자산 셋이다.
-/// - 접힌 안의 화면을 열면(라비가 데려가도) 저절로 펼쳐진다 — 지금 어디 있는지 사라지면 안 된다.
+/// 0.6.0 — 왼쪽 메뉴 「더 보기」. 늘 보이는 것은 홈·라비·자산 셋이다(지갑·돕기 모드는 그 화면이 셋 자리에 든다).
+/// - 접힌 안의 화면을 열면(라비가 데려가도) showPage 가 펼친다 — 지금 어디 있는지 사라지면 안 된다.
+///   🔴 class 관찰로 하지 않는다: 표시등이 20초마다 class 를 다시 써서, 사람이 접어도 도로 펼쳐졌다.
 /// - 접힌 안의 배지(새 주문·새 글)는 「더 보기」에도 점으로 띄운다 — 새 주문을 놓치면 안 된다.
+let navMoreSetOpen: ((open: boolean) => void) | null = null;
+
 function setupNavMore() {
   const nav = document.querySelector("nav") as HTMLElement | null;
   const btn = document.getElementById("navmore-btn") as HTMLButtonElement | null;
   if (!nav || !btn) return;
-  const label = btn.querySelector("#navmore-t");
-  if (label) label.textContent = t("더 보기");
-  const setOpen = (open: boolean) => {
-    nav.classList.toggle("more-open", open);
-    btn.setAttribute("aria-expanded", open ? "true" : "false");
-  };
-  btn.onclick = () => setOpen(!nav.classList.contains("more-open"));
   const sync = () => {
     const badge = document.getElementById("navmore-badge");
-    if (!badge) return;
     const any = ["nav-orderbadge", "nav-talkbadge"].some((id) => {
       const el = document.getElementById(id);
       return !!el && !el.hidden;
     });
+    const open = nav.classList.contains("more-open");
     // 펼쳐 있으면 안쪽 배지가 보이므로 점은 접혀 있을 때만 띄운다.
-    badge.hidden = !any || nav.classList.contains("more-open");
+    if (badge) badge.hidden = !any || open;
+    // 색 점만으로 알리지 않는다 — 단추 이름에도 넣는다.
+    btn.setAttribute("aria-label", t(any && !open ? "더 보기, 안 본 소식 있음" : "더 보기"));
   };
+  const setOpen = (open: boolean) => {
+    nav.classList.toggle("more-open", open);
+    btn.setAttribute("aria-expanded", open ? "true" : "false");
+    sync();
+  };
+  navMoreSetOpen = setOpen;
+  btn.onclick = () => setOpen(!nav.classList.contains("more-open"));
   const obs = new MutationObserver(sync);
   for (const id of ["nav-orderbadge", "nav-talkbadge"]) {
     const el = document.getElementById(id);
     if (el) obs.observe(el, { attributes: true, attributeFilter: ["hidden"] });
   }
-  // 접힌 안의 화면이 켜지면 펼친다.
-  const openIfInside = () => {
-    if (nav.querySelector("a.navmore.on")) setOpen(true);
-    sync();
-  };
-  // 🔴 nav 자신의 class(펼침·접힘)가 바뀐 것으로는 다시 펼치지 않는다 — 안쪽 화면을 보는 중에도
-  //    사람이 「더 보기」를 눌러 접을 수 있어야 한다. 링크의 `on` 이 바뀔 때만 본다.
-  new MutationObserver((muts) => {
-    if (muts.some((m) => m.target !== nav)) openIfInside();
-    else sync();
-  }).observe(nav, { attributes: true, subtree: true, attributeFilter: ["class"] });
-  openIfInside();
+  sync();
 }
 
 function showPage(id: string) {
@@ -4710,6 +4712,7 @@ function showPage(id: string) {
   document.querySelectorAll(".page").forEach((p) => p.classList.toggle("on", p.id === `page-${id}`));
   document.querySelectorAll("nav a").forEach((a) =>
     a.classList.toggle("on", (a as HTMLElement).dataset.page === id));
+  if (document.querySelector(`nav a.navmore[data-page="${id}"]`)) navMoreSetOpen?.(true);
   if (id === "wallet") loadWallet();
   // 0.4.8 — 지갑 화면 맨 위 알림 줄(「지갑이 준비됐어요」·복구 단어 확인). 배치는 안 건드리고 칸 하나만.
   if (id === "wallet") void paintWalletNotes(walletNotes);
@@ -16315,6 +16318,7 @@ function 배지그리기() {
     el.textContent = String(안본주문);
     el.hidden = 안본주문 <= 0;
   }
+  if (currentPage === "home") void paintHomeToday();
 }
 
 /// 사장이 주문표를 봤다 → 숫자와 띠를 내린다.
@@ -18099,6 +18103,7 @@ async function applyMode(): Promise<void> {
   // 그 자체라 돕는 사람도 쓴다 — 장사 기능이 아니다. 「지갑」도 같다.
   show("shop", !help && !wallet);
   // `door` 는 큰 메뉴에서 내렸다(「내 가게」 안에 있다). 감출 것이 없다.
+  document.querySelector("nav")?.classList.toggle("help-first", help);
   walletFirst(wallet);
 
   if (wallet) {
@@ -18159,6 +18164,7 @@ const wordsRestore = wireWordsRestore({
  */
 let walletNavHome: { parent: Node; next: Node | null } | null = null;
 function walletFirst(on: boolean) {
+  document.querySelector("nav")?.classList.toggle("wallet-first", on);
   const a = document.querySelector<HTMLElement>('nav a[data-page="wallet"]');
   const top = document.querySelector<HTMLElement>("nav a[data-page]");
   if (!a || !a.parentNode) return;

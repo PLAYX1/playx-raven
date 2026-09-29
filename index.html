@@ -70,23 +70,29 @@
       nav a { display: flex; align-items: center; gap: 8px; padding: 12px 16px; color: var(--text);
               text-decoration: none; font-size: 15px; cursor: pointer; border-left: 2px solid transparent; }
       /* 0.6.0 — 왼쪽 메뉴는 「홈·라비·자산」 셋만 늘 보인다. 나머지는 「더 보기」 안에 접는다.
-         🔴 자리 순서는 order 로 정한다 — 글 안 기능 링크 순서(DOM)는 그대로 둔다. */
+         🔴 실제 메뉴는 아래쪽의 88px 어두운 레일 규칙이 입힌다 — 같은 모양을 따른다.
+         🔴 자리 순서는 order 로 정한다. 접힘은 !important 로 — 「이야기」 화면 규칙이 뒤에서 덮지 못하게. */
       nav .brand { order: 0; }
       nav > a[data-page="home"] { order: 1; }
       nav > a[data-page="ravi"] { order: 2; }
       nav > a[data-page="assets"] { order: 3; }
       nav > #navmore-btn { order: 4; }
-      nav > a.navmore { order: 5; display: none; padding-left: 28px; }
-      nav.more-open > a.navmore { display: flex; }
+      nav > a.navmore { order: 5; }
+      nav:not(.more-open) > a.navmore { display: none !important; }
+      /* 「지갑」 모드는 지갑이 주 화면, 「돕기」 모드는 「돕는 중」이 주 화면 — 접힌 안에 두지 않는다. */
+      nav.wallet-first > a[data-page="wallet"] { display: flex !important; order: 0; }
+      nav.help-first > a[data-page="helping"] { display: flex !important; order: 3; }
       nav > .navfoot { order: 9; }
-      #navmore-btn { display: flex; align-items: center; gap: 8px; width: 100%; box-sizing: border-box;
-                     min-height: 48px; padding: 12px 16px; background: transparent; border: 0;
-                     border-left: 2px solid transparent; color: var(--muted); font: inherit; font-size: 15px;
-                     cursor: pointer; text-align: left; }
-      #navmore-btn:hover { background: color-mix(in srgb, var(--brand) 7%, transparent); }
-      #navmore-btn:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
-      #navmore-btn .chev { margin-left: auto; transition: transform .12s ease; }
-      nav.more-open #navmore-btn .chev { transform: rotate(180deg); }
+      #navmore-btn { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center;
+                     gap: 4px; width: 80px; max-width: 100%; min-height: 58px; margin: 2px auto; padding: 8px 4px;
+                     box-sizing: border-box; background: transparent; border: 0; border-radius: 14px;
+                     color: #ECEDF3; font: inherit; font-size: 11px; line-height: 1.2; cursor: pointer; }
+      #navmore-btn svg { width: 24px; height: 24px; flex: none; }
+      #navmore-btn .chev { display: none; }
+      #navmore-btn:hover { background: #2A2C38; }
+      #navmore-btn[aria-expanded="true"] { background: #2A2C38; }
+      #navmore-btn:focus-visible { outline: 2px solid #E2702A; outline-offset: -2px; }
+      #navmore-btn .ordbadge { position: absolute; top: 6px; right: 14px; }
       nav a:hover { background: color-mix(in srgb, var(--brand) 7%, transparent); }
       nav a.on { border-left-color: var(--brand); background: color-mix(in srgb, var(--brand) 12%, transparent);
                  font-weight: 600; }
@@ -2462,7 +2468,7 @@
       .rv-home-balance .overview-actions button { min-height:52px; padding:0 24px; border-radius:16px; }
       .rv-home-balance #rv-home-send { min-height:52px; min-width:130px; background:#E2702A; color:#15161D; font-weight:700; }
       .rv-home-safety { padding:28px !important; }
-      .rv-home-today { padding:28px !important; }
+      .rv-home-today { padding:28px !important; grid-column:1 / -1; }
       .rv-home-today .rv-home-entry { min-height:44px; display:flex; align-items:center; justify-content:space-between; gap:12px; font-size:16px; }
       .rv-home-today .rv-home-entry b { font-weight:700; }
       .rv-home-activity, .rv-home-chats { padding:26px 28px !important; }
