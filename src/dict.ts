@@ -459,6 +459,18 @@ export const DICT: Record<string, Record<string, string>> = {
       "Even if someone else touches this computer they cannot change the destination; they can only send to your wallet. Changing the address requires the wallet passphrase.",
     "내 가게":
       "My shop",
+    "오늘 가게":
+      "Shop today",
+    "오늘 받은 금액":
+      "Received today",
+    "판매 {0}건":
+      "{0} sales",
+    "새 주문 {0}건":
+      "{0} new orders",
+    "입금 대기 {0}건":
+      "{0} awaiting payment",
+    "내 가게 열기":
+      "Open my shop",
     "더 보기":
       "More",
     "내 소개":
@@ -2125,6 +2137,18 @@ export const DICT: Record<string, Record<string, string>> = {
       "他人がこのパソコンを触っても送り先は変えられず、店主のウォレットに送ることしかできません。アドレスを変えるにはウォレットのパスフレーズが必要です。",
     "내 가게":
       "マイショップ",
+    "오늘 가게":
+      "今日のお店",
+    "오늘 받은 금액":
+      "今日の入金",
+    "판매 {0}건":
+      "販売 {0}件",
+    "새 주문 {0}건":
+      "新しい注文 {0}件",
+    "입금 대기 {0}건":
+      "入金待ち {0}件",
+    "내 가게 열기":
+      "マイショップを開く",
     "더 보기":
       "もっと見る",
     "내 소개":
@@ -3791,6 +3815,18 @@ export const DICT: Record<string, Record<string, string>> = {
       "即使他人接触这台电脑也无法更改目的地，只能转到您的钱包。更改地址需要钱包密码。",
     "내 가게":
       "我的店",
+    "오늘 가게":
+      "今日店铺",
+    "오늘 받은 금액":
+      "今日收款",
+    "판매 {0}건":
+      "销售 {0} 笔",
+    "새 주문 {0}건":
+      "新订单 {0} 笔",
+    "입금 대기 {0}건":
+      "待付款 {0} 笔",
+    "내 가게 열기":
+      "打开我的店",
     "더 보기":
       "更多",
     "내 소개":

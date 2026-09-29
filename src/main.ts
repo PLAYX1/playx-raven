@@ -4572,6 +4572,35 @@ async function paintProfile(): Promise<void> {
   } catch { /* Profile name can be set while relays are unavailable. */ }
 }
 
+/// 0.6.0-A2 — 홈의 「오늘 가게」 카드. 가게를 만든 사람에게만 보인다.
+/// 이미 있는 장부(ledger_range·ledger_pending)와 새 주문 숫자만 읽는다 — 새 계산·새 저장 없음.
+/// 발송·환불·공동구매 줄은 그 기능이 생길 때 여기에 더한다(RV7 §14.3-1).
+async function paintHomeToday(): Promise<void> {
+  const box = document.getElementById("rv-home-today");
+  const body = document.getElementById("rv-home-today-body");
+  if (!box || !body) return;
+  try {
+    const sh = await invoke<any>("shop_load").catch(() => null);
+    if (!sh || !Object.keys(sh).length) { box.hidden = true; return; }
+    const ymd = todayYmd();
+    const r: any = await invoke("ledger_range", { fromYmd: ymd, toYmd: ymd, tzOffsetMin: tzMin() });
+    const pend: any = await invoke("ledger_pending").catch(() => null);
+    const cur = r?.currency ? " " + String(r.currency) : "";
+    const money = Number(r?.total || 0).toLocaleString(undefined, { maximumFractionDigits: 2 }) + cur;
+    const row = (label: string, value: string) =>
+      `<div class="rv-home-entry"><span>${escapeHtml(label)}</span><b>${escapeHtml(value)}</b></div>`;
+    body.innerHTML =
+      row(t("오늘 받은 금액"), money) +
+      row(tf("판매 {0}건", Number(r?.sales || 0)), "") +
+      row(tf("새 주문 {0}건", 안본주문), "") +
+      row(tf("입금 대기 {0}건", Number(pend?.count || 0)), "");
+    box.hidden = false;
+  } catch {
+    // 장부를 못 읽었으면 조용히 접는다. 없는 숫자를 지어내지 않는다.
+    box.hidden = true;
+  }
+}
+
 async function paintHome(): Promise<void> {
   void refreshOverview();
   const safe = document.getElementById("rv-home-safe");
@@ -4595,6 +4624,7 @@ async function paintHome(): Promise<void> {
       return `<div class="rv-home-entry"><span class="rv-home-icon ${received ? "receive" : "send"}" aria-hidden="true">${received ? "↓" : "↑"}</span><span class="rv-home-tx-main">${copyHtml(received ? "받음" : "보냄")} · ${escapeHtml(String(tx.asset_name || "RVN"))}<small>${escapeHtml(when)} · ${escapeHtml(state)}</small></span><strong class="${received ? "ok" : ""}">${received ? "+" : "−"}${escapeHtml(Math.abs(amount).toLocaleString(lang))}</strong></div>`;
     }).join("") || `<p>${copyHtml("최근 거래가 없습니다")}</p>`;
   } catch { $("rv-home-txs").textContent = t("거래 내역을 읽지 못했습니다"); }
+  void paintHomeToday();
   try {
     const rooms: any[] = await invoke("talk_rooms");
     $("rv-home-rooms").innerHTML = `<div class="rv-home-entry">${copyHtml("라비")} · ${copyHtml("AI 도우미")}</div>` +
@@ -16991,6 +17021,10 @@ window.addEventListener("DOMContentLoaded", async () => {
     (a as HTMLElement).onclick = () => showPage((a as HTMLElement).dataset.page!);
   });
   setupNavMore();
+  document.getElementById("rv-home-shop")?.addEventListener("click", () => {
+    showPage("shop");
+    shopTab(안본주문 > 0 ? "orders" : "sales");
+  });
   // 0.4.8-B 잔액 카드 — 큰 단추 「받기」, 작은 줄 「최근 거래」「주소 확인」. (「보내기」는 아래 w-send-rvn)
   $("w-receive").addEventListener("click", () => void openReceive());
   $("w-go-txs").addEventListener("click", () => jumpToEl("w-txs"));

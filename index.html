@@ -2462,6 +2462,9 @@
       .rv-home-balance .overview-actions button { min-height:52px; padding:0 24px; border-radius:16px; }
       .rv-home-balance #rv-home-send { min-height:52px; min-width:130px; background:#E2702A; color:#15161D; font-weight:700; }
       .rv-home-safety { padding:28px !important; }
+      .rv-home-today { padding:28px !important; }
+      .rv-home-today .rv-home-entry { min-height:44px; display:flex; align-items:center; justify-content:space-between; gap:12px; font-size:16px; }
+      .rv-home-today .rv-home-entry b { font-weight:700; }
       .rv-home-activity, .rv-home-chats { padding:26px 28px !important; }
       .rv-home-entry { display:flex; align-items:center; gap:14px; }
       .rv-home-entry .rv-home-icon { width:44px; height:44px; border-radius:14px; display:grid; place-items:center; flex:none; background:var(--ravi-tint); color:var(--ravi-soft); font-size:22px; }
@@ -3579,6 +3582,7 @@
         </div>
 <button id="rv-home-send" type="button">보내기</button></div>
           <div class="rv-home-safety"><h2>안전 상태</h2><p id="rv-home-safe">상태를 확인하는 중…</p><button id="rv-home-backup" class="ghost" type="button">백업 확인</button></div>
+          <div class="rv-home-today" id="rv-home-today" hidden><h2>오늘 가게</h2><div id="rv-home-today-body"></div><button id="rv-home-shop" class="ghost" type="button">내 가게 열기</button></div>
           <div class="rv-home-activity"><h2>최근 활동</h2><div id="rv-home-txs"></div></div>
           <div class="rv-home-chats"><h2>최근 대화</h2><div id="rv-home-rooms"></div><button id="rv-home-chat" class="ghost" type="button">대화 열기</button></div>
         </div>
