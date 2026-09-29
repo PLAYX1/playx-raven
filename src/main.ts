@@ -4605,6 +4605,44 @@ async function paintHome(): Promise<void> {
 /** 「만들기」 화면 들어가기 — 화면이 준비되면 채운다. */
 let createApi: CreateApi | undefined;
 
+/// 0.6.0 — 왼쪽 메뉴 「더 보기」. 늘 보이는 것은 홈·라비·자산 셋이다.
+/// - 접힌 안의 화면을 열면(라비가 데려가도) 저절로 펼쳐진다 — 지금 어디 있는지 사라지면 안 된다.
+/// - 접힌 안의 배지(새 주문·새 글)는 「더 보기」에도 점으로 띄운다 — 새 주문을 놓치면 안 된다.
+function setupNavMore() {
+  const nav = document.querySelector("nav") as HTMLElement | null;
+  const btn = document.getElementById("navmore-btn") as HTMLButtonElement | null;
+  if (!nav || !btn) return;
+  const label = btn.querySelector("#navmore-t");
+  if (label) label.textContent = t("더 보기");
+  const setOpen = (open: boolean) => {
+    nav.classList.toggle("more-open", open);
+    btn.setAttribute("aria-expanded", open ? "true" : "false");
+  };
+  btn.onclick = () => setOpen(!nav.classList.contains("more-open"));
+  const sync = () => {
+    const badge = document.getElementById("navmore-badge");
+    if (!badge) return;
+    const any = ["nav-orderbadge", "nav-talkbadge"].some((id) => {
+      const el = document.getElementById(id);
+      return !!el && !el.hidden;
+    });
+    // 펼쳐 있으면 안쪽 배지가 보이므로 점은 접혀 있을 때만 띄운다.
+    badge.hidden = !any || nav.classList.contains("more-open");
+  };
+  const obs = new MutationObserver(sync);
+  for (const id of ["nav-orderbadge", "nav-talkbadge"]) {
+    const el = document.getElementById(id);
+    if (el) obs.observe(el, { attributes: true, attributeFilter: ["hidden"] });
+  }
+  // 접힌 안의 화면이 켜지면 펼친다.
+  const openIfInside = () => {
+    if (nav.querySelector("a.navmore.on")) setOpen(true);
+    sync();
+  };
+  new MutationObserver(openIfInside).observe(nav, { attributes: true, subtree: true, attributeFilter: ["class"] });
+  openIfInside();
+}
+
 function showPage(id: string) {
   // 🔴 화면을 떠나면 그 화면 때문에 도는 타이머를 끈다.
   //
@@ -16952,6 +16990,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     if (label) { a.setAttribute("aria-label", t(label)); a.setAttribute("title", t(label)); }
     (a as HTMLElement).onclick = () => showPage((a as HTMLElement).dataset.page!);
   });
+  setupNavMore();
   // 0.4.8-B 잔액 카드 — 큰 단추 「받기」, 작은 줄 「최근 거래」「주소 확인」. (「보내기」는 아래 w-send-rvn)
   $("w-receive").addEventListener("click", () => void openReceive());
   $("w-go-txs").addEventListener("click", () => jumpToEl("w-txs"));

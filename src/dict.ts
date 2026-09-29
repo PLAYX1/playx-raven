@@ -459,6 +459,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Even if someone else touches this computer they cannot change the destination; they can only send to your wallet. Changing the address requires the wallet passphrase.",
     "내 가게":
       "My shop",
+    "더 보기":
+      "More",
     "내 소개":
       "My page",
     "손님이 보는 얼굴입니다. 「이야기」의 내 이름과 다른 자리입니다 — 개인 대화와 섞이지 않습니다.":
@@ -2123,6 +2125,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "他人がこのパソコンを触っても送り先は変えられず、店主のウォレットに送ることしかできません。アドレスを変えるにはウォレットのパスフレーズが必要です。",
     "내 가게":
       "マイショップ",
+    "더 보기":
+      "もっと見る",
     "내 소개":
       "紹介ページ",
     "손님이 보는 얼굴입니다. 「이야기」의 내 이름과 다른 자리입니다 — 개인 대화와 섞이지 않습니다.":
@@ -3787,6 +3791,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "即使他人接触这台电脑也无法更改目的地，只能转到您的钱包。更改地址需要钱包密码。",
     "내 가게":
       "我的店",
+    "더 보기":
+      "更多",
     "내 소개":
       "我的介绍",
     "손님이 보는 얼굴입니다. 「이야기」의 내 이름과 다른 자리입니다 — 개인 대화와 섞이지 않습니다.":
