@@ -4669,7 +4669,12 @@ function setupNavMore() {
     if (nav.querySelector("a.navmore.on")) setOpen(true);
     sync();
   };
-  new MutationObserver(openIfInside).observe(nav, { attributes: true, subtree: true, attributeFilter: ["class"] });
+  // 🔴 nav 자신의 class(펼침·접힘)가 바뀐 것으로는 다시 펼치지 않는다 — 안쪽 화면을 보는 중에도
+  //    사람이 「더 보기」를 눌러 접을 수 있어야 한다. 링크의 `on` 이 바뀔 때만 본다.
+  new MutationObserver((muts) => {
+    if (muts.some((m) => m.target !== nav)) openIfInside();
+    else sync();
+  }).observe(nav, { attributes: true, subtree: true, attributeFilter: ["class"] });
   openIfInside();
 }
 
