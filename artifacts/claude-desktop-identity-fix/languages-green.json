@@ -14,15 +14,11 @@
         "element": "upnag"
       },
       {
+        "text": "홈",
+        "element": "SPAN"
+      },
+      {
         "text": "라비",
-        "element": "SPAN"
-      },
-      {
-        "text": "이야기",
-        "element": "SPAN"
-      },
-      {
-        "text": "지갑",
         "element": "SPAN"
       },
       {
@@ -30,184 +26,24 @@
         "element": "SPAN"
       },
       {
-        "text": "내 소개",
-        "element": "SPAN"
-      },
-      {
-        "text": "내 가게",
-        "element": "SPAN"
-      },
-      {
-        "text": "이 컴퓨터",
-        "element": "SPAN"
+        "text": "더 보기",
+        "element": "navmore-t"
       },
       {
         "text": "문제 알리기",
         "element": "rp-open"
       },
       {
-        "text": "RVN 노드 켜짐",
-        "element": "d-node-t"
+        "text": "연결됨",
+        "element": "d-sum-t"
       },
       {
-        "text": "채굴 꺼짐",
-        "element": "d-mine-t"
-      },
-      {
-        "text": "파일창고 꺼짐",
-        "element": "d-ipfs-t"
-      },
-      {
-        "text": "릴레이 꺼짐",
-        "element": "d-relay-t"
-      },
-      {
-        "text": "바깥 연결 꺼짐",
-        "element": "d-out-t"
-      },
-      {
-        "text": "한눈에",
-        "element": "overview-title"
-      },
-      {
-        "text": "내 노드",
-        "element": "SPAN"
-      },
-      {
-        "text": "켜짐",
-        "element": "overview-node"
-      },
-      {
-        "text": "확정 잔액",
-        "element": "SPAN"
-      },
-      {
-        "text": "받기",
-        "element": "SPAN"
-      },
-      {
-        "text": "폰에서 서명한 거래 보내기",
-        "element": "SPAN"
-      },
-      {
-        "text": "가게부터 만들까요?",
+        "text": "라비",
         "element": "ravi-hello"
       },
       {
-        "text": "이름 하나면 시작됩니다. 나머지는 나중에 채우셔도 됩니다.",
+        "text": "AI 키를 넣으면 라비가 깨어나요",
         "element": "ravi-sub"
-      },
-      {
-        "text": "물어보고 시키는 곳. AI는 직접 켤 때만 사용합니다.",
-        "element": "P"
-      },
-      {
-        "text": "가게 만들기",
-        "element": "SPAN"
-      },
-      {
-        "text": "여기서 시작합니다",
-        "element": "SPAN"
-      },
-      {
-        "text": "오늘 얼마",
-        "element": "SPAN"
-      },
-      {
-        "text": "매출 · 장부",
-        "element": "SPAN"
-      },
-      {
-        "text": "손님 QR",
-        "element": "SPAN"
-      },
-      {
-        "text": "카운터에 붙이는 것",
-        "element": "SPAN"
-      },
-      {
-        "text": "들어온 주문",
-        "element": "SPAN"
-      },
-      {
-        "text": "손님이 시킨 것",
-        "element": "SPAN"
-      },
-      {
-        "text": "지금 닫기",
-        "element": "SPAN"
-      },
-      {
-        "text": "손님에게 안 보입니다",
-        "element": "SPAN"
-      },
-      {
-        "text": "메뉴 넣기",
-        "element": "SPAN"
-      },
-      {
-        "text": "말로 불러 주세요",
-        "element": "SPAN"
-      },
-      {
-        "text": "자산 만들기",
-        "element": "SPAN"
-      },
-      {
-        "text": "쿠폰 · 회원권 · 굿즈",
-        "element": "SPAN"
-      },
-      {
-        "text": "가게 소개",
-        "element": "SPAN"
-      },
-      {
-        "text": "손님에게 보일 글",
-        "element": "SPAN"
-      },
-      {
-        "text": "물어보기",
-        "element": "SPAN"
-      },
-      {
-        "text": "뭐든 물어보세요",
-        "element": "SPAN"
-      },
-      {
-        "text": "아직 안 된 것",
-        "element": "SPAN"
-      },
-      {
-        "text": "가게 이름이 비어 있습니다",
-        "element": "SPAN"
-      },
-      {
-        "text": "메뉴가 하나도 없습니다",
-        "element": "SPAN"
-      },
-      {
-        "text": "체인에 가게를 등록하지 않았습니다",
-        "element": "SPAN"
-      },
-      {
-        "text": "바깥 연결이 꺼져 있습니다",
-        "element": "SPAN"
-      },
-      {
-        "text": "손님에게 보일 얼굴을 아직 안 올렸습니다",
-        "element": "SPAN"
-      },
-      {
-        "text": "지금 상태",
-        "element": "B"
-      },
-      {
-        "text": "상태",
-        "element": "SPAN"
-      },
-      {
-        "text": "못 읽음",
-        "element": "SPAN"
       },
       {
         "text": "폰에서 서명한 거래 보내기",
@@ -216,6 +52,10 @@
       {
         "text": "폰에서 RavenVault 쓰기",
         "element": "SUMMARY"
+      },
+      {
+        "text": "AI 열쇠 넣기",
+        "element": "ravi-keyopen"
       },
       {
         "text": "화면 채우기",
@@ -230,11 +70,71 @@
         "element": "BUTTON"
       },
       {
+        "text": "무엇을 도와드릴까요? 보내기·받기·백업·대화 무엇이든 물어보세요.",
+        "element": "SPAN"
+      },
+      {
+        "text": "잔액 확인",
+        "element": "BUTTON"
+      },
+      {
+        "text": "백업 방법",
+        "element": "BUTTON"
+      },
+      {
+        "text": "폰 연결",
+        "element": "BUTTON"
+      },
+      {
+        "text": "RVN 보내기 요청",
+        "element": "rv-send-request"
+      },
+      {
+        "text": "말로 묻기",
+        "element": "rv-voice"
+      },
+      {
         "text": "보내기",
         "element": "chat-go"
       },
       {
-        "text": "아이스 아메리카노 4500원 넣어줘",
+        "text": "AI 열쇠 넣기",
+        "element": "SPAN"
+      },
+      {
+        "text": "닫기",
+        "element": "SPAN"
+      },
+      {
+        "text": "열쇠가 있으면 라비가 AI 로 무엇이든 답해요. 열쇠는 AI 회사에서 각자 받아요(요금은 회사마다 달라요).",
+        "element": "SPAN"
+      },
+      {
+        "text": "어디서 받나요",
+        "element": "SPAN"
+      },
+      {
+        "text": "받은 열쇠를 여기에 붙여 넣으세요",
+        "element": "SPAN"
+      },
+      {
+        "text": "저장",
+        "element": "SPAN"
+      },
+      {
+        "text": "열쇠는 이 컴퓨터에만 저장돼요. AI 에게 물을 때만 고른 회사로 함께 보내지고, 우리 서버로는 가지 않아요.",
+        "element": "SPAN"
+      },
+      {
+        "text": "내 컴퓨터에서 돌리는 AI 나 다른 곳은 「이 컴퓨터 › AI 열쇠」에서 넣어요.",
+        "element": "SPAN"
+      },
+      {
+        "text": "라비에게 시킬 수 있는 일",
+        "element": "SUMMARY"
+      },
+      {
+        "text": "레이븐코인으로 받으면 뭐가 좋아?",
         "element": "chat-q",
         "attribute": "placeholder"
       }
@@ -256,7 +156,15 @@
         "element": "upnag"
       },
       {
+        "text": "홈",
+        "element": "SPAN"
+      },
+      {
         "text": "라비",
+        "element": "SPAN"
+      },
+      {
+        "text": "내 소개",
         "element": "SPAN"
       },
       {
@@ -272,7 +180,7 @@
         "element": "SPAN"
       },
       {
-        "text": "내 소개",
+        "text": "아티스트",
         "element": "SPAN"
       },
       {
@@ -284,32 +192,28 @@
         "element": "SPAN"
       },
       {
+        "text": "더 보기",
+        "element": "navmore-t"
+      },
+      {
         "text": "문제 알리기",
         "element": "rp-open"
       },
       {
-        "text": "RVN 노드 켜짐",
-        "element": "d-node-t"
-      },
-      {
-        "text": "채굴 꺼짐",
-        "element": "d-mine-t"
-      },
-      {
-        "text": "파일창고 꺼짐",
-        "element": "d-ipfs-t"
-      },
-      {
-        "text": "릴레이 꺼짐",
-        "element": "d-relay-t"
-      },
-      {
-        "text": "바깥 연결 꺼짐",
-        "element": "d-out-t"
+        "text": "연결됨",
+        "element": "d-sum-t"
       },
       {
         "text": "방",
         "element": "DIV"
+      },
+      {
+        "text": "라비",
+        "element": "B"
+      },
+      {
+        "text": "AI 도우미",
+        "element": "SMALL"
       },
       {
         "text": "레이븐 이야기",
@@ -322,6 +226,10 @@
       {
         "text": "레이븐 이야기",
         "element": "tk-title"
+      },
+      {
+        "text": "공개 방 · 누구나 읽을 수 있어요",
+        "element": "SPAN"
       },
       {
         "text": "초대하기",
@@ -342,6 +250,14 @@
       {
         "text": "알겠습니다",
         "element": "tk-firstok"
+      },
+      {
+        "text": "아직 글이 없습니다.",
+        "element": "SPAN"
+      },
+      {
+        "text": "첫 글을 올려 보세요 — 세계 릴레이로 함께 나갑니다.",
+        "element": "SPAN"
       },
       {
         "text": "글을",
@@ -380,10 +296,6 @@
         "element": "tk-send"
       },
       {
-        "text": "라비에게 물어보기",
-        "element": "SPAN"
-      },
-      {
         "text": "메시지",
         "element": "tk-text",
         "attribute": "placeholder"
@@ -406,7 +318,15 @@
         "element": "upnag"
       },
       {
+        "text": "홈",
+        "element": "SPAN"
+      },
+      {
         "text": "라비",
+        "element": "SPAN"
+      },
+      {
+        "text": "내 소개",
         "element": "SPAN"
       },
       {
@@ -422,7 +342,7 @@
         "element": "SPAN"
       },
       {
-        "text": "내 소개",
+        "text": "아티스트",
         "element": "SPAN"
       },
       {
@@ -434,28 +354,16 @@
         "element": "SPAN"
       },
       {
+        "text": "더 보기",
+        "element": "navmore-t"
+      },
+      {
         "text": "문제 알리기",
         "element": "rp-open"
       },
       {
-        "text": "RVN 노드 켜짐",
-        "element": "d-node-t"
-      },
-      {
-        "text": "채굴 꺼짐",
-        "element": "d-mine-t"
-      },
-      {
-        "text": "파일창고 꺼짐",
-        "element": "d-ipfs-t"
-      },
-      {
-        "text": "릴레이 꺼짐",
-        "element": "d-relay-t"
-      },
-      {
-        "text": "바깥 연결 꺼짐",
-        "element": "d-out-t"
+        "text": "연결됨",
+        "element": "d-sum-t"
       },
       {
         "text": "지갑",
@@ -466,11 +374,27 @@
         "element": "P"
       },
       {
-        "text": "받기",
+        "text": "복구 단어를 아직 확인하지 않으셨어요",
         "element": "SPAN"
       },
       {
-        "text": "받을 주소 만들기",
+        "text": "지금 확인",
+        "element": "SPAN"
+      },
+      {
+        "text": "사용 가능",
+        "element": "w-bal-title"
+      },
+      {
+        "text": "들어오는 중 9,999 RVN",
+        "element": "w-unconfirmed"
+      },
+      {
+        "text": "네트워크에 기록되면(보통 몇 분) 사용 가능으로 옮겨져요.",
+        "element": "w-incoming-note"
+      },
+      {
+        "text": "받기",
         "element": "SPAN"
       },
       {
@@ -478,32 +402,24 @@
         "element": "SPAN"
       },
       {
-        "text": "RVN 보내기",
-        "element": "SPAN"
-      },
-      {
         "text": "자산 보내기",
-        "element": "SPAN"
-      },
-      {
-        "text": "쿠폰 · 회원권",
-        "element": "SPAN"
+        "element": "w-send-asset"
       },
       {
         "text": "최근 거래",
-        "element": "SPAN"
+        "element": "w-go-txs"
       },
       {
-        "text": "들어오고 나간 것",
-        "element": "SPAN"
+        "text": "주소 확인",
+        "element": "w-go-whose"
       },
       {
-        "text": "사용 가능",
-        "element": "H3"
+        "text": "12단어로 되살리기",
+        "element": "w-restore-words"
       },
       {
-        "text": "확인 대기 중 9,999 RVN",
-        "element": "w-unconfirmed"
+        "text": "새로고침",
+        "element": "w-refresh"
       },
       {
         "text": "지갑 잠금",
@@ -518,20 +434,16 @@
         "element": "w-enc"
       },
       {
-        "text": "자산 보내기",
-        "element": "w-send-asset"
+        "text": "주소 확인",
+        "element": "whose-title"
       },
       {
-        "text": "RVN 보내기",
-        "element": "w-send-rvn"
+        "text": "붙여 넣으면 이 지갑 주소인지 바로 알려 드려요.",
+        "element": "P"
       },
       {
-        "text": "받을 주소 만들기",
-        "element": "w-newaddr"
-      },
-      {
-        "text": "새로고침",
-        "element": "w-refresh"
+        "text": "확인",
+        "element": "whose-go"
       },
       {
         "text": "받을 주소록",
@@ -554,8 +466,9 @@
         "element": "TD"
       },
       {
-        "text": "라비에게 물어보기",
-        "element": "SPAN"
+        "text": "R… 주소를 붙여 넣으세요",
+        "element": "whose-in",
+        "attribute": "placeholder"
       }
     ],
     "overflow": 0
@@ -575,7 +488,15 @@
         "element": "upnag"
       },
       {
+        "text": "홈",
+        "element": "SPAN"
+      },
+      {
         "text": "라비",
+        "element": "SPAN"
+      },
+      {
+        "text": "내 소개",
         "element": "SPAN"
       },
       {
@@ -591,7 +512,7 @@
         "element": "SPAN"
       },
       {
-        "text": "내 소개",
+        "text": "아티스트",
         "element": "SPAN"
       },
       {
@@ -603,28 +524,16 @@
         "element": "SPAN"
       },
       {
+        "text": "더 보기",
+        "element": "navmore-t"
+      },
+      {
         "text": "문제 알리기",
         "element": "rp-open"
       },
       {
-        "text": "RVN 노드 켜짐",
-        "element": "d-node-t"
-      },
-      {
-        "text": "채굴 꺼짐",
-        "element": "d-mine-t"
-      },
-      {
-        "text": "파일창고 꺼짐",
-        "element": "d-ipfs-t"
-      },
-      {
-        "text": "릴레이 꺼짐",
-        "element": "d-relay-t"
-      },
-      {
-        "text": "바깥 연결 꺼짐",
-        "element": "d-out-t"
+        "text": "연결됨",
+        "element": "d-sum-t"
       },
       {
         "text": "자산",
@@ -641,6 +550,14 @@
       {
         "text": "에 있습니다. 아무도 갖고 있지 않으면 찾을 수 없게 됩니다 — 이 컴퓨터가 켜져 있으면 이 컴퓨터가 갖고 있습니다.",
         "element": "P"
+      },
+      {
+        "text": "만들기",
+        "element": "SPAN"
+      },
+      {
+        "text": "증명서 · 티켓 · 작품",
+        "element": "SPAN"
       },
       {
         "text": "새 자산 만들기",
@@ -785,10 +702,6 @@
       {
         "text": "해당하는 자산이 없습니다.",
         "element": "TD"
-      },
-      {
-        "text": "라비에게 물어보기",
-        "element": "SPAN"
       }
     ],
     "overflow": 0
@@ -808,7 +721,15 @@
         "element": "upnag"
       },
       {
+        "text": "홈",
+        "element": "SPAN"
+      },
+      {
         "text": "라비",
+        "element": "SPAN"
+      },
+      {
+        "text": "내 소개",
         "element": "SPAN"
       },
       {
@@ -824,7 +745,7 @@
         "element": "SPAN"
       },
       {
-        "text": "내 소개",
+        "text": "아티스트",
         "element": "SPAN"
       },
       {
@@ -836,28 +757,16 @@
         "element": "SPAN"
       },
       {
+        "text": "더 보기",
+        "element": "navmore-t"
+      },
+      {
         "text": "문제 알리기",
         "element": "rp-open"
       },
       {
-        "text": "RVN 노드 켜짐",
-        "element": "d-node-t"
-      },
-      {
-        "text": "채굴 꺼짐",
-        "element": "d-mine-t"
-      },
-      {
-        "text": "파일창고 꺼짐",
-        "element": "d-ipfs-t"
-      },
-      {
-        "text": "릴레이 꺼짐",
-        "element": "d-relay-t"
-      },
-      {
-        "text": "바깥 연결 꺼짐",
-        "element": "d-out-t"
+        "text": "연결됨",
+        "element": "d-sum-t"
       },
       {
         "text": "내 소개",
@@ -932,10 +841,6 @@
         "element": "ar-give"
       },
       {
-        "text": "라비에게 물어보기",
-        "element": "SPAN"
-      },
-      {
         "text": "표시할 이름",
         "element": "ar-name",
         "attribute": "placeholder"
@@ -963,7 +868,15 @@
         "element": "upnag"
       },
       {
+        "text": "홈",
+        "element": "SPAN"
+      },
+      {
         "text": "라비",
+        "element": "SPAN"
+      },
+      {
+        "text": "내 소개",
         "element": "SPAN"
       },
       {
@@ -979,7 +892,7 @@
         "element": "SPAN"
       },
       {
-        "text": "내 소개",
+        "text": "아티스트",
         "element": "SPAN"
       },
       {
@@ -991,28 +904,16 @@
         "element": "SPAN"
       },
       {
+        "text": "더 보기",
+        "element": "navmore-t"
+      },
+      {
         "text": "문제 알리기",
         "element": "rp-open"
       },
       {
-        "text": "RVN 노드 켜짐",
-        "element": "d-node-t"
-      },
-      {
-        "text": "채굴 꺼짐",
-        "element": "d-mine-t"
-      },
-      {
-        "text": "파일창고 꺼짐",
-        "element": "d-ipfs-t"
-      },
-      {
-        "text": "릴레이 꺼짐",
-        "element": "d-relay-t"
-      },
-      {
-        "text": "바깥 연결 꺼짐",
-        "element": "d-out-t"
+        "text": "연결됨",
+        "element": "d-sum-t"
       },
       {
         "text": "내 가게",
@@ -1089,10 +990,6 @@
       {
         "text": "상태",
         "element": "TH"
-      },
-      {
-        "text": "라비에게 물어보기",
-        "element": "SPAN"
       }
     ],
     "overflow": 0
@@ -1112,7 +1009,15 @@
         "element": "upnag"
       },
       {
+        "text": "홈",
+        "element": "SPAN"
+      },
+      {
         "text": "라비",
+        "element": "SPAN"
+      },
+      {
+        "text": "내 소개",
         "element": "SPAN"
       },
       {
@@ -1128,7 +1033,7 @@
         "element": "SPAN"
       },
       {
-        "text": "내 소개",
+        "text": "아티스트",
         "element": "SPAN"
       },
       {
@@ -1140,28 +1045,16 @@
         "element": "SPAN"
       },
       {
+        "text": "더 보기",
+        "element": "navmore-t"
+      },
+      {
         "text": "문제 알리기",
         "element": "rp-open"
       },
       {
-        "text": "RVN 노드 켜짐",
-        "element": "d-node-t"
-      },
-      {
-        "text": "채굴 꺼짐",
-        "element": "d-mine-t"
-      },
-      {
-        "text": "파일창고 꺼짐",
-        "element": "d-ipfs-t"
-      },
-      {
-        "text": "릴레이 꺼짐",
-        "element": "d-relay-t"
-      },
-      {
-        "text": "바깥 연결 꺼짐",
-        "element": "d-out-t"
+        "text": "연결됨",
+        "element": "d-sum-t"
       },
       {
         "text": "설정 · 언어",
@@ -1174,6 +1067,50 @@
       {
         "text": "Mac에서 기존 앱의 파일 이름은 그대로 남을 수 있습니다. 앱 안의 이름은 RavenVault Desktop입니다.",
         "element": "P"
+      },
+      {
+        "text": "폰 연결",
+        "element": "SPAN"
+      },
+      {
+        "text": "폰으로 QR 을 찍으면, 폰에서 이 컴퓨터의 잔액·증서·매출을 보고 요청을 보낼 수 있어요.",
+        "element": "SPAN"
+      },
+      {
+        "text": "폰 지갑과 이 컴퓨터 지갑은 섞이지 않아요. 복구 단어와 개인키는 이 컴퓨터 밖으로 나가지 않아요.",
+        "element": "SPAN"
+      },
+      {
+        "text": "폰 연결 QR 보이기",
+        "element": "SPAN"
+      },
+      {
+        "text": "연결된 기기",
+        "element": "SPAN"
+      },
+      {
+        "text": "아직 연결된 폰이 없어요.",
+        "element": "SPAN"
+      },
+      {
+        "text": "폰 요청",
+        "element": "SPAN"
+      },
+      {
+        "text": "폰이 보낸 요청은 24시간 기다려요. 열면 이 컴퓨터의 원래 화면으로 가요.",
+        "element": "SPAN"
+      },
+      {
+        "text": "기다리는 요청이 없어요.",
+        "element": "SPAN"
+      },
+      {
+        "text": "공개 Nostr 중계도 예비 통로로 쓰기 (기본 끔)",
+        "element": "SPAN"
+      },
+      {
+        "text": "공개 중계는 내용은 못 보지만, 언제 어느 기기끼리 주고받는지는 볼 수 있어요.",
+        "element": "SPAN"
       },
       {
         "text": "이 컴퓨터",
@@ -1222,6 +1159,10 @@
       {
         "text": "이 프로그램을 무엇으로 쓰시나요",
         "element": "B"
+      },
+      {
+        "text": "지갑으로만 쓰기",
+        "element": "mode-wallet"
       },
       {
         "text": "레이븐코인 돕기",
@@ -1534,10 +1475,6 @@
       {
         "text": "고급 — 채굴 · AI 키 · 세부 설정",
         "element": "SUMMARY"
-      },
-      {
-        "text": "라비에게 물어보기",
-        "element": "SPAN"
       }
     ],
     "overflow": 0
@@ -1553,6 +1490,10 @@
         "element": "SPAN"
       },
       {
+        "text": "화면 밝기",
+        "element": "LABEL"
+      },
+      {
         "text": "설정으로",
         "element": "desktop-settings-go"
       },
@@ -1561,7 +1502,15 @@
         "element": "upnag"
       },
       {
+        "text": "홈",
+        "element": "SPAN"
+      },
+      {
         "text": "라비",
+        "element": "SPAN"
+      },
+      {
+        "text": "내 소개",
         "element": "SPAN"
       },
       {
@@ -1577,7 +1526,7 @@
         "element": "SPAN"
       },
       {
-        "text": "내 소개",
+        "text": "아티스트",
         "element": "SPAN"
       },
       {
@@ -1589,28 +1538,16 @@
         "element": "SPAN"
       },
       {
+        "text": "더 보기",
+        "element": "navmore-t"
+      },
+      {
         "text": "문제 알리기",
         "element": "rp-open"
       },
       {
-        "text": "RVN 노드 켜짐",
-        "element": "d-node-t"
-      },
-      {
-        "text": "채굴 꺼짐",
-        "element": "d-mine-t"
-      },
-      {
-        "text": "파일창고 꺼짐",
-        "element": "d-ipfs-t"
-      },
-      {
-        "text": "릴레이 꺼짐",
-        "element": "d-relay-t"
-      },
-      {
-        "text": "바깥 연결 꺼짐",
-        "element": "d-out-t"
+        "text": "연결됨",
+        "element": "d-sum-t"
       },
       {
         "text": "설정 · 언어",
@@ -1623,6 +1560,50 @@
       {
         "text": "Mac에서 기존 앱의 파일 이름은 그대로 남을 수 있습니다. 앱 안의 이름은 RavenVault Desktop입니다.",
         "element": "P"
+      },
+      {
+        "text": "폰 연결",
+        "element": "SPAN"
+      },
+      {
+        "text": "폰으로 QR 을 찍으면, 폰에서 이 컴퓨터의 잔액·증서·매출을 보고 요청을 보낼 수 있어요.",
+        "element": "SPAN"
+      },
+      {
+        "text": "폰 지갑과 이 컴퓨터 지갑은 섞이지 않아요. 복구 단어와 개인키는 이 컴퓨터 밖으로 나가지 않아요.",
+        "element": "SPAN"
+      },
+      {
+        "text": "폰 연결 QR 보이기",
+        "element": "SPAN"
+      },
+      {
+        "text": "연결된 기기",
+        "element": "SPAN"
+      },
+      {
+        "text": "아직 연결된 폰이 없어요.",
+        "element": "SPAN"
+      },
+      {
+        "text": "폰 요청",
+        "element": "SPAN"
+      },
+      {
+        "text": "폰이 보낸 요청은 24시간 기다려요. 열면 이 컴퓨터의 원래 화면으로 가요.",
+        "element": "SPAN"
+      },
+      {
+        "text": "기다리는 요청이 없어요.",
+        "element": "SPAN"
+      },
+      {
+        "text": "공개 Nostr 중계도 예비 통로로 쓰기 (기본 끔)",
+        "element": "SPAN"
+      },
+      {
+        "text": "공개 중계는 내용은 못 보지만, 언제 어느 기기끼리 주고받는지는 볼 수 있어요.",
+        "element": "SPAN"
       },
       {
         "text": "이 컴퓨터",
@@ -1671,6 +1652,10 @@
       {
         "text": "이 프로그램을 무엇으로 쓰시나요",
         "element": "B"
+      },
+      {
+        "text": "지갑으로만 쓰기",
+        "element": "mode-wallet"
       },
       {
         "text": "레이븐코인 돕기",
@@ -1983,10 +1968,6 @@
       {
         "text": "고급 — 채굴 · AI 키 · 세부 설정",
         "element": "SUMMARY"
-      },
-      {
-        "text": "라비에게 물어보기",
-        "element": "SPAN"
       }
     ],
     "overflow": 0
@@ -2006,7 +1987,15 @@
         "element": "upnag"
       },
       {
+        "text": "홈",
+        "element": "SPAN"
+      },
+      {
         "text": "라비",
+        "element": "SPAN"
+      },
+      {
+        "text": "내 소개",
         "element": "SPAN"
       },
       {
@@ -2022,7 +2011,7 @@
         "element": "SPAN"
       },
       {
-        "text": "내 소개",
+        "text": "아티스트",
         "element": "SPAN"
       },
       {
@@ -2034,172 +2023,24 @@
         "element": "SPAN"
       },
       {
+        "text": "더 보기",
+        "element": "navmore-t"
+      },
+      {
         "text": "문제 알리기",
         "element": "rp-open"
       },
       {
-        "text": "RVN 노드 켜짐",
-        "element": "d-node-t"
+        "text": "연결됨",
+        "element": "d-sum-t"
       },
       {
-        "text": "채굴 꺼짐",
-        "element": "d-mine-t"
-      },
-      {
-        "text": "파일창고 꺼짐",
-        "element": "d-ipfs-t"
-      },
-      {
-        "text": "릴레이 꺼짐",
-        "element": "d-relay-t"
-      },
-      {
-        "text": "바깥 연결 꺼짐",
-        "element": "d-out-t"
-      },
-      {
-        "text": "한눈에",
-        "element": "overview-title"
-      },
-      {
-        "text": "내 노드",
-        "element": "SPAN"
-      },
-      {
-        "text": "켜짐",
-        "element": "overview-node"
-      },
-      {
-        "text": "확정 잔액",
-        "element": "SPAN"
-      },
-      {
-        "text": "받기",
-        "element": "SPAN"
-      },
-      {
-        "text": "폰에서 서명한 거래 보내기",
-        "element": "SPAN"
-      },
-      {
-        "text": "가게부터 만들까요?",
+        "text": "라비",
         "element": "ravi-hello"
       },
       {
-        "text": "이름 하나면 시작됩니다. 나머지는 나중에 채우셔도 됩니다.",
+        "text": "AI 키를 넣으면 라비가 깨어나요",
         "element": "ravi-sub"
-      },
-      {
-        "text": "물어보고 시키는 곳. AI는 직접 켤 때만 사용합니다.",
-        "element": "P"
-      },
-      {
-        "text": "가게 만들기",
-        "element": "SPAN"
-      },
-      {
-        "text": "여기서 시작합니다",
-        "element": "SPAN"
-      },
-      {
-        "text": "오늘 얼마",
-        "element": "SPAN"
-      },
-      {
-        "text": "매출 · 장부",
-        "element": "SPAN"
-      },
-      {
-        "text": "손님 QR",
-        "element": "SPAN"
-      },
-      {
-        "text": "카운터에 붙이는 것",
-        "element": "SPAN"
-      },
-      {
-        "text": "들어온 주문",
-        "element": "SPAN"
-      },
-      {
-        "text": "손님이 시킨 것",
-        "element": "SPAN"
-      },
-      {
-        "text": "지금 닫기",
-        "element": "SPAN"
-      },
-      {
-        "text": "손님에게 안 보입니다",
-        "element": "SPAN"
-      },
-      {
-        "text": "메뉴 넣기",
-        "element": "SPAN"
-      },
-      {
-        "text": "말로 불러 주세요",
-        "element": "SPAN"
-      },
-      {
-        "text": "자산 만들기",
-        "element": "SPAN"
-      },
-      {
-        "text": "쿠폰 · 회원권 · 굿즈",
-        "element": "SPAN"
-      },
-      {
-        "text": "가게 소개",
-        "element": "SPAN"
-      },
-      {
-        "text": "손님에게 보일 글",
-        "element": "SPAN"
-      },
-      {
-        "text": "물어보기",
-        "element": "SPAN"
-      },
-      {
-        "text": "뭐든 물어보세요",
-        "element": "SPAN"
-      },
-      {
-        "text": "아직 안 된 것",
-        "element": "SPAN"
-      },
-      {
-        "text": "가게 이름이 비어 있습니다",
-        "element": "SPAN"
-      },
-      {
-        "text": "메뉴가 하나도 없습니다",
-        "element": "SPAN"
-      },
-      {
-        "text": "체인에 가게를 등록하지 않았습니다",
-        "element": "SPAN"
-      },
-      {
-        "text": "바깥 연결이 꺼져 있습니다",
-        "element": "SPAN"
-      },
-      {
-        "text": "손님에게 보일 얼굴을 아직 안 올렸습니다",
-        "element": "SPAN"
-      },
-      {
-        "text": "지금 상태",
-        "element": "B"
-      },
-      {
-        "text": "상태",
-        "element": "SPAN"
-      },
-      {
-        "text": "못 읽음",
-        "element": "SPAN"
       },
       {
         "text": "폰에서 서명한 거래 보내기",
@@ -2230,6 +2071,10 @@
         "element": "SUMMARY"
       },
       {
+        "text": "AI 열쇠 넣기",
+        "element": "ravi-keyopen"
+      },
+      {
         "text": "화면 채우기",
         "element": "BUTTON"
       },
@@ -2242,11 +2087,39 @@
         "element": "BUTTON"
       },
       {
+        "text": "무엇을 도와드릴까요? 보내기·받기·백업·대화 무엇이든 물어보세요.",
+        "element": "SPAN"
+      },
+      {
+        "text": "잔액 확인",
+        "element": "BUTTON"
+      },
+      {
+        "text": "백업 방법",
+        "element": "BUTTON"
+      },
+      {
+        "text": "폰 연결",
+        "element": "BUTTON"
+      },
+      {
+        "text": "RVN 보내기 요청",
+        "element": "rv-send-request"
+      },
+      {
+        "text": "말로 묻기",
+        "element": "rv-voice"
+      },
+      {
         "text": "보내기",
         "element": "chat-go"
       },
       {
-        "text": "아이스 아메리카노 4500원 넣어줘",
+        "text": "라비에게 시킬 수 있는 일",
+        "element": "SUMMARY"
+      },
+      {
+        "text": "레이븐코인으로 받으면 뭐가 좋아?",
         "element": "chat-q",
         "attribute": "placeholder"
       }
@@ -2268,7 +2141,15 @@
         "element": "upnag"
       },
       {
+        "text": "홈",
+        "element": "SPAN"
+      },
+      {
         "text": "라비",
+        "element": "SPAN"
+      },
+      {
+        "text": "내 소개",
         "element": "SPAN"
       },
       {
@@ -2284,7 +2165,7 @@
         "element": "SPAN"
       },
       {
-        "text": "내 소개",
+        "text": "아티스트",
         "element": "SPAN"
       },
       {
@@ -2296,28 +2177,16 @@
         "element": "SPAN"
       },
       {
+        "text": "더 보기",
+        "element": "navmore-t"
+      },
+      {
         "text": "문제 알리기",
         "element": "rp-open"
       },
       {
-        "text": "RVN 노드 켜짐",
-        "element": "d-node-t"
-      },
-      {
-        "text": "채굴 꺼짐",
-        "element": "d-mine-t"
-      },
-      {
-        "text": "파일창고 꺼짐",
-        "element": "d-ipfs-t"
-      },
-      {
-        "text": "릴레이 꺼짐",
-        "element": "d-relay-t"
-      },
-      {
-        "text": "바깥 연결 꺼짐",
-        "element": "d-out-t"
+        "text": "연결됨",
+        "element": "d-sum-t"
       },
       {
         "text": "설정 · 언어",
@@ -2330,6 +2199,50 @@
       {
         "text": "Mac에서 기존 앱의 파일 이름은 그대로 남을 수 있습니다. 앱 안의 이름은 RavenVault Desktop입니다.",
         "element": "P"
+      },
+      {
+        "text": "폰 연결",
+        "element": "SPAN"
+      },
+      {
+        "text": "폰으로 QR 을 찍으면, 폰에서 이 컴퓨터의 잔액·증서·매출을 보고 요청을 보낼 수 있어요.",
+        "element": "SPAN"
+      },
+      {
+        "text": "폰 지갑과 이 컴퓨터 지갑은 섞이지 않아요. 복구 단어와 개인키는 이 컴퓨터 밖으로 나가지 않아요.",
+        "element": "SPAN"
+      },
+      {
+        "text": "폰 연결 QR 보이기",
+        "element": "SPAN"
+      },
+      {
+        "text": "연결된 기기",
+        "element": "SPAN"
+      },
+      {
+        "text": "아직 연결된 폰이 없어요.",
+        "element": "SPAN"
+      },
+      {
+        "text": "폰 요청",
+        "element": "SPAN"
+      },
+      {
+        "text": "폰이 보낸 요청은 24시간 기다려요. 열면 이 컴퓨터의 원래 화면으로 가요.",
+        "element": "SPAN"
+      },
+      {
+        "text": "기다리는 요청이 없어요.",
+        "element": "SPAN"
+      },
+      {
+        "text": "공개 Nostr 중계도 예비 통로로 쓰기 (기본 끔)",
+        "element": "SPAN"
+      },
+      {
+        "text": "공개 중계는 내용은 못 보지만, 언제 어느 기기끼리 주고받는지는 볼 수 있어요.",
+        "element": "SPAN"
       },
       {
         "text": "이 컴퓨터",
@@ -2378,6 +2291,10 @@
       {
         "text": "이 프로그램을 무엇으로 쓰시나요",
         "element": "B"
+      },
+      {
+        "text": "지갑으로만 쓰기",
+        "element": "mode-wallet"
       },
       {
         "text": "레이븐코인 돕기",
@@ -2824,6 +2741,10 @@
         "element": "rs-folder"
       },
       {
+        "text": "복구 단어로 되살리기",
+        "element": "rs-words"
+      },
+      {
         "text": "복구 카드 인쇄",
         "element": "rs-card"
       },
@@ -3062,10 +2983,6 @@
       {
         "text": "고급 — 채굴 · AI 키 · 세부 설정",
         "element": "SUMMARY"
-      },
-      {
-        "text": "라비에게 물어보기",
-        "element": "SPAN"
       },
       {
         "text": "강남지점 · 2층 계산대",
@@ -3340,15 +3257,11 @@
         "element": "upnag"
       },
       {
+        "text": "홈",
+        "element": "SPAN"
+      },
+      {
         "text": "라비",
-        "element": "SPAN"
-      },
-      {
-        "text": "이야기",
-        "element": "SPAN"
-      },
-      {
-        "text": "지갑",
         "element": "SPAN"
       },
       {
@@ -3356,184 +3269,24 @@
         "element": "SPAN"
       },
       {
-        "text": "내 소개",
-        "element": "SPAN"
-      },
-      {
-        "text": "내 가게",
-        "element": "SPAN"
-      },
-      {
-        "text": "이 컴퓨터",
-        "element": "SPAN"
+        "text": "더 보기",
+        "element": "navmore-t"
       },
       {
         "text": "문제 알리기",
         "element": "rp-open"
       },
       {
-        "text": "RVN 노드 켜짐",
-        "element": "d-node-t"
+        "text": "연결됨",
+        "element": "d-sum-t"
       },
       {
-        "text": "채굴 꺼짐",
-        "element": "d-mine-t"
-      },
-      {
-        "text": "파일창고 꺼짐",
-        "element": "d-ipfs-t"
-      },
-      {
-        "text": "릴레이 꺼짐",
-        "element": "d-relay-t"
-      },
-      {
-        "text": "바깥 연결 꺼짐",
-        "element": "d-out-t"
-      },
-      {
-        "text": "한눈에",
-        "element": "overview-title"
-      },
-      {
-        "text": "내 노드",
-        "element": "SPAN"
-      },
-      {
-        "text": "켜짐",
-        "element": "overview-node"
-      },
-      {
-        "text": "확정 잔액",
-        "element": "SPAN"
-      },
-      {
-        "text": "받기",
-        "element": "SPAN"
-      },
-      {
-        "text": "폰에서 서명한 거래 보내기",
-        "element": "SPAN"
-      },
-      {
-        "text": "가게부터 만들까요?",
+        "text": "라비",
         "element": "ravi-hello"
       },
       {
-        "text": "이름 하나면 시작됩니다. 나머지는 나중에 채우셔도 됩니다.",
+        "text": "AI 키를 넣으면 라비가 깨어나요",
         "element": "ravi-sub"
-      },
-      {
-        "text": "물어보고 시키는 곳. AI는 직접 켤 때만 사용합니다.",
-        "element": "P"
-      },
-      {
-        "text": "가게 만들기",
-        "element": "SPAN"
-      },
-      {
-        "text": "여기서 시작합니다",
-        "element": "SPAN"
-      },
-      {
-        "text": "오늘 얼마",
-        "element": "SPAN"
-      },
-      {
-        "text": "매출 · 장부",
-        "element": "SPAN"
-      },
-      {
-        "text": "손님 QR",
-        "element": "SPAN"
-      },
-      {
-        "text": "카운터에 붙이는 것",
-        "element": "SPAN"
-      },
-      {
-        "text": "들어온 주문",
-        "element": "SPAN"
-      },
-      {
-        "text": "손님이 시킨 것",
-        "element": "SPAN"
-      },
-      {
-        "text": "지금 닫기",
-        "element": "SPAN"
-      },
-      {
-        "text": "손님에게 안 보입니다",
-        "element": "SPAN"
-      },
-      {
-        "text": "메뉴 넣기",
-        "element": "SPAN"
-      },
-      {
-        "text": "말로 불러 주세요",
-        "element": "SPAN"
-      },
-      {
-        "text": "자산 만들기",
-        "element": "SPAN"
-      },
-      {
-        "text": "쿠폰 · 회원권 · 굿즈",
-        "element": "SPAN"
-      },
-      {
-        "text": "가게 소개",
-        "element": "SPAN"
-      },
-      {
-        "text": "손님에게 보일 글",
-        "element": "SPAN"
-      },
-      {
-        "text": "물어보기",
-        "element": "SPAN"
-      },
-      {
-        "text": "뭐든 물어보세요",
-        "element": "SPAN"
-      },
-      {
-        "text": "아직 안 된 것",
-        "element": "SPAN"
-      },
-      {
-        "text": "가게 이름이 비어 있습니다",
-        "element": "SPAN"
-      },
-      {
-        "text": "메뉴가 하나도 없습니다",
-        "element": "SPAN"
-      },
-      {
-        "text": "체인에 가게를 등록하지 않았습니다",
-        "element": "SPAN"
-      },
-      {
-        "text": "바깥 연결이 꺼져 있습니다",
-        "element": "SPAN"
-      },
-      {
-        "text": "손님에게 보일 얼굴을 아직 안 올렸습니다",
-        "element": "SPAN"
-      },
-      {
-        "text": "지금 상태",
-        "element": "B"
-      },
-      {
-        "text": "상태",
-        "element": "SPAN"
-      },
-      {
-        "text": "못 읽음",
-        "element": "SPAN"
       },
       {
         "text": "폰에서 서명한 거래 보내기",
@@ -3542,6 +3295,10 @@
       {
         "text": "폰에서 RavenVault 쓰기",
         "element": "SUMMARY"
+      },
+      {
+        "text": "AI 열쇠 넣기",
+        "element": "ravi-keyopen"
       },
       {
         "text": "화면 채우기",
@@ -3556,11 +3313,71 @@
         "element": "BUTTON"
       },
       {
+        "text": "무엇을 도와드릴까요? 보내기·받기·백업·대화 무엇이든 물어보세요.",
+        "element": "SPAN"
+      },
+      {
+        "text": "잔액 확인",
+        "element": "BUTTON"
+      },
+      {
+        "text": "백업 방법",
+        "element": "BUTTON"
+      },
+      {
+        "text": "폰 연결",
+        "element": "BUTTON"
+      },
+      {
+        "text": "RVN 보내기 요청",
+        "element": "rv-send-request"
+      },
+      {
+        "text": "말로 묻기",
+        "element": "rv-voice"
+      },
+      {
         "text": "보내기",
         "element": "chat-go"
       },
       {
-        "text": "아이스 아메리카노 4500원 넣어줘",
+        "text": "AI 열쇠 넣기",
+        "element": "SPAN"
+      },
+      {
+        "text": "닫기",
+        "element": "SPAN"
+      },
+      {
+        "text": "열쇠가 있으면 라비가 AI 로 무엇이든 답해요. 열쇠는 AI 회사에서 각자 받아요(요금은 회사마다 달라요).",
+        "element": "SPAN"
+      },
+      {
+        "text": "어디서 받나요",
+        "element": "SPAN"
+      },
+      {
+        "text": "받은 열쇠를 여기에 붙여 넣으세요",
+        "element": "SPAN"
+      },
+      {
+        "text": "저장",
+        "element": "SPAN"
+      },
+      {
+        "text": "열쇠는 이 컴퓨터에만 저장돼요. AI 에게 물을 때만 고른 회사로 함께 보내지고, 우리 서버로는 가지 않아요.",
+        "element": "SPAN"
+      },
+      {
+        "text": "내 컴퓨터에서 돌리는 AI 나 다른 곳은 「이 컴퓨터 › AI 열쇠」에서 넣어요.",
+        "element": "SPAN"
+      },
+      {
+        "text": "라비에게 시킬 수 있는 일",
+        "element": "SUMMARY"
+      },
+      {
+        "text": "레이븐코인으로 받으면 뭐가 좋아?",
         "element": "chat-q",
         "attribute": "placeholder"
       }
@@ -3582,7 +3399,15 @@
         "element": "upnag"
       },
       {
+        "text": "홈",
+        "element": "SPAN"
+      },
+      {
         "text": "라비",
+        "element": "SPAN"
+      },
+      {
+        "text": "내 소개",
         "element": "SPAN"
       },
       {
@@ -3598,7 +3423,7 @@
         "element": "SPAN"
       },
       {
-        "text": "내 소개",
+        "text": "아티스트",
         "element": "SPAN"
       },
       {
@@ -3610,32 +3435,28 @@
         "element": "SPAN"
       },
       {
+        "text": "더 보기",
+        "element": "navmore-t"
+      },
+      {
         "text": "문제 알리기",
         "element": "rp-open"
       },
       {
-        "text": "RVN 노드 켜짐",
-        "element": "d-node-t"
-      },
-      {
-        "text": "채굴 꺼짐",
-        "element": "d-mine-t"
-      },
-      {
-        "text": "파일창고 꺼짐",
-        "element": "d-ipfs-t"
-      },
-      {
-        "text": "릴레이 꺼짐",
-        "element": "d-relay-t"
-      },
-      {
-        "text": "바깥 연결 꺼짐",
-        "element": "d-out-t"
+        "text": "연결됨",
+        "element": "d-sum-t"
       },
       {
         "text": "방",
         "element": "DIV"
+      },
+      {
+        "text": "라비",
+        "element": "B"
+      },
+      {
+        "text": "AI 도우미",
+        "element": "SMALL"
       },
       {
         "text": "레이븐 이야기",
@@ -3648,6 +3469,10 @@
       {
         "text": "레이븐 이야기",
         "element": "tk-title"
+      },
+      {
+        "text": "공개 방 · 누구나 읽을 수 있어요",
+        "element": "SPAN"
       },
       {
         "text": "초대하기",
@@ -3668,6 +3493,14 @@
       {
         "text": "알겠습니다",
         "element": "tk-firstok"
+      },
+      {
+        "text": "아직 글이 없습니다.",
+        "element": "SPAN"
+      },
+      {
+        "text": "첫 글을 올려 보세요 — 세계 릴레이로 함께 나갑니다.",
+        "element": "SPAN"
       },
       {
         "text": "글을",
@@ -3706,8 +3539,24 @@
         "element": "tk-send"
       },
       {
-        "text": "라비에게 물어보기",
-        "element": "SPAN"
+        "text": "레이븐 이야기",
+        "element": "rv-person-name"
+      },
+      {
+        "text": "공개 방 · 누구나 읽을 수 있어요",
+        "element": "P"
+      },
+      {
+        "text": "친구 추가",
+        "element": "rv-add-friend"
+      },
+      {
+        "text": "폰에서 QR 로 친구를 추가해요.",
+        "element": "P"
+      },
+      {
+        "text": "고급",
+        "element": "SUMMARY"
       },
       {
         "text": "메시지",
@@ -3732,7 +3581,15 @@
         "element": "upnag"
       },
       {
+        "text": "홈",
+        "element": "SPAN"
+      },
+      {
         "text": "라비",
+        "element": "SPAN"
+      },
+      {
+        "text": "내 소개",
         "element": "SPAN"
       },
       {
@@ -3748,7 +3605,7 @@
         "element": "SPAN"
       },
       {
-        "text": "내 소개",
+        "text": "아티스트",
         "element": "SPAN"
       },
       {
@@ -3760,28 +3617,16 @@
         "element": "SPAN"
       },
       {
+        "text": "더 보기",
+        "element": "navmore-t"
+      },
+      {
         "text": "문제 알리기",
         "element": "rp-open"
       },
       {
-        "text": "RVN 노드 켜짐",
-        "element": "d-node-t"
-      },
-      {
-        "text": "채굴 꺼짐",
-        "element": "d-mine-t"
-      },
-      {
-        "text": "파일창고 꺼짐",
-        "element": "d-ipfs-t"
-      },
-      {
-        "text": "릴레이 꺼짐",
-        "element": "d-relay-t"
-      },
-      {
-        "text": "바깥 연결 꺼짐",
-        "element": "d-out-t"
+        "text": "연결됨",
+        "element": "d-sum-t"
       },
       {
         "text": "지갑",
@@ -3792,11 +3637,27 @@
         "element": "P"
       },
       {
-        "text": "받기",
+        "text": "복구 단어를 아직 확인하지 않으셨어요",
         "element": "SPAN"
       },
       {
-        "text": "받을 주소 만들기",
+        "text": "지금 확인",
+        "element": "SPAN"
+      },
+      {
+        "text": "사용 가능",
+        "element": "w-bal-title"
+      },
+      {
+        "text": "들어오는 중 9,999 RVN",
+        "element": "w-unconfirmed"
+      },
+      {
+        "text": "네트워크에 기록되면(보통 몇 분) 사용 가능으로 옮겨져요.",
+        "element": "w-incoming-note"
+      },
+      {
+        "text": "받기",
         "element": "SPAN"
       },
       {
@@ -3804,32 +3665,24 @@
         "element": "SPAN"
       },
       {
-        "text": "RVN 보내기",
-        "element": "SPAN"
-      },
-      {
         "text": "자산 보내기",
-        "element": "SPAN"
-      },
-      {
-        "text": "쿠폰 · 회원권",
-        "element": "SPAN"
+        "element": "w-send-asset"
       },
       {
         "text": "최근 거래",
-        "element": "SPAN"
+        "element": "w-go-txs"
       },
       {
-        "text": "들어오고 나간 것",
-        "element": "SPAN"
+        "text": "주소 확인",
+        "element": "w-go-whose"
       },
       {
-        "text": "사용 가능",
-        "element": "H3"
+        "text": "12단어로 되살리기",
+        "element": "w-restore-words"
       },
       {
-        "text": "확인 대기 중 9,999 RVN",
-        "element": "w-unconfirmed"
+        "text": "새로고침",
+        "element": "w-refresh"
       },
       {
         "text": "지갑 잠금",
@@ -3844,20 +3697,16 @@
         "element": "w-enc"
       },
       {
-        "text": "자산 보내기",
-        "element": "w-send-asset"
+        "text": "주소 확인",
+        "element": "whose-title"
       },
       {
-        "text": "RVN 보내기",
-        "element": "w-send-rvn"
+        "text": "붙여 넣으면 이 지갑 주소인지 바로 알려 드려요.",
+        "element": "P"
       },
       {
-        "text": "받을 주소 만들기",
-        "element": "w-newaddr"
-      },
-      {
-        "text": "새로고침",
-        "element": "w-refresh"
+        "text": "확인",
+        "element": "whose-go"
       },
       {
         "text": "받을 주소록",
@@ -3880,8 +3729,9 @@
         "element": "TD"
       },
       {
-        "text": "라비에게 물어보기",
-        "element": "SPAN"
+        "text": "R… 주소를 붙여 넣으세요",
+        "element": "whose-in",
+        "attribute": "placeholder"
       }
     ],
     "overflow": 0
@@ -3901,7 +3751,15 @@
         "element": "upnag"
       },
       {
+        "text": "홈",
+        "element": "SPAN"
+      },
+      {
         "text": "라비",
+        "element": "SPAN"
+      },
+      {
+        "text": "내 소개",
         "element": "SPAN"
       },
       {
@@ -3917,7 +3775,7 @@
         "element": "SPAN"
       },
       {
-        "text": "내 소개",
+        "text": "아티스트",
         "element": "SPAN"
       },
       {
@@ -3929,28 +3787,16 @@
         "element": "SPAN"
       },
       {
+        "text": "더 보기",
+        "element": "navmore-t"
+      },
+      {
         "text": "문제 알리기",
         "element": "rp-open"
       },
       {
-        "text": "RVN 노드 켜짐",
-        "element": "d-node-t"
-      },
-      {
-        "text": "채굴 꺼짐",
-        "element": "d-mine-t"
-      },
-      {
-        "text": "파일창고 꺼짐",
-        "element": "d-ipfs-t"
-      },
-      {
-        "text": "릴레이 꺼짐",
-        "element": "d-relay-t"
-      },
-      {
-        "text": "바깥 연결 꺼짐",
-        "element": "d-out-t"
+        "text": "연결됨",
+        "element": "d-sum-t"
       },
       {
         "text": "자산",
@@ -3967,6 +3813,14 @@
       {
         "text": "에 있습니다. 아무도 갖고 있지 않으면 찾을 수 없게 됩니다 — 이 컴퓨터가 켜져 있으면 이 컴퓨터가 갖고 있습니다.",
         "element": "P"
+      },
+      {
+        "text": "만들기",
+        "element": "SPAN"
+      },
+      {
+        "text": "증명서 · 티켓 · 작품",
+        "element": "SPAN"
       },
       {
         "text": "새 자산 만들기",
@@ -4111,10 +3965,6 @@
       {
         "text": "해당하는 자산이 없습니다.",
         "element": "TD"
-      },
-      {
-        "text": "라비에게 물어보기",
-        "element": "SPAN"
       }
     ],
     "overflow": 0
@@ -4134,7 +3984,15 @@
         "element": "upnag"
       },
       {
+        "text": "홈",
+        "element": "SPAN"
+      },
+      {
         "text": "라비",
+        "element": "SPAN"
+      },
+      {
+        "text": "내 소개",
         "element": "SPAN"
       },
       {
@@ -4150,7 +4008,7 @@
         "element": "SPAN"
       },
       {
-        "text": "내 소개",
+        "text": "아티스트",
         "element": "SPAN"
       },
       {
@@ -4162,28 +4020,16 @@
         "element": "SPAN"
       },
       {
+        "text": "더 보기",
+        "element": "navmore-t"
+      },
+      {
         "text": "문제 알리기",
         "element": "rp-open"
       },
       {
-        "text": "RVN 노드 켜짐",
-        "element": "d-node-t"
-      },
-      {
-        "text": "채굴 꺼짐",
-        "element": "d-mine-t"
-      },
-      {
-        "text": "파일창고 꺼짐",
-        "element": "d-ipfs-t"
-      },
-      {
-        "text": "릴레이 꺼짐",
-        "element": "d-relay-t"
-      },
-      {
-        "text": "바깥 연결 꺼짐",
-        "element": "d-out-t"
+        "text": "연결됨",
+        "element": "d-sum-t"
       },
       {
         "text": "내 소개",
@@ -4258,10 +4104,6 @@
         "element": "ar-give"
       },
       {
-        "text": "라비에게 물어보기",
-        "element": "SPAN"
-      },
-      {
         "text": "표시할 이름",
         "element": "ar-name",
         "attribute": "placeholder"
@@ -4289,7 +4131,15 @@
         "element": "upnag"
       },
       {
+        "text": "홈",
+        "element": "SPAN"
+      },
+      {
         "text": "라비",
+        "element": "SPAN"
+      },
+      {
+        "text": "내 소개",
         "element": "SPAN"
       },
       {
@@ -4305,7 +4155,7 @@
         "element": "SPAN"
       },
       {
-        "text": "내 소개",
+        "text": "아티스트",
         "element": "SPAN"
       },
       {
@@ -4317,28 +4167,16 @@
         "element": "SPAN"
       },
       {
+        "text": "더 보기",
+        "element": "navmore-t"
+      },
+      {
         "text": "문제 알리기",
         "element": "rp-open"
       },
       {
-        "text": "RVN 노드 켜짐",
-        "element": "d-node-t"
-      },
-      {
-        "text": "채굴 꺼짐",
-        "element": "d-mine-t"
-      },
-      {
-        "text": "파일창고 꺼짐",
-        "element": "d-ipfs-t"
-      },
-      {
-        "text": "릴레이 꺼짐",
-        "element": "d-relay-t"
-      },
-      {
-        "text": "바깥 연결 꺼짐",
-        "element": "d-out-t"
+        "text": "연결됨",
+        "element": "d-sum-t"
       },
       {
         "text": "내 가게",
@@ -4415,10 +4253,6 @@
       {
         "text": "상태",
         "element": "TH"
-      },
-      {
-        "text": "라비에게 물어보기",
-        "element": "SPAN"
       }
     ],
     "overflow": 0
@@ -4438,7 +4272,15 @@
         "element": "upnag"
       },
       {
+        "text": "홈",
+        "element": "SPAN"
+      },
+      {
         "text": "라비",
+        "element": "SPAN"
+      },
+      {
+        "text": "내 소개",
         "element": "SPAN"
       },
       {
@@ -4454,7 +4296,7 @@
         "element": "SPAN"
       },
       {
-        "text": "내 소개",
+        "text": "아티스트",
         "element": "SPAN"
       },
       {
@@ -4466,28 +4308,16 @@
         "element": "SPAN"
       },
       {
+        "text": "더 보기",
+        "element": "navmore-t"
+      },
+      {
         "text": "문제 알리기",
         "element": "rp-open"
       },
       {
-        "text": "RVN 노드 켜짐",
-        "element": "d-node-t"
-      },
-      {
-        "text": "채굴 꺼짐",
-        "element": "d-mine-t"
-      },
-      {
-        "text": "파일창고 꺼짐",
-        "element": "d-ipfs-t"
-      },
-      {
-        "text": "릴레이 꺼짐",
-        "element": "d-relay-t"
-      },
-      {
-        "text": "바깥 연결 꺼짐",
-        "element": "d-out-t"
+        "text": "연결됨",
+        "element": "d-sum-t"
       },
       {
         "text": "설정 · 언어",
@@ -4500,6 +4330,50 @@
       {
         "text": "Mac에서 기존 앱의 파일 이름은 그대로 남을 수 있습니다. 앱 안의 이름은 RavenVault Desktop입니다.",
         "element": "P"
+      },
+      {
+        "text": "폰 연결",
+        "element": "SPAN"
+      },
+      {
+        "text": "폰으로 QR 을 찍으면, 폰에서 이 컴퓨터의 잔액·증서·매출을 보고 요청을 보낼 수 있어요.",
+        "element": "SPAN"
+      },
+      {
+        "text": "폰 지갑과 이 컴퓨터 지갑은 섞이지 않아요. 복구 단어와 개인키는 이 컴퓨터 밖으로 나가지 않아요.",
+        "element": "SPAN"
+      },
+      {
+        "text": "폰 연결 QR 보이기",
+        "element": "SPAN"
+      },
+      {
+        "text": "연결된 기기",
+        "element": "SPAN"
+      },
+      {
+        "text": "아직 연결된 폰이 없어요.",
+        "element": "SPAN"
+      },
+      {
+        "text": "폰 요청",
+        "element": "SPAN"
+      },
+      {
+        "text": "폰이 보낸 요청은 24시간 기다려요. 열면 이 컴퓨터의 원래 화면으로 가요.",
+        "element": "SPAN"
+      },
+      {
+        "text": "기다리는 요청이 없어요.",
+        "element": "SPAN"
+      },
+      {
+        "text": "공개 Nostr 중계도 예비 통로로 쓰기 (기본 끔)",
+        "element": "SPAN"
+      },
+      {
+        "text": "공개 중계는 내용은 못 보지만, 언제 어느 기기끼리 주고받는지는 볼 수 있어요.",
+        "element": "SPAN"
       },
       {
         "text": "이 컴퓨터",
@@ -4548,6 +4422,10 @@
       {
         "text": "이 프로그램을 무엇으로 쓰시나요",
         "element": "B"
+      },
+      {
+        "text": "지갑으로만 쓰기",
+        "element": "mode-wallet"
       },
       {
         "text": "레이븐코인 돕기",
@@ -4860,10 +4738,6 @@
       {
         "text": "고급 — 채굴 · AI 키 · 세부 설정",
         "element": "SUMMARY"
-      },
-      {
-        "text": "라비에게 물어보기",
-        "element": "SPAN"
       }
     ],
     "overflow": 0
@@ -4879,6 +4753,10 @@
         "element": "SPAN"
       },
       {
+        "text": "화면 밝기",
+        "element": "LABEL"
+      },
+      {
         "text": "설정으로",
         "element": "desktop-settings-go"
       },
@@ -4887,7 +4765,15 @@
         "element": "upnag"
       },
       {
+        "text": "홈",
+        "element": "SPAN"
+      },
+      {
         "text": "라비",
+        "element": "SPAN"
+      },
+      {
+        "text": "내 소개",
         "element": "SPAN"
       },
       {
@@ -4903,7 +4789,7 @@
         "element": "SPAN"
       },
       {
-        "text": "내 소개",
+        "text": "아티스트",
         "element": "SPAN"
       },
       {
@@ -4915,28 +4801,16 @@
         "element": "SPAN"
       },
       {
+        "text": "더 보기",
+        "element": "navmore-t"
+      },
+      {
         "text": "문제 알리기",
         "element": "rp-open"
       },
       {
-        "text": "RVN 노드 켜짐",
-        "element": "d-node-t"
-      },
-      {
-        "text": "채굴 꺼짐",
-        "element": "d-mine-t"
-      },
-      {
-        "text": "파일창고 꺼짐",
-        "element": "d-ipfs-t"
-      },
-      {
-        "text": "릴레이 꺼짐",
-        "element": "d-relay-t"
-      },
-      {
-        "text": "바깥 연결 꺼짐",
-        "element": "d-out-t"
+        "text": "연결됨",
+        "element": "d-sum-t"
       },
       {
         "text": "설정 · 언어",
@@ -4949,6 +4823,50 @@
       {
         "text": "Mac에서 기존 앱의 파일 이름은 그대로 남을 수 있습니다. 앱 안의 이름은 RavenVault Desktop입니다.",
         "element": "P"
+      },
+      {
+        "text": "폰 연결",
+        "element": "SPAN"
+      },
+      {
+        "text": "폰으로 QR 을 찍으면, 폰에서 이 컴퓨터의 잔액·증서·매출을 보고 요청을 보낼 수 있어요.",
+        "element": "SPAN"
+      },
+      {
+        "text": "폰 지갑과 이 컴퓨터 지갑은 섞이지 않아요. 복구 단어와 개인키는 이 컴퓨터 밖으로 나가지 않아요.",
+        "element": "SPAN"
+      },
+      {
+        "text": "폰 연결 QR 보이기",
+        "element": "SPAN"
+      },
+      {
+        "text": "연결된 기기",
+        "element": "SPAN"
+      },
+      {
+        "text": "아직 연결된 폰이 없어요.",
+        "element": "SPAN"
+      },
+      {
+        "text": "폰 요청",
+        "element": "SPAN"
+      },
+      {
+        "text": "폰이 보낸 요청은 24시간 기다려요. 열면 이 컴퓨터의 원래 화면으로 가요.",
+        "element": "SPAN"
+      },
+      {
+        "text": "기다리는 요청이 없어요.",
+        "element": "SPAN"
+      },
+      {
+        "text": "공개 Nostr 중계도 예비 통로로 쓰기 (기본 끔)",
+        "element": "SPAN"
+      },
+      {
+        "text": "공개 중계는 내용은 못 보지만, 언제 어느 기기끼리 주고받는지는 볼 수 있어요.",
+        "element": "SPAN"
       },
       {
         "text": "이 컴퓨터",
@@ -4997,6 +4915,10 @@
       {
         "text": "이 프로그램을 무엇으로 쓰시나요",
         "element": "B"
+      },
+      {
+        "text": "지갑으로만 쓰기",
+        "element": "mode-wallet"
       },
       {
         "text": "레이븐코인 돕기",
@@ -5309,10 +5231,6 @@
       {
         "text": "고급 — 채굴 · AI 키 · 세부 설정",
         "element": "SUMMARY"
-      },
-      {
-        "text": "라비에게 물어보기",
-        "element": "SPAN"
       }
     ],
     "overflow": 0
@@ -5332,7 +5250,15 @@
         "element": "upnag"
       },
       {
+        "text": "홈",
+        "element": "SPAN"
+      },
+      {
         "text": "라비",
+        "element": "SPAN"
+      },
+      {
+        "text": "내 소개",
         "element": "SPAN"
       },
       {
@@ -5348,7 +5274,7 @@
         "element": "SPAN"
       },
       {
-        "text": "내 소개",
+        "text": "아티스트",
         "element": "SPAN"
       },
       {
@@ -5360,172 +5286,24 @@
         "element": "SPAN"
       },
       {
+        "text": "더 보기",
+        "element": "navmore-t"
+      },
+      {
         "text": "문제 알리기",
         "element": "rp-open"
       },
       {
-        "text": "RVN 노드 켜짐",
-        "element": "d-node-t"
+        "text": "연결됨",
+        "element": "d-sum-t"
       },
       {
-        "text": "채굴 꺼짐",
-        "element": "d-mine-t"
-      },
-      {
-        "text": "파일창고 꺼짐",
-        "element": "d-ipfs-t"
-      },
-      {
-        "text": "릴레이 꺼짐",
-        "element": "d-relay-t"
-      },
-      {
-        "text": "바깥 연결 꺼짐",
-        "element": "d-out-t"
-      },
-      {
-        "text": "한눈에",
-        "element": "overview-title"
-      },
-      {
-        "text": "내 노드",
-        "element": "SPAN"
-      },
-      {
-        "text": "켜짐",
-        "element": "overview-node"
-      },
-      {
-        "text": "확정 잔액",
-        "element": "SPAN"
-      },
-      {
-        "text": "받기",
-        "element": "SPAN"
-      },
-      {
-        "text": "폰에서 서명한 거래 보내기",
-        "element": "SPAN"
-      },
-      {
-        "text": "가게부터 만들까요?",
+        "text": "라비",
         "element": "ravi-hello"
       },
       {
-        "text": "이름 하나면 시작됩니다. 나머지는 나중에 채우셔도 됩니다.",
+        "text": "AI 키를 넣으면 라비가 깨어나요",
         "element": "ravi-sub"
-      },
-      {
-        "text": "물어보고 시키는 곳. AI는 직접 켤 때만 사용합니다.",
-        "element": "P"
-      },
-      {
-        "text": "가게 만들기",
-        "element": "SPAN"
-      },
-      {
-        "text": "여기서 시작합니다",
-        "element": "SPAN"
-      },
-      {
-        "text": "오늘 얼마",
-        "element": "SPAN"
-      },
-      {
-        "text": "매출 · 장부",
-        "element": "SPAN"
-      },
-      {
-        "text": "손님 QR",
-        "element": "SPAN"
-      },
-      {
-        "text": "카운터에 붙이는 것",
-        "element": "SPAN"
-      },
-      {
-        "text": "들어온 주문",
-        "element": "SPAN"
-      },
-      {
-        "text": "손님이 시킨 것",
-        "element": "SPAN"
-      },
-      {
-        "text": "지금 닫기",
-        "element": "SPAN"
-      },
-      {
-        "text": "손님에게 안 보입니다",
-        "element": "SPAN"
-      },
-      {
-        "text": "메뉴 넣기",
-        "element": "SPAN"
-      },
-      {
-        "text": "말로 불러 주세요",
-        "element": "SPAN"
-      },
-      {
-        "text": "자산 만들기",
-        "element": "SPAN"
-      },
-      {
-        "text": "쿠폰 · 회원권 · 굿즈",
-        "element": "SPAN"
-      },
-      {
-        "text": "가게 소개",
-        "element": "SPAN"
-      },
-      {
-        "text": "손님에게 보일 글",
-        "element": "SPAN"
-      },
-      {
-        "text": "물어보기",
-        "element": "SPAN"
-      },
-      {
-        "text": "뭐든 물어보세요",
-        "element": "SPAN"
-      },
-      {
-        "text": "아직 안 된 것",
-        "element": "SPAN"
-      },
-      {
-        "text": "가게 이름이 비어 있습니다",
-        "element": "SPAN"
-      },
-      {
-        "text": "메뉴가 하나도 없습니다",
-        "element": "SPAN"
-      },
-      {
-        "text": "체인에 가게를 등록하지 않았습니다",
-        "element": "SPAN"
-      },
-      {
-        "text": "바깥 연결이 꺼져 있습니다",
-        "element": "SPAN"
-      },
-      {
-        "text": "손님에게 보일 얼굴을 아직 안 올렸습니다",
-        "element": "SPAN"
-      },
-      {
-        "text": "지금 상태",
-        "element": "B"
-      },
-      {
-        "text": "상태",
-        "element": "SPAN"
-      },
-      {
-        "text": "못 읽음",
-        "element": "SPAN"
       },
       {
         "text": "폰에서 서명한 거래 보내기",
@@ -5556,6 +5334,10 @@
         "element": "SUMMARY"
       },
       {
+        "text": "AI 열쇠 넣기",
+        "element": "ravi-keyopen"
+      },
+      {
         "text": "화면 채우기",
         "element": "BUTTON"
       },
@@ -5568,11 +5350,39 @@
         "element": "BUTTON"
       },
       {
+        "text": "무엇을 도와드릴까요? 보내기·받기·백업·대화 무엇이든 물어보세요.",
+        "element": "SPAN"
+      },
+      {
+        "text": "잔액 확인",
+        "element": "BUTTON"
+      },
+      {
+        "text": "백업 방법",
+        "element": "BUTTON"
+      },
+      {
+        "text": "폰 연결",
+        "element": "BUTTON"
+      },
+      {
+        "text": "RVN 보내기 요청",
+        "element": "rv-send-request"
+      },
+      {
+        "text": "말로 묻기",
+        "element": "rv-voice"
+      },
+      {
         "text": "보내기",
         "element": "chat-go"
       },
       {
-        "text": "아이스 아메리카노 4500원 넣어줘",
+        "text": "라비에게 시킬 수 있는 일",
+        "element": "SUMMARY"
+      },
+      {
+        "text": "레이븐코인으로 받으면 뭐가 좋아?",
         "element": "chat-q",
         "attribute": "placeholder"
       }
@@ -5594,7 +5404,15 @@
         "element": "upnag"
       },
       {
+        "text": "홈",
+        "element": "SPAN"
+      },
+      {
         "text": "라비",
+        "element": "SPAN"
+      },
+      {
+        "text": "내 소개",
         "element": "SPAN"
       },
       {
@@ -5610,7 +5428,7 @@
         "element": "SPAN"
       },
       {
-        "text": "내 소개",
+        "text": "아티스트",
         "element": "SPAN"
       },
       {
@@ -5622,28 +5440,16 @@
         "element": "SPAN"
       },
       {
+        "text": "더 보기",
+        "element": "navmore-t"
+      },
+      {
         "text": "문제 알리기",
         "element": "rp-open"
       },
       {
-        "text": "RVN 노드 켜짐",
-        "element": "d-node-t"
-      },
-      {
-        "text": "채굴 꺼짐",
-        "element": "d-mine-t"
-      },
-      {
-        "text": "파일창고 꺼짐",
-        "element": "d-ipfs-t"
-      },
-      {
-        "text": "릴레이 꺼짐",
-        "element": "d-relay-t"
-      },
-      {
-        "text": "바깥 연결 꺼짐",
-        "element": "d-out-t"
+        "text": "연결됨",
+        "element": "d-sum-t"
       },
       {
         "text": "설정 · 언어",
@@ -5656,6 +5462,50 @@
       {
         "text": "Mac에서 기존 앱의 파일 이름은 그대로 남을 수 있습니다. 앱 안의 이름은 RavenVault Desktop입니다.",
         "element": "P"
+      },
+      {
+        "text": "폰 연결",
+        "element": "SPAN"
+      },
+      {
+        "text": "폰으로 QR 을 찍으면, 폰에서 이 컴퓨터의 잔액·증서·매출을 보고 요청을 보낼 수 있어요.",
+        "element": "SPAN"
+      },
+      {
+        "text": "폰 지갑과 이 컴퓨터 지갑은 섞이지 않아요. 복구 단어와 개인키는 이 컴퓨터 밖으로 나가지 않아요.",
+        "element": "SPAN"
+      },
+      {
+        "text": "폰 연결 QR 보이기",
+        "element": "SPAN"
+      },
+      {
+        "text": "연결된 기기",
+        "element": "SPAN"
+      },
+      {
+        "text": "아직 연결된 폰이 없어요.",
+        "element": "SPAN"
+      },
+      {
+        "text": "폰 요청",
+        "element": "SPAN"
+      },
+      {
+        "text": "폰이 보낸 요청은 24시간 기다려요. 열면 이 컴퓨터의 원래 화면으로 가요.",
+        "element": "SPAN"
+      },
+      {
+        "text": "기다리는 요청이 없어요.",
+        "element": "SPAN"
+      },
+      {
+        "text": "공개 Nostr 중계도 예비 통로로 쓰기 (기본 끔)",
+        "element": "SPAN"
+      },
+      {
+        "text": "공개 중계는 내용은 못 보지만, 언제 어느 기기끼리 주고받는지는 볼 수 있어요.",
+        "element": "SPAN"
       },
       {
         "text": "이 컴퓨터",
@@ -5704,6 +5554,10 @@
       {
         "text": "이 프로그램을 무엇으로 쓰시나요",
         "element": "B"
+      },
+      {
+        "text": "지갑으로만 쓰기",
+        "element": "mode-wallet"
       },
       {
         "text": "레이븐코인 돕기",
@@ -6150,6 +6004,10 @@
         "element": "rs-folder"
       },
       {
+        "text": "복구 단어로 되살리기",
+        "element": "rs-words"
+      },
+      {
         "text": "복구 카드 인쇄",
         "element": "rs-card"
       },
@@ -6388,10 +6246,6 @@
       {
         "text": "고급 — 채굴 · AI 키 · 세부 설정",
         "element": "SUMMARY"
-      },
-      {
-        "text": "라비에게 물어보기",
-        "element": "SPAN"
       },
       {
         "text": "강남지점 · 2층 계산대",

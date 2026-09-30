@@ -2180,7 +2180,7 @@ async function paintStatusDots() {
   paintDotSum();
   // 노드 상태가 바뀌면 라비 얼굴도 따라 바뀐다.
   paintRaviFace();
-  void refreshKeys().catch(() => {});
+  void invoke("ai_models_refresh").catch(() => {}).then(() => refreshKeys()).catch(() => {});
 
   try {
     const i = await invoke<any>("ipfs_status");
@@ -9206,6 +9206,7 @@ async function saveKeys() {
       const m = document.getElementById(`model-${p}`) as HTMLInputElement | null;
       if (m) await invoke("save_model", { provider: p, model: m.value.trim() });
     }
+    await invoke("ai_models_refresh").catch(() => {});
     await refreshKeys();
     if (warnings.length) $("key-note").textContent = `키가 저장됐습니다. ${warnings.join("; ")}`;
   } catch (e) {
@@ -9871,6 +9872,27 @@ function applyActions(actions: any[]): string[] {
           done.push(`${a.spot} — ${spot.say}`);
           break;
         }
+        // 🔴 보내기는 **준비만** 한다. 주소·금액을 채워 확인 화면까지 열고, 누르는 것은 사장이다.
+        //    받는 주소는 형식이 맞아야 하고, 금액은 양수여야 한다. 아니면 조용히 버린다.
+        case "send_prepare": {
+          const to = String(a.to || "").trim();
+          const amt = Number(a.amount);
+          if (!/^[R][1-9A-HJ-NP-Za-km-z]{25,34}$/.test(to) || !(amt > 0) || !Number.isFinite(amt)) {
+            done.push("보내기 준비를 못 했습니다 — 주소나 금액을 다시 확인해 주세요");
+            break;
+          }
+          const asset = a.asset ? String(a.asset).toUpperCase() : "";
+          void (async () => {
+            showPage("wallet");
+            await openSend(asset ? "asset" : "rvn", asset || undefined);
+            ($("s-addr") as HTMLInputElement).value = to;
+            ($("s-qty") as HTMLInputElement).value = String(amt);
+            composeChanged();
+            await reviewSend();
+          })();
+          done.push(tf("보내기 확인 화면을 열었습니다 — {0} {1}, 누르는 것은 사장님입니다", String(amt), asset || "RVN"));
+          break;
+        }
         case "shop_set": {
           const id = SHOP_FIELDS[a.field];
           if (!id) break;
@@ -10254,6 +10276,36 @@ function raviGo(to: GuideGo) {
   }
 }
 
+/** 라비에게 넘기는 사장님 화면 — 읽기 전용, 필요한 것만. 주소·열쇠는 넣지 않는다. */
+async function ownerSnapshot(): Promise<Record<string, unknown>> {
+  const out: Record<string, unknown> = {};
+  try {
+    const b: any = await invoke("wallet_balance");
+    out.wallet = { rvn_confirmed: Number(b.confirmed) || 0, rvn_incoming: Number(b.unconfirmed) || 0 };
+  } catch {}
+  try {
+    const p: any = await invoke("ledger_pending");
+    // 「입금 대기」= 손님이 주문했지만 아직 결제가 안 들어온 주문. 하루 지나면 사라진다.
+    out.awaiting_payment = {
+      meaning: "orders placed by customers whose payment has not arrived yet (dropped after 24h)",
+      count: Number(p?.count || 0),
+      orders: (p?.orders || []).slice(0, 10).map((o: any) => ({
+        items: Array.isArray(o.items) ? o.items.map((i: any) => `${i.name ?? ""}${i.qty > 1 ? " x" + i.qty : ""}`).slice(0, 6) : [],
+        rvn: o.rvn, price: o.krw, currency: o.currency, table: o.table ?? null,
+        minutes_ago: o.quoted_at ? Math.max(0, Math.round((Date.now() / 1000 - Number(o.quoted_at)) / 60)) : null,
+      })),
+    };
+  } catch {}
+  try {
+    const ymd = todayYmd();
+    const r: any = await invoke("ledger_range", { fromYmd: ymd, toYmd: ymd, tzOffsetMin: tzMin() });
+    out.today = { sales: Number(r?.sales || 0), total: r?.mixed_currency ? null : Number(r?.total || 0), currency: r?.currency ?? null };
+    const gb: any = await invoke("gb_overview", { todayYmd: ymd, nowUnix: Math.floor(Date.now() / 1000) }).catch(() => null);
+    if (gb) out.group_buy = { refund_due: gb.refund_due, to_ship: gb.to_ship, items: (gb.items || []).length };
+  } catch {}
+  return out;
+}
+
 async function chatSend() {
   const q = ($("chat-q") as HTMLInputElement).value.trim();
   if (!q) return;
@@ -10299,6 +10351,7 @@ async function chatSend() {
       ...(m.stock != null ? { stock: m.stock } : {}),
     })),
     currency: ($("mn-cur") as HTMLSelectElement)?.value,
+    owner: await ownerSnapshot(),
   };
 
   try {

@@ -296,6 +296,7 @@ pub fn run() {
             ai::ai_chat,
             ai::save_custom_provider,
             ai::model_settings,
+            ai::ai_models_refresh,
             ai::save_model,
             wallet::encryption_state,
             wallet::encrypt_wallet,

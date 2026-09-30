@@ -537,6 +537,10 @@ export const DICT: Record<string, Record<string, string>> = {
       "Cancel this waitlist entry?",
     "공동구매 최소 수량 미달 환불":
       "Group buy below minimum — refund",
+    "보내기 확인 화면을 열었습니다 — {0} {1}, 누르는 것은 사장님입니다":
+      "Send review screen opened — {0} {1}. You press the button.",
+    "보내기 준비를 못 했습니다 — 주소나 금액을 다시 확인해 주세요":
+      "Could not prepare the send — please check the address and amount.",
     "환불 대기(가게 사정) {0}건":
       "{0} refunds due (shop's side)",
     "결제 차례를 알릴 분 {0}명":
@@ -2323,6 +2327,10 @@ export const DICT: Record<string, Record<string, string>> = {
       "この順番待ちを取り消しますか?",
     "공동구매 최소 수량 미달 환불":
       "共同購入の最小数量未達による返金",
+    "보내기 확인 화면을 열었습니다 — {0} {1}, 누르는 것은 사장님입니다":
+      "送金の確認画面を開きました — {0} {1}。押すのはオーナーです。",
+    "보내기 준비를 못 했습니다 — 주소나 금액을 다시 확인해 주세요":
+      "送金を準備できませんでした — アドレスと金額をご確認ください。",
     "환불 대기(가게 사정) {0}건":
       "返金待ち(店舗都合) {0}件",
     "결제 차례를 알릴 분 {0}명":
@@ -4109,6 +4117,10 @@ export const DICT: Record<string, Record<string, string>> = {
       "要取消这条候补吗？",
     "공동구매 최소 수량 미달 환불":
       "团购未达最少数量退款",
+    "보내기 확인 화면을 열었습니다 — {0} {1}, 누르는 것은 사장님입니다":
+      "已打开转账确认页 — {0} {1}。由店主自己确认。",
+    "보내기 준비를 못 했습니다 — 주소나 금액을 다시 확인해 주세요":
+      "无法准备转账 — 请检查地址和金额。",
     "환불 대기(가게 사정) {0}건":
       "待退款（店铺原因）{0} 笔",
     "결제 차례를 알릴 분 {0}명":
