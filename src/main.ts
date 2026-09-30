@@ -12170,6 +12170,8 @@ async function fulfil(sale: any) {
       qty: sale.qty,
       toAddress: to.trim(),
       passphrase: pass,
+      paidRvn: Number(sale.paid) || null,
+      orderAddr: sale.address ?? null,
     });
     $("vd-result").innerHTML =
       `<div class="card" style="margin-top:12px"><h3>보냈습니다</h3>

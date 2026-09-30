@@ -118,6 +118,8 @@ pub async fn fulfil_sale(
     qty: f64,
     to_address: String,
     passphrase: Option<String>,
+    paid_rvn: Option<f64>,
+    order_addr: Option<String>,
 ) -> Result<String, String> {
     if qty <= 0.0 {
         return Err("수량이 올바르지 않습니다.".into());
@@ -156,5 +158,19 @@ pub async fn fulfil_sale(
         .unwrap_or("")
         .to_string();
     crate::refund::remember_ours(&txid);
+
+    // 🔴 자산 판매도 가게 결제와 같은 1% 다. **자산을 실제로 보낸 뒤에** 적는다 —
+    //    보내기가 실패했는데 개발비만 쌓이면 우리가 훔치는 것이다. 주문 주소로 중복을
+    //    막으므로(`accrue`) 같은 판매를 두 번 눌러도 한 번만 쌓인다.
+    //    화면이 금액·주소를 안 넘기면(옛 호출) 아무것도 적지 않는다.
+    if let (Some(paid), Some(addr)) = (paid_rvn, order_addr.as_deref()) {
+        if paid.is_finite() && paid > 0.0 && !addr.trim().is_empty() {
+            let (rate, _) = crate::shop::fee_config();
+            let fee = (paid * rate * 1e8).round() / 1e8;
+            if fee >= crate::swap::MIN_DEV_FEE {
+                crate::devfee::accrue(addr.trim(), fee).await;
+            }
+        }
+    }
     Ok(txid)
 }
