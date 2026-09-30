@@ -477,6 +477,12 @@ export const DICT: Record<string, Record<string, string>> = {
       "AI off",
     "라비 열기":
       "Open Ravi",
+    "라비에게 시키세요":
+      "Tell Ravi what to do",
+    "예: 수료증 120장 만들어 줘":
+      "e.g. Make 120 certificates",
+    "AI 꺼짐 · 정해진 안내만":
+      "AI off · guided answers only",
     "AI 키를 넣으면 라비가 자유롭게 답해요. 지금은 정해진 안내만 보여줘요.":
       "Add an AI key and Ravi can answer freely. For now it only shows fixed guides.",
     "AI가 켜져 있어요. 궁금한 것을 물어보세요.":
@@ -2169,6 +2175,12 @@ export const DICT: Record<string, Record<string, string>> = {
       "AI オフ",
     "라비 열기":
       "ラビを開く",
+    "라비에게 시키세요":
+      "ラビに任せる",
+    "예: 수료증 120장 만들어 줘":
+      "例: 修了証を120枚作って",
+    "AI 꺼짐 · 정해진 안내만":
+      "AIオフ · 定型の案内のみ",
     "AI 키를 넣으면 라비가 자유롭게 답해요. 지금은 정해진 안내만 보여줘요.":
       "AIキーを入れるとラビが自由に答えます。今は決まった案内だけを表示します。",
     "AI가 켜져 있어요. 궁금한 것을 물어보세요.":
@@ -3861,6 +3873,12 @@ export const DICT: Record<string, Record<string, string>> = {
       "AI 未开启",
     "라비 열기":
       "打开拉比",
+    "라비에게 시키세요":
+      "交给拉比",
+    "예: 수료증 120장 만들어 줘":
+      "例如:制作120份证书",
+    "AI 꺼짐 · 정해진 안내만":
+      "AI 未开启 · 仅固定指引",
     "AI 키를 넣으면 라비가 자유롭게 답해요. 지금은 정해진 안내만 보여줘요.":
       "填入 AI 密钥后拉比可以自由回答。现在只显示固定说明。",
     "AI가 켜져 있어요. 궁금한 것을 물어보세요.":

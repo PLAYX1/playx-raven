@@ -2617,6 +2617,7 @@ async function refreshOverview() {
   const confirmed = wallet.status === "fulfilled" ? wallet.value?.confirmed : undefined;
   setCopyText($("overview-balance"), () => typeof confirmed === "number" && Number.isFinite(confirmed) && confirmed >= 0
     ? `${confirmed.toLocaleString(lang, {maximumFractionDigits:8})} RVN` : t("확인 못 함"));
+  $("overview-balance").classList.toggle("unknown", !(typeof confirmed === "number" && Number.isFinite(confirmed) && confirmed >= 0));
   /* 🔴 0.4.8-B — 방금 받은 10 RVN 이 여기서는 **0** 으로만 보였다(RV3 T04). 확정 잔액에 섞지는
      않는다(확인 전 돈을 쓸 수 있는 돈처럼 보이면 안 된다) — 옆에 「들어오는 중」으로 따로 적는다.
      같은 `wallet_balance` 답을 쓴다(켤 때 읽는 횟수를 늘리지 않는다). */
@@ -9717,8 +9718,15 @@ function paintRaviBadge(): void {
       b.title = label;
       b.setAttribute("aria-label", label);
     }
-    const sub = document.getElementById("rv-home-ravi-sub");
-    if (sub) setCopyText(sub, () => t(on ? "AI가 켜져 있어요. 궁금한 것을 물어보세요." : "AI 키를 넣으면 라비가 자유롭게 답해요. 지금은 정해진 안내만 보여줘요."));
+    const nm = document.getElementById("rv-header-ravi-name");
+    if (nm) setCopyText(nm, () => `${t("라비")} · ${t(on ? "켜짐" : "꺼짐")}`);
+    const pill = document.getElementById("rv-home-ai-pill");
+    if (pill) {
+      pill.dataset.ai = on ? "on" : "off";
+      setCopyText(pill, () => t(on ? "AI 켜짐" : "AI 꺼짐 · 정해진 안내만"));
+    }
+    const q = document.getElementById("rv-home-ravi-q") as HTMLInputElement | null;
+    if (q) q.placeholder = t("예: 수료증 120장 만들어 줘");
   } catch {
     /* aiProvider 가 아직 만들어지기 전이면 다음 그림 때 다시 한다 */
   }
@@ -16953,9 +16961,18 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("rv-header-ravi").title = t("라비");
   $("rv-header-ravi").setAttribute("aria-label", t("라비"));
   $("rv-header-ravi").onclick = () => showPage("ravi");
-  $("rv-home-ravi-open").onclick = () => showPage("ravi");
+  const homeAsk = () => {
+    const hq = $("rv-home-ravi-q") as HTMLInputElement;
+    const v = hq.value.trim();
+    showPage("ravi");
+    if (!v) return;
+    ($("chat-q") as HTMLInputElement).value = v;
+    hq.value = "";
+    void chatSend();
+  };
+  $("rv-home-ravi-open").onclick = homeAsk;
+  $("rv-home-ravi-q").addEventListener("keydown", (e) => { if ((e as KeyboardEvent).key === "Enter" && !(e as KeyboardEvent).isComposing) { e.preventDefault(); homeAsk(); } });
   $("rv-home-ravi-face").appendChild(raviFace("sleep", 44, { round: true }));
-  $("rv-home-ravi").onclick = (e) => { if (!(e.target as HTMLElement).closest("button")) showPage("ravi"); };
   paintRaviBadge();
   document.querySelectorAll<HTMLElement>('nav a[data-page]').forEach(link => {
     const label = link.querySelector("span")?.textContent?.trim() || link.dataset.page || "";

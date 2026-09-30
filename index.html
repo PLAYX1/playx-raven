@@ -2509,13 +2509,26 @@
       .rv-home-grid > .rv-home-ravi p { margin:0; color:var(--muted); }
       .rv-home-grid > .rv-home-ravi button { margin:0; min-height:48px !important; padding:0 22px; border-radius:24px; background:var(--text, #15161D); color:var(--panel, #fff); white-space:nowrap; }
       .rv-home-grid > .rv-home-ravi button:hover:not(:disabled) { background:var(--brand-light); color:#15161D; }
-      .rv-home-grid > .rv-home-ravi { cursor:pointer; }
       .rv-home-grid > .rv-home-ravi:hover { border-color:var(--ravi, #e7731f); }
       .rv-home-balance #overview-balance { font-size:clamp(28px,4vw,44px); white-space:nowrap; letter-spacing:-.01em; }
       .rv-home-balance .overview h2 { display:none; }
       @media(min-width:901px) { .rv-home-grid:has(#rv-home-today[hidden]) { grid-template-areas:"bal act" "safe chats" "ravi ravi"; } }
       .rv-home-grid { align-items:stretch; }
       .rv-home-grid > .rv-home-ravi { align-self:center; }
+
+      /* 0.6.0 홈 라비 막대: 진짜 입력칸 · 아래에 붙어 따라다님 */
+      .rv-home-grid > .rv-home-ravi { position:sticky; bottom:16px; z-index:5; box-shadow:0 6px 24px rgba(0,0,0,.14); cursor:default; }
+      .rv-ai-pill { display:inline-block; font-size:12px; color:var(--muted); }
+      .rv-ai-pill::before { content:""; display:inline-block; width:8px; height:8px; border-radius:50%; background:#8a8f98; margin-right:6px; }
+      .rv-ai-pill[data-ai="on"]::before { background:#1f9d55; }
+      #rv-home-ravi-q { flex:1.4; min-width:0; height:44px; border-radius:22px; padding:0 16px; }
+      #page-home > h1 { font-size:24px; margin:0 0 14px; }
+      .rv-home-activity, .rv-home-chats { align-self:start; }
+      body > nav { overflow-x:hidden; }
+      nav > a[data-page="ravi"] { display:none !important; }
+      #overview-phone { grid-column:1/-1; order:4; background:transparent !important; border:0 !important; box-shadow:none !important; text-decoration:underline; justify-content:flex-start; overflow-wrap:normal; word-break:keep-all; min-height:0; padding:0; color:var(--muted) !important; }
+      :root[data-theme="dark"] .rv-home-balance { border:1px solid rgba(231,115,31,.35) !important; background:linear-gradient(135deg,#232636,#15161D) !important; }
+      #overview-balance.unknown { font-size:24px; }
       .rv-home-grid > .rv-home-safety { align-self:start; }
       /* 돈 카드의 단추 셋을 한 줄로: 보내기(주황) · 받기 · 폰 서명 거래 */
       .rv-home-balance { display:grid; grid-template-columns:auto auto minmax(0,1fr); gap:12px; align-content:start; align-items:center; }
@@ -2613,7 +2626,7 @@
     <!-- 창을 잡는 띠. 제목줄을 없앴기 때문에 이게 없으면 창이 안 움직인다. -->
     <div class="titlebar" data-tauri-drag-region></div>
     <header class="desktop-header" data-tauri-drag-region>
-      <button id="rv-header-ravi" class="rv-header-ravi" type="button" aria-label="라비"><span class="rv-header-ravi-face" id="rv-header-ravi-face"></span><span class="rv-header-ravi-name">라비</span></button>
+      <button id="rv-header-ravi" class="rv-header-ravi" type="button" aria-label="라비"><span class="rv-header-ravi-face" id="rv-header-ravi-face"></span><span class="rv-header-ravi-name" id="rv-header-ravi-name">라비</span></button>
       <div class="desktop-logo" data-tauri-drag-region><span id="rv-desktop-logo"></span><strong data-tauri-drag-region>RavenVault Desktop</strong></div>
       <button id="desktop-preferences" type="button" aria-expanded="false" aria-controls="desktop-language-menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 7h4m4 0h8M4 17h8m4 0h4" stroke-linecap="round"/><circle cx="10" cy="7" r="2"/><circle cx="14" cy="17" r="2"/></svg><span>설정</span><span aria-hidden="true">·</span><span id="desktop-language-name" translate="no">한국어</span></button>
       <div id="desktop-language-menu" hidden><label for="rv-theme">화면 밝기</label><select id="rv-theme"><option value="system">시스템</option><option value="light">밝게</option><option value="dark">어둡게</option></select><div class="desktop-language-options" translate="no"><button data-language="ko">한국어</button><button data-language="en">English</button><button data-language="ja">日本語</button><button data-language="zh">简体中文</button></div><button id="desktop-settings-go">설정으로</button></div>
@@ -3637,7 +3650,7 @@
         </div>
 <button id="rv-home-send" type="button">보내기</button></div>
           <div class="rv-home-safety"><h2>안전 상태</h2><p id="rv-home-safe">상태를 확인하는 중…</p><button id="rv-home-backup" class="ghost" type="button">백업 확인</button></div>
-          <div class="rv-home-ravi" id="rv-home-ravi"><span id="rv-home-ravi-face" class="rv-home-ravi-face"></span><div class="rv-home-ravi-words"><h2>라비에게 물어보기</h2><p id="rv-home-ravi-sub">AI 키를 넣으면 라비가 자유롭게 답해요. 지금은 정해진 안내만 보여줘요.</p></div><button id="rv-home-ravi-open" class="ghost" type="button">라비 열기</button></div>
+          <div class="rv-home-ravi" id="rv-home-ravi"><span id="rv-home-ravi-face" class="rv-home-ravi-face"></span><div class="rv-home-ravi-words"><h2>라비에게 시키세요</h2><span id="rv-home-ai-pill" class="rv-ai-pill" data-ai="off">AI 꺼짐 · 정해진 안내만</span><p id="rv-home-ravi-sub" hidden></p></div><input id="rv-home-ravi-q" type="text" placeholder="예: 수료증 120장 만들어 줘" autocomplete="off" /><button id="rv-home-ravi-open" class="ghost" type="button">보내기</button></div>
           <div class="rv-home-today" id="rv-home-today" hidden><h2>오늘 가게</h2><div id="rv-home-today-body"></div><button id="rv-home-shop" class="ghost" type="button">내 가게 열기</button></div>
           <div class="rv-home-activity"><h2>최근 활동</h2><div id="rv-home-txs"></div></div>
           <div class="rv-home-chats"><h2>최근 대화</h2><div id="rv-home-rooms"></div><button id="rv-home-chat" class="ghost" type="button">대화 열기</button></div>
