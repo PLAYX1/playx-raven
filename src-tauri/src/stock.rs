@@ -148,6 +148,65 @@ pub fn commit(address: &str, menu: &mut Value) {
     }
 }
 
+/// 🔴 **화면이 들고 있던 옛 재고 숫자로 팔린 만큼을 되돌리지 않는다.**
+///
+/// 팔리면 서버의 메뉴에서 수량이 빠진다(`commit`). 그런데 사장 화면은 아침에 읽은 숫자를
+/// 들고 있다가, 값 하나만 고쳐 저장해도 **메뉴 전체**를 다시 올린다. 그러면 오전에 팔린
+/// 만큼이 되살아나 초과 판매가 된다. 앱을 다시 켜도 옛 숫자로 돌아갔다.
+///
+/// 그래서 화면은 읽은 숫자를 `stock_seen` 으로 같이 보낸다. 사장이 그 칸을 **안 고쳤으면**
+/// (`stock == stock_seen`) 지금 서버/디스크의 숫자를 지키고, **고쳤으면** 새 숫자를 쓴다.
+/// `stock_seen` 은 여기서 떼어 낸다 — 저장되지 않는다.
+pub fn merge_seen(incoming: &mut Value, current: &Value) {
+    let Some(list) = incoming.as_array_mut() else { return };
+    for it in list.iter_mut() {
+        let seen = it.get("stock_seen").cloned();
+        if let Some(o) = it.as_object_mut() {
+            o.remove("stock_seen");
+        }
+        let Some(seen) = seen else { continue };
+        if it.get("stock") != Some(&seen) {
+            continue; // 사장이 고쳤다
+        }
+        let name = it.get("name").and_then(Value::as_str).unwrap_or("").to_string();
+        let now = current
+            .as_array()
+            .and_then(|c| c.iter().find(|x| x.get("name").and_then(Value::as_str) == Some(name.as_str())))
+            .and_then(|x| x.get("stock"))
+            .and_then(Value::as_i64);
+        if let Some(n) = now {
+            it["stock"] = json!(n);
+        }
+    }
+}
+
+/// 팔려서 줄어든 수량을 디스크(`shop.json`)에도 적는다. 앱을 다시 켜도 옛 숫자로 안 돌아가게.
+pub fn persist_counts(menu: &Value) {
+    let mut shop = crate::shop::shop_load();
+    let Some(disk) = shop.get_mut("menu").and_then(Value::as_array_mut) else { return };
+    let mut changed = false;
+    for it in disk.iter_mut() {
+        let name = it.get("name").and_then(Value::as_str).unwrap_or("").to_string();
+        if it.get("group").is_some() || it.get("stock").and_then(Value::as_i64).is_none() {
+            continue;
+        }
+        let live = menu
+            .as_array()
+            .and_then(|c| c.iter().find(|x| x.get("name").and_then(Value::as_str) == Some(name.as_str())))
+            .and_then(|x| x.get("stock"))
+            .and_then(Value::as_i64);
+        if let Some(n) = live {
+            if it.get("stock").and_then(Value::as_i64) != Some(n) {
+                it["stock"] = json!(n);
+                changed = true;
+            }
+        }
+    }
+    if changed {
+        let _ = crate::shop::shop_save(shop);
+    }
+}
+
 /// 주문이 취소되거나 오래됐다. 잡은 것을 푼다.
 pub fn release(address: &str) {
     with(|v| v.retain(|(a, _, _)| a != address));
@@ -161,6 +220,23 @@ mod tests {
     /// 다른 쪽이 세어 버린다 — `paths::TEST_ENV` 와 같은 함정이고, 실제로
     /// 「같은 손님이 두 번」 시험이 그렇게 빨갛게 났다.
     static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    #[test]
+    fn 안_고친_재고는_서버_숫자를_지키고_고친_것은_새_숫자() {
+        let current = json!([{ "name": "케이크", "stock": 3 }, { "name": "쿠키", "stock": 5 }]);
+        let mut incoming = json!([
+            { "name": "케이크", "stock": 8, "stock_seen": 8 },
+            { "name": "쿠키", "stock": 20, "stock_seen": 5 },
+            { "name": "새것", "stock": 4, "stock_seen": 4 },
+            { "name": "무제한" }
+        ]);
+        merge_seen(&mut incoming, &current);
+        assert_eq!(incoming[0]["stock"], 3, "아침 숫자 8 이 팔린 만큼을 되살렸다");
+        assert_eq!(incoming[1]["stock"], 20, "사장이 고친 숫자는 그대로");
+        assert_eq!(incoming[2]["stock"], 4, "서버가 모르는 품목은 들어온 숫자");
+        assert!(incoming[3].get("stock").is_none());
+        assert!(incoming.as_array().unwrap().iter().all(|x| x.get("stock_seen").is_none()), "stock_seen 은 저장되지 않는다");
+    }
     fn alone() -> std::sync::MutexGuard<'static, ()> {
         let g = LOCK.lock().unwrap_or_else(|e| e.into_inner());
         // 앞 시험이 남긴 것을 지우고 시작한다.

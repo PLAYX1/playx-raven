@@ -4618,11 +4618,14 @@ async function gbSave(): Promise<void> {
 async function loadGroup(): Promise<void> {
   gbEditor();
   $("gb-save").onclick = () => void gbSave();
+  const win = $("gb-window") as HTMLInputElement;
+  if (!win.value) win.value = "24";
   let ov: any;
   try {
     ov = await invoke<any>("gb_overview", { todayYmd: todayYmd(), nowUnix: Math.floor(Date.now() / 1000) });
-  } catch (e) {
-    $("gb-items").innerHTML = `<div class="warnbox">${escapeHtml(errText(e))}</div>`;
+  } catch {
+    // 없는 숫자를 지어내지 않는다. 품목 정하기는 그대로 쓸 수 있다.
+    $("gb-items").innerHTML = `<div class="warnbox">${copyHtml("공동구매 현황을 읽지 못했어요. 앱을 다시 켜 보세요.")}</div>`;
     return;
   }
   ($("gb-window") as HTMLInputElement).value = String(ov?.window_h ?? 24);
@@ -15707,7 +15710,8 @@ async function loadShop() {
 
   if (Array.isArray(sh.menu)) {
     menuItems.length = 0;
-    sh.menu.forEach((m: any) => menuItems.push(m));
+    // 읽은 재고 숫자를 같이 기억한다. 사장이 안 고친 칸은 서버가 팔린 만큼 줄인 숫자를 지킨다(stock.rs merge_seen).
+    sh.menu.forEach((m: any) => menuItems.push({ ...m, stock_seen: m.stock ?? undefined }));
     renderMenu();
   }
 
@@ -16188,6 +16192,8 @@ async function saveMenu() {
     } catch {
       /* 아직 체인에 등록 안 했으면 알릴 간판이 없다. 메뉴는 저장됐다. */
     }
+    // 이번에 올린 숫자가 이제 「읽은 숫자」다. 다음 저장에서 안 고친 칸으로 알아보게.
+    menuItems.forEach((m) => { m.stock_seen = m.stock ?? undefined; });
     $("mn-result").innerHTML =
       // 올린 것을 볼 수 없으면 올렸는지 알 수 없다. 주소만 보여 주던 자리다.
       `<div class="card" style="margin-top:12px"><h3>메뉴판을 올렸습니다</h3>

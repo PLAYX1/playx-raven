@@ -1047,10 +1047,17 @@ async fn sweep_payments(st: &ServerState) {
 
         // 잡아 둔 것을 진짜로 뺀다. 여기서 빼야 손님 화면의 "남은 수량" 이
         // 실제와 맞는다. 주문할 때 빼면 결제 안 한 사람 때문에 품절이 된다.
-        if let Ok(mut sh) = st.shop.lock() {
+        let committed = if let Ok(mut sh) = st.shop.lock() {
             if let Some(menu) = sh.get_mut("menu") {
                 crate::stock::commit(addr, menu);
             }
+            sh.get("menu").cloned()
+        } else {
+            None
+        };
+        // 앱을 다시 켜도 줄어든 수량이 남게 디스크에도 적는다.
+        if let Some(menu) = committed.as_ref() {
+            crate::stock::persist_counts(menu);
         }
         // 공동구매 확정자 명단에 적는다(같은 주문은 두 번 안 적힌다).
         if let Some(row) = settled.as_ref() {
@@ -4079,6 +4086,13 @@ pub fn publish_shop(
     shop: Value,
     ai_provider: String,
 ) -> Result<(), String> {
+    let mut shop = shop;
+    {
+        let live = state.shop.lock().ok().and_then(|s| s.get("menu").cloned()).unwrap_or(Value::Null);
+        if let Some(menu) = shop.get_mut("menu") {
+            crate::stock::merge_seen(menu, &live);
+        }
+    }
     *state.shop.lock().map_err(|_| "잠금 실패")? = shop;
     *state.ai.lock().map_err(|_| "잠금 실패")? = ai_provider;
     Ok(())

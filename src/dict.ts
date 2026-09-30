@@ -477,6 +477,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "AI off",
     "라비 열기":
       "Open Ravi",
+    "공동구매 현황을 읽지 못했어요. 앱을 다시 켜 보세요.":
+      "Couldn't read the group-buy status. Try restarting the app.",
     "공동구매":
       "Group buy",
     "받는 날":
@@ -2261,6 +2263,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "AI オフ",
     "라비 열기":
       "ラビを開く",
+    "공동구매 현황을 읽지 못했어요. 앱을 다시 켜 보세요.":
+      "共同購入の状況を読み込めませんでした。アプリを再起動してください。",
     "공동구매":
       "共同購入",
     "받는 날":
@@ -4045,6 +4049,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "AI 未开启",
     "라비 열기":
       "打开拉比",
+    "공동구매 현황을 읽지 못했어요. 앱을 다시 켜 보세요.":
+      "无法读取团购状态。请重新启动应用。",
     "공동구매":
       "团购",
     "받는 날":

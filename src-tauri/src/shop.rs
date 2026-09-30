@@ -544,6 +544,13 @@ pub fn currency() -> String {
 #[tauri::command]
 pub fn shop_save(mut shop: Value) -> Result<(), String> {
     let path = shop_path();
+    // 화면이 들고 있던 옛 재고로 팔린 수량을 되살리지 않는다(`stock::merge_seen`).
+    {
+        let disk = shop_load().get("menu").cloned().unwrap_or(Value::Null);
+        if let Some(menu) = shop.get_mut("menu") {
+            crate::stock::merge_seen(menu, &disk);
+        }
+    }
 
     // 🔴 **없는 값이 있는 값을 지우면 안 된다.**
     //
