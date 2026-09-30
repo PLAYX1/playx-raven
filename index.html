@@ -2294,6 +2294,13 @@
       .rv-logo-btn { display:inline-flex; padding:0; margin:0; min-height:0; border:0; border-radius:12px; background:none; cursor:pointer; line-height:0; }
       .rv-logo-btn:hover { box-shadow:0 0 0 3px rgba(231,115,31,.35); }
       .rv-logo-btn:focus-visible { outline:2px solid var(--ravi, #e7731f); outline-offset:2px; }
+      .rv-header-ravi { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; margin:0 auto 0 4px; min-height:0; padding:4px 10px; border:1px solid transparent; border-radius:14px; background:none; color:var(--text, #111); cursor:pointer; line-height:1; }
+      .rv-header-ravi:hover { background:rgba(231,115,31,.12); }
+      .rv-header-ravi:focus-visible { outline:2px solid var(--ravi, #e7731f); outline-offset:2px; }
+      .rv-header-ravi.on { border-color:var(--ravi, #e7731f); background:rgba(231,115,31,.14); }
+      .rv-header-ravi-face { display:block; width:40px; height:40px; line-height:0; }
+      .rv-header-ravi-name { font-size:13px; font-weight:700; }
+      nav > a[data-page="ravi"] { display:none !important; }
       #desktop-preferences { display:flex; align-items:center; gap:10px; border-radius:16px; background:#fff; color:#111; min-height:64px; font-size:16px; border:1px solid var(--line); }
       .desktop-header svg, .overview svg { width:24px; height:24px; flex:none; }
       #desktop-language-menu { position:absolute; right:24px; top:76px; width:360px; background:#fff; border:1px solid var(--line); border-radius:16px; padding:16px; box-shadow:0 8px 24px #0002; }
@@ -2566,6 +2573,7 @@
     <div class="titlebar" data-tauri-drag-region></div>
     <header class="desktop-header" data-tauri-drag-region>
       <div class="desktop-logo" data-tauri-drag-region><span id="rv-desktop-logo"></span><strong data-tauri-drag-region>RavenVault Desktop</strong></div>
+      <button id="rv-header-ravi" class="rv-header-ravi" type="button" aria-label="라비"><span class="rv-header-ravi-face" id="rv-header-ravi-face"></span><span class="rv-header-ravi-name">라비</span></button>
       <button id="desktop-preferences" type="button" aria-expanded="false" aria-controls="desktop-language-menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 7h4m4 0h8M4 17h8m4 0h4" stroke-linecap="round"/><circle cx="10" cy="7" r="2"/><circle cx="14" cy="17" r="2"/></svg><span>설정</span><span aria-hidden="true">·</span><span id="desktop-language-name" translate="no">한국어</span></button>
       <div id="desktop-language-menu" hidden><label for="rv-theme">화면 밝기</label><select id="rv-theme"><option value="system">시스템</option><option value="light">밝게</option><option value="dark">어둡게</option></select><div class="desktop-language-options" translate="no"><button data-language="ko">한국어</button><button data-language="en">English</button><button data-language="ja">日本語</button><button data-language="zh">简体中文</button></div><button id="desktop-settings-go">설정으로</button></div>
     </header>

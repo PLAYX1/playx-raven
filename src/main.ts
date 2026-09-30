@@ -4712,6 +4712,7 @@ function showPage(id: string) {
   document.querySelectorAll(".page").forEach((p) => p.classList.toggle("on", p.id === `page-${id}`));
   document.querySelectorAll("nav a").forEach((a) =>
     a.classList.toggle("on", (a as HTMLElement).dataset.page === id));
+  $("rv-header-ravi")?.classList.toggle("on", id === "ravi");
   if (document.querySelector(`nav a.navmore[data-page="${id}"]`)) navMoreSetOpen?.(true);
   if (id === "wallet") loadWallet();
   // 0.4.8 — 지갑 화면 맨 위 알림 줄(「지갑이 준비됐어요」·복구 단어 확인). 배치는 안 건드리고 칸 하나만.
@@ -16938,6 +16939,11 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.querySelectorAll(".ravi-static-face").forEach(slot => slot.replaceWith(raviFace("sleep", 40)));
   const raviNav = document.querySelector('nav a[data-page="ravi"]');
   raviNav?.querySelector("svg")?.replaceWith(raviFace("sleep", 24));
+  // 라비는 왼쪽 메뉴가 아니라 머리글 아이콘(아래에 「라비」 글자)으로 둔다. 메뉴의 라비 칸은 검사·이동 코드가 쓰니 숨겨서 남긴다.
+  $("rv-header-ravi-face").appendChild(raviFace("sleep", 40, { round: true }));
+  $("rv-header-ravi").title = t("라비");
+  $("rv-header-ravi").setAttribute("aria-label", t("라비"));
+  $("rv-header-ravi").onclick = () => showPage("ravi");
   document.querySelectorAll<HTMLElement>('nav a[data-page]').forEach(link => {
     const label = link.querySelector("span")?.textContent?.trim() || link.dataset.page || "";
     link.title = t(label);
