@@ -2488,6 +2488,28 @@
       .rv-home-entry .rv-home-tx-main { min-width:0; flex:1; }
       .rv-home-entry strong.ok { color:var(--ok); }
       @media(max-width:900px) { .rv-home-grid { grid-template-columns:1fr; } #page-home { padding:24px; } }
+
+      /* ── 0.6.0 홈: 덜어내기 ───────────────────────────────────────────
+         디자인 보드(DeskHome)의 짜임: 왼쪽 = 돈 → 오늘 할 일, 오른쪽 = 최근 것, 맨 아래 = 라비 입력줄.
+         칸 이름(id)은 하나도 바꾸지 않았다 — 배치만 바꾼다. */
+      .rv-home-grid { grid-template-columns:minmax(0,1.5fr) minmax(0,1fr); grid-template-areas:"bal act" "safe act" "today chats" "ravi ravi"; align-items:start; gap:20px; }
+      .rv-home-grid > .rv-home-balance { grid-area:bal; }
+      .rv-home-grid > .rv-home-safety { grid-area:safe; display:flex; align-items:center; justify-content:space-between; gap:16px; padding:14px 22px !important; border-radius:20px; }
+      .rv-home-grid > .rv-home-safety h2 { margin:0; font-size:15px; white-space:nowrap; }
+      .rv-home-grid > .rv-home-safety p { margin:0; flex:1; color:var(--muted); font-size:16px; }
+      .rv-home-grid > .rv-home-safety button { margin:0; min-height:44px !important; padding:0 18px; white-space:nowrap; }
+      .rv-home-grid > .rv-home-today { grid-area:today; grid-column:auto; }
+      .rv-home-grid > .rv-home-activity { grid-area:act; }
+      .rv-home-grid > .rv-home-chats { grid-area:chats; }
+      .rv-home-grid > .rv-home-ravi { grid-area:ravi; display:flex; align-items:center; gap:16px; padding:10px 12px 10px 14px !important; border-radius:32px; }
+      .rv-home-ravi-face { display:block; width:44px; height:44px; flex:none; line-height:0; }
+      .rv-home-ravi-words { flex:1; min-width:0; }
+      .rv-home-grid > .rv-home-ravi h2 { margin:0 0 2px; font-size:17px; }
+      .rv-home-grid > .rv-home-ravi p { margin:0; color:var(--muted); font-size:15px; }
+      .rv-home-grid > .rv-home-ravi button { margin:0; min-height:48px !important; padding:0 22px; border-radius:24px; background:#15161D; color:#fff; white-space:nowrap; }
+      .rv-home-balance #overview-balance { font-size:44px; white-space:nowrap; letter-spacing:-.01em; }
+      .rv-home-balance .overview h2 { display:none; }
+      @media(max-width:900px) { .rv-home-grid { grid-template-columns:1fr; grid-template-areas:"bal" "safe" "today" "ravi" "act" "chats"; } }
       /* v2 desktop rail: the same 76px navigation on every page. */
       body > nav, .rv-talk-layout nav { width:76px; min-width:76px; background:#15161D; color:#ECEDF3; padding:18px 0; align-items:center; gap:2px; }
       body > nav a, .rv-talk-layout nav a { width:56px; min-height:56px; height:56px; box-sizing:border-box; display:flex; align-items:center; justify-content:center; padding:14px; margin:0; border:0; border-radius:16px; color:#ECEDF3; flex:none; }
@@ -3599,7 +3621,7 @@
         </div>
 <button id="rv-home-send" type="button">보내기</button></div>
           <div class="rv-home-safety"><h2>안전 상태</h2><p id="rv-home-safe">상태를 확인하는 중…</p><button id="rv-home-backup" class="ghost" type="button">백업 확인</button></div>
-          <div class="rv-home-ravi" id="rv-home-ravi"><h2>라비에게 물어보기</h2><p id="rv-home-ravi-sub">AI 키를 넣으면 라비가 자유롭게 답해요. 지금은 정해진 안내만 보여줘요.</p><button id="rv-home-ravi-open" class="ghost" type="button">라비 열기</button></div>
+          <div class="rv-home-ravi" id="rv-home-ravi"><span id="rv-home-ravi-face" class="rv-home-ravi-face"></span><div class="rv-home-ravi-words"><h2>라비에게 물어보기</h2><p id="rv-home-ravi-sub">AI 키를 넣으면 라비가 자유롭게 답해요. 지금은 정해진 안내만 보여줘요.</p></div><button id="rv-home-ravi-open" class="ghost" type="button">라비 열기</button></div>
           <div class="rv-home-today" id="rv-home-today" hidden><h2>오늘 가게</h2><div id="rv-home-today-body"></div><button id="rv-home-shop" class="ghost" type="button">내 가게 열기</button></div>
           <div class="rv-home-activity"><h2>최근 활동</h2><div id="rv-home-txs"></div></div>
           <div class="rv-home-chats"><h2>최근 대화</h2><div id="rv-home-rooms"></div><button id="rv-home-chat" class="ghost" type="button">대화 열기</button></div>

@@ -16966,6 +16966,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("rv-header-ravi").setAttribute("aria-label", t("라비"));
   $("rv-header-ravi").onclick = () => showPage("ravi");
   $("rv-home-ravi-open").onclick = () => showPage("ravi");
+  $("rv-home-ravi-face").appendChild(raviFace("sleep", 44, { round: true }));
+  $("rv-home-ravi").onclick = (e) => { if (!(e.target as HTMLElement).closest("button")) showPage("ravi"); };
   paintRaviBadge();
   document.querySelectorAll<HTMLElement>('nav a[data-page]').forEach(link => {
     const label = link.querySelector("span")?.textContent?.trim() || link.dataset.page || "";
