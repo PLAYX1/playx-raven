@@ -9718,7 +9718,7 @@ function paintRaviBadge(): void {
       b.setAttribute("aria-label", label);
     }
     const sub = document.getElementById("rv-home-ravi-sub");
-    if (sub) sub.textContent = t(on ? "AI가 켜져 있어요. 궁금한 것을 물어보세요." : "AI 키를 넣으면 라비가 자유롭게 답해요. 지금은 정해진 안내만 보여줘요.");
+    if (sub) setCopyText(sub, () => t(on ? "AI가 켜져 있어요. 궁금한 것을 물어보세요." : "AI 키를 넣으면 라비가 자유롭게 답해요. 지금은 정해진 안내만 보여줘요."));
   } catch {
     /* aiProvider 가 아직 만들어지기 전이면 다음 그림 때 다시 한다 */
   }
@@ -16942,25 +16942,13 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.documentElement.dataset.theme = theme.value;
   theme.onchange = () => { document.documentElement.dataset.theme = theme.value; localStorage.setItem("ravenvault-theme", theme.value); };
   $("ravi-face").replaceWith(Object.assign(raviFace("sleep", 184), { id: "ravi-face" }));
-  // 머리글에는 앱 로고를 두고, 라비 얼굴은 메뉴의 라비 칸에 둔다.
-  const logoBtn = document.createElement("button");
-  logoBtn.type = "button";
-  logoBtn.className = "rv-logo-btn";
-  logoBtn.title = t("홈");
-  logoBtn.setAttribute("aria-label", t("홈"));
-  const appIcon = document.createElement("img");
-  appIcon.src = new URL("../icon.svg", import.meta.url).href;
-  appIcon.alt = "";
-  logoBtn.appendChild(appIcon);
-  logoBtn.onclick = () => showPage("home");
   // 왼쪽 맨 앞 아이콘은 라비다(아래 rv-header-ravi). 예전 앱 로고 자리는 비운다.
   $("rv-desktop-logo").remove();
-  void logoBtn;
   $("rv-onboard-face").appendChild(raviFace("sleep", 150));
   document.querySelectorAll(".ravi-static-face").forEach(slot => slot.replaceWith(raviFace("sleep", 40)));
   const raviNav = document.querySelector('nav a[data-page="ravi"]');
   raviNav?.querySelector("svg")?.replaceWith(raviFace("sleep", 24));
-  // 라비는 왼쪽 메뉴가 아니라 머리글 아이콘(아래에 「라비」 글자)으로 둔다. 메뉴의 라비 칸은 검사·이동 코드가 쓰니 숨겨서 남긴다.
+  // 라비는 머리글 맨 왼쪽 아이콘(아래에 「라비」 글자)과 왼쪽 메뉴, 두 곳에 둔다.
   $("rv-header-ravi-face").appendChild(raviFace("sleep", 40, { round: true }));
   $("rv-header-ravi").title = t("라비");
   $("rv-header-ravi").setAttribute("aria-label", t("라비"));
@@ -17438,6 +17426,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     if (!name) setCopyText($("ar-nameview"), () => t("아직 이름이 없습니다"));
   };
   window.addEventListener("desktop-language-change", syncLanguage);
+  window.addEventListener("desktop-language-change", paintRaviBadge);
   syncLanguage();
   $("overview-receive").onclick = () => { showPage("wallet"); void openReceive(); };
   $("overview-phone").onclick = () => { const panel = $("phone-tx-panel") as HTMLDetailsElement; panel.open = true; panel.scrollIntoView(); $("phone-tx-code").focus(); };
