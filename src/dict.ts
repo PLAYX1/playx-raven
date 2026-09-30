@@ -471,6 +471,16 @@ export const DICT: Record<string, Record<string, string>> = {
       "{0} awaiting payment",
     "내 가게 열기":
       "Open my shop",
+    "AI 켜짐":
+      "AI on",
+    "AI 꺼짐":
+      "AI off",
+    "라비 열기":
+      "Open Ravi",
+    "AI 키를 넣으면 라비가 자유롭게 답해요. 지금은 정해진 안내만 보여줘요.":
+      "Add an AI key and Ravi can answer freely. For now it only shows fixed guides.",
+    "AI가 켜져 있어요. 궁금한 것을 물어보세요.":
+      "AI is on. Ask anything you wonder about.",
     "매출 화면에서 확인":
       "Check on the Sales screen",
     "더 보기, 안 본 소식 있음":
@@ -2153,6 +2163,16 @@ export const DICT: Record<string, Record<string, string>> = {
       "入金待ち {0}件",
     "내 가게 열기":
       "マイショップを開く",
+    "AI 켜짐":
+      "AI オン",
+    "AI 꺼짐":
+      "AI オフ",
+    "라비 열기":
+      "ラビを開く",
+    "AI 키를 넣으면 라비가 자유롭게 답해요. 지금은 정해진 안내만 보여줘요.":
+      "AIキーを入れるとラビが自由に答えます。今は決まった案内だけを表示します。",
+    "AI가 켜져 있어요. 궁금한 것을 물어보세요.":
+      "AIがオンです。気になることを聞いてください。",
     "매출 화면에서 확인":
       "売上画面で確認",
     "더 보기, 안 본 소식 있음":
@@ -3835,6 +3855,16 @@ export const DICT: Record<string, Record<string, string>> = {
       "待付款 {0} 笔",
     "내 가게 열기":
       "打开我的店",
+    "AI 켜짐":
+      "AI 已开启",
+    "AI 꺼짐":
+      "AI 未开启",
+    "라비 열기":
+      "打开拉比",
+    "AI 키를 넣으면 라비가 자유롭게 답해요. 지금은 정해진 안내만 보여줘요.":
+      "填入 AI 密钥后拉比可以自由回答。现在只显示固定说明。",
+    "AI가 켜져 있어요. 궁금한 것을 물어보세요.":
+      "AI 已开启。有疑问尽管提问。",
     "매출 화면에서 확인":
       "请在销售页面确认",
     "더 보기, 안 본 소식 있음":

@@ -8984,6 +8984,7 @@ async function refreshKeys() {
     sel.innerHTML = have.map((p) => `<option value="${p}">${escapeHtml(labelOf(p))}</option>`).join("");
     if (have.includes(previous)) sel.value = previous;
     aiProvider = sel.value || null;
+    paintRaviBadge();
     const raviSub = document.getElementById("ravi-sub");
     if (raviSub) raviSub.textContent = aiProvider ? t("AI 도우미 · 물어본 것만 봐요") : t("AI 키를 넣으면 라비가 깨어나요");
     // 0.4.8-B — 라비 화면의 「AI 열쇠 넣기」는 열쇠가 없을 때만 보인다.
@@ -9703,6 +9704,24 @@ function raviPoint(spot: { page: string; el?: string; say: string }) {
 
 function paintRaviFace() {
   setAllRaviMood(raviState);
+  paintRaviBadge();
+}
+/** 라비가 AI 로 답하는지(키를 넣었는지)를 머리글 아이콘의 점·풀이와 홈 카드 글에 보인다. */
+function paintRaviBadge(): void {
+  try {
+    const on = !!aiProvider;
+    const b = document.getElementById("rv-header-ravi");
+    if (b) {
+      b.dataset.ai = on ? "on" : "off";
+      const label = `${t("라비")} · ${t(on ? "AI 켜짐" : "AI 꺼짐")}`;
+      b.title = label;
+      b.setAttribute("aria-label", label);
+    }
+    const sub = document.getElementById("rv-home-ravi-sub");
+    if (sub) sub.textContent = t(on ? "AI가 켜져 있어요. 궁금한 것을 물어보세요." : "AI 키를 넣으면 라비가 자유롭게 답해요. 지금은 정해진 안내만 보여줘요.");
+  } catch {
+    /* aiProvider 가 아직 만들어지기 전이면 다음 그림 때 다시 한다 */
+  }
 }
 
 function applyActions(actions: any[]): string[] {
@@ -16946,6 +16965,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("rv-header-ravi").title = t("라비");
   $("rv-header-ravi").setAttribute("aria-label", t("라비"));
   $("rv-header-ravi").onclick = () => showPage("ravi");
+  $("rv-home-ravi-open").onclick = () => showPage("ravi");
+  paintRaviBadge();
   document.querySelectorAll<HTMLElement>('nav a[data-page]').forEach(link => {
     const label = link.querySelector("span")?.textContent?.trim() || link.dataset.page || "";
     link.title = t(label);
@@ -17581,6 +17602,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   });
   $("ai-pick").addEventListener("change", () => {
     aiProvider = ($("ai-pick") as HTMLSelectElement).value || null;
+    paintRaviBadge();
   });
   $("mn-cur").addEventListener("change", showRate);
   refreshKeys();

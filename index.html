@@ -2300,7 +2300,10 @@
       .rv-header-ravi.on { border-color:var(--ravi, #e7731f); background:rgba(231,115,31,.14); }
       .rv-header-ravi-face { display:block; width:40px; height:40px; line-height:0; }
       .rv-header-ravi-name { font-size:13px; font-weight:700; }
-      nav > a[data-page="ravi"] { display:none !important; }
+      .rv-header-ravi { position:relative; }
+      .rv-header-ravi-face { position:relative; }
+      .rv-header-ravi-face::after { content:""; position:absolute; right:-2px; bottom:-2px; width:14px; height:14px; border-radius:50%; background:#8a8f98; border:2px solid #fff; box-sizing:border-box; }
+      .rv-header-ravi[data-ai="on"] .rv-header-ravi-face::after { background:#1f9d55; }
       #desktop-preferences { display:flex; align-items:center; gap:10px; border-radius:16px; background:#fff; color:#111; min-height:64px; font-size:16px; border:1px solid var(--line); }
       .desktop-header svg, .overview svg { width:24px; height:24px; flex:none; }
       #desktop-language-menu { position:absolute; right:24px; top:76px; width:360px; background:#fff; border:1px solid var(--line); border-radius:16px; padding:16px; box-shadow:0 8px 24px #0002; }
@@ -3596,6 +3599,7 @@
         </div>
 <button id="rv-home-send" type="button">보내기</button></div>
           <div class="rv-home-safety"><h2>안전 상태</h2><p id="rv-home-safe">상태를 확인하는 중…</p><button id="rv-home-backup" class="ghost" type="button">백업 확인</button></div>
+          <div class="rv-home-ravi" id="rv-home-ravi"><h2>라비에게 물어보기</h2><p id="rv-home-ravi-sub">AI 키를 넣으면 라비가 자유롭게 답해요. 지금은 정해진 안내만 보여줘요.</p><button id="rv-home-ravi-open" class="ghost" type="button">라비 열기</button></div>
           <div class="rv-home-today" id="rv-home-today" hidden><h2>오늘 가게</h2><div id="rv-home-today-body"></div><button id="rv-home-shop" class="ghost" type="button">내 가게 열기</button></div>
           <div class="rv-home-activity"><h2>최근 활동</h2><div id="rv-home-txs"></div></div>
           <div class="rv-home-chats"><h2>최근 대화</h2><div id="rv-home-rooms"></div><button id="rv-home-chat" class="ghost" type="button">대화 열기</button></div>
