@@ -8520,6 +8520,16 @@ async function 최근거래_모아읽기(개수: number): Promise<any[]> {
 /// 지난 2년치가 울리면 그건 알림이 아니라 소음이다.
 let 감시_마지막블록: string | null = null;
 let 감시_첫바퀴 = true;
+/// 🔴 이미 알린 입금. `listsinceblock` 은 아직 블록에 안 들어간 거래를 **매 바퀴 다시** 준다 —
+///    그래서 확인이 늦는 입금 하나가 「들어왔습니다」를 20초마다 반복했다(0.1 RVN 을 내 주소로 보낸 날).
+///    거래 번호(txid)+칸(vout)+종류로 한 번만 알린다.
+const 알린입금 = new Set<string>();
+const 입금열쇠 = (t: any) => `${t?.txid ?? ""}:${t?.vout ?? ""}:${t?.asset_name ?? "RVN"}`;
+function 알린걸_기억(rows: any[]) {
+  for (const t of rows) if (t?.category === "receive") 알린입금.add(입금열쇠(t));
+  // 끝없이 자라지 않게 — 오래된 것부터 버린다(Set 은 넣은 순서를 기억한다).
+  while (알린입금.size > 2000) 알린입금.delete(알린입금.values().next().value as string);
+}
 let 감시타이머: number | null = null;
 
 async function 지갑감시() {
@@ -8536,12 +8546,14 @@ async function 지갑감시() {
   if (감시_첫바퀴) {
     감시_첫바퀴 = false;
     감시_마지막블록 = 다음;
+    알린걸_기억([...rvn, ...자산]); // 켤 때 이미 있던 입금은 알리지 않는다
     return;
   }
 
-  const 들어온것 = [...rvn, ...자산].filter((t) => t?.category === "receive");
+  const 들어온것 = [...rvn, ...자산].filter((t) => t?.category === "receive" && !알린입금.has(입금열쇠(t)));
   감시_마지막블록 = 다음;
   if (!들어온것.length) return;
+  알린걸_기억(들어온것);
 
   // 화면을 새 사실로 맞춘다. 잔액과 자산 목록 둘 다 — 자산이 들어왔는데
   // 목록이 옛것이면 「보이는데 못 쓰는」 상태가 된다.
@@ -9596,6 +9608,20 @@ async function artistLoad() {
   } catch (e) {
     seal.className = "arseal muted";
     seal.textContent = errText(e);
+    // 지갑이 잠겨서 12단어를 못 읽은 것이면, 안내만 두지 않고 그 자리에서 열 수 있게 한다.
+    try {
+      const lock: any = await invoke("wallet_lock_state");
+      if (lock?.encrypted && !lock?.unlocked) {
+        const go = document.createElement("button");
+        go.className = "ghost";
+        go.style.marginLeft = "8px";
+        go.textContent = t("지갑 열고 다시 확인");
+        go.onclick = async () => {
+          if (await ensureUnlocked(t("이름표를 확인하려면 지갑을 열어야 합니다."))) void artistLoad();
+        };
+        seal.appendChild(go);
+      }
+    } catch { /* 잠김 여부를 못 읽으면 안내 글만 둔다 */ }
   }
   // 🔴 **「자산」 화면을 먼저 열어야만 숫자가 나왔다.** `assets` 는 그 화면이
   //    채우는 지도라, 여기 바로 온 사장에게는 늘 비어 있다. 화면이 「확인
@@ -10066,7 +10092,7 @@ function applyActions(actions: any[]): string[] {
 // 🔴 0.4.8-B — 기본은 「그냥 묻기」. 처음 쓰는 사람은 채울 화면이 아니라 물을 것을 들고 온다
 //    (RV3 T11). 「화면 채우기」는 그대로 고를 수 있고, 한 번 고르면 이 컴퓨터가 기억한다.
 const CHAT_MODE_KEY = "playx-raven-chat-mode";
-let chatMode: "fill" | "ask" | "debate" = "ask";
+let chatMode: "fill" | "ask" | "debate" = "fill";
 
 /// 지금 무엇을 시키는 중인지. 이름만으로는 모자란다 —
 /// 「둘에게」가 무엇 둘인지 대표가 물었고, 그건 이름이 틀렸다는 뜻이다.
@@ -10100,7 +10126,8 @@ function paintChatMode(m: "fill" | "ask" | "debate") {
 function restoreChatMode() {
   let saved: string | null = null;
   try { saved = localStorage.getItem(CHAT_MODE_KEY); } catch { /* 못 읽으면 기본값 */ }
-  paintChatMode(saved === "fill" || saved === "debate" || saved === "ask" ? saved : "ask");
+  // 「그냥 묻기」와 「화면 채우기」를 하나로 합쳤다 — 묻든 시키든 같은 길(장부를 보고 답하고, 시키면 화면을 채운다).
+  paintChatMode(saved === "debate" ? "debate" : "fill");
 }
 
 function setChatMode(m: "fill" | "ask" | "debate") {
@@ -10126,7 +10153,7 @@ async function chatAsk(q: string) {
   setAllRaviMood("thinking");
   chatHtml("ai", "<span class=\"muted\" data-thinking=\"1\">생각하는 중…</span>");
   try {
-    const r = await invoke<any>("ai_ask_owner", { provider: aiProvider, question: q });
+    const r = await invoke<any>("ai_ask_owner", { provider: aiProvider, question: q, owner: await ownerSnapshot() });
     chatPopThinking();
     chatHtml("ai", escapeHtml(r?.text || "").replace(/\n/g, "<br />"));
   } catch (e: any) {
@@ -10282,6 +10309,12 @@ async function ownerSnapshot(): Promise<Record<string, unknown>> {
   try {
     const b: any = await invoke("wallet_balance");
     out.wallet = { rvn_confirmed: Number(b.confirmed) || 0, rvn_incoming: Number(b.unconfirmed) || 0 };
+  } catch {}
+  try {
+    // 이 지갑의 받는 주소(비밀 아님). 노드가 「내 것」이라고 확인한 것만 — 「내 주소로 보내줘」에 쓴다.
+    const r: any = await invoke("receive_address", { fresh: false });
+    const a = String(r?.address ?? "").trim();
+    if (r?.mine === true && looksLikeAddress(a)) (out.wallet as any) = { ...((out.wallet as any) || {}), my_receive_address: a };
   } catch {}
   try {
     const p: any = await invoke("ledger_pending");
