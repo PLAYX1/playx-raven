@@ -1211,6 +1211,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "The key to this lock",
     "이 주소는 내 지갑입니다.":
       "This address is your own wallet.",
+    "내 지갑끼리 옮기기예요. 돈은 그대로이고 수수료만 나가요.":
+      "This is a move between your own addresses. Your money stays yours; only the fee is spent.",
     "이 주소는 체인에 올라가므로, 바뀌면":
       "This address goes onto the chain, so if it changes you need a",
     "이 주소로 갑니다":
@@ -2909,6 +2911,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "この錠前の鍵",
     "이 주소는 내 지갑입니다.":
       "このアドレスは自分のウォレットです。",
+    "내 지갑끼리 옮기기예요. 돈은 그대로이고 수수료만 나가요.":
+      "自分のアドレス同士の移動です。お金はそのままで、手数料だけがかかります。",
     "이 주소는 체인에 올라가므로, 바뀌면":
       "このアドレスはチェーンに載るため、変わったら",
     "이 주소로 갑니다":
@@ -4607,6 +4611,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "这把锁的钥匙",
     "이 주소는 내 지갑입니다.":
       "这个地址是您自己的钱包。",
+    "내 지갑끼리 옮기기예요. 돈은 그대로이고 수수료만 나가요.":
+      "这是在您自己的地址之间转移。资金不变,只扣手续费。",
     "이 주소는 체인에 올라가므로, 바뀌면":
       "该地址会上链，因此一旦变更就需要",
     "이 주소로 갑니다":

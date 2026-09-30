@@ -8604,7 +8604,7 @@ async function reviewSend() {
   const warns: string[] = [];
   if (!sendPreview.enough)
     warns.push(tf("보유 {0}. 보내려는 {1}보다 적습니다.", sendPreview.held, amount));
-  if (sendPreview.is_mine) warns.push("이 주소는 내 지갑입니다.");
+  if (sendPreview.is_mine) warns.push("내 지갑끼리 옮기기예요. 돈은 그대로이고 수수료만 나가요.");
   $("r-warn").innerHTML = warns.length
     ? `<div class="warnbox" style="margin-top:12px">${warns.join("<br>")}</div>`
     : "";
