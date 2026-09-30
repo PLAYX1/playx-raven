@@ -1105,6 +1105,20 @@ fn one() -> i64 { 1 }
 /// 공동구매 대기 신청. 결제가 없어 자리를 잡지 않는다 — 결제 차례가 오면 가게가 알린다.
 async fn api_wait_add(State(st): State<ServerState>, Json(b): Json<WaitAdd>) -> impl IntoResponse {
     let now = now_unix();
+    // 🔴 속도 제한이 먼저다. 가짜 신청으로 대기열을 채워 진짜 손님을 밀어내고(결제 차례도 가짜에게 간다),
+    //    장부 파일을 끝없이 키우는 길이었다. 주문과 같은 기준(분당·하루당)을 쓴다.
+    {
+        let mut t = match st.order_times.lock() {
+            Ok(t) => t,
+            Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "잠금 실패" }))),
+        };
+        t.retain(|x| now - x < 86_400);
+        let last_min = t.iter().filter(|x| now - **x < 60).count();
+        if last_min >= ORDERS_PER_MIN || t.len() >= ORDERS_PER_DAY {
+            return (StatusCode::TOO_MANY_REQUESTS, Json(json!({ "error": "신청이 너무 몰렸습니다. 잠시 뒤에 다시 눌러 주세요.", "busy": true })));
+        }
+        t.push(now);
+    }
     let menu = st.shop.lock().ok().and_then(|s| s.get("menu").cloned()).unwrap_or(json!([]));
     let today = crate::ledger::local_ymd(now, local_tz_offset_min());
     match crate::groupbuy::public_wait_add(&menu, b.item.trim(), b.qty, &b.name, &b.contact, today, now) {
@@ -2021,6 +2035,15 @@ async fn api_order(
         }
         // 0개짜리 줄은 아예 없앤다. 남겨 두면 장부·영수증에 「0개」가 찍힌다.
         list.retain(|it| it.get("qty").and_then(Value::as_i64).unwrap_or(0) > 0);
+    }
+    // 🔴 메뉴에 없는 품목은 여기서 버린다. 손님이 보낸 임의의 글이 장부·화면·AI 도우미로 들어가는 문이었다.
+    {
+        let menu = state
+            .shop
+            .lock()
+            .map(|sh| sh.get("menu").cloned().unwrap_or(json!([])))
+            .unwrap_or(json!([]));
+        body.items = crate::shop::only_menu_items(&menu, &body.items);
     }
     if body.items.as_array().map(|a| a.is_empty()).unwrap_or(true) {
         return (

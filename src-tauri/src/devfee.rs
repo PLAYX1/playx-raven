@@ -54,6 +54,25 @@ fn write(v: &Value) {
     let _ = std::fs::write(&p, serde_json::to_vec_pretty(v).unwrap_or_default());
 }
 
+/// 장부 읽기→쓰기를 한 번에 하나만 지나가게 한다(동기 자물쇠 — 안에서 기다리지 않는다).
+static LEDGER_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+/// 송금은 한 번에 하나만. 자동 송금(3분마다)과 「개발비 보내기」 단추가 겹치면 같은 돈이 두 번 나간다.
+/// (tokio 의 sync 기능에 기대지 않으려고 원자 깃발로 한다. 이미 보내는 중이면 기다리지 않고 돌려보낸다.)
+static PAYING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+struct PayGuard;
+impl PayGuard {
+    fn take() -> Option<PayGuard> {
+        use std::sync::atomic::Ordering;
+        PAYING.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire).ok().map(|_| PayGuard)
+    }
+}
+impl Drop for PayGuard {
+    fn drop(&mut self) {
+        PAYING.store(false, std::sync::atomic::Ordering::Release);
+    }
+}
+
 /// 8자리에서 자른다. 체인이 그 아래를 모른다.
 fn round8(v: f64) -> f64 {
     (v * 1e8).round() / 1e8
@@ -223,22 +242,8 @@ pub async fn accrue(order_addr: &str, fee_rvn: f64) {
         return;
     }
 
-    let mut v = read();
-    // 같은 주문을 두 번 적지 않는다. sweep 은 주기적으로 도는 함수라
-    // 같은 주소를 다시 볼 수 있고, 그때마다 더하면 장부가 부풀어 오른다.
-    let already = v["history"]
-        .as_array()
-        .map(|h| {
-            h.iter()
-                .any(|e| e.get("order").and_then(Value::as_str) == Some(order_addr))
-        })
-        .unwrap_or(false);
-    if already {
-        return;
-    }
-
-    let owed = round8(v["owed"].as_f64().unwrap_or(0.0) + fee_rvn);
-    v["owed"] = json!(owed);
+    // 🔴 시세는 **장부를 읽기 전에** 얻는다. 읽은 채 네트워크를 기다리면 그동안 송금이 장부를 줄였을 때
+    //    옛 값 위에 덮어써서 이미 낸 금액이 되살아난다(이중 송금).
 
     // 🔴 **받은 그 순간의 시세를 같이 적는다. 나중에 못 만든다.**
     //
@@ -263,6 +268,24 @@ pub async fn accrue(order_addr: &str, fee_rvn: f64) {
         Err(e) => (None, format!("못 얻음: {e}")),
     };
 
+
+    let _g = LEDGER_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let mut v = read();
+    // 같은 주문을 두 번 적지 않는다. sweep 은 주기적으로 도는 함수라
+    // 같은 주소를 다시 볼 수 있고, 그때마다 더하면 장부가 부풀어 오른다.
+    let already = v["history"]
+        .as_array()
+        .map(|h| {
+            h.iter()
+                .any(|e| e.get("order").and_then(Value::as_str) == Some(order_addr))
+        })
+        .unwrap_or(false);
+    if already {
+        return;
+    }
+
+    let owed = round8(v["owed"].as_f64().unwrap_or(0.0) + fee_rvn);
+    v["owed"] = json!(owed);
     if let Some(h) = v["history"].as_array_mut() {
         h.push(json!({
             "order": order_addr,
@@ -360,6 +383,10 @@ pub fn start_auto_pay() {
 
 #[tauri::command]
 pub async fn fee_pay() -> Result<Value, String> {
+    // 🔴 한 번에 하나만. 자동 송금과 단추가 겹치면 같은 `owed` 를 두 번 보낸다.
+    let Some(_pay) = PayGuard::take() else {
+        return Err("이미 개발비를 보내는 중입니다. 잠시 뒤에 다시 확인해 주세요.".into());
+    };
     let v = read();
     let owed = round8(v["owed"].as_f64().unwrap_or(0.0));
     let (_rate, addr) = crate::shop::fee_config();
@@ -386,6 +413,7 @@ pub async fn fee_pay() -> Result<Value, String> {
     // 나간 것을 확인했다. 이제 줄인다. 그 사이 새로 쌓인 것이 있을 수 있으니
     // 다시 읽어서 **보낸 만큼만** 뺀다 — 통째로 0 으로 만들면 그 사이의
     // 결제 한 건이 조용히 사라진다.
+    let _g = LEDGER_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let mut fresh = read();
     let left = round8((fresh["owed"].as_f64().unwrap_or(0.0) - owed).max(0.0));
     fresh["owed"] = json!(left);
@@ -444,6 +472,15 @@ mod tests {
         tauri::async_runtime::block_on(accrue("RtestNeg", -5.0));
         assert_eq!(std::fs::read(ledger_file()).ok(), before);
         let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// 🔴 송금은 한 번에 하나만 — 두 번째는 기다리지 않고 돌려보내고, 첫째가 끝나면 다시 잡을 수 있다.
+    #[test]
+    fn only_one_payment_at_a_time() {
+        let a = PayGuard::take().expect("처음엔 잡힌다");
+        assert!(PayGuard::take().is_none(), "보내는 중에는 못 잡는다");
+        drop(a);
+        assert!(PayGuard::take().is_some(), "끝나면 다시 잡힌다");
     }
 
     /// 🔴 자동 송금에 **끄는 길이 있으면 안 된다.** 한 번 만들었다가 지웠고,

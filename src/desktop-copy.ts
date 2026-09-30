@@ -193,6 +193,7 @@ export const DESKTOP_COPY: Record<string, [string, string, string]> = {
   "12단어에서 나오는 이름": ["Identity derived from 12 words", "12単語から生成される ID", "由12个助记词生成的身份"],
   "지갑 열고 다시 확인": ["Unlock wallet and check again", "ウォレットを開いて再確認", "解锁钱包后重新检查"],
   "이름표를 확인하려면 지갑을 열어야 합니다.": ["The wallet must be unlocked to check the name tag.", "名札を確認するにはウォレットを開く必要があります。", "检查名牌需要先解锁钱包。"],
+  "라비가 채운 주소입니다. 받을 분이 알려 준 주소와 끝까지 같은지 확인하세요.": ["Ravi filled in this address. Check it matches, to the end, the address the recipient gave you.", "ラビが入力したアドレスです。相手から聞いたアドレスと最後まで同じか確認してください。", "此地址由 Ravi 填写。请核对是否与收款人提供的地址完全一致。"],
   "12단어를 읽지 못했습니다.": ["Could not read the recovery words.", "復元単語を読み取れませんでした。", "无法读取助记词。"],
   "지갑이 잠겨 있으면 열어 주세요. 12단어로 만든 지갑이 아니면, 이 이름은 백업 파일이 유일한 사본입니다 — 파일을 잃으면 이 이름으로 다시 못 돌아옵니다.": ["Unlock the wallet if locked. If it was not created from 12 words, only the backup preserves this identity. Losing that file loses the identity.", "ロック中ならウォレットを解除してください。12単語で作成していない場合、この ID はバックアップからのみ復元できます。ファイルを失うと ID も失います。", "钱包若已锁定，请先解锁。如果并非由12个助记词创建，此身份只能从备份恢复。丢失备份就会丢失此身份。"],
   "가게 간판 열쇠": ["Shop identity key", "お店の看板キー", "店铺身份密钥"],

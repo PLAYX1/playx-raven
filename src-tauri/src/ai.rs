@@ -529,6 +529,19 @@ pub fn default_model(provider: &str) -> &'static str {
 
 /// The model this provider should use: whatever the owner set, else our default.
 fn model_for(provider: &str) -> String {
+    let m = model_for_raw(provider);
+    // 모델 이름은 요청 주소(`models/{이름}:generateContent`)에 들어간다. 글자·숫자·`.` `_` `-` `/` `:` 만 받는다.
+    if model_name_ok(&m) { m } else { default_model(provider).to_string() }
+}
+
+fn model_name_ok(m: &str) -> bool {
+    !m.is_empty()
+        && m.len() <= 80
+        && !m.contains("..")
+        && m.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-' | '/' | ':'))
+}
+
+fn model_for_raw(provider: &str) -> String {
     std::fs::read_to_string(config_dir().join("models.json"))
         .ok()
         .and_then(|raw| serde_json::from_str::<Value>(&raw).ok())
@@ -673,10 +686,27 @@ pub async fn ai_models_refresh() -> Value {
     if let Ok(dir) = std::fs::create_dir_all(config_dir()).map(|_| ()) {
         let _ = dir;
         if let Ok(b) = serde_json::to_vec_pretty(&doc) {
-            let _ = std::fs::write(auto_path(), b);
+            let tmp = auto_path().with_extension("json.tmp");
+            if std::fs::write(&tmp, b).is_ok() {
+                let _ = std::fs::rename(&tmp, auto_path());
+            }
         }
     }
     doc
+}
+
+#[cfg(test)]
+mod model_name_tests {
+    use super::model_name_ok;
+    #[test]
+    fn only_plain_model_names_reach_the_url() {
+        for ok in ["gemini-3.8-flash", "openai/gpt-oss-120b", "claude-sonnet-5", "gpt-4o"] {
+            assert!(model_name_ok(ok), "{ok}");
+        }
+        for bad in ["", "a b", "x?y=1", "x#y", "../etc", "a%2Fb", "x\ny", &"a".repeat(81)] {
+            assert!(!model_name_ok(bad), "{bad}");
+        }
+    }
 }
 
 #[cfg(test)]

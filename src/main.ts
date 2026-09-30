@@ -8481,6 +8481,11 @@ function 바로팔기배선(asset: string, kind: string) {
 const TAIL_CHECK_RVN = 30_000;
 
 let sendMode: "asset" | "rvn" | null = null;
+/// 라비가 채워 연 보내기인가. 그렇다면 「이미 보낸 적 있는 주소」여도 끝 4자리를 반드시 묻는다
+/// (손님 글로 라비를 조종해 공격자 주소를 채우게 하는 길을 막는 마지막 문).
+let 라비가채운보내기 = false;
+/// 마지막으로 읽은 이 지갑의 받는 주소 — 「내 주소로」 요청에만 쓴다.
+let 최근내주소 = "";
 let sendPreview: any = null;
 
 /// 장부에 **자산까지** 담아 읽는다.
@@ -8595,6 +8600,7 @@ function 고치기_되살리기() {
 
 async function openSend(mode: "asset" | "rvn", preselect?: string) {
   sendMode = mode;
+  라비가채운보내기 = false;
   sendPreview = null;
   고치기_되살리기();
   $("send-review").style.display = "none";
@@ -8742,6 +8748,7 @@ async function reviewSend() {
   if (!sendPreview.enough)
     warns.push(tf("보유 {0}. 보내려는 {1}보다 적습니다.", sendPreview.held, amount));
   if (sendPreview.is_mine) warns.push("내 지갑끼리 옮기기예요. 돈은 그대로이고 수수료만 나가요.");
+  if (라비가채운보내기 && !sendPreview.is_mine) warns.push(t("라비가 채운 주소입니다. 받을 분이 알려 준 주소와 끝까지 같은지 확인하세요."));
   $("r-warn").innerHTML = warns.length
     ? `<div class="warnbox" style="margin-top:12px">${warns.join("<br>")}</div>`
     : "";
@@ -8758,7 +8765,7 @@ async function reviewSend() {
   // 자산은 금액을 원화로 환산할 수 없다 — 고유 자산 한 개가 집 한 채일 수도
   // 있고 쿠폰 한 장일 수도 있다. 값을 모르면 무겁게 다룬다.
   const big = asset ? true : (Number(amount) || 0) >= TAIL_CHECK_RVN;
-  const needTail = !h.known && big;
+  const needTail = 라비가채운보내기 || (!h.known && big);
   $("r-tailbox").style.display = needTail ? "" : "none";
   ($("s-tail") as HTMLInputElement).value = "";
   $("s-tailwarn").textContent = "";
@@ -9884,7 +9891,7 @@ function paintRaviBadge(): void {
   }
 }
 
-function applyActions(actions: any[]): string[] {
+function applyActions(actions: any[], typed = ""): string[] {
   const done: string[] = [];
   for (const a of actions || []) {
     try {
@@ -9907,10 +9914,17 @@ function applyActions(actions: any[]): string[] {
             done.push("보내기 준비를 못 했습니다 — 주소나 금액을 다시 확인해 주세요");
             break;
           }
+          // 🔴 받는 주소는 **사장님이 이번에 직접 친 말 안에 있거나, 이 지갑 자신의 주소**일 때만 받는다.
+          //    주문 글·메뉴 이름에서 흘러든 주소(AI 조종)로는 확인 화면조차 열지 않는다.
+          if (!(typed.includes(to) || (최근내주소 && to === 최근내주소))) {
+            done.push("보내기 준비를 못 했습니다 — 받을 주소를 사장님이 직접 적어 주세요");
+            break;
+          }
           const asset = a.asset ? String(a.asset).toUpperCase() : "";
           void (async () => {
             showPage("wallet");
             await openSend(asset ? "asset" : "rvn", asset || undefined);
+            라비가채운보내기 = true;
             ($("s-addr") as HTMLInputElement).value = to;
             ($("s-qty") as HTMLInputElement).value = String(amt);
             composeChanged();
@@ -9920,6 +9934,8 @@ function applyActions(actions: any[]): string[] {
           break;
         }
         case "shop_set": {
+          // 🔴 주문 링크는 라비가 채우지 않는다 — 조종당하면 손님을 가짜 링크로 보낼 수 있다.
+          if (a.field === "order_url") break;
           const id = SHOP_FIELDS[a.field];
           if (!id) break;
           ($(id) as HTMLInputElement).value = String(a.value ?? "");
@@ -9947,6 +9963,8 @@ function applyActions(actions: any[]): string[] {
           const label = String(a.label || "").trim().slice(0, 8);
           const say = String(a.say || "").trim();
           if (!label || !say) break;
+          // 🔴 단추가 눌릴 때 대신 쳐 주는 말에 **주소를 넣을 수 없다** — 주소를 영구 저장해 두고 나중에 「사장님이 친 말」로 위장시키는 길.
+          if (/R[1-9A-HJ-NP-Za-km-z]{25,34}/.test(say)) { done.push("주소가 들어간 문장은 단추로 만들 수 없습니다"); break; }
           const now = myTiles().filter((m) => m.label !== label);
           if (now.length >= 8) {
             done.push("단추가 여덟 개까지입니다. 하나 지우고 다시 말씀해 주세요.");
@@ -10001,7 +10019,7 @@ function applyActions(actions: any[]): string[] {
           break;
         }
         case "menu_set":
-          if (menuItems[a.index]) {
+          if (menuItems[a.index] && ["name", "name_en", "price", "pass_months", "pass_days", "stock"].includes(String(a.field))) {
             // 숫자 칸은 숫자로. 빈 값은 **0 이 아니라 없음**이다 —
             // 재고를 0 으로 만들면 팔던 물건이 품절로 뜬다.
             const numeric = ["price", "pass_months", "pass_days", "stock"].includes(a.field);
@@ -10153,7 +10171,7 @@ async function chatAsk(q: string) {
   setAllRaviMood("thinking");
   chatHtml("ai", "<span class=\"muted\" data-thinking=\"1\">생각하는 중…</span>");
   try {
-    const r = await invoke<any>("ai_ask_owner", { provider: aiProvider, question: q, owner: await ownerSnapshot() });
+    const r = await invoke<any>("ai_ask_owner", { provider: aiProvider, question: q, owner: await ownerSnapshot(q) });
     chatPopThinking();
     chatHtml("ai", escapeHtml(r?.text || "").replace(/\n/g, "<br />"));
   } catch (e: any) {
@@ -10304,7 +10322,7 @@ function raviGo(to: GuideGo) {
 }
 
 /** 라비에게 넘기는 사장님 화면 — 읽기 전용, 필요한 것만. 주소·열쇠는 넣지 않는다. */
-async function ownerSnapshot(): Promise<Record<string, unknown>> {
+async function ownerSnapshot(asked = ""): Promise<Record<string, unknown>> {
   const out: Record<string, unknown> = {};
   try {
     const b: any = await invoke("wallet_balance");
@@ -10314,7 +10332,11 @@ async function ownerSnapshot(): Promise<Record<string, unknown>> {
     // 이 지갑의 받는 주소(비밀 아님). 노드가 「내 것」이라고 확인한 것만 — 「내 주소로 보내줘」에 쓴다.
     const r: any = await invoke("receive_address", { fresh: false });
     const a = String(r?.address ?? "").trim();
-    if (r?.mine === true && looksLikeAddress(a)) (out.wallet as any) = { ...((out.wallet as any) || {}), my_receive_address: a };
+    if (r?.mine === true && looksLikeAddress(a)) {
+      최근내주소 = a;
+      // AI 회사로는 「내 주소/내 지갑」을 말했을 때만 나간다.
+      if (/내\s*(주소|지갑)|my\s+(address|wallet)/i.test(asked)) (out.wallet as any) = { ...((out.wallet as any) || {}), my_receive_address: a };
+    }
   } catch {}
   try {
     const p: any = await invoke("ledger_pending");
@@ -10384,7 +10406,7 @@ async function chatSend() {
       ...(m.stock != null ? { stock: m.stock } : {}),
     })),
     currency: ($("mn-cur") as HTMLSelectElement)?.value,
-    owner: await ownerSnapshot(),
+    owner: await ownerSnapshot(q),
   };
 
   try {
@@ -10396,7 +10418,7 @@ async function chatSend() {
       history: chatHistory.slice(-6),
     });
     chatSay("ai", r.reply || "");
-    const done = applyActions(r.actions);
+    const done = applyActions(r.actions, q);
     // 무엇을 바꿨는지 눈에 보여야 한다. 조용히 고치면 나중에 원인을 못 찾는다.
     if (done.length) chatSay("did", done.join(" · "));
 
@@ -16023,7 +16045,7 @@ function renderMenu() {
               : "사진"
           }
         </div>
-        <div><label>품목</label><input data-mn="name" data-i="${i}" value="${it.name || ""}" /></div>
+        <div><label>품목</label><input data-mn="name" data-i="${i}" value="${escapeHtml(String(it.name || ""))}" /></div>
         <div><label>가격</label>
           <div class="row" style="gap:6px">
             <input data-mn="price" data-i="${i}" type="number" step="any"
