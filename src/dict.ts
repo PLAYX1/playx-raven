@@ -541,6 +541,10 @@ export const DICT: Record<string, Record<string, string>> = {
       "Send review screen opened — {0} {1}. You press the button.",
     "보내기 준비를 못 했습니다 — 주소나 금액을 다시 확인해 주세요":
       "Could not prepare the send — please check the address and amount.",
+    "환불 창을 열었습니다 — {0} RVN, 돌려주기는 사장님이 누릅니다":
+      "Refund form opened — {0} RVN. You press the refund button.",
+    "환불 준비를 못 했습니다 — 환불 대기 목록에 없는 주문입니다":
+      "Could not prepare the refund — that order is not on the refund list.",
     "환불 대기(가게 사정) {0}건":
       "{0} refunds due (shop's side)",
     "결제 차례를 알릴 분 {0}명":
@@ -2331,6 +2335,10 @@ export const DICT: Record<string, Record<string, string>> = {
       "送金の確認画面を開きました — {0} {1}。押すのはオーナーです。",
     "보내기 준비를 못 했습니다 — 주소나 금액을 다시 확인해 주세요":
       "送金を準備できませんでした — アドレスと金額をご確認ください。",
+    "환불 창을 열었습니다 — {0} RVN, 돌려주기는 사장님이 누릅니다":
+      "返金画面を開きました — {0} RVN。返金ボタンを押すのはオーナーです。",
+    "환불 준비를 못 했습니다 — 환불 대기 목록에 없는 주문입니다":
+      "返金を準備できませんでした — 返金待ちの注文ではありません。",
     "환불 대기(가게 사정) {0}건":
       "返金待ち(店舗都合) {0}件",
     "결제 차례를 알릴 분 {0}명":
@@ -4121,6 +4129,10 @@ export const DICT: Record<string, Record<string, string>> = {
       "已打开转账确认页 — {0} {1}。由店主自己确认。",
     "보내기 준비를 못 했습니다 — 주소나 금액을 다시 확인해 주세요":
       "无法准备转账 — 请检查地址和金额。",
+    "환불 창을 열었습니다 — {0} RVN, 돌려주기는 사장님이 누릅니다":
+      "已打开退款页 — {0} RVN。由店主自己点击退款。",
+    "환불 준비를 못 했습니다 — 환불 대기 목록에 없는 주문입니다":
+      "无法准备退款 — 该订单不在待退款列表中。",
     "환불 대기(가게 사정) {0}건":
       "待退款（店铺原因）{0} 笔",
     "결제 차례를 알릴 분 {0}명":

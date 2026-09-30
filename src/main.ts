@@ -9933,6 +9933,26 @@ function applyActions(actions: any[], typed = ""): string[] {
           done.push(tf("보내기 확인 화면을 열었습니다 — {0} {1}, 누르는 것은 사장님입니다", String(amt), asset || "RVN"));
           break;
         }
+        // 🔴 환불은 **창만 채워 연다.** 대상은 사장님 장부에서 온 번호(r1…)만 받고 금액도 장부 값이다.
+        //    받을 주소는 체인에서 찾은 보낸 주소이고, 「돌려주기」와 한 번 더 확인은 사장님이 누른다.
+        case "refund_prepare": {
+          const c = 환불후보.get(String(a.ref || ""));
+          if (!c || !(c.rvn > 0)) {
+            done.push("환불 준비를 못 했습니다 — 환불 대기 목록에 없는 주문입니다");
+            break;
+          }
+          void (async () => {
+            showPage("shop");
+            try { await loadGroup(); } catch {}
+            void doRefund(c.order, c.rvn, "gb-refund", async () => {
+              await invoke("gb_refund_mark", { order: c.order, item: c.item });
+              void loadGroup();
+            }, "공동구매 최소 수량 미달 환불");
+            $("gb-refund").scrollIntoView({ behavior: "smooth", block: "center" });
+          })();
+          done.push(tf("환불 창을 열었습니다 — {0} RVN, 돌려주기는 사장님이 누릅니다", String(c.rvn)));
+          break;
+        }
         // 🔴 그림은 **사장님이 돈 나가는 것을 보고 「만들기」를 눌러야** 만든다(자기 API 키로 한 장마다 요금).
         case "image_prepare": {
           const p = String(a.prompt || "").trim().slice(0, 300);
@@ -10359,6 +10379,7 @@ async function raviImage(prompt: string) {
 }
 
 /** 라비에게 넘기는 사장님 화면 — 읽기 전용, 필요한 것만. 주소·열쇠는 넣지 않는다. */
+const 환불후보 = new Map<string, { order: string; rvn: number; item: string }>();
 async function ownerSnapshot(asked = ""): Promise<Record<string, unknown>> {
   const out: Record<string, unknown> = {};
   try {
@@ -10393,7 +10414,20 @@ async function ownerSnapshot(asked = ""): Promise<Record<string, unknown>> {
     const r: any = await invoke("ledger_range", { fromYmd: ymd, toYmd: ymd, tzOffsetMin: tzMin() });
     out.today = { sales: Number(r?.sales || 0), total: r?.mixed_currency ? null : Number(r?.total || 0), currency: r?.currency ?? null };
     const gb: any = await invoke("gb_overview", { todayYmd: ymd, nowUnix: Math.floor(Date.now() / 1000) }).catch(() => null);
-    if (gb) out.group_buy = { refund_due: gb.refund_due, to_ship: gb.to_ship, items: (gb.items || []).length };
+    if (gb) {
+      // 환불 대상은 주소가 아니라 짧은 번호(r1, r2…)로만 AI 에 준다 — AI 가 주소를 고르지 못하게.
+      환불후보.clear();
+      const cands: any[] = [];
+      for (const it of (gb.items || []) as any[]) {
+        for (const r of (it.refund_due || []) as any[]) {
+          if (cands.length >= 10 || !looksLikeAddress(String(r.order))) continue;
+          const ref = "r" + (cands.length + 1);
+          환불후보.set(ref, { order: String(r.order), rvn: Number(r.rvn) || 0, item: String(it.item) });
+          cands.push({ ref, item: String(it.item), qty: r.qty, rvn: r.rvn });
+        }
+      }
+      out.group_buy = { refund_due: gb.refund_due, to_ship: gb.to_ship, items: (gb.items || []).length, refund_candidates: cands };
+    }
   } catch {}
   return out;
 }
