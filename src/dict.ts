@@ -477,6 +477,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "AI off",
     "라비 열기":
       "Open Ravi",
+    "자산 판매·맞교환도 1%, 경매 낙찰은 10%가 개발비입니다. 사람 사이 송금에는 개발비가 없습니다.":
+      "Asset sales and swaps also carry a 1% developer fee, and a won auction 10%. Sending to people carries no developer fee.",
     "라비에게 시키세요":
       "Tell Ravi what to do",
     "예: 수료증 120장 만들어 줘":
@@ -2177,6 +2179,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "AI オフ",
     "라비 열기":
       "ラビを開く",
+    "자산 판매·맞교환도 1%, 경매 낙찰은 10%가 개발비입니다. 사람 사이 송금에는 개발비가 없습니다.":
+      "資産販売・交換も1%、オークション落札は10%が開発費です。人への送金に開発費はかかりません。",
     "라비에게 시키세요":
       "ラビに任せる",
     "예: 수료증 120장 만들어 줘":
@@ -3877,6 +3881,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "AI 未开启",
     "라비 열기":
       "打开拉比",
+    "자산 판매·맞교환도 1%, 경매 낙찰은 10%가 개발비입니다. 사람 사이 송금에는 개발비가 없습니다.":
+      "资产出售和交换同样收取1%开发费，拍卖成交收取10%。向他人转账不收开发费。",
     "라비에게 시키세요":
       "交给拉比",
     "예: 수료증 120장 만들어 줘":
