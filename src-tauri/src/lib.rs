@@ -297,6 +297,8 @@ pub fn run() {
             ai::save_custom_provider,
             ai::model_settings,
             ai::ai_models_refresh,
+            ai::ai_image,
+            ai::image_save,
             ai::save_model,
             wallet::encryption_state,
             wallet::encrypt_wallet,

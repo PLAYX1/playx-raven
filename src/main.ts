@@ -9933,6 +9933,14 @@ function applyActions(actions: any[], typed = ""): string[] {
           done.push(tf("보내기 확인 화면을 열었습니다 — {0} {1}, 누르는 것은 사장님입니다", String(amt), asset || "RVN"));
           break;
         }
+        // 🔴 그림은 **사장님이 돈 나가는 것을 보고 「만들기」를 눌러야** 만든다(자기 API 키로 한 장마다 요금).
+        case "image_prepare": {
+          const p = String(a.prompt || "").trim().slice(0, 300);
+          if (!p) break;
+          void raviImage(p);
+          done.push(t("그림 만들기를 사장님께 물어봤습니다"));
+          break;
+        }
         case "shop_set": {
           // 🔴 주문 링크는 라비가 채우지 않는다 — 조종당하면 손님을 가짜 링크로 보낼 수 있다.
           if (a.field === "order_url") break;
@@ -10318,6 +10326,35 @@ function raviGo(to: GuideGo) {
     case "assets": showPage("assets"); return;
     case "node": toggleDot("node"); return;
     case "key": openKeyCard(); return;
+  }
+}
+
+/** 라비가 만들자고 한 그림 — 요금이 나간다고 알리고, 「만들기」를 눌러야 만든다. 대화창에 그림과 저장 단추를 둔다. */
+async function raviImage(prompt: string) {
+  const ok = await sure(t("그림 한 장을 만들까요?"), tf("「{0}」 — 내 AI 키(구글 또는 OpenAI)로 만들고, 한 장마다 요금이 나갑니다.", prompt), t("만들기"));
+  if (!ok) return;
+  chatHtml("ai", `<span class="muted" data-thinking="1">${escapeHtml(t("그림을 만드는 중…"))}</span>`);
+  try {
+    const r = await invoke<any>("ai_image", { prompt, prefer: aiProvider });
+    chatPopThinking();
+    const b64 = String(r?.b64 || "");
+    if (!/^[A-Za-z0-9+/=]+$/.test(b64)) throw new Error("그림을 받지 못했습니다.");
+    const mime = ["image/png", "image/jpeg", "image/webp"].includes(r?.mime) ? r.mime : "image/png";
+    chatHtml("ai", `<img class="raviimg" alt="" src="data:${mime};base64,${b64}" /><div><button class="ghost" data-imgsave="1">${escapeHtml(t("저장"))}</button></div>`);
+    const btn = ($("chat-log").lastElementChild?.querySelector("[data-imgsave]") as HTMLElement | null);
+    if (btn) btn.onclick = async () => {
+      try {
+        const path = await pickSavePath({ defaultPath: `ravi-${Date.now()}.${mime === "image/jpeg" ? "jpg" : mime === "image/webp" ? "webp" : "png"}`, filters: [{ name: "Image", extensions: ["png", "jpg", "webp"] }] });
+        if (!path) return;
+        const saved = await invoke<any>("image_save", { path, b64 });
+        chatSay("did", tf("그림을 저장했습니다 — {0}", String(saved?.path ?? path)));
+      } catch (e) {
+        chatSay("ai", errText(e));
+      }
+    };
+  } catch (e) {
+    chatPopThinking();
+    chatSay("ai", errText(e));
   }
 }
 
