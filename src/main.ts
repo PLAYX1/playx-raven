@@ -16934,7 +16934,9 @@ window.addEventListener("DOMContentLoaded", async () => {
   appIcon.alt = "";
   logoBtn.appendChild(appIcon);
   logoBtn.onclick = () => showPage("home");
-  $("rv-desktop-logo").replaceWith(logoBtn);
+  // 왼쪽 맨 앞 아이콘은 라비다(아래 rv-header-ravi). 예전 앱 로고 자리는 비운다.
+  $("rv-desktop-logo").remove();
+  void logoBtn;
   $("rv-onboard-face").appendChild(raviFace("sleep", 150));
   document.querySelectorAll(".ravi-static-face").forEach(slot => slot.replaceWith(raviFace("sleep", 40)));
   const raviNav = document.querySelector('nav a[data-page="ravi"]');
