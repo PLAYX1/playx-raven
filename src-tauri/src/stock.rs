@@ -138,6 +138,10 @@ pub fn commit(address: &str, menu: &mut Value) {
             continue;
         };
         let Some(n) = taken.get(&name) else { continue };
+        // 공동구매 품목은 `groupbuy.rs` 가 결제 장부로 센다. 여기서도 빼면 두 번 빠진다.
+        if it.get("group").is_some() {
+            continue;
+        }
         if let Some(s) = it.get("stock").and_then(Value::as_i64) {
             it["stock"] = json!((s - n).max(0));
         }

@@ -4212,6 +4212,7 @@
         <div class="tabs">
           <button class="tab on" data-shoptab="orders">들어온 주문<span class="ordbadge" id="or-badge" hidden>0</span></button>
           <button class="tab" data-shoptab="menu">메뉴판</button>
+          <button class="tab" data-shoptab="group">공동구매</button>
           <!-- 🔴 손님 QR 은 **장사의 전부**인데 「이 컴퓨터」 안쪽에 있었다.
                매일 쓰는 것은 매일 여는 화면에 있어야 한다. -->
           <button class="tab" id="sh-qrtab">손님 QR · 테이블</button>
@@ -4223,6 +4224,19 @@
 
         <!-- 매출장부. 체인은 "이체가 있었다"까지만 증명하고, 그게 얼마짜리였는지는
              말해 주지 못한다. 여기가 그 숫자를 보관하고 꺼내는 자리다. -->
+        <!-- 0.6.0 공동구매 · 대기 신청 · 가게 사정 환불 · 송장(RV7 §16·§17·§18·§22). 계산은 groupbuy.rs. -->
+        <div class="shoptab" id="shoptab-group">
+          <p class="meta">메뉴판 품목에 받는 날·마감일·최소 수량을 붙이면 공동구매가 돼요. 최대 수량은 「남은 수량」이에요. 결제한 분부터 확정되고, 다 차면 손님은 대기 신청만 할 수 있어요. 결제한 예약은 손님이 취소할 수 없어요. 마감까지 최소 수량이 안 모이면 「환불 대기」에 떠요.</p>
+          <div id="gb-items"><p class="meta">읽는 중…</p></div>
+          <div id="gb-refund"></div>
+          <details class="card" id="gb-setup" style="margin-top:14px">
+            <summary><b>공동구매로 팔 품목 정하기</b></summary>
+            <div id="gb-edit" style="margin-top:10px"></div>
+            <label class="meta" style="display:block;margin-top:10px">결제 차례를 기다려 주는 시간 <input id="gb-window" type="number" min="1" max="336" style="width:90px" /> 시간</label>
+            <div class="row" style="margin-top:12px"><button id="gb-save" type="button">저장하고 올리기</button><span class="meta" id="gb-say"></span></div>
+          </details>
+        </div>
+
         <div class="shoptab" id="shoptab-sales">
           <div class="row" id="sl-range">
             <button class="ghost on" data-days="0">오늘</button>

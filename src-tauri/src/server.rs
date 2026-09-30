@@ -470,6 +470,10 @@ fn customer_path(path: &str) -> bool {
             | "/api/order"
             | "/api/order-state"
             | "/api/slots"
+            // 공동구매 대기 신청·내 순번·취소, 택배 송장. 카톡 링크로 밖에서 여는 손님이 쓴다.
+            | "/api/wait"
+            | "/api/wait/cancel"
+            | "/api/ship"
             // 릴레이는 열려 있어야 한다. 닫으면 이 컴퓨터가 릴레이가 아니다.
             | "/api/relay"
             | "/api/qr"
@@ -1048,6 +1052,11 @@ async fn sweep_payments(st: &ServerState) {
                 crate::stock::commit(addr, menu);
             }
         }
+        // 공동구매 확정자 명단에 적는다(같은 주문은 두 번 안 적힌다).
+        if let Some(row) = settled.as_ref() {
+            let menu = st.shop.lock().ok().and_then(|s| s.get("menu").cloned()).unwrap_or(Value::Null);
+            crate::groupbuy::record_paid(&menu, row);
+        }
     }
     // 자물쇠를 놓았다. 이제 체인에 물어본다.
     //
@@ -1072,6 +1081,58 @@ async fn sweep_payments(st: &ServerState) {
                 }
             }
         });
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct WaitAdd {
+    item: String,
+    #[serde(default = "one")]
+    qty: i64,
+    #[serde(default)]
+    name: String,
+    contact: String,
+}
+fn one() -> i64 { 1 }
+
+/// 공동구매 대기 신청. 결제가 없어 자리를 잡지 않는다 — 결제 차례가 오면 가게가 알린다.
+async fn api_wait_add(State(st): State<ServerState>, Json(b): Json<WaitAdd>) -> impl IntoResponse {
+    let now = now_unix();
+    let menu = st.shop.lock().ok().and_then(|s| s.get("menu").cloned()).unwrap_or(json!([]));
+    let today = crate::ledger::local_ymd(now, local_tz_offset_min());
+    match crate::groupbuy::public_wait_add(&menu, b.item.trim(), b.qty, &b.name, &b.contact, today, now) {
+        Ok(v) => (StatusCode::OK, Json(v)),
+        Err(e) => (StatusCode::BAD_REQUEST, Json(json!({ "error": e }))),
+    }
+}
+
+/// 내 대기 순번·상태. 번호와 열쇠가 둘 다 맞아야 답한다. 연락처는 돌려주지 않는다.
+async fn api_wait_state(Query(q): Query<std::collections::HashMap<String, String>>) -> impl IntoResponse {
+    let id = q.get("id").and_then(|v| v.parse::<i64>().ok()).unwrap_or(0);
+    let key = q.get("k").cloned().unwrap_or_default();
+    match crate::groupbuy::public_wait_state(id, &key) {
+        Some(v) => (StatusCode::OK, Json(v)),
+        None => (StatusCode::NOT_FOUND, Json(json!({ "error": "그런 대기 신청이 없어요." }))),
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct WaitCancel { id: i64, k: String }
+
+/// 대기 신청 취소(돈이 없으니 마감 전 언제든). 결제한 예약은 이 길로 못 없앤다.
+async fn api_wait_cancel(Json(b): Json<WaitCancel>) -> impl IntoResponse {
+    match crate::groupbuy::public_wait_cancel(b.id, &b.k) {
+        Ok(()) => (StatusCode::OK, Json(json!({ "ok": true }))),
+        Err(e) => (StatusCode::BAD_REQUEST, Json(json!({ "error": e }))),
+    }
+}
+
+/// 택배 송장. 주문 주소가 곧 열쇠다(`api_order_state` 와 같은 규칙).
+async fn api_ship(Query(q): Query<std::collections::HashMap<String, String>>) -> impl IntoResponse {
+    let a = q.get("a").cloned().unwrap_or_default();
+    match crate::groupbuy::public_ship(a.trim()) {
+        Some(v) => (StatusCode::OK, Json(v)),
+        None => (StatusCode::NOT_FOUND, Json(json!({ "error": "아직 발송 전이에요." }))),
     }
 }
 
@@ -1115,6 +1176,7 @@ async fn api_order_state(
                 "passes": crate::ticket::for_order(&addr, now_unix())["tickets"],
                 // 예약한 시각. 손님이 「몇 시였더라」를 다시 볼 곳은 여기뿐이다.
                 "booking": crate::booking::for_order(&addr),
+                "ship": crate::groupbuy::public_ship(&addr),
             })),
         ),
         // 모르는 주소다. 예전에는 여기서 "paid" 라고 답했고, 그건 한 푼도 내지
@@ -1588,7 +1650,7 @@ async fn api_shop(State(state): State<ServerState>) -> impl IntoResponse {
         // 않으므로 다음 판올림에도 살아남는다.
         "theme": crate::shop::theme_read(),
         "left": crate::stock::stock_left(
-            shop.get("menu").cloned().unwrap_or(json!([])),
+            crate::groupbuy::adjusted_menu(&shop.get("menu").cloned().unwrap_or(json!([]))),
             now_unix(),
         ),
         // 영업 여부는 **가게 시계**로 판정한다. 손님 폰의 시간대를 쓰면,
@@ -1904,6 +1966,15 @@ struct OrderBody {
     /// 이게 없으면 직원은 "아메리카노 나왔습니다" 를 외치고 손님이 일어나
     /// 받으러 와야 한다. 자리로 가져다주는 가게에서는 그게 안 된다.
     table: Option<String>,
+    /// 공동구매 대기 신청으로 결제 차례를 받아 온 손님이면 그 번호와 열쇠(`groupbuy.rs`).
+    #[serde(default)]
+    wait: Option<WaitRef>,
+}
+
+#[derive(serde::Deserialize, Clone)]
+struct WaitRef {
+    id: i64,
+    key: String,
 }
 
 /// Creates an order: its own address, and a price frozen at this moment.
@@ -2164,6 +2235,15 @@ async fn api_order(
             .lock()
             .map(|s| s.get("menu").cloned().unwrap_or(json!([])))
             .unwrap_or(json!([]));
+        // 공동구매: 마감이 지났으면 받지 않고, 남은 수는 결제 장부로 센다(`groupbuy.rs`).
+        let today = crate::ledger::local_ymd(now, local_tz_offset_min());
+        if let Err(e) = crate::groupbuy::can_order(&menu, &body.items, today) {
+            return (StatusCode::CONFLICT, Json(json!({ "error": e })));
+        }
+        let menu = crate::groupbuy::adjusted_menu(&menu);
+        if let Some(w) = body.wait.clone() {
+            crate::groupbuy::link_order(&address, w.id, &w.key);
+        }
         if let Err(e) = crate::stock::hold(&address, &menu, &body.items, now) {
             return (StatusCode::CONFLICT, Json(json!({ "error": e })));
         }
@@ -3273,6 +3353,9 @@ fn build_phone_router(st: ServerState) -> axum::Router {
         .route("/api/claim", post(api_claim))
         .route("/api/paid", get(api_paid))
         .route("/api/order-state", get(api_order_state))
+        .route("/api/wait", get(api_wait_state).post(api_wait_add))
+        .route("/api/wait/cancel", post(api_wait_cancel))
+        .route("/api/ship", get(api_ship))
         // 손님이 고를 수 있는 시각. 담은 것에 따라 필요한 시간이 달라지므로
         // 장바구니를 통째로 받는다.
         .route("/api/slots", post(api_slots))
@@ -4257,7 +4340,7 @@ mod outside {
     /// 터널을 켠 모든 가게의 계산대가 그날로 인터넷에 열린다.
     #[test]
     fn nothing_that_runs_the_shop_is_a_customer_path() {
-        for open in ["/", "/buy", "/api/order", "/api/order-state", "/api/paid", "/ipfs/QmX"] {
+        for open in ["/", "/buy", "/api/order", "/api/order-state", "/api/paid", "/ipfs/QmX", "/api/wait", "/api/wait/cancel", "/api/ship"] {
             assert!(customer_path(open), "{open} 이 손님 경로에서 빠졌습니다");
         }
         for shut in [

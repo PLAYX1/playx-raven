@@ -58,6 +58,7 @@ mod sendfee;
 mod rewards;
 mod stock;
 mod booking;
+mod groupbuy;
 mod trade;
 mod walletx;
 mod wiring;
@@ -257,6 +258,11 @@ pub fn run() {
             stock::stock_left,
             booking::booking_slots,
             booking::booking_list,
+            groupbuy::gb_overview,
+            groupbuy::gb_window_set,
+            groupbuy::gb_wait_cancel,
+            groupbuy::gb_refund_mark,
+            groupbuy::gb_ship_set,
             booking::booking_cancel,
             trade::trade_list,
             trade::trade_get,

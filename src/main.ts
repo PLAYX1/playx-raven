@@ -4573,6 +4573,117 @@ async function paintProfile(): Promise<void> {
   } catch { /* Profile name can be set while relays are unavailable. */ }
 }
 
+/// 0.6.0 공동구매 화면. 계산·저장은 전부 `groupbuy.rs` — 여기는 보여 주고 누르는 것만.
+const gbYmd = (n: unknown): string => {
+  const v = Number(n) || 0;
+  return v ? `${Math.floor(v / 10000)}-${String(Math.floor(v / 100) % 100).padStart(2, "0")}-${String(v % 100).padStart(2, "0")}` : "";
+};
+function gbEditor(): void {
+  const rows = menuItems.map((m, i) => {
+    const g = m.group || {};
+    return `<div style="display:grid;grid-template-columns:minmax(120px,1.4fr) auto repeat(2,minmax(130px,1fr)) repeat(2,90px);gap:8px;align-items:end;margin:8px 0">
+      <b style="align-self:center">${escapeHtml(String(m.name || ""))}</b>
+      <label class="meta" style="align-self:center"><input type="checkbox" data-gb="on" data-i="${i}" ${m.group ? "checked" : ""} /> ${copyHtml("공동구매")}</label>
+      <label class="meta">${copyHtml("받는 날")}<input type="date" data-gb="pickup" data-i="${i}" value="${escapeHtml(String(g.pickup || ""))}" /></label>
+      <label class="meta">${copyHtml("마감일")}<input type="date" data-gb="deadline" data-i="${i}" value="${escapeHtml(String(g.deadline || ""))}" /></label>
+      <label class="meta">${copyHtml("최소")}<input type="number" min="1" data-gb="min" data-i="${i}" value="${escapeHtml(String(g.min || 1))}" /></label>
+      <label class="meta">${copyHtml("최대")}<input type="number" min="0" data-gb="stock" data-i="${i}" value="${m.stock ?? ""}" /></label>
+    </div>`;
+  });
+  $("gb-edit").innerHTML = rows.join("") || `<p class="meta">${copyHtml("메뉴판에 품목을 먼저 올려 주세요.")}</p>`;
+}
+async function gbSave(): Promise<void> {
+  const val = (i: number, k: string) => (document.querySelector(`[data-gb="${k}"][data-i="${i}"]`) as HTMLInputElement | null);
+  for (let i = 0; i < menuItems.length; i++) {
+    const on = !!val(i, "on")?.checked;
+    if (!on) { delete menuItems[i].group; continue; }
+    const pickup = val(i, "pickup")?.value || "", deadline = val(i, "deadline")?.value || "";
+    const min = Math.max(1, Math.floor(Number(val(i, "min")?.value) || 1));
+    const max = val(i, "stock")?.value ?? "";
+    if (!pickup || !deadline) { setCopyText($("gb-say"), () => tf("{0}: 받는 날과 마감일을 골라 주세요.", String(menuItems[i].name || ""))); return; }
+    if (deadline > pickup) { setCopyText($("gb-say"), () => tf("{0}: 마감일이 받는 날보다 늦어요.", String(menuItems[i].name || ""))); return; }
+    if (max === "" || !(Number(max) >= 0)) { setCopyText($("gb-say"), () => tf("{0}: 최대 수량을 적어 주세요.", String(menuItems[i].name || ""))); return; }
+    menuItems[i].group = { pickup, deadline, min };
+    menuItems[i].stock = Math.floor(Number(max));
+    if (menuItems[i].kind !== "pass" && menuItems[i].kind !== "book") menuItems[i].kind = "stock";
+  }
+  const hours = Math.floor(Number(($("gb-window") as HTMLInputElement).value) || 24);
+  try { await invoke("gb_window_set", { hours }); } catch (e) { $("gb-say").textContent = errText(e); return; }
+  setCopyText($("gb-say"), () => t("저장하는 중…"));
+  await saveMenu();
+  try { renderMenu(); } catch { /* 메뉴판 탭이 안 열려 있어도 된다 */ }
+  setCopyText($("gb-say"), () => t("저장했어요."));
+  await loadGroup();
+}
+async function loadGroup(): Promise<void> {
+  gbEditor();
+  $("gb-save").onclick = () => void gbSave();
+  let ov: any;
+  try {
+    ov = await invoke<any>("gb_overview", { todayYmd: todayYmd(), nowUnix: Math.floor(Date.now() / 1000) });
+  } catch (e) {
+    $("gb-items").innerHTML = `<div class="warnbox">${escapeHtml(errText(e))}</div>`;
+    return;
+  }
+  ($("gb-window") as HTMLInputElement).value = String(ov?.window_h ?? 24);
+  const items: any[] = ov?.items || [];
+  const problems: any[] = ov?.problems || [];
+  const STATE: Record<string, string> = { open: "모집 중", full: "다 찼어요 · 대기 신청만 받아요", done: "마감 · 성사", short: "마감 · 최소 수량 미달" };
+  const when = (u: unknown) => Number(u) > 0 ? new Date(Number(u) * 1000).toLocaleString(lang, { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" }) : "";
+  const carriers: string[] = ov?.carriers || [];
+  const html = items.map((it) => {
+    const max = Number(it.paid_qty || 0) + Number(it.left || 0);
+    const waits = (it.waiting || []).map((w: any, n: number) => `<div class="kv"><b>${n + 1}. ${escapeHtml(String(w.name || ""))} · ${escapeHtml(String(w.contact || ""))} × ${escapeHtml(String(w.qty))}</b><span>${
+      w.state === "offered" ? `<span class="warn">${copyHtml("결제 차례")} · ${escapeHtml(when(w.until))}${escapeHtml(t("까지"))} — ${copyHtml("연락해 주세요")}</span>` : copyHtml("기다림")
+    } <button class="ghost" data-gbx="${escapeHtml(String(w.id))}">${copyHtml("취소")}</button></span></div>`).join("");
+    const refunds = (it.refund_due || []).map((r: any) => `<div class="kv"><b><code class="addr">${escapeHtml(String(r.order).slice(0, 10))}…</code> × ${escapeHtml(String(r.qty))} · ${escapeHtml(String(r.rvn))} RVN</b><span><button data-gbr="${escapeHtml(String(r.order))}" data-rvn="${escapeHtml(String(r.rvn))}" data-item="${escapeHtml(String(it.item))}">${copyHtml("환불 미리보기")}</button></span></div>`).join("");
+    const orders = (it.orders || []).filter((o: any) => o.refunded !== true).map((o: any) => {
+      const sh = o.ship;
+      const right = sh
+        ? `${escapeHtml(String(sh.carrier))} ${escapeHtml(String(sh.number))}`
+        : `<select data-gbc="${escapeHtml(String(o.order))}">${carriers.map((c) => `<option>${escapeHtml(c)}</option>`).join("")}</select> <input data-gbn="${escapeHtml(String(o.order))}" inputmode="numeric" placeholder="${escapeHtml(t("송장번호"))}" style="width:150px" /> <button class="ghost" data-gbs="${escapeHtml(String(o.order))}">${copyHtml("송장 넣기")}</button>`;
+      return `<div class="kv"><b><code class="addr">${escapeHtml(String(o.order).slice(0, 10))}…</code> × ${escapeHtml(String(o.qty))}</b><span>${right}</span></div>`;
+    }).join("");
+    return `<div class="card" style="margin-top:12px">
+      <h3 style="margin-top:0">${escapeHtml(String(it.item))} <span class="meta">· ${copyHtml(STATE[it.state] || "")}</span></h3>
+      <p class="meta">${copyHtml("받는 날")} ${gbYmd(it.pickup)} · ${copyHtml("마감일")} ${gbYmd(it.deadline)} · ${escapeHtml(tf("확정 {0} / 최대 {1} · 최소 {2}", it.paid_qty, max, it.min))}</p>
+      ${refunds ? `<h4>${copyHtml("환불 대기 (가게 사정)")}</h4>${refunds}` : ""}
+      ${waits ? `<h4>${copyHtml("대기 신청")}</h4>${waits}` : ""}
+      ${orders ? `<details><summary>${copyHtml("결제한 주문 · 송장")}</summary>${orders}</details>` : ""}
+    </div>`;
+  }).join("");
+  $("gb-items").innerHTML =
+    (problems.length ? `<div class="warnbox">${problems.map((p) => `${escapeHtml(String(p.item))}: ${escapeHtml(t(String(p.why)))}`).join("<br>")}</div>` : "") +
+    (html || `<p class="meta">${copyHtml("아직 공동구매 품목이 없어요. 아래에서 정해 주세요.")}</p>`);
+  if (!items.length) ($("gb-setup") as HTMLDetailsElement).open = true;
+  document.querySelectorAll<HTMLElement>("[data-gbx]").forEach((b) => {
+    b.onclick = async () => {
+      if (!(await sure(t("이 대기 신청을 취소할까요?")))) return;
+      try { await invoke("gb_wait_cancel", { id: Number(b.dataset.gbx) }); } catch (e) { $("gb-say").textContent = errText(e); }
+      void loadGroup();
+    };
+  });
+  document.querySelectorAll<HTMLElement>("[data-gbr]").forEach((b) => {
+    b.onclick = () => {
+      const order = String(b.dataset.gbr), item = String(b.dataset.item);
+      void doRefund(order, Number(b.dataset.rvn) || 0, "gb-refund", async () => {
+        await invoke("gb_refund_mark", { order, item });
+        void loadGroup();
+      }, "공동구매 최소 수량 미달 환불");
+      $("gb-refund").scrollIntoView({ behavior: "smooth", block: "center" });
+    };
+  });
+  document.querySelectorAll<HTMLElement>("[data-gbs]").forEach((b) => {
+    b.onclick = async () => {
+      const order = String(b.dataset.gbs);
+      const carrier = (document.querySelector(`[data-gbc="${CSS.escape(order)}"]`) as HTMLSelectElement | null)?.value || "";
+      const number = (document.querySelector(`[data-gbn="${CSS.escape(order)}"]`) as HTMLInputElement | null)?.value || "";
+      try { await invoke("gb_ship_set", { order, carrier, number, nowUnix: Math.floor(Date.now() / 1000) }); void loadGroup(); }
+      catch (e) { $("gb-say").textContent = errText(e); ($("gb-setup") as HTMLDetailsElement).open = true; }
+    };
+  });
+}
+
 /// 0.6.0-A2 — 홈의 「오늘 가게」 카드. 가게를 만든 사람에게만 보인다.
 /// 이미 있는 장부(ledger_range·ledger_pending)와 새 주문 숫자만 읽는다 — 새 계산·새 저장 없음.
 /// 발송·환불·공동구매 줄은 그 기능이 생길 때 여기에 더한다(RV7 §14.3-1).
@@ -4589,7 +4700,17 @@ async function paintHomeToday(): Promise<void> {
     const ymd = todayYmd();
     const r: any = await invoke("ledger_range", { fromYmd: ymd, toYmd: ymd, tzOffsetMin: tzMin() });
     const pend: any = await invoke("ledger_pending").catch(() => null);
+    const gb: any = await invoke("gb_overview", { todayYmd: ymd, nowUnix: Math.floor(Date.now() / 1000) }).catch(() => null);
     if (seq !== homeTodaySeq) return;
+    // 공동구매가 있을 때만 두 줄(RV7 §17.2): 가게 사정 환불, 결제 차례를 알릴 분. 발송할 것은 배달하는 가게만.
+    const gbItems: any[] = gb?.items || [];
+    const offered = gbItems.reduce((n, it) => n + (it.waiting || []).filter((w: any) => w.state === "offered").length, 0);
+    const gbLine = (label: string) => `<div class="rv-home-entry"><span>${escapeHtml(label)}</span><b></b></div>`;
+    const gbRows = gbItems.length
+      ? (Number(gb.refund_due) > 0 ? gbLine(tf("환불 대기(가게 사정) {0}건", gb.refund_due)) : "") +
+        (offered > 0 ? gbLine(tf("결제 차례를 알릴 분 {0}명", offered)) : "") +
+        (sh.delivery && Number(gb.to_ship) > 0 ? gbLine(tf("송장 넣을 주문 {0}건", gb.to_ship)) : "")
+      : "";
     // 🔴 통화가 섞였거나 못 읽은 줄이 있으면 합계를 확정 금액처럼 보이지 않는다(매출 화면과 같은 기준).
     const doubtful = !!r?.mixed_currency || !!r?.unreadable_rows;
     const cur = r?.currency ? " " + String(r.currency) : "";
@@ -4602,7 +4723,8 @@ async function paintHomeToday(): Promise<void> {
       row(t("오늘 받은 금액"), money) +
       row(tf("판매 {0}건", Number(r?.sales || 0)), "") +
       row(tf("안 본 새 주문 {0}건", 안본주문), "") +
-      row(tf("입금 대기 {0}건", Number(pend?.count || 0)), "");
+      row(tf("입금 대기 {0}건", Number(pend?.count || 0)), "") +
+      gbRows;
     box.hidden = false;
   } catch {
     // 장부를 못 읽었으면 조용히 접는다. 없는 숫자를 지어내지 않는다.
@@ -12742,8 +12864,8 @@ async function sendDirect() {
  * ⚠️ 주소는 **되돌릴 수 없다.** 잘못 보내면 끝이다. 그래서 보내기 전에
  *    한 번 더 확인하고, 확인 문구에 주소와 금액을 그대로 적는다.
  */
-async function doRefund(payAddress: string, suggested: number) {
-  const box = $("or-refund");
+async function doRefund(payAddress: string, suggested: number, boxId = "or-refund", onDone?: () => void | Promise<void>, why = "주문 취소") {
+  const box = $(boxId);
   const lock = await invoke<any>("wallet_lock_state").catch(() => null);
   const needPass = !!(lock?.encrypted && !lock?.unlocked);
   box.innerHTML =
@@ -12757,7 +12879,7 @@ async function doRefund(payAddress: string, suggested: number) {
          <input id="rf-to" placeholder="R..." autocomplete="off" spellcheck="false" />
          <p class="meta" id="rf-fromsay">${copyHtml("보낸 주소를 찾는 중…")}</p>
          <label class="meta" for="rf-why">${copyHtml("사유 (내 지갑에만 남습니다)")}</label>
-         <input id="rf-why" value="${t("주문 취소")}" />
+         <input id="rf-why" value="${escapeHtml(t(why))}" />
          ${
            needPass
              ? `<label class="meta" for="rf-pass">${copyHtml("지갑 암호")}</label>
@@ -12840,6 +12962,7 @@ async function doRefund(payAddress: string, suggested: number) {
          <div class="kv"><b>${copyHtml("금액")}</b><span>${r.amount} RVN</span></div>
          <div class="kv"><b>${copyHtml("거래 번호")}</b><code class="addr">${escapeHtml(String(r.txid))}</code></div></div>`;
       loadWallet();
+      try { await onDone?.(); } catch { /* 환불은 나갔다. 표시만 못 했으면 다음에 다시 보인다. */ }
     } catch (e) {
       b.disabled = false;
       $("rf-say").innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
@@ -14913,6 +15036,7 @@ function shopTab(which: string) {
     loadOrders();
   }
   if (which === "sales") loadSales();
+  if (which === "group") void loadGroup();
   if (which === "mine") {
     previewOpen();
     // 🔴 여태 `loadShop()` 은 **앱 켤 때 한 번**만 돌았다. 탭을 눌러도 다시
