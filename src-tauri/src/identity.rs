@@ -335,7 +335,7 @@ pub fn derive(seed: &[u8; 64], path: &str) -> Option<[u8; 32]> {
 ///    이 파일 밖으로 나가는 유일한 곳이 아래 두 함수뿐이고, 둘 다 씨앗으로
 ///    바꾼 뒤 즉시 버린다.
 fn words_from_node() -> Option<(String, String)> {
-    let v = tauri::async_runtime::block_on(async {
+    let v = crate::rt::block(async {
         crate::raven::call_rpc("getmywords", json!([])).await
     })
     .ok()?;

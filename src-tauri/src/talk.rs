@@ -313,7 +313,7 @@ pub async fn talk_profiles(pubkeys: Vec<String>) -> Result<Value, String> {
 /// 제일 나쁘다.
 #[tauri::command]
 pub fn recovery_status() -> Value {
-    let words = tauri::async_runtime::block_on(async {
+    let words = crate::rt::block(async {
         crate::raven::call_rpc("getmywords", json!([])).await
     });
     // 잠긴 것과 12단어가 없는 것은 **다른 말**이다. 잠긴 것은 열면 되고,

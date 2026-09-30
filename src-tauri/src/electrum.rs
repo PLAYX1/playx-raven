@@ -173,7 +173,7 @@ pub fn electrum_status() -> Value {
 fn scripthash(address: &str) -> Result<String, String> {
     // The node already knows how to turn an address into its script; asking it
     // avoids reimplementing base58 and the asset-aware script rules here.
-    let info = tauri::async_runtime::block_on(crate::raven::call_rpc(
+    let info = crate::rt::block(crate::raven::call_rpc(
         "validateaddress",
         json!([address]),
     ))?;

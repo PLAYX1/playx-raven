@@ -1,4 +1,5 @@
 mod artist;
+mod rt;
 mod auction;
 mod ai;
 mod ai_endpoint;

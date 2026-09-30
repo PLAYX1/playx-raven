@@ -227,7 +227,7 @@ fn derive_with(tag: &str, words: &str, passphrase: &str) -> Option<[u8; 32]> {
 /// ⚠️ 12단어는 **여기서만** 쓰고 어디에도 안 남긴다. 로그에도, 파일에도,
 ///    화면에도 안 나간다. 나가는 것은 해시 결과뿐이다.
 fn from_seed() -> Option<[u8; 32]> {
-    let v = tauri::async_runtime::block_on(async {
+    let v = crate::rt::block(async {
         crate::raven::call_rpc("getmywords", json!([])).await
     })
     .ok()?;

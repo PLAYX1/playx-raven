@@ -734,7 +734,7 @@ pub fn stop_on_exit() {
         .and_then(|g| g.as_ref().map(|v| v.iter().any(|(n, _)| n == "node")))
         .unwrap_or(false);
     if ours_node {
-        let _ = tauri::async_runtime::block_on(async {
+        let _ = crate::rt::block(async {
             let r = crate::raven::call_rpc("stop", json!([])).await;
             // 스스로 닫는 데 몇 초 걸린다. 안 기다리면 앱이 먼저 사라지고
             // 노드는 어정쩡하게 남는다 — 지금 겪고 있는 그 모습이다.
