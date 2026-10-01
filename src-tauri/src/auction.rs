@@ -70,25 +70,18 @@ pub fn bind_message(nostr_pk: &str, asset: &str, addr: &str, auction_id: &str) -
     format!("{BIND_PREFIX}|{nostr_pk}|{asset}|{addr}|{auction_id}")
 }
 
-/// 낙찰 수수료 **10%**. 맞교환의 1% 와 **다른 값이고, 그게 맞다.**
+/// 낙찰 수수료 **1%**. 가게·맞교환·중고와 **같은 값**이다.
 ///
-/// ## 왜 여기만 더 받나
-///
-/// 갈림선은 **「우리가 빠져도 그 일이 되는가」**다.
-/// 그냥 맞교환은 우리가 빠져도 둘이 지갑끼리 직접 한다 — 그래서 1% 다.
-/// 경매는 다르다. **값을 만드는 것이 경쟁 그 자체**라, 판을 열고 사람을
-/// 모으고 마감을 지키는 쪽이 없으면 아예 성립하지 않는다.
-///
-/// 바깥 기준도 그렇다. 미술 경매는 낙찰가에 **25%** 를 얹는다(구매자
-/// 프리미엄). eBay 는 13%, 크립토 장터는 2.5% 다. 10% 는 그 사이에서
-/// **아무도 놀라지 않는 자리**다.
+/// 대표님 지시(2026-10-01, "모든 결제는 1%의 수수료가 있게 해줘"). 예전에는
+/// 경매만 10% 였지만, 거래마다 요율이 다르면 사용자에게 설명이 둘이 되고
+/// 레이븐코인 사용자의 반발이 제일 먼저 나올 곳이 경매였다. 이제 모든 거래가
+/// 같은 1% 다.
 ///
 /// ## 🔴 끄는 길이 없다 — 맞교환 1% 와 같은 규칙이다
 ///
 /// 대표님 지시(2026-08-23, "무조건 1% 받을거야 · 이거 설정하는거 없애")는
-/// **요율을 못 바꾸게 하라**가 아니라 **끄는 스위치를 두지 마라**였다.
-/// 그래서 여기도 상수 하나이고 설정 파일을 읽지 않는다.
-/// 시험 `there_is_no_way_to_turn_the_auction_fee_off` 이 그걸 지킨다.
+/// **끄는 스위치를 두지 마라**였다. 그래서 여기도 상수 하나이고 설정 파일을
+/// 읽지 않는다. 시험 `there_is_no_way_to_turn_the_auction_fee_off` 이 지킨다.
 ///
 /// ⚠️ **화면에 미리 적어야 한다.** 낙찰된 뒤에 알게 되면 그게 신뢰를 깬다.
 ///    `winner_pays()` 가 그 한 숫자를 준다.
@@ -97,17 +90,17 @@ pub fn bind_message(nostr_pk: &str, asset: &str, addr: &str, auction_id: &str) -
 /// ```ignore
 /// swap_take(hex, true, passphrase, Some(auction::SETTLE_FEE_RATE))
 /// ```
-/// 마지막 인자를 빼면 `fee_config()` 의 **1%** 가 걷힌다. 그러면 화면은
-/// 10% 라 적고 체인은 1% 를 가져간다 — 돈에서 제일 나쁜 종류의 어긋남이다.
-/// 시험 `the_advertised_rate_must_be_collectable` 이 이걸 지킨다.
-pub const SETTLE_FEE_RATE: f64 = 0.10;
+/// 마지막 인자를 빼면 `fee_config()` 의 요율이 걷힌다. 지금은 둘 다 1% 라
+/// 같은 값이지만, 화면 숫자와 체인이 걷는 숫자가 한 자리에서 나오도록
+/// 계속 이 요율을 넘긴다. 시험 `the_advertised_rate_must_be_collectable` 이 지킨다.
+pub const SETTLE_FEE_RATE: f64 = 0.01;
 
 /// 낙찰 수수료 (RVN). 사토시 자리에서 반올림한다.
 ///
 /// ⚠️ **0.01 RVN 미만이면 0 이다.** 체인이 먼지만 한 출력을 거절해서
-///    `swap.rs` 가 그 출력을 통째로 건너뛴다(`MIN_DEV_FEE`). 10% 이므로 낙찰가가
-///    **0.1 RVN 미만**일 때 그렇게 되는데, `MIN_START_RVN` 이 1 RVN 이라
-///    정상적인 판에서는 일어나지 않는다. 시작가 하한을 낮추는 사람은
+///    `swap.rs` 가 그 출력을 통째로 건너뛴다(`MIN_DEV_FEE`). 1% 이므로 낙찰가가
+///    **1 RVN 미만**일 때 그렇게 되는데, `MIN_START_RVN` 이 정확히 1 RVN 이라
+///    정상적인 판에서는 일어나지 않는다(경계값: 1 RVN 의 1% = 0.01 RVN). 시작가 하한을 낮추는 사람은
 ///    이 줄을 먼저 읽을 것.
 pub fn settle_fee(price: f64) -> f64 {
     if !price.is_finite() || price <= 0.0 {
@@ -304,23 +297,23 @@ mod tests {
     #[test]
     fn there_is_no_way_to_turn_the_auction_fee_off() {
         assert!(SETTLE_FEE_RATE > 0.0, "낙찰 수수료가 0 이 됐다");
-        assert!((SETTLE_FEE_RATE - 0.10).abs() < 1e-9,
-                "낙찰 수수료가 10% 가 아니다: {SETTLE_FEE_RATE}");
+        assert!((SETTLE_FEE_RATE - 0.01).abs() < 1e-9,
+                "낙찰 수수료가 1% 가 아니다: {SETTLE_FEE_RATE}");
         // 값이 있는 판에서는 반드시 걷힌다 — 조건부로 0 이 되면 안 된다.
         for price in [1.0, 7.0, 100.0, 1_234.5] {
             assert!(settle_fee(price) > 0.0, "{price} RVN 판에서 수수료가 0 이다");
         }
     }
 
-    /// 경매는 10%, 가게·맞교환은 1%. **둘이 섞이면 안 된다.**
-    /// 하나로 합치려는 사람이 여기서 빨간불을 본다.
+    /// 모든 결제는 1%. 경매·가게·맞교환이 **같은 값**이어야 한다.
+    /// 어느 한쪽만 바꾸는 사람이 여기서 빨간불을 본다.
     #[test]
-    fn the_auction_takes_more_than_a_plain_swap() {
+    fn every_payment_takes_the_same_one_percent() {
         let (shop_rate, _) = crate::shop::fee_config();
         assert!((shop_rate - 0.01).abs() < 1e-9, "가게 요율이 1% 가 아니다");
-        assert!(SETTLE_FEE_RATE > shop_rate, "경매가 맞교환보다 적게 받는다");
-        // 100 RVN 판: 가게라면 1, 경매는 10.
-        assert!((settle_fee(100.0) - 10.0).abs() < 1e-8);
+        assert!((SETTLE_FEE_RATE - shop_rate).abs() < 1e-12, "경매와 가게 요율이 다르다");
+        // 100 RVN 판: 가게도 경매도 1.
+        assert!((settle_fee(100.0) - 1.0).abs() < 1e-8);
     }
 
     /// 화면에 적는 숫자와 실제로 나가는 숫자가 같아야 한다.
@@ -342,7 +335,7 @@ mod tests {
         }
     }
 
-    /// 시작가 하한이 지키는 것: 10% 가 먼지(0.01 RVN)보다 커야 한다.
+    /// 시작가 하한이 지키는 것: 1% 가 먼지(0.01 RVN)보다 커야 한다.
     /// 하한을 낮추면 이 시험이 먼저 빨개진다.
     #[test]
     fn the_start_floor_keeps_the_fee_collectable() {
@@ -352,15 +345,15 @@ mod tests {
 
     /// 🔴 **화면에 적은 요율을 실제로 걷을 수 있어야 한다.**
     ///
-    /// 2026-09-06 에 실제로 밟았다: 10% 를 상수로 넣어 놓고 걷는 길인
-    /// `swap_take` 는 요율을 받을 자리가 없었다. 그대로 배선했으면 화면은
-    /// 10%, 체인은 1% 였다. 이 시험은 **소스를 읽어서** 그 자리가 아직
+    /// 2026-09-06 에 실제로 밟았다: 경매 요율을 상수로 넣어 놓고 걷는 길인
+    /// `swap_take` 는 요율을 받을 자리가 없었다. 그대로 배선했으면 화면과
+    /// 체인이 다른 숫자를 썼을 것이다. 이 시험은 **소스를 읽어서** 그 자리가 아직
     /// 있는지 본다 — 없어지면 여기가 먼저 빨개진다.
     #[test]
     fn the_advertised_rate_must_be_collectable() {
         let src = include_str!("swap.rs");
         assert!(src.contains("fee_rate: Option<f64>"),
-                "swap_take 가 요율을 못 받는다 — 경매 10% 는 화면에만 남는다");
+                "swap_take 가 요율을 못 받는다 — 경매 요율은 화면에만 남는다");
         assert!(src.contains("pub async fn swap_check_at"),
                 "요율을 골라 계산하는 길이 사라졌다");
         assert!(src.contains("rate.unwrap_or(기본요율)"),

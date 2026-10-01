@@ -2621,6 +2621,15 @@
       :is(body > nav, .rv-talk-layout nav) .dotrow { width:80px; height:auto; min-height:40px; padding:4px 0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; }
       :is(body > nav, .rv-talk-layout nav) .dotsum #d-sum-t, :is(body > nav, .rv-talk-layout nav) .dotrow:not(.dotsum) span:last-child { display:block; font-size:11px !important; line-height:1.2; color:#B9BBC8; text-align:center; white-space:normal; word-break:keep-all; }
       @media(max-width:1160px) { #page-talk .talkwrap { grid-template-columns:300px minmax(320px,1fr); } }
+      /* ── 내 가게 → 지도에 올리기 (map-card.ts) ── */
+      .mpcard .mpfield { display: block; margin: 14px 0 4px; font-weight: 600; }
+      .mpcard input { width: 100%; max-width: 520px; }
+      .mpcard .chips { margin-top: 6px; }
+      .mpcard .mppreview { margin-top: 14px; padding: 12px 14px; border: 1px dashed var(--line); border-radius: 12px; line-height: 1.9; }
+      .mpcard .mppreview b { display: inline-block; min-width: 92px; color: var(--muted); font-weight: 500; }
+      .mpcard .meta.bad { color: var(--danger); } .mpcard .meta.warn { color: var(--warn); } .mpcard .meta.good { color: var(--ok); }
+      .mpcard .mpactions { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+      .mpcard [hidden] { display: none !important; }
     </style>
   </head>
   <body>
@@ -2927,6 +2936,10 @@
              바깥에 열려 있는지 알 방법이 없었다. -->
         <button type="button" class="dotrow" id="d-out-row">
           <span class="dot off" id="d-out"></span><span id="d-out-t">바깥 연결</span>
+        </button>
+        <!-- 여섯째. 손님 폰 지도에 이 가게가 올라가 있나(map.rs). 올렸으면 켜져 있는 동안 「영업 중」 신호가 간다. -->
+        <button type="button" class="dotrow" id="d-map-row">
+          <span class="dot off" id="d-map"></span><span id="d-map-t">지도: 안 올림</span>
         </button>
       </div>
     </nav>
@@ -4310,6 +4323,44 @@
             <div class="meta" id="sh-openpreview" style="margin-top:10px"></div>
           </div>
 
+          <!-- 지도에 올리기 — 손님 폰 지도에 가게가 보이고, 이 컴퓨터가 켜져 있는 동안 「영업 중」.
+               서버가 없다: 이름표·신호는 이 컴퓨터가 서명해 공개 릴레이에 올린다(map.rs).
+               🔴 정확 좌표를 받는 칸이 없다 — 동네는 표에서 고르거나 5자리 코드만. -->
+          <div class="card mpcard" id="mp-card">
+            <h3 style="margin-top:0">지도에 올리기</h3>
+            <p class="meta">손님 폰 지도에 내 가게가 보이고, 이 컴퓨터가 켜져 있는 동안 「영업 중」으로 뜹니다.</p>
+            <p class="meta" id="mp-privacy">지도에 올라가는 것은 가게 이름·업종·동네(약 5km 칸)·가게 링크·영업 중 신호뿐입니다. 정확한 주소와 좌표는 보내지 않습니다.</p>
+            <label class="mpfield" for="mp-name">가게 이름</label>
+            <input id="mp-name" maxlength="40" autocomplete="off" translate="no" />
+            <span class="mpfield">업종</span>
+            <div class="chips wrap" id="mp-cats" role="group" aria-label="업종"></div>
+            <span class="mpfield">동네</span>
+            <input id="mp-areaq" placeholder="동네 이름으로 찾기 — 예: 내손동, 분당" autocomplete="off" />
+            <div class="chips wrap" id="mp-areas" role="group" aria-label="동네"></div>
+            <details>
+              <summary>지역 코드 직접 넣기</summary>
+              <input id="mp-areacode" maxlength="5" placeholder="5자리 지역 코드 — 예: wydk3" autocomplete="off" />
+              <p class="meta">표에 없는 동네는 5자리 지역 코드(geohash)를 넣으세요. 더 긴 코드(정확한 위치)는 받지 않습니다.</p>
+            </details>
+            <label class="mpfield" for="mp-url">가게 링크</label>
+            <input id="mp-url" placeholder="https://" autocomplete="off" />
+            <div class="meta" id="mp-urlnote"></div>
+            <button type="button" class="ghost" id="mp-usetunnel" hidden>지금 바깥 연결 주소 넣기</button>
+            <details id="mp-fixed" hidden>
+              <summary>고정 이름 터널 만드는 법</summary>
+              <p class="meta">임시 주소(…trycloudflare.com)는 앱이나 터널을 다시 켤 때마다 바뀝니다. 내 도메인이 있으면 Cloudflare 의 「이름 있는 터널」로 주소를 고정할 수 있습니다: ① cloudflared tunnel login ② cloudflared tunnel create 가게이름 ③ cloudflared tunnel route dns 가게이름 shop.내도메인 ④ 그 터널을 이 컴퓨터의 8790 포트로 연결 ⑤ https://shop.내도메인 을 위 「가게 링크」에 넣기. 어려우시면 「문제 알리기」로 물어 주세요.</p>
+            </details>
+            <div class="mppreview" id="mp-preview" aria-live="polite"></div>
+            <div class="meta" id="mp-problems"></div>
+            <div class="mpactions">
+              <button type="button" id="mp-go">올리기</button>
+              <button type="button" class="ghost" id="mp-down" hidden>내리기</button>
+            </div>
+            <div class="meta" id="mp-state"></div>
+            <p class="meta">지도 서명 주소 — 이 컴퓨터의 가게 열쇠에서 나온 주소입니다. 손님 지도는 이 주소의 서명만 이 가게로 믿습니다.</p>
+            <p class="meta" id="mp-issuer" translate="no"></p>
+          </div>
+
           <!-- 아래는 **처음 한 번** 하는 것들이다. 접어 둔다 —
                숨기는 것이 아니라 접는 것이고, 접으면 있는 줄 안다.
                (매일 여는 사장이 이름·좌표·영업시간을 매일 지나칠 이유가 없다) -->
@@ -4810,7 +4861,7 @@
             나머지 99%는 사장님 지갑으로 바로 들어옵니다.
             <b>손님이 더 내는 것이 아니라</b>, 받으신 금액에서 나뉩니다.
           </p>
-          <p class="meta" style="margin:0 0 10px">자산 판매·맞교환도 1%, 경매 낙찰은 10%가 개발비입니다. 사람 사이 송금에는 개발비가 없습니다.</p>
+          <p class="meta" style="margin:0 0 10px">자산 판매·맞교환·경매 낙찰까지 모든 결제에 1%가 개발비입니다. 사람 사이 송금에는 개발비가 없습니다.</p>
           <!-- 🔴 **내가 이 줄을 틀리게 고칠 뻔했다**(2026-08-30).
                「중고 물건 사기」가 거짓말인 줄 알고 뺐는데, **원래 맞는
                말이었다.** 폰 지갑이 「이 물건 사기」로 들어온 결제에

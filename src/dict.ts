@@ -36,6 +36,7 @@ import { DESKTOP_COPY } from "./desktop-copy";
 import { CREATE_COPY } from "./create-copy";
 import { CERT_COPY } from "./cert-copy";
 import { PAIRING_COPY } from "./pairing-copy";
+import { MAP_COPY } from "./map-copy";
 
 export const DICT: Record<string, Record<string, string>> = {
   ko: {},
@@ -569,8 +570,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "hours",
     "저장하고 올리기":
       "Save and publish",
-    "자산 판매·맞교환도 1%, 경매 낙찰은 10%가 개발비입니다. 사람 사이 송금에는 개발비가 없습니다.":
-      "Asset sales and swaps also carry a 1% developer fee, and a won auction 10%. Sending to people carries no developer fee.",
+    "자산 판매·맞교환·경매 낙찰까지 모든 결제에 1%가 개발비입니다. 사람 사이 송금에는 개발비가 없습니다.":
+      "Asset sales, swaps and won auctions all carry the same 1% developer fee. Sending to people carries no developer fee.",
     "라비에게 시키세요":
       "Tell Ravi what to do",
     "예: 수료증 120장 만들어 줘":
@@ -2363,8 +2364,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "時間",
     "저장하고 올리기":
       "保存して公開",
-    "자산 판매·맞교환도 1%, 경매 낙찰은 10%가 개발비입니다. 사람 사이 송금에는 개발비가 없습니다.":
-      "資産販売・交換も1%、オークション落札は10%が開発費です。人への送金に開発費はかかりません。",
+    "자산 판매·맞교환·경매 낙찰까지 모든 결제에 1%가 개발비입니다. 사람 사이 송금에는 개발비가 없습니다.":
+      "資産販売・交換・オークション落札まで、すべての決済に1%の開発費がかかります。人への送金に開発費はかかりません。",
     "라비에게 시키세요":
       "ラビに任せる",
     "예: 수료증 120장 만들어 줘":
@@ -4157,8 +4158,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "小时",
     "저장하고 올리기":
       "保存并发布",
-    "자산 판매·맞교환도 1%, 경매 낙찰은 10%가 개발비입니다. 사람 사이 송금에는 개발비가 없습니다.":
-      "资产出售和交换同样收取1%开发费，拍卖成交收取10%。向他人转账不收开发费。",
+    "자산 판매·맞교환·경매 낙찰까지 모든 결제에 1%가 개발비입니다. 사람 사이 송금에는 개발비가 없습니다.":
+      "资产出售、交换和拍卖成交，所有付款都收取1%开发费。向他人转账不收开发费。",
     "라비에게 시키세요":
       "交给拉比",
     "예: 수료증 120장 만들어 줘":
@@ -5442,6 +5443,10 @@ Object.assign(DICT.zh, {
 
 // RV6 「폰 연결」 문구는 이미 있는 번역을 덮지 않는다(같은 한국어가 다른 화면에서 먼저 쓰였으면 그것이 이긴다).
 for (const [source, values] of Object.entries(PAIRING_COPY)) {
+  (["en", "ja", "zh"] as const).forEach((language, index) => { DICT[language][source] ??= values[index]; });
+}
+// 「지도에 올리기」(map-card.ts) — 같은 한국어가 이미 있으면 그 번역이 이긴다.
+for (const [source, values] of Object.entries(MAP_COPY)) {
   (["en", "ja", "zh"] as const).forEach((language, index) => { DICT[language][source] ??= values[index]; });
 }
 for (const [source, values] of [...Object.entries(DESKTOP_COPY), ...Object.entries(CREATE_COPY), ...Object.entries(CERT_COPY)]) {

@@ -138,6 +138,14 @@ fn load_or_make() -> Result<[u8; 32], String> {
     Ok(bytes)
 }
 
+/// 가게 열쇠의 비밀값 — **이 프로그램 안에서만** 쓴다(`map.rs` 가 지도 서명 열쇠를 뽑는 씨앗).
+///
+/// 🔴 화면·로그·릴레이로 절대 내보내지 않는다. 밖으로 나가는 것은 여기서 뽑은
+///    열쇠의 **공개키·서명**뿐이다.
+pub(crate) fn secret_for_derivation() -> Result<[u8; 32], String> {
+    load_or_make()
+}
+
 /// 12단어에서 이 가게의 열쇠를 뽑는다.
 ///
 /// ## 🔴 왜 BIP32 트리를 안 쓰나
@@ -422,6 +430,11 @@ pub async fn announce(asset: &str, url: &str) -> Result<Value, String> {
 ///
 /// 그래서 주소만 싣는다. 사진을 바꾸면 새 주소를 실어 다시 올리면 그만이고,
 /// **소각은 0원**이다.
+/// 좌표를 소수 둘째 자리로 뭉갠다(약 1.1km). 릴레이에 정확한 위치를 남기지 않기 위해서다.
+pub(crate) fn coarse_coord(v: f64) -> f64 {
+    (v * 100.0).round() / 100.0
+}
+
 fn living_profile() -> Vec<(String, Value)> {
     let sh: Value = std::fs::read_to_string(crate::paths::app_file("shop.json"))
         .ok()
@@ -457,9 +470,12 @@ fn living_profile() -> Vec<(String, Value)> {
     ] {
         take(k);
     }
+    // 🔴 정확한 좌표는 릴레이에 올리지 않는다. 소수 둘째 자리(약 1km)로 뭉갠다.
+    //    가게 주소(`location`)는 사장이 직접 적은 글이고, 좌표는 「가까운 순」을
+    //    매길 때만 쓰이므로 1km 칸이면 충분하다. 정확한 값은 shop.json 에만 남는다.
     for k in ["lat", "lon"] {
         if let Some(v) = sh.get(k).and_then(Value::as_f64) {
-            out.push((k.to_string(), json!(v)));
+            out.push((k.to_string(), json!(coarse_coord(v))));
         }
     }
     for k in ["pickup", "delivery", "closed_now"] {
@@ -571,5 +587,19 @@ mod crossreport {
             // 열쇠 없는 기계에서 시험 전체가 빨개진다.
             Err(e) => println!("CROSSCHECK-SKIP {e}"),
         }
+    }
+}
+
+#[cfg(test)]
+mod coarse_coord_tests {
+    use super::coarse_coord;
+
+    #[test]
+    fn exact_shop_coordinates_are_rounded_before_going_to_relays() {
+        assert_eq!(coarse_coord(37.498095), 37.5);
+        assert_eq!(coarse_coord(127.027610), 127.03);
+        assert_eq!(coarse_coord(37.344712), 37.34);
+        // 약 1km 안쪽 차이는 같은 값이 된다 — 정확한 가게 위치를 거꾸로 알 수 없다.
+        assert_eq!(coarse_coord(37.3447), coarse_coord(37.3449));
     }
 }

@@ -588,12 +588,34 @@ fn admin_authed(state: &ServerState, headers: &HeaderMap, q: &Value) -> bool {
 
 // ── 손님 ──────────────────────────────────────────────────────────────────
 
-async fn customer_page() -> Html<&'static str> {
-    Html(include_str!("../../web/customer.html"))
+// 공유 링크 미리보기(카톡·텔레그램 카드). 미리보기 로봇은 스크립트를 안 돌리므로
+// 가게 이름·사진을 HTML 에 처음부터 넣어 내준다. 자세한 이유는 og.rs 머리말.
+#[path = "og.rs"]
+mod og;
+
+fn og_base(headers: &HeaderMap) -> Option<String> {
+    let tunnel = crate::tunnel::public_base(String::new(), 0);
+    let tunnel = if tunnel["public"] == json!(true) { tunnel["base"].as_str().map(str::to_string) } else { None };
+    let h = |k: &str| headers.get(k).and_then(|v| v.to_str().ok()).map(str::to_string);
+    og::base_from(tunnel.as_deref(), h("host").as_deref(), h("x-forwarded-proto").as_deref())
 }
 
-async fn buy_page() -> Html<&'static str> {
-    Html(include_str!("../../web/buy.html"))
+async fn customer_page(State(st): State<ServerState>, headers: HeaderMap, uri: axum::http::Uri) -> Html<String> {
+    let shop = st.shop.lock().map(|s| s.clone()).unwrap_or(json!({}));
+    let pq = uri.path_and_query().map(|p| p.as_str()).unwrap_or("/");
+    Html(og::customer(include_str!("../../web/customer.html"), &shop, og_base(&headers).as_deref(), pq))
+}
+
+async fn buy_page(
+    State(st): State<ServerState>,
+    headers: HeaderMap,
+    uri: axum::http::Uri,
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Html<String> {
+    let id = q.get("id").cloned().unwrap_or_default();
+    let offer = st.offers.lock().ok().and_then(|m| m.get(&id).cloned());
+    let pq = uri.path_and_query().map(|p| p.as_str()).unwrap_or("/buy");
+    Html(og::buy(include_str!("../../web/buy.html"), offer.as_ref(), og_base(&headers).as_deref(), pq))
 }
 
 /// One listing, for the public sale page.

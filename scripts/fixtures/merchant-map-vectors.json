@@ -1,0 +1,14 @@
+{
+  "source": "ravenvault docs/MERCHANT-EVENT-FORMAT.md §4 (2026-10-01) — 레이븐코인 키 32바이트 0x15, Nostr 키 32바이트 0x17",
+  "issuer": "RMem8GvhCRTBMi7Gr1ZaC4xfEr1RFCRBbR",
+  "rvnPubkey": "03d793631af7aa0e709439dd47fc001acd0b0727670b6670ea528ac83cb0127f4a",
+  "nostrPubkey": "57eb3638f51f4dc5c8d5a7324b47df99e816cfcc5b5eb1245bc8c98029f9e674",
+  "card": { "slug": "playx-gym", "name": "PLAY X 체육관", "category": "fitness", "area": "wydk3", "contact": "031-421-8585", "shopUrl": "https://shop.example.com/playx", "createdAt": 1790000000 },
+  "merchantMessage": "[\"rv.merchant/1\",\"RMem8GvhCRTBMi7Gr1ZaC4xfEr1RFCRBbR\",\"playx-gym\",\"PLAY X 체육관\",\"fitness\",\"wydk3\",\"031-421-8585\",\"https://shop.example.com/playx\",1790000000]",
+  "merchantSignature": "3AUBN2tI0gLyhHirCrFc9L58QEPGF4+0qJNamZYfAJBB+AenTcoHslb4e2ilgoFQCuERlWTN+rr66Crs2SbOvQ==",
+  "merchantEventId": "24ef603a0435ef2520b0fec902f717e668b20b48b0742ef1df354f294eda5a91",
+  "beat": { "slug": "playx-gym", "area": "wydk3", "at": 1790000300, "openItems": 12 },
+  "presenceMessage": "[\"rv.shop-presence/1\",\"RMem8GvhCRTBMi7Gr1ZaC4xfEr1RFCRBbR\",\"playx-gym\",1790000300,12]",
+  "presenceSignature": "/iaSgFq7hTEviLLv1bEHHZD2toITVw6/x01KWSfJArEyRhB4ueFLMfujBH5vnL8zDrNTZpxbVHE6dmuiThx1cw==",
+  "presenceEventId": "ca650c5d8d12fc6d8dfbde05a35d11d5db6df24f905d16b2743377387ea3caef"
+}

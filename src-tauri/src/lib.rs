@@ -35,6 +35,9 @@ mod msg;
 mod pass;
 mod member_privacy;
 mod place;
+// 「내 가게를 지도에 올리기」 — 이름표·영업 중 신호(폰 지도 형식 정본: ravenvault docs/MERCHANT-EVENT-FORMAT.md).
+mod map;
+mod map_format;
 mod price;
 mod refund;
 mod issue;
@@ -462,6 +465,12 @@ pub fn run() {
             place::parse_coords,
             place::distance_m,
             place::directions_links,
+            map::map_load,
+            map::map_check,
+            map::map_publish,
+            map::map_unpublish,
+            map::map_status,
+            map::map_presence_now,
             price::rvn_rate,
             price::quote_price,
             boot::boot_report,
@@ -583,6 +592,8 @@ pub fn run() {
             //    밤새 들어온 입금이 아침까지 확인되지 않는다.
             //    「돕기」인 사람의 노트북은 건드리지 않는다(배터리는 그 사람 것).
             awake::sync_with_mode();
+            // 지도에 올려 둔 가게면 켜자마자 「영업 중」 신호를 한 번, 그 뒤 5분마다(map.rs).
+            map::start();
             // ── 창을 닫아도 가게는 계속 돈다 ────────────────────────────
             //
             // 🔴 X 를 누르면 앱이 통째로 끝나고 있었다. 그러면 **손님 폰
@@ -818,6 +829,8 @@ pub fn run() {
                 //    죽였다 — 그때까지는 문이 열린 채다.
                 //
                 //    ⚠️ 껐다고 믿는 사람에게 열린 문은 가장 나쁜 종류의 구멍이다.
+                // 지도의 「영업 중」을 거둔다(3초까지만 시도 — 종료를 붙잡지 않는다).
+                crate::map::stop_on_exit();
                 crate::tunnel::stop_on_exit();
             }
         });

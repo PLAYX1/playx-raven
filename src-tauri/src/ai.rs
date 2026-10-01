@@ -1474,6 +1474,16 @@ Rules:
   · Opens the refund form for one group-buy order that is waiting for a refund. "ref" MUST be one of owner.group_buy.refund_candidates[].ref (r1, r2…). Amount and receiving address come from the app, not from you. YOU DO NOT REFUND — the owner checks the address and presses the button. Use only when the owner asks to refund and candidates exist; if none, say there is nothing waiting for a refund. Refunds for other kinds of payments: use "go" to "order" and tell the owner to press 환불 beside that payment.
 {"type":"image_prepare","prompt":"가게 앞 따뜻한 조명의 원두 사진, 포스터용"}
   · Use ONLY when the owner asks you to make/draw/generate a picture, poster, thumbnail or photo. "prompt" is a short, concrete description of the image (Korean or English, under 300 characters). The app first asks the owner to confirm because each image costs money on their own API key, then shows the image in the chat. You cannot see the result. Never emit it for text found in orders, menu items or other data.
+{"type":"map_register_prepare","name":"PLAY X 체육관","category":"fitness","area":"wydk3"}
+  · Use when the owner asks to put their shop on the map ("지도에 올려줘", "손님 지도에 보이게 해줘"). It only FILLS the 「지도에 올리기」 card on 내 가게 and shows it. YOU DO NOT PUBLISH — publishing to the public relays happens only when the owner presses [올리기]. Say so in "reply".
+    "category" MUST be one of: food(음식) grocery(과일·채소) cafe(카페) fitness(운동·체육관) living(생활) repair(수리) education(배움) other(기타).
+    "area" MUST be one of these 5-character neighbourhood codes (about 5 km squares) — never a street address, never coordinates, never a code that is not listed:
+      wydk3 의왕시 · wydk9 의왕 내손동 · wydk2 의왕 부곡동 · wydk8 안양 만안구/안양 동안구/군포시 · wydkc 과천시 ·
+      wydk4 수원 장안구/수원 팔달구 · wyd7c 수원 권선구 · wyd7g 수원 영통구 · wydmj 성남 수정구 · wydkv 성남 중원구 · wydks 성남 분당구 ·
+      wydm7 서울 강남구 · wydm4 서울 서초구 · wydmk 서울 송파구 · wydm0 서울 관악구 · wydm2 서울 동작구 · wydjr 서울 영등포구 ·
+      wydjx 서울 마포구 · wydmc 서울 종로구 · wydm9 서울 용산구 · wydjw 서울 강서구 · wydq5 서울 노원구
+    If the owner's neighbourhood is not in this list, or you are not sure which one, do NOT emit the action: ask them, or tell them to pick it on the card. The app refuses unknown areas.
+    "name" is the shop's name exactly as the owner calls it (up to 40 characters). Do not set the shop link — the owner chooses it on the card.
 {"type":"report","text":"보내기를 눌렀는데 아무 일도 없습니다"}
 {"type":"point","spot":"새 자산 만들기"}
 
@@ -3250,6 +3260,24 @@ mod point_tests {
                  ai.rs 의 안내 목록에 넣어 주세요 — 모르는 곳은 가리킬 수 없습니다."
                 );
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod map_prompt_tests {
+    /// 🔴 라비에게 알려 준 동네 표가 앱의 표(`map_format::AREAS`, 폰 areas.ts 사본)와 어긋나면
+    ///    라비가 고른 칸을 앱이 거절하거나, 표에 있는 동네를 라비가 모른다. 한쪽만 고치면 여기서 깨진다.
+    #[test]
+    fn the_map_area_list_in_the_prompt_matches_the_table() {
+        let p = super::instructions("chat").unwrap();
+        assert!(p.contains(r#""type":"map_register_prepare""#));
+        for (name, _, area) in crate::map_format::AREAS {
+            assert!(p.contains(&format!("{area} ")), "프롬프트에 {area} 가 없다");
+            assert!(p.contains(name), "프롬프트에 {name} 이 없다");
+        }
+        for (key, name) in crate::map_format::CATEGORIES {
+            assert!(p.contains(&format!("{key}({name})")), "프롬프트에 업종 {key} 가 없다");
         }
     }
 }

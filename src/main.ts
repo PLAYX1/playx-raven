@@ -42,6 +42,7 @@ import { requireWalletBackup, restoreIsComplete } from "./backup-result";
 import { paintWalletNotes, walletWelcome } from "./wallet-notes";
 import { wireSeedCheck } from "./seed-check";
 import { wireWordsRestore } from "./words-restore";
+import { wireMapCard } from "./map-card";
 import { invoke as rawInvoke } from "@tauri-apps/api/core";
 
 /**
@@ -2213,6 +2214,13 @@ async function paintStatusDots() {
       }
       dotSum.out = outUp;
       paintDotSum();
+      // 여섯째 — 손님 폰 지도에 올라가 있나(map.rs). 「올림」이면 켜져 있는 동안 5분마다 「영업 중」 신호.
+      try {
+        const m = await invoke<any>("map_status");
+        set("d-map", "d-map-t", !!m?.registered, m?.registered ? "지도: 올림" : "지도: 안 올림");
+      } catch {
+        set("d-map", "d-map-t", false, "지도: 안 올림");
+      }
     })();
   } catch {
     set("d-ipfs", "d-ipfs-t", false, "파일창고(IPFS) 꺼짐");
@@ -3193,6 +3201,8 @@ function setOpenState(closed: boolean) {
   box.dispatchEvent(new Event("change", { bubbles: true }));
   paintOpenPick();
   paintRavi();
+  // 지도에 올린 가게면 「영업 중」/「닫힘」 신호를 5분 기다리지 않고 바로 보낸다.
+  mapCard.openChanged();
 }
 
 /* ══ 화면마다 큰 아이콘 줄 ═══════════════════════════════════════════
@@ -9959,6 +9969,15 @@ function applyActions(actions: any[], typed = ""): string[] {
           if (!p) break;
           void raviImage(p);
           done.push(t("그림 만들기를 사장님께 물어봤습니다"));
+          break;
+        }
+        // 🔴 지도 올리기는 **준비만** 한다. 이름·업종·동네를 채워 카드를 보여 주고,
+        //    [올리기]는 사장님이 누른다(공개 릴레이에 나가는 일이다).
+        //    동네는 표에 있는 칸(또는 표의 동네 이름)만 — 지어낸 칸·정확 좌표는 거절한다.
+        //    가게 링크는 라비가 채우지 않는다(조종당하면 손님을 가짜 링크로 보낼 수 있다).
+        case "map_register_prepare": {
+          const r = mapCard.prepare({ name: a.name, category: a.category, area: a.area });
+          done.push(r.message);
           break;
         }
         case "shop_set": {
@@ -17769,6 +17788,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("d-mine-row").addEventListener("click", () => toggleDot("mine"));
   $("d-relay-row").addEventListener("click", () => toggleDot("relay"));
   $("d-out-row").addEventListener("click", () => toggleDot("out"));
+  $("d-map-row")?.addEventListener("click", () => { showPage("shop"); shopTab("mine"); jumpToEl("mp-card"); void mapCard.refresh(); });
 
   async function paintWalletDir() {
     const pathEl = document.getElementById("wd-path");
@@ -18506,6 +18526,12 @@ const wordsRestore = wireWordsRestore({
     jumpToEl("rs-pick");
   },
 });
+
+/** 「내 가게 → 지도에 올리기」(map-card.ts · map.rs). 라비는 prepare 로 칸만 채운다. */
+const mapCard = wireMapCard({ invoke, showShop: () => { showPage("shop"); shopTab("mine"); } });
+void mapCard.refresh();
+document.querySelectorAll('[data-page="shop"]').forEach((a) => a.addEventListener("click", () => void mapCard.refresh()));
+window.addEventListener("rv-map-changed", () => void paintStatusDots());
 
 /**
  * 「지갑」 모드면 왼쪽 메뉴의 지갑을 **맨 위**로 올린다. 다른 모드로 바꾸면
