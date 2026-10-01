@@ -2631,7 +2631,14 @@
       .mpcard .mpactions { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
       .mpcard [hidden] { display: none !important; }
     </style>
-  </head>
+  <style id="rv-fit-fixes">
+      /* 좁은 창(720~900px)·낮은 창에서 깨지던 곳 — 2차 메뉴가 글자 중간에서 줄바꿈되고(메/뉴/판), 왼쪽 메뉴 아래가 잘리고, 떠 있는 라비 입력줄이 내용을 가렸다. */
+      .tabs > .tab, .tabs > button { flex: 0 0 auto; white-space: nowrap; }
+      body > nav { overflow-y: auto; overflow-x: hidden; scrollbar-width: none; }
+      body > nav::-webkit-scrollbar { display: none; }
+      main > .page { padding-bottom: 120px; }
+    </style>
+</head>
   <body>
     <!-- 창을 잡는 띠. 제목줄을 없앴기 때문에 이게 없으면 창이 안 움직인다. -->
     <div class="titlebar" data-tauri-drag-region></div>

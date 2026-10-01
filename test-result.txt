@@ -1,0 +1,400 @@
+test refund::tests::a_day_rolls_over_at_midnight_utc ... ok
+test refund::tests::limits_stay_readable_in_every_currency ... ok
+test refund::tests::one_refund_can_never_exceed_the_day ... ok
+test refund::tests::unknown_rate_closes_staff_refunds_outside_won ... ok
+test recover::tests::a_restore_cleans_up_what_it_unlocked ... ok
+test refund::tests::자산_줄을_못_읽으면_없다고_하지_않는다 ... ok
+test refund::tests::지갑_전체가_아니라_그_시간_앞쯤부터_읽는다 ... ok
+test rehearse::tests::reset_refuses_to_delete_anything_but_the_practice_folder ... ok
+test refund::tests::주인_표가_나가면_경보한다 ... ok
+test rehearse::tests::the_rehearsal_never_touches_the_real_node ... ok
+test reindex::tests::못_읽는_시간표는_휴무가_아니라_모름이다 ... ok
+test quiet::tests::숨겨도_출력은_온다 ... ok
+test paths::tests::the_override_wins_and_an_empty_one_does_not ... ok
+test reindex::tests::보통_가게는_문_닫은_뒤가_창이다 ... ok
+test refund::tests::a_shop_that_never_set_a_currency_still_gets_won ... ok
+test reindex::tests::밤에_일하는_가게는_낮이_창이다 ... ok
+test reindex::tests::시간표가_없으면_모른다고_한다 ... ok
+test reindex::tests::자정을_24시로_적어도_읽는다 ... ok
+test reindex_run::behind_tests::재색인_중의_남은_블록은_믿지_않는다 ... ok
+test reindex_run::behind_tests::평소_따라잡기에서는_그대로_쓴다 ... ok
+test reindex_run::broken_tests::오류가_없으면_깨진_것이_아니다 ... ok
+test reindex_run::broken_tests::재계산_중을_깨진_것으로_보지_않는다 ... ok
+test reindex::tests::휴무일이_있으면_그날이_창이다 ... ok
+test reindex_run::heal_tests::한_번만_고친다 ... ok
+test reindex_run::heal_tests::블록을_다시_받지_않는다 ... ok
+test reindex_run::tests::launchd_를_먼저_내린다 ... ok
+test relay::tests::a_forged_event_is_refused ... ok
+test relay::tests::connection_slots_are_capped_and_returned ... ok
+test reindex_run::tests::전체_재색인을_쓴다_코어_문구를_따르지_않는다 ... ok
+test reindex::tests::하루종일_하는_가게는_창이_없다고_말한다 ... ok
+test relay::tests::the_filter_looks_at_what_it_should ... ok
+test relay::tests::대화에는_가게_잣대를_대지_않는다 ... ok
+test relay::tests::레이븐_이야기만_저장한다 ... ok
+test relay::tests::레이븐_이야기만_저장한다 ... ok
+test report::tests::a_report_never_carries_secrets ... ok
+test report::tests::the_report_says_which_app_it_came_from ... ok
+test report::tests::unsent_reports_are_parked_not_dropped ... ok
+test rewards::tests::the_error_for_a_past_block_says_what_to_do ... ok
+test roles::tests::member_registration_roles ... ok
+test roles::tests::staff_cannot_reach_the_owners_things ... ok
+test roles::tests::staff_screen_can_reach_everything_it_calls ... ok
+test reindex::tests::필요한_길이보다_짧은_창은_고르지_않는다 ... ok
+test rt::tests::런타임_밖에서도_된다 ... ok
+test rt::tests::런타임_위에서_불러도_안_죽는다_여러_일꾼 ... ok
+test roles::tests::staff_screen_is_plain_javascript ... ok
+test rt::tests::런타임_위에서_불러도_안_죽는다_한_일꾼 ... ok
+test sample::overwrite_tests::덮기_전에_한_부_남긴다 ... ok
+test sendfee::tests::거스름은_이_지갑_주소_하나 ... ok
+test sendfee::tests::다른_오류는_지어내지_않고_그대로_돌려준다 ... ok
+test sendfee::tests::모자라면_수수료_대신_모자람을_알린다 ... ok
+test sendfee::tests::빈_주소와_0_이하_금액은_노드에_묻지도_않는다 ... ok
+test sendfee::tests::서명_전파_잠금해제_부름이_없다 ... ok
+test sendfee::tests::수수료만_가져오고_서명도_전파도_안_한다 ... ok
+test server::bind_probe::binding_the_phone_port_is_fast ... ok
+test relay::tests::가게_글이_아닌_것은_안_받는다 ... ok
+test server::bind_probe::reading_our_own_address_is_fast ... ok
+test server::face_tests::every_face_in_the_state_table_exists ... ok
+test server::face_tests::the_pictures_are_real_webp_and_small_enough ... ok
+test server::face_tests::every_face_the_screens_ask_for_exists ... ok
+test server::grok_findings::an_expired_quote_is_not_auto_confirmed ... ok
+test server::grok_findings::rotating_a_role_token_is_written_to_disk ... ok
+test server::grok_findings::the_order_total_is_recomputed_from_the_menu ... ok
+test server::og::tests::buy_card_uses_the_offer ... ok
+test server::grok_findings::the_expected_amounts_of_live_orders_are_never_wiped ... ok
+test server::og::tests::host_header_is_filtered ... ok
+test server::og::tests::no_shop_keeps_the_default_card ... ok
+test sample::tests::check_reports_shape ... ok
+test server::og::tests::customer_html_has_the_marker_and_no_outside_image ... ok
+test recover::tests::the_recovery_card_has_no_secrets ... ok
+test peers::tests::원본_지문은_보존과_공개_목록에서_빠진다 ... ok
+test rehearse::tests::the_practice_folder_says_what_it_is ... ok
+test server::og::tests::shop_name_photo_and_url_go_into_the_card ... ok
+test server::og::tests::outside_or_bad_photos_are_dropped ... ok
+test lockbox::tests::locking_twice_does_not_give_the_same_file ... ok
+test lockbox::pass_tests::다른_컴퓨터에서_암호로_열린다 ... ok
+test lockbox::tests::it_locks_and_only_the_right_key_opens_it ... ok
+test relay::tests::live_push_and_pairing_rooms_stay_off_disk ... ok
+test server::order_persistence_tests::admin_states_uses_sale_or_pending_details_and_empty_defaults ... ok
+test server::order_persistence_tests::admin_state_checks_existence_payment_staleness_and_every_transition ... ok
+test server::order_persistence_tests::auth_failures_have_distinct_json_codes ... ok
+test server::order_persistence_tests::corrupt_file_is_preserved_and_missing_file_is_harmless ... ok
+test server::order_persistence_tests::forged_paid_states_are_kept_but_marked_unverified ... ok
+test server::order_persistence_tests::member_groups_roles_validation_policy_and_remote_gate ... ok
+test server::order_persistence_tests::member_memos_use_real_roles_and_http_codes ... ok
+test server::outside::nothing_that_runs_the_shop_is_a_customer_path ... ok
+test server::outside::the_qr_pages_pass_real_headers ... ok
+test server::outside::the_shop_wifi_and_the_internet_are_told_apart_by_host ... ok
+test server::outside::파일창고_중계는_스크립트를_가둔다 ... ok
+test server::router_builds::the_outside_only_reaches_customer_paths ... ok
+test server::order_persistence_tests::member_policy_and_registration_return_real_http_codes ... ok
+test server::order_persistence_tests::member_registration_and_policy_groups_validate_and_persist ... ok
+test server::router_builds::the_server_restores_past_orders_on_start ... ok
+test server::order_persistence_tests::member_search_matches_filters_redaction_limit_and_never_exposes_phone ... ok
+test server::order_persistence_tests::member_search_roles_validation_policy_and_remote_gate ... ok
+test server::shop_seal_interop::staff_and_scanner_qr_carry_the_seal_key_and_keep_old_params ... ok
+test server::order_persistence_tests::only_done_older_than_seven_days_is_omitted_from_disk ... ok
+test server::spam::the_limits_are_tight_enough_to_matter_and_loose_enough_to_sell ... ok
+test server::theme_tests::dark_theme_variables_stay_inside_the_media_query ... ok
+test server::ticket_tests::the_number_does_not_wrap_at_999 ... ok
+test server::ticket_tests::the_number_starts_at_one_each_day ... ok
+test server::ticket_tests::there_is_only_one_place_that_hands_out_numbers ... ok
+test server::token_tests::열쇠가_비지_않는다 ... ok
+test server::token_tests::열쇠를_파일에서_읽지_않는다 ... ok
+test services::tests::같이_넣은_것은_복사해서_돌린다 ... ok
+test services::tests::락_충돌은_끄라고_말한다 ... ok
+test services::tests::로그가_없어도_안_터진다 ... ok
+test services::tests::모르는_이유는_지어내지_않는다 ... ok
+test services::tests::복구_단어가_든_오류는_옮기지_않는다 ... ok
+test services::tests::아주_긴_오류는_끊는다 ... ok
+test services::tests::윈도우는_데몬을_눌러_끄고_창을_안_띄운다 ... ok
+test services::tests::이번에_난_락은_잡는다 ... ok
+test services::tests::조용히_죽은_경우도_말을_한다 ... ok
+test services::tests::지난번_락은_오늘_일이_아니다 ... ok
+test setup::space_tests::빈_공간이_0_이_아니다 ... ok
+test setupflow::tests::모르는_것을_다음으로_고르지_않는다 ... ok
+test setupflow::tests::모를_때는_모른다고_한다 ... ok
+test setupflow::tests::문은_선택이다 ... ok
+test shop::empty_hours::an_empty_timetable_is_not_a_closed_shop ... ok
+test shop::fee_tests::a_fee_below_dust_is_not_collected ... ok
+test shop::fee_tests::no_address_means_no_fee ... ok
+test server::order_persistence_tests::paid_at_verifies_orders_completed_days_after_payment ... ok
+test shop::fee_tests::the_fee_comes_out_of_the_total_not_on_top ... ok
+test server::order_persistence_tests::saved_tokens_are_private_and_leave_no_temporary_file ... ok
+test shop::history_tests::the_prefix_is_added_only_when_missing ... ok
+test shop::open_tests::a_bar_that_closes_at_two_am_is_open_at_one_am ... ok
+test shop::open_tests::a_closed_shop_says_when_it_opens_again ... ok
+test shop::open_tests::a_shop_with_no_timetable_keeps_selling ... ok
+test shop::open_tests::broken_times_do_not_crash_the_shop ... ok
+test shop::open_tests::the_owners_own_switch_beats_the_timetable ... ok
+test shop::open_tests::the_shops_own_clock_decides ... ok
+test shop::open_tests::weekday_index_starts_on_thursday ... ok
+test shop::price_tests::a_negative_quantity_cannot_discount_the_order ... ok
+test shop::price_tests::an_invented_item_is_worth_nothing ... ok
+test shop::price_tests::items_outside_the_menu_are_dropped ... ok
+test shop::price_tests::the_menu_decides_the_price_not_the_phone ... ok
+test shop::profile_merge_tests::a_readable_profile_fills_in_the_shop ... ok
+test shop::profile_merge_tests::an_unreadable_shop_still_appears ... ok
+test shop::profile_merge_tests::blank_fields_come_back_as_nothing ... ok
+test shop::profile_merge_tests::the_profile_cannot_rename_the_asset ... ok
+test shop::tests::counter_lets_small_sales_through ... ok
+test shop::tests::offline_never_accepts_zero_conf ... ok
+test shop::theme_tests::a_dark_tint_is_refused ... ok
+test shop::theme_tests::a_pale_accent_is_refused ... ok
+test shop::theme_tests::nonsense_falls_back_instead_of_breaking_the_screen ... ok
+test server::order_persistence_tests::ticket_counter_survives_restart_and_resets_on_new_day ... ok
+test server::order_persistence_tests::waiting_and_real_paid_orders_roundtrip_with_all_metadata ... ok
+test shop::되그리기::an_absent_field_does_not_erase_a_saved_one ... ok
+test shop::되그리기::저장한_것은_다시_그린다 ... ok
+test shopkey::coarse_coord_tests::exact_shop_coordinates_are_rounded_before_going_to_relays ... ok
+test shopkey::crossreport::print_a_signed_event_for_the_web_to_check ... ok
+test shopkey::tests::a_plain_http_address_is_refused ... ok
+test shopkey::tests::an_unnamed_shop_cannot_announce ... ok
+test shopkey::tests::the_id_preimage_has_no_spaces ... ok
+test shopkey::tests::the_kind_does_not_collide_with_listings ... ok
+test shopmove::tests::넣을_수_있는_최대를_우리가_계산한다 ... ok
+test shopmove::tests::재발행_가능을_잠그지_않는다 ... ok
+test shopmove::tests::재발행이_성공한_뒤에_열쇠를_바꾼다 ... ok
+test server::router_builds::the_phone_router_can_actually_be_built ... ok
+test server::router_builds::the_screens_get_what_they_ask_for ... ok
+test shopseal::tests::every_vector_matches_the_phone_byte_for_byte ... ok
+test shopseal::tests::path_lists_match_the_phone ... ok
+test shopseal::tests::replay_clock_and_path_gate ... ok
+test shopseal::tests::response_is_bound_to_its_request_and_tamper_evident ... ok
+test spec::tests::every_suggestion_comes_with_a_reason_in_plain_korean ... ok
+test spec::tests::mining_never_starts_on_by_itself ... ok
+test shopseal::tests::attacker_tamper_wrong_token_other_key_malformed ... ok
+test server::shop_seal_interop::clock_wrong_token_tamper_and_outside_are_refused ... ok
+test spec::tests::the_first_run_asks_for_three_things_at_most ... ok
+test stock::tests::an_abandoned_order_lets_go ... ok
+test stock::tests::an_item_without_a_number_is_unlimited ... ok
+test stock::tests::ordering_twice_from_one_phone_does_not_double_count ... ok
+test stock::tests::paying_actually_reduces_the_number ... ok
+test stock::tests::the_last_one_cannot_be_taken_twice ... ok
+test stock::tests::zero_is_sold_out_not_unlimited ... ok
+test stock::tests::안_고친_재고는_서버_숫자를_지키고_고친_것은_새_숫자 ... ok
+test swap::tests::딱_맞는_묶음만_판다 ... ok
+test swap::tests::맞교환에도_개발비가_들어간다 ... ok
+test swap::tests::사토시_아래는_같은_값으로_본다 ... ok
+test swap::tests::조립한_뒤에_다시_확인한다 ... ok
+test swap::tests::파는_사람_몫은_안_깎는다 ... ok
+test swap::tests::합칠_때_내_것이_앞이다 ... ok
+test sweep::tests::the_screen_reads_the_key_we_save ... ok
+test sweep::tests::turning_it_off_never_needs_a_valid_address ... ok
+test talk::gate_tests::검사가_모두_올리기_전에_있다 ... ok
+test spec::tests::the_till_always_keeps_some_cpu ... ok
+test talk::gate_tests::모를_때는_막지_않는다 ... ok
+test talk::gate_tests::못_가진_자산으로_방을_안_만든다 ... ok
+test talk::gate_tests::비밀방이라고_말하지_않는다 ... ok
+test spec::tests::unknown_is_null_never_zero ... ok
+test talk::gate_tests::사라질_수_있다고_말한다 ... ok
+test talk::gate_tests::자산을_태그와_본문_둘_다에_적는다 ... ok
+test talk::gate_tests::주석_거르개가_제대로_거른다 ... ok
+test talk::gate_tests::아무_경로나_안_읽는다 ... ok
+test talk::gate_tests::사진인지_이름과_안을_둘_다_본다 ... ok
+test talk::gate_tests::파일_이름을_글에_안_적는다 ... ok
+test talk::tests::간판_열쇠와_사람_열쇠는_다르다 ... ok
+test talk::tests::같은_열두단어면_같은_열쇠다 ... ok
+test talk::tests::글에는_레이븐_표가_붙는다 ... ok
+test talk::tests::빈_파일과_짧은_파일은_잡힌다 ... ok
+test talk::tests::이름만_바꾼_실행파일은_잡힌다 ... ok
+test talk::tests::이름이_사진이_아니면_잡힌다 ... ok
+test talk::tests::진짜_사진은_통과한다 ... ok
+test talk::gate_tests::파일창고가_꺼졌으면_켜라고_말한다 ... ok
+test talk::tests::파일_이름을_그대로_믿지_않는다 ... ok
+test talk::gate_tests::홑따옴표_따옴표를_안_쓴다 ... ok
+test server::shop_seal_interop::old_plaintext_is_counted_and_blocked_only_when_the_owner_says_so ... ok
+test talk::tests::큰_사진은_잡히고_딱_맞는_것은_통과한다 ... ok
+test server::shop_seal_interop::ts_sealed_requests_reach_the_real_member_handlers ... ok
+test shop::fee_tests::the_fee_address_is_exactly_what_the_node_validated ... ok
+test ticket::tests::codes_avoid_letters_people_misread ... ok
+test shop::fee_tests::there_is_no_way_to_turn_it_off ... ok
+test shop::ticket_cap_tests::a_broken_value_falls_back ... ok
+test shop::ticket_cap_tests::the_default_is_sane ... ok
+test shopseal::tests::desk_key_is_created_once_0600_and_never_silently_replaced ... ok
+test ticket::tests::a_day_pass_bought_at_night_still_covers_that_day ... ok
+test ticket::tests::a_fractional_quantity_buys_nothing ... ok
+test ticket::tests::a_year_pass_ends_the_day_before_the_same_date ... ok
+test ticket::tests::a_zero_quantity_buys_nothing ... ok
+test ticket::tests::an_expired_ticket_is_refused_not_counted ... ok
+test ticket::tests::months_and_days_add_up ... ok
+test ticket::tests::only_pass_items_become_tickets ... ok
+test trade::tests::an_unknown_trade_falls_back_instead_of_breaking ... ok
+test trade::tests::each_trade_shows_what_to_type ... ok
+test trade::tests::every_trade_has_the_same_shape ... ok
+test trade::tests::the_clinic_says_it_does_not_keep_records ... ok
+test trust::신뢰::런타임_안에서_런타임을_시작하지_않는다 ... ok
+test trust::신뢰::못_본_것을_없다고_하지_않는다 ... ok
+test trust::신뢰::못_지킬_약속을_적지_않는다 ... ok
+test ticket::tests::promotion_enforces_collection_consent_and_validation ... ok
+test trust::신뢰::재보지_않은_시간을_말하지_않는다 ... ok
+test trust::신뢰::정직한_문장은_막지_않는다 ... ok
+test tunnel::alive_tests::the_heartbeat_knocks_before_it_announces ... ok
+test tunnel::alive_tests::살아_있는지_실제로_확인한다 ... ok
+test tunnel::alive_tests::심장은_살아_있을_때만_알린다 ... ok
+test tunnel::alive_tests::출력_파이프를_계속_비운다 ... ok
+test tunnel::orphan_tests::ps_자기자신은_거른다 ... ok
+test tunnel::orphan_tests::남의_터널은_안_죽인다 ... ok
+test tunnel::orphan_tests::우리_것은_잡는다 ... ok
+test walletx::tests::abandon_is_not_cancel ... ok
+test walletx::tests::we_do_not_offer_bumpfee ... ok
+test whose::tests::가져온_열쇠_감시_남의_잘못된_주소 ... ok
+test whose::tests::거스름_자리에_넣는다 ... ok
+test whose::tests::거스름_주소_33번을_알아본다 ... ok
+test whose::tests::결과에_고정했는지를_적는다 ... ok
+test whose::tests::마법사가_미리_읽을_표 ... ok
+test whose::tests::받은_돈은_확인된_것과_확인_전을_나눈다 ... ok
+test whose::tests::부모_표를_이름에서_찾는다 ... ok
+test whose::tests::붙여넣은_것에서_주소만_뽑는다 ... ok
+test whose::tests::붙이기_떼기_동결_해제도_쓰는_표를_제자리로 ... ok
+test whose::tests::이_주소에_있는_것만_센다 ... ok
+test whose::tests::읽기_명령만_부른다 ... ok
+test whose::tests::읽어_둔_자리는_한_번만_쓴다 ... ok
+test whose::tests::주인_표가_먼저_오고_조각을_모두_읽는다 ... ok
+test whose::tests::주인_표마다_보관_주소 ... ok
+test whose::tests::한_주소에_있으면_확인_0_이어도_고정한다 ... ok
+test ticket::tests::promotion_stores_memo_only_in_member_ledger ... ok
+test wording::tests::실제로_걸린다 ... ok
+test wiring::tests::등록한_명령이_전부_실재한다 ... ok
+test wording::tests::자산_방_초대_문구에_투자_어휘가_없다 ... ok
+test trust::신뢰::안_되는_것을_되는_척하지_않는다 ... ok
+test words::tests::base58check_known_value ... ok
+test words::tests::checksum_matches_core_rule ... ok
+test words::tests::errors_never_carry_words ... ok
+test words::tests::phrase_has_no_debug_or_clone ... ok
+test wording::화면검사::화면에도_금지어가_없다 ... ok
+test ticket::tests::promotion_version_phone_limits_and_concurrent_insert ... ok
+test words::tests::wipe_clears ... ok
+test ticket::tests::the_last_day_is_still_a_usable_day ... ok
+test ticket::tests::the_phone_cannot_choose_how_long_the_pass_lasts ... ok
+test words::tests::wordlist_is_the_official_file ... ok
+test words_restore::tests::gate_blocks_only_while_wallet_slot_is_empty ... ok
+test words_restore::tests::channel_body_puts_words_first_and_keeps_conf ... ok
+test words_restore::tests::log_lines_with_mnemonic_are_masked ... ok
+test words_restore::tests::passphrase_that_config_would_mangle_is_refused ... ok
+test ticket::tests::the_same_order_never_issues_twice ... ok
+test words_restore::tests::command_line_never_carries_words ... ok
+test words_restore::tests::real_flow_on_isolated_core ... ignored
+test words_restore::tests::rescan_progress_reads_core_line ... ok
+test ticket::tests::three_months_follows_the_calendar_not_ninety_days ... ok
+test words_restore::tests::pipe_dir_is_private_and_removed ... ok
+test words_restore::tests::state_with_foreign_name_is_ignored ... ok
+test ticket::tests::three_of_the_same_pass_make_three_tickets ... ok
+test words_restore::tests::no_error_formats_the_words ... ok
+test ticket::tests::two_and_a_half_becomes_two ... ok
+test words_restore::tests::set_aside_moves_without_clobbering ... ok
+test words::tests::seed_matches_official_vector ... ok
+test words::tests::ripemd160_official_vectors ... ok
+test words::tests::addresses_match_phone_fixture ... ok
+
+failures:
+
+---- backup_storage::tests::concurrent_publication_is_rejected_while_the_first_owns_the_destination stdout ----
+
+thread 'backup_storage::tests::concurrent_publication_is_rejected_while_the_first_owns_the_destination' (29138554) panicked at src/backup_storage.rs:335:77:
+Use a dedicated repository fixture directory
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- backup_storage::tests::every_publication_failure_restores_both_original_names stdout ----
+
+thread 'backup_storage::tests::every_publication_failure_restores_both_original_names' (29138555) panicked at src/backup_storage.rs:335:77:
+Use a dedicated repository fixture directory
+
+---- backup_storage::tests::initially_absent_files_stay_absent_after_failure stdout ----
+
+thread 'backup_storage::tests::initially_absent_files_stay_absent_after_failure' (29138556) panicked at src/backup_storage.rs:335:77:
+Use a dedicated repository fixture directory
+
+---- backup_storage::tests::readback_detects_actual_corruption_before_replacing_either_backup stdout ----
+
+thread 'backup_storage::tests::readback_detects_actual_corruption_before_replacing_either_backup' (29138557) panicked at src/backup_storage.rs:335:77:
+Use a dedicated repository fixture directory
+
+---- backup_storage::tests::rollback_failure_keeps_original_snapshots_and_blocks_retry stdout ----
+
+thread 'backup_storage::tests::rollback_failure_keeps_original_snapshots_and_blocks_retry' (29138558) panicked at src/backup_storage.rs:335:77:
+Use a dedicated repository fixture directory
+
+---- backup_storage::tests::stale_lock_and_invalid_source_never_touch_existing_backups stdout ----
+
+thread 'backup_storage::tests::stale_lock_and_invalid_source_never_touch_existing_backups' (29138559) panicked at src/backup_storage.rs:335:77:
+Use a dedicated repository fixture directory
+
+---- backup_storage::tests::successful_publication_rotates_both_supported_extensions stdout ----
+
+thread 'backup_storage::tests::successful_publication_rotates_both_supported_extensions' (29138560) panicked at src/backup_storage.rs:335:77:
+Use a dedicated repository fixture directory
+
+---- backup_storage::tests::symbolic_link_destinations_are_rejected stdout ----
+
+thread 'backup_storage::tests::symbolic_link_destinations_are_rejected' (29138561) panicked at src/backup_storage.rs:335:77:
+Use a dedicated repository fixture directory
+
+---- backup_storage::tests::workspaces_are_unique_private_and_remove_only_their_own_files stdout ----
+
+thread 'backup_storage::tests::workspaces_are_unique_private_and_remove_only_their_own_files' (29138562) panicked at src/backup_storage.rs:335:77:
+Use a dedicated repository fixture directory
+
+---- lockbox::backup_safety_tests::key_read_failure_preserves_existing_bytes stdout ----
+
+thread 'lockbox::backup_safety_tests::key_read_failure_preserves_existing_bytes' (29138748) panicked at src/lockbox.rs:617:18:
+Set RV_BACKUP_FIXTURE_ROOT to a dedicated repository fixture directory
+
+---- lockbox::backup_safety_tests::malformed_envelope_returns_error_without_panic_or_destination_change stdout ----
+
+thread 'lockbox::backup_safety_tests::malformed_envelope_returns_error_without_panic_or_destination_change' (29138749) panicked at src/lockbox.rs:617:18:
+Set RV_BACKUP_FIXTURE_ROOT to a dedicated repository fixture directory
+
+---- lockbox::backup_safety_tests::missing_key_does_not_ignore_an_empty_directory_or_link_envelope stdout ----
+
+thread 'lockbox::backup_safety_tests::missing_key_does_not_ignore_an_empty_directory_or_link_envelope' (29138750) panicked at src/lockbox.rs:617:18:
+Set RV_BACKUP_FIXTURE_ROOT to a dedicated repository fixture directory
+
+---- lockbox::backup_safety_tests::missing_key_is_created_once_and_existing_invalid_keys_are_never_replaced stdout ----
+
+thread 'lockbox::backup_safety_tests::missing_key_is_created_once_and_existing_invalid_keys_are_never_replaced' (29138751) panicked at src/lockbox.rs:617:18:
+Set RV_BACKUP_FIXTURE_ROOT to a dedicated repository fixture directory
+
+---- lockbox::backup_safety_tests::missing_key_with_existing_envelope_never_creates_a_mismatched_key stdout ----
+
+thread 'lockbox::backup_safety_tests::missing_key_with_existing_envelope_never_creates_a_mismatched_key' (29138752) panicked at src/lockbox.rs:617:18:
+Set RV_BACKUP_FIXTURE_ROOT to a dedicated repository fixture directory
+
+---- lockbox::backup_safety_tests::new_files_roundtrip_and_tampering_never_overwrites_destination stdout ----
+
+thread 'lockbox::backup_safety_tests::new_files_roundtrip_and_tampering_never_overwrites_destination' (29138753) panicked at src/lockbox.rs:617:18:
+Set RV_BACKUP_FIXTURE_ROOT to a dedicated repository fixture directory
+
+---- lockbox::backup_safety_tests::released_plain_and_password_envelope_formats_still_open stdout ----
+
+thread 'lockbox::backup_safety_tests::released_plain_and_password_envelope_formats_still_open' (29138754) panicked at src/lockbox.rs:617:18:
+Set RV_BACKUP_FIXTURE_ROOT to a dedicated repository fixture directory
+
+---- lockbox::backup_safety_tests::unreadable_or_malformed_password_envelope_preserves_existing_backup stdout ----
+
+thread 'lockbox::backup_safety_tests::unreadable_or_malformed_password_envelope_preserves_existing_backup' (29138755) panicked at src/lockbox.rs:617:18:
+Set RV_BACKUP_FIXTURE_ROOT to a dedicated repository fixture directory
+
+
+failures:
+    backup_storage::tests::concurrent_publication_is_rejected_while_the_first_owns_the_destination
+    backup_storage::tests::every_publication_failure_restores_both_original_names
+    backup_storage::tests::initially_absent_files_stay_absent_after_failure
+    backup_storage::tests::readback_detects_actual_corruption_before_replacing_either_backup
+    backup_storage::tests::rollback_failure_keeps_original_snapshots_and_blocks_retry
+    backup_storage::tests::stale_lock_and_invalid_source_never_touch_existing_backups
+    backup_storage::tests::successful_publication_rotates_both_supported_extensions
+    backup_storage::tests::symbolic_link_destinations_are_rejected
+    backup_storage::tests::workspaces_are_unique_private_and_remove_only_their_own_files
+    lockbox::backup_safety_tests::key_read_failure_preserves_existing_bytes
+    lockbox::backup_safety_tests::malformed_envelope_returns_error_without_panic_or_destination_change
+    lockbox::backup_safety_tests::missing_key_does_not_ignore_an_empty_directory_or_link_envelope
+    lockbox::backup_safety_tests::missing_key_is_created_once_and_existing_invalid_keys_are_never_replaced
+    lockbox::backup_safety_tests::missing_key_with_existing_envelope_never_creates_a_mismatched_key
+    lockbox::backup_safety_tests::new_files_roundtrip_and_tampering_never_overwrites_destination
+    lockbox::backup_safety_tests::released_plain_and_password_envelope_formats_still_open
+    lockbox::backup_safety_tests::unreadable_or_malformed_password_envelope_preserves_existing_backup
+
+test result: FAILED. 666 passed; 17 failed; 13 ignored; 0 measured; 0 filtered out; finished in 6.23s
+
+error: test failed, to rerun pass `--lib`
