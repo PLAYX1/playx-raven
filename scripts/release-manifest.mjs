@@ -30,7 +30,7 @@ export async function prepareRelease(source, destination, version) {
     if (next.reduce((order, n, i) => order || Math.sign(n - old[i]), 0) <= 0) throw new Error('Release must be newer than the currently published version');
   } catch (e) { if (e.code !== 'ENOENT') throw e; }
   const base = `https://raw.githubusercontent.com/PLAYX1/playx-raven-releases/dist/v${version}`;
-  const manifest = { version, notes: 'RavenVault Desktop 0.6.0 — 라비가 사장님의 실제 숫자(입금 대기·오늘 매출·공동구매)를 보고 답합니다. 보내기·환불은 라비가 창을 채워 열어 주고, 돌려주기·보내기 단추는 사장님이 직접 누릅니다. 그림 만들기는 요금을 확인한 뒤에만 만듭니다(내 API 키). 새 AI 모델은 자동으로 골라 쓰고, 「지금 쓸 곳」에서 고른 AI를 먼저 씁니다. 라비 대화 방식을 하나로 합쳤고, 들어온 돈 알림이 반복되던 것과 지갑이 잠겼을 때의 안내를 고쳤습니다. 주문·대기 신청 남용을 막고 개발비 기록의 동시 처리를 안전하게 했습니다.', pub_date: new Date().toISOString(), platforms: {}, installers: [] };
+  const manifest = { version, notes: 'RavenVault Desktop 0.6.1 — 좁은 창에서 글자가 쪼개지던 메뉴(메뉴판·공지 등)와 잘리던 왼쪽 메뉴, 가려지던 아래 내용을 고쳤습니다. 수수료 1%가 적용됩니다. 0.6.0 — 라비가 사장님의 실제 숫자(입금 대기·오늘 매출·공동구매)를 보고 답합니다. 보내기·환불은 라비가 창을 채워 열어 주고, 돌려주기·보내기 단추는 사장님이 직접 누릅니다. 그림 만들기는 요금을 확인한 뒤에만 만듭니다(내 API 키). 새 AI 모델은 자동으로 골라 쓰고, 「지금 쓸 곳」에서 고른 AI를 먼저 씁니다. 라비 대화 방식을 하나로 합쳤고, 들어온 돈 알림이 반복되던 것과 지갑이 잠겼을 때의 안내를 고쳤습니다. 주문·대기 신청 남용을 막고 개발비 기록의 동시 처리를 안전하게 했습니다.', pub_date: new Date().toISOString(), platforms: {}, installers: [] };
   for (const [suffix, platform] of Object.entries(platforms)) {
     const signature = (await readFile(path.join(source, prefix + suffix + '.sig'), 'utf8')).trim();
     if (!/^[A-Za-z0-9+/=\r\n]+$/.test(signature) || signature.length < 100 || signature.length > 2048) throw new Error(`Malformed updater signature: ${suffix}`);
