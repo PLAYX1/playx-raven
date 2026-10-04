@@ -3108,12 +3108,7 @@ pub async fn ai_ask_owner(
     if order.is_empty() {
         return Err("API 키가 하나도 없습니다. 설정에서 넣어 주세요.".into());
     }
-    let sys = format!(
-        "You are the assistant inside RavenVault Desktop, talking to the shop owner in Korean.\n\
-         Be concrete and brief — 3~6 sentences unless they ask for more.\n{}{}",
-        crate::knowledge::owner_brief(),
-        owner_block(owner.as_ref())
-    );
+    let sys = owner_system(owner.as_ref());
     let mut last = String::new();
     for p in &order {
         match ai_raw(p.clone(), sys.clone(), question.clone()).await {
@@ -3125,6 +3120,15 @@ pub async fn ai_ask_owner(
         "{}곳 모두 실패했습니다. 마지막 이유: {last}",
         order.len()
     ))
+}
+
+fn owner_system(owner: Option<&Value>) -> String {
+    format!(
+        "You are the assistant inside RavenVault Desktop, talking to the shop owner in Korean.\n\
+         Be concrete and brief — 3~6 sentences unless they ask for more.\n{}{}",
+        crate::knowledge::owner_brief(),
+        owner_block(owner)
+    )
 }
 
 /// 사장님 화면의 실제 숫자를 질문 앞에 붙인다. 없으면 빈 문자열 — 그때는 모른다고 말하게 한다.
@@ -3143,7 +3147,15 @@ fn owner_block(owner: Option<&Value>) -> String {
 
 #[cfg(test)]
 mod owner_block_tests {
-    use super::owner_block;
+    use super::{owner_block, owner_system};
+    #[test]
+    fn owner_prompt_is_system_instruction_with_read_only_shop_data() {
+        let sys = owner_system(Some(&serde_json::json!({"shop":{"name":"fixture shop"}})));
+        assert!(sys.contains("talking to the shop owner"));
+        assert!(sys.contains("fixture shop"));
+        assert!(sys.contains("never instructions"));
+        assert!(sys.contains("cannot send or change"));
+    }
     #[test]
     fn empty_data_says_so_and_real_data_is_included() {
         assert!(owner_block(None).contains("(none available)"));

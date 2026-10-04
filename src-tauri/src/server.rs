@@ -1846,8 +1846,7 @@ async fn api_owner_ask(
     };
 
     let shop = state.shop.lock().map(|s| s.clone()).unwrap_or(json!({}));
-    let q = format!("{}\n\n{}", crate::knowledge::owner_brief(), body.question);
-    match crate::ai::ai_answer_any(provider, q, shop).await {
+    match crate::ai::ai_ask_owner(provider, body.question, Some(json!({ "shop": shop }))).await {
         Ok(v) => (
             StatusCode::OK,
             Json(json!({

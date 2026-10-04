@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+const read = p => readFileSync(p, 'utf8');
+const server = read('src-tauri/src/server.rs');
+const owner = server.slice(server.indexOf('async fn api_owner_ask('), server.indexOf('async fn api_ai_status('));
+assert.ok(owner.includes('ai_ask_owner('));
+assert.ok(!owner.includes('ai_answer_any('));
+assert.ok(owner.includes('"answer":') && owner.includes('"left":'));
+const ai = read('src-tauri/src/ai.rs');
+const ownerAI = ai.slice(ai.indexOf('pub async fn ai_ask_owner('), ai.indexOf('fn owner_system('));
+assert.ok(ownerAI.includes('try_order(&provider, false)'));
+assert.ok(ownerAI.includes('owner_system(owner.as_ref())'));
+console.log('PASS owner phone system instructions, provider order and answer/left contract');
