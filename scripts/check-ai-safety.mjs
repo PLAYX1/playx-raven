@@ -11,3 +11,37 @@ const ownerAI = ai.slice(ai.indexOf('pub async fn ai_ask_owner('), ai.indexOf('f
 assert.ok(ownerAI.includes('try_order(&provider, false)'));
 assert.ok(ownerAI.includes('owner_system(owner.as_ref())'));
 console.log('PASS owner phone system instructions, provider order and answer/left contract');
+
+// Run production action handlers with synthetic DOM and RPC. No network.
+const { default: ts } = await import('typescript');
+const { default: vm } = await import('node:vm');
+const main = read('src/main.ts');
+const ast = ts.createSourceFile('main.ts', main, ts.ScriptTarget.Latest, true);
+const fn = name => ast.statements.find(n => ts.isFunctionDeclaration(n) && n.name?.text === name).getText(ast);
+const compile = s => ts.transpileModule(s, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText;
+let calls = [], removed = false;
+const save = {}, cancel = {}, note = {}, swatch = { style: {} };
+const card = { style: {}, remove() { removed = true; }, querySelector(s) { return ({'[data-theme-save]':save,'[data-theme-cancel]':cancel,'[data-theme-note]':note,'[data-theme-swatch]':swatch})[s]; } };
+const c = vm.createContext({ $, chatHtml() {}, copyHtml:s=>s, t:s=>s, tf:s=>s, errText:()=> 'synthetic error', setCopyText:(el,draw)=>el.textContent=draw(), invoke:async(cmd,args)=>{ calls.push({cmd,args}); } });
+function $(id) { assert.equal(id,'chat-log'); return { lastElementChild:{querySelector:()=>card} }; }
+vm.runInContext(compile(fn('previewRaviTheme')),c);
+assert.equal(c.previewRaviTheme('112233','eef0ff'),true);
+assert.equal(calls.length,0,'preview must not save');
+cancel.onclick(); assert.equal(removed,true); assert.equal(calls.length,0);
+c.previewRaviTheme('112233','eef0ff'); await save.onclick();
+assert.equal(calls.length,1); assert.equal(calls[0].cmd,'theme_save'); assert.equal(calls[0].args.accent,'#112233');
+assert.equal(c.previewRaviTheme('bad<script>','eef0ff'),false);
+assert.ok(!fn('applyActions').includes('invoke("theme_save"'));
+const html = read('web/admin.html');
+const apply = html.slice(html.indexOf('      function apply(actions)'),html.indexOf('      // 손님은 주문하고'));
+const menu = [{name:'fixture',price:10}]; let agreed=false, confirmations=0;
+const admin = vm.createContext({menu, renderMenu(){}, confirm(){ confirmations++; return agreed; }, Number, $(){return {};} });
+vm.runInContext(apply,admin);
+admin.apply([{type:'menu_clear'}]); assert.equal(menu.length,1); assert.equal(confirmations,1);
+agreed=true; admin.apply([{type:'menu_clear'}]); assert.equal(menu.length,0);
+menu.push({name:'fixture',price:10});
+for (const field of ['__proto__','constructor','image','unknown']) admin.apply([{type:'menu_set',index:0,field,value:'forbidden'}]);
+assert.deepEqual(menu[0],{name:'fixture',price:10});
+admin.apply([{type:'menu_set',index:0,field:'price',value:'not a number'}]); assert.equal(menu[0].price,10);
+admin.apply([{type:'menu_set',index:0,field:'price',value:'12'}]); assert.equal(menu[0].price,12);
+console.log('PASS theme preview/manual save, admin delete confirmation and menu field allowlist');

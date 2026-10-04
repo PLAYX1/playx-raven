@@ -673,13 +673,19 @@
           if (a.type === "menu_add") {
             menu.push({ name: a.name || "", price: a.price ?? null, image: null });
             done.push(`추가: ${a.name}`);
-          } else if (a.type === "menu_set" && menu[a.index]) {
-            menu[a.index][a.field] = a.field === "price" ? Number(a.value) : a.value;
+          } else if (a.type === "menu_set" && Number.isInteger(a.index) && menu[a.index] && ["name", "name_en", "price", "pass_months", "pass_days", "stock"].includes(a.field)) {
+            const numeric = ["price", "pass_months", "pass_days", "stock"].includes(a.field);
+            const value = !numeric ? String(a.value ?? "") : a.value === "" || a.value == null ? null : Number(a.value);
+            if (numeric && value !== null && (!Number.isFinite(value) || value < 0)) continue;
+            menu[a.index][a.field] = value;
+            if (["pass_months", "pass_days"].includes(a.field)) menu[a.index].kind = "pass";
+            if (a.field === "stock" && menu[a.index].kind !== "pass") menu[a.index].kind = "stock";
             done.push(`${a.index + 1}번 ${a.field} → ${a.value}`);
           } else if (a.type === "menu_remove" && menu[a.index]) {
             done.push(`삭제: ${menu[a.index].name}`);
             menu.splice(a.index, 1);
           } else if (a.type === "menu_clear") {
+            if (menu.length && !confirm(`메뉴 ${menu.length}개를 전부 지울까요?\n되돌릴 수 없습니다.`)) continue;
             done.push(`메뉴 ${menu.length}개 지움`);
             menu.length = 0;
           } else if (a.type === "shop_set") {

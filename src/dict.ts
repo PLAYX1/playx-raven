@@ -41,6 +41,8 @@ import { MAP_COPY } from "./map-copy";
 export const DICT: Record<string, Record<string, string>> = {
   ko: {},
   en: {
+    "가게 색 미리보기 — 저장을 누르면 적용됩니다.": "Shop colour preview — press Save to apply.",
+    "가게 색을 저장했습니다.": "Shop colours saved.",
     "만료된 연결을 갱신하지 못했습니다. 저장소 권한·남은 공간을 확인한 뒤 이 컴퓨터에서 폰 연결/손님 QR을 다시 열어 주세요. 새 QR은 아직 만들지 않았습니다.": "The expired connection could not be renewed. Check storage permissions and free space, then reopen Phone connection / Customer QR on this computer. No new QR has been created yet.",
     "연결 열쇠가 만료되어 새로 만들었습니다. RavenVault 폰 앱에서 새 QR을 다시 찍어 주세요.": "The expired connection keys have been renewed. Scan the new QR again in the RavenVault phone app.",
     "와이파이 숫자 이사는 백업 암호를 안전하게 전달할 수 없어 중단했습니다. 옛 컴퓨터에서 암호화 백업 파일(예: 이사.zip.pxlock)을 만들고 USB로 새 컴퓨터에 옮긴 뒤 복구하세요. 백업 암호는 파일과 따로 전달하세요. 자산을 새로 만들지 마세요.": "Wi-Fi code transfer has been stopped because it cannot safely deliver the backup password. Create an encrypted backup (for example, 이사.zip.pxlock) on the old computer, carry it by USB to the new computer, and restore it. Deliver the password separately. Do not create the assets again.",
@@ -1839,6 +1841,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "The key is too short. Please check the one written on your paper again.",
   },
   ja: {
+    "가게 색 미리보기 — 저장을 누르면 적용됩니다.": "お店の色のプレビュー — 保存を押すと反映されます。",
+    "가게 색을 저장했습니다.": "お店の色を保存しました。",
     "만료된 연결을 갱신하지 못했습니다. 저장소 권한·남은 공간을 확인한 뒤 이 컴퓨터에서 폰 연결/손님 QR을 다시 열어 주세요. 새 QR은 아직 만들지 않았습니다.": "期限切れの接続を更新できませんでした。保存先の権限と空き容量を確認し、このパソコンで「スマホ接続／お客様 QR」をもう一度開いてください。新しい QR はまだ作成していません。",
     "연결 열쇠가 만료되어 새로 만들었습니다. RavenVault 폰 앱에서 새 QR을 다시 찍어 주세요.": "期限切れの接続キーを更新しました。RavenVault のスマホアプリで新しい QR をもう一度読み取ってください。",
     "와이파이 숫자 이사는 백업 암호를 안전하게 전달할 수 없어 중단했습니다. 옛 컴퓨터에서 암호화 백업 파일(예: 이사.zip.pxlock)을 만들고 USB로 새 컴퓨터에 옮긴 뒤 복구하세요. 백업 암호는 파일과 따로 전달하세요. 자산을 새로 만들지 마세요.": "Wi-Fi の数字コードによる移行は、バックアップのパスワードを安全に渡せないため停止しました。古いパソコンで暗号化バックアップ（例: 이사.zip.pxlock）を作り、USB で新しいパソコンへ移して復元してください。パスワードはファイルと別に渡してください。資産を作り直さないでください。",
@@ -3637,6 +3641,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "鍵が短すぎます。紙に書いたものをもう一度ご確認ください。",
   },
   zh: {
+    "가게 색 미리보기 — 저장을 누르면 적용됩니다.": "店铺颜色预览 — 点击保存后生效。",
+    "가게 색을 저장했습니다.": "已保存店铺颜色。",
     "만료된 연결을 갱신하지 못했습니다. 저장소 권한·남은 공간을 확인한 뒤 이 컴퓨터에서 폰 연결/손님 QR을 다시 열어 주세요. 새 QR은 아직 만들지 않았습니다.": "无法更新过期连接。请检查存储权限和剩余空间，然后在此电脑重新打开「手机连接／顾客二维码」。尚未生成新二维码。",
     "연결 열쇠가 만료되어 새로 만들었습니다. RavenVault 폰 앱에서 새 QR을 다시 찍어 주세요.": "过期的连接密钥已更新。请在 RavenVault 手机应用中重新扫描新的二维码。",
     "와이파이 숫자 이사는 백업 암호를 안전하게 전달할 수 없어 중단했습니다. 옛 컴퓨터에서 암호화 백업 파일(예: 이사.zip.pxlock)을 만들고 USB로 새 컴퓨터에 옮긴 뒤 복구하세요. 백업 암호는 파일과 따로 전달하세요. 자산을 새로 만들지 마세요.": "Wi-Fi 数字码迁移无法安全传递备份密码，因此已停用。请在旧电脑创建加密备份（如 이사.zip.pxlock），用 USB 移到新电脑后恢复。密码须与文件分开传递。请勿重新创建资产。",

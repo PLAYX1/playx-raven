@@ -9922,6 +9922,37 @@ function paintRaviBadge(): void {
   }
 }
 
+/** AI 색상 제안은 대화창에서만 본다. 공개 화면은 사람이 저장해야 바뀐다. */
+function previewRaviTheme(rawAccent: unknown, rawTint: unknown): boolean {
+  const hex = (v: unknown) => /^[0-9a-f]{6}$/i.test(String(v ?? "")) ? `#${String(v)}` : "";
+  const accent = hex(rawAccent), tint = hex(rawTint);
+  if (!accent) return false;
+  chatHtml("ai", `<section data-theme-preview><p>${copyHtml("가게 색 미리보기 — 저장을 누르면 적용됩니다.")}</p>` +
+    `<div data-theme-swatch>${copyHtml("주문하기")}</div>` +
+    `<button type="button" data-theme-save>${copyHtml("저장")}</button> ` +
+    `<button type="button" class="ghost" data-theme-cancel>${copyHtml("취소")}</button><p data-theme-note aria-live="polite"></p></section>`);
+  const card = $("chat-log").lastElementChild!.querySelector<HTMLElement>("[data-theme-preview]")!;
+  const swatch = card.querySelector<HTMLElement>("[data-theme-swatch]")!;
+  swatch.style.backgroundColor = accent;
+  swatch.style.color = "#fff";
+  card.style.backgroundColor = tint || "";
+  const save = card.querySelector<HTMLButtonElement>("[data-theme-save]")!;
+  const cancel = card.querySelector<HTMLButtonElement>("[data-theme-cancel]")!;
+  cancel.onclick = () => card.remove();
+  save.onclick = async () => {
+    save.disabled = true; cancel.disabled = true;
+    const note = card.querySelector<HTMLElement>("[data-theme-note]")!;
+    try {
+      await invoke("theme_save", { accent, tint: tint || null });
+      setCopyText(note, () => t("가게 색을 저장했습니다."));
+    } catch (e) {
+      setCopyText(note, () => tf("색을 못 바꿨습니다. {0}", errText(e)));
+      save.disabled = false;
+    } finally { cancel.disabled = false; }
+  };
+  return true;
+}
+
 function applyActions(actions: any[], typed = ""): string[] {
   const done: string[] = [];
   for (const a of actions || []) {
@@ -10141,28 +10172,8 @@ function applyActions(actions: any[], typed = ""): string[] {
           }
           break;
 
-        // 🔴 이 케이스가 **없었다.** 라비에게는 색 바꾸는 법을 7줄에 걸쳐
-        // 가르쳐 놓고(`ai.rs:321·329`), 받는 쪽이 비어 있었다. 뒤쪽은
-        // 멀쩡히 있다(`shop.rs` theme_read/save, `server.rs` 경로).
-        // **중간만 끊겨서**, 사장이 "가게 색 바꿔줘" 하면 라비는 바꿨다고
-        // 답하고 아무 일도 일어나지 않았다. 거짓말을 하게 만든 셈이다.
         case "theme": {
-          const hex = (v: unknown) =>
-            /^[0-9a-f]{6}$/i.test(String(v ?? "")) ? `#${String(v)}` : "";
-          const accent = hex(a.accent);
-          const tint = hex(a.tint);
-          if (!accent) break;
-          // ⚠️ 옅은 accent 는 노드가 거절한다(`shop.rs`의 `ok_accent`) —
-          // 흰 글자가 안 읽히는 주문 단추가 되기 때문이다. 거절당하면
-          // 그 사실을 그대로 말한다. 조용히 넘기면 또 거짓말이 된다.
-          // `applyActions` 는 동기 함수다. 여기서 기다리면 나머지 동작이
-          // 멈추므로 보내 놓고, 결과는 대화창에 따로 적는다.
-          void invoke("theme_save", { accent, tint: tint || null })
-            .then(() => chatSay("ai", tf("가게 색을 {0} 로 바꿨습니다.", accent)))
-            .catch((e) =>
-              chatSay("ai", tf("색을 못 바꿨습니다. {0}", String((e as Error)?.message || e))),
-            );
-          done.push(tf("가게 색 {0} 로 바꾸는 중", accent));
+          if (previewRaviTheme(a.accent, a.tint)) done.push(t("가게 색 미리보기 — 저장을 누르면 적용됩니다."));
           break;
         }
         // 목록에 없는 것은 조용히 버린다. 모르는 동작을 추측해서 실행하면 안 된다.
