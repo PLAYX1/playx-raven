@@ -47,6 +47,11 @@ mod paths {
     use std::path::PathBuf;
     pub static TEST_ENV: std::sync::Mutex<()> = std::sync::Mutex::new(());
     pub fn home() -> PathBuf { PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("synthetic") }
+    pub fn test_fixture_root() -> std::path::PathBuf {
+        let root = home().join("test-fixtures");
+        std::fs::create_dir_all(&root).expect("Create isolated test fixture root");
+        root
+    }
     pub fn app_dir() -> PathBuf { home().join("app") }
     pub fn app_file(name: &str) -> PathBuf { app_dir().join(name) }
     pub fn raven_dir() -> PathBuf { home().join("node") }
