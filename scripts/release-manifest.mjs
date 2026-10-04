@@ -30,7 +30,7 @@ export async function prepareRelease(source, destination, version) {
     if (next.reduce((order, n, i) => order || Math.sign(n - old[i]), 0) <= 0) throw new Error('Release must be newer than the currently published version');
   } catch (e) { if (e.code !== 'ENOENT') throw e; }
   const base = `https://raw.githubusercontent.com/PLAYX1/playx-raven-releases/dist/v${version}`;
-  const manifest = { version, notes: 'RavenVault Desktop 0.6.2 — 0.6.1 다음 판입니다. 사진 보관은 사장 인증 뒤 공개 HTTPS 주소로만 연결해 가게 안 컴퓨터 주소로 새지 않게 했습니다. 직원·검표 연결 열쇠는 봉해서 다루고 30일마다 새로 바뀝니다(직원 폰은 새 연결 QR을 다시 찍어야 할 수 있습니다). 직원 환불은 주문에 묶이고 하루 한도를 지킵니다. 가게 공지 글은 서명·크기를 확인한 뒤에만 올립니다. 화면의 말을 서버·완료·공개 장부·사진 보관함처럼 쉬운 말로 바꿨습니다. 보내기 확인 화면에 원화 환산을 보여 주고, 주소를 끊어 보여 주며 처음 보내는 주소를 경고합니다. 지갑이 잠겼다 풀려도 보내기에 쓰던 주소·금액은 남고 암호·복구 단어 칸은 지웁니다. 기존 지갑·가게 데이터 위치는 그대로입니다.', pub_date: new Date().toISOString(), platforms: {}, installers: [] };
+  const manifest = { version, notes: 'RavenVault Desktop 0.6.3 — 라비(AI)와 보안을 같이 다듬었습니다. 키를 아직 넣지 않았으면 라비가 눈을 감고 있고, 누르면 키 입력 창이 열리며 연결이 확인되면 깨어납니다. 라비가 바꾼 가게 색은 미리 본 뒤 사장님이 저장합니다. 관리자 폰의 메뉴 전체 삭제는 한 번 더 묻습니다. 사장 폰 질문은 사장용 라비가 답합니다. 손님과 사장의 AI 사용 한도를 나누고, 하루 사용량은 앱을 다시 켜도 유지합니다. AI 키를 운영체제 저장소로 옮긴 뒤에는 옛 키 파일을 지웁니다. 0.6.2 — 매장 서버 보안 수정, 쉬운 말, 보내기 확인 화면.', pub_date: new Date().toISOString(), platforms: {}, installers: [] };
   for (const [suffix, platform] of Object.entries(platforms)) {
     const signature = (await readFile(path.join(source, prefix + suffix + '.sig'), 'utf8')).trim();
     if (!/^[A-Za-z0-9+/=\r\n]+$/.test(signature) || signature.length < 100 || signature.length > 2048) throw new Error(`Malformed updater signature: ${suffix}`);
