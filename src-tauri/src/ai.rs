@@ -2361,34 +2361,65 @@ pub async fn ai_answer_any(
     question: String,
     shop_context: Value,
 ) -> Result<Value, String> {
+    ai_answer_any_limited(provider, question, shop_context, || Ok(())).await
+}
+
+pub(crate) async fn ai_answer_any_limited(
+    provider: String, question: String, shop_context: Value,
+    mut before_attempt: impl FnMut() -> Result<(), String> + Send,
+) -> Result<Value, String> {
     let order = try_order(&provider, true);
     if order.is_empty() {
         return Err("API 키가 하나도 없습니다. 설정에서 넣어 주세요.".into());
     }
-    let mut tried: Vec<String> = Vec::new();
-    for p in &order {
+    let (provider, text, tried) = run_attempts(order, &mut before_attempt, |p| {
+        ai_answer(p, question.clone(), shop_context.clone())
+    }).await?;
+    Ok(json!({ "text": text, "provider": provider, "tried": tried }))
+}
+
+/// Reserve durable usage before EVERY dispatch; no refund on provider errors.
+async fn run_attempts<T, F: std::future::Future<Output = Result<T, String>>>(
+    order: Vec<String>, mut before_attempt: impl FnMut() -> Result<(), String>,
+    mut request: impl FnMut(String) -> F,
+) -> Result<(String, T, Vec<String>), String> {
+    let mut tried = Vec::new();
+    let mut last = String::new();
+    for p in order {
+        before_attempt()?;
         tried.push(p.clone());
-        match ai_answer(p.clone(), question.clone(), shop_context.clone()).await {
-            Ok(text) => {
-                return Ok(json!({
-                    "text": text,
-                    "provider": p,
-                    // 몇 번째로 성공했는지. 첫 번째가 계속 실패하면 사장이 알아야 한다.
-                    "tried": tried,
-                }));
-            }
-            Err(e) => {
-                // 마지막 하나까지 실패하면 그때 이유를 보여 준다.
-                if p == order.last().unwrap() {
-                    return Err(format!(
-                        "{}곳 모두 실패했습니다. 마지막 이유: {e}",
-                        order.len()
-                    ));
-                }
-            }
+        match request(p.clone()).await {
+            Ok(answer) => return Ok((p, answer, tried)),
+            Err(e) => last = e,
         }
     }
-    Err("답을 받지 못했습니다.".into())
+    Err(format!("{}곳 모두 실패했습니다. 마지막 이유: {last}", tried.len()))
+}
+
+#[cfg(test)]
+mod attempt_tests {
+    use super::run_attempts;
+    #[tokio::test]
+    async fn fallback_charges_failures_and_stops_before_unfunded_dispatch() {
+        let order = vec!["fake-a".into(), "fake-b".into(), "fake-c".into()];
+        let charged = std::sync::atomic::AtomicU32::new(0);
+        let sent = std::sync::atomic::AtomicU32::new(0);
+        let out = run_attempts(order.clone(), || {
+            if charged.load(std::sync::atomic::Ordering::SeqCst) >= 2 { return Err("[AI_LIMIT] fixture limit".into()); }
+            charged.fetch_add(1, std::sync::atomic::Ordering::SeqCst); Ok(())
+        }, |_| {
+            sent.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            std::future::ready(Err::<String, _>("fixture provider down".into()))
+        }).await;
+        assert!(out.unwrap_err().starts_with("[AI_LIMIT]"));
+        assert_eq!(charged.load(std::sync::atomic::Ordering::SeqCst), 2);
+        assert_eq!(sent.load(std::sync::atomic::Ordering::SeqCst), 2);
+        let mut attempts = 0;
+        let (p, text, tried) = run_attempts(order, || { attempts += 1; Ok(()) }, |p| {
+            std::future::ready(if p == "fake-b" { Ok("fixture answer") } else { Err("fixture down".into()) })
+        }).await.unwrap();
+        assert_eq!(attempts, 2); assert_eq!(p, "fake-b"); assert_eq!(text, "fixture answer"); assert_eq!(tried.len(), 2);
+    }
 }
 
 /// One question to one provider. No JSON contract, no shop context — just
@@ -3101,6 +3132,13 @@ pub async fn ai_ask_owner(
     question: String,
     owner: Option<Value>,
 ) -> Result<Value, String> {
+    ai_ask_owner_limited(provider, question, owner, || Ok(())).await
+}
+
+pub(crate) async fn ai_ask_owner_limited(
+    provider: String, question: String, owner: Option<Value>,
+    mut before_attempt: impl FnMut() -> Result<(), String> + Send,
+) -> Result<Value, String> {
     if question.trim().is_empty() {
         return Err("질문이 비어 있습니다.".into());
     }
@@ -3109,17 +3147,10 @@ pub async fn ai_ask_owner(
         return Err("API 키가 하나도 없습니다. 설정에서 넣어 주세요.".into());
     }
     let sys = owner_system(owner.as_ref());
-    let mut last = String::new();
-    for p in &order {
-        match ai_raw(p.clone(), sys.clone(), question.clone()).await {
-            Ok(t) => return Ok(json!({ "provider": p, "text": t })),
-            Err(e) => last = e,
-        }
-    }
-    Err(format!(
-        "{}곳 모두 실패했습니다. 마지막 이유: {last}",
-        order.len()
-    ))
+    let (provider, text, _) = run_attempts(order, &mut before_attempt, |p| {
+        ai_raw(p, sys.clone(), question.clone())
+    }).await?;
+    Ok(json!({ "provider": provider, "text": text }))
 }
 
 fn owner_system(owner: Option<&Value>) -> String {

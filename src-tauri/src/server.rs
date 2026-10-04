@@ -73,9 +73,8 @@ pub struct ServerState {
     /// (fetched_at, shop list). Keeps a phone refresh from re-walking the
     /// chain on a machine that is also running a shop.
     shops_cache: Arc<Mutex<Option<(i64, Value)>>>,
-    /// (day_start_unix, asked_today, last_ask_unix) for the customer question
-    /// box. See `ASK_PER_DAY`.
-    ask_budget: Arc<Mutex<(i64, u32, i64)>>,
+    /// Durable daily attempt counts and independent customer/owner execution gates.
+    ask_budget: Arc<crate::ai_budget::Budget>,
     /// Public listings by id, as the sale page shows them.
     offers: Arc<Mutex<std::collections::HashMap<String, Value>>>,
     /// pay address → (listing id, where the buyer wants it delivered)
@@ -194,45 +193,17 @@ const ORDERS_PER_MIN: usize = 20;
 /// 하루 상한. 분당 제한만 두면 하루 종일 천천히 두드려 2만 개를 만든다.
 const ORDERS_PER_DAY: usize = 2_000;
 
-/// The customer question box answers without the owner pressing anything, and
-/// every answer is billed to the owner's own API key. Left uncapped it is a
-/// card terminal someone left switched on: one bored person with a phone can
-/// spend more in an evening than the shop makes.
-///
-/// So it is capped by day and spaced by seconds. When the cap is hit, the box
-/// says the shop is not answering right now rather than failing silently —
-/// a customer who gets no reply thinks the shop is broken.
-const ASK_PER_DAY: u32 = 200;
-const ASK_MIN_GAP_SECS: i64 = 3;
-
-fn now_unix() -> i64 {
+pub(crate) fn now_unix() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0)
 }
 
-/// Consumes one question from today's budget, or explains why not.
-fn take_ask_budget(state: &ServerState) -> Result<u32, String> {
-    let now = now_unix();
-    let day = now - (now % 86_400);
-    let mut b = state
-        .ask_budget
-        .lock()
-        .map_err(|_| "잠금 실패".to_string())?;
-
-    if b.0 != day {
-        *b = (day, 0, 0);
-    }
-    if now - b.2 < ASK_MIN_GAP_SECS {
-        return Err("잠시 후 다시 물어봐 주세요.".into());
-    }
-    if b.1 >= ASK_PER_DAY {
-        return Err("오늘은 자동 응대를 더 할 수 없습니다. 가게에 직접 물어봐 주세요.".into());
-    }
-    b.1 += 1;
-    b.2 = now;
-    Ok(ASK_PER_DAY - b.1)
+fn ai_error_status(error: &str) -> StatusCode {
+    if error.starts_with("[AI_LIMIT]") { StatusCode::TOO_MANY_REQUESTS }
+    else if error.starts_with("[AI_STORAGE]") { StatusCode::SERVICE_UNAVAILABLE }
+    else { StatusCode::BAD_GATEWAY }
 }
 
 /// 32 bytes from the OS. Not a timestamp, not a counter: this is the only thing
@@ -1838,23 +1809,21 @@ async fn api_owner_ask(
     if body.question.chars().count() > 500 {
         return (StatusCode::BAD_REQUEST, Json(json!({ "error": "질문이 너무 깁니다." })));
     }
-    // 예산은 손님 응대와 **같은 지갑**에서 나간다. 사장이 폰으로 길게 놀다가
-    // 손님 응대가 멈추면 그건 장사 사고다 — 같이 세는 편이 정직하다.
-    let left = match take_ask_budget(&state) {
-        Ok(n) => n,
-        Err(e) => return (StatusCode::TOO_MANY_REQUESTS, Json(json!({ "error": e }))),
+    let permit = match state.ask_budget.begin(crate::ai_budget::Lane::Owner) {
+        Ok(p) => p,
+        Err(e) => return (ai_error_status(&e), Json(json!({ "error": e }))),
     };
 
     let shop = state.shop.lock().map(|s| s.clone()).unwrap_or(json!({}));
-    match crate::ai::ai_ask_owner(provider, body.question, Some(json!({ "shop": shop }))).await {
+    match crate::ai::ai_ask_owner_limited(provider, body.question, Some(json!({ "shop": shop })), || permit.charge()).await {
         Ok(v) => (
             StatusCode::OK,
             Json(json!({
                 "answer": v.get("text").and_then(Value::as_str).unwrap_or_default(),
-                "left": left,
+                "left": permit.left(),
             })),
         ),
-        Err(e) => (StatusCode::BAD_GATEWAY, Json(json!({ "error": e }))),
+        Err(e) => (ai_error_status(&e), Json(json!({ "error": e }))),
     }
 }
 
@@ -2028,23 +1997,22 @@ async fn api_ask(State(state): State<ServerState>, Json(body): Json<AskBody>) ->
 
     // 예산을 먼저 깎는다. 호출 뒤에 깎으면 실패한 호출이 공짜가 되어
     // 재시도만으로 한도를 넘길 수 있다.
-    let left = match take_ask_budget(&state) {
-        Ok(n) => n,
-        Err(e) => return (StatusCode::TOO_MANY_REQUESTS, Json(json!({ "error": e }))),
+    let permit = match state.ask_budget.begin(crate::ai_budget::Lane::Customer) {
+        Ok(p) => p,
+        Err(e) => return (ai_error_status(&e), Json(json!({ "error": e }))),
     };
-
     let shop = state.shop.lock().map(|s| s.clone()).unwrap_or(json!({}));
     // 한 곳이 할당량을 넘겼다고 손님이 가게 안에서 오류 화면을 볼 이유는
     // 없다. 키가 있는 다른 곳으로 넘어간다 — 싸고 빠른 것부터.
-    match crate::ai::ai_answer_any(provider, body.question, shop).await {
+    match crate::ai::ai_answer_any_limited(provider, body.question, shop, || permit.charge()).await {
         Ok(v) => (
             StatusCode::OK,
             Json(json!({
                 "answer": v.get("text").and_then(Value::as_str).unwrap_or_default(),
-                "left": left,
+                "left": permit.left(),
             })),
         ),
-        Err(e) => (StatusCode::BAD_GATEWAY, Json(json!({ "error": e }))),
+        Err(e) => (ai_error_status(&e), Json(json!({ "error": e }))),
     }
 }
 
@@ -2764,7 +2732,7 @@ async fn admin_status(State(state): State<ServerState>, headers: HeaderMap) -> i
         return (StatusCode::UNAUTHORIZED, Json(auth_fail_json(reason)));
     }
 
-    let asked = state.ask_budget.lock().map(|b| b.1).unwrap_or(0);
+    let (asked, owner_asked) = state.ask_budget.counts();
     let node = crate::raven::node_status().await.unwrap_or(json!({}));
     let balance = crate::raven::wallet_balance().await.unwrap_or(json!({}));
     let lock = crate::raven::wallet_lock_state().await.unwrap_or(json!({}));
@@ -2773,7 +2741,7 @@ async fn admin_status(State(state): State<ServerState>, headers: HeaderMap) -> i
         StatusCode::OK,
         Json(json!({
             "node": node, "balance": balance, "lock": lock,
-            "ai": { "asked_today": asked, "limit": ASK_PER_DAY },
+            "ai": { "asked_today": asked, "limit": crate::ai_budget::CUSTOMER_LIMIT, "owner_attempts_today": owner_asked, "owner_limit": crate::ai_budget::OWNER_LIMIT },
         })),
     )
 }
@@ -2859,9 +2827,16 @@ async fn admin_ai(
     if let Err(reason) = admin_authed_reason(&st, &headers, &json!({})) {
         return (StatusCode::UNAUTHORIZED, Json(auth_fail_json(reason)));
     }
+    let permit = match st.ask_budget.begin(crate::ai_budget::Lane::Owner) {
+        Ok(p) => p,
+        Err(e) => return (ai_error_status(&e), Json(json!({ "error": e }))),
+    };
+    if let Err(e) = permit.charge() {
+        return (ai_error_status(&e), Json(json!({ "error": e })));
+    }
     match crate::ai::ai_chat(body.provider, body.message, body.state, body.history).await {
         Ok(v) => (StatusCode::OK, Json(v)),
-        Err(e) => (StatusCode::BAD_GATEWAY, Json(json!({ "error": e }))),
+        Err(e) => (ai_error_status(&e), Json(json!({ "error": e }))),
     }
 }
 
@@ -4362,7 +4337,7 @@ impl Default for ServerState {
             order_fee: Arc::new(Mutex::new(std::collections::HashMap::new())),
             started_ip: Arc::new(Mutex::new(String::new())),
             shops_cache: Arc::new(Mutex::new(None)),
-            ask_budget: Arc::new(Mutex::new((0, 0, 0))),
+            ask_budget: crate::ai_budget::shared(),
             offers: Arc::new(Mutex::new(std::collections::HashMap::new())),
             claims: Arc::new(Mutex::new(std::collections::HashMap::new())),
             sent: Arc::new(Mutex::new(std::collections::HashSet::new())),

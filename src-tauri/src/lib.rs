@@ -2,6 +2,7 @@ mod artist;
 mod rt;
 mod auction;
 mod ai;
+mod ai_budget;
 mod ai_endpoint;
 mod companion;
 mod auto;
