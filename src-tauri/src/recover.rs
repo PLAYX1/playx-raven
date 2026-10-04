@@ -434,7 +434,7 @@ pub fn restore_survey(folder: String, pass: Option<String>) -> Result<Value, Str
     if let Some(n) = count_in("create_history.json", "entries") {
         items.push(
             json!({ "key": "create", "what": "만든 기록", "detail": format!("{n}건"),
-                           "why": "증명서 받는 사람 이름·다시 인쇄 — 체인에는 없습니다" }),
+                           "why": "증명서 받는 사람 이름·다시 인쇄 — 공개 장부에는 없습니다" }),
         );
     }
     if let Some(n) = count_in("tickets.json", "tickets") {
@@ -814,7 +814,7 @@ mod restore_files {
             }
             *changed = true;
             if !backup.is_file() {
-                return Err(io::Error::other("교체한 이전 파일을 확인하지 못했습니다. 노드를 켜지 말고 보존 파일을 확인해 주세요."));
+                return Err(io::Error::other("교체한 이전 파일을 확인하지 못했습니다. 서버를 켜지 말고 보존 파일을 확인해 주세요."));
             }
             Ok(())
         }
@@ -928,7 +928,7 @@ mod restore_files {
                 .map_err(|e| e.to_string())?
                 != expected
             {
-                return Err("교체 후 파일을 확인하지 못했습니다. 보존한 이전 파일로 확인하기 전에는 노드를 켜지 마세요.".into());
+                return Err("교체 후 파일을 확인하지 못했습니다. 보존한 이전 파일로 확인하기 전에는 서버를 켜지 마세요.".into());
             }
             Ok(())
         })();
@@ -967,7 +967,7 @@ mod restore_files {
             Ok(previous) => {
                 changed = true;
                 done.push(json!({"what": label, "previous": previous,
-                        "note": if label == "지갑" { "노드를 켜면 적용됩니다. 지갑의 유효성은 노드가 확인합니다." } else { "" }}));
+                        "note": if label == "지갑" { "서버를 켜면 적용됩니다. 지갑의 유효성은 서버가 확인합니다." } else { "" }}));
             }
             Err(error) => {
                 changed |= error.changed;
@@ -979,7 +979,7 @@ mod restore_files {
             let result = (|| {
                 if rpc_responding {
                     return Err(error(
-                        "노드가 응답하고 있습니다. 노드를 완전히 종료한 뒤 다시 시도해 주세요.",
+                        "서버가 응답하고 있습니다. 서버를 완전히 종료한 뒤 다시 시도해 주세요.",
                     ));
                 }
                 let guard = DataDirGuard::acquire(raven_dir).map_err(error)?;
@@ -1178,11 +1178,11 @@ pub fn recovery_card() -> Value {
         "shop_name": shop.get("name").cloned().unwrap_or(json!("")),
         "backup_folder": dir().join("backups").to_string_lossy(),
         "steps": [
-            "새 컴퓨터에 레이븐 노드와 이 프로그램을 설치합니다.",
-            "노드를 아직 켜지 마세요.",
+            "새 컴퓨터에 레이븐 서버와 이 프로그램을 설치합니다.",
+            "서버를 아직 켜지 마세요.",
             "이 프로그램을 열고 [이 컴퓨터] → [되돌리기]에서 백업 폴더를 고릅니다.",
             "회원 수와 메뉴 개수가 맞는지 눈으로 확인하고 되돌립니다.",
-            "노드를 켭니다. 장부를 따라잡는 동안에도 주문은 받을 수 있습니다.",
+            "서버를 켭니다. 장부를 따라잡는 동안에도 주문은 받을 수 있습니다.",
             "폰 QR을 다시 뽑아 직원들에게 나눠 줍니다 — 옛 QR은 더 이상 안 됩니다.",
         ],
         "warnings": [

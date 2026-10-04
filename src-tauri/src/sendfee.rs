@@ -85,7 +85,7 @@ where
     let raw = rpc("createrawtransaction", json!([[], Value::Object(outs)])).await?;
     let raw = raw.as_str().unwrap_or_default().to_string();
     if raw.is_empty() {
-        return Err("노드가 거래를 조립하지 못했어요.".into());
+        return Err("서버가 거래를 조립하지 못했어요.".into());
     }
 
     let mut opts = json!({ "lockUnspents": false });
@@ -102,7 +102,7 @@ where
         .get("fee")
         .and_then(Value::as_f64)
         .filter(|f| f.is_finite() && *f >= 0.0)
-        .ok_or_else(|| "노드가 수수료를 알려 주지 않았어요.".to_string())?;
+        .ok_or_else(|| "서버가 수수료를 알려 주지 않았어요.".to_string())?;
     // 🔴 채운 거래(hex)는 돌려주지 않는다. 수수료 숫자만.
     Ok(json!({
         "fee": round8(fee),

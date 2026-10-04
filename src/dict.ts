@@ -116,8 +116,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "We ask once. You can change it later under “This computer”, and nothing is deleted when you do.",
     "레이븐코인을 돕고 싶어요":
       "I want to help Ravencoin",
-    "켜 두기만 하면 됩니다. 이 컴퓨터가 체인을 지키고, 다른 가게의 공지를 나르고, 사진을 나눠 갖습니다. 그래픽카드가 있으면 캘 수도 있습니다.":
-      "Just leave it running. This computer guards the chain, carries other shops' notices, and shares their photos. With a graphics card it can mine too.",
+    "켜 두기만 하면 됩니다. 이 컴퓨터가 공개 장부를 지키고, 다른 가게의 공지를 나르고, 사진을 나눠 갖습니다. 그래픽카드가 있으면 캘 수도 있습니다.":
+      "Just leave it running. This computer guards the public ledger, carries other shops' notices, and shares their photos. With a graphics card it can mine too.",
     "장사에 쓸 거예요":
       "I'll use it for my business",
     "위의 것을 전부 하면서, 손님 QR·메뉴판·결제·기간권·회원까지 씁니다. 가게가 없어도 괜찮습니다 — 만드는 것부터 같이 합니다.":
@@ -130,8 +130,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Help Ravencoin",
     "장사에 쓰기":
       "Use for business",
-    "체인 지키기":
-      "Guarding the chain",
+    "공개 장부 지키기":
+      "Guarding the public ledger",
     "공지 나르기":
       "Carrying notices",
     "사진 나눠 갖기":
@@ -144,8 +144,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Just leaving it on tightens this net. The more shops join, the better they reach each other when someone else's relay goes down.",
     "아직 못 하고 있는 것":
       "What it cannot do yet",
-    "이 노드는 아직 남의 지갑 잔액을 대신 답해 주지 못합니다. 주소 색인이 꺼져 있기 때문입니다. 켜면 이 컴퓨터가 실제로 남을 돕게 됩니다.":
-      "This node cannot yet answer balance questions for other people's wallets, because the address index is off. Turning it on makes this computer genuinely useful to others.",
+    "이 서버는 아직 남의 지갑 잔액을 대신 답해 주지 못합니다. 주소 색인이 꺼져 있기 때문입니다. 켜면 이 컴퓨터가 실제로 남을 돕게 됩니다.":
+      "This server cannot yet answer balance questions for other people's wallets, because the address index is off. Turning it on makes this computer genuinely useful to others.",
     "주소 색인 켜기":
       "Turn on the address index",
     "바깥 연결":
@@ -178,8 +178,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Download and turn on",
     "주소 복사":
       "Copy address",
-    "주소 색인 — 이 노드로 지갑도 열기":
-      "Address index — serve wallets from this node",
+    "주소 색인 — 이 서버로 지갑도 열기":
+      "Address index — serve wallets from this server",
     "지금은 손님 지갑이 잔액을 우리 서버 한 곳에 묻습니다. 이걸 켜면 이 컴퓨터가 직접 답합니다. 대신 한 번 다시 훑어야 하고, 그동안 입금 확인이 멈춥니다.":
       "Today customer wallets ask a single server of ours for balances. Turn this on and this computer answers directly. It has to rescan once, and payment confirmation stops while it does.",
     "한가해지면 알아서 시작하기":
@@ -194,8 +194,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Progress",
     "끝날 때까지 입금 확인이 멈춥니다. 중간에 꺼져도 괜찮습니다 — 다시 켜면 이어서 합니다.":
       "Payment confirmation stops until it finishes. It is safe to shut down midway — it resumes when you start again.",
-    "이 노드가 손님 지갑의 잔액 질문에 직접 답합니다. 남의 서버에 안 묻습니다.":
-      "This node answers wallet balance questions directly. It asks nobody else's server.",
+    "이 서버가 손님 지갑의 잔액 질문에 직접 답합니다. 남의 서버에 안 묻습니다.":
+      "This server answers wallet balance questions directly. It asks nobody else's server.",
     "뒤부터 한가합니다":
       "from now it is quiet",
     "동안":
@@ -268,8 +268,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Fill in with AI",
     "GPU를 몇 %로 쓸까요":
       "What % of the GPU shall we use",
-    "IPFS 게이트웨이":
-      "IPFS gateway",
+    "사진 보관함(IPFS) 게이트웨이":
+      "photo store (IPFS) gateway",
     "Ollama는":
       "Ollama runs",
     "RavenVault Desktop 백업":
@@ -344,8 +344,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Where it goes",
     "가볍게 시작합니다":
       "Start light",
-    "가짜 체인":
-      "a practice chain",
+    "가짜 공개 장부":
+      "a practice public ledger",
     "간판 사진":
       "Storefront photo",
     "강남 로스터리":
@@ -438,8 +438,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Off",
     "끄기":
       "Turn off",
-    "끄려면 체인을 처음부터 다시 받아야 합니다(몇 시간).":
-      "Turning it back off means downloading the chain from scratch (several hours).",
+    "끄려면 공개 장부를 처음부터 다시 받아야 합니다(몇 시간).":
+      "Turning it back off means downloading the public ledger from scratch (several hours).",
     "끄면 바깥 주소로는 손님 화면만 열립니다. 켜면 사장·직원 화면도 열립니다.":
       "Off: the outside address opens only the customer screen. On: the owner and staff screens open too.",
     "끄시면 열쇠 없이 바로 쓸 수 있지만, 그 USB 하나가 곧 지갑입니다.":
@@ -642,30 +642,30 @@ export const DICT: Record<string, Record<string, string>> = {
       "this time tomorrow",
     "넘어가는 순서 바꾸기":
       "Change the fallback order",
-    "노드":
-      "Node",
-    "노드 RPC":
-      "Node RPC",
-    "노드 꺼짐":
-      "Node is off",
-    "노드 따라잡는 중":
-      "Node is catching up",
-    "노드 켜짐":
-      "Node is on",
-    "노드·사진 창고·지갑·계산대를 한 프로그램에서 씁니다.":
-      "Node, file store, wallet and till — all in one program.",
-    "노드가 꺼져 있어요":
-      "The node is off",
-    "노드가 꺼져 있어요.":
-      "The node is off.",
-    "노드가 바로 꺼집니다.":
-      "the node shuts down immediately.",
-    "노드가 켜져 있는지 보시고, 잠시 뒤에 다시 눌러 주세요.":
-      "Check that the node is running, then press again in a moment.",
-    "노드끼리 대화":
-      "Node-to-node chat",
-    "노드만 켭니다. 앱까지 저절로 켜지면 아무도 없는 방에서 지갑이 열립니다.":
-      "Only the node starts. If the app started by itself too, a wallet would open in an empty room.",
+    "서버":
+      "Server",
+    "서버 RPC":
+      "Server RPC",
+    "서버 꺼짐":
+      "Server is off",
+    "서버 따라잡는 중":
+      "Server is catching up",
+    "서버 켜짐":
+      "Server is on",
+    "서버·사진 창고·지갑·계산대를 한 프로그램에서 씁니다.":
+      "Server, file store, wallet and till — all in one program.",
+    "서버가 꺼져 있어요":
+      "The server is off",
+    "서버가 꺼져 있어요.":
+      "The server is off.",
+    "서버가 바로 꺼집니다.":
+      "the server shuts down immediately.",
+    "서버가 켜져 있는지 보시고, 잠시 뒤에 다시 눌러 주세요.":
+      "Check that the server is running, then press again in a moment.",
+    "서버끼리 대화":
+      "Server-to-server chat",
+    "서버만 켭니다. 앱까지 저절로 켜지면 아무도 없는 방에서 지갑이 열립니다.":
+      "Only the server starts. If the app started by itself too, a wallet would open in an empty room.",
     "누구에게":
       "To whom",
     "눌러서 보기":
@@ -744,8 +744,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Reload",
     "두 곳에 묻기":
       "Ask two of them",
-    "두 노드가 같은 지갑을 쓰면 같은 주소를 두 번 나눠 주고 돈을 잃습니다. 원래 컴퓨터가":
-      "If two nodes use the same wallet they hand out the same address twice and money is lost. Use it only when the original computer is",
+    "두 서버가 같은 지갑을 쓰면 같은 주소를 두 번 나눠 주고 돈을 잃습니다. 원래 컴퓨터가":
+      "If two servers use the same wallet they hand out the same address twice and money is lost. Use it only when the original computer is",
     "뒤로":
       "Back",
     "드나든 기록":
@@ -870,8 +870,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Open the till from outside too",
     "바깥에서도 열리게":
       "Make it reachable from outside",
-    "바꾸기는 실패해도 지금 암호가 그대로 남고, 노드도 꺼지지 않습니다.":
-      "If the change fails, your current passphrase stays and the node does not shut down.",
+    "바꾸기는 실패해도 지금 암호가 그대로 남고, 서버도 꺼지지 않습니다.":
+      "If the change fails, your current passphrase stays and the server does not shut down.",
     "바꿀 수 없습니다.":
       "be changed.",
     "밖에서 주문하러 올 주소":
@@ -978,8 +978,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Product under a brand (sub)",
     "블록":
       "blocks",
-    "블록체인":
-      "Blockchain",
+    "공개 장부":
+      "public ledger",
     "비우면 수량 × 10":
       "Leave empty for quantity × 10",
     "비워 두면 가게 목록에 이름만 보이고":
@@ -1012,8 +1012,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "New passphrase (10 characters or more)",
     "새 암호를 잊으면 돈과 자산은 영원히 사라집니다.":
       "If you forget the new passphrase, your money and assets are gone forever.",
-    "새 이름을 체인에 새깁니다. RVN이 소각됩니다.":
-      "Carves a new name onto the chain. RVN is burned.",
+    "새 이름을 공개 장부에 새깁니다. RVN이 소각됩니다.":
+      "Carves a new name onto the public ledger. RVN is burned.",
     "새 자산 만들기":
       "Create a new asset",
     "새 주소에 붙일 이름":
@@ -1022,8 +1022,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Refresh",
     "샘플 넣기":
       "Insert an example",
-    "샘플 사진 (IPFS에 올라가 있습니다)":
-      "Sample photo (already on IPFS)",
+    "샘플 사진 (사진 보관함에 올라가 있습니다)":
+      "Sample photo (already on photo store)",
     "생각하는 중…":
       "Thinking…",
     "서로 다른 AI 두 곳에 같은 것을 묻습니다":
@@ -1208,8 +1208,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Start practice",
     "연습용 돈을 만드는 중…":
       "Creating practice money…",
-    "연습용 체인을 켜는 중…":
-      "Starting the practice chain…",
+    "연습용 공개 장부를 켜는 중…":
+      "Starting the practice public ledger…",
     "열려 있음":
       "Open",
     "열린 것과":
@@ -1288,8 +1288,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "When it exceeds this amount (RVN)",
     "이 기능만 이 컴퓨터 밖으로 나갑니다.":
       "This is the only feature that leaves this computer.",
-    "이 노드":
-      "This node",
+    "이 서버":
+      "This server",
     "이 단어를 아는 사람은 지갑 전부를 가져갈 수 있습니다.":
       "Anyone who knows these words can take the whole wallet.",
     "이 목록은":
@@ -1302,8 +1302,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Not this app, not Ravencoin, not anyone can undo it. There is no recovery.",
     "이 이름으로 해 보기":
       "Try it with this name",
-    "이 이름은 체인에 영구히 남고 누구도 다시 쓸 수 없습니다. 그대로 다시 입력하세요.":
-      "This name stays on the chain forever and nobody can ever reuse it. Type it again exactly.",
+    "이 이름은 공개 장부에 영구히 남고 누구도 다시 쓸 수 없습니다. 그대로 다시 입력하세요.":
+      "This name stays on the public ledger forever and nobody can ever reuse it. Type it again exactly.",
     "이 이름을 아는 사람은 누구나 들을 수 있습니다. 비밀 대화가 아닙니다.":
       "Anyone who knows this name can listen in. This is not a private conversation.",
     "이 자물쇠의 열쇠":
@@ -1312,8 +1312,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "This address is your own wallet.",
     "내 지갑끼리 옮기기예요. 돈은 그대로이고 수수료만 나가요.":
       "This is a move between your own addresses. Your money stays yours; only the fee is spent.",
-    "이 주소는 체인에 올라가므로, 바뀌면":
-      "This address goes onto the chain, so if it changes you need a",
+    "이 주소는 공개 장부에 올라가므로, 바뀌면":
+      "This address goes onto the public ledger, so if it changes you need a",
     "이 주소로 갑니다":
       "goes to this address",
     "이 지갑의 주소만 씁니다. 직접 입력하지 않는 이유는, 잘못 붙여넣으면 매출이 남에게 갑니다.":
@@ -1366,8 +1366,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "One name is enough to start. You can fill in the rest later.",
     "이름·전화 뒷자리·회원번호 아무거나 치면 됩니다.":
       "Type a name, the last digits of a phone number, or a member number — any of them.",
-    "이름이 체인에 영구히 남고 RVN이 소각됩니다. 이름을 그대로 입력하세요.":
-      "leaves the name on the chain forever and burns RVN. Type the name exactly.",
+    "이름이 공개 장부에 영구히 남고 RVN이 소각됩니다. 이름을 그대로 입력하세요.":
+      "leaves the name on the public ledger forever and burns RVN. Type the name exactly.",
     "이미 들어 있는 것이 있습니다":
       "There is something already in there",
     "이미 만들어진 잠긴 백업은 그대로 남습니다.":
@@ -1396,8 +1396,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Send an asset",
     "자산 이름":
       "Asset name",
-    "자산에 붙은 그림·음악은 체인이 아니라":
-      "Pictures and music attached to an asset are not on the chain but in the",
+    "자산에 붙은 그림·음악은 공개 장부가 아니라":
+      "Pictures and music attached to an asset are not on the public ledger but in the",
     "자산을 가진 사람 전원에게 갑니다. 답장은 받을 수 없습니다.":
       "It goes to everyone holding the asset. You cannot receive replies.",
     "자산을 가진 사람들에게 나눠 줍니다. 회원권·조합원 토큰에 씁니다.":
@@ -1428,8 +1428,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Save",
     "저장 중…":
       "Saving…",
-    "저장됩니다 — 체인에 올리면 지울 수 없고, 누구나 회원 명단과 계약 종료일을 볼 수 있게 됩니다.":
-      "— putting them on the chain would make them unerasable, and anyone could see your member list and contract end dates.",
+    "저장됩니다 — 공개 장부에 올리면 지울 수 없고, 누구나 회원 명단과 계약 종료일을 볼 수 있게 됩니다.":
+      "— putting them on the public ledger would make them unerasable, and anyone could see your member list and contract end dates.",
     "저장하고 다시 켜기 안내":
       "Save and restart guide",
     "저장했습니다":
@@ -1442,8 +1442,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Electricity price (KRW/kWh)",
     "전부 이 컴퓨터에 둡니다":
       "Keep everything on this computer",
-    "전원이 돌아오면 노드가 저절로 켜집니다. 앱은 켜지지 않습니다.":
-      "When power returns the node starts by itself. The app does not.",
+    "전원이 돌아오면 서버가 저절로 켜집니다. 앱은 켜지지 않습니다.":
+      "When power returns the server starts by itself. The app does not.",
     "전체":
       "All",
     "전체 명단":
@@ -1598,18 +1598,18 @@ export const DICT: Record<string, Record<string, string>> = {
       "This is an address you are sending to for the first time.",
     "처음 한 번 하는 것들":
       "Things you do once",
-    "체인에 가게를 등록하지 않았습니다":
-      "The shop is not registered on the chain",
-    "체인에 남을 이름":
-      "The name that stays on the chain",
-    "체인에 영구히 남고 누구나 볼 수 있습니다.":
-      "It stays on the chain forever and anyone can see it.",
-    "체인에 저장되는 이름은 영문 대문자만 가능합니다. 손님이 보는 이름은 위에 적은 것입니다.":
-      "The name stored on the chain can only use capital letters. What customers see is the name you typed above.",
-    "체인에서 직접 확인하실 수 있습니다. 카드 수수료(2~3%)와 달리":
-      "You can verify it directly on the chain. Unlike card fees (2–3%), there is",
-    "체인은 지나간 순간의 명단을 되돌려주지 않습니다. 먼저 예약해야 그 블록이 지날 때 명단이 굳습니다.":
-      "The chain will not give you a holder list from a moment that has passed. You must book it first, and the list freezes when that block goes by.",
+    "공개 장부에 가게를 등록하지 않았습니다":
+      "The shop is not registered on the public ledger",
+    "공개 장부에 남을 이름":
+      "The name that stays on the public ledger",
+    "공개 장부에 영구히 남고 누구나 볼 수 있습니다.":
+      "It stays on the public ledger forever and anyone can see it.",
+    "공개 장부에 저장되는 이름은 영문 대문자만 가능합니다. 손님이 보는 이름은 위에 적은 것입니다.":
+      "The name stored on the public ledger can only use capital letters. What customers see is the name you typed above.",
+    "공개 장부에서 직접 확인하실 수 있습니다. 카드 수수료(2~3%)와 달리":
+      "You can verify it directly on the public ledger. Unlike card fees (2–3%), there is",
+    "공개 장부는 지나간 순간의 명단을 되돌려주지 않습니다. 먼저 예약해야 그 블록이 지날 때 명단이 굳습니다.":
+      "The public ledger will not give you a holder list from a moment that has passed. You must book it first, and the list freezes when that block goes by.",
     "최근 거래":
       "Recent transactions",
     "출입 · 회원":
@@ -1658,8 +1658,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Choose a file",
     "파일 지키기":
       "Keep the files",
-    "파일 창고(IPFS)":
-      "file store (IPFS)",
+    "사진 보관함":
+      "photo store",
     "파일을 고르면 여기 자동으로 채워집니다":
       "This fills in automatically once you choose a file",
     "파일을 안 붙이셨습니다 — 나중에 붙이려면 재발행이 켜져 있어야 합니다":
@@ -1746,8 +1746,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Register a member",
     "회원권 번호":
       "Membership number",
-    "회원번호를 체인에 하나 찍습니다 (":
-      "This mints one member number on the chain (",
+    "회원번호를 공개 장부에 하나 찍습니다 (":
+      "This mints one member number on the public ledger (",
     "횟수":
       "Visits",
     "횟수권 (10회 등)":
@@ -1793,8 +1793,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Could not verify the password. Please try again.",
     "자산을 조회할 수 있는 서버가 없습니다. ElectrumX를 켜거나 인터넷을 확인하세요.":
       "No server is available to look up assets. Start ElectrumX or check your internet.",
-    "노드가 다시 뜨지 않았습니다. 「이 컴퓨터」에서 상태를 봐 주세요.":
-      "The node did not come back up. Check its status under “This computer”.",
+    "서버가 다시 뜨지 않았습니다. 「이 컴퓨터」에서 상태를 봐 주세요.":
+      "The server did not come back up. Check its status under “This computer”.",
     "ravend 를 찾지 못했습니다.":
       "Could not find ravend.",
     "이 폴더에 wallet.dat 이 없습니다. 레이븐 코어의 데이터 폴더를 골라 주세요.":
@@ -1914,8 +1914,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "一度だけお尋ねします。あとで「このコンピュータ」で変更でき、変更しても何も消えません。",
     "레이븐코인을 돕고 싶어요":
       "Ravencoin を手伝いたい",
-    "켜 두기만 하면 됩니다. 이 컴퓨터가 체인을 지키고, 다른 가게의 공지를 나르고, 사진을 나눠 갖습니다. 그래픽카드가 있으면 캘 수도 있습니다.":
-      "起動しておくだけです。このコンピュータがチェーンを守り、他店のお知らせを運び、写真を分け合います。グラフィックカードがあれば採掘もできます。",
+    "켜 두기만 하면 됩니다. 이 컴퓨터가 공개 장부를 지키고, 다른 가게의 공지를 나르고, 사진을 나눠 갖습니다. 그래픽카드가 있으면 캘 수도 있습니다.":
+      "起動しておくだけです。このコンピュータが公開台帳を守り、他店のお知らせを運び、写真を分け合います。グラフィックカードがあれば採掘もできます。",
     "장사에 쓸 거예요":
       "商売に使います",
     "위의 것을 전부 하면서, 손님 QR·메뉴판·결제·기간권·회원까지 씁니다. 가게가 없어도 괜찮습니다 — 만드는 것부터 같이 합니다.":
@@ -1928,8 +1928,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Ravencoin を手伝う",
     "장사에 쓰기":
       "商売に使う",
-    "체인 지키기":
-      "チェーンを守る",
+    "공개 장부 지키기":
+      "公開台帳を守る",
     "공지 나르기":
       "お知らせを運ぶ",
     "사진 나눠 갖기":
@@ -1942,8 +1942,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "起動しておくだけでこの網が密になります。店が増えるほど、他のリレーが切れても互いにつながります。",
     "아직 못 하고 있는 것":
       "まだできないこと",
-    "이 노드는 아직 남의 지갑 잔액을 대신 답해 주지 못합니다. 주소 색인이 꺼져 있기 때문입니다. 켜면 이 컴퓨터가 실제로 남을 돕게 됩니다.":
-      "このノードはまだ他人のウォレット残高に代わって答えられません。アドレス索引がオフだからです。オンにすればこのコンピュータが実際に他の人を助けます。",
+    "이 서버는 아직 남의 지갑 잔액을 대신 답해 주지 못합니다. 주소 색인이 꺼져 있기 때문입니다. 켜면 이 컴퓨터가 실제로 남을 돕게 됩니다.":
+      "このサーバーはまだ他人のウォレット残高に代わって答えられません。アドレス索引がオフだからです。オンにすればこのコンピュータが実際に他の人を助けます。",
     "주소 색인 켜기":
       "アドレス索引をオンにする",
     "바깥 연결":
@@ -1976,8 +1976,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "必要なものを取得してオン",
     "주소 복사":
       "アドレスをコピー",
-    "주소 색인 — 이 노드로 지갑도 열기":
-      "アドレス索引 — このノードでウォレットも開く",
+    "주소 색인 — 이 서버로 지갑도 열기":
+      "アドレス索引 — このサーバーでウォレットも開く",
     "지금은 손님 지갑이 잔액을 우리 서버 한 곳에 묻습니다. 이걸 켜면 이 컴퓨터가 직접 답합니다. 대신 한 번 다시 훑어야 하고, 그동안 입금 확인이 멈춥니다.":
       "今はお客様のウォレットが残高を当方のサーバー1台に尋ねています。これをオンにすると、このコンピュータが直接答えます。代わりに一度読み直しが必要で、その間は入金確認が止まります。",
     "한가해지면 알아서 시작하기":
@@ -1992,8 +1992,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "進行",
     "끝날 때까지 입금 확인이 멈춥니다. 중간에 꺼져도 괜찮습니다 — 다시 켜면 이어서 합니다.":
       "終わるまで入金確認が止まります。途中で切れても大丈夫です — 再起動すれば続きから行います。",
-    "이 노드가 손님 지갑의 잔액 질문에 직접 답합니다. 남의 서버에 안 묻습니다.":
-      "このノードがウォレットの残高質問に直接答えます。他人のサーバーには尋ねません。",
+    "이 서버가 손님 지갑의 잔액 질문에 직접 답합니다. 남의 서버에 안 묻습니다.":
+      "このサーバーがウォレットの残高質問に直接答えます。他人のサーバーには尋ねません。",
     "뒤부터 한가합니다":
       "後から暇になります",
     "동안":
@@ -2066,8 +2066,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "AIで埋める",
     "GPU를 몇 %로 쓸까요":
       "GPUを何%使いますか",
-    "IPFS 게이트웨이":
-      "IPFSゲートウェイ",
+    "사진 보관함(IPFS) 게이트웨이":
+      "写真保管庫(IPFS)ゲートウェイ",
     "Ollama는":
       "Ollamaは",
     "RavenVault Desktop 백업":
@@ -2142,8 +2142,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "送り先",
     "가볍게 시작합니다":
       "軽く始めます",
-    "가짜 체인":
-      "練習用チェーン",
+    "가짜 공개 장부":
+      "練習用公開台帳",
     "간판 사진":
       "看板の写真",
     "강남 로스터리":
@@ -2236,8 +2236,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "オフ",
     "끄기":
       "オフにする",
-    "끄려면 체인을 처음부터 다시 받아야 합니다(몇 시간).":
-      "元に戻すにはチェーンを最初から取り直す必要があります（数時間）。",
+    "끄려면 공개 장부를 처음부터 다시 받아야 합니다(몇 시간).":
+      "元に戻すには公開台帳を最初から取り直す必要があります（数時間）。",
     "끄면 바깥 주소로는 손님 화면만 열립니다. 켜면 사장·직원 화면도 열립니다.":
       "オフだと外部アドレスではお客様画面だけが開きます。オンにすると店主・スタッフ画面も開きます。",
     "끄시면 열쇠 없이 바로 쓸 수 있지만, 그 USB 하나가 곧 지갑입니다.":
@@ -2440,30 +2440,30 @@ export const DICT: Record<string, Record<string, string>> = {
       "明日の今頃",
     "넘어가는 순서 바꾸기":
       "切り替え順を変える",
-    "노드":
-      "ノード",
-    "노드 RPC":
-      "ノードRPC",
-    "노드 꺼짐":
-      "ノードは停止中",
-    "노드 따라잡는 중":
-      "ノードが追いついています",
-    "노드 켜짐":
-      "ノードは稼働中",
-    "노드·사진 창고·지갑·계산대를 한 프로그램에서 씁니다.":
-      "ノード・ファイル倉庫・ウォレット・レジを一つのプログラムで。",
-    "노드가 꺼져 있어요":
-      "ノードが停止しています",
-    "노드가 꺼져 있어요.":
-      "ノードが停止しています。",
-    "노드가 바로 꺼집니다.":
-      "ノードはすぐに停止します。",
-    "노드가 켜져 있는지 보시고, 잠시 뒤에 다시 눌러 주세요.":
-      "ノードが起動しているか確認して、少し後にもう一度押してください。",
-    "노드끼리 대화":
-      "ノード同士の会話",
-    "노드만 켭니다. 앱까지 저절로 켜지면 아무도 없는 방에서 지갑이 열립니다.":
-      "ノードだけを起動します。アプリまで自動起動すると、誰もいない部屋でウォレットが開いてしまいます。",
+    "서버":
+      "サーバー",
+    "서버 RPC":
+      "サーバーRPC",
+    "서버 꺼짐":
+      "サーバーは停止中",
+    "서버 따라잡는 중":
+      "サーバーが追いついています",
+    "서버 켜짐":
+      "サーバーは稼働中",
+    "서버·사진 창고·지갑·계산대를 한 프로그램에서 씁니다.":
+      "サーバー・ファイル倉庫・ウォレット・レジを一つのプログラムで。",
+    "서버가 꺼져 있어요":
+      "サーバーが停止しています",
+    "서버가 꺼져 있어요.":
+      "サーバーが停止しています。",
+    "서버가 바로 꺼집니다.":
+      "サーバーはすぐに停止します。",
+    "서버가 켜져 있는지 보시고, 잠시 뒤에 다시 눌러 주세요.":
+      "サーバーが起動しているか確認して、少し後にもう一度押してください。",
+    "서버끼리 대화":
+      "サーバー同士の会話",
+    "서버만 켭니다. 앱까지 저절로 켜지면 아무도 없는 방에서 지갑이 열립니다.":
+      "サーバーだけを起動します。アプリまで自動起動すると、誰もいない部屋でウォレットが開いてしまいます。",
     "누구에게":
       "誰に",
     "눌러서 보기":
@@ -2542,8 +2542,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "読み直す",
     "두 곳에 묻기":
       "2か所に聞く",
-    "두 노드가 같은 지갑을 쓰면 같은 주소를 두 번 나눠 주고 돈을 잃습니다. 원래 컴퓨터가":
-      "2つのノードが同じウォレットを使うと同じアドレスを二度配ってしまい、お金を失います。元のパソコンが",
+    "두 서버가 같은 지갑을 쓰면 같은 주소를 두 번 나눠 주고 돈을 잃습니다. 원래 컴퓨터가":
+      "2つのサーバーが同じウォレットを使うと同じアドレスを二度配ってしまい、お金を失います。元のパソコンが",
     "뒤로":
       "戻る",
     "드나든 기록":
@@ -2668,8 +2668,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "外からレジまで開く",
     "바깥에서도 열리게":
       "外からも開けるように",
-    "바꾸기는 실패해도 지금 암호가 그대로 남고, 노드도 꺼지지 않습니다.":
-      "変更に失敗しても現在のパスフレーズはそのまま残り、ノードも停止しません。",
+    "바꾸기는 실패해도 지금 암호가 그대로 남고, 서버도 꺼지지 않습니다.":
+      "変更に失敗しても現在のパスフレーズはそのまま残り、サーバーも停止しません。",
     "바꿀 수 없습니다.":
       "変えられません。",
     "밖에서 주문하러 올 주소":
@@ -2776,8 +2776,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "ブランド配下の商品（サブ）",
     "블록":
       "ブロック",
-    "블록체인":
-      "ブロックチェーン",
+    "공개 장부":
+      "公開台帳",
     "비우면 수량 × 10":
       "空欄にすると数量×10",
     "비워 두면 가게 목록에 이름만 보이고":
@@ -2810,8 +2810,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "新しいパスフレーズ（10文字以上）",
     "새 암호를 잊으면 돈과 자산은 영원히 사라집니다.":
       "新しいパスフレーズを忘れると、お金とアセットは永久に失われます。",
-    "새 이름을 체인에 새깁니다. RVN이 소각됩니다.":
-      "新しい名前をチェーンに刻みます。RVNが焼却されます。",
+    "새 이름을 공개 장부에 새깁니다. RVN이 소각됩니다.":
+      "新しい名前を公開台帳に刻みます。RVNが焼却されます。",
     "새 자산 만들기":
       "新しいアセットを作る",
     "새 주소에 붙일 이름":
@@ -2820,8 +2820,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "再読み込み",
     "샘플 넣기":
       "サンプルを入れる",
-    "샘플 사진 (IPFS에 올라가 있습니다)":
-      "サンプル写真（IPFSに上がっています）",
+    "샘플 사진 (사진 보관함에 올라가 있습니다)":
+      "サンプル写真（写真保管庫に上がっています）",
     "생각하는 중…":
       "考えています…",
     "서로 다른 AI 두 곳에 같은 것을 묻습니다":
@@ -3006,8 +3006,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "練習を始める",
     "연습용 돈을 만드는 중…":
       "練習用のお金を作成中…",
-    "연습용 체인을 켜는 중…":
-      "練習用チェーンを起動中…",
+    "연습용 공개 장부를 켜는 중…":
+      "練習用公開台帳を起動中…",
     "열려 있음":
       "開いています",
     "열린 것과":
@@ -3086,8 +3086,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "この金額（RVN）を超えたら",
     "이 기능만 이 컴퓨터 밖으로 나갑니다.":
       "この機能だけがこのパソコンの外に出ます。",
-    "이 노드":
-      "このノード",
+    "이 서버":
+      "このサーバー",
     "이 단어를 아는 사람은 지갑 전부를 가져갈 수 있습니다.":
       "この単語を知っている人はウォレットのすべてを持ち去れます。",
     "이 목록은":
@@ -3100,8 +3100,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "このアプリも、Ravencoinも、誰も元に戻せません。復旧方法はありません。",
     "이 이름으로 해 보기":
       "この名前で試す",
-    "이 이름은 체인에 영구히 남고 누구도 다시 쓸 수 없습니다. 그대로 다시 입력하세요.":
-      "この名前はチェーンに永久に残り、誰も再利用できません。そのまま再入力してください。",
+    "이 이름은 공개 장부에 영구히 남고 누구도 다시 쓸 수 없습니다. 그대로 다시 입력하세요.":
+      "この名前は公開台帳に永久に残り、誰も再利用できません。そのまま再入力してください。",
     "이 이름을 아는 사람은 누구나 들을 수 있습니다. 비밀 대화가 아닙니다.":
       "この名前を知っている人は誰でも聞けます。秘密の会話ではありません。",
     "이 자물쇠의 열쇠":
@@ -3110,8 +3110,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "このアドレスは自分のウォレットです。",
     "내 지갑끼리 옮기기예요. 돈은 그대로이고 수수료만 나가요.":
       "自分のアドレス同士の移動です。お金はそのままで、手数料だけがかかります。",
-    "이 주소는 체인에 올라가므로, 바뀌면":
-      "このアドレスはチェーンに載るため、変わったら",
+    "이 주소는 공개 장부에 올라가므로, 바뀌면":
+      "このアドレスは公開台帳に載るため、変わったら",
     "이 주소로 갑니다":
       "このアドレスへ行きます",
     "이 지갑의 주소만 씁니다. 직접 입력하지 않는 이유는, 잘못 붙여넣으면 매출이 남에게 갑니다.":
@@ -3164,8 +3164,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "名前が一つあれば始められます。残りは後で埋めても大丈夫です。",
     "이름·전화 뒷자리·회원번호 아무거나 치면 됩니다.":
       "名前・電話番号の下4桁・会員番号のどれでも入力できます。",
-    "이름이 체인에 영구히 남고 RVN이 소각됩니다. 이름을 그대로 입력하세요.":
-      "名前がチェーンに永久に残り、RVNが焼却されます。名前をそのまま入力してください。",
+    "이름이 공개 장부에 영구히 남고 RVN이 소각됩니다. 이름을 그대로 입력하세요.":
+      "名前が公開台帳に永久に残り、RVNが焼却されます。名前をそのまま入力してください。",
     "이미 들어 있는 것이 있습니다":
       "すでに入っているものがあります",
     "이미 만들어진 잠긴 백업은 그대로 남습니다.":
@@ -3194,8 +3194,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "アセットを送る",
     "자산 이름":
       "アセット名",
-    "자산에 붙은 그림·음악은 체인이 아니라":
-      "アセットに付いた画像・音楽はチェーンではなく",
+    "자산에 붙은 그림·음악은 공개 장부가 아니라":
+      "アセットに付いた画像・音楽は公開台帳ではなく",
     "자산을 가진 사람 전원에게 갑니다. 답장은 받을 수 없습니다.":
       "アセットを持つ全員に届きます。返信は受け取れません。",
     "자산을 가진 사람들에게 나눠 줍니다. 회원권·조합원 토큰에 씁니다.":
@@ -3226,8 +3226,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "保存",
     "저장 중…":
       "保存中…",
-    "저장됩니다 — 체인에 올리면 지울 수 없고, 누구나 회원 명단과 계약 종료일을 볼 수 있게 됩니다.":
-      "— チェーンに載せると消せなくなり、誰でも会員名簿と契約終了日を見られるようになります。",
+    "저장됩니다 — 공개 장부에 올리면 지울 수 없고, 누구나 회원 명단과 계약 종료일을 볼 수 있게 됩니다.":
+      "— 公開台帳に載せると消せなくなり、誰でも会員名簿と契約終了日を見られるようになります。",
     "저장하고 다시 켜기 안내":
       "保存して再起動する案内",
     "저장했습니다":
@@ -3240,8 +3240,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "電気料金（ウォン/kWh）",
     "전부 이 컴퓨터에 둡니다":
       "すべてこのパソコンに置きます",
-    "전원이 돌아오면 노드가 저절로 켜집니다. 앱은 켜지지 않습니다.":
-      "電源が戻るとノードは自動で起動します。アプリは起動しません。",
+    "전원이 돌아오면 서버가 저절로 켜집니다. 앱은 켜지지 않습니다.":
+      "電源が戻るとサーバーは自動で起動します。アプリは起動しません。",
     "전체":
       "すべて",
     "전체 명단":
@@ -3396,18 +3396,18 @@ export const DICT: Record<string, Record<string, string>> = {
       "初めて送るアドレスです。",
     "처음 한 번 하는 것들":
       "最初の一度だけすること",
-    "체인에 가게를 등록하지 않았습니다":
-      "お店をチェーンに登録していません",
-    "체인에 남을 이름":
-      "チェーンに残る名前",
-    "체인에 영구히 남고 누구나 볼 수 있습니다.":
-      "チェーンに永久に残り、誰でも見られます。",
-    "체인에 저장되는 이름은 영문 대문자만 가능합니다. 손님이 보는 이름은 위에 적은 것입니다.":
-      "チェーンに保存される名前は英大文字のみです。お客様が見るのは上に入力した名前です。",
-    "체인에서 직접 확인하실 수 있습니다. 카드 수수료(2~3%)와 달리":
-      "チェーンで直接確認できます。カード手数料（2〜3%）と違って",
-    "체인은 지나간 순간의 명단을 되돌려주지 않습니다. 먼저 예약해야 그 블록이 지날 때 명단이 굳습니다.":
-      "チェーンは過ぎた時点の名簿を返してくれません。先に予約しておくと、そのブロックが過ぎた時に名簿が確定します。",
+    "공개 장부에 가게를 등록하지 않았습니다":
+      "お店を公開台帳に登録していません",
+    "공개 장부에 남을 이름":
+      "公開台帳に残る名前",
+    "공개 장부에 영구히 남고 누구나 볼 수 있습니다.":
+      "公開台帳に永久に残り、誰でも見られます。",
+    "공개 장부에 저장되는 이름은 영문 대문자만 가능합니다. 손님이 보는 이름은 위에 적은 것입니다.":
+      "公開台帳に保存される名前は英大文字のみです。お客様が見るのは上に入力した名前です。",
+    "공개 장부에서 직접 확인하실 수 있습니다. 카드 수수료(2~3%)와 달리":
+      "公開台帳で直接確認できます。カード手数料（2〜3%）と違って",
+    "공개 장부는 지나간 순간의 명단을 되돌려주지 않습니다. 먼저 예약해야 그 블록이 지날 때 명단이 굳습니다.":
+      "公開台帳は過ぎた時点の名簿を返してくれません。先に予約しておくと、そのブロックが過ぎた時に名簿が確定します。",
     "최근 거래":
       "最近の取引",
     "출입 · 회원":
@@ -3456,8 +3456,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "ファイルを選ぶ",
     "파일 지키기":
       "ファイルを守る",
-    "파일 창고(IPFS)":
-      "ファイル倉庫（IPFS）",
+    "사진 보관함":
+      "写真保管庫",
     "파일을 고르면 여기 자동으로 채워집니다":
       "ファイルを選ぶとここが自動で埋まります",
     "파일을 안 붙이셨습니다 — 나중에 붙이려면 재발행이 켜져 있어야 합니다":
@@ -3544,8 +3544,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "会員を登録",
     "회원권 번호":
       "会員券番号",
-    "회원번호를 체인에 하나 찍습니다 (":
-      "会員番号をチェーンに1つ刻みます（",
+    "회원번호를 공개 장부에 하나 찍습니다 (":
+      "会員番号を公開台帳に1つ刻みます（",
     "횟수":
       "回数",
     "횟수권 (10회 등)":
@@ -3591,8 +3591,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "パスワードを確認できませんでした。もう一度お試しください。",
     "자산을 조회할 수 있는 서버가 없습니다. ElectrumX를 켜거나 인터넷을 확인하세요.":
       "資産を照会できるサーバーがありません。ElectrumX を起動するか、インターネットをご確認ください。",
-    "노드가 다시 뜨지 않았습니다. 「이 컴퓨터」에서 상태를 봐 주세요.":
-      "ノードが再起動しませんでした。「このコンピューター」で状態をご確認ください。",
+    "서버가 다시 뜨지 않았습니다. 「이 컴퓨터」에서 상태를 봐 주세요.":
+      "サーバーが再起動しませんでした。「このコンピューター」で状態をご確認ください。",
     "ravend 를 찾지 못했습니다.":
       "ravend が見つかりませんでした。",
     "이 폴더에 wallet.dat 이 없습니다. 레이븐 코어의 데이터 폴더를 골라 주세요.":
@@ -3712,7 +3712,7 @@ export const DICT: Record<string, Record<string, string>> = {
       "只问一次。之后可在「这台电脑」中更改，更改不会删除任何内容。",
     "레이븐코인을 돕고 싶어요":
       "我想帮助 Ravencoin",
-    "켜 두기만 하면 됩니다. 이 컴퓨터가 체인을 지키고, 다른 가게의 공지를 나르고, 사진을 나눠 갖습니다. 그래픽카드가 있으면 캘 수도 있습니다.":
+    "켜 두기만 하면 됩니다. 이 컴퓨터가 공개 장부를 지키고, 다른 가게의 공지를 나르고, 사진을 나눠 갖습니다. 그래픽카드가 있으면 캘 수도 있습니다.":
       "只要开着就行。这台电脑守护链、传递其他店铺的公告、共享照片。有显卡还可以挖矿。",
     "장사에 쓸 거예요":
       "我要用于做生意",
@@ -3726,7 +3726,7 @@ export const DICT: Record<string, Record<string, string>> = {
       "帮助 Ravencoin",
     "장사에 쓰기":
       "用于做生意",
-    "체인 지키기":
+    "공개 장부 지키기":
       "守护链",
     "공지 나르기":
       "传递公告",
@@ -3740,8 +3740,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "仅仅开着就能织密这张网。店铺越多，别人的中继断了也能彼此连上。",
     "아직 못 하고 있는 것":
       "目前还做不到的",
-    "이 노드는 아직 남의 지갑 잔액을 대신 답해 주지 못합니다. 주소 색인이 꺼져 있기 때문입니다. 켜면 이 컴퓨터가 실제로 남을 돕게 됩니다.":
-      "此节点还不能替别人的钱包回答余额，因为地址索引是关的。打开后这台电脑才真正帮到别人。",
+    "이 서버는 아직 남의 지갑 잔액을 대신 답해 주지 못합니다. 주소 색인이 꺼져 있기 때문입니다. 켜면 이 컴퓨터가 실제로 남을 돕게 됩니다.":
+      "此服务器还不能替别人的钱包回答余额，因为地址索引是关的。打开后这台电脑才真正帮到别人。",
     "주소 색인 켜기":
       "打开地址索引",
     "바깥 연결":
@@ -3774,8 +3774,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "下载并打开",
     "주소 복사":
       "复制地址",
-    "주소 색인 — 이 노드로 지갑도 열기":
-      "地址索引 — 用此节点也服务钱包",
+    "주소 색인 — 이 서버로 지갑도 열기":
+      "地址索引 — 用此服务器也服务钱包",
     "지금은 손님 지갑이 잔액을 우리 서버 한 곳에 묻습니다. 이걸 켜면 이 컴퓨터가 직접 답합니다. 대신 한 번 다시 훑어야 하고, 그동안 입금 확인이 멈춥니다.":
       "现在顾客钱包向我们的一台服务器询问余额。打开后由这台电脑直接回答。代价是需要重扫一次，期间无法确认收款。",
     "한가해지면 알아서 시작하기":
@@ -3790,8 +3790,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "进度",
     "끝날 때까지 입금 확인이 멈춥니다. 중간에 꺼져도 괜찮습니다 — 다시 켜면 이어서 합니다.":
       "在完成之前无法确认收款。中途关机也没关系 — 再开机会接着做。",
-    "이 노드가 손님 지갑의 잔액 질문에 직접 답합니다. 남의 서버에 안 묻습니다.":
-      "此节点直接回答钱包余额问题，不再询问别人的服务器。",
+    "이 서버가 손님 지갑의 잔액 질문에 직접 답합니다. 남의 서버에 안 묻습니다.":
+      "此服务器直接回答钱包余额问题，不再询问别人的服务器。",
     "뒤부터 한가합니다":
       "之后开始空闲",
     "동안":
@@ -3864,8 +3864,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "用 AI 填写",
     "GPU를 몇 %로 쓸까요":
       "使用显卡的百分之几",
-    "IPFS 게이트웨이":
-      "IPFS 网关",
+    "사진 보관함(IPFS) 게이트웨이":
+      "照片存储库(IPFS) 网关",
     "Ollama는":
       "Ollama",
     "RavenVault Desktop 백업":
@@ -3940,7 +3940,7 @@ export const DICT: Record<string, Record<string, string>> = {
       "去向",
     "가볍게 시작합니다":
       "轻量启动",
-    "가짜 체인":
+    "가짜 공개 장부":
       "模拟链",
     "간판 사진":
       "门头照片",
@@ -4034,7 +4034,7 @@ export const DICT: Record<string, Record<string, string>> = {
       "已关闭",
     "끄기":
       "关闭",
-    "끄려면 체인을 처음부터 다시 받아야 합니다(몇 시간).":
+    "끄려면 공개 장부를 처음부터 다시 받아야 합니다(몇 시간).":
       "若要关闭，需要从头重新下载整条链（数小时）。",
     "끄면 바깥 주소로는 손님 화면만 열립니다. 켜면 사장·직원 화면도 열립니다.":
       "关闭时，外部地址只能打开顾客界面。开启后，店主和员工界面也能打开。",
@@ -4238,30 +4238,30 @@ export const DICT: Record<string, Record<string, string>> = {
       "明天此时",
     "넘어가는 순서 바꾸기":
       "调整回退顺序",
-    "노드":
-      "节点",
-    "노드 RPC":
-      "节点 RPC",
-    "노드 꺼짐":
-      "节点已关闭",
-    "노드 따라잡는 중":
-      "节点正在同步",
-    "노드 켜짐":
-      "节点已开启",
-    "노드·사진 창고·지갑·계산대를 한 프로그램에서 씁니다.":
-      "节点、文件仓库、钱包、收银台，一个程序全包。",
-    "노드가 꺼져 있어요":
-      "节点已关闭",
-    "노드가 꺼져 있어요.":
-      "节点已关闭。",
-    "노드가 바로 꺼집니다.":
-      "节点会立即关闭。",
-    "노드가 켜져 있는지 보시고, 잠시 뒤에 다시 눌러 주세요.":
-      "请确认节点已启动，稍后再点一次。",
-    "노드끼리 대화":
-      "节点间对话",
-    "노드만 켭니다. 앱까지 저절로 켜지면 아무도 없는 방에서 지갑이 열립니다.":
-      "只启动节点。若连应用也自动启动，就会在无人的房间里打开钱包。",
+    "서버":
+      "服务器",
+    "서버 RPC":
+      "服务器 RPC",
+    "서버 꺼짐":
+      "服务器已关闭",
+    "서버 따라잡는 중":
+      "服务器正在同步",
+    "서버 켜짐":
+      "服务器已开启",
+    "서버·사진 창고·지갑·계산대를 한 프로그램에서 씁니다.":
+      "服务器、文件仓库、钱包、收银台，一个程序全包。",
+    "서버가 꺼져 있어요":
+      "服务器已关闭",
+    "서버가 꺼져 있어요.":
+      "服务器已关闭。",
+    "서버가 바로 꺼집니다.":
+      "服务器会立即关闭。",
+    "서버가 켜져 있는지 보시고, 잠시 뒤에 다시 눌러 주세요.":
+      "请确认服务器已启动，稍后再点一次。",
+    "서버끼리 대화":
+      "服务器间对话",
+    "서버만 켭니다. 앱까지 저절로 켜지면 아무도 없는 방에서 지갑이 열립니다.":
+      "只启动服务器。若连应用也自动启动，就会在无人的房间里打开钱包。",
     "누구에게":
       "转给谁",
     "눌러서 보기":
@@ -4340,8 +4340,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "重新读取",
     "두 곳에 묻기":
       "问两家",
-    "두 노드가 같은 지갑을 쓰면 같은 주소를 두 번 나눠 주고 돈을 잃습니다. 원래 컴퓨터가":
-      "两个节点使用同一个钱包会把同一地址派发两次，从而丢钱。只有当原电脑",
+    "두 서버가 같은 지갑을 쓰면 같은 주소를 두 번 나눠 주고 돈을 잃습니다. 원래 컴퓨터가":
+      "两个服务器使用同一个钱包会把同一地址派发两次，从而丢钱。只有当原电脑",
     "뒤로":
       "返回",
     "드나든 기록":
@@ -4466,8 +4466,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "从外部也能打开收银台",
     "바깥에서도 열리게":
       "让外部也能访问",
-    "바꾸기는 실패해도 지금 암호가 그대로 남고, 노드도 꺼지지 않습니다.":
-      "即使更改失败，当前密码仍然有效，节点也不会关闭。",
+    "바꾸기는 실패해도 지금 암호가 그대로 남고, 서버도 꺼지지 않습니다.":
+      "即使更改失败，当前密码仍然有效，服务器也不会关闭。",
     "바꿀 수 없습니다.":
       "无法更改。",
     "밖에서 주문하러 올 주소":
@@ -4574,8 +4574,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "品牌下的商品（子资产）",
     "블록":
       "个区块",
-    "블록체인":
-      "区块链",
+    "공개 장부":
+      "公开账本",
     "비우면 수량 × 10":
       "留空则为数量 × 10",
     "비워 두면 가게 목록에 이름만 보이고":
@@ -4608,8 +4608,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "新密码（10个字符以上）",
     "새 암호를 잊으면 돈과 자산은 영원히 사라집니다.":
       "若忘记新密码，您的资金和资产将永久消失。",
-    "새 이름을 체인에 새깁니다. RVN이 소각됩니다.":
-      "将新名称刻入链上。会销毁 RVN。",
+    "새 이름을 공개 장부에 새깁니다. RVN이 소각됩니다.":
+      "将新名称刻入公开账本上。会销毁 RVN。",
     "새 자산 만들기":
       "创建新资产",
     "새 주소에 붙일 이름":
@@ -4618,8 +4618,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "刷新",
     "샘플 넣기":
       "填入示例",
-    "샘플 사진 (IPFS에 올라가 있습니다)":
-      "示例照片（已在 IPFS 上）",
+    "샘플 사진 (사진 보관함에 올라가 있습니다)":
+      "示例照片（已在 照片存储库 上）",
     "생각하는 중…":
       "思考中…",
     "서로 다른 AI 두 곳에 같은 것을 묻습니다":
@@ -4804,7 +4804,7 @@ export const DICT: Record<string, Record<string, string>> = {
       "开始练习",
     "연습용 돈을 만드는 중…":
       "正在生成练习用资金…",
-    "연습용 체인을 켜는 중…":
+    "연습용 공개 장부를 켜는 중…":
       "正在启动练习链…",
     "열려 있음":
       "已开启",
@@ -4884,8 +4884,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "超过此金额（RVN）时",
     "이 기능만 이 컴퓨터 밖으로 나갑니다.":
       "只有这项功能会离开这台电脑。",
-    "이 노드":
-      "本节点",
+    "이 서버":
+      "本服务器",
     "이 단어를 아는 사람은 지갑 전부를 가져갈 수 있습니다.":
       "知道这些单词的人可以拿走整个钱包。",
     "이 목록은":
@@ -4898,8 +4898,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "本应用、Ravencoin、任何人都无法还原。没有恢复办法。",
     "이 이름으로 해 보기":
       "用这个名称试试",
-    "이 이름은 체인에 영구히 남고 누구도 다시 쓸 수 없습니다. 그대로 다시 입력하세요.":
-      "这个名称将永久留在链上，任何人都无法再用。请原样再输入一次。",
+    "이 이름은 공개 장부에 영구히 남고 누구도 다시 쓸 수 없습니다. 그대로 다시 입력하세요.":
+      "这个名称将永久留在公开账本上，任何人都无法再用。请原样再输入一次。",
     "이 이름을 아는 사람은 누구나 들을 수 있습니다. 비밀 대화가 아닙니다.":
       "任何知道这个名称的人都能收听。这不是私密对话。",
     "이 자물쇠의 열쇠":
@@ -4908,7 +4908,7 @@ export const DICT: Record<string, Record<string, string>> = {
       "这个地址是您自己的钱包。",
     "내 지갑끼리 옮기기예요. 돈은 그대로이고 수수료만 나가요.":
       "这是在您自己的地址之间转移。资金不变,只扣手续费。",
-    "이 주소는 체인에 올라가므로, 바뀌면":
+    "이 주소는 공개 장부에 올라가므로, 바뀌면":
       "该地址会上链，因此一旦变更就需要",
     "이 주소로 갑니다":
       "转到此地址",
@@ -4962,8 +4962,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "有一个名字就能开始。其余的可以以后再填。",
     "이름·전화 뒷자리·회원번호 아무거나 치면 됩니다.":
       "输入姓名、手机尾号或会员编号，任意一种都可以。",
-    "이름이 체인에 영구히 남고 RVN이 소각됩니다. 이름을 그대로 입력하세요.":
-      "名称会永久留在链上，并销毁 RVN。请原样输入名称。",
+    "이름이 공개 장부에 영구히 남고 RVN이 소각됩니다. 이름을 그대로 입력하세요.":
+      "名称会永久留在公开账本上，并销毁 RVN。请原样输入名称。",
     "이미 들어 있는 것이 있습니다":
       "里面已经有内容了",
     "이미 만들어진 잠긴 백업은 그대로 남습니다.":
@@ -4992,8 +4992,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "转出资产",
     "자산 이름":
       "资产名称",
-    "자산에 붙은 그림·음악은 체인이 아니라":
-      "资产附带的图片和音乐不在链上，而在",
+    "자산에 붙은 그림·음악은 공개 장부가 아니라":
+      "资产附带的图片和音乐不在公开账本上，而在",
     "자산을 가진 사람 전원에게 갑니다. 답장은 받을 수 없습니다.":
       "会发给所有持有该资产的人。无法收到回复。",
     "자산을 가진 사람들에게 나눠 줍니다. 회원권·조합원 토큰에 씁니다.":
@@ -5024,7 +5024,7 @@ export const DICT: Record<string, Record<string, string>> = {
       "保存",
     "저장 중…":
       "保存中…",
-    "저장됩니다 — 체인에 올리면 지울 수 없고, 누구나 회원 명단과 계약 종료일을 볼 수 있게 됩니다.":
+    "저장됩니다 — 공개 장부에 올리면 지울 수 없고, 누구나 회원 명단과 계약 종료일을 볼 수 있게 됩니다.":
       "—— 一旦上链就无法删除，任何人都能看到您的会员名单和合约到期日。",
     "저장하고 다시 켜기 안내":
       "保存并重启说明",
@@ -5038,8 +5038,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "电价（韩元/kWh）",
     "전부 이 컴퓨터에 둡니다":
       "全部保存在这台电脑上",
-    "전원이 돌아오면 노드가 저절로 켜집니다. 앱은 켜지지 않습니다.":
-      "来电后节点会自动启动。应用不会启动。",
+    "전원이 돌아오면 서버가 저절로 켜집니다. 앱은 켜지지 않습니다.":
+      "来电后服务器会自动启动。应用不会启动。",
     "전체":
       "全部",
     "전체 명단":
@@ -5194,17 +5194,17 @@ export const DICT: Record<string, Record<string, string>> = {
       "这是您第一次向该地址转账。",
     "처음 한 번 하는 것들":
       "只需做一次的事",
-    "체인에 가게를 등록하지 않았습니다":
-      "尚未在链上注册店铺",
-    "체인에 남을 이름":
-      "留在链上的名称",
-    "체인에 영구히 남고 누구나 볼 수 있습니다.":
-      "会永久留在链上，任何人都能看到。",
-    "체인에 저장되는 이름은 영문 대문자만 가능합니다. 손님이 보는 이름은 위에 적은 것입니다.":
-      "存储在链上的名称只能使用大写英文字母。顾客看到的是您上面填写的名称。",
-    "체인에서 직접 확인하실 수 있습니다. 카드 수수료(2~3%)와 달리":
-      "您可以在链上直接核对。与刷卡手续费（2~3%）不同，",
-    "체인은 지나간 순간의 명단을 되돌려주지 않습니다. 먼저 예약해야 그 블록이 지날 때 명단이 굳습니다.":
+    "공개 장부에 가게를 등록하지 않았습니다":
+      "尚未在公开账本上注册店铺",
+    "공개 장부에 남을 이름":
+      "留在公开账本上的名称",
+    "공개 장부에 영구히 남고 누구나 볼 수 있습니다.":
+      "会永久留在公开账本上，任何人都能看到。",
+    "공개 장부에 저장되는 이름은 영문 대문자만 가능합니다. 손님이 보는 이름은 위에 적은 것입니다.":
+      "存储在公开账本上的名称只能使用大写英文字母。顾客看到的是您上面填写的名称。",
+    "공개 장부에서 직접 확인하실 수 있습니다. 카드 수수료(2~3%)와 달리":
+      "您可以在公开账本上直接核对。与刷卡手续费（2~3%）不同，",
+    "공개 장부는 지나간 순간의 명단을 되돌려주지 않습니다. 먼저 예약해야 그 블록이 지날 때 명단이 굳습니다.":
       "链不会回溯已经过去的名单。必须先预约，等那个区块经过时名单才会锁定。",
     "최근 거래":
       "最近交易",
@@ -5254,8 +5254,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "选择文件",
     "파일 지키기":
       "保存文件",
-    "파일 창고(IPFS)":
-      "文件仓库（IPFS）",
+    "사진 보관함":
+      "照片存储库",
     "파일을 고르면 여기 자동으로 채워집니다":
       "选择文件后这里会自动填入",
     "파일을 안 붙이셨습니다 — 나중에 붙이려면 재발행이 켜져 있어야 합니다":
@@ -5342,8 +5342,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "登记会员",
     "회원권 번호":
       "会员卡号",
-    "회원번호를 체인에 하나 찍습니다 (":
-      "将在链上铸造一个会员编号（",
+    "회원번호를 공개 장부에 하나 찍습니다 (":
+      "将在公开账本上铸造一个会员编号（",
     "횟수":
       "次数",
     "횟수권 (10회 등)":
@@ -5389,8 +5389,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "无法验证密码。请重试。",
     "자산을 조회할 수 있는 서버가 없습니다. ElectrumX를 켜거나 인터넷을 확인하세요.":
       "没有可查询资产的服务器。请启动 ElectrumX 或检查网络。",
-    "노드가 다시 뜨지 않았습니다. 「이 컴퓨터」에서 상태를 봐 주세요.":
-      "节点没有重新启动。请在「这台电脑」查看状态。",
+    "서버가 다시 뜨지 않았습니다. 「이 컴퓨터」에서 상태를 봐 주세요.":
+      "服务器没有重新启动。请在「这台电脑」查看状态。",
     "ravend 를 찾지 못했습니다.":
       "找不到 ravend。",
     "이 폴더에 wallet.dat 이 없습니다. 레이븐 코어의 데이터 폴더를 골라 주세요.":

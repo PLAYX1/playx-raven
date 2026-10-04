@@ -195,7 +195,7 @@ const fn same(a: &str, b: &str) -> bool {
 //    둘 다 되돌릴 수 없는 사고라, 실수로는 못 바꾸게 막아 둔다.
 const _: () = assert!(
     same(SEED_TAG, "PLAYX-RAVEN-SHOPKEY-v1"),
-    "간판 표식을 바꾸면 체인에 박힌 공개키와 어긋나 가게가 죽는다."
+    "간판 표식을 바꾸면 공개 장부에 박힌 공개키와 어긋나 가게가 죽는다."
 );
 const _: () = assert!(
     same(SEED_TAG_TALK, "PLAYX-RAVEN-TALKKEY-v1"),
@@ -516,7 +516,7 @@ pub async fn shop_refresh() -> Result<Value, String> {
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .ok_or_else(|| {
-            "아직 체인에 등록하지 않으셨습니다. 등록하시면 손님이 장터에서 찾을 수 있습니다."
+            "아직 공개 장부에 등록하지 않으셨습니다. 등록하시면 손님이 장터에서 찾을 수 있습니다."
                 .to_string()
         })?;
     let url = crate::tunnel::tunnel_status()["url"]

@@ -2666,7 +2666,7 @@
                동안 사람은 아무것도 못 하므로, 여기가 인사할 자리다. -->
           <span id="rv-onboard-face"></span>
           <div class="ob-brand">RavenVault Desktop</div>
-          <div class="ob-lead">노드·사진 창고·지갑·계산대를 한 프로그램에서 씁니다.</div>
+          <div class="ob-lead">서버·사진 창고·지갑·계산대를 한 프로그램에서 씁니다.</div>
           <div class="ob-scan" id="ob-scanning">이 컴퓨터에 맞게 살펴보는 중…</div>
         </div>
 
@@ -2784,7 +2784,7 @@
         <button id="hello-help" class="ghost hellopick">
           <b>레이븐코인을 돕고 싶어요</b>
           <span class="meta">
-            켜 두기만 하면 됩니다. 이 컴퓨터가 체인을 지키고, 다른 가게의 공지를 나르고,
+            켜 두기만 하면 됩니다. 이 컴퓨터가 공개 장부를 지키고, 다른 가게의 공지를 나르고,
             사진을 나눠 갖습니다. 그래픽카드가 있으면 캘 수도 있습니다.
           </span>
         </button>
@@ -2924,7 +2924,7 @@
           <span class="dot off" id="d-sum"></span><span id="d-sum-t">확인 중…</span>
         </button>
         <button type="button" class="dotrow" id="d-node-row">
-          <span class="dot off" id="d-node"></span><span id="d-node-t">RVN 노드</span>
+          <span class="dot off" id="d-node"></span><span id="d-node-t">RVN 서버</span>
         </button>
         <!-- 따라잡는 동안에만 보인다. 다 따라잡으면 사라진다 — 늘 있으면
              아무 뜻도 없는 장식이 된다. -->
@@ -3181,8 +3181,8 @@
             <div class="meta" id="ms-consent-text" translate="no"></div>
           </div>
           <div class="warnbox" id="ms-chain" style="font-size:13px">
-            회원번호를 체인에 하나 찍습니다 (<b>5 RVN · 약 17원</b>).
-            이름·기간·정지는 <b>이 가게 컴퓨터와 그 백업에</b> 저장됩니다 — 체인에 올리면 지울 수 없고,
+            회원번호를 공개 장부에 하나 찍습니다 (<b>5 RVN · 약 17원</b>).
+            이름·기간·정지는 <b>이 가게 컴퓨터와 그 백업에</b> 저장됩니다 — 공개 장부에 올리면 지울 수 없고,
             누구나 회원 명단과 계약 종료일을 볼 수 있게 됩니다.
           </div>
 
@@ -3432,7 +3432,7 @@
 
       <section class="page" id="page-assets">
         <h2 class="title">자산</h2>
-        <p class="lede">자산에 붙은 그림·음악은 체인이 아니라 <b>파일창고(IPFS)</b>에 있습니다. 아무도 갖고 있지 않으면 찾을 수 없게 됩니다 — 이 컴퓨터가 켜져 있으면 이 컴퓨터가 갖고 있습니다.</p>
+        <p class="lede">자산에 붙은 그림·음악은 공개 장부가 아니라 <b>사진 보관함</b>에 있습니다. 아무도 갖고 있지 않으면 찾을 수 없게 됩니다 — 이 컴퓨터가 켜져 있으면 이 컴퓨터가 갖고 있습니다.</p>
         <!-- 큰 아이콘 줄. 라비 화면과 같은 문법 — 위는 「지금 할 일」. -->
         <div class="tiles pagetiles" id="pt-assets"></div>
 
@@ -3454,7 +3454,7 @@
 
         <div class="bar">
           <button id="new-asset">새 자산 만들기</button>
-          <span class="meta">새 이름을 체인에 새깁니다. RVN이 소각됩니다.</span>
+          <span class="meta">새 이름을 공개 장부에 새깁니다. RVN이 소각됩니다.</span>
         </div>
 
         <!-- ── 맞교환 ────────────────────────────────────────────────
@@ -3666,7 +3666,7 @@
         <div class="rv-home-grid">
           <div class="rv-home-balance">        <div class="overview" aria-labelledby="overview-title">
           <h2 id="overview-title">한눈에</h2>
-          <div class="overview-values"><div><span>내 노드</span><strong id="overview-node">확인 못 함</strong></div><div><span>확정 잔액</span><strong id="overview-balance">확인 못 함</strong></div><div id="overview-incoming-row" hidden><span>들어오는 중</span><strong id="overview-incoming"></strong></div></div>
+          <div class="overview-values"><div><span>내 서버</span><strong id="overview-node">확인 못 함</strong></div><div><span>완료 잔액</span><strong id="overview-balance">확인 못 함</strong></div><div id="overview-incoming-row" hidden><span>들어오는 중</span><strong id="overview-incoming"></strong></div></div>
           <div class="overview-actions"><button id="overview-receive"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m-5-5 5 5 5-5M4 17v4h16v-4"/></svg><span>받기</span></button><button id="overview-phone"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M10 17h4"/></svg><span>폰에서 서명한 거래 보내기</span></button></div>
         </div>
 <button id="rv-home-send" type="button">보내기</button></div>
@@ -3698,7 +3698,7 @@
         <!-- 아직 안 된 것 한 줄. 눌러 보고 알게 하면 헛걸음이다. -->
         <details class="rv-web-info" id="phone-tx-panel">
           <summary>폰에서 서명한 거래 보내기</summary>
-          <p>열쇠는 폰에 남습니다. 이 컴퓨터는 내용을 확인하고 내 노드로 전파합니다.</p>
+          <p>열쇠는 폰에 남습니다. 이 컴퓨터는 내용을 확인하고 내 서버로 전파합니다.</p>
           <label for="phone-tx-code">폰의 서명 거래 코드 붙여넣기</label>
           <textarea id="phone-tx-code" rows="3" maxlength="600000" spellcheck="false" autocomplete="off" placeholder="ravenvault://transaction?v=1&amp;hex=…"></textarea>
           <p>분할 QR은 모든 조각을 한 줄에 하나씩 붙여넣으세요.</p>
@@ -3713,8 +3713,8 @@
           <div id="rv-phone-qr" class="shareqr" aria-label="RavenVault 웹앱 주소 QR"></div>
           <p class="phone-url" translate="no">https://ravenvault.ex.erci.se/wallet/</p>
           <button id="rv-phone-open" class="ghost" type="button">브라우저로 열기</button>
-          <p>같은 컴퓨터의 Chrome에서 http://127.0.0.1:8790에 연결할 때는 로컬 네트워크 접근을 허용해야 합니다. 노드와 손님 서버가 켜져 있어야 합니다.</p>
-          <p>다른 기기에서는 127.0.0.1로 이 컴퓨터에 연결할 수 없습니다. 폰에서는 접근 가능한 이 컴퓨터의 노드 주소를 설정하세요.</p>
+          <p>같은 컴퓨터의 Chrome에서 http://127.0.0.1:8790에 연결할 때는 로컬 네트워크 접근을 허용해야 합니다. 서버와 손님 서버가 켜져 있어야 합니다.</p>
+          <p>다른 기기에서는 127.0.0.1로 이 컴퓨터에 연결할 수 없습니다. 폰에서는 접근 가능한 이 컴퓨터의 서버 주소를 설정하세요.</p>
           <p id="rv-web-note" role="status" aria-live="polite"></p>
         </details>
 
@@ -3818,7 +3818,7 @@
             <div class="rk">무엇을</div>
             <div class="rv" id="r-what"></div>
             <div class="rk">얼마</div>
-            <div class="rv"><div class="big" id="r-amount"></div><div class="meta">받는 분이 받는 금액</div></div>
+            <div class="rv"><div class="big" id="r-amount"></div><div class="meta" id="r-krw"></div><div class="meta">받는 분이 받는 금액</div></div>
             <div class="rk">수수료</div>
             <div class="rv"><div id="r-fee"></div><div class="meta" id="r-feenote"></div></div>
             <div class="rk">합계</div>
@@ -3895,7 +3895,7 @@
           <div class="warnbox" id="enc-warn-new">
             <b>이 암호를 잊으면 돈과 자산은 영원히 사라집니다.</b><br />
             이 앱도, 레이븐코인도, 누구도 되돌릴 수 없습니다. 복구 방법이 없습니다.<br /><br />
-            암호를 걸면 <b>노드가 바로 꺼집니다.</b> 다시 켤 때까지 가게가 멈춥니다.
+            암호를 걸면 <b>서버가 바로 꺼집니다.</b> 다시 켤 때까지 가게가 멈춥니다.
             영업 중에는 누르지 마세요.<br /><br />
             암호는 <b>잠겨 있을 때만</b> 지킵니다. 자동 판매를 켜면 잠금이 풀리고,
             그동안은 암호가 없는 것과 같습니다.
@@ -3905,7 +3905,7 @@
                무서운 화면이 어느 쪽인지 흐려진다. -->
           <div class="warnbox" id="enc-warn-change" style="display:none">
             <b>새 암호를 잊으면 돈과 자산은 영원히 사라집니다.</b><br />
-            바꾸기는 실패해도 지금 암호가 그대로 남고, 노드도 꺼지지 않습니다.
+            바꾸기는 실패해도 지금 암호가 그대로 남고, 서버도 꺼지지 않습니다.
           </div>
 
           <div id="enc-old-row" style="display:none">
@@ -4001,7 +4001,7 @@
                 <label class="cr-switch"><input id="cr-photo-slot" type="checkbox" /><span>사진 칸 쓰기 <span class="meta">(왼쪽 위 3×4cm 증명사진)</span></span></label>
               </div>
               <label>제목<input id="cr-title" maxlength="80" autocomplete="off" placeholder="예: 필라테스 지도자 과정" /></label>
-              <p class="meta" id="cr-title-say">제목은 로마자로 바뀌어 증서 번호(체인 이름)에 들어가요. 받는 사람 이름은 제목에 넣지 마세요.</p>
+              <p class="meta" id="cr-title-say">제목은 로마자로 바뀌어 증서 번호(공개 장부 이름)에 들어가요. 받는 사람 이름은 제목에 넣지 마세요.</p>
               <div id="cr-recipients-wrap" class="cr-recwrap">
                 <label id="cr-recipients-box">받는 사람 (한 줄에 한 명 · 엑셀에서 여러 칸을 복사해 붙여도 돼요)<textarea id="cr-recipients" rows="4" autocomplete="off" spellcheck="false" placeholder="김하늘&#10;이바다"></textarea></label>
                 <div class="cr-rosterbar" id="cr-rosterbar">
@@ -4050,10 +4050,10 @@
               </div>
               <div id="cr-file-wrap">
                 <label><span id="cr-file-label">사진·파일 붙이기 (선택)</span><input id="cr-file" type="file" /></label>
-                <p class="meta"><span id="cr-file-say">파일은 올리지 않아요. 이 컴퓨터에서 지문만 만들어 체인에 새겨요.</span>
+                <p class="meta"><span id="cr-file-say">파일은 올리지 않아요. 이 컴퓨터에서 지문만 만들어 공개 장부에 새겨요.</span>
                   <button class="link" id="cr-file-clear" type="button" hidden>파일 빼기</button></p>
               </div>
-              <p class="meta cr-private" id="cr-private-say">받는 사람·발급자·설명은 체인에 올리지 않아요. 인쇄하는 종이와 이 컴퓨터에만 남아요.</p>
+              <p class="meta cr-private" id="cr-private-say">받는 사람·발급자·설명은 공개 장부에 올리지 않아요. 인쇄하는 종이와 이 컴퓨터에만 남아요.</p>
               <div class="cr-actions">
                 <button id="cr-check" type="button">확인하기</button>
                 <button class="ghost" id="cr-kind-back" type="button">다른 것 고르기</button>
@@ -4087,7 +4087,7 @@
         <div id="rw-body" style="display:none">
           <div class="card">
             <h3>1. 명단을 굳힐 때를 정합니다</h3>
-            <p class="meta">체인은 지나간 순간의 명단을 되돌려주지 않습니다. 먼저 예약해야
+            <p class="meta">공개 장부는 지나간 순간의 명단을 되돌려주지 않습니다. 먼저 예약해야
               그 블록이 지날 때 명단이 굳습니다.</p>
             <div class="row" style="margin-top:12px">
               <div style="flex:1"><label>어떤 자산의 보유자</label>
@@ -4418,9 +4418,9 @@
                 <input id="sh-ja" placeholder="日本語 (선택)" autocomplete="off" />
                 <input id="sh-zh" placeholder="中文 (선택)" autocomplete="off" />
               </div>
-              <div class="meta">체인에 저장되는 이름은 영문 대문자만 가능합니다. 손님이 보는 이름은 위에 적은 것입니다.</div>
+              <div class="meta">공개 장부에 저장되는 이름은 영문 대문자만 가능합니다. 손님이 보는 이름은 위에 적은 것입니다.</div>
 
-              <label style="margin-top:12px">체인에 남을 이름</label>
+              <label style="margin-top:12px">공개 장부에 남을 이름</label>
               <input id="sh-asset" placeholder="GANGNAM_CAFE" autocomplete="off" spellcheck="false" />
               <div class="meta" id="sh-assetcheck"></div>
               <!-- 🔴 **실제로 체인에 올라간 이름.** 위 칸(`sh-asset`)은 사장이
@@ -4474,7 +4474,7 @@
               <div class="meta" id="sh-orderurlnote" style="margin-top:4px">
                 <b>대개는 비워 두시면 됩니다.</b> 「이 컴퓨터 → 바깥에서 열기」를 켜면
                 지금 주소를 손님에게 <b>자동으로 알립니다</b> — 주소가 바뀌어도 저절로 따라갑니다.
-                여기 적은 주소는 체인에 영구히 남아 바꾸려면 재발행(RVN 소각)을 해야 하니,
+                여기 적은 주소는 공개 장부에 영구히 남아 바꾸려면 재발행(RVN 소각)을 해야 하니,
                 <b>안 바뀌는 내 도메인이 있을 때만</b> 적으세요.
               </div>
 
@@ -4498,7 +4498,7 @@
               <div class="cost" id="sh-cost"></div>
 
               <div class="confirmbox" id="sh-confirmbox" style="display:none">
-                <div>등록하면 <b id="sh-confirmname"></b> 이름이 체인에 영구히 남고 RVN이 소각됩니다. 이름을 그대로 입력하세요.</div>
+                <div>등록하면 <b id="sh-confirmname"></b> 이름이 공개 장부에 영구히 남고 RVN이 소각됩니다. 이름을 그대로 입력하세요.</div>
                 <input id="sh-confirm" autocomplete="off" />
                 <button id="sh-go" disabled>가게 등록</button>
               </div>
@@ -4606,7 +4606,7 @@
         <div class="tabs" style="margin-bottom:12px">
           <button class="tab on" data-mtab="send">공지 보내기</button>
           <button class="tab" data-mtab="inbox">받은 공지</button>
-          <button class="tab" data-mtab="direct">노드끼리 대화</button>
+          <button class="tab" data-mtab="direct">서버끼리 대화</button>
         </div>
 
         <div class="mtab on" id="mtab-send">
@@ -4621,7 +4621,7 @@
             <input id="nt-body" placeholder="9월 20일 하루 쉽니다" autocomplete="off" />
 
             <div class="warnbox" style="margin-top:12px">
-              보낸 공지는 <b>지울 수 없습니다.</b> 체인에 영구히 남고 누구나 볼 수 있습니다.<br />
+              보낸 공지는 <b>지울 수 없습니다.</b> 공개 장부에 영구히 남고 누구나 볼 수 있습니다.<br />
               보낼 때마다 네트워크 수수료가 듭니다. 답장은 오지 않습니다 — 이건 방송입니다.
             </div>
             <div class="row"><button id="nt-go">공지 보내기</button><span class="meta" id="nt-note"></span></div>
@@ -4672,7 +4672,7 @@
       <section class="page" id="page-parts">
         <h2 class="title" id="pt-title">상태</h2>
         <div class="tabs" id="pt-tabs">
-          <button class="tab on" data-part="node">RVN 노드</button>
+          <button class="tab on" data-part="node">RVN 서버</button>
           <button class="tab" data-part="mine">채굴</button>
           <button class="tab" data-part="ipfs">파일창고</button>
           <button class="tab" data-part="relay">릴레이</button>
@@ -4903,7 +4903,7 @@
             <div class="meta" id="fee-sendsay" style="margin-top:8px"></div>
           </div>
           <p class="meta" style="margin-top:10px">
-            <b>끄는 설정은 없습니다.</b> 대신 체인에서 직접 대조하실 수 있고,
+            <b>끄는 설정은 없습니다.</b> 대신 공개 장부에서 직접 대조하실 수 있고,
             소스가 전부 공개돼 있습니다. 카드 수수료(2~3%)와 달리
             <b>단말기 임대료도 정산 대기도 해지 위약금도 없습니다.</b>
           </p>
@@ -4951,7 +4951,7 @@
         <!-- 이 노드가 어디인지. 지점이 둘이 되는 순간 "이 컴퓨터"는 뜻이 없다. -->
         <div class="card" style="margin-bottom:12px">
           <!-- 사이드바 표시등을 누르면 여기로 온다. -->
-          <h3 id="sec-node">이 노드</h3>
+          <h3 id="sec-node">이 서버</h3>
           <label style="display:block;font-size:14px;color:var(--muted);margin-top:8px">
             이름 (지점명)
             <input id="nd-name" placeholder="강남지점 · 2층 계산대" autocomplete="off"
@@ -5156,7 +5156,7 @@
 
           <div class="warnbox" style="margin-top:12px;font-size: 14px">
             <b>백업본을 다른 컴퓨터에서 동시에 켜지 마세요.</b>
-            두 노드가 같은 지갑을 쓰면 같은 주소를 두 번 나눠 주고 돈을 잃습니다.
+            두 서버가 같은 지갑을 쓰면 같은 주소를 두 번 나눠 주고 돈을 잃습니다.
             원래 컴퓨터가 <b>완전히 죽었을 때만</b> 쓰세요.
           </div>
         </div>
@@ -5295,7 +5295,7 @@
             <div id="cf-result"></div>
             <div id="cf-others"></div>
 
-            <h3 id="sec-ipfs" style="margin-top:20px">파일창고(IPFS)</h3>
+            <h3 id="sec-ipfs" style="margin-top:20px">사진 보관함</h3>
             <!-- 🔴 「창고」라고만 하면 **내 것만 넣는 곳**으로 읽힌다. 실제로는
                  세상과 나눠 갖는 곳이고, 그걸 모르면 「내 창고에 넣었으니 남은
                  못 본다」고 오해한다. 사진을 올리는 사람이 알아야 할 사실이다.
@@ -5303,7 +5303,7 @@
                  사장이 검색할 단어가 「파일창고」뿐이면 아무것도 안 나온다. -->
             <p class="lede" style="margin-top:4px">
               가게 사진·메뉴판이 여기 들어갑니다. <b>내 컴퓨터에만 있는 창고가 아니라</b>,
-              손님 폰과 다른 노드가 같이 나눠 갖는 곳입니다 — 그래서 손님이 사진을 볼 수 있습니다.
+              손님 폰과 다른 서버가 같이 나눠 갖는 곳입니다 — 그래서 손님이 사진을 볼 수 있습니다.
               같은 파일은 언제나 같은 주소를 가지므로, <b>바뀌면 주소도 바뀝니다.</b>
             </p>
             <div class="row" id="if-profiles">
@@ -5317,9 +5317,9 @@
 
           <div class="card">
             <h3>읽기 전용</h3>
-            <div class="kv"><b>노드 RPC</b><span>127.0.0.1:8766 · 쿠키 인증</span></div>
-            <div class="kv"><b>IPFS API</b><span>127.0.0.1:5001</span></div>
-            <div class="kv"><b>IPFS 게이트웨이</b><span>127.0.0.1:8080</span></div>
+            <div class="kv"><b>서버 RPC</b><span>127.0.0.1:8766 · 쿠키 인증</span></div>
+            <div class="kv"><b>사진 보관함(IPFS) API</b><span>127.0.0.1:5001</span></div>
+            <div class="kv"><b>사진 보관함(IPFS) 게이트웨이</b><span>127.0.0.1:8080</span></div>
           </div>
         </details>
       </section>
@@ -5376,7 +5376,7 @@
           <details class="rehearse">
             <summary>먼저 연습해 보기 <span class="meta">— 돈이 들지 않습니다</span></summary>
             <p class="meta" style="margin:8px 0">
-              진짜와 똑같이 한 번 해 보실 수 있습니다. <b>가짜 체인</b>이라
+              진짜와 똑같이 한 번 해 보실 수 있습니다. <b>가짜 공개 장부</b>이라
               돈이 안 나가고, 마음에 안 들면 지우고 다시 하시면 됩니다.
               <b>진짜 지갑은 건드리지 않습니다.</b>
             </p>
@@ -5488,7 +5488,7 @@
                       style="width:100%;height:420px;border:1px solid var(--line);border-radius:12px;background:#12141c"></iframe>
             </div>
             <div class="meta">
-              표지와 가사는 <b>파일창고(IPFS)에 함께 저장</b>됩니다. 우리 서버가 없어져도 남습니다.<br>
+              표지와 가사는 <b>사진 보관함에 함께 저장</b>됩니다. 우리 서버가 없어져도 남습니다.<br>
               「들을 수 있는 곳」만 우리 주소이고, 그건 살아 있는 동안만 열립니다.
             </div>
           </div>
@@ -5533,7 +5533,7 @@
                덜어내는지 잘 모른다. 끝난 뒤의 모습이 결정에 쓰이는 숫자다. -->
           <div id="i-after"></div>
           <div class="confirmbox">
-            <div>이 이름은 체인에 영구히 남고 누구도 다시 쓸 수 없습니다. 그대로 다시 입력하세요.</div>
+            <div>이 이름은 공개 장부에 영구히 남고 누구도 다시 쓸 수 없습니다. 그대로 다시 입력하세요.</div>
             <input id="i-confirm" autocomplete="off" spellcheck="false" />
           </div>
           <div id="i-result"></div>

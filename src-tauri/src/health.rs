@@ -198,13 +198,13 @@ pub async fn service_health(phone_on: bool, tunnel_on: bool) -> Value {
     let (state, why, fix) = if !node_ok {
         (
             "down",
-            "노드가 꺼져 있습니다. 주문도 결제 확인도 안 됩니다.",
-            "레이븐 노드를 다시 켜세요. 그동안 들어온 돈은 사라지지 않고, 켜면 전부 보입니다.",
+            "서버가 꺼져 있습니다. 주문도 결제 확인도 안 됩니다.",
+            "레이븐 서버를 다시 켜세요. 그동안 들어온 돈은 사라지지 않고, 켜면 전부 보입니다.",
         )
     } else if behind > 20 {
         (
             "catching_up",
-            "노드가 따라잡는 중입니다. 방금 들어온 결제가 아직 안 보일 수 있습니다.",
+            "서버가 따라잡는 중입니다. 방금 들어온 결제가 아직 안 보일 수 있습니다.",
             // 🔴 **거짓말이었다.** 여기는 「몇 분」이라고 했는데, 같은 저장소의
             //    실측 주석(main.ts)에는 초당 1.25블록·남은 320만 블록이면
             //    **한 달**이라고 적혀 있다. 첫 실행 사장이 정확히 이 상태다.
@@ -212,7 +212,7 @@ pub async fn service_health(phone_on: bool, tunnel_on: bool) -> Value {
             //    ⚠️ 며칠 걸릴 일을 「몇 분」이라고 하면, 사장은 몇 분 뒤
             //       고장 났다고 판단하고 프로그램을 지운다. 모르면 모른다고
             //       하는 편이 낫다.
-            "얼마나 걸리는지는 「이 컴퓨터 → RVN 노드」에서 남은 시간을 보실 수 있습니다. \
+            "얼마나 걸리는지는 「이 컴퓨터 → RVN 서버」에서 남은 시간을 보실 수 있습니다. \
 처음이면 며칠 걸릴 수 있습니다 — 그동안에도 메뉴·QR·가게 정보는 쓰실 수 있습니다.",
         )
     } else if !phone_on {
@@ -224,8 +224,8 @@ pub async fn service_health(phone_on: bool, tunnel_on: bool) -> Value {
     } else if !ipfs_ok {
         (
             "no_photos",
-            "IPFS가 꺼져 있습니다. 메뉴 사진이 손님에게 안 보입니다.",
-            "IPFS를 켜세요. 주문 자체는 됩니다.",
+            "사진 보관함이 꺼져 있습니다. 메뉴 사진이 손님에게 안 보입니다.",
+            "사진 보관함을 켜세요. 주문 자체는 됩니다.",
         )
     } else if !tunnel_on {
         (
@@ -304,7 +304,7 @@ pub async fn money_status() -> Value {
             "ok": node.is_ok(),
             "blocks": blocks,
             "behind": behind,
-            "why": if node.is_err() { "노드가 꺼져 있습니다. 결제 확인이 안 됩니다." }
+            "why": if node.is_err() { "서버가 꺼져 있습니다. 결제 확인이 안 됩니다." }
                    else if behind > 20 { "따라잡는 중입니다. 방금 들어온 결제가 아직 안 보일 수 있습니다." }
                    else { "정상입니다." },
         },

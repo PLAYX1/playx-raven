@@ -306,7 +306,7 @@ impl Drop for Flight {
 }
 
 /// 🔴 화면이 이 글자를 알아본다(`create-page.ts`) — 바꾸면 거기도.
-pub const ALREADY_THERE: &str = "ALREADY_THERE: 이 이름은 이미 체인이나 지갑에 있어요. 방금 보낸 것이 기록된 것일 수 있으니 다시 만들지 말고 「만든 것」과 자산 화면을 먼저 확인해 주세요.";
+pub const ALREADY_THERE: &str = "ALREADY_THERE: 이 이름은 이미 공개 장부가나 지갑에 있어요. 방금 보낸 것이 기록된 것일 수 있으니 다시 만들지 말고 「만든 것」과 자산 화면을 먼저 확인해 주세요.";
 
 async fn issue_now(method: &'static str, params: Value, passphrase: Option<String>) -> Result<String, String> {
     crate::issue2::with_wallet(passphrase, || async {
@@ -319,7 +319,7 @@ async fn issue_now(method: &'static str, params: Value, passphrase: Option<Strin
         if txid.is_empty() {
             // 🔴 노드는 부름을 받았다 — 거래 번호만 없다. 「실패」로 보고 다시 열면 두 번 태울
             //    수 있으니 「보냈는지 모름」으로 돌려준다.
-            return Err(format!("{}노드가 거래 번호를 돌려주지 않았어요. 보냈는지 아직 몰라요 — 기록될 때까지 기다려 주세요. 같은 것을 다시 보내지 마세요.", crate::raven::SENT_UNKNOWN));
+            return Err(format!("{}서버가 거래 번호를 돌려주지 않았어요. 보냈는지 아직 몰라요 — 기록될 때까지 기다려 주세요. 같은 것을 다시 보내지 마세요.", crate::raven::SENT_UNKNOWN));
         }
         crate::refund::remember_ours(&txid);
         Ok(txid)

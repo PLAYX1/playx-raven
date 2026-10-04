@@ -131,7 +131,7 @@ export function wireSeedCheck(deps: SeedCheckDeps): { open: () => void } {
          <b>${copyHtml("이 암호를 잊으면 돈과 자산은 영원히 사라집니다.")}</b><br />
          ${copyHtml("이 앱도, 레이븐코인도, 누구도 되돌릴 수 없습니다. 복구 방법이 없습니다.")}
        </div>
-       <p class="meta sdw-gap">${copyHtml("암호를 걸면 지갑 프로그램(노드)이 잠깐 꺼졌다가 저절로 다시 켜져요. 1~2분쯤 걸리고, 켜지면 바로 다음 단계로 넘어가요.")}</p>
+       <p class="meta sdw-gap">${copyHtml("암호를 걸면 지갑 프로그램(서버)이 잠깐 꺼졌다가 저절로 다시 켜져요. 1~2분쯤 걸리고, 켜지면 바로 다음 단계로 넘어가요.")}</p>
        ${shop ? `<div class="warnbox sdw-gap">${copyHtml("그동안 가게의 결제 확인도 멈춰요. 영업 중이면 나중에 하세요.")}</div>` : ""}
        <label class="sdw-gap">${copyHtml("새 암호 (10자 이상)")}<input id="sdw-new" type="password" autocomplete="new-password" /></label>
        <label>${copyHtml("한 번 더")}<input id="sdw-new2" type="password" autocomplete="new-password" /></label>
@@ -203,7 +203,7 @@ export function wireSeedCheck(deps: SeedCheckDeps): { open: () => void } {
       const el = document.getElementById("sdw-wait");
       if (el && mine === run) setCopyText(el, () => t(s));
     };
-    say("지갑 프로그램(노드)이 꺼지기를 기다리는 중…");
+    say("지갑 프로그램(서버)이 꺼지기를 기다리는 중…");
     // ① 꺼질 때까지(최대 90초 — 장부를 디스크에 내리느라 늦게 꺼지는 컴퓨터가 있다).
     //    꺼지기 전에 켜라고 하면 「이미 켜져 있다」로 끝나고, 곧 꺼진다.
     let down = false;
@@ -221,7 +221,7 @@ export function wireSeedCheck(deps: SeedCheckDeps): { open: () => void } {
     }
     // 잠금 파일이 풀릴 틈을 준다. 바로 켜면 「이미 쓰는 중」으로 죽는다.
     if (down) await sleep(2000);
-    say("지갑 프로그램(노드)을 다시 켜는 중…");
+    say("지갑 프로그램(서버)을 다시 켜는 중…");
     let lastStart = 0;
     const start = async () => {
       lastStart = Date.now();
@@ -251,7 +251,7 @@ export function wireSeedCheck(deps: SeedCheckDeps): { open: () => void } {
         if (warming(e)) say("장부를 여는 중이에요. 몇 분 걸릴 수 있어요…");
         else if (Date.now() - lastStart > 15_000) {
           // 켜라고 했는데 아직 꺼져 있다 — 꺼지던 중에 불렀을 수 있다. 한 번 더.
-          say("지갑 프로그램(노드)을 다시 켜는 중…");
+          say("지갑 프로그램(서버)을 다시 켜는 중…");
           await start();
         }
       }

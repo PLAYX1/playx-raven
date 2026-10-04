@@ -272,9 +272,9 @@ pub async fn services_status() -> Value {
             // 0.1.5 부터 윈도우·리눅스는 설치 파일에 같이 들어간다.
             // 맥(애플 실리콘)은 공식 배포가 없어 아직 따로 깔아야 한다.
             "install": if cfg!(target_os = "macos") {
-                "레이븐 노드를 설치해 주세요. 애플 실리콘 맥은 공식 배포가 없어 아직 같이 넣지 못합니다."
+                "레이븐 서버를 설치해 주세요. 애플 실리콘 맥은 공식 배포가 없어 아직 같이 넣지 못합니다."
             } else {
-                "노드가 없습니다. RavenVault Desktop 을 다시 받아 설치하시면 같이 들어옵니다."
+                "서버가 없습니다. RavenVault Desktop 을 다시 받아 설치하시면 같이 들어옵니다."
             },
             // 못 찾았으면 어디를 봤는지 같이 준다. 사장이 자기 설치 자리를
             // 알려 주면 그 자리를 다음 판에 넣을 수 있다.
@@ -428,7 +428,7 @@ pub async fn start_parts(files: bool) -> Result<Value, String> {
                     "note": if need_reindex {
                         "자산 색인을 만드느라 처음부터 다시 훑습니다 — 몇 시간 걸립니다. 그동안 주문 확인이 멈춥니다."
                     } else {
-                        "따라잡는 중입니다. 처음이면 며칠 걸릴 수 있습니다 — 남은 시간은 「이 컴퓨터 → RVN 노드」에서 보입니다"
+                        "따라잡는 중입니다. 처음이면 며칠 걸릴 수 있습니다 — 남은 시간은 「이 컴퓨터 → RVN 서버」에서 보입니다"
                     },
                     "reindexing": need_reindex,
                 }));
@@ -649,7 +649,7 @@ fn node_why(raw: &str) -> String {
     // 🔴 0.4.9 — 틀린 복구 단어를 받은 코어는 단어 전체를 오류 문장에 넣는다(설계서 F7). 그 문장이
     //    여기서 화면 오류가 되고 「문제 알리기」에 실린다. 그런 줄은 통째로 바꾼다 — 앞 200자도 안 옮긴다.
     if crate::words_restore::masks_node_error(raw) {
-        return "노드가 켜지지 않았습니다. 복구 단어 설정 문제로 보입니다 — 내용은 보안을 위해 옮기지 않습니다.".into();
+        return "서버가 켜지지 않았습니다. 복구 단어 설정 문제로 보입니다 — 내용은 보안을 위해 옮기지 않습니다.".into();
     }
     let low = raw.to_lowercase();
     if low.contains("cannot obtain a lock") || low.contains("probably already running") {
@@ -660,13 +660,13 @@ fn node_why(raw: &str) -> String {
     if low.contains("-daemon is not supported") {
         // 여기 오면 안 된다 — 윈도우에서는 `-daemon` 을 안 붙이니까. 오면
         // 그건 위의 갈래가 깨진 것이므로, 그렇게 적는다.
-        return "이 컴퓨터에서는 노드를 뒤로 돌릴 수 없습니다. 프로그램을 다시 받아 주세요.".into();
+        return "이 컴퓨터에서는 서버를 뒤로 돌릴 수 없습니다. 프로그램을 다시 받아 주세요.".into();
     }
     if raw.is_empty() {
-        return "노드가 켜지자마자 멈췄습니다. 레이븐 코어가 켜져 있는지 확인해 주세요.".into();
+        return "서버가 켜지자마자 멈췄습니다. 레이븐 코어가 켜져 있는지 확인해 주세요.".into();
     }
     // 모르는 이유는 지어내지 않는다. 코어가 한 말을 그대로 옮긴다.
-    format!("노드가 켜지지 않았습니다: {}", raw.chars().take(200).collect::<String>())
+    format!("서버가 켜지지 않았습니다: {}", raw.chars().take(200).collect::<String>())
 }
 
 fn remember(name: &str, child: Child) {
@@ -804,7 +804,7 @@ mod tests {
         // 윈도우에서는 그 자리에서 죽는다. 명령줄로 눌러 끈다.
         assert!(
             body.contains(&format!("\"-daemon{}0\"", "=")),
-            "설정 파일의 daemon=1 을 안 누르면 윈도우에서 노드가 죽는다"
+            "설정 파일의 daemon=1 을 안 누르면 윈도우에서 서버가 죽는다"
         );
         // 잡에서 안 빠져나오면 앱을 닫을 때 노드도 같이 죽는다.
         assert!(body.contains("BREAKAWAY"), "잡에서 빠져나와야 밤새 산다");

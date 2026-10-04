@@ -214,9 +214,9 @@ mod tests {
     #[test]
     fn staff_cannot_reach_the_owners_things() {
         for p in [
-            "/api/admin/publish",  // 체인에 쓰는 일
+            "/api/admin/publish",  // 공개 장부에 쓰는 일
             "/api/admin/issue",    // 자산 발행 — RVN 이 탄다
-            "/api/admin/machine",  // 노드 재시작
+            "/api/admin/machine",  // 서버 재시작
             "/api/admin/backup",   // 지갑이 들어가는 백업
             "/api/scan/in",        // 입장 처리는 쓰는 일이다
             "/wallet",

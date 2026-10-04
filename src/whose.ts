@@ -46,7 +46,7 @@ export function issuedOf(r: unknown): Issued {
 
 /** 발행 뒤 주인 표를 제자리에 못 뒀을 때 한 줄. */
 export const OWNER_NOT_PINNED =
-  "주인 표가 있는 주소를 확인하지 못해, 노드가 새 거스름 주소로 옮겼을 수 있어요. 지갑 화면 「내 주인 표」에서 지금 주소를 확인해 주세요.";
+  "주인 표가 있는 주소를 확인하지 못해, 서버가 새 거스름 주소로 옮겼을 수 있어요. 지갑 화면 「내 주인 표」에서 지금 주소를 확인해 주세요.";
 
 const B58 = "1-9A-HJ-NP-Za-km-z";
 /** 문장 속 레이븐 주소 하나(본망 R… 34자 안팎). `raven:` 앞머리가 붙어 있어도 찾는다. */
@@ -95,7 +95,7 @@ const ICON = {
 function kindLine(r: WhoseResult): string {
   if (r.kind === "receive" && r.index != null) return esc(tf("받기 주소 {0}번", r.index));
   if (r.kind === "change" && r.index != null)
-    return esc(tf("거스름 주소 {0}번", r.index)) + ` <span class="whose-why">${copyHtml("거래할 때 노드가 자동으로 만든 주소예요")}</span>`;
+    return esc(tf("거스름 주소 {0}번", r.index)) + ` <span class="whose-why">${copyHtml("거래할 때 서버가 자동으로 만든 주소예요")}</span>`;
   if (r.kind === "imported") return copyHtml("가져온 열쇠의 주소예요 — 12단어에서 나온 주소가 아니에요");
   return "";
 }
@@ -123,7 +123,7 @@ function holdingsHtml(h: NonNullable<WhoseResult["holdings"]>): string {
   let out = `<div class="whose-have"><div class="whose-havehead">${copyHtml("이 주소에 있는 것")}</div>`;
   out += rows.length ? `<ul class="whose-list">${rows.join("")}</ul>` : `<p class="meta">${copyHtml("지금 이 주소에는 아무것도 없어요.")}</p>`;
   if (h.partial) out += `<p class="meta">${esc(tf("자산 조각이 많아 {0}개 중 {1}개만 확인했어요.", h.total, h.checked))}</p>`;
-  if (h.error) out += `<p class="meta whose-err">${copyHtml("가진 것을 다 읽지 못했어요. 노드가 따라잡은 뒤 다시 확인해 주세요.")}</p>`;
+  if (h.error) out += `<p class="meta whose-err">${copyHtml("가진 것을 다 읽지 못했어요. 서버가 따라잡은 뒤 다시 확인해 주세요.")}</p>`;
   return out + `</div>`;
 }
 
@@ -154,7 +154,7 @@ export function whoseHtml(r: WhoseResult, from: "wallet" | "ravi" = "wallet"): s
   }
   if (r.address && r.state !== "invalid") body += `<code class="addr whose-addr" translate="no">${esc(r.address)}</code>`;
   if (r.state === "mine" && r.holdings) body += holdingsHtml(r.holdings);
-  if (from === "ravi") body += `<p class="meta whose-rule">${copyHtml("이 컴퓨터의 노드에 바로 물어봤어요.")}</p>`;
+  if (from === "ravi") body += `<p class="meta whose-rule">${copyHtml("이 컴퓨터의 서버에 바로 물어봤어요.")}</p>`;
   return `<div class="whose-res ${tone}" data-state="${esc(r.state)}">${body}</div>`;
 }
 

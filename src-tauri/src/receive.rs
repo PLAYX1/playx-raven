@@ -77,7 +77,7 @@ where
     F: Future<Output = Result<Value, String>>,
 {
     let v = rpc("validateaddress", json!([address])).await?;
-    usable(&v).ok_or_else(|| "노드가 이 주소를 이 지갑의 받는 주소로 확인해 주지 않았어요. 보여 드리지 않을게요.".to_string())
+    usable(&v).ok_or_else(|| "서버가 이 주소를 이 지갑의 받는 주소로 확인해 주지 않았어요. 보여 드리지 않을게요.".to_string())
 }
 
 /// 받는 주소 하나. `fresh` 면 늘 새로 만든다.

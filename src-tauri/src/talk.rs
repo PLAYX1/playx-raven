@@ -344,7 +344,7 @@ pub fn recovery_status() -> Value {
             { "what": "지갑 · 돈", "ok": seed,
               "why": "12단어로 만든 지갑이면 어느 기계에서도 같은 주소가 나옵니다." },
             { "what": "가진 자산 · 가게", "ok": true,
-              "why": "체인에 있습니다. 지갑이 되살아나면 자산도 같이 보입니다." },
+              "why": "공개 장부에 있습니다. 지갑이 되살아나면 자산도 같이 보입니다." },
             { "what": "가게 간판 열쇠",
               "ok": shop["recoverable"].as_bool().unwrap_or(false) || !shop["exists"].as_bool().unwrap_or(false),
               "why": shop["why"].as_str().unwrap_or("아직 만들지 않았습니다 — 만들 때 12단어에서 뽑습니다.") },
@@ -1462,7 +1462,7 @@ mod gate_tests {
         let body = &src[i..i + end];
         assert!(
             body.contains("unknown.is_none()"),
-            "확인 못 했을 때도 막고 있다 — 노드가 훑는 동안 자기 방에 자기가 못 쓴다"
+            "확인 못 했을 때도 막고 있다 — 서버가 훑는 동안 자기 방에 자기가 못 쓴다"
         );
     }
 

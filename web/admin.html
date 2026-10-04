@@ -16,7 +16,7 @@
                    style-src 'unsafe-inline'; img-src 'self' data: http: https:;
                    connect-src 'self'; base-uri 'none'; form-action 'none';
                    frame-ancestors 'none'" />
-    <title>RavenVault Desktop · 내 노드</title>
+    <title>RavenVault Desktop · 내 서버</title>
     <style>
       :root {
         --bg: #ffffff; --fg: #141518; --muted: #6b7280; --line: #e6e7ea;
@@ -253,7 +253,7 @@
         <!-- 상태 셋. 각자 카드를 차지할 만큼 자주 보는 것이 아니다.
              평소엔 한 줄로 읽고, 이상할 때만 눈에 걸리면 된다. -->
         <div class="card status">
-          <div class="srow"><span class="sk">노드</span>
+          <div class="srow"><span class="sk">서버</span>
             <span id="node"><span class="dot"></span>확인 중…</span></div>
           <div class="detail" id="nodedetail"></div>
           <div class="srow"><span class="sk">지갑 잠금</span><span id="lock">확인 중…</span></div>
@@ -291,7 +291,7 @@
         <div class="row"><button class="go" id="s-save">손님 화면에 반영</button></div>
         <div id="s-result"></div>
         <p class="note">
-          여기서 고치는 것은 <b>손님 화면</b>입니다. 체인에 올리는 가게 등록은 컴퓨터에서 하세요 —
+          여기서 고치는 것은 <b>손님 화면</b>입니다. 공개 장부에 올리는 가게 등록은 컴퓨터에서 하세요 —
           RVN이 소각되고 되돌릴 수 없습니다.
         </p>
       </div>
@@ -390,9 +390,9 @@
 
           $("mc-body").innerHTML =
             `<div class="card">
-               <h3>${esc(m.node_name || "이름 없는 노드")}</h3>
-               <div class="row" style="justify-content:space-between"><b>레이븐 노드</b><span>${on(svc.node?.running)}</span></div>
-               <div class="row" style="justify-content:space-between"><b>사진 창고(IPFS)</b><span>${on(svc.ipfs?.running)}</span></div>
+               <h3>${esc(m.node_name || "이름 없는 서버")}</h3>
+               <div class="row" style="justify-content:space-between"><b>레이븐 서버</b><span>${on(svc.node?.running)}</span></div>
+               <div class="row" style="justify-content:space-between"><b>사진 창고(사진 보관함)</b><span>${on(svc.ipfs?.running)}</span></div>
                <div class="row" style="justify-content:space-between"><b>바깥 연결</b><span>${net.headline || "—"}</span></div>
                <div class="row" style="justify-content:space-between"><b>장부</b><span>${m.disk?.chain_gb ?? "?"} GB${m.disk?.pruned ? " (아껴 쓰는 중)" : ""}</span></div>
              </div>` +
@@ -570,7 +570,7 @@
         $("s-pickup").checked = s.pickup !== false;
         $("s-delivery").checked = !!s.delivery;
         $("s-cur").value = s.currency || "KRW";
-        $("title").textContent = s.name || "내 노드";
+        $("title").textContent = s.name || "내 서버";
         menu = s.menu || [];
         renderMenu();
         return s;
@@ -617,7 +617,7 @@
         $(where).innerHTML = r.error
           ? `<div class="err">${r.error}</div>`
           : `<div class="card" style="margin-top:8px">손님 화면에 반영했습니다.</div>      `;
-        $("title").textContent = shop.name || "내 노드";
+        $("title").textContent = shop.name || "내 서버";
       }
 
       $("s-save").onclick = () => save("s-result");

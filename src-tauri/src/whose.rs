@@ -59,9 +59,9 @@ pub fn clean_input(raw: &str) -> String {
     s.trim_matches(wrap).to_string()
 }
 
-/// 노드에 물어볼 만한 모양인가. 영문·숫자 1~100자.
+/// 서버에 물어볼 만한 모양인가. 영문·숫자 1~100자.
 ///
-/// 판정은 노드가 한다. 여기서는 문장 통째나 빈 칸을 노드에 넘기지 않을 뿐이다.
+/// 판정은 서버가 한다. 여기서는 문장 통째나 빈 칸을 서버에 넘기지 않을 뿐이다.
 fn worth_asking(s: &str) -> bool {
     !s.is_empty() && s.len() <= 100 && s.bytes().all(|b| b.is_ascii_alphanumeric())
 }
@@ -95,7 +95,7 @@ pub fn hd_chain(path: &str) -> Option<(u32, u64)> {
     (chain <= 1).then_some((chain as u32, n))
 }
 
-/// `validateaddress` 의 답을 읽는다. 노드는 부르지 않는다.
+/// `validateaddress` 의 답을 읽는다. 서버는 부르지 않는다.
 pub fn judge(v: &Value) -> Verdict {
     let flag = |k: &str| v.get(k).and_then(Value::as_bool).unwrap_or(false);
     if !flag("isvalid") {
@@ -381,7 +381,7 @@ pub fn with_change(method: &str, mut params: Value, address: &str) -> Value {
 pub struct Pin {
     /// 이 발행이 쓰는 부모 표. 없으면(루트) 나머지도 의미가 없다.
     pub token: Option<String>,
-    /// 그 표가 지금 있는 내 주소. `None` 이면 `""` 로 보낸다(노드가 새 거스름 주소로).
+    /// 그 표가 지금 있는 내 주소. `None` 이면 `""` 로 보낸다(서버가 새 거스름 주소로).
     pub address: Option<String>,
     /// 못 고정한 까닭: `not_found` · `unknown` · `many` · `not_mine`.
     pub why: Option<&'static str>,
@@ -471,7 +471,7 @@ pub async fn owner_pin(method: &str, name: &str) -> Pin {
     locate(&token).await
 }
 
-/// 발행 마법사의 종류 → 노드 명령.
+/// 발행 마법사의 종류 → 서버 명령.
 fn method_of_kind(kind: &str) -> Option<&'static str> {
     match kind {
         "sub" | "unique" => Some("issue"),
@@ -518,7 +518,7 @@ pub async fn owner_pin_ready(kind: String, name: String) -> Value {
 async fn follow(ops: Vec<Outpoint>) -> (Vec<Outpoint>, Vec<Option<Seen>>, usize) {
     let total = ops.len();
     let ops: Vec<Outpoint> = ops.into_iter().take(MAX_TXOUT_LOOKUPS).collect();
-    // 노드 쪽 동시 부름은 `raven::call_rpc` 의 문(4개)이 줄 세운다.
+    // 서버 쪽 동시 부름은 `raven::call_rpc` 의 문(4개)이 줄 세운다.
     let seen = futures_util::future::join_all(ops.iter().map(|o| async move {
         call_rpc("gettxout", json!([o.txid, o.vout, true])).await.ok().and_then(|v| seen_of(&v))
     }))

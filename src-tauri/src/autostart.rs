@@ -255,9 +255,9 @@ pub fn autostart_audit() -> Value {
         // 앱이 올라가 있으면 노드 항목은 없는 편이 낫다.
         "extra": node_on,
         "why": if node_on && app_on {
-            "자동 시작에 두 개가 올라가 있습니다 — 프로그램과 노드. 프로그램만 있으면 됩니다(켜지면서 노드를 같이 켭니다). 노드가 따로 뜨면 프로그램을 끝내도 노드가 남습니다."
+            "자동 시작에 두 개가 올라가 있습니다 — 프로그램과 서버. 프로그램만 있으면 됩니다(켜지면서 서버를 같이 켭니다). 서버가 따로 뜨면 프로그램을 끝내도 서버가 남습니다."
         } else if node_on {
-            "노드만 자동 시작에 올라가 있습니다. 프로그램을 켜 두는 편이 낫습니다."
+            "서버만 자동 시작에 올라가 있습니다. 프로그램을 켜 두는 편이 낫습니다."
         } else {
             ""
         },
@@ -279,7 +279,7 @@ pub fn autostart_tidy() -> Result<Value, String> {
         .args(["unload", "-w", &node.to_string_lossy()])
         .output();
     std::fs::remove_file(&node).map_err(|e| format!("걷어내지 못했습니다: {e}"))?;
-    Ok(json!({ "removed": true, "note": "프로그램 하나만 남았습니다. 프로그램이 켜지면 노드도 같이 켭니다." }))
+    Ok(json!({ "removed": true, "note": "프로그램 하나만 남았습니다. 프로그램이 켜지면 서버도 같이 켭니다." }))
 }
 
 #[cfg(test)]

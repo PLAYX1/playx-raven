@@ -148,7 +148,7 @@ pub fn asset_kinds() -> Value {
             "id": "root", "name": "루트 자산", "burn": crate::issue::BURN_ROOT,
             "form": "PLAYX", "one_line": "새 이름 하나. 이 아래로 모든 것이 갈라집니다.",
             "when": [
-                "가게·브랜드 이름을 체인에 잡을 때",
+                "가게·브랜드 이름을 공개 장부에 잡을 때",
                 "앞으로 하위·고유를 만들 계획이 있을 때"
             ],
             "examples": [
@@ -205,7 +205,7 @@ pub fn asset_kinds() -> Value {
             "form": "#KYC", "one_line": "주소에 붙이는 도장. 이것만으로는 아무 일도 안 합니다.",
             "when": [
                 "제한 자산을 만들 계획이 있을 때만",
-                "'신원 확인된 사람'을 체인에 표시해야 할 때"
+                "'신원 확인된 사람'을 공개 장부에 표시해야 할 때"
             ],
             "examples": [
                 { "case": "규제 지분", "name": "#KYC", "why": "신분 확인을 마친 주소에만 붙입니다" },
@@ -215,7 +215,7 @@ pub fn asset_kinds() -> Value {
         },
         {
             "id": "restricted", "name": "제한 자산", "burn": BURN_RESTRICTED,
-            "form": "$SHARES", "one_line": "자격 있는 주소만 가질 수 있습니다. 체인이 막습니다.",
+            "form": "$SHARES", "one_line": "자격 있는 주소만 가질 수 있습니다. 공개 장부가 막습니다.",
             "when": [
                 "법적으로 보유자를 가려야 할 때 (지분·증권형)",
                 "아무나 되팔면 안 되는 것"
@@ -656,7 +656,7 @@ pub async fn can_receive(address: String, asset: String) -> Result<Value, String
         "why": match allowed {
             Some(true) => "이 주소는 받을 수 있습니다.",
             Some(false) => "이 주소는 이 자산을 받을 수 없습니다 — 자격이 없거나 동결돼 있습니다.",
-            None => "확인하지 못했습니다. 보내 보면 체인이 거절할 수 있습니다.",
+            None => "확인하지 못했습니다. 보내 보면 공개 장부가 거절할 수 있습니다.",
         },
     }))
 }

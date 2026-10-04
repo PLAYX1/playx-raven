@@ -378,9 +378,9 @@ pub async fn ipfs_set_storage_max(gb: f64) -> Result<Value, String> {
         .post(format!("{API}/config?arg=Datastore.StorageMax&arg={want}"))
         .send()
         .await
-        .map_err(|e| format!("IPFS 에 닿지 못했습니다: {e}"))?;
+        .map_err(|e| format!("사진 보관함에 닿지 못했습니다: {e}"))?;
     if !r.status().is_success() {
-        return Err(format!("IPFS 가 거절했습니다({}).", r.status()));
+        return Err(format!("사진 보관함이 거절했습니다({}).", r.status()));
     }
     Ok(json!({ "storage_max": want, "needs_restart": true }))
 }

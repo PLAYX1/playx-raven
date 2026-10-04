@@ -49,7 +49,7 @@ export function wirePhoneTransaction(invoke:Invoke,t:(s:string)=>string) {
     setCopyText(status, () => t('네트워크에 보내는 중입니다.'));
     try {
       const result=await invoke<{txid:string}>('phone_transaction_send',{code:`ravenvault://transaction?v=1&hex=${chosen.value.hex}`,expectedTxid:chosen.value.txid,confirmed:true});
-      setCopyText(status, () => t(result.txid===chosen.value.txid?'노드가 거래를 받았습니다. 블록 확정은 아직 확인 못 함.':'전파 결과를 확인 못 했습니다. 다시 보내기 전에 거래 ID로 확인하세요.'));
+      setCopyText(status, () => t(result.txid===chosen.value.txid?'서버가 거래를 받았습니다. 블록 완료는 아직 확인 못 함.':'전파 결과를 확인 못 했습니다. 다시 보내기 전에 거래 ID로 확인하세요.'));
     } catch(error) {setCopyText(status, () => t(error instanceof Error?error.message:String(error)));}
     finally {reviewed=null;send.hidden=true;sending=false;check.disabled=false;input.disabled=false;cancel.disabled=false;}
   });

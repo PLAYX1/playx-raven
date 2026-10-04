@@ -950,7 +950,7 @@ pub async fn shop_history(asset: String) -> Result<Value, String> {
     let v = call_rpc("listassets", json!([name.clone(), true, 1, 0])).await?;
     let entry = v
         .get(&name)
-        .ok_or_else(|| "체인에서 이 가게를 찾지 못했습니다.".to_string())?;
+        .ok_or_else(|| "공개 장부에서 이 가게를 찾지 못했습니다.".to_string())?;
 
     let height = entry.get("block_height").and_then(Value::as_i64);
     let hash = entry.get("blockhash").and_then(Value::as_str).unwrap_or("");

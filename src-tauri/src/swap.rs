@@ -175,7 +175,7 @@ pub async fn swap_make_lot(
     Ok(json!({
         "already": false,
         "txid": txid,
-        "note": "묶음을 만드는 중입니다. 체인에 들어가면(보통 1~2분) 제안을 만들 수 있습니다.",
+        "note": "묶음을 만드는 중입니다. 공개 장부에 들어가면(보통 1~2분) 제안을 만들 수 있습니다.",
     }))
 }
 

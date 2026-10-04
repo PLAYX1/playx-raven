@@ -302,7 +302,7 @@ async fn pin_these(items: Vec<String>) -> Result<Value, String> {
         "failed": failed,
         "no_file": skipped,
         "fingerprints": fingerprints_skipped,
-        "note": "체인이 가리키는 것만 받았습니다. 이 컴퓨터가 계속 갖고 있으니, 발행한 컴퓨터가 꺼져 있어도 손님 화면에서 열립니다.",
+        "note": "공개 장부가 가리키는 것만 받았습니다. 이 컴퓨터가 계속 갖고 있으니, 발행한 컴퓨터가 꺼져 있어도 손님 화면에서 열립니다.",
     }))
 }
 

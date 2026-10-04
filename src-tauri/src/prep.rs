@@ -121,7 +121,7 @@ $r -join "`n" | Set-Content -Path '{done}' -Encoding UTF8
             "방화벽 열기",
             fw1 && fw2,
             if fw1 && fw2 {
-                "다른 노드가 이 컴퓨터에 붙을 수 있습니다."
+                "다른 서버가 이 컴퓨터에 붙을 수 있습니다."
             } else {
                 &fw1w
             },
@@ -159,7 +159,7 @@ pub async fn pc_prepare(boost: bool) -> Result<Value, String> {
                 "메모리 넉넉히 주기",
                 true,
                 &format!(
-                    "{} MB 로 올렸습니다. 노드를 껐다 켜야 적용됩니다.",
+                    "{} MB 로 올렸습니다. 서버를 껐다 켜야 적용됩니다.",
                     v.get("mb").and_then(Value::as_i64).unwrap_or(0)
                 ),
             )),
@@ -245,7 +245,7 @@ mod tests {
         let i = src.find("pub async fn pc_prepare").expect("함수가 있어야 한다");
         assert!(
             !src[i..].contains("services_start"),
-            "준비하면서 노드를 다시 켜고 있다 — 손님이 그 앞에 서 있을 수 있다"
+            "준비하면서 서버를 다시 켜고 있다 — 손님이 그 앞에 서 있을 수 있다"
         );
     }
 }

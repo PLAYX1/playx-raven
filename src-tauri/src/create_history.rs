@@ -1079,7 +1079,7 @@ pub(crate) mod tests {
             assert_eq!(fixed["template"], "thanks");
             assert_eq!(fixed["lang"], "en");
             assert!(fixed.get("signer").is_none(), "비운 칸은 지운다");
-            assert_eq!(fixed["names"], json!(["HANBIT#PILATESEU260923-1"]), "체인 이름은 못 바꾼다");
+            assert_eq!(fixed["names"], json!(["HANBIT#PILATESEU260923-1"]), "공개 장부 이름은 못 바꾼다");
             assert!(create_history_details(id.clone(), json!({"recipients":["가","나"]})).is_err());
             assert!(create_history_details("../../etc".into(), json!({})).is_err());
             assert!(create_history_get(id).is_ok());
@@ -1103,7 +1103,7 @@ pub(crate) mod tests {
             // 끝난 것처럼 목록에 나오지도, 한 달이 지났다고 지워지지도 않는다.
             assert!(create_history_list().unwrap().is_empty());
             mark_done(&id, &names, "").unwrap();
-            assert!(unknown_pending_error().is_ok(), "체인에서 찾아 풀면 다시 만들 수 있다");
+            assert!(unknown_pending_error().is_ok(), "공개 장부에서 찾아 풀면 다시 만들 수 있다");
             assert_eq!(create_history_list().unwrap().len(), 1);
         });
     }

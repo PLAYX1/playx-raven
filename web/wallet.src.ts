@@ -406,7 +406,7 @@ async function broadcast(hex: string): Promise<string> {
   });
   const j = (await r.json()) as { txid?: string; error?: string };
   if (j.error) throw new Error(j.error);
-  if (!j.txid) throw new Error("노드가 거래번호를 주지 않았습니다.");
+  if (!j.txid) throw new Error("서버가 거래번호를 주지 않았습니다.");
   return j.txid;
 }
 
@@ -640,6 +640,8 @@ let draftMnemonic: string | null = null;
 let quizPlan: { position: number; options: string[] }[] = [];
 let quizAt = 0;
 
+// 잠금 중에는 보내기 칸을 DOM에만 남긴다. 열쇠나 검토 결과는 보존하지 않는다.
+let resumeSend = false;
 let idleTimer: number | undefined;
 
 function touchIdle(): void {
@@ -649,6 +651,7 @@ function touchIdle(): void {
 }
 
 function lock(): void {
+  resumeSend = document.body.dataset.screen === "send" || document.body.dataset.screen === "confirm";
   mnemonic = null;
   hdKey = null;
   scan = null;
@@ -657,6 +660,10 @@ function lock(): void {
   quizPlan = [];
   window.clearTimeout(idleTimer);
   ($("unlock-pass") as HTMLInputElement).value = "";
+  document.querySelectorAll<HTMLInputElement>('input[type="password"]').forEach((input) => { input.value = ""; });
+  ($("restore-input") as HTMLTextAreaElement).value = "";
+  $("words-grid").replaceChildren();
+  $("quiz-opts").replaceChildren();
   say("unlock-msg", "");
   const v = readVault();
   if (!v) {
@@ -2427,7 +2434,10 @@ function unlocked(m: string): void {
   // 「물건 올리기」로 들어온 사람을 지갑 첫 화면에 떨궈 두면, 왜 여기 왔는지
   // 잊는다. 잠금을 푼 다음 하려던 자리로 이어 준다.
   // 「이 물건 사기」로 들어왔으면 보내기 화면을 채운 채로 연다.
-  if (!openBuyFromHash()) {
+  if (resumeSend) {
+    resumeSend = false;
+    show("send");
+  } else if (!openBuyFromHash()) {
     // 🔴 **「이야기」 탭을 눌러도 지갑 첫 화면이 떴다**(대표님 보고 2026-08-29,
     //    실측 감사 2026-08-30로 원인 확인).
     //
@@ -2515,6 +2525,7 @@ async function refresh(deep: boolean): Promise<void> {
       say("scan-status", `주소 ${done}개까지 확인했습니다…`);
     });
     renderMain();
+    if (document.body.dataset.screen === "send") $("send-have").textContent = rvnText(totalSats());
   } catch (e) {
     // 🔴 **못 물어본 것을 「0원」으로 두면 안 된다.**
     //
@@ -2779,7 +2790,7 @@ function walletErrSay(e: unknown): string {
   if (못닿음) {
     return (
       "지금 잔액을 확인하지 못했습니다. " +
-      "돈은 그대로 있습니다 — 체인에 있고 이 화면이 못 읽을 뿐입니다. " +
+      "돈은 그대로 있습니다 — 공개 장부에 있고 이 화면이 못 읽을 뿐입니다. " +
       "잠시 뒤 「새로고침」을 눌러 주세요."
     );
   }
@@ -2843,11 +2854,11 @@ function renderMain(): void {
   const note = $("source-note");
   if (scan.trusted) {
     note.className = "link1";
-    note.innerHTML = `<b>·</b> 가게 노드에 연결됨`;
+    note.innerHTML = `<b>·</b> 가게 서버에 연결됨`;
   } else {
     note.className = "note warn";
     note.textContent =
-      `이 가게 노드가 답하지 못해 바깥 서버 ${scan.source || "알 수 없음"} 가 답했습니다. ` +
+      `이 가게 서버가 답하지 못해 바깥 서버 ${scan.source || "알 수 없음"} 가 답했습니다. ` +
       `바깥 서버는 잔액을 틀리게 말할 수 있습니다 — 다만 12단어가 여기 있는 한 ` +
       `그 서버가 돈을 가져갈 수는 없습니다.`;
   }

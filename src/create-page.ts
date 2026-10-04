@@ -257,7 +257,7 @@ export function wireCreate(deps: CreateDeps): CreateApi {
       brandSel.replaceChildren(...s.brands.map((b) => option(b, false)), ...pending.map((b) => option(b, true)));
     } catch (e) {
       el("cr-brand-wrap").hidden = true; el("cr-maker-wrap").hidden = false;
-      tell(() => tf("노드 지갑을 읽지 못했습니다: {0}", errText(e)));
+      tell(() => tf("서버 지갑을 읽지 못했습니다: {0}", errText(e)));
     }
     paintMaker();
     void bulk.loadMarks();
@@ -266,7 +266,7 @@ export function wireCreate(deps: CreateDeps): CreateApi {
   function paintMaker() {
     const preview = brandFrom(makerIn.value);
     const out = el("cr-maker-say");
-    if (preview) setCopyText(out, () => tf("체인에는 {0}(으)로 새겨요", preview));
+    if (preview) setCopyText(out, () => tf("공개 장부에는 {0}(으)로 새겨요", preview));
     else if (makerIn.value.trim()) setCopyText(out, () => t("영문이나 한글로 3자 이상 적어 주세요."));
     else out.replaceChildren();
   }
@@ -275,8 +275,8 @@ export function wireCreate(deps: CreateDeps): CreateApi {
     el("cr-file-clear").hidden = !fingerprint;
     // 🔴 지문은 소금 없이 파일 그대로의 해시다. 짧거나 양식이 뻔한 문서는 누가 후보를
     //    만들어 대 보면 맞출 수 있다 — 정직하게 한 줄 말한다.
-    if (fingerprint) setCopyText(out, () => `${tf("붙인 파일 · {0} · 원본은 이 컴퓨터에 두고, 지문만 체인에 새겨요.", fileName)} ${t(FINGERPRINT_GUESS)}`);
-    else setCopyText(out, () => t("파일은 올리지 않아요. 이 컴퓨터에서 지문만 만들어 체인에 새겨요."));
+    if (fingerprint) setCopyText(out, () => `${tf("붙인 파일 · {0} · 원본은 이 컴퓨터에 두고, 지문만 공개 장부에 새겨요.", fileName)} ${t(FINGERPRINT_GUESS)}`);
+    else setCopyText(out, () => t("파일은 올리지 않아요. 이 컴퓨터에서 지문만 만들어 공개 장부에 새겨요."));
   }
   function paintRecipientsSay() {
     const people = parseRecipients(recipientsIn.value);
@@ -426,7 +426,7 @@ export function wireCreate(deps: CreateDeps): CreateApi {
       if (roster && !pick.length) throw new Error(t("발행할 줄이 없어요. 확인 표에서 받는 사람을 채우거나 발행 체크를 켜 주세요."));
       const people = roster ? pick.map((i) => roster[i].row.recipient) : parseRecipients(recipientsIn.value);
       // 🔴 제목은 로마자로 바뀌어 체인 이름에 영원히 남는다. 받는 사람 이름이 섞이면 안 된다.
-      if (people.some((p) => p.length >= 2 && title.includes(p))) throw new Error(t("제목에 받는 사람 이름이 들어 있어요. 제목은 증서 번호(체인)에 들어가니, 이름은 받는 사람 칸에만 적어 주세요."));
+      if (people.some((p) => p.length >= 2 && title.includes(p))) throw new Error(t("제목에 받는 사람 이름이 들어 있어요. 제목은 증서 번호(공개 장부)에 들어가니, 이름은 받는 사람 칸에만 적어 주세요."));
       if (!roster && kind === "certificate" && people.length > MAX_COPIES) throw new Error(tf("받는 사람은 한 번에 {0}명까지예요. 나눠서 만들어 주세요.", MAX_COPIES));
       if (people.some((p) => p.length > 60)) throw new Error(t("받는 사람 이름은 60자까지 적을 수 있어요."));
       const count = roster ? pick.length : kind === "certificate" && people.length ? people.length : Number(countIn.value);
@@ -507,14 +507,14 @@ export function wireCreate(deps: CreateDeps): CreateApi {
       };
       bill.append(
         cell(node("b", () => tf("{0}장", n.toLocaleString("en-US"))), "발행할 증서"),
-        cell(data("b", `${rvnText(r.total)} RVN`), "체인 수수료 합계"),
+        cell(data("b", `${rvnText(r.total)} RVN`), "공개 장부 수수료 합계"),
         cell(data("b", `${rvnText(s.spendable)} RVN`), "지갑 잔액", s.spendable < r.total ? "short" : ""),
       );
       parts.push(bill);
-      parts.push(node("p", () => tf("한 장에 {0} RVN이 체인에 태워지고, 보낼 때마다 네트워크 수수료가 조금 붙어요 · {1}번에 나눠 보내요(한 번에 {2}장까지).", 5, chunks, MAX_COPIES), "meta"));
+      parts.push(node("p", () => tf("한 장에 {0} RVN이 공개 장부에 태워지고, 보낼 때마다 네트워크 수수료가 조금 붙어요 · {1}번에 나눠 보내요(한 번에 {2}장까지).", 5, chunks, MAX_COPIES), "meta"));
       const withPhoto = b.photoSlot ? b.lines.filter((l) => l.photo).length : 0;
       if (withPhoto) parts.push(node("p", () => tf("사진 {0}장을 함께 인쇄해요 · 사진은 이 컴퓨터에만 둬요.", withPhoto), "meta"));
-      parts.push(node("p", "받는 사람·과정·사진은 체인에 올리지 않아요. 인쇄하는 종이와 이 컴퓨터에만 남아요.", "meta"));
+      parts.push(node("p", "받는 사람·과정·사진은 공개 장부에 올리지 않아요. 인쇄하는 종이와 이 컴퓨터에만 남아요.", "meta"));
       if (r.needsBrand && chunks > 1) {
         parts.push(node("p", () => tf("처음 한 번은 이름 등록이 먼저예요 — 등록과 함께 첫 {0}장을 만들고, 기록되면(1~2분) 「나머지 이어서 만들기」로 {1}장을 더 만들어요.", r.count, n - r.count), "meta"));
       }
@@ -525,11 +525,11 @@ export function wireCreate(deps: CreateDeps): CreateApi {
         parts.push(node("p", () => tf("받는 사람 {0}명", people.length), "meta"));
         parts.push(data("p", people.length > 3 ? `${people.slice(0, 3).join(", ")} …` : people.join(", "), "meta"));
       }
-      parts.push(node("p", "받는 사람·발급자·설명은 체인에 올리지 않아요. 인쇄하는 종이와 이 컴퓨터에만 남아요.", "meta"));
+      parts.push(node("p", "받는 사람·발급자·설명은 공개 장부에 올리지 않아요. 인쇄하는 종이와 이 컴퓨터에만 남아요.", "meta"));
     }
     const shown = b ? leftRows(b) : r.names.length;
     parts.push(
-      node("p", r.kind === "certificate" ? "증서 번호(체인에 새겨질 이름)" : "체인에 새겨질 이름", "meta"),
+      node("p", r.kind === "certificate" ? "증서 번호(공개 장부에 새겨질 이름)" : "공개 장부에 새겨질 이름", "meta"),
       data("p", shown > 1 ? tf("{0} 외 {1}장", r.names[0], shown - 1) : r.names[0], "cr-name"),
     );
     parts.push(node("p", r.fingerprint ? () => tf("파일 지문을 함께 새겨요 · {0}", r.fileName) : () => t("파일 없이 만들어요."), "meta"));
@@ -764,7 +764,7 @@ export function wireCreate(deps: CreateDeps): CreateApi {
     });
     waitBox.replaceChildren(
       node("h3", () => tf("{0}장을 만드는 중이에요", total.toLocaleString("en-US"))),
-      node("p", "창을 닫지 마세요 — 50장씩 나눠 보내요. 한 묶음에 보통 몇 초, 노드가 바쁘면 더 걸려요.", "meta"),
+      node("p", "창을 닫지 마세요 — 50장씩 나눠 보내요. 한 묶음에 보통 몇 초, 서버가 바쁘면 더 걸려요.", "meta"),
       bar,
       node("p", () => tf("{0} / {1}장", done, total), "meta"),
       list,
@@ -1004,8 +1004,8 @@ export function wireCreate(deps: CreateDeps): CreateApi {
     const probe = d.step === "brand" ? d.brand : (d.names?.[0] ?? "");
     waitBox.replaceChildren(
       node("h3", "보냈는지 아직 몰라요 — 기록될 때까지 기다려 주세요"),
-      node("p", "노드가 제때 답하지 않았어요. 이미 보냈을 수 있으니 다시 만들지 마세요 — 같은 것이 두 번 태워질 수 있어요. 기록되면 여기서 저절로 이어져요.", "meta"),
-      node("p", d.step === "brand" ? "등록할 이름" : "체인에 새겨질 이름", "meta"),
+      node("p", "서버가 제때 답하지 않았어요. 이미 보냈을 수 있으니 다시 만들지 마세요 — 같은 것이 두 번 태워질 수 있어요. 기록되면 여기서 저절로 이어져요.", "meta"),
+      node("p", d.step === "brand" ? "등록할 이름" : "공개 장부에 새겨질 이름", "meta"),
       data("p", d.step !== "brand" && (d.names?.length ?? 0) > 1 ? tf("{0} 외 {1}장", probe, (d.names?.length ?? 1) - 1) : probe, "cr-name"),
       state,
       actionsRow(again, giveUp),
@@ -1061,12 +1061,12 @@ export function wireCreate(deps: CreateDeps): CreateApi {
           return;
         }
         if (gone) {
-          setCopyText(state, () => t("한 시간 넘게 체인과 지갑 어디에도 안 보여요 — 보내지 않은 것으로 보여요. 처음부터 다시 만들 수 있어요."));
+          setCopyText(state, () => t("한 시간 넘게 공개 장부와 지갑 어디에도 안 보여요 — 보내지 않은 것으로 보여요. 처음부터 다시 만들 수 있어요."));
           giveUp.hidden = false;
         } else if (sending) {
           setCopyText(state, () => t(SENDING_NOTE));
         } else {
-          setCopyText(state, () => t("아직 안 보여요. 노드가 따라잡는 중일 수 있어요 — 조금 더 기다려 주세요."));
+          setCopyText(state, () => t("아직 안 보여요. 서버가 따라잡는 중일 수 있어요 — 조금 더 기다려 주세요."));
         }
       } catch (e) {
         setCopyText(state, () => errText(e));
@@ -1210,7 +1210,7 @@ export function wireCreate(deps: CreateDeps): CreateApi {
     if (e.id) {
       const id = e.id;
       secondary.append(button("기록에서 지우기", async () => {
-        const ok = await deps.sure(t("이 기록을 지울까요?"), t("받는 사람 이름과 인쇄 파일이 이 컴퓨터에서 지워져요. 체인에 만든 것은 그대로 남아요."), t("지웁니다"));
+        const ok = await deps.sure(t("이 기록을 지울까요?"), t("받는 사람 이름과 인쇄 파일이 이 컴퓨터에서 지워져요. 공개 장부에 만든 것은 그대로 남아요."), t("지웁니다"));
         if (!ok) return;
         await invoke("create_history_forget", { id }).catch((err) => tell(() => errText(err)));
         const d = loadDraft();

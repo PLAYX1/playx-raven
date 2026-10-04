@@ -253,7 +253,7 @@ const sheetBytes = (sheets, bookType = 'xlsx') => {
     { recipient: '김하늘', course: '필라테스 지도자 과정', grade: '2급', date: '2026-09-24', number: 'PLNE-2026-001', asset: 'PLNE#PILATES260924-1', txid: 'ab'.repeat(32), verifyUrl: 'https://ravenvault.ex.erci.se/verify/?a=PLNE%23PILATES260924-1' },
     { recipient: 'Doe, "Jane"', course: '', grade: '', date: '', number: '', asset: 'PLNE#PILATES260924-2', txid: 'cd'.repeat(32), verifyUrl: 'https://ravenvault.ex.erci.se/verify/?a=PLNE%23PILATES260924-2' },
   ];
-  const head = ['받는 사람', '과정', '등급', '발급일', '번호', '체인 이름', '거래 번호', '확인 주소'];
+  const head = ['받는 사람', '과정', '등급', '발급일', '번호', '공개 장부 이름', '거래 번호', '확인 주소'];
   const wb = XLSX.read(m.resultXlsx(issued), { type: 'array' });
   assert.deepEqual(wb.SheetNames, ['발행 목록']);
   const ws = wb.Sheets['발행 목록'];

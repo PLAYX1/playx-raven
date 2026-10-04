@@ -190,7 +190,7 @@ fn spends_not_ours(since: &Value, cutoff: i64, ours: &HashSet<String>) -> Result
     let rvn = since
         .get("transactions")
         .and_then(Value::as_array)
-        .ok_or("지갑 기록을 읽지 못했어요. 노드가 따라잡은 뒤 다시 해 주세요.")?;
+        .ok_or("지갑 기록을 읽지 못했어요. 서버가 따라잡은 뒤 다시 해 주세요.")?;
     let assets = crate::raven::asset_transactions_of(since.clone())?;
     let mut found = Vec::new();
     for (tx, asset_row) in rvn
@@ -620,7 +620,7 @@ mod tests {
     fn 지갑_전체가_아니라_그_시간_앞쯤부터_읽는다() {
         // 24시간 ≈ 1,440블록. 넉넉히 1,830블록 앞.
         assert_eq!(start_height(3_000_000, 24), Some(3_000_000 - 1_830));
-        assert_eq!(start_height(100, 24), None, "짧은 체인은 처음부터");
+        assert_eq!(start_height(100, 24), None, "짧은 공개 장부는 처음부터");
         assert_eq!(start_height(3_000_000, -5), Some(3_000_000 - 30));
         assert!(MAX_WATCH_HOURS <= 24 * 31);
         // 타이머가 부르는 자리에 전체 읽기(`listtransactions`·빈 listsinceblock)가 없다.
@@ -689,7 +689,7 @@ async fn refund_payer_of_tx(txid: String) -> Result<Value, String> {
                 vin.get("txid").and_then(Value::as_str),
                 vin.get("vout").and_then(Value::as_u64),
             ) else {
-                return Ok(json!({ "address": null, "source": "이 가게 노드" }));
+                return Ok(json!({ "address": null, "source": "이 가게 서버" }));
             };
             if let Ok(p) = crate::raven::call_rpc("getrawtransaction", json!([prev, 1])).await {
                 let a = p
@@ -702,7 +702,7 @@ async fn refund_payer_of_tx(txid: String) -> Result<Value, String> {
                     .and_then(|a| a.first())
                     .and_then(Value::as_str);
                 if let Some(a) = a {
-                    return Ok(json!({ "address": a, "source": "이 가게 노드" }));
+                    return Ok(json!({ "address": a, "source": "이 가게 서버" }));
                 }
             }
         }

@@ -96,11 +96,11 @@ const num = (v: unknown, digits = 8) => {
 type Step = "guide" | "words" | "confirm" | "progress" | "done";
 const STAGES = ["stopping", "set_aside", "creating", "created", "restarting", "rescanning"];
 const STAGE_SAY = [
-  "노드 멈추는 중",
+  "서버 멈추는 중",
   "지금 지갑을 옆에 두는 중",
   "단어로 새 지갑 만드는 중",
   "단어가 제대로 들어갔는지 확인",
-  "노드 다시 켜는 중 — 여기서부터 노드는 단어를 모릅니다",
+  "서버 다시 켜는 중 — 여기서부터 서버는 단어를 모릅니다",
   "옛 거래 찾는 중",
 ];
 
@@ -217,7 +217,7 @@ export function wireWordsRestore(deps: WordsRestoreDeps) {
     show(
       "guide",
       `<div class="warnbox"><b>${copyHtml("되살리기가 중간에 멈췄습니다.")}</b><br />
-         ${copyHtml("옛 지갑은 옆에 그대로 있습니다. 노드는 켜지 않고 기다리고 있습니다 — 지금 켜면 빈 지갑이 새로 생기기 때문입니다.")}</div>
+         ${copyHtml("옛 지갑은 옆에 그대로 있습니다. 서버는 켜지 않고 기다리고 있습니다 — 지금 켜면 빈 지갑이 새로 생기기 때문입니다.")}</div>
        ${why ? errBox(why) : ""}
        <div class="row sdw-gap"><button id="wrs-again">${copyHtml("단어 다시 넣고 이어 하기")}</button>
        <button class="ghost" id="wrs-undo">${copyHtml("옛 지갑으로 되돌리기")}</button></div>`,
@@ -238,7 +238,7 @@ export function wireWordsRestore(deps: WordsRestoreDeps) {
     show(
       "words",
       `<p>${copyHtml("종이에 적어 둔 복구 단어를 순서대로 넣어 주세요. 영어 단어입니다.")}</p>
-       ${fileChannel ? `<div class="warnbox sdw-gap">${copyHtml("이번에는 단어를 임시 파일로 건넵니다. 노드가 읽은 뒤 바로 지우지만, 저장 장치에 흔적이 남을 수 있습니다.")}</div>` : ""}
+       ${fileChannel ? `<div class="warnbox sdw-gap">${copyHtml("이번에는 단어를 임시 파일로 건넵니다. 서버가 읽은 뒤 바로 지우지만, 저장 장치에 흔적이 남을 수 있습니다.")}</div>` : ""}
        <div class="wrs-grid${masked ? " wrs-masked" : ""}" id="wrs-grid" translate="no">${Array.from({ length: count }, (_, i) => cellHtml(i + 1, vals[i] || "")).join("")}</div>
        <div class="wrs-sug" id="wrs-sug" translate="no"></div>
        <p class="meta" id="wrs-hint" role="status" aria-live="polite"></p>
@@ -442,7 +442,7 @@ export function wireWordsRestore(deps: WordsRestoreDeps) {
         <label><input type="radio" name="wrs-when" value="after_close" ${shop ? "checked" : ""} /> ${copyHtml("오늘 마감 뒤에 찾기 (가게가 한가할 때 알아서)")}</label>
         <label><input type="radio" name="wrs-when" value="now" ${shop ? "" : "checked"} /> ${copyHtml("지금 바로 찾기")}</label></fieldset>`);
     }
-    lines.push(`<p class="meta sdw-gap">${copyHtml("노드가 몇 분 꺼졌다 켜집니다. 단어는 디스크·기록·명령줄에 남기지 않고 노드에 한 번만 건넵니다.")}</p>
+    lines.push(`<p class="meta sdw-gap">${copyHtml("서버가 몇 분 꺼졌다 켜집니다. 단어는 디스크·기록·명령줄에 남기지 않고 서버에 한 번만 건넵니다.")}</p>
       <div id="wrs-out"></div><button class="sdw-gap" id="wrs-start">${copyHtml("되살리기 시작")}</button>`);
     // 단어는 아직 ②의 칸에 있다 — ③을 그리면 ②가 사라지므로 먼저 모아 둔다(시작하면 바로 지운다).
     const words = cells().map((i) => i.value.trim().toLowerCase()).join(" ");
@@ -575,7 +575,7 @@ export function wireWordsRestore(deps: WordsRestoreDeps) {
     show(
       "progress",
       `<div class="warnbox"><b>${copyHtml("이 컴퓨터에서는 디스크에 흔적 없이 단어를 건네지 못했습니다.")}</b><br />
-         ${copyHtml("지금 지갑과 단어는 그대로이고, 옛 지갑은 옆에 있습니다. 임시 파일로 건네면 노드가 읽은 뒤 바로 0 으로 덮고 지우지만, 저장 장치(SSD)에 흔적이 남을 수 있습니다.")}</div>
+         ${copyHtml("지금 지갑과 단어는 그대로이고, 옛 지갑은 옆에 있습니다. 임시 파일로 건네면 서버가 읽은 뒤 바로 0 으로 덮고 지우지만, 저장 장치(SSD)에 흔적이 남을 수 있습니다.")}</div>
        <div class="row sdw-gap"><button id="wrs-file">${copyHtml("임시 파일로 건네기 — 단어를 한 번 더 넣습니다")}</button>
        <button class="ghost" id="wrs-undo">${copyHtml("옛 지갑으로 되돌리기")}</button></div>`,
     );
@@ -612,7 +612,7 @@ export function wireWordsRestore(deps: WordsRestoreDeps) {
     }
     if (!r.encrypted) {
       lines.push(`<div class="warnbox sdw-gap"><b>${copyHtml("이 지갑에는 아직 지갑 암호가 없습니다.")}</b><br />
-        ${copyHtml("지금 거는 것을 강하게 권합니다 — 되살린 지갑 파일에는 복구 단어가 암호 없이 들어 있습니다. 노드가 잠깐 꺼졌다 켜집니다.")}</div>
+        ${copyHtml("지금 거는 것을 강하게 권합니다 — 되살린 지갑 파일에는 복구 단어가 암호 없이 들어 있습니다. 서버가 잠깐 꺼졌다 켜집니다.")}</div>
         <button class="sdw-gap" id="wrs-enc">${copyHtml("지갑 암호 걸기")}</button>`);
     }
     lines.push(`<p class="meta sdw-gap">${copyHtml("단어로 돌아오지 않는 것: 가게 메뉴·회원·예약·가게 간판 열쇠. 백업 파일이 있으면 「백업에서 되돌리기」로 가져오세요(지갑은 빼고).")}</p>
@@ -640,7 +640,7 @@ export function wireWordsRestore(deps: WordsRestoreDeps) {
     show(
       "done",
       `<p><b>${copyHtml("옛 지갑으로 되돌릴까요?")}</b></p>
-       <p class="meta">${copyHtml("되살린 지갑도 지우지 않고 옆에 둡니다. 노드가 잠깐 꺼졌다 켜집니다.")}</p>
+       <p class="meta">${copyHtml("되살린 지갑도 지우지 않고 옆에 둡니다. 서버가 잠깐 꺼졌다 켜집니다.")}</p>
        <div id="wrs-out"></div>
        <div class="row sdw-gap"><button id="wrs-undo-go">${copyHtml("되돌리기")}</button><button class="ghost" id="wrs-x">${copyHtml("그만두기")}</button></div>`,
     );

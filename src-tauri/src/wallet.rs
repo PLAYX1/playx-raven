@@ -67,7 +67,7 @@ pub async fn encrypt_wallet(passphrase: String, confirm: String) -> Result<Value
     match &before {
         Err(e) => {
             return Err(format!(
-                "노드에 연결하지 못했습니다. 암호를 걸지 않았습니다. ({e})"
+                "서버에 연결하지 못했습니다. 암호를 걸지 않았습니다. ({e})"
             ))
         }
         Ok(i) => {

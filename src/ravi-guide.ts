@@ -48,7 +48,7 @@ export const GUIDE: GuideTopic[] = [
     id: "fee", name: "수수료",
     words: /수수료|\bfees?\b|手数料|手续费|費用|费用/i,
     lines: [
-      "보낼 때 수수료는 노드가 정해요 — 보통 0.01 RVN 안팎이에요.",
+      "보낼 때 수수료는 서버가 정해요 — 보통 0.01 RVN 안팎이에요.",
       "보내기 확인 화면에서 이번 수수료와 내 지갑에서 나가는 합계를 먼저 보여 드려요. 받는 분은 적은 금액을 그대로 받아요.",
     ],
     go: [{ label: "보내기 열기", to: "send" }],
@@ -100,13 +100,13 @@ export const GUIDE: GuideTopic[] = [
     go: [{ label: "AI 열쇠 넣기", to: "key" }],
   },
   {
-    id: "sync", name: "노드 동기화",
+    id: "sync", name: "서버 동기화",
     words: /동기화|싱크|따라잡|\bsync|노드|\bnode\b|同期|同步|ノード|节点|節點/i,
     lines: [
       "이 컴퓨터가 레이븐코인 기록을 받아 맞추는 중이에요(동기화). 처음엔 몇 시간에서 며칠 걸릴 수 있어요.",
       "켜 두기만 하면 돼요. 그동안에는 받은 돈이 늦게 보일 수 있어요.",
     ],
-    go: [{ label: "노드 상태 보기", to: "node" }],
+    go: [{ label: "서버 상태 보기", to: "node" }],
   },
   {
     id: "receive", name: "받기",

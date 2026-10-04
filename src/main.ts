@@ -790,10 +790,10 @@ async function paintHuman(a: Asset): Promise<boolean> {
     (who ? kv("받는 사람", who) : "") +
     (made
       ? `<p class="meta">${copyHtml("이 컴퓨터가 만든 것이에요. 제목·받는 사람은 이 컴퓨터의 발행 기록에만 있어요.")}</p>`
-      : `<p class="meta">${copyHtml("제목·받는 사람 이름은 체인에 올라가지 않아요. 발급한 곳에서 받은 종이나 파일로 확인하세요.")}</p>`) +
+      : `<p class="meta">${copyHtml("제목·받는 사람 이름은 공개 장부에 올라가지 않아요. 발급한 곳에서 받은 종이나 파일로 확인하세요.")}</p>`) +
     `<div class="verifyrow"><button class="ghost" id="p-verify" type="button">${copyHtml("진짜인지 확인")}</button>
        <span class="meta">${copyHtml("공개 확인 페이지가 인터넷 창에서 열려요.")}</span></div>` +
-    `<p class="chainname">${copyHtml("체인 이름")} <code translate="no">${escapeHtml(a.name)}</code></p>`;
+    `<p class="chainname">${copyHtml("공개 장부 이름")} <code translate="no">${escapeHtml(a.name)}</code></p>`;
   const vb = document.getElementById("p-verify");
   // 확인 페이지가 `?a=` 를 받아 곧바로 찾는다(release-site verify.js).
   if (vb) vb.onclick = () => void openUrl(verifyLink(a.name)).catch(() => {});
@@ -853,7 +853,7 @@ async function renderPanel() {
   try {
     kind = await invoke("content_kind", { cid });
   } catch {
-    $("p-body").innerHTML = '<p class="muted">로컬 IPFS가 꺼져 있어 이 컴퓨터에서 열 수 없습니다.</p>';
+    $("p-body").innerHTML = '<p class="muted">로컬 사진 보관함이 꺼져 있어 이 컴퓨터에서 열 수 없습니다.</p>';
     return;
   }
   if (selected !== a.name) return; // 사용자가 그 사이 다른 행을 골랐다
@@ -1387,7 +1387,7 @@ async function idAdopt() {
         "② 두 이름을 잇는 글(「같은 사람입니다」)을 양쪽 열쇠로 서명해 세계 릴레이에 올립니다. " +
         "한번 퍼진 글은 되거둘 수 없습니다. " +
         "③ 옛 열쇠 파일은 지우지 않고 talkkey-old-<시각>.json 으로 옆에 남깁니다. " +
-        "④ 가게 간판 열쇠는 바뀌지 않습니다 — 그 공개키는 체인에 박혀 있습니다.",
+        "④ 가게 간판 열쇠는 바뀌지 않습니다 — 그 공개키는 공개 장부에 박혀 있습니다.",
     ),
   );
   if (!ok) return;
@@ -1561,7 +1561,7 @@ async function doRestore(directory = false) {
       const keys = r.items.map((i: any) => i.key);
       const ok = await sure(
         "되돌릴까요?",
-        "지금 있는 것은 옆에 따로 남겨 둡니다.\n지갑을 되돌리려면 노드가 꺼져 있어야 합니다.",
+        "지금 있는 것은 옆에 따로 남겨 둡니다.\n지갑을 되돌리려면 서버가 꺼져 있어야 합니다.",
         "되돌립니다"
       );
       if (!ok) return;
@@ -1579,7 +1579,7 @@ async function doRestore(directory = false) {
           done.map(d => `<div class="kv"><b>${escapeHtml(String(d.what))}</b><span>${escapeHtml(String(d.note || t("완료")))}</span></div>`).join("") +
           (failed.length ? `<div class="warnbox">${failed.map(f => `${escapeHtml(String(f.what))} — ${escapeHtml(String(f.why))}`).join("<br>")}</div>` : "") +
           (previous.length ? `<p>${copyHtml("보존한 이전 파일을 확인하기 전에는 지우지 마세요.")}</p>` + previous.map(p => `<div class="kv"><b>${escapeHtml(String(p.what))}</b><code style="overflow-wrap:anywhere">${escapeHtml(p.previous)}</code></div>`).join("") : "") +
-          (!complete && failed.some(f => f.changed) ? `<div class="warnbox">${copyHtml("일부 파일이 바뀌었습니다. 보존한 이전 파일을 확인하기 전에는 노드를 켜지 마세요.")}</div>` : "") +
+          (!complete && failed.some(f => f.changed) ? `<div class="warnbox">${copyHtml("일부 파일이 바뀌었습니다. 보존한 이전 파일을 확인하기 전에는 서버를 켜지 마세요.")}</div>` : "") +
           (res?.cleanup_warning ? `<div class="warnbox">${escapeHtml(String(res.cleanup_warning))}</div>` : "") +
           `<p class="meta">${escapeHtml(String(res?.note || ""))}</p></div>`;
       } catch (e) {
@@ -1598,7 +1598,7 @@ async function showCard() {
     $("rs-result").innerHTML =
       `<div class="card" style="margin-top:11px">
          <h3>복구 카드 — 인쇄해서 서랍에</h3>
-         <div class="kv"><b>노드</b><span>${c.node?.name || "(이름 없음)"} · ${c.node?.id}</span></div>
+         <div class="kv"><b>서버</b><span>${c.node?.name || "(이름 없음)"} · ${c.node?.id}</span></div>
          <div class="kv"><b>가게</b><span>${c.shop_name || "-"}</span></div>
          <div class="kv"><b>백업 위치</b><span>${c.backup_folder}</span></div>
          <ol style="margin:12px 0 0 18px;font-size:14px;line-height:1.9">
@@ -1958,7 +1958,7 @@ async function paintEasySetup(): Promise<void> {
     typeof x === "number" ? `${x}${unit}` : t("모름");
 
   const rows = [
-    ["블록체인",
+    ["공개 장부",
       sug.full_chain
         ? "전부 이 컴퓨터에 둡니다"
         : "가볍게 시작합니다"],
@@ -2158,7 +2158,7 @@ async function paintStatusDots() {
     const synced = (n?.progress ?? 0) > 0.9999;
     // 🔴 「따라잡는 중」만 적으면 **끝이 안 보인다.** 34GB 를 훑는 동안
     //    사장은 이게 10분짜리인지 하루짜리인지 알 수가 없다. 숫자를 준다.
-    set("d-node", "d-node-t", true, synced ? "RVN 노드 켜짐" : tf("노드 {0}%", pct.toFixed(1)));
+    set("d-node", "d-node-t", true, synced ? "RVN 서버 켜짐" : tf("서버 {0}%", pct.toFixed(1)));
     setSyncBar(synced ? null : pct);
     nodeUp = true;
     nodeWarming = false;
@@ -2172,7 +2172,7 @@ async function paintStatusDots() {
       "d-node",
       "d-node-t",
       nodeWarming,
-      nodeWarming ? "RVN 노드 여는 중" : "RVN 노드 꺼짐"
+      nodeWarming ? "RVN 서버 여는 중" : "RVN 서버 꺼짐"
     );
     setSyncBar(null);
     nodeUp = false;
@@ -2223,7 +2223,7 @@ async function paintStatusDots() {
       }
     })();
   } catch {
-    set("d-ipfs", "d-ipfs-t", false, "파일창고(IPFS) 꺼짐");
+    set("d-ipfs", "d-ipfs-t", false, "사진 보관함 꺼짐");
   }
 }
 
@@ -2586,9 +2586,9 @@ async function drawMoneyStatus(): Promise<void> {
   const n = s.node || {};
   줄들.push(
     n.ok
-      ? 줄("노드", n.behind > 20 ? tf("{0}블록 뒤", n.behind) : tf("블록 {0}", Number(n.blocks).toLocaleString()),
+      ? 줄("서버", n.behind > 20 ? tf("{0}블록 뒤", n.behind) : tf("블록 {0}", Number(n.blocks).toLocaleString()),
            n.behind > 20 ? "warn" : "good", String(n.why || ""))
-      : 줄("노드", "꺼짐", "bad", String(n.why || "")),
+      : 줄("서버", "꺼짐", "bad", String(n.why || "")),
   );
 
   const w = s.wallet || {};
@@ -2903,7 +2903,7 @@ async function 라비살피기() {
             page: "reward",
             el: "rw-gate",
             say: t(
-              "자산 색인이 꺼져 있어 명단을 못 셉니다. 켜려면 43GB 를 다시 훑고 그동안 노드가 멈춥니다 — 문 닫는 시간에 하세요.",
+              "자산 색인이 꺼져 있어 명단을 못 셉니다. 켜려면 43GB 를 다시 훑고 그동안 서버가 멈춥니다 — 문 닫는 시간에 하세요.",
             ),
           }),
       });
@@ -2967,7 +2967,7 @@ function shopTodo(): { bad: boolean; label: string; why: string; go?: () => void
   return [
     {
       bad: !(nodeUp ?? true),
-      label: (nodeWarming ? "노드가 여는 중이에요" : "노드가 꺼져 있어요"),
+      label: (nodeWarming ? "서버가 여는 중이에요" : "서버가 꺼져 있어요"),
       why: ("결제가 들어와도 확인을 못 합니다."),
       go: () => { $("qrwrap").style.display = "none"; showPage("settings"); },
     },
@@ -2991,7 +2991,7 @@ function shopTodo(): { bad: boolean; label: string; why: string; go?: () => void
       //    「등록하지 않았습니다」를 계속 띄웠다. 실제로 그 상태였다.
       //    등록됐다는 증거는 **체인에 올라간 이름**(`sh-registered`)이다.
       bad: !val("sh-registered"),
-      label: ("체인에 가게를 등록하지 않았습니다"),
+      label: ("공개 장부에 가게를 등록하지 않았습니다"),
       why: ("같은 와이파이 주문은 됩니다. 다만 가게 목록에는 안 뜹니다."),
       // 탭만 열면 또 찾아야 한다. **체인에 남을 이름 칸**까지 데려간다.
       go: () => {
@@ -3173,7 +3173,7 @@ async function openQrSheet() {
     body.innerHTML = todoHtml +
       `<div class="warnbox">
          <b>${copyHtml("손님 폰 서버를 켜지 못했습니다.")}</b><br />
-         ${copyHtml("노드가 켜져 있는지 보시고, 잠시 뒤에 다시 눌러 주세요.")}
+         ${copyHtml("서버가 켜져 있는지 보시고, 잠시 뒤에 다시 눌러 주세요.")}
        </div>
        <div class="meta" style="margin-top:10px">${escapeHtml(errText(e))}</div>`;
   }
@@ -3488,7 +3488,7 @@ function bindTurnOn(id: string, cmd: string) {
     try {
       const r = await invoke<any>(cmd);
       // 못 켰으면 이유를 그대로 보여 준다. 조용히 실패하면 또 누른다.
-      const why = (r?.skipped || []).map((x: any) => `${x.what}: ${x.why}`).join(" · ");
+      const why = (r?.skipped || []).map((x: any) => `${t(x.what === "노드" ? "서버" : x.what === "IPFS" ? "사진 보관함" : x.what)}: ${x.why}`).join(" · ");
       if (say) setCopyText(say, () => why || t("켰습니다. 잠시 뒤 다시 봐 주세요."));
     } catch (e) {
       if (say) say.textContent = String((e as Error)?.message || e);
@@ -3524,7 +3524,7 @@ async function bootStrip(): Promise<string> {
   const notes: string[] = (r.notes || []).map(String);
   const bad: string[] = (r.skipped || [])
     .filter((x: any) => !String(x?.why || "").includes("이미 켜져"))
-    .map((x: any) => `${x.what} — ${x.why}`);
+    .map((x: any) => `${t(x.what === "노드" ? "서버" : x.what === "IPFS" ? "사진 보관함" : x.what)} — ${x.why}`);
   if (!notes.length && !bad.length) return "";
   return (
     `<div class="card" data-bootstrip style="margin-bottom:14px">` +
@@ -3578,7 +3578,7 @@ async function speedCard(): Promise<string> {
     return `<div class="card" style="margin-top:12px">
         <h3>${copyHtml("빠르게 따라잡기")}</h3>
         <p class="meta danger">${escapeHtml(errText(e))}</p>
-        <p class="meta">${copyHtml("「노드 설정 열기」에서 「메모리 사용」을 2000 이상으로 직접 정하셔도 됩니다.")}</p>
+        <p class="meta">${copyHtml("「서버 설정 열기」에서 「메모리 사용」을 2000 이상으로 직접 정하셔도 됩니다.")}</p>
       </div>`;
   }
   try {
@@ -3595,11 +3595,11 @@ async function speedCard(): Promise<string> {
     //    묻게 됐다. 같은 것을 두 이름으로 부르면 안 된다 — 오늘만 두 번째다.
     return `<div class="card" style="margin-top:12px;border-color:var(--brand)">
         <h3>${copyHtml("빠르게 따라잡기")}</h3>
-        <p class="meta">${copyHtml("노드에 메모리를 더 주면 장부를 훨씬 빨리 훑습니다.")}</p>
+        <p class="meta">${copyHtml("서버에 메모리를 더 주면 장부를 훨씬 빨리 훑습니다.")}</p>
         <div class="kv"><b>${copyHtml("지금 메모리")}</b><span>${Number(s.now).toLocaleString()} MB</span></div>
         <div class="kv"><b>${copyHtml("권하는 값")}</b><span><b>${Number(s.suggest).toLocaleString()} MB</b></span></div>
         <p class="meta">${escapeHtml(String(s.why || ""))}</p>
-        ${s.measured ? "" : `<p class="meta warn">${copyHtml("이 컴퓨터의 메모리를 못 읽어서 8GB 로 셈했습니다. 실제와 다르면 「노드 설정 열기」에서 직접 정하세요.")}</p>`}
+        ${s.measured ? "" : `<p class="meta warn">${copyHtml("이 컴퓨터의 메모리를 못 읽어서 8GB 로 셈했습니다. 실제와 다르면 「서버 설정 열기」에서 직접 정하세요.")}</p>`}
         <div class="row" style="margin-top:10px">
           <button id="nd-fast">${copyHtml("빠르게 따라잡기")}</button>
           <span class="meta" id="nd-fastsay"></span>
@@ -3682,8 +3682,8 @@ function slowCard(behind: number, rate: number): string {
       <p class="meta">${copyHtml("지금 속도로는")} ${Math.round(day)}${copyHtml("일 걸립니다. 아래 셋 중 하나가 원인인 경우가 대부분입니다.")}</p>
       <div class="kv"><b>${copyHtml("① 디스크")}</b><span>${copyHtml("HDD 면 SSD 보다 20~50배 느립니다. 작업 관리자 → 성능 → 디스크 에서 보실 수 있습니다.")}</span></div>
       <div class="kv"><b>${copyHtml("② 백신")}</b><span>${copyHtml("장부 폴더를 검사에서 빼야 합니다 — 위 「한 번에 준비하기」가 해 드립니다.")}</span></div>
-      <div class="kv"><b>${copyHtml("③ 색인")}</b><span>${copyHtml("「이 노드로 지갑도 열기」를 켜 두면 여러 배 느려집니다. 급하시면 다 따라잡은 뒤에 켜셔도 됩니다.")}</span></div>
-      <p class="meta" style="margin-top:10px">${copyHtml("그리고 다 따라잡기 전에도 가게는 여실 수 있습니다 — 노드가 따라잡는 동안에는 결제가 늦게 보일 뿐입니다.")}</p>
+      <div class="kv"><b>${copyHtml("③ 색인")}</b><span>${copyHtml("「이 서버로 지갑도 열기」를 켜 두면 여러 배 느려집니다. 급하시면 다 따라잡은 뒤에 켜셔도 됩니다.")}</span></div>
+      <p class="meta" style="margin-top:10px">${copyHtml("그리고 다 따라잡기 전에도 가게는 여실 수 있습니다 — 서버가 따라잡는 동안에는 결제가 늦게 보일 뿐입니다.")}</p>
     </div>`;
 }
 
@@ -3783,10 +3783,10 @@ async function stallCard(): Promise<string> {
         <h3>${copyHtml("진행이 멈춰 있습니다")}</h3>
         <div class="kv"><b>${copyHtml("블록")}</b><span>${Number(s.blocks).toLocaleString()}</span></div>
         <div class="kv"><b>${copyHtml("안 움직인 시간")}</b><span>${Number(s.quiet_min)}${copyHtml("분")}</span></div>
-        <p class="meta">${copyHtml("확인하실 것 — ① 이 컴퓨터의 남은 디스크 공간(장부에 40GB 넘게 듭니다) ② 노드를 껐다 켜 보기. 재색인은 이어서 합니다.")}</p>
+        <p class="meta">${copyHtml("확인하실 것 — ① 이 컴퓨터의 남은 디스크 공간(장부에 40GB 넘게 듭니다) ② 서버를 껐다 켜 보기. 재색인은 이어서 합니다.")}</p>
         <div class="row" style="margin-top:10px">
-          <button class="ghost" id="nd-restart">${copyHtml("노드 껐다 켜기")}</button>
-          <button class="ghost" id="nd-log">${copyHtml("노드가 뭐 하는지 보기")}</button>
+          <button class="ghost" id="nd-restart">${copyHtml("서버 껐다 켜기")}</button>
+          <button class="ghost" id="nd-log">${copyHtml("서버가 뭐 하는지 보기")}</button>
           <span class="meta" id="nd-restartsay"></span>
         </div>
         <div id="nd-logbox"></div>
@@ -3865,7 +3865,7 @@ async function restoreCard(): Promise<string> {
         <h3>${copyHtml("메모리 되돌리기")}</h3>
         <div class="kv"><b>${copyHtml("지금")}</b><span>${now.toLocaleString()} MB</span></div>
         <div class="kv"><b>${copyHtml("되돌릴 값")}</b><span>450 MB</span></div>
-        <p class="meta">${copyHtml("다 따라잡았습니다. 이제 이만큼 필요 없습니다 — 계산대 메모리를 노드가 계속 물고 있으면 주문 화면이 느려집니다.")}</p>
+        <p class="meta">${copyHtml("다 따라잡았습니다. 이제 이만큼 필요 없습니다 — 계산대 메모리를 서버가 계속 물고 있으면 주문 화면이 느려집니다.")}</p>
         <div class="row" style="margin-top:10px">
           <button class="ghost" id="nd-back">${copyHtml("메모리 되돌리기")}</button>
           <span class="meta" id="nd-backsay"></span>
@@ -3891,7 +3891,7 @@ function bindRestore() {
         return;
       }
       const ok = await sure(
-        t("노드를 껐다 켤까요?"),
+        t("서버를 껐다 켤까요?"),
         t("그래야 적용됩니다. 그동안 결제 확인이 멈추고, 얼마나 걸릴지는 장부 크기에 따라 다릅니다.")
       );
       if (!ok) {
@@ -3924,7 +3924,7 @@ function bindSpeed() {
       say.innerHTML =
         `<span class="ok">${Number(r.set).toLocaleString()} MB ${copyHtml("로 정했습니다")}</span>`;
       const ok = await sure(
-        t("노드를 껐다 켤까요?"),
+        t("서버를 껐다 켤까요?"),
         t("그래야 적용됩니다. 재색인은 이어서 합니다 — 처음부터 다시 하지 않습니다. 몇 분 동안 결제 확인이 멈춥니다.")
       );
       if (!ok) return;
@@ -3948,7 +3948,7 @@ async function paintPartBody(): Promise<void> {
 
   try {
     if (partOpen === "node") {
-      if (title) title.textContent = "RVN 노드";
+      if (title) title.textContent = "RVN 서버";
       // 🔴 노드가 꺼져 있으면 `node_status` 가 던진다. 여태 그 영어 오류만
       //    화면에 남고 **끝이었다** — 왜 안 뜨는지도, 켜는 단추도 없었다.
       //    「.cookie 를 못 읽었습니다」는 증상이지 원인이 아니다.
@@ -3969,7 +3969,7 @@ async function paintPartBody(): Promise<void> {
         if (warming) {
           box.innerHTML =
             `<div class="card">
-               <h3>${copyHtml("노드가 시작하는 중입니다")}</h3>
+               <h3>${copyHtml("서버가 시작하는 중입니다")}</h3>
                <p class="meta">${copyHtml("장부를 확인하고 있습니다. 몇 분 걸립니다 — 그동안 아무것도 안 하셔도 됩니다.")}</p>
                <p class="meta" style="opacity:.7">${escapeHtml(msg.slice(0, 120))}</p>
              </div>`;
@@ -3993,11 +3993,11 @@ async function paintPartBody(): Promise<void> {
           box.innerHTML =
             `<div class="card" style="border-color:var(--warn)">
                <h3>${copyHtml("장부가 깨졌습니다")}</h3>
-               <p class="meta">${copyHtml("그래서 노드가 켜질 때마다 그 자리를 만나 스스로 꺼집니다. 「지금 켜기」를 눌러도 소용이 없습니다.")}</p>
+               <p class="meta">${copyHtml("그래서 서버가 켜질 때마다 그 자리를 만나 스스로 꺼집니다. 「지금 켜기」를 눌러도 소용이 없습니다.")}</p>
                <p class="meta">${copyHtml("계산을 다시 하면 고쳐집니다. 블록 파일은 그대로 쓰므로 다시 받지 않습니다 — 몇 시간 걸릴 수 있고, 그동안 컴퓨터를 켜 두시면 됩니다.")}</p>
                <div class="row" style="margin-top:12px">
                  <button id="nd-heal">${copyHtml("장부 고치기")}</button>
-                 <button class="ghost" id="nd-log">${copyHtml("노드가 뭐 하는지 보기")}</button>
+                 <button class="ghost" id="nd-log">${copyHtml("서버가 뭐 하는지 보기")}</button>
                  <span class="meta" id="nd-say"></span>
                </div>
                <div id="nd-logbox"></div>
@@ -4024,13 +4024,13 @@ async function paintPartBody(): Promise<void> {
         }
         box.innerHTML =
           `<div class="card">
-             <h3>${copyHtml("노드가 꺼져 있습니다")}</h3>
-             <p class="meta">${copyHtml("결제 확인도 색인도 이 노드가 합니다.")}</p>
+             <h3>${copyHtml("서버가 꺼져 있습니다")}</h3>
+             <p class="meta">${copyHtml("결제 확인도 색인도 이 서버가 합니다.")}</p>
              ${
                n.installed
                  ? `<p class="meta">${copyHtml("프로그램은 있습니다")} — <code class="addr">${escapeHtml(String(n.path || ""))}</code></p>
                     <button id="nd-go" style="margin-top:12px">${copyHtml("지금 켜기")}</button>`
-                 : `<p class="meta" style="color:var(--warn)">${copyHtml("노드 프로그램을 찾지 못했습니다.")}</p>
+                 : `<p class="meta" style="color:var(--warn)">${copyHtml("서버 프로그램을 찾지 못했습니다.")}</p>
                     <p class="meta">${escapeHtml(String(n.install || ""))}</p>` +
                    (looked.length
                      ? `<details style="margin-top:10px"><summary class="meta">${copyHtml("어디를 봤는지 보기")}</summary>
@@ -4087,7 +4087,7 @@ async function paintPartBody(): Promise<void> {
             [t("블록"), Number(s?.blocks ?? 0).toLocaleString()],
             // 판을 숨기지 않는다. 못 읽었으면 못 읽었다고 적는다.
             [
-              t("노드 판"),
+              t("서버 판"),
               nv?.line
                 ? String(nv.line).replace(/^.*?(v[0-9].*)$/, "$1") +
                   (nv.ok === false ? ` ⚠️` : "")
@@ -4119,20 +4119,20 @@ async function paintPartBody(): Promise<void> {
               )
             : behind > 0
               ? t("따라잡는 동안에는 방금 들어온 결제가 늦게 보입니다.")
-              : t("이 컴퓨터가 체인을 통째로 들고 있습니다. 남에게 묻지 않습니다."),
+              : t("이 컴퓨터가 공개 장부를 통째로 들고 있습니다. 남에게 묻지 않습니다."),
         ) +
         // 🔴 못 따라잡는 판이면 **제일 먼저** 말한다. 며칠 기다린 뒤에
         //    알게 되면 그 며칠이 통째로 버려진다.
         (nv?.ok === false
           ? `<div class="card" style="margin-top:12px;border-color:var(--danger)">
-               <h3>${copyHtml("이 노드 판으로는 끝까지 못 갑니다")}</h3>
+               <h3>${copyHtml("이 서버 판으로는 끝까지 못 갑니다")}</h3>
                <p class="meta">${escapeHtml(String(nv?.say || ""))}</p>
                <p class="meta"><code class="addr">${escapeHtml(String(nv?.path || ""))}</code></p>
              </div>`
           : "") +
         (behind > 0 ? await stallCard() : "") + slowCard(behind, rate) + prepCard(behind) +
         (behind > 0 ? await speedCard() : await restoreCard()) + (await indexCard()) +
-        goto("settings", t("노드 설정 열기"));
+        goto("settings", t("서버 설정 열기"));
       bindSpeed();
       bindRestore();
       bindRestart();
@@ -4165,7 +4165,7 @@ async function paintPartBody(): Promise<void> {
               t("켜려면 두 가지가 필요합니다 — 캐는 프로그램(kawpowminer)과 받을 주소.")
         ) + goto("settings", t(on ? "채굴 설정 열기" : "채굴 켜는 곳으로"));
     } else if (partOpen === "ipfs") {
-      if (title) title.textContent = "파일창고 (IPFS)";
+      if (title) title.textContent = "사진 보관함";
       const s = await invoke<any>("ipfs_status");
       box.innerHTML = !s?.running
         ? card([[t("지금"), t("꺼져 있습니다")]], t("사진과 메뉴판이 여기 들어갑니다. 꺼져 있으면 손님이 사진을 못 봅니다.")) +
@@ -4176,7 +4176,7 @@ async function paintPartBody(): Promise<void> {
               [t("지키는 파일"), `${pinned.size.toLocaleString()}${t("개")}`],
               [t("판"), String(s.version || "—").slice(0, 22)],
             ],
-            t("내 컴퓨터에만 있는 창고가 아니라, 손님 폰과 다른 노드가 같이 나눠 갖는 곳입니다.")
+            t("내 컴퓨터에만 있는 창고가 아니라, 손님 폰과 다른 서버가 같이 나눠 갖는 곳입니다.")
           ) +
           /* 🔴 **서로 보완하는 자리.** 대표님: "탈중앙인데 서로가 보완해
              가면서 가는 구조가 좋은데 말야. 내 406호 컴퓨터와 내 맥북이
@@ -4342,7 +4342,7 @@ function bindIndexCard(): void {
     now.onclick = async () => {
       if (!confirm("지금 시작하면 몇 시간 동안 입금 확인이 멈춥니다. 시작할까요?")) return;
       now.disabled = true;
-      say("노드를 다시 띄우는 중입니다…");
+      say("서버를 다시 띄우는 중입니다…");
       try {
         await invoke("reindex_start");
         say("시작했습니다. 이 화면에서 진행을 보실 수 있습니다.");
@@ -4403,7 +4403,7 @@ async function indexCard(): Promise<string> {
   }
   if (st.done) {
     return card([[t("주소 색인"), t("켜져 있습니다")]],
-      t("이 노드가 손님 지갑의 잔액 질문에 직접 답합니다. 남의 서버에 안 묻습니다."));
+      t("이 서버가 손님 지갑의 잔액 질문에 직접 답합니다. 남의 서버에 안 묻습니다."));
   }
 
   const now = Math.floor(Date.now() / 1000);
@@ -4431,7 +4431,7 @@ async function indexCard(): Promise<string> {
     can = true;
   }
   return `<div class="card">
-      <b>${copyHtml("주소 색인 — 이 노드로 지갑도 열기")}</b>
+      <b>${copyHtml("주소 색인 — 이 서버로 지갑도 열기")}</b>
       <p class="meta" style="margin-top:8px">${copyHtml("지금은 손님 지갑이 잔액을 우리 서버 한 곳에 묻습니다. 이걸 켜면 이 컴퓨터가 직접 답합니다. 대신 한 번 다시 훑어야 하고, 그동안 입금 확인이 멈춥니다.")}</p>
       <p class="meta" style="margin-top:8px"><b>${escapeHtml(say)}</b></p>
       ${can ? `<label style="display:flex;align-items:center;gap:10px;margin-top:12px;cursor:pointer">
@@ -4750,7 +4750,7 @@ async function paintHomeToday(): Promise<void> {
 async function paintHome(): Promise<void> {
   void refreshOverview();
   const safe = document.getElementById("rv-home-safe");
-  if (safe) safe.textContent = nodeUp ? t("노드와 연결됨") : t("노드 상태를 확인하세요");
+  if (safe) safe.textContent = nodeUp ? t("서버와 연결됨") : t("서버 상태를 확인하세요");
   try {
     const recent: unknown = await invoke("recent_transactions", { count: 4 }).catch(() => null);
     const txs: any[] = (Array.isArray(recent) && recent.length ? recent : await 최근거래_모아읽기(4))
@@ -4911,6 +4911,7 @@ function showPage(id: string) {
 }
 
 /* ── 지갑 ─────────────────────────────────────────────────── */
+let walletWasLocked: boolean | null = null;
 async function loadWallet() {
   // 주인 표 줄은 따로 읽는다 — 느려도 잔액·잠금이 기다리지 않게.
   void paintOwners();
@@ -4943,6 +4944,15 @@ async function loadWallet() {
       rx="2"/><path d="M8 11V7a4 4 0 0 1 7.5-2"/></svg>`;
 
     const l: any = await invoke("wallet_lock_state");
+    const locked = !!l.encrypted && !l.unlocked;
+    if (locked && walletWasLocked === false) {
+      document.querySelectorAll<HTMLInputElement>('input[type="password"]').forEach((input) => { input.value = ""; });
+    }
+    walletWasLocked = locked;
+    if (sendPreview) {
+      $("r-passbox").style.display = locked ? "" : "none";
+      gateSend();
+    }
     const enc = $("w-enc") as HTMLButtonElement;
     const lockNow = $("w-lock-now") as HTMLButtonElement;
 
@@ -5081,7 +5091,7 @@ async function openReceive(fresh = false) {
   const addr = String(r?.address ?? "").trim();
   // 🔴 노드가 「이 지갑 것」이라고 한 것만 보여 준다. 모양이 이상하거나 확인이 없으면 안 그린다.
   if (!looksLikeAddress(addr) || r?.mine !== true) {
-    host.innerHTML = `<div class="warnbox">${copyHtml("노드가 이 주소를 이 지갑의 받는 주소로 확인해 주지 않았어요. 보여 드리지 않을게요.")}</div>`;
+    host.innerHTML = `<div class="warnbox">${copyHtml("서버가 이 주소를 이 지갑의 받는 주소로 확인해 주지 않았어요. 보여 드리지 않을게요.")}</div>`;
     return;
   }
   host.innerHTML = receiveHtml(addr, r?.reused === true, copyHtml, escapeHtml);
@@ -5145,13 +5155,13 @@ async function checkWhose(raw?: string) {
   try {
     const r = await invoke<WhoseResult | null>("addr_whose", { address: text });
     if (seq !== whoseSeq) return;          // 그사이 다른 주소를 넣었다 — 옛 답을 그리지 않는다
-    if (!r || typeof r !== "object" || !r.state) throw new Error(t("노드가 답하지 않았어요."));
+    if (!r || typeof r !== "object" || !r.state) throw new Error(t("서버가 답하지 않았어요."));
     whoseLast = r;
     out.innerHTML = whoseHtml(r);
   } catch (e) {
     if (seq !== whoseSeq) return;
     whoseLast = null;
-    out.innerHTML = `<div class="warnbox">${copyHtml("노드에 묻지 못했어요.")} ${escapeHtml(errText(e))}</div>`;
+    out.innerHTML = `<div class="warnbox">${copyHtml("서버에 묻지 못했어요.")} ${escapeHtml(errText(e))}</div>`;
   }
 }
 
@@ -5190,11 +5200,11 @@ const raviWhoseSaid: { box: HTMLElement; r: WhoseResult }[] = [];
  * (라비 첫 화면의 `do` 칸과 같은 원칙 — 열쇠 없이 되는 일은 AI 를 거치지 않는다.)
  */
 async function raviWhose(address: string) {
-  chatHtml("ai", `<span class="muted" data-thinking="1">${copyHtml("노드에 묻는 중…")}</span>`);
+  chatHtml("ai", `<span class="muted" data-thinking="1">${copyHtml("서버에 묻는 중…")}</span>`);
   try {
     const r = await invoke<WhoseResult | null>("addr_whose", { address });
     chatPopThinking();
-    if (!r || typeof r !== "object" || !r.state) throw new Error(t("노드가 답하지 않았어요."));
+    if (!r || typeof r !== "object" || !r.state) throw new Error(t("서버가 답하지 않았어요."));
     chatHtml("ai", whoseHtml(r, "ravi"));
     const box = $("chat-log").lastElementChild?.querySelector<HTMLElement>(".msgtxt");
     if (box) {
@@ -5203,7 +5213,7 @@ async function raviWhose(address: string) {
     }
   } catch (e) {
     chatPopThinking();
-    chatHtml("ai", `<span class="warn">${copyHtml("노드에 묻지 못했어요.")} ${escapeHtml(errText(e))}</span>`);
+    chatHtml("ai", `<span class="warn">${copyHtml("서버에 묻지 못했어요.")} ${escapeHtml(errText(e))}</span>`);
   }
 }
 
@@ -5305,7 +5315,7 @@ function dropJob(): DropJob {
     case "shop":
       return {
         title: t("가게 사진으로 씁니다"),
-        why: t("가게 정보에 붙습니다. 체인은 안 건드리므로 값이 들지 않습니다."),
+        why: t("가게 정보에 붙습니다. 공개 장부는 안 건드리므로 값이 들지 않습니다."),
         ok: true,
       };
     default:
@@ -5513,7 +5523,7 @@ async function paintKeyMove() {
        <div class="meta" style="margin-top:6px;line-height:1.9">
          · ${copyHtml("100 RVN 이 소각됩니다. 돌아오지 않습니다.")}<br />
          · ${copyHtml("가게 정보를 그대로 가져와 열쇠 한 줄만 바꿔 다시 새깁니다 — 다른 정보는 안 잃습니다.")}<br />
-         · ${copyHtml("체인에 새긴 뒤에야 열쇠 파일을 바꿉니다. 실패하면 아무것도 안 바뀝니다.")}<br />
+         · ${copyHtml("공개 장부에 새긴 뒤에야 열쇠 파일을 바꿉니다. 실패하면 아무것도 안 바뀝니다.")}<br />
          · ${copyHtml("옛 열쇠는 지우지 않고 옆에 남깁니다.")}<br />
          · ${copyHtml("「재발행 가능」은 켠 채로 둡니다 — 끄면 결제 주소도 영영 못 바꿉니다.")}<br />
          · ${copyHtml("확인되기까지 몇 분 걸리고, 그동안 손님 화면은 옛 정보를 봅니다.")}
@@ -5541,7 +5551,7 @@ async function doKeyMove(p: any) {
       t("되돌릴 수 없습니다.")
   );
   if (!ok) return;
-  if (!(await ensureUnlocked(t("체인에 새기려면 지갑을 열어야 합니다.")))) return;
+  if (!(await ensureUnlocked(t("공개 장부에 새기려면 지갑을 열어야 합니다.")))) return;
   const btn = $("km-go") as HTMLButtonElement;
   btn.disabled = true;
   setCopyText($("km-note"), () => t("새기는 중… 몇 분 걸립니다"));
@@ -6913,7 +6923,7 @@ async function talkNewRoom() {
       ? list.length
         ? t("고르시면 그 자산을 가진 분만 이 방에 글을 씁니다. 넘기면 그 순간 끊깁니다.")
         : t("가진 자산이 없습니다 — 누구나 들어오는 방이 됩니다.")
-      : t("지금은 자산을 확인할 수 없습니다(노드가 따라잡는 중). 누구나 들어오는 방으로 만드실 수 있습니다."));
+      : t("지금은 자산을 확인할 수 없습니다(서버가 따라잡는 중). 누구나 들어오는 방으로 만드실 수 있습니다."));
   } catch {
     setCopyText($("tk-nhint"), () => t("자산을 확인하지 못했습니다."));
   }
@@ -7180,7 +7190,7 @@ async function fanMakeRoom(asset: string) {
     // 🔴 **못 골랐으면 못 골랐다고 말한다.** 조용히 「누구나」로 두면
     //    사장은 자산 방을 만든 줄 알고 아무나 쓸 수 있는 방을 만든다.
     $("tk-nsay").innerHTML =
-      `<span class="danger">${escapeHtml(asset)} ${copyHtml("을(를) 자산 목록에서 못 찾았습니다. 노드가 장부를 훑는 중일 수 있습니다 — 자산 칸을 직접 확인해 주세요.")}</span>`;
+      `<span class="danger">${escapeHtml(asset)} ${copyHtml("을(를) 자산 목록에서 못 찾았습니다. 서버가 장부를 훑는 중일 수 있습니다 — 자산 칸을 직접 확인해 주세요.")}</span>`;
   }
   $("tk-newbox").scrollIntoView({ behavior: "smooth", block: "center" });
 }
@@ -7435,7 +7445,7 @@ async function swapLook() {
   const hex = ($("sw-hex") as HTMLTextAreaElement).value.trim();
   const box = $("sw-take");
   if (!hex) return;
-  box.innerHTML = `<p class="meta">${copyHtml("체인에 물어보는 중…")}</p>`;
+  box.innerHTML = `<p class="meta">${copyHtml("공개 장부에 물어보는 중…")}</p>`;
   try {
     const r = await invoke<any>("swap_check", { hex });
     if (!r.ok) {
@@ -7474,7 +7484,7 @@ async function swapBuy(hex: string, info: any) {
       tf("{0} {1}개를 받고 ", info.asset, Number(info.amount).toLocaleString()) +
         tf("모두 {0} RVN 을 냅니다 ", Number(info.total || info.price).toLocaleString()) +
         tf("(파는 사람 {0} · 개발비 {1}). ", Number(info.price).toLocaleString(), Number(info.fee || 0).toLocaleString()) +
-        tf("그 밖에 체인 수수료 {0} RVN. 되돌릴 수 없습니다.", dry.fee)
+        tf("그 밖에 공개 장부 수수료 {0} RVN. 되돌릴 수 없습니다.", dry.fee)
     );
     if (!ok) { $("sw-note").textContent = ""; return; }
     const r = await invoke<any>("swap_take", { hex, broadcast: true, passphrase: null });
@@ -7706,7 +7716,7 @@ function renderExtra() {
       </div>
       <label style="margin-top:12px">처음 받을 주소
         <input id="x-to" spellcheck="false" placeholder="R..." /></label>
-      <div class="meta">🔴 이 주소에도 위 딱지가 붙어 있어야 합니다. 안 붙어 있으면 노드가 거절합니다.</div>`;
+      <div class="meta">🔴 이 주소에도 위 딱지가 붙어 있어야 합니다. 안 붙어 있으면 서버가 거절합니다.</div>`;
     ["x-verifier", "x-to"].forEach((id) =>
       $(id).addEventListener("input", () => wizGate())
     );
@@ -7797,7 +7807,7 @@ async function checkIssueName() {
   if (NEEDS_EXISTING.includes(wizKind)) {
     if (!taken) {
       note.innerHTML =
-        `<span class="danger">체인에 없는 이름입니다. ` +
+        `<span class="danger">공개 장부에 없는 이름입니다. ` +
         (wizKind === "reissue" ? "더 찍으려면" : "고유 자산을 붙이려면") +
         ` 이미 가진 자산의 이름을 넣으세요.</span>`;
       return;
@@ -8415,7 +8425,7 @@ async function doIssue() {
       wizUnknown.set(name, Date.now());
       marked = false;
       void invoke("issue_unknown_mark", { name, kind: wizKind, probe, state: "unknown" }).catch(() => {});
-      $("i-result").innerHTML = `<div class="warnbox" style="margin-top:12px"><b>${copyHtml("보냈는지 아직 몰라요 — 기록될 때까지 기다려 주세요")}</b><br />${copyHtml("노드가 제때 답하지 않았어요. 이미 보냈을 수 있으니 다시 보내지 마세요. 몇 분 뒤 자산 화면에서 기록됐는지 확인해 주세요.")}</div>`;
+      $("i-result").innerHTML = `<div class="warnbox" style="margin-top:12px"><b>${copyHtml("보냈는지 아직 몰라요 — 기록될 때까지 기다려 주세요")}</b><br />${copyHtml("서버가 제때 답하지 않았어요. 이미 보냈을 수 있으니 다시 보내지 마세요. 몇 분 뒤 자산 화면에서 기록됐는지 확인해 주세요.")}</div>`;
       finished = true;
       wizFinish(btn);
       return;
@@ -8683,20 +8693,20 @@ function pickPayee(address: string) {
 }
 
 /** 수수료 한 줄 — RVN 은 노드에 읽기로만 묻는다(`sendfee.rs`, 서명·전파 없음). 못 구하면 지어내지 않는다. */
-const FEE_UNKNOWN = "수수료는 노드가 정해요(보통 0.01 RVN 안팎).";
+const FEE_UNKNOWN = "수수료는 서버가 정해요(보통 0.01 RVN 안팎).";
 function paintSendFee(fee: any, amount: number, asset: string | null) {
   const feeBox = $("r-fee"), feeNote = $("r-feenote"), total = $("r-total");
   const known = !asset && fee && typeof fee.fee === "number" && Number.isFinite(fee.fee) && fee.short !== true;
   if (known) {
     setCopyText(feeBox, () => `${fmtQty(fee.fee)} RVN`);
-    setCopyText(feeNote, () => t("노드가 지금 계산한 값이에요. 보낼 때 노드가 다시 계산해 아주 조금 다를 수 있어요."));
+    setCopyText(feeNote, () => t("서버가 지금 계산한 값이에요. 보낼 때 서버가 다시 계산해 아주 조금 다를 수 있어요."));
     setCopyText(total, () => `${fmtQty(Number(fee.total ?? amount + fee.fee))} RVN`);
     return;
   }
   setCopyText(feeBox, () => t(FEE_UNKNOWN));
   setCopyText(feeNote, () => asset ? t("수수료는 RVN 으로 내요.")
     : fee?.short === true ? t("수수료까지 합치면 잔액이 모자라요. 금액을 조금 줄여 주세요.")
-    : t("이번 수수료를 노드에 묻지 못했어요."));
+    : t("이번 수수료를 서버에 묻지 못했어요."));
   setCopyText(total, () => asset ? tf("{0} {1} + 수수료(RVN)", fmtQty(amount), asset) : tf("{0} RVN + 수수료", fmtQty(amount)));
 }
 
@@ -8733,7 +8743,7 @@ async function reviewSend() {
   if (!sendPreview.valid) {
     setAllRaviMood("worried");
     $("s-addrnote").innerHTML =
-      `<span style="color:var(--bad)">이 체인의 주소가 아닙니다. 한 글자라도 틀리면 이렇게 나옵니다.</span>`;
+      `<span style="color:var(--bad)">이 공개 장부의 주소가 아닙니다. 한 글자라도 틀리면 이렇게 나옵니다.</span>`;
     return;
   }
   $("s-addrnote").textContent = "";
@@ -8744,17 +8754,18 @@ async function reviewSend() {
   // 0.4.8-B — 이 컴퓨터에 저장한 받을 사람 이름도 보여 준다. 🔴 그래도 「처음 보내는 주소」 경고는
   //    노드의 보낸 기록(h.known)으로만 정한다 — 이름을 저장했다고 경고를 끄지 않는다.
   const who = String(h.label || payeeName(address) || "");
-  const first = `<span class="warn">${copyHtml("처음 보내는 주소")}</span>`;
+  const first = `<span class="warn">${copyHtml("처음 보내는 주소예요. 주소 앞뒤 글자를 한 번 더 확인하세요")}</span>`;
   $("r-who").innerHTML = who
     ? `<b translate="no">${escapeHtml(who)}</b>${h.known ? "" : ` · ${first}`}`
-    : first;
-  $("r-addr").textContent = address;
+    : h.known ? "" : first;
+  $("r-addr").textContent = address.match(/.{1,4}/g)?.join(" ") || address;
   $("r-hist").textContent = h.known
     ? tf("지난번 {0} · {1}", h.last_amount ?? "?", h.last_time ? ago(h.last_time) : "")
     : "";
 
   $("r-what").textContent = asset ?? "RVN";
   $("r-amount").textContent = `${amount}${asset ? "" : " RVN"}`;
+  setCopyText($("r-krw"), () => t("원화 환산 정보 없음"));
 
   const warns: string[] = [];
   if (!sendPreview.enough)
@@ -8805,11 +8816,16 @@ async function reviewSend() {
   setCopyText($("r-fee"), () => t("수수료 계산 중…"));
   $("r-feenote").textContent = "";
   $("r-total").textContent = "";
-  const [lock, fee] = await Promise.all([
+  const [lock, fee, rate] = await Promise.all([
     invoke<any>("wallet_lock_state").catch(() => null),
     asset ? Promise.resolve(null) : invoke<any>("send_fee", { address, amount }).catch(() => null),
+    asset ? Promise.resolve(null) : invoke<any>("rvn_rate", { currency: "KRW" }).catch(() => null),
   ]);
   paintSendFee(fee, amount, asset);
+  const won = amount * Number(rate?.rate);
+  if (!asset && Number(rate?.rate) > 0 && Number.isFinite(won)) {
+    setCopyText($("r-krw"), () => tf("지금 시세로 약 {0}원", Math.round(won).toLocaleString(lang)));
+  }
   const needPass = lock && lock.encrypted && !lock.unlocked;
   $("r-passbox").style.display = needPass ? "" : "none";
   ($("s-pass") as HTMLInputElement).value = "";
@@ -8921,6 +8937,9 @@ async function doSend() {
     // "보내는 중…" 이 남아 있으면 얼마를 보내려던 건지 사라진다.
     btn.textContent = wasLabel || "보내기";
     btn.disabled = false;
+  } finally {
+    ($("s-pass") as HTMLInputElement).value = "";
+    if (sendPreview) gateSend();
   }
   btn.textContent = "보내기";
 }
@@ -9622,7 +9641,7 @@ async function artistLoad() {
       setCopyText(seal, () => t("PLAYX 주인이 올린 소개입니다"));
     } else {
       seal.className = "arseal warn";
-      setCopyText(seal, () => t(String(chk?.why || "체인이 가리키는 열쇠와 이 컴퓨터가 다릅니다.")));
+      setCopyText(seal, () => t(String(chk?.why || "공개 장부가 가리키는 열쇠와 이 컴퓨터가 다릅니다.")));
     }
   } catch (e) {
     seal.className = "arseal muted";
@@ -9655,7 +9674,7 @@ async function artistLoad() {
   } else if (shop) {
     setCopyText(qty, () => t("SHOP.PLAYX 가 없습니다. 손님에게 줄 토큰이 없습니다."));
   } else {
-    setCopyText(qty, () => t("SHOP.PLAYX 수량을 못 읽었습니다. 노드가 켜져 있는지 보세요."));
+    setCopyText(qty, () => t("SHOP.PLAYX 수량을 못 읽었습니다. 서버가 켜져 있는지 보세요."));
   }
 }
 
@@ -9703,7 +9722,7 @@ async function artistPick(file: File) {
     setCopyText($("ar-picnote"), () => t("파일창고에 올리는 중…"));
     const added = await invoke<any>("ipfs_add_file", { file: { name: "face.jpg", bytes: Array.from(new Uint8Array(await blob.arrayBuffer())) } });
     const cid = String(added?.cid || "");
-    if (!cid) throw new Error("파일창고가 사진 주소를 안 돌려줬습니다. 노드가 켜져 있는지 보세요.");
+    if (!cid) throw new Error("파일창고가 사진 주소를 안 돌려줬습니다. 서버가 켜져 있는지 보세요.");
 
     // ⚠️ **처음 여는 팬은 20초쯤 기다린다.** 실측(2026-08-31): 이 컴퓨터에서
     //    갓 올린 파일을 ipfs.io 가 받아 가는 데 19.5초 걸렸다 — 세계에서
@@ -9783,7 +9802,7 @@ const RAVI_SPOTS: Record<string, { page: string; el?: string; say: string }> = {
   "이야기 방 만들기": { page: "talk", el: "tk-newroom", say: "방을 만드는 곳입니다" },
   "방 초대하기": { page: "talk", el: "tk-inv", say: "초대 링크를 만드는 곳입니다" },
   "이 컴퓨터 준비하기": { page: "parts", el: "pc-go", say: "백신·방화벽·메모리를 한 번에 정합니다" },
-  "노드 상태": { page: "parts", say: "노드가 어떤지 보는 곳입니다" },
+  "노드 상태": { page: "parts", say: "서버가 어떤지 보는 곳입니다" },
   // 🔴 대표님: "라비가 이걸 어떻게 사용하는지도 다 설명이 가능해야해"
   //    1차 메뉴 중 **「나눠주기」와 「내 가게」를 라비가 못 가리켰다.**
   //    누가 「자산 가진 사람들한테 나눠주려면 어디로 가?」 하고 물으면
@@ -9914,7 +9933,7 @@ function applyActions(actions: any[], typed = ""): string[] {
           const spot = RAVI_SPOTS[String(a.spot || "")];
           if (!spot) break; // 지어낸 이름은 조용히 무시한다
           raviPoint(spot);
-          done.push(`${a.spot} — ${spot.say}`);
+          done.push(`${a.spot === "노드 상태" ? "서버 상태" : a.spot} — ${spot.say}`);
           break;
         }
         // 🔴 보내기는 **준비만** 한다. 주소·금액을 채워 확인 화면까지 열고, 누르는 것은 사장이다.
@@ -10567,7 +10586,7 @@ function wireRehearse(): void {
   const start = document.getElementById("rh-start");
   if (!start) return;
   start.onclick = async () => {
-    await rhSay("연습용 체인을 켜는 중…");
+    await rhSay("연습용 공개 장부를 켜는 중…");
     try {
       await invoke("rehearse_start");
       // 돈이 없으면 발행이 안 된다. 켜자마자 만들어 둔다 — 묻지 않는다.
@@ -10757,7 +10776,7 @@ async function fillSample() {
   shopIcon = "QmZYRLyTXskYN89TSrhELMm5CCHRi3RyXCjSyABz8tRbvK";
   $("sh-picprev").innerHTML =
     `<img src="http://127.0.0.1:8080/ipfs/${shopIcon}" alt="" style="max-width:180px;border-radius:8px;margin-top:8px" />`;
-  $("sh-picnote").textContent = "샘플 사진 (IPFS에 올라가 있습니다)";
+  $("sh-picnote").textContent = "샘플 사진 (사진 보관함에 올라가 있습니다)";
 
   menuItems.length = 0;
   menuItems.push(
@@ -11987,7 +12006,7 @@ function msNumChanged() {
   const v = ($("ms-num") as HTMLSelectElement).value;
   $("ms-numnote").innerHTML = v
     ? `<span class="ok">이미 있는 번호를 씁니다</span> — 소각되는 RVN이 없습니다`
-    : "체인에 새 번호를 찍습니다. 손님이 번호를 갖고 오셨으면 위에서 고르세요.";
+    : "공개 장부에 새 번호를 찍습니다. 손님이 번호를 갖고 오셨으면 위에서 고르세요.";
   $("ms-chain").style.display = v ? "none" : "";
 }
 
@@ -12048,7 +12067,7 @@ async function saveMember() {
       const root = (($("sh-asset") as HTMLInputElement)?.value || "GYM").trim();
       asset = await invoke<string>("member_number", { root, seed });
 
-      $("ms-note2").textContent = "체인에 회원번호를 찍는 중…";
+      $("ms-note2").textContent = "공개 장부에 회원번호를 찍는 중…";
       const lock = await invoke<any>("wallet_lock_state").catch(() => null);
       const pass =
         lock?.encrypted && !lock?.unlocked
@@ -12067,7 +12086,7 @@ async function saveMember() {
         //    회원을 열 명 등록하면 50 RVN 이다. 사장이 알고 눌러야 한다.
         if (
           !(await holdBeforeDoing(
-            tf("회원 이름표 「{0}」 을(를) 체인에 만듭니다", asset),
+            tf("회원 이름표 「{0}」 을(를) 공개 장부에 만듭니다", asset),
             "5 RVN 이 타서 없어집니다. 되돌릴 수 없습니다.",
           ))
         ) {
@@ -12196,8 +12215,8 @@ async function doEncrypt() {
         .then(() => true)
         .catch(() => false);
       $("enc-result").innerHTML =
-        `<div class="warnbox" style="margin-top:12px"><b>암호를 걸었습니다. 노드가 꺼졌습니다.</b><br />
-         레이븐 노드를 다시 켜야 가게가 다시 돕니다. 암호를 종이에 적어 안전한 곳에 두세요 —
+        `<div class="warnbox" style="margin-top:12px"><b>암호를 걸었습니다. 서버가 꺼졌습니다.</b><br />
+         레이븐 서버를 다시 켜야 가게가 다시 돕니다. 암호를 종이에 적어 안전한 곳에 두세요 —
          이 컴퓨터가 아닌 곳에.<br /><br />
          ${
            alsoBackup
@@ -12975,7 +12994,7 @@ async function loadChannels() {
 async function sendNotice() {
   const btn = $("nt-go") as HTMLButtonElement;
   btn.disabled = true;
-  $("nt-note").textContent = "IPFS에 올리고 체인에 기록하는 중…";
+  $("nt-note").textContent = "사진 보관함에 올리고 공개 장부에 기록하는 중…";
   try {
     const r = await invoke<any>("broadcast", {
       channel: ($("nt-ch") as HTMLSelectElement).value,
@@ -13022,7 +13041,7 @@ async function checkPubsub() {
   try {
     const r = await invoke<any>("pubsub_ready");
     $("ps-state").innerHTML = r.ready
-      ? `<span class="ok">노드끼리 직접 대화할 수 있습니다.</span> 서버도 수수료도 없습니다.`
+      ? `<span class="ok">서버끼리 직접 대화할 수 있습니다.</span> 서버도 수수료도 없습니다.`
       : `<b>아직 켜져 있지 않습니다.</b><br />${r.how}`;
     ($("ps-go") as HTMLButtonElement).disabled = !r.ready;
   } catch {}
@@ -13562,7 +13581,7 @@ async function loadIpfsConf() {
           try {
             await invoke("ipfs_config_write", { key, value, isJson });
             $("if-result").innerHTML =
-              `<div class="meta ok" style="margin-top:9px">${tf("{0} → {1} · IPFS를 다시 켜야 적용됩니다", escapeHtml(key), escapeHtml(value))}</div>`;
+              `<div class="meta ok" style="margin-top:9px">${tf("{0} → {1} · 사진 보관함을 다시 켜야 적용됩니다", escapeHtml(key), escapeHtml(value))}</div>`;
           } catch (err) {
             $("if-result").innerHTML = `<div class="warnbox" style="margin-top:9px">${escapeHtml(errText(err))}</div>`;
           }
@@ -13577,7 +13596,7 @@ async function loadIpfsConf() {
           try {
             await invoke("ipfs_apply_profile", { name });
             $("if-result").innerHTML =
-              `<div class="card" style="margin-top:10px">적용했습니다. <b>IPFS를 다시 켜야</b> 반영됩니다.
+              `<div class="card" style="margin-top:10px">적용했습니다. <b>사진 보관함을 다시 켜야</b> 반영됩니다.
                보존한 파일은 그대로입니다.</div>`;
             loadIpfsConf();
           } catch (err) {
@@ -13706,7 +13725,7 @@ async function saveConf() {
     $("cf-result").innerHTML =
       `<div class="card" style="margin-top:12px"><h3>저장했습니다</h3>` +
       (r.wrote || []).map((w: any) => `<div class="kv"><b>${w.key}</b><span>${w.value}</span></div>`).join("") +
-      `<p class="meta"><b>노드를 다시 켜야 적용됩니다.</b> 지금은 아직 예전 설정으로 돌고 있습니다.<br />
+      `<p class="meta"><b>서버를 다시 켜야 적용됩니다.</b> 지금은 아직 예전 설정으로 돌고 있습니다.<br />
        이전 설정은 <code>raven.conf.bak</code> 로 남겼습니다.</p></div>`;
     $("cf-note").textContent = "";
   } catch (e) {
@@ -13957,7 +13976,7 @@ async function loadBackup() {
       .map((i: any) => `<div class="kv"><b>${escapeHtml(String(i.name))}</b><span>${
         i.exists ? fmtBytes(i.size) : "<span class='warn'>없음</span>"
       } — ${escapeHtml(String(i.why))}</span></div>`).join("") +
-      `<p class="meta">${copyHtml("브라우저·PWA 지갑과 파일, IPFS 원본, AI API 키는 이 백업에 포함되지 않습니다.")}</p>`;
+      `<p class="meta">${copyHtml("브라우저·PWA 지갑과 파일, 사진 보관함(IPFS) 원본, AI API 키는 이 백업에 포함되지 않습니다.")}</p>`;
     const issue = latestAutomaticBackupIssue || b.automatic?.error || b.automatic?.warning;
     if (issue) $("bk-list").innerHTML += `<div class="warnbox">${escapeHtml(String(issue))}</div>`;
   } catch {}
@@ -14130,7 +14149,7 @@ async function doBackup(destFolder = ""): Promise<string> {
          <div class="kv"><b>${escapeHtml(r.name)}</b><span>${escapeHtml(r.size_text)}</span></div>
          <p class="meta">${escapeHtml(whereText)}</p>
          <p>${copyHtml("아래 파일을 담았습니다. 백업 파일과 백업 암호 또는 백업 열쇠를 별도로 보관하세요.")}</p>
-         <p class="meta">${copyHtml("브라우저·PWA 지갑과 파일, IPFS 원본, AI API 키는 이 백업에 포함되지 않습니다.")}</p>
+         <p class="meta">${copyHtml("브라우저·PWA 지갑과 파일, 사진 보관함(IPFS) 원본, AI API 키는 이 백업에 포함되지 않습니다.")}</p>
          ${(r.inside || []).map((i: any) => `<div class="kv"><b>${escapeHtml(i.name)}</b><span>${escapeHtml(i.what)}</span></div>`).join("")}
        </div>` +
       (r.warning
@@ -14344,9 +14363,9 @@ async function obChoose(shopOnly: boolean) {
   const DEFAULTS: Record<string, number> = { dbcache: 450, maxconnections: 125, maxmempool: 300, server: 0 };
   const WORDS: Record<string, string> = {
     dbcache: "메모리 사용",
-    maxconnections: "다른 노드와 연결",
+    maxconnections: "다른 서버와 연결",
     maxmempool: "대기 중인 거래 보관",
-    server: "이 앱이 노드에 말 걸기",
+    server: "이 앱이 서버에 말 걸기",
     prune: "장부 정리",
   };
   let cur: Record<string, number> = {};
@@ -14370,8 +14389,8 @@ async function obChoose(shopOnly: boolean) {
       ? `<div>장부 — <b>갖고 있는 것에서 옛 것을 지웁니다.</b> 다시 받지 않습니다.</div>`
       : `<div>장부 — <b>손대지 않습니다.</b> 지금 것 그대로 둡니다.</div>`
   );
-  rows.push(`<div>사진 창고(IPFS) — 설정을 <b>${obRec.ipfs_profile}</b>로 맞춥니다.</div>`);
-  rows.push(`<div style="margin-top:8px;color:var(--faint)">노드를 다시 켤 때 적용됩니다.</div>`);
+  rows.push(`<div>사진 보관함(IPFS) — 설정을 <b>${obRec.ipfs_profile}</b>로 맞춥니다.</div>`);
+  rows.push(`<div style="margin-top:8px;color:var(--faint)">서버를 다시 켤 때 적용됩니다.</div>`);
   $("ob-nums").innerHTML = rows.join("");
 
   obShow("verdict");
@@ -14454,9 +14473,9 @@ function switches(): Switch[] {
     {
       id: "autostart",
       title: "정전 뒤 자동으로 켜기",
-      desc: "전원이 돌아오면 노드가 저절로 켜집니다. 앱은 켜지지 않습니다.",
+      desc: "전원이 돌아오면 서버가 저절로 켜집니다. 앱은 켜지지 않습니다.",
       on: () => autostartOn,
-      body: `<div class="meta">노드만 켭니다. 앱까지 저절로 켜지면 아무도 없는 방에서 지갑이 열립니다.</div>`,
+      body: `<div class="meta">서버만 켭니다. 앱까지 저절로 켜지면 아무도 없는 방에서 지갑이 열립니다.</div>`,
       apply: "지금 켜기",
       run: async () => { await toggleAutostart(); },
     },
@@ -14466,7 +14485,7 @@ function switches(): Switch[] {
       desc: "디스크 45 GB → 5 GB, 메모리와 연결도 줄입니다.",
       on: () => lowspecOn,
       body: `<div class="warnbox" style="font-size:14px">
-               <b>한 번 켜면 되돌릴 수 없습니다.</b> 끄려면 체인을 처음부터 다시 받아야 합니다(몇 시간).
+               <b>한 번 켜면 되돌릴 수 없습니다.</b> 끄려면 공개 장부를 처음부터 다시 받아야 합니다(몇 시간).
              </div>`,
       apply: "저장하고 다시 켜기 안내",
       run: async () => { await applyLowspec(); },
@@ -14553,7 +14572,7 @@ async function refreshSwitchState() {
 async function applyLowspec() {
   const on = lowspecOn;
   if (!on) {
-    if (!(await sure("장부를 5 GB로 줄일까요?", "되돌리려면 체인을 처음부터 다시 받아야 합니다.", "줄입니다")))
+    if (!(await sure("장부를 5 GB로 줄일까요?", "되돌리려면 공개 장부를 처음부터 다시 받아야 합니다.", "줄입니다")))
       return;
   }
   const values = on
@@ -14564,8 +14583,8 @@ async function applyLowspec() {
   say(
     "저장했습니다",
     on
-      ? "설정을 되돌렸습니다. 다만 이미 지워진 블록은 다시 받아야 합니다.\n노드를 다시 켜 주세요."
-      : "노드를 다시 켜야 적용됩니다."
+      ? "설정을 되돌렸습니다. 다만 이미 지워진 블록은 다시 받아야 합니다.\n서버를 다시 켜 주세요."
+      : "서버를 다시 켜야 적용됩니다."
   );
 }
 
@@ -14587,7 +14606,7 @@ async function checkHealth() {
     $$("hz-card").className = `verdict ${tone}`;
     $$("hz-state").textContent =
       { ok: "지금 주문을 받을 수 있습니다", down: "주문을 받을 수 없습니다",
-        catching_up: "노드가 따라잡는 중입니다", no_orders: "손님이 주문할 곳이 없습니다",
+        catching_up: "서버가 따라잡는 중입니다", no_orders: "손님이 주문할 곳이 없습니다",
         no_photos: "사진이 손님에게 안 보입니다", local_only: "매장 안에서만 받습니다" }[
         h.state as string
       ] || String(h.state);
@@ -14599,7 +14618,7 @@ async function checkHealth() {
       h.state === "ok"
         ? ""
         : `<div class="meta" style="margin-top:10px">
-             ${tf("노드 {0} · IPFS {1} · 폰 {2}{3}", t(h.node ? "켜짐" : "꺼짐"), t(h.ipfs ? "켜짐" : "꺼짐"), t(h.phone ? "켜짐" : "꺼짐"), h.behind ? tf(" · {0} 블록 남음", h.behind) : "")}
+             ${tf("서버 {0} · 사진 보관함 {1} · 폰 {2}{3}", t(h.node ? "켜짐" : "꺼짐"), t(h.ipfs ? "켜짐" : "꺼짐"), t(h.phone ? "켜짐" : "꺼짐"), h.behind ? tf(" · {0} 블록 남음", h.behind) : "")}
            </div>`;
   } catch (e) {
     // 🔴 **빈 `catch` 였다.** 그래서 못 물어봤을 때 이 카드가 처음 글자인
@@ -14610,7 +14629,7 @@ async function checkHealth() {
     $$("hz-card").className = "verdict warn";
     setCopyText($$("hz-state"), () => t("지금 받을 수 있는지 못 알아봤습니다"));
     $$("hz-why").textContent = errText(e);
-    setCopyText($$("hz-fix"), () => t("노드가 켜져 있는지 보고, 잠시 뒤 이 화면을 다시 열어 주세요."));
+    setCopyText($$("hz-fix"), () => t("서버가 켜져 있는지 보고, 잠시 뒤 이 화면을 다시 열어 주세요."));
     $$("hz-extra").innerHTML = "";
   }
 }
@@ -14633,7 +14652,7 @@ async function toggleAutostart() {
       const p = await invoke<any>("default_paths");
       if (!p.ravend) {
         throw new Error(
-          "ravend 를 찾지 못했습니다. 레이븐 노드를 어디에 설치하셨는지 확인해 주세요."
+          "ravend 를 찾지 못했습니다. 레이븐 서버를 어디에 설치하셨는지 확인해 주세요."
         );
       }
       await invoke("autostart_enable", { ravendPath: p.ravend, dataDir: p.data_dir });
@@ -14725,7 +14744,7 @@ async function refreshTunnel() {
              이 주소는 <b>임시입니다.</b> 앱이나 터널을 다시 켜면 바뀌고,
              이미 올린 링크는 열리지 않습니다. 자주 파실 거면 고정 주소가 필요합니다.<br />
              그리고 이 통로는 <b>Cloudflare를 지나갑니다</b> — 결제는 여전히 손님 지갑이 서명하고
-             체인이 정산하지만, 화면 자체는 그 회사를 거쳐 전달됩니다.
+             공개 장부가 정산하지만, 화면 자체는 그 회사를 거쳐 전달됩니다.
            </p>
          </div>`
       : "";
@@ -14990,7 +15009,7 @@ function paintChainMark() {
   const btn = document.getElementById("sh-refresh");
   if (btn) btn.style.display = asset ? "" : "none";
   el.className = asset ? "chainmark on" : "chainmark";
-  setCopyText(el, () => asset ? tf("체인에 등록됨 · {0}", asset) : t("이 컴퓨터에만 있습니다"));
+  setCopyText(el, () => asset ? tf("공개 장부에 등록됨 · {0}", asset) : t("이 컴퓨터에만 있습니다"));
   el.title = asset
     ? ""
     : t("손님은 QR 로 옵니다. 장터에서 찾게 하려면 아래에서 등록하세요.");
@@ -15440,7 +15459,7 @@ async function checkShopName() {
   } catch {}
 
   $("sh-assetcheck").innerHTML = free
-    ? `체인에 <code>${full}</code> 로 남습니다`
+    ? `공개 장부에 <code>${full}</code> 로 남습니다`
     : `<span style="color:var(--bad)">이미 등록된 이름입니다. 자산 이름은 영구적이라 다시 쓸 수 없습니다.</span>`;
 
   if (free) {
@@ -15577,10 +15596,10 @@ async function registerShop() {
 
     $("sh-result").innerHTML =
       `<div class="card" style="margin-top:12px"><h3>가게가 등록되었습니다</h3>
-       <div class="kv"><b>체인 이름</b><span>${asset}</span></div>
+       <div class="kv"><b>공개 장부 이름</b><span>${asset}</span></div>
        <div class="kv"><b>프로필</b><code class="addr">${up.cid}</code></div>
        <div class="kv"><b>트랜잭션</b><code class="addr">${txid}</code></div>
-       <p class="meta">확인되면 전 세계 어느 노드에서도 이 가게가 보입니다.</p></div>`;
+       <p class="meta">확인되면 전 세계 어느 서버에서도 이 가게가 보입니다.</p></div>`;
     $("sh-confirmbox").style.display = "none";
   } catch (e) {
     $("sh-result").innerHTML = `<div class="warnbox" style="margin-top:12px">${escapeHtml(errText(e))}</div>`;
@@ -15804,7 +15823,7 @@ function lockChainName() {
     p.id = "sh-assetlocked";
     p.className = "meta";
     setCopyText(p, () => t(
-      "이미 체인에 올린 이름입니다. 체인 이름은 바꿀 수 없어서 잠가 두었습니다 — 다시 등록하면 RVN 이 또 탑니다.",
+      "이미 공개 장부에 올린 이름입니다. 공개 장부 이름은 바꿀 수 없어서 잠가 두었습니다 — 다시 등록하면 RVN 이 또 탑니다.",
     ));
     box.insertAdjacentElement("afterend", p);
   }
@@ -16090,7 +16109,7 @@ async function sayPrice(i: number) {
   }
   // 여덟 자리를 넘는 자리는 체인에서 잘린다. 잘린다고 미리 말해 준다.
   const cut = Math.round(v * 1e8) / 1e8;
-  setCopyText(el, () => cut !== v ? `${t("체인에는")} ${cut} RVN ${t("으로 올라갑니다")}` : "");
+  setCopyText(el, () => cut !== v ? `${t("공개 장부에는")} ${cut} RVN ${t("으로 올라갑니다")}` : "");
 }
 
 /** 「8월 23일에 사면 9월 22일까지」 — 사장이 카운터에서 할 말 그대로. */
@@ -17469,7 +17488,13 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("s-cancel").addEventListener("click", closeSend);
   ["s-addr", "s-qty"].forEach((id) => $(id).addEventListener("input", composeChanged));
   $("s-review").addEventListener("click", reviewSend);
+  $("r-addr").addEventListener("copy", (event) => {
+    if (!event.clipboardData) return;
+    event.preventDefault();
+    event.clipboardData.setData("text/plain", ($("r-addr").textContent || "").replace(/ /g, ""));
+  });
   $("s-back").addEventListener("click", () => {
+    ($("s-pass") as HTMLInputElement).value = "";
     $("send-review").style.display = "none";
     $("send-compose").style.display = "";
   });
@@ -18062,6 +18087,13 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("enc-go").addEventListener("click", doEncrypt);
   $("w-lock-now").addEventListener("click", async () => {
     await invoke("lock_wallet").catch(() => {});
+    document.querySelectorAll<HTMLInputElement>('input[type="password"]').forEach((input) => { input.value = ""; });
+    if (!$("sdw").classList.contains("hidden")) $("sdw-close").click();
+    if (!$("wrs").classList.contains("hidden")) $("wrs-close").click();
+    if (sendPreview) {
+      $("r-passbox").style.display = "";
+      gateSend();
+    }
     loadWallet();
   });
   $("new-asset").addEventListener("click", openWizard);
@@ -18313,7 +18345,7 @@ window.addEventListener("DOMContentLoaded", async () => {
           void loadBackup();
         }
       })
-      .catch(() => { const note = document.getElementById("bk-note"); if (note) setCopyText(note, () => t("자동 백업을 확인하지 못했습니다. 노드 연결을 확인하고 백업을 다시 실행하세요.")); });
+      .catch(() => { const note = document.getElementById("bk-note"); if (note) setCopyText(note, () => t("자동 백업을 확인하지 못했습니다. 서버 연결을 확인하고 백업을 다시 실행하세요.")); });
   backupTick();
   setInterval(backupTick, 6 * 60 * 60 * 1000);
   // 인터넷이 끊기는 것은 화면을 열어 볼 때가 아니라 장사 중에 일어난다.
@@ -18570,7 +18602,7 @@ async function paintHelping(): Promise<void> {
     card(
       [
         [
-          t("체인 지키기"),
+          t("공개 장부 지키기"),
           node?.blocks
             ? `${t("블록")} ${Number(node.blocks).toLocaleString()} · ${t("이웃")} ${Number(node.peers ?? 0)}${t("곳")}`
             : on(false),
@@ -18589,7 +18621,7 @@ async function paintHelping(): Promise<void> {
     // 🔴 정직하게. 지금은 색인이 꺼져 있어서 이 노드가 남의 지갑을 돕지는
     //    못한다. 돕고 있다고 적으면 안 된다.
     `<div class="card"><b>${copyHtml("아직 못 하고 있는 것")}</b>
-       <p class="meta" style="margin-top:8px">${copyHtml("이 노드는 아직 남의 지갑 잔액을 대신 답해 주지 못합니다. 주소 색인이 꺼져 있기 때문입니다. 켜면 이 컴퓨터가 실제로 남을 돕게 됩니다.")}</p>
+       <p class="meta" style="margin-top:8px">${copyHtml("이 서버는 아직 남의 지갑 잔액을 대신 답해 주지 못합니다. 주소 색인이 꺼져 있기 때문입니다. 켜면 이 컴퓨터가 실제로 남을 돕게 됩니다.")}</p>
        <button data-part-go="node" style="margin-top:12px">${copyHtml("주소 색인 켜기")}</button>
      </div>` +
     /* 🔴 **만들어 놓고 아무도 안 부르던 것**(실측 2026-09-08).
@@ -18599,7 +18631,7 @@ async function paintHelping(): Promise<void> {
           놓고 `lib.rs` 에 등록만 하고 **부르는 줄이 하나도 없었다.**
           「돕기」가 상태만 보여 주고 실제로 돕지는 않고 있었던 것이다. */
     `<div class="card"><b>${copyHtml("가게 사진 대신 들어 주기")}</b>
-       <p class="meta" style="margin-top:8px">${copyHtml("체인에 올라온 가게들의 사진을 이 컴퓨터가 함께 들고 있습니다. 그 가게 컴퓨터가 꺼져 있어도 손님 화면에서 사진이 열립니다. 체인이 가리키는 것만, 하나에 4MB까지만 받습니다.")}</p>
+       <p class="meta" style="margin-top:8px">${copyHtml("공개 장부에 올라온 가게들의 사진을 이 컴퓨터가 함께 들고 있습니다. 그 가게 컴퓨터가 꺼져 있어도 손님 화면에서 사진이 열립니다. 공개 장부가 가리키는 것만, 하나에 4MB까지만 받습니다.")}</p>
        <div id="hp-round-out" class="meta" style="margin-top:8px"></div>
        <button id="hp-round" style="margin-top:12px">${copyHtml("지금 한 바퀴 돕기")}</button>
      </div>`;
@@ -18610,7 +18642,7 @@ async function paintHelping(): Promise<void> {
     단추.onclick = async () => {
       const 자리 = document.getElementById("hp-round-out");
       단추.disabled = true;
-      if (자리) setCopyText(자리, () => t("체인에서 가게를 읽는 중…"));
+      if (자리) setCopyText(자리, () => t("공개 장부에서 가게를 읽는 중…"));
       try {
         const r = await invoke<any>("help_round");
         /* 숫자를 정직하게 적는다. 「도왔습니다」만 적으면 아무것도 안 해도

@@ -221,7 +221,7 @@ mod tests {
     #[test]
     fn 지갑은_노드만_알아서_켠다() {
         let w = autostart_for("wallet");
-        assert!(w.node, "지갑은 노드 안에 있다 — 노드는 켜야 한다");
+        assert!(w.node, "지갑은 서버 안에 있다 — 서버는 켜야 한다");
         assert!(!w.files, "지갑만 쓰는 사람의 컴퓨터로 남의 사진을 나르지 않는다");
         assert!(!w.outside, "가게가 없는 컴퓨터를 인터넷에 열지 않는다");
         assert!(!w.phone, "손님 서버(릴레이)를 알아서 열지 않는다");

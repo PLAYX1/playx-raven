@@ -377,7 +377,7 @@ pub async fn help_round() -> Result<Value, String> {
         json!(["SHOP.*", true, MAX_SHOPS, 0]),
     )
     .await?;
-    let map = raw.as_object().ok_or("체인이 목록을 주지 않았습니다.")?;
+    let map = raw.as_object().ok_or("공개 장부가 목록을 주지 않았습니다.")?;
 
     let mut held = 0usize;
     let mut fetched = 0usize;

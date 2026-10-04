@@ -152,13 +152,13 @@ pub fn electrum_status() -> Value {
         Ok(v) => json!({
             "running": true,
             "server": v,
-            "what": "주소별 자산 조회가 됩니다. 출입 확인을 파일이 아니라 체인에서 합니다.",
+            "what": "주소별 자산 조회가 됩니다. 출입 확인을 파일이 아니라 공개 장부에서 합니다.",
         }),
         Err(e) => json!({
             "running": false,
             "why": e,
-            "what": "없어도 다 돌아갑니다. 켜면 회원 확인이 체인에서 직접 되고, \
-                     손님 폰의 경량 지갑도 이 노드에 붙을 수 있습니다.",
+            "what": "없어도 다 돌아갑니다. 켜면 회원 확인이 공개 장부에서 직접 되고, \
+                     손님 폰의 경량 지갑도 이 서버에 붙을 수 있습니다.",
             "how": "https://github.com/ALENOC/electrumx-ravencoin",
         }),
     }
@@ -343,7 +343,7 @@ pub async fn wallet_send_signed(hex: String) -> Result<Value, String> {
     match crate::raven::call_rpc("sendrawtransaction", json!([hex.clone()])).await {
         Ok(txid) => Ok(json!({
             "txid": txid.as_str().unwrap_or_default(),
-            "note": "이 가게 노드가 네트워크에 알렸습니다.",
+            "note": "이 가게 서버가 네트워크에 알렸습니다.",
         })),
         Err(e) => {
             // ⚠️ 여기 오는 것은 **이미 서명된 거래**다. 열쇠는 넘어가지 않는다.
@@ -354,7 +354,7 @@ pub async fn wallet_send_signed(hex: String) -> Result<Value, String> {
                 .map_err(|b| format!("{e} / {b}"))?;
             Ok(json!({
                 "txid": txid,
-                "note": "이 가게 노드가 답하지 않아 공개 조회처를 통해 알렸습니다.",
+                "note": "이 가게 서버가 답하지 않아 공개 조회처를 통해 알렸습니다.",
                 "via_public": true,
             }))
         }
@@ -512,7 +512,7 @@ pub async fn chain_address(address: String) -> Result<Value, String> {
             "rvn": sats as f64 / 100_000_000.0,
             "assets": assets,
             "utxos": rows,
-            "source": "이 가게 노드",
+            "source": "이 가게 서버",
             "trusted": true,
         }));
     }

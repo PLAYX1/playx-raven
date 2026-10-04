@@ -155,7 +155,7 @@ pub fn suggest_setup() -> Value {
     let mut why: Vec<String> = Vec::new();
     match f {
         Some(g) if full_chain => why.push(format!(
-            "빈 공간이 {:.0}GB 있어서, 블록체인 전부를 이 컴퓨터에 두기로 했습니다. \
+            "빈 공간이 {:.0}GB 있어서, 공개 장부 전부를 이 컴퓨터에 두기로 했습니다. \
              그래야 남에게 묻지 않고 스스로 결제를 확인합니다.",
             g
         )),

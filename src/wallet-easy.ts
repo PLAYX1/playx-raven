@@ -118,7 +118,7 @@ export function receiveHtml(address: string, reused: boolean, copyHtml: Copy, es
     `<div class="shareqr wrecv-qr" id="w-qr" role="img" aria-label="받을 주소 QR">${copyHtml("QR 만드는 중…")}</div>` +
     `<div class="wrecv-side">` +
     `<code class="addr wrecv-addr" id="w-addr-text" translate="no">${esc(address)}</code>` +
-    `<p class="meta">${copyHtml("이 컴퓨터의 노드가 확인한 내 지갑 주소예요. 레이븐코인(RVN)과 레이븐 자산만 받을 수 있어요.")}</p>` +
+    `<p class="meta">${copyHtml("이 컴퓨터의 서버가 확인한 내 지갑 주소예요. 레이븐코인(RVN)과 레이븐 자산만 받을 수 있어요.")}</p>` +
     `<div class="wrecv-btns">` +
     `<button type="button" id="w-copy">${copyHtml("주소 복사")}</button>` +
     `<button type="button" class="ghost" id="w-copymsg">${copyHtml("메시지로 복사")}</button>` +
@@ -147,7 +147,7 @@ export function sentHtml(
     `<h3>${copyHtml("보냈어요")}</h3>` +
     `<div class="wdone-amt" translate="no">${esc(o.amount)} ${esc(o.what)}</div>` +
     `<div class="kv"><b>${copyHtml("받는 사람")}</b><span>${who}</span></div>` +
-    `<p class="meta">${copyHtml("네트워크에 기록되면(보통 1~2분) 확정돼요. 보낸 것은 되돌릴 수 없어요.")}</p>` +
+    `<p class="meta">${copyHtml("네트워크에 기록되면(보통 1~2분) 완료돼요. 보낸 것은 되돌릴 수 없어요.")}</p>` +
     `<details class="wdone-more"><summary>${copyHtml("자세히")}</summary>` +
     `<div class="kv"><b>${copyHtml("받는 주소")}</b><code class="addr" translate="no">${esc(o.address)}</code></div>` +
     `<div class="kv"><b>${copyHtml("거래 번호")}</b><code class="addr" translate="no">${esc(o.txid)}</code></div>` +
