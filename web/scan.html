@@ -174,15 +174,11 @@
       문 앞에 놓고 하루 종일 켜 두는 화면이라 그렇게 만들었습니다.
     </p>
 
+    <script src="/shop-seal.bundle.js"></script>
     <script>
       const $ = (id) => document.getElementById(id);
-      const q = new URLSearchParams(location.search).get("t");
-      const token = q || sessionStorage.getItem("st") || "";
-      if (q) {
-        sessionStorage.setItem("st", token);
-        // 주소창에 열쇠를 남기지 않는다. 문 앞 태블릿은 아무나 만진다.
-        history.replaceState(null, "", "/scan");
-      }
+      let token = "";
+      try { token = window.RVShopSeal.connection().token; } catch { /* guidance is visible above */ }
       const H = { "x-playx-token": token, "content-type": "application/json" };
 
       let current = null, timer, memberPolicy = null, savingMember = false, checkSerial = 0, vGroups = [];

@@ -454,44 +454,10 @@ pub fn build_metadata(
 ///    올리기가 막히면 안 된다.
 #[tauri::command]
 pub async fn ipfs_keep_url(url: String) -> Value {
-    // https 만. 남이 준 주소로 이 컴퓨터의 파일을 읽게 하면 안 된다.
-    if !url.starts_with("https://") {
-        return json!({ "kept": false, "why": "https 주소만 보관합니다" });
-    }
-    // 사진 한 장에 이보다 크면 우리가 받을 이유가 없다.
-    const MAX: usize = 12 * 1024 * 1024;
-
-    let Ok(r) = reqwest::Client::new()
-        .get(&url)
-        .timeout(std::time::Duration::from_secs(60))
-        .send()
-        .await
-    else {
-        return json!({ "kept": false, "why": "사진을 받지 못했습니다" });
+    let bytes = match download_photo(&url).await {
+        Ok(b) => b,
+        Err(why) => return json!({ "kept": false, "why": why }),
     };
-    if !r.status().is_success() {
-        return json!({ "kept": false, "why": format!("{}", r.status()) });
-    }
-    // 🔴 다 받은 뒤에 크기를 보면 수 GB 파일 하나로 메모리가 먼저 터진다.
-    //    알려 준 크기로 먼저 거르고, 받는 도중에도 넘으면 멈춘다.
-    if r.content_length().is_some_and(|n| n > MAX as u64) {
-        return json!({ "kept": false, "why": "사진이 너무 큽니다" });
-    }
-    let mut r = r;
-    let mut bytes: Vec<u8> = Vec::new();
-    loop {
-        match r.chunk().await {
-            Ok(Some(part)) => {
-                if bytes.len() + part.len() > MAX {
-                    return json!({ "kept": false, "why": "사진이 너무 큽니다" });
-                }
-                bytes.extend_from_slice(&part);
-            }
-            Ok(None) => break,
-            Err(_) => return json!({ "kept": false, "why": "사진을 다 받지 못했습니다" }),
-        }
-    }
-
     let name = url.rsplit('/').next().unwrap_or("photo").to_string();
     let part = reqwest::multipart::Part::bytes(bytes.to_vec()).file_name(name);
     let form = reqwest::multipart::Form::new().part("file", part);
@@ -501,5 +467,117 @@ pub async fn ipfs_keep_url(url: String) -> Value {
     match parse_added(&body).last() {
         Some(a) => json!({ "kept": true, "cid": a.hash, "bytes": bytes.len() }),
         None => json!({ "kept": false, "why": "파일창고가 답을 안 했습니다" }),
+    }
+}
+
+/// Validate every DNS result and pin that exact set for the TLS connection.
+/// Proxies and redirects cannot turn a public media URL into a LAN request.
+const MAX_PHOTO_BYTES: usize = 12 * 1024 * 1024;
+fn photo_url(text: &str) -> Result<reqwest::Url, String> {
+    let url = reqwest::Url::parse(text).map_err(|_| "사진 HTTPS 주소를 확인해 주세요.")?;
+    if text.len() > 2048 || url.scheme() != "https" || !url.username().is_empty()
+        || url.password().is_some() || url.fragment().is_some()
+        || url.port_or_known_default() != Some(443) || url.host_str().is_none() {
+        return Err("인증정보 없는 공개 HTTPS 사진 주소(443 포트)를 사용해 주세요.".into());
+    }
+    Ok(url)
+}
+fn public_photo_ip(ip: std::net::IpAddr) -> bool {
+    match ip {
+        std::net::IpAddr::V4(v) => {
+            let [a,b,_,_] = v.octets();
+            !(v.is_private() || v.is_loopback() || v.is_link_local() || v.is_multicast()
+                || v.is_broadcast() || v.is_documentation() || v.is_unspecified()
+                || a == 0 || a >= 240 || (a == 100 && (64..=127).contains(&b))
+                || (a == 192 && b == 0) || (a == 198 && (18..=19).contains(&b)))
+        }
+        std::net::IpAddr::V6(v) => {
+            // Include mapped IPv4; require global-unicast IPv6 and exclude
+            // translation/tunnel/documentation space rather than trusting it.
+            if let Some(v4) = v.to_ipv4_mapped() { return public_photo_ip(v4.into()); }
+            let seg = v.segments();
+            (seg[0] & 0xe000) == 0x2000
+                && !(seg[0] == 0x2001 && (seg[1] < 0x200 || seg[1] == 0xdb8))
+                && seg[0] != 0x2002
+        }
+    }
+}
+fn photo_addresses(addresses: Vec<std::net::SocketAddr>) -> Result<Vec<std::net::SocketAddr>, String> {
+    if addresses.is_empty() || addresses.len() > 32 || addresses.iter().any(|a| !public_photo_ip(a.ip())) {
+        return Err("로컬·사설 주소는 보관하지 않습니다. 공개 사진 서버의 HTTPS 주소를 사용해 주세요.".into());
+    }
+    Ok(addresses)
+}
+fn photo_magic(bytes: &[u8]) -> bool {
+    bytes.starts_with(&[0xff, 0xd8, 0xff]) || bytes.starts_with(b"\x89PNG\r\n\x1a\n")
+        || bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a")
+        || (bytes.starts_with(b"RIFF") && bytes.get(8..12) == Some(b"WEBP"))
+        || (bytes.get(4..8) == Some(b"ftyp") && matches!(bytes.get(8..12), Some(b"avif") | Some(b"avis")))
+}
+async fn photo_body(mut response: reqwest::Response) -> Result<Vec<u8>, String> {
+    if !response.status().is_success() { return Err("사진 서버가 거절했습니다. 원래 사진 주소를 확인해 주세요.".into()); }
+    let mime = response.headers().get(reqwest::header::CONTENT_TYPE).and_then(|h| h.to_str().ok())
+        .unwrap_or("").split(';').next().unwrap_or("").trim();
+    if !matches!(mime, "image/jpeg" | "image/png" | "image/gif" | "image/webp" | "image/avif") {
+        return Err("JPG·PNG·GIF·WebP·AVIF 사진만 보관합니다. 사진 파일의 직접 주소를 사용해 주세요.".into());
+    }
+    if response.content_length().is_some_and(|n| n > MAX_PHOTO_BYTES as u64) { return Err("사진이 12 MB를 넘습니다. 사진을 줄여 다시 올려 주세요.".into()); }
+    let mut bytes = Vec::new();
+    while let Some(chunk) = response.chunk().await.map_err(|_| "사진을 다 받지 못했습니다. 다시 시도해 주세요.")? {
+        if chunk.len() > MAX_PHOTO_BYTES.saturating_sub(bytes.len()) { return Err("사진이 12 MB를 넘습니다. 사진을 줄여 다시 올려 주세요.".into()); }
+        bytes.extend_from_slice(&chunk);
+    }
+    if !photo_magic(&bytes) { return Err("사진 내용이 JPG·PNG·GIF·WebP·AVIF 형식과 다릅니다. 원래 사진 파일을 다시 올려 주세요.".into()); }
+    Ok(bytes)
+}
+async fn download_photo(text: &str) -> Result<Vec<u8>, String> {
+    let url = photo_url(text)?;
+    let host = url.host_str().ok_or("사진 서버 주소가 없습니다.")?;
+    let addresses = tokio::time::timeout(std::time::Duration::from_secs(5), tokio::net::lookup_host((host, 443)))
+        .await.map_err(|_| "사진 서버 주소 확인이 오래 걸립니다.")?
+        .map_err(|_| "사진 서버 주소를 확인하지 못했습니다.")?.collect();
+    let addresses = photo_addresses(addresses)?;
+    let client = reqwest::Client::builder().no_proxy()
+        .redirect(reqwest::redirect::Policy::none()).resolve_to_addrs(host, &addresses)
+        .timeout(std::time::Duration::from_secs(30)).connect_timeout(std::time::Duration::from_secs(5))
+        .build().map_err(|_| "안전한 사진 연결을 준비하지 못했습니다.")?;
+    let response = client.get(url).send().await.map_err(|_| "사진을 받지 못했습니다. 공개 HTTPS 직접 주소인지 확인해 주세요.")?;
+    photo_body(response).await
+}
+#[cfg(test)]
+mod photo_security_tests {
+    use super::*;
+    #[test]
+    fn photo_urls_and_every_resolved_address_are_restricted() {
+        for bad in ["http://media.example/x", "https://user:pass@media.example/x", "https://media.example:5001/x", "https://media.example/x#fragment", "file:///synthetic"] {
+            assert!(photo_url(bad).is_err(), "{bad}");
+        }
+        assert!(photo_url("https://image.nostr.build/photo.jpg").is_ok());
+        for bad in ["127.0.0.1", "10.2.3.4", "172.16.0.1", "192.168.1.2", "169.254.169.254", "100.64.0.1", "198.18.0.1", "0.0.0.0", "::1", "::ffff:127.0.0.1", "::ffff:10.0.0.1", "fc00::1", "fe80::1", "2001:db8::1", "2002:7f00:1::"] {
+            assert_eq!(public_photo_ip(bad.parse().unwrap()), false, "{bad}");
+        }
+        assert!(public_photo_ip("8.8.8.8".parse().unwrap()));
+        assert!(public_photo_ip("2606:4700:4700::1111".parse().unwrap()));
+        assert!(photo_addresses(vec!["8.8.8.8:443".parse().unwrap(), "127.0.0.1:443".parse().unwrap()]).is_err());
+    }
+    #[tokio::test]
+    async fn streaming_size_mime_and_magic_are_checked_without_length() {
+        use axum::{routing::get, Router};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let app = Router::new().route("/ok", get(|| async { ([("content-type", "image/png")], b"\x89PNG\r\n\x1a\nfixture".to_vec()) }))
+            .route("/bad", get(|| async { ([("content-type", "image/png")], b"<html>fixture</html>".to_vec()) }))
+            .route("/large", get(|| async {
+                let chunks = futures_util::stream::iter((0..13).map(|_| Ok::<_, std::io::Error>(vec![0u8; 1024*1024])));
+                ([("content-type", "image/png")], axum::body::Body::from_stream(chunks))
+            }));
+        let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        let client = reqwest::Client::new();
+        assert!(photo_body(client.get(format!("http://{address}/ok")).send().await.unwrap()).await.is_ok());
+        assert!(photo_body(client.get(format!("http://{address}/bad")).send().await.unwrap()).await.is_err());
+        let response = client.get(format!("http://{address}/large")).send().await.unwrap();
+        assert_eq!(response.content_length(), None);
+        assert!(photo_body(response).await.unwrap_err().contains("12 MB"));
+        server.abort();
     }
 }

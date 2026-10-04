@@ -38,12 +38,7 @@ fn targets() -> Vec<String> {
 /// 사장에게 실패라고 말하면 아무도 안 쓴다.
 #[tauri::command]
 pub async fn nostr_publish(event: Value) -> Result<Value, String> {
-    // 서명이 없는 것을 넘기면 릴레이가 조용히 버린다 — 올린 줄 알고 기다리게 된다.
-    for k in ["id", "sig", "pubkey", "kind", "created_at", "content", "tags"] {
-        if event.get(k).is_none() {
-            return Err(format!("이벤트에 {k} 가 없습니다."));
-        }
-    }
+    validate_publish_event(&event)?;
     let msg = serde_json::to_string(&json!(["EVENT", event]))
         .map_err(|e| format!("보낼 것을 만들지 못했습니다: {e}"))?;
 
@@ -93,6 +88,7 @@ async fn send_one(url: &str, msg: &str) -> Result<(), String> {
     .map_err(|e| format!("연결 실패: {e}"))?;
 
     let (mut ws, _) = connect;
+    let expected_id = serde_json::from_str::<Value>(msg).ok().and_then(|v| v[1]["id"].as_str().map(str::to_string)).ok_or("이벤트 ID가 없습니다.")?;
     ws.send(Message::Text(msg.to_string().into()))
         .await
         .map_err(|e| format!("보내지 못했습니다: {e}"))?;
@@ -114,7 +110,7 @@ async fn send_one(url: &str, msg: &str) -> Result<(), String> {
                     Ok(v) => v,
                     Err(_) => continue,
                 };
-                if v.get(0).and_then(Value::as_str) == Some("OK") {
+                if v.get(0).and_then(Value::as_str) == Some("OK") && v.get(1).and_then(Value::as_str) == Some(expected_id.as_str()) {
                     return if v.get(2).and_then(Value::as_bool).unwrap_or(false) {
                         Ok(())
                     } else {
@@ -382,4 +378,115 @@ async fn read_one(url: &str, req: &str, sub: &str) -> Result<Vec<Value>, String>
     }
     let _ = ws.close(None).await;
     Ok(out)
+}
+
+/// The public proxy supports only the event types used by this wallet/shop.
+/// Reject malformed fields before hashing, and verify both NIP-01 id and BIP340.
+pub(crate) const MAX_PUBLISH_BYTES: usize = 32 * 1024;
+pub(crate) fn validate_publish_event(event: &Value) -> Result<(), String> {
+    let o = event.as_object().ok_or("이벤트 모양이 올바르지 않습니다.")?;
+    for k in ["id", "sig", "pubkey", "kind", "created_at", "content", "tags"] {
+        if !o.contains_key(k) { return Err(format!("이벤트에 {k} 가 없습니다.")); }
+    }
+    if o.len() != 7 || serde_json::to_vec(event).map_err(|_| "이벤트를 읽지 못했습니다.")?.len() > MAX_PUBLISH_BYTES {
+        return Err("이벤트가 32 KB를 넘거나 지원하지 않는 필드가 있습니다.".into());
+    }
+    let hex_field = |key: &str, size: usize| o[key].as_str().is_some_and(|s| s.len() == size && s.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)));
+    if !hex_field("id",64) || !hex_field("pubkey",64) || !hex_field("sig",128) { return Err("이벤트 ID·공개키·서명 모양이 올바르지 않습니다.".into()); }
+    let kind = o["kind"].as_u64().filter(|k| [0,1,5,40,42,1059,30078,30402].contains(k)).ok_or("이 가게는 프로필·레이븐 이야기·상품·가게 공지·쪽지·삭제 요청만 중계합니다.")?;
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
+    if !o["created_at"].as_u64().is_some_and(|t| t >= now.saturating_sub(7 * 86_400) && t <= now.saturating_add(300) && t <= 9_007_199_254_740_991) { return Err("이벤트 시각이 올바르지 않습니다. 기기 시계를 확인해 주세요.".into()); }
+    let content = o["content"].as_str().ok_or("이벤트 내용은 글자여야 합니다.")?;
+    let tags = o["tags"].as_array().filter(|t| t.len() <= 128).ok_or("태그가 너무 많거나 모양이 다릅니다.")?;
+    if tags.iter().any(|t| !t.as_array().is_some_and(|items| !items.is_empty() && items.len() <= 8 && items.iter().all(|x| x.as_str().is_some_and(|s| s.len() <= 2048)))) {
+        return Err("태그는 짧은 글자 목록이어야 합니다.".into());
+    }
+    let tag = |name: &str| tags.iter().any(|t| t[0] == name && t.get(1).and_then(Value::as_str).is_some_and(|s| !s.is_empty()));
+    match kind {
+        0 | 40 | 30078 => { if !serde_json::from_str::<Value>(content).is_ok_and(|v| v.is_object()) { return Err("프로필·방·가게 내용은 JSON 객체여야 합니다.".into()); } },
+        5 => if !tag("e") && !tag("a") { return Err("삭제할 이벤트를 지정해 주세요.".into()); },
+        42 => if !tag("e") { return Err("대화방 이벤트를 지정해 주세요.".into()); },
+        1059 => if !tag("p") || content.is_empty() { return Err("쪽지의 받는 사람과 봉함 내용을 확인해 주세요.".into()); },
+        _ => (),
+    }
+    if matches!(kind,30078|30402) && !tag("d") { return Err("가게·상품 식별자가 없습니다.".into()); }
+    if !crate::relay::verify(event) { return Err("이벤트 ID 또는 서명이 맞지 않습니다. 지갑에서 다시 서명해 주세요.".into()); }
+    Ok(())
+}
+/// Bounded process-wide budget; changing key/address cannot bypass global cap.
+#[derive(Default)]
+pub(crate) struct PublishBudget { times: Vec<(u64, String)> }
+impl PublishBudget {
+    pub(crate) fn take(&mut self, now: u64, pubkey: &str) -> Result<(), &'static str> {
+        self.times.retain(|(at,_)| now.saturating_sub(*at) < 60);
+        if self.times.len() >= 20 || self.times.iter().filter(|(_,key)| key == pubkey).count() >= 4 {
+            return Err("릴레이 중계 요청이 많습니다. 1분 뒤 다시 올려 주세요.");
+        }
+        self.times.push((now,pubkey.to_string())); Ok(())
+    }
+}
+#[cfg(test)]
+mod publish_security_tests {
+    use super::*;
+    fn signed() -> Value {
+        use sha2::{Digest,Sha256};
+        let secp=secp256k1::Secp256k1::new();
+        let key=secp256k1::Keypair::from_seckey_slice(&secp,&[7u8;32]).unwrap();
+        let pk=key.x_only_public_key().0.to_string();
+        let created=std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+        let tags=json!([["d","synthetic-listing"]]); let content="{\"title\":\"synthetic\"}";
+        let hash:[u8;32]=Sha256::digest(serde_json::to_vec(&json!([0,pk,created,30402,tags,content])).unwrap()).into();
+        json!({"id":hex::encode(hash),"pubkey":pk,"sig":secp.sign_schnorr_no_aux_rand(&hash,&key).to_string(),"kind":30402,"created_at":created,"tags":tags,"content":content})
+    }
+    #[test]
+    fn valid_signature_is_required_for_supported_bounded_event() {
+        let event=signed(); assert!(validate_publish_event(&event).is_ok());
+        for key in ["id","sig","pubkey"] { let mut bad=event.clone();bad[key]=json!("0".repeat(if key=="sig" {128}else{64}));assert_eq!(validate_publish_event(&bad).is_err(),true,"{key}"); }
+        let mut bad=event.clone();bad["content"]=json!("changed");assert!(validate_publish_event(&bad).is_err());
+        let mut bad=event.clone();bad["kind"]=json!(27235);assert!(validate_publish_event(&bad).is_err());
+        let mut bad=event.clone();bad["tags"]=json!([["x",7]]);assert!(validate_publish_event(&bad).is_err());
+        let mut bad=event.clone();bad["content"]=json!("x".repeat(MAX_PUBLISH_BYTES));assert!(validate_publish_event(&bad).is_err());
+        let mut bad=event.clone();bad["created_at"]=json!(-1);assert!(validate_publish_event(&bad).is_err());
+    }
+    #[test]
+    fn quota_cannot_be_bypassed_with_distinct_signers_and_recovers_after_window() {
+        let mut budget=PublishBudget::default();
+        for _ in 0..4 {assert!(budget.take(100,"same").is_ok());}
+        assert!(budget.take(100,"same").is_err());
+        for i in 0..16 {assert!(budget.take(100,&format!("key{i}")).is_ok());}
+        assert!(budget.take(100,"new-key").is_err());assert_eq!(budget.times.len(),20);
+        assert!(budget.take(160,"same").is_ok());assert_eq!(budget.times.len(),1);
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn synthetic_signed_event(kind:u64, tags:Value, content:&str, key_byte:u8)->Value {
+    use sha2::{Digest,Sha256};
+    let secp=secp256k1::Secp256k1::new();
+    let key=secp256k1::Keypair::from_seckey_slice(&secp,&[key_byte;32]).unwrap();
+    let pubkey=key.x_only_public_key().0.to_string();
+    let at=std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+    let hash:[u8;32]=Sha256::digest(serde_json::to_vec(&json!([0,pubkey,at,kind,tags,content])).unwrap()).into();
+    json!({"id":hex::encode(hash),"pubkey":pubkey,"sig":secp.sign_schnorr_no_aux_rand(&hash,&key).to_string(),"kind":kind,"created_at":at,"tags":tags,"content":content})
+}
+#[cfg(test)]
+pub(crate) fn synthetic_product(content:&str,key_byte:u8)->Value {
+    let at=std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+    let tags=json!([["d","playx-synthetic"],["title","Synthetic bicycle"],["price","25","USD"],["published_at",at.to_string()],["t","playx"],["status","active"],["location","Synthetic town"]]);
+    synthetic_signed_event(30402,tags,content,key_byte)
+}
+#[cfg(test)]
+mod product_usability_tests {
+    use super::*;
+    #[test]
+    fn signed_wallet_product_plain_text_and_edits_are_supported_without_weakening_checks() {
+        assert!(include_str!("../../web/wallet.src.ts").contains("content: desc"));
+        for content in ["A synthetic bicycle with new brakes.", "Edited: collection after 5 pm.", ""] {
+            let event = synthetic_product(content, 41);
+            assert_eq!(validate_publish_event(&event), Ok(()), "wallet listing descriptions are plain text");
+            let mut bad = event.clone(); bad["sig"] = json!("0".repeat(128)); assert!(validate_publish_event(&bad).is_err());
+            let mut bad = event.clone(); bad["id"] = json!("0".repeat(64)); assert!(validate_publish_event(&bad).is_err());
+        }
+        assert!(validate_publish_event(&synthetic_product(&"x".repeat(MAX_PUBLISH_BYTES),41)).is_err());
+    }
 }

@@ -862,7 +862,7 @@ mod 옛장부 {
         assert_eq!(row_shop(&json!({ "shop": "   " })), "본점", "빈 이름이 본점이 아니다");
         assert_eq!(row_shop(&json!({ "shop": " 2호점 " })), "2호점", "이름 양쪽 공백이 안 잘렸다");
 
-        let dir = std::env::temp_dir().join("playx-raven-test-ledger-shop");
+        let dir = crate::paths::test_fixture_root().join("playx-raven-test-ledger-shop");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(dir.join("ledger")).unwrap();
         std::env::set_var("PLAYX_RAVEN_HOME", &dir);
@@ -1007,7 +1007,7 @@ mod 이중기입 {
     #[test]
     fn 두_번_적히지_않는다() {
         let _g = crate::paths::TEST_ENV.lock().unwrap_or_else(|e| e.into_inner());
-        let tmp = std::env::temp_dir().join(format!("rvn-dup-{}", std::process::id()));
+        let tmp = crate::paths::test_fixture_root().join(format!("rvn-dup-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();
         std::env::set_var("PLAYX_RAVEN_HOME", &tmp);

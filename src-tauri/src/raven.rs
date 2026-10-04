@@ -197,6 +197,10 @@ pub async fn call_rpc(method: &str, params: Value) -> Result<Value, String> {
 /// Preserve numeric RPC error codes for public chain adapters without exposing
 /// node credentials, configuration paths, or raw RPC errors to browsers.
 pub(crate) async fn call_rpc_detailed(method: &str, params: Value) -> Result<Value, RpcFailure> {
+    #[cfg(test)]
+    { let _ = (method, params); return Err("Synthetic lib tests cannot access a live node; inject a mock RPC backend".into()); }
+    #[cfg(not(test))]
+    {
     // 🔴 0.4.9 — 지갑을 되살리며 옛 거래를 찾는 동안(`rescanblockchain`) 코어는 `cs_main` 을
     //    쥐고 있어 거의 모든 질문이 20초 뒤 시간 초과로 끝난다. 그 사이 주기 질문 네 개가
     //    대기열(`rpc_gate`)을 막고, 화면은 「노드가 답하지 않습니다」로 고장처럼 보인다.
@@ -284,6 +288,7 @@ pub(crate) async fn call_rpc_detailed(method: &str, params: Value) -> Result<Val
         .get("result")
         .cloned()
         .ok_or_else(|| format!("{method}: response had no result"))?)
+    }
 }
 
 /// 오래 걸리는 부름 하나(0.4.9 — `rescanblockchain`). 몇 시간이 걸릴 수 있다.
@@ -293,6 +298,10 @@ pub(crate) async fn call_rpc_detailed(method: &str, params: Value) -> Result<Val
 ///    나머지 화면이 셋으로 버틴다. 끊겨도 노드 안의 훑기는 계속되므로, 부르는 쪽이
 ///    `debug.log` 와 뒤이은 질문으로 끝났는지 판단한다(words_restore.rs).
 pub(crate) async fn call_rpc_long(method: &str, params: Value, secs: u64) -> Result<Value, String> {
+    #[cfg(test)]
+    { let _ = (method, params, secs); return Err("Synthetic lib tests cannot access a live node".into()); }
+    #[cfg(not(test))]
+    {
     let cookie = read_cookie()?;
     let (user, pass) = cookie
         .split_once(':')
@@ -318,6 +327,7 @@ pub(crate) async fn call_rpc_long(method: &str, params: Value, secs: u64) -> Res
         .get("result")
         .cloned()
         .ok_or_else(|| format!("{method}: response had no result"))
+    }
 }
 
 #[derive(Deserialize)]

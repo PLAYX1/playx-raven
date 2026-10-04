@@ -1098,7 +1098,7 @@ mod fee_tests {
     fn the_fee_address_is_exactly_what_the_node_validated() {
         let _g = crate::paths::TEST_ENV.lock().unwrap_or_else(|e| e.into_inner());
         // 사장 설정 파일이 끼어들지 않는 깨끗한 자리에서 본다.
-        let dir = std::env::temp_dir().join("playx-raven-test-feeaddr");
+        let dir = crate::paths::test_fixture_root().join("playx-raven-test-feeaddr");
         let _ = std::fs::remove_dir_all(&dir);
         std::env::set_var("PLAYX_RAVEN_HOME", &dir);
 
@@ -1163,7 +1163,7 @@ mod fee_tests {
     #[test]
     fn there_is_no_way_to_turn_it_off() {
         let _g = crate::paths::TEST_ENV.lock().unwrap_or_else(|e| e.into_inner());
-        let dir = std::env::temp_dir().join("playx-raven-test-fee");
+        let dir = crate::paths::test_fixture_root().join("playx-raven-test-fee");
         let _ = std::fs::remove_dir_all(&dir);
         let _ = std::fs::create_dir_all(&dir);
         std::env::set_var("PLAYX_RAVEN_HOME", &dir);
@@ -1216,7 +1216,7 @@ mod ticket_cap_tests {
     #[test]
     fn the_default_is_sane() {
         let _g = crate::paths::TEST_ENV.lock().unwrap_or_else(|e| e.into_inner());
-        let dir = std::env::temp_dir().join("playx-raven-test-cap");
+        let dir = crate::paths::test_fixture_root().join("playx-raven-test-cap");
         let _ = std::fs::remove_dir_all(&dir);
         std::env::set_var("PLAYX_RAVEN_HOME", &dir);
         assert_eq!(ticket_cap(), 9_999);
@@ -1227,7 +1227,7 @@ mod ticket_cap_tests {
     #[test]
     fn a_broken_value_falls_back() {
         let _g = crate::paths::TEST_ENV.lock().unwrap_or_else(|e| e.into_inner());
-        let dir = std::env::temp_dir().join("playx-raven-test-cap2");
+        let dir = crate::paths::test_fixture_root().join("playx-raven-test-cap2");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         std::env::set_var("PLAYX_RAVEN_HOME", &dir);

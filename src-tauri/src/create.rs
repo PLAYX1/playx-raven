@@ -460,7 +460,7 @@ mod tests {
     /// 화면(easy-create.ts)·폰·확인 페이지와 **같은 지문**이 나와야 한다.
     #[test]
     fn 떨어뜨린_문서의_지문은_화면과_같고_떨어뜨린_것만_읽는다() {
-        let dir = std::env::temp_dir().join(format!("rv-fp-{}-{:x}", std::process::id(), rand::random::<u32>()));
+        let dir = crate::paths::test_fixture_root().join(format!("rv-fp-{}-{:x}", std::process::id(), rand::random::<u32>()));
         std::fs::create_dir_all(&dir).unwrap();
         let file = dir.join("수료 명단.pdf");
         std::fs::write(&file, b"synthetic artwork bytes for RavenVault create test\n").unwrap();

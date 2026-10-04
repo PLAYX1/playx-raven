@@ -140,7 +140,7 @@ fn peek<T>(f: impl FnOnce(&Vec<Value>) -> T) -> T {
 /// 🔴 안 하면 아무나 남의 이름으로 「이 가게는 여기서 주문받습니다」를 올릴
 /// 수 있고, 우리가 그것을 손님에게 나른다. 릴레이가 하는 일 중 이것만은
 /// 빠뜨리면 안 된다.
-fn verify(e: &Value) -> bool {
+pub(crate) fn verify(e: &Value) -> bool {
     use secp256k1::{schnorr::Signature, Secp256k1, XOnlyPublicKey};
     use sha2::{Digest, Sha256};
 
@@ -858,7 +858,7 @@ mod tests {
         use futures_util::{SinkExt, StreamExt};
         use tokio_tungstenite::tungstenite::Message as M;
         let _g = crate::paths::TEST_ENV.lock().unwrap_or_else(|e| e.into_inner());
-        let home = std::env::temp_dir().join(format!("rv6-relay-{}", std::process::id()));
+        let home = crate::paths::test_fixture_root().join(format!("rv6-relay-{}", std::process::id()));
         std::fs::create_dir_all(&home).unwrap();
         std::env::set_var("PLAYX_RAVEN_HOME", &home);
 

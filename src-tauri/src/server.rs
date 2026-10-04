@@ -63,6 +63,7 @@ pub struct ServerState {
     /// One token per role. A staff phone that leaves with an employee is
     /// revoked by rotating that one entry, without stopping the counter.
     role_tokens: Arc<Mutex<std::collections::HashMap<String, String>>>,
+    token_expires_at: Arc<Mutex<i64>>,
     /// What the customer page shows. Published by the desktop app rather than
     /// read from the chain per request — a phone refresh must not be able to
     /// make this node do RPC work on demand.
@@ -283,15 +284,31 @@ pub(crate) fn atomic_write_0600(path: &std::path::Path, bytes: &[u8]) -> std::io
     std::fs::rename(&tmp, path)?;
     #[cfg(unix)]
     if let Some(d) = path.parent() {
-        if let Ok(dir) = std::fs::File::open(d) {
-            let _ = dir.sync_all();
-        }
+        std::fs::File::open(d)?.sync_all()?;
     }
     Ok(())
 }
 
+fn replay_path() -> std::path::PathBuf { crate::paths::app_file("shop-seal-replay.json") }
+fn load_seal_seen() -> std::collections::HashMap<String,i64> {
+    let broken = || std::collections::HashMap::from([("storage-error".into(), i64::MAX)]);
+    let bytes = match std::fs::read(replay_path()) { Ok(b) => b, Err(e) if e.kind()==std::io::ErrorKind::NotFound => return Default::default(), Err(_) => return broken() };
+    if bytes.len()>300_000 { return broken(); }
+    let Some(mut seen) = serde_json::from_slice::<std::collections::HashMap<String,i64>>(&bytes).ok() else { return broken() };
+    if seen.len()>4096 || seen.keys().any(|s|s.len()!=32 || !s.bytes().all(|b|b.is_ascii_digit()||(b'a'..=b'f').contains(&b))) { return broken(); }
+    seen.retain(|_,at| crate::shopseal::now().saturating_sub(*at)<=crate::shopseal::REPLAY_TTL);
+    seen
+}
+const ROLE_TOKEN_TTL: i64 = 30 * 86_400;
+fn stored_token_expiry() -> Option<i64> {
+    serde_json::from_slice::<Value>(&std::fs::read(tokens_path()).ok()?).ok()?["expires_at"].as_i64()
+}
+fn tokens_live(state: &ServerState) -> bool {
+    state.token_expires_at.lock().map(|e| *e > now_unix()).unwrap_or(false)
+}
 fn load_tokens() -> Option<(String, std::collections::HashMap<String, String>)> {
     let v: Value = serde_json::from_str(&std::fs::read_to_string(tokens_path()).ok()?).ok()?;
+    if v["expires_at"].as_i64()? <= now_unix() { return None; }
     let owner = v.get("owner")?.as_str()?.to_string();
     if owner.len() < 32 {
         return None;
@@ -309,16 +326,30 @@ fn load_tokens() -> Option<(String, std::collections::HashMap<String, String>)> 
     Some((owner, roles))
 }
 
-fn save_tokens(owner: &str, roles: &std::collections::HashMap<String, String>) {
-    let path = tokens_path();
-    let doc = json!({
-        "owner": owner,
+fn save_tokens(owner: &str, roles: &std::collections::HashMap<String, String>) -> std::io::Result<()> {
+    save_tokens_until(owner,roles,now_unix().saturating_add(ROLE_TOKEN_TTL))
+}
+fn save_tokens_until(owner: &str, roles: &std::collections::HashMap<String,String>, expires_at:i64) -> std::io::Result<()> {
+    let doc = json!({ "owner": owner, "expires_at": expires_at,
         "staff": roles.get("staff").cloned().unwrap_or_default(),
-        "scanner": roles.get("scanner").cloned().unwrap_or_default(),
-    });
-    if let Ok(bytes) = serde_json::to_vec_pretty(&doc) {
-        let _ = atomic_write_0600(&path, &bytes);
-    }
+        "scanner": roles.get("scanner").cloned().unwrap_or_default() });
+    atomic_write_0600(&tokens_path(), &serde_json::to_vec_pretty(&doc)?)
+}
+
+/// Trusted native QR/start action renews expired sessions, never an HTTP request.
+/// Install no unpersisted credential if durability fails.
+fn renew_expired_role_tokens(state: &ServerState) -> Result<bool,String> {
+    let mut owner=state.token.lock().map_err(|_|"연결 열쇠 잠금을 확인하지 못했습니다.")?;
+    let mut roles=state.role_tokens.lock().map_err(|_|"연결 열쇠 잠금을 확인하지 못했습니다.")?;
+    let mut expiry=state.token_expires_at.lock().map_err(|_|"연결 만료 잠금을 확인하지 못했습니다.")?;
+    if *expiry>now_unix() { return Ok(false); }
+    let fresh=random_token();
+    let next: std::collections::HashMap<String,String>=["staff","scanner"].into_iter().map(|r|(r.to_string(),random_token())).collect();
+    if fresh.len()!=64 || next.values().any(|v|v.len()!=64) { return Err("안전한 새 연결 열쇠를 만들지 못했습니다. 앱을 다시 열어 주세요.".into()); }
+    let until=now_unix().saturating_add(ROLE_TOKEN_TTL);
+    save_tokens_until(&fresh,&next,until).map_err(|_|"만료된 연결을 갱신하지 못했습니다. 저장소 권한·남은 공간을 확인한 뒤 이 컴퓨터에서 폰 연결/손님 QR을 다시 열어 주세요. 새 QR은 아직 만들지 않았습니다.")?;
+    *owner=fresh; *roles=next; *expiry=until;
+    Ok(true)
 }
 
 /// 손님·직원 화면을 여는 열쇠 글자.
@@ -370,12 +401,13 @@ fn token_ok(expected: &str, given: &str) -> bool {
 /// Returns the role rather than a boolean so the caller can apply the right
 /// rule — "authenticated" is not a permission, and treating it as one is how a
 /// staff token ends up spending money.
-fn role_of(state: &ServerState, headers: &HeaderMap, q: &Value) -> Option<String> {
+fn role_of(state: &ServerState, headers: &HeaderMap, _q: &Value) -> Option<String> {
+    if !tokens_live(state) { return None; }
     let given = headers
         .get("x-playx-token")
         .and_then(|v| v.to_str().ok())
         .map(str::to_string)
-        .or_else(|| q.get("t").and_then(Value::as_str).map(str::to_string))
+
         .unwrap_or_default();
     if given.is_empty() {
         return None;
@@ -440,6 +472,7 @@ fn customer_path(path: &str) -> bool {
         "/" | "/wallet"
             | "/legacy-wallet"
             | "/wallet.bundle.js"
+            | "/shop-seal.bundle.js"
             | "/buy"
             | "/shops"
             | "/api/shop"
@@ -561,6 +594,7 @@ fn admin_authed_reason(
     headers: &HeaderMap,
     q: &Value,
 ) -> Result<(), AuthFail> {
+    if !tokens_live(state) { return Err(AuthFail::BadToken); }
     if outside_blocked(state, headers, "/admin") {
         return Err(AuthFail::RemoteOff);
     }
@@ -570,7 +604,7 @@ fn admin_authed_reason(
         .map(str::to_string)
         // The first load comes from a scanned QR, which can only carry the
         // token in the URL. Everything after that uses the header.
-        .or_else(|| q.get("t").and_then(Value::as_str).map(str::to_string))
+
         .unwrap_or_default();
     let owner = state.token.lock().map(|t| t.clone()).unwrap_or_default();
     if token_ok(&owner, &given) {
@@ -1334,6 +1368,8 @@ async fn staff_refund_limits_route(
 
 #[derive(serde::Deserialize)]
 struct StaffRefundBody {
+    order_address: String,
+    request_id: String,
     to: String,
     krw: f64,
     reason: String,
@@ -1353,14 +1389,35 @@ async fn staff_refund_route(
     if let Err(reason) = authed_for_reason(&st, &headers, &json!({}), "/api/staff/refund") {
         return (StatusCode::UNAUTHORIZED, Json(auth_fail_json(reason)));
     }
-    match crate::refund::staff_refund(b.to, b.krw, b.reason, now_unix(), b.passphrase).await {
+    match crate::refund::staff_refund_response(b.to, b.krw, b.reason, now_unix(), b.passphrase, b.order_address, b.request_id).await {
         Ok(v) => (StatusCode::OK, Json(v)),
-        Err(e) => (StatusCode::BAD_REQUEST, Json(json!({ "error": e }))),
+        Err(e) => (StatusCode::BAD_REQUEST, Json(e.body())),
     }
 }
 
-async fn wallet_page() -> Html<&'static str> {
-    Html(include_str!("../../web/wallet.html"))
+/// Public signed-event relay is confined to the real loopback listener peer.
+fn trusted_loopback_request(req: &axum::extract::Request, require_origin: bool) -> bool {
+    let headers=req.headers();
+    if req.uri().scheme().is_some() || req.uri().authority().is_some()
+        || !req.extensions().get::<axum::extract::ConnectInfo<std::net::SocketAddr>>().is_some_and(|p|p.0.ip().is_loopback())
+        || headers.keys().any(|h|h.as_str().starts_with("x-forwarded-") || matches!(h.as_str(),"forwarded"|"x-real-ip"|"via")) { return false; }
+    let Some(host)=headers.get("host").and_then(|h|h.to_str().ok()) else { return false; };
+    if headers.get_all("host").iter().count()!=1 || ![format!("localhost:{PORT}"),format!("127.0.0.1:{PORT}"),format!("[::1]:{PORT}")].contains(&host.to_string()) { return false; }
+    if require_origin {
+        let expected=format!("http://{host}");
+        if headers.get_all("origin").iter().count()!=1 || headers.get("origin").and_then(|v|v.to_str().ok())!=Some(expected.as_str())
+            || headers.get("sec-fetch-site").is_some_and(|v|v!="same-origin") { return false; }
+    }
+    true
+}
+#[derive(Clone)]
+struct LocalWalletPublish;
+
+async fn wallet_page(req: axum::extract::Request) -> axum::response::Response {
+    if !trusted_loopback_request(&req, false) {
+        return (StatusCode::FORBIDDEN, Html("<h1>안전한 지갑 연결이 필요합니다</h1><p>가게 와이파이의 HTTP 주소에는 복구 단어를 넣지 마세요. 폰의 RavenVault 앱이나 <a href=\"https://ravenvault.ex.erci.se/wallet/\" rel=\"noreferrer\">HTTPS RavenVault 지갑</a>을 열고 이 컴퓨터를 연결하세요. 이 컴퓨터에서는 http://127.0.0.1:8790/wallet 을 사용할 수 있습니다.</p>" )).into_response();
+    }
+    Html(include_str!("../../web/wallet.html")).into_response()
 }
 
 /// The wallet's code, served as JavaScript.
@@ -2555,8 +2612,44 @@ async fn api_shop_history(
 /// 🔴 지갑 화면은 `connect-src 'self'` 라 릴레이로 직접 못 나간다 — 12단어가
 /// 그 페이지에 있어서 일부러 막아 둔 것이다. 서명은 브라우저가 끝내고,
 /// **바깥으로 나가는 일만** 여기서 한다. 개인키는 여기까지 오지 않는다.
-async fn api_nostr_publish(Json(body): Json<Value>) -> impl IntoResponse {
-    match crate::nostrpub::nostr_publish(body).await {
+#[cfg(test)]
+#[derive(Clone, Default)]
+struct SyntheticPublisher {
+    events: Arc<Mutex<Vec<Value>>>,
+    budget: Arc<Mutex<crate::nostrpub::PublishBudget>>,
+}
+async fn api_nostr_publish(
+    State(st): State<ServerState>, headers: HeaderMap,
+    local: Option<axum::Extension<LocalWalletPublish>>,
+    #[cfg(test)] fixture: Option<axum::Extension<SyntheticPublisher>>,
+    body: axum::body::Bytes,
+) -> impl IntoResponse {
+    if local.is_none() {
+        if let Err(e) = authed_for_reason(&st, &headers, &json!({}), "/api/nostr/publish") { return (StatusCode::UNAUTHORIZED, Json(auth_fail_json(e))); }
+    }
+    if body.len() > crate::nostrpub::MAX_PUBLISH_BYTES {
+        return (StatusCode::PAYLOAD_TOO_LARGE, Json(json!({"error":"이벤트는 32 KB까지 올릴 수 있습니다."})));
+    }
+    let event: Value = match serde_json::from_slice(&body) {
+        Ok(v) => v, Err(_) => return (StatusCode::BAD_REQUEST, Json(json!({"error":"이벤트 JSON을 확인해 주세요."}))),
+    };
+    if let Err(e) = crate::nostrpub::validate_publish_event(&event) { return (StatusCode::BAD_REQUEST, Json(json!({"error":e}))); }
+    static BUDGET: std::sync::OnceLock<Mutex<crate::nostrpub::PublishBudget>> = std::sync::OnceLock::new();
+    let now = now_unix().max(0) as u64;
+    let budget = BUDGET.get_or_init(|| Mutex::new(Default::default()));
+    #[cfg(test)]
+    let budget = fixture.as_ref().map(|f| &*f.0.budget).unwrap_or(budget);
+    let admission = budget.lock()
+        .map_err(|_| "릴레이 중계를 잠시 멈췄습니다.").and_then(|mut b| b.take(now,event["pubkey"].as_str().unwrap_or("")));
+    if let Err(e) = admission { return (StatusCode::TOO_MANY_REQUESTS, Json(json!({"error":e}))); }
+    #[cfg(test)]
+    let result = if let Some(f) = fixture {
+        f.0.events.lock().unwrap().push(event);
+        Ok(json!({"ok":["synthetic publisher"],"failed":[]}))
+    } else { Err("lib tests require a private synthetic publisher extension".to_string()) };
+    #[cfg(not(test))]
+    let result = crate::nostrpub::nostr_publish(event).await;
+    match result {
         Ok(v) => (StatusCode::OK, Json(v)),
         Err(e) => (StatusCode::BAD_GATEWAY, Json(json!({ "error": e }))),
     }
@@ -2663,22 +2756,7 @@ async fn raven_face(axum::extract::Path(name): axum::extract::Path<String>) -> i
 
 // ── 사장 ──────────────────────────────────────────────────────────────────
 
-async fn admin_page(
-    State(state): State<ServerState>,
-    headers: HeaderMap,
-    Query(q): Query<std::collections::HashMap<String, String>>,
-) -> impl IntoResponse {
-    let qv = json!(q);
-    // 🔴 여기에 빈 HeaderMap 을 넘기면 안 된다. 토큰은 QR 이 실어 준 URL 에서
-    // 오지만, 이 요청이 가게 안에서 온 것인지 바깥에서 온 것인지는 **Host
-    // 헤더에만** 있다. 빈 것을 넘기면 안전한 쪽으로 "바깥" 이 되어, 사장이
-    // 자기 가게 wifi 에서 자기 QR 을 찍어도 문이 안 열린다.
-    if !admin_authed(&state, &headers, &qv) {
-        return (
-            StatusCode::UNAUTHORIZED,
-            Html("<h1>접근 권한이 없습니다</h1><p>앱 화면의 QR을 다시 찍어 주세요.</p>"),
-        );
-    }
+async fn admin_page() -> impl IntoResponse {
     (StatusCode::OK, Html(include_str!("../../web/admin.html")))
 }
 
@@ -2860,25 +2938,11 @@ async fn admin_issue(
     }
 }
 
-async fn staff_page(
-    State(state): State<ServerState>,
-    headers: HeaderMap,
-    Query(q): Query<std::collections::HashMap<String, String>>,
-) -> impl IntoResponse {
-    if !authed_for(&state, &headers, &json!(q), "/staff") {
-        return (StatusCode::UNAUTHORIZED, Html("<h1>접근 권한이 없습니다</h1>"));
-    }
+async fn staff_page() -> impl IntoResponse {
     (StatusCode::OK, Html(include_str!("../../web/staff.html")))
 }
 
-async fn scan_page(
-    State(state): State<ServerState>,
-    headers: HeaderMap,
-    Query(q): Query<std::collections::HashMap<String, String>>,
-) -> impl IntoResponse {
-    if !authed_for(&state, &headers, &json!(q), "/scan") {
-        return (StatusCode::UNAUTHORIZED, Html("<h1>접근 권한이 없습니다</h1>"));
-    }
+async fn scan_page() -> impl IntoResponse {
     (StatusCode::OK, Html(include_str!("../../web/scan.html")))
 }
 
@@ -3213,6 +3277,7 @@ async fn api_scan_sealed(
             return seal_plain_error(StatusCode::INTERNAL_SERVER_ERROR, "SEAL_UNAVAILABLE");
         }
     };
+    if !tokens_live(&state) { return seal_plain_error(StatusCode::UNAUTHORIZED, "SESSION_EXPIRED"); }
     let mut tokens = vec![("owner".to_string(), state.token.lock().map(|t| t.clone()).unwrap_or_default())];
     if let Ok(m) = state.role_tokens.lock() {
         for r in ["staff", "scanner"] {
@@ -3233,7 +3298,13 @@ async fn api_scan_sealed(
     drop(tokens);
     let gate = {
         let mut seen = state.seal_seen.lock().unwrap_or_else(|e| e.into_inner());
-        crate::shopseal::admit(&opened, crate::shopseal::now(), &mut seen)
+        if seen.contains_key("storage-error") { Err((503,"SEAL_STORAGE")) }
+        else {
+            crate::shopseal::admit(&opened, crate::shopseal::now(), &mut seen).and_then(|()| {
+                let bytes = serde_json::to_vec(&*seen).map_err(|_| (503,"SEAL_STORAGE"))?;
+                atomic_write_0600(&replay_path(), &bytes).map_err(|_| (503,"SEAL_STORAGE"))
+            })
+        }
     };
     if let Err((status, code)) = gate {
         return Json(crate::shopseal::seal_response(&opened.ctx, status, Some(&json!({ "code": code })), None)).into_response();
@@ -3268,21 +3339,28 @@ async fn api_scan_sealed(
 /// 봉함에서 풀려 들어온 안쪽 요청은 `SealedInner` 확장값이 있어 여기를 그냥 지나간다.
 async fn plain_member_gate(
     State(state): State<ServerState>,
-    req: axum::extract::Request,
+    mut req: axum::extract::Request,
     next: axum::middleware::Next,
 ) -> axum::response::Response {
-    let personal = crate::shopseal::PERSONAL_PLAIN_PATHS.contains(&req.uri().path());
-    if personal && req.extensions().get::<crate::shopseal::SealedInner>().is_none() && role_of(&state, req.headers(), &json!({})).is_some() {
-        if let Ok(mut g) = state.plain_seen.lock() {
-            g.0 += 1;
-            g.1 = now_unix();
-        }
-        if crate::shopseal::block_plain() {
-            return (StatusCode::FORBIDDEN, Json(json!({
-                "error": "이 가게는 암호 없는 연결을 막았습니다. 폰 앱과 가게 앱을 새 판으로 올린 뒤 연결 QR 을 다시 찍어 주세요.",
-                "code": "SEAL_REQUIRED",
-            }))).into_response();
-        }
+    let path = req.uri().path();
+    let inner = req.extensions().get::<crate::shopseal::SealedInner>().is_some();
+    let secret_query = req.uri().query().is_some_and(|q| q.split('&').any(|p| p.split('=').next() == Some("t")));
+    let private_api = path.starts_with("/api/admin/") || path.starts_with("/api/staff/")
+        || (path.starts_with("/api/scan/") && path != crate::shopseal::SEAL_PATH)
+        || matches!(path, "/api/owner-ask" | "/api/keepphoto" | "/api/nostr/publish");
+    if !inner && path=="/api/nostr/publish" && req.method()==axum::http::Method::POST
+        && !secret_query && !req.headers().contains_key("x-playx-token") && trusted_loopback_request(&req,true) {
+        req.extensions_mut().insert(LocalWalletPublish);
+        return next.run(req).await;
+    }
+    if !inner && (private_api || req.headers().contains_key("x-playx-token") || secret_query) {
+        let authenticated = role_of(&state, req.headers(), &json!({})).is_some();
+        if authenticated { if let Ok(mut g) = state.plain_seen.lock() { g.0 += 1; g.1 = now_unix(); } }
+        let status = if authenticated || secret_query { StatusCode::FORBIDDEN } else { StatusCode::UNAUTHORIZED };
+        return (status, Json(json!({
+            "error": "암호화된 연결이 필요합니다. RavenVault 폰 앱에서 이 컴퓨터의 새 연결 QR을 찍어 주세요. 브라우저에서는 HTTPS 또는 이 컴퓨터의 127.0.0.1 주소를 사용하세요.",
+            "code": if authenticated || secret_query { "SEAL_REQUIRED" } else { "BAD_TOKEN" },
+        }))).into_response();
     }
     next.run(req).await
 }
@@ -3291,8 +3369,8 @@ async fn plain_member_gate(
 fn role_urls(ip: &str, staff_t: &str, scan_t: &str, desk_pub: Option<&str>) -> (String, String) {
     let k = desk_pub.map(|k| format!("&k={k}")).unwrap_or_default();
     (
-        format!("http://{ip}:{PORT}/staff?t={staff_t}{k}"),
-        format!("http://{ip}:{PORT}/scan?t={scan_t}{k}"),
+        format!("ravenvault-shop://{ip}:{PORT}/staff#t={staff_t}{k}"),
+        format!("ravenvault-shop://{ip}:{PORT}/scan#t={scan_t}{k}"),
     )
 }
 
@@ -3348,6 +3426,7 @@ fn build_phone_router(st: ServerState) -> axum::Router {
         .route("/wallet", get(wallet_page))
         .route("/legacy-wallet", get(wallet_page))
         .route("/wallet.bundle.js", get(wallet_bundle))
+        .route("/shop-seal.bundle.js", get(|| async { ([("content-type", "application/javascript; charset=utf-8")], include_str!("../../web/shop-seal.bundle.js")) }))
         .route("/api/shop", get(api_shop))
         .route("/api/ask", post(api_ask))
         .route("/api/owner-ask", post(api_owner_ask))
@@ -3499,9 +3578,11 @@ async fn outside_gate(
 pub async fn start_phone_server(
     state: tauri::State<'_, ServerState>,
 ) -> Result<Value, String> {
+    let credentials_renewed=renew_expired_role_tokens(&state)?;
     let st = ServerState {
         token: state.token.clone(),
         role_tokens: state.role_tokens.clone(),
+        token_expires_at: state.token_expires_at.clone(),
         shop: state.shop.clone(),
         ai: state.ai.clone(),
         order_fee: state.order_fee.clone(),
@@ -3547,7 +3628,7 @@ pub async fn start_phone_server(
         Ok(listener) => {
             RELAY_LIVE.store(true, Ordering::Relaxed);
             tokio::spawn(async move {
-                let _ = axum::serve(listener, app).await;
+                let _ = axum::serve(listener, app.into_make_service_with_connect_info::<std::net::SocketAddr>()).await;
             });
         }
         Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
@@ -3644,8 +3725,10 @@ pub async fn start_phone_server(
         "customer_url": format!("http://{ip}:{PORT}/"),
         "platform_url": format!("http://{ip}:{PORT}/shops"),
         "staff_url": staff_url,
+        "credentials_renewed": credentials_renewed,
+        "connection_note": if credentials_renewed { "연결 열쇠가 만료되어 새로 만들었습니다. RavenVault 폰 앱에서 새 QR을 다시 찍어 주세요." } else { "" },
         "scan_url": scan_url,
-        "admin_url": format!("http://{ip}:{PORT}/admin?t={owner_token}"),
+        "admin_url": format!("ravenvault-shop://{ip}:{PORT}/admin#t={owner_token}{}", desk_pub.as_deref().map(|k| format!("&k={k}")).unwrap_or_default()),
         "ip": ip,
     }))
 }
@@ -4182,15 +4265,12 @@ pub fn rotate_role_token(state: tauri::State<'_, ServerState>, role: String) -> 
     if !["staff", "scanner"].contains(&role.as_str()) {
         return Err("이 역할은 새로 만들 수 없습니다.".into());
     }
-    let mut m = state.role_tokens.lock().map_err(|_| "잠금 실패")?;
-    m.insert(role, random_token());
-    // 🔴 저장을 안 하고 있었다. 잃어버린 직원 폰을 끊었다고 생각한 뒤 앱을
-    // 다시 켜면 **옛 토큰이 되살아나** 그 폰의 URL 이 다시 열린다.
-    // 끊는 것은 지금만이 아니라 앞으로도 끊긴 것이어야 한다.
-    let snapshot = m.clone();
-    drop(m);
-    let owner = state.token.lock().map(|t| t.clone()).unwrap_or_default();
-    save_tokens(&owner, &snapshot);
+    let owner = state.token.lock().map_err(|_| "잠금 실패")?;
+    let mut roles = state.role_tokens.lock().map_err(|_| "잠금 실패")?;
+    let mut next = roles.clone(); next.insert(role, random_token());
+    save_tokens(&owner, &next).map_err(|_| "새 연결 열쇠를 저장하지 못해 기존 연결을 바꾸지 않았습니다. 저장소를 확인한 뒤 다시 끊어 주세요.")?;
+    *roles = next;
+    *state.token_expires_at.lock().map_err(|_| "잠금 실패")? = stored_token_expiry().unwrap_or(0);
     Ok(())
 }
 
@@ -4229,20 +4309,13 @@ pub fn remote_admin_set(state: tauri::State<'_, ServerState>, on: bool) -> Resul
 /// fresh QR codes come back in the same result.
 #[tauri::command]
 pub fn logout_all_phones(state: tauri::State<'_, ServerState>) -> Result<Value, String> {
+    let mut owner = state.token.lock().map_err(|_| "잠금 실패")?;
+    let mut roles = state.role_tokens.lock().map_err(|_| "잠금 실패")?;
     let fresh = random_token();
-    if let Ok(mut t) = state.token.lock() {
-        *t = fresh.clone();
-    }
-    let mut roles = std::collections::HashMap::new();
-    if let Ok(mut m) = state.role_tokens.lock() {
-        for r in ["staff", "scanner"] {
-            let t = random_token();
-            m.insert(r.to_string(), t.clone());
-            roles.insert(r.to_string(), t);
-        }
-    }
-    // 새 토큰도 남긴다. 안 그러면 다음 재시작에 옛 토큰이 되살아난다.
-    save_tokens(&fresh, &roles);
+    let next = ["staff", "scanner"].into_iter().map(|r| (r.to_string(), random_token())).collect();
+    save_tokens(&fresh, &next).map_err(|_| "새 연결 열쇠를 저장하지 못해 로그아웃을 완료하지 않았습니다. 저장소를 확인한 뒤 다시 끊어 주세요.")?;
+    *owner = fresh; *roles = next;
+    *state.token_expires_at.lock().map_err(|_| "잠금 실패")? = stored_token_expiry().unwrap_or(0);
     Ok(json!({
         "done": true,
         "message": "모든 폰이 끊겼습니다. 잃어버린 폰의 주소는 이제 열리지 않습니다.",
@@ -4275,13 +4348,14 @@ impl Default for ServerState {
                         .iter()
                         .map(|r| (r.to_string(), random_token()))
                         .collect();
-                    save_tokens(&o, &roles);
+                    let _ = save_tokens(&o, &roles);
                     o
                 }),
             )),
             role_tokens: Arc::new(Mutex::new(
                 load_tokens().map(|(_, r)| r).unwrap_or_default(),
             )),
+            token_expires_at: Arc::new(Mutex::new(stored_token_expiry().unwrap_or(0))),
             // 저장된 가게로 시작한다. 빈 값으로 시작하면 손님 폰에 빈 메뉴가
             // 뜨고, 사장은 그걸 보고 서버가 죽었다고 생각한다.
             shop: Arc::new(Mutex::new(crate::shop::shop_load())),
@@ -4304,7 +4378,7 @@ impl Default for ServerState {
             order_expect: Arc::new(Mutex::new(std::collections::HashMap::new())),
             order_until: Arc::new(Mutex::new(std::collections::HashMap::new())),
             order_times: Arc::new(Mutex::new(Vec::new())),
-            seal_seen: Arc::new(Mutex::new(std::collections::HashMap::new())),
+            seal_seen: Arc::new(Mutex::new(load_seal_seen())),
             plain_seen: Arc::new(Mutex::new((0, 0))),
         }
     }
@@ -4363,21 +4437,16 @@ mod outside {
     ///
     /// 소스를 읽어 확인한다. 타입 검사도 시험도 이걸 못 잡았기 때문이다.
     #[test]
-    fn the_qr_pages_pass_real_headers() {
-        let src = include_str!("../src/server.rs");
-        for f in ["admin_page", "staff_page", "scan_page"] {
-            let at = src.find(&format!("async fn {f}(")).expect(f);
-            // 바이트로 자르면 한글 한가운데를 잘라 패닉이 난다. 글자 단위로.
-            let body: String = src[at..].chars().take(400).collect();
-            assert!(
-                !body.contains("HeaderMap::new()"),
-                "{f} 가 빈 헤더를 넘깁니다 — QR 로 들어오는 화면이 전부 막힙니다"
-            );
-            assert!(
-                body.contains("headers: HeaderMap"),
-                "{f} 가 헤더를 안 받습니다"
-            );
+    fn role_pages_are_inert_shells_and_private_data_uses_the_outer_gate() {
+        let source=include_str!("server.rs");
+        for name in ["admin_page","staff_page","scan_page"] {
+            let start=source.find(&format!("async fn {name}(")).unwrap();
+            let body=&source[start..start+source[start..].find("\n}").unwrap()];
+            assert!(body.contains("Html(include_str!"));
+            assert!(!body.contains("Query(") && !body.contains("token"));
         }
+        assert!(source.contains("from_fn_with_state(st.clone(), outside_gate)"));
+        assert!(source.contains("from_fn_with_state(st.clone(), plain_member_gate)"));
     }
 
     /// 검수 — `/ipfs/…` 로 내주는 남의 HTML 이 가게 출처에서 스크립트를 못 돌리게.
@@ -4842,12 +4911,16 @@ mod theme_tests {
 ///    막히면 안 된다. 그래서 늘 200 으로 답하고 결과만 알려 준다.
 /// 🔴 이 길은 **사진을 받아 두기만** 한다. 남에게 내주지 않는다 —
 ///    그건 사진 서버가 되는 일이고, 부하도 책임도 다른 이야기다.
-async fn api_keep_photo(Json(body): Json<Value>) -> impl IntoResponse {
-    let url = body.get("url").and_then(Value::as_str).unwrap_or("").to_string();
-    if url.is_empty() {
-        return Json(json!({ "kept": false, "why": "주소가 없습니다" }));
+async fn api_keep_photo(State(st): State<ServerState>, headers: HeaderMap, Json(body): Json<Value>) -> impl IntoResponse {
+    if let Err(reason) = authed_for_reason(&st, &headers, &json!({}), "/api/keepphoto") {
+        return (StatusCode::UNAUTHORIZED, Json(auth_fail_json(reason)));
     }
-    Json(crate::upload::ipfs_keep_url(url).await)
+    static GATE: std::sync::OnceLock<tokio::sync::Semaphore> = std::sync::OnceLock::new();
+    let Ok(_permit) = GATE.get_or_init(|| tokio::sync::Semaphore::new(2)).try_acquire() else {
+        return (StatusCode::TOO_MANY_REQUESTS, Json(json!({"kept":false,"why":"다른 사진 보관이 끝난 뒤 다시 시도해 주세요."})));
+    };
+    let url = body.get("url").and_then(Value::as_str).unwrap_or("").to_string();
+    (StatusCode::OK, Json(crate::upload::ipfs_keep_url(url).await))
 }
 
 #[cfg(test)]
@@ -4932,9 +5005,10 @@ mod router_builds {
             let expected = if path.starts_with("/api/") { axum::http::StatusCode::UNAUTHORIZED } else { axum::http::StatusCode::FORBIDDEN };
             assert_eq!(status("shop.example.com", path).await, expected, "{path} 가 바깥에 열려 있다");
         }
-        for path in ["/", "/wallet", "/api/capabilities", "/report.js"] {
+        for path in ["/", "/api/capabilities", "/report.js"] {
             assert_ne!(status("shop.example.com", path).await, axum::http::StatusCode::FORBIDDEN, "{path} 가 바깥에서 막혔다");
         }
+        assert_eq!(status("shop.example.com", "/wallet").await, axum::http::StatusCode::FORBIDDEN, "mnemonic wallet must never be served over remote HTTP");
         assert_ne!(status("192.168.0.10:8790", "/admin").await, axum::http::StatusCode::FORBIDDEN, "가게 안에서 사장 화면이 막혔다");
     }
 
@@ -5001,31 +5075,9 @@ mod bind_probe {
     }
 }
 
-/// 이사 짐을 내준다.
-///
-/// ⚠️ 파일을 잠근 암호는 **헤더로** 같이 보낸다. 같은 와이파이 안이고,
-///    숫자를 맞힌 쪽에게만 준다. 숫자를 세 번 틀리면 짐 자체가 사라진다.
-async fn api_move(axum::extract::Path(code): axum::extract::Path<String>) -> impl IntoResponse {
-    match crate::moving::take(&code) {
-        Ok((path, pass)) => match std::fs::read(&path) {
-            Ok(bytes) => (
-                StatusCode::OK,
-                [
-                    ("content-type", "application/zip".to_string()),
-                    ("x-move-pass", pass),
-                ],
-                bytes,
-            )
-                .into_response(),
-            Err(e) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("짐을 읽지 못했습니다: {e}"),
-            )
-                .into_response(),
-        },
-        // 왜 안 되는지 그대로 전한다 — 「세 번 틀렸습니다」 같은 것.
-        Err(msg) => (StatusCode::FORBIDDEN, msg).into_response(),
-    }
+/// Legacy unauthenticated HTTP transfer must never expose a backup passphrase.
+async fn api_move(axum::extract::Path(_code): axum::extract::Path<String>) -> impl IntoResponse {
+    (StatusCode::FORBIDDEN, crate::moving::HTTP_MOVE_GUIDANCE)
 }
 
 #[cfg(test)]
@@ -5043,8 +5095,7 @@ mod order_persistence_tests {
             let lock = crate::paths::TEST_ENV
                 .lock()
                 .unwrap_or_else(|e| e.into_inner());
-            let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("target")
+            let dir = crate::paths::test_fixture_root()
                 .join(format!("test-order-state-{}", std::process::id()));
             let _ = std::fs::remove_dir_all(&dir);
             std::fs::create_dir_all(&dir).unwrap();
@@ -5287,7 +5338,7 @@ mod order_persistence_tests {
     fn saved_tokens_are_private_and_leave_no_temporary_file() {
         let _home = TestHome::new();
         let st = ServerState::default();
-        save_tokens(&st.token.lock().unwrap(), &st.role_tokens.lock().unwrap());
+        save_tokens(&st.token.lock().unwrap(), &st.role_tokens.lock().unwrap()).unwrap();
         assert!(load_tokens().is_some());
         #[cfg(unix)]
         {
@@ -5338,8 +5389,10 @@ mod order_persistence_tests {
             };
             req = req.header("x-playx-token", token);
         }
+        let mut request = req.body(axum::body::Body::from(body)).unwrap();
+        if role.is_some() { request.extensions_mut().insert(crate::shopseal::SealedInner); }
         let response = build_phone_router(st.clone())
-            .oneshot(req.body(axum::body::Body::from(body)).unwrap())
+            .oneshot(request)
             .await
             .unwrap();
         let status = response.status();
@@ -5720,8 +5773,9 @@ mod order_persistence_tests {
             if let Some(role) = role {
                 req = req.header("x-playx-token", st.role_tokens.lock().unwrap()[role].clone());
             }
-            let response = build_phone_router(st.clone())
-                .oneshot(req.body(axum::body::Body::from("{invalid synthetic JSON")).unwrap()).await.unwrap();
+            let mut inner = req.body(axum::body::Body::from("{invalid synthetic JSON")).unwrap();
+            if role.is_some() { inner.extensions_mut().insert(crate::shopseal::SealedInner); }
+            let response = build_phone_router(st.clone()).oneshot(inner).await.unwrap();
             assert_eq!(response.status(), expected_status);
             let bytes = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
             let body: Value = serde_json::from_slice(&bytes).unwrap();
@@ -6046,31 +6100,27 @@ mod shop_seal_interop {
         let st = shop(&v);
         let staff = v["tokens"]["staff"].as_str().unwrap().to_string();
         let host = "192.168.0.10:8790";
-        // 옛 폰의 평문 회원 보기: 기본은 받되 센다.
-        let (status, _) = raw(&st, "GET", "/api/scan/member-info?code=ROOT%2FM%23ABCD", host, Some(&staff), String::new()).await;
-        assert_eq!(status, StatusCode::OK);
-        let (status, _) = raw(&st, "POST", "/api/scan/check", host, Some(&staff), json!({"query":"ROOT/M#ABCD"}).to_string()).await;
-        assert_eq!(status, StatusCode::OK);
-        assert_eq!(st.plain_seen.lock().unwrap().0, 2);
-        // 토큰 없는 두드림은 세지 않는다(경고가 부풀면 아무도 안 믿는다). 주문은 손님 정보가 아니라 안 센다.
-        let _ = raw(&st, "GET", "/api/scan/member-info?code=X", host, None, String::new()).await;
-        let (status, _) = raw(&st, "GET", "/api/admin/states", host, Some(&staff), String::new()).await;
-        assert_eq!(status, StatusCode::OK);
-        assert_eq!(st.plain_seen.lock().unwrap().0, 2);
-
-        // 사장이 막기를 켜면 평문 손님 정보 길은 403 SEAL_REQUIRED, 주문은 그대로.
+        // Plaintext is always refused even when the legacy setting is false.
+        for (method,path,body) in [
+            ("GET","/api/scan/member-info?code=ROOT%2FM%23ABCD",String::new()),
+            ("POST","/api/scan/check",json!({"query":"ROOT/M#ABCD"}).to_string()),
+            ("GET","/api/admin/states",String::new()),
+        ] {
+            let (status,body)=raw(&st,method,path,host,Some(&staff),body).await;
+            assert_eq!(status,StatusCode::FORBIDDEN);assert_eq!(body["code"],"SEAL_REQUIRED");
+        }
+        let _ = raw(&st,"GET","/api/scan/member-info?code=X",host,None,String::new()).await;
+        assert_eq!(st.plain_seen.lock().unwrap().0,3);
         crate::shopseal::set_block_plain(true).unwrap();
-        let (status, body) = raw(&st, "POST", "/api/scan/member", host, Some(&staff), json!({"code":"x","name":"n"}).to_string()).await;
-        assert_eq!((status, body["code"].as_str()), (StatusCode::FORBIDDEN, Some("SEAL_REQUIRED")));
-        let (status, _) = raw(&st, "GET", "/api/admin/states", host, Some(&staff), String::new()).await;
-        assert_eq!(status, StatusCode::OK);
-        assert_eq!(st.plain_seen.lock().unwrap().0, 3);
+        let (status,body)=raw(&st,"POST","/api/scan/member",host,Some(&staff),json!({"code":"x","name":"n"}).to_string()).await;
+        assert_eq!((status,body["code"].as_str()),(StatusCode::FORBIDDEN,Some("SEAL_REQUIRED")));
+        assert_eq!(st.plain_seen.lock().unwrap().0,4);
         // 봉함은 막기와 상관없이 지나간다 — 안쪽 요청은 확장값 표시가 있어 평문으로 안 센다.
         let c = case(&v, "interop", "interop-info");
         set_test_now(Some(c["now_ms"].as_i64().unwrap() / 1000));
         let ans = open_response(&ctx(c), &sealed(&st, &c["envelope"]).await.1).unwrap();
         assert_eq!(ans["status"], 200, "{ans}");
-        assert_eq!(st.plain_seen.lock().unwrap().0, 3);
+        assert_eq!(st.plain_seen.lock().unwrap().0, 4);
         // 네트워크에서 온 머리글로는 봉함 표시를 흉내 낼 수 없다(표시는 요청 확장값이다).
         let mut req = axum::http::Request::builder().uri("/api/scan/member-info?code=ROOT%2FM%23ABCD").method("GET")
             .header("host", host).header("x-playx-token", staff.as_str()).header("sealedinner", "1");
@@ -6082,13 +6132,266 @@ mod shop_seal_interop {
     }
 
     #[test]
-    fn staff_and_scanner_qr_carry_the_seal_key_and_keep_old_params() {
+    fn staff_and_scanner_qr_are_app_only_and_carry_the_seal_key() {
         let (staff, scan) = role_urls("192.168.0.10", "aa", "bb", Some(&"cd".repeat(32)));
-        assert_eq!(staff, format!("http://192.168.0.10:{PORT}/staff?t=aa&k={}", "cd".repeat(32)));
-        assert_eq!(scan, format!("http://192.168.0.10:{PORT}/scan?t=bb&k={}", "cd".repeat(32)));
+        assert_eq!(staff, format!("ravenvault-shop://192.168.0.10:{PORT}/staff#t=aa&k={}", "cd".repeat(32)));
+        assert_eq!(scan, format!("ravenvault-shop://192.168.0.10:{PORT}/scan#t=bb&k={}", "cd".repeat(32)));
         let (staff, scan) = role_urls("192.168.0.10", "aa", "bb", None);
-        assert_eq!((staff.as_str(), scan.as_str()), (format!("http://192.168.0.10:{PORT}/staff?t=aa").as_str(), format!("http://192.168.0.10:{PORT}/scan?t=bb").as_str()));
+        assert_eq!((staff.as_str(), scan.as_str()), (format!("ravenvault-shop://192.168.0.10:{PORT}/staff#t=aa").as_str(), format!("ravenvault-shop://192.168.0.10:{PORT}/scan#t=bb").as_str()));
         // 봉함 길은 같은 가게 망에서만(손님 길 아님).
         assert!(!customer_path("/api/scan/sealed"));
+    }
+}
+
+#[cfg(test)]
+mod desktop_security_tests {
+    use super::*;
+    use tower::ServiceExt;
+    pub(super) async fn request(st: &ServerState, path: &str, token: Option<&str>, body: &str) -> (StatusCode, Value) {
+        let mut req = axum::http::Request::builder().uri(path)
+            .method(if path.starts_with("/api/keepphoto") || path == crate::shopseal::SEAL_PATH { "POST" } else { "GET" })
+            .header("host", "192.168.1.20:8790").header("content-type", "application/json");
+        if let Some(t) = token { req = req.header("x-playx-token", t); }
+        let r = build_phone_router(st.clone()).oneshot(req.body(axum::body::Body::from(body.to_string())).unwrap()).await.unwrap();
+        let status = r.status();
+        let bytes = axum::body::to_bytes(r.into_body(), 1_000_000).await.unwrap();
+        (status, serde_json::from_slice(&bytes).unwrap_or(Value::Null))
+    }
+    pub(super) fn envelope(token:&str,path:&str,method:&str,body:Value)->(Value,crate::shopseal::Ctx) {
+        use chacha20poly1305::{XChaCha20Poly1305,XNonce};
+        use chacha20poly1305::aead::{Aead,KeyInit,Payload};
+        let desk=crate::shopseal::desk_key().unwrap();
+        let secret=x25519_dalek::StaticSecret::from([9u8;32]);
+        let eph=x25519_dalek::PublicKey::from(&secret).to_bytes();
+        let shared=secret.diffie_hellman(&x25519_dalek::PublicKey::from(desk.public)).to_bytes();
+        let key=crate::shopseal::derive_key(&shared,token);let n=rand::random::<[u8;24]>();
+        let plain=serde_json::to_vec(&json!({"v":1,"m":method,"path":path,"ts":crate::shopseal::now(),"nonce":hex::encode(rand::random::<[u8;16]>()),"body":body})).unwrap();
+        let aad=[b"rv-shop-seal-v1/req".as_slice(),&eph,&desk.public].concat();
+        let ct=XChaCha20Poly1305::new((&key).into()).encrypt(XNonce::from_slice(&n),Payload{msg:&plain,aad:&aad}).unwrap();
+        (json!({"v":1,"eph":hex::encode(eph),"n":hex::encode(n),"ct":hex::encode(ct)}),crate::shopseal::Ctx::from_parts(key,eph,n))
+    }
+    #[tokio::test]
+    async fn legacy_move_never_returns_archive_or_passphrase() {
+        let _home = super::order_persistence_tests::TestHome::new();
+        let st = ServerState::default();
+        let res = build_phone_router(st).oneshot(axum::http::Request::builder().uri("/move/123456").header("host","localhost").body(axum::body::Body::empty()).unwrap()).await.unwrap();
+        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+        assert!(!res.headers().contains_key("x-move-pass"));
+        assert!(crate::moving::move_offer("shop".into()).await.unwrap_err().contains("USB"));
+        assert!(crate::moving::move_fetch("127.0.0.1".into(), "123456".into()).await.unwrap_err().contains("USB"));
+    }
+    #[tokio::test]
+    async fn photo_copy_requires_authentication_before_fetch() {
+        let _home = super::order_persistence_tests::TestHome::new();
+        let st = ServerState::default();
+        let (status, _) = request(&st, "/api/keepphoto", None, "{}").await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED, "anonymous LAN photo copy must be refused before any outbound request");
+    }
+    #[tokio::test]
+    async fn plain_role_token_cannot_read_sensitive_response() {
+        let _home = super::order_persistence_tests::TestHome::new();
+        let st = ServerState::default();
+        let token = st.role_tokens.lock().unwrap()["staff"].clone();
+        let (status, body) = request(&st, "/api/admin/states", Some(&token), "").await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "token and customer orders must require authenticated encryption");
+        assert_eq!(body["code"], "SEAL_REQUIRED");
+        crate::shopseal::set_test_now(None);
+        let (env,ctx)=envelope(&token,"/api/admin/states","GET",Value::Null);
+        let (status,body)=request(&st,crate::shopseal::SEAL_PATH,None,&env.to_string()).await;
+        assert_eq!(status,StatusCode::OK);assert_eq!(crate::shopseal::open_response(&ctx,&body).unwrap()["status"],200);
+        let restarted=ServerState::default();
+        let (_,body)=request(&restarted,crate::shopseal::SEAL_PATH,None,&env.to_string()).await;
+        assert_eq!(crate::shopseal::open_response(&ctx,&body).unwrap()["body"]["code"],"SEAL_REPLAY");
+        let scanner=st.role_tokens.lock().unwrap()["scanner"].clone();
+        for path in ["/api/keepphoto","/api/nostr/publish"] {
+            let (env,ctx)=envelope(&scanner,path,"POST",json!({}));
+            let (_,body)=request(&st,crate::shopseal::SEAL_PATH,None,&env.to_string()).await;
+            let answer=crate::shopseal::open_response(&ctx,&body).unwrap();
+            assert_eq!(answer["status"],401);assert_eq!(answer["body"]["code"],"FORBIDDEN_ROLE");
+        }
+        *st.token_expires_at.lock().unwrap()=now_unix()-1;
+        let (env,_)=envelope(&token,"/api/admin/states","GET",Value::Null);
+        let (status,body)=request(&st,crate::shopseal::SEAL_PATH,None,&env.to_string()).await;
+        assert_eq!(status,StatusCode::UNAUTHORIZED);assert_eq!(body["code"],"SESSION_EXPIRED");
+        *st.token_expires_at.lock().unwrap()=now_unix()+60;
+        st.role_tokens.lock().unwrap().insert("staff".into(), "a".repeat(64));
+        let (env,_)=envelope(&token,"/api/admin/states","GET",Value::Null);
+        let (status,body)=request(&st,crate::shopseal::SEAL_PATH,None,&env.to_string()).await;
+        assert_eq!(status,StatusCode::UNAUTHORIZED);assert_eq!(body["code"],"BAD_TOKEN");
+    }
+    #[tokio::test]
+    async fn lan_http_never_serves_mnemonic_wallet() {
+        let _home = super::order_persistence_tests::TestHome::new();
+        let st = ServerState::default();
+        let (status, _) = request(&st, "/wallet", None, "").await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "LAN HTTP must not supply mnemonic-capable wallet code");
+    }
+}
+
+#[cfg(test)]
+mod wallet_usability_tests {
+    use super::*;
+    use tower::ServiceExt;
+    async fn publish(st: &ServerState, fixture: &SyntheticPublisher, event: Value, peer: Option<&str>, host: &str, origin: Option<&str>, extra: Option<(&str,&str)>) -> (StatusCode,Value) {
+        let mut builder = axum::http::Request::builder().uri("/api/nostr/publish").method("POST").header("host",host).header("content-type","application/json");
+        if let Some(v)=origin { builder=builder.header("origin",v); }
+        if let Some((k,v))=extra { builder=builder.header(k,v); }
+        let mut request=builder.body(axum::body::Body::from(event.to_string())).unwrap();
+        if let Some(v)=peer { request.extensions_mut().insert(axum::extract::ConnectInfo(v.parse::<std::net::SocketAddr>().unwrap())); }
+        request.extensions_mut().insert(fixture.clone());
+        let response=build_phone_router(st.clone()).oneshot(request).await.unwrap();
+        let status=response.status();let bytes=axum::body::to_bytes(response.into_body(),100_000).await.unwrap();
+        (status,serde_json::from_slice(&bytes).unwrap_or(Value::Null))
+    }
+    #[tokio::test]
+    async fn local_wallet_boundary_rejects_lan_spoofing_cross_origin_and_forwarding() {
+        let _home=super::order_persistence_tests::TestHome::new();let st=ServerState::default();let fixture=SyntheticPublisher::default();
+        let event=crate::nostrpub::synthetic_product("Public listing only",43);
+        let cases=[
+            (None,"localhost:8790",Some("http://localhost:8790"),None),
+            (Some("192.168.1.7:54000"),"localhost:8790",Some("http://localhost:8790"),None),
+            (Some("127.0.0.1:54000"),"localhost.evil:8790",Some("http://localhost.evil:8790"),None),
+            (Some("127.0.0.1:54000"),"localhost:8790.evil",Some("http://localhost:8790.evil"),None),
+            (Some("127.0.0.1:54000"),"localhost:80",Some("http://localhost:80"),None),
+            (Some("127.0.0.1:54000"),"localhost:8790",None,None),
+            (Some("127.0.0.1:54000"),"localhost:8790",Some("null"),None),
+            (Some("127.0.0.1:54000"),"localhost:8790",Some("http://attacker.example"),None),
+            (Some("127.0.0.1:54000"),"localhost:8790",Some("http://127.0.0.1:8790"),None),
+            (Some("127.0.0.1:54000"),"localhost:8790",Some("https://localhost:8790"),None),
+        ];
+        for (peer,host,origin,extra) in cases { let(status,_)=publish(&st,&fixture,event.clone(),peer,host,origin,extra).await;assert_eq!(matches!(status,StatusCode::UNAUTHORIZED|StatusCode::FORBIDDEN),true,"{peer:?} {host} {origin:?}: {status}"); }
+        for header in ["forwarded","x-forwarded-for","x-forwarded-proto","x-forwarded-host","x-forwarded-port","x-forwarded-anything","x-real-ip","via","host","origin","sec-fetch-site","x-rv-local-wallet","localwalletpublish"] {
+            let (status,_)=publish(&st,&fixture,event.clone(),Some("127.0.0.1:54000"),"localhost:8790",Some("http://localhost:8790"),Some((header,"cross-site"))).await;
+            if matches!(header,"x-rv-local-wallet"|"localwalletpublish") {
+                let (status,_)=publish(&st,&fixture,event.clone(),Some("192.168.1.7:54000"),"localhost:8790",Some("http://localhost:8790"),Some((header,"1"))).await;
+                assert_eq!(status,StatusCode::UNAUTHORIZED,"HTTP headers cannot create the private extension");
+            } else { assert_eq!(matches!(status,StatusCode::UNAUTHORIZED|StatusCode::FORBIDDEN),true,"{header}: {status}"); }
+        }
+        // Two legitimate spoof-like custom headers above are irrelevant locally;
+        // they do not manufacture authority on the LAN.
+        assert_eq!(fixture.events.lock().unwrap().len(),2);
+    }
+    #[tokio::test]
+    async fn local_wallet_validates_signature_size_and_quota_before_publishing() {
+        let _home=super::order_persistence_tests::TestHome::new();let st=ServerState::default();let fixture=SyntheticPublisher::default();
+        let event=crate::nostrpub::synthetic_product("Description",44);
+        let mut bad=event.clone();bad["sig"]=json!("0".repeat(128));
+        assert_eq!(publish(&st,&fixture,bad,Some("127.0.0.1:54000"),"localhost:8790",Some("http://localhost:8790"),None).await.0,StatusCode::BAD_REQUEST);
+        let large=crate::nostrpub::synthetic_product(&"x".repeat(crate::nostrpub::MAX_PUBLISH_BYTES),44);
+        assert_eq!(publish(&st,&fixture,large,Some("127.0.0.1:54000"),"localhost:8790",Some("http://localhost:8790"),None).await.0,StatusCode::PAYLOAD_TOO_LARGE);
+        assert_eq!(fixture.events.lock().unwrap().len(),0);
+        for _ in 0..4 {assert_eq!(publish(&st,&fixture,event.clone(),Some("127.0.0.1:54000"),"localhost:8790",Some("http://localhost:8790"),None).await.0,StatusCode::OK);}
+        assert_eq!(publish(&st,&fixture,event,Some("127.0.0.1:54000"),"localhost:8790",Some("http://localhost:8790"),None).await.0,StatusCode::TOO_MANY_REQUESTS);
+        assert_eq!(fixture.events.lock().unwrap().len(),4);
+    }
+    #[tokio::test]
+    async fn supported_wallet_event_scopes_reach_only_the_fake_publisher() {
+        let _home=super::order_persistence_tests::TestHome::new();let st=ServerState::default();let fixture=SyntheticPublisher::default();
+        let forms=[(0,json!([]),"{\"name\":\"Synthetic profile\"}"),(1,json!([]),"Public chat text"),(5,json!([["e","a".repeat(64)]]),""),(40,json!([]),"{\"name\":\"Synthetic room\"}"),(42,json!([["e","a".repeat(64)]]),"Room message"),(1059,json!([["p","b".repeat(64)]]),"synthetic-encrypted-envelope"),(30078,json!([["d","shop"]]),"{\"name\":\"Synthetic shop\"}"),(30402,json!([["d","product"]]),"Plain product text")];
+        for (i,(kind,tags,content)) in forms.into_iter().enumerate() {
+            let event=crate::nostrpub::synthetic_signed_event(kind,tags,content,50+i as u8);
+            assert_eq!(publish(&st,&fixture,event,Some("127.0.0.1:54000"),"localhost:8790",Some("http://localhost:8790"),None).await.0,StatusCode::OK,"kind {kind}");
+        }
+        assert_eq!(fixture.events.lock().unwrap().len(),8);
+    }
+    #[tokio::test]
+    async fn expired_native_renewal_persists_then_updates_running_router_and_rejects_old_tokens() {
+        let _home=super::order_persistence_tests::TestHome::new();let st=ServerState::default();
+        let old=st.role_tokens.lock().unwrap()["staff"].clone();
+        *st.token_expires_at.lock().unwrap()=now_unix()-1;
+        save_tokens_until(&st.token.lock().unwrap(),&st.role_tokens.lock().unwrap(),now_unix()-1).unwrap();
+        let(env,_)=super::desktop_security_tests::envelope(&old,"/api/admin/states","GET",Value::Null);
+        let(status,body)=super::desktop_security_tests::request(&st,crate::shopseal::SEAL_PATH,None,&env.to_string()).await;
+        assert_eq!(status,StatusCode::UNAUTHORIZED);assert_eq!(body,json!({"code":"SESSION_EXPIRED"}));
+        let already_running=build_phone_router(st.clone());
+        assert_eq!(renew_expired_role_tokens(&st),Ok(true));
+        let fresh=st.role_tokens.lock().unwrap()["staff"].clone();assert_ne!(fresh,old);
+        let reloaded=ServerState::default();assert_eq!(reloaded.role_tokens.lock().unwrap()["staff"],fresh);assert!(tokens_live(&reloaded));
+        let pub_key=hex::encode(crate::shopseal::desk_key().unwrap().public);
+        let qr=role_urls("192.168.1.10",&fresh,&reloaded.role_tokens.lock().unwrap()["scanner"],Some(&pub_key)).0;
+        assert!(qr.contains(&format!("#t={fresh}&k={pub_key}")));
+        let(env,ctx)=super::desktop_security_tests::envelope(&fresh,"/api/admin/states","GET",Value::Null);
+        let request=axum::http::Request::builder().uri(crate::shopseal::SEAL_PATH).method("POST").header("host","192.168.1.20:8790").header("content-type","application/json").body(axum::body::Body::from(env.to_string())).unwrap();
+        let response=already_running.oneshot(request).await.unwrap();let bytes=axum::body::to_bytes(response.into_body(),100_000).await.unwrap();
+        assert_eq!(crate::shopseal::open_response(&ctx,&serde_json::from_slice(&bytes).unwrap()).unwrap()["status"],200);
+        for state in [&st,&reloaded] {let(env,_)=super::desktop_security_tests::envelope(&old,"/api/admin/states","GET",Value::Null);let(status,body)=super::desktop_security_tests::request(state,crate::shopseal::SEAL_PATH,None,&env.to_string()).await;assert_eq!(status,StatusCode::UNAUTHORIZED);assert_eq!(body,json!({"error":"권한 없음","code":"BAD_TOKEN"}));}
+        assert_eq!(renew_expired_role_tokens(&st),Ok(false));
+    }
+    #[tokio::test]
+    async fn failed_native_renewal_keeps_expired_credentials_and_persisted_file() {
+        let _home=super::order_persistence_tests::TestHome::new();let st=ServerState::default();
+        let old=st.role_tokens.lock().unwrap().clone();let owner=st.token.lock().unwrap().clone();
+        *st.token_expires_at.lock().unwrap()=now_unix()-1;save_tokens_until(&owner,&old,now_unix()-1).unwrap();
+        let bytes=std::fs::read(tokens_path()).unwrap();std::fs::create_dir(tokens_path().with_extension("json.tmp")).unwrap();
+        let renewal=renew_expired_role_tokens(&st);assert_eq!(renewal.is_err(),true,"storage failure must not create unpersisted QR credentials");assert!(renewal.unwrap_err().contains("새 QR은 아직"));
+        assert_eq!(*st.role_tokens.lock().unwrap(),old);assert_eq!(*st.token.lock().unwrap(),owner);assert!(!tokens_live(&st));assert_eq!(std::fs::read(tokens_path()).unwrap(),bytes);
+        let(env,_)=super::desktop_security_tests::envelope(&old["staff"],"/api/admin/states","GET",Value::Null);
+        let(status,body)=super::desktop_security_tests::request(&st,crate::shopseal::SEAL_PATH,None,&env.to_string()).await;assert_eq!(status,StatusCode::UNAUTHORIZED);assert_eq!(body,json!({"code":"SESSION_EXPIRED"}));
+        let src=include_str!("server.rs");let start=&src[src.find("pub async fn start_phone_server(").unwrap()..];assert!(start.find("renew_expired_role_tokens(&state)?").unwrap()<start.find("let app = build_phone_router").unwrap());
+    }
+
+    #[tokio::test]
+    async fn actual_loopback_listener_supplies_peer_and_never_trusts_forwarding_headers() {
+        let _home=super::order_persistence_tests::TestHome::new();let st=ServerState::default();let fixture=SyntheticPublisher::default();
+        let listener=tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();let addr=listener.local_addr().unwrap();
+        let app=build_phone_router(st).layer(axum::Extension(fixture.clone()));
+        let(stop,done)=tokio::sync::oneshot::channel::<()>();
+        let server=tokio::spawn(async move {axum::serve(listener,app.into_make_service_with_connect_info::<std::net::SocketAddr>()).with_graceful_shutdown(async {let _=done.await;}).await.unwrap();});
+        let client=reqwest::Client::builder().no_proxy().redirect(reqwest::redirect::Policy::none()).timeout(std::time::Duration::from_secs(5)).build().unwrap();
+        let event=crate::nostrpub::synthetic_product("TCP synthetic product",60);
+        // The ephemeral fixture supplies the production fixed-port authority;
+        // PORT remains the actual native server's fixed 8790 bind contract.
+        let url=format!("http://{addr}/api/nostr/publish");
+        let response=client.post(&url).header("host","127.0.0.1:8790").header("origin","http://127.0.0.1:8790").json(&event).send().await.unwrap();
+        assert_eq!(response.status(),StatusCode::OK);assert_eq!(fixture.events.lock().unwrap().len(),1);
+        for (header,value) in [("origin","http://attacker.example"),("x-forwarded-host","127.0.0.1:8790"),("x-forwarded-custom","synthetic")] {
+            let mut req=client.post(&url).header("host","127.0.0.1:8790").header("origin","http://127.0.0.1:8790");
+            if header=="origin" {req=client.post(&url).header("host","127.0.0.1:8790");}
+            let status=req.header(header,value).json(&event).send().await.unwrap().status();assert_eq!(matches!(status,StatusCode::UNAUTHORIZED|StatusCode::FORBIDDEN),true,"{header}");
+        }
+        let status=client.post(format!("http://{addr}/api/keepphoto")).header("host","127.0.0.1:8790").header("origin","http://127.0.0.1:8790").json(&json!({})).send().await.unwrap().status();assert_eq!(status,StatusCode::UNAUTHORIZED);
+        assert_eq!(fixture.events.lock().unwrap().len(),1);
+        stop.send(()).unwrap();server.await.unwrap();
+    }
+    #[tokio::test]
+    async fn same_origin_loopback_wallet_publishes_signed_product_without_owner_token() {
+        let _home=super::order_persistence_tests::TestHome::new();let st=ServerState::default();let fixture=SyntheticPublisher::default();
+        let event=crate::nostrpub::synthetic_product("Plain-text product description",42);
+        let (status,body)=publish(&st,&fixture,event.clone(),Some("127.0.0.1:54000"),"localhost:8790",Some("http://localhost:8790"),None).await;
+        assert_eq!(status,StatusCode::OK,"same-origin localhost wallet needs no owner role token: {body}");
+        assert_eq!(fixture.events.lock().unwrap().len(),1);assert_eq!(fixture.events.lock().unwrap()[0],event);
+    }
+}
+
+#[cfg(test)]
+mod refund_outcome_tests {
+    use super::*;
+    #[tokio::test]
+    async fn sealed_refund_outcome_is_bound_to_the_durable_original_intent() {
+        let _home=super::order_persistence_tests::TestHome::new();
+        let st=ServerState::default();let token=st.role_tokens.lock().unwrap()["staff"].clone();
+        let id="1".repeat(32);let order="synthetic-order";let to="synthetic-payer";
+        let file=crate::paths::app_file("staff-refund-reservations.json");
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        for state in ["cancelled","reserved","dispatching","complete"] {
+            std::fs::write(&file,json!({"reservations":[{"request_id":id,"payment_txid":"a".repeat(64),"order_address":order,"to":to,"day":0,"usd":20.0,"amount":20.0,"currency":"USD","sats":500000000u64,"state":state,"txid":null,"rate":4.0,"reason":"synthetic reason"}]}).to_string()).unwrap();
+            for edited in [false,true] {
+                let payload=json!({"order_address":if edited{"edited-order"}else{order},"request_id":id,"to":if edited{"bad"}else{to},"krw":if edited{-1.0}else{20.0},"reason":"synthetic reason","passphrase":null});
+                let (env,ctx)=super::desktop_security_tests::envelope(&token,"/api/staff/refund","POST",payload);
+                let (status,wire)=super::desktop_security_tests::request(&st,crate::shopseal::SEAL_PATH,None,&env.to_string()).await;
+                assert_eq!(status,StatusCode::OK);assert!(wire.get("refund_outcome").is_none(),"outcome must stay inside authenticated response");
+                let opened=crate::shopseal::open_response(&ctx,&wire).unwrap();assert_eq!(opened["status"],400);
+                let answer=&opened["body"];
+                if state=="cancelled" && !edited {
+                    assert_eq!(answer["refund_outcome"],"not_sent");assert_eq!(answer["request_id"],id);
+                    assert_eq!(answer["request"]["order_address"],order);assert_eq!(answer["request"]["to"],to);assert_eq!(answer["request"]["amount"],20.0);
+                } else {assert_eq!(answer["refund_outcome"],"unresolved");assert!(answer.get("request_id").is_none());}
+            }
+        }
+        // An unreadable history can never authorize replacing an unknown ID.
+        std::fs::write(&file,b"synthetic corrupt journal").unwrap();
+        let (env,ctx)=super::desktop_security_tests::envelope(&token,"/api/staff/refund","POST",json!({"order_address":order,"request_id":id,"to":"bad","krw":-1.0,"reason":"synthetic reason","passphrase":null}));
+        let (_,wire)=super::desktop_security_tests::request(&st,crate::shopseal::SEAL_PATH,None,&env.to_string()).await;
+        assert_eq!(crate::shopseal::open_response(&ctx,&wire).unwrap()["body"]["refund_outcome"],"unresolved");
     }
 }

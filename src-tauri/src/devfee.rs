@@ -462,7 +462,7 @@ mod tests {
         //    쌓이자 시험이 깨졌다 — 시험이 남의 돈 장부를 보고 있었다.
         //    옆의 환불 시험처럼 공용 자물쇠를 잡고 임시 폴더로 보낸다.
         let _g = crate::paths::TEST_ENV.lock().unwrap_or_else(|e| e.into_inner());
-        let d = std::env::temp_dir().join("playx-devfee-zero-test");
+        let d = crate::paths::test_fixture_root().join("playx-devfee-zero-test");
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
         std::env::set_var("PLAYX_RAVEN_HOME", &d);
@@ -521,7 +521,7 @@ mod tests {
         // 🔴 대표님의 진짜 장부를 건드리면 안 된다. `paths.rs` 의 공용
         //    자물쇠를 잡고 임시 폴더로 보낸다.
         let _g = crate::paths::TEST_ENV.lock().unwrap_or_else(|e| e.into_inner());
-        let d = std::env::temp_dir().join("playx-devfee-refund-test");
+        let d = crate::paths::test_fixture_root().join("playx-devfee-refund-test");
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
         std::env::set_var("PLAYX_RAVEN_HOME", &d);

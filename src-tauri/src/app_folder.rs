@@ -45,7 +45,7 @@ mod tests {
     #[test]
     fn the_app_folder_is_closed_to_other_accounts() {
         use std::os::unix::fs::PermissionsExt;
-        let dir = std::env::temp_dir().join(format!("playx-raven-perm-{}", std::process::id()));
+        let dir = crate::paths::test_fixture_root().join(format!("playx-raven-perm-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o755)).unwrap();

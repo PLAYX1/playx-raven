@@ -60,7 +60,7 @@ pub async fn refund(
     reason: String,
     passphrase: Option<String>,
 ) -> Result<Value, String> {
-    if amount <= 0.0 {
+    if !amount.is_finite() || amount <= 0.0 || amount > 21_000_000_000.0 {
         return Err("환불 금액이 0보다 커야 합니다.".into());
     }
     let check = crate::send::check_address(to_address.clone()).await?;
@@ -289,116 +289,209 @@ fn limits_from_fx(cur: &str, fx: Option<f64>) -> (f64, f64, String) {
     }
 }
 
-/// 오늘 직원이 내보낸 금액. (day, krw)
-static STAFF_TODAY: std::sync::Mutex<(i64, f64)> = std::sync::Mutex::new((0, 0.0));
-
-fn today(now_unix: i64) -> i64 {
-    now_unix - (now_unix % 86_400)
+/// UTC budgets are durable and shared across role-token rotation/restarts.
+static STAFF_GATE: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+fn today(now_unix: i64) -> i64 { now_unix - now_unix.rem_euclid(86_400) }
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct Reservation {
+    request_id: String, payment_txid: String, order_address: String, to: String,
+    day: i64, usd: f64, amount: f64, currency: String, sats: u64,
+    state: String, txid: Option<String>,
+    #[serde(default)] rate: Option<f64>,
+    #[serde(default)] reason: Option<String>,
 }
-
-/// What a staff refund is allowed to be right now.
-///
-/// Returns the verdict rather than just a bool: a screen that says "안 됩니다"
-/// with no number sends the staff member to find the owner without knowing what
-/// to ask for.
-#[tauri::command]
-pub async fn staff_refund_limits(now_unix: i64) -> Value {
-    let (day, used) = STAFF_TODAY.lock().map(|g| *g).unwrap_or((0, 0.0));
-    let used = if day == today(now_unix) { used } else { 0.0 };
-    let (once, per_day, cur) = staff_limits().await;
-    json!({
-        "once": once,
-        "day": per_day,
-        "used": used,
-        "left": (per_day - used).max(0.0),
-        "currency": cur,
-        // 예전 이름. 화면이 아직 이걸 읽고 있어 같이 보낸다 — 통화가 원화가
-        // 아니면 이 이름은 거짓이므로, 화면을 고친 뒤 지운다.
-        "once_krw": once,
-        "day_krw": per_day,
-        "used_krw": used,
-        "left_krw": (per_day - used).max(0.0),
-    })
+#[derive(Default, serde::Serialize, serde::Deserialize)]
+struct RefundJournal { reservations: Vec<Reservation> }
+trait JournalStore { fn load(&self) -> Result<RefundJournal,String>; fn save(&self,journal:&RefundJournal)->Result<(),String>; }
+struct FileJournal(std::path::PathBuf);
+impl JournalStore for FileJournal {
+    fn load(&self)->Result<RefundJournal,String> {
+        let bytes = match std::fs::read(&self.0) { Ok(b)=>b, Err(e) if e.kind()==std::io::ErrorKind::NotFound=>return Ok(Default::default()), Err(_)=>return Err("환불 기록을 읽지 못했습니다. 사장님이 저장소를 확인해 주세요.".into()) };
+        if bytes.len()>8*1024*1024 { return Err("환불 기록이 너무 큽니다. 사장님이 기록을 확인해 주세요.".into()); }
+        let journal: RefundJournal=serde_json::from_slice(&bytes).map_err(|_|"환불 기록이 손상되었습니다. 사장님이 기록을 확인하기 전에는 다시 보내지 마세요.")?;
+        if journal.reservations.iter().any(|r| !r.usd.is_finite() || r.usd<=0.0 || !r.amount.is_finite() || r.amount<=0.0 || r.sats==0 || r.rate.is_some_and(|v|!v.is_finite()||v<=0.0) || r.reason.as_ref().is_some_and(|v|v.len()>300) || !matches!(r.state.as_str(),"reserved"|"dispatching"|"complete"|"cancelled")) {
+            return Err("환불 기록을 검증하지 못했습니다. 사장님께 부탁하세요.".into());
+        }
+        Ok(journal)
+    }
+    fn save(&self,journal:&RefundJournal)->Result<(),String> {
+        use std::io::Write;
+        let parent=self.0.parent().ok_or("환불 기록 경로가 없습니다.")?;
+        std::fs::create_dir_all(parent).map_err(|_|"환불 기록 폴더를 만들지 못했습니다.")?;
+        let temp=parent.join(format!(".refund-reservation-{}-{:x}.tmp",std::process::id(),rand::random::<u64>()));
+        let result=(||->std::io::Result<()> {
+            let mut options=std::fs::OpenOptions::new();options.write(true).create_new(true);
+            #[cfg(unix)] { use std::os::unix::fs::OpenOptionsExt;options.mode(0o600); }
+            let mut file=options.open(&temp)?;
+            file.write_all(&serde_json::to_vec(journal)?)?;file.sync_all()?;drop(file);
+            std::fs::rename(&temp,&self.0)?;
+            #[cfg(unix)] { std::fs::File::open(parent)?.sync_all()?; }
+            Ok(())
+        })();
+        if result.is_err() { let _=std::fs::remove_file(temp); }
+        result.map_err(|_|"환불 기록을 안전하게 저장하지 못했습니다. 사장님이 저장소를 확인하기 전에는 다시 보내지 마세요.".into())
+    }
 }
-
-/// A refund made by staff, inside the limits.
-///
-/// The amount is checked in the shop's own currency, not in RVN — a limit that
-/// drifts with the exchange rate is not a limit anyone can reason about.
+fn journal_file()->FileJournal { FileJournal(crate::paths::app_file("staff-refund-reservations.json")) }
+fn active(r:&Reservation)->bool { r.state!="cancelled" }
+fn used_usd(journal:&RefundJournal,day:i64)->f64 { journal.reservations.iter().filter(|r|r.day==day&&active(r)).map(|r|r.usd).sum() }
+fn sats(value:f64)->Result<u64,String> {
+    if !value.is_finite() || value<=0.0 || value>21_000_000_000.0 { return Err("환불 금액을 확인해 주세요.".into()); }
+    let n=(value*1e8).round();if n<1.0 || n>2_100_000_000_000_000_000.0 { return Err("환불 금액이 너무 작거나 큽니다.".into()); } Ok(n as u64)
+}
+fn mainnet_address(address:&str)->bool { crate::electrum::base58check(address).is_ok_and(|b|b.len()==21&&b[0]==60) }
+fn txid_shape(id:&str)->bool { id.len()==64&&id.bytes().all(|b|b.is_ascii_digit()||(b'a'..=b'f').contains(&b)) }
+type RefundFuture<'a,T> = std::pin::Pin<Box<dyn std::future::Future<Output=Result<T,String>>+Send+'a>>;
+trait StaffBackend: Sync {
+    fn quote<'a>(&'a self,currency:&'a str)->RefundFuture<'a,Value>;
+    #[allow(clippy::too_many_arguments)]
+    fn audit(&self,to:&str,amount:f64,currency:&str,rvn:f64,rate:f64,reason:&str,txid:&str,now:i64)->Result<(),String>;
+    fn verify<'a>(&'a self,sale:&'a Value,to:&'a str)->RefundFuture<'a,()>;
+    fn pay<'a>(&'a self,to:&'a str,rvn:f64,reason:&'a str,passphrase:Option<String>)->RefundFuture<'a,Value>;
+}
+struct LocalStaffBackend;
+impl StaffBackend for LocalStaffBackend {
+    fn audit(&self,to:&str,amount:f64,currency:&str,rvn:f64,rate:f64,reason:&str,txid:&str,now:i64)->Result<(),String> {
+        crate::ledger::record_refund(to,amount,currency,rvn,rate,reason,txid,now)
+    }
+    fn quote<'a>(&'a self,currency:&'a str)->RefundFuture<'a,Value> { Box::pin(async move {
+        #[cfg(test)] { let _=currency;Err("Tests must inject synthetic RVN quotes".into()) }
+        #[cfg(not(test))] { crate::price::rvn_rate(currency.to_string()).await }
+    }) }
+    fn verify<'a>(&'a self,sale:&'a Value,to:&'a str)->RefundFuture<'a,()> { Box::pin(async move {
+        let id=sale["txid"].as_str().ok_or("원 결제 거래가 없습니다.")?;
+        let wallet=call_rpc("gettransaction",json!([id])).await?;
+        if wallet["confirmations"].as_i64().unwrap_or(0)<1 || wallet["abandoned"]==true { return Err("원 결제의 확인을 기다린 뒤 다시 환불해 주세요.".into()); }
+        let received=wallet["details"].as_array().ok_or("원 결제의 수신 기록을 확인하지 못했습니다.")?.iter()
+            .filter(|d|d["category"]=="receive"&&d["address"]==sale["address"])
+            .filter_map(|d|d["amount"].as_f64()).sum::<f64>();
+        if !received.is_finite() || received+1e-8<sale["rvn"].as_f64().unwrap_or(f64::INFINITY) { return Err("원 결제 금액을 확인하지 못했습니다. 사장님께 부탁하세요.".into()); }
+        let payment=call_rpc("getrawtransaction",json!([id,1])).await?;
+        let vins=payment["vin"].as_array().filter(|a|!a.is_empty()&&a.len()<=128).ok_or("원 결제의 보낸 주소를 확인하지 못했습니다.")?;
+        let mut previous=std::collections::HashMap::new();
+        for vin in vins {
+            let prev=vin["txid"].as_str().filter(|s|txid_shape(s)).ok_or("원 결제 입력을 확인하지 못했습니다.")?;
+            if !previous.contains_key(prev) { previous.insert(prev.to_string(),call_rpc("getrawtransaction",json!([prev,1])).await?); }
+        }
+        verify_payer(sale,&payment,&previous,to)
+    }) }
+    fn pay<'a>(&'a self,to:&'a str,rvn:f64,reason:&'a str,passphrase:Option<String>)->RefundFuture<'a,Value> {
+        Box::pin(refund(to.to_string(),rvn,reason.to_string(),passphrase))
+    }
+}
+fn verify_payer(sale:&Value,payment:&Value,previous:&std::collections::HashMap<String,Value>,to:&str)->Result<(),String> {
+    if payment["txid"]!=sale["txid"] || !mainnet_address(to) { return Err("원 결제와 환불 주소가 맞지 않습니다. 사장님께 부탁하세요.".into()); }
+    let received=payment["vout"].as_array().ok_or("원 결제 출력을 확인하지 못했습니다.")?.iter()
+        .filter(|o|o["scriptPubKey"]["addresses"].as_array().is_some_and(|a|a.iter().any(|v|v==&sale["address"])))
+        .filter_map(|o|o["value"].as_f64()).sum::<f64>();
+    if !received.is_finite() || received+1e-8<sale["rvn"].as_f64().unwrap_or(f64::INFINITY) { return Err("원 결제가 이 주문을 지급하지 않았습니다. 사장님께 부탁하세요.".into()); }
+    let vins=payment["vin"].as_array().filter(|a|!a.is_empty()&&a.len()<=128).ok_or("원 결제 입력이 없습니다.")?;
+    for input in vins {
+        let prev=input["txid"].as_str().and_then(|id|previous.get(id)).ok_or("원 결제 보낸 주소를 확인하지 못했습니다.")?;
+        let n=input["vout"].as_u64().and_then(|n|usize::try_from(n).ok()).ok_or("원 결제 입력 번호가 올바르지 않습니다.")?;
+        let output=prev["vout"].as_array().and_then(|a|a.get(n)).ok_or("원 결제 입력을 찾지 못했습니다.")?;
+        let addresses=output["scriptPubKey"]["addresses"].as_array().ok_or("보낸 주소가 단일 주소가 아닙니다. 사장님께 부탁하세요.")?;
+        if addresses.len()!=1 || addresses[0]!=to { return Err("직원은 확인된 원 결제의 보낸 주소로만 환불할 수 있습니다. 거래소 결제·다른 주소 환불은 사장님께 부탁하세요.".into()); }
+    }
+    Ok(())
+}
 #[tauri::command]
-pub async fn staff_refund(
-    to_address: String,
-    krw: f64,
-    reason: String,
-    now_unix: i64,
-    passphrase: Option<String>,
-) -> Result<Value, String> {
-    if krw <= 0.0 {
-        return Err("금액이 0보다 커야 합니다.".into());
+pub async fn staff_refund_limits(now_unix:i64)->Value {
+    let _gate=STAFF_GATE.lock().await;
+    let (once,per_day,cur)=staff_limits().await;
+    let journal=match journal_file().load() { Ok(j)=>j,Err(e)=>return json!({"error":e,"once":0,"day":0,"left":0,"currency":cur}) };
+    let used=used_usd(&journal,today(now_unix))/STAFF_DAY_USD*per_day;
+    json!({"once":once,"day":per_day,"used":used,"left":(per_day-used).max(0.0),"currency":cur,
+        "once_krw":once,"day_krw":per_day,"used_krw":used,"left_krw":(per_day-used).max(0.0)})
+}
+/// Only a durable cancelled reservation proves that this exact intent was not
+/// broadcast. All other errors deliberately carry no permission to discard it.
+#[derive(Clone, serde::Serialize)]
+struct RefundIntent { order_address:String, to:String, amount:f64, reason:Option<String> }
+pub(crate) struct RefundFailure { message:String, cancelled:Option<(String,RefundIntent)> }
+impl From<String> for RefundFailure { fn from(message:String)->Self { Self{message,cancelled:None} } }
+impl From<&str> for RefundFailure { fn from(message:&str)->Self { message.to_string().into() } }
+impl std::fmt::Debug for RefundFailure { fn fmt(&self,f:&mut std::fmt::Formatter<'_>)->std::fmt::Result { f.debug_struct("RefundFailure").field("message",&self.message).finish() } }
+impl std::ops::Deref for RefundFailure { type Target=str;fn deref(&self)->&str { &self.message } }
+impl RefundFailure {
+    pub(crate) fn body(&self)->Value {
+        match &self.cancelled {
+            Some((id,intent))=>json!({"error":self.message,"refund_outcome":"not_sent","request_id":id,"request":intent}),
+            None=>json!({"error":self.message,"refund_outcome":"unresolved"}),
+        }
     }
-    let (once, per_day, cur) = staff_limits().await;
-    let unit = crate::price::symbol_for(&cur);
-    if once <= 0.0 {
-        return Err("환율을 읽지 못해 직원 환불을 잠시 멈췄습니다. 사장님께 부탁하세요.".into());
+}
+fn prior_request(journal:&RefundJournal,id:&str,order:&str,to:&str,amount:f64,reason:&str)->Result<(),RefundFailure> {
+    if let Some(r)=journal.reservations.iter().find(|r|r.request_id==id) {
+        let message="이 요청은 이미 환불 기록에 있습니다. 사장님이 거래 결과를 확인해 주세요. 같은 환불을 다시 보내지 마세요.";
+        if r.state=="cancelled" && r.order_address==order && r.to==to && r.amount==amount
+            && r.reason.as_ref().is_none_or(|v|v==reason) {
+            return Err(RefundFailure{message:"전송 전에 환불이 취소되었습니다. 주소와 금액을 확인한 뒤 새 요청으로 다시 진행하세요.".into(),cancelled:Some((id.into(),RefundIntent{order_address:r.order_address.clone(),to:r.to.clone(),amount:r.amount,reason:r.reason.clone()}))});
+        }
+        return Err(message.into());
     }
-    if krw > once {
-        return Err(format!(
-            "직원은 한 번에 {unit}{once:.0} 까지 환불할 수 있습니다. 이 건은 사장님께 부탁하세요."
-        ));
+    Ok(())
+}
+#[tauri::command]
+pub async fn staff_refund(to_address:String,krw:f64,reason:String,now_unix:i64,passphrase:Option<String>,order_address:String,request_id:String)->Result<Value,String> {
+    staff_refund_response(to_address,krw,reason,now_unix,passphrase,order_address,request_id).await.map_err(|e|e.message)
+}
+pub(crate) async fn staff_refund_response(to_address:String,krw:f64,reason:String,now_unix:i64,passphrase:Option<String>,order_address:String,request_id:String)->Result<Value,RefundFailure> {
+    let _gate=STAFF_GATE.lock().await;
+    let store=journal_file();let journal=store.load()?;
+    // Resolve a recorded ID before lookup, quote or validation of edited input.
+    prior_request(&journal,&request_id,&order_address,&to_address,krw,&reason)?;
+    let sale=crate::ledger::recent_sold_index(now_unix).remove(&order_address).ok_or("이 주문의 결제 기록이 없습니다. 주문의 결제 주소를 넣거나 사장님께 부탁하세요.")?;
+    let (once,per_day,cur)=staff_limits().await;
+    staff_refund_locked(&store,&LocalStaffBackend,journal,&sale,&to_address,krw,&reason,now_unix,passphrase,&request_id,once,per_day,&cur).await
+}
+#[cfg(test)]
+#[allow(clippy::too_many_arguments)]
+async fn staff_refund_with(store:&impl JournalStore,backend:&impl StaffBackend,sale:&Value,to:&str,amount:f64,reason:&str,now:i64,passphrase:Option<String>,request_id:&str,once:f64,per_day:f64,cur:&str)->Result<Value,RefundFailure> {
+    let _gate=STAFF_GATE.lock().await;
+    staff_refund_locked(store,backend,store.load()?,sale,to,amount,reason,now,passphrase,request_id,once,per_day,cur).await
+}
+#[allow(clippy::too_many_arguments)]
+async fn staff_refund_locked(store:&impl JournalStore,backend:&impl StaffBackend,mut journal:RefundJournal,sale:&Value,to:&str,amount:f64,reason:&str,now:i64,passphrase:Option<String>,request_id:&str,once:f64,per_day:f64,cur:&str)->Result<Value,RefundFailure> {
+    prior_request(&journal,request_id,sale["address"].as_str().unwrap_or(""),to,amount,reason)?;
+    if !amount.is_finite() || amount<=0.0 || !once.is_finite() || once<=0.0 || !per_day.is_finite() || per_day<=0.0 || amount>once
+        || request_id.len()!=32 || !request_id.bytes().all(|b|b.is_ascii_digit()||(b'a'..=b'f').contains(&b)) || reason.len()>300 || !mainnet_address(to) {
+        return Err("금액·주소·요청 번호를 확인해 주세요. 직원 한도를 넘는 환불은 사장님께 부탁하세요.".into());
     }
-
-    let d = today(now_unix);
-    let used = {
-        let g = STAFF_TODAY.lock().map_err(|_| "잠금 실패")?;
-        if g.0 == d { g.1 } else { 0.0 }
-    };
-    if used + krw > per_day {
-        return Err(format!(
-            "오늘 직원 환불 한도({unit}{per_day:.0})를 넘습니다. 지금까지 {unit}{used:.0} 나갔습니다."
-        ));
+    let original=sale["txid"].as_str().filter(|s|txid_shape(s)).ok_or("원 결제 거래를 확인하지 못했습니다.")?;
+    let total=sale["amount"].as_f64().filter(|a|a.is_finite()&&*a>0.0).ok_or("원 결제 금액이 없습니다.")?;
+    if sale["currency"]!=cur || sale["kind"]!="sale" || sale["confirmations"].as_i64().unwrap_or(0)<0 { return Err("확인된 같은 통화의 원 결제만 직원이 환불할 수 있습니다. 사장님께 부탁하세요.".into()); }
+    let total_sats=sats(sale["rvn"].as_f64().unwrap_or(0.0))?;
+    let quote=backend.quote(cur).await?;
+    let rate=quote["rate"].as_f64().filter(|r|r.is_finite()&&*r>0.0).filter(|_|quote["currency"]==cur).ok_or("시세를 읽지 못해 환불을 멈췄습니다. 사장님께 부탁하세요.")?;
+    // Existing shop contract: entered fiat / current fiat-per-RVN, rounded to sats.
+    let refund_sats=sats(amount/rate)?;
+    let usd=amount/per_day*STAFF_DAY_USD;
+    if journal.reservations.iter().any(|r|r.payment_txid==original&&matches!(r.state.as_str(),"reserved"|"dispatching")) { return Err("이 결제의 이전 환불 결과를 아직 모릅니다. 사장님이 거래를 확인하기 전에는 다시 보내지 마세요.".into()); }
+    let used=used_usd(&journal,today(now));
+    if used+usd>STAFF_DAY_USD+1e-9 { return Err("오늘 직원 환불 한도를 넘습니다. 사장님께 부탁하세요.".into()); }
+    let paid:Vec<_>=journal.reservations.iter().filter(|r|r.payment_txid==original&&active(r)).collect();
+    let spent=paid.iter().try_fold(0u64,|sum,r|sum.checked_add(r.sats)).ok_or("환불 금액 합계를 확인하지 못했습니다.")?;
+    if spent.checked_add(refund_sats).is_none_or(|n|n>total_sats) || paid.iter().map(|r|r.amount).sum::<f64>()+amount>total+1e-8 { return Err("원 결제의 남은 환불 금액을 넘습니다. 사장님께 부탁하세요.".into()); }
+    journal.reservations.push(Reservation{request_id:request_id.into(),payment_txid:original.into(),order_address:sale["address"].as_str().unwrap_or("").into(),to:to.into(),day:today(now),usd,amount,currency:cur.into(),sats:refund_sats,state:"reserved".into(),txid:None,rate:Some(rate),reason:Some(reason.into())});
+    store.save(&journal)?; // Never call even a read RPC before durable admission.
+    let index=journal.reservations.len()-1;
+    if let Err(e)=backend.verify(sale,to).await {
+        journal.reservations[index].state="cancelled".into();store.save(&journal)?;
+        let r=&journal.reservations[index];
+        return Err(RefundFailure{message:e,cancelled:Some((request_id.into(),RefundIntent{order_address:r.order_address.clone(),to:r.to.clone(),amount,reason:r.reason.clone()}))});
     }
-
-    let rate = crate::price::rvn_rate(crate::shop::currency())
-        .await
-        .ok()
-        .and_then(|r| r["rate"].as_f64())
-        .filter(|r| *r > 0.0)
-        .ok_or_else(|| "시세를 읽지 못해 환불을 멈췄습니다. 사장님께 부탁하세요.".to_string())?;
-    let rvn = (krw / rate * 1e8).round() / 1e8;
-
-    let out = refund(to_address.clone(), rvn, reason.clone(), passphrase).await?;
-
-    // 성공한 뒤에 센다. 실패한 환불이 한도를 갉아먹으면, 직원은 되지도 않은
-    // 일로 남은 하루를 못 쓴다.
-    if let Ok(mut g) = STAFF_TODAY.lock() {
-        *g = (d, used + krw);
-    }
-
-    // 나간 돈도 장부에 남는다. 매출만 적고 환불을 빼먹으면 합계가 실제보다
-    // 크게 잡히고, 그건 세금을 더 내는 쪽으로 틀리는 실수다.
-    let _ = crate::ledger::record_refund(
-        &to_address,
-        krw,
-        &crate::shop::currency(),
-        rvn,
-        rate,
-        &reason,
-        out.get("txid").and_then(|v| v.as_str()).unwrap_or(""),
-        now_unix,
-    );
-
-    Ok(json!({
-        "result": out,
-        "amount": krw,
-        "currency": cur,
-        "symbol": unit,
-        "rvn": rvn,
-        "left": (per_day - used - krw).max(0.0),
-        // 화면이 아직 읽는 옛 이름.
-        "krw": krw,
-        "left_krw": (per_day - used - krw).max(0.0),
-        "notify_owner": true,
-    }))
+    journal.reservations[index].state="dispatching".into();store.save(&journal)?;
+    let rvn=refund_sats as f64/1e8;
+    let result=backend.pay(to,rvn,reason,passphrase).await.map_err(|_|format!("{}이 환불의 전송 결과를 확인하지 못했습니다. 예약 한도는 유지됩니다. 사장님이 거래를 확인하기 전에는 다시 보내지 마세요.",crate::raven::SENT_UNKNOWN))?;
+    let txid=result["txid"].as_str().filter(|s|txid_shape(s)).ok_or_else(||format!("{}환불 거래 번호를 확인하지 못했습니다. 다시 보내지 마세요.",crate::raven::SENT_UNKNOWN))?;
+    journal.reservations[index].state="complete".into();journal.reservations[index].txid=Some(txid.into());
+    store.save(&journal).map_err(|_|format!("{}환불 전송 뒤 기록 저장을 확인하지 못했습니다. 예약 기록은 유지됩니다. 다시 보내지 마세요.",crate::raven::SENT_UNKNOWN))?;
+    // Completion is durable before the append-only audit. An uncertain audit
+    // write cannot cause a retry to send or record a second time.
+    backend.audit(to,amount,cur,rvn,rate,reason,txid,now).map_err(|_|format!("{}환불은 전송되었지만 매출장부 저장을 확인하지 못했습니다. 사장님이 환불 예약 기록과 거래를 확인해 주세요. 다시 보내지 마세요.",crate::raven::SENT_UNKNOWN))?;
+    let left=(STAFF_DAY_USD-used-usd)/STAFF_DAY_USD*per_day;
+    Ok(json!({"result":result,"amount":amount,"currency":cur,"rate":rate,"symbol":crate::price::symbol_for(cur),"rvn":rvn,"left":left.max(0.0),"krw":amount,"left_krw":left.max(0.0),"notify_owner":true}))
 }
 
 #[cfg(test)]
@@ -617,4 +710,184 @@ async fn refund_payer_of_tx(txid: String) -> Result<Value, String> {
     // ② 노드가 못 하면 공개 조회처. 프라이버시를 조금 내주고 답을 얻는다.
     let a = crate::publicbook::payer_of(&txid).await?;
     Ok(json!({ "address": a, "source": "공개 조회처" }))
+}
+
+#[cfg(test)]
+mod staff_security_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize,Ordering};
+    fn address(byte:u8)->String {
+        // Synthetic mainnet Base58Check fixture, no wallet or keys involved.
+        use sha2::{Digest,Sha256};
+        let mut bytes=vec![60];bytes.extend_from_slice(&[byte;20]);
+        let hash=Sha256::digest(Sha256::digest(&bytes));bytes.extend_from_slice(&hash[..4]);
+        let alphabet=b"123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+        let mut digits=vec![0u8];
+        for byte in bytes {let mut carry=byte as u32;for d in &mut digits {carry+=(*d as u32)*256;*d=(carry%58) as u8;carry/=58;}while carry>0 {digits.push((carry%58) as u8);carry/=58;}}
+        digits.into_iter().rev().map(|d|alphabet[d as usize] as char).collect()
+    }
+    fn sale(index:u8)->Value { json!({"kind":"sale","address":address(1),"txid":format!("{index:064x}"),"amount":100.0,"currency":"USD","rvn":100.0,"confirmations":1}) }
+    fn store()->FileJournal { FileJournal(crate::paths::test_fixture_root().join(format!("refund-test-{:x}",rand::random::<u64>())).join("journal.json")) }
+    struct Mock { verifies:AtomicUsize,pays:AtomicUsize,unknown:bool,bound:String,rate:f64,quote_currency:Option<String>,quote_missing:bool,audits:std::sync::Mutex<Vec<Value>>,audit_fail:bool,credits:AtomicUsize }
+    impl Mock {fn new(unknown:bool)->Self{Self{verifies:AtomicUsize::new(0),pays:AtomicUsize::new(0),unknown,bound:address(2),rate:1.0,quote_currency:None,quote_missing:false,audits:std::sync::Mutex::new(Vec::new()),audit_fail:false,credits:AtomicUsize::new(0)}}}
+    impl StaffBackend for Mock {
+        fn audit(&self,to:&str,amount:f64,currency:&str,rvn:f64,rate:f64,reason:&str,txid:&str,now:i64)->Result<(),String> {
+            self.audits.lock().unwrap().push(json!({"to":to,"amount":amount,"currency":currency,"rvn":rvn,"rate":rate,"reason":reason,"txid":txid,"now":now}));
+            if self.audit_fail {Err("synthetic uncertain audit write".into())}else{Ok(())}
+        }
+        fn quote<'a>(&'a self,currency:&'a str)->RefundFuture<'a,Value>{Box::pin(async move {if self.quote_missing {return Err("synthetic missing quote".into());}Ok(json!({"rate":self.rate,"currency":self.quote_currency.as_deref().unwrap_or(currency)}))})}
+        fn verify<'a>(&'a self,_sale:&'a Value,to:&'a str)->RefundFuture<'a,()> {Box::pin(async move {self.verifies.fetch_add(1,Ordering::SeqCst);if to!=self.bound {return Err("recipient mismatch".into());}Ok(())})}
+        fn pay<'a>(&'a self,to:&'a str,rvn:f64,_reason:&'a str,_pass:Option<String>)->RefundFuture<'a,Value>{Box::pin(async move{
+            self.pays.fetch_add(1,Ordering::SeqCst);tokio::task::yield_now().await;
+            if self.unknown{return Err(format!("{}synthetic timeout",crate::raven::SENT_UNKNOWN));}
+            self.credits.fetch_add(1,Ordering::SeqCst);
+            Ok(json!({"txid":"a".repeat(64),"to":to,"amount":rvn}))
+        })}
+    }
+    struct FailStore {file:FileJournal,saves:AtomicUsize,fail_at:usize}
+    impl JournalStore for FailStore {
+        fn load(&self)->Result<RefundJournal,String>{self.file.load()}
+        fn save(&self,j:&RefundJournal)->Result<(),String>{if self.saves.fetch_add(1,Ordering::SeqCst)+1==self.fail_at{Err("synthetic storage failure".into())}else{self.file.save(j)}}
+    }
+    async fn send(store:&impl JournalStore,node:&Mock,sale:&Value,to:&str,amount:f64,id:u8)->Result<Value,RefundFailure>{
+        staff_refund_with(store,node,sale,to,amount,"synthetic",1_800_000_000,None,&format!("{id:032x}"),25.0,80.0,"USD").await
+    }
+    #[tokio::test]
+    async fn current_quote_preserves_entered_fiat_and_actual_sent_rvn() {
+        for (rate, expected) in [(4.0, 5.0), (0.25, 80.0)] {
+            let file=store();let mut node=Mock::new(false);node.rate=rate;
+            let out=send(&file,&node,&sale(1),&address(2),20.0,1).await.unwrap();
+            assert_eq!(out["result"]["amount"],json!(expected),"20 USD must use the current mocked USD/RVN quote");
+            assert_eq!(out["rvn"],json!(expected));
+            assert_eq!(out["amount"],json!(20.0));assert_eq!(out["currency"],"USD");
+            assert_eq!(out["left"],json!(60.0));assert_eq!(node.pays.load(Ordering::SeqCst),1);
+            assert_eq!(out["rate"],json!(rate));
+            let journal=file.load().unwrap();let reservation=&journal.reservations[0];
+            assert_eq!(reservation.amount,20.0);assert_eq!(reservation.currency,"USD");assert_eq!(reservation.rate,Some(rate));assert_eq!(reservation.sats,(expected*1e8) as u64);
+            let audits=node.audits.lock().unwrap();assert_eq!(audits.len(),1);assert_eq!(audits[0]["amount"],20.0);assert_eq!(audits[0]["rate"],rate);assert_eq!(audits[0]["rvn"],expected);assert_eq!(audits[0]["currency"],"USD");
+        }
+    }
+    #[tokio::test]
+    async fn invalid_missing_or_wrong_currency_quote_never_sends() {
+        for rate in [0.0,-1.0,f64::NAN,f64::INFINITY,f64::NEG_INFINITY] {
+            let file=store();let mut node=Mock::new(false);node.rate=rate;
+            assert!(send(&file,&node,&sale(1),&address(2),20.0,1).await.is_err());
+            assert_eq!(node.pays.load(Ordering::SeqCst),0);assert_eq!(node.verifies.load(Ordering::SeqCst),0);
+            assert!(file.load().unwrap().reservations.is_empty());
+        }
+        for missing in [true,false] {
+            let mut node=Mock::new(false);node.quote_missing=missing;node.quote_currency=Some("KRW".into());
+            assert!(send(&store(),&node,&sale(1),&address(2),20.0,1).await.is_err());assert_eq!(node.pays.load(Ordering::SeqCst),0);
+        }
+        assert!(LocalStaffBackend.quote("USD").await.is_err(),"lib tests must not fetch live prices");
+    }
+    #[tokio::test]
+    async fn current_quotes_keep_both_original_payment_caps_across_price_changes() {
+        // Falling prices exhaust RVN while fiat remains; rising prices exhaust
+        // fiat while original RVN remains. Neither cap resets after restart.
+        let file=store();let mut node=Mock::new(false);let mut original=sale(1);original["rvn"]=json!(25.0);
+        node.rate=2.0;assert!(send(&file,&node,&original,&address(2),20.0,1).await.is_ok()); // 10 RVN
+        node.rate=1.0;assert!(send(&FileJournal(file.0.clone()),&node,&original,&address(2),20.0,2).await.is_err()); // 30 > 25 RVN
+        assert_eq!(node.pays.load(Ordering::SeqCst),1);
+        let file=store();original["amount"]=json!(30.0);original["rvn"]=json!(100.0);
+        node.rate=4.0;assert!(send(&file,&node,&original,&address(2),20.0,3).await.is_ok());
+        node.rate=8.0;assert!(send(&FileJournal(file.0.clone()),&node,&original,&address(2),20.0,4).await.is_err()); // 40 > 30 USD
+        assert!(send(&file,&node,&original,&address(2),10.0,5).await.is_ok());
+        assert_eq!(node.pays.load(Ordering::SeqCst),3);
+    }
+    #[tokio::test]
+    async fn cancelled_same_intent_can_correct_with_fresh_id_and_pay_exactly_once() {
+        let file=store();let node=Mock::new(false);let original=sale(1);let wrong=address(3);let to=address(2);
+        let first=send(&file,&node,&original,&wrong,20.0,1).await.unwrap_err().body();
+        assert_eq!(first["refund_outcome"],"not_sent");assert_eq!(first["request_id"],format!("{:032x}",1));
+        assert_eq!(first["request"]["to"],wrong);assert_eq!(first["request"]["amount"],20.0);
+        assert_eq!(file.load().unwrap().reservations[0].state,"cancelled");assert_eq!(used_usd(&file.load().unwrap(),today(1_800_000_000)),0.0);
+        assert_eq!(send(&FileJournal(file.0.clone()),&node,&original,&wrong,20.0,1).await.unwrap_err().body()["refund_outcome"],"not_sent");
+        assert_eq!(send(&file,&node,&original,&to,20.0,1).await.unwrap_err().body()["refund_outcome"],"unresolved","edited retry is not the cancelled intent");
+        assert!(send(&file,&node,&original,&to,20.0,2).await.is_ok());
+        assert_eq!(send(&file,&node,&original,&to,20.0,2).await.unwrap_err().body()["refund_outcome"],"unresolved");
+        assert_eq!(node.pays.load(Ordering::SeqCst),1);assert_eq!(node.credits.load(Ordering::SeqCst),1);assert_eq!(node.audits.lock().unwrap().len(),1);
+    }
+    #[tokio::test]
+    async fn uncertain_or_unreadable_prior_id_wins_over_edited_invalid_retry() {
+        let file=store();let mut node=Mock::new(true);let original=sale(1);
+        assert_eq!(send(&file,&node,&original,&address(2),20.0,1).await.unwrap_err().body()["refund_outcome"],"unresolved");
+        node.unknown=false;node.rate=f64::NAN;
+        for (to,amount) in [(address(3),21.0),("bad".into(),f64::NAN),(address(2),-1.0)] {
+            let err=send(&FileJournal(file.0.clone()),&node,&json!({}),&to,amount,1).await.unwrap_err();
+            assert!(err.contains("이미 환불 기록"));assert_eq!(err.body()["refund_outcome"],"unresolved");
+        }
+        assert_eq!(node.pays.load(Ordering::SeqCst),1);assert_eq!(file.load().unwrap().reservations[0].state,"dispatching");
+        std::fs::write(&file.0,b"synthetic unreadable journal").unwrap();
+        assert_eq!(send(&file,&node,&original,&address(3),20.0,1).await.unwrap_err().body()["refund_outcome"],"unresolved");
+        assert_eq!(node.pays.load(Ordering::SeqCst),1);
+    }
+    #[tokio::test]
+    async fn cancellation_storage_and_audit_failures_never_authorize_fresh_intent() {
+        for fail_at in [1,2,3] {
+            let file=FailStore{file:store(),saves:AtomicUsize::new(0),fail_at};let node=Mock::new(false);
+            let to=if fail_at==2{address(3)}else{address(2)};
+            assert_eq!(send(&file,&node,&sale(1),&to,20.0,1).await.unwrap_err().body()["refund_outcome"],"unresolved");
+            assert_eq!(node.pays.load(Ordering::SeqCst),if fail_at==3{1}else{0});
+            if fail_at>1 {
+                assert_eq!(send(&FileJournal(file.file.0.clone()),&node,&json!({}),"bad",f64::NAN,1).await.unwrap_err().body()["refund_outcome"],"unresolved");
+            }
+        }
+        let file=store();let mut node=Mock::new(false);node.audit_fail=true;
+        assert!(send(&file,&node,&sale(1),&address(2),20.0,1).await.unwrap_err().starts_with(crate::raven::SENT_UNKNOWN));
+        assert_eq!(file.load().unwrap().reservations[0].state,"complete");
+        assert_eq!(send(&file,&node,&json!({}),"bad",f64::NAN,1).await.unwrap_err().body()["refund_outcome"],"unresolved");
+        assert_eq!(node.pays.load(Ordering::SeqCst),1);assert_eq!(node.credits.load(Ordering::SeqCst),1);assert_eq!(node.audits.lock().unwrap().len(),1);
+    }
+    #[tokio::test]
+    async fn durable_budget_serializes_races_and_survives_restart() {
+        let store=store();let node=Mock::new(false);let to=address(2);
+        let a=sale(1);let b=sale(2);let c=sale(3);let d=sale(4);
+        let results=tokio::join!(send(&store,&node,&a,&to,25.0,1),send(&store,&node,&b,&to,25.0,2),send(&store,&node,&c,&to,25.0,3),send(&store,&node,&d,&to,25.0,4));
+        assert_eq!([results.0,results.1,results.2,results.3].iter().filter(|r|r.is_ok()).count(),3);
+        assert_eq!(node.pays.load(Ordering::SeqCst),3);
+        let restarted=FileJournal(store.0.clone());
+        assert_eq!(used_usd(&restarted.load().unwrap(),today(1_800_000_000)),75.0);
+        assert!(send(&restarted,&node,&sale(5),&to,10.0,5).await.is_err());
+        assert_eq!(node.pays.load(Ordering::SeqCst),3);
+    }
+    #[tokio::test]
+    async fn storage_failure_prevents_any_rpc_and_unknown_or_final_write_failure_never_retries() {
+        let node=Mock::new(false);let to=address(2);let first=FailStore{file:store(),saves:AtomicUsize::new(0),fail_at:1};
+        assert!(send(&first,&node,&sale(1),&to,20.0,1).await.is_err());
+        assert_eq!(node.verifies.load(Ordering::SeqCst),0);assert_eq!(node.pays.load(Ordering::SeqCst),0);
+        let failed_after_pay=FailStore{file:store(),saves:AtomicUsize::new(0),fail_at:3};
+        assert!(send(&failed_after_pay,&node,&sale(1),&to,20.0,2).await.unwrap_err().starts_with(crate::raven::SENT_UNKNOWN));
+        let restarted=FileJournal(failed_after_pay.file.0.clone());
+        assert_eq!(restarted.load().unwrap().reservations[0].state,"dispatching");
+        assert!(send(&restarted,&node,&sale(1),&to,20.0,3).await.is_err());assert_eq!(node.pays.load(Ordering::SeqCst),1);
+        let unknown=Mock::new(true);let pending=store();
+        assert!(send(&pending,&unknown,&sale(2),&to,20.0,4).await.unwrap_err().starts_with(crate::raven::SENT_UNKNOWN));
+        let restarted=FileJournal(pending.0.clone());
+        assert!(send(&restarted,&unknown,&sale(2),&address(3),20.0,5).await.is_err());
+        assert_eq!(unknown.pays.load(Ordering::SeqCst),1);assert_eq!(used_usd(&restarted.load().unwrap(),today(1_800_000_000)),20.0);
+    }
+    #[tokio::test]
+    async fn request_original_payment_remaining_amount_and_recipient_are_bound() {
+        let store=store();let mut node=Mock::new(false);node.rate=10.0;let to=address(2);let mut original=sale(1);original["amount"]=json!(30.0);original["rvn"]=json!(3.0);
+        assert!(send(&store,&node,&original,&address(3),20.0,1).await.is_err());assert_eq!(node.pays.load(Ordering::SeqCst),0);
+        assert!(send(&store,&node,&original,&to,20.0,2).await.is_ok());
+        assert!(send(&store,&node,&original,&to,20.0,2).await.is_err());
+        assert!(send(&store,&node,&original,&to,20.0,3).await.is_err());
+        assert!(send(&store,&node,&original,&to,10.0,4).await.is_ok());assert_eq!(node.pays.load(Ordering::SeqCst),2);
+        assert!(send(&store,&node,&original,&to,f64::NAN,5).await.is_err());
+        assert!(send(&store,&node,&original,&to,f64::INFINITY,6).await.is_err());
+    }
+    #[test]
+    fn payer_proof_rejects_wrong_order_multi_address_and_changed_original_transaction() {
+        let sale=sale(1);let to=address(2);let prev="b".repeat(64);
+        let payment=json!({"txid":sale["txid"],"vin":[{"txid":prev,"vout":0}],"vout":[{"value":100.0,"scriptPubKey":{"addresses":[sale["address"]]}}]});
+        let mut previous=std::collections::HashMap::from([(prev.clone(),json!({"vout":[{"scriptPubKey":{"addresses":[to]}}]}))]);
+        assert!(verify_payer(&sale,&payment,&previous,&to).is_ok());
+        assert!(verify_payer(&sale,&payment,&previous,&address(3)).is_err());
+        previous.get_mut(&prev).unwrap()["vout"][0]["scriptPubKey"]["addresses"]=json!([to,address(3)]);
+        assert!(verify_payer(&sale,&payment,&previous,&to).is_err());
+        let mut bad=payment.clone();bad["txid"]=json!("c".repeat(64));assert!(verify_payer(&sale,&bad,&previous,&to).is_err());
+        let mut bad=payment.clone();bad["vout"][0]["scriptPubKey"]["addresses"]=json!([address(9)]);assert!(verify_payer(&sale,&bad,&previous,&to).is_err());
+    }
 }

@@ -509,7 +509,7 @@ mod tests {
     /// 잠그고 여는 것이 실제로 되는지. 그리고 **틀린 열쇠로는 안 열리는지.**
     #[test]
     fn it_locks_and_only_the_right_key_opens_it() {
-        let dir = std::env::temp_dir().join("playx-lockbox-test");
+        let dir = crate::paths::test_fixture_root().join("playx-lockbox-test");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let src = dir.join("plain.bin");
@@ -539,7 +539,7 @@ mod tests {
     /// 같은 파일" 이라는 사실이 밖에서 보인다.
     #[test]
     fn locking_twice_does_not_give_the_same_file() {
-        let dir = std::env::temp_dir().join("playx-lockbox-test2");
+        let dir = crate::paths::test_fixture_root().join("playx-lockbox-test2");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let src = dir.join("p.bin");
@@ -613,8 +613,7 @@ mod backup_safety_tests {
     impl Fixture {
         fn new() -> Self {
             let guard = crate::paths::TEST_ENV.lock().unwrap_or_else(|e| e.into_inner());
-            let root = PathBuf::from(std::env::var_os("RV_BACKUP_FIXTURE_ROOT")
-                .expect("Set RV_BACKUP_FIXTURE_ROOT to a dedicated repository fixture directory"));
+            let root = crate::paths::test_fixture_root();
             assert!(root.is_absolute() && root.is_dir());
             let path = root.join(format!("lockbox-{}-{}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
             std::fs::create_dir(&path).unwrap();

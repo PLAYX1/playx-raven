@@ -263,7 +263,7 @@ mod tests {
 
     #[test]
     fn 그림은_svg_로만_덮어쓰지_않는다() {
-        let dir = std::env::temp_dir().join(format!("rv-recv-qr-{}", std::process::id()));
+        let dir = crate::paths::test_fixture_root().join(format!("rv-recv-qr-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let a = dir.join("받는주소.svg");
         assert_eq!(svg_path(a.to_str().unwrap()).unwrap(), a);

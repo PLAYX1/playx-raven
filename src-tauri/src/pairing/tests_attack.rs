@@ -48,7 +48,7 @@ impl Phone {
 }
 
 fn tmpdir(tag: &str) -> std::path::PathBuf {
-    let d = std::env::temp_dir().join(format!("rv6-pair-{tag}-{}-{}", std::process::id(), new_request_id()));
+    let d = crate::paths::test_fixture_root().join(format!("rv6-pair-{tag}-{}-{}", std::process::id(), new_request_id()));
     let _ = std::fs::remove_dir_all(&d);
     d
 }

@@ -1137,7 +1137,7 @@ mod key_security_tests {
     }
     fn home<T>(name: &str, f: impl FnOnce() -> T) -> T {
         let _guard = crate::paths::TEST_ENV.lock().unwrap_or_else(|e| e.into_inner());
-        let dir = std::env::temp_dir().join(format!("rv-ai-security-{name}-{}", std::process::id()));
+        let dir = crate::paths::test_fixture_root().join(format!("rv-ai-security-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         std::env::set_var("PLAYX_RAVEN_HOME", &dir);
@@ -1335,11 +1335,11 @@ mod key_security_tests {
         home("first", || {
             let first = service_name();
             store("openai").unwrap().set(OLD).unwrap();
-            let second = std::env::temp_dir().join("rv-ai-security-second");
+            let second = crate::paths::test_fixture_root().join("rv-ai-security-second");
             std::env::set_var("PLAYX_RAVEN_HOME", &second);
             assert_ne!(first, service_name());
             assert!(store("openai").unwrap().get().is_err());
-            std::env::set_var("PLAYX_RAVEN_HOME", std::env::temp_dir().join(format!("rv-ai-security-first-{}", std::process::id())));
+            std::env::set_var("PLAYX_RAVEN_HOME", crate::paths::test_fixture_root().join(format!("rv-ai-security-first-{}", std::process::id())));
             assert_eq!(store("openai").unwrap().get().unwrap(), OLD);
         });
     }
@@ -2866,7 +2866,7 @@ mod order_pref_tests {
         let _g = crate::paths::TEST_ENV
             .lock()
             .unwrap_or_else(|e| e.into_inner());
-        let dir = std::env::temp_dir().join(format!("playx-raven-test-{name}"));
+        let dir = crate::paths::test_fixture_root().join(format!("playx-raven-test-{name}"));
         let _ = std::fs::remove_dir_all(&dir);
         std::env::set_var("PLAYX_RAVEN_HOME", &dir);
         let r = f();

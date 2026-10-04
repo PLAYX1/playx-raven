@@ -858,7 +858,7 @@ mod tests {
     ///    「띄우기 전 길이 뒤에 붙은 것만」 읽는 설계가 맞는지 확인한다.
     #[test]
     fn 지난번_락은_오늘_일이_아니다() {
-        let dir = std::env::temp_dir().join(format!("pxr-log-{}", std::process::id()));
+        let dir = crate::paths::test_fixture_root().join(format!("pxr-log-{}", std::process::id()));
         let _ = std::fs::create_dir_all(&dir);
         let log = dir.join("debug.log");
         // 지난주에 락 충돌이 한 번 있었다.
@@ -878,7 +878,7 @@ mod tests {
 
     #[test]
     fn 이번에_난_락은_잡는다() {
-        let dir = std::env::temp_dir().join(format!("pxr-log2-{}", std::process::id()));
+        let dir = crate::paths::test_fixture_root().join(format!("pxr-log2-{}", std::process::id()));
         let _ = std::fs::create_dir_all(&dir);
         let log = dir.join("debug.log");
         std::fs::write(&log, "2026-08-25 Raven server starting\n").unwrap();

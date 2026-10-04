@@ -136,7 +136,7 @@ mod tests {
     use crate::paths::TEST_ENV as LOCK;
 
     fn sandbox(name: &str) -> std::path::PathBuf {
-        let d = std::env::temp_dir().join(format!("playx-mode-{name}"));
+        let d = crate::paths::test_fixture_root().join(format!("playx-mode-{name}"));
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
         std::env::set_var("PLAYX_RAVEN_HOME", &d);

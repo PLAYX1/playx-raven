@@ -3081,6 +3081,7 @@ async function openQrSheet() {
       } catch {
         return `<code class="addr qrurl">${escapeHtml(url)}</code>`;
       }
+      if (new URL(url).protocol === "ravenvault-shop:") return `<span class="meta" style="font-size:15px">${copyHtml("RavenVault 폰 앱에서 연결 QR을 찍어 주세요.")}</span>`;
       const hosts = extraIps.length ? extraIps : [String(r.ip)];
       return hosts
         .map((ip) => `<code class="addr qrurl">http://${escapeHtml(ip)}:${escapeHtml(String(r.port))}${escapeHtml(path)}</code>`)
@@ -3088,6 +3089,7 @@ async function openQrSheet() {
     };
 
     body.innerHTML = todoHtml +
+      (r.credentials_renewed ? `<div class="meta" style="font-size:15px">${copyHtml("연결 열쇠가 만료되어 새로 만들었습니다. RavenVault 폰 앱에서 새 QR을 다시 찍어 주세요.")}</div>` : "") +
       `<div class="qrmain">${custQr}
          <div>
            <b style="font-size:19px">${copyHtml("손님")}</b>
@@ -3102,7 +3104,7 @@ async function openQrSheet() {
        </div>` +
       `<div class="meta" style="margin-bottom:8px">
          🔴 ${copyHtml("아래 셋에는 열쇠가 들어 있습니다. 붙이지 말고, 찍을 때만 보여 주세요.")}
-         ${copyHtml("QR 이 안 열리면 아래 주소를 폰 브라우저에 치세요.")}
+         ${copyHtml("RavenVault 폰 앱에서 연결 QR을 찍어 주세요.")}
        </div>` +
       `<div class="qrothers">
          <div class="qrcard haskey">${adminQr}<b>${copyHtml("사장님만")}</b>
@@ -14800,12 +14802,12 @@ async function startPhone() {
       }
 
     // 사장·직원·검표 QR에는 각각 다른 열쇠가 들어 있다. 손님 QR만 붙여도 된다.
-    phoneQr = foreverQr +
-      `<div class="qrbox">${adminQr}<div class="cap"><b>사장님만</b>돈·발행·설정 전부</div>${oneLink(r.admin_url)}</div>` +
-      `<div class="qrbox">${staffQr}<div class="cap"><b>직원</b>주문·회원확인만</div>${oneLink(r.staff_url)}</div>` +
-      `<div class="qrbox">${scanQr}<div class="cap"><b>검표 태블릿</b>문 앞에 두는 화면</div>${oneLink(r.scan_url)}</div>` +
+    phoneQr = (r.credentials_renewed ? `<div class="meta" style="font-size:15px">${copyHtml("연결 열쇠가 만료되어 새로 만들었습니다. RavenVault 폰 앱에서 새 QR을 다시 찍어 주세요.")}</div>` : "") + foreverQr +
+      `<div class="qrbox">${adminQr}<div class="cap"><b>사장님만</b>돈·발행·설정 전부</div>${copyHtml("RavenVault 폰 앱에서 연결 QR을 찍어 주세요.")}</div>` +
+      `<div class="qrbox">${staffQr}<div class="cap"><b>직원</b>주문·회원확인만</div>${copyHtml("RavenVault 폰 앱에서 연결 QR을 찍어 주세요.")}</div>` +
+      `<div class="qrbox">${scanQr}<div class="cap"><b>검표 태블릿</b>문 앞에 두는 화면</div>${copyHtml("RavenVault 폰 앱에서 연결 QR을 찍어 주세요.")}</div>` +
       `<div class="qrbox">${custQr}<div class="cap"><b>손님</b>카운터에 붙이세요</div>${oneLink(r.customer_url)}</div>` +
-      `<div class="meta" style="width:100%;margin-top:8px">${tf("{0}:{1} · 폰을 같은 와이파이에 붙이고 찍으세요. QR 이 안 열리면 위 주소를 치세요.", r.ip, r.port)}</div>` +
+      `<div class="meta" style="width:100%;margin-top:8px">${escapeHtml(r.ip)}:${escapeHtml(String(r.port))} · ${copyHtml("RavenVault 폰 앱에서 연결 QR을 찍어 주세요.")}</div>` +
       // 손님 QR 에는 열쇠가 없어 붙여도 된다. 나머지 셋에는 열쇠가 들어 있어
       // 인쇄해 벽에 붙이면 그건 열쇠를 벽에 붙이는 것이다.
       `<div class="tblbox">

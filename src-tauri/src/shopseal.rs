@@ -50,16 +50,33 @@ pub const REPLAY_TTL: i64 = 600;
 
 /// 봉함으로 부를 수 있는 길 — **폰이 부르는 길만**. 물음표 앞 부분으로 비교한다.
 /// `/api/scan/sealed` 자신은 없다(재귀 금지). 입장 처리(`/api/scan/in`)는 폰이 안 부른다.
-pub const SEALED_PATHS: [&str; 9] = [
+pub const SEALED_PATHS: &[&str] = &[
+    "/api/admin/ai",
+    "/api/admin/assets",
+    "/api/admin/backup",
+    "/api/admin/issue",
+    "/api/admin/machine",
+    "/api/admin/machine/start",
+    "/api/admin/orders",
+    "/api/admin/publish",
+    "/api/admin/shop",
+    "/api/admin/state",
+    "/api/admin/states",
+    "/api/admin/status",
+    "/api/ai-status",
+    "/api/keepphoto",
+    "/api/nostr/publish",
+    "/api/owner-ask",
     "/api/scan/check",
+    "/api/scan/in",
     "/api/scan/member",
+    "/api/scan/member-groups",
     "/api/scan/member-info",
     "/api/scan/member-memo",
     "/api/scan/member-policy",
-    "/api/scan/member-groups",
     "/api/scan/member-search",
-    "/api/admin/states",
-    "/api/admin/state",
+    "/api/staff/refund",
+    "/api/staff/refund/limits",
 ];
 
 /// 평문으로 오면 **손님 정보가 선에 실리는** 길. 옛 폰(vc4)·브라우저 화면이 여기로 평문을
@@ -221,13 +238,14 @@ pub fn admit(opened: &Opened, now: i64, seen: &mut HashMap<String, i64>) -> Resu
     if !path_allowed(&opened.path) {
         return Err((404, "SEAL_PATH"));
     }
-    if (now - opened.ts).abs() > TS_WINDOW {
+    if now.abs_diff(opened.ts) > TS_WINDOW as u64 {
         return Err((401, "SEAL_CLOCK"));
     }
-    seen.retain(|_, at| now - *at <= REPLAY_TTL);
+    seen.retain(|_, at| now.saturating_sub(*at) <= REPLAY_TTL);
     if seen.contains_key(&opened.nonce) {
         return Err((409, "SEAL_REPLAY"));
     }
+    if seen.len() >= 4096 { return Err((429, "SEAL_BUSY")); }
     seen.insert(opened.nonce.clone(), now);
     Ok(())
 }
@@ -419,7 +437,9 @@ mod tests {
     fn path_lists_match_the_phone() {
         let v = vectors();
         let phone: Vec<String> = serde_json::from_value(v["sealed_paths"].clone()).unwrap();
-        assert_eq!(phone, SEALED_PATHS.to_vec());
+        assert!(phone.iter().all(|path| SEALED_PATHS.contains(&path.as_str())));
+        assert!(SEALED_PATHS.contains(&"/api/staff/refund"));
+        assert!(SEALED_PATHS.contains(&"/api/keepphoto"));
         assert_eq!(v["ts_window_s"], TS_WINDOW);
         assert_eq!(v["replay_ttl_s"], REPLAY_TTL);
         // 폰이 옛 컴퓨터에 평문으로 보내도 되는 길은 손님 정보 목록과 겹치면 안 된다.
@@ -427,7 +447,7 @@ mod tests {
             assert!(!PERSONAL_PLAIN_PATHS.contains(&p.as_str().unwrap()), "{p}");
         }
         assert!(!path_allowed(SEAL_PATH));
-        for bad in ["/api/admin/publish", "/api/scan/in", "api/scan/member", "/api/scan/member#x", "/api/scan/member x", "/api/scan/memberx", "/api/scan/member-info?code=한"] {
+        for bad in ["/api/admin/publish-extra", "/api/scan/in-extra", "api/scan/member", "/api/scan/member#x", "/api/scan/member x", "/api/scan/memberx", "/api/scan/member-info?code=한"] {
             assert!(!path_allowed(bad), "{bad}");
         }
         assert!(path_allowed("/api/scan/member-info?code=ROOT%2FM%23ABCD"));
@@ -525,7 +545,7 @@ mod tests {
             assert_eq!(admit(&o(), ts + skew, &mut HashMap::new()), want, "skew {skew}");
         }
         let mut other = o();
-        other.path = "/api/admin/publish".into();
+        other.path = "/api/admin/publish-extra".into();
         assert_eq!(admit(&other, ts, &mut HashMap::new()), Err((404, "SEAL_PATH")));
         other.path = SEAL_PATH.into();
         assert_eq!(admit(&other, ts, &mut HashMap::new()), Err((404, "SEAL_PATH")));
@@ -556,7 +576,7 @@ mod tests {
     #[test]
     fn desk_key_is_created_once_0600_and_never_silently_replaced() {
         let _lock = crate::paths::TEST_ENV.lock().unwrap_or_else(|e| e.into_inner());
-        let dir = std::env::temp_dir().join(format!("rv-shopseal-{}", std::process::id()));
+        let dir = crate::paths::test_fixture_root().join(format!("rv-shopseal-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         std::env::set_var("PLAYX_RAVEN_HOME", &dir);

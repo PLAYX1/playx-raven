@@ -2181,15 +2181,20 @@ async function keepCopy(url: string, note: HTMLElement) {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ url }),
     });
-    if (!r.ok) return;
     const j = await r.json();
-    if (!j?.kept) return;
+    if (!r.ok || !j?.kept) {
+      const add = document.createElement("div"); add.className = "sub";
+      add.textContent = j?.why || j?.error || "사진 사본을 보관하려면 가게 앱에서 새 연결 QR을 찍어 주세요. 원래 사진은 그대로 사용할 수 있습니다.";
+      note.appendChild(add); return;
+    }
     const add = document.createElement("div");
     add.className = "sub";
     add.textContent = "이 가게 컴퓨터에도 한 부 보관했습니다.";
     note.appendChild(add);
   } catch {
-    // 노드가 없는 곳(웹)에서 열었으면 여기로 온다. 정상이다.
+    const add = document.createElement("div"); add.className = "sub";
+    add.textContent = "사진 사본을 보관하려면 가게 앱에서 새 연결 QR을 찍어 주세요. 원래 사진은 그대로 사용할 수 있습니다.";
+    note.appendChild(add);
   }
 }
 

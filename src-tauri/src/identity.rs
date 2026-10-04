@@ -1051,7 +1051,7 @@ mod tests {
     /// 자물쇠를 잡고 들어간다(`paths::TEST_ENV`).
     fn in_a_temp_home<T>(f: impl FnOnce(&std::path::Path) -> T) -> T {
         let _g = crate::paths::TEST_ENV.lock().unwrap_or_else(|e| e.into_inner());
-        let dir = std::env::temp_dir().join(format!("playx-identity-test-{}", std::process::id()));
+        let dir = crate::paths::test_fixture_root().join(format!("playx-identity-test-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         std::env::set_var("PLAYX_RAVEN_HOME", &dir);

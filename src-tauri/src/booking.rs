@@ -378,7 +378,7 @@ mod store_tests {
         let _g = crate::paths::TEST_ENV
             .lock()
             .unwrap_or_else(|e| e.into_inner());
-        let dir = std::env::temp_dir().join("playx-raven-booking-test");
+        let dir = crate::paths::test_fixture_root().join("playx-raven-booking-test");
         let _ = std::fs::create_dir_all(&dir);
         std::env::set_var("PLAYX_RAVEN_HOME", &dir);
         // 앞선 시험이 남긴 것을 지운다. 남아 있으면 「자리가 찼다」가 되어

@@ -81,14 +81,8 @@ pub fn allowed(role: &str, path: &str) -> bool {
     match role {
         "owner" => true,
         "staff" => {
-            path.starts_with("/api/staff/")
-                || path.starts_with("/api/admin/orders")
-                || path.starts_with("/api/admin/state")
-                || path.starts_with("/api/admin/states")
-                || path.starts_with("/api/admin/shop")
-                // 환불은 돈이 나가는 일이라 예외로 열되, 금액은 refund.rs 가
-                // 막는다. 권한을 여는 것과 한도를 거는 것은 다른 일이다.
-                || path.starts_with("/api/staff/refund")
+            matches!(path, "/api/admin/orders" | "/api/admin/state" | "/api/admin/states"
+                | "/api/admin/shop" | "/api/staff/refund" | "/api/staff/refund/limits")
                 // 손님이 내민 표가 진짜인지 보는 것까지. 확인(check)만 열고
                 // 입장 처리(in)는 열지 않는다 — 읽는 일과 쓰는 일은 다르다.
                 || path == "/api/scan/check"

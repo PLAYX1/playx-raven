@@ -1438,7 +1438,7 @@ mod tests {
     const V1: &str = "legal winner thank year wave sausage worth useful legal winner thank yellow";
 
     fn scratch(name: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("rvw-{name}-{}-{:x}", std::process::id(), rand::random::<u32>()));
+        let d = crate::paths::test_fixture_root().join(format!("rvw-{name}-{}-{:x}", std::process::id(), rand::random::<u32>()));
         std::fs::create_dir_all(&d).unwrap();
         d
     }

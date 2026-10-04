@@ -48,6 +48,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// 숫자가 사는 시간. 짧을수록 안전하고, 너무 짧으면 노인이 못 따라간다.
 const 유효초: i64 = 600;
 
+pub(crate) const HTTP_MOVE_GUIDANCE: &str = "와이파이 숫자 이사는 백업 암호를 안전하게 전달할 수 없어 중단했습니다. 옛 컴퓨터에서 암호화 백업 파일(예: 이사.zip.pxlock)을 만들고 USB로 새 컴퓨터에 옮긴 뒤 복구하세요. 백업 암호는 파일과 따로 전달하세요. 자산을 새로 만들지 마세요.";
+
 /// 틀릴 수 있는 횟수. 여섯 자리를 찍어 맞히지 못하게.
 const 최대실패: u32 = 3;
 
@@ -92,46 +94,8 @@ fn 내주소() -> Vec<String> {
 /// `what` 은 `"all"`(전부) 또는 `"shop"`(가게만).
 #[tauri::command]
 pub async fn move_offer(what: String) -> Result<Value, String> {
-    let 전부 = what == "all";
-    let tmp = std::env::temp_dir().join(format!("playx-move-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&tmp);
-    std::fs::create_dir_all(&tmp).map_err(|e| format!("자리를 만들지 못했습니다: {e}"))?;
-
-    let (code, pass) = 숫자와암호();
-
-    // 기존 백업을 그대로 쓴다. 새 길을 내면 새 버그가 난다.
-    let v = crate::backup::backup_zip(tmp.to_string_lossy().to_string(), "이사".into(), 전부).await?;
-    let path = v
-        .get("path")
-        .and_then(Value::as_str)
-        .map(PathBuf::from)
-        .ok_or("짐을 싸지 못했습니다.")?;
-
-    if let Ok(mut g) = 준비된짐.lock() {
-        *g = Some(짐 {
-            code: code.clone(),
-            pass: pass.clone(),
-            path,
-            made_at: now(),
-            fails: 0,
-            what: what.clone(),
-        });
-    }
-
-    Ok(json!({
-        "code": code,
-        "pass": pass,
-        "hosts": 내주소(),
-        "port": crate::server::PORT,
-        "minutes": 유효초 / 60,
-        "what": what,
-        // 화면이 그대로 읽어 주면 되는 문장. 사장이 문장을 지어내지 않아도 된다.
-        "say": if 전부 {
-            "이 컴퓨터의 가게와 지갑을 통째로 보냅니다. 옮긴 뒤에는 새 컴퓨터에서 장사하세요."
-        } else {
-            "가게만 보냅니다. 돈과 자산은 이 컴퓨터에 그대로 남습니다."
-        },
-    }))
+    let _ = what;
+    Err(HTTP_MOVE_GUIDANCE.into())
 }
 
 /// 옛 컴퓨터: 짐을 무른다(취소).
@@ -177,93 +141,8 @@ pub fn take(code: &str) -> Result<(PathBuf, String), String> {
 /// 새 컴퓨터: 옛 컴퓨터에서 받아 그대로 되살린다.
 #[tauri::command]
 pub async fn move_fetch(host: String, code: String) -> Result<Value, String> {
-    if !code.chars().all(|c| c.is_ascii_digit()) || code.len() != 6 {
-        return Err("숫자 여섯 자리를 넣어 주세요.".into());
-    }
-    // ⚠️ 주소는 사람이 손으로 넣는다. 이상한 글자가 섞이면 우리가 의도하지
-    //    않은 곳을 부르게 된다.
-    if !host
-        .bytes()
-        .all(|b| b.is_ascii_alphanumeric() || b == b'.' || b == b'-' || b == b':')
-    {
-        return Err("컴퓨터 주소가 올바르지 않습니다.".into());
-    }
-    let port = crate::server::PORT;
-    let url = if host.contains(':') {
-        format!("http://{host}/move/{code}")
-    } else {
-        format!("http://{host}:{port}/move/{code}")
-    };
-
-    let c = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(180))
-        .build()
-        .map_err(|e| format!("연결을 준비하지 못했습니다: {e}"))?;
-    let r = c
-        .get(&url)
-        .send()
-        .await
-        .map_err(|_| "옛 컴퓨터를 찾지 못했습니다. 두 컴퓨터가 같은 인터넷에 있어야 하고, 옛 컴퓨터에서 「가게 옮기기」를 눌러 두셔야 합니다.".to_string())?;
-
-    if !r.status().is_success() {
-        // 옛 컴퓨터가 왜 거절했는지 그대로 전한다 — 「세 번 틀렸습니다」 같은 것.
-        let msg = r.text().await.unwrap_or_default();
-        return Err(if msg.trim().is_empty() {
-            "옛 컴퓨터가 짐을 주지 않았습니다.".into()
-        } else {
-            msg
-        });
-    }
-    let pass = r
-        .headers()
-        .get("x-move-pass")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or_default()
-        .to_string();
-    let bytes = r
-        .bytes()
-        .await
-        .map_err(|e| format!("짐을 다 받지 못했습니다: {e}"))?;
-
-    let tmp = std::env::temp_dir().join(format!("playx-moved-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&tmp);
-    std::fs::create_dir_all(&tmp).map_err(|e| format!("자리를 만들지 못했습니다: {e}"))?;
-    // 🔴 **이름을 사실대로 적는다.** 보내는 쪽은 잠긴 파일을 주는데
-    //    여기서 `이사.zip` 이라 적어서, 푸는 쪽이 확장자를 보고 「안 잠긴
-    //    zip」으로 오해했다. 이름과 내용이 어긋나면 그 거짓말을 나중에
-    //    누군가가 믿는다.
-    let zip = tmp.join("이사.zip.pxlock");
-    std::fs::write(&zip, &bytes).map_err(|e| format!("짐을 놓지 못했습니다: {e}"))?;
-
-    // 되살리는 일은 기존 복구가 한다. 여기서 새로 만들지 않는다.
-    // 보낼 때 이미 「전부/가게만」을 골랐다. 그러니 **짐에 든 것은 전부**
-    // 되살린다 — 받는 쪽에서 또 고르게 하면 사장이 두 번 판단해야 하고,
-    // 그러다 하나를 빠뜨리면 옮긴 줄 알았는데 안 옮겨져 있다.
-    let 짐목록 = crate::recover::restore_survey(zip.to_string_lossy().to_string(), Some(pass.clone()))?;
-    let keys: Vec<String> = 짐목록
-        .get("items")
-        .and_then(Value::as_array)
-        .map(|a| {
-            a.iter()
-                .filter_map(|i| i.get("key").and_then(Value::as_str).map(str::to_string))
-                .collect()
-        })
-        .unwrap_or_default();
-
-    let out = crate::recover::restore_apply(zip.to_string_lossy().to_string(), keys, Some(pass))
-        .await?;
-
-    let _ = std::fs::remove_dir_all(&tmp);
-    // Receiving an archive is not the same as restoring every selected item.
-    let complete = restore_complete(&out);
-    Ok(json!({
-        "ok": complete,
-        "status": if complete { "complete" } else { out.get("status").and_then(Value::as_str).unwrap_or("failed") },
-        "restored": out,
-        // 🔴 이 말을 꼭 화면에 띄워야 한다. 안 그러면 사장이 자산을 새로 만든다.
-        "warn": "가게 자산을 새로 만들지 마세요. 같은 지갑이면 그대로 따라옵니다. \
-새로 만들면 100 RVN 이 타고 손님이 아는 QR 이 죽습니다.",
-    }))
+    let _ = (host, code);
+    Err(HTTP_MOVE_GUIDANCE.into())
 }
 
 #[cfg(test)]

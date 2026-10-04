@@ -316,7 +316,7 @@ mod tests {
 
     /// 시험이 대표님의 진짜 `~/Library/LaunchAgents` 를 건드리면 안 된다.
     fn sandbox(name: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("playx-autostart-{name}"));
+        let d = crate::paths::test_fixture_root().join(format!("playx-autostart-{name}"));
         let _ = std::fs::remove_dir_all(&d);
         std::env::set_var("PLAYX_RAVEN_LAUNCHAGENTS", &d);
         d
