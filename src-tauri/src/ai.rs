@@ -121,7 +121,7 @@ struct FileStore(PathBuf);
 #[cfg(all(not(test), not(any(target_os = "macos", target_os = "windows"))))]
 impl KeyStore for FileStore {
     fn get(&self) -> Result<String, StoreError> {
-        std::fs::read_to_string(&self.0)
+        read_private_key(&self.0)
             .map(|s| s.trim().into())
             .map_err(|e| {
                 if e.kind() == std::io::ErrorKind::NotFound {
@@ -334,13 +334,34 @@ fn delete_key_with_store_locked(provider: &str, s: &dyn KeyStore) -> Result<(), 
     }
 }
 
+fn read_private_key(path: &std::path::Path) -> std::io::Result<String> {
+    let file = std::fs::File::open(path)?;
+    #[cfg(unix)] {
+        use std::os::unix::fs::PermissionsExt;
+        file.set_permissions(std::fs::Permissions::from_mode(0o600))?;
+    }
+    use std::io::Read;
+    let mut text = String::new();
+    file.take(4097).read_to_string(&mut text)?;
+    if text.len() > 4096 { return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "invalid key file")); }
+    Ok(text)
+}
+
+/// Remove plaintext even if unrelated suffix cleanup fails.
+fn cleanup_legacy_artifacts(provider: &str) -> Result<(), String> {
+    let mut errors = Vec::new();
+    if let Err(e) = remove_legacy_key(&key_path(provider)) { errors.push(e); }
+    if let Err(e) = remove_key(&last4_path(provider)) { errors.push(e); }
+    if errors.is_empty() { Ok(()) } else { Err(errors.join("; ")) }
+}
+
 fn migrate_locked(provider: &str, s: &dyn KeyStore) -> Result<Option<String>, String> {
     let path = key_path(provider);
     if deleted_path(provider).exists() {
         remove_legacy_key(&path)?;
         return Ok(None);
     }
-    if let Ok(old) = std::fs::read_to_string(&path) {
+    if let Ok(old) = read_private_key(&path) {
         if old.trim().chars().count() < 16 {
             remove_legacy_key(&path)?;
             remove_key(&last4_path(provider))?;
@@ -361,7 +382,7 @@ fn migrate_locked(provider: &str, s: &dyn KeyStore) -> Result<Option<String>, St
     let key = if let Some(key) = stored {
         key
     } else {
-        let old = std::fs::read_to_string(&path)
+        let old = read_private_key(&path)
             .map_err(|_| MISSING_KEY.to_string())?
             .trim()
             .to_string();
@@ -380,8 +401,7 @@ fn migrate_locked(provider: &str, s: &dyn KeyStore) -> Result<Option<String>, St
         }
         old
     };
-    remove_key(&last4_path(provider))?;
-    remove_legacy_key(&path)?;
+    cleanup_legacy_artifacts(provider)?;
     Ok(Some(key))
 }
 
@@ -417,7 +437,10 @@ fn read_key_locked(provider: &str) -> Result<String, String> {
         match migrate_locked(provider, &*s) {
             Ok(Some(key)) => return Ok(key),
             Err(error) => {
-                if let Ok(key) = s.get() { return Ok(key); }
+                if let Ok(key) = s.get() {
+                    let _ = cleanup_legacy_artifacts(provider);
+                    return Ok(key);
+                }
                 if let Some(key) = legacy_fallback(provider) { return Ok(key); }
                 return Err(error);
             }
@@ -429,7 +452,7 @@ fn read_key_locked(provider: &str) -> Result<String, String> {
 #[cfg(any(test, target_os = "macos", target_os = "windows"))]
 fn legacy_fallback(provider: &str) -> Option<String> {
     if deleted_path(provider).exists() { return None; }
-    std::fs::read_to_string(key_path(provider)).ok()
+    read_private_key(&key_path(provider)).ok()
         .map(|key| key.trim().to_string())
         .filter(|key| key.chars().count() >= 16)
 }
@@ -1027,6 +1050,10 @@ pub fn api_key_status() -> Value {
             && custom.as_ref().is_some_and(|(_, base, _)| base.starts_with("http://"));
         available.insert(provider.into(), json!(if provider == "custom" { custom.is_some() && (has || local) } else { has }));
     }
+    let plaintext = ["anthropic", "openai", "google", "groq", "xai", "custom"].iter()
+        .any(|p| key_path(p).is_file() && !deleted_path(p).exists());
+    let warning = guard.as_ref().err().cloned().or_else(|| plaintext.then(||
+        "AI 키가 OS 보안 저장소 대신 이 컴퓨터의 평문 파일에 남아 있습니다(파일 권한 0600).".to_string()));
     json!({
         "configured": configuration,
         "has_key": present,
@@ -1039,7 +1066,7 @@ pub fn api_key_status() -> Value {
         "custom": custom.is_some(),
         "custom_label": custom.map(|c| c.0).unwrap_or_default(),
         "last4": suffixes,
-        "warning": guard.as_ref().err(),
+        "warning": warning,
     })
 }
 
@@ -1232,12 +1259,32 @@ mod key_security_tests {
             scenario.mismatch = false;
             std::fs::create_dir(last4_path("openai")).unwrap();
             assert!(migrate_locked("openai", &scenario).is_err());
-            assert!(path.exists());
+            assert!(!path.exists(), "suffix cleanup failure must not leave plaintext after secure storage succeeds");
             std::fs::remove_dir(last4_path("openai")).unwrap();
+            write_private(&path, OLD.as_bytes()).unwrap();
             FAIL_LEGACY_REMOVE.store(true, std::sync::atomic::Ordering::SeqCst);
             assert!(migrate_locked("openai", &scenario).is_err());
             assert!(path.exists());
             assert_eq!(migrate_locked("openai", &scenario).unwrap(), Some(OLD.into()));
+            assert!(!path.exists());
+        });
+    }
+
+    #[test]
+    fn fallback_is_private_and_status_warns_without_exposing_key() {
+        home("fallback-private", || {
+            let path = key_path("openai");
+            write_private(&path, OLD.as_bytes()).unwrap();
+            #[cfg(unix)] { use std::os::unix::fs::PermissionsExt; std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap(); }
+            let mut scenario = ScenarioStore::new(None); scenario.fail_get = true;
+            assert!(migrate_locked("openai", &scenario).is_err());
+            assert!(legacy_fallback("openai").is_some());
+            #[cfg(unix)] { use std::os::unix::fs::PermissionsExt; assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o600); }
+            FAIL_LEGACY_REMOVE.store(true, std::sync::atomic::Ordering::SeqCst);
+            let status = api_key_status();
+            assert!(status["warning"].as_str().unwrap().contains("평문 파일"));
+            assert!(!status["warning"].as_str().unwrap().contains(OLD));
+            assert!(api_key_status()["warning"].is_null());
             assert!(!path.exists());
         });
     }

@@ -9177,7 +9177,7 @@ async function refreshKeys() {
     const deleteButton = document.getElementById("ravi-key-delete");
     if (deleteButton) deleteButton.hidden = !aiProvider;
 
-    $("key-note").textContent = st.warning || (have.length ? "AI 설정이 있습니다. 연결은 아직 확인하지 않았습니다." : "아직 없습니다");
+    $("key-note").textContent = st.warning ? t(st.warning) : (have.length ? "AI 설정이 있습니다. 연결은 아직 확인하지 않았습니다." : "아직 없습니다");
     // 대화창은 쓸 수 있는 곳이 하나라도 있을 때만 의미가 있다.
     // 🔴 여태 API 키가 없으면 이 버튼을 **숨겼다.** 그러면 Ravi 가 있다는
     // 것을 알 길이 없다 — 키를 넣을 이유도 못 만난다.

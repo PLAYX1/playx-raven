@@ -41,6 +41,7 @@ import { MAP_COPY } from "./map-copy";
 export const DICT: Record<string, Record<string, string>> = {
   ko: {},
   en: {
+    "AI 키가 OS 보안 저장소 대신 이 컴퓨터의 평문 파일에 남아 있습니다(파일 권한 0600).": "An AI key remains in a plain-text file on this computer instead of the OS secure store (file permissions 0600).",
     "가게 색 미리보기 — 저장을 누르면 적용됩니다.": "Shop colour preview — press Save to apply.",
     "가게 색을 저장했습니다.": "Shop colours saved.",
     "만료된 연결을 갱신하지 못했습니다. 저장소 권한·남은 공간을 확인한 뒤 이 컴퓨터에서 폰 연결/손님 QR을 다시 열어 주세요. 새 QR은 아직 만들지 않았습니다.": "The expired connection could not be renewed. Check storage permissions and free space, then reopen Phone connection / Customer QR on this computer. No new QR has been created yet.",
@@ -1841,6 +1842,7 @@ export const DICT: Record<string, Record<string, string>> = {
       "The key is too short. Please check the one written on your paper again.",
   },
   ja: {
+    "AI 키가 OS 보안 저장소 대신 이 컴퓨터의 평문 파일에 남아 있습니다(파일 권한 0600).": "AI キーが OS の安全な保存場所ではなく、このコンピューターの平文ファイルに残っています（権限 0600）。",
     "가게 색 미리보기 — 저장을 누르면 적용됩니다.": "お店の色のプレビュー — 保存を押すと反映されます。",
     "가게 색을 저장했습니다.": "お店の色を保存しました。",
     "만료된 연결을 갱신하지 못했습니다. 저장소 권한·남은 공간을 확인한 뒤 이 컴퓨터에서 폰 연결/손님 QR을 다시 열어 주세요. 새 QR은 아직 만들지 않았습니다.": "期限切れの接続を更新できませんでした。保存先の権限と空き容量を確認し、このパソコンで「スマホ接続／お客様 QR」をもう一度開いてください。新しい QR はまだ作成していません。",
@@ -3641,6 +3643,7 @@ export const DICT: Record<string, Record<string, string>> = {
       "鍵が短すぎます。紙に書いたものをもう一度ご確認ください。",
   },
   zh: {
+    "AI 키가 OS 보안 저장소 대신 이 컴퓨터의 평문 파일에 남아 있습니다(파일 권한 0600).": "AI 密钥保留在本机的明文文件中，而不是操作系统安全存储中（文件权限 0600）。",
     "가게 색 미리보기 — 저장을 누르면 적용됩니다.": "店铺颜色预览 — 点击保存后生效。",
     "가게 색을 저장했습니다.": "已保存店铺颜色。",
     "만료된 연결을 갱신하지 못했습니다. 저장소 권한·남은 공간을 확인한 뒤 이 컴퓨터에서 폰 연결/손님 QR을 다시 열어 주세요. 새 QR은 아직 만들지 않았습니다.": "无法更新过期连接。请检查存储权限和剩余空间，然后在此电脑重新打开「手机连接／顾客二维码」。尚未生成新二维码。",
