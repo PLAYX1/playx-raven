@@ -55,3 +55,73 @@ assert.ok(adminAI.indexOf('permit.charge()') < adminAI.indexOf('ai_chat('));
 const attempts = ai.slice(ai.indexOf('async fn run_attempts'),ai.indexOf('mod attempt_tests'));
 assert.ok(attempts.indexOf('before_attempt()?') < attempts.indexOf('match request('));
 console.log('PASS customer/owner/admin budget wiring and pre-dispatch fallback charge');
+
+// Key onboarding is driven by fake fetch responses; never call a provider.
+const latestMain = read('src/main.ts');
+const latestAST = ts.createSourceFile('main.ts', latestMain, ts.ScriptTarget.Latest, true);
+const latestFn = name => latestAST.statements.find(n => ts.isFunctionDeclaration(n) && n.name?.text === name).getText(latestAST);
+async function onboarding(outcome) {
+  const pending = new Set(), elements = new Map(); let awake=false, closed=false, refreshes=0, requests=0;
+  const element = id => { if (!elements.has(id)) elements.set(id,{value:'',textContent:'',disabled:false,hidden:false,querySelector:()=>elements.get('retry')}); return elements.get(id); };
+  element('ravi-key-input').value='synthetic-input'; element('retry');
+  let release;
+  const barrier = new Promise(resolve=>{release=resolve;});
+  const fakeFetch = async () => { requests++; await barrier; return new Response('{}',{status:outcome}); };
+  const ctx = vm.createContext({ $,keyPick:'openai',aiKeyed:{openai:true}, PROVIDERS:{openai:['Fixture AI']},
+    markKeyPending(p,on){if(on)pending.add(p);else pending.delete(p);},
+    async invoke(command){
+      if(command==='save_api_key')return {};
+      assert.equal(command,'ai_check_connection');
+      const response=await fakeFetch(); if(!response.ok)throw Error('synthetic connection failure');
+    },
+    async refreshKeys(){refreshes++; awake=!pending.has('openai');},
+    closeKeyCard(){closed=true;}, chatHtml(){}, copyHtml:s=>s,escapeHtml:s=>s,t:s=>s,tf:s=>s,
+    setCopyText:(el,draw)=>el.textContent=draw(), showPage(p){assert.equal(p,'ravi');},openKeyCard(){closed=false;},aiProvider:null,
+  });
+  function $(id){return element(id);}
+  vm.runInContext(compile(latestFn('saveKeyCard')+'\n'+latestFn('wakeRavi')),ctx);
+  ctx.wakeRavi(); assert.equal(closed,false);
+  const saving=ctx.saveKeyCard(); await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(awake,false,'must sleep while connection is pending');
+  assert.ok(element('ravi-key-input').value==='', 'clear input before connection check');
+  assert.equal(element('ravi-key-save').disabled,true);
+  await ctx.saveKeyCard(); assert.equal(requests,1,'double click must not check twice');
+  release(); await saving;
+  assert.equal(awake,outcome===200); assert.equal(closed,outcome===200);
+  assert.ok(element('ravi-key-input').value===''); assert.equal(element('ravi-key-save').disabled,false);
+  if(outcome!==200){
+    assert.ok(pending.has('openai')); assert.equal(element('retry').hidden,false);
+    assert.ok(element('kc-note').textContent.includes('확인하지 못했어요'));
+  }
+  assert.ok(refreshes>0);
+}
+await onboarding(200); await onboarding(401); await onboarding(503);
+const refresh = latestFn('refreshKeys');
+assert.ok(refresh.includes('!pendingKeyChecks.has(sel.value)'));
+assert.ok(refresh.includes('setAllRaviMood(keyed ? "normal" : "sleep")'));
+assert.ok(latestMain.includes('$("ravi-face").onclick = wakeRavi'));
+for (const phrase of ['눌러서 깨우기','저장하고 연결 확인','저장된 키로 연결 확인','연결을 확인하는 중…']) {
+  assert.equal((read('src/dict.ts').match(new RegExp('"'+phrase+'":','g'))||[]).length,3);
+}
+console.log('PASS sleeping Ravi, clickable key entry, fake-fetch connection success/failure and duplicate-click guard');
+
+// Exercise the actual status refresh, including browser select semantics.
+let availability = {}, moods = [];
+const slots = new Map();
+const slot = id => { if(!slots.has(id))slots.set(id,{value:'',textContent:'',hidden:true,dataset:{}}); return slots.get(id); };
+let options=[],selected='';
+slots.set('ai-pick',{get value(){return selected;},set value(v){selected=options.includes(v)?v:'';},set innerHTML(html){options=[...html.matchAll(/value="([^"]+)"/g)].map(m=>m[1]); selected=options[0]||'';}});
+const pending = new Set();
+const statusContext=vm.createContext({$ : slot,document:{getElementById:()=>null},PROVIDERS:{openai:['Fixture A'],groq:['Fixture B']},
+  aiProvider:null,lastKeyState:null,pendingKeyChecks:pending,
+  async invoke(cmd){return cmd==='api_key_status'?{available:availability}:{};},
+  renderKeyRows(){},escapeHtml:String,paintRaviBadge(){},t:s=>s,refreshOverview(){},closeKeyCard(){},
+  setAllRaviMood:m=>moods.push(m),animateRavi:on=>moods.push(on?'awake':'sleep'),
+});
+vm.runInContext(compile(latestFn('refreshKeys')),statusContext);
+await statusContext.refreshKeys(); assert.equal(statusContext.aiProvider,null); assert.equal(moods.at(-1),'sleep');
+availability={openai:true}; pending.add('openai'); await statusContext.refreshKeys();
+assert.equal(statusContext.aiProvider,null); assert.equal(moods.at(-1),'sleep');
+pending.delete('openai'); availability.groq=true; await statusContext.refreshKeys('groq');
+assert.equal(statusContext.aiProvider,'groq'); assert.equal(moods.at(-1),'awake');
+console.log('PASS actual status refresh: no key asleep, unverified key asleep, checked provider selected and awake');

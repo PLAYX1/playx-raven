@@ -8979,6 +8979,15 @@ let shopMenuCid: string | null = null;
 // thing on this screen — the burn — still needs the name retyped by hand.
 
 let aiProvider: string | null = null;
+// Provider names only; a failed connection check stays asleep across restarts.
+const pendingKeyChecks = new Set<string>((() => {
+  try { const v = JSON.parse(localStorage.getItem("rv-ai-pending-checks") || "[]"); return Array.isArray(v) ? v.filter(p => typeof p === "string") : []; }
+  catch { return []; }
+})());
+function markKeyPending(provider: string, pending: boolean): void {
+  if (pending) pendingKeyChecks.add(provider); else pendingKeyChecks.delete(provider);
+  localStorage.setItem("rv-ai-pending-checks", JSON.stringify([...pendingKeyChecks]));
+}
 
 /// 열쇠를 넣는 칸의 순서. 위에 있는 것이 먼저 눈에 들어오고, 대부분은
 /// 첫 칸 하나만 채운다. 그래서 이 순서는 취향이 아니라 기본값에 가깝다.
@@ -9143,7 +9152,7 @@ function renderKeyRows(st: any, models: any) {
     });
 }
 
-async function refreshKeys() {
+async function refreshKeys(preferred = "") {
   try {
     const st = (await invoke<any>("api_key_status")) || {};
     const models = await invoke<any>("model_settings").catch(() => ({}));
@@ -9156,21 +9165,17 @@ async function refreshKeys() {
     // whatever is available. Silently switching providers on someone who chose
     // one would show up as a surprise bill on the wrong account.
     const sel = $("ai-pick") as HTMLSelectElement;
-    const previous = sel.value;
+    const previous = preferred || sel.value;
     sel.innerHTML = have.map((p) => `<option value="${p}">${escapeHtml(labelOf(p))}</option>`).join("");
     if (have.includes(previous)) sel.value = previous;
-    aiProvider = sel.value || null;
+    aiProvider = sel.value && !pendingKeyChecks.has(sel.value) ? sel.value : null;
     paintRaviBadge();
     const raviSub = document.getElementById("ravi-sub");
-    if (raviSub) raviSub.textContent = aiProvider ? t("AI 도우미 · 물어본 것만 봐요") : t("AI 키를 넣으면 라비가 깨어나요");
+    if (raviSub) raviSub.textContent = aiProvider ? t("AI 도우미 · 물어본 것만 봐요") : t("눌러서 깨우기");
     // 0.4.8-B — 라비 화면의 「AI 열쇠 넣기」는 열쇠가 없을 때만 보인다.
     const keyOpen = document.getElementById("ravi-keyopen");
-    if (keyOpen) keyOpen.hidden = !!aiProvider;
+    if (keyOpen) { keyOpen.hidden = !!aiProvider; setCopyText(keyOpen, () => t("눌러서 깨우기")); }
     const keyHost = document.getElementById("ravi-key");
-    if (keyHost && !aiProvider && keyHost.hidden) {
-      keyHost.innerHTML = keyCardHtml();
-      keyHost.hidden = false;
-    }
     if (keyHost && aiProvider && !keyHost.hidden) closeKeyCard();
     const last4 = document.getElementById("ravi-key-last4");
     if (last4) last4.textContent = aiProvider && st.last4?.[aiProvider] ? `····${String(st.last4[aiProvider])}` : "";
@@ -9188,7 +9193,7 @@ async function refreshKeys() {
     //    떠 있고, 오른쪽 아래 내용을 가린다(그록 감사 2026-08-27).
     //    지금 어느 화면인지 보고 정한다.
     void refreshOverview();
-    const keyed = [...Object.keys(PROVIDERS), "custom"].some(provider => st.available?.[provider]);
+    const keyed = !!aiProvider;
     if (lastKeyState === null) setAllRaviMood(keyed ? "normal" : "sleep");
     else if (keyed !== lastKeyState) void animateRavi(keyed);
     lastKeyState = keyed;
@@ -9245,13 +9250,19 @@ async function saveKeys() {
       });
       if (result.warning) warnings.push(result.warning);
       ($("cu-key") as HTMLInputElement).value = "";
+      markKeyPending("custom", true);
+      await invoke("ai_check_connection", { provider: "custom" });
+      markKeyPending("custom", false);
     }
     for (const p of Object.keys(PROVIDERS)) {
       const el = document.getElementById(`key-${p}`) as HTMLInputElement | null;
       if (el && el.value.trim()) {
+        markKeyPending(p, true);
         const result = await invoke<{ warning?: string }>("save_api_key", { provider: p, key: el.value.trim() });
         if (result.warning) warnings.push(result.warning);
         el.value = "";
+        await invoke("ai_check_connection", { provider: p });
+        markKeyPending(p, false);
       }
       const m = document.getElementById(`model-${p}`) as HTMLInputElement | null;
       if (m) await invoke("save_model", { provider: p, model: m.value.trim() });
@@ -9901,10 +9912,12 @@ function paintRaviFace() {
 function paintRaviBadge(): void {
   try {
     const on = !!aiProvider;
+    const wake = document.getElementById("rv-home-ravi-open");
+    if (wake) setCopyText(wake, () => t(on ? "보내기" : "눌러서 깨우기"));
     const b = document.getElementById("rv-header-ravi");
     if (b) {
       b.dataset.ai = on ? "on" : "off";
-      const label = `${t("라비")} · ${t(on ? "AI 켜짐" : "AI 꺼짐")}`;
+      const label = `${t("라비")} · ${t(on ? "AI 켜짐" : "눌러서 깨우기")}`;
       b.title = label;
       b.setAttribute("aria-label", label);
     }
@@ -10314,7 +10327,8 @@ function keyCardHtml(): string {
     `<button type="button" class="kc-where" data-kc-where="${escapeHtml(pickedConsole)}">${copyHtml("어디서 받나요")} ↗</button></div>` +
     `<label class="kc-label" for="ravi-key-input">${copyHtml("받은 열쇠를 여기에 붙여 넣으세요")}</label>` +
     `<div class="kc-in"><input id="ravi-key-input" type="password" autocomplete="off" spellcheck="false" placeholder="${escapeHtml(ph)}" />` +
-    `<button type="button" id="ravi-key-save">${copyHtml("저장")}</button></div>` +
+    `<button type="button" id="ravi-key-save">${copyHtml("저장하고 연결 확인")}</button></div>` +
+    `<button type="button" class="ghost" data-kc-check${aiKeyed[keyPick] ? "" : " hidden"}>${copyHtml("저장된 키로 연결 확인")}</button>` +
     `<p class="meta">${copyHtml("열쇠는 이 컴퓨터에만 저장돼요. AI 에게 물을 때만 고른 회사로 함께 보내지고, 우리 서버로는 가지 않아요.")}</p>` +
     `<p class="meta kc-note" id="kc-note" aria-live="polite"></p>` +
     `<p class="meta">${copyHtml("내 컴퓨터에서 돌리는 AI 나 다른 곳은 「이 컴퓨터 › AI 열쇠」에서 넣어요.")}</p>` +
@@ -10339,7 +10353,7 @@ function closeKeyCard() {
 
 /** clear=true 는 사람이 회사를 직접 고른 때만 — 붙여 넣은 키로 회사를 알아본 때(자동)는 칸을 지우면 방금 붙인 키가 사라진다(0.5.0 결함). */
 function pickKeyProvider(p: string, clear = true) {
-  if (!PROVIDERS[p]) return;
+  if (!PROVIDERS[p] || (document.getElementById("ravi-key-save") as HTMLButtonElement | null)?.disabled) return;
   keyPick = p;
   document.querySelectorAll<HTMLElement>("#ravi-key [data-kc-pick]").forEach((pick) => {
     const on = pick.dataset.kcPick === p;
@@ -10350,31 +10364,50 @@ function pickKeyProvider(p: string, clear = true) {
   ($("ravi-key").querySelector("[data-kc-where]") as HTMLElement).dataset.kcWhere = PROVIDERS[p][2];
   const input = document.getElementById("ravi-key-input") as HTMLInputElement | null;
   if (input) { if (clear) input.value = ""; input.placeholder = PROVIDERS[p][1]; }
+  const retry = $("ravi-key").querySelector<HTMLButtonElement>("[data-kc-check]");
+  if (retry) retry.hidden = !aiKeyed[p];
 }
 
-async function saveKeyCard() {
+async function saveKeyCard(checkOnly = false) {
   const input = $("ravi-key-input") as HTMLInputElement;
   const note = $("kc-note");
-  const key = input.value.trim();
-  if (!key) return void setCopyText(note, () => t("칸이 비어 있어요. 키를 붙여넣고 다시 눌러 주세요."));
   const btn = $("ravi-key-save") as HTMLButtonElement;
+  if (btn.disabled) return;
+  const provider = keyPick;
+  const key = input.value.trim();
+  if (!checkOnly && !key) return void setCopyText(note, () => t("칸이 비어 있어요. 키를 붙여넣고 다시 눌러 주세요."));
   btn.disabled = true;
+  markKeyPending(provider, true);
   try {
-    await invoke("save_api_key", { provider: keyPick, key });
+    if (!checkOnly) await invoke("save_api_key", { provider, key });
     input.value = "";
-    await refreshKeys();
-    const label = PROVIDERS[keyPick]?.[0] || keyPick;
+    setCopyText(note, () => t("연결을 확인하는 중…"));
+    await invoke("ai_check_connection", { provider });
+    markKeyPending(provider, false);
+    await refreshKeys(provider);
+    const label = PROVIDERS[provider]?.[0] || provider;
     closeKeyCard();
-    // 깨어나는 순간을 보여 준다. "됐어요" 한 줄보다 이게 기억에 남는다.
     chatHtml("ai",
       `<div class="wake awake"><span class="ravi-mount"></span>` +
       `<div><b>${copyHtml("안녕하세요, 라비예요.")}</b><br />` +
-      `<span class="muted">${tf("{0} 열쇠를 저장했어요. 이제 무엇이든 물어보세요.", `<span translate="no">${escapeHtml(label)}</span>`)}</span></div></div>`);
-  } catch (e) {
-    setCopyText(note, () => `${errText(e)} 다시 넣어 주세요`);
+      `<span class="muted">${tf("{0} 연결을 확인했어요. 이제 무엇이든 물어보세요.", `<span translate="no">${escapeHtml(label)}</span>`)}</span></div></div>`);
+  } catch {
+    await refreshKeys();
+    setCopyText(note, () => t("저장 또는 연결을 확인하지 못했어요. 키와 네트워크를 확인하고 다시 눌러 주세요."));
+    const retry = $("ravi-key").querySelector<HTMLButtonElement>("[data-kc-check]");
+    if (retry) retry.hidden = !aiKeyed[provider];
   } finally {
     input.value = "";
     btn.disabled = false;
+  }
+}
+
+function wakeRavi(): void {
+  showPage("ravi");
+  if (!aiProvider) {
+    const selected = ($("ai-pick") as HTMLSelectElement).value;
+    if (PROVIDERS[selected]) keyPick = selected;
+    openKeyCard();
   }
 }
 
@@ -17322,10 +17355,11 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("rv-header-ravi-face").appendChild(raviFace("sleep", 40, { round: true }));
   $("rv-header-ravi").title = t("라비");
   $("rv-header-ravi").setAttribute("aria-label", t("라비"));
-  $("rv-header-ravi").onclick = () => showPage("ravi");
+  $("rv-header-ravi").onclick = wakeRavi;
   const homeAsk = () => {
     const hq = $("rv-home-ravi-q") as HTMLInputElement;
     const v = hq.value.trim();
+    if (!aiProvider) { wakeRavi(); return; }
     showPage("ravi");
     if (!v) return;
     ($("chat-q") as HTMLInputElement).value = v;
@@ -17335,6 +17369,9 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("rv-home-ravi-open").onclick = homeAsk;
   $("rv-home-ravi-q").addEventListener("keydown", (e) => { if ((e as KeyboardEvent).key === "Enter" && !(e as KeyboardEvent).isComposing) { e.preventDefault(); homeAsk(); } });
   $("rv-home-ravi-face").appendChild(raviFace("sleep", 44, { round: true }));
+  $("ravi-face").tabIndex = 0;
+  $("ravi-face").onclick = wakeRavi;
+  $("ravi-face").addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); wakeRavi(); } });
   paintRaviBadge();
   document.querySelectorAll<HTMLElement>('nav a[data-page]').forEach(link => {
     const label = link.querySelector("span")?.textContent?.trim() || link.dataset.page || "";
@@ -17352,7 +17389,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   });
   $("rv-room-ravi-face").appendChild(raviFace("sleep", 50, { round: true }));
   applyRaviCharacter();
-  $("rv-room-ravi").onclick = () => showPage("ravi");
+  $("rv-room-ravi").onclick = wakeRavi;
   $("rv-profile-save").onclick = async () => {
     const name = ($("rv-profile-name") as HTMLInputElement).value.trim();
     const color = ($("rv-profile-color") as HTMLInputElement).value;
@@ -17963,6 +18000,7 @@ window.addEventListener("DOMContentLoaded", async () => {
       return;
     }
     if (el.closest("[data-kc='close']")) return closeKeyCard();
+    if (el.closest("[data-kc-check]")) { void saveKeyCard(true); return; }
     if (el.closest("#ravi-key-save")) void saveKeyCard();
   });
   $("ravi-key").addEventListener("input", (e) => {
@@ -17978,8 +18016,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     if ((e as KeyboardEvent).key === "Enter") chatSend();
   });
   $("ai-pick").addEventListener("change", () => {
-    aiProvider = ($("ai-pick") as HTMLSelectElement).value || null;
-    paintRaviBadge();
+    void refreshKeys();
   });
   $("mn-cur").addEventListener("change", showRate);
   refreshKeys();

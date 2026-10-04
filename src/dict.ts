@@ -41,6 +41,12 @@ import { MAP_COPY } from "./map-copy";
 export const DICT: Record<string, Record<string, string>> = {
   ko: {},
   en: {
+    "눌러서 깨우기": "Press to wake up",
+    "저장하고 연결 확인": "Save and check connection",
+    "저장된 키로 연결 확인": "Check connection with saved key",
+    "연결을 확인하는 중…": "Checking connection…",
+    "{0} 연결을 확인했어요. 이제 무엇이든 물어보세요.": "Connected to {0}. Ask me anything.",
+    "저장 또는 연결을 확인하지 못했어요. 키와 네트워크를 확인하고 다시 눌러 주세요.": "Could not confirm saving or connection. Check the key and network, then try again.",
     "AI 키가 OS 보안 저장소 대신 이 컴퓨터의 평문 파일에 남아 있습니다(파일 권한 0600).": "An AI key remains in a plain-text file on this computer instead of the OS secure store (file permissions 0600).",
     "가게 색 미리보기 — 저장을 누르면 적용됩니다.": "Shop colour preview — press Save to apply.",
     "가게 색을 저장했습니다.": "Shop colours saved.",
@@ -1842,6 +1848,12 @@ export const DICT: Record<string, Record<string, string>> = {
       "The key is too short. Please check the one written on your paper again.",
   },
   ja: {
+    "눌러서 깨우기": "押して起こす",
+    "저장하고 연결 확인": "保存して接続を確認",
+    "저장된 키로 연결 확인": "保存済みキーで接続を確認",
+    "연결을 확인하는 중…": "接続を確認中…",
+    "{0} 연결을 확인했어요. 이제 무엇이든 물어보세요.": "{0} への接続を確認しました。何でも聞いてください。",
+    "저장 또는 연결을 확인하지 못했어요. 키와 네트워크를 확인하고 다시 눌러 주세요.": "保存または接続を確認できませんでした。キーとネットワークを確認して、もう一度押してください。",
     "AI 키가 OS 보안 저장소 대신 이 컴퓨터의 평문 파일에 남아 있습니다(파일 권한 0600).": "AI キーが OS の安全な保存場所ではなく、このコンピューターの平文ファイルに残っています（権限 0600）。",
     "가게 색 미리보기 — 저장을 누르면 적용됩니다.": "お店の色のプレビュー — 保存を押すと反映されます。",
     "가게 색을 저장했습니다.": "お店の色を保存しました。",
@@ -3643,6 +3655,12 @@ export const DICT: Record<string, Record<string, string>> = {
       "鍵が短すぎます。紙に書いたものをもう一度ご確認ください。",
   },
   zh: {
+    "눌러서 깨우기": "点击唤醒",
+    "저장하고 연결 확인": "保存并检查连接",
+    "저장된 키로 연결 확인": "使用已保存的密钥检查连接",
+    "연결을 확인하는 중…": "正在检查连接…",
+    "{0} 연결을 확인했어요. 이제 무엇이든 물어보세요.": "已确认连接到 {0}。现在可以提问了。",
+    "저장 또는 연결을 확인하지 못했어요. 키와 네트워크를 확인하고 다시 눌러 주세요.": "无法确认保存或连接。请检查密钥和网络，然后重试。",
     "AI 키가 OS 보안 저장소 대신 이 컴퓨터의 평문 파일에 남아 있습니다(파일 권한 0600).": "AI 密钥保留在本机的明文文件中，而不是操作系统安全存储中（文件权限 0600）。",
     "가게 색 미리보기 — 저장을 누르면 적용됩니다.": "店铺颜色预览 — 点击保存后生效。",
     "가게 색을 저장했습니다.": "已保存店铺颜色。",

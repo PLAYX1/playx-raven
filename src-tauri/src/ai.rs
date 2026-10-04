@@ -1070,6 +1070,56 @@ pub fn api_key_status() -> Value {
     })
 }
 
+/// Check credentials with a model-list GET, never paid inference or fallback.
+/// References: https://platform.claude.com/docs/en/api/http/models
+/// https://ai.google.dev/api/models and each provider's OpenAI-compatible models API.
+fn connection_request(provider: &str, key: &str) -> Result<reqwest::RequestBuilder, String> {
+    let client = crate::ai_endpoint::client()?;
+    let request = match provider {
+        "anthropic" => client.get("https://api.anthropic.com/v1/models")
+            .header("x-api-key", key).header("anthropic-version", "2023-06-01"),
+        "google" => client.get("https://generativelanguage.googleapis.com/v1beta/models")
+            .header("x-goog-api-key", key),
+        p if openai_compat(p).is_some() => client.get(format!("{}/models", openai_compat(p).unwrap().0))
+            .bearer_auth(key),
+        "custom" => {
+            let (base, _, custom_key) = custom_request_settings()?;
+            let request = client.get(format!("{base}/models"));
+            if custom_key.is_empty() { request } else { request.bearer_auth(custom_key) }
+        }
+        _ => return Err("알 수 없는 제공자입니다.".into()),
+    };
+    Ok(request.timeout(std::time::Duration::from_secs(20)))
+}
+
+#[tauri::command]
+pub async fn ai_check_connection(provider: String) -> Result<(), String> {
+    let key = if provider == "custom" { String::new() } else { read_key(&provider)? };
+    let response = connection_request(&provider, &key)?.send().await
+        .map_err(|_| "AI 연결을 확인하지 못했습니다. 네트워크를 확인하고 다시 눌러 주세요.".to_string())?;
+    if !response.status().is_success() {
+        return Err("AI 연결을 확인하지 못했습니다. 키와 제공자 설정을 확인하고 다시 눌러 주세요.".into());
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod connection_tests {
+    use super::connection_request;
+    #[test]
+    fn check_is_get_without_prompt_url_key_or_fallback() {
+        for provider in ["anthropic", "google", "openai", "groq", "xai"] {
+            let request = connection_request(provider, "fixture-only").unwrap().build().unwrap();
+            assert!(request.method() == reqwest::Method::GET);
+            assert!(request.url().path().ends_with("/models"));
+            assert!(request.url().query().is_none());
+            assert!(request.body().is_none());
+            assert!(request.url().scheme() == "https");
+        }
+        assert!(connection_request("unknown", "fixture-only").is_err());
+    }
+}
+
 /// Where a custom OpenAI-compatible endpoint lives: (label, base_url, model).
 ///
 /// xAI, DeepSeek, Groq, Together and a locally-run Ollama all speak the same

@@ -289,6 +289,7 @@ pub fn run() {
             ai::save_api_key,
             ai::delete_api_key,
             ai::api_key_status,
+            ai::ai_check_connection,
             ai::ai_order_read,
             ai::ai_debate,
             ai::ai_ask_owner,
