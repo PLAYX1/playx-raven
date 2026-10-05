@@ -1,5 +1,14 @@
 /** Korean source copy + English, Japanese and Simplified Chinese. User text is not translated here. */
 export const PROMO_COPY: Record<string, [string, string, string]> = {
+  "홍보 대상": ["Promotion target", "宣伝対象", "宣传对象"],
+  "내 가게": ["My shop", "自分の店舗", "我的店铺"],
+  "레이븐볼트 앱": ["RavenVault app", "RavenVaultアプリ", "RavenVault应用"],
+  "직접 주제": ["Custom topic", "自分のテーマ", "自定主题"],
+  "해시태그": ["Hashtags", "ハッシュタグ", "话题标签"],
+  "태그만 복사": ["Copy tags only", "タグのみコピー", "仅复制标签"],
+  "메뉴를 먼저 등록하세요": ["Register your menu first", "先にメニューを登録してください", "请先登记菜单"],
+  "앱 사실표 밖 숫자나 약속을 확인해 주세요.": ["Check numbers or promises outside the app fact sheet.", "アプリの事実表にない数字や約束をご確認ください。", "请核对应用事实表之外的数字或承诺。"],
+  "QR 주소가 없습니다. 가게 주문 주소를 저장하거나 폰 연결을 켜 주세요.": ["No QR URL. Save a shop order URL or turn on phone connection.", "QRのURLがありません。店舗の注文URLを保存するかスマホ接続を有効にしてください。", "没有二维码地址。请保存店铺订购地址或开启手机连接。"],
   "홍보 만들기": ["Create promotion", "宣伝を作る", "制作宣传"],
   "+ 홍보 만들기": ["+ Create promotion", "+ 宣伝を作る", "+ 制作宣传"],
   "홍보 글 언어": ["Promotion language", "宣伝の言語", "宣传语言"],

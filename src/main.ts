@@ -10542,9 +10542,17 @@ async function openRaviPromo(request = "") {
   const host = $("chat-log").lastElementChild?.querySelector<HTMLElement>("[data-promo-host]");
   try {
     if (host) await createPromoCard(host, {
-      load: () => invoke("shop_load"),
+      load: async () => {
+        const saved = await invoke<any>("shop_load") || {};
+        if (!saved.order_url && !saved.chain_asset && !saved.page_url && !saved.shop_url) {
+          // Only the public customer page; never owner/staff URLs or pairing credentials.
+          const base = await invoke<any>("public_base", { localIp: serverIp || "127.0.0.1", port: 8790 }).catch(() => null);
+          if (base?.base && (base.public || serverIp)) saved.page_url = `${String(base.base).replace(/\/$/, "")}/`;
+        }
+        return saved;
+      },
       keyed: () => !!aiProvider,
-      generate: (language, request) => invoke("ai_promo", { provider: aiProvider, language, request }),
+      generate: (language, request, target) => invoke("ai_promo", { provider: aiProvider, language, request, target }),
       qr: text => invoke<string>("qr_svg", { text }),
       save: async b64 => {
         const path = await pickSavePath({ defaultPath: `ravi-promo-${Date.now()}.png`, filters: [{ name: "PNG", extensions: ["png"] }] });
