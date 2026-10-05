@@ -32,7 +32,7 @@
  * 🔴 열쇠는 **공백을 고르게 편 한 줄**이어야 한다. 원본 HTML 에서 줄바꿈으로
  *    쪼개진 문장도 찾을 때 한 줄로 펴서 비교하기 때문이다.
  */
-import { DESKTOP_COPY } from "./desktop-copy";
+import { DESKTOP_COPY, PROMO_COPY } from "./desktop-copy";
 import { CREATE_COPY } from "./create-copy";
 import { CERT_COPY } from "./cert-copy";
 import { PAIRING_COPY } from "./pairing-copy";
@@ -5526,6 +5526,6 @@ for (const [source, values] of Object.entries(PAIRING_COPY)) {
 for (const [source, values] of Object.entries(MAP_COPY)) {
   (["en", "ja", "zh"] as const).forEach((language, index) => { DICT[language][source] ??= values[index]; });
 }
-for (const [source, values] of [...Object.entries(DESKTOP_COPY), ...Object.entries(ARTIST_PHOTO_COPY), ...Object.entries(CREATE_COPY), ...Object.entries(CERT_COPY), ...Object.entries(RAVI_HOME_COPY)]) {
+for (const [source, values] of [...Object.entries(DESKTOP_COPY), ...Object.entries(PROMO_COPY), ...Object.entries(ARTIST_PHOTO_COPY), ...Object.entries(CREATE_COPY), ...Object.entries(CERT_COPY), ...Object.entries(RAVI_HOME_COPY)]) {
   (["en", "ja", "zh"] as const).forEach((language, index) => { DICT[language][source] = values[index]; });
 }

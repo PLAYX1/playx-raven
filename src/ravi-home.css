@@ -71,6 +71,19 @@
 #ravi-panel.reviewing .chat-in { visibility:hidden; }
 #ravi-launcher { position:fixed; right:20px; bottom:20px; width:72px; height:72px; padding:0; border:1px solid #d9e1ec; border-radius:50%; background:#f7fafb; box-shadow:0 6px 24px #1f224e30; z-index:65; }
 .ravi-sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
+.ravi-promo-entry { flex:none; padding:0 12px 6px; }
+.ravi-promo-entry button { min-height:32px; font-size:13px; }
+#ravi-panel .ravi-promo-card { min-width:0; width:100%; box-sizing:border-box; }
+#ravi-panel .ravi-promo-card h3 { margin:0 0 8px; }
+#ravi-panel .promo-actions, #ravi-panel .promo-tabs { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0; }
+#ravi-panel .promo-tabs button { flex:1 1 auto; min-height:36px; font-size:13px; }
+#ravi-panel .promo-tabs [aria-selected="true"] { background:#1f224e; color:#fff; }
+#ravi-panel .ravi-promo-card textarea { display:block; box-sizing:border-box; width:100%; min-width:0; resize:vertical; min-height:160px; max-height:320px; font:inherit; margin:8px 0; }
+#ravi-panel .ravi-promo-card input, #ravi-panel .ravi-promo-card select { box-sizing:border-box; max-width:100%; font:inherit; }
+#ravi-panel .ravi-promo-card label, #ravi-panel .ravi-promo-card input { display:block; width:100%; }
+#ravi-panel .ravi-promo-card img { width:100%; height:auto; border-radius:12px; }
+#ravi-panel .ravi-promo-card p { font-size:13px; overflow-wrap:anywhere; }
+#ravi-panel .promo-warning { color:#a13b17; }
 /* Toasts occupy the space to the left of even the expanded panel. */
 #ravibub.ravibub, #live-note, #live-note.on, #busybar { left:104px !important; right:auto !important; bottom:20px !important; transform:none !important; max-width:min(380px,calc(100vw - 776px)) !important; width:auto; box-sizing:border-box; }
 @media(max-width:900px) { #ravibub.ravibub, #live-note, #busybar { top:96px !important; bottom:auto !important; max-width:calc(100vw - 136px) !important; } }

@@ -1,0 +1,46 @@
+라비 홍보 도우미 (사장 화면)
+
+사용법
+1. 라비에게 「홍보 글 만들어 줘」「오늘 특가 알려 줘」라고 말하거나,
+   패널·＋ 라비 도구·라비 메뉴·가게 화면의 「홍보 만들기」를 누른다.
+2. 기본 언어는 한국어. 영어·일본어·중국어를 고르고 X·인스타·카카오톡·동네
+   탭에서 초안을 편집한다. 「다시 쓰기」는 저장된 가게 정보를 다시 읽는다.
+3. 글을 복사하거나 공유 이미지를 만든 뒤 PNG 저장 대화상자에서 저장한다.
+   사람이 직접 게시한다. 주문 링크가 없는 가게는 QR 이미지 생성이 비활성화된다.
+
+데이터·비용
+- 가게 이름·소개·메뉴·가격·통화·영업시간·주문 링크만 저장된 shop에서 읽는다.
+  결제 주소·열쇠·지갑 잔액·매출·고객 데이터는 홍보 생성에 전달하지 않는다.
+- AI 키가 없으면 「AI 없이 만든 기본 글」. AI 실패·한도 초과도 기본 글로 돌아간다.
+- AI 사용 시 ai_promo는 사장 제공자 순서와 Lane::Owner 예산을 사용하며,
+  실패한 시도와 대체 제공자 시도도 전송 전에 차감한다. 손님 예산과 분리된다.
+- 프롬프트는 가게 데이터에 없는 할인·가격·효능·수익 약속을 금지한다.
+  생성 직후와 편집 중 가격·통화를 비교하고 다른 메뉴의 가격도 경고한다.
+  가격 경고는 검토 안내이며 사실 검증을 대신하지 않는다.
+- X는 CJK 두 글자·URL 23글자로 계산해 280 이내. 인스타 해시태그 5개 이내.
+  카카오는 3줄. 모든 초안에 저장된 주문 URL을 포함하고 생성된 다른 URL은 제거한다.
+- 1080×1080 PNG는 로컬 canvas로 만든다. 기존 로우폴리 라비 SVG와 주문 QR,
+  가게 이름·편집 가능한 한 줄을 넣는다. 유료 이미지 생성은 호출하지 않는다.
+
+검증 (2026-10-05, 가짜 데이터만 사용)
+- npm run build 통과. 기존 대형 청크 경고 있음.
+- npm run check:ravi-promo 통과: 실제 템플릿/검사 함수 및 실제 카드 코드를 실행.
+  네 언어·네 채널·가격/통화 경고·길이·링크·편집/복사/탭·AI 실패·canvas 크기와
+  라비/QR 그리기·수동 저장·한 줄 수정 시 이전 이미지 무효화·정보 없음 검사.
+- node scripts/check-ai-safety.mjs 통과.
+- node scripts/check-ravi-panel.mjs 통과.
+- RV_BACKUP_FIXTURE_ROOT=/tmp/rv-test-fixture cargo test --lib:
+  새 promo 테스트 통과. 샌드박스 포트 열기 제한을 받는 기존 시험 6개는 제외하여
+  717 passed, 13 ignored, 6 filtered out. 제외 전 전체 실행은 그 6개에서 실패.
+- 포트 제한 시험: ai_endpoint redirect, peers 폴더 조회, relay live push,
+  server bind_probe, server loopback peer, upload streaming 검증.
+- 브라우저 시험 두 개(check-ravi-promo-browser, check-ravi-panel-browser)는
+  Chrome 프로세스를 시작하지 못해 미실행. 실제 브라우저 레이아웃·PNG QR 디코드
+  검증은 이 환경에서 완료하지 못했다. 실행 가능한 테스트 스크립트를 포함한다.
+  홍보 브라우저 시험은 Python qrcode 모듈로 공개 가짜 URL의 QR만 만든다.
+- 실제 송금·AI 제공자 요청·push·태그·배포·ravend/설치 RavenVault 앱 변경 없음.
+
+Git 포장
+기존 worktree의 index.lock 쓰기가 샌드박스에서 거부되어 /tmp의 GIT_INDEX_FILE과
+임시 객체 저장소에 의미 단위 커밋을 만든 뒤 refs/heads/claude/ravi-promo를 bundle에
+담는다. 원래 worktree HEAD는 유지되며 변경 파일은 작업 폴더에 남는다.

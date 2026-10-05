@@ -3,6 +3,8 @@ import "./style-attrs";
 import { browserPhotoApi, uploadArtistPhoto, photoErrorText, PhotoFailure } from "./artist-photo";
 import { seedErrorKind, seedErrorMessage, seedUnlockButton } from "./seed-recovery";
 import { createRaviHome } from "./ravi-home";
+import { createPromoCard } from "./ravi-promo-card";
+import { isPromoRequest } from "./ravi-promo";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 let raviHome: ReturnType<typeof createRaviHome> | null = null;
 import { raviFace, setMood, RAVI_CHARACTERS, type RaviMood } from "./ravi-face";
@@ -10063,6 +10065,10 @@ function applyActions(actions: any[], typed = ""): string[] {
           done.push(`${a.field} → ${a.value}`);
           break;
         }
+        case "promo_create": {
+          if (isPromoRequest(typed)) void openRaviPromo(typed);
+          break;
+        }
         // 사장이 **제일 자주 하는 일**이다 — "오늘 쉰다", "재료 떨어졌다".
         // 체크박스를 찾는 것보다 말하는 편이 확실히 빠르고, 틀려도 값이 0이다
         // (다시 켜면 그만이고 체인에 남지 않는다).
@@ -10527,6 +10533,29 @@ async function ownerSnapshot(asked = ""): Promise<Record<string, unknown>> {
 }
 
 let raviRequestPending = false;
+let promoOpening = false;
+async function openRaviPromo(request = "") {
+  if (promoOpening) return;
+  promoOpening = true;
+  raviHome?.open();
+  chatHtml("ai", '<div data-promo-host="1"></div>');
+  const host = $("chat-log").lastElementChild?.querySelector<HTMLElement>("[data-promo-host]");
+  try {
+    if (host) await createPromoCard(host, {
+      load: () => invoke("shop_load"),
+      keyed: () => !!aiProvider,
+      generate: (language, request) => invoke("ai_promo", { provider: aiProvider, language, request }),
+      qr: text => invoke<string>("qr_svg", { text }),
+      save: async b64 => {
+        const path = await pickSavePath({ defaultPath: `ravi-promo-${Date.now()}.png`, filters: [{ name: "PNG", extensions: ["png"] }] });
+        if (!path) return false;
+        await invoke("image_save", { path, b64 });
+        return true;
+      },
+    }, request);
+  } finally { promoOpening = false; }
+}
+
 async function chatSend() {
   if (raviRequestPending || !($("chat-q") as HTMLInputElement).value.trim()) return;
   raviRequestPending = true;
@@ -10538,6 +10567,12 @@ async function chatSend() {
 async function chatSendExisting() {
   const q = ($("chat-q") as HTMLInputElement).value.trim();
   if (!q) return;
+  if (isPromoRequest(q)) {
+    ($("chat-q") as HTMLInputElement).value = "";
+    chatSay("me", q);
+    await openRaviPromo(q);
+    return;
+  }
   // 🔴 「R… 내 거야?」는 AI 에게 보내지 않는다 — 노드가 정확히 아는 것을 AI 가 짐작하게
   //    두면 안 된다. 열쇠가 없어도, 어느 모드든 규칙으로 바로 답한다(0.4.6).
   const whoseAddr = whoseQuestion(q);
@@ -17377,7 +17412,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   const homeAsk = () => {
     const hq = $("rv-home-ravi-q") as HTMLInputElement;
     const v = hq.value.trim();
-    if (!aiProvider) { wakeRavi(); return; }
+    if (!aiProvider && !isPromoRequest(v)) { wakeRavi(); return; }
     showPage("ravi");
     if (!v) return;
     ($("chat-q") as HTMLInputElement).value = v;
@@ -17453,6 +17488,9 @@ window.addEventListener("DOMContentLoaded", async () => {
     await reviewSend();
   };
   raviHome = createRaviHome({ wake: wakeRavi, wallet: () => showPage("wallet"), report: () => openReport(), send: () => { void chatSend(); }, tools: () => showPage("ravi") });
+  for (const id of ["ravi-promo-open", "ravi-menu-promo", "ravi-tools-promo", "sh-promo"]) {
+    $(id).onclick = () => { void openRaviPromo(); };
+  }
   // The original small home input remains reachable among the expanded tools.
   $("ravi-tools").appendChild($("rv-home-ravi"));
   const balanceSource = $("overview-balance");

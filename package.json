@@ -14,6 +14,8 @@
     "check:issue-gate": "node scripts/check-issue-gate.mjs",
     "check:peer-help": "node scripts/check-peer-help.mjs",
     "check:ravi-panel": "node scripts/check-ravi-panel.mjs",
+    "check:ravi-promo": "node scripts/check-ravi-promo.mjs && node scripts/check-ravi-promo-card.mjs",
+    "check:ravi-promo:browser": "node scripts/check-ravi-promo-browser.mjs",
     "check:ravi-panel:browser": "node scripts/check-ravi-panel-browser.mjs"
   },
   "dependencies": {
