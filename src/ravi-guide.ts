@@ -1,6 +1,6 @@
 /** Conservative, offline Ravi contract. UI copy, chips and AI actions share this data. */
 import capabilities from "./ravi-capabilities.json";
-import { normalizeRavi, raviIntentIds, raviHelpIntent, raviQuestionLanguage, type RaviLanguage } from "./ravi-intents";
+import { normalizeRavi, raviResolve, raviHelpIntent, raviQuestionLanguage, type RaviLanguage } from "./ravi-intents";
 export { raviQuestionLanguage } from "./ravi-intents";
 export type GuideGo = "receive" | "send" | "wallet" | "txs" | "backup" | "create" | "assets" | "node" | "key" | "orders" | "sales" | "shop" | "reward" | "phone" | "talk" | "settings" | "report" | "qr";
 export type GuideTopic = {
@@ -21,7 +21,7 @@ export function raviCandidates(q: string): GuideTopic[] {
   if (!text) return [];
   const exact = GUIDE.filter(g => [g.say, ...(capabilities.copy as Record<string, string[]>)[g.say] || []].some(s => normalizeRavi(s) === text));
   if (exact.length === 1) return exact;
-  return raviIntentIds(q).map(id => guideById(id)).filter((g): g is GuideTopic => !!g);
+  return raviResolve(q).ids.map(id => guideById(id)).filter((g): g is GuideTopic => !!g);
 }
 export function matchGuide(q: string): GuideTopic | null {
   const candidates = raviCandidates(q);
@@ -47,7 +47,11 @@ export function guideChoicesHtml(candidates: GuideTopic[], copy: Copy): string {
   return `<div class="guide" data-guide="clarify" data-answer-kind="clarify"><div class="guidebadge">${copy("혹시 이거요? 아래 두 가지 중 골라 주세요.")}</div><div class="guidego">` +
     candidates.slice(0, 2).map(g => `<button type="button" class="ghost" data-ravi-input="${g.id}">${copy(g.name)}</button>`).join("") + `</div></div>`;
 }
-export function guideById(id: string): GuideTopic | null { return GUIDE.find(g => g.id === id) ?? null; }
+const SPECIAL: GuideTopic[] = [
+  { id: "help", name: "도움말", say: "도움말", category: "app", words: /(?!)/, lines: [], go: [], kind: "help", starter: false },
+  { id: "promo", name: "홍보 초안", say: "홍보 초안", category: "shop", words: /(?!)/, lines: [], go: [], kind: "promo", starter: false },
+];
+export function guideById(id: string): GuideTopic | null { return [...GUIDE, ...SPECIAL].find(g => g.id === id) ?? null; }
 export function raviActionAllowed(type: unknown): boolean { return RAVI_ACTIONS.some(a => a.type === type); }
 type Copy = (source: string) => string;
 // copyHtml both translates and escapes user-visible values. Data attributes use stable ids only.

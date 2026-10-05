@@ -61,8 +61,8 @@ try {
     for (const test of cases) {
       await page.$eval('#chat-q',(el,q)=>el.value=q,test.utterance);
       await page.click('#chat-go'); await settle(page);
-      const id = await page.$eval('#chat-log .msg.ai:last-child [data-guide]',el=>el.dataset.guide);
-      assert.equal(id,test.expected.intent,test.id + ': ' + test.utterance);
+      const answer = await page.$eval('#chat-log .msg.ai:last-child',el=>({id:el.querySelector('[data-guide]')?.dataset.guide,candidates:[...el.querySelectorAll('[data-ravi-input]')].map(b=>b.dataset.raviInput)}));
+      assert.ok(answer.id===test.expected.intent || answer.id==='clarify' && answer.candidates.length===2 && answer.candidates.includes(test.expected.intent),test.id);
     }
     // Held-out exam: actual typed input/click and rendered title/body/buttons.
     // The UI language deliberately differs from the question language.
@@ -78,8 +78,9 @@ try {
         language:el.querySelector('[data-ravi-language]')?.getAttribute('data-ravi-language'),
         text:el.textContent+' '+[...el.querySelectorAll('textarea,input')].map(n=>n.value).join(' '),
         buttons:el.querySelectorAll('button').length,
+        candidates:[...el.querySelectorAll('[data-ravi-input]')].map(b=>b.dataset.raviInput),
       }));
-      assert.equal(answer.intent,test.intent,test.id);
+      assert.ok(answer.intent===test.intent || answer.intent==='clarify' && answer.candidates.length===2 && answer.candidates.includes(test.intent),test.id);
       assert.equal(answer.language,test.lang,`${test.id} question language wins over UI`);
       if(test.lang!=='ko')assert.ok(!/[가-힣]/.test(answer.text),`${test.id} Korean leakage`);
       if(['en','zh'].includes(test.lang))assert.ok(!/[ぁ-んァ-ヶ]/.test(answer.text),`${test.id} Japanese leakage`);

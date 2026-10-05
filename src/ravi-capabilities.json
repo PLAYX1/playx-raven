@@ -651,6 +651,21 @@
       "In this computer’s Backup screen, create a locked backup file or restore from a saved file. Review the data and restore instructions yourself.",
       "このコンピューターのバックアップ画面で暗号化したバックアップファイルの作成や、保存したファイルからの復元ができます。復元する資料と案内はご自身で確認してください。",
       "在本机的备份页面创建加密备份文件或从保存的文件恢复。请自行确认要恢复的资料和说明。"
+    ],
+    "언어 설정 안내": [
+      "Language settings guide",
+      "言語設定の案内",
+      "语言设置指南"
+    ],
+    "화면 상단의 언어 선택에서 한국어·영어·일본어·중국어를 고를 수 있어요.": [
+      "Choose Korean, English, Japanese or Chinese using the language selector at the top.",
+      "画面上部の言語選択で韓国語・英語・日本語・中国語を選べます。",
+      "可在页面顶部的语言选择器中选择韩语、英语、日语或中文。"
+    ],
+    "설정 열기": [
+      "Open settings",
+      "設定を開く",
+      "打开设置"
     ]
   },
   "guides": [
@@ -1233,6 +1248,24 @@
         {
           "label": "보내기 열기",
           "to": "send"
+        }
+      ],
+      "category": "app",
+      "kind": "guide",
+      "starter": false
+    },
+    {
+      "id": "language",
+      "name": "언어 설정 안내",
+      "say": "언어 설정 안내",
+      "words": "(?!)",
+      "lines": [
+        "화면 상단의 언어 선택에서 한국어·영어·일본어·중국어를 고를 수 있어요."
+      ],
+      "go": [
+        {
+          "label": "설정 열기",
+          "to": "settings"
         }
       ],
       "category": "app",

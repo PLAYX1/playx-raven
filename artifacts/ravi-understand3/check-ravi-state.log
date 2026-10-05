@@ -1,0 +1,6 @@
+PASS rig sleep/wake/idle/listening/thinking/speaking/joy, pause, reduced motion and spring continuity
+PASS speech default-off, Korean natural voice allowlist, interim input, unsupported/error fallback, approval/background stop and stale callbacks
+PASS asset references, retained pages/tools and speech adapter has no spending or approval route
+PASS shared home/menu DOM, real controller modes, approval/key/backup/report stop, hidden/background stop, stale transcript rejection and five-finger report gesture
+PASS actual wallet watcher triggers joy only for a new incoming transaction
+PASS all 27 new Ravi phrases translated in en/ja/zh

@@ -1,4 +1,6 @@
-/** Offline meaning-level features. Examples are documentation, never a lookup table.
+import limits from "./ravi-similarity-thresholds.json";
+import { raviSimilarity, type SimilarityDecision } from "./ravi-similarity";
+/** Conservative explicit signals precede offline example retrieval.
  * Match stems across particles/endings; normalize spacing/width and only lexical typos.
  * Addresses and amounts are never corrected, resolved or executed here.
  */
@@ -55,13 +57,13 @@ export function raviFeatures(q: string): Set<Concept> {
   if (/\bfees?\b/i.test(q)) found.add("fee");
   return found;
 }
-export function raviHelpIntent(q: string): boolean {
+function ruleHelpIntent(q: string): boolean {
   const text = normalizeRavi(q);
   const features = raviFeatures(q);
   if (features.has("unsupported") || features.has("promo") || raviIntentIds(q).length) return false;
   return features.has("help") || /\bhelp\b/i.test(q) || /도움(?:말|이필요)|도와(?:줘|주|줄)|(?:어떻게|어찌)(?:써|쓰|사용)|(?:뭘|뭐|무엇을)할|(?:할수있는|뭐해줄|기능소개)|ヘルプ|使い方|機能一覧|帮助|何ができ|whatcan(?:you|ravi)do|what(?:do|does)(?:you|ravi)do|howcanyouhelp|(?:which|what)features|capabilit|yourfeatures|機能.*(?:教|紹介)|帮我一下|你能做什么|能干嘛|能做啥|怎么用/.test(text);
 }
-export function raviPromoIntent(q: string): boolean {
+function rulePromoIntent(q: string): boolean {
   const f = raviFeatures(q);
   return f.has("promo") && !f.has("unsupported") && !f.has("send") && !f.has("undo");
 }
@@ -84,7 +86,7 @@ export function raviIntentIds(q: string): string[] {
   use("talk", has("talk")); use("media", has("media")); use("report", has("report"));
   use("undo", !has("order") && has("undo") && (has("send") || has("order") || /환불|refund|返金|退款/.test(normalizeRavi(q))));
   use("send", has("send", "money") || /송금|이체|送金|转账|汇款/.test(normalizeRavi(q)) ||
-    /(?:한테|에게|님께)\d+(?:rvn|원|코인)?(?:을|를)?보내/.test(normalizeRavi(q)) ||
+    /(?:한테|에게|님께)\d+(?:rvn|원|코인|개)?(?:을|를)?보내/.test(normalizeRavi(q)) ||
     /\bsend\s+[0-9]+(?:\.[0-9]+)?\s+(?:to\s+|rvn\b)/i.test(q));
   use("balance", has("balance") || has("money", "pending") || /입금.*(?:안보|안들어|안떠|확인중)|deposit.*pending/.test(normalizeRavi(q)));
   use("receive", has("receive") && !has("owned", "assets") && !has("owned", "cert")); use("fee", has("fee")); use("seed", has("seed"));
@@ -101,9 +103,42 @@ export function raviIntentIds(q: string): string[] {
   for (const [parent, children] of Object.entries(collapse)) if (ids.has(parent)) children.forEach(id => ids.delete(id));
   return [...ids];
 }
+/** Retrieval is injectable so validation can rebuild the model without held-out examples. */
+export function raviResolve(q: string, retrieve: (q: string) => SimilarityDecision = raviSimilarity): SimilarityDecision {
+  const ids = raviIntentIds(q), f = raviFeatures(q);
+  if (f.has("unsupported")) return { kind: "miss", ids: [], ranked: [] };
+  const result = retrieve(q);
+  // An exact learned expression has an unambiguous label; the table is never an exam key.
+  if ((result.ranked[0]?.score ?? 0) > 0.999999) return result;
+  if (ids.length > 1) return { kind: "clarify", ids: ids.slice(0, 2), ranked: result.ranked };
+  // Retain explicit keywords; generic money/send and situation fragments are weak.
+  const certain = ids.filter(id => id !== "send" && (id !== "balance" || f.has("balance") || f.has("pending")) && (id !== "create" || f.has("create")) && (id !== "assets" || !f.has("create")) ||
+    id === "send" && (/송금|이체|送金|转账|汇款/.test(normalizeRavi(q)) || /\d/.test(q) && f.has("send")));
+  // A competing learned meaning makes a broad legacy signal unsafe to commit to.
+  // Numeric send requests stay on the explicit, non-executing send-guide path.
+  if (certain.length === 1 && !(certain[0] === "send" && /\d/.test(q)) &&
+      result.ranked[0]?.intent !== certain[0] && result.ranked[0]?.intent !== "miss" &&
+      result.ranked[0]?.score >= limits.low && result.ranked[0].score - (result.ranked.find(r => r.intent === certain[0])?.score ?? 0) >= limits.margin) {
+    return { kind: "clarify", ids: [certain[0], result.ranked[0].intent], ranked: result.ranked };
+  }
+  if (certain.length) return { kind: certain.length === 1 ? "direct" : "clarify", ids: certain.slice(0, 2), ranked: result.ranked };
+  if (rulePromoIntent(q)) return { kind: "direct", ids: ["promo"], ranked: result.ranked };
+  if (ruleHelpIntent(q)) return { kind: "direct", ids: ["help"], ranked: result.ranked };
+  return result;
+}
+export function raviHelpIntent(q: string): boolean { const d = raviResolve(q); return d.kind === "direct" && d.ids[0] === "help"; }
+export function raviPromoIntent(q: string): boolean { const d = raviResolve(q); return d.kind === "direct" && d.ids[0] === "promo"; }
 export type RaviLanguage = "ko" | "en" | "ja" | "zh";
 /** Script in the question outranks UI locale. RVN/QR/CSV alone use the UI fallback. */
 export function raviQuestionLanguage(q: string, fallback: RaviLanguage = "ko"): RaviLanguage {
+  // Explicit language-selection requests choose their requested answer language.
+  // These names select copy only; they do not classify an intent or change UI settings.
+  const requested: [RaviLanguage, string[]][] = [
+    ["ko", ["한국어", "korean", "韓国語", "韩语"]], ["en", ["영어", "영문", "english", "英語", "英语"]],
+    ["ja", ["일본어", "일본말", "japanese", "日本語", "日语"]], ["zh", ["중국어", "중문", "chinese", "中国語", "中文"]],
+  ];
+  const target = requested.filter(([, names]) => names.some(name => q.toLowerCase().includes(name)));
+  if (target.length === 1 && raviResolve(q).ids[0] === "language") return target[0][0];
   if (/[가-힣ㄱ-ㅎㅏ-ㅣ]/.test(q)) return "ko";
   if (/[ぁ-んァ-ヶ]/.test(q)) return "ja";
   if (/[一-鿿]/.test(q)) return /残高|手数料|営業|売上|証明書|資産|送金|領収書|取引|復元|配布|休業/.test(q) ? "ja" : "zh";

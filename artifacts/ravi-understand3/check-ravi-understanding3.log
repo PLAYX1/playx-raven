@@ -1,0 +1,10 @@
+{
+  "entry": "production chatSend; no AI key; amount+send reaches explicit send guide, not a transfer parser or RPC",
+  "total": 40,
+  "pass": 40,
+  "direct": 21,
+  "candidates": 19,
+  "wrong": 0,
+  "languageLeaks": 0,
+  "rows": []
+}
