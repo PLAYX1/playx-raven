@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
+import { intents, dict } from './ravi-chat-fixture.mjs';
 const compile = source => ts.transpileModule(source, {compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText;
-const core={}; vm.runInNewContext(compile(readFileSync('src/ravi-promo.ts','utf8')),{exports:core,URL,require:()=>({default:JSON.parse(readFileSync("src/ravi-promo-facts.json", "utf8"))})});
+const core={}; vm.runInNewContext(compile(readFileSync('src/ravi-promo.ts','utf8')),{exports:core,URL,require:path=>path.includes("ravi-intents")?intents:({default:JSON.parse(readFileSync("src/ravi-promo-facts.json", "utf8"))})});
 const elements=[], canvases=[], paints=[];
 class Element {
   constructor(tag){this.tagName=tag;this.children=[];this.attributes={};this.hidden=false;this.disabled=false;this.value='';this.tabIndex=0;this._text='';elements.push(this);}
@@ -21,7 +22,7 @@ const document={createElement(tag){const e=new Element(tag);if(tag==='canvas')ca
 class Image {constructor(){this.naturalWidth=41;}set src(value){this._src=value;queueMicrotask(()=>this.onload());}}
 const exports={},clip=[];
 vm.runInNewContext(compile(readFileSync('src/ravi-promo-card.ts','utf8').replace(/^import .*;\n/gm,'')),{
-  exports,...core,currentLang:"ko",document,Image,URL,crypto:{randomUUID:()=>String(elements.length)},t:s=>s,
+  exports,...core,DICT:dict,raviQuestionLanguage:intents.raviQuestionLanguage,currentLang:"ko",document,Image,URL,crypto:{randomUUID:()=>String(elements.length)},t:s=>s,
   LANG_NAMES:{ko:'한국어',en:'English',ja:'日本語',zh:'简体中文'},scene:readFileSync('src/assets/ravi-scene.svg','utf8'),
   navigator:{clipboard:{async writeText(text){clip.push(text);}}},
 });

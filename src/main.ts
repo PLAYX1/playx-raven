@@ -251,7 +251,7 @@ import {
 import {
   loadPayees, payeeName, pickerHtml, receiveHtml, recentPayees, RECEIVE_MESSAGE, savePayee, sentHtml,
 } from "./wallet-easy";
-import { guideById, guideHtml, guideMissHtml, matchGuide, providerOfKey, type GuideGo } from "./ravi-guide";
+import { guideById, guideHtml, raviAnswerHtml, raviCopy, raviText, raviQuestionLanguage, providerOfKey, type GuideGo } from "./ravi-guide";
 
 type Asset = {
   name: string;
@@ -10412,8 +10412,7 @@ function wakeRavi(): void {
 
 /** 열쇠가 없을 때의 답 — 정해 둔 안내. 맞는 게 없으면 모른다고 말한다. */
 function raviGuide(q: string) {
-  const topic = matchGuide(q);
-  chatHtml("ai", topic ? guideHtml(topic, copyHtml) : guideMissHtml(copyHtml, q));
+  chatHtml("ai", raviAnswerHtml(q, lang));
 }
 
 /** 안내 답 아래 단추가 데려가는 곳. */
@@ -10447,6 +10446,7 @@ function raviGo(to: GuideGo) {
     case "talk": showPage("talk"); return;
     case "settings": showPage("settings"); return;
     case "report": openReport(); return;
+    case "qr": showPage("shop"); void openQrSheet(); return;
   }
 }
 
@@ -10578,13 +10578,13 @@ async function chatSendExisting() {
   if (!q) return;
   if (containsRaviSecret(q)) {
     ($("chat-q") as HTMLInputElement).value = "";
-    chatSay("ai", t("시드·키·토큰은 라비에게 보내지 마세요. 입력을 기록하지 않았어요."));
+    chatHtml("ai", `<div translate="no">${raviCopy(raviQuestionLanguage(q, lang))("시드·키·토큰은 라비에게 보내지 마세요. 입력을 기록하지 않았어요.")}</div>`);
     return;
   }
   if (isRaviHelp(q)) {
     ($("chat-q") as HTMLInputElement).value = "";
     chatSay("me", q);
-    chatHtml("ai", raviHelpHtml(copyHtml));
+    chatHtml("ai", raviAnswerHtml(q, lang));
     return;
   }
   if (isPromoRequest(q)) {
@@ -18067,7 +18067,9 @@ window.addEventListener("DOMContentLoaded", async () => {
     const input = el.closest<HTMLElement>("[data-ravi-input]");
     const action = el.closest<HTMLElement>("[data-ravi-action-input]");
     const say = input ? guideById(input.dataset.raviInput || "")?.say : action ? RAVI_ACTIONS.find(a => a.type === action.dataset.raviActionInput)?.say : null;
-    if (say) { ($("chat-q") as HTMLInputElement).value = t(say); raviHome?.open(); $("chat-q").focus(); }
+    const responseLanguage = el.closest<HTMLElement>("[data-ravi-language]")?.dataset.raviLanguage;
+    const fixed = responseLanguage && ["ko", "en", "ja", "zh"].includes(responseLanguage);
+    if (say) { ($("chat-q") as HTMLInputElement).value = fixed ? raviText(say, responseLanguage as typeof lang) : t(say); raviHome?.open(); $("chat-q").focus(); }
   };
   $("chat-log").addEventListener("click", raviInputClick);
   document.querySelector(".rv-quick")!.addEventListener("click", raviInputClick);

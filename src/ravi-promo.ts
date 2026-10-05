@@ -1,3 +1,4 @@
+import { raviPromoIntent } from "./ravi-intents";
 import appFacts from "./ravi-promo-facts.json";
 export type PromoLang = "ko" | "en" | "ja" | "zh";
 export const PROMO_CHANNELS = ["x", "instagram", "kakao", "local"] as const;
@@ -99,7 +100,7 @@ export function promoPriceWarnings(text: string, shop: PromoShop): string[] {
   return [...new Set(warnings)];
 }
 export function isPromoRequest(text: string): boolean {
-  return /홍보|특가.*(알려|글|만들)|(?:promot|advertis|social post)|宣伝|宣传/i.test(text);
+  return raviPromoIntent(text);
 }
 
 export function safePromoUrl(value: unknown): string {
@@ -150,9 +151,13 @@ export function promoHashtags(shop: PromoShop, target: PromoTarget, language: Pr
   const languageTags = language === "en" ? [target === "shop" ? "LocalShop" : "CryptoWallet"] : local;
   const max = HASHTAG_LIMITS[channel][1];
   const shortMetadata = metadata.map(part => Array.from(part).slice(0, 18).join("")).join("");
+  const native = language === "ko" ? ["레이븐코인", "레이븐볼트", "코인결제", "QR주문", "비수탁"] :
+    language === "ja" ? ["レイヴンコイン", "RavenVault", "暗号決済", "QR注文", "自己管理"] :
+    language === "zh" ? ["渡鸦币", "RavenVault", "加密支付", "二维码订购", "自主管理"] :
+    ["Ravencoin", "RavenVault", "CryptoPayment", "QRorder", "NonCustodial"];
   const candidates = channel === "instagram"
-    ? ["레이븐코인", "Ravencoin", "레이븐볼트", "RavenVault", ...metadata, ...languageTags, "코인결제", "RVN", "QR주문", "QRorder", "비수탁", "NonCustodial", "CryptoPayment"]
-    : [languageTags.length && metadata.length ? `레이븐코인${shortMetadata}` : "레이븐코인", "Ravencoin", ...(!languageTags.length && metadata.length ? [shortMetadata] : []), ...languageTags.slice(0, 1), "RavenVault"];
+    ? [native[0], "Ravencoin", native[1], "RavenVault", ...metadata, ...languageTags, native[2], "RVN", native[3], "QRorder", native[4], "NonCustodial", "CryptoPayment", "LocalShop", "CryptoWallet", "Blockchain"]
+    : [metadata.length ? shortMetadata : native[0], "Ravencoin", ...languageTags.slice(0, 1), native[0], "RavenVault", "RVN"];
   return normalizeHashtags(candidates).slice(0, max).join(" ");
 }
 export function combinePromo(body: string, hashtags: string): string {

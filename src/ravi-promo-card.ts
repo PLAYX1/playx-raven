@@ -1,4 +1,6 @@
-import { t, LANG_NAMES, lang as currentLang } from "./i18n";
+import { lang as currentLang } from "./i18n";
+import { DICT } from "./dict";
+import { raviQuestionLanguage } from "./ravi-intents";
 import scene from "./assets/ravi-scene.svg?raw";
 import { PROMO_CHANNELS, PROMO_LIMITS, PROMO_TARGETS, inferPromoTarget, promoImageUrl, promoTagline, preparePromo, combinePromo, promoFactWarnings, normalizeHashtags, HASHTAG_LIMITS, promoLength, promoPriceWarnings, promoShop, templatePromo, type PromoTarget, type PromoChannel, type PromoDrafts, type PromoLang, type PromoShop } from "./ravi-promo";
 
@@ -13,7 +15,6 @@ const labels: Record<PromoChannel, string> = { x: "X", instagram: "인스타그�
 function node<K extends keyof HTMLElementTagNameMap>(tag: K, text = ""): HTMLElementTagNameMap[K] {
   const el = document.createElement(tag); el.textContent = text; return el;
 }
-function button(text: string) { const el = node("button", t(text)); el.type = "button"; return el; }
 function loadSvg(svg: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -52,11 +53,16 @@ export async function promoPng(shop: PromoShop, tagline: string, qr: string, tar
 
 /** A result lives in the shared, scrolling conversation, never over the page. */
 export async function createPromoCard(host: HTMLElement, api: PromoApi, request = ""): Promise<void> {
+  const answerLanguage = raviQuestionLanguage(request, currentLang);
+  const t = (source: string) => answerLanguage === "ko" ? source : DICT[answerLanguage]?.[source] || source;
+  const button = (text: string) => { const el = node("button", t(text)); el.type = "button"; return el; };
   const card = node("section"); card.className = "ravi-promo-card";
+  card.setAttribute("translate", "no"); card.setAttribute("data-ravi-language", answerLanguage);
+  card.setAttribute("data-guide", "promo");
   const title = node("h3", t("홍보 만들기")), language = node("select");
   language.setAttribute("aria-label", t("홍보 글 언어"));
-  for (const [value, label] of Object.entries(LANG_NAMES)) { const option = node("option", label); option.value = value; language.append(option); }
-  language.value = currentLang;
+  for (const [value, label] of Object.entries({ ko: ["한국어", "Korean", "韓国語", "韩语"], en: ["영어", "English", "英語", "英语"], ja: ["일본어", "Japanese", "日本語", "日语"], zh: ["중국어", "Chinese", "中国語", "中文"] })) { const option = node("option", label[["ko", "en", "ja", "zh"].indexOf(answerLanguage)]); option.value = value; language.append(option); }
+  language.value = answerLanguage;
   const toolbar = node("div"); toolbar.className = "promo-actions";
   const rewrite = button("다시 쓰기"); toolbar.append(language, rewrite);
   const source = node("p"), status = node("p"); status.setAttribute("role", "status");

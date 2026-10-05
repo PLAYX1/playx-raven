@@ -1,0 +1,5 @@
+PASS desktop send: KRW known/unavailable/invalid/assets, grouped address, original clipboard, new/known recipient, locked gate; no broadcast
+PASS desktop lock transition: send inputs retained, password cleared, lock gate refreshed
+PASS web lock/unlock from compose and review: inputs and purchase retained in memory, review discarded, sensitive fields cleared
+PASS new and renamed confirmation copy translated in en/ja/zh
+PASS existing backup quiz: positions 2/6/10, completion after all answers, content protection retained; no words or screenshots

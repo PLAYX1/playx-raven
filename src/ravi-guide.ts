@@ -1,6 +1,8 @@
 /** Conservative, offline Ravi contract. UI copy, chips and AI actions share this data. */
 import capabilities from "./ravi-capabilities.json";
-export type GuideGo = "receive" | "send" | "wallet" | "txs" | "backup" | "create" | "assets" | "node" | "key" | "orders" | "sales" | "shop" | "reward" | "phone" | "talk" | "settings" | "report";
+import { normalizeRavi, raviIntentIds, raviHelpIntent, raviQuestionLanguage, type RaviLanguage } from "./ravi-intents";
+export { raviQuestionLanguage } from "./ravi-intents";
+export type GuideGo = "receive" | "send" | "wallet" | "txs" | "backup" | "create" | "assets" | "node" | "key" | "orders" | "sales" | "shop" | "reward" | "phone" | "talk" | "settings" | "report" | "qr";
 export type GuideTopic = {
   id: string; category: string; name: string; say: string; words: RegExp;
   lines: string[]; go: { label: string; to: GuideGo }[]; kind: string; starter: boolean;
@@ -13,48 +15,50 @@ export const RAVI_SCREENS: Record<string, { page: string; tab?: string }> = capa
 export const RAVI_CATEGORIES = capabilities.categories;
 export const GUIDE_BADGE = "라비 안내 · AI 아님";
 export const RAVI_GREETING = "키가 없어도 안내와 화면 열기를 도와드려요. 돈 보내기·결제·저장·발행은 직접 확인하고 승인해 주세요.";
-const normalize = (s: string) => String(s ?? "").normalize("NFKC").toLowerCase().replace(/[\s?!？！.,·]/g, "");
-export function isRaviHelp(q: string): boolean {
-  return /^(뭘할수있어|무엇을할수있|뭐할수있|할수있는일|라비가할수있는일|도움말|도와줘|help|whatcanyoudo|何ができる|ヘルプ|你能做什么|帮助)/i.test(normalize(q));
-}
-/** A narrow typo dictionary, never fuzzy-match addresses or numbers. */
-function question(q: string): string {
-  return normalize(q).replace(/백엎/g, "백업").replace(/송굼/g, "송금").replace(/잔엑/g, "잔액").replace(/메뉴판/g, "메뉴");
+export const isRaviHelp = raviHelpIntent;
+export function raviCandidates(q: string): GuideTopic[] {
+  const text = normalizeRavi(q);
+  if (!text) return [];
+  const exact = GUIDE.filter(g => [g.say, ...(capabilities.copy as Record<string, string[]>)[g.say] || []].some(s => normalizeRavi(s) === text));
+  if (exact.length === 1) return exact;
+  return raviIntentIds(q).map(id => guideById(id)).filter((g): g is GuideTopic => !!g);
 }
 export function matchGuide(q: string): GuideTopic | null {
-  const text = question(q);
-  if (!text) return null;
-  // The exact localized help/chip phrases come from the same canonical entries.
-  const exact = GUIDE.filter(g => [g.say, ...(capabilities.copy as Record<string, string[]>)[g.say] || []].some(s => question(s) === text));
-  if (exact.length === 1) return exact[0];
-  const matches = GUIDE.filter(g => g.words.test(text) || g.words.test(String(q).normalize("NFKC")));
-  // Specific requests take precedence over broad nouns. Multiple unrelated requests abstain.
-  const specific = matches.filter(g => !["send", "receive", "balance", "undo", "cert", "create", "key"].includes(g.id));
-  if (specific.length > 1) return null;
-  if (specific.length === 1) {
-    const winner = specific[0];
-    if (matches.some(g => g.id === "balance")) return null;
-    if (matches.some(g => g.id === "send") && !["media", "market", "fee", "reward"].includes(winner.id)) return null;
-    return winner;
-  }
-  if (matches.some(g => g.id === "fee")) return guideById("fee");
-  if (matches.some(g => g.id === "seed")) return guideById("seed");
-  if (matches.some(g => g.id === "undo")) return guideById("undo");
-  if (matches.some(g => g.id === "assets")) return guideById("assets");
-  return matches.length === 1 ? matches[0] : null;
+  const candidates = raviCandidates(q);
+  return candidates.length === 1 ? candidates[0] : null;
+}
+/** Fixed-language chat copy must not be repainted by the global UI translator. */
+export function raviText(source: string, language: RaviLanguage): string {
+  const text = language === "ko" ? source : (capabilities.copy as Record<string, string[]>)[source]?.[["en", "ja", "zh"].indexOf(language)];
+  if (text === undefined) throw new Error(`Missing Ravi translation: ${language}`);
+  return String(text);
+}
+export function raviCopy(language: RaviLanguage): Copy {
+  return source => raviText(source, language).replace(/[&<>"']/g, c => ({"&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"}[c]!));
+}
+export function raviAnswerHtml(q: string, fallback: RaviLanguage = "ko"): string {
+  const language = raviQuestionLanguage(q, fallback), copy = raviCopy(language);
+  const candidates = raviCandidates(q);
+  const html = isRaviHelp(q) ? raviHelpHtml(copy) : candidates.length === 1 ? guideHtml(candidates[0], copy) :
+    candidates.length > 1 ? guideChoicesHtml(candidates, copy) : guideMissHtml(copy, q);
+  return `<div data-ravi-language="${language}" translate="no">${html}</div>`;
+}
+export function guideChoicesHtml(candidates: GuideTopic[], copy: Copy): string {
+  return `<div class="guide" data-guide="clarify" data-answer-kind="clarify"><div class="guidebadge">${copy("혹시 이거요? 아래 두 가지 중 골라 주세요.")}</div><div class="guidego">` +
+    candidates.slice(0, 2).map(g => `<button type="button" class="ghost" data-ravi-input="${g.id}">${copy(g.name)}</button>`).join("") + `</div></div>`;
 }
 export function guideById(id: string): GuideTopic | null { return GUIDE.find(g => g.id === id) ?? null; }
 export function raviActionAllowed(type: unknown): boolean { return RAVI_ACTIONS.some(a => a.type === type); }
 type Copy = (source: string) => string;
 // copyHtml both translates and escapes user-visible values. Data attributes use stable ids only.
 export function guideHtml(topic: GuideTopic, copyHtml: Copy): string {
-  return `<div class="guide" data-guide="${topic.id}" data-answer-kind="${topic.kind}"><div class="guidebadge">${copyHtml(GUIDE_BADGE)}</div>` +
+  return `<div class="guide" data-guide="${topic.id}" data-answer-kind="${topic.kind}"><div class="guidebadge">${copyHtml(GUIDE_BADGE)}</div><h4>${copyHtml(topic.name)}</h4>` +
     topic.lines.map(line => `<p>${copyHtml(line)}</p>`).join("") +
     `<div class="guidego">` + topic.go.map(g => `<button type="button" class="ghost" data-guide-go="${g.to}">${copyHtml(g.label)}</button>`).join("") + `</div></div>`;
 }
 /** Alternatives are related suggestions, never automatic navigation. */
 export function raviSuggestions(q: string): GuideTopic[] {
-  const text = question(q);
+  const text = normalizeRavi(q);
   const category = /가게|주문|메뉴|매출|휴무|shop|order/.test(text) ? "shop" :
     /rvn|돈|지갑|입금|송금|wallet|coin/.test(text) ? "wallet" :
     /자산|증서|쿠폰|asset|certificate/.test(text) ? "assets" : "app";
@@ -80,7 +84,8 @@ export function raviStarterHtml(copyHtml: Copy): string {
 }
 /** Refuse pasted secrets before echoing or sending input; ordinary safety questions still work. */
 export function containsRaviSecret(q: string): boolean {
-  return /(?:sk-(?:ant-)?|xai-|gsk_|AIza)[a-z0-9_-]{12,}|\b(?:token|api[_ -]?key|private[_ -]?key)\s*[:=]\s*\S+|(?:시드|복구\s*단어|mnemonic|seed)\s*[:=]\s*\S+/i.test(q) ||
+  return /(?:sk-(?:ant-)?|xai-|gsk_|AIza)[a-z0-9_-]{12,}|(?:token|api[_ -]?key|private[_ -]?key|개인키|비밀키|秘密鍵|私钥|密钥)\s*[:=]\s*\S+|(?:시드|복구\s*단어|mnemonic|seed|助记词|シード)\s*[:=]\s*\S+/i.test(q) ||
+    /\b(?:[KL][1-9A-HJ-NP-Za-km-z]{51}|5[1-9A-HJ-NP-Za-km-z]{50})\b/.test(q) ||
     q.trim().split(/\s+/).length >= 12 && /^(?:[a-z]+\s+){11,23}[a-z]+$/i.test(q.trim());
 }
 export function providerOfKey(key: string): string | null {

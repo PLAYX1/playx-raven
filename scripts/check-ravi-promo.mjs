@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
+import { intents } from './ravi-chat-fixture.mjs';
 const compile = path => ts.transpileModule(readFileSync(path, 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText;
 const exports = {};
-vm.runInNewContext(compile('src/ravi-promo.ts'), { exports, URL, require:()=>({default:JSON.parse(readFileSync("src/ravi-promo-facts.json", "utf8"))}) });
+vm.runInNewContext(compile('src/ravi-promo.ts'), { exports, URL, require:path=>path.includes("ravi-intents")?intents:({default:JSON.parse(readFileSync("src/ravi-promo-facts.json", "utf8"))}) });
 const { promoShop, templatePromo, promoPriceWarnings, promoLength, limitPromo, isPromoRequest, PROMO_CHANNELS, PROMO_LIMITS } = exports;
 const saved = { name_ko:'시험 카페', name_en:'Fixture Cafe', description:'원두를 직접 볶습니다', currency:'KRW',
   menu:[{name:'커피',price:3000},{name:'차',price:4000},{name:'미정'},{name:'잘못된 가격',price:-1}],
@@ -80,7 +81,9 @@ for(const lang of ['ko','en','ja','zh']) {
       const draft=preparePromo(drafts[channel],channel,detailed,target,lang);
       const tags=normalizeHashtags(draft.hashtags);
       assert.ok(tags.length>=HASHTAG_LIMITS[channel][0] && tags.length<=HASHTAG_LIMITS[channel][1]);
-      assert.ok(tags.some(t=>/[가-힣]/.test(t)) && tags.some(t=>/^#[A-Za-z]+$/.test(t)));
+      assert.ok(tags.some(t=>/^#[A-Za-z]+$/.test(t)));
+      if(lang==='ko')assert.ok(tags.some(t=>/[가-힣]/.test(t)));
+      if(lang!=='ko' && target!=='shop')assert.ok(!/[가-힣]/.test(draft.hashtags));
       assert.ok(promoLength(combinePromo(draft.body,draft.hashtags),channel)<=PROMO_LIMITS[channel]);
       assert.ok(!draft.body.includes('#'),'separate hashtag field');
       if(lang==='ja')assert.ok(tags.some(t=>/[ァ-ヶ]/.test(t)));

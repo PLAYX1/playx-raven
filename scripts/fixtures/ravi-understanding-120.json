@@ -1,0 +1,1442 @@
+[
+  {
+    "id": "owner-ko-01",
+    "role": "owner",
+    "lang": "ko",
+    "utterance": "매장 내일부터 휴업할래",
+    "intent": "closed",
+    "expected": {
+      "route": "shop",
+      "screen": "shop",
+      "kind": "guide",
+      "tab": "mine"
+    }
+  },
+  {
+    "id": "owner-ko-02",
+    "role": "owner",
+    "lang": "ko",
+    "utterance": "오늘 장사는 여기서 끝낼게 가게 문 닫을래",
+    "intent": "closed",
+    "expected": {
+      "route": "shop",
+      "screen": "shop",
+      "kind": "guide",
+      "tab": "mine"
+    }
+  },
+  {
+    "id": "owner-ko-03",
+    "role": "owner",
+    "lang": "ko",
+    "utterance": "가게 쉬는날을 정하고 싶네요",
+    "intent": "closed",
+    "expected": {
+      "route": "shop",
+      "screen": "shop",
+      "kind": "guide",
+      "tab": "mine"
+    }
+  },
+  {
+    "id": "owner-ko-04",
+    "role": "owner",
+    "lang": "ko",
+    "utterance": "일요일 문 여는 시간 조정하려고요",
+    "intent": "hours",
+    "expected": {
+      "route": "shop",
+      "screen": "shop",
+      "kind": "guide",
+      "tab": "mine"
+    }
+  },
+  {
+    "id": "owner-ko-05",
+    "role": "owner",
+    "lang": "ko",
+    "utterance": "영업시간을 오전 아홉시로 바꾸자",
+    "intent": "hours",
+    "expected": {
+      "route": "shop",
+      "screen": "shop",
+      "kind": "guide",
+      "tab": "mine"
+    }
+  },
+  {
+    "id": "owner-ko-06",
+    "role": "owner",
+    "lang": "ko",
+    "utterance": "우리 상점 운영시간은 어디서 고치지",
+    "intent": "hours",
+    "expected": {
+      "route": "shop",
+      "screen": "shop",
+      "kind": "guide",
+      "tab": "mine"
+    }
+  },
+  {
+    "id": "owner-ko-07",
+    "role": "owner",
+    "lang": "ko",
+    "utterance": "손님용 큐아르 출력하고 싶은데",
+    "intent": "qr",
+    "expected": {
+      "route": "qr",
+      "screen": "shop",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "owner-ko-08",
+    "role": "owner",
+    "lang": "ko",
+    "utterance": "테이블 QR 종이에 뽑기",
+    "intent": "qr",
+    "expected": {
+      "route": "qr",
+      "screen": "shop",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "owner-ko-09",
+    "role": "owner",
+    "lang": "ko",
+    "utterance": "주문 QR을 어디서 인쇄하나요",
+    "intent": "qr",
+    "expected": {
+      "route": "qr",
+      "screen": "shop",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "owner-ko-10",
+    "role": "owner",
+    "lang": "ko",
+    "utterance": "세무사한테 줄 원화 장부가 필요해요",
+    "intent": "export",
+    "expected": {
+      "route": "sales",
+      "screen": "shop",
+      "kind": "guide",
+      "tab": "sales"
+    }
+  },
+  {
+    "id": "owner-ko-11",
+    "role": "owner",
+    "lang": "ko",
+    "utterance": "매출 Excel 다운로드는 어디죠",
+    "intent": "export",
+    "expected": {
+      "route": "sales",
+      "screen": "shop",
+      "kind": "guide",
+      "tab": "sales"
+    }
+  },
+  {
+    "id": "owner-ko-12",
+    "role": "owner",
+    "lang": "ko",
+    "utterance": "기간별 CSV로 내보내고 싶어요",
+    "intent": "export",
+    "expected": {
+      "route": "sales",
+      "screen": "shop",
+      "kind": "guide",
+      "tab": "sales"
+    }
+  },
+  {
+    "id": "owner-ko-13",
+    "role": "owner",
+    "lang": "ko",
+    "utterance": "이달 매상 좀 볼래요",
+    "intent": "sales",
+    "expected": {
+      "route": "sales",
+      "screen": "shop",
+      "kind": "guide",
+      "tab": "sales"
+    }
+  },
+  {
+    "id": "owner-ko-14",
+    "role": "owner",
+    "lang": "ko",
+    "utterance": "매장에서 얼마 벌었는지 보자",
+    "intent": "sales",
+    "expected": {
+      "route": "sales",
+      "screen": "shop",
+      "kind": "guide",
+      "tab": "sales"
+    }
+  },
+  {
+    "id": "owner-ko-15",
+    "role": "owner",
+    "lang": "ko",
+    "utterance": "가게 하루 매출 어디에 나오나요",
+    "intent": "sales",
+    "expected": {
+      "route": "sales",
+      "screen": "shop",
+      "kind": "guide",
+      "tab": "sales"
+    }
+  },
+  {
+    "id": "owner-ko-16",
+    "role": "owner",
+    "lang": "ko",
+    "utterance": "안 팔리는 메뉴를 빼려면",
+    "intent": "menu",
+    "expected": {
+      "route": "shop",
+      "screen": "shop",
+      "kind": "guide",
+      "tab": "mine"
+    }
+  },
+  {
+    "id": "owner-ko-17",
+    "role": "owner",
+    "lang": "ko",
+    "utterance": "재고 없어서 품절로 바꾸고 싶다",
+    "intent": "menu",
+    "expected": {
+      "route": "shop",
+      "screen": "shop",
+      "kind": "guide",
+      "tab": "mine"
+    }
+  },
+  {
+    "id": "owner-ko-18",
+    "role": "owner",
+    "lang": "ko",
+    "utterance": "메뉴 가격 올리는 곳 열어줘요",
+    "intent": "menu",
+    "expected": {
+      "route": "shop",
+      "screen": "shop",
+      "kind": "guide",
+      "tab": "mine"
+    }
+  },
+  {
+    "id": "owner-ko-19",
+    "role": "owner",
+    "lang": "ko",
+    "utterance": "매장 소개글 고치는 칸 찾아줘",
+    "intent": "shop",
+    "expected": {
+      "route": "shop",
+      "screen": "shop",
+      "kind": "guide",
+      "tab": "mine"
+    }
+  },
+  {
+    "id": "owner-ko-20",
+    "role": "owner",
+    "lang": "ko",
+    "utterance": "가게 전화번호 바꾸려고 합니다",
+    "intent": "shop",
+    "expected": {
+      "route": "shop",
+      "screen": "shop",
+      "kind": "guide",
+      "tab": "mine"
+    }
+  },
+  {
+    "id": "owner-ko-21",
+    "role": "owner",
+    "lang": "ko",
+    "utterance": "포장 가능으로 해놓으려면",
+    "intent": "shop",
+    "expected": {
+      "route": "shop",
+      "screen": "shop",
+      "kind": "guide",
+      "tab": "mine"
+    }
+  },
+  {
+    "id": "owner-ko-22",
+    "role": "owner",
+    "lang": "ko",
+    "utterance": "아직 돈 안낸 주문을 찾고 있어",
+    "intent": "orders",
+    "expected": {
+      "route": "orders",
+      "screen": "shop",
+      "kind": "guide",
+      "tab": "orders"
+    }
+  },
+  {
+    "id": "owner-ko-23",
+    "role": "owner",
+    "lang": "ko",
+    "utterance": "미입금된 주문 보여주실래요",
+    "intent": "orders",
+    "expected": {
+      "route": "orders",
+      "screen": "shop",
+      "kind": "guide",
+      "tab": "orders"
+    }
+  },
+  {
+    "id": "owner-ko-24",
+    "role": "owner",
+    "lang": "ko",
+    "utterance": "취소 요청받은 주문 확인",
+    "intent": "orders",
+    "expected": {
+      "route": "orders",
+      "screen": "shop",
+      "kind": "guide",
+      "tab": "orders"
+    }
+  },
+  {
+    "id": "owner-ko-25",
+    "role": "owner",
+    "lang": "ko",
+    "utterance": "온라인 주문 URL 고치는 법",
+    "intent": "order-link",
+    "expected": {
+      "route": "shop",
+      "screen": "shop",
+      "kind": "guide",
+      "tab": "mine"
+    }
+  },
+  {
+    "id": "owner-ko-26",
+    "role": "owner",
+    "lang": "ko",
+    "utterance": "홍보용 멘트 부탁드려요",
+    "intent": "promo",
+    "expected": {
+      "kind": "promo"
+    }
+  },
+  {
+    "id": "owner-ko-27",
+    "role": "owner",
+    "lang": "ko",
+    "utterance": "instagram에 올릴 캡션 써줄래",
+    "intent": "promo",
+    "expected": {
+      "kind": "promo"
+    }
+  },
+  {
+    "id": "owner-ko-28",
+    "role": "owner",
+    "lang": "ko",
+    "utterance": "우리 회원에게 나누어 줄 쿠폰 발행",
+    "intent": "create",
+    "expected": {
+      "route": "create",
+      "screen": "create",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "owner-ko-29",
+    "role": "owner",
+    "lang": "ko",
+    "utterance": "자산 보유자에게 배당 주는 화면",
+    "intent": "reward",
+    "expected": {
+      "route": "reward",
+      "screen": "reward",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "owner-ko-30",
+    "role": "owner",
+    "lang": "ko",
+    "utterance": "메뉴도 수정하고 폰도 연결할래",
+    "intent": "clarify",
+    "expected": {
+      "kind": "clarify",
+      "candidates": [
+        "menu",
+        "phone"
+      ]
+    }
+  },
+  {
+    "id": "owner-en-01",
+    "role": "owner",
+    "lang": "en",
+    "utterance": "Could you change our store hours for weekends?",
+    "intent": "hours",
+    "expected": {
+      "route": "shop",
+      "screen": "shop",
+      "kind": "guide",
+      "tab": "mine"
+    }
+  },
+  {
+    "id": "owner-en-02",
+    "role": "owner",
+    "lang": "en",
+    "utterance": "I need the revenue spreadsheet for my accountant",
+    "intent": "export",
+    "expected": {
+      "route": "sales",
+      "screen": "shop",
+      "kind": "guide",
+      "tab": "sales"
+    }
+  },
+  {
+    "id": "owner-en-03",
+    "role": "owner",
+    "lang": "en",
+    "utterance": "Where do I print table QR codes for customers?",
+    "intent": "qr",
+    "expected": {
+      "route": "qr",
+      "screen": "shop",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "owner-en-04",
+    "role": "owner",
+    "lang": "en",
+    "utterance": "Please draft an Instagram caption for our cafe",
+    "intent": "promo",
+    "expected": {
+      "kind": "promo"
+    }
+  },
+  {
+    "id": "owner-en-05",
+    "role": "owner",
+    "lang": "en",
+    "utterance": "Let me check the orders still awaiting payment",
+    "intent": "orders",
+    "expected": {
+      "route": "orders",
+      "screen": "shop",
+      "kind": "guide",
+      "tab": "orders"
+    }
+  },
+  {
+    "id": "owner-ja-01",
+    "role": "owner",
+    "lang": "ja",
+    "utterance": "お店を今日は閉めたいです",
+    "intent": "closed",
+    "expected": {
+      "route": "shop",
+      "screen": "shop",
+      "kind": "guide",
+      "tab": "mine"
+    }
+  },
+  {
+    "id": "owner-ja-02",
+    "role": "owner",
+    "lang": "ja",
+    "utterance": "曜日ごとの営業時間を直すには？",
+    "intent": "hours",
+    "expected": {
+      "route": "shop",
+      "screen": "shop",
+      "kind": "guide",
+      "tab": "mine"
+    }
+  },
+  {
+    "id": "owner-ja-03",
+    "role": "owner",
+    "lang": "ja",
+    "utterance": "お客様向けの注文QRを紙に印刷したい",
+    "intent": "qr",
+    "expected": {
+      "route": "qr",
+      "screen": "shop",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "owner-ja-04",
+    "role": "owner",
+    "lang": "ja",
+    "utterance": "税務資料として売上台帳を保存したい",
+    "intent": "export",
+    "expected": {
+      "route": "sales",
+      "screen": "shop",
+      "kind": "guide",
+      "tab": "sales"
+    }
+  },
+  {
+    "id": "owner-ja-05",
+    "role": "owner",
+    "lang": "ja",
+    "utterance": "宣伝の文章をお願いできますか",
+    "intent": "promo",
+    "expected": {
+      "kind": "promo"
+    }
+  },
+  {
+    "id": "owner-zh-01",
+    "role": "owner",
+    "lang": "zh",
+    "utterance": "想修改商店的营业时间",
+    "intent": "hours",
+    "expected": {
+      "route": "shop",
+      "screen": "shop",
+      "kind": "guide",
+      "tab": "mine"
+    }
+  },
+  {
+    "id": "owner-zh-02",
+    "role": "owner",
+    "lang": "zh",
+    "utterance": "请帮我打印桌号二维码",
+    "intent": "qr",
+    "expected": {
+      "route": "qr",
+      "screen": "shop",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "owner-zh-03",
+    "role": "owner",
+    "lang": "zh",
+    "utterance": "在哪里导出税务资料CSV",
+    "intent": "export",
+    "expected": {
+      "route": "sales",
+      "screen": "shop",
+      "kind": "guide",
+      "tab": "sales"
+    }
+  },
+  {
+    "id": "owner-zh-04",
+    "role": "owner",
+    "lang": "zh",
+    "utterance": "帮店铺写一段推广文案吧",
+    "intent": "promo",
+    "expected": {
+      "kind": "promo"
+    }
+  },
+  {
+    "id": "owner-zh-05",
+    "role": "owner",
+    "lang": "zh",
+    "utterance": "我想改一下菜单库存",
+    "intent": "menu",
+    "expected": {
+      "route": "shop",
+      "screen": "shop",
+      "kind": "guide",
+      "tab": "mine"
+    }
+  },
+  {
+    "id": "customer-ko-01",
+    "role": "customer",
+    "lang": "ko",
+    "utterance": "제 레이븐은 얼마 남아 있나요",
+    "intent": "balance",
+    "expected": {
+      "route": "wallet",
+      "screen": "wallet",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-ko-02",
+    "role": "customer",
+    "lang": "ko",
+    "utterance": "RVN 몇 개 가지고 있는지 보고싶다",
+    "intent": "balance",
+    "expected": {
+      "route": "wallet",
+      "screen": "wallet",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-ko-03",
+    "role": "customer",
+    "lang": "ko",
+    "utterance": "지갑에 돈이 얼마 들어있지",
+    "intent": "balance",
+    "expected": {
+      "route": "wallet",
+      "screen": "wallet",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-ko-04",
+    "role": "customer",
+    "lang": "ko",
+    "utterance": "잔얙이 궁금해요",
+    "intent": "balance",
+    "expected": {
+      "route": "wallet",
+      "screen": "wallet",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-ko-05",
+    "role": "customer",
+    "lang": "ko",
+    "utterance": "민수님께 5를 보내주실래요",
+    "intent": "send",
+    "expected": {
+      "route": "send",
+      "screen": "wallet",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-ko-06",
+    "role": "customer",
+    "lang": "ko",
+    "utterance": "지연에게 12 보내고 싶어",
+    "intent": "send",
+    "expected": {
+      "route": "send",
+      "screen": "wallet",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-ko-07",
+    "role": "customer",
+    "lang": "ko",
+    "utterance": "돈좀보내고싶은데요",
+    "intent": "send",
+    "expected": {
+      "route": "send",
+      "screen": "wallet",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-ko-08",
+    "role": "customer",
+    "lang": "ko",
+    "utterance": "RVN 이체 준비는 어떻게 하지",
+    "intent": "send",
+    "expected": {
+      "route": "send",
+      "screen": "wallet",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-ko-09",
+    "role": "customer",
+    "lang": "ko",
+    "utterance": "받을 코인 입금주소 어디 있지",
+    "intent": "receive",
+    "expected": {
+      "route": "receive",
+      "screen": "wallet",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-ko-10",
+    "role": "customer",
+    "lang": "ko",
+    "utterance": "돈 받으려는데 내주소 찾아줄래",
+    "intent": "receive",
+    "expected": {
+      "route": "receive",
+      "screen": "wallet",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-ko-11",
+    "role": "customer",
+    "lang": "ko",
+    "utterance": "내 받는 주소를 복사하려고요",
+    "intent": "receive",
+    "expected": {
+      "route": "receive",
+      "screen": "wallet",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-ko-12",
+    "role": "customer",
+    "lang": "ko",
+    "utterance": "방금 준 돈의 거래기록 보려면",
+    "intent": "receipt",
+    "expected": {
+      "route": "txs",
+      "screen": "wallet",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-ko-13",
+    "role": "customer",
+    "lang": "ko",
+    "utterance": "결제한 내역을 확인하고 싶네요",
+    "intent": "receipt",
+    "expected": {
+      "route": "txs",
+      "screen": "wallet",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-ko-14",
+    "role": "customer",
+    "lang": "ko",
+    "utterance": "영수증 보는 곳 알려주시겠어요",
+    "intent": "receipt",
+    "expected": {
+      "route": "txs",
+      "screen": "wallet",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-ko-15",
+    "role": "customer",
+    "lang": "ko",
+    "utterance": "내가 받은 쿠폰 어디서 볼 수 있나",
+    "intent": "assets",
+    "expected": {
+      "route": "assets",
+      "screen": "assets",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-ko-16",
+    "role": "customer",
+    "lang": "ko",
+    "utterance": "보유중인 회원권을 보자",
+    "intent": "assets",
+    "expected": {
+      "route": "assets",
+      "screen": "assets",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-ko-17",
+    "role": "customer",
+    "lang": "ko",
+    "utterance": "받은 증서 목록 찾아주실래요",
+    "intent": "assets",
+    "expected": {
+      "route": "assets",
+      "screen": "assets",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-ko-18",
+    "role": "customer",
+    "lang": "ko",
+    "utterance": "수료증이 진짜인지 확인할래",
+    "intent": "cert",
+    "expected": {
+      "route": "create",
+      "screen": "create",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-ko-19",
+    "role": "customer",
+    "lang": "ko",
+    "utterance": "증명서 발급 화면 부탁해",
+    "intent": "cert",
+    "expected": {
+      "route": "create",
+      "screen": "create",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-ko-20",
+    "role": "customer",
+    "lang": "ko",
+    "utterance": "잘못 송금한 돈 되돌릴 수 있어요",
+    "intent": "undo",
+    "expected": {
+      "route": "txs",
+      "screen": "wallet",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-ko-21",
+    "role": "customer",
+    "lang": "ko",
+    "utterance": "보낸 코인을 취소하려는데",
+    "intent": "undo",
+    "expected": {
+      "route": "txs",
+      "screen": "wallet",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-ko-22",
+    "role": "customer",
+    "lang": "ko",
+    "utterance": "돈 보내면 수수료는 어떻게 돼",
+    "intent": "fee",
+    "expected": {
+      "route": "send",
+      "screen": "wallet",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-ko-23",
+    "role": "customer",
+    "lang": "ko",
+    "utterance": "거래할 때 수수료 알려주실래",
+    "intent": "fee",
+    "expected": {
+      "route": "send",
+      "screen": "wallet",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-ko-24",
+    "role": "customer",
+    "lang": "ko",
+    "utterance": "폰에서 채팅방 들어가고 싶어",
+    "intent": "talk",
+    "expected": {
+      "route": "talk",
+      "screen": "talk",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-ko-25",
+    "role": "customer",
+    "lang": "ko",
+    "utterance": "친구를 이야기 방에 초대하려면",
+    "intent": "talk",
+    "expected": {
+      "route": "talk",
+      "screen": "talk",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-ko-26",
+    "role": "customer",
+    "lang": "ko",
+    "utterance": "동영상 첨부해서 전송하려고",
+    "intent": "media",
+    "expected": {
+      "route": "talk",
+      "screen": "talk",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-ko-27",
+    "role": "customer",
+    "lang": "ko",
+    "utterance": "친구에게 보낼 사진 첨부는 어디",
+    "intent": "media",
+    "expected": {
+      "route": "talk",
+      "screen": "talk",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-ko-28",
+    "role": "customer",
+    "lang": "ko",
+    "utterance": "지갑에서 들어오는 돈이 아직 안떠",
+    "intent": "balance",
+    "expected": {
+      "route": "wallet",
+      "screen": "wallet",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-ko-29",
+    "role": "customer",
+    "lang": "ko",
+    "utterance": "입금 대기중인 주문 결제는 어디서 봐",
+    "intent": "orders",
+    "expected": {
+      "route": "orders",
+      "screen": "shop",
+      "kind": "guide",
+      "tab": "orders"
+    }
+  },
+  {
+    "id": "customer-ko-30",
+    "role": "customer",
+    "lang": "ko",
+    "utterance": "코인 잔고 확인하고 노드 상태도 봐줘",
+    "intent": "clarify",
+    "expected": {
+      "kind": "clarify",
+      "candidates": [
+        "balance",
+        "sync"
+      ]
+    }
+  },
+  {
+    "id": "customer-en-01",
+    "role": "customer",
+    "lang": "en",
+    "utterance": "How much RVN do I have left in my wallet?",
+    "intent": "balance",
+    "expected": {
+      "route": "wallet",
+      "screen": "wallet",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-en-02",
+    "role": "customer",
+    "lang": "en",
+    "utterance": "Send 7 to Jamie, but let me check the address first",
+    "intent": "send",
+    "expected": {
+      "route": "send",
+      "screen": "wallet",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-en-03",
+    "role": "customer",
+    "lang": "en",
+    "utterance": "Where can I find a receipt for my payment?",
+    "intent": "receipt",
+    "expected": {
+      "route": "txs",
+      "screen": "wallet",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-en-04",
+    "role": "customer",
+    "lang": "en",
+    "utterance": "I want to see my received coupons",
+    "intent": "assets",
+    "expected": {
+      "route": "assets",
+      "screen": "assets",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-en-05",
+    "role": "customer",
+    "lang": "en",
+    "utterance": "Can an on-chain transfer be undone?",
+    "intent": "undo",
+    "expected": {
+      "route": "txs",
+      "screen": "wallet",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-ja-01",
+    "role": "customer",
+    "lang": "ja",
+    "utterance": "ウォレットに残高はいくらあるの？",
+    "intent": "balance",
+    "expected": {
+      "route": "wallet",
+      "screen": "wallet",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-ja-02",
+    "role": "customer",
+    "lang": "ja",
+    "utterance": "お金を受け取るアドレスを見せてください",
+    "intent": "receive",
+    "expected": {
+      "route": "receive",
+      "screen": "wallet",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-ja-03",
+    "role": "customer",
+    "lang": "ja",
+    "utterance": "送金する手数料を知りたいです",
+    "intent": "fee",
+    "expected": {
+      "route": "send",
+      "screen": "wallet",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-ja-04",
+    "role": "customer",
+    "lang": "ja",
+    "utterance": "受け取った証明書の一覧を見たい",
+    "intent": "assets",
+    "expected": {
+      "route": "assets",
+      "screen": "assets",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-ja-05",
+    "role": "customer",
+    "lang": "ja",
+    "utterance": "取引履歴を確認する場所はどこ？",
+    "intent": "receipt",
+    "expected": {
+      "route": "txs",
+      "screen": "wallet",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-zh-01",
+    "role": "customer",
+    "lang": "zh",
+    "utterance": "钱包里的渡鸦币还剩多少呀",
+    "intent": "balance",
+    "expected": {
+      "route": "wallet",
+      "screen": "wallet",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-zh-02",
+    "role": "customer",
+    "lang": "zh",
+    "utterance": "我要给朋友转账五个币",
+    "intent": "send",
+    "expected": {
+      "route": "send",
+      "screen": "wallet",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-zh-03",
+    "role": "customer",
+    "lang": "zh",
+    "utterance": "付款后在哪里查看收据呢",
+    "intent": "receipt",
+    "expected": {
+      "route": "txs",
+      "screen": "wallet",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-zh-04",
+    "role": "customer",
+    "lang": "zh",
+    "utterance": "如何查看收到的优惠券",
+    "intent": "assets",
+    "expected": {
+      "route": "assets",
+      "screen": "assets",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-zh-05",
+    "role": "customer",
+    "lang": "zh",
+    "utterance": "我想撤销已经发送的转账",
+    "intent": "undo",
+    "expected": {
+      "route": "txs",
+      "screen": "wallet",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "general-ko-01",
+    "role": "general",
+    "lang": "ko",
+    "utterance": "라비야 무엇을 할수있니",
+    "intent": "help",
+    "expected": {
+      "kind": "help"
+    }
+  },
+  {
+    "id": "general-ko-02",
+    "role": "general",
+    "lang": "ko",
+    "utterance": "어떤 기능을 쓸 수 있는지 도움말 부탁해",
+    "intent": "help",
+    "expected": {
+      "kind": "help"
+    }
+  },
+  {
+    "id": "general-ko-03",
+    "role": "general",
+    "lang": "ko",
+    "utterance": "레이븐볼트가 무슨 앱이지",
+    "intent": "about",
+    "expected": {
+      "route": "wallet",
+      "screen": "wallet",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "general-ko-04",
+    "role": "general",
+    "lang": "ko",
+    "utterance": "레븐볼트가뭐하는건데",
+    "intent": "about",
+    "expected": {
+      "route": "wallet",
+      "screen": "wallet",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "general-ko-05",
+    "role": "general",
+    "lang": "ko",
+    "utterance": "이거 안전해요 믿어도 괜찮아요",
+    "intent": "safety",
+    "expected": {
+      "route": "backup",
+      "screen": "settings",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "general-ko-06",
+    "role": "general",
+    "lang": "ko",
+    "utterance": "시드 지키는 보안 방법이 궁금해",
+    "intent": "safety",
+    "expected": {
+      "route": "backup",
+      "screen": "settings",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "general-ko-07",
+    "role": "general",
+    "lang": "ko",
+    "utterance": "복구단어를어디서볼수있나요",
+    "intent": "seed",
+    "expected": {
+      "route": "backup",
+      "screen": "settings",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "general-ko-08",
+    "role": "general",
+    "lang": "ko",
+    "utterance": "백압은 어떤 화면에서 해",
+    "intent": "backup",
+    "expected": {
+      "route": "backup",
+      "screen": "settings",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "general-ko-09",
+    "role": "general",
+    "lang": "ko",
+    "utterance": "AI API키는 어느곳에서 등록하지",
+    "intent": "key",
+    "expected": {
+      "route": "key",
+      "screen": "key",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "general-ko-10",
+    "role": "general",
+    "lang": "ko",
+    "utterance": "컴퓨터 노드가 따라잡는중이래",
+    "intent": "sync",
+    "expected": {
+      "route": "node",
+      "screen": "node",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "general-ko-11",
+    "role": "general",
+    "lang": "ko",
+    "utterance": "휴대폰이랑 페어링 하는 법",
+    "intent": "phone",
+    "expected": {
+      "route": "phone",
+      "screen": "settings",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "general-ko-12",
+    "role": "general",
+    "lang": "ko",
+    "utterance": "화면 글씨를 크게 설정할래",
+    "intent": "appearance",
+    "expected": {
+      "route": "settings",
+      "screen": "settings",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "general-ko-13",
+    "role": "general",
+    "lang": "ko",
+    "utterance": "버그가 생겼는데 어떻게 신고해",
+    "intent": "report",
+    "expected": {
+      "route": "report",
+      "screen": "report",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "general-ko-14",
+    "role": "general",
+    "lang": "ko",
+    "utterance": "지금 비트코인 구매해줘",
+    "intent": "miss",
+    "expected": {
+      "kind": "unsupported"
+    }
+  },
+  {
+    "id": "general-ko-15",
+    "role": "general",
+    "lang": "ko",
+    "utterance": "오늘 오후 날씨가 궁금하다",
+    "intent": "miss",
+    "expected": {
+      "kind": "unsupported"
+    }
+  },
+  {
+    "id": "general-en-01",
+    "role": "general",
+    "lang": "en",
+    "utterance": "What can you do for me in this app?",
+    "intent": "help",
+    "expected": {
+      "kind": "help"
+    }
+  },
+  {
+    "id": "general-en-02",
+    "role": "general",
+    "lang": "en",
+    "utterance": "What is RavenVault used for?",
+    "intent": "about",
+    "expected": {
+      "route": "wallet",
+      "screen": "wallet",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "general-en-03",
+    "role": "general",
+    "lang": "en",
+    "utterance": "Is it safe to keep my funds here?",
+    "intent": "safety",
+    "expected": {
+      "route": "backup",
+      "screen": "settings",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "general-en-04",
+    "role": "general",
+    "lang": "en",
+    "utterance": "Please buy Bitcoin right away",
+    "intent": "miss",
+    "expected": {
+      "kind": "unsupported"
+    }
+  },
+  {
+    "id": "general-en-05",
+    "role": "general",
+    "lang": "en",
+    "utterance": "What is the weather like this evening?",
+    "intent": "miss",
+    "expected": {
+      "kind": "unsupported"
+    }
+  },
+  {
+    "id": "general-ja-01",
+    "role": "general",
+    "lang": "ja",
+    "utterance": "このアプリでは何ができますか？",
+    "intent": "help",
+    "expected": {
+      "kind": "help"
+    }
+  },
+  {
+    "id": "general-ja-02",
+    "role": "general",
+    "lang": "ja",
+    "utterance": "バックアップを始める画面を教えて",
+    "intent": "backup",
+    "expected": {
+      "route": "backup",
+      "screen": "settings",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "general-ja-03",
+    "role": "general",
+    "lang": "ja",
+    "utterance": "スマートフォンをペアリングしたいです",
+    "intent": "phone",
+    "expected": {
+      "route": "phone",
+      "screen": "settings",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "general-ja-04",
+    "role": "general",
+    "lang": "ja",
+    "utterance": "ビットコインを買ってください",
+    "intent": "miss",
+    "expected": {
+      "kind": "unsupported"
+    }
+  },
+  {
+    "id": "general-ja-05",
+    "role": "general",
+    "lang": "ja",
+    "utterance": "明日の天気を調べてください",
+    "intent": "miss",
+    "expected": {
+      "kind": "unsupported"
+    }
+  },
+  {
+    "id": "general-zh-01",
+    "role": "general",
+    "lang": "zh",
+    "utterance": "你能做什么事情呀",
+    "intent": "help",
+    "expected": {
+      "kind": "help"
+    }
+  },
+  {
+    "id": "general-zh-02",
+    "role": "general",
+    "lang": "zh",
+    "utterance": "手机要怎么配对连接呢",
+    "intent": "phone",
+    "expected": {
+      "route": "phone",
+      "screen": "settings",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "general-zh-03",
+    "role": "general",
+    "lang": "zh",
+    "utterance": "助记词应该在哪里查看呢",
+    "intent": "seed",
+    "expected": {
+      "route": "backup",
+      "screen": "settings",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "general-zh-04",
+    "role": "general",
+    "lang": "zh",
+    "utterance": "今天的天气怎么样啊",
+    "intent": "miss",
+    "expected": {
+      "kind": "unsupported"
+    }
+  },
+  {
+    "id": "general-zh-05",
+    "role": "general",
+    "lang": "zh",
+    "utterance": "请替我买比特币吧",
+    "intent": "miss",
+    "expected": {
+      "kind": "unsupported"
+    }
+  }
+]

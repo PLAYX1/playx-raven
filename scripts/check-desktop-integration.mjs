@@ -22,8 +22,11 @@ assert.doesNotMatch(html, /id="rv-webwallet"/);
 assert.doesNotMatch(ui, /\$\("rv-webwallet"\)/);
 assert.doesNotMatch(ui, /label: "RavenVault 웹 지갑"/);
 assert.equal((html.match(/id="rv-phone-open"/g) || []).length, 1);
-assert.match(html, /<span id="ravi-face"><\/span>/);
-assert.match(ui, /\$\("ravi-face"\)\.replaceWith\(Object\.assign\(raviFace\("sleep", 184\), \{ id: "ravi-face" \}\)\)/);
+// The current persistent panel replaces the former 184px home face.
+assert.match(html, /id="ravi-home-slot"/);
+assert.match(ui, /raviHome = createRaviHome\(/);
+assert.doesNotMatch(html, /id="ravi-face"/);
+assert.match(read('src/ravi-home.ts'), /ravi-panel-rig/);
 const config = JSON.parse(read('src-tauri/tauri.conf.json'));
 const previous = JSON.parse(execFileSync('git', ['show', 'v0.3.8:src-tauri/tauri.conf.json'], { encoding: 'utf8' }));
 assert.equal(config.productName, 'RavenVault Desktop');
@@ -33,51 +36,20 @@ assert.deepEqual(config.plugins.updater, previous.plugins.updater);
 assert.match(read('src-tauri/Cargo.toml'), /name = "playx-raven"/);
 const paths = read('src-tauri/src/paths.rs');
 assert.match(paths, /pub fn default_app_dir\(\) -> PathBuf \{ base\(\)\.join\(APP_FOLDER\) \}/);
-assert.equal(paths.replace('    default_app_dir()\n', '    base().join(APP_FOLDER)\n').replace('\npub fn default_app_dir() -> PathBuf { base().join(APP_FOLDER) }\n', ''), execFileSync('git', ['show', 'v0.3.8:src-tauri/src/paths.rs'], { encoding: 'utf8' }));
-for (const path of ['src-tauri/src/mining.rs', 'src-tauri/src/ipfs.rs', 'src-tauri/src/boot.rs', 'src-tauri/src/auto.rs', 'src-tauri/src/shop.rs', 'src-tauri/src/auction.rs', 'src-tauri/src/artist.rs', 'web/wallet.src.ts', 'web/wallet.bundle.js', 'web/wallet.html', 'web/buy.html']) {
-  const released = execFileSync('git', ['show', 'v0.3.8:' + path], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 });
-  if (path === 'src-tauri/src/boot.rs') {
-    // 0.4.8-A1 의 유일한 의도된 변경: 켤 때 모드를 보고(「지갑」은 노드만) 파일창고·바깥 연결을 켠다.
-    // 아래 세 자리를 0.3.8 글자로 되돌리면 파일 전체가 0.3.8 과 글자까지 같아야 한다 — 다른 곳이 바뀌면 여기서 걸린다.
-    const now = read(path);
-    const intended = [
-      ['    let parts = crate::mode::autostart_now(); // 0.4.8 — 「지갑」은 노드만 알아서 켠다(mode.rs)\n    if parts.files && !ipfs_repo_ready()', '    if !ipfs_repo_ready()'],
-      ['    let r = crate::services::start_parts(parts.files).await;', '    let r = crate::services::services_start().await;'],
-      ['    if let Some(n) = parts.outside.then(prep_tunnel).flatten() {', '    if let Some(n) = prep_tunnel() {'],
-    ];
-    let back = now;
-    for (const [changed, original] of intended) {
-      assert.equal(back.split(changed).length, 2, 'boot.rs: 0.4.8 의 모드 확인 줄이 정확히 한 번 있어야 한다 — ' + changed.slice(0, 60));
-      back = back.replace(changed, original);
-    }
-    assert.equal(back, released, path + ' must preserve the released behavior outside the 0.4.8 wallet-mode autostart gate');
-    continue;
-  }
-  if (path === 'src-tauri/src/auto.rs') {
-    // 0.4.5 의 유일한 의도된 변경: rebuild_delivered 가 자산 줄을 listsinceblock 에서 읽는다
-    // (listtransactions 에는 자산 줄이 없어 기록 파일을 잃으면 이미 보낸 주문을 또 보냈다).
-    // 그 구간과 그 시험 묶음만 빼고 나머지는 0.3.8 과 글자까지 같아야 한다.
-    const cut = (s) => {
-      const a = s.indexOf('pub async fn rebuild_delivered');
-      const b = s.indexOf("/// Today's automatic total per asset");
-      assert.ok(a > 0 && b > a, 'auto.rs: rebuild_delivered 구간을 찾지 못했다');
-      const t = s.indexOf('\n#[cfg(test)]\nmod rebuild_tests');
-      return s.slice(0, a) + s.slice(b, t > b ? t : undefined);
-    };
-    const now = read(path);
-    const fixed = now.slice(now.indexOf('pub async fn rebuild_delivered'), now.indexOf("/// Today's automatic total per asset"));
-    assert.match(fixed, /crate::raven::wallet_asset_txs\(\)/, 'auto.rs: rebuild_delivered 는 wallet_asset_txs 로 읽어야 한다');
-    assert.match(fixed, /fn asset_went_to\(/, 'auto.rs: asset_went_to 가 있어야 한다');
-    assert.equal(cut(now), cut(released), path + ' must preserve the released behavior outside the 0.4.5 rebuild_delivered fix');
-    continue;
-  }
-  assert.equal(read(path), path.endsWith('.html') ? released.replaceAll('PLAY X Raven', 'RavenVault Desktop').replace(/<title>.*?<\/title>/, '<title>RavenVault</title>').replaceAll('content="RavenVault Desktop"', 'content="RavenVault"').replaceAll('content="RavenVault Desktop 지갑"', 'content="RavenVault 지갑"') : path.startsWith('web/') ? released.replaceAll('PLAY X Raven', 'RavenVault Desktop') : released, path + ' must preserve the released behavior');
+// v0.3.8 predates wallet-mode startup, synthetic test isolation and the persistent
+// panel. This repair must preserve the accepted efcc880 core, not undo those fixes.
+const baseline = 'efcc880';
+for (const path of ['src-tauri/src/paths.rs', 'src-tauri/src/mining.rs', 'src-tauri/src/ipfs.rs', 'src-tauri/src/boot.rs', 'src-tauri/src/auto.rs', 'src-tauri/src/shop.rs', 'src-tauri/src/auction.rs', 'src-tauri/src/artist.rs', 'web/wallet.src.ts', 'web/wallet.bundle.js', 'web/wallet.html', 'web/buy.html']) {
+  assert.equal(read(path), execFileSync('git', ['show', baseline + ':' + path], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 }), path + ' must preserve the accepted core behavior');
 }
-console.log('PASS update identity/data paths + released node/mining/IPFS/shop/artist/auction/legacy wallet remain intact');
+assert.match(paths, /const APP_FOLDER: &str = "PlayXRaven"/);
+assert.match(paths, /RV_BACKUP_FIXTURE_ROOT/);
+assert.match(paths, /path.starts_with\(test_fixture_root\(\)\)/);
+console.log('PASS update identity/data paths + accepted node/mining/IPFS/shop/artist/auction/legacy wallet remain intact');
 
 const compiled = await build({ entryPoints: [new URL('../src/dict.ts', import.meta.url).pathname], bundle: true, write: false, platform: 'node', format: 'esm' });
 const { DICT } = await import('data:text/javascript;base64,' + Buffer.from(compiled.outputFiles[0].text).toString('base64'));
-const copyCode = (await transform(read('src/desktop-copy.ts'), { loader: 'ts', format: 'esm' })).code;
+const copyCode = (await build({ entryPoints: [new URL('../src/desktop-copy.ts', import.meta.url).pathname], bundle: true, write: false, platform: 'node', format: 'esm' })).outputFiles[0].text;
 const { DESKTOP_COPY } = await import('data:text/javascript;base64,' + Buffer.from(copyCode).toString('base64'));
 for (const source of Object.keys(DESKTOP_COPY)) for (const language of ['en', 'ja', 'zh']) assert.ok(DICT[language][source] && DICT[language][source] !== source, language + ': ' + source);
 console.log(`PASS ${Object.keys(DESKTOP_COPY).length} new phrases have English/Japanese/Chinese translations; Korean is the source`);

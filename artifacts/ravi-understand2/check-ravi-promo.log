@@ -1,0 +1,3 @@
+PASS production promo: saved public facts, four languages/channels, templates, matching item/currency prices, limits, bilingual hashtags, QR links, owner budget and translated copy
+PASS targets, shared app fact sheet, original request, samples/default fixtures, QR fallbacks, bilingual tags + local language, channel tag limits, metadata, deduplication, X combined 280 and unsupported numbers
+PASS very long shop metadata still leaves X within 280; generated claim hashtags cannot override curated tags

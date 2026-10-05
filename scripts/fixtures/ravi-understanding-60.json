@@ -50,7 +50,7 @@
     "expected": {
       "intent": "closed",
       "screen": "shop",
-      "kind": "unsupported"
+      "kind": "guide"
     }
   },
   {
@@ -60,7 +60,7 @@
     "expected": {
       "intent": "closed",
       "screen": "shop",
-      "kind": "unsupported"
+      "kind": "guide"
     }
   },
   {
@@ -70,7 +70,7 @@
     "expected": {
       "intent": "shop",
       "screen": "shop",
-      "kind": "unsupported"
+      "kind": "guide"
     }
   },
   {
@@ -80,7 +80,7 @@
     "expected": {
       "intent": "shop",
       "screen": "shop",
-      "kind": "unsupported"
+      "kind": "guide"
     }
   },
   {
@@ -90,7 +90,7 @@
     "expected": {
       "intent": "order-link",
       "screen": "shop",
-      "kind": "unsupported"
+      "kind": "guide"
     }
   },
   {
@@ -98,9 +98,9 @@
     "role": "owner",
     "utterance": "주문 QR은 어디서 만들어요?",
     "expected": {
-      "intent": "order-link",
+      "intent": "qr",
       "screen": "shop",
-      "kind": "unsupported"
+      "kind": "guide"
     }
   },
   {
@@ -110,7 +110,7 @@
     "expected": {
       "intent": "menu",
       "screen": "shop",
-      "kind": "unsupported"
+      "kind": "guide"
     }
   },
   {
@@ -120,7 +120,7 @@
     "expected": {
       "intent": "menu",
       "screen": "shop",
-      "kind": "unsupported"
+      "kind": "guide"
     }
   },
   {
@@ -130,7 +130,7 @@
     "expected": {
       "intent": "menu",
       "screen": "shop",
-      "kind": "unsupported"
+      "kind": "guide"
     }
   },
   {
@@ -140,7 +140,7 @@
     "expected": {
       "intent": "menu",
       "screen": "shop",
-      "kind": "unsupported"
+      "kind": "guide"
     }
   },
   {
@@ -150,7 +150,7 @@
     "expected": {
       "intent": "shop",
       "screen": "shop",
-      "kind": "unsupported"
+      "kind": "guide"
     }
   },
   {
@@ -160,7 +160,7 @@
     "expected": {
       "intent": "shop",
       "screen": "shop",
-      "kind": "unsupported"
+      "kind": "guide"
     }
   },
   {
@@ -231,7 +231,7 @@
     "expected": {
       "intent": "media",
       "screen": "talk",
-      "kind": "unsupported"
+      "kind": "guide"
     }
   },
   {
@@ -241,7 +241,7 @@
     "expected": {
       "intent": "appearance",
       "screen": "settings",
-      "kind": "unsupported"
+      "kind": "guide"
     }
   },
   {
@@ -251,7 +251,7 @@
     "expected": {
       "intent": "appearance",
       "screen": "settings",
-      "kind": "unsupported"
+      "kind": "guide"
     }
   },
   {
@@ -441,7 +441,7 @@
     "expected": {
       "intent": "media",
       "screen": "talk",
-      "kind": "unsupported"
+      "kind": "guide"
     }
   },
   {
@@ -591,7 +591,7 @@
     "expected": {
       "intent": "appearance",
       "screen": "settings",
-      "kind": "unsupported"
+      "kind": "guide"
     }
   },
   {

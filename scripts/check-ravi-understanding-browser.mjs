@@ -64,6 +64,29 @@ try {
       const id = await page.$eval('#chat-log .msg.ai:last-child [data-guide]',el=>el.dataset.guide);
       assert.equal(id,test.expected.intent,test.id + ': ' + test.utterance);
     }
+    // Held-out exam: actual typed input/click and rendered title/body/buttons.
+    // The UI language deliberately differs from the question language.
+    const heldOut = JSON.parse(readFileSync(resolve(root,'scripts/fixtures/ravi-understanding-120.json'),'utf8'));
+    for (const test of heldOut) {
+      const uiLanguage = test.lang === 'ko' ? 'en' : 'ko';
+      await page.$eval(`[data-language="${uiLanguage}"]`,el=>el.click()); await settle(page);
+      await page.$eval('#chat-q',(el,q)=>el.value=q,test.utterance);
+      await page.click('#chat-go'); await settle(page);
+      await page.waitForFunction(() => !!document.querySelector('#chat-log .msg.ai:last-child [data-guide]'));
+      const answer = await page.$eval('#chat-log .msg.ai:last-child',el=>({
+        intent:el.querySelector('[data-guide]')?.getAttribute('data-guide'),
+        language:el.querySelector('[data-ravi-language]')?.getAttribute('data-ravi-language'),
+        text:el.textContent+' '+[...el.querySelectorAll('textarea,input')].map(n=>n.value).join(' '),
+        buttons:el.querySelectorAll('button').length,
+      }));
+      assert.equal(answer.intent,test.intent,test.id);
+      assert.equal(answer.language,test.lang,`${test.id} question language wins over UI`);
+      if(test.lang!=='ko')assert.ok(!/[가-힣]/.test(answer.text),`${test.id} Korean leakage`);
+      if(['en','zh'].includes(test.lang))assert.ok(!/[ぁ-んァ-ヶ]/.test(answer.text),`${test.id} Japanese leakage`);
+      if(test.lang==='en')assert.ok(!/[一-鿿]/.test(answer.text),`${test.id} CJK leakage`);
+      if(test.intent==='miss')assert.ok(answer.buttons>=2 && answer.buttons<=3);
+      if(test.intent==='clarify')assert.equal(answer.buttons,2);
+    }
     const caps = JSON.parse(readFileSync(resolve(root,'src/ravi-capabilities.json'),'utf8'));
     const translated = (s,lang) => lang==='ko'?s:caps.copy[s][['en','ja','zh'].indexOf(lang)];
     for (const lang of ['ko','en','ja','zh']) {
@@ -94,6 +117,6 @@ try {
     await page.screenshot({path:resolve(out,'understanding-ko.png')});
     assert.deepEqual(errors,[]);
     await context.close();
-    console.log('PASS production UI: 60 utterances, 4-language chips/help/input, order navigation, 3 refusal suggestions, secret redaction, no AI/send/save');
+    console.log('PASS production UI: 60 regression + 120 held-out utterances, mismatched UI/question languages, 4-language chips/help/input, order navigation, 3 refusal suggestions, secret redaction, no AI/send/save');
   }
 } finally { await browser?.close(); rmSync(profile,{recursive:true,force:true}); }

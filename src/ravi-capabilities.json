@@ -551,6 +551,106 @@
       "Some features need an AI key. Ravi helps with drafts and preparation. Check saving and approval on the relevant screen yourself.",
       "一部の機能にはAIキーが必要です。ラビは下書きと準備を手伝います。保存・承認は各画面でご自身で確認してください。",
       "部分功能需要 AI 密钥。拉比仅协助草稿和准备。请在相应页面自行确认保存和批准。"
+    ],
+    "영업시간 안내": [
+      "Opening hours",
+      "営業時間の案内",
+      "营业时间指南"
+    ],
+    "내 가게의 영업시간에서 요일별 여는 시간과 닫는 시간을 바꿀 수 있어요. 변경 내용은 자동 저장되므로 화면에서 직접 확인해 주세요.": [
+      "Change opening and closing times for each day in My shop → Opening hours. Changes save automatically; check them yourself.",
+      "店舗の営業時間で曜日ごとの開店・閉店時間を変更できます。変更は自動保存されるため、ご自身で確認してください。",
+      "在我的店铺的营业时间中修改每天的开门和关门时间。修改会自动保存，请自行确认。"
+    ],
+    "손님 QR 안내": [
+      "Customer order QR",
+      "お客様用注文QR",
+      "顾客订单二维码"
+    ],
+    "내 가게의 손님 QR · 테이블에서 주문 QR을 열고 인쇄할 수 있어요. 손님 QR만 공개하고, 사장·직원 연결 QR은 붙이지 마세요.": [
+      "Open and print order QR codes in My shop → Customer QR / tables. Share only customer QR codes; keep owner and staff pairing QR codes private.",
+      "店舗のお客様QR・テーブルで注文QRを開いて印刷できます。お客様用QRだけを公開し、オーナー・スタッフ接続QRは公開しないでください。",
+      "在我的店铺的顾客二维码与桌号中打开并打印订单二维码。仅公开顾客二维码，请勿公开店主或员工连接二维码。"
+    ],
+    "매출장부 내보내기": [
+      "Export sales ledger",
+      "売上台帳の書き出し",
+      "导出销售账本"
+    ],
+    "매출 화면에서 기간을 고르고 엑셀 파일로 내보내기를 누르면 원화 매출장부 CSV를 저장해요. 세금 신고를 대신 제출하지는 않아요.": [
+      "Choose a date range in Sales and click Export to Excel to save the KRW sales ledger as CSV. This does not submit a tax return.",
+      "売上画面で期間を選び、Excelへの書き出しを押すとウォン建て売上台帳をCSVで保存できます。税務申告の提出は代行しません。",
+      "在销售页面选择日期范围，点击导出到Excel即可保存韩元销售账本CSV。不会代为提交税务申报。"
+    ],
+    "거래 내역 안내": [
+      "Transaction records",
+      "取引履歴の案内",
+      "交易记录指南"
+    ],
+    "지갑의 최근 거래에서 보낸 돈과 받은 돈의 내역을 확인할 수 있어요. 가게 결제 내역은 주문과 매출 화면에서 확인해 주세요.": [
+      "Check sent and received funds in Wallet → Recent transactions. Check shop payment records in Orders and Sales.",
+      "ウォレットの最近の取引で送受金履歴を確認できます。店舗の決済履歴は注文と売上画面で確認してください。",
+      "在钱包的最近交易中查看收付款记录。店铺支付记录请在订单和销售页面查看。"
+    ],
+    "레이븐볼트 소개": [
+      "About RavenVault",
+      "RavenVaultについて",
+      "关于RavenVault"
+    ],
+    "레이븐볼트는 레이븐코인 지갑과 가게 주문·매출·자산 관리를 제공하는 앱이에요. 아래 도움말에서 할 수 있는 일을 확인할 수 있어요.": [
+      "RavenVault provides a Ravencoin wallet and shop orders, sales and asset management. See Help for available features.",
+      "RavenVaultはレイヴンコインのウォレットと店舗の注文・売上・資産管理を提供するアプリです。対応機能はヘルプで確認できます。",
+      "RavenVault提供渡鸦币钱包以及店铺订单、销售和资产管理。可在帮助中查看支持的功能。"
+    ],
+    "안전 안내": [
+      "Safety guide",
+      "安全の案内",
+      "安全指南"
+    ],
+    "돈 보내기·결제·발행은 사용자가 확인하고 승인해야 해요. 시드·개인키·API 키를 대화에 적지 말고, 백업 화면에서 보관 방법을 확인해 주세요.": [
+      "You must review and approve transfers, payments and issuance yourself. Never paste seeds, private keys or API keys into chat. Check storage guidance in Backup.",
+      "送金・支払い・発行はご自身で確認・承認してください。シード・秘密鍵・APIキーを会話に入力しないでください。バックアップで保管方法を確認できます。",
+      "转账、支付和发行须由您自行确认并批准。请勿在聊天中填写助记词、私钥或API密钥。可在备份页面查看保管方法。"
+    ],
+    "손님 QR 열기": [
+      "Open customer QR",
+      "お客様QRを開く",
+      "打开顾客二维码"
+    ],
+    "이야기 화면에서 지원되는 파일·영상 첨부를 확인하고 직접 보내 주세요. 라비가 대신 전송하지는 않아요.": [
+      "Check supported file and video attachments in Talk and send them yourself. Ravi does not send them for you.",
+      "会話画面で対応するファイル・動画の添付を確認し、ご自身で送信してください。ラビは代送しません。",
+      "请在聊天页面查看支持的文件与视频附件并自行发送。拉比不会代发。"
+    ],
+    "내 가게에서 이름·소개·주소·전화·배달·포장을 직접 바꿀 수 있어요. 변경 내용은 자동 저장되므로 확인해 주세요.": [
+      "Edit the name, description, address, phone, delivery and pickup in My shop. Changes save automatically; review them yourself.",
+      "店舗で名前・紹介・住所・電話・配達・持ち帰りを変更できます。変更は自動保存されるため確認してください。",
+      "可在我的店铺修改名称、简介、地址、电话、配送与自提。修改会自动保存，请自行确认。"
+    ],
+    "내 가게의 지금 닫음과 안내문에서 휴무를 설정할 수 있어요. 변경 내용은 자동 저장되므로 직접 확인해 주세요.": [
+      "Set closing status and a notice in My shop → Closed now. Changes save automatically; review them yourself.",
+      "店舗の現在休業と案内文で休業を設定できます。変更は自動保存されるため、ご自身で確認してください。",
+      "在我的店铺的现在关门和公告中设置休业。修改会自动保存，请自行确认。"
+    ],
+    "내 가게의 메뉴에서 품목·가격·재고를 직접 바꿀 수 있어요. 변경 내용은 자동 저장되므로 확인해 주세요.": [
+      "Edit items, prices and stock in My shop → Menu. Changes save automatically; review them yourself.",
+      "店舗のメニューで品目・価格・在庫を変更できます。変更は自動保存されるため確認してください。",
+      "在我的店铺的菜单中修改商品、价格和库存。修改会自动保存，请自行确认。"
+    ],
+    "혹시 이거요? 아래 두 가지 중 골라 주세요.": [
+      "Did you mean one of these? Choose below.",
+      "こちらのことでしょうか？次の二つから選んでください。",
+      "您是指这些吗？请从下面两项中选择。"
+    ],
+    "내 가게의 주문 링크 칸에서 주소를 직접 입력할 수 있어요. 변경 내용은 자동 저장되므로 확인해 주세요.": [
+      "Enter the address yourself in My shop → Order link. Changes save automatically; review them yourself.",
+      "店舗の注文リンク欄でアドレスを入力できます。変更は自動保存されるため、ご自身で確認してください。",
+      "在我的店铺的订购链接栏自行输入地址。修改会自动保存，请自行确认。"
+    ],
+    "이 컴퓨터의 백업 화면에서 잠근 백업 파일을 만들거나, 보관한 파일로 복구할 수 있어요. 복구할 자료와 안내를 직접 확인해 주세요.": [
+      "In this computer’s Backup screen, create a locked backup file or restore from a saved file. Review the data and restore instructions yourself.",
+      "このコンピューターのバックアップ画面で暗号化したバックアップファイルの作成や、保存したファイルからの復元ができます。復元する資料と案内はご自身で確認してください。",
+      "在本机的备份页面创建加密备份文件或从保存的文件恢复。请自行确认要恢复的资料和说明。"
     ]
   },
   "guides": [
@@ -561,7 +661,7 @@
       "say": "주문 링크 안내",
       "words": "주문링크|주문.*qr|orderlink|注文リンク|订购链接",
       "lines": [
-        "라비는 주문 링크를 대신 넣지 못해요. 대신 내 가게의 주문 링크 칸에 직접 입력하면 앱이 자동 저장해요."
+        "내 가게의 주문 링크 칸에서 주소를 직접 입력할 수 있어요. 변경 내용은 자동 저장되므로 확인해 주세요."
       ],
       "go": [
         {
@@ -569,7 +669,7 @@
           "to": "shop"
         }
       ],
-      "kind": "unsupported",
+      "kind": "guide",
       "starter": false
     },
     {
@@ -597,7 +697,7 @@
       "say": "파일·영상 안내",
       "words": "영상|동영상|파일|사진.*(?:보내|전송)|video|sendfile|動画|视频",
       "lines": [
-        "이건 아직 못 해요. 라비는 파일·영상을 대신 전송하지 못해요. 대신 이야기 화면에서 지원되는 첨부를 확인해 주세요."
+        "이야기 화면에서 지원되는 파일·영상 첨부를 확인하고 직접 보내 주세요. 라비가 대신 전송하지는 않아요."
       ],
       "go": [
         {
@@ -605,7 +705,7 @@
           "to": "talk"
         }
       ],
-      "kind": "unsupported",
+      "kind": "guide",
       "starter": false
     },
     {
@@ -641,7 +741,7 @@
           "to": "settings"
         }
       ],
-      "kind": "unsupported",
+      "kind": "guide",
       "starter": false
     },
     {
@@ -651,7 +751,7 @@
       "say": "휴무 설정 안내",
       "words": "휴무|오늘.*(?:쉬|쉰|닫)|재료.*떨어|closed|close.*shop|休業|休息",
       "lines": [
-        "라비 안내는 휴무를 바꾸지 못해요. 대신 내 가게에서 오늘 쉼과 이유를 직접 바꾸면 앱이 자동 저장해요."
+        "내 가게의 지금 닫음과 안내문에서 휴무를 설정할 수 있어요. 변경 내용은 자동 저장되므로 직접 확인해 주세요."
       ],
       "go": [
         {
@@ -659,7 +759,7 @@
           "to": "shop"
         }
       ],
-      "kind": "unsupported",
+      "kind": "guide",
       "starter": false
     },
     {
@@ -687,7 +787,7 @@
       "say": "메뉴 편집 안내",
       "words": "메뉴|메뉴판|가격.*(?:바꿔|변경|올려)|아메리카노|menu|メニュー|菜单",
       "lines": [
-        "키 없는 라비는 메뉴를 대신 수정하지 못해요. 대신 내 가게에서 메뉴·가격·재고를 직접 바꾸면 앱이 자동 저장해요."
+        "내 가게의 메뉴에서 품목·가격·재고를 직접 바꿀 수 있어요. 변경 내용은 자동 저장되므로 확인해 주세요."
       ],
       "go": [
         {
@@ -695,7 +795,7 @@
           "to": "shop"
         }
       ],
-      "kind": "unsupported",
+      "kind": "guide",
       "starter": false
     },
     {
@@ -705,7 +805,7 @@
       "say": "가게 설정 안내",
       "words": "가게.*(?:이름|소개|주소|전화|등록|설정)|배달|포장|shopsettings|店舗設定|店铺设置",
       "lines": [
-        "키 없는 라비는 가게 정보를 대신 바꾸지 못해요. 대신 내 가게 화면에서 정보를 직접 바꾸면 앱이 자동 저장해요."
+        "내 가게에서 이름·소개·주소·전화·배달·포장을 직접 바꿀 수 있어요. 변경 내용은 자동 저장되므로 확인해 주세요."
       ],
       "go": [
         {
@@ -713,7 +813,7 @@
           "to": "shop"
         }
       ],
-      "kind": "unsupported",
+      "kind": "guide",
       "starter": false
     },
     {
@@ -891,7 +991,7 @@
       "name": "백업",
       "words": "백업|backup|バックアップ|备份|備份",
       "lines": [
-        "이 컴퓨터 → 백업에서 지갑과 가게 자료를 잠근 파일 하나로 만들어요.",
+        "이 컴퓨터의 백업 화면에서 잠근 백업 파일을 만들거나, 보관한 파일로 복구할 수 있어요. 복구할 자료와 안내를 직접 확인해 주세요.",
         "그 파일은 USB나 다른 컴퓨터에 두세요. 이 컴퓨터가 고장 나면 그 파일로 되돌려요."
       ],
       "go": [
@@ -1021,6 +1121,122 @@
       "category": "wallet",
       "kind": "guide",
       "say": "보내기",
+      "starter": false
+    },
+    {
+      "id": "hours",
+      "name": "영업시간 안내",
+      "say": "영업시간 안내",
+      "words": "(?!)",
+      "lines": [
+        "내 가게의 영업시간에서 요일별 여는 시간과 닫는 시간을 바꿀 수 있어요. 변경 내용은 자동 저장되므로 화면에서 직접 확인해 주세요."
+      ],
+      "go": [
+        {
+          "label": "가게 설정 안내",
+          "to": "shop"
+        }
+      ],
+      "category": "shop",
+      "kind": "guide",
+      "starter": false
+    },
+    {
+      "id": "qr",
+      "name": "손님 QR 안내",
+      "say": "손님 QR 안내",
+      "words": "(?!)",
+      "lines": [
+        "내 가게의 손님 QR · 테이블에서 주문 QR을 열고 인쇄할 수 있어요. 손님 QR만 공개하고, 사장·직원 연결 QR은 붙이지 마세요."
+      ],
+      "go": [
+        {
+          "label": "손님 QR 열기",
+          "to": "qr"
+        }
+      ],
+      "category": "shop",
+      "kind": "guide",
+      "starter": false
+    },
+    {
+      "id": "export",
+      "name": "매출장부 내보내기",
+      "say": "매출장부 내보내기",
+      "words": "(?!)",
+      "lines": [
+        "매출 화면에서 기간을 고르고 엑셀 파일로 내보내기를 누르면 원화 매출장부 CSV를 저장해요. 세금 신고를 대신 제출하지는 않아요."
+      ],
+      "go": [
+        {
+          "label": "매출 보기",
+          "to": "sales"
+        }
+      ],
+      "category": "shop",
+      "kind": "guide",
+      "starter": false
+    },
+    {
+      "id": "receipt",
+      "name": "거래 내역 안내",
+      "say": "거래 내역 안내",
+      "words": "(?!)",
+      "lines": [
+        "지갑의 최근 거래에서 보낸 돈과 받은 돈의 내역을 확인할 수 있어요. 가게 결제 내역은 주문과 매출 화면에서 확인해 주세요."
+      ],
+      "go": [
+        {
+          "label": "최근 거래 보기",
+          "to": "txs"
+        },
+        {
+          "label": "주문 보기",
+          "to": "orders"
+        }
+      ],
+      "category": "wallet",
+      "kind": "guide",
+      "starter": false
+    },
+    {
+      "id": "about",
+      "name": "레이븐볼트 소개",
+      "say": "레이븐볼트 소개",
+      "words": "(?!)",
+      "lines": [
+        "레이븐볼트는 레이븐코인 지갑과 가게 주문·매출·자산 관리를 제공하는 앱이에요. 아래 도움말에서 할 수 있는 일을 확인할 수 있어요."
+      ],
+      "go": [
+        {
+          "label": "지갑 열기",
+          "to": "wallet"
+        }
+      ],
+      "category": "app",
+      "kind": "guide",
+      "starter": false
+    },
+    {
+      "id": "safety",
+      "name": "안전 안내",
+      "say": "안전 안내",
+      "words": "(?!)",
+      "lines": [
+        "돈 보내기·결제·발행은 사용자가 확인하고 승인해야 해요. 시드·개인키·API 키를 대화에 적지 말고, 백업 화면에서 보관 방법을 확인해 주세요."
+      ],
+      "go": [
+        {
+          "label": "백업 열기",
+          "to": "backup"
+        },
+        {
+          "label": "보내기 열기",
+          "to": "send"
+        }
+      ],
+      "category": "app",
+      "kind": "guide",
       "starter": false
     }
   ],

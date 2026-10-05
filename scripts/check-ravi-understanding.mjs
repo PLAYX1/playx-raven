@@ -10,7 +10,7 @@ const cases=JSON.parse(readFileSync('scripts/fixtures/ravi-understanding-60.json
 const caps=JSON.parse(readFileSync('src/ravi-capabilities.json','utf8'));
 assert.equal(cases.length,60);
 assert.deepEqual(['owner','customer','general'].map(r=>cases.filter(c=>c.role===r).length),[25,20,15]);
-const screen={receive:'wallet',send:'wallet',wallet:'wallet',txs:'wallet',backup:'settings',create:'create',assets:'assets',node:'node',key:'key',orders:'shop',sales:'shop',shop:'shop',reward:'reward',phone:'settings',talk:'talk',settings:'settings',report:'report'};
+const screen={receive:'wallet',send:'wallet',wallet:'wallet',txs:'wallet',backup:'settings',create:'create',assets:'assets',node:'node',key:'key',orders:'shop',sales:'shop',shop:'shop',reward:'reward',phone:'settings',talk:'talk',settings:'settings',report:'report',qr:'shop'};
 const legacy=JSON.parse(readFileSync('scripts/fixtures/ravi-guide-before.json','utf8'));
 function actual(q,before=false){
  if(!before && g.isRaviHelp(q)) return {intent:'help',kind:'help',screens:[]};
@@ -78,11 +78,11 @@ const pc={module:{exports:{}},exports:{},URL};vm.runInNewContext(promoBundle.out
 const nodes=new Map(),messages=[],calls=[];
 const el=id=>{if(!nodes.has(id))nodes.set(id,{value:'',checked:false,hidden:false});return nodes.get(id);};
 const ctx=vm.createContext({ ...g,$:el,document:{getElementById:()=>null},aiProvider:null,
-  isPromoRequest:pc.module.exports.isPromoRequest,whoseQuestion:()=>null,
+  isPromoRequest:pc.module.exports.isPromoRequest,whoseQuestion:()=>null,lang:'ko',
   chatSay:(who,text)=>messages.push({who,text}),chatHtml:(who,html)=>messages.push({who,html}),copyHtml:s=>s,t:s=>s,
   invoke:async()=>{throw Error('Unexpected AI/RPC');},openRaviPromo:()=>{throw Error('Unexpected promo path');},
   showPage:page=>calls.push(['page',page]),jumpToEl:id=>calls.push(['jump',id]),
-  openReceive:()=>calls.push(['receive']),openSend:()=>calls.push(['send']),openKeyCard:()=>calls.push(['key']),
+  openQrSheet:()=>calls.push(['qr']),openReceive:()=>calls.push(['receive']),openSend:()=>calls.push(['send']),openKeyCard:()=>calls.push(['key']),
   toggleDot:id=>calls.push(['dot',id]),openReport:()=>calls.push(['report']),shopTab:tab=>calls.push(['tab',tab]),
 });
 vm.runInContext(compile(fn('raviGuide')+'\n'+fn('raviOpenScreen')+'\n'+fn('raviGo')+'\n'+fn('chatSendExisting')),ctx);
@@ -128,7 +128,12 @@ for(locale of ['ko','en','ja','zh']){
  for(const action of caps.actions){clickCtx.handleClick(event('[data-ravi-action-input]',{raviActionInput:action.type}));assert.equal(el('chat-q').value,translate(action.say,locale));}
  clickCtx.handleClick(event('[data-ravi-help]',{}));assert.ok(messages.at(-1).html.includes('data-guide="help"'));
 }
-assert.equal(focused,(g.GUIDE.length+caps.actions.length)*4);assert.equal(opened,focused);
+// An English response keeps English suggestion input even if the UI is Korean.
+locale='ko';
+const localizedEvent={target:{closest:selector=>selector==='[data-ravi-input]'?{dataset:{raviInput:'phone'}}:selector==='[data-ravi-language]'?{dataset:{raviLanguage:'en'}}:null}};
+clickCtx.handleClick(localizedEvent);
+assert.equal(el('chat-q').value,translate('폰 연결 안내','en'));
+assert.equal(focused,(g.GUIDE.length+caps.actions.length)*4+1);assert.equal(opened,focused);
 for(const q of ['How much is the fee?','手数料はいくら?','手续费多少?'])assert.equal(g.matchGuide(q)?.id,'fee');
 console.log('PASS actual help/alternative click handler: all entries in 4 languages fill input without submitting');
 

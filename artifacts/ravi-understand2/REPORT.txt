@@ -1,0 +1,87 @@
+라비 2차 수리 결과 — 2026-10-06
+기준 HEAD: efcc880e744d6a9952c7cd2e7f1235f34a7c4ce1
+대상: /Users/gimmusong/wt-rv-desktop-simple (데스크톱 저장소). 별도 폰 앱의 정확도는 측정하지 않았다.
+
+120문항 결과: 120/120 (100%), 오매칭 0, 질문/제목/본문/단추 언어 누수 0.
+학습용 표현: 의도 34개 × 8개 = 272개. 학습 표도 실제 입력 경로에서 검증했다.
+별도 시험 문장 120개는 정규화 후 중복 0, 학습 표와 겹침 0. 숨긴 검수자 40문항은 제공되지 않아 측정하지 않았다.
+
+그룹별:
+  사장 45/45 · 오매칭 0 · 언어 누수 0
+  손님 45/45 · 오매칭 0 · 언어 누수 0
+  일반 30/30 · 오매칭 0 · 언어 누수 0
+
+언어별:
+  한국어 75/75 · 오매칭 0 · 언어 누수 0
+  영어 15/15 · 오매칭 0 · 언어 누수 0
+  일본어 15/15 · 오매칭 0 · 언어 누수 0
+  중국어 15/15 · 오매칭 0 · 언어 누수 0
+
+실제 입력 경로 검증:
+  chatSend → chatSendExisting → 비밀 입력 차단 → 도움말 → 홍보 선처리 → 주소 질문 → 내장 안내/후보/거절. 기존 실행 순서를 유지했다.
+  함수는 src/main.ts에서 AST로 읽어 실행한다. 입력값과 제출 처리는 최상위 chatSend부터 통과한다.
+  홍보는 openRaviPromo 및 createPromoCard까지 실제 함수로 실행한다. 빈 공개 가게 자료만 공급하며 실제 AI·노드·송금 호출은 허용하지 않는다.
+  데스크톱 최상위 경로에는 별도의 이름→주소 송금 파서가 없다. 민수에게 5 보내 같은 입력은 뜻을 인식해 준비 안내만 제공하며, 수취 주소·금액을 추측하거나 거래를 실행하지 않는다.
+  독립 시험 fixture에 기대 의도·답 종류·화면/탭·후보를 명시했다. 실제 raviGo 및 화면/탭 연결을 확인한다.
+  앱 UI 언어는 질문 언어와 일부러 다르게 둔다. 정적 안내는 정해진 번역의 제목·각 문단·각 단추를 검사하고 홍보는 실제 카드의 문구와 입력 값을 검사한다.
+  사용자 가게 이름·메뉴명은 기존처럼 번역하지 않는 사용자 자료다. 시험에는 외국어 사용자 자료를 넣지 않았다.
+  Chrome 브라우저 실행은 차단되어 픽셀/실제 표시 검증은 완료하지 못했다. 위 점수는 합성 DOM을 사용한 실제 입력 함수 및 렌더링 코드 실행 결과다.
+
+검수자가 제공한 각 문장의 전/후 (동일한 실제 입력 경로, 기준 커밋 소스로 전을 재현):
+  「가게 문 닫을게」: MISS (명시적 거절 + 대안 3개) → 휴무 설정 → 내 가게
+  「영업시간 바꿔」: MISS (명시적 거절 + 대안 3개) → 영업시간 → 내 가게
+  「QR 코드 출력」: MISS (명시적 거절 + 대안 3개) → 손님 주문 QR → QR 창 (인쇄는 직접)
+  「영수증」: MISS (명시적 거절 + 대안 3개) → 거래 내역 → 지갑 최근 거래·주문
+  「레이븐 얼마 있어?」: MISS (명시적 거절 + 대안 3개) → 잔액 → 지갑
+  「민수한테 5 보내」: MISS (명시적 거절 + 대안 3개) → 보내기 준비 → 지갑 (주소 추측·송금 없음)
+  「홍보 글 써줘」: 홍보 선처리 정상 → 홍보 도우미 → 실제 홍보 카드
+  「인스타 올릴 글」: MISS (명시적 거절 + 대안 3개) → 홍보 도우미 → 실제 홍보 카드
+  「세금 자료 엑셀」: MISS (명시적 거절 + 대안 3개) → 원화 매출장부 CSV → 가게 매출 탭
+  「CSV 내보내기」: MISS (명시적 거절 + 대안 3개) → 원화 매출장부 CSV → 가게 매출 탭
+  「레이븐볼트가 뭐야」: MISS (명시적 거절 + 대안 3개) → 레이븐볼트 소개
+  「이거 안전해?」: MISS (명시적 거절 + 대안 3개) → 안전 안내 → 백업·보내기 안내
+  「what can you do」: 도움말 인식, 한국어 제목·본문·단추 → 영어 도움말 (제목·본문·단추 모두 영어)
+  「비트코인 사줘」: MISS (명시적 거절 + 대안 3개) → 한국어 명시적 거절 + 대안 단추 3개
+  「오늘 날씨」: MISS (명시적 거절 + 대안 3개) → 한국어 명시적 거절 + 대안 단추 3개
+  홍보 글 써줘는 기준 커밋에서도 홍보 선처리가 동작했다. matchGuide 단독 MISS와 전체 입력 결과는 다르므로 전을 MISS로 부풀리지 않았다.
+
+수리 내용:
+  문장 전체 조회 대신 가게·돈·행동·대상 등 의미 요소와 어간을 조합한다. 조사가 붙거나 띄어쓰기가 없어도 찾고, 폭/대소문자와 제한된 철자 오타를 정규화한다. 주소와 금액은 보정하지 않는다.
+  메뉴의 상품명을 특정 낱말로 외우던 판정은 가격 단위+추가 의도로 바꿨다. 관계가 있는 하위 의도만 합치고, 별개 의도는 두 후보를 제시한다.
+  영업시간·휴무·QR·거래 내역·CSV·소개·보안·백업 복원은 실제 화면 안내로 연결한다. 메뉴·가게·링크·화면 설정·첨부처럼 실제 화면이 있는 기능의 낡은 unsupported 분류도 안내로 고쳤다.
+  거절에는 질문 언어로 명시적 거절과 관련 대안 2~3개를 표시한다. 비트코인 구매와 날씨는 정상 거절이다.
+  답변 언어를 UI 언어와 분리했다. 홍보 제목·본문·단추·해시태그도 질문 언어를 따른다. 응답의 대안 단추를 누르면 같은 언어로 입력만 채우고 제출하지 않는다.
+  개인키/WIF/API 키/시드 형태 입력은 되풀이·대화 기록·홍보·AI 전달 전에 차단한다. 돈 보내기·결제·발행의 직접 실행은 추가하지 않았다. 기존 준비 액션의 출처 검증·유한 양수 금액·수동 검토 검사를 통과했다.
+  1차의 낡은 ravi-face 화면 단정은 현재 지속 패널과 rig 연결을 검사하도록 정리했다. 같은 검사 안의 v0.3.8 파일 전체 동일성 단정은 이미 승인된 efcc880 코어 보존으로 갱신했고, 앱 식별자·업데이터·폴더 불변 및 실제 연결 검사는 유지했다.
+  기존 60문항의 문장은 그대로 유지했다. 실제 화면이 존재하는 기능의 답 종류 및 QR 경로 기대값을 이번 요구에 맞췄다.
+
+최종 검증:
+  npm run build: 통과 (기존 큰 청크 경고만).
+  CARGO_NET_OFFLINE=true node --test scripts/*.test.mjs web/*.test.mjs: 57/57 통과.
+  기존 60문항: 60/60, 오매칭 0. 학습 272표현 및 별도 120문항: 모두 통과.
+  요청한 check-ravi-*.mjs 전부와 check-wallet-easy 실행을 시도했다. 기타 안전 검사 및 기존 화면 검사는 통과했다.
+  check-ravi-panel-browser.mjs: 환경 차단 (Chrome 실행/localhost listen) (exit 1)
+  check-ravi-panel.mjs: 통과 (exit 0)
+  check-ravi-promo-browser.mjs: 환경 차단 (Chrome 실행/localhost listen) (exit 1)
+  check-ravi-promo-card.mjs: 통과 (exit 0)
+  check-ravi-promo.mjs: 통과 (exit 0)
+  check-ravi-state.mjs: 통과 (exit 0)
+  check-ravi-understanding-browser.mjs: 환경 차단 (Chrome 실행/localhost listen) (exit 1)
+  check-ravi-understanding.mjs: 통과 (exit 0)
+  check-ravi-understanding2.mjs: 통과 (exit 0)
+  check-wallet-easy.mjs: 환경 차단 (Chrome 실행/localhost listen) (exit 1)
+  check-desktop-integration.mjs: 통과 (exit 0)
+  check-ai-safety.mjs: 통과 (exit 0)
+  check-send-confirmation.mjs: 통과 (exit 0)
+  check-phone-transaction.mjs: 통과 (exit 0)
+  check-backup-safety.mjs: 통과 (exit 0)
+  요청 그대로 RV_BACKUP_FIXTURE_ROOT=$HOME/rv-test-fixture cargo test --manifest-path src-tauri/Cargo.toml: 지정 경로 쓰기 EPERM.
+    test result: FAILED. 522 passed; 202 failed; 13 ignored; 0 measured; 0 filtered out; finished in 2.41s
+  허용된 /tmp/rv-test-fixture-understand2로 재실행: test result: FAILED. 718 passed; 6 failed; 13 ignored; 0 measured; 0 filtered out; finished in 10.27s
+  남은 6개는 모두 합성 localhost 포트 바인딩 EPERM. 실제 AI·송금은 하지 않았다. 전체 검증 통과라고 보고하지 않는다.
+
+전달:
+  임시 GIT_INDEX_FILE → write-tree → commit-tree로 이번 파일만 커밋한다. 기존 HEAD와 공유 인덱스는 유지한다.
+  ref: refs/heads/claude/ravi-understand2
+  증분 bundle: artifacts/ravi-understand2.bundle (기준 efcc880 필요). push·태그 없음.
+  상세 문항/전후 응답: results.json, 각 실행 로그와 검사 상태: checks.json 및 verification.json.
