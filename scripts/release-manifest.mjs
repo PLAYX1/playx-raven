@@ -30,7 +30,7 @@ export async function prepareRelease(source, destination, version) {
     if (next.reduce((order, n, i) => order || Math.sign(n - old[i]), 0) <= 0) throw new Error('Release must be newer than the currently published version');
   } catch (e) { if (e.code !== 'ENOENT') throw e; }
   const base = `https://raw.githubusercontent.com/PLAYX1/playx-raven-releases/dist/v${version}`;
-  const manifest = { version, notes: 'RavenVault Desktop 0.6.7 — 홍보 도우미를 고쳤습니다. 「레이븐볼트 홍보 글」을 부탁하면 이제 가게가 아니라 레이븐볼트 앱을 소개하는 글을 씁니다(내 가게 / 레이븐볼트 앱 / 직접 주제 고르기). 샘플 메뉴는 홍보에 넣지 않습니다. 채널마다 한글·영어 해시태그를 붙이고 태그만 따로 복사할 수 있습니다. 공유 이미지 단추가 늘 켜지고, 가게 주소가 없으면 레이븐볼트 주소 QR 로 만듭니다. 0.6.6 — 라비 홍보 도우미.', pub_date: new Date().toISOString(), platforms: {}, installers: [] };
+  const manifest = { version, notes: 'RavenVault Desktop 0.6.8 — 라비가 말을 훨씬 잘 알아듣습니다. AI 키가 없어도 「오늘 얼마 팔았어」「쉬는 날 설정」「세무사한테 줄 자료」「엄마한테 10개 보내줘」처럼 평소 말투로 물으면 맞는 화면을 안내합니다. 애매하면 「혹시 이거요?」 하고 두 가지를 보여 주고, 못 하는 일은 솔직히 못 한다고 말하며 대신 할 수 있는 일을 알려 줍니다. 「뭘 할 수 있어?」라고 물으면 라비가 할 수 있는 일 목록이 4개 언어로 나옵니다. 질문한 언어로 답합니다. 송금·결제는 여전히 직접 확인하고 승인해야 합니다. 0.6.7 — 홍보 도우미 수리.', pub_date: new Date().toISOString(), platforms: {}, installers: [] };
   for (const [suffix, platform] of Object.entries(platforms)) {
     const signature = (await readFile(path.join(source, prefix + suffix + '.sig'), 'utf8')).trim();
     if (!/^[A-Za-z0-9+/=\r\n]+$/.test(signature) || signature.length < 100 || signature.length > 2048) throw new Error(`Malformed updater signature: ${suffix}`);
