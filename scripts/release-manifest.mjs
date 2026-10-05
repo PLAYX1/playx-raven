@@ -30,7 +30,7 @@ export async function prepareRelease(source, destination, version) {
     if (next.reduce((order, n, i) => order || Math.sign(n - old[i]), 0) <= 0) throw new Error('Release must be newer than the currently published version');
   } catch (e) { if (e.code !== 'ENOENT') throw e; }
   const base = `https://raw.githubusercontent.com/PLAYX1/playx-raven-releases/dist/v${version}`;
-  const manifest = { version, notes: 'RavenVault Desktop 0.6.4 — 라비가 홈 가운데에서 살아 움직입니다. 숨 쉬고 눈을 깜빡이고 고개를 갸웃하며, 키가 없으면 눈을 감고 잠들어 있다가 키를 넣고 연결이 확인되면 기지개를 켜고 깨어납니다. 라비 답을 소리로 읽어 줄 수 있습니다(기본은 꺼짐). 음성으로는 돈을 승인할 수 없고, 보내기 승인 화면은 그대로 손으로 확인합니다. 기존 메뉴와 가게 기능은 그대로입니다. 0.6.3 — 라비 키 연결 확인, AI 사용 한도 분리, 가게 색 미리보기, 메뉴 전체 삭제 확인.', pub_date: new Date().toISOString(), platforms: {}, installers: [] };
+  const manifest = { version, notes: 'RavenVault Desktop 0.6.5 — 라비와 대화하기가 편해졌습니다. 어느 화면에서든 라비 대화창이 앞에 떠 있고, 입력칸이 늘 보이며, 새 답은 자동으로 아래에 이어집니다. Enter 로 보내고 바로 다음 말을 이어 쓸 수 있습니다. 대화 글자를 가리던 옛 라비 그림과, 다른 프로그램을 누르면 라비 눈이 사라지던 문제를 고쳤습니다. 아티스트 소개 사진이 「줄이는 중」에서 멈추지 않게 했고, 지갑이 잠겨 있으면 그 자리에서 열고 바로 이어 올릴 수 있습니다. 0.6.4 — 살아 있는 라비 홈, 라비 답 읽어 주기.', pub_date: new Date().toISOString(), platforms: {}, installers: [] };
   for (const [suffix, platform] of Object.entries(platforms)) {
     const signature = (await readFile(path.join(source, prefix + suffix + '.sig'), 'utf8')).trim();
     if (!/^[A-Za-z0-9+/=\r\n]+$/.test(signature) || signature.length < 100 || signature.length > 2048) throw new Error(`Malformed updater signature: ${suffix}`);
