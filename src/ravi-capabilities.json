@@ -52,40 +52,20 @@
       "メニュー編集の案内",
       "菜单编辑指南"
     ],
-    "키 없는 라비는 메뉴를 대신 수정하지 못해요. 대신 내 가게에서 메뉴·가격·재고를 직접 바꾸고 저장할 수 있어요.": [
-      "Without an AI key Ravi cannot edit menus. Edit menu, prices and stock in My shop, then save.",
-      "AIキーがない場合、ラビはメニューを編集できません。店舗画面でメニュー・価格・在庫を編集し保存できます。",
-      "没有 AI 密钥时拉比无法编辑菜单。可在店铺页面修改菜单、价格和库存并保存。"
-    ],
     "휴무 설정 안내": [
       "Closing guide",
       "休業設定の案内",
       "休业设置指南"
-    ],
-    "라비 안내는 휴무를 저장하지 못해요. 대신 내 가게에서 오늘 쉼과 이유를 정하고 직접 저장해 주세요.": [
-      "The guide cannot save closing status. Set Closed today and a reason in My shop, then save yourself.",
-      "ガイドは休業設定を保存できません。店舗で本日休業と理由を設定し、ご自身で保存してください。",
-      "指南无法保存休业状态。请在店铺页面设置今日休业及原因，然后自行保存。"
     ],
     "가게 설정 안내": [
       "Shop settings guide",
       "店舗設定の案内",
       "店铺设置指南"
     ],
-    "키 없는 라비는 가게 정보를 대신 저장하지 못해요. 대신 내 가게 화면에서 정보를 적고 저장해 주세요.": [
-      "Without a key Ravi cannot save shop details. Enter them in My shop and save yourself.",
-      "キーがない場合、ラビは店舗情報を保存できません。店舗画面で入力して保存してください。",
-      "没有密钥时拉比无法保存店铺资料。请在店铺页面输入并自行保存。"
-    ],
     "주문 링크 안내": [
       "Order link guide",
       "注文リンクの案内",
       "订购链接指南"
-    ],
-    "라비는 주문 링크를 대신 넣거나 저장하지 못해요. 대신 내 가게의 주문 링크 칸에서 직접 입력하고 저장해 주세요.": [
-      "Ravi cannot enter or save order links. Enter the link in My shop and save it yourself.",
-      "ラビは注文リンクを入力・保存できません。店舗の注文リンク欄で入力して保存してください。",
-      "拉比无法代填或保存订购链接。请在店铺的订购链接栏输入并自行保存。"
     ],
     "자산 만들기 안내": [
       "Asset creation guide",
@@ -122,11 +102,6 @@
       "スマホ接続の案内",
       "手机连接指南"
     ],
-    "설정의 폰 연결에서 연결 코드를 확인해 주세요. 폰에서 코드를 입력하고 양쪽 화면의 확인을 직접 승인해요.": [
-      "Check the pairing code in Settings → Phone connection. Enter it on your phone and approve on both devices.",
-      "設定のスマホ接続でコードを確認し、スマホで入力して両方の画面で承認してください。",
-      "请在设置的手机连接中查看配对码，在手机输入并在两端确认。"
-    ],
     "이야기 안내": [
       "Conversation guide",
       "会話の案内",
@@ -141,11 +116,6 @@
       "File and video guide",
       "ファイル・動画の案内",
       "文件与视频指南"
-    ],
-    "이건 아직 못 해요. 라비는 파일·영상을 대신 전송하지 못해요. 대신 이야기 화면에서 지원되는 첨부를 확인해 주세요.": [
-      "I cannot do this yet. Ravi cannot send files or videos for you. Check supported attachments in Talk.",
-      "まだできません。ラビはファイル・動画を代送できません。会話画面で対応する添付をご確認ください。",
-      "这个目前还做不到。拉比无法代发文件或视频。请在聊天页面查看支持的附件。"
     ],
     "화면 설정 안내": [
       "Display settings guide",
@@ -182,11 +152,6 @@
       "Raviにできること",
       "拉比能做什么"
     ],
-    "뭘 할 수 있어?": [
-      "What can you do?",
-      "何ができる？",
-      "你能做什么？"
-    ],
     "도움말": [
       "Help",
       "ヘルプ",
@@ -201,11 +166,6 @@
       "Even without a key I can guide you and open screens. Review and approve transfers, payments, saves and issuance yourself.",
       "キーがなくても案内と画面表示をお手伝いできます。送金・支払い・保存・発行はご自身で確認・承認してください。",
       "无需密钥也能提供指南和打开页面。转账、支付、保存和发行请自行确认并批准。"
-    ],
-    "AI 키 연결 후: 양식 초안·준비만, 저장과 승인은 직접 해 주세요.": [
-      "With an AI key: form drafts and preparation only; save and approve yourself.",
-      "AIキー接続後：フォームの下書きと準備のみ。保存と承認はご自身で。",
-      "连接 AI 密钥后：仅准备表单草稿；请自行保存和批准。"
     ],
     "양식 초안·준비": [
       "Form drafts & preparation",
@@ -266,11 +226,6 @@
       "Confirm clearing menu",
       "全メニュー削除の確認",
       "确认清空菜单"
-    ],
-    "발행 양식 초안": [
-      "Issuance form draft",
-      "発行フォームの下書き",
-      "发行表单草稿"
     ],
     "화면 이동": [
       "Open a screen",
@@ -522,26 +477,6 @@
       "Raviの案内 · AIではありません",
       "Ravi 指南 · 非 AI"
     ],
-    "라비는 주문 링크를 대신 넣지 못해요. 대신 내 가게의 주문 링크 칸에 직접 입력하면 앱이 자동 저장해요.": [
-      "Ravi cannot enter order links. Enter one yourself in My shop; the app saves it automatically.",
-      "ラビは注文リンクを入力できません。店舗の注文リンク欄に直接入力すると、アプリが自動保存します。",
-      "拉比无法代填订购链接。在店铺的订购链接栏自行输入，应用会自动保存。"
-    ],
-    "라비 안내는 휴무를 바꾸지 못해요. 대신 내 가게에서 오늘 쉼과 이유를 직접 바꾸면 앱이 자동 저장해요.": [
-      "The guide cannot change closing status. Edit Closed today and its reason in My shop; the app saves your edits automatically.",
-      "ガイドは休業設定を変更できません。店舗で本日休業と理由を直接変更すると、アプリが自動保存します。",
-      "指南无法更改休业状态。在店铺页面自行更改今日休业及原因，应用会自动保存。"
-    ],
-    "키 없는 라비는 메뉴를 대신 수정하지 못해요. 대신 내 가게에서 메뉴·가격·재고를 직접 바꾸면 앱이 자동 저장해요.": [
-      "Without a key Ravi cannot edit menus. Edit menus, prices and stock in My shop; the app saves your changes automatically.",
-      "キーがない場合、ラビはメニューを編集できません。店舗でメニュー・価格・在庫を変更すると、アプリが自動保存します。",
-      "没有密钥时拉比无法编辑菜单。在店铺页面自行修改菜单、价格和库存，应用会自动保存。"
-    ],
-    "키 없는 라비는 가게 정보를 대신 바꾸지 못해요. 대신 내 가게 화면에서 정보를 직접 바꾸면 앱이 자동 저장해요.": [
-      "Without a key Ravi cannot edit shop details. Edit them yourself in My shop; the app saves your changes automatically.",
-      "キーがない場合、ラビは店舗情報を編集できません。店舗で直接編集すると、アプリが自動保存します。",
-      "没有密钥时拉比无法编辑店铺资料。在店铺页面自行编辑，应用会自动保存。"
-    ],
     "아직 저장하지 않은 초안이에요. 가게 화면에서 직접 값을 바꾸면 앱이 자동 저장해요.": [
       "This draft is not saved. Edit values directly in My shop to trigger automatic saving.",
       "この下書きは未保存です。店舗画面で値を直接変更すると自動保存されます。",
@@ -666,6 +601,31 @@
       "Open settings",
       "設定を開く",
       "打开设置"
+    ],
+    "지갑 암호 분실 안내": [
+      "Wallet password recovery guide",
+      "ウォレットのパスワード紛失案内",
+      "钱包密码丢失指南"
+    ],
+    "지갑 암호를 잊었다면 보관한 복구 단어로 지갑을 되살린 뒤 새 암호를 설정할 수 있어요. 이 컴퓨터 → 백업 → 복구 단어로 되살리기의 안내와 확인 사항을 먼저 읽어 주세요.": [
+      "If you forgot the wallet password, restore the wallet with your saved recovery words, then set a new password. First read the instructions and checks in This computer → Backup → Restore with recovery words.",
+      "ウォレットのパスワードを忘れた場合、保管した復元用単語で復元してから新しいパスワードを設定できます。このコンピューター → バックアップ → 単語で復元の説明と確認事項を先に読んでください。",
+      "忘记钱包密码时，可用保存的恢复单词恢复钱包，再设置新密码。请先阅读此电脑 → 备份 → 用恢复单词恢复中的说明与确认事项。"
+    ],
+    "복구 단어도 없으면 잊은 지갑 암호를 복구할 수 없어요. 라비가 암호를 찾아 주거나 잠금을 대신 풀 수는 없어요. 복구 단어와 암호는 대화에 적지 마세요.": [
+      "Without the recovery words, the forgotten wallet password cannot be recovered. Ravi cannot retrieve the password or unlock the wallet. Never enter recovery words or passwords in chat.",
+      "復元用単語もない場合、忘れたウォレットのパスワードは復旧できません。ラビはパスワードを探したりロックを解除したりできません。単語やパスワードをチャットに書かないでください。",
+      "如果也没有恢复单词，就无法找回忘记的钱包密码。拉比不能找回密码或代为解锁。请勿在聊天中输入恢复单词或密码。"
+    ],
+    "주변 가게 찾기 안내": [
+      "Nearby shop guide",
+      "近くのお店を探す案内",
+      "附近店铺查找指南"
+    ],
+    "주변의 RVN 받는 가게는 폰 앱의 지도에서 찾아 주세요. 컴퓨터 앱에는 주변 가게 찾기 화면이 없어요. 내 가게의 지도에 올리기는 가게 등록용이에요. 라비는 위치나 영업 여부를 추측하지 않아요.": [
+      "Find nearby shops accepting RVN on the phone app map. The computer app has no nearby shop search screen. Add to map in My shop registers your own shop. Ravi does not guess locations or opening status.",
+      "RVNが使える近くのお店はスマホアプリの地図で探してください。コンピューターアプリには周辺店舗の検索画面がありません。店舗の地図掲載は自分の店舗の登録用です。ラビは場所や営業状況を推測しません。",
+      "请在手机应用的地图中查找附近接受RVN的店铺。电脑应用没有附近店铺搜索页面。我的店铺中的地图发布用于注册自己的店铺。拉比不会猜测位置或营业状态。"
     ]
   },
   "guides": [
@@ -1269,6 +1229,38 @@
         }
       ],
       "category": "app",
+      "kind": "guide",
+      "starter": false
+    },
+    {
+      "id": "password",
+      "category": "wallet",
+      "name": "지갑 암호 분실 안내",
+      "say": "지갑 암호 분실 안내",
+      "words": "(?!)",
+      "lines": [
+        "지갑 암호를 잊었다면 보관한 복구 단어로 지갑을 되살린 뒤 새 암호를 설정할 수 있어요. 이 컴퓨터 → 백업 → 복구 단어로 되살리기의 안내와 확인 사항을 먼저 읽어 주세요.",
+        "복구 단어도 없으면 잊은 지갑 암호를 복구할 수 없어요. 라비가 암호를 찾아 주거나 잠금을 대신 풀 수는 없어요. 복구 단어와 암호는 대화에 적지 마세요."
+      ],
+      "go": [
+        {
+          "label": "설정 열기",
+          "to": "settings"
+        }
+      ],
+      "kind": "guide",
+      "starter": false
+    },
+    {
+      "id": "map",
+      "category": "shop",
+      "name": "주변 가게 찾기 안내",
+      "say": "주변 가게 찾기 안내",
+      "words": "(?!)",
+      "lines": [
+        "주변의 RVN 받는 가게는 폰 앱의 지도에서 찾아 주세요. 컴퓨터 앱에는 주변 가게 찾기 화면이 없어요. 내 가게의 지도에 올리기는 가게 등록용이에요. 라비는 위치나 영업 여부를 추측하지 않아요."
+      ],
+      "go": [],
       "kind": "guide",
       "starter": false
     }

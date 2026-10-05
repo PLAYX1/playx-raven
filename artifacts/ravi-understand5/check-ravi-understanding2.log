@@ -1,0 +1,63 @@
+{
+  "after": {
+    "total": 120,
+    "pass": 120,
+    "wrong": 0,
+    "languageLeaks": 0
+  },
+  "groups": [
+    {
+      "role": "owner",
+      "total": 45,
+      "pass": 45,
+      "wrong": 0,
+      "languageLeaks": 0
+    },
+    {
+      "role": "customer",
+      "total": 45,
+      "pass": 45,
+      "wrong": 0,
+      "languageLeaks": 0
+    },
+    {
+      "role": "general",
+      "total": 30,
+      "pass": 30,
+      "wrong": 0,
+      "languageLeaks": 0
+    }
+  ],
+  "languages": [
+    {
+      "lang": "ko",
+      "total": 75,
+      "pass": 75,
+      "wrong": 0,
+      "languageLeaks": 0
+    },
+    {
+      "lang": "en",
+      "total": 15,
+      "pass": 15,
+      "wrong": 0,
+      "languageLeaks": 0
+    },
+    {
+      "lang": "ja",
+      "total": 15,
+      "pass": 15,
+      "wrong": 0,
+      "languageLeaks": 0
+    },
+    {
+      "lang": "zh",
+      "total": 15,
+      "pass": 15,
+      "wrong": 0,
+      "languageLeaks": 0
+    }
+  ],
+  "failures": []
+}
+PASS 120 held-out top-level inputs; no overlap; title/body/buttons language; promo production path; safe routes and secret-before-echo

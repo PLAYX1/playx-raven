@@ -1,0 +1,535 @@
+{
+  "base": "1667f85",
+  "method": "stratified 5-fold; IDF/vectors rebuilt on four folds; no exam used for training or threshold selection; comparable uses the original held-out inputs",
+  "scenarios": {
+    "total": 36,
+    "pass": 36,
+    "wrong": 0,
+    "languageLeaks": 0,
+    "rows": [
+      {
+        "q": "암호 까먹어서 지갑이 안 열리네 어떡하지",
+        "expected": "password",
+        "intent": "password",
+        "language": "ko"
+      },
+      {
+        "q": "지갑 비밀번호를 잊었고 복구 단어도 안 보관했는데",
+        "expected": "password",
+        "intent": "password",
+        "language": "ko"
+      },
+      {
+        "q": "비번 생각이 안 나는데 단어로 다시 쓸 수 있니",
+        "expected": "password",
+        "intent": "password",
+        "language": "ko"
+      },
+      {
+        "q": "지갑 암호 기억 안 나서 다시 설정하고 싶은데",
+        "expected": "password",
+        "intent": "password",
+        "language": "ko"
+      },
+      {
+        "q": "비밀번호 잃었는데 라비가 풀어 줄 수 있나",
+        "expected": "password",
+        "intent": "password",
+        "language": "ko"
+      },
+      {
+        "q": "어제 우리 가게 장사는 어땠을까",
+        "expected": "sales",
+        "intent": "sales",
+        "language": "ko"
+      },
+      {
+        "q": "지난주 장사해서 얼마나 팔렸는지 볼 수 있어",
+        "expected": "sales",
+        "intent": "sales",
+        "language": "ko"
+      },
+      {
+        "q": "이번 달 매출 합계가 궁금한걸",
+        "expected": "sales",
+        "intent": "sales",
+        "language": "ko"
+      },
+      {
+        "q": "어제 손님 얼마 왔는지 알아보자",
+        "expected": "sales",
+        "intent": "sales",
+        "language": "ko"
+      },
+      {
+        "q": "지난달에 얼마 벌었는지 확인할래",
+        "expected": "sales",
+        "intent": "sales",
+        "language": "ko"
+      },
+      {
+        "q": "내 주변 가게를 찾아보고 싶은걸",
+        "expected": "map",
+        "intent": "map",
+        "language": "ko"
+      },
+      {
+        "q": "집 근처 레이븐 받는 카페가 있나",
+        "expected": "map",
+        "intent": "map",
+        "language": "ko"
+      },
+      {
+        "q": "주변에 RVN 받는 가게를 찾아보려면",
+        "expected": "map",
+        "intent": "map",
+        "language": "ko"
+      },
+      {
+        "q": "동네 RVN 가맹점 위치 좀 보고 싶은데",
+        "expected": "map",
+        "intent": "map",
+        "language": "ko"
+      },
+      {
+        "q": "근방 상점 지도 어디서 보는 거지",
+        "expected": "map",
+        "intent": "map",
+        "language": "ko"
+      },
+      {
+        "q": "카톡에 올릴 짧은 문장 써줄 수 있니",
+        "expected": "promo",
+        "intent": "promo",
+        "language": "ko"
+      },
+      {
+        "q": "카카오톡에 가게 소식 올리게 글 좀 써봐",
+        "expected": "promo",
+        "intent": "promo",
+        "language": "ko"
+      },
+      {
+        "q": "단톡방에 쓸 우리 카페 홍보문 만들어줄래",
+        "expected": "promo",
+        "intent": "promo",
+        "language": "ko"
+      },
+      {
+        "q": "카톡 채널에 게시할 행사 글 써줄 수 있어",
+        "expected": "promo",
+        "intent": "promo",
+        "language": "ko"
+      },
+      {
+        "q": "인스타 게시물에 넣을 문구 부탁할게",
+        "expected": "promo",
+        "intent": "promo",
+        "language": "ko"
+      },
+      {
+        "q": "누가 나한테 코인 보내 준다는데 어디로 받아",
+        "expected": "receive",
+        "intent": "receive",
+        "language": "ko"
+      },
+      {
+        "q": "친구가 내게 보내 준다니 무엇을 알려줘야 해",
+        "expected": "receive",
+        "intent": "receive",
+        "language": "ko"
+      },
+      {
+        "q": "상대가 나에게 송금한대 주소는 어디서 보지",
+        "expected": "receive",
+        "intent": "receive",
+        "language": "ko"
+      },
+      {
+        "q": "동생이 나한테 돈 보내준대 뭘 주지",
+        "expected": "receive",
+        "intent": "receive",
+        "language": "ko"
+      },
+      {
+        "q": "돈을 받으려는데 내 주소를 어디서 찾아",
+        "expected": "receive",
+        "intent": "receive",
+        "language": "ko"
+      },
+      {
+        "q": "송금하는 방법을 알려줄 수 있니",
+        "expected": "send",
+        "intent": "send",
+        "language": "ko"
+      },
+      {
+        "q": "코인 송금은 어떻게 해야 하는 거지",
+        "expected": "send",
+        "intent": "send",
+        "language": "ko"
+      },
+      {
+        "q": "친구에게 돈 보내는 순서 설명해줄래",
+        "expected": "send",
+        "intent": "send",
+        "language": "ko"
+      },
+      {
+        "q": "다른 지갑으로 RVN 전송하려면 어떻게 해",
+        "expected": "send",
+        "intent": "send",
+        "language": "ko"
+      },
+      {
+        "q": "이체하는 절차를 알고 싶네",
+        "expected": "send",
+        "intent": "send",
+        "language": "ko"
+      },
+      {
+        "q": "Forgot my wallet password; what can I do?",
+        "expected": "password",
+        "intent": "password",
+        "language": "en"
+      },
+      {
+        "q": "ウォレットのパスワードを忘れました。どうすればいい？",
+        "expected": "password",
+        "intent": "password",
+        "language": "ja"
+      },
+      {
+        "q": "钱包密码忘记了还能恢复吗",
+        "expected": "password",
+        "intent": "password",
+        "language": "zh"
+      },
+      {
+        "q": "Find a nearby shop that accepts RVN please",
+        "expected": "map",
+        "intent": "map",
+        "language": "en"
+      },
+      {
+        "q": "近くのRVNが使えるお店はどこですか",
+        "expected": "map",
+        "intent": "map",
+        "language": "ja"
+      },
+      {
+        "q": "附近接受RVN的店铺怎么找",
+        "expected": "map",
+        "intent": "map",
+        "language": "zh"
+      }
+    ]
+  },
+  "canonicalLanguageChecks": 8,
+  "baseline": {
+    "all": {
+      "total": 624,
+      "direct": 368,
+      "correct": 365,
+      "wrong": 3,
+      "directRate": 0.5897435897435898,
+      "wrongMatchRate": 0.008152173913043478
+    },
+    "byIntent": {
+      "password": {
+        "total": 0,
+        "direct": 0,
+        "correct": 0,
+        "wrong": 0,
+        "directRate": null,
+        "wrongMatchRate": 0
+      },
+      "sales": {
+        "total": 18,
+        "direct": 8,
+        "correct": 8,
+        "wrong": 0,
+        "directRate": 0.4444444444444444,
+        "wrongMatchRate": 0
+      },
+      "map": {
+        "total": 0,
+        "direct": 0,
+        "correct": 0,
+        "wrong": 0,
+        "directRate": null,
+        "wrongMatchRate": 0
+      },
+      "promo": {
+        "total": 15,
+        "direct": 13,
+        "correct": 12,
+        "wrong": 1,
+        "directRate": 0.8666666666666667,
+        "wrongMatchRate": 0.07692307692307693
+      },
+      "receive": {
+        "total": 18,
+        "direct": 12,
+        "correct": 12,
+        "wrong": 0,
+        "directRate": 0.6666666666666666,
+        "wrongMatchRate": 0
+      },
+      "send": {
+        "total": 18,
+        "direct": 7,
+        "correct": 7,
+        "wrong": 0,
+        "directRate": 0.3888888888888889,
+        "wrongMatchRate": 0
+      }
+    },
+    "folds": [
+      {
+        "total": 139,
+        "direct": 93,
+        "correct": 93,
+        "wrong": 0,
+        "directRate": 0.6690647482014388,
+        "wrongMatchRate": 0
+      },
+      {
+        "total": 138,
+        "direct": 78,
+        "correct": 77,
+        "wrong": 1,
+        "directRate": 0.5652173913043478,
+        "wrongMatchRate": 0.01282051282051282
+      },
+      {
+        "total": 135,
+        "direct": 86,
+        "correct": 85,
+        "wrong": 1,
+        "directRate": 0.6370370370370371,
+        "wrongMatchRate": 0.011627906976744186
+      },
+      {
+        "total": 106,
+        "direct": 52,
+        "correct": 51,
+        "wrong": 1,
+        "directRate": 0.49056603773584906,
+        "wrongMatchRate": 0.019230769230769232
+      },
+      {
+        "total": 106,
+        "direct": 59,
+        "correct": 59,
+        "wrong": 0,
+        "directRate": 0.5566037735849056,
+        "wrongMatchRate": 0
+      }
+    ]
+  },
+  "current": {
+    "all": {
+      "total": 734,
+      "direct": 481,
+      "correct": 481,
+      "wrong": 0,
+      "directRate": 0.6553133514986376,
+      "wrongMatchRate": 0
+    },
+    "byIntent": {
+      "password": {
+        "total": 23,
+        "direct": 22,
+        "correct": 22,
+        "wrong": 0,
+        "directRate": 0.9565217391304348,
+        "wrongMatchRate": 0
+      },
+      "sales": {
+        "total": 34,
+        "direct": 26,
+        "correct": 26,
+        "wrong": 0,
+        "directRate": 0.7647058823529411,
+        "wrongMatchRate": 0
+      },
+      "map": {
+        "total": 23,
+        "direct": 23,
+        "correct": 23,
+        "wrong": 0,
+        "directRate": 1,
+        "wrongMatchRate": 0
+      },
+      "promo": {
+        "total": 31,
+        "direct": 29,
+        "correct": 29,
+        "wrong": 0,
+        "directRate": 0.9354838709677419,
+        "wrongMatchRate": 0
+      },
+      "receive": {
+        "total": 34,
+        "direct": 31,
+        "correct": 31,
+        "wrong": 0,
+        "directRate": 0.9117647058823529,
+        "wrongMatchRate": 0
+      },
+      "send": {
+        "total": 34,
+        "direct": 30,
+        "correct": 30,
+        "wrong": 0,
+        "directRate": 0.8823529411764706,
+        "wrongMatchRate": 0
+      }
+    },
+    "folds": [
+      {
+        "total": 162,
+        "direct": 111,
+        "correct": 111,
+        "wrong": 0,
+        "directRate": 0.6851851851851852,
+        "wrongMatchRate": 0
+      },
+      {
+        "total": 160,
+        "direct": 99,
+        "correct": 99,
+        "wrong": 0,
+        "directRate": 0.61875,
+        "wrongMatchRate": 0
+      },
+      {
+        "total": 157,
+        "direct": 114,
+        "correct": 114,
+        "wrong": 0,
+        "directRate": 0.7261146496815286,
+        "wrongMatchRate": 0
+      },
+      {
+        "total": 129,
+        "direct": 78,
+        "correct": 78,
+        "wrong": 0,
+        "directRate": 0.6046511627906976,
+        "wrongMatchRate": 0
+      },
+      {
+        "total": 126,
+        "direct": 79,
+        "correct": 79,
+        "wrong": 0,
+        "directRate": 0.626984126984127,
+        "wrongMatchRate": 0
+      }
+    ]
+  },
+  "comparable": {
+    "all": {
+      "total": 624,
+      "direct": 378,
+      "correct": 378,
+      "wrong": 0,
+      "directRate": 0.6057692307692307,
+      "wrongMatchRate": 0
+    },
+    "byIntent": {
+      "password": {
+        "total": 0,
+        "direct": 0,
+        "correct": 0,
+        "wrong": 0,
+        "directRate": null,
+        "wrongMatchRate": 0
+      },
+      "sales": {
+        "total": 18,
+        "direct": 13,
+        "correct": 13,
+        "wrong": 0,
+        "directRate": 0.7222222222222222,
+        "wrongMatchRate": 0
+      },
+      "map": {
+        "total": 0,
+        "direct": 0,
+        "correct": 0,
+        "wrong": 0,
+        "directRate": null,
+        "wrongMatchRate": 0
+      },
+      "promo": {
+        "total": 15,
+        "direct": 13,
+        "correct": 13,
+        "wrong": 0,
+        "directRate": 0.8666666666666667,
+        "wrongMatchRate": 0
+      },
+      "receive": {
+        "total": 18,
+        "direct": 18,
+        "correct": 18,
+        "wrong": 0,
+        "directRate": 1,
+        "wrongMatchRate": 0
+      },
+      "send": {
+        "total": 18,
+        "direct": 14,
+        "correct": 14,
+        "wrong": 0,
+        "directRate": 0.7777777777777778,
+        "wrongMatchRate": 0
+      }
+    },
+    "folds": [
+      {
+        "total": 139,
+        "direct": 88,
+        "correct": 88,
+        "wrong": 0,
+        "directRate": 0.6330935251798561,
+        "wrongMatchRate": 0
+      },
+      {
+        "total": 138,
+        "direct": 80,
+        "correct": 80,
+        "wrong": 0,
+        "directRate": 0.5797101449275363,
+        "wrongMatchRate": 0
+      },
+      {
+        "total": 135,
+        "direct": 92,
+        "correct": 92,
+        "wrong": 0,
+        "directRate": 0.6814814814814815,
+        "wrongMatchRate": 0
+      },
+      {
+        "total": 106,
+        "direct": 57,
+        "correct": 57,
+        "wrong": 0,
+        "directRate": 0.5377358490566038,
+        "wrongMatchRate": 0
+      },
+      {
+        "total": 106,
+        "direct": 61,
+        "correct": 61,
+        "wrong": 0,
+        "directRate": 0.5754716981132075,
+        "wrongMatchRate": 0
+      }
+    ]
+  }
+}

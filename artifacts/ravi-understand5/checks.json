@@ -1,0 +1,67 @@
+[
+  {
+    "name": "build",
+    "command": "npm run build",
+    "exit": 0
+  },
+  {
+    "name": "check-ravi-panel",
+    "command": "node scripts/check-ravi-panel.mjs",
+    "exit": 0
+  },
+  {
+    "name": "check-ravi-panel-browser",
+    "command": "node scripts/check-ravi-panel-browser.mjs",
+    "exit": 1
+  },
+  {
+    "name": "check-ravi-promo-card",
+    "command": "node scripts/check-ravi-promo-card.mjs",
+    "exit": 0
+  },
+  {
+    "name": "check-ravi-promo-browser",
+    "command": "node scripts/check-ravi-promo-browser.mjs",
+    "exit": 1
+  },
+  {
+    "name": "check-ravi-state",
+    "command": "node scripts/check-ravi-state.mjs",
+    "exit": 0
+  },
+  {
+    "name": "check-ravi-understanding-browser",
+    "command": "node scripts/check-ravi-understanding-browser.mjs",
+    "exit": 1
+  },
+  {
+    "name": "check-ravi-similarity",
+    "command": "node scripts/check-ravi-similarity.mjs",
+    "exit": 0
+  },
+  {
+    "name": "check-ravi-promo",
+    "command": "node scripts/check-ravi-promo.mjs",
+    "exit": 0
+  },
+  {
+    "name": "check-ravi-understanding",
+    "command": "node scripts/check-ravi-understanding.mjs",
+    "exit": 0
+  },
+  {
+    "name": "check-ravi-understanding3",
+    "command": "node scripts/check-ravi-understanding3.mjs",
+    "exit": 0
+  },
+  {
+    "name": "check-ravi-understanding5",
+    "command": "node scripts/check-ravi-understanding5.mjs",
+    "exit": 0
+  },
+  {
+    "name": "check-ravi-understanding2",
+    "command": "node scripts/check-ravi-understanding2.mjs",
+    "exit": 0
+  }
+]
