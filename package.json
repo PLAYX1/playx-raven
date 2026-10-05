@@ -12,7 +12,9 @@
     "screensweep": "node screensweep.mjs",
     "countercheck": "node countercheck.mjs",
     "check:issue-gate": "node scripts/check-issue-gate.mjs",
-    "check:peer-help": "node scripts/check-peer-help.mjs"
+    "check:peer-help": "node scripts/check-peer-help.mjs",
+    "check:ravi-panel": "node scripts/check-ravi-panel.mjs",
+    "check:ravi-panel:browser": "node scripts/check-ravi-panel-browser.mjs"
   },
   "dependencies": {
     "@noble/ciphers": "^2.3.0",

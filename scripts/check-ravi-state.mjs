@@ -79,7 +79,7 @@ console.log('PASS asset references, retained pages/tools and speech adapter has 
 let active = 'page-home', blockedNodes = [], observer, hidden = false, framePaused = true, currentMode = 'sleep';
 const nodes = new Map(), listeners = new Map(), timers = new Map(); let timerId = 0, woke = 0, reports = 0;
 function element(id) {
-  if (!nodes.has(id)) nodes.set(id, { id, value:'', textContent:'', dataset:{}, attributes:{}, hidden:false, open:false,
+  if (!nodes.has(id)) nodes.set(id, { id, value:'', textContent:'', dataset:{}, attributes:{}, hidden:["ravi-key","rv-send-card"].includes(id), open:false, classList:{toggle(){}},
     append(child) { child.parent = this; }, getClientRects: () => [1],
     setAttribute(k,v) { this.attributes[k]=v; }, addEventListener(name,fn) { this[name]=fn; }, scrollIntoView() {} });
   return nodes.get(id);
@@ -94,17 +94,20 @@ const fakeWindow = {addEventListener:(name,fn)=>listeners.set(name,fn),
   setTimeout:fn=>{timers.set(++timerId,fn);return timerId;}, SpeechRecognition:Recognition};
 const controllerSource = readFileSync('src/ravi-home.ts','utf8').replace(/^import .*;\n/gm,'');
 const controllerExports = {};
+let panelOpen = true, panelSuspended = false, rigIndex = 0;
+const rigPauses = [];
+const panelAdapter = { open(){panelOpen=true;}, visible:()=>panelOpen&&!panelSuspended, suspend:on=>panelSuspended=on, message(){}, sent(){} };
 vm.runInNewContext(ts.transpileModule(controllerSource,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,
-  {exports:controllerExports, mountRaviRig:()=>fakeRig, createRaviVoice, t:s=>s, document:fakeDoc, window:fakeWindow,
+  {exports:controllerExports, mountRaviRig:()=> { const index=rigIndex++; return {...fakeRig,pause(on){rigPauses[index]=on;if(index===1)framePaused=on;}}; }, createRaviPanel:()=>panelAdapter, queueMicrotask(){}, createRaviVoice, t:s=>s, document:fakeDoc, window:fakeWindow,
     MutationObserver:class {constructor(fn){observer=fn;}observe(){}}, clearTimeout:id=>timers.delete(id)});
-const controller=controllerExports.createRaviHome({wake:()=>woke++,wallet:()=>active='page-wallet',report:()=>reports++});
+const controller=controllerExports.createRaviHome({wake:()=>woke++,wallet:()=>active='page-wallet',report:()=>reports++,send(){},tools(){} });
 assert.equal(currentMode,'sleep'); assert.equal(framePaused,false);
 assert.equal(element('ravi-conversation').parent.id,'ravi-home-slot');
 controller.reply('synthetic basic guide');assert.equal(currentMode,'sleep','basic guide does not bypass checked-key wake');
 controller.connected(true); assert.equal(currentMode,'idle'); assert.ok(woke>0);
 controller.thinking(); assert.equal(currentMode,'thinking');
-controller.reply('synthetic reply'); assert.equal(currentMode,'speaking'); assert.equal(element('ravi-caption').textContent,'synthetic reply');
-blockedNodes=[element('send-review')]; observer(); assert.equal(framePaused,true); assert.equal(currentMode,'idle'); assert.equal(timers.size,0);
+controller.reply('synthetic reply'); assert.equal(currentMode,'speaking'); assert.equal(element('ravi-caption').textContent,'깨어났어요. 무엇을 도와드릴까요?','home greeting stays concise');
+blockedNodes=[element('send-review')]; observer(); assert.deepEqual(rigPauses,[true,true,true],'all live rigs pause on approval');assert.equal(element('rv-voice').disabled,true);assert.equal(element('ravi-read').disabled,true); assert.equal(framePaused,true); assert.equal(currentMode,'idle'); assert.equal(timers.size,0);
 controller.reply('late reply'); assert.equal(currentMode,'idle');
 blockedNodes=[]; observer(); assert.equal(framePaused,false);
 element('rv-voice').onclick(); assert.equal(currentMode,'listening');
@@ -116,14 +119,16 @@ controller.background(false);assert.equal(framePaused,false);assert.equal(curren
 hidden=true;listeners.get('visibilitychange')();assert.equal(framePaused,true);
 hidden=false;listeners.get('visibilitychange')();assert.equal(framePaused,false);
 controller.joy();assert.equal(currentMode,'joy');
-active='page-wallet';controller.page('wallet');observer();assert.equal(framePaused,true);
-active='page-ravi';controller.page('ravi');observer();assert.equal(framePaused,false);assert.equal(element('ravi-conversation').parent.id,'page-ravi');
+active='page-wallet';controller.page('wallet');observer();assert.equal(framePaused,false,'panel stays active on other pages');
+active='page-ravi';controller.page('ravi');observer();assert.equal(framePaused,false);assert.equal(element('ravi-conversation').parent.id,'ravi-home-slot');
 active='page-home';controller.page('home');assert.equal(element('ravi-conversation').parent.id,'ravi-home-slot');
 listeners.get('touchstart')({touches:Array(5)});assert.equal(reports,1);
 listeners.get('touchstart')({touches:Array(5)});assert.equal(reports,1);
 listeners.get('touchend')({touches:[]});listeners.get('touchstart')({touches:Array(5)});assert.equal(reports,2);
 element('ravi-plus').onclick();assert.equal(element('ravi-tools').open,true);
-for(const id of ['ravi-key','askwrap','rpwrap','sdw']){blockedNodes=[element(id)];observer();assert.equal(framePaused,true);}
+for(const id of ['ravi-key','askwrap','rpwrap','sdw','phone-tx-send']){blockedNodes=[element(id)];observer();assert.equal(framePaused,true);}
+blockedNodes=[];element('ravi-key').hidden=false;observer();assert.deepEqual(rigPauses,[true,true,true]);element('ravi-key').hidden=true;observer();assert.equal(framePaused,false);
+panelOpen=false;observer();assert.equal(framePaused,true);assert.equal(rigPauses[0],false,'home rig keeps breathing when panel is folded');panelOpen=true;observer();
 console.log('PASS shared home/menu DOM, real controller modes, approval/key/backup/report stop, hidden/background stop, stale transcript rejection and five-finger report gesture');
 
 const main = readFileSync('src/main.ts','utf8');
