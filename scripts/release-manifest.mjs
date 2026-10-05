@@ -30,7 +30,7 @@ export async function prepareRelease(source, destination, version) {
     if (next.reduce((order, n, i) => order || Math.sign(n - old[i]), 0) <= 0) throw new Error('Release must be newer than the currently published version');
   } catch (e) { if (e.code !== 'ENOENT') throw e; }
   const base = `https://raw.githubusercontent.com/PLAYX1/playx-raven-releases/dist/v${version}`;
-  const manifest = { version, notes: 'RavenVault Desktop 0.6.5 — 라비와 대화하기가 편해졌습니다. 어느 화면에서든 라비 대화창이 앞에 떠 있고, 입력칸이 늘 보이며, 새 답은 자동으로 아래에 이어집니다. Enter 로 보내고 바로 다음 말을 이어 쓸 수 있습니다. 대화 글자를 가리던 옛 라비 그림과, 다른 프로그램을 누르면 라비 눈이 사라지던 문제를 고쳤습니다. 아티스트 소개 사진이 「줄이는 중」에서 멈추지 않게 했고, 지갑이 잠겨 있으면 그 자리에서 열고 바로 이어 올릴 수 있습니다. 0.6.4 — 살아 있는 라비 홈, 라비 답 읽어 주기.', pub_date: new Date().toISOString(), platforms: {}, installers: [] };
+  const manifest = { version, notes: 'RavenVault Desktop 0.6.6 — 라비 홍보 도우미가 생겼습니다. 라비에게 「홍보 글 만들어 줘」라고 하거나 「홍보 만들기」를 누르면, 가게의 실제 메뉴·가격·영업시간으로 X·인스타·카카오톡·동네 소식용 글을 한국어·영어·일본어·중국어로 써 줍니다. 가게 이름·라비·주문 QR 이 들어간 공유 그림도 만들어 저장할 수 있습니다. 글은 사장님이 확인하고 직접 올립니다. 메뉴와 다른 가격이 들어가면 경고합니다. 0.6.5 — 떠 있는 라비 대화창, 라비 눈 수리, 아티스트 사진 수리.', pub_date: new Date().toISOString(), platforms: {}, installers: [] };
   for (const [suffix, platform] of Object.entries(platforms)) {
     const signature = (await readFile(path.join(source, prefix + suffix + '.sig'), 'utf8')).trim();
     if (!/^[A-Za-z0-9+/=\r\n]+$/.test(signature) || signature.length < 100 || signature.length > 2048) throw new Error(`Malformed updater signature: ${suffix}`);
