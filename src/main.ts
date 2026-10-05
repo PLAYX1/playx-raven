@@ -1,11 +1,15 @@
 // 🔴 맨 먼저 — 앱 CSP(Tauri nonce) 가 막는 style="…" 속성을 CSSOM 으로 되살린다(src/style-attrs.ts).
 import "./style-attrs";
+import { createRaviHome } from "./ravi-home";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+let raviHome: ReturnType<typeof createRaviHome> | null = null;
 import { raviFace, setMood, RAVI_CHARACTERS, type RaviMood } from "./ravi-face";
 let raviState: RaviMood = "sleep";
 let lastKeyState: boolean | null = null;
 let raviAnimation = 0;
 function setAllRaviMood(mood: RaviMood): void {
   raviState = mood;
+  raviHome?.mood(mood);
   document.querySelectorAll<HTMLElement>(".ravi-face").forEach(face => setMood(face, mood));
 }
 function applyRaviCharacter(): void {
@@ -2648,7 +2652,7 @@ function paintRavi() {
   const hi = $("ravi-hello");
   const sub = $("ravi-sub");
   if (hi && sub) {
-    hi.textContent = t("라비");
+    hi.textContent = t("밤의 물결, 곁에 있는 라비.");
     sub.textContent = aiProvider ? t("AI 도우미 · 물어본 것만 봐요") : t("AI 키를 넣으면 라비가 깨어나요");
   }
   /* 🔴 아직 안 된 것이 있으면 **타일에 적어 둔다.** 눌러 보고 알게 하면
@@ -4839,11 +4843,12 @@ function showPage(id: string) {
 
   if (currentPage !== id) {
     document.querySelectorAll<HTMLInputElement>('#keyrows input[type="password"], #cu-key, #ravi-key-input').forEach(input => { input.value = ""; });
-    if (currentPage === "ravi") closeKeyCard();
+    if (currentPage === "ravi" || currentPage === "home") closeKeyCard();
   }
   currentPage = id;
+  raviHome?.page(id);
   document.body.classList.toggle("rv-talk-layout", id === "talk");
-  if (id === "ravi") paintRavi();
+  if (id === "ravi" || id === "home") paintRavi();
   if (id === "home") void paintHome();
   if (id === "profile") void paintProfile();
   paintPageTiles(id);
@@ -8581,6 +8586,7 @@ async function 지갑감시() {
   감시_마지막블록 = 다음;
   if (!들어온것.length) return;
   알린걸_기억(들어온것);
+  raviHome?.joy();
 
   // 화면을 새 사실로 맞춘다. 잔액과 자산 목록 둘 다 — 자산이 들어왔는데
   // 목록이 옛것이면 「보이는데 못 쓰는」 상태가 된다.
@@ -9311,6 +9317,7 @@ function chatPut(who: "me" | "ai" | "did", html: string) {
   if (who === "ai") div.querySelector(".msgravi")?.replaceWith(raviFace(raviState, 32, { round: true }));
   div.querySelectorAll(".ravi-mount").forEach(slot => slot.replaceWith(raviFace(raviState, 64)));
   $("chat-log").appendChild(div);
+  if (who === "ai" && !div.querySelector("[data-thinking]")) raviHome?.reply(div.querySelector(".msgtxt")?.textContent || "");
   $("chat-log").scrollTop = $("chat-log").scrollHeight;
 }
 
@@ -9912,6 +9919,7 @@ function paintRaviFace() {
 function paintRaviBadge(): void {
   try {
     const on = !!aiProvider;
+    raviHome?.connected(on);
     const wake = document.getElementById("rv-home-ravi-open");
     if (wake) setCopyText(wake, () => t(on ? "보내기" : "눌러서 깨우기"));
     const b = document.getElementById("rv-header-ravi");
@@ -10516,7 +10524,15 @@ async function ownerSnapshot(asked = ""): Promise<Record<string, unknown>> {
   return out;
 }
 
+let raviRequestPending = false;
 async function chatSend() {
+  if (raviRequestPending || !($("chat-q") as HTMLInputElement).value.trim()) return;
+  raviRequestPending = true;
+  raviHome?.thinking();
+  try { await chatSendExisting(); } finally { raviRequestPending = false; raviHome?.finish(); }
+}
+
+async function chatSendExisting() {
   const q = ($("chat-q") as HTMLInputElement).value.trim();
   if (!q) return;
   // 🔴 「R… 내 거야?」는 AI 에게 보내지 않는다 — 노드가 정확히 아는 것을 AI 가 짐작하게
@@ -17344,7 +17360,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   theme.value = ["light", "dark"].includes(savedTheme || "") ? savedTheme! : "system";
   document.documentElement.dataset.theme = theme.value;
   theme.onchange = () => { document.documentElement.dataset.theme = theme.value; localStorage.setItem("ravenvault-theme", theme.value); };
-  $("ravi-face").replaceWith(Object.assign(raviFace("sleep", 184), { id: "ravi-face" }));
+  $("ravi-face").replaceWith(Object.assign(raviFace("sleep", 184), { id: "ravi-face", hidden: true }));
   // 왼쪽 맨 앞 아이콘은 라비다(아래 rv-header-ravi). 예전 앱 로고 자리는 비운다.
   $("rv-desktop-logo").remove();
   $("rv-onboard-face").appendChild(raviFace("sleep", 150));
@@ -17435,12 +17451,19 @@ window.addEventListener("DOMContentLoaded", async () => {
     // The original review recalculates fee and requires the owner's existing confirmation.
     await reviewSend();
   };
-  const Speech = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-  if (Speech) {
-    const voice = $("rv-voice") as HTMLButtonElement;
-    voice.hidden = false;
-    voice.onclick = () => { const recognition = new Speech(); recognition.lang = lang; recognition.onresult = (event: any) => { ($("chat-q") as HTMLInputElement).value = String(event.results?.[0]?.[0]?.transcript || ""); }; recognition.start(); };
-  }
+  raviHome = createRaviHome({ wake: wakeRavi, wallet: () => showPage("wallet"), report: () => openReport() });
+  // The original small home input remains reachable among the expanded tools.
+  $("ravi-tools").appendChild($("rv-home-ravi"));
+  const balanceSource = $("overview-balance");
+  const balanceCopy = () => { $("ravi-balance-value").textContent = balanceSource.textContent; };
+  new MutationObserver(balanceCopy).observe(balanceSource, { childList: true, characterData: true, subtree: true });
+  balanceCopy(); paintRaviBadge();
+  try {
+    const appWindow = getCurrentWindow();
+    void appWindow.isFocused().then(focused => { if (typeof focused === "boolean") raviHome?.background(!focused); }).catch(() => {});
+    void appWindow.onFocusChanged(({ payload }) => raviHome?.background(!payload)).catch(() => {});
+  } catch { /* synthetic browser tests have no native window */ }
+
   loadHealth();
   // 🔴 **부르는 줄.** 화면만 만들고 이 줄을 안 쓰면 오늘만 여섯 번 본 그 병이다.
   //    켤 때 한 번, 그리고 1분마다. 이 프로그램에는 이미 타이머가 여럿이라
@@ -17851,7 +17874,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   window.addEventListener("desktop-language-change", paintRaviBadge);
   syncLanguage();
   $("overview-receive").onclick = () => { showPage("wallet"); void openReceive(); };
-  $("overview-phone").onclick = () => { const panel = $("phone-tx-panel") as HTMLDetailsElement; panel.open = true; panel.scrollIntoView(); $("phone-tx-code").focus(); };
+  $("overview-phone").onclick = () => { ($("ravi-tools") as HTMLDetailsElement).open = true; const panel = $("phone-tx-panel") as HTMLDetailsElement; panel.open = true; panel.scrollIntoView(); $("phone-tx-code").focus(); };
   $("rv-home-send").onclick = () => { showPage("wallet"); void openSend("rvn"); };
   $("rv-home-backup").onclick = () => showPage("settings");
   $("rv-home-chat").onclick = () => showPage("talk");

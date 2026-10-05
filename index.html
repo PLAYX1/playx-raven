@@ -3663,7 +3663,7 @@
            같은 길이라 배울 것이 하나뿐이다. -->
       <section class="page on" id="page-home">
         <h1>홈</h1>
-        <div class="rv-home-grid">
+        <div class="rv-home-grid"><div id="ravi-home-slot"></div><aside class="ravi-sidebar">
           <div class="rv-home-balance">        <div class="overview" aria-labelledby="overview-title">
           <h2 id="overview-title">한눈에</h2>
           <div class="overview-values"><div><span>내 서버</span><strong id="overview-node">확인 못 함</strong></div><div><span>완료 잔액</span><strong id="overview-balance">확인 못 함</strong></div><div id="overview-incoming-row" hidden><span>들어오는 중</span><strong id="overview-incoming"></strong></div></div>
@@ -3675,6 +3675,7 @@
           <div class="rv-home-today" id="rv-home-today" hidden><h2>오늘 가게</h2><div id="rv-home-today-body"></div><button id="rv-home-shop" class="ghost" type="button">내 가게 열기</button></div>
           <div class="rv-home-activity"><h2>최근 활동</h2><div id="rv-home-txs"></div></div>
           <div class="rv-home-chats"><h2>최근 대화</h2><div id="rv-home-rooms"></div><button id="rv-home-chat" class="ghost" type="button">대화 열기</button></div>
+        </aside>
         </div>
       </section>
       <section class="page" id="page-ravi">
@@ -3684,40 +3685,18 @@
              걷히던 것이었다 — 화면에는 「1%」가 떠 있었고 계산 코드도 있었는데
              부르는 줄이 없었다. 대표가 물어봐야만 알 수 있는 상태였다.
              그래서 **묻지 않아도 보이게** 첫 화면에 둔다. -->
+        <div id="ravi-conversation">
+        <button id="ravi-balance" type="button"><span>완료 잔액</span><strong id="ravi-balance-value">확인 못 함</strong></button>
         <div class="ravihero">
-          <span id="ravi-face"></span>
-          <div class="ravihi">
-            <h2 id="ravi-hello">라비</h2>
-            <p id="ravi-sub" class="lede">AI 키를 넣으면 라비가 깨어나요</p>
-            <span id="ravi-key-last4" aria-live="polite"></span><button id="ravi-key-delete" class="ghost" type="button" hidden>키 지우기</button>
-          </div>
+          <div class="ravihi"><h2 id="ravi-hello">밤의 물결, 곁에 있는 라비.</h2><p id="ravi-sub" class="lede">AI 키를 넣으면 라비가 깨어나요</p></div>
+          <button id="ravi-stage" type="button" aria-label="잠든 라비 깨우기"><span id="ravi-rig"></span></button>
+          <p id="ravi-state">잠듦 · 느린 숨</p>
+          <div class="ravi-caption-area"><p id="ravi-caption" aria-live="polite" translate="no">라비가 잠들어 있어요. 눌러서 깨워 주세요.</p><p id="ravi-transcript" translate="no"></p></div>
+          <span id="ravi-face" hidden></span>
         </div>
-
         <!-- 🔴 타일은 여덟 개까지다. 더 늘리면 다시 '찾는 화면'이 된다.
              왼쪽 넷은 열쇠 없이도 되는 것, 오른쪽 넷은 라비가 하는 것. -->
         <!-- 아직 안 된 것 한 줄. 눌러 보고 알게 하면 헛걸음이다. -->
-        <details class="rv-web-info" id="phone-tx-panel">
-          <summary>폰에서 서명한 거래 보내기</summary>
-          <p>열쇠는 폰에 남습니다. 이 컴퓨터는 내용을 확인하고 내 서버로 전파합니다.</p>
-          <label for="phone-tx-code">폰의 서명 거래 코드 붙여넣기</label>
-          <textarea id="phone-tx-code" rows="3" maxlength="600000" spellcheck="false" autocomplete="off" placeholder="ravenvault://transaction?v=1&amp;hex=…"></textarea>
-          <p>분할 QR은 모든 조각을 한 줄에 하나씩 붙여넣으세요.</p>
-          <div class="phone-tx-actions"><button id="phone-tx-check" type="button">보내기 전 내용 확인</button><button id="phone-tx-cancel" type="button" class="ghost">입력 지우기</button></div>
-          <div id="phone-tx-preview"></div>
-          <p id="phone-tx-status" role="status" aria-live="polite"></p>
-          <button id="phone-tx-send" type="button" hidden>확인하고 네트워크에 보내기</button>
-        </details>
-        <details class="rv-web-info" id="rv-phone-info">
-          <summary>폰에서 RavenVault 쓰기</summary>
-          <p>폰 카메라로 찍으면 RavenVault가 열립니다. 폰 지갑과 이 컴퓨터의 지갑은 별개이며 잔액이 자동으로 합쳐지지 않습니다.</p>
-          <div id="rv-phone-qr" class="shareqr" aria-label="RavenVault 웹앱 주소 QR"></div>
-          <p class="phone-url" translate="no">https://ravenvault.ex.erci.se/wallet/</p>
-          <button id="rv-phone-open" class="ghost" type="button">브라우저로 열기</button>
-          <p>같은 컴퓨터의 Chrome에서 http://127.0.0.1:8790에 연결할 때는 로컬 네트워크 접근을 허용해야 합니다. 서버와 손님 서버가 켜져 있어야 합니다.</p>
-          <p>다른 기기에서는 127.0.0.1로 이 컴퓨터에 연결할 수 없습니다. 폰에서는 접근 가능한 이 컴퓨터의 서버 주소를 설정하세요.</p>
-          <p id="rv-web-note" role="status" aria-live="polite"></p>
-        </details>
-
         <div id="ravi-chatwrap">
       <div id="chat">
         <!-- 여태 이 창은 양식 채우기 전용이었다. 사장님이 "이거 어떻게 생각해"
@@ -3740,14 +3719,39 @@
           <button id="rv-send-continue" type="button" hidden>기존 보내기 화면에서 직접 확정</button>
         </div>
 
+        <div class="ravi-voice-row"><button id="ravi-read" type="button" aria-pressed="false">답 읽어 주기 꺼짐</button><p>음성으로는 승인할 수 없어요</p></div>
         <div class="chat-in">
-          <button id="rv-voice" type="button" hidden>말로 묻기</button><input id="chat-q" placeholder="레이븐코인으로 받으면 뭐가 좋아?" autocomplete="off" />
+          <button id="ravi-plus" type="button" aria-label="라비 도구 열기" aria-expanded="false">＋</button><input id="chat-q" placeholder="라비에게 말하기" autocomplete="off" /><button id="rv-voice" type="button" aria-label="말로 묻기" aria-pressed="false" hidden>🎙</button>
           <button id="chat-go">보내기</button>
         </div>
         <!-- 0.4.8-B AI 열쇠 넣기 카드(라비 화면 안에서 바로). 그리는 것은 main.ts openKeyCard. -->
         <div id="ravi-key" hidden></div>
       </div>
         </div>
+        <details id="ravi-tools"><summary>라비 도구</summary>
+        <div class="ravi-key-status"><span id="ravi-key-last4"></span><button id="ravi-key-delete" class="ghost" type="button" hidden>키 지우기</button></div>
+        <details class="rv-web-info" id="phone-tx-panel">
+          <summary>폰에서 서명한 거래 보내기</summary>
+          <p>열쇠는 폰에 남습니다. 이 컴퓨터는 내용을 확인하고 내 서버로 전파합니다.</p>
+          <label for="phone-tx-code">폰의 서명 거래 코드 붙여넣기</label>
+          <textarea id="phone-tx-code" rows="3" maxlength="600000" spellcheck="false" autocomplete="off" placeholder="ravenvault://transaction?v=1&amp;hex=…"></textarea>
+          <p>분할 QR은 모든 조각을 한 줄에 하나씩 붙여넣으세요.</p>
+          <div class="phone-tx-actions"><button id="phone-tx-check" type="button">보내기 전 내용 확인</button><button id="phone-tx-cancel" type="button" class="ghost">입력 지우기</button></div>
+          <div id="phone-tx-preview"></div>
+          <p id="phone-tx-status" role="status" aria-live="polite"></p>
+          <button id="phone-tx-send" type="button" hidden>확인하고 네트워크에 보내기</button>
+        </details>
+        <details class="rv-web-info" id="rv-phone-info">
+          <summary>폰에서 RavenVault 쓰기</summary>
+          <p>폰 카메라로 찍으면 RavenVault가 열립니다. 폰 지갑과 이 컴퓨터의 지갑은 별개이며 잔액이 자동으로 합쳐지지 않습니다.</p>
+          <div id="rv-phone-qr" class="shareqr" aria-label="RavenVault 웹앱 주소 QR"></div>
+          <p class="phone-url" translate="no">https://ravenvault.ex.erci.se/wallet/</p>
+          <button id="rv-phone-open" class="ghost" type="button">브라우저로 열기</button>
+          <p>같은 컴퓨터의 Chrome에서 http://127.0.0.1:8790에 연결할 때는 로컬 네트워크 접근을 허용해야 합니다. 서버와 손님 서버가 켜져 있어야 합니다.</p>
+          <p>다른 기기에서는 127.0.0.1로 이 컴퓨터에 연결할 수 없습니다. 폰에서는 접근 가능한 이 컴퓨터의 서버 주소를 설정하세요.</p>
+          <p id="rv-web-note" role="status" aria-live="polite"></p>
+        </details>
+
         <details class="rv-ravi-actions"><summary>라비에게 시킬 수 있는 일</summary>
         <div class="tiles" id="ravi-tiles"></div>
         <div class="warnbox raviTodo" id="ravi-todo" style="display:none"></div>        <div class="card" id="money-status" style="margin-bottom:14px">
@@ -3756,6 +3760,8 @@
         </div>
 
         </details>
+        </details>
+        </div>
       </section>
 
       <section class="page" id="page-wallet">
@@ -3825,6 +3831,7 @@
             <div class="rv"><div class="rtotal" id="r-total"></div><div class="meta">내 지갑에서 나가는 돈</div></div>
           </div>
 
+          <p class="ravi-approval-note">음성으로는 승인할 수 없어요</p>
           <div id="r-warn"></div>
 
           <!-- 🔴 이 확인은 문구 하나로 살고 죽는다.

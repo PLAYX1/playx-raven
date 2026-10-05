@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 400" id="ravi-svg" role="img" aria-label="보라 리본과 별빛 눈을 가진 로우폴리 라비">
+<defs>
+<clipPath id="lake-clip"><path d="M20 356L82 344 275 344 342 359 320 388 70 394 18 375Z"/></clipPath>
+<clipPath id="eye-clip-left"><polygon points="124,196 159,184 172,210 137,223"/></clipPath>
+<clipPath id="eye-clip-right"><polygon points="220,181 255,185 251,212 219,211"/></clipPath>
+</defs>
+<g id="lake" aria-hidden="true">
+<path d="M20 356L82 344 275 344 342 359 320 388 70 394 18 375Z" fill="#e9eef5"/>
+<g id="lake-mesh" stroke="#f7fafb" stroke-width="1" opacity=".8">
+<polygon points="20,356 82,344 112,369" fill="#cdd7e7"/><polygon points="82,344 185,351 112,369" fill="#dde3ef"/><polygon points="185,351 275,344 241,371" fill="#c9d4e6"/><polygon points="275,344 342,359 241,371" fill="#dfe5ef"/><polygon points="112,369 185,351 241,371" fill="#b9c7e0"/><polygon points="20,356 112,369 70,394" fill="#e1e6f0"/><polygon points="112,369 241,371 179,391" fill="#d6deeb"/><polygon points="241,371 342,359 320,388" fill="#d4deed"/><polygon points="70,394 112,369 179,391" fill="#dce2ed"/><polygon points="179,391 241,371 320,388" fill="#e2e7f0"/>
+</g>
+<g clip-path="url(#lake-clip)" opacity=".14"><use href="#ravi-character" transform="translate(0 430) scale(1 -.2)"/></g>
+<path id="lake-ripple" d="M58 374L101 378 157 373M231 381L272 377 312 379" fill="none" stroke="#8e9fc0" stroke-width="1"/>
+</g>
+<g id="ravi-character">
+<g id="rig-body">
+<g id="rig-tail">
+<polygon points="116,320 59,301 36,258 71,277 96,301" fill="#263265"/>
+<polygon points="36,258 42,289 60,297" fill="#e16638"/><polygon points="36,258 59,276 42,289" fill="#f3a46a"/>
+<polygon points="89,321 34,325 16,300 46,307" fill="#2a356b"/><polygon points="16,300 46,307 34,325" fill="#e16638"/>
+<polygon points="108,322 73,285 67,260 87,278" fill="#353f73"/><polygon points="67,260 87,278 81,293" fill="#e16638"/>
+<polygon points="59,301 89,321 34,325" fill="#1f224e"/>
+</g>
+<polygon points="131,241 219,237 248,269 271,320 252,352 116,355 87,321 101,269" fill="#2a356b"/>
+<polygon points="131,241 150,293 101,269" fill="#353f73"/><polygon points="101,269 150,293 116,355 87,321" fill="#212a5a"/>
+<polygon points="150,293 185,349 116,355" fill="#263265"/><polygon points="219,237 248,269 221,296" fill="#353f73"/><polygon points="221,296 248,269 271,320" fill="#263265"/><polygon points="221,296 252,352 271,320" fill="#1f224e"/>
+<g id="rig-chest">
+<polygon points="142,250 219,249 225,306 195,341 168,322" fill="#e16638"/>
+<polygon points="142,250 180,272 157,288" fill="#e16638"/><polygon points="180,272 219,249 211,287" fill="#f3a46a"/><polygon points="157,288 180,272 181,309" fill="#f5c297"/><polygon points="181,309 180,272 211,287" fill="#e16638"/><polygon points="181,309 211,287 225,306" fill="#f3a46a"/><polygon points="168,322 181,309 195,341" fill="#f3a46a"/><polygon points="181,309 225,306 195,341" fill="#f5c297"/>
+</g>
+<g id="rig-wing-left">
+<polygon points="122,257 146,294 132,330 108,342 90,316 101,279" fill="#263265"/>
+<polygon points="122,257 146,294 117,295" fill="#353f73"/><polygon points="117,295 146,294 132,330" fill="#212a5a"/><polygon points="90,316 117,295 108,342" fill="#1f224e"/><polygon points="108,342 132,330 126,351" fill="#e16638"/>
+</g>
+<g id="rig-wing-right">
+<polygon points="230,249 250,272 269,312 253,341 227,319 220,282" fill="#2a356b"/>
+<polygon points="230,249 250,272 220,282" fill="#353f73"/><polygon points="250,272 269,312 243,301" fill="#263265"/><polygon points="220,282 243,301 227,319" fill="#212a5a"/><polygon points="243,301 269,312 253,341" fill="#353f73"/>
+</g>
+<g id="rig-feet">
+<polygon points="137,347 167,346 185,359 155,366 123,361" fill="#e16638"/><polygon points="137,347 155,366 147,371" fill="#f3a46a"/><polygon points="155,366 185,359 167,354" fill="#f5c297"/>
+<polygon points="203,346 227,344 250,360 216,366 191,359" fill="#e16638"/><polygon points="216,366 227,354 250,360" fill="#f3a46a"/><polygon points="216,366 231,372 227,354" fill="#f5c297"/>
+</g>
+</g>
+<g id="rig-head">
+<g id="rig-feathers">
+<polygon points="136,103 112,59 122,23 145,78" fill="#353f73"/><polygon points="122,23 131,48 112,59" fill="#69659b"/><polygon points="112,59 145,78 136,103" fill="#263265"/>
+<polygon points="147,103 148,63 178,52 160,91" fill="#263265"/><polygon points="148,63 160,91 147,103" fill="#353f73"/>
+<polygon points="130,105 103,88 96,70 123,81" fill="#212a5a"/><polygon points="96,70 123,81 130,105" fill="#4c518c"/>
+</g>
+<polygon points="137,87 221,102 264,143 280,208 269,245 212,272 137,266 91,239 81,189 97,128" fill="#2a356b"/>
+<polygon points="137,87 221,102 166,150" fill="#353f73"/><polygon points="221,102 264,143 166,150" fill="#2d3b6f"/><polygon points="137,87 166,150 97,128" fill="#263265"/><polygon points="97,128 166,150 106,201 81,189" fill="#212a5a"/><polygon points="166,150 264,143 214,196" fill="#263265"/><polygon points="264,143 280,208 244,181" fill="#353f73"/><polygon points="81,189 106,201 91,239" fill="#1f224e"/><polygon points="91,239 137,266 106,201" fill="#212a5a"/>
+<g id="rig-face">
+<polygon points="115,210 130,184 158,174 175,184 186,216 215,222 217,178 236,164 258,175 280,208 269,245 212,272 137,266 106,242" fill="#f5c297"/>
+<polygon points="115,210 130,184 158,174 151,199" fill="#ffd29e"/><polygon points="217,178 236,164 258,175 234,184" fill="#ffd29e"/>
+<polygon points="106,242 137,266 212,272 185,251" fill="#f3a46a"/><polygon points="212,272 269,245 246,250" fill="#e16638"/><polygon points="258,175 280,208 264,217" fill="#f3a46a"/>
+</g>
+<g id="rig-ribbon">
+<polygon points="96,142 75,124 61,142 59,160 88,164" fill="#9272a5"/><polygon points="75,124 96,142 79,148 61,142" fill="#794687"/>
+<polygon points="93,146 116,134 124,155 111,176 94,162" fill="#9b7e9f"/><polygon points="116,134 124,155 97,156" fill="#9272a5"/>
+<polygon points="82,158 61,187 79,181 76,212 93,192 93,165" fill="#794687"/><polygon points="94,162 112,195 95,191 103,212 88,205" fill="#9272a5"/>
+<polygon points="80,148 97,145 100,163 82,166" fill="#69659b"/><polygon points="80,148 100,163 82,166" fill="#9272a5"/>
+</g>
+<g id="rig-eye-left">
+<g id="eye-open-left">
+<polygon points="122,194 160,180 175,211 135,225" fill="#212a5a"/>
+<polygon points="124,196 159,184 172,210 137,223" fill="#f7fafb"/>
+<g clip-path="url(#eye-clip-left)"><g id="rig-pupil-left">
+<polygon points="139,191 159,188 170,208 151,223 138,211" fill="#69659b"/><polygon points="139,191 159,188 151,223" fill="#4c518c"/><polygon points="147,196 157,195 162,206 153,215 145,208" fill="#353f73"/>
+<g id="rig-star-left" fill="#f7fafb"><polygon points="155,195 158,202 165,204 159,207 156,214 153,208 147,206 153,202"/><polygon points="142,211 144,214 147,215 144,217 143,220 141,216 138,215 141,214"/></g>
+</g></g>
+<polygon points="121,193 161,180 164,190 129,204" fill="#212a5a"/>
+</g>
+<g id="rig-lid-left" opacity="0"><polygon points="120,193 160,180 175,212 136,226" fill="#f5c297"/><path d="M128 210L146 215 166 207" fill="none" stroke="#263265" stroke-width="4"/></g>
+</g>
+<g id="rig-eye-right">
+<g id="eye-open-right">
+<polygon points="218,179 258,182 253,214 216,213" fill="#212a5a"/>
+<polygon points="220,181 255,185 251,212 219,211" fill="#f7fafb"/>
+<g clip-path="url(#eye-clip-right)"><g id="rig-pupil-right">
+<polygon points="228,180 247,184 249,205 236,215 224,207" fill="#69659b"/><polygon points="228,180 247,184 236,215" fill="#4c518c"/><polygon points="232,187 241,188 246,200 237,208 230,200" fill="#353f73"/>
+<g id="rig-star-right" fill="#f7fafb"><polygon points="240,188 243,195 250,198 243,201 240,208 237,201 231,198 237,195"/><polygon points="225,202 227,205 230,206 227,208 226,211 224,207 221,206 224,205"/></g>
+</g></g>
+<polygon points="217,177 258,181 258,188 221,188" fill="#212a5a"/>
+</g>
+<g id="rig-lid-right" opacity="0"><polygon points="216,177 258,181 255,215 216,214" fill="#f5c297"/><path d="M221 202L235 208 252 205" fill="none" stroke="#263265" stroke-width="4"/></g>
+</g>
+<g id="rig-cheeks" fill="#f3a46a"><polygon points="124,233 136,224 154,227 159,233 143,240 130,240"/><polygon points="243,226 254,217 267,219 270,226 259,232 247,232"/></g>
+<g id="rig-beak-lower"><polygon points="177,242 203,241 218,251 198,257" fill="#e16638"/><polygon points="177,242 198,257 185,253" fill="#bc4936"/></g>
+<g id="rig-beak-upper"><polygon points="170,231 195,208 219,241 203,250" fill="#e16638"/><polygon points="170,231 195,208 194,235" fill="#f3a46a"/><polygon points="195,208 219,241 194,235" fill="#e97938"/><polygon points="193,218 201,225 191,223" fill="#a94633"/></g>
+</g>
+</g>
+<g id="sleep-particles" opacity="0" fill="#69659b" aria-hidden="true"><g id="sleep-z"><polygon points="284,103 296,103 284,116 296,116 296,119 279,119 290,106 280,106"/><polygon points="306,83 315,83 306,93 316,93 316,96 301,96 310,86 302,86" opacity=".6"/><polygon points="326,65 334,65 326,74 334,74 334,77 321,77 329,68 322,68" opacity=".3"/></g></g>
+<g id="thought-particles" opacity="0" fill="#69659b" aria-hidden="true"><polygon points="201,54 208,42 215,54"/><polygon points="230,60 237,49 243,62"/><polygon points="251,75 261,70 261,82"/></g>
+<g id="joy-particles" opacity="0" fill="#e16638" aria-hidden="true"><polygon points="58,212 67,198 73,216"/><polygon points="289,226 302,213 305,234"/><polygon points="60,280 68,272 70,284"/><polygon points="297,291 306,282 310,295"/></g>
+</svg>

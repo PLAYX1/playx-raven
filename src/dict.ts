@@ -38,6 +38,28 @@ import { CERT_COPY } from "./cert-copy";
 import { PAIRING_COPY } from "./pairing-copy";
 import { MAP_COPY } from "./map-copy";
 
+const RAVI_HOME_COPY: Record<string, [string, string, string]> = {
+  "밤의 물결, 곁에 있는 라비.": ["Night ripples. Ravi by your side.", "夜のさざ波、そばにいるラビ。", "夜色涟漪，拉比在身旁。"],
+  "잠듦 · 느린 숨": ["Asleep · breathing slowly", "眠っています · ゆっくり呼吸", "睡着了 · 缓缓呼吸"],
+  "깨어 있음 · 곁에 있어요": ["Awake · here with you", "起きています · そばにいます", "醒着 · 在你身旁"],
+  "듣는 중 · 편하게 말해 주세요": ["Listening · take your time", "聞いています · 気軽に話してください", "正在听 · 请慢慢说"],
+  "생각 중 · 조각을 모아요": ["Thinking · putting pieces together", "考えています · かけらを集めています", "思考中 · 整理思绪"],
+  "말하는 중 · 라비의 목소리": ["Speaking · Ravi’s voice", "話しています · ラビの声", "说话中 · 拉比的声音"],
+  "기쁨 · 고마워요": ["Happy · thank you", "うれしいです · ありがとう", "开心 · 谢谢你"],
+  "잠든 라비 깨우기": ["Wake sleeping Ravi", "眠っているラビを起こす", "唤醒熟睡的拉比"],
+  "라비와 말하기": ["Talk with Ravi", "ラビと話す", "和拉比聊天"],
+  "라비가 잠들어 있어요. 눌러서 깨워 주세요.": ["Ravi is asleep. Press to wake her.", "ラビは眠っています。押して起こしてください。", "拉比睡着了。点按唤醒她。"],
+  "깨어났어요. 무엇을 도와드릴까요?": ["I’m awake. How can I help?", "起きました。何をお手伝いしましょうか？", "我醒啦。有什么可以帮你？"],
+  "라비에게 말하기": ["Talk to Ravi", "ラビに話しかける", "对拉比说"],
+  "라비 도구 열기": ["Open Ravi’s tools", "ラビの道具を開く", "打开拉比工具"],
+  "라비 도구": ["Ravi’s tools", "ラビの道具", "拉比工具"],
+  "말로 묻기": ["Ask by voice", "声で質問する", "语音提问"],
+  "답 읽어 주기 꺼짐": ["Read replies aloud: off", "回答の読み上げ：オフ", "朗读回答：关"],
+  "답 읽어 주기 켜짐": ["Read replies aloud: on", "回答の読み上げ：オン", "朗读回答：开"],
+  "음성으로는 승인할 수 없어요": ["Voice cannot approve payments", "音声では承認できません", "语音无法批准付款"],
+  "이 기기에서는 글로 물어봐 주세요": ["Please ask by typing on this device", "この機器では文字で質問してください", "请在此设备上打字提问"],
+};
+
 export const DICT: Record<string, Record<string, string>> = {
   ko: {},
   en: {
@@ -5488,6 +5510,6 @@ for (const [source, values] of Object.entries(PAIRING_COPY)) {
 for (const [source, values] of Object.entries(MAP_COPY)) {
   (["en", "ja", "zh"] as const).forEach((language, index) => { DICT[language][source] ??= values[index]; });
 }
-for (const [source, values] of [...Object.entries(DESKTOP_COPY), ...Object.entries(CREATE_COPY), ...Object.entries(CERT_COPY)]) {
+for (const [source, values] of [...Object.entries(DESKTOP_COPY), ...Object.entries(CREATE_COPY), ...Object.entries(CERT_COPY), ...Object.entries(RAVI_HOME_COPY)]) {
   (["en", "ja", "zh"] as const).forEach((language, index) => { DICT[language][source] = values[index]; });
 }
