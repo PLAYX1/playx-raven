@@ -17,46 +17,63 @@
 .ravi-sidebar .rv-home-balance #overview-balance { font-size:28px; white-space:normal; overflow-wrap:anywhere; }
 .ravi-sidebar button, .ravi-sidebar #overview-phone, .ravi-sidebar #overview-receive,
 .ravi-sidebar #rv-home-send, .ravi-sidebar #rv-home-backup { min-height:64px !important; font-size:16px; white-space:normal; }
-#ravi-conversation { --text:#1f224e; --muted:#59637d; --panel:#fff; --bg:#f7fafb; --line:#d9e1ec; background:#f7fafb; color:#1f224e; border:1px solid #d9e1ec; border-radius:4px 24px 4px 24px; padding:16px; min-width:0; font-size:16px; }
-#ravi-conversation button, #ravi-conversation input, #ravi-conversation summary { font-size:16px; }
-#ravi-conversation button { min-height:64px; }
-#ravi-balance { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:12px; background:#fff; color:#1f224e; border:1px solid #d9e1ec; margin:0 auto 12px; border-radius:4px 18px; padding:8px 20px; }
+#ravi-conversation { --text:#1f224e; --muted:#59637d; background:#f7fafb; color:#1f224e; border:1px solid #d9e1ec; border-radius:24px; padding:24px; min-width:0; text-align:center; }
+#ravi-balance { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:12px; background:#fff; color:#1f224e; border:1px solid #d9e1ec; margin:0 auto 16px; border-radius:18px; padding:12px 20px; }
 #ravi-balance strong { font-size:22px; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
-#ravi-conversation .ravihero { display:flex; flex-direction:column; gap:6px; padding:0; margin:0; text-align:center; }
+#ravi-conversation .ravihero { display:flex; flex-direction:column; align-items:center; gap:12px; padding:0; margin:0; }
 #ravi-conversation .ravihi { display:block; }
-#ravi-conversation #ravi-hello { font:22px/1.5 Georgia,'AppleMyungjo',serif; margin:0; }
-#ravi-conversation #ravi-sub { font-size:16px; margin:0; }
-#ravi-stage { display:block; width:100%; height:clamp(190px,30vh,310px); padding:0; border:0; background:transparent; box-shadow:none; }
-#ravi-rig { display:block; height:100%; width:100%; }
-#ravi-rig svg { display:block; height:100%; width:100%; overflow:hidden; pointer-events:none; stroke:none; fill:none; }
-#ravi-state { margin:0; color:#59637d; font-size:16px; line-height:24px; }
-.ravi-caption-area { min-width:0; width:100%; }
-#ravi-caption { white-space:pre-line; font-size:18px; line-height:24px; max-height:72px; overflow:auto; margin:8px 0; overflow-wrap:anywhere; }
-#ravi-transcript { margin:0; min-height:24px; line-height:24px; color:#59637d; font-size:16px; max-height:48px; overflow:auto; overflow-wrap:anywhere; }
-#ravi-conversation #chat { position:static; display:flex; flex-direction:column; width:auto; max-width:none; height:auto; padding:0; background:transparent; color:#1f224e; border:0; box-shadow:none; }
-#ravi-conversation #chat-log { padding:8px 0; font-size:16px; max-height:180px; min-height:0; overflow:auto; }
-#ravi-conversation #chat-log:empty { display:none; }
-#ravi-conversation .msg { font-size:16px; }
-#ravi-conversation .rv-quick { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin:8px 0; }
-#ravi-conversation .rv-quick button { background:#fff; color:#1f224e; border:1px solid #d9e1ec; padding:8px; border-radius:4px 16px; }
-#ravi-conversation .ravi-voice-row { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; }
-#ravi-conversation .ravi-voice-row p { font-size:16px; margin:0; color:#59637d; }
-#ravi-read { background:transparent; color:#1f224e; border:0; padding:8px; }
-#ravi-read[aria-pressed="true"] { color:#a94621; }
-#ravi-conversation .chat-in { display:flex; align-items:stretch; padding:0; gap:0; background:#fff; border:1px solid #d9e1ec; border-radius:4px 20px; overflow:hidden; }
-#ravi-conversation .chat-in input { min-width:0; flex:1; border:0; border-radius:0; padding:8px; font-size:16px; min-height:64px; background:#fff; color:#1f224e; }
-#ravi-conversation .chat-in button { min-width:64px; flex:none; padding:8px; margin:0; background:transparent; color:#1f224e; border:0; border-radius:0; }
-#ravi-conversation #chat-go { background:#1f224e; color:#fff; }
-#ravi-conversation #rv-voice[aria-pressed="true"] { background:#fde8dc; }
-#ravi-conversation .chat-mode { order:5; display:flex; flex-wrap:wrap; gap:8px; padding:8px 0; background:transparent; }
-#ravi-conversation .chat-mode button { min-height:64px; color:#1f224e; background:#fff; border:1px solid #d9e1ec; }
-#ravi-tools { margin-top:12px; }
-#ravi-tools > summary { min-height:64px; display:flex; align-items:center; cursor:pointer; }
+#ravi-hello { font:24px/1.5 Georgia,'AppleMyungjo',serif; margin:0; }
+#ravi-sub, #ravi-state { margin:0; color:#59637d; font-size:16px; line-height:24px; }
+#ravi-stage { display:block; width:100%; height:clamp(220px,32vh,360px); padding:0; border:0; background:transparent; box-shadow:none; }
+#ravi-rig, #ravi-panel-rig, #ravi-launcher-rig { display:block; height:100%; width:100%; }
+#ravi-rig svg, #ravi-panel-rig svg, #ravi-launcher-rig svg { display:block; height:100%; width:100%; overflow:hidden; pointer-events:none; stroke:none; fill:none; }
+#ravi-caption { font-size:18px; line-height:1.5; margin:0; overflow-wrap:anywhere; }
+#ravi-transcript { display:none; }
+#ravi-open { min-height:56px; padding:12px 28px; background:#1f224e; color:#fff; }
+#ravi-tools { margin-top:20px; }
+#ravi-tools > summary { min-height:56px; display:flex; align-items:center; cursor:pointer; }
 #ravi-tools .rv-home-ravi { display:flex; flex-wrap:wrap; gap:12px; position:static; margin-top:12px; }
-#ravi-tools .rv-home-ravi h2, #ravi-tools .rv-home-ravi input { font-size:16px; }
-#ravi-tools .rv-home-ravi input { min-width:0; min-height:64px; }
-#ravi-conversation #ravi-key { order:4; }
 .ravi-key-status { display:flex; align-items:center; gap:12px; }
+/* Author display rules must never resurrect a hidden legacy face or approval card. */
+.ravi-face[hidden], #ravi-panel[hidden], #ravi-launcher[hidden], #ravi-new[hidden], #ravi-key[hidden], #rv-send-card[hidden] { display:none !important; }
+#ravi-panel { --text:#1f224e; --muted:#59637d; --bg:#f7fafb; --panel:#fff; --line:#d9e1ec; position:fixed; right:16px; bottom:16px; width:440px; height:min(580px,calc(100dvh - 136px)); max-width:calc(100vw - 120px); z-index:65; display:flex; flex-direction:column; color:var(--text); background:var(--panel); border:1px solid var(--line); border-radius:22px; box-shadow:0 12px 48px #1f224e30; overflow:hidden; }
+#ravi-panel.large { width:640px; height:calc(100dvh - 136px); }
+#ravi-panel button { font-size:14px; min-height:40px; padding:8px 12px; color:var(--text); background:#fff; border:1px solid var(--line); flex:none; }
+#ravi-panel button:focus-visible, #ravi-panel textarea:focus-visible, #ravi-launcher:focus-visible { outline:3px solid #a94622; outline-offset:-3px; }
+#ravi-panel button:disabled { opacity:.5; }
+#ravi-panel .ravi-panel-head { display:flex; align-items:center; gap:8px; padding:8px 12px; flex:none; border-bottom:1px solid var(--line); }
+#ravi-panel #ravi-panel-stage { width:64px; height:64px; padding:0; border:0; background:transparent; }
+.ravi-panel-title { flex:1; min-width:0; }
+.ravi-panel-title strong { font-size:17px; }
+#ravi-panel-state { font-size:13px; line-height:1.4; margin:4px 0 0; overflow-wrap:anywhere; }
+#ravi-panel #ravi-chatwrap { flex:1; min-height:0; display:flex; width:100%; }
+#ravi-panel #chat { position:relative; inset:auto; width:100%; height:100%; min-height:0; max-width:none; display:flex; flex-direction:column; border:0; padding:0; box-shadow:none; background:#fff; color:var(--text); overflow:hidden; }
+#ravi-panel .ravi-history { order:1; flex:1; min-height:0; position:relative; display:flex; }
+#ravi-panel #chat-log { flex:1; min-height:0; max-height:none; padding:16px; overflow:auto; overscroll-behavior:contain; overflow-anchor:none; font-size:16px; }
+#ravi-panel .msg { font-size:16px; line-height:1.6; max-width:95%; padding:10px 12px; margin-bottom:12px; overflow-wrap:anywhere; }
+#ravi-panel .msg.ai { display:flex; gap:8px; background:#f7fafb; border:1px solid var(--line); }
+#ravi-panel .msgtxt { min-width:0; flex:1; }
+#ravi-panel .msg .ravi-face { width:32px !important; height:32px !important; animation:none; }
+#ravi-panel .msg.me { background:#1f224e; color:#fff; }
+#ravi-panel #ravi-new { position:absolute; bottom:8px; left:50%; transform:translateX(-50%); background:#1f224e; color:#fff; border:0; box-shadow:0 2px 10px #1f224e30; }
+#ravi-panel .rv-quick { order:2; display:flex; flex-wrap:nowrap; overflow-x:auto; flex:none; gap:8px; margin:0; padding:8px 12px; max-width:none; overscroll-behavior:contain; }
+#ravi-panel .rv-quick button { white-space:nowrap; border-radius:999px; }
+#ravi-panel .ravi-voice-row { order:3; flex:none; display:flex; align-items:center; justify-content:space-between; gap:8px; padding:0 12px 8px; }
+#ravi-panel .ravi-voice-row p { font-size:12px; margin:0; }
+#ravi-panel #ravi-read[aria-pressed="true"] { color:#a94621; }
+#ravi-panel .chat-in { order:4; flex:none; display:flex; align-items:center; padding:8px 12px; gap:6px; border-top:1px solid var(--line); background:#fff; }
+#ravi-panel #chat-q { min-width:0; flex:1; height:64px; min-height:64px; max-height:64px; resize:none; margin:0; padding:8px; font-family:inherit; font-size:16px; line-height:1.4; border:1px solid var(--line); border-radius:12px; background:#f7fafb; color:var(--text); }
+#ravi-panel #chat-go { background:#1f224e; color:#fff; }
+#ravi-panel .chat-mode { order:0; flex:none; display:flex; flex-wrap:nowrap; overflow-x:auto; gap:6px; padding:6px 12px; border:0; }
+#ravi-panel .chat-mode button { white-space:nowrap; font-size:13px; min-height:32px; padding:4px 10px; }
+#ravi-panel .chat-mode button.on { border-color:#1f224e; background:#eef0f7; }
+#ravi-panel #ravi-key, #ravi-panel #rv-send-card { position:absolute; inset:0 0 86px; z-index:2; overflow:auto; margin:0; border:0; border-radius:0; background:#fff; padding:16px; }
+#ravi-panel.reviewing .chat-in { visibility:hidden; }
+#ravi-launcher { position:fixed; right:20px; bottom:20px; width:72px; height:72px; padding:0; border:1px solid #d9e1ec; border-radius:50%; background:#f7fafb; box-shadow:0 6px 24px #1f224e30; z-index:65; }
+.ravi-sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
+/* Toasts occupy the space to the left of even the expanded panel. */
+#ravibub.ravibub, #live-note, #live-note.on, #busybar { left:104px !important; right:auto !important; bottom:20px !important; transform:none !important; max-width:min(380px,calc(100vw - 776px)) !important; width:auto; box-sizing:border-box; }
+@media(max-width:900px) { #ravibub.ravibub, #live-note, #busybar { top:96px !important; bottom:auto !important; max-width:calc(100vw - 136px) !important; } }
 .ravi-paused .ravi-face, .ravi-paused .ravi-face * { animation:none !important; transition:none !important; }
 #send-review, #send-compose, #w-balance, #sdw .sheet-box, #wrs .sheet-box,
 #askwrap.on .askbox { --panel:#fff; --bg:#fff; --text:#1f224e; --muted:#59637d; --line:#d9e1ec; background:#fff !important; color:#1f224e; animation:none !important; }
@@ -69,7 +86,10 @@
   .ravi-sidebar { display:flex; }
   #ravi-conversation { padding:12px; }
   #ravi-stage { height:220px; }
-  #ravi-conversation .chat-in button { min-width:64px; }
+  #ravi-panel { right:8px; bottom:8px; max-width:calc(100vw - 104px); }
+  #ravi-panel .ravi-panel-head { gap:4px; padding:6px; }
+  #ravi-panel button { padding:6px; }
+  #ravi-panel .chat-in { padding:6px; }
 }
 @media(prefers-reduced-motion:reduce) {
   #ravi-conversation *, .ravi-face, .ravi-face * { animation:none !important; transition:none !important; scroll-behavior:auto !important; }

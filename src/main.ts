@@ -9318,7 +9318,7 @@ function chatPut(who: "me" | "ai" | "did", html: string) {
   div.querySelectorAll(".ravi-mount").forEach(slot => slot.replaceWith(raviFace(raviState, 64)));
   $("chat-log").appendChild(div);
   if (who === "ai" && !div.querySelector("[data-thinking]")) raviHome?.reply(div.querySelector(".msgtxt")?.textContent || "");
-  $("chat-log").scrollTop = $("chat-log").scrollHeight;
+  raviHome?.message(who === "ai" && !div.querySelector("[data-thinking]"));
 }
 
 const SHOP_FIELDS: Record<string, string> = {
@@ -10344,6 +10344,7 @@ function keyCardHtml(): string {
 }
 
 function openKeyCard() {
+  raviHome?.open(false);
   const host = $("ravi-key");
   host.innerHTML = keyCardHtml();
   host.hidden = false;
@@ -10528,6 +10529,7 @@ let raviRequestPending = false;
 async function chatSend() {
   if (raviRequestPending || !($("chat-q") as HTMLInputElement).value.trim()) return;
   raviRequestPending = true;
+  raviHome?.sent();
   raviHome?.thinking();
   try { await chatSendExisting(); } finally { raviRequestPending = false; raviHome?.finish(); }
 }
@@ -17370,7 +17372,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("rv-header-ravi-face").appendChild(raviFace("sleep", 40, { round: true }));
   $("rv-header-ravi").title = t("라비");
   $("rv-header-ravi").setAttribute("aria-label", t("라비"));
-  $("rv-header-ravi").onclick = wakeRavi;
+  $("rv-header-ravi").onclick = () => raviHome?.open();
   const homeAsk = () => {
     const hq = $("rv-home-ravi-q") as HTMLInputElement;
     const v = hq.value.trim();
@@ -17421,6 +17423,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     button.onclick = () => { ($("chat-q") as HTMLInputElement).value = button.dataset.rvQuestion || ""; void chatSend(); };
   });
   $("rv-send-request").onclick = () => { $("rv-send-card").hidden = false; $("rv-send-to").focus(); };
+  $("rv-send-close").onclick = () => { $("rv-send-card").hidden = true; raviHome?.open(); };
   ["rv-send-to", "rv-send-amount"].forEach(id => $(id).addEventListener("input", () => { $("rv-send-continue").hidden = true; $("rv-send-summary").textContent = ""; }));
   $("rv-send-check").onclick = async () => {
     const address = ($("rv-send-to") as HTMLInputElement).value.trim();
@@ -17444,10 +17447,11 @@ window.addEventListener("DOMContentLoaded", async () => {
     ($("s-addr") as HTMLInputElement).value = address;
     ($("s-qty") as HTMLInputElement).value = amount;
     composeChanged();
+    $("rv-send-card").hidden = true;
     // The original review recalculates fee and requires the owner's existing confirmation.
     await reviewSend();
   };
-  raviHome = createRaviHome({ wake: wakeRavi, wallet: () => showPage("wallet"), report: () => openReport() });
+  raviHome = createRaviHome({ wake: wakeRavi, wallet: () => showPage("wallet"), report: () => openReport(), send: () => { void chatSend(); }, tools: () => showPage("ravi") });
   // The original small home input remains reachable among the expanded tools.
   $("ravi-tools").appendChild($("rv-home-ravi"));
   const balanceSource = $("overview-balance");
@@ -18030,9 +18034,6 @@ window.addEventListener("DOMContentLoaded", async () => {
   });
   $("ravi-key").addEventListener("keydown", (e) => {
     if ((e as KeyboardEvent).key === "Enter" && (e.target as HTMLElement).id === "ravi-key-input") void saveKeyCard();
-  });
-  $("chat-q").addEventListener("keydown", (e) => {
-    if ((e as KeyboardEvent).key === "Enter") chatSend();
   });
   $("ai-pick").addEventListener("change", () => {
     void refreshKeys();

@@ -39,6 +39,14 @@ import { PAIRING_COPY } from "./pairing-copy";
 import { MAP_COPY } from "./map-copy";
 
 const RAVI_HOME_COPY: Record<string, [string, string, string]> = {
+  "라비와 대화": ["Chat with Ravi", "ラビと会話", "与拉比聊天"],
+  "대화 기록": ["Conversation history", "会話履歴", "聊天记录"],
+  "새 답 ↓": ["New reply ↓", "新しい返信 ↓", "新回复 ↓"],
+  "새 답이 왔어요": ["A new reply arrived", "新しい返信が届きました", "收到新回复"],
+  "크게": ["Expand", "拡大", "放大"],
+  "작게": ["Reduce", "縮小", "缩小"],
+  "접기": ["Collapse", "折りたたむ", "收起"],
+  "대화창 접기": ["Collapse conversation", "会話を折りたたむ", "收起聊天窗口"],
   "밤의 물결, 곁에 있는 라비.": ["Night ripples. Ravi by your side.", "夜のさざ波、そばにいるラビ。", "夜色涟漪，拉比在身旁。"],
   "잠듦 · 느린 숨": ["Asleep · breathing slowly", "眠っています · ゆっくり呼吸", "睡着了 · 缓缓呼吸"],
   "깨어 있음 · 곁에 있어요": ["Awake · here with you", "起きています · そばにいます", "醒着 · 在你身旁"],
