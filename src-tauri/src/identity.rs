@@ -329,41 +329,59 @@ pub fn derive(seed: &[u8; 64], path: &str) -> Option<[u8; 32]> {
 
 // ── 노드에서 12단어를 받아 오는 길 ─────────────────────────────────────
 
-/// 노드에 12단어를 물어본다. 잠겨 있거나 12단어로 만든 지갑이 아니면 `None`.
-///
-/// ⚠️ 돌려주는 값은 **호출한 쪽에서 씨앗으로 바꾸고 바로 버려야 한다.**
-///    이 파일 밖으로 나가는 유일한 곳이 아래 두 함수뿐이고, 둘 다 씨앗으로
-///    바꾼 뒤 즉시 버린다.
-fn words_from_node() -> Option<(String, String)> {
-    let v = crate::rt::block(async {
-        crate::raven::call_rpc("getmywords", json!([])).await
-    })
-    .ok()?;
-    split_words(&v)
+/// Safe, shared failures: raw RPC messages can contain secrets and never leave here.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum SeedFailure { Unavailable, Locked, NotMnemonic, Other }
+impl SeedFailure {
+    pub(crate) fn message(self) -> &'static str {
+        match self {
+            Self::Unavailable => "RVN 서버에 연결하지 못했습니다. 「이 컴퓨터 → RVN 서버」에서 켜져 있는지 확인해 주세요.",
+            Self::Locked => "지갑이 잠겨 있어 12단어를 읽을 수 없습니다. 「지갑 열기」를 눌러 주세요.",
+            Self::NotMnemonic => "이 지갑은 12단어로 만든 지갑이 아닙니다. 먼저 설정에서 지갑과 열쇠를 파일로 백업해 주세요. 12단어가 필요한 기능은 12단어 지갑을 새로 만들거나, 가진 12단어로 「설정 → 복구 단어로 되살리기」를 이용해 주세요. 기존 지갑을 지우거나 덮어쓰지 마세요.",
+            Self::Other => "12단어를 확인하지 못했습니다. 서버가 바쁘거나 지갑 조회에 문제가 있을 수 있습니다. 잠시 뒤 다시 시도해 주세요.",
+        }
+    }
+    pub(crate) fn public_error(self) -> String {
+        let code = match self { Self::Unavailable => "UNAVAILABLE", Self::Locked => "LOCKED", Self::NotMnemonic => "NOT_MNEMONIC", Self::Other => "OTHER" };
+        format!("[SEED_{code}] {}", self.message())
+    }
 }
 
-/// 같은 일을 **async 로** 한다.
-///
-/// 🔴 왜 둘로 나뉘어 있나. `tauri::async_runtime::block_on` 은 이미 async
-///    런타임 위에서 부르면 **터진다**("Cannot start a runtime from within a
-///    runtime"). 아래 `#[tauri::command] pub async fn` 들은 전부 그 런타임
-///    위에서 돈다. 그래서 async 인 자리에서는 이쪽을 쓴다.
-///
-///    위 sync 판은 `talk::key()` 가 sync 라서 남는다 — 거기 길은 예전부터
-///    그랬고, 이 공사에서 바꾸는 것이 아니다.
-async fn words_async() -> Option<(String, String)> {
-    let v = crate::raven::call_rpc("getmywords", json!([])).await.ok()?;
-    split_words(&v)
+pub(crate) fn classify_seed_rpc(e: &crate::raven::RpcFailure) -> SeedFailure {
+    // Ravencoin rpcwallet.cpp: EnsureWalletIsUnlocked => -13; non-BIP44 => -4.
+    // https://github.com/RavenProject/Ravencoin/blob/master/src/wallet/rpcwallet.cpp
+    // -4 alone is NOT evidence of a non-mnemonic wallet. Nor is a timeout.
+    if e.code == Some(-13) { return SeedFailure::Locked; }
+    let msg = e.message.to_ascii_lowercase();
+    if e.code == Some(-4) && msg.contains("wallet doesn't have 12 words") {
+        return SeedFailure::NotMnemonic;
+    }
+    if e.code.is_none() && (msg.contains("서버에 닿지 못했습니다") || msg.contains("the node is probably not running")) {
+        return SeedFailure::Unavailable;
+    }
+    SeedFailure::Other
+}
+
+/// Secrets stay inside derivation callers; never expose the raw response/error.
+pub(crate) fn words_from_node() -> Result<(String, String), SeedFailure> {
+    crate::rt::block(words_async())
+}
+
+pub(crate) async fn words_async() -> Result<(String, String), SeedFailure> {
+    // Includes queue waiting, not just reqwest's socket timeout.
+    let v = tokio::time::timeout(std::time::Duration::from_secs(25),
+        crate::raven::call_rpc_detailed("getmywords", json!([])))
+        .await.map_err(|_| SeedFailure::Other)?
+        .map_err(|e| classify_seed_rpc(&e))?;
+    split_words(&v).ok_or(SeedFailure::Other)
 }
 
 fn split_words(v: &Value) -> Option<(String, String)> {
-    let words = v.get("word_list").and_then(Value::as_str)?.to_string();
-    let pass = v
-        .get("passphrase")
-        .and_then(Value::as_str)
-        .unwrap_or("")
-        .to_string();
-    Some((words, pass))
+    let words = v.get("word_list").and_then(Value::as_str)?;
+    // An empty/malformed success is not proof of an old wallet.
+    if words.split_whitespace().count() < 12 { return None; }
+    let pass = v.get("passphrase").and_then(Value::as_str).unwrap_or("");
+    Some((words.to_string(), pass.to_string()))
 }
 
 /// 12단어에서 **사람 열쇠**를 뽑는다. 웹 지갑과 같은 값이 나온다.
@@ -383,17 +401,18 @@ pub fn artist_key_from(words: &str, passphrase: &str) -> Option<[u8; 32]> {
     derive(&seed_from_words(words, passphrase)?, PATH_ARTIST)
 }
 
-/// 이 노드의 아티스트 열쇠. 12단어를 못 읽으면 `None`.
+/// 이 노드의 아티스트 열쇠. 실패 원인만 돌려주며 RPC 원문은 버린다.
 #[allow(dead_code)]
-pub fn artist_key() -> Option<[u8; 32]> {
-    let (words, pass) = words_from_node()?;
-    artist_key_from(&words, &pass)
+pub fn artist_key() -> Result<[u8; 32], String> {
+    let (words, pass) = words_from_node().map_err(SeedFailure::public_error)?;
+    artist_key_from(&words, &pass).ok_or_else(|| SeedFailure::Other.public_error())
 }
 
-/// 이 노드의 사람 열쇠. 12단어를 못 읽으면 `None`.
-pub fn person_key() -> Option<[u8; 32]> {
-    let (words, pass) = words_from_node()?;
-    person_key_from(&words, &pass)
+/// 이 노드의 사람 열쇠. 실패 원인만 돌려주며 RPC 원문은 버린다.
+#[allow(dead_code)]
+pub fn person_key() -> Result<[u8; 32], String> {
+    let (words, pass) = words_from_node().map_err(SeedFailure::public_error)?;
+    person_key_from(&words, &pass).ok_or_else(|| SeedFailure::Other.public_error())
 }
 
 /// 12단어를 **한 번만** 물어보고 두 열쇠를 같이 뽑는다.
@@ -402,11 +421,11 @@ pub fn person_key() -> Option<[u8; 32]> {
 /// 따로 물어보면 노드에 RPC 가 두 번 간다.
 ///
 /// ⚠️ 12단어는 이 함수 안에서만 살고 나갈 때는 열쇠 두 개뿐이다.
-async fn both_keys_async() -> Option<([u8; 32], Option<[u8; 32]>)> {
+async fn both_keys_async() -> Result<([u8; 32], Option<[u8; 32]>), SeedFailure> {
     let (words, pass) = words_async().await?;
-    let person = person_key_from(&words, &pass)?;
+    let person = person_key_from(&words, &pass).ok_or(SeedFailure::Other)?;
     let legacy = crate::shopkey::derive_tagged(crate::shopkey::SEED_TAG_TALK, &words, &pass);
-    Some((person, legacy))
+    Ok((person, legacy))
 }
 
 /// 화면에 보여 줄 경로표. **사람이 읽고 확인할 수 있어야** 계약이다.
@@ -516,7 +535,9 @@ pub async fn identity_status() -> Value {
         .map(|(_, f, _)| f.clone())
         .unwrap_or_else(|| "none".into());
 
-    let both = both_keys_async().await;
+    let both_result = both_keys_async().await;
+    let seed_error = both_result.as_ref().err().map(|e| e.public_error());
+    let both = both_result.ok();
     let canonical = both
         .as_ref()
         .and_then(|(p, _)| crate::shopkey::pubkey_of(p).ok());
@@ -538,7 +559,7 @@ pub async fn identity_status() -> Value {
     };
 
     let advice = if canonical.is_none() {
-        "12단어를 읽지 못했습니다. 지갑이 잠겨 있으면 열어 주세요. 12단어로 만든 지갑이 아니면 이 이름은 백업 파일이 유일한 사본입니다."
+        seed_error.as_deref().unwrap_or(SeedFailure::Other.message())
     } else if now_pk.is_none() {
         "아직 이야기 이름이 없습니다. 처음 글을 쓸 때 12단어에서 만들어지고, 그때부터 폰·웹 지갑과 같은 사람이 됩니다."
     } else if same == Some(true) {
@@ -561,6 +582,7 @@ pub async fn identity_status() -> Value {
                     } },
         "same_as_wallet": same,
         "advice": advice,
+        "seed_error": seed_error,
         "shop": crate::shopkey::shopkey_origin(),
         "shop_note": "가게 간판 열쇠는 옮기지 않습니다. 그 공개키가 공개 장부에 박혀 있어서, 바꾸려면 자산 재발행(100 RVN)이 필요합니다. 지금 열쇠도 12단어에서 나오므로 복구는 됩니다.",
     })
@@ -653,9 +675,7 @@ async fn publish_link(old: Option<&[u8; 32]>, new: &[u8; 32]) -> Vec<Value> {
 /// 남는다(`talk::install_key`).
 #[tauri::command]
 pub async fn identity_adopt_person_key() -> Result<Value, String> {
-    let (new, _) = both_keys_async().await.ok_or(
-        "12단어를 읽지 못했습니다. 지갑이 잠겨 있으면 열어 주시고, 12단어로 만든 지갑이 아니면 이 길은 쓸 수 없습니다.",
-    )?;
+    let (new, _) = both_keys_async().await.map_err(SeedFailure::public_error)?;
     let new_pk = crate::shopkey::pubkey_of(&new)?;
 
     let disk = crate::talk::key_on_disk();
@@ -696,11 +716,8 @@ pub async fn identity_adopt_person_key() -> Result<Value, String> {
 #[tauri::command]
 pub async fn identity_restore_legacy_key() -> Result<Value, String> {
     let old = both_keys_async()
-        .await
-        .and_then(|(_, l)| l)
-        .ok_or(
-        "12단어를 읽지 못했습니다. 지갑이 잠겨 있으면 열어 주시고, 12단어로 만든 지갑이 아니면 이 길은 쓸 수 없습니다.",
-    )?;
+        .await.map_err(SeedFailure::public_error)?
+        .1.ok_or_else(|| SeedFailure::Other.public_error())?;
     let old_pk = crate::shopkey::pubkey_of(&old)?;
 
     if let Some((sk, _, _)) = crate::talk::key_on_disk() {
@@ -716,6 +733,48 @@ pub async fn identity_restore_legacy_key() -> Result<Value, String> {
         "kept": "직전 열쇠는 talkkey-old-<시각>.json 으로 옆에 남겼습니다. 지우지 않았습니다.",
         "note": "옛 이름으로 돌아왔습니다. 폰·웹 지갑에서는 다른 이름으로 보입니다 — 하나로 합치려면 「이름 합치기」를 눌러 주세요.",
     }))
+}
+
+#[cfg(test)]
+mod seed_failure_tests {
+    use super::*;
+    fn failure(code: Option<i64>, message: &str) -> SeedFailure {
+        classify_seed_rpc(&crate::raven::RpcFailure { code, message: message.into() })
+    }
+    #[test]
+    fn rpc_codes_and_causes_are_distinct() {
+        assert_eq!(failure(Some(-13), "untrusted text"), SeedFailure::Locked);
+        assert_eq!(failure(Some(-4), "getmywords: Error: Wallet doesn't have 12 words. Only new wallets generated by the mnemonic phrase will have 12 words"), SeedFailure::NotMnemonic);
+        assert_eq!(failure(Some(-4), "other wallet error"), SeedFailure::Other);
+        assert_eq!(failure(Some(-14), "incorrect passphrase"), SeedFailure::Other);
+        assert_eq!(failure(Some(-32601), "Method not found"), SeedFailure::Other);
+        assert_eq!(failure(None, "서버에 닿지 못했습니다 (synthetic)"), SeedFailure::Unavailable);
+        assert_eq!(failure(None, "The node is probably not running, or was started without server=1."), SeedFailure::Unavailable);
+        assert_eq!(failure(None, "서버가 20초 안에 답하지 않았습니다"), SeedFailure::Other);
+        assert_eq!(failure(None, "Malformed .cookie file"), SeedFailure::Other);
+        assert_eq!(failure(None, "passphrase"), SeedFailure::Other);
+    }
+    #[test]
+    fn raw_rpc_text_and_secrets_never_leave_classification() {
+        // Synthetic canaries, not wallet data or valid mnemonic words.
+        let secret = "SYNTHETIC-SECRET-CANARY";
+        for code in [None, Some(-13), Some(-4), Some(-32601)] {
+            let msg = format!("Error: Wallet doesn't have 12 words. {secret}");
+            let public = failure(code, &msg).public_error();
+            assert!(!public.contains(secret));
+            assert!(!public.contains("getmywords"));
+            assert!(!public.contains("passphrase"));
+        }
+    }
+    #[test]
+    fn malformed_success_is_not_mistaken_for_an_old_wallet() {
+        for v in [json!(null), json!({}), json!({"word_list": ""}), json!({"word_list": 12}), json!({"word_list": "synthetic incomplete"})] {
+            assert!(split_words(&v).is_none());
+        }
+        // Public BIP39 vector only, with synthetic passphrase.
+        let v = json!({"word_list": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about", "passphrase": "SYNTHETIC"});
+        assert!(split_words(&v).is_some());
+    }
 }
 
 #[cfg(test)]

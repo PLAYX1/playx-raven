@@ -1,5 +1,7 @@
 // 🔴 맨 먼저 — 앱 CSP(Tauri nonce) 가 막는 style="…" 속성을 CSSOM 으로 되살린다(src/style-attrs.ts).
 import "./style-attrs";
+import { browserPhotoApi, uploadArtistPhoto, photoErrorText, PhotoFailure } from "./artist-photo";
+import { seedErrorKind, seedErrorMessage, seedUnlockButton } from "./seed-recovery";
 import { createRaviHome } from "./ravi-home";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 let raviHome: ReturnType<typeof createRaviHome> | null = null;
@@ -191,6 +193,23 @@ async function invoke<T = any>(cmd: string, args?: any): Promise<T> {
   }
   try {
     return (await readNative<T>(cmd, args)) as T;
+  } catch (e) {
+    if (cmd !== "artist_profile_set" && seedErrorKind(e) === "LOCKED") {
+      const page = document.querySelector<HTMLElement>(".page.on");
+      if (page && !page.querySelector(".seed-recovery")) {
+        const note = document.createElement("div");
+        note.className = "warnbox seed-recovery";
+        note.textContent = errText(e);
+        page.append(note);
+        addSeedUnlock(note, e, async () => {
+          note.remove();
+          if (cmd.startsWith("identity_")) await idLoad();
+          else if (cmd.startsWith("shop")) await paintKeyMove();
+          else if (cmd.startsWith("talk_")) await talkPaintMe();
+        });
+      }
+    }
+    throw e;
   } finally {
     if (mine) {
       busyCount--;
@@ -372,7 +391,7 @@ document.addEventListener(
 /// **화면에 올리기 전에** 여기서 옮긴다.
 function errText(e: unknown): string {
   // 「보냈는지 모름」 표지는 화면이 알아보는 데만 쓴다 — 사람에게는 문장만.
-  return t(String(e).trim().replace(/SENT_UNKNOWN: /g, ""));
+  return t(seedErrorMessage(String(e).trim().replace(/SENT_UNKNOWN: /g, "")));
 }
 
 function fmtQty(n: number): string {
@@ -1155,6 +1174,8 @@ let askResolve: ((v: string | null) => void) | null = null;
 
 function askClose(v: string | null) {
   $("askwrap").classList.remove("on");
+  // The password must not remain in the hidden input after closing the sheet.
+  ($("ask-input") as HTMLInputElement).value = "";
   const r = askResolve;
   askResolve = null;
   r?.(v);
@@ -1316,14 +1337,7 @@ async function idLoad() {
     idKeyRow(t("이 컴퓨터"), nowPk, idFromWord(s?.now?.from)) +
     idKeyRow(t("폰 · 웹 지갑"), canon, t("12단어에서 나오는 이름")) +
     // 🔴 러스트의 `advice` 를 **그대로.** 무엇을 하면 되는지가 여기 들어 있다.
-    (s?.advice ? `<p class="meta" style="margin-top:10px">${escapeHtml(String(s.advice))}</p>` : "") +
-    // 12단어를 못 읽었으면 그 사실이 이 화면에서 제일 중요한 소식이다.
-    (canon
-      ? ""
-      : `<div class="warnbox" style="margin-top:10px">
-           <b>${copyHtml("12단어를 읽지 못했습니다.")}</b>
-           ${copyHtml("지갑이 잠겨 있으면 열어 주세요. 12단어로 만든 지갑이 아니면, 이 이름은 백업 파일이 유일한 사본입니다 — 파일을 잃으면 이 이름으로 다시 못 돌아옵니다.")}
-         </div>`) +
+    (s?.advice ? `<p class="meta" style="margin-top:10px">${escapeHtml(errText(s.advice))}</p>` : "") +
     // 옛 이름. 있고 지금 이름과 다를 때만 말한다.
     (leg && leg !== nowPk
       ? `<h3 class="grouphead">${copyHtml("옛 이름")}</h3>` +
@@ -1344,6 +1358,7 @@ async function idLoad() {
 
   // 단추는 **할 수 있을 때만** 보인다. 눌러도 「바꿀 것이 없습니다」만
   // 돌아오는 단추는 고장으로 읽힌다.
+  if (s?.seed_error) addSeedUnlock(body, s.seed_error, idLoad);
   if (canon && same !== true) adopt.style.display = "";
   if (leg && nowPk && leg !== nowPk) legacy.style.display = "";
 }
@@ -5516,7 +5531,7 @@ async function paintKeyMove() {
      <div class="kv"><b>${copyHtml("지금 열쇠")}</b><span><code class="addr">${escapeHtml(String(p.now_pubkey || "").slice(0, 16))}…</code></span></div>
      <div class="kv"><b>${copyHtml("새 열쇠")}</b><span><code class="addr">${escapeHtml(String(p.new_pubkey || "—").slice(0, 16))}…</code> ${copyHtml("(12단어에서)")}</span></div>
      <div class="kv"><b>${copyHtml("지금 수량")}</b><span>${Number(p.amount || 0).toLocaleString()}${copyHtml("개")}</span></div>
-     ${blocked ? `<p class="meta danger" style="margin-top:10px">${escapeHtml(blocked)}</p>` : `
+     ${blocked ? `<p class="meta danger" style="margin-top:10px">${escapeHtml(errText(blocked))}</p>` : `
      <label style="margin-top:12px">${copyHtml("이참에 더 찍을 수량")}
        <input id="km-qty" type="number" min="0" step="1" value="${max}" /></label>
      <div class="meta">
@@ -5538,6 +5553,7 @@ async function paintKeyMove() {
        <button id="km-go">${copyHtml("100 RVN 소각하고 바꾸기")}</button>
        <span class="meta" id="km-note"></span>
      </div>`}`;
+  if (blocked) addSeedUnlock(body, blocked, paintKeyMove);
   const go = document.getElementById("km-go");
   if (go) go.addEventListener("click", () => void doKeyMove(p));
 }
@@ -8035,6 +8051,10 @@ function renderSummary() {
 ///
 /// 이미 열려 있거나 암호가 없는 지갑이면 아무것도 묻지 않는다.
 /// 취소하면 `false` 를 준다 — 부르는 쪽이 거기서 멈춰야 한다.
+function addSeedUnlock(host: HTMLElement, error: unknown, retry: () => Promise<unknown>) {
+  seedUnlockButton(host, error, () => ensureUnlocked(t("지갑을 열면 방금 하던 일을 다시 시도합니다.")), retry, t("지갑 열기"));
+}
+
 async function ensureUnlocked(why: string): Promise<boolean> {
   try {
     const lock: any = await invoke("wallet_lock_state");
@@ -9700,62 +9720,41 @@ async function artistLoad() {
  *  세계 게이트웨이를 기다리지 않아도 되고, 혼합 콘텐츠에도 안 걸린다. */
 let arPickedPreview = "";
 
+let arPhotoBusy = false;
+let arSaving = false;
 async function artistPick(file: File) {
-  if (file.size > 8 * 1024 * 1024) {
-    $("ar-picnote").innerHTML = `<span class="danger">${copyHtml("사진이 너무 큽니다. 8MB 아래로 골라 주세요.")}</span>`;
-    return;
-  }
-  setCopyText($("ar-picnote"), () => t("사진 줄이는 중…"));
+  if (arPhotoBusy || arSaving) return;
+  arPhotoBusy = true;
+  const controls = ["ar-pick", "ar-facebtn", "ar-save"].map(id => $(id) as HTMLButtonElement);
+  controls.forEach(button => { button.disabled = true; });
+  arPickedPreview = "";
   try {
-    // 정사각형으로 가운데를 자른다. 얼굴은 어디서나 동그란 자리에 들어간다.
-    const bitmap = await createImageBitmap(file);
-    const side = Math.min(bitmap.width, bitmap.height);
-    const canvas = document.createElement("canvas");
-    canvas.width = canvas.height = 512;
-    canvas.getContext("2d")!.drawImage(
-      bitmap, (bitmap.width - side) / 2, (bitmap.height - side) / 2, side, side, 0, 0, 512, 512);
-    const blob: Blob = await new Promise((ok, no) =>
-      canvas.toBlob((b) => (b ? ok(b) : no(new Error("사진을 못 줄였습니다."))), "image/jpeg", 0.82));
-
-    // 🔴 **미리보기는 `data:` 로 본다.**
-    //
-    //    여태 `http://127.0.0.1:8080/ipfs/…` 을 넣고 있었다. 앱 화면은
-    //    `https` 문맥이라 웹뷰가 그걸 **혼합 콘텐츠로 조용히 막는다** —
-    //    오류도 안 뜨고 자리만 빈다. 대표님이 본 "사진 올렸는데 안나와"가
-    //    이것이다. 게다가 그 주소는 이 컴퓨터에서만 열려서, 애초에
-    //    미리보기 말고는 쓸 데가 없다.
-    const dataUrl: string = await new Promise((ok, no) => {
-      const r = new FileReader();
-      r.onload = () => ok(String(r.result));
-      r.onerror = () => no(new Error("사진을 못 읽었습니다."));
-      r.readAsDataURL(blob);
-    });
-    arPickedPreview = dataUrl;
-    arPaintPreview();
-
-    // 🔴 **팬이 보는 것은 `data:` 가 아니라 주소다.** 릴레이 한 건이 32KB 고
-    //    넘으면 **조용히 버린다**(`relay.rs:76`). 사진을 이름표 안에 담으면
-    //    이름표가 통째로 안 나간다. 그리고 러스트 쪽 문이 `https://` 만
-    //    받는다(`artist.rs` check_picture) — 담는 길은 아예 없다.
-    setCopyText($("ar-picnote"), () => t("파일창고에 올리는 중…"));
-    const added = await invoke<any>("ipfs_add_file", { file: { name: "face.jpg", bytes: Array.from(new Uint8Array(await blob.arrayBuffer())) } });
-    const cid = String(added?.cid || "");
-    if (!cid) throw new Error("파일창고가 사진 주소를 안 돌려줬습니다. 서버가 켜져 있는지 보세요.");
-
-    // ⚠️ **처음 여는 팬은 20초쯤 기다린다.** 실측(2026-08-31): 이 컴퓨터에서
-    //    갓 올린 파일을 ipfs.io 가 받아 가는 데 19.5초 걸렸다 — 세계에서
-    //    이 파일을 가진 곳이 아직 우리뿐이라 찾는 데 그만큼 든다. 한 번
-    //    받아 가면 그다음은 빠르다. 우리 노드가 계속 켜져 있어야 한다.
-    arPicture = `https://ipfs.io/ipfs/${cid}`;
+    const result = await uploadArtistPhoto(file,
+      browserPhotoApi(file => invoke("ipfs_add_file", { file })),
+      message => setCopyText($("ar-picnote"), () => t(message)),
+      data => { arPickedPreview = data; arPaintPreview(); });
+    arPicture = `https://ipfs.io/ipfs/${result.cid}`;
     $("ar-picnote").innerHTML =
-      `<span class="ok">${copyHtml("사진 준비됐습니다")} · ${Math.round(blob.size / 1024)}KB</span><br />` +
+      `<span class="ok">${copyHtml("사진 준비됐습니다")} · ${Math.round(result.size / 1024)}KB</span><br />` +
+      (result.original ? `<span class="meta">${copyHtml("사진을 줄이지 못해 원본 JPG/PNG를 올립니다.")}</span><br />` : "") +
+      result.diagnostics.map(e => `<span class="meta">${escapeHtml(t(photoErrorText(e)))}</span><br />`).join("") +
       `<span class="meta">${copyHtml("아래 「이 소개 올리기」를 눌러야 팬에게 보입니다. 팬 화면에 처음 뜨기까지 20초쯤 걸립니다.")}</span>`;
   } catch (e) {
-    $("ar-picnote").innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
+    arPickedPreview = "";
+    arPaintPreview();
+    const message = e instanceof PhotoFailure ? photoErrorText(e)
+      : e instanceof Error && ["사진이 너무 큽니다. 8MB 아래로 골라 주세요.", "JPG 또는 PNG 사진을 골라 주세요."].includes(e.message)
+        ? e.message : photoErrorText(e);
+    $("ar-picnote").innerHTML = `<span class="danger">${escapeHtml(t(message))}</span>`;
+  } finally {
+    arPhotoBusy = false;
+    controls.forEach(button => { button.disabled = false; });
   }
 }
 
 async function artistSave() {
+  if (arPhotoBusy || arSaving) return;
+  arSaving = true;
   const btn = $("ar-save") as HTMLButtonElement;
   const say = $("ar-say");
   btn.disabled = true;
@@ -9781,7 +9780,9 @@ async function artistSave() {
     arPaintPreview();
   } catch (e) {
     say.innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
+    addSeedUnlock(say, e, artistSave);
   } finally {
+    arSaving = false;
     btn.disabled = false;
     btn.textContent = 옛;
   }

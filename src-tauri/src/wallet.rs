@@ -120,16 +120,33 @@ pub async fn unlock_for(passphrase: String, seconds: i64) -> Result<(), String> 
     if !(10..=3600).contains(&seconds) {
         return Err("잠금 해제는 10초에서 1시간 사이만 됩니다.".into());
     }
-    call_rpc("walletpassphrase", json!([passphrase, seconds]))
+    crate::raven::call_rpc_detailed("walletpassphrase", json!([passphrase, seconds]))
         .await
-        .map_err(|e| {
-            if e.contains("incorrect") {
-                "암호가 맞지 않습니다.".to_string()
-            } else {
-                e
-            }
-        })?;
+        .map_err(unlock_failure_message)?;
     Ok(())
+}
+
+fn unlock_failure_message(e: crate::raven::RpcFailure) -> String {
+    // Never pass through a node's raw error after sending a password.
+    if e.code == Some(-14) {
+        "암호가 맞지 않습니다.".into()
+    } else {
+        "지갑 잠금을 해제하지 못했습니다. 서버 연결과 지갑 상태를 확인한 뒤 다시 시도해 주세요.".into()
+    }
+}
+
+#[cfg(test)]
+mod unlock_failure_tests {
+    #[test]
+    fn rpc_error_never_echoes_the_password() {
+        for code in [None, Some(-14), Some(-4)] {
+            let message = super::unlock_failure_message(crate::raven::RpcFailure {
+                code, message: "SYNTHETIC-PASSWORD-CANARY".into(),
+            });
+            assert!(!message.contains("SYNTHETIC-PASSWORD-CANARY"));
+            assert_eq!(message == "암호가 맞지 않습니다.", code == Some(-14));
+        }
+    }
 }
 
 /// Locks immediately.

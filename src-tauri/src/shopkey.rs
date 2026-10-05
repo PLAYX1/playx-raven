@@ -103,18 +103,19 @@ fn load_or_make() -> Result<[u8; 32], String> {
     //    대표님: "레이븐코인 seed 만 입력해서 복구하면 기존에 사용하던
     //    모든게 복구가 되었으면 좋겠는데."
     //
-    //    그러려면 이 열쇠도 씨앗에서 나와야 한다. 지갑이 잠겨 있거나
-    //    12단어로 만든 지갑이 아니면 예전처럼 무작위로 만든다 — 그때는
+    //    그러려면 이 열쇠도 씨앗에서 나와야 한다. 잠김·연결 실패는 오류다.
+    //    12단어로 만들지 않은 것이 확인된 지갑만 무작위로 만든다 — 그때는
     //    백업이 유일한 길이고, 파일에 그렇게 적어 둔다.
     let (bytes, from) = match from_seed() {
-        Some(b) => (b, "seed"),
-        None => (
+        Ok(b) => (b, "seed"),
+        Err(crate::identity::SeedFailure::NotMnemonic) => (
             Secp256k1::new()
                 .generate_keypair(&mut rand::thread_rng())
                 .0
                 .secret_bytes(),
             "random",
         ),
+        Err(e) => return Err(e.public_error()),
     };
     let body = json!({
         "sk": hex::encode(bytes),
@@ -230,18 +231,13 @@ fn derive_with(tag: &str, words: &str, passphrase: &str) -> Option<[u8; 32]> {
     secp256k1::SecretKey::from_byte_array(&out).ok().map(|_| out)
 }
 
-/// 노드에 12단어를 물어본다. 잠겨 있거나 12단어로 만든 지갑이 아니면 `None`.
+/// 노드에 12단어를 물어본다. 실패 원인을 공통 분류로 보존한다.
 ///
 /// ⚠️ 12단어는 **여기서만** 쓰고 어디에도 안 남긴다. 로그에도, 파일에도,
 ///    화면에도 안 나간다. 나가는 것은 해시 결과뿐이다.
-fn from_seed() -> Option<[u8; 32]> {
-    let v = crate::rt::block(async {
-        crate::raven::call_rpc("getmywords", json!([])).await
-    })
-    .ok()?;
-    let words = v.get("word_list").and_then(Value::as_str)?;
-    let pass = v.get("passphrase").and_then(Value::as_str).unwrap_or("");
-    derive_from_words(words, pass)
+fn from_seed() -> Result<[u8; 32], crate::identity::SeedFailure> {
+    let (words, pass) = crate::identity::words_from_node()?;
+    derive_from_words(&words, &pass).ok_or(crate::identity::SeedFailure::Other)
 }
 
 /// 지금 열쇠를 **12단어에서 나온 것으로 바꿔 넣는다.**
@@ -253,7 +249,7 @@ fn from_seed() -> Option<[u8; 32]> {
 /// 옛 열쇠는 **지우지 않고** `shopkey-old-*.json` 으로 옆에 남긴다.
 /// 되돌릴 일이 생길 수 있고, 지운 것은 못 되돌린다.
 pub fn install_seed_key() -> Result<String, String> {
-    let sk = from_seed().ok_or("12단어를 읽지 못했습니다.")?;
+    let sk = from_seed().map_err(crate::identity::SeedFailure::public_error)?;
     let p = key_file();
     if p.exists() {
         let stamp = std::time::SystemTime::now()

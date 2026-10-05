@@ -38,6 +38,14 @@ import { CERT_COPY } from "./cert-copy";
 import { PAIRING_COPY } from "./pairing-copy";
 import { MAP_COPY } from "./map-copy";
 
+const ARTIST_PHOTO_COPY: Record<string, [string, string, string]> = {
+  "사진 읽는 중…": ["Reading photo…", "写真を読み込み中…", "正在读取照片…"],
+  "다른 방법으로 사진 읽는 중…": ["Reading photo another way…", "別の方法で写真を読み込み中…", "正在用其他方式读取照片…"],
+  "다른 방법으로 사진 줄이는 중…": ["Resizing photo another way…", "別の方法で写真を縮小中…", "正在用其他方式缩小照片…"],
+  "사진 미리보기 읽는 중…": ["Reading photo preview…", "写真のプレビューを読み込み中…", "正在读取照片预览…"],
+  "업로드할 사진 파일 읽는 중…": ["Reading photo file for upload…", "アップロード用の写真を読み込み中…", "正在读取待上传的照片文件…"],
+};
+
 const RAVI_HOME_COPY: Record<string, [string, string, string]> = {
   "라비와 대화": ["Chat with Ravi", "ラビと会話", "与拉比聊天"],
   "대화 기록": ["Conversation history", "会話履歴", "聊天记录"],
@@ -5518,6 +5526,6 @@ for (const [source, values] of Object.entries(PAIRING_COPY)) {
 for (const [source, values] of Object.entries(MAP_COPY)) {
   (["en", "ja", "zh"] as const).forEach((language, index) => { DICT[language][source] ??= values[index]; });
 }
-for (const [source, values] of [...Object.entries(DESKTOP_COPY), ...Object.entries(CREATE_COPY), ...Object.entries(CERT_COPY), ...Object.entries(RAVI_HOME_COPY)]) {
+for (const [source, values] of [...Object.entries(DESKTOP_COPY), ...Object.entries(ARTIST_PHOTO_COPY), ...Object.entries(CREATE_COPY), ...Object.entries(CERT_COPY), ...Object.entries(RAVI_HOME_COPY)]) {
   (["en", "ja", "zh"] as const).forEach((language, index) => { DICT[language][source] = values[index]; });
 }

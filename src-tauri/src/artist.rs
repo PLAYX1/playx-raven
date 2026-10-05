@@ -106,7 +106,6 @@ fn now() -> i64 {
 
 fn key() -> Result<[u8; 32], String> {
     crate::identity::artist_key()
-        .ok_or_else(|| "12단어를 읽지 못했습니다. 지갑이 잠겨 있으면 먼저 열어 주세요.".to_string())
 }
 
 /// 이 컴퓨터의 아티스트 공개키. **체인에 박힌 것과 같아야 한다.**

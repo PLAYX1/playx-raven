@@ -91,14 +91,15 @@ fn key() -> Result<[u8; 32], String> {
     }
 
     let (sk, from) = match from_seed() {
-        Some(b) => (b, "seed"),
-        None => (
+        Ok(b) => (b, "seed"),
+        Err(crate::identity::SeedFailure::NotMnemonic) => (
             secp256k1::Secp256k1::new()
                 .generate_keypair(&mut rand::thread_rng())
                 .0
                 .secret_bytes(),
             "random",
         ),
+        Err(e) => return Err(e.public_error()),
     };
     let p = key_file();
     if let Some(d) = p.parent() {
@@ -137,8 +138,9 @@ fn key() -> Result<[u8; 32], String> {
 ///    보기 때문에, 이미 이름이 있는 사람은 아무 일도 일어나지 않는다.
 ///
 /// ⚠️ 12단어는 `identity.rs` 안에서만 쓰이고 어디에도 안 남는다.
-fn from_seed() -> Option<[u8; 32]> {
-    crate::identity::person_key()
+fn from_seed() -> Result<[u8; 32], crate::identity::SeedFailure> {
+    let (words, pass) = crate::identity::words_from_node()?;
+    crate::identity::person_key_from(&words, &pass).ok_or(crate::identity::SeedFailure::Other)
 }
 
 // 옛 방식(표식 해시)으로 뽑은 이야기 열쇠는 `identity::both_keys_async` 가
@@ -313,22 +315,9 @@ pub async fn talk_profiles(pubkeys: Vec<String>) -> Result<Value, String> {
 /// 제일 나쁘다.
 #[tauri::command]
 pub fn recovery_status() -> Value {
-    let words = crate::rt::block(async {
-        crate::raven::call_rpc("getmywords", json!([])).await
-    });
-    // 잠긴 것과 12단어가 없는 것은 **다른 말**이다. 잠긴 것은 열면 되고,
-    // 없는 것은 지갑을 새로 만들어 옮겨야 한다. 뭉뚱그리면 안 된다.
-    let (seed, seed_why) = match &words {
+    let (seed, seed_why) = match crate::identity::words_from_node() {
         Ok(_) => (true, "12단어가 있습니다.".to_string()),
-        Err(e) if e.contains("passphrase") || e.contains("잠") => (
-            false,
-            "지갑이 잠겨 있어 확인하지 못했습니다. 열고 다시 봐 주세요.".into(),
-        ),
-        Err(_) => (
-            false,
-            "이 지갑은 12단어로 만들어지지 않았습니다. 그래서 씨앗만으로는 되살릴 수 없습니다."
-                .into(),
-        ),
+        Err(e) => (false, e.public_error()),
     };
 
     let shop = crate::shopkey::shopkey_origin();

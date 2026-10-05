@@ -76,12 +76,12 @@ async fn chain_profile(asset: &str) -> Result<(Value, String, f64, bool), String
 ///
 /// ⚠️ 검사로는 안 잡혔다 — 시험은 런타임 밖에서 도니까 통과한다.
 ///    **통과가 작동의 증거가 아닌** 또 하나의 자리다.
-async fn seed_pubkey() -> Option<String> {
-    let v = crate::raven::call_rpc("getmywords", json!([])).await.ok()?;
-    let words = v.get("word_list").and_then(Value::as_str)?;
-    let pass = v.get("passphrase").and_then(Value::as_str).unwrap_or("");
-    let sk = crate::shopkey::derive_tagged(crate::shopkey::SEED_TAG, words, pass)?;
-    crate::shopkey::pubkey_of(&sk).ok()
+async fn seed_pubkey() -> Result<String, String> {
+    let (words, pass) = crate::identity::words_async().await
+        .map_err(crate::identity::SeedFailure::public_error)?;
+    let sk = crate::shopkey::derive_tagged(crate::shopkey::SEED_TAG, &words, &pass)
+        .ok_or_else(|| crate::identity::SeedFailure::Other.public_error())?;
+    crate::shopkey::pubkey_of(&sk)
 }
 
 /// **무슨 일이 일어날지 먼저 보여 준다.** 100 RVN 이 타는 일이라 미리보기가 없으면 안 된다.
@@ -95,7 +95,9 @@ pub async fn shop_key_move_plan() -> Result<Value, String> {
 
     let (profile, cid, amount, reissuable) = chain_profile(&asset).await?;
     let now_pk = profile["nostr_pubkey"].as_str().unwrap_or("").to_string();
-    let new_pk = seed_pubkey().await;
+    let seed_result = seed_pubkey().await;
+    let seed_error = seed_result.as_ref().err().cloned();
+    let new_pk = seed_result.ok();
 
     // 🔴 이미 넣을 수 있는 최대치가 얼마인지 **우리가 계산해서 준다.**
     //    상한(210억)을 그대로 넣으면 이미 있는 수량만큼 넘쳐서 거래가
@@ -104,12 +106,8 @@ pub async fn shop_key_move_plan() -> Result<Value, String> {
 
     let blocked = if !reissuable {
         Some("이 자산은 재발행이 잠겨 있습니다. 간판 열쇠를 바꿀 수 없습니다.".to_string())
-    } else if new_pk.is_none() {
-        Some(
-            "12단어를 읽지 못했습니다. 지갑이 잠겨 있으면 열어 주시고, \
-             12단어로 만든 지갑이 아니면 이 길은 쓸 수 없습니다."
-                .into(),
-        )
+    } else if let Some(error) = seed_error {
+        Some(error)
     } else if new_pk.as_deref() == Some(now_pk.as_str()) {
         Some("이미 12단어에서 나온 열쇠를 쓰고 있습니다. 바꿀 것이 없습니다.".into())
     } else {
