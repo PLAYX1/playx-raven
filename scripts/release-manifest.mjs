@@ -30,7 +30,7 @@ export async function prepareRelease(source, destination, version) {
     if (next.reduce((order, n, i) => order || Math.sign(n - old[i]), 0) <= 0) throw new Error('Release must be newer than the currently published version');
   } catch (e) { if (e.code !== 'ENOENT') throw e; }
   const base = `https://raw.githubusercontent.com/PLAYX1/playx-raven-releases/dist/v${version}`;
-  const manifest = { version, notes: 'RavenVault Desktop 0.6.6 — 라비 홍보 도우미가 생겼습니다. 라비에게 「홍보 글 만들어 줘」라고 하거나 「홍보 만들기」를 누르면, 가게의 실제 메뉴·가격·영업시간으로 X·인스타·카카오톡·동네 소식용 글을 한국어·영어·일본어·중국어로 써 줍니다. 가게 이름·라비·주문 QR 이 들어간 공유 그림도 만들어 저장할 수 있습니다. 글은 사장님이 확인하고 직접 올립니다. 메뉴와 다른 가격이 들어가면 경고합니다. 0.6.5 — 떠 있는 라비 대화창, 라비 눈 수리, 아티스트 사진 수리.', pub_date: new Date().toISOString(), platforms: {}, installers: [] };
+  const manifest = { version, notes: 'RavenVault Desktop 0.6.7 — 홍보 도우미를 고쳤습니다. 「레이븐볼트 홍보 글」을 부탁하면 이제 가게가 아니라 레이븐볼트 앱을 소개하는 글을 씁니다(내 가게 / 레이븐볼트 앱 / 직접 주제 고르기). 샘플 메뉴는 홍보에 넣지 않습니다. 채널마다 한글·영어 해시태그를 붙이고 태그만 따로 복사할 수 있습니다. 공유 이미지 단추가 늘 켜지고, 가게 주소가 없으면 레이븐볼트 주소 QR 로 만듭니다. 0.6.6 — 라비 홍보 도우미.', pub_date: new Date().toISOString(), platforms: {}, installers: [] };
   for (const [suffix, platform] of Object.entries(platforms)) {
     const signature = (await readFile(path.join(source, prefix + suffix + '.sig'), 'utf8')).trim();
     if (!/^[A-Za-z0-9+/=\r\n]+$/.test(signature) || signature.length < 100 || signature.length > 2048) throw new Error(`Malformed updater signature: ${suffix}`);
