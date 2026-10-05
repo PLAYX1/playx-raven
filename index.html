@@ -2419,6 +2419,7 @@
       #page-ravi .msg.me, .bub.me { background:var(--my-bubble); color:var(--my-text); }
       #page-ravi .ravihero .ravi-face { margin-right:22px; }
       #page-ravi .ravihero .ravi-face img { width:100%; height:100%; object-fit:cover; }
+      .rv-quick [data-ravi-starters] { display:contents; }
       .rv-quick { display:flex; gap:8px; flex-wrap:wrap; max-width:850px; margin:12px auto; }
       .rv-quick button { background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:999px; }
       #rv-send-card { max-width:850px; margin:12px auto; }
@@ -3711,7 +3712,7 @@
         </div>
 
         <div class="ravi-history"><div id="chat-log" role="log" aria-label="대화 기록" aria-live="off" tabindex="0"></div><button id="ravi-new" type="button" hidden>새 답 ↓</button></div>
-        <div class="rv-quick"><button type="button" data-rv-question="지갑 잔액을 어떻게 확인하나요?">잔액 확인</button><button type="button" data-rv-question="백업은 어떻게 하나요?">백업 방법</button><button type="button" data-rv-question="폰을 어떻게 연결하나요?">폰 연결</button><button id="rv-send-request" type="button">RVN 보내기 요청</button></div>
+        <div class="rv-quick"><button id="rv-send-request" type="button">RVN 보내기 요청</button></div>
         <div id="rv-send-card" class="card" hidden>
           <button id="rv-send-close" type="button">닫기</button><h3>보내기 요청 확인</h3><p>라비는 직접 보내지 않아요. 받는 사람과 금액을 적고 수수료를 확인하세요.</p>
           <label>받는 주소 <input id="rv-send-to" autocomplete="off" /></label>

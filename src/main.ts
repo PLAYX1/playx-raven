@@ -5,6 +5,7 @@ import { seedErrorKind, seedErrorMessage, seedUnlockButton } from "./seed-recove
 import { createRaviHome } from "./ravi-home";
 import { createPromoCard } from "./ravi-promo-card";
 import { isPromoRequest } from "./ravi-promo";
+import { isRaviHelp, raviHelpHtml, raviStarterHtml, RAVI_GREETING, RAVI_ACTIONS, RAVI_SCREENS, raviActionAllowed, containsRaviSecret } from "./ravi-guide";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 let raviHome: ReturnType<typeof createRaviHome> | null = null;
 import { raviFace, setMood, RAVI_CHARACTERS, type RaviMood } from "./ravi-face";
@@ -9355,7 +9356,6 @@ const SHOP_FIELDS: Record<string, string> = {
   // 🔴 돈 받을 주소(`sh-addr`)와 소각 확인칸(`sh-confirm`)은 **일부러 없다.**
   // 그 둘은 틀리면 되돌릴 수 없다 — 라비가 채우면 사장은 화면에 뜬 것을
   // 확인이라 여기고 그대로 누른다.
-  order_url: "sh-orderurl",
 };
 
 /**
@@ -9816,8 +9816,8 @@ function bindArtist() {
 }
 
 const RAVI_SPOTS: Record<string, { page: string; el?: string; say: string }> = {
-  "새 자산 만들기": { page: "assets", el: "as-new", say: "회원권·쿠폰·굿즈를 만드는 곳입니다" },
-  "가게 열기": { page: "shop", el: "sh-save", say: "손님이 볼 화면을 여는 곳입니다" },
+  "새 자산 만들기": { page: "assets", el: "new-asset", say: "회원권·쿠폰·굿즈를 만드는 곳입니다" },
+  "가게 열기": { page: "shop", el: "sh-ko", say: "손님이 볼 화면을 여는 곳입니다" },
   "문 등록": { page: "door", el: "dr-doors", say: "입구 문을 등록하는 곳입니다" },
   "회원 등록": { page: "door", el: "dr-new", say: "회원을 등록하는 곳입니다" },
   "이야기 방 만들기": { page: "talk", el: "tk-newroom", say: "방을 만드는 곳입니다" },
@@ -9980,6 +9980,7 @@ function previewRaviTheme(rawAccent: unknown, rawTint: unknown): boolean {
 function applyActions(actions: any[], typed = ""): string[] {
   const done: string[] = [];
   for (const a of actions || []) {
+    if (!raviActionAllowed(a?.type)) continue;
     try {
       switch (a.type) {
         // 🔴 **라비가 단추를 가리킨다. 누르지는 않는다.**
@@ -10080,7 +10081,7 @@ function applyActions(actions: any[], typed = ""): string[] {
           // 이유를 같이 적는다. 닫힌 문만 보는 것과 "재료가 떨어졌습니다" 를
           // 보는 것은 손님에게 아주 다른 일이다.
           if (note && typeof a.note === "string") note.value = a.note.slice(0, 60);
-          done.push(a.today ? tf("오늘 쉼{0}", a.note ? ` — ${a.note}` : "") : "다시 엽니다");
+          done.push(t("휴무 초안") + " — " + t("아직 저장하지 않은 초안이에요. 가게 화면에서 직접 값을 바꾸면 앱이 자동 저장해요."));
           break;
         }
         // 🔴 홈 화면을 사장이 늘린다. 우리가 정한 여덟 개가 전부가 아니다.
@@ -10178,24 +10179,8 @@ function applyActions(actions: any[], typed = ""): string[] {
           done.push(tf("메뉴 {0}개 모두 지움", menuItems.length));
           menuItems.length = 0;
           break;
-        case "issue_set": {
-          const id = { name: "i-name", qty: "i-qty", units: "i-units" }[
-            a.field as string
-          ];
-          if (a.field === "reissuable") {
-            ($("i-reissuable") as HTMLInputElement).checked = !!a.value;
-            done.push(tf("재발행 {0}", t(a.value ? "가능" : "불가")));
-          } else if (id) {
-            ($(id) as HTMLInputElement).value = String(a.value ?? "");
-            done.push(tf("발행 {0} → {1}", a.field, a.value));
-            // 이름이 바뀌면 체인에 이미 있는지 다시 확인해야 한다.
-            if (a.field === "name") checkIssueName();
-          }
-          break;
-        }
         case "go":
-          if (["assets", "wallet", "issue", "shop", "order", "settings"].includes(a.screen)) {
-            showPage(a.screen);
+          if (raviOpenScreen(a.screen)) {
             done.push(tf("{0} 화면으로 이동", a.screen));
           }
           break;
@@ -10222,9 +10207,7 @@ let chatMode: "fill" | "ask" | "debate" = "fill";
 /// 지금 무엇을 시키는 중인지. 이름만으로는 모자란다 —
 /// 「둘에게」가 무엇 둘인지 대표가 물었고, 그건 이름이 틀렸다는 뜻이다.
 const MODE_SAY: Record<string, string> = {
-  fill:
-    "가게 이름이나 메뉴를 <b>말로 알려주시면</b> 화면에 채워 드릴게요.<br />" +
-    '<span class="muted">발행·전송·소각은 하지 못합니다. 그건 직접 누르셔야 합니다.</span>',
+  fill: RAVI_GREETING,
   ask: "무엇이든 물어보세요. <b>화면은 건드리지 않습니다.</b>",
   debate:
     "서로 다른 <b>AI 두 곳</b>에 같은 것을 묻고 <b>양쪽 답을 그대로</b> 보여 드려요.<br />" +
@@ -10270,7 +10253,7 @@ function setChatMode(m: "fill" | "ask" | "debate") {
     log.prepend(intro);
   }
   intro.innerHTML =
-    `<span class="msgravi"></span><div class="msgtxt">${MODE_SAY[m]}</div>`;
+    `<span class="msgravi"></span><div class="msgtxt">${!aiProvider || m === "fill" ? copyHtml(RAVI_GREETING) : MODE_SAY[m]}</div>`;
   intro.querySelector(".msgravi")?.replaceWith(raviFace(raviState, 32, { round: true }));
 }
 
@@ -10430,10 +10413,20 @@ function wakeRavi(): void {
 /** 열쇠가 없을 때의 답 — 정해 둔 안내. 맞는 게 없으면 모른다고 말한다. */
 function raviGuide(q: string) {
   const topic = matchGuide(q);
-  chatHtml("ai", topic ? guideHtml(topic, copyHtml) : guideMissHtml(copyHtml));
+  chatHtml("ai", topic ? guideHtml(topic, copyHtml) : guideMissHtml(copyHtml, q));
 }
 
 /** 안내 답 아래 단추가 데려가는 곳. */
+function raviOpenScreen(screen: unknown): boolean {
+  // Old model replies may use legacy screen names; connect them to real pages.
+  const name = screen === "order" ? "orders" : screen === "issue" ? "create" : String(screen ?? "");
+  const target = Object.prototype.hasOwnProperty.call(RAVI_SCREENS, name) ? RAVI_SCREENS[name] : null;
+  if (!target) return false;
+  showPage(target.page);
+  if (target.tab) shopTab(target.tab);
+  return true;
+}
+
 function raviGo(to: GuideGo) {
   const jumpTo = jumpToEl;
   switch (to) {
@@ -10446,6 +10439,14 @@ function raviGo(to: GuideGo) {
     case "assets": showPage("assets"); return;
     case "node": toggleDot("node"); return;
     case "key": openKeyCard(); return;
+    case "orders": raviOpenScreen("orders"); return;
+    case "sales": raviOpenScreen("sales"); return;
+    case "shop": raviOpenScreen("shop"); return;
+    case "reward": showPage("reward"); return;
+    case "phone": showPage("settings"); jumpTo("rvp-card"); return;
+    case "talk": showPage("talk"); return;
+    case "settings": showPage("settings"); return;
+    case "report": openReport(); return;
   }
 }
 
@@ -10575,6 +10576,17 @@ async function chatSend() {
 async function chatSendExisting() {
   const q = ($("chat-q") as HTMLInputElement).value.trim();
   if (!q) return;
+  if (containsRaviSecret(q)) {
+    ($("chat-q") as HTMLInputElement).value = "";
+    chatSay("ai", t("시드·키·토큰은 라비에게 보내지 마세요. 입력을 기록하지 않았어요."));
+    return;
+  }
+  if (isRaviHelp(q)) {
+    ($("chat-q") as HTMLInputElement).value = "";
+    chatSay("me", q);
+    chatHtml("ai", raviHelpHtml(copyHtml));
+    return;
+  }
   if (isPromoRequest(q)) {
     ($("chat-q") as HTMLInputElement).value = "";
     chatSay("me", q);
@@ -17420,9 +17432,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   const homeAsk = () => {
     const hq = $("rv-home-ravi-q") as HTMLInputElement;
     const v = hq.value.trim();
-    if (!aiProvider && !isPromoRequest(v)) { wakeRavi(); return; }
+    if (!v) { raviHome?.open(); return; }
     showPage("ravi");
-    if (!v) return;
     ($("chat-q") as HTMLInputElement).value = v;
     hq.value = "";
     void chatSend();
@@ -17463,9 +17474,16 @@ window.addEventListener("DOMContentLoaded", async () => {
     } catch (e) { $("rv-profile-note").textContent = errText(e); }
   };
   $("rv-add-friend").onclick = () => { showPage("settings"); document.getElementById("rvp-card")?.scrollIntoView(); };
-  document.querySelectorAll<HTMLButtonElement>("[data-rv-question]").forEach(button => {
-    button.onclick = () => { ($("chat-q") as HTMLInputElement).value = button.dataset.rvQuestion || ""; void chatSend(); };
-  });
+  const paintRaviStarters = () => {
+    const quick = document.querySelector(".rv-quick")!;
+    quick.querySelectorAll("[data-rv-question], [data-ravi-starters]").forEach(el => el.remove());
+    const host = document.createElement("span");
+    host.dataset.raviStarters = "";
+    host.innerHTML = raviStarterHtml(copyHtml);
+    quick.prepend(host);
+  };
+  paintRaviStarters();
+  window.addEventListener("desktop-language-change", paintRaviStarters);
   $("rv-send-request").onclick = () => { $("rv-send-card").hidden = false; $("rv-send-to").focus(); };
   $("rv-send-close").onclick = () => { $("rv-send-card").hidden = true; raviHome?.open(); };
   ["rv-send-to", "rv-send-amount"].forEach(id => $(id).addEventListener("input", () => { $("rv-send-continue").hidden = true; $("rv-send-summary").textContent = ""; }));
@@ -18041,8 +18059,18 @@ window.addEventListener("DOMContentLoaded", async () => {
       b.onclick = () => setChatMode(b.dataset.mode as "fill" | "ask" | "debate");
     });
   restoreChatMode();
-  if (!$("chat-log").children.length) chatSay("ai", t("무엇을 도와드릴까요? 보내기·받기·백업·대화 무엇이든 물어보세요."));
+  if (!$("chat-log").children.length) chatSay("ai", t(RAVI_GREETING));
   // 0.4.8-B 라비 안내 답의 단추 · AI 열쇠 넣기 카드.
+  const raviInputClick = (e: Event) => {
+    const el = e.target as HTMLElement;
+    if (el.closest("[data-ravi-help]")) { chatHtml("ai", raviHelpHtml(copyHtml)); return; }
+    const input = el.closest<HTMLElement>("[data-ravi-input]");
+    const action = el.closest<HTMLElement>("[data-ravi-action-input]");
+    const say = input ? guideById(input.dataset.raviInput || "")?.say : action ? RAVI_ACTIONS.find(a => a.type === action.dataset.raviActionInput)?.say : null;
+    if (say) { ($("chat-q") as HTMLInputElement).value = t(say); raviHome?.open(); $("chat-q").focus(); }
+  };
+  $("chat-log").addEventListener("click", raviInputClick);
+  document.querySelector(".rv-quick")!.addEventListener("click", raviInputClick);
   $("chat-log").addEventListener("click", (e) => {
     const el = e.target as HTMLElement;
     const go = el.closest<HTMLElement>("[data-guide-go]");

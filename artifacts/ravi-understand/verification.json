@@ -1,0 +1,204 @@
+{
+  "build": "pass",
+  "node": {
+    "pass": 57,
+    "fail": 0,
+    "offline": true
+  },
+  "rust": {
+    "pass": 718,
+    "fail": 6,
+    "ignored": 13,
+    "fixture": "workspace synthetic directory",
+    "failure": "EPERM local port binding"
+  },
+  "checks": [
+    {
+      "script": "check-ravi-panel.mjs",
+      "status": 0,
+      "classification": "pass"
+    },
+    {
+      "script": "check-ravi-promo-card.mjs",
+      "status": 0,
+      "classification": "pass"
+    },
+    {
+      "script": "check-ravi-promo.mjs",
+      "status": 0,
+      "classification": "pass"
+    },
+    {
+      "script": "check-ravi-state.mjs",
+      "status": 0,
+      "classification": "pass"
+    },
+    {
+      "script": "check-ravi-understanding.mjs",
+      "status": 0,
+      "classification": "pass"
+    },
+    {
+      "script": "check-ai-safety.mjs",
+      "status": 0,
+      "classification": "pass"
+    },
+    {
+      "script": "check-send-confirmation.mjs",
+      "status": 0,
+      "classification": "pass"
+    },
+    {
+      "script": "check-phone-transaction.mjs",
+      "status": 0,
+      "classification": "pass"
+    },
+    {
+      "script": "check-backup-result.mjs",
+      "status": 0,
+      "classification": "pass"
+    },
+    {
+      "script": "check-easy-create.mjs",
+      "status": 0,
+      "classification": "pass"
+    },
+    {
+      "script": "check-issue-gate.mjs",
+      "status": 0,
+      "classification": "pass"
+    },
+    {
+      "script": "check-map-copy.mjs",
+      "status": 0,
+      "classification": "pass"
+    },
+    {
+      "script": "check-merchant-map.mjs",
+      "status": 0,
+      "classification": "pass"
+    },
+    {
+      "script": "check-peer-help.mjs",
+      "status": 0,
+      "classification": "pass"
+    },
+    {
+      "script": "check-shop-seal.mjs",
+      "status": 0,
+      "classification": "pass"
+    },
+    {
+      "script": "check-staff-refund.mjs",
+      "status": 0,
+      "classification": "pass"
+    },
+    {
+      "script": "check-cert-roster.mjs",
+      "status": 0,
+      "classification": "pass"
+    },
+    {
+      "script": "check-ravi-panel-browser.mjs",
+      "status": 1,
+      "classification": "sandbox"
+    },
+    {
+      "script": "check-ravi-promo-browser.mjs",
+      "status": 1,
+      "classification": "sandbox"
+    },
+    {
+      "script": "check-ravi-understanding-browser.mjs",
+      "status": 1,
+      "classification": "sandbox"
+    },
+    {
+      "script": "check-restore-vectors.mjs",
+      "status": 1,
+      "classification": "sandbox"
+    },
+    {
+      "script": "check-words-restore.mjs",
+      "status": 1,
+      "classification": "sandbox"
+    },
+    {
+      "script": "check-cert-photos.mjs",
+      "status": 1,
+      "classification": "sandbox"
+    },
+    {
+      "script": "check-backup-safety.mjs",
+      "status": 0,
+      "signal": null,
+      "classification": "pass"
+    },
+    {
+      "script": "check-backup-ui.mjs",
+      "status": 1,
+      "signal": null,
+      "classification": "sandbox"
+    },
+    {
+      "script": "check-certificate-bulk-ui.mjs",
+      "status": 1,
+      "signal": null,
+      "classification": "sandbox"
+    },
+    {
+      "script": "check-certificate-preview.mjs",
+      "status": 1,
+      "signal": null,
+      "classification": "sandbox"
+    },
+    {
+      "script": "check-desktop-identity-fix.mjs",
+      "status": 1,
+      "signal": null,
+      "classification": "sandbox"
+    },
+    {
+      "script": "check-desktop-integration.mjs",
+      "status": 1,
+      "signal": null,
+      "classification": "pre-existing-stale-assertion"
+    },
+    {
+      "script": "check-desktop-languages.mjs",
+      "status": 1,
+      "signal": null,
+      "classification": "sandbox"
+    },
+    {
+      "script": "check-desktop-mutation.mjs",
+      "status": 1,
+      "signal": null,
+      "classification": "expected-red"
+    },
+    {
+      "script": "check-desktop-ux.mjs",
+      "status": 1,
+      "signal": null,
+      "classification": "sandbox"
+    },
+    {
+      "script": "check-local-wallet-publish.mjs",
+      "status": 0,
+      "signal": null,
+      "classification": "pass"
+    },
+    {
+      "script": "check-style-csp.mjs",
+      "status": 1,
+      "signal": null,
+      "classification": "sandbox"
+    },
+    {
+      "script": "check-wallet-easy.mjs",
+      "status": 1,
+      "signal": null,
+      "classification": "sandbox"
+    }
+  ]
+}

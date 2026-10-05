@@ -57,7 +57,7 @@ assert.ok(!command.includes('request.chars().take('),'original request must not 
 assert.ok(ai.includes('input["app_facts"]') && ai.includes('input["shop"]'));
 assert.ok(ai.includes('가게 데이터에 없는 할인·가격·효능·수익 약속 금지, 모르면 비워 두기'));
 const translations = {};
-vm.runInNewContext(compile('src/desktop-copy.ts'),{exports:translations});
+vm.runInNewContext(compile('src/desktop-copy.ts'),{exports:translations, require:()=>({default:JSON.parse(readFileSync('src/ravi-capabilities.json','utf8'))})});
 for(const [key,values] of Object.entries(translations.PROMO_COPY)) assert.ok(values.length===3 && values.every(s=>s && s!==key));
 console.log('PASS production promo: saved public facts, four languages/channels, templates, matching item/currency prices, limits, bilingual hashtags, QR links, owner budget and translated copy');
 

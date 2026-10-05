@@ -1,0 +1,607 @@
+[
+  {
+    "id": "owner-01",
+    "role": "owner",
+    "utterance": "오늘 매출 얼마야?",
+    "expected": {
+      "intent": "sales",
+      "screen": "shop",
+      "kind": "guide",
+      "tab": "sales"
+    }
+  },
+  {
+    "id": "owner-02",
+    "role": "owner",
+    "utterance": "입금 대기 몇 건이야?",
+    "expected": {
+      "intent": "orders",
+      "screen": "shop",
+      "kind": "guide",
+      "tab": "orders"
+    }
+  },
+  {
+    "id": "owner-03",
+    "role": "owner",
+    "utterance": "아직 입금 안 된 주문 보여 주세요",
+    "expected": {
+      "intent": "orders",
+      "screen": "shop",
+      "kind": "guide",
+      "tab": "orders"
+    }
+  },
+  {
+    "id": "owner-04",
+    "role": "owner",
+    "utterance": "들어온 주문 목록 열어줘",
+    "expected": {
+      "intent": "orders",
+      "screen": "shop",
+      "kind": "guide",
+      "tab": "orders"
+    }
+  },
+  {
+    "id": "owner-05",
+    "role": "owner",
+    "utterance": "오늘은 쉬니까 휴무로 저장해줘",
+    "expected": {
+      "intent": "closed",
+      "screen": "shop",
+      "kind": "unsupported"
+    }
+  },
+  {
+    "id": "owner-06",
+    "role": "owner",
+    "utterance": "오늘 재료 떨어져서 문 닫아요",
+    "expected": {
+      "intent": "closed",
+      "screen": "shop",
+      "kind": "unsupported"
+    }
+  },
+  {
+    "id": "owner-07",
+    "role": "owner",
+    "utterance": "가게 이름을 달빛 카페로 바꿔주세요",
+    "expected": {
+      "intent": "shop",
+      "screen": "shop",
+      "kind": "unsupported"
+    }
+  },
+  {
+    "id": "owner-08",
+    "role": "owner",
+    "utterance": "가게 소개 저장해 줘",
+    "expected": {
+      "intent": "shop",
+      "screen": "shop",
+      "kind": "unsupported"
+    }
+  },
+  {
+    "id": "owner-09",
+    "role": "owner",
+    "utterance": "주문 링크 넣어줘",
+    "expected": {
+      "intent": "order-link",
+      "screen": "shop",
+      "kind": "unsupported"
+    }
+  },
+  {
+    "id": "owner-10",
+    "role": "owner",
+    "utterance": "주문 QR은 어디서 만들어요?",
+    "expected": {
+      "intent": "order-link",
+      "screen": "shop",
+      "kind": "unsupported"
+    }
+  },
+  {
+    "id": "owner-11",
+    "role": "owner",
+    "utterance": "메뉴판 보여줘",
+    "expected": {
+      "intent": "menu",
+      "screen": "shop",
+      "kind": "unsupported"
+    }
+  },
+  {
+    "id": "owner-12",
+    "role": "owner",
+    "utterance": "아이스 아메리카노 4500원 넣어줘",
+    "expected": {
+      "intent": "menu",
+      "screen": "shop",
+      "kind": "unsupported"
+    }
+  },
+  {
+    "id": "owner-13",
+    "role": "owner",
+    "utterance": "메뉴 가격 바꿔 줘요",
+    "expected": {
+      "intent": "menu",
+      "screen": "shop",
+      "kind": "unsupported"
+    }
+  },
+  {
+    "id": "owner-14",
+    "role": "owner",
+    "utterance": "메뉴를 전부 지워 주세요",
+    "expected": {
+      "intent": "menu",
+      "screen": "shop",
+      "kind": "unsupported"
+    }
+  },
+  {
+    "id": "owner-15",
+    "role": "owner",
+    "utterance": "배달을 켜 줘",
+    "expected": {
+      "intent": "shop",
+      "screen": "shop",
+      "kind": "unsupported"
+    }
+  },
+  {
+    "id": "owner-16",
+    "role": "owner",
+    "utterance": "포장만 받도록 해줘요",
+    "expected": {
+      "intent": "shop",
+      "screen": "shop",
+      "kind": "unsupported"
+    }
+  },
+  {
+    "id": "owner-17",
+    "role": "owner",
+    "utterance": "회원권 만들고 싶어요",
+    "expected": {
+      "intent": "create",
+      "screen": "create",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "owner-18",
+    "role": "owner",
+    "utterance": "단골 쿠폰 발행하려면?",
+    "expected": {
+      "intent": "create",
+      "screen": "create",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "owner-19",
+    "role": "owner",
+    "utterance": "수료증 만드는 곳 알려 주세요",
+    "expected": {
+      "intent": "cert",
+      "screen": "create",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "owner-20",
+    "role": "owner",
+    "utterance": "자산 가진 사람들에게 나눠주고 싶다",
+    "expected": {
+      "intent": "reward",
+      "screen": "reward",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "owner-21",
+    "role": "owner",
+    "utterance": "주문 환불은 어떻게 하나요?",
+    "expected": {
+      "intent": "orders",
+      "screen": "shop",
+      "kind": "guide",
+      "tab": "orders"
+    }
+  },
+  {
+    "id": "owner-22",
+    "role": "owner",
+    "utterance": "중고 물건 10 RVN에 팔고 싶어",
+    "expected": {
+      "intent": "market",
+      "screen": "assets",
+      "kind": "unsupported"
+    }
+  },
+  {
+    "id": "owner-23",
+    "role": "owner",
+    "utterance": "영상 전송해 줘",
+    "expected": {
+      "intent": "media",
+      "screen": "talk",
+      "kind": "unsupported"
+    }
+  },
+  {
+    "id": "owner-24",
+    "role": "owner",
+    "utterance": "다크 테마로 바꿔주세요",
+    "expected": {
+      "intent": "appearance",
+      "screen": "settings",
+      "kind": "unsupported"
+    }
+  },
+  {
+    "id": "owner-25",
+    "role": "owner",
+    "utterance": "글씨 크기 키워 주세요",
+    "expected": {
+      "intent": "appearance",
+      "screen": "settings",
+      "kind": "unsupported"
+    }
+  },
+  {
+    "id": "customer-01",
+    "role": "customer",
+    "utterance": "돈 받는 주소 알려줘",
+    "expected": {
+      "intent": "receive",
+      "screen": "wallet",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-02",
+    "role": "customer",
+    "utterance": "내 주소 복사하려면?",
+    "expected": {
+      "intent": "receive",
+      "screen": "wallet",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-03",
+    "role": "customer",
+    "utterance": "RVN 받으려면 어떻게 해요",
+    "expected": {
+      "intent": "receive",
+      "screen": "wallet",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-04",
+    "role": "customer",
+    "utterance": "친구한테 5 RVN 보내줘",
+    "expected": {
+      "intent": "send",
+      "screen": "wallet",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-05",
+    "role": "customer",
+    "utterance": "송굼 하려면 어디로 가요?",
+    "expected": {
+      "intent": "send",
+      "screen": "wallet",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-06",
+    "role": "customer",
+    "utterance": "송금 수수료는 얼마예요",
+    "expected": {
+      "intent": "fee",
+      "screen": "wallet",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-07",
+    "role": "customer",
+    "utterance": "보낸 돈 취소할 수 있나요",
+    "expected": {
+      "intent": "undo",
+      "screen": "wallet",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-08",
+    "role": "customer",
+    "utterance": "잘못 보낸 송금 되돌릴 수 있어요?",
+    "expected": {
+      "intent": "undo",
+      "screen": "wallet",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-09",
+    "role": "customer",
+    "utterance": "잔엑이 안 보여요",
+    "expected": {
+      "intent": "balance",
+      "screen": "wallet",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-10",
+    "role": "customer",
+    "utterance": "입금한 돈이 아직 안 들어왔어요",
+    "expected": {
+      "intent": "balance",
+      "screen": "wallet",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-11",
+    "role": "customer",
+    "utterance": "내 자산을 보여 주세요",
+    "expected": {
+      "intent": "assets",
+      "screen": "assets",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-12",
+    "role": "customer",
+    "utterance": "받은 증서는 어디서 봐요",
+    "expected": {
+      "intent": "assets",
+      "screen": "assets",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-13",
+    "role": "customer",
+    "utterance": "받은 쿠폰 확인하고 싶어요",
+    "expected": {
+      "intent": "assets",
+      "screen": "assets",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-14",
+    "role": "customer",
+    "utterance": "증명서 진짜인지 확인하려면?",
+    "expected": {
+      "intent": "cert",
+      "screen": "assets",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-15",
+    "role": "customer",
+    "utterance": "폰 연결 어떻게 해요",
+    "expected": {
+      "intent": "phone",
+      "screen": "settings",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-16",
+    "role": "customer",
+    "utterance": "휴대폰을 연결하고 싶습니다",
+    "expected": {
+      "intent": "phone",
+      "screen": "settings",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-17",
+    "role": "customer",
+    "utterance": "친구 초대하고 싶어요",
+    "expected": {
+      "intent": "talk",
+      "screen": "talk",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-18",
+    "role": "customer",
+    "utterance": "메시지 보내는 곳 알려 주세요",
+    "expected": {
+      "intent": "talk",
+      "screen": "talk",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "customer-19",
+    "role": "customer",
+    "utterance": "사진 보내줘",
+    "expected": {
+      "intent": "media",
+      "screen": "talk",
+      "kind": "unsupported"
+    }
+  },
+  {
+    "id": "customer-20",
+    "role": "customer",
+    "utterance": "10 RVN 중고",
+    "expected": {
+      "intent": "market",
+      "screen": "assets",
+      "kind": "unsupported"
+    }
+  },
+  {
+    "id": "general-01",
+    "role": "general",
+    "utterance": "뭘 할 수 있어?",
+    "expected": {
+      "intent": "help",
+      "screen": null,
+      "kind": "help"
+    }
+  },
+  {
+    "id": "general-02",
+    "role": "general",
+    "utterance": "도움말",
+    "expected": {
+      "intent": "help",
+      "screen": null,
+      "kind": "help"
+    }
+  },
+  {
+    "id": "general-03",
+    "role": "general",
+    "utterance": "백 업 은 어떻게 해요?",
+    "expected": {
+      "intent": "backup",
+      "screen": "settings",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "general-04",
+    "role": "general",
+    "utterance": "백엎 해줘요",
+    "expected": {
+      "intent": "backup",
+      "screen": "settings",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "general-05",
+    "role": "general",
+    "utterance": "복구 단어는 어디서 봐요?",
+    "expected": {
+      "intent": "seed",
+      "screen": "settings",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "general-06",
+    "role": "general",
+    "utterance": "시드는 남한테 줘도 돼요?",
+    "expected": {
+      "intent": "seed",
+      "screen": "settings",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "general-07",
+    "role": "general",
+    "utterance": "AI 키 어디서 받아요",
+    "expected": {
+      "intent": "key",
+      "screen": "key",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "general-08",
+    "role": "general",
+    "utterance": "노드 상태 확인해 주세요",
+    "expected": {
+      "intent": "sync",
+      "screen": "node",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "general-09",
+    "role": "general",
+    "utterance": "동 기 화가 너무 느려요",
+    "expected": {
+      "intent": "sync",
+      "screen": "node",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "general-10",
+    "role": "general",
+    "utterance": "지갑 잔액 확인 방법",
+    "expected": {
+      "intent": "balance",
+      "screen": "wallet",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "general-11",
+    "role": "general",
+    "utterance": "이야기 방 만들고 싶어요",
+    "expected": {
+      "intent": "talk",
+      "screen": "talk",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "general-12",
+    "role": "general",
+    "utterance": "오류를 신고하고 싶어요",
+    "expected": {
+      "intent": "report",
+      "screen": "report",
+      "kind": "guide"
+    }
+  },
+  {
+    "id": "general-13",
+    "role": "general",
+    "utterance": "내일 비 와?",
+    "expected": {
+      "intent": "miss",
+      "screen": null,
+      "kind": "unsupported"
+    }
+  },
+  {
+    "id": "general-14",
+    "role": "general",
+    "utterance": "이 화면 글자 크게 해 줘요",
+    "expected": {
+      "intent": "appearance",
+      "screen": "settings",
+      "kind": "unsupported"
+    }
+  },
+  {
+    "id": "general-15",
+    "role": "general",
+    "utterance": "10 RVN에 대해 설명해줘",
+    "expected": {
+      "intent": "miss",
+      "screen": null,
+      "kind": "unsupported"
+    }
+  }
+]

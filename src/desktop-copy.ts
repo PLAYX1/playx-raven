@@ -1,3 +1,4 @@
+import raviCapabilities from "./ravi-capabilities.json";
 /** Korean source copy + English, Japanese and Simplified Chinese. User text is not translated here. */
 export const PROMO_COPY: Record<string, [string, string, string]> = {
   "홍보 대상": ["Promotion target", "宣伝対象", "宣传对象"],
@@ -39,6 +40,7 @@ export const PROMO_COPY: Record<string, [string, string, string]> = {
   "PNG를 저장하지 못했습니다. 다시 시도해 주세요.": ["Could not save PNG. Try again.", "PNGを保存できません。再試行してください。", "无法保存 PNG，请重试。"],
 };
 export const DESKTOP_COPY: Record<string, [string, string, string]> = {
+  ...(raviCapabilities.copy as unknown as Record<string, [string, string, string]>),
   "지갑 잠금을 해제하지 못했습니다. 서버 연결과 지갑 상태를 확인한 뒤 다시 시도해 주세요.": ["Could not unlock the wallet. Check the server connection and wallet status, then try again.", "ウォレットのロックを解除できません。サーバー接続とウォレットの状態を確認して再試行してください。", "无法解锁钱包。请检查服务器连接及钱包状态，然后重试。"],
   "RVN 서버에 연결하지 못했습니다. 「이 컴퓨터 → RVN 서버」에서 켜져 있는지 확인해 주세요.": ["Could not connect to the RVN server. Check that it is running in “This computer → RVN server”.", "RVNサーバーに接続できません。「このコンピュータ → RVNサーバー」で起動しているか確認してください。", "无法连接 RVN 服务器。请在“此电脑 → RVN 服务器”中确认已启动。"],
   "지갑이 잠겨 있어 12단어를 읽을 수 없습니다. 「지갑 열기」를 눌러 주세요.": ["The wallet is locked, so its recovery words cannot be read. Click “Unlock wallet”.", "ウォレットがロックされているため復元単語を読めません。「ウォレットを開く」を押してください。", "钱包已锁定，无法读取助记词。请点击“解锁钱包”。"],

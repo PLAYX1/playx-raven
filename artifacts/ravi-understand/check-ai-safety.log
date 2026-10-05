@@ -1,0 +1,5 @@
+PASS owner phone system instructions, provider order and answer/left contract
+PASS theme preview/manual save, admin delete confirmation and menu field allowlist
+PASS customer/owner/admin budget wiring and pre-dispatch fallback charge
+PASS sleeping Ravi, clickable key entry, fake-fetch connection success/failure and duplicate-click guard
+PASS actual status refresh: no key asleep, unverified key asleep, checked provider selected and awake
