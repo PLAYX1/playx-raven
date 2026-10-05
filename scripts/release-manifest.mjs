@@ -30,7 +30,7 @@ export async function prepareRelease(source, destination, version) {
     if (next.reduce((order, n, i) => order || Math.sign(n - old[i]), 0) <= 0) throw new Error('Release must be newer than the currently published version');
   } catch (e) { if (e.code !== 'ENOENT') throw e; }
   const base = `https://raw.githubusercontent.com/PLAYX1/playx-raven-releases/dist/v${version}`;
-  const manifest = { version, notes: 'RavenVault Desktop 0.6.3 — 라비(AI)와 보안을 같이 다듬었습니다. 키를 아직 넣지 않았으면 라비가 눈을 감고 있고, 누르면 키 입력 창이 열리며 연결이 확인되면 깨어납니다. 라비가 바꾼 가게 색은 미리 본 뒤 사장님이 저장합니다. 관리자 폰의 메뉴 전체 삭제는 한 번 더 묻습니다. 사장 폰 질문은 사장용 라비가 답합니다. 손님과 사장의 AI 사용 한도를 나누고, 하루 사용량은 앱을 다시 켜도 유지합니다. AI 키를 운영체제 저장소로 옮긴 뒤에는 옛 키 파일을 지웁니다. 0.6.2 — 매장 서버 보안 수정, 쉬운 말, 보내기 확인 화면.', pub_date: new Date().toISOString(), platforms: {}, installers: [] };
+  const manifest = { version, notes: 'RavenVault Desktop 0.6.4 — 라비가 홈 가운데에서 살아 움직입니다. 숨 쉬고 눈을 깜빡이고 고개를 갸웃하며, 키가 없으면 눈을 감고 잠들어 있다가 키를 넣고 연결이 확인되면 기지개를 켜고 깨어납니다. 라비 답을 소리로 읽어 줄 수 있습니다(기본은 꺼짐). 음성으로는 돈을 승인할 수 없고, 보내기 승인 화면은 그대로 손으로 확인합니다. 기존 메뉴와 가게 기능은 그대로입니다. 0.6.3 — 라비 키 연결 확인, AI 사용 한도 분리, 가게 색 미리보기, 메뉴 전체 삭제 확인.', pub_date: new Date().toISOString(), platforms: {}, installers: [] };
   for (const [suffix, platform] of Object.entries(platforms)) {
     const signature = (await readFile(path.join(source, prefix + suffix + '.sig'), 'utf8')).trim();
     if (!/^[A-Za-z0-9+/=\r\n]+$/.test(signature) || signature.length < 100 || signature.length > 2048) throw new Error(`Malformed updater signature: ${suffix}`);
