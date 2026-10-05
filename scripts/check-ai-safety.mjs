@@ -99,7 +99,8 @@ await onboarding(200); await onboarding(401); await onboarding(503);
 const refresh = latestFn('refreshKeys');
 assert.ok(refresh.includes('!pendingKeyChecks.has(sel.value)'));
 assert.ok(refresh.includes('setAllRaviMood(keyed ? "normal" : "sleep")'));
-assert.ok(latestMain.includes('$("ravi-face").onclick = wakeRavi'));
+assert.ok(read("src/ravi-home.ts").includes('byId("ravi-stage").onclick = api.wake'));
+assert.ok(!latestMain.includes('$("ravi-face").replaceWith'), "legacy hero face must not be mounted");
 for (const phrase of ['눌러서 깨우기','저장하고 연결 확인','저장된 키로 연결 확인','연결을 확인하는 중…']) {
   assert.equal((read('src/dict.ts').match(new RegExp('"'+phrase+'":','g'))||[]).length,3);
 }

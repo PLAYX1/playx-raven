@@ -17360,7 +17360,6 @@ window.addEventListener("DOMContentLoaded", async () => {
   theme.value = ["light", "dark"].includes(savedTheme || "") ? savedTheme! : "system";
   document.documentElement.dataset.theme = theme.value;
   theme.onchange = () => { document.documentElement.dataset.theme = theme.value; localStorage.setItem("ravenvault-theme", theme.value); };
-  $("ravi-face").replaceWith(Object.assign(raviFace("sleep", 184), { id: "ravi-face", hidden: true }));
   // 왼쪽 맨 앞 아이콘은 라비다(아래 rv-header-ravi). 예전 앱 로고 자리는 비운다.
   $("rv-desktop-logo").remove();
   $("rv-onboard-face").appendChild(raviFace("sleep", 150));
@@ -17385,9 +17384,6 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("rv-home-ravi-open").onclick = homeAsk;
   $("rv-home-ravi-q").addEventListener("keydown", (e) => { if ((e as KeyboardEvent).key === "Enter" && !(e as KeyboardEvent).isComposing) { e.preventDefault(); homeAsk(); } });
   $("rv-home-ravi-face").appendChild(raviFace("sleep", 44, { round: true }));
-  $("ravi-face").tabIndex = 0;
-  $("ravi-face").onclick = wakeRavi;
-  $("ravi-face").addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); wakeRavi(); } });
   paintRaviBadge();
   document.querySelectorAll<HTMLElement>('nav a[data-page]').forEach(link => {
     const label = link.querySelector("span")?.textContent?.trim() || link.dataset.page || "";
