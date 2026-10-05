@@ -299,6 +299,7 @@ pub fn run() {
             ai::ai_answer,
             ai::ai_answer_any,
             ai::ai_chat,
+            ai::ai_promo,
             ai::save_custom_provider,
             ai::model_settings,
             ai::ai_models_refresh,
