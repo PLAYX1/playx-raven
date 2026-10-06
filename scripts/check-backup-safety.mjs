@@ -42,6 +42,9 @@ tokio = { version = "1", features = ["rt-multi-thread", "net", "macros", "sync"]
 writeFileSync(resolve(out, 'src/main.rs'), `#![allow(dead_code,unused_mut,unused_variables)]
 mod backup;
 mod lockbox;
+mod ravi_companion {
+    pub fn notify(kind: &'static str) { assert_eq!(kind, "backup"); }
+}
 ${baseline ? '' : 'mod backup_storage;'}
 mod paths {
     use std::path::PathBuf;

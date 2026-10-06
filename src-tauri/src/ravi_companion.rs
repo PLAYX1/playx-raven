@@ -1,15 +1,79 @@
 //! Small resident surface. No AI, wallet RPC, secrets, or service ownership here.
+use crate::companion_layout::{layout, Layout};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use tauri::{Emitter, Manager};
 const FAILURE: &str = "라비 창 설정을 적용하지 못했어요.";
-struct TrayControls(tauri::menu::CheckMenuItem<tauri::Wry>);
+struct TrayControls {
+    greeting: tauri::menu::CheckMenuItem<tauri::Wry>,
+    auto: tauri::menu::CheckMenuItem<tauri::Wry>,
+    call: tauri::menu::MenuItem<tauri::Wry>,
+    large: tauri::menu::MenuItem<tauri::Wry>,
+    quit: tauri::menu::MenuItem<tauri::Wry>,
+}
+fn tray_copy(locale: &str, key: usize) -> &'static str {
+    let col = match locale {
+        "ko" => 0,
+        "ja" => 2,
+        "zh" => 3,
+        _ => 1,
+    };
+    [
+        [
+            "라비 부르기 / 숨기기",
+            "Call / hide Ravi",
+            "ラビを呼ぶ / 隠す",
+            "呼叫 / 隐藏拉比",
+        ],
+        [
+            "큰 화면 열기",
+            "Open main window",
+            "メイン画面を開く",
+            "打开主窗口",
+        ],
+        [
+            "시작 인사",
+            "Startup greeting",
+            "起動時のあいさつ",
+            "启动问候",
+        ],
+        [
+            "로그인 때 자동 실행",
+            "Start at login",
+            "ログイン時に起動",
+            "登录时启动",
+        ],
+        [
+            "종료 (손님 주문도 멈춥니다)",
+            "Quit (also stops orders)",
+            "終了（注文受付も停止）",
+            "退出（也停止接单）",
+        ],
+        [
+            "레이븐볼트 · 라비",
+            "RavenVault · Ravi",
+            "RavenVault · ラビ",
+            "RavenVault · 拉比",
+        ],
+    ][key][col]
+}
 const SHORTCUTS: [&str; 3] = ["Alt+Space", "Alt+Shift+Space", "Control+Shift+Space"];
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 #[serde(default, deny_unknown_fields)]
 pub struct Settings {
+    pub always_visible: bool,
+    pub quiet_start: u8,
+    pub quiet_end: u8,
+    pub daily_limit: u8,
+    pub timezone: i32,
+    pub locale: String,
+    pub notice_seen: bool,
+    pub alert_day: i64,
+    pub alert_count: u8,
+    pub muted_day: i64,
     pub size: u16,
     pub greeting: bool,
     pub sound: bool,
@@ -24,6 +88,16 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
+            always_visible: false,
+            quiet_start: 22,
+            quiet_end: 8,
+            daily_limit: 5,
+            timezone: 0,
+            locale: "ko".into(),
+            notice_seen: false,
+            alert_day: -1,
+            alert_count: 0,
+            muted_day: -1,
             size: 160,
             greeting: true,
             sound: false,
@@ -39,7 +113,13 @@ impl Default for Settings {
 }
 impl Settings {
     fn valid(&self) -> bool {
-        [120, 160, 200].contains(&self.size) && SHORTCUTS.contains(&self.shortcut.as_str())
+        [120, 160, 200].contains(&self.size)
+            && SHORTCUTS.contains(&self.shortcut.as_str())
+            && self.quiet_start < 24
+            && self.quiet_end < 24
+            && self.daily_limit <= 20
+            && (-840..=840).contains(&self.timezone)
+            && ["ko", "en", "ja", "zh"].contains(&self.locale.as_str())
     }
 }
 #[derive(Default)]
@@ -47,6 +127,10 @@ struct Resident {
     settings: Mutex<Settings>,
     bubble: Mutex<bool>,
     main_opened: std::sync::atomic::AtomicBool,
+    layout: Mutex<Layout>,
+    message: Mutex<String>,
+    generation: AtomicU64,
+    responding: std::sync::atomic::AtomicBool,
 }
 #[derive(Serialize, Debug)]
 struct Platform {
@@ -67,15 +151,11 @@ fn platform(os: &str, wayland: bool, simple: bool) -> Platform {
         };
     }
     Platform {
-        transparent: os != "macos",
+        transparent: true,
         decorated: false,
         top: true,
         movable: true,
-        notice: if os == "macos" {
-            "맥에서는 작은 배경판과 함께 나타나요."
-        } else {
-            "창 효과가 불편하면 ‘일반 작은 창’을 켜 주세요."
-        },
+        notice: "",
     }
 }
 fn current_platform(s: &Settings) -> Platform {
@@ -153,8 +233,11 @@ fn settings(app: &tauri::AppHandle) -> Settings {
 pub fn companion_settings(app: tauri::AppHandle) -> Value {
     let s = settings(&app);
     json!({"platform":current_platform(&s),"settings":s,"shortcuts":SHORTCUTS,
+        "visible":app.get_webview_window("ravi-companion").is_some_and(|w|w.is_visible().unwrap_or(false)),
         "saved":crate::paths::app_file("ravi-companion.json").is_file(),
         "bubble":*app.state::<Resident>().bubble.lock().unwrap_or_else(|e|e.into_inner()),
+        "layout":*app.state::<Resident>().layout.lock().unwrap_or_else(|e|e.into_inner()),
+        "message":app.state::<Resident>().message.lock().unwrap_or_else(|e|e.into_inner()).clone(),
         "shortcut_active":false,"shortcut_notice":"전역 단축키는 공식 플러그인 설치가 필요해요. 지금은 메뉴바·트레이로 불러 주세요."})
 }
 #[tauri::command]
@@ -163,6 +246,10 @@ pub fn companion_save(app: tauri::AppHandle, mut value: Settings) -> Result<(), 
         return Err(FAILURE.into());
     }
     let prior = settings(&app);
+    value.notice_seen |= prior.notice_seen;
+    value.alert_day = prior.alert_day;
+    value.alert_count = prior.alert_count;
+    value.muted_day = prior.muted_day;
     value.x = prior.x;
     value.y = prior.y;
     persist(&value)?;
@@ -171,15 +258,30 @@ pub fn companion_save(app: tauri::AppHandle, mut value: Settings) -> Result<(), 
         .lock()
         .map_err(|_| FAILURE)? = value.clone();
     if let Some(controls) = app.try_state::<TrayControls>() {
-        let _ = controls.inner().0.set_checked(value.greeting);
+        let c = controls.inner();
+        let _ = c.greeting.set_checked(value.greeting);
+        let _ = c.call.set_text(tray_copy(&value.locale, 0));
+        let _ = c.large.set_text(tray_copy(&value.locale, 1));
+        let _ = c.greeting.set_text(tray_copy(&value.locale, 2));
+        let _ = c.auto.set_text(tray_copy(&value.locale, 3));
+        let _ = c.quit.set_text(tray_copy(&value.locale, 4));
+    }
+    if let Some(tray) = app.tray_by_id("main") {
+        let _ = tray.set_tooltip(Some(tray_copy(&value.locale, 5)));
     }
     let p = current_platform(&value);
     if let Some(w) = app.get_webview_window("ravi-companion") {
+        let _ = w.set_title(tray_copy(&value.locale, 5));
         let _ = w.set_always_on_top(p.top);
         let _ = w.set_decorations(p.decorated);
-        resize(&app, false)?;
+        resize(&app, false, 140.0)?;
     }
     let _ = app.emit("companion-settings", &value);
+    if !value.always_visible || main_active(&app) {
+        hide(&app)?;
+    } else {
+        show(&app, false)?;
+    }
     Ok(())
 }
 pub fn command_allowed(label: &str, command: &str) -> bool {
@@ -198,13 +300,163 @@ pub fn command_allowed(label: &str, command: &str) -> bool {
             "companion_bubble",
             "companion_sample",
             "companion_move",
+            "companion_dismiss",
+            "companion_click",
+            "companion_hold",
         ]
         .contains(&command)
 }
 static APP: std::sync::OnceLock<tauri::AppHandle> = std::sync::OnceLock::new();
 pub fn notify_joy() {
+    notify("deposit");
+}
+fn clock(s: &Settings) -> (i64, u8) {
+    let seconds = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64
+        - s.timezone as i64 * 60;
+    (
+        seconds.div_euclid(86400),
+        (seconds.rem_euclid(86400) / 3600) as u8,
+    )
+}
+fn allowed(s: &Settings, day: i64, hour: u8) -> bool {
+    let quiet = if s.quiet_start < s.quiet_end {
+        hour >= s.quiet_start && hour < s.quiet_end
+    } else if s.quiet_start > s.quiet_end {
+        hour >= s.quiet_start || hour < s.quiet_end
+    } else {
+        false
+    };
+    !quiet
+        && s.muted_day != day
+        && (s.alert_day != day || s.alert_count < s.daily_limit)
+        && s.daily_limit > 0
+}
+pub fn notify(kind: &'static str) {
+    if !["deposit", "order", "backup", "hello"].contains(&kind) {
+        return;
+    }
     if let Some(app) = APP.get() {
-        let _ = app.emit_to("ravi-companion", "companion-state", "joy");
+        let h = app.clone();
+        let _ = app.run_on_main_thread(move || {
+            // A badge remains even when quiet hours or an active main window suppress a visit.
+            if let Some(tray) = h.tray_by_id("main") {
+                let _ = tray.set_icon_as_template(false);
+                let _ = tray.set_icon(Some(tray_badge_image()));
+            }
+            if h.state::<Resident>().responding.load(Ordering::Relaxed) {
+                return;
+            }
+            if main_active(&h) {
+                let _ = h.emit_to("main", "companion-notice", kind);
+                return;
+            }
+            let mut s = settings(&h);
+            let (day, hour) = clock(&s);
+            if !allowed(&s, day, hour) {
+                return;
+            }
+            if s.alert_day != day {
+                s.alert_day = day;
+                s.alert_count = 0;
+            }
+            s.alert_count += 1;
+            if persist(&s).is_err() {
+                return;
+            }
+            *h.state::<Resident>()
+                .settings
+                .lock()
+                .unwrap_or_else(|e| e.into_inner()) = s;
+            *h.state::<Resident>()
+                .message
+                .lock()
+                .unwrap_or_else(|e| e.into_inner()) = kind.into();
+            if show(&h, false).is_ok() {
+                let _ = resize(&h, true, 140.0);
+                let _ = h.emit_to("ravi-companion", "companion-notice", kind);
+                expire(&h);
+            }
+        });
+    }
+}
+fn main_active(app: &tauri::AppHandle) -> bool {
+    app.get_webview_window("main")
+        .is_some_and(|w| w.is_focused().unwrap_or(false) && !w.is_minimized().unwrap_or(false))
+}
+fn hide(app: &tauri::AppHandle) -> Result<(), String> {
+    app.state::<Resident>()
+        .responding
+        .store(false, Ordering::Relaxed);
+    app.state::<Resident>()
+        .generation
+        .fetch_add(1, Ordering::Relaxed);
+    hit_visibility(app, false);
+    if let Some(w) = app.get_webview_window("ravi-companion") {
+        let _ = w.emit("companion-visible", false);
+        w.hide().map_err(|_| FAILURE)?;
+    }
+    Ok(())
+}
+fn expire(app: &tauri::AppHandle) {
+    let id = app
+        .state::<Resident>()
+        .generation
+        .fetch_add(1, Ordering::Relaxed)
+        + 1;
+    let h = app.clone();
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_secs(12)).await;
+        let app = h.clone();
+        let _ = h.run_on_main_thread(move || {
+            if app.state::<Resident>().generation.load(Ordering::Relaxed) != id {
+                return;
+            }
+            if settings(&app).always_visible && !main_active(&app) {
+                let _ = resize(&app, false, 140.0);
+            } else {
+                let _ = hide(&app);
+            }
+        });
+    });
+}
+#[tauri::command]
+pub fn companion_hold(app: tauri::AppHandle, hold: bool) {
+    app.state::<Resident>()
+        .responding
+        .store(hold, Ordering::Relaxed);
+    if hold {
+        app.state::<Resident>()
+            .generation
+            .fetch_add(1, Ordering::Relaxed);
+    } else {
+        expire(&app);
+    }
+}
+#[tauri::command]
+pub fn companion_dismiss(app: tauri::AppHandle, today: bool) -> Result<(), String> {
+    if today {
+        let mut s = settings(&app);
+        s.muted_day = clock(&s).0;
+        persist(&s)?;
+        *app.state::<Resident>()
+            .settings
+            .lock()
+            .map_err(|_| FAILURE)? = s;
+    }
+    hide(&app)
+}
+#[tauri::command(async)]
+pub fn companion_click(app: tauri::AppHandle) -> Result<(), String> {
+    if app.get_webview_window("main").is_some() {
+        open_main(&app)?;
+        let _ = app.emit_to("main", "companion-chat", ());
+        hide(&app)
+    } else {
+        resize(&app, true, 220.0)?;
+        show(&app, true)
     }
 }
 #[derive(Default)]
@@ -324,9 +576,23 @@ pub fn open_main(app: &tauri::AppHandle) -> Result<(), String> {
                         let _ = w.emit(name, payload);
                     }
                 }
+                if matches!(
+                    e,
+                    tauri::WindowEvent::Focused(_) | tauri::WindowEvent::Resized(_)
+                ) {
+                    if main_active(&h) {
+                        let _ = hide(&h);
+                    } else if settings(&h).always_visible {
+                        let _ = show(&h, false);
+                    }
+                }
                 // Default close DESTROYS the webview; do not prevent_close/hide here.
                 if let tauri::WindowEvent::Destroyed = e {
-                    let _ = show(&h, false);
+                    if settings(&h).always_visible {
+                        let _ = show(&h, false);
+                    } else {
+                        let _ = hide(&h);
+                    }
                 }
             });
             if let Ok(Some(m)) = w.current_monitor() {
@@ -341,6 +607,11 @@ pub fn open_main(app: &tauri::AppHandle) -> Result<(), String> {
             Ok(w)
         },
         |w| {
+            hide(app)?;
+            if let Some(tray) = app.tray_by_id("main") {
+                let _ = tray.set_icon(Some(tray_image()));
+                let _ = tray.set_icon_as_template(cfg!(target_os = "macos"));
+            }
             w.show().map_err(|_| FAILURE)?;
             let _ = w.unminimize();
             w.set_focus().map_err(|_| FAILURE.into())
@@ -351,38 +622,67 @@ pub fn open_main(app: &tauri::AppHandle) -> Result<(), String> {
 pub fn companion_open_main(app: tauri::AppHandle) -> Result<(), String> {
     open_main(&app)
 }
-fn resize(app: &tauri::AppHandle, bubble: bool) -> Result<(), String> {
+fn resize(app: &tauri::AppHandle, bubble: bool, content: f64) -> Result<(), String> {
     let w = app.get_webview_window("ravi-companion").ok_or(FAILURE)?;
     let s = settings(app);
-    let pos = w.outer_position().map_err(|_| FAILURE)?;
     let sf = w.scale_factor().unwrap_or(1.0);
-    let area = w
-        .current_monitor()
-        .ok()
-        .flatten()
-        .map(|m| m.work_area().size.to_logical::<f64>(sf));
-    let (width, height) = if bubble {
-        (460.0, 440.0)
-    } else {
-        (s.size as f64, s.size as f64)
-    };
-    w.set_size(tauri::LogicalSize::new(
-        area.map_or(width, |a| width.min(a.width)),
-        area.map_or(height, |a| height.min(a.height)),
-    ))
-    .map_err(|_| FAILURE)?;
-    keep_inside(&w, pos.x, pos.y)?;
+    let m = w.current_monitor().map_err(|_| FAILURE)?.ok_or(FAILURE)?;
+    let a = m.work_area();
+    let pos = w.outer_position().map_err(|_| FAILURE)?;
+    let previous = *app.state::<Resident>().layout.lock().map_err(|_| FAILURE)?;
+    let aw = a.size.width as f64 / sf;
+    let ah = a.size.height as f64 / sf;
+    if bubble && (aw < 304.0 || ah < 400.0) {
+        open_main(app)?;
+        return Err(FAILURE.into());
+    }
+    let next = layout(
+        (a.position.x as f64 / sf, a.position.y as f64 / sf, aw, ah),
+        (
+            pos.x as f64 / sf + previous.bird_left,
+            pos.y as f64 / sf + previous.bird_top,
+        ),
+        s.size,
+        bubble,
+        content,
+    );
+    w.set_size(tauri::LogicalSize::new(next.width, next.height))
+        .map_err(|_| FAILURE)?;
+    w.set_position(tauri::LogicalPosition::new(next.x, next.y))
+        .map_err(|_| FAILURE)?;
+    *app.state::<Resident>().layout.lock().map_err(|_| FAILURE)? = next;
     *app.state::<Resident>().bubble.lock().map_err(|_| FAILURE)? = bubble;
+    w.emit("companion-layout", next).map_err(|_| FAILURE)?;
     w.emit("companion-bubble", bubble)
         .map_err(|_| FAILURE.into())
 }
 pub fn show(app: &tauri::AppHandle, focus: bool) -> Result<(), String> {
+    if main_active(app) {
+        if focus {
+            let _ = app.emit_to("main", "companion-chat", ());
+        }
+        return hide(app);
+    }
     hit_visibility(app, true);
     let w = app.get_webview_window("ravi-companion").ok_or(FAILURE)?;
+    if focus {
+        *app.state::<Resident>()
+            .message
+            .lock()
+            .map_err(|_| FAILURE)? = "call".into();
+        resize(app, true, 220.0)?;
+        let _ = w.emit("companion-notice", "call");
+        if let Some(tray) = app.tray_by_id("main") {
+            let _ = tray.set_icon(Some(tray_image()));
+            let _ = tray.set_icon_as_template(cfg!(target_os = "macos"));
+        }
+    } else {
+        resize(app, false, 140.0)?;
+    }
     w.show().map_err(|_| FAILURE)?;
     if focus {
-        resize(app, true)?;
         let _ = w.set_focus();
+        expire(app);
     }
     let _ = w.emit("companion-visible", true);
     Ok(())
@@ -390,18 +690,26 @@ pub fn show(app: &tauri::AppHandle, focus: bool) -> Result<(), String> {
 #[tauri::command]
 pub fn companion_show(app: tauri::AppHandle, visible: bool) -> Result<(), String> {
     if visible {
-        return show(&app, true);
+        show(&app, true)
+    } else {
+        hide(&app)
     }
-    hit_visibility(&app, false);
-    if let Some(w) = app.get_webview_window("ravi-companion") {
-        let _ = w.emit("companion-visible", false);
-        w.hide().map_err(|_| FAILURE)?;
-    }
-    Ok(())
 }
 #[tauri::command]
-pub fn companion_bubble(app: tauri::AppHandle, open: bool) -> Result<(), String> {
-    resize(&app, open)
+pub fn companion_bubble(
+    app: tauri::AppHandle,
+    open: bool,
+    height: Option<f64>,
+) -> Result<(), String> {
+    let height = height.unwrap_or(220.0);
+    if !height.is_finite() {
+        return Err(FAILURE.into());
+    }
+    resize(&app, open, height)?;
+    if !open && !settings(&app).always_visible {
+        hide(&app)?;
+    }
+    Ok(())
 }
 #[tauri::command]
 pub fn companion_move(app: tauri::AppHandle, x: i32, y: i32, save: bool) -> Result<Value, String> {
@@ -455,16 +763,16 @@ fn build_resident(
         "ravi-companion",
         tauri::WebviewUrl::App("companion.html".into()),
     )
-    .title("레이븐볼트 · 라비")
+    .title(tray_copy(&s.locale, 5))
     .inner_size(s.size as f64, s.size as f64)
     .resizable(false)
     .decorations(p.decorated)
     .always_on_top(p.top)
     .skip_taskbar(true)
     .shadow(false)
-    .focused(false);
-    #[cfg(not(target_os = "macos"))]
-    let builder = builder.transparent(p.transparent);
+    .focused(false)
+    .visible(false)
+    .transparent(p.transparent);
     builder.build()
 }
 
@@ -480,7 +788,7 @@ fn hit_region(x: f64, y: f64, width: f64, height: f64, bubble: bool) -> bool {
 }
 type HitGate = std::sync::Arc<(Mutex<bool>, std::sync::Condvar)>;
 fn hit_visibility(app: &tauri::AppHandle, visible: bool) {
-    if !cfg!(target_os = "windows") {
+    if !cfg!(any(target_os = "windows", target_os = "macos")) {
         return;
     }
     let Some(gate) = app.try_state::<HitGate>() else {
@@ -496,10 +804,10 @@ fn hit_visibility(app: &tauri::AppHandle, visible: bool) {
     }
 }
 fn start_hit_test(app: &tauri::AppHandle) {
-    if !cfg!(target_os = "windows") {
+    if !cfg!(any(target_os = "windows", target_os = "macos")) {
         return;
     }
-    let gate: HitGate = std::sync::Arc::new((Mutex::new(true), std::sync::Condvar::new()));
+    let gate: HitGate = std::sync::Arc::new((Mutex::new(false), std::sync::Condvar::new()));
     app.manage(gate.clone());
     let app = app.clone();
     std::thread::spawn(move || loop {
@@ -550,6 +858,7 @@ pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         settings: Mutex::new(s.clone()),
         bubble: Mutex::new(false),
         main_opened: std::sync::atomic::AtomicBool::new(false),
+        ..Resident::default()
     });
     let w = match build_resident(app, &s, &p) {
         Ok(w) => w,
@@ -620,26 +929,42 @@ pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                 let _ = open_main(&h);
             }
         }
-        if let tauri::WindowEvent::Focused(on) = e {
+        if let tauri::WindowEvent::Focused(_) = e {
             // Tauri 2.11 has no portable occlusion event. Conservative blur suspension.
-            let _ = h.emit_to("ravi-companion", "companion-visible", *on);
+            let _ = h.emit_to(
+                "ravi-companion",
+                "companion-visible",
+                h.get_webview_window("ravi-companion")
+                    .is_some_and(|w| w.is_visible().unwrap_or(false)),
+            );
         }
     });
-    let call = MenuItem::with_id(app, "ravi-call", "라비 부르기 / 숨기기", true, None::<&str>)?;
-    let large = MenuItem::with_id(app, "ravi-large", "큰 화면 열기", true, None::<&str>)?;
+    let call = MenuItem::with_id(
+        app,
+        "ravi-call",
+        tray_copy(&s.locale, 0),
+        true,
+        None::<&str>,
+    )?;
+    let large = MenuItem::with_id(
+        app,
+        "ravi-large",
+        tray_copy(&s.locale, 1),
+        true,
+        None::<&str>,
+    )?;
     let greeting = CheckMenuItem::with_id(
         app,
         "ravi-greeting",
-        "인사 켜기",
+        tray_copy(&s.locale, 2),
         true,
         s.greeting,
         None::<&str>,
     )?;
-    app.manage(TrayControls(greeting.clone()));
     let auto = CheckMenuItem::with_id(
         app,
         "ravi-autostart",
-        "로그인 때 자동 실행",
+        tray_copy(&s.locale, 3),
         true,
         crate::autostart::autostart_get(),
         None::<&str>,
@@ -647,15 +972,22 @@ pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let quit = MenuItem::with_id(
         app,
         "ravi-quit",
-        "종료 (손님 주문도 멈춥니다)",
+        tray_copy(&s.locale, 4),
         true,
         None::<&str>,
     )?;
+    app.manage(TrayControls {
+        call: call.clone(),
+        large: large.clone(),
+        greeting: greeting.clone(),
+        auto: auto.clone(),
+        quit: quit.clone(),
+    });
     let menu = Menu::with_items(app, &[&call, &large, &greeting, &auto, &quit])?;
     let tray = tauri::tray::TrayIconBuilder::with_id("main")
         .icon(crate::ravi_companion::tray_image())
         .icon_as_template(cfg!(target_os = "macos"))
-        .tooltip("레이븐볼트 · 라비")
+        .tooltip(tray_copy(&s.locale, 5))
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(move |app, e| match e.id().as_ref() {
@@ -705,7 +1037,25 @@ pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     if tray.is_err() || !s.resident_start {
         open_main(app.handle()).map_err(std::io::Error::other)?;
     }
+    if s.resident_start && s.greeting {
+        notify("hello");
+    }
+    if s.resident_start && s.always_visible {
+        show(app.handle(), false).map_err(std::io::Error::other)?;
+    }
     Ok(())
+}
+fn tray_badge_image() -> tauri::image::Image<'static> {
+    let mut pixels = include_bytes!("../icons/ravi-tray-32.rgba").to_vec();
+    for y in 0..12 {
+        for x in 20..32 {
+            if (x as i32 - 26).pow(2) + (y as i32 - 6).pow(2) <= 30 {
+                let i = (y * 32 + x) * 4;
+                pixels[i..i + 4].copy_from_slice(&[237, 99, 69, 255]);
+            }
+        }
+    }
+    tauri::image::Image::new_owned(pixels, 32, 32)
 }
 fn tray_image() -> tauri::image::Image<'static> {
     // Native trays require raster pixels. Source is our vector; no bitmap character animation.
@@ -728,6 +1078,37 @@ fn tray_image() -> tauri::image::Image<'static> {
 mod tests {
     use super::*;
     #[test]
+    fn notifications_quiet_limit_mute_midnight_and_migration() {
+        let mut s: Settings =
+            serde_json::from_str(r#"{"size":160,"resident_start":true}"#).unwrap();
+        assert!(!s.always_visible);
+        for hour in 0..24 {
+            assert_eq!(allowed(&s, 100, hour), (8..22).contains(&hour));
+        }
+        s.quiet_start = 10;
+        s.quiet_end = 12;
+        assert!(!allowed(&s, 100, 10));
+        assert!(allowed(&s, 100, 12));
+        s.quiet_start = 0;
+        s.quiet_end = 0;
+        s.alert_day = 100;
+        s.alert_count = 5;
+        assert!(!allowed(&s, 100, 12));
+        assert!(allowed(&s, 101, 12));
+        s.muted_day = 101;
+        assert!(!allowed(&s, 101, 12));
+        assert!(allowed(&s, 102, 12));
+        s.daily_limit = 0;
+        assert!(!allowed(&s, 102, 12));
+        s.daily_limit = 21;
+        assert!(!s.valid());
+        for locale in ["ko", "en", "ja", "zh"] {
+            for key in 0..6 {
+                assert!(!tray_copy(locale, key).is_empty());
+            }
+        }
+    }
+    #[test]
     fn resident_cannot_invoke_wallet_ai_or_keys() {
         for command in [
             "send_rvn",
@@ -740,8 +1121,18 @@ mod tests {
             assert!(command_allowed("main", command));
         }
         assert!(command_allowed("ravi-companion", "companion_open_main"));
-        for command in ["voice_consent", "voice_set_consent", "voice_transcribe", "voice_cancel", "voice_open_microphone_settings"] { assert!(command_allowed("ravi-companion", command)); }
-        for command in ["open_external", "ai_raw", "api_key_status", "send_asset"] { assert!(!command_allowed("ravi-companion", command)); }
+        for command in [
+            "voice_consent",
+            "voice_set_consent",
+            "voice_transcribe",
+            "voice_cancel",
+            "voice_open_microphone_settings",
+        ] {
+            assert!(command_allowed("ravi-companion", command));
+        }
+        for command in ["open_external", "ai_raw", "api_key_status", "send_asset"] {
+            assert!(!command_allowed("ravi-companion", command));
+        }
     }
     #[test]
     fn destroyed_main_is_recreated_then_focused() {
@@ -816,7 +1207,7 @@ mod tests {
     }
     #[test]
     fn platform_fallbacks() {
-        assert!(!platform("macos", false, false).transparent);
+        assert!(platform("macos", false, false).transparent);
         assert!(platform("windows", false, false).transparent);
         assert!(platform("linux", false, false).top);
         assert!(platform("linux", true, false).decorated);

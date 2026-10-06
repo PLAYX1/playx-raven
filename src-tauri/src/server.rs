@@ -707,7 +707,7 @@ async fn api_claim(
     // 즉시 디스크에. 손님이 주소를 적은 직후 앱이 죽으면, 그 손님은 돈을 내고도
     // "모르는 주문"이 된다.
     persist_orders(&state);
-    crate::ravi_companion::notify_joy();
+    crate::ravi_companion::notify("order");
     // 🔴 벤딩머신에는 수수료 배선이 없었다. 커피 주문에는 넣었는데 여기는
     // 다른 길이라 빠졌다 — 온라인으로 자산을 파는 것도 똑같이 우리 프로그램이
     // 하는 일이다.
@@ -2463,7 +2463,7 @@ async fn api_order(
     }
 
     persist_order_state(&state);
-    crate::ravi_companion::notify_joy();
+    crate::ravi_companion::notify("order");
     (
         StatusCode::OK,
         Json(json!({

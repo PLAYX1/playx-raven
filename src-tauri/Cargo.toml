@@ -48,7 +48,7 @@ futures-util = "0.3"
 #    노드로 내려오는 순간 가게 돈과 가게 간판이 같은 열쇠를 쓰게 된다.
 secp256k1 = { version = "0.30", features = ["rand", "std"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "multipart"] }
-tauri = { version = "2", features = ["tray-icon"] }
+tauri = { version = "2", features = ["tray-icon", "macos-private-api"] }
 tauri-plugin-opener = "2"
 # 파일 고르기는 OS 가 해야 한다. 경로를 타이핑하게 하면 아무도 안 한다.
 tauri-plugin-dialog = "2"

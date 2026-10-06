@@ -43,7 +43,8 @@
         "base-uri": "'self'",
         "form-action": "'none'"
       }
-    }
+    },
+    "macOSPrivateApi": true
   },
   "bundle": {
     "active": true,

@@ -5,6 +5,7 @@ mod ai;
 mod ravi_voice;
 mod ravi_agent;
 mod ravi_companion;
+mod companion_layout;
 mod ai_budget;
 mod ai_endpoint;
 mod companion;
@@ -130,6 +131,9 @@ pub fn run() {
             ravi_companion::companion_sample,
             ravi_companion::companion_move,
             ravi_companion::companion_signal,
+            ravi_companion::companion_click,
+            ravi_companion::companion_dismiss,
+            ravi_companion::companion_hold,
             pairing::pairing_state,
             pairing::pairing_show_qr,
             pairing::pairing_cancel_qr,

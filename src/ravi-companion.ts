@@ -1,3 +1,4 @@
+import { copy, type CopyKey } from "./companion-copy";
 import { mountRaviMicrophone } from "./ravi-microphone";
 import { installFirstRunBarrier, afterRaviLanding, finishRaviLanding } from "./firstrun";
 installFirstRunBarrier();
@@ -8,21 +9,40 @@ import { containsRaviSecret, raviAnswerHtml, guideById } from "./ravi-guide";
 import { RaviPhysics, createFrameLoop, frameRate, type Bounds, type Emotion } from "./ravi-physics";
 import "./ravi-companion.css";
 
-type Settings = { size: number; greeting: boolean; sound: boolean; reduced: boolean; battery: boolean; resident_start: boolean; simple_window: boolean; shortcut: string; x: number|null; y: number|null };
-type Setup = { bubble: boolean; saved: boolean; settings: Settings; platform: { transparent: boolean; movable: boolean; notice: string }; shortcut_notice: string };
+type Settings = { locale: string; always_visible: boolean; size: number; greeting: boolean; sound: boolean; reduced: boolean; battery: boolean; resident_start: boolean; simple_window: boolean; shortcut: string; x: number|null; y: number|null };
+type Layout = { width:number; height:number; bird:number; bird_left:number; bird_top:number; bubble_width:number; bubble_height:number; below:boolean };
+type Setup = { visible:boolean; layout:Layout; message:string; bubble: boolean; saved: boolean; settings: Settings; platform: { transparent: boolean; movable: boolean; notice: string }; shortcut_notice: string };
 type Sample = { x:number; y:number; scale:number; cursor:{x:number;y:number}|null; bounds:Bounds|null };
 const $ = (id:string) => document.getElementById(id)!;
 const bird=$("bird"), character=$("character"), question=$("question") as HTMLInputElement;
 character.innerHTML=scene;
 character.querySelector('#lake')?.remove();
+character.querySelector('svg')?.setAttribute('aria-hidden','true');
 const physics=new RaviPhysics();physics.resting="sleep";
-let config:Setup, visible=true, ready=false, sample:Sample|null=null, sampling=false, sampledAt=-10;
+let config:Setup, visible=false, ready=false, sample:Sample|null=null, sampling=false, sampledAt=-10;
 let bounds:Bounds={left:0,top:0,right:0,bottom:0}, bubble=false, moving=false, desired:{x:number;y:number}|null=null;
 let savePosition=false, wasMoving=false, battery=false, audio:AudioContext|null=null;
 let clickTimer=0;
 let drag:{x:number;y:number;px:number;py:number;at:number;distance:number}|null=null;
 const reduced=matchMedia('(prefers-reduced-motion: reduce)');
-const labels:Record<Emotion,string>={idle:'곁에 있어요.',joy:'좋은 소식이 왔어요!',sleepy:'조금 졸려요…',surprised:'앗, 깜짝이야!',focused:'듣고 있어요.',thinking:'생각 중이에요…',working:'도구로 확인 중이에요…',sleep:'잠든 라비 · 눌러서 안내를 받아요.'};
+const say=(key:CopyKey)=>copy(key,config?.settings.locale);
+let notice:CopyKey|null=null;
+let currentLayout:Layout|null=null;
+function applyLayout(v:Layout){
+  if(!v.bird)return;
+  currentLayout=v;
+  for(const [key,value] of Object.entries(v))if(typeof value==='number')document.documentElement.style.setProperty(`--${key.replace(/_/g,'-')}`,`${value}px`);
+  document.body.classList.toggle('below',v.below);
+  const tail=Math.min(v.bubble_width-24,Math.max(24,v.bird_left+v.bird/2-8));
+  document.documentElement.style.setProperty('--tail',`${tail}px`);
+  queueMicrotask(resizeBubble);
+}
+function showNotice(kind:string){
+  if(!physics.reduced)physics.arrive();
+  notice=(['deposit','order','backup','hello','call'].includes(kind)?kind:'call') as CopyKey;
+  $('ask').hidden=notice!=='call';$('ravi-voice-surface').hidden=true;
+  $('status').textContent=say(notice);mood(notice==='call'?'idle':'joy');
+}
 const transform=(id:string,v:string)=>character.querySelector(`#${id}`)?.setAttribute('transform',v);
 const opacity=(id:string,v:number)=>character.querySelector(`#${id}`)?.setAttribute('opacity',String(v));
 const microphone = mountRaviMicrophone({
@@ -30,7 +50,7 @@ const microphone = mountRaviMicrophone({
   allowed: () => visible && bubble && !document.hidden,
   transcript(text) { question.value = text; },
   quiet() { if (audio) void audio.suspend().catch(() => {}); },
-  listening(on) { mood(on ? 'focused' : physics.resting); },
+  listening(on) { mood(on ? 'focused' : physics.resting); void invoke('companion_hold',{hold:on}).catch(()=>{}); },
 });
 function sound() {
   if(!config?.settings.sound||!visible||!audio||["requesting","listening","transcribing"].includes(microphone.state))return;
@@ -47,7 +67,7 @@ function mood(mode:Emotion){if(mode==='sleep'||mode==='idle')physics.resting=mod
 function paint(){
   const p=physics,t=p.time,quiet=p.reduced;
   character.style.transform=`translate(${p.offsetX.value}px,${p.bounce.value}px) rotate(${p.tilt.value}deg) scale(${1+(1-p.scale.value)*.65+p.breath},${p.scale.value+p.breath})`;
-  character.style.opacity=config?.settings.greeting&&t<.45?String(.3+t/.45*.7):'1';
+  character.style.opacity='1';
   for(const side of ['left','right']){
     const cx=side==='left'?148:238,cy=side==='left'?204:197;
     transform(`eye-open-${side}`,`translate(${cx} ${cy}) scale(1 ${Math.max(.02,p.eye)}) translate(${-cx} ${-cy})`);
@@ -66,7 +86,7 @@ function paint(){
   while(particles.children.length<p.particles){const star=document.createElement('i');star.textContent='✦';particles.append(star);}
   while(particles.children.length>p.particles)particles.lastChild?.remove();
   Array.from(particles.children).forEach((el,i)=>{const angle=i*Math.PI/6+t*.4;const e=el as HTMLElement;e.style.left=`${48+40*Math.cos(angle)}%`;e.style.top=`${45+35*Math.sin(angle)}%`;e.style.opacity=String(.45+.4*Math.sin(i+t)**2);});
-  if(!bubble||document.activeElement!==question)$('status').textContent=labels[p.emotion];
+  if(!bubble||document.activeElement!==question)$('status').textContent=say(notice||p.emotion);
 }
 async function sampleNative(){
   if(sampling||!visible)return;sampling=true;
@@ -81,7 +101,7 @@ async function flushMove(){
   if(moving||!visible||!desired)return;moving=true;
   const point=desired;desired=null;const save=savePosition;savePosition=false;
   try{await invoke('companion_move',{x:Math.round(point.x),y:Math.round(point.y),save});}
-  catch{physics.vx=physics.vy=0;$('status').textContent='창틀로 라비를 옮겨 주세요.';}
+  catch{physics.vx=physics.vy=0;$('status').textContent=say('failed');}
   finally{moving=false;if(desired&&visible)void flushMove();}
 }
 const loop=createFrameLoop({now:()=>performance.now(),raf:requestAnimationFrame,cancelRaf:cancelAnimationFrame,
@@ -96,46 +116,57 @@ const loop=createFrameLoop({now:()=>performance.now(),raf:requestAnimationFrame,
   paint();
 },()=>frameRate(physics.active,battery||config?.settings.battery,!visible||!ready));
 function visibility(on:boolean){
-  if(!on)microphone.stop();
+  if(!on){microphone.stop();$('answer').replaceChildren();notice=null;}
   visible=on&&!document.hidden;document.body.classList.toggle('paused',!visible);
   if(visible&&ready){sampledAt=-10;loop.start();}
   else{loop.stop();clearTimeout(clickTimer);clickTimer=0;desired=null;physics.vx=physics.vy=0;drag=null;physics.release();question.value='';void audio?.suspend();}
 }
 function apply(value:Settings){
   config.settings=value;physics.reduced=value.reduced||reduced.matches;
-  document.documentElement.style.setProperty('--bird-size',`${value.size}px`);
-  for(const key of ['greeting','sound','reduced','battery','resident_start','simple_window'] as const)($(key) as HTMLInputElement).checked=value[key];
-  ($('size') as HTMLSelectElement).value=String(value.size);($('shortcut') as HTMLSelectElement).value=value.shortcut;
-  if(config.saved)try{localStorage.setItem('rv-ravi-start-off',value.greeting?'0':'1');}catch{/* optional */}
+  document.documentElement.lang=value.locale;
+  document.querySelectorAll<HTMLElement>('[data-copy]').forEach(el=>{el.textContent=say(el.dataset.copy as CopyKey);});
+  for(const [id,key] of [['bird','bird'],['bubble','bubble'],['collapse','close'],['settings-toggle','settings'],['rv-voice','mic']] as const)$(id).setAttribute('aria-label',say(key));
+  bird.title=say('bird');question.placeholder=say('call');
   paint();
 }
 async function setBubble(on:boolean){
   if(!on)microphone.stop();
   if (on) await new Promise<void>(resolve => afterRaviLanding(resolve));
   try{await invoke('companion_bubble',{open:on});bubble=on;$('bubble').hidden=!on;if(on){visibility(true);question.focus();}await sampleNative();}
-  catch{$('status').textContent='말풍선을 열지 못했어요. 트레이에서 큰 화면을 열어 주세요.';}
+  catch{$('status').textContent=say('failed');}
 }
 function ask(text:string){
   const safe=text.trim();question.value='';
-  if(containsRaviSecret(safe)){$('answer').textContent='비밀 정보는 대화창에 넣지 마세요. 설정의 전용 입력칸을 사용해 주세요.';return;}
+  if(containsRaviSecret(safe)){$('answer').textContent=say('secret');return;}
   if(!safe)return;
-  $('answer').innerHTML=raviAnswerHtml(safe,'ko');mood('focused');
+  $('answer').innerHTML=raviAnswerHtml(safe,config.settings.locale as 'ko'|'en'|'ja'|'zh');mood('focused');
 }
 $('ask').onsubmit=e=>{e.preventDefault();ask(question.value);};
 $('answer').onclick=e=>{const target=(e.target as Element).closest<HTMLButtonElement>('button');if(!target)return;
   const id=target.dataset.raviInput||target.dataset.guideTopic;const guide=id?guideById(id):null;
-  if(guide)ask(guide.say);else void invoke('companion_open_main').catch(()=>{$('status').textContent='큰 화면을 열지 못했어요.';});};
+  if(guide)ask(guide.say);else void invoke('companion_open_main').catch(()=>{$('status').textContent=say('failed');});};
 question.onfocus=()=>{physics.touch();mood('focused');};question.onblur=()=>mood(physics.resting);question.oninput=()=>physics.touch();
 $('collapse').onclick=()=>{void setBubble(false);mood(physics.resting);};
-$('open-main').onclick=()=>{question.value='';void invoke('companion_open_main').catch(()=>{$('status').textContent='큰 화면을 열지 못했어요.';});};
-$('settings-toggle').onclick=()=>{const p=$('preferences') as HTMLDetailsElement;p.open=!p.open;};
-$('save').onclick=async()=>{
-  const next={...config.settings,size:Number(($('size') as HTMLSelectElement).value),shortcut:($('shortcut') as HTMLSelectElement).value};
-  for(const key of ['greeting','sound','reduced','battery','resident_start','simple_window'] as const)next[key]=($(key) as HTMLInputElement).checked;
-  if(next.sound&&!audio)audio=new AudioContext();
-  try{await invoke('companion_save',{value:next});apply(next);await setBubble(true);$('status').textContent='저장했어요.';}
-  catch{$('status').textContent='설정을 저장하지 못했어요.';}
-};
+$('open-main').onclick=()=>{question.value='';void invoke('companion_open_main').catch(()=>{$('status').textContent=say('failed');});};
+$('settings-toggle').onclick=()=>{void invoke('companion_open_main').catch(()=>{});};
+$('today').onclick=()=>{void invoke('companion_dismiss',{today:true}).catch(()=>{$('status').textContent=say('failed');});};
+async function call(){showNotice('call');await invoke('companion_click').catch(()=>{$('status').textContent=say('failed');});}
+// Measure the actual bubble contents, with a fixed readable width, before native resizing.
+let resizePending=false,lastMeasure='';
+function resizeBubble(){
+  if(!bubble||!currentLayout||resizePending)return;
+  const height=Math.ceil($('bubble').scrollHeight)+2;
+  const signature=`${height}:${currentLayout.bubble_height}`;
+  if(signature===lastMeasure)return;
+  lastMeasure=signature;
+  if(Math.abs(height-currentLayout.bubble_height)<2)return;
+  resizePending=true;
+  void invoke('companion_bubble',{open:true,height}).catch(()=>{$('status').textContent=say('failed');}).finally(()=>{resizePending=false;queueMicrotask(resizeBubble);});
+}
+new ResizeObserver(resizeBubble).observe($('bubble'));
+$('bubble').addEventListener('input',()=>{void invoke('companion_hold',{hold:true});});
+$('bubble').addEventListener('focusout',()=>{queueMicrotask(()=>{if(!$('bubble').contains(document.activeElement))void invoke('companion_hold',{hold:false});});});
+$('ask').addEventListener('submit',()=>{void invoke('companion_hold',{hold:false});});
 bird.onpointerdown=e=>{
   if(e.button!==0||!sample)return;if(config.settings.sound&&!audio)audio=new AudioContext();physics.touch();bird.setPointerCapture(e.pointerId);
   drag={x:e.screenX,y:e.screenY,px:sample.x,py:sample.y,at:performance.now(),distance:0};
@@ -149,15 +180,16 @@ bird.onpointermove=e=>{
 };
 bird.onpointerup=async e=>{
   if(!drag)return;const distance=drag.distance;drag=null;physics.release();bird.releasePointerCapture(e.pointerId);
-  if(distance<5){physics.vx=physics.vy=0;clearTimeout(clickTimer);clickTimer=window.setTimeout(()=>{clickTimer=0;if(visible)void setBubble(true);},260);}
+  if(distance<5){physics.vx=physics.vy=0;clearTimeout(clickTimer);clickTimer=window.setTimeout(()=>{clickTimer=0;if(visible)void call();},260);}
   else{await sampleNative();if(sample){physics.x=sample.x;physics.y=sample.y;}savePosition=true;desired={x:physics.x,y:physics.y};void flushMove();}
 };
 bird.onpointercancel=()=>{drag=null;physics.release();physics.vx=physics.vy=0;};
 bird.ondblclick=()=>{clearTimeout(clickTimer);clickTimer=0;afterRaviLanding(()=>{void invoke('companion_open_main').catch(()=>{});});};
-bird.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();void setBubble(true);}};
+bird.onclick=e=>{if(e.detail===0)void call();};
+bird.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();void call();}};
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){question.value='';void setBubble(false);}});
 document.addEventListener('visibilitychange',()=>visibility(!document.hidden));
-window.addEventListener('blur',()=>{if(microphone.state!=='requesting')visibility(false);});window.addEventListener('focus',()=>visibility(true));
+window.addEventListener('blur',()=>{if(microphone.state!=='requesting')microphone.stop();});window.addEventListener('focus',()=>visibility(true));
 window.addEventListener('pagehide',()=>{visibility(false);void audio?.close();});
 reduced.addEventListener('change',()=>{if(config)apply(config.settings);});
 // Battery API is optional in native webviews; the explicit power-saving switch always works.
@@ -168,19 +200,22 @@ async function init(){
   try{
     config=await invoke<Setup>('companion_settings');apply(config.settings);
     document.body.classList.toggle('opaque',!config.platform.transparent);
-    $('platform-notice').textContent=config.platform.notice;$('shortcut-notice').textContent=config.shortcut_notice;
+    applyLayout(config.layout);if(config.message)showNotice(config.message);
     await Promise.all([
       listen<boolean>('companion-visible',e=>visibility(e.payload)),
-      listen<boolean>('companion-bubble',e=>{afterRaviLanding(()=>{bubble=e.payload;$('bubble').hidden=!bubble;if(bubble)question.focus();});}),
+      listen<Layout>('companion-layout',e=>applyLayout(e.payload)),
+      listen<string>('companion-notice',e=>showNotice(e.payload)),
+      listen<boolean>('companion-bubble',e=>{afterRaviLanding(()=>{bubble=e.payload;$('bubble').hidden=!bubble;queueMicrotask(resizeBubble);if(bubble&&notice==='call'&&document.hasFocus())question.focus();});}),
       listen<Settings>('companion-settings',e=>apply(e.payload)),
       listen<Emotion>('companion-state',e=>mood(e.payload)),
-      listen<string>('companion-error',e=>{$('status').textContent=e.payload;}),
+      listen<string>('companion-error',()=>{$('status').textContent=say('failed');}),
     ]);
+    config=await invoke<Setup>('companion_settings');apply(config.settings);applyLayout(config.layout);if(config.message)showNotice(config.message);
     await sampleNative();if(sample){physics.x=sample.x;physics.y=sample.y;}
-    if(config.settings.greeting&&config.settings.resident_start){physics.arrive();$('status').textContent='안녕하세요. 오늘도 곁에 있을게요.';}
-    bubble=false;$('bubble').hidden=true;
+    if(config.settings.greeting&&config.settings.resident_start)physics.arrive();
+    bubble=config.bubble;$('bubble').hidden=!bubble;
     window.setTimeout(finishRaviLanding, config.settings.greeting&&config.settings.resident_start ? 2100 : 0);
-    ready=true;visibility(document.hasFocus());if(bubble){question.focus();visibility(true);}
-  }catch{finishRaviLanding();$('bubble').hidden=true;bird.title='라비 창을 준비하지 못했어요. 트레이에서 큰 화면을 열어 주세요.';}
+    ready=true;visibility(config.visible);if(bubble&&config.visible&&notice==='call')question.focus();
+  }catch{finishRaviLanding();$('bubble').hidden=true;bird.title=say('failed');}
 }
 void init();

@@ -383,7 +383,11 @@ pub async fn backup_auto(now_unix: i64) -> Value {
     };
     let external = external_drives()["drives"].as_array().cloned().unwrap_or_default();
     let clouds = cloud_folders()["folders"].as_array().cloned().unwrap_or_default();
-    remember_auto_result(auto_to(now_unix, external, clouds).await)
+    let result=remember_auto_result(auto_to(now_unix, external, clouds).await);
+    if result.get("error").is_some() || result.get("warning").and_then(Value::as_str).is_some_and(|s|!s.is_empty()) {
+        crate::ravi_companion::notify("backup");
+    }
+    result
 }
 
 fn remember_auto_result(mut result: Value) -> Value {

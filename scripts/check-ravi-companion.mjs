@@ -42,7 +42,7 @@ assert.match(native,/ensure_window\(\s*\|\|\s*app.get_webview_window\("main"\)/)
 const mainLife=native.slice(native.indexOf('pub fn open_main('),native.indexOf('pub fn companion_open_main'));
 assert.ok(!/api\.prevent_close\(|\.hide\(/.test(mainLife),'main close must destroy');
 assert.match(lib,/ravi_companion::command_allowed/);
-const config=JSON.parse(readFileSync('src-tauri/tauri.conf.json','utf8'));assert.equal(config.app.windows[0].create,false);assert.notEqual(config.app.macOSPrivateApi,true);
+const config=JSON.parse(readFileSync('src-tauri/tauri.conf.json','utf8'));assert.equal(config.app.windows[0].create,false);assert.equal(config.app.macOSPrivateApi,true);
 const companion=readFileSync('src/ravi-companion.ts','utf8');assert.ok(!/ravi_agent_chat|send_rvn|walletpassphrase|api_key_status/.test(companion));assert.match(companion,/containsRaviSecret\(safe\)/);
 assert.ok(!/localStorage\.setItem\([^\n]*(?:question|safe|text)/.test(companion));
 for(const size of [16,32,48,64])assert.equal(readFileSync(`src-tauri/icons/ravi-tray-${size}.rgba`).length,size*size*4);
