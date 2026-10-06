@@ -30,7 +30,7 @@ export async function prepareRelease(source, destination, version) {
     if (next.reduce((order, n, i) => order || Math.sign(n - old[i]), 0) <= 0) throw new Error('Release must be newer than the currently published version');
   } catch (e) { if (e.code !== 'ENOENT') throw e; }
   const base = `https://raw.githubusercontent.com/PLAYX1/playx-raven-releases/dist/v${version}`;
-  const manifest = { version, notes: 'RavenVault Desktop 0.7.1 — AI 키가 저장되지 않던 문제를 고쳤습니다. 맥 키체인에 이전 버전이 만든 항목이 남아 있어 새 키를 저장하지 못하던 경우, 앱이 스스로 막힌 항목을 지우고 다시 만들거나 새 이름으로 따로 저장합니다(키는 파일에 쓰지 않습니다). 저장이 안 되면 이유를 구분해 알려 줍니다. 맥이 키체인 접근 허용을 물으면 「항상 허용」을 눌러 주세요. 저장된 키 끝 네 자리 표시를 되살렸습니다. 0.7.0 — 키를 저장하면 라비가 바로 깨어납니다.', pub_date: new Date().toISOString(), platforms: {}, installers: [] };
+  const manifest = { version, notes: 'RavenVault Desktop 0.8.0 — 라비가 화면 가운데로 날아와 「오늘 어땠어요?」 하고 인사합니다. 라비가 AI 에이전트가 되어 잔액·거래·매출·시세·서버·백업 상태를 직접 보고 답합니다(돈이 나가는 일은 준비까지만, 보내기는 직접 확인). 트레이에 상주하는 떠 있는 라비: 단축키로 부르고, 큰 창을 닫아도 메모리를 아낍니다. 스프링·관성·던지기·시선 따라가기 등 살아 있는 반응. 0.7.1 — 키 저장 복구.', pub_date: new Date().toISOString(), platforms: {}, installers: [] };
   for (const [suffix, platform] of Object.entries(platforms)) {
     const signature = (await readFile(path.join(source, prefix + suffix + '.sig'), 'utf8')).trim();
     if (!/^[A-Za-z0-9+/=\r\n]+$/.test(signature) || signature.length < 100 || signature.length > 2048) throw new Error(`Malformed updater signature: ${suffix}`);
