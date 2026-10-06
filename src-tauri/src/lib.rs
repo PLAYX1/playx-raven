@@ -302,6 +302,8 @@ pub fn run() {
             shop::pay_order,
             shop::broadcast_message,
             ai::save_api_key,
+            ai::save_device_api_key,
+            ai::move_api_key_to_keychain,
             ai::delete_api_key,
             ai::api_key_status,
             ai::ai_check_connection,

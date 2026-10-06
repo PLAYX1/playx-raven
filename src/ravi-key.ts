@@ -52,6 +52,8 @@ const storageStages: Record<string, string> = {
 };
 const storageKinds: Record<string, string> = {
   "access-denied": "접근 거부 또는 ACL 불일치", cancelled: "사용자 취소", locked: "키체인 잠김 또는 상호작용 불가",
+  "keychain-locked": "키체인 잠김 또는 상호작용 불가", corrupt: "저장된 키를 읽을 수 없어요 — 다시 넣어 주세요",
+  "file-permission": "설정 폴더의 파일 권한과 여유 공간을 확인해 주세요.",
   duplicate: "중복 항목", "no-entry": "항목 없음", unavailable: "저장소 사용 불가", other: "기타 저장소 오류",
 };
 function storageDiagnostic(error: unknown): { stage: string; kind: string; previous?: unknown } | null {
@@ -68,10 +70,13 @@ function ownershipFailure(value: unknown, depth = 0): boolean {
   return diagnostic.kind === "access-denied" || diagnostic.kind === "duplicate"
     || ownershipFailure(diagnostic.previous, depth + 1);
 }
-export function keyStorageError(error: unknown, translate: (text: string) => string = text => text): string {
+export function keyStorageError(error: unknown, translate: (text: string) => string = text => text, platform = "macos"): string {
   const diagnostic = storageDiagnostic(error);
   if (diagnostic) {
-    const help = ownershipFailure(diagnostic) ? KEYCHAIN_LEGACY_HELP
+    const help = diagnostic.kind === "keychain-locked" ? keyStorageGuide(platform)[0]
+      : diagnostic.kind === "corrupt" ? "저장된 키를 읽을 수 없어요 — 다시 넣어 주세요"
+      : diagnostic.kind === "file-permission" ? "설정 폴더의 파일 권한과 여유 공간을 확인해 주세요."
+      : ownershipFailure(diagnostic) ? KEYCHAIN_LEGACY_HELP
       : diagnostic.kind === "cancelled" ? "키체인 접근을 취소했어요. 다시 저장하고 접근을 허용해 주세요."
       : diagnostic.kind === "locked" ? "키체인이 잠겨 있거나 접근을 물을 수 없어요. 키체인 잠금을 풀고 다시 저장해 주세요."
       : "키를 저장하지 못했어요. OS 보안 저장소 권한과 설정 폴더를 확인해 주세요.";
@@ -143,4 +148,21 @@ export class SavedKeyChecks {
     this.persist();
     return true;
   }
+}
+
+
+export const KEYCHAIN_LOCKED_HELP = "맥의 로그인 키체인이 잠겨 있어 키를 저장하지 못했어요.";
+export const DEVICE_STORAGE_LABEL = "키체인 대신 기기 암호화로 저장됨(덜 안전)";
+export const DEVICE_STORAGE_BUTTON = "대신 이 앱 안에 암호화해서 저장(키체인보다 덜 안전)";
+export function keyStorageGuide(platform: string): string[] {
+  if (platform === "linux") return ["설정 폴더의 파일 권한과 여유 공간을 확인해 주세요."];
+  if (platform === "windows") return ["윈도우 자격 증명 관리자에 접근하지 못했어요.", "제어판 → 자격 증명 관리자 → Windows 자격 증명을 열고, 로그인 계정의 접근 권한을 확인한 뒤 다시 시도해 주세요."];
+  return [KEYCHAIN_LOCKED_HELP,
+    "1. 키체인 접근을 열어 주세요.",
+    "2. 왼쪽 ‘로그인’을 우클릭하고 ‘잠금 해제’를 선택하세요.",
+    "3. 지금 맥 암호를 넣으세요. 암호를 바꾼 적이 있다면 예전 암호를 시도하세요.",
+    "그래도 안 되면 키체인 접근의 설정에서 ‘기본 키체인 재설정’을 마지막 방법으로 사용할 수 있어요. 로그인 키체인에 저장된 암호가 지워지므로 먼저 확인하세요."];
+}
+export function needsKeyStorageGuide(error: unknown): boolean {
+  return ["keychain-locked", "locked", "access-denied", "cancelled", "unavailable", "file-permission"].includes(storageDiagnostic(error)?.kind || "");
 }

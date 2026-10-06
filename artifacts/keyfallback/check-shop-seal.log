@@ -1,0 +1,1 @@
+PASS: 9 encrypted request vectors / 5 response vectors; fragment stripping, no wire token, insecure-context no-fallback; 3 served role bootstraps

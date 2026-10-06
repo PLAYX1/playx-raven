@@ -1225,6 +1225,9 @@
       .keyrow { display: grid; grid-template-columns: 152px minmax(0,1fr) auto; gap: 8px;
                 align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
       .keyrow > * { min-width: 0; }
+      .key-storage-status { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+      .key-storage-status .meta { flex: 1 1 240px; }
+      .key-storage-help button { white-space: normal; margin: 4px; }
       /* 이 줄의 입력도 .form 밖이라 폭 규칙을 못 받는다. */
       .keyrow input { font: inherit; font-size: 14px; padding: 8px 8px; border-radius: 8px;
                       border: 1px solid var(--line); background: var(--panel); color: var(--text);

@@ -280,6 +280,19 @@ pub fn read_metadata(doc: Value, lang: String) -> Value {
     })
 }
 
+fn is_keychain_access_target(path: &str) -> bool {
+    cfg!(target_os = "macos") && path == "/System/Applications/Utilities/Keychain Access.app"
+}
+
+#[cfg(test)]
+#[test]
+fn keychain_access_is_an_exact_path() {
+    assert_eq!(is_keychain_access_target("/System/Applications/Utilities/Keychain Access.app"), cfg!(target_os = "macos"));
+    for path in ["/Applications/Other.app", "/System/Applications/Utilities/Keychain Access.app/other", "file:///System/Applications/Utilities/Keychain Access.app", "/System/Applications/Utilities/Keychain Access.app --args"] {
+        assert!(!is_keychain_access_target(path));
+    }
+}
+
 /// Hands a local gateway URL to the system browser.
 ///
 /// Rendering arbitrary PDFs and documents inside a wallet-adjacent window is not
@@ -310,7 +323,7 @@ pub async fn open_external(url: String) -> Result<(), String> {
         "https://www.ravencoin.org/",        // 레이븐코인 공식
         "https://rvn.ex.erci.se/",           // 우리 사이트
     ];
-    if !ALLOWED.iter().any(|p| url.starts_with(p)) {
+    if !is_keychain_access_target(&url) && !ALLOWED.iter().any(|p| url.starts_with(p)) {
         // 오류 문구도 한국어로. 영어 원문은 사장에게 아무것도 알려주지 않는다.
         return Err(format!(
             "이 주소는 열지 않습니다. 우리가 아는 곳만 엽니다.\n{url}"

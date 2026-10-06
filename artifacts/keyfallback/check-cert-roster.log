@@ -1,0 +1,14 @@
+PASS cert-roster: UTF-8 BOM CSV
+PASS cert-roster: CP949(한국어 엑셀 CSV)
+PASS cert-roster: 따옴표 CSV(쉼표·줄바꿈·"") · TSV · UTF-16
+PASS cert-roster: 샘플 CSV·XLSX → 읽기 → 연결 = sampleRows (※ 설명 줄 건너뜀)
+PASS cert-roster: 엑셀 날짜 칸(TZ=기본) · 서식 숫자 001 · 1e21 · 0.1+0.2 · 명단 시트 · .xls
+PASS cert-roster: 머리글 짐작(동의어·영문·(선택)·NFD·우선순위·전화번호 제외·한 열)
+PASS cert-roster: 붙여넣기(한 열 · 머리글 있는 표 · 머리글 없는 표 · 따옴표 칸)
+PASS cert-roster: 날짜(점·빗금·8자리·한글·요일·시각·엑셀 일련번호 · 없는 날 → bad-date)
+PASS cert-roster: 확인 표(empty-name · too-long · long-name · duplicate · bad-date · date-range · no-photo · photo-not-found)
+PASS cert-roster: 500줄 한도 · 지원 안 하는 확장자 · 빈 파일 · 머리글만 · 깨진 파일
+PASS cert-roster: 발행 목록 XLSX(시트 「발행 목록」·확인 주소 링크) · CSV(BOM·따옴표·수식 막기)
+PASS cert-roster: 시간대 America/Los_Angeles 에서도 같은 답
+PASS cert-roster: 시간대 Pacific/Kiritimati 에서도 같은 답
+PASS cert-roster: 13개 묶음 모두 통과

@@ -1,6 +1,22 @@
 import raviCapabilities from "./ravi-capabilities.json";
 /** Korean source copy + English, Japanese and Simplified Chinese. User text is not translated here. */
 export const PROMO_COPY: Record<string, [string, string, string]> = {
+  "맥의 로그인 키체인이 잠겨 있어 키를 저장하지 못했어요.": ["Your Mac’s login keychain is locked, so the key could not be saved.", "Macのログインキーチェーンがロックされているため、キーを保存できませんでした。", "Mac 的登录钥匙串已锁定，无法保存密钥。"],
+  "1. 키체인 접근을 열어 주세요.": ["1. Open Keychain Access.", "1. キーチェーンアクセスを開いてください。", "1. 打开“钥匙串访问”。"],
+  "2. 왼쪽 ‘로그인’을 우클릭하고 ‘잠금 해제’를 선택하세요.": ["2. Right-click “login” on the left and choose “Unlock”.", "2. 左側の「ログイン」を右クリックし、「ロックを解除」を選んでください。", "2. 右键点击左侧的“登录”，选择“解锁”。"],
+  "3. 지금 맥 암호를 넣으세요. 암호를 바꾼 적이 있다면 예전 암호를 시도하세요.": ["3. Enter your current Mac password. If you changed it, try the previous password.", "3. 現在のMacのパスワードを入力してください。変更した場合は以前のパスワードを試してください。", "3. 输入当前 Mac 密码。如果更改过密码，请尝试旧密码。"],
+  "그래도 안 되면 키체인 접근의 설정에서 ‘기본 키체인 재설정’을 마지막 방법으로 사용할 수 있어요. 로그인 키체인에 저장된 암호가 지워지므로 먼저 확인하세요.": ["If that fails, “Reset Default Keychains” in Keychain Access settings is a last resort. It deletes passwords saved in the login keychain; check before proceeding.", "解決しない場合、キーチェーンアクセスの設定で「デフォルトキーチェーンをリセット」を最後の手段として使えます。ログインキーチェーンに保存されたパスワードが削除されるため、先に確認してください。", "如果仍然失败，可将“钥匙串访问”设置中的“重置默认钥匙串”作为最后手段。这会删除登录钥匙串中保存的密码，请先确认。"],
+  "키체인 접근 열기": ["Open Keychain Access", "キーチェーンアクセスを開く", "打开钥匙串访问"],
+  "대신 이 앱 안에 암호화해서 저장(키체인보다 덜 안전)": ["Store encrypted in this app instead (less secure than Keychain)", "代わりにこのアプリ内で暗号化して保存（キーチェーンより安全性が低い）", "改为在此应用内加密保存（安全性低于钥匙串）"],
+  "키체인 대신 기기 암호화로 저장됨(덜 안전)": ["Stored with device encryption instead of Keychain (less secure)", "キーチェーンの代わりに端末暗号化で保存済み（安全性が低い）", "已用设备加密保存，未使用钥匙串（安全性较低）"],
+  "저장된 키를 읽을 수 없어요 — 다시 넣어 주세요": ["Cannot read the saved key — please enter it again", "保存されたキーを読み取れません — 再入力してください", "无法读取已保存的密钥 — 请重新输入"],
+  "키체인으로 옮기기": ["Move to Keychain", "キーチェーンに移す", "移至钥匙串"],
+  "키 저장 도움말": ["Key storage help", "キー保存のヘルプ", "密钥存储帮助"],
+  "OS 보안 저장소에 저장됨": ["Stored in OS secure storage", "OSの安全な保管場所に保存済み", "已保存到系统安全存储"],
+  "이 컴퓨터의 파일에 저장됨": ["Stored in a file on this computer", "このコンピュータのファイルに保存済み", "已保存到此电脑上的文件"],
+  "윈도우 자격 증명 관리자에 접근하지 못했어요.": ["Could not access Windows Credential Manager.", "Windows資格情報マネージャーにアクセスできませんでした。", "无法访问 Windows 凭据管理器。"],
+  "제어판 → 자격 증명 관리자 → Windows 자격 증명을 열고, 로그인 계정의 접근 권한을 확인한 뒤 다시 시도해 주세요.": ["Open Control Panel → Credential Manager → Windows Credentials, check your login account’s access, then retry.", "コントロールパネル → 資格情報マネージャー → Windows資格情報を開き、ログインアカウントのアクセス権を確認して再試行してください。", "打开控制面板 → 凭据管理器 → Windows 凭据，检查登录账户的访问权限后重试。"],
+  "설정 폴더의 파일 권한과 여유 공간을 확인해 주세요.": ["Check file permissions and available space in the settings folder.", "設定フォルダーのファイル権限と空き容量を確認してください。", "请检查设置文件夹的文件权限和可用空间。"],
   "홍보 대상": ["Promotion target", "宣伝対象", "宣传对象"],
   "내 가게": ["My shop", "自分の店舗", "我的店铺"],
   "레이븐볼트 앱": ["RavenVault app", "RavenVaultアプリ", "RavenVault应用"],

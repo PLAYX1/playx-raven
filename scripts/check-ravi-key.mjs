@@ -49,7 +49,7 @@ function fixture({language='ko', saveError, available={}, outcome=200, provider=
   let mood='sleep', gate, saveGate, renders=0;
   const slot = id => {
     if (!slots.has(id)) slots.set(id,{value:'',textContent:'',disabled:false,hidden:true,dataset:{},
-      setAttribute(k,v){this[k]=v;},querySelector(){return slot('retry');},querySelectorAll(){return [];}});
+      remove(){},setAttribute(k,v){this[k]=v;},querySelector(){return slot('retry');},querySelectorAll(){return [];}});
     return slots.get(id);
   };
   let options=[], selected='';
@@ -57,7 +57,7 @@ function fixture({language='ko', saveError, available={}, outcome=200, provider=
   const t = translate(language);
   const ctx = vm.createContext({ ...helpers,providerOfKey,$:slot,document:{getElementById:slot},
     PROVIDERS:{google:['Google (Gemini)','AIza…','https://aistudio.google.com/apikey'],openai:['OpenAI','sk-…','https://platform.openai.com/api-keys']},
-    keyPick:provider, aiProvider:null,aiKeyed:{},lastKeyState:null,keyChecks:checks,raviHome:null,
+    keyStoragePlatform:'macos', showKeyStorageHelp(){}, keyPick:provider, aiProvider:null,aiKeyed:{},lastKeyState:null,keyChecks:checks,raviHome:null,
     async invoke(command,args){
       calls.push(command); // Never record key arguments in logs/evidence.
       if(command==='save_api_key') {
@@ -88,7 +88,7 @@ function fixture({language='ko', saveError, available={}, outcome=200, provider=
   });
   slot('ravi-key-save').hidden=false;slot('ravi-key').hidden=false;
   slot('ravi-key-input').value=`\n"Bearer key='${key}'"\r\n`;
-  vm.runInContext(compile(['renderKeyRows','refreshKeys','keyStatusMessage','checkSavedKey','keyConnectionMessage','saveKeyCard','wakeRavi','keyCardHtml','paintRaviBadge'].map(fn).join('\n')),ctx);
+  vm.runInContext(compile(['keyStorageSourceHtml','renderKeyRows','refreshKeys','keyStatusMessage','checkSavedKey','keyConnectionMessage','saveKeyCard','wakeRavi','keyCardHtml','paintRaviBadge'].map(fn).join('\n')),ctx);
   const renderRows=ctx.renderKeyRows;ctx.renderKeyRows=(...args)=>{renders++;return renderRows(...args);};
   return {ctx,slot,checks,calls,messages,saved,available,suffixes,get closed(){return slot('ravi-key').hidden;},get mood(){return mood;},get renders(){return renders;},
     block(){let release;gate=new Promise(r=>release=r);return release;},setOutcome(value){outcome=value;},
@@ -283,3 +283,69 @@ for (const error of ['key-store:'+JSON.stringify({stage:key,kind:'access-denied'
   assert.ok(!helpers.keyStorageError(error).includes(key),'malformed diagnostic never leaks IPC content');
 }
 console.log('PASS 4-language keychain permission waiting, recovery step/classification copy, manual recovery, no key/body/code leakage and no connection check on failed storage');
+
+// Execute the production recovery buttons with a synthetic DOM and RPC only.
+for (const language of ['ko','en','ja','zh']) {
+  for (const platform of ['macos','windows','linux']) {
+    const t = translate(language), nodes = new Map(), commands = [];
+    const make = (tag='div') => ({tag,id:'',textContent:'',innerHTML:'',disabled:false,children:[],
+      append(child){this.children.push(child);},after(child){nodes.set(child.id,child);},
+      remove(){nodes.delete(this.id);},querySelectorAll(){return this.children.filter(c=>c.tag==='button');}});
+    const note=make();note.id='recovery-note';nodes.set(note.id,note);
+    let stored=false, refreshed=false, failNative=true;
+    const c=vm.createContext({...helpers,t,copyHtml:t,keyStoragePlatform:platform,
+      document:{getElementById:id=>nodes.get(id),createElement:make},
+      keyChecks:{forget(){}},refreshKeys:async()=>{refreshed=true;},
+      invoke:async(command,args)=>{
+        commands.push(command);
+        if(command==='open_external') {assert.equal(args.url,'/System/Applications/Utilities/Keychain Access.app');return;}
+        assert.equal(args.provider,'google');
+        assert.ok(args.key===key,'retry/consent keeps the original key only in memory');
+        if(command==='save_api_key'&&failNative)throw 'key-store:{"stage":"set","kind":"keychain-locked"}';
+        if(command==='save_device_api_key')assert.equal(args.consent,true);
+        stored=true;
+      },
+      console:{log(){throw Error('secret logging forbidden');},error(){throw Error('secret logging forbidden');}}
+    });
+    vm.runInContext(compile(fn('showKeyStorageHelp')),c);
+    c.showKeyStorageHelp(note,'key-store:{"stage":"set","kind":"keychain-locked"}','google',key);
+    const box=nodes.get('recovery-note-storage-help');
+    assert.equal(commands.length,0,'rendering guidance never writes a key');
+    assert.ok(!box.innerHTML.includes(key));
+    if(language!=='ko')assert.ok(!/[가-힣]/.test(box.innerHTML),'all platform instructions translated');
+    const find=label=>box.children.find(b=>b.textContent===t(label));
+    if(platform==='macos') {
+      await find('키체인 접근 열기').onclick();
+      assert.equal(commands[0],'open_external');
+      assert.ok(box.innerHTML.includes(t(helpers.keyStorageGuide('macos')[4])),'destructive reset warning is present');
+    } else assert.ok(!find('키체인 접근 열기'),'no Mac application launch on another OS');
+    if(platform==='linux') {assert.ok(!find(helpers.DEVICE_STORAGE_BUTTON));continue;}
+    await find('다시 시도').onclick();assert.equal(stored,false);
+    assert.ok(!commands.includes('save_device_api_key'),'failed retry cannot silently opt in');
+    await find(helpers.DEVICE_STORAGE_BUTTON).onclick();
+    assert.equal(stored,true);assert.equal(refreshed,true);
+    assert.equal(note.textContent,t(helpers.DEVICE_STORAGE_LABEL));
+    assert.equal(nodes.has('recovery-note-storage-help'),false);
+    const restart=fixture({language,available:{google:true}});
+    await restart.ctx.refreshKeys();await restart.settle();
+    assert.equal(restart.ctx.aiProvider,'google','saved availability wakes Ravi after restart');
+    const source=restart.ctx.keyStorageSourceHtml({storage_sources:{google:'device-encrypted'}},'google');
+    assert.ok(source.includes(t(helpers.DEVICE_STORAGE_LABEL))&&source.includes('data-move-key'));
+    assert.ok(!source.includes(key));
+  }
+}
+console.log('PASS recovery flow in 4 languages / 3 platforms: exact launcher, retry, single-click consent, source status, restart wake and no secret rendering/logging');
+
+{
+  let refreshed=false,forgotten=false;
+  const note={textContent:''};
+  const c=vm.createContext({...helpers,t:s=>s,keyStoragePlatform:'macos',
+    invoke:async()=>{throw 'key-store:{"stage":"delete","kind":"keychain-locked"}';},
+    keyChecks:{forget(){forgotten=true;}},document:{getElementById(){return null;}},
+    refreshKeys:async()=>{refreshed=true;},$:()=>note,setCopyText:(el,draw)=>el.textContent=draw()});
+  vm.runInContext(compile(fn('deleteSavedKey')),c);
+  await c.deleteSavedKey('google');
+  assert.ok(refreshed&&forgotten,'partial native delete still refreshes tombstone state');
+  assert.ok(!note.textContent.includes('key-store:'));
+}
+console.log('PASS partial native deletion updates availability without rendering raw IPC');

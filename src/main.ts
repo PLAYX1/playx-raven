@@ -254,7 +254,7 @@ import {
 import {
   loadPayees, payeeName, pickerHtml, receiveHtml, recentPayees, RECEIVE_MESSAGE, savePayee, sentHtml,
 } from "./wallet-easy";
-import { KEYCHAIN_SAVING, keyLast4, normalizeApiKey, keyConnectionFailure, keyStorageError, SavedKeyChecks } from "./ravi-key";
+import { DEVICE_STORAGE_LABEL, DEVICE_STORAGE_BUTTON, keyStorageGuide, needsKeyStorageGuide, KEYCHAIN_SAVING, keyLast4, normalizeApiKey, keyConnectionFailure, keyStorageError, SavedKeyChecks } from "./ravi-key";
 import { guideById, guideHtml, raviAnswerHtml, raviCopy, raviText, raviQuestionLanguage, providerOfKey, type GuideGo } from "./ravi-guide";
 
 type Asset = {
@@ -9131,6 +9131,76 @@ async function resetOrder() {
   }
 }
 
+function keyStorageSourceHtml(st: any, provider: string): string {
+  const source = st.storage_sources?.[provider];
+  const row = (content: string) => `<div class="key-storage-status">${content}</div>`;
+  if (source === "device-encrypted") return row(`<span class="meta">${copyHtml(DEVICE_STORAGE_LABEL)}</span>`
+    + (keyStoragePlatform === "linux" ? "" : `<button type="button" class="ghost" data-move-key="${provider}">${copyHtml("키체인으로 옮기기")}</button>`));
+  if (st.storage_errors?.[provider]) return row(`<span class="meta">${escapeHtml(keyStorageError(st.storage_errors[provider], t, keyStoragePlatform))}</span><button type="button" class="ghost" data-storage-help="${provider}">${copyHtml("키 저장 도움말")}</button>`);
+  return source === "keychain" ? row(`<span class="meta">${copyHtml("OS 보안 저장소에 저장됨")}</span>`)
+    : source === "file" || source === "legacy-file" ? row(`<span class="meta">${copyHtml("이 컴퓨터의 파일에 저장됨")}</span>`) : "";
+}
+
+function showKeyStorageHelp(note: HTMLElement, error: unknown, provider: string, pendingKey = "", retryMove = false) {
+  document.getElementById(`${note.id}-storage-help`)?.remove();
+  const custom = provider === "custom" && pendingKey ? {
+    label: ($("cu-label") as HTMLInputElement).value.trim(),
+    base_url: ($("cu-url") as HTMLInputElement).value.trim(),
+    model: ($("cu-model") as HTMLInputElement).value.trim(),
+  } : undefined;
+  const box = document.createElement("div");
+  box.id = `${note.id}-storage-help`;
+  box.className = "card key-storage-help";
+  const lines = keyStoragePlatform === "linux" || needsKeyStorageGuide(error) ? keyStorageGuide(keyStoragePlatform) : [keyStorageError(error, t, keyStoragePlatform)];
+  box.innerHTML = lines.map(line => `<p>${copyHtml(line)}</p>`).join("");
+  const add = (label: string, action: () => Promise<void>) => {
+    const button = document.createElement("button");
+    button.type = "button"; button.textContent = t(label); button.className = "ghost";
+    button.onclick = async () => {
+      const buttons = box.querySelectorAll("button"); buttons.forEach(b => b.disabled = true);
+      try { await action(); }
+      catch (failure) { note.textContent = keyStorageError(failure, t, keyStoragePlatform); }
+      finally { buttons.forEach(b => b.disabled = false); }
+    };
+    box.append(button);
+  };
+  if (keyStoragePlatform === "macos") add("키체인 접근 열기", async () => {
+    await invoke("open_external", { url: "/System/Applications/Utilities/Keychain Access.app" });
+  });
+  const finish = async () => {
+    pendingKey = ""; box.remove(); keyChecks.forget(provider);
+    await refreshKeys(provider, true);
+  };
+  add("다시 시도", async () => {
+    if (pendingKey) {
+      if (custom) await invoke("save_custom_provider", { label: custom.label, baseUrl: custom.base_url, model: custom.model, key: pendingKey });
+      else await invoke("save_api_key", { provider, key: pendingKey });
+      await finish();
+    }
+    else if (retryMove) { await invoke("move_api_key_to_keychain", { provider }); await finish(); }
+    else { await refreshKeys("", true); }
+  });
+  if (pendingKey && keyStoragePlatform !== "linux") add(DEVICE_STORAGE_BUTTON, async () => {
+    await invoke("save_device_api_key", { provider, key: pendingKey, consent: true, custom });
+    await finish();
+    note.textContent = t(DEVICE_STORAGE_LABEL);
+  });
+  add("닫기", async () => { pendingKey = ""; box.remove(); });
+  note.after(box);
+}
+
+async function deleteSavedKey(provider: string) {
+  let failure: unknown;
+  try { await invoke("delete_api_key", { provider }); }
+  catch (error) { failure = error; }
+  // A native deletion failure can still leave a durable tombstone and no local key.
+  keyChecks.forget(provider);
+  document.getElementById("key-note-storage-help")?.remove();
+  document.getElementById("kc-note-storage-help")?.remove();
+  await refreshKeys();
+  if (failure !== undefined) setCopyText($("key-note"), () => keyStorageError(failure, t, keyStoragePlatform));
+}
+
 function renderKeyRows(st: any, models: any) {
   aiKeyed = st.available || {};
   renderOrder("customer");
@@ -9144,18 +9214,29 @@ function renderKeyRows(st: any, models: any) {
             `<div class="keyrow"><span class="who">${label}${keyLast4(st.last4?.[p]) ? ` · ····${escapeHtml(keyLast4(st.last4?.[p]))}` : ""}</span>
                <input id="model-${p}" value="${escapeHtml(models?.[p]?.model || "")}"
                       placeholder="${escapeHtml(models?.[p]?.default || "")}" autocomplete="off" spellcheck="false" />
-               <button class="ghost" data-delkey="${p}">지우기</button></div>`
+               <button class="ghost" data-delkey="${p}">지우기</button>${keyStorageSourceHtml(st, p)}</div>`
           : `<div class="keyrow"><span class="who">${label}</span>
                <input id="key-${p}" type="password" placeholder="${ph}" autocomplete="off" />
-               <button class="ghost" data-console="${console_}">열쇠 받기</button></div>`
+               <button class="ghost" data-console="${console_}">열쇠 받기</button>${keyStorageSourceHtml(st, p)}</div>`
       )
       .join("") +
     (st.custom
       ? `<div class="keyrow"><span class="who">${escapeHtml(st.custom_label || "커스텀")}</span>
            <span class="saved">${st.has_key?.custom ? (keyLast4(st.last4?.custom) ? `····${escapeHtml(keyLast4(st.last4?.custom))}` : "") : "키 없음"}</span>
-           <button class="ghost" data-delkey="custom">지우기</button></div>`
+           <button class="ghost" data-delkey="custom">지우기</button>${keyStorageSourceHtml(st, "custom")}</div>`
       : "");
 
+  $("keyrows").querySelectorAll<HTMLElement>("[data-move-key]").forEach(button => {
+    button.onclick = async () => {
+      button.setAttribute("disabled", "true");
+      try { await invoke("move_api_key_to_keychain", { provider: button.dataset.moveKey }); await refreshKeys(); }
+      catch (error) { showKeyStorageHelp($("key-note"), error, button.dataset.moveKey!, "", true); }
+      finally { button.removeAttribute("disabled"); }
+    };
+  });
+  $("keyrows").querySelectorAll<HTMLElement>("[data-storage-help]").forEach(button => {
+    button.onclick = () => showKeyStorageHelp($("key-note"), st.storage_errors?.[button.dataset.storageHelp!], button.dataset.storageHelp!);
+  });
   $("keyrows")
     .querySelectorAll("[data-console]")
     .forEach((b) => {
@@ -9173,9 +9254,7 @@ function renderKeyRows(st: any, models: any) {
     .forEach((b) => {
       (b as HTMLElement).onclick = async () => {
         const p = (b as HTMLElement).dataset.delkey!;
-        await invoke("delete_api_key", { provider: p });
-        keyChecks.forget(p);
-        await refreshKeys();
+        await deleteSavedKey(p);
       };
     });
 }
@@ -9183,6 +9262,7 @@ function renderKeyRows(st: any, models: any) {
 async function refreshKeys(preferred = "", keepKeyCard = false, refreshRows = true) {
   try {
     const st = (await invoke<any>("api_key_status")) || {};
+    if (["macos", "windows", "linux"].includes(st.platform)) keyStoragePlatform = st.platform;
     if (refreshRows) {
       const models = await invoke<any>("model_settings").catch(() => ({}));
       renderKeyRows(st, models);
@@ -9299,13 +9379,17 @@ async function showRate() {
 }
 
 async function saveKeys() {
+  document.getElementById("key-note-storage-help")?.remove();
   const btn = $("key-save") as HTMLButtonElement;
   btn.disabled = true;
   setCopyText($("key-note"), () => t(KEYCHAIN_SAVING));
   const warnings: string[] = [];
+  let failedProvider = "";
+  let failedKey = "";
   try {
     const cu = ($("cu-url") as HTMLInputElement).value.trim();
     if (cu) {
+      failedProvider = "custom"; failedKey = normalizeApiKey(($("cu-key") as HTMLInputElement).value);
       const result = await invoke<{ warning?: string }>("save_custom_provider", {
         label: ($("cu-label") as HTMLInputElement).value.trim(),
         baseUrl: cu,
@@ -9315,14 +9399,17 @@ async function saveKeys() {
       if (result.warning) warnings.push(result.warning);
       ($("cu-key") as HTMLInputElement).value = "";
       keyChecks.forget("custom");
+      failedProvider = ""; failedKey = "";
     }
     for (const p of Object.keys(PROVIDERS)) {
       const el = document.getElementById(`key-${p}`) as HTMLInputElement | null;
       if (el && el.value.trim()) {
+        failedProvider = p; failedKey = normalizeApiKey(el.value);
         const result = await invoke<{ warning?: string }>("save_api_key", { provider: p, key: normalizeApiKey(el.value) });
         if (result.warning) warnings.push(result.warning);
         el.value = "";
         keyChecks.forget(p);
+        failedProvider = ""; failedKey = "";
       }
       const m = document.getElementById(`model-${p}`) as HTMLInputElement | null;
       if (m) await invoke("save_model", { provider: p, model: m.value.trim() });
@@ -9332,7 +9419,8 @@ async function saveKeys() {
     if (warnings.length) $("key-note").textContent = `키가 저장됐습니다. ${warnings.join("; ")}`;
   } catch (e) {
     await refreshKeys().catch(() => {});
-    setCopyText($("key-note"), () => `${t("키 저장에 실패했어요.")} ${keyStorageError(e, t)}`);
+    setCopyText($("key-note"), () => `${t("키 저장에 실패했어요.")} ${keyStorageError(e, t, keyStoragePlatform)}`);
+    if (failedProvider) showKeyStorageHelp($("key-note"), e, failedProvider, failedKey);
   } finally {
     document.querySelectorAll<HTMLInputElement>('#keyrows input[type="password"], #cu-key').forEach(input => { input.value = ""; });
     btn.disabled = false;
@@ -10359,6 +10447,7 @@ function chatPopThinking() {
    ② 열쇠 넣는 곳은 라비 화면 안에: 회사마다 「어디서 받나요」, 붙여 넣는 칸 **하나**, 저장.
       저장은 「이 컴퓨터 › AI 열쇠」와 **같은 명령**(`save_api_key`, 0600 파일)이다 — 방식은 안 바꾼다.
    🔴 열쇠 칸은 password 칸이고, 어디에도 적지(로그) 않는다. 저장이 끝나면 칸을 비운다. */
+let keyStoragePlatform = /Win/.test(navigator.platform) ? "windows" : /Mac/.test(navigator.platform) ? "macos" : "linux";
 let keyPick = "anthropic";
 
 function keyCardHtml(): string {
@@ -10398,6 +10487,7 @@ function closeKeyCard() {
   const host = $("ravi-key");
   const input = document.getElementById("ravi-key-input") as HTMLInputElement | null;
   if (input) input.value = "";
+  document.getElementById("kc-note-storage-help")?.remove();
   host.hidden = true;
   host.innerHTML = "";
 }
@@ -10406,6 +10496,7 @@ function closeKeyCard() {
 function pickKeyProvider(p: string, clear = true) {
   if (!PROVIDERS[p] || (document.getElementById("ravi-key-save") as HTMLButtonElement | null)?.disabled) return;
   keyPick = p;
+  document.getElementById("kc-note-storage-help")?.remove();
   document.querySelectorAll<HTMLElement>("#ravi-key [data-kc-pick]").forEach((pick) => {
     const on = pick.dataset.kcPick === p;
     pick.classList.toggle("on", on);
@@ -10435,6 +10526,7 @@ async function saveKeyCard(checkOnly = false) {
   const note = $("kc-note");
   const btn = $("ravi-key-save") as HTMLButtonElement;
   if (btn.disabled) return;
+  document.getElementById("kc-note-storage-help")?.remove();
   const provider = keyPick;
   delete note.dataset.keySaveFailed;
   if (checkOnly) {
@@ -10458,7 +10550,8 @@ async function saveKeyCard(checkOnly = false) {
     catch (error) {
       await refreshKeys("", true);
       note.dataset.keySaveFailed = "1";
-      setCopyText(note, () => `${t("키 저장에 실패했어요.")} ${keyStorageError(error, t)}`);
+      setCopyText(note, () => `${t("키 저장에 실패했어요.")} ${keyStorageError(error, t, keyStoragePlatform)}`);
+      showKeyStorageHelp(note, error, provider, key);
       return;
     }
     input.value = "";
@@ -18065,9 +18158,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("ravi-key-delete").addEventListener("click", async () => {
     if (!aiProvider) return;
     const provider = aiProvider;
-    await invoke("delete_api_key", { provider });
-    keyChecks.forget(provider);
-    await refreshKeys();
+    await deleteSavedKey(provider);
   });
   $("ravi-key").addEventListener("click", (e) => {
     const el = e.target as HTMLElement;

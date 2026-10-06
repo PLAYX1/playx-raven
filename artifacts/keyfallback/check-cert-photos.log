@@ -1,0 +1,23 @@
+PASS photoKey: NFD 파일명 = NFC 칸, 경로·확장자 하나·대소문자·공백
+PASS isImageName: 받는 확장자만
+PASS matchPhotos: 칸 이름·받는 사람 대체·헷갈림·재사용·사진 아닌 파일·남는 사진
+PASS matchPhotos: 같은 이름 파일 두 개(다른 폴더)는 헷갈림, 빈 명단·빈 파일
+PASS pickedFiles: 사진만·자연 정렬(사진2 < 사진10)·폴더의 숨김/__MACOSX 제외
+file:///Users/gimmusong/wt-rv-desktop-simple/node_modules/@puppeteer/browsers/lib/esm/launch.js:303
+                reject(new Error([
+                       ^
+
+Error: Failed to launch the browser process!
+
+
+TROUBLESHOOTING: https://pptr.dev/troubleshooting
+
+    at Interface.onClose (file:///Users/gimmusong/wt-rv-desktop-simple/node_modules/@puppeteer/browsers/lib/esm/launch.js:303:24)
+    at Interface.emit (node:events:536:35)
+    at Interface.close (node:internal/readline/interface:530:10)
+    at Socket.onend (node:internal/readline/interface:256:10)
+    at Socket.emit (node:events:536:35)
+    at endReadableNT (node:internal/streams/readable:1698:12)
+    at process.processTicksAndRejections (node:internal/process/task_queues:82:21)
+
+Node.js v20.20.0

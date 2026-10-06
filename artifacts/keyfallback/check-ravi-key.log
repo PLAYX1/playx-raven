@@ -1,0 +1,6 @@
+PASS 4 languages: save wakes during check; 200/400/401/403/429/500/503/404, network/timeout/storage/setup/format and restart
+PASS stuck-pending migration, private storage, other-provider fallback, Google paste, failed replacement, duplicate guard, stale results and no key/body/log leakage
+PASS last-four-only badge/list: immediate save, restart, replacement during pending check, replaced restart, failed replacement, malformed/short IPC, Unicode, HTML escaping, custom provider, switch and removal
+PASS 4-language keychain permission waiting, recovery step/classification copy, manual recovery, no key/body/code leakage and no connection check on failed storage
+PASS recovery flow in 4 languages / 3 platforms: exact launcher, retry, single-click consent, source status, restart wake and no secret rendering/logging
+PASS partial native deletion updates availability without rendering raw IPC

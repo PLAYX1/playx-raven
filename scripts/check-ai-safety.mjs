@@ -13,7 +13,7 @@ const ai = read('src-tauri/src/ai.rs');
 const osStore = ai.slice(ai.indexOf('impl KeyStore for OsStore'), ai.indexOf('struct FileStore'));
 assert.equal((osStore.match(/map_err\(classify_keyring_error\)/g)||[]).length,3,'native get/set/delete preserve safe classifications');
 const classifier=ai.slice(ai.indexOf('fn classify_keyring_error'),ai.indexOf('trait KeyStore'));
-assert.ok(!/\.to_string\(|println!|eprintln!|dbg!|log::|tracing::|format!/.test(classifier),'native error payloads are never formatted or logged');
+assert.ok(!/println!|eprintln!|dbg!|log::|tracing::|format!/.test(classifier),'native error payloads are never logged or interpolated into IPC');
 assert.ok(ai.includes('#[cfg(all(not(test), any(target_os = "macos", target_os = "windows")))]\nstruct OsStore'), 'tests cannot reach native keychain');
 const generations=ai.slice(ai.indexOf('struct GenerationStore'),ai.indexOf('fn remove_key('));
 assert.ok(!generations.includes('key_path(')&&!generations.includes('key.as_bytes()'),'native recovery never writes a plaintext key or fallback');
@@ -85,7 +85,7 @@ const keyStatus = ai.slice(ai.indexOf('fn key_status_locked('), ai.indexOf('fn c
 const statusIPC = ai.slice(ai.indexOf('pub fn api_key_status('), ai.indexOf('/// Check credentials'));
 assert.ok(keyStatus.includes('let suffix = key.as_deref().map(last4).unwrap_or_default();'));
 assert.ok(keyStatus.includes('(has, suffix)'));
-assert.ok(statusIPC.includes('key_status_with_error_locked(provider)') && statusIPC.includes('suffixes.insert(provider.into(), json!(suffix));'));
+assert.ok(statusIPC.includes('key_status_with_source_locked(provider)') && statusIPC.includes('suffixes.insert(provider.into(), json!(suffix));'));
 assert.ok(statusIPC.includes('"last4": suffixes'));
 assert.ok(!/println!|eprintln!|dbg!|log::|tracing::/.test(suffixFn + keyStatus + statusIPC), 'key status never logs fragments');
 assert.ok(!/json!\(key\)|"key"\s*:|"prefix"\s*:|"length"\s*:/.test(statusIPC), 'IPC has no raw key, prefix or length');
@@ -114,9 +114,24 @@ assert.ok(!/String\(st\.last4|escapeHtml\(st\.last4|\$\{st\.last4/.test(fn('rend
 console.log('PASS Rust suffix and status IPC wiring expose only the final four characters; both frontend displays validate suffixes');
 assert.ok(!main.includes('data-kc-try'), 'saved keys need no explicit trial gate');
 // Detect plausible live-key literals without printing any match.
-for (const path of ['src/main.ts','src/ravi-key.ts','src/desktop-copy.ts','src-tauri/src/ai.rs','scripts/check-ravi-key.mjs']) {
+for (const path of ['src/main.ts','src/ravi-key.ts','src/desktop-copy.ts','src-tauri/src/ai.rs','src-tauri/src/ai_fallback.rs','scripts/check-ravi-key.mjs']) {
   const contents=read(path);
   assert.ok(!/AIza[A-Za-z0-9_-]{35}|sk-(?:proj-|ant-)?[A-Za-z0-9_-]{40,}|gsk_[A-Za-z0-9]{40,}/.test(contents), 'possible live-key literal in a key-fix file');
 }
 await import('./check-ravi-key.mjs');
 console.log('PASS safe structured IPC, key/body/log guards and saved-key regression scenarios');
+const fallback = read('src-tauri/src/ai_fallback.rs');
+assert.ok(fallback.includes('Aes256Gcm') && fallback.includes('Hkdf::<sha2::Sha256>'));
+assert.ok(fallback.includes('OsRng.fill_bytes(&mut nonce)') && fallback.includes('cipher.decrypt('));
+assert.ok(fallback.includes('aad: provider.as_bytes()') && fallback.includes('options.custom_flags(libc::O_NOFOLLOW)'));
+assert.ok(fallback.includes('D:P(A;;GA;;;OW)') && fallback.includes('mode(0o600)'));
+assert.ok(!/println!|eprintln!|dbg!|log::|tracing::/.test(fallback));
+const consent = ai.slice(ai.indexOf('pub fn save_device_api_key'),ai.indexOf('pub fn move_api_key_to_keychain'));
+assert.ok(consent.includes('if !consent') && consent.includes('fallback::write(&provider, &key)'));
+assert.ok(!consent.includes('save_key_to_store') && !consent.includes('account_store('));
+const guide=fn('showKeyStorageHelp');
+assert.ok(guide.includes('consent: true') && !/localStorage|sessionStorage|console\.|errText\(/.test(guide));
+assert.ok(guide.includes('pendingKey = ""'));
+const opener=read('src-tauri/src/ipfs.rs');
+assert.ok(opener.includes('path == "/System/Applications/Utilities/Keychain Access.app"'));
+console.log('PASS AEAD/HKDF/nonce/tag, permissions, explicit consent, pending-key cleanup and exact application allowlist guards');

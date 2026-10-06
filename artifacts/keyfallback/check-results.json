@@ -1,0 +1,216 @@
+[
+  {
+    "script": "scripts/check-ai-safety.mjs",
+    "exit": 0,
+    "result": "pass"
+  },
+  {
+    "script": "scripts/check-backup-result.mjs",
+    "exit": 0,
+    "result": "pass"
+  },
+  {
+    "script": "scripts/check-backup-safety.mjs",
+    "exit": 0,
+    "result": "pass"
+  },
+  {
+    "script": "scripts/check-backup-ui.mjs",
+    "exit": 1,
+    "isolated_artifacts": true,
+    "result": "blocked-port"
+  },
+  {
+    "script": "scripts/check-cert-photos.mjs",
+    "exit": 1,
+    "result": "blocked-browser-launch"
+  },
+  {
+    "script": "scripts/check-cert-roster.mjs",
+    "exit": 0,
+    "result": "pass"
+  },
+  {
+    "script": "scripts/check-certificate-bulk-ui.mjs",
+    "exit": 1,
+    "result": "blocked-browser-launch"
+  },
+  {
+    "script": "scripts/check-certificate-preview.mjs",
+    "exit": 1,
+    "result": "blocked-port"
+  },
+  {
+    "script": "scripts/check-desktop-identity-fix.mjs",
+    "exit": 1,
+    "result": "blocked-port"
+  },
+  {
+    "script": "scripts/check-desktop-integration.mjs",
+    "exit": 0,
+    "result": "pass"
+  },
+  {
+    "script": "scripts/check-desktop-languages.mjs",
+    "exit": 1,
+    "isolated_artifacts": true,
+    "result": "blocked-port"
+  },
+  {
+    "script": "scripts/check-desktop-mutation.mjs",
+    "exit": 1,
+    "expected_red": true,
+    "result": "expected-red"
+  },
+  {
+    "script": "scripts/check-desktop-ux.mjs",
+    "exit": 1,
+    "isolated_artifacts": true,
+    "result": "blocked-port"
+  },
+  {
+    "script": "scripts/check-easy-create.mjs",
+    "exit": 0,
+    "result": "pass"
+  },
+  {
+    "script": "scripts/check-issue-gate.mjs",
+    "exit": 0,
+    "result": "pass"
+  },
+  {
+    "script": "scripts/check-local-wallet-publish.mjs",
+    "exit": 0,
+    "result": "pass"
+  },
+  {
+    "script": "scripts/check-map-copy.mjs",
+    "exit": 0,
+    "result": "pass"
+  },
+  {
+    "script": "scripts/check-merchant-map.mjs",
+    "exit": 0,
+    "result": "pass"
+  },
+  {
+    "script": "scripts/check-peer-help.mjs",
+    "exit": 0,
+    "result": "pass"
+  },
+  {
+    "script": "scripts/check-phone-transaction.mjs",
+    "exit": 0,
+    "result": "pass"
+  },
+  {
+    "script": "scripts/check-ravi-agent.mjs",
+    "exit": 0,
+    "result": "pass"
+  },
+  {
+    "script": "scripts/check-ravi-companion.mjs",
+    "exit": 0,
+    "result": "pass"
+  },
+  {
+    "script": "scripts/check-ravi-key.mjs",
+    "exit": 0,
+    "result": "pass"
+  },
+  {
+    "script": "scripts/check-ravi-panel-browser.mjs",
+    "exit": 1,
+    "result": "blocked-browser-launch"
+  },
+  {
+    "script": "scripts/check-ravi-panel.mjs",
+    "exit": 0,
+    "result": "pass"
+  },
+  {
+    "script": "scripts/check-ravi-promo-browser.mjs",
+    "exit": 1,
+    "result": "blocked-browser-launch"
+  },
+  {
+    "script": "scripts/check-ravi-promo-card.mjs",
+    "exit": 0,
+    "result": "pass"
+  },
+  {
+    "script": "scripts/check-ravi-promo.mjs",
+    "exit": 0,
+    "result": "pass"
+  },
+  {
+    "script": "scripts/check-ravi-similarity.mjs",
+    "exit": 0,
+    "result": "pass"
+  },
+  {
+    "script": "scripts/check-ravi-state.mjs",
+    "exit": 0,
+    "result": "pass"
+  },
+  {
+    "script": "scripts/check-ravi-understanding-browser.mjs",
+    "exit": 1,
+    "result": "blocked-browser-launch"
+  },
+  {
+    "script": "scripts/check-ravi-understanding.mjs",
+    "exit": 0,
+    "result": "pass"
+  },
+  {
+    "script": "scripts/check-ravi-understanding2.mjs",
+    "exit": 0,
+    "result": "pass"
+  },
+  {
+    "script": "scripts/check-ravi-understanding3.mjs",
+    "exit": 0,
+    "result": "pass"
+  },
+  {
+    "script": "scripts/check-ravi-understanding5.mjs",
+    "exit": 0,
+    "result": "pass"
+  },
+  {
+    "script": "scripts/check-restore-vectors.mjs",
+    "exit": 1,
+    "result": "blocked-port"
+  },
+  {
+    "script": "scripts/check-send-confirmation.mjs",
+    "exit": 0,
+    "result": "pass"
+  },
+  {
+    "script": "scripts/check-shop-seal.mjs",
+    "exit": 0,
+    "result": "pass"
+  },
+  {
+    "script": "scripts/check-staff-refund.mjs",
+    "exit": 0,
+    "result": "pass"
+  },
+  {
+    "script": "scripts/check-style-csp.mjs",
+    "exit": 1,
+    "result": "blocked-port"
+  },
+  {
+    "script": "scripts/check-wallet-easy.mjs",
+    "exit": 1,
+    "result": "blocked-port"
+  },
+  {
+    "script": "scripts/check-words-restore.mjs",
+    "exit": 1,
+    "result": "blocked-port"
+  }
+]

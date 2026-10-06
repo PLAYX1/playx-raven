@@ -18,6 +18,8 @@
 use serde_json::{json, Value};
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
+#[path = "ai_fallback.rs"]
+mod fallback;
 static KEY_LOCK: Mutex<()> = Mutex::new(());
 const MISSING_KEY: &str = "API 키가 저장되어 있지 않습니다. 설정에서 넣어 주세요.";
 
@@ -50,7 +52,9 @@ enum StoreError {
     Unavailable,
     AccessDenied(Option<i64>),
     Cancelled(Option<i64>),
-    Locked(Option<i64>),
+    KeychainLocked(Option<i64>),
+    Corrupt,
+    FilePermission,
     Duplicate(Option<i64>),
     Other(Option<i64>),
     Recovery { stage: &'static str, cause: Box<StoreError>, previous: Option<Box<StoreError>> },
@@ -62,15 +66,17 @@ impl StoreError {
     fn at(self, stage: &'static str, previous: Option<StoreError>) -> Self {
         Self::Recovery { stage, cause: Box::new(self), previous: previous.map(Box::new) }
     }
-    // Only app-owned classifications and numeric codes cross IPC. Never format
-    // keyring::Error: its payload can contain secret bytes or attributes.
+    // Only app-owned classifications and numeric codes cross IPC. Never include
+    // keyring::Error text: its payload can contain secret bytes or attributes.
     fn diagnostic(&self, stage: &str) -> Value {
         let (kind, code) = match self {
             Self::NoEntry => ("no-entry", None),
             Self::Unavailable => ("unavailable", None),
             Self::AccessDenied(c) => ("access-denied", *c),
             Self::Cancelled(c) => ("cancelled", *c),
-            Self::Locked(c) => ("locked", *c),
+            Self::KeychainLocked(c) => ("keychain-locked", *c),
+            Self::Corrupt => ("corrupt", None),
+            Self::FilePermission => ("file-permission", None),
             Self::Duplicate(c) => ("duplicate", *c),
             Self::Other(c) => ("other", *c),
             Self::Recovery { stage, cause, previous } => {
@@ -106,18 +112,21 @@ fn classify_keyring_error(error: keyring::Error) -> StoreError {
             if let Some(error) = error.downcast_ref::<keyring::windows::Error>() {
                 return classify_windows_status(error.0);
             }
-            if inaccessible { StoreError::Locked(None) } else { StoreError::Other(None) }
+            if inaccessible || keychain_passphrase_message(&error.to_string()) { StoreError::KeychainLocked(None) } else { StoreError::Other(None) }
         }
         _ => StoreError::Other(None),
     }
+}
+fn keychain_passphrase_message(message: &str) -> bool {
+    message.contains("The user name or passphrase")
 }
 #[cfg(any(test, target_os = "windows"))]
 fn classify_windows_status(code: u32) -> StoreError {
     let code = i64::from(code);
     match code {
-        5 | 1314 | 1326 => StoreError::AccessDenied(Some(code)),
-        995 | 1223 => StoreError::Cancelled(Some(code)),
-        1312 => StoreError::Locked(Some(code)),
+        5 | 1314 | 1326 => StoreError::KeychainLocked(Some(code)),
+        995 | 1223 => StoreError::KeychainLocked(Some(code)),
+        1312 => StoreError::KeychainLocked(Some(code)),
         52 | 183 => StoreError::Duplicate(Some(code)),
         _ => StoreError::Other(Some(code)),
     }
@@ -125,9 +134,8 @@ fn classify_windows_status(code: u32) -> StoreError {
 #[cfg(any(test, target_os = "macos"))]
 fn classify_os_status(code: i64) -> StoreError {
     match code {
-        -25293 | -25243 | -25244 => StoreError::AccessDenied(Some(code)),
-        -128 => StoreError::Cancelled(Some(code)),
-        -25308 | -25315 | -25291 | -25292 | -25294 | -25295 => StoreError::Locked(Some(code)),
+        -25243 => StoreError::AccessDenied(Some(code)),
+        -25293 | -25244 | -128 | -25308 | -25315 | -25291 | -25292 | -25294 | -25295 => StoreError::KeychainLocked(Some(code)),
         -25299 => StoreError::Duplicate(Some(code)),
         -25300 => StoreError::NoEntry,
         _ => StoreError::Other(Some(code)),
@@ -221,15 +229,15 @@ impl KeyStore for FileStore {
                 if e.kind() == std::io::ErrorKind::NotFound {
                     StoreError::NoEntry
                 } else {
-                    StoreError::Unavailable
+                    StoreError::FilePermission
                 }
             })
     }
     fn set(&self, key: &str) -> Result<(), StoreError> {
-        write_private(&self.0, key.as_bytes()).map_err(|_| StoreError::Unavailable)
+        write_private(&self.0, key.as_bytes()).map_err(|_| StoreError::FilePermission)
     }
     fn delete(&self) -> Result<(), StoreError> {
-        remove_key(&self.0).map_err(|_| StoreError::Unavailable)
+        remove_key(&self.0).map_err(|_| StoreError::FilePermission)
     }
 }
 
@@ -307,7 +315,10 @@ impl GenerationStore {
 #[cfg(any(test, target_os = "macos", target_os = "windows"))]
 impl KeyStore for GenerationStore {
     fn get(&self) -> Result<String, StoreError> {
-        for generation in (1..=self.generation()?).rev() {
+        let latest = self.generation()?;
+        // An explicit replacement in the device store must not revive an older OS key.
+        let oldest = if fallback::path(&self.provider).exists() { latest } else { 1 };
+        for generation in (oldest..=latest).rev() {
             match self.open(generation)?.get() {
                 Ok(key) => return Ok(key),
                 Err(StoreError::NoEntry) => continue,
@@ -333,7 +344,7 @@ impl KeyStore for GenerationStore {
                     Err(e) => Err(e.at("retry-set", Some(initial))),
                 }
             }
-            Err(e) if matches!(e, StoreError::Cancelled(_) | StoreError::Locked(_)) =>
+            Err(e) if matches!(e, StoreError::Cancelled(_) | StoreError::KeychainLocked(_)) =>
                 Err(e.at("recovery-delete", Some(initial))),
             // Ownership may prevent deletion as well as update. Leave the old
             // item alone from here on and create an independent account.
@@ -374,11 +385,17 @@ fn write_private(path: &std::path::Path, bytes: &[u8]) -> Result<(), String> {
             use std::os::unix::fs::OpenOptionsExt;
             options.mode(0o600);
         }
+        #[cfg(not(windows))]
         let mut file = options.open(&pending)?;
+        #[cfg(windows)]
+        let mut file = fallback::create_private_file(&pending)?;
         file.write_all(bytes)?;
         file.sync_all()?;
         drop(file);
-        std::fs::rename(&pending, path)
+        std::fs::rename(&pending, path)?;
+        #[cfg(unix)]
+        std::fs::File::open(path.parent().ok_or_else(|| std::io::Error::from(std::io::ErrorKind::InvalidInput))?)?.sync_all()?;
+        Ok(())
     })();
     if result.is_err() {
         let _ = std::fs::remove_file(&pending);
@@ -479,6 +496,7 @@ fn save_key_locked(provider: &str, key: &str) -> Result<Option<String>, String> 
         remove_legacy_key(&key_path(provider))?;
     }
     save_key_to_store(&*store(provider)?, key)?;
+    remove_key(&fallback::path(provider))?;
     // The key is durable already. Attempt metadata and legacy cleanup independently.
     let mut errors = Vec::new();
     // The suffix is derived from the store on demand; old .last4 files are
@@ -531,7 +549,7 @@ fn delete_key_with_store_locked(provider: &str, s: &dyn KeyStore) -> Result<(), 
             errors.push(e.safe_message("delete"));
         }
     }
-    for path in [last4_path(provider), key_path(provider)] {
+    for path in [last4_path(provider), key_path(provider), fallback::path(provider)] {
         if let Err(e) = remove_key(&path) {
             errors.push(e);
         }
@@ -619,7 +637,7 @@ pub fn migrate_keys_on_start() {
             if let Ok(s) = store(provider) {
             #[cfg(any(test, target_os = "macos", target_os = "windows"))]
             {
-                let _ = migrate_locked(provider, &*s);
+                if !fallback::path(provider).exists() { let _ = migrate_locked(provider, &*s); }
             }
             #[cfg(all(not(test), not(any(target_os = "macos", target_os = "windows"))))]
             {
@@ -630,7 +648,7 @@ pub fn migrate_keys_on_start() {
     });
 }
 
-fn read_key_locked(provider: &str) -> Result<String, String> {
+fn read_primary_key_locked(provider: &str) -> Result<String, String> {
     if !known(provider) {
         return Err("알 수 없는 제공자입니다.".into());
     }
@@ -673,7 +691,54 @@ fn read_key(provider: &str) -> Result<String, String> {
 fn key_status_locked(provider: &str) -> (bool, String) {
     key_status_with_error_locked(provider).unwrap_or_default()
 }
+fn read_key_source_locked(provider: &str) -> Result<(String, &'static str), String> {
+    if !known(provider) { return Err("알 수 없는 제공자입니다.".into()); }
+    if deleted_path(provider).exists() {
+        let _ = remove_legacy_key(&key_path(provider));
+        let _ = remove_key(&last4_path(provider));
+        let _ = remove_key(&fallback::path(provider));
+        return Err(MISSING_KEY.into());
+    }
+    if fallback::path(provider).exists() {
+        // No automatic migration: only an explicit user action writes the OS store.
+        if let Ok(s) = store(provider) {
+            if let Ok(key) = s.get() { return Ok((key, primary_source())); }
+        }
+        return fallback::read(provider).map(|key| (key, "device-encrypted"));
+    }
+    read_primary_key_locked(provider).map(|key| {
+        let source = if key_path(provider).exists() { "legacy-file" } else { primary_source() };
+        (key, source)
+    })
+}
+fn primary_source() -> &'static str {
+    if cfg!(any(test, target_os = "macos", target_os = "windows")) { "keychain" } else { "file" }
+}
+fn read_key_locked(provider: &str) -> Result<String, String> {
+    read_key_source_locked(provider).map(|(key, _)| key)
+}
+fn key_status_with_source_locked(provider: &str) -> Result<(bool, String, &'static str), String> {
+    if !fallback::path(provider).exists() {
+        let (has, suffix) = primary_key_status_locked(provider)?;
+        let source = if !has { "none" } else if key_path(provider).exists() { "legacy-file" } else { primary_source() };
+        return Ok((has, suffix, source));
+    }
+    let (key, source) = match read_key_source_locked(provider) {
+        Ok((key, source)) => (Some(key), source),
+        Err(e) if e == MISSING_KEY => (None, "none"),
+        Err(e) => return Err(e),
+    };
+    let has = key.as_ref().is_some_and(|k| !k.is_empty());
+    let suffix = key.as_deref().map(last4).unwrap_or_default();
+    let _ = remove_key(&last4_path(provider));
+    Ok((has, suffix, source))
+}
+#[cfg(test)]
 fn key_status_with_error_locked(provider: &str) -> Result<(bool, String), String> {
+    key_status_with_source_locked(provider).map(|(has, suffix, _)| (has, suffix))
+}
+
+fn primary_key_status_locked(provider: &str) -> Result<(bool, String), String> {
     if deleted_path(provider).exists() {
         let _ = remove_legacy_key(&key_path(provider));
         let _ = remove_key(&last4_path(provider));
@@ -1185,7 +1250,7 @@ pub fn save_model(provider: String, model: String) -> Result<(), String> {
         return Err("알 수 없는 제공자입니다.".into());
     }
     let dir = config_dir();
-    std::fs::create_dir_all(&dir).map_err(|e| format!("설정 폴더를 만들지 못했습니다: {e}"))?;
+    std::fs::create_dir_all(&dir).map_err(|_| StoreError::FilePermission.safe_message("set"))?;
     let path = dir.join("models.json");
 
     let mut doc = std::fs::read_to_string(&path)
@@ -1248,6 +1313,63 @@ pub fn save_api_key(provider: String, key: String) -> Result<Value, String> {
     Ok(json!({ "warning": save_key_locked(&provider, &key)? }))
 }
 
+#[derive(serde::Deserialize)]
+pub struct DeviceCustomConfig { label: String, base_url: String, model: String }
+
+/// This command is called only by the explicit less-safe-storage consent button.
+#[tauri::command(async)]
+pub fn save_device_api_key(provider: String, key: String, consent: bool, custom: Option<DeviceCustomConfig>) -> Result<(), String> {
+    if !consent || !known(&provider) { return Err(StoreError::Unavailable.safe_message("set")); }
+    let key = normalize_api_key(&key);
+    if key.len() > 4096 || key.chars().any(char::is_control) || key.chars().count() < 16 || key_provider_mismatch(&provider, &key) {
+        return Err("API 키를 줄바꿈 없이 다시 입력하세요.".into());
+    }
+    let _guard = lock_keys()?;
+    let custom_doc = if provider == "custom" {
+        let (label, base, model) = match custom {
+            Some(c) => (c.label, c.base_url, c.model),
+            None => custom_config().ok_or_else(|| "커스텀 제공자가 설정되지 않았습니다.".to_string())?,
+        };
+        let base = crate::ai_endpoint::validate(&base, &model, &key)?;
+        Some(json!({ "label": label, "base_url": base, "model": model }))
+    } else { None };
+    // A destination change or crash during custom configuration must fail closed.
+    if custom_doc.is_some() { write_private(&deleted_path(&provider), b"deleted")?; }
+    // Reserve a fresh OS generation without accessing the native keychain.
+    // While .aead exists, reads cannot fall through to pre-replacement accounts.
+    #[cfg(any(test, target_os = "macos", target_os = "windows"))]
+    {
+        let s = GenerationStore { provider: provider.clone() };
+        let next = s.generation().map_err(|e| e.safe_message("set"))?.checked_add(1)
+            .filter(|g| *g <= 1024).ok_or_else(|| StoreError::Unavailable.safe_message("set"))?;
+        write_private(&s.marker(), next.to_string().as_bytes())?;
+    }
+    fallback::write(&provider, &key)?;
+    if let Some(doc) = custom_doc {
+        let bytes = serde_json::to_vec(&doc).map_err(|_| StoreError::Unavailable.safe_message("set"))?;
+        write_private(&config_dir().join("custom.json"), &bytes)?;
+    }
+    remove_legacy_key(&key_path(&provider))?;
+    remove_key(&last4_path(&provider))?;
+    remove_key(&deleted_path(&provider))?;
+    Ok(())
+}
+
+#[tauri::command(async)]
+pub fn move_api_key_to_keychain(provider: String) -> Result<(), String> {
+    if !cfg!(any(test, target_os = "macos", target_os = "windows")) { return Err(StoreError::FilePermission.safe_message("set")); }
+    if !known(&provider) { return Err("알 수 없는 제공자입니다.".into()); }
+    let _guard = lock_keys()?;
+    if deleted_path(&provider).exists() { return Err(MISSING_KEY.into()); }
+    let key = fallback::read(&provider)?;
+    let s = store(&provider)?;
+    // Retain encrypted copy until a verified successful OS write.
+    save_key_to_store(&*s, &key)?;
+    if !s.get().is_ok_and(|stored| stored == key) { return Err(StoreError::Unavailable.safe_message("get")); }
+    remove_key(&fallback::path(&provider))?;
+    Ok(())
+}
+
 #[tauri::command(async)]
 pub fn api_key_status() -> Value {
     let guard = lock_keys();
@@ -1256,12 +1378,14 @@ pub fn api_key_status() -> Value {
     let mut available = serde_json::Map::new();
     let mut configuration = serde_json::Map::new();
     let mut storage_errors = serde_json::Map::new();
+    let mut sources = serde_json::Map::new();
     let custom = if guard.is_ok() { custom_config() } else { None };
     for provider in ["anthropic", "openai", "google", "groq", "xai", "custom"] {
-        let status = if guard.is_ok() { key_status_with_error_locked(provider) }
+        let status = if guard.is_ok() { key_status_with_source_locked(provider) }
             else { Err(StoreError::Unavailable.safe_message("get")) };
         if let Err(error) = &status { storage_errors.insert(provider.into(), json!(error)); }
-        let (has, suffix) = status.unwrap_or_default();
+        let (has, suffix, source) = status.unwrap_or((false, String::new(), "none"));
+        sources.insert(provider.into(), json!(source));
         present.insert(provider.into(), json!(has));
         suffixes.insert(provider.into(), json!(suffix));
         configuration.insert(provider.into(), json!(if provider == "custom" { custom.is_some() } else { has }));
@@ -1287,6 +1411,8 @@ pub fn api_key_status() -> Value {
         "last4": suffixes,
         "warning": warning,
         "storage_errors": storage_errors,
+        "storage_sources": sources,
+        "platform": std::env::consts::OS,
     })
 }
 
@@ -1486,7 +1612,7 @@ pub fn save_custom_provider(
     let key = normalize_api_key(&key);
     let _guard = lock_keys()?;
     let dir = config_dir();
-    std::fs::create_dir_all(&dir).map_err(|e| format!("설정 폴더를 만들지 못했습니다: {e}"))?;
+    std::fs::create_dir_all(&dir).map_err(|_| StoreError::FilePermission.safe_message("set"))?;
 
     if !key.trim().is_empty() && key.trim().chars().count() < 16 { return Err("키가 너무 짧아요".into()); }
     if base_url.trim().is_empty() {
@@ -1563,6 +1689,92 @@ mod key_security_tests {
         let _ = std::fs::remove_dir_all(&dir);
         result
     }
+    #[test]
+    fn device_fallback_consent_restart_move_delete_and_tamper() {
+        home("device-fallback", || {
+            let key = format!("fixture-{:032x}", rand::random::<u128>());
+            for code in [-25293, -25308, -128, -25244, -25315] {
+                let error = classify_os_status(code);
+                assert!(matches!(error, StoreError::KeychainLocked(_)));
+                faults("google", vec![("set", error)]);
+                let failure = save_api_key("google".into(), key.clone()).unwrap_err();
+                assert!(failure.contains("keychain-locked") && !failure.contains(&key));
+                assert!(!fallback::path("google").exists(), "no silent fallback");
+            }
+            assert!(keychain_passphrase_message("The user name or passphrase you entered is not correct"));
+            assert!(!keychain_passphrase_message(&key));
+            assert!(save_device_api_key("google".into(), key.clone(), false, None).is_err());
+            account_store("google").unwrap().set("synthetic-older-credential").unwrap();
+            MEMORY_OPERATIONS.lock().unwrap().clear();
+            save_device_api_key("google".into(), key.clone(), true, None).unwrap();
+            assert!(operations().is_empty(), "consent saves only to the encrypted file");
+            assert!(!key_path("google").exists());
+            let encrypted = std::fs::read(fallback::path("google")).unwrap();
+            assert!(!encrypted.windows(key.len()).any(|b| b == key.as_bytes()));
+            #[cfg(unix)] {
+                use std::os::unix::fs::PermissionsExt;
+                assert_eq!(std::fs::metadata(fallback::path("google")).unwrap().permissions().mode() & 0o777, 0o600);
+            }
+            assert!(read_key("google").is_ok_and(|v| v == key));
+            assert_eq!(api_key_status()["storage_sources"]["google"], "device-encrypted");
+            // No process-local secret/cache is necessary: reopen disk after mock restart.
+            MEMORY_KEYS.lock().unwrap().clear();
+            assert!(api_key_status()["available"]["google"].as_bool().unwrap());
+            assert!(read_key("google").is_ok_and(|v| v == key));
+            fallback::write("google", &key).unwrap();
+            assert!(std::fs::read(fallback::path("google")).unwrap() != encrypted, "fresh random nonce");
+            faults("google.2", vec![("set", StoreError::KeychainLocked(Some(-25293)))]);
+            assert!(move_api_key_to_keychain("google".into()).is_err());
+            assert!(fallback::path("google").exists());
+            move_api_key_to_keychain("google".into()).unwrap();
+            assert!(!fallback::path("google").exists());
+            assert_eq!(api_key_status()["storage_sources"]["google"], "keychain");
+            save_device_api_key("google".into(), key.clone(), true, None).unwrap();
+            let mut bytes = std::fs::read(fallback::path("google")).unwrap();
+            *bytes.last_mut().unwrap() ^= 1;
+            std::fs::write(fallback::path("google"), &bytes).unwrap();
+            let error = read_key("google").unwrap_err();
+            assert!(error.contains("corrupt") && !error.contains(&key));
+            assert_eq!(api_key_status()["available"]["google"], false);
+            save_device_api_key("google".into(), key.clone(), true, None).unwrap();
+            let saved = std::fs::read(fallback::path("google")).unwrap();
+            faults("google.4", vec![("delete", StoreError::KeychainLocked(Some(-25293)))]);
+            assert!(delete_api_key("google".into()).is_err());
+            assert!(!fallback::path("google").exists());
+            assert!(deleted_path("google").exists());
+            // Even a restored backup file cannot resurrect a deleted credential.
+            std::fs::write(fallback::path("google"), saved).unwrap();
+            assert!(read_key("google").is_err());
+            assert_eq!(api_key_status()["available"]["google"], false);
+        });
+    }
+
+    #[test]
+    fn device_custom_destination_and_native_replacement_are_safe() {
+        home("device-custom", || {
+            let key = format!("fixture-{:032x}", rand::random::<u128>());
+            assert!(save_device_api_key("../escape".into(), key.clone(), true, None).is_err());
+            let custom = || DeviceCustomConfig { label: "fixture".into(), base_url: "https://example.test/v1".into(), model: "fixture".into() };
+            save_device_api_key("custom".into(), key.clone(), true, Some(custom())).unwrap();
+            assert!(read_key("custom").is_ok_and(|v| v == key));
+            assert!(api_key_status()["available"]["custom"].as_bool().unwrap());
+            let bad = DeviceCustomConfig { base_url: "http://example.test/v1".into(), ..custom() };
+            assert!(save_device_api_key("custom".into(), key.clone(), true, Some(bad)).is_err());
+            assert!(custom_config().is_some_and(|(_, base, _)| base == "https://example.test/v1"));
+            save_device_api_key("openai".into(), key.clone(), true, None).unwrap();
+            let replacement = format!("fixture-{:032x}", rand::random::<u128>());
+            save_api_key("openai".into(), replacement.clone()).unwrap();
+            assert!(!fallback::path("openai").exists());
+            assert!(read_key("openai").is_ok_and(|v| v == replacement));
+            #[cfg(any(target_os = "macos", target_os = "windows"))]
+            {
+                let error = keyring::Error::PlatformFailure(Box::new(std::io::Error::other(format!("The user name or passphrase {key}"))));
+                let diagnostic = classify_keyring_error(error).safe_message("set");
+                assert!(diagnostic.contains("keychain-locked") && !diagnostic.contains(&key));
+            }
+        });
+    }
+
     const OLD: &str = "synthetic-legacy-key-1234";
 
     fn faults(account: &str, failures: Vec<(&'static str, StoreError)>) {
@@ -1624,7 +1836,7 @@ mod key_security_tests {
 
     #[test]
     fn cancelled_locked_and_other_errors_do_not_delete_or_create_accounts() {
-        for failure in [StoreError::Cancelled(Some(-128)), StoreError::Locked(Some(-25308)), StoreError::Other(Some(-999)), StoreError::Unavailable] {
+        for failure in [StoreError::Cancelled(Some(-128)), StoreError::KeychainLocked(Some(-25308)), StoreError::Other(Some(-999)), StoreError::Unavailable] {
             home("nonrecoverable", || {
                 account_store("google").unwrap().set(OLD).unwrap();
                 MEMORY_OPERATIONS.lock().unwrap().clear();
@@ -1642,7 +1854,7 @@ mod key_security_tests {
     fn recovery_failures_preserve_safe_step_classifications() {
         for (operation, failure, stage) in [
             ("delete", StoreError::Cancelled(Some(-128)), "recovery-delete"),
-            ("delete", StoreError::Locked(Some(-25308)), "recovery-delete"),
+            ("delete", StoreError::KeychainLocked(Some(-25308)), "recovery-delete"),
             ("set", StoreError::Other(Some(-999)), "retry-set"),
         ] {
             home("recovery-failure", || {
@@ -1658,11 +1870,11 @@ mod key_security_tests {
         }
         home("generation-failure", || {
             faults("google", vec![("set", StoreError::Duplicate(Some(-25299))), ("delete", StoreError::AccessDenied(Some(-25244)))]);
-            faults("google.2", vec![("set", StoreError::Locked(Some(-25308)))]);
+            faults("google.2", vec![("set", StoreError::KeychainLocked(Some(-25308)))]);
             let error = save_api_key("google".into(), OLD.into()).unwrap_err();
             let value: Value = serde_json::from_str(error.strip_prefix("key-store:").unwrap()).unwrap();
             assert_eq!(value["stage"], "generation-set");
-            assert_eq!(value["kind"], "locked");
+            assert_eq!(value["kind"], "keychain-locked");
             assert_eq!(value["code"], -25308);
             assert_eq!(value["previous"]["stage"], "recovery-delete");
             assert_eq!(value["previous"]["previous"]["kind"], "duplicate");
@@ -1705,9 +1917,9 @@ mod key_security_tests {
             save_api_key("google".into(), "synthetic-third-key-CD34".into()).unwrap();
             assert_eq!(std::fs::read_to_string(config_dir().join("google.generation")).unwrap(), "3");
             assert_eq!(api_key_status()["last4"]["google"], "CD34");
-            faults("google.3", vec![("get", StoreError::Locked(Some(-25308)))]);
+            faults("google.3", vec![("get", StoreError::KeychainLocked(Some(-25308)))]);
             let error = store("google").unwrap().get().unwrap_err();
-            assert_eq!(error.safe_message("get"), StoreError::Locked(Some(-25308)).at("get", None).safe_message("get"));
+            assert_eq!(error.safe_message("get"), StoreError::KeychainLocked(Some(-25308)).at("get", None).safe_message("get"));
             // Both migration and its compatibility read fail; status must not
             // fall back to a stale credential in .2 or the original account.
             faults("google.3", vec![("get", StoreError::AccessDenied(Some(-25293))), ("get", StoreError::AccessDenied(Some(-25293)))]);
@@ -1745,14 +1957,14 @@ mod key_security_tests {
 
     #[test]
     fn os_status_mapping_and_keyring_payloads_never_escape() {
-        for code in [5, 1314, 1326] { assert_eq!(classify_windows_status(code), StoreError::AccessDenied(Some(i64::from(code)))); }
-        assert_eq!(classify_windows_status(1223), StoreError::Cancelled(Some(1223)));
-        assert_eq!(classify_windows_status(1312), StoreError::Locked(Some(1312)));
+        for code in [5, 1314, 1326] { assert_eq!(classify_windows_status(code), StoreError::KeychainLocked(Some(i64::from(code)))); }
+        assert_eq!(classify_windows_status(1223), StoreError::KeychainLocked(Some(1223)));
+        assert_eq!(classify_windows_status(1312), StoreError::KeychainLocked(Some(1312)));
         assert_eq!(classify_windows_status(183), StoreError::Duplicate(Some(183)));
-        assert_eq!(classify_os_status(-25293), StoreError::AccessDenied(Some(-25293)));
-        assert_eq!(classify_os_status(-25244), StoreError::AccessDenied(Some(-25244)));
-        assert_eq!(classify_os_status(-25308), StoreError::Locked(Some(-25308)));
-        assert_eq!(classify_os_status(-128), StoreError::Cancelled(Some(-128)));
+        assert_eq!(classify_os_status(-25293), StoreError::KeychainLocked(Some(-25293)));
+        assert_eq!(classify_os_status(-25244), StoreError::KeychainLocked(Some(-25244)));
+        assert_eq!(classify_os_status(-25308), StoreError::KeychainLocked(Some(-25308)));
+        assert_eq!(classify_os_status(-128), StoreError::KeychainLocked(Some(-128)));
         assert_eq!(classify_os_status(-25299), StoreError::Duplicate(Some(-25299)));
         assert_eq!(classify_os_status(-98765), StoreError::Other(Some(-98765)));
         #[cfg(any(target_os = "macos", target_os = "windows"))]
@@ -3091,7 +3303,7 @@ pub fn ai_order_save(customer: bool, order: Vec<String>) -> Result<Value, String
     }
     let lane = if customer { "customer" } else { "owner" };
     let dir = config_dir();
-    std::fs::create_dir_all(&dir).map_err(|e| format!("설정 폴더를 만들지 못했습니다: {e}"))?;
+    std::fs::create_dir_all(&dir).map_err(|_| StoreError::FilePermission.safe_message("set"))?;
     let mut v: Value = std::fs::read_to_string(order_path())
         .ok()
         .and_then(|t| serde_json::from_str(&t).ok())

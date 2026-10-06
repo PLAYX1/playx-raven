@@ -1,0 +1,317 @@
+{
+  "base": "1667f85",
+  "method": "stratified 5-fold; IDF/vectors rebuilt on four folds; no exam used for training or threshold selection; comparable uses the original held-out inputs",
+  "scenarios": {
+    "total": 36,
+    "pass": 36,
+    "wrong": 0,
+    "languageLeaks": 0
+  },
+  "canonicalLanguageChecks": 8,
+  "baseline": {
+    "all": {
+      "total": 624,
+      "direct": 368,
+      "correct": 365,
+      "wrong": 3,
+      "directRate": 0.5897435897435898,
+      "wrongMatchRate": 0.008152173913043478
+    },
+    "byIntent": {
+      "password": {
+        "total": 0,
+        "direct": 0,
+        "correct": 0,
+        "wrong": 0,
+        "directRate": null,
+        "wrongMatchRate": 0
+      },
+      "sales": {
+        "total": 18,
+        "direct": 8,
+        "correct": 8,
+        "wrong": 0,
+        "directRate": 0.4444444444444444,
+        "wrongMatchRate": 0
+      },
+      "map": {
+        "total": 0,
+        "direct": 0,
+        "correct": 0,
+        "wrong": 0,
+        "directRate": null,
+        "wrongMatchRate": 0
+      },
+      "promo": {
+        "total": 15,
+        "direct": 13,
+        "correct": 12,
+        "wrong": 1,
+        "directRate": 0.8666666666666667,
+        "wrongMatchRate": 0.07692307692307693
+      },
+      "receive": {
+        "total": 18,
+        "direct": 12,
+        "correct": 12,
+        "wrong": 0,
+        "directRate": 0.6666666666666666,
+        "wrongMatchRate": 0
+      },
+      "send": {
+        "total": 18,
+        "direct": 7,
+        "correct": 7,
+        "wrong": 0,
+        "directRate": 0.3888888888888889,
+        "wrongMatchRate": 0
+      }
+    },
+    "folds": [
+      {
+        "total": 139,
+        "direct": 93,
+        "correct": 93,
+        "wrong": 0,
+        "directRate": 0.6690647482014388,
+        "wrongMatchRate": 0
+      },
+      {
+        "total": 138,
+        "direct": 78,
+        "correct": 77,
+        "wrong": 1,
+        "directRate": 0.5652173913043478,
+        "wrongMatchRate": 0.01282051282051282
+      },
+      {
+        "total": 135,
+        "direct": 86,
+        "correct": 85,
+        "wrong": 1,
+        "directRate": 0.6370370370370371,
+        "wrongMatchRate": 0.011627906976744186
+      },
+      {
+        "total": 106,
+        "direct": 52,
+        "correct": 51,
+        "wrong": 1,
+        "directRate": 0.49056603773584906,
+        "wrongMatchRate": 0.019230769230769232
+      },
+      {
+        "total": 106,
+        "direct": 59,
+        "correct": 59,
+        "wrong": 0,
+        "directRate": 0.5566037735849056,
+        "wrongMatchRate": 0
+      }
+    ]
+  },
+  "current": {
+    "all": {
+      "total": 734,
+      "direct": 481,
+      "correct": 481,
+      "wrong": 0,
+      "directRate": 0.6553133514986376,
+      "wrongMatchRate": 0
+    },
+    "byIntent": {
+      "password": {
+        "total": 23,
+        "direct": 22,
+        "correct": 22,
+        "wrong": 0,
+        "directRate": 0.9565217391304348,
+        "wrongMatchRate": 0
+      },
+      "sales": {
+        "total": 34,
+        "direct": 26,
+        "correct": 26,
+        "wrong": 0,
+        "directRate": 0.7647058823529411,
+        "wrongMatchRate": 0
+      },
+      "map": {
+        "total": 23,
+        "direct": 23,
+        "correct": 23,
+        "wrong": 0,
+        "directRate": 1,
+        "wrongMatchRate": 0
+      },
+      "promo": {
+        "total": 31,
+        "direct": 29,
+        "correct": 29,
+        "wrong": 0,
+        "directRate": 0.9354838709677419,
+        "wrongMatchRate": 0
+      },
+      "receive": {
+        "total": 34,
+        "direct": 31,
+        "correct": 31,
+        "wrong": 0,
+        "directRate": 0.9117647058823529,
+        "wrongMatchRate": 0
+      },
+      "send": {
+        "total": 34,
+        "direct": 30,
+        "correct": 30,
+        "wrong": 0,
+        "directRate": 0.8823529411764706,
+        "wrongMatchRate": 0
+      }
+    },
+    "folds": [
+      {
+        "total": 162,
+        "direct": 111,
+        "correct": 111,
+        "wrong": 0,
+        "directRate": 0.6851851851851852,
+        "wrongMatchRate": 0
+      },
+      {
+        "total": 160,
+        "direct": 99,
+        "correct": 99,
+        "wrong": 0,
+        "directRate": 0.61875,
+        "wrongMatchRate": 0
+      },
+      {
+        "total": 157,
+        "direct": 114,
+        "correct": 114,
+        "wrong": 0,
+        "directRate": 0.7261146496815286,
+        "wrongMatchRate": 0
+      },
+      {
+        "total": 129,
+        "direct": 78,
+        "correct": 78,
+        "wrong": 0,
+        "directRate": 0.6046511627906976,
+        "wrongMatchRate": 0
+      },
+      {
+        "total": 126,
+        "direct": 79,
+        "correct": 79,
+        "wrong": 0,
+        "directRate": 0.626984126984127,
+        "wrongMatchRate": 0
+      }
+    ]
+  },
+  "comparable": {
+    "all": {
+      "total": 624,
+      "direct": 378,
+      "correct": 378,
+      "wrong": 0,
+      "directRate": 0.6057692307692307,
+      "wrongMatchRate": 0
+    },
+    "byIntent": {
+      "password": {
+        "total": 0,
+        "direct": 0,
+        "correct": 0,
+        "wrong": 0,
+        "directRate": null,
+        "wrongMatchRate": 0
+      },
+      "sales": {
+        "total": 18,
+        "direct": 13,
+        "correct": 13,
+        "wrong": 0,
+        "directRate": 0.7222222222222222,
+        "wrongMatchRate": 0
+      },
+      "map": {
+        "total": 0,
+        "direct": 0,
+        "correct": 0,
+        "wrong": 0,
+        "directRate": null,
+        "wrongMatchRate": 0
+      },
+      "promo": {
+        "total": 15,
+        "direct": 13,
+        "correct": 13,
+        "wrong": 0,
+        "directRate": 0.8666666666666667,
+        "wrongMatchRate": 0
+      },
+      "receive": {
+        "total": 18,
+        "direct": 18,
+        "correct": 18,
+        "wrong": 0,
+        "directRate": 1,
+        "wrongMatchRate": 0
+      },
+      "send": {
+        "total": 18,
+        "direct": 14,
+        "correct": 14,
+        "wrong": 0,
+        "directRate": 0.7777777777777778,
+        "wrongMatchRate": 0
+      }
+    },
+    "folds": [
+      {
+        "total": 139,
+        "direct": 88,
+        "correct": 88,
+        "wrong": 0,
+        "directRate": 0.6330935251798561,
+        "wrongMatchRate": 0
+      },
+      {
+        "total": 138,
+        "direct": 80,
+        "correct": 80,
+        "wrong": 0,
+        "directRate": 0.5797101449275363,
+        "wrongMatchRate": 0
+      },
+      {
+        "total": 135,
+        "direct": 92,
+        "correct": 92,
+        "wrong": 0,
+        "directRate": 0.6814814814814815,
+        "wrongMatchRate": 0
+      },
+      {
+        "total": 106,
+        "direct": 57,
+        "correct": 57,
+        "wrong": 0,
+        "directRate": 0.5377358490566038,
+        "wrongMatchRate": 0
+      },
+      {
+        "total": 106,
+        "direct": 61,
+        "correct": 61,
+        "wrong": 0,
+        "directRate": 0.5754716981132075,
+        "wrongMatchRate": 0
+      }
+    ]
+  }
+}
