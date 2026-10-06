@@ -1,5 +1,6 @@
 // 🔴 맨 먼저 — 앱 CSP(Tauri nonce) 가 막는 style="…" 속성을 CSSOM 으로 되살린다(src/style-attrs.ts).
 import "./style-attrs";
+import { rememberCompanionPage, restoreCompanionPage, mountCompanionBridge } from "./ravi-companion-bridge";
 import { browserPhotoApi, uploadArtistPhoto, photoErrorText, PhotoFailure } from "./artist-photo";
 import { seedErrorKind, seedErrorMessage, seedUnlockButton } from "./seed-recovery";
 import { createRaviAgentUI, TOOL_LABELS } from "./ravi-agent";
@@ -4867,6 +4868,7 @@ function showPage(id: string) {
     if (currentPage === "ravi" || currentPage === "home") closeKeyCard();
   }
   currentPage = id;
+  rememberCompanionPage(id);
   raviHome?.page(id);
   document.body.classList.toggle("rv-talk-layout", id === "talk");
   if (id === "ravi" || id === "home") paintRavi();
@@ -10300,7 +10302,7 @@ async function chatAgent(q: string) {
   const status = document.createElement("p"); status.setAttribute("role", "status");
   status.textContent = "라비가 질문을 살펴보고 있어요…"; $("chat-log").append(status);
   const progress = new Channel<string>();
-  progress.onmessage = name => { status.textContent = Object.prototype.hasOwnProperty.call(TOOL_LABELS, name) ? `라비가 ${TOOL_LABELS[name]}…` : "라비가 확인하고 있어요…"; };
+  progress.onmessage = name => { status.setAttribute("data-ravi-tool", "working"); status.textContent = Object.prototype.hasOwnProperty.call(TOOL_LABELS, name) ? `라비가 ${TOOL_LABELS[name]}…` : "라비가 확인하고 있어요…"; };
   try {
     const r = await invoke<any>("ravi_agent_chat", { provider: aiProvider, message: q, tz: tzMin(), progress });
     if (containsRaviSecret(String(r.reply || ""))) { chatSay("ai", "답에 민감한 정보가 있어 표시하지 않았어요."); return; }
@@ -17490,7 +17492,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     // The original review recalculates fee and requires the owner's existing confirmation.
     await reviewSend();
   };
-  raviHome = createRaviHome({ wake: wakeRavi, wallet: () => showPage("wallet"), report: () => openReport(), send: () => { void chatSend(); }, tools: () => showPage("ravi") });
+  raviHome = createRaviHome({ wake: wakeRavi, wallet: () => showPage("wallet"), report: () => openReport(), send: () => { void chatSend(); }, tools: () => showPage("ravi"), companion: mode => { void invoke("companion_signal", { kind: mode === "listening" || mode === "speaking" ? "idle" : mode }).catch(() => {}); } });
   raviAgentUI = createRaviAgentUI({ invoke, keyed: () => aiProvider, key: wakeRavi, dock: () => raviHome?.open(false), tz: tzMin });
   for (const id of ["ravi-promo-open", "ravi-menu-promo", "ravi-tools-promo", "sh-promo"]) {
     $(id).onclick = () => { void openRaviPromo(); };
@@ -18555,7 +18557,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   // 🔴 `paintRavi()` 만 부르면 안 된다. 첫 화면이 HTML 에서 이미 켜져
   //    있어 `showPage` 를 안 지나가고, 그러면 떠 있는 단추를 숨기는
   //    처리도 안 돈다 — 대화창 위에 대화창으로 가는 단추가 떠 있었다.
-  showPage("home");
+  showPage(restoreCompanionPage());
+  void mountCompanionBridge();
   loadAssets();
   // 코어 지갑처럼 들어오는 것을 그 자리에서 알린다. 레이븐 블록이 약 60초라
   // 15초면 늦지 않고, 노드를 두드리는 부담도 작다.

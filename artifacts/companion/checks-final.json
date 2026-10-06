@@ -1,0 +1,87 @@
+[
+  {
+    "script": "scripts/check-ai-safety.mjs",
+    "exit": 0,
+    "seconds": 2.33
+  },
+  {
+    "script": "scripts/check-send-confirmation.mjs",
+    "exit": 0,
+    "seconds": 0.83
+  },
+  {
+    "script": "scripts/check-ravi-agent.mjs",
+    "exit": 0,
+    "seconds": 6.62
+  },
+  {
+    "script": "scripts/check-ravi-companion.mjs",
+    "exit": 0,
+    "seconds": 0.12
+  },
+  {
+    "script": "scripts/check-ravi-key.mjs",
+    "exit": 0,
+    "seconds": 1.84
+  },
+  {
+    "script": "scripts/check-ravi-panel-browser.mjs",
+    "exit": 1,
+    "seconds": 0.91
+  },
+  {
+    "script": "scripts/check-ravi-panel.mjs",
+    "exit": 0,
+    "seconds": 0.51
+  },
+  {
+    "script": "scripts/check-ravi-promo-browser.mjs",
+    "exit": 1,
+    "seconds": 0.68
+  },
+  {
+    "script": "scripts/check-ravi-promo-card.mjs",
+    "exit": 0,
+    "seconds": 0.66
+  },
+  {
+    "script": "scripts/check-ravi-promo.mjs",
+    "exit": 0,
+    "seconds": 2.52
+  },
+  {
+    "script": "scripts/check-ravi-similarity.mjs",
+    "exit": 0,
+    "seconds": 1.76
+  },
+  {
+    "script": "scripts/check-ravi-state.mjs",
+    "exit": 0,
+    "seconds": 0.65
+  },
+  {
+    "script": "scripts/check-ravi-understanding-browser.mjs",
+    "exit": 1,
+    "seconds": 0.51
+  },
+  {
+    "script": "scripts/check-ravi-understanding.mjs",
+    "exit": 0,
+    "seconds": 1.56
+  },
+  {
+    "script": "scripts/check-ravi-understanding2.mjs",
+    "exit": 0,
+    "seconds": 6.82
+  },
+  {
+    "script": "scripts/check-ravi-understanding3.mjs",
+    "exit": 0,
+    "seconds": 1.36
+  },
+  {
+    "script": "scripts/check-ravi-understanding5.mjs",
+    "exit": 0,
+    "seconds": 4.31
+  }
+]

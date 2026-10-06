@@ -1,0 +1,51 @@
+// Production pure physics + scheduler with synthetic clocks only. No native/AI/RPC calls.
+import assert from 'node:assert/strict';
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { build } from 'esbuild';
+import vm from 'node:vm';
+import { parsePs, sumTree } from './measure-companion.mjs';
+const bundled=await build({entryPoints:['src/ravi-physics.ts'],bundle:true,format:'cjs',platform:'node',write:false});
+const context={module:{exports:{}},exports:{}};vm.runInNewContext(bundled.outputFiles[0].text,context);
+const {RaviPhysics,spring,integrate,energy,frameRate,createFrameLoop}=context.module.exports;
+const bounds={left:-1920,top:-100,right:1800,bottom:900};
+const s=spring(10);s.target=0;let previous=energy(s);
+for(let i=0;i<2400;i++){integrate(s,1/240);const next=energy(s);assert.ok(next<=previous+1e-8,'passive spring loses energy');previous=next;}
+assert.ok(Math.abs(s.value)<1e-5&&Math.abs(s.velocity)<1e-5);
+const simulate=fps=>{const p=new RaviPhysics(7);p.x=1795;p.y=600;p.vx=900;p.vy=200;p.setEmotion('joy');let poses=[];
+  for(let i=1;i<=fps*5;i++){p.step(1/fps,bounds);if(i%(fps/10)===0)poses.push([p.x,p.y,p.tilt.value,p.scale.value,p.eye]);}
+  return poses;};
+const a=simulate(30),b=simulate(60);assert.equal(a.length,b.length);
+for(let i=0;i<a.length;i++)for(let j=0;j<a[i].length;j++)assert.ok(Math.abs(a[i][j]-b[i][j])<1e-7,'30/60 FPS fixed-step trajectory equivalence');
+const p=new RaviPhysics();p.x=1799;p.y=899;p.vx=1400;p.vy=1200;p.step(.05,bounds);assert.ok(p.vx<0&&p.vy<0);assert.ok(p.scale.velocity<0);
+for(let i=0;i<1000;i++){p.step(1/60,bounds);assert.ok(p.x>=bounds.left&&p.x<=bounds.right&&p.y>=bounds.top&&p.y<=bounds.bottom);assert.ok(p.particles<=12);}
+assert.equal(p.vx,0);assert.equal(p.vy,0);
+p.beginDrag();p.drag(-100,100,.03,bounds);assert.ok(p.vx!==0);p.release();assert.ok(!p.dragging);
+p.reduced=true;p.setEmotion('joy');p.arrive();p.step(.1,bounds);assert.equal(p.particles,0);assert.equal(p.bounce.value,0);assert.equal(p.scale.value,1);
+const snapshot=JSON.stringify(p);p.step(10,bounds,true);assert.equal(JSON.stringify(p),snapshot);
+p.reduced=false;p.setEmotion('idle');for(let i=0;i<1000;i++)p.step(.1,bounds);assert.equal(p.emotion,'sleepy');
+const blink=new RaviPhysics(123);blink.setEmotion('idle');let closed=false;for(let i=0;i<400;i++){blink.step(1/60,bounds);closed ||= blink.eye<.2;}assert.ok(closed);
+assert.equal(frameRate(false,false,false),15);assert.equal(frameRate(true,false,false),60);assert.equal(frameRate(true,true,false),24);assert.equal(frameRate(true,true,true),0);
+let clock=0,id=0,drawn=0,active=false;const rafs=new Map(),timers=new Map();
+const loop=createFrameLoop({now:()=>clock,raf:cb=>{rafs.set(++id,cb);return id;},cancelRaf:id=>rafs.delete(id),delay:cb=>{timers.set(++id,cb);return id;},cancelDelay:id=>timers.delete(id)},()=>drawn++,()=>frameRate(active,false,false));
+loop.start();assert.equal(timers.size,1);assert.equal(rafs.size,0);
+let callback=[...timers.values()][0];timers.clear();callback();assert.equal(rafs.size,1);
+loop.stop();assert.equal(rafs.size+timers.size,0);assert.equal(drawn,0);
+active=true;clock=10000;loop.start();callback=[...rafs.values()][0];rafs.clear();callback(clock+16);assert.equal(drawn,1);loop.stop();assert.equal(rafs.size+timers.size,0);
+const bridge=await build({entryPoints:['src/ravi-companion-bridge.ts'],bundle:true,format:'cjs',platform:'node',write:false});
+const local=new Map(),bc={module:{exports:{}},exports:{},localStorage:{getItem:k=>local.get(k)??null,setItem:(k,v)=>local.set(k,v)}};
+vm.runInNewContext(bridge.outputFiles[0].text,bc);
+const state=bc.module.exports;assert.equal(state.restoreCompanionPage(),'home');state.rememberCompanionPage('wallet');assert.equal(state.restoreCompanionPage(),'wallet');state.rememberCompanionPage('arbitrary-private-form');assert.equal(state.restoreCompanionPage(),'wallet');assert.equal(local.size,1);
+const rows=parsePs('10 1 1024 ravi\n11 10 2048 WebKit\n12 11 1024 worker\n90 1 2048 unrelated\n91 1 2048 WebKit');
+assert.equal(sumTree(rows,10).rssMiB,4);assert.equal(sumTree(rows,10,[91]).rssMiB,6);
+const native=readFileSync('src-tauri/src/ravi_companion.rs','utf8'),lib=readFileSync('src-tauri/src/lib.rs','utf8');
+assert.match(native,/ensure_window\(\s*\|\|\s*app.get_webview_window\("main"\)/);
+const mainLife=native.slice(native.indexOf('pub fn open_main('),native.indexOf('pub fn companion_open_main'));
+assert.ok(!/api\.prevent_close\(|\.hide\(/.test(mainLife),'main close must destroy');
+assert.match(lib,/ravi_companion::command_allowed/);
+const config=JSON.parse(readFileSync('src-tauri/tauri.conf.json','utf8'));assert.equal(config.app.windows[0].create,false);assert.notEqual(config.app.macOSPrivateApi,true);
+const companion=readFileSync('src/ravi-companion.ts','utf8');assert.ok(!/ravi_agent_chat|send_rvn|walletpassphrase|api_key_status/.test(companion));assert.match(companion,/containsRaviSecret\(safe\)/);
+assert.ok(!/localStorage\.setItem\([^\n]*(?:question|safe|text)/.test(companion));
+for(const size of [16,32,48,64])assert.equal(readFileSync(`src-tauri/icons/ravi-tray-${size}.rgba`).length,size*size*4);
+for(const size of [22,44])assert.equal(readFileSync(`src-tauri/icons/ravi-tray-template-${size}.rgba`).length,size*size*4);
+mkdirSync('artifacts/companion',{recursive:true});writeFileSync('artifacts/companion/check.json',JSON.stringify({physics:'passed',frameIndependence:'30/60 FPS < 1e-7',scheduler:'passed',rssParser:'passed',nativeGUI:'unverified',globalShortcut:'blocked: official plugin unavailable',realAI:false,realPayments:false},null,2)+'\n');
+console.log('PASS companion: convergence, passive energy, 30/60 FPS trajectory, bounce/bounds/friction, drag, reduced motion, deterministic blink, particle cap, zero hidden RAF/timers, RSS accounting, native lifecycle/security contracts');

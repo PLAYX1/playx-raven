@@ -1,0 +1,385 @@
+   Compiling playx-raven v0.7.1 (/Users/gimmusong/wt-rv-desktop-simple/src-tauri)
+warning: unused import: `super::*`
+   --> src/report.rs:195:9
+    |
+195 |     use super::*;
+    |         ^^^^^^^^
+    |
+    = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: duplicated attribute
+   --> src/relay.rs:794:5
+    |
+794 |     #[test]
+    |     ^^^^^^^
+    |
+    = note: `#[warn(duplicate_macro_attributes)]` on by default
+
+warning: unused import: `BufRead`
+  --> src/tunnel.rs:31:15
+   |
+31 | use std::io::{BufRead, BufReader};
+   |               ^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+  --> src/quiet.rs:25:9
+   |
+25 |     let mut c = std::process::Command::new(program);
+   |         ----^
+   |         |
+   |         help: remove this `mut`
+   |
+   = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `title`
+  --> src/report.rs:75:5
+   |
+75 |     title: String,
+   |     ^^^^^ help: if this is intentional, prefix it with an underscore: `_title`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: value assigned to `cur` is never read
+    --> src/server.rs:3843:19
+     |
+3843 |     let mut cur = String::new();
+     |                   ^^^^^^^^^^^^^ this value is reassigned later and never used
+...
+3847 |             cur = line.split(':').next().unwrap_or("").trim().to_string();
+     |             --- `cur` is overwritten here before the previous value is read
+     |
+     = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `BufRead`
+  --> src/tunnel.rs:31:15
+   |
+31 | use std::io::{BufRead, BufReader};
+   |               ^^^^^^^
+
+warning: function `observe_rpc` is never used
+   --> src/ravi_companion.rs:238:8
+    |
+238 | pub fn observe_rpc(method: &str, value: &Value) {
+    |        ^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `unpack_if_zip` is never used
+   --> src/recover.rs:275:4
+    |
+275 | fn unpack_if_zip(input: &str) -> Result<PathBuf, String> {
+    |    ^^^^^^^^^^^^^
+
+warning: constant `유효초` is never used
+  --> src/moving.rs:49:7
+   |
+49 | const 유효초: i64 = 600;
+   |       ^^^^^^
+
+warning: constant `최대실패` is never used
+  --> src/moving.rs:54:7
+   |
+54 | const 최대실패: u32 = 3;
+   |       ^^^^^^^^
+
+warning: fields `code`, `pass`, `made_at`, `fails`, and `what` are never read
+  --> src/moving.rs:57:5
+   |
+56 | struct 짐 {
+   |        -- fields in this struct
+57 |     code: String,
+   |     ^^^^
+58 |     pass: String,
+   |     ^^^^
+59 |     path: PathBuf,
+60 |     made_at: i64,
+   |     ^^^^^^^
+61 |     fails: u32,
+   |     ^^^^^
+62 |     what: String,
+   |     ^^^^
+
+warning: function `now` is never used
+  --> src/moving.rs:67:4
+   |
+67 | fn now() -> i64 {
+   |    ^^^
+
+warning: function `숫자와암호` is never used
+  --> src/moving.rs:79:4
+   |
+79 | fn 숫자와암호() -> (String, String) {
+   |    ^^^^^^^^^^
+
+warning: function `내주소` is never used
+  --> src/moving.rs:88:4
+   |
+88 | fn 내주소() -> Vec<String> {
+   |    ^^^^^^
+
+warning: function `take` is never used
+   --> src/moving.rs:116:8
+    |
+116 | pub fn take(code: &str) -> Result<(PathBuf, String), String> {
+    |        ^^^^
+
+warning: function `restore_complete` is never used
+   --> src/moving.rs:219:4
+    |
+219 | fn restore_complete(out: &Value) -> bool {
+    |    ^^^^^^^^^^^^^^^^
+
+warning: function `known_area` is never used
+  --> src/map_format.rs:90:8
+   |
+90 | pub fn known_area(v: &str) -> bool {
+   |        ^^^^^^^^^^
+
+warning: function `pending_order` is never used
+   --> src/ledger.rs:235:8
+    |
+235 | pub fn pending_order(address: &str) -> Option<serde_json::Value> {
+    |        ^^^^^^^^^^^^^
+
+warning: constant `BURN_TAG` is never used
+  --> src/issue2.rs:32:11
+   |
+32 | pub const BURN_TAG: f64 = 0.1;
+   |           ^^^^^^^^
+
+warning: constant `RPC_PORT_DEFAULT` is never used
+  --> src/raven.rs:13:7
+   |
+13 | const RPC_PORT_DEFAULT: u16 = 8766;
+   |       ^^^^^^^^^^^^^^^^
+
+warning: function `rpc_url` is never used
+  --> src/raven.rs:23:4
+   |
+23 | fn rpc_url() -> String {
+   |    ^^^^^^^
+
+warning: function `conf_value` is never used
+  --> src/raven.rs:31:4
+   |
+31 | fn conf_value(key: &str) -> Option<String> {
+   |    ^^^^^^^^^^
+
+warning: function `data_dir` is never used
+  --> src/raven.rs:76:4
+   |
+76 | fn data_dir() -> PathBuf {
+   |    ^^^^^^^^
+
+warning: function `read_cookie` is never used
+  --> src/raven.rs:96:4
+   |
+96 | fn read_cookie() -> Result<String, String> {
+   |    ^^^^^^^^^^^
+
+warning: function `conf_rpc_auth` is never used
+   --> src/raven.rs:116:4
+    |
+116 | fn conf_rpc_auth() -> Option<(String, String)> {
+    |    ^^^^^^^^^^^^^
+
+warning: constant `RPC_TIMEOUT_SECS` is never used
+   --> src/raven.rs:127:7
+    |
+127 | const RPC_TIMEOUT_SECS: u64 = 20;
+    |       ^^^^^^^^^^^^^^^^
+
+warning: static `CLIENT` is never used
+   --> src/raven.rs:162:8
+    |
+162 | static CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
+    |        ^^^^^^
+
+warning: function `client` is never used
+   --> src/raven.rs:164:4
+    |
+164 | fn client() -> &'static reqwest::Client {
+    |    ^^^^^^
+
+warning: static `GATE` is never used
+   --> src/raven.rs:175:8
+    |
+175 | static GATE: std::sync::OnceLock<tokio::sync::Semaphore> = std::sync::OnceLock::new();
+    |        ^^^^
+
+warning: function `rpc_gate` is never used
+   --> src/raven.rs:177:4
+    |
+177 | fn rpc_gate() -> &'static tokio::sync::Semaphore {
+    |    ^^^^^^^^
+
+warning: constant `ROLES` is never used
+  --> src/roles.rs:38:11
+   |
+38 | pub const ROLES: [&str; 4] = ["owner", "staff", "scanner", "customer"];
+   |           ^^^^^
+
+warning: function `admin_authed` is never used
+   --> src/server.rs:590:4
+    |
+590 | fn admin_authed(state: &ServerState, headers: &HeaderMap, q: &Value) -> bool {
+    |    ^^^^^^^^^^^^
+
+warning: function `fee_path` is never used
+    --> src/shop.rs:1014:4
+     |
+1014 | fn fee_path() -> std::path::PathBuf {
+     |    ^^^^^^^^
+
+warning: function `only_shop_kinds_are_taken` is never used
+   --> src/relay.rs:828:8
+    |
+828 |     fn only_shop_kinds_are_taken() {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `MIN_START_RVN` is never used
+  --> src/auction.rs:23:11
+   |
+23 | pub const MIN_START_RVN: f64 = 1.0;
+   |           ^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `BIND_PREFIX` is never used
+  --> src/auction.rs:27:11
+   |
+27 | pub const BIND_PREFIX: &str = "PLAYX-AUCTION";
+   |           ^^^^^^^^^^^
+
+warning: function `min_next` is never used
+  --> src/auction.rs:36:8
+   |
+36 | pub fn min_next(current: f64) -> f64 {
+   |        ^^^^^^^^
+
+warning: function `is_unique_asset` is never used
+  --> src/auction.rs:50:8
+   |
+50 | pub fn is_unique_asset(name: &str) -> bool {
+   |        ^^^^^^^^^^^^^^^
+
+warning: function `bind_message` is never used
+  --> src/auction.rs:69:8
+   |
+69 | pub fn bind_message(nostr_pk: &str, asset: &str, addr: &str, auction_id: &str) -> String {
+   |        ^^^^^^^^^^^^
+
+warning: constant `SETTLE_FEE_RATE` is never used
+  --> src/auction.rs:96:11
+   |
+96 | pub const SETTLE_FEE_RATE: f64 = 0.01;
+   |           ^^^^^^^^^^^^^^^
+
+warning: function `settle_fee` is never used
+   --> src/auction.rs:105:8
+    |
+105 | pub fn settle_fee(price: f64) -> f64 {
+    |        ^^^^^^^^^^
+
+warning: function `winner_pays` is never used
+   --> src/auction.rs:118:8
+    |
+118 | pub fn winner_pays(price: f64) -> f64 {
+    |        ^^^^^^^^^^^
+
+warning: function `preview_need` is never used
+   --> src/auction.rs:127:8
+    |
+127 | pub fn preview_need(price: f64, rate: f64) -> f64 {
+    |        ^^^^^^^^^^^^
+
+warning: struct `Bid` is never constructed
+   --> src/auction.rs:134:12
+    |
+134 | pub struct Bid {
+    |            ^^^
+
+warning: function `rank_top` is never used
+   --> src/auction.rs:156:8
+    |
+156 | pub fn rank_top<'a>(bids: &'a [Bid], auction_id: &str, start_price: f64) -> Option<&'a Bid> {
+    |        ^^^^^^^^
+
+warning: constant `CUSTODY_MARKS` is never used
+  --> src/noncustody.rs:37:11
+   |
+37 | pub const CUSTODY_MARKS: &[&str] = &[
+   |           ^^^^^^^^^^^^^
+
+warning: constant `EXCHANGE_MARKS` is never used
+  --> src/noncustody.rs:46:11
+   |
+46 | pub const EXCHANGE_MARKS: &[&str] = &[
+   |           ^^^^^^^^^^^^^^
+
+warning: constant `BANNED` is never used
+  --> src/wording.rs:26:11
+   |
+26 | pub const BANNED: &[&str] = &[
+   |           ^^^^^^
+
+warning: function `risky` is never used
+  --> src/wording.rs:32:8
+   |
+32 | pub fn risky(text: &str) -> Vec<&'static str> {
+   |        ^^^^^
+
+warning: function `resolve_known_area` is never used
+  --> src/map_format.rs:95:8
+   |
+95 | pub fn resolve_known_area(v: &str) -> Option<&'static str> {
+   |        ^^^^^^^^^^^^^^^^^^
+
+warning: constant `CALLS` is never used
+  --> src/receive.rs:40:18
+   |
+40 | pub(crate) const CALLS: &[&str] = &["listreceivedbyaddress", "validateaddress", "getnewaddress"];
+   |                  ^^^^^
+
+warning: constant `CALLS` is never used
+  --> src/sendfee.rs:39:18
+   |
+39 | pub(crate) const CALLS: &[&str] = &["listreceivedbyaddress", "createrawtransaction", "fundrawtransaction"];
+   |                  ^^^^^
+
+warning: function `release` is never used
+   --> src/stock.rs:211:8
+    |
+211 | pub fn release(address: &str) {
+    |        ^^^^^^^
+
+warning: constant `PERSONAL_PLAIN_PATHS` is never used
+  --> src/shopseal.rs:86:11
+   |
+86 | pub const PERSONAL_PLAIN_PATHS: [&str; 7] = [
+   |           ^^^^^^^^^^^^^^^^^^^^
+
+warning: `playx-raven` (lib test) generated 34 warnings (3 duplicates) (run `cargo fix --lib -p playx-raven --tests` to apply 1 suggestion)
+warning: `playx-raven` (lib) generated 39 warnings (15 duplicates) (run `cargo fix --lib -p playx-raven` to apply 2 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 19.61s
+     Running unittests src/lib.rs (src-tauri/target/debug/deps/playx_raven_lib-30b4ef325738600a)
+
+running 8 tests
+test ravi_companion::tests::transparent_gutters_pass_through_and_bubble_is_interactive ... ok
+test ravi_companion::tests::platform_fallbacks ... ok
+test ravi_companion::tests::destroyed_main_is_recreated_then_focused ... ok
+test ravi_companion::tests::resident_cannot_invoke_wallet_ai_or_keys ... ok
+test ravi_companion::tests::disconnected_and_negative_monitors ... ok
+test ravi_companion::tests::receipts_baseline_duplicates_and_new_arrival ... ok
+test ravi_companion::tests::settings_roundtrip_and_rejection ... ok
+test ravi_companion::tests::settings_file_roundtrip_private_and_corrupt_fallback ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 758 filtered out; finished in 0.03s
+
+     Running unittests src/main.rs (src-tauri/target/debug/deps/playx_raven-769d1707c49885d3)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

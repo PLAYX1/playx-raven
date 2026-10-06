@@ -1,0 +1,9 @@
+PASS owner phone system instructions, provider order and answer/left contract
+PASS theme preview/manual save, admin delete confirmation and menu field allowlist
+PASS customer/owner/admin budget wiring and pre-dispatch fallback charge
+PASS Rust suffix and status IPC wiring expose only the final four characters; both frontend displays validate suffixes
+PASS 4 languages: save wakes during check; 200/400/401/403/429/500/503/404, network/timeout/storage/setup/format and restart
+PASS stuck-pending migration, private storage, other-provider fallback, Google paste, failed replacement, duplicate guard, stale results and no key/body/log leakage
+PASS last-four-only badge/list: immediate save, restart, replacement during pending check, replaced restart, failed replacement, malformed/short IPC, Unicode, HTML escaping, custom provider, switch and removal
+PASS 4-language keychain permission waiting, recovery step/classification copy, manual recovery, no key/body/code leakage and no connection check on failed storage
+PASS safe structured IPC, key/body/log guards and saved-key regression scenarios

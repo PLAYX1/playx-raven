@@ -3,6 +3,7 @@ mod rt;
 mod auction;
 mod ai;
 mod ravi_agent;
+mod ravi_companion;
 mod ai_budget;
 mod ai_endpoint;
 mod companion;
@@ -114,7 +115,20 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         // The owner token is minted once per run and lives only in memory.
         .manage(server::ServerState::default())
-        .invoke_handler(tauri::generate_handler![
+        .invoke_handler(|invoke| {
+            if !ravi_companion::command_allowed(invoke.message.webview_ref().label(), invoke.message.command()) {
+                invoke.resolver.reject("라비 작은 창에서는 이 작업을 할 수 없어요.");
+                return true;
+            }
+            let handler: fn(tauri::ipc::Invoke<tauri::Wry>) -> bool = tauri::generate_handler![
+            ravi_companion::companion_settings,
+            ravi_companion::companion_save,
+            ravi_companion::companion_open_main,
+            ravi_companion::companion_show,
+            ravi_companion::companion_bubble,
+            ravi_companion::companion_sample,
+            ravi_companion::companion_move,
+            ravi_companion::companion_signal,
             pairing::pairing_state,
             pairing::pairing_show_qr,
             pairing::pairing_cancel_qr,
@@ -578,7 +592,9 @@ pub fn run() {
             server::load_orders,
             server::order_states,
             server::set_order_state,
-        ])
+        ];
+            handler(invoke)
+        })
         .setup(|app| {
             // 앱 자료 폴더를 이 사용자 전용으로 잠근다(다른 계정이 열쇠·장부를 못 읽게).
             app_folder::harden();
@@ -606,105 +622,8 @@ pub fn run() {
             awake::sync_with_mode();
             // 지도에 올려 둔 가게면 켜자마자 「영업 중」 신호를 한 번, 그 뒤 5분마다(map.rs).
             map::start();
-            // ── 창을 닫아도 가게는 계속 돈다 ────────────────────────────
-            //
-            // 🔴 X 를 누르면 앱이 통째로 끝나고 있었다. 그러면 **손님 폰
-            // 서버(8790)가 같이 죽는다** — QR 을 찍어도 아무 화면이 안 뜨고,
-            // 결제한 손님의 주문 상태가 안 바뀌고, 자동 발송과 채굴이 멈춘다.
-            // `ravend` 는 별도 데몬이라 살아남지만, 가게는 이미 멈춘 뒤다.
-            //
-            // 계산대 컴퓨터는 원래 안 끄는 물건이다. X 는 **창을 치우는 것**이고,
-            // 진짜로 끄는 것은 메뉴 막대에서 따로 고른다.
-            use tauri::menu::{Menu, MenuItem};
-            use tauri::tray::TrayIconBuilder;
             use tauri::Manager;
-
-            let open = MenuItem::with_id(app, "open", "RavenVault Desktop 열기", true, None::<&str>)?;
-            // "종료" 라고만 쓰면 창 닫기와 같은 것으로 읽힌다. 무엇이 멈추는지 쓴다.
-            let quit = MenuItem::with_id(
-                app,
-                "quit",
-                "완전히 끄기 (손님 주문도 멈춥니다)",
-                true,
-                None::<&str>,
-            )?;
-            let menu = Menu::with_items(app, &[&open, &quit])?;
-
-            TrayIconBuilder::with_id("main")
-                .icon(app.default_window_icon().cloned().ok_or("아이콘 없음")?)
-                .tooltip("RavenVault Desktop — 가게가 돌고 있습니다")
-                .menu(&menu)
-                .show_menu_on_left_click(false)
-                .on_menu_event(|app, e| match e.id().as_ref() {
-                    "open" => {
-                        if let Some(w) = app.get_webview_window("main") {
-                            let _ = w.show();
-                            let _ = w.unminimize();
-                            let _ = w.set_focus();
-                        }
-                    }
-                    "quit" => app.exit(0),
-                    _ => {}
-                })
-                .on_tray_icon_event(|tray, event| {
-                    // 아이콘을 그냥 누르면 창을 다시 연다. 메뉴를 열어야만
-                    // 돌아올 수 있으면 아무도 못 찾는다.
-                    if let tauri::tray::TrayIconEvent::Click { button, .. } = event {
-                        if button == tauri::tray::MouseButton::Left {
-                            if let Some(w) = tray.app_handle().get_webview_window("main") {
-                                let _ = w.show();
-                                let _ = w.set_focus();
-                            }
-                        }
-                    }
-                })
-                .build(app)?;
-
-            if let Some(w) = app.get_webview_window("main") {
-                let h = app.handle().clone();
-                w.on_window_event(move |e| {
-                    // 🔴 **떨어뜨린 자리가 곧 뜻이다.**
-                    //
-                    //    대표님: "자산을 발행하기 위해 드랍할 곳이 있고 아닌
-                    //    곳이 있어야 할 것 같아. 화면에 그걸 잘 설명해 줘야 하고."
-                    //
-                    //    맞다. 채팅에 사진을 떨어뜨린 사람은 **글에 붙이려는**
-                    //    것이지 500 RVN 을 태우려는 게 아니다. 그래서 자리마다
-                    //    다른 일이 일어나고, 끌고 오는 **그 순간** 화면이
-                    //    무슨 일이 일어날지 말한다.
-                    //
-                    //    경로는 여기서 기억해 둔다. 화면이 「이 경로를 올려 줘」
-                    //    라고 말할 수 있게 되는데, 아무 경로나 받으면 화면이
-                    //    뚫리는 날 wallet.dat 이 공개 파일창고로 올라간다.
-                    if let tauri::WindowEvent::DragDrop(d) = e {
-                        use tauri::DragDropEvent as D;
-                        let (name, payload) = match d {
-                            D::Enter { .. } => ("drop-enter", serde_json::json!({})),
-                            D::Leave => ("drop-leave", serde_json::json!({})),
-                            D::Drop { paths, .. } => {
-                                let list: Vec<String> =
-                                    paths.iter().map(|p| p.to_string_lossy().to_string()).collect();
-                                crate::dropbox::remember(&list);
-                                ("drop-files", serde_json::json!({ "paths": list }))
-                            }
-                            _ => ("drop-leave", serde_json::json!({})),
-                        };
-                        // `Emitter` 를 여기서 들인다 — 파일 위쪽에 두면 이
-                        // 블록이 없는 빌드에서 「안 쓰는 import」 경고가 난다.
-                        use tauri::Emitter as _;
-                        if let Some(win) = h.get_webview_window("main") {
-                            let _ = win.emit(name, payload);
-                        }
-                    }
-                    if let tauri::WindowEvent::CloseRequested { api, .. } = e {
-                        // 끄지 않고 감춘다. 가게는 계속 돈다.
-                        api.prevent_close();
-                        if let Some(w) = h.get_webview_window("main") {
-                            let _ = w.hide();
-                        }
-                    }
-                });
-            }
+            ravi_companion::setup(app)?;
 
             // 🔴 **화면보다 큰 창을 띄우지 않는다.**
             //
@@ -803,18 +722,12 @@ pub fn run() {
             // ⚠️ `has_visible_windows` 가 참이면 이미 보이는 창이 있다는 뜻이라
             //    그때 또 부르면 남의 창을 앞으로 끌어온다.
             #[cfg(target_os = "macos")]
-            if let tauri::RunEvent::Reopen { has_visible_windows, .. } = event {
-                if !has_visible_windows {
-                    // `Manager` 를 여기서 들인다 — 파일 위쪽에 두면 이 블록이
-                    // 없는 다른 OS 빌드에서 "안 쓰는 import" 경고가 난다.
-                    use tauri::Manager as _;
-                    if let Some(w) = _app.get_webview_window("main") {
-                        let _ = w.show();
-                        let _ = w.unminimize();
-                        let _ = w.set_focus();
-                    }
-                }
+            if let tauri::RunEvent::Reopen { .. } = event {
+                let _ = ravi_companion::open_main(_app);
                 return;
+            }
+            if let tauri::RunEvent::ExitRequested { code: None, api, .. } = &event {
+                api.prevent_exit();
             }
             // 앱이 끝나면 채굴기도 끝난다. 이게 없으면 창을 닫은 뒤에도
             // 채굴기가 살아남아 전기를 계속 먹는데, 화면에는 아무것도 없어서

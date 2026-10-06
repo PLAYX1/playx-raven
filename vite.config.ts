@@ -10,6 +10,7 @@ export default defineConfig(async () => ({
   //
   // 1. prevent Vite from obscuring rust errors
   clearScreen: false,
+  build: { rollupOptions: { input: { main: "index.html", companion: "companion.html" } } },
   // 2. tauri expects a fixed port, fail if that port is not available
   server: {
     port: 1420,

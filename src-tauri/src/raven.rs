@@ -284,6 +284,7 @@ pub(crate) async fn call_rpc_detailed(method: &str, params: Value) -> Result<Val
         }
     }
 
+    if let Some(result) = parsed.get("result") { crate::ravi_companion::observe_rpc(method, result); }
     Ok(parsed
         .get("result")
         .cloned()

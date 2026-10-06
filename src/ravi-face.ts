@@ -1,5 +1,6 @@
 /** RaviFace: v2 RaviFace.dc.html eye geometry and motion. */
-export type RaviMood = "normal" | "sleep" | "happy" | "surprised" | "thinking" | "worried" | "love" | "wink" | "wake";
+type OriginalMood = "normal" | "sleep" | "happy" | "surprised" | "thinking" | "worried" | "love" | "wink" | "wake";
+export type RaviMood = OriginalMood | "sleepy" | "focused" | "working";
 export const RAVI_CHARACTERS = [
   { id: "basic", name: "기본", image: "/ravi/face.webp", background: "#EFEAF8", filter: "none" },
   { id: "dawn", name: "새벽", image: "/ravi/face.webp", background: "#DDE8F7", filter: "hue-rotate(-40deg)" },
@@ -10,13 +11,13 @@ export const RAVI_CHARACTERS = [
   { id: "ink", name: "먹", image: "/ravi/face.webp", background: "#E4E4E8", filter: "grayscale(1) contrast(1.1)" },
   { id: "gold", name: "황금", image: "/ravi/face.webp", background: "#F6EBC8", filter: "hue-rotate(160deg) saturate(1.4)" },
 ] as const;
-const names: Record<RaviMood, string> = { normal: "라비", sleep: "자는 라비", happy: "웃는 라비", surprised: "깜짝 놀란 라비", thinking: "생각하는 라비", worried: "걱정하는 라비", love: "좋아하는 라비", wink: "윙크하는 라비", wake: "막 깬 라비" };
-function eyes(m: RaviMood): string {
+const names: Record<OriginalMood, string> = { normal: "라비", sleep: "자는 라비", happy: "웃는 라비", surprised: "깜짝 놀란 라비", thinking: "생각하는 라비", worried: "걱정하는 라비", love: "좋아하는 라비", wink: "윙크하는 라비", wake: "막 깬 라비" };
+function eyes(m: OriginalMood): string {
   const cover = ["sleep", "happy", "thinking", "surprised", "love"].includes(m)
     ? '<g fill="#FBB67F"><ellipse cx="135" cy="240" rx="42" ry="40"/><ellipse cx="286" cy="240" rx="42" ry="40"/></g>' : "";
   const normal = ["normal", "wake", "worried"].includes(m)
     ? '<g fill="#FBB67F"><rect class="rv-lid" x="94" y="200" width="84" height="80" rx="30"/><rect class="rv-lid rv-lid2" x="245" y="200" width="84" height="80" rx="30"/></g>' : "";
-  const extras: Record<RaviMood, string> = {
+  const extras: Record<OriginalMood, string> = {
     normal: "",
     sleep: '<g fill="none" stroke="#2A2340" stroke-width="8" stroke-linecap="round"><path d="M105 238q30 22 60 0"/><path d="M256 238q30 22 60 0"/></g><g fill="#2A2340" font-family="system-ui, sans-serif" font-weight="800"><text class="rv-z" x="330" y="150" font-size="34">z</text><text class="rv-z rv-z2" x="340" y="140" font-size="44">Z</text><text class="rv-z rv-z3" x="350" y="130" font-size="28">z</text></g>',
     happy: '<g fill="none" stroke="#1B1A25" stroke-width="9" stroke-linecap="round"><path d="M105 250q30 -34 60 0"/><path d="M256 250q30 -34 60 0"/></g><g fill="#F28AA0" opacity="0.75"><ellipse cx="110" cy="292" rx="22" ry="12"/><ellipse cx="312" cy="292" rx="22" ry="12"/></g>',
@@ -30,15 +31,16 @@ function eyes(m: RaviMood): string {
   return cover + normal + extras[m];
 }
 export function setMood(el: HTMLElement, mood: RaviMood): void {
+  const faceMood: OriginalMood = mood === "sleepy" ? "sleep" : mood === "focused" || mood === "working" ? "thinking" : mood;
   el.dataset.mood = mood;
   el.dataset.raviMood = mood;
   el.setAttribute("role", "img");
-  el.setAttribute("aria-label", names[mood]);
+  el.setAttribute("aria-label", mood === "sleepy" ? "졸린 라비" : mood === "focused" ? "집중하는 라비" : mood === "working" ? "일하는 라비" : names[faceMood]);
   el.classList.toggle("rv-bob", mood !== "sleep");
   const img = el.querySelector("img");
   if (img) (img as HTMLElement).style.filter = `${el.dataset.characterFilter || "none"} ${mood === "sleep" ? "saturate(0.6) brightness(0.92)" : ""}`;
   const svg = el.querySelector("svg");
-  if (svg) svg.innerHTML = eyes(mood);
+  if (svg) svg.innerHTML = eyes(faceMood);
 }
 export function raviFace(mood: RaviMood, size: number, options: { round?: boolean } = {}): HTMLElement {
   const el = document.createElement("span");
