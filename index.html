@@ -3667,19 +3667,25 @@
            같은 길이라 배울 것이 하나뿐이다. -->
       <section class="page on" id="page-home">
         <h1>홈</h1>
-        <div class="rv-home-grid"><div id="ravi-home-slot"></div><aside class="ravi-sidebar">
-          <div class="rv-home-balance">        <div class="overview" aria-labelledby="overview-title">
-          <h2 id="overview-title">한눈에</h2>
-          <div class="overview-values"><div><span>내 서버</span><strong id="overview-node">확인 못 함</strong></div><div><span>완료 잔액</span><strong id="overview-balance">확인 못 함</strong></div><div id="overview-incoming-row" hidden><span>들어오는 중</span><strong id="overview-incoming"></strong></div></div>
-          <div class="overview-actions"><button id="overview-receive"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m-5-5 5 5 5-5M4 17v4h16v-4"/></svg><span>받기</span></button><button id="overview-phone"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M10 17h4"/></svg><span>폰에서 서명한 거래 보내기</span></button></div>
-        </div>
-<button id="rv-home-send" type="button">보내기</button></div>
-          <div class="rv-home-safety"><h2>안전 상태</h2><p id="rv-home-safe">상태를 확인하는 중…</p><button id="rv-home-backup" class="ghost" type="button">백업 확인</button></div>
-          <div class="rv-home-ravi" id="rv-home-ravi"><span id="rv-home-ravi-face" class="rv-home-ravi-face"></span><div class="rv-home-ravi-words"><h2>라비에게 시키세요</h2><span id="rv-home-ai-pill" class="rv-ai-pill" data-ai="off">AI 꺼짐 · 정해진 안내만</span><p id="rv-home-ravi-sub" hidden></p></div><input id="rv-home-ravi-q" type="text" placeholder="예: 수료증 120장 만들어 줘" autocomplete="off" /><button id="rv-home-ravi-open" class="ghost" type="button">보내기</button></div>
-          <div class="rv-home-today" id="rv-home-today" hidden><h2>오늘 가게</h2><div id="rv-home-today-body"></div><button id="rv-home-shop" class="ghost" type="button">내 가게 열기</button></div>
-          <div class="rv-home-activity"><h2>최근 활동</h2><div id="rv-home-txs"></div></div>
-          <div class="rv-home-chats"><h2>최근 대화</h2><div id="rv-home-rooms"></div><button id="rv-home-chat" class="ghost" type="button">대화 열기</button></div>
-        </aside>
+        <div class="rv-home-grid">
+          <div class="rv-home-balance">
+            <div class="overview" aria-labelledby="overview-title">
+              <h2 id="overview-title">완료 잔액</h2>
+              <div class="overview-values"><strong id="overview-balance">확인 못 함</strong><span id="overview-incoming-row" hidden>들어오는 중 <strong id="overview-incoming"></strong></span></div>
+              <div class="overview-actions"><button id="rv-home-send" type="button">보내기</button><button id="overview-receive" type="button">받기</button><button id="rv-home-more" class="ghost" type="button">더 보기</button></div>
+            </div>
+          </div>
+          <div class="rv-home-safety">
+            <div class="rv-home-heading"><h2>안전 상태</h2><button id="rv-home-backup" class="ghost" type="button">백업 확인</button></div>
+            <div id="rv-home-safe" class="rv-home-signals" role="status"><span id="rv-home-backup-state" data-tone="warn">백업 확인 중</span><span id="rv-home-lock-state" data-tone="warn">잠금 확인 중</span><span id="rv-home-server-state" data-tone="warn">서버 <span id="overview-node">확인 못 함</span></span></div>
+          </div>
+          <div id="ravi-home-slot" role="region" aria-label="라비"></div>
+          <div class="rv-home-today" id="rv-home-today">
+            <div class="rv-home-heading"><h2>오늘 가게</h2><button id="rv-home-shop" class="ghost" type="button">더 보기</button></div>
+            <div id="rv-home-today-body"><p>가게 상태를 확인하는 중…</p></div>
+          </div>
+          <div class="rv-home-activity"><div class="rv-home-heading"><h2>최근 활동</h2><button id="rv-home-activity-all" class="ghost" type="button">모두 보기</button></div><div id="rv-home-txs"></div></div>
+          <div class="rv-home-chats"><div class="rv-home-heading"><h2>최근 대화</h2><button id="rv-home-chat" class="ghost" type="button">대화 열기</button></div><div id="rv-home-rooms"></div></div>
         </div>
       </section>
       <section class="page" id="page-ravi">
@@ -3742,6 +3748,8 @@
         </div>
         </div>
         <details id="ravi-tools"><summary>라비 도구</summary>
+        <button id="overview-phone" type="button">폰에서 서명한 거래 보내기</button>
+        <div class="rv-home-ravi" id="rv-home-ravi"><span id="rv-home-ravi-face" class="rv-home-ravi-face"></span><div class="rv-home-ravi-words"><h2>라비에게 시키세요</h2><span id="rv-home-ai-pill" class="rv-ai-pill" data-ai="off">AI 꺼짐 · 정해진 안내만</span><p id="rv-home-ravi-sub" hidden></p></div><input id="rv-home-ravi-q" type="text" placeholder="예: 수료증 120장 만들어 줘" autocomplete="off" /><button id="rv-home-ravi-open" class="ghost" type="button">보내기</button></div>
         <button id="ravi-tools-promo" type="button" class="ghost">홍보 만들기</button>
         <div class="ravi-key-status"><span id="ravi-key-last4"></span><button id="ravi-key-delete" class="ghost" type="button" hidden>키 지우기</button></div>
         <details class="rv-web-info" id="phone-tx-panel">

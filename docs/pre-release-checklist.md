@@ -1,5 +1,6 @@
 # 데스크톱 배포 전 검사
 
+- [ ] `npm run check:home-onescreen` — 홈 3개 기준 창 CSS 높이·폭·대비 산술, 요약 개수/오류/상태 회귀 검사. `check:pre-release`에 포함. 브라우저 실측을 대체한 통과로 해석하지 않는다. [결과와 한계](home-onescreen-report.md).
 - [ ] `npm run check:pre-release` — preflight, TypeScript, Vite, 첫 실행 컨트롤러 시나리오. release workflow가 실행한다.
 - [ ] `node scripts/check-firstrun.mjs --browser` — 네 가지 첫 실행 조합의 첫 프레임부터 인사 만료까지 팝업 없음. 격리 Chrome 사용. 다른 경로의 Chrome은 `CHROME_PATH` 지정.
 - [ ] `node scripts/check-ravi-panel.mjs`, `node scripts/check-ravi-state.mjs`, `node scripts/check-ravi-agent.mjs`, `node scripts/check-ravi-companion.mjs`.

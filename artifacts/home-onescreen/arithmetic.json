@@ -1,0 +1,149 @@
+{
+  "kind": "CSS arithmetic; not browser measurement",
+  "checks": [
+    {
+      "width": 1120,
+      "height": 780,
+      "rows": [
+        148,
+        148,
+        220
+      ],
+      "minRows": [
+        148,
+        148,
+        220
+      ],
+      "maxRows": [
+        176,
+        184,
+        220
+      ],
+      "cardWidths": [
+        487,
+        487
+      ],
+      "includingLockedBanner": 770,
+      "spare": 10
+    },
+    {
+      "width": 1440,
+      "height": 900,
+      "rows": [
+        162,
+        162,
+        220
+      ],
+      "minRows": [
+        148,
+        148,
+        220
+      ],
+      "maxRows": [
+        176,
+        184,
+        220
+      ],
+      "cardWidths": [
+        647,
+        647
+      ],
+      "includingLockedBanner": 798,
+      "spare": 102
+    },
+    {
+      "width": 1920,
+      "height": 1080,
+      "rows": [
+        176,
+        184,
+        220
+      ],
+      "minRows": [
+        148,
+        148,
+        220
+      ],
+      "maxRows": [
+        176,
+        184,
+        220
+      ],
+      "cardWidths": [
+        887,
+        887
+      ],
+      "includingLockedBanner": 834,
+      "spare": 246
+    }
+  ],
+  "contrasts": [
+    {
+      "foreground": "#1f224e",
+      "background": "#ffffff",
+      "ratio": 15.031308839053752
+    },
+    {
+      "foreground": "#59637d",
+      "background": "#ffffff",
+      "ratio": 5.990348408414971
+    },
+    {
+      "foreground": "#226b43",
+      "background": "#ffffff",
+      "ratio": 6.457279043575974
+    },
+    {
+      "foreground": "#805000",
+      "background": "#ffffff",
+      "ratio": 6.850872141992458
+    },
+    {
+      "foreground": "#a52a22",
+      "background": "#ffffff",
+      "ratio": 7.108641499814984
+    },
+    {
+      "foreground": "#1f224e",
+      "background": "#f3f5fa",
+      "ratio": 13.780364613917765
+    },
+    {
+      "foreground": "#59637d",
+      "background": "#f3f5fa",
+      "ratio": 5.491816189544601
+    },
+    {
+      "foreground": "#226b43",
+      "background": "#f3f5fa",
+      "ratio": 5.919887654965432
+    },
+    {
+      "foreground": "#805000",
+      "background": "#f3f5fa",
+      "ratio": 6.280724922283679
+    },
+    {
+      "foreground": "#a52a22",
+      "background": "#f3f5fa",
+      "ratio": 6.517042050427622
+    },
+    {
+      "foreground": "#ffffff",
+      "background": "#1f224e",
+      "ratio": 15.031308839053752
+    },
+    {
+      "foreground": "#1f224e",
+      "background": "#fff5e3",
+      "ratio": 13.901937441826249
+    }
+  ],
+  "renderFixtures": "passed",
+  "mutationSensitivity": "passed",
+  "unverified": [
+    "Actual font shaping/wrapping",
+    "Browser cascade, screenshots, focus traversal",
+    "Tauri WebView, display scaling, translated copy"
+  ]
+}

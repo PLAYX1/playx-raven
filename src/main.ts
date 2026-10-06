@@ -1,5 +1,6 @@
 // 🔴 맨 먼저 — 앱 CSP(Tauri nonce) 가 막는 style="…" 속성을 CSSOM 으로 되살린다(src/style-attrs.ts).
 import "./style-attrs";
+import { homeSafety } from "./home-summary";
 import { installFirstRunBarrier, afterRaviLanding, deferUntilRaviLanding, finishRaviLanding } from "./firstrun";
 installFirstRunBarrier();
 import { rememberCompanionPage, restoreCompanionPage, mountCompanionBridge } from "./ravi-companion-bridge";
@@ -2654,6 +2655,7 @@ async function refreshOverview() {
   setCopyText($("overview-node"), () => n && typeof progress === "number" && Number.isFinite(progress)
     ? progress < 0.9999 ? `${t("동기화")} ${Math.max(0, Math.min(100, progress * 100)).toFixed(1)}%` : t("켜짐")
     : nodeUp === false ? t("꺼짐") : t("확인 못 함"));
+  $("rv-home-server-state").dataset.tone = !n ? "bad" : typeof progress !== "number" || !Number.isFinite(progress) || progress < 0.9999 ? "warn" : "good";
   const confirmed = wallet.status === "fulfilled" ? wallet.value?.confirmed : undefined;
   setCopyText($("overview-balance"), () => typeof confirmed === "number" && Number.isFinite(confirmed) && confirmed >= 0
     ? `${confirmed.toLocaleString(lang, {maximumFractionDigits:8})} RVN` : t("확인 못 함"));
@@ -4733,9 +4735,9 @@ async function loadGroup(): Promise<void> {
   });
 }
 
-/// 0.6.0-A2 — 홈의 「오늘 가게」 카드. 가게를 만든 사람에게만 보인다.
+/// 홈의 「오늘 가게」 카드. 가게 없음과 조회 실패도 명시한다.
 /// 이미 있는 장부(ledger_range·ledger_pending)와 새 주문 숫자만 읽는다 — 새 계산·새 저장 없음.
-/// 발송·환불·공동구매 줄은 그 기능이 생길 때 여기에 더한다(RV7 §14.3-1).
+/// 발송·환불·공동구매의 상세 내역은 「더 보기」의 가게 화면에서 확인한다.
 let homeTodaySeq = 0;
 async function paintHomeToday(): Promise<void> {
   const box = document.getElementById("rv-home-today");
@@ -4743,23 +4745,13 @@ async function paintHomeToday(): Promise<void> {
   if (!box || !body) return;
   const seq = ++homeTodaySeq; // 늦게 끝난 옛 호출이 새 숫자를 덮지 않게
   try {
-    const sh = await invoke<any>("shop_load").catch(() => null);
+    const sh = await invoke<any>("shop_load");
     // 가게 유무는 기존 코드와 같은 기준(이름이 있는가)으로 판정한다.
-    if (!sh || !(sh.name || sh.name_en)) { if (seq === homeTodaySeq) box.hidden = true; return; }
+    if (!sh || !(sh.name || sh.name_en)) { if (seq === homeTodaySeq) { box.hidden = false; body.innerHTML = `<p>${copyHtml("아직 가게가 없습니다")}</p>`; } return; }
     const ymd = todayYmd();
     const r: any = await invoke("ledger_range", { fromYmd: ymd, toYmd: ymd, tzOffsetMin: tzMin() });
     const pend: any = await invoke("ledger_pending").catch(() => null);
-    const gb: any = await invoke("gb_overview", { todayYmd: ymd, nowUnix: Math.floor(Date.now() / 1000) }).catch(() => null);
     if (seq !== homeTodaySeq) return;
-    // 공동구매가 있을 때만 두 줄(RV7 §17.2): 가게 사정 환불, 결제 차례를 알릴 분. 발송할 것은 배달하는 가게만.
-    const gbItems: any[] = gb?.items || [];
-    const offered = gbItems.reduce((n, it) => n + (it.waiting || []).filter((w: any) => w.state === "offered").length, 0);
-    const gbLine = (label: string) => `<div class="rv-home-entry"><span>${escapeHtml(label)}</span><b></b></div>`;
-    const gbRows = gbItems.length
-      ? (Number(gb.refund_due) > 0 ? gbLine(tf("환불 대기(가게 사정) {0}건", gb.refund_due)) : "") +
-        (offered > 0 ? gbLine(tf("결제 차례를 알릴 분 {0}명", offered)) : "") +
-        (sh.delivery && Number(gb.to_ship) > 0 ? gbLine(tf("송장 넣을 주문 {0}건", gb.to_ship)) : "")
-      : "";
     // 🔴 통화가 섞였거나 못 읽은 줄이 있으면 합계를 확정 금액처럼 보이지 않는다(매출 화면과 같은 기준).
     const doubtful = !!r?.mixed_currency || !!r?.unreadable_rows;
     const cur = r?.currency ? " " + String(r.currency) : "";
@@ -4770,24 +4762,35 @@ async function paintHomeToday(): Promise<void> {
       `<div class="rv-home-entry"><span>${escapeHtml(label)}</span><b>${escapeHtml(value)}</b></div>`;
     body.innerHTML =
       row(t("오늘 받은 금액"), money) +
-      row(tf("판매 {0}건", Number(r?.sales || 0)), "") +
-      row(tf("안 본 새 주문 {0}건", 안본주문), "") +
-      row(tf("입금 대기 {0}건", Number(pend?.count || 0)), "") +
-      gbRows;
+      row(t("판매"), String(Number(r?.sales || 0))) +
+      row(t("새 주문"), String(안본주문)) +
+      row(t("입금 대기"), pend ? String(Number(pend.count || 0)) : t("확인 못 함"));
     box.hidden = false;
   } catch {
-    // 장부를 못 읽었으면 조용히 접는다. 없는 숫자를 지어내지 않는다.
-    if (seq === homeTodaySeq) box.hidden = true;
+    // 조회 실패를 빈 가게나 매출 0으로 표시하지 않는다.
+    if (seq === homeTodaySeq) { box.hidden = false; body.innerHTML = `<p>${copyHtml("가게 상태를 확인하지 못했습니다. 더 보기에서 다시 확인하세요.")}</p>`; }
+  }
+}
+
+let homeSafetySeq = 0;
+async function paintHomeSafety(): Promise<void> {
+  const seq = ++homeSafetySeq;
+  const [lock, backup] = await Promise.allSettled([invoke<any>("wallet_lock_state"), invoke<any>("backup_survey")]);
+  if (seq !== homeSafetySeq) return;
+  const summary = homeSafety(lock.status === "fulfilled" ? lock.value : null, backup.status === "fulfilled" ? backup.value : null, latestAutomaticBackupIssue);
+  for (const key of ["lock", "backup"] as const) {
+    const el = $(key === "lock" ? "rv-home-lock-state" : "rv-home-backup-state");
+    el.textContent = t(summary[key].label);
+    el.dataset.tone = summary[key].tone;
   }
 }
 
 async function paintHome(): Promise<void> {
   void refreshOverview();
-  const safe = document.getElementById("rv-home-safe");
-  if (safe) safe.textContent = nodeUp ? t("서버와 연결됨") : t("서버 상태를 확인하세요");
+  void paintHomeSafety();
   try {
-    const recent: unknown = await invoke("recent_transactions", { count: 4 }).catch(() => null);
-    const txs: any[] = (Array.isArray(recent) && recent.length ? recent : await 최근거래_모아읽기(4))
+    const recent: unknown = await invoke("recent_transactions", { count: 3 }).catch(() => null);
+    const txs: any[] = (Array.isArray(recent) && recent.length ? recent : await 최근거래_모아읽기(3))
       .sort((a, b) => Number(b?.time || 0) - Number(a?.time || 0));
     const received = txs.find(tx => tx.category === "receive");
     if (received?.txid && lastReceivedHomeTx && received.txid !== lastReceivedHomeTx) {
@@ -4795,7 +4798,7 @@ async function paintHome(): Promise<void> {
       setTimeout(() => setAllRaviMood(aiProvider ? "normal" : "sleep"), 1300);
     }
     if (received?.txid) lastReceivedHomeTx = String(received.txid);
-    $("rv-home-txs").innerHTML = txs.map(tx => {
+    $("rv-home-txs").innerHTML = txs.slice(0, 3).map(tx => {
       const received = tx.category === "receive";
       const amount = Number(tx.amount || 0);
       const checks = Math.max(0, Number(tx.confirmations || 0));
@@ -4807,8 +4810,8 @@ async function paintHome(): Promise<void> {
   void paintHomeToday();
   try {
     const rooms: any[] = await invoke("talk_rooms");
-    $("rv-home-rooms").innerHTML = `<div class="rv-home-entry">${copyHtml("라비")} · ${copyHtml("AI 도우미")}</div>` +
-      (Array.isArray(rooms) ? rooms.slice(0, 3).map(room => `<div class="rv-home-entry" translate="no">${escapeHtml(String(room.name || ""))}</div>`).join("") : "");
+    $("rv-home-rooms").innerHTML = `<div class="rv-home-entry">${copyHtml("라비")}<small>${escapeHtml(document.querySelector("#chat-log .msg.ai:last-child .msgtxt")?.textContent || t("AI 도우미 · 라비와 대화에서 이어가기"))}</small></div>` +
+      (Array.isArray(rooms) ? rooms.slice(0, 1).map(room => `<div class="rv-home-entry" translate="no">${escapeHtml(String(room.name || ""))}<small>${escapeHtml(String(room.about || t("대화 열기에서 확인하세요")))}</small></div>`).join("") : "");
   } catch { $("rv-home-rooms").textContent = t("대화를 읽지 못했습니다"); }
 }
 
@@ -18023,10 +18026,12 @@ window.addEventListener("DOMContentLoaded", async () => {
   window.addEventListener("desktop-language-change", paintRaviBadge);
   syncLanguage();
   $("overview-receive").onclick = () => { showPage("wallet"); void openReceive(); };
-  $("overview-phone").onclick = () => { ($("ravi-tools") as HTMLDetailsElement).open = true; const panel = $("phone-tx-panel") as HTMLDetailsElement; panel.open = true; panel.scrollIntoView(); $("phone-tx-code").focus(); };
+  $("overview-phone").onclick = () => { showPage("ravi"); ($("ravi-tools") as HTMLDetailsElement).open = true; const panel = $("phone-tx-panel") as HTMLDetailsElement; panel.open = true; panel.scrollIntoView(); $("phone-tx-code").focus(); };
   $("rv-home-send").onclick = () => { showPage("wallet"); void openSend("rvn"); };
   $("rv-home-backup").onclick = () => showPage("settings");
   $("rv-home-chat").onclick = () => showPage("talk");
+  $("rv-home-activity-all").onclick = () => { showPage("wallet"); jumpToEl("w-txs"); };
+  $("rv-home-more").onclick = () => showPage("wallet");
 
   $("fee-send").addEventListener("click", () => void sendOwed());
   void paintFeePick();
@@ -18576,6 +18581,7 @@ window.addEventListener("DOMContentLoaded", async () => {
       })
       .catch(() => { const note = document.getElementById("bk-note"); if (note) setCopyText(note, () => t("자동 백업을 확인하지 못했습니다. 서버 연결을 확인하고 백업을 다시 실행하세요.")); });
   backupTick();
+  setInterval(() => { if ($("page-home").classList.contains("on")) { void paintHomeSafety(); void refreshOverview(); } }, 20000);
   setInterval(backupTick, 6 * 60 * 60 * 1000);
   // 인터넷이 끊기는 것은 화면을 열어 볼 때가 아니라 장사 중에 일어난다.
   setInterval(() => void quietly(loadNet), 30_000);

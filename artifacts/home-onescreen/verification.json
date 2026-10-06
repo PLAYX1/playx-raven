@@ -1,0 +1,343 @@
+{
+  "preRelease": "passed",
+  "homeArithmetic": "passed; not browser geometry",
+  "trackedJavaScript": {
+    "passed": 35,
+    "expectedMutationFailure": 1,
+    "blocked": 14
+  },
+  "checks": [
+    {
+      "check": "artist-photo.test.mjs",
+      "exit": 0,
+      "seconds": 0.66,
+      "result": "passed"
+    },
+    {
+      "check": "check-ai-safety.mjs",
+      "exit": 0,
+      "seconds": 3.38,
+      "result": "passed"
+    },
+    {
+      "check": "check-backup-result.mjs",
+      "exit": 0,
+      "seconds": 0.07,
+      "result": "passed"
+    },
+    {
+      "check": "check-backup-safety.mjs",
+      "exit": 0,
+      "seconds": 10.32,
+      "result": "passed"
+    },
+    {
+      "check": "check-backup-ui.mjs",
+      "exit": 1,
+      "seconds": 0.18,
+      "result": "blocked by Chrome launch or loopback EPERM; not passed"
+    },
+    {
+      "check": "check-cert-photos.mjs",
+      "exit": 1,
+      "seconds": 0.51,
+      "result": "blocked by Chrome launch or loopback EPERM; not passed"
+    },
+    {
+      "check": "check-cert-roster.mjs",
+      "exit": 0,
+      "seconds": 0.61,
+      "result": "passed"
+    },
+    {
+      "check": "check-certificate-bulk-ui.mjs",
+      "exit": 1,
+      "seconds": 0.5,
+      "result": "blocked by Chrome launch or loopback EPERM; not passed"
+    },
+    {
+      "check": "check-certificate-preview.mjs",
+      "exit": 1,
+      "seconds": 11.43,
+      "result": "blocked by Chrome launch or loopback EPERM; not passed"
+    },
+    {
+      "check": "check-companion-fix.mjs",
+      "exit": 0,
+      "seconds": 0.18,
+      "result": "passed"
+    },
+    {
+      "check": "check-desktop-identity-fix.mjs",
+      "exit": 1,
+      "seconds": 0.18,
+      "result": "blocked by Chrome launch or loopback EPERM; not passed"
+    },
+    {
+      "check": "check-desktop-integration.mjs",
+      "exit": 0,
+      "seconds": 0.34,
+      "result": "passed"
+    },
+    {
+      "check": "check-desktop-languages.mjs",
+      "exit": 1,
+      "seconds": 0.28,
+      "result": "blocked by Chrome launch or loopback EPERM; not passed"
+    },
+    {
+      "check": "check-desktop-mutation.mjs",
+      "exit": 1,
+      "seconds": 8.6,
+      "result": "expected assertion failure; original source restored"
+    },
+    {
+      "check": "check-desktop-ux.mjs",
+      "exit": 1,
+      "seconds": 0.18,
+      "result": "blocked by Chrome launch or loopback EPERM; not passed"
+    },
+    {
+      "check": "check-easy-create.mjs",
+      "exit": 0,
+      "seconds": 0.07,
+      "result": "passed"
+    },
+    {
+      "check": "check-firstrun.mjs",
+      "exit": 0,
+      "seconds": 0.61,
+      "result": "passed"
+    },
+    {
+      "check": "check-game-bridge.mjs",
+      "exit": 1,
+      "seconds": 0.08,
+      "result": "pre-existing untracked test fails: native bridge not connected; excluded from commit"
+    },
+    {
+      "check": "check-issue-gate.mjs",
+      "exit": 0,
+      "seconds": 0.04,
+      "result": "passed"
+    },
+    {
+      "check": "check-local-wallet-publish.mjs",
+      "exit": 0,
+      "seconds": 0.18,
+      "result": "passed"
+    },
+    {
+      "check": "check-map-copy.mjs",
+      "exit": 0,
+      "seconds": 0.18,
+      "result": "passed"
+    },
+    {
+      "check": "check-merchant-map.mjs",
+      "exit": 0,
+      "seconds": 0.12,
+      "result": "passed"
+    },
+    {
+      "check": "check-peer-help.mjs",
+      "exit": 0,
+      "seconds": 0.04,
+      "result": "passed"
+    },
+    {
+      "check": "check-phone-transaction.mjs",
+      "exit": 0,
+      "seconds": 0.12,
+      "result": "passed"
+    },
+    {
+      "check": "check-ravi-agent.mjs",
+      "exit": 0,
+      "seconds": 15.81,
+      "result": "passed"
+    },
+    {
+      "check": "check-ravi-companion.mjs",
+      "exit": 0,
+      "seconds": 0.13,
+      "result": "passed"
+    },
+    {
+      "check": "check-ravi-key.mjs",
+      "exit": 0,
+      "seconds": 2.0,
+      "result": "passed"
+    },
+    {
+      "check": "check-ravi-panel-browser.mjs",
+      "exit": 1,
+      "seconds": 0.93,
+      "result": "blocked by Chrome launch or loopback EPERM; not passed"
+    },
+    {
+      "check": "check-ravi-panel.mjs",
+      "exit": 0,
+      "seconds": 0.51,
+      "result": "passed"
+    },
+    {
+      "check": "check-ravi-promo-browser.mjs",
+      "exit": 1,
+      "seconds": 1.37,
+      "result": "blocked by Chrome launch or loopback EPERM; not passed"
+    },
+    {
+      "check": "check-ravi-promo-card.mjs",
+      "exit": 0,
+      "seconds": 0.72,
+      "result": "passed"
+    },
+    {
+      "check": "check-ravi-promo.mjs",
+      "exit": 0,
+      "seconds": 2.47,
+      "result": "passed"
+    },
+    {
+      "check": "check-ravi-similarity.mjs",
+      "exit": 0,
+      "seconds": 1.79,
+      "result": "passed"
+    },
+    {
+      "check": "check-ravi-state.mjs",
+      "exit": 0,
+      "seconds": 0.67,
+      "result": "passed"
+    },
+    {
+      "check": "check-ravi-understanding-browser.mjs",
+      "exit": 1,
+      "seconds": 0.81,
+      "result": "blocked by Chrome launch or loopback EPERM; not passed"
+    },
+    {
+      "check": "check-ravi-understanding.mjs",
+      "exit": 0,
+      "seconds": 1.46,
+      "result": "passed"
+    },
+    {
+      "check": "check-ravi-understanding2.mjs",
+      "exit": 0,
+      "seconds": 6.39,
+      "result": "passed"
+    },
+    {
+      "check": "check-ravi-understanding3.mjs",
+      "exit": 0,
+      "seconds": 1.2,
+      "result": "passed"
+    },
+    {
+      "check": "check-ravi-understanding5.mjs",
+      "exit": 0,
+      "seconds": 3.81,
+      "result": "passed"
+    },
+    {
+      "check": "check-ravi-voice.mjs",
+      "exit": 0,
+      "seconds": 0.45,
+      "result": "passed"
+    },
+    {
+      "check": "check-restore-vectors.mjs",
+      "exit": 1,
+      "seconds": 0.81,
+      "result": "blocked by Chrome launch or loopback EPERM; not passed"
+    },
+    {
+      "check": "check-send-confirmation.mjs",
+      "exit": 0,
+      "seconds": 0.89,
+      "result": "passed"
+    },
+    {
+      "check": "check-shop-seal.mjs",
+      "exit": 0,
+      "seconds": 0.13,
+      "result": "passed"
+    },
+    {
+      "check": "check-staff-refund.mjs",
+      "exit": 0,
+      "seconds": 0.18,
+      "result": "passed"
+    },
+    {
+      "check": "check-style-csp.mjs",
+      "exit": 1,
+      "seconds": 0.13,
+      "result": "blocked by Chrome launch or loopback EPERM; not passed"
+    },
+    {
+      "check": "check-wallet-easy.mjs",
+      "exit": 1,
+      "seconds": 0.12,
+      "result": "blocked by Chrome launch or loopback EPERM; not passed"
+    },
+    {
+      "check": "check-wallet-vault.mjs",
+      "exit": 0,
+      "seconds": 0.94,
+      "result": "passed"
+    },
+    {
+      "check": "check-words-restore.mjs",
+      "exit": 1,
+      "seconds": 0.18,
+      "result": "blocked by Chrome launch or loopback EPERM; not passed"
+    },
+    {
+      "check": "desktop-installer-identity.test.mjs",
+      "exit": 1,
+      "seconds": 22.45,
+      "result": "passed on CARGO_NET_OFFLINE=true retry"
+    },
+    {
+      "check": "release-manifest.test.mjs",
+      "exit": 0,
+      "seconds": 0.12,
+      "result": "passed"
+    },
+    {
+      "check": "verify-published-release.test.mjs",
+      "exit": 0,
+      "seconds": 0.13,
+      "result": "passed"
+    }
+  ],
+  "native": {
+    "passed": 757,
+    "failed": 7,
+    "ignored": 13,
+    "reason": "all seven failures: loopback bind EPERM",
+    "fixture": "RV_BACKUP_FIXTURE_ROOT=/tmp/home-onescreen-native"
+  },
+  "restoreSafety": {
+    "passed": 23
+  },
+  "restoreVectorsWithoutCore": {
+    "passed": 30,
+    "core": "not tested"
+  },
+  "pythonMutations": {
+    "browserSeal": "expected failure; restored, green rerun",
+    "refund": "expected failure with isolated fixture; restored",
+    "desktopSecurity": "failed: obsolete source anchor (substring not found)",
+    "securityUsability": "partial assertion failures; loopback EPERM blocks completion"
+  },
+  "unverified": [
+    "Browser geometry / screenshots / font wrapping",
+    "Tauri WebView / keyboard and screen reader traversal",
+    "OS scaling, zoom, localized long text",
+    "Real wallets or transfers (not performed)"
+  ]
+}
