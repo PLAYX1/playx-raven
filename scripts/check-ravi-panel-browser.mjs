@@ -54,6 +54,7 @@ try {
     });
     await page.goto(origin,{waitUntil:'networkidle0'});
     await page.addStyleTag({content:'#onboard,#hello{display:none!important}'});
+    await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-ravi-arriving'));
     await settle(page);
     assert.equal(await page.$('#ravi-face'),null,'old hidden webp hero has been removed');
     assert.equal(await page.$eval('#ravi-home-slot',el=>!!el.querySelector('#chat-log')),false);
@@ -118,7 +119,7 @@ try {
     await page.click('#rv-header-ravi'); await settle(page);
     assert.equal(await page.$eval('#ravi-panel',el=>el.classList.contains('large')),true,'size persists');
     await page.reload({waitUntil:'networkidle0'}); await page.addStyleTag({content:'#onboard,#hello{display:none!important}'}); await settle(page);
-    assert.equal(await visible(page,'#ravi-panel'),true,'open state persists');
+    assert.equal(await visible(page,'#ravi-panel'),false,'restart never restores an open conversation');
     assert.equal(await page.$eval('#ravi-panel',el=>el.classList.contains('large')),true);
     assert.deepEqual(errors,[]);
     await context.close(); console.log(`PASS ${width}×${height}: shared panel, Enter/Shift+Enter, focus, scroll/new reply, toast, approval speech stop, Escape and persisted size/open state`);

@@ -333,9 +333,21 @@ export function wirePairing(confirmBox?: Ask) {
   card.className = "card rvp";
   card.id = "rvp-card";
   card.innerHTML = CARD;
+  card.hidden = true;
   const lang = settings.querySelector(".desktop-language-settings");
   if (lang) lang.after(card); else settings.prepend(card);
   wireCard(card);
+  for (const page of [settings, document.getElementById("page-wallet")]) {
+    if (!page) continue;
+    const connect = document.createElement("button");
+    connect.type = "button"; connect.id = page === settings ? "rvp-connect-settings" : "rvp-connect-wallet";
+    setCopyText(connect, () => t("휴대폰 연결"));
+    connect.onclick = () => {
+      (document.querySelector('nav [data-page="settings"]') as HTMLElement | null)?.click();
+      card.hidden = false; card.scrollIntoView({ block: "start" }); void refresh();
+    };
+    page.prepend(connect);
+  }
 
   // 구석 알림 — 설정을 안 보고 있어도 폰 요청·연결 요청을 놓치지 않게.
   const notice = document.createElement("button");
@@ -345,7 +357,7 @@ export function wirePairing(confirmBox?: Ask) {
   document.body.append(notice);
   notice.addEventListener("click", () => {
     (document.querySelector('nav [data-page="settings"]') as HTMLElement | null)?.click();
-    window.setTimeout(() => card.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+    window.setTimeout(() => el("rvp-connect-settings")?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
   });
 
   // 기존 보내기 화면에서 보내기가 끝났다 → 그게 폰 요청이었다면 폰에 「완료」.
@@ -358,7 +370,6 @@ export function wirePairing(confirmBox?: Ask) {
   });
 
   const onSettings = () => document.getElementById("page-settings")?.classList.contains("on");
-  let lastSeenGuest = new Set<string>();
   window.setInterval(() => {
     if (onSettings()) notice.hidden = true;
     if (onSettings()) void refresh();
@@ -368,16 +379,11 @@ export function wirePairing(confirmBox?: Ask) {
   const poll = async () => {
     try {
       const w = await invoke<{ requests: number; pending: boolean; guestqr: string[] } | null>("pairing_waiting");
-      const n = w?.requests ?? 0, pending = !!w?.pending;
+      const n = Math.max(w?.requests ?? 0, w?.guestqr?.length ?? 0), pending = !!w?.pending;
       notice.hidden = !(n || pending) || !!onSettings();
       setCopyText(notice, () => pending ? t("폰이 연결을 기다려요 — 확인하기") : tf("폰 요청 {0}건 — 보기", n));
-      // 손님 QR 띄우기는 확인 없이 바로(허락할 때 「요청」을 준 폰만 보낼 수 있다).
-      for (const id of w?.guestqr ?? []) {
-        if (lastSeenGuest.has(id)) continue;
-        lastSeenGuest.add(id);
-        void act(() => openRequest(id));
-      }
-      if (lastSeenGuest.size > 200) lastSeenGuest = new Set();
+      // Requests only announce themselves. Opening/acknowledging requires a click.
+
     } catch { notice.hidden = true; }
   };
   window.setInterval(poll, 10_000);

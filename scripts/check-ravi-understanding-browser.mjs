@@ -49,6 +49,7 @@ try {
       },transformCallback:f=>f,metadata:{}};
     });
     await page.goto(origin,{waitUntil:'networkidle0'});
+    await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-ravi-arriving'));
     await page.addStyleTag({content:'#onboard,#hello{display:none!important}'});
     await settle(page);
     assert.equal(await page.$('#ravi-face'),null,'old hidden webp hero has been removed');

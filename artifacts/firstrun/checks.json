@@ -1,0 +1,400 @@
+[
+  {
+    "name": "artist-photo.test.mjs",
+    "code": 0,
+    "signal": null,
+    "location": [],
+    "result": "passed"
+  },
+  {
+    "name": "check-ai-safety.mjs",
+    "code": 0,
+    "signal": null,
+    "location": [],
+    "result": "passed"
+  },
+  {
+    "name": "check-backup-result.mjs",
+    "code": 0,
+    "signal": null,
+    "location": [],
+    "result": "passed"
+  },
+  {
+    "name": "build",
+    "code": 0,
+    "signal": null,
+    "location": [],
+    "result": "passed"
+  },
+  {
+    "name": "check-backup-ui.mjs",
+    "code": 1,
+    "signal": null,
+    "location": [
+      "at file:///Users/gimmusong/wt-rv-desktop-simple/scripts/check-backup-ui.mjs:13:8"
+    ],
+    "result": "blocked",
+    "blocker": "existing isolated profile / loopback bind denied (EPERM)"
+  },
+  {
+    "name": "check-cert-photos.mjs",
+    "code": 1,
+    "signal": null,
+    "location": [],
+    "blocker": "Chrome launch failed",
+    "result": "blocked"
+  },
+  {
+    "name": "check-cert-roster.mjs",
+    "code": 0,
+    "signal": null,
+    "location": [],
+    "result": "passed"
+  },
+  {
+    "name": "check-certificate-bulk-ui.mjs",
+    "code": 1,
+    "signal": null,
+    "location": [],
+    "blocker": "Chrome launch failed",
+    "result": "blocked"
+  },
+  {
+    "name": "check-certificate-preview.mjs",
+    "code": 1,
+    "signal": null,
+    "location": [],
+    "result": "blocked",
+    "blocker": "loopback bind denied (EPERM)"
+  },
+  {
+    "name": "check-desktop-identity-fix.mjs",
+    "code": 1,
+    "signal": null,
+    "location": [],
+    "result": "blocked",
+    "blocker": "existing isolated profile / loopback bind denied (EPERM)"
+  },
+  {
+    "name": "check-desktop-integration.mjs",
+    "code": 0,
+    "signal": null,
+    "location": [],
+    "result": "passed"
+  },
+  {
+    "name": "check-desktop-languages.mjs",
+    "code": 1,
+    "signal": null,
+    "location": [
+      "at file:///Users/gimmusong/wt-rv-desktop-simple/scripts/check-desktop-languages.mjs:23:8"
+    ],
+    "result": "blocked",
+    "blocker": "existing isolated profile / loopback bind denied (EPERM)"
+  },
+  {
+    "name": "check-backup-safety.mjs",
+    "code": 0,
+    "signal": null,
+    "location": [],
+    "rust": [
+      "test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 27 filtered out; finished in 7.77s"
+    ],
+    "result": "passed"
+  },
+  {
+    "name": "check-desktop-ux.mjs",
+    "code": 1,
+    "signal": null,
+    "location": [
+      "at file:///Users/gimmusong/wt-rv-desktop-simple/scripts/check-desktop-ux.mjs:16:8"
+    ],
+    "result": "blocked",
+    "blocker": "existing isolated profile / loopback bind denied (EPERM)"
+  },
+  {
+    "name": "check-easy-create.mjs",
+    "code": 0,
+    "signal": null,
+    "location": [],
+    "result": "passed"
+  },
+  {
+    "name": "check-firstrun.mjs",
+    "code": 0,
+    "signal": null,
+    "location": [],
+    "result": "passed"
+  },
+  {
+    "name": "check-issue-gate.mjs",
+    "code": 0,
+    "signal": null,
+    "location": [],
+    "result": "passed"
+  },
+  {
+    "name": "check-local-wallet-publish.mjs",
+    "code": 0,
+    "signal": null,
+    "location": [],
+    "result": "passed"
+  },
+  {
+    "name": "check-map-copy.mjs",
+    "code": 0,
+    "signal": null,
+    "location": [],
+    "result": "passed"
+  },
+  {
+    "name": "check-merchant-map.mjs",
+    "code": 0,
+    "signal": null,
+    "location": [],
+    "result": "passed"
+  },
+  {
+    "name": "check-peer-help.mjs",
+    "code": 0,
+    "signal": null,
+    "location": [],
+    "result": "passed"
+  },
+  {
+    "name": "check-phone-transaction.mjs",
+    "code": 0,
+    "signal": null,
+    "location": [],
+    "result": "passed"
+  },
+  {
+    "name": "check-desktop-mutation.mjs",
+    "code": 1,
+    "signal": null,
+    "location": [],
+    "result": "expected-red: semantic transaction hash mutant rejected, source restored"
+  },
+  {
+    "name": "check-ravi-companion.mjs",
+    "code": 0,
+    "signal": null,
+    "location": [],
+    "result": "passed"
+  },
+  {
+    "name": "check-ravi-key.mjs",
+    "code": 0,
+    "signal": null,
+    "location": [],
+    "result": "passed"
+  },
+  {
+    "name": "check-ravi-panel-browser.mjs",
+    "code": 1,
+    "signal": null,
+    "location": [],
+    "blocker": "Chrome launch failed",
+    "result": "blocked"
+  },
+  {
+    "name": "check-ravi-panel.mjs",
+    "code": 0,
+    "signal": null,
+    "location": [],
+    "result": "passed"
+  },
+  {
+    "name": "check-ravi-promo-browser.mjs",
+    "code": 1,
+    "signal": null,
+    "location": [],
+    "blocker": "Chrome launch failed",
+    "result": "blocked"
+  },
+  {
+    "name": "check-ravi-promo-card.mjs",
+    "code": 0,
+    "signal": null,
+    "location": [],
+    "result": "passed"
+  },
+  {
+    "name": "check-ravi-promo.mjs",
+    "code": 0,
+    "signal": null,
+    "location": [],
+    "result": "passed"
+  },
+  {
+    "name": "check-ravi-similarity.mjs",
+    "code": 0,
+    "signal": null,
+    "location": [],
+    "result": "passed"
+  },
+  {
+    "name": "check-ravi-state.mjs",
+    "code": 0,
+    "signal": null,
+    "location": [],
+    "result": "passed"
+  },
+  {
+    "name": "check-ravi-agent.mjs",
+    "code": 0,
+    "signal": null,
+    "location": [],
+    "rust": [
+      "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 769 filtered out; finished in 4.17s"
+    ],
+    "result": "passed"
+  },
+  {
+    "name": "check-ravi-understanding-browser.mjs",
+    "code": 1,
+    "signal": null,
+    "location": [],
+    "blocker": "Chrome launch failed",
+    "result": "blocked"
+  },
+  {
+    "name": "check-ravi-understanding.mjs",
+    "code": 0,
+    "signal": null,
+    "location": [],
+    "result": "passed"
+  },
+  {
+    "name": "check-ravi-understanding3.mjs",
+    "code": 0,
+    "signal": null,
+    "location": [],
+    "result": "passed"
+  },
+  {
+    "name": "check-ravi-understanding5.mjs",
+    "code": 0,
+    "signal": null,
+    "location": [],
+    "result": "passed"
+  },
+  {
+    "name": "check-ravi-understanding2.mjs",
+    "code": 0,
+    "signal": null,
+    "location": [],
+    "result": "passed"
+  },
+  {
+    "name": "check-ravi-voice.mjs",
+    "code": 0,
+    "signal": null,
+    "location": [],
+    "result": "passed"
+  },
+  {
+    "name": "check-restore-vectors.mjs",
+    "code": 1,
+    "signal": null,
+    "location": [
+      "at freePort (file:///Users/gimmusong/wt-rv-desktop-simple/scripts/check-restore-vectors.mjs:129:11)",
+      "at async startNode (file:///Users/gimmusong/wt-rv-desktop-simple/scripts/check-restore-vectors.mjs:136:18)"
+    ],
+    "result": "blocked",
+    "blocker": "loopback bind denied (EPERM)"
+  },
+  {
+    "name": "check-shop-seal.mjs",
+    "code": 0,
+    "signal": null,
+    "location": [],
+    "result": "passed"
+  },
+  {
+    "name": "check-send-confirmation.mjs",
+    "code": 0,
+    "signal": null,
+    "location": [],
+    "result": "passed"
+  },
+  {
+    "name": "check-staff-refund.mjs",
+    "code": 0,
+    "signal": null,
+    "location": [],
+    "result": "passed"
+  },
+  {
+    "name": "check-style-csp.mjs",
+    "code": 1,
+    "signal": null,
+    "location": [],
+    "result": "blocked",
+    "blocker": "loopback bind denied (EPERM)"
+  },
+  {
+    "name": "check-wallet-easy.mjs",
+    "code": 1,
+    "signal": null,
+    "location": [],
+    "result": "blocked",
+    "blocker": "loopback bind denied (EPERM)"
+  },
+  {
+    "name": "check-words-restore.mjs",
+    "code": 1,
+    "signal": null,
+    "location": [],
+    "result": "blocked",
+    "blocker": "loopback bind denied (EPERM)"
+  },
+  {
+    "name": "release-manifest.test.mjs",
+    "code": 0,
+    "signal": null,
+    "location": [],
+    "result": "passed"
+  },
+  {
+    "name": "verify-backup-storage.mjs",
+    "code": 0,
+    "signal": null,
+    "location": [],
+    "result": "passed"
+  },
+  {
+    "name": "verify-published-release.test.mjs",
+    "code": 0,
+    "signal": null,
+    "location": [],
+    "result": "passed"
+  },
+  {
+    "name": "desktop-installer-identity.test.mjs",
+    "code": 0,
+    "signal": null,
+    "location": [],
+    "result": "passed after CARGO_NET_OFFLINE=true retry"
+  },
+  {
+    "name": "restore-safety",
+    "code": 0,
+    "signal": null,
+    "location": [],
+    "rust": [
+      "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.75s"
+    ],
+    "result": "passed"
+  },
+  {
+    "name": "cargo-lib",
+    "code": 101,
+    "signal": null,
+    "location": [],
+    "result": "blocked",
+    "blocker": "7 loopback/socket tests denied; 757 passed, 13 ignored"
+  }
+]

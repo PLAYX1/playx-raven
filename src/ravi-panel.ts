@@ -1,7 +1,7 @@
 import { t } from "./i18n";
 
 const STORAGE = "ravenvault-ravi-panel";
-export function createRaviPanel(send: () => void, changed: () => void) {
+export function createRaviPanel(send: () => void, changed: () => void, afterLanding: (run: () => void) => void = run => run()) {
   const el = (id: string) => document.getElementById(id)!;
   const panel = el("ravi-panel"), launcher = el("ravi-launcher"), log = el("chat-log");
   const input = el("chat-q") as HTMLTextAreaElement, fresh = el("ravi-new");
@@ -9,7 +9,7 @@ export function createRaviPanel(send: () => void, changed: () => void) {
   let open = false, large = false, suspended = false, following = true, pending = false;
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE) || "{}");
-    open = saved.open === true; large = saved.large === true;
+    large = saved.large === true; // Only size survives a restart, never visibility.
   } catch { /* Storage is optional; the current session still works. */ }
   const atBottom = () => log.scrollHeight - log.clientHeight - log.scrollTop <= 32;
   const bottom = () => { log.scrollTop = log.scrollHeight; following = true; pending = false; fresh.hidden = true; };
@@ -29,9 +29,11 @@ export function createRaviPanel(send: () => void, changed: () => void) {
     try { localStorage.setItem(STORAGE, JSON.stringify({ open, large })); } catch { /* Best effort. */ }
   }
   function show(focus = true) {
-    open = true; paint(); save();
-    if (following) bottom();
-    if (focus && !suspended) input.focus({ preventScroll: true });
+    afterLanding(() => {
+      open = true; paint(); save();
+      if (following) bottom();
+      if (focus && !suspended) input.focus({ preventScroll: true });
+    });
   }
   function collapse() {
     const ownedFocus = panel.contains(document.activeElement);
