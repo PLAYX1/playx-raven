@@ -30,7 +30,7 @@ export async function prepareRelease(source, destination, version) {
     if (next.reduce((order, n, i) => order || Math.sign(n - old[i]), 0) <= 0) throw new Error('Release must be newer than the currently published version');
   } catch (e) { if (e.code !== 'ENOENT') throw e; }
   const base = `https://raw.githubusercontent.com/PLAYX1/playx-raven-releases/dist/v${version}`;
-  const manifest = { version, notes: 'RavenVault Desktop 0.8.2 — 라비는 이제 트레이에 조용히 상주하고 필요할 때만 말풍선으로 나타납니다(항상 떠 있기는 설정에서 선택). 첫 실행 때 손님 QR·대화창이 먼저 뜨지 않고 라비가 날아온 뒤에 인사합니다. 채팅창 마이크 받아쓰기(권한 안내 포함), 잠긴 맥 키체인 안내와 암호화 보관 선택지, 금고·용돈 지갑 설계 기반을 추가했습니다.', pub_date: new Date().toISOString(), platforms: {}, installers: [] };
+  const manifest = { version, notes: 'RavenVault Desktop 0.8.3 — 라비는 이제 트레이에 조용히 상주하고 필요할 때만 말풍선으로 나타납니다(항상 떠 있기는 설정에서 선택). 첫 실행 때 손님 QR·대화창이 먼저 뜨지 않고 라비가 날아온 뒤에 인사합니다. 채팅창 마이크 받아쓰기(권한 안내 포함), 잠긴 맥 키체인 안내와 암호화 보관 선택지, 금고·용돈 지갑 설계 기반을 추가했습니다. (0.8.2 는 윈도우 설치 파일 빌드 문제로 건너뜁니다.)', pub_date: new Date().toISOString(), platforms: {}, installers: [] };
   for (const [suffix, platform] of Object.entries(platforms)) {
     const signature = (await readFile(path.join(source, prefix + suffix + '.sig'), 'utf8')).trim();
     if (!/^[A-Za-z0-9+/=\r\n]+$/.test(signature) || signature.length < 100 || signature.length > 2048) throw new Error(`Malformed updater signature: ${suffix}`);
