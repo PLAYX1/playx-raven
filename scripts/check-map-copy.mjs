@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-const read = (p) => readFileSync(resolve(root, p), 'utf8');
+const read = (p) => readFileSync(resolve(root, p), 'utf8').replace(/\r\n/g, '\n');
 const bundle = async (entry) => {
   const out = await build({ entryPoints: [resolve(root, entry)], bundle: true, write: false, platform: 'node', format: 'esm', logLevel: 'silent' });
   return import('data:text/javascript;base64,' + Buffer.from(out.outputFiles[0].text).toString('base64'));

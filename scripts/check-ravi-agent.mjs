@@ -9,7 +9,7 @@ import ts from 'typescript';
 import { build } from 'esbuild';
 
 const out = 'artifacts/agent1'; mkdirSync(out, { recursive: true });
-const source = readFileSync('src/ravi-agent.ts', 'utf8');
+const source = readFileSync('src/ravi-agent.ts', 'utf8').replace(/\r\n/g, '\n');
 const compiled = ts.transpileModule(source.replace(/^import .*;\n/gm, ''), {
   compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS },
 }).outputText;

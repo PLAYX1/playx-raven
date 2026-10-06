@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
-const read = p => readFileSync(p, 'utf8');
+const read = p => readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
 const compile = p => ts.transpileModule(read(p).replace(/^import .*;\n/gm, ''), {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
 }).outputText;
