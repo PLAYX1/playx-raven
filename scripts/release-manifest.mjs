@@ -30,7 +30,7 @@ export async function prepareRelease(source, destination, version) {
     if (next.reduce((order, n, i) => order || Math.sign(n - old[i]), 0) <= 0) throw new Error('Release must be newer than the currently published version');
   } catch (e) { if (e.code !== 'ENOENT') throw e; }
   const base = `https://raw.githubusercontent.com/PLAYX1/playx-raven-releases/dist/v${version}`;
-  const manifest = { version, notes: 'RavenVault Desktop 0.8.0 — 라비가 화면 가운데로 날아와 「오늘 어땠어요?」 하고 인사합니다. 라비가 AI 에이전트가 되어 잔액·거래·매출·시세·서버·백업 상태를 직접 보고 답합니다(돈이 나가는 일은 준비까지만, 보내기는 직접 확인). 트레이에 상주하는 떠 있는 라비: 단축키로 부르고, 큰 창을 닫아도 메모리를 아낍니다. 스프링·관성·던지기·시선 따라가기 등 살아 있는 반응. 0.7.1 — 키 저장 복구.', pub_date: new Date().toISOString(), platforms: {}, installers: [] };
+  const manifest = { version, notes: 'RavenVault Desktop 0.8.2 — 라비는 이제 트레이에 조용히 상주하고 필요할 때만 말풍선으로 나타납니다(항상 떠 있기는 설정에서 선택). 첫 실행 때 손님 QR·대화창이 먼저 뜨지 않고 라비가 날아온 뒤에 인사합니다. 채팅창 마이크 받아쓰기(권한 안내 포함), 잠긴 맥 키체인 안내와 암호화 보관 선택지, 금고·용돈 지갑 설계 기반을 추가했습니다.', pub_date: new Date().toISOString(), platforms: {}, installers: [] };
   for (const [suffix, platform] of Object.entries(platforms)) {
     const signature = (await readFile(path.join(source, prefix + suffix + '.sig'), 'utf8')).trim();
     if (!/^[A-Za-z0-9+/=\r\n]+$/.test(signature) || signature.length < 100 || signature.length > 2048) throw new Error(`Malformed updater signature: ${suffix}`);
