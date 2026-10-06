@@ -1,0 +1,3 @@
+PASS voice: consent/revoke, permission states, 30s/silence, waveform samples, cleanup/stale callbacks, provider changes, local fallback, text-only manual send, no voice approval, mac entitlements; synthetic only
+PASS shared resident/main microphone and complete ko/en/ja/zh voice messages
+PASS actual microphone UI: immediate status, consent, waveform, transcript-only fill, manual-edit cancellation and settings revoke

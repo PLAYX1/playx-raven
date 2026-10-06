@@ -3726,6 +3726,12 @@
         </div>
 
         <div class="ravi-voice-row"><button id="ravi-read" type="button" aria-pressed="false">답 읽어 주기 꺼짐</button><p>음성으로는 승인할 수 없어요</p></div>
+        <div id="ravi-voice-surface" translate="no" hidden>
+          <p id="ravi-voice-note" role="status" aria-live="polite"></p>
+          <canvas id="ravi-voice-wave" width="240" height="36" aria-hidden="true" hidden></canvas><span id="ravi-voice-time" hidden></span>
+          <div id="ravi-voice-consent" hidden><strong id="ravi-voice-provider"></strong><p id="ravi-voice-disclosure"></p><button id="ravi-voice-agree" type="button"></button><button id="ravi-voice-decline" type="button"></button></div>
+          <button id="ravi-mic-settings" type="button" hidden></button>
+        </div>
         <div class="chat-in">
           <button id="ravi-plus" type="button" aria-label="라비 도구 열기" aria-expanded="false">＋</button><textarea id="chat-q" rows="2" placeholder="라비에게 말하기" aria-label="라비에게 말하기" autocomplete="off"></textarea><button id="rv-voice" type="button" aria-label="말로 묻기" aria-pressed="false" hidden>🎙</button>
           <button id="chat-go">보내기</button>
@@ -4706,6 +4712,7 @@
       </section>
 
       <section class="page" id="page-settings">
+        <div class="card" translate="no"><button id="ravi-voice-revoke" type="button"></button><p id="ravi-voice-revoked" role="status"></p></div>
         <div class="card desktop-language-settings"><h2>설정 · 언어</h2><div class="desktop-language-options" translate="no"><button data-language="ko">한국어</button><button data-language="en">English</button><button data-language="ja">日本語</button><button data-language="zh">简体中文</button></div><p>언어는 바로 바뀌며 다음 실행에도 기억합니다.</p><p>Mac에서 기존 앱의 파일 이름은 그대로 남을 수 있습니다. 앱 안의 이름은 RavenVault Desktop입니다.</p></div>
         <h2 class="title">이 컴퓨터</h2>
 

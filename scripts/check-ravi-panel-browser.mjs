@@ -33,7 +33,7 @@ try {
     });
     await page.evaluateOnNewDocument(() => {
       localStorage.setItem('playx-raven-lang','ko'); window.__CALLS=[]; window.__ABORTS=0; window.__CANCELS=0;
-      class Recognition { start(){window.__RECOGNITION=this;} abort(){window.__ABORTS++;} }
+      class Recognition { processLocally=false; start(){window.__RECOGNITION=this;} abort(){window.__ABORTS++;} }
       window.SpeechRecognition=Recognition;
       Object.defineProperty(window,'speechSynthesis',{value:{getVoices:()=>[{name:'Yuna',lang:'ko-KR'}],cancel(){window.__CANCELS++;},speak(u){window.__SPOKEN=u;}}});
       window.__TAURI_INTERNALS__={invoke:async(command,args)=>{
@@ -41,7 +41,8 @@ try {
         if(command==='node_status')return {blocks:1000,headers:1000,progress:1,peers:3};
         if(command==='wallet_balance')return {confirmed:12.5,unconfirmed:0};
         if(command==='money_status')throw 'Synthetic unavailable status';
-        if(command==='api_key_status')return {};
+        if(command==='api_key_status')return window.__VOICE_KEYED?{available:{openai:true},has_key:{openai:true},last4:{openai:'TEST'}}:{};
+        if(command==='voice_consent')return true;
         if(command==='model_settings')return {};
         if(command==='plugin:app|version')return '0.6.4';
         if(command==='backup_auto')return {error:'Synthetic unavailable backup'};
@@ -102,7 +103,10 @@ try {
     assert.ok(geometry.toast.right<geometry.panel.left,'toast never covers panel');
     await page.screenshot({path:resolve(out,`panel-${width}x${height}.png`)}); evidence.push({width,height,...geometry});
     // Native approval remains the sole route to payment; speech cannot click/send.
+    await page.evaluate(()=>{window.__VOICE_KEYED=true;document.querySelector('#ai-pick').dispatchEvent(new Event('change'));});
+    await page.waitForFunction(()=>document.querySelector('#ai-pick').value==='openai');
     await page.click('#rv-voice');
+    await page.waitForFunction(()=>!!window.__RECOGNITION);
     const cancels = await page.evaluate(()=>window.__CANCELS);
     await page.evaluate(()=>{const s=document.querySelector('#send-review');s.style.display='block';s.style.position='fixed';s.style.inset='120px 100px 40px';}); await settle(page);
     assert.equal(await visible(page,'#ravi-panel'),false); assert.equal(await page.evaluate(()=>window.__ABORTS>0),true);

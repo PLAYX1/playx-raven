@@ -1,0 +1,2 @@
+"NSMicrophoneUsageDescription" = "Allow the microphone to dictate text. With your consent, audio is sent to your selected AI provider.";
+"NSSpeechRecognitionUsageDescription" = "Speech recognition is used to dictate text on this device.";

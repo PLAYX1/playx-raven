@@ -1,5 +1,6 @@
 import { mountRaviRig, type RaviMode } from "./ravi-rig";
 import { createRaviVoice, type RecognitionConstructor } from "./ravi-voice";
+import { mountRaviMicrophone } from "./ravi-microphone";
 import { createRaviPanel } from "./ravi-panel";
 import { t } from "./i18n";
 import "./ravi-home.css";
@@ -8,7 +9,7 @@ const labels: Record<RaviMode, string> = {
   sleep: "잠듦 · 느린 숨", idle: "깨어 있음 · 곁에 있어요", listening: "듣는 중 · 편하게 말해 주세요",
   thinking: "생각 중 · 조각을 모아요", speaking: "말하는 중 · 라비의 목소리", joy: "기쁨 · 고마워요",
 };
-export function createRaviHome(api: { wake(): void; wallet(): void; report(): void; send(): void; tools(): void; companion?(mode: RaviMode): void }) {
+export function createRaviHome(api: { wake(): void; wallet(): void; report(): void; send(): void; tools(): void; companion?(mode: RaviMode): void; voiceProvider?(): string }) {
   const byId = (id: string) => document.getElementById(id)!;
   const home = byId("ravi-home-slot");
   const conversation = byId("ravi-conversation");
@@ -55,6 +56,13 @@ export function createRaviHome(api: { wake(): void; wallet(): void; report(): vo
   });
   mic.hidden = !voice.supported;
   mic.onclick = () => voice.listen();
+  const microphone = api.voiceProvider ? mountRaviMicrophone({
+    provider: api.voiceProvider, allowed: () => !blocked(),
+    transcript(text) { input.value = text; input.dispatchEvent(new Event("input", { bubbles: true })); },
+    quiet() { voice.stop(); clearSpeech(); },
+    listening(on) { if (on) setMode("listening"); else if (mode === "listening") resting(); },
+  }) : undefined;
+  function stopVoice() { microphone?.stop(); voice.stop(); }
   let readEnabled = false;
   read.onclick = () => {
     readEnabled = !readEnabled;
@@ -94,7 +102,7 @@ export function createRaviHome(api: { wake(): void; wallet(): void; report(): vo
     byId("ravi-panel").classList.toggle("reviewing", inline);
     mic.disabled = read.disabled = approvalOpen;
     if (stop) {
-      voice.stop(); clearSpeech(); clearTimeout(joyTimer);
+      stopVoice(); clearSpeech(); clearTimeout(joyTimer);
       if (["speaking", "listening", "joy"].includes(mode)) resting();
     }
   }
@@ -105,7 +113,7 @@ export function createRaviHome(api: { wake(): void; wallet(): void; report(): vo
     observer.observe(el, { attributes: true, attributeFilter: ["class", "style", "hidden", "open"] }));
   const onVisibility = () => { background = document.hidden; sync(); };
   document.addEventListener("visibilitychange", onVisibility);
-  window.addEventListener("blur", () => { background = true; sync(); });
+  window.addEventListener("blur", () => { if (microphone?.state === "requesting") return; background = true; sync(); });
   window.addEventListener("focus", () => { background = document.hidden; sync(); });
   window.addEventListener("pagehide", () => { background = true; sync(); });
   resting(); sync();
@@ -119,7 +127,7 @@ export function createRaviHome(api: { wake(): void; wallet(): void; report(): vo
       sync();
     },
     mood(value: string) {
-      if (value === "thinking") { clearSpeech(); voice.stop(); setMode(connected ? "thinking" : "sleep"); }
+      if (value === "thinking") { clearSpeech(); stopVoice(); setMode(connected ? "thinking" : "sleep"); }
       else if (value === "wake") { [rig, small, face].forEach(r => r.wake()); resting(); }
       else if (!["speaking", "listening", "joy"].includes(mode)) setMode(value === "sleep" ? "sleep" : "idle");
     },
@@ -131,24 +139,24 @@ export function createRaviHome(api: { wake(): void; wallet(): void; report(): vo
     },
     reply(text: string) {
       if (!text.trim()) return;
-      clearSpeech(); voice.stop();
+      clearSpeech(); stopVoice();
       if (blocked()) { resting(); return; }
       if (!connected) { resting(); voice.speak(text); return; }
       setMode("speaking"); [rig, small, face].forEach(r => r.pose.level = .7);
       const session = speechEpoch;
       if (voice.speak(text)) {
         // Long utterances must also terminate if the WebView drops its onend event.
-        speakingTimer = window.setTimeout(() => { if (session === speechEpoch) { voice.stop(); resting(); } }, Math.min(120000, Math.max(8000, text.length * 200)));
+        speakingTimer = window.setTimeout(() => { if (session === speechEpoch) { stopVoice(); resting(); } }, Math.min(120000, Math.max(8000, text.length * 200)));
       } else {
         speakingTimer = window.setTimeout(() => { if (session === speechEpoch) resting(); }, Math.min(12000, Math.max(1400, text.length * 90)));
       }
     },
     joy() {
       if (!connected || blocked()) return;
-      clearSpeech(); voice.stop(); clearTimeout(joyTimer); setMode("joy");
+      clearSpeech(); stopVoice(); clearTimeout(joyTimer); setMode("joy");
       joyTimer = window.setTimeout(resting, 1700);
     },
-    thinking() { if (!blocked()) { voice.stop(); clearSpeech(); setMode(connected ? "thinking" : "sleep"); } },
+    thinking() { if (!blocked()) { stopVoice(); clearSpeech(); setMode(connected ? "thinking" : "sleep"); } },
     finish() { if (mode === "thinking") resting(); },
   };
 }

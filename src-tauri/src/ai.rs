@@ -405,7 +405,7 @@ fn write_private(path: &std::path::Path, bytes: &[u8]) -> Result<(), String> {
     })
 }
 
-fn redact_external_error(message: &str, key: &str) -> String {
+pub(crate) fn redact_external_error(message: &str, key: &str) -> String {
     if key.is_empty() { return message.to_string(); }
     let mut redacted = message.replace(key, "[키 가림]");
     let chars: Vec<char> = key.chars().collect();
@@ -681,7 +681,7 @@ fn legacy_fallback(provider: &str) -> Option<String> {
         .map(|key| key.trim().to_string())
         .filter(|key| key.chars().count() >= 16)
 }
-fn read_key(provider: &str) -> Result<String, String> {
+pub(crate) fn read_key(provider: &str) -> Result<String, String> {
     if !known(provider) { return Err("알 수 없는 제공자입니다.".into()); }
     let _guard = lock_keys()?;
     read_key_locked(provider)

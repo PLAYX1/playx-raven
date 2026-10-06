@@ -1,0 +1,7 @@
+
+#ravi-voice-surface { padding: 8px 12px; font-size: 13px; }
+#ravi-voice-surface[hidden], #ravi-voice-surface [hidden] { display: none !important; }
+#ravi-voice-surface p { margin: 4px 0 8px; }
+#ravi-voice-surface button { margin: 4px; }
+#ravi-voice-wave { max-width: 75%; vertical-align: middle; }
+#ravi-voice-time { margin-inline-start: 8px; }

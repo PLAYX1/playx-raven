@@ -9280,6 +9280,7 @@ async function refreshKeys(preferred = "", keepKeyCard = false, refreshRows = tr
     const usable = have.filter(p => !keyChecks.rejected.has(p));
     sel.value = usable.includes(previous) ? previous : usable[0] || have[0] || "";
     aiProvider = usable.includes(sel.value) ? sel.value : null;
+    try { localStorage.setItem("rv-voice-provider", aiProvider || ""); } catch { /* Optional provider metadata only. */ }
     paintRaviBadge();
     const raviSub = document.getElementById("ravi-sub");
     if (raviSub) raviSub.textContent = aiProvider ? t("AI 도우미 · 물어본 것만 봐요") : t("눌러서 깨우기");
@@ -17585,7 +17586,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     // The original review recalculates fee and requires the owner's existing confirmation.
     await reviewSend();
   };
-  raviHome = createRaviHome({ wake: wakeRavi, wallet: () => showPage("wallet"), report: () => openReport(), send: () => { void chatSend(); }, tools: () => showPage("ravi"), companion: mode => { void invoke("companion_signal", { kind: mode === "listening" || mode === "speaking" ? "idle" : mode }).catch(() => {}); } });
+  raviHome = createRaviHome({ voiceProvider: () => aiProvider || "", wake: wakeRavi, wallet: () => showPage("wallet"), report: () => openReport(), send: () => { void chatSend(); }, tools: () => showPage("ravi"), companion: mode => { void invoke("companion_signal", { kind: mode === "listening" || mode === "speaking" ? "idle" : mode }).catch(() => {}); } });
   raviAgentUI = createRaviAgentUI({ invoke, keyed: () => aiProvider, key: wakeRavi, dock: () => raviHome?.open(false), tz: tzMin });
   for (const id of ["ravi-promo-open", "ravi-menu-promo", "ravi-tools-promo", "sh-promo"]) {
     $(id).onclick = () => { void openRaviPromo(); };

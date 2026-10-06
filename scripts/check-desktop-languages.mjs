@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer-core';
 import jsQR from 'jsqr';
 const root = fileURLToPath(new URL('../', import.meta.url)), dist = resolve(root, process.env.RV_LANGUAGE_DIST || 'dist');
-const out = resolve(root, 'artifacts/claude-desktop-identity-fix');
+const out = resolve(root, process.env.RV_UI_ARTIFACTS || 'artifacts/claude-desktop-identity-fix');
 const probesOnly = process.argv.includes('--probes-only');
 const samples = ['More','Photo','Invite','Chat','Message','ファンクラブ','写真','My node','照片','聊天','더 보기','사진','초대하기','이야기','내용','팬클럽','내 노드','그만두기','취소'];
 const probes = [], startup = [];

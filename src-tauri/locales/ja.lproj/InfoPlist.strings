@@ -1,0 +1,2 @@
+"NSMicrophoneUsageDescription" = "音声を文字にするためマイクを許可してください。同意したAI会社に音声が送信されます。";
+"NSSpeechRecognitionUsageDescription" = "この端末で音声を文字にするため音声認識を使います。";

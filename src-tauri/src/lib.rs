@@ -2,6 +2,7 @@ mod artist;
 mod rt;
 mod auction;
 mod ai;
+mod ravi_voice;
 mod ravi_agent;
 mod ravi_companion;
 mod ai_budget;
@@ -323,6 +324,11 @@ pub fn run() {
             ravi_agent::ravi_tool,
             ravi_agent::ravi_today,
             ravi_agent::ravi_greeting,
+            ravi_voice::voice_open_microphone_settings,
+            ravi_voice::voice_cancel,
+            ravi_voice::voice_consent,
+            ravi_voice::voice_set_consent,
+            ravi_voice::voice_transcribe,
             ai::ai_chat,
             ai::ai_promo,
             ai::save_custom_provider,

@@ -188,6 +188,12 @@ pub fn command_allowed(label: &str, command: &str) -> bool {
             "companion_settings",
             "companion_save",
             "companion_open_main",
+            // Dictation-only boundary: transcript/consent, never general AI or keys.
+            "voice_consent",
+            "voice_set_consent",
+            "voice_transcribe",
+            "voice_cancel",
+            "voice_open_microphone_settings",
             "companion_show",
             "companion_bubble",
             "companion_sample",
@@ -734,6 +740,8 @@ mod tests {
             assert!(command_allowed("main", command));
         }
         assert!(command_allowed("ravi-companion", "companion_open_main"));
+        for command in ["voice_consent", "voice_set_consent", "voice_transcribe", "voice_cancel", "voice_open_microphone_settings"] { assert!(command_allowed("ravi-companion", command)); }
+        for command in ["open_external", "ai_raw", "api_key_status", "send_asset"] { assert!(!command_allowed("ravi-companion", command)); }
     }
     #[test]
     fn destroyed_main_is_recreated_then_focused() {

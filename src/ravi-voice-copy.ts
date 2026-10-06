@@ -1,0 +1,26 @@
+import { lang } from './i18n';
+const copy = {
+  consent: ['음성은 선택한 AI 회사로 전송돼요. 받아쓴 글을 확인한 뒤 직접 보내 주세요. 음성으로 돈 보내기·결제·삭제를 승인할 수 없어요.', 'Audio is sent to your selected AI provider. Review the transcript and send it yourself. Voice cannot approve transfers, payments or deletion.', '音声は選択したAI会社へ送信されます。文字を確認してから自分で送信してください。音声で送金・支払い・削除は承認できません。', '音频会发送给所选AI公司。请核对文字后自行发送。语音无法批准转账、付款或删除。'],
+  agree: ['동의하고 말하기','Agree and speak','同意して話す','同意并说话'],
+  cancel: ['취소','Cancel','キャンセル','取消'],
+  revoke: ['음성 전송 동의 철회','Revoke audio consent','音声送信の同意を取り消す','撤回音频发送同意'],
+  revoked: ['음성 전송 동의를 철회했어요. 다음 사용 때 다시 물어볼게요.','Audio consent revoked. We will ask again next time.','音声送信の同意を取り消しました。次回また確認します。','已撤回音频发送同意，下次使用时将再次询问。'],
+  requesting: ['마이크를 준비하고 있어요. 권한 창이 뜨면 허용해 주세요.','Preparing the microphone. Allow access if asked.','マイクを準備中です。許可を求められたら許可してください。','正在准备麦克风。弹出权限窗口时请允许。'],
+  listening: ['듣는 중 · 다시 누르면 받아써요','Listening · press again to transcribe','聞いています · もう一度押すと文字にします','正在聆听 · 再按一次转为文字'],
+  transcribing: ['받아쓰는 중 · 다시 누르면 취소해요','Transcribing · press again to cancel','文字にしています · もう一度押すとキャンセル','正在转写 · 再按一次取消'],
+  done: ['글을 확인하고 보내 주세요. 자동으로 보내지 않았어요.','Review the text and send it. It has not been sent automatically.','文字を確認して送信してください。自動送信はしていません。','请核对文字后发送，尚未自动发送。'],
+  denied: ['마이크 사용이 거부됐어요. 기기 설정에서 허용한 뒤 다시 눌러 주세요.','Microphone access was denied. Allow it in device settings, then try again.','マイクが拒否されました。端末の設定で許可してから再度お試しください。','麦克风权限被拒绝。请在设备设置中允许后重试。'],
+  permission: ['이 창에는 마이크 권한이 없어요. 앱과 기기 권한 설정을 확인해 주세요.','This window has no microphone permission. Check app and device permissions.','この画面にはマイクの権限がありません。アプリと端末の権限を確認してください。','此窗口没有麦克风权限。请检查应用及设备权限。'],
+  device: ['마이크를 찾지 못했어요. 연결한 뒤 다시 눌러 주세요.','No microphone was found. Connect one and try again.','マイクが見つかりません。接続してもう一度お試しください。','未找到麦克风。连接后请重试。'],
+  busy: ['마이크를 열지 못했어요. 다른 앱에서 사용 중인지 확인해 주세요.','Could not open the microphone. Check whether another app is using it.','マイクを開けません。他のアプリで使用していないか確認してください。','无法打开麦克风。请检查是否被其他应用占用。'],
+  network: ['받아쓰기에 연결하지 못했어요. 인터넷을 확인하고 다시 말해 주세요.','Could not connect for transcription. Check your internet and try again.','文字起こしに接続できません。ネット接続を確認してもう一度話してください。','无法连接转写服务。请检查网络后重试。'],
+  unsupported: ['이 환경에서는 마이크 녹음을 지원하지 않아요. 글로 입력해 주세요.','Microphone recording is unavailable here. Please type your message.','この環境ではマイク録音に対応していません。文字で入力してください。','此环境不支持麦克风录音。请键入文字。'],
+  unsupported_provider: ['이 AI 회사는 음성 받아쓰기를 지원하지 않아요 — 다른 회사 키를 쓰거나 글로 입력하세요','This AI provider does not support dictation — use another provider’s key or type your message.','このAI会社は音声の文字起こしに対応していません。他社のキーを使うか文字で入力してください。','此AI公司不支持语音转写，请使用其他公司的密钥或键入文字。'],
+  key: ['받아쓰기에 쓸 AI 키를 설정에서 확인해 주세요.','Check the AI key for dictation in Settings.','設定で文字起こし用のAIキーを確認してください。','请在设置中检查用于转写的AI密钥。'],
+  budget: ['오늘 사용 한도나 동시 실행 한도에 도달했어요. 잠시 뒤 다시 시도해 주세요.','The usage or concurrency limit was reached. Please try later.','利用上限または同時実行上限に達しました。後でもう一度お試しください。','已达到用量或并发限制，请稍后重试。'],
+  silence: ['목소리를 듣지 못했어요. 마이크를 확인하고 다시 말해 주세요.','No speech was heard. Check your microphone and try again.','声が聞こえませんでした。マイクを確認してもう一度話してください。','未听到语音，请检查麦克风后重试。'],
+  storage: ['음성 동의를 저장하지 못했어요. 설정 폴더를 확인해 주세요.','Could not save audio consent. Check the settings folder.','音声の同意を保存できません。設定フォルダーを確認してください。','无法保存音频同意，请检查设置文件夹。'],
+  response: ['받아쓴 글을 읽지 못했어요. 다시 말하거나 글로 입력해 주세요.','Could not read the transcript. Try again or type your message.','文字起こしを読み取れませんでした。もう一度話すか文字で入力してください。','无法读取转写结果，请重试或键入文字。'],
+  settings: ['시스템 설정 > 개인정보 보호 및 보안 > 마이크','System Settings > Privacy & Security > Microphone','システム設定 > プライバシーとセキュリティ > マイク','系统设置 > 隐私与安全性 > 麦克风'],
+} as const;
+export function voiceCopy(key: keyof typeof copy) { return copy[key][({ko:0,en:1,ja:2,zh:3} as const)[lang]]; }

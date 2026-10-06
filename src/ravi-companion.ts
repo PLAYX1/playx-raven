@@ -1,3 +1,4 @@
+import { mountRaviMicrophone } from "./ravi-microphone";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import scene from "./assets/ravi-scene.svg?raw";
@@ -22,8 +23,15 @@ const reduced=matchMedia('(prefers-reduced-motion: reduce)');
 const labels:Record<Emotion,string>={idle:'곁에 있어요.',joy:'좋은 소식이 왔어요!',sleepy:'조금 졸려요…',surprised:'앗, 깜짝이야!',focused:'듣고 있어요.',thinking:'생각 중이에요…',working:'도구로 확인 중이에요…',sleep:'잠든 라비 · 눌러서 안내를 받아요.'};
 const transform=(id:string,v:string)=>character.querySelector(`#${id}`)?.setAttribute('transform',v);
 const opacity=(id:string,v:number)=>character.querySelector(`#${id}`)?.setAttribute('opacity',String(v));
+const microphone = mountRaviMicrophone({
+  provider() { try { return localStorage.getItem('rv-voice-provider') || ''; } catch { return ''; } },
+  allowed: () => visible && bubble && !document.hidden,
+  transcript(text) { question.value = text; },
+  quiet() { if (audio) void audio.suspend().catch(() => {}); },
+  listening(on) { mood(on ? 'focused' : physics.resting); },
+});
 function sound() {
-  if(!config?.settings.sound||!visible||!audio)return;
+  if(!config?.settings.sound||!visible||!audio||["requesting","listening","transcribing"].includes(microphone.state))return;
   void audio.resume().then(()=>{
     if(!visible)return;
     const oscillator=audio!.createOscillator(),gain=audio!.createGain(),now=audio!.currentTime;
@@ -86,6 +94,7 @@ const loop=createFrameLoop({now:()=>performance.now(),raf:requestAnimationFrame,
   paint();
 },()=>frameRate(physics.active,battery||config?.settings.battery,!visible||!ready));
 function visibility(on:boolean){
+  if(!on)microphone.stop();
   visible=on&&!document.hidden;document.body.classList.toggle('paused',!visible);
   if(visible&&ready){sampledAt=-10;loop.start();}
   else{loop.stop();clearTimeout(clickTimer);clickTimer=0;desired=null;physics.vx=physics.vy=0;drag=null;physics.release();question.value='';void audio?.suspend();}
@@ -99,6 +108,7 @@ function apply(value:Settings){
   paint();
 }
 async function setBubble(on:boolean){
+  if(!on)microphone.stop();
   try{await invoke('companion_bubble',{open:on});bubble=on;$('bubble').hidden=!on;if(on){visibility(true);question.focus();}await sampleNative();}
   catch{$('status').textContent='말풍선을 열지 못했어요. 트레이에서 큰 화면을 열어 주세요.';}
 }
@@ -144,7 +154,7 @@ bird.ondblclick=()=>{clearTimeout(clickTimer);clickTimer=0;void invoke('companio
 bird.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();void setBubble(true);}};
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){question.value='';void setBubble(false);}});
 document.addEventListener('visibilitychange',()=>visibility(!document.hidden));
-window.addEventListener('blur',()=>visibility(false));window.addEventListener('focus',()=>visibility(true));
+window.addEventListener('blur',()=>{if(microphone.state!=='requesting')visibility(false);});window.addEventListener('focus',()=>visibility(true));
 window.addEventListener('pagehide',()=>{visibility(false);void audio?.close();});
 reduced.addEventListener('change',()=>{if(config)apply(config.settings);});
 // Battery API is optional in native webviews; the explicit power-saving switch always works.

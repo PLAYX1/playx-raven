@@ -478,6 +478,12 @@ jobs:
           check_app() {
             local path="$1" binary
             check_code "$path"
+            # Tauri reads bundle.macOS.entitlements; verify the signed result too.
+            codesign -d --entitlements :- "$path" 2>/dev/null > "$RUNNER_TEMP/rv-entitlements.plist"
+            /usr/libexec/PlistBuddy -c 'Print :com.apple.security.device.audio-input' "$RUNNER_TEMP/rv-entitlements.plist" | grep -Fx true
+            for usage in NSMicrophoneUsageDescription NSSpeechRecognitionUsageDescription; do
+              /usr/libexec/PlistBuddy -c "Print :$usage" "$path/Contents/Info.plist" | grep -q .
+            done
             for binary in ravend ipfs; do
               echo "검산: 포함 실행 파일 — $binary"
               [ -f "$path/Contents/Resources/vendor/$binary" ] || {

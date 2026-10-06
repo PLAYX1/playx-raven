@@ -1,0 +1,23 @@
+{
+  "real_ai_calls": false,
+  "real_microphone_recording": false,
+  "real_transfers": false,
+  "build": "passed",
+  "voice_state_ui_checks": "passed",
+  "rust_full": {
+    "passed": 755,
+    "failed_socket_permission": 7,
+    "ignored": 13
+  },
+  "rust_available": {
+    "passed": 755,
+    "failed": 0,
+    "filtered_socket_tests": 7,
+    "ignored": 13,
+    "ignored_doc_tests": 1
+  },
+  "linux_native_media_permission": "blocked_by_dependency_constraint",
+  "new_dependencies": [],
+  "plist_lint": "passed",
+  "diff_check": "passed"
+}

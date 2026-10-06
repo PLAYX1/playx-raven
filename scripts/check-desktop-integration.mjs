@@ -44,9 +44,10 @@ for (const path of ['src-tauri/src/paths.rs', 'src-tauri/src/mining.rs', 'src-ta
   // This repair adds one exact, separately tested application target. Preserve
   // every pre-existing IPFS/parser/URL rule byte-for-byte around that addition.
   if (path === 'src-tauri/src/ipfs.rs') {
+    assert.ok(current.includes('url == "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone"'));
     assert.ok(current.includes('path == "/System/Applications/Utilities/Keychain Access.app"'));
     current = current.replace(/fn is_keychain_access_target[\s\S]*?(?=\/\/\/ Hands a local gateway URL)/, '')
-      .replace('!is_keychain_access_target(&url) && !ALLOWED', '!ALLOWED');
+      .replace('!is_keychain_access_target(&url) && !is_microphone_settings_target(&url) && !ALLOWED', '!ALLOWED');
   }
   assert.equal(current, execFileSync('git', ['show', baseline + ':' + path], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 }), path + ' must preserve the accepted core behavior');
 }
