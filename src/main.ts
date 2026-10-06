@@ -251,7 +251,7 @@ import {
 import {
   loadPayees, payeeName, pickerHtml, receiveHtml, recentPayees, RECEIVE_MESSAGE, savePayee, sentHtml,
 } from "./wallet-easy";
-import { normalizeApiKey, keyConnectionFailure, keyStorageError, SavedKeyChecks } from "./ravi-key";
+import { KEYCHAIN_SAVING, keyLast4, normalizeApiKey, keyConnectionFailure, keyStorageError, SavedKeyChecks } from "./ravi-key";
 import { guideById, guideHtml, raviAnswerHtml, raviCopy, raviText, raviQuestionLanguage, providerOfKey, type GuideGo } from "./ravi-guide";
 
 type Asset = {
@@ -9137,7 +9137,7 @@ function renderKeyRows(st: any, models: any) {
         st.has_key?.[p]
           ? // 모델 이름은 회사가 예고 없이 바꾼다. 우리 배포를 기다리지 않고
             // 직접 고칠 수 있어야 한다.
-            `<div class="keyrow"><span class="who">${label} · ${copyHtml("키가 저장됐습니다.")}</span>
+            `<div class="keyrow"><span class="who">${label}${keyLast4(st.last4?.[p]) ? ` · ····${escapeHtml(keyLast4(st.last4?.[p]))}` : ""}</span>
                <input id="model-${p}" value="${escapeHtml(models?.[p]?.model || "")}"
                       placeholder="${escapeHtml(models?.[p]?.default || "")}" autocomplete="off" spellcheck="false" />
                <button class="ghost" data-delkey="${p}">지우기</button></div>`
@@ -9148,7 +9148,7 @@ function renderKeyRows(st: any, models: any) {
       .join("") +
     (st.custom
       ? `<div class="keyrow"><span class="who">${escapeHtml(st.custom_label || "커스텀")}</span>
-           <span class="saved">${st.has_key?.custom ? copyHtml("키가 저장됐습니다.") : "키 없음"}</span>
+           <span class="saved">${st.has_key?.custom ? (keyLast4(st.last4?.custom) ? `····${escapeHtml(keyLast4(st.last4?.custom))}` : "") : "키 없음"}</span>
            <button class="ghost" data-delkey="custom">지우기</button></div>`
       : "");
 
@@ -9205,7 +9205,8 @@ async function refreshKeys(preferred = "", keepKeyCard = false, refreshRows = tr
     const keyHost = document.getElementById("ravi-key");
     if (!keepKeyCard && keyHost && aiProvider && !keyHost.hidden) closeKeyCard();
     const last4 = document.getElementById("ravi-key-last4");
-    if (last4) last4.textContent = aiProvider ? t("키가 저장됐습니다.") : "";
+    const suffix = aiProvider ? keyLast4(st.last4?.[aiProvider]) : "";
+    if (last4) last4.textContent = suffix ? `····${suffix}` : "";
     const deleteButton = document.getElementById("ravi-key-delete");
     if (deleteButton) deleteButton.hidden = !aiProvider;
 
@@ -9296,6 +9297,7 @@ async function showRate() {
 async function saveKeys() {
   const btn = $("key-save") as HTMLButtonElement;
   btn.disabled = true;
+  setCopyText($("key-note"), () => t(KEYCHAIN_SAVING));
   const warnings: string[] = [];
   try {
     const cu = ($("cu-url") as HTMLInputElement).value.trim();
@@ -9326,7 +9328,7 @@ async function saveKeys() {
     if (warnings.length) $("key-note").textContent = `키가 저장됐습니다. ${warnings.join("; ")}`;
   } catch (e) {
     await refreshKeys().catch(() => {});
-    setCopyText($("key-note"), () => `${t("키 저장에 실패했어요.")} ${t(keyStorageError(e))}`);
+    setCopyText($("key-note"), () => `${t("키 저장에 실패했어요.")} ${keyStorageError(e, t)}`);
   } finally {
     document.querySelectorAll<HTMLInputElement>('#keyrows input[type="password"], #cu-key').forEach(input => { input.value = ""; });
     btn.disabled = false;
@@ -10431,12 +10433,13 @@ async function saveKeyCard(checkOnly = false) {
     return void setCopyText(note, () => t("키 형식이 고른 회사와 맞지 않아요. 키를 발급한 회사를 다시 골라 주세요."));
   }
   btn.disabled = true;
+  setCopyText(note, () => t(KEYCHAIN_SAVING));
   try {
     try { await invoke("save_api_key", { provider, key }); }
     catch (error) {
       await refreshKeys("", true);
       note.dataset.keySaveFailed = "1";
-      setCopyText(note, () => `${t("키 저장에 실패했어요.")} ${t(keyStorageError(error))}`);
+      setCopyText(note, () => `${t("키 저장에 실패했어요.")} ${keyStorageError(error, t)}`);
       return;
     }
     input.value = "";

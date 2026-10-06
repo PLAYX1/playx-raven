@@ -3044,6 +3044,7 @@ dependencies = [
  "rand 0.8.7",
  "reqwest 0.12.28",
  "secp256k1",
+ "security-framework 3.7.0",
  "serde",
  "serde_json",
  "sha2",

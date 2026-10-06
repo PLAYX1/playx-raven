@@ -44,10 +44,94 @@ fn lock_keys() -> Result<KeyGuard, String> {
     Ok(KeyGuard { _process: process, _file: file })
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 enum StoreError {
     NoEntry,
     Unavailable,
+    AccessDenied(Option<i64>),
+    Cancelled(Option<i64>),
+    Locked(Option<i64>),
+    Duplicate(Option<i64>),
+    Other(Option<i64>),
+    Recovery { stage: &'static str, cause: Box<StoreError>, previous: Option<Box<StoreError>> },
+}
+impl StoreError {
+    fn recoverable(&self) -> bool {
+        matches!(self, Self::AccessDenied(_) | Self::Duplicate(_))
+    }
+    fn at(self, stage: &'static str, previous: Option<StoreError>) -> Self {
+        Self::Recovery { stage, cause: Box::new(self), previous: previous.map(Box::new) }
+    }
+    // Only app-owned classifications and numeric codes cross IPC. Never format
+    // keyring::Error: its payload can contain secret bytes or attributes.
+    fn diagnostic(&self, stage: &str) -> Value {
+        let (kind, code) = match self {
+            Self::NoEntry => ("no-entry", None),
+            Self::Unavailable => ("unavailable", None),
+            Self::AccessDenied(c) => ("access-denied", *c),
+            Self::Cancelled(c) => ("cancelled", *c),
+            Self::Locked(c) => ("locked", *c),
+            Self::Duplicate(c) => ("duplicate", *c),
+            Self::Other(c) => ("other", *c),
+            Self::Recovery { stage, cause, previous } => {
+                let mut value = cause.diagnostic(stage);
+                if let Some(previous) = previous { value["previous"] = previous.diagnostic("set"); }
+                return value;
+            }
+        };
+        json!({ "stage": stage, "kind": kind, "code": code })
+    }
+    fn safe_message(&self, stage: &str) -> String {
+        format!("key-store:{}", self.diagnostic(stage))
+    }
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+fn classify_keyring_error(error: keyring::Error) -> StoreError {
+    use keyring::Error;
+    match error {
+        Error::NoEntry => StoreError::NoEntry,
+        Error::Ambiguous(_) => StoreError::Duplicate(None),
+        Error::PlatformFailure(_) | Error::NoStorageAccess(_) => {
+            let (error, inaccessible) = match error {
+                Error::PlatformFailure(error) => (error, false),
+                Error::NoStorageAccess(error) => (error, true),
+                _ => unreachable!(),
+            };
+            #[cfg(target_os = "macos")]
+            if let Some(error) = error.downcast_ref::<security_framework::base::Error>() {
+                return classify_os_status(i64::from(error.code()));
+            }
+            #[cfg(target_os = "windows")]
+            if let Some(error) = error.downcast_ref::<keyring::windows::Error>() {
+                return classify_windows_status(error.0);
+            }
+            if inaccessible { StoreError::Locked(None) } else { StoreError::Other(None) }
+        }
+        _ => StoreError::Other(None),
+    }
+}
+#[cfg(any(test, target_os = "windows"))]
+fn classify_windows_status(code: u32) -> StoreError {
+    let code = i64::from(code);
+    match code {
+        5 | 1314 | 1326 => StoreError::AccessDenied(Some(code)),
+        995 | 1223 => StoreError::Cancelled(Some(code)),
+        1312 => StoreError::Locked(Some(code)),
+        52 | 183 => StoreError::Duplicate(Some(code)),
+        _ => StoreError::Other(Some(code)),
+    }
+}
+#[cfg(any(test, target_os = "macos"))]
+fn classify_os_status(code: i64) -> StoreError {
+    match code {
+        -25293 | -25243 | -25244 => StoreError::AccessDenied(Some(code)),
+        -128 => StoreError::Cancelled(Some(code)),
+        -25308 | -25315 | -25291 | -25292 | -25294 | -25295 => StoreError::Locked(Some(code)),
+        -25299 => StoreError::Duplicate(Some(code)),
+        -25300 => StoreError::NoEntry,
+        _ => StoreError::Other(Some(code)),
+    }
 }
 trait KeyStore {
     fn get(&self) -> Result<String, StoreError>;
@@ -59,10 +143,30 @@ trait KeyStore {
 static MEMORY_KEYS: std::sync::LazyLock<Mutex<std::collections::HashMap<String, String>>> =
     std::sync::LazyLock::new(|| Mutex::new(std::collections::HashMap::new()));
 #[cfg(test)]
+type StoreFaults = std::collections::HashMap<String, std::collections::VecDeque<(&'static str, StoreError)>>;
+#[cfg(test)]
+static MEMORY_FAULTS: std::sync::LazyLock<Mutex<StoreFaults>> =
+    std::sync::LazyLock::new(|| Mutex::new(std::collections::HashMap::new()));
+#[cfg(test)]
+static MEMORY_OPERATIONS: Mutex<Vec<(&'static str, String)>> = Mutex::new(Vec::new());
+#[cfg(test)]
+fn memory_operation(account: &str, operation: &'static str) -> Result<(), StoreError> {
+    // Test evidence records operation/account only, never password arguments.
+    MEMORY_OPERATIONS.lock().unwrap().push((operation, account.into()));
+    let mut faults = MEMORY_FAULTS.lock().unwrap();
+    if let Some(queue) = faults.get_mut(account) {
+        if queue.front().is_some_and(|(op, _)| *op == operation) {
+            return Err(queue.pop_front().unwrap().1);
+        }
+    }
+    Ok(())
+}
+#[cfg(test)]
 struct MemoryStore(String);
 #[cfg(test)]
 impl KeyStore for MemoryStore {
     fn get(&self) -> Result<String, StoreError> {
+        memory_operation(&self.0, "get")?;
         MEMORY_KEYS
             .lock()
             .map_err(|_| StoreError::Unavailable)?
@@ -71,6 +175,7 @@ impl KeyStore for MemoryStore {
             .ok_or(StoreError::NoEntry)
     }
     fn set(&self, key: &str) -> Result<(), StoreError> {
+        memory_operation(&self.0, "set")?;
         MEMORY_KEYS
             .lock()
             .map_err(|_| StoreError::Unavailable)?
@@ -78,6 +183,7 @@ impl KeyStore for MemoryStore {
         Ok(())
     }
     fn delete(&self) -> Result<(), StoreError> {
+        memory_operation(&self.0, "delete")?;
         MEMORY_KEYS
             .lock()
             .map_err(|_| StoreError::Unavailable)?
@@ -92,27 +198,15 @@ struct OsStore(keyring::Entry);
 #[cfg(all(not(test), any(target_os = "macos", target_os = "windows")))]
 impl KeyStore for OsStore {
     fn get(&self) -> Result<String, StoreError> {
-        self.0.get_password().map_err(|e| {
-            if matches!(e, keyring::Error::NoEntry) {
-                StoreError::NoEntry
-            } else {
-                StoreError::Unavailable
-            }
-        })
+        self.0.get_password().map_err(classify_keyring_error)
     }
     fn set(&self, key: &str) -> Result<(), StoreError> {
         self.0
             .set_password(key)
-            .map_err(|_| StoreError::Unavailable)
+            .map_err(classify_keyring_error)
     }
     fn delete(&self) -> Result<(), StoreError> {
-        self.0.delete_credential().map_err(|e| {
-            if matches!(e, keyring::Error::NoEntry) {
-                StoreError::NoEntry
-            } else {
-                StoreError::Unavailable
-            }
-        })
+        self.0.delete_credential().map_err(classify_keyring_error)
     }
 }
 
@@ -158,7 +252,7 @@ fn absolute_data_dir_at(path: PathBuf, cwd: &std::path::Path) -> PathBuf {
         }
     })
 }
-fn store(provider: &str) -> Result<Box<dyn KeyStore>, String> {
+fn account_store(provider: &str) -> Result<Box<dyn KeyStore>, StoreError> {
     #[cfg(test)]
     {
         return Ok(Box::new(MemoryStore(format!(
@@ -170,12 +264,95 @@ fn store(provider: &str) -> Result<Box<dyn KeyStore>, String> {
     {
         return keyring::Entry::new(&service_name(), provider)
             .map(|e| Box::new(OsStore(e)) as Box<dyn KeyStore>)
-            .map_err(|_| "OS 보안 저장소를 열지 못했습니다.".into());
+            .map_err(classify_keyring_error);
     }
     #[cfg(all(not(test), not(any(target_os = "macos", target_os = "windows"))))]
     {
         Ok(Box::new(FileStore(key_path(provider))))
     }
+}
+
+// The marker contains only a high-water generation number, never a key or
+// suffix. Reserve it BEFORE creating a credential so a crash cannot leave an
+// undiscoverable new key. Existing account names remain compatible.
+#[cfg(any(test, target_os = "macos", target_os = "windows"))]
+struct GenerationStore { provider: String }
+#[cfg(any(test, target_os = "macos", target_os = "windows"))]
+impl GenerationStore {
+    fn marker(&self) -> PathBuf { config_dir().join(format!("{}.generation", self.provider)) }
+    fn generation(&self) -> Result<u32, StoreError> {
+        match std::fs::read_to_string(self.marker()) {
+            Ok(value) => value.trim().parse::<u32>().ok().filter(|n| (1..=1024).contains(n))
+                .ok_or_else(|| StoreError::Other(None).at("generation-metadata", None)),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(1),
+            Err(_) => Err(StoreError::Unavailable.at("generation-metadata", None)),
+        }
+    }
+    fn account(&self, generation: u32) -> String {
+        if generation == 1 { self.provider.clone() } else { format!("{}.{generation}", self.provider) }
+    }
+    fn open(&self, generation: u32) -> Result<Box<dyn KeyStore>, StoreError> {
+        account_store(&self.account(generation)).map_err(|e| e.at("open", None))
+    }
+    fn next_generation(&self, generation: u32, key: &str, previous: StoreError) -> Result<(), StoreError> {
+        if generation >= 1024 {
+            return Err(StoreError::Duplicate(None).at("generation-limit", Some(previous)));
+        }
+        write_private(&self.marker(), (generation + 1).to_string().as_bytes())
+            .map_err(|_| StoreError::Unavailable.at("generation-metadata", Some(previous.clone())))?;
+        self.open(generation + 1)?.set(key)
+            .map_err(|e| e.at("generation-set", Some(previous)))
+    }
+}
+#[cfg(any(test, target_os = "macos", target_os = "windows"))]
+impl KeyStore for GenerationStore {
+    fn get(&self) -> Result<String, StoreError> {
+        for generation in (1..=self.generation()?).rev() {
+            match self.open(generation)?.get() {
+                Ok(key) => return Ok(key),
+                Err(StoreError::NoEntry) => continue,
+                // Never silently use an older key when the newest is locked.
+                Err(e) => return Err(e.at("get", None)),
+            }
+        }
+        Err(StoreError::NoEntry)
+    }
+    fn set(&self, key: &str) -> Result<(), StoreError> {
+        let generation = self.generation()?;
+        let current = self.open(generation)?;
+        let initial = match current.set(key) {
+            Ok(()) => return Ok(()),
+            Err(e) if e.recoverable() => e,
+            Err(e) => return Err(e.at("set", None)),
+        };
+        match current.delete() {
+            Ok(()) | Err(StoreError::NoEntry) => {
+                match current.set(key) { // Exactly one retry of this account.
+                    Ok(()) => Ok(()),
+                    Err(e) if e.recoverable() => self.next_generation(generation, key, e.at("retry-set", Some(initial))),
+                    Err(e) => Err(e.at("retry-set", Some(initial))),
+                }
+            }
+            Err(e) if matches!(e, StoreError::Cancelled(_) | StoreError::Locked(_)) =>
+                Err(e.at("recovery-delete", Some(initial))),
+            // Ownership may prevent deletion as well as update. Leave the old
+            // item alone from here on and create an independent account.
+            Err(e) => self.next_generation(generation, key, e.at("recovery-delete", Some(initial))),
+        }
+    }
+    fn delete(&self) -> Result<(), StoreError> {
+        // The provider tombstone blocks older generations from resurfacing.
+        // Do not prompt again for inaccessible credentials owned by old apps.
+        self.open(self.generation()?)?.delete().map_err(|e| {
+            if e == StoreError::NoEntry { e } else { e.at("delete", None) }
+        })
+    }
+}
+fn store(provider: &str) -> Result<Box<dyn KeyStore>, String> {
+    #[cfg(any(test, target_os = "macos", target_os = "windows"))]
+    { Ok(Box::new(GenerationStore { provider: provider.into() })) }
+    #[cfg(all(not(test), not(any(target_os = "macos", target_os = "windows"))))]
+    { account_store(provider).map_err(|e| e.safe_message("open")) }
 }
 
 fn remove_key(path: &std::path::Path) -> Result<(), String> {
@@ -233,7 +410,7 @@ fn redact_value(value: &mut Value, key: &str) {
 }
 
 fn last4(key: &str) -> String {
-    if key.chars().count() < 16 {
+    if key.chars().count() < 4 {
         return String::new();
     }
     key.chars()
@@ -279,7 +456,7 @@ fn key_provider_mismatch(provider: &str, key: &str) -> bool {
 }
 
 fn save_key_to_store(store: &dyn KeyStore, key: &str) -> Result<(), String> {
-    store.set(key).map_err(|_| "API 키를 보안 저장소에 저장하지 못했습니다.".to_string())
+    store.set(key).map_err(|e| e.safe_message("set"))
 }
 
 fn save_key_locked(provider: &str, key: &str) -> Result<Option<String>, String> {
@@ -345,13 +522,13 @@ fn delete_key_locked(provider: &str) -> Result<(), String> {
     delete_key_with_store_locked(provider, &*s)
 }
 fn delete_key_with_store_locked(provider: &str, s: &dyn KeyStore) -> Result<(), String> {
+    // A durable tombstone must precede deletion: otherwise an older generation
+    // could reappear if writing metadata fails after deleting the newest key.
+    write_private(&deleted_path(provider), b"deleted")?;
     let mut errors = Vec::new();
-    if let Err(e) = write_private(&deleted_path(provider), b"deleted") {
-        errors.push(e);
-    }
     if let Err(e) = s.delete() {
         if e != StoreError::NoEntry {
-            errors.push("보안 저장소의 키를 지우지 못했습니다.".into());
+            errors.push(e.safe_message("delete"));
         }
     }
     for path in [last4_path(provider), key_path(provider)] {
@@ -403,9 +580,7 @@ fn migrate_locked(provider: &str, s: &dyn KeyStore) -> Result<Option<String>, St
     let stored = match existing {
         Ok(key) => Some(key),
         Err(StoreError::NoEntry) => None,
-        Err(StoreError::Unavailable) => {
-            return Err("보안 저장소를 읽지 못했습니다. 옛 키 파일은 유지합니다.".into())
-        }
+        Err(e) => return Err(e.safe_message("get")),
     };
     if !path.exists() {
         remove_key(&last4_path(provider))?;
@@ -479,7 +654,7 @@ fn read_key_locked(provider: &str) -> Result<String, String> {
             Ok(None) => {}
         }
     }
-    s.get().map_err(|_| MISSING_KEY.into())
+    s.get().map_err(|e| if e == StoreError::NoEntry { MISSING_KEY.into() } else { e.safe_message("get") })
 }
 #[cfg(any(test, target_os = "macos", target_os = "windows"))]
 fn legacy_fallback(provider: &str) -> Option<String> {
@@ -494,32 +669,39 @@ fn read_key(provider: &str) -> Result<String, String> {
     read_key_locked(provider)
 }
 
+#[cfg(test)]
 fn key_status_locked(provider: &str) -> (bool, String) {
+    key_status_with_error_locked(provider).unwrap_or_default()
+}
+fn key_status_with_error_locked(provider: &str) -> Result<(bool, String), String> {
     if deleted_path(provider).exists() {
         let _ = remove_legacy_key(&key_path(provider));
         let _ = remove_key(&last4_path(provider));
-        return (false, String::new());
+        return Ok((false, String::new()));
     }
-    let key = store(provider)
-        .and_then(|s| {
-            #[cfg(any(test, target_os = "macos", target_os = "windows"))]
-            { Ok(migrate_locked(provider, &*s).ok().flatten()
-                .or_else(|| s.get().ok())
-                .or_else(|| legacy_fallback(provider))) }
-            #[cfg(all(not(test), not(any(target_os = "macos", target_os = "windows"))))]
-            { s.get().map(Some).map_err(|_| MISSING_KEY.to_string()) }
-        })
-        .ok();
-    let key = key.flatten();
+    let s = store(provider)?;
+    #[cfg(any(test, target_os = "macos", target_os = "windows"))]
+    let key = match migrate_locked(provider, &*s) {
+        Ok(key) => key,
+        Err(error) => match s.get() {
+            Ok(key) => Some(key),
+            Err(_) => match legacy_fallback(provider) {
+                Some(key) => Some(key),
+                None => return Err(error),
+            },
+        },
+    };
+    #[cfg(all(not(test), not(any(target_os = "macos", target_os = "windows"))))]
+    let key = match s.get() {
+        Ok(key) => Some(key),
+        Err(StoreError::NoEntry) => None,
+        Err(e) => return Err(e.safe_message("get")),
+    };
     let has = key.as_ref().is_some_and(|k| !k.is_empty());
     let suffix = key.as_deref().map(last4).unwrap_or_default();
-    // Clean unsafe metadata left by old versions; never use it as evidence of a key.
-    if let Ok(old) = std::fs::read_to_string(last4_path(provider)) {
-        if old.chars().count() <= 4 || key.is_none() || key.as_ref().is_some_and(|k| k.chars().count() < 16) {
-            let _ = remove_key(&last4_path(provider));
-        }
-    }
-    (has, suffix)
+    // Never persist the suffix; clear metadata written by older versions.
+    let _ = remove_key(&last4_path(provider));
+    Ok((has, suffix))
 }
 
 fn custom_request_settings() -> Result<(String, String, String), String> {
@@ -1026,7 +1208,7 @@ pub fn save_model(provider: String, model: String) -> Result<(), String> {
 }
 
 /// Forgets a stored key and any legacy copies.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn delete_api_key(provider: String) -> Result<(), String> {
     if !known(&provider) {
         return Err("알 수 없는 제공자입니다.".into());
@@ -1048,7 +1230,7 @@ pub fn delete_api_key(provider: String) -> Result<(), String> {
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn save_api_key(provider: String, key: String) -> Result<Value, String> {
     if !known(&provider) {
         return Err("알 수 없는 제공자입니다.".into());
@@ -1066,16 +1248,20 @@ pub fn save_api_key(provider: String, key: String) -> Result<Value, String> {
     Ok(json!({ "warning": save_key_locked(&provider, &key)? }))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn api_key_status() -> Value {
     let guard = lock_keys();
     let mut suffixes = serde_json::Map::new();
     let mut present = serde_json::Map::new();
     let mut available = serde_json::Map::new();
     let mut configuration = serde_json::Map::new();
+    let mut storage_errors = serde_json::Map::new();
     let custom = if guard.is_ok() { custom_config() } else { None };
     for provider in ["anthropic", "openai", "google", "groq", "xai", "custom"] {
-        let (has, suffix) = if guard.is_ok() { key_status_locked(provider) } else { (false, String::new()) };
+        let status = if guard.is_ok() { key_status_with_error_locked(provider) }
+            else { Err(StoreError::Unavailable.safe_message("get")) };
+        if let Err(error) = &status { storage_errors.insert(provider.into(), json!(error)); }
+        let (has, suffix) = status.unwrap_or_default();
         present.insert(provider.into(), json!(has));
         suffixes.insert(provider.into(), json!(suffix));
         configuration.insert(provider.into(), json!(if provider == "custom" { custom.is_some() } else { has }));
@@ -1100,6 +1286,7 @@ pub fn api_key_status() -> Value {
         "custom_label": custom.map(|c| c.0).unwrap_or_default(),
         "last4": suffixes,
         "warning": warning,
+        "storage_errors": storage_errors,
     })
 }
 
@@ -1289,7 +1476,7 @@ fn custom_config() -> Option<(String, String, String)> {
 }
 
 /// Saves a custom OpenAI-compatible endpoint.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn save_custom_provider(
     label: String,
     base_url: String,
@@ -1378,12 +1565,213 @@ mod key_security_tests {
     }
     const OLD: &str = "synthetic-legacy-key-1234";
 
+    fn faults(account: &str, failures: Vec<(&'static str, StoreError)>) {
+        MEMORY_FAULTS.lock().unwrap().insert(format!("{}:{account}", service_name()), failures.into());
+    }
+    fn operations() -> Vec<(String, String)> {
+        let prefix = format!("{}:", service_name());
+        MEMORY_OPERATIONS.lock().unwrap().iter().filter_map(|(op, account)|
+            account.strip_prefix(&prefix).map(|account| (op.to_string(), account.to_string()))).collect()
+    }
+
+    #[test]
+    fn recoverable_save_deletes_and_retries_exactly_once() {
+        for failure in [StoreError::AccessDenied(Some(-25293)), StoreError::AccessDenied(Some(-25244)), StoreError::Duplicate(Some(-25299))] {
+            home("recoverable", || {
+                account_store("google").unwrap().set(OLD).unwrap();
+                MEMORY_OPERATIONS.lock().unwrap().clear();
+                faults("google", vec![("set", failure)]);
+                save_api_key("google".into(), "synthetic-new-key-5678".into()).unwrap();
+                assert_eq!(operations(), [("set".into(), "google".into()), ("delete".into(), "google".into()), ("set".into(), "google".into())]);
+                assert!(!config_dir().join("google.generation").exists());
+                assert!(read_key("google").unwrap() == "synthetic-new-key-5678");
+                assert_eq!(api_key_status()["last4"]["google"], "5678");
+                assert!(!key_path("google").exists());
+            });
+        }
+    }
+
+    #[test]
+    fn refused_deletion_uses_latest_generation_through_restart_replace_and_delete() {
+        home("generations", || {
+            account_store("google").unwrap().set(OLD).unwrap();
+            // The original account remains readable for backwards compatibility.
+            assert!(read_key("google").unwrap() == OLD);
+            MEMORY_OPERATIONS.lock().unwrap().clear();
+            faults("google", vec![("set", StoreError::AccessDenied(Some(-25293))), ("delete", StoreError::AccessDenied(Some(-25244)))]);
+            save_api_key("google".into(), "synthetic-generation-key-AB12".into()).unwrap();
+            assert_eq!(operations(), [("set".into(), "google".into()), ("delete".into(), "google".into()), ("set".into(), "google.2".into())]);
+            assert_eq!(std::fs::read_to_string(config_dir().join("google.generation")).unwrap(), "2");
+            assert!(account_store("google").unwrap().get().unwrap() == OLD);
+            MEMORY_OPERATIONS.lock().unwrap().clear();
+            // Fresh store objects derive the account from disk, as on restart.
+            assert!(store("google").unwrap().get().unwrap() == "synthetic-generation-key-AB12");
+            assert_eq!(api_key_status()["last4"]["google"], "AB12");
+            save_api_key("google".into(), "synthetic-replacement-key-CD34".into()).unwrap();
+            assert!(read_key("google").unwrap() == "synthetic-replacement-key-CD34");
+            assert_eq!(api_key_status()["last4"]["google"], "CD34");
+            delete_api_key("google".into()).unwrap();
+            assert!(read_key("google").is_err());
+            assert_eq!(api_key_status()["available"]["google"], false);
+            assert_eq!(api_key_status()["last4"]["google"], "");
+            assert!(operations().iter().filter(|(_, account)| account.starts_with("google")).all(|(_, account)| account == "google.2"), "old account is never touched again");
+            save_api_key("google".into(), "synthetic-after-delete-EF56".into()).unwrap();
+            assert_eq!(api_key_status()["last4"]["google"], "EF56");
+            assert!(account_store("google").unwrap().get().unwrap() == OLD);
+            assert!(!key_path("google").exists());
+        });
+    }
+
+    #[test]
+    fn cancelled_locked_and_other_errors_do_not_delete_or_create_accounts() {
+        for failure in [StoreError::Cancelled(Some(-128)), StoreError::Locked(Some(-25308)), StoreError::Other(Some(-999)), StoreError::Unavailable] {
+            home("nonrecoverable", || {
+                account_store("google").unwrap().set(OLD).unwrap();
+                MEMORY_OPERATIONS.lock().unwrap().clear();
+                faults("google", vec![("set", failure.clone())]);
+                let error = save_api_key("google".into(), "synthetic-new-key-5678".into()).unwrap_err();
+                assert_eq!(error, failure.safe_message("set"));
+                assert_eq!(operations(), [("set".into(), "google".into())]);
+                assert!(!error.contains(OLD) && !error.contains("synthetic"));
+                assert!(read_key("google").unwrap() == OLD);
+            });
+        }
+    }
+
+    #[test]
+    fn recovery_failures_preserve_safe_step_classifications() {
+        for (operation, failure, stage) in [
+            ("delete", StoreError::Cancelled(Some(-128)), "recovery-delete"),
+            ("delete", StoreError::Locked(Some(-25308)), "recovery-delete"),
+            ("set", StoreError::Other(Some(-999)), "retry-set"),
+        ] {
+            home("recovery-failure", || {
+                let mut queue = vec![("set", StoreError::AccessDenied(Some(-25293)))];
+                queue.push((operation, failure.clone()));
+                faults("google", queue);
+                let error = save_api_key("google".into(), OLD.into()).unwrap_err();
+                let expected = failure.at(stage, Some(StoreError::AccessDenied(Some(-25293)))).safe_message("set");
+                assert_eq!(error, expected);
+                assert!(!error.contains(OLD));
+                assert!(!config_dir().join("google.generation").exists());
+            });
+        }
+        home("generation-failure", || {
+            faults("google", vec![("set", StoreError::Duplicate(Some(-25299))), ("delete", StoreError::AccessDenied(Some(-25244)))]);
+            faults("google.2", vec![("set", StoreError::Locked(Some(-25308)))]);
+            let error = save_api_key("google".into(), OLD.into()).unwrap_err();
+            let value: Value = serde_json::from_str(error.strip_prefix("key-store:").unwrap()).unwrap();
+            assert_eq!(value["stage"], "generation-set");
+            assert_eq!(value["kind"], "locked");
+            assert_eq!(value["code"], -25308);
+            assert_eq!(value["previous"]["stage"], "recovery-delete");
+            assert_eq!(value["previous"]["previous"]["kind"], "duplicate");
+            assert!(!error.contains(OLD));
+            assert!(!key_path("google").exists());
+        });
+        home("retry-generation", || {
+            faults("google", vec![("set", StoreError::Duplicate(None)), ("set", StoreError::Duplicate(None))]);
+            save_api_key("google".into(), OLD.into()).unwrap();
+            assert!(store("google").unwrap().get().unwrap() == OLD);
+            assert_eq!(std::fs::read_to_string(config_dir().join("google.generation")).unwrap(), "2");
+        });
+    }
+
+    #[test]
+    fn generation_metadata_crash_reservation_and_corruption_fail_safely() {
+        home("generation-marker", || {
+            account_store("google").unwrap().set(OLD).unwrap();
+            // Simulate a crash after reservation but before the new OS item.
+            write_private(&config_dir().join("google.generation"), b"2").unwrap();
+            assert!(read_key("google").unwrap() == OLD);
+            save_api_key("google".into(), "synthetic-new-key-5678".into()).unwrap();
+            assert_eq!(api_key_status()["last4"]["google"], "5678");
+            write_private(&config_dir().join("google.generation"), b"invalid").unwrap();
+            let error = save_api_key("google".into(), OLD.into()).unwrap_err();
+            assert!(error.contains("generation-metadata"));
+            assert!(!error.contains(OLD));
+            assert_eq!(api_key_status()["available"]["google"], false);
+            assert!(api_key_status()["storage_errors"]["google"].as_str().unwrap().contains("generation-metadata"));
+        });
+    }
+
+    #[test]
+    fn generations_continue_and_latest_read_delete_errors_keep_their_classification() {
+        home("latest-errors", || {
+            account_store("google").unwrap().set(OLD).unwrap();
+            write_private(&config_dir().join("google.generation"), b"2").unwrap();
+            account_store("google.2").unwrap().set("synthetic-second-key-AB12").unwrap();
+            faults("google.2", vec![("set", StoreError::AccessDenied(Some(-25293))), ("delete", StoreError::AccessDenied(Some(-25244)))]);
+            save_api_key("google".into(), "synthetic-third-key-CD34".into()).unwrap();
+            assert_eq!(std::fs::read_to_string(config_dir().join("google.generation")).unwrap(), "3");
+            assert_eq!(api_key_status()["last4"]["google"], "CD34");
+            faults("google.3", vec![("get", StoreError::Locked(Some(-25308)))]);
+            let error = store("google").unwrap().get().unwrap_err();
+            assert_eq!(error.safe_message("get"), StoreError::Locked(Some(-25308)).at("get", None).safe_message("get"));
+            // Both migration and its compatibility read fail; status must not
+            // fall back to a stale credential in .2 or the original account.
+            faults("google.3", vec![("get", StoreError::AccessDenied(Some(-25293))), ("get", StoreError::AccessDenied(Some(-25293)))]);
+            let status = api_key_status();
+            assert_eq!(status["available"]["google"], false);
+            assert_eq!(status["last4"]["google"], "");
+            assert!(status["storage_errors"]["google"].as_str().unwrap().contains("access-denied"));
+            assert!(!status.to_string().contains("synthetic"));
+            faults("google.3", vec![("delete", StoreError::Cancelled(Some(-128)))]);
+            let error = delete_api_key("google".into()).unwrap_err();
+            assert!(error.contains("cancelled") && error.contains("delete") && !error.contains("synthetic"));
+            assert!(deleted_path("google").exists());
+            assert_eq!(api_key_status()["available"]["google"], false);
+            delete_api_key("google".into()).unwrap();
+        });
+        home("generation-limit", || {
+            write_private(&config_dir().join("google.generation"), b"1024").unwrap();
+            faults("google.1024", vec![("set", StoreError::Duplicate(None)), ("delete", StoreError::AccessDenied(None))]);
+            let error = save_api_key("google".into(), OLD.into()).unwrap_err();
+            assert!(error.contains("generation-limit") && !error.contains(OLD));
+            assert!(!key_path("google").exists());
+        });
+        home("delete-metadata-failure", || {
+            account_store("google").unwrap().set(OLD).unwrap();
+            write_private(&config_dir().join("google.generation"), b"2").unwrap();
+            account_store("google.2").unwrap().set("synthetic-latest-key-AB12").unwrap();
+            std::fs::create_dir(deleted_path("google")).unwrap();
+            MEMORY_OPERATIONS.lock().unwrap().clear();
+            assert!(delete_api_key("google".into()).is_err());
+            assert!(operations().is_empty(), "no credential is deleted without a durable tombstone");
+            std::fs::remove_dir(deleted_path("google")).unwrap();
+            assert!(read_key("google").unwrap() == "synthetic-latest-key-AB12");
+        });
+    }
+
+    #[test]
+    fn os_status_mapping_and_keyring_payloads_never_escape() {
+        for code in [5, 1314, 1326] { assert_eq!(classify_windows_status(code), StoreError::AccessDenied(Some(i64::from(code)))); }
+        assert_eq!(classify_windows_status(1223), StoreError::Cancelled(Some(1223)));
+        assert_eq!(classify_windows_status(1312), StoreError::Locked(Some(1312)));
+        assert_eq!(classify_windows_status(183), StoreError::Duplicate(Some(183)));
+        assert_eq!(classify_os_status(-25293), StoreError::AccessDenied(Some(-25293)));
+        assert_eq!(classify_os_status(-25244), StoreError::AccessDenied(Some(-25244)));
+        assert_eq!(classify_os_status(-25308), StoreError::Locked(Some(-25308)));
+        assert_eq!(classify_os_status(-128), StoreError::Cancelled(Some(-128)));
+        assert_eq!(classify_os_status(-25299), StoreError::Duplicate(Some(-25299)));
+        assert_eq!(classify_os_status(-98765), StoreError::Other(Some(-98765)));
+        #[cfg(any(target_os = "macos", target_os = "windows"))]
+        for error in [keyring::Error::BadEncoding(OLD.as_bytes().to_vec()), keyring::Error::Invalid(OLD.into(), OLD.into()), keyring::Error::TooLong(OLD.into(), 4096), keyring::Error::Ambiguous(Vec::new())] {
+            assert!(!classify_keyring_error(error).safe_message("set").contains(OLD));
+        }
+        #[cfg(target_os = "macos")]
+        for code in [-25293, -25308, -128, -25299, -25244] {
+            let native = security_framework::base::Error::from_code(code);
+            assert_eq!(classify_keyring_error(keyring::Error::PlatformFailure(Box::new(native))), classify_os_status(i64::from(code)));
+        }
+    }
+
     #[test]
     fn failed_secure_store_save_returns_only_the_existing_safe_reason() {
         let mut store = ScenarioStore::new(None);
         store.fail_set = true;
         let error = save_key_to_store(&store, "synthetic-fixture-key").unwrap_err();
-        assert_eq!(error, "API 키를 보안 저장소에 저장하지 못했습니다.");
+        assert_eq!(error, StoreError::Unavailable.safe_message("set"));
         assert!(!error.contains("fixture"));
         assert!(store.value.lock().unwrap().is_none());
     }
@@ -1416,15 +1804,49 @@ mod key_security_tests {
         home("short", || {
             assert_eq!(save_api_key("openai".into(), "abcd".into()).unwrap_err(), "키가 너무 짧아요");
             assert!(store("openai").unwrap().get().is_err());
-            assert_eq!(last4("abcd"), "");
+            assert_eq!(last4("abc"), "");
+            assert_eq!(last4("abcd"), "abcd");
             store("openai").unwrap().set("abcd").unwrap();
             write_private(&last4_path("openai"), b"abcd").unwrap();
             let status = api_key_status();
             assert_eq!(status["has_key"]["openai"], true);
-            assert_eq!(status["last4"]["openai"], "");
+            assert_eq!(status["last4"]["openai"], "abcd");
             assert!(!last4_path("openai").exists());
             save_api_key("openai".into(), "1234567890123456".into()).unwrap();
             assert_eq!(api_key_status()["last4"]["openai"], "3456");
+        });
+    }
+
+    #[test]
+    fn key_status_returns_only_four_character_suffix_after_save_reload_and_replace() {
+        home("suffix-lifecycle", || {
+            for key in ["synthetic-first-key-AB12", "synthetic-replaced-key-CD34"] {
+                save_api_key("openai".into(), key.into()).unwrap();
+                let expected = last4(key);
+                assert_eq!(expected.chars().count(), 4);
+                assert_eq!(key_status_locked("openai"), (true, expected.clone()));
+                // Status rereads the secure store; stale suffix files cannot override it.
+                write_private(&last4_path("openai"), b"stale-fragment-too-long").unwrap();
+                for _ in 0..2 {
+                    let status = api_key_status();
+                    assert_eq!(status["last4"]["openai"], expected);
+                    assert!(!status.to_string().contains(key));
+                    assert!(!status.to_string().contains("stale-fragment"));
+                    for suffix in status["last4"].as_object().unwrap().values() {
+                        let count = suffix.as_str().unwrap().chars().count();
+                        assert!(count == 0 || count == 4);
+                    }
+                }
+            }
+            for key in ["", "a", "ab", "abc", "abcd", "abcde", "앞중간끝😀한글末"] {
+                store("openai").unwrap().set(key).unwrap();
+                let expected = if key.chars().count() < 4 { String::new() }
+                    else { key.chars().skip(key.chars().count() - 4).collect() };
+                assert_eq!(key_status_locked("openai"), (!key.is_empty(), expected.clone()));
+                assert_eq!(api_key_status()["last4"]["openai"], expected);
+            }
+            delete_api_key("openai".into()).unwrap();
+            assert_eq!(api_key_status()["last4"]["openai"], "");
         });
     }
 

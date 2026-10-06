@@ -96,3 +96,7 @@ windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Storage
 # 리눅스는 CI 에 dbus 가 없어 기존 0600 파일을 그대로 쓴다(ai.rs cfg).
 [target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
 keyring = { version = "3", features = ["apple-native", "windows-native"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# Downcast keyring's native error to OSStatus without formatting its message.
+security-framework = "3"

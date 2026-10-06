@@ -1,3 +1,8 @@
+/** Only the four-character suffix supplied by api_key_status may be displayed. */
+export function keyLast4(value: unknown): string {
+  return typeof value === "string" && Array.from(value).length === 4 ? value : "";
+}
+
 /** Paste cleanup and safe IPC error copy. Never render arbitrary provider errors. */
 export function normalizeApiKey(value: string): string {
   let key = value.replace(/[\r\n]/g, "").trim();
@@ -38,8 +43,42 @@ const storageErrors = new Set([
   "API 키를 줄바꿈 없이 다시 입력하세요.", "키가 비어 있어요", "키가 너무 짧아요",
   "키 형식이 고른 회사와 맞지 않아요. 키를 발급한 회사를 다시 골라 주세요.",
 ]);
-export function keyStorageError(error: unknown): string {
-  return typeof error === "string" && storageErrors.has(error) ? error : "키를 저장하지 못했어요. OS 보안 저장소 권한과 설정 폴더를 확인해 주세요.";
+export const KEYCHAIN_SAVING = "저장 중… 맥이 키체인 접근 허용을 물을 수 있어요 — 「항상 허용」을 눌러 주세요";
+export const KEYCHAIN_LEGACY_HELP = "이 컴퓨터의 키체인에 이전 버전이 만든 항목이 있어 새 키를 저장하지 못했어요. 키체인 접근 앱에서 'se.erci.ravenvault.desktop.ai' 를 검색해 지운 뒤 다시 넣어 주세요.";
+const storageStages: Record<string, string> = {
+  open: "저장소 열기", get: "키 읽기", set: "키 저장", delete: "키 삭제",
+  "recovery-delete": "복구 삭제", "retry-set": "다시 저장", "generation-set": "새 계정 저장",
+  "generation-metadata": "세대 정보 저장", "generation-limit": "세대 한도",
+};
+const storageKinds: Record<string, string> = {
+  "access-denied": "접근 거부 또는 ACL 불일치", cancelled: "사용자 취소", locked: "키체인 잠김 또는 상호작용 불가",
+  duplicate: "중복 항목", "no-entry": "항목 없음", unavailable: "저장소 사용 불가", other: "기타 저장소 오류",
+};
+function storageDiagnostic(error: unknown): { stage: string; kind: string; previous?: unknown } | null {
+  if (typeof error !== "string" || !error.startsWith("key-store:") || error.length > 2048) return null;
+  try {
+    const value = JSON.parse(error.slice(10));
+    return value && Object.prototype.hasOwnProperty.call(storageStages, value.stage)
+      && Object.prototype.hasOwnProperty.call(storageKinds, value.kind) ? value : null;
+  } catch { return null; }
+}
+function ownershipFailure(value: unknown, depth = 0): boolean {
+  if (!value || typeof value !== "object" || depth > 4) return false;
+  const diagnostic = value as { kind?: unknown; previous?: unknown };
+  return diagnostic.kind === "access-denied" || diagnostic.kind === "duplicate"
+    || ownershipFailure(diagnostic.previous, depth + 1);
+}
+export function keyStorageError(error: unknown, translate: (text: string) => string = text => text): string {
+  const diagnostic = storageDiagnostic(error);
+  if (diagnostic) {
+    const help = ownershipFailure(diagnostic) ? KEYCHAIN_LEGACY_HELP
+      : diagnostic.kind === "cancelled" ? "키체인 접근을 취소했어요. 다시 저장하고 접근을 허용해 주세요."
+      : diagnostic.kind === "locked" ? "키체인이 잠겨 있거나 접근을 물을 수 없어요. 키체인 잠금을 풀고 다시 저장해 주세요."
+      : "키를 저장하지 못했어요. OS 보안 저장소 권한과 설정 폴더를 확인해 주세요.";
+    // Translate fixed phrases separately; never interpolate IPC data or codes.
+    return `${translate(help)} (${translate(storageStages[diagnostic.stage])}: ${translate(storageKinds[diagnostic.kind])})`;
+  }
+  return translate(typeof error === "string" && storageErrors.has(error) ? error : "키를 저장하지 못했어요. OS 보안 저장소 권한과 설정 폴더를 확인해 주세요.");
 }
 
 export type SafeConnectionError = { kind: string; status?: number };

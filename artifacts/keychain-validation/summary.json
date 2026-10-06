@@ -1,0 +1,80 @@
+{
+  "base": "06a345763e46745563970f5080616819b18c9ada",
+  "original_index_sha256": "1ddbab9e90cf5c421d19f0128aea0931a631cec5b3f4581ce42bc6009411a28b",
+  "key_tests": {
+    "passed": 25,
+    "failed": 0
+  },
+  "build": "passed",
+  "ai_safety": "passed",
+  "ravi_checks": [
+    {
+      "script": "scripts/check-ravi-key.mjs",
+      "exit_code": 0
+    },
+    {
+      "script": "scripts/check-ravi-panel-browser.mjs",
+      "exit_code": 1
+    },
+    {
+      "script": "scripts/check-ravi-panel.mjs",
+      "exit_code": 0
+    },
+    {
+      "script": "scripts/check-ravi-promo-browser.mjs",
+      "exit_code": 1
+    },
+    {
+      "script": "scripts/check-ravi-promo-card.mjs",
+      "exit_code": 0
+    },
+    {
+      "script": "scripts/check-ravi-promo.mjs",
+      "exit_code": 0
+    },
+    {
+      "script": "scripts/check-ravi-similarity.mjs",
+      "exit_code": 0
+    },
+    {
+      "script": "scripts/check-ravi-state.mjs",
+      "exit_code": 0
+    },
+    {
+      "script": "scripts/check-ravi-understanding-browser.mjs",
+      "exit_code": 1
+    },
+    {
+      "script": "scripts/check-ravi-understanding.mjs",
+      "exit_code": 0
+    },
+    {
+      "script": "scripts/check-ravi-understanding2.mjs",
+      "exit_code": 0
+    },
+    {
+      "script": "scripts/check-ravi-understanding3.mjs",
+      "exit_code": 0
+    },
+    {
+      "script": "scripts/check-ravi-understanding5.mjs",
+      "exit_code": 0
+    }
+  ],
+  "real_ai_calls": false,
+  "real_native_keystore_tests": false,
+  "cargo_requested_path": {
+    "command": "RV_BACKUP_FIXTURE_ROOT=$HOME/rv-test-fixture cargo test --manifest-path src-tauri/Cargo.toml",
+    "passed": 526,
+    "failed": 211,
+    "ignored": 13,
+    "limitation": "샌드박스의 fixture 폴더 쓰기 거부 포함"
+  },
+  "cargo_writable_fixture": {
+    "command": "RV_BACKUP_FIXTURE_ROOT=/tmp/rv-keychain-fixture cargo test --offline --manifest-path src-tauri/Cargo.toml",
+    "passed": 730,
+    "failed": 7,
+    "ignored": 13,
+    "limitation": "루프백 포트 바인딩 Operation not permitted"
+  }
+}
