@@ -64,6 +64,7 @@ try {
       },transformCallback:f=>f,metadata:{}};
     },saved,qr,qrMap);
     await page.goto(origin,{waitUntil:'networkidle0'});
+    await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-ravi-arriving'));
     await page.addStyleTag({content:'#onboard,#hello{display:none!important}'});
     await page.click('#ravi-open');
     await page.type('#chat-q','오늘 특가 알려 줘'); await page.keyboard.press('Enter');

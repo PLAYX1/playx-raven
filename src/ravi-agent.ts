@@ -81,8 +81,8 @@ function privacyForm(value: Consent, save: (v: Consent) => Promise<void>, dismis
   if (dismiss) card.append(button("지금은 취소", dismiss));
   return card;
 }
-export function createRaviAgentUI(api: { invoke: Invoke; keyed(): string | null; key(): void; dock(): void; tz(): number }) {
-  let consent = defaults();
+export function createRaviAgentUI(api: { invoke: Invoke; keyed(): string | null; key(): void; dock(): void; landed?(): void; afterLanding?(run: () => void): void; tz(): number }) {
+  let consent = defaults(), started = false;
   const host = document.createElement("div"); host.id = "ravi-agent-settings";
   document.getElementById("page-settings")!.append(host);
   const renderSettings = async () => {
@@ -123,23 +123,37 @@ export function createRaviAgentUI(api: { invoke: Invoke; keyed(): string | null;
       });
     },
     start() {
-      if (!shouldGreet(localStorage, sessionStorage)) return;
+      if (started) return;
+      started = true;
+      if (!shouldGreet(localStorage, sessionStorage)) { api.landed?.(); return; }
       const overlay = document.createElement("aside"); overlay.className = "ravi-arrival"; overlay.setAttribute("aria-label", "라비 시작 인사");
       const bird = document.createElement("div"); bird.className = "ravi-arrival-bird"; bird.append(raviFace("happy", 180));
-      const bubble = document.createElement("div"); bubble.className = "ravi-arrival-bubble";
+      const bubble = document.createElement("div"); bubble.className = "ravi-arrival-bubble"; bubble.hidden = true;
       const title = document.createElement("strong"); title.textContent = "짜잔! 오늘 어땠어요?";
       const summary = document.createElement("p"); summary.textContent = "오늘의 로컬 정보를 확인하고 있어요…";
       const natural = document.createElement("p"); natural.setAttribute("aria-live", "polite");
       let timer = 0, closed = false;
-      const dock = () => { if (closed) return; closed = true; clearTimeout(timer); overlay.classList.add("docking"); window.setTimeout(() => { overlay.remove(); api.dock(); }, 360); };
-      const key = button("AI 열쇠를 넣으면 더 많은 걸 해 드려요", () => { dock(); api.key(); }); key.hidden = !!api.keyed();
+      const dismiss = () => { if (closed) return; closed = true; clearTimeout(timer); overlay.classList.add("docking"); window.setTimeout(() => overlay.remove(), 360); };
+      const dock = () => {
+        const run = () => { if (closed) return; dismiss(); api.dock(); };
+        if (api.afterLanding) api.afterLanding(run); else run();
+      };
+      const key = button("AI 열쇠를 넣으면 더 많은 걸 해 드려요", () => { const run = () => { dock(); api.key(); }; if (api.afterLanding) api.afterLanding(run); else run(); }); key.hidden = !!api.keyed();
       bubble.append(title, summary, natural, key, button("라비와 이야기하기", dock)); overlay.append(bird, bubble); document.body.append(overlay);
-      timer = window.setTimeout(dock, 18000);
+      let landed = false;
+      const land = () => {
+        if (landed) return;
+        landed = true; bubble.hidden = false; api.landed?.();
+        timer = window.setTimeout(dismiss, 18000);
+      };
+      bird.addEventListener("animationend", event => { if (event.target === bird) land(); });
+      // Fallback for disabled animations / hidden WebViews; never shorter than the flight.
+      window.setTimeout(land, 2100);
       void api.invoke("ravi_today", { tz: api.tz() }).then(async data => {
         await settingsReady;
         if (closed) return;
         summary.textContent = todayLines(data).join("\n"); key.hidden = !!api.keyed();
-        clearTimeout(timer); timer = window.setTimeout(dock, 18000);
+        if (landed) { clearTimeout(timer); timer = window.setTimeout(dismiss, 18000); }
         // No consent means no automatic provider call, even when a key exists.
         if (api.keyed() && consent.reviewed) {
           try { const line = await api.invoke<string>("ravi_greeting", { provider: api.keyed(), tz: api.tz() }); if (!closed && !containsRaviSecret(line)) natural.textContent = line; } catch { /* Fixed greeting and local numbers stay visible. */ }

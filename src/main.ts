@@ -1,5 +1,7 @@
 // 🔴 맨 먼저 — 앱 CSP(Tauri nonce) 가 막는 style="…" 속성을 CSSOM 으로 되살린다(src/style-attrs.ts).
 import "./style-attrs";
+import { installFirstRunBarrier, afterRaviLanding, deferUntilRaviLanding, finishRaviLanding } from "./firstrun";
+installFirstRunBarrier();
 import { rememberCompanionPage, restoreCompanionPage, mountCompanionBridge } from "./ravi-companion-bridge";
 import { browserPhotoApi, uploadArtistPhoto, photoErrorText, PhotoFailure } from "./artist-photo";
 import { seedErrorKind, seedErrorMessage, seedUnlockButton } from "./seed-recovery";
@@ -1194,6 +1196,7 @@ function ask(
   message = "",
   opts: { value?: string; password?: boolean; numeric?: boolean; ok?: string } = {}
 ): Promise<string | null> {
+  if (document.documentElement.hasAttribute("data-ravi-arriving")) return new Promise(resolve => afterRaviLanding(() => { void ask(title, message, opts).then(resolve); }));
   $("ask-title").textContent = title;
   $("ask-msg").textContent = message;
   const input = $("ask-input") as HTMLInputElement;
@@ -1211,6 +1214,7 @@ function ask(
 
 /// 예/아니오만. 예면 true.
 function sure(title: string, message = "", ok = "네"): Promise<boolean> {
+  if (document.documentElement.hasAttribute("data-ravi-arriving")) return new Promise(resolve => afterRaviLanding(() => { void sure(title, message, ok).then(resolve); }));
   $("ask-title").textContent = title;
   $("ask-msg").textContent = message;
   $("ask-input").style.display = "none";
@@ -1224,6 +1228,7 @@ function sure(title: string, message = "", ok = "네"): Promise<boolean> {
 const ASK_ALT = "\u0000ask-alt";
 /// 둘 중 하나를 고른다(그리고 취소). 고른 쪽 `"yes"`·`"alt"`, 취소면 null.
 function choose(title: string, message: string, yes: string, alt: string): Promise<"yes" | "alt" | null> {
+  if (document.documentElement.hasAttribute("data-ravi-arriving")) return new Promise(resolve => afterRaviLanding(() => { void choose(title, message, yes, alt).then(resolve); }));
   $("ask-title").textContent = title;
   $("ask-msg").textContent = message;
   $("ask-input").style.display = "none";
@@ -1237,6 +1242,7 @@ function choose(title: string, message: string, yes: string, alt: string): Promi
 
 /// 알리기만. 되돌릴 것이 없을 때.
 function say(title: string, message = ""): Promise<unknown> {
+  if (document.documentElement.hasAttribute("data-ravi-arriving")) return new Promise(resolve => afterRaviLanding(() => { void say(title, message).then(resolve); }));
   $("ask-title").textContent = title;
   $("ask-msg").textContent = message;
   $("ask-input").style.display = "none";
@@ -2801,6 +2807,7 @@ function rpScreen(): string {
 let rpPick: [string, string] | null = null;
 
 function openReport(prefill = "") {
+  if (deferUntilRaviLanding(() => openReport(prefill))) return;
   const wrap = $("rpwrap");
   const text = $("rp-text") as HTMLTextAreaElement;
   const chips = $("rp-chips");
@@ -3053,6 +3060,7 @@ function shopTodo(): { bad: boolean; label: string; why: string; go?: () => void
 }
 
 async function openQrSheet() {
+  if (deferUntilRaviLanding(() => { void openQrSheet(); })) return;
   const wrap = $("qrwrap");
   const body = $("qr-body");
   wrap.style.display = "flex";
@@ -10476,6 +10484,7 @@ function keyCardHtml(): string {
 }
 
 function openKeyCard() {
+  if (deferUntilRaviLanding(openKeyCard)) return;
   raviHome?.open(false);
   const host = $("ravi-key");
   host.innerHTML = keyCardHtml();
@@ -14429,6 +14438,7 @@ function obShow(step: ObStep) {
 }
 
 async function startOnboard() {
+  if (deferUntilRaviLanding(() => { void startOnboard(); })) return;
   $("onboard").classList.remove("hidden");
   obShow("scan");
 
@@ -17586,8 +17596,8 @@ window.addEventListener("DOMContentLoaded", async () => {
     // The original review recalculates fee and requires the owner's existing confirmation.
     await reviewSend();
   };
-  raviHome = createRaviHome({ voiceProvider: () => aiProvider || "", wake: wakeRavi, wallet: () => showPage("wallet"), report: () => openReport(), send: () => { void chatSend(); }, tools: () => showPage("ravi"), companion: mode => { void invoke("companion_signal", { kind: mode === "listening" || mode === "speaking" ? "idle" : mode }).catch(() => {}); } });
-  raviAgentUI = createRaviAgentUI({ invoke, keyed: () => aiProvider, key: wakeRavi, dock: () => raviHome?.open(false), tz: tzMin });
+  raviHome = createRaviHome({ voiceProvider: () => aiProvider || "", afterLanding: afterRaviLanding, wake: wakeRavi, wallet: () => showPage("wallet"), report: () => openReport(), send: () => { void chatSend(); }, tools: () => showPage("ravi"), companion: mode => { void invoke("companion_signal", { kind: mode === "listening" || mode === "speaking" ? "idle" : mode }).catch(() => {}); } });
+  raviAgentUI = createRaviAgentUI({ invoke, keyed: () => aiProvider, key: wakeRavi, dock: () => raviHome?.open(false), landed: finishRaviLanding, afterLanding: afterRaviLanding, tz: tzMin });
   for (const id of ["ravi-promo-open", "ravi-menu-promo", "ravi-tools-promo", "sh-promo"]) {
     $(id).onclick = () => { void openRaviPromo(); };
   }
@@ -18189,7 +18199,8 @@ window.addEventListener("DOMContentLoaded", async () => {
     void refreshKeys();
   });
   $("mn-cur").addEventListener("change", showRate);
-  void refreshKeys().catch(() => {}).finally(() => raviAgentUI?.start());
+  void refreshKeys().catch(() => {});
+  raviAgentUI?.start();
   showRate();
   let shopTimer: any;
   $("sh-asset").addEventListener("input", () => {
@@ -18446,7 +18457,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   //    안 일어난다 — 만들어 놓고 안 부르는 그 병이다.
   void listen("drop-enter", () => dropVeil(true));
   void listen("drop-leave", () => dropVeil(false));
-  void listen<any>("drop-files", (e) => void onDropped(e.payload?.paths || []));
+  void listen<any>("drop-files", (e) => afterRaviLanding(() => { void onDropped(e.payload?.paths || []); }));
   // 엔터로 보낸다. 줄바꿈은 Shift+Enter — 대화창의 기본 약속이다.
   $("tk-text").addEventListener("keydown", (e) => {
     const k = e as KeyboardEvent;
@@ -18629,9 +18640,11 @@ window.addEventListener("DOMContentLoaded", async () => {
     $(id)?.addEventListener("input", saveShop)
   );
 
-  if (!localStorage.getItem(ONBOARD_KEY)) {
-    startOnboard();
-  }
+  // Setup stays available without interrupting the first greeting.
+  const setup = document.createElement("button");
+  setup.id = "firstrun-setup"; setup.textContent = t("초기 설정");
+  setup.onclick = () => afterRaviLanding(() => { void startOnboard(); });
+  $("page-settings").prepend(setup);
   $("ob-only").addEventListener("click", () => obChoose(true));
   $("ob-also").addEventListener("click", () => obChoose(false));
   $("ob-override").addEventListener("click", () => obChoose(true));
@@ -18649,7 +18662,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   // 🔴 `paintRavi()` 만 부르면 안 된다. 첫 화면이 HTML 에서 이미 켜져
   //    있어 `showPage` 를 안 지나가고, 그러면 떠 있는 단추를 숨기는
   //    처리도 안 돈다 — 대화창 위에 대화창으로 가는 단추가 떠 있었다.
-  showPage(restoreCompanionPage());
+  const restoredPage = restoreCompanionPage();
+  showPage(restoredPage === "ravi" ? "home" : restoredPage);
   void mountCompanionBridge();
   loadAssets();
   // 코어 지갑처럼 들어오는 것을 그 자리에서 알린다. 레이븐 블록이 약 60초라
@@ -18665,7 +18679,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   void reindexTick();
   window.setInterval(() => void reindexTick(), 60_000);
   // 0.4.9 — 되살리기가 중간에 멈춰 있으면(노드를 못 켜는 상태) 먼저 알리고, 「마감 뒤 찾기」 예약을 1분마다 본다.
-  wordsRestore.checkOnStart();
+  afterRaviLanding(() => wordsRestore.checkOnStart());
   window.setInterval(() => wordsRestore.tick(), 60_000);
   // Status is cheap; the IPFS scan is not, and is deliberately not on a timer.
 });
@@ -18685,7 +18699,8 @@ async function applyMode(): Promise<void> {
   }
   const hello = document.getElementById("hello");
   if (!m?.chosen) {
-    if (hello) hello.style.display = "";
+    // Mode selection is available in Settings; startup never opens the chooser.
+    if (hello) hello.style.display = "none";
     return;
   }
   if (hello) hello.style.display = "none";

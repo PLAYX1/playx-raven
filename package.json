@@ -18,7 +18,9 @@
     "check:ravi-promo:browser": "node scripts/check-ravi-promo-browser.mjs",
     "check:ravi-panel:browser": "node scripts/check-ravi-panel-browser.mjs",
     "check:ravi-understanding": "node scripts/check-ravi-understanding.mjs",
-    "check:ravi-understanding:browser": "node scripts/check-ravi-understanding-browser.mjs"
+    "check:ravi-understanding:browser": "node scripts/check-ravi-understanding-browser.mjs",
+    "check:firstrun": "node scripts/check-firstrun.mjs",
+    "check:pre-release": "npm run build && node scripts/check-firstrun.mjs"
   },
   "dependencies": {
     "@noble/ciphers": "^2.3.0",

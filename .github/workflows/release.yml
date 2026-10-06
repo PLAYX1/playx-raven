@@ -135,6 +135,9 @@ jobs:
 
       - run: npm ci
 
+      - name: Verify first-run popup order
+        run: npm run check:pre-release
+
       # Synthetic fixtures only: never start the app or a Ravencoin node.
       # These must pass on each host before any installer is published.
       - name: Verify backup preservation and restore exclusion

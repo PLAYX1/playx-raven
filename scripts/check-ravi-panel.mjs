@@ -57,7 +57,8 @@ f.docListeners.get('keydown')(key({key:'Tab'}));assert.equal(prevented,1,'no Tab
 f.docListeners.get('keydown')(key({key:'Escape'}));assert.equal(f.panel.visible(),false);
 assert.equal(f.doc.activeElement.id,'desktop-preferences','Escape preserves page focus');
 f=fixture();assert.equal(f.panel.visible(),false);assert.equal(f.el('ravi-panel').classList.contains('large'),true);
-f.panel.open();f=fixture();assert.equal(f.panel.visible(),true,'open state survives recreation');
+f.panel.open();f=fixture();assert.equal(f.panel.visible(),false,'conversation never reopens on restart');
+f.panel.open();
 assert.equal(f.el('ravi-panel').classList.contains('large'),true);
 f.el('chat-q').focus();f.el('ravi-collapse').onclick();assert.equal(f.doc.activeElement.id,'ravi-launcher');
 f.panel.open();f.panel.suspend(true);assert.equal(f.panel.visible(),false);assert.equal(f.el('ravi-launcher').hidden,true);

@@ -1,4 +1,6 @@
 import { mountRaviMicrophone } from "./ravi-microphone";
+import { installFirstRunBarrier, afterRaviLanding, finishRaviLanding } from "./firstrun";
+installFirstRunBarrier();
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import scene from "./assets/ravi-scene.svg?raw";
@@ -109,6 +111,7 @@ function apply(value:Settings){
 }
 async function setBubble(on:boolean){
   if(!on)microphone.stop();
+  if (on) await new Promise<void>(resolve => afterRaviLanding(resolve));
   try{await invoke('companion_bubble',{open:on});bubble=on;$('bubble').hidden=!on;if(on){visibility(true);question.focus();}await sampleNative();}
   catch{$('status').textContent='말풍선을 열지 못했어요. 트레이에서 큰 화면을 열어 주세요.';}
 }
@@ -150,7 +153,7 @@ bird.onpointerup=async e=>{
   else{await sampleNative();if(sample){physics.x=sample.x;physics.y=sample.y;}savePosition=true;desired={x:physics.x,y:physics.y};void flushMove();}
 };
 bird.onpointercancel=()=>{drag=null;physics.release();physics.vx=physics.vy=0;};
-bird.ondblclick=()=>{clearTimeout(clickTimer);clickTimer=0;void invoke('companion_open_main').catch(()=>{});};
+bird.ondblclick=()=>{clearTimeout(clickTimer);clickTimer=0;afterRaviLanding(()=>{void invoke('companion_open_main').catch(()=>{});});};
 bird.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();void setBubble(true);}};
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){question.value='';void setBubble(false);}});
 document.addEventListener('visibilitychange',()=>visibility(!document.hidden));
@@ -168,15 +171,16 @@ async function init(){
     $('platform-notice').textContent=config.platform.notice;$('shortcut-notice').textContent=config.shortcut_notice;
     await Promise.all([
       listen<boolean>('companion-visible',e=>visibility(e.payload)),
-      listen<boolean>('companion-bubble',e=>{bubble=e.payload;$('bubble').hidden=!bubble;if(bubble)question.focus();}),
+      listen<boolean>('companion-bubble',e=>{afterRaviLanding(()=>{bubble=e.payload;$('bubble').hidden=!bubble;if(bubble)question.focus();});}),
       listen<Settings>('companion-settings',e=>apply(e.payload)),
       listen<Emotion>('companion-state',e=>mood(e.payload)),
       listen<string>('companion-error',e=>{$('status').textContent=e.payload;}),
     ]);
     await sampleNative();if(sample){physics.x=sample.x;physics.y=sample.y;}
     if(config.settings.greeting&&config.settings.resident_start){physics.arrive();$('status').textContent='안녕하세요. 오늘도 곁에 있을게요.';}
-    bubble=config.bubble;$('bubble').hidden=!bubble;
+    bubble=false;$('bubble').hidden=true;
+    window.setTimeout(finishRaviLanding, config.settings.greeting&&config.settings.resident_start ? 2100 : 0);
     ready=true;visibility(document.hasFocus());if(bubble){question.focus();visibility(true);}
-  }catch{$('bubble').hidden=false;$('status').textContent='라비 창을 준비하지 못했어요. 트레이에서 큰 화면을 열어 주세요.';}
+  }catch{finishRaviLanding();$('bubble').hidden=true;bird.title='라비 창을 준비하지 못했어요. 트레이에서 큰 화면을 열어 주세요.';}
 }
 void init();

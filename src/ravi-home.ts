@@ -9,7 +9,7 @@ const labels: Record<RaviMode, string> = {
   sleep: "잠듦 · 느린 숨", idle: "깨어 있음 · 곁에 있어요", listening: "듣는 중 · 편하게 말해 주세요",
   thinking: "생각 중 · 조각을 모아요", speaking: "말하는 중 · 라비의 목소리", joy: "기쁨 · 고마워요",
 };
-export function createRaviHome(api: { wake(): void; wallet(): void; report(): void; send(): void; tools(): void; companion?(mode: RaviMode): void; voiceProvider?(): string }) {
+export function createRaviHome(api: { afterLanding?(run: () => void): void; wake(): void; wallet(): void; report(): void; send(): void; tools(): void; companion?(mode: RaviMode): void; voiceProvider?(): string }) {
   const byId = (id: string) => document.getElementById(id)!;
   const home = byId("ravi-home-slot");
   const conversation = byId("ravi-conversation");
@@ -107,7 +107,7 @@ export function createRaviHome(api: { wake(): void; wallet(): void; report(): vo
     }
   }
   // paint calls changed; queue it so initialization completes before the first sync.
-  const panel = createRaviPanel(api.send, () => queueMicrotask(sync));
+  const panel = createRaviPanel(api.send, () => queueMicrotask(sync), api.afterLanding);
   const observer = new MutationObserver(sync);
   document.querySelectorAll(".page, .sheet, #askwrap, #rpwrap, #onboard, #hello, #ravi-key, #rv-send-card, #send-review, #qrwrap, #phone-tx-send, #phone-tx-panel, #ravi-tools").forEach(el =>
     observer.observe(el, { attributes: true, attributeFilter: ["class", "style", "hidden", "open"] }));
