@@ -30,7 +30,7 @@ export async function prepareRelease(source, destination, version) {
     if (next.reduce((order, n, i) => order || Math.sign(n - old[i]), 0) <= 0) throw new Error('Release must be newer than the currently published version');
   } catch (e) { if (e.code !== 'ENOENT') throw e; }
   const base = `https://raw.githubusercontent.com/PLAYX1/playx-raven-releases/dist/v${version}`;
-  const manifest = { version, notes: 'RavenVault Desktop 0.6.9 — 라비가 더 바로 답합니다. 「비번 까먹었어」「어제 장사 어땠어」「근처 가게」「카톡에 올릴 글 써줘」「송금 하는 방법」 같은 말을 되묻지 않고 맞는 화면이나 홍보 도우미로 바로 안내합니다. 애매한 말은 여전히 「혹시 이거요?」로 확인하고, 못 하는 일은 솔직히 알려 줍니다. 0.6.8 — 라비가 평소 말투를 알아듣습니다.', pub_date: new Date().toISOString(), platforms: {}, installers: [] };
+  const manifest = { version, notes: 'RavenVault Desktop 0.7.0 — 라비가 안 깨어나던 문제를 고쳤습니다. AI 키를 저장하면 바로 깨어납니다. 연결 확인은 뒤에서 따로 하고, 실패해도 라비를 재우지 않습니다(키를 분명히 거절한 경우만 다시 입력 안내). 실패 이유(키 거절·한도·서버·네트워크)를 말해 줍니다. 전에 연결 확인이 실패해 계속 자고 있던 분도 업데이트 후 열면 키를 다시 넣지 않아도 깨어납니다. 키 앞뒤 공백·따옴표는 자동으로 지웁니다. 0.6.9 — 라비가 더 바로 답합니다.', pub_date: new Date().toISOString(), platforms: {}, installers: [] };
   for (const [suffix, platform] of Object.entries(platforms)) {
     const signature = (await readFile(path.join(source, prefix + suffix + '.sig'), 'utf8')).trim();
     if (!/^[A-Za-z0-9+/=\r\n]+$/.test(signature) || signature.length < 100 || signature.length > 2048) throw new Error(`Malformed updater signature: ${suffix}`);
