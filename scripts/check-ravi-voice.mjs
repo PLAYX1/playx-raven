@@ -90,9 +90,18 @@ console.log('PASS shared resident/main microphone and complete ko/en/ja/zh voice
 
 // Mount the actual UI adapter with a synthetic DOM/recorder/RPC; verify the visible flow.
 {
-  const f=fixture(), nodes=new Map(), commands=[];let approved=false;
-  const node=id=>{if(!nodes.has(id))nodes.set(id,{hidden:false,textContent:'',value:'',attributes:{},handlers:{},width:240,height:36,setAttribute(k,v){this.attributes[k]=v;},addEventListener(k,v){this.handlers[k]=v;},getContext(){return {clearRect(){},beginPath(){},moveTo(){},lineTo(){},stroke(){}};}});return nodes.get(id);};
-  const doc={getElementById:node,documentElement:{}};
+  const f=fixture(), nodes=new Map(), commands=[], listeners=new Map();let approved=false;
+  class Element {
+    closest(){return this;}
+    get isConnected(){return true;}
+    click(){this.onclick?.();}
+  }
+  const node=id=>{if(!nodes.has(id))nodes.set(id,Object.assign(new Element(),{hidden:false,textContent:'',value:'',attributes:{},handlers:{},width:240,height:36,setAttribute(k,v){this.attributes[k]=v;},addEventListener(k,v){this.handlers[k]=v;},getContext(){return {clearRect(){},beginPath(){},moveTo(){},lineTo(){},stroke(){}};}}));return nodes.get(id);};
+  const attrs=new Map();
+  const doc={getElementById:node,documentElement:{setAttribute:(k,v)=>attrs.set(k,v),removeAttribute:k=>attrs.delete(k)},addEventListener:(k,f)=>listeners.set(k,f)};
+  const landing={};
+  vm.runInNewContext(ts.transpileModule(readFileSync('src/firstrun.ts','utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,{exports:landing,document:doc,Element,HTMLElement:Element,queueMicrotask});
+  landing.installFirstRunBarrier();
   const invoke=async(command,args)=>{
     commands.push(command);
     if(command==='voice_consent')return approved;
@@ -109,11 +118,17 @@ console.log('PASS shared resident/main microphone and complete ko/en/ja/zh voice
   });
   const mounted=out.mountRaviMicrophone({provider:()=> 'openai',allowed:()=>true,transcript:t=>{node('chat-q').value=t;},quiet(){},listening(){}});
   assert.equal(node('rv-voice').hidden,false);
-  node('rv-voice').onclick();assert.equal(node('ravi-voice-note').textContent,'requesting');await flush();assert.equal(node('ravi-voice-consent').hidden,false);
+  let prevented=false;
+  listeners.get('click')({target:node('rv-voice'),preventDefault(){prevented=true;},stopImmediatePropagation(){}});
+  assert.equal(prevented,true);await flush();assert.equal(commands.length,0,'landing barrier defers consent RPC and microphone permission');assert.equal(f.permissions,0);
+  landing.finishRaviLanding();await Promise.resolve();
+  assert.equal(node('ravi-voice-note').textContent,'requesting','replayed click gives immediate status');await flush();
+  assert.equal(attrs.has('data-ravi-arriving'),false);assert.equal(node('ravi-voice-consent').hidden,false,'queued microphone click opens consent only after landing');
+  assert.equal(f.permissions,0,'landing never bypasses explicit voice consent');
   node('ravi-voice-agree').onclick();await flush();assert.equal(node('rv-voice').attributes['aria-pressed'],'true');assert.equal(node('ravi-voice-wave').hidden,false);
   f.tick(100);node('rv-voice').onclick();await flush();assert.equal(node('chat-q').value,'모의 입력');assert.equal(node('ravi-voice-note').textContent,'done');
   assert.ok(!commands.some(c=>/send|ravi_agent|ai_chat/.test(c)));
   node('rv-voice').onclick();await flush();assert.equal(mounted.state,'listening');node('chat-q').handlers.input({isTrusted:true});assert.equal(mounted.state,'idle');
   await node('ravi-voice-revoke').onclick();assert.equal(approved,false);assert.equal(node('ravi-voice-revoked').textContent,'revoked');
 }
-console.log('PASS actual microphone UI: immediate status, consent, waveform, transcript-only fill, manual-edit cancellation and settings revoke');
+console.log('PASS actual microphone UI: first-run deferred click, consent before permission, waveform, transcript-only fill, manual-edit cancellation and settings revoke');
