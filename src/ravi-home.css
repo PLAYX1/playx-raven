@@ -141,3 +141,9 @@
    paired with the action queue so hidden dialogs cannot receive focus or input. */
 html[data-ravi-arriving] :is(.sheet, [role="dialog"], dialog, #askwrap, #rpwrap, #onboard, #hello, #send-review, #qrwrap, #chat, #ravi-panel, #ravi-launcher, #ravi-key, #rv-send-card, #phone-tx-send, #rvp-notice, #ravibub, #neworder, #live-note, #dropveil, .ravi-arrival-bubble) { display:none!important; }
 .ravi-arrival-bubble[hidden], #rvp-card[hidden] { display:none!important; }
+
+/* 오른쪽 열 카드는 전부 같은 폭으로 늘어난다(예전 align-self:start 가 활동·대화 카드만 줄이던 문제). */
+.ravi-sidebar > div, .ravi-sidebar > .rv-home-activity, .ravi-sidebar > .rv-home-chats { align-self:stretch; width:100%; box-sizing:border-box; }
+/* 흰 카드 안의 보조 단추는 글자가 보여야 한다. */
+.ravi-sidebar button.ghost { background:#fff; color:#1f224e; border-color:#9aa6bd; }
+.ravi-sidebar button.ghost:hover:not(:disabled) { background:#eef2fb; }
