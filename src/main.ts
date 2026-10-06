@@ -2,6 +2,8 @@
 import "./style-attrs";
 import { browserPhotoApi, uploadArtistPhoto, photoErrorText, PhotoFailure } from "./artist-photo";
 import { seedErrorKind, seedErrorMessage, seedUnlockButton } from "./seed-recovery";
+import { createRaviAgentUI, TOOL_LABELS } from "./ravi-agent";
+let raviAgentUI: ReturnType<typeof createRaviAgentUI> | null = null;
 import { createRaviHome } from "./ravi-home";
 import { createPromoCard } from "./ravi-promo-card";
 import { isPromoRequest } from "./ravi-promo";
@@ -52,7 +54,7 @@ import { paintWalletNotes, walletWelcome } from "./wallet-notes";
 import { wireSeedCheck } from "./seed-check";
 import { wireWordsRestore } from "./words-restore";
 import { wireMapCard } from "./map-card";
-import { invoke as rawInvoke } from "@tauri-apps/api/core";
+import { Channel, invoke as rawInvoke } from "@tauri-apps/api/core";
 
 /**
  * 오래 걸리는 일에 **「하는 중」을 자동으로 보여 준다.**
@@ -9342,7 +9344,6 @@ async function saveKeys() {
 // pick from a list this code already knows how to do. Nothing on that list
 // spends, burns, or issues.
 
-const chatHistory: any[] = [];
 
 function chatSay(who: "me" | "ai" | "did", text: string) {
   chatPut(who, `<span${who === "me" ? ' translate="no"' : ""}>${escapeHtml(text).replace(/\n/g, "<br />")}</span>`);
@@ -10290,17 +10291,33 @@ function setChatMode(m: "fill" | "ask" | "debate") {
   intro.querySelector(".msgravi")?.replaceWith(raviFace(raviState, 32, { round: true }));
 }
 
-async function chatAsk(q: string) {
-  setAllRaviMood("thinking");
-  chatHtml("ai", "<span class=\"muted\" data-thinking=\"1\">생각하는 중…</span>");
-  try {
-    const r = await invoke<any>("ai_ask_owner", { provider: aiProvider, question: q, owner: await ownerSnapshot(q) });
-    chatPopThinking();
-    chatHtml("ai", escapeHtml(r?.text || "").replace(/\n/g, "<br />"));
-  } catch (e: any) {
-    chatPopThinking();
-    chatHtml("ai", `<span class="warn">${escapeHtml(errText(e))}</span>`);
+async function chatAsk(q: string) { await chatAgent(q); }
+
+async function chatAgent(q: string) {
+  if (!raviAgentUI || !await raviAgentUI.ensureConsent()) {
+    chatSay("ai", "정보 선택을 저장하지 않아 질문을 AI에 보내지 않았어요."); return;
   }
+  const status = document.createElement("p"); status.setAttribute("role", "status");
+  status.textContent = "라비가 질문을 살펴보고 있어요…"; $("chat-log").append(status);
+  const progress = new Channel<string>();
+  progress.onmessage = name => { status.textContent = Object.prototype.hasOwnProperty.call(TOOL_LABELS, name) ? `라비가 ${TOOL_LABELS[name]}…` : "라비가 확인하고 있어요…"; };
+  try {
+    const r = await invoke<any>("ravi_agent_chat", { provider: aiProvider, message: q, tz: tzMin(), progress });
+    if (containsRaviSecret(String(r.reply || ""))) { chatSay("ai", "답에 민감한 정보가 있어 표시하지 않았어요."); return; }
+    chatSay("ai", r.reply || "답 데이터 없음");
+    for (const p of r.prepared || []) {
+      if (p.name === "prepare_send") {
+        // Backend bound these values to this question; retain the original send safety checks too.
+        const done = applyActions([{ type: "send_prepare", to: p.args.address, amount: p.args.amount }], q);
+        if (done.length) chatSay("did", done.join(" · "));
+      } else if (p.name === "open_screen") raviOpenScreen(p.args.screen);
+      else if (p.name === "prepare_promo") await openRaviPromo(q);
+    }
+  } catch (e) {
+    // Backend emits fixed errors only; never display arbitrary transport payloads.
+    const safe = typeof e === "string" && !containsRaviSecret(e) && e.length < 180 ? e : "라비 요청을 마치지 못했어요.";
+    chatSay("ai", safe);
+  } finally { status.remove(); }
 }
 
 async function chatDebate(q: string) {
@@ -10533,57 +10550,6 @@ async function raviImage(prompt: string) {
 
 /** 라비에게 넘기는 사장님 화면 — 읽기 전용, 필요한 것만. 주소·열쇠는 넣지 않는다. */
 const 환불후보 = new Map<string, { order: string; rvn: number; item: string }>();
-async function ownerSnapshot(asked = ""): Promise<Record<string, unknown>> {
-  const out: Record<string, unknown> = {};
-  try {
-    const b: any = await invoke("wallet_balance");
-    out.wallet = { rvn_confirmed: Number(b.confirmed) || 0, rvn_incoming: Number(b.unconfirmed) || 0 };
-  } catch {}
-  try {
-    // 이 지갑의 받는 주소(비밀 아님). 노드가 「내 것」이라고 확인한 것만 — 「내 주소로 보내줘」에 쓴다.
-    const r: any = await invoke("receive_address", { fresh: false });
-    const a = String(r?.address ?? "").trim();
-    if (r?.mine === true && looksLikeAddress(a)) {
-      최근내주소 = a;
-      // AI 회사로는 「내 주소/내 지갑」을 말했을 때만 나간다.
-      if (/내\s*(주소|지갑)|my\s+(address|wallet)/i.test(asked)) (out.wallet as any) = { ...((out.wallet as any) || {}), my_receive_address: a };
-    }
-  } catch {}
-  try {
-    const p: any = await invoke("ledger_pending");
-    // 「입금 대기」= 손님이 주문했지만 아직 결제가 안 들어온 주문. 하루 지나면 사라진다.
-    out.awaiting_payment = {
-      meaning: "orders placed by customers whose payment has not arrived yet (dropped after 24h)",
-      count: Number(p?.count || 0),
-      orders: (p?.orders || []).slice(0, 10).map((o: any) => ({
-        items: Array.isArray(o.items) ? o.items.map((i: any) => `${i.name ?? ""}${i.qty > 1 ? " x" + i.qty : ""}`).slice(0, 6) : [],
-        rvn: o.rvn, price: o.krw, currency: o.currency, table: o.table ?? null,
-        minutes_ago: o.quoted_at ? Math.max(0, Math.round((Date.now() / 1000 - Number(o.quoted_at)) / 60)) : null,
-      })),
-    };
-  } catch {}
-  try {
-    const ymd = todayYmd();
-    const r: any = await invoke("ledger_range", { fromYmd: ymd, toYmd: ymd, tzOffsetMin: tzMin() });
-    out.today = { sales: Number(r?.sales || 0), total: r?.mixed_currency ? null : Number(r?.total || 0), currency: r?.currency ?? null };
-    const gb: any = await invoke("gb_overview", { todayYmd: ymd, nowUnix: Math.floor(Date.now() / 1000) }).catch(() => null);
-    if (gb) {
-      // 환불 대상은 주소가 아니라 짧은 번호(r1, r2…)로만 AI 에 준다 — AI 가 주소를 고르지 못하게.
-      환불후보.clear();
-      const cands: any[] = [];
-      for (const it of (gb.items || []) as any[]) {
-        for (const r of (it.refund_due || []) as any[]) {
-          if (cands.length >= 10 || !looksLikeAddress(String(r.order))) continue;
-          const ref = "r" + (cands.length + 1);
-          환불후보.set(ref, { order: String(r.order), rvn: Number(r.rvn) || 0, item: String(it.item) });
-          cands.push({ ref, item: String(it.item), qty: r.qty, rvn: r.rvn });
-        }
-      }
-      out.group_buy = { refund_due: gb.refund_due, to_ship: gb.to_ship, items: (gb.items || []).length, refund_candidates: cands };
-    }
-  } catch {}
-  return out;
-}
 
 let raviRequestPending = false;
 let promoOpening = false;
@@ -10664,49 +10630,8 @@ async function chatSendExisting() {
   if (chatMode === "ask") return chatAsk(q);
   if (chatMode === "debate") return chatDebate(q);
 
-  const val = (id: string) => ($(id) as HTMLInputElement)?.value || "";
-  const state = {
-    shop: {
-      name_ko: val("sh-ko"),
-      name_en: val("sh-en"),
-      description: val("sh-desc"),
-      location: val("sh-loc"),
-      asset: val("sh-asset"),
-      pickup: ($("sh-pickup") as HTMLInputElement)?.checked,
-      delivery: ($("sh-delivery") as HTMLInputElement)?.checked,
-    },
-    // 🔴 기간·재고도 보낸다. 안 보내면 라비가 「하루권 얼마야?」에 답을
-    //    못 하고, 이미 있는 이용권을 또 만들라고 한다. 빈 값은 안 보낸다 —
-    //    토큰만 늘고 뜻은 그대로다.
-    menu: menuItems.map((m, i) => ({
-      index: i,
-      name: m.name,
-      price: m.price,
-      ...(m.pass_months ? { pass_months: m.pass_months } : {}),
-      ...(m.pass_days ? { pass_days: m.pass_days } : {}),
-      ...(m.stock != null ? { stock: m.stock } : {}),
-    })),
-    currency: ($("mn-cur") as HTMLSelectElement)?.value,
-    owner: await ownerSnapshot(q),
-  };
+  await chatAgent(q);
 
-  try {
-    const r = await invoke<any>("ai_chat", {
-      provider: aiProvider,
-      message: q,
-      state,
-      // 마지막 몇 마디만 보낸다. 전부 보내면 매번 값이 늘어난다.
-      history: chatHistory.slice(-6),
-    });
-    chatSay("ai", r.reply || "");
-    const done = applyActions(r.actions, q);
-    // 무엇을 바꿨는지 눈에 보여야 한다. 조용히 고치면 나중에 원인을 못 찾는다.
-    if (done.length) chatSay("did", done.join(" · "));
-
-    chatHistory.push({ role: "user", text: q }, { role: "assistant", text: r.reply || "" });
-  } catch (e) {
-    chatSay("ai", errText(e));
-  }
 }
 
 
@@ -17566,6 +17491,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     await reviewSend();
   };
   raviHome = createRaviHome({ wake: wakeRavi, wallet: () => showPage("wallet"), report: () => openReport(), send: () => { void chatSend(); }, tools: () => showPage("ravi") });
+  raviAgentUI = createRaviAgentUI({ invoke, keyed: () => aiProvider, key: wakeRavi, dock: () => raviHome?.open(false), tz: tzMin });
   for (const id of ["ravi-promo-open", "ravi-menu-promo", "ravi-tools-promo", "sh-promo"]) {
     $(id).onclick = () => { void openRaviPromo(); };
   }
@@ -18169,7 +18095,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     void refreshKeys();
   });
   $("mn-cur").addEventListener("change", showRate);
-  refreshKeys();
+  void refreshKeys().catch(() => {}).finally(() => raviAgentUI?.start());
   showRate();
   let shopTimer: any;
   $("sh-asset").addEventListener("input", () => {

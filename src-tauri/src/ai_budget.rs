@@ -41,6 +41,9 @@ pub fn shared() -> Arc<Budget> {
 }
 
 impl Budget {
+    #[cfg(test)]
+    pub(crate) fn fixture(path: PathBuf) -> Arc<Self> { Arc::new(Self::load(path)) }
+
     fn load(path: PathBuf) -> Self {
         let doc = match std::fs::read(&path) {
             Ok(bytes) if bytes.len() <= 1024 => serde_json::from_slice::<Usage>(&bytes).ok()

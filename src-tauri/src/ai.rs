@@ -2670,6 +2670,14 @@ async fn openai_compatible_content(
     content: Value,
     want_json: bool,
 ) -> Result<String, String> {
+    openai_compatible_content_limited(client, base, model, key, system, content, want_json, None).await
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn openai_compatible_content_limited(
+    client: &reqwest::Client, base: &str, model: &str, key: &str,
+    system: &str, content: Value, want_json: bool, output_limit: Option<u32>,
+) -> Result<String, String> {
     let base = crate::ai_endpoint::validate(base, model, key)?;
     let mut body = json!({
         "model": model,
@@ -2678,6 +2686,7 @@ async fn openai_compatible_content(
             { "role": "user", "content": content },
         ],
     });
+    if let Some(limit) = output_limit { body["max_tokens"] = json!(limit); }
     if want_json {
         body["response_format"] = json!({ "type": "json_object" });
     }
@@ -3242,6 +3251,14 @@ mod attempt_tests {
 /// own questions, and the two-provider comparison. Copying the five
 /// provider branches three times is how they drift apart.
 pub async fn ai_raw(provider: String, system: String, input: String) -> Result<String, String> {
+    ai_raw_limited(provider, system, input, false).await
+}
+
+/// Agent calls retain provider transport and key handling; no native function calling.
+pub(crate) async fn ravi_agent_raw(provider: String, system: String, input: String) -> Result<String, String> {
+    ai_raw_limited(provider, system, input, true).await
+}
+async fn ai_raw_limited(provider: String, system: String, input: String, bounded: bool) -> Result<String, String> {
     let key = if provider == "custom" {
         String::new()
     } else {
@@ -3292,13 +3309,14 @@ pub async fn ai_raw(provider: String, system: String, input: String) -> Result<S
         p if openai_compat(p).is_some() => {
             let (base, _) = openai_compat(p).unwrap();
             let model = model_for(p);
-            openai_compatible(&client, base, &model, &key, &system, &input, false).await
+            openai_compatible_content_limited(&client, base, &model, &key, &system, json!(input), false, bounded.then_some(600)).await
         }
         "google" => {
-            let body = json!({
+            let mut body = json!({
                 "systemInstruction": { "parts": [{ "text": system }] },
                 "contents": [{ "role": "user", "parts": [{ "text": input }] }],
             });
+            if bounded { body["generationConfig"] = json!({"maxOutputTokens":600}); }
             let parsed: Value = client
                 .post(format!(
                     "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent",
@@ -3337,7 +3355,7 @@ pub async fn ai_raw(provider: String, system: String, input: String) -> Result<S
         "custom" => {
             let (base, model, key) = custom_request_settings()?;
             disclosure_key = key.clone();
-            openai_compatible(&client, &base, &model, &key, &system, &input, false).await
+            openai_compatible_content_limited(&client, &base, &model, &key, &system, json!(input), false, bounded.then_some(600)).await
         }
         _ => Err("알 수 없는 제공자입니다.".into()),
     }?;

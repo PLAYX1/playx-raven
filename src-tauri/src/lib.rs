@@ -2,6 +2,7 @@ mod artist;
 mod rt;
 mod auction;
 mod ai;
+mod ravi_agent;
 mod ai_budget;
 mod ai_endpoint;
 mod companion;
@@ -298,6 +299,14 @@ pub fn run() {
             ai::ai_read_image,
             ai::ai_answer,
             ai::ai_answer_any,
+            ravi_agent::ravi_agent_chat,
+            ravi_agent::ravi_consent,
+            ravi_agent::ravi_consent_save,
+            ravi_agent::ravi_audit,
+            ravi_agent::ravi_tool_registry,
+            ravi_agent::ravi_tool,
+            ravi_agent::ravi_today,
+            ravi_agent::ravi_greeting,
             ai::ai_chat,
             ai::ai_promo,
             ai::save_custom_provider,
