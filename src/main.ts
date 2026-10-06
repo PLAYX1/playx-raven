@@ -251,6 +251,7 @@ import {
 import {
   loadPayees, payeeName, pickerHtml, receiveHtml, recentPayees, RECEIVE_MESSAGE, savePayee, sentHtml,
 } from "./wallet-easy";
+import { normalizeApiKey, keyConnectionFailure, keyStorageError, SavedKeyChecks } from "./ravi-key";
 import { guideById, guideHtml, raviAnswerHtml, raviCopy, raviText, raviQuestionLanguage, providerOfKey, type GuideGo } from "./ravi-guide";
 
 type Asset = {
@@ -9008,15 +9009,8 @@ let shopMenuCid: string | null = null;
 // thing on this screen — the burn — still needs the name retyped by hand.
 
 let aiProvider: string | null = null;
-// Provider names only; a failed connection check stays asleep across restarts.
-const pendingKeyChecks = new Set<string>((() => {
-  try { const v = JSON.parse(localStorage.getItem("rv-ai-pending-checks") || "[]"); return Array.isArray(v) ? v.filter(p => typeof p === "string") : []; }
-  catch { return []; }
-})());
-function markKeyPending(provider: string, pending: boolean): void {
-  if (pending) pendingKeyChecks.add(provider); else pendingKeyChecks.delete(provider);
-  localStorage.setItem("rv-ai-pending-checks", JSON.stringify([...pendingKeyChecks]));
-}
+// A saved key wakes Ravi immediately; checks are advisory except explicit rejection.
+const keyChecks = new SavedKeyChecks(localStorage);
 
 /// 열쇠를 넣는 칸의 순서. 위에 있는 것이 먼저 눈에 들어오고, 대부분은
 /// 첫 칸 하나만 채운다. 그래서 이 순서는 취향이 아니라 기본값에 가깝다.
@@ -9143,7 +9137,7 @@ function renderKeyRows(st: any, models: any) {
         st.has_key?.[p]
           ? // 모델 이름은 회사가 예고 없이 바꾼다. 우리 배포를 기다리지 않고
             // 직접 고칠 수 있어야 한다.
-            `<div class="keyrow"><span class="who">${label} · ····${escapeHtml(String(st.last4?.[p] || ""))}</span>
+            `<div class="keyrow"><span class="who">${label} · ${copyHtml("키가 저장됐습니다.")}</span>
                <input id="model-${p}" value="${escapeHtml(models?.[p]?.model || "")}"
                       placeholder="${escapeHtml(models?.[p]?.default || "")}" autocomplete="off" spellcheck="false" />
                <button class="ghost" data-delkey="${p}">지우기</button></div>`
@@ -9154,7 +9148,7 @@ function renderKeyRows(st: any, models: any) {
       .join("") +
     (st.custom
       ? `<div class="keyrow"><span class="who">${escapeHtml(st.custom_label || "커스텀")}</span>
-           <span class="saved">${st.has_key?.custom ? `····${escapeHtml(String(st.last4?.custom || ""))}` : "키 없음"}</span>
+           <span class="saved">${st.has_key?.custom ? copyHtml("키가 저장됐습니다.") : "키 없음"}</span>
            <button class="ghost" data-delkey="custom">지우기</button></div>`
       : "");
 
@@ -9176,16 +9170,19 @@ function renderKeyRows(st: any, models: any) {
       (b as HTMLElement).onclick = async () => {
         const p = (b as HTMLElement).dataset.delkey!;
         await invoke("delete_api_key", { provider: p });
+        keyChecks.forget(p);
         await refreshKeys();
       };
     });
 }
 
-async function refreshKeys(preferred = "") {
+async function refreshKeys(preferred = "", keepKeyCard = false, refreshRows = true) {
   try {
     const st = (await invoke<any>("api_key_status")) || {};
-    const models = await invoke<any>("model_settings").catch(() => ({}));
-    renderKeyRows(st, models);
+    if (refreshRows) {
+      const models = await invoke<any>("model_settings").catch(() => ({}));
+      renderKeyRows(st, models);
+    } else aiKeyed = st.available || {};
     const have = [...Object.keys(PROVIDERS), "custom"].filter((p) => st.available?.[p]);
     const labelOf = (p: string) =>
       p === "custom" ? st.custom_label || "커스텀" : PROVIDERS[p][0];
@@ -9196,8 +9193,9 @@ async function refreshKeys(preferred = "") {
     const sel = $("ai-pick") as HTMLSelectElement;
     const previous = preferred || sel.value;
     sel.innerHTML = have.map((p) => `<option value="${p}">${escapeHtml(labelOf(p))}</option>`).join("");
-    if (have.includes(previous)) sel.value = previous;
-    aiProvider = sel.value && !pendingKeyChecks.has(sel.value) ? sel.value : null;
+    const usable = have.filter(p => !keyChecks.rejected.has(p));
+    sel.value = usable.includes(previous) ? previous : usable[0] || have[0] || "";
+    aiProvider = usable.includes(sel.value) ? sel.value : null;
     paintRaviBadge();
     const raviSub = document.getElementById("ravi-sub");
     if (raviSub) raviSub.textContent = aiProvider ? t("AI 도우미 · 물어본 것만 봐요") : t("눌러서 깨우기");
@@ -9205,13 +9203,13 @@ async function refreshKeys(preferred = "") {
     const keyOpen = document.getElementById("ravi-keyopen");
     if (keyOpen) { keyOpen.hidden = !!aiProvider; setCopyText(keyOpen, () => t("눌러서 깨우기")); }
     const keyHost = document.getElementById("ravi-key");
-    if (keyHost && aiProvider && !keyHost.hidden) closeKeyCard();
+    if (!keepKeyCard && keyHost && aiProvider && !keyHost.hidden) closeKeyCard();
     const last4 = document.getElementById("ravi-key-last4");
-    if (last4) last4.textContent = aiProvider && st.last4?.[aiProvider] ? `····${String(st.last4[aiProvider])}` : "";
+    if (last4) last4.textContent = aiProvider ? t("키가 저장됐습니다.") : "";
     const deleteButton = document.getElementById("ravi-key-delete");
     if (deleteButton) deleteButton.hidden = !aiProvider;
 
-    $("key-note").textContent = st.warning ? t(st.warning) : (have.length ? "AI 설정이 있습니다. 연결은 아직 확인하지 않았습니다." : "아직 없습니다");
+    setCopyText($("key-note"), () => [st.warning ? t("저장된 키를 읽지 못했어요. OS 보안 저장소 권한을 확인하고 키를 다시 저장해 주세요.") : "", keyStatusMessage()].filter(Boolean).join(" ") || t(have.length ? "AI 설정이 있습니다. 연결은 아직 확인하지 않았습니다." : "아직 없습니다"));
     // 대화창은 쓸 수 있는 곳이 하나라도 있을 때만 의미가 있다.
     // 🔴 여태 API 키가 없으면 이 버튼을 **숨겼다.** 그러면 Ravi 가 있다는
     // 것을 알 길이 없다 — 키를 넣을 이유도 못 만난다.
@@ -9240,7 +9238,38 @@ async function refreshKeys(preferred = "") {
         delete note.dataset.keyHint;
       }
     });
+    // One background GET per stored provider at startup, also after a new save.
+    for (const provider of have) void checkSavedKey(provider);
   } catch {}
+}
+
+function keyStatusMessage(): string {
+  return Object.keys(aiKeyed).filter(p => aiKeyed[p]).map(p => {
+    const result = keyChecks.results.get(p);
+    if (result) return keyConnectionMessage(result, p);
+    if (keyChecks.pending.has(p)) return `${PROVIDERS[p]?.[0] || "AI"}: ${t("연결을 확인하는 중…")}`;
+    if (keyChecks.results.has(p)) return `${PROVIDERS[p]?.[0] || "AI"}: ${t("연결을 확인했어요.")}`;
+    return "";
+  }).filter(Boolean).join(" ");
+}
+
+async function checkSavedKey(provider: string, force = false): Promise<void> {
+  const version = keyChecks.begin(provider, force);
+  if (version === null) return;
+  paintRaviBadge();
+  let error: unknown;
+  try { await invoke("ai_check_connection", { provider }); }
+  catch (failure) { error = failure; }
+  if (!keyChecks.finish(provider, version, error)) return;
+  // Advisory results must not rebuild settings inputs while someone is typing.
+  await refreshKeys("", true, false);
+  const result = keyChecks.results.get(provider);
+  const note = document.getElementById("kc-note");
+  if (note && keyPick === provider && !note.dataset.keySaveFailed) setCopyText(note, () => result ? keyConnectionMessage(result, provider) : t("연결을 확인했어요."));
+  if (result && aiKeyed[provider]) {
+    chatHtml("ai", `<p>${escapeHtml(keyConnectionMessage(result, provider))}</p>` +
+      (keyConnectionFailure(result).rejected ? "" : `<p>${copyHtml("저장된 키로 라비는 깨어 있어요. 연결 확인은 참고용이에요.")}</p>`));
+  }
 }
 
 /// 지금 시세. 메뉴 가격 옆에 RVN 환산이 붙는 근거다.
@@ -9275,33 +9304,29 @@ async function saveKeys() {
         label: ($("cu-label") as HTMLInputElement).value.trim(),
         baseUrl: cu,
         model: ($("cu-model") as HTMLInputElement).value.trim(),
-        key: ($("cu-key") as HTMLInputElement).value.trim(),
+        key: normalizeApiKey(($("cu-key") as HTMLInputElement).value),
       });
       if (result.warning) warnings.push(result.warning);
       ($("cu-key") as HTMLInputElement).value = "";
-      markKeyPending("custom", true);
-      await invoke("ai_check_connection", { provider: "custom" });
-      markKeyPending("custom", false);
+      keyChecks.forget("custom");
     }
     for (const p of Object.keys(PROVIDERS)) {
       const el = document.getElementById(`key-${p}`) as HTMLInputElement | null;
       if (el && el.value.trim()) {
-        markKeyPending(p, true);
-        const result = await invoke<{ warning?: string }>("save_api_key", { provider: p, key: el.value.trim() });
+        const result = await invoke<{ warning?: string }>("save_api_key", { provider: p, key: normalizeApiKey(el.value) });
         if (result.warning) warnings.push(result.warning);
         el.value = "";
-        await invoke("ai_check_connection", { provider: p });
-        markKeyPending(p, false);
+        keyChecks.forget(p);
       }
       const m = document.getElementById(`model-${p}`) as HTMLInputElement | null;
       if (m) await invoke("save_model", { provider: p, model: m.value.trim() });
     }
-    await invoke("ai_models_refresh").catch(() => {});
     await refreshKeys();
+    void invoke("ai_models_refresh").catch(() => {}).then(() => refreshKeys());
     if (warnings.length) $("key-note").textContent = `키가 저장됐습니다. ${warnings.join("; ")}`;
   } catch (e) {
     await refreshKeys().catch(() => {});
-    $("key-note").textContent = `${errText(e)} 다시 확인해 주세요`;
+    setCopyText($("key-note"), () => `${t("키 저장에 실패했어요.")} ${t(keyStorageError(e))}`);
   } finally {
     document.querySelectorAll<HTMLInputElement>('#keyrows input[type="password"], #cu-key').forEach(input => { input.value = ""; });
     btn.disabled = false;
@@ -9929,15 +9954,21 @@ function paintRaviBadge(): void {
     if (b) {
       b.dataset.ai = on ? "on" : "off";
       const label = `${t("라비")} · ${t(on ? "AI 켜짐" : "눌러서 깨우기")}`;
-      b.title = label;
-      b.setAttribute("aria-label", label);
+      const status = keyStatusMessage();
+      b.title = status ? `${label} · ${status}` : label;
+      b.setAttribute("aria-label", b.title);
     }
     const nm = document.getElementById("rv-header-ravi-name");
     if (nm) setCopyText(nm, () => `${t("라비")} · ${t(on ? "켜짐" : "꺼짐")}`);
     const pill = document.getElementById("rv-home-ai-pill");
     if (pill) {
       pill.dataset.ai = on ? "on" : "off";
-      setCopyText(pill, () => t(on ? "AI 켜짐" : "AI 꺼짐 · 정해진 안내만"));
+      const status = keyStatusMessage();
+      pill.title = status;
+      const summary = [...keyChecks.rejected.keys()].some(p => aiKeyed[p]) ? "키 거절" :
+        [...keyChecks.results].some(([p, result]) => aiKeyed[p] && result) ? "연결 확인 실패" :
+        keyChecks.pending.size ? "연결 확인 중" : "";
+      setCopyText(pill, () => `${t(on ? "AI 켜짐" : "AI 꺼짐 · 정해진 안내만")}${summary ? ` · ${t(summary)}` : ""}`);
     }
     const q = document.getElementById("rv-home-ravi-q") as HTMLInputElement | null;
     if (q) q.placeholder = t("예: 수료증 120장 만들어 줘");
@@ -10328,7 +10359,7 @@ function keyCardHtml(): string {
     `<button type="button" id="ravi-key-save">${copyHtml("저장하고 연결 확인")}</button></div>` +
     `<button type="button" class="ghost" data-kc-check${aiKeyed[keyPick] ? "" : " hidden"}>${copyHtml("저장된 키로 연결 확인")}</button>` +
     `<p class="meta">${copyHtml("열쇠는 이 컴퓨터에만 저장돼요. AI 에게 물을 때만 고른 회사로 함께 보내지고, 우리 서버로는 가지 않아요.")}</p>` +
-    `<p class="meta kc-note" id="kc-note" aria-live="polite"></p>` +
+    `<p class="meta kc-note" id="kc-note" aria-live="polite">${escapeHtml(keyChecks.results.get(keyPick) ? keyConnectionMessage(keyChecks.results.get(keyPick), keyPick) : "")}</p>` +
     `<p class="meta">${copyHtml("내 컴퓨터에서 돌리는 AI 나 다른 곳은 「이 컴퓨터 › AI 열쇠」에서 넣어요.")}</p>` +
     `</section>`;
 }
@@ -10365,6 +10396,17 @@ function pickKeyProvider(p: string, clear = true) {
   if (input) { if (clear) input.value = ""; input.placeholder = PROVIDERS[p][1]; }
   const retry = $("ravi-key").querySelector<HTMLButtonElement>("[data-kc-check]");
   if (retry) retry.hidden = !aiKeyed[p];
+  delete $("kc-note").dataset.keySaveFailed;
+  setCopyText($("kc-note"), () => keyChecks.results.get(p) ? keyConnectionMessage(keyChecks.results.get(p), p) : "");
+}
+
+function keyConnectionMessage(error: unknown, provider = ""): string {
+  const failure = keyConnectionFailure(error);
+  const label = PROVIDERS[provider]?.[0];
+  const company = label ? `${label}: ` : "";
+  const google = provider === "google" && (failure.status === 400 || failure.status === 401 || failure.status === 403)
+    ? ` ${t("Google AI Studio의 API 키(AIza…)인지, Generative Language API가 켜져 있는지 확인해 주세요.")}` : "";
+  return `${company}${t(failure.phrase)}${google}${failure.status === undefined ? "" : ` (${failure.status})`}`;
 }
 
 async function saveKeyCard(checkOnly = false) {
@@ -10373,28 +10415,35 @@ async function saveKeyCard(checkOnly = false) {
   const btn = $("ravi-key-save") as HTMLButtonElement;
   if (btn.disabled) return;
   const provider = keyPick;
-  const key = input.value.trim();
-  if (!checkOnly && !key) return void setCopyText(note, () => t("칸이 비어 있어요. 키를 붙여넣고 다시 눌러 주세요."));
-  btn.disabled = true;
-  markKeyPending(provider, true);
-  try {
-    if (!checkOnly) await invoke("save_api_key", { provider, key });
+  delete note.dataset.keySaveFailed;
+  if (checkOnly) {
     input.value = "";
+    if (!aiKeyed[provider] || keyChecks.pending.has(provider)) return;
     setCopyText(note, () => t("연결을 확인하는 중…"));
-    await invoke("ai_check_connection", { provider });
-    markKeyPending(provider, false);
-    await refreshKeys(provider);
-    const label = PROVIDERS[provider]?.[0] || provider;
+    void checkSavedKey(provider, true);
+    return;
+  }
+  const key = normalizeApiKey(input.value);
+  if (!key) return void setCopyText(note, () => t("칸이 비어 있어요. 키를 붙여넣고 다시 눌러 주세요."));
+  const detected = providerOfKey(key);
+  if (detected && detected !== provider || /\s/.test(key)) {
+    input.value = "";
+    return void setCopyText(note, () => t("키 형식이 고른 회사와 맞지 않아요. 키를 발급한 회사를 다시 골라 주세요."));
+  }
+  btn.disabled = true;
+  try {
+    try { await invoke("save_api_key", { provider, key }); }
+    catch (error) {
+      await refreshKeys("", true);
+      note.dataset.keySaveFailed = "1";
+      setCopyText(note, () => `${t("키 저장에 실패했어요.")} ${t(keyStorageError(error))}`);
+      return;
+    }
+    input.value = "";
+    keyChecks.forget(provider);
+    await refreshKeys(provider, true);
     closeKeyCard();
-    chatHtml("ai",
-      `<div class="wake awake"><span class="ravi-mount"></span>` +
-      `<div><b>${copyHtml("안녕하세요, 라비예요.")}</b><br />` +
-      `<span class="muted">${tf("{0} 연결을 확인했어요. 이제 무엇이든 물어보세요.", `<span translate="no">${escapeHtml(label)}</span>`)}</span></div></div>`);
-  } catch {
-    await refreshKeys();
-    setCopyText(note, () => t("저장 또는 연결을 확인하지 못했어요. 키와 네트워크를 확인하고 다시 눌러 주세요."));
-    const retry = $("ravi-key").querySelector<HTMLButtonElement>("[data-kc-check]");
-    if (retry) retry.hidden = !aiKeyed[provider];
+    chatHtml("ai", `<p>${copyHtml("키를 저장했어요. 라비가 깨어났어요. 연결 확인은 뒤에서 진행해요.")}</p>`);
   } finally {
     input.value = "";
     btn.disabled = false;
@@ -18086,6 +18135,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     if (!aiProvider) return;
     const provider = aiProvider;
     await invoke("delete_api_key", { provider });
+    keyChecks.forget(provider);
     await refreshKeys();
   });
   $("ravi-key").addEventListener("click", (e) => {
@@ -18106,7 +18156,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("ravi-key").addEventListener("input", (e) => {
     const el = e.target as HTMLInputElement;
     if (el.id !== "ravi-key-input") return;
-    const p = providerOfKey(el.value);
+    const p = providerOfKey(normalizeApiKey(el.value));
     if (p && p !== keyPick) pickKeyProvider(p, false);
   });
   $("ravi-key").addEventListener("keydown", (e) => {

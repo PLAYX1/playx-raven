@@ -251,11 +251,45 @@ fn deleted_path(provider: &str) -> PathBuf {
     config_dir().join(format!("{provider}.deleted"))
 }
 
+/// Strip common paste wrappers before validation; never include input in errors.
+fn normalize_api_key(key: &str) -> String {
+    let mut key = key.replace(['\r', '\n'], "").trim().to_string();
+    loop {
+        let old = key.clone();
+        key = key.trim().trim_matches(['\'', '"', '‘', '’', '“', '”']).trim().to_string();
+        if key.get(..6).is_some_and(|p| p.eq_ignore_ascii_case("bearer"))
+            && key.as_bytes().get(6).is_some_and(u8::is_ascii_whitespace) {
+            key = key[6..].trim().to_string();
+        } else if key.get(..4).is_some_and(|p| p.eq_ignore_ascii_case("key=")) {
+            key = key[4..].trim().to_string();
+        }
+        if key == old { return key; }
+    }
+}
+fn key_provider(key: &str) -> Option<&'static str> {
+    if key.starts_with("sk-ant-") { Some("anthropic") }
+    else if key.starts_with("AIza") { Some("google") }
+    else if key.starts_with("xai-") { Some("xai") }
+    else if key.starts_with("gsk_") { Some("groq") }
+    else if key.starts_with("sk-") { Some("openai") }
+    else { None }
+}
+fn key_provider_mismatch(provider: &str, key: &str) -> bool {
+    provider != "custom" && key_provider(key).is_some_and(|p| p != provider)
+}
+
+fn save_key_to_store(store: &dyn KeyStore, key: &str) -> Result<(), String> {
+    store.set(key).map_err(|_| "API 키를 보안 저장소에 저장하지 못했습니다.".to_string())
+}
+
 fn save_key_locked(provider: &str, key: &str) -> Result<Option<String>, String> {
     if key.len() > 4096 || key.chars().any(char::is_control) {
         return Err("API 키를 줄바꿈 없이 다시 입력하세요.".into());
     }
     let key = key.trim();
+    if key_provider_mismatch(provider, key) {
+        return Err("키 형식이 고른 회사와 맞지 않아요. 키를 발급한 회사를 다시 골라 주세요.".into());
+    }
     if key.is_empty() {
         return Err("키가 비어 있어요".into());
     }
@@ -267,9 +301,7 @@ fn save_key_locked(provider: &str, key: &str) -> Result<Option<String>, String> 
     if deleted_path(provider).exists() && key_path(provider).exists() {
         remove_legacy_key(&key_path(provider))?;
     }
-    store(provider)?
-        .set(key)
-        .map_err(|_| "API 키를 보안 저장소에 저장하지 못했습니다.".to_string())?;
+    save_key_to_store(&*store(provider)?, key)?;
     // The key is durable already. Attempt metadata and legacy cleanup independently.
     let mut errors = Vec::new();
     // The suffix is derived from the store on demand; old .last4 files are
@@ -1021,9 +1053,10 @@ pub fn save_api_key(provider: String, key: String) -> Result<Value, String> {
     if !known(&provider) {
         return Err("알 수 없는 제공자입니다.".into());
     }
+    let key = normalize_api_key(&key);
     let _guard = lock_keys()?;
     let dir = config_dir();
-    std::fs::create_dir_all(&dir).map_err(|e| format!("설정 폴더를 만들지 못했습니다: {e}"))?;
+    std::fs::create_dir_all(&dir).map_err(|_| "AI 설정 폴더를 열지 못했습니다.".to_string())?;
     if !key.trim().is_empty() && key.trim().chars().count() < 16 { return Err("키가 너무 짧아요".into()); }
     if provider == "custom" {
         let (_, base, model) =
@@ -1092,20 +1125,54 @@ fn connection_request(provider: &str, key: &str) -> Result<reqwest::RequestBuild
     Ok(request.timeout(std::time::Duration::from_secs(20)))
 }
 
+// Only an allowlisted category and a numeric status cross the IPC boundary.
+// Response bodies, URLs, headers and reqwest errors can contain credentials.
+#[derive(Debug, serde::Serialize, PartialEq, Eq)]
+pub struct ConnectionError {
+    kind: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    status: Option<u16>,
+}
+impl ConnectionError {
+    fn new(kind: &'static str) -> Self { Self { kind, status: None } }
+}
+async fn check_connection_request(request: reqwest::RequestBuilder) -> Result<(), ConnectionError> {
+    await_connection(async {
+        request.send().await.map_err(|e| {
+            ConnectionError::new(if e.is_timeout() { "timeout" } else { "network" })
+        })
+    }, std::time::Duration::from_secs(20)).await
+}
+async fn await_connection(
+    response: impl std::future::Future<Output = Result<reqwest::Response, ConnectionError>>,
+    timeout: std::time::Duration,
+) -> Result<(), ConnectionError> {
+    let response = tokio::time::timeout(timeout, response).await
+        .map_err(|_| ConnectionError::new("timeout"))??;
+    let status = response.status();
+    if status.is_success() { return Ok(()); }
+    let kind = match status.as_u16() {
+        400 | 401 | 403 => "rejected",
+        429 => "quota",
+        500..=599 => "server",
+        _ => "http",
+    };
+    Err(ConnectionError { kind, status: Some(status.as_u16()) })
+}
+
 #[tauri::command]
-pub async fn ai_check_connection(provider: String) -> Result<(), String> {
-    let key = if provider == "custom" { String::new() } else { read_key(&provider)? };
-    let response = connection_request(&provider, &key)?.send().await
-        .map_err(|_| "AI 연결을 확인하지 못했습니다. 네트워크를 확인하고 다시 눌러 주세요.".to_string())?;
-    if !response.status().is_success() {
-        return Err("AI 연결을 확인하지 못했습니다. 키와 제공자 설정을 확인하고 다시 눌러 주세요.".into());
-    }
-    Ok(())
+pub async fn ai_check_connection(provider: String) -> Result<(), ConnectionError> {
+    let key = if provider == "custom" { String::new() } else {
+        read_key(&provider).map_err(|_| ConnectionError::new("storage"))?
+    };
+    if key_provider_mismatch(&provider, &key) { return Err(ConnectionError::new("format")); }
+    let request = connection_request(&provider, &key).map_err(|_| ConnectionError::new("setup"))?;
+    check_connection_request(request).await
 }
 
 #[cfg(test)]
 mod connection_tests {
-    use super::connection_request;
+    use super::*;
     #[test]
     fn check_is_get_without_prompt_url_key_or_fallback() {
         for provider in ["anthropic", "google", "openai", "groq", "xai"] {
@@ -1118,6 +1185,91 @@ mod connection_tests {
         }
         assert!(connection_request("unknown", "fixture-only").is_err());
     }
+    // In-process HTTP mock server. It cannot contact a provider or require TCP.
+    async fn mock_response(status: u16) -> reqwest::Response {
+        use tower::ServiceExt;
+        let app = axum::Router::new().route("/models", axum::routing::get(move || async move {
+            (axum::http::StatusCode::from_u16(status).unwrap(), "private-body synthetic-fixture-key")
+        }));
+        let request = axum::http::Request::builder().uri("/models")
+            .header("authorization", "Bearer synthetic-fixture-key")
+            .body(axum::body::Body::empty()).unwrap();
+        let response = app.oneshot(request).await.unwrap();
+        let (parts, body) = response.into_parts();
+        let bytes = axum::body::to_bytes(body, 4096).await.unwrap();
+        reqwest::Response::from(axum::http::Response::from_parts(parts, bytes))
+    }
+    #[tokio::test]
+    async fn mock_status_branches_never_expose_key_or_response_body() {
+        for (status, kind) in [(400, "rejected"), (401, "rejected"), (403, "rejected"), (429, "quota"), (500, "server"), (503, "server"), (302, "http"), (404, "http")] {
+            let error = await_connection(async { Ok(mock_response(status).await) }, std::time::Duration::from_secs(1)).await.unwrap_err();
+            assert_eq!(error.kind, kind);
+            assert_eq!(error.status, Some(status));
+            let ipc = serde_json::to_string(&error).unwrap();
+            assert!(!ipc.contains("fixture") && !ipc.contains("private-body") && !ipc.contains("http://"));
+            assert!(!format!("{error:?}").contains("fixture"));
+        }
+        for status in [200, 204] {
+            assert!(await_connection(async { Ok(mock_response(status).await) }, std::time::Duration::from_secs(1)).await.is_ok());
+        }
+    }
+    #[tokio::test]
+    async fn mock_timeout_and_network_are_safe_and_distinct() {
+        let timeout = await_connection(async {
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            Ok(mock_response(200).await)
+        }, std::time::Duration::from_millis(10)).await.unwrap_err();
+        assert_eq!(timeout, ConnectionError::new("timeout"));
+        let network = await_connection(async { Err(ConnectionError::new("network")) }, std::time::Duration::from_secs(1)).await.unwrap_err();
+        assert_eq!(serde_json::to_string(&network).unwrap(), r#"{"kind":"network"}"#);
+        // Invalid header fails locally before dispatch; reqwest's credential-bearing
+        // diagnostic must be replaced with the same safe transport category.
+        let request = reqwest::Client::new().get("https://mock.invalid/models")
+            .header("authorization", "synthetic-fixture-key\n");
+        assert_eq!(check_connection_request(request).await.unwrap_err(), ConnectionError::new("network"));
+    }
+
+    #[tokio::test]
+    async fn loopback_mock_covers_http_refusal_and_delayed_response() {
+        use std::time::Duration;
+        // This server sees synthetic headers only; no real key/store/provider access.
+        let app = axum::Router::new().route("/models/{status}", axum::routing::get(
+            |axum::extract::Path(status): axum::extract::Path<u16>| async move {
+                (axum::http::StatusCode::from_u16(status).unwrap(), "private-body synthetic-fixture-key")
+            }
+        )).route("/slow", axum::routing::get(|| async {
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            "private-body synthetic-fixture-key"
+        }));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap(); });
+        let client = reqwest::Client::builder().no_proxy().build().unwrap();
+        for status in [200, 400, 401, 403, 429, 503] {
+            let request = client.get(format!("http://{address}/models/{status}"))
+                .header("x-goog-api-key", "synthetic-fixture-key");
+            let result = check_connection_request(request).await;
+            if status == 200 { assert!(result.is_ok()); }
+            else {
+                let error = result.unwrap_err();
+                assert_eq!(error.status, Some(status));
+                let ipc = serde_json::to_string(&error).unwrap();
+                assert!(!ipc.contains("fixture") && !ipc.contains("private-body"));
+            }
+        }
+        let delayed = client.get(format!("http://{address}/slow"))
+            .timeout(Duration::from_millis(30));
+        assert_eq!(check_connection_request(delayed).await.unwrap_err(), ConnectionError::new("timeout"));
+        server.abort();
+        let _ = server.await;
+        // A just-closed loopback listener gives a connection-refused transport error.
+        let closed = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let refused = closed.local_addr().unwrap();
+        drop(closed);
+        assert_eq!(check_connection_request(client.get(format!("http://{refused}/models")))
+            .await.unwrap_err(), ConnectionError::new("network"));
+    }
+
 }
 
 /// Where a custom OpenAI-compatible endpoint lives: (label, base_url, model).
@@ -1144,6 +1296,7 @@ pub fn save_custom_provider(
     model: String,
     key: String,
 ) -> Result<Value, String> {
+    let key = normalize_api_key(&key);
     let _guard = lock_keys()?;
     let dir = config_dir();
     std::fs::create_dir_all(&dir).map_err(|e| format!("설정 폴더를 만들지 못했습니다: {e}"))?;
@@ -1224,6 +1377,39 @@ mod key_security_tests {
         result
     }
     const OLD: &str = "synthetic-legacy-key-1234";
+
+    #[test]
+    fn failed_secure_store_save_returns_only_the_existing_safe_reason() {
+        let mut store = ScenarioStore::new(None);
+        store.fail_set = true;
+        let error = save_key_to_store(&store, "synthetic-fixture-key").unwrap_err();
+        assert_eq!(error, "API 키를 보안 저장소에 저장하지 못했습니다.");
+        assert!(!error.contains("fixture"));
+        assert!(store.value.lock().unwrap().is_none());
+    }
+
+    #[test]
+    fn pasted_key_is_normalized_before_storage_and_mismatch_never_saves() {
+        home("paste", || {
+            let key = concat!("AIza", "-synthetic-fixture-only");
+            let pasted = format!(" \n\"Bearer key='{}'\"\r\n ", key);
+            assert!(save_api_key("google".into(), pasted).is_ok());
+            assert!(read_key("google").unwrap() == key);
+            assert!(!key_path("google").exists());
+            let mismatch = save_api_key("openai".into(), key.into()).unwrap_err();
+            assert!(mismatch.contains("키 형식"));
+            assert!(!mismatch.contains(key));
+            assert!(store("openai").unwrap().get().is_err());
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+            assert_eq!(runtime.block_on(ai_check_connection("openai".into())).unwrap_err().kind, "storage");
+            // A legacy key assigned to the wrong provider is blocked before dispatch.
+            store("openai").unwrap().set(key).unwrap();
+            assert_eq!(runtime.block_on(ai_check_connection("openai".into())).unwrap_err().kind, "format");
+            for text in ["Bearer synthetic-fixture-only", "Bearer\tsynthetic-fixture-only", "key=synthetic-fixture-only", "'synthetic-fixture-only'", "\nsynthetic-fixture-only\r\n"] {
+                assert!(normalize_api_key(text) == "synthetic-fixture-only");
+            }
+        });
+    }
 
     #[test]
     fn short_key_and_suffix_rule() {
