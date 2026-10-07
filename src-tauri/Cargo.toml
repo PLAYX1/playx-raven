@@ -31,6 +31,12 @@ open = "5"
 # OpenSSL just to talk to 127.0.0.1.
 zip = { version = "2", default-features = false, features = ["deflate"] }
 sha2 = "0.10"
+semver = "1"
+minisign-verify = "0.2"
+base64 = "0.22"
+flate2 = "1"
+tar = "0.4"
+plist = "1"
 # 클라우드로 나가는 백업을 우리가 한 번 더 잠근다.
 # 🔴 레이븐코인 지갑 암호는 2011년 방식(SHA-512 25,000회)이라 GPU 로 초당
 #    8만 개를 시험할 수 있다. 영단어 하나짜리 암호는 2.5초에 뚫린다.
@@ -100,3 +106,7 @@ keyring = { version = "3", features = ["apple-native", "windows-native"] }
 [target.'cfg(target_os = "macos")'.dependencies]
 # Downcast keyring's native error to OSStatus without formatting its message.
 security-framework = "3"
+
+[dev-dependencies]
+ring = "0.17"
+blake2 = "0.10"

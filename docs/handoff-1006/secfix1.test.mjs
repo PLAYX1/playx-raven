@@ -67,8 +67,11 @@ test('F03 remote order without local payment evidence cannot pay',()=>{
  assert.match(read('src-tauri/src/vending.rs'),/getreceivedbyaddress/);
  assert.match(read('src-tauri/src/vending.rs'),/order_addr.*ok_or/);
 });
-test('F06 updater install capability removed until signed metadata policy exists',()=>{
- assert.ok(!read('src-tauri/src/lib.rs').includes('.plugin(tauri_plugin_updater::Builder::new().build())'));
+test('F06 unrestricted updater IPC remains disabled; checked bytes reach the installer',()=>{
+ const policy=read('src-tauri/src/secure_update.rs');
+ const verified=policy.indexOf('update_policy::enforce('), installed=policy.indexOf('.install(&bytes)');
+ assert.ok(verified>=0 && installed>verified);
+ assert.ok(!read('src/main.ts').includes('downloadAndInstall'));
  assert.ok(!read('src-tauri/capabilities/default.json').includes('updater:default'));
 });
 test('H4 manifest missing asset or changed bytes refuses load',async()=>{

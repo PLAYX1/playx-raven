@@ -2297,17 +2297,25 @@ async function checkNow() {
   }
 }
 
-async function checkForUpdate(_quiet = true) {
-  const message = "앱 내 업데이트는 보안 보강 중입니다. 대표가 확인한 설치 파일로 수동 업데이트해 주세요.";
+async function checkForUpdate(quiet = true) {
   const nag = document.getElementById("upnag") as HTMLButtonElement | null;
-  if (nag) {
-    nag.hidden = false;
-    nag.classList.remove("new");
-    nag.textContent = "수동 업데이트 안내";
-    nag.onclick = () => void sure("업데이트 설치 보류", message, "닫기");
-  }
   const note = document.getElementById("up-note");
-  if (note) note.textContent = message;
+  try {
+    const update = await invoke<{ version: string | null }>("check_update");
+    if (!update.version) { if (note) note.textContent = "새 버전이 없습니다."; return; }
+    const version = update.version;
+    if (nag) {
+      nag.hidden = false; nag.classList.add("new"); nag.textContent = `${version} 업데이트`;
+      nag.onclick = async () => {
+        if (!await sure("업데이트 설치", `${version} 설치 후 앱이 재시작될 수 있습니다.`, "설치")) return;
+        nag.disabled = true;
+        try { await invoke("install_update", { expectedVersion: version }); }
+        catch (e) { if (note) note.textContent = errText(e); }
+        finally { nag.disabled = false; }
+      };
+    }
+    if (note) note.textContent = "설치 직전에 서명된 버전과 패키지를 검증합니다. 검증 정보가 없는 릴리스는 설치되지 않습니다.";
+  } catch (e) { if (!quiet && note) note.textContent = errText(e); }
 }
 
 /* ══ 라비 첫 화면 ═════════════════════════════════════════════════════
@@ -8778,7 +8786,7 @@ function gateSend() {
   const tailOk =
     !needTail || tail.toLowerCase() === String(sendPreview.address).slice(-4).toLowerCase();
   const go = $("s-go") as HTMLButtonElement;
-  go.disabled = !tailOk || (needPass && !pass) || !sendPreview.enough;
+  go.disabled = sendingNow || !tailOk || (needPass && !pass) || !sendPreview.enough;
   // 네 자를 다 쳤는데 안 맞으면 말해 준다. 조용히 버튼만 막으면 사람은
   // 자기가 오타를 낸 줄 알고 다시 친다 — 정작 봐야 할 것은 주소다.
   $("s-tailwarn").innerHTML =
@@ -12670,6 +12678,7 @@ async function 웹주문확인(물어봐도되나 = false) {
     return;
   }
   try {
+    const completion = await invoke<{ pending: number }>("retry_remote_completions", { token: 열쇠 });
     const r = await fetch("https://rvn.ex.erci.se/api/rvn/deliveries", {
       headers: { "x-rvn-delivery-token": 열쇠 },
     });
@@ -12689,6 +12698,7 @@ async function 웹주문확인(물어봐도되나 = false) {
     $("wo-note").textContent = 웹주문들.length
       ? tf("{0}건이 기다리고 있습니다. 보낼 때마다 지갑 암호를 한 번 받습니다.", 웹주문들.length)
       : "열쇠가 확인됐습니다. 지금 기다리는 주문은 없습니다 — 웹에서 누가 사면 여기에 뜹니다.";
+    if (completion.pending) $("wo-note").textContent += " 완료 기록/미확인 주문이 로컬 재시도 대기 중입니다.";
     $("wo-list").innerHTML = 웹주문들
       .map((o, i) => `<tr>
           <td translate="no">${escapeHtml(o.title || o.asset)}<div class="meta">${escapeHtml(o.asset)}</div></td>
@@ -12724,21 +12734,15 @@ async function 웹주문보내기(i: number) {
   if (!lock?.unlocked && !pass) return;
 
   try {
-    const txid = await invoke<string>("fulfil_sale", {
-      asset: o.asset,
-      qty: Number(o.qty) || 1,
-      toAddress: String(o.to),
+    const txid = await invoke<string>("deliver_remote_sale", {
+      order: { id: o.id, asset: o.asset, qty: Number(o.qty), to: String(o.to),
+        order_addr: o.order_addr, paid_rvn: o.paid_rvn,
+        payment_txid: o.payment_txid, payment_vout: o.payment_vout },
       passphrase: pass,
     });
-    /* 🔴 **보낸 뒤에만** 알린다. 먼저 알리고 전송이 실패하면 그 주문은
-       목록에서 빠지는데 사람은 못 받는다 — 영영 사라진다. */
-    await fetch("https://rvn.ex.erci.se/api/rvn/deliveries", {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-rvn-delivery-token": 열쇠 },
-      body: JSON.stringify({ id: o.id, txid }),
-    }).catch(() => {});
+    const completion = await invoke<{ pending: number }>("retry_remote_completions", { token: 열쇠 });
     $("wo-result").innerHTML =
-      `<div class="card" style="margin-top:12px"><h3>보냈습니다</h3>
+      `<div class="card" style="margin-top:12px"><h3>${completion.pending ? "전달됨 · 서버 완료 기록 재시도 대기" : "보냈습니다"}</h3>
        <div class="kv"><b>트랜잭션</b><code class="addr">${escapeHtml(txid)}</code></div></div>`;
     웹주문확인();
     loadAssets(false);
@@ -12994,13 +12998,8 @@ async function 웹자동배송() {
 
     /* 🔴 **보낸 뒤에만** 웹에 알린다. 먼저 알리고 전송이 실패하면 그 주문은
        목록에서 빠지는데 사람은 못 받는다 — 영영 사라진다. */
-    for (const s of res.sent || []) {
-      await fetch("https://rvn.ex.erci.se/api/rvn/deliveries", {
-        method: "POST",
-        headers: { "content-type": "application/json", "x-rvn-delivery-token": 열쇠 },
-        body: JSON.stringify({ id: s.id, txid: s.txid }),
-      }).catch(() => {});
-    }
+    const completion = await invoke<{ pending: number }>("retry_remote_completions", { token: 열쇠 });
+    if (completion.pending) $("wo-note").textContent = "전달 결과 또는 서버 완료 기록 확인 대기 중입니다. 자산을 다시 보내지 않습니다.";
     if ((res.sent || []).length) {
       웹주문확인();
       loadAssets(false);

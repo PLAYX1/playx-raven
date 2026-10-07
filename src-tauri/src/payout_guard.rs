@@ -183,3 +183,54 @@ pub fn acknowledge(dir: &Path, lane: &str, id: &str) -> Result<(), String> {
     fs::remove_file(&marker).map_err(|_| BLOCKED)?;
     sync_parent(&marker)
 }
+
+/// Read only: never creates a pending intent or calls a payment RPC.
+pub fn receipt(dir: &Path, lane: &str, id: &str, intent: &[u8]) -> Result<Option<String>, String> {
+    if [lane, id].iter().any(|s| {
+        s.is_empty() || s.len() > 128 || !s.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
+    }) {
+        return Err("지급 식별자 오류".into());
+    }
+    let bytes = match fs::read(dir.join(format!("{lane}-{id}.done"))) {
+        Ok(b) => b,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(_) => return Err(BLOCKED.into()),
+    };
+    if bytes.len() != intent.len() + 65
+        || bytes[64] != b'\n'
+        || &bytes[65..] != intent
+        || !bytes[..64].iter().all(|b| b.is_ascii_hexdigit())
+    {
+        return Err("기존 지급 내용과 다릅니다.".into());
+    }
+    Ok(Some(
+        String::from_utf8(bytes[..64].to_vec()).map_err(|_| BLOCKED)?,
+    ))
+}
+
+/// OS-owned lock is released on process death. The file is never deleted: removing
+/// it would permit two processes to lock different inodes for the same journal.
+pub struct ProcessLock(std::fs::File);
+impl ProcessLock {
+    pub fn take(dir: &Path, name: &str) -> Result<Self, String> {
+        fs::create_dir_all(dir).map_err(|_| "원장 폴더 생성 실패")?;
+        let mut options = OpenOptions::new();
+        options.read(true).write(true).create(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        let file = options
+            .open(dir.join(format!("{name}.lock")))
+            .map_err(|_| "원장 잠금 파일 오류")?;
+        file.try_lock()
+            .map_err(|_| "다른 프로세스가 원장을 처리 중입니다.")?;
+        Ok(Self(file))
+    }
+}
+impl Drop for ProcessLock {
+    fn drop(&mut self) {
+        let _ = self.0.unlock();
+    }
+}

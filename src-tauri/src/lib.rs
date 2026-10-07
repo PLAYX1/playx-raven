@@ -90,6 +90,9 @@ mod reindex;
 mod reindex_run;
 mod tunnel;
 mod vending;
+mod remote_sales;
+mod update_policy;
+mod secure_update;
 mod wallet;
 mod server;
 mod services;
@@ -114,8 +117,8 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        // F06: 대표 확인 필요 — signed version/hash metadata is not enforced.
-        // Updater IPC is not registered until replay protection is implemented.
+        // No updater IPC permissions: installation is only exposed via secure_update.
+        .plugin(tauri_plugin_updater::Builder::default().build())
         .plugin(tauri_plugin_process::init())
         // The owner token is minted once per run and lives only in memory.
         .manage(server::ServerState::default())
@@ -351,7 +354,11 @@ pub fn run() {
             wallet::lock_wallet,
             vending::sellable_assets,
             vending::pending_sales,
+            secure_update::check_update,
+            secure_update::install_update,
             vending::fulfil_sale,
+            remote_sales::deliver_remote_sale,
+            remote_sales::retry_remote_completions,
             auto::auto_fulfil,
             auto::auto_usage,
             auto::auto_enable,
@@ -613,6 +620,9 @@ pub fn run() {
         .setup(|app| {
             // 앱 자료 폴더를 이 사용자 전용으로 잠근다(다른 계정이 열쇠·장부를 못 읽게).
             app_folder::harden();
+            if secure_update::initialize_policy(&app.package_info().version.to_string()).is_err() {
+                eprintln!("최소 허용 버전 기록 실패: 업데이트 확인 및 설치 시 다시 검증합니다.");
+            }
             ai::migrate_keys_on_start();
             tauri::async_runtime::spawn(member_privacy::run_cleanup());
             // 「만들기」 기록 정리 — 보관 기간 지난 받는 사람 이름, 7일 지난 인쇄 파일,
