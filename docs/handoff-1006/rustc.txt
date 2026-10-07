@@ -1,0 +1,17 @@
+warning: field `0` is never read
+  --> docs/handoff-1006/../../src-tauri/src/payout_guard.rs:72:10
+   |
+72 |     Done(String),
+   |     ---- ^^^^^^
+   |     |
+   |     field in this variant
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+help: consider changing the field to be of unit type to suppress this warning while preserving the field numbering, or remove the field
+   |
+72 -     Done(String),
+72 +     Done(()),
+   |
+
+warning: 1 warning emitted
+

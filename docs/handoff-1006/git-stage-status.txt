@@ -1,0 +1,8 @@
+branch: claude/secfix1
+HEAD: ced2bdaa50402ea2928fbfb592b13ac96b35c17d
+staging: FAILED
+reason: worktree index.lock creation returned Operation not permitted
+index: /Users/gimmusong/build/playx-raven/.git/worktrees/wt-rv-secfix1/index
+staged files after attempt: none
+commit: NOT CREATED
+push/deploy: NOT RUN

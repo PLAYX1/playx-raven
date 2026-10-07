@@ -87,6 +87,7 @@ pub async fn pending_sales(offers: Vec<Offer>, min_conf: u32) -> Result<Value, S
         let confirmations = tx.get("confirmations").and_then(Value::as_i64).unwrap_or(0);
         out.push(json!({
             "txid": tx.get("txid"),
+            "vout": tx.get("vout"),
             "address": addr,
             "paid": tx.get("amount"),
             "time": tx.get("time"),
@@ -120,8 +121,10 @@ pub async fn fulfil_sale(
     passphrase: Option<String>,
     paid_rvn: Option<f64>,
     order_addr: Option<String>,
+    payment_txid: Option<String>,
+    payment_vout: Option<u32>,
 ) -> Result<String, String> {
-    if qty <= 0.0 {
+    if !qty.is_finite() || qty <= 0.0 {
         return Err("수량이 올바르지 않습니다.".into());
     }
     if asset.ends_with('!') {
@@ -132,31 +135,32 @@ pub async fn fulfil_sale(
         return Err("받는 주소가 올바르지 않습니다.".into());
     }
 
-    let locked = matches!(
-        call_rpc("getwalletinfo", json!([]))
-            .await
-            .ok()
-            .and_then(|i| i.get("unlocked_until").and_then(Value::as_i64)),
-        Some(0)
-    );
-    if locked {
-        let pass =
-            passphrase.ok_or_else(|| "지갑이 잠겨 있습니다. 암호가 필요합니다.".to_string())?;
-        call_rpc("walletpassphrase", json!([pass, 30])).await?;
-    }
-
-    let result = call_rpc("transfer", json!([asset, qty, to_address, "", 0, "", ""])).await;
-
-    if locked {
-        let _ = call_rpc("walletlock", json!([])).await;
-    }
-
-    let txid = result?
-        .as_array()
-        .and_then(|a| a.first())
-        .and_then(Value::as_str)
-        .unwrap_or("")
-        .to_string();
+    // Remote queued orders without local confirmed payment evidence are disabled.
+    let order = order_addr.as_deref().ok_or("로컬 결제 증빙이 없는 웹 주문 전달은 보류됩니다. 대표 확인이 필요합니다.")?;
+    let paid = paid_rvn.filter(|n| n.is_finite() && *n > 0.0).ok_or("결제 금액이 없습니다.")?;
+    let payment = payment_txid.ok_or("결제 거래 번호가 없습니다.")?;
+    let vout = payment_vout.ok_or("결제 출력 번호가 없습니다.")?;
+    if payment.len() != 64 || !payment.bytes().all(|b| b.is_ascii_hexdigit()) { return Err("결제 거래 번호 오류".into()); }
+    let received = call_rpc("getreceivedbyaddress", json!([order, 1])).await?;
+    if received.as_f64().unwrap_or(0.0) < paid { return Err("확정된 결제 금액이 부족합니다.".into()); }
+    let payment_record = call_rpc("gettransaction", json!([payment])).await?;
+    let confirmed = payment_record["confirmations"].as_i64().unwrap_or(0) >= 1;
+    let matches = payment_record["details"].as_array().is_some_and(|rows| rows.iter().any(|r|
+        r["category"] == "receive" && r["address"] == order && r["vout"].as_u64() == Some(vout as u64)
+        && r["asset_name"].is_null() && r["amount"].as_f64() == Some(paid)));
+    if !confirmed || !matches { return Err("결제 출력이 주문과 다르거나 미확정입니다.".into()); }
+    let intent = serde_json::to_vec(&json!([order, payment, vout, paid, asset, qty, to_address])).map_err(|_| "주문 기록 오류")?;
+    let id = format!("{}-{}", payment.to_lowercase(), vout);
+    let txid = crate::send::with_unlocked(passphrase, || async {
+        let guard = match crate::payout_guard::begin(&crate::paths::app_file("payouts"), "sale", &id, &intent)? {
+            crate::payout_guard::Begin::Done(txid) => return Ok(txid),
+            crate::payout_guard::Begin::New(g) => g,
+        };
+        let result = call_rpc("transfer", json!([asset, qty, to_address, "", 0, "", ""])).await?;
+        let txid = result.as_array().and_then(|a| a.first()).and_then(Value::as_str).unwrap_or("").to_string();
+        guard.complete(&txid)?;
+        Ok(txid)
+    }).await?;
     crate::refund::remember_ours(&txid);
 
     // 🔴 자산 판매도 가게 결제와 같은 1% 다. **자산을 실제로 보낸 뒤에** 적는다 —

@@ -246,8 +246,8 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { openRavenVaultWallet, RAVENVAULT_WALLET, LEGACY_LOCAL_WALLET } from "./desktop-links";
 import { getVersion } from "@tauri-apps/api/app";
 import { listen } from "@tauri-apps/api/event";
-import { check as checkUpdate } from "@tauri-apps/plugin-updater";
-import { relaunch } from "@tauri-apps/plugin-process";
+
+
 import { copyHtml, setCopyText, t, tf, lang, setLang, LANG_NAMES, startI18n } from "./i18n";
 import {
   issuedOf, looksLikeAddress, ownerRowsHtml, OWNER_NOT_PINNED, whoseHtml, whoseQuestion,
@@ -2279,35 +2279,6 @@ async function paintStatusDots() {
  * 🔴 장사 중에 저절로 다시 시작되면 손님 QR 이 먹통이 된다. 그래서
  *    받는 것까지는 자동이어도 **다시 시작은 사람이 정한다.**
  */
-async function doInstall(up: any) {
-  const nag = document.getElementById("upnag") as HTMLButtonElement | null;
-  const ok = await sure(
-    t("지금 받아서 설치할까요?"),
-    `${t("새 버전")} ${up?.version ?? ""} · ` +
-      t("받은 뒤 프로그램이 다시 시작합니다. 손님이 주문 중이면 그 화면이 끊깁니다.")
-  );
-  if (!ok) return;
-  try {
-    if (nag) {
-      nag.disabled = true;
-      setCopyText(nag, () => t("받는 중…"));
-    }
-    await up.downloadAndInstall((e: any) => {
-      // 얼마나 왔는지 말한다. 큰 파일이라 아무 말이 없으면 멎은 줄 안다.
-      if (e?.event === "Progress" && nag) {
-        setCopyText(nag, () => t("받는 중…"));
-      }
-      if (e?.event === "Finished" && nag) setCopyText(nag, () => t("설치 중…"));
-    });
-    await relaunch();
-  } catch (e) {
-    if (nag) {
-      nag.disabled = false;
-      setCopyText(nag, () => t("새 버전 받기"));
-    }
-    await sure(t("받지 못했습니다"), errText(e), t("닫기"));
-  }
-}
 
 async function checkNow() {
   const nag = document.getElementById("upnag") as HTMLButtonElement | null;
@@ -2326,99 +2297,17 @@ async function checkNow() {
   }
 }
 
-async function checkForUpdate(quiet = true) {
-  try {
-    const up = await checkUpdate();
-    const nag = document.getElementById("upnag") as HTMLButtonElement | null;
-    if (!up) {
-      // 🔴 **감추지 않는다.** 「최신이다」도 답이다. 아무 말이 없으면
-      //    사장은 확인이 된 건지 안 된 건지 알 수 없다.
-      if (nag) {
-        nag.hidden = false;
-        nag.classList.remove("new");
-        setCopyText(nag, () => t("최신 버전"));
-        nag.onclick = () => void checkNow();
-      }
-      if (!quiet) $("up-note").textContent = "지금이 최신입니다.";
-      return;
-    }
-    // 🔴 **늘 보이는 자리에 먼저 말한다.** 아래 자세한 칸은 「설정」 화면
-    //    안쪽 스크롤 한참 밑에 있다 — 앱은 새 판이 있는 걸 알면서도
-    //    보이는 데서는 아무 말도 안 했다. 그래서 몇 판이나 뒤처진 채로
-    //    쓰고 계셨다. 판 번호 옆에 붙여 두고, 누르면 그 칸으로 데려간다.
-    if (nag) {
-      nag.hidden = false;
-      // 🔴 이때만 눈에 띄게 한다. 최신일 때도 주황이면 늘 할 일이 있는
-      //    것처럼 보이고, 그러면 진짜 있을 때 안 보인다.
-      nag.classList.add("new");
-      setCopyText(nag, () => t("새 버전 받기"));
-      // 🔴 **이름이 「받기」면 받아야 한다.** 여태 화면만 옮겼다 —
-      //    사장은 눌렀는데 아무 일도 안 일어난다고 겪었고, 실제 설치는
-      //    저 아래 「받아서 설치」를 **또** 눌러야 했다. 그 칸이 화면
-      //    밖에 있으면 그런 단추가 있는 줄도 모른다.
-      nag.onclick = () => void doInstall(up);
-    }
-    // 무엇이 바뀌는지 말하지 않고 "새 버전" 만 띄우면 아무도 안 누른다.
-    $("up-box").style.display = "";
-    $("up-box").innerHTML =
-      `<div class="card" style="border-color:var(--ravi)">
-         <h3>${tf("새 버전이 있습니다 — {0}", escapeHtml(up.version))}</h3>
-         <p class="meta" style="white-space:pre-wrap">${escapeHtml(up.body || "").slice(0, 600)}</p>
-         <div class="row" style="margin-top:12px">
-           <button id="up-go">받아서 설치</button>
-           <button class="ghost" id="up-later">나중에</button>
-           <span class="meta" id="up-note"></span>
-         </div>
-         <p class="note" style="margin-top:10px">
-           설치하면 프로그램이 <b>다시 시작</b>합니다. 그동안 손님 QR 이 잠깐
-           멈추니, <b>손님이 없을 때</b> 누르세요.
-         </p>
-       </div>`;
-    ($("up-go") as HTMLElement).onclick = async () => {
-      const ok = await sure(
-        "지금 설치할까요?",
-        "프로그램이 다시 시작합니다. 손님이 주문 중이면 그 화면이 끊깁니다.",
-        "설치",
-      );
-      if (!ok) return;
-      $("up-note").textContent = "받는 중…";
-      try {
-        let got = 0;
-        let total = 0;
-        await up.downloadAndInstall((e: any) => {
-          if (e.event === "Started") total = e.data?.contentLength || 0;
-          if (e.event === "Progress") {
-            got += e.data?.chunkLength || 0;
-            $("up-note").textContent = total
-              ? tf("받는 중 {0}%", Math.round((got / total) * 100))
-              : "받는 중…";
-          }
-          if (e.event === "Finished") $("up-note").textContent = "설치 중…";
-        });
-        await relaunch();
-      } catch (e) {
-        $("up-note").innerHTML = `<span class="warn">${escapeHtml(errText(e))}</span>`;
-      }
-    };
-    ($("up-later") as HTMLElement).onclick = () => {
-      $("up-box").style.display = "none";
-      // 이 큰 칸만 접는다. **판 번호 옆의 작은 표시는 남긴다** — 새 판이
-      // 있다는 사실 자체를 감추면, 그게 지금까지 벌어진 일이다.
-      localStorage.setItem("playx-raven-update-snooze", String(Date.now()));
-    };
-  } catch (e) {
-    // 업데이트 서버가 없거나 인터넷이 끊긴 것은 사고가 아니다. 조용히 넘긴다 —
-    // 다만 사장이 직접 눌러 확인했을 때는 말해 준다.
-    // 🔴 「확인 중…」에서 멈춘 채로 두면 사장은 프로그램이 멎은 줄 안다.
-    const nag2 = document.getElementById("upnag") as HTMLButtonElement | null;
-    if (nag2) {
-      nag2.hidden = false;
-      nag2.classList.remove("new");
-      setCopyText(nag2, () => t("확인 못 했습니다"));
-      nag2.onclick = () => void checkNow();
-    }
-    if (!quiet) $("up-note").textContent = "확인하지 못했습니다. 인터넷을 확인해 주세요.";
+async function checkForUpdate(_quiet = true) {
+  const message = "앱 내 업데이트는 보안 보강 중입니다. 대표가 확인한 설치 파일로 수동 업데이트해 주세요.";
+  const nag = document.getElementById("upnag") as HTMLButtonElement | null;
+  if (nag) {
+    nag.hidden = false;
+    nag.classList.remove("new");
+    nag.textContent = "수동 업데이트 안내";
+    nag.onclick = () => void sure("업데이트 설치 보류", message, "닫기");
   }
+  const note = document.getElementById("up-note");
+  if (note) note.textContent = message;
 }
 
 /* ══ 라비 첫 화면 ═════════════════════════════════════════════════════
@@ -8904,8 +8793,12 @@ function gateSend() {
   go.textContent = amt > 0 ? tf("{0} {1} 보내기", fmtQty(amt), what) : "보내기";
 }
 
+let sendingNow = false;
 async function doSend() {
-  if (!sendPreview) return;
+  if (!sendPreview || sendingNow) return;
+  sendingNow = true;
+  sendPreview.requestId ??= crypto.randomUUID();
+  const approved = sendPreview;
   const btn = $("s-go") as HTMLButtonElement;
   const wasLabel = btn.textContent;
   btn.disabled = true;
@@ -8913,32 +8806,35 @@ async function doSend() {
   const pass = ($("s-pass") as HTMLInputElement).value || null;
   // 결과 화면에 쓸 것 — 보낸 뒤에는 sendPreview 를 비운다.
   const sent = {
-    address: String(sendPreview.address),
-    amount: fmtQty(Number(sendPreview.amount)),
-    what: sendMode === "asset" ? String(sendPreview.asset) : "RVN",
-    isMine: sendPreview.is_mine === true,
+    address: String(approved.address),
+    amount: fmtQty(Number(approved.amount)),
+    what: sendMode === "asset" ? String(approved.asset) : "RVN",
+    isMine: approved.is_mine === true,
   };
 
   try {
     const txid =
       sendMode === "asset"
         ? await invoke<string>("send_asset", {
-            asset: sendPreview.asset,
-            qty: sendPreview.amount,
-            toAddress: sendPreview.address,
+            asset: approved.asset,
+            qty: approved.amount,
+            toAddress: approved.address,
             passphrase: pass,
+            requestId: approved.requestId,
           })
         : await invoke<string>("send_rvn", {
-            toAddress: sendPreview.address,
-            amount: sendPreview.amount,
+            toAddress: approved.address,
+            amount: approved.amount,
             comment: null,
             passphrase: pass,
+            requestId: approved.requestId,
           });
+    await invoke("send_ack", { requestId: approved.requestId });
     setAllRaviMood("happy");
     setTimeout(() => setAllRaviMood(aiProvider ? "normal" : "sleep"), 1400);
 
     // RV6: 폰 요청으로 채운 보내기였다면 폰에 「완료」를 알린다(pairing-ui.ts 가 맞춰 본다).
-    window.dispatchEvent(new CustomEvent("rv-sent", { detail: { txid: String(txid ?? ""), address: sent.address, amount: Number(sendPreview.amount), what: sent.what } }));
+    window.dispatchEvent(new CustomEvent("rv-sent", { detail: { txid: String(txid ?? ""), address: sent.address, amount: Number(approved.amount), what: sent.what } }));
     // 🔴 0.4.8-B — 결과가 「트랜잭션 + 64자」였다(RV3 T05). 사람이 확인할 것은 **얼마를 누구에게**다.
     //    거래 번호는 「자세히」 안으로. 이름이 없으면 그 자리에서 붙여 저장하게 한다(이 컴퓨터에만).
     const name = payeeName(sent.address);
@@ -8969,7 +8865,7 @@ async function doSend() {
     //    보이는 단추를 두면 안 된다.
     const back = $("s-back") as HTMLElement | null;
     if (back) back.style.display = "none";
-    sendPreview = null;
+    if (sendPreview === approved) sendPreview = null;
     loadWallet();
     // 🔴 여태 `loadWallet()` 만 불렀다. 그래서 RVN 잔액은 줄어드는데
     //    **자산 목록은 옛날 그대로**였다 — 100장을 다 보내고도 목록에는
@@ -8978,12 +8874,13 @@ async function doSend() {
     void loadAssets(false);
   } catch (e) {
     $("s-result").innerHTML = `<div class="warnbox" style="margin-top:12px">${escapeHtml(errText(e))}</div>`;
-    // 실패했으니 다시 누를 수 있어야 하고, 라벨도 금액으로 돌아와야 한다.
+    // 미확인 지급은 Rust의 영속 잠금이 재시도/재시작에도 차단한다.
     // "보내는 중…" 이 남아 있으면 얼마를 보내려던 건지 사라진다.
     btn.textContent = wasLabel || "보내기";
     btn.disabled = false;
   } finally {
     ($("s-pass") as HTMLInputElement).value = "";
+    sendingNow = false;
     if (sendPreview) gateSend();
   }
   btn.textContent = "보내기";
@@ -12719,6 +12616,8 @@ async function fulfil(sale: any) {
       passphrase: pass,
       paidRvn: Number(sale.paid) || null,
       orderAddr: sale.address ?? null,
+      paymentTxid: sale.txid ?? null,
+      paymentVout: sale.vout ?? null,
     });
     $("vd-result").innerHTML =
       `<div class="card" style="margin-top:12px"><h3>보냈습니다</h3>

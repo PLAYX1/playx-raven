@@ -119,7 +119,7 @@ for (const screen of ['send', 'confirm']) {
   web$('restore-input').value = 'synthetic input'; web$('words-grid').innerHTML = 'synthetic input'; web$('quiz-opts').innerHTML = 'synthetic input';
   const body = { dataset: { screen } };
   const web = vm.createContext({ $: web$, document: { body, querySelectorAll: () => passwordFields },
-    mnemonic: null, hdKey: null, scan: {}, pending: {}, draftMnemonic: null, quizPlan: [], idleTimer: undefined, resumeSend: false,
+    integrityFailed: false, mnemonic: null, hdKey: null, scan: {}, pending: {}, draftMnemonic: null, quizPlan: [], idleTimer: undefined, resumeSend: false,
     window: { clearTimeout() {} }, say() {}, readVault: () => ({}), showLockedOrOpen: async () => { body.dataset.screen = 'unlock'; },
     show: screen => { body.dataset.screen = screen; }, RavencoinKey: { getHDKey: () => null }, NET_NAME: 'synthetic', touchIdle() {},
     openBuyFromHash: () => { throw Error('Resume must not reset a purchase'); }, sayWhereThisWalletLives() {}, loadTalks: async () => {},

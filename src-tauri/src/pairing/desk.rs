@@ -226,7 +226,7 @@ impl Desk {
         if p.perms.money != "phone" {
             return 0.0;
         }
-        let limit = p.perms.daily_limit_rvn.saturating_mul(100_000_000);
+        let limit = if p.perms.daily_limit_rvn > MAX_PHONE_DAILY_RVN { 0 } else { p.perms.daily_limit_rvn.saturating_mul(100_000_000) };
         limit.saturating_sub(self.spent_sats(peer, now)) as f64 / 1e8
     }
 
@@ -457,8 +457,8 @@ impl Desk {
         for (id, peer) in ids {
             let ok = match self.book.get(&peer) {
                 Some(p) => {
-                    let limit = p.perms.daily_limit_rvn.saturating_mul(100_000_000);
-                    p.perms.request && p.perms.money == "phone" && self.spent_sats(&peer, now) <= limit
+                    let limit = if p.perms.daily_limit_rvn > MAX_PHONE_DAILY_RVN { 0 } else { p.perms.daily_limit_rvn.saturating_mul(100_000_000) };
+                    p.perms.request && p.perms.money == "phone" && p.perms.daily_limit_rvn <= MAX_PHONE_DAILY_RVN && self.spent_sats(&peer, now) <= limit
                 }
                 None => false,
             };

@@ -98,6 +98,7 @@ mod shopkey;
 mod shopmove;
 mod shopseal;
 mod devfee;
+mod payout_guard;
 mod ticket;
 mod relay;
 mod upload;
@@ -113,7 +114,8 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
+        // F06: 대표 확인 필요 — signed version/hash metadata is not enforced.
+        // Updater IPC is not registered until replay protection is implemented.
         .plugin(tauri_plugin_process::init())
         // The owner token is minted once per run and lives only in memory.
         .manage(server::ServerState::default())
@@ -216,6 +218,7 @@ pub fn run() {
             send::send_asset,
             send::transfer_ownership,
             send::send_rvn,
+            send::send_ack,
             upload::ipfs_add_file,
             upload::ipfs_add_bundle,
             upload::build_metadata,

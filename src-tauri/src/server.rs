@@ -443,6 +443,8 @@ fn customer_path(path: &str) -> bool {
         "/" | "/wallet"
             | "/legacy-wallet"
             | "/wallet.bundle.js"
+            | "/wallet-integrity.js"
+            | "/wallet-integrity.json"
             | "/shop-seal.bundle.js"
             | "/buy"
             | "/shops"
@@ -3401,6 +3403,8 @@ fn build_phone_router(st: ServerState) -> axum::Router {
         // 로그인이다. 열쇠는 브라우저 안에만 있고 서버로 오지 않는다.
         .route("/wallet", get(wallet_page))
         .route("/legacy-wallet", get(wallet_page))
+        .route("/wallet-integrity.js", get(|| async { ([("content-type", "application/javascript; charset=utf-8"), ("cache-control", "no-store")], include_str!("../../web/wallet-integrity.js")) }))
+        .route("/wallet-integrity.json", get(|| async { ([("content-type", "application/json"), ("cache-control", "no-store")], include_str!("../../web/wallet-integrity.json")) }))
         .route("/wallet.bundle.js", get(wallet_bundle))
         .route("/shop-seal.bundle.js", get(|| async { ([("content-type", "application/javascript; charset=utf-8")], include_str!("../../web/shop-seal.bundle.js")) }))
         .route("/api/shop", get(api_shop))

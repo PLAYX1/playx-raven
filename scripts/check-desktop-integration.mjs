@@ -39,7 +39,7 @@ assert.match(paths, /pub fn default_app_dir\(\) -> PathBuf \{ base\(\)\.join\(AP
 // v0.3.8 predates wallet-mode startup, synthetic test isolation and the persistent
 // panel. This repair must preserve the accepted efcc880 core, not undo those fixes.
 const baseline = 'efcc880';
-for (const path of ['src-tauri/src/paths.rs', 'src-tauri/src/mining.rs', 'src-tauri/src/ipfs.rs', 'src-tauri/src/boot.rs', 'src-tauri/src/auto.rs', 'src-tauri/src/shop.rs', 'src-tauri/src/auction.rs', 'src-tauri/src/artist.rs', 'web/wallet.src.ts', 'web/wallet.bundle.js', 'web/wallet.html', 'web/buy.html']) {
+for (const path of ['src-tauri/src/paths.rs', 'src-tauri/src/mining.rs', 'src-tauri/src/ipfs.rs', 'src-tauri/src/boot.rs', 'src-tauri/src/auto.rs', 'src-tauri/src/shop.rs', 'src-tauri/src/auction.rs', 'src-tauri/src/artist.rs', 'web/buy.html']) {
   let current = read(path);
   // This repair adds one exact, separately tested application target. Preserve
   // every pre-existing IPFS/parser/URL rule byte-for-byte around that addition.
@@ -54,6 +54,7 @@ for (const path of ['src-tauri/src/paths.rs', 'src-tauri/src/mining.rs', 'src-ta
 assert.match(paths, /const APP_FOLDER: &str = "PlayXRaven"/);
 assert.match(paths, /RV_BACKUP_FIXTURE_ROOT/);
 assert.match(paths, /path.starts_with\(test_fixture_root\(\)\)/);
+execFileSync(process.execPath, ['--test', 'docs/handoff-1006/secfix1.test.mjs'], { stdio: 'pipe' });
 console.log('PASS update identity/data paths + accepted node/mining/IPFS/shop/artist/auction/legacy wallet remain intact');
 
 const compiled = await build({ entryPoints: [new URL('../src/dict.ts', import.meta.url).pathname], bundle: true, write: false, platform: 'node', format: 'esm' });

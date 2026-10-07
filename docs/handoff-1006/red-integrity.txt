@@ -1,0 +1,27 @@
+원 실행의 사례/결과만 보존. assertion 값과 소스 덤프는 제거함.
+TAP version 13
+# Subtest: H1 weak passwords refused; new vault and legacy migration round trip; failed storage preserves old vault
+ok 1 - H1 weak passwords refused; new vault and legacy migration round trip; failed storage preserves old vault
+# Subtest: H2 actual raw output required before sign; amount/script/hash mismatch and absolute fee ceiling refused
+ok 2 - H2 actual raw output required before sign; amount/script/hash mismatch and absolute fee ceiling refused
+# Subtest: H3 unverified automatic installation disabled
+ok 3 - H3 unverified automatic installation disabled
+# Subtest: M Windows restore refuses disk fallback
+ok 4 - M Windows restore refuses disk fallback
+# Subtest: M pairing existing excessive limits blocked and new limit capped
+ok 5 - M pairing existing excessive limits blocked and new limit capped
+# Subtest: F01/F02 durable guard precedes payout and ledger is atomic
+ok 6 - F01/F02 durable guard precedes payout and ledger is atomic
+# Subtest: F03 remote order without local payment evidence cannot pay
+ok 7 - F03 remote order without local payment evidence cannot pay
+# Subtest: F06 updater install capability removed until signed metadata policy exists
+ok 8 - F06 updater install capability removed until signed metadata policy exists
+# Subtest: H4 manifest missing asset or changed bytes refuses load
+not ok 9 - H4 manifest missing asset or changed bytes refuses load
+1..9
+# tests 9
+# pass 8
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0

@@ -52,10 +52,9 @@ const FEE_PER_KB = 1_000_000;
 const FEE_CEILING_SATS = 100_000_000;
 
 const STORE_KEY = "playx.raven.wallet.v1";
-const PBKDF2_ITER = 210_000;
+const PBKDF2_ITER = 600_000;
 
-/// 잠그지 않기로 한 지갑에도 같은 형식을 쓴다. 저장·복호 경로가 하나여야
-/// 나중에 잠글 때 새로운 버그가 생기지 않는다.
+// 레거시 무잠금 금고를 읽어 보호된 금고로 이전할 때만 사용한다. 신규 저장 금지.
 const NO_LOCK = "\u0000playx-open-wallet";
 /** 카운터에 폰을 두고 자리를 뜨는 일이 있다. */
 const IDLE_LOCK_MS = 10 * 60 * 1000;
@@ -113,7 +112,7 @@ interface ScanResult {
 }
 
 interface Vault {
-  v: 1;
+  v: 1 | 2;
   iter: number;
   salt: string;
   iv: string;
@@ -346,19 +345,49 @@ async function lockVault(mnemonic: string, password: string): Promise<Vault> {
     enc.encode(mnemonic) as unknown as BufferSource,
   );
   return {
-    v: 1, iter: PBKDF2_ITER,
+    v: 2, iter: PBKDF2_ITER,
     salt: toB64(salt), iv: toB64(iv), ct: toB64(new Uint8Array(ct)),
   };
 }
 
 async function openVault(vault: Vault, password: string): Promise<string> {
-  const key = await deriveKey(password, fromB64(vault.salt), vault.iter || PBKDF2_ITER);
+  if (![1, 2].includes(vault.v) || !Number.isSafeInteger(vault.iter ?? 210_000) || (vault.iter ?? 210_000) < 210_000 || vault.iter > 2_000_000) throw new Error("지원하지 않는 금고입니다.");
+  const key = await deriveKey(password, fromB64(vault.salt), vault.iter || 210_000);
   const pt = await crypto.subtle.decrypt(
     { name: "AES-GCM", iv: fromB64(vault.iv) as unknown as BufferSource },
     key,
     fromB64(vault.ct) as unknown as BufferSource,
   );
   return dec.decode(pt);
+}
+
+/** 숫자만의 PIN은 오프라인 추측 공격에 약하므로 신규 봉인에 허용하지 않는다. */
+function strongPassword(password: string): boolean {
+  return password.length >= 12 && password.length <= 256 && /\p{L}/u.test(password) && /[^\p{L}\s]/u.test(password);
+}
+
+async function storeVerifiedVault(m: string, password: string, bio?: string): Promise<Vault> {
+  if (integrityFailed) throw new Error("지갑 무결성 확인이 필요합니다.");
+  if (!bio && !strongPassword(password)) throw new Error("강한 암호가 필요합니다.");
+  const prior = localStorage.getItem(STORE_KEY);
+  if (migrationExpected !== null && JSON.stringify(readVault()) !== migrationExpected) throw new Error("다른 탭에서 금고가 바뀌었습니다. 다시 열어 주세요.");
+  const next = await lockVault(m, password);
+  if (await openVault(next, password) !== m) throw new Error("새 금고 검증에 실패했습니다. 기존 금고는 보존됩니다.");
+  if (bio) (next as unknown as Record<string, unknown>).bio = bio;
+  // 다른 탭이 바꾼 금고를 덮어쓰지 않는다. setItem 실패는 원래 값을 보존한다.
+  if (integrityFailed) throw new Error("지갑 무결성 확인이 필요합니다.");
+  if (localStorage.getItem(STORE_KEY) !== prior) throw new Error("금고가 변경되었습니다. 다시 열어 주세요.");
+  localStorage.setItem(STORE_KEY, JSON.stringify(next));
+  migrationExpected = null;
+  return next;
+}
+
+function requireVaultUpgrade(m: string, vault: Vault): void {
+  if (integrityFailed) return;
+  migrationExpected = JSON.stringify(vault);
+  draftMnemonic = m;
+  show("password");
+  say("pw-msg", "기존 잠금은 보호가 약합니다. 강한 암호 또는 지문·얼굴로 다시 잠가야 사용할 수 있습니다. 저장에 실패하면 기존 금고를 유지합니다.", "err");
 }
 
 function readVault(): Vault | null {
@@ -435,7 +464,7 @@ function normalizeUtxos(address: string, rows: unknown[]): SpendUtxo[] {
 
     if (typeof txid !== "string" || !/^[0-9a-f]{64}$/i.test(txid)) continue;
     if (typeof vout !== "number" || !Number.isInteger(vout) || vout < 0) continue;
-    if (typeof sats !== "number" || !Number.isFinite(sats) || sats <= 0) continue;
+    if (typeof sats !== "number" || !Number.isSafeInteger(sats) || sats <= 0) continue;
 
     const script = typeof r.script === "string" && r.script ? r.script.toLowerCase() : spk;
     if (script !== spk) continue;
@@ -582,11 +611,47 @@ function devFeeSats(amountSats: number): number {
   return fee >= DUST_SATS ? fee : 0;
 }
 
+/** PWA validatePublicCoin과 같은 검증: 원거래 해시·출력·소유 스크립트. */
+function verifiedInputSum(inputs: SpendUtxo[], rawTransactions: Record<string, string>): number {
+  if (!inputs.length || inputs.length > 200) throw new Error("입력 개수를 확인해 주세요.");
+  let total = 0;
+  const seen = new Set<string>();
+  for (const u of inputs) {
+    const id = `${u.txid}:${u.outputIndex}`;
+    const raw = rawTransactions[u.txid];
+    if (seen.has(id) || typeof raw !== "string" || raw.length > 400_000 || !/^(?:[0-9a-f]{2})+$/i.test(raw)) throw new Error("입력 원거래가 없거나 중복되었습니다.");
+    seen.add(id);
+    const tx = bitcoin.Transaction.fromHex(raw);
+    const out = tx.outs[u.outputIndex];
+    const owned = bitcoin.address.toOutputScript(u.address, NETWORK).toString("hex");
+    if (tx.getId() !== u.txid || !out || !Number.isSafeInteger(u.satoshis) || u.satoshis <= 0 || out.value !== u.satoshis || out.script.toString("hex") !== u.script || u.script !== owned) throw new Error("원거래와 입력 금액·주소가 달라 서명을 거부했습니다.");
+    total += out.value;
+    if (!Number.isSafeInteger(total)) throw new Error("입력 합계 범위를 초과했습니다.");
+  }
+  return total;
+}
+function assertFee(actual: number, approved: number): void {
+  if (!Number.isSafeInteger(actual) || actual <= 0 || actual !== approved || actual > FEE_CEILING_SATS) throw new Error("승인 수수료와 다르거나 절대 상한 1 RVN을 초과해 중단했습니다.");
+}
+async function fetchInputTransactions(inputs: SpendUtxo[]): Promise<Record<string, string>> {
+  const raws: Record<string, string> = {};
+  for (const u of inputs) {
+    if (raws[u.txid]) continue;
+    const response = await fetch(`/api/chain/coin?txid=${u.txid}&vout=${u.outputIndex}`, { credentials: "omit", cache: "no-store", redirect: "error" });
+    if (!response.ok) throw new Error("입력 원거래를 확인할 수 없습니다. 노드 색인을 확인해 주세요.");
+    const coin = await response.json();
+    if (typeof coin?.rawTransaction !== "string") throw new Error("원거래가 없어 서명을 거부했습니다.");
+    raws[u.txid] = coin.rawTransaction;
+  }
+  return raws;
+}
+
 function buildAndSign(
   sel: Selection,
   toAddress: string,
   changeAddress: string,
   keys: Record<string, string>,
+  rawTransactions: Record<string, string>,
   /** 개발비를 붙일지. 「이 물건 사기」로 들어왔을 때만 참이다. */
   withDevFee = false,
 ): string {
@@ -618,18 +683,18 @@ function buildAndSign(
   //
   // ⚠️ 개발비 출력이 늘었으므로 **여기도 같이 세어야 한다.** 안 그러면
   // 개발비가 채굴 수수료로 잘못 세어져 "수수료 계산이 맞지 않다" 로 막힌다.
-  const inSum = sel.inputs.reduce((s, u) => s + u.satoshis, 0);
+  const inSum = verifiedInputSum(sel.inputs, rawTransactions);
   const outSum = toGets + (devOk ? dev : 0) + sel.change;
   const realFee = inSum - outSum;
-  if (realFee !== sel.fee) throw new Error("수수료 계산이 맞지 않아 중단했습니다.");
-  if (realFee <= 0) throw new Error("수수료가 0 이하입니다. 중단했습니다.");
-  if (realFee > FEE_CEILING_SATS) throw new Error("수수료가 비정상적으로 큽니다. 중단했습니다.");
+  assertFee(realFee, sel.fee);
 
   return sign(NET_NAME, tx.toHex(), sel.inputs, keys);
 }
 
 // ── 지갑 상태 ───────────────────────────────────────────────────────────────
 
+let integrityFailed = false;
+let migrationExpected: string | null = null;
 let mnemonic: string | null = null;
 let hdKey: unknown = null;
 let scan: ScanResult | null = null;
@@ -665,6 +730,7 @@ function lock(): void {
   $("words-grid").replaceChildren();
   $("quiz-opts").replaceChildren();
   say("unlock-msg", "");
+  if (integrityFailed) return;
   const v = readVault();
   if (!v) {
     show("welcome");
@@ -2428,6 +2494,7 @@ function sayWhereThisWalletLives(): void {
 }
 
 function unlocked(m: string): void {
+  if (integrityFailed) return;
   mnemonic = m;
   hdKey = RavencoinKey.getHDKey(NET_NAME, m);
   touchIdle();
@@ -2988,17 +3055,7 @@ function goPassword(): void {
   show("password");
 }
 
-/// Saves the wallet without a lock.
-///
-/// ## Why this is allowed
-///
-/// This is a spending wallet holding coffee money, on a phone that already has
-/// a lock screen. Demanding a second long password is friction people defeat by
-/// typing `123456`, which is worse than no lock because it looks like one.
-///
-/// So it is a choice — and the main screen says, permanently, that the wallet is
-/// open. A warning that appears once is decoration; one that stays is a fact.
-/// 지문·얼굴로 잠근다. 잠금번호 자리에 인증기가 만든 32바이트를 넣는다.
+/** 기기 인증으로 보호하며 기존 기록은 새 봉인 검증 후 교체한다. */
 async function saveWithBio(): Promise<void> {
   if (!draftMnemonic) {
     say("pw-msg", "다시 시작해 주세요.", "err");
@@ -3011,13 +3068,11 @@ async function saveWithBio(): Promise<void> {
     const got = await bioEnrol();
     if (!got) {
       // 되는 척하지 않는다. 못 하면 못 한다고 말하고 숫자를 받는다.
-      say("pw-msg", "이 기기에서는 지문·얼굴로 잠글 수 없습니다. 숫자 6자리로 해 주세요.", "err");
+      say("pw-msg", "이 기기에서는 지문·얼굴로 잠글 수 없습니다. 12자 이상의 강한 암호로 잠가 주세요.", "err");
       btn.disabled = false;
       return;
     }
-    const vault = await lockVault(draftMnemonic, got.secret);
-    (vault as unknown as Record<string, unknown>).bio = got.id;
-    localStorage.setItem(STORE_KEY, JSON.stringify(vault));
+    await storeVerifiedVault(draftMnemonic, got.secret, got.id);
     const m = draftMnemonic;
     draftMnemonic = null;
     quizPlan = [];
@@ -3028,34 +3083,12 @@ async function saveWithBio(): Promise<void> {
   }
 }
 
-async function saveWithoutLock(): Promise<void> {
-  if (!draftMnemonic) {
-    say("pw-msg", "다시 시작해 주세요.", "err");
-    return;
-  }
-  const btn = $("btn-pw-skip") as HTMLButtonElement;
-  btn.disabled = true;
-  try {
-    // 잠그지 않아도 저장 형식은 같다. 나중에 잠글 때 다른 길을 타지 않게.
-    const vault = await lockVault(draftMnemonic, NO_LOCK);
-    (vault as unknown as Record<string, unknown>).open = true;
-    localStorage.setItem(STORE_KEY, JSON.stringify(vault));
-    const m = draftMnemonic;
-    draftMnemonic = null;
-    quizPlan = [];
-    unlocked(m);
-  } catch (e) {
-    say("pw-msg", (e as Error).message || "저장하지 못했습니다.", "err");
-    btn.disabled = false;
-  }
-}
-
 async function savePassword(): Promise<void> {
   const p1 = ($("pw1") as HTMLInputElement).value;
   const p2 = ($("pw2") as HTMLInputElement).value;
 
-  if (p1.length < 6) {
-    say("pw-msg", "잠금번호는 6자리 이상으로 정해 주세요.", "err");
+  if (!strongPassword(p1)) {
+    say("pw-msg", "암호는 12~256자, 문자와 숫자 또는 기호를 섞어 주세요.", "err");
     return;
   }
   if (p1 !== p2) {
@@ -3071,8 +3104,9 @@ async function savePassword(): Promise<void> {
   btn.disabled = true;
   say("pw-msg", "잠그는 중…");
   try {
-    const vault = await lockVault(draftMnemonic, p1);
-    localStorage.setItem(STORE_KEY, JSON.stringify(vault));
+    await storeVerifiedVault(draftMnemonic, p1);
+    ($("pw1") as HTMLInputElement).value = "";
+    ($("pw2") as HTMLInputElement).value = "";
     const m = draftMnemonic;
     draftMnemonic = null;
     quizPlan = [];
@@ -3099,9 +3133,13 @@ async function doUnlock(): Promise<void> {
     if (!RavencoinKey.isMnemonicValid(m)) throw new Error("암호가 맞지 않습니다.");
     ($("unlock-pass") as HTMLInputElement).value = "";
     say("unlock-msg", "");
+    if (vault.v !== 2 || vault.iter < PBKDF2_ITER || !strongPassword(pass)) {
+      requireVaultUpgrade(m, vault);
+      return;
+    }
     unlocked(m);
   } catch {
-    say("unlock-msg", "암호가 맞지 않습니다.", "err");
+    say("unlock-msg", "암호가 맞지 않거나 금고를 읽지 못했습니다. 기존 기록은 보존됩니다.", "err");
   } finally {
     btn.disabled = false;
   }
@@ -3224,7 +3262,7 @@ function reviewSend(): void {
 
   $("cf-to").textContent = to;
   $("cf-amount").textContent = rvnText(sel.amount);
-  $("cf-fee").textContent = rvnText(sel.fee);
+  $("cf-fee").textContent = `${rvnText(sel.fee)} (절대 상한 1 RVN, 보내기로 승인)`;
   $("cf-total").textContent = rvnText(sel.amount + sel.fee);
   $("cf-change").textContent = sel.change > 0 ? `${rvnText(sel.change)} → ${change}` : "없음";
   say("cf-msg", "");
@@ -3242,12 +3280,17 @@ function fillMax(): void {
 }
 
 async function confirmSend(): Promise<void> {
-  if (!pending) return;
+  if (!pending || ($( "btn-confirm") as HTMLButtonElement).disabled) return;
+  const approved = pending;
   const btn = $("btn-confirm") as HTMLButtonElement;
   btn.disabled = true;
   say("cf-msg", "서명하고 보내는 중…");
 
   try {
+    assertFee(approved.sel.fee, approved.sel.fee);
+    const raws = await fetchInputTransactions(approved.sel.inputs);
+    verifiedInputSum(approved.sel.inputs, raws);
+    if (pending !== approved || !hdKey) throw new Error("지갑이 잠겼거나 승인 내용이 바뀌었습니다.");
     // 개인키는 여기서 만들어서 여기서 쓰고 끝난다. 서버로 가는 것은
     // 서명이 끝난 hex 뿐이다.
     const keys: Record<string, string> = {};
@@ -3261,7 +3304,7 @@ async function confirmSend(): Promise<void> {
     // 서명 직전에 한 번 더 본다. `pending.to` 는 검토 화면이 굳힌 주소이고,
     // 그게 사려던 물건의 주소와 같을 때만 개발비가 붙는다.
     const hex = buildAndSign(
-      pending.sel, pending.to, pending.change, keys,
+      pending.sel, pending.to, pending.change, keys, raws,
       !!buying && buying.to === pending.to,
     );
     const txid = await broadcast(hex);
@@ -3296,7 +3339,6 @@ function wire(): void {
   $("btn-restore-back").onclick = () => show("welcome");
 
   $("btn-pw-save").onclick = () => void savePassword();
-  $("btn-pw-skip").onclick = () => void saveWithoutLock();
   $("btn-pw-bio").onclick = () => void saveWithBio();
   $("btn-unlock-bio").onclick = () => {
     const v = readVault();
@@ -3584,7 +3626,7 @@ function boot(): void {
   void showLockedOrOpen(vault);
 }
 
-/// 잠그지 않은 지갑이면 바로 열고, 아니면 잠금번호를 묻는다.
+/// 레거시 무잠금 금고는 강한 잠금 이전 화면으로만 연다.
 ///
 /// `open` 표시를 **믿지 않고 실제로 열어 본다.** 표시를 보고 판단하면, 그
 /// 표시가 생기기 전에 만들어진 지갑은 영영 못 연다 — 걸지도 않은 암호를
@@ -3597,7 +3639,7 @@ async function showLockedOrOpen(vault: Vault): Promise<void> {
   try {
     const m = await openVault(vault, NO_LOCK);
     if (RavencoinKey.isMnemonicValid(m)) {
-      unlocked(m);
+      requireVaultUpgrade(m, vault);
       return;
     }
   } catch {
@@ -3616,6 +3658,7 @@ async function showLockedOrOpen(vault: Vault): Promise<void> {
       try {
         const m = await openVault(vault, secret);
         if (RavencoinKey.isMnemonicValid(m)) {
+          if (vault.v !== 2 || vault.iter < PBKDF2_ITER) await storeVerifiedVault(m, secret, bio);
           say("unlock-msg", "");
           unlocked(m);
           return;
@@ -3652,3 +3695,5 @@ export {
   NETWORK, DUST_SATS, GAP_LIMIT, SCAN_MAX,
 };
 export type { SpendUtxo, Selection };
+
+window.addEventListener("wallet-integrity-failed", () => { integrityFailed = true; lock(); });

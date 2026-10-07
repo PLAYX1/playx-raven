@@ -1,0 +1,11 @@
+
+  wallet.bundle.js  855.1kb
+
+⚡ Done in 42ms
+지갑 번들   875601 바이트
+
+  shops.bundle.js  59.2kb
+
+⚡ Done in 9ms
+가게 번들    60642 바이트
+wallet integrity: 6 scripts

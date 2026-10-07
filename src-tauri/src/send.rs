@@ -130,7 +130,7 @@ pub async fn preview_send(
 /// is scoped to the one send that needed it and reversed immediately — not held
 /// open "until the app closes", which is the same thing as not having a
 /// passphrase at all.
-async fn with_unlocked<F, Fut, T>(passphrase: Option<String>, body: F) -> Result<T, String>
+pub(crate) async fn with_unlocked<F, Fut, T>(passphrase: Option<String>, body: F) -> Result<T, String>
 where
     F: FnOnce() -> Fut,
     Fut: std::future::Future<Output = Result<T, String>>,
@@ -237,8 +237,9 @@ pub async fn send_asset(
     qty: f64,
     to_address: String,
     passphrase: Option<String>,
+    request_id: Option<String>,
 ) -> Result<String, String> {
-    if qty <= 0.0 {
+    if !qty.is_finite() || qty <= 0.0 {
         return Err("수량은 0보다 커야 합니다.".into());
     }
     // 오너 토큰 전송은 그 자산의 발행권을 통째로 넘기는 일이다. 보통 보내기와
@@ -258,7 +259,13 @@ pub async fn send_asset(
         return Err("받는 주소가 올바르지 않습니다.".into());
     }
 
+    let request_id = request_id.ok_or("지급 식별자가 없습니다. 앱을 새로 열어 주세요.")?;
+    let intent = serde_json::to_vec(&json!(["asset", asset, qty, to_address])).map_err(|_| "지급 내용 오류")?;
     with_unlocked(passphrase, || async {
+        let guard = match crate::payout_guard::begin(&crate::paths::app_file("payouts"), "send", &request_id, &intent)? {
+            crate::payout_guard::Begin::Done(txid) => return Ok(txid),
+            crate::payout_guard::Begin::New(guard) => guard,
+        };
         // transfer "asset_name" qty "to_address" "message" expire_time
         //          "change_address" "asset_change_address"
         let result = call_rpc(
@@ -273,6 +280,7 @@ pub async fn send_asset(
             .and_then(Value::as_str)
             .unwrap_or("")
             .to_string();
+        guard.complete_waiting_ack(&txid)?;
         crate::refund::remember_ours(&txid);
         Ok(txid)
     })
@@ -290,8 +298,9 @@ pub async fn send_rvn(
     amount: f64,
     comment: Option<String>,
     passphrase: Option<String>,
+    request_id: Option<String>,
 ) -> Result<String, String> {
-    if amount <= 0.0 {
+    if !amount.is_finite() || amount <= 0.0 {
         return Err("금액은 0보다 커야 합니다.".into());
     }
 
@@ -300,7 +309,13 @@ pub async fn send_rvn(
         return Err("받는 주소가 올바르지 않습니다.".into());
     }
 
+    let request_id = request_id.ok_or("지급 식별자가 없습니다. 앱을 새로 열어 주세요.")?;
+    let intent = serde_json::to_vec(&json!(["rvn", to_address, amount, comment])).map_err(|_| "지급 내용 오류")?;
     with_unlocked(passphrase, || async {
+        let guard = match crate::payout_guard::begin(&crate::paths::app_file("payouts"), "send", &request_id, &intent)? {
+            crate::payout_guard::Begin::Done(txid) => return Ok(txid),
+            crate::payout_guard::Begin::New(guard) => guard,
+        };
         // subtractfeefromamount stays false: the amount typed is the amount
         // that arrives. A shop settling an invoice needs that to be true.
         let result = call_rpc(
@@ -313,6 +328,7 @@ pub async fn send_rvn(
             .as_str()
             .map(str::to_string)
             .ok_or_else(|| "sendtoaddress did not return a txid".to_string())?;
+        guard.complete_waiting_ack(&txid)?;
         crate::refund::remember_ours(&txid);
         Ok(txid)
     })
@@ -368,4 +384,9 @@ pub async fn transfer_ownership(
             .to_string())
     })
     .await
+}
+
+#[tauri::command]
+pub fn send_ack(request_id: String) -> Result<(), String> {
+    crate::payout_guard::acknowledge(&crate::paths::app_file("payouts"), "send", &request_id)
 }

@@ -39,7 +39,7 @@
     <meta name="apple-mobile-web-app-title" content="RavenVault" />
     <!-- 🔴 신고 단추가 소개·안내 화면에만 있었다. **정작 고장이 나는 곳**
          (지갑·장터)에는 없었다. 데스크톱 앱은 어느 화면에서든 있다. -->
-    <script src="/report.js" defer></script>
+    <script type="application/json" data-wallet-src="/report.js"></script>
     <title>RavenVault</title>
     <style>
       /* 손님 화면. 가게 와이파이만 잡힌 폰에서, 70대도 쓴다.
@@ -583,7 +583,7 @@
       .camstop { min-height: 60px; font-size: 17px; border: 0; background: #fff;
                  color: #141518; font-family: inherit; }
     </style>
-    <script src="/i18n.js"></script>
+    <script type="application/json" data-wallet-src="/i18n.js"></script>
       <!-- 카톡·텔레그램에 링크를 붙였을 때 뜨는 카드.
          ⚠️ 매장 노드는 자기 주소(192.168.x)라 바깥에서 그림을 못 가져온다.
             그래서 그림은 **웹 주소**를 가리킨다 — 가게 안이든 밖이든 뜬다. -->
@@ -691,22 +691,17 @@
     <section id="s-password">
       <h1>잠금번호를 정하세요</h1>
       <p class="sub">
-        이 폰에서 지갑을 열 때 씁니다. <b>숫자 6자리면 됩니다.</b>
+        이 폰에서 지갑을 열 때 씁니다. <b>12~256자이며 문자와 숫자 또는 기호를 섞어 주세요.</b>
       </p>
-      <!-- 커피값 지갑이다. 폰 자체가 이미 잠겨 있는데 그 위에 긴 비밀번호를
-           또 요구하면, 사람은 그걸 이기려고 123456 을 쓴다. 숫자 여섯 자리는
-           숫자 키패드가 뜨고 빨리 쳐진다. -->
       <label for="pw1">잠금번호</label>
-      <input id="pw1" type="password" inputmode="numeric" autocomplete="new-password" />
+      <input id="pw1" type="password" inputmode="text" minlength="12" maxlength="256" autocomplete="new-password" />
       <label for="pw2">한 번 더</label>
-      <input id="pw2" type="password" inputmode="numeric" autocomplete="new-password" />
+      <input id="pw2" type="password" inputmode="text" minlength="12" maxlength="256" autocomplete="new-password" />
       <div class="msg" id="pw-msg"></div>
       <button id="btn-pw-save" class="primary">저장하고 시작</button>
       <!-- 폰은 이미 얼굴로 잠겨 있다. 그 위에 숫자를 또 요구하면 사람은
            123456 을 쓰고, 그러면 잠금은 연극이 된다. 되는 기기에서만 보인다. -->
       <button id="btn-pw-bio" class="ghost">지문 · 얼굴로 잠그기</button>
-      <!-- 건너뛸 수 있어야 한다. 다만 건너뛴 사실을 화면이 계속 말한다. -->
-      <button id="btn-pw-skip" class="ghost">잠그지 않고 쓰기</button>
       <div class="note warn">
         잠금번호를 잊으면 저희도 풀어 드릴 수 없습니다. 그때는 종이에 적어 둔
         12단어로만 되살릴 수 있습니다.<br /><br />
@@ -1132,9 +1127,9 @@
          40~70대는 그걸 못 본다. 탭 바로 위에 둔다 — 늘 보이는 자리다. -->
     <div id="pwa-box" class="pwabox"></div>
 
-    <script src="/shop-seal.bundle.js"></script>
-    <script src="/wallet.bundle.js"></script>
-    <script src="/help.js"></script>
+    <script type="application/json" data-wallet-src="/shop-seal.bundle.js"></script>
+    <script type="application/json" data-wallet-src="/wallet.bundle.js"></script>
+    <script type="application/json" data-wallet-src="/help.js"></script>
 
       <nav class="tabbar">
       <a href="/wallet" class="tab on" aria-current="page">
@@ -1169,6 +1164,7 @@
     <!-- 🔴 인라인이면 이 화면의 CSP(`script-src 'self'`)에 막혀 **조용히 안 돈다.**
          그렇게 「?」 도움말과 앱 설치가 죽어 있었다. 파일 안에 이유를 적어 뒀다.
          ⚠️ 자리를 위로 올리지 마라 — 아래 탭 막대까지 번역해야 한다. -->
-    <script src="/wallet-boot.js"></script>
-</body>
+    <script type="application/json" data-wallet-src="/wallet-boot.js"></script>
+<script src="/wallet-integrity.js" defer></script>
+  </body>
 </html>

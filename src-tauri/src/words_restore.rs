@@ -574,34 +574,8 @@ async fn spawn_with_words(ctx: &Ctx, phrase: &Phrase, pass: &Secret, file: bool)
     const NO_WINDOW: u32 = 0x0800_0000;
     let mut body = channel_body(ctx, phrase, pass);
     if file {
-        // A-2 — 사람이 「임시 파일로 건네기」를 따로 고른 때만 온다.
-        let dir = make_pipe_dir(ctx)?;
-        let conf = dir.0.join(format!("c-{:016x}.conf", rand::random::<u64>()));
-        let w = std::fs::write(&conf, body.as_bytes());
         words::wipe(&mut body);
-        w.map_err(|_| "단어를 건넬 통로를 만들지 못했습니다.".to_string())?;
-        let child = std::process::Command::new(&ravend)
-            .args(creation_args(ctx, &conf.to_string_lossy()))
-            .arg("-daemon=0")
-            .creation_flags(NO_WINDOW)
-            .stdin(std::process::Stdio::null())
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .spawn();
-        let mut child = match child {
-            Ok(c) => c,
-            Err(_) => {
-                scrub_file(&conf);
-                return Err("서버를 띄우지 못했습니다. 옛 지갑은 옆에 그대로 있습니다.".into());
-            }
-        };
-        // 윈도우는 「읽었다」를 알려 주는 부모 종료가 없다 — RPC 가 답하면 설정은 이미 읽었다.
-        let from = log_len(ctx);
-        let ready = wait_ready(ctx, from, Some(&mut child), 900).await;
-        scrub_file(&conf);
-        drop(dir);
-        ready?;
-        return Ok(Some(child));
+        return Err("복구 단어를 임시 파일로 전달하는 기능은 중지되었습니다. 이름 있는 파이프를 사용해 주세요.".into());
     }
     let name = format!(r"\\.\pipe\ravenvault-{:016x}", rand::random::<u64>());
     let server = win_pipe::Server::create(&name).map_err(|_| {
@@ -877,6 +851,8 @@ pub(crate) async fn survey(ctx: &Ctx) -> Value {
 
 /// 흐름 전체. 단어는 여기로 **옮겨져** 들어오고, 이 함수가 끝나면 떨어지며 지워진다.
 pub(crate) async fn run_flow(ctx: &Ctx, phrase: Phrase, pass: Secret, opts: Opts) -> Result<Value, String> {
+    #[cfg(windows)]
+    if opts.file { return Err("임시 파일 복구는 중지되었습니다. 이름 있는 파이프를 사용해 주세요.".into()); }
     let info = survey(ctx).await;
     if let Some(b) = info["blocked"].as_str() {
         // 새 컴퓨터가 아닌데 막힌 경우만 멈춘다. (지갑 자리가 비어 있는 이어 하기는 아래에서 따로 본다.)

@@ -1,0 +1,27 @@
+[
+  {
+    "file": "scripts/check-ai-safety.mjs",
+    "exit": 0,
+    "pass": true
+  },
+  {
+    "file": "scripts/check-wallet-vault.mjs",
+    "exit": 0,
+    "pass": true
+  },
+  {
+    "file": "scripts/check-phone-transaction.mjs",
+    "exit": 0,
+    "pass": true
+  },
+  {
+    "file": "scripts/check-send-confirmation.mjs",
+    "exit": 0,
+    "pass": true
+  },
+  {
+    "file": "scripts/check-desktop-integration.mjs",
+    "exit": 0,
+    "pass": true
+  }
+]

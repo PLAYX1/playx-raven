@@ -1,0 +1,366 @@
+[
+  {
+    "file": "scripts/artist-photo.test.mjs",
+    "exit": 0,
+    "signal": null,
+    "reason": "passed",
+    "locations": []
+  },
+  {
+    "file": "scripts/check-ai-safety.mjs",
+    "exit": 1,
+    "signal": null,
+    "reason": "missing-fixture-or-dependency",
+    "locations": []
+  },
+  {
+    "file": "scripts/check-backup-result.mjs",
+    "exit": 0,
+    "signal": null,
+    "reason": "passed",
+    "locations": []
+  },
+  {
+    "file": "scripts/check-backup-safety.mjs",
+    "exit": 1,
+    "signal": null,
+    "reason": "runtime-error",
+    "locations": []
+  },
+  {
+    "file": "scripts/check-backup-ui.mjs",
+    "exit": 1,
+    "signal": null,
+    "reason": "sandbox-permission",
+    "locations": []
+  },
+  {
+    "file": "scripts/check-cert-photos.mjs",
+    "exit": 1,
+    "signal": null,
+    "reason": "runtime-error",
+    "locations": []
+  },
+  {
+    "file": "scripts/check-cert-roster.mjs",
+    "exit": 0,
+    "signal": null,
+    "reason": "passed",
+    "locations": []
+  },
+  {
+    "file": "scripts/check-certificate-bulk-ui.mjs",
+    "exit": 1,
+    "signal": null,
+    "reason": "runtime-error",
+    "locations": []
+  },
+  {
+    "file": "scripts/check-certificate-preview.mjs",
+    "exit": 1,
+    "signal": null,
+    "reason": "sandbox-permission",
+    "locations": []
+  },
+  {
+    "file": "scripts/check-companion-fix.mjs",
+    "exit": 0,
+    "signal": null,
+    "reason": "passed",
+    "locations": []
+  },
+  {
+    "file": "scripts/check-desktop-identity-fix.mjs",
+    "exit": 1,
+    "signal": null,
+    "reason": "sandbox-permission",
+    "locations": []
+  },
+  {
+    "file": "scripts/check-desktop-integration.mjs",
+    "exit": 0,
+    "signal": null,
+    "reason": "passed",
+    "locations": []
+  },
+  {
+    "file": "scripts/check-desktop-languages.mjs",
+    "exit": 1,
+    "signal": null,
+    "reason": "missing-fixture-or-dependency",
+    "locations": []
+  },
+  {
+    "file": "scripts/check-desktop-ux.mjs",
+    "exit": 1,
+    "signal": null,
+    "reason": "missing-fixture-or-dependency",
+    "locations": []
+  },
+  {
+    "file": "scripts/check-easy-create.mjs",
+    "exit": 0,
+    "signal": null,
+    "reason": "passed",
+    "locations": []
+  },
+  {
+    "file": "scripts/check-firstrun.mjs",
+    "exit": 0,
+    "signal": null,
+    "reason": "passed",
+    "locations": []
+  },
+  {
+    "file": "scripts/check-home-onescreen.mjs",
+    "exit": 0,
+    "signal": null,
+    "reason": "passed",
+    "locations": []
+  },
+  {
+    "file": "scripts/check-issue-gate.mjs",
+    "exit": 0,
+    "signal": null,
+    "reason": "passed",
+    "locations": []
+  },
+  {
+    "file": "scripts/check-local-wallet-publish.mjs",
+    "exit": 0,
+    "signal": null,
+    "reason": "passed",
+    "locations": []
+  },
+  {
+    "file": "scripts/check-map-copy.mjs",
+    "exit": 0,
+    "signal": null,
+    "reason": "passed",
+    "locations": []
+  },
+  {
+    "file": "scripts/check-merchant-map.mjs",
+    "exit": 0,
+    "signal": null,
+    "reason": "passed",
+    "locations": []
+  },
+  {
+    "file": "scripts/check-peer-help.mjs",
+    "exit": 0,
+    "signal": null,
+    "reason": "passed",
+    "locations": []
+  },
+  {
+    "file": "scripts/check-phone-transaction.mjs",
+    "exit": 1,
+    "signal": null,
+    "reason": "missing-fixture-or-dependency",
+    "locations": []
+  },
+  {
+    "file": "scripts/check-ravi-agent.mjs",
+    "exit": 0,
+    "signal": null,
+    "reason": "passed",
+    "locations": []
+  },
+  {
+    "file": "scripts/check-ravi-companion.mjs",
+    "exit": 0,
+    "signal": null,
+    "reason": "passed",
+    "locations": []
+  },
+  {
+    "file": "scripts/check-ravi-key.mjs",
+    "exit": 0,
+    "signal": null,
+    "reason": "passed",
+    "locations": []
+  },
+  {
+    "file": "scripts/check-ravi-panel-browser.mjs",
+    "exit": 1,
+    "signal": null,
+    "reason": "sandbox-permission",
+    "locations": []
+  },
+  {
+    "file": "scripts/check-ravi-panel.mjs",
+    "exit": 0,
+    "signal": null,
+    "reason": "passed",
+    "locations": []
+  },
+  {
+    "file": "scripts/check-ravi-promo-browser.mjs",
+    "exit": 1,
+    "signal": null,
+    "reason": "sandbox-permission",
+    "locations": []
+  },
+  {
+    "file": "scripts/check-ravi-promo-card.mjs",
+    "exit": 0,
+    "signal": null,
+    "reason": "passed",
+    "locations": []
+  },
+  {
+    "file": "scripts/check-ravi-promo.mjs",
+    "exit": 0,
+    "signal": null,
+    "reason": "passed",
+    "locations": []
+  },
+  {
+    "file": "scripts/check-ravi-similarity.mjs",
+    "exit": 0,
+    "signal": null,
+    "reason": "passed",
+    "locations": []
+  },
+  {
+    "file": "scripts/check-ravi-state.mjs",
+    "exit": 0,
+    "signal": null,
+    "reason": "passed",
+    "locations": []
+  },
+  {
+    "file": "scripts/check-ravi-understanding-browser.mjs",
+    "exit": 1,
+    "signal": null,
+    "reason": "sandbox-permission",
+    "locations": []
+  },
+  {
+    "file": "scripts/check-ravi-understanding.mjs",
+    "exit": 0,
+    "signal": null,
+    "reason": "passed",
+    "locations": []
+  },
+  {
+    "file": "scripts/check-ravi-understanding2.mjs",
+    "exit": 0,
+    "signal": null,
+    "reason": "passed",
+    "locations": []
+  },
+  {
+    "file": "scripts/check-ravi-understanding3.mjs",
+    "exit": 0,
+    "signal": null,
+    "reason": "passed",
+    "locations": []
+  },
+  {
+    "file": "scripts/check-ravi-understanding5.mjs",
+    "exit": 0,
+    "signal": null,
+    "reason": "passed",
+    "locations": []
+  },
+  {
+    "file": "scripts/check-ravi-voice.mjs",
+    "exit": 0,
+    "signal": null,
+    "reason": "passed",
+    "locations": []
+  },
+  {
+    "file": "scripts/check-restore-vectors.mjs",
+    "exit": 1,
+    "signal": null,
+    "reason": "runtime-error",
+    "locations": []
+  },
+  {
+    "file": "scripts/check-send-confirmation.mjs",
+    "exit": 0,
+    "signal": null,
+    "reason": "passed",
+    "locations": []
+  },
+  {
+    "file": "scripts/check-shop-seal.mjs",
+    "exit": 0,
+    "signal": null,
+    "reason": "passed",
+    "locations": []
+  },
+  {
+    "file": "scripts/check-staff-refund.mjs",
+    "exit": 0,
+    "signal": null,
+    "reason": "passed",
+    "locations": []
+  },
+  {
+    "file": "scripts/check-style-csp.mjs",
+    "exit": 1,
+    "signal": null,
+    "reason": "sandbox-permission",
+    "locations": []
+  },
+  {
+    "file": "scripts/check-wallet-easy.mjs",
+    "exit": 1,
+    "signal": null,
+    "reason": "sandbox-permission",
+    "locations": []
+  },
+  {
+    "file": "scripts/check-wallet-vault.mjs",
+    "exit": 1,
+    "signal": null,
+    "reason": "runtime-error",
+    "locations": []
+  },
+  {
+    "file": "scripts/check-words-restore.mjs",
+    "exit": 1,
+    "signal": null,
+    "reason": "sandbox-permission",
+    "locations": []
+  },
+  {
+    "file": "scripts/desktop-installer-identity.test.mjs",
+    "exit": 1,
+    "signal": null,
+    "reason": "runtime-error",
+    "locations": []
+  },
+  {
+    "file": "scripts/release-manifest.test.mjs",
+    "exit": 0,
+    "signal": null,
+    "reason": "passed",
+    "locations": []
+  },
+  {
+    "file": "scripts/verify-published-release.test.mjs",
+    "exit": 0,
+    "signal": null,
+    "reason": "passed",
+    "locations": []
+  },
+  {
+    "file": "web/wallet.test.mjs",
+    "exit": 0,
+    "signal": null,
+    "reason": "passed",
+    "locations": []
+  },
+  {
+    "file": "web/customer-mine.test.mjs",
+    "exit": 0,
+    "signal": null,
+    "reason": "passed",
+    "locations": []
+  }
+]

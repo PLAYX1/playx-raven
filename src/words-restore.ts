@@ -111,8 +111,6 @@ export function wireWordsRestore(deps: WordsRestoreDeps) {
   /** 칸 개수 — 12 기본 · 24 전환 · 18 은 붙여넣기로만. */
   let count = 12;
   let masked = false;
-  /** 파이프가 안 읽혀(윈도우) 사람이 「임시 파일로 건네기」를 고른 뒤의 한 번. */
-  let fileChannel = false;
   let pruneReindex = false;
   let survey: any = null;
   let run = 0;
@@ -135,7 +133,6 @@ export function wireWordsRestore(deps: WordsRestoreDeps) {
     wipeInputs();
     if (body) body.replaceChildren();
     count = 12;
-    fileChannel = false;
     sheet?.classList.add("hidden");
     void protectScreen(false);
   };
@@ -238,7 +235,6 @@ export function wireWordsRestore(deps: WordsRestoreDeps) {
     show(
       "words",
       `<p>${copyHtml("종이에 적어 둔 복구 단어를 순서대로 넣어 주세요. 영어 단어입니다.")}</p>
-       ${fileChannel ? `<div class="warnbox sdw-gap">${copyHtml("이번에는 단어를 임시 파일로 건넵니다. 서버가 읽은 뒤 바로 지우지만, 저장 장치에 흔적이 남을 수 있습니다.")}</div>` : ""}
        <div class="wrs-grid${masked ? " wrs-masked" : ""}" id="wrs-grid" translate="no">${Array.from({ length: count }, (_, i) => cellHtml(i + 1, vals[i] || "")).join("")}</div>
        <div class="wrs-sug" id="wrs-sug" translate="no"></div>
        <p class="meta" id="wrs-hint" role="status" aria-live="polite"></p>
@@ -476,7 +472,7 @@ export function wireWordsRestore(deps: WordsRestoreDeps) {
       // 🔴 칸을 **먼저** 비운다. 부르는 동안 화면이 찍혀도 단어가 없다.
       wipeInputs();
       document.getElementById("wrs-kept")?.remove();
-      const args = { words, passphrase: pass, confirm, rescan: when, pruneReindex, channel: fileChannel ? "file" : "pipe" };
+      const args = { words, passphrase: pass, confirm, rescan: when, pruneReindex, channel: "pipe" };
       try {
         await deps.invoke("words_restore_start", args);
       } catch (e) {
@@ -487,8 +483,7 @@ export function wireWordsRestore(deps: WordsRestoreDeps) {
         args.words = "";
         args.passphrase = "";
       }
-      fileChannel = false;
-      paintProgress();
+        paintProgress();
     });
   }
 
@@ -575,11 +570,10 @@ export function wireWordsRestore(deps: WordsRestoreDeps) {
     show(
       "progress",
       `<div class="warnbox"><b>${copyHtml("이 컴퓨터에서는 디스크에 흔적 없이 단어를 건네지 못했습니다.")}</b><br />
-         ${copyHtml("지금 지갑과 단어는 그대로이고, 옛 지갑은 옆에 있습니다. 임시 파일로 건네면 서버가 읽은 뒤 바로 0 으로 덮고 지우지만, 저장 장치(SSD)에 흔적이 남을 수 있습니다.")}</div>
-       <div class="row sdw-gap"><button id="wrs-file">${copyHtml("임시 파일로 건네기 — 단어를 한 번 더 넣습니다")}</button>
+         ${copyHtml("임시 파일 전달은 보안을 위해 중지했습니다. 옛 지갑으로 되돌린 뒤 대표에게 복구를 요청해 주세요.")}</div>
+       <div class="row sdw-gap">
        <button class="ghost" id="wrs-undo">${copyHtml("옛 지갑으로 되돌리기")}</button></div>`,
     );
-    on("wrs-file", () => { fileChannel = true; paintWords(); });
     on("wrs-undo", () => paintUndo());
   }
 

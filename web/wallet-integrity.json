@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "sourceDigest": "ef8b6bb3f6d9d7098b47462be8176c669abf7dde1f6d6a3161268de24d674e9a",
+  "assets": {
+    "/report.js": "sha256-kclmeXlgNnGZjRUnPwPSPZNmJmxQk4xBEauLQk45Mng=",
+    "/i18n.js": "sha256-3KyMC03UMtOPGKfzFmUhBhU1PpPOPh1H/dZ5Hlv8LKo=",
+    "/shop-seal.bundle.js": "sha256-8YfknBGrxoEHi2TaCTmjIdMZ95Tzpk9gtOMb8lpb93M=",
+    "/wallet.bundle.js": "sha256-Q6bNS4MY9pBUnAuiUFdhG7WbFZE0Do7dx7xzAbDbynw=",
+    "/help.js": "sha256-xL/s6KdQBONiDbcek/JfxDWoggMMLmA6iZJ24WD8M+8=",
+    "/wallet-boot.js": "sha256-YhOWdIhS7rotFBeky33puY8wny4ammo1Vg1rqTGW9s8="
+  }
+}

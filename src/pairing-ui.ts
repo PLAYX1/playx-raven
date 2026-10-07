@@ -79,7 +79,7 @@ const CARD = `
       <p class="rvp-sub">${copyHtml("돈이 나가는 일")}</p>
       <label><input type="radio" name="rvp-money" id="rvp-money-desk" value="desktop" checked /> ${copyHtml("이 컴퓨터에서 확인 (기본)")}</label>
       <label><input type="radio" name="rvp-money" id="rvp-money-phone" value="phone" /> ${copyHtml("폰 승인 허용 — 하루 한도 안에서만")}</label>
-      <label class="rvp-limit">${copyHtml("하루 한도 (RVN, 최근 24시간)")} <input type="number" id="rvp-limit" min="0" step="1" value="0" /></label>
+      <label class="rvp-limit">${copyHtml("하루 한도 (최대 1,000 RVN, 최근 24시간)")} <input type="number" id="rvp-limit" max="1000" min="0" step="1" value="0" /></label>
       <p class="meta">${copyHtml("폰 승인이어도 지갑이 잠겨 있으면 풀릴 때까지 기다려요. 자산 보내기는 언제나 이 컴퓨터에서 확인해요.")}</p>
     </fieldset>
     <div class="rvp-row">
@@ -110,7 +110,7 @@ function permsText(p: Perms) {
   const parts: string[] = [];
   if (p.view) parts.push(copyHtml("보기"));
   if (p.request) parts.push(copyHtml("요청"));
-  parts.push(p.money === "phone" ? `${copyHtml("폰 승인")} <span translate="no">${esc(p.daily_limit_rvn)} RVN</span>` : copyHtml("돈은 이 컴퓨터에서 확인"));
+  parts.push(p.money === "phone" && p.daily_limit_rvn > 1000 ? copyHtml("기존 한도가 1,000 RVN을 초과해 자동 송금이 중지되었습니다. 다시 연결해 주세요.") : p.money === "phone" ? `${copyHtml("폰 승인")} <span translate="no">${esc(p.daily_limit_rvn)} RVN</span>` : copyHtml("돈은 이 컴퓨터에서 확인"));
   return parts.join(" · ");
 }
 function summary(r: Req) {

@@ -563,6 +563,7 @@ pub struct Perms {
     /// 정수 RVN
     pub daily_limit_rvn: u64,
 }
+pub const MAX_PHONE_DAILY_RVN: u64 = 1_000;
 impl Default for Perms {
     fn default() -> Self {
         Self { view: true, request: false, money: "desktop".into(), daily_limit_rvn: 0 }
@@ -791,7 +792,8 @@ pub fn authorize(p: &Value, t: &str, body: &Value, spent_today_rvn: f64) -> Deci
             return Decision::Allow("desktop_confirm");
         }
         let Some(spent) = rvn_to_sats(spent_today_rvn) else { return Decision::Deny("not_permitted") };
-        let limit = (safe_int(&p["daily_limit_rvn"]).unwrap_or(0) as u128) * 100_000_000;
+        let requested = safe_int(&p["daily_limit_rvn"]).unwrap_or(0) as u64;
+        let limit = if requested > MAX_PHONE_DAILY_RVN { 0 } else { requested as u128 * 100_000_000 };
         return if (spent as u128) + (amount as u128) <= limit { Decision::Allow("auto") } else { Decision::Deny("over_limit") };
     }
     Decision::Deny("unknown_type")
