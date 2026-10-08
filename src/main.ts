@@ -10348,6 +10348,12 @@ async function chatDebate(q: string) {
     chatHtml("ai", `<div class="duo">${one(r?.a)}${one(r?.b)}</div>`);
   } catch (e: any) {
     chatPopThinking();
+    // 열쇠가 하나뿐이면 「두 곳에 묻기」는 못 돌지만 질문은 그대로 답해야 한다 —
+    // 에러만 보이고 답이 없으면 처음 쓰는 사람은 라비가 고장 난 줄 안다.
+    if (String(e).includes("두 곳 이상의 API")) {
+      chatHtml("ai", `<span class="muted">두 곳에 묻기는 서로 다른 회사의 열쇠가 둘 있어야 해요. 지금은 하나라서 라비가 그냥 답할게요.</span>`);
+      return chatAgent(q);
+    }
     chatHtml("ai", `<span class="warn">${escapeHtml(errText(e))}</span>`);
   }
 }
