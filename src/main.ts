@@ -1,5 +1,8 @@
 // 🔴 맨 먼저 — 앱 CSP(Tauri nonce) 가 막는 style="…" 속성을 CSSOM 으로 되살린다(src/style-attrs.ts).
 import "./style-attrs";
+import "./sales-account.css";
+import { wireSalesAccount } from "./sales-account";
+import { openRaviStory } from "./desktop-links";
 import { homeSafety } from "./home-summary";
 import { installFirstRunBarrier, afterRaviLanding, deferUntilRaviLanding, finishRaviLanding } from "./firstrun";
 installFirstRunBarrier();
@@ -4752,7 +4755,10 @@ function setupNavMore() {
   sync();
 }
 
+let salesAccount: ReturnType<typeof wireSalesAccount> | undefined;
+
 function showPage(id: string) {
+  if (id !== currentPage) salesAccount?.hide();
   // 🔴 화면을 떠나면 그 화면 때문에 도는 타이머를 끈다.
   //
   //    「부품」 화면을 한 번 열었다가 지갑으로 나가면, **앱을 끌 때까지**
@@ -18211,6 +18217,13 @@ window.addEventListener("DOMContentLoaded", async () => {
     };
   });
   $("sh-sample").addEventListener("click", fillSample);
+  salesAccount = wireSalesAccount({ invoke, cancelAsk: () => askClose(null), active: () => currentPage === "sales",
+    ask: () => ask("지갑 비밀번호 재인증", "판매 전용 번호를 만든 뒤 지갑을 바로 잠가요.", { password: true }) });
+  $("sales-back").onclick = () => showPage("home");
+  $("game-sales-open").onclick = () => showPage("sales");
+  $("ravi-story-open").onclick = () => { void openRaviStory({ openExternal: openUrl }).catch(() => {
+    $("game-notice").textContent = "기본 브라우저를 열지 못했어요. 잠시 후 다시 눌러 주세요.";
+  }); };
   $("w-enc").addEventListener("click", openEncrypt);
   $("enc-cancel").addEventListener("click", () => ($("encbox").style.display = "none"));
   ["enc-old", "enc-new", "enc-new2", "enc-confirm"].forEach((id) =>
@@ -18218,6 +18231,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   );
   $("enc-go").addEventListener("click", doEncrypt);
   $("w-lock-now").addEventListener("click", async () => {
+    salesAccount?.hide();
     await invoke("lock_wallet").catch(() => {});
     document.querySelectorAll<HTMLInputElement>('input[type="password"]').forEach((input) => { input.value = ""; });
     if (!$("sdw").classList.contains("hidden")) $("sdw-close").click();

@@ -1,0 +1,149 @@
+
+> playx-raven@0.8.4 test
+> node --test scripts/sales-account.test.mjs scripts/release-manifest.test.mjs scripts/verify-published-release.test.mjs scripts/signed-release-metadata.test.mjs
+
+TAP version 13
+# Subtest: all platforms publish immutable version URLs, hashes, aliases and preserve older files
+ok 1 - all platforms publish immutable version URLs, hashes, aliases and preserve older files
+  ---
+  duration_ms: 65.897833
+  ...
+# Subtest: missing platform and missing signature stop publication
+ok 2 - missing platform and missing signature stop publication
+  ---
+  duration_ms: 5.662417
+  ...
+# Subtest: invalid version and malformed signature fail before writing
+ok 3 - invalid version and malformed signature fail before writing
+  ---
+  duration_ms: 14.149291
+  ...
+# Subtest: Linux RPM output produced by the real Tauri build is preserved
+ok 4 - Linux RPM output produced by the real Tauri build is preserved
+  ---
+  duration_ms: 29.630375
+  ...
+# Subtest: RavenVault keeps the original wallet, updater and Windows MSI identity
+ok 5 - RavenVault keeps the original wallet, updater and Windows MSI identity
+  ---
+  duration_ms: 1.148333
+  ...
+# Subtest: publishing an older or equal version cannot downgrade a newer public update
+ok 6 - publishing an older or equal version cannot downgrade a newer public update
+  ---
+  duration_ms: 12.096375
+  ...
+# Subtest: new installer brand keeps both latest aliases and old immutable files
+ok 7 - new installer brand keeps both latest aliases and old immutable files
+  ---
+  duration_ms: 28.63425
+  ...
+# Subtest: 0.8.4 refuses metadata publication without secfix1 signed statements
+ok 8 - 0.8.4 refuses metadata publication without secfix1 signed statements
+  ---
+  duration_ms: 8.41975
+  ...
+# Subtest: phone/web core public vectors: account 100, both derivation paths, boundary addresses
+ok 9 - phone/web core public vectors: account 100, both derivation paths, boundary addresses
+  ---
+  duration_ms: 173.486
+  ...
+# Subtest: vendored phone sources remain byte-identical; reference cross-check when available
+ok 10 - vendored phone sources remain byte-identical; reference cross-check when available
+  ---
+  duration_ms: 84.694583
+  ...
+# Subtest: disclosure expires at exactly one minute and rejects late/cancelled auth
+ok 11 - disclosure expires at exactly one minute and rejects late/cancelled auth
+  ---
+  duration_ms: 16.709875
+  ...
+# Subtest: game uses the fixed OS external browser URL
+ok 12 - game uses the fixed OS external browser URL
+  ---
+  duration_ms: 9.338625
+  ...
+# Subtest: native boundary contains only read/auth RPCs and always relocks after derivation
+ok 13 - native boundary contains only read/auth RPCs and always relocks after derivation
+  ---
+  duration_ms: 1.111375
+  ...
+# Subtest: UI: reveal/copy/QR, 100-address refresh, errors, blur and stale replies
+ok 14 - UI: reveal/copy/QR, 100-address refresh, errors, blur and stale replies
+  ---
+  duration_ms: 320.366791
+  ...
+# Subtest: signed version/target/hash/expiry binding; reject unsigned, tampered and raw mode metadata
+ok 15 - signed version/target/hash/expiry binding; reject unsigned, tampered and raw mode metadata
+  ---
+  duration_ms: 6.131542
+  ...
+# Subtest: exact four updater platforms / five installers produce only seven deduplicated artifact HEAD requests
+ok 16 - exact four updater platforms / five installers produce only seven deduplicated artifact HEAD requests
+  ---
+  duration_ms: 26.672417
+  ...
+# Subtest: 50 seconds of stale raw cache recovers without rebuilding or publishing
+ok 17 - 50 seconds of stale raw cache recovers without rebuilding or publishing
+  ---
+  duration_ms: 2.244083
+  ...
+# Subtest: cache may remain stale for fifteen minutes; final bounded attempt succeeds
+ok 18 - cache may remain stale for fifteen minutes; final bounded attempt succeeds
+  ---
+  duration_ms: 14.448542
+  ...
+# Subtest: permanently wrong version fails after bounded retries
+ok 19 - permanently wrong version fails after bounded retries
+  ---
+  duration_ms: 0.986958
+  ...
+# Subtest: missing public artifact fails instead of reporting a successful release
+ok 20 - missing public artifact fails instead of reporting a successful release
+  ---
+  duration_ms: 1.626375
+  ...
+# Subtest: schema, exact platform identities and immutable URLs reject malformed public metadata
+ok 21 - schema, exact platform identities and immutable URLs reject malformed public metadata
+  ---
+  duration_ms: 0.572833
+  ...
+# Subtest: same-version metadata mismatch is rejected before any artifact request
+ok 22 - same-version metadata mismatch is rejected before any artifact request
+  ---
+  duration_ms: 0.398417
+  ...
+# Subtest: oversized manifest and a nonresponsive public request fail within limits
+ok 23 - oversized manifest and a nonresponsive public request fail within limits
+  ---
+  duration_ms: 5.428333
+  ...
+# Subtest: verify-only workflow cannot build, sign, or publish and shares the postpublish verifier
+ok 24 - verify-only workflow cannot build, sign, or publish and shares the postpublish verifier
+  ---
+  duration_ms: 2.066958
+  ...
+# Subtest: new RavenVault Desktop URLs pass the same immutable manifest and HEAD checks
+ok 25 - new RavenVault Desktop URLs pass the same immutable manifest and HEAD checks
+  ---
+  duration_ms: 1.157166
+  ...
+# Subtest: new release verification fails if an old latest alias disappears
+ok 26 - new release verification fails if an old latest alias disappears
+  ---
+  duration_ms: 1.325292
+  ...
+# Subtest: 0.8.4 public verifier requires bound signed-release metadata and retains it in the comparison
+ok 27 - 0.8.4 public verifier requires bound signed-release metadata and retains it in the comparison
+  ---
+  duration_ms: 0.300041
+  ...
+1..27
+# tests 27
+# suites 0
+# pass 27
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1210.83625

@@ -91,6 +91,7 @@ mod reindex_run;
 mod tunnel;
 mod vending;
 mod remote_sales;
+mod sales_account;
 mod update_policy;
 mod secure_update;
 mod wallet;
@@ -351,6 +352,8 @@ pub fn run() {
             wallet::encrypt_wallet,
             wallet::change_passphrase,
             wallet::unlock_for,
+            sales_account::sales_account_reveal,
+            sales_account::sales_account_balance,
             wallet::lock_wallet,
             vending::sellable_assets,
             vending::pending_sales,

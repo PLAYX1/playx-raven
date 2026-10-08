@@ -136,3 +136,20 @@ test('new release verification fails if an old latest alias disappears',async()=
   const f=fixture({latest:renamed,immutable:renamed,head:url=>url.includes('/PLAY-X-Raven-latest-')?404:200});
   await assert.rejects(verifyPublishedRelease(version,{...f,cacheWaitMs:0}),/Artifact unavailable/);
 });
+
+
+test('0.8.4 public verifier requires bound signed-release metadata and retains it in the comparison',()=>{
+  const value=manifest('0.8.4');
+  assert.throws(()=>validatePublishedManifest(value,'0.8.4'));
+  value.signed_releases=Object.fromEntries(['darwin-aarch64','darwin-x86_64'].map(target=>[target,{
+    statement:JSON.stringify({version:'0.8.4',target,sha256:'a'.repeat(64),sequence:1,expires:Math.floor(Date.now()/1000)+3600}),
+    signature:'synthetic-signature'.repeat(10),
+  }]));
+  assert.deepEqual(validatePublishedManifest(value,'0.8.4').signed_releases,value.signed_releases);
+  const valid=value.signed_releases['darwin-aarch64'].statement;
+  value.signed_releases['darwin-aarch64'].statement=valid.replace('0.8.4','0.8.3');
+  assert.throws(()=>validatePublishedManifest(value,'0.8.4'));
+  value.signed_releases['darwin-aarch64'].statement=valid;
+  value.signed_releases['darwin-aarch64'].signature='';
+  assert.throws(()=>validatePublishedManifest(value,'0.8.4'));
+});

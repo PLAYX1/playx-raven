@@ -1,0 +1,19 @@
+ok 1 - H1 weak passwords refused; new vault and legacy migration round trip; failed storage preserves old vault
+ok 2 - H2 actual raw output required before sign; amount/script/hash mismatch and absolute fee ceiling refused
+ok 3 - H3 unverified automatic installation disabled
+ok 4 - M Windows restore refuses disk fallback
+ok 5 - M pairing existing excessive limits blocked and new limit capped
+ok 6 - F01/F02 durable guard precedes payout and ledger is atomic
+ok 7 - F03 remote order without local payment evidence cannot pay
+ok 8 - F06 unrestricted updater IPC remains disabled; checked bytes reach the installer
+ok 9 - H4 manifest missing asset or changed bytes refuses load
+ok 10 - H2 signing function never invokes signer on forged values or excessive fee
+ok 11 - F01 actual UI double entry blocked; uncertain retry keeps same request identifier
+ok 12 - H1 legacy no-lock record opens only into migration; never enters unlocked wallet
+1..12
+# tests 12
+# pass 12
+# fail 0
+# cancelled 0
+# skipped 0
+process_exit=0

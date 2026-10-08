@@ -35,7 +35,25 @@ export function validatePublishedManifest(value, expectedVersion) {
   if (!value || typeof value !== 'object') throw new InvalidRelease('Invalid release manifest');
   checkVersion(value.version);
   if (value.version !== expectedVersion) throw new NotVisible(`Expected ${expectedVersion}; public manifest still reports ${value.version}`);
-  exactKeys(value, ['version', 'notes', 'pub_date', 'platforms', 'installers'], 'manifest');
+  const needsStatement = expectedVersion.split('.').map(Number).reduce((order,n,i)=>order || Math.sign(n-[0,8,4][i]),0) >= 0;
+  exactKeys(value, ['version', 'notes', 'pub_date', 'platforms', 'installers', ...(needsStatement ? ['signed_releases'] : [])], 'manifest');
+  const signed = {};
+  if (needsStatement) {
+    exactKeys(value.signed_releases, ['darwin-aarch64','darwin-x86_64'], 'signed releases');
+    for (const target of ['darwin-aarch64','darwin-x86_64']) {
+      const item = value.signed_releases[target];
+      exactKeys(item, ['statement','signature'], 'signed release');
+      if (typeof item.statement !== 'string' || item.statement.length > 4096 || typeof item.signature !== 'string'
+          || item.signature.length < 100 || item.signature.length > 4096) throw new InvalidRelease('Invalid signed statement encoding');
+      let statement;
+      try { statement = JSON.parse(item.statement); } catch { throw new InvalidRelease('Invalid signed statement JSON'); }
+      exactKeys(statement, ['version','target','sha256','sequence','expires'], 'release statement');
+      if (statement.version !== expectedVersion || statement.target !== target || !/^[a-f0-9]{64}$/.test(statement.sha256)
+          || !Number.isSafeInteger(statement.sequence) || statement.sequence < 1
+          || !Number.isSafeInteger(statement.expires) || statement.expires <= Math.floor(Date.now()/1000)) throw new InvalidRelease('Invalid signed statement binding');
+      signed[target] = {statement:item.statement,signature:item.signature};
+    }
+  }
   if (typeof value.notes !== 'string' || value.notes.length > 16_384) throw new InvalidRelease('Invalid release notes');
   if (typeof value.pub_date !== 'string' || !Number.isFinite(Date.parse(value.pub_date)) || new Date(value.pub_date).toISOString() !== value.pub_date) {
     throw new InvalidRelease('Invalid publication date');
@@ -63,7 +81,7 @@ export function validatePublishedManifest(value, expectedVersion) {
     if (typeof item.sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(item.sha256)) throw new InvalidRelease(`Invalid installer hash: ${suffix}`);
     return { platform: suffix, url: item.url, bytes: item.bytes, sha256: item.sha256 };
   });
-  return { version: value.version, notes: value.notes, pub_date: value.pub_date, platforms, installers };
+  return { version: value.version, notes: value.notes, pub_date: value.pub_date, platforms, installers, ...(needsStatement ? {signed_releases:signed} : {}) };
 }
 
 function lengthHeader(response, limit) {

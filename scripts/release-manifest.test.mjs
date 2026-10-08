@@ -70,3 +70,10 @@ test('publishing an older or equal version cannot downgrade a newer public updat
    }
    assert.equal(await readFile(old,'utf8'),'old published bytes');
  },'RavenVault-Desktop'));
+
+test('0.8.4 refuses metadata publication without secfix1 signed statements',()=>fixture(async(source,out)=>{
+  const {readdir,rename}=await import('node:fs/promises');
+  for (const name of await readdir(source)) await rename(path.join(source,name),path.join(source,name.replace('0.4.0','0.8.4')));
+  await assert.rejects(prepareRelease(source,out,'0.8.4'),/Signed release statement directory required/);
+  await assert.rejects(readFile(path.join(out,'latest.json')));
+}));

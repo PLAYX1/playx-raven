@@ -292,6 +292,50 @@ pub(crate) async fn call_rpc_detailed(method: &str, params: Value) -> Result<Val
     }
 }
 
+/// Secret-bearing local RPC. Fixed allowlist, no observer/logging/raw errors;
+/// owned JSON buffers are wiped before release. Never exposed as a Tauri command.
+pub(crate) async fn sales_secret_rpc(method: &str, mut params: Value) -> Result<Value, String> {
+    fn wipe(v: &mut Value) {
+        match v {
+            Value::String(s) => crate::words::wipe(s),
+            Value::Array(a) => a.iter_mut().for_each(wipe),
+            Value::Object(o) => o.values_mut().for_each(wipe),
+            _ => {}
+        }
+    }
+    struct Body(Vec<u8>);
+    impl Drop for Body { fn drop(&mut self) { crate::words::wipe_bytes(&mut self.0); } }
+    if !matches!(method, "walletpassphrase" | "getmywords") {
+        wipe(&mut params); return Err("판매 계정 인증 실패".into());
+    }
+    #[cfg(test)]
+    { wipe(&mut params); return Err("Synthetic tests cannot access a live node".into()); }
+    #[cfg(not(test))]
+    {
+        let mut value = json!({"jsonrpc":"1.0","id":"sales","method":method});
+        value["params"] = params.take();
+        let encoded = serde_json::to_vec(&value);
+        wipe(&mut value);
+        let mut body = Body(encoded.map_err(|_| "판매 계정 인증 실패")?);
+        let mut cookie = read_cookie().map_err(|_| "판매 계정 인증 실패")?;
+        let auth = cookie.split_once(':').ok_or("판매 계정 인증 실패")?;
+        let request = client().post(rpc_url()).basic_auth(auth.0, Some(auth.1))
+            .header("Content-Type", "application/json").body(body.0.clone())
+            .timeout(std::time::Duration::from_secs(15));
+        crate::words::wipe(&mut cookie);
+        crate::words::wipe_bytes(&mut body.0);
+        let response = request.send().await.map_err(|_| "판매 계정 인증 실패")?;
+        let mut bytes = Body(response.bytes().await.map_err(|_| "판매 계정 인증 실패")?.to_vec());
+        let parsed = serde_json::from_slice::<Value>(&bytes.0);
+        crate::words::wipe_bytes(&mut bytes.0);
+        let mut parsed = parsed.map_err(|_| "판매 계정 인증 실패")?;
+        if !parsed["error"].is_null() { wipe(&mut parsed); return Err("판매 계정 인증 실패".into()); }
+        let result = parsed.get_mut("result").map(Value::take).ok_or("판매 계정 인증 실패")?;
+        wipe(&mut parsed);
+        Ok(result)
+    }
+}
+
 /// 오래 걸리는 부름 하나(0.4.9 — `rescanblockchain`). 몇 시간이 걸릴 수 있다.
 ///
 /// 🔴 위 `call_rpc` 와 다른 점 둘: ① 되살리는 중 문을 거치지 않는다(이 부름이 바로 그 일이다)

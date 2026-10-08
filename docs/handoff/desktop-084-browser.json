@@ -1,0 +1,6 @@
+{
+  "status": "blocked",
+  "stage": "launch",
+  "reason": "launch-or-assertion-failure",
+  "native": "mocked"
+}

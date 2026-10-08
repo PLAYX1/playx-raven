@@ -7,3 +7,9 @@ export const LEGACY_LOCAL_WALLET = "http://127.0.0.1:8790/wallet";
 export async function openRavenVaultWallet(open: (url: string) => Promise<unknown>): Promise<void> {
   await open(RAVENVAULT_WALLET);
 }
+
+/** Tauri OS opener is the Desktop equivalent of shell.openExternal. */
+export const RAVI_STORY_URL = "https://ravenvault.ex.erci.se/game/ravi-story";
+export async function openRaviStory(shell: { openExternal: (url: string) => Promise<unknown> }): Promise<void> {
+  await shell.openExternal(RAVI_STORY_URL);
+}

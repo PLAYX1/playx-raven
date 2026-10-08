@@ -1,3 +1,4 @@
+import { signedReleaseMetadata } from './signed-release-metadata.mjs';
 import { readdir, readFile, stat, mkdir, copyFile, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
@@ -5,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 export const installerSuffixes = ['windows.exe','windows.msi','mac-apple-silicon.dmg','mac-intel.dmg','linux.AppImage'];
 const platforms = { 'windows.exe':'windows-x86_64', 'mac-apple-silicon.tar.gz':'darwin-aarch64', 'mac-intel.tar.gz':'darwin-x86_64', 'linux.AppImage':'linux-x86_64' };
-export async function prepareRelease(source, destination, version) {
+export async function prepareRelease(source, destination, version, statementDirectory) {
   if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version)) throw new Error('Invalid release version');
   const files = (await readdir(source)).sort();
   const prefix = files.some(name => name.startsWith(`RavenVault-Desktop-${version}-`)) ? `RavenVault-Desktop-${version}-` : `PLAY-X-Raven-${version}-`;
@@ -30,7 +31,12 @@ export async function prepareRelease(source, destination, version) {
     if (next.reduce((order, n, i) => order || Math.sign(n - old[i]), 0) <= 0) throw new Error('Release must be newer than the currently published version');
   } catch (e) { if (e.code !== 'ENOENT') throw e; }
   const base = `https://raw.githubusercontent.com/PLAYX1/playx-raven-releases/dist/v${version}`;
-  const manifest = { version, notes: 'RavenVault Desktop 0.8.3 — 라비는 이제 트레이에 조용히 상주하고 필요할 때만 말풍선으로 나타납니다(항상 떠 있기는 설정에서 선택). 첫 실행 때 손님 QR·대화창이 먼저 뜨지 않고 라비가 날아온 뒤에 인사합니다. 채팅창 마이크 받아쓰기(권한 안내 포함), 잠긴 맥 키체인 안내와 암호화 보관 선택지, 금고·용돈 지갑 설계 기반을 추가했습니다. (0.8.2 는 윈도우 설치 파일 빌드 문제로 건너뜁니다.)', pub_date: new Date().toISOString(), platforms: {}, installers: [] };
+  const manifest = { version, notes: `RavenVault Desktop ${version} — 게임 판매 대금 받기: 비밀번호 재인증 후 판매 전용 xpub·QR·처음 주소 3개 표시, 1분 자동 숨김, 기본 주소 100개의 확정 금액 조회, 내 지갑으로 옮기기 안내. 라비 스토리를 기본 브라우저에서 엽니다. 서명된 업데이트 버전·해시·순서 검증을 유지합니다.`, pub_date: new Date().toISOString(), platforms: {}, installers: [] };
+  const needsStatement = version.split('.').map(Number).reduce((order,n,i)=>order || Math.sign(n-[0,8,4][i]),0) >= 0;
+  if (needsStatement) {
+    const config = JSON.parse(await readFile(new URL('../src-tauri/tauri.conf.json', import.meta.url),'utf8'));
+    manifest.signed_releases = await signedReleaseMetadata(statementDirectory, source, prefix, version, config.plugins.updater.pubkey);
+  }
   for (const [suffix, platform] of Object.entries(platforms)) {
     const signature = (await readFile(path.join(source, prefix + suffix + '.sig'), 'utf8')).trim();
     if (!/^[A-Za-z0-9+/=\r\n]+$/.test(signature) || signature.length < 100 || signature.length > 2048) throw new Error(`Malformed updater signature: ${suffix}`);
@@ -58,8 +64,8 @@ export async function prepareRelease(source, destination, version) {
   return { manifest, paths };
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const [source, destination, version] = process.argv.slice(2);
-  const result = await prepareRelease(source, destination, version);
+  const [source, destination, version, statementDirectory] = process.argv.slice(2);
+  const result = await prepareRelease(source, destination, version, statementDirectory);
   await writeFile(path.resolve(destination, '../release-paths.txt'), result.paths.join('\n') + '\n');
   console.log(`Validated ${Object.keys(result.manifest.platforms).length} signed platforms and ${result.manifest.installers.length} installers for ${version}`);
 }

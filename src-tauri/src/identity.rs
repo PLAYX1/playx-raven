@@ -181,7 +181,7 @@ const _: () = assert!(
 //
 // RFC 2104. 블록 128바이트. 시험이 RFC 4231 값으로 확인한다.
 
-fn hmac_sha512(key: &[u8], parts: &[&[u8]]) -> [u8; 64] {
+pub(crate) fn hmac_sha512(key: &[u8], parts: &[&[u8]]) -> [u8; 64] {
     let mut k = [0u8; 128];
     if key.len() > 128 {
         let d = Sha512::digest(key);
@@ -206,6 +206,9 @@ fn hmac_sha512(key: &[u8], parts: &[&[u8]]) -> [u8; 64] {
     outer.update(ih);
     let mut out = [0u8; 64];
     out.copy_from_slice(&outer.finalize());
+    crate::words::wipe_bytes(&mut k);
+    crate::words::wipe_bytes(&mut ipad);
+    crate::words::wipe_bytes(&mut opad);
     out
 }
 
@@ -225,7 +228,7 @@ fn hmac_sha512(key: &[u8], parts: &[&[u8]]) -> [u8; 64] {
 ///    다를 수 있는데, 그 경우는 애초에 레이븐코어와 웹 지갑도 서로 안
 ///    맞으므로 여기서 만들어 낼 수 있는 답이 아니다.)
 pub fn seed_from_words(words: &str, passphrase: &str) -> Option<[u8; 64]> {
-    let norm = words
+    let mut norm = words
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ")
@@ -246,6 +249,9 @@ pub fn seed_from_words(words: &str, passphrase: &str) -> Option<[u8; 64]> {
             out[i] ^= u[i];
         }
     }
+    crate::words::wipe(&mut norm);
+    crate::words::wipe_bytes(&mut salt);
+    crate::words::wipe_bytes(&mut u);
     Some(out)
 }
 
