@@ -80,12 +80,16 @@ export class RaviPhysics {
 export function createFrameLoop(api: { now(): number; raf(cb: (time: number) => void): number; cancelRaf(id: number): void;
   delay(cb: () => void, ms: number): number; cancelDelay(id: number): void }, draw: (dt: number) => void, rate: () => number) {
   let running=false, frame=0, timer=0, last=0;
-  const cancel=()=>{ api.cancelRaf(frame); api.cancelDelay(timer); frame=timer=0; };
+  // 🔴 requestAnimationFrame 같은 브라우저 내장 함수를 api.raf(...) 로 부르면 this 가 api 가 되어
+  // 브라우저에서만 Illegal invocation 이 난다(Node 시험은 못 잡는다) — 항상 풀어서 호출한다.
+  const now=()=>api.now(), raf=(cb:(time:number)=>void)=>api.raf.call(undefined,cb), cancelRaf=(id:number)=>api.cancelRaf.call(undefined,id);
+  const delay=(cb:()=>void,ms:number)=>api.delay.call(undefined,cb,ms), cancelDelay=(id:number)=>api.cancelDelay.call(undefined,id);
+  const cancel=()=>{ cancelRaf(frame); cancelDelay(timer); frame=timer=0; };
   const schedule=()=>{
     const fps=rate(); if (!running || !fps) return;
-    if (fps===60) frame=api.raf(tick);
-    else timer=api.delay(()=>{ timer=0; if(running) frame=api.raf(tick); },1000/fps);
+    if (fps===60) frame=raf(tick);
+    else timer=delay(()=>{ timer=0; if(running) frame=raf(tick); },1000/fps);
   };
   const tick=(now:number)=>{ frame=0; if(!running)return; draw(Math.min(.25,Math.max(0,(now-last)/1000))); last=now; schedule(); };
-  return { start(){ if(running)return; running=true; last=api.now(); schedule(); }, stop(){ running=false; cancel(); }, get running(){return running;} };
+  return { start(){ if(running)return; running=true; last=now(); schedule(); }, stop(){ running=false; cancel(); }, get running(){return running;} };
 }
