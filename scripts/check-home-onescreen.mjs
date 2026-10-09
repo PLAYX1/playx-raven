@@ -17,11 +17,6 @@ function declarations(source, selector, media = false) {
   return result;
 }
 const px = value => { assert.match(value, /^\d+(?:\.\d+)?px$/); return parseFloat(value); };
-function clamp(value, height, limit) {
-  const match = /^clamp\((\d+)px,(\d+)vh,(\d+)px\)$/.exec(value);
-  assert.ok(match, `Unmodelled clamp: ${value}`);
-  return limit === 'min' ? +match[1] : limit === 'max' ? +match[3] : Math.max(+match[1], Math.min(+match[3], height * +match[2] / 100));
-}
 function luminance(hex) {
   assert.match(hex,/^#[a-f\d]{6}$/i);
   const rgb = hex.slice(1).match(/../g).map(x=>parseInt(x,16)/255).map(x=>x<=.04045 ? x/12.92 : ((x+.055)/1.055)**2.4);
@@ -33,52 +28,47 @@ function checkLayout(source) {
   const grid = declarations(source, '#page-home .rv-home-grid');
   const card = declarations(source, '#page-home .rv-home-grid > div');
   const button = declarations(source, '#page-home button');
-  const legacy = [...html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map(m=>m[1]).join('\n');
-  assert.equal(grid['grid-template-columns'],'repeat(2,minmax(0,1fr))','Equal column widths');
+  assert.equal(grid['grid-template-columns'],'repeat(2,minmax(0,1fr))');
+  assert.equal(grid['grid-template-areas'],'"bal safe" "act conversation" "today extras"');
   assert.equal(grid['grid-template-rows'],'var(--home-row-top) var(--home-row-middle) var(--home-row-bottom)');
   assert.equal(card.width,'100%'); assert.equal(card['box-sizing'],'border-box');
   assert.equal(card['align-self'],'stretch'); assert.equal(card.padding,'var(--home-pad)');
   assert.equal(declarations(source,'#page-home .rv-home-grid',true)['grid-template-columns'],'minmax(0,1fr)');
-  assert.match(source,/@media\(max-width:1050px\)/);
-  assert.ok(px(button['min-height'])>=44); assert.ok(px(button['font-size'])>=15);
+  assert.match(source,/@media\(max-width:760px\)/);
+  assert.ok(px(button['min-height'])>=36); assert.ok(px(button['font-size'])>=15);
   assert.equal(root.padding,'0'); assert.equal(root.overflow,undefined); assert.equal(card.overflow,undefined);
-  const gap=px(root['--home-gap']), pad=px(root['--home-pad']);
-  const title=declarations(source,'#page-home > h1');
-  const pagePad=declarations(source,'main:has(> #page-home.on)').padding.split(' ').map(px);
-  const chrome=px(declarations(legacy,'body')['padding-top']);
-  const nav=px(declarations(legacy,'body > nav').width);
-  const banner=declarations(source,'#page-home > .seed-recovery');
-  const fixed=chrome + 2*pagePad[0] + px(title['line-height']) + px(title.margin.split(' ')[2]) + px(banner['min-height']) + px(banner.margin.split(' ')[0]);
+  const compact=declarations(source,'#page-home',true);
   const checks=[];
-  for (const [width,height] of [[1120,780],[1440,900],[1920,1080]]) {
-    const rows=[clamp(root['--home-row-top'],height),clamp(root['--home-row-middle'],height),px(root['--home-row-bottom'])];
-    const minRows=[clamp(root['--home-row-top'],height,'min'),clamp(root['--home-row-middle'],height,'min'),rows[2]];
-    const maxRows=[clamp(root['--home-row-top'],height,'max'),clamp(root['--home-row-middle'],height,'max'),rows[2]];
-    const total=fixed+rows.reduce((a,b)=>a+b,0)+2*gap;
-    assert.ok(total<=height,`${width}×${height}: ${total}px > ${height}px`);
-    // Content minima: 24px title + 40px balance + 6px gap + 44px actions;
-    // 44px heading + 6px gap + 3 × 48px activity rows. Borders included.
-    assert.ok(rows[0]>=2*pad+2+24+40+6+44,'Balance fits its row');
-    assert.ok(rows[1]>=2*pad+2+24+24+44+12,'Ravi fits its row');
-    assert.ok(rows[2]>=2*pad+2+44+6+3*48,'All three activity rows fit');
-    const cardWidth=(width-nav-2*pagePad[1]-gap)/2;
-    assert.ok(cardWidth>=450,'Minimum supported card width');
-    checks.push({width,height,rows,minRows,maxRows,cardWidths:[cardWidth,cardWidth],includingLockedBanner:total,spare:height-total});
+  for (const [width,height] of [[1024,640],[1280,720],[1440,900],[1728,1117]]) {
+    const small=width<=1100||height<=680;
+    const vars=small?{...root,...compact}:root;
+    const pad=px(vars['--home-pad']),gap=px(vars['--home-gap']);
+    const rows=['--home-row-top','--home-row-middle','--home-row-bottom'].map(k=>px(vars[k]));
+    const pagePadding=declarations(source,'main:has(> #page-home.on)',small).padding.split(' ').map(px);
+    const total=110+pagePadding[0]*2+28+8+rows.reduce((a,b)=>a+b,0)+2*gap;
+    assert.ok(total<=height,`${width}×${height}: estimated ${total}px > ${height}px`);
+    assert.ok(rows[0]>=2*pad+2+24+40+6+44,'Balance content budget');
+    assert.ok(rows[1]>=2*pad+2+36+6+3*46,'Three transaction row budget');
+    assert.ok(rows[2]>=2*pad+2+36+6+42,'Sales summary budget');
+    if(!small)assert.ok(total+64<=height,'Recovery banner remains reachable');
+    checks.push({width,height,rows,estimatedHeight:total,estimatedSpare:height-total,disclosure:small?'collapsed':'expanded'});
   }
-  const pairs=[['--home-ink','--home-paper'],['--home-muted','--home-paper'],['--home-good','--home-paper'],['--home-warn','--home-paper'],['--home-bad','--home-paper']];
-  const contrasts=pairs.map(([fg,bg])=>({foreground:root[fg],background:root[bg],ratio:contrast(root[fg],root[bg])}));
-  for(const foreground of [root['--home-ink'],root['--home-muted'],root['--home-good'],root['--home-warn'],root['--home-bad']]) contrasts.push({foreground,background:'#f3f5fa',ratio:contrast(foreground,'#f3f5fa')});
-  contrasts.push({foreground:'#ffffff',background:'#1f224e',ratio:contrast('#ffffff','#1f224e')},{foreground:'#1f224e',background:'#fff5e3',ratio:contrast('#1f224e','#fff5e3')});
+  const dark=declarations(source,':root[data-theme="dark"] #page-home');
+  const contrasts=[];
+  for(const [theme,vars] of [['light',root],['dark',{...root,...dark}]]){
+    for(const fg of ['--home-ink','--home-muted','--home-good','--home-warn','--home-bad'])for(const bg of ['--home-paper','--home-tint'])
+      contrasts.push({theme,foreground:vars[fg],background:vars[bg],ratio:contrast(vars[fg],vars[bg])});
+    contrasts.push({theme,foreground:vars['--home-on-action'],background:vars['--home-action'],ratio:contrast(vars['--home-on-action'],vars['--home-action'])});
+  }
   for(const pair of contrasts)assert.ok(pair.ratio>=4.5,`Contrast below 4.5: ${JSON.stringify(pair)}`);
   return {checks,contrasts};
 }
 const layout=checkLayout(css);
-// Sensitivity checks: the fallback must fail if budgets, widths or colors regress.
-assert.throws(()=>checkLayout(css.replace('--home-row-bottom:220px','--home-row-bottom:320px')));
+assert.throws(()=>checkLayout(css.replace('--home-row-bottom:112px','--home-row-bottom:320px')));
 assert.throws(()=>checkLayout(css.replace('repeat(2,minmax(0,1fr))','minmax(0,2fr) minmax(0,1fr)')));
 assert.throws(()=>checkLayout(css.replace('--home-muted:#59637d','--home-muted:#cccccc')));
 const homeHTML=html.slice(html.indexOf('<section class="page on" id="page-home">'),html.indexOf('<section class="page" id="page-ravi">'));
-const order=['rv-home-balance','rv-home-safety','ravi-home-slot','rv-home-today','rv-home-activity','rv-home-chats'].map(id=>homeHTML.indexOf(id));
+const order=['rv-home-balance','rv-home-safety','rv-home-activity','ravi-home-slot','rv-home-today','rv-home-extras'].map(id=>homeHTML.indexOf(id));
 assert.ok(order.every((x,i)=>x>=0 && (!i||x>order[i-1])),'DOM reading and keyboard order follows the grid');
 assert.ok(!homeHTML.includes('tabindex='),'No artificial tab order');
 assert.ok(main.includes('$("rv-home-activity-all").onclick = () => { showPage("wallet"); jumpToEl("w-txs"); };'));
@@ -114,10 +104,9 @@ const context=vm.createContext({$:el,document:{getElementById:el,querySelector:(
 vm.runInContext(compile(fn('paintHomeToday')+'\n'+fn('paintHome')),context);
 await context.paintHome(); await context.paintHomeToday();
 assert.equal((el('rv-home-txs').innerHTML.match(/class="rv-home-entry"/g)||[]).length,3);
-assert.equal((el('rv-home-rooms').innerHTML.match(/class="rv-home-entry"/g)||[]).length,2);
 assert.ok(el('rv-home-txs').innerHTML.includes('&lt;fixture&gt;'));
 assert.equal((el('rv-home-today-body').innerHTML.match(/class="rv-home-entry"/g)||[]).length,4);
 shop=null;await context.paintHomeToday();assert.ok(el('rv-home-today-body').innerHTML.includes('아직 가게'));
 fail=true;await context.paintHomeToday();assert.ok(el('rv-home-today-body').innerHTML.includes('확인하지 못했습니다'));assert.equal(el('rv-home-today').hidden,false);
 writeFileSync(`${out}/arithmetic.json`,JSON.stringify({kind:'CSS arithmetic; not browser measurement',...layout,renderFixtures:'passed',mutationSensitivity:'passed',unverified:['Actual font shaping/wrapping','Browser cascade, screenshots, focus traversal','Tauri WebView, display scaling, translated copy']},null,2)+'\n');
-console.log('PASS home arithmetic: 3 viewports, equal widths, row content minima, banner budget, 4.5:1 contrast, mutation sensitivity; production summary/safety fixtures. Browser geometry NOT verified.');
+console.log('PASS home arithmetic: 4 viewports (estimates only), 2 columns, row content minima, desktop banner budget, 4.5:1 contrast, mutation sensitivity; production summary/safety fixtures. Browser geometry NOT verified.');

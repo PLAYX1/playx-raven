@@ -61,6 +61,8 @@ f.panel.open();f=fixture();assert.equal(f.panel.visible(),false,'conversation ne
 f.panel.open();
 assert.equal(f.el('ravi-panel').classList.contains('large'),true);
 f.el('chat-q').focus();f.el('ravi-collapse').onclick();assert.equal(f.doc.activeElement.id,'ravi-launcher');
+f.el('page-home').classList.toggle('on',true);f.panel.open();f.el('ravi-collapse').onclick();assert.equal(f.doc.activeElement.id,'ravi-open','home returns focus to the visible conversation button');
+f.el('page-home').classList.toggle('on',false);
 f.panel.open();f.panel.suspend(true);assert.equal(f.panel.visible(),false);assert.equal(f.el('ravi-launcher').hidden,true);
 const persisted=storage.get('ravenvault-ravi-panel');f.panel.suspend(false);assert.equal(f.panel.visible(),true);
 assert.equal(storage.get('ravenvault-ravi-panel'),persisted,'temporary approval pause never changes saved preference');

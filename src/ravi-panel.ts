@@ -38,7 +38,10 @@ export function createRaviPanel(send: () => void, changed: () => void, afterLand
   function collapse() {
     const ownedFocus = panel.contains(document.activeElement);
     open = false; paint(); save();
-    if (ownedFocus && !suspended) launcher.focus({ preventScroll: true });
+    if (ownedFocus && !suspended) {
+      const trigger = el("page-home").classList.contains("on") ? el("ravi-open") : launcher;
+      trigger.focus({ preventScroll: true });
+    }
   }
   for (const id of ["ravi-launcher", "ravi-open", "ravi-menu-open"]) el(id).onclick = () => show();
   el("ravi-collapse").onclick = collapse;

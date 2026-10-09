@@ -4709,11 +4709,6 @@ async function paintHome(): Promise<void> {
     }).join("") || `<p>${copyHtml("최근 거래가 없습니다")}</p>`;
   } catch { $("rv-home-txs").textContent = t("거래 내역을 읽지 못했습니다"); }
   void paintHomeToday();
-  try {
-    const rooms: any[] = await invoke("talk_rooms");
-    $("rv-home-rooms").innerHTML = `<div class="rv-home-entry">${copyHtml("라비")}<small>${escapeHtml(document.querySelector("#chat-log .msg.ai:last-child .msgtxt")?.textContent || t("AI 도우미 · 라비와 대화에서 이어가기"))}</small></div>` +
-      (Array.isArray(rooms) ? rooms.slice(0, 1).map(room => `<div class="rv-home-entry" translate="no">${escapeHtml(String(room.name || ""))}<small>${escapeHtml(String(room.about || t("대화 열기에서 확인하세요")))}</small></div>`).join("") : "");
-  } catch { $("rv-home-rooms").textContent = t("대화를 읽지 못했습니다"); }
 }
 
 /** 「만들기」 화면 들어가기 — 화면이 준비되면 채운다. */
@@ -17946,6 +17941,19 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("rv-home-send").onclick = () => { showPage("wallet"); void openSend("rvn"); };
   $("rv-home-backup").onclick = () => showPage("settings");
   $("rv-home-chat").onclick = () => showPage("talk");
+  $("rv-home-nearby").onclick = async () => {
+    try { await invoke("start_phone_server"); await invoke("open_share", { url: "http://127.0.0.1:8790/shops" }); }
+    catch { say(t("열지 못했습니다"), t("서버 연결을 확인하고 다시 시도해 주세요.")); }
+  };
+  $("rv-home-games").onclick = () => showPage("games");
+  $("rv-home-sales").onclick = () => showPage("sales");
+  // Collapse only secondary entrances in a small window. Native details keeps
+  // Enter/Space, focus order and all destinations available without a custom trap.
+  const compactHome = matchMedia("(max-width:1100px), (max-height:680px)");
+  const homeExtras = $("rv-home-extras") as HTMLDetailsElement;
+  const fitHomeExtras = () => { homeExtras.open = !compactHome.matches; };
+  fitHomeExtras();
+  compactHome.addEventListener("change", fitHomeExtras);
   $("rv-home-activity-all").onclick = () => { showPage("wallet"); jumpToEl("w-txs"); };
   $("rv-home-more").onclick = () => showPage("wallet");
 

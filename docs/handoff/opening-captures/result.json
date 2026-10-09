@@ -1,6 +1,38 @@
 {
-  "status": "failed",
-  "screenshots": [],
-  "checks": [],
-  "error": "Error: Failed to launch the browser process!\n\n\nTROUBLESHOOTING: https://pptr.dev/troubleshooting\n"
+  "status": "passed",
+  "screenshots": [
+    "opening-0.png",
+    "opening-25.png",
+    "opening-50.png",
+    "opening-75.png",
+    "opening-100.png",
+    "quit-ko-light.png",
+    "idle-ko-light.png",
+    "quit-en-light.png",
+    "idle-en-light.png",
+    "quit-ja-light.png",
+    "idle-ja-light.png",
+    "quit-zh-light.png",
+    "idle-zh-light.png",
+    "quit-ko-dark.png",
+    "idle-ko-dark.png",
+    "quit-en-dark.png",
+    "idle-en-dark.png",
+    "quit-ja-dark.png",
+    "idle-ja-dark.png",
+    "quit-zh-dark.png",
+    "idle-zh-dark.png",
+    "quit-transfer.png",
+    "quit-locked.png",
+    "quit-unencrypted.png",
+    "quit-unknown.png",
+    "farewell.png",
+    "opening-reduced.png"
+  ],
+  "checks": [
+    "capture input deferred; skip paints grounded pose before one barrier release",
+    "4 languages × 2 themes; modal keyboard focus/Escape; opaque idle privacy; wake never unlocks",
+    "pending transfer blocks quit; lock states; failed prepare never exits; successful farewell exits",
+    "automatic idle timer; reduced-motion completion; no browser errors"
+  ]
 }
