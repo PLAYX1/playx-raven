@@ -24,7 +24,7 @@ export function createRaviHome(api: { afterLanding?(run: () => void): void; wake
   let speakingTimer = 0, joyTimer = 0, speechEpoch = 0;
   const visible = (el: Element) => !!el.getClientRects().length;
   function externalApproval(): boolean {
-    return Array.from(document.querySelectorAll(".sheet:not(.hidden), #askwrap.on, #rpwrap, #onboard:not(.hidden), #hello, #send-review, #qrwrap, #phone-tx-send:not([hidden])")).some(visible);
+    return Array.from(document.querySelectorAll(".ravi-lifecycle[open], .sheet:not(.hidden), #askwrap.on, #rpwrap, #onboard:not(.hidden), #hello, #send-review, #qrwrap, #phone-tx-send:not([hidden])")).some(visible);
   }
   function approval(): boolean {
     return externalApproval() || ["ravi-key", "rv-send-card"].some(id => !byId(id).hidden && visible(byId(id)));
@@ -113,6 +113,7 @@ export function createRaviHome(api: { afterLanding?(run: () => void): void; wake
     observer.observe(el, { attributes: true, attributeFilter: ["class", "style", "hidden", "open"] }));
   const onVisibility = () => { background = document.hidden; sync(); };
   document.addEventListener("visibilitychange", onVisibility);
+  document.addEventListener("ravi-lifecycle-change", sync);
   window.addEventListener("blur", () => { if (microphone?.state === "requesting") return; background = true; sync(); });
   window.addEventListener("focus", () => { background = document.hidden; sync(); });
   window.addEventListener("pagehide", () => { background = true; sync(); });

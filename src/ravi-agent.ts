@@ -1,4 +1,5 @@
-import { raviFace } from "./ravi-face";
+import { mountRaviOpening } from "./ravi-opening";
+import { t } from "./i18n";
 import { containsRaviSecret } from "./ravi-guide";
 
 export const GREETING_OFF = "rv-ravi-start-off";
@@ -127,28 +128,29 @@ export function createRaviAgentUI(api: { invoke: Invoke; keyed(): string | null;
       started = true;
       if (!shouldGreet(localStorage, sessionStorage)) { api.landed?.(); return; }
       const overlay = document.createElement("aside"); overlay.className = "ravi-arrival"; overlay.setAttribute("aria-label", "라비 시작 인사");
-      const bird = document.createElement("div"); bird.className = "ravi-arrival-bird"; bird.append(raviFace("happy", 180));
+      const bird = document.createElement("button"); bird.type = "button"; bird.className = "ravi-arrival-bird"; bird.setAttribute("data-ravi-skip", "true"); bird.setAttribute("aria-label", t("인사 건너뛰기"));
       const bubble = document.createElement("div"); bubble.className = "ravi-arrival-bubble"; bubble.hidden = true;
       const title = document.createElement("strong"); title.textContent = "짜잔! 오늘 어땠어요?";
       const summary = document.createElement("p"); summary.textContent = "오늘의 로컬 정보를 확인하고 있어요…";
       const natural = document.createElement("p"); natural.setAttribute("aria-live", "polite");
       let timer = 0, closed = false;
-      const dismiss = () => { if (closed) return; closed = true; clearTimeout(timer); overlay.classList.add("docking"); window.setTimeout(() => overlay.remove(), 360); };
+      const dismiss = () => { if (closed) return; closed = true; clearTimeout(timer); overlay.classList.add("docking"); window.setTimeout(() => { opening.destroy(); overlay.remove(); }, 360); };
       const dock = () => {
         const run = () => { if (closed) return; dismiss(); api.dock(); };
         if (api.afterLanding) api.afterLanding(run); else run();
       };
       const key = button("AI 열쇠를 넣으면 더 많은 걸 해 드려요", () => { const run = () => { dock(); api.key(); }; if (api.afterLanding) api.afterLanding(run); else run(); }); key.hidden = !!api.keyed();
       bubble.append(title, summary, natural, key, button("라비와 이야기하기", dock)); overlay.append(bird, bubble); document.body.append(overlay);
+      const skip = button(t("인사 건너뛰기"), () => opening.finish());
+      skip.className = "ravi-arrival-skip"; skip.setAttribute("data-ravi-skip", "true"); overlay.append(skip);
       let landed = false;
       const land = () => {
         if (landed) return;
-        landed = true; bubble.hidden = false; api.landed?.();
+        landed = true; skip.hidden = true; bird.setAttribute("aria-label", t("라비와 이야기하기")); bubble.hidden = false; api.landed?.();
         timer = window.setTimeout(dismiss, 18000);
       };
-      bird.addEventListener("animationend", event => { if (event.target === bird) land(); });
-      // Fallback for disabled animations / hidden WebViews; never shorter than the flight.
-      window.setTimeout(land, 2100);
+      const opening = mountRaviOpening(bird, land);
+      void api.invoke("companion_settings").then(value => opening.batterySaver(value?.settings?.battery === true)).catch(() => {});
       void api.invoke("ravi_today", { tz: api.tz() }).then(async data => {
         await settingsReady;
         if (closed) return;
@@ -159,7 +161,7 @@ export function createRaviAgentUI(api: { invoke: Invoke; keyed(): string | null;
           try { const line = await api.invoke<string>("ravi_greeting", { provider: api.keyed(), tz: api.tz() }); if (!closed && !containsRaviSecret(line)) natural.textContent = line; } catch { /* Fixed greeting and local numbers stay visible. */ }
         }
       }).catch(() => { if (!closed) summary.textContent = "오늘 요약 데이터 없음"; });
-      bird.onclick = dock;
+      bird.onclick = () => { if (!landed) opening.finish(); else dock(); };
     },
   };
 }

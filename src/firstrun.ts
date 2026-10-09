@@ -22,7 +22,7 @@ export function installFirstRunBarrier(): void {
   const deferClick = (event: MouseEvent) => {
     if (landed || !(event.target instanceof Element)) return;
     const target = event.target.closest<HTMLElement>('button, a, summary, [role="button"]');
-    if (!target) return;
+    if (!target || target.hasAttribute("data-ravi-skip")) return;
     event.preventDefault(); event.stopImmediatePropagation();
     afterRaviLanding(() => { if (target.isConnected) target.click(); });
   };
@@ -37,6 +37,7 @@ export function installFirstRunBarrier(): void {
     if (landed || event.isComposing || event.shiftKey || !['Enter', ' '].includes(event.key)) return;
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
+    if (target.hasAttribute("data-ravi-skip")) return;
     if (event.key === ' ' && !target.matches('button, a, summary, [role="button"]')) return;
     event.preventDefault(); event.stopImmediatePropagation();
     const key = event.key;

@@ -1,0 +1,22 @@
+.ravi-lifecycle { width:min(460px,calc(100vw - 40px)); max-height:calc(100dvh - 40px); padding:0; border:1px solid var(--line); border-radius:28px; background:var(--panel); color:var(--text); box-shadow:0 24px 100px #080d2238; overflow:auto; }
+.ravi-lifecycle::backdrop { background:#080d2270; }
+.ravi-lifecycle-card { padding:24px 32px 32px; text-align:center; }
+.ravi-lifecycle-rig { width:176px; height:196px; margin:0 auto 8px; }
+.ravi-lifecycle-rig svg { width:100%; height:100%; overflow:visible; }
+.ravi-lifecycle-eyebrow { color:var(--muted); font-size:11px; letter-spacing:.18em; margin:4px 0 12px; }
+.ravi-lifecycle h2 { font-size:24px; line-height:1.35; margin:0 0 16px; letter-spacing:-.025em; }
+#ravi-lifecycle-note { font-size:16px; line-height:1.65; margin:0; min-height:3.3em; overflow-wrap:anywhere; }
+.ravi-lifecycle-detail { color:var(--muted); font-size:14px; line-height:1.65; margin:12px 0 24px; }
+.ravi-lifecycle-actions { display:flex; flex-wrap:wrap; justify-content:center; gap:8px; }
+.ravi-lifecycle-actions button { min-height:44px; padding:10px 16px; border:1px solid var(--line); border-radius:13px; background:var(--bg); color:var(--text); font:inherit; cursor:pointer; }
+.ravi-lifecycle-actions .ravi-quit { background:var(--text); color:var(--panel); }
+.ravi-lifecycle-actions button:disabled { opacity:.5; cursor:wait; }
+.ravi-lifecycle button:focus-visible { outline:3px solid var(--ravi-soft); outline-offset:3px; }
+/* Opaque privacy curtain also covers new toasts and pre-existing top-layer content. */
+body.ravi-private > :not(.ravi-lifecycle), body.ravi-private > :not(.ravi-lifecycle) * { visibility:hidden!important; }
+body.ravi-private .ravi-lifecycle { border:0; box-shadow:none; width:100vw; height:100dvh; max-width:none; max-height:none; inset:0; margin:0; border-radius:0; background:var(--bg); }
+body.ravi-private .ravi-lifecycle::backdrop { background:var(--bg); }
+body.ravi-private .ravi-lifecycle-card { box-sizing:border-box; min-height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:32px; }
+body.ravi-private .ravi-lifecycle-detail { max-width:380px; }
+body.ravi-private .ravi-lifecycle-rig { width:220px; height:245px; }
+@media(max-height:600px) { .ravi-lifecycle-rig,body.ravi-private .ravi-lifecycle-rig { width:112px; height:124px; } .ravi-lifecycle-card { padding:16px 24px; } }

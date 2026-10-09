@@ -49,7 +49,7 @@ function fixture({ keyed=false, restart=false, greetingOff=false, waiting=null }
   };
   const ctx=vm.createContext({document,Element,HTMLElement:Element,KeyboardEvent:class{constructor(type,opts){this.type=type;Object.assign(this,opts);}},localStorage:store(storage),sessionStorage:store(session),queueMicrotask,Date,Promise,Set,Map,console,
     window:{setTimeout:(f,ms)=>schedule(f,ms),setInterval:(f,ms)=>schedule(f,ms,true),addEventListener(){},confirm(){throw Error('Automatic confirm forbidden');}},clearTimeout:id=>timers.delete(id),setTimeout:(f,ms)=>schedule(f,ms),
-    MutationObserver:class{observe(){}},ResizeObserver:class{observe(){}},raviFace:()=>new Element('svg'),containsRaviSecret:()=>false,invoke,t:s=>s,tf:(s,...a)=>s.replace(/\{(\d+)\}/g,(_,i)=>a[i]),copyHtml:s=>s,setCopyText:(el,render)=>{el.textContent=render();}});
+    MutationObserver:class{observe(){}},ResizeObserver:class{observe(){}},mountRaviOpening:(_host,land)=>{let done=false;const finish=()=>{if(!done){done=true;land();}};const id=schedule(finish,2400);return {finish,batterySaver(){},destroy(){timers.delete(id);}};},containsRaviSecret:()=>false,invoke,t:s=>s,tf:(s,...a)=>s.replace(/\{(\d+)\}/g,(_,i)=>a[i]),copyHtml:s=>s,setCopyText:(el,render)=>{el.textContent=render();}});
   const modules={};for(const name of sources){ctx.exports={};vm.runInContext(`{const exports = globalThis.exports; ${compiled[name]}\n}`,ctx);modules[name]=ctx.exports;}
   const gate=modules.firstrun;gate.installFirstRunBarrier();
   const panel=modules['ravi-panel'].createRaviPanel(()=>{},()=>{},gate.afterRaviLanding);
@@ -66,7 +66,7 @@ for(const restart of [false,true])for(const keyed of [false,true]) {
   assert.equal(f.panel.visible(),false);
   const bubble=f.walk(f.document.body).find(n=>n.className==='ravi-arrival-bubble');assert.equal(bubble.hidden,true);
   await f.advance(1699);assert.equal(f.panel.visible(),false);assert.equal(bubble.hidden,true);
-  await f.advance(401);assert.equal(bubble.hidden,false);assert.equal(f.panel.visible(),false);
+  await f.advance(701);assert.equal(bubble.hidden,false);assert.equal(f.panel.visible(),false);
   await f.advance(60000);assert.equal(f.panel.visible(),false,'greeting timeout and polling never open conversation');
   assert.equal(f.el('rvp-card').hidden,true);assert.equal(f.el('rvp-notice').hidden,true);assert.equal(f.keys,0);
   assert.ok(!f.calls.includes('pairing_request_open'));assert.ok(!f.calls.includes('pairing_show_qr'));
@@ -82,11 +82,11 @@ for(const waiting of [{requests:0,pending:true,guestqr:[]},{requests:1,pending:f
 {
   const f=fixture();let recovery=0;f.gate.afterRaviLanding(()=>recovery++);f.panel.open();
   await f.advance(1699);assert.equal(recovery,0);assert.equal(f.panel.visible(),false);
-  await f.advance(401);assert.equal(recovery,1);assert.equal(f.panel.visible(),true,'explicit requests drain only after landing');
+  await f.advance(701);assert.equal(recovery,1);assert.equal(f.panel.visible(),true,'explicit requests drain only after landing');
 }
 {
   const f=fixture();await flush();const bird=f.walk(f.document.body).find(n=>n.className==='ravi-arrival-bird');
-  bird.onclick();assert.equal(f.panel.visible(),false);await f.advance(2100);assert.equal(f.panel.visible(),true);
+  f.panel.open();bird.onclick();assert.equal(f.document.documentElement.hasAttribute('data-ravi-arriving'),false);await flush();assert.equal(f.panel.visible(),true,'skip releases only after immediate landing');
 }
 {
   const f=fixture({greetingOff:true,restart:true});await f.advance(60000);
@@ -96,7 +96,7 @@ for(const waiting of [{requests:0,pending:true,guestqr:[]},{requests:1,pending:f
   const f=fixture();let prevented=0;
   f.listeners.get('click')({target:f.el('ravi-launcher'),preventDefault(){prevented++;},stopImmediatePropagation(){}});
   assert.equal(prevented,1);assert.equal(f.panel.visible(),false);
-  await f.advance(2100);assert.equal(f.panel.visible(),true,'captured clicks replay after landing');
+  await f.advance(2400);assert.equal(f.panel.visible(),true,'captured clicks replay after landing');
 }
 {
   const f=fixture();let prevented=0;
@@ -112,7 +112,7 @@ for(const name of ['ask','sure','choose','say']) {
   vm.runInContext('let askResolve = null; const ASK_ALT = "alternate"; '+ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText,f.ctx);
   f.ctx[name]('Fixture title','Fixture message');
   assert.equal(f.el('askwrap').classList.contains('on'),false);
-  await f.advance(2100);assert.equal(f.el('askwrap').classList.contains('on'),true);
+  await f.advance(2400);assert.equal(f.el('askwrap').classList.contains('on'),true);
 }
 // Integration invariants cover bootstrap paths outside the isolated controllers.
 const main=read('src/main.ts'),css=read('src/ravi-home.css');

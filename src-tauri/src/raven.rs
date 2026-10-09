@@ -197,6 +197,7 @@ pub async fn call_rpc(method: &str, params: Value) -> Result<Value, String> {
 /// Preserve numeric RPC error codes for public chain adapters without exposing
 /// node credentials, configuration paths, or raw RPC errors to browsers.
 pub(crate) async fn call_rpc_detailed(method: &str, params: Value) -> Result<Value, RpcFailure> {
+    let _transfer = if is_send_method(method) { Some(crate::ravi_lifecycle::begin_transfer()?) } else { None };
     #[cfg(test)]
     { let _ = (method, params); return Err("Synthetic lib tests cannot access a live node; inject a mock RPC backend".into()); }
     #[cfg(not(test))]

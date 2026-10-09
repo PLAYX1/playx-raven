@@ -1,0 +1,6 @@
+{
+  "status": "failed",
+  "screenshots": [],
+  "checks": [],
+  "error": "Error: Failed to launch the browser process!\n\n\nTROUBLESHOOTING: https://pptr.dev/troubleshooting\n"
+}

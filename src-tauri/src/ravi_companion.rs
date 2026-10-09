@@ -586,7 +586,8 @@ pub fn open_main(app: &tauri::AppHandle) -> Result<(), String> {
                         let _ = show(&h, false);
                     }
                 }
-                // Default close DESTROYS the webview; do not prevent_close/hide here.
+                // Main CloseRequested is handled by ravi_lifecycle in the app-wide handler.
+                // Keep Destroyed cleanup for OS teardown and explicit destruction.
                 if let tauri::WindowEvent::Destroyed = e {
                     if settings(&h).always_visible {
                         let _ = show(&h, false);
@@ -1017,7 +1018,7 @@ pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                     let _ = app.emit("companion-error", "자동 실행 설정을 바꾸지 못했어요.");
                 }
             }
-            "ravi-quit" => app.exit(0),
+            "ravi-quit" => crate::ravi_lifecycle::request_close(app),
             _ => {}
         })
         .on_tray_icon_event(|tray, event| {

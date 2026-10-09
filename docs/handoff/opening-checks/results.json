@@ -1,0 +1,42 @@
+{
+  "date": "2026-10-09",
+  "branch": "claude/rv-desktop-084",
+  "npm_test": {
+    "exit_code": 0,
+    "passed": 39,
+    "failed": 0
+  },
+  "typecheck": {
+    "exit_code": 0
+  },
+  "check_pre_release": {
+    "exit_code": 0
+  },
+  "cargo_test_ravi_lifecycle_offline": {
+    "exit_code": 0,
+    "passed": 1,
+    "filtered": 787
+  },
+  "cargo_check_offline": {
+    "exit_code": 0,
+    "warnings": 40
+  },
+  "git_diff_check": {
+    "exit_code": 0
+  },
+  "opening_browser": {
+    "exit_code": 1,
+    "status": "blocked_at_launch",
+    "screenshots": 0,
+    "reason": "Chrome failed to launch the browser process"
+  },
+  "native_gui": "unverified",
+  "live_wallet_or_network_execution": false,
+  "push_or_deployment": false,
+  "commit": {
+    "exit_code": 128,
+    "created": false,
+    "reason": "Git index.lock creation denied by filesystem permissions",
+    "fallback": "docs/handoff/commit-opening.sh"
+  }
+}

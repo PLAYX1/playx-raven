@@ -39,8 +39,12 @@ const rows=parsePs('10 1 1024 ravi\n11 10 2048 WebKit\n12 11 1024 worker\n90 1 2
 assert.equal(sumTree(rows,10).rssMiB,4);assert.equal(sumTree(rows,10,[91]).rssMiB,6);
 const native=readFileSync('src-tauri/src/ravi_companion.rs','utf8'),lib=readFileSync('src-tauri/src/lib.rs','utf8');
 assert.match(native,/ensure_window\(\s*\|\|\s*app.get_webview_window\("main"\)/);
-const mainLife=native.slice(native.indexOf('pub fn open_main('),native.indexOf('pub fn companion_open_main'));
-assert.ok(!/api\.prevent_close\(|\.hide\(/.test(mainLife),'main close must destroy');
+// Closing now requires a main-window confirmation; the tiny companion remains isolated.
+assert.match(lib,/window.label\(\) == "main"[\s\S]*?CloseRequested[\s\S]*?api.prevent_close\(\)[\s\S]*?ravi_lifecycle::request_close/);
+assert.match(native,/"ravi-quit" => crate::ravi_lifecycle::request_close\(app\)/);
+const lifecycle=readFileSync('src-tauri/src/ravi_lifecycle.rs','utf8');
+assert.match(lifecycle,/g.active>0 \|\| g.closing/);
+assert.match(lifecycle,/crate::wallet::lock_wallet\(\).await/);
 assert.match(lib,/ravi_companion::command_allowed/);
 const config=JSON.parse(readFileSync('src-tauri/tauri.conf.json','utf8'));assert.equal(config.app.windows[0].create,false);assert.equal(config.app.macOSPrivateApi,true);
 const companion=readFileSync('src/ravi-companion.ts','utf8');assert.ok(!/ravi_agent_chat|send_rvn|walletpassphrase|api_key_status/.test(companion));assert.match(companion,/containsRaviSecret\(safe\)/);

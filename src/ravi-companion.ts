@@ -1,4 +1,5 @@
 import { copy, type CopyKey } from "./companion-copy";
+import { restingFrame } from "./ravi-choreography";
 import { mountRaviMicrophone } from "./ravi-microphone";
 import { installFirstRunBarrier, afterRaviLanding, finishRaviLanding } from "./firstrun";
 installFirstRunBarrier();
@@ -66,19 +67,20 @@ function sound() {
 function mood(mode:Emotion){if(mode==='sleep'||mode==='idle')physics.resting=mode;physics.setEmotion(mode);if(mode==='joy')sound();}
 function paint(){
   const p=physics,t=p.time,quiet=p.reduced;
+  const rest=["sleep","sleepy"].includes(p.emotion)?restingFrame(t*1000,quiet):null;
   character.style.transform=`translate(${p.offsetX.value}px,${p.bounce.value}px) rotate(${p.tilt.value}deg) scale(${1+(1-p.scale.value)*.65+p.breath},${p.scale.value+p.breath})`;
   character.style.opacity='1';
   for(const side of ['left','right']){
     const cx=side==='left'?148:238,cy=side==='left'?204:197;
-    transform(`eye-open-${side}`,`translate(${cx} ${cy}) scale(1 ${Math.max(.02,p.eye)}) translate(${-cx} ${-cy})`);
+    transform(`eye-open-${side}`,`translate(${cx} ${cy}) scale(1 ${Math.max(.02,rest?.eye??p.eye)}) translate(${-cx} ${-cy})`);
     transform(`rig-pupil-${side}`,`translate(${p.gazeX} ${p.gazeY})`);
-    opacity(`rig-lid-${side}`,1-p.eye);
+    opacity(`rig-lid-${side}`,1-(rest?.eye??p.eye));
   }
-  transform('rig-head',`rotate(${quiet?0:p.gazeX*.65} 180 254)`);
+  transform('rig-head',`rotate(${quiet?0:rest?.head??p.gazeX*.65} 180 254)`);
   transform('rig-feathers',`rotate(${quiet?0:Math.sin(t*2)*(p.emotion==='surprised'?7:2)} 139 102)`);
-  transform('rig-wing-left',`rotate(${p.emotion==='joy'&&!quiet?-22:0} 122 266)`);
-  transform('rig-wing-right',`rotate(${p.emotion==='joy'&&!quiet?22:0} 237 264)`);
-  transform('rig-beak-lower',`translate(0 ${p.emotion==='surprised'?4:p.emotion==='joy'?2:0})`);
+  transform('rig-wing-left',`rotate(${rest?.wing??(p.emotion==='joy'&&!quiet?-22:0)} 122 266)`);
+  transform('rig-wing-right',`rotate(${rest?-rest.wing:p.emotion==='joy'&&!quiet?22:0} 237 264)`);
+  transform('rig-beak-lower',`translate(0 ${rest?rest.beak*8:p.emotion==='surprised'?4:p.emotion==='joy'?2:0})`);
   opacity('thought-particles',['thinking','working'].includes(p.emotion)?1:0);
   transform('thought-particles',`rotate(${quiet?0:t*45} 228 64)`);
   opacity('sleep-particles',p.emotion==='sleep'||p.emotion==='sleepy'?1:0);opacity('joy-particles',0);

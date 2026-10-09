@@ -1,6 +1,41 @@
 {
-  "status": "blocked",
-  "stage": "launch",
-  "reason": "launch-or-assertion-failure",
-  "native": "mocked"
+  "status": "pass",
+  "network": "all requests blocked",
+  "native": "mocked",
+  "qr": "synthetic SVG; QR encoding covered by native generator",
+  "checks": [
+    {
+      "width": 720,
+      "overflow": false,
+      "buttons": [
+        64,
+        64,
+        64,
+        64,
+        64
+      ]
+    },
+    {
+      "width": 1120,
+      "overflow": false,
+      "buttons": [
+        64,
+        64,
+        64,
+        64,
+        64
+      ]
+    },
+    {
+      "width": 1440,
+      "overflow": false,
+      "buttons": [
+        64,
+        64,
+        64,
+        64,
+        64
+      ]
+    }
+  ]
 }

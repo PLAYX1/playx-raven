@@ -12,6 +12,7 @@ import { seedErrorKind, seedErrorMessage, seedUnlockButton } from "./seed-recove
 import { createRaviAgentUI, TOOL_LABELS } from "./ravi-agent";
 let raviAgentUI: ReturnType<typeof createRaviAgentUI> | null = null;
 import { createRaviHome } from "./ravi-home";
+import { mountRaviLifecycle } from "./ravi-lifecycle";
 import { createPromoCard } from "./ravi-promo-card";
 import { isPromoRequest } from "./ravi-promo";
 import { isRaviHelp, raviHelpHtml, raviStarterHtml, RAVI_GREETING, RAVI_ACTIONS, RAVI_SCREENS, raviActionAllowed, containsRaviSecret } from "./ravi-guide";
@@ -17511,6 +17512,11 @@ window.addEventListener("DOMContentLoaded", async () => {
   };
   raviHome = createRaviHome({ voiceProvider: () => aiProvider || "", afterLanding: afterRaviLanding, wake: wakeRavi, wallet: () => showPage("wallet"), report: () => openReport(), send: () => { void chatSend(); }, tools: () => showPage("ravi"), companion: mode => { void invoke("companion_signal", { kind: mode === "listening" || mode === "speaking" ? "idle" : mode }).catch(() => {}); } });
   raviAgentUI = createRaviAgentUI({ invoke, keyed: () => aiProvider, key: wakeRavi, dock: () => raviHome?.open(false), landed: finishRaviLanding, afterLanding: afterRaviLanding, tz: tzMin });
+  afterRaviLanding(() => {
+    const lifecycle = mountRaviLifecycle({ invoke: rawInvoke, pending: () => sendingNow });
+    const requested = () => { void rawInvoke<boolean>("ravi_take_close_request").then(on => { if (on) void lifecycle.requestClose(); }).catch(() => {}); };
+    void listen("ravi-close-requested", requested).then(requested).catch(() => {});
+  });
   for (const id of ["ravi-promo-open", "ravi-menu-promo", "ravi-tools-promo", "sh-promo"]) {
     $(id).onclick = () => { void openRaviPromo(); };
   }

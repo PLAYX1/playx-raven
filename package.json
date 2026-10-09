@@ -24,7 +24,7 @@
     "check:ravi-companion": "node scripts/check-ravi-companion.mjs && node scripts/check-companion-fix.mjs",
     "check:home-onescreen": "node scripts/check-home-onescreen.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "node --test scripts/sales-account.test.mjs scripts/release-manifest.test.mjs scripts/verify-published-release.test.mjs scripts/signed-release-metadata.test.mjs"
+    "test": "node --test scripts/opening.test.mjs scripts/sales-account.test.mjs scripts/release-manifest.test.mjs scripts/verify-published-release.test.mjs scripts/signed-release-metadata.test.mjs"
   },
   "dependencies": {
     "@noble/ciphers": "^2.3.0",

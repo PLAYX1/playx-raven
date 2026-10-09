@@ -1,3 +1,4 @@
+use tauri::Manager;
 mod artist;
 mod rt;
 mod auction;
@@ -5,6 +6,7 @@ mod ai;
 mod ravi_voice;
 mod ravi_agent;
 mod ravi_companion;
+mod ravi_lifecycle;
 mod companion_layout;
 mod ai_budget;
 mod ai_endpoint;
@@ -123,12 +125,26 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         // The owner token is minted once per run and lives only in memory.
         .manage(server::ServerState::default())
+        .on_window_event(|window, event| {
+            if window.label() == "main" {
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                    ravi_lifecycle::request_close(window.app_handle());
+                }
+            }
+        })
         .invoke_handler(|invoke| {
             if !ravi_companion::command_allowed(invoke.message.webview_ref().label(), invoke.message.command()) {
                 invoke.resolver.reject("라비 작은 창에서는 이 작업을 할 수 없어요.");
                 return true;
             }
             let handler: fn(tauri::ipc::Invoke<tauri::Wry>) -> bool = tauri::generate_handler![
+            ravi_lifecycle::ravi_lifecycle_status,
+            ravi_lifecycle::ravi_take_close_request,
+            ravi_lifecycle::ravi_prepare_quit,
+            ravi_lifecycle::ravi_finish_quit,
+            ravi_lifecycle::ravi_cancel_quit,
+            ravi_lifecycle::ravi_hide_main,
             ravi_companion::companion_settings,
             ravi_companion::companion_save,
             ravi_companion::companion_open_main,
@@ -756,6 +772,7 @@ pub fn run() {
             }
             if let tauri::RunEvent::ExitRequested { code: None, api, .. } = &event {
                 api.prevent_exit();
+                ravi_lifecycle::request_close(_app);
             }
             // 앱이 끝나면 채굴기도 끝난다. 이게 없으면 창을 닫은 뒤에도
             // 채굴기가 살아남아 전기를 계속 먹는데, 화면에는 아무것도 없어서

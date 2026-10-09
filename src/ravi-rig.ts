@@ -1,4 +1,5 @@
 import scene from "./assets/ravi-scene.svg?raw";
+import type { RaviFrame } from "./ravi-choreography";
 
 // Geometry, pivots and spring choreography ported from approved proto3/rig.js.
 export type RaviMode = "sleep" | "idle" | "listening" | "thinking" | "speaking" | "joy";
@@ -135,7 +136,21 @@ export function mountRaviRig(host: HTMLElement) {
   document.addEventListener("pointermove", pointer, { passive: true });
   document.addEventListener("pointerleave", leave);
   draw();
+  function renderFrame(f: RaviFrame) {
+    const p=pose.springs;
+    for(const [key,value] of Object.entries({head:f.head,wing:f.wing,tail:f.tail,eye:f.eye,beak:f.beak})) {
+      const spring=p[key as keyof typeof p]; spring.value=spring.target=value;
+    }
+    pose.blink=0; pose.mode="idle"; draw();
+    transform("ravi-character", `translate(${f.x} ${f.y}) rotate(${f.roll} 180 365)`);
+    transform("rig-body", `translate(0 ${f.body})`);
+    transform("rig-head", `translate(0 ${f.body}) rotate(${f.head} 180 254)`);
+    transform("rig-feet", `translate(0 ${f.feet})`);
+    transform("rig-wing-right", `rotate(${-f.wing-f.wave} 237 264)`);
+    svg.style.opacity=String(f.opacity);
+  }
   return {
+    renderFrame,
     pose,
     mode(mode: RaviMode) { pose.setMode(mode); if (reduced.matches) pose.step(0, true, false); if (!paused) draw(); },
     wake() { pose.wake(); },
