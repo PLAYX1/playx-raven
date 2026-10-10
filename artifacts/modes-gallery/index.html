@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>창 모드 갤러리</title>
+<style>
+/* 레이븐볼트 창 모드 시안 갤러리 — 정적 목업(합성 자료). 실제 앱 화면이 아니다.
+   색은 앱 토큰(index.html v2 「밤 까마귀」)을 그대로 쓴다. 정체성(라비 주황·잉크 남색) 유지. */
+:root{color-scheme:light;--bg:#F7F6F3;--panel:#FFFFFF;--side:#F2F0EB;--line:#E6E3DC;--text:#15161D;--muted:#5B5E6B;--brand:#15161D;--on-brand:#fff;--ravi:#E2702A;--ravi-soft:#B4531C;--ravi-tint:#FBE7DA;--ok:#1F7A4D;--warn:#8A5A00;--bad:#A5160F;--desk:#d9dce3;--menubar:rgba(246,246,246,.92)}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#0F1016;--panel:#15161D;--side:#1C1E29;--line:#2A2D3A;--text:#ECEDF3;--muted:#A3A7B7;--brand:#E2702A;--on-brand:#15161D;--ravi:#E2702A;--ravi-soft:#F0A777;--ravi-tint:#2A1D18;--ok:#6FD1A0;--warn:#F2C36A;--bad:#ff8a80;--desk:#2b2e38;--menubar:rgba(30,30,34,.92)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 "IBM Plex Sans KR",-apple-system,"Segoe UI","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif}
+header.g{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;padding:12px 16px;background:var(--panel);border-bottom:1px solid var(--line)}
+header.g h1{font-size:17px;margin:0 12px 0 0}
+header.g fieldset{border:0;margin:0;padding:0;display:flex;gap:4px;align-items:center}
+header.g legend{float:left;margin-right:6px;color:var(--muted);font-size:12px}
+header.g label{display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border:1px solid var(--line);border-radius:999px;cursor:pointer;min-height:32px}
+header.g input{margin:0}
+main.g{padding:16px;display:grid;gap:28px;max-width:1500px;margin:0 auto}
+section.mode h2{font-size:16px;margin:0 0 4px}
+section.mode p.why{margin:0 0 10px;color:var(--muted);max-width:80ch}
+.desk{background:var(--desk);border-radius:12px;padding:16px;display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start;overflow:hidden}
+.cap{font-size:12px;color:var(--muted);margin-top:4px}
+/* 공통 창 */
+.win{background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.18);overflow:hidden;position:relative}
+.bar{height:28px;display:flex;align-items:center;gap:6px;padding:0 10px;border-bottom:1px solid var(--line);background:var(--side)}
+.bar i{width:10px;height:10px;border-radius:50%;background:#ff5f57}.bar i+i{background:#febc2e}.bar i+i+i{background:#28c840}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--ok);flex:none}
+.amt{font-variant-numeric:tabular-nums;font-weight:650}
+.k{color:var(--ok);font-weight:600}.out{color:var(--muted)}
+.muted{color:var(--muted)}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:36px;padding:0 14px;border-radius:8px;border:1px solid var(--brand);background:var(--brand);color:var(--on-brand);font:inherit;font-weight:600}
+.btn.ghost{background:transparent;color:var(--text);border-color:var(--line)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;min-width:0}
+.card h3{margin:0 0 6px;font-size:13px;color:var(--muted);font-weight:600}
+.big{font-size:28px;line-height:1.1;letter-spacing:-.02em}
+.row{display:flex;gap:8px;align-items:baseline;min-width:0}
+.row .v{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.seller-only{display:none}[data-seller="1"] .seller-only{display:block}
+/* 큰 창 */
+.large{width:860px;height:500px;display:grid;grid-template-rows:28px 1fr}
+.large .body{display:grid;grid-template-columns:76px 1fr;min-height:0}
+.side{background:#1C1E29;color:#ECEDF3;display:flex;flex-direction:column;align-items:center;gap:14px;padding:12px 0;font-size:11px}
+.side span{display:flex;flex-direction:column;align-items:center;gap:2px}.side b{width:22px;height:22px;border-radius:6px;background:#2A2D3A;display:block}
+.large .grid{padding:14px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-content:start;overflow:hidden}
+/* 중간 */
+.medium{width:560px;height:500px;display:grid;grid-template-rows:28px 1fr}
+.medium .body{display:grid;grid-template-columns:52px 1fr;min-height:0}
+.medium .side{gap:16px}.medium .side span em{display:none}
+.medium .grid{padding:12px;display:grid;gap:10px;align-content:start;overflow:hidden}
+/* 미니 */
+.mini{font-size:12px;padding:6px 8px;display:flex;flex-direction:column;gap:3px}
+.mini .hd{display:flex;align-items:center;gap:6px}.mini .hd .amt{flex:1;font-size:14px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mini .tools{display:flex;gap:3px}.mini .tools b{width:22px;height:22px;border:1px solid var(--line);border-radius:6px;display:grid;place-items:center;font-size:10px;font-weight:600}
+.mini.s{width:220px;height:60px;justify-content:center}.mini.m{width:300px;height:140px}.mini.l{width:360px;height:260px}
+.mini .ln{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip{width:160px;height:40px;display:flex;align-items:center;gap:8px;padding:0 12px;font-size:15px}
+.chip .amt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 메뉴바 */
+.screen{width:640px;height:380px;border-radius:10px;overflow:hidden;background:linear-gradient(135deg,#5d6b8a,#2c3550);position:relative}
+.menubar{height:26px;background:var(--menubar);color:var(--text);display:flex;justify-content:flex-end;align-items:center;gap:14px;padding:0 12px;font-size:13px;backdrop-filter:blur(20px)}
+.tray{display:inline-flex;align-items:center;gap:4px;padding:1px 6px;border-radius:5px;background:color-mix(in srgb,var(--text) 14%,transparent)}
+.tray svg{width:15px;height:15px}
+.menu{position:absolute;right:56px;top:30px;width:260px;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.35);padding:5px;font-size:13px}
+.menu div{padding:4px 10px;border-radius:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.menu .dis{color:var(--muted)}.menu hr{border:0;border-top:1px solid var(--line);margin:4px 6px}
+.menu .on{background:color-mix(in srgb,var(--ravi) 18%,transparent)}
+.menu .sub::after{content:"▸";float:right;color:var(--muted)}
+.taskbar{position:absolute;left:0;right:0;bottom:0;height:34px;background:rgba(20,22,30,.9);display:flex;justify-content:flex-end;align-items:center;gap:10px;padding:0 10px;color:#fff;font-size:12px}
+.flyout{position:absolute;right:10px;bottom:40px;width:260px}
+/* 도킹 바 */
+.dockv{position:absolute;right:0;top:26px;bottom:0;width:76px;background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;align-items:center;gap:10px;padding:10px 4px;font-size:11px;text-align:center}
+.dockv .amt{font-size:12px;word-break:break-all}
+/* 대기화면 */
+.standby{width:768px;height:432px;background:#000;color:#d9d9e0;border-radius:10px;padding:34px;display:flex;flex-direction:column;gap:14px;font-size:14px}
+.standby .clock{font-size:64px;line-height:1;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.standby .bal{font-size:52px;font-weight:600;letter-spacing:-.02em}
+.standby .cols{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.standby .c{border:1px solid #26262e;border-radius:12px;padding:12px}
+.standby .muted{color:#9a9aa8}
+/* 카드 홈 */
+.cards{width:860px;display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.cards .w2{grid-column:span 2}.cards .h2{grid-row:span 2}
+.edit{outline:2px dashed var(--ravi);outline-offset:3px}
+.propose{width:420px}
+.propose ul{margin:6px 0;padding-left:18px}
+.propose .drop{color:var(--bad)}
+.lock{display:inline-block;padding:1px 6px;border-radius:999px;background:var(--ravi-tint);color:var(--ravi-soft);font-size:11px;font-weight:600}
+</style>
+</head>
+<body>
+<header class="g">
+  <h1>레이븐볼트 창 모드 시안</h1>
+  <fieldset><legend>테마</legend><label><input type="radio" name="theme" value="light" checked>라이트</label><label><input type="radio" name="theme" value="dark">다크</label></fieldset>
+  <fieldset><legend>금액</legend><label><input type="radio" name="mask" value="1" checked>가림</label><label><input type="radio" name="mask" value="0">보임</label></fieldset>
+  <fieldset><legend>판매자</legend><label><input type="radio" name="seller" value="0" checked>끔</label><label><input type="radio" name="seller" value="1">켬</label></fieldset>
+  <fieldset><legend>말</legend><label><input type="radio" name="lang" value="ko" checked>한국어</label><label><input type="radio" name="lang" value="de">Deutsch</label><label><input type="radio" name="lang" value="ru">Русский</label></fieldset>
+</header>
+<main class="g" id="g"></main>
+<script>
+// 합성 자료만. 실제 지갑·주소·키 없음.
+const T = {
+  ko: { bal: '잔액', inc: '들어오는 중', recent: '최근 변화', inN: '입금', out: '보냄', sale: '판매', conf: '확인됨', unconf: '확인 전', now: '방금', min: '6분 전', node: '노드 정상 · 연결 8곳', today: '오늘 판매', sales: '판매 4건', deps: '입금 2건 · 확인 전 1', alerts: '알림 · 할 일', backup: '백업 확인', send: '보내기', recv: '받기', more: '더 보기', ravi: '라비와 대화', lock: '지갑 잠김 · 감지는 계속', awake: '잠들지 않게 하는 중', ro: '읽기 전용 · 보내기는 큰 화면에서', newN: '새 소식 3', menuNode: '● 노드 정상 · 연결 8곳', menuAlerts: '새 소식 3', display: '표시 방식', modes: ['큰 창', '작은 창', '칩 (아주 작게)', '메뉴바만'], standby: '대기화면 켜기', callRavi: '라비 부르기', openMain: '큰 화면 열기', miniSub: '미니 창', quit: '끝내기', hint: '아무 키나 누르면 돌아가요 · 읽기 전용', date: '10월 11일 일요일', stock: '재고 부족', stockItems: '커피 원두 2 · 컵 홀더 5', cardsEdit: '카드 고르기', propose: '라비 제안 — 「판매 현황 위젯 만들어줘」', add: '추가', cancel: '취소', dropped: '넣을 수 없어서 뺐어요', dropSend: '「보내기」 카드 — 돈이 움직이는 카드는 없어요', dropHtml: '모르는 칸 html', masked: '금액 가림' },
+};
+T.de = { ...T.ko, bal: 'Kontostand', inc: 'eingehend', recent: 'Letzte Aktivität', inN: 'Eingang', out: 'Gesendet', sale: 'Verkauf', conf: 'bestätigt', unconf: 'unbestätigt', now: 'gerade eben', min: 'vor 6 Min.', node: 'Knoten in Ordnung · 8 Verbindungen', today: 'Verkäufe heute', sales: '4 Verkäufe', deps: '2 Eingänge · 1 unbestätigt', alerts: 'Benachrichtigungen · Aufgaben', backup: 'Sicherung prüfen', send: 'Senden', recv: 'Empfangen', more: 'Mehr', ravi: 'Mit Ravi sprechen', lock: 'Geldbörse gesperrt · Überwachung läuft', awake: 'Ruhezustand verhindert', ro: 'Nur lesen · Senden im Hauptfenster', newN: '3 neue', menuNode: '● Knoten in Ordnung · 8 Verbindungen', menuAlerts: '3 neue Benachrichtigungen', display: 'Darstellung', modes: ['Vollständiges Fenster', 'Minifenster', 'Chip (winzig)', 'Nur Menüleiste'], standby: 'Bereitschaftsbildschirm starten', callRavi: 'Ravi rufen', openMain: 'Hauptfenster öffnen', miniSub: 'Minifenster', quit: 'Beenden', hint: 'Beliebige Taste drücken, um zurückzukehren · nur lesen', date: 'Sonntag, 11. Oktober', stock: 'Niedriger Lagerbestand', stockItems: 'Kaffeebohnen 2 · Becherhalter 5', cardsEdit: 'Karten auswählen', propose: 'Ravis Vorschlag — „Erstelle ein Verkaufsübersichts-Widget“', add: 'Hinzufügen', cancel: 'Abbrechen', dropped: 'Weggelassen, weil nicht erlaubt', dropSend: '„Senden“-Karte — Karten, die Geld bewegen, gibt es nicht', dropHtml: 'Unbekanntes Feld html', masked: 'Beträge verborgen' };
+T.ru = { ...T.ko, bal: 'Баланс', inc: 'поступает', recent: 'Последние изменения', inN: 'Поступление', out: 'Отправлено', sale: 'Продажа', conf: 'подтверждено', unconf: 'не подтверждено', now: 'только что', min: '6 мин назад', node: 'Узел в порядке · 8 подключений', today: 'Продажи сегодня', sales: '4 продажи', deps: '2 поступления · 1 не подтверждено', alerts: 'Уведомления · задачи', backup: 'Проверить резервную копию', send: 'Отправить', recv: 'Получить', more: 'Ещё', ravi: 'Поговорить с Рави', lock: 'Кошелёк заблокирован · наблюдение продолжается', awake: 'Не даём уснуть', ro: 'Только чтение · отправка в главном окне', newN: '3 новых', menuNode: '● Узел в порядке · 8 подключений', menuAlerts: '3 новых уведомления', display: 'Режим отображения', modes: ['Полное окно', 'Мини-окно', 'Чип (крошечный)', 'Только строка меню'], standby: 'Включить экран ожидания', callRavi: 'Позвать Рави', openMain: 'Открыть главное окно', miniSub: 'Мини-окно', quit: 'Выйти', hint: 'Нажмите любую клавишу, чтобы вернуться · только чтение', date: 'воскресенье, 11 октября', stock: 'Заканчивается', stockItems: 'Кофейные зёрна 2 · Держатели 5', cardsEdit: 'Выбрать карточки', propose: 'Предложение Рави — «Сделай виджет продаж»', add: 'Добавить', cancel: 'Отмена', dropped: 'Убрано — не разрешено', dropSend: 'Карточка «Отправить» — карточек, двигающих деньги, нет', dropHtml: 'Неизвестное поле html', masked: 'суммы скрыты' };
+
+const q = new URLSearchParams(location.search);
+const state = { theme: q.get('theme') || 'light', mask: q.get('mask') ?? '1', seller: q.get('seller') ?? '0', lang: q.get('lang') || 'ko' };
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const RAVEN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 15c2-6 7-9 14-9-2 2-3 4-3 6 2 0 3 1 3 2-3 0-5 2-8 4-2 1-4 1-6-3z"/></svg>';
+
+function render() {
+  const t = T[state.lang], M = state.mask === '1';
+  const money = (v) => (M ? '••••' : `${v} RVN`);
+  document.documentElement.dataset.theme = state.theme;
+  document.documentElement.lang = state.lang;
+  document.body.dataset.seller = state.seller;
+  for (const [k, v] of Object.entries(state)) document.querySelectorAll(`input[name="${k}"]`).forEach((i) => (i.checked = i.value === v));
+  const recent = (n) => [[t.sale, '+12.5', t.unconf + ' · ' + t.now], [t.inN, '+3', t.conf + ' · ' + t.min], [t.out, '−250.25', '2h'], [t.inN, '+0.5', '1d']].slice(0, n)
+    .map(([k, v, m]) => `<div class="row"><span class="${k === t.out ? 'out' : 'k'}">${esc(k)}</span><span class="v amt">${M ? '••••' : esc(v)}</span><span class="muted">${esc(m)}</span></div>`).join('');
+  const sellerCard = `<div class="card seller-only"><h3>${esc(t.today)}</h3><div class="amt">${esc(t.sales)}${M ? '' : ' · 88.5 RVN'}</div><div class="muted">${esc(t.deps)}</div></div>`;
+  const home = (cols) => `
+    <div class="card" ${cols === 2 ? '' : ''}><h3>${esc(t.bal)}${M ? ` <span class="lock">${esc(t.masked)}</span>` : ''}</h3><div class="big amt">${money('42.125')}</div><div class="muted">${esc(t.inc)} ${money('3.5')}</div><div class="row" style="margin-top:8px;flex-wrap:wrap"><span class="btn">${esc(t.send)}</span><span class="btn ghost">${esc(t.recv)}</span><span class="btn ghost">${esc(t.more)}</span></div></div>
+    <div class="card"><h3>${esc(t.alerts)}</h3><div class="muted">● ${esc(t.node)}</div><span class="btn ghost" style="margin-top:6px">${esc(t.backup)}</span></div>
+    <div class="card"><h3>${esc(t.recent)}</h3>${recent(3)}</div>
+    ${sellerCard}`;
+  const mini = (size) => `<div class="win mini ${size}"><div class="hd"><span class="dot"></span><span class="amt">${size === 's' && false ? esc(t.newN) : money('1,234.56789')}</span><span class="tools"><b>👁</b><b>${size.toUpperCase()}</b><b>↗</b><b>×</b></span></div>${size === 's' ? '' : recent(size === 'l' ? (state.seller === '1' ? 3 : 4) : 3) + `<div class="ln muted">${esc(t.node)}</div>`}${size === 'l' ? `<div class="ln muted">${esc(t.lock)}</div>${state.seller === '1' ? `<div class="ln"><b>${esc(t.today)}</b> ${esc(t.sales)}</div>` : ''}<div class="ln muted" style="font-size:11px">${esc(t.ro)}</div>` : ''}</div>`;
+  const menu = `<div class="menu" role="menu"><div class="dis">${esc(t.menuNode)}</div><div class="dis">${esc(t.bal)} ${money('1,234.56')}</div><div class="dis">${esc(t.menuAlerts)}</div><hr><div>${esc(t.callRavi)}</div><div>${esc(t.openMain)}</div><div class="sub">${esc(t.display)}</div><div class="sub">${esc(t.miniSub)}</div><hr><div class="on">✓ ${esc(t.modes[3])}</div><div>${esc(t.standby)}</div><hr><div>${esc(t.quit)}</div></div>`;
+  document.getElementById('g').innerHTML = `
+  <section class="mode"><h2>1 · 큰 창 (지금의 메인)</h2><p class="why">모든 기능. 폭 960px 이상: 사이드바 + 두 칸 카드. 돈이 움직이는 모든 일은 여기서만(명시적 확인 화면).</p>
+    <div class="desk"><div class="win large"><div class="bar"><i></i><i></i><i></i></div><div class="body"><nav class="side"><span><b></b>${esc(t.bal)}</span><span><b></b>Ravi</span><span><b></b>${esc(t.more)}</span></nav><div class="grid">${home(2)}</div></div></div></div></section>
+  <section class="mode"><h2>2 · 중간 (콤팩트 — 폭 600~959px 자동)</h2><p class="why">사이드바는 아이콘 줄(52px), 카드는 한 칸. 들어갈 때 960 미만 · 나올 때 984 이상(히스테리시스 24px). 돈 화면 진행 중에는 모드를 안 바꾸고 이 배치로만 줄인다.</p>
+    <div class="desk"><div class="win medium"><div class="bar"><i></i><i></i><i></i></div><div class="body"><nav class="side"><span><b></b></span><span><b></b></span><span><b></b></span></nav><div class="grid">${home(1)}</div></div></div></div></section>
+  <section class="mode"><h2>3 · 작은 창 S · M · L (구현됨) + 4 · 칩 160×40 (이번 구현)</h2><p class="why">읽기 전용. 무테·항상 위(선택)·끌어 옮기기. 칩은 점과 숫자 한 줄, 누르면 S 로 펼침. 금액은 Rust 에서 가려서 온다.</p>
+    <div class="desk">${mini('s')}${mini('m')}${mini('l')}<div class="win chip"><span class="dot"></span><span class="amt">${money('1,234.56789')}</span></div></div></section>
+  <section class="mode"><h2>5 · 메뉴바만 (맥 메뉴막대 · 윈도우 트레이)</h2><p class="why">창 없이 아이콘 + 짧은 글(기본: 새 소식 수 · 선택: 잔액, 가림이면 ••••). 누르면 읽기 전용 요약 줄 셋 + 표시 방식. 독 아이콘 숨김(맥, 선택). 팝오버 창 대신 OS 메뉴(이번 구현 범위).</p>
+    <div class="desk"><div><div class="screen"><div class="menubar"><span>Wi-Fi</span><span class="tray">${RAVEN}<span class="amt">${state.lang === 'ko' ? '3' : '3'}</span></span><span>10:41</span></div>${menu}</div><div class="cap">맥: 메뉴막대 아이콘 옆 글자는 tray.set_title(맥만)</div></div>
+    <div><div class="screen"><div class="taskbar"><span class="tray">${RAVEN}</span><span>10:41</span></div><div class="flyout">${menu.replace('class="menu"', 'class="menu" style="position:static"')}</div></div><div class="cap">윈도우: 글자 대신 툴팁 · 왼쪽 클릭으로 메뉴(메뉴바만일 때)</div></div></div></section>
+  <section class="mode"><h2>6 · 화면 가장자리 도킹 바 (설계만)</h2><p class="why">한쪽에 붙는 76px 세로 띠, 항상 위. 노트북 화면을 덜 먹는다. Tauri 2 에는 macOS/Windows 「작업 영역 예약(앱바)」 API 가 없어 다른 창이 그 아래로 깔린다 — 확인 필요/대안: 미니 S 를 가장자리에 자석처럼 붙이기.</p>
+    <div class="desk"><div class="screen"><div class="menubar"><span>10:41</span></div><div class="dockv"><span class="dot"></span><span class="amt">${money('1,234')}</span><span class="muted">${esc(t.inN)} 2</span>${state.seller === '1' ? `<span>${esc(t.sales)}</span>` : ''}</div></div></div></section>
+  <section class="mode"><h2>7 · 대기화면 (스탠바이 — 이번 구현)</h2><p class="why">가게 계산대 옆 모니터·사무실 큰 화면. 읽기 전용, 큰 글씨, 순검정 배경, 1분마다 ±24px 이동(번인 방지), 밤 시간 어둡게(대비 4.5:1 유지), 아무 키·클릭으로 돌아감, 누를 것 0개.</p>
+    <div class="desk"><div class="standby"><div class="row"><span class="clock">10:41</span><span class="muted">${esc(t.date)}</span></div><div><div class="muted">${esc(t.bal)}${M ? ' · ' + esc(t.masked) : ''}</div><div class="bal amt">${money('1,234.56789')}</div></div><div class="cols"><div class="c"><div class="muted">${esc(t.recent)}</div>${recent(3)}</div><div class="c seller-only"><div class="muted">${esc(t.today)}</div><div class="bal" style="font-size:34px">${esc(t.sales)}</div><div class="muted">${esc(t.deps)}</div></div></div><div class="row muted" style="justify-content:space-between"><span><span class="dot"></span> ${esc(t.node)}</span><span>${esc(t.hint)}</span></div></div></div></section>
+  <section class="mode"><h2>8 · 카드 홈 + 라비가 고르는 위젯 (설계 + 검증 함수 구현)</h2><p class="why">같은 카드가 칩·S·M·L·대기화면에서 다르게 보인다. 라비는 <b>고정 카드 목록에서 고르고 값만</b> 제안(임의 HTML·스크립트·URL 금지, 돈 카드 없음) → 미리보기 → 사람이 「추가」. src/card-catalog.ts validateLayout.</p>
+    <div class="desk"><div class="cards edit"><div class="card w2"><h3>${esc(t.bal)}</h3><div class="big amt">${money('42.125')}</div></div><div class="card"><h3>Node</h3><span class="dot"></span> ${esc(t.node)}</div><div class="card"><h3>10:41</h3><div class="muted">${esc(t.date)}</div></div><div class="card w2"><h3>${esc(t.recent)}</h3>${recent(3)}</div><div class="card seller-only w2"><h3>${esc(t.today)}</h3><div class="amt">${esc(t.sales)}</div></div><div class="card seller-only"><h3>${esc(t.stock)}</h3><div class="muted">${esc(t.stockItems)}</div></div></div>
+    <div class="win propose card"><h3>${esc(t.propose)}</h3><ul><li>sales · M · range=today</li><li>recent · L · filter=sales · count=5</li></ul><div class="drop">${esc(t.dropped)}:</div><ul class="drop"><li>${esc(t.dropSend)}</li><li>${esc(t.dropHtml)}</li></ul><div class="row" style="justify-content:flex-end;gap:8px"><span class="btn ghost">${esc(t.cancel)}</span><span class="btn">${esc(t.add)}</span></div></div></div></section>`;
+}
+document.querySelector('header.g').addEventListener('change', (e) => { state[e.target.name] = e.target.value; render(); });
+render();
+</script>
+</body>
+</html>

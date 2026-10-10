@@ -12,6 +12,8 @@ mod companion_layout;
 mod mini;
 mod mini_feed;
 mod mini_watch;
+// 표시 방식(큰 창·작은 창·칩·메뉴바만) + 대기화면 — docs/design/window-modes.md
+mod display_mode;
 mod ai_budget;
 mod ai_endpoint;
 mod companion;
@@ -133,6 +135,7 @@ pub fn run() {
         .manage(server::ServerState::default())
         .on_window_event(|window, event| {
             if window.label() == "main" {
+                display_mode::on_main_event(window.app_handle(), event);
                 if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                     api.prevent_close();
                     ravi_lifecycle::request_close(window.app_handle());
@@ -147,6 +150,11 @@ pub fn run() {
             // 🔴 미니 창은 읽기 전용 다섯 명령만(mini::MINI_COMMANDS). 보내기·잠금 풀기·복구 단어는 여기서 막힌다.
             if !mini::command_allowed(invoke.message.webview_ref().label(), invoke.message.command()) {
                 invoke.resolver.reject("미니 창에서는 이 작업을 할 수 없어요. 큰 화면을 열어 주세요.");
+                return true;
+            }
+            // 🔴 대기화면은 읽기 전용 두 명령만(display_mode::STANDBY_COMMANDS).
+            if !display_mode::command_allowed(invoke.message.webview_ref().label(), invoke.message.command()) {
+                invoke.resolver.reject("대기화면에서는 이 작업을 할 수 없어요.");
                 return true;
             }
             let handler: fn(tauri::ipc::Invoke<tauri::Wry>) -> bool = tauri::generate_handler![
@@ -172,6 +180,11 @@ pub fn run() {
             mini::mini_show,
             mini::mini_open_main,
             mini::mini_seen,
+            display_mode::display_mode_get,
+            display_mode::display_mode_set,
+            display_mode::standby_open,
+            display_mode::standby_state,
+            display_mode::standby_exit,
             pairing::pairing_state,
             pairing::pairing_show_qr,
             pairing::pairing_cancel_qr,
@@ -689,6 +702,7 @@ pub fn run() {
             use tauri::Manager;
             ravi_companion::setup(app)?;
             mini::setup(app);
+            display_mode::setup(app);
 
             // 🔴 **화면보다 큰 창을 띄우지 않는다.**
             //

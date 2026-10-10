@@ -69,7 +69,8 @@ async function boot() {
   });
   $("size").addEventListener("click", () => settings && void set({ size: nextSize(settings.size) }));
   $("mask").addEventListener("click", () => settings && void set({ mask: !settings.mask }));
-  $("headline").addEventListener("click", () => settings && void set({ mask: !settings.mask }));
+  // 칩(xs)에서는 한 번 누르면 한 줄(S)로 펼친다(가림 켬/끔은 트레이·S 이상에서). 키보드 Enter/Space 도 같다.
+  $("headline").addEventListener("click", () => settings && void set(settings.size === "xs" ? { size: "s" } : { mask: !settings.mask }));
   $("open-main").addEventListener("click", () => void invoke("mini_open_main").catch(() => {}));
   $("close").addEventListener("click", () => void invoke("mini_show", { visible: false }).catch(() => {}));
   $("notice").addEventListener("click", () => { notice(null, false); void invoke("mini_seen").catch(() => {}); });

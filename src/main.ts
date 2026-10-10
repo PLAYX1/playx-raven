@@ -1,5 +1,6 @@
 // 🔴 맨 먼저 — 앱 CSP(Tauri nonce) 가 막는 style="…" 속성을 CSSOM 으로 되살린다(src/style-attrs.ts).
 import "./style-attrs";
+import "./display-mode"; // 설정 「표시 방식」 칸 + 레이아웃 토큰(docs/design/window-modes.md)
 import "./sales-account.css";
 import { wireSalesAccount } from "./sales-account";
 import "./creator-publish.css";

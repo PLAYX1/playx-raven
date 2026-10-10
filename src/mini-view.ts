@@ -2,7 +2,7 @@
 // 🔴 금액 가리기는 Rust(mini_feed::snapshot)가 이미 했다: 가림이면 금액 칸이 null 로 온다.
 //    여기서도 null 이면 「••••」로 그린다(두 겹). 글자는 전부 textContent — HTML 로 넣지 않는다.
 
-export type Size = "s" | "m" | "l";
+export type Size = "xs" | "s" | "m" | "l";
 export type Recent = { dir: "in" | "out"; sale: boolean; amount: string | null; unit: string | null; conf: number; done: boolean; ago: number };
 export type Notice = { kind: string; count: number; title: string; body: string };
 export type Snapshot = {
@@ -47,6 +47,7 @@ const KO = {
   deps: (n: number, v: string | null) => `입금 ${n}건${v === null ? "" : ` · ${v} RVN`}`,
   pendingN: (n: number) => (n > 0 ? ` · 확인 전 ${n}` : ""),
   mask: "금액 가리기", unmask: "금액 보이기", size: "크기 바꾸기 (두 번 눌러도 돼요)", main: "큰 화면 열기", close: "닫기 (트레이로)",
+  expand: "눌러서 펼치기",
   onTop: "항상 위에", sound: "소리", notify: "알림", readOnly: "읽기 전용 · 보내기는 큰 화면에서",
   status: { ok: "정상", warn: "확인 중", bad: "문제 있음" } as Record<string, string>,
 };
@@ -70,19 +71,21 @@ const EN: typeof KO = {
   deps: (n, v) => `${n} deposits${v === null ? "" : ` · ${v} RVN`}`,
   pendingN: (n) => (n > 0 ? ` · ${n} unconfirmed` : ""),
   mask: "Hide amounts", unmask: "Show amounts", size: "Change size (or double-click)", main: "Open main window", close: "Close (to tray)",
+  expand: "click to expand",
   onTop: "On top", sound: "Sound", notify: "Alerts", readOnly: "Read-only · send from the main window",
   status: { ok: "OK", warn: "Checking", bad: "Problem" },
 };
 export const copyFor = (locale: string) => (locale.startsWith("en") ? EN : KO);
 
-export const nextSize = (s: Size): Size => (s === "s" ? "m" : s === "m" ? "l" : "s");
+// 칩(xs)은 두 번 누르면 한 줄(S)로 펼친다 — 순환은 S→M→L→S (Rust mini::next_size 와 같다).
+export const nextSize = (s: Size): Size => (s === "xs" ? "s" : s === "s" ? "m" : s === "m" ? "l" : "s");
 
 const money = (v: string | null, unit = "RVN") => (v === null ? HIDDEN : `${v} ${unit}`);
 
 /** 한 줄 막대(S)·머리줄의 글. 새 소식이 있으면 S 에서는 그게 먼저다. */
 export function headline(snap: Snapshot, size: Size): string {
   const c = copyFor(snap.locale);
-  if (size === "s" && snap.unseen > 0) return c.unseen(snap.unseen);
+  if ((size === "s" || size === "xs") && snap.unseen > 0) return c.unseen(snap.unseen);
   if (!snap.balance.known) return c.noBalance;
   return money(snap.balance.confirmed);
 }
@@ -120,9 +123,9 @@ export function render(snap: Snapshot, st: Settings) {
   $("dot").setAttribute("title", nodeLine(snap));
   text("headline", headline(snap, st.size));
   $("headline").classList.toggle("is-hidden", snap.masked);
-  $("headline").setAttribute("aria-label", `${c.balance}: ${headline(snap, st.size)}`);
+  $("headline").setAttribute("aria-label", `${c.balance}: ${headline(snap, st.size)}${st.size === "xs" ? ` · ${c.expand}` : ""}`);
   text("pending", snap.balance.has_pending ? `${c.pending} ${money(snap.balance.pending)}` : "");
-  $("pending").hidden = !snap.balance.has_pending || st.size === "s";
+  $("pending").hidden = !snap.balance.has_pending || st.size === "s" || st.size === "xs";
 
   const mask = $("mask");
   mask.setAttribute("aria-pressed", String(snap.masked));
@@ -165,7 +168,7 @@ export function showNotice(n: Notice | null, size: Size) {
   const box = $("notice");
   if (!n) { box.hidden = true; document.body.classList.remove("has-notice"); return; }
   text("notice-title", n.title);
-  text("notice-body", size === "s" ? "" : n.body);
+  text("notice-body", size === "s" || size === "xs" ? "" : n.body);
   box.hidden = false;
   document.body.classList.add("has-notice");
 }

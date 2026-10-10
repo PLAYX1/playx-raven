@@ -1,0 +1,42 @@
+/* 대기화면 — 큰 모니터에 켜 두는 읽기 전용 화면. 🔴 style="" 속성 금지(Tauri nonce CSP).
+ * 번인 방지: 순검정 배경 · 순백 대신 회백 글자 · 1분마다 묶음 위치 이동(standby-view shiftFor) · 밤 시간 흐리게. */
+:root{--bg:#000;--fg:#d9d9e0;--muted:#9a9aa8;--line:#26262e;--ok:#5fcf95;--warn:#e8b75c;--bad:#ff8a80;--ravi:#e2702a;color-scheme:dark;
+  --ease-in-out:cubic-bezier(.77,0,.175,1)}
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--fg);cursor:none;
+  font:16px/1.4 "IBM Plex Sans KR",-apple-system,BlinkMacSystemFont,"Segoe UI","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;-webkit-user-select:none;user-select:none}
+[hidden]{display:none!important}
+/* 여백은 번인 이동 폭(±24px)보다 커야 한다 — 옮겨도 화면 밖으로 안 나가게 */
+#sb{position:fixed;inset:0;display:grid;place-items:center;padding:max(4vmin,32px)}
+.stage{width:min(100%,1400px);display:flex;flex-direction:column;gap:3.5vmin}
+.top{display:flex;align-items:baseline;gap:2vmin;flex-wrap:wrap}
+.clock{font-size:clamp(48px,11vmin,180px);line-height:1;font-weight:500;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.date{margin:0;font-size:clamp(16px,2.6vmin,36px);color:var(--muted)}
+.label{margin:0;font-size:clamp(14px,2.2vmin,28px);color:var(--muted)}
+.balance{margin:0;font-size:clamp(40px,9vmin,140px);line-height:1.05;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.balance.masked{letter-spacing:.08em}
+.sub{margin:0;font-size:clamp(14px,2.2vmin,28px);color:var(--muted);overflow-wrap:anywhere}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,18em),1fr));gap:3vmin}
+.card{border:1px solid var(--line);border-radius:16px;padding:2.4vmin 3vmin;min-width:0}
+.card h2{margin:0 0 1.2vmin;font-size:clamp(14px,2.2vmin,28px);font-weight:500;color:var(--muted)}
+.big{margin:0;font-size:clamp(28px,5.5vmin,84px);font-weight:600;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1vmin}
+.list li{display:flex;flex-wrap:wrap;gap:.2em 2vmin;align-items:baseline;font-size:clamp(16px,2.8vmin,40px);min-width:0}
+.list .k{flex:none;color:var(--ok);font-weight:600}
+.list .v{flex:1 1 6em;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.list .m{flex:0 1 auto;min-width:0;color:var(--muted);font-size:.7em;overflow-wrap:anywhere}
+.list .empty{color:var(--muted)}
+.foot{display:flex;justify-content:space-between;gap:2vmin;flex-wrap:wrap;color:var(--muted);font-size:clamp(13px,1.8vmin,24px)}
+.foot p{margin:0}
+.node{display:flex;align-items:center;gap:1vmin}
+.dot{width:.7em;height:.7em;border-radius:50%;background:var(--warn);flex:none}
+[data-status="ok"] .dot{background:var(--ok)}[data-status="bad"] .dot{background:var(--bad)}
+/* 밤 시간 — 빛을 줄이되 글자 대비는 4.5:1 이상 유지(불투명도로 흐리면 1.2:1 까지 떨어져 못 읽는다).
+ * 밝은 글자 14.9:1 → 8.4:1, 흐린 글자 7.6:1 → 5.0:1. 배경은 순검정 그대로. */
+#sb[data-dim="true"]{--fg:#a3a3ad;--muted:#7a7a86;--ok:#3f9e6e;--warn:#b08a45;--bad:#c96a62}
+@media (prefers-reduced-motion: no-preference){
+  .stage{transition:color .6s ease}
+  #sb{animation:sb-in .32s cubic-bezier(.23,1,.32,1)}
+  @keyframes sb-in{from{opacity:0}to{opacity:1}}
+}
+@media (prefers-reduced-motion: reduce){.stage{transition:none}}
