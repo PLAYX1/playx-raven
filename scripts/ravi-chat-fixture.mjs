@@ -15,6 +15,7 @@ function exportsOf(code, globals={}) {
 export const guides=exportsOf(await bundle('src/ravi-guide.ts'));
 export const intents=exportsOf(await bundle('src/ravi-intents.ts'));
 const whose=exportsOf(await bundle("src/whose.ts"));
+const raviChat=exportsOf(await bundle('src/ravi-chat.ts'));
 export const dict=exportsOf(await bundle('src/dict.ts')).DICT;
 class Element {
  constructor(tag){this.tagName=tag;this.children=[];this.attributes={};this.hidden=false;this.disabled=false;this.value='';this._text='';}
@@ -38,7 +39,7 @@ export async function chatFixture(before=false) {
  const historicPromo={name:'historic-promo',setup(b){b.onLoad({filter:/ravi-promo\.ts$/},()=>({contents:execFileSync('git',['show','efcc880:src/ravi-promo.ts'],{encoding:'utf8'}),loader:'ts'}));}};
  const cardCode=before ? (await build({stdin:{contents:execFileSync('git',['show','efcc880:src/ravi-promo-card.ts'],{encoding:'utf8'}),resolveDir:process.cwd()+'/src',loader:'ts'},bundle:true,platform:'node',format:'cjs',write:false,loader:{'.svg':'text'},plugins:[i18n,historicPromo]})).outputFiles[0].text : await bundle('src/ravi-promo-card.ts',{loader:{'.svg':'text'},plugins:[i18n]});
  const card=exportsOf(cardCode,{document,crypto:{randomUUID:()=>String(cards.length)},navigator:{clipboard:{writeText(){throw Error('No automatic clipboard write');}}}});
- const ctx=vm.createContext({...modules, ...promo,lang:'ko',aiProvider:null,raviRequestPending:false,promoOpening:false,serverIp:null,
+ const ctx=vm.createContext({...raviChat,...modules, ...promo,lang:'ko',aiProvider:null,raviRequestPending:false,promoOpening:false,serverIp:null,
   $:el,document,copyHtml:s=>s,t:s=>s,raviHome:{sent(){},thinking(){},finish(){},open(){}},
   whoseQuestion:whose.whoseQuestion,
   chatSay:(who,text)=>messages.push({who,text}),

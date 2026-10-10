@@ -22,7 +22,7 @@ const flush = async () => { for (let i=0;i<20;i++) await Promise.resolve(); };
 function fixture({ keyed = false, consent = defaultConsent(), local = storage(), session = storage(), today = {wallet:'locked'}, failSave = false } = {}) {
   class Element {
     constructor(tag) { this.tagName=tag; this.children=[]; this.attributes={}; this.textContent=''; this.hidden=false; this.classes=new Set(); this.classList={ add: v=>this.classes.add(v) }; }
-    append(...children) { for (const c of children) { c.parent=this; this.children.push(c); } }
+    append(...children) { for (const c of children) { if (c.parent) c.parent.children=c.parent.children.filter(x=>x!==c); c.parent=this; this.children.push(c); } } // DOM moves an attached node
     replaceChildren(...children) { this.children=[]; this.append(...children); }
     remove() { if (this.parent) this.parent.children=this.parent.children.filter(c=>c!==this); }
     setAttribute(k,v) { this.attributes[k]=v; }
@@ -31,10 +31,10 @@ function fixture({ keyed = false, consent = defaultConsent(), local = storage(),
   }
   const nodes = new Map(['page-settings','ravi-tools','chat-log'].map(id=>[id,new Element('div')]));
   const body=new Element('body'), timers=new Map(), calls=[]; let serial=0, docks=0, keys=0;
-  const document={body,getElementById:id=>nodes.get(id),createElement:tag=>new Element(tag),createTextNode:text=>({textContent:text})};
+  const document={body,addEventListener(){},removeEventListener(){},getElementById:id=>nodes.get(id),createElement:tag=>new Element(tag),createTextNode:text=>({textContent:text})};
   const exports={};
   vm.runInNewContext(compiled,{ exports, document, localStorage:local,sessionStorage:session,
-    raviFace:()=>new Element('svg'),containsRaviSecret:secret,
+    raviFace:()=>new Element('svg'),containsRaviSecret:secret,t:s=>s,mountRaviOpening:(bird,land)=>{land();return {finish(){},destroy(){},batterySaver(){}};},
     window:{setTimeout:(f,delay)=>{timers.set(++serial,{f,delay});return serial;}},clearTimeout:id=>timers.delete(id),
   });
   const api={ keyed:()=>keyed?'synthetic-provider':null,key:()=>keys++,dock:()=>docks++,tz:()=>540,
@@ -84,38 +84,45 @@ assert.equal(f.keys,1);assert.equal(f.docks,1);assert.ok(f.body.children[0].clas
 f=fixture({keyed:true,consent:{reviewed:true,balance:false,transactions:false,shop:false}});ui=f.exports.createRaviAgentUI(f.api);ui.start();await flush();
 assert.equal(f.calls.filter(c=>c.name==='ravi_greeting').length,1,'waits for persisted consent before greeting');
 assert.match(textOf(f.body),/오늘도 반가워요/);assert.equal(button(f.body,'AI 열쇠를 넣으면 더 많은 걸 해 드려요').hidden,true);
-[...f.timers.values()].find(t=>t.delay===2100).f();[...f.timers.values()].find(t=>t.delay===18000).f();[...f.timers.values()].find(t=>t.delay===360).f();assert.equal(f.docks,0,'timeout never opens conversation');
+[...f.timers.values()].find(t=>t.delay===2100)?.f();[...f.timers.values()].find(t=>t.delay===18000).f();[...f.timers.values()].find(t=>t.delay===360).f();assert.equal(f.docks,0,'timeout never opens conversation');
 
-f=fixture({keyed:true});ui=f.exports.createRaviAgentUI(f.api);await flush();let resolved=false;const pending=ui.ensureConsent().then(v=>resolved=v);await flush();
-assert.equal(resolved,false);const card=f.nodes.get('chat-log');assert.match(textOf(card),/라비에게 보여 줄 정보/);
+f=fixture({keyed:true});ui=f.exports.createRaviAgentUI(f.api);await flush();let resolved=0;
+assert.equal((await ui.consentState()).reviewed,false);
+assert.equal(ui.offerConsent(()=>resolved++),true);assert.equal(ui.offerConsent(()=>resolved++),true);
+const card=f.nodes.get('chat-log');assert.equal(card.children.length,1,'offer card never stacks');assert.match(textOf(card),/라비에게 보여 줄 정보/);assert.match(textOf(card),/방금은 내 정보 없이 답했어요/);
+assert.equal(f.docks,0,'offering consent does not grab the conversation');
 const checks=walk(card).filter(n=>n.tagName==='input');assert.equal(checks.length,3);assert.ok(checks.every(c=>!c.checked));
-checks[0].checked=true;button(card,'선택 저장').onclick();await pending;
-assert.equal(resolved,true);assert.equal(f.calls.find(c=>c.name==='ravi_consent_save').args.consent.transactions,false);
+checks[0].checked=true;button(card,'선택 저장').onclick();await flush();
+assert.equal(resolved,1,'saved callback runs once');assert.equal(card.children.length,0);assert.equal(f.calls.find(c=>c.name==='ravi_consent_save').args.consent.transactions,false);
+assert.equal(ui.offerConsent(()=>resolved++),false,'no offer after consent is saved');
 await flush();const settings=f.nodes.get('page-settings');button(settings,'라비 도구 사용 기록 보기').onclick();await flush();
 assert.match(textOf(settings),/wallet_balance/);assert.match(textOf(settings),/rejected/);assert.ok(!textOf(settings).includes('untrusted-name'));
 const off=walk(settings).find(n=>n.tagName==='label'&&textOf(n).includes('시작 인사 끄기')).children[0];off.checked=true;off.onchange();assert.equal(f.local.getItem(f.exports.GREETING_OFF),'1');
 
-f=fixture({failSave:true});ui=f.exports.createRaviAgentUI(f.api);await flush();let settled=false;const cancelled=ui.ensureConsent().then(v=>{settled=true;return v;});await flush();
+f=fixture({failSave:true});ui=f.exports.createRaviAgentUI(f.api);await flush();let settled=false;await ui.consentState();ui.offerConsent(()=>{settled=true;});
 button(f.nodes.get('chat-log'),'선택 저장').onclick();await flush();assert.equal(settled,false);
-assert.match(textOf(f.nodes.get('chat-log')),/저장하지 못했어요/);button(f.nodes.get('chat-log'),'지금은 취소').onclick();assert.equal(await cancelled,false);
+assert.match(textOf(f.nodes.get('chat-log')),/저장하지 못했어요/);button(f.nodes.get('chat-log'),'지금은 취소').onclick();
+assert.equal(f.nodes.get('chat-log').children.length,0);assert.equal(ui.offerConsent(()=>{settled=true;}),false,'not re-offered after Not now');assert.equal(settled,false);
 console.log('PASS production UI: offline tools, key card, greeting consent, opt-in defaults/save failure/cancel, settings and audit');
 
 const mainSource=readFileSync('src/main.ts','utf8'),ast=ts.createSourceFile('main.ts',mainSource,ts.ScriptTarget.Latest,true);
 const fn=name=>ast.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text===name).getText(ast);
-let dispatched=[],actions=[],messages=[],allowed=true;
-const ctx=vm.createContext({raviAgentUI:{ensureConsent:async()=>allowed},document:{createElement:()=>({setAttribute(){},remove(){}})},$:()=>({append(){}}),Channel:class{},TOOL_LABELS:f.exports.TOOL_LABELS,aiProvider:'synthetic',tzMin:()=>540,
+let dispatched=[],actions=[],messages=[],allowed=true,offered=0;
+const ctx=vm.createContext({raviAgentUI:{consentState:async()=>({reviewed:allowed}),offerConsent:()=>{offered++;return true;}},copyHtml:s=>s,escapeHtml:s=>s,document:{createElement:()=>({setAttribute(){},remove(){}})},$:()=>({append(){}}),Channel:class{},TOOL_LABELS:f.exports.TOOL_LABELS,aiProvider:'synthetic',tzMin:()=>540,
   containsRaviSecret:secret,chatSay:(who,text)=>messages.push({who,text}),raviOpenScreen:s=>actions.push(s),openRaviPromo:async()=>actions.push('promo'),
   applyActions:(a,q)=>{actions.push({a,q});return ['준비'];},invoke:async(cmd,args)=>{dispatched.push(cmd);args.progress.onmessage('wallet_balance');return {reply:'확인할 화면을 준비했어요',prepared:[{name:'prepare_send',args:{address:'R111111111111111111111111111111111',amount:1}}]};},
 });
 vm.runInContext(ts.transpileModule(fn('chatAgent'),{compilerOptions:{target:ts.ScriptTarget.ES2020}}).outputText,ctx);
 await ctx.chatAgent('직접 요청');assert.deepEqual(dispatched,['ravi_agent_chat']);assert.equal(actions[0].a[0].type,'send_prepare');assert.equal(actions[0].q,'직접 요청');
-allowed=false;dispatched=[];await ctx.chatAgent('취소');assert.equal(dispatched.length,0);
+assert.equal(offered,0,'no offer once consent is saved');
+allowed=false;dispatched=[];messages.length=0;await ctx.chatAgent('취소');assert.deepEqual(dispatched,['ravi_agent_chat'],'unsaved consent still answers (general chat)');assert.equal(offered,1);
+assert.ok(!messages.some(m=>/보내지 않았어요/.test(m.text)),'question is never dropped');
 assert.ok(!/invoke\([^\n]*(?:send_rvn|send_asset|walletpassphrase)/.test(fn('chatAgent')));
 assert.ok(mainSource.includes('raviAgentUI?.start();'),'arrival starts independently of provider availability');
 const css=readFileSync('src/ravi-home.css','utf8'),html=readFileSync('index.html','utf8');
 assert.match(css,/@media\(prefers-reduced-motion:reduce\)[\s\S]*\.ravi-arrival-bird[\s\S]*animation:ravi-hello/);
 assert.match(html,/\.rv-lid\s*\{[^}]*transform:scaleY\(0\)/);
-console.log('PASS chat integration passes only preparation actions, consent blocks dispatch, reduced-motion fade and folded eyelid invariant');
+console.log('PASS chat integration passes only preparation actions, unsaved consent answers generally and offers the card, reduced-motion fade and folded eyelid invariant');
 
 const report={vm:'passed',rust:'not_run',browser:'not_run',realAI:false,realRPC:false};
 const rust=spawnSync('cargo',['test','--manifest-path','src-tauri/Cargo.toml','ravi_agent::tests'],{encoding:'utf8',env:{...process.env,RV_BACKUP_FIXTURE_ROOT:process.env.RV_BACKUP_FIXTURE_ROOT||join(tmpdir(),'rv-test-fixture')},timeout:240000,maxBuffer:8*1024*1024});

@@ -626,6 +626,16 @@
       "Find nearby shops accepting RVN on the phone app map. The computer app has no nearby shop search screen. Add to map in My shop registers your own shop. Ravi does not guess locations or opening status.",
       "RVNが使える近くのお店はスマホアプリの地図で探してください。コンピューターアプリには周辺店舗の検索画面がありません。店舗の地図掲載は自分の店舗の登録用です。ラビは場所や営業状況を推測しません。",
       "请在手机应用的地图中查找附近接受RVN的店铺。电脑应用没有附近店铺搜索页面。我的店铺中的地图发布用于注册自己的店铺。拉比不会猜测位置或营业状态。"
+    ],
+    "송금은 라비가 대신 하지 않아요. 보내기 화면에서 직접 보내시면 돼요.": [
+      "Ravi does not send money for you. You can send it yourself on the Send screen.",
+      "送金はRaviが代わりに行いません。「送る」画面からご自身で送ってください。",
+      "Ravi 不会替您转账。请在转出页面自己转出。"
+    ],
+    "받는 주소는 끝 글자까지 확인하고, 처음 보내는 곳이면 아주 적은 금액으로 먼저 보내 보세요.": [
+      "Check the receiving address to the last character, and if it is a new address, send a tiny amount first.",
+      "受取アドレスは最後の文字まで確認し、初めての相手ならまずごく少額を送ってみてください。",
+      "请核对收款地址直到最后一个字符；如果是第一次转给对方，请先转一笔很小的金额试试。"
     ]
   },
   "guides": [
@@ -1084,8 +1094,10 @@
       "name": "보내기",
       "words": "(?:rvn|레이븐|코인|돈|자산|내주소|내지갑).*(?:보내|보낼|전송)|(?:송금|이체)|send.*(?:rvn|coin|money)|transfer.*(?:rvn|coin|money)|送金|转账",
       "lines": [
+        "송금은 라비가 대신 하지 않아요. 보내기 화면에서 직접 보내시면 돼요.",
         "지갑 → 「보내기」에서 받는 주소와 금액을 넣고 「검토」를 눌러요.",
-        "확인 화면에서 받는 사람·금액·수수료·합계를 보고 보내요. 처음 보내는 주소에 큰 금액이면 끝 네 글자를 한 번 더 물어요."
+        "확인 화면에서 받는 사람·금액·수수료·합계를 보고 보내요. 처음 보내는 주소에 큰 금액이면 끝 네 글자를 한 번 더 물어요.",
+        "받는 주소는 끝 글자까지 확인하고, 처음 보내는 곳이면 아주 적은 금액으로 먼저 보내 보세요."
       ],
       "go": [
         {

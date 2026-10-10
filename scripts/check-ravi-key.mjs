@@ -57,7 +57,7 @@ function fixture({language='ko', saveError, available={}, outcome=200, provider=
   const t = translate(language);
   const ctx = vm.createContext({ ...helpers,providerOfKey,$:slot,document:{getElementById:slot},
     PROVIDERS:{google:['Google (Gemini)','AIza…','https://aistudio.google.com/apikey'],openai:['OpenAI','sk-…','https://platform.openai.com/api-keys']},
-    keyStoragePlatform:'macos', showKeyStorageHelp(){}, keyPick:provider, aiProvider:null,aiKeyed:{},lastKeyState:null,keyChecks:checks,raviHome:null,
+    keyStoragePlatform:'macos', showKeyStorageHelp(){}, raviHeldQuestion:'', raviKeyJustSaved:'', aiUsableCount:0, paintDebateAvailability(){}, resendHeldQuestion(){}, raviConnectedHtml:()=>'<p>연결됐어요 · 한 번 물어볼까요?</p>', keyPick:provider, aiProvider:null,aiKeyed:{},lastKeyState:null,keyChecks:checks,raviHome:null,
     async invoke(command,args){
       calls.push(command); // Never record key arguments in logs/evidence.
       if(command==='save_api_key') {
