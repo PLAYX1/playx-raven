@@ -1,0 +1,57 @@
+/* 미니 창. 🔴 style="" 속성은 쓰지 않는다 — Tauri CSP(nonce)가 무시한다(check-style-csp.mjs). */
+:root{
+  --bg:#ffffff;--fg:#1d1b2e;--muted:#4f4c66;--line:#d9d6e6;--btn:#f3f1f8;--btn-fg:#1d1b2e;
+  --ok:#17733d;--warn:#8a5200;--bad:#b42318;--in:#17603a;--out:#5b2a86;
+  --note-bg:#e8f1ff;--note-fg:#0b3a85;--focus:#1f5fd6;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#1b1a21;--fg:#f2f1f7;--muted:#c0bdd0;--line:#3a3847;--btn:#2a2833;--btn-fg:#f2f1f7;
+    --ok:#4ade80;--warn:#fbbf24;--bad:#ff8a80;--in:#6ee7a0;--out:#d6b4fc;
+    --note-bg:#132a4a;--note-fg:#d4e6ff;--focus:#8ab4ff;
+    color-scheme:dark;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--fg);font:12px/1.35 -apple-system,BlinkMacSystemFont,"Segoe UI","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;-webkit-user-select:none;user-select:none;cursor:default}
+#mini{height:100%;padding:6px 8px;border:1px solid var(--line);display:flex;flex-direction:column;gap:3px;overflow:hidden}
+[hidden]{display:none!important}
+button{font:inherit;color:var(--btn-fg);background:var(--btn);border:1px solid var(--line);border-radius:6px;min-width:24px;height:24px;padding:0 5px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
+svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+#mask[aria-pressed="false"] .slash{display:none}
+#bar{display:flex;align-items:center;gap:6px;min-width:0;flex:none}
+.dot{flex:none;width:10px;height:10px;border-radius:50%;background:var(--warn)}
+[data-status="ok"] .dot{background:var(--ok)}
+[data-status="bad"] .dot{background:var(--bad)}
+.headline{flex:1 1 auto;min-width:0;justify-content:flex-start;background:transparent;border:0;padding:0 2px;font-size:14px;font-weight:650;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--fg)}
+.headline.is-hidden{letter-spacing:.08em}
+.tools{display:flex;gap:3px;flex:none}
+.notice{flex:none;display:block;width:100%;height:auto;min-height:22px;text-align:left;background:var(--note-bg);color:var(--note-fg);border-color:transparent;padding:2px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pending{margin:0;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:none}
+.recent{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1px;min-height:0;overflow:hidden}
+.row{display:flex;gap:6px;align-items:baseline;white-space:nowrap;min-width:0}
+.row .k{flex:none;width:2.6em;color:var(--muted)}
+.row.in .k,.row.sale .k{color:var(--in);font-weight:600}
+.row.out .k{color:var(--out)}
+.row .v{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+.row .m{flex:none;color:var(--muted);font-size:11px}
+.row.empty{color:var(--muted)}
+.node,.line,.readonly{margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--muted);flex:none}
+.extra{display:flex;flex-direction:column;gap:2px;border-top:1px solid var(--line);padding-top:3px;min-height:0}
+.seller h2{margin:0;font-size:12px;color:var(--fg)}
+.seller .line{color:var(--fg)}
+.opts{display:flex;gap:10px;flex-wrap:wrap}
+.opts label{display:inline-flex;align-items:center;gap:3px;white-space:nowrap;color:var(--fg)}
+.opts input{margin:0;width:14px;height:14px}
+.readonly{font-size:11px}
+/* S — 한 줄 막대 */
+[data-size="s"] #mini,#mini[data-size="s"]{justify-content:center}
+#mini[data-size="s"] .recent,#mini[data-size="s"] .node,#mini[data-size="s"] .extra,#mini[data-size="s"] .pending,#mini[data-size="s"] #mask{display:none!important}
+#mini[data-size="s"] .notice{display:none!important}
+body.has-notice #mini[data-size="s"] .headline{color:var(--note-fg);background:var(--note-bg);border-radius:4px;padding:0 4px}
+/* M — 잔액·최근 3·노드 */
+#mini[data-size="m"] .extra{display:none!important}
+#mini[data-size="m"] .pending{display:none!important}
+@media (prefers-reduced-motion: no-preference){.notice{transition:opacity .2s}}

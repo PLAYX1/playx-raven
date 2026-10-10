@@ -1,0 +1,36 @@
+{
+  "period_ms": 15000,
+  "need": 3,
+  "trials": [
+    {
+      "detected_ms": 6094,
+      "polls": 1,
+      "wait_to_next_poll_ms": 6077
+    },
+    {
+      "detected_ms": 14697,
+      "polls": 1,
+      "wait_to_next_poll_ms": 14674
+    },
+    {
+      "detected_ms": 6032,
+      "polls": 1,
+      "wait_to_next_poll_ms": 6020
+    }
+  ],
+  "reconfirm": {
+    "confirmations_seen_each_poll": [
+      0,
+      1,
+      2,
+      3,
+      null
+    ]
+  },
+  "locked": {
+    "wallet_locked": true,
+    "detected_while_locked": true,
+    "balance_readable_while_locked": true
+  },
+  "node": "/Ravencoin:4.8.0/"
+}

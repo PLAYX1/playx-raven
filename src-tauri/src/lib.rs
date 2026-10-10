@@ -8,6 +8,10 @@ mod ravi_agent;
 mod ravi_companion;
 mod ravi_lifecycle;
 mod companion_layout;
+// 미니 창(애플 뮤직 미니 플레이어처럼) — 읽기 전용. 창·문지기(mini) · 판단(mini_feed) · 지켜보기(mini_watch).
+mod mini;
+mod mini_feed;
+mod mini_watch;
 mod ai_budget;
 mod ai_endpoint;
 mod companion;
@@ -138,6 +142,11 @@ pub fn run() {
                 invoke.resolver.reject("라비 작은 창에서는 이 작업을 할 수 없어요.");
                 return true;
             }
+            // 🔴 미니 창은 읽기 전용 다섯 명령만(mini::MINI_COMMANDS). 보내기·잠금 풀기·복구 단어는 여기서 막힌다.
+            if !mini::command_allowed(invoke.message.webview_ref().label(), invoke.message.command()) {
+                invoke.resolver.reject("미니 창에서는 이 작업을 할 수 없어요. 큰 화면을 열어 주세요.");
+                return true;
+            }
             let handler: fn(tauri::ipc::Invoke<tauri::Wry>) -> bool = tauri::generate_handler![
             ravi_lifecycle::ravi_lifecycle_status,
             ravi_lifecycle::ravi_take_close_request,
@@ -156,6 +165,11 @@ pub fn run() {
             ravi_companion::companion_click,
             ravi_companion::companion_dismiss,
             ravi_companion::companion_hold,
+            mini::mini_state,
+            mini::mini_set,
+            mini::mini_show,
+            mini::mini_open_main,
+            mini::mini_seen,
             pairing::pairing_state,
             pairing::pairing_show_qr,
             pairing::pairing_cancel_qr,
@@ -668,6 +682,7 @@ pub fn run() {
             map::start();
             use tauri::Manager;
             ravi_companion::setup(app)?;
+            mini::setup(app);
 
             // 🔴 **화면보다 큰 창을 띄우지 않는다.**
             //

@@ -335,6 +335,7 @@ fn allowed(s: &Settings, day: i64, hour: u8) -> bool {
         && s.daily_limit > 0
 }
 pub fn notify(kind: &'static str) {
+    crate::mini::companion_notice(kind);
     if !["deposit", "order", "backup", "hello"].contains(&kind) {
         return;
     }
@@ -984,7 +985,8 @@ pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         auto: auto.clone(),
         quit: quit.clone(),
     });
-    let menu = Menu::with_items(app, &[&call, &large, &greeting, &auto, &quit])?;
+    let mini = crate::mini::tray_submenu(app)?;
+    let menu = Menu::with_items(app, &[&call, &large, &mini, &greeting, &auto, &quit])?;
     let tray = tauri::tray::TrayIconBuilder::with_id("main")
         .icon(crate::ravi_companion::tray_image())
         .icon_as_template(cfg!(target_os = "macos"))
@@ -1019,6 +1021,7 @@ pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
             "ravi-quit" => crate::ravi_lifecycle::request_close(app),
+            id if id.starts_with("mini-") => crate::mini::on_menu(app, id),
             _ => {}
         })
         .on_tray_icon_event(|tray, event| {
