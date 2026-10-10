@@ -1,0 +1,661 @@
+{
+ "eye_diameter_px": {
+  "16": {
+   "before_dark": 1.8,
+   "before_with_ring": 2.3,
+   "after": 4,
+   "floor": 4,
+   "pass": true
+  },
+  "20": {
+   "before_dark": 2.2,
+   "before_with_ring": 2.9,
+   "after": 5,
+   "floor": 5,
+   "pass": true
+  },
+  "22": {
+   "before_dark": 2.5,
+   "before_with_ring": 3.2,
+   "after": 5,
+   "floor": 5,
+   "pass": true
+  },
+  "24": {
+   "before_dark": 2.7,
+   "before_with_ring": 3.5,
+   "after": 6,
+   "floor": 6,
+   "pass": true
+  },
+  "32": {
+   "before_dark": 3.6,
+   "before_with_ring": 4.6,
+   "after": 8,
+   "floor": 7,
+   "pass": true
+  }
+ },
+ "mood_distinct_pct": {
+  "light": {
+   "16": {
+    "before": {
+     "min_pct": 0.41,
+     "closest": "normal~worried",
+     "normal~worried": 0.41,
+     "mean_pct": 1.57,
+     "pairs": {
+      "normal~happy": 1.1,
+      "normal~worried": 0.41,
+      "normal~sleep": 1.21,
+      "normal~surprised": 2.1,
+      "normal~love": 1.19,
+      "happy~worried": 1.5,
+      "happy~sleep": 0.67,
+      "happy~surprised": 2.42,
+      "happy~love": 1.16,
+      "worried~sleep": 1.62,
+      "worried~surprised": 2.45,
+      "worried~love": 1.46,
+      "sleep~surprised": 2.64,
+      "sleep~love": 1.17,
+      "surprised~love": 2.48
+     }
+    },
+    "after": {
+     "min_pct": 1.99,
+     "closest": "normal~worried",
+     "normal~worried": 1.99,
+     "mean_pct": 3.84,
+     "pairs": {
+      "normal~happy": 4.54,
+      "normal~worried": 1.99,
+      "normal~sleep": 3.23,
+      "normal~surprised": 2.68,
+      "normal~love": 4.43,
+      "happy~worried": 3.3,
+      "happy~sleep": 3.95,
+      "happy~surprised": 5.14,
+      "happy~love": 3.21,
+      "worried~sleep": 4.2,
+      "worried~surprised": 3.23,
+      "worried~love": 4.58,
+      "sleep~surprised": 4.8,
+      "sleep~love": 2.84,
+      "surprised~love": 5.47
+     }
+    }
+   },
+   "20": {
+    "before": {
+     "min_pct": 0.44,
+     "closest": "normal~worried",
+     "normal~worried": 0.44,
+     "mean_pct": 1.72,
+     "pairs": {
+      "normal~happy": 1.24,
+      "normal~worried": 0.44,
+      "normal~sleep": 1.36,
+      "normal~surprised": 2.35,
+      "normal~love": 1.34,
+      "happy~worried": 1.68,
+      "happy~sleep": 0.49,
+      "happy~surprised": 2.69,
+      "happy~love": 1.21,
+      "worried~sleep": 1.8,
+      "worried~surprised": 2.78,
+      "worried~love": 1.6,
+      "sleep~surprised": 2.83,
+      "sleep~love": 1.26,
+      "surprised~love": 2.74
+     }
+    },
+    "after": {
+     "min_pct": 2.84,
+     "closest": "normal~worried",
+     "normal~worried": 2.84,
+     "mean_pct": 5.83,
+     "pairs": {
+      "normal~happy": 6.17,
+      "normal~worried": 2.84,
+      "normal~sleep": 5.99,
+      "normal~surprised": 3.39,
+      "normal~love": 5.0,
+      "happy~worried": 6.14,
+      "happy~sleep": 3.43,
+      "happy~surprised": 9.55,
+      "happy~love": 5.08,
+      "worried~sleep": 6.67,
+      "worried~surprised": 6.22,
+      "worried~love": 5.34,
+      "sleep~surprised": 9.38,
+      "sleep~love": 4.08,
+      "surprised~love": 8.13
+     }
+    }
+   },
+   "22": {
+    "before": {
+     "min_pct": 0.45,
+     "closest": "normal~worried",
+     "normal~worried": 0.45,
+     "mean_pct": 1.62,
+     "pairs": {
+      "normal~happy": 1.22,
+      "normal~worried": 0.45,
+      "normal~sleep": 1.22,
+      "normal~surprised": 2.1,
+      "normal~love": 1.27,
+      "happy~worried": 1.67,
+      "happy~sleep": 0.55,
+      "happy~surprised": 2.62,
+      "happy~love": 1.17,
+      "worried~sleep": 1.66,
+      "worried~surprised": 2.49,
+      "worried~love": 1.53,
+      "sleep~surprised": 2.64,
+      "sleep~love": 1.14,
+      "surprised~love": 2.6
+     }
+    },
+    "after": {
+     "min_pct": 2.45,
+     "closest": "normal~worried",
+     "normal~worried": 2.45,
+     "mean_pct": 4.7,
+     "pairs": {
+      "normal~happy": 4.84,
+      "normal~worried": 2.45,
+      "normal~sleep": 4.99,
+      "normal~surprised": 2.53,
+      "normal~love": 4.11,
+      "happy~worried": 4.91,
+      "happy~sleep": 2.68,
+      "happy~surprised": 7.36,
+      "happy~love": 3.99,
+      "worried~sleep": 5.64,
+      "worried~surprised": 4.97,
+      "worried~love": 4.49,
+      "sleep~surprised": 7.52,
+      "sleep~love": 3.41,
+      "surprised~love": 6.59
+     }
+    }
+   },
+   "24": {
+    "before": {
+     "min_pct": 0.4,
+     "closest": "normal~worried",
+     "normal~worried": 0.4,
+     "mean_pct": 1.61,
+     "pairs": {
+      "normal~happy": 1.29,
+      "normal~worried": 0.4,
+      "normal~sleep": 1.14,
+      "normal~surprised": 2.04,
+      "normal~love": 1.26,
+      "happy~worried": 1.69,
+      "happy~sleep": 0.8,
+      "happy~surprised": 2.54,
+      "happy~love": 1.25,
+      "worried~sleep": 1.54,
+      "worried~surprised": 2.43,
+      "worried~love": 1.47,
+      "sleep~surprised": 2.49,
+      "sleep~love": 1.18,
+      "surprised~love": 2.64
+     }
+    },
+    "after": {
+     "min_pct": 3.13,
+     "closest": "normal~surprised",
+     "normal~worried": 3.73,
+     "mean_pct": 5.23,
+     "pairs": {
+      "normal~happy": 4.47,
+      "normal~worried": 3.73,
+      "normal~sleep": 4.66,
+      "normal~surprised": 3.13,
+      "normal~love": 4.89,
+      "happy~worried": 5.83,
+      "happy~sleep": 3.21,
+      "happy~surprised": 6.95,
+      "happy~love": 4.18,
+      "worried~sleep": 6.39,
+      "worried~surprised": 6.22,
+      "worried~love": 6.5,
+      "sleep~surprised": 7.15,
+      "sleep~love": 3.57,
+      "surprised~love": 7.54
+     }
+    }
+   },
+   "32": {
+    "before": {
+     "min_pct": 0.42,
+     "closest": "normal~worried",
+     "normal~worried": 0.42,
+     "mean_pct": 1.69,
+     "pairs": {
+      "normal~happy": 1.3,
+      "normal~worried": 0.42,
+      "normal~sleep": 1.34,
+      "normal~surprised": 2.2,
+      "normal~love": 1.31,
+      "happy~worried": 1.72,
+      "happy~sleep": 0.6,
+      "happy~surprised": 2.54,
+      "happy~love": 1.22,
+      "worried~sleep": 1.76,
+      "worried~surprised": 2.61,
+      "worried~love": 1.56,
+      "sleep~surprised": 2.75,
+      "sleep~love": 1.25,
+      "surprised~love": 2.76
+     }
+    },
+    "after": {
+     "min_pct": 3.21,
+     "closest": "normal~worried",
+     "normal~worried": 3.21,
+     "mean_pct": 4.93,
+     "pairs": {
+      "normal~happy": 4.86,
+      "normal~worried": 3.21,
+      "normal~sleep": 4.32,
+      "normal~surprised": 3.59,
+      "normal~love": 4.96,
+      "happy~worried": 5.09,
+      "happy~sleep": 4.06,
+      "happy~surprised": 6.78,
+      "happy~love": 4.12,
+      "worried~sleep": 5.17,
+      "worried~surprised": 4.88,
+      "worried~love": 5.62,
+      "sleep~surprised": 6.81,
+      "sleep~love": 3.45,
+      "surprised~love": 7.03
+     }
+    }
+   }
+  },
+  "dark": {
+   "16": {
+    "before": {
+     "min_pct": 0.41,
+     "closest": "normal~worried",
+     "normal~worried": 0.41,
+     "mean_pct": 1.58,
+     "pairs": {
+      "normal~happy": 1.07,
+      "normal~worried": 0.41,
+      "normal~sleep": 1.16,
+      "normal~surprised": 2.23,
+      "normal~love": 1.21,
+      "happy~worried": 1.48,
+      "happy~sleep": 0.65,
+      "happy~surprised": 2.42,
+      "happy~love": 1.15,
+      "worried~sleep": 1.57,
+      "worried~surprised": 2.57,
+      "worried~love": 1.48,
+      "sleep~surprised": 2.64,
+      "sleep~love": 1.17,
+      "surprised~love": 2.47
+     }
+    },
+    "after": {
+     "min_pct": 1.99,
+     "closest": "normal~worried",
+     "normal~worried": 1.99,
+     "mean_pct": 3.84,
+     "pairs": {
+      "normal~happy": 4.54,
+      "normal~worried": 1.99,
+      "normal~sleep": 3.23,
+      "normal~surprised": 2.68,
+      "normal~love": 4.43,
+      "happy~worried": 3.3,
+      "happy~sleep": 3.95,
+      "happy~surprised": 5.14,
+      "happy~love": 3.21,
+      "worried~sleep": 4.2,
+      "worried~surprised": 3.23,
+      "worried~love": 4.58,
+      "sleep~surprised": 4.8,
+      "sleep~love": 2.84,
+      "surprised~love": 5.47
+     }
+    }
+   },
+   "20": {
+    "before": {
+     "min_pct": 0.43,
+     "closest": "normal~worried",
+     "normal~worried": 0.43,
+     "mean_pct": 1.72,
+     "pairs": {
+      "normal~happy": 1.25,
+      "normal~worried": 0.43,
+      "normal~sleep": 1.33,
+      "normal~surprised": 2.42,
+      "normal~love": 1.33,
+      "happy~worried": 1.69,
+      "happy~sleep": 0.48,
+      "happy~surprised": 2.7,
+      "happy~love": 1.2,
+      "worried~sleep": 1.76,
+      "worried~surprised": 2.84,
+      "worried~love": 1.6,
+      "sleep~surprised": 2.84,
+      "sleep~love": 1.25,
+      "surprised~love": 2.73
+     }
+    },
+    "after": {
+     "min_pct": 2.84,
+     "closest": "normal~worried",
+     "normal~worried": 2.84,
+     "mean_pct": 5.84,
+     "pairs": {
+      "normal~happy": 6.17,
+      "normal~worried": 2.84,
+      "normal~sleep": 6.04,
+      "normal~surprised": 3.39,
+      "normal~love": 5.0,
+      "happy~worried": 6.14,
+      "happy~sleep": 3.48,
+      "happy~surprised": 9.55,
+      "happy~love": 5.08,
+      "worried~sleep": 6.72,
+      "worried~surprised": 6.22,
+      "worried~love": 5.34,
+      "sleep~surprised": 9.43,
+      "sleep~love": 4.13,
+      "surprised~love": 8.13
+     }
+    }
+   },
+   "22": {
+    "before": {
+     "min_pct": 0.45,
+     "closest": "normal~worried",
+     "normal~worried": 0.45,
+     "mean_pct": 1.61,
+     "pairs": {
+      "normal~happy": 1.2,
+      "normal~worried": 0.45,
+      "normal~sleep": 1.17,
+      "normal~surprised": 2.14,
+      "normal~love": 1.26,
+      "happy~worried": 1.65,
+      "happy~sleep": 0.55,
+      "happy~surprised": 2.61,
+      "happy~love": 1.17,
+      "worried~sleep": 1.62,
+      "worried~surprised": 2.52,
+      "worried~love": 1.52,
+      "sleep~surprised": 2.63,
+      "sleep~love": 1.14,
+      "surprised~love": 2.59
+     }
+    },
+    "after": {
+     "min_pct": 2.45,
+     "closest": "normal~worried",
+     "normal~worried": 2.45,
+     "mean_pct": 4.71,
+     "pairs": {
+      "normal~happy": 4.84,
+      "normal~worried": 2.45,
+      "normal~sleep": 5.03,
+      "normal~surprised": 2.53,
+      "normal~love": 4.11,
+      "happy~worried": 4.91,
+      "happy~sleep": 2.73,
+      "happy~surprised": 7.36,
+      "happy~love": 3.99,
+      "worried~sleep": 5.69,
+      "worried~surprised": 4.97,
+      "worried~love": 4.49,
+      "sleep~surprised": 7.56,
+      "sleep~love": 3.46,
+      "surprised~love": 6.59
+     }
+    }
+   },
+   "24": {
+    "before": {
+     "min_pct": 0.4,
+     "closest": "normal~worried",
+     "normal~worried": 0.4,
+     "mean_pct": 1.63,
+     "pairs": {
+      "normal~happy": 1.34,
+      "normal~worried": 0.4,
+      "normal~sleep": 1.15,
+      "normal~surprised": 2.1,
+      "normal~love": 1.31,
+      "happy~worried": 1.74,
+      "happy~sleep": 0.8,
+      "happy~surprised": 2.53,
+      "happy~love": 1.25,
+      "worried~sleep": 1.54,
+      "worried~surprised": 2.49,
+      "worried~love": 1.52,
+      "sleep~surprised": 2.49,
+      "sleep~love": 1.18,
+      "surprised~love": 2.65
+     }
+    },
+    "after": {
+     "min_pct": 3.13,
+     "closest": "normal~surprised",
+     "normal~worried": 3.73,
+     "mean_pct": 5.23,
+     "pairs": {
+      "normal~happy": 4.47,
+      "normal~worried": 3.73,
+      "normal~sleep": 4.66,
+      "normal~surprised": 3.13,
+      "normal~love": 4.89,
+      "happy~worried": 5.83,
+      "happy~sleep": 3.21,
+      "happy~surprised": 6.95,
+      "happy~love": 4.18,
+      "worried~sleep": 6.39,
+      "worried~surprised": 6.22,
+      "worried~love": 6.5,
+      "sleep~surprised": 7.15,
+      "sleep~love": 3.57,
+      "surprised~love": 7.54
+     }
+    }
+   },
+   "32": {
+    "before": {
+     "min_pct": 0.42,
+     "closest": "normal~worried",
+     "normal~worried": 0.42,
+     "mean_pct": 1.69,
+     "pairs": {
+      "normal~happy": 1.28,
+      "normal~worried": 0.42,
+      "normal~sleep": 1.27,
+      "normal~surprised": 2.24,
+      "normal~love": 1.33,
+      "happy~worried": 1.71,
+      "happy~sleep": 0.6,
+      "happy~surprised": 2.52,
+      "happy~love": 1.23,
+      "worried~sleep": 1.69,
+      "worried~surprised": 2.66,
+      "worried~love": 1.58,
+      "sleep~surprised": 2.72,
+      "sleep~love": 1.26,
+      "surprised~love": 2.77
+     }
+    },
+    "after": {
+     "min_pct": 3.21,
+     "closest": "normal~worried",
+     "normal~worried": 3.21,
+     "mean_pct": 4.94,
+     "pairs": {
+      "normal~happy": 4.86,
+      "normal~worried": 3.21,
+      "normal~sleep": 4.35,
+      "normal~surprised": 3.59,
+      "normal~love": 4.96,
+      "happy~worried": 5.09,
+      "happy~sleep": 4.09,
+      "happy~surprised": 6.78,
+      "happy~love": 4.12,
+      "worried~sleep": 5.2,
+      "worried~surprised": 4.88,
+      "worried~love": 5.62,
+      "sleep~surprised": 6.84,
+      "sleep~love": 3.48,
+      "surprised~love": 7.03
+     }
+    }
+   }
+  }
+ },
+ "contrast": {
+  "eye_vs_face": {
+   "before": 9.35,
+   "after": 12.5,
+   "goal": 7
+  },
+  "hair_edge_vs_bg": {
+   "before": 3.43,
+   "after": 5.83,
+   "goal": 3,
+   "note": "후: 머리 둘레 진남색 외곽선이 배경과 만난다"
+  },
+  "beak_edge_vs_face": {
+   "before": 1.61,
+   "after": 12.5,
+   "goal": 3,
+   "note": "후: 부리 둘레 검정 테 — 테 바깥은 살구, 안은 주황"
+  },
+  "beak_fill_vs_outline": {
+   "before": null,
+   "after": 6.74,
+   "goal": 3
+  },
+  "ribbon_vs_hair": {
+   "before": 1.5,
+   "after": 4.24,
+   "goal": 3
+  },
+  "ribbon_edge_vs_bg": {
+   "before": 2.29,
+   "after": 5.83,
+   "goal": 3,
+   "note": "후: 리본 테"
+  },
+  "face_vs_hair": {
+   "before": 6.33,
+   "after": 7.3,
+   "goal": 3
+  },
+  "brow_vs_face": {
+   "before": 1.57,
+   "after": 12.5,
+   "goal": 3,
+   "note": "전: 걱정 눈썹이 남색 머리 위(#1B1A25 vs #2F386E) / 후: 살구 위에만 찍음"
+  },
+  "measured_eye_vs_face_1x": {
+   "16": {
+    "before": {
+     "eye_px": "#736A5E",
+     "face_px": "#EEAF7B",
+     "ratio": 2.8
+    },
+    "after": {
+     "eye_px": "#12101C",
+     "face_px": "#FFC896",
+     "ratio": 12.5
+    }
+   },
+   "20": {
+    "before": {
+     "eye_px": "#54534D",
+     "face_px": "#FAB67E",
+     "ratio": 4.43
+    },
+    "after": {
+     "eye_px": "#12101C",
+     "face_px": "#FFC896",
+     "ratio": 12.5
+    }
+   },
+   "22": {
+    "before": {
+     "eye_px": "#514A3F",
+     "face_px": "#EDAF7B",
+     "ratio": 4.59
+    },
+    "after": {
+     "eye_px": "#12101C",
+     "face_px": "#FFC896",
+     "ratio": 12.5
+    }
+   },
+   "24": {
+    "before": {
+     "eye_px": "#534636",
+     "face_px": "#F9B57D",
+     "ratio": 5.2
+    },
+    "after": {
+     "eye_px": "#12101C",
+     "face_px": "#FFC896",
+     "ratio": 12.5
+    }
+   },
+   "32": {
+    "before": {
+     "eye_px": "#3C3933",
+     "face_px": "#F9B67E",
+     "ratio": 6.59
+    },
+    "after": {
+     "eye_px": "#12101C",
+     "face_px": "#FFC896",
+     "ratio": 12.5
+    }
+   }
+  }
+ },
+ "tray": {
+  "two_tone_after": true,
+  "two_tone_before": false,
+  "alert_gap_px": {
+   "18": 1,
+   "36": 2
+  },
+  "alert_dot_px": {
+   "18": 21,
+   "36": 80
+  },
+  "template_vs_menubar": {
+   "light(#ECECEE)": 17.8,
+   "dark(#2A2A2E)": 14.29
+  },
+  "before_alert": {
+   "badge_vs_navy": 3.56,
+   "badge_vs_light_bar": 2.75,
+   "badge_vs_dark_bar": 4.41,
+   "note": "전: 알림 때 템플릿을 끄고 색 아이콘 + 빨강 점(메뉴바 라이트/다크 자동 반전 없음)"
+  },
+  "before_template_eyes": "구멍(투명) — 머리 실루엣에 뚫린 두 구멍 = 해골 인상"
+ },
+ "big_unchanged": {
+  "dom_same": 264,
+  "of": 264,
+  "pixel_same": true
+ }
+}

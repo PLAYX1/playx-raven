@@ -1,4 +1,5 @@
 /** RaviFace: v2 RaviFace.dc.html eye geometry and motion. */
+import { smallBucket, smallFaceSvg, type SmallMood, type SmallSize } from "./ravi-face-small";
 type OriginalMood = "normal" | "sleep" | "happy" | "surprised" | "thinking" | "worried" | "love" | "wink" | "wake";
 export type RaviMood = OriginalMood | "sleepy" | "focused" | "working";
 export const RAVI_CHARACTERS = [
@@ -37,12 +38,26 @@ export function setMood(el: HTMLElement, mood: RaviMood): void {
   el.setAttribute("role", "img");
   el.setAttribute("aria-label", mood === "sleepy" ? "졸린 라비" : mood === "focused" ? "집중하는 라비" : mood === "working" ? "일하는 라비" : names[faceMood]);
   el.classList.toggle("rv-bob", mood !== "sleep");
+  if (el.dataset.raviSmall) { paintSmall(el, mood); return; }
   const img = el.querySelector("img");
   if (img) (img as HTMLElement).style.filter = `${el.dataset.characterFilter || "none"} ${mood === "sleep" ? "saturate(0.6) brightness(0.92)" : ""}`;
   const svg = el.querySelector("svg");
   if (svg) svg.innerHTML = eyes(faceMood);
 }
+/** 작은 얼굴(≤32px) 다시 칠하기 — 큰 얼굴에는 아무 일도 하지 않는다. 돈·보안 경고 감정(calm·apologetic)은 진지한 눈으로. */
+export function paintSmall(el: HTMLElement, mood: RaviMood = (el.dataset.raviMood as RaviMood) || "normal"): void {
+  const n = Number(el.dataset.raviSmall) as SmallSize;
+  if (!n) return;
+  const emo = el.dataset.raviEmotion;
+  const m: SmallMood = emo === "calm" ? "calm" : emo === "apologetic" ? "worried" : mood;
+  const parts = smallFaceSvg(m, n);
+  const [baseSvg, moodSvg] = el.querySelectorAll("svg");
+  if (baseSvg) { baseSvg.innerHTML = parts.base; (baseSvg as SVGElement).style.filter = `${el.dataset.characterFilter || "none"} ${mood === "sleep" ? "saturate(0.6) brightness(0.92)" : ""}`; }
+  if (moodSvg) moodSvg.innerHTML = parts.mood;
+}
 export function raviFace(mood: RaviMood, size: number, options: { round?: boolean } = {}): HTMLElement {
+  const small = smallBucket(size);
+  if (small) return smallRaviFace(mood, size, small, options);
   const el = document.createElement("span");
   el.className = "ravi-face";
   el.style.width = `${size}px`;
@@ -55,6 +70,24 @@ export function raviFace(mood: RaviMood, size: number, options: { round?: boolea
   svg.setAttribute("viewBox", "0 0 420 420");
   svg.setAttribute("aria-hidden", "true");
   el.append(img, svg);
+  setMood(el, mood);
+  return el;
+}
+/** 16~32px 전용: 사진(face.webp) 대신 손맞춤 SVG 두 겹(바탕·표정). API·클래스·라벨은 큰 얼굴과 같다. */
+function smallRaviFace(mood: RaviMood, size: number, n: SmallSize, options: { round?: boolean }): HTMLElement {
+  const el = document.createElement("span");
+  el.className = "ravi-face";
+  el.style.width = `${size}px`;
+  el.style.height = `${size}px`;
+  el.style.borderRadius = options.round ? "50%" : `${Math.round(size * .28)}px`;
+  el.dataset.raviSmall = String(n);
+  for (const cls of ["rv-sm-base", "rv-sm-mood"]) {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", `0 0 ${n} ${n}`);
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("class", cls);
+    el.append(svg);
+  }
   setMood(el, mood);
   return el;
 }

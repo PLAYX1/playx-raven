@@ -32,6 +32,8 @@
     "test": "node --test scripts/opening.test.mjs scripts/sales-account.test.mjs scripts/release-manifest.test.mjs scripts/verify-published-release.test.mjs scripts/signed-release-metadata.test.mjs scripts/desktop-ui-browser.test.mjs scripts/creator-publish.test.mjs scripts/creator-publish-browser.test.mjs scripts/name-lookup.test.mjs scripts/signed-lists-browser.test.mjs scripts/memory-budget-browser.test.mjs scripts/drop-publish.test.mjs scripts/drop-publish-browser.test.mjs scripts/window-modes.test.mjs scripts/window-modes-browser.test.mjs scripts/layout-gate-browser.test.mjs scripts/amount-locale.test.mjs",
     "test:memory": "node --test scripts/memory-budget-browser.test.mjs",
     "measure:memory": "node scripts/measure-memory.mjs",
+    "check:ravi-small": "node --test scripts/ravi-small-icons.test.mjs",
+    "gallery:ravi-small": "python3 scripts/generate-ravi-tray-v2.py && node scripts/ravi-small-icons-gallery.mjs && python3 scripts/ravi-small-icons-metrics.py",
     "check:ravi-emotion": "node --test --test-concurrency=1 scripts/ravi-emotion.test.mjs scripts/ravi-emotion-gallery.mjs scripts/ravi-emotion-app-browser.test.mjs",
     "gallery:drop": "RV_DROP_SHOTS=artifacts/drop-gallery/shots node --test scripts/drop-publish-browser.test.mjs && node scripts/build-drop-gallery.mjs",
     "check:home-browser": "npm run build && node scripts/check-home-browser.mjs"
