@@ -987,6 +987,7 @@ pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     });
     let mini = crate::mini::tray_submenu(app)?;
     let menu = Menu::with_items(app, &[&call, &large, &mini, &greeting, &auto, &quit])?;
+    crate::display_mode::attach_tray_menu(app, &menu)?;
     let tray = tauri::tray::TrayIconBuilder::with_id("main")
         .icon(crate::ravi_companion::tray_image())
         .icon_as_template(cfg!(target_os = "macos"))
@@ -1022,6 +1023,7 @@ pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             }
             "ravi-quit" => crate::ravi_lifecycle::request_close(app),
             id if id.starts_with("mini-") => crate::mini::on_menu(app, id),
+            id if id.starts_with("dm-") => crate::display_mode::on_menu(app, id),
             _ => {}
         })
         .on_tray_icon_event(|tray, event| {
@@ -1038,7 +1040,7 @@ pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         })
         .build(app);
     // A missing Linux tray must never strand the application without a route back.
-    if tray.is_err() || !s.resident_start {
+    if tray.is_err() || (!s.resident_start && !crate::display_mode::starts_without_main()) {
         open_main(app.handle()).map_err(std::io::Error::other)?;
     }
     if s.resident_start && s.greeting {

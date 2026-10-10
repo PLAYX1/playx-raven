@@ -1,0 +1,11 @@
+<!doctype html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>레이븐볼트 대기화면</title></head><body translate="no"><main id="sb" data-dim="false" aria-describedby="sb-hint">
+<div id="sb-stage" class="stage">
+<header class="top"><time id="sb-clock" class="clock">--:--</time><p id="sb-date" class="date"></p></header>
+<section class="hero" aria-labelledby="sb-bal-label"><p id="sb-bal-label" class="label">잔액</p><p id="sb-balance" class="balance">••••</p><p id="sb-incoming" class="sub" hidden></p></section>
+<section class="cols">
+<section class="card" aria-labelledby="sb-recent-title"><h2 id="sb-recent-title">최근 입금</h2><ul id="sb-recent" class="list"></ul></section>
+<section id="sb-seller" class="card" aria-labelledby="sb-seller-title" hidden><h2 id="sb-seller-title">오늘 판매</h2><p id="sb-sales" class="big"></p><p id="sb-deps" class="sub"></p></section>
+</section>
+<footer class="foot"><p id="sb-node" class="node"><span id="sb-dot" class="dot" aria-hidden="true"></span><span id="sb-node-text">노드 확인 중</span></p><p id="sb-hint" class="hint">아무 키나 누르면 돌아가요 · 읽기 전용</p></footer>
+</div>
+</main><script type="module" src="/src/standby-main.ts"></script></body></html>

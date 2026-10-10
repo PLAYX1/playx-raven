@@ -1,0 +1,32 @@
+/* 설정 「표시 방식」 칸 — 토큰(src/layout-tokens.css)만 쓴다. 색은 앱 변수 그대로. */
+#display-mode-card { margin-top: var(--sp-3); }
+#display-mode-card h3 { margin: 0 0 var(--sp-1); font-size: var(--fs-lg); }
+#display-mode-card .rv-dm-lede { margin: 0 0 var(--sp-3); max-width: var(--measure); }
+.rv-dm-modes { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 13em), 1fr)); gap: var(--sp-2); }
+.rv-dm-mode { position: relative; display: flex; align-items: flex-start; gap: var(--sp-2); min-height: var(--hit); padding: var(--sp-3); border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); cursor: pointer; min-width: 0; }
+.rv-dm-mode input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.rv-dm-mode:has(input:checked) { border-color: var(--ravi); box-shadow: inset 0 0 0 1px var(--ravi); }
+.rv-dm-mode:has(input:focus-visible) { outline: 2px solid var(--ravi); outline-offset: 2px; }
+.rv-dm-mode:has(input:disabled) { opacity: .55; cursor: not-allowed; }
+.rv-dm-ico { flex: none; width: 28px; height: 28px; color: var(--text); }
+.rv-dm-ico svg { width: 28px; height: 28px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.rv-dm-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow-wrap: anywhere; word-break: keep-all; }
+.rv-dm-txt b { font-size: var(--fs-md); line-height: var(--lh-snug); }
+.rv-dm-txt small { font-size: var(--fs-sm); color: var(--muted); line-height: var(--lh-snug); }
+.rv-dm-standby button { flex: 0 1 auto; max-width: 100%; word-break: keep-all; overflow-wrap: normal; }
+.rv-dm-standby { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); margin-top: var(--sp-3); }
+.rv-dm-standby .meta { margin: 0; flex: 1 1 16em; min-width: 0; }
+.rv-dm-more { margin-top: var(--sp-3); }
+.rv-dm-more summary { min-height: var(--hit); display: flex; align-items: center; gap: var(--sp-2); cursor: pointer; }
+.rv-dm-more summary::before { content: "▸"; color: var(--muted); }
+.rv-dm-more[open] summary::before { content: "▾"; }
+.rv-dm-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); min-height: var(--hit); }
+.rv-dm-row.check input { width: 18px; height: 18px; flex: none; }
+.rv-dm-row > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.rv-dm-hours { display: inline-flex; align-items: center; gap: var(--sp-1); }
+.rv-dm-row select { min-height: 36px; max-width: 100%; }
+.rv-dm-note:empty { display: none; }
+@media (prefers-reduced-motion: no-preference) {
+  .rv-dm-mode { transition: border-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease, transform var(--dur-press) var(--ease-out); }
+  .rv-dm-mode:active { transform: scale(.98); }
+}

@@ -1,0 +1,6247 @@
+{
+ "when": "2026-10-10T18:06:06.501Z",
+ "fixes": true,
+ "runs": [
+  {
+   "screen": "home",
+   "width": 390,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 51,
+   "hoverGhost": []
+  },
+  {
+   "screen": "wallet",
+   "width": 390,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [
+    {
+     "el": "#w-send-rvn「보내기」",
+     "sw": 109,
+     "cw": 102
+    }
+   ],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 29,
+   "hoverGhost": []
+  },
+  {
+   "screen": "wallet-receive",
+   "width": 390,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [
+    {
+     "el": "#w-send-rvn「보내기」",
+     "sw": 109,
+     "cw": 102
+    }
+   ],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 31,
+   "hoverGhost": []
+  },
+  {
+   "screen": "wallet-send",
+   "width": 390,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [
+    {
+     "el": "#w-send-rvn「보내기」",
+     "sw": 109,
+     "cw": 102
+    }
+   ],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 36,
+   "hoverGhost": []
+  },
+  {
+   "screen": "wallet-restore",
+   "width": 390,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [
+    {
+     "el": "#w-send-rvn「보내기」",
+     "sw": 109,
+     "cw": 102
+    }
+   ],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 29,
+   "hoverGhost": []
+  },
+  {
+   "screen": "assets",
+   "width": 390,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 44,
+   "hoverGhost": []
+  },
+  {
+   "screen": "sales",
+   "width": 390,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 25,
+   "hoverGhost": []
+  },
+  {
+   "screen": "games",
+   "width": 390,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 13,
+   "hoverGhost": []
+  },
+  {
+   "screen": "market",
+   "width": 390,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 19,
+   "hoverGhost": []
+  },
+  {
+   "screen": "creator",
+   "width": 390,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 52,
+   "hoverGhost": []
+  },
+  {
+   "screen": "ravi",
+   "width": 390,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 10,
+   "hoverGhost": []
+  },
+  {
+   "screen": "settings",
+   "width": 390,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 112,
+   "hoverGhost": []
+  },
+  {
+   "screen": "shop",
+   "width": 390,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 28,
+   "hoverGhost": []
+  },
+  {
+   "screen": "dialog-backup",
+   "width": 390,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 51,
+   "hoverGhost": []
+  },
+  {
+   "screen": "home",
+   "width": 390,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 51,
+   "hoverGhost": []
+  },
+  {
+   "screen": "wallet",
+   "width": 390,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [
+    {
+     "el": "#w-send-rvn「보내기」",
+     "sw": 109,
+     "cw": 102
+    }
+   ],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 29,
+   "hoverGhost": []
+  },
+  {
+   "screen": "wallet-receive",
+   "width": 390,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [
+    {
+     "el": "#w-send-rvn「보내기」",
+     "sw": 109,
+     "cw": 102
+    }
+   ],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 31,
+   "hoverGhost": []
+  },
+  {
+   "screen": "wallet-send",
+   "width": 390,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [
+    {
+     "el": "#w-send-rvn「보내기」",
+     "sw": 109,
+     "cw": 102
+    }
+   ],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 36,
+   "hoverGhost": []
+  },
+  {
+   "screen": "wallet-restore",
+   "width": 390,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [
+    {
+     "el": "#w-send-rvn「보내기」",
+     "sw": 109,
+     "cw": 102
+    }
+   ],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 29,
+   "hoverGhost": []
+  },
+  {
+   "screen": "assets",
+   "width": 390,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 44,
+   "hoverGhost": []
+  },
+  {
+   "screen": "sales",
+   "width": 390,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 25,
+   "hoverGhost": []
+  },
+  {
+   "screen": "games",
+   "width": 390,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 13,
+   "hoverGhost": []
+  },
+  {
+   "screen": "market",
+   "width": 390,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 19,
+   "hoverGhost": []
+  },
+  {
+   "screen": "creator",
+   "width": 390,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 52,
+   "hoverGhost": []
+  },
+  {
+   "screen": "ravi",
+   "width": 390,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 10,
+   "hoverGhost": []
+  },
+  {
+   "screen": "settings",
+   "width": 390,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 112,
+   "hoverGhost": []
+  },
+  {
+   "screen": "shop",
+   "width": 390,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 28,
+   "hoverGhost": []
+  },
+  {
+   "screen": "dialog-backup",
+   "width": 390,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 51,
+   "hoverGhost": []
+  },
+  {
+   "screen": "home",
+   "width": 720,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 51,
+   "hoverGhost": []
+  },
+  {
+   "screen": "wallet",
+   "width": 720,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 29,
+   "hoverGhost": []
+  },
+  {
+   "screen": "wallet-receive",
+   "width": 720,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 31,
+   "hoverGhost": []
+  },
+  {
+   "screen": "wallet-send",
+   "width": 720,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 36,
+   "hoverGhost": []
+  },
+  {
+   "screen": "wallet-restore",
+   "width": 720,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 29,
+   "hoverGhost": []
+  },
+  {
+   "screen": "assets",
+   "width": 720,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 44,
+   "hoverGhost": []
+  },
+  {
+   "screen": "sales",
+   "width": 720,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 25,
+   "hoverGhost": []
+  },
+  {
+   "screen": "games",
+   "width": 720,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 13,
+   "hoverGhost": []
+  },
+  {
+   "screen": "market",
+   "width": 720,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 19,
+   "hoverGhost": []
+  },
+  {
+   "screen": "creator",
+   "width": 720,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 52,
+   "hoverGhost": []
+  },
+  {
+   "screen": "ravi",
+   "width": 720,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 10,
+   "hoverGhost": []
+  },
+  {
+   "screen": "settings",
+   "width": 720,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 112,
+   "hoverGhost": []
+  },
+  {
+   "screen": "shop",
+   "width": 720,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 28,
+   "hoverGhost": []
+  },
+  {
+   "screen": "dialog-backup",
+   "width": 720,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 51,
+   "hoverGhost": []
+  },
+  {
+   "screen": "home",
+   "width": 720,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 51,
+   "hoverGhost": []
+  },
+  {
+   "screen": "wallet",
+   "width": 720,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 29,
+   "hoverGhost": []
+  },
+  {
+   "screen": "wallet-receive",
+   "width": 720,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 31,
+   "hoverGhost": []
+  },
+  {
+   "screen": "wallet-send",
+   "width": 720,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 36,
+   "hoverGhost": []
+  },
+  {
+   "screen": "wallet-restore",
+   "width": 720,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 29,
+   "hoverGhost": []
+  },
+  {
+   "screen": "assets",
+   "width": 720,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 44,
+   "hoverGhost": []
+  },
+  {
+   "screen": "sales",
+   "width": 720,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 25,
+   "hoverGhost": []
+  },
+  {
+   "screen": "games",
+   "width": 720,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 13,
+   "hoverGhost": []
+  },
+  {
+   "screen": "market",
+   "width": 720,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 19,
+   "hoverGhost": []
+  },
+  {
+   "screen": "creator",
+   "width": 720,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 52,
+   "hoverGhost": []
+  },
+  {
+   "screen": "ravi",
+   "width": 720,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 10,
+   "hoverGhost": []
+  },
+  {
+   "screen": "settings",
+   "width": 720,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 112,
+   "hoverGhost": []
+  },
+  {
+   "screen": "shop",
+   "width": 720,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 28,
+   "hoverGhost": []
+  },
+  {
+   "screen": "dialog-backup",
+   "width": 720,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 51,
+   "hoverGhost": []
+  },
+  {
+   "screen": "home",
+   "width": 1024,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 51,
+   "hoverGhost": []
+  },
+  {
+   "screen": "wallet",
+   "width": 1024,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 29,
+   "hoverGhost": []
+  },
+  {
+   "screen": "wallet-receive",
+   "width": 1024,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 31,
+   "hoverGhost": []
+  },
+  {
+   "screen": "wallet-send",
+   "width": 1024,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 36,
+   "hoverGhost": []
+  },
+  {
+   "screen": "wallet-restore",
+   "width": 1024,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 29,
+   "hoverGhost": []
+  },
+  {
+   "screen": "assets",
+   "width": 1024,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 44,
+   "hoverGhost": []
+  },
+  {
+   "screen": "sales",
+   "width": 1024,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 25,
+   "hoverGhost": []
+  },
+  {
+   "screen": "games",
+   "width": 1024,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 13,
+   "hoverGhost": []
+  },
+  {
+   "screen": "market",
+   "width": 1024,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 19,
+   "hoverGhost": []
+  },
+  {
+   "screen": "creator",
+   "width": 1024,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 52,
+   "hoverGhost": []
+  },
+  {
+   "screen": "ravi",
+   "width": 1024,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 10,
+   "hoverGhost": []
+  },
+  {
+   "screen": "settings",
+   "width": 1024,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 112,
+   "hoverGhost": []
+  },
+  {
+   "screen": "shop",
+   "width": 1024,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 28,
+   "hoverGhost": []
+  },
+  {
+   "screen": "dialog-backup",
+   "width": 1024,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 51,
+   "hoverGhost": []
+  },
+  {
+   "screen": "home",
+   "width": 1024,
+   "theme": "light",
+   "lang": "de",
+   "docOverflow": 0,
+   "overflow": 0,
+   "clipped": [
+    {
+     "el": "#rv-home-send「Kontostandsübersicht」",
+     "sw": 170,
+     "cw": 160
+    },
+    {
+     "el": "#rv-home-more「Einstellungen」",
+     "sw": 109,
+     "cw": 103
+    },
+    {
+     "el": "#rv-home-backup「Überweisung verkäuferm」",
+     "sw": 227,
+     "cw": 137
+    },
+    {
+     "el": "#rp-open「Empfangsadresse」",
+     "sw": 89,
+     "cw": 78
+    }
+   ],
+   "pseudo": {
+    "lang": "de",
+    "changed": 849
+   }
+  },
+  {
+   "screen": "wallet",
+   "width": 1024,
+   "theme": "light",
+   "lang": "de",
+   "docOverflow": 0,
+   "overflow": 0,
+   "clipped": [
+    {
+     "el": "#rp-open「Empfangsadresse」",
+     "sw": 89,
+     "cw": 78
+    }
+   ],
+   "pseudo": {
+    "lang": "de",
+    "changed": 849
+   }
+  },
+  {
+   "screen": "assets",
+   "width": 1024,
+   "theme": "light",
+   "lang": "de",
+   "docOverflow": 0,
+   "overflow": 0,
+   "clipped": [
+    {
+     "el": "#rp-open「Empfangsadresse」",
+     "sw": 89,
+     "cw": 78
+    }
+   ],
+   "pseudo": {
+    "lang": "de",
+    "changed": 849
+   }
+  },
+  {
+   "screen": "games",
+   "width": 1024,
+   "theme": "light",
+   "lang": "de",
+   "docOverflow": 0,
+   "overflow": 0,
+   "clipped": [
+    {
+     "el": "#rp-open「Empfangsadresse」",
+     "sw": 89,
+     "cw": 78
+    }
+   ],
+   "pseudo": {
+    "lang": "de",
+    "changed": 849
+   }
+  },
+  {
+   "screen": "settings",
+   "width": 1024,
+   "theme": "light",
+   "lang": "de",
+   "docOverflow": 0,
+   "overflow": 0,
+   "clipped": [
+    {
+     "el": "#rp-open「Empfangsadresse」",
+     "sw": 89,
+     "cw": 78
+    }
+   ],
+   "pseudo": {
+    "lang": "de",
+    "changed": 849
+   }
+  },
+  {
+   "screen": "home",
+   "width": 1024,
+   "theme": "light",
+   "lang": "ru",
+   "docOverflow": 0,
+   "overflow": 0,
+   "clipped": [
+    {
+     "el": "#rv-home-more「Подтверждение」",
+     "sw": 127,
+     "cw": 115
+    },
+    {
+     "el": "#rp-open「Подтверждение настройк」",
+     "sw": 89,
+     "cw": 78
+    }
+   ],
+   "pseudo": {
+    "lang": "ru",
+    "changed": 849
+   }
+  },
+  {
+   "screen": "wallet",
+   "width": 1024,
+   "theme": "light",
+   "lang": "ru",
+   "docOverflow": 0,
+   "overflow": 0,
+   "clipped": [
+    {
+     "el": "#rp-open「Подтверждение настройк」",
+     "sw": 89,
+     "cw": 78
+    }
+   ],
+   "pseudo": {
+    "lang": "ru",
+    "changed": 849
+   }
+  },
+  {
+   "screen": "assets",
+   "width": 1024,
+   "theme": "light",
+   "lang": "ru",
+   "docOverflow": 0,
+   "overflow": 0,
+   "clipped": [
+    {
+     "el": "#rp-open「Подтверждение настройк」",
+     "sw": 89,
+     "cw": 78
+    }
+   ],
+   "pseudo": {
+    "lang": "ru",
+    "changed": 849
+   }
+  },
+  {
+   "screen": "games",
+   "width": 1024,
+   "theme": "light",
+   "lang": "ru",
+   "docOverflow": 0,
+   "overflow": 0,
+   "clipped": [
+    {
+     "el": "#rp-open「Подтверждение настройк」",
+     "sw": 89,
+     "cw": 78
+    }
+   ],
+   "pseudo": {
+    "lang": "ru",
+    "changed": 849
+   }
+  },
+  {
+   "screen": "settings",
+   "width": 1024,
+   "theme": "light",
+   "lang": "ru",
+   "docOverflow": 0,
+   "overflow": 0,
+   "clipped": [
+    {
+     "el": "#rp-open「Подтверждение настройк」",
+     "sw": 89,
+     "cw": 78
+    }
+   ],
+   "pseudo": {
+    "lang": "ru",
+    "changed": 849
+   }
+  },
+  {
+   "screen": "home",
+   "width": 1024,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 51,
+   "hoverGhost": []
+  },
+  {
+   "screen": "wallet",
+   "width": 1024,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 29,
+   "hoverGhost": []
+  },
+  {
+   "screen": "wallet-receive",
+   "width": 1024,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 31,
+   "hoverGhost": []
+  },
+  {
+   "screen": "wallet-send",
+   "width": 1024,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 36,
+   "hoverGhost": []
+  },
+  {
+   "screen": "wallet-restore",
+   "width": 1024,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 29,
+   "hoverGhost": []
+  },
+  {
+   "screen": "assets",
+   "width": 1024,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 44,
+   "hoverGhost": []
+  },
+  {
+   "screen": "sales",
+   "width": 1024,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 25,
+   "hoverGhost": []
+  },
+  {
+   "screen": "games",
+   "width": 1024,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 13,
+   "hoverGhost": []
+  },
+  {
+   "screen": "market",
+   "width": 1024,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 19,
+   "hoverGhost": []
+  },
+  {
+   "screen": "creator",
+   "width": 1024,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 52,
+   "hoverGhost": []
+  },
+  {
+   "screen": "ravi",
+   "width": 1024,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 10,
+   "hoverGhost": []
+  },
+  {
+   "screen": "settings",
+   "width": 1024,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 112,
+   "hoverGhost": []
+  },
+  {
+   "screen": "shop",
+   "width": 1024,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 28,
+   "hoverGhost": []
+  },
+  {
+   "screen": "dialog-backup",
+   "width": 1024,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 51,
+   "hoverGhost": []
+  },
+  {
+   "screen": "home",
+   "width": 1024,
+   "theme": "dark",
+   "lang": "de",
+   "docOverflow": 0,
+   "overflow": 0,
+   "clipped": [
+    {
+     "el": "#rv-home-send「Kontostandsübersicht」",
+     "sw": 170,
+     "cw": 160
+    },
+    {
+     "el": "#rv-home-more「Einstellungen」",
+     "sw": 109,
+     "cw": 103
+    },
+    {
+     "el": "#rv-home-backup「Überweisung verkäuferm」",
+     "sw": 227,
+     "cw": 137
+    },
+    {
+     "el": "#rp-open「Empfangsadresse」",
+     "sw": 89,
+     "cw": 78
+    }
+   ],
+   "pseudo": {
+    "lang": "de",
+    "changed": 849
+   }
+  },
+  {
+   "screen": "wallet",
+   "width": 1024,
+   "theme": "dark",
+   "lang": "de",
+   "docOverflow": 0,
+   "overflow": 0,
+   "clipped": [
+    {
+     "el": "#rp-open「Empfangsadresse」",
+     "sw": 89,
+     "cw": 78
+    }
+   ],
+   "pseudo": {
+    "lang": "de",
+    "changed": 849
+   }
+  },
+  {
+   "screen": "assets",
+   "width": 1024,
+   "theme": "dark",
+   "lang": "de",
+   "docOverflow": 0,
+   "overflow": 0,
+   "clipped": [
+    {
+     "el": "#rp-open「Empfangsadresse」",
+     "sw": 89,
+     "cw": 78
+    }
+   ],
+   "pseudo": {
+    "lang": "de",
+    "changed": 849
+   }
+  },
+  {
+   "screen": "games",
+   "width": 1024,
+   "theme": "dark",
+   "lang": "de",
+   "docOverflow": 0,
+   "overflow": 0,
+   "clipped": [
+    {
+     "el": "#rp-open「Empfangsadresse」",
+     "sw": 89,
+     "cw": 78
+    }
+   ],
+   "pseudo": {
+    "lang": "de",
+    "changed": 849
+   }
+  },
+  {
+   "screen": "settings",
+   "width": 1024,
+   "theme": "dark",
+   "lang": "de",
+   "docOverflow": 0,
+   "overflow": 0,
+   "clipped": [
+    {
+     "el": "#rp-open「Empfangsadresse」",
+     "sw": 89,
+     "cw": 78
+    }
+   ],
+   "pseudo": {
+    "lang": "de",
+    "changed": 849
+   }
+  },
+  {
+   "screen": "home",
+   "width": 1024,
+   "theme": "dark",
+   "lang": "ru",
+   "docOverflow": 0,
+   "overflow": 0,
+   "clipped": [
+    {
+     "el": "#rv-home-more「Подтверждение」",
+     "sw": 127,
+     "cw": 115
+    },
+    {
+     "el": "#rp-open「Подтверждение настройк」",
+     "sw": 89,
+     "cw": 78
+    }
+   ],
+   "pseudo": {
+    "lang": "ru",
+    "changed": 849
+   }
+  },
+  {
+   "screen": "wallet",
+   "width": 1024,
+   "theme": "dark",
+   "lang": "ru",
+   "docOverflow": 0,
+   "overflow": 0,
+   "clipped": [
+    {
+     "el": "#rp-open「Подтверждение настройк」",
+     "sw": 89,
+     "cw": 78
+    }
+   ],
+   "pseudo": {
+    "lang": "ru",
+    "changed": 849
+   }
+  },
+  {
+   "screen": "assets",
+   "width": 1024,
+   "theme": "dark",
+   "lang": "ru",
+   "docOverflow": 0,
+   "overflow": 0,
+   "clipped": [
+    {
+     "el": "#rp-open「Подтверждение настройк」",
+     "sw": 89,
+     "cw": 78
+    }
+   ],
+   "pseudo": {
+    "lang": "ru",
+    "changed": 849
+   }
+  },
+  {
+   "screen": "games",
+   "width": 1024,
+   "theme": "dark",
+   "lang": "ru",
+   "docOverflow": 0,
+   "overflow": 0,
+   "clipped": [
+    {
+     "el": "#rp-open「Подтверждение настройк」",
+     "sw": 89,
+     "cw": 78
+    }
+   ],
+   "pseudo": {
+    "lang": "ru",
+    "changed": 849
+   }
+  },
+  {
+   "screen": "settings",
+   "width": 1024,
+   "theme": "dark",
+   "lang": "ru",
+   "docOverflow": 0,
+   "overflow": 0,
+   "clipped": [
+    {
+     "el": "#rp-open「Подтверждение настройк」",
+     "sw": 89,
+     "cw": 78
+    }
+   ],
+   "pseudo": {
+    "lang": "ru",
+    "changed": 849
+   }
+  },
+  {
+   "screen": "home",
+   "width": 1440,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 55,
+   "hoverGhost": []
+  },
+  {
+   "screen": "wallet",
+   "width": 1440,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 29,
+   "hoverGhost": []
+  },
+  {
+   "screen": "wallet-receive",
+   "width": 1440,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 31,
+   "hoverGhost": []
+  },
+  {
+   "screen": "wallet-send",
+   "width": 1440,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 36,
+   "hoverGhost": []
+  },
+  {
+   "screen": "wallet-restore",
+   "width": 1440,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 29,
+   "hoverGhost": []
+  },
+  {
+   "screen": "assets",
+   "width": 1440,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 44,
+   "hoverGhost": []
+  },
+  {
+   "screen": "sales",
+   "width": 1440,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 25,
+   "hoverGhost": []
+  },
+  {
+   "screen": "games",
+   "width": 1440,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 13,
+   "hoverGhost": []
+  },
+  {
+   "screen": "market",
+   "width": 1440,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 19,
+   "hoverGhost": []
+  },
+  {
+   "screen": "creator",
+   "width": 1440,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 52,
+   "hoverGhost": []
+  },
+  {
+   "screen": "ravi",
+   "width": 1440,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 10,
+   "hoverGhost": []
+  },
+  {
+   "screen": "settings",
+   "width": 1440,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 112,
+   "hoverGhost": []
+  },
+  {
+   "screen": "shop",
+   "width": 1440,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 28,
+   "hoverGhost": []
+  },
+  {
+   "screen": "dialog-backup",
+   "width": 1440,
+   "theme": "light",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 55,
+   "hoverGhost": []
+  },
+  {
+   "screen": "home",
+   "width": 1440,
+   "theme": "light",
+   "lang": "de",
+   "docOverflow": 0,
+   "overflow": 0,
+   "clipped": [
+    {
+     "el": "#rp-open「Empfangsadresse」",
+     "sw": 89,
+     "cw": 78
+    }
+   ],
+   "pseudo": {
+    "lang": "de",
+    "changed": 849
+   }
+  },
+  {
+   "screen": "wallet",
+   "width": 1440,
+   "theme": "light",
+   "lang": "de",
+   "docOverflow": 0,
+   "overflow": 0,
+   "clipped": [
+    {
+     "el": "#rp-open「Empfangsadresse」",
+     "sw": 89,
+     "cw": 78
+    }
+   ],
+   "pseudo": {
+    "lang": "de",
+    "changed": 849
+   }
+  },
+  {
+   "screen": "assets",
+   "width": 1440,
+   "theme": "light",
+   "lang": "de",
+   "docOverflow": 0,
+   "overflow": 0,
+   "clipped": [
+    {
+     "el": "#rp-open「Empfangsadresse」",
+     "sw": 89,
+     "cw": 78
+    }
+   ],
+   "pseudo": {
+    "lang": "de",
+    "changed": 849
+   }
+  },
+  {
+   "screen": "games",
+   "width": 1440,
+   "theme": "light",
+   "lang": "de",
+   "docOverflow": 0,
+   "overflow": 0,
+   "clipped": [
+    {
+     "el": "#rp-open「Empfangsadresse」",
+     "sw": 89,
+     "cw": 78
+    }
+   ],
+   "pseudo": {
+    "lang": "de",
+    "changed": 849
+   }
+  },
+  {
+   "screen": "settings",
+   "width": 1440,
+   "theme": "light",
+   "lang": "de",
+   "docOverflow": 0,
+   "overflow": 0,
+   "clipped": [
+    {
+     "el": "#rp-open「Empfangsadresse」",
+     "sw": 89,
+     "cw": 78
+    }
+   ],
+   "pseudo": {
+    "lang": "de",
+    "changed": 849
+   }
+  },
+  {
+   "screen": "home",
+   "width": 1440,
+   "theme": "light",
+   "lang": "ru",
+   "docOverflow": 0,
+   "overflow": 0,
+   "clipped": [
+    {
+     "el": "#rp-open「Подтверждение настройк」",
+     "sw": 89,
+     "cw": 78
+    }
+   ],
+   "pseudo": {
+    "lang": "ru",
+    "changed": 849
+   }
+  },
+  {
+   "screen": "wallet",
+   "width": 1440,
+   "theme": "light",
+   "lang": "ru",
+   "docOverflow": 0,
+   "overflow": 0,
+   "clipped": [
+    {
+     "el": "#rp-open「Подтверждение настройк」",
+     "sw": 89,
+     "cw": 78
+    }
+   ],
+   "pseudo": {
+    "lang": "ru",
+    "changed": 849
+   }
+  },
+  {
+   "screen": "assets",
+   "width": 1440,
+   "theme": "light",
+   "lang": "ru",
+   "docOverflow": 0,
+   "overflow": 0,
+   "clipped": [
+    {
+     "el": "#rp-open「Подтверждение настройк」",
+     "sw": 89,
+     "cw": 78
+    }
+   ],
+   "pseudo": {
+    "lang": "ru",
+    "changed": 849
+   }
+  },
+  {
+   "screen": "games",
+   "width": 1440,
+   "theme": "light",
+   "lang": "ru",
+   "docOverflow": 0,
+   "overflow": 0,
+   "clipped": [
+    {
+     "el": "#rp-open「Подтверждение настройк」",
+     "sw": 89,
+     "cw": 78
+    }
+   ],
+   "pseudo": {
+    "lang": "ru",
+    "changed": 849
+   }
+  },
+  {
+   "screen": "settings",
+   "width": 1440,
+   "theme": "light",
+   "lang": "ru",
+   "docOverflow": 0,
+   "overflow": 0,
+   "clipped": [
+    {
+     "el": "#rp-open「Подтверждение настройк」",
+     "sw": 89,
+     "cw": 78
+    }
+   ],
+   "pseudo": {
+    "lang": "ru",
+    "changed": 849
+   }
+  },
+  {
+   "screen": "home",
+   "width": 1440,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 55,
+   "hoverGhost": []
+  },
+  {
+   "screen": "wallet",
+   "width": 1440,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 29,
+   "hoverGhost": []
+  },
+  {
+   "screen": "wallet-receive",
+   "width": 1440,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 31,
+   "hoverGhost": []
+  },
+  {
+   "screen": "wallet-send",
+   "width": 1440,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 36,
+   "hoverGhost": []
+  },
+  {
+   "screen": "wallet-restore",
+   "width": 1440,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 29,
+   "hoverGhost": []
+  },
+  {
+   "screen": "assets",
+   "width": 1440,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 44,
+   "hoverGhost": []
+  },
+  {
+   "screen": "sales",
+   "width": 1440,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 25,
+   "hoverGhost": []
+  },
+  {
+   "screen": "games",
+   "width": 1440,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 13,
+   "hoverGhost": []
+  },
+  {
+   "screen": "market",
+   "width": 1440,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 19,
+   "hoverGhost": []
+  },
+  {
+   "screen": "creator",
+   "width": 1440,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 52,
+   "hoverGhost": []
+  },
+  {
+   "screen": "ravi",
+   "width": 1440,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 10,
+   "hoverGhost": []
+  },
+  {
+   "screen": "settings",
+   "width": 1440,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 112,
+   "hoverGhost": []
+  },
+  {
+   "screen": "shop",
+   "width": 1440,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 28,
+   "hoverGhost": []
+  },
+  {
+   "screen": "dialog-backup",
+   "width": 1440,
+   "theme": "dark",
+   "contrast": [],
+   "overflow": [],
+   "clipped": [],
+   "tiny": [
+    {
+     "el": "#appver「v0.8.4」",
+     "px": 11
+    },
+    {
+     "el": "#upnag「확인 중…」",
+     "px": 11
+    },
+    {
+     "el": "span「홈」",
+     "px": 11
+    },
+    {
+     "el": "span「자산」",
+     "px": 11
+    },
+    {
+     "el": "#navmore-t「더 보기」",
+     "px": 11
+    },
+    {
+     "el": "#rp-open「문제 알리기」",
+     "px": 11.5
+    },
+    {
+     "el": "#d-sum-t「바깥 연결 끊김」",
+     "px": 11
+    }
+   ],
+   "small": [
+    {
+     "el": "#appver「v0.8.4」",
+     "w": 80,
+     "h": 22
+    }
+   ],
+   "docOverflow": 0,
+   "texts": 55,
+   "hoverGhost": []
+  },
+  {
+   "screen": "home",
+   "width": 1440,
+   "theme": "dark",
+   "lang": "de",
+   "docOverflow": 0,
+   "overflow": 0,
+   "clipped": [
+    {
+     "el": "#rp-open「Empfangsadresse」",
+     "sw": 89,
+     "cw": 78
+    }
+   ],
+   "pseudo": {
+    "lang": "de",
+    "changed": 849
+   }
+  },
+  {
+   "screen": "wallet",
+   "width": 1440,
+   "theme": "dark",
+   "lang": "de",
+   "docOverflow": 0,
+   "overflow": 0,
+   "clipped": [
+    {
+     "el": "#rp-open「Empfangsadresse」",
+     "sw": 89,
+     "cw": 78
+    }
+   ],
+   "pseudo": {
+    "lang": "de",
+    "changed": 849
+   }
+  },
+  {
+   "screen": "assets",
+   "width": 1440,
+   "theme": "dark",
+   "lang": "de",
+   "docOverflow": 0,
+   "overflow": 0,
+   "clipped": [
+    {
+     "el": "#rp-open「Empfangsadresse」",
+     "sw": 89,
+     "cw": 78
+    }
+   ],
+   "pseudo": {
+    "lang": "de",
+    "changed": 849
+   }
+  },
+  {
+   "screen": "games",
+   "width": 1440,
+   "theme": "dark",
+   "lang": "de",
+   "docOverflow": 0,
+   "overflow": 0,
+   "clipped": [
+    {
+     "el": "#rp-open「Empfangsadresse」",
+     "sw": 89,
+     "cw": 78
+    }
+   ],
+   "pseudo": {
+    "lang": "de",
+    "changed": 849
+   }
+  },
+  {
+   "screen": "settings",
+   "width": 1440,
+   "theme": "dark",
+   "lang": "de",
+   "docOverflow": 0,
+   "overflow": 0,
+   "clipped": [
+    {
+     "el": "#rp-open「Empfangsadresse」",
+     "sw": 89,
+     "cw": 78
+    }
+   ],
+   "pseudo": {
+    "lang": "de",
+    "changed": 849
+   }
+  },
+  {
+   "screen": "home",
+   "width": 1440,
+   "theme": "dark",
+   "lang": "ru",
+   "docOverflow": 0,
+   "overflow": 0,
+   "clipped": [
+    {
+     "el": "#rp-open「Подтверждение настройк」",
+     "sw": 89,
+     "cw": 78
+    }
+   ],
+   "pseudo": {
+    "lang": "ru",
+    "changed": 849
+   }
+  },
+  {
+   "screen": "wallet",
+   "width": 1440,
+   "theme": "dark",
+   "lang": "ru",
+   "docOverflow": 0,
+   "overflow": 0,
+   "clipped": [
+    {
+     "el": "#rp-open「Подтверждение настройк」",
+     "sw": 89,
+     "cw": 78
+    }
+   ],
+   "pseudo": {
+    "lang": "ru",
+    "changed": 849
+   }
+  },
+  {
+   "screen": "assets",
+   "width": 1440,
+   "theme": "dark",
+   "lang": "ru",
+   "docOverflow": 0,
+   "overflow": 0,
+   "clipped": [
+    {
+     "el": "#rp-open「Подтверждение настройк」",
+     "sw": 89,
+     "cw": 78
+    }
+   ],
+   "pseudo": {
+    "lang": "ru",
+    "changed": 849
+   }
+  },
+  {
+   "screen": "games",
+   "width": 1440,
+   "theme": "dark",
+   "lang": "ru",
+   "docOverflow": 0,
+   "overflow": 0,
+   "clipped": [
+    {
+     "el": "#rp-open「Подтверждение настройк」",
+     "sw": 89,
+     "cw": 78
+    }
+   ],
+   "pseudo": {
+    "lang": "ru",
+    "changed": 849
+   }
+  },
+  {
+   "screen": "settings",
+   "width": 1440,
+   "theme": "dark",
+   "lang": "ru",
+   "docOverflow": 0,
+   "overflow": 0,
+   "clipped": [
+    {
+     "el": "#rp-open「Подтверждение настройк」",
+     "sw": 89,
+     "cw": 78
+    }
+   ],
+   "pseudo": {
+    "lang": "ru",
+    "changed": 849
+   }
+  }
+ ],
+ "font": {
+  "declared": "\"IBM Plex Sans KR\", system-ui, sans-serif",
+  "rendered": [
+   {
+    "familyName": "IBM Plex Sans KR",
+    "postScriptName": "IBMPlexSansKR",
+    "isCustomFont": true,
+    "glyphCount": 26
+   },
+   {
+    "familyName": ".SF NS",
+    "postScriptName": ".SFNS-Regular",
+    "isCustomFont": false,
+    "glyphCount": 14
+   }
+  ]
+ }
+}

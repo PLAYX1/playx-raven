@@ -41,6 +41,8 @@ pub fn command_allowed(label: &str, command: &str) -> bool {
 
 pub fn dims(size: &str) -> (f64, f64) {
     match size {
+        // 칩(표시 방식 「칩」) — 점 + 숫자 한 줄. docs/design/window-modes.md
+        "xs" => (160.0, 40.0),
         "s" => (220.0, 60.0),
         "l" => (360.0, 260.0),
         _ => (300.0, 140.0),
@@ -92,7 +94,7 @@ impl Default for Settings {
 
 impl Settings {
     pub fn valid(&self) -> bool {
-        ["s", "m", "l"].contains(&self.size.as_str())
+        ["xs", "s", "m", "l"].contains(&self.size.as_str())
             && (1..=12).contains(&self.need)
             && (-840..=840).contains(&self.tz)
             && ["ko", "en"].contains(&self.locale.as_str())
@@ -130,6 +132,7 @@ pub fn apply(mut s: Settings, p: Prefs) -> Result<Settings, String> {
 #[cfg_attr(not(test), allow(dead_code))] // 화면(mini-view.ts nextSize)과 같은 순서 — 시험이 묶는다.
 pub fn next_size(size: &str) -> &'static str {
     match size {
+        "xs" => "s",
         "s" => "m",
         "m" => "l",
         _ => "s",
@@ -198,7 +201,7 @@ pub fn visible(app: &tauri::AppHandle) -> bool {
 
 /// 노드에 물어볼 이유가 있나 — 창이 보이거나, 한 번 써 본 사람이 OS 알림을 켜 두었을 때만.
 pub fn watch_wanted(app: &tauri::AppHandle) -> bool {
-    visible(app) || (app.state::<Mini>().enabled.load(Ordering::Relaxed) && settings(app).os_notify)
+    visible(app) || crate::display_mode::wants_watch(app) || (app.state::<Mini>().enabled.load(Ordering::Relaxed) && settings(app).os_notify)
 }
 
 fn ui_settings(s: &Settings) -> Value {
@@ -239,6 +242,7 @@ pub fn snapshot(app: &tauri::AppHandle) -> Value {
 }
 
 pub fn push_snapshot(app: &tauri::AppHandle) {
+    crate::display_mode::on_snapshot(app);
     if visible(app) {
         let _ = app.emit_to(LABEL, "mini-snapshot", snapshot(app));
     }
@@ -427,7 +431,9 @@ pub fn badge(app: &tauri::AppHandle, unseen: u32) {
     let k = ko(app);
     if let Some(tray) = app.tray_by_id("main") {
         // macOS: 메뉴막대 아이콘 옆 글자. 윈도우·리눅스는 툴팁으로 대신한다.
-        let _ = tray.set_title(if unseen > 0 { Some(format!("{}", unseen.min(99))) } else { None });
+        if crate::display_mode::badge_sets_title(app) {
+            let _ = tray.set_title(if unseen > 0 { Some(format!("{}", unseen.min(99))) } else { None });
+        }
         let base = if k { "레이븐볼트 · 라비" } else { "RavenVault · Ravi" };
         let _ = tray.set_tooltip(Some(if unseen > 0 {
             if k { format!("{base} · 새 소식 {unseen}") } else { format!("{base} · {unseen} new") }
@@ -632,6 +638,9 @@ mod tests {
         assert!(serde_json::from_str::<Prefs>(r#"{"x":5}"#).is_err(), "위치는 창이 정한다");
         assert_eq!((next_size("s"), next_size("m"), next_size("l")), ("m", "l", "s"));
         assert_eq!(dims("s"), (220.0, 60.0));
+        assert_eq!(dims("xs"), (160.0, 40.0));
+        assert_eq!(next_size("xs"), "s", "칩을 두 번 누르면 한 줄(S)로 펼친다");
+        assert!(apply(Settings::default(), Prefs { size: Some("xs".into()), ..Prefs::default() }).is_ok());
         assert_eq!(dims("m"), (300.0, 140.0));
         assert_eq!(dims("l"), (360.0, 260.0));
     }
