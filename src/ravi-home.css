@@ -158,7 +158,7 @@ main:has(> #page-home.on) { padding:10px 24px; }
 #page-home #overview-incoming-row { display:block; min-width:0; font-size:15px; line-height:20px; color:var(--home-muted); }
 #page-home #overview-incoming { display:block; font-size:15px; font-variant-numeric:tabular-nums; }
 #page-home .overview-actions { display:flex; gap:8px; }
-#page-home .overview-actions button { min-height:44px !important; }
+#page-home .overview-actions button { min-height:44px !important; border-radius:6px; }
 #page-home #rv-home-send { order:0; min-width:100px; background:var(--home-action); color:var(--home-on-action); }
 #page-home #overview-receive { order:0; }
 #page-home .rv-home-safety { display:block; }
@@ -194,6 +194,9 @@ main:has(> #page-home.on) { padding:10px 24px; }
 #page-home summary { cursor:pointer; padding:6px 0; color:var(--home-ink); }
 #page-home summary span { margin-left:8px; color:var(--home-muted); }
 #page-home .rv-home-shortcuts { display:flex; gap:8px; margin-top:6px; flex-wrap:wrap; }
+/* Closed details must remove secondary controls from layout as well as Tab.
+   Do not rely on the browser's skipped-content layout for these flex children. */
+#page-home #rv-home-extras:not([open]) > .rv-home-shortcuts { display:none; }
 #page-home > .seed-recovery { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:56px; margin:8px 0 0; padding:5px 12px; width:100%; border:1px solid var(--home-warn); border-radius:16px; background:var(--home-tint); color:var(--home-ink); font-size:15px; line-height:22px; }
 #page-home > .seed-recovery button { flex:none; background:var(--home-action); color:var(--home-on-action); }
 #page-home [hidden] { display:none !important; }

@@ -2,6 +2,7 @@
 // No render-function fixture, HTML replacement, addStyleTag or source bundling.
 // Usage: npm run build && node scripts/check-home-browser.mjs
 // Baseline: node scripts/check-home-browser.mjs --baseline --dist /path/to/old/dist
+// Separate evidence: node scripts/check-home-browser.mjs --out docs/handoff/homefit2-captures
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
 import {readFile, stat} from 'node:fs/promises';
@@ -15,7 +16,7 @@ const root = resolve(import.meta.dirname, '..');
 const args = process.argv.slice(2), baseline = args.includes('--baseline');
 const dist = resolve(root, args.includes('--dist') ? args[args.indexOf('--dist') + 1] : 'dist');
 const phase = baseline ? 'before' : 'after';
-const out = join(root, 'docs/handoff/home-captures');
+const out = resolve(root, args.includes('--out') ? args[args.indexOf('--out') + 1] : 'docs/handoff/home-captures');
 mkdirSync(out, {recursive:true});
 const evidence = {status:'running', phase, kind:'production dist / real Chrome geometry',
   fixture:'synthetic unlocked wallet; 42.125 RVN; 8 transactions; 3 assets; one AI provider available (no key material)',
@@ -139,7 +140,19 @@ export function measureHome() {
     escaped:[...el.querySelectorAll('button,p,.rv-home-entry,.rv-home-signals,h2,summary')].filter(shown).filter(c=>{
       const a=el.getBoundingClientRect(), b=c.getBoundingClientRect();return b.bottom>a.bottom+.5||b.right>a.right+.5||b.left<a.left-.5||b.top<a.top-.5;
     }).map(describe)}));
-  const controls=[...document.querySelectorAll('#page-home button,#page-home summary')].filter(shown).map(el=>({selector:describe(el),...rect(el), visible:visible(el)}));
+  const controls=[...document.querySelectorAll('#page-home button,#page-home summary')].filter(shown).map(el=>{
+    const r=rect(el), clippingAncestors=[];
+    for(let p=el.parentElement;p;p=p.parentElement){
+      const s=getComputedStyle(p),b=p.getBoundingClientRect();
+      if((/auto|scroll|hidden|clip/.test(s.overflowY)&&(r.y<b.top-.5||r.bottom>b.bottom+.5))||
+         (/auto|scroll|hidden|clip/.test(s.overflowX)&&(r.x<b.left-.5||r.right>b.right+.5)))clippingAncestors.push(describe(p));
+    }
+    const hitTests=[[r.x+2,r.y+2],[r.right-2,r.bottom-2],[r.x+r.width/2,r.y+r.height/2]].map(([x,y])=>{
+      const top=document.elementFromPoint(x,y);
+      return {x,y,top:top?describe(top):null,owned:!!top&&(el.contains(top)||top.contains(el))};
+    });
+    return {selector:describe(el),name:el.getAttribute('aria-label')||el.textContent.trim(),...r,visible:visible(el),clippingAncestors,hitTests};
+  });
   const rgb = color => {const v=color.match(/[\d.]+/g)?.map(Number); return v?.length>=3 ? [v[0]/255,v[1]/255,v[2]/255,v[3]??1] : [0,0,0,0];};
   const over=(a,b)=>[...a.slice(0,3).map((x,i)=>x*a[3]+b[i]*(1-a[3])),1];
   const bg=el=>{const chain=[];for(let p=el;p;p=p.parentElement)chain.unshift(p);return chain.reduce((c,p)=>over(rgb(getComputedStyle(p).backgroundColor),c),[1,1,1,1]);};
@@ -224,13 +237,17 @@ try {
       check(Object.values(result.elements).every(e=>e.visible),'core element clipped/occluded/outside first screen');
       check(result.cards.every(c=>c.visible&&c.escaped.length===0),'card content clipped/escaped');
       check(result.controls.every(c=>c.height>=36&&c.width>=36&&c.visible),'control below 36px or outside viewport');
+      const controlFailures=result.controls.filter(c=>c.height<36||c.width<36||!c.visible);
       check(result.contrast.every(c=>c.ratio>=4.5),'text contrast below 4.5:1');
       const salesText=await page.$eval('#rv-home-today-body',el=>el.textContent);
       check(sales?salesText.includes('32,500')&&salesText.includes('KRW'):salesText.includes('아직 가게가 없습니다'),'wrong sales fixture rendered');
       check(['wallet_balance','wallet_lock_state','recent_transactions','list_assets','api_key_status','shop_load'].every(c=>result.fixture.calls.includes(c)),'production app did not consume required fixtures');
       check(await page.$$eval('input[type="password"]',els=>els.every(el=>!el.value)),'unexpected credential field value');
       check(await page.$eval('#sales-public',el=>el.children.length===0),'sales disclosure must remain concealed');
+      const keyboard={};
       if(!baseline){
+        const readingCards=[...result.cards].sort((a,b)=>a.rect.y-b.rect.y||a.rect.x-b.rect.x).map(c=>c.selector);
+        check(JSON.stringify(readingCards)===JSON.stringify(result.cards.map(c=>c.selector)),'card DOM order differs from visual reading order');
         check(result.extras?.visible,'missing more disclosure');
         check(result.extras?.open===(width>1100&&height>680),'incorrect responsive disclosure state');
         if(width===1024){
@@ -244,15 +261,18 @@ try {
         const expected=await page.$$eval('#page-home button,#page-home summary',els=>els.filter(el=>el.getClientRects().length&&!el.disabled).map(el=>el.id||el.tagName));
         await page.focus('#rv-home-send');const actual=[];
         for(let i=0;i<expected.length;i++){actual.push(await page.evaluate(()=>document.activeElement.id||document.activeElement.tagName));await page.keyboard.press('Tab');}
+        Object.assign(keyboard,{expected,actual});
         check(JSON.stringify(actual)===JSON.stringify(expected),'keyboard order differs from reading order');
         await page.focus('#ravi-open');await page.keyboard.press('Enter');
         await page.waitForFunction(()=>!document.querySelector('#ravi-panel').hidden);
         await page.keyboard.press('Escape');
+        keyboard.focusAfterEscape=await page.evaluate(()=>document.activeElement.id||document.activeElement.tagName);
         check(await page.evaluate(()=>document.querySelector('#ravi-panel').hidden&&document.activeElement.id==='ravi-open'),'conversation close must return focus to the visible home control');
         check(errors.length===0,'browser error during keyboard checks');
       }
-      evidence.checks.push({...result,sales,screenshot:filename,blockedRequests,browserErrors:errors,failures});
+      evidence.checks.push({...result,sales,screenshot:filename,blockedRequests,browserErrors:errors,failures,controlFailures,keyboard});
       console.log(`${baseline?'BASELINE':failures.length?'FAIL':'PASS'} ${width}x${height} ${theme} ${sales?'sales':'no-sales'}: y=${result.vertical}px x=${result.horizontal}px`);
+      if(failures.length)console.log(JSON.stringify({failures,controlFailures,keyboard},null,2));
     }catch(error){
       const filename=`${phase}-${width}x${height}-${theme}-${sales?'sales':'no-sales'}-error.png`;
       await page.screenshot({path:join(out,filename)});

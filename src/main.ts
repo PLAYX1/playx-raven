@@ -17925,7 +17925,14 @@ window.addEventListener("DOMContentLoaded", async () => {
     button.onclick = () => setLang(button.dataset.language as typeof lang);
   });
   $("desktop-settings-go").onclick = () => { closeLanguages(); showPage("settings"); document.querySelector("main")!.scrollTop = 0; };
-  document.addEventListener("keydown", event => { if (event.key === "Escape") { closeLanguages(); languageButton.focus(); } });
+  document.addEventListener("keydown", event => {
+    // A closed language menu must not steal Escape/focus from the Ravi panel.
+    if (event.key !== "Escape" || event.defaultPrevented || languageMenu.hidden) return;
+    const ownedFocus = languageMenu.contains(document.activeElement) || document.activeElement === languageButton;
+    closeLanguages();
+    event.preventDefault();
+    if (ownedFocus) languageButton.focus({ preventScroll: true });
+  });
   document.addEventListener("click", event => { if (!(event.target as Element).closest(".desktop-header")) closeLanguages(); });
   const syncLanguage = () => {
     $("desktop-language-name").textContent = LANG_NAMES[lang];

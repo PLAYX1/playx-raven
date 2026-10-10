@@ -3669,25 +3669,32 @@
            같은 길이라 배울 것이 하나뿐이다. -->
       <section class="page on" id="page-home">
         <h1>홈</h1>
+        <!-- DOM/Tab and two-column reading order: balance → safety → transactions → Ravi → sales → extras. -->
         <div class="rv-home-grid">
           <div class="rv-home-balance">
             <div class="overview" aria-labelledby="overview-title">
               <h2 id="overview-title">완료 잔액</h2>
               <div class="overview-values"><strong id="overview-balance">확인 못 함</strong><span id="overview-incoming-row" hidden>들어오는 중 <strong id="overview-incoming"></strong></span></div>
-              <div class="overview-actions"><button id="rv-home-send" type="button">보내기</button><button id="overview-receive" type="button">받기</button><button id="rv-home-more" class="ghost" type="button">더 보기</button></div>
+              <div class="overview-actions" role="group" aria-label="잔액 관련 작업"><button id="rv-home-send" type="button">보내기</button><button id="overview-receive" type="button">받기</button><button id="rv-home-more" class="ghost" type="button">더 보기</button></div>
             </div>
           </div>
           <div class="rv-home-safety">
-            <div class="rv-home-heading"><h2>안전 상태</h2><button id="rv-home-backup" class="ghost" type="button">백업 확인</button></div>
+            <div class="rv-home-heading"><h2>알림 · 할 일</h2><button id="rv-home-backup" class="ghost" type="button">백업 확인</button></div>
             <div id="rv-home-safe" class="rv-home-signals" role="status"><span id="rv-home-backup-state" data-tone="warn">백업 확인 중</span><span id="rv-home-lock-state" data-tone="warn">잠금 확인 중</span><span id="rv-home-server-state" data-tone="warn">서버 <span id="overview-node">확인 못 함</span></span></div>
+            <p class="rv-home-address-note">보내기 전 받는 주소를 다시 확인하세요.</p>
           </div>
+          <div class="rv-home-activity"><div class="rv-home-heading"><h2>최근 거래</h2><button id="rv-home-activity-all" class="ghost" type="button">모두 보기</button></div><div id="rv-home-txs"></div></div>
           <div id="ravi-home-slot" role="region" aria-label="라비"></div>
           <div class="rv-home-today" id="rv-home-today">
-            <div class="rv-home-heading"><h2>오늘 가게</h2><button id="rv-home-shop" class="ghost" type="button">더 보기</button></div>
+            <div class="rv-home-heading"><h2>가게 매출 · 오늘</h2><button id="rv-home-shop" class="ghost" type="button">매출 보기</button></div>
             <div id="rv-home-today-body"><p>가게 상태를 확인하는 중…</p></div>
           </div>
-          <div class="rv-home-activity"><div class="rv-home-heading"><h2>최근 활동</h2><button id="rv-home-activity-all" class="ghost" type="button">모두 보기</button></div><div id="rv-home-txs"></div></div>
-          <div class="rv-home-chats"><div class="rv-home-heading"><h2>최근 대화</h2><button id="rv-home-chat" class="ghost" type="button">대화 열기</button></div><div id="rv-home-rooms"></div></div>
+          <div class="rv-home-extras">
+            <details id="rv-home-extras" open>
+              <summary>더 보기 <span>가까운 가게 · 게임 · 대화</span></summary>
+              <div class="rv-home-shortcuts"><button id="rv-home-nearby" class="ghost" type="button">가까운 가게</button><button id="rv-home-games" class="ghost" type="button">게임</button><button id="rv-home-chat" class="ghost" type="button">대화</button><button id="rv-home-sales" class="ghost" type="button">판매 계정</button></div>
+            </details>
+          </div>
         </div>
       </section>
       <section class="page" id="page-sales">

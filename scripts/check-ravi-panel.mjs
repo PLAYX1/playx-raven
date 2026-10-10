@@ -10,7 +10,10 @@ const storage=new Map();
 function fixture({brokenStorage=false, saved}={}) {
   if(saved!==undefined)storage.set('ravenvault-ravi-panel',saved);
   const nodes=new Map(),docListeners=new Map(),mutations=[],resizes=[];
-  const doc={activeElement:null,getElementById:id=>el(id),addEventListener:(name,fn)=>docListeners.set(name,fn)};
+  const doc={activeElement:null,getElementById:id=>el(id),addEventListener(name,fn){
+    const previous=docListeners.get(name);
+    docListeners.set(name,event=>{previous?.(event);fn(event);});
+  }};
   function el(id){
     if(nodes.has(id))return nodes.get(id);
     let top=0; const classes=new Set(),listeners=new Map();
@@ -46,7 +49,7 @@ f.el('ravi-new').onclick();assert.equal(log.scrollTop,1305);assert.equal(f.el('r
 log.clientHeight=400;f.resizes[0]();assert.equal(log.scrollTop,1145,'resize retains following mode');
 // Enter sends, while Shift+Enter and IME composition retain browser editing behavior.
 let prevented=0;
-const key=overrides=>({key:'Enter',shiftKey:false,isComposing:false,preventDefault(){prevented++;},...overrides});
+const key=overrides=>({key:'Enter',shiftKey:false,isComposing:false,defaultPrevented:false,preventDefault(){prevented++;this.defaultPrevented=true;},...overrides});
 f.el('chat-q').emit('keydown',key({}));assert.equal(f.sent,1);assert.equal(prevented,1);
 f.el('chat-q').emit('keydown',key({shiftKey:true}));f.el('chat-q').emit('keydown',key({isComposing:true}));
 assert.equal(f.sent,1);assert.equal(prevented,1);
@@ -72,6 +75,34 @@ f=fixture({saved:'{corrupted'});assert.equal(f.panel.visible(),false);
 console.log('PASS production panel: shared DOM, bottom follow, dynamic content/resize, reader position/new-reply chip, Enter/Shift+Enter/IME, send focus/late focus, nonmodal Escape, stored open/size, approval pause, unavailable/corrupt storage');
 // Execute production chatSend with a delayed reply. Sending twice must not duplicate a request.
 const main=ts.createSourceFile('main.ts',readFileSync('src/main.ts','utf8'),ts.ScriptTarget.Latest,true);
+// Run the real desktop Escape listener alongside the real panel controller.
+// Testing the panel alone missed the later listener stealing restored focus.
+let languageListener;
+function findLanguageListener(node){
+  if(ts.isCallExpression(node)&&node.expression.getText(main)==='document.addEventListener'&&
+    node.arguments[0]?.text==='keydown'&&node.arguments[1]?.getText(main).includes('closeLanguages'))languageListener=node;
+  ts.forEachChild(node,findLanguageListener);
+}
+findLanguageListener(main);assert.ok(languageListener,'desktop language Escape listener exists');
+const focusFixture=fixture(),languageMenu=focusFixture.el('desktop-language-menu'),languageButton=focusFixture.el('desktop-preferences');
+languageMenu.hidden=true;
+const closeLanguages=()=>{languageMenu.hidden=true;languageButton.setAttribute('aria-expanded','false');};
+vm.runInNewContext(ts.transpileModule(languageListener.getText(main),{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText,
+  {document:focusFixture.doc,languageMenu,languageButton,closeLanguages});
+focusFixture.el('page-home').classList.toggle('on',true);
+focusFixture.el('ravi-open').onclick();
+focusFixture.docListeners.get('keydown')(key({key:'Escape'}));
+assert.equal(focusFixture.panel.visible(),false);
+assert.equal(focusFixture.doc.activeElement.id,'ravi-open','desktop listener must preserve panel return focus');
+languageMenu.hidden=false;focusFixture.el('language-choice').parent=languageMenu;focusFixture.el('language-choice').focus();
+focusFixture.docListeners.get('keydown')(key({key:'Escape'}));
+assert.equal(languageMenu.hidden,true);assert.equal(focusFixture.doc.activeElement.id,'desktop-preferences');
+languageMenu.hidden=false;focusFixture.el('ravi-open').focus();
+focusFixture.docListeners.get('keydown')(key({key:'Escape',defaultPrevented:true}));
+assert.equal(languageMenu.hidden,false,'another Escape owner is respected');
+focusFixture.docListeners.get('keydown')(key({key:'Escape'}));
+assert.equal(languageMenu.hidden,true);assert.equal(focusFixture.doc.activeElement.id,'ravi-open','closing a background menu does not steal focus');
+console.log('PASS home focus regression: production panel + desktop Escape listener, menu ownership, handled Escape');
 const send=main.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text==='chatSend').getText(main);
 f.panel.open();f.el('chat-q').value='synthetic question';let release,requests=0;
 const barrier=new Promise(r=>release=r);
