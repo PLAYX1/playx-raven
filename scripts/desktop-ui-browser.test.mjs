@@ -104,7 +104,7 @@ test('button text contrast >= 4.5:1 on every page (1024x640, 1440x900; light/dar
 
 // (2) Seller mode: the three sales entrances are absent for ordinary users (layout, Tab order,
 // accessibility tree and programmatic navigation) and appear only after the settings switch.
-const SELLER = ['nav a[data-page="sales"]', '#rv-home-sales', '#game-sales-open'];
+const SELLER = ['nav a[data-page="sales"]', '#rv-home-sales', '#game-sales-open', '#creator-open', '#page-creator'];
 const sellerState = page => page.evaluate(sels => sels.map(sel => { const el = document.querySelector(sel);
   return { sel, exists: !!el, hidden: !!el?.hidden, inert: !!el?.inert, rendered: !!el?.getClientRects().length }; }), SELLER);
 async function tabStops(page) {
@@ -122,12 +122,14 @@ test('seller mode: off by default (not rendered, not focusable, not in a11y tree
   await page.evaluate(() => { document.querySelector('nav')?.classList.add('more-open'); document.querySelector('#rv-home-extras')?.setAttribute('open', ''); });
   const stops = await tabStops(page);
   assert.ok(stops.length > 5, 'tab walk reached controls');
-  assert.ok(!stops.includes('sales') && !stops.includes('rv-home-sales') && !stops.includes('game-sales-open'), stops.join(','));
+  assert.ok(!stops.includes('sales') && !stops.includes('rv-home-sales') && !stops.includes('game-sales-open') && !stops.includes('creator-open') && !stops.some(s => String(s).startsWith('creator-')), stops.join(','));
   const names = await axNames(page);
-  assert.ok(!names.some(n => /판매 대금 받기|판매 계정/.test(n)), 'sales entrances leaked into accessibility tree');
+  assert.ok(!names.some(n => /판매 대금 받기|판매 계정|게임·음악 올리기/.test(n)), 'seller entrances leaked into accessibility tree');
   // Programmatic attempts (old saved page, scripted click) must not open the page.
   await page.evaluate(() => document.querySelector('nav a[data-page="sales"]').click());
   assert.equal(await page.$eval('#page-sales', p => p.classList.contains('on')), false);
+  await page.evaluate(() => document.querySelector('#creator-open').click());
+  assert.equal(await page.$eval('#page-creator', p => p.classList.contains('on')), false, 'creator page opened while seller mode is off');
   // Turn it on from settings.
   await page.click('nav a[data-page="settings"]');
   await page.waitForFunction(() => document.querySelector('#page-settings.on'));

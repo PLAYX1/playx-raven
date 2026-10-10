@@ -2,6 +2,8 @@
 import "./style-attrs";
 import "./sales-account.css";
 import { wireSalesAccount } from "./sales-account";
+import "./creator-publish.css";
+import { wireCreatorPublish } from "./creator-publish";
 import { openRaviStory } from "./desktop-links";
 import { homeSafety } from "./home-summary";
 import { installFirstRunBarrier, afterRaviLanding, deferUntilRaviLanding, finishRaviLanding } from "./firstrun";
@@ -4503,7 +4505,7 @@ function applySellerMode() {
   });
   const box = document.getElementById("seller-mode") as HTMLInputElement | null;
   if (box) box.checked = on;
-  if (!on && currentPage === "sales") showPage("settings");
+  if (!on && (currentPage === "sales" || currentPage === "creator")) showPage("settings");
 }
 let lastReceivedHomeTx: string | null = null;
 
@@ -4768,7 +4770,7 @@ let salesAccount: ReturnType<typeof wireSalesAccount> | undefined;
 
 function showPage(id: string) {
   // 판매자 기능이 꺼져 있으면 판매 화면은 열리지 않는다(메뉴가 숨겨진 것만으로는 부족하다).
-  if (id === "sales" && !sellerModeOn()) return;
+  if ((id === "sales" || id === "creator") && !sellerModeOn()) return;
   if (id !== currentPage) salesAccount?.hide();
   // 🔴 화면을 떠나면 그 화면 때문에 도는 타이머를 끈다.
   //
@@ -18263,6 +18265,9 @@ window.addEventListener("DOMContentLoaded", async () => {
     ask: () => ask("지갑 비밀번호 재인증", "판매 전용 번호를 만든 뒤 지갑을 바로 잠가요.", { password: true }) });
   $("sales-back").onclick = () => showPage("home");
   $("game-sales-open").onclick = () => showPage("sales");
+  $("creator-open").onclick = () => showPage("creator");
+  wireCreatorPublish({ invoke: (cmd, args) => invoke(cmd, args), back: () => showPage("games"),
+    askPassword: () => ask("지갑 비밀번호", "제작자 주소로 매니페스트에 서명한 뒤 지갑을 바로 잠가요.", { password: true }) });
   const sellerBox = $("seller-mode") as HTMLInputElement;
   sellerBox.onchange = () => {
     try { if (sellerBox.checked) localStorage.setItem(SELLER_MODE_KEY, "1"); else localStorage.removeItem(SELLER_MODE_KEY); } catch { sellerBox.checked = false; }

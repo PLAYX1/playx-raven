@@ -3734,7 +3734,90 @@
         <h1>게임</h1>
         <button class="card" id="ravi-story-open" type="button"><strong>라비 스토리</strong><span>기본 브라우저에서 게임 열기</span></button>
         <button type="button" id="game-sales-open" data-seller-only hidden inert>게임 판매 대금 받기</button>
+        <button type="button" id="creator-open" data-seller-only hidden inert>내 게임·음악 올리기</button>
         <p id="game-notice" role="status"></p>
+      </section>
+      <!-- 판매자 기능을 켠 사람만. 규칙은 core/creator, 화면 배선은 src/creator-publish.ts -->
+      <section class="page" id="page-creator" data-seller-only hidden inert>
+        <h1>내 게임·음악 올리기</h1>
+        <p>만든 게임이나 음악을 IPFS 에 올리고, 레이븐코인 자산으로 이름을 붙여요.</p>
+        <p class="creator-note" role="note">올리고 발행해도 처음에는 「미검증」이에요. 다른 사람에게는 외부 링크로만 보이고, 지갑 결제·로그인은 연결되지 않아요. 검증은 따로 신청해요.</p>
+        <div class="card">
+          <h2>1 · 무엇을 올릴까요?</h2>
+          <div class="creator-kinds" role="radiogroup" aria-label="올릴 종류">
+            <label class="check"><input type="radio" name="creator-type" value="game" checked /> 게임(웹 묶음)</label>
+            <label class="check"><input type="radio" name="creator-type" value="music" /> 음악(오디오 + 표지)</label>
+          </div>
+        </div>
+        <div class="card">
+          <h2>2 · 정보</h2>
+          <label class="creator-field">제목<input id="creator-title" maxlength="80" autocomplete="off" /></label>
+          <label class="creator-field">설명<textarea id="creator-desc" maxlength="2000" rows="3"></textarea></label>
+          <label class="creator-field">자산 이름(영문 대문자·숫자·점·밑줄)
+            <span class="creator-asset-row"><code id="creator-prefix"></code><input id="creator-asset" maxlength="30" autocomplete="off" spellcheck="false" /></span></label>
+          <p class="meta" id="creator-name-say" role="status"></p>
+          <p class="meta">앞부분(접두어)은 임시예요. 대표 결정에 따라 바뀔 수 있어요.</p>
+          <label class="creator-field">가격(RVN, 비우면 무료)<input id="creator-price" inputmode="decimal" autocomplete="off" /></label>
+          <p class="meta" id="creator-fee" role="status"></p>
+          <label class="creator-field">제작자 주소(이 주소로 서명해요)<span class="creator-asset-row"><input id="creator-address" autocomplete="off" spellcheck="false" placeholder="R…" /><button type="button" class="ghost" id="creator-new-address">새 주소 받기</button></span></label>
+          <label class="creator-field">판매 대금 받을 주소(비우면 제작자 주소)<input id="creator-receiving" autocomplete="off" spellcheck="false" placeholder="R…" /></label>
+          <div id="creator-game-fields">
+            <label class="creator-field">여는 파일<select id="creator-entry"></select></label>
+            <label class="creator-field">외부 링크(선택, https)<input id="creator-origin" autocomplete="off" spellcheck="false" placeholder="https://" /></label>
+            <label class="check"><input type="checkbox" id="creator-cap-identity" /> 지갑으로 로그인 요청(검증 뒤에만 켜져요)</label>
+            <label class="check"><input type="checkbox" id="creator-cap-payment" /> 지갑 결제 요청(검증 뒤에만 켜져요)</label>
+          </div>
+          <div id="creator-music-fields" hidden>
+            <label class="creator-field">미리듣기 파일<select id="creator-preview-file"></select></label>
+            <span class="creator-asset-row"><label class="creator-field">미리듣기 시작(초)<input id="creator-preview-start" inputmode="numeric" value="0" /></label>
+            <label class="creator-field">끝(초)<input id="creator-preview-end" inputmode="numeric" value="30" /></label></span>
+            <p class="meta">사기 전에 들을 수 있는 부분이에요. 60초까지 정할 수 있어요.</p>
+          </div>
+        </div>
+        <div class="card">
+          <h2>3 · 파일</h2>
+          <label class="creator-field">파일 고르기<input type="file" id="creator-files" multiple /></label>
+          <label class="creator-field" id="creator-folder-wrap">폴더 통째로 고르기<input type="file" id="creator-folder" webkitdirectory multiple /></label>
+          <label class="creator-field">표지 그림(PNG·JPG·WEBP, 선택)<input type="file" id="creator-cover" accept=".png,.jpg,.jpeg,.webp" /></label>
+          <p class="meta" id="creator-files-say" role="status"></p>
+          <button type="button" id="creator-check-run">검사하기</button>
+          <div id="creator-check" role="status"></div>
+        </div>
+        <div class="card">
+          <h2>4 · 올리기</h2>
+          <p>파일을 보관하는 곳: <b id="creator-pin-holder"></b></p>
+          <p class="meta">IPFS 파일은 누군가 계속 보관(고정)해야 남아요. 외부 보관 서비스는 아직 정하지 않았어요.</p>
+          <button type="button" id="creator-upload" disabled>올리고 서명하기</button>
+          <p id="creator-upload-say" role="status"></p>
+          <dl id="creator-result" class="creator-kv" hidden>
+            <dt>매니페스트 CID</dt><dd><code id="creator-cid"></code></dd>
+            <dt>매니페스트 SHA-256</dt><dd><code id="creator-sha"></code></dd>
+            <dt>보관한 곳</dt><dd id="creator-pinned-by"></dd>
+          </dl>
+        </div>
+        <div class="card" id="creator-confirm" hidden>
+          <h2>5 · 발행 전 확인</h2>
+          <dl class="creator-kv">
+            <dt>자산 이름</dt><dd><code id="creator-c-name"></code></dd>
+            <dt>소각 비용</dt><dd><b id="creator-c-burn"></b><br /><span class="meta" id="creator-c-burn-check"></span></dd>
+            <dt>매니페스트 CID</dt><dd><code id="creator-c-cid"></code></dd>
+            <dt>네트워크</dt><dd id="creator-c-chain"></dd>
+          </dl>
+          <h3>되돌릴 수 없어요</h3>
+          <ul id="creator-c-irreversible"></ul>
+          <ul id="creator-c-blockers"></ul>
+          <label class="creator-field">확인을 위해 자산 이름을 똑같이 적어 주세요<input id="creator-typed" autocomplete="off" spellcheck="false" /></label>
+          <button type="button" id="creator-issue" disabled>발행하기</button>
+          <p id="creator-issue-say" role="status"></p>
+        </div>
+        <div class="card" id="creator-done" hidden>
+          <h2>발행했어요 — 지금은 「미검증」</h2>
+          <p>거래 번호 <code id="creator-txid"></code></p>
+          <p>아래 등록 신청서를 저장해 두세요. 검증을 받으려면 이 신청서를 보내요(보내는 곳은 정해지면 알려 드려요).</p>
+          <label class="creator-field">등록 신청서<textarea id="creator-request" rows="8" readonly></textarea></label>
+          <button type="button" id="creator-copy-request" class="ghost">신청서 복사</button>
+        </div>
+        <button type="button" id="creator-back">게임으로 돌아가기</button>
       </section>
       <section class="page" id="page-ravi">
         <button id="ravi-menu-open" type="button">라비와 대화</button>

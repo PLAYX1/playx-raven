@@ -1,0 +1,12 @@
+{
+  "source": "ravenvault 저장소 브랜치 claude/rv-creator-core (기준 5a25a3a 위)",
+  "files": {
+    "core/creator/bytes.ts": "b3092fe7d6ebdc52881280f61bd21322a2ddff1be5b547d915ce6cf5ee72dbd6",
+    "core/creator/limits.ts": "883f9b70d46d9286e2f0aed765befa81d31062dd2f0ad41c0f87ea3e546548c2",
+    "core/creator/asset-name.ts": "69ca224513d3123d0539ed461c1a9701d19adbd996b7db94a9940351de165cb0",
+    "core/creator/manifest.ts": "7e9f428829e554f314466b96d7ced088d8accfba4f92b78b59521515fbb4daf5",
+    "core/creator/publish.ts": "e0729ccdf5b5540c287e3492af960424a7a16e4a2fa1dc5b5e3909d90189b4f8",
+    "core/creator/listing.ts": "b759e913f964d27f33a0406fc0085c162051c02580957387d664066dd6bcb1f6",
+    "core/game-registry/platform-fee.ts": "b8b38519375cc0ad1d56d56c6ca0a020eb2c63a2809b1adcb6d697f04f586520"
+  }
+}
