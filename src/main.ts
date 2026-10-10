@@ -17615,7 +17615,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   //    켤 때 한 번, 그리고 1분마다. 이 프로그램에는 이미 타이머가 여럿이라
   //    자주 물어보지 않는다 — 돈이 도는지는 초 단위로 볼 것이 아니다.
   void drawMoneyStatus();
-  setInterval(() => void drawMoneyStatus(), 60_000);
+  // 그리는 일이라 창을 안 보는 동안은 쉰다(쉬는중 규칙). 다시 보면 다음 1분 안에 살아난다.
+  setInterval(() => { if (!쉬는중()) void drawMoneyStatus(); }, 60_000);
   let nameTimer: any;
   $("i-name").addEventListener("input", () => {
     clearTimeout(nameTimer);

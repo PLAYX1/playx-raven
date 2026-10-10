@@ -1,0 +1,11 @@
+[
+{"config":"offline-lowpower","profile":"lowpower","offline":1,"overrides":"","seconds":90,"footprint_5s_mb":18,"footprint_peak_mb":18,"footprint_final_mb":18,"rss_final_mb":40,"peers":0,"threads":13}
+,
+{"config":"online-default-networking","profile":"default-networking","offline":0,"overrides":"","seconds":90,"footprint_5s_mb":44,"footprint_peak_mb":103,"footprint_final_mb":93,"rss_final_mb":130,"peers":77,"threads":17}
+,
+{"config":"online-lowpower","profile":"lowpower","offline":0,"overrides":"","seconds":90,"footprint_5s_mb":41,"footprint_peak_mb":75,"footprint_final_mb":73,"rss_final_mb":115,"peers":67,"threads":16}
+,
+{"config":"online-lowpower-conn20","profile":"lowpower","offline":0,"overrides":"Swarm.ConnMgr.HighWater=20 Swarm.ConnMgr.LowWater=10 Swarm.ResourceMgr.MaxMemory="128MB"","seconds":90,"footprint_5s_mb":42,"footprint_peak_mb":89,"footprint_final_mb":84,"rss_final_mb":134,"peers":62,"threads":16}
+,
+{"config":"online-lowpower-dhtclient-conn20","profile":"lowpower","offline":0,"overrides":"Routing.Type="dhtclient" Swarm.ConnMgr.HighWater=20 Swarm.ConnMgr.LowWater=10 Swarm.ResourceMgr.MaxMemory="128MB"","seconds":90,"footprint_5s_mb":43,"footprint_peak_mb":84,"footprint_final_mb":83,"rss_final_mb":127,"peers":51,"threads":19}
+]

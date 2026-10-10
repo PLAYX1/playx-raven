@@ -166,7 +166,10 @@ export function translateDom(root: Node = document.body) {
     }
     attributes.set(e, saved);
   });
-  document.documentElement.lang = lang;
+  // 🔴 같은 값이라도 대입하면 속성 변경 기록이 생긴다. 마이크(ravi-microphone)가 lang 을 지켜보다
+  //    글자를 다시 쓰고, 그게 다시 번역을 부르고, 번역이 또 lang 을 써서 초당 ~16번 전체 DOM 을
+  //    훑는 고리가 숨김 상태에서도 돌았다(2026-10-11 실측, docs/memory-budget.md). 바뀔 때만 쓴다.
+  if (document.documentElement.lang !== lang) document.documentElement.lang = lang;
 }
 
 /** 켤 때 한 번 부른다. 그 뒤로는 화면이 바뀔 때마다 저절로 따라간다. */
@@ -180,8 +183,14 @@ export function startI18n() {
   };
   run();
   if (!window.MutationObserver) return;
-  let timer: number | null = null;
+  let timer: number | null = null, owed = false;
+  // 창을 안 보는 동안(최소화·메뉴바로 숨김)은 전체 DOM 을 훑지 않고 「갚을 것」만 적어 둔다.
+  // 다시 보이는 순간 한 번 훑는다 — 보는 사람이 없을 때 번역할 이유가 없다.
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && owed) { owed = false; run(); }
+  });
   new MutationObserver(() => {
+    if (document.hidden) { owed = true; return; }
     // 한 번에 몰아서. 글자 하나 바뀔 때마다 돌면 화면이 느려진다.
     if (timer !== null) return;
     timer = window.setTimeout(() => {
