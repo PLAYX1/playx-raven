@@ -1,0 +1,24 @@
+{
+  "source": "branch claude/rv-mini-window 365f45f (not merged into this branch)",
+  "heapUsedMB": 0.78,
+  "heapTotalMB": 1.25,
+  "nodes": 97,
+  "documents": 1,
+  "listeners": 12,
+  "layoutObjects": 26,
+  "imageDecodedMB": 0,
+  "canvasMB": 0,
+  "images": 0,
+  "canvases": 0,
+  "firedIn5s": {
+    "interval": 0,
+    "timeout": 0,
+    "raf": 0
+  },
+  "ipcCalls": [
+    "mini_state",
+    "plugin:event|listen",
+    "plugin:event|listen"
+  ],
+  "note": "mini_state is not in the synthetic fixture, so the window shows its empty state"
+}

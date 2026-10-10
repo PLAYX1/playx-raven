@@ -370,7 +370,9 @@ export function wirePairing(confirmBox?: Ask) {
   });
 
   const onSettings = () => document.getElementById("page-settings")?.classList.contains("on");
+  // 창을 안 보는 동안은 그리지도 묻지도 않는다(알림 띠는 보여야 의미가 있다). 다시 보면 다음 주기에 살아난다.
   window.setInterval(() => {
+    if (document.hidden) return;
     if (onSettings()) notice.hidden = true;
     if (onSettings()) void refresh();
     else paintQr();
@@ -386,7 +388,7 @@ export function wirePairing(confirmBox?: Ask) {
 
     } catch { notice.hidden = true; }
   };
-  window.setInterval(poll, 10_000);
+  window.setInterval(() => { if (!document.hidden) void poll(); }, 10_000);
   void poll();
   void refresh();
 }

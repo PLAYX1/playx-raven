@@ -1,0 +1,11 @@
+ravend v4.8.0.0-854fc7f30-dirty-playx, regtest, temp datadir, wallet ON, assetindex=1 addressindex=1, coinbase to one wallet address,
+setmocktime +70000s per 1000 blocks, macOS `footprint` (phys_footprint).
+blocks   footprint
+0        67 MB
+15000    88 MB
+30000    107 MB
+45000    125 MB
+=> ~1.29 KB per block INCLUDING the wallet's own coinbase transactions (upper bound for block index + coins cache + wallet).
+The run stopped between 45k and 60k blocks (cause not identified; a second regtest node started concurrently also failed —
+run one node at a time). A wallet-less rerun stopped at ~4k blocks for the same reason, so block-index-only cost was NOT isolated.
+Mainnet (~4.4M blocks) block-index cost is therefore an ESTIMATE only (hundreds of MB, low confidence).

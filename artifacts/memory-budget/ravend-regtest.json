@@ -1,0 +1,11 @@
+[
+{"config":"core-default","args":"assetindex=1 addressindex=1","rss_idle_mb":16,"rss_after_400_blocks_mb":18,"rss_with_mempool_mb":44,"footprint_idle_mb":67,"footprint_after_400_blocks_mb":68,"footprint_with_mempool_mb":69,"mempool":"150 156656","threads":19}
+,
+{"config":"template-normal","args":"assetindex=1 addressindex=1 dbcache=450 maxconnections=40","rss_idle_mb":73,"rss_after_400_blocks_mb":74,"rss_with_mempool_mb":44,"footprint_idle_mb":67,"footprint_after_400_blocks_mb":69,"footprint_with_mempool_mb":69,"mempool":"150 156656","threads":19}
+,
+{"config":"template-lowspec","args":"assetindex=1 addressindex=1 dbcache=300 maxmempool=100 maxconnections=16","rss_idle_mb":73,"rss_after_400_blocks_mb":17,"rss_with_mempool_mb":44,"footprint_idle_mb":67,"footprint_after_400_blocks_mb":68,"footprint_with_mempool_mb":69,"mempool":"150 156656","threads":19}
+,
+{"config":"proposed-lowmem","args":"assetindex=1 addressindex=1 dbcache=100 maxmempool=50 maxconnections=12 par=1 rpcthreads=2 maxsigcachesize=8 maxorphantx=20","rss_idle_mb":73,"rss_after_400_blocks_mb":74,"rss_with_mempool_mb":44,"footprint_idle_mb":67,"footprint_after_400_blocks_mb":68,"footprint_with_mempool_mb":69,"mempool":"150 156656","threads":19}
+,
+{"config":"boost-4096","args":"assetindex=1 addressindex=1 dbcache=4096","rss_idle_mb":73,"rss_after_400_blocks_mb":74,"rss_with_mempool_mb":44,"footprint_idle_mb":67,"footprint_after_400_blocks_mb":68,"footprint_with_mempool_mb":69,"mempool":"150 156656","threads":19}
+]

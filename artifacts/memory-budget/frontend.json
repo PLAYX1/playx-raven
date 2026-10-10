@@ -1,0 +1,395 @@
+{
+  "measuredAt": "2026-10-10T18:22:09.320Z",
+  "environment": {
+    "chrome": "Chrome/154.0.8037.99",
+    "node": "v20.20.0",
+    "platform": "darwin",
+    "viewport": "1120x780",
+    "note": "Headless Chrome (V8/Blink). Tauri on macOS uses WKWebView, Windows WebView2 (Chromium) — absolute numbers differ on macOS; trends and DOM counts carry over."
+  },
+  "bundle": {
+    "files": {
+      "assets/cert-roster-BnI6gxky.js": 504186,
+      "assets/companion-BKaNPomu.js": 9865,
+      "assets/companion-C7btRIA7.css": 2697,
+      "assets/main-CRW-uNxW.css": 29116,
+      "assets/main-Dq-zBmom.js": 903980,
+      "assets/ravi-physics-4waH4FeH.js": 927330,
+      "assets/ravi-physics-Bi_zR948.css": 304,
+      "companion.html": 2370,
+      "fonts/IBMPlexSansKR-Bold.woff2": 370492,
+      "fonts/IBMPlexSansKR-Medium.woff2": 439816,
+      "fonts/IBMPlexSansKR-Regular.woff2": 438540,
+      "fonts/IBMPlexSansKR-SemiBold.woff2": 434484,
+      "fonts/OFL-IBMPlexSansKR.txt": 4456,
+      "index.html": 431323,
+      "raven-face.webp": 11476,
+      "raven-happy.webp": 19638,
+      "raven-head.png": 51231,
+      "raven-head.webp": 7538,
+      "raven-hello.png": 89986,
+      "raven-hello.webp": 19290,
+      "raven-sleep.webp": 12292,
+      "raven-wait.webp": 18680,
+      "raven-worry.webp": 19732,
+      "ravi/face.webp": 11476
+    },
+    "js": 2345361,
+    "css": 32117,
+    "html": 433693,
+    "largestJs": {
+      "file": "assets/ravi-physics-4waH4FeH.js",
+      "size": 927330
+    }
+  },
+  "startup": {
+    "heapUsedMB": 7.39,
+    "heapTotalMB": 8.28,
+    "nodes": 10633,
+    "documents": 3,
+    "listeners": 706,
+    "layoutObjects": 549,
+    "imageDecodedMB": 0.67,
+    "canvasMB": 0.03,
+    "images": 1,
+    "canvases": 1
+  },
+  "rafPerSecondHomeReduced": 120,
+  "pages": {
+    "home": {
+      "heapUsedMB": 7.41,
+      "heapTotalMB": 8.03,
+      "nodes": 10639,
+      "documents": 3,
+      "listeners": 706,
+      "layoutObjects": 549,
+      "imageDecodedMB": 0.67,
+      "canvasMB": 0.03,
+      "images": 1,
+      "canvases": 1
+    },
+    "wallet": {
+      "heapUsedMB": 7.44,
+      "heapTotalMB": 8.28,
+      "nodes": 10802,
+      "documents": 3,
+      "listeners": 707,
+      "layoutObjects": 641,
+      "imageDecodedMB": 0.67,
+      "canvasMB": 0.03,
+      "images": 1,
+      "canvases": 1
+    },
+    "assets": {
+      "heapUsedMB": 7.45,
+      "heapTotalMB": 8.03,
+      "nodes": 10878,
+      "documents": 3,
+      "listeners": 714,
+      "layoutObjects": 668,
+      "imageDecodedMB": 0.67,
+      "canvasMB": 0.03,
+      "images": 1,
+      "canvases": 1
+    },
+    "talk": {
+      "heapUsedMB": 7.47,
+      "heapTotalMB": 8.03,
+      "nodes": 10891,
+      "documents": 3,
+      "listeners": 717,
+      "layoutObjects": 527,
+      "imageDecodedMB": 0.67,
+      "canvasMB": 0.03,
+      "images": 1,
+      "canvases": 1
+    },
+    "shop": {
+      "heapUsedMB": 7.48,
+      "heapTotalMB": 8.28,
+      "nodes": 10893,
+      "documents": 3,
+      "listeners": 717,
+      "layoutObjects": 511,
+      "imageDecodedMB": 0.67,
+      "canvasMB": 0.03,
+      "images": 1,
+      "canvases": 1
+    },
+    "door": {
+      "heapUsedMB": 7.48,
+      "heapTotalMB": 8.03,
+      "nodes": 10893,
+      "documents": 3,
+      "listeners": 717,
+      "layoutObjects": 511,
+      "imageDecodedMB": 0.67,
+      "canvasMB": 0.03,
+      "images": 1,
+      "canvases": 1
+    },
+    "profile": {
+      "heapUsedMB": 7.49,
+      "heapTotalMB": 8.28,
+      "nodes": 10961,
+      "documents": 3,
+      "listeners": 725,
+      "layoutObjects": 545,
+      "imageDecodedMB": 0.67,
+      "canvasMB": 0.03,
+      "images": 1,
+      "canvases": 1
+    },
+    "ravi": {
+      "heapUsedMB": 7.49,
+      "heapTotalMB": 8.03,
+      "nodes": 10969,
+      "documents": 3,
+      "listeners": 725,
+      "layoutObjects": 552,
+      "imageDecodedMB": 0.67,
+      "canvasMB": 0.03,
+      "images": 1,
+      "canvases": 1
+    },
+    "reward": {
+      "heapUsedMB": 7.53,
+      "heapTotalMB": 8.53,
+      "nodes": 10987,
+      "documents": 3,
+      "listeners": 725,
+      "layoutObjects": 673,
+      "imageDecodedMB": 0.67,
+      "canvasMB": 0.03,
+      "images": 1,
+      "canvases": 1
+    },
+    "artist": {
+      "heapUsedMB": 7.54,
+      "heapTotalMB": 8.28,
+      "nodes": 10973,
+      "documents": 3,
+      "listeners": 725,
+      "layoutObjects": 620,
+      "imageDecodedMB": 0.67,
+      "canvasMB": 0.03,
+      "images": 1,
+      "canvases": 1
+    },
+    "games": {
+      "heapUsedMB": 7.54,
+      "heapTotalMB": 8.28,
+      "nodes": 10973,
+      "documents": 3,
+      "listeners": 725,
+      "layoutObjects": 565,
+      "imageDecodedMB": 0.67,
+      "canvasMB": 0.03,
+      "images": 1,
+      "canvases": 1
+    },
+    "helping": {
+      "heapUsedMB": 7.56,
+      "heapTotalMB": 8.53,
+      "nodes": 11022,
+      "documents": 3,
+      "listeners": 726,
+      "layoutObjects": 598,
+      "imageDecodedMB": 0.67,
+      "canvasMB": 0.03,
+      "images": 1,
+      "canvases": 1
+    },
+    "settings": {
+      "heapUsedMB": 7.58,
+      "heapTotalMB": 8.53,
+      "nodes": 11116,
+      "documents": 3,
+      "listeners": 737,
+      "layoutObjects": 968,
+      "imageDecodedMB": 0.67,
+      "canvasMB": 0.03,
+      "images": 1,
+      "canvases": 1
+    },
+    "sales": {
+      "heapUsedMB": 7.57,
+      "heapTotalMB": 8.28,
+      "nodes": 11097,
+      "documents": 3,
+      "listeners": 737,
+      "layoutObjects": 599,
+      "imageDecodedMB": 0.67,
+      "canvasMB": 0.03,
+      "images": 1,
+      "canvases": 1
+    }
+  },
+  "unavailableCommands": [
+    "ai_check_connection",
+    "artist_check",
+    "artist_profile_get",
+    "check_update",
+    "cloud_folders",
+    "conf_options",
+    "detect_gpu",
+    "external_drives",
+    "gpu_presets",
+    "identity_status",
+    "incoming_payments",
+    "ipfs_options",
+    "member_groups_get",
+    "member_privacy_state",
+    "network_state",
+    "owner_tokens_where",
+    "pairing_state",
+    "pairing_waiting",
+    "reindex_state",
+    "report_parked",
+    "reward_ready",
+    "shop_key_move_plan",
+    "shop_seal_state",
+    "shop_setup",
+    "suggest_setup",
+    "unsellable"
+  ],
+  "forbiddenCommands": [],
+  "leak": {
+    "navigations": 100,
+    "samples": [
+      {
+        "nav": 10,
+        "heapUsedMB": 7.61,
+        "nodes": 11096,
+        "listeners": 737
+      },
+      {
+        "nav": 20,
+        "heapUsedMB": 7.65,
+        "nodes": 11101,
+        "listeners": 739
+      },
+      {
+        "nav": 30,
+        "heapUsedMB": 7.68,
+        "nodes": 11109,
+        "listeners": 741
+      },
+      {
+        "nav": 40,
+        "heapUsedMB": 7.71,
+        "nodes": 11116,
+        "listeners": 743
+      },
+      {
+        "nav": 50,
+        "heapUsedMB": 7.74,
+        "nodes": 11094,
+        "listeners": 743
+      },
+      {
+        "nav": 60,
+        "heapUsedMB": 7.77,
+        "nodes": 11103,
+        "listeners": 745
+      },
+      {
+        "nav": 70,
+        "heapUsedMB": 7.79,
+        "nodes": 11108,
+        "listeners": 747
+      },
+      {
+        "nav": 80,
+        "heapUsedMB": 7.81,
+        "nodes": 11096,
+        "listeners": 747
+      },
+      {
+        "nav": 90,
+        "heapUsedMB": 7.84,
+        "nodes": 11101,
+        "listeners": 749
+      },
+      {
+        "nav": 100,
+        "heapUsedMB": 7.86,
+        "nodes": 11109,
+        "listeners": 751
+      }
+    ],
+    "heapSlopeKBPerNav": 2.7,
+    "nodeSlopePerNav": -0.03,
+    "listenerSlopePerNav": 0.14,
+    "heapGrowthMB": 0.21,
+    "intervalsAlive": 17
+  },
+  "hidden": {
+    "seconds": 32,
+    "fired": {
+      "interval": 97,
+      "timeout": 1,
+      "raf": 0
+    },
+    "invokesTotal": 14,
+    "invokesPerMinute": 26.3,
+    "invokesByCommand": {
+      "incoming_payments": 1,
+      "wallet_lock_state": 2,
+      "backup_survey": 2,
+      "node_status": 2,
+      "wallet_balance": 2,
+      "wallet_since": 2,
+      "reindex_state": 1,
+      "words_restore_status": 1,
+      "talk_read": 1
+    }
+  },
+  "motion": {
+    "home": {
+      "heapUsedMB": 7.44,
+      "heapTotalMB": 8.53,
+      "nodes": 10646,
+      "documents": 3,
+      "listeners": 707,
+      "layoutObjects": 851,
+      "imageDecodedMB": 0.67,
+      "canvasMB": 0.03,
+      "images": 1,
+      "canvases": 1
+    },
+    "ravi": {
+      "heapUsedMB": 7.42,
+      "heapTotalMB": 8.28,
+      "nodes": 10641,
+      "documents": 3,
+      "listeners": 706,
+      "layoutObjects": 503,
+      "imageDecodedMB": 0.67,
+      "canvasMB": 0.03,
+      "images": 1,
+      "canvases": 1
+    },
+    "rafPerSecondVisible": 120,
+    "rafPerSecondHidden": 0
+  },
+  "companion": {
+    "heapUsedMB": 4.85,
+    "heapTotalMB": 5.53,
+    "nodes": 302,
+    "documents": 1,
+    "listeners": 37,
+    "layoutObjects": 153,
+    "imageDecodedMB": 0,
+    "canvasMB": 0.03,
+    "images": 0,
+    "canvases": 1,
+    "rafPerSecondVisible": 0,
+    "hiddenFired": {
+      "interval": 0,
+      "timeout": 0,
+      "raf": 0
+    },
+    "hiddenInvokes": 0
+  }
+}
