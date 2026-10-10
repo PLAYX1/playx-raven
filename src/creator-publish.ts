@@ -575,5 +575,18 @@ export function wireCreatorPublish(deps: CreatorDeps) {
     el('cw-resume-go').onclick = () => { el('cw-resume').hidden = true; restore(draft); };
     el('cw-resume-drop').onclick = () => { el('cw-resume').hidden = true; dropDraft(); };
   }
-  return { go, paintMine, get step() { return step; } };
+  /** 끌어놓기 화면(drop-publish.ts)의 「자세히」: 이미 고른 파일·칸을 넣고 ③ 단계(이름·가격)부터 연다. */
+  function prefill(p: { type: ContentType; content: FileInput[]; cover: FileInput[]; fields: Record<string, string | boolean> } | null) {
+    if (!p) { go(step); return; }
+    type = p.type; content = p.content; cover = p.cover; published = null; plan = null;
+    paintKinds(); paintFiles();
+    for (const [id, v] of Object.entries(p.fields)) {
+      const e = el<HTMLInputElement>(id); if (!e) continue;
+      if (e.type === 'checkbox') e.checked = v === true; else e.value = String(v);
+      if (id === 'cw-asset' && v) e.dataset.touched = '1';
+    }
+    (el('cw-start') as HTMLButtonElement).disabled = !input('cw-guide-ok').checked;
+    go(3);
+  }
+  return { go, paintMine, prefill, get step() { return step; } };
 }

@@ -4,6 +4,9 @@ import "./sales-account.css";
 import { wireSalesAccount } from "./sales-account";
 import "./creator-publish.css";
 import { wireCreatorPublish } from "./creator-publish";
+import "./drop-tokens.css";
+import "./drop-publish.css";
+import { wireDropPublish } from "./drop-publish";
 import { wireOpenMarket } from "./open-market";
 import { marketLists } from "./market-lists";
 import { openRaviStory } from "./desktop-links";
@@ -4778,6 +4781,8 @@ async function paintHome(): Promise<void> {
 
 /** 「만들기」 화면 들어가기 — 화면이 준비되면 채운다. */
 let createApi: CreateApi | undefined;
+/** 끌어놓기 발행(판매자 기능). */
+let dropPublish: ReturnType<typeof wireDropPublish> | undefined;
 
 /// 0.6.0 — 왼쪽 메뉴 「더 보기」. 늘 보이는 것은 홈·라비·자산 셋이다(지갑·돕기 모드는 그 화면이 셋 자리에 든다).
 /// - 접힌 안의 화면을 열면(라비가 데려가도) showPage 가 펼친다 — 지금 어디 있는지 사라지면 안 된다.
@@ -5309,6 +5314,10 @@ function dropJob(): DropJob {
         why: t("PDF·한글·워드·사진 파일을 놓으면 지문만 만들어 적어요. 파일은 어디에도 올리지 않아요."),
         ok: true,
       };
+    case "creator":
+      // 끌어놓기 발행: 놓기만 하면 상품 미리보기가 만들어진다(아직 아무 데도 안 올린다 — 「발행」을 눌러야 올라간다).
+      if (dropPublish && $("page-creator").dataset.mode !== "wizard") return dropPublish.overlayCopy();
+      return { title: t("여기서는 받지 않습니다"), why: t("「끌어놓기 화면으로」를 누른 뒤 놓아 주세요."), ok: false };
     case "talk":
       return {
         title: t("사진을 글에 붙입니다"),
@@ -5376,6 +5385,12 @@ async function onDropped(paths: string[]) {
   const j = dropJob();
   if (!j.ok || !paths.length) return;
 
+  // 끌어놓기 발행 화면: 놓은 파일·폴더를 그대로 상품으로(러스트가 「방금 놓은 것」만 읽는다 — drop_publish.rs).
+  if (currentPage === "creator") {
+    if (dropPublish && $("page-creator").dataset.mode !== "wizard") await dropPublish.dropPaths(paths);
+    return;
+  }
+
   const vids = paths.filter((p) => /\.(mp4|mov|avi|mkv|webm|m4v)$/i.test(p));
   const files = paths.filter(looksLikeImage);
   const docs = paths.filter(looksLikeDocument);
@@ -5418,6 +5433,15 @@ async function onDropped(paths: string[]) {
       const 이름 = docs[0].split(/[\\/]/).pop() || "";
       if (await sure(t("이 문서로 증명서 만들기"), `${tf("「{0}」의 지문만 만들어 증명서에 적어요. 파일은 어디에도 올리지 않아요.", 이름)}\n${t(FINGERPRINT_GUESS)}`, t("이 문서로 증명서 만들기"))) {
         await certificateFromDropped(docs[0]);
+      }
+      return;
+    }
+    // 판매자 기능이 켜져 있으면 「상품으로 올리기」를 한 번 여쭌다(자동으로 올리지 않는다 — 미리보기만 만든다).
+    if (sellerModeOn() && dropPublish) {
+      if (await sure(t("이 파일로 상품을 만들까요?"), t("「내 상품 올리기」에서 미리보기를 만들어요. 「발행」을 누르기 전에는 아무 데도 올리지 않아요."), t("상품 만들기"))) {
+        showPage("creator");
+        $("page-creator").dataset.mode = "drop";
+        await dropPublish.dropPaths(paths);
       }
       return;
     }
@@ -18452,7 +18476,11 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("creator-open").onclick = () => showPage("creator");
   // 장터 목록(허용·차단·수수료 일정)은 한 곳에서 읽는다 — 마법사의 수수료 안내와 장터 구매 확인이 같은 서명된 일정을 쓴다.
   const mkLists = marketLists();
-  wireCreatorPublish({ invoke: (cmd, args) => invoke(cmd, args), back: () => showPage("games"), feeSchedule: () => mkLists.current().feeSchedule,
+  const creatorWizard = wireCreatorPublish({ invoke: (cmd, args) => invoke(cmd, args), back: () => showPage("games"), feeSchedule: () => mkLists.current().feeSchedule,
+    askPassword: () => ask("지갑 비밀번호", "내 주소로 상품 정보에 서명한 뒤 지갑을 바로 잠가요.", { password: true }) });
+  // 끌어놓기 발행(한 화면) — 「내 상품 올리기」의 기본 화면. 9단계 마법사는 「자세히」로 남는다(src/drop-publish.ts).
+  dropPublish = wireDropPublish({ invoke: (cmd, args) => invoke(cmd, args), back: () => showPage("games"), root: $("page-creator"),
+    openWizard: p => creatorWizard.prefill(p), lang: lang === "en" ? "en" : "ko",
     askPassword: () => ask("지갑 비밀번호", "내 주소로 상품 정보에 서명한 뒤 지갑을 바로 잠가요.", { password: true }) });
   // 열린 장터(시험): 노드 자산 목록·IPFS 읽기 명령이 아직 없어 source 없이 둔다 — 화면이 「아직 없어요」라고 말한다. 판매 스위치는 core 상수(꺼짐).
   const market = wireOpenMarket({ back: () => showPage("games"), lists: mkLists });
