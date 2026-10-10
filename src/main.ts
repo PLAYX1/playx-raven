@@ -31,6 +31,9 @@ function setAllRaviMood(mood: RaviMood): void {
   raviHome?.mood(mood);
   document.querySelectorAll<HTMLElement>(".ravi-face").forEach(face => setMood(face, mood));
 }
+// 라비 감정 엔진(ravi-emotion*.ts) — 상황 이벤트 → 표정·한마디. 기본 얼굴은 위 setAllRaviMood 를 그대로 거친다.
+import { mountRaviEmotionApp, emitRaviEvent } from "./ravi-emotion-app";
+queueMicrotask(() => mountRaviEmotionApp({ setMood: setAllRaviMood, rest: () => (aiProvider ? "normal" : "sleep") }));
 function applyRaviCharacter(): void {
   const selected = RAVI_CHARACTERS.find(character => character.id === localStorage.getItem("rv-ravi-character")) || RAVI_CHARACTERS[0];
   document.querySelectorAll<HTMLElement>(".ravi-face").forEach(face => {
@@ -4713,8 +4716,7 @@ async function paintHome(): Promise<void> {
       .sort((a, b) => Number(b?.time || 0) - Number(a?.time || 0));
     const received = txs.find(tx => tx.category === "receive");
     if (received?.txid && lastReceivedHomeTx && received.txid !== lastReceivedHomeTx) {
-      setAllRaviMood("surprised");
-      setTimeout(() => setAllRaviMood(aiProvider ? "normal" : "sleep"), 1300);
+      emitRaviEvent("deposit_seen");
     }
     if (received?.txid) lastReceivedHomeTx = String(received.txid);
     $("rv-home-txs").innerHTML = txs.slice(0, 3).map(tx => {
@@ -8630,6 +8632,7 @@ async function openSend(mode: "asset" | "rvn", preselect?: string) {
 }
 
 function closeSend() {
+  emitRaviEvent("send_closed");
   sendMode = null;
   sendPreview = null;
   $("send-compose").style.display = "none";
@@ -8710,7 +8713,7 @@ async function reviewSend() {
   btn.disabled = false;
 
   if (!sendPreview.valid) {
-    setAllRaviMood("worried");
+    emitRaviEvent("send_invalid");
     $("s-addrnote").innerHTML =
       `<span style="color:var(--bad)">이 공개 장부의 주소가 아닙니다. 한 글자라도 틀리면 이렇게 나옵니다.</span>`;
     return;
@@ -8801,6 +8804,7 @@ async function reviewSend() {
 
   $("send-compose").style.display = "none";
   $("send-review").style.display = "";
+  emitRaviEvent("send_review");
   gateSend();
 }
 
@@ -8820,7 +8824,7 @@ function gateSend() {
     needTail && tail.length >= 4 && !tailOk
       ? `<span class="danger">원본과 다릅니다. 주소가 바뀌었을 수 있으니 보내지 마세요.</span>`
       : "";
-  if (needTail && tail.length >= 4 && !tailOk) setAllRaviMood("worried");
+  if (needTail && tail.length >= 4 && !tailOk) emitRaviEvent("risk_warning");
   // 대가를 버튼에 박는다. 누르는 순간 손이 보는 것은 옆의 설명문이 아니라
   // 버튼이고, 체인에 나간 전송은 되돌릴 방법이 없다.
   const amt = Number(sendPreview.amount ?? sendPreview.rvn ?? 0);
@@ -8865,8 +8869,7 @@ async function doSend() {
             requestId: approved.requestId,
           });
     await invoke("send_ack", { requestId: approved.requestId });
-    setAllRaviMood("happy");
-    setTimeout(() => setAllRaviMood(aiProvider ? "normal" : "sleep"), 1400);
+    emitRaviEvent("send_done");
 
     // RV6: 폰 요청으로 채운 보내기였다면 폰에 「완료」를 알린다(pairing-ui.ts 가 맞춰 본다).
     window.dispatchEvent(new CustomEvent("rv-sent", { detail: { txid: String(txid ?? ""), address: sent.address, amount: Number(approved.amount), what: sent.what } }));
@@ -14270,6 +14273,7 @@ async function doBackup(destFolder = ""): Promise<string> {
   $("bk-note").textContent = "백업 중…";
   try {
     const r = requireWalletBackup(await invoke("backup_zip", { destFolder, label, includeWallet: true }));
+    emitRaviEvent("backup_done");
     // 🔴 **어디에 만들었는지 짐작해서 적지 않는다.** 「바탕화면에 있습니다」로
     //    박아 뒀는데 기본 폴더를 서류함으로 바꾸자 그 문장이 거짓말이 됐고,
     //    사장은 바탕화면을 뒤졌다. 러스트가 돌려준 **진짜 경로**를 읽는다.
@@ -18313,6 +18317,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("w-lock-now").addEventListener("click", async () => {
     salesAccount?.hide();
     await invoke("lock_wallet").catch(() => {});
+    emitRaviEvent("wallet_locked");
     document.querySelectorAll<HTMLInputElement>('input[type="password"]').forEach((input) => { input.value = ""; });
     if (!$("sdw").classList.contains("hidden")) $("sdw-close").click();
     if (!$("wrs").classList.contains("hidden")) $("wrs-close").click();
