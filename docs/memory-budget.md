@@ -233,6 +233,13 @@
 
 번들 예산: 기존 `preflight.mjs` 에는 **크기 예산이 없었다**(배선·자원 검사만). 이 시험의 번들 항목(JS 2,600KB·최대 청크 1,000KB·index.html 480KB·CSS 60KB)이 첫 예산이다.
 
+**CSS 예산 60KB → 72KB (2026-10-11, 통합 `claude/rv-desktop-final`).** 이유: 0.8.6 통합에서 새 화면 네 개의 스타일이 함께 들어왔다 —
+끌어놓기 발행(`drop-publish.css` 20.7KB + `drop-tokens.css` 1.2KB), 라비 감정(`ravi-emotion.css` 5.9KB), 창 모드
+(`display-mode.css` 2.8KB·`layout-tokens.css` 7.0KB·`standby.css` 3.5KB, 원본 기준). 빌드 결과 CSS 합계 66.7KB.
+CSS 는 화면을 그리는 데 쓰는 정적 규칙이라 힙·타이머 예산과 달리 숨김 상태 비용이 없다. 여유 약 5KB 를 두고 72KB 로 올린다.
+JS 쪽 「가장 큰 묶음 1,000KB」는 올리지 않고 끌어놓기 발행을 따로 불러오는 조각으로 떼어 지켰다(main 930KB).
+다음에 줄일 곳: `drop-publish.css` 의 템플릿 7종 규칙을 그 화면 조각과 함께 불러오기(지금은 시작 묶음 CSS 에 들어 있음).
+
 결과(2026-10-11): `npm test` 77개 중 통과 74·건너뜀 1(미니 창 — 이 브랜치엔 mini.html 없음)·실패 1(`sales-account.test.mjs` 「vendored phone sources」 — 다른 워크트리 `wt-rv-web1008` 의 의존성 문제로 **기준 커밋에서도 똑같이 실패**, 이번 변경과 무관). `tsc --noEmit`·`preflight` 통과.
 
 시험이 고장을 잡는지 확인: 수리 전 빌드(`dist-before`)로 돌리면 「928 setTimeout callbacks/min while hidden」으로 **실패**, 수리 뒤 통과. `claude/rv-mini-window` 빌드로 돌리면 미니 창 항목이 켜져 통과.
