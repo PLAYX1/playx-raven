@@ -140,7 +140,7 @@ const watcherContext = vm.createContext({감시_첫바퀴:true,감시_마지막�
   invoke:async()=>({lastblock:'synthetic-block',transactions:[fixture]}),
   입금열쇠:t=>t.txid,알린걸_기억:rows=>rows.forEach(t=>watched.add(t.txid)),
   raviHome:{joy:()=>depositJoys++},loadWallet(){},loadAssets(){},refreshOverview(){},알림켜짐:()=>false,
-  알림소리(){},살짝알림(){},tf:s=>s});
+  알림소리(){},살짝알림(){},tf:s=>s,fmtQty:n=>String(n)});
 vm.runInContext(ts.transpileModule(watch,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText,watcherContext);
 await watcherContext.지갑감시();assert.equal(depositJoys,0,'startup history never jumps');
 fixture.txid='synthetic-new-deposit';await watcherContext.지갑감시();assert.equal(depositJoys,1);
