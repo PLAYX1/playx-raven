@@ -344,8 +344,21 @@ pub async fn reveal_seed(passphrase: String) -> Result<Value, String> {
 ///
 /// 화면 글자는 네 나라 말로 옮기지만, **디스크에 새기는 이름은 안 옮긴다** —
 /// 옮기면 컴퓨터 언어를 바꿨을 때 옛 백업을 못 찾는다. ASCII 하나로 고정한다.
-const BACKUP_DIR: &str = "PLAYXRaven-Backup";
-/// 잠근 파일. `.pxlock` 이면 무엇으로 여는 것인지 이름이 말해 준다.
+///
+/// 2026-10 레이븐볼트로 이름을 바꿨다: `PLAYXRaven-Backup/PLAYXRaven.zip.pxlock`
+/// → `RavenVault-Backup/RavenVault.zip.pxlock`. 옛 이름 폴더·파일은 **건드리지
+/// 않는다**(지우기·옮기기·덮어쓰기 없음). 새 백업은 늘 새 폴더에 쓰고, 옛 백업은
+/// `backup_find` 가 읽기 전용으로 같이 찾는다. 이름 표: `docs/backup-naming.md`.
+///
+/// 이중 노드 경고(맨 위 「Two nodes on one wallet」)는 이름과 상관없이 그대로다 —
+/// 레이븐볼트 백업도 원래 컴퓨터가 꺼진 것을 확인한 뒤에만 켠다.
+pub(crate) const BACKUP_DIR: &str = "RavenVault-Backup";
+/// 백업 파일 이름 앞부분. `RavenVault.zip.pxlock`, `RavenVault-<가게>.zip.pxlock`.
+pub(crate) const FILE_STEM: &str = "RavenVault";
+/// 잠근 파일. **확장자 `.pxlock` 은 일부러 안 바꾼다.** 이미 깔린 옛 앱의
+/// 되돌리기 파일 고르기 거르개가 `pxlock`·`zip`·`잠김` 만 받아서, 확장자를
+/// 바꾸면 옛 앱(또는 옛 앱만 있는 새 컴퓨터)에서 새 백업이 회색으로 떠 못
+/// 고른다. 파일 안 머리말 `PXRLOCK1` 도 그대로다 — 이름이 아니라 형식이다.
 const LOCKED_EXT: &str = "zip.pxlock";
 /// zip 안 설명서. 어느 나라에서 풀어도 안 깨진다.
 const README_NAME: &str = "READ-ME.txt";
@@ -410,8 +423,8 @@ async fn auto_to(now_unix: i64, external: Vec<Value>, clouds: Vec<Value>) -> Val
     });
     let external: Vec<_> = external.into_iter().filter(|d| d["writable"] == true).collect();
     if already_complete
-        && external.iter().all(|d| d["path"].as_str().is_some_and(|path| daily_copy_complete(&PathBuf::from(path).join(BACKUP_DIR), usb_should_lock(), &stamp)))
-        && clouds.iter().all(|d| d["path"].as_str().is_some_and(|path| daily_copy_complete(&PathBuf::from(path).join(BACKUP_DIR), true, &stamp)))
+        && external.iter().all(|d| d["path"].as_str().is_some_and(|path| daily_copy_complete(&PathBuf::from(path), usb_should_lock(), &stamp)))
+        && clouds.iter().all(|d| d["path"].as_str().is_some_and(|path| daily_copy_complete(&PathBuf::from(path), true, &stamp)))
     {
         return json!({"skipped": "오늘의 검증된 백업이 있습니다", "dest": dest.to_string_lossy(), "local_complete": true});
     }
@@ -432,9 +445,7 @@ async fn auto_to(now_unix: i64, external: Vec<Value>, clouds: Vec<Value>) -> Val
     let mut outside = Vec::new();
     for drive in external {
         let Some(path) = drive["path"].as_str() else { continue };
-        let folder = PathBuf::from(path).join(BACKUP_DIR);
-        let result = std::fs::create_dir_all(&folder).map_err(|e| e.to_string())
-            .and_then(|_| publish_daily(&prepared, &folder, usb_should_lock(), &stamp));
+        let result = publish_daily(&prepared, &PathBuf::from(path), usb_should_lock(), &stamp);
         outside.push(match result {
             Ok(v) => json!({"ok": true, "drive": drive["name"], "path": v["path"], "locked": v["locked"]}),
             Err(e) => json!({"ok": false, "drive": drive["name"], "why": e}),
@@ -443,9 +454,7 @@ async fn auto_to(now_unix: i64, external: Vec<Value>, clouds: Vec<Value>) -> Val
     let mut cloud = Vec::new();
     for place in clouds {
         let Some(path) = place["path"].as_str() else { continue };
-        let folder = PathBuf::from(path).join(BACKUP_DIR);
-        let result = std::fs::create_dir_all(&folder).map_err(|e| e.to_string())
-            .and_then(|_| publish_daily(&prepared, &folder, true, &stamp));
+        let result = publish_daily(&prepared, &PathBuf::from(path), true, &stamp);
         cloud.push(match result {
             Ok(v) => json!({"ok": true, "where": place["name"], "path": v["path"], "wallet": true, "locked": true}),
             Err(e) => json!({"ok": false, "where": place["name"], "wallet": false, "why": e}),
@@ -472,7 +481,7 @@ async fn auto_to(now_unix: i64, external: Vec<Value>, clouds: Vec<Value>) -> Val
 ///
 /// Civil-from-days — the standard algorithm, shifting the year to start in March
 /// so leap days land at the end and the month lengths become a simple formula.
-fn day_name(day_unix: i64) -> String {
+pub(crate) fn day_name(day_unix: i64) -> String {
     let z = day_unix / 86_400 + 719_468;
     let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
     let doe = z - era * 146_097;
@@ -665,18 +674,39 @@ fn record_backup(dest: &Path, count: usize) -> Option<String> {
         .map(|_| "백업 파일은 저장했지만 완료 시각을 기록하지 못했습니다. 설정 폴더 권한을 확인하세요.".into())
 }
 
-// Keep existing destinations and receipts together. No rename or rotation of old backups.
+// New backups always go to `<picked>/RavenVault-Backup`. Old-name folders
+// (`PLAYXRaven-Backup`, `PLAY X Raven 백업`, `RavenVault Desktop 백업`, ...) are
+// never written, renamed or rotated; `backup_find` reads them.
 fn external_backup_dir(picked: &Path) -> PathBuf {
-    let legacy = picked.join("PLAY X Raven 백업");
-    if legacy.is_dir() { legacy } else { picked.join("RavenVault Desktop 백업") }
+    picked.join(BACKUP_DIR)
 }
 
-fn publish_archive(prepared: &PreparedBackup, picked: &Path, label: &str, locked: bool) -> Result<Value, String> {
+/// 완료 영수증 자리: `.RavenVault.zip.pxlock.complete.json`. 새 이름 백업은 모두
+/// 영수증을 남긴다 — 찾기 목록은 영수증과 크기·지문이 맞는 것만 올린다.
+pub(crate) fn receipt_path(archive: &Path) -> PathBuf {
+    let name = archive.file_name().unwrap_or_default().to_string_lossy();
+    archive.with_file_name(format!(".{name}.complete.json"))
+}
+
+/// 영수증이 이 파일과 맞으면 그 내용을 돌려준다.
+pub(crate) fn matching_receipt(archive: &Path) -> Option<Value> {
+    let v = std::fs::read(receipt_path(archive)).ok().and_then(|b| serde_json::from_slice::<Value>(&b).ok())?;
+    let (size, hash) = file_digest(archive).ok()?;
+    (v["size"] == size && v["sha256"] == hash).then_some(v)
+}
+
+fn publish_receipt(prepared: &PreparedBackup, archive: &Path, receipt: &Value) -> Result<(), String> {
+    let stage = Workspace::new(prepared.workspace.path())?;
+    let record = stage.path().join("receipt.json");
+    std::fs::write(&record, receipt.to_string()).map_err(|e| e.to_string())?;
+    publish_file(&record, &receipt_path(archive))
+}
+
+fn publish_archive(prepared: &PreparedBackup, picked: &Path, label: &str, locked: bool, day: &str) -> Result<Value, String> {
     if !picked.is_dir() { return Err("폴더가 아닙니다. 저장할 폴더를 고르세요.".into()); }
-    // Retain the existing backup folder and filename conventions.
     let out_dir = external_backup_dir(picked);
     let safe_label: String = label.trim().chars().take(48).map(|c| if c.is_alphanumeric() || c == '-' { c } else { '_' }).collect();
-    let stem = if safe_label.is_empty() { "PLAYXRaven".to_owned() } else { format!("PLAYXRaven-{safe_label}") };
+    let stem = if safe_label.is_empty() { FILE_STEM.to_owned() } else { format!("{FILE_STEM}-{safe_label}") };
     let output_workspace = Workspace::new(prepared.workspace.path())?;
     let plain = output_workspace.path().join("archive.zip");
     write_archive(prepared, &plain)?;
@@ -695,8 +725,17 @@ fn publish_archive(prepared: &PreparedBackup, picked: &Path, label: &str, locked
     let extension = if locked { LOCKED_EXT } else { "zip" };
     let out = out_dir.join(format!("{stem}.{extension}"));
     std::fs::create_dir_all(&out_dir).map_err(|e| format!("백업 폴더를 만들지 못했습니다: {e}"))?;
+    // The receipt that matches today's latest moves with it to `-previous`.
+    let old_receipt = if out.exists() { matching_receipt(&out) } else { None };
     publish_file(&staged, &out)?;
-    let size = std::fs::metadata(&out).map_err(|e| e.to_string())?.len();
+    let (size, sha256) = file_digest(&out)?;
+    if let Some(old) = old_receipt {
+        let previous = crate::backup_storage::previous_path(&out)?;
+        if matching_receipt_value(&previous, &old) { publish_receipt(prepared, &previous, &old)?; }
+    }
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    publish_receipt(prepared, &out, &json!({"version": 1, "day": day, "at": now, "size": size, "sha256": sha256}))
+        .map_err(|e| format!("백업 파일은 저장했지만 완료 영수증을 쓰지 못했습니다. 다시 백업하세요: {e}"))?;
     let wallet_included = prepared.inside.iter().any(|v| v["name"] == "wallet.dat");
     let stamp_warning = if wallet_included { record_backup(&out, prepared.inside.len()) } else { None };
     Ok(json!({
@@ -709,33 +748,35 @@ fn publish_archive(prepared: &PreparedBackup, picked: &Path, label: &str, locked
     }))
 }
 
+fn matching_receipt_value(archive: &Path, receipt: &Value) -> bool {
+    file_digest(archive).is_ok_and(|(size, hash)| receipt["size"] == size && receipt["sha256"] == hash)
+}
+
+fn today() -> String {
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0);
+    day_name(now - now.rem_euclid(86_400))
+}
+
 // Keep yesterday's external copy: a six-hour retry must not rotate a
 // destination that already has this day's verified copy.
 fn daily_archive_paths(picked: &Path, locked: bool) -> (PathBuf, PathBuf) {
     let extension = if locked { LOCKED_EXT } else { "zip" };
-    let latest = external_backup_dir(picked).join(format!("PLAYXRaven.{extension}"));
-    let receipt = latest.with_file_name(format!(".PLAYXRaven.{extension}.complete.json"));
+    let latest = external_backup_dir(picked).join(format!("{FILE_STEM}.{extension}"));
+    let receipt = receipt_path(&latest);
     (latest, receipt)
 }
 
 fn daily_copy_complete(picked: &Path, locked: bool, day: &str) -> bool {
-    let (latest, receipt) = daily_archive_paths(picked, locked);
-    let prior = std::fs::read(&receipt).ok().and_then(|b| serde_json::from_slice::<Value>(&b).ok());
-    prior.is_some_and(|v| v["day"] == day && file_digest(&latest).is_ok_and(|(size, hash)| v["size"] == size && v["sha256"] == hash))
+    let (latest, _) = daily_archive_paths(picked, locked);
+    matching_receipt(&latest).is_some_and(|v| v["day"] == day)
 }
 
 fn publish_daily(prepared: &PreparedBackup, picked: &Path, locked: bool, day: &str) -> Result<Value, String> {
-    let (latest, receipt) = daily_archive_paths(picked, locked);
+    let (latest, _) = daily_archive_paths(picked, locked);
     if daily_copy_complete(picked, locked, day) {
         return Ok(json!({"path": latest.to_string_lossy(), "locked": locked, "skipped": true}));
     }
-    let result = publish_archive(prepared, picked, "", locked)?;
-    let (size, sha256) = file_digest(&latest)?;
-    let stage = Workspace::new(prepared.workspace.path())?;
-    let record = stage.path().join("receipt.json");
-    std::fs::write(&record, json!({"day": day, "size": size, "sha256": sha256}).to_string()).map_err(|e| e.to_string())?;
-    publish_file(&record, &receipt)?;
-    Ok(result)
+    publish_archive(prepared, picked, "", locked, day)
 }
 
 /// The public command never returns success for an omitted requested wallet.
@@ -745,7 +786,7 @@ pub async fn backup_zip(dest_folder: String, label: String, include_wallet: bool
     let picked = if dest_folder.trim().is_empty() { default_backup_parent() } else { PathBuf::from(dest_folder) };
     if !picked.is_dir() { return Err("폴더가 아닙니다. 저장할 폴더를 고르세요.".into()); }
     let prepared = prepare_backup(include_wallet).await?;
-    publish_archive(&prepared, &picked, &label, true)
+    publish_archive(&prepared, &picked, &label, true, &today())
 }
 
 fn unique_generation(parent: &Path, prefix: &str) -> PathBuf {
@@ -1208,6 +1249,17 @@ fn cloud_covering(path: &Path) -> Option<String> {
         }
     }
     None
+}
+
+/// Where backups may already be: the default folder, the desktop (older default),
+/// every synced cloud folder and every external disk. Read by `backup_find` only.
+pub(crate) fn backup_places() -> Vec<(String, PathBuf)> {
+    let mut out = vec![("내 서류함".to_string(), documents_dir()), ("바탕화면".to_string(), home().join("Desktop"))];
+    out.extend(cloud_folder_list().into_iter().map(|c| (c.name, c.path)));
+    out.extend(list_external().into_iter().filter_map(|d| {
+        Some((d["name"].as_str()?.to_string(), PathBuf::from(d["path"].as_str()?)))
+    }));
+    out
 }
 
 /// 화면에는 「내 서류함」처럼 읽히는 이름. 윈도우 백슬래시도 여기서 접는다.

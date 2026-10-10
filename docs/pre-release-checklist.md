@@ -7,5 +7,6 @@
 - [ ] 기존 `scripts/check-*.mjs` 및 `scripts/*.test.mjs` 회귀 검사. `check-desktop-mutation.mjs`는 의도적 실패를 기대하므로 다른 빌드와 분리해서 실행.
 - [ ] `cargo test --manifest-path src-tauri/Cargo.toml --lib -- --test-threads=1` 및 `cargo test --manifest-path qa/restore-safety/Cargo.toml -- --test-threads=1`.
 - [ ] 기존 release workflow의 백업 보존·복구 제외·설치 프로그램 ID·release manifest 검사.
+- [ ] 백업 이름(docs/backup-naming.md): 새 백업은 `RavenVault-Backup/RavenVault.zip.pxlock`, 옛 이름(`PLAYXRaven-Backup` 등) 백업이 「백업 찾기」에 함께 보이고 바뀌지 않았는지.
 
 실제 지갑이나 메인넷 앱을 실행하지 않고 합성 fixture만 사용한다. Chrome/루프백 바인딩이 차단된 환경의 미실행·실패를 통과로 기록하지 않는다. 이번 실행 결과와 전수 조사: [firstrun-report.md](firstrun-report.md).

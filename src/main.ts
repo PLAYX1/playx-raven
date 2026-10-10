@@ -1542,12 +1542,56 @@ async function sampleClear() {
   }
 }
 
-async function doRestore(directory = false) {
+// 백업 찾기 — 새 이름(RavenVault-Backup)과 옛 이름(PLAYXRaven-Backup 등)을 한 번에
+// 찾아 한 목록으로 보인다. 찾기는 아무 파일도 바꾸지 않는다(backup_find.rs).
+// 화면에는 모두 「레이븐볼트 백업」으로 적고, 옛 이름이면 작게만 표시한다.
+async function findBackups() {
+  const box = $("rs-found");
+  box.innerHTML = `<div class="meta" style="margin-top:9px">${copyHtml("찾는 중…")}</div>`;
+  try {
+    const r: any = await invoke("backup_folders");
+    const items: any[] = Array.isArray(r?.items) ? r.items : [];
+    const rejected: any[] = Array.isArray(r?.rejected) ? r.rejected : [];
+    const rejectedNote = rejected.length
+      ? `<p class="meta" style="margin-top:8px">${escapeHtml(tf("확인되지 않아 목록에서 뺀 파일 {0}개 — 손상됐거나 끝까지 저장되지 않은 백업입니다.", rejected.length))}</p>`
+      : "";
+    if (!items.length) {
+      box.innerHTML = `<div class="meta" style="margin-top:9px">${copyHtml("찾은 백업이 없습니다. 「백업에서 되돌리기」로 직접 고르세요.")}</div>` + rejectedNote;
+      return;
+    }
+    const row = (it: any, i: number) => {
+      const tags: string[] = [];
+      if (it.scheme === "playxraven") tags.push(t("옛 이름"));
+      if (it.previous) tags.push(t("이전 판"));
+      if (it.verification !== "complete") tags.push(t("완료 기록 없음"));
+      const size = Number(it.size) > 0 ? fmtBytes(Number(it.size)) : t("폴더");
+      return `<div class="found-row">
+          <div class="found-what"><b>${escapeHtml(String(it.day || ""))} · ${escapeHtml(t(String(it.place || "")))}</b>
+            <span class="meta">${copyHtml("레이븐볼트 백업")} · ${escapeHtml(size)}${tags.length ? ` · <small>${escapeHtml(tags.join(" · "))}</small>` : ""}</span></div>
+          <button class="ghost" data-found="${i}">${copyHtml("이 백업 열기")}</button>
+        </div>`;
+    };
+    box.innerHTML =
+      `<div class="card" style="margin-top:11px"><h3>${escapeHtml(tf("찾은 레이븐볼트 백업 {0}개", items.length))}</h3>` +
+      `<p class="meta">${copyHtml("최근 것이 위에 있습니다. 같은 백업이 여러 곳에 있으면 한 번만 보입니다.")}</p>` +
+      items.map(row).join("") + rejectedNote + `</div>`;
+    box.querySelectorAll<HTMLButtonElement>("[data-found]").forEach((button) => {
+      button.onclick = () => {
+        const it = items[Number(button.dataset.found)];
+        if (it?.path) void doRestore(it.kind === "folder", String(it.path));
+      };
+    });
+  } catch (e) {
+    box.innerHTML = `<div class="warnbox" style="margin-top:11px">${escapeHtml(errText(e))}</div>`;
+  }
+}
+
+async function doRestore(directory = false, preset = "") {
   // 경로를 타이핑하게 하지 않는다. 이 파일 3,457행에 내가 직접 적어 둔 문장이
   // "폴더 경로를 타이핑하게 하는 것은 백업을 안 하게 하는 가장 확실한 방법"
   // 인데, 만들 때만 지키고 **되돌릴 때는 안 지키고 있었다.**
   // 파일 고르기는 OS 가 한다 — 사람은 파인더에서 눈으로 찾는 데 익숙하다.
-  const where = await pickFile({
+  const where = preset || await pickFile({
     title: t(directory ? "되돌릴 백업 폴더를 고르세요" : "되돌릴 백업을 고르세요"),
     multiple: false,
     directory,
@@ -1558,7 +1602,7 @@ async function doRestore(directory = false) {
     //
     //    `잠김` 은 옛 이름이다. 이미 그렇게 만들어 둔 백업이 있으니 계속 받는다.
     filters: directory ? undefined : [
-      { name: "RavenVault Desktop 백업", extensions: ["pxlock", "zip", "잠김"] },
+      { name: t("레이븐볼트 백업"), extensions: ["pxlock", "zip", "잠김"] },
       { name: "모든 파일", extensions: ["*"] },
     ],
     defaultPath: undefined,
@@ -17614,6 +17658,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     if ((e as KeyboardEvent).key === "Escape" && askResolve) askClose(null);
   });
   $("nd-name").addEventListener("change", saveNode);
+  $("rs-find").addEventListener("click", () => void findBackups());
   $("rs-pick").addEventListener("click", () => void doRestore());
   $("rs-folder").addEventListener("click", () => void doRestore(true));
   $("sp-fill").addEventListener("click", () => sampleFill(false));

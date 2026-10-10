@@ -80,6 +80,34 @@ const RAVI_HOME_COPY: Record<string, [string, string, string]> = {
 export const DICT: Record<string, Record<string, string>> = {
   ko: {},
   en: {
+    "레이븐볼트 백업":
+      "RavenVault backup",
+    "백업 찾기":
+      "Find backups",
+    "확인되지 않아 목록에서 뺀 파일 {0}개 — 손상됐거나 끝까지 저장되지 않은 백업입니다.":
+      "{0} file(s) left out because they could not be verified — damaged or not fully saved.",
+    "찾은 백업이 없습니다. 「백업에서 되돌리기」로 직접 고르세요.":
+      "No backups found. Choose one yourself with “Restore from backup”.",
+    "옛 이름":
+      "old name",
+    "이전 판":
+      "previous copy",
+    "완료 기록 없음":
+      "no completion record",
+    "폴더":
+      "folder",
+    "이 백업 열기":
+      "Open this backup",
+    "찾은 레이븐볼트 백업 {0}개":
+      "{0} RavenVault backup(s) found",
+    "최근 것이 위에 있습니다. 같은 백업이 여러 곳에 있으면 한 번만 보입니다.":
+      "Newest first. A backup stored in several places is shown once.",
+    "내 서류함":
+      "Documents",
+    "바탕화면":
+      "Desktop",
+    "이 파일은 레이븐볼트 백업이 아닙니다.":
+      "This file is not a RavenVault backup.",
     "눌러서 깨우기": "Press to wake up",
     "저장하고 연결 확인": "Save and check connection",
     "저장된 키로 연결 확인": "Check connection with saved key",
@@ -1887,6 +1915,34 @@ export const DICT: Record<string, Record<string, string>> = {
       "The key is too short. Please check the one written on your paper again.",
   },
   ja: {
+    "레이븐볼트 백업":
+      "RavenVault バックアップ",
+    "백업 찾기":
+      "バックアップを探す",
+    "확인되지 않아 목록에서 뺀 파일 {0}개 — 손상됐거나 끝까지 저장되지 않은 백업입니다.":
+      "確認できず一覧から外したファイル {0} 件 — 破損しているか、最後まで保存されていないバックアップです。",
+    "찾은 백업이 없습니다. 「백업에서 되돌리기」로 직접 고르세요.":
+      "バックアップが見つかりません。「バックアップから戻す」で直接選んでください。",
+    "옛 이름":
+      "旧名",
+    "이전 판":
+      "一つ前",
+    "완료 기록 없음":
+      "完了記録なし",
+    "폴더":
+      "フォルダ",
+    "이 백업 열기":
+      "このバックアップを開く",
+    "찾은 레이븐볼트 백업 {0}개":
+      "見つかった RavenVault バックアップ {0} 件",
+    "최근 것이 위에 있습니다. 같은 백업이 여러 곳에 있으면 한 번만 보입니다.":
+      "新しいものが上です。同じバックアップが複数の場所にあっても一度だけ表示します。",
+    "내 서류함":
+      "書類",
+    "바탕화면":
+      "デスクトップ",
+    "이 파일은 레이븐볼트 백업이 아닙니다.":
+      "このファイルは RavenVault のバックアップではありません。",
     "눌러서 깨우기": "押して起こす",
     "저장하고 연결 확인": "保存して接続を確認",
     "저장된 키로 연결 확인": "保存済みキーで接続を確認",
@@ -3694,6 +3750,34 @@ export const DICT: Record<string, Record<string, string>> = {
       "鍵が短すぎます。紙に書いたものをもう一度ご確認ください。",
   },
   zh: {
+    "레이븐볼트 백업":
+      "RavenVault 备份",
+    "백업 찾기":
+      "查找备份",
+    "확인되지 않아 목록에서 뺀 파일 {0}개 — 손상됐거나 끝까지 저장되지 않은 백업입니다.":
+      "有 {0} 个文件无法验证，未列出 — 可能已损坏或未完整保存。",
+    "찾은 백업이 없습니다. 「백업에서 되돌리기」로 직접 고르세요.":
+      "没有找到备份。请用“从备份恢复”自行选择。",
+    "옛 이름":
+      "旧名称",
+    "이전 판":
+      "上一份",
+    "완료 기록 없음":
+      "无完成记录",
+    "폴더":
+      "文件夹",
+    "이 백업 열기":
+      "打开此备份",
+    "찾은 레이븐볼트 백업 {0}개":
+      "找到 {0} 个 RavenVault 备份",
+    "최근 것이 위에 있습니다. 같은 백업이 여러 곳에 있으면 한 번만 보입니다.":
+      "最新的在上面。同一备份存放在多处时只显示一次。",
+    "내 서류함":
+      "文稿",
+    "바탕화면":
+      "桌面",
+    "이 파일은 레이븐볼트 백업이 아닙니다.":
+      "此文件不是 RavenVault 备份。",
     "눌러서 깨우기": "点击唤醒",
     "저장하고 연결 확인": "保存并检查连接",
     "저장된 키로 연결 확인": "使用已保存的密钥检查连接",
