@@ -22,3 +22,59 @@
 :root[data-theme="dark"] #page-creator .creator-bad { color: #ff9b8a; }
 :root[data-theme="dark"] #page-creator .creator-good { color: #7fd6a0; }
 @media (max-width: 520px) { #page-creator .creator-kv { grid-template-columns: minmax(0, 1fr); } }
+
+/* ── 마법사(2단계: 누구나 판매) ── */
+#page-creator .cw-steps { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0; margin: 12px 0; }
+#page-creator .cw-steps li { padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+#page-creator .cw-steps li.done { color: var(--text); }
+#page-creator .cw-steps li.now { color: var(--text); border-color: var(--text); font-weight: 700; }
+#page-creator .cw-nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+#page-creator .cw-error { color: #a43122; font-weight: 600; min-height: 1em; }
+#page-creator .cw-kinds { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: 10px; }
+#page-creator .cw-kind { display: flex; flex-direction: column; gap: 4px; padding: 14px; border: 2px solid var(--line); border-radius: 12px; cursor: pointer; color: var(--text); }
+#page-creator .cw-kind.on { border-color: var(--text); }
+#page-creator .cw-kind span { color: var(--muted); font-size: 14px; }
+#page-creator .cw-drop { border: 2px dashed var(--muted); border-radius: 14px; padding: 24px 16px; text-align: center; cursor: pointer; color: var(--text); }
+#page-creator .cw-drop.over { border-color: var(--text); background: var(--ravi-tint); }
+#page-creator .cw-filelist { overflow-wrap: anywhere; }
+#page-creator .cw-why { margin: 12px 0; color: var(--text); }
+#page-creator .cw-why summary { cursor: pointer; font-weight: 600; min-height: 32px; }
+#page-creator .cw-fee, #page-creator .cw-costs { border-left: 4px solid var(--line); padding-left: 12px; color: var(--text); }
+#page-creator .cw-suggest { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+#page-creator .cw-chip { min-height: 36px; font-family: monospace; }
+#page-creator .cw-warnlist { color: var(--text); }
+#page-creator .cw-progress { height: 12px; border-radius: 6px; border: 1px solid var(--line); overflow: hidden; max-width: 640px; }
+#page-creator .cw-progress span { display: block; height: 100%; width: 0; background: var(--text); }
+#page-creator .cw-resume { padding: 10px 14px; border: 2px solid var(--line); border-radius: 12px; color: var(--text); }
+#page-creator .cw-panel h2 { outline: none; }
+
+/* ── 열린 장터(시험) ── */
+#page-market .card { margin: 16px 0; padding: 20px; }
+#page-market button { min-height: 44px; margin: 6px 6px 6px 0; }
+#page-market .creator-note { padding: 14px 16px; border: 2px solid var(--ravi-soft); border-radius: 12px; color: var(--text); }
+#page-market .mk-list { list-style: none; padding: 0; display: grid; gap: 8px; }
+#page-market .mk-item { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; width: 100%; text-align: left; padding: 12px 14px; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+#page-market .mk-item .meta { flex-basis: 100%; overflow-wrap: anywhere; color: var(--muted); }
+#page-market .mk-badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 14px; font-weight: 700; }
+#page-market .mk-badge.ok { background: #d9f2e3; color: #14532d; }
+#page-market .mk-badge.bond { background: #fdeccc; color: #6b3d00; }
+#page-market .mk-badge.none { background: #e6e6ea; color: #2b2d36; }
+#page-market .creator-kv { display: grid; grid-template-columns: minmax(0, max-content) minmax(0, 1fr); gap: 6px 16px; }
+#page-market .creator-kv dt { color: var(--muted); }
+#page-market .creator-kv dd { margin: 0; overflow-wrap: anywhere; }
+#page-market .creator-bad { color: #a43122; font-weight: 600; }
+#page-market .creator-warn { color: var(--text); }
+#page-market .mk-cover { max-width: min(240px, 100%); border-radius: 8px; display: block; margin: 8px 0; }
+#page-market audio { width: 100%; max-width: 480px; }
+#page-market a { color: var(--text); text-decoration: underline; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) #page-creator .cw-error, :root:not([data-theme="light"]) #page-market .creator-bad { color: #ff9b8a; }
+}
+:root[data-theme="dark"] #page-creator .cw-error, :root[data-theme="dark"] #page-market .creator-bad { color: #ff9b8a; }
+@media (max-width: 520px) { #page-market .creator-kv { grid-template-columns: minmax(0, 1fr); } }
+/* 전역 button:hover 가 ghost 단추 배경을 --brand-light(밝은 테마에선 짙은 색)로 바꾸는데 글자는 --text 그대로라 대비가 1.4:1 로 떨어진다.
+   이 두 화면에서만 바로잡는다(전역 규칙은 다른 화면 영향 때문에 건드리지 않음). */
+#page-creator button.ghost:hover:not(:disabled), #page-market button.ghost:hover:not(:disabled) { background: var(--ravi-tint); color: var(--text); border-color: var(--text); }
+#page-creator button:not(.ghost):hover:not(:disabled), #page-market button:not(.ghost):not(.mk-item):hover:not(:disabled) { background: var(--brand-light); border-color: var(--brand-light); color: var(--on-brand, #fff); }
+#page-market .mk-item:hover:not(:disabled) { background: var(--ravi-tint); color: var(--text); border-color: var(--text); }
+#page-creator li, #page-market li, #page-market p, #page-creator p { overflow-wrap: anywhere; }

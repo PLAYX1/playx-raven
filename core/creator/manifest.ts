@@ -5,10 +5,12 @@ import { decodeBase58Check, encodeBase58Check } from '../wallet-offline/base58ch
 import { PLATFORM_FEE_BPS_MAX, splitPrice } from '../game-registry/platform-fee';
 import { canonicalJson, base64Decode, base64Encode, plain, sha256Hex, utf8, type Loose } from './bytes';
 import { checkCreatorAssetName, CREATOR_ASSET_PREFIX } from './asset-name';
-import { ALLOWED_EXT, LIMITS, MIME_BY_EXT, extOf, safePath, type ContentType } from './limits';
+import { CONTENT_TYPES, LIMITS, MIME_BY_EXT, allowedExt, extOf, isContentType, safePath, type ContentType } from './limits';
 
 /*
- * 제작자 콘텐츠 매니페스트(rv-creator-manifest v1) — 게임·음악 같은 규격, type 으로 구분.
+ * 제작자 상품 매니페스트(rv-creator-manifest v2) — 게임·음악·책·티켓·디지털 같은 규격, type 으로 구분하고 종류별 칸은 details 에.
+ * v1(게임·음악 전용, game/music 칸)은 메인넷에 나간 적이 없어 받지 않는다(서명 도메인도 V2 로 바꿔 섞이지 않게 했다).
+ * 종류별 필수 칸 표 = limits.ts CONTENT_TYPES[type].detailKeys (문서 docs/open-seller-platform.md §4 와 같은 표).
  *
  * IPFS 에 올리는 JSON 이고, 레이븐코인 자산의 ipfs_hash 가 이 파일의 CID 를 가리킨다.
  *   · 파일마다 경로·CID·SHA-256·크기·MIME. 받는 쪽은 받은 바이트의 SHA-256 으로 내용을 확인한다(게이트웨이를 믿지 않는다).
@@ -24,24 +26,32 @@ import { ALLOWED_EXT, LIMITS, MIME_BY_EXT, extOf, safePath, type ContentType } f
  */
 
 export const MANIFEST_FORMAT = 'rv-creator-manifest';
-export const MANIFEST_VERSION = 1;
-export const MANIFEST_SIGN_DOMAIN = 'RAVENVAULT-CREATOR-MANIFEST-V1';
+export const MANIFEST_VERSION = 2;
+export const MANIFEST_SIGN_DOMAIN = 'RAVENVAULT-CREATOR-MANIFEST-V2';
 export const MANIFEST_SIGN_SCHEME = 'rvn-signmessage';
 export const FEE_POLICY = 'rv-platform-fee-v4';
 export const MAX_MANIFEST_BYTES = 64 * 1024;
 /** 아이템 하나 가격의 플랫폼 상한(게임 등록부 PLATFORM_MAX_ITEM_ATOMS 와 같은 100,000 RVN). */
 export const MAX_PRICE_ATOMS = 100_000n * 100_000_000n;
 export const MAX_PREVIEW_MS = 60_000;
+export const MAX_PREVIEW_PAGES = 50;
+export const MAX_TICKETS = 100_000;
 
 export type FileEntry = { path: string; cid: string; sha256: string; size: number; mime: string };
 export type GameSection = { entry: string; origin: string | null; capabilities: { identity: boolean; payment: boolean } };
 export type MusicSection = { previewFile: string; previewStartMs: number; previewEndMs: number };
+export type BookSection = { bookFile: string; format: 'pdf' | 'epub'; previewFile: string | null; previewPages: number; pageCount: number | null };
+/** 사용(입장) 확인 = 서버 없이: 제작자(또는 제작자가 정한 확인 담당 주소)가 서명한 입장 코드를 문 앞 기기가 오프라인으로 검사한다(ticket.ts). */
+export type TicketSection = { eventName: string; startsAt: string; endsAt: string | null; venue: string; quantity: number;
+  redemption: { method: 'creator-signed-code'; checkerAddress: string }; refundPolicy: string; contact: string };
+export type DigitalSection = { label: string };
+export type Details = GameSection | MusicSection | BookSection | TicketSection | DigitalSection;
 export type UnsignedManifest = {
   format: typeof MANIFEST_FORMAT; version: typeof MANIFEST_VERSION; type: ContentType; asset: string;
   title: string; description: string; files: FileEntry[]; cover: FileEntry | null;
   creator: { address: string; receivingAddress: string };
   price: { atoms: string } | null; fee: { policy: typeof FEE_POLICY; declaredBps: number };
-  game: GameSection | null; music: MusicSection | null; createdAt: string;
+  details: Details; createdAt: string;
 };
 export type ManifestSignature = { scheme: typeof MANIFEST_SIGN_SCHEME; domain: typeof MANIFEST_SIGN_DOMAIN; address: string; value: string };
 export type CreatorManifest = UnsignedManifest & { signature: ManifestSignature };
@@ -117,27 +127,64 @@ function checkFileEntry(f: unknown, type: ContentType | 'cover'): FileEntry {
   if (!plain(f) || !keysAre(f, 'path,cid,sha256,size,mime')) return fail('manifest-files', 'entry-keys');
   if (!safePath(f.path) || typeof f.cid !== 'string' || !CID_V0.test(f.cid) || typeof f.sha256 !== 'string' || !SHA.test(f.sha256)) fail('manifest-files', 'entry-format');
   const ext = extOf(f.path);
-  if (!ALLOWED_EXT[type].has(ext) || MIME_BY_EXT[ext] !== f.mime) fail('manifest-files', 'type');
-  const max = type === 'cover' ? LIMITS.cover.maxFileBytes : LIMITS[type].maxFileBytes;
+  if (!allowedExt(type).has(ext) || MIME_BY_EXT[ext] !== f.mime) fail('manifest-files', 'type');
+  const max = type === 'cover' ? LIMITS.cover.maxFileBytes : CONTENT_TYPES[type].maxFileBytes;
   if (!int(f.size, 1, max)) fail('manifest-files', 'size');
   return f as FileEntry;
 }
 
+const isoTime = (t: unknown) => typeof t === 'string' && t.length <= 40 && /^\d{4}-\d{2}-\d{2}T/.test(t) && Number.isFinite(Date.parse(t));
+
+/** 종류별 details 칸 검사. 필수 키 목록은 limits.ts CONTENT_TYPES[type].detailKeys 한 곳에서 온다(모르는 칸·빠진 칸 거절). */
+function checkDetails(type: ContentType, x: Loose, files: FileEntry[], price: unknown): void {
+  if (!plain(x) || !keysAre(x, CONTENT_TYPES[type].detailKeys.join(','))) fail('manifest-type', `${type}-section`);
+  const has = (p: unknown) => typeof p === 'string' && files.some(f => f.path === p);
+  if (type === 'game') {
+    if (!has(x.entry) || !['html', 'htm'].includes(extOf(x.entry))) fail('manifest-type', 'entry');
+    if (!plain(x.capabilities) || !keysAre(x.capabilities, 'identity,payment') ||
+        typeof x.capabilities.identity !== 'boolean' || typeof x.capabilities.payment !== 'boolean') fail('manifest-type', 'capabilities');
+    if (x.capabilities.payment && price === null) fail('manifest-type', 'payment-without-price');
+    if (x.origin !== null) {
+      let u: URL | null = null;
+      try { u = new URL(x.origin); } catch { /* below */ }
+      if (!u || u.protocol !== 'https:' || u.origin !== x.origin || /(^|\.)ex\.erci\.se$/i.test(u.hostname)) fail('manifest-type', 'origin');
+    }
+  } else if (type === 'music') {
+    if (!has(x.previewFile)) fail('manifest-type', 'preview-file');
+    if (!int(x.previewStartMs, 0, 24 * 3600_000) || !int(x.previewEndMs, x.previewStartMs + 1000, x.previewStartMs + MAX_PREVIEW_MS)) fail('manifest-type', 'preview-range');
+  } else if (type === 'book') {
+    if (!has(x.bookFile) || (x.format !== 'pdf' && x.format !== 'epub') || extOf(x.bookFile) !== x.format) fail('manifest-type', 'book-file');
+    if (x.previewFile === null) { if (x.previewPages !== 0) fail('manifest-type', 'preview-pages'); }
+    else if (!has(x.previewFile) || x.previewFile === x.bookFile || extOf(x.previewFile) !== 'pdf' || !int(x.previewPages, 1, MAX_PREVIEW_PAGES)) fail('manifest-type', 'preview-file');
+    if (x.pageCount !== null && !int(x.pageCount, 1, 100_000)) fail('manifest-type', 'page-count');
+    if (x.pageCount !== null && x.previewPages > x.pageCount) fail('manifest-type', 'preview-pages');
+  } else if (type === 'ticket') {
+    if (!text(x.eventName, 1, 80) || !text(x.venue, 1, 200) || !text(x.refundPolicy, 1, 1000) || !text(x.contact, 1, 200)) fail('manifest-type', 'ticket-text');
+    if (!isoTime(x.startsAt) || (x.endsAt !== null && (!isoTime(x.endsAt) || Date.parse(x.endsAt) <= Date.parse(x.startsAt)))) fail('manifest-type', 'ticket-time');
+    if (!int(x.quantity, 1, MAX_TICKETS)) fail('manifest-type', 'ticket-quantity');
+    if (!plain(x.redemption) || !keysAre(x.redemption, 'method,checkerAddress') || x.redemption.method !== 'creator-signed-code' ||
+        !isRvnAddress(x.redemption.checkerAddress)) fail('manifest-type', 'ticket-redemption');
+  } else if (type === 'digital') {
+    if (!text(x.label, 1, 40)) fail('manifest-type', 'label');
+  }
+}
+
 /** 엄격 검사: 모르는 칸·빠진 칸·틀린 모양은 전부 거절. 서명은 보지 않는다(verifyManifest 가 본다). */
 export function validateManifest(raw: unknown, prefix: string = CREATOR_ASSET_PREFIX): CreatorManifest {
-  if (!plain(raw) || !keysAre(raw, 'format,version,type,asset,title,description,files,cover,creator,price,fee,game,music,createdAt,signature')) return fail('manifest-shape', 'keys');
+  if (!plain(raw) || !keysAre(raw, 'format,version,type,asset,title,description,files,cover,creator,price,fee,details,createdAt,signature')) return fail('manifest-shape', 'keys');
   const d = raw as Loose;
   if (d.format !== MANIFEST_FORMAT || d.version !== MANIFEST_VERSION) fail('manifest-shape', 'format');
-  if (d.type !== 'game' && d.type !== 'music') fail('manifest-type');
+  if (!isContentType(d.type)) fail('manifest-type');
   const type: ContentType = d.type;
+  const rule = CONTENT_TYPES[type];
   if (!checkCreatorAssetName(d.asset, prefix).valid) fail('manifest-asset', 'name');
   if (!text(d.title, 1, 80) || !text(d.description, 0, 2000) || d.title.trim() !== d.title || !d.title.trim()) fail('manifest-shape', 'title');
-  if (typeof d.createdAt !== 'string' || d.createdAt.length > 40 || !Number.isFinite(Date.parse(d.createdAt))) fail('manifest-shape', 'createdAt');
-  if (!Array.isArray(d.files) || d.files.length < 1 || d.files.length > LIMITS[type].maxFiles) fail('manifest-files', 'count');
+  if (!isoTime(d.createdAt)) fail('manifest-shape', 'createdAt');
+  if (!Array.isArray(d.files) || d.files.length < rule.minFiles || d.files.length > rule.maxFiles) fail('manifest-files', 'count');
   const files = (d.files as unknown[]).map(f => checkFileEntry(f, type));
   const paths = new Set(files.map(f => f.path.toLowerCase()));
   if (paths.size !== files.length) fail('manifest-files', 'duplicate');
-  if (files.reduce((n, f) => n + f.size, 0) > LIMITS[type].maxTotalBytes) fail('manifest-files', 'total');
+  if (files.reduce((n, f) => n + f.size, 0) > rule.maxTotalBytes) fail('manifest-files', 'total');
   if (d.cover !== null) { const c = checkFileEntry(d.cover, 'cover'); if (paths.has(c.path.toLowerCase())) fail('manifest-files', 'cover-duplicate'); }
   if (!plain(d.creator) || !keysAre(d.creator, 'address,receivingAddress') || !isRvnAddress(d.creator.address) || !isRvnAddress(d.creator.receivingAddress)) fail('manifest-shape', 'creator');
   if (!plain(d.fee) || !keysAre(d.fee, 'policy,declaredBps') || d.fee.policy !== FEE_POLICY || !int(d.fee.declaredBps, 0, PLATFORM_FEE_BPS_MAX)) fail('manifest-price', 'fee');
@@ -145,22 +192,7 @@ export function validateManifest(raw: unknown, prefix: string = CREATOR_ASSET_PR
     if (!plain(d.price) || !keysAre(d.price, 'atoms') || typeof d.price.atoms !== 'string' || !ATOMS.test(d.price.atoms) || BigInt(d.price.atoms) > MAX_PRICE_ATOMS) fail('manifest-price', 'atoms');
     try { splitPrice(d.price.atoms, d.fee.declaredBps); } catch { fail('manifest-price', 'split'); }
   }
-  if (type === 'game') {
-    if (d.music !== null || !plain(d.game) || !keysAre(d.game, 'entry,origin,capabilities')) fail('manifest-type', 'game-section');
-    if (!files.some(f => f.path === d.game.entry) || !['html', 'htm'].includes(extOf(d.game.entry))) fail('manifest-type', 'entry');
-    if (!plain(d.game.capabilities) || !keysAre(d.game.capabilities, 'identity,payment') ||
-        typeof d.game.capabilities.identity !== 'boolean' || typeof d.game.capabilities.payment !== 'boolean') fail('manifest-type', 'capabilities');
-    if (d.game.capabilities.payment && d.price === null) fail('manifest-type', 'payment-without-price');
-    if (d.game.origin !== null) {
-      let u: URL | null = null;
-      try { u = new URL(d.game.origin); } catch { /* below */ }
-      if (!u || u.protocol !== 'https:' || u.origin !== d.game.origin || /(^|\.)ex\.erci\.se$/i.test(u.hostname)) fail('manifest-type', 'origin');
-    }
-  } else {
-    if (d.game !== null || !plain(d.music) || !keysAre(d.music, 'previewFile,previewStartMs,previewEndMs')) fail('manifest-type', 'music-section');
-    if (!files.some(f => f.path === d.music.previewFile)) fail('manifest-type', 'preview-file');
-    if (!int(d.music.previewStartMs, 0, 24 * 3600_000) || !int(d.music.previewEndMs, d.music.previewStartMs + 1000, d.music.previewStartMs + MAX_PREVIEW_MS)) fail('manifest-type', 'preview-range');
-  }
+  checkDetails(type, d.details, files, d.price);
   if (!plain(d.signature) || !keysAre(d.signature, 'scheme,domain,address,value') || d.signature.scheme !== MANIFEST_SIGN_SCHEME ||
       d.signature.domain !== MANIFEST_SIGN_DOMAIN || typeof d.signature.value !== 'string' || d.signature.value.length > 200) fail('manifest-signature', 'shape');
   try { canonicalJson(d); } catch { fail('manifest-shape', 'canonical'); }

@@ -4,8 +4,9 @@ import { burnCheck, checkCreatorAssetName, CREATOR_ASSET_PREFIX, type BurnCheck 
 import { checkFiles, type ContentType, type FileInput, type FilesCheck } from './limits';
 import {
   CID_V0, CreatorError, FEE_POLICY, MANIFEST_FORMAT, MANIFEST_VERSION, encodeManifest, isRvnAddress, manifestSigningMessage, verifyManifest, withSignature,
-  type CreatorManifest, type FileEntry, type UnsignedManifest,
+  type CreatorManifest, type Details, type FileEntry, type UnsignedManifest,
 } from './manifest';
+import { atomsToRvn } from './bytes';
 
 /*
  * 「내 콘텐츠 올리기」 흐름의 순수 부분: 파일 검사 → 보관(pin) → 매니페스트 → 제작자 서명 → 자기 검사 → 매니페스트 보관 → 발행 계획.
@@ -63,10 +64,16 @@ export type PublishInput = {
   type: ContentType; asset: string; title: string; description: string;
   files: FileInput[]; creatorAddress: string; receivingAddress: string;
   priceAtoms: string | null; declaredFeeBps: number;
-  game?: { entry: string; origin: string | null; identity: boolean; payment: boolean };
-  music?: { previewFile: string; previewStartMs: number; previewEndMs: number };
+  /** 종류별 칸(limits.ts CONTENT_TYPES[type].detailKeys). 화면이 만들고, 매니페스트 검사기가 엄격히 본다. */
+  details: Details;
   now: Date; prefix?: string;
 };
+/**
+ * 이어 올리기: 이미 보관한 파일의 SHA-256 → CID. 화면이 저장해 두었다가(파일 바이트는 저장하지 않는다) 다시 열면 넘긴다.
+ * 같은 바이트면 다시 올리지 않는다. 저장된 CID 가 CIDv0 모양이 아니면 무시하고 다시 올린다.
+ */
+export type PinCache = Map<string, { cid: string; size: number }>;
+export type PublishProgress = { done: number; total: number; path: string; skipped: boolean };
 export type PublishResult = {
   check: FilesCheck; manifest: CreatorManifest; manifestBytes: Uint8Array; manifestCid: string; manifestSha256: string; pinnedBy: string; real: boolean;
 };
@@ -87,15 +94,27 @@ export function precheck(input: PublishInput): { check: FilesCheck; problems: st
  * 올리기: 파일을 하나씩 보관하고 CID 를 받아 매니페스트를 만들고, 제작자 주소로 서명하고, 서명을 스스로 다시 확인한 뒤
  * 매니페스트 자체를 보관한다. 하나라도 틀리면 멈춘다(반쯤 올라간 파일은 보관소에 남을 수 있다 — 화면이 알린다).
  */
-export async function publishContent(input: PublishInput, pin: PinAdapter, sign: MessageSigner): Promise<PublishResult> {
+export async function publishContent(input: PublishInput, pin: PinAdapter, sign: MessageSigner,
+  opts: { cache?: PinCache; onProgress?: (p: PublishProgress) => void } = {}): Promise<PublishResult> {
   const { check, problems } = precheck(input);
   if (problems.length) throw new CreatorError('manifest-files', problems.join(' / '));
   const byPath = new Map(input.files.map(f => [f.path, f]));
+  const cache = opts.cache ?? new Map();
+  const total = check.files.length + 1;
+  let done = 0;
   const entryOf = async (path: string): Promise<FileEntry> => {
     const f = byPath.get(path)!, c = check.files.find(x => x.path === path)!;
-    const r = await pin.add(path, f.bytes);
-    if (!CID_V0.test(r.cid) || r.size !== f.bytes.length) throw new CreatorError('manifest-files', `보관소가 이상한 답을 줬어요: ${path}`);
-    return { path, cid: r.cid, sha256: sha256Hex(f.bytes), size: f.bytes.length, mime: c.mime };
+    const sha = sha256Hex(f.bytes);
+    const hit = cache.get(sha);
+    let r: PinResult;
+    if (hit && CID_V0.test(hit.cid) && hit.size === f.bytes.length) r = hit;
+    else {
+      r = await pin.add(path, f.bytes);
+      if (!CID_V0.test(r.cid) || r.size !== f.bytes.length) throw new CreatorError('manifest-files', `보관소가 이상한 답을 줬어요: ${path}`);
+      cache.set(sha, { cid: r.cid, size: r.size });
+    }
+    opts.onProgress?.({ done: ++done, total, path, skipped: r === hit });
+    return { path, cid: r.cid, sha256: sha, size: f.bytes.length, mime: c.mime };
   };
   const files: FileEntry[] = [];
   for (const c of check.files.filter(x => x.role === 'content')) files.push(await entryOf(c.path));
@@ -105,9 +124,7 @@ export async function publishContent(input: PublishInput, pin: PinAdapter, sign:
     format: MANIFEST_FORMAT, version: MANIFEST_VERSION, type: input.type, asset: input.asset, title: input.title.trim(), description: input.description.trim(),
     files, cover, creator: { address: input.creatorAddress, receivingAddress: input.receivingAddress },
     price: input.priceAtoms === null ? null : { atoms: input.priceAtoms }, fee: { policy: FEE_POLICY, declaredBps: input.declaredFeeBps },
-    game: input.type === 'game' ? { entry: input.game?.entry ?? '', origin: input.game?.origin ?? null, capabilities: { identity: !!input.game?.identity, payment: !!input.game?.payment } } : null,
-    music: input.type === 'music' ? { previewFile: input.music?.previewFile ?? '', previewStartMs: input.music?.previewStartMs ?? 0, previewEndMs: input.music?.previewEndMs ?? 0 } : null,
-    createdAt: input.now.toISOString(),
+    details: input.details, createdAt: input.now.toISOString(),
   };
   const signature = await sign(input.creatorAddress, manifestSigningMessage(unsigned));
   const manifest = withSignature(unsigned, input.creatorAddress, signature);
@@ -116,6 +133,7 @@ export async function publishContent(input: PublishInput, pin: PinAdapter, sign:
   const verified = verifyManifest(manifestBytes, { expectedAsset: input.asset, prefix: input.prefix });
   const m = await pin.add('manifest.json', manifestBytes);
   if (!CID_V0.test(m.cid)) throw new CreatorError('manifest-files', '매니페스트 CID 가 이상해요');
+  opts.onProgress?.({ done: ++done, total, path: 'manifest.json', skipped: false });
   return { check, manifest, manifestBytes, manifestCid: m.cid, manifestSha256: verified.bytesSha256, pinnedBy: pin.holder, real: pin.real };
 }
 
@@ -146,17 +164,18 @@ export function planIssue(p: { asset: string; manifestCid: string; chain: string
   const blockers: string[] = [...name.problems];
   if (!CID_V0.test(p.manifestCid)) blockers.push('매니페스트 CID 가 없어요. 먼저 올려 주세요.');
   if (name.ownerTokenNeeded && !p.ownedAssets.includes(name.ownerTokenNeeded))
-    blockers.push(`이 이름 아래 만들려면 이 지갑에 「${name.ownerTokenNeeded}」 주인 표가 있어야 해요(접두어 방식은 대표 결정 대기).`);
+    blockers.push(`이 이름 아래 만들려면 이 지갑에 「${name.ownerTokenNeeded}」 주인 표가 있어야 해요.`);
   if (p.nameTaken === true) blockers.push('이미 있는 이름이에요. 자산 이름은 영구라 다시 쓸 수 없어요.');
   if (p.nameTaken === null) blockers.push('이름이 비어 있는지 노드에 확인하지 못했어요.');
   if (burn.status === 'mismatch') blockers.push(burn.say);
   if (!testChain && !(p.realMainnetEnabled ?? REAL_MAINNET_ISSUE_ENABLED)) blockers.push('실제 발행은 아직 꺼져 있어요(대표 결정 대기). 시험망에서만 발행할 수 있어요.');
   if (p.typedName !== p.asset) blockers.push('확인을 위해 자산 이름을 똑같이 다시 적어 주세요.');
   const irreversible = [
-    `발행하면 ${burn.rvn} RVN 이 소각 주소로 가서 영영 돌아오지 않아요. PLAY X 도 레이븐볼트도 받지 않아요.`,
-    '자산 이름은 영구예요. 지우거나 바꿀 수 없어요.',
-    '발행한 뒤에는 되돌릴 수 없어요. 매니페스트를 바꾸려면 재발행(추가 소각)이 필요해요.',
-    '발행해도 「검증됨」이 아니에요. 검증 전에는 외부 링크로만 보이고 지갑 결제·로그인이 연결되지 않아요.',
+    `등록하면 ${burn.rvn} RVN 이 소각 주소로 가서 영영 돌아오지 않아요. 이건 수수료가 아니라 보증(스팸 막기)이에요 — PLAY X 도 레이븐볼트도 받지 않아요.`,
+    '상품 이름(등록증 이름)은 영구예요. 지우거나 바꿀 수 없어요.',
+    '등록한 뒤에는 되돌릴 수 없어요. 내용을 바꾸려면 다시 등록(재발행, 추가 소각)이 필요해요.',
+    '등록해도 「검증됨」이 아니에요. 자동 점검을 통과하면 「보증」 표시와 경고를 달고 팔 수 있고(실행되는 게임은 제외), 신원·세이브 연결은 검증된 뒤에만 돼요.',
+    '환불·배송·티켓 취소 같은 판매 책임은 제작자에게 있어요. 레이븐볼트는 돈을 맡지 않아 대신 돌려줄 수 없어요.',
   ];
   return { params: { name: p.asset, qty: 1, units: 0, reissuable: true, ipfsHash: p.manifestCid }, burn, canIssue: blockers.length === 0, blockers, irreversible, chain: p.chain, testChain };
 }
@@ -165,4 +184,53 @@ export function planIssue(p: { asset: string; manifestCid: string; chain: string
 export class MockIssuer implements Issuer {
   readonly calls: IssueParams[] = [];
   async issue(params: IssueParams) { this.calls.push({ ...params }); return { txid: sha256Hex(new TextEncoder().encode(JSON.stringify(params))) }; }
+}
+
+/* ── 비용 한눈에(마법사 ⑤) ───────────────────────────────────────────── */
+
+/** 네트워크 수수료 추정(노드가 답하지 못할 때 쓰는 보수적 기본값). 발행 거래는 보통 이보다 작다 — 「추정」으로만 보인다. */
+export const NETWORK_FEE_FALLBACK_ATOMS = 1_000_000n; // 0.01 RVN
+export type CostPlan = {
+  burnAtoms: string; networkFeeAtoms: string; networkFeeEstimated: boolean; totalAtoms: string;
+  balanceAtoms: string | null; enough: boolean | null; shortAtoms: string; lines: string[];
+};
+/**
+ * 등록에 드는 돈: 소각(보증) + 네트워크 수수료. 잔액(확정분만)과 비교해 모자란 금액을 알려 준다.
+ * 판매 수수료는 여기에 없다 — 판매될 때 구매 거래에서 자동으로 떼고(지갑이 강제), 제작자가 미리 내는 돈이 아니다.
+ */
+export function costPlan(p: { burnRvn: number; networkFeeAtoms: bigint | null; balanceAtoms: bigint | null }): CostPlan {
+  const burn = BigInt(p.burnRvn) * 100_000_000n;
+  const fee = p.networkFeeAtoms !== null && p.networkFeeAtoms >= 0n ? p.networkFeeAtoms : NETWORK_FEE_FALLBACK_ATOMS;
+  const total = burn + fee;
+  const enough = p.balanceAtoms === null ? null : p.balanceAtoms >= total;
+  const short = p.balanceAtoms === null || enough ? 0n : total - p.balanceAtoms;
+  const lines = [
+    `보증(소각) ${atomsToRvn(burn)} RVN — 수수료가 아니에요. 아무도 받지 않고 영영 사라져요. 아무나 마구 올리지 못하게 막는 보증이에요.`,
+    `네트워크 수수료 약 ${atomsToRvn(fee)} RVN${p.networkFeeAtoms === null ? '(추정)' : ''} — 레이븐코인 거래를 처리하는 값이에요.`,
+    `합계 ${atomsToRvn(total)} RVN`,
+  ];
+  if (enough === null) lines.push('잔액을 확인하지 못했어요. 지갑이 동기화된 뒤 다시 확인해 주세요.');
+  else if (!enough) lines.push(`${atomsToRvn(short)} RVN 이 모자라요. 「받기」 화면의 내 주소로 RVN 을 받은 뒤(확정까지 몇 분) 다시 확인해 주세요.`);
+  else lines.push('잔액이 충분해요.');
+  return { burnAtoms: burn.toString(), networkFeeAtoms: fee.toString(), networkFeeEstimated: p.networkFeeAtoms === null, totalAtoms: total.toString(),
+    balanceAtoms: p.balanceAtoms === null ? null : p.balanceAtoms.toString(), enough, shortAtoms: short.toString(), lines };
+}
+
+/* ── 보관 상태 점검(「내 파일이 지금 받아지는지」) ────────────────────────── */
+
+/** cid 가 지금 네트워크에서 찾아지는가. 데스크탑은 기존 cid_alive 명령(제한 시간 안에 찾기)을 쓴다. */
+export type CidProbe = (cid: string) => Promise<boolean>;
+export type PinHealth = { ok: boolean; checked: number; missing: string[]; say: string };
+/** 매니페스트와 그 안의 모든 파일을 하나씩 찾아본다. 하나라도 못 찾으면 구매자 목록에서 숨겨질 수 있다. */
+export async function checkPinHealth(manifestCid: string, manifest: Pick<CreatorManifest, 'files' | 'cover'>, probe: CidProbe): Promise<PinHealth> {
+  const items: Array<[string, string]> = [['manifest.json', manifestCid], ...manifest.files.map(f => [f.path, f.cid] as [string, string]), ...(manifest.cover ? [[manifest.cover.path, manifest.cover.cid] as [string, string]] : [])];
+  const missing: string[] = [];
+  for (const [path, cid] of items) {
+    let alive = false;
+    try { alive = CID_V0.test(cid) && await probe(cid); } catch { alive = false; }
+    if (!alive) missing.push(path);
+  }
+  const ok = missing.length === 0;
+  return { ok, checked: items.length, missing,
+    say: ok ? `파일 ${items.length}개 모두 지금 받아져요.` : `${missing.length}개 파일을 지금 못 찾아요(${missing.slice(0, 3).join(', ')}). 이 컴퓨터를 켜 두고 IPFS 가 켜져 있는지 확인해 주세요.` };
 }

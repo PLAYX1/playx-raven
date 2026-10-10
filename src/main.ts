@@ -4,6 +4,7 @@ import "./sales-account.css";
 import { wireSalesAccount } from "./sales-account";
 import "./creator-publish.css";
 import { wireCreatorPublish } from "./creator-publish";
+import { wireOpenMarket } from "./open-market";
 import { openRaviStory } from "./desktop-links";
 import { homeSafety } from "./home-summary";
 import { installFirstRunBarrier, afterRaviLanding, deferUntilRaviLanding, finishRaviLanding } from "./firstrun";
@@ -4505,7 +4506,7 @@ function applySellerMode() {
   });
   const box = document.getElementById("seller-mode") as HTMLInputElement | null;
   if (box) box.checked = on;
-  if (!on && (currentPage === "sales" || currentPage === "creator")) showPage("settings");
+  if (!on && (currentPage === "sales" || currentPage === "creator" || currentPage === "market")) showPage("settings");
 }
 let lastReceivedHomeTx: string | null = null;
 
@@ -4770,7 +4771,7 @@ let salesAccount: ReturnType<typeof wireSalesAccount> | undefined;
 
 function showPage(id: string) {
   // 판매자 기능이 꺼져 있으면 판매 화면은 열리지 않는다(메뉴가 숨겨진 것만으로는 부족하다).
-  if ((id === "sales" || id === "creator") && !sellerModeOn()) return;
+  if ((id === "sales" || id === "creator" || id === "market") && !sellerModeOn()) return;
   if (id !== currentPage) salesAccount?.hide();
   // 🔴 화면을 떠나면 그 화면 때문에 도는 타이머를 끈다.
   //
@@ -18267,7 +18268,10 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("game-sales-open").onclick = () => showPage("sales");
   $("creator-open").onclick = () => showPage("creator");
   wireCreatorPublish({ invoke: (cmd, args) => invoke(cmd, args), back: () => showPage("games"),
-    askPassword: () => ask("지갑 비밀번호", "제작자 주소로 매니페스트에 서명한 뒤 지갑을 바로 잠가요.", { password: true }) });
+    askPassword: () => ask("지갑 비밀번호", "내 주소로 상품 정보에 서명한 뒤 지갑을 바로 잠가요.", { password: true }) });
+  // 열린 장터(시험): 노드 자산 목록·IPFS 읽기 명령이 아직 없어 source 없이 둔다 — 화면이 「아직 없어요」라고 말한다. 판매 스위치는 core 상수(꺼짐).
+  const market = wireOpenMarket({ back: () => showPage("games") });
+  $("market-open").onclick = () => { showPage("market"); void market.load(); };
   const sellerBox = $("seller-mode") as HTMLInputElement;
   sellerBox.onchange = () => {
     try { if (sellerBox.checked) localStorage.setItem(SELLER_MODE_KEY, "1"); else localStorage.removeItem(SELLER_MODE_KEY); } catch { sellerBox.checked = false; }

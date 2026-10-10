@@ -3734,90 +3734,211 @@
         <h1>게임</h1>
         <button class="card" id="ravi-story-open" type="button"><strong>라비 스토리</strong><span>기본 브라우저에서 게임 열기</span></button>
         <button type="button" id="game-sales-open" data-seller-only hidden inert>게임 판매 대금 받기</button>
-        <button type="button" id="creator-open" data-seller-only hidden inert>내 게임·음악 올리기</button>
+        <button type="button" id="creator-open" data-seller-only hidden inert>내 상품 올리기</button>
+        <button type="button" id="market-open" data-seller-only hidden inert>열린 장터(시험)</button>
         <p id="game-notice" role="status"></p>
       </section>
-      <!-- 판매자 기능을 켠 사람만. 규칙은 core/creator, 화면 배선은 src/creator-publish.ts -->
+      <!-- 판매자 기능을 켠 사람만. 규칙은 core/creator, 화면 배선은 src/creator-publish.ts(마법사)·src/open-market.ts(장터) -->
       <section class="page" id="page-creator" data-seller-only hidden inert>
-        <h1>내 게임·음악 올리기</h1>
-        <p>만든 게임이나 음악을 IPFS 에 올리고, 레이븐코인 자산으로 이름을 붙여요.</p>
-        <p class="creator-note" role="note">올리고 발행해도 처음에는 「미검증」이에요. 다른 사람에게는 외부 링크로만 보이고, 지갑 결제·로그인은 연결되지 않아요. 검증은 따로 신청해요.</p>
-        <div class="card">
-          <h2>1 · 무엇을 올릴까요?</h2>
-          <div class="creator-kinds" role="radiogroup" aria-label="올릴 종류">
-            <label class="check"><input type="radio" name="creator-type" value="game" checked /> 게임(웹 묶음)</label>
-            <label class="check"><input type="radio" name="creator-type" value="music" /> 음악(오디오 + 표지)</label>
+        <h1>내 상품 올리기</h1>
+        <p class="meta" id="cw-test-note" role="note"></p>
+        <ol class="cw-steps" id="cw-steps" aria-label="올리기 단계"></ol>
+        <p class="cw-resume" id="cw-resume" role="status" hidden><span id="cw-resume-say"></span> <button type="button" class="ghost" id="cw-resume-go">이어서 하기</button> <button type="button" class="ghost" id="cw-resume-drop">처음부터</button></p>
+
+        <div class="cw-panel card" data-step="0" id="cw-guide">
+          <h2>판매자 안내 — 먼저 읽어 주세요</h2>
+          <h3>올리는 법</h3>
+          <ol>
+            <li>무엇을 팔지 골라요(게임·음악·책·티켓·그 밖의 디지털 상품).</li>
+            <li>파일을 끌어다 놓아요.</li>
+            <li>이름·설명·가격을 적어요.</li>
+            <li>자동 점검 결과를 봐요.</li>
+            <li>드는 돈을 한눈에 확인해요.</li>
+            <li>파일을 올려요(중간에 닫아도 이어서 할 수 있어요).</li>
+            <li>마지막으로 확인하고 「상품 등록증」을 만들어요.</li>
+            <li>내 판매 목록·공유 글·판매 현황을 봐요.</li>
+          </ol>
+          <h3>드는 돈</h3>
+          <ul id="cw-guide-cost"></ul>
+          <h3>판매 수수료</h3>
+          <ul id="cw-guide-fee"></ul>
+          <h3>꼭 알아 두세요</h3>
+          <ul>
+            <li><b>되돌릴 수 없어요.</b> 상품 등록증(레이븐코인 자산)은 지우거나 이름을 바꿀 수 없고, 보증으로 소각한 RVN 은 돌아오지 않아요.</li>
+            <li><b>파일 보관은 내 책임이에요.</b> 파일은 이 컴퓨터의 IPFS 보관함에 있어요. 컴퓨터를 끄거나 파일을 지우면 구매자가 못 받을 수 있어요. 외부 보관 서비스는 아직 정하지 않았어요.</li>
+            <li><b>환불 책임은 판매자(나)에게 있어요.</b> 레이븐볼트는 돈을 맡지 않아 대신 돌려줄 수 없어요. 티켓은 재판매·환불·행사 취소 책임도 판매자에게 있어요.</li>
+            <li><b>올린 파일은 공개돼요.</b> IPFS 파일은 주소(CID)를 아는 사람 누구나 받을 수 있어요. 구매는 「소장 기록과 판매자 응원」이고, 파일을 잠그는 장치(DRM)는 없어요.</li>
+            <li>처음에는 「미검증」이에요. 자동 점검을 통과하면 「보증 · 미검증」 표시와 경고를 달고 팔 수 있어요(게임은 검증된 뒤에만 결제가 돼요).</li>
+            <li>세금·통신판매·공연·표 재판매 같은 법률 문제는 <b>전문가 확인이 필요해요.</b> 레이븐볼트는 이를 판단하지 않아요.</li>
+          </ul>
+          <p class="creator-note" id="cw-switch-note" role="note"></p>
+          <label class="check"><input type="checkbox" id="cw-guide-ok" /> 읽었어요</label>
+          <div class="cw-nav"><button type="button" id="cw-start" disabled>시작하기</button></div>
+        </div>
+
+        <div class="cw-panel card" data-step="1" hidden>
+          <h2>① 무엇을 팔까요?</h2>
+          <div class="cw-kinds" id="cw-kinds" role="radiogroup" aria-label="파는 것"></div>
+          <details class="cw-why"><summary>왜 필요해요?</summary><p>종류에 따라 올릴 수 있는 파일과 적어야 할 칸이 달라요. 게임처럼 코드를 실행하는 상품은 검증된 뒤에만 지갑 결제가 돼요.</p></details>
+        </div>
+
+        <div class="cw-panel card" data-step="2" hidden>
+          <h2>② 파일 끌어다 놓기</h2>
+          <div class="cw-drop" id="cw-drop" tabindex="0" role="button" aria-describedby="cw-drop-say">
+            <p><b>여기에 파일을 끌어다 놓으세요</b></p>
+            <p class="meta" id="cw-drop-say"></p>
+          </div>
+          <label class="creator-field">또는 파일 고르기<input type="file" id="cw-files" multiple /></label>
+          <label class="creator-field" id="cw-folder-wrap">폴더 통째로 고르기(게임)<input type="file" id="cw-folder" webkitdirectory multiple /></label>
+          <label class="creator-field">표지 그림(PNG·JPG·WEBP, 선택)<input type="file" id="cw-cover" accept=".png,.jpg,.jpeg,.webp" /></label>
+          <ul class="cw-filelist" id="cw-filelist"></ul>
+          <p class="meta" id="cw-files-say" role="status"></p>
+          <details class="cw-why"><summary>왜 필요해요?</summary><p>구매자가 받을 파일이에요. 파일마다 「지문」(SHA-256)을 남겨서, 나중에 누가 내용을 바꿔치기해도 구매자 지갑이 알아채요.</p></details>
+        </div>
+
+        <div class="cw-panel card" data-step="3" hidden>
+          <h2>③ 이름·설명·가격</h2>
+          <label class="creator-field">제목(구매자에게 보이는 이름, 한글 가능)<input id="cw-title" maxlength="80" autocomplete="off" /></label>
+          <label class="creator-field">설명<textarea id="cw-desc" maxlength="2000" rows="3"></textarea></label>
+          <label class="creator-field">상품 등록증 이름(영문 대문자·숫자·점·밑줄)
+            <span class="creator-asset-row"><code id="cw-prefix"></code><input id="cw-asset" maxlength="30" autocomplete="off" spellcheck="false" /></span></label>
+          <div class="cw-suggest" id="cw-suggest" aria-label="이름 제안"></div>
+          <p class="meta" id="cw-name-say" role="status"></p>
+          <ul class="cw-warnlist" id="cw-name-warn"></ul>
+          <details class="cw-why"><summary>왜 필요해요?</summary><p>「상품 등록증」은 레이븐코인에 영원히 남는 이름표예요(전문 용어로 「자산」). 체인이 영문 대문자 이름만 받아서 따로 적어요. 같은 이름은 두 번 만들 수 없어요.</p></details>
+          <label class="creator-field">가격(RVN, 비우면 무료)<input id="cw-price" inputmode="decimal" autocomplete="off" /></label>
+          <div class="cw-fee" id="cw-fee" role="status"></div>
+          <label class="creator-field">판매 대금 받을 내 주소<span class="creator-asset-row"><input id="cw-address" autocomplete="off" spellcheck="false" placeholder="R…" /><button type="button" class="ghost" id="cw-new-address">새 주소 받기</button></span></label>
+          <p class="meta">이 주소로 서명하고, 판매 대금도 이 주소로 바로 들어와요.</p>
+          <div id="cw-fields-game" class="cw-fields" hidden>
+            <label class="creator-field">여는 파일<select id="cw-entry"></select></label>
+            <label class="creator-field">외부 링크(선택, https)<input id="cw-origin" autocomplete="off" spellcheck="false" placeholder="https://" /></label>
+            <label class="check"><input type="checkbox" id="cw-cap-identity" /> 지갑으로 로그인 요청(검증 뒤에만 켜져요)</label>
+            <label class="check"><input type="checkbox" id="cw-cap-payment" /> 지갑 결제 요청(검증 뒤에만 켜져요)</label>
+          </div>
+          <div id="cw-fields-music" class="cw-fields" hidden>
+            <label class="creator-field">미리듣기 파일<select id="cw-preview-file"></select></label>
+            <span class="creator-asset-row"><label class="creator-field">미리듣기 시작(초)<input id="cw-preview-start" inputmode="numeric" value="0" /></label>
+            <label class="creator-field">끝(초)<input id="cw-preview-end" inputmode="numeric" value="30" /></label></span>
+          </div>
+          <div id="cw-fields-book" class="cw-fields" hidden>
+            <label class="creator-field">책 파일(PDF·EPUB)<select id="cw-book-file"></select></label>
+            <label class="creator-field">미리보기 PDF(앞 몇 쪽만 따로 만든 파일, 선택)<select id="cw-book-preview"></select></label>
+            <span class="creator-asset-row"><label class="creator-field">미리보기 쪽수<input id="cw-book-pages" inputmode="numeric" value="5" /></label>
+            <label class="creator-field">전체 쪽수(모르면 비우기)<input id="cw-book-total" inputmode="numeric" /></label></span>
+          </div>
+          <div id="cw-fields-ticket" class="cw-fields" hidden>
+            <label class="creator-field">행사 이름<input id="cw-t-event" maxlength="80" /></label>
+            <span class="creator-asset-row"><label class="creator-field">시작(날짜·시각)<input id="cw-t-start" type="datetime-local" /></label>
+            <label class="creator-field">끝(선택)<input id="cw-t-end" type="datetime-local" /></label></span>
+            <label class="creator-field">장소<input id="cw-t-venue" maxlength="200" /></label>
+            <label class="creator-field">판매 수량<input id="cw-t-qty" inputmode="numeric" value="50" /></label>
+            <label class="creator-field">환불 규정<textarea id="cw-t-refund" maxlength="1000" rows="2"></textarea></label>
+            <label class="creator-field">연락처(이메일 등)<input id="cw-t-contact" maxlength="200" /></label>
+            <p class="creator-note" role="note">입장 확인은 서버 없이 해요: 결제를 확인한 뒤 내가 서명한 입장 코드(QR)를 구매자에게 보내고, 행사장 기기가 그 서명을 확인해요. 문이 여러 개면 「이미 사용」이 기기끼리 공유되지 않아요. 재판매·환불·행사 취소 책임은 판매자에게 있어요(공연·표 재판매 관련 법률은 전문가 확인 필요).</p>
+          </div>
+          <div id="cw-fields-digital" class="cw-fields" hidden>
+            <label class="creator-field">상품 종류 한 줄(예: 그림 모음, 악보)<input id="cw-d-label" maxlength="40" /></label>
           </div>
         </div>
-        <div class="card">
-          <h2>2 · 정보</h2>
-          <label class="creator-field">제목<input id="creator-title" maxlength="80" autocomplete="off" /></label>
-          <label class="creator-field">설명<textarea id="creator-desc" maxlength="2000" rows="3"></textarea></label>
-          <label class="creator-field">자산 이름(영문 대문자·숫자·점·밑줄)
-            <span class="creator-asset-row"><code id="creator-prefix"></code><input id="creator-asset" maxlength="30" autocomplete="off" spellcheck="false" /></span></label>
-          <p class="meta" id="creator-name-say" role="status"></p>
-          <p class="meta">앞부분(접두어)은 임시예요. 대표 결정에 따라 바뀔 수 있어요.</p>
-          <label class="creator-field">가격(RVN, 비우면 무료)<input id="creator-price" inputmode="decimal" autocomplete="off" /></label>
-          <p class="meta" id="creator-fee" role="status"></p>
-          <label class="creator-field">제작자 주소(이 주소로 서명해요)<span class="creator-asset-row"><input id="creator-address" autocomplete="off" spellcheck="false" placeholder="R…" /><button type="button" class="ghost" id="creator-new-address">새 주소 받기</button></span></label>
-          <label class="creator-field">판매 대금 받을 주소(비우면 제작자 주소)<input id="creator-receiving" autocomplete="off" spellcheck="false" placeholder="R…" /></label>
-          <div id="creator-game-fields">
-            <label class="creator-field">여는 파일<select id="creator-entry"></select></label>
-            <label class="creator-field">외부 링크(선택, https)<input id="creator-origin" autocomplete="off" spellcheck="false" placeholder="https://" /></label>
-            <label class="check"><input type="checkbox" id="creator-cap-identity" /> 지갑으로 로그인 요청(검증 뒤에만 켜져요)</label>
-            <label class="check"><input type="checkbox" id="creator-cap-payment" /> 지갑 결제 요청(검증 뒤에만 켜져요)</label>
-          </div>
-          <div id="creator-music-fields" hidden>
-            <label class="creator-field">미리듣기 파일<select id="creator-preview-file"></select></label>
-            <span class="creator-asset-row"><label class="creator-field">미리듣기 시작(초)<input id="creator-preview-start" inputmode="numeric" value="0" /></label>
-            <label class="creator-field">끝(초)<input id="creator-preview-end" inputmode="numeric" value="30" /></label></span>
-            <p class="meta">사기 전에 들을 수 있는 부분이에요. 60초까지 정할 수 있어요.</p>
-          </div>
+
+        <div class="cw-panel card" data-step="4" hidden>
+          <h2>④ 자동 점검</h2>
+          <div id="cw-check" role="status"></div>
+          <button type="button" class="ghost" id="cw-recheck">다시 점검</button>
+          <details class="cw-why"><summary>왜 필요해요?</summary><p>파일 이름과 실제 내용이 다른 파일, 실행 파일, 지갑 복구 단어를 묻는 글 같은 것을 미리 걸러요. 구매자 지갑도 사기 전에 같은 점검을 다시 해요.</p></details>
         </div>
-        <div class="card">
-          <h2>3 · 파일</h2>
-          <label class="creator-field">파일 고르기<input type="file" id="creator-files" multiple /></label>
-          <label class="creator-field" id="creator-folder-wrap">폴더 통째로 고르기<input type="file" id="creator-folder" webkitdirectory multiple /></label>
-          <label class="creator-field">표지 그림(PNG·JPG·WEBP, 선택)<input type="file" id="creator-cover" accept=".png,.jpg,.jpeg,.webp" /></label>
-          <p class="meta" id="creator-files-say" role="status"></p>
-          <button type="button" id="creator-check-run">검사하기</button>
-          <div id="creator-check" role="status"></div>
+
+        <div class="cw-panel card" data-step="5" hidden>
+          <h2>⑤ 드는 돈 한눈에</h2>
+          <ul class="cw-costs" id="cw-cost"></ul>
+          <div class="cw-fee" id="cw-cost-fee"></div>
+          <p class="meta" id="cw-receive" role="status"></p>
+          <button type="button" class="ghost" id="cw-balance">잔액 다시 확인</button>
+          <details class="cw-why"><summary>왜 필요해요?</summary><p>상품 등록증을 만들 때 보증 RVN 이 소각되고 네트워크 수수료가 들어요. 잔액이 모자라면 등록이 실패하니 미리 확인해요. 판매 수수료는 지금 내는 돈이 아니라 팔릴 때 나뉘어요.</p></details>
         </div>
-        <div class="card">
-          <h2>4 · 올리기</h2>
-          <p>파일을 보관하는 곳: <b id="creator-pin-holder"></b></p>
-          <p class="meta">IPFS 파일은 누군가 계속 보관(고정)해야 남아요. 외부 보관 서비스는 아직 정하지 않았어요.</p>
-          <button type="button" id="creator-upload" disabled>올리고 서명하기</button>
-          <p id="creator-upload-say" role="status"></p>
-          <dl id="creator-result" class="creator-kv" hidden>
-            <dt>매니페스트 CID</dt><dd><code id="creator-cid"></code></dd>
-            <dt>매니페스트 SHA-256</dt><dd><code id="creator-sha"></code></dd>
-            <dt>보관한 곳</dt><dd id="creator-pinned-by"></dd>
-          </dl>
+
+        <div class="cw-panel card" data-step="6" hidden>
+          <h2>⑥ 올리기</h2>
+          <p>파일을 보관하는 곳: <b id="cw-pin-holder"></b></p>
+          <div class="cw-progress" role="progressbar" id="cw-progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="올리기 진행률"><span id="cw-progress-bar"></span></div>
+          <p id="cw-upload-say" role="status"></p>
+          <button type="button" id="cw-upload">올리고 서명하기</button>
+          <button type="button" class="ghost" id="cw-pin-check" disabled>내 파일이 지금 받아지는지 확인</button>
+          <p class="meta" id="cw-pin-say" role="status"></p>
+          <details class="cw-why"><summary>왜 필요해요?</summary><p>파일은 IPFS 라는 나눠 보관하는 저장소에 올라가요. 누군가(지금은 이 컴퓨터) 계속 보관해야 구매자가 받을 수 있어요. 중간에 닫아도, 다시 열어 같은 파일을 고르면 올린 것은 건너뛰어요.</p></details>
         </div>
-        <div class="card" id="creator-confirm" hidden>
-          <h2>5 · 발행 전 확인</h2>
+
+        <div class="cw-panel card" data-step="7" hidden>
+          <h2>⑦ 마지막 확인</h2>
           <dl class="creator-kv">
-            <dt>자산 이름</dt><dd><code id="creator-c-name"></code></dd>
-            <dt>소각 비용</dt><dd><b id="creator-c-burn"></b><br /><span class="meta" id="creator-c-burn-check"></span></dd>
-            <dt>매니페스트 CID</dt><dd><code id="creator-c-cid"></code></dd>
-            <dt>네트워크</dt><dd id="creator-c-chain"></dd>
+            <dt>상품 등록증 이름</dt><dd><code id="cw-c-name"></code></dd>
+            <dt>보증(소각)</dt><dd><b id="cw-c-burn"></b><br /><span class="meta" id="cw-c-burn-check"></span></dd>
+            <dt>판매 수수료</dt><dd id="cw-c-fee"></dd>
+            <dt>네트워크</dt><dd id="cw-c-chain"></dd>
           </dl>
           <h3>되돌릴 수 없어요</h3>
-          <ul id="creator-c-irreversible"></ul>
-          <ul id="creator-c-blockers"></ul>
-          <label class="creator-field">확인을 위해 자산 이름을 똑같이 적어 주세요<input id="creator-typed" autocomplete="off" spellcheck="false" /></label>
-          <button type="button" id="creator-issue" disabled>발행하기</button>
-          <p id="creator-issue-say" role="status"></p>
+          <ul id="cw-c-irreversible"></ul>
+          <ul id="cw-c-blockers"></ul>
+          <label class="creator-field">확인을 위해 상품 등록증 이름을 똑같이 적어 주세요<input id="cw-typed" autocomplete="off" spellcheck="false" /></label>
+          <button type="button" id="cw-issue" disabled>등록하기</button>
+          <p id="cw-issue-say" role="status"></p>
         </div>
-        <div class="card" id="creator-done" hidden>
-          <h2>발행했어요 — 지금은 「미검증」</h2>
-          <p>거래 번호 <code id="creator-txid"></code></p>
-          <p>아래 등록 신청서를 저장해 두세요. 검증을 받으려면 이 신청서를 보내요(보내는 곳은 정해지면 알려 드려요).</p>
-          <label class="creator-field">등록 신청서<textarea id="creator-request" rows="8" readonly></textarea></label>
-          <button type="button" id="creator-copy-request" class="ghost">신청서 복사</button>
+
+        <div class="cw-panel card" data-step="8" hidden>
+          <h2>⑧ 등록했어요</h2>
+          <p>거래 번호 <code id="cw-txid"></code></p>
+          <h3>내 판매 목록</h3>
+          <ul class="cw-mine" id="cw-mine"></ul>
+          <h3>공유 글</h3>
+          <label class="creator-field">복사해서 알려 주세요<textarea id="cw-share" rows="4" readonly></textarea></label>
+          <button type="button" class="ghost" id="cw-share-copy">공유 글 복사</button>
+          <h3>판매 현황</h3>
+          <p id="cw-sales" role="status"></p>
+          <details><summary>검증 신청서(선택)</summary><label class="creator-field">「검증됨」을 받으려면 이 신청서를 보내요(보내는 곳은 정해지면 알려 드려요)<textarea id="cw-request" rows="6" readonly></textarea></label></details>
         </div>
-        <button type="button" id="creator-back">게임으로 돌아가기</button>
+
+        <p class="cw-error" id="cw-error" role="alert"></p>
+        <div class="cw-nav"><button type="button" class="ghost" id="cw-prev">이전</button><button type="button" id="cw-next">다음</button></div>
+        <button type="button" class="ghost" id="creator-back">게임으로 돌아가기</button>
+      </section>
+
+      <!-- 열린 장터(구매자). 판매 스위치가 꺼져 있고 노드 목록 명령이 아직 없어 판매자 기능 뒤에 둔다(시험). -->
+      <section class="page" id="page-market" data-seller-only hidden inert>
+        <h1>열린 장터 <span class="meta">(시험)</span></h1>
+        <p class="creator-note" role="note" id="mk-note"></p>
+        <div id="mk-list-view">
+          <ul class="mk-list" id="mk-list"></ul>
+          <p id="mk-list-say" role="status"></p>
+        </div>
+        <div id="mk-detail" class="card" hidden>
+          <p><span class="mk-badge" id="mk-d-badge"></span> <span class="meta" id="mk-d-kind"></span></p>
+          <h2 id="mk-d-title"></h2>
+          <p id="mk-d-desc"></p>
+          <p class="creator-note" id="mk-d-warning" role="note"></p>
+          <ul class="wz-warnlist" id="mk-d-alerts"></ul>
+          <dl class="creator-kv" id="mk-d-facts"></dl>
+          <div id="mk-d-preview"></div>
+          <button type="button" class="ghost" id="mk-d-check">자동 점검</button>
+          <div id="mk-d-check-say" role="status"></div>
+          <button type="button" id="mk-d-buy" disabled>구매하기</button>
+          <p class="meta" id="mk-d-buy-say" role="status"></p>
+          <button type="button" class="ghost" id="mk-d-back">목록으로</button>
+        </div>
+        <div id="mk-confirm" class="card" hidden>
+          <h2>구매 확인</h2>
+          <ul id="mk-c-lines"></ul>
+          <p class="meta" id="mk-c-note"></p>
+          <ul id="mk-c-blockers"></ul>
+          <button type="button" id="mk-c-pay">이 금액으로 사기</button>
+          <button type="button" class="ghost" id="mk-c-cancel">취소</button>
+          <p id="mk-c-say" role="status"></p>
+        </div>
+        <div class="card">
+          <h2>내 구매 목록</h2>
+          <ul id="mk-purchases"></ul>
+        </div>
+        <button type="button" class="ghost" id="market-back">게임으로 돌아가기</button>
       </section>
       <section class="page" id="page-ravi">
         <button id="ravi-menu-open" type="button">라비와 대화</button>

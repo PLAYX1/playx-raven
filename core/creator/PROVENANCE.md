@@ -1,10 +1,10 @@
 # core/creator — 지갑 저장소에서 복사
 
-원본: `ravenvault` 저장소 `core/creator/*` (브랜치 `claude/rv-creator-core`, 수수료 규약 v4 커밋 `5a25a3a` 위).
+원본: `ravenvault` 저장소 `core/creator/*` (브랜치 `claude/rv-open-seller-core`, 기준 `7c73845` 위 — 2단계 누구나 판매).
 아래 파일은 원본과 **바이트가 같아야** 한다. SHA-256 은 `vendor-sha256.json` 에 고정했고 `scripts/creator-publish.test.mjs` 가 확인한다
 (원본 체크아웃이 있으면 원본과도 직접 비교하고, 없으면 그 시험만 SKIP 으로 명시한다).
 
-- `core/creator/bytes.ts` · `limits.ts` · `asset-name.ts` · `manifest.ts` · `publish.ts` · `listing.ts`
+- `core/creator/bytes.ts` · `limits.ts` · `asset-name.ts` · `manifest.ts` · `publish.ts` · `listing.ts` · `open-market.ts` · `ticket.ts`
 - `core/game-registry/platform-fee.ts` (수수료 분할 — 지갑 v4 와 같은 파일)
 
 복사하지 않은 것: `core/creator/purchase.ts`(구매자 거래 — 지갑의 직접 결제 부품에 기댄다)와 시험 파일. 구매자 쪽 거래 시험은 지갑 저장소에서 돈다.

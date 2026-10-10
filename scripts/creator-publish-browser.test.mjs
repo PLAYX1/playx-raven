@@ -1,12 +1,14 @@
-// Creator publish in real Chrome (production dist, synthetic fixture). Upload → sign → confirm → issue on a MOCK chain.
-// IPFS adds, signing and issuance are answered by this harness (exposeFunction + a wrapped Tauri invoke); nothing reaches
-// a real node, IPFS daemon or network. Keys are throwaway. Also: mainnet stays locked, owner token gate, bad files,
-// music flow, text contrast >= 4.5:1 (light/dark, 390 and 1440 wide) and no horizontal overflow at 390.
+// Open-seller wizard + open market in real Chrome (production dist, synthetic fixture, MOCK chain only).
+// IPFS adds, cid_alive, signing, balance, issuance are answered by this harness (exposeFunction + a wrapped Tauri invoke);
+// nothing reaches a real node, IPFS daemon or network. Keys are throwaway. Covers: every wizard step at 390/1440 × light/dark
+// (screenshot + text contrast >= 4.5:1 + no horizontal overflow), resume after a failed upload, name conflict / official-looking
+// warnings, cost shortfall, mainnet lock, seller switch off, and the buyer screens (list → detail → auto-check → preview →
+// confirm with fee split → mock purchase → purchase list) with the sales switch off in production and on only in a test re-wire.
 import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { readFile, stat, writeFile } from 'node:fs/promises';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync, statSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { resolve, join, extname, sep } from 'node:path';
@@ -19,13 +21,28 @@ const root = resolve(import.meta.dirname, '..');
 const built = await build({ entryPoints: [join(root, 'scripts/fixtures/creator-core-entry.ts')], bundle: true, write: false, platform: 'node', format: 'cjs', logLevel: 'silent' });
 const core = { exports: {} };
 new Function('require', 'exports', 'module', built.outputFiles[0].text)(createRequire(import.meta.url), core.exports, core);
-const { mockCid, signMessageForTest, randomKey, addressOf, verifyManifest } = core.exports;
+const { mockCid, signMessageForTest, randomKey, addressOf, verifyManifest, publishContent, MockPinAdapter } = core.exports;
+const marketBundle = (await build({ stdin: { contents: "import { wireOpenMarket } from './src/open-market.ts'; window.__wireOpenMarket = wireOpenMarket;", resolveDir: root, loader: 'ts' },
+  bundle: true, write: false, platform: 'browser', format: 'iife', logLevel: 'silent' })).outputFiles[0].text;
 const KEY = randomKey();
 const ADDRESS = addressOf(KEY);
+const RECEIVING = 'RCJPGkCQi5NpBgtj8qkjGcSugfWRa3iQiS';
 
-let work, dist, browser, server, origin, files;
+let work, dist, browser, server, origin, shotDir;
+const enc = s => new TextEncoder().encode(s);
+const PNG = n => Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 73, 72, 68, 82, n]);
+const PDF = s => enc(`%PDF-1.7\n${s}\n%%EOF`);
+const EPUB = () => { const h = new Uint8Array(30); h.set([0x50, 0x4b, 0x03, 0x04]); return Uint8Array.from([...h, ...enc('mimetypeapplication/epub+zip rest')]); };
+const MP3 = Uint8Array.from([0x49, 0x44, 0x33, 3, 0, 0, 0, 0, 0, 0, 0xff, 0xfb, 0x90, 0x64]);
+const FILES = {
+  book: [{ name: 'sea.epub', type: 'application/epub+zip', bytes: EPUB() }, { name: 'sea-preview.pdf', type: 'application/pdf', bytes: PDF('preview') }, { name: 'cover.png', type: 'image/png', bytes: PNG(2) }],
+  game: [{ name: 'index.html', type: 'text/html', bytes: enc('<!doctype html><script src="game.js"></script>') }, { name: 'game.js', type: '', bytes: enc('console.log(1)') }],
+  exe: [{ name: 'evil.pdf', type: 'application/pdf', bytes: enc('MZ not a pdf') }],
+};
+
 before(async () => {
-  work = mkdtempSync(join(tmpdir(), 'rv-creator-ui-'));
+  work = mkdtempSync(join(tmpdir(), 'rv-open-seller-ui-'));
+  shotDir = process.env.RV_CREATOR_SHOTS || join(work, 'shots'); mkdirSync(shotDir, { recursive: true });
   dist = join(work, 'dist');
   execFileSync(process.execPath, [resolve(root, 'node_modules/vite/bin/vite.js'), 'build', '--outDir', dist, '--emptyOutDir', '--logLevel', 'error'], { cwd: root, stdio: ['ignore', 'ignore', 'inherit'] });
   const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2', '.jpg': 'image/jpeg', '.webp': 'image/webp' };
@@ -41,74 +58,75 @@ before(async () => {
   await new Promise(r => server.listen(0, '127.0.0.1', r));
   origin = `http://127.0.0.1:${server.address().port}`;
   browser = await puppeteer.launch({ executablePath: process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true, userDataDir: join(work, 'profile'), args: ['--no-first-run', '--disable-background-networking'] });
-  // Test files on disk (uploadFile needs real paths).
-  const png = n => Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 73, 72, 68, 82, n]);
-  files = {
-    index: join(work, 'index.html'), js: join(work, 'game.js'), hero: join(work, 'hero.png'), cover: join(work, 'cover.png'),
-    exe: join(work, 'evil.exe'), mp3: join(work, 'song.mp3'), fake: join(work, 'fake.mp3'),
-  };
-  writeFileSync(files.index, '<!doctype html><html><body><script src="game.js"></script></body></html>');
-  writeFileSync(files.js, 'console.log("star run")');
-  writeFileSync(files.hero, png(1)); writeFileSync(files.cover, png(2));
-  writeFileSync(files.exe, 'MZ not allowed');
-  writeFileSync(files.mp3, Buffer.from([0x49, 0x44, 0x33, 3, 0, 0, 0, 0, 0, 0, 0xff, 0xfb, 0x90, 0x64]));
-  writeFileSync(files.fake, png(3)); // a PNG named .mp3
 });
-after(async () => { await browser?.close(); server?.close(); if (work) rmSync(work, { recursive: true, force: true }); });
+after(async () => { await browser?.close(); server?.close(); if (work && !process.env.RV_KEEP_WORK) rmSync(work, { recursive: true, force: true }); });
 
-/** Harness answers for the five commands this page uses; everything else falls through to the shared fixture. */
-function installCreatorHarness({ chain, ownerTokens }) {
+/** Harness answers for the commands the wizard uses; everything else falls through to the shared fixture. */
+function installCreatorHarness({ chain, balance, taken, failPinAt, dead }) {
   const base = window.__TAURI_INTERNALS__.invoke;
   const calls = window.__creatorCalls = [];
+  const pinned = window.__pinnedCids = new Map();
+  let adds = 0;
   const wrap = async (cmd, args) => {
-    if (cmd === 'ipfs_add_file') { calls.push({ cmd, name: args.file.name, size: args.file.bytes.length }); return { cid: await window.__mockCid(args.file.bytes), name: args.file.name, size: args.file.bytes.length }; }
+    if (cmd === 'ipfs_add_file') {
+      adds++; calls.push({ cmd, name: args.file.name, size: args.file.bytes.length });
+      if (failPinAt && adds === failPinAt) throw new Error('IPFS 가 응답하지 않아요(시험)');
+      const cid = await window.__mockCid(args.file.bytes); pinned.set(cid, args.file.name); return { cid, name: args.file.name, size: args.file.bytes.length };
+    }
+    if (cmd === 'cid_alive') { calls.push({ cmd, cid: args.cid }); return pinned.has(args.cid) && !(dead ?? []).includes(pinned.get(args.cid)); }
     if (cmd === 'sign_message') { calls.push({ cmd, address: args.address, withPassword: 'passphrase' in args }); return { address: args.address, message: args.message, signature: await window.__testSign(args.address, args.message) }; }
-    if (cmd === 'owner_tokens') return ownerTokens;
-    if (cmd === 'name_taken') { calls.push({ cmd, name: args.name }); return false; }
+    if (cmd === 'name_taken') { calls.push({ cmd, name: args.name }); return (taken ?? []).includes(args.name); }
     if (cmd === 'node_status') { const s = await base(cmd, args); return { ...s, chain }; }
-    if (cmd === 'issue_asset') { calls.push({ cmd, args }); return { txid: 'cd'.repeat(32), owner_token: 'PLAYXG/STAR_RUN!' }; }
+    if (cmd === 'wallet_balance') return { confirmed: balance, unconfirmed: 0 };
+    if (cmd === 'receive_address') return { address: window.__testAddress, reused: true, mine: true };
+    if (cmd === 'issue_asset') { calls.push({ cmd, args }); return { txid: 'cd'.repeat(32), owner_token: args.name + '!' }; }
     if (cmd === 'new_address') return window.__testAddress;
     return base(cmd, args);
   };
   window.__TAURI_INTERNALS__.invoke = wrap; window.__TAURI__.core.invoke = wrap;
 }
 
-async function openCreator({ width = 1440, height = 900, theme = 'light', chain = 'regtest', ownerTokens = ['PLAYXG!'] } = {}) {
+async function openApp({ width = 1440, height = 900, theme = 'light', chain = 'regtest', balance = 600, taken = [], failPinAt = 0, dead = [], seller = true, draft = null } = {}) {
   const page = await browser.newPage();
+  page.on('pageerror', e => { page.__errors = [...(page.__errors ?? []), e.message]; });
   await page.setViewport({ width, height });
   await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: theme }, { name: 'prefers-reduced-motion', value: 'reduce' }]);
   await page.setRequestInterception(true);
   page.on('request', r => (new URL(r.url()).origin === origin && r.method() === 'GET') ? r.continue() : r.abort());
   await page.exposeFunction('__mockCid', bytes => mockCid(Uint8Array.from(bytes)));
   await page.exposeFunction('__testSign', (address, message) => { if (address !== ADDRESS) throw Error('wrong address'); return signMessageForTest(message, KEY); });
-  await page.evaluateOnNewDocument(installFixture, { theme, sales: true, seller: true });
-  await page.evaluateOnNewDocument(installCreatorHarness, { chain, ownerTokens });
+  await page.evaluateOnNewDocument(installFixture, { theme, sales: true, seller });
+  await page.evaluateOnNewDocument(installCreatorHarness, { chain, balance, taken, failPinAt, dead });
   await page.evaluateOnNewDocument(a => { window.__testAddress = a; }, ADDRESS);
+  if (draft) await page.evaluateOnNewDocument(d => { localStorage.setItem('rv-creator-draft-v2', d); }, draft);
   await page.goto(origin + '/', { waitUntil: 'networkidle0' });
   await page.waitForFunction(() => document.querySelector('#page-home.on') && !document.documentElement.hasAttribute('data-ravi-arriving'), { timeout: 20000 });
   await page.evaluate(() => document.querySelector('nav')?.classList.add('more-open'));
   await page.click('nav a[data-page="games"]');
   await page.waitForFunction(() => document.querySelector('#page-games.on'));
+  return page;
+}
+async function openCreator(opts) {
+  const page = await openApp(opts);
   await page.click('#creator-open');
   await page.waitForFunction(() => document.querySelector('#page-creator.on'));
   return page;
 }
-const text = (page, sel) => page.$eval(sel, e => e.textContent.replace(/\s+/g, ' ').trim());
-const visible = (page, sel) => page.$eval(sel, e => !e.closest('[hidden]') && e.getClientRects().length > 0);
-
-async function fillGame(page) {
-  await page.type('#creator-title', '별 달리기');
-  await page.type('#creator-asset', 'STAR_RUN');
-  await page.type('#creator-price', '300');
-  await page.click('#creator-new-address');
-  await page.waitForFunction(a => document.querySelector('#creator-address').value === a, {}, ADDRESS);
-  await (await page.$('#creator-files')).uploadFile(files.index, files.js, files.hero);
-  await (await page.$('#creator-cover')).uploadFile(files.cover);
-  await page.waitForFunction(() => /3개 파일 · 표지 1장/.test(document.querySelector('#creator-files-say').textContent));
+const text = (page, sel) => page.$eval(sel, e => e.tagName === 'TEXTAREA' ? e.value : e.textContent.replace(/\s+/g, ' ').trim());
+const stepNow = page => page.evaluate(() => Number([...document.querySelectorAll('#page-creator .cw-panel')].find(p => !p.hidden)?.dataset.step));
+const disabled = (page, sel) => page.$eval(sel, b => b.disabled);
+async function next(page, want) { await page.click('#cw-next'); await page.waitForFunction(w => Number([...document.querySelectorAll('#page-creator .cw-panel')].find(p => !p.hidden)?.dataset.step) === w, { timeout: 10000 }, want); }
+async function dropFiles(page, files) {
+  await page.evaluate(list => {
+    const dt = new DataTransfer();
+    for (const f of list) dt.items.add(new File([Uint8Array.from(f.bytes)], f.name, { type: f.type }));
+    document.querySelector('#cw-drop').dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }));
+  }, files.map(f => ({ name: f.name, type: f.type, bytes: Array.from(f.bytes) })));
 }
+const setValue = (page, sel, v) => page.$eval(sel, (e, val) => { e.value = val; e.dispatchEvent(new Event('input', { bubbles: true })); e.dispatchEvent(new Event('change', { bubbles: true })); }, v);
 
-// All visible text in the creator page against the alpha-composited background behind it.
-function textContrast() {
+// All visible text inside `scope` against the alpha-composited background behind it.
+function textContrast(scope) {
   const parse = c => { const v = c.match(/[\d.]+/g)?.map(Number); if (!v || v.length < 3) return [0, 0, 0, 0];
     return c.startsWith('color(') ? [v[0], v[1], v[2], v[3] ?? 1] : [v[0] / 255, v[1] / 255, v[2] / 255, v[3] ?? 1]; };
   const over = (a, b) => [...a.slice(0, 3).map((x, i) => x * a[3] + b[i] * (1 - a[3])), 1];
@@ -116,7 +134,7 @@ function textContrast() {
   const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); };
   const opacityOf = el => { let o = 1; for (let p = el; p; p = p.parentElement) o *= parseFloat(getComputedStyle(p).opacity); return o; };
   const out = [];
-  for (const n of document.querySelectorAll('#page-creator *')) {
+  for (const n of document.querySelectorAll(scope + ' *')) {
     if (![...n.childNodes].some(t => t.nodeType === 3 && t.textContent.trim())) continue;
     const r = n.getBoundingClientRect(), s = getComputedStyle(n);
     if (!r.width || !r.height || s.visibility !== 'visible' || n.closest('[hidden]') || (n.disabled && n.tagName === 'BUTTON')) continue;
@@ -128,148 +146,354 @@ function textContrast() {
   }
   return out;
 }
-const overflow390 = page => page.evaluate(() => {
+const overflow = (page, scope) => page.evaluate(sc => {
   const vw = document.documentElement.clientWidth;
-  const wide = [...document.querySelectorAll('#page-creator *')].filter(e => { const r = e.getBoundingClientRect(); return r.width && r.right > vw + 1; })
-    .map(e => (e.id ? '#' + e.id : e.tagName.toLowerCase()) + ':' + Math.round(e.getBoundingClientRect().right));
-  return { vw, wide: wide.slice(0, 10) };
-});
-
-test('game: upload → creator signature → confirm (burn 「확인 불가」, irreversible) → issue on the mock chain → unverified request', { timeout: 300_000 }, async () => {
-  const page = await openCreator();
-  assert.equal(await text(page, '#creator-prefix'), 'PLAYXG/');
-  assert.match(await text(page, '#creator-pin-holder'), /이 컴퓨터의 IPFS/);
-  await fillGame(page);
-  assert.match(await text(page, '#creator-fee'), /300 RVN.*255 RVN.*45 RVN.*15%.*초안/);
-  assert.match(await text(page, '#creator-name-say'), /PLAYXG\/STAR_RUN/);
-  assert.equal(await page.$eval('#creator-upload', b => b.disabled), true, 'upload locked before the check');
-  await page.click('#creator-check-run');
-  assert.match(await text(page, '#creator-check'), /올릴 수 있어요 · 파일 4개/);
-  assert.match(await text(page, '#creator-check'), /코드를 실행해요.*나쁜 코드를 다 찾아내지 못해요/);
-  assert.equal(await page.$eval('#creator-upload', b => b.disabled), false);
-  await page.click('#creator-upload');
-  await page.waitForFunction(() => !document.querySelector('#creator-confirm').hidden, { timeout: 20000 });
-  const cid = await text(page, '#creator-cid');
-  assert.match(cid, /^Qm[1-9A-HJ-NP-Za-km-z]{44}$/);
-  const calls = await page.evaluate(() => window.__creatorCalls);
-  assert.deepEqual(calls.filter(c => c.cmd === 'ipfs_add_file').map(c => c.name), ['index.html', 'game.js', 'hero.png', 'cover.png', 'manifest.json']);
-  assert.deepEqual(calls.filter(c => c.cmd === 'sign_message'), [{ cmd: 'sign_message', address: ADDRESS, withPassword: false }]);
-  // Confirmation screen.
-  assert.equal(await text(page, '#creator-c-name'), 'PLAYXG/STAR_RUN');
-  assert.equal(await text(page, '#creator-c-cid'), cid);
-  assert.match(await text(page, '#creator-c-burn'), /^100 RVN \(하위 자산\)$/);
-  assert.match(await text(page, '#creator-c-burn-check'), /확인 불가/);
-  assert.match(await text(page, '#creator-c-chain'), /시험망\(regtest\)/);
-  assert.match(await text(page, '#creator-c-irreversible'), /영영 돌아오지 않아요.*영구예요.*되돌릴 수 없어요.*「검증됨」이 아니에요/);
-  assert.equal(await page.$eval('#creator-issue', b => b.disabled), true, 'issue locked until the name is typed');
-  await page.type('#creator-typed', 'PLAYXG/STAR_RU');
-  assert.equal(await page.$eval('#creator-issue', b => b.disabled), true);
-  await page.type('#creator-typed', 'N');
-  assert.equal(await page.$eval('#creator-issue', b => b.disabled), false);
-  const shots = {};
-  for (const theme of ['light', 'dark']) {
-    await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: theme }]);
-    shots[`confirm-${theme}`] = (await page.evaluate(textContrast)).filter(r => !r.gradient && r.ratio < 4.5);
+  // 화면 밖으로 나간 상자 + 자기 상자·카드 오른쪽 끝을 넘은 「글자」(텍스트 노드의 실제 그려진 범위로 잰다 — 상자는 좁은데 글자만 삐져나가는 경우).
+  const out = [];
+  for (const e of document.querySelectorAll(sc + ' *')) {
+    const r = e.getBoundingClientRect(); if (!r.width || e.closest('[hidden]')) continue;
+    const card = e.closest('.card'); const limit = Math.min(vw, card && card !== e ? card.getBoundingClientRect().right : vw);
+    let right = r.right;
+    for (const t of e.childNodes) if (t.nodeType === 3 && t.textContent.trim()) { const range = document.createRange(); range.selectNodeContents(t); for (const q of range.getClientRects()) right = Math.max(right, q.right); }
+    if (right > limit + 1) out.push((e.id ? '#' + e.id : e.tagName.toLowerCase()) + ':' + Math.round(right) + '>' + Math.round(limit));
   }
-  await page.click('#creator-issue');
-  await page.waitForFunction(() => !document.querySelector('#creator-done').hidden, { timeout: 10000 });
-  const issued = (await page.evaluate(() => window.__creatorCalls)).filter(c => c.cmd === 'issue_asset');
-  assert.deepEqual(issued.map(c => c.args), [{ name: 'PLAYXG/STAR_RUN', qty: 1, units: 0, reissuable: true, ipfsHash: cid, toAddress: null }]);
-  assert.equal(await text(page, '#creator-txid'), 'cd'.repeat(32));
-  const req = JSON.parse(await page.$eval('#creator-request', t => t.value));
-  assert.deepEqual([req.format, req.status, req.asset, req.type, req.manifestCid, req.issueTxid, req.creatorAddress], ['rv-creator-listing-request', 'unverified', 'PLAYXG/STAR_RUN', 'game', cid, 'cd'.repeat(32), ADDRESS]);
-  for (const theme of ['light', 'dark']) {
-    await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: theme }]);
-    shots[`done-${theme}`] = (await page.evaluate(textContrast)).filter(r => !r.gradient && r.ratio < 4.5);
-  }
-  assert.deepEqual(await page.evaluate(() => window.__homeFixture.forbidden), [], 'no reveal/unlock/send command');
-  for (const [k, v] of Object.entries(shots)) assert.deepEqual(v, [], `low contrast (${k}): ${JSON.stringify(v)}`);
-  if (process.env.RV_CREATOR_SHOTS) await page.screenshot({ path: join(process.env.RV_CREATOR_SHOTS, 'creator-done-1440.png'), fullPage: true });
-  await page.close();
-});
+  return out.slice(0, 10);
+}, scope);
+async function audit(page, scope, label, report) {
+  // 방금 누른 단추 위에 마우스가 남아 hover 전환이 도는 중이면 중간 색을 재게 된다 — 마우스를 치우고 애니메이션이 끝날 때까지 기다린다.
+  await page.mouse.move(1, 1);
+  await page.waitForFunction(() => document.getAnimations().filter(a => a.playState === 'running' && !(a.effect?.getComputedTiming?.().iterations === Infinity)).length === 0, { timeout: 5000 }).catch(() => {});
+  const all = await page.evaluate(textContrast, scope);
+  await page.evaluate(sc => (document.querySelector(`${sc} .cw-panel:not([hidden])`) ?? document.querySelector(`${sc} .card:not([hidden])`))?.scrollIntoView({ block: 'start' }), scope);
+  const file = join(shotDir, `${label}.png`);
+  await page.screenshot({ path: file, fullPage: true });
+  report[label] = { measured: all.length, low: all.filter(r => !r.gradient && r.ratio < 4.5), overflow: await overflow(page, scope), shot: statSync(file).size };
+}
 
-test('mainnet stays locked; missing PLAYXG! blocks; nothing is issued', { timeout: 300_000 }, async () => {
-  for (const [opts, expect] of [[{ chain: 'main' }, /실제 발행은 아직 꺼져 있어요/], [{ ownerTokens: [] }, /PLAYXG!/]]) {
-    const page = await openCreator(opts);
-    await fillGame(page);
-    await page.click('#creator-check-run');
-    await page.click('#creator-upload');
-    await page.waitForFunction(() => !document.querySelector('#creator-confirm').hidden, { timeout: 20000 });
-    await page.type('#creator-typed', 'PLAYXG/STAR_RUN');
-    assert.equal(await page.$eval('#creator-issue', b => b.disabled), true);
-    assert.match(await text(page, '#creator-c-blockers'), expect);
-    await page.evaluate(() => document.querySelector('#creator-issue').click());
-    assert.equal((await page.evaluate(() => window.__creatorCalls)).filter(c => c.cmd === 'issue_asset').length, 0);
-    if (opts.chain === 'main') assert.match(await text(page, '#creator-c-chain'), /메인넷/);
-    await page.close();
-  }
-});
+/** The whole book flow, auditing every step. Returns the page at step 8. */
+async function bookFlow(page, report, tag) {
+  const shot = async n => report && audit(page, '#page-creator', `wizard-${tag}-step${n}`, report);
+  assert.equal(await stepNow(page), 0);
+  assert.match(await text(page, '#cw-guide'), /보증.*수수료가 아니에요.*판매될 때마다 15%\(초안\).*300 RVN 에 팔리면 → 나 255 RVN · 수수료 45 RVN.*파일 보관은 내 책임.*환불 책임은 판매자.*전문가 확인/);
+  assert.match(await text(page, '#cw-switch-note'), /메인넷 등록은 꺼져.*판매\(구매 결제\)는 꺼져/);
+  assert.equal(await disabled(page, '#cw-start'), true, 'must tick 「읽었어요」');
+  await shot(0);
+  await page.click('#cw-guide-ok'); await page.click('#cw-start');
+  await page.waitForFunction(() => !document.querySelector('.cw-panel[data-step="1"]').hidden);
+  assert.equal(await disabled(page, '#cw-next'), true, 'choose a kind first');
+  assert.deepEqual(await page.$$eval('input[name="cw-type"]', r => r.map(x => x.value)), ['game', 'music', 'book', 'ticket', 'digital']);
+  assert.match(await text(page, '#cw-kinds'), /게임.*검증된 뒤에만 지갑 결제.*책.*전자책\(PDF·EPUB\)/);
+  await page.click('input[name="cw-type"][value="book"]');
+  await shot(1);
+  await next(page, 2);
+  assert.match(await text(page, '#cw-drop-say'), /PDF·EPUB/);
+  assert.equal(await disabled(page, '#cw-next'), true, 'no files yet');
+  await dropFiles(page, FILES.book);
+  await page.waitForFunction(() => /2개 파일 · 표지 1장/.test(document.querySelector('#cw-files-say').textContent));
+  await shot(2);
+  await next(page, 3);
+  await page.type('#cw-title', '바다 이야기');
+  await page.waitForFunction(() => /PLAYXG\.BOOK/.test(document.querySelector('#cw-suggest').textContent));
+  assert.equal(await page.$eval('#cw-asset', e => e.value), 'BOOK', 'Korean-only title → fallback name proposal');
+  await setValue(page, '#cw-asset', 'SEA_BOOK');
+  await page.type('#cw-price', '300');
+  assert.match(await text(page, '#cw-fee'), /판매될 때마다 15%\(초안\).*내 받는 주소로 바로.*300 RVN 에 팔리면 → 나 255 RVN · 수수료 45 RVN.*내 가격 300 RVN 이면 → 나 255 RVN · 수수료 45 RVN.*보증 500 RVN 과는 다른 돈/);
+  await page.click('#cw-new-address');
+  await page.waitForFunction(a => document.querySelector('#cw-address').value === a, {}, ADDRESS);
+  await page.waitForFunction(() => /PLAYXG\.SEA_BOOK \(15\/30자\)/.test(document.querySelector('#cw-name-say').textContent));
+  assert.equal(await page.$eval('#cw-book-file', s => s.value), 'sea.epub'); assert.equal(await page.$eval('#cw-book-preview', s => s.value), 'sea-preview.pdf');
+  await shot(3);
+  await next(page, 4);
+  assert.match(await text(page, '#cw-check'), /올릴 수 있어요 · 파일 3개 .*주의 1개.*EPUB.*레이븐볼트는 열지 않고/);
+  await shot(4);
+  await next(page, 5);
+  await page.waitForFunction(() => /합계/.test(document.querySelector('#cw-cost').textContent));
+  assert.match(await text(page, '#cw-cost'), /보증\(소각\) 500 RVN — 수수료가 아니에요.*네트워크 수수료 약 0\.01 RVN\(추정\).*합계 500\.01 RVN.*잔액이 충분해요.*600 RVN/);
+  assert.match(await text(page, '#cw-cost-fee'), /지금 내는 돈 아님.*15%.*255.*45/);
+  await shot(5);
+  await next(page, 6);
+  assert.match(await text(page, '#cw-pin-holder'), /이 컴퓨터의 IPFS/);
+  await shot(6);
+  await page.click('#cw-upload');
+  await page.waitForFunction(() => /다 올렸어요/.test(document.querySelector('#cw-upload-say').textContent), { timeout: 20000 });
+  assert.equal(await page.$eval('#cw-progress', e => e.getAttribute('aria-valuenow')), '100');
+  await page.click('#cw-pin-check');
+  await page.waitForFunction(() => /받아져요|못 찾아요/.test(document.querySelector('#cw-pin-say').textContent));
+  await next(page, 7);
+  await page.waitForFunction(() => document.querySelector('#cw-c-name').textContent === 'PLAYXG.SEA_BOOK');
+  assert.match(await text(page, '#cw-c-burn'), /500 RVN — 수수료가 아니라 보증/);
+  assert.match(await text(page, '#cw-c-burn-check'), /확인 불가/);
+  assert.match(await text(page, '#cw-c-fee'), /15%\(초안\).*나 255 RVN · 수수료 45 RVN/);
+  assert.match(await text(page, '#cw-c-irreversible'), /영영 돌아오지 않아요.*보증.*영구예요.*되돌릴 수 없어요.*판매 책임은 제작자/);
+  assert.equal(await disabled(page, '#cw-issue'), true);
+  await page.type('#cw-typed', 'PLAYXG.SEA_BOOK');
+  await page.waitForFunction(() => !document.querySelector('#cw-issue').disabled);
+  await shot(7);
+  await page.click('#cw-issue');
+  await page.waitForFunction(() => !document.querySelector('.cw-panel[data-step="8"]').hidden, { timeout: 10000 });
+  await page.waitForFunction(() => /판매/.test(document.querySelector('#cw-sales').textContent));
+  await shot(8);
+  return page;
+}
 
-test('bad files are refused before upload; music flow (audio + cover + preview window) reaches the confirm screen', { timeout: 300_000 }, async () => {
-  const page = await openCreator();
-  await fillGame(page);
-  await (await page.$('#creator-files')).uploadFile(files.index, files.exe);
-  await page.waitForFunction(() => /2개 파일/.test(document.querySelector('#creator-files-say').textContent));
-  await page.click('#creator-check-run');
-  assert.match(await text(page, '#creator-check'), /고칠 곳 .*evil\.exe/);
-  assert.equal(await page.$eval('#creator-upload', b => b.disabled), true);
-  assert.equal((await page.evaluate(() => window.__creatorCalls)).filter(c => c.cmd === 'ipfs_add_file').length, 0);
-  // Music.
-  await page.click('input[name="creator-type"][value="music"]');
-  assert.equal(await visible(page, '#creator-music-fields'), true); assert.equal(await visible(page, '#creator-game-fields'), false);
-  await (await page.$('#creator-files')).uploadFile(files.fake);
-  await page.waitForFunction(() => /1개 파일/.test(document.querySelector('#creator-files-say').textContent));
-  await page.click('#creator-check-run');
-  assert.match(await text(page, '#creator-check'), /fake\.mp3: 파일 이름\(확장자\)과 실제 내용이 달라요/);
-  await (await page.$('#creator-files')).uploadFile(files.mp3);
-  await page.waitForFunction(() => document.querySelector('#creator-preview-file').value === 'song.mp3');
-  await page.$eval('#creator-preview-end', e => { e.value = '75'; e.dispatchEvent(new Event('input')); });
-  await page.click('#creator-check-run');
-  assert.match(await text(page, '#creator-check'), /60초 이하/);
-  await page.$eval('#creator-preview-start', e => { e.value = '15'; e.dispatchEvent(new Event('input')); });
-  await page.$eval('#creator-asset', e => { e.value = 'MORNING_SONG'; e.dispatchEvent(new Event('input')); });
-  await page.click('#creator-check-run');
-  assert.match(await text(page, '#creator-check'), /올릴 수 있어요/);
-  await page.click('#creator-upload');
-  await page.waitForFunction(() => !document.querySelector('#creator-confirm').hidden, { timeout: 20000 });
-  assert.equal(await text(page, '#creator-c-name'), 'PLAYXG/MORNING_SONG');
-  await page.close();
-});
-
-test('390 and 1440 wide, light and dark: no horizontal overflow, page text contrast >= 4.5:1', { timeout: 300_000 }, async () => {
+test('book: guide → ①…⑧ on the mock chain; every step audited at 390/1440 × light/dark (screenshot, contrast ≥ 4.5:1, no overflow)', { timeout: 600_000 }, async () => {
   const report = {};
   for (const width of [390, 1440]) for (const theme of ['light', 'dark']) {
     const page = await openCreator({ width, height: 844, theme });
-    await fillGame(page);
-    await page.click('#creator-check-run');
-    await page.click('#creator-upload');
-    await page.waitForFunction(() => !document.querySelector('#creator-confirm').hidden, { timeout: 20000 });
-    const low = (await page.evaluate(textContrast)).filter(r => !r.gradient && r.ratio < 4.5);
-    const measured = (await page.evaluate(textContrast)).length;
-    const of = await overflow390(page);
-    report[`${width}-${theme}`] = { measured, low, overflow: of.wide };
-    if (process.env.RV_CREATOR_SHOTS) await page.screenshot({ path: join(process.env.RV_CREATOR_SHOTS, `creator-${width}-${theme}.png`), fullPage: true });
+    await bookFlow(page, report, `${width}-${theme}`);
+    if (width === 1440 && theme === 'light') {
+      const calls = await page.evaluate(() => window.__creatorCalls);
+      assert.deepEqual(calls.filter(c => c.cmd === 'ipfs_add_file').map(c => c.name), ['sea.epub', 'sea-preview.pdf', 'cover.png', 'manifest.json']);
+      assert.deepEqual(calls.filter(c => c.cmd === 'sign_message'), [{ cmd: 'sign_message', address: ADDRESS, withPassword: false }]);
+      const issued = calls.filter(c => c.cmd === 'issue_asset').map(c => c.args);
+      assert.equal(issued.length, 1); assert.equal(issued[0].name, 'PLAYXG.SEA_BOOK'); assert.deepEqual([issued[0].qty, issued[0].units, issued[0].reissuable], [1, 0, true]);
+      assert.equal(await text(page, '#cw-txid'), 'cd'.repeat(32));
+      assert.match(await text(page, '#cw-mine'), /바다 이야기 · PLAYXG\.SEA_BOOK · 책/);
+      assert.match(await page.$eval('#cw-share', t => t.value), /PLAYXG\.SEA_BOOK[\s\S]*열린 장터[\s\S]*ipfs:\/\/Qm/);
+      assert.match(await text(page, '#cw-sales'), /판매 기능이 아직 꺼져 있어 판매가 없어요/);
+      const req = JSON.parse(await page.$eval('#cw-request', t => t.value));
+      assert.deepEqual([req.status, req.asset, req.type, req.issueTxid], ['unverified', 'PLAYXG.SEA_BOOK', 'book', 'cd'.repeat(32)]);
+      assert.equal(await page.evaluate(() => localStorage.getItem('rv-creator-draft-v2')), null, 'draft cleared after issuing');
+      assert.deepEqual(await page.evaluate(() => window.__homeFixture.forbidden), [], 'no reveal/unlock/send command');
+    }
     await page.close();
   }
   if (process.env.RV_CREATOR_REPORT) await writeFile(process.env.RV_CREATOR_REPORT, JSON.stringify(report, null, 2));
+  assert.equal(Object.keys(report).length, 36, '9 steps × 4 environments');
   for (const [k, v] of Object.entries(report)) {
-    assert.ok(v.measured > 40, `${k}: measured too little (${v.measured})`);
+    assert.ok(v.measured > 10, `${k}: measured too little (${v.measured})`);
+    assert.ok(v.shot > 5000, `${k}: screenshot missing`);
     assert.deepEqual(v.low, [], `${k} low contrast: ${JSON.stringify(v.low)}`);
     assert.deepEqual(v.overflow, [], `${k} overflow: ${JSON.stringify(v.overflow)}`);
   }
 });
 
-test('a manifest the page produced verifies independently in node', { timeout: 120_000 }, async () => {
-  // Re-run the page flow, then fetch the manifest bytes the page pinned and verify them outside the browser.
-  const page = await openCreator();
+test('resume: an upload that fails half-way is continued later without re-uploading finished files; pin check finds a missing file', { timeout: 300_000 }, async () => {
+  let page = await openCreator({ failPinAt: 3 });
+  await page.click('#cw-guide-ok'); await page.click('#cw-start');
+  await page.click('input[name="cw-type"][value="book"]');
+  await next(page, 2);
+  await dropFiles(page, FILES.book);
+  await page.waitForFunction(() => /2개 파일/.test(document.querySelector('#cw-files-say').textContent));
+  await next(page, 3);
+  await page.type('#cw-title', 'Sea Book'); await setValue(page, '#cw-asset', 'SEA_BOOK'); await page.type('#cw-price', '20');
+  await page.click('#cw-new-address'); await page.waitForFunction(a => document.querySelector('#cw-address').value === a, {}, ADDRESS);
+  await page.waitForFunction(() => !document.querySelector('#cw-next').disabled);
+  await next(page, 4); await next(page, 5); await next(page, 6);
+  await page.click('#cw-upload');
+  await page.waitForFunction(() => /올리지 못했어요.*다시 눌러/.test(document.querySelector('#cw-error').textContent), { timeout: 20000 });
+  const draft = await page.evaluate(() => localStorage.getItem('rv-creator-draft-v2'));
+  const saved = JSON.parse(draft);
+  assert.equal(saved.cache.length, 2, 'two files were pinned before the failure'); assert.equal(saved.published, null);
+  assert.doesNotMatch(draft, /"bytes"|passphrase|mnemonic/, 'draft holds no bytes or secrets');
+  await page.close();
+  // Reopen later: banner → continue → re-pick the same files → only the remaining file + manifest are uploaded.
+  page = await openCreator({ draft, dead: ['cover.png'] });
+  await page.waitForFunction(() => !document.querySelector('#cw-resume').hidden);
+  assert.match(await text(page, '#cw-resume-say'), /지난번 올리던 것이 있어요/);
+  await page.click('#cw-resume-go');
+  assert.equal(await stepNow(page), 2);
+  assert.equal(await page.$eval('#cw-title', e => e.value), 'Sea Book');
+  await dropFiles(page, FILES.book);
+  await page.waitForFunction(() => /2개 파일/.test(document.querySelector('#cw-files-say').textContent));
+  await next(page, 3); await page.waitForFunction(() => !document.querySelector('#cw-next').disabled);
+  await next(page, 4); await next(page, 5); await next(page, 6);
+  assert.match(await text(page, '#cw-upload-say'), /이미 올린 파일 2개는 건너뛰어요/);
+  await page.click('#cw-upload');
+  await page.waitForFunction(() => /다 올렸어요/.test(document.querySelector('#cw-upload-say').textContent), { timeout: 20000 });
+  assert.deepEqual((await page.evaluate(() => window.__creatorCalls)).filter(c => c.cmd === 'ipfs_add_file').map(c => c.name), ['cover.png', 'manifest.json']);
+  await page.click('#cw-pin-check');
+  await page.waitForFunction(() => /못 찾아요/.test(document.querySelector('#cw-pin-say').textContent));
+  assert.match(await text(page, '#cw-pin-say'), /cover\.png/, 'the file this computer no longer serves is named');
+  await page.close();
+});
+
+test('name: taken on chain blocks, official-looking and lookalike warn; ticket details reach a verifiable manifest', { timeout: 300_000 }, async () => {
+  const page = await openCreator({ taken: ['PLAYXG.AUTUMN_LIVE'] });
+  await page.click('#cw-guide-ok'); await page.click('#cw-start');
+  await page.click('input[name="cw-type"][value="ticket"]'); await next(page, 2);
+  assert.equal(await disabled(page, '#cw-next'), false, 'a ticket needs no files');
+  await next(page, 3);
+  assert.match(await text(page, '#cw-fields-ticket'), /서버 없이.*서명한 입장 코드.*「이미 사용」이 기기끼리 공유되지 않아요.*재판매·환불·행사 취소 책임은 판매자.*전문가 확인/);
+  await page.type('#cw-title', 'Autumn Live'); await setValue(page, '#cw-asset', 'AUTUMN_LIVE');
+  await page.click('#cw-new-address'); await page.waitForFunction(a => document.querySelector('#cw-address').value === a, {}, ADDRESS);
+  await page.waitForFunction(() => /이미 체인에 있어요/.test(document.querySelector('#cw-name-warn').textContent));
+  assert.equal(await disabled(page, '#cw-next'), true, 'taken name blocks');
+  await setValue(page, '#cw-asset', 'PLAYX_OFFICIAL_LIVE');
+  await page.waitForFunction(() => /공식/.test(document.querySelector('#cw-name-warn').textContent));
+  await setValue(page, '#cw-asset', 'AUTUMN_LIVE_2026');
+  await page.type('#cw-price', '40');
+  await page.type('#cw-t-event', '가을 작은 음악회'); await setValue(page, '#cw-t-start', '2027-11-20T19:00'); await setValue(page, '#cw-t-end', '2027-11-20T21:00');
+  await page.type('#cw-t-venue', '서울 작은 홀'); await setValue(page, '#cw-t-qty', '50');
+  await page.type('#cw-t-refund', '행사 7일 전까지 환불'); await page.type('#cw-t-contact', 'hello@example.com');
+  await page.waitForFunction(() => !document.querySelector('#cw-next').disabled);
+  await next(page, 4); await next(page, 5); await next(page, 6);
   await page.evaluate(() => { const base = window.__TAURI_INTERNALS__.invoke; window.__pinned = {}; const wrap = async (c, a) => { if (c === 'ipfs_add_file' && a.file.name === 'manifest.json') window.__pinned.manifest = a.file.bytes; return base(c, a); }; window.__TAURI_INTERNALS__.invoke = wrap; window.__TAURI__.core.invoke = wrap; });
-  await fillGame(page);
-  await page.click('#creator-check-run');
-  await page.click('#creator-upload');
-  await page.waitForFunction(() => !document.querySelector('#creator-confirm').hidden, { timeout: 20000 });
-  const bytes = Uint8Array.from(await page.evaluate(() => window.__pinned.manifest));
-  const v = verifyManifest(bytes, { expectedAsset: 'PLAYXG/STAR_RUN' });
-  assert.equal(v.signedBy, ADDRESS); assert.equal(mockCid(bytes), await text(page, '#creator-cid'));
-  assert.equal(v.manifest.price.atoms, '30000000000'); assert.equal(v.manifest.files.length, 3); assert.equal(v.manifest.cover.path, 'cover.png');
+  await page.click('#cw-upload');
+  await page.waitForFunction(() => /다 올렸어요/.test(document.querySelector('#cw-upload-say').textContent), { timeout: 20000 });
+  const v = verifyManifest(Uint8Array.from(await page.evaluate(() => window.__pinned.manifest)), { expectedAsset: 'PLAYXG.AUTUMN_LIVE_2026' });
+  assert.equal(v.signedBy, ADDRESS); assert.equal(v.manifest.type, 'ticket'); assert.equal(v.manifest.files.length, 0);
+  assert.deepEqual([v.manifest.details.eventName, v.manifest.details.quantity, v.manifest.details.redemption.checkerAddress], ['가을 작은 음악회', 50, ADDRESS]);
+  await page.close();
+});
+
+test('cost shortfall and mainnet lock block issuing; bad files are refused; game kind warns that code runs', { timeout: 300_000 }, async () => {
+  for (const [opts, expectCost, expectBlock] of [[{ balance: 100 }, /400\.01 RVN 이 모자라요/, /모자라요/], [{ chain: 'main' }, /잔액이 충분해요/, /실제 발행은 아직 꺼져 있어요/]]) {
+    const page = await openCreator(opts);
+    await page.click('#cw-guide-ok'); await page.click('#cw-start');
+    await page.click('input[name="cw-type"][value="game"]'); await next(page, 2);
+    await dropFiles(page, FILES.game);
+    await page.waitForFunction(() => /2개 파일/.test(document.querySelector('#cw-files-say').textContent));
+    await next(page, 3);
+    await page.type('#cw-title', 'Star Run'); await setValue(page, '#cw-asset', 'STAR_RUN');
+    await page.click('#cw-new-address'); await page.waitForFunction(a => document.querySelector('#cw-address').value === a, {}, ADDRESS);
+    await page.waitForFunction(() => !document.querySelector('#cw-next').disabled);
+    await next(page, 4);
+    assert.match(await text(page, '#cw-check'), /코드를 실행해요.*나쁜 코드를 다 찾아내지 못해요/);
+    await next(page, 5);
+    await page.waitForFunction(() => /합계/.test(document.querySelector('#cw-cost').textContent));
+    assert.match(await text(page, '#cw-cost'), expectCost);
+    if (opts.balance) assert.match(await text(page, '#cw-receive'), new RegExp(ADDRESS));
+    await next(page, 6); await page.click('#cw-upload');
+    await page.waitForFunction(() => /다 올렸어요/.test(document.querySelector('#cw-upload-say').textContent), { timeout: 20000 });
+    await next(page, 7);
+    await page.type('#cw-typed', 'PLAYXG.STAR_RUN');
+    await page.waitForFunction(() => document.querySelector('#cw-c-blockers').textContent.length > 0);
+    assert.match(await text(page, '#cw-c-blockers'), expectBlock);
+    assert.equal(await disabled(page, '#cw-issue'), true);
+    await page.evaluate(() => document.querySelector('#cw-issue').click());
+    assert.equal((await page.evaluate(() => window.__creatorCalls)).filter(c => c.cmd === 'issue_asset').length, 0, 'nothing issued');
+    await page.close();
+  }
+  const page = await openCreator();
+  await page.click('#cw-guide-ok'); await page.click('#cw-start');
+  await page.click('input[name="cw-type"][value="digital"]'); await next(page, 2);
+  await dropFiles(page, FILES.exe);
+  await next(page, 3);
+  await page.type('#cw-title', 'Brushes'); await setValue(page, '#cw-asset', 'BRUSH_PACK'); await page.type('#cw-d-label', '그림 모음');
+  await page.click('#cw-new-address'); await page.waitForFunction(a => document.querySelector('#cw-address').value === a, {}, ADDRESS);
+  await page.waitForFunction(() => !document.querySelector('#cw-next').disabled);
+  await next(page, 4);
+  assert.match(await text(page, '#cw-check'), /고칠 곳 .*evil\.pdf.*실행 파일.*→ 파일을 바꾸거나 빼고/);
+  assert.equal(await disabled(page, '#cw-next'), true);
+  assert.equal((await page.evaluate(() => window.__creatorCalls)).filter(c => c.cmd === 'ipfs_add_file').length, 0);
+  await page.close();
+});
+
+test('seller switch off: creator and market entries are hidden, inert and route-blocked', { timeout: 120_000 }, async () => {
+  const page = await openApp({ seller: false });
+  for (const id of ['#creator-open', '#market-open', '#page-creator', '#page-market']) {
+    assert.deepEqual(await page.$eval(id, e => [e.hidden, e.hasAttribute('inert')]), [true, true], id);
+  }
+  await page.evaluate(() => { document.querySelector('#creator-open').click(); document.querySelector('#market-open').click(); });
+  assert.equal(await page.$eval('#page-creator', e => e.classList.contains('on')), false);
+  assert.equal(await page.$eval('#page-market', e => e.classList.contains('on')), false);
+  assert.equal(await page.$eval('#page-games', e => e.classList.contains('on')), true);
+  await page.close();
+});
+
+/* ── 구매자 화면 ── */
+async function marketFixture() {
+  const pin = new MockPinAdapter();
+  const sign = async (_a, m) => signMessageForTest(m, KEY);
+  const common = { creatorAddress: ADDRESS, receivingAddress: RECEIVING, declaredFeeBps: 1500, now: new Date('2026-10-10T00:00:00Z'), description: '시험 상품' };
+  const book = await publishContent({ ...common, type: 'book', asset: 'PLAYXG.SEA_BOOK', title: '바다 이야기', priceAtoms: '30000000000',
+    files: [{ path: 'sea.pdf', bytes: PDF('book'), mime: '' }, { path: 'sea-preview.pdf', bytes: PDF('pv'), mime: '' }, { path: 'cover.png', bytes: PNG(5), mime: '', role: 'cover' }],
+    details: { bookFile: 'sea.pdf', format: 'pdf', previewFile: 'sea-preview.pdf', previewPages: 5, pageCount: 80 } }, pin, sign);
+  const fake = await publishContent({ ...common, type: 'book', asset: 'PLAYXG.SEA_B00K', title: '바다 이야기', priceAtoms: '30000000000', creatorAddress: ADDRESS,
+    files: [{ path: 'sea.pdf', bytes: PDF('copy'), mime: '' }], details: { bookFile: 'sea.pdf', format: 'pdf', previewFile: null, previewPages: 0, pageCount: null } }, pin, sign);
+  const music = await publishContent({ ...common, type: 'music', asset: 'PLAYXG.MORNING_SONG', title: '아침 노래', priceAtoms: '2000000000',
+    files: [{ path: 'song.mp3', bytes: MP3, mime: '' }], details: { previewFile: 'song.mp3', previewStartMs: 0, previewEndMs: 30000 } }, pin, sign);
+  const game = await publishContent({ ...common, type: 'game', asset: 'PLAYXG.STAR_RUN', title: '별 달리기', priceAtoms: '3000000000',
+    files: FILES.game.map(f => ({ path: f.name, bytes: f.bytes, mime: f.type })), details: { entry: 'index.html', origin: 'https://star-run.example', capabilities: { identity: false, payment: true } } }, pin, sign);
+  const assets = [book, fake, music, game].map(r => ({ name: r.manifest.asset, ipfs_hash: r.manifestCid }));
+  const store = Object.fromEntries([...pin.stored.entries()].map(([k, v]) => [k, Array.from(v)]));
+  return { assets, store };
+}
+async function openMarket(opts = {}, { salesEnabled = true, withBuy = true } = {}) {
+  const page = await openApp(opts);
+  await page.click('#market-open');
+  await page.waitForFunction(() => document.querySelector('#page-market.on'));
+  await page.waitForFunction(() => /아직 없어요/.test(document.querySelector('#mk-list-say').textContent));
+  const fx = await marketFixture();
+  await page.addScriptTag({ content: marketBundle });
+  await page.evaluate((fx, salesEnabled, withBuy) => {
+    window.__buys = [];
+    const m = window.__wireOpenMarket({ back: () => {}, salesEnabled, now: () => Date.parse('2026-10-12T00:00:00Z'),
+      source: { assets: async () => fx.assets, fetch: async cid => fx.store[cid] ? Uint8Array.from(fx.store[cid]) : null },
+      buy: withBuy ? async r => { window.__buys.push(r); return { txid: 'ab'.repeat(32) }; } : undefined });
+    return m.load();
+  }, fx, salesEnabled, withBuy);
+  await page.waitForFunction(() => document.querySelectorAll('#mk-list .mk-item').length === 4);
+  return page;
+}
+const openItem = async (page, asset) => { await page.click(`#mk-list .mk-item[data-asset="${asset}"]`); await page.waitForFunction(() => !document.querySelector('#mk-detail').hidden); };
+
+test('buyer: list → detail → auto-check → preview → confirm (fee split) → mock purchase → purchase list; game stays external, lookalike warned', { timeout: 300_000 }, async () => {
+  const page = await openMarket();
+  const items = await page.$$eval('#mk-list .mk-item', b => b.map(x => x.dataset.asset + ':' + x.querySelector('.mk-badge').textContent));
+  assert.deepEqual(items, ['PLAYXG.MORNING_SONG:미검증', 'PLAYXG.SEA_B00K:미검증', 'PLAYXG.SEA_BOOK:미검증', 'PLAYXG.STAR_RUN:미검증'], 'no auto-check yet → all unverified');
+  assert.match(await text(page, '#mk-list'), /바다 이야기.*비슷한 이름 있음/);
+  // Game: external link only, no buy, even after an auto-check.
+  await openItem(page, 'PLAYXG.STAR_RUN');
+  await page.click('#mk-d-check'); await page.waitForFunction(() => /자동 점검:/.test(document.querySelector('#mk-d-check-say').textContent));
+  assert.match(await text(page, '#mk-d-warning'), /외부 링크로만.*게임처럼 코드를 실행하는 상품은 검증된 뒤에만/);
+  assert.match(await text(page, '#mk-d-preview'), /지갑 안에서 열지 않아요.*ipfs:\/\/Qm/);
+  assert.equal(await disabled(page, '#mk-d-buy'), true);
+  await page.click('#mk-d-back');
+  // Book: auto-check → bonded → preview link → confirm → pay.
+  await openItem(page, 'PLAYXG.SEA_BOOK');
+  assert.match(await text(page, '#mk-d-alerts'), /비슷한 이름의 상품이 있어요\(PLAYXG\.SEA_B00K\).*판매자 주소/);
+  await page.click('#mk-d-check');
+  await page.waitForFunction(() => document.querySelector('#mk-d-badge').textContent === '보증 · 미검증');
+  assert.match(await text(page, '#mk-d-warning'), /검토하지 않은 판매자예요. 자동 점검과 보증만.*환불.*판매자에게.*보증 500 RVN 은 수수료가 아니에요/);
+  assert.match(await text(page, '#mk-d-facts'), /PLAYXG\.SEA_BOOK.*300 RVN.*미리보기5쪽.*80쪽.*공개 IPFS/);
+  assert.equal(await page.$eval('#mk-d-book-preview', a => a.textContent), '미리보기 5쪽 받기(PDF)');
+  assert.equal(await page.$eval('#mk-d-book-preview', a => a.href.startsWith('blob:')), true);
+  assert.equal(await disabled(page, '#mk-d-buy'), false);
+  await page.click('#mk-d-buy');
+  await page.waitForFunction(() => !document.querySelector('#mk-confirm').hidden);
+  assert.match(await text(page, '#mk-c-lines'), new RegExp(`판매자에게 255 RVN \\(받는 주소 ${RECEIVING}\\).*레이븐볼트 수수료 45 RVN \\(15%\\).*합계 300 RVN`));
+  assert.match(await text(page, '#mk-c-note'), /판매자 받는 주소로 바로.*한 거래 안에서 지갑이 나눠요/);
+  const report = {};
+  for (const width of [390, 1440]) for (const theme of ['light', 'dark']) {
+    await page.setViewport({ width, height: 844 }); await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: theme }]); await page.evaluate(t => { document.documentElement.dataset.theme = t; }, theme);
+    await audit(page, '#page-market', `market-confirm-${width}-${theme}`, report);
+  }
+  await page.setViewport({ width: 1440, height: 900 }); await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'light' }]); await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
+  await page.click('#mk-c-pay');
+  await page.waitForFunction(() => /샀어요/.test(document.querySelector('#mk-c-say').textContent));
+  assert.deepEqual(await page.evaluate(() => window.__buys), [{ asset: 'PLAYXG.SEA_BOOK', sellerAddress: RECEIVING, priceAtoms: '30000000000', sellerAtoms: '25500000000', feeAtoms: '4500000000', feeBps: 1500, tier: 'bonded' }]);
+  assert.match(await text(page, '#mk-purchases'), /바다 이야기 · PLAYXG\.SEA_BOOK · 판매자 255 RVN \+ 수수료 45 RVN · 거래 abababababab/);
+  // Music: preview player limited to its window.
+  await page.click('#mk-c-cancel'); await page.click('#mk-d-back');
+  await openItem(page, 'PLAYXG.MORNING_SONG');
+  await page.click('#mk-d-check');
+  await page.waitForFunction(() => document.querySelector('#mk-d-audio'));
+  assert.match(await text(page, '#mk-d-preview'), /미리듣기 0초~30초/);
+  for (const width of [390, 1440]) for (const theme of ['light', 'dark']) {
+    await page.setViewport({ width, height: 844 }); await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: theme }]); await page.evaluate(t => { document.documentElement.dataset.theme = t; }, theme);
+    await audit(page, '#page-market', `market-detail-${width}-${theme}`, report);
+  }
+  for (const [k, v] of Object.entries(report)) {
+    assert.deepEqual(v.low, [], `${k} low contrast: ${JSON.stringify(v.low)}`);
+    assert.deepEqual(v.overflow, [], `${k} overflow: ${JSON.stringify(v.overflow)}`);
+  }
+  await page.close();
+});
+
+test('buyer with the production switch (off): confirm screen shows the split but paying is locked and nothing is sent', { timeout: 300_000 }, async () => {
+  const page = await openMarket({}, { salesEnabled: false, withBuy: true });
+  await openItem(page, 'PLAYXG.SEA_BOOK');
+  await page.click('#mk-d-check');
+  await page.waitForFunction(() => document.querySelector('#mk-d-badge').textContent === '보증 · 미검증');
+  assert.match(await text(page, '#mk-d-buy-say'), /판매 기능은 아직 꺼져/);
+  await page.click('#mk-d-buy');
+  await page.waitForFunction(() => !document.querySelector('#mk-confirm').hidden);
+  assert.match(await text(page, '#mk-c-lines'), /판매자에게 255 RVN.*수수료 45 RVN/);
+  assert.match(await text(page, '#mk-c-blockers'), /판매 기능이 아직 꺼져 있어요/);
+  assert.equal(await disabled(page, '#mk-c-pay'), true);
+  await page.evaluate(() => document.querySelector('#mk-c-pay').click());
+  assert.deepEqual(await page.evaluate(() => window.__buys), []);
   await page.close();
 });
