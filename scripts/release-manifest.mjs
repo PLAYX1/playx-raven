@@ -1,21 +1,39 @@
 import { signedReleaseMetadata } from './signed-release-metadata.mjs';
+import { checkTargets, parseTargetsArg, TARGET_INSTALLERS } from './verify-published-release.mjs';
 import { readdir, readFile, stat, mkdir, copyFile, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const installerSuffixes = ['windows.exe','windows.msi','mac-apple-silicon.dmg','mac-intel.dmg','linux.AppImage'];
+export const ALL_RELEASE_TARGETS = Object.freeze(['windows-x86_64','darwin-aarch64','darwin-x86_64','linux-x86_64']);
 const platforms = { 'windows.exe':'windows-x86_64', 'mac-apple-silicon.tar.gz':'darwin-aarch64', 'mac-intel.tar.gz':'darwin-x86_64', 'linux.AppImage':'linux-x86_64' };
-export async function prepareRelease(source, destination, version, statementDirectory) {
-  if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version)) throw new Error('Invalid release version');
+const labels = { 'windows-x86_64':'windows', 'darwin-aarch64':'mac-apple-silicon', 'darwin-x86_64':'mac-intel', 'linux-x86_64':'linux' };
+const semver = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+const compare = (a, b) => a.split('.').map(Number).reduce((order, n, i) => order || Math.sign(n - b.split('.').map(Number)[i]), 0);
+/**
+ * `targets` is required and has no default: every listed target must be complete (installers,
+ * updater package, signature and, from 0.8.4, a signed statement). Targets left out get no updater
+ * entry, their latest aliases are not touched, and their installer entries carry the previous
+ * release's immutable files labeled with that older version.
+ */
+export async function prepareRelease(source, destination, version, statementDirectory, targets) {
+  if (!semver.test(version)) throw new Error('Invalid release version');
+  targets = checkTargets(targets);
+  const partial = targets.length !== ALL_RELEASE_TARGETS.length;
+  const listedLabels = new Set(targets.map(t => labels[t]));
+  const ownInstallers = installerSuffixes.filter(s => targets.some(t => TARGET_INSTALLERS[t].includes(s)));
+  const ownPlatforms = Object.fromEntries(Object.entries(platforms).filter(([, p]) => targets.includes(p)));
   const files = (await readdir(source)).sort();
   const prefix = files.some(name => name.startsWith(`RavenVault-Desktop-${version}-`)) ? `RavenVault-Desktop-${version}-` : `PLAY-X-Raven-${version}-`;
-  const required = [...new Set([...installerSuffixes, ...Object.keys(platforms)])];
+  const required = [...new Set([...ownInstallers, ...Object.keys(ownPlatforms)])];
   for (const suffix of required) if (!files.includes(prefix + suffix)) throw new Error(`Missing installer: ${suffix}`);
-  for (const suffix of Object.keys(platforms)) if (!files.includes(prefix + suffix + '.sig')) throw new Error(`Missing updater signature: ${suffix}`);
+  for (const suffix of Object.keys(ownPlatforms)) if (!files.includes(prefix + suffix + '.sig')) throw new Error(`Missing updater signature: ${suffix}`);
   const assets = [];
   for (const name of files) {
-    if (!name.startsWith(prefix) || !/^(?:RavenVault-Desktop|PLAY-X-Raven)-[\d.]+-(?:windows|mac-apple-silicon|mac-intel|linux)\.(?:exe|msi|dmg|AppImage|deb|rpm|tar\.gz)(?:\.sig)?$/.test(name)) throw new Error(`Unexpected release file: ${name}`);
+    const match = name.startsWith(prefix) && /^(?:RavenVault-Desktop|PLAY-X-Raven)-[\d.]+-(windows|mac-apple-silicon|mac-intel|linux)\.(?:exe|msi|dmg|AppImage|deb|rpm|tar\.gz)(?:\.sig)?$/.exec(name);
+    if (!match) throw new Error(`Unexpected release file: ${name}`);
+    if (!listedLabels.has(match[1])) throw new Error(`Release file for a target that is not listed: ${name}`);
     const info = await stat(path.join(source, name));
     if (!info.isFile() || info.size < 1 || info.size >= 95_000_000) throw new Error(`Unsupported release file size: ${name}`);
     const data = await readFile(path.join(source, name));
@@ -24,27 +42,41 @@ export async function prepareRelease(source, destination, version, statementDire
   // Never replace a previously published version. Old updater metadata stays usable.
   const versionDir = path.join(destination, `v${version}`);
   try { await stat(versionDir); throw new Error('Version already exists; use a new version'); } catch (e) { if (e.code !== 'ENOENT') throw e; }
+  let previous = null;
   try {
-    const current = JSON.parse(await readFile(path.join(destination, 'latest.json'), 'utf8')).version;
-    if (typeof current !== 'string' || !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(current)) throw new Error('Invalid currently published version');
-    const old = current.split('.').map(Number), next = version.split('.').map(Number);
-    if (next.reduce((order, n, i) => order || Math.sign(n - old[i]), 0) <= 0) throw new Error('Release must be newer than the currently published version');
+    previous = JSON.parse(await readFile(path.join(destination, 'latest.json'), 'utf8'));
+    const current = previous.version;
+    if (typeof current !== 'string' || !semver.test(current)) throw new Error('Invalid currently published version');
+    if (compare(version, current) <= 0) throw new Error('Release must be newer than the currently published version');
   } catch (e) { if (e.code !== 'ENOENT') throw e; }
+  const carried = [];
+  if (partial) {
+    if (!previous || !Array.isArray(previous.installers)) throw new Error('A partial release needs the current latest.json to carry the other targets');
+    for (const suffix of installerSuffixes.filter(s => !ownInstallers.includes(s))) {
+      const found = previous.installers.filter(item => item?.platform === suffix);
+      if (found.length !== 1) throw new Error(`Cannot carry previous installer: ${suffix}`);
+      const item = found[0], from = typeof item.version === 'string' ? item.version : previous.version;
+      if (!semver.test(from) || compare(version, from) <= 0) throw new Error(`Invalid carried installer version: ${suffix}`);
+      const okUrl = ['PLAY-X-Raven', 'RavenVault-Desktop'].some(b => item.url === `https://raw.githubusercontent.com/PLAYX1/playx-raven-releases/dist/v${from}/${b}-${from}-${suffix}`);
+      if (!okUrl || !Number.isSafeInteger(item.bytes) || item.bytes < 1 || !/^[a-f0-9]{64}$/.test(item.sha256 || '')) throw new Error(`Invalid carried installer entry: ${suffix}`);
+      carried.push({ platform: suffix, url: item.url, bytes: item.bytes, sha256: item.sha256, version: from });
+    }
+  }
   const base = `https://raw.githubusercontent.com/PLAYX1/playx-raven-releases/dist/v${version}`;
   const manifest = { version, notes: `RavenVault Desktop ${version} — 게임 판매 대금 받기: 비밀번호 재인증 후 판매 전용 xpub·QR·처음 주소 3개 표시, 1분 자동 숨김, 기본 주소 100개의 확정 금액 조회, 내 지갑으로 옮기기 안내. 라비 스토리를 기본 브라우저에서 엽니다. 서명된 업데이트 버전·해시·순서 검증을 유지합니다.`, pub_date: new Date().toISOString(), platforms: {}, installers: [] };
-  const needsStatement = version.split('.').map(Number).reduce((order,n,i)=>order || Math.sign(n-[0,8,4][i]),0) >= 0;
+  const needsStatement = compare(version, '0.8.4') >= 0;
   if (needsStatement) {
     const config = JSON.parse(await readFile(new URL('../src-tauri/tauri.conf.json', import.meta.url),'utf8'));
-    manifest.signed_releases = await signedReleaseMetadata(statementDirectory, source, prefix, version, config.plugins.updater.pubkey);
+    manifest.signed_releases = await signedReleaseMetadata(statementDirectory, source, prefix, version, config.plugins.updater.pubkey, targets);
   }
-  for (const [suffix, platform] of Object.entries(platforms)) {
+  for (const [suffix, platform] of Object.entries(ownPlatforms)) {
     const signature = (await readFile(path.join(source, prefix + suffix + '.sig'), 'utf8')).trim();
     if (!/^[A-Za-z0-9+/=\r\n]+$/.test(signature) || signature.length < 100 || signature.length > 2048) throw new Error(`Malformed updater signature: ${suffix}`);
     manifest.platforms[platform] = { signature, url: `${base}/${prefix}${suffix}` };
   }
   for (const suffix of installerSuffixes) {
     const item = assets.find(a => a.name === prefix + suffix);
-    manifest.installers.push({ platform: suffix, url: `${base}/${item.name}`, bytes: item.bytes, sha256: item.sha256 });
+    manifest.installers.push(item ? { platform: suffix, url: `${base}/${item.name}`, bytes: item.bytes, sha256: item.sha256 } : carried.find(c => c.platform === suffix));
   }
   await mkdir(versionDir, { recursive: true });
   const paths = [];
@@ -57,15 +89,17 @@ export async function prepareRelease(source, destination, version, statementDire
     paths.push(immutable, alias, newAlias);
   }
   const sums = assets.map(a => `${a.sha256}  v${version}/${a.name}`).join('\n') + '\n';
-  const metadata = { 'latest.json': JSON.stringify(manifest, null, 2) + '\n', 'VERSION': version + '\n', 'SHA256SUMS.txt': sums, 'README.md': `# RavenVault Desktop ${version}\n\n공식 설치 안내: https://ravenvault.ex.erci.se/download/\n\nPLAY X Raven의 지갑·가게 데이터와 업데이트 서명을 이어받습니다. 버전별 파일은 보존합니다.\n` };
+  const metadata = { 'latest.json': JSON.stringify(manifest, null, 2) + '\n', 'VERSION': version + '\n', 'SHA256SUMS.txt': sums, 'README.md': `# RavenVault Desktop ${version}\n\n공식 설치 안내: https://ravenvault.ex.erci.se/download/\n\nPLAY X Raven의 지갑·가게 데이터와 업데이트 서명을 이어받습니다. 버전별 파일은 보존합니다.\n${partial ? `\n이번 판 대상: ${targets.join(', ')}. 그 밖의 운영체제는 이전 판(${[...new Set(carried.map(c => c.version))].join(', ')})을 유지합니다.\n` : ''}` };
   for (const [name, text] of Object.entries(metadata)) { await writeFile(path.join(destination, name), text); paths.push(name); }
   await writeFile(path.join(destination, `v${version}`, 'manifest.json'), JSON.stringify(manifest, null, 2));
   paths.push(`v${version}/manifest.json`);
   return { manifest, paths };
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const [source, destination, version, statementDirectory] = process.argv.slice(2);
-  const result = await prepareRelease(source, destination, version, statementDirectory);
+  const { targets, rest } = parseTargetsArg(process.argv.slice(2));
+  if (rest.length < 3 || rest.length > 4) throw new Error('Usage: node scripts/release-manifest.mjs <input> <dist> <version> [statements] --targets darwin-aarch64[,...]');
+  const [source, destination, version, statementDirectory] = rest;
+  const result = await prepareRelease(source, destination, version, statementDirectory, targets);
   await writeFile(path.resolve(destination, '../release-paths.txt'), result.paths.join('\n') + '\n');
-  console.log(`Validated ${Object.keys(result.manifest.platforms).length} signed platforms and ${result.manifest.installers.length} installers for ${version}`);
+  console.log(`Validated ${Object.keys(result.manifest.platforms).length} signed platforms (${targets.join(', ')}) and ${result.manifest.installers.length} installers for ${version}`);
 }

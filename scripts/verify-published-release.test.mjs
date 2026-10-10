@@ -10,7 +10,7 @@ if (process.argv.includes('--mutant-head')) {
   assert.notEqual(broken, source, 'Mutation must change the real HEAD status guard');
   moduleUrl = `data:text/javascript;base64,${Buffer.from(broken).toString('base64')}`;
 }
-const { PUBLIC_BASE, verifyPublishedRelease, validatePublishedManifest } = await import(moduleUrl);
+const { PUBLIC_BASE, verifyPublishedRelease, validatePublishedManifest, ALL_TARGETS } = await import(moduleUrl);
 const version = '0.4.1';
 const platformPairs = [
   ['windows-x86_64', 'windows.exe'], ['darwin-aarch64', 'mac-apple-silicon.tar.gz'],
@@ -48,7 +48,7 @@ function clock() {
 
 test('exact four updater platforms / five installers produce only seven deduplicated artifact HEAD requests', async () => {
   const f = fixture();
-  const result = await verifyPublishedRelease(version, { ...f, cacheWaitMs: 0 });
+  const result = await verifyPublishedRelease(version, { targets: ALL_TARGETS,  ...f, cacheWaitMs: 0 });
   assert.deepEqual({ ...result, elapsedMs: 0 }, { version, updaterPlatforms: 4, installers: 5, artifacts: 7, attempts: 1, elapsedMs: 0 });
   assert.equal(f.calls.filter(c => c.method === 'GET').length, 2);
   assert.equal(f.calls.filter(c => c.method === 'HEAD').length, 7);
@@ -57,27 +57,27 @@ test('exact four updater platforms / five installers produce only seven deduplic
 test('50 seconds of stale raw cache recovers without rebuilding or publishing', async () => {
   const time = clock();
   const f = fixture({ latest: () => manifest(time.now() < 50_000 ? '0.4.0' : version) });
-  const result = await verifyPublishedRelease(version, { ...f, ...time });
+  const result = await verifyPublishedRelease(version, { targets: ALL_TARGETS,  ...f, ...time });
   assert.equal(result.attempts, 3);
   assert.equal(result.elapsedMs, 60_000);
 });
 test('cache may remain stale for fifteen minutes; final bounded attempt succeeds', async () => {
   const time = clock();
   const f = fixture({ latest: () => manifest(time.now() < 900_000 ? '0.4.0' : version) });
-  const result = await verifyPublishedRelease(version, { ...f, ...time });
+  const result = await verifyPublishedRelease(version, { targets: ALL_TARGETS,  ...f, ...time });
   assert.equal(result.attempts, 31);
   assert.equal(result.elapsedMs, 900_000);
 });
 test('permanently wrong version fails after bounded retries', async () => {
   const time = clock(), f = fixture({ latest: () => manifest('0.4.0') });
-  await assert.rejects(verifyPublishedRelease(version, { ...f, ...time, cacheWaitMs: 60_000 }), /did not become available.*still reports 0\.4\.0/);
+  await assert.rejects(verifyPublishedRelease(version, { targets: ALL_TARGETS,  ...f, ...time, cacheWaitMs: 60_000 }), /did not become available.*still reports 0\.4\.0/);
   assert.equal(time.now(), 60_000);
   assert.equal(f.calls.filter(c => c.method === 'GET').length, 6);
   assert.equal(f.calls.filter(c => c.method === 'HEAD').length, 0);
 });
 test('missing public artifact fails instead of reporting a successful release', async () => {
   const time = clock(), f = fixture({ head: url => url.endsWith('windows.msi') ? 404 : 200 });
-  await assert.rejects(verifyPublishedRelease(version, { ...f, ...time, cacheWaitMs: 30_000 }), /Artifact unavailable \(HTTP 404\)/);
+  await assert.rejects(verifyPublishedRelease(version, { targets: ALL_TARGETS,  ...f, ...time, cacheWaitMs: 30_000 }), /Artifact unavailable \(HTTP 404\)/);
   assert.equal(time.now(), 30_000);
 });
 test('schema, exact platform identities and immutable URLs reject malformed public metadata', () => {
@@ -92,18 +92,18 @@ test('schema, exact platform identities and immutable URLs reject malformed publ
   ];
   for (const mutate of mutations) {
     const value = manifest(); mutate(value);
-    assert.throws(() => validatePublishedManifest(value, version));
+    assert.throws(() => validatePublishedManifest(value, version, ALL_TARGETS));
   }
 });
 test('same-version metadata mismatch is rejected before any artifact request', async () => {
   const other = manifest(); other.installers[0].sha256 = 'b'.repeat(64);
   const f = fixture({ immutable: () => other });
-  await assert.rejects(verifyPublishedRelease(version, { ...f, cacheWaitMs: 0 }), /manifests disagree/);
+  await assert.rejects(verifyPublishedRelease(version, { targets: ALL_TARGETS,  ...f, cacheWaitMs: 0 }), /manifests disagree/);
   assert.equal(f.calls.length, 2);
 });
 test('oversized manifest and a nonresponsive public request fail within limits', async () => {
-  await assert.rejects(verifyPublishedRelease(version, { cacheWaitMs: 0, fetcher: async () => new Response(' '.repeat(65_537)) }), /size limit/);
-  await assert.rejects(verifyPublishedRelease(version, { cacheWaitMs: 0, attemptTimeoutMs: 5, fetcher: () => new Promise(() => {}) }), /timed out/);
+  await assert.rejects(verifyPublishedRelease(version, { targets: ALL_TARGETS,  cacheWaitMs: 0, fetcher: async () => new Response(' '.repeat(65_537)) }), /size limit/);
+  await assert.rejects(verifyPublishedRelease(version, { targets: ALL_TARGETS,  cacheWaitMs: 0, attemptTimeoutMs: 5, fetcher: () => new Promise(() => {}) }), /timed out/);
 });
 test('verify-only workflow cannot build, sign, or publish and shares the postpublish verifier', async () => {
   const workflow = (await readFile(new URL('../.github/workflows/release.yml', import.meta.url), 'utf8')).replaceAll('\r\n', '\n');
@@ -123,33 +123,33 @@ test('verify-only workflow cannot build, sign, or publish and shares the postpub
 test('new RavenVault Desktop URLs pass the same immutable manifest and HEAD checks',async()=>{
   const renamed=()=>JSON.parse(JSON.stringify(manifest()).replaceAll('PLAY-X-Raven-','RavenVault-Desktop-'));
   const f=fixture({latest:renamed,immutable:renamed});
-  const result=await verifyPublishedRelease(version,{...f,cacheWaitMs:0});
+  const result=await verifyPublishedRelease(version, { targets: ALL_TARGETS, ...f,cacheWaitMs:0});
   assert.equal(result.artifacts,21);
   assert.equal(f.calls.filter(c=>c.method==='HEAD'&&c.url.includes('/PLAY-X-Raven-latest-')).length,7);
   assert.equal(f.calls.filter(c=>c.method==='HEAD'&&c.url.includes('/RavenVault-Desktop-latest-')).length,7);
   const bad=renamed();bad.platforms['darwin-aarch64'].url=bad.platforms['darwin-aarch64'].url.replace(version,'9.9.9');
-  assert.throws(()=>validatePublishedManifest(bad,version),/Invalid immutable updater URL/);
+  assert.throws(()=>validatePublishedManifest(bad, version, ALL_TARGETS),/Invalid immutable updater URL/);
 });
 
 test('new release verification fails if an old latest alias disappears',async()=>{
   const renamed=()=>JSON.parse(JSON.stringify(manifest()).replaceAll('PLAY-X-Raven-','RavenVault-Desktop-'));
   const f=fixture({latest:renamed,immutable:renamed,head:url=>url.includes('/PLAY-X-Raven-latest-')?404:200});
-  await assert.rejects(verifyPublishedRelease(version,{...f,cacheWaitMs:0}),/Artifact unavailable/);
+  await assert.rejects(verifyPublishedRelease(version, { targets: ALL_TARGETS, ...f,cacheWaitMs:0}),/Artifact unavailable/);
 });
 
 
 test('0.8.4 public verifier requires bound signed-release metadata and retains it in the comparison',()=>{
   const value=manifest('0.8.4');
-  assert.throws(()=>validatePublishedManifest(value,'0.8.4'));
+  assert.throws(()=>validatePublishedManifest(value, '0.8.4', ALL_TARGETS));
   value.signed_releases=Object.fromEntries(['darwin-aarch64','darwin-x86_64'].map(target=>[target,{
     statement:JSON.stringify({version:'0.8.4',target,sha256:'a'.repeat(64),sequence:1,expires:Math.floor(Date.now()/1000)+3600}),
     signature:'synthetic-signature'.repeat(10),
   }]));
-  assert.deepEqual(validatePublishedManifest(value,'0.8.4').signed_releases,value.signed_releases);
+  assert.deepEqual(validatePublishedManifest(value, '0.8.4', ALL_TARGETS).signed_releases,value.signed_releases);
   const valid=value.signed_releases['darwin-aarch64'].statement;
   value.signed_releases['darwin-aarch64'].statement=valid.replace('0.8.4','0.8.3');
-  assert.throws(()=>validatePublishedManifest(value,'0.8.4'));
+  assert.throws(()=>validatePublishedManifest(value, '0.8.4', ALL_TARGETS));
   value.signed_releases['darwin-aarch64'].statement=valid;
   value.signed_releases['darwin-aarch64'].signature='';
-  assert.throws(()=>validatePublishedManifest(value,'0.8.4'));
+  assert.throws(()=>validatePublishedManifest(value, '0.8.4', ALL_TARGETS));
 });

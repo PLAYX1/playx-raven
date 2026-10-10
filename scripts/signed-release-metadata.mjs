@@ -20,10 +20,10 @@ export function verifyStatement(text, signature, publicKey, expected, now = Math
       || !Number.isSafeInteger(release.expires) || release.expires <= now) throw Error('Release statement binding/expiry mismatch');
   return {statement:text,signature};
 }
-export async function signedReleaseMetadata(directory, source, prefix, version, publicKey) {
+export async function signedReleaseMetadata(directory, source, prefix, version, publicKey, targets = ['darwin-aarch64','darwin-x86_64']) {
   if (!directory) throw Error('Signed release statement directory required (secfix1)');
   const output={};
-  for (const [target,suffix] of [['darwin-aarch64','mac-apple-silicon.tar.gz'],['darwin-x86_64','mac-intel.tar.gz']]) {
+  for (const [target,suffix] of [['darwin-aarch64','mac-apple-silicon.tar.gz'],['darwin-x86_64','mac-intel.tar.gz']].filter(([t])=>targets.includes(t))) {
     const file=path.join(directory,`${target}.json`);
     const text=await readFile(file,'utf8'), signature=await readFile(`${file}.minisig`,'utf8');
     const bytes=await readFile(path.join(source,prefix+suffix));

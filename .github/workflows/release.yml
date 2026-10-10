@@ -47,7 +47,7 @@ jobs:
       - name: Verify existing public release
         env:
           RELEASE_VERSION: ${{ inputs.version }}
-        run: node scripts/verify-published-release.mjs "$RELEASE_VERSION"
+        run: node scripts/verify-published-release.mjs "$RELEASE_VERSION" --targets windows-x86_64,darwin-aarch64,darwin-x86_64,linux-x86_64
 
   build:
     if: inputs.verify_only != true
@@ -657,7 +657,7 @@ jobs:
           set -euo pipefail
           V="${RELEASE_VERSION:-${GITHUB_REF_NAME#v}}"
           git clone --depth 1 --branch dist git@github.com:PLAYX1/playx-raven-releases.git pub
-          node scripts/release-manifest.mjs rel pub "$V"
+          node scripts/release-manifest.mjs rel pub "$V" --targets windows-x86_64,darwin-aarch64,darwin-x86_64,linux-x86_64
           cd pub
           git config user.name playx1
           git config user.email playexercise@gmail.com
@@ -670,4 +670,4 @@ jobs:
         run: |
           set -euo pipefail
           V="${RELEASE_VERSION:-${GITHUB_REF_NAME#v}}"
-          node scripts/verify-published-release.mjs "$V"
+          node scripts/verify-published-release.mjs "$V" --targets windows-x86_64,darwin-aarch64,darwin-x86_64,linux-x86_64

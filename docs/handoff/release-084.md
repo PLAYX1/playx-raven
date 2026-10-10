@@ -115,6 +115,8 @@ for pair in darwin-aarch64:mac-apple-silicon darwin-x86_64:mac-intel; do
 done
 ```
 
+**2026-10-10 실제 사용 방식 (minisign 없음):** 업데이트 키 파일은 base64 로 감싼 minisign 비밀키라 minisign CLI 에 바로 못 넣는다(풀어 복사 금지). 같은 키로 `npx tauri signer sign -f ~/.playx-raven/updater.key -p "" <statement.json>` 을 실행하면 prehashed `ED` 서명이 `<statement.json>.sig` 에 base64 로 나온다. 이를 base64 디코드한 텍스트가 `.minisig` 형식이며 `scripts/signed-release-metadata.mjs` 의 `verifyStatement` 로 검증된다. 0.8.4 는 **Apple Silicon 만** 공개하므로 `darwin-aarch64` 명세 하나만 만든다(sequence 2026101001).
+
 ## 4. 검증된 메타데이터 준비 → 검토 → 업로드
 
 별도 릴리스 환경에서 기존 공개 저장소 `dist` checkout을 사용한다. 아래 명령은 대표가 실행할 **실제 업로드 명령**이며 이번 작업에서는 실행하지 않았다. `RV_PUBLISH_DIR`는 기존 dist checkout 경로, `RV_RELEASE_INPUT_DIR`와 `RV_STATEMENTS_DIR`는 앞 단계의 경로다.
@@ -123,13 +125,13 @@ done
 : "${RV_PUBLISH_DIR:?기존 릴리스 dist checkout 절대 경로 필요}"
 test "$(git -C "$RV_PUBLISH_DIR" branch --show-current)" = dist
 node scripts/release-manifest.mjs \
-  "$RV_RELEASE_INPUT_DIR" "$RV_PUBLISH_DIR" 0.8.4 "$RV_STATEMENTS_DIR"
+  "$RV_RELEASE_INPUT_DIR" "$RV_PUBLISH_DIR" 0.8.4 "$RV_STATEMENTS_DIR" --targets darwin-aarch64
 # 위 명령은 업로드하지 않음. 키·서명·버전/해시/대상/만료 검증 실패 시 중단.
 # 여기서 latest.json 및 v0.8.4/manifest.json의 signed_releases 두 대상을 검토.
 git -C "$RV_PUBLISH_DIR" add --pathspec-from-file="$(dirname "$RV_PUBLISH_DIR")/release-paths.txt"
 git -C "$RV_PUBLISH_DIR" -c core.hooksPath=/dev/null commit -m 'Release RavenVault Desktop 0.8.4'
 git -C "$RV_PUBLISH_DIR" push origin HEAD:dist
-node scripts/verify-published-release.mjs 0.8.4
+node scripts/verify-published-release.mjs 0.8.4 --targets darwin-aarch64
 ```
 
 서비스 `https://rvn.ex.erci.se/update/...`가 `signed_releases`를 누락 없이 전달하는지도 확인한다. 실제 업데이트 응답을 구버전 시험 설치에서 확인하고, 잘못된 서명·해시·버전·대상·만료·낮은 sequence를 각각 거절하는지 본다. 기존 버전별 파일은 삭제·덮어쓰기하지 않는다.
