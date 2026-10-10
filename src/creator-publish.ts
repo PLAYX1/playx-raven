@@ -4,7 +4,12 @@ import { ASSET_KIND_LETTER, assetPrefixFor, checkCreatorAssetName, nameConflicts
 import { CONTENT_TYPES, CONTENT_TYPE_IDS, SCRIPT_NOTICE, extOf, type ContentType, type FileInput } from '../core/creator/limits';
 import { buildListingRequest } from '../core/creator/listing';
 import { CreatorError, isRvnAddress, validateManifest, type CreatorManifest, type Details } from '../core/creator/manifest';
-import { BOND_SAY, OPEN_MARKET_FEE_BPS, OPEN_MARKET_SALES_ENABLED, feeNotice } from '../core/creator/open-market';
+import { BOND_SAY, OPEN_MARKET_SALES_ENABLED, feeNotice, type FeeNoticeOptions } from '../core/creator/open-market';
+import { MARKET_FEE_BPS_CEILING, type FeeSchedule } from '../core/creator/fee-schedule';
+import { splitPrice } from '../core/game-registry/platform-fee';
+
+/** 일정이 받을 수 있는 가장 높은 요율(코드 천장)로 나눠도 판매자 몫이 남는가 — 매니페스트 검사와 같은 기준. */
+const splitsAtCeiling = (atoms: string) => { try { splitPrice(atoms, MARKET_FEE_BPS_CEILING); return true; } catch { return false; } };
 import {
   REAL_MAINNET_ISSUE_ENABLED, checkPinHealth, costPlan, planIssue, precheck, publishContent,
   type CidProbe, type IssuePlan, type Issuer, type MessageSigner, type PinAdapter, type PinCache, type PublishInput, type PublishResult,
@@ -102,6 +107,11 @@ export type CreatorDeps = {
   neighbors?: () => Promise<NameNeighbor[]>;
   /** 판매 현황. 판매 스위치가 꺼져 있거나 읽는 기능이 없으면 null. */
   sales?: (item: MineItem) => Promise<{ count: number; sellerRvn: string } | null>;
+  /**
+   * 장터 수수료 일정(서명된 목록, market-lists.ts). 없으면(출하 상태 — 받는 길·키 없음) 안내는 「일정을 아직 받지 못했어요」+ 정책 출발값.
+   * 요율 숫자는 전부 여기서 읽는다(15% 하드코딩 없음).
+   */
+  feeSchedule?: () => FeeSchedule | null;
 };
 
 export function wireCreatorPublish(deps: CreatorDeps) {
@@ -111,6 +121,15 @@ export function wireCreatorPublish(deps: CreatorDeps) {
   const sign = nodeSigner(deps.invoke, deps.askPassword);
   const store = (() => { try { return deps.storage === undefined ? window.localStorage : deps.storage; } catch { return null; } })();
   const now = () => deps.now?.() ?? new Date();
+  // 수수료 안내의 「지금」 = 체인 높이. 메인넷 노드가 다 따라잡았을 때만 그 높이를 쓰고, 아니면 일정의 시작 시각으로 어림(화면에 「예상」).
+  let chainHeight: number | null = null;
+  const readChainHeight = async () => {
+    try { const s = await deps.invoke<{ chain?: string; blocks?: number; headers?: number }>('node_status');
+      chainHeight = s?.chain === 'main' && Number.isSafeInteger(s.blocks) && s.blocks! > 0 && s.blocks === s.headers ? s.blocks! : null; }
+    catch { chainHeight = null; }
+  };
+  const feeOpts = (): FeeNoticeOptions => ({ schedule: deps.feeSchedule?.() ?? null, kind: type, height: chainHeight, now: now().getTime(),
+    seller: isRvnAddress(input('cw-address').value.trim()) ? { address: input('cw-address').value.trim(), receivingAddress: input('cw-address').value.trim() } : null });
   let step = 0, type: ContentType | null = null, content: FileInput[] = [], cover: FileInput[] = [];
   let cache: PinCache = new Map(), published: Draft['published'] = null, plan: IssuePlan | null = null, busy = false;
   let chain = 'unknown', taken: boolean | null = null, balanceAtoms: bigint | null = null, neighbors: NameNeighbor[] = [];
@@ -170,9 +189,10 @@ export function wireCreatorPublish(deps: CreatorDeps) {
   }
 
   /* ── 안내 ── */
-  const fee0 = feeNotice(null);
   list(el('cw-guide-cost'), [BOND_SAY, '네트워크 수수료(아주 적은 RVN)가 따로 들어요.', '이 두 가지는 등록할 때 한 번만 내요.']);
-  list(el('cw-guide-fee'), fee0.lines);
+  const paintGuideFee = () => list(el('cw-guide-fee'), feeNotice(null, { ...feeOpts(), kind: null, seller: null }).lines);
+  paintGuideFee();
+  void readChainHeight().then(paintGuideFee);
   el('cw-switch-note').textContent = `지금은 시험 단계예요. 실제 메인넷 등록은 ${REAL_MAINNET_ISSUE_ENABLED ? '열려' : '꺼져'} 있고, 판매(구매 결제)는 ${OPEN_MARKET_SALES_ENABLED ? '열려' : '꺼져'} 있어요(대표 결정 대기). 시험망에서만 등록할 수 있어요.`;
   el('cw-test-note').textContent = '시험 단계 — 실제 메인넷 등록·판매는 꺼져 있어요.';
   input('cw-guide-ok').onchange = () => { (el('cw-start') as HTMLButtonElement).disabled = !input('cw-guide-ok').checked; };
@@ -261,7 +281,7 @@ export function wireCreatorPublish(deps: CreatorDeps) {
   function paintFee() {
     const raw = input('cw-price').value.trim();
     const atoms = raw ? rvnToAtoms(raw) : null;
-    const n = feeNotice(atoms);
+    const n = feeNotice(atoms, feeOpts());
     const box = el('cw-fee');
     const lines = raw && !atoms ? ['가격은 RVN 숫자로, 소수점 아래 8자리까지 적어 주세요.', ...n.lines] : raw && atoms && !n.mine ? ['가격이 너무 작아 수수료를 떼고 나면 받을 돈이 남지 않아요.', ...n.lines] : n.lines;
     const ul = document.createElement('ul'); list(ul, raw ? lines : ['가격을 비우면 무료로 올려요(판매 없음).', ...lines]);
@@ -345,7 +365,7 @@ export function wireCreatorPublish(deps: CreatorDeps) {
   function gather(): PublishInput {
     const price = input('cw-price').value.trim(), address = input('cw-address').value.trim();
     return { type: type ?? 'digital', asset: assetName(), title: input('cw-title').value, description: el<HTMLTextAreaElement>('cw-desc').value, files: [...content, ...cover],
-      creatorAddress: address, receivingAddress: address, priceAtoms: price ? (rvnToAtoms(price) ?? 'invalid') : null, declaredFeeBps: OPEN_MARKET_FEE_BPS, details: details(), now: now() };
+      creatorAddress: address, receivingAddress: address, priceAtoms: price ? (rvnToAtoms(price) ?? 'invalid') : null, details: details(), now: now() };
   }
   /** 이 단계에서 다음으로 못 가는 이유 — 「원인 → 다음 행동」 한 줄씩. */
   function infoProblems(): string[] {
@@ -356,7 +376,7 @@ export function wireCreatorPublish(deps: CreatorDeps) {
     if (taken === true) p.push('이미 있는 이름이에요 → 다른 이름을 골라 주세요.');
     if (!isRvnAddress(inp.creatorAddress)) p.push('받을 주소가 없거나 틀려요 → 「새 주소 받기」를 눌러 주세요.');
     if (inp.priceAtoms === 'invalid') p.push('가격이 숫자가 아니에요 → 예: 20 또는 12.5');
-    if (inp.priceAtoms && inp.priceAtoms !== 'invalid' && !feeNotice(inp.priceAtoms).mine) p.push('가격이 너무 작아요 → 수수료를 떼고도 남도록 올려 주세요.');
+    if (inp.priceAtoms && inp.priceAtoms !== 'invalid' && !splitsAtCeiling(inp.priceAtoms)) p.push('가격이 너무 작아요 → 수수료를 떼고도 남도록 올려 주세요.');
     const d = inp.details as unknown as Record<string, unknown>;
     if (type === 'music' && !((d.previewEndMs as number) > (d.previewStartMs as number) + 999 && (d.previewEndMs as number) - (d.previewStartMs as number) <= 60_000))
       p.push('미리듣기 구간이 이상해요 → 1초 이상 60초 이하로 정해 주세요.');
@@ -412,7 +432,7 @@ export function wireCreatorPublish(deps: CreatorDeps) {
     list(el('cw-cost'), [...c.lines, ...(c.balanceAtoms !== null ? [`지금 잔액(확정) ${atomsToRvn(c.balanceAtoms)} RVN`] : [])]);
     el('cw-cost').querySelectorAll('li')[c.lines.length - 1]?.classList.add(c.enough === false ? 'creator-bad' : c.enough ? 'creator-good' : 'creator-warn');
     const ul = document.createElement('ul'); const raw = input('cw-price').value.trim();
-    list(ul, ['판매 수수료(지금 내는 돈 아님):', ...feeNotice(raw ? rvnToAtoms(raw) : null).lines]);
+    list(ul, ['판매 수수료(지금 내는 돈 아님):', ...feeNotice(raw ? rvnToAtoms(raw) : null, feeOpts()).lines]);
     el('cw-cost-fee').replaceChildren(ul);
     if (c.enough === false) {
       try { const r = await deps.invoke<{ address?: string } | string>('receive_address', { fresh: false }); const a = typeof r === 'string' ? r : r?.address;
@@ -469,8 +489,10 @@ export function wireCreatorPublish(deps: CreatorDeps) {
     await readBalance();
     el('cw-c-name').textContent = asset;
     el('cw-c-chain').textContent = chain === 'main' ? '메인넷(실제 돈)' : ['test', 'regtest'].includes(chain) ? `시험망(${chain})` : `알 수 없음(${chain})`;
-    const n = feeNotice(published.manifest.price?.atoms ?? null);
-    el('cw-c-fee').textContent = `${n.percent}%(초안) — 팔릴 때마다 자동으로 나뉘어요. ${n.mine ? `내 가격이면 나 ${n.mine.sellerRvn} RVN · 수수료 ${n.mine.feeRvn} RVN.` : '무료 상품은 수수료가 없어요.'}`;
+    const n = feeNotice(published.manifest.price?.atoms ?? null, feeOpts());
+    el('cw-c-fee').textContent = !published.manifest.price ? '무료 상품은 수수료가 없어요(목록에 「무료」로 보여요).'
+      : !n.scheduled ? `수수료 일정을 아직 받지 못했어요 — 일정을 받으면 판매가 열려요. ${n.lines[2] ?? ''}`
+      : `지금 ${n.percent}%${n.next ? ` → ${n.next.date} 무렵부터 ${n.next.percent}%` : ''} — 팔릴 때마다 자동으로 나뉘어요. ${n.mine ? `내 가격이면 지금 나 ${n.mine.sellerRvn} RVN · 수수료 ${n.mine.feeRvn} RVN${n.mine.later && n.next ? `, ${n.next.date}부터 나 ${n.mine.later.sellerRvn} RVN · 수수료 ${n.mine.later.feeRvn} RVN` : ''}.` : ''}`;
     paintPlan();
   }
   function paintPlan() {

@@ -4,7 +4,8 @@
 아래 파일은 원본과 **바이트가 같아야** 한다. SHA-256 은 `vendor-sha256.json` 에 고정했고 `scripts/creator-publish.test.mjs` 가 확인한다
 (원본 체크아웃이 있으면 원본과도 직접 비교하고, 없으면 그 시험만 SKIP 으로 명시한다).
 
-- `core/creator/bytes.ts` · `limits.ts` · `asset-name.ts` · `manifest.ts` · `publish.ts` · `listing.ts` · `open-market.ts` · `ticket.ts`
+- `core/creator/bytes.ts` · `limits.ts` · `asset-name.ts` · `manifest.ts` · `publish.ts` · `fee-schedule.ts` · `listing.ts` · `open-market.ts` · `ticket.ts`
+  (`fee-schedule.ts` = 장터 수수료 일정 — 지갑 브랜치 `claude/rv-signed-lists-core` 위 2026-10-11, docs/fee-schedule.md)
 - `core/game-registry/platform-fee.ts` (수수료 분할 — 지갑 v4 와 같은 파일)
 - `core/signed-lists/envelope.ts` · `creator-parts.ts` · `sources.ts` (서명된 허용·차단 목록 실행 중 갱신 — 지갑 브랜치 `claude/rv-signed-lists-core`. 지갑 쪽 `wallet.ts`·`boot.ts`(게임 등록부 연결)는 복사하지 않았다)
 

@@ -18288,10 +18288,12 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("sales-back").onclick = () => showPage("home");
   $("game-sales-open").onclick = () => showPage("sales");
   $("creator-open").onclick = () => showPage("creator");
-  wireCreatorPublish({ invoke: (cmd, args) => invoke(cmd, args), back: () => showPage("games"),
+  // 장터 목록(허용·차단·수수료 일정)은 한 곳에서 읽는다 — 마법사의 수수료 안내와 장터 구매 확인이 같은 서명된 일정을 쓴다.
+  const mkLists = marketLists();
+  wireCreatorPublish({ invoke: (cmd, args) => invoke(cmd, args), back: () => showPage("games"), feeSchedule: () => mkLists.current().feeSchedule,
     askPassword: () => ask("지갑 비밀번호", "내 주소로 상품 정보에 서명한 뒤 지갑을 바로 잠가요.", { password: true }) });
   // 열린 장터(시험): 노드 자산 목록·IPFS 읽기 명령이 아직 없어 source 없이 둔다 — 화면이 「아직 없어요」라고 말한다. 판매 스위치는 core 상수(꺼짐).
-  const market = wireOpenMarket({ back: () => showPage("games"), lists: marketLists() });
+  const market = wireOpenMarket({ back: () => showPage("games"), lists: mkLists });
   $("market-open").onclick = () => { showPage("market"); void market.load(); };
   const sellerBox = $("seller-mode") as HTMLInputElement;
   sellerBox.onchange = () => {

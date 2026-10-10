@@ -6,6 +6,7 @@ import { CREATOR_ASSET_PREFIX, checkCreatorAssetName } from './asset-name';
 import { CID_V0, CreatorError, isRvnAddress, verifyManifest, type CreatorManifest } from './manifest';
 import { isContentType, type ContentType } from './limits';
 import { assetPrefixFor, nameConflicts } from './asset-name';
+import { activeFeeSchedule, freeListingAllowed, manifestFeeRef, type FeeSchedule } from './fee-schedule';
 import { BONDED_BADGE, OPEN_MARKET_GAME_INDEX, bondBlockers, type AutoCheck, type BondBlocker } from './open-market';
 
 /*
@@ -163,13 +164,16 @@ export type Listing =
   | (Base & { status: 'bonded'; reason: 'bonded'; bondBlockers: []; access: 'download'; identity: false; payment: true; badge: typeof BONDED_BADGE; autoCheck: AutoCheck })
   | (Base & { status: 'verified'; entry: AllowlistEntry; access: 'in-wallet' | 'download'; identity: boolean; payment: boolean; badge: '검증됨'; autoCheck: AutoCheck | null });
 
-export type JudgeOptions = { denylist?: CreatorDenylist | null; autoCheck?: AutoCheck | null; now?: number; prefix?: string };
+export type JudgeOptions = { denylist?: CreatorDenylist | null; autoCheck?: AutoCheck | null; now?: number; prefix?: string;
+  /** 수수료 일정(가격 없는 상품을 그 종류에서 보일지 — freePrice). 기본 = 지금 쓰는 일정. */
+  schedule?: FeeSchedule | null };
 
 /**
  * 체인 자산 하나 → 목록 항목.
  *  · 매니페스트를 못 받거나 깨졌거나 서명이 틀리거나 남의 매니페스트(asset 칸 불일치)면 숨긴다(hidden). 차단 목록에 있어도 숨긴다.
  *  · 허용 목록 항목과 (자산·종류·매니페스트 CID·바이트 SHA-256·제작자·받는 주소)가 **전부** 같고 verified 면 검증됨.
- *    결제는 검증됨 + 가격 있음 + 선언 수수료율 = 목록 수수료율일 때만(게임은 결제 요청 칸도 켜져 있어야).
+ *    결제는 검증됨 + 가격 있음 + 수수료 칸이 일정 참조(옛 선언은 manifestFeeRef 호환 규칙)일 때만(게임은 결제 요청 칸도 켜져 있어야).
+ *    허용 목록 feeBps 는 이제 「그 상품에 대표가 정한 최대 요율」(일정 요율보다 낮으면 그 값, 예: 회사 자기 상품 0).
  *  · 아니면 (b) 보증 조건(open-market.ts bondBlockers)을 본다. 이유가 하나도 없으면 보증(결제+경고), 하나라도 있으면 미검증.
  */
 export function judgeListing(asset: ChainAsset, manifestBytes: Uint8Array | null, allowlist: CreatorAllowlist | null, opts: JudgeOptions | string = {}): Listing {
@@ -183,13 +187,15 @@ export function judgeListing(asset: ChainAsset, manifestBytes: Uint8Array | null
   try { const v = verifyManifest(manifestBytes, { expectedAsset: asset.name, prefix }); manifest = v.manifest; sha = v.bytesSha256; }
   catch (e) { return { status: 'hidden', asset: asset.name, reason: (e as CreatorError).code ?? 'manifest-invalid' }; }
   if (denied(o.denylist ?? null, asset.name, manifest)) return { status: 'hidden', asset: asset.name, reason: 'denied' };
+  if (manifest.price === null && !freeListingAllowed(o.schedule === undefined ? activeFeeSchedule() : o.schedule, manifest.type)) return { status: 'hidden', asset: asset.name, reason: 'free-not-allowed' };
   const conflict = nameConflicts(asset.name, manifest.title, [], prefix);
   const base: Base = { asset: asset.name, manifestCid: asset.ipfs_hash, manifest, manifestSha256: sha, lookalikes: [], officialLooking: conflict.officialLooking };
   const entry = allowlist?.entries.find(e => e.asset === asset.name);
   if (entry && entry.status === 'verified' && entry.type === manifest.type && entry.manifestCid === asset.ipfs_hash && entry.manifestSha256 === sha &&
       entry.creatorAddress === manifest.creator.address && entry.receivingAddress === manifest.creator.receivingAddress) {
     const game = manifest.type === 'game' ? manifest.details as { capabilities: { identity: boolean; payment: boolean } } : null;
-    const payment = manifest.price !== null && manifest.fee.declaredBps === entry.feeBps && (game === null || game.capabilities.payment === true);
+    // 수수료 칸 = 일정 참조(또는 호환 규칙을 통과한 옛 선언). 실제 요율은 구매 시점에 일정에서(purchase.ts).
+    const payment = manifest.price !== null && manifestFeeRef(manifest.fee, entry.feeBps).ok && (game === null || game.capabilities.payment === true);
     return { status: 'verified', ...base, entry, access: game ? 'in-wallet' : 'download', identity: game?.capabilities.identity === true, payment, badge: '검증됨', autoCheck: check };
   }
   const reason = !entry ? 'not-listed' as const : entry.status !== 'verified' ? 'suspended' as const : 'changed-since-review' as const;
@@ -207,14 +213,14 @@ export function judgeListing(asset: ChainAsset, manifestBytes: Uint8Array | null
  * 이름의 종류 글자와 매니페스트 type 이 다르면 매니페스트 검사에서 숨긴다(manifest-asset).
  */
 export async function discoverListings(p: { assets: readonly ChainAsset[]; fetchManifest: (cid: string) => Promise<Uint8Array | null>; allowlist: CreatorAllowlist | null;
-  denylist?: CreatorDenylist | null; autoChecks?: ReadonlyMap<string, AutoCheck>; now?: number; prefix?: string; type?: ContentType | null }): Promise<Listing[]> {
+  denylist?: CreatorDenylist | null; autoChecks?: ReadonlyMap<string, AutoCheck>; now?: number; prefix?: string; type?: ContentType | null; schedule?: FeeSchedule | null }): Promise<Listing[]> {
   const out: Listing[] = [];
   const kindHead = p.type ? assetPrefixFor(p.type, p.prefix ?? CREATOR_ASSET_PREFIX) : null;
   for (const a of p.assets) {
     if (kindHead && !String(a?.name ?? '').startsWith(kindHead)) continue;
     let bytes: Uint8Array | null = null;
     if (a.ipfs_hash && CID_V0.test(a.ipfs_hash)) { try { bytes = await p.fetchManifest(a.ipfs_hash); } catch { bytes = null; } }
-    out.push(judgeListing(a, bytes, p.allowlist, { denylist: p.denylist, autoCheck: p.autoChecks?.get(a.name) ?? null, now: p.now, prefix: p.prefix }));
+    out.push(judgeListing(a, bytes, p.allowlist, { denylist: p.denylist, autoCheck: p.autoChecks?.get(a.name) ?? null, now: p.now, prefix: p.prefix, schedule: p.schedule }));
   }
   const visible = out.filter((l): l is Exclude<Listing, { status: 'hidden' }> => l.status !== 'hidden');
   const neighbors = visible.map(l => ({ asset: l.asset, title: l.manifest.title }));

@@ -42,6 +42,7 @@
   제작자 허용 = `RAVENVAULT-CREATOR-ALLOWLIST-V1`, 차단 = `RAVENVAULT-CREATOR-DENYLIST-V1`. 원래 검사기(`verifyAllowlistSignature`+`validateRegistry`,
   `verifyCreatorAllowlist`, `verifyCreatorDenylist`)를 그대로 부른다. 도메인 문자열은 목적마다 새로 — 재사용 없음(바깥 `…SIGNED-LISTS-V1`, 키 전환 `…LIST-KEY-TRANSITION-V1`).
 - 묶음은 **스냅숏**이다: 세 칸이 늘 있고 값은 목록 또는 `null`(「이 목록 없음」). 합치기(merge)가 없어 「일부만 바뀐」 상태가 생기지 않는다.
+- **2026-10-11 네 번째 칸 `feeSchedule`(장터 수수료 일정)** — 안쪽 도메인 `RAVENVAULT-FEE-SCHEDULE-V1`. 칸이 없는 옛 세 칸 묶음도 받는다. 만료돼도 마지막으로 검증된 일정을 유지한다(차단 목록과 같은 처리). 정본: `docs/fee-schedule.md`.
 - 안쪽 서명을 볼 키 = 그 목록의 원래 내장 키 + 믿는 목록 키(전환 반영) − 은퇴한 키.
 
 ## 3. 안전 규칙 (전부 시험이 있다)

@@ -8,13 +8,12 @@
  *   제작자 몫이 먼지면 'price-too-small'(그 가격은 팔 수 없다).
  *
  * 수수료율은 게임 가격표의 버전마다 feeBps 로, 수수료 주소는 서명된 등록부의 platform.feeAddresses 로 정해진다.
+ * 장터(제작자 상품)의 요율은 서명된 수수료 일정(core/creator/fee-schedule.ts)이 정한다 — 15% 초안 상수는 2026-10-11 없앴다.
  * 견적·메모·거래 어디에서도 가져오지 않는다. 법률·세무 처리(수수료의 성격·신고)는 전문가 확인 필요.
  */
 
 /** 플랫폼 몫의 상한 15% (1500 bps). 가격표 버전은 이보다 낮출 수만 있다. */
 export const PLATFORM_FEE_BPS_MAX = 1500;
-/** 수수료율 초안(대표가 정한다 — 게이트 feeStatus). 이 상수 하나로 초안을 바꾼다. */
-export const DRAFT_PLATFORM_FEE_BPS = 1500;
 /** 분할의 한쪽 출력이 가질 수 있는 최소 금액. 지갑의 RVN_DUST_THRESHOLD_SATS 와 같아야 한다(시험이 고정). */
 export const OUTPUT_DUST_ATOMS = 1000;
 const BPS_DENOM = 10000n;

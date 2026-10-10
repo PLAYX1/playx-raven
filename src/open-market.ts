@@ -5,6 +5,7 @@ import { discoverListings, type ChainAsset, type CreatorAllowlist, type CreatorD
 import type { BookSection, MusicSection, TicketSection, GameSection, DigitalSection } from '../core/creator/manifest';
 import type { MarketLists } from './market-lists';
 import { BOND_BLOCKER_SAY, BONDED_WARNING, BOND_SAY, OPEN_MARKET_SALES_ENABLED, autoCheck, purchaseSummary, type AutoCheck } from '../core/creator/open-market';
+import { bpsPercent, estimateHeight, heightDateKo, manifestFeeRef, marketRate, type FeeSchedule } from '../core/creator/fee-schedule';
 
 /*
  * 데스크탑 「열린 장터(시험)」 — 구매자 최소 화면: 목록 → 상세(미리듣기·미리보기) → 구매 확인(수수료 분리 금액) → 내 구매 목록.
@@ -28,6 +29,10 @@ export type MarketDeps = {
   back: () => void; source?: MarketSource | null; now?: () => number; storage?: Storage | null;
   /** 서명된 최신 허용·차단 목록(market-lists.ts). 있으면 source.allowlist/denylist 보다 앞선다 — 목록을 다시 그릴 때마다 지금 것을 읽는다. */
   lists?: MarketLists | null;
+  /** 장터 수수료 일정. 기본 = lists 의 서명된 일정(market-lists.ts). 없으면 구매 확인이 「일정을 아직 받지 못했어요」로 잠긴다. */
+  feeSchedule?: () => FeeSchedule | null;
+  /** 체인 팁 높이(요율은 팁 + 1 에서). 없으면 일정 시작 시각으로 어림(「예상」 표시 — 실제 구매 거래는 지갑이 체인 높이로 다시 계산). */
+  chainHeight?: () => number | null;
   /** 시험만: 판매 스위치를 대신 켜고, 구매 거래를 모의로 만든다. */
   salesEnabled?: boolean; buy?: (r: BuyRequest) => Promise<{ txid: string }>;
 };
@@ -50,6 +55,27 @@ export function wireOpenMarket(deps: MarketDeps) {
   const checks = new Map<string, AutoCheck>();
   const blobs: string[] = [];
   let listings: Shown[] = [], current: Shown | null = null, busy = false, kind: ContentType | null = null;
+
+  /** 이 상품의 지금 요율(서명된 일정 · 체인 높이 + 1). 못 정하면 bps null 과 이유 한 줄. */
+  function rateOf(l: Shown): { bps: number; say: string } | { bps: null; say: string } {
+    const schedule = deps.feeSchedule?.() ?? deps.lists?.current().feeSchedule ?? null;
+    if (!schedule) return { bps: null, say: '수수료 일정을 아직 받지 못했어요 → 서명된 수수료 일정을 받기 전에는 살 수 없어요.' };
+    if (!l.manifest.price) return { bps: null, say: '무료 상품이에요.' };
+    const ceiling = l.status === 'verified' ? l.entry.feeBps : null;
+    const ref = manifestFeeRef(l.manifest.fee, ceiling);
+    if (!ref.ok || ref.scheduleId !== schedule.scheduleId) return { bps: null, say: '이 상품의 수수료 칸이 레이븐볼트 수수료 일정과 맞지 않아요 → 살 수 없어요.' };
+    const tip = deps.chainHeight?.() ?? null;
+    const height = (tip ?? estimateHeight(schedule, now())) + 1;
+    try {
+      const r = marketRate({ schedule, kind: l.manifest.type, seller: { address: l.manifest.creator.address, receivingAddress: l.manifest.creator.receivingAddress }, height, priceAtoms: l.manifest.price.atoms, ceilingBps: ceiling });
+      const est = tip === null ? '(예상)' : '';
+      return { bps: r.bps, say: `지금 수수료 ${bpsPercent(r.bps)}%${est}${r.nextChange ? ` → ${heightDateKo(schedule, r.nextChange.height)} 무렵${est}(블록 ${r.nextChange.height})부터 ${bpsPercent(r.nextChange.bps)}%` : ''}. 기간은 체인 블록 높이로 정해요.` };
+    } catch (e) {
+      const c = (e as { code?: string }).code;
+      return { bps: null, say: c === 'before-launch' ? `장터 시작 전이에요 → ${heightDateKo(schedule, schedule.launch.height)} 무렵(블록 ${schedule.launch.height})부터 살 수 있어요.`
+        : c === 'cap-range' ? '가격이 너무 커서 수수료 상한(500 RVN) 안에서 나눌 수 없어요 → 살 수 없어요.' : '수수료를 계산하지 못했어요 → 살 수 없어요.' };
+    }
+  }
 
   /* 종류 탭: 전체 + 다섯 종류. 탭마다 체인 검색어가 다르다(이름의 종류 글자). */
   function paintTabs() {
@@ -207,13 +233,15 @@ export function wireOpenMarket(deps: MarketDeps) {
   };
   el('mk-d-buy').onclick = () => {
     if (!current?.payment) return;
-    const s = purchaseSummary(current.manifest, current.status === 'verified' ? current.entry.feeBps : undefined);
-    if (!s) return;
+    const rate = rateOf(current);
+    const s = rate.bps === null ? null : purchaseSummary(current.manifest, rate.bps);
+    if (!current.manifest.price) return;
     view('confirm');
-    list(el('mk-c-lines'), [`${current.manifest.title} (${current.asset})`, ...s.lines]);
+    list(el('mk-c-lines'), [`${current.manifest.title} (${current.asset})`, ...(s ? s.lines : [`가격 ${atomsToRvn(current.manifest.price.atoms)} RVN`]), rate.say]);
     el('mk-c-note').textContent = '판매자 몫은 판매자 받는 주소로 바로, 수수료는 레이븐볼트 수수료 주소로 — 한 거래 안에서 지갑이 나눠요. 레이븐볼트가 돈을 맡지 않아요.' +
       (current.status === 'bonded' ? ' ' + BONDED_WARNING : '');
     const blockers = salesOn ? [] : ['판매 기능이 아직 꺼져 있어요(대표 결정 대기). 지금은 살 수 없어요.'];
+    if (!s) blockers.push(rate.say);
     if (salesOn && !deps.buy) blockers.push('이 데스크탑은 아직 구매 거래를 만들 수 없어요(지갑 연결 전).');
     list(el('mk-c-blockers'), blockers, 'creator-bad');
     el<HTMLButtonElement>('mk-c-pay').disabled = blockers.length > 0;
@@ -221,7 +249,9 @@ export function wireOpenMarket(deps: MarketDeps) {
   };
   el('mk-c-pay').onclick = async () => {
     if (!current || !deps.buy || !salesOn || busy || !current.manifest.price) return;
-    const s = purchaseSummary(current.manifest, current.status === 'verified' ? current.entry.feeBps : undefined)!;
+    const rate = rateOf(current);
+    if (rate.bps === null) return;
+    const s = purchaseSummary(current.manifest, rate.bps)!;
     busy = true; el<HTMLButtonElement>('mk-c-pay').disabled = true; el('mk-c-say').textContent = '보내는 중…';
     try {
       const r = await deps.buy({ asset: current.asset, sellerAddress: current.manifest.creator.receivingAddress, priceAtoms: current.manifest.price.atoms,

@@ -27,7 +27,8 @@ export function canonicalJson(value: unknown): string {
  * 서버·DB 없음: 묶음은 지갑 사이트의 정적 파일(release-site /lists/signed-lists.json) 또는 IPFS 로 나른다(sources.ts). 전달 경로는 믿지 않는다.
  *
  * 묶음 = 바깥 서명(이 파일, 도메인 RAVENVAULT-SIGNED-LISTS-V1) + 안쪽 목록마다 **원래 서명**(원래 도메인 그대로 —
- * 게임 등록부 RAVENVAULT-GAME-ALLOWLIST-V1 · 제작자 허용 RAVENVAULT-CREATOR-ALLOWLIST-V1 · 차단 RAVENVAULT-CREATOR-DENYLIST-V1).
+ * 게임 등록부 RAVENVAULT-GAME-ALLOWLIST-V1 · 제작자 허용 RAVENVAULT-CREATOR-ALLOWLIST-V1 · 차단 RAVENVAULT-CREATOR-DENYLIST-V1 ·
+ * 수수료 일정 RAVENVAULT-FEE-SCHEDULE-V1).
  * 바깥 서명은 일련번호·발행 시각·만료와 안쪽 목록 각각의 SHA-256 을 묶는다. 도메인 문자열은 목적마다 따로다(재사용 금지).
  *
  * 안전 규칙(전부 시험이 있다 — signed-lists.test.ts):
@@ -46,9 +47,15 @@ export const LISTS_DOMAIN = 'RAVENVAULT-SIGNED-LISTS-V1';
 export const TRANSITION_FORMAT = 'rv-list-key-transition';
 export const TRANSITION_DOMAIN = 'RAVENVAULT-LIST-KEY-TRANSITION-V1';
 export const STATE_FORMAT = 'rv-signed-lists-state';
-/** 묶음 안 목록 이름. 묶음은 늘 세 칸을 다 가진다(값은 목록 또는 null = 「이 목록 없음」). 스냅숏이라 합치기(merge)가 없다. */
-export const PART_NAMES = ['gameRegistry', 'creatorAllowlist', 'creatorDenylist'] as const;
+/**
+ * 묶음 안 목록 이름. 묶음은 칸을 다 가진다(값은 목록 또는 null = 「이 목록 없음」). 스냅숏이라 합치기(merge)가 없다.
+ * feeSchedule(장터 수수료 일정, 2026-10-11)은 나중에 더한 칸이다 — 그 칸이 없는 옛 세 칸 묶음도 받는다(없음 = null).
+ * 서명기(signBundle)는 늘 네 칸을 쓴다.
+ */
+export const PART_NAMES = ['gameRegistry', 'creatorAllowlist', 'creatorDenylist', 'feeSchedule'] as const;
 export type PartName = typeof PART_NAMES[number];
+const LEGACY_PART_NAMES = PART_NAMES.filter(n => n !== 'feeSchedule');
+const partKeysOk = (o: Record<string, Loose>) => keysAre(o, PART_NAMES.join(',')) || keysAre(o, LEGACY_PART_NAMES.join(','));
 
 export const MAX_BUNDLE_BYTES = 8 * 1024 * 1024;
 export const MAX_LIFETIME_MS = 180 * 24 * 3600 * 1000;
@@ -189,10 +196,11 @@ export function verifyBundle(raw: unknown, trust: Trust, verifiers: PartVerifier
   if (!plain(b) || !keysAre(b, 'format,version,body,parts,transitions,signature') || b.format !== LISTS_FORMAT || b.version !== LISTS_VERSION) return fail('shape', 'bundle');
   const body = b.body as Loose;
   if (!plain(body) || !keysAre(body, 'sequence,issuedAt,expiresAt,parts') || !int(body.sequence, 1, Number.MAX_SAFE_INTEGER) ||
-      !plain(body.parts) || !keysAre(body.parts, PART_NAMES.join(',')) || !plain(b.parts) || !keysAre(b.parts, PART_NAMES.join(','))) fail('shape', 'body');
+      !plain(body.parts) || !partKeysOk(body.parts) || !plain(b.parts) || !partKeysOk(b.parts) ||
+      ('feeSchedule' in body.parts) !== ('feeSchedule' in b.parts)) fail('shape', 'body');
   const issuedAtMs = isoTime(body.issuedAt), expiresAtMs = isoTime(body.expiresAt);
   for (const name of PART_NAMES) {
-    const h = body.parts[name], p = b.parts[name];
+    const h = body.parts[name] ?? null, p = b.parts[name] ?? null;
     if (h === null && p === null) continue;
     if (!plain(h) || !keysAre(h, 'sha256') || typeof h.sha256 !== 'string' || !SHA.test(h.sha256) || !plain(p) || !keysAre(p, 'doc,signature')) fail('shape', 'part-' + name);
   }
@@ -213,7 +221,7 @@ export function verifyBundle(raw: unknown, trust: Trust, verifiers: PartVerifier
   if (!verifyWith(key!, s.signature, bundleSigningBytes(body as BundleBody))) fail('signature');
   // 서명된 해시와 실린 목록이 같아야 한다(쓰지 않는 목록도 — 서명되지 않은 바이트는 하나도 받지 않는다).
   for (const name of PART_NAMES) {
-    const p = b.parts[name];
+    const p = b.parts[name] ?? null;
     if (p === null) continue;
     let sha: string;
     try { sha = partSha256(p); } catch { return fail('part-hash', name); }
@@ -223,7 +231,7 @@ export function verifyBundle(raw: unknown, trust: Trust, verifiers: PartVerifier
   for (const name of PART_NAMES) {
     const v = verifiers[name];
     if (!v) continue;
-    const p = b.parts[name];
+    const p = b.parts[name] ?? null;
     if (p === null) { values[name] = null; continue; }
     try { values[name] = v.verify(JSON.parse(JSON.stringify(p.doc)), JSON.parse(JSON.stringify(p.signature)), partKeys(t, v.builtinKeys)); }
     catch (e) { return fail('part-invalid', `${name}: ${(e as Error)?.message ?? 'invalid'}`.slice(0, 200)); }
@@ -300,7 +308,7 @@ export function currentLists(state: ListsState, now: number, builtin: readonly L
 /* ── 서명기(대표 도구·시험 전용 — 앱은 부르지 않는다) ─────────────────────── */
 
 /** 32바이트 ed25519 비밀값으로 묶음을 만든다. 시험과 sign-lists.mjs 의 참고 구현. */
-export function signBundle(p: { sequence: number; issuedAt: string; expiresAt: string; parts: Record<PartName, PartPayload | null>; transitions?: KeyTransition[] }, privateKey: Uint8Array): SignedBundle {
+export function signBundle(p: { sequence: number; issuedAt: string; expiresAt: string; parts: Partial<Record<PartName, PartPayload | null>>; transitions?: KeyTransition[] }, privateKey: Uint8Array): SignedBundle {
   const parts = Object.fromEntries(PART_NAMES.map(n => [n, p.parts[n] ?? null])) as Record<PartName, PartPayload | null>;
   const body: BundleBody = { sequence: p.sequence, issuedAt: p.issuedAt, expiresAt: p.expiresAt,
     parts: Object.fromEntries(PART_NAMES.map(n => [n, parts[n] ? { sha256: partSha256(parts[n]!) } : null])) as BundleBody['parts'] };

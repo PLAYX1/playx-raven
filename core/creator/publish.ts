@@ -7,6 +7,7 @@ import {
   type CreatorManifest, type Details, type FileEntry, type UnsignedManifest,
 } from './manifest';
 import { atomsToRvn } from './bytes';
+import { scheduleFee } from './fee-schedule';
 
 /*
  * 「내 콘텐츠 올리기」 흐름의 순수 부분: 파일 검사 → 보관(pin) → 매니페스트 → 제작자 서명 → 자기 검사 → 매니페스트 보관 → 발행 계획.
@@ -63,7 +64,9 @@ export type MessageSigner = (address: string, message: string) => Promise<string
 export type PublishInput = {
   type: ContentType; asset: string; title: string; description: string;
   files: FileInput[]; creatorAddress: string; receivingAddress: string;
-  priceAtoms: string | null; declaredFeeBps: number;
+  priceAtoms: string | null;
+  /** 수수료 일정 참조(기본 rv-market). 옛 선언 요율(declaredFeeBps)은 호환 시험용 — 주면 옛 형식 매니페스트를 만든다. */
+  feeScheduleId?: string; declaredFeeBps?: number;
   /** 종류별 칸(limits.ts CONTENT_TYPES[type].detailKeys). 화면이 만들고, 매니페스트 검사기가 엄격히 본다. */
   details: Details;
   now: Date; prefix?: string;
@@ -123,7 +126,7 @@ export async function publishContent(input: PublishInput, pin: PinAdapter, sign:
   const unsigned: UnsignedManifest = {
     format: MANIFEST_FORMAT, version: MANIFEST_VERSION, type: input.type, asset: input.asset, title: input.title.trim(), description: input.description.trim(),
     files, cover, creator: { address: input.creatorAddress, receivingAddress: input.receivingAddress },
-    price: input.priceAtoms === null ? null : { atoms: input.priceAtoms }, fee: { policy: FEE_POLICY, declaredBps: input.declaredFeeBps },
+    price: input.priceAtoms === null ? null : { atoms: input.priceAtoms }, fee: input.declaredFeeBps === undefined ? scheduleFee(input.feeScheduleId) : { policy: FEE_POLICY, declaredBps: input.declaredFeeBps },
     details: input.details, createdAt: input.now.toISOString(),
   };
   const signature = await sign(input.creatorAddress, manifestSigningMessage(unsigned));

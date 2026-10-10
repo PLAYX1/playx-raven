@@ -16,7 +16,7 @@ export function marketLists(o: { storage?: Storage | null; sources?: readonly Li
   const store: StateStore = storageStore(o.storage === undefined ? (() => { try { return window.localStorage; } catch { return null; } })() : o.storage);
   const keys = o.listKeys ?? SIGNED_LISTS_PUBLIC_KEYS, now = o.now ?? Date.now;
   let state: ListsState = loadState(store);
-  const current = () => { try { return creatorListsFrom(state, now(), keys, undefined, o.creatorKeys); } catch { return { allowlist: null, denylist: null, source: 'builtin' as const, sequence: 0, expiresAt: null, say: '기본 목록을 쓰고 있어요.' }; } };
+  const current = () => { try { return creatorListsFrom(state, now(), keys, undefined, o.creatorKeys); } catch { return { allowlist: null, denylist: null, feeSchedule: null, source: 'builtin' as const, sequence: 0, expiresAt: null, say: '기본 목록을 쓰고 있어요.' }; } };
   if (!o.sources?.length || keys.length === 0) return { current };
   return {
     current,

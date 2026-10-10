@@ -3,6 +3,7 @@ import { ripemd160 } from '@noble/hashes/ripemd160';
 import { secp256k1 } from '@noble/curves/secp256k1';
 import { decodeBase58Check, encodeBase58Check } from '../wallet-offline/base58check';
 import { PLATFORM_FEE_BPS_MAX, splitPrice } from '../game-registry/platform-fee';
+import { FEE_SCHEDULE_POLICY, LEGACY_FEE_POLICY, MARKET_FEE_BPS_CEILING, type ManifestFee } from './fee-schedule';
 import { canonicalJson, base64Decode, base64Encode, plain, sha256Hex, utf8, type Loose } from './bytes';
 import { checkCreatorAssetName, CREATOR_ASSET_PREFIX } from './asset-name';
 import { CONTENT_TYPES, LIMITS, MIME_BY_EXT, allowedExt, extOf, isContentType, safePath, type ContentType } from './limits';
@@ -18,8 +19,8 @@ import { CONTENT_TYPES, LIMITS, MIME_BY_EXT, allowedExt, extOf, isContentType, s
  *     서명 문구 = DOMAIN \n 자산 이름 \n sha256:<서명 칸을 뺀 매니페스트의 정본 JSON 의 SHA-256>.
  *     도메인을 앞에 붙여 다른 서명(신원·송금 확인 문구)과 섞이지 않게 한다.
  *   · asset 칸 = 이 매니페스트를 가리키는 자산 이름. 남의 매니페스트 CID 를 자기 자산에 붙이는 「도용」을 막는다.
- *   · 가격은 RVN 정수 atoms 문자열. 수수료율은 제작자가 「동의한 값의 선언」일 뿐이고, 실제 율과 수수료 주소는
- *     지갑 내장 규칙과 서명된 허용 목록이 정한다(수수료 규약 v4, docs/platform-fee.md).
+ *   · 가격은 RVN 정수 atoms 문자열. 수수료 칸은 **요율 참조**({policy:'rv-fee-schedule-v1', scheduleId}) — 실제 요율은 구매 시점
+ *     (체인 높이)에 서명된 수수료 일정에서 계산하고, 수수료 주소는 코드 고정(docs/fee-schedule.md). 옛 선언 요율 칸은 호환 규칙으로만 받는다.
  *
  * 미검증 콘텐츠는 이 서명이 맞아도 「미검증」이다. 서명은 「누가 만들었나」만 증명하고 「안전한가」는 증명하지 않는다.
  * 정본 직렬화(canonicalJson)는 정렬 키 JSON 이며, JCS(RFC 8785)를 그대로 쓸지는 결정 필요(설계 §2.3 마지막 줄).
@@ -29,7 +30,8 @@ export const MANIFEST_FORMAT = 'rv-creator-manifest';
 export const MANIFEST_VERSION = 2;
 export const MANIFEST_SIGN_DOMAIN = 'RAVENVAULT-CREATOR-MANIFEST-V2';
 export const MANIFEST_SIGN_SCHEME = 'rvn-signmessage';
-export const FEE_POLICY = 'rv-platform-fee-v4';
+/** 옛 선언 요율 정책 이름(호환). 새 매니페스트는 fee-schedule.ts FEE_SCHEDULE_POLICY(요율 참조)를 쓴다. */
+export const FEE_POLICY = LEGACY_FEE_POLICY;
 export const MAX_MANIFEST_BYTES = 64 * 1024;
 /** 아이템 하나 가격의 플랫폼 상한(게임 등록부 PLATFORM_MAX_ITEM_ATOMS 와 같은 100,000 RVN). */
 export const MAX_PRICE_ATOMS = 100_000n * 100_000_000n;
@@ -50,7 +52,7 @@ export type UnsignedManifest = {
   format: typeof MANIFEST_FORMAT; version: typeof MANIFEST_VERSION; type: ContentType; asset: string;
   title: string; description: string; files: FileEntry[]; cover: FileEntry | null;
   creator: { address: string; receivingAddress: string };
-  price: { atoms: string } | null; fee: { policy: typeof FEE_POLICY; declaredBps: number };
+  price: { atoms: string } | null; fee: ManifestFee;
   details: Details; createdAt: string;
 };
 export type ManifestSignature = { scheme: typeof MANIFEST_SIGN_SCHEME; domain: typeof MANIFEST_SIGN_DOMAIN; address: string; value: string };
@@ -190,10 +192,14 @@ export function validateManifest(raw: unknown, prefix: string = CREATOR_ASSET_PR
   if (files.reduce((n, f) => n + f.size, 0) > rule.maxTotalBytes) fail('manifest-files', 'total');
   if (d.cover !== null) { const c = checkFileEntry(d.cover, 'cover'); if (paths.has(c.path.toLowerCase())) fail('manifest-files', 'cover-duplicate'); }
   if (!plain(d.creator) || !keysAre(d.creator, 'address,receivingAddress') || !isRvnAddress(d.creator.address) || !isRvnAddress(d.creator.receivingAddress)) fail('manifest-shape', 'creator');
-  if (!plain(d.fee) || !keysAre(d.fee, 'policy,declaredBps') || d.fee.policy !== FEE_POLICY || !int(d.fee.declaredBps, 0, PLATFORM_FEE_BPS_MAX)) fail('manifest-price', 'fee');
+  const scheduleRef = plain(d.fee) && keysAre(d.fee, 'policy,scheduleId') && d.fee.policy === FEE_SCHEDULE_POLICY &&
+    typeof d.fee.scheduleId === 'string' && /^[a-z0-9][a-z0-9-]{0,31}$/.test(d.fee.scheduleId);
+  const legacy = plain(d.fee) && keysAre(d.fee, 'policy,declaredBps') && d.fee.policy === LEGACY_FEE_POLICY && int(d.fee.declaredBps, 0, PLATFORM_FEE_BPS_MAX);
+  if (!scheduleRef && !legacy) fail('manifest-price', 'fee');
   if (d.price !== null) {
     if (!plain(d.price) || !keysAre(d.price, 'atoms') || typeof d.price.atoms !== 'string' || !ATOMS.test(d.price.atoms) || BigInt(d.price.atoms) > MAX_PRICE_ATOMS) fail('manifest-price', 'atoms');
-    try { splitPrice(d.price.atoms, d.fee.declaredBps); } catch { fail('manifest-price', 'split'); }
+    // 요율 참조면 일정이 받을 수 있는 가장 높은 요율(천장)로 나눠도 판매자 몫이 남아야 한다.
+    try { splitPrice(d.price.atoms, scheduleRef ? MARKET_FEE_BPS_CEILING : d.fee.declaredBps); } catch { fail('manifest-price', 'split'); }
   }
   checkDetails(type, d.details, files, d.price);
   if (!plain(d.signature) || !keysAre(d.signature, 'scheme,domain,address,value') || d.signature.scheme !== MANIFEST_SIGN_SCHEME ||

@@ -22,7 +22,7 @@ const PNG = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 
 
 test('vendored creator core is byte-identical to the pinned copy (and to the wallet source when present)', t => {
   const files = Object.keys(pins.files);
-  assert.equal(files.length, 12);
+  assert.equal(files.length, 13); // + core/creator/fee-schedule.ts (2026-10-11)
   for (const f of files) assert.equal(digest(f), pins.files[f], `vendored drift: ${f}`);
   const root = process.env.RV_WALLET_CORE || '/Users/gimmusong/wt-rv-signed-lists-core';
   if (!existsSync(`${root}/core/creator/manifest.ts`)) { t.skip('wallet checkout absent; pinned hashes still checked'); return; }
@@ -103,4 +103,13 @@ test('creator page is seller-only and route-guarded in source (same pattern as t
   const draftType = wizard.slice(wizard.indexOf('type Draft ='), wizard.indexOf('export type MineItem'));
   assert.doesNotMatch(draftType, /bytes|pass|seed|key/i);
   assert.doesNotMatch(wizard.slice(wizard.indexOf('const FIELD_IDS'), wizard.indexOf('const el =')), /pass|seed/i, 'no secret field is saved');
+});
+
+test('market fee address (vendored fee-schedule.ts) = the node-validated platform address in shop.rs; no 15% draft constant left', () => {
+  const fs = readFileSync('core/creator/fee-schedule.ts', 'utf8');
+  const ts = /MARKET_FEE_ADDRESS = '(R[1-9A-HJ-NP-Za-km-z]{33})'/.exec(fs)?.[1];
+  const rs = /const PLATFORM_ADDRESS: &str = "(R[1-9A-HJ-NP-Za-km-z]{33})"/.exec(readFileSync('src-tauri/src/shop.rs', 'utf8'))?.[1];
+  assert.equal(ts, 'RLFnbkjmf1VCVq7D9TZvRp7fv6W97rm2cB'); assert.equal(ts, rs);
+  for (const f of ['core/game-registry/platform-fee.ts', 'core/creator/open-market.ts', 'src/creator-publish.ts', 'src/open-market.ts'])
+    assert.doesNotMatch(readFileSync(f, 'utf8'), /DRAFT_PLATFORM_FEE_BPS|OPEN_MARKET_FEE_BPS|15%\(초안\)/, f);
 });
