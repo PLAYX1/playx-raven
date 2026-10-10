@@ -103,6 +103,13 @@ windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Storage
 [target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
 keyring = { version = "3", features = ["apple-native", "windows-native"] }
 
+# 미니 창 OS 알림(입금 감지·확인·노드 이상). 🔴 플러그인(tauri-plugin-notification)이 아니라
+# 그 밑의 notify-rust 를 Rust 에서만 쓴다 — 플러그인은 모든 창에 JS 를 심고 IPC 명령 3개를 새로 연다.
+# 여기는 창이 알림을 부를 길이 아예 없다(알림 본문은 Rust 가 가림 규칙을 거쳐 만든다). 리눅스는 dbus
+# (zbus)를 끌고 오므로 넣지 않는다 → 트레이·미니 창만. 판은 플러그인 2.3.3 이 받는 4.x 와 같다.
+[target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies.notify-rust]
+version = "4.11"
+
 [target.'cfg(target_os = "macos")'.dependencies]
 # Downcast keyring's native error to OSStatus without formatting its message.
 security-framework = "3"

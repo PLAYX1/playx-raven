@@ -1,0 +1,1 @@
+{"$schema":"../gen/schemas/desktop-schema.json","identifier":"mini","description":"미니 창(읽기 전용): 이벤트 듣기와 창 끌기만. 지갑·opener·dialog·process·updater·notification 권한 없음.","windows":["mini"],"permissions":["core:event:allow-listen","core:event:allow-unlisten","core:window:allow-start-dragging"]}
