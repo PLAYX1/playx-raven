@@ -14,6 +14,7 @@ import { rememberCompanionPage, restoreCompanionPage, mountCompanionBridge } fro
 import { browserPhotoApi, uploadArtistPhoto, photoErrorText, PhotoFailure } from "./artist-photo";
 import { seedErrorKind, seedErrorMessage, seedUnlockButton } from "./seed-recovery";
 import { createRaviAgentUI, TOOL_LABELS } from "./ravi-agent";
+import { isRaviSendRequest, isExplicitSendOrder, raviSendAnswerHtml, parseRichQuestion, raviRichAnswerHtml, publicAddressQuestion, raviPublicOfferHtml, raviPublicResultHtml, raviKeyHintHtml, raviFailureNextHtml, raviConnectedHtml, type PublicAddress } from "./ravi-chat";
 let raviAgentUI: ReturnType<typeof createRaviAgentUI> | null = null;
 import { createRaviHome } from "./ravi-home";
 import { mountRaviLifecycle } from "./ravi-lifecycle";
@@ -9221,6 +9222,8 @@ async function refreshKeys(preferred = "", keepKeyCard = false, refreshRows = tr
     const previous = preferred || sel.value;
     sel.innerHTML = have.map((p) => `<option value="${p}">${escapeHtml(labelOf(p))}</option>`).join("");
     const usable = have.filter(p => !keyChecks.rejected.has(p));
+    aiUsableCount = usable.length;
+    paintDebateAvailability();
     sel.value = usable.includes(previous) ? previous : usable[0] || have[0] || "";
     aiProvider = usable.includes(sel.value) ? sel.value : null;
     try { localStorage.setItem("rv-voice-provider", aiProvider || ""); } catch { /* Optional provider metadata only. */ }
@@ -9282,6 +9285,8 @@ function keyStatusMessage(): string {
   }).filter(Boolean).join(" ");
 }
 
+/// 방금 저장한 열쇠의 회사 — 그 연결 확인이 성공하면 「연결됐어요」 한 줄을 한 번만 띄운다.
+let raviKeyJustSaved = "";
 async function checkSavedKey(provider: string, force = false): Promise<void> {
   const version = keyChecks.begin(provider, force);
   if (version === null) return;
@@ -9295,10 +9300,14 @@ async function checkSavedKey(provider: string, force = false): Promise<void> {
   const result = keyChecks.results.get(provider);
   const note = document.getElementById("kc-note");
   if (note && keyPick === provider && !note.dataset.keySaveFailed) setCopyText(note, () => result ? keyConnectionMessage(result, provider) : t("연결을 확인했어요."));
+  const justSaved = raviKeyJustSaved === provider;
+  if (justSaved) raviKeyJustSaved = "";
   if (result && aiKeyed[provider]) {
     chatHtml("ai", `<p>${escapeHtml(keyConnectionMessage(result, provider))}</p>` +
-      (keyConnectionFailure(result).rejected ? "" : `<p>${copyHtml("저장된 키로 라비는 깨어 있어요. 연결 확인은 참고용이에요.")}</p>`));
-  }
+      (keyConnectionFailure(result).rejected
+        ? `<div class="guidego"><button type="button" class="ghost" data-guide-go="key">${copyHtml("열쇠 다시 넣기")}</button></div>`
+        : `<p>${copyHtml("저장된 키로 라비는 깨어 있어요. 연결 확인은 참고용이에요.")}</p>`));
+  } else if (!result && justSaved && aiProvider) chatHtml("ai", raviConnectedHtml(copyHtml));
 }
 
 /// 지금 시세. 메뉴 가격 옆에 RVN 환산이 붙는 근거다.
@@ -10289,6 +10298,23 @@ const MODE_HINT: Record<string, string> = {
   debate: "커피값을 4500원으로 올릴까?",
 };
 
+/// 쓸 수 있는 AI 가 몇 곳인가(거절된 열쇠는 뺀다). 「두 곳에 묻기」는 둘 이상일 때만 보인다.
+let aiUsableCount = 0;
+/// 열쇠가 하나뿐인데 「두 곳에 묻기」로 물었을 때, 답과 **같은 말풍선** 맨 위에 붙는 한 줄.
+const DEBATE_ONE_NOTE = "AI가 하나만 연결돼 있어 바로 답할게요.";
+
+/** 🔴 2026-10-11 — 열쇠가 하나인데 「두 곳에 묻기」가 보여, 누르면 「회사·열쇠」 안내 한 줄만 나오고
+ *  답은 동의 카드에서 멈췄다. 하나뿐이면 단추를 감추고, 골라 두었던 모드는 「그냥 묻기」로 칠한다. */
+function paintDebateAvailability() {
+  const b = document.querySelector<HTMLElement>('#chat-mode [data-mode="debate"]');
+  if (b) b.hidden = aiUsableCount < 2;
+  if (aiUsableCount < 2 && chatMode === "debate") {
+    paintChatMode("fill");
+    const intro = document.querySelector<HTMLElement>("#chat-log .msg.intro .msgtxt");
+    if (intro) intro.innerHTML = copyHtml(RAVI_GREETING);
+  }
+}
+
 /** 고른 모드를 단추·안내 칸에만 입힌다(말풍선은 안 남긴다) — 켤 때 쓴다. */
 function paintChatMode(m: "fill" | "ask" | "debate") {
   chatMode = m;
@@ -10327,18 +10353,30 @@ function setChatMode(m: "fill" | "ask" | "debate") {
 
 async function chatAsk(q: string) { await chatAgent(q); }
 
-async function chatAgent(q: string) {
-  if (!raviAgentUI || !await raviAgentUI.ensureConsent()) {
-    chatSay("ai", "정보 선택을 저장하지 않아 질문을 AI에 보내지 않았어요."); return;
-  }
+/// 정보 선택을 저장하면 다시 보낼 질문 — 마지막으로 「내 정보 없이」 답한 것 하나.
+let raviHeldQuestion = "";
+
+/**
+ * 🔴 2026-10-11 — 정보 선택을 저장하지 않으면 질문을 **버렸다**(「정보 선택을 저장하지 않아 질문을 AI에
+ *    보내지 않았어요」). 카드는 「모두 꺼도 일반 대화는 쓸 수 있어요」라고 약속하는데 말이다. 게다가 카드가
+ *    떠 있는 동안 다음 질문은 조용히 무시됐다(대표가 같은 질문을 두 번 쳐도 답이 없었다).
+ *    이제: 저장 전이면 **내 정보 없이 바로 답하고**(백엔드가 개인 정보 도구를 빼고 묻는다),
+ *    카드는 답 아래에 한 번만 조용히 놓는다. 저장하면 그 질문을 다시 보낸다.
+ */
+async function chatAgent(q: string, note = "") {
+  const consent = raviAgentUI ? await raviAgentUI.consentState() : null;
+  const general = !consent?.reviewed;
+  const say = (text: string) => note
+    ? chatHtml("ai", `<p class="muted">${copyHtml(note)}</p><p>${escapeHtml(text).replace(/\n/g, "<br />")}</p>`)
+    : chatSay("ai", text);
   const status = document.createElement("p"); status.setAttribute("role", "status");
   status.textContent = "라비가 질문을 살펴보고 있어요…"; $("chat-log").append(status);
   const progress = new Channel<string>();
   progress.onmessage = name => { status.setAttribute("data-ravi-tool", "working"); status.textContent = Object.prototype.hasOwnProperty.call(TOOL_LABELS, name) ? `라비가 ${TOOL_LABELS[name]}…` : "라비가 확인하고 있어요…"; };
   try {
     const r = await invoke<any>("ravi_agent_chat", { provider: aiProvider, message: q, tz: tzMin(), progress });
-    if (containsRaviSecret(String(r.reply || ""))) { chatSay("ai", "답에 민감한 정보가 있어 표시하지 않았어요."); return; }
-    chatSay("ai", r.reply || "답 데이터 없음");
+    if (containsRaviSecret(String(r.reply || ""))) { say("답에 민감한 정보가 있어 표시하지 않았어요."); return; }
+    say(r.reply || "답 데이터 없음");
     for (const p of r.prepared || []) {
       if (p.name === "prepare_send") {
         // Backend bound these values to this question; retain the original send safety checks too.
@@ -10350,8 +10388,28 @@ async function chatAgent(q: string) {
   } catch (e) {
     // Backend emits fixed errors only; never display arbitrary transport payloads.
     const safe = typeof e === "string" && !containsRaviSecret(e) && e.length < 180 ? e : "라비 요청을 마치지 못했어요.";
-    chatSay("ai", safe);
+    // 열쇠가 틀렸으면 「열쇠 다시 넣기」, 바쁘거나 끊겼으면 「다시 묻기」 — 다음에 할 일을 단추로.
+    const next = raviFailureNextHtml(safe, q, copyHtml);
+    if (next) chatHtml("ai", `${note ? `<p class="muted">${copyHtml(note)}</p>` : ""}<p>${copyHtml(safe)}</p>${next}`);
+    else say(safe);
+    return;
   } finally { status.remove(); }
+  if (general && raviAgentUI) {
+    raviHeldQuestion = q;
+    raviAgentUI.offerConsent(() => void resendHeldQuestion());
+  }
+}
+
+/** 동의 카드에서 「선택 저장」 — 사용자가 다시 치지 않아도 보류한 질문을 고른 정보까지 보고 다시 답한다. */
+async function resendHeldQuestion(lead = "저장했어요. 방금 질문을 고른 정보까지 보고 다시 답할게요.") {
+  const q = raviHeldQuestion;
+  raviHeldQuestion = "";
+  if (!q || !aiProvider) return;
+  chatSay("ai", lead);
+  while (raviRequestPending) await new Promise(r => setTimeout(r, 100));
+  raviRequestPending = true;
+  raviHome?.thinking();
+  try { await chatAgent(q); } finally { raviRequestPending = false; raviHome?.finish(); }
 }
 
 async function chatDebate(q: string) {
@@ -10371,10 +10429,9 @@ async function chatDebate(q: string) {
     chatPopThinking();
     // 열쇠가 하나뿐이면 「두 곳에 묻기」는 못 돌지만 질문은 그대로 답해야 한다 —
     // 에러만 보이고 답이 없으면 처음 쓰는 사람은 라비가 고장 난 줄 안다.
-    if (String(e).includes("두 곳 이상의 API")) {
-      chatHtml("ai", `<span class="muted">두 곳에 묻기는 서로 다른 회사의 열쇠가 둘 있어야 해요. 지금은 하나라서 라비가 그냥 답할게요.</span>`);
-      return chatAgent(q);
-    }
+    // 🔴 2026-10-11 — 여기서 안내 한 말풍선 + 답 한 말풍선으로 나뉘었고, 답 쪽은 동의 카드에서 멈춰
+    //    안내만 남았다. 이제 안내 한 줄은 답과 같은 말풍선 맨 위에 붙는다.
+    if (String(e).includes("두 곳 이상의 API")) return chatAgent(q, DEBATE_ONE_NOTE);
     chatHtml("ai", `<span class="warn">${escapeHtml(errText(e))}</span>`);
   }
 }
@@ -10509,7 +10566,11 @@ async function saveKeyCard(checkOnly = false) {
     keyChecks.forget(provider);
     await refreshKeys(provider, true);
     closeKeyCard();
-    chatHtml("ai", `<p>${copyHtml("키를 저장했어요. 라비가 깨어났어요. 연결 확인은 뒤에서 진행해요.")}</p>`);
+    // 🔴 2026-10-11 대표: 「열쇠를 넣고 나면 반드시 작동해야 한다」. 들고 있던 질문이 있으면 바로 다시 묻고
+    //    (동의 카드·두 곳에 묻기에 막히지 않는다 — 저장 전이면 내 정보 없이 답한다), 없으면 연결 확인 뒤
+    //    「연결됐어요 · 한 번 물어볼까요?」를 띄운다(checkSavedKey).
+    if (raviHeldQuestion && aiProvider) void resendHeldQuestion("키를 저장했어요. 방금 질문을 AI로 다시 물어볼게요.");
+    else { raviKeyJustSaved = provider; chatHtml("ai", `<p>${copyHtml("키를 저장했어요. 연결을 확인하고 있어요.")}</p>`); }
   } finally {
     input.value = "";
     btn.disabled = false;
@@ -10527,7 +10588,28 @@ function wakeRavi(): void {
 
 /** 열쇠가 없을 때의 답 — 정해 둔 안내. 맞는 게 없으면 모른다고 말한다. */
 function raviGuide(q: string) {
-  chatHtml("ai", raviAnswerHtml(q, lang));
+  const html = raviAnswerHtml(q, lang);
+  // 정해 둔 안내로 답하지 못한 질문은 들고 있다가, 열쇠를 저장하면 AI 로 다시 묻는다(saveKeyCard).
+  if (/data-answer-kind="(?:unsupported|clarify)"/.test(html)) raviHeldQuestion = q;
+  // 정해 둔 안내로도 답이 없을 때(「아직 못 해요」) 빈손으로 끝내지 않는다 — 한 줄, 단추는 더하지 않는다.
+  chatHtml("ai", /data-answer-kind="(?:unsupported|clarify)"/.test(html) ? html + raviKeyHintHtml(q, lang) : html);
+}
+
+/** 「공개 조회하기」를 누른 뒤 — 사용자가 적은 주소 하나만 보낸다. 숫자와 고정 출처만 돌아온다. */
+async function raviPublicLookup(button: HTMLElement) {
+  const address = button.dataset.raviPublic || "";
+  const language = (button.closest<HTMLElement>("[data-ravi-language]")?.dataset.raviLanguage || lang) as typeof lang;
+  if (!address || (button as HTMLButtonElement).disabled) return;
+  (button as HTMLButtonElement).disabled = true;
+  chatHtml("ai", `<span class="muted" data-thinking="1">${copyHtml("공개 조회처에 묻는 중…")}</span>`);
+  try {
+    const r = await invoke<PublicAddress>("ravi_public_address", { address });
+    chatPopThinking();
+    chatHtml("ai", raviPublicResultHtml(r, language));
+  } catch (e) {
+    chatPopThinking();
+    chatHtml("ai", `<span class="warn">${escapeHtml(errText(e))}</span>`);
+  }
 }
 
 /** 안내 답 아래 단추가 데려가는 곳. */
@@ -10665,6 +10747,31 @@ async function chatSendExisting() {
     chatSay("me", q);
     return void raviWhose(whoseAddr);
   }
+  // 🔴 2026-10-11 — AI 에게 맡기면 안 되는 세 가지는 열쇠가 있어도 정해 둔 답으로 바로 답한다(ravi-chat.ts).
+  //    「돈 보내줘」: 라비는 대신 보내지 않는다 — 보내기 화면 단추 + 안전 요령.
+  //    (주소와 「숫자 RVN」을 둘 다 적은 직접 지시만 기존 「확인 화면 준비」로 간다. 확정은 사람이 누른다.)
+  if (aiProvider && isRaviSendRequest(q) && !isExplicitSendOrder(q)) {
+    ($("chat-q") as HTMLInputElement).value = "";
+    chatSay("me", q);
+    chatHtml("ai", raviSendAnswerHtml(q, lang));
+    return;
+  }
+  //    「R… 잔액 얼마야?」: 적은 주소 하나만, 알리고 나서, 단추를 눌러야 공개 조회처에 묻는다.
+  const publicAddress = publicAddressQuestion(q);
+  if (publicAddress) {
+    ($("chat-q") as HTMLInputElement).value = "";
+    chatSay("me", q);
+    chatHtml("ai", raviPublicOfferHtml(q, publicAddress, lang));
+    return;
+  }
+  //    「380만개면 부자순위 몇위야?」: 순위표가 없으면 모른다고, 시세는 말한 값으로만.
+  const rich = parseRichQuestion(q);
+  if (rich) {
+    ($("chat-q") as HTMLInputElement).value = "";
+    chatSay("me", q);
+    chatHtml("ai", raviRichAnswerHtml(q, rich, lang, !!aiProvider));
+    return;
+  }
   if (!aiProvider) {
     chatSay("me", q);
     ($("chat-q") as HTMLInputElement).value = "";
@@ -10674,7 +10781,7 @@ async function chatSendExisting() {
   chatSay("me", q);
 
   if (chatMode === "ask") return chatAsk(q);
-  if (chatMode === "debate") return chatDebate(q);
+  if (chatMode === "debate") return aiUsableCount >= 2 ? chatDebate(q) : chatAgent(q, DEBATE_ONE_NOTE);
 
   await chatAgent(q);
 
@@ -18136,6 +18243,11 @@ window.addEventListener("DOMContentLoaded", async () => {
     const el = e.target as HTMLElement;
     const go = el.closest<HTMLElement>("[data-guide-go]");
     if (go) return raviGo(go.dataset.guideGo as GuideGo);
+    const lookup = el.closest<HTMLElement>("[data-ravi-public]");
+    if (lookup) return void raviPublicLookup(lookup);
+    // 「다시 묻기」·「한 번 물어볼까요?」 — 적힌 질문을 칸에 넣고 바로 보낸다(보통 보내기와 같은 길).
+    const again = el.closest<HTMLElement>("[data-ravi-ask]");
+    if (again?.dataset.raviAsk) { ($("chat-q") as HTMLInputElement).value = again.dataset.raviAsk; void chatSend(); return; }
     const topic = el.closest<HTMLElement>("[data-guide-topic]");
     const g = topic ? guideById(topic.dataset.guideTopic || "") : null;
     if (g) chatHtml("ai", guideHtml(g, copyHtml));

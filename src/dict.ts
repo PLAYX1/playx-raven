@@ -38,6 +38,7 @@ import { CERT_COPY } from "./cert-copy";
 import { PAIRING_COPY } from "./pairing-copy";
 import { MAP_COPY } from "./map-copy";
 import { RAVI_LIFECYCLE_COPY } from "./ravi-lifecycle-copy";
+import { RAVI_CHAT_COPY } from "./ravi-chat-copy";
 
 const ARTIST_PHOTO_COPY: Record<string, [string, string, string]> = {
   "사진 읽는 중…": ["Reading photo…", "写真を読み込み中…", "正在读取照片…"],
@@ -5529,4 +5530,8 @@ for (const [source, values] of Object.entries(MAP_COPY)) {
 }
 for (const [source, values] of [...Object.entries(DESKTOP_COPY), ...Object.entries(PROMO_COPY), ...Object.entries(ARTIST_PHOTO_COPY), ...Object.entries(CREATE_COPY), ...Object.entries(CERT_COPY), ...Object.entries(RAVI_HOME_COPY), ...Object.entries(RAVI_LIFECYCLE_COPY)]) {
   (["en", "ja", "zh"] as const).forEach((language, index) => { DICT[language][source] = values[index]; });
+}
+// 라비 대화 흐름(2026-10-11) — 이미 있는 번역은 덮지 않는다.
+for (const [source, values] of Object.entries(RAVI_CHAT_COPY)) {
+  (["en", "ja", "zh"] as const).forEach((language, index) => { DICT[language][source] ??= values[index]; });
 }

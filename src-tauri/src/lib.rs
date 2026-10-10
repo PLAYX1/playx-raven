@@ -351,6 +351,7 @@ pub fn run() {
             ravi_agent::ravi_tool,
             ravi_agent::ravi_today,
             ravi_agent::ravi_greeting,
+            ravi_agent::ravi_public_address,
             ravi_voice::voice_open_microphone_settings,
             ravi_voice::voice_cancel,
             ravi_voice::voice_consent,

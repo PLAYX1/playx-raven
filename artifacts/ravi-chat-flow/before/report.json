@@ -1,0 +1,71 @@
+{
+  "mode": "before",
+  "runs": [
+    {
+      "width": 1440,
+      "scheme": "light",
+      "debateVisible": true,
+      "turns": [
+        {
+          "q": "380만개면 부자순위 몇위야?",
+          "a": [
+            {
+              "who": "msg me",
+              "text": "380만개면 부자순위 몇위야?"
+            },
+            {
+              "who": "msg ai",
+              "text": "두 곳에 묻기는 서로 다른 회사의 열쇠가 둘 있어야 해요. 지금은 하나라서 라비가 그냥 답할게요."
+            }
+          ]
+        },
+        {
+          "q": "380만개면 부자순위 몇위야?",
+          "a": []
+        },
+        {
+          "q": "돈 보내줘",
+          "a": []
+        },
+        {
+          "q": "(지금은 취소)",
+          "a": [
+            {
+              "who": "msg ai",
+              "text": "정보 선택을 저장하지 않아 질문을 AI에 보내지 않았어요."
+            }
+          ]
+        },
+        {
+          "q": "돈 보내줘 (다시)",
+          "a": [
+            {
+              "who": "msg me",
+              "text": "돈 보내줘"
+            },
+            {
+              "who": "msg ai",
+              "text": "두 곳에 묻기는 서로 다른 회사의 열쇠가 둘 있어야 해요. 지금은 하나라서 라비가 그냥 답할게요."
+            }
+          ]
+        }
+      ],
+      "cardShown": 1,
+      "calls": [
+        "ravi_consent",
+        "ai_order_read",
+        "ai_models_refresh",
+        "ravi_take_close_request",
+        "ai_check_connection",
+        "ai_debate",
+        "ravi_consent",
+        "ai_models_refresh",
+        "ai_debate",
+        "ravi_consent"
+      ],
+      "payloads": [],
+      "spent": [],
+      "errors": []
+    }
+  ]
+}

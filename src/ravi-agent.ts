@@ -61,11 +61,14 @@ export function toolSummary(name: string, v: any): string {
 function button(text: string, run: () => void): HTMLButtonElement {
   const b = document.createElement("button"); b.type = "button"; b.textContent = text; b.onclick = run; return b;
 }
-function privacyForm(value: Consent, save: (v: Consent) => Promise<void>, dismiss?: () => void): HTMLElement {
+/** 대화 중에 조용히 내미는 카드의 머리말 — 질문은 이미 일반 대화로 답했다는 것을 먼저 말한다. */
+export const CONSENT_OFFER_LEAD = "방금은 내 정보 없이 답했어요. 잔액·거래·가게 정보를 보고 답하길 원하시면 골라서 저장하세요. 저장하면 방금 질문을 다시 물어볼게요.";
+function privacyForm(value: Consent, save: (v: Consent) => Promise<void>, dismiss?: () => void, lead = ""): HTMLElement {
   const card = document.createElement("section"); card.className = "ravi-privacy card";
   const title = document.createElement("h3"); title.textContent = "라비에게 보여 줄 정보";
-  const p = document.createElement("p"); p.textContent = "선택한 정보 중 질문에 필요한 요약만 AI 회사에 전달해요. 주소·주문 메모·고객 이름은 보내지 않아요. 모두 꺼도 일반 대화와 로컬 조회는 쓸 수 있어요. 설정에서 언제든 바꿀 수 있어요.";
-  card.append(title, p);
+  const p = document.createElement("p"); p.textContent = "선택한 정보 중 질문에 필요한 요약만 AI에 전달해요. 주소·주문 메모·고객 이름은 보내지 않아요. 모두 꺼도 일반 대화와 로컬 조회는 쓸 수 있어요. 설정에서 언제든 바꿀 수 있어요.";
+  if (lead) { const intro = document.createElement("p"); intro.className = "ravi-privacy-lead"; intro.textContent = lead; card.append(title, intro, p); }
+  else card.append(title, p);
   const fields = new Map<string, HTMLInputElement>();
   for (const [key, label] of [["balance", "잔액"], ["transactions", "최근 거래 요약"], ["shop", "가게 매출·주문·개발비"]] as const) {
     const row = document.createElement("label"), input = document.createElement("input");
@@ -111,17 +114,31 @@ export function createRaviAgentUI(api: { invoke: Invoke; keyed(): string | null;
     })(); }); tools.append(b);
   }
   tools.append(result); document.getElementById("ravi-tools")!.append(tools);
+  // 대화 속 제안 카드는 한 번에 하나, 「지금은 취소」를 누르면 이번 실행 동안 다시 내밀지 않는다.
+  let offer: HTMLElement | null = null, declined = false, onSaved: (() => void) | null = null;
   return {
-    async ensureConsent(): Promise<boolean> {
-      try { consent = await api.invoke<Consent>("ravi_consent"); } catch { return false; }
-      if (consent.reviewed) return true;
-      api.dock();
-      return new Promise(resolve => {
-        const card = privacyForm(consent, async value => {
-          await api.invoke("ravi_consent_save", { consent: value }); consent = value; card.remove(); void renderSettings(); resolve(true);
-        }, () => { card.remove(); resolve(false); });
-        document.getElementById("chat-log")!.append(card); card.scrollIntoView({ block: "nearest" });
-      });
+    /** 저장된 선택. 읽지 못하면 null — 부르는 쪽은 개인 정보 없는 일반 대화로 간다. */
+    async consentState(): Promise<Consent | null> {
+      try { consent = await api.invoke<Consent>("ravi_consent"); return consent; } catch { return null; }
+    },
+    /**
+     * 🔴 질문을 붙잡지 않는다(옛 ensureConsent 는 저장하지 않으면 질문을 버렸고, 카드가 떠 있는 동안
+     *    다음 질문까지 막혔다). 답은 이미 나갔고, 이 카드는 그 아래에 조용히 한 번 놓인다.
+     *    저장하면 saved() — 부르는 쪽이 보류한 질문을 다시 보낸다.
+     */
+    offerConsent(saved: () => void): boolean {
+      onSaved = saved;
+      if (declined || consent.reviewed) { offer?.remove(); offer = null; return false; }
+      const log = document.getElementById("chat-log")!;
+      if (!offer) {
+        offer = privacyForm(consent, async value => {
+          await api.invoke("ravi_consent_save", { consent: value }); consent = value;
+          offer?.remove(); offer = null; void renderSettings(); onSaved?.();
+        }, () => { declined = true; offer?.remove(); offer = null; }, CONSENT_OFFER_LEAD);
+        offer.setAttribute("data-ravi-consent-offer", "1");
+      }
+      log.append(offer); // 이미 있으면 맨 아래로 옮길 뿐, 쌓지 않는다
+      return true;
     },
     start() {
       if (started) return;

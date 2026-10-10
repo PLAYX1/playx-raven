@@ -10,7 +10,7 @@
 .ravi-key-status { display:flex; align-items:center; gap:12px; }
 /* Author display rules must never resurrect a hidden legacy face or approval card. */
 .ravi-face[hidden], #ravi-panel[hidden], #ravi-launcher[hidden], #ravi-new[hidden], #ravi-key[hidden], #rv-send-card[hidden] { display:none !important; }
-#ravi-panel { --text:#1f224e; --muted:#59637d; --bg:#f7fafb; --panel:#fff; --line:#d9e1ec; position:fixed; right:16px; bottom:16px; width:440px; height:min(580px,calc(100dvh - 136px)); max-width:calc(100vw - 120px); z-index:65; display:flex; flex-direction:column; color:var(--text); background:var(--panel); border:1px solid var(--line); border-radius:22px; box-shadow:0 12px 48px #1f224e30; overflow:hidden; }
+#ravi-panel { --text:#1f224e; --muted:#59637d; --bg:#f7fafb; --panel:#fff; --line:#d9e1ec; --ravi-soft:#b4531c; --faint:#59637d; --warn:#8a5a00; --ok:#1f7a4d; /* 대화창은 늘 밝다 — 다크 화면의 밝은 색 변수가 새어 들면 글자가 안 보인다(2026-10-11 「라비 안내」 1.9:1) */ position:fixed; right:16px; bottom:16px; width:440px; height:min(580px,calc(100dvh - 136px)); max-width:calc(100vw - 120px); z-index:65; display:flex; flex-direction:column; color:var(--text); background:var(--panel); border:1px solid var(--line); border-radius:22px; box-shadow:0 12px 48px #1f224e30; overflow:hidden; }
 #ravi-panel.large { width:640px; height:calc(100dvh - 136px); }
 #ravi-panel button { font-size:14px; min-height:40px; padding:8px 12px; color:var(--text); background:#fff; border:1px solid var(--line); flex:none; }
 #ravi-panel button:focus-visible, #ravi-panel textarea:focus-visible, #ravi-launcher:focus-visible { outline:3px solid #a94622; outline-offset:-3px; }
