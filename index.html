@@ -924,6 +924,10 @@
       pre.conf { background: var(--bg); border: 1px solid var(--line); border-radius: 7px;
                  padding: 8px 12px; font-size: 14px; margin: 0 0 8px; overflow-x: auto; }
       .kv { display: flex; gap: 8px; font-size: 14px; margin-bottom: 4px; }
+      .found-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px;
+                   padding: 8px 0; border-top: 1px solid var(--line, rgba(127,127,127,.25)); }
+      .found-row .found-what { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 220px; overflow-wrap: anywhere; }
+      .found-row small { font-size: 12px; }
       .kv b { font-weight: 600; min-width: 76px; color: var(--muted); }
       code.addr { font-size: 13px; word-break: break-all; }
       .tabs { display: flex; gap: 4px; margin: 4px 0 16px; border-bottom: 1px solid var(--line);   /* 🔴 실측(2026-08-29): 2차 메뉴 7개는 ≈909px 이라 1280px 창에는 들어가지만
@@ -5298,6 +5302,7 @@
 
           <!-- 되돌리기. 백업만 있고 이게 없으면 백업이 아니라 습관이다. -->
           <div class="row" style="margin-top:16px">
+            <button class="ghost" id="rs-find">백업 찾기</button>
             <button class="ghost" id="rs-pick">백업에서 되돌리기</button>
             <button class="ghost" id="rs-folder">폴더에서 되돌리기</button>
             <button class="ghost" id="rs-words">복구 단어로 되살리기</button>
@@ -5305,6 +5310,7 @@
             <button class="ghost" id="rs-lost">폰을 잃어버렸어요</button>
             <button class="ghost" id="up-check">새 버전 확인</button>
           </div>
+          <div id="rs-found"></div>
           <div id="rs-result"></div>
 
           <!-- 훔쳐가는 문제. 지갑 잠금은 "못 보낸다"를 막을 뿐, "많이 들고 있다"는
