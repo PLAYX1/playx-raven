@@ -5,13 +5,13 @@ import { b64urlDecode, b64urlEncode, canonicalJson, hex, plain, sha256Hex, utf8,
 import { CREATOR_ASSET_PREFIX, checkCreatorAssetName } from './asset-name';
 import { CID_V0, CreatorError, isRvnAddress, verifyManifest, type CreatorManifest } from './manifest';
 import { isContentType, type ContentType } from './limits';
-import { nameConflicts } from './asset-name';
+import { assetPrefixFor, nameConflicts } from './asset-name';
 import { BONDED_BADGE, OPEN_MARKET_GAME_INDEX, bondBlockers, type AutoCheck, type BondBlocker } from './open-market';
 
 /*
  * 발견·등록 신청·「검증됨」 판정.
  *
- * 서버는 없다. 목록은 체인 자산 검색(listassets "<접두어>*")으로 찾고, 각 자산의 ipfs_hash 가 가리키는 매니페스트를
+ * 서버는 없다. 목록은 체인 자산 검색(listassets "RV.*", 종류 탭은 "RV.M.*" — asset-name.ts kindSearchPattern)으로 찾고, 각 자산의 ipfs_hash 가 가리키는 매니페스트를
  * 받아 서명·형식을 확인한다. 신뢰 3층(open-market.ts): 미검증 → 보증(자동 점검 + 루트 소각, 결제+경고) → 검증됨(대표 서명 허용 목록).
  * 대표가 서명한 차단 목록(deny)에 있으면 어느 층이든 숨긴다. 허용·차단 목록은 같은 Ed25519 방식이고 도메인만 다르다.
  *
@@ -51,7 +51,7 @@ export function validateCreatorAllowlist(raw: unknown, prefix: string = CREATOR_
   const assets = new Set<string>(), indexes = new Set<number>();
   for (const e of raw.entries as Loose[]) {
     if (!plain(e) || !keysAre(e, 'asset,type,manifestCid,manifestSha256,creatorAddress,receivingAddress,gameIndex,feeBps,origins,status,verifiedAt')) fail('allowlist-shape', 'entry-keys');
-    if (!checkCreatorAssetName(e.asset, prefix).valid || assets.has(e.asset)) fail('allowlist-shape', 'asset');
+    if (!checkCreatorAssetName(e.asset, prefix, { type: isContentType(e.type) ? e.type : null }).valid || assets.has(e.asset)) fail('allowlist-shape', 'asset');
     if (!isContentType(e.type) || typeof e.manifestCid !== 'string' || !CID_V0.test(e.manifestCid) ||
         typeof e.manifestSha256 !== 'string' || !/^[a-f0-9]{64}$/.test(e.manifestSha256)) fail('allowlist-shape', 'manifest');
     if (!isRvnAddress(e.creatorAddress) || !isRvnAddress(e.receivingAddress)) fail('allowlist-shape', 'address');
@@ -201,11 +201,17 @@ export function judgeListing(asset: ChainAsset, manifestBytes: Uint8Array | null
     identity: false, payment: false, badge: '미검증', autoCheck: check };
 }
 
-/** 여러 자산을 한꺼번에. 숨긴 것은 빼고, 검증됨 → 보증 → 미검증 순. 서로 비슷한 이름(사칭 의심)을 lookalikes 에 붙인다. */
+/**
+ * 여러 자산을 한꺼번에. 숨긴 것은 빼고, 검증됨 → 보증 → 미검증 순. 서로 비슷한 이름(사칭 의심)을 lookalikes 에 붙인다.
+ * type 을 주면 그 종류 글자로 시작하는 자산(kindSearchPattern(type) = 「RV.M.*」)만 본다 — 종류 탭. 노드 검색이 넓게 돌려줘도 여기서 한 번 더 거른다.
+ * 이름의 종류 글자와 매니페스트 type 이 다르면 매니페스트 검사에서 숨긴다(manifest-asset).
+ */
 export async function discoverListings(p: { assets: readonly ChainAsset[]; fetchManifest: (cid: string) => Promise<Uint8Array | null>; allowlist: CreatorAllowlist | null;
-  denylist?: CreatorDenylist | null; autoChecks?: ReadonlyMap<string, AutoCheck>; now?: number; prefix?: string }): Promise<Listing[]> {
+  denylist?: CreatorDenylist | null; autoChecks?: ReadonlyMap<string, AutoCheck>; now?: number; prefix?: string; type?: ContentType | null }): Promise<Listing[]> {
   const out: Listing[] = [];
+  const kindHead = p.type ? assetPrefixFor(p.type, p.prefix ?? CREATOR_ASSET_PREFIX) : null;
   for (const a of p.assets) {
+    if (kindHead && !String(a?.name ?? '').startsWith(kindHead)) continue;
     let bytes: Uint8Array | null = null;
     if (a.ipfs_hash && CID_V0.test(a.ipfs_hash)) { try { bytes = await p.fetchManifest(a.ipfs_hash); } catch { bytes = null; } }
     out.push(judgeListing(a, bytes, p.allowlist, { denylist: p.denylist, autoCheck: p.autoChecks?.get(a.name) ?? null, now: p.now, prefix: p.prefix }));

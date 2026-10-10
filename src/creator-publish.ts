@@ -1,5 +1,5 @@
 import { atomsToRvn, rvnToAtoms } from '../core/creator/bytes';
-import { CREATOR_ASSET_PREFIX, checkCreatorAssetName, nameConflicts, suggestNames, type NameNeighbor } from '../core/creator/asset-name';
+import { ASSET_KIND_LETTER, assetPrefixFor, checkCreatorAssetName, nameConflicts, suggestNames, type NameNeighbor } from '../core/creator/asset-name';
 import { CONTENT_TYPES, CONTENT_TYPE_IDS, SCRIPT_NOTICE, extOf, type ContentType, type FileInput } from '../core/creator/limits';
 import { buildListingRequest } from '../core/creator/listing';
 import { CreatorError, isRvnAddress, validateManifest, type CreatorManifest, type Details } from '../core/creator/manifest';
@@ -17,7 +17,8 @@ import {
  * 바깥 세계와 닿는 곳은 전부 기존 명령이다:
  *   · 보관(pin): ipfs_add_file(CIDv0·pin) · 보관 확인: cid_alive · 서명: sign_message(노드 signmessage)
  *   · 등록: issue_asset — **시험망(test·regtest)에서만**. 메인넷은 REAL_MAINNET_ISSUE_ENABLED(대표 결정)가 켜야 열린다.
- *   · 잔액: wallet_balance · 받는 주소: receive_address·new_address · 이름 확인: name_taken · 네트워크: node_status
+ *   · 잔액: wallet_balance · 받는 주소: receive_address·new_address · 이름 확인(체인 중복 조회): name_taken(노드 getassetdata) · 네트워크: node_status
+ *   · 이름은 대표 확정 `RV.<종류글자>.<작품이름>` — 앞부분(RV.M. 등)은 고른 종류로 정해지고 사람은 작품 이름 칸만 적는다.
  * 시드·비밀번호·서명 문구를 로그로 남기지 않는다. 이어하기 저장(localStorage)에는 공개 정보(칸 값·CID·매니페스트)만 둔다 — 파일 바이트·비밀번호 없음.
  */
 
@@ -239,8 +240,23 @@ export function wireCreatorPublish(deps: CreatorDeps) {
   drop.addEventListener('click', () => input('cw-files').click());
 
   /* ── ③ 이름·설명·가격 ── */
-  const assetName = () => CREATOR_ASSET_PREFIX + input('cw-asset').value.trim().toUpperCase();
-  el('cw-prefix').textContent = CREATOR_ASSET_PREFIX;
+  /** 종류로 정해지는 앞부분(RV.M. 등). 종류를 아직 안 골랐으면 디지털로 보인다(① 단계에서 막히므로 실제로는 쓰이지 않는다). */
+  const namePrefix = () => assetPrefixFor(type ?? 'digital');
+  const assetName = () => namePrefix() + input('cw-asset').value.trim().toUpperCase();
+  const nameCheck = () => checkCreatorAssetName(assetName(), undefined, { type: type ?? 'digital' });
+  function paintPrefix() {
+    el('cw-prefix').textContent = namePrefix();
+    el('cw-kind-letter').textContent = `「${namePrefix()}」의 ${ASSET_KIND_LETTER[type ?? 'digital']} 는 ${CONTENT_TYPES[type ?? 'digital'].label} 칸이라는 뜻이에요. 앞부분은 고른 종류로 정해져요.`;
+  }
+  /* 체인 중복 조회 줄(③·⑦ 단계): 비어 있음 / 이미 있음 / 확인 불가. 확인 불가면 ⑦에서 등록을 막는다(planIssue 정책). */
+  function paintDup(target: HTMLElement, state: boolean | null | 'checking' | 'invalid') {
+    const [text, cls] = state === 'checking' ? ['조회하는 중…', 'meta']
+      : state === 'invalid' ? ['이름을 규칙에 맞게 고치면 조회해요.', 'meta']
+      : state === true ? ['이미 있어요 — 체인에 같은 이름이 있어 등록할 수 없어요. 다른 이름을 골라 주세요.', 'creator-bad']
+      : state === false ? ['비어 있어요 — 노드에 물어 확인했어요.', 'creator-good']
+      : ['확인 불가 — 노드에 묻지 못했어요(노드가 꺼져 있거나 동기화 중). 확인될 때까지 등록할 수 없어요 → 「다시 조회」', 'creator-bad'];
+    target.textContent = text; target.className = cls;
+  }
   function paintFee() {
     const raw = input('cw-price').value.trim();
     const atoms = raw ? rvnToAtoms(raw) : null;
@@ -253,47 +269,51 @@ export function wireCreatorPublish(deps: CreatorDeps) {
   function suggestions() {
     const box = el('cw-suggest');
     const t = new Set([...neighbors.map(n => n.asset)]);
-    const names = suggestNames(input('cw-title').value, t, { fallback: FALLBACK_WORD[type ?? 'digital'], n: 3 });
+    const names = suggestNames(input('cw-title').value, t, { type: type ?? 'digital', fallback: FALLBACK_WORD[type ?? 'digital'], n: 3 });
     box.replaceChildren(...(names.length ? [Object.assign(document.createElement('span'), { className: 'meta', textContent: '이름 제안: ' })] : []), ...names.map(name => {
       const b = document.createElement('button'); b.type = 'button'; b.className = 'ghost cw-chip'; b.textContent = name;
-      b.onclick = () => { input('cw-asset').value = name.slice(CREATOR_ASSET_PREFIX.length); input('cw-asset').dataset.touched = '1'; void nameLine(); saveDraft(); };
+      b.onclick = () => { input('cw-asset').value = name.slice(namePrefix().length); input('cw-asset').dataset.touched = '1'; void nameLine(); saveDraft(); };
       return b;
     }));
   }
   let nameSeq = 0;
   async function nameLine() {
-    const c = checkCreatorAssetName(assetName());
+    const c = nameCheck();
     el('cw-name-say').textContent = c.valid ? `상품 등록증 이름: ${c.name} (${c.name.length}/30자)` : c.problems.join(' ');
     const conflict = nameConflicts(assetName(), input('cw-title').value, neighbors);
     const seq = ++nameSeq;
     taken = conflict.taken ? true : null;
+    paintDup(el('cw-dup'), !c.valid ? 'invalid' : conflict.taken ? true : 'checking');
     if (c.valid && !conflict.taken) {
       try { taken = (await deps.invoke<boolean>('name_taken', { name: assetName() })) === true; } catch { taken = null; }
       if (seq !== nameSeq) return;
+      paintDup(el('cw-dup'), taken);
     }
     const warn = [...conflict.say];
     if (taken && !conflict.taken) warn.unshift('이 이름은 이미 체인에 있어요. 다른 이름을 골라 주세요.');
-    if (taken === null && c.valid) warn.push('이름이 비어 있는지 노드에 확인하지 못했어요. 마지막 확인 단계에서 다시 확인해요.');
+    if (taken === null && c.valid) warn.push('이 이름이 체인에 이미 있는지 확인 불가 — 마지막 확인 단계에서 다시 조회해요. 그때도 확인 불가면 등록할 수 없어요.');
     list(el('cw-name-warn'), warn, 'creator-warn');
     paintNext();
   }
   async function enterInfo() {
+    paintPrefix();
     try { neighbors = (await deps.neighbors?.()) ?? []; } catch { neighbors = []; }
     if (!input('cw-asset').value && !input('cw-asset').dataset.touched) {
-      const s = suggestNames(input('cw-title').value, new Set(neighbors.map(n => n.asset)), { fallback: FALLBACK_WORD[type ?? 'digital'], n: 1 })[0];
-      if (s) input('cw-asset').value = s.slice(CREATOR_ASSET_PREFIX.length);
+      const s = suggestNames(input('cw-title').value, new Set(neighbors.map(n => n.asset)), { type: type ?? 'digital', fallback: FALLBACK_WORD[type ?? 'digital'], n: 1 })[0];
+      if (s) input('cw-asset').value = s.slice(namePrefix().length);
     }
     if (type === 'ticket' && !input('cw-t-contact').value) input('cw-t-contact').placeholder = 'hello@example.com';
     suggestions(); paintFee(); await nameLine();
   }
   input('cw-title').addEventListener('input', () => {
     if (!input('cw-asset').dataset.touched) {
-      const s = suggestNames(input('cw-title').value, new Set(neighbors.map(n => n.asset)), { fallback: FALLBACK_WORD[type ?? 'digital'], n: 1 })[0];
-      if (s) input('cw-asset').value = s.slice(CREATOR_ASSET_PREFIX.length);
+      const s = suggestNames(input('cw-title').value, new Set(neighbors.map(n => n.asset)), { type: type ?? 'digital', fallback: FALLBACK_WORD[type ?? 'digital'], n: 1 })[0];
+      if (s) input('cw-asset').value = s.slice(namePrefix().length);
     }
     suggestions(); void nameLine();
   });
   input('cw-asset').addEventListener('input', () => { input('cw-asset').dataset.touched = '1'; void nameLine(); });
+  el('cw-dup-recheck').onclick = () => void nameLine();
   input('cw-price').addEventListener('input', paintFee);
   el('cw-new-address').onclick = async () => {
     try { const a = await deps.invoke<unknown>('new_address', { label: 'creator' }); input('cw-address').value = typeof a === 'string' ? a : String((a as { address?: string })?.address ?? ''); paintNext(); saveDraft(); }
@@ -330,7 +350,7 @@ export function wireCreatorPublish(deps: CreatorDeps) {
   function infoProblems(): string[] {
     const p: string[] = [], inp = gather();
     if (!inp.title.trim()) p.push('제목이 비어 있어요 → 구매자에게 보일 제목을 적어 주세요.');
-    const n = checkCreatorAssetName(inp.asset);
+    const n = checkCreatorAssetName(inp.asset, undefined, { type: inp.type });
     if (!n.valid) p.push(`상품 등록증 이름이 규칙에 안 맞아요(${n.problems[0]}) → 제안된 이름을 누르거나 영문 대문자로 고쳐 주세요.`);
     if (taken === true) p.push('이미 있는 이름이에요 → 다른 이름을 골라 주세요.');
     if (!isRvnAddress(inp.creatorAddress)) p.push('받을 주소가 없거나 틀려요 → 「새 주소 받기」를 눌러 주세요.');
@@ -387,7 +407,7 @@ export function wireCreatorPublish(deps: CreatorDeps) {
   }
   async function paintCost() {
     await readBalance();
-    const c = costPlan({ burnRvn: checkCreatorAssetName(assetName()).burnRvn, networkFeeAtoms: null, balanceAtoms });
+    const c = costPlan({ burnRvn: nameCheck().burnRvn, networkFeeAtoms: null, balanceAtoms });
     list(el('cw-cost'), [...c.lines, ...(c.balanceAtoms !== null ? [`지금 잔액(확정) ${atomsToRvn(c.balanceAtoms)} RVN`] : [])]);
     el('cw-cost').querySelectorAll('li')[c.lines.length - 1]?.classList.add(c.enough === false ? 'creator-bad' : c.enough ? 'creator-good' : 'creator-warn');
     const ul = document.createElement('ul'); const raw = input('cw-price').value.trim();
@@ -440,9 +460,11 @@ export function wireCreatorPublish(deps: CreatorDeps) {
   async function prepareConfirm() {
     if (!published) { setError('아직 올리지 않았어요 → ⑥ 단계에서 올려 주세요.'); return; }
     const asset = published.manifest.asset;
+    paintDup(el('cw-c-dup'), 'checking');
     const [node, isTaken] = await Promise.allSettled([deps.invoke<{ chain?: string }>('node_status'), deps.invoke<boolean>('name_taken', { name: asset })]);
     chain = node.status === 'fulfilled' ? String(node.value?.chain ?? 'unknown') : 'unknown';
     taken = isTaken.status === 'fulfilled' ? isTaken.value === true : null;
+    paintDup(el('cw-c-dup'), taken);
     await readBalance();
     el('cw-c-name').textContent = asset;
     el('cw-c-chain').textContent = chain === 'main' ? '메인넷(실제 돈)' : ['test', 'regtest'].includes(chain) ? `시험망(${chain})` : `알 수 없음(${chain})`;
@@ -453,7 +475,7 @@ export function wireCreatorPublish(deps: CreatorDeps) {
   function paintPlan() {
     if (!published) return;
     plan = planIssue({ asset: published.manifest.asset, manifestCid: published.manifestCid, chain, ownedAssets: [], nameTaken: taken,
-      chainBurnRvn: null, typedName: input('cw-typed').value.trim(), realMainnetEnabled: REAL_MAINNET_ISSUE_ENABLED });
+      chainBurnRvn: null, typedName: input('cw-typed').value.trim(), realMainnetEnabled: REAL_MAINNET_ISSUE_ENABLED, type: published.manifest.type });
     const c = costPlan({ burnRvn: plan.burn.rvn, networkFeeAtoms: null, balanceAtoms });
     el('cw-c-burn').textContent = `${plan.burn.rvn} RVN — 수수료가 아니라 보증이에요(소각, 아무도 받지 않음)`;
     el('cw-c-burn-check').textContent = plan.burn.status === 'unverifiable' ? '체인과 대조: 확인 불가 — 저장소에 적힌 값이에요. 노드에 묻는 방법이 없어 실제 소각액과 대조하지 못했어요.' : plan.burn.say;
@@ -464,6 +486,12 @@ export function wireCreatorPublish(deps: CreatorDeps) {
     (el('cw-issue') as HTMLButtonElement).disabled = !plan.canIssue || c.enough === false || busy;
   }
   input('cw-typed').addEventListener('input', paintPlan);
+  el('cw-c-dup-recheck').onclick = async () => {
+    if (!published || busy) return;
+    paintDup(el('cw-c-dup'), 'checking');
+    try { taken = (await deps.invoke<boolean>('name_taken', { name: published.manifest.asset })) === true; } catch { taken = null; }
+    paintDup(el('cw-c-dup'), taken); paintPlan();
+  };
   async function issue() {
     if (!published || !plan?.canIssue || busy) return;
     busy = true; (el('cw-issue') as HTMLButtonElement).disabled = true;

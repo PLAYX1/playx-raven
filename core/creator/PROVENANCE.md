@@ -1,6 +1,6 @@
 # core/creator — 지갑 저장소에서 복사
 
-원본: `ravenvault` 저장소 `core/creator/*` (브랜치 `claude/rv-open-seller-core`, 기준 `7c73845` 위 — 2단계 누구나 판매).
+원본: `ravenvault` 저장소 `core/creator/*` (브랜치 `claude/rv-asset-name-rv`, 기준 `d9ac1c3` 위 — 2단계 누구나 판매 + 대표 확정 이름 `RV.<종류>.<이름>`).
 아래 파일은 원본과 **바이트가 같아야** 한다. SHA-256 은 `vendor-sha256.json` 에 고정했고 `scripts/creator-publish.test.mjs` 가 확인한다
 (원본 체크아웃이 있으면 원본과도 직접 비교하고, 없으면 그 시험만 SKIP 으로 명시한다).
 

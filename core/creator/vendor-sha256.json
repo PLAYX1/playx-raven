@@ -1,13 +1,13 @@
 {
-  "source": "ravenvault 저장소 브랜치 claude/rv-open-seller-core (기준 7c73845 위)",
+  "source": "ravenvault 저장소 브랜치 claude/rv-asset-name-rv (기준 d9ac1c3 위 — 이름 RV.<종류>.<이름>)",
   "files": {
     "core/creator/bytes.ts": "b3092fe7d6ebdc52881280f61bd21322a2ddff1be5b547d915ce6cf5ee72dbd6",
     "core/creator/limits.ts": "f37eaf05505f97aac67fb1b8230017db8a529d62341390301c119895da269420",
-    "core/creator/asset-name.ts": "0732cd891326684884ba5e2904812946249f6cbffdfe280ae50f3ffe82a551b4",
-    "core/creator/manifest.ts": "b27fd2eb005ead62784f932e6331f00c244aa60ee90b390a313b4f45aad47c03",
-    "core/creator/publish.ts": "53d4ec5afa23e8512fbc9cf9387f8201e8111fe7cffc94f294b4f83e33704ebc",
-    "core/creator/listing.ts": "67af688d3b78b0b504178f277eaaf79e91f1a590b726659c9518675acfd12abb",
-    "core/creator/open-market.ts": "7867611f729a5041c1ffa1ac76645b13c2f3f63054cdc60fe86fa9ed3e83b986",
+    "core/creator/asset-name.ts": "0ffee8f76e94f95b4f5f8073f6c6de1c869f69cfaf273a5815fee2a762956a1e",
+    "core/creator/manifest.ts": "112f0f99d45b37aabce715547cc675a73490efec6889ad84c5a9559109be2b62",
+    "core/creator/publish.ts": "437ca095e69ff784e99c71282acf9498e1a198850bf372c374c9fab32f089cd6",
+    "core/creator/listing.ts": "18928db24e0ce4be9f678edde1a3b9735c0477d9de5ff68825b1ee81969aa0fe",
+    "core/creator/open-market.ts": "adbc7320042033eb6155244f932c1554e30bb5c852cd72899a4d12d5f27ac957",
     "core/creator/ticket.ts": "97f89f9fdc7daab00b2677b8b9247cc83ccbd66348dc0c2e91fcfc57854ae842",
     "core/game-registry/platform-fee.ts": "b8b38519375cc0ad1d56d56c6ca0a020eb2c63a2809b1adcb6d697f04f586520"
   }

@@ -3804,8 +3804,10 @@
             <span class="creator-asset-row"><code id="cw-prefix"></code><input id="cw-asset" maxlength="30" autocomplete="off" spellcheck="false" /></span></label>
           <div class="cw-suggest" id="cw-suggest" aria-label="이름 제안"></div>
           <p class="meta" id="cw-name-say" role="status"></p>
+          <p class="meta" id="cw-kind-letter"></p>
           <ul class="cw-warnlist" id="cw-name-warn"></ul>
-          <details class="cw-why"><summary>왜 필요해요?</summary><p>「상품 등록증」은 레이븐코인에 영원히 남는 이름표예요(전문 용어로 「자산」). 체인이 영문 대문자 이름만 받아서 따로 적어요. 같은 이름은 두 번 만들 수 없어요.</p></details>
+          <p class="cw-dup-row"><span>체인 중복 조회</span> <b id="cw-dup" role="status">—</b> <button type="button" class="ghost" id="cw-dup-recheck">다시 조회</button></p>
+          <details class="cw-why"><summary>왜 필요해요?</summary><p>「상품 등록증」은 레이븐코인에 영원히 남는 이름표예요(전문 용어로 「자산」). 체인이 영문 대문자 이름만 받아서 따로 적어요. 이름은 「RV.종류글자.작품이름」 모양이에요 — 음악 M, 게임 G, 책 B, 티켓 T, 그 밖의 디지털 X(예: RV.M.FOREST). 종류 글자 덕분에 구매자가 종류별로 찾을 수 있고, 다른 종류인 척할 수 없어요. 같은 이름은 두 번 만들 수 없어서 체인에 이미 있는지 노드에 물어봐요.</p></details>
           <label class="creator-field">가격(RVN, 비우면 무료)<input id="cw-price" inputmode="decimal" autocomplete="off" /></label>
           <div class="cw-fee" id="cw-fee" role="status"></div>
           <label class="creator-field">판매 대금 받을 내 주소<span class="creator-asset-row"><input id="cw-address" autocomplete="off" spellcheck="false" placeholder="R…" /><button type="button" class="ghost" id="cw-new-address">새 주소 받기</button></span></label>
@@ -3873,6 +3875,7 @@
           <h2>⑦ 마지막 확인</h2>
           <dl class="creator-kv">
             <dt>상품 등록증 이름</dt><dd><code id="cw-c-name"></code></dd>
+            <dt>체인 중복 조회</dt><dd><b id="cw-c-dup" role="status"></b> <button type="button" class="ghost" id="cw-c-dup-recheck">다시 조회</button></dd>
             <dt>보증(소각)</dt><dd><b id="cw-c-burn"></b><br /><span class="meta" id="cw-c-burn-check"></span></dd>
             <dt>판매 수수료</dt><dd id="cw-c-fee"></dd>
             <dt>네트워크</dt><dd id="cw-c-chain"></dd>
@@ -3908,6 +3911,7 @@
         <h1>열린 장터 <span class="meta">(시험)</span></h1>
         <p class="creator-note" role="note" id="mk-note"></p>
         <div id="mk-list-view">
+          <div class="mk-tabs" id="mk-tabs" role="group" aria-label="종류별로 보기"></div>
           <ul class="mk-list" id="mk-list"></ul>
           <p id="mk-list-say" role="status"></p>
         </div>

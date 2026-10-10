@@ -62,7 +62,8 @@ before(async () => {
 after(async () => { await browser?.close(); server?.close(); if (work && !process.env.RV_KEEP_WORK) rmSync(work, { recursive: true, force: true }); });
 
 /** Harness answers for the commands the wizard uses; everything else falls through to the shared fixture. */
-function installCreatorHarness({ chain, balance, taken, failPinAt, dead }) {
+function installCreatorHarness({ chain, balance, taken, failPinAt, dead, nameUnknown }) {
+  window.__nameUnknown = !!nameUnknown;
   const base = window.__TAURI_INTERNALS__.invoke;
   const calls = window.__creatorCalls = [];
   const pinned = window.__pinnedCids = new Map();
@@ -75,7 +76,7 @@ function installCreatorHarness({ chain, balance, taken, failPinAt, dead }) {
     }
     if (cmd === 'cid_alive') { calls.push({ cmd, cid: args.cid }); return pinned.has(args.cid) && !(dead ?? []).includes(pinned.get(args.cid)); }
     if (cmd === 'sign_message') { calls.push({ cmd, address: args.address, withPassword: 'passphrase' in args }); return { address: args.address, message: args.message, signature: await window.__testSign(args.address, args.message) }; }
-    if (cmd === 'name_taken') { calls.push({ cmd, name: args.name }); return (taken ?? []).includes(args.name); }
+    if (cmd === 'name_taken') { calls.push({ cmd, name: args.name }); if (window.__nameUnknown) throw new Error('노드가 응답하지 않아요(시험)'); return (taken ?? []).includes(args.name); }
     if (cmd === 'node_status') { const s = await base(cmd, args); return { ...s, chain }; }
     if (cmd === 'wallet_balance') return { confirmed: balance, unconfirmed: 0 };
     if (cmd === 'receive_address') return { address: window.__testAddress, reused: true, mine: true };
@@ -86,7 +87,7 @@ function installCreatorHarness({ chain, balance, taken, failPinAt, dead }) {
   window.__TAURI_INTERNALS__.invoke = wrap; window.__TAURI__.core.invoke = wrap;
 }
 
-async function openApp({ width = 1440, height = 900, theme = 'light', chain = 'regtest', balance = 600, taken = [], failPinAt = 0, dead = [], seller = true, draft = null } = {}) {
+async function openApp({ width = 1440, height = 900, theme = 'light', chain = 'regtest', balance = 600, taken = [], failPinAt = 0, dead = [], seller = true, draft = null, nameUnknown = false } = {}) {
   const page = await browser.newPage();
   page.on('pageerror', e => { page.__errors = [...(page.__errors ?? []), e.message]; });
   await page.setViewport({ width, height });
@@ -96,7 +97,7 @@ async function openApp({ width = 1440, height = 900, theme = 'light', chain = 'r
   await page.exposeFunction('__mockCid', bytes => mockCid(Uint8Array.from(bytes)));
   await page.exposeFunction('__testSign', (address, message) => { if (address !== ADDRESS) throw Error('wrong address'); return signMessageForTest(message, KEY); });
   await page.evaluateOnNewDocument(installFixture, { theme, sales: true, seller });
-  await page.evaluateOnNewDocument(installCreatorHarness, { chain, balance, taken, failPinAt, dead });
+  await page.evaluateOnNewDocument(installCreatorHarness, { chain, balance, taken, failPinAt, dead, nameUnknown });
   await page.evaluateOnNewDocument(a => { window.__testAddress = a; }, ADDRESS);
   if (draft) await page.evaluateOnNewDocument(d => { localStorage.setItem('rv-creator-draft-v2', d); }, draft);
   await page.goto(origin + '/', { waitUntil: 'networkidle0' });
@@ -193,14 +194,18 @@ async function bookFlow(page, report, tag) {
   await shot(2);
   await next(page, 3);
   await page.type('#cw-title', '바다 이야기');
-  await page.waitForFunction(() => /PLAYXG\.BOOK/.test(document.querySelector('#cw-suggest').textContent));
+  await page.waitForFunction(() => /RV\.B\.BOOK/.test(document.querySelector('#cw-suggest').textContent));
   assert.equal(await page.$eval('#cw-asset', e => e.value), 'BOOK', 'Korean-only title → fallback name proposal');
+  assert.equal(await text(page, '#cw-prefix'), 'RV.B.', 'book → fixed RV.B. prefix (kind letter from the chosen kind)');
+  assert.match(await text(page, '#cw-kind-letter'), /RV\.B\.」의 B 는 책 칸/);
   await setValue(page, '#cw-asset', 'SEA_BOOK');
   await page.type('#cw-price', '300');
   assert.match(await text(page, '#cw-fee'), /판매될 때마다 15%\(초안\).*내 받는 주소로 바로.*300 RVN 에 팔리면 → 나 255 RVN · 수수료 45 RVN.*내 가격 300 RVN 이면 → 나 255 RVN · 수수료 45 RVN.*보증 500 RVN 과는 다른 돈/);
   await page.click('#cw-new-address');
   await page.waitForFunction(a => document.querySelector('#cw-address').value === a, {}, ADDRESS);
-  await page.waitForFunction(() => /PLAYXG\.SEA_BOOK \(15\/30자\)/.test(document.querySelector('#cw-name-say').textContent));
+  await page.waitForFunction(() => /RV\.B\.SEA_BOOK \(13\/30자\)/.test(document.querySelector('#cw-name-say').textContent));
+  await page.waitForFunction(() => /비어 있어요/.test(document.querySelector('#cw-dup').textContent));
+  assert.equal(await page.$eval('#cw-dup', e => e.className), 'creator-good');
   assert.equal(await page.$eval('#cw-book-file', s => s.value), 'sea.epub'); assert.equal(await page.$eval('#cw-book-preview', s => s.value), 'sea-preview.pdf');
   await shot(3);
   await next(page, 4);
@@ -220,13 +225,14 @@ async function bookFlow(page, report, tag) {
   await page.click('#cw-pin-check');
   await page.waitForFunction(() => /받아져요|못 찾아요/.test(document.querySelector('#cw-pin-say').textContent));
   await next(page, 7);
-  await page.waitForFunction(() => document.querySelector('#cw-c-name').textContent === 'PLAYXG.SEA_BOOK');
+  await page.waitForFunction(() => document.querySelector('#cw-c-name').textContent === 'RV.B.SEA_BOOK');
+  await page.waitForFunction(() => /비어 있어요/.test(document.querySelector('#cw-c-dup').textContent));
   assert.match(await text(page, '#cw-c-burn'), /500 RVN — 수수료가 아니라 보증/);
   assert.match(await text(page, '#cw-c-burn-check'), /확인 불가/);
   assert.match(await text(page, '#cw-c-fee'), /15%\(초안\).*나 255 RVN · 수수료 45 RVN/);
   assert.match(await text(page, '#cw-c-irreversible'), /영영 돌아오지 않아요.*보증.*영구예요.*되돌릴 수 없어요.*판매 책임은 제작자/);
   assert.equal(await disabled(page, '#cw-issue'), true);
-  await page.type('#cw-typed', 'PLAYXG.SEA_BOOK');
+  await page.type('#cw-typed', 'RV.B.SEA_BOOK');
   await page.waitForFunction(() => !document.querySelector('#cw-issue').disabled);
   await shot(7);
   await page.click('#cw-issue');
@@ -246,13 +252,15 @@ test('book: guide → ①…⑧ on the mock chain; every step audited at 390/144
       assert.deepEqual(calls.filter(c => c.cmd === 'ipfs_add_file').map(c => c.name), ['sea.epub', 'sea-preview.pdf', 'cover.png', 'manifest.json']);
       assert.deepEqual(calls.filter(c => c.cmd === 'sign_message'), [{ cmd: 'sign_message', address: ADDRESS, withPassword: false }]);
       const issued = calls.filter(c => c.cmd === 'issue_asset').map(c => c.args);
-      assert.equal(issued.length, 1); assert.equal(issued[0].name, 'PLAYXG.SEA_BOOK'); assert.deepEqual([issued[0].qty, issued[0].units, issued[0].reissuable], [1, 0, true]);
+      assert.equal(issued.length, 1); assert.equal(issued[0].name, 'RV.B.SEA_BOOK'); assert.deepEqual([issued[0].qty, issued[0].units, issued[0].reissuable], [1, 0, true]);
       assert.equal(await text(page, '#cw-txid'), 'cd'.repeat(32));
-      assert.match(await text(page, '#cw-mine'), /바다 이야기 · PLAYXG\.SEA_BOOK · 책/);
-      assert.match(await page.$eval('#cw-share', t => t.value), /PLAYXG\.SEA_BOOK[\s\S]*열린 장터[\s\S]*ipfs:\/\/Qm/);
+      assert.match(await text(page, '#cw-mine'), /바다 이야기 · RV\.B\.SEA_BOOK · 책/);
+      assert.match(await page.$eval('#cw-share', t => t.value), /RV\.B\.SEA_BOOK[\s\S]*열린 장터[\s\S]*ipfs:\/\/Qm/);
+      const asked = calls.filter(c => c.cmd === 'name_taken').map(c => c.name);
+      assert.ok(asked.length >= 2 && asked.every(n => /^RV\.B\./.test(n)) && asked.at(-1) === 'RV.B.SEA_BOOK', `chain duplicate lookups: ${asked}`);
       assert.match(await text(page, '#cw-sales'), /판매 기능이 아직 꺼져 있어 판매가 없어요/);
       const req = JSON.parse(await page.$eval('#cw-request', t => t.value));
-      assert.deepEqual([req.status, req.asset, req.type, req.issueTxid], ['unverified', 'PLAYXG.SEA_BOOK', 'book', 'cd'.repeat(32)]);
+      assert.deepEqual([req.status, req.asset, req.type, req.issueTxid], ['unverified', 'RV.B.SEA_BOOK', 'book', 'cd'.repeat(32)]);
       assert.equal(await page.evaluate(() => localStorage.getItem('rv-creator-draft-v2')), null, 'draft cleared after issuing');
       assert.deepEqual(await page.evaluate(() => window.__homeFixture.forbidden), [], 'no reveal/unlock/send command');
     }
@@ -309,7 +317,7 @@ test('resume: an upload that fails half-way is continued later without re-upload
 });
 
 test('name: taken on chain blocks, official-looking and lookalike warn; ticket details reach a verifiable manifest', { timeout: 300_000 }, async () => {
-  const page = await openCreator({ taken: ['PLAYXG.AUTUMN_LIVE'] });
+  const page = await openCreator({ taken: ['RV.T.AUTUMN_LIVE'] });
   await page.click('#cw-guide-ok'); await page.click('#cw-start');
   await page.click('input[name="cw-type"][value="ticket"]'); await next(page, 2);
   assert.equal(await disabled(page, '#cw-next'), false, 'a ticket needs no files');
@@ -318,7 +326,12 @@ test('name: taken on chain blocks, official-looking and lookalike warn; ticket d
   await page.type('#cw-title', 'Autumn Live'); await setValue(page, '#cw-asset', 'AUTUMN_LIVE');
   await page.click('#cw-new-address'); await page.waitForFunction(a => document.querySelector('#cw-address').value === a, {}, ADDRESS);
   await page.waitForFunction(() => /이미 체인에 있어요/.test(document.querySelector('#cw-name-warn').textContent));
+  assert.match(await text(page, '#cw-dup'), /이미 있어요/); assert.equal(await text(page, '#cw-prefix'), 'RV.T.');
   assert.equal(await disabled(page, '#cw-next'), true, 'taken name blocks');
+  // 작품 이름 칸에 예약어 → 규칙 위반으로 막힘, 조회하지 않음.
+  await setValue(page, '#cw-asset', 'RVN');
+  await page.waitForFunction(() => /쓸 수 없어요/.test(document.querySelector('#cw-name-say').textContent));
+  assert.match(await text(page, '#cw-dup'), /규칙에 맞게 고치면 조회/); assert.equal(await disabled(page, '#cw-next'), true, 'reserved word blocks');
   await setValue(page, '#cw-asset', 'PLAYX_OFFICIAL_LIVE');
   await page.waitForFunction(() => /공식/.test(document.querySelector('#cw-name-warn').textContent));
   await setValue(page, '#cw-asset', 'AUTUMN_LIVE_2026');
@@ -331,9 +344,57 @@ test('name: taken on chain blocks, official-looking and lookalike warn; ticket d
   await page.evaluate(() => { const base = window.__TAURI_INTERNALS__.invoke; window.__pinned = {}; const wrap = async (c, a) => { if (c === 'ipfs_add_file' && a.file.name === 'manifest.json') window.__pinned.manifest = a.file.bytes; return base(c, a); }; window.__TAURI_INTERNALS__.invoke = wrap; window.__TAURI__.core.invoke = wrap; });
   await page.click('#cw-upload');
   await page.waitForFunction(() => /다 올렸어요/.test(document.querySelector('#cw-upload-say').textContent), { timeout: 20000 });
-  const v = verifyManifest(Uint8Array.from(await page.evaluate(() => window.__pinned.manifest)), { expectedAsset: 'PLAYXG.AUTUMN_LIVE_2026' });
+  const v = verifyManifest(Uint8Array.from(await page.evaluate(() => window.__pinned.manifest)), { expectedAsset: 'RV.T.AUTUMN_LIVE_2026' });
   assert.equal(v.signedBy, ADDRESS); assert.equal(v.manifest.type, 'ticket'); assert.equal(v.manifest.files.length, 0);
   assert.deepEqual([v.manifest.details.eventName, v.manifest.details.quantity, v.manifest.details.redemption.checkerAddress], ['가을 작은 음악회', 50, ADDRESS]);
+  await page.close();
+});
+
+test('chain duplicate lookup: 「확인 불가」 is shown on ③ and ⑦ and blocks issuing until a re-check answers', { timeout: 300_000 }, async () => {
+  const page = await openCreator({ nameUnknown: true });
+  await page.click('#cw-guide-ok'); await page.click('#cw-start');
+  await page.click('input[name="cw-type"][value="game"]'); await next(page, 2);
+  await dropFiles(page, FILES.game);
+  await page.waitForFunction(() => /2개 파일/.test(document.querySelector('#cw-files-say').textContent));
+  await next(page, 3);
+  assert.equal(await text(page, '#cw-prefix'), 'RV.G.');
+  await page.type('#cw-title', 'Star Run'); await setValue(page, '#cw-asset', 'STAR_RUN');
+  await page.click('#cw-new-address'); await page.waitForFunction(a => document.querySelector('#cw-address').value === a, {}, ADDRESS);
+  await page.waitForFunction(() => /확인 불가/.test(document.querySelector('#cw-dup').textContent));
+  assert.equal(await page.$eval('#cw-dup', e => e.className), 'creator-bad');
+  assert.match(await text(page, '#cw-name-warn'), /체인에 이미 있는지 확인 불가/);
+  const report = {};
+  for (const width of [390, 1440]) for (const theme of ['light', 'dark']) {
+    await page.setViewport({ width, height: 844 }); await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: theme }]); await page.evaluate(t => { document.documentElement.dataset.theme = t; }, theme);
+    await audit(page, '#page-creator', `wizard-dup-unknown-step3-${width}-${theme}`, report);
+  }
+  await page.setViewport({ width: 1440, height: 900 }); await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'light' }]); await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
+  await page.waitForFunction(() => !document.querySelector('#cw-next').disabled);
+  await next(page, 4); await next(page, 5); await next(page, 6);
+  await page.click('#cw-upload');
+  await page.waitForFunction(() => /다 올렸어요/.test(document.querySelector('#cw-upload-say').textContent), { timeout: 20000 });
+  await next(page, 7);
+  await page.waitForFunction(() => /확인 불가/.test(document.querySelector('#cw-c-dup').textContent));
+  await page.type('#cw-typed', 'RV.G.STAR_RUN');
+  await page.waitForFunction(() => /확인 불가/.test(document.querySelector('#cw-c-blockers').textContent));
+  assert.equal(await disabled(page, '#cw-issue'), true, 'unknown availability blocks issuing');
+  for (const width of [390, 1440]) for (const theme of ['light', 'dark']) {
+    await page.setViewport({ width, height: 844 }); await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: theme }]); await page.evaluate(t => { document.documentElement.dataset.theme = t; }, theme);
+    await audit(page, '#page-creator', `wizard-dup-unknown-step7-${width}-${theme}`, report);
+  }
+  await page.setViewport({ width: 1440, height: 900 }); await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'light' }]); await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
+  for (const [k, v] of Object.entries(report)) {
+    assert.ok(v.measured > 10, `${k}: measured too little`);
+    assert.deepEqual(v.low, [], `${k} low contrast: ${JSON.stringify(v.low)}`);
+    assert.deepEqual(v.overflow, [], `${k} overflow: ${JSON.stringify(v.overflow)}`);
+  }
+  // 노드가 돌아오면 「다시 조회」 → 비어 있음 → 등록 가능.
+  await page.evaluate(() => { window.__nameUnknown = false; });
+  await page.click('#cw-c-dup-recheck');
+  await page.waitForFunction(() => /비어 있어요/.test(document.querySelector('#cw-c-dup').textContent));
+  await page.waitForFunction(() => !document.querySelector('#cw-issue').disabled);
+  assert.doesNotMatch(await text(page, '#cw-c-blockers'), /확인 불가/);
+  assert.equal((await page.evaluate(() => window.__creatorCalls)).filter(c => c.cmd === 'issue_asset').length, 0, 'nothing issued by the re-check');
   await page.close();
 });
 
@@ -357,7 +418,7 @@ test('cost shortfall and mainnet lock block issuing; bad files are refused; game
     await next(page, 6); await page.click('#cw-upload');
     await page.waitForFunction(() => /다 올렸어요/.test(document.querySelector('#cw-upload-say').textContent), { timeout: 20000 });
     await next(page, 7);
-    await page.type('#cw-typed', 'PLAYXG.STAR_RUN');
+    await page.type('#cw-typed', 'RV.G.STAR_RUN');
     await page.waitForFunction(() => document.querySelector('#cw-c-blockers').textContent.length > 0);
     assert.match(await text(page, '#cw-c-blockers'), expectBlock);
     assert.equal(await disabled(page, '#cw-issue'), true);
@@ -397,14 +458,14 @@ async function marketFixture() {
   const pin = new MockPinAdapter();
   const sign = async (_a, m) => signMessageForTest(m, KEY);
   const common = { creatorAddress: ADDRESS, receivingAddress: RECEIVING, declaredFeeBps: 1500, now: new Date('2026-10-10T00:00:00Z'), description: '시험 상품' };
-  const book = await publishContent({ ...common, type: 'book', asset: 'PLAYXG.SEA_BOOK', title: '바다 이야기', priceAtoms: '30000000000',
+  const book = await publishContent({ ...common, type: 'book', asset: 'RV.B.SEA_BOOK', title: '바다 이야기', priceAtoms: '30000000000',
     files: [{ path: 'sea.pdf', bytes: PDF('book'), mime: '' }, { path: 'sea-preview.pdf', bytes: PDF('pv'), mime: '' }, { path: 'cover.png', bytes: PNG(5), mime: '', role: 'cover' }],
     details: { bookFile: 'sea.pdf', format: 'pdf', previewFile: 'sea-preview.pdf', previewPages: 5, pageCount: 80 } }, pin, sign);
-  const fake = await publishContent({ ...common, type: 'book', asset: 'PLAYXG.SEA_B00K', title: '바다 이야기', priceAtoms: '30000000000', creatorAddress: ADDRESS,
+  const fake = await publishContent({ ...common, type: 'book', asset: 'RV.B.SEA_B00K', title: '바다 이야기', priceAtoms: '30000000000', creatorAddress: ADDRESS,
     files: [{ path: 'sea.pdf', bytes: PDF('copy'), mime: '' }], details: { bookFile: 'sea.pdf', format: 'pdf', previewFile: null, previewPages: 0, pageCount: null } }, pin, sign);
-  const music = await publishContent({ ...common, type: 'music', asset: 'PLAYXG.MORNING_SONG', title: '아침 노래', priceAtoms: '2000000000',
+  const music = await publishContent({ ...common, type: 'music', asset: 'RV.M.MORNING_SONG', title: '아침 노래', priceAtoms: '2000000000',
     files: [{ path: 'song.mp3', bytes: MP3, mime: '' }], details: { previewFile: 'song.mp3', previewStartMs: 0, previewEndMs: 30000 } }, pin, sign);
-  const game = await publishContent({ ...common, type: 'game', asset: 'PLAYXG.STAR_RUN', title: '별 달리기', priceAtoms: '3000000000',
+  const game = await publishContent({ ...common, type: 'game', asset: 'RV.G.STAR_RUN', title: '별 달리기', priceAtoms: '3000000000',
     files: FILES.game.map(f => ({ path: f.name, bytes: f.bytes, mime: f.type })), details: { entry: 'index.html', origin: 'https://star-run.example', capabilities: { identity: false, payment: true } } }, pin, sign);
   const assets = [book, fake, music, game].map(r => ({ name: r.manifest.asset, ipfs_hash: r.manifestCid }));
   const store = Object.fromEntries([...pin.stored.entries()].map(([k, v]) => [k, Array.from(v)]));
@@ -418,9 +479,10 @@ async function openMarket(opts = {}, { salesEnabled = true, withBuy = true } = {
   const fx = await marketFixture();
   await page.addScriptTag({ content: marketBundle });
   await page.evaluate((fx, salesEnabled, withBuy) => {
-    window.__buys = [];
+    window.__buys = []; window.__patterns = [];
     const m = window.__wireOpenMarket({ back: () => {}, salesEnabled, now: () => Date.parse('2026-10-12T00:00:00Z'),
-      source: { assets: async () => fx.assets, fetch: async cid => fx.store[cid] ? Uint8Array.from(fx.store[cid]) : null },
+      // 노드가 검색어를 무시하고 전부 돌려주는 최악의 경우 — 화면(discoverListings)이 종류 글자로 다시 걸러야 한다.
+      source: { assets: async p => { window.__patterns.push(p); return fx.assets; }, fetch: async cid => fx.store[cid] ? Uint8Array.from(fx.store[cid]) : null },
       buy: withBuy ? async r => { window.__buys.push(r); return { txid: 'ab'.repeat(32) }; } : undefined });
     return m.load();
   }, fx, salesEnabled, withBuy);
@@ -432,22 +494,41 @@ const openItem = async (page, asset) => { await page.click(`#mk-list .mk-item[da
 test('buyer: list → detail → auto-check → preview → confirm (fee split) → mock purchase → purchase list; game stays external, lookalike warned', { timeout: 300_000 }, async () => {
   const page = await openMarket();
   const items = await page.$$eval('#mk-list .mk-item', b => b.map(x => x.dataset.asset + ':' + x.querySelector('.mk-badge').textContent));
-  assert.deepEqual(items, ['PLAYXG.MORNING_SONG:미검증', 'PLAYXG.SEA_B00K:미검증', 'PLAYXG.SEA_BOOK:미검증', 'PLAYXG.STAR_RUN:미검증'], 'no auto-check yet → all unverified');
+  assert.deepEqual(items, ['RV.B.SEA_B00K:미검증', 'RV.B.SEA_BOOK:미검증', 'RV.G.STAR_RUN:미검증', 'RV.M.MORNING_SONG:미검증'], 'no auto-check yet → all unverified');
   assert.match(await text(page, '#mk-list'), /바다 이야기.*비슷한 이름 있음/);
+  // 종류 탭: 전체 + 다섯 종류, 탭마다 체인 검색어 RV.<글자>.* 로 찾고 그 종류만 보인다.
+  assert.deepEqual(await page.$$eval('#mk-tabs button', b => b.map(x => `${x.dataset.kind}:${x.textContent}:${x.getAttribute('aria-pressed')}`)),
+    ['all:전체:true', 'game:게임:false', 'music:음악:false', 'book:책:false', 'ticket:티켓:false', 'digital:그 밖의 디지털 상품:false']);
+  await page.click('#mk-tabs button[data-kind="book"]');
+  await page.waitForFunction(() => document.querySelectorAll('#mk-list .mk-item').length === 2);
+  assert.deepEqual(await page.$$eval('#mk-list .mk-item', b => b.map(x => x.dataset.asset)), ['RV.B.SEA_B00K', 'RV.B.SEA_BOOK']);
+  assert.match(await text(page, '#mk-list-say'), /책 2개/);
+  await page.click('#mk-tabs button[data-kind="ticket"]');
+  await page.waitForFunction(() => /아직 올라온 티켓 상품이 없어요/.test(document.querySelector('#mk-list-say').textContent));
+  const tabReport = {};
+  for (const width of [390, 1440]) for (const theme of ['light', 'dark']) {
+    await page.setViewport({ width, height: 844 }); await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: theme }]); await page.evaluate(t => { document.documentElement.dataset.theme = t; }, theme);
+    await audit(page, '#page-market', `market-tabs-${width}-${theme}`, tabReport);
+  }
+  await page.setViewport({ width: 1440, height: 900 }); await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'light' }]); await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
+  for (const [k, v] of Object.entries(tabReport)) { assert.deepEqual(v.low, [], `${k} low contrast: ${JSON.stringify(v.low)}`); assert.deepEqual(v.overflow, [], `${k} overflow: ${JSON.stringify(v.overflow)}`); }
+  await page.click('#mk-tabs button[data-kind="all"]');
+  await page.waitForFunction(() => document.querySelectorAll('#mk-list .mk-item').length === 4);
+  assert.deepEqual(await page.evaluate(() => window.__patterns), ['RV.*', 'RV.B.*', 'RV.T.*', 'RV.*']);
   // Game: external link only, no buy, even after an auto-check.
-  await openItem(page, 'PLAYXG.STAR_RUN');
+  await openItem(page, 'RV.G.STAR_RUN');
   await page.click('#mk-d-check'); await page.waitForFunction(() => /자동 점검:/.test(document.querySelector('#mk-d-check-say').textContent));
   assert.match(await text(page, '#mk-d-warning'), /외부 링크로만.*게임처럼 코드를 실행하는 상품은 검증된 뒤에만/);
   assert.match(await text(page, '#mk-d-preview'), /지갑 안에서 열지 않아요.*ipfs:\/\/Qm/);
   assert.equal(await disabled(page, '#mk-d-buy'), true);
   await page.click('#mk-d-back');
   // Book: auto-check → bonded → preview link → confirm → pay.
-  await openItem(page, 'PLAYXG.SEA_BOOK');
-  assert.match(await text(page, '#mk-d-alerts'), /비슷한 이름의 상품이 있어요\(PLAYXG\.SEA_B00K\).*판매자 주소/);
+  await openItem(page, 'RV.B.SEA_BOOK');
+  assert.match(await text(page, '#mk-d-alerts'), /비슷한 이름의 상품이 있어요\(RV\.B\.SEA_B00K\).*판매자 주소/);
   await page.click('#mk-d-check');
   await page.waitForFunction(() => document.querySelector('#mk-d-badge').textContent === '보증 · 미검증');
   assert.match(await text(page, '#mk-d-warning'), /검토하지 않은 판매자예요. 자동 점검과 보증만.*환불.*판매자에게.*보증 500 RVN 은 수수료가 아니에요/);
-  assert.match(await text(page, '#mk-d-facts'), /PLAYXG\.SEA_BOOK.*300 RVN.*미리보기5쪽.*80쪽.*공개 IPFS/);
+  assert.match(await text(page, '#mk-d-facts'), /RV\.B\.SEA_BOOK.*300 RVN.*미리보기5쪽.*80쪽.*공개 IPFS/);
   assert.equal(await page.$eval('#mk-d-book-preview', a => a.textContent), '미리보기 5쪽 받기(PDF)');
   assert.equal(await page.$eval('#mk-d-book-preview', a => a.href.startsWith('blob:')), true);
   assert.equal(await disabled(page, '#mk-d-buy'), false);
@@ -463,11 +544,11 @@ test('buyer: list → detail → auto-check → preview → confirm (fee split) 
   await page.setViewport({ width: 1440, height: 900 }); await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'light' }]); await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
   await page.click('#mk-c-pay');
   await page.waitForFunction(() => /샀어요/.test(document.querySelector('#mk-c-say').textContent));
-  assert.deepEqual(await page.evaluate(() => window.__buys), [{ asset: 'PLAYXG.SEA_BOOK', sellerAddress: RECEIVING, priceAtoms: '30000000000', sellerAtoms: '25500000000', feeAtoms: '4500000000', feeBps: 1500, tier: 'bonded' }]);
-  assert.match(await text(page, '#mk-purchases'), /바다 이야기 · PLAYXG\.SEA_BOOK · 판매자 255 RVN \+ 수수료 45 RVN · 거래 abababababab/);
+  assert.deepEqual(await page.evaluate(() => window.__buys), [{ asset: 'RV.B.SEA_BOOK', sellerAddress: RECEIVING, priceAtoms: '30000000000', sellerAtoms: '25500000000', feeAtoms: '4500000000', feeBps: 1500, tier: 'bonded' }]);
+  assert.match(await text(page, '#mk-purchases'), /바다 이야기 · RV\.B\.SEA_BOOK · 판매자 255 RVN \+ 수수료 45 RVN · 거래 abababababab/);
   // Music: preview player limited to its window.
   await page.click('#mk-c-cancel'); await page.click('#mk-d-back');
-  await openItem(page, 'PLAYXG.MORNING_SONG');
+  await openItem(page, 'RV.M.MORNING_SONG');
   await page.click('#mk-d-check');
   await page.waitForFunction(() => document.querySelector('#mk-d-audio'));
   assert.match(await text(page, '#mk-d-preview'), /미리듣기 0초~30초/);
@@ -484,7 +565,7 @@ test('buyer: list → detail → auto-check → preview → confirm (fee split) 
 
 test('buyer with the production switch (off): confirm screen shows the split but paying is locked and nothing is sent', { timeout: 300_000 }, async () => {
   const page = await openMarket({}, { salesEnabled: false, withBuy: true });
-  await openItem(page, 'PLAYXG.SEA_BOOK');
+  await openItem(page, 'RV.B.SEA_BOOK');
   await page.click('#mk-d-check');
   await page.waitForFunction(() => document.querySelector('#mk-d-badge').textContent === '보증 · 미검증');
   assert.match(await text(page, '#mk-d-buy-say'), /판매 기능은 아직 꺼져/);

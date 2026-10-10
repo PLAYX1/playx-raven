@@ -47,11 +47,16 @@
 #page-creator .cw-progress span { display: block; height: 100%; width: 0; background: var(--text); }
 #page-creator .cw-resume { padding: 10px 14px; border: 2px solid var(--line); border-radius: 12px; color: var(--text); }
 #page-creator .cw-panel h2 { outline: none; }
+#page-creator .cw-dup-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; color: var(--text); }
+#page-creator .cw-dup-row > span { font-weight: 600; }
 
 /* ── 열린 장터(시험) ── */
 #page-market .card { margin: 16px 0; padding: 20px; }
 #page-market button { min-height: 44px; margin: 6px 6px 6px 0; }
 #page-market .creator-note { padding: 14px 16px; border: 2px solid var(--ravi-soft); border-radius: 12px; color: var(--text); }
+#page-market .mk-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+#page-market .mk-tabs button { min-height: 40px; margin: 0; padding: 6px 14px; border-radius: 999px; background: var(--panel); color: var(--text); border: 1px solid var(--line); }
+#page-market .mk-tabs button[aria-pressed="true"] { border: 2px solid var(--text); font-weight: 700; }
 #page-market .mk-list { list-style: none; padding: 0; display: grid; gap: 8px; }
 #page-market .mk-item { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; width: 100%; text-align: left; padding: 12px 14px; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
 #page-market .mk-item .meta { flex-basis: 100%; overflow-wrap: anywhere; color: var(--muted); }

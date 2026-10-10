@@ -1,5 +1,6 @@
 import { atomsToRvn, rvnToAtoms } from '../core/creator/bytes';
-import { CONTENT_TYPES } from '../core/creator/limits';
+import { kindSearchPattern } from '../core/creator/asset-name';
+import { CONTENT_TYPES, CONTENT_TYPE_IDS, type ContentType } from '../core/creator/limits';
 import { discoverListings, type ChainAsset, type CreatorAllowlist, type CreatorDenylist, type Listing } from '../core/creator/listing';
 import type { BookSection, MusicSection, TicketSection, GameSection, DigitalSection } from '../core/creator/manifest';
 import { BOND_BLOCKER_SAY, BONDED_WARNING, BOND_SAY, OPEN_MARKET_SALES_ENABLED, autoCheck, purchaseSummary, type AutoCheck } from '../core/creator/open-market';
@@ -8,14 +9,15 @@ import { BOND_BLOCKER_SAY, BONDED_WARNING, BOND_SAY, OPEN_MARKET_SALES_ENABLED, 
  * 데스크탑 「열린 장터(시험)」 — 구매자 최소 화면: 목록 → 상세(미리듣기·미리보기) → 구매 확인(수수료 분리 금액) → 내 구매 목록.
  *
  * 🔴 지금 이 화면은 **시험 전용**이다(판매자 기능 뒤에 숨김):
- *   · 노드에서 「PLAYXG.*」 자산 목록과 IPFS 파일을 읽는 데스크탑 명령이 아직 없다 → source 를 주입하지 않으면 「목록을 읽는 기능이 아직 없어요」.
+ *   · 노드에서 「RV.*」(종류 탭은 「RV.M.*」 등 — kindSearchPattern) 자산 목록과 IPFS 파일을 읽는 데스크탑 명령이 아직 없다 → source 를 주입하지 않으면 「목록을 읽는 기능이 아직 없어요」.
  *   · 판매 스위치(OPEN_MARKET_SALES_ENABLED)가 꺼져 있어 구매 단추는 확인 화면까지만 가고 잠긴다. 시험만 salesEnabled·buy 를 주입한다.
  *   · 실제 구매 거래(판매자 몫 + 수수료 출력 + 메모)는 지갑 저장소 core/creator/purchase.ts + 기존 v4 부품이 만들고 시험한다(데스크탑은 아직 연결 안 함).
  * 판정(검증됨·보증·미검증·숨김)은 전부 core/creator/listing.ts — 여기서 다시 판단하지 않는다.
  */
 
 export type MarketSource = {
-  assets(): Promise<ChainAsset[]>;
+  /** pattern = listassets 검색어. 종류 탭이 kindSearchPattern 으로 만든다(「RV.*」 전체, 「RV.M.*」 음악…). */
+  assets(pattern: string): Promise<ChainAsset[]>;
   fetch(cid: string): Promise<Uint8Array | null>;
   allowlist?: CreatorAllowlist | null; denylist?: CreatorDenylist | null;
 };
@@ -44,7 +46,19 @@ export function wireOpenMarket(deps: MarketDeps) {
   const salesOn = deps.salesEnabled ?? OPEN_MARKET_SALES_ENABLED;
   const checks = new Map<string, AutoCheck>();
   const blobs: string[] = [];
-  let listings: Shown[] = [], current: Shown | null = null, busy = false;
+  let listings: Shown[] = [], current: Shown | null = null, busy = false, kind: ContentType | null = null;
+
+  /* 종류 탭: 전체 + 다섯 종류. 탭마다 체인 검색어가 다르다(이름의 종류 글자). */
+  function paintTabs() {
+    el('mk-tabs').replaceChildren(...([null, ...CONTENT_TYPE_IDS] as Array<ContentType | null>).map(k => {
+      const b = document.createElement('button'); b.type = 'button'; b.dataset.kind = k ?? 'all';
+      b.textContent = k ? CONTENT_TYPES[k].label : '전체';
+      b.title = `찾는 이름: ${kindSearchPattern(k)}`;
+      b.setAttribute('aria-pressed', String(kind === k));
+      b.onclick = () => { if (kind !== k) { kind = k; paintTabs(); void load(); } };
+      return b;
+    }));
+  }
 
   el('mk-note').textContent = `시험 화면이에요. 「검증됨」은 레이븐볼트가 검토한 판매자, 「보증 · 미검증」은 자동 점검과 보증만 통과한 판매자, 「미검증」은 외부 링크로만 볼 수 있어요. 판매(구매 결제)는 ${salesOn ? '시험용으로 켜져' : '아직 꺼져'} 있어요.`;
   const readPurchases = (): Purchase[] => { try { return JSON.parse(store?.getItem(PURCHASES_KEY) ?? '[]') as Purchase[]; } catch { return []; } };
@@ -61,9 +75,9 @@ export function wireOpenMarket(deps: MarketDeps) {
     view('list'); el('mk-list-say').textContent = '불러오는 중…';
     if (!deps.source) { el('mk-list').replaceChildren(); el('mk-list-say').textContent = '장터 목록을 읽는 기능이 아직 없어요(다음 단계: 노드 자산 목록·IPFS 읽기 연결).'; return; }
     try {
-      const assets = await deps.source.assets();
+      const assets = await deps.source.assets(kindSearchPattern(kind));
       listings = await discoverListings({ assets, fetchManifest: c => deps.source!.fetch(c), allowlist: deps.source.allowlist ?? null, denylist: deps.source.denylist ?? null,
-        autoChecks: checks, now: now() }) as Shown[];
+        autoChecks: checks, now: now(), type: kind }) as Shown[];
     } catch (e) { el('mk-list-say').textContent = `목록을 못 읽었어요(${String((e as Error)?.message ?? e)}) → 노드가 켜져 있는지 확인하고 다시 열어 주세요.`; return; }
     el('mk-list').replaceChildren(...listings.map(l => {
       const li = document.createElement('li');
@@ -76,7 +90,7 @@ export function wireOpenMarket(deps: MarketDeps) {
       b.onclick = () => detail(l);
       li.append(b); return li;
     }));
-    el('mk-list-say').textContent = listings.length ? `${listings.length}개` : '아직 올라온 상품이 없어요.';
+    el('mk-list-say').textContent = listings.length ? `${kind ? CONTENT_TYPES[kind].label + ' ' : ''}${listings.length}개` : kind ? `아직 올라온 ${CONTENT_TYPES[kind].label} 상품이 없어요.` : '아직 올라온 상품이 없어요.';
   }
 
   function previewBox(l: Shown) {
@@ -192,6 +206,6 @@ export function wireOpenMarket(deps: MarketDeps) {
   el('mk-c-cancel').onclick = () => { if (current) detail(current); };
   el('mk-d-back').onclick = () => view('list');
   el('market-back').onclick = deps.back;
-  paintPurchases();
+  paintPurchases(); paintTabs();
   return { load };
 }

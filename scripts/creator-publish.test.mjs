@@ -24,7 +24,7 @@ test('vendored creator core is byte-identical to the pinned copy (and to the wal
   const files = Object.keys(pins.files);
   assert.equal(files.length, 9);
   for (const f of files) assert.equal(digest(f), pins.files[f], `vendored drift: ${f}`);
-  const root = process.env.RV_WALLET_CORE || '/Users/gimmusong/wt-rv-open-seller-core';
+  const root = process.env.RV_WALLET_CORE || '/Users/gimmusong/wt-rv-asset-name-core';
   if (!existsSync(`${root}/core/creator/manifest.ts`)) { t.skip('wallet checkout absent; pinned hashes still checked'); return; }
   for (const f of files) assert.equal(digest(f), digest(`${root}/${f}`), `differs from wallet source: ${f}`);
 });
@@ -49,26 +49,28 @@ test('kubo pin adapter = existing ipfs_add_file (CIDv0, pinned); signer = sign_m
   assert.deepEqual(calls.splice(0), [['sign_message', 'address,message'], ['sign_message', 'address,message,passphrase']]);
   await assert.rejects(() => ui.nodeSigner(invoke, async () => null)('RAddr', 'msg'), /비밀번호/);
   calls.splice(0);
-  const issued = await ui.nodeIssuer(invoke).issue({ name: 'PLAYXG.STAR_RUN', qty: 1, units: 0, reissuable: true, ipfsHash: 'Qm' + '1'.repeat(44) });
+  const issued = await ui.nodeIssuer(invoke).issue({ name: 'RV.G.STAR_RUN', qty: 1, units: 0, reissuable: true, ipfsHash: 'Qm' + '1'.repeat(44) });
   assert.equal(issued.txid, 'ab'.repeat(32));
   assert.deepEqual(calls, [['issue_asset', 'ipfsHash,name,qty,reissuable,toAddress,units']]);
   await assert.rejects(() => ui.nodeIssuer(async () => ({})).issue({ name: 'X', qty: 1, units: 0, reissuable: true, ipfsHash: 'x' }), /거래 번호/);
 });
 
-test('desktop bundle: publish → verify → plan (root PLAYXG., anyone, 500 RVN bond, mainnet off, burn 「확인 불가」)', async () => {
+test('desktop bundle: publish → verify → plan (root RV.<kind>., anyone, 500 RVN bond, kind letter = type, mainnet off, burn 「확인 불가」, unknown duplicate blocks)', async () => {
   const key = core.randomKey();
   const address = core.addressOf(key);
   const pin = new core.MockPinAdapter();
   const result = await core.publishContent({
-    type: 'game', asset: 'PLAYXG.STAR_RUN', title: '별 달리기', description: '', creatorAddress: address, receivingAddress: address,
+    type: 'game', asset: 'RV.G.STAR_RUN', title: '별 달리기', description: '', creatorAddress: address, receivingAddress: address,
     files: [{ path: 'index.html', bytes: enc('<!doctype html><script src="a.js"></script>'), mime: 'text/html' }, { path: 'a.js', bytes: enc('1'), mime: '' },
       { path: 'cover.png', bytes: PNG, mime: 'image/png', role: 'cover' }],
     priceAtoms: '30000000000', declaredFeeBps: 1500, details: { entry: 'index.html', origin: null, capabilities: { identity: false, payment: false } }, now: new Date('2026-10-10T00:00:00Z'),
   }, pin, async (_a, m) => core.signMessageForTest(m, key));
-  const v = core.verifyManifest(result.manifestBytes, { expectedAsset: 'PLAYXG.STAR_RUN' });
+  const v = core.verifyManifest(result.manifestBytes, { expectedAsset: 'RV.G.STAR_RUN' });
   assert.equal(v.signedBy, address);
-  const base = { asset: 'PLAYXG.STAR_RUN', manifestCid: result.manifestCid, ownedAssets: [], nameTaken: false, chainBurnRvn: null, typedName: 'PLAYXG.STAR_RUN' };
+  const base = { asset: 'RV.G.STAR_RUN', manifestCid: result.manifestCid, ownedAssets: [], nameTaken: false, chainBurnRvn: null, typedName: 'RV.G.STAR_RUN', type: 'game' };
   assert.equal(core.planIssue({ ...base, chain: 'regtest' }).canIssue, true, 'no owner token needed');
+  assert.ok(core.planIssue({ ...base, chain: 'regtest', type: 'music' }).blockers.some(b => b.includes('종류 글자')), 'kind letter must match the manifest type');
+  assert.ok(core.planIssue({ ...base, chain: 'regtest', nameTaken: null }).blockers.some(b => b.includes('확인 불가')), 'unknown duplicate blocks');
   const main = core.planIssue({ ...base, chain: 'main' });
   assert.equal(main.canIssue, false); assert.ok(main.blockers.some(b => b.includes('실제 발행은 아직 꺼져 있어요')));
   assert.equal(core.REAL_MAINNET_ISSUE_ENABLED, false); assert.equal(core.OPEN_MARKET_SALES_ENABLED, false);

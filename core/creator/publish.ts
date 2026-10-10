@@ -82,7 +82,7 @@ export type PublishResult = {
 export function precheck(input: PublishInput): { check: FilesCheck; problems: string[] } {
   const check = checkFiles(input.type, input.files);
   const problems = check.problems.map(p => p.path ? `${p.path}: ${p.say}` : p.say);
-  const name = checkCreatorAssetName(input.asset, input.prefix ?? CREATOR_ASSET_PREFIX);
+  const name = checkCreatorAssetName(input.asset, input.prefix ?? CREATOR_ASSET_PREFIX, { type: input.type });
   problems.push(...name.problems);
   if (!isRvnAddress(input.creatorAddress)) problems.push('제작자 주소(R…)가 올바르지 않아요.');
   if (!isRvnAddress(input.receivingAddress)) problems.push('판매 대금 받을 주소(R…)가 올바르지 않아요.');
@@ -157,8 +157,10 @@ export interface Issuer { issue(params: IssueParams): Promise<{ txid: string }> 
  * 자산은 qty 1·units 0·reissuable true 로 만든다(설계 §2.2 — 매니페스트를 고치려면 재발행이 필요하므로 잠그지 않는다).
  */
 export function planIssue(p: { asset: string; manifestCid: string; chain: string; ownedAssets: readonly string[]; nameTaken: boolean | null;
-  chainBurnRvn: number | null; typedName: string; prefix?: string; realMainnetEnabled?: boolean }): IssuePlan {
-  const name = checkCreatorAssetName(p.asset, p.prefix ?? CREATOR_ASSET_PREFIX);
+  chainBurnRvn: number | null; typedName: string; prefix?: string; realMainnetEnabled?: boolean;
+  /** 매니페스트 종류. 주면 이름의 종류 글자와 같아야 한다(사칭 방지). */
+  type?: ContentType }): IssuePlan {
+  const name = checkCreatorAssetName(p.asset, p.prefix ?? CREATOR_ASSET_PREFIX, { type: p.type ?? null });
   const burn = burnCheck(name.kind, p.chainBurnRvn);
   const testChain = TEST_CHAINS.has(p.chain);
   const blockers: string[] = [...name.problems];
@@ -166,7 +168,7 @@ export function planIssue(p: { asset: string; manifestCid: string; chain: string
   if (name.ownerTokenNeeded && !p.ownedAssets.includes(name.ownerTokenNeeded))
     blockers.push(`이 이름 아래 만들려면 이 지갑에 「${name.ownerTokenNeeded}」 주인 표가 있어야 해요.`);
   if (p.nameTaken === true) blockers.push('이미 있는 이름이에요. 자산 이름은 영구라 다시 쓸 수 없어요.');
-  if (p.nameTaken === null) blockers.push('이름이 비어 있는지 노드에 확인하지 못했어요.');
+  if (p.nameTaken === null) blockers.push('이 이름이 체인에 이미 있는지 확인 불가 — 노드에 묻지 못했어요. 확인될 때까지 등록할 수 없어요.');
   if (burn.status === 'mismatch') blockers.push(burn.say);
   if (!testChain && !(p.realMainnetEnabled ?? REAL_MAINNET_ISSUE_ENABLED)) blockers.push('실제 발행은 아직 꺼져 있어요(대표 결정 대기). 시험망에서만 발행할 수 있어요.');
   if (p.typedName !== p.asset) blockers.push('확인을 위해 자산 이름을 똑같이 다시 적어 주세요.');

@@ -100,7 +100,7 @@ export const BOND_BLOCKER_SAY: Readonly<Record<BondBlocker, string>> = Object.fr
 /** (b)층으로 결제를 열면 안 되는 이유 목록. 빈 배열이면 (b) 결제 가능. 구매 직전에 purchase.ts 가 한 번 더 부른다(상태 값을 믿지 않는다). */
 export function bondBlockers(m: CreatorManifest, asset: string, check: AutoCheck | null, now: number, prefix: string = CREATOR_ASSET_PREFIX): BondBlocker[] {
   const out: BondBlocker[] = [];
-  const name = checkCreatorAssetName(asset, prefix);
+  const name = checkCreatorAssetName(asset, prefix, { type: m.type });
   if (!name.valid || name.kind !== 'root') out.push('not-root');
   if (!CONTENT_TYPES[m.type].bondedPayment) out.push('runs-code');
   if (m.price === null) out.push('free');

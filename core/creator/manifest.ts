@@ -177,7 +177,10 @@ export function validateManifest(raw: unknown, prefix: string = CREATOR_ASSET_PR
   if (!isContentType(d.type)) fail('manifest-type');
   const type: ContentType = d.type;
   const rule = CONTENT_TYPES[type];
-  if (!checkCreatorAssetName(d.asset, prefix).valid) fail('manifest-asset', 'name');
+  const nameCheck = checkCreatorAssetName(d.asset, prefix);
+  if (!nameCheck.valid) fail('manifest-asset', 'name');
+  // 이름의 종류 글자(RV.M. = 음악)와 매니페스트 type 이 다르면 거절한다 — 책을 음악 칸에 올려 음악처럼 보이게 하는 사칭을 막는다.
+  if (nameCheck.type !== type) fail('manifest-asset', 'kind');
   if (!text(d.title, 1, 80) || !text(d.description, 0, 2000) || d.title.trim() !== d.title || !d.title.trim()) fail('manifest-shape', 'title');
   if (!isoTime(d.createdAt)) fail('manifest-shape', 'createdAt');
   if (!Array.isArray(d.files) || d.files.length < rule.minFiles || d.files.length > rule.maxFiles) fail('manifest-files', 'count');
