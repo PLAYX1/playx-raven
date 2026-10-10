@@ -4492,6 +4492,19 @@ async function sendOwed() {
 
 /** 지금 열려 있는 화면. 끌어다 놓기가 **자리마다 다르게** 굴려면 필요하다. */
 let currentPage = "home";
+/** 판매자 기능(게임 판매 대금 받기). 기본 꺼짐 — 켜면 판매 메뉴·바로가기가 나타난다. 이 컴퓨터에만 저장. */
+const SELLER_MODE_KEY = "rv-seller-mode";
+function sellerModeOn(): boolean { try { return localStorage.getItem(SELLER_MODE_KEY) === "1"; } catch { return false; } }
+function applySellerMode() {
+  const on = sellerModeOn();
+  document.querySelectorAll<HTMLElement>("[data-seller-only]").forEach(el => {
+    el.hidden = !on;
+    if (on) el.removeAttribute("inert"); else el.setAttribute("inert", "");
+  });
+  const box = document.getElementById("seller-mode") as HTMLInputElement | null;
+  if (box) box.checked = on;
+  if (!on && currentPage === "sales") showPage("settings");
+}
 let lastReceivedHomeTx: string | null = null;
 
 async function paintProfile(): Promise<void> {
@@ -4754,6 +4767,8 @@ function setupNavMore() {
 let salesAccount: ReturnType<typeof wireSalesAccount> | undefined;
 
 function showPage(id: string) {
+  // 판매자 기능이 꺼져 있으면 판매 화면은 열리지 않는다(메뉴가 숨겨진 것만으로는 부족하다).
+  if (id === "sales" && !sellerModeOn()) return;
   if (id !== currentPage) salesAccount?.hide();
   // 🔴 화면을 떠나면 그 화면 때문에 도는 타이머를 끈다.
   //
@@ -18248,6 +18263,12 @@ window.addEventListener("DOMContentLoaded", async () => {
     ask: () => ask("지갑 비밀번호 재인증", "판매 전용 번호를 만든 뒤 지갑을 바로 잠가요.", { password: true }) });
   $("sales-back").onclick = () => showPage("home");
   $("game-sales-open").onclick = () => showPage("sales");
+  const sellerBox = $("seller-mode") as HTMLInputElement;
+  sellerBox.onchange = () => {
+    try { if (sellerBox.checked) localStorage.setItem(SELLER_MODE_KEY, "1"); else localStorage.removeItem(SELLER_MODE_KEY); } catch { sellerBox.checked = false; }
+    applySellerMode();
+  };
+  applySellerMode();
   $("ravi-story-open").onclick = () => { void openRaviStory({ openExternal: openUrl }).catch(() => {
     $("game-notice").textContent = "기본 브라우저를 열지 못했어요. 잠시 후 다시 눌러 주세요.";
   }); };

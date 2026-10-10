@@ -4,4 +4,9 @@
 #page-sales .sales-warning { padding: 16px; border: 2px solid #a43122; border-radius: 12px; }
 #page-sales button, #page-games button { min-height: 44px; margin: 6px; }
 #sales-public img { display: block; background: white; }
-#ravi-story-open { padding: 24px; text-align: left; }
+#page-games #ravi-story-open { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; width: min(100%, 420px);
+  padding: 18px 22px; text-align: left; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
+#page-games #ravi-story-open strong { font-size: 17px; font-weight: 700; color: var(--text); }
+#page-games #ravi-story-open span { font-size: 14px; font-weight: 400; color: var(--muted); }
+#page-games #ravi-story-open:hover:not(:disabled) { background: color-mix(in srgb, var(--ravi) 7%, var(--panel)); border-color: var(--ravi); }
+#page-games #ravi-story-open:focus-visible { outline: 3px solid var(--ravi-soft); outline-offset: 2px; }
