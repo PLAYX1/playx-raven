@@ -134,13 +134,15 @@ export function createRaviAgentUI(api: { invoke: Invoke; keyed(): string | null;
       const summary = document.createElement("p"); summary.textContent = "오늘의 로컬 정보를 확인하고 있어요…";
       const natural = document.createElement("p"); natural.setAttribute("aria-live", "polite");
       let timer = 0, closed = false;
-      const dismiss = () => { if (closed) return; closed = true; clearTimeout(timer); overlay.classList.add("docking"); window.setTimeout(() => { opening.destroy(); overlay.remove(); }, 360); };
+      const dismiss = () => { if (closed) return; closed = true; clearTimeout(timer); document.removeEventListener("keydown", onEscape); overlay.classList.add("docking"); window.setTimeout(() => { opening.destroy(); overlay.remove(); }, 360); };
+      // The landed bubble covers home controls for up to 18s; Escape and a close button release them without opening the chat.
+      const onEscape = (event: KeyboardEvent) => { if (event.key !== "Escape" || event.defaultPrevented || !landed) return; event.preventDefault(); dismiss(); };
       const dock = () => {
         const run = () => { if (closed) return; dismiss(); api.dock(); };
         if (api.afterLanding) api.afterLanding(run); else run();
       };
       const key = button("AI 열쇠를 넣으면 더 많은 걸 해 드려요", () => { const run = () => { dock(); api.key(); }; if (api.afterLanding) api.afterLanding(run); else run(); }); key.hidden = !!api.keyed();
-      bubble.append(title, summary, natural, key, button("라비와 이야기하기", dock)); overlay.append(bird, bubble); document.body.append(overlay);
+      bubble.append(title, summary, natural, key, button("라비와 이야기하기", dock), button(t("닫기"), dismiss)); overlay.append(bird, bubble); document.body.append(overlay);
       const skip = button(t("인사 건너뛰기"), () => opening.finish());
       skip.className = "ravi-arrival-skip"; skip.setAttribute("data-ravi-skip", "true"); overlay.append(skip);
       let landed = false;
@@ -148,6 +150,7 @@ export function createRaviAgentUI(api: { invoke: Invoke; keyed(): string | null;
         if (landed) return;
         landed = true; skip.hidden = true; bird.setAttribute("aria-label", t("라비와 이야기하기")); bubble.hidden = false; api.landed?.();
         timer = window.setTimeout(dismiss, 18000);
+        document.addEventListener("keydown", onEscape);
       };
       const opening = mountRaviOpening(bird, land);
       void api.invoke("companion_settings").then(value => opening.batterySaver(value?.settings?.battery === true)).catch(() => {});

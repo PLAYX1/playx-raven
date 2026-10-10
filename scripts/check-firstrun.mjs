@@ -32,7 +32,8 @@ function fixture({ keyed=false, restart=false, greetingOff=false, waiting=null }
     click(){this.onclick?.();}
   }
   const el=id=>{if(!nodes.has(id)){const n=new Element();n.id=id;}return nodes.get(id);};
-  const document={body:new Element('body'),documentElement:new Element('html'),activeElement:null,getElementById:id=>nodes.get(id)||null,createElement:tag=>new Element(tag),createTextNode:text=>({textContent:text}),addEventListener:(k,f)=>listeners.set(k,f),querySelector:()=>null};
+  const listen=(k,all)=>{if(!all.length){listeners.delete(k);return;}const d=e=>{for(const g of d.all)g(e);};d.all=all;listeners.set(k,d);};
+  const document={body:new Element('body'),documentElement:new Element('html'),activeElement:null,getElementById:id=>nodes.get(id)||null,createElement:tag=>new Element(tag),createTextNode:text=>({textContent:text}),addEventListener:(k,f)=>listen(k,[...(listeners.get(k)?.all||[]),f]),removeEventListener:(k,f)=>listen(k,(listeners.get(k)?.all||[]).filter(g=>g!==f)),querySelector:()=>null};
   for(const id of ['page-settings','page-wallet','ravi-tools','chat-log','ravi-panel','ravi-launcher','chat-q','ravi-new','ravi-chatwrap','ravi-expand','rv-header-ravi','ravi-open','ravi-menu-open','ravi-collapse','ravi-announcement'])document.body.append(el(id));
   const storage=new Map(restart?[['ravenvault-ravi-panel','{"open":true,"large":true}'],['rv-companion-page','ravi']]:[]);
   if(greetingOff)storage.set('rv-ravi-start-off','1');
