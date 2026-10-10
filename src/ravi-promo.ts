@@ -58,7 +58,7 @@ function templateShopPromo(shop: PromoShop, language: PromoLang): PromoDrafts {
     ja: { hello: "ご近所のみなさん、お立ち寄りください！", menu: "メニュー", hours: "営業時間", days: ["日", "月", "火", "水", "木", "金", "土"], tag: "#近所のお店" },
     zh: { hello: "邻居们，欢迎来看看！", menu: "菜单", hours: "营业时间", days: ["日", "一", "二", "三", "四", "五", "六"], tag: "#社区小店" },
   }[language];
-  const prices = shop.menu.slice(0, 3).map(m => `${m.name} ${m.price.toLocaleString("en-US", { maximumFractionDigits: 8 })}${shop.currency === "KRW" ? "원" : shop.currency ? ` ${shop.currency}` : ""}`).join(" · ");
+  const prices = shop.menu.slice(0, 3).map(m => `${m.name} ${new Intl.NumberFormat(language, { maximumFractionDigits: 8 }).format(m.price) /* 2026-10-11 en-US 고정 → 홍보문 언어의 숫자 형식(가격은 RVN 최소단위 8자리까지) */}${shop.currency === "KRW" ? "원" : shop.currency ? ` ${shop.currency}` : ""}`).join(" · ");
   const hours = shop.hours.map(h => `${labels.days[h.day]} ${h.open}–${h.close}`).join(" · ");
   const lines = [shop.name, shop.description, prices && `${labels.menu}: ${prices}`, hours && `${labels.hours}: ${hours}`].filter(Boolean);
   // For the short channel, add whole facts only: never cut a name or price in half.

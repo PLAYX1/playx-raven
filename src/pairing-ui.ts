@@ -11,6 +11,7 @@
  */
 import { invoke } from "@tauri-apps/api/core";
 import { copyHtml, setCopyText, t, tf } from "./i18n";
+import { setAmountRvn } from "./amount-ui";
 import "./pairing-ui.css";
 
 type Perms = { view: boolean; request: boolean; money: "desktop" | "phone"; daily_limit_rvn: number };
@@ -248,7 +249,7 @@ async function openRequest(id: string) {
     window.setTimeout(() => {
       const a = el("s-addr") as HTMLInputElement | null, q = el("s-qty") as HTMLInputElement | null;
       if (a && q) {
-        a.value = to; q.value = String(amount);
+        a.value = to; setAmountRvn(q, amount); // 지역 형식으로(de 「1,5」) — 글자 「1.5」를 넣으면 de 에서 막힌다
         a.dispatchEvent(new Event("input", { bubbles: true }));
         q.dispatchEvent(new Event("input", { bubbles: true }));
       }

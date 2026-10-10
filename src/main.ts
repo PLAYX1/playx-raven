@@ -257,6 +257,8 @@ import { listen } from "@tauri-apps/api/event";
 
 
 import { copyHtml, setCopyText, t, tf, lang, setLang, LANG_NAMES, startI18n } from "./i18n";
+import { amountProblemText, bindAmountInput, fmtCount, fmtRvn, fmtSats, readAmount, setAmountRvn, setAmountSats } from "./amount-ui";
+import { rvnNumberToSats, satsToRvnNumber } from "./amount-locale";
 import {
   issuedOf, looksLikeAddress, ownerRowsHtml, OWNER_NOT_PINNED, whoseHtml, whoseQuestion,
   type Issued, type OwnerRow, type WhoseResult,
@@ -416,8 +418,9 @@ function errText(e: unknown): string {
 function fmtQty(n: number): string {
   // 정수면 소수점을 붙이지 않는다. 고유 자산이 "1.00000000"으로 보이면
   // 이게 하나뿐인 물건이라는 사실이 숫자 뒤에 숨는다.
-  if (Number.isInteger(n)) return n.toLocaleString();
-  return String(parseFloat(n.toFixed(8)));
+  // 2026-10-11 — 화면 언어의 숫자 형식(de 「1.234,5」). 8자리 보존·0 아닌 값은 0 으로 안 보임(amount-locale.ts).
+  if (Number.isInteger(n)) return fmtCount(n);
+  return fmtRvn(n, { code: "" });
 }
 
 function fmtBytes(n: number): string {
@@ -1794,10 +1797,10 @@ async function paintSweepKrw(): Promise<void> {
       const inp = document.getElementById(inId) as HTMLInputElement | null;
       const out = document.getElementById(outId);
       if (!inp || !out) continue;
-      const n = Number(inp.value.trim());
+      const n = amountOrNaN(bindAmountInput(inp));
       out.textContent =
         inp.value.trim() && isFinite(n) && n > 0
-          ? tf("지금 시세로 약 {0}원", Math.round(n * rate).toLocaleString())
+          ? tf("지금 시세로 약 {0}원", fmtCount(Math.round(n * rate)))
           : "";
     }
   };
@@ -2576,7 +2579,7 @@ async function drawMoneyStatus(): Promise<void> {
 
   const w = s.wallet || {};
   const 지갑글 = w.state === "locked" ? "잠김" : w.state === "unlocked" ? "열림" : "암호 없음";
-  줄들.push(줄("지갑", `${지갑글} · ${Number(w.rvn || 0).toLocaleString()} RVN`,
+  줄들.push(줄("지갑", `${지갑글} · ${fmtRvn(Number(w.rvn || 0))}`,
                 w.state === "unlocked" ? "warn" : "good", String(w.why || "")));
 
   // 🔴 여기가 핵심이다.
@@ -2608,7 +2611,7 @@ async function refreshOverview() {
   $("rv-home-server-state").dataset.tone = !n ? "bad" : typeof progress !== "number" || !Number.isFinite(progress) || progress < 0.9999 ? "warn" : "good";
   const confirmed = wallet.status === "fulfilled" ? wallet.value?.confirmed : undefined;
   setCopyText($("overview-balance"), () => typeof confirmed === "number" && Number.isFinite(confirmed) && confirmed >= 0
-    ? `${confirmed.toLocaleString(lang, {maximumFractionDigits:8})} RVN` : t("확인 못 함"));
+    ? fmtRvn(confirmed) : t("확인 못 함"));
   $("overview-balance").classList.toggle("unknown", !(typeof confirmed === "number" && Number.isFinite(confirmed) && confirmed >= 0));
   /* 🔴 0.4.8-B — 방금 받은 10 RVN 이 여기서는 **0** 으로만 보였다(RV3 T04). 확정 잔액에 섞지는
      않는다(확인 전 돈을 쓸 수 있는 돈처럼 보이면 안 된다) — 옆에 「들어오는 중」으로 따로 적는다.
@@ -2617,7 +2620,7 @@ async function refreshOverview() {
   const row = document.getElementById("overview-incoming-row");
   const show = Number.isFinite(incoming) && incoming > 0;
   if (row) row.hidden = !show;
-  if (show) setCopyText($("overview-incoming"), () => `${incoming.toLocaleString(lang, { maximumFractionDigits: 8 })} RVN`);
+  if (show) setCopyText($("overview-incoming"), () => fmtRvn(incoming));
 }
 
 /** 라비 화면을 그린다. 상태가 바뀔 때마다 다시 부른다. */
@@ -4508,8 +4511,8 @@ async function paintOwed() {
       return;
     }
     box.style.display = "";
-    $("fee-owed").textContent = `${owed.toFixed(8).replace(/0+$/, "").replace(/\.$/, "")} RVN`;
-    $("fee-sent").textContent = `${sent.toFixed(8).replace(/0+$/, "").replace(/\.$/, "")} RVN`;
+    $("fee-owed").textContent = fmtRvn(owed);
+    $("fee-sent").textContent = fmtRvn(sent);
     const btn = $("fee-send") as HTMLButtonElement;
     // 🔴 못 보내는 이유를 눌러 보고 알게 하지 않는다. 미리 말한다.
     btn.disabled = !o.ready || owed < 0.01;
@@ -4720,7 +4723,7 @@ async function paintHomeToday(): Promise<void> {
     const cur = r?.currency ? " " + String(r.currency) : "";
     const money = doubtful
       ? t("매출 화면에서 확인")
-      : Number(r?.total || 0).toLocaleString(lang, { maximumFractionDigits: 2 }) + cur;
+      : fmtRvn(Number(r?.total || 0), { code: "", maxFraction: String(r?.currency || "") === "RVN" ? 8 : 2 }) + cur;
     const row = (label: string, value: string) =>
       `<div class="rv-home-entry"><span>${escapeHtml(label)}</span><b>${escapeHtml(value)}</b></div>`;
     body.innerHTML =
@@ -4767,7 +4770,7 @@ async function paintHome(): Promise<void> {
       const checks = Math.max(0, Number(tx.confirmations || 0));
       const state = checks >= 6 ? t("확인 완료") : tf("확인 중 {0}/6", checks);
       const when = Number(tx.time) > 0 ? new Date(Number(tx.time) * 1000).toLocaleString(lang, { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" }) : "";
-      return `<div class="rv-home-entry"><span class="rv-home-icon ${received ? "receive" : "send"}" aria-hidden="true">${received ? "↓" : "↑"}</span><span class="rv-home-tx-main">${copyHtml(received ? "받음" : "보냄")} · ${escapeHtml(String(tx.asset_name || "RVN"))}<small>${escapeHtml(when)} · ${escapeHtml(state)}</small></span><strong class="${received ? "ok" : ""}">${received ? "+" : "−"}${escapeHtml(Math.abs(amount).toLocaleString(lang))}</strong></div>`;
+      return `<div class="rv-home-entry"><span class="rv-home-icon ${received ? "receive" : "send"}" aria-hidden="true">${received ? "↓" : "↑"}</span><span class="rv-home-tx-main">${copyHtml(received ? "받음" : "보냄")} · ${escapeHtml(String(tx.asset_name || "RVN"))}<small>${escapeHtml(when)} · ${escapeHtml(state)}</small></span><strong class="${received ? "ok" : ""}">${received ? "+" : "−"}${escapeHtml(fmtRvn(Math.abs(amount), { code: "" }))}</strong></div>`;
     }).join("") || `<p>${copyHtml("최근 거래가 없습니다")}</p>`;
   } catch { $("rv-home-txs").textContent = t("거래 내역을 읽지 못했습니다"); }
   void paintHomeToday();
@@ -4919,14 +4922,14 @@ async function loadWallet() {
   void paintOwners();
   try {
     const b: any = await invoke("wallet_balance");
-    $("w-confirmed").textContent = `${b.confirmed.toLocaleString(undefined, { maximumFractionDigits: 8 })} RVN`;
+    $("w-confirmed").textContent = fmtRvn(b.confirmed);
     // Unconfirmed money is shown apart from spendable money on purpose: a shop
     // that ships on an unconfirmed payment can be paid with one that never lands.
     // 🔴 0.4.8-B — 「확인 대기 중」은 처음 쓰는 사람에게 「내 돈인지 아닌지」가 안 읽혔다(RV3 T04).
     //    「들어오는 중」으로 부르고, 언제 쓸 수 있게 되는지 한 줄을 붙인다. 합치지는 않는다.
     const incoming = Number(b.unconfirmed) > 0;
     setCopyText($("w-unconfirmed"), () => incoming
-      ? `${t("들어오는 중")} ${b.unconfirmed.toLocaleString(lang, { maximumFractionDigits: 8 })} RVN`
+      ? `${t("들어오는 중")} ${fmtRvn(b.unconfirmed)}`
       : "");
     $("w-incoming-note").hidden = !incoming;
   } catch (e) {
@@ -5022,7 +5025,7 @@ async function loadWallet() {
             ${addrLine}${noteLine}
             <div class="meta">${when}</div>
           </td>
-          <td class="num ${incoming ? "ok" : "danger"}">${amt.toLocaleString(undefined, { maximumFractionDigits: 8 })}</td>
+          <td class="num ${incoming ? "ok" : "danger"}">${fmtRvn(amt, { code: "" })}</td>
           <td class="num">${t.confirmations ?? 0}</td>
         </tr>`;
       })
@@ -7416,7 +7419,7 @@ async function swapMakeLot() {
 async function swapMakeOffer() {
   const asset = ($("sw-asset") as HTMLInputElement).value.trim();
   const amount = parseFloat(($("sw-amt") as HTMLInputElement).value) || 0;
-  const price = parseFloat(($("sw-price") as HTMLInputElement).value) || 0;
+  const price = amountOrNaN(bindAmountInput($("sw-price") as HTMLInputElement)) || 0;
   const box = $("sw-offer");
   if (!(await ensureUnlocked("제안에 서명하려면 지갑을 열어야 합니다."))) return;
   box.innerHTML = `<p class="meta">${copyHtml("만드는 중…")}</p>`;
@@ -7425,8 +7428,8 @@ async function swapMakeOffer() {
     box.innerHTML =
       `<div class="card" style="margin-top:12px">
          <h3>${copyHtml("제안을 만들었습니다")}</h3>
-         <div class="kv"><b>${copyHtml("파는 것")}</b><span>${escapeHtml(asset)} ${amount.toLocaleString()}${copyHtml("개")}</span></div>
-         <div class="kv"><b>${copyHtml("받을 돈")}</b><span>${price.toLocaleString()} RVN</span></div>
+         <div class="kv"><b>${copyHtml("파는 것")}</b><span>${escapeHtml(asset)} ${fmtQty(amount)}${copyHtml("개")}</span></div>
+         <div class="kv"><b>${copyHtml("받을 돈")}</b><span>${fmtRvn(price)}</span></div>
          <p class="meta">🔴 ${copyHtml("이 글자만으로는 아무 일도 안 일어납니다. 사는 사람이 RVN 을 붙여야 거래가 됩니다 — 그래서 아무 데나 보내셔도 됩니다.")}</p>
          <textarea readonly rows="3" id="sw-out">${escapeHtml(String(r.hex))}</textarea>
          <div class="row" style="margin-top:10px">
@@ -7457,11 +7460,11 @@ async function swapLook() {
     }
     box.innerHTML =
       `<div class="card" style="margin-top:12px">
-         <div class="kv"><b>${copyHtml("받는 것")}</b><span>${escapeHtml(String(r.asset))} ${Number(r.amount).toLocaleString()}${copyHtml("개")}</span></div>
-         <div class="kv"><b>${copyHtml("파는 사람에게")}</b><span>${Number(r.price).toLocaleString()} RVN</span></div>
-         <div class="kv"><b>${copyHtml("개발비 1%")}</b><span>${Number(r.fee || 0).toLocaleString()} RVN</span></div>
-         <div class="kv"><b>${copyHtml("모두")}</b><span><b>${Number(r.total || r.price).toLocaleString()} RVN</b></span></div>
-         <div class="kv"><b>${copyHtml("한 개당")}</b><span>${Number(r.each).toLocaleString()} RVN</span></div>
+         <div class="kv"><b>${copyHtml("받는 것")}</b><span>${escapeHtml(String(r.asset))} ${fmtQty(Number(r.amount))}${copyHtml("개")}</span></div>
+         <div class="kv"><b>${copyHtml("파는 사람에게")}</b><span>${fmtRvn(Number(r.price))}</span></div>
+         <div class="kv"><b>${copyHtml("개발비 1%")}</b><span>${fmtRvn(Number(r.fee || 0))}</span></div>
+         <div class="kv"><b>${copyHtml("모두")}</b><span><b>${fmtRvn(Number(r.total || r.price))}</b></span></div>
+         <div class="kv"><b>${copyHtml("한 개당")}</b><span>${fmtRvn(Number(r.each))}</span></div>
          <p class="meta">${copyHtml("한 거래 안에서 동시에 오갑니다. 먼저 보내지 않습니다.")}</p>
          <div class="row" style="margin-top:12px"><button id="sw-buy">${copyHtml("사기")}</button>
            <span class="meta" id="sw-note"></span></div>
@@ -7484,9 +7487,9 @@ async function swapBuy(hex: string, info: any) {
     const dry = await invoke<any>("swap_take", { hex, broadcast: false, passphrase: null });
     const ok = await sure(
       t("이대로 보낼까요?"),
-      tf("{0} {1}개를 받고 ", info.asset, Number(info.amount).toLocaleString()) +
-        tf("모두 {0} RVN 을 냅니다 ", Number(info.total || info.price).toLocaleString()) +
-        tf("(파는 사람 {0} · 개발비 {1}). ", Number(info.price).toLocaleString(), Number(info.fee || 0).toLocaleString()) +
+      tf("{0} {1}개를 받고 ", info.asset, fmtQty(Number(info.amount))) +
+        tf("모두 {0} RVN 을 냅니다 ", fmtRvn(Number(info.total || info.price), { code: "" })) +
+        tf("(파는 사람 {0} · 개발비 {1}). ", fmtRvn(Number(info.price), { code: "" }), fmtRvn(Number(info.fee || 0), { code: "" })) +
         tf("그 밖에 공개 장부 수수료 {0} RVN. 되돌릴 수 없습니다.", dry.fee)
     );
     if (!ok) { $("sw-note").textContent = ""; return; }
@@ -7561,7 +7564,7 @@ async function renderKinds() {
     .map(
       (k) => `<div class="choice${못내는이유(k) ? " blocked" : ""}" data-kind="${k.id}">
         <b>${k.name} <span class="form">${k.form}</span></b>
-        <span>${k.one_line} · <b>${tf("{0} RVN 소각", k.burn.toLocaleString())}</b></span>
+        <span>${k.one_line} · <b>${tf("{0} RVN 소각", fmtRvn(k.burn, { code: "" }))}</b></span>
         <div class="ex">
           ${k.examples
             .map((e: any) => `<div class="exrow"><b>${e.case}</b><span><code>${e.name}</code> — ${e.why}</span></div>`)
@@ -7687,7 +7690,7 @@ function wizGo(step: number) {
 
   if (wizStep === 5) renderSummary();
   const next = $("wz-next") as HTMLButtonElement;
-  next.textContent = wizStep === 5 ? tf("{0} RVN 소각하고 발행", burnNow().toLocaleString()) : "다음";
+  next.textContent = wizStep === 5 ? tf("{0} RVN 소각하고 발행", fmtRvn(burnNow(), { code: "" })) : "다음";
   wizGate();
 }
 
@@ -7921,7 +7924,7 @@ function renderSummary() {
   }
 
   const need = burnNow();
-  $("i-cost").innerHTML = `<div class="burn danger">${tf("{0} RVN 소각", need.toLocaleString())}</div>
+  $("i-cost").innerHTML = `<div class="burn danger">${tf("{0} RVN 소각", fmtRvn(need, { code: "" }))}</div>
     <div class="meta">소각된 RVN은 돌아오지 않습니다. 네트워크 수수료는 별도입니다.</div>
     <div class="meta" id="i-have">지갑 확인 중…</div>`;
   // 🔴 여기에 `issueCheck.name` 을 넣어 뒀었다. 즉 **정답을 칸 안에 흐리게
@@ -7943,8 +7946,8 @@ function renderSummary() {
       const have = b?.confirmed ?? 0;
       const ok = have >= need + 0.1;
       $("i-have").innerHTML = ok
-        ? tf("지갑에 {0} RVN 있습니다.", have.toLocaleString(undefined, { maximumFractionDigits: 2 }))
-        : `<span class="danger">${tf("지갑에 {0} RVN뿐입니다 — {1} RVN 더 넣으셔야 합니다.", have.toLocaleString(undefined, { maximumFractionDigits: 2 }), (need - have).toFixed(2))}</span>`;
+        ? tf("지갑에 {0} RVN 있습니다.", fmtRvn(have, { code: "" }))
+        : `<span class="danger">${tf("지갑에 {0} RVN뿐입니다 — {1} RVN 더 넣으셔야 합니다.", fmtRvn(have, { code: "" }), fmtSats((rvnNumberToSats(need) ?? 0n) - (rvnNumberToSats(have) ?? 0n), { code: "" }))}</span>`;
       // 🔴 여태 **나가는 돈만** 보여 줬다. 배당은 dry-run 으로 "무엇이
       // 어떻게 되는지" 를 강제로 보게 하는데, 발행은 소각량 한 줄뿐이었다.
       //
@@ -7952,8 +7955,7 @@ function renderSummary() {
       // 잘 모른다. **끝난 뒤의 모습**을 같이 보여 준다 — 그게 결정에 쓰이는
       // 숫자다. 그리고 되돌릴 수 없는 것을 그 옆에 나란히 적는다.
       const after = have - need;
-      const rvn = (n: number) =>
-        n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+      const rvn = (n: number) => fmtRvn(n, { code: "" });
       const forever: string[] = [tf("이름 「{0}」 은 영원히 바뀌지 않습니다", issueCheck?.name || "")];
       if (!re && wizKind !== "unique") {
         forever.push("재발행을 껐으므로 수량과 파일을 영원히 못 바꿉니다");
@@ -8019,7 +8021,7 @@ function renderSummary() {
       });
       // 이 단계의 「다음」은 되돌릴 수 없는 발행이다. 앞 단계들과 글자가
       // 같으면 손이 습관대로 누른다. 대가를 버튼 안에 둔다.
-      go.textContent = tf("발행하기 · {0} RVN 소각", need.toLocaleString(undefined, { maximumFractionDigits: 2 }));
+      go.textContent = tf("발행하기 · {0} RVN 소각", fmtRvn(need, { code: "" }));
     })
     .catch(() => {
       $("i-have").textContent = "";
@@ -8417,7 +8419,7 @@ async function doIssue() {
          <p class="meta">값을 넣으면 <b>rvn.ex.erci.se 상점</b>과
             <b>레이븐홀드 장터</b>에 함께 올라갑니다. 나중에 해도 됩니다.</p>
          <label>값 (RVN)</label>
-         <input id="sell-rvn" type="number" min="1" step="1" placeholder="예: 100" />
+         <input id="sell-rvn" type="text" inputmode="decimal" autocomplete="off" placeholder="예: 100" />
          <label>보여줄 이름</label>
          <input id="sell-title" type="text" maxlength="60" value="${escapeHtml(issueCheck.name)}" />
          <button id="sell-list" type="button">상점에 올리기</button>
@@ -8465,7 +8467,7 @@ function 바로팔기배선(asset: string, kind: string) {
   const btn = $("sell-list") as HTMLButtonElement | null;
   if (!btn) return;
   btn.onclick = async () => {
-    const rvn = parseFloat(($("sell-rvn") as HTMLInputElement).value);
+    const rvn = amountOrNaN(bindAmountInput($("sell-rvn") as HTMLInputElement));
     const title = ($("sell-title") as HTMLInputElement).value.trim();
     if (!Number.isFinite(rvn) || rvn <= 0) { 말("값을 넣어 주세요. 값 없는 물건은 상점에 못 세웁니다."); return; }
     if (!title) { 말("보여줄 이름을 넣어 주세요."); return; }
@@ -8609,7 +8611,7 @@ async function 지갑감시() {
   const 무엇 = 첫?.asset_name || "RVN";
   const 얼마 = Number(첫?.amount) || 0;
   const 더 = 들어온것.length > 1 ? tf(" 외 {0}건", 들어온것.length - 1) : "";
-  살짝알림(tf("{0} {1} 이 들어왔습니다{2}", 무엇, 얼마.toLocaleString(), 더));
+  살짝알림(tf("{0} {1} 이 들어왔습니다{2}", 무엇, fmtQty(얼마), 더));
 }
 
 /// 화면을 가리지 않고 알리는 한 줄. 확인을 누르게 하지 않는다 —
@@ -8711,9 +8713,11 @@ function paintSendFee(fee: any, amount: number, asset: string | null) {
   const feeBox = $("r-fee"), feeNote = $("r-feenote"), total = $("r-total");
   const known = !asset && fee && typeof fee.fee === "number" && Number.isFinite(fee.fee) && fee.short !== true;
   if (known) {
-    setCopyText(feeBox, () => `${fmtQty(fee.fee)} RVN`);
+    setCopyText(feeBox, () => fmtRvn(fee.fee));
     setCopyText(feeNote, () => t("서버가 지금 계산한 값이에요. 보낼 때 서버가 다시 계산해 아주 조금 다를 수 있어요."));
-    setCopyText(total, () => `${fmtQty(Number(fee.total ?? amount + fee.fee))} RVN`);
+    // 합계는 사토시로 더한다(0.1 + 0.2 ≠ 0.3). 노드가 준 합계가 있으면 그 값.
+    const sum = fee.total != null ? rvnNumberToSats(Number(fee.total)) : (rvnNumberToSats(amount) ?? 0n) + (rvnNumberToSats(fee.fee) ?? 0n);
+    setCopyText(total, () => (sum === null ? t(FEE_UNKNOWN) : fmtSats(sum)));
     return;
   }
   setCopyText(feeBox, () => t(FEE_UNKNOWN));
@@ -8730,13 +8734,35 @@ function composeChanged() {
     pickedAddr = "";
     $("s-addrnote").textContent = "";
   }
-  const qty = parseFloat(($("s-qty") as HTMLInputElement).value);
-  ($("s-review") as HTMLButtonElement).disabled = !(addr.length > 20 && qty > 0);
+  // 2026-10-11 — 금액은 화면 언어의 규칙으로만 읽는다. 모호하면(de 「1.234」) 값을 정하지 않고 막는다.
+  const qtyEl = $("s-qty") as HTMLInputElement;
+  const parsed = readAmount(qtyEl);
+  setCopyText($("s-qtynote"), () => (parsed.ok || parsed.problem === "empty" ? "" : amountProblemText(qtyEl, readAmount(qtyEl))));
+  ($("s-review") as HTMLButtonElement).disabled = !(addr.length > 20 && parsed.ok);
+}
+
+/** 금액 칸 → 노드에 넘길 수. 못 읽으면 NaN(부르는 쪽의 「금액을 확인」 안내가 그대로 막는다). */
+function amountOrNaN(el: HTMLInputElement): number {
+  const r = readAmount(el);
+  if (!r.ok) return NaN;
+  try { return satsToRvnNumber(r.sats); } catch { return NaN; }
 }
 
 async function reviewSend() {
   const address = ($("s-addr") as HTMLInputElement).value.trim();
-  const amount = parseFloat(($("s-qty") as HTMLInputElement).value);
+  const qtyEl = $("s-qty") as HTMLInputElement;
+  const parsedQty = readAmount(qtyEl);
+  if (!parsedQty.ok) {
+    setCopyText($("s-qtynote"), () => amountProblemText(qtyEl, readAmount(qtyEl)));
+    ($("s-review") as HTMLButtonElement).disabled = true;
+    return;
+  }
+  // 정수 사토시 → 노드 명령의 수. 이진 수로 정확히 못 담는 값이면 보내지 않는다.
+  let amount: number;
+  try { amount = satsToRvnNumber(parsedQty.sats); } catch {
+    setCopyText($("s-qtynote"), () => t("금액이 너무 커요."));
+    return;
+  }
   const asset = sendMode === "asset" ? ($("s-asset") as HTMLSelectElement).value : null;
 
   const btn = $("s-review") as HTMLButtonElement;
@@ -8777,12 +8803,12 @@ async function reviewSend() {
     : "";
 
   $("r-what").textContent = asset ?? "RVN";
-  $("r-amount").textContent = `${amount}${asset ? "" : " RVN"}`;
+  $("r-amount").textContent = asset ? fmtQty(amount) : fmtRvn(amount);
   setCopyText($("r-krw"), () => t("원화 환산 정보 없음"));
 
   const warns: string[] = [];
   if (!sendPreview.enough)
-    warns.push(tf("보유 {0}. 보내려는 {1}보다 적습니다.", sendPreview.held, amount));
+    warns.push(tf("보유 {0}. 보내려는 {1}보다 적습니다.", fmtQty(Number(sendPreview.held)), fmtQty(amount)));
   if (sendPreview.is_mine) warns.push("내 지갑끼리 옮기기예요. 돈은 그대로이고 수수료만 나가요.");
   if (라비가채운보내기 && !sendPreview.is_mine) warns.push(t("라비가 채운 주소입니다. 받을 분이 알려 준 주소와 끝까지 같은지 확인하세요."));
   $("r-warn").innerHTML = warns.length
@@ -8837,7 +8863,7 @@ async function reviewSend() {
   paintSendFee(fee, amount, asset);
   const won = amount * Number(rate?.rate);
   if (!asset && Number(rate?.rate) > 0 && Number.isFinite(won)) {
-    setCopyText($("r-krw"), () => tf("지금 시세로 약 {0}원", Math.round(won).toLocaleString(lang)));
+    setCopyText($("r-krw"), () => tf("지금 시세로 약 {0}원", fmtCount(Math.round(won))));
   }
   const needPass = lock && lock.encrypted && !lock.unlocked;
   $("r-passbox").style.display = needPass ? "" : "none";
@@ -10125,11 +10151,11 @@ function applyActions(actions: any[], typed = ""): string[] {
             await openSend(asset ? "asset" : "rvn", asset || undefined);
             라비가채운보내기 = true;
             ($("s-addr") as HTMLInputElement).value = to;
-            ($("s-qty") as HTMLInputElement).value = String(amt);
+            setAmountRvn($("s-qty") as HTMLInputElement, amt);
             composeChanged();
             await reviewSend();
           })();
-          done.push(tf("보내기 확인 화면을 열었습니다 — {0} {1}, 누르는 것은 사장님입니다", String(amt), asset || "RVN"));
+          done.push(tf("보내기 확인 화면을 열었습니다 — {0} {1}, 누르는 것은 사장님입니다", fmtQty(amt), asset || "RVN"));
           break;
         }
         // 🔴 환불은 **창만 채워 연다.** 대상은 사장님 장부에서 온 번호(r1…)만 받고 금액도 장부 값이다.
@@ -10759,7 +10785,7 @@ async function rhPaint(): Promise<void> {
     $("rh-out").innerHTML = st?.running
       ? `<div class="rhbadge">연습 중</div>
          <div class="meta" style="margin-top:6px">
-           ${tf("연습용 돈 {0} RVN · 만들어 본 자산 {1}개", Number(st.balance || 0).toLocaleString(undefined, { maximumFractionDigits: 0 }), st.assets || 0)}
+           ${tf("연습용 돈 {0} RVN · 만들어 본 자산 {1}개", fmtRvn(Number(st.balance || 0), { code: "" }), st.assets || 0)}
          </div>`
       : "";
   } catch {
@@ -10797,7 +10823,7 @@ function wireRehearse(): void {
       });
       // ⚠️ 여기서 "발행했습니다" 라고만 쓰면 진짜와 헷갈린다. 연습이라고 적는다.
       await rhSay(
-        tf("연습으로 만들었습니다. 진짜로 하시면 이대로 됩니다. (연습용 잔액 {0} RVN)", Number(r?.balance || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })),
+        tf("연습으로 만들었습니다. 진짜로 하시면 이대로 됩니다. (연습용 잔액 {0} RVN)", fmtRvn(Number(r?.balance || 0), { code: "" })),
       );
       await rhPaint();
     } catch (e) {
@@ -12472,7 +12498,7 @@ async function sellRate() {
 async function listOffer() {
   if (!sellTarget) return;
   const qty = parseFloat(($("sl-qty") as HTMLInputElement).value);
-  const price = parseFloat(($("sl-price") as HTMLInputElement).value);
+  const price = amountOrNaN(bindAmountInput($("sl-price") as HTMLInputElement));
   if (!(qty > 0) || !(price > 0)) {
     $("sl-note").textContent = "수량과 가격을 넣어 주세요";
     return;
@@ -13130,8 +13156,8 @@ async function toggleAuto() {
     const ex = await invoke<any>("exposure").catch(() => null);
     // 조언이 아니라 숫자로 보여준다.
     $("vd-autonote").innerHTML = ex
-      ? `이 컴퓨터에 <b>${ex.rvn.toLocaleString()} RVN</b>` +
-        (ex.krw ? tf(" (약 {0}원)", Math.round(ex.krw).toLocaleString()) : "") +
+      ? `이 컴퓨터에 <b>${fmtRvn(ex.rvn)}</b>` +
+        (ex.krw ? tf(" (약 {0}원)", fmtCount(Math.round(ex.krw))) : "") +
         ` 있습니다. 털리면 이만큼입니다.`
       : "";
   } catch (e) {
@@ -13271,10 +13297,10 @@ async function doRefund(payAddress: string, suggested: number, boxId = "or-refun
   box.innerHTML =
     `<div class="card" style="margin-top:12px">
        <h3>${copyHtml("환불하기")}</h3>
-       <p class="meta">${copyHtml("받은 금액은")} ${suggested} RVN ${copyHtml("입니다. 일부만 돌려주시려면 더 적게 넣으세요.")}</p>
+       <p class="meta">${copyHtml("받은 금액은")} ${escapeHtml(fmtRvn(suggested))} ${copyHtml("입니다. 일부만 돌려주시려면 더 적게 넣으세요.")}</p>
        <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
          <label class="meta" for="rf-amt">${copyHtml("얼마를 돌려드릴까요? (RVN)")}</label>
-         <input id="rf-amt" inputmode="decimal" value="${suggested}" />
+         <input id="rf-amt" inputmode="decimal" />
          <label class="meta" for="rf-to">${copyHtml("어느 주소로 돌려드릴까요?")}</label>
          <input id="rf-to" placeholder="R..." autocomplete="off" spellcheck="false" />
          <p class="meta" id="rf-fromsay">${copyHtml("보낸 주소를 찾는 중…")}</p>
@@ -13293,6 +13319,7 @@ async function doRefund(payAddress: string, suggested: number, boxId = "or-refun
          <span class="meta" id="rf-say"></span>
        </div>
      </div>`;
+  setAmountRvn(bindAmountInput($("rf-amt") as HTMLInputElement), suggested);
   ($("rf-to") as HTMLInputElement).focus();
 
   // 🔴 대표님: "상대방 지갑주소가 안 보이던데."
@@ -13328,7 +13355,13 @@ async function doRefund(payAddress: string, suggested: number, boxId = "or-refun
     box.innerHTML = "";
   });
   $("rf-go").addEventListener("click", async () => {
-    const amount = parseFloat(($("rf-amt") as HTMLInputElement).value);
+    const rfEl = $("rf-amt") as HTMLInputElement;
+    const rfParsed = readAmount(rfEl);
+    if (!rfParsed.ok && rfParsed.problem !== "empty") {
+      $("rf-say").innerHTML = `<span class="danger">${escapeHtml(amountProblemText(rfEl, rfParsed))}</span>`;
+      return;
+    }
+    const amount = amountOrNaN(rfEl);
     const to = ($("rf-to") as HTMLInputElement).value.trim();
     const reason = ($("rf-why") as HTMLInputElement).value.trim();
     const pass = needPass ? ($("rf-pass") as HTMLInputElement).value : null;
@@ -13344,7 +13377,7 @@ async function doRefund(payAddress: string, suggested: number, boxId = "or-refun
     // 🔴 **되돌릴 수 없다.** 주소와 금액을 그대로 다시 보여 주고 묻는다.
     const ok = await sure(
       t("이 주소로 보낼까요?"),
-      `${amount} RVN\n${to}\n\n${t("보내면 되돌릴 수 없습니다.")}`,
+      `${fmtRvn(amount)}\n${to}\n\n${t("보내면 되돌릴 수 없습니다.")}`,
     );
     if (!ok) return;
     const b = $("rf-go") as HTMLButtonElement;
@@ -13359,7 +13392,7 @@ async function doRefund(payAddress: string, suggested: number, boxId = "or-refun
       });
       box.innerHTML =
         `<div class="card" style="margin-top:12px"><h3>${copyHtml("환불했습니다")}</h3>
-         <div class="kv"><b>${copyHtml("금액")}</b><span>${r.amount} RVN</span></div>
+         <div class="kv"><b>${copyHtml("금액")}</b><span>${escapeHtml(fmtRvn(Number(r.amount)))}</span></div>
          <div class="kv"><b>${copyHtml("거래 번호")}</b><code class="addr">${escapeHtml(String(r.txid))}</code></div></div>`;
       loadWallet();
       try { await onDone?.(); } catch { /* 환불은 나갔다. 표시만 못 했으면 다음에 다시 보인다. */ }
@@ -13997,7 +14030,7 @@ function rwArgs(dry: boolean) {
     asset: ($("rw-asset") as HTMLInputElement).value.trim(),
     height: Number(($("rw-height") as HTMLInputElement).value),
     payWith: ($("rw-pay") as HTMLInputElement).value.trim(),
-    amount: parseFloat(($("rw-amt") as HTMLInputElement).value),
+    amount: amountOrNaN(bindAmountInput($("rw-amt") as HTMLInputElement)),
     skip: ($("rw-skip") as HTMLInputElement).value
       .split(",")
       .map((x) => x.trim())
@@ -14171,8 +14204,10 @@ async function loadSweep() {
     const on = !!s?.enabled && !!s?.to;
     if (on) {
       (($("sw-to") as HTMLInputElement).value ||= String(s.to || ""));
-      (($("sw-above") as HTMLInputElement).value ||= String(s.above ?? ""));
-      (($("sw-keep") as HTMLInputElement).value ||= String(s.keep ?? ""));
+      // 저장된 값(수)은 이 언어의 입력 글자로 넣는다(de 「3000,5」). 「String(수)」의 점은 de 에서 막힌다.
+      const aboveEl = bindAmountInput($("sw-above") as HTMLInputElement), keepEl = bindAmountInput($("sw-keep") as HTMLInputElement);
+      if (!aboveEl.value && s.above != null) setAmountRvn(aboveEl, Number(s.above));
+      if (!keepEl.value && s.keep != null) setAmountRvn(keepEl, Number(s.keep));
     }
     $("sw-state").innerHTML = on
       ? `켜져 있습니다 — <b>${fmtQty(Number(s.above))} RVN</b> 을 넘으면 ` +
@@ -14185,8 +14220,17 @@ async function loadSweep() {
 
 async function saveSweep(enabled: boolean) {
   const to = ($("sw-to") as HTMLInputElement).value.trim();
-  const above = parseFloat(($("sw-above") as HTMLInputElement).value);
-  const keep = parseFloat(($("sw-keep") as HTMLInputElement).value);
+  // 🔴 2026-10-11 — 여태 parseFloat 였다: de 에서 「3.000」(삼천)이 3 으로 읽혀 3 RVN 넘으면 쓸어 갔다.
+  //    켤 때는 두 칸 다 이 언어 규칙으로 정확히 읽혀야 한다. 못 읽으면 저장하지 않는다(0 으로 바꾸지 않는다).
+  const aboveEl = bindAmountInput($("sw-above") as HTMLInputElement), keepEl = bindAmountInput($("sw-keep") as HTMLInputElement);
+  if (enabled) {
+    for (const el of [aboveEl, keepEl]) {
+      const r = readAmount(el);
+      if (!r.ok && !(r.problem === "zero" && el === keepEl)) { $("sw-note").textContent = amountProblemText(el, r); el.focus(); return; }
+    }
+  }
+  const above = amountOrNaN(aboveEl);
+  const keep = keepEl.value.trim() && readAmount(keepEl).ok ? amountOrNaN(keepEl) : 0;
   $("sw-note").textContent = enabled ? "확인 중…" : "끄는 중…";
   try {
     // 끌 때는 주소를 검사하지 않는다 — 잘못 저장해 둔 주소 때문에 끌 수조차
@@ -17562,9 +17606,13 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("rv-send-request").onclick = () => { $("rv-send-card").hidden = false; $("rv-send-to").focus(); };
   $("rv-send-close").onclick = () => { $("rv-send-card").hidden = true; raviHome?.open(); };
   ["rv-send-to", "rv-send-amount"].forEach(id => $(id).addEventListener("input", () => { $("rv-send-continue").hidden = true; $("rv-send-summary").textContent = ""; }));
+  bindAmountInput($("rv-send-amount") as HTMLInputElement);
   $("rv-send-check").onclick = async () => {
     const address = ($("rv-send-to") as HTMLInputElement).value.trim();
-    const amount = Number(($("rv-send-amount") as HTMLInputElement).value);
+    const amountEl = $("rv-send-amount") as HTMLInputElement;
+    const parsedAmount = readAmount(amountEl);
+    if (!parsedAmount.ok && parsedAmount.problem !== "empty") { $("rv-send-summary").textContent = amountProblemText(amountEl, parsedAmount); return; }
+    const amount = amountOrNaN(amountEl);
     if (!address || !Number.isFinite(amount) || amount <= 0) { $("rv-send-summary").textContent = t("받는 주소와 금액을 확인해 주세요"); return; }
     try {
       const preview = await invoke<any>("preview_send", { address, asset: null, amount });
@@ -17572,17 +17620,18 @@ window.addEventListener("DOMContentLoaded", async () => {
       const fee = await invoke<any>("send_fee", { address, amount });
       if (typeof fee?.fee !== "number" || fee.short) { $("rv-send-summary").textContent = t("수수료를 확인하지 못했습니다. 지갑 화면에서 다시 시도해 주세요"); return; }
       const name = payeeName(address) || t("이름 없음");
-      $("rv-send-summary").textContent = `${t("받는 사람")}: ${name} · ${amount} RVN · ${t("수수료")}: ${fee.fee} RVN`;
+      $("rv-send-summary").textContent = `${t("받는 사람")}: ${name} · ${fmtRvn(amount)} · ${t("수수료")}: ${fmtRvn(fee.fee)}`;
       $("rv-send-continue").hidden = false;
     } catch (e) { $("rv-send-summary").textContent = errText(e); }
   };
   $("rv-send-continue").onclick = async () => {
     const address = ($("rv-send-to") as HTMLInputElement).value.trim();
-    const amount = ($("rv-send-amount") as HTMLInputElement).value;
+    // 글자가 아니라 받아들인 사토시를 넘긴다(두 칸이 같은 언어여도 재해석 여지를 없앤다).
+    const parsedAmount = readAmount($("rv-send-amount") as HTMLInputElement);
     showPage("wallet");
     await openSend("rvn");
     ($("s-addr") as HTMLInputElement).value = address;
-    ($("s-qty") as HTMLInputElement).value = amount;
+    setAmountSats($("s-qty") as HTMLInputElement, parsedAmount.ok ? parsedAmount.sats : null);
     composeChanged();
     $("rv-send-card").hidden = true;
     // The original review recalculates fee and requires the owner's existing confirmation.
@@ -17704,6 +17753,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("w-send-asset").addEventListener("click", () => void openSend("asset"));
   $("w-send-rvn").addEventListener("click", () => void openSend("rvn"));
   $("s-cancel").addEventListener("click", closeSend);
+  bindAmountInput($("s-qty") as HTMLInputElement);
   ["s-addr", "s-qty"].forEach((id) => $(id).addEventListener("input", composeChanged));
   $("s-review").addEventListener("click", reviewSend);
   $("r-addr").addEventListener("copy", (event) => {
