@@ -1,0 +1,19 @@
+{
+  "_note": "유럽어 길이 시험용 초안(원어민 미검수, 앱에 싣지 않음). 존칭은 ~/rv-i18n/STYLE.md §2 — 돈·보안 안내는 de Sie · ru вы.",
+  "de": {
+    "worried": "Der Node antwortet nicht. Die Bestätigung von Zahlungseingängen kann sich verzögern.",
+    "calm": "Bitte prüfen Sie vor dem Senden noch einmal die Adresse und den Betrag.",
+    "apologetic": "Entschuldigung, die Verbindung ist instabil. Bitte prüfen Sie Ihre Internetverbindung und versuchen Sie es erneut.",
+    "happy": "Der Zahlungseingang wurde bestätigt.",
+    "celebrate": "Ihr erster Verkauf! Herzlichen Glückwunsch.",
+    "puzzled": "Das weiß ich leider nicht genau. Was ich nicht weiß, erfinde ich nicht."
+  },
+  "ru": {
+    "worried": "Узел не отвечает. Подтверждение поступлений может задержаться.",
+    "calm": "Перед отправкой ещё раз проверьте адрес и сумму.",
+    "apologetic": "Извините, соединение нестабильно. Проверьте подключение к интернету и попробуйте ещё раз.",
+    "happy": "Поступление подтверждено.",
+    "celebrate": "Ваша первая продажа! Поздравляю.",
+    "puzzled": "Этого я точно не знаю. То, чего не знаю, я не придумываю."
+  }
+}

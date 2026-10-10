@@ -29,6 +29,7 @@
     "test": "node --test scripts/opening.test.mjs scripts/sales-account.test.mjs scripts/release-manifest.test.mjs scripts/verify-published-release.test.mjs scripts/signed-release-metadata.test.mjs scripts/desktop-ui-browser.test.mjs scripts/creator-publish.test.mjs scripts/creator-publish-browser.test.mjs scripts/name-lookup.test.mjs scripts/signed-lists-browser.test.mjs scripts/memory-budget-browser.test.mjs",
     "test:memory": "node --test scripts/memory-budget-browser.test.mjs",
     "measure:memory": "node scripts/measure-memory.mjs",
+    "check:ravi-emotion": "node --test --test-concurrency=1 scripts/ravi-emotion.test.mjs scripts/ravi-emotion-gallery.mjs scripts/ravi-emotion-app-browser.test.mjs",
     "check:home-browser": "npm run build && node scripts/check-home-browser.mjs"
   },
   "dependencies": {

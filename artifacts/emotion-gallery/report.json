@@ -1,0 +1,74 @@
+{
+  "cases": [
+    {
+      "theme": "light",
+      "reduced": false,
+      "png": "gallery-light-motion.png",
+      "bubbles": 42,
+      "minContrast": 18.04,
+      "minGlyph": 5.01,
+      "overflow": [],
+      "clipped": [],
+      "emotionInfinite": 0,
+      "transformAnimsWhileMoving": 30
+    },
+    {
+      "theme": "light",
+      "reduced": true,
+      "png": "gallery-light-reduced.png",
+      "bubbles": 42,
+      "minContrast": 18.04,
+      "minGlyph": 5.01,
+      "overflow": [],
+      "clipped": [],
+      "emotionInfinite": 0,
+      "transformAnimsWhileMoving": 0
+    },
+    {
+      "theme": "dark",
+      "reduced": false,
+      "png": "gallery-dark-motion.png",
+      "bubbles": 42,
+      "minContrast": 15.44,
+      "minGlyph": 7.53,
+      "overflow": [],
+      "clipped": [],
+      "emotionInfinite": 0,
+      "transformAnimsWhileMoving": 30
+    },
+    {
+      "theme": "dark",
+      "reduced": true,
+      "png": "gallery-dark-reduced.png",
+      "bubbles": 42,
+      "minContrast": 15.44,
+      "minGlyph": 7.53,
+      "overflow": [],
+      "clipped": [],
+      "emotionInfinite": 0,
+      "transformAnimsWhileMoving": 0
+    }
+  ],
+  "eu": [
+    {
+      "locale": "de",
+      "png": "long-de.png",
+      "overflow": [],
+      "clipped": [],
+      "minContrast": 18.04
+    },
+    {
+      "locale": "ru",
+      "png": "long-ru.png",
+      "overflow": [],
+      "clipped": [],
+      "minContrast": 18.04
+    }
+  ],
+  "faces": [
+    "faces-light.png",
+    "faces-dark.png",
+    "ladder.png",
+    "ladder-small-4x.png"
+  ]
+}
