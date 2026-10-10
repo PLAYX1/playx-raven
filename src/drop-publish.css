@@ -52,6 +52,9 @@
 .dp-zone-icon { font-size: 2rem; line-height: 1; color: var(--text); }
 .dp-zone-h { font-size: var(--dp-font-l); font-weight: 700; line-height: 1.3; }
 .dp-zone-say { color: var(--muted); max-width: 46ch; }
+/* 끌어놓기 칸·「자세히」 단추 글은 낱말 안에서 끊지 않는다(레이아웃 관문 word-split, 320px). 다른 단추·알약은
+   긴 자산 이름(RV.M.…)이 넘치지 않게 anywhere 를 그대로 둔다 — 전부 keep-all 로 바꾸면 이름 줄이 화면 밖으로 밀린다. */
+.dp #dp-detail, .dp .dp-zone, .dp .dp-zone * { word-break: keep-all; overflow-wrap: break-word; }
 .dp .dp-zone[aria-busy="true"] { border-style: solid; border-color: var(--text); }
 .dp-paste { margin-top: var(--dp-gap-2); }
 
