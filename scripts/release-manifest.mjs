@@ -63,7 +63,7 @@ export async function prepareRelease(source, destination, version, statementDire
     }
   }
   const base = `https://raw.githubusercontent.com/PLAYX1/playx-raven-releases/dist/v${version}`;
-  const manifest = { version, notes: `RavenVault Desktop ${version} — 게임 판매 대금 받기: 비밀번호 재인증 후 판매 전용 xpub·QR·처음 주소 3개 표시, 1분 자동 숨김, 기본 주소 100개의 확정 금액 조회, 내 지갑으로 옮기기 안내. 라비 스토리를 기본 브라우저에서 엽니다. 서명된 업데이트 버전·해시·순서 검증을 유지합니다.`, pub_date: new Date().toISOString(), platforms: {}, installers: [] };
+  const manifest = { version, notes: `RavenVault Desktop ${version} — 게임 탭의 라비 스토리 카드 글자가 보이도록 고쳤습니다. 게임 판매 대금 받기는 설정의 「판매자 기능」을 켠 경우에만 나타납니다(기본 꺼짐). 어두운 화면의 단추 글자 대비를 높였습니다. 서명된 업데이트 버전·해시·순서 검증을 유지합니다.`, pub_date: new Date().toISOString(), platforms: {}, installers: [] };
   const needsStatement = compare(version, '0.8.4') >= 0;
   if (needsStatement) {
     const config = JSON.parse(await readFile(new URL('../src-tauri/tauri.conf.json', import.meta.url),'utf8'));
