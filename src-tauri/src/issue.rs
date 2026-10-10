@@ -153,20 +153,86 @@ pub fn validate_name(name: String) -> Value {
     })
 }
 
+/// 이름 조회의 세 가지 답. **「비어 있음」은 노드가 정상으로 「없다」고 답했을 때만이다.**
+///
+/// 🔴 예전에는 노드 오류 문구에 `Invalid` 나 `not found` 가 들어 있으면 「비어 있음」으로
+///    답했다. 그런데 노드 오류는 「없음」이 아니라 **「모름」**이다 — 동기화 중·색인 꺼짐·
+///    시간 초과·이상한 이름 모두 오류로 온다. 모름이 「비어 있음」으로 새면 이미 있는
+///    이름으로 발행을 시도하는 문이 열린다(소각만 하고 실패하거나, 화면이 「써도 된다」고 거짓말).
+///    그래서 셋으로 나눈다: 있음(`Taken`)·없음(`Free`)·모름(`Unknown`). 모름이면 발행을 막는다.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NameLookup {
+    Taken,
+    Free,
+    Unknown,
+}
+
+/// 「모름」일 때 화면에 보이는 한 줄(원인 → 다음 행동). 노드 원문 오류는 싣지 않는다.
+pub const NAME_UNKNOWN_SAY: &str =
+    "확인 불가: 이 이름이 체인에 이미 있는지 노드에 묻지 못했어요. 노드가 다 따라잡았는지 확인한 뒤 「다시 조회」를 눌러 주세요.";
+
+/// 노드가 장부를 끝까지 따라잡았나 — 「없음」을 믿어도 되는 조건.
+///
+/// `getassetdata` 는 노드가 **지금까지 읽은 블록**만 안다. 따라잡는 중인 노드의 「없음」은
+/// 「아직 못 읽었음」일 수 있다. 첫 동기화가 끝났고(`initialblockdownload == false`),
+/// 받은 머리글까지 블록을 다 읽었을 때(`blocks == headers`)만 믿는다.
+pub(crate) fn chain_caught_up(info: &Value) -> bool {
+    info.get("initialblockdownload") == Some(&Value::Bool(false))
+        && info["blocks"].as_u64().is_some_and(|b| b > 0)
+        && info["blocks"].as_u64() == info["headers"].as_u64()
+}
+
+/// 노드 답 두 개(장부 상태·`getassetdata`)를 셋 중 하나로 엄격히 나눈다. 순수 함수 — 시험이 여기만 본다.
+///
+/// - 결과가 객체이고 `name` 이 묻는 이름과 **정확히** 같다 → `Taken`(동기화와 무관: 있다는 것은 확실하다).
+/// - 결과가 `null` 이고 노드가 다 따라잡았다 → `Free`. 이것만이 「알려진 정상 없음 응답」이다.
+/// - 그 밖의 전부(오류 문구가 무엇이든·빈 답·다른 이름·숫자/문자열/배열·동기화 중·장부 상태를 못 읽음) → `Unknown`.
+pub(crate) fn classify_name_answer(
+    name: &str,
+    chain: Result<&Value, &str>,
+    answer: Result<&Value, &str>,
+) -> NameLookup {
+    match answer {
+        Ok(Value::Object(o)) => match o.get("name").and_then(Value::as_str) {
+            Some(n) if n == name => NameLookup::Taken,
+            _ => NameLookup::Unknown,
+        },
+        Ok(Value::Null) => match chain {
+            Ok(info) if chain_caught_up(info) => NameLookup::Free,
+            _ => NameLookup::Unknown,
+        },
+        Ok(_) | Err(_) => NameLookup::Unknown,
+    }
+}
+
+/// 노드에 묻는다: 장부 상태(`getblockchaininfo`) + 자산 자료(`getassetdata`).
+pub async fn lookup_name(name: &str) -> NameLookup {
+    if name.is_empty() || name.len() > 64 {
+        return NameLookup::Unknown;
+    }
+    let chain = call_rpc("getblockchaininfo", json!([])).await;
+    let answer = call_rpc("getassetdata", json!([name])).await;
+    classify_name_answer(
+        name,
+        chain.as_ref().map_err(String::as_str),
+        answer.as_ref().map_err(String::as_str),
+    )
+}
+
 /// Has someone already taken this name?
 ///
 /// Asset names are permanent and global. A name that exists cannot be issued
 /// again by anyone, so this has to be checked against the chain rather than
 /// guessed.
+///
+/// 화면 약속(바꾸지 않음): `true` = 있음, `false` = 없음, **오류 = 확인 불가**.
+/// 확인 불가를 `false` 로 바꾸어 넘기지 않는다(`lookup_name` 참고).
 #[tauri::command]
 pub async fn name_taken(name: String) -> Result<bool, String> {
-    match call_rpc("getassetdata", json!([name])).await {
-        // A result means the asset exists.
-        Ok(v) => Ok(!v.is_null()),
-        // The node answers with an error for names it has never seen, which is
-        // the answer we want rather than a failure.
-        Err(e) if e.contains("not found") || e.contains("Invalid") => Ok(false),
-        Err(e) => Err(e),
+    match lookup_name(&name).await {
+        NameLookup::Taken => Ok(true),
+        NameLookup::Free => Ok(false),
+        NameLookup::Unknown => Err(NAME_UNKNOWN_SAY.into()),
     }
 }
 
@@ -218,8 +284,13 @@ pub async fn issue_asset(
         _ => {}
     }
 
-    if name_taken(name.clone()).await.unwrap_or(false) {
-        return Err("이미 존재하는 이름입니다. 자산 이름은 영구적이라 다시 쓸 수 없습니다.".into());
+    // 🔴 「모름」을 「없음」으로 넘기지 않는다(예전 `.unwrap_or(false)`). 모르면 발행하지 않는다.
+    match lookup_name(&name).await {
+        NameLookup::Free => {}
+        NameLookup::Taken => {
+            return Err("이미 존재하는 이름입니다. 자산 이름은 영구적이라 다시 쓸 수 없습니다.".into())
+        }
+        NameLookup::Unknown => return Err(NAME_UNKNOWN_SAY.into()),
     }
 
     // 🔴 주인 표 자리는 보내기 **전에** 읽는다(읽기만, 실패해도 막지 않는다).
@@ -324,5 +395,120 @@ mod name_tests {
             body.contains("qualifier") && body.contains("restricted"),
             "평범한 발행 문이 자격 증명·제한 자산을 안 막고 있다"
         );
+    }
+}
+
+#[cfg(test)]
+mod name_lookup_tests {
+    use super::{chain_caught_up, classify_name_answer, NameLookup};
+    use serde_json::{json, Value};
+
+    fn synced() -> Value {
+        json!({"chain":"main","initialblockdownload":false,"blocks":3_500_000,"headers":3_500_000})
+    }
+
+    /// 🔴 고친 결함: 오류 문구에 「Invalid」「not found」가 들어 있으면 「비어 있음」이었다.
+    ///    어떤 문구든 오류는 **모름**이다.
+    #[test]
+    fn 오류_문구는_무엇이든_모름이다() {
+        let info = synced();
+        for e in [
+            "getassetdata: Invalid asset name",
+            "getassetdata: Asset not found",
+            "not found",
+            "Invalid",
+            "INVALID",
+            "getassetdata: invalid parameter",
+            "서버가 20초 안에 답하지 않았습니다 (getassetdata). 따라잡는 중이거나 바쁠 수 있습니다.",
+            "서버에 닿지 못했습니다 (http://127.0.0.1:8766): connection refused",
+            "Node returned something that is not JSON: EOF",
+            "getassetdata: response had no result",
+            "자산 색인이 꺼져 있습니다.",
+            "",
+        ] {
+            assert_eq!(
+                classify_name_answer("RV.M.FOREST", Ok(&info), Err(e)),
+                NameLookup::Unknown,
+                "{e:?} 를 모름으로 보지 않았다"
+            );
+        }
+    }
+
+    #[test]
+    fn 정상_없음만_비어_있음이다() {
+        assert_eq!(classify_name_answer("RV.M.FOREST", Ok(&synced()), Ok(&Value::Null)), NameLookup::Free);
+    }
+
+    #[test]
+    fn 이름이_같은_자료면_있음이다() {
+        let data = json!({"name":"RV.M.FOREST","amount":1,"units":0,"reissuable":1,"has_ipfs":1,"ipfs_hash":"Qm"});
+        assert_eq!(classify_name_answer("RV.M.FOREST", Ok(&synced()), Ok(&data)), NameLookup::Taken);
+        // 있다는 것은 동기화 중이어도 확실하다.
+        let syncing = json!({"initialblockdownload":true,"blocks":10,"headers":3_500_000});
+        assert_eq!(classify_name_answer("RV.M.FOREST", Ok(&syncing), Ok(&data)), NameLookup::Taken);
+        assert_eq!(classify_name_answer("RV.M.FOREST", Err("down"), Ok(&data)), NameLookup::Taken);
+    }
+
+    /// 빈 답·형식 이상·다른 이름은 「있음」도 「없음」도 아니다.
+    #[test]
+    fn 형식_이상과_빈_답은_모름이다() {
+        let info = synced();
+        for v in [
+            json!({}),
+            json!({"name":"RV.M.FORES"}),
+            json!({"name":"rv.m.forest"}),
+            json!({"name":null}),
+            json!({"name":7}),
+            json!(""),
+            json!("RV.M.FOREST"),
+            json!(0),
+            json!(false),
+            json!([]),
+            json!([{"name":"RV.M.FOREST"}]),
+        ] {
+            assert_eq!(classify_name_answer("RV.M.FOREST", Ok(&info), Ok(&v)), NameLookup::Unknown, "{v} 를 모름으로 보지 않았다");
+        }
+    }
+
+    /// 따라잡는 중인 노드의 「없음」은 「아직 못 읽음」일 수 있다.
+    #[test]
+    fn 노드가_덜_따라잡았으면_없음도_모름이다() {
+        for info in [
+            json!({"initialblockdownload":true,"blocks":3_500_000,"headers":3_500_000}),
+            json!({"initialblockdownload":false,"blocks":3_499_999,"headers":3_500_000}),
+            json!({"initialblockdownload":false,"blocks":0,"headers":0}),
+            json!({"initialblockdownload":"false","blocks":5,"headers":5}),
+            json!({"blocks":5,"headers":5}),
+            json!({"initialblockdownload":false,"blocks":5}),
+            json!({"initialblockdownload":false,"blocks":"5","headers":"5"}),
+            json!(null),
+        ] {
+            assert!(!chain_caught_up(&info), "{info} 를 다 따라잡았다고 봤다");
+            assert_eq!(classify_name_answer("RV.M.FOREST", Ok(&info), Ok(&Value::Null)), NameLookup::Unknown, "{info}");
+        }
+        // 장부 상태를 못 읽었으면(오류·시간 초과) 「없음」을 믿지 않는다.
+        assert_eq!(classify_name_answer("RV.M.FOREST", Err("timeout"), Ok(&Value::Null)), NameLookup::Unknown);
+    }
+
+    /// 시험 빌드의 RPC 는 늘 실패한다 — 그때 명령이 「없음(false)」이 아니라 오류(확인 불가)를 돌려줘야 한다.
+    #[tokio::test]
+    async fn 노드에_못_닿으면_명령은_오류를_돌려준다() {
+        let r = super::name_taken("RV.M.FOREST".into()).await;
+        assert_eq!(r, Err(super::NAME_UNKNOWN_SAY.to_string()));
+        let shop = crate::shop::shop_name_free("GANGNAM".into()).await;
+        assert!(shop.is_err(), "가게 이름 확인이 모름을 「비어 있음」으로 넘겼다");
+        assert_eq!(super::lookup_name("").await, NameLookup::Unknown);
+    }
+
+    /// 발행 문·가게 문에 옛 우회(문구 포함 → 없음, unwrap_or(false))가 다시 생기지 않게.
+    #[test]
+    fn 옛_우회가_돌아오지_않는다() {
+        for (file, src) in [("issue.rs", include_str!("issue.rs")), ("shop.rs", include_str!("shop.rs"))] {
+            let code: String = src.lines().filter(|l| !l.trim_start().starts_with("//")).collect::<Vec<_>>().join("\n");
+            let body = &code[..code.find("#[cfg(test)]").unwrap_or(code.len())];
+            assert!(!body.contains("e.contains(\"Invalid\")"), "{file}: 오류 문구로 「없음」을 판단한다");
+            assert!(!body.contains("e.contains(\"not found\")"), "{file}: 오류 문구로 「없음」을 판단한다");
+            assert!(!body.contains("name_taken(name.clone()).await.unwrap_or(false)"), "{file}: 모름을 없음으로 넘긴다");
+        }
     }
 }

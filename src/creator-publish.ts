@@ -1,4 +1,5 @@
 import { atomsToRvn, rvnToAtoms } from '../core/creator/bytes';
+import { askNameTaken, nameTakenSettled } from './name-lookup';
 import { ASSET_KIND_LETTER, assetPrefixFor, checkCreatorAssetName, nameConflicts, suggestNames, type NameNeighbor } from '../core/creator/asset-name';
 import { CONTENT_TYPES, CONTENT_TYPE_IDS, SCRIPT_NOTICE, extOf, type ContentType, type FileInput } from '../core/creator/limits';
 import { buildListingRequest } from '../core/creator/listing';
@@ -285,7 +286,7 @@ export function wireCreatorPublish(deps: CreatorDeps) {
     taken = conflict.taken ? true : null;
     paintDup(el('cw-dup'), !c.valid ? 'invalid' : conflict.taken ? true : 'checking');
     if (c.valid && !conflict.taken) {
-      try { taken = (await deps.invoke<boolean>('name_taken', { name: assetName() })) === true; } catch { taken = null; }
+      taken = await askNameTaken(deps.invoke, assetName());
       if (seq !== nameSeq) return;
       paintDup(el('cw-dup'), taken);
     }
@@ -463,7 +464,7 @@ export function wireCreatorPublish(deps: CreatorDeps) {
     paintDup(el('cw-c-dup'), 'checking');
     const [node, isTaken] = await Promise.allSettled([deps.invoke<{ chain?: string }>('node_status'), deps.invoke<boolean>('name_taken', { name: asset })]);
     chain = node.status === 'fulfilled' ? String(node.value?.chain ?? 'unknown') : 'unknown';
-    taken = isTaken.status === 'fulfilled' ? isTaken.value === true : null;
+    taken = nameTakenSettled(isTaken);
     paintDup(el('cw-c-dup'), taken);
     await readBalance();
     el('cw-c-name').textContent = asset;
@@ -489,7 +490,7 @@ export function wireCreatorPublish(deps: CreatorDeps) {
   el('cw-c-dup-recheck').onclick = async () => {
     if (!published || busy) return;
     paintDup(el('cw-c-dup'), 'checking');
-    try { taken = (await deps.invoke<boolean>('name_taken', { name: published.manifest.asset })) === true; } catch { taken = null; }
+    taken = await askNameTaken(deps.invoke, published.manifest.asset);
     paintDup(el('cw-c-dup'), taken); paintPlan();
   };
   async function issue() {

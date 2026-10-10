@@ -1,5 +1,5 @@
 {
-  "source": "ravenvault 저장소 브랜치 claude/rv-asset-name-rv (기준 d9ac1c3 위 — 이름 RV.<종류>.<이름>)",
+  "source": "ravenvault 저장소 브랜치 claude/rv-signed-lists-core (기준 5d845db 위 — 이름 RV.<종류>.<이름> + 서명된 목록 실행 중 갱신)",
   "files": {
     "core/creator/bytes.ts": "b3092fe7d6ebdc52881280f61bd21322a2ddff1be5b547d915ce6cf5ee72dbd6",
     "core/creator/limits.ts": "f37eaf05505f97aac67fb1b8230017db8a529d62341390301c119895da269420",
@@ -9,6 +9,9 @@
     "core/creator/listing.ts": "18928db24e0ce4be9f678edde1a3b9735c0477d9de5ff68825b1ee81969aa0fe",
     "core/creator/open-market.ts": "adbc7320042033eb6155244f932c1554e30bb5c852cd72899a4d12d5f27ac957",
     "core/creator/ticket.ts": "97f89f9fdc7daab00b2677b8b9247cc83ccbd66348dc0c2e91fcfc57854ae842",
-    "core/game-registry/platform-fee.ts": "b8b38519375cc0ad1d56d56c6ca0a020eb2c63a2809b1adcb6d697f04f586520"
+    "core/game-registry/platform-fee.ts": "b8b38519375cc0ad1d56d56c6ca0a020eb2c63a2809b1adcb6d697f04f586520",
+    "core/signed-lists/envelope.ts": "c2cf09966cf67ef7efd2acd2178f4fb6575d6dfc76c6e29d5ef80b9039c23af8",
+    "core/signed-lists/creator-parts.ts": "7db1c3b8f4d552912032404a798ccbf6707ba1e5c1e7a1ce4b03f3ea93ee20ad",
+    "core/signed-lists/sources.ts": "488040d9d7632249821fb15e76cadec508af30a7387e6b66cbed4577aaa041c0"
   }
 }

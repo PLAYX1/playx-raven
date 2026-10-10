@@ -5,6 +5,7 @@ import { wireSalesAccount } from "./sales-account";
 import "./creator-publish.css";
 import { wireCreatorPublish } from "./creator-publish";
 import { wireOpenMarket } from "./open-market";
+import { marketLists } from "./market-lists";
 import { openRaviStory } from "./desktop-links";
 import { homeSafety } from "./home-summary";
 import { installFirstRunBarrier, afterRaviLanding, deferUntilRaviLanding, finishRaviLanding } from "./firstrun";
@@ -265,6 +266,7 @@ import {
   loadPayees, payeeName, pickerHtml, receiveHtml, recentPayees, RECEIVE_MESSAGE, savePayee, sentHtml,
 } from "./wallet-easy";
 import { DEVICE_STORAGE_LABEL, DEVICE_STORAGE_BUTTON, keyStorageGuide, needsKeyStorageGuide, KEYCHAIN_SAVING, keyLast4, normalizeApiKey, keyConnectionFailure, keyStorageError, SavedKeyChecks } from "./ravi-key";
+import { nameTakenFrom, strictBool } from "./name-lookup";
 import { guideById, guideHtml, raviAnswerHtml, raviCopy, raviText, raviQuestionLanguage, providerOfKey, type GuideGo } from "./ravi-guide";
 
 type Asset = {
@@ -7756,8 +7758,13 @@ async function checkIssueName() {
 
   // 이름이 남았는지는 체인이 답한다. 남이 가져간 이름은 영원히 못 쓰고,
   // 그걸 실패한 트랜잭션으로 알게 되면 RVN이 날아간다.
-  let taken = false;
-  try { taken = await invoke<boolean>("name_taken", { name }); } catch {}
+  // 🔴 오류 = **확인 불가**(「없음」이 아니다). 예전에는 오류를 삼켜 taken=false 로 넘겼다.
+  let taken: boolean | null = null;
+  try { taken = nameTakenFrom(await invoke<unknown>("name_taken", { name })); } catch { taken = null; }
+  if (taken === null) {
+    note.innerHTML = `<span class="danger">확인 불가: 이 이름이 공개 장부에 이미 있는지 노드에 묻지 못했습니다. 노드가 다 따라잡은 뒤 다시 확인해 주세요.</span>`;
+    return;
+  }
   // 🔴 「더 찍기」와 「고유 여러 개」는 **이미 가진 자산에 얹는 것**이다.
   //    그런데 여기서 「이미 존재하는 이름」을 무조건 막고 있어서, 그 둘은
   //    2단계를 **영영 통과할 수 없었다.** 고를 수는 있는데 갈 수가 없었다.
@@ -15581,10 +15588,24 @@ async function checkShopName() {
     return;
   }
   const full = await invoke<string>("shop_asset_name", { input: raw });
-  let free = true;
+  // 🔴 노드에 묻지 못하면(오류) 「비어 있음」이 아니라 **「확인 불가」**다 — 예전에는 `free = true` 로
+  //    시작해 오류를 삼켜, 모르는 채로 500 RVN 등록 확인 칸을 열었다.
+  let free: boolean | null = null;
   try {
-    free = await invoke<boolean>("shop_name_free", { name: raw });
-  } catch {}
+    // shop_name_free 는 「비어 있음」이 true 다(name_taken 과 반대) — 정확한 불리언만 믿는다.
+    free = strictBool(await invoke<unknown>("shop_name_free", { name: raw }));
+  } catch {
+    free = null;
+  }
+  if (free === null) {
+    $("sh-assetcheck").innerHTML = `<span style="color:var(--bad)">확인 불가: 이 이름이 이미 있는지 노드에 묻지 못했어요. 노드가 다 따라잡은 뒤 이름을 다시 적어 확인해 주세요.</span>`;
+    $("sh-cost").innerHTML = "";
+    $("sh-confirmbox").style.display = "none";
+    // 앞서 확인한 다른 이름이 확인 칸에 남아 등록 단추를 열지 않게 비운다.
+    $("sh-confirmname").textContent = "";
+    gateShop();
+    return;
+  }
 
   $("sh-assetcheck").innerHTML = free
     ? `공개 장부에 <code>${full}</code> 로 남습니다`
@@ -18270,7 +18291,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   wireCreatorPublish({ invoke: (cmd, args) => invoke(cmd, args), back: () => showPage("games"),
     askPassword: () => ask("지갑 비밀번호", "내 주소로 상품 정보에 서명한 뒤 지갑을 바로 잠가요.", { password: true }) });
   // 열린 장터(시험): 노드 자산 목록·IPFS 읽기 명령이 아직 없어 source 없이 둔다 — 화면이 「아직 없어요」라고 말한다. 판매 스위치는 core 상수(꺼짐).
-  const market = wireOpenMarket({ back: () => showPage("games") });
+  const market = wireOpenMarket({ back: () => showPage("games"), lists: marketLists() });
   $("market-open").onclick = () => { showPage("market"); void market.load(); };
   const sellerBox = $("seller-mode") as HTMLInputElement;
   sellerBox.onchange = () => {

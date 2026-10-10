@@ -22,9 +22,9 @@ const PNG = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 
 
 test('vendored creator core is byte-identical to the pinned copy (and to the wallet source when present)', t => {
   const files = Object.keys(pins.files);
-  assert.equal(files.length, 9);
+  assert.equal(files.length, 12);
   for (const f of files) assert.equal(digest(f), pins.files[f], `vendored drift: ${f}`);
-  const root = process.env.RV_WALLET_CORE || '/Users/gimmusong/wt-rv-asset-name-core';
+  const root = process.env.RV_WALLET_CORE || '/Users/gimmusong/wt-rv-signed-lists-core';
   if (!existsSync(`${root}/core/creator/manifest.ts`)) { t.skip('wallet checkout absent; pinned hashes still checked'); return; }
   for (const f of files) assert.equal(digest(f), digest(`${root}/${f}`), `differs from wallet source: ${f}`);
 });

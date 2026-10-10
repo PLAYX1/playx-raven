@@ -6,6 +6,7 @@
 
 - `core/creator/bytes.ts` · `limits.ts` · `asset-name.ts` · `manifest.ts` · `publish.ts` · `listing.ts` · `open-market.ts` · `ticket.ts`
 - `core/game-registry/platform-fee.ts` (수수료 분할 — 지갑 v4 와 같은 파일)
+- `core/signed-lists/envelope.ts` · `creator-parts.ts` · `sources.ts` (서명된 허용·차단 목록 실행 중 갱신 — 지갑 브랜치 `claude/rv-signed-lists-core`. 지갑 쪽 `wallet.ts`·`boot.ts`(게임 등록부 연결)는 복사하지 않았다)
 
 복사하지 않은 것: `core/creator/purchase.ts`(구매자 거래 — 지갑의 직접 결제 부품에 기댄다)와 시험 파일. 구매자 쪽 거래 시험은 지갑 저장소에서 돈다.
 

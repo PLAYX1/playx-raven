@@ -59,10 +59,12 @@ pub async fn list_shops(count: i64, start: i64) -> Result<Value, String> {
 #[tauri::command]
 pub async fn shop_name_free(name: String) -> Result<bool, String> {
     let full = normalize_shop_name(&name);
-    match call_rpc("getassetdata", json!([full])).await {
-        Ok(v) => Ok(v.is_null()),
-        Err(e) if e.contains("not found") || e.contains("Invalid") => Ok(true),
-        Err(e) => Err(e),
+    // 🔴 오류 문구에 「Invalid」·「not found」가 있으면 「비어 있음」이라 답하던 것을 고쳤다 —
+    //    노드 오류는 「모름」이다(`issue::lookup_name`). 모르면 오류로 돌려 화면이 「확인 불가」를 말한다.
+    match crate::issue::lookup_name(&full).await {
+        crate::issue::NameLookup::Free => Ok(true),
+        crate::issue::NameLookup::Taken => Ok(false),
+        crate::issue::NameLookup::Unknown => Err(crate::issue::NAME_UNKNOWN_SAY.into()),
     }
 }
 

@@ -3,6 +3,7 @@ import { kindSearchPattern } from '../core/creator/asset-name';
 import { CONTENT_TYPES, CONTENT_TYPE_IDS, type ContentType } from '../core/creator/limits';
 import { discoverListings, type ChainAsset, type CreatorAllowlist, type CreatorDenylist, type Listing } from '../core/creator/listing';
 import type { BookSection, MusicSection, TicketSection, GameSection, DigitalSection } from '../core/creator/manifest';
+import type { MarketLists } from './market-lists';
 import { BOND_BLOCKER_SAY, BONDED_WARNING, BOND_SAY, OPEN_MARKET_SALES_ENABLED, autoCheck, purchaseSummary, type AutoCheck } from '../core/creator/open-market';
 
 /*
@@ -25,6 +26,8 @@ export type BuyRequest = { asset: string; sellerAddress: string; priceAtoms: str
 export type Purchase = { asset: string; title: string; txid: string; sellerRvn: string; feeRvn: string; at: string };
 export type MarketDeps = {
   back: () => void; source?: MarketSource | null; now?: () => number; storage?: Storage | null;
+  /** 서명된 최신 허용·차단 목록(market-lists.ts). 있으면 source.allowlist/denylist 보다 앞선다 — 목록을 다시 그릴 때마다 지금 것을 읽는다. */
+  lists?: MarketLists | null;
   /** 시험만: 판매 스위치를 대신 켜고, 구매 거래를 모의로 만든다. */
   salesEnabled?: boolean; buy?: (r: BuyRequest) => Promise<{ txid: string }>;
 };
@@ -71,12 +74,38 @@ export function wireOpenMarket(deps: MarketDeps) {
   }
   const badgeClass = (l: Shown) => 'mk-badge ' + (l.status === 'verified' ? 'ok' : l.status === 'bonded' ? 'bond' : 'none');
 
+  /* 지금 쓰는 목록 한 줄 + 「목록 새로 받기」(받는 길이 있을 때만). 실패해도 마지막으로 검증된 목록 그대로. */
+  function paintListsSay(extra = '') {
+    const say = document.getElementById('mk-lists-say');
+    if (say) say.textContent = deps.lists ? deps.lists.current().say + (extra ? ' ' + extra : '') : '';
+  }
+  const refreshBtn = document.getElementById('mk-lists-refresh') as HTMLButtonElement | null;
+  if (refreshBtn) {
+    refreshBtn.hidden = !deps.lists?.refresh;
+    refreshBtn.onclick = async () => {
+      if (!deps.lists?.refresh || refreshBtn.disabled) return;
+      refreshBtn.disabled = true; paintListsSay('새 목록을 받는 중…');
+      let extra = '';
+      try {
+        const out = await deps.lists.refresh();
+        extra = out.applied ? (out.changed ? '새 목록을 적용했어요.' : '바뀐 것이 없어요.')
+          : `새 목록을 적용하지 않았어요(${out.tried.map(t => t.reason).join(', ') || '받을 곳 없음'}) → 지금 목록을 그대로 써요.`;
+      } catch { extra = '새 목록을 받지 못했어요 → 지금 목록을 그대로 써요.'; }
+      refreshBtn.disabled = false;
+      await load();
+      paintListsSay(extra);
+    };
+  }
+
   async function load() {
     view('list'); el('mk-list-say').textContent = '불러오는 중…';
     if (!deps.source) { el('mk-list').replaceChildren(); el('mk-list-say').textContent = '장터 목록을 읽는 기능이 아직 없어요(다음 단계: 노드 자산 목록·IPFS 읽기 연결).'; return; }
     try {
       const assets = await deps.source.assets(kindSearchPattern(kind));
-      listings = await discoverListings({ assets, fetchManifest: c => deps.source!.fetch(c), allowlist: deps.source.allowlist ?? null, denylist: deps.source.denylist ?? null,
+      const signed = deps.lists?.current() ?? null;
+      paintListsSay();
+      listings = await discoverListings({ assets, fetchManifest: c => deps.source!.fetch(c), allowlist: signed ? signed.allowlist : deps.source.allowlist ?? null,
+        denylist: signed ? signed.denylist : deps.source.denylist ?? null,
         autoChecks: checks, now: now(), type: kind }) as Shown[];
     } catch (e) { el('mk-list-say').textContent = `목록을 못 읽었어요(${String((e as Error)?.message ?? e)}) → 노드가 켜져 있는지 확인하고 다시 열어 주세요.`; return; }
     el('mk-list').replaceChildren(...listings.map(l => {
