@@ -2,8 +2,9 @@ import { assetPrefixFor, type NameNeighbor } from '../core/creator/asset-name';
 import { atomsToRvn, base64Decode, rvnToAtoms, sha256Hex } from '../core/creator/bytes';
 import { COVER_EXT, extOf, sniff, type ContentType, type FileInput } from '../core/creator/limits';
 import { buildListingRequest } from '../core/creator/listing';
-import { CreatorError, type CreatorManifest, type Details, type MusicSection } from '../core/creator/manifest';
-import { OPEN_MARKET_FEE_BPS, feeNotice } from '../core/creator/open-market';
+import { CreatorError, isRvnAddress, type CreatorManifest, type Details, type MusicSection } from '../core/creator/manifest';
+import { feeNotice } from '../core/creator/open-market';
+import { bpsPercent, policySchedule, ruleFor, type FeeSchedule } from '../core/creator/fee-schedule';
 import {
   NETWORK_FEE_FALLBACK_ATOMS, REAL_MAINNET_ISSUE_ENABLED, costPlan, planIssue, publishContent,
   type CidProbe, type Issuer, type MessageSigner, type PinAdapter, type PinCache, type PublishInput,
@@ -42,8 +43,8 @@ export type DropDeps = {
   openWizard?: (p: WizardPrefill | null) => void;
   pin?: PinAdapter; issuer?: Issuer; probe?: CidProbe; now?: () => Date; storage?: Storage | null;
   neighbors?: () => Promise<NameNeighbor[]>;
-  /** 서명된 수수료 일정(있으면). 없으면 초안 요율(OPEN_MARKET_FEE_BPS). */
-  feeSchedule?: () => Promise<{ bps: number; source: string } | null>;
+  /** 서명된 수수료 일정(마법사와 같은 것 — main.ts 의 marketLists). 없으면 정책 출발값으로 안내만 하고 판매는 닫혀 있다. */
+  feeSchedule?: () => FeeSchedule | null;
   lang?: DropLang; stretch?: number;
 };
 export type WizardPrefill = { type: ContentType; content: FileInput[]; cover: FileInput[]; fields: Record<string, string | boolean> };
@@ -126,7 +127,7 @@ export function wireDropPublish(deps: DropDeps) {
   let cache: PinCache = new Map(), published: Draft['published'] = null;
   let pastedCids: Array<{ cid: string; alive: boolean | null }> = [];
   let taken: boolean | null | 'checking' = 'checking', chain = 'unknown', balanceAtoms: bigint | null = null, neighbors: NameNeighbor[] = [];
-  let fee: { bps: number; source: string } = { bps: OPEN_MARKET_FEE_BPS, source: '초안' };
+  let chainHeight: number | null = null;
   let urls: string[] = [], coverUrl: string | null = null, audioUrls = new Map<string, string>();
   let touched = { work: false, price: false, preview: false };
   let entering = false;
@@ -264,14 +265,16 @@ export function wireDropPublish(deps: DropDeps) {
   async function refreshChain() {
     const my = ++seq; taken = 'checking'; paint();
     const asset = assetName();
-    const [node, nt, bal, fs] = await Promise.allSettled([
-      deps.invoke<{ chain?: string }>('node_status'), deps.invoke<unknown>('name_taken', { name: asset }), deps.invoke<{ confirmed?: number }>('wallet_balance'), deps.feeSchedule?.() ?? Promise.resolve(null)]);
+    const [node, nt, bal] = await Promise.allSettled([
+      deps.invoke<{ chain?: string; blocks?: number; headers?: number }>('node_status'), deps.invoke<unknown>('name_taken', { name: asset }), deps.invoke<{ confirmed?: number }>('wallet_balance')]);
     if (my !== seq) return;
     chain = node.status === 'fulfilled' ? String(node.value?.chain ?? 'unknown') : 'unknown';
     // 세 상태: true 있음 · false 없음 · 그 밖(오류·모르는 답) = 확인 불가. 「모름」을 「없음」으로 읽지 않는다.
     taken = nt.status === 'fulfilled' ? (nt.value === true ? true : nt.value === false ? false : null) : null;
     if (bal.status === 'fulfilled') { const a = rvnToAtoms(Number(bal.value?.confirmed ?? NaN).toFixed(8)); balanceAtoms = a === null ? null : BigInt(a); } else balanceAtoms = null;
-    if (fs.status === 'fulfilled' && fs.value && Number.isInteger(fs.value.bps) && fs.value.bps >= 0 && fs.value.bps <= 10_000) fee = fs.value;
+    // 수수료 기간은 체인 높이로 정한다(마법사와 같은 규칙: 메인넷·동기화 끝난 높이만, 아니면 일정 시작 시각으로 어림).
+    const st = node.status === 'fulfilled' ? node.value : null;
+    chainHeight = st?.chain === 'main' && Number.isSafeInteger(st.blocks) && st.blocks! > 0 && st.blocks === st.headers ? st.blocks! : null;
     paint();
   }
 
@@ -300,7 +303,7 @@ export function wireDropPublish(deps: DropDeps) {
     const ordered = type === 'music' ? tracks.map(t => content.find(f => f.path === t.path)!).filter(Boolean) : content;
     return { type, asset: assetName(), title: fields.title, description: fields.description, files: [...ordered, ...(cover ? [{ ...cover, role: 'cover' as const }] : [])],
       creatorAddress: fields.address.trim(), receivingAddress: fields.address.trim(), priceAtoms: price ? (rvnToAtoms(price) ?? 'invalid') : null,
-      declaredFeeBps: OPEN_MARKET_FEE_BPS, details: details(), now: now() };
+      details: details(), now: now() };
   }
   const gates = () => dropGates({ prepublished: published && !content.length ? { asset: published.manifest.asset } : null, input: gather(), nameTaken: taken, neighbors, chain, chainBurnRvn: null, balanceAtoms, pastedCids, realMainnetEnabled: REAL_MAINNET_ISSUE_ENABLED, now: now().getTime() });
 
@@ -405,9 +408,14 @@ export function wireDropPublish(deps: DropDeps) {
     out.push(chipsBox(g.chips));
     // 비용 한 줄 + 발행 단추
     const pr = fields.price.trim(), atoms = pr ? rvnToAtoms(pr) : null;
-    const n = feeNotice(atoms, fee.bps);
+    // 수수료는 서명된 일정(트렁크 규칙)에서. 일정을 아직 못 받았으면 정책 출발값을 「일정 받기 전」으로 보이고 판매는 닫혀 있다.
+    const schedule = deps.feeSchedule?.() ?? null, addr = fields.address.trim();
+    const n = feeNotice(atoms, { schedule, kind: type, height: chainHeight, now: now().getTime(),
+      seller: isRvnAddress(addr) ? { address: addr, receivingAddress: addr } : null });
+    const feePct = n.percent ?? bpsPercent(ruleFor(policySchedule({ launchHeight: 1, launchTimeNote: '2026-01-01T00:00:00Z' }), type).bps);
+    const feeSource = say(n.scheduled ? 'feeSrcSigned' : 'feeSrcPending');
     const cost = h('p', { class: 'dp-cost', id: 'dp-cost' }, atoms
-      ? say('costLine', { burn: 500, net: atomsToRvn(NETWORK_FEE_FALLBACK_ATOMS), fee: n.percent, feeSource: fee.source })
+      ? say('costLine', { burn: 500, net: atomsToRvn(NETWORK_FEE_FALLBACK_ATOMS), fee: feePct, feeSource })
       : say('costLineFree', { burn: 500, net: atomsToRvn(NETWORK_FEE_FALLBACK_ATOMS) }));
     const act = h('div', { class: 'dp-act' });
     const pub = h('button', { type: 'button', class: 'dp-publish', id: 'dp-publish' }, state === 'publishing' ? say('publishing') : say('publish')) as HTMLButtonElement;

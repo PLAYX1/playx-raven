@@ -18480,7 +18480,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     askPassword: () => ask("지갑 비밀번호", "내 주소로 상품 정보에 서명한 뒤 지갑을 바로 잠가요.", { password: true }) });
   // 끌어놓기 발행(한 화면) — 「내 상품 올리기」의 기본 화면. 9단계 마법사는 「자세히」로 남는다(src/drop-publish.ts).
   dropPublish = wireDropPublish({ invoke: (cmd, args) => invoke(cmd, args), back: () => showPage("games"), root: $("page-creator"),
-    openWizard: p => creatorWizard.prefill(p), lang: lang === "en" ? "en" : "ko",
+    openWizard: p => creatorWizard.prefill(p), lang: lang === "en" ? "en" : "ko", feeSchedule: () => mkLists.current().feeSchedule,
     askPassword: () => ask("지갑 비밀번호", "내 주소로 상품 정보에 서명한 뒤 지갑을 바로 잠가요.", { password: true }) });
   // 열린 장터(시험): 노드 자산 목록·IPFS 읽기 명령이 아직 없어 source 없이 둔다 — 화면이 「아직 없어요」라고 말한다. 판매 스위치는 core 상수(꺼짐).
   const market = wireOpenMarket({ back: () => showPage("games"), lists: mkLists });

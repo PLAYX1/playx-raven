@@ -157,7 +157,7 @@ test('drag & drop anywhere: veil appears, album detected (EP, cover, track order
   assert.equal(await page.$eval('#dp-card', c => c.dataset.template), 'album');
   assert.match(await txt(page, '#dp-card'), /보증 · 미검증.*음악 · EP.*15 RVN.*RV\.M\..*숲의 노래.*바다.*하늘/);
   assert.equal(await page.$eval('#dp-card', c => c.firstElementChild.classList.contains('rvs-trust')), true, 'trust strip first');
-  assert.match(await txt(page, '#dp-cost'), /보증\(소각\) 500 RVN.*네트워크 수수료 약 0\.01 RVN.*15%\(초안\)/);
+  assert.match(await txt(page, '#dp-cost'), /보증\(소각\) 500 RVN.*네트워크 수수료 약 0\.01 RVN.*5%\(일정 받기 전/);
   await waitPublishable(page);
   assert.match(await txt(page, '#dp-chips'), /파일 4개 모두 통과/);
   assert.match(await txt(page, '#dp-chips'), /소각액 500 RVN — 체인과 대조 확인 불가/);
