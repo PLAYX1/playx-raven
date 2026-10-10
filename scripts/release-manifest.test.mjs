@@ -110,6 +110,10 @@ test('partial release: only listed target is published, other aliases untouched,
   for (const [name,bytes] of Object.entries(before)) assert.deepEqual(await readFile(path.join(out,name)),bytes,`alias changed: ${name}`);
   assert.equal(await readFile(path.join(out,'RavenVault-Desktop-latest-mac-apple-silicon.dmg'),'utf8'),'synthetic 0.4.1 mac-apple-silicon.dmg');
   assert.ok(paths.every(p=>!/windows|mac-intel|linux/.test(p)),'partial release must not stage other targets');
+  const sums=(await readFile(path.join(out,'SHA256SUMS.txt'),'utf8')).trim().split('\n');
+  assert.ok(sums.some(l=>l.endsWith('v0.4.1/RavenVault-Desktop-0.4.1-mac-apple-silicon.dmg')));
+  assert.ok(sums.some(l=>l.endsWith('v0.4.0/PLAY-X-Raven-0.4.0-windows.exe')),'other targets keep their checksum lines');
+  assert.ok(!sums.some(l=>l.includes('v0.4.0/PLAY-X-Raven-0.4.0-mac-apple-silicon')),'replaced target drops its old checksum lines');
   const latest=JSON.parse(await readFile(path.join(out,'latest.json'),'utf8'));
   assert.ok(validatePublishedManifest(latest,'0.4.1',['darwin-aarch64']));
   assert.throws(()=>validatePublishedManifest(latest,'0.4.1',['darwin-aarch64','darwin-x86_64','windows-x86_64','linux-x86_64']));

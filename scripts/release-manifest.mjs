@@ -88,7 +88,19 @@ export async function prepareRelease(source, destination, version, statementDire
     await copyFile(from, path.join(destination, newAlias));
     paths.push(immutable, alias, newAlias);
   }
-  const sums = assets.map(a => `${a.sha256}  v${version}/${a.name}`).join('\n') + '\n';
+  // A partial release keeps the checksum lines of the other targets' still-current files.
+  let carriedSums = [];
+  if (partial) {
+    const keep = new Set(Object.values(labels).filter(l => !listedLabels.has(l)));
+    const versions = new Set(carried.map(c => c.version));
+    let text = '';
+    try { text = await readFile(path.join(destination, 'SHA256SUMS.txt'), 'utf8'); } catch (e) { if (e.code !== 'ENOENT') throw e; }
+    carriedSums = text.split('\n').filter(line => {
+      const m = /^[a-f0-9]{64} {2}v(\d+\.\d+\.\d+)\/(?:RavenVault-Desktop|PLAY-X-Raven)-\1-(windows|mac-apple-silicon|mac-intel|linux)\.[A-Za-z.]+$/.exec(line);
+      return m && versions.has(m[1]) && keep.has(m[2]);
+    });
+  }
+  const sums = [...assets.map(a => `${a.sha256}  v${version}/${a.name}`), ...carriedSums].join('\n') + '\n';
   const metadata = { 'latest.json': JSON.stringify(manifest, null, 2) + '\n', 'VERSION': version + '\n', 'SHA256SUMS.txt': sums, 'README.md': `# RavenVault Desktop ${version}\n\n공식 설치 안내: https://ravenvault.ex.erci.se/download/\n\nPLAY X Raven의 지갑·가게 데이터와 업데이트 서명을 이어받습니다. 버전별 파일은 보존합니다.\n${partial ? `\n이번 판 대상: ${targets.join(', ')}. 그 밖의 운영체제는 이전 판(${[...new Set(carried.map(c => c.version))].join(', ')})을 유지합니다.\n` : ''}` };
   for (const [name, text] of Object.entries(metadata)) { await writeFile(path.join(destination, name), text); paths.push(name); }
   await writeFile(path.join(destination, `v${version}`, 'manifest.json'), JSON.stringify(manifest, null, 2));
