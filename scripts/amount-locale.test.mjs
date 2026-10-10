@@ -47,8 +47,11 @@ test('round trip with grouping: display text (minus code) parses back except whe
 // 모호 입력 처리표 — 문서(docs/amount-locale.md)와 같은 표.
 const TABLE = [
   // [입력, 지역, 기대 결과(sats 글자 | 문제 이름)]
-  ['1.234', 'de', 'ambiguous'], ['1,234', 'de', 'ambiguous'], ['1.234', 'en', 'ambiguous'], ['1,234', 'en', 'ambiguous'],
-  ['1.234', 'ru', 'ambiguous'], ['1,234', 'ru', 'ambiguous'], ['1,234', 'ko', 'ambiguous'], ['100.000', 'it', 'ambiguous'],
+  ['1.234', 'de', 'ambiguous'], ['1,234', 'de', 'ambiguous'], ['1.234', 'en', '123400000'], ['1,234', 'en', '123400000000'],
+  ['1.234', 'ru', 'ambiguous'], ['1,234', 'ru', 'ambiguous'], ['1,234', 'ko', '123400000000'], ['100.000', 'it', 'ambiguous'],
+  // 대표 결정 2026-10-11: 점 소수 지역은 표준 규칙. 쉼표 묶음은 정확히 3자리만.
+  ['1,23', 'en', 'other-format'], ['12,34', 'ko', 'other-format'], ['1,2345', 'en', 'other-format'], ['1,234.5', 'ko', '123450000000'], ['1.234,5', 'ko', 'other-format'],
+  ['10,000', 'ja', '1000000000000'], ['1,234', 'es-MX', '123400000000'], ['100.000', 'zh', '10000000000'], ['1.234', 'es-ES', 'ambiguous'], ['1.234', 'pt-BR', 'ambiguous'],
   ['1 234,5', 'de', '123450000000'], ['1 234,5', 'ru', '123450000000'], ['1 234,5', 'fr', '123450000000'], ['1 234,5', 'fr', '123450000000'],
   ['1 234,5', 'en', 'other-format'], ['1 234.5', 'en', '123450000000'], ['1 234.5', 'de', 'other-format'],
   ['1.234,5', 'de', '123450000000'], ['1.234,5', 'es-ES', '123450000000'], ['1.234,5', 'pt-BR', '123450000000'], ['1.234,5', 'en', 'other-format'],
@@ -75,12 +78,46 @@ test('ambiguous / foreign / invalid input table', () => {
   }
 });
 
-test('ambiguity is the same in every locale: 1.234 and 1,234 never pick a value silently', () => {
-  for (const l of LOCALES) for (const s of ['1.234', '1,234', '999.999', '10,000', '100.000']) {
-    const r = A.parseAmountInput(s, l);
-    eq(r.ok, false, `${s} @ ${l}`);
-    assert.ok(['ambiguous'].includes(r.problem), `${s} @ ${l} → ${r.problem}`);
+test('comma-decimal locales stay strict; dot-decimal locales read the standard way', () => {
+  for (const l of LOCALES) for (const str of ['1.234', '1,234', '999.999', '10,000', '100.000']) {
+    const r = A.parseAmountInput(str, l);
+    if (COMMA_DECIMAL.has(l)) { eq(r.ok, false, `${str} @ ${l}`); eq(r.problem, 'ambiguous', `${str} @ ${l}`); }
+    else { eq(r.ok, true, `${str} @ ${l}`); }
   }
+});
+
+test('within one convention family no string is accepted as two different values (dot family / comma family)', () => {
+  const pieces = ['0', '1', '12', '123', '1234', '5', '000', '50'];
+  const seps = ['', '.', ',', ' ', '\u00a0'];
+  const fams = [LOCALES.filter(l => !COMMA_DECIMAL.has(l)), LOCALES.filter(l => COMMA_DECIMAL.has(l))];
+  for (const a of pieces) for (const s1 of seps) for (const b of pieces) for (const s2 of seps) for (const c of ['', '5', '678']) {
+    const raw = a + s1 + b + s2 + c;
+    for (const fam of fams) {
+      const values = new Set();
+      for (const l of fam) { const r = A.parseAmountInput(raw, l); if (r.ok) values.add(String(r.sats)); }
+      eq(values.size <= 1, true, `${JSON.stringify(raw)} in ${fam}`);
+    }
+  }
+});
+
+test('drafts store sats only: switching locale never reinterprets a saved amount', () => {
+  for (const from of LOCALES) for (const to of LOCALES) for (const typed of ['1.234', '1,234', '1 234,5', '0,5', '0.5', '12345']) {
+    const stored = A.toStoredAmount(typed, from);
+    if (stored === null) continue;
+    const text = A.fromStoredAmount(stored, to);
+    const back = A.parseAmountInput(text, to);
+    eq(back.ok && String(back.sats), stored, `${typed} ${from}→${to} via ${stored}`);
+  }
+  eq(A.toStoredAmount('1.234', 'de'), null); eq(A.formatAmountForInput(123400000n, 'de'), '1,2340'); eq(A.formatAmountForInput(123400000n, 'en'), '1.234'); eq(A.fromStoredAmount('1.5', 'de'), ''); eq(A.fromStoredAmount('abc', 'en'), '');
+});
+
+test('Korean reading words for the review screen', () => {
+  eq(A.koreanAmountWords(123450000000n), '천이백삼십사 점 오');
+  eq(A.koreanAmountWords(123400000n), '일 점 이삼사');
+  eq(A.koreanAmountWords(1000000000000n), '만');
+  eq(A.koreanAmountWords(2100000000000000000n), '이백십억');
+  eq(A.koreanAmountWords(1n), '영 점 영영영영영영영일');
+  eq(A.koreanAmountWords(11100000000n), '백십일');
 });
 
 test('display: 8-digit precision, small values never 0, code after number with NBSP', () => {

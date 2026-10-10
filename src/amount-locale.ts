@@ -8,8 +8,14 @@
  * 1. 금액은 안에서 **정수 사토시(bigint)** 로만 다룬다. 부동소수 계산 금지.
  *    문자 → 사토시는 글자를 잘라 붙여 만든다(`parseFloat` 안 씀).
  * 2. 입력은 **선택한 지역의 소수기호**만 소수점으로 받는다. 점·쉼표를 무조건 지우거나
- *    바꾸지 않는다. 두 해석(1.234 = 1.234 / 1234)이 다 성립하면 **모호** 로 돌려주고
- *    값을 정하지 않는다. 다른 지역 형식으로만 읽히면 **다른 형식** 으로 돌려준다.
+ *    바꾸지 않는다. (대표 결정 2026-10-11)
+ *    - 점이 소수점인 지역(ko·en·ja·zh·es-MX…)은 표준 규칙: 1.234 = 1.234, 1,234 = 1234,
+ *      1,234.5 = 1234.5. 쉼표 천단위는 정확히 3자리 묶음만(1,23·12,34 는 거절).
+ *    - 쉼표가 소수점인 지역(de·it·fr·ru·pt-BR·es-ES…)은 엄격: 두 해석이 다 성립하면 **모호**.
+ *    - 이 지역 형식으로는 안 되고 다른 형식으로만 읽히면 **다른 형식**(거절).
+ *    그래서 같은 글자가 점 지역과 쉼표 지역에서 다른 값이 될 수 있다(「1.234」). 저장된 초안이
+ *    언어를 바꿔 재해석되지 않게 하는 것은 **글자 대신 사토시만 저장**하는 것으로 지킨다
+ *    (toStoredAmount / fromStoredAmount).
  * 3. 음수·지수(1e3)·소수 9자리 이상·총발행량(210억 RVN) 초과는 거절.
  * 4. 표시는 정수 부분만 Intl.NumberFormat(지역)에 맡기고 소수는 글자 그대로 붙인다 —
  *    8자리 정밀도를 잃지 않고, 0 이 아닌 값이 0 으로 보이는 일이 없다.
@@ -131,7 +137,11 @@ export function formatAmount(sats: bigint, locale: string, opts: FormatOptions =
 
 /** 입력칸에 되돌려 넣는 글자 — 묶음 없음, 지역 소수기호, 코드 없음. 언어를 바꿀 때 값 보존용. */
 export function formatAmountForInput(sats: bigint, locale: string, decimals = RVN_DECIMALS): string {
-  return formatAmount(sats, locale, { decimals, code: '', grouping: false });
+  const text = formatAmount(sats, locale, { decimals, code: '', grouping: false });
+  // 쉼표 소수 지역에서 「1,234」(=1.234)는 다시 읽으면 모호다 → 「1,2340」 으로 써서 한 가지로만 읽히게.
+  const back = parseAmountInput(text, locale, { decimals, allowZero: true });
+  if (back.ok && back.sats === sats) return text;
+  return decimals > 3 ? text + '0' : text;
 }
 
 /** 개수·블록 수 같은 정수(소수 없음). */
@@ -205,7 +215,8 @@ function readWith(s: string, dec: string, groups: string, decimals: number): Rea
 /**
  * 사람이 친(또는 붙여넣은) 금액을 사토시로. 값을 짐작하지 않는다.
  * - 이 지역 관례로만 하나로 읽히면 ok.
- * - 점 관례(1,234.5)와 쉼표 관례(1.234,5)로 **다른 값**이 다 나오면 'ambiguous'.
+ * - 점이 소수점인 지역: 이 지역 관례로 읽히면 그대로 ok(표준 규칙, 모호 아님).
+ * - 쉼표가 소수점인 지역: 두 관례로 **다른 값**이 다 나오면 'ambiguous'.
  * - 이 지역 관례로는 안 되고 다른 관례로만 되면 'other-format'(값을 정하지 않는다).
  */
 export function parseAmountInput(raw: string, locale: string, opts: ParseOptions = {}): ParsedAmount {
@@ -231,7 +242,7 @@ export function parseAmountInput(raw: string, locale: string, opts: ParseOptions
     return { ok: true, sats };
   };
   if ('sats' in local && 'sats' in other) {
-    if (local.sats === other.sats) return finish(local.sats);
+    if (local.sats === other.sats || localDec === '.') return finish(local.sats);
     return fail('ambiguous', [local.sats, other.sats]);
   }
   if ('sats' in local) return finish(local.sats);
@@ -257,4 +268,48 @@ export const AMOUNT_PROBLEM_SOURCE: Record<AmountProblem, string> = {
 /** 안내 문장에 끼울 값: {0}=예시, {1}=사람이 친 글자, {2}=이 지역 소수기호. */
 export function amountProblemValues(raw: string, locale: string): [string, string, string] {
   return [amountExample(locale), normalizeTyped(raw), numberSymbols(locale).decimal];
+}
+
+/* ── 초안 저장: 글자가 아니라 사토시만 ─────────────────────────────────── */
+
+/** 입력 글자 → 저장할 값(사토시 십진 글자). 받아들일 수 없으면 null(저장하지 않는다). */
+export function toStoredAmount(raw: string, locale: string, decimals = RVN_DECIMALS): string | null {
+  const r = parseAmountInput(raw, locale, { decimals });
+  return r.ok ? r.sats.toString() : null;
+}
+/** 저장한 사토시 → 지금 지역의 입력 글자. 저장값이 사토시 정수가 아니면 빈 글자. */
+export function fromStoredAmount(stored: string | null | undefined, locale: string, decimals = RVN_DECIMALS): string {
+  if (!stored || !/^\d{1,20}$/.test(stored)) return '';
+  const sats = BigInt(stored);
+  return sats > 0n ? formatAmountForInput(sats, locale, decimals) : '';
+}
+
+/* ── 한국어 읽는 말(검토 화면에 금액과 함께) ─────────────────────────────── */
+
+const KO_DIGIT = ['영', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구'];
+function koChunk(n: number): string {
+  const units = ['', '십', '백', '천'];
+  let out = '';
+  for (let i = 3; i >= 0; i--) {
+    const d = Math.floor(n / 10 ** i) % 10;
+    if (d === 0) continue;
+    out += (d === 1 && i > 0 ? '' : KO_DIGIT[d]) + units[i];
+  }
+  return out;
+}
+/** 123450000000n → "천이백삼십사 점 오". 정수는 만·억·조 단위, 소수는 한 자리씩. */
+export function koreanAmountWords(sats: bigint, decimals = RVN_DECIMALS): string {
+  const abs = sats < 0n ? -sats : sats;
+  const base = 10n ** BigInt(decimals);
+  let whole = abs / base;
+  const frac = decimals > 0 ? (abs % base).toString().padStart(decimals, '0').replace(/0+$/, '') : '';
+  const big = ['', '만', '억', '조', '경'];
+  const parts: string[] = [];
+  for (let i = 0; whole > 0n; i++, whole /= 10000n) {
+    const c = Number(whole % 10000n);
+    if (c === 0) continue;
+    parts.unshift((c === 1 && i === 1 ? '' : koChunk(c)) + big[i]);
+  }
+  const int = parts.length ? parts.join(' ') : '영';
+  return (sats < 0n ? '마이너스 ' : '') + int + (frac ? ' 점 ' + [...frac].map(d => KO_DIGIT[Number(d)]).join('') : '');
 }

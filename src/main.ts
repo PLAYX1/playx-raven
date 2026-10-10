@@ -258,7 +258,7 @@ import { listen } from "@tauri-apps/api/event";
 
 import { copyHtml, setCopyText, t, tf, lang, setLang, LANG_NAMES, startI18n } from "./i18n";
 import { amountProblemText, bindAmountInput, fmtCount, fmtRvn, fmtSats, readAmount, setAmountRvn, setAmountSats } from "./amount-ui";
-import { rvnNumberToSats, satsToRvnNumber } from "./amount-locale";
+import { koreanAmountWords, rvnNumberToSats, satsToRvnNumber } from "./amount-locale";
 import {
   issuedOf, looksLikeAddress, ownerRowsHtml, OWNER_NOT_PINNED, whoseHtml, whoseQuestion,
   type Issued, type OwnerRow, type WhoseResult,
@@ -8804,6 +8804,8 @@ async function reviewSend() {
 
   $("r-what").textContent = asset ?? "RVN";
   $("r-amount").textContent = asset ? fmtQty(amount) : fmtRvn(amount);
+  // 대표 결정 2026-10-11 — 한국어 화면은 읽는 말도 함께(「천이백삼십사 RVN」). 쉼표·점이 낀 입력에서 특히 오독을 잡는다.
+  $("r-amount-words").textContent = lang === "ko" && !asset ? `${koreanAmountWords(parsedQty.sats)} RVN` : "";
   setCopyText($("r-krw"), () => t("원화 환산 정보 없음"));
 
   const warns: string[] = [];
