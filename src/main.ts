@@ -7,7 +7,8 @@ import "./creator-publish.css";
 import { wireCreatorPublish } from "./creator-publish";
 import "./drop-tokens.css";
 import "./drop-publish.css";
-import { wireDropPublish } from "./drop-publish";
+// 끌어놓기 발행은 「내 상품 올리기」에서만 쓰여 시작 묶음에서 떼어 낸다(메모리 예산: 가장 큰 묶음 ≤ 1000KB).
+import type { wireDropPublish } from "./drop-publish";
 import { wireOpenMarket } from "./open-market";
 import { marketLists } from "./market-lists";
 import { openRaviStory } from "./desktop-links";
@@ -18532,9 +18533,12 @@ window.addEventListener("DOMContentLoaded", async () => {
   const creatorWizard = wireCreatorPublish({ invoke: (cmd, args) => invoke(cmd, args), back: () => showPage("games"), feeSchedule: () => mkLists.current().feeSchedule,
     askPassword: () => ask("지갑 비밀번호", "내 주소로 상품 정보에 서명한 뒤 지갑을 바로 잠가요.", { password: true }) });
   // 끌어놓기 발행(한 화면) — 「내 상품 올리기」의 기본 화면. 9단계 마법사는 「자세히」로 남는다(src/drop-publish.ts).
-  dropPublish = wireDropPublish({ invoke: (cmd, args) => invoke(cmd, args), back: () => showPage("games"), root: $("page-creator"),
-    openWizard: p => creatorWizard.prefill(p), lang: lang === "en" ? "en" : "ko", feeSchedule: () => mkLists.current().feeSchedule,
-    askPassword: () => ask("지갑 비밀번호", "내 주소로 상품 정보에 서명한 뒤 지갑을 바로 잠가요.", { password: true }) });
+  //    따로 내려받는 조각이라 시작 직후 곧바로 불러 붙인다. 그 사이 끌어놓기는 dropPublish 가 없으면 기존처럼 무시된다.
+  void import("./drop-publish").then(({ wireDropPublish }) => {
+    dropPublish = wireDropPublish({ invoke: (cmd, args) => invoke(cmd, args), back: () => showPage("games"), root: $("page-creator"),
+      openWizard: p => creatorWizard.prefill(p), lang: lang === "en" ? "en" : "ko", feeSchedule: () => mkLists.current().feeSchedule,
+      askPassword: () => ask("지갑 비밀번호", "내 주소로 상품 정보에 서명한 뒤 지갑을 바로 잠가요.", { password: true }) });
+  }).catch((e) => console.warn("drop-publish load failed", e));
   // 열린 장터(시험): 노드 자산 목록·IPFS 읽기 명령이 아직 없어 source 없이 둔다 — 화면이 「아직 없어요」라고 말한다. 판매 스위치는 core 상수(꺼짐).
   const market = wireOpenMarket({ back: () => showPage("games"), lists: mkLists });
   $("market-open").onclick = () => { showPage("market"); void market.load(); };
