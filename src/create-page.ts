@@ -15,6 +15,7 @@
  */
 import { setStyledSrcdoc } from "./srcdoc-style";
 import { lang, setCopyText, tf } from "./i18n";
+import { fmtCount, fmtRvn } from "./amount-ui";
 import { issuedOf, OWNER_NOT_PINNED } from "./whose";
 import {
   MAX_COPIES, MAX_TICKETS, brandCandidates, brandFrom, fileFingerprint, findFreeRun, itemNames,
@@ -431,7 +432,7 @@ export function wireCreate(deps: CreateDeps): CreateApi {
       if (people.some((p) => p.length > 60)) throw new Error(t("받는 사람 이름은 60자까지 적을 수 있어요."));
       const count = roster ? pick.length : kind === "certificate" && people.length ? people.length : Number(countIn.value);
       const max = roster ? MAX_BATCH_ROWS : kind === "ticket" ? MAX_TICKETS : MAX_COPIES;
-      if (!Number.isInteger(count) || count < 1 || count > max) throw new Error(tf("1부터 {0}까지 적어 주세요.", max.toLocaleString("en-US")));
+      if (!Number.isInteger(count) || count < 1 || count > max) throw new Error(tf("1부터 {0}까지 적어 주세요.", fmtCount(max)));
       const s = await loadStatus();
       const pending = s.pending ?? [];
       const wanted = s.brands.length || pending.length ? brandSel.value : brandFrom(makerIn.value);
@@ -506,7 +507,7 @@ export function wireCreate(deps: CreateDeps): CreateApi {
         return d;
       };
       bill.append(
-        cell(node("b", () => tf("{0}장", n.toLocaleString("en-US"))), "발행할 증서"),
+        cell(node("b", () => tf("{0}장", fmtCount(n))), "발행할 증서"),
         cell(data("b", `${rvnText(r.total)} RVN`), "공개 장부 수수료 합계"),
         cell(data("b", `${rvnText(s.spendable)} RVN`), "지갑 잔액", s.spendable < r.total ? "short" : ""),
       );
@@ -533,8 +534,8 @@ export function wireCreate(deps: CreateDeps): CreateApi {
       data("p", shown > 1 ? tf("{0} 외 {1}장", r.names[0], shown - 1) : r.names[0], "cr-name"),
     );
     parts.push(node("p", r.fingerprint ? () => tf("파일 지문을 함께 새겨요 · {0}", r.fileName) : () => t("파일 없이 만들어요."), "meta"));
-    if (r.kind === "ticket") parts.push(node("p", () => tf("티켓 {0}장 · 나중에 더 만들 수 있어요", r.count.toLocaleString("en-US")), "meta"));
-    if (!b) parts.push(node("p", "필요한 RVN", "meta"), data("p", `${r.total.toLocaleString("en-US", { maximumFractionDigits: 2 })} RVN`, "cr-cost"));
+    if (r.kind === "ticket") parts.push(node("p", () => tf("티켓 {0}장 · 나중에 더 만들 수 있어요", fmtCount(r.count)), "meta"));
+    if (!b) parts.push(node("p", "필요한 RVN", "meta"), data("p", `${fmtRvn(r.total)}`, "cr-cost"));
     if (r.needsBrand) parts.push(node("p", () => tf("처음 한 번은 이름 {0} 등록(500 RVN)이 들어가요. 다음부터는 만드는 값만 들어요.", r.brand), "meta"));
     parts.push(node("p", "이 RVN은 네트워크에 태워져 이름과 기록을 지키는 데 쓰여요. 저희가 받는 돈이 아니에요.", "meta"));
 
@@ -563,7 +564,7 @@ export function wireCreate(deps: CreateDeps): CreateApi {
     let pass: HTMLInputElement | null = null, typed: HTMLInputElement | null = null;
     const actions = actionsRow();
     if (short > 0) {
-      parts.push(node("p", () => tf("{0} RVN이 더 필요해요 · 지갑 화면의 받기 주소로 다른 지갑이나 거래소에서 보내 주세요.", short.toLocaleString("en-US", { maximumFractionDigits: 2 })), "cr-warn"));
+      parts.push(node("p", () => tf("{0} RVN이 더 필요해요 · 지갑 화면의 받기 주소로 다른 지갑이나 거래소에서 보내 주세요.", fmtRvn(short, { code: "" })), "cr-warn"));
       actions.append(button("받기 주소 보기", () => go("wallet")), button("다시 확인하기", () => void check(), true));
     } else {
       if (r.needsBrand) {
@@ -585,7 +586,7 @@ export function wireCreate(deps: CreateDeps): CreateApi {
       if (r.needsBrand) parts.push(node("p", "두 번 진행해요. 먼저 이름 등록, 기록된 뒤에 만들기.", "meta"));
       const makeBtn = r.needsBrand || !b
         ? button(r.needsBrand ? "이름 등록하고 만들기" : "만들기", () => void make(r, pass))
-        : node("button", () => tf("{0}장 만들기", leftRows(b).toLocaleString("en-US")));
+        : node("button", () => tf("{0}장 만들기", fmtCount(leftRows(b))));
       if (b && !r.needsBrand) { makeBtn.setAttribute("type", "button"); makeBtn.addEventListener("click", () => void make(r, pass)); }
       makeBtn.id = "cr-make";
       const gate = () => {
@@ -604,7 +605,7 @@ export function wireCreate(deps: CreateDeps): CreateApi {
   }
 
   /* ── 4. 만들기 ───────────────────────────────────────────────────── */
-  const rvnText = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 2 });
+  const rvnText = (n: number) => fmtRvn(n, { code: "" });
   async function make(r: Review, pass: HTMLInputElement | null) {
     if (busy) return;
     if (loadDraft()?.stage === "sent-unknown") { paintUnknown(); return; }
@@ -684,7 +685,7 @@ export function wireCreate(deps: CreateDeps): CreateApi {
     if (makeBtn) makeBtn.disabled = true;
     let passphrase: string | null = null;
     try {
-      const ok = await deps.hold(tf("「{0}」 {1}장을 만들어요", r.title, leftRows(b).toLocaleString("en-US")), tf("{0} RVN이 태워지고 되돌릴 수 없어요", rvnText(r.total)));
+      const ok = await deps.hold(tf("「{0}」 {1}장을 만들어요", r.title, fmtCount(leftRows(b))), tf("{0} RVN이 태워지고 되돌릴 수 없어요", rvnText(r.total)));
       if (!ok) { if (makeBtn) makeBtn.disabled = false; return; }
       passphrase = pass?.value || null;
       if (pass) pass.value = "";
@@ -763,7 +764,7 @@ export function wireCreate(deps: CreateDeps): CreateApi {
       list.append(li);
     });
     waitBox.replaceChildren(
-      node("h3", () => tf("{0}장을 만드는 중이에요", total.toLocaleString("en-US"))),
+      node("h3", () => tf("{0}장을 만드는 중이에요", fmtCount(total))),
       node("p", "창을 닫지 마세요 — 50장씩 나눠 보내요. 한 묶음에 보통 몇 초, 서버가 바쁘면 더 걸려요.", "meta"),
       bar,
       node("p", () => tf("{0} / {1}장", done, total), "meta"),

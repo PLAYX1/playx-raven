@@ -3492,7 +3492,7 @@
           <div class="row">
             <div style="flex:2"><label>자산<input id="sw-asset" spellcheck="false" placeholder="PLAYX" /></label></div>
             <div style="flex:1"><label>수량<input id="sw-amt" type="number" value="1" min="0" step="any" /></label></div>
-            <div style="flex:1"><label>받을 RVN<input id="sw-price" type="number" value="100" min="0" step="any" /></label></div>
+            <div style="flex:1"><label>받을 RVN<input id="sw-price" type="text" inputmode="decimal" autocomplete="off" value="100" /></label></div>
           </div>
           <div class="meta" id="sw-ready"></div>
           <div class="row" style="margin-top:10px">
@@ -3987,7 +3987,7 @@
         <div id="rv-send-card" class="card" hidden>
           <button id="rv-send-close" type="button">닫기</button><h3>보내기 요청 확인</h3><p>라비는 직접 보내지 않아요. 받는 사람과 금액을 적고 수수료를 확인하세요.</p>
           <label>받는 주소 <input id="rv-send-to" autocomplete="off" /></label>
-          <label>금액 (RVN) <input id="rv-send-amount" type="number" min="0" step="any" /></label>
+          <label>금액 (RVN) <input id="rv-send-amount" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" /></label>
           <button id="rv-send-check" type="button">수수료 확인</button>
           <p id="rv-send-summary" role="status"></p>
           <button id="rv-send-continue" type="button" hidden>기존 보내기 화면에서 직접 확정</button>
@@ -4089,7 +4089,8 @@
           <div class="wpick" id="s-pick"></div>
           <label>받는 주소<input id="s-addr" placeholder="R…" autocomplete="off" spellcheck="false" /></label>
           <div class="meta" id="s-addrnote"></div>
-          <label id="s-qtylabel">수량<input id="s-qty" type="number" min="0" step="any" /></label>
+          <label id="s-qtylabel">수량<input id="s-qty" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" aria-describedby="s-qtynote" /></label>
+          <div class="meta" id="s-qtynote" aria-live="polite"></div>
           <div class="meta" id="s-held"></div>
           <div class="row" style="margin-top:12px">
             <button id="s-review" disabled>검토</button>
@@ -4107,7 +4108,7 @@
             <div class="rk">무엇을</div>
             <div class="rv" id="r-what"></div>
             <div class="rk">얼마</div>
-            <div class="rv"><div class="big" id="r-amount"></div><div class="meta" id="r-krw"></div><div class="meta">받는 분이 받는 금액</div></div>
+            <div class="rv"><div class="big" id="r-amount"></div><div class="meta" id="r-amount-words" translate="no"></div><div class="meta" id="r-krw"></div><div class="meta">받는 분이 받는 금액</div></div>
             <div class="rk">수수료</div>
             <div class="rv"><div id="r-fee"></div><div class="meta" id="r-feenote"></div></div>
             <div class="rk">합계</div>
@@ -5855,7 +5856,7 @@
         </div>
         <div class="row">
           <div style="flex:1"><label>수량<input id="sl-qty" type="number" min="0" step="any" /></label></div>
-          <div style="flex:1"><label>가격<input id="sl-price" type="number" min="0" step="any" /></label></div>
+          <div style="flex:1"><label>가격<input id="sl-price" type="text" inputmode="decimal" autocomplete="off" /></label></div>
           <div style="flex:1"><label>단위<select id="sl-cur">
             <option value="KRW">원 (₩)</option><option value="USD">달러 ($)</option><option value="RVN">RVN</option>
           </select></label></div>

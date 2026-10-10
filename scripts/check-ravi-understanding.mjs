@@ -108,6 +108,8 @@ const own='R'+'B'.repeat(33),destination='R'+'A'.repeat(33);
 const actionCtx=vm.createContext({ ...g,$:el,showPage(){},openSend:async()=>{sends++;},composeChanged(){},reviewSend:async()=>{reviews++;},
   최근내주소:own,라비가채운보내기:false,renderMenu(){},t:s=>s,tf:(s,...v)=>s.replace(/\{(\d+)\}/g,(_,i)=>v[i]),
   SHOP_FIELDS:{name_ko:'sh-ko'},환불후보:new Map(),menuItems:[],
+  // 2026-10-11 금액 칸은 amount-ui 로 채운다(지역 형식). 여기서는 ko/en 과 같은 결과(「5」)만 흉내 낸다.
+  setAmountRvn:(e,n)=>{e.value=String(n);},fmtQty:n=>String(n),
   invoke:()=>{throw Error('No spending RPC permitted');},
 });
 vm.runInContext(compile(fn('applyActions')),actionCtx);
