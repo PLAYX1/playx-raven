@@ -111,6 +111,9 @@ async function openCreator(opts) {
   const page = await openApp(opts);
   await page.click('#creator-open');
   await page.waitForFunction(() => document.querySelector('#page-creator.on'));
+  // 「내 상품 올리기」는 이제 끌어놓기 화면(drop-publish.ts)으로 열린다. 이 시험은 9단계 마법사 = 「자세히(단계별로)」.
+  await page.click('#dp-detail');
+  await page.waitForFunction(() => document.querySelector('#page-creator').dataset.mode === 'wizard');
   return page;
 }
 const text = (page, sel) => page.$eval(sel, e => e.tagName === 'TEXTAREA' ? e.value : e.textContent.replace(/\s+/g, ' ').trim());

@@ -24,7 +24,8 @@
     "check:ravi-companion": "node scripts/check-ravi-companion.mjs && node scripts/check-companion-fix.mjs",
     "check:home-onescreen": "node scripts/check-home-onescreen.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "node --test scripts/opening.test.mjs scripts/sales-account.test.mjs scripts/release-manifest.test.mjs scripts/verify-published-release.test.mjs scripts/signed-release-metadata.test.mjs scripts/desktop-ui-browser.test.mjs scripts/creator-publish.test.mjs scripts/creator-publish-browser.test.mjs",
+    "test": "node --test scripts/opening.test.mjs scripts/sales-account.test.mjs scripts/release-manifest.test.mjs scripts/verify-published-release.test.mjs scripts/signed-release-metadata.test.mjs scripts/desktop-ui-browser.test.mjs scripts/creator-publish.test.mjs scripts/creator-publish-browser.test.mjs scripts/drop-publish.test.mjs scripts/drop-publish-browser.test.mjs",
+    "gallery:drop": "RV_DROP_SHOTS=artifacts/drop-gallery/shots node --test scripts/drop-publish-browser.test.mjs && node scripts/build-drop-gallery.mjs",
     "check:home-browser": "npm run build && node scripts/check-home-browser.mjs"
   },
   "dependencies": {

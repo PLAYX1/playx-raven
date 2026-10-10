@@ -1,0 +1,28 @@
+/*
+ * 끌어놓기 발행 화면용 레이아웃·움직임 변수(한 곳).
+ * 🔴 공통 레이아웃 토큰(window-modes 작업)이 나오면 그 이름으로 바꿔 합친다 — 그때까지 이 파일만 고친다.
+ *    값의 근거: 누를 곳 44px(애플 HIG·WCAG 2.5.5), 칸 최소 폭 = 16글자(긴 독일어 낱말 1개가 들어가는 폭),
+ *    움직임은 스프링 근사(임계 감쇠, response ≈ 0.3s)와 강한 ease-out. 움직임 줄이기 설정이면 짧은 투명도만.
+ */
+:root {
+  --dp-hit: 44px;
+  --dp-gap-1: 6px;
+  --dp-gap-2: 12px;
+  --dp-gap-3: 20px;
+  --dp-gap-4: 28px;
+  --dp-radius-s: 10px;
+  --dp-radius-m: 14px;
+  --dp-radius-l: 20px;
+  --dp-maxw: 880px;
+  --dp-field-min: 16ch;
+  --dp-font-s: 0.875rem;
+  --dp-font-m: 1rem;
+  --dp-font-l: 1.25rem;
+  --dp-font-xl: clamp(1.25rem, 1rem + 1.2vw, 1.75rem);
+  --dp-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  /* 임계 감쇠 스프링(damping 1.0, response 0.3s)을 linear() 로 근사 — 넘침 없음. */
+  --dp-spring: linear(0, 0.2 6%, 0.45 13%, 0.66 21%, 0.81 30%, 0.9 39%, 0.95 49%, 0.98 60%, 0.995 74%, 1);
+  --dp-dur-press: 120ms;
+  --dp-dur-in: 260ms;
+  --dp-dur-out: 140ms;
+}

@@ -27,6 +27,7 @@ mod classes;
 mod conf;
 mod door;
 mod dropbox;
+mod drop_publish;
 mod peers;
 mod sample;
 mod recover;
@@ -542,6 +543,9 @@ pub fn run() {
             price::quote_price,
             boot::boot_report,
             upload::ipfs_add_dropped,
+            drop_publish::creator_dropped_list,
+            drop_publish::creator_dropped_read,
+            drop_publish::creator_cid_read,
             shopkey::shopkey_origin,
             shopmove::shop_key_move_plan,
             shopmove::shop_key_move,
