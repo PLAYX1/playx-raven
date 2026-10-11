@@ -393,7 +393,7 @@ pub(crate) fn validate_publish_event(event: &Value) -> Result<(), String> {
     }
     let hex_field = |key: &str, size: usize| o[key].as_str().is_some_and(|s| s.len() == size && s.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)));
     if !hex_field("id",64) || !hex_field("pubkey",64) || !hex_field("sig",128) { return Err("이벤트 ID·공개키·서명 모양이 올바르지 않습니다.".into()); }
-    let kind = o["kind"].as_u64().filter(|k| [0,1,5,40,42,1059,30078,30402].contains(k)).ok_or("이 가게는 프로필·레이븐 이야기·상품·가게 공지·쪽지·삭제 요청만 중계합니다.")?;
+    let kind = o["kind"].as_u64().filter(|k| [0,1,5,40,41,42,1059,30078,30402].contains(k)).ok_or("이 가게는 프로필·레이븐 이야기(방 만들기·방 정보 수정 포함)·상품·가게 공지·쪽지·삭제 요청만 중계합니다.")?;
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
     if !o["created_at"].as_u64().is_some_and(|t| t >= now.saturating_sub(7 * 86_400) && t <= now.saturating_add(300) && t <= 9_007_199_254_740_991) { return Err("이벤트 시각이 올바르지 않습니다. 기기 시계를 확인해 주세요.".into()); }
     let content = o["content"].as_str().ok_or("이벤트 내용은 글자여야 합니다.")?;
@@ -404,6 +404,8 @@ pub(crate) fn validate_publish_event(event: &Value) -> Result<(), String> {
     let tag = |name: &str| tags.iter().any(|t| t[0] == name && t.get(1).and_then(Value::as_str).is_some_and(|s| !s.is_empty()));
     match kind {
         0 | 40 | 30078 => { if !serde_json::from_str::<Value>(content).is_ok_and(|v| v.is_object()) { return Err("프로필·방·가게 내용은 JSON 객체여야 합니다.".into()); } },
+        // 방 정보 수정(NIP-28): 어느 방인지(`e`)와 JSON 내용이 둘 다 있어야 한다. 누가 고칠 수 있는지는 읽는 쪽(talk.rs)이 본다.
+        41 => if !tag("e") || !serde_json::from_str::<Value>(content).is_ok_and(|v| v.is_object()) { return Err("방 정보 수정에는 방 번호와 JSON 내용이 있어야 합니다.".into()); },
         5 => if !tag("e") && !tag("a") { return Err("삭제할 이벤트를 지정해 주세요.".into()); },
         42 => if !tag("e") { return Err("대화방 이벤트를 지정해 주세요.".into()); },
         1059 => if !tag("p") || content.is_empty() { return Err("쪽지의 받는 사람과 봉함 내용을 확인해 주세요.".into()); },

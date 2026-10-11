@@ -621,6 +621,8 @@ pub fn run() {
             talk::talk_replies,
             talk::talk_translate,
             talk::talk_make_room,
+            // 방 이름·설명 고치기(NIP-28 kind 41) — 방을 만든 이야기 열쇠로만 서명한다.
+            talk::talk_room_meta_set,
             talk::talk_my_assets,
             talk::talk_delete_request,
             talk::talk_profile_set,

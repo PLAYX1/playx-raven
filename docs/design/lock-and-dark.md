@@ -154,7 +154,7 @@
 | stock | — | `stock_left` |
 | swap | — | `swap_ready` `swap_make_lot` `swap_offer` `swap_check` `swap_take` |
 | sweep | `sweep_read` | `sweep_configure` `sweep_run` `sweep_hold` `hours_save` `is_open` `set_manual` |
-| talk | — | `talk_me` `talk_post` `talk_photo_post` `talk_read` `talk_rooms` `talk_replies` `talk_translate` `talk_make_room` `talk_my_assets` `talk_delete_request` `talk_profile_set` `talk_profiles` `recovery_status` |
+| talk | — | `talk_me` `talk_post` `talk_photo_post` `talk_read` `talk_rooms` `talk_replies` `talk_translate` `talk_make_room` `talk_room_meta_set` `talk_my_assets` `talk_delete_request` `talk_profile_set` `talk_profiles` `recovery_status` |
 | ticket | — | `ticket_find` `ticket_use` `ticket_list` `ticket_to_member` |
 | trade | — | `trade_list` `trade_get` |
 | tunnel | `tunnel_status` | `tunnel_install` `tunnel_start` `tunnel_stop` `public_base` `open_share` `share_targets` |
