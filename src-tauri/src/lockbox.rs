@@ -359,6 +359,13 @@ pub async fn backup_pass_set(pass: String, wallet_pass: Option<String>) -> Resul
     Ok(json!({ "ok": true }))
 }
 
+/// 넣은 암호가 백업 암호 봉투를 여나 — 봉투가 없거나 읽을 수 없으면 None.
+/// 지갑 잠금 풀기(`app_lock::app_unlock`)가 노드가 꺼져 있을 때만 쓴다. 열쇠는 곧바로 버린다.
+pub fn pass_matches(pass: &str) -> Option<bool> {
+    let blob = pass_read_checked().ok().flatten()?;
+    Some(unwrap_key(&blob, pass).map(|mut k| k.fill(0)).is_ok())
+}
+
 /// 암호가 정해져 있나.
 #[tauri::command]
 pub fn backup_pass_state() -> Value {

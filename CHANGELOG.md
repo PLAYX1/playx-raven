@@ -13,6 +13,11 @@
 - 메모리 절감: 창이 숨겨져 있을 때 화면을 계속 다시 훑던 작업을 멈춰 숨긴 상태의 처리량을 크게 줄였고, 처음 불러오는 묶음을 가볍게 했습니다.
 - 백업 폴더 이름을 `RavenVault-Backup`(파일 `RavenVault.zip.pxlock`)으로 바꿨습니다. 옛 `PLAYXRaven-Backup` 백업은 그대로 두고 「백업 찾기」에서 읽기 전용으로 찾고 열 수 있습니다. 바뀐 뒤 첫 자동 백업은 새 폴더에 한 벌을 새로 씁니다.
 - 작은 라비 얼굴(16~32px)과 메뉴바 아이콘의 대비를 높여 작은 크기에서도 표정이 구별됩니다. 큰 얼굴은 그대로입니다.
+- 대기화면을 켜면 지갑이 바로 잠깁니다. 잠긴 동안 보내기·서명·복구 단어·백업 내보내기는 앱 안쪽에서 거절되고, 들어온 돈만 읽기 전용으로 보입니다. 대기화면을 끄면 잠긴 화면으로 돌아오며, 지갑 암호를 넣어야 다시 쓸 수 있습니다. 시간이 지나도 저절로 풀리지 않고, 앱을 다시 켜도 잠금이 유지됩니다.
+- 매장용 읽기 전용 모드(설정 「표시 방식」): 켜면 지갑이 잠기고 잔액·최근 입금만 보입니다(금액 가림). 끌 때는 지갑 암호가 필요합니다.
+- 어두운 화면에서 지갑 잔액·보내기 검토·복구 단어 창이 흰 카드로 뜨던 것을 어두운 카드로 바꿨습니다(글자 대비 4.5:1 이상). 보내기 검토에 「아직 보내지 않았어요」 상태 줄을 넣었습니다. 밝은 화면은 그대로입니다.
+- 복구 단어 창: 보여 준 지 3분이 지나면 단어를 저절로 가리고(다시 보려면 지갑 암호), 단어를 고르거나 복사할 수 없게 했습니다. 화면 캡처 보호는 그대로 켜집니다.
+- 미니 창: 끌어다 놓으면 화면 가장자리에 붙고(트레이 메뉴에서 끌 수 있음), 트레이 메뉴 「구석으로 보내기」로 네 구석에 바로 둘 수 있습니다. 「항상 위에」는 그대로 고를 수 있습니다.
 - 준비 중(이번 판에서 켜지지 않음): 장터 판매와 메인넷 자산 발행은 스위치가 꺼진 채 출하합니다. 관련 화면은 안내·미리보기까지만 동작합니다.
 - 업데이트 검증(서명된 버전·해시·순서 확인)은 그대로 유지합니다.
 - 공개되지 않았던 0.8.5 의 변경(아래)도 함께 들어 있습니다.
@@ -28,6 +33,11 @@
 - Lower memory use: work that kept rescanning the page while the window was hidden is stopped, and the startup bundle is smaller.
 - Backups are now saved in a `RavenVault-Backup` folder (`RavenVault.zip.pxlock`). Old `PLAYXRaven-Backup` backups are left untouched and can still be found and opened read-only via "Find backups". The first automatic backup after the update writes a fresh copy to the new folder.
 - Higher-contrast small Ravi faces (16–32 px) and menu bar icons. The large face is unchanged.
+- Starting the standby screen now locks the wallet immediately. While locked, sending, signing, recovery words and backup export are refused inside the app; only incoming money is shown, read-only. Leaving standby returns to the locked screen, and the wallet password is needed to use the wallet again. The lock never expires on a timer and stays on after restarting the app.
+- Store read-only mode (Settings › Display): locks the wallet and shows only the balance and recent deposits (amounts hidden). Turning it off needs the wallet password.
+- In the dark theme, the wallet balance, send review and recovery-word window no longer appear as white cards; they use dark cards with at least 4.5:1 text contrast. The send review shows a "Not sent yet" status line. The light theme is unchanged.
+- Recovery-word window: words hide automatically 3 minutes after being shown (the wallet password is needed to see them again) and can't be selected or copied. Screen-capture protection stays on.
+- Mini window: snaps to screen edges after dragging (can be turned off in the tray menu), and "Move to corner" in the tray menu places it in any of the four corners. "Keep on top" is still available.
 - Coming later (not enabled in this release): marketplace sales and mainnet asset issuance ship switched off; those screens only explain and preview.
 - Signed update checks (version, hash and sequence) are unchanged.
 - Also includes the 0.8.5 changes below (0.8.5 was not published).

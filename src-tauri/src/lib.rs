@@ -14,6 +14,8 @@ mod mini_feed;
 mod mini_watch;
 // 표시 방식(큰 창·작은 창·칩·메뉴바만) + 대기화면 — docs/design/window-modes.md
 mod display_mode;
+// 지갑 잠금(대기화면 진입 즉시·매장용 읽기 전용) — docs/design/lock-and-dark.md
+mod app_lock;
 mod ai_budget;
 mod ai_endpoint;
 mod companion;
@@ -157,6 +159,12 @@ pub fn run() {
                 invoke.resolver.reject("대기화면에서는 이 작업을 할 수 없어요.");
                 return true;
             }
+            // 🔴 지갑이 잠겨 있으면(대기화면 진입·매장용 읽기 전용) 허용 목록 밖 명령은 전부 거부 —
+            //    보내기·서명·복구 단어·백업 내보내기·열쇠. 단일 진실은 app_lock(메모리 + app-lock.json).
+            if !app_lock::command_allowed(invoke.message.command()) {
+                invoke.resolver.reject("지갑이 잠겨 있어요. 잠금을 푼 뒤 다시 해 주세요.");
+                return true;
+            }
             let handler: fn(tauri::ipc::Invoke<tauri::Wry>) -> bool = tauri::generate_handler![
             ravi_lifecycle::ravi_lifecycle_status,
             ravi_lifecycle::ravi_take_close_request,
@@ -185,6 +193,9 @@ pub fn run() {
             display_mode::standby_open,
             display_mode::standby_state,
             display_mode::standby_exit,
+            app_lock::app_lock_state,
+            app_lock::app_unlock,
+            app_lock::app_lock_now,
             pairing::pairing_state,
             pairing::pairing_show_qr,
             pairing::pairing_cancel_qr,
@@ -702,6 +713,7 @@ pub fn run() {
             use tauri::Manager;
             ravi_companion::setup(app)?;
             mini::setup(app);
+            app_lock::setup(app);
             display_mode::setup(app);
 
             // 🔴 **화면보다 큰 창을 띄우지 않는다.**

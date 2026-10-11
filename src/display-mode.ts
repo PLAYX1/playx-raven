@@ -5,6 +5,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import "./layout-tokens.css";
 import "./display-mode.css";
+import { lockCopy, enterStoreMode } from "./app-lock";
 
 export type DisplayMode = "window" | "mini" | "chip" | "menubar";
 type Settings = { mode: DisplayMode; hide_dock: boolean; tray_text: "alerts" | "balance" | "none"; dim_from: number; dim_to: number; shift: boolean; locale: string };
@@ -94,6 +95,9 @@ export function buildCard(state: State, l = lang()): HTMLElement {
   if (!sup.tray) card.append(el("p", { className: "meta", textContent: c.noTray }));
   const sb = el("div", { className: "rv-dm-standby" }, el("button", { type: "button", id: "dm-standby", className: "ghost", textContent: c.standby }), el("p", { className: "meta", textContent: c.standbyNote }));
   card.append(sb);
+  // 매장용 읽기 전용 모드 — 켜면 지갑이 잠기고(Rust app_lock) 조회만. 끌 때는 지갑 암호(잠금 풀기). 4개 국어.
+  const lc = lockCopy();
+  card.append(el("div", { className: "rv-dm-standby rv-dm-store" }, el("button", { type: "button", id: "dm-store", className: "ghost", textContent: lc.storeOn, title: lc.storeOn }), el("p", { className: "meta", textContent: lc.storeNote })));
   const more = el("details", { className: "rv-dm-more" }, el("summary", { textContent: c.more }));
   if (sup.tray_text) {
     const sel = el("select", { id: "dm-tray-text" });
@@ -148,6 +152,7 @@ export async function mountDisplayMode(): Promise<void> {
   };
   card.querySelectorAll<HTMLInputElement>('input[name="dm-mode"]').forEach((i) => i.addEventListener("change", () => i.checked && void set({ mode: i.value as DisplayMode })));
   card.querySelector("#dm-standby")?.addEventListener("click", () => void call("standby_open").catch(() => (note.textContent = c.failed)));
+  card.querySelector("#dm-store")?.addEventListener("click", () => void enterStoreMode().catch(() => (note.textContent = c.failed)));
   card.querySelector<HTMLSelectElement>("#dm-tray-text")?.addEventListener("change", (e) => void set({ tray_text: (e.target as HTMLSelectElement).value as Settings["tray_text"] }));
   card.querySelector<HTMLInputElement>("#dm-hide-dock")?.addEventListener("change", (e) => void set({ hide_dock: (e.target as HTMLInputElement).checked }));
   card.querySelector<HTMLInputElement>("#dm-shift")?.addEventListener("change", (e) => void set({ shift: (e.target as HTMLInputElement).checked }));

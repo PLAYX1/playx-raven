@@ -5619,3 +5619,16 @@ for (const [source, values] of [...Object.entries(DESKTOP_COPY), ...Object.entri
 for (const [source, values] of Object.entries(RAVI_CHAT_COPY)) {
   (["en", "ja", "zh"] as const).forEach((language, index) => { DICT[language][source] ??= values[index]; });
 }
+// 잠금·다크 돈 카드·복구 단어 민감 화면(2026-10-11, docs/design/lock-and-dark.md) — 이미 있는 번역은 덮지 않는다.
+const LOCK_DARK_COPY: Record<string, [string, string, string]> = {
+  "민감한 화면 — 복구 단어": ["Sensitive screen — recovery words", "機密画面 — 復元ワード", "敏感画面 — 恢复词"],
+  "화면 보호 켜짐 · {0}초 뒤에 단어를 저절로 가려요": ["Screen protection on · words hide automatically in {0}s", "画面保護オン · {0}秒後にワードを自動で隠します", "屏幕保护已开启 · {0} 秒后自动隐藏恢复词"],
+  "시간이 지나 단어를 가렸어요. 다시 보려면 지갑 암호를 넣어 주세요.": ["Time is up, so the words were hidden. Enter the wallet password to see them again.", "時間が過ぎたためワードを隠しました。もう一度見るにはウォレットのパスワードを入力してください。", "时间已到，恢复词已隐藏。要再次查看，请输入钱包密码。"],
+  "복사하지 마세요. 종이에 손으로 적어 주세요.": ["Don’t copy them. Write them on paper by hand.", "コピーしないでください。紙に手で書き写してください。", "请勿复制。请手写在纸上。"],
+  "아직 보내지 않았어요 — 받는 사람·통화(RVN 또는 자산)·금액·수수료를 확인한 뒤 「보내기」를 누르세요.": ["Not sent yet — check the recipient, currency (RVN or asset), amount and fee, then press “Send”.", "まだ送っていません — 受取人・通貨(RVN または資産)・金額・手数料を確認してから「送る」を押してください。", "尚未发送 — 请确认收款人、币种(RVN 或资产)、金额和手续费后再按「发送」。"],
+  "지갑이 잠겨 있어요. 잠금을 푼 뒤 다시 해 주세요.": ["The wallet is locked. Unlock it and try again.", "ウォレットはロックされています。ロックを解除してからもう一度お試しください。", "钱包已锁定。请解锁后重试。"],
+  "지갑이 잠긴 동안에는 금액 가리기·캡처 보호를 끌 수 없어요.": ["While the wallet is locked, hiding amounts and capture protection can’t be turned off.", "ウォレットのロック中は、金額の非表示とキャプチャ保護をオフにできません。", "钱包锁定期间无法关闭金额隐藏和截屏保护。"],
+};
+for (const [source, values] of Object.entries(LOCK_DARK_COPY)) {
+  (["en", "ja", "zh"] as const).forEach((language, index) => { DICT[language][source] ??= values[index]; });
+}

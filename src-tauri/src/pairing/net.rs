@@ -343,6 +343,10 @@ impl Backend for RealBackend {
         // 🔴 기존 보내기 길 그대로(주소 확인·잠금 확인·refund 기록). 암호는 넘기지 않는다 —
         //    잠겨 있으면 여기서 실패하고, 부르는 쪽은 그 전에 잠금을 확인해 대기열에 둔다.
         Box::pin(async move {
+            // 🔴 PC 지갑이 잠겨 있으면(대기화면·매장용 읽기 전용) 폰 승인 보내기도 하지 않는다(app_lock).
+            if crate::app_lock::is_locked() {
+                return Err(crate::app_lock::REMOTE_LOCKED.to_string());
+            }
             let id = format!("phone-{:032x}", rand::random::<u128>());
             let txid = crate::send::send_rvn(to.to_string(), amount_rvn, Some("폰 요청 (RV6 폰 승인)".into()), None, Some(id.clone())).await?;
             crate::send::send_ack(id)?;

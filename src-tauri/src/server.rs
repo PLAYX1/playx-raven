@@ -1324,6 +1324,10 @@ async fn admin_backup(State(st): State<ServerState>, headers: HeaderMap) -> impl
     if let Err(reason) = admin_authed_reason(&st, &headers, &json!({})) {
         return (StatusCode::UNAUTHORIZED, Json(auth_fail_json(reason)));
     }
+    // 🔴 PC 지갑이 잠겨 있으면(대기화면·매장용 읽기 전용) 폰에서도 돈·열쇠·백업 일을 하지 않는다(app_lock).
+    if crate::app_lock::is_locked() {
+        return (StatusCode::LOCKED, Json(json!({ "error": crate::app_lock::REMOTE_LOCKED })));
+    }
     match crate::backup::backup_zip(String::new(), String::new(), true).await {
         Ok(v) => (StatusCode::OK, Json(v)),
         Err(e) => (StatusCode::BAD_REQUEST, Json(json!({ "error": e }))),
@@ -1362,6 +1366,10 @@ async fn staff_refund_route(
 ) -> impl IntoResponse {
     if let Err(reason) = authed_for_reason(&st, &headers, &json!({}), "/api/staff/refund") {
         return (StatusCode::UNAUTHORIZED, Json(auth_fail_json(reason)));
+    }
+    // 🔴 PC 지갑이 잠겨 있으면(대기화면·매장용 읽기 전용) 폰에서도 돈·열쇠·백업 일을 하지 않는다(app_lock).
+    if crate::app_lock::is_locked() {
+        return (StatusCode::LOCKED, Json(json!({ "error": crate::app_lock::REMOTE_LOCKED })));
     }
     match crate::refund::staff_refund_response(b.to, b.krw, b.reason, now_unix(), b.passphrase, b.order_address, b.request_id).await {
         Ok(v) => (StatusCode::OK, Json(v)),
@@ -2868,6 +2876,10 @@ async fn admin_issue(
 ) -> impl IntoResponse {
     if let Err(reason) = admin_authed_reason(&state, &headers, &json!({})) {
         return (StatusCode::UNAUTHORIZED, Json(auth_fail_json(reason)));
+    }
+    // 🔴 PC 지갑이 잠겨 있으면(대기화면·매장용 읽기 전용) 폰에서도 돈·열쇠·백업 일을 하지 않는다(app_lock).
+    if crate::app_lock::is_locked() {
+        return (StatusCode::LOCKED, Json(json!({ "error": crate::app_lock::REMOTE_LOCKED })));
     }
     if body.confirm.trim() != body.name.trim() {
         return (

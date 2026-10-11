@@ -1,6 +1,7 @@
 // 🔴 맨 먼저 — 앱 CSP(Tauri nonce) 가 막는 style="…" 속성을 CSSOM 으로 되살린다(src/style-attrs.ts).
 import "./style-attrs";
 import "./display-mode"; // 설정 「표시 방식」 칸 + 레이아웃 토큰(docs/design/window-modes.md)
+import "./app-lock"; // 잠긴 기본 화면·매장용 읽기 전용 + 다크 돈 카드(docs/design/lock-and-dark.md)
 import "./sales-account.css";
 import { wireSalesAccount } from "./sales-account";
 import "./creator-publish.css";
@@ -8903,6 +8904,7 @@ async function reviewSend() {
 
   $("send-compose").style.display = "none";
   $("send-review").style.display = "";
+  $("r-state").hidden = false;
   emitRaviEvent("send_review");
   gateSend();
 }
@@ -9002,6 +9004,7 @@ async function doSend() {
     //    보이는 단추를 두면 안 된다.
     const back = $("s-back") as HTMLElement | null;
     if (back) back.style.display = "none";
+    $("r-state").hidden = true; // 「아직 보내지 않았어요」는 보낸 뒤에는 거짓말이다
     if (sendPreview === approved) sendPreview = null;
     loadWallet();
     // 🔴 여태 `loadWallet()` 만 불렀다. 그래서 RVN 잔액은 줄어드는데

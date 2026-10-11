@@ -71,6 +71,8 @@ pub struct Settings {
     pub open: bool,
     pub x: Option<i32>,
     pub y: Option<i32>,
+    /// 끌어다 놓으면 화면 가장자리(24px 안)에 자석처럼 붙는다. 기본 켬.
+    pub snap: bool,
 }
 
 impl Default for Settings {
@@ -88,6 +90,7 @@ impl Default for Settings {
             open: false,
             x: None,
             y: None,
+            snap: true,
         }
     }
 }
@@ -114,6 +117,7 @@ pub struct Prefs {
     pub need: Option<u8>,
     pub tz: Option<i32>,
     pub locale: Option<String>,
+    pub snap: Option<bool>,
 }
 
 pub fn apply(mut s: Settings, p: Prefs) -> Result<Settings, String> {
@@ -125,6 +129,7 @@ pub fn apply(mut s: Settings, p: Prefs) -> Result<Settings, String> {
     if let Some(v) = p.os_notify { s.os_notify = v; }
     if let Some(v) = p.need { s.need = v; }
     if let Some(v) = p.tz { s.tz = v; }
+    if let Some(v) = p.snap { s.snap = v; }
     if let Some(v) = p.locale { s.locale = if v.starts_with("en") { "en".into() } else { "ko".into() }; }
     if s.valid() { Ok(s) } else { Err(FAILURE.into()) }
 }
@@ -180,6 +185,7 @@ struct TrayItems {
     toggle: tauri::menu::MenuItem<tauri::Wry>,
     top: tauri::menu::CheckMenuItem<tauri::Wry>,
     mask: tauri::menu::CheckMenuItem<tauri::Wry>,
+    snap: tauri::menu::CheckMenuItem<tauri::Wry>,
 }
 
 static APP: std::sync::OnceLock<tauri::AppHandle> = std::sync::OnceLock::new();
@@ -205,7 +211,7 @@ pub fn watch_wanted(app: &tauri::AppHandle) -> bool {
 }
 
 fn ui_settings(s: &Settings) -> Value {
-    json!({"size":s.size,"on_top":s.on_top,"mask":s.mask,"capture_guard":s.capture_guard,
+    json!({"size":s.size,"on_top":s.on_top,"snap":s.snap,"mask":s.mask,"capture_guard":s.capture_guard,
         "sound":s.sound,"os_notify":s.os_notify,"need":s.need,"locale":s.locale,
         "os_notify_supported": cfg!(any(target_os = "macos", target_os = "windows"))})
 }
@@ -253,10 +259,19 @@ pub fn mini_state(app: tauri::AppHandle) -> Value {
     json!({"settings": ui_settings(&settings(&app)), "snapshot": snapshot(&app)})
 }
 
+/// 지갑이 잠긴 동안(대기화면·매장용 읽기 전용)에는 금액 가리기·캡처 보호를 **끌 수 없다**(켜는 것은 된다).
+pub fn change_allowed_while_locked(prev: &Settings, next: &Settings, locked: bool) -> bool {
+    !(locked && ((prev.mask && !next.mask) || (prev.capture_guard && !next.capture_guard)))
+}
+
 #[tauri::command]
 pub fn mini_set(app: tauri::AppHandle, prefs: Prefs) -> Result<Value, String> {
     let prev = settings(&app);
     let next = apply(prev.clone(), prefs)?;
+    if !change_allowed_while_locked(&prev, &next, crate::app_lock::is_locked()) {
+        sync_tray(&app);
+        return Err("지갑이 잠긴 동안에는 금액 가리기·캡처 보호를 끌 수 없어요.".into());
+    }
     store(&app, next.clone())?;
     if let Some(w) = app.get_webview_window(LABEL) {
         if prev.on_top != next.on_top {
@@ -295,7 +310,7 @@ pub fn mini_seen(app: tauri::AppHandle) {
     push_snapshot(&app);
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 struct Rect { x: i32, y: i32, w: i32, h: i32 }
 
 fn clamp(x: i32, y: i32, w: i32, h: i32, monitors: &[Rect]) -> (i32, i32) {
@@ -320,6 +335,69 @@ fn monitors(w: &tauri::WebviewWindow) -> Vec<Rect> {
             Rect { x: a.position.x, y: a.position.y, w: a.size.width as i32, h: a.size.height as i32 }
         })
         .collect()
+}
+
+/// 가장자리 자석 — 작업 영역 가장자리에서 `threshold` 안이면 `gap` 만큼 띄워 붙인다(물리 px).
+/// 가로·세로 따로. 멀면 그대로. 여러 화면이면 창 가운데가 든 화면(없으면 가장 가까운 화면).
+fn snap_to_edges(x: i32, y: i32, w: i32, h: i32, monitors: &[Rect], threshold: i32, gap: i32) -> (i32, i32) {
+    let (cx, cy) = (x + w / 2, y + h / 2);
+    let Some(m) = monitors
+        .iter()
+        .min_by_key(|m| {
+            let dx = (m.x - cx).max(cx - (m.x + m.w)).max(0) as i64;
+            let dy = (m.y - cy).max(cy - (m.y + m.h)).max(0) as i64;
+            dx * dx + dy * dy
+        })
+    else {
+        return (x, y);
+    };
+    let pull = |v: i32, lo: i32, hi: i32| {
+        if (v - (lo + gap)).abs() <= threshold { lo + gap } else if (hi - gap - v).abs() <= threshold { hi - gap } else { v }
+    };
+    (pull(x, m.x, m.x + m.w - w), pull(y, m.y, m.y + m.h - h))
+}
+
+/// 구석으로 보내기 — tr(오른쪽 위)·br·tl·bl. 첫 화면(주 화면)의 작업 영역 기준.
+fn corner_position(which: &str, w: i32, h: i32, m: Rect, gap: i32) -> (i32, i32) {
+    let right = m.x + m.w - w - gap;
+    let bottom = m.y + m.h - h - gap;
+    match which {
+        "tl" => (m.x + gap, m.y + gap),
+        "bl" => (m.x + gap, bottom),
+        "br" => (right, bottom),
+        _ => (right, m.y + gap),
+    }
+}
+
+static MOVE_GEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// 끌기가 끝난 뒤(움직임이 300ms 멎으면) 한 번 붙인다 — 끄는 도중에는 손을 따라간다(1:1).
+fn snap_after_drag(app: &tauri::AppHandle) {
+    let gen = MOVE_GEN.fetch_add(1, Ordering::Relaxed) + 1;
+    let h = app.clone();
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+        if MOVE_GEN.load(Ordering::Relaxed) != gen || !settings(&h).snap {
+            return;
+        }
+        let Some(w) = h.get_webview_window(LABEL) else { return };
+        let (Ok(p), Ok(size)) = (w.outer_position(), w.outer_size()) else { return };
+        let sf = w.scale_factor().unwrap_or(1.0);
+        let to = snap_to_edges(p.x, p.y, size.width as i32, size.height as i32, &monitors(&w), (24.0 * sf) as i32, (8.0 * sf) as i32);
+        if to != (p.x, p.y) {
+            let _ = w.set_position(tauri::PhysicalPosition::new(to.0, to.1));
+        }
+    });
+}
+
+fn send_to_corner(app: &tauri::AppHandle, which: &str) -> Result<(), String> {
+    show(app)?;
+    let w = app.get_webview_window(LABEL).ok_or(FAILURE)?;
+    let size = w.outer_size().map_err(|_| FAILURE)?;
+    let sf = w.scale_factor().unwrap_or(1.0);
+    let m = *monitors(&w).first().ok_or(FAILURE)?;
+    let (x, y) = corner_position(which, size.width as i32, size.height as i32, m, (16.0 * sf) as i32);
+    keep_inside(&w, x, y).map(|_| ())
 }
 
 fn keep_inside(w: &tauri::WebviewWindow, x: i32, y: i32) -> Result<(i32, i32), String> {
@@ -352,6 +430,8 @@ fn build(app: &tauri::AppHandle, s: &Settings) -> Result<tauri::WebviewWindow, S
             let mut s = state.settings.lock().unwrap_or_else(|e| e.into_inner());
             s.x = Some(p.x);
             s.y = Some(p.y);
+            drop(s);
+            snap_after_drag(&h);
         }
         tauri::WindowEvent::Focused(false) => {
             let _ = persist(&settings(&h));
@@ -423,6 +503,7 @@ fn sync_tray(app: &tauri::AppHandle) {
         });
         let _ = t.top.set_checked(s.on_top);
         let _ = t.mask.set_checked(s.mask);
+        let _ = t.snap.set_checked(s.snap);
     }
 }
 
@@ -454,9 +535,16 @@ pub fn tray_submenu(app: &tauri::App) -> tauri::Result<tauri::menu::Submenu<taur
     let lm = MenuItem::with_id(app, "mini-size-l", if k { "크게" } else { "Large" }, true, None::<&str>)?;
     let top = CheckMenuItem::with_id(app, "mini-top", if k { "항상 위에" } else { "Keep on top" }, true, s.on_top, None::<&str>)?;
     let mask = CheckMenuItem::with_id(app, "mini-mask", if k { "금액 가리기" } else { "Hide amounts" }, true, s.mask, None::<&str>)?;
-    app.manage(TrayItems { toggle: toggle.clone(), top: top.clone(), mask: mask.clone() });
+    let snap = CheckMenuItem::with_id(app, "mini-snap", if k { "가장자리에 붙이기" } else { "Snap to screen edges" }, true, s.snap, None::<&str>)?;
+    let corners = [("tr", "오른쪽 위", "Top right"), ("br", "오른쪽 아래", "Bottom right"), ("tl", "왼쪽 위", "Top left"), ("bl", "왼쪽 아래", "Bottom left")]
+        .iter()
+        .map(|(id, ko, en)| MenuItem::with_id(app, format!("mini-corner-{id}"), if k { *ko } else { *en }, true, None::<&str>))
+        .collect::<tauri::Result<Vec<_>>>()?;
+    let corner_refs: Vec<&dyn tauri::menu::IsMenuItem<tauri::Wry>> = corners.iter().map(|i| i as &dyn tauri::menu::IsMenuItem<tauri::Wry>).collect();
+    let corner_menu = Submenu::with_items(app, if k { "구석으로 보내기" } else { "Move to corner" }, true, &corner_refs)?;
+    app.manage(TrayItems { toggle: toggle.clone(), top: top.clone(), mask: mask.clone(), snap: snap.clone() });
     let sep = PredefinedMenuItem::separator(app)?;
-    Submenu::with_items(app, if k { "미니 창" } else { "Mini window" }, true, &[&toggle, &sep, &sm, &mm, &lm, &top, &mask])
+    Submenu::with_items(app, if k { "미니 창" } else { "Mini window" }, true, &[&toggle, &sep, &sm, &mm, &lm, &top, &mask, &snap, &corner_menu])
 }
 
 pub fn on_menu(app: &tauri::AppHandle, id: &str) {
@@ -474,6 +562,11 @@ pub fn on_menu(app: &tauri::AppHandle, id: &str) {
             let v = !settings(app).mask;
             mini_set(app.clone(), Prefs { mask: Some(v), ..Prefs::default() }).map(|_| ())
         }
+        "mini-snap" => {
+            let v = !settings(app).snap;
+            mini_set(app.clone(), Prefs { snap: Some(v), ..Prefs::default() }).map(|_| ())
+        }
+        c if c.starts_with("mini-corner-") => send_to_corner(app, c.trim_start_matches("mini-corner-")),
         _ => Ok(()),
     };
     if r.is_err() {
@@ -568,7 +661,50 @@ pub fn setup(app: &mut tauri::App) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn locked_wallet_cannot_unmask_or_drop_capture_guard() {
+        let on = Settings::default();
+        let unmasked = Settings { mask: false, ..Settings::default() };
+        let unguarded = Settings { capture_guard: false, ..Settings::default() };
+        assert!(!change_allowed_while_locked(&on, &unmasked, true));
+        assert!(!change_allowed_while_locked(&on, &unguarded, true));
+        assert!(change_allowed_while_locked(&unmasked, &on, true), "잠긴 동안 가림 켜기는 된다");
+        assert!(change_allowed_while_locked(&on, &Settings { size: "l".into(), ..Settings::default() }, true));
+        assert!(change_allowed_while_locked(&on, &unmasked, false), "풀리면 원래대로");
+        let src = include_str!("mini.rs");
+        let f = &src[src.find("pub fn mini_set").unwrap()..];
+        assert!(f[..f.find("store(&app").unwrap()].contains("change_allowed_while_locked"), "저장 전에 검사");
+    }
+
     use super::*;
+
+    #[test]
+    fn edge_snap_pulls_only_when_close_and_keeps_gap() {
+        let ms = [Rect { x: 0, y: 0, w: 1440, h: 900 }, Rect { x: 1440, y: 0, w: 1920, h: 1080 }];
+        // 오른쪽 위 가장자리 근처(20px 안쪽) → 가장자리에서 8px 띄워 붙는다.
+        assert_eq!(snap_to_edges(1440 - 300 - 20, 15, 300, 140, &ms[..1], 24, 8), (1440 - 300 - 8, 8));
+        // 가운데면 그대로.
+        assert_eq!(snap_to_edges(500, 400, 300, 140, &ms, 24, 8), (500, 400));
+        // 왼쪽만 가깝다 → 가로만 붙고 세로는 그대로.
+        assert_eq!(snap_to_edges(30, 400, 300, 140, &ms, 24, 8), (8, 400));
+        // 둘째 화면 안에서는 둘째 화면 가장자리에 붙는다(첫 화면 오른쪽 끝이 아니라).
+        assert_eq!(snap_to_edges(1440 + 12, 1080 - 140 - 5, 300, 140, &ms, 24, 8), (1440 + 8, 1080 - 140 - 8));
+        // 화면이 없으면 그대로.
+        assert_eq!(snap_to_edges(3, 3, 10, 10, &[], 24, 8), (3, 3));
+    }
+
+    #[test]
+    fn corners_stay_inside_the_work_area() {
+        let m = Rect { x: 0, y: 25, w: 1440, h: 875 };
+        assert_eq!(corner_position("tr", 300, 140, m, 16), (1440 - 300 - 16, 25 + 16));
+        assert_eq!(corner_position("br", 300, 140, m, 16), (1440 - 300 - 16, 900 - 140 - 16));
+        assert_eq!(corner_position("tl", 300, 140, m, 16), (16, 41));
+        assert_eq!(corner_position("bl", 300, 140, m, 16), (16, 900 - 140 - 16));
+        assert_eq!(corner_position("??", 300, 140, m, 16), corner_position("tr", 300, 140, m, 16));
+        assert!(Settings::default().snap, "자석 기본 켬");
+        assert!(serde_json::from_str::<Settings>(r#"{"size":"m"}"#).unwrap().snap, "옛 설정 파일(칸 없음)도 켬");
+        assert_eq!(apply(Settings::default(), Prefs { snap: Some(false), ..Default::default() }).unwrap().snap, false);
+    }
 
     #[test]
     fn mini_window_can_only_reach_read_only_commands() {

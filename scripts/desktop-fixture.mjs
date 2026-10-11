@@ -47,6 +47,7 @@ export function installFixture({theme, sales, seller = false}) {
     datadir_status:{path:'/public-fixture', exists:true},
     node_identity:{name:'홈 배치 확인', id:'public-home-fixture'},
     money_status:{}, backup_pass_state:{configured:true},
+    app_lock_state:{locked:false, reason:null, since:null, wallet_encrypted:true, backup_pass:true},
     start_phone_server:{ip:'127.0.0.1', admin_url:'http://127.0.0.1:8790/admin', staff_url:'http://127.0.0.1:8790/staff', scan_url:'http://127.0.0.1:8790/scan', customer_url:'http://127.0.0.1:8790/'},
     // Existing startup may request shop publication. These are inert IPC stubs;
     // no native code, key derivation, HTTP or chain RPC is ever invoked.

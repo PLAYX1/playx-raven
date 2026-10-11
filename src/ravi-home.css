@@ -62,8 +62,12 @@
 #ravibub.ravibub, #live-note, #live-note.on, #busybar { left:104px !important; right:auto !important; bottom:20px !important; transform:none !important; max-width:min(380px,calc(100vw - 776px)) !important; width:auto; box-sizing:border-box; }
 @media(max-width:900px) { #ravibub.ravibub, #live-note, #busybar { top:96px !important; bottom:auto !important; max-width:calc(100vw - 136px) !important; } }
 .ravi-paused .ravi-face, .ravi-paused .ravi-face * { animation:none !important; transition:none !important; }
-#send-review, #send-compose, #w-balance, #sdw .sheet-box, #wrs .sheet-box,
 #askwrap.on .askbox { --panel:#fff; --bg:#fff; --text:#1f224e; --muted:#59637d; --line:#d9e1ec; background:#fff !important; color:#1f224e; animation:none !important; }
+/* 돈 화면(지갑 잔액·보내기 작성/검토·복구 단어·12단어 되살리기)의 흰 카드는 **라이트 테마에서만**.
+   다크에서 흰색으로 강제하던 규칙은 폐지(대표 결정 2026-10-11) → 다크 돈 카드·민감 화면은 src/money-card.css.
+   :where() 로 감싸 옛 규칙과 같은 우선순위를 지킨다(라이트 화면은 한 픽셀도 바뀌지 않는다). */
+:where(:root[data-theme="light"]) :is(#send-review, #send-compose, #w-balance, #sdw .sheet-box, #wrs .sheet-box) { --panel:#fff; --bg:#fff; --text:#1f224e; --muted:#59637d; --line:#d9e1ec; background:#fff !important; color:#1f224e; animation:none !important; }
+@media (prefers-color-scheme: light) { :where(:root:not([data-theme="dark"])) :is(#send-review, #send-compose, #w-balance, #sdw .sheet-box, #wrs .sheet-box) { --panel:#fff; --bg:#fff; --text:#1f224e; --muted:#59637d; --line:#d9e1ec; background:#fff !important; color:#1f224e; animation:none !important; } }
 .ravi-approval-note { font-size:16px; margin:16px 0; }
 @media(max-width:740px) {
   #ravi-conversation { padding:12px; }

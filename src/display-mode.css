@@ -30,3 +30,5 @@
   .rv-dm-mode { transition: border-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease, transform var(--dur-press) var(--ease-out); }
   .rv-dm-mode:active { transform: scale(.98); }
 }
+/* 매장용 읽기 전용 단추 — 한 줄 전체를 쓰고, 큰 창이 갈 수 없는 좁은 폭(320)의 긴 낱말은 말줄임(전체 문구는 title). */
+.rv-dm-store button { flex: 1 1 100%; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

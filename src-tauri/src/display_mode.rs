@@ -239,7 +239,8 @@ pub fn starts_without_main() -> bool {
 
 /// 지켜보기(mini_watch)가 돌 이유 — 대기화면이 떠 있거나 창 없는 모드일 때.
 pub fn wants_watch(app: &tauri::AppHandle) -> bool {
-    app.get_webview_window(STANDBY).is_some() || settings(app).mode != "window"
+    // 잠긴 동안에도 돈다 — 잠긴 기본 화면·매장용 읽기 전용 화면의 입금 표시(읽기만).
+    app.get_webview_window(STANDBY).is_some() || settings(app).mode != "window" || crate::app_lock::is_locked()
 }
 
 fn copy<'a>(locale: &str, ko: &'a str, en: &'a str) -> &'a str {
@@ -297,6 +298,10 @@ pub fn on_snapshot(app: &tauri::AppHandle) {
     let snap = crate::mini::snapshot(app);
     if app.get_webview_window(STANDBY).is_some() {
         let _ = app.emit_to(STANDBY, "standby-snapshot", &snap);
+    }
+    // 잠긴 큰 창(잠긴 기본 화면·매장용 읽기 전용)도 같은 한 장(가림 적용)만 받는다.
+    if crate::app_lock::is_locked() {
+        let _ = app.emit_to("main", "app-lock-snapshot", &snap);
     }
     let want = s.mode != "window";
     let mut guard = d.tray.lock().unwrap_or_else(|e| e.into_inner());
@@ -449,6 +454,10 @@ pub fn standby_open(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 fn open_standby(app: &tauri::AppHandle) -> Result<(), String> {
+    // 🔴 들어가는 **순간** 지갑을 잠근다(대표 결정 2026-10-11) — 창을 만들기 전에. 창 만들기가 실패해도
+    //    잠금은 남는다(안전한 쪽). 끌 때는 인증 없이 잠긴 기본 화면으로(`exit_standby` 는 풀지 않는다).
+    //    저장 실패는 메모리 잠금이 이미 걸렸으므로 대기화면을 막지 않는다.
+    let _ = crate::app_lock::lock("standby");
     if let Some(w) = app.get_webview_window(STANDBY) {
         let _ = w.set_focus();
         return Ok(());
