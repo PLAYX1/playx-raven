@@ -3,6 +3,7 @@ import "./style-attrs";
 import "./display-mode"; // 설정 「표시 방식」 칸 + 레이아웃 토큰(docs/design/window-modes.md)
 import "./app-lock"; // 잠긴 기본 화면·매장용 읽기 전용 + 다크 돈 카드(docs/design/lock-and-dark.md)
 import "./wallet-file"; // 지갑 파일 내보내기·가져오기 + 백업 열쇠 52글자 종이 단계(0.8.7)
+import { routeBackupDrop } from "./backup-drop-route"; // 0.9.0 — 놓은 .pxlock·.rvwallet 은 자산 드롭보다 먼저 복원 확인 창으로
 import "./sales-account.css";
 import { wireSalesAccount } from "./sales-account";
 import "./creator-publish.css";
@@ -5351,6 +5352,9 @@ function looksLikeImage(path: string): boolean {
 
 async function onDropped(paths: string[]) {
   dropVeil(false);
+  // 0.9.0 — 백업 파일(.pxlock·.rvwallet)은 어느 화면에서든 확장자로 먼저 가른다. 섞여 있어도 자산 흐름으로
+  //    넘기지 않는다(src/backup-drop-route.ts). 확인 창만 열고, 바꾸는 것은 확인 뒤 Rust(restore_drop.rs).
+  if (routeBackupDrop(paths)) return;
   const j = dropJob();
   if (!j.ok || !paths.length) return;
 

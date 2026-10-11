@@ -29,7 +29,9 @@ use std::path::{Path, PathBuf};
 pub const NEW_DIR: &str = "RavenVault-Backup";
 /// Folders older app versions wrote, newest first. Never written again.
 pub const OLD_DIRS: &[&str] = &["PLAYXRaven-Backup", "PLAYXRaven-백업", "RavenVault Desktop 백업", "PLAY X Raven 백업"];
-const MAX_BYTES: u64 = 4 * 1024 * 1024 * 1024;
+pub(crate) const MAX_BYTES: u64 = 4 * 1024 * 1024 * 1024;
+/// 잠근 백업 파일의 첫 여덟 바이트. 끌어다 놓은 복원(`restore_drop.rs`)도 이 검사를 그대로 쓴다.
+pub(crate) const LOCK_MAGIC: &[u8; 8] = b"PXRLOCK1";
 
 fn scheme_of(name: &str) -> Option<(&'static str, bool)> {
     // (scheme, locked-by-name)
@@ -53,7 +55,7 @@ fn is_generation_folder(name: &str) -> Option<&'static str> {
     (hex.len() == 16 && hex.bytes().all(|b| b.is_ascii_hexdigit())).then_some(scheme)
 }
 
-fn digest(path: &Path) -> Option<(u64, String, [u8; 8])> {
+pub(crate) fn digest(path: &Path) -> Option<(u64, String, [u8; 8])> {
     use sha2::{Digest, Sha256};
     let mut file = std::fs::File::open(path).ok()?;
     let mut hasher = Sha256::new();
@@ -99,7 +101,7 @@ fn check_file(path: &Path, place: &str, items: &mut Vec<Value>, rejected: &mut V
         Err(_) => return,
     }
     let Some((size, sha256, head)) = digest(path) else { return reject(rejected, path, place, "파일을 읽지 못했습니다.") };
-    let locked = &head == b"PXRLOCK1";
+    let locked = &head == LOCK_MAGIC;
     if locked_name && !locked { return reject(rejected, path, place, "잠근 백업 형식이 아닙니다. 파일이 손상됐을 수 있습니다."); }
     if !locked && head[..4] != *b"PK\x03\x04" { return reject(rejected, path, place, "백업 파일 형식이 아닙니다."); }
     let receipt_file = crate::backup::receipt_path(path);

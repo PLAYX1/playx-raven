@@ -124,6 +124,8 @@ mod upload;
 mod spec;
 mod lockbox;
 mod walletfile;
+// 0.9.0 — 끌어다 놓은 백업(.pxlock·.rvwallet)에서 되살리기. 기존 복원 함수만 부른다.
+mod restore_drop;
 mod rehearse;
 // 0.4.9 — 복구 단어(12단어)로 지갑 되살리기. 검사·주소(words) · 흐름(words_restore).
 mod words;
@@ -494,6 +496,11 @@ pub fn run() {
             walletfile::wallet_import_apply,
             walletfile::wallet_import_cancel,
             walletfile::key_sheet_print,
+            walletfile::wallet_core_export,
+            restore_drop::restore_drop_inspect,
+            restore_drop::restore_drop_open,
+            restore_drop::restore_drop_apply,
+            restore_drop::restore_drop_cancel,
             backup::external_drives,
             backup::cloud_folders,
             sample::sample_check,

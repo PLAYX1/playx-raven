@@ -18,6 +18,22 @@
 //!   「백업 되돌리기」 문(`recover::restore_apply`)을 그대로 쓴다 — 노드가 꺼져 있어야 하고, 현재 `wallet.dat`
 //!   은 **먼저 따로 보관**(`before-restore`)한 뒤에 바뀐다.
 //! - 열쇠·암호·지갑 암호·복구 단어는 로그·오류 문구·반환값에 넣지 않는다.
+//!
+//! ## 🔴 단 하나의 좁은 예외 — 「코어용 wallet.dat」(0.9.0, 대표 결정 2026-10-12)
+//!
+//! 레이븐볼트를 떠나 레이븐 코어로 옮길 길(탈출구)이 있어야 믿고 쓸 수 있다. 코어는 52글자로 잠근
+//! `.rvwallet` 을 못 연다. 그래서 **`wallet_core_export` 한 명령만** 52글자 잠금이 없는 코어용
+//! `wallet.dat` 을 만든다. 그 대신 아래를 **모두** 지킨다(시험 `core_export_*`):
+//!
+//! - **지갑 암호가 있어야만** 한다(`core_export_gate`). 개인키는 지갑 암호로 암호화돼 있어야 하고, 없으면
+//!   `NEEDS_WALLET_PASS` 로 막는다. 지갑 암호로 **다시 인증**(같은 `reauth`·같은 기다림)한다.
+//! - **노드의 안전한 스냅샷(`backupwallet`)으로만** 만든다. 노드 폴더의 `wallet.dat` 을 직접 복사하지 않는다.
+//!   스냅샷은 앱 전용 비공개 작업 폴더에 받고, 머리(BDB·SQLite)를 확인한 뒤 사용자가 선택창에서 고른 폴더에
+//!   **새 파일**(`wallet-for-ravencoin-core-날짜.dat`, 덮어쓰기 없음)로 두고 다시 읽어 지문을 대조한다.
+//! - 이름은 언제나 `.dat` 이다. **평문이 `.rvwallet` 이름·`seal_into` 경로로 나가는 일은 없다** —
+//!   `wallet_export`(`.rvwallet`)는 지금처럼 항상 52글자로 잠근다.
+//! - 잠긴 동안 거부(`LOCKED_ALLOWED` 에 없음) · 폰·직원 HTTP 에 없음 · 비밀은 로그·오류·반환값에 없음.
+//! - 지갑 암호가 10글자보다 짧으면(코어에서 걸었던 암호일 수 있다) 화면이 경고한다(`weak_pass`).
 
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
@@ -30,15 +46,15 @@ pub const NEEDS_WALLET_PASS: &str = "NEEDS_WALLET_PASS:";
 const NEEDS_WALLET_PASS_SAY: &str = "지갑 암호가 아직 없어요. 암호가 없는 지갑은 파일로 꺼내면 그 파일을 주운 사람이 돈을 쓸 수 있어요. 먼저 「지갑 화면 → 암호 걸기」에서 10글자 이상 암호를 정한 뒤 다시 해 주세요.";
 const NODE_DOWN_SAY: &str = "노드가 응답하지 않아 지갑 암호가 있는지 확인할 수 없어요. 노드를 켠 뒤 다시 해 주세요.";
 const WRONG_PASS_SAY: &str = "지갑 암호가 맞지 않습니다.";
-const MAX_IMPORT_BYTES: u64 = 256 * 1024 * 1024;
+pub(crate) const MAX_IMPORT_BYTES: u64 = 256 * 1024 * 1024;
 
 static BUSY: AtomicBool = AtomicBool::new(false);
 static FAILS: AtomicU32 = AtomicU32::new(0);
 static NEXT_TRY: AtomicI64 = AtomicI64::new(0);
 
-struct Busy;
+pub(crate) struct Busy;
 impl Busy {
-    fn take() -> Result<Self, String> {
+    pub(crate) fn take() -> Result<Self, String> {
         BUSY.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
             .map_err(|_| "다른 지갑 파일 작업이 진행 중이에요. 끝난 뒤 다시 해 주세요.".to_string())?;
         Ok(Busy)
@@ -225,11 +241,26 @@ pub fn seal_into(plain: &Path, dest_dir: &Path, key: &[u8; 32], work: &Path, sta
     Ok((fin, sealed_len))
 }
 
+/// 지갑 암호를 연달아 틀려 기다려야 하는 남은 초(0 이면 바로). 내보내기·코어용·끌어다 놓은 복원이 같이 쓴다.
+fn reauth_wait_left(at: i64) -> i64 {
+    NEXT_TRY.load(Ordering::Acquire) - at
+}
+
+/// 지갑 암호를 한 번 틀렸다 — `app_lock::backoff_secs` 로 다음 시도 시각을 늦춘다.
+fn note_wrong_wallet_pass(at: i64) {
+    let f = FAILS.fetch_add(1, Ordering::AcqRel) + 1;
+    NEXT_TRY.store(at + crate::app_lock::backoff_secs(f), Ordering::Release);
+}
+
+fn wait_say(wait: i64) -> String {
+    format!("여러 번 틀려서 잠시 기다려야 해요. {wait}초 뒤에 다시 해 주세요.")
+}
+
 /// 지갑 암호 재인증(성공하면 지갑은 하기 전 상태로 돌아간다). 암호는 반환·로그에 남지 않는다.
-async fn reauth(pass: &str) -> Result<(), String> {
-    let wait = NEXT_TRY.load(Ordering::Acquire) - now();
+pub(crate) async fn reauth(pass: &str) -> Result<(), String> {
+    let wait = reauth_wait_left(now());
     if wait > 0 {
-        return Err(format!("여러 번 틀려서 잠시 기다려야 해요. {wait}초 뒤에 다시 해 주세요."));
+        return Err(wait_say(wait));
     }
     if pass.is_empty() {
         return Err("지갑 암호를 넣어 주세요.".into());
@@ -248,11 +279,45 @@ async fn reauth(pass: &str) -> Result<(), String> {
             Ok(())
         }
         Err(e) if e.code == Some(-14) => {
-            let f = FAILS.fetch_add(1, Ordering::AcqRel) + 1;
-            NEXT_TRY.store(now() + crate::app_lock::backoff_secs(f), Ordering::Release);
+            note_wrong_wallet_pass(now());
             Err(WRONG_PASS_SAY.into())
         }
         Err(_) => Err("지갑 잠금을 확인하지 못했어요. 노드 연결을 확인한 뒤 다시 해 주세요.".into()),
+    }
+}
+
+/// 끌어다 놓은 백업에서 되살리기 전의 본인 확인(`restore_drop.rs`). 되살리기는 노드가 **꺼져 있어야** 하므로
+/// 노드에게만 물을 수 없다 — 잠금 풀기(`app_lock::app_unlock`)와 **같은 판단**(`app_lock::decide`)을 쓴다:
+/// 노드가 켜져 있고 지갑 암호가 있으면 노드가 확인(`reauth`), 노드가 꺼져 있으면 백업 암호 봉투로만 확인
+/// (이 앱은 지갑 암호를 걸 때 같은 암호로 봉투를 만든다). 틀리면 같은 기다림. 돌려주는 것: 무엇으로 확인했나.
+pub(crate) async fn reauth_for_restore(pass: &str) -> Result<&'static str, String> {
+    use crate::app_lock::{decide, Decision, Probe};
+    let wait = reauth_wait_left(now());
+    if wait > 0 {
+        return Err(wait_say(wait));
+    }
+    let given = !pass.is_empty();
+    let probe = match crate::raven::wallet_lock_state().await {
+        Ok(st) if st["encrypted"].as_bool() == Some(true) => {
+            reauth(pass).await?;
+            return Ok("wallet");
+        }
+        Ok(_) => Probe::NoPassword,
+        Err(_) => Probe::NodeDown,
+    };
+    let envelope = if given {
+        crate::lockbox::pass_matches(pass)
+    } else {
+        crate::lockbox::backup_pass_state()["set"].as_bool().unwrap_or(false).then_some(false)
+    };
+    match decide(probe, given, envelope) {
+        Decision::Unlock { verified_by } => Ok(verified_by),
+        Decision::Wrong => {
+            note_wrong_wallet_pass(now());
+            Err(WRONG_PASS_SAY.into())
+        }
+        Decision::NeedPassword => Err("지갑 암호를 넣어 주세요.".into()),
+        Decision::CannotVerify => Err("노드가 꺼져 있고 백업 암호도 정해져 있지 않아 지갑 암호를 확인할 수 없어요. 노드를 켠 뒤 다시 해 주세요(되살리기 직전에 끄시면 돼요).".into()),
     }
 }
 
@@ -298,6 +363,152 @@ pub async fn wallet_export(dest: String, wallet_pass: String) -> Result<Value, S
         "size": size,
         "verified": true,
         "backup_pass": crate::lockbox::backup_pass_state()["set"].as_bool().unwrap_or(false),
+    }))
+}
+
+// ─────────────── 코어용 wallet.dat — 레이븐 코어로 옮기기(0.9.0, 좁은 예외) ───────────────
+
+/// 코어용 파일 이름 앞부분. 끝은 언제나 `.dat` — `.rvwallet`(잠근 파일)과 헷갈리지 않게.
+pub const CORE_PREFIX: &str = "wallet-for-ravencoin-core-";
+const CORE_EXT: &str = "dat";
+const NEEDS_WALLET_PASS_CORE_SAY: &str = "지갑 암호가 아직 없어요. 코어용 wallet.dat 은 52글자 열쇠로 잠기지 않아서, 지갑 암호가 없으면 그 파일을 주운 사람이 바로 돈을 쓸 수 있어요. 먼저 「지갑 화면 → 암호 걸기」에서 10글자 이상 암호를 정한 뒤 다시 해 주세요.";
+
+/// 코어용 내보내기의 첫 관문(순수 함수 — 시험). 지갑 암호가 **있다고 확인될 때만** 통과.
+/// 없으면 `NEEDS_WALLET_PASS`(화면이 암호 걸기를 안내), 노드가 답하지 않아 모르면 노드를 켜라고.
+pub fn core_export_gate(wallet_encrypted: Option<bool>) -> Result<(), String> {
+    match wallet_encrypted {
+        Some(true) => Ok(()),
+        Some(false) => Err(format!("{NEEDS_WALLET_PASS}{NEEDS_WALLET_PASS_CORE_SAY}")),
+        None => Err(NODE_DOWN_SAY.into()),
+    }
+}
+
+/// 지갑 파일 형식 — 머리 바이트로 **확인되는 범위만** 이름 붙인다.
+/// `bdb`: Berkeley DB btree 메타 페이지의 마법수 0x00053162(오프셋 12, 두 엔디언) ·
+/// `sqlite`: 「SQLite format 3\0」 머리. 그 밖은 `None`(코어가 여는지 우리가 말할 수 없다).
+pub fn wallet_format(head: &[u8]) -> Option<&'static str> {
+    if head.starts_with(b"SQLite format 3\0") {
+        return Some("sqlite");
+    }
+    if head.len() >= 16 {
+        let m = &head[12..16];
+        if m == [0x62, 0x31, 0x05, 0x00] || m == [0x00, 0x05, 0x31, 0x62] {
+            return Some("bdb");
+        }
+    }
+    None
+}
+
+/// 지갑 암호가 약한가 — 길이만 본다(이 앱은 10글자 미만을 받지 않지만, 레이븐 코어에서 걸었던 암호는 더 짧을 수 있다).
+pub fn weak_wallet_pass(pass: &str) -> bool {
+    pass.chars().count() < crate::lockbox::MIN_PASS
+}
+
+fn head16(path: &Path) -> Vec<u8> {
+    use std::io::Read;
+    let mut h = [0u8; 16];
+    let n = std::fs::File::open(path).and_then(|mut f| f.read(&mut h)).unwrap_or(0);
+    h[..n].to_vec()
+}
+
+/// 노드가 만든 스냅샷(`backupwallet` 결과)을 고른 폴더에 **새 파일**로 두고, 다시 읽어 지문을 대조한다.
+/// 돌려주는 것: (파일 경로, 크기, 형식). 실패하면 만들던 파일을 지운다. 이미 있는 파일은 덮어쓰지 않는다.
+pub fn place_core_copy(snapshot: &Path, dest_dir: &Path, stamp: &str) -> Result<(PathBuf, u64, &'static str), String> {
+    let (len, sha) = digest(snapshot)?;
+    if len == 0 {
+        return Err("노드가 만든 지갑 사본이 비어 있어요. 노드 상태를 확인한 뒤 다시 해 주세요.".into());
+    }
+    let format = wallet_format(&head16(snapshot))
+        .ok_or_else(|| "노드가 만든 사본이 지갑 파일처럼 보이지 않아요. 아무 파일도 만들지 않았어요.".to_string())?;
+    let need = len.saturating_add(4 * 1024 * 1024);
+    if let Some(free) = free_bytes(dest_dir) {
+        if free < need {
+            return Err(format!(
+                "저장할 곳의 빈 공간이 모자라요. 필요한 공간은 약 {}MB, 남은 공간은 {}MB 예요.",
+                need / 1_048_576 + 1,
+                free / 1_048_576
+            ));
+        }
+    }
+    let mut chosen: Option<(PathBuf, PathBuf, std::fs::File)> = None;
+    for n in 0..100 {
+        let base = if n == 0 { format!("{CORE_PREFIX}{stamp}") } else { format!("{CORE_PREFIX}{stamp}-{}", n + 1) };
+        let fin = dest_dir.join(format!("{base}.{CORE_EXT}"));
+        let part = dest_dir.join(format!(".{base}.{CORE_EXT}.part"));
+        if std::fs::symlink_metadata(&fin).is_ok() {
+            continue;
+        }
+        let mut o = std::fs::OpenOptions::new();
+        o.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            o.mode(0o600);
+        }
+        match o.open(&part) {
+            Ok(f) => {
+                chosen = Some((fin, part, f));
+                break;
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
+                return Err("이 폴더에 쓸 권한이 없어요. 다른 폴더를 고르거나 폴더 권한을 확인해 주세요.".into())
+            }
+            Err(_) => return Err("이 폴더에 파일을 만들지 못했어요. 다른 폴더를 골라 주세요.".into()),
+        }
+    }
+    let (fin, part, mut file) = chosen.ok_or_else(|| "같은 이름의 파일이 너무 많아요. 다른 폴더를 골라 주세요.".to_string())?;
+    let written = (|| -> Result<(), String> {
+        let mut src = std::fs::File::open(snapshot).map_err(|_| "노드가 만든 사본을 읽지 못했어요.".to_string())?;
+        std::io::copy(&mut src, &mut file).map_err(|_| "파일을 끝까지 쓰지 못했어요. 빈 공간과 연결(USB)을 확인해 주세요.".to_string())?;
+        file.sync_all().map_err(|_| "파일을 저장소에 확정하지 못했어요.".to_string())?;
+        drop(file);
+        std::fs::rename(&part, &fin).map_err(|_| "파일 이름을 확정하지 못했어요.".to_string())
+    })();
+    if let Err(e) = written {
+        let _ = std::fs::remove_file(&part);
+        return Err(e);
+    }
+    // 쓴 뒤 다시 읽어 확인 — 크기·지문·머리가 스냅샷과 같아야 한다.
+    let verified = digest(&fin).ok().filter(|(l, s)| *l == len && *s == sha).is_some() && wallet_format(&head16(&fin)) == Some(format);
+    if !verified {
+        let _ = std::fs::remove_file(&fin);
+        return Err("쓴 파일을 다시 읽었더니 내용이 달라요. 만든 파일은 지웠어요. 저장 장치를 확인한 뒤 다시 해 주세요.".into());
+    }
+    Ok((fin, len, format))
+}
+
+/// 코어용 wallet.dat 꺼내기 — 레이븐 코어로 옮길 때만. 머리 주석의 「좁은 예외」 규칙을 모두 지킨다.
+#[tauri::command]
+pub async fn wallet_core_export(dest: String, wallet_pass: String) -> Result<Value, String> {
+    let _busy = Busy::take()?;
+    let dest_dir = check_dest(&dest)?;
+    // 1) 지갑 암호가 있어야 한다(없으면 NEEDS_WALLET_PASS).
+    let enc = crate::raven::wallet_lock_state().await.ok().and_then(|v| v["encrypted"].as_bool());
+    core_export_gate(enc)?;
+    // 2) 지갑 암호로 다시 인증(같은 기다림). 약한지는 길이만 보고, 암호는 곧바로 버린다.
+    reauth(&wallet_pass).await?;
+    let weak = weak_wallet_pass(&wallet_pass);
+    drop(wallet_pass);
+    // 3) 노드의 안전한 스냅샷 — 앱 전용 비공개 작업 폴더에 받는다(노드 폴더 파일을 직접 복사하지 않는다).
+    let work = crate::backup_storage::Workspace::new(&crate::paths::app_dir())?;
+    let snapshot = work.path().join("wallet.dat");
+    crate::raven::call_rpc("backupwallet", json!([snapshot.to_string_lossy()]))
+        .await
+        .map_err(|_| "노드가 지갑 사본을 만들지 못했어요. 노드가 켜져 있는지 확인한 뒤 다시 해 주세요.".to_string())?;
+    // 4) 고른 폴더에 새 파일로 두고 다시 읽어 확인. 작업 폴더의 스냅샷은 곧바로 지운다.
+    let placed = place_core_copy(&snapshot, &dest_dir, &stamp_name(now()));
+    let _ = std::fs::remove_file(&snapshot);
+    let (path, size, format) = placed?;
+    Ok(json!({
+        "ok": true,
+        "path": path.to_string_lossy(),
+        "folder": dest_dir.to_string_lossy(),
+        "size": size,
+        "format": format,
+        "verified": true,
+        "weak_pass": weak,
+        "locked_with_backup_key": false,
     }))
 }
 
@@ -514,7 +725,7 @@ pub fn wallet_import_cancel() -> Value {
 mod tests {
     use super::*;
 
-    const NEW: [&str; 6] = ["wallet_export", "wallet_import_prepare", "wallet_import_apply", "wallet_import_cancel", "wallet_file_status", "key_sheet_print"];
+    const NEW: [&str; 7] = ["wallet_export", "wallet_import_prepare", "wallet_import_apply", "wallet_import_cancel", "wallet_file_status", "key_sheet_print", "wallet_core_export"];
 
     fn dir(name: &str) -> PathBuf {
         let d = crate::paths::test_fixture_root().join(name);
@@ -665,6 +876,8 @@ mod tests {
             assert!(!crate::app_lock::allowed_while_locked(c), "{c} 가 잠긴 동안 허용 목록에 있다");
         }
         // 실제 문지기: 잠그면 거부, 풀면 통과(app_lock 의 시험용 실별 상태).
+        // app-lock.json 은 같은 임시 이름으로 쓴다 — 잠금을 쓰는 다른 시험과 겹치지 않게 같은 자물쇠를 잡는다.
+        let _g = crate::paths::TEST_ENV.lock().unwrap_or_else(|e| e.into_inner());
         crate::app_lock::lock("standby").unwrap();
         for c in NEW {
             assert!(!crate::app_lock::command_allowed(c), "잠긴 동안 {c} 가 통과한다");
@@ -763,5 +976,190 @@ mod tests {
         let nopass = rt.block_on(wallet_import_prepare(p.to_string_lossy().to_string(), "pass".into(), "아무암호아무암호아무".into()));
         assert!(nopass.is_err());
         std::env::remove_var("PLAYX_RAVEN_HOME");
+    }
+
+    // ─────────── 코어용 wallet.dat(좁은 예외) ───────────
+
+    fn body_of<'a>(src: &'a str, head: &str) -> &'a str {
+        let f = &src[src.find(head).unwrap()..];
+        &f[..f.find("\n}\n").unwrap()]
+    }
+
+    /// 실제 코드(시험 모듈 앞까지)만.
+    fn code() -> &'static str {
+        let src = include_str!("walletfile.rs");
+        &src[..src.find("#[cfg(test)]\nmod tests").unwrap()]
+    }
+
+    #[test]
+    fn core_export_refuses_without_a_wallet_password() {
+        // 지갑 암호가 없다고 확인되면 화면이 알아보는 접두어로 막는다(암호 걸기 안내).
+        let e = core_export_gate(Some(false)).unwrap_err();
+        assert!(e.starts_with(NEEDS_WALLET_PASS) && e.contains("52글자") && e.contains("10글자"), "{e}");
+        // 노드가 답하지 않아 모르면 막되, 접두어 없이(노드를 켜라는 말).
+        let down = core_export_gate(None).unwrap_err();
+        assert!(!down.starts_with(NEEDS_WALLET_PASS));
+        assert!(core_export_gate(Some(true)).is_ok());
+        // 실제 명령: 시험에는 노드가 없다 → 지갑 암호 유무를 모르므로 거절, 고른 폴더에는 아무것도 생기지 않는다.
+        let out = dir("wf-core-refuse");
+        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        let r = rt.block_on(wallet_core_export(out.to_string_lossy().to_string(), "synthetic-pass-123".into()));
+        let e = r.unwrap_err();
+        assert!(!e.contains("synthetic-pass-123"), "오류 문구에 지갑 암호가 들어갔다");
+        assert_eq!(std::fs::read_dir(&out).unwrap().count(), 0, "거절됐는데 파일이 생겼다");
+    }
+
+    #[test]
+    fn core_export_order_gate_then_reauth_then_node_snapshot_then_place() {
+        let f = body_of(code(), "pub async fn wallet_core_export");
+        let at = |s: &str| f.find(s).unwrap_or_else(|| panic!("{s} 없음"));
+        let busy = at("Busy::take()");
+        let dest = at("check_dest(");
+        let state = at("wallet_lock_state()");
+        let gate = at("core_export_gate(");
+        let re = at("reauth(&wallet_pass)");
+        let snap = at("\"backupwallet\"");
+        let place = at("place_core_copy(");
+        assert!(busy < dest && dest < state && state < gate && gate < re && re < snap && snap < place, "순서: 문 → 폴더 → 지갑 암호 있음 → 재인증 → 노드 스냅샷 → 새 파일");
+        // 노드 폴더의 wallet.dat 을 직접 복사하지 않는다 · 잠금 파일 경로를 쓰지 않는다.
+        for bad in ["raven_dir", "fs::copy", "seal_into", "lock_file", "EXT}", ".rvwallet"] {
+            assert!(!f.contains(bad), "코어용 내보내기에 {bad}");
+        }
+        // 반환값에 비밀 칸이 없다(약함 여부만).
+        let ret = &f[f.find("Ok(json!").unwrap()..];
+        for bad in ["wallet_pass", "seed", "words", "paper", "key_get"] {
+            assert!(!ret.contains(bad), "반환값에 {bad}");
+        }
+        // 스냅샷은 앱 전용 작업 폴더(Workspace)에 받고 곧바로 지운다.
+        assert!(f.contains("Workspace::new(&crate::paths::app_dir())") && f.contains("remove_file(&snapshot)"));
+    }
+
+    #[test]
+    fn core_export_is_the_only_unlocked_path_and_rvwallet_stays_locked() {
+        let c = code();
+        // 평문을 고른 폴더에 두는 함수는 place_core_copy 하나, 그것을 부르는 곳은 wallet_core_export 하나.
+        assert_eq!(c.matches("place_core_copy(").count(), 2, "정의 + wallet_core_export 한 곳");
+        assert!(body_of(c, "pub async fn wallet_core_export").contains("place_core_copy("));
+        // .rvwallet 길(wallet_export·seal_into)은 코어용 이름·함수를 모른다.
+        let ex = &c[c.find("pub async fn wallet_export").unwrap()..];
+        let ex = &ex[..ex.find("\n// ──").unwrap()];
+        assert!(!ex.contains("place_core_copy") && !ex.contains("CORE_PREFIX") && ex.contains("seal_into("));
+        let seal = body_of(c, "pub fn seal_into");
+        assert!(seal.contains("lock_file(") && !seal.contains("CORE_"), "seal_into 는 언제나 잠근다");
+        // 코어용 이름은 .dat, 잠근 파일 확장자와 겹치지 않는다.
+        assert_eq!(CORE_EXT, "dat");
+        assert_ne!(CORE_EXT, EXT);
+        assert!(!CORE_PREFIX.contains(EXT));
+    }
+
+    #[test]
+    fn core_export_places_a_verified_copy_under_its_own_name_and_never_overwrites() {
+        let snapdir = dir("wf-core-snap");
+        let out = dir("wf-core-out");
+        let snap = snapdir.join("wallet.dat");
+        fake_wallet(&snap);
+        let (p, size, fmt) = place_core_copy(&snap, &out, "20261012-000000").unwrap();
+        let name = p.file_name().unwrap().to_string_lossy().to_string();
+        assert_eq!(name, "wallet-for-ravencoin-core-20261012-000000.dat");
+        assert!(!name.ends_with(".rvwallet"));
+        assert_eq!((size, fmt), (4096, "bdb"));
+        assert_eq!(std::fs::read(&p).unwrap(), std::fs::read(&snap).unwrap(), "스냅샷과 같은 내용");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(std::fs::metadata(&p).unwrap().permissions().mode() & 0o777, 0o600);
+        }
+        // 두 번째는 번호를 붙이고, 처음 파일은 그대로.
+        let (p2, _, _) = place_core_copy(&snap, &out, "20261012-000000").unwrap();
+        assert!(p2.to_string_lossy().ends_with("20261012-000000-2.dat"));
+        let names: Vec<String> = std::fs::read_dir(&out).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().to_string()).collect();
+        assert_eq!(names.len(), 2, "임시(.part) 파일이 남으면 안 된다: {names:?}");
+        assert!(names.iter().all(|n| !n.contains("part")));
+        // SQLite 지갑도 이름 붙음.
+        let sq = snapdir.join("sq.dat");
+        std::fs::write(&sq, b"SQLite format 3\0and then some pages").unwrap();
+        assert_eq!(place_core_copy(&sq, &out, "S").unwrap().2, "sqlite");
+    }
+
+    #[test]
+    fn core_export_refuses_snapshots_that_are_not_wallets() {
+        let snapdir = dir("wf-core-bad");
+        let out = dir("wf-core-bad-out");
+        let empty = snapdir.join("empty.dat");
+        std::fs::write(&empty, b"").unwrap();
+        assert!(place_core_copy(&empty, &out, "S").is_err());
+        let pdf = snapdir.join("x.dat");
+        std::fs::write(&pdf, b"%PDF-1.7 definitely not a wallet file at all").unwrap();
+        assert!(place_core_copy(&pdf, &out, "S").is_err());
+        assert_eq!(std::fs::read_dir(&out).unwrap().count(), 0, "거절했는데 파일이 남았다");
+    }
+
+    #[test]
+    fn wallet_format_names_only_what_the_header_proves() {
+        let mut le = vec![0u8; 32];
+        le[12..16].copy_from_slice(&[0x62, 0x31, 0x05, 0x00]);
+        let mut be = vec![0u8; 32];
+        be[12..16].copy_from_slice(&[0x00, 0x05, 0x31, 0x62]);
+        assert_eq!(wallet_format(&le), Some("bdb"));
+        assert_eq!(wallet_format(&be), Some("bdb"));
+        assert_eq!(wallet_format(b"SQLite format 3\0x"), Some("sqlite"));
+        assert_eq!(wallet_format(b"PXRLOCK1 locked file"), None);
+        assert_eq!(wallet_format(&[0u8; 64]), None);
+        assert_eq!(wallet_format(b""), None);
+        // looks_like_wallet 과 같은 판단이다.
+        for h in [le.as_slice(), be.as_slice(), b"SQLite format 3\0x".as_slice(), &[0u8; 64][..]] {
+            assert_eq!(wallet_format(h).is_some(), looks_like_wallet(h));
+        }
+    }
+
+    #[test]
+    fn weak_wallet_pass_is_length_only_and_matches_the_app_minimum() {
+        assert!(weak_wallet_pass("short"));
+        assert!(weak_wallet_pass("123456789"));
+        assert!(!weak_wallet_pass("1234567890"));
+        assert!(!weak_wallet_pass("열글자짜리암호입니다"));
+        assert_eq!(crate::lockbox::MIN_PASS, 10);
+    }
+
+    #[test]
+    fn wrong_wallet_password_waits_after_five_tries() {
+        // 실제 명령들이 쓰는 같은 기록(FAILS·NEXT_TRY). 다른 시험이 기다림에 걸리지 않게 끝에서 되돌린다.
+        let (f0, n0) = (FAILS.load(Ordering::Acquire), NEXT_TRY.load(Ordering::Acquire));
+        FAILS.store(0, Ordering::Release);
+        NEXT_TRY.store(0, Ordering::Release);
+        let t = 1_000_000;
+        for _ in 0..4 {
+            note_wrong_wallet_pass(t);
+            assert!(reauth_wait_left(t) <= 0, "4번까지는 바로 다시");
+        }
+        note_wrong_wallet_pass(t);
+        assert_eq!(reauth_wait_left(t), 30, "5번째부터 기다림");
+        note_wrong_wallet_pass(t);
+        assert_eq!(reauth_wait_left(t), 60);
+        assert!(wait_say(30).contains("30초"));
+        // 세 길(내보내기·코어용·끌어다 놓은 복원)이 같은 기다림을 먼저 본다.
+        for head in ["pub(crate) async fn reauth(", "pub(crate) async fn reauth_for_restore("] {
+            let f = body_of(code(), head);
+            assert!(f.find("reauth_wait_left(").unwrap() < f.find("wallet_lock_state").or_else(|| f.find("walletpassphrase")).unwrap(), "{head}");
+        }
+        FAILS.store(f0, Ordering::Release);
+        NEXT_TRY.store(n0, Ordering::Release);
+    }
+
+    #[test]
+    fn restore_reauth_uses_the_same_unlock_decision() {
+        let f = body_of(code(), "pub(crate) async fn reauth_for_restore(");
+        assert!(f.contains("decide(probe, given, envelope)"), "잠금 풀기와 같은 판단");
+        assert!(f.contains("reauth(pass).await?"), "노드가 켜져 있으면 노드가 지갑 암호를 확인");
+        assert!(f.contains("note_wrong_wallet_pass"), "틀리면 같은 기다림");
+        // 시험에는 노드도 봉투도 없다 → 확인할 수 없어 거절(통과시키지 않는다).
+        let _g = crate::paths::TEST_ENV.lock().unwrap_or_else(|e| e.into_inner());
+        let app = dir("wf-reauth-restore");
+        std::env::set_var("PLAYX_RAVEN_HOME", &app);
+        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        let r = rt.block_on(reauth_for_restore("synthetic-pass-123"));
+        std::env::remove_var("PLAYX_RAVEN_HOME");
+        let e = r.unwrap_err();
+        assert!(!e.contains("synthetic-pass-123"));
     }
 }
