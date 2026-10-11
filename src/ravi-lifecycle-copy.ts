@@ -22,4 +22,21 @@ export const RAVI_LIFECYCLE_COPY:Record<string,[string,string,string]>={
   '돌아가기':['Return','戻る','返回'],
   '다시 만나 반가워요':['Welcome back','おかえりなさい','欢迎回来'],
   '이제 함께할게요.':['I’m here with you.','そばにいます。','我会陪伴您。'],
+  // 라비 시작 인사(ravi-agent.ts start) — 0.8.8. 유럽어는 public/i18n 에 없으면 영어로 내려간다.
+  '짜잔! 오늘 어땠어요?':['Ta-da! How was your day?','じゃーん！今日はどうでしたか？','当当！今天过得怎么样？'],
+  '오늘의 로컬 정보를 확인하고 있어요…':['Checking today’s local information…','今日のローカル情報を確認しています…','正在查看今天的本地信息…'],
+  'AI 열쇠를 넣으면 더 많은 걸 해 드려요':['Add an AI key and I can do more for you','AIキーを入れると、もっといろいろお手伝いできます','添加 AI 密钥后，我能为您做更多事'],
+  '라비와 이야기하기':['Talk with Ravi','Raviと話す','与 Ravi 聊天'],
+  '오늘 요약 데이터 없음':['No summary for today','今日のまとめはありません','今天没有摘要'],
+  // 시작 인사의 오늘 요약 줄(todayLines). 값은 {0}{1} 로 끼운다.
+  '지갑이 잠겨 있어요. 잠금을 풀면 더 알려 드릴게요.':['Your wallet is locked. Unlock it and I can tell you more.','ウォレットはロックされています。ロックを解除すると、もっとお知らせできます。','钱包已锁定。解锁后我可以告诉您更多。'],
+  '지갑 상태 데이터 없음':['No wallet status data','ウォレットの状態データがありません','没有钱包状态数据'],
+  '지갑이 열려 있어요':['Your wallet is open','ウォレットは開いています','钱包已打开'],
+  '오늘 결제 주문 {0}건':['{0} paid orders today','今日の支払い済み注文 {0}件','今天已付款订单 {0} 笔'],
+  '오늘 순매출 {0} {1}':['Net sales today {0} {1}','今日の純売上 {0} {1}','今天净销售额 {0} {1}'],
+  '마지막 백업 {0}':['Last backup {0}','最終バックアップ {0}','上次备份 {0}'],
+  '백업 기록 데이터 없음':['No backup record data','バックアップ記録のデータがありません','没有备份记录数据'],
+  '서버 연결 · 동기화됨':['Server connected · Synced','サーバー接続 · 同期済み','服务器已连接 · 已同步'],
+  '서버 연결 · 동기화 중':['Server connected · Syncing','サーバー接続 · 同期中','服务器已连接 · 正在同步'],
+  '서버 상태 데이터 없음':['No server status data','サーバーの状態データがありません','没有服务器状态数据'],
 };

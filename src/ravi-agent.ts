@@ -1,5 +1,5 @@
 import { mountRaviOpening } from "./ravi-opening";
-import { t } from "./i18n";
+import { t, tf } from "./i18n";
 import { containsRaviSecret } from "./ravi-guide";
 
 export const GREETING_OFF = "rv-ravi-start-off";
@@ -27,20 +27,20 @@ export function shouldGreet(local: Pick<Storage, "getItem">, session: Pick<Stora
 }
 const numeric = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 export function todayLines(v: any): string[] {
-  if (v?.wallet === "locked") return ["지갑이 잠겨 있어요. 잠금을 풀면 더 알려 드릴게요."];
-  if (v?.wallet !== "open") return ["지갑 상태 데이터 없음"];
-  const one = ["지갑이 열려 있어요"];
+  if (v?.wallet === "locked") return [t("지갑이 잠겨 있어요. 잠금을 풀면 더 알려 드릴게요.")];
+  if (v?.wallet !== "open") return [t("지갑 상태 데이터 없음")];
+  const one = [t("지갑이 열려 있어요")];
   if (v.wallet_balance?.status === "ok" && numeric(v.wallet_balance.confirmed)) one.push(`${v.wallet_balance.confirmed.toLocaleString("ko-KR", { maximumFractionDigits: 8 })} RVN`);
   const sales = v.shop_sales, orders = v.shop_orders?.counts;
-  if (numeric(orders?.paid_today)) one.push(`오늘 결제 주문 ${orders.paid_today}건`);
-  if (sales?.status === "ok" && numeric(sales.total) && typeof sales.currency === "string") one.push(`오늘 순매출 ${sales.total.toLocaleString("ko-KR")} ${sales.currency}`);
+  if (numeric(orders?.paid_today)) one.push(tf("오늘 결제 주문 {0}건", orders.paid_today));
+  if (sales?.status === "ok" && numeric(sales.total) && typeof sales.currency === "string") one.push(tf("오늘 순매출 {0} {1}", sales.total.toLocaleString("ko-KR"), sales.currency));
   const two: string[] = [];
   const at = v.backup_status?.last_success_at;
-  if (numeric(at)) two.push(`마지막 백업 ${new Date(at * 1000).toLocaleDateString("ko-KR")}`);
-  else two.push("백업 기록 데이터 없음");
+  if (numeric(at)) two.push(tf("마지막 백업 {0}", new Date(at * 1000).toLocaleDateString("ko-KR")));
+  else two.push(t("백업 기록 데이터 없음"));
   const node = v.node_status;
-  if (node?.status === "ok" && typeof node.synced === "boolean") two.push(node.synced ? "서버 연결 · 동기화됨" : "서버 연결 · 동기화 중");
-  else two.push("서버 상태 데이터 없음");
+  if (node?.status === "ok" && typeof node.synced === "boolean") two.push(node.synced ? t("서버 연결 · 동기화됨") : t("서버 연결 · 동기화 중"));
+  else two.push(t("서버 상태 데이터 없음"));
   return [one.join(" · "), two.join(" · ")];
 }
 export function toolSummary(name: string, v: any): string {
@@ -93,7 +93,7 @@ export function createRaviAgentUI(api: { invoke: Invoke; keyed(): string | null;
   const host = document.createElement("div"); host.id = "ravi-agent-settings";
   document.getElementById("page-settings")!.append(host);
   const renderSettings = async () => {
-    try { consent = await api.invoke<Consent>("ravi_consent"); } catch { consent = defaults(); }
+    try { consent = (await api.invoke<Consent | null>("ravi_consent")) ?? defaults(); } catch { consent = defaults(); } // 빈 답(옛 판·가짜 IPC)에도 죽지 않는다
     host.replaceChildren(privacyForm(consent, async value => { await api.invoke("ravi_consent_save", { consent: value }); consent = value; }));
     const off = document.createElement("label"), input = document.createElement("input"); input.type = "checkbox";
     try { input.checked = localStorage.getItem(GREETING_OFF) === "1"; } catch { /* optional storage */ }
@@ -122,7 +122,7 @@ export function createRaviAgentUI(api: { invoke: Invoke; keyed(): string | null;
   return {
     /** 저장된 선택. 읽지 못하면 null — 부르는 쪽은 개인 정보 없는 일반 대화로 간다. */
     async consentState(): Promise<Consent | null> {
-      try { consent = await api.invoke<Consent>("ravi_consent"); return consent; } catch { return null; }
+      try { consent = (await api.invoke<Consent | null>("ravi_consent")) ?? defaults(); return consent; } catch { return null; }
     },
     /**
      * 🔴 질문을 붙잡지 않는다(옛 ensureConsent 는 저장하지 않으면 질문을 버렸고, 카드가 떠 있는 동안
@@ -150,8 +150,8 @@ export function createRaviAgentUI(api: { invoke: Invoke; keyed(): string | null;
       const overlay = document.createElement("aside"); overlay.className = "ravi-arrival"; overlay.setAttribute("aria-label", "라비 시작 인사");
       const bird = document.createElement("button"); bird.type = "button"; bird.className = "ravi-arrival-bird"; bird.setAttribute("data-ravi-skip", "true"); bird.setAttribute("aria-label", t("인사 건너뛰기"));
       const bubble = document.createElement("div"); bubble.className = "ravi-arrival-bubble"; bubble.hidden = true;
-      const title = document.createElement("strong"); title.textContent = "짜잔! 오늘 어땠어요?";
-      const summary = document.createElement("p"); summary.textContent = "오늘의 로컬 정보를 확인하고 있어요…";
+      const title = document.createElement("strong"); title.textContent = t("짜잔! 오늘 어땠어요?");
+      const summary = document.createElement("p"); summary.textContent = t("오늘의 로컬 정보를 확인하고 있어요…");
       const natural = document.createElement("p"); natural.setAttribute("aria-live", "polite");
       let timer = 0, closed = false;
       const dismiss = () => { if (closed) return; closed = true; clearTimeout(timer); document.removeEventListener("keydown", onEscape); overlay.classList.add("docking"); window.setTimeout(() => { opening.destroy(); overlay.remove(); }, 360); };
@@ -161,8 +161,8 @@ export function createRaviAgentUI(api: { invoke: Invoke; keyed(): string | null;
         const run = () => { if (closed) return; dismiss(); api.dock(); };
         if (api.afterLanding) api.afterLanding(run); else run();
       };
-      const key = button("AI 열쇠를 넣으면 더 많은 걸 해 드려요", () => { const run = () => { dock(); api.key(); }; if (api.afterLanding) api.afterLanding(run); else run(); }); key.hidden = !!api.keyed();
-      bubble.append(title, summary, natural, key, button("라비와 이야기하기", dock), button(t("닫기"), dismiss)); overlay.append(bird, bubble); document.body.append(overlay);
+      const key = button(t("AI 열쇠를 넣으면 더 많은 걸 해 드려요"), () => { const run = () => { dock(); api.key(); }; if (api.afterLanding) api.afterLanding(run); else run(); }); key.hidden = !!api.keyed();
+      bubble.append(title, summary, natural, key, button(t("라비와 이야기하기"), dock), button(t("닫기"), dismiss)); overlay.append(bird, bubble); document.body.append(overlay);
       const skip = button(t("인사 건너뛰기"), () => opening.finish());
       skip.className = "ravi-arrival-skip"; skip.setAttribute("data-ravi-skip", "true"); overlay.append(skip);
       let landed = false;
@@ -183,7 +183,7 @@ export function createRaviAgentUI(api: { invoke: Invoke; keyed(): string | null;
         if (api.keyed() && consent.reviewed) {
           try { const line = await api.invoke<string>("ravi_greeting", { provider: api.keyed(), tz: api.tz() }); if (!closed && !containsRaviSecret(line)) natural.textContent = line; } catch { /* Fixed greeting and local numbers stay visible. */ }
         }
-      }).catch(() => { if (!closed) summary.textContent = "오늘 요약 데이터 없음"; });
+      }).catch(() => { if (!closed) summary.textContent = t("오늘 요약 데이터 없음"); });
       bird.onclick = () => { if (!landed) opening.finish(); else dock(); };
     },
   };

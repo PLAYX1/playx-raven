@@ -1,5 +1,25 @@
 # 변경 기록
 
+## 0.8.8
+
+### 한국어
+
+- 라비 대화: 「몇 살이야」「생일이 언제야」 같은 라비 자신에 대한 질문은 이 컴퓨터 안에서 바로 답합니다(나이는 오늘 날짜로 계산). 위로·응원·피곤·외로움·불안·화·기쁨 같은 감정 표현에도 답하고, 위기 표현에는 항상 전문기관 안내를 먼저 보여 줍니다. 내 정보가 필요 없는 일반 질문에는 정보 선택(동의) 카드를 띄우지 않습니다. 시작 인사 문구도 고른 화면 언어로 나옵니다.
+- 체인 정보(읽기 전용): 내 노드 높이·해시율·난이도·대기 거래·연결 수와 51% 공격 비용 기준 보안 순위를 보여 줍니다. 오래된 정보는 표시가 바뀌고, 못 읽으면 「정보 없음」, 따라잡는 중에는 해시율을 숨깁니다. 투자 조언이 아닙니다. 라비도 이 두 가지를 읽기만 할 수 있습니다(보내기·바꾸기 없음).
+- 자산 파일(IPFS) 보관: 자산 화면에서 한 번 탭하면 보관, 길게 누르면 해제(5초 안에 되돌리기 가능)합니다. 자동 보관은 「보관 안 하기」와 아직 정하지 않은 받은 자산을 건너뜁니다. 0.8.7 에서 이미 보관 중이던 것은 그대로 「보관하기」로 옮겨 적습니다. 앱 안 「진짜인지 확인」은 체인의 자산 정보·주인·보유 주소·끌어놓은 파일을 대조하고, 노드가 따라잡는 중이면 「확인 못 함」으로 표시합니다.
+- 이야기 방 초대 링크가 옛 웹 지갑(rvn.ex.erci.se) 대신 새 지갑(`https://ravenvault.ex.erci.se/wallet/?room=…`)을 엽니다.
+- 업데이트 단추: 새 버전이 없을 때 「확인 중…」으로 남던 것을 고쳐 「지금이 최신입니다.」로 바뀝니다. 확인에 실패하면 단추를 숨깁니다.
+- 업데이트 검증(서명된 버전·해시·순서 확인)은 그대로 유지합니다.
+
+### English
+
+- Ravi chat: questions about Ravi itself ("How old are you?", "When is your birthday?") are answered locally on this computer (age is computed from today's date). Ravi also replies to feelings such as comfort, encouragement, tiredness, loneliness, worry, anger and joy, and crisis wording always shows professional help first. General questions that need none of your information no longer show the information-choice (consent) card. The startup greeting now follows the chosen screen language.
+- Chain info (read-only): your node's height, hash rate, difficulty, pending transactions and connections, plus a security rank based on the cost of a 51% attack. Stale data is marked, unreadable data shows "no data", and the hash rate is hidden while the node is catching up. Not investment advice. Ravi can read these two as well (nothing is sent or changed).
+- Asset file (IPFS) keeping: tap once on the Assets screen to keep a file, long-press to release it (undo within 5 seconds). Automatic keeping skips assets marked "Don't keep" and received assets you have not decided on yet. Files already kept in 0.8.7 are recorded as "Keep". The in-app "Check it's genuine" compares the chain's asset data, owner, holding addresses and a dropped file, and shows "Could not check" while the node is catching up.
+- Chat room invite links now open the new wallet (`https://ravenvault.ex.erci.se/wallet/?room=…`) instead of the old web wallet (rvn.ex.erci.se).
+- Update button: it no longer stays on "Checking…" when there is no new version; it now says "You are up to date." and is hidden if the check fails.
+- Signed update version/hash/order verification is unchanged.
+
 ## 0.8.7
 
 ### 한국어

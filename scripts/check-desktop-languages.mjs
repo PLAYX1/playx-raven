@@ -186,7 +186,7 @@ try {
           assert.equal(state.alive,'alive');assert.equal(state.locale,next);assert.equal(state.saved,next);assert.equal(state.selected,'page-'+target);assert.equal(state.draft,'synthetic pending draft');
           assert.ok(state.label.includes({en:'Settings',ja:'設定',zh:'设置',ko:'설정'}[next]));
           // 0.4.8-B 「확인 대기 중」→「들어오는 중」. 사용 가능 잔액에 합치지 않고 따로 적는다.
-          if(target==='wallet')assert.equal(await page.$eval('#w-unconfirmed',e=>e.textContent),`${next==='ko'?'들어오는 중':DICT[next]['들어오는 중']} 9,999 RVN`);
+          if(target==='wallet')assert.equal(await page.$eval('#w-unconfirmed',e=>e.textContent),`${next==='ko'?'들어오는 중':DICT[next]['들어오는 중']} 9,999\u00a0RVN`); // 숫자와 단위 사이는 줄바꿈 없는 공백(amount-locale.ts NBSP, f74bb6b)
           if(target==='wallet')assert.equal(await page.$eval('#w-confirmed',e=>e.textContent),'12.5 RVN','Incoming never added to available');
           const explicit=await page.$$eval('[data-desktop-copy]',es=>es.filter(e=>!e.closest('[translate="no"]')).map(e=>[e.dataset.desktopCopy,e.textContent]));
           for(const [source,actual]of explicit)assert.equal(actual,next==='ko'?source:DICT[next][source]||source,'Explicit app copy: '+source);
@@ -224,14 +224,14 @@ try {
       await page.$eval('nav [data-page="ravi"]',e=>e.click());
       await page.evaluate(()=>{window.__NODE_PROGRESS=0.5;window.__BALANCE_MODE='known';});
       await page.$eval('nav [data-page="ravi"]',e=>e.click());
-      await page.waitForFunction(()=>document.querySelector('#overview-balance').textContent==='12.5 RVN');
+      await page.waitForFunction(()=>document.querySelector('#overview-balance').textContent==='12.5\u00a0RVN'); // fmtRvn: 숫자와 단위 사이 NBSP(f74bb6b)
       assert.match(await page.$eval('#overview-node',e=>e.textContent),/50.0%/);
       assert.ok(!(await page.$eval('.overview',e=>e.textContent)).includes('9999'),'Unconfirmed funds excluded');
       // 0.4.8-B 첫 화면에도 「들어오는 중」을 **따로** 적는다 — 확정 잔액(12.5)에는 여전히 안 섞는다.
-      assert.equal(await page.$eval('#overview-balance',e=>e.textContent),'12.5 RVN','Unconfirmed funds excluded from the confirmed balance');
+      assert.equal(await page.$eval('#overview-balance',e=>e.textContent),'12.5\u00a0RVN','Unconfirmed funds excluded from the confirmed balance');
       assert.ok(!(await page.$eval('.overview',e=>e.textContent)).includes('10,011.5'),'Confirmed and incoming are never summed');
       assert.equal(await page.$eval('#overview-incoming-row',e=>e.hidden),false,'Incoming row shown');
-      assert.equal(await page.$eval('#overview-incoming',e=>e.textContent),'9,999 RVN','Incoming shown apart');
+      assert.equal(await page.$eval('#overview-incoming',e=>e.textContent),'9,999\u00a0RVN','Incoming shown apart');
       await page.evaluate(()=>window.__BALANCE_MODE='unknown');
       await page.$eval('nav [data-page="ravi"]',e=>e.click());
       await page.waitForFunction(()=>document.querySelector('#overview-balance').textContent==='Unable to verify');

@@ -91,17 +91,17 @@ test('메인넷 발행 스위치: 상수는 꺼짐, 모든 발행 명령 앞에 
   for (const f of ['lib.rs', 'server.rs', 'ravi_agent.rs']) assert.ok(!read('src-tauri/src/' + f).includes('REAL_MAINNET_ISSUE_ENABLED'), `${f} 가 스위치를 만진다`);
 });
 
-test('버전 0.8.7 이 여섯 곳에서 같고, 업데이트 안내문·변경 기록이 0.8.7 이다', () => {
-  const v = '0.8.7';
+test('버전 0.8.8 이 여섯 곳에서 같고, 업데이트 안내문·변경 기록이 0.8.8 이다', () => {
+  const v = '0.8.8';
   assert.equal(JSON.parse(read('package.json')).version, v);
   const lock = JSON.parse(read('package-lock.json'));
   assert.equal(lock.version, v); assert.equal(lock.packages[''].version, v);
   assert.equal(JSON.parse(read('src-tauri/tauri.conf.json')).version, v);
-  assert.match(read('src-tauri/Cargo.toml'), /^version = "0\.8\.7"$/m);
-  assert.match(read('src-tauri/Cargo.lock'), /name = "playx-raven"\nversion = "0\.8\.7"/);
-  assert.match(read('CHANGELOG.md'), /^# 변경 기록\n\n## 0\.8\.7\n/);
+  assert.match(read('src-tauri/Cargo.toml'), /^version = "0\.8\.8"$/m);
+  assert.match(read('src-tauri/Cargo.lock'), /name = "playx-raven"\nversion = "0\.8\.8"/);
+  assert.match(read('CHANGELOG.md'), /^# 변경 기록\n\n## 0\.8\.8\n/);
   const manifest = read('scripts/release-manifest.mjs');
-  assert.match(manifest, /지갑 파일 내보내기·가져오기/); assert.match(manifest, /52글자/); assert.doesNotMatch(manifest, /게임 탭의 라비 스토리 카드 글자가 보이도록/);
+  assert.match(manifest, /지갑 파일 내보내기·가져오기/); assert.match(manifest, /52글자/); assert.match(manifest, /체인 정보/); assert.match(manifest, /ravenvault\.ex\.erci\.se/); assert.doesNotMatch(manifest, /게임 탭의 라비 스토리 카드 글자가 보이도록/);
   // 서명 목록 만료·일련번호 메모(서명은 하지 않았다)
   const notes = read('docs/integration-notes.md');
   assert.match(notes, /2026-11-09/); assert.match(notes, /2026101002/);

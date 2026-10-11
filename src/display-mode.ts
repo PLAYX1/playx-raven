@@ -7,6 +7,7 @@ import "./layout-tokens.css";
 import "./display-mode.css";
 import { lockCopy, enterStoreMode } from "./app-lock";
 import { handleLockRefusal } from "./wallet-file";
+import { lang as appLang } from "./i18n";
 
 export type DisplayMode = "window" | "mini" | "chip" | "menubar";
 type Settings = { mode: DisplayMode; hide_dock: boolean; tray_text: "alerts" | "balance" | "none"; dim_from: number; dim_to: number; shift: boolean; locale: string };
@@ -57,13 +58,9 @@ const EN: typeof KO = {
   failed: "Couldn't change it. Please try again.",
   saved: (m) => `Switched to ${m}.`,
 };
-const lang = () => {
-  try {
-    const saved = localStorage.getItem("playx-raven-lang") || navigator.language || "ko";
-    // 유럽어 여섯(AI 번역)은 이 창 문구를 아직 모른다 — 한국어가 아니라 영어로 보여 준다.
-    return saved.startsWith("en") || ["it", "es", "fr", "pt-BR", "de", "ru"].includes(saved) ? "en" : "ko";
-  } catch { return "ko"; }
-};
+// 앱의 지금 말(i18n.lang)을 따른다 — 시작 뒤 말을 바꿔도 다시 그릴 때 맞는다.
+// 이 칸 문구는 한국어·영어 두 벌뿐이다. 일본어·중국어·유럽어 여섯은 한국어가 아니라 영어로 보여 준다.
+const lang = () => (appLang === "ko" ? "ko" : "en");
 export const copyFor = (l: string) => (l === "en" ? EN : KO);
 
 const DEFAULT: State = {
@@ -173,4 +170,12 @@ export async function mountDisplayMode(): Promise<void> {
 if (typeof document !== "undefined") {
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => void mountDisplayMode());
   else void mountDisplayMode();
+  // 화면 말을 바꾸면 칸을 새 말로 다시 그린다(설정값은 display_mode_get 으로 다시 읽는다). 「더 고르기」 펼침은 유지.
+  window.addEventListener("desktop-language-change", () => {
+    const old = document.getElementById("display-mode-card");
+    if (!old) return;
+    const wasOpen = !!old.querySelector<HTMLDetailsElement>("details.rv-dm-more")?.open;
+    old.remove();
+    void mountDisplayMode().then(() => { if (wasOpen) document.querySelector<HTMLDetailsElement>("#display-mode-card details.rv-dm-more")?.setAttribute("open", ""); });
+  });
 }

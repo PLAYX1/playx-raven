@@ -229,15 +229,17 @@ async function mountPaperStep(): Promise<void> {
   if (!ckKey || document.getElementById("wf-paper")) return;
   const card = ckKey.closest(".card");
   if (!card) return;
-  const t = c();
+  let t = c();
   // 기존 안내 문단은 이 화면이 맡는다(main.ts 는 더 이상 이 문단을 바꾸지 않는다).
   const need = document.getElementById("ck-need");
   const st = await invoke<{ set?: boolean }>("backup_pass_state").catch(() => null);
-  if (need) {
+  const paintNeed = () => {
+    if (!need) return;
     need.textContent = "";
     need.append(el("b", { textContent: t.paperLead }));
     if (st?.set) need.append(el("br"), t.paperLeadPass);
-  }
+  };
+  paintNeed();
   // 기존 열쇠 보기/복사 단추는 그대로 두고, 아래에 단계와 확인을 붙인다.
   const viewer = keyViewer();
   const note = el("p", { className: "meta", textContent: "" });
@@ -247,18 +249,21 @@ async function mountPaperStep(): Promise<void> {
   passIn.style.cssText = "flex:1;min-width:180px";
   const ok = el("input", { type: "checkbox", id: "wf-paper-ok", checked: paperDone() });
   ok.addEventListener("change", () => { setPaperDone(ok.checked); paintStatus(); });
+  const steps = el("b", { textContent: `${t.step1}  →  ${t.step2}  →  ${t.step3}` });
+  const autoLine = el("p", { className: "meta", textContent: t.keyAuto });
+  const showBtn = Object.assign(el("button", { textContent: t.showKey }), { onclick: () => void viewer.show().catch((e) => { note.textContent = errText(e); }) });
+  const hideBtn = Object.assign(el("button", { className: "ghost", textContent: t.hideKey }), { onclick: viewer.hide });
+  const copyBtn = Object.assign(el("button", { className: "ghost", textContent: t.copyKey }), {
+    onclick: () => void viewer.copy().then(() => { note.textContent = t.copied; }).catch(() => { note.textContent = t.copyFail; }),
+  });
+  const doneText = el("span", { textContent: t.paperDone });
   const wrap = el("div", { id: "wf-paper", className: "card" },
-    el("p", { className: "meta" }, el("b", { textContent: `${t.step1}  →  ${t.step2}  →  ${t.step3}` })),
+    el("p", { className: "meta" }, steps),
     viewer.root,
-    el("p", { className: "meta", textContent: t.keyAuto }),
-    el("div", { className: "row" },
-      Object.assign(el("button", { textContent: t.showKey }), { onclick: () => void viewer.show().catch((e) => { note.textContent = errText(e); }) }),
-      Object.assign(el("button", { className: "ghost", textContent: t.hideKey }), { onclick: viewer.hide }),
-      Object.assign(el("button", { className: "ghost", textContent: t.copyKey }), {
-        onclick: () => void viewer.copy().then(() => { note.textContent = t.copied; }).catch(() => { note.textContent = t.copyFail; }),
-      })),
+    autoLine,
+    el("div", { className: "row" }, showBtn, hideBtn, copyBtn),
     el("div", { className: "row", style: "margin-top:8px" }, passIn,
-      Object.assign(el("button", { className: "ghost", textContent: t.printKey }), {
+      Object.assign(el("button", { className: "ghost", textContent: t.printKey, id: "wf-print" }), {
         onclick: async () => {
           note.textContent = "";
           try {
@@ -268,10 +273,23 @@ async function mountPaperStep(): Promise<void> {
           finally { passIn.value = ""; }
         },
       })),
-    el("label", { className: "meta", style: "display:flex;gap:8px;align-items:flex-start;margin-top:10px" }, ok, el("span", { textContent: t.paperDone })),
+    el("label", { className: "meta", style: "display:flex;gap:8px;align-items:flex-start;margin-top:10px" }, ok, doneText),
     status, note);
   paintStatus();
   card.after(wrap);
+  // 화면 말을 바꾸면 고정 문구만 새 말로 바꾼다(보이던 열쇠·입력값·확인 표시는 그대로).
+  window.addEventListener("desktop-language-change", () => {
+    if (!wrap.isConnected) return;
+    t = c();
+    paintNeed();
+    steps.textContent = `${t.step1}  →  ${t.step2}  →  ${t.step3}`;
+    autoLine.textContent = t.keyAuto;
+    showBtn.textContent = t.showKey; hideBtn.textContent = t.hideKey; copyBtn.textContent = t.copyKey;
+    const printBtn = wrap.querySelector<HTMLButtonElement>("#wf-print"); if (printBtn) printBtn.textContent = t.printKey;
+    passIn.placeholder = t.walletPassFor;
+    doneText.textContent = t.paperDone;
+    paintStatus();
+  });
 }
 
 type Status = { node_up?: boolean; wallet_encrypted?: boolean | null; backup_pass?: boolean };
@@ -286,14 +304,21 @@ async function pickFolder(): Promise<string | null> {
 function mountFileCard(): void {
   const anchor = document.getElementById("wf-paper") ?? document.getElementById("ck-key")?.closest(".card");
   if (!anchor || document.getElementById("wf-card")) return;
-  const t = c();
+  let t = c();
   const body = el("div", { id: "wf-body" });
   const exportBtn = el("button", { textContent: t.exportBtn, id: "wf-export" });
   const importBtn = el("button", { className: "ghost", textContent: t.importBtn, id: "wf-import" });
+  const head = el("h3", { textContent: t.title, style: "margin-top:0" });
+  const lede = el("p", { className: "meta", textContent: t.lede });
   const card = el("div", { id: "wf-card", className: "card", style: "margin-top:12px" },
-    el("h3", { textContent: t.title, style: "margin-top:0" }),
-    el("p", { className: "meta", textContent: t.lede }),
+    head, lede,
     el("div", { className: "row" }, exportBtn, importBtn), body);
+  // 화면 말을 바꾸면 제목·안내·두 단추를 새 말로. 진행 중인 단계(body)는 지우지 않고, 다음에 그리는 글부터 새 말이다.
+  window.addEventListener("desktop-language-change", () => {
+    if (!card.isConnected) return;
+    t = c();
+    head.textContent = t.title; lede.textContent = t.lede; exportBtn.textContent = t.exportBtn; importBtn.textContent = t.importBtn;
+  });
 
   const reset = () => { body.textContent = ""; };
   const line = (text: string, cls = "meta") => el("p", { className: cls, textContent: text });

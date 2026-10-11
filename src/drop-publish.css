@@ -35,7 +35,7 @@
 .dp button:disabled { background: var(--line); color: var(--muted); border-color: var(--line); cursor: not-allowed; }
 
 .dp-row { display: flex; flex-wrap: wrap; gap: var(--dp-gap-2); align-items: center; margin: var(--dp-gap-2) 0; }
-.dp-row > button { flex: 0 1 auto; }
+.dp-row > button { flex: 0 1 auto; max-width: 100%; } /* 긴 번역 낱말이 와도 줄 폭을 넘지 않는다(글자는 .dp button 의 anywhere 로 줄 안에서 접힌다) */
 .dp-row-input > input { flex: 1 1 var(--dp-field-min); min-width: 0; }
 .dp-row-end { justify-content: flex-end; }
 .dp-row-2 > .dp-field { flex: 1 1 calc(var(--dp-field-min) + 4ch); min-width: 0; }

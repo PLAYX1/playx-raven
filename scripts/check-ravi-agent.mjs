@@ -36,7 +36,7 @@ function fixture({ keyed = false, consent = defaultConsent(), local = storage(),
   const document={body,addEventListener(){},removeEventListener(){},getElementById:id=>nodes.get(id),createElement:tag=>new Element(tag),createTextNode:text=>({textContent:text})};
   const exports={};
   vm.runInNewContext(compiled,{ exports, document, localStorage:local,sessionStorage:session,
-    raviFace:()=>new Element('svg'),containsRaviSecret:secret,t:s=>s,mountRaviOpening:(bird,land)=>{land();return {finish(){},destroy(){},batterySaver(){}};},
+    raviFace:()=>new Element('svg'),containsRaviSecret:secret,t:s=>s,tf:(s,...v)=>s.replace(/\{(\d+)\}/g,(_,i)=>String(v[i])),mountRaviOpening:(bird,land)=>{land();return {finish(){},destroy(){},batterySaver(){}};},
     window:{setTimeout:(f,delay)=>{timers.set(++serial,{f,delay});return serial;}},clearTimeout:id=>timers.delete(id),
   });
   const api={ keyed:()=>keyed?'synthetic-provider':null,key:()=>keys++,dock:()=>docks++,tz:()=>540,
