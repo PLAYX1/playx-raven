@@ -348,6 +348,17 @@ fn unpack_with(input: &str, pass: &str) -> Result<PathBuf, String> {
                             .into(),
                     );
                 }
+                // 0.9.0 — 종이에 적은 52글자 열쇠도 받는다(다른 컴퓨터에서 만든 백업을 그 컴퓨터의
+                //    열쇠로). 52글자로 읽히고 그 열쇠로 열리면 끝, 아니면 아래 백업 암호 길로 간다.
+                if let Ok(k) = crate::lockbox::from_paper(pass) {
+                    if crate::lockbox::unlock_file(&p, &opened, &k).is_ok() {
+                        done = true;
+                    } else {
+                        let _ = std::fs::remove_file(&opened);
+                    }
+                }
+            }
+            if !done {
                 let (_body, env) = crate::lockbox::strip_wrap(&raw);
                 let env = env.ok_or_else(|| {
                 "이 백업에는 암호로 여는 길이 없습니다. 만든 컴퓨터의 열쇠(9agn-…)가 있어야 합니다.".to_string()
@@ -1358,6 +1369,36 @@ mod tests {
             cleanup_opened().unwrap();
         }
         assert_eq!(std::fs::read(&old).unwrap(), old_before, "old backup must stay untouched");
+        match prior { Some(p) => std::env::set_var("PLAYX_RAVEN_HOME", p), None => std::env::remove_var("PLAYX_RAVEN_HOME") }
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    /// 0.9.0 — 다른 컴퓨터에서 만든 `.pxlock` 을 그 컴퓨터의 종이 열쇠(52글자)로 연다(끌어다 놓은 복원).
+    /// 틀린 52글자·빈 칸은 열리지 않고, 이 컴퓨터 열쇠·백업 암호 길은 그대로다.
+    #[test]
+    fn a_backup_from_another_computer_opens_with_its_paper_key() {
+        let _guard = crate::paths::TEST_ENV.lock().unwrap_or_else(|e| e.into_inner());
+        let home = crate::paths::test_fixture_root().join(format!("recover-paper-{:x}", rand::random::<u64>()));
+        let app = home.join("app");
+        std::fs::create_dir_all(&app).unwrap();
+        let prior = std::env::var_os("PLAYX_RAVEN_HOME");
+        std::env::set_var("PLAYX_RAVEN_HOME", &app);
+        let other: [u8; 32] = [42u8; 32]; // 「다른 컴퓨터」의 열쇠 — 이 컴퓨터 열쇠와 다르다.
+        assert_ne!(crate::lockbox::key_get_or_make().unwrap(), other);
+        let plain = home.join("plain.zip");
+        let mut zip = zip::ZipWriter::new(std::fs::File::create(&plain).unwrap());
+        let o: zip::write::FileOptions<()> = zip::write::FileOptions::default();
+        zip.start_file("shop.json", o).unwrap();
+        std::io::Write::write_all(&mut zip, json!({"name": "synthetic paper shop", "menu": []}).to_string().as_bytes()).unwrap();
+        zip.finish().unwrap();
+        let locked = home.join("RavenVault.zip.pxlock");
+        crate::lockbox::lock_file(&plain, &locked, &other).unwrap();
+        let path = locked.to_string_lossy().to_string();
+        assert!(restore_survey(path.clone(), None).is_err(), "열쇠 없이 열렸다");
+        assert!(restore_survey(path.clone(), Some(crate::lockbox::to_paper(&[7u8; 32]))).is_err(), "틀린 52글자로 열렸다");
+        let ok = restore_survey(path.clone(), Some(crate::lockbox::to_paper(&other))).unwrap();
+        assert!(ok.to_string().contains("synthetic paper shop"), "{ok}");
+        cleanup_opened().unwrap();
         match prior { Some(p) => std::env::set_var("PLAYX_RAVEN_HOME", p), None => std::env::remove_var("PLAYX_RAVEN_HOME") }
         let _ = std::fs::remove_dir_all(&home);
     }
