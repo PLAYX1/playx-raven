@@ -47,9 +47,9 @@
  */
 import type { Lang } from "./i18n-pack";
 import {
-  PERSONA_LANGS, CANON, AGE_BASE, AGE_LESS_THAN_MONTH, AGE_MONTHS, AGE_YEARS, AGE_TAIL,
+  CANON, AGE_BASE, AGE_LESS_THAN_MONTH, AGE_MONTHS, AGE_YEARS, AGE_TAIL,
   MOOD_ANSWER, CHAT, EMOTION, CRISIS, CHAIN_TOPIC_LABEL, CHAIN_ANSWER, CHAIN_PRICE_EXTRA, CHAIN_SCREEN_ANSWER,
-  type EmotionKind, type ChainTopic, type T10,
+  type EmotionKind, type ChainTopic,
 } from "./ravi-persona-copy";
 
 export type { EmotionKind, ChainTopic };
@@ -58,14 +58,9 @@ export type { EmotionKind, ChainTopic };
 export const RAVI_BORN_UTC_MS = Date.UTC(2026, 7, 19, 19, 32, 0);
 
 /* ── 정규화 ─────────────────────────────────────────────────────────────── */
-const strip = (s: string) => String(s ?? "").normalize("NFKC").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").normalize("NFC");
-/** 공백·문장부호·기호를 모두 없앤 한 줄 — 전체 문장 비교용. */
-export const compactRavi = (s: string) => strip(s).replace(/[\s\p{P}\p{S}]/gu, "").replace(/[ㅠㅜㅋㅎ]+$/u, "");
-/** 낱말 경계를 남긴 한 줄 — 낱말 찾기용(라틴·키릴). */
-const spacedRavi = (s: string) => strip(s).replace(/[\p{P}\p{S}]+/gu, " ").replace(/\s+/g, " ").trim();
-const isCjk = (l: Lang) => l === "ko" || l === "ja" || l === "zh";
-const idx = (l: Lang) => PERSONA_LANGS.indexOf(l);
-const pick = (t: T10, l: Lang) => t[idx(l)];
+// 정규화·낱말 찾기 도구는 main 묶음의 ravi-crisis.ts 와 같이 쓴다(한 벌만 둔다).
+import { compactRavi, spacedRavi, pick, table, findLang, CRISIS_WORDS, raviCrisisReply } from "./ravi-crisis";
+export { compactRavi, raviCrisisReply };
 const x = (stems: string[], ends: string[]) => stems.flatMap(s => ends.map(e => s + e));
 
 /* ── 전체 문장 표 ──────────────────────────────────────────────────────── */
@@ -293,28 +288,6 @@ function candidates(c: string): string[] {
   return [...seen];
 }
 
-/* ── 낱말 찾기(감정·체인·위기·지갑 낱말) ──────────────────────────────────── */
-function kw(lang: Lang, words: string[]): RegExp {
-  const cjk = isCjk(lang);
-  const alt = words.map(w => {
-    const exactEnd = w.endsWith("$");
-    const body = strip(exactEnd ? w.slice(0, -1) : w).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    if (cjk) return body.replace(/\s+/g, "").replace(/[%]/g, "");
-    return `(?<![\\p{L}\\p{N}])${body}${exactEnd ? "(?![\\p{L}\\p{N}])" : ""}`;
-  }).join("|");
-  return new RegExp(alt, "u");
-}
-type WordTable = Partial<Record<Lang, string[]>>;
-const table = (t: WordTable): Partial<Record<Lang, RegExp>> => Object.fromEntries((Object.entries(t) as [Lang, string[]][]).map(([l, w]) => [l, kw(l, w)]));
-function findLang(re: Partial<Record<Lang, RegExp>>, raw: string, ui: Lang): Lang | null {
-  const compact = compactRavi(raw), spaced = spacedRavi(raw);
-  for (const l of [ui, ...PERSONA_LANGS.filter(x => x !== ui)]) {
-    const r = re[l];
-    if (r && r.test(isCjk(l) ? compact : spaced)) return l;
-  }
-  return null;
-}
-
 /** 지갑 일(돈·주소·백업·결제 …) 낱말 — 하나라도 있으면 감정·체인 분류는 물러난다. */
 const WALLET_WORDS = table({
   ko: ["송금", "보내줘", "보내기", "보낼", "입금", "출금", "잔액", "수수료", "주소", "지갑", "백업", "시드", "복구단어", "비밀번호", "결제", "주문", "매출", "환불", "열쇠", "니모닉", "비밀키"],
@@ -333,20 +306,6 @@ const COIN_WORDS = table({
   ko: ["rvn", "레이븐코인", "레이븐볼트", "코인", "채굴"], en: ["rvn", "ravencoin", "ravenvault", "mining$"], ja: ["rvn", "レイヴンコイン", "レイヴンヴォルト", "マイニング"],
   zh: ["rvn", "渡鸦币", "挖矿"], it: ["rvn", "ravencoin", "mining$"], es: ["rvn", "ravencoin", "mineria"], fr: ["rvn", "ravencoin", "minage"],
   "pt-BR": ["rvn", "ravencoin", "mineracao"], de: ["rvn", "ravencoin", "mining$"], ru: ["rvn", "ravencoin", "майнинг"],
-});
-
-/* ── 위기 ──────────────────────────────────────────────────────────────── */
-const CRISIS_WORDS = table({
-  ko: ["죽고싶", "죽을래", "죽어버리", "자살", "자해", "목숨을끊", "스스로목숨", "살기싫", "살고싶지않", "사라지고싶", "죽어야겠", "삶을끝"],
-  en: ["kill myself", "killing myself", "want to die", "wanna die", "end my life", "ending my life", "suicid", "self harm", "hurt myself", "harm myself", "don t want to live", "dont want to live", "better off dead", "no reason to live", "kms$"],
-  ja: ["死にたい", "しにたい", "自殺", "自傷", "消えたい", "生きていたくない", "生きたくない", "リストカット", "死のうと"],
-  zh: ["想死", "自杀", "自残", "不想活", "活不下去", "结束生命", "轻生", "割腕", "自殺"],
-  it: ["voglio morire", "vorrei morire", "suicid", "farmi del male", "togliermi la vita", "uccidermi", "non voglio vivere", "autolesion"],
-  es: ["quiero morir", "quiero morirme", "suicid", "hacerme dano", "quitarme la vida", "matarme", "no quiero vivir", "autolesion"],
-  fr: ["je veux mourir", "envie de mourir", "suicid", "me faire du mal", "me tuer", "mettre fin a mes jours", "je ne veux plus vivre", "automutil"],
-  "pt-BR": ["quero morrer", "queria morrer", "suicid", "me machucar", "me matar", "tirar minha vida", "nao quero viver", "automutil"],
-  de: ["ich will sterben", "will nicht mehr leben", "suizid", "selbstmord", "mich umbringen", "mir etwas antun", "mich selbst verletzen", "ritzen", "nicht mehr leben"],
-  ru: ["хочу умереть", "хочу умирать", "суицид", "самоубииств", "покончить с собои", "не хочу жить", "навредить себе", "порезать себя", "убить себя"],
 });
 
 /* ── 감정 낱말 ─────────────────────────────────────────────────────────── */
@@ -537,6 +496,7 @@ export function raviAgeText(lang: Lang, now: Date): string {
   const { months, years } = raviElapsed(now);
   const part = years >= 1 ? pick(AGE_YEARS, lang).replace("{0}", String(years))
     : months < 1 ? pick(AGE_LESS_THAN_MONTH, lang)
+    : months === 1 ? pick(AGE_MONTHS, lang).replace("{0}", "1").replace(/\b1 months\b/, "1 month").replace(/\b1 mesi\b/, "1 mese").replace(/\b1 meses\b/, lang === "pt-BR" ? "1 mês" : "1 mes").replace(/\b1 Monaten\b/, "1 Monat")
     : pick(AGE_MONTHS, lang).replace("{0}", String(months));
   return `${pick(AGE_BASE, lang)} ${part} ${pick(AGE_TAIL, lang)}`;
 }
@@ -560,16 +520,6 @@ export type PersonaContext = { uiLang: Lang; now?: Date; mood?: string; hasKey?:
 
 /** 문장 정리: 같은 말 뒤에 마침표·공백이 겹치지 않게. */
 const tidy = (s: string) => s.replace(/\s+/g, " ").trim();
-
-/** 위기 표현만 먼저 잡는 입구 — main.ts 가 다른 가로채기(도움말·홍보·송금·순위)보다 앞에서 부른다. */
-export function raviCrisisReply(q: string, ui: Lang): PersonaReply | null {
-  const raw = String(q ?? "");
-  if (!raw.trim() || raw.length > 400) return null;
-  const lang = findLang(CRISIS_WORDS, raw, ui);
-  if (!lang) return null;
-  const m: PersonaMatch = { id: "ravi-crisis", kind: "crisis", lang };
-  return { ...m, text: raviPersonaText(m) };
-}
 
 export function raviPersonaText(m: PersonaMatch, ctx: { now?: Date; mood?: string } = {}): string {
   const lang = m.lang;
@@ -597,7 +547,8 @@ export function raviPersonaReply(q: string, ctx: PersonaContext): PersonaReply |
   const m = classifyRaviTalk(q, ctx.uiLang);
   if (!m) return null;
   if (m.kind === "emotion" && ctx.hasKey) return null;
-  if (m.kind === "chain" && ctx.hasKey && CONCEPT_QUESTION.test(compactRavi(q))) return null;
+  // 개념 질문(「해시율이 뭐야?」)은 열쇠가 있으면 AI 로. 단 부자 순위·보유자 수는 「설명」이 섞여도 고정 답(GPT 교차검토).
+  if (m.kind === "chain" && ctx.hasKey && CHAIN_AI_TOPICS.includes(m.topic as ChainTopic) && CONCEPT_QUESTION.test(compactRavi(q))) return null;
   // 0.8.8 병합: 해시율·블록·보안 비용·시세는 열쇠가 있으면 AI 가 읽기 도구로 답한다(SYSTEM 이 출처·기준 시각·「지어내지 않기」를 강제).
   // 부자 순위·보유자 수는 도구가 없어 열쇠가 있어도 로컬의 정직한 「아직 없어요」.
   if (m.kind === "chain" && ctx.hasKey && CHAIN_AI_TOPICS.includes(m.topic as ChainTopic)) return null;

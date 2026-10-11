@@ -340,6 +340,11 @@ async fn pin_these(items: Vec<String>) -> Result<Value, String> {
             continue;
         }
         match crate::ipfs::pin_add(cid.clone()).await {
+            // 붙잡는 동안(큰 파일은 몇 분) 사용자가 「보관 안 하기」로 풀었으면 그 뜻이 이긴다 — 방금 붙잡은 것을 다시 푼다.
+            Ok(true) if crate::asset_keep::load().is_skipped(&cid) => {
+                let _ = crate::ipfs::pin_remove(cid.clone()).await;
+                declined += 1;
+            }
             Ok(true) => pinned.push(json!({ "asset": name, "cid": cid })),
             // 붙들지 못했으면 한동안 다시 묻지 않는다 — 안 그러면 돌 때마다 5분씩 기다린다.
             Ok(false) | Err(_) => {

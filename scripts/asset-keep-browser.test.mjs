@@ -165,6 +165,37 @@ test('내가 만든 자산: 길게 눌러도 경고 창이 먼저 — 체크 전
   await page.waitForFunction(() => /되돌리기/.test(document.querySelector('tr[data-row="MINE/A"] .klabel').textContent));
 });
 
+test('0.8.8 병합: 같은 파일을 여러 자산이 쓰면 길게 눌러도 바로 풀지 않고 「자산 n개가 함께 써요」 안내 창을 거친다', async () => {
+  const shared = { ...CFG, assets: [...CFG.assets, { name: 'GOT/B2', ipfs_hash: c(2), mine: false, amount: 1 }] };
+  await fresh(shared);
+  const box = await (await page.$(btn('GOT/B'))).boundingBox();
+  await page.mouse.move(box.x + 20, box.y + 10); await page.mouse.down(); await sleep(750); await page.mouse.up();
+  await page.waitForSelector('.keep-dlg');
+  assert.match(await page.$eval('.keep-dlg', (e) => e.textContent), /자산 2개가 함께 써요/);
+  assert.ok(!(await calls()).includes('pin_remove'), '공유 파일을 길게 누르기만으로 풀었다');
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector('.keep-dlg'));
+  assert.equal(await labelOf('GOT/B'), '보관 중');
+  // 하나만 쓰는 파일은 그대로 길게 누르기 즉시 해제(위 시험과 같다).
+});
+
+test('0.8.8 병합: 일괄 보관 도중 「보관 안 하기」로 바뀐 파일은 keep 으로 덮어쓰지 않는다', async () => {
+  await fresh(CFG, () => { for (const n of [3, 4, 7]) window.__fx.alive[`Qm${String(n).padStart(44, '0')}`] = true; });
+  await page.click('#keep-incl');
+  assert.equal(await page.$eval('#pin-all', (b) => b.textContent), '파일 있는 4개 모두 보관'); // G, C, D, E — E 가 대상에 들어 있다
+  // 일괄 보관이 시작된 직후(대상 확정 뒤) GOT/E(5)가 「보관 안 하기」로 저장된다 — 앞 줄 보관이 돌아오며 새 뜻을 읽는다.
+  await page.evaluate(() => {
+    const E = `Qm${'5'.padStart(44, '0')}`, G = `Qm${'7'.padStart(44, '0')}`;
+    // 첫 대상(G)의 「파일 찾기」 답이 나가는 순간 E 의 뜻이 「보관 안 하기」로 바뀐다(대상 목록은 이미 정해진 뒤).
+    Object.defineProperty(window.__fx.alive, G, { configurable: true, get() { window.__fx.decisions[E] = 'skip'; return true; } });
+    document.getElementById('pin-all').click();
+  });
+  await page.waitForFunction(() => /개 보관/.test(document.getElementById('keep-live').textContent), { timeout: 15000 });
+  assert.equal((await decisions())[`Qm${'5'.padStart(44, '0')}`], 'skip', '「보관 안 하기」가 일괄 보관에 덮였다');
+  const touched = await page.evaluate(() => window.__calls.filter((x) => (x[0] === 'cid_alive' || x[0] === 'pin_add') && x[1]?.cid === `Qm${'5'.padStart(44, '0')}`).length);
+  assert.equal(touched, 0, '「보관 안 하기」 파일을 찾거나 붙잡았다');
+});
+
 test('키보드만으로: Delete → 안내 창(받은 자산도) → 보관 해제, Space 로 보관, R 다시 확인, V 진짜인지 확인, 우클릭 메뉴', async () => {
   await fresh();
   await page.focus(btn('GOT/B'));

@@ -46,7 +46,13 @@ pub fn parse_iso_utc(s: &str) -> Option<i64> {
     let mut d = date.split('-');
     let (y, m, day): (i64, i64, i64) = (d.next()?.parse().ok()?, d.next()?.parse().ok()?, d.next()?.parse().ok()?);
     if d.next().is_some() || !(1970..=2200).contains(&y) || !(1..=12).contains(&m) || !(1..=31).contains(&day) { return None; }
-    let time = time.split('.').next()?;
+    // 없는 날짜(2월 30일 등)는 받지 않는다 — 날짜를 밀어 계산하면 기준 시각이 틀어진다(0.8.8 병합 GPT 교차검토).
+    let leap = (y % 4 == 0 && y % 100 != 0) || y % 400 == 0;
+    let month_days = [31, if leap { 29 } else { 28 }, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][(m - 1) as usize];
+    if day > month_days { return None; }
+    let (time, frac) = time.split_once('.').unwrap_or((time, ""));
+    // 시간대(+09:00 등)가 붙어 있으면 UTC 로 잘못 읽지 않고 모른다고 한다.
+    if !frac.bytes().all(|b| b.is_ascii_digit()) || time.contains(['+', '-']) { return None; }
     let mut t = time.split(':');
     let (h, mi, sec): (i64, i64, i64) = (t.next()?.parse().ok()?, t.next()?.parse().ok()?, t.next().unwrap_or("0").parse().ok()?);
     if t.next().is_some() || !(0..24).contains(&h) || !(0..60).contains(&mi) || !(0..61).contains(&sec) { return None; }
@@ -106,6 +112,7 @@ pub fn security_json(s: &Security, now: i64, fetched_at: i64, refresh_failed: bo
         "as_of": s.as_of,
         "fetched_at": fetched_at,
         "refresh_failed": refresh_failed,
+        "source": "crypto51",
     })
 }
 
@@ -285,6 +292,14 @@ mod tests {
         assert_eq!((v["hashrate_hs"].as_f64(), v["difficulty"].as_f64()), (Some(5.0e11), Some(120000.5)));
         let v = build_overview(&ok, None, None, Some(&json!("x")), 99);
         assert!(v["hashrate_hs"].is_null() && v["difficulty"].is_null() && v["mempool_count"].is_null());
+    }
+    #[test]
+    fn impossible_dates_and_time_zones_are_unknown_not_shifted() {
+        assert!(parse_iso_utc("2026-10-11T13:07:38.938552").is_some());
+        assert!(parse_iso_utc("2024-02-29T00:00:00Z").is_some());
+        for bad in ["2026-02-30T00:00:00", "2025-02-29T00:00:00", "2026-04-31T00:00:00", "2026-10-11T13:07:38.938+09:00", "2026-10-11T13:07:38+09:00", "2026-10-11T13:07:38.9x"] {
+            assert_eq!(parse_iso_utc(bad), None, "{bad}");
+        }
     }
     #[test]
     fn stage2_questions_are_recognised_and_stage1_are_not() {

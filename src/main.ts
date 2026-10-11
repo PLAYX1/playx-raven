@@ -284,6 +284,7 @@ import {
 import { DEVICE_STORAGE_LABEL, DEVICE_STORAGE_BUTTON, keyStorageGuide, needsKeyStorageGuide, KEYCHAIN_SAVING, keyLast4, normalizeApiKey, keyConnectionFailure, keyStorageError, SavedKeyChecks } from "./ravi-key";
 import { nameTakenFrom, strictBool } from "./name-lookup";
 import { loadRaviPersona } from "./ravi-persona-lazy";
+import { raviCrisisReply } from "./ravi-crisis";
 import { guideById, guideHtml, raviAnswerHtml, raviCopy, raviText, raviQuestionLanguage, providerOfKey, type GuideGo } from "./ravi-guide";
 import { questionNeedsPersonalData } from "./ravi-consent-need";
 
@@ -10793,16 +10794,20 @@ function raviPersonaSay(q: string, talk: { text: string; event?: "user_thanks" |
 async function chatSendExisting() {
   const q = ($("chat-q") as HTMLInputElement).value.trim();
   if (!q) return;
+  // 🔴 2026-10-11 (0.8.8) — 위기 표현은 무엇보다 먼저(비밀 검사보다도), AI 열쇠·지연 묶음과 상관없이 정해 둔 안내로 답한다(ravi-crisis.ts, main 묶음).
+  //    비밀처럼 보이는 글이 섞였으면 입력을 말풍선에 다시 보이지 않고 안내만 한다(아무 데도 보내지 않는다).
+  const crisis = raviCrisisReply(q, lang);
+  if (crisis) {
+    if (containsRaviSecret(q)) { ($("chat-q") as HTMLInputElement).value = ""; chatHtml("ai", `<div translate="no">${escapeHtml(crisis.text)}</div>`); return; }
+    raviPersonaSay(q, crisis); return;
+  }
   if (containsRaviSecret(q)) {
     ($("chat-q") as HTMLInputElement).value = "";
     chatHtml("ai", `<div translate="no">${raviCopy(raviQuestionLanguage(q, (["ko", "en", "ja", "zh"].includes(lang) ? lang : "en") as CoreLang))("시드·키·토큰은 라비에게 보내지 마세요. 입력을 기록하지 않았어요.")}</div>`);
     return;
   }
-  // 🔴 2026-10-11 (0.8.8) — 위기 표현은 무엇보다 먼저, AI 열쇠와 상관없이 정해 둔 안내로 답한다(ravi-persona.ts).
-  //    ravi-persona 는 지연 묶음(ravi-persona-lazy.ts) — 처음 한 번만 읽는다. 읽기 실패면 null → 기존 경로(AI SYSTEM 위기 규칙).
+  // 인물 설정·감정·체인 대답은 지연 묶음(ravi-persona-lazy.ts) — 처음 한 번만 읽는다. 읽기 실패면 null → 기존 경로.
   const persona = await loadRaviPersona();
-  const crisis = persona?.raviCrisisReply(q, lang) ?? null;
-  if (crisis) { raviPersonaSay(q, crisis); return; }
   if (isRaviHelp(q)) {
     ($("chat-q") as HTMLInputElement).value = "";
     chatSay("me", q);
@@ -10862,7 +10867,12 @@ async function chatSendExisting() {
   chatSay("me", q);
 
   if (chatMode === "ask") return chatAsk(q);
-  if (chatMode === "debate") return aiUsableCount >= 2 ? chatDebate(q) : chatAgent(q, DEBATE_ONE_NOTE);
+  // 0.8.8 병합(GPT 교차검토): 체인 수치 질문(해시율·블록·보안 비용·시세)은 토론 모드여도 읽기 도구·출처·기준 시각 규칙이 있는
+  // chatAgent 로 보낸다 — ai_debate 에는 도구가 없어 숫자를 지어낼 수 있다.
+  if (chatMode === "debate") {
+    if (persona?.classifyChainQuestion(q, lang)) return chatAgent(q);
+    return aiUsableCount >= 2 ? chatDebate(q) : chatAgent(q, DEBATE_ONE_NOTE);
+  }
 
   await chatAgent(q);
 

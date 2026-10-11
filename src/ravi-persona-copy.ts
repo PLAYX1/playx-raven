@@ -19,10 +19,11 @@
  *  - 진단·치료 조언을 하지 않는다. 위기 표현은 전문기관 안내로 잇는다.
  *  - 「공식」「재단」으로 오해될 말을 쓰지 않는다.
  */
-import type { Lang } from "./i18n-pack";
 
-export const PERSONA_LANGS: readonly Lang[] = ["ko", "en", "ja", "zh", "it", "es", "fr", "pt-BR", "de", "ru"];
-export type T10 = readonly [string, string, string, string, string, string, string, string, string, string];
+// 언어 순서·T10 은 main 묶음의 ravi-crisis.ts 가 정본(위기 안내가 지연 묶음 없이도 돌게).
+import { PERSONA_LANGS, type T10 } from "./ravi-crisis";
+export { PERSONA_LANGS };
+export type { T10 };
 
 /** 인물 설정 대답 — id 는 지갑 정본 persona id 와 같다(ravi-age 는 계산 문구라 AGE_* 표를 쓴다). */
 export const CANON: Record<string, T10> = {
@@ -406,19 +407,8 @@ export const EMOTION: Record<EmotionKind, T10> = {
   ],
 };
 
-/* ── 위기 표현 — 라비가 상담을 대신하지 않는다. 전문기관 안내로 잇는다 ───────────────── */
-export const CRISIS: T10 = [
-  "많이 힘든 마음이 전해져요. 말해 줘서 고마워요. 저는 새 캐릭터라 위기 상황을 도와드릴 수 없어요. 지금 위험하다고 느끼면 바로 119나 가까운 응급실에 연락해 주세요. 한국에서는 자살예방 상담전화 109(24시간)에서 전문 상담사와 이야기할 수 있어요. 곁에 있는 믿을 수 있는 사람에게도 지금 알려 주세요.",
-  "I can tell you’re in a lot of pain, and I’m glad you told me. I’m a new character and can’t help in a crisis. If you feel in danger right now, please call your local emergency number (911 in the US) or go to the nearest emergency room. In the US you can call or text 988 to reach the Suicide & Crisis Lifeline; elsewhere, please find your country’s crisis line. Please also tell someone you trust who is near you right now.",
-  "とてもつらい気持ちが伝わってきます。話してくれてありがとう。私は新しいキャラクターなので、危機的な状況をお手伝いできません。今すぐ危険だと感じたら、119番か近くの救急に連絡してください。信頼できる身近な人にも、今すぐ知らせてください。お住まいの地域の「いのちの電話」など、専門の相談窓口にも連絡できます。",
-  "我能感受到你现在非常痛苦，谢谢你告诉我。我只是一个新角色，没法在危机时帮上忙。如果你觉得现在有危险，请马上拨打当地急救电话或前往最近的急诊。也请立刻告诉身边你信任的人，并联系你所在地区的心理援助热线。",
-  "Sento che stai soffrendo molto, e sono contenta che tu me l’abbia detto. Sono un personaggio nuovo e non posso aiutare in una crisi. Se in questo momento ti senti in pericolo, chiama subito il 112 o vai al pronto soccorso più vicino. Parlane anche subito con una persona di cui ti fidi e che ti sta vicino; puoi anche cercare il servizio di ascolto per la prevenzione del suicidio del tuo Paese.",
-  "Noto que estás sufriendo mucho y me alegra que me lo hayas contado. Soy un personaje nuevo y no puedo ayudar en una crisis. Si ahora mismo te sientes en peligro, llama ya a tu número de emergencias (112 en España) o ve a urgencias. En España también puedes llamar al 024, la línea de atención a la conducta suicida. Cuéntaselo también ahora a alguien de confianza que esté cerca.",
-  "Je sens que tu souffres beaucoup, et je suis contente que tu me l’aies dit. Je suis un nouveau personnage et je ne peux pas aider en cas de crise. Si tu te sens en danger maintenant, appelle tout de suite le 112 ou rends-toi aux urgences. En France, tu peux aussi appeler le 3114, le numéro national de prévention du suicide. Parles-en aussi maintenant à une personne de confiance près de toi.",
-  "Sinto que você está sofrendo muito, e fico feliz por ter me contado. Sou uma personagem nova e não consigo ajudar em uma crise. Se você se sente em perigo agora, ligue já para a emergência (192 ou 193 no Brasil) ou vá ao pronto-socorro mais próximo. No Brasil, você também pode ligar para o 188, o CVV, que atende 24 horas. Conte agora também a uma pessoa de confiança que esteja perto.",
-  "Ich spüre, dass es dir sehr schlecht geht, und ich bin froh, dass du es mir gesagt hast. Ich bin eine neue Figur und kann in einer Krise nicht helfen. Wenn du dich gerade in Gefahr fühlst, ruf bitte sofort den Notruf 112 an oder geh in die nächste Notaufnahme. In Deutschland erreichst du außerdem die Telefonseelsorge kostenlos unter 0800 111 0 111. Sag es bitte auch jetzt jemandem, dem du vertraust und der in deiner Nähe ist.",
-  "Я чувствую, как тебе тяжело, и рада, что ты мне сказал. Я новый персонаж и не могу помочь в кризисной ситуации. Если ты чувствуешь опасность прямо сейчас, немедленно позвони по номеру экстренной помощи 112 или поезжай в ближайшую больницу. Обязательно расскажи сейчас и кому-нибудь из близких, кому ты доверяешь, кто рядом. Можно также обратиться на телефон доверия в твоей стране.",
-];
+/* ── 위기 표현 — 문구는 main 묶음의 ravi-crisis.ts 에 있다(지연 묶음이 실패해도 위기 안내는 산다). ── */
+export { CRISIS } from "./ravi-crisis";
 
 /* ── 체인 정보 — 읽는 도구가 아직 없다. 숫자를 만들지 않는다 ───────────────────────── */
 export type ChainTopic = "hashrate" | "security" | "richlist" | "holders" | "price" | "chain";

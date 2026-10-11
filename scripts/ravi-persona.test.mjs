@@ -196,9 +196,17 @@ test('체인 개념 질문은 열쇠가 있으면 AI 로(현재 값 질문만 �
   assert.equal(raviPersonaReply('해시율이 뭐야?', { uiLang: 'ko', hasKey: true }), null);
   assert.equal(raviPersonaReply('채굴 난이도가 뭐야?', { uiLang: 'ko', hasKey: true }), null);
   assert.equal(raviPersonaReply('explain the hashrate', { uiLang: 'en', hasKey: true }), null);
+  assert.equal(raviPersonaReply('부자순위가 뭔지 설명해줘', { uiLang: 'ko', hasKey: true })?.kind, 'chain', '부자 순위는 「설명」이 섞여도 고정 답');
   assert.equal(raviPersonaReply('해시율이 뭐야?', { uiLang: 'ko', hasKey: false }).kind, 'chain', '열쇠가 없으면 정직하게 모른다고');
   assert.equal(raviPersonaReply('지금 해시율 알려줘', { uiLang: 'ko', hasKey: true }), null, '0.8.8 병합: 현재 값은 AI 가 chain_overview 로 읽는다');
   assert.equal(raviPersonaReply('지금 해시율 알려줘', { uiLang: 'ko', hasKey: false }).kind, 'chain');
+});
+
+test('0.8.8 병합: 「1개월」은 단수(1 month·1 mese·1 mes·1 mês·1 Monat)', () => {
+  const one = new Date('2026-10-11T12:00:00+09:00');
+  assert.match(raviAgeText('en', one), /about 1 month ago/); assert.doesNotMatch(raviAgeText('en', one), /1 months/);
+  for (const [l, re] of [['it', /1 mese fa/], ['es', /1 mes,|1 mes /], ['pt-BR', /1 mês/], ['de', /1 Monat geboren/]]) assert.match(raviAgeText(l, one), re, l);
+  assert.match(raviAgeText('en', new Date('2026-11-21T12:00:00+09:00')), /about 3 months ago/);
 });
 
 test('기분: 지금 얼굴 상태를 따른다', () => {

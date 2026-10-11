@@ -67,7 +67,9 @@ const layout=checkLayout(css);
 assert.throws(()=>checkLayout(css.replace('--home-row-bottom:112px','--home-row-bottom:320px')));
 assert.throws(()=>checkLayout(css.replace('repeat(2,minmax(0,1fr))','minmax(0,2fr) minmax(0,1fr)')));
 assert.throws(()=>checkLayout(css.replace('--home-muted:#59637d','--home-muted:#cccccc')));
-const homeHTML=html.slice(html.indexOf('<section class="page on" id="page-home">'),html.indexOf('<section class="page" id="page-ravi">'));
+// 홈 섹션만 — 다음 `<section class="page"` 앞까지(0.8.8 병합: 예전 끝 표시 page-ravi 사이에 만들기·판매 화면이 끼어 cw-drop 의 tabindex 를 홈 것으로 잘못 읽었다).
+const homeStart=html.indexOf('<section class="page on" id="page-home">');
+const homeHTML=html.slice(homeStart,html.indexOf('<section class="page"',homeStart+10));
 const order=['rv-home-balance','rv-home-safety','rv-home-activity','ravi-home-slot','rv-home-today','rv-home-extras'].map(id=>homeHTML.indexOf(id));
 assert.ok(order.every((x,i)=>x>=0 && (!i||x>order[i-1])),'DOM reading and keyboard order follows the grid');
 assert.ok(!homeHTML.includes('tabindex='),'No artificial tab order');
@@ -91,8 +93,8 @@ const fn=name=>ast.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text=
 const nodes=new Map();const el=id=>{if(!nodes.has(id))nodes.set(id,{innerHTML:'',textContent:'',hidden:false});return nodes.get(id);};
 let shop={name:'fixture'}, fail=false;
 const escape=s=>String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
-const context=vm.createContext({$:el,document:{getElementById:el,querySelector:()=>null},homeTodaySeq:0,lastReceivedHomeTx:null,lang:'ko',안본주문:2,
-  t:s=>s,copyHtml:escape,escapeHtml:escape,refreshOverview(){},paintHomeSafety(){},todayYmd:()=>'',tzMin:()=>0,
+const context=vm.createContext({$:el,document:{getElementById:el,querySelector:()=>null},homeTodaySeq:0,lastReceivedHomeTx:null,chainInfo:{paintHome(){context.chainPainted=(context.chainPainted||0)+1;}},lang:'ko',안본주문:2,
+  t:s=>s,tf:(s,...a)=>String(s).replace(/\{(\d)\}/g,(_,i)=>String(a[i])),fmtRvn:n=>String(n),copyHtml:escape,escapeHtml:escape,refreshOverview(){},paintHomeSafety(){},todayYmd:()=>'',tzMin:()=>0,
   invoke:async command=>{
     if(command==='shop_load'){if(fail)throw Error('fixture');return shop;}
     if(command==='ledger_range')return {total:12000,currency:'KRW',sales:4};
@@ -103,6 +105,7 @@ const context=vm.createContext({$:el,document:{getElementById:el,querySelector:(
   }});
 vm.runInContext(compile(fn('paintHomeToday')+'\n'+fn('paintHome')),context);
 await context.paintHome(); await context.paintHomeToday();
+assert.equal(context.chainPainted,1,'0.8.8: 홈을 그리면 체인 요약 줄도 한 번 갱신한다');
 assert.equal((el('rv-home-txs').innerHTML.match(/class="rv-home-entry"/g)||[]).length,3);
 assert.ok(el('rv-home-txs').innerHTML.includes('&lt;fixture&gt;'));
 assert.equal((el('rv-home-today-body').innerHTML.match(/class="rv-home-entry"/g)||[]).length,4);

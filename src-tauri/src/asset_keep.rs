@@ -268,12 +268,16 @@ pub async fn asset_keep_set(cids: Vec<String>, decision: String) -> Result<Value
     if p.damaged {
         return Err("보관 설정 파일이 손상되어 있어요. 「자동 보관 다시 켜기」를 먼저 눌러 주세요.".into());
     }
+    // 상한(20,000)에 막혀 적지 못한 뜻이 있으면 성공이라고 하지 않는다 — 화면이 「보관 안 하기」를 저장된 줄 알고
+    // 파일을 풀면 자동 보관이 다시 붙잡을 수 있다(0.8.8 병합 GPT 교차검토).
+    let room = valid.iter().filter(|c| !p.decisions.contains_key(*c)).count();
+    if dec.is_some() && p.decisions.len() + room > MAX_DECISIONS {
+        return Err("보관 설정이 너무 많아 더 적을 수 없어요. 안 쓰는 설정을 「안 정함」으로 되돌린 뒤 다시 해 주세요.".into());
+    }
     for cid in &valid {
         match dec {
             Some(d) => {
-                if p.decisions.len() < MAX_DECISIONS || p.decisions.contains_key(cid) {
-                    p.decisions.insert(cid.clone(), d);
-                }
+                p.decisions.insert(cid.clone(), d);
             }
             None => {
                 p.decisions.remove(cid);
@@ -310,10 +314,15 @@ pub async fn asset_keep_reset() -> Result<Value, String> {
         let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
         // 깨진 파일은 지우지 않고 옆으로 치운다 — 사람이 볼 수 있게.
         let p = path();
-        if p.exists() {
-            let _ = std::fs::rename(&p, p.with_extension("json.bad"));
+        let bad = p.with_extension("json.bad");
+        let moved = p.exists() && std::fs::rename(&p, &bad).is_ok();
+        if let Err(e) = save(&Prefs::default()) {
+            // 새 설정을 못 썼으면 치운 파일을 제자리로 — 「손상」 표시가 남아 자동 보관이 멈춘 채로 있게 한다.
+            if moved {
+                let _ = std::fs::rename(&bad, &p);
+            }
+            return Err(e);
         }
-        save(&Prefs::default())?;
     }
     Ok(view(&ensure_migrated().await))
 }
@@ -425,6 +434,26 @@ mod tests {
             assert!(r.is_err());
             let r = tauri::async_runtime::block_on(asset_keep_auto_mine(false));
             assert!(r.is_err());
+        });
+    }
+
+    #[test]
+    fn 상한에_막힌_보관_안_하기는_성공이라고_하지_않는다() {
+        crate::create_history::tests::sandbox(|_dir| {
+            let mut p = Prefs { migrated: true, ..Prefs::default() };
+            for i in 0..MAX_DECISIONS { p.decisions.insert(format!("Qm{:044}", i), Decision::Keep); }
+            save(&p).unwrap();
+            // 새 주소는 적을 자리가 없다 → 오류(화면은 파일을 풀지 않는다).
+            let r = tauri::async_runtime::block_on(asset_keep_set(vec![A.into()], "skip".into()));
+            assert!(r.is_err(), "상한에서 조용히 성공하면 화면이 풀고 자동 보관이 다시 붙잡는다");
+            assert_eq!(load().decision(A), None);
+            // 이미 있는 주소의 뜻은 바꿀 수 있다.
+            let old = format!("Qm{:044}", 7);
+            let r = tauri::async_runtime::block_on(asset_keep_set(vec![old.clone()], "skip".into()));
+            assert!(r.is_ok());
+            assert_eq!(load().decision(&old), Some(Decision::Skip));
+            // 「안 정함」으로 되돌리기는 늘 된다.
+            assert!(tauri::async_runtime::block_on(asset_keep_set(vec![old.clone()], "clear".into())).is_ok());
         });
     }
 }

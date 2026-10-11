@@ -82,6 +82,8 @@ export function createAssetKeep(deps: KeepDeps) {
   const healthOf = (cid: string): Health => deps.health.get(cid) ?? "unknown";
   const ownerOf = (cid: string) => [...deps.assets.values()].find((a) => a.ipfs_hash === cid && a.mine);
   const nameOf = (cid: string) => [...deps.assets.values()].find((a) => a.ipfs_hash === cid)?.name ?? cid;
+  /** 같은 파일(CID)을 쓰는 자산 수 — 보관은 파일 단위라 하나를 풀면 모두 풀린다(0.8.8 병합 GPT 교차검토). */
+  const sharersOf = (cid: string) => [...deps.assets.values()].filter((a) => a.ipfs_hash === cid).length;
 
   const toRow = (a: KeepAsset): AssetRow => ({
     name: a.name, cid: a.ipfs_hash, mine: a.mine, fingerprint: deps.isFingerprint(a.ipfs_hash),
@@ -212,8 +214,11 @@ export function createAssetKeep(deps: KeepDeps) {
   async function requestUnkeep(cid: string, via: "hold" | "menu" | "key" | "panel") {
     if (!deps.getPinned().has(cid) || busy.has(cid)) return;
     const mine = !!ownerOf(cid);
-    if (via === "hold" && !mine) { await unkeepCid(cid); return; }
+    const shared = sharersOf(cid);
+    // 길게 누르기 즉시 해제는 「내 것이 아니고 이 파일을 쓰는 자산이 하나뿐」일 때만. 여럿이 쓰면 안내 창을 거친다.
+    if (via === "hold" && !mine && shared <= 1) { await unkeepCid(cid); return; }
     const name = nameOf(cid);
+    const sharedLine = shared > 1 ? [tf("이 파일은 자산 {0}개가 함께 써요. 풀면 모두 이 컴퓨터에서 보관이 풀려요.", shared)] : [];
     const ok = mine
       ? await dialog({
           title: t("이 파일은 내가 만든 자산의 것이에요"),
@@ -221,6 +226,7 @@ export function createAssetKeep(deps: KeepDeps) {
             tf("「{0}」의 파일이에요. 이 컴퓨터가 마지막 사본일 수 있어요.", clip(name, 48)),
             t("풀고 나면 이 파일을 열 수 없게 될 수 있어요. 다른 곳에 사본이 있는지는 알 수 없어요."),
             t("자산 자체와 내 잔액은 그대로입니다."),
+            ...sharedLine,
           ],
           check: t("마지막 사본일 수 있음을 이해했어요"),
           ok: t("보관 해제"),
@@ -229,7 +235,7 @@ export function createAssetKeep(deps: KeepDeps) {
         })
       : await dialog({
           title: t("이 파일의 보관을 풀까요?"),
-          body: [t("이 컴퓨터가 더 이상 이 파일을 붙들지 않습니다. 자산 자체나 내 잔액은 그대로입니다."), t("파일은 다른 컴퓨터에 있으면 계속 열립니다. 이 컴퓨터에서는 잠시 뒤 정리될 수 있습니다.")],
+          body: [t("이 컴퓨터가 더 이상 이 파일을 붙들지 않습니다. 자산 자체나 내 잔액은 그대로입니다."), t("파일은 다른 컴퓨터에 있으면 계속 열립니다. 이 컴퓨터에서는 잠시 뒤 정리될 수 있습니다."), ...sharedLine],
           ok: t("보관 해제"),
           cancel: t("취소"),
         });
@@ -471,6 +477,8 @@ export function createAssetKeep(deps: KeepDeps) {
     deps.renderList();
     for (const cid of cids) {
       if (bulk.stop) break;
+      // 도는 사이에 「모두 안 함」·줄 해제로 「보관 안 하기」가 됐으면 덮어쓰지 않는다(0.8.8 병합 GPT 교차검토).
+      if (decisionOf(cid) === "skip") { bulk.done++; continue; }
       const r = await keepCid(cid);
       if (r === "kept") kept++; else if (r === "reserved") reserved++; else bad++;
       bulk.done++;

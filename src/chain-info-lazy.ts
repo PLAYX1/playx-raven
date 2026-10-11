@@ -5,6 +5,8 @@
  * 읽는 동안 홈 단추는 index.html 의 정적 글자(「체인 정보」)만 보인다 — 숫자를 만들어 채우지 않는다.
  * 🔴 읽기에 실패해도 화면은 죽지 않는다: 경고만 남기고 다음 호출에서 다시 시도한다. 문구(chain-info-copy)는 dict.ts 가 main 에 둔다.
  */
+import "./chain-info-home.css";
+
 type Invoke = <T = any>(name: string, args?: Record<string, unknown>) => Promise<T>;
 type ChainApi = { enter(): void; paintHome(): void };
 

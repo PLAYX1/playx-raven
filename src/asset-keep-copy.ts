@@ -90,6 +90,7 @@ export const ASSET_KEEP_COPY: Record<string, [string, string, string]> = {
   "이 파일은 내가 만든 자산의 것이에요": ["This file belongs to an asset I made", "このファイルは自分で作った資産のものです", "这个文件属于我创建的资产"],
   "이 파일은 장부에 적힌 원본과 같아요 (파일 보관함 방식).": ["This file matches the original on the ledger (file storage method).", "このファイルは台帳に記録された原本と一致します（ファイル保管庫方式）。", "该文件与账本上记录的原件一致（文件存储方式）。"],
   "이 파일은 장부에 적힌 원본과 같아요.": ["This file matches the original on the ledger.", "このファイルは台帳に記録された原本と一致します。", "该文件与账本上记录的原件一致。"],
+  "이 파일은 자산 {0}개가 함께 써요. 풀면 모두 이 컴퓨터에서 보관이 풀려요.": ["{0} assets use this same file. Releasing it stops keeping it on this computer for all of them.", "このファイルは{0}件のアセットが共有しています。解除すると、このコンピュータではすべての保管が解除されます。", "此文件由 {0} 个资产共用。取消后，这台电脑将不再为它们全部保存。"],
   "이 파일의 보관을 풀까요?": ["Stop keeping this file?", "このファイルの保管を解除しますか？", "要取消保存此文件吗？"],
   "이 확인은 내 노드가 직접 했어요 · 장부 높이 {0} · {1}": ["My own node did this check · ledger height {0} · {1}", "この確認は自分のノードが直接行いました · 台帳の高さ {0} · {1}", "此确认由我自己的节点直接完成 · 账本高度 {0} · {1}"],
   "이어서 확인": ["Continue checking", "続けて確認", "继续检查"],

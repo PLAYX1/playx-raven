@@ -140,12 +140,29 @@ s2 = await h2.send('너무 우울해'); assert.equal(h2.calls.filter(c => c.comm
 s2 = await h2.send('친구한테 5 RVN 보내줘'); assert.ok(!/1살이에요/.test(s2.map(m => m.text).join('')), '지갑 요청을 가로채지 않는다');
 ok('(a2) persona/crisis/chain answered locally even with a key; emotion goes to AI; wallet requests untouched');
 
+// (a2b) 0.8.8 병합 — 토론 모드(열쇠 2개)여도 체인 수치 질문은 도구가 있는 ravi_agent_chat 으로, ai_debate 로 가지 않는다.
+const hd = harness({ mode: 'debate', usable: 2 });
+await hd.send('해시율 알려줘');
+assert.equal(hd.calls.filter(c => c.command === 'ai_debate').length, 0, '체인 질문이 도구 없는 토론으로 갔다');
+assert.equal(hd.calls.filter(c => c.command === 'ravi_agent_chat').length, 1);
+ok('(a2b) chain numbers in debate mode go to the tool agent, not ai_debate');
+
 // (a3) 0.8.8 병합 — 지연 묶음(ravi-persona-lazy) 읽기가 실패해도 대화는 죽지 않고 기존 AI 경로로 간다.
 const h3 = harness({ personaLoad: async () => null });
 let s3 = await h3.send('몇살이야?');
 assert.deepEqual(s3.map(m => m.who), ['me', 'ai']); assert.equal(s3[1].text, '합성 AI 답');
 assert.equal(h3.calls.filter(c => c.command === 'ravi_agent_chat').length, 1, '읽기 실패 → AI 로(SYSTEM 정본·위기 규칙이 받는다)');
-ok('(a3) persona chunk load failure falls back to the AI path without throwing');
+// 위기 안내는 main 묶음(ravi-crisis.ts)이라 지연 묶음이 실패해도, 열쇠가 있어도 AI 를 부르지 않고 먼저 답한다.
+const aiBefore = h3.calls.filter(c => c.command === 'ravi_agent_chat').length;
+s3 = await h3.send('죽고 싶어'); assert.match(s3.at(-1).text, /109/); assert.match(s3.at(-1).text, /119/);
+assert.equal(h3.calls.filter(c => c.command === 'ravi_agent_chat').length, aiBefore, '위기 표현이 AI 로 갔다');
+// 영어 12낱말 위기 문장은 비밀(복구 단어) 검사에 걸리지만 위기 안내가 먼저 — 입력은 말풍선에 다시 보이지 않는다.
+const longCry = 'I want to die and need help right now please stay here with me';
+s3 = await h3.send(longCry); assert.match(s3.at(-1).text, /988/); assert.ok(!s3.some(m => m.who === 'me'), '비밀처럼 보이는 입력을 말풍선에 보였다');
+assert.equal(h3.calls.filter(c => c.command === 'ravi_agent_chat').length, aiBefore);
+// 400자가 넘는 긴 글 속 위기 표현도 놓치지 않는다.
+s3 = await h3.send('오늘 있었던 일을 길게 적어 볼게. '.repeat(30) + ' 그냥 죽고 싶어'); assert.match(s3.at(-1).text, /109/);
+ok('(a3) persona chunk load failure falls back to the AI path without throwing; crisis still answered first');
 
 // (b) 저장 → 보류한 마지막 질문을 다시 보낸다
 said = await h.save();

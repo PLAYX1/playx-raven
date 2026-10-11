@@ -1,13 +1,4 @@
-/* 「체인 정보」 — 홈 한 줄 요약(키가 충분한 창에서만) + 상세 화면. 앱 공통 변수(--panel --line --muted)를 쓴다. */
-#rv-home-chain { display:none; width:100%; box-sizing:border-box; align-items:center; gap:12px; margin-top:10px; min-height:44px; padding:0 14px; border:1px solid var(--home-line, var(--line)); border-radius:14px; background:var(--home-paper, var(--panel)); color:var(--home-ink, var(--text)); font-size:15px; text-align:left; cursor:pointer; }
-#rv-home-chain strong { flex:none; font-size:15px; }
-#rv-home-chain span { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--home-muted, var(--muted)); }
-#rv-home-chain[data-state="stale"] span { color:var(--home-warn, #805000); }
-#rv-home-chain[data-state="very_stale"] span { opacity:.55; }
-/* 한 화면 약속: 키가 낮은 창에서는 요약 줄을 숨기고 「더 보기」의 바로가기만 쓴다. */
-@media(min-height:860px) { #rv-home-chain { display:flex; } }
-@media(max-width:760px) { #rv-home-chain { display:flex; } }
-
+/* 「체인 정보」 상세 화면 — 지연 묶음(chain-info-card.ts). 홈 요약 줄은 chain-info-home.css(main). 앱 공통 변수(--panel --line --muted)를 쓴다. */
 #page-chain .ci-actions { display:flex; gap:8px; flex-wrap:wrap; margin:6px 0 14px; }
 #page-chain .ci-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:14px; max-width:1100px; }
 #page-chain .ci-card { border:1px solid var(--line); background:var(--panel); border-radius:18px; padding:18px; min-width:0; }
