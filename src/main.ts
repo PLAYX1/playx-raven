@@ -1,7 +1,8 @@
 // 🔴 맨 먼저 — 앱 CSP(Tauri nonce) 가 막는 style="…" 속성을 CSSOM 으로 되살린다(src/style-attrs.ts).
 import "./style-attrs";
 import "./display-mode"; // 설정 「표시 방식」 칸 + 레이아웃 토큰(docs/design/window-modes.md)
-import "./settings-nav"; // 0.9.0 설정 묶음 자리 정리·왼쪽 목록(src/settings-nav.ts) — 레인A
+void import("./settings-nav"); // 0.9.0 설정 왼쪽 목록·주제 바꾸기·바로 가기(src/settings-nav.ts) — 레인A. 시작 묶음 1000KB 예산 때문에 따로 싣는다
+import { myHeadHtml, nameCardAfterMe, saveTalkName, setMyTalkName, wireTalkIdentity } from "./talk-identity"; // 0.9.0 이야기 이름표 — 레인A
 import "./app-lock"; // 잠긴 기본 화면·매장용 읽기 전용 + 다크 돈 카드(docs/design/lock-and-dark.md)
 import "./wallet-file"; // 지갑 파일 내보내기·가져오기 + 백업 열쇠 52글자 종이 단계(0.8.7)
 import "./sales-account.css";
@@ -4547,12 +4548,12 @@ async function paintProfile(): Promise<void> {
   }
   $("rv-profile-face").replaceChildren(raviFace(raviState, 116, { round: true }));
   applyRaviCharacter();
-  ($("rv-profile-color") as HTMLInputElement).value = localStorage.getItem("rv-profile-color") || "#EFEAF8";
   try {
     const me = await invoke<any>("talk_me");
     const key = String(me.pubkey || "");
     const profiles = await invoke<any>("talk_profiles", { pubkeys: [key] });
     ($("rv-profile-name") as HTMLInputElement).value = String(profiles?.[key]?.name || "");
+    setMyTalkName(String(profiles?.[key]?.name || ""));
   } catch { /* Profile name can be set while relays are unavailable. */ }
 }
 
@@ -6019,6 +6020,7 @@ async function talkPaintMe() {
     tkMine = String(me?.pubkey || "");
     await tkLoadNames([tkMine]);
     const mine = tkNames.get(tkMine);
+    nameCardAfterMe(tkNames.has(tkMine), String(mine?.name || "")); // 0.9.0 첫 진입 이름 카드(src/talk-identity.ts)
     const shown = mine?.name ? `<span translate="no">${escapeHtml(String(mine.name))}</span>` : "";
     // 머리줄은 좁다. 긴 설명은 「내 이름」 단추 안에서 말한다.
     $("tk-me").innerHTML =
@@ -6328,14 +6330,15 @@ async function talkPaint() {
         //    🔴 예전에는 `who === prev` 만 봤다. 그래서 어제 마지막으로 쓴
         //       사람이 오늘 아침 첫 글을 쓰면 **이름이 안 붙었다** — 밤을
         //       사이에 두고 이어 쓴 것처럼 보였다.
-        //    ⚠️ 내 글에는 이름을 안 적는다. 오른쪽에 붙은 파란 풍선이 이미
-        //       「나」다. 「나」라고 또 적으면 내 말마다 이름표가 하나씩 더
-        //       붙는데, 그게 카톡과 게시판을 가르는 자리다.
+        //    🔴 0.9.0 — 내 글에도 내 이름·아이콘을 단다(대표 결정 2026-10-12, 이전 「카톡식, 내 글엔 이름 없음」을
+        //       뒤집음). 남들 눈에 내가 어떤 이름으로 보이는지가 내 화면에서도 보여야 한다. 이어 쓴 글에는 안 단다.
         const 이어짐 =
           !day && i > 0 && 쓴이[i - 1] === who && ms - 때[i - 1] < TK_이음;
         const head =
-          mine || 이어짐
+          이어짐
             ? ""
+            : mine
+            ? myHeadHtml(String(tkNames.get(who)?.name || ""))
             : `<div class="who" style="--h:${tkHue(who)}"><span class="rv-avatar" aria-hidden="true">${escapeHtml((tkNames.get(who)?.name || "레").slice(0,1))}</span> ${tkWho(who)}</div>`;
 
         // ③ 시각은 **덩어리의 마지막 글 옆에** 한 번. 한 사람이 세 줄을
@@ -6485,8 +6488,10 @@ async function talkSetName() {
   })) || "";
   setCopyText($("tk-note"), () => t("올리는 중…"));
   try {
-    await invoke("talk_profile_set", { name, about, picture: String(now?.picture || "") });
-    tkNames.set(tkMine, { name, about, picture: now?.picture || "" });
+    // 0.9.0 — 결과를 확인한 것만 「정했습니다」(talk-identity.ts saveTalkName).
+    const r = await saveTalkName(invoke, name, about, String(now?.picture || ""));
+    if (!r.ok) throw r.error;
+    tkNames.set(tkMine, { name: r.name, about, picture: now?.picture || "" });
     $("tk-note").innerHTML = `<span class="ok">${copyHtml("이름을 정했습니다")}</span>`;
     void talkPaintMe();
     void talkPaint();
@@ -17766,19 +17771,20 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("rv-room-ravi-face").appendChild(raviFace("sleep", 50, { round: true }));
   applyRaviCharacter();
   $("rv-room-ravi").onclick = wakeRavi;
+  // 0.9.0 — 「내 색」 없앰. 이름은 이야기와 같은 이름표(talk-identity.ts 가 저장 결과를 확인한다).
   $("rv-profile-save").onclick = async () => {
     const name = ($("rv-profile-name") as HTMLInputElement).value.trim();
-    const color = ($("rv-profile-color") as HTMLInputElement).value;
-    if (!name) { $("rv-profile-note").textContent = t("이름을 적어 주세요"); return; }
+    const note = $("rv-profile-note");
+    if (!name) { note.textContent = t("이름을 적어 주세요"); return; }
+    let pk = "", existing: any = {};
     try {
-      const me = await invoke<any>("talk_me");
-      const pk = String(me.pubkey || "");
-      const existing = await invoke<any>("talk_profiles", { pubkeys: [pk] }).catch(() => ({}));
-      await invoke("talk_profile_set", { name, about: String(existing?.[pk]?.about || ""), picture: String(existing?.[pk]?.picture || "") });
-      localStorage.setItem("rv-profile-color", color);
-      $("rv-person-avatar").style.background = color;
-      $("rv-profile-note").textContent = t("이름을 저장했습니다");
-    } catch (e) { $("rv-profile-note").textContent = errText(e); }
+      pk = String((await invoke<any>("talk_me"))?.pubkey || "");
+      existing = await invoke<any>("talk_profiles", { pubkeys: [pk] }).catch(() => ({}));
+    } catch (e) { note.className = "danger"; note.textContent = errText(e); return; }
+    const r = await saveTalkName(invoke, name, String(existing?.[pk]?.about || ""), String(existing?.[pk]?.picture || ""));
+    note.className = r.ok ? "ok" : "danger";
+    note.textContent = r.ok ? t("이름을 저장했습니다") : r.error;
+    if (r.ok && pk) tkNames.set(pk, { ...(tkNames.get(pk) || {}), name: r.name });
   };
   $("rv-add-friend").onclick = () => { showPage("settings"); document.getElementById("rvp-card")?.scrollIntoView(); };
   const paintRaviStarters = () => {
@@ -18653,6 +18659,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     });
   }
   $("tk-name").addEventListener("click", () => void talkSetName());
+  wireTalkIdentity({ invoke, current: () => tkNames.get(tkMine) || null, onSaved: (name) => { tkNames.set(tkMine, { ...(tkNames.get(tkMine) || {}), name }); void talkPaintMe(); void talkPaint(); } }); // 0.9.0 첫 진입 이름 카드
   bindArtist();
   // ── 접기·펴기 ────────────────────────────────────────────────────
   // 🔴 단추 다섯을 하나로 접었다. 접은 것은 **없앤 것이 아니다** — 여는

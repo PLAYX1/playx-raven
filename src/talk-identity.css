@@ -1,0 +1,41 @@
+/* 0.9.0 「이야기」 이름표 — 시안 ~/rv-design-089/mockups/talk.html. 토큰은 src/settings-apple.css(:root --rv-*).
+ * 🔴 style="" 금지 — 캐릭터별 바탕·색 필터는 data-ravi-char 로 여기서 칠한다(src/ravi-face.ts RAVI_CHARACTERS 와 같은 값). */
+.rv-myface { position: relative; display: inline-grid; place-items: center; flex: none; width: 30px; height: 30px; border-radius: 50%; overflow: hidden; background: #EFEAF8; }
+.rv-myface img { width: 100%; height: 100%; object-fit: cover; }
+.rv-myface[data-ravi-char="dawn"] { background: #DDE8F7; } .rv-myface[data-ravi-char="dawn"] img { filter: hue-rotate(-40deg); }
+.rv-myface[data-ravi-char="forest"] { background: #DCEFE3; } .rv-myface[data-ravi-char="forest"] img { filter: hue-rotate(-110deg); }
+.rv-myface[data-ravi-char="ember"] { background: #FBE7DA; } .rv-myface[data-ravi-char="ember"] img { filter: hue-rotate(120deg) saturate(1.3); }
+.rv-myface[data-ravi-char="sea"] { background: #D9EEF0; } .rv-myface[data-ravi-char="sea"] img { filter: hue-rotate(-70deg) saturate(1.2); }
+.rv-myface[data-ravi-char="blossom"] { background: #F9E1EA; } .rv-myface[data-ravi-char="blossom"] img { filter: hue-rotate(60deg); }
+.rv-myface[data-ravi-char="ink"] { background: #E4E4E8; } .rv-myface[data-ravi-char="ink"] img { filter: grayscale(1) contrast(1.1); }
+.rv-myface[data-ravi-char="gold"] { background: #F6EBC8; } .rv-myface[data-ravi-char="gold"] img { filter: hue-rotate(160deg) saturate(1.4); }
+
+/* 내 글 머리: 오른쪽 정렬 「이름 · 나」 + 내 아이콘 */
+#page-talk .who.me { display: flex; align-items: center; justify-content: flex-end; gap: 6px; align-self: flex-end; margin: 14px 5px 4px 0; color: var(--text); font-size: 15px; }
+#page-talk .who.me .tk-me-tag { font-weight: 500; color: var(--muted); }
+
+/* 첫 진입 이름 카드 */
+.tk-namecard { margin: 12px auto 16px; width: min(560px, calc(100% - 24px)); background: var(--panel); border-radius: 18px; padding: 24px;
+  box-shadow: 0 12px 32px rgba(21, 22, 29, .12), 0 0 0 1px var(--line); }
+.tk-namecard[hidden] { display: none; }
+.tk-namecard h3 { margin: 0 0 6px; font-size: var(--rv-fs-title, 24px); letter-spacing: -.015em; }
+.tk-namecard > p { margin: 0 0 16px; color: var(--muted); font-size: var(--rv-fs-body, 17px); }
+.tk-nc-pick { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; }
+.tk-nc-pick .rv-myface { width: 56px; height: 56px; }
+.tk-nc-pick input { flex: 1; min-width: 0; min-height: 56px; font: inherit; font-size: var(--rv-fs-body, 17px); padding: 0 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); color: var(--text); }
+.tk-nc-acts { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+#tk-nc-save { min-height: 56px; padding: 0 28px; font-size: 18px; font-weight: 700; border-radius: 12px; background: var(--rv-cta, #B4531C); border-color: var(--rv-cta, #B4531C); color: #fff; }
+#tk-nc-save:hover:not(:disabled) { background: var(--rv-cta-hover, #9A4512); border-color: var(--rv-cta-hover, #9A4512); }
+#tk-nc-later { min-height: 48px; border: 0; background: none; color: var(--rv-navy-ink, #2A356B); font-size: var(--rv-fs-body, 17px); font-weight: 600; }
+.tk-nc-msg { margin: 10px 0 0; font-size: var(--rv-fs-sub, 15px); min-height: 1em; }
+.tk-nc-msg:empty { display: none; }
+.tk-nc-msg.ok { color: var(--ok); font-weight: 600; }
+.tk-nc-msg.bad { color: var(--danger); font-weight: 600; border-left: 4px solid var(--danger); padding-left: 10px; }
+.tk-rules { list-style: none; margin: 16px 0 0; padding: 12px 16px; border-radius: 12px; background: color-mix(in srgb, var(--text) 5%, var(--panel)); color: var(--muted); font-size: var(--rv-fs-sub, 15px); line-height: 1.6; }
+.tk-rules li { margin: 2px 0; }
+.tkfirst .tk-rules { flex: 1; min-width: 220px; margin: 0; padding: 0; background: none; color: inherit; }
+#rv-profile-note.ok { color: var(--ok); font-weight: 600; } #rv-profile-note.danger { color: var(--danger); font-weight: 600; }
+.rv-profile-same { color: var(--muted); font-size: var(--rv-fs-sub, 15px); margin: -6px 0 14px; }
+.tk-room-sheet[hidden], #tk-room-settings[hidden] { display: none; }
+:root[data-theme="dark"] :is(.tk-nc-msg.bad, #rv-profile-note.danger) { color: #ff8a80; border-color: #ff8a80; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) :is(.tk-nc-msg.bad, #rv-profile-note.danger) { color: #ff8a80; border-color: #ff8a80; } }

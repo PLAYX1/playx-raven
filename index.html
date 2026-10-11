@@ -3235,8 +3235,10 @@
         <div class="card rv-profile-card">
           <span id="rv-profile-face"></span>
           <p>이름표는 공개됩니다. 사진은 이 화면에 올리지 않아요.</p>
+          <!-- 0.9.0 — 「내 색」은 없앴다(대표 결정 2026-10-12). 내 표시는 이름 + 라비 캐릭터.
+               이 이름 칸은 이야기의 「내 이름」과 **같은 이름표**다(talk_profile_set 하나). -->
           <label>내 이름 <input id="rv-profile-name" maxlength="40" autocomplete="nickname" /></label>
-          <label>내 색 <input id="rv-profile-color" type="color" value="#EFEAF8" /></label>
+          <p class="rv-profile-same">여기 이름은 「이야기」에서 보이는 이름과 같은 이름표예요. 한 곳에서 바꾸면 둘 다 바뀌어요.</p>
           <h2>라비 캐릭터 고르기</h2><div id="rv-profile-characters"></div>
           <button id="rv-profile-save" type="button">저장</button><p id="rv-profile-note" role="status"></p>
         </div>
@@ -3292,6 +3294,8 @@
               <span class="meta" id="tk-me"></span>
               <span style="margin-left:auto"></span>
               <span id="tk-invite"></span>
+              <!-- 0.9.0 레인C 자리: 「방 설정」 시트(설계안 §6). 지금은 숨긴 채 비활성 — 시트는 #tk-room-sheet 에 붙는다. -->
+              <button class="ghost" id="tk-room-settings" type="button" hidden disabled aria-controls="tk-room-sheet" aria-expanded="false">방 설정</button>
               <!-- 🔴 「⋯」 하나만 두지 않는다. 40~70대에게 점 세 개는 단추로
                    안 읽힌다. **글자로** 적는다. -->
               <button class="ghost" id="tk-more" aria-expanded="false">더 보기</button>
@@ -3339,9 +3343,34 @@
 
             <!-- 처음 세 번만. 🔴 한 번도 안 보이면 그건 없앤 것이고,
                  매번 보이면 안 읽는다. 세 번은 읽고 기억할 만큼이다. -->
+            <!-- ── 0.9.0 첫 진입 「이름을 정해 주세요」(설계안 §3-3) ── 내 이름표가 아직 없을 때 한 번.
+                 저장 결과는 talk_profile_set 이 돌려준 이벤트로 확인한다(src/talk-identity.ts). -->
+            <section id="tk-namecard" class="tk-namecard" aria-labelledby="tk-nc-h" hidden>
+              <h3 id="tk-nc-h">이름을 정해 주세요</h3>
+              <p>이 방에서 다른 분들에게 보일 이름이에요. 「내 소개」의 이름과 같은 이름표이고, 언제든 바꿀 수 있어요.</p>
+              <div class="tk-nc-pick">
+                <span class="rv-myface" id="tk-nc-face" aria-hidden="true"><img src="/ravi/face.webp" alt="" /></span>
+                <input id="tk-nc-name" maxlength="40" autocomplete="nickname" aria-label="내 이름" placeholder="예: 동네 꽃집" />
+              </div>
+              <div class="tk-nc-acts">
+                <button id="tk-nc-save" type="button">이 이름으로 시작</button>
+                <button id="tk-nc-later" type="button" class="ghost">나중에 할게요</button>
+              </div>
+              <p id="tk-nc-msg" class="tk-nc-msg" role="status"></p>
+              <ul class="tk-rules">
+                <li>① 복구 단어(12단어)는 누구에게도, 어떤 글에도 쓰지 마세요.</li>
+                <li>② 이름은 누구나 똑같이 달 수 있어요. 돈 이야기는 이름만 믿지 마세요.</li>
+                <li>③ 번역은 틀릴 수 있어요. 원문을 함께 보세요.</li>
+              </ul>
+            </section>
+
+            <!-- 처음 세 번만(설계안 §3-4: 규칙 세 줄). 이름 카드가 떠 있으면 같은 말이라 이 띠는 숨는다. -->
             <div id="tk-first" class="tkfirst" hidden>
-              <p>⚠️ <b>이름은 누구나 같게 달 수 있습니다.</b> 돈이나 주소
-                이야기는 이름만 보고 믿지 마세요. 글은 세계 릴레이로 나갑니다.</p>
+              <ul class="tk-rules">
+                <li>① 복구 단어(12단어)는 누구에게도, 어떤 글에도 쓰지 마세요.</li>
+                <li>② 이름은 누구나 똑같이 달 수 있어요. 돈 이야기는 이름만 믿지 마세요.</li>
+                <li>③ 번역은 틀릴 수 있어요. 원문을 함께 보세요.</li>
+              </ul>
               <button class="ghost" id="tk-firstok">알겠습니다</button>
             </div>
 
@@ -3450,6 +3479,8 @@
             <p>폰에서 QR 로 친구를 추가해요.</p>
             <details><summary>고급</summary><code id="rv-person-key"></code></details>
           </aside>
+          <!-- 0.9.0 레인C 마운트 지점: 「방 설정」 시트(시안 talk.html aside.info). 비어 있고 숨김. -->
+          <div id="tk-room-sheet" class="tk-room-sheet" hidden></div>
         </div>
       </section>
 
