@@ -89,3 +89,64 @@ CSS 변수 파일: `src/layout-tokens.css`(설정 칸 모듈 `src/display-mode.t
 | 사이드바 글(독일어) 쪼개짐·잘림 | `#upnag` `#rp-open` `#d-sum-row` | 사이드바 88px | 「중간」 규칙처럼 아이콘 + 툴팁, 글은 2줄 말줄임 |
 | 사이드바 글 11px | 사이드바 전체 | 글자 하한 미달 | 12px 로(사이드바 폭 재조정 필요 — 대표 확인) |
 | 320·390 폭 | 전 화면 | 큰 창 최소 폭이 720 이라 실제로는 안 생김 | 「자동 전환」(window-modes.md §6)이 들어오면 이 폭은 미니로 넘어간다 |
+
+## 0.9.0 설정 B — 720px 미만 주제별 측정 목록(관문 밖, 보존용)
+
+- 관문은 설정 주제(백업·가게·열쇠 등)를 **720px 이상에서만** 하나씩 잰다. 근거: 큰 창 최소 폭 `src-tauri/tauri.conf.json` `"minWidth": 720`(앱 창은 이보다 좁아지지 않는다).
+- 그래도 무시하지 않는다: 320·390 에서 주제를 하나씩 열어 잰 결과(병합 브랜치 `claude/rv-desktop-090-merge`, 2026-10-12, `RV_PROBE_NARROW` 임시 탐침) 설정 화면 전용 새 실패 51건.
+  레인 A 보고 42건 + 병합으로 패널 안에 들어온 레인 B 백업 칸(#wf-*·#bk-two-grid·#sx-backup-mount) 계열. 대부분 0.9.0 이전부터 「한 번만 하는 일」로 접혀 있어 안 잡히던 칸이다.
+- 폰·좁은 창 지원을 시작하면 이 목록부터 고친다.
+
+```
+settings|clip|#dm-standby  (폭 320)
+settings|clip|#id-paths  (폭 320,390)
+settings|clip|#sw-list  (폭 320,390)
+settings|clip|#wf-export  (폭 320,390)
+settings|narrow|#bk-two-grid b  (폭 320,390)
+settings|narrow|#bk-two-grid span  (폭 320,390)
+settings|narrow|#bk-usbstate  (폭 320,390)
+settings|narrow|#sw-list div.sw-desc  (폭 320,390)
+settings|narrow|#sw-list div.sw-title  (폭 320)
+settings|narrow|#sx-backup-mount span  (폭 320,390)
+settings|narrow|#wf-paper span  (폭 320)
+settings|offscreen|#id-paths b  (폭 390)
+settings|offscreen|#id-paths span  (폭 390)
+settings|offscreen|#id-paths span.osub  (폭 390)
+settings|offscreen|#wf-export span  (폭 390)
+settings|target-small|#key-anthropic  (폭 320)
+settings|target-small|#key-google  (폭 320,390)
+settings|target-small|#key-groq  (폭 320)
+settings|target-small|#key-xai  (폭 320,390)
+settings|target-small|#model-openai  (폭 320)
+settings|word-split|#bk-go  (폭 320)
+settings|word-split|#bk-pick  (폭 320,390)
+settings|word-split|#bk-seed  (폭 320)
+settings|word-split|#bp-save  (폭 320,390)
+settings|word-split|#cf-reload  (폭 320)
+settings|word-split|#cf-save  (폭 320,390)
+settings|word-split|#ck-copy  (폭 320,390)
+settings|word-split|#ck-show  (폭 320,390)
+settings|word-split|#key-save  (폭 320)
+settings|word-split|#keyrows button.ghost  (폭 320,390)
+settings|word-split|#mv-all  (폭 320,390)
+settings|word-split|#mv-get  (폭 320,390)
+settings|word-split|#mv-shop  (폭 320)
+settings|word-split|#page-settings button  (폭 320,390)
+settings|word-split|#rs-card  (폭 320)
+settings|word-split|#rs-find  (폭 320)
+settings|word-split|#rs-folder  (폭 320,390)
+settings|word-split|#rs-lost  (폭 320)
+settings|word-split|#rs-pick  (폭 320)
+settings|word-split|#rs-words  (폭 320)
+settings|word-split|#snd-test  (폭 320,390)
+settings|word-split|#sp-clear  (폭 320)
+settings|word-split|#sw-off  (폭 320)
+settings|word-split|#sx-talkname  (폭 320,390)
+settings|word-split|#tk-snd-test  (폭 320)
+settings|word-split|#up-check  (폭 320)
+settings|word-split|#wd-pick  (폭 320)
+settings|word-split|#wf-core-start  (폭 320)
+settings|word-split|#wf-drop-pick  (폭 320,390)
+settings|word-split|#wf-export  (폭 320,390)
+settings|word-split|#wf-import  (폭 320,390)
+```

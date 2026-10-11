@@ -261,13 +261,22 @@ async function pickFolder(): Promise<string | null> {
   return typeof r === "string" ? r : null;
 }
 
+/** 단추 글자 — 끝의 「내보내기(잠금)…」처럼 괄호·말줄임이 붙은 마지막 덩어리는 한 줄에 둔다(좁은 설정 패널에서
+ *  「(잠금)…」만 다음 줄로 떨어지지 않게 — 0.9.0 병합, 레이아웃 관문 word-split). textContent 는 그대로다. */
+function label(b: HTMLElement, text: string): void {
+  const m = /^(.*\s)?(\S*\(\S+\)…)$/u.exec(text);
+  if (!m) { b.textContent = text; return; }
+  b.replaceChildren(...(m[1] ? [m[1]] : []), el("span", { textContent: m[2], style: "white-space:nowrap" }));
+}
+
 function mountFileCard(): void {
   const anchor = document.getElementById("wf-paper") ?? document.getElementById("ck-key")?.closest(".card");
   if (!anchor || document.getElementById("wf-card")) return;
   let t = c();
   const body = el("div", { id: "wf-body" });
-  const exportBtn = el("button", { textContent: t.exportBtn, id: "wf-export" });
-  const importBtn = el("button", { className: "ghost", textContent: t.importBtn, id: "wf-import" });
+  const exportBtn = el("button", { id: "wf-export" });
+  const importBtn = el("button", { className: "ghost", id: "wf-import" });
+  label(exportBtn, t.exportBtn); label(importBtn, t.importBtn);
   const head = el("h3", { textContent: t.title, style: "margin-top:0" });
   const lede = el("p", { className: "meta", textContent: t.lede });
   const card = el("div", { id: "wf-card", className: "card", style: "margin-top:12px" },
@@ -277,7 +286,7 @@ function mountFileCard(): void {
   window.addEventListener("desktop-language-change", () => {
     if (!card.isConnected) return;
     t = c();
-    head.textContent = t.title; lede.textContent = t.lede; exportBtn.textContent = t.exportBtn; importBtn.textContent = t.importBtn;
+    head.textContent = t.title; lede.textContent = t.lede; label(exportBtn, t.exportBtn); label(importBtn, t.importBtn);
   });
 
   const reset = () => { body.textContent = ""; };

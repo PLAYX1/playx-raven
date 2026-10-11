@@ -205,3 +205,10 @@
   #page-settings .sx-ic { width: 26px; height: 26px; }
   #page-settings .sx-ic svg { width: 16px; height: 16px; }
 }
+
+/* 0.9.0 병합 — 레인 B 백업 칸(두 파일 구분표·wallet.dat 백업 파일 단추)이 설정 B 의 주제 패널(768px 창에서 516px)
+   안에 들어오며 생긴 레이아웃 관문 실패 3건: 표 칸이 긴 낱말 최소 폭 때문에 넘침(clip·offscreen), 단추 안 낱말 쪼개짐(word-split). */
+#sx-backup-mount .bkrow { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr); }
+#sx-backup-mount .bkrow > * { min-width: 0; overflow-wrap: anywhere; }
+#sx-backup-mount #wf-card > .row { display: flex; flex-wrap: wrap; gap: 8px; }
+#sx-backup-mount :is(#wf-export, #wf-import) { flex: 0 1 auto; word-break: keep-all; } /* 끝 덩어리 「…(잠금)…」는 wallet-file.ts label() 이 한 줄로 묶는다 */
