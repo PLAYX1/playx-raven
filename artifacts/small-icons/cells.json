@@ -1,0 +1,6346 @@
+{
+ "generatedAt": "2026-10-10T21:12:27.065Z",
+ "cells": {
+  "before-light-1x": [
+   {
+    "which": "before",
+    "size": 16,
+    "mood": "normal",
+    "x": 78,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "before",
+    "size": 16,
+    "mood": "happy",
+    "x": 126,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "before",
+    "size": 16,
+    "mood": "worried",
+    "x": 174,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "before",
+    "size": 16,
+    "mood": "sleep",
+    "x": 222,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "before",
+    "size": 16,
+    "mood": "surprised",
+    "x": 270,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "before",
+    "size": 16,
+    "mood": "love",
+    "x": 318,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "before",
+    "size": 16,
+    "mood": "thinking",
+    "x": 366,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "before",
+    "size": 16,
+    "mood": "wink",
+    "x": 414,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "before",
+    "size": 16,
+    "mood": "wake",
+    "x": 462,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "before",
+    "size": 16,
+    "mood": "sleepy",
+    "x": 510,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "before",
+    "size": 16,
+    "mood": "focused",
+    "x": 558,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "before",
+    "size": 16,
+    "mood": "working",
+    "x": 606,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "before",
+    "size": 20,
+    "mood": "normal",
+    "x": 76,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "before",
+    "size": 20,
+    "mood": "happy",
+    "x": 124,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "before",
+    "size": 20,
+    "mood": "worried",
+    "x": 172,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "before",
+    "size": 20,
+    "mood": "sleep",
+    "x": 220,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "before",
+    "size": 20,
+    "mood": "surprised",
+    "x": 268,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "before",
+    "size": 20,
+    "mood": "love",
+    "x": 316,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "before",
+    "size": 20,
+    "mood": "thinking",
+    "x": 364,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "before",
+    "size": 20,
+    "mood": "wink",
+    "x": 412,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "before",
+    "size": 20,
+    "mood": "wake",
+    "x": 460,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "before",
+    "size": 20,
+    "mood": "sleepy",
+    "x": 508,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "before",
+    "size": 20,
+    "mood": "focused",
+    "x": 556,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "before",
+    "size": 20,
+    "mood": "working",
+    "x": 604,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "before",
+    "size": 22,
+    "mood": "normal",
+    "x": 75,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "before",
+    "size": 22,
+    "mood": "happy",
+    "x": 123,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "before",
+    "size": 22,
+    "mood": "worried",
+    "x": 171,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "before",
+    "size": 22,
+    "mood": "sleep",
+    "x": 219,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "before",
+    "size": 22,
+    "mood": "surprised",
+    "x": 267,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "before",
+    "size": 22,
+    "mood": "love",
+    "x": 315,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "before",
+    "size": 22,
+    "mood": "thinking",
+    "x": 363,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "before",
+    "size": 22,
+    "mood": "wink",
+    "x": 411,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "before",
+    "size": 22,
+    "mood": "wake",
+    "x": 459,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "before",
+    "size": 22,
+    "mood": "sleepy",
+    "x": 507,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "before",
+    "size": 22,
+    "mood": "focused",
+    "x": 555,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "before",
+    "size": 22,
+    "mood": "working",
+    "x": 603,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "before",
+    "size": 24,
+    "mood": "normal",
+    "x": 74,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "before",
+    "size": 24,
+    "mood": "happy",
+    "x": 122,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "before",
+    "size": 24,
+    "mood": "worried",
+    "x": 170,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "before",
+    "size": 24,
+    "mood": "sleep",
+    "x": 218,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "before",
+    "size": 24,
+    "mood": "surprised",
+    "x": 266,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "before",
+    "size": 24,
+    "mood": "love",
+    "x": 314,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "before",
+    "size": 24,
+    "mood": "thinking",
+    "x": 362,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "before",
+    "size": 24,
+    "mood": "wink",
+    "x": 410,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "before",
+    "size": 24,
+    "mood": "wake",
+    "x": 458,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "before",
+    "size": 24,
+    "mood": "sleepy",
+    "x": 506,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "before",
+    "size": 24,
+    "mood": "focused",
+    "x": 554,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "before",
+    "size": 24,
+    "mood": "working",
+    "x": 602,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "before",
+    "size": 32,
+    "mood": "normal",
+    "x": 70,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "before",
+    "size": 32,
+    "mood": "happy",
+    "x": 118,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "before",
+    "size": 32,
+    "mood": "worried",
+    "x": 166,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "before",
+    "size": 32,
+    "mood": "sleep",
+    "x": 214,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "before",
+    "size": 32,
+    "mood": "surprised",
+    "x": 262,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "before",
+    "size": 32,
+    "mood": "love",
+    "x": 310,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "before",
+    "size": 32,
+    "mood": "thinking",
+    "x": 358,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "before",
+    "size": 32,
+    "mood": "wink",
+    "x": 406,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "before",
+    "size": 32,
+    "mood": "wake",
+    "x": 454,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "before",
+    "size": 32,
+    "mood": "sleepy",
+    "x": 502,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "before",
+    "size": 32,
+    "mood": "focused",
+    "x": 550,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "before",
+    "size": 32,
+    "mood": "working",
+    "x": 598,
+    "y": 150,
+    "w": 32
+   }
+  ],
+  "after-light-1x": [
+   {
+    "which": "after",
+    "size": 16,
+    "mood": "normal",
+    "x": 78,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "after",
+    "size": 16,
+    "mood": "happy",
+    "x": 126,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "after",
+    "size": 16,
+    "mood": "worried",
+    "x": 174,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "after",
+    "size": 16,
+    "mood": "sleep",
+    "x": 222,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "after",
+    "size": 16,
+    "mood": "surprised",
+    "x": 270,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "after",
+    "size": 16,
+    "mood": "love",
+    "x": 318,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "after",
+    "size": 16,
+    "mood": "thinking",
+    "x": 366,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "after",
+    "size": 16,
+    "mood": "wink",
+    "x": 414,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "after",
+    "size": 16,
+    "mood": "wake",
+    "x": 462,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "after",
+    "size": 16,
+    "mood": "sleepy",
+    "x": 510,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "after",
+    "size": 16,
+    "mood": "focused",
+    "x": 558,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "after",
+    "size": 16,
+    "mood": "working",
+    "x": 606,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "after",
+    "size": 20,
+    "mood": "normal",
+    "x": 76,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "after",
+    "size": 20,
+    "mood": "happy",
+    "x": 124,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "after",
+    "size": 20,
+    "mood": "worried",
+    "x": 172,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "after",
+    "size": 20,
+    "mood": "sleep",
+    "x": 220,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "after",
+    "size": 20,
+    "mood": "surprised",
+    "x": 268,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "after",
+    "size": 20,
+    "mood": "love",
+    "x": 316,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "after",
+    "size": 20,
+    "mood": "thinking",
+    "x": 364,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "after",
+    "size": 20,
+    "mood": "wink",
+    "x": 412,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "after",
+    "size": 20,
+    "mood": "wake",
+    "x": 460,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "after",
+    "size": 20,
+    "mood": "sleepy",
+    "x": 508,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "after",
+    "size": 20,
+    "mood": "focused",
+    "x": 556,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "after",
+    "size": 20,
+    "mood": "working",
+    "x": 604,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "after",
+    "size": 22,
+    "mood": "normal",
+    "x": 75,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "after",
+    "size": 22,
+    "mood": "happy",
+    "x": 123,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "after",
+    "size": 22,
+    "mood": "worried",
+    "x": 171,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "after",
+    "size": 22,
+    "mood": "sleep",
+    "x": 219,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "after",
+    "size": 22,
+    "mood": "surprised",
+    "x": 267,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "after",
+    "size": 22,
+    "mood": "love",
+    "x": 315,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "after",
+    "size": 22,
+    "mood": "thinking",
+    "x": 363,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "after",
+    "size": 22,
+    "mood": "wink",
+    "x": 411,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "after",
+    "size": 22,
+    "mood": "wake",
+    "x": 459,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "after",
+    "size": 22,
+    "mood": "sleepy",
+    "x": 507,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "after",
+    "size": 22,
+    "mood": "focused",
+    "x": 555,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "after",
+    "size": 22,
+    "mood": "working",
+    "x": 603,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "after",
+    "size": 24,
+    "mood": "normal",
+    "x": 74,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "after",
+    "size": 24,
+    "mood": "happy",
+    "x": 122,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "after",
+    "size": 24,
+    "mood": "worried",
+    "x": 170,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "after",
+    "size": 24,
+    "mood": "sleep",
+    "x": 218,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "after",
+    "size": 24,
+    "mood": "surprised",
+    "x": 266,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "after",
+    "size": 24,
+    "mood": "love",
+    "x": 314,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "after",
+    "size": 24,
+    "mood": "thinking",
+    "x": 362,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "after",
+    "size": 24,
+    "mood": "wink",
+    "x": 410,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "after",
+    "size": 24,
+    "mood": "wake",
+    "x": 458,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "after",
+    "size": 24,
+    "mood": "sleepy",
+    "x": 506,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "after",
+    "size": 24,
+    "mood": "focused",
+    "x": 554,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "after",
+    "size": 24,
+    "mood": "working",
+    "x": 602,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "after",
+    "size": 32,
+    "mood": "normal",
+    "x": 70,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "after",
+    "size": 32,
+    "mood": "happy",
+    "x": 118,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "after",
+    "size": 32,
+    "mood": "worried",
+    "x": 166,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "after",
+    "size": 32,
+    "mood": "sleep",
+    "x": 214,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "after",
+    "size": 32,
+    "mood": "surprised",
+    "x": 262,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "after",
+    "size": 32,
+    "mood": "love",
+    "x": 310,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "after",
+    "size": 32,
+    "mood": "thinking",
+    "x": 358,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "after",
+    "size": 32,
+    "mood": "wink",
+    "x": 406,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "after",
+    "size": 32,
+    "mood": "wake",
+    "x": 454,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "after",
+    "size": 32,
+    "mood": "sleepy",
+    "x": 502,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "after",
+    "size": 32,
+    "mood": "focused",
+    "x": 550,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "after",
+    "size": 32,
+    "mood": "working",
+    "x": 598,
+    "y": 150,
+    "w": 32
+   }
+  ],
+  "before-light-2x": [
+   {
+    "which": "before",
+    "size": 16,
+    "mood": "normal",
+    "x": 78,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "before",
+    "size": 16,
+    "mood": "happy",
+    "x": 126,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "before",
+    "size": 16,
+    "mood": "worried",
+    "x": 174,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "before",
+    "size": 16,
+    "mood": "sleep",
+    "x": 222,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "before",
+    "size": 16,
+    "mood": "surprised",
+    "x": 270,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "before",
+    "size": 16,
+    "mood": "love",
+    "x": 318,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "before",
+    "size": 16,
+    "mood": "thinking",
+    "x": 366,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "before",
+    "size": 16,
+    "mood": "wink",
+    "x": 414,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "before",
+    "size": 16,
+    "mood": "wake",
+    "x": 462,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "before",
+    "size": 16,
+    "mood": "sleepy",
+    "x": 510,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "before",
+    "size": 16,
+    "mood": "focused",
+    "x": 558,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "before",
+    "size": 16,
+    "mood": "working",
+    "x": 606,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "before",
+    "size": 20,
+    "mood": "normal",
+    "x": 76,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "before",
+    "size": 20,
+    "mood": "happy",
+    "x": 124,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "before",
+    "size": 20,
+    "mood": "worried",
+    "x": 172,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "before",
+    "size": 20,
+    "mood": "sleep",
+    "x": 220,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "before",
+    "size": 20,
+    "mood": "surprised",
+    "x": 268,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "before",
+    "size": 20,
+    "mood": "love",
+    "x": 316,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "before",
+    "size": 20,
+    "mood": "thinking",
+    "x": 364,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "before",
+    "size": 20,
+    "mood": "wink",
+    "x": 412,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "before",
+    "size": 20,
+    "mood": "wake",
+    "x": 460,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "before",
+    "size": 20,
+    "mood": "sleepy",
+    "x": 508,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "before",
+    "size": 20,
+    "mood": "focused",
+    "x": 556,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "before",
+    "size": 20,
+    "mood": "working",
+    "x": 604,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "before",
+    "size": 22,
+    "mood": "normal",
+    "x": 75,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "before",
+    "size": 22,
+    "mood": "happy",
+    "x": 123,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "before",
+    "size": 22,
+    "mood": "worried",
+    "x": 171,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "before",
+    "size": 22,
+    "mood": "sleep",
+    "x": 219,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "before",
+    "size": 22,
+    "mood": "surprised",
+    "x": 267,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "before",
+    "size": 22,
+    "mood": "love",
+    "x": 315,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "before",
+    "size": 22,
+    "mood": "thinking",
+    "x": 363,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "before",
+    "size": 22,
+    "mood": "wink",
+    "x": 411,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "before",
+    "size": 22,
+    "mood": "wake",
+    "x": 459,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "before",
+    "size": 22,
+    "mood": "sleepy",
+    "x": 507,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "before",
+    "size": 22,
+    "mood": "focused",
+    "x": 555,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "before",
+    "size": 22,
+    "mood": "working",
+    "x": 603,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "before",
+    "size": 24,
+    "mood": "normal",
+    "x": 74,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "before",
+    "size": 24,
+    "mood": "happy",
+    "x": 122,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "before",
+    "size": 24,
+    "mood": "worried",
+    "x": 170,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "before",
+    "size": 24,
+    "mood": "sleep",
+    "x": 218,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "before",
+    "size": 24,
+    "mood": "surprised",
+    "x": 266,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "before",
+    "size": 24,
+    "mood": "love",
+    "x": 314,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "before",
+    "size": 24,
+    "mood": "thinking",
+    "x": 362,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "before",
+    "size": 24,
+    "mood": "wink",
+    "x": 410,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "before",
+    "size": 24,
+    "mood": "wake",
+    "x": 458,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "before",
+    "size": 24,
+    "mood": "sleepy",
+    "x": 506,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "before",
+    "size": 24,
+    "mood": "focused",
+    "x": 554,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "before",
+    "size": 24,
+    "mood": "working",
+    "x": 602,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "before",
+    "size": 32,
+    "mood": "normal",
+    "x": 70,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "before",
+    "size": 32,
+    "mood": "happy",
+    "x": 118,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "before",
+    "size": 32,
+    "mood": "worried",
+    "x": 166,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "before",
+    "size": 32,
+    "mood": "sleep",
+    "x": 214,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "before",
+    "size": 32,
+    "mood": "surprised",
+    "x": 262,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "before",
+    "size": 32,
+    "mood": "love",
+    "x": 310,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "before",
+    "size": 32,
+    "mood": "thinking",
+    "x": 358,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "before",
+    "size": 32,
+    "mood": "wink",
+    "x": 406,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "before",
+    "size": 32,
+    "mood": "wake",
+    "x": 454,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "before",
+    "size": 32,
+    "mood": "sleepy",
+    "x": 502,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "before",
+    "size": 32,
+    "mood": "focused",
+    "x": 550,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "before",
+    "size": 32,
+    "mood": "working",
+    "x": 598,
+    "y": 150,
+    "w": 32
+   }
+  ],
+  "after-light-2x": [
+   {
+    "which": "after",
+    "size": 16,
+    "mood": "normal",
+    "x": 78,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "after",
+    "size": 16,
+    "mood": "happy",
+    "x": 126,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "after",
+    "size": 16,
+    "mood": "worried",
+    "x": 174,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "after",
+    "size": 16,
+    "mood": "sleep",
+    "x": 222,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "after",
+    "size": 16,
+    "mood": "surprised",
+    "x": 270,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "after",
+    "size": 16,
+    "mood": "love",
+    "x": 318,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "after",
+    "size": 16,
+    "mood": "thinking",
+    "x": 366,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "after",
+    "size": 16,
+    "mood": "wink",
+    "x": 414,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "after",
+    "size": 16,
+    "mood": "wake",
+    "x": 462,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "after",
+    "size": 16,
+    "mood": "sleepy",
+    "x": 510,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "after",
+    "size": 16,
+    "mood": "focused",
+    "x": 558,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "after",
+    "size": 16,
+    "mood": "working",
+    "x": 606,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "after",
+    "size": 20,
+    "mood": "normal",
+    "x": 76,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "after",
+    "size": 20,
+    "mood": "happy",
+    "x": 124,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "after",
+    "size": 20,
+    "mood": "worried",
+    "x": 172,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "after",
+    "size": 20,
+    "mood": "sleep",
+    "x": 220,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "after",
+    "size": 20,
+    "mood": "surprised",
+    "x": 268,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "after",
+    "size": 20,
+    "mood": "love",
+    "x": 316,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "after",
+    "size": 20,
+    "mood": "thinking",
+    "x": 364,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "after",
+    "size": 20,
+    "mood": "wink",
+    "x": 412,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "after",
+    "size": 20,
+    "mood": "wake",
+    "x": 460,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "after",
+    "size": 20,
+    "mood": "sleepy",
+    "x": 508,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "after",
+    "size": 20,
+    "mood": "focused",
+    "x": 556,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "after",
+    "size": 20,
+    "mood": "working",
+    "x": 604,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "after",
+    "size": 22,
+    "mood": "normal",
+    "x": 75,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "after",
+    "size": 22,
+    "mood": "happy",
+    "x": 123,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "after",
+    "size": 22,
+    "mood": "worried",
+    "x": 171,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "after",
+    "size": 22,
+    "mood": "sleep",
+    "x": 219,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "after",
+    "size": 22,
+    "mood": "surprised",
+    "x": 267,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "after",
+    "size": 22,
+    "mood": "love",
+    "x": 315,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "after",
+    "size": 22,
+    "mood": "thinking",
+    "x": 363,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "after",
+    "size": 22,
+    "mood": "wink",
+    "x": 411,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "after",
+    "size": 22,
+    "mood": "wake",
+    "x": 459,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "after",
+    "size": 22,
+    "mood": "sleepy",
+    "x": 507,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "after",
+    "size": 22,
+    "mood": "focused",
+    "x": 555,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "after",
+    "size": 22,
+    "mood": "working",
+    "x": 603,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "after",
+    "size": 24,
+    "mood": "normal",
+    "x": 74,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "after",
+    "size": 24,
+    "mood": "happy",
+    "x": 122,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "after",
+    "size": 24,
+    "mood": "worried",
+    "x": 170,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "after",
+    "size": 24,
+    "mood": "sleep",
+    "x": 218,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "after",
+    "size": 24,
+    "mood": "surprised",
+    "x": 266,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "after",
+    "size": 24,
+    "mood": "love",
+    "x": 314,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "after",
+    "size": 24,
+    "mood": "thinking",
+    "x": 362,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "after",
+    "size": 24,
+    "mood": "wink",
+    "x": 410,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "after",
+    "size": 24,
+    "mood": "wake",
+    "x": 458,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "after",
+    "size": 24,
+    "mood": "sleepy",
+    "x": 506,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "after",
+    "size": 24,
+    "mood": "focused",
+    "x": 554,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "after",
+    "size": 24,
+    "mood": "working",
+    "x": 602,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "after",
+    "size": 32,
+    "mood": "normal",
+    "x": 70,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "after",
+    "size": 32,
+    "mood": "happy",
+    "x": 118,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "after",
+    "size": 32,
+    "mood": "worried",
+    "x": 166,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "after",
+    "size": 32,
+    "mood": "sleep",
+    "x": 214,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "after",
+    "size": 32,
+    "mood": "surprised",
+    "x": 262,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "after",
+    "size": 32,
+    "mood": "love",
+    "x": 310,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "after",
+    "size": 32,
+    "mood": "thinking",
+    "x": 358,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "after",
+    "size": 32,
+    "mood": "wink",
+    "x": 406,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "after",
+    "size": 32,
+    "mood": "wake",
+    "x": 454,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "after",
+    "size": 32,
+    "mood": "sleepy",
+    "x": 502,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "after",
+    "size": 32,
+    "mood": "focused",
+    "x": 550,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "after",
+    "size": 32,
+    "mood": "working",
+    "x": 598,
+    "y": 150,
+    "w": 32
+   }
+  ],
+  "before-dark-1x": [
+   {
+    "which": "before",
+    "size": 16,
+    "mood": "normal",
+    "x": 78,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "before",
+    "size": 16,
+    "mood": "happy",
+    "x": 126,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "before",
+    "size": 16,
+    "mood": "worried",
+    "x": 174,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "before",
+    "size": 16,
+    "mood": "sleep",
+    "x": 222,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "before",
+    "size": 16,
+    "mood": "surprised",
+    "x": 270,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "before",
+    "size": 16,
+    "mood": "love",
+    "x": 318,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "before",
+    "size": 16,
+    "mood": "thinking",
+    "x": 366,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "before",
+    "size": 16,
+    "mood": "wink",
+    "x": 414,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "before",
+    "size": 16,
+    "mood": "wake",
+    "x": 462,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "before",
+    "size": 16,
+    "mood": "sleepy",
+    "x": 510,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "before",
+    "size": 16,
+    "mood": "focused",
+    "x": 558,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "before",
+    "size": 16,
+    "mood": "working",
+    "x": 606,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "before",
+    "size": 20,
+    "mood": "normal",
+    "x": 76,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "before",
+    "size": 20,
+    "mood": "happy",
+    "x": 124,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "before",
+    "size": 20,
+    "mood": "worried",
+    "x": 172,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "before",
+    "size": 20,
+    "mood": "sleep",
+    "x": 220,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "before",
+    "size": 20,
+    "mood": "surprised",
+    "x": 268,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "before",
+    "size": 20,
+    "mood": "love",
+    "x": 316,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "before",
+    "size": 20,
+    "mood": "thinking",
+    "x": 364,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "before",
+    "size": 20,
+    "mood": "wink",
+    "x": 412,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "before",
+    "size": 20,
+    "mood": "wake",
+    "x": 460,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "before",
+    "size": 20,
+    "mood": "sleepy",
+    "x": 508,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "before",
+    "size": 20,
+    "mood": "focused",
+    "x": 556,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "before",
+    "size": 20,
+    "mood": "working",
+    "x": 604,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "before",
+    "size": 22,
+    "mood": "normal",
+    "x": 75,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "before",
+    "size": 22,
+    "mood": "happy",
+    "x": 123,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "before",
+    "size": 22,
+    "mood": "worried",
+    "x": 171,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "before",
+    "size": 22,
+    "mood": "sleep",
+    "x": 219,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "before",
+    "size": 22,
+    "mood": "surprised",
+    "x": 267,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "before",
+    "size": 22,
+    "mood": "love",
+    "x": 315,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "before",
+    "size": 22,
+    "mood": "thinking",
+    "x": 363,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "before",
+    "size": 22,
+    "mood": "wink",
+    "x": 411,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "before",
+    "size": 22,
+    "mood": "wake",
+    "x": 459,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "before",
+    "size": 22,
+    "mood": "sleepy",
+    "x": 507,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "before",
+    "size": 22,
+    "mood": "focused",
+    "x": 555,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "before",
+    "size": 22,
+    "mood": "working",
+    "x": 603,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "before",
+    "size": 24,
+    "mood": "normal",
+    "x": 74,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "before",
+    "size": 24,
+    "mood": "happy",
+    "x": 122,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "before",
+    "size": 24,
+    "mood": "worried",
+    "x": 170,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "before",
+    "size": 24,
+    "mood": "sleep",
+    "x": 218,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "before",
+    "size": 24,
+    "mood": "surprised",
+    "x": 266,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "before",
+    "size": 24,
+    "mood": "love",
+    "x": 314,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "before",
+    "size": 24,
+    "mood": "thinking",
+    "x": 362,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "before",
+    "size": 24,
+    "mood": "wink",
+    "x": 410,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "before",
+    "size": 24,
+    "mood": "wake",
+    "x": 458,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "before",
+    "size": 24,
+    "mood": "sleepy",
+    "x": 506,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "before",
+    "size": 24,
+    "mood": "focused",
+    "x": 554,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "before",
+    "size": 24,
+    "mood": "working",
+    "x": 602,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "before",
+    "size": 32,
+    "mood": "normal",
+    "x": 70,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "before",
+    "size": 32,
+    "mood": "happy",
+    "x": 118,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "before",
+    "size": 32,
+    "mood": "worried",
+    "x": 166,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "before",
+    "size": 32,
+    "mood": "sleep",
+    "x": 214,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "before",
+    "size": 32,
+    "mood": "surprised",
+    "x": 262,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "before",
+    "size": 32,
+    "mood": "love",
+    "x": 310,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "before",
+    "size": 32,
+    "mood": "thinking",
+    "x": 358,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "before",
+    "size": 32,
+    "mood": "wink",
+    "x": 406,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "before",
+    "size": 32,
+    "mood": "wake",
+    "x": 454,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "before",
+    "size": 32,
+    "mood": "sleepy",
+    "x": 502,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "before",
+    "size": 32,
+    "mood": "focused",
+    "x": 550,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "before",
+    "size": 32,
+    "mood": "working",
+    "x": 598,
+    "y": 150,
+    "w": 32
+   }
+  ],
+  "after-dark-1x": [
+   {
+    "which": "after",
+    "size": 16,
+    "mood": "normal",
+    "x": 78,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "after",
+    "size": 16,
+    "mood": "happy",
+    "x": 126,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "after",
+    "size": 16,
+    "mood": "worried",
+    "x": 174,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "after",
+    "size": 16,
+    "mood": "sleep",
+    "x": 222,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "after",
+    "size": 16,
+    "mood": "surprised",
+    "x": 270,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "after",
+    "size": 16,
+    "mood": "love",
+    "x": 318,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "after",
+    "size": 16,
+    "mood": "thinking",
+    "x": 366,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "after",
+    "size": 16,
+    "mood": "wink",
+    "x": 414,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "after",
+    "size": 16,
+    "mood": "wake",
+    "x": 462,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "after",
+    "size": 16,
+    "mood": "sleepy",
+    "x": 510,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "after",
+    "size": 16,
+    "mood": "focused",
+    "x": 558,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "after",
+    "size": 16,
+    "mood": "working",
+    "x": 606,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "after",
+    "size": 20,
+    "mood": "normal",
+    "x": 76,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "after",
+    "size": 20,
+    "mood": "happy",
+    "x": 124,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "after",
+    "size": 20,
+    "mood": "worried",
+    "x": 172,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "after",
+    "size": 20,
+    "mood": "sleep",
+    "x": 220,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "after",
+    "size": 20,
+    "mood": "surprised",
+    "x": 268,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "after",
+    "size": 20,
+    "mood": "love",
+    "x": 316,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "after",
+    "size": 20,
+    "mood": "thinking",
+    "x": 364,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "after",
+    "size": 20,
+    "mood": "wink",
+    "x": 412,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "after",
+    "size": 20,
+    "mood": "wake",
+    "x": 460,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "after",
+    "size": 20,
+    "mood": "sleepy",
+    "x": 508,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "after",
+    "size": 20,
+    "mood": "focused",
+    "x": 556,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "after",
+    "size": 20,
+    "mood": "working",
+    "x": 604,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "after",
+    "size": 22,
+    "mood": "normal",
+    "x": 75,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "after",
+    "size": 22,
+    "mood": "happy",
+    "x": 123,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "after",
+    "size": 22,
+    "mood": "worried",
+    "x": 171,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "after",
+    "size": 22,
+    "mood": "sleep",
+    "x": 219,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "after",
+    "size": 22,
+    "mood": "surprised",
+    "x": 267,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "after",
+    "size": 22,
+    "mood": "love",
+    "x": 315,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "after",
+    "size": 22,
+    "mood": "thinking",
+    "x": 363,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "after",
+    "size": 22,
+    "mood": "wink",
+    "x": 411,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "after",
+    "size": 22,
+    "mood": "wake",
+    "x": 459,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "after",
+    "size": 22,
+    "mood": "sleepy",
+    "x": 507,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "after",
+    "size": 22,
+    "mood": "focused",
+    "x": 555,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "after",
+    "size": 22,
+    "mood": "working",
+    "x": 603,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "after",
+    "size": 24,
+    "mood": "normal",
+    "x": 74,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "after",
+    "size": 24,
+    "mood": "happy",
+    "x": 122,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "after",
+    "size": 24,
+    "mood": "worried",
+    "x": 170,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "after",
+    "size": 24,
+    "mood": "sleep",
+    "x": 218,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "after",
+    "size": 24,
+    "mood": "surprised",
+    "x": 266,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "after",
+    "size": 24,
+    "mood": "love",
+    "x": 314,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "after",
+    "size": 24,
+    "mood": "thinking",
+    "x": 362,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "after",
+    "size": 24,
+    "mood": "wink",
+    "x": 410,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "after",
+    "size": 24,
+    "mood": "wake",
+    "x": 458,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "after",
+    "size": 24,
+    "mood": "sleepy",
+    "x": 506,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "after",
+    "size": 24,
+    "mood": "focused",
+    "x": 554,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "after",
+    "size": 24,
+    "mood": "working",
+    "x": 602,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "after",
+    "size": 32,
+    "mood": "normal",
+    "x": 70,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "after",
+    "size": 32,
+    "mood": "happy",
+    "x": 118,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "after",
+    "size": 32,
+    "mood": "worried",
+    "x": 166,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "after",
+    "size": 32,
+    "mood": "sleep",
+    "x": 214,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "after",
+    "size": 32,
+    "mood": "surprised",
+    "x": 262,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "after",
+    "size": 32,
+    "mood": "love",
+    "x": 310,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "after",
+    "size": 32,
+    "mood": "thinking",
+    "x": 358,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "after",
+    "size": 32,
+    "mood": "wink",
+    "x": 406,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "after",
+    "size": 32,
+    "mood": "wake",
+    "x": 454,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "after",
+    "size": 32,
+    "mood": "sleepy",
+    "x": 502,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "after",
+    "size": 32,
+    "mood": "focused",
+    "x": 550,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "after",
+    "size": 32,
+    "mood": "working",
+    "x": 598,
+    "y": 150,
+    "w": 32
+   }
+  ],
+  "before-dark-2x": [
+   {
+    "which": "before",
+    "size": 16,
+    "mood": "normal",
+    "x": 78,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "before",
+    "size": 16,
+    "mood": "happy",
+    "x": 126,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "before",
+    "size": 16,
+    "mood": "worried",
+    "x": 174,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "before",
+    "size": 16,
+    "mood": "sleep",
+    "x": 222,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "before",
+    "size": 16,
+    "mood": "surprised",
+    "x": 270,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "before",
+    "size": 16,
+    "mood": "love",
+    "x": 318,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "before",
+    "size": 16,
+    "mood": "thinking",
+    "x": 366,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "before",
+    "size": 16,
+    "mood": "wink",
+    "x": 414,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "before",
+    "size": 16,
+    "mood": "wake",
+    "x": 462,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "before",
+    "size": 16,
+    "mood": "sleepy",
+    "x": 510,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "before",
+    "size": 16,
+    "mood": "focused",
+    "x": 558,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "before",
+    "size": 16,
+    "mood": "working",
+    "x": 606,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "before",
+    "size": 20,
+    "mood": "normal",
+    "x": 76,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "before",
+    "size": 20,
+    "mood": "happy",
+    "x": 124,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "before",
+    "size": 20,
+    "mood": "worried",
+    "x": 172,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "before",
+    "size": 20,
+    "mood": "sleep",
+    "x": 220,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "before",
+    "size": 20,
+    "mood": "surprised",
+    "x": 268,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "before",
+    "size": 20,
+    "mood": "love",
+    "x": 316,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "before",
+    "size": 20,
+    "mood": "thinking",
+    "x": 364,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "before",
+    "size": 20,
+    "mood": "wink",
+    "x": 412,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "before",
+    "size": 20,
+    "mood": "wake",
+    "x": 460,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "before",
+    "size": 20,
+    "mood": "sleepy",
+    "x": 508,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "before",
+    "size": 20,
+    "mood": "focused",
+    "x": 556,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "before",
+    "size": 20,
+    "mood": "working",
+    "x": 604,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "before",
+    "size": 22,
+    "mood": "normal",
+    "x": 75,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "before",
+    "size": 22,
+    "mood": "happy",
+    "x": 123,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "before",
+    "size": 22,
+    "mood": "worried",
+    "x": 171,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "before",
+    "size": 22,
+    "mood": "sleep",
+    "x": 219,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "before",
+    "size": 22,
+    "mood": "surprised",
+    "x": 267,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "before",
+    "size": 22,
+    "mood": "love",
+    "x": 315,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "before",
+    "size": 22,
+    "mood": "thinking",
+    "x": 363,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "before",
+    "size": 22,
+    "mood": "wink",
+    "x": 411,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "before",
+    "size": 22,
+    "mood": "wake",
+    "x": 459,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "before",
+    "size": 22,
+    "mood": "sleepy",
+    "x": 507,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "before",
+    "size": 22,
+    "mood": "focused",
+    "x": 555,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "before",
+    "size": 22,
+    "mood": "working",
+    "x": 603,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "before",
+    "size": 24,
+    "mood": "normal",
+    "x": 74,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "before",
+    "size": 24,
+    "mood": "happy",
+    "x": 122,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "before",
+    "size": 24,
+    "mood": "worried",
+    "x": 170,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "before",
+    "size": 24,
+    "mood": "sleep",
+    "x": 218,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "before",
+    "size": 24,
+    "mood": "surprised",
+    "x": 266,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "before",
+    "size": 24,
+    "mood": "love",
+    "x": 314,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "before",
+    "size": 24,
+    "mood": "thinking",
+    "x": 362,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "before",
+    "size": 24,
+    "mood": "wink",
+    "x": 410,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "before",
+    "size": 24,
+    "mood": "wake",
+    "x": 458,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "before",
+    "size": 24,
+    "mood": "sleepy",
+    "x": 506,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "before",
+    "size": 24,
+    "mood": "focused",
+    "x": 554,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "before",
+    "size": 24,
+    "mood": "working",
+    "x": 602,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "before",
+    "size": 32,
+    "mood": "normal",
+    "x": 70,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "before",
+    "size": 32,
+    "mood": "happy",
+    "x": 118,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "before",
+    "size": 32,
+    "mood": "worried",
+    "x": 166,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "before",
+    "size": 32,
+    "mood": "sleep",
+    "x": 214,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "before",
+    "size": 32,
+    "mood": "surprised",
+    "x": 262,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "before",
+    "size": 32,
+    "mood": "love",
+    "x": 310,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "before",
+    "size": 32,
+    "mood": "thinking",
+    "x": 358,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "before",
+    "size": 32,
+    "mood": "wink",
+    "x": 406,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "before",
+    "size": 32,
+    "mood": "wake",
+    "x": 454,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "before",
+    "size": 32,
+    "mood": "sleepy",
+    "x": 502,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "before",
+    "size": 32,
+    "mood": "focused",
+    "x": 550,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "before",
+    "size": 32,
+    "mood": "working",
+    "x": 598,
+    "y": 150,
+    "w": 32
+   }
+  ],
+  "after-dark-2x": [
+   {
+    "which": "after",
+    "size": 16,
+    "mood": "normal",
+    "x": 78,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "after",
+    "size": 16,
+    "mood": "happy",
+    "x": 126,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "after",
+    "size": 16,
+    "mood": "worried",
+    "x": 174,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "after",
+    "size": 16,
+    "mood": "sleep",
+    "x": 222,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "after",
+    "size": 16,
+    "mood": "surprised",
+    "x": 270,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "after",
+    "size": 16,
+    "mood": "love",
+    "x": 318,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "after",
+    "size": 16,
+    "mood": "thinking",
+    "x": 366,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "after",
+    "size": 16,
+    "mood": "wink",
+    "x": 414,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "after",
+    "size": 16,
+    "mood": "wake",
+    "x": 462,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "after",
+    "size": 16,
+    "mood": "sleepy",
+    "x": 510,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "after",
+    "size": 16,
+    "mood": "focused",
+    "x": 558,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "after",
+    "size": 16,
+    "mood": "working",
+    "x": 606,
+    "y": 36,
+    "w": 16
+   },
+   {
+    "which": "after",
+    "size": 20,
+    "mood": "normal",
+    "x": 76,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "after",
+    "size": 20,
+    "mood": "happy",
+    "x": 124,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "after",
+    "size": 20,
+    "mood": "worried",
+    "x": 172,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "after",
+    "size": 20,
+    "mood": "sleep",
+    "x": 220,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "after",
+    "size": 20,
+    "mood": "surprised",
+    "x": 268,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "after",
+    "size": 20,
+    "mood": "love",
+    "x": 316,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "after",
+    "size": 20,
+    "mood": "thinking",
+    "x": 364,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "after",
+    "size": 20,
+    "mood": "wink",
+    "x": 412,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "after",
+    "size": 20,
+    "mood": "wake",
+    "x": 460,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "after",
+    "size": 20,
+    "mood": "sleepy",
+    "x": 508,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "after",
+    "size": 20,
+    "mood": "focused",
+    "x": 556,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "after",
+    "size": 20,
+    "mood": "working",
+    "x": 604,
+    "y": 60,
+    "w": 20
+   },
+   {
+    "which": "after",
+    "size": 22,
+    "mood": "normal",
+    "x": 75,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "after",
+    "size": 22,
+    "mood": "happy",
+    "x": 123,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "after",
+    "size": 22,
+    "mood": "worried",
+    "x": 171,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "after",
+    "size": 22,
+    "mood": "sleep",
+    "x": 219,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "after",
+    "size": 22,
+    "mood": "surprised",
+    "x": 267,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "after",
+    "size": 22,
+    "mood": "love",
+    "x": 315,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "after",
+    "size": 22,
+    "mood": "thinking",
+    "x": 363,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "after",
+    "size": 22,
+    "mood": "wink",
+    "x": 411,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "after",
+    "size": 22,
+    "mood": "wake",
+    "x": 459,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "after",
+    "size": 22,
+    "mood": "sleepy",
+    "x": 507,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "after",
+    "size": 22,
+    "mood": "focused",
+    "x": 555,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "after",
+    "size": 22,
+    "mood": "working",
+    "x": 603,
+    "y": 88,
+    "w": 22
+   },
+   {
+    "which": "after",
+    "size": 24,
+    "mood": "normal",
+    "x": 74,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "after",
+    "size": 24,
+    "mood": "happy",
+    "x": 122,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "after",
+    "size": 24,
+    "mood": "worried",
+    "x": 170,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "after",
+    "size": 24,
+    "mood": "sleep",
+    "x": 218,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "after",
+    "size": 24,
+    "mood": "surprised",
+    "x": 266,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "after",
+    "size": 24,
+    "mood": "love",
+    "x": 314,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "after",
+    "size": 24,
+    "mood": "thinking",
+    "x": 362,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "after",
+    "size": 24,
+    "mood": "wink",
+    "x": 410,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "after",
+    "size": 24,
+    "mood": "wake",
+    "x": 458,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "after",
+    "size": 24,
+    "mood": "sleepy",
+    "x": 506,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "after",
+    "size": 24,
+    "mood": "focused",
+    "x": 554,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "after",
+    "size": 24,
+    "mood": "working",
+    "x": 602,
+    "y": 118,
+    "w": 24
+   },
+   {
+    "which": "after",
+    "size": 32,
+    "mood": "normal",
+    "x": 70,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "after",
+    "size": 32,
+    "mood": "happy",
+    "x": 118,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "after",
+    "size": 32,
+    "mood": "worried",
+    "x": 166,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "after",
+    "size": 32,
+    "mood": "sleep",
+    "x": 214,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "after",
+    "size": 32,
+    "mood": "surprised",
+    "x": 262,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "after",
+    "size": 32,
+    "mood": "love",
+    "x": 310,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "after",
+    "size": 32,
+    "mood": "thinking",
+    "x": 358,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "after",
+    "size": 32,
+    "mood": "wink",
+    "x": 406,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "after",
+    "size": 32,
+    "mood": "wake",
+    "x": 454,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "after",
+    "size": 32,
+    "mood": "sleepy",
+    "x": 502,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "after",
+    "size": 32,
+    "mood": "focused",
+    "x": 550,
+    "y": 150,
+    "w": 32
+   },
+   {
+    "which": "after",
+    "size": 32,
+    "mood": "working",
+    "x": 598,
+    "y": 150,
+    "w": 32
+   }
+  ]
+ },
+ "bigSame": [
+  {
+   "size": 33,
+   "mood": "normal",
+   "same": true
+  },
+  {
+   "size": 33,
+   "mood": "normal·round",
+   "same": true
+  },
+  {
+   "size": 33,
+   "mood": "happy",
+   "same": true
+  },
+  {
+   "size": 33,
+   "mood": "happy·round",
+   "same": true
+  },
+  {
+   "size": 33,
+   "mood": "worried",
+   "same": true
+  },
+  {
+   "size": 33,
+   "mood": "worried·round",
+   "same": true
+  },
+  {
+   "size": 33,
+   "mood": "sleep",
+   "same": true
+  },
+  {
+   "size": 33,
+   "mood": "sleep·round",
+   "same": true
+  },
+  {
+   "size": 33,
+   "mood": "surprised",
+   "same": true
+  },
+  {
+   "size": 33,
+   "mood": "surprised·round",
+   "same": true
+  },
+  {
+   "size": 33,
+   "mood": "love",
+   "same": true
+  },
+  {
+   "size": 33,
+   "mood": "love·round",
+   "same": true
+  },
+  {
+   "size": 33,
+   "mood": "thinking",
+   "same": true
+  },
+  {
+   "size": 33,
+   "mood": "thinking·round",
+   "same": true
+  },
+  {
+   "size": 33,
+   "mood": "wink",
+   "same": true
+  },
+  {
+   "size": 33,
+   "mood": "wink·round",
+   "same": true
+  },
+  {
+   "size": 33,
+   "mood": "wake",
+   "same": true
+  },
+  {
+   "size": 33,
+   "mood": "wake·round",
+   "same": true
+  },
+  {
+   "size": 33,
+   "mood": "sleepy",
+   "same": true
+  },
+  {
+   "size": 33,
+   "mood": "sleepy·round",
+   "same": true
+  },
+  {
+   "size": 33,
+   "mood": "focused",
+   "same": true
+  },
+  {
+   "size": 33,
+   "mood": "focused·round",
+   "same": true
+  },
+  {
+   "size": 33,
+   "mood": "working",
+   "same": true
+  },
+  {
+   "size": 33,
+   "mood": "working·round",
+   "same": true
+  },
+  {
+   "size": 36,
+   "mood": "normal",
+   "same": true
+  },
+  {
+   "size": 36,
+   "mood": "normal·round",
+   "same": true
+  },
+  {
+   "size": 36,
+   "mood": "happy",
+   "same": true
+  },
+  {
+   "size": 36,
+   "mood": "happy·round",
+   "same": true
+  },
+  {
+   "size": 36,
+   "mood": "worried",
+   "same": true
+  },
+  {
+   "size": 36,
+   "mood": "worried·round",
+   "same": true
+  },
+  {
+   "size": 36,
+   "mood": "sleep",
+   "same": true
+  },
+  {
+   "size": 36,
+   "mood": "sleep·round",
+   "same": true
+  },
+  {
+   "size": 36,
+   "mood": "surprised",
+   "same": true
+  },
+  {
+   "size": 36,
+   "mood": "surprised·round",
+   "same": true
+  },
+  {
+   "size": 36,
+   "mood": "love",
+   "same": true
+  },
+  {
+   "size": 36,
+   "mood": "love·round",
+   "same": true
+  },
+  {
+   "size": 36,
+   "mood": "thinking",
+   "same": true
+  },
+  {
+   "size": 36,
+   "mood": "thinking·round",
+   "same": true
+  },
+  {
+   "size": 36,
+   "mood": "wink",
+   "same": true
+  },
+  {
+   "size": 36,
+   "mood": "wink·round",
+   "same": true
+  },
+  {
+   "size": 36,
+   "mood": "wake",
+   "same": true
+  },
+  {
+   "size": 36,
+   "mood": "wake·round",
+   "same": true
+  },
+  {
+   "size": 36,
+   "mood": "sleepy",
+   "same": true
+  },
+  {
+   "size": 36,
+   "mood": "sleepy·round",
+   "same": true
+  },
+  {
+   "size": 36,
+   "mood": "focused",
+   "same": true
+  },
+  {
+   "size": 36,
+   "mood": "focused·round",
+   "same": true
+  },
+  {
+   "size": 36,
+   "mood": "working",
+   "same": true
+  },
+  {
+   "size": 36,
+   "mood": "working·round",
+   "same": true
+  },
+  {
+   "size": 40,
+   "mood": "normal",
+   "same": true
+  },
+  {
+   "size": 40,
+   "mood": "normal·round",
+   "same": true
+  },
+  {
+   "size": 40,
+   "mood": "happy",
+   "same": true
+  },
+  {
+   "size": 40,
+   "mood": "happy·round",
+   "same": true
+  },
+  {
+   "size": 40,
+   "mood": "worried",
+   "same": true
+  },
+  {
+   "size": 40,
+   "mood": "worried·round",
+   "same": true
+  },
+  {
+   "size": 40,
+   "mood": "sleep",
+   "same": true
+  },
+  {
+   "size": 40,
+   "mood": "sleep·round",
+   "same": true
+  },
+  {
+   "size": 40,
+   "mood": "surprised",
+   "same": true
+  },
+  {
+   "size": 40,
+   "mood": "surprised·round",
+   "same": true
+  },
+  {
+   "size": 40,
+   "mood": "love",
+   "same": true
+  },
+  {
+   "size": 40,
+   "mood": "love·round",
+   "same": true
+  },
+  {
+   "size": 40,
+   "mood": "thinking",
+   "same": true
+  },
+  {
+   "size": 40,
+   "mood": "thinking·round",
+   "same": true
+  },
+  {
+   "size": 40,
+   "mood": "wink",
+   "same": true
+  },
+  {
+   "size": 40,
+   "mood": "wink·round",
+   "same": true
+  },
+  {
+   "size": 40,
+   "mood": "wake",
+   "same": true
+  },
+  {
+   "size": 40,
+   "mood": "wake·round",
+   "same": true
+  },
+  {
+   "size": 40,
+   "mood": "sleepy",
+   "same": true
+  },
+  {
+   "size": 40,
+   "mood": "sleepy·round",
+   "same": true
+  },
+  {
+   "size": 40,
+   "mood": "focused",
+   "same": true
+  },
+  {
+   "size": 40,
+   "mood": "focused·round",
+   "same": true
+  },
+  {
+   "size": 40,
+   "mood": "working",
+   "same": true
+  },
+  {
+   "size": 40,
+   "mood": "working·round",
+   "same": true
+  },
+  {
+   "size": 44,
+   "mood": "normal",
+   "same": true
+  },
+  {
+   "size": 44,
+   "mood": "normal·round",
+   "same": true
+  },
+  {
+   "size": 44,
+   "mood": "happy",
+   "same": true
+  },
+  {
+   "size": 44,
+   "mood": "happy·round",
+   "same": true
+  },
+  {
+   "size": 44,
+   "mood": "worried",
+   "same": true
+  },
+  {
+   "size": 44,
+   "mood": "worried·round",
+   "same": true
+  },
+  {
+   "size": 44,
+   "mood": "sleep",
+   "same": true
+  },
+  {
+   "size": 44,
+   "mood": "sleep·round",
+   "same": true
+  },
+  {
+   "size": 44,
+   "mood": "surprised",
+   "same": true
+  },
+  {
+   "size": 44,
+   "mood": "surprised·round",
+   "same": true
+  },
+  {
+   "size": 44,
+   "mood": "love",
+   "same": true
+  },
+  {
+   "size": 44,
+   "mood": "love·round",
+   "same": true
+  },
+  {
+   "size": 44,
+   "mood": "thinking",
+   "same": true
+  },
+  {
+   "size": 44,
+   "mood": "thinking·round",
+   "same": true
+  },
+  {
+   "size": 44,
+   "mood": "wink",
+   "same": true
+  },
+  {
+   "size": 44,
+   "mood": "wink·round",
+   "same": true
+  },
+  {
+   "size": 44,
+   "mood": "wake",
+   "same": true
+  },
+  {
+   "size": 44,
+   "mood": "wake·round",
+   "same": true
+  },
+  {
+   "size": 44,
+   "mood": "sleepy",
+   "same": true
+  },
+  {
+   "size": 44,
+   "mood": "sleepy·round",
+   "same": true
+  },
+  {
+   "size": 44,
+   "mood": "focused",
+   "same": true
+  },
+  {
+   "size": 44,
+   "mood": "focused·round",
+   "same": true
+  },
+  {
+   "size": 44,
+   "mood": "working",
+   "same": true
+  },
+  {
+   "size": 44,
+   "mood": "working·round",
+   "same": true
+  },
+  {
+   "size": 50,
+   "mood": "normal",
+   "same": true
+  },
+  {
+   "size": 50,
+   "mood": "normal·round",
+   "same": true
+  },
+  {
+   "size": 50,
+   "mood": "happy",
+   "same": true
+  },
+  {
+   "size": 50,
+   "mood": "happy·round",
+   "same": true
+  },
+  {
+   "size": 50,
+   "mood": "worried",
+   "same": true
+  },
+  {
+   "size": 50,
+   "mood": "worried·round",
+   "same": true
+  },
+  {
+   "size": 50,
+   "mood": "sleep",
+   "same": true
+  },
+  {
+   "size": 50,
+   "mood": "sleep·round",
+   "same": true
+  },
+  {
+   "size": 50,
+   "mood": "surprised",
+   "same": true
+  },
+  {
+   "size": 50,
+   "mood": "surprised·round",
+   "same": true
+  },
+  {
+   "size": 50,
+   "mood": "love",
+   "same": true
+  },
+  {
+   "size": 50,
+   "mood": "love·round",
+   "same": true
+  },
+  {
+   "size": 50,
+   "mood": "thinking",
+   "same": true
+  },
+  {
+   "size": 50,
+   "mood": "thinking·round",
+   "same": true
+  },
+  {
+   "size": 50,
+   "mood": "wink",
+   "same": true
+  },
+  {
+   "size": 50,
+   "mood": "wink·round",
+   "same": true
+  },
+  {
+   "size": 50,
+   "mood": "wake",
+   "same": true
+  },
+  {
+   "size": 50,
+   "mood": "wake·round",
+   "same": true
+  },
+  {
+   "size": 50,
+   "mood": "sleepy",
+   "same": true
+  },
+  {
+   "size": 50,
+   "mood": "sleepy·round",
+   "same": true
+  },
+  {
+   "size": 50,
+   "mood": "focused",
+   "same": true
+  },
+  {
+   "size": 50,
+   "mood": "focused·round",
+   "same": true
+  },
+  {
+   "size": 50,
+   "mood": "working",
+   "same": true
+  },
+  {
+   "size": 50,
+   "mood": "working·round",
+   "same": true
+  },
+  {
+   "size": 56,
+   "mood": "normal",
+   "same": true
+  },
+  {
+   "size": 56,
+   "mood": "normal·round",
+   "same": true
+  },
+  {
+   "size": 56,
+   "mood": "happy",
+   "same": true
+  },
+  {
+   "size": 56,
+   "mood": "happy·round",
+   "same": true
+  },
+  {
+   "size": 56,
+   "mood": "worried",
+   "same": true
+  },
+  {
+   "size": 56,
+   "mood": "worried·round",
+   "same": true
+  },
+  {
+   "size": 56,
+   "mood": "sleep",
+   "same": true
+  },
+  {
+   "size": 56,
+   "mood": "sleep·round",
+   "same": true
+  },
+  {
+   "size": 56,
+   "mood": "surprised",
+   "same": true
+  },
+  {
+   "size": 56,
+   "mood": "surprised·round",
+   "same": true
+  },
+  {
+   "size": 56,
+   "mood": "love",
+   "same": true
+  },
+  {
+   "size": 56,
+   "mood": "love·round",
+   "same": true
+  },
+  {
+   "size": 56,
+   "mood": "thinking",
+   "same": true
+  },
+  {
+   "size": 56,
+   "mood": "thinking·round",
+   "same": true
+  },
+  {
+   "size": 56,
+   "mood": "wink",
+   "same": true
+  },
+  {
+   "size": 56,
+   "mood": "wink·round",
+   "same": true
+  },
+  {
+   "size": 56,
+   "mood": "wake",
+   "same": true
+  },
+  {
+   "size": 56,
+   "mood": "wake·round",
+   "same": true
+  },
+  {
+   "size": 56,
+   "mood": "sleepy",
+   "same": true
+  },
+  {
+   "size": 56,
+   "mood": "sleepy·round",
+   "same": true
+  },
+  {
+   "size": 56,
+   "mood": "focused",
+   "same": true
+  },
+  {
+   "size": 56,
+   "mood": "focused·round",
+   "same": true
+  },
+  {
+   "size": 56,
+   "mood": "working",
+   "same": true
+  },
+  {
+   "size": 56,
+   "mood": "working·round",
+   "same": true
+  },
+  {
+   "size": 64,
+   "mood": "normal",
+   "same": true
+  },
+  {
+   "size": 64,
+   "mood": "normal·round",
+   "same": true
+  },
+  {
+   "size": 64,
+   "mood": "happy",
+   "same": true
+  },
+  {
+   "size": 64,
+   "mood": "happy·round",
+   "same": true
+  },
+  {
+   "size": 64,
+   "mood": "worried",
+   "same": true
+  },
+  {
+   "size": 64,
+   "mood": "worried·round",
+   "same": true
+  },
+  {
+   "size": 64,
+   "mood": "sleep",
+   "same": true
+  },
+  {
+   "size": 64,
+   "mood": "sleep·round",
+   "same": true
+  },
+  {
+   "size": 64,
+   "mood": "surprised",
+   "same": true
+  },
+  {
+   "size": 64,
+   "mood": "surprised·round",
+   "same": true
+  },
+  {
+   "size": 64,
+   "mood": "love",
+   "same": true
+  },
+  {
+   "size": 64,
+   "mood": "love·round",
+   "same": true
+  },
+  {
+   "size": 64,
+   "mood": "thinking",
+   "same": true
+  },
+  {
+   "size": 64,
+   "mood": "thinking·round",
+   "same": true
+  },
+  {
+   "size": 64,
+   "mood": "wink",
+   "same": true
+  },
+  {
+   "size": 64,
+   "mood": "wink·round",
+   "same": true
+  },
+  {
+   "size": 64,
+   "mood": "wake",
+   "same": true
+  },
+  {
+   "size": 64,
+   "mood": "wake·round",
+   "same": true
+  },
+  {
+   "size": 64,
+   "mood": "sleepy",
+   "same": true
+  },
+  {
+   "size": 64,
+   "mood": "sleepy·round",
+   "same": true
+  },
+  {
+   "size": 64,
+   "mood": "focused",
+   "same": true
+  },
+  {
+   "size": 64,
+   "mood": "focused·round",
+   "same": true
+  },
+  {
+   "size": 64,
+   "mood": "working",
+   "same": true
+  },
+  {
+   "size": 64,
+   "mood": "working·round",
+   "same": true
+  },
+  {
+   "size": 96,
+   "mood": "normal",
+   "same": true
+  },
+  {
+   "size": 96,
+   "mood": "normal·round",
+   "same": true
+  },
+  {
+   "size": 96,
+   "mood": "happy",
+   "same": true
+  },
+  {
+   "size": 96,
+   "mood": "happy·round",
+   "same": true
+  },
+  {
+   "size": 96,
+   "mood": "worried",
+   "same": true
+  },
+  {
+   "size": 96,
+   "mood": "worried·round",
+   "same": true
+  },
+  {
+   "size": 96,
+   "mood": "sleep",
+   "same": true
+  },
+  {
+   "size": 96,
+   "mood": "sleep·round",
+   "same": true
+  },
+  {
+   "size": 96,
+   "mood": "surprised",
+   "same": true
+  },
+  {
+   "size": 96,
+   "mood": "surprised·round",
+   "same": true
+  },
+  {
+   "size": 96,
+   "mood": "love",
+   "same": true
+  },
+  {
+   "size": 96,
+   "mood": "love·round",
+   "same": true
+  },
+  {
+   "size": 96,
+   "mood": "thinking",
+   "same": true
+  },
+  {
+   "size": 96,
+   "mood": "thinking·round",
+   "same": true
+  },
+  {
+   "size": 96,
+   "mood": "wink",
+   "same": true
+  },
+  {
+   "size": 96,
+   "mood": "wink·round",
+   "same": true
+  },
+  {
+   "size": 96,
+   "mood": "wake",
+   "same": true
+  },
+  {
+   "size": 96,
+   "mood": "wake·round",
+   "same": true
+  },
+  {
+   "size": 96,
+   "mood": "sleepy",
+   "same": true
+  },
+  {
+   "size": 96,
+   "mood": "sleepy·round",
+   "same": true
+  },
+  {
+   "size": 96,
+   "mood": "focused",
+   "same": true
+  },
+  {
+   "size": 96,
+   "mood": "focused·round",
+   "same": true
+  },
+  {
+   "size": 96,
+   "mood": "working",
+   "same": true
+  },
+  {
+   "size": 96,
+   "mood": "working·round",
+   "same": true
+  },
+  {
+   "size": 116,
+   "mood": "normal",
+   "same": true
+  },
+  {
+   "size": 116,
+   "mood": "normal·round",
+   "same": true
+  },
+  {
+   "size": 116,
+   "mood": "happy",
+   "same": true
+  },
+  {
+   "size": 116,
+   "mood": "happy·round",
+   "same": true
+  },
+  {
+   "size": 116,
+   "mood": "worried",
+   "same": true
+  },
+  {
+   "size": 116,
+   "mood": "worried·round",
+   "same": true
+  },
+  {
+   "size": 116,
+   "mood": "sleep",
+   "same": true
+  },
+  {
+   "size": 116,
+   "mood": "sleep·round",
+   "same": true
+  },
+  {
+   "size": 116,
+   "mood": "surprised",
+   "same": true
+  },
+  {
+   "size": 116,
+   "mood": "surprised·round",
+   "same": true
+  },
+  {
+   "size": 116,
+   "mood": "love",
+   "same": true
+  },
+  {
+   "size": 116,
+   "mood": "love·round",
+   "same": true
+  },
+  {
+   "size": 116,
+   "mood": "thinking",
+   "same": true
+  },
+  {
+   "size": 116,
+   "mood": "thinking·round",
+   "same": true
+  },
+  {
+   "size": 116,
+   "mood": "wink",
+   "same": true
+  },
+  {
+   "size": 116,
+   "mood": "wink·round",
+   "same": true
+  },
+  {
+   "size": 116,
+   "mood": "wake",
+   "same": true
+  },
+  {
+   "size": 116,
+   "mood": "wake·round",
+   "same": true
+  },
+  {
+   "size": 116,
+   "mood": "sleepy",
+   "same": true
+  },
+  {
+   "size": 116,
+   "mood": "sleepy·round",
+   "same": true
+  },
+  {
+   "size": 116,
+   "mood": "focused",
+   "same": true
+  },
+  {
+   "size": 116,
+   "mood": "focused·round",
+   "same": true
+  },
+  {
+   "size": 116,
+   "mood": "working",
+   "same": true
+  },
+  {
+   "size": 116,
+   "mood": "working·round",
+   "same": true
+  },
+  {
+   "size": 120,
+   "mood": "normal",
+   "same": true
+  },
+  {
+   "size": 120,
+   "mood": "normal·round",
+   "same": true
+  },
+  {
+   "size": 120,
+   "mood": "happy",
+   "same": true
+  },
+  {
+   "size": 120,
+   "mood": "happy·round",
+   "same": true
+  },
+  {
+   "size": 120,
+   "mood": "worried",
+   "same": true
+  },
+  {
+   "size": 120,
+   "mood": "worried·round",
+   "same": true
+  },
+  {
+   "size": 120,
+   "mood": "sleep",
+   "same": true
+  },
+  {
+   "size": 120,
+   "mood": "sleep·round",
+   "same": true
+  },
+  {
+   "size": 120,
+   "mood": "surprised",
+   "same": true
+  },
+  {
+   "size": 120,
+   "mood": "surprised·round",
+   "same": true
+  },
+  {
+   "size": 120,
+   "mood": "love",
+   "same": true
+  },
+  {
+   "size": 120,
+   "mood": "love·round",
+   "same": true
+  },
+  {
+   "size": 120,
+   "mood": "thinking",
+   "same": true
+  },
+  {
+   "size": 120,
+   "mood": "thinking·round",
+   "same": true
+  },
+  {
+   "size": 120,
+   "mood": "wink",
+   "same": true
+  },
+  {
+   "size": 120,
+   "mood": "wink·round",
+   "same": true
+  },
+  {
+   "size": 120,
+   "mood": "wake",
+   "same": true
+  },
+  {
+   "size": 120,
+   "mood": "wake·round",
+   "same": true
+  },
+  {
+   "size": 120,
+   "mood": "sleepy",
+   "same": true
+  },
+  {
+   "size": 120,
+   "mood": "sleepy·round",
+   "same": true
+  },
+  {
+   "size": 120,
+   "mood": "focused",
+   "same": true
+  },
+  {
+   "size": 120,
+   "mood": "focused·round",
+   "same": true
+  },
+  {
+   "size": 120,
+   "mood": "working",
+   "same": true
+  },
+  {
+   "size": 120,
+   "mood": "working·round",
+   "same": true
+  },
+  {
+   "size": 150,
+   "mood": "normal",
+   "same": true
+  },
+  {
+   "size": 150,
+   "mood": "normal·round",
+   "same": true
+  },
+  {
+   "size": 150,
+   "mood": "happy",
+   "same": true
+  },
+  {
+   "size": 150,
+   "mood": "happy·round",
+   "same": true
+  },
+  {
+   "size": 150,
+   "mood": "worried",
+   "same": true
+  },
+  {
+   "size": 150,
+   "mood": "worried·round",
+   "same": true
+  },
+  {
+   "size": 150,
+   "mood": "sleep",
+   "same": true
+  },
+  {
+   "size": 150,
+   "mood": "sleep·round",
+   "same": true
+  },
+  {
+   "size": 150,
+   "mood": "surprised",
+   "same": true
+  },
+  {
+   "size": 150,
+   "mood": "surprised·round",
+   "same": true
+  },
+  {
+   "size": 150,
+   "mood": "love",
+   "same": true
+  },
+  {
+   "size": 150,
+   "mood": "love·round",
+   "same": true
+  },
+  {
+   "size": 150,
+   "mood": "thinking",
+   "same": true
+  },
+  {
+   "size": 150,
+   "mood": "thinking·round",
+   "same": true
+  },
+  {
+   "size": 150,
+   "mood": "wink",
+   "same": true
+  },
+  {
+   "size": 150,
+   "mood": "wink·round",
+   "same": true
+  },
+  {
+   "size": 150,
+   "mood": "wake",
+   "same": true
+  },
+  {
+   "size": 150,
+   "mood": "wake·round",
+   "same": true
+  },
+  {
+   "size": 150,
+   "mood": "sleepy",
+   "same": true
+  },
+  {
+   "size": 150,
+   "mood": "sleepy·round",
+   "same": true
+  },
+  {
+   "size": 150,
+   "mood": "focused",
+   "same": true
+  },
+  {
+   "size": 150,
+   "mood": "focused·round",
+   "same": true
+  },
+  {
+   "size": 150,
+   "mood": "working",
+   "same": true
+  },
+  {
+   "size": 150,
+   "mood": "working·round",
+   "same": true
+  }
+ ],
+ "bigPixelSame": true,
+ "smallApi": [
+  {
+   "size": 12,
+   "mood": "normal",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 12,
+   "mood": "normal",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 12,
+   "mood": "happy",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 12,
+   "mood": "happy",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 12,
+   "mood": "worried",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 12,
+   "mood": "worried",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 12,
+   "mood": "sleep",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 12,
+   "mood": "sleep",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 12,
+   "mood": "surprised",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 12,
+   "mood": "surprised",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 12,
+   "mood": "love",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 12,
+   "mood": "love",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 12,
+   "mood": "thinking",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 12,
+   "mood": "thinking",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 12,
+   "mood": "wink",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 12,
+   "mood": "wink",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 12,
+   "mood": "wake",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 12,
+   "mood": "wake",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 12,
+   "mood": "sleepy",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 12,
+   "mood": "sleepy",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 12,
+   "mood": "focused",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 12,
+   "mood": "focused",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 12,
+   "mood": "working",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 12,
+   "mood": "working",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 16,
+   "mood": "normal",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 16,
+   "mood": "normal",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 16,
+   "mood": "happy",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 16,
+   "mood": "happy",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 16,
+   "mood": "worried",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 16,
+   "mood": "worried",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 16,
+   "mood": "sleep",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 16,
+   "mood": "sleep",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 16,
+   "mood": "surprised",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 16,
+   "mood": "surprised",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 16,
+   "mood": "love",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 16,
+   "mood": "love",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 16,
+   "mood": "thinking",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 16,
+   "mood": "thinking",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 16,
+   "mood": "wink",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 16,
+   "mood": "wink",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 16,
+   "mood": "wake",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 16,
+   "mood": "wake",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 16,
+   "mood": "sleepy",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 16,
+   "mood": "sleepy",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 16,
+   "mood": "focused",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 16,
+   "mood": "focused",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 16,
+   "mood": "working",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 16,
+   "mood": "working",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 18,
+   "mood": "normal",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 18,
+   "mood": "normal",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 18,
+   "mood": "happy",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 18,
+   "mood": "happy",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 18,
+   "mood": "worried",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 18,
+   "mood": "worried",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 18,
+   "mood": "sleep",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 18,
+   "mood": "sleep",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 18,
+   "mood": "surprised",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 18,
+   "mood": "surprised",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 18,
+   "mood": "love",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 18,
+   "mood": "love",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 18,
+   "mood": "thinking",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 18,
+   "mood": "thinking",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 18,
+   "mood": "wink",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 18,
+   "mood": "wink",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 18,
+   "mood": "wake",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 18,
+   "mood": "wake",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 18,
+   "mood": "sleepy",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 18,
+   "mood": "sleepy",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 18,
+   "mood": "focused",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 18,
+   "mood": "focused",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 18,
+   "mood": "working",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 18,
+   "mood": "working",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 20,
+   "mood": "normal",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 20,
+   "mood": "normal",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 20,
+   "mood": "happy",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 20,
+   "mood": "happy",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 20,
+   "mood": "worried",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 20,
+   "mood": "worried",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 20,
+   "mood": "sleep",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 20,
+   "mood": "sleep",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 20,
+   "mood": "surprised",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 20,
+   "mood": "surprised",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 20,
+   "mood": "love",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 20,
+   "mood": "love",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 20,
+   "mood": "thinking",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 20,
+   "mood": "thinking",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 20,
+   "mood": "wink",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 20,
+   "mood": "wink",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 20,
+   "mood": "wake",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 20,
+   "mood": "wake",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 20,
+   "mood": "sleepy",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 20,
+   "mood": "sleepy",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 20,
+   "mood": "focused",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 20,
+   "mood": "focused",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 20,
+   "mood": "working",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 20,
+   "mood": "working",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 22,
+   "mood": "normal",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 22,
+   "mood": "normal",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 22,
+   "mood": "happy",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 22,
+   "mood": "happy",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 22,
+   "mood": "worried",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 22,
+   "mood": "worried",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 22,
+   "mood": "sleep",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 22,
+   "mood": "sleep",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 22,
+   "mood": "surprised",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 22,
+   "mood": "surprised",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 22,
+   "mood": "love",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 22,
+   "mood": "love",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 22,
+   "mood": "thinking",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 22,
+   "mood": "thinking",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 22,
+   "mood": "wink",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 22,
+   "mood": "wink",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 22,
+   "mood": "wake",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 22,
+   "mood": "wake",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 22,
+   "mood": "sleepy",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 22,
+   "mood": "sleepy",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 22,
+   "mood": "focused",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 22,
+   "mood": "focused",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 22,
+   "mood": "working",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 22,
+   "mood": "working",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 24,
+   "mood": "normal",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 24,
+   "mood": "normal",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 24,
+   "mood": "happy",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 24,
+   "mood": "happy",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 24,
+   "mood": "worried",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 24,
+   "mood": "worried",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 24,
+   "mood": "sleep",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 24,
+   "mood": "sleep",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 24,
+   "mood": "surprised",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 24,
+   "mood": "surprised",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 24,
+   "mood": "love",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 24,
+   "mood": "love",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 24,
+   "mood": "thinking",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 24,
+   "mood": "thinking",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 24,
+   "mood": "wink",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 24,
+   "mood": "wink",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 24,
+   "mood": "wake",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 24,
+   "mood": "wake",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 24,
+   "mood": "sleepy",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 24,
+   "mood": "sleepy",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 24,
+   "mood": "focused",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 24,
+   "mood": "focused",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 24,
+   "mood": "working",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 24,
+   "mood": "working",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 28,
+   "mood": "normal",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 28,
+   "mood": "normal",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 28,
+   "mood": "happy",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 28,
+   "mood": "happy",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 28,
+   "mood": "worried",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 28,
+   "mood": "worried",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 28,
+   "mood": "sleep",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 28,
+   "mood": "sleep",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 28,
+   "mood": "surprised",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 28,
+   "mood": "surprised",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 28,
+   "mood": "love",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 28,
+   "mood": "love",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 28,
+   "mood": "thinking",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 28,
+   "mood": "thinking",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 28,
+   "mood": "wink",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 28,
+   "mood": "wink",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 28,
+   "mood": "wake",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 28,
+   "mood": "wake",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 28,
+   "mood": "sleepy",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 28,
+   "mood": "sleepy",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 28,
+   "mood": "focused",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 28,
+   "mood": "focused",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 28,
+   "mood": "working",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 28,
+   "mood": "working",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 32,
+   "mood": "normal",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 32,
+   "mood": "normal",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 32,
+   "mood": "happy",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 32,
+   "mood": "happy",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 32,
+   "mood": "worried",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 32,
+   "mood": "worried",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 32,
+   "mood": "sleep",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 32,
+   "mood": "sleep",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 32,
+   "mood": "surprised",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 32,
+   "mood": "surprised",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 32,
+   "mood": "love",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 32,
+   "mood": "love",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 32,
+   "mood": "thinking",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 32,
+   "mood": "thinking",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 32,
+   "mood": "wink",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 32,
+   "mood": "wink",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 32,
+   "mood": "wake",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 32,
+   "mood": "wake",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 32,
+   "mood": "sleepy",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 32,
+   "mood": "sleepy",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 32,
+   "mood": "focused",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 32,
+   "mood": "focused",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 32,
+   "mood": "working",
+   "same": true,
+   "why": ""
+  },
+  {
+   "size": 32,
+   "mood": "working",
+   "same": true,
+   "why": ""
+  }
+ ],
+ "colorTray": [
+  "ravi-tray-v2-16",
+  "ravi-tray-v2-16-alert",
+  "ravi-tray-v2-16-sleep",
+  "ravi-tray-v2-32",
+  "ravi-tray-v2-32-alert",
+  "ravi-tray-v2-32-sleep"
+ ]
+}

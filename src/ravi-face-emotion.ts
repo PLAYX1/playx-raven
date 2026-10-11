@@ -4,7 +4,7 @@
  * 덧그림 규칙: 같은 420×420 좌표, 선 색은 기존 눈(#1B1A25)·볼(#F28AA0) 그대로 — 캐릭터를 바꾸지 않는다.
  * 반짝임(celebrate)만 한 번 「팝」 하고 멈춘다(반복 없음). 나머지는 정지 그림.
  */
-import { raviFace, setMood } from "./ravi-face";
+import { paintSmall, raviFace, setMood } from "./ravi-face";
 import { BASE_MOOD, type RaviEmotion } from "./ravi-emotion";
 import { EMOTION_LABEL } from "./ravi-emotion-rules";
 import { t } from "./i18n";
@@ -40,6 +40,8 @@ export function paintEmotionFace(el: HTMLElement, emotion: RaviEmotion, detail =
   setMood(el, BASE_MOOD[emotion]);
   el.dataset.raviEmotion = emotion;
   el.setAttribute("aria-label", t(EMOTION_LABEL[emotion]));
+  // 작은 얼굴(≤32px)은 손맞춤 그림 — 420 좌표 덧그림을 얹지 않고, 진지한 감정만 눈을 바꾼다.
+  if (el.dataset.raviSmall) { paintSmall(el); return; }
   const svg = el.querySelector("svg");
   if (!svg) return;
   svg.querySelector(".rv-emo")?.remove();
