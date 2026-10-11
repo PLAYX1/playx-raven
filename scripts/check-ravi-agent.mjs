@@ -15,6 +15,8 @@ const compiled = ts.transpileModule(source.replace(/^import .*;\n/gm, ''), {
 }).outputText;
 const guideBundle = await build({ entryPoints: ['src/ravi-guide.ts'], bundle: true, platform: 'node', format: 'cjs', write: false });
 const guideContext = { module: { exports: {} }, exports: {} }; vm.runInNewContext(guideBundle.outputFiles[0].text, guideContext);
+const needBundle = await build({ entryPoints: ['src/ravi-consent-need.ts'], bundle: true, platform: 'node', format: 'cjs', write: false });
+const needContext = { module: { exports: {} }, exports: {} }; vm.runInNewContext(needBundle.outputFiles[0].text, needContext);
 const secret = guideContext.module.exports.containsRaviSecret;
 const storage = () => { const m = new Map(); return { getItem: k => m.get(k) ?? null, setItem: (k,v) => m.set(k,v) }; };
 const defaultConsent = () => ({ reviewed: false, balance: false, transactions: false, shop: false });
@@ -109,13 +111,13 @@ const mainSource=readFileSync('src/main.ts','utf8'),ast=ts.createSourceFile('mai
 const fn=name=>ast.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text===name).getText(ast);
 let dispatched=[],actions=[],messages=[],allowed=true,offered=0;
 const ctx=vm.createContext({raviAgentUI:{consentState:async()=>({reviewed:allowed}),offerConsent:()=>{offered++;return true;}},copyHtml:s=>s,escapeHtml:s=>s,document:{createElement:()=>({setAttribute(){},remove(){}})},$:()=>({append(){}}),Channel:class{},TOOL_LABELS:f.exports.TOOL_LABELS,aiProvider:'synthetic',tzMin:()=>540,
-  containsRaviSecret:secret,chatSay:(who,text)=>messages.push({who,text}),raviOpenScreen:s=>actions.push(s),openRaviPromo:async()=>actions.push('promo'),
+  containsRaviSecret:secret,questionNeedsPersonalData:needContext.module.exports.questionNeedsPersonalData,chatSay:(who,text)=>messages.push({who,text}),raviOpenScreen:s=>actions.push(s),openRaviPromo:async()=>actions.push('promo'),
   applyActions:(a,q)=>{actions.push({a,q});return ['준비'];},invoke:async(cmd,args)=>{dispatched.push(cmd);args.progress.onmessage('wallet_balance');return {reply:'확인할 화면을 준비했어요',prepared:[{name:'prepare_send',args:{address:'R111111111111111111111111111111111',amount:1}}]};},
 });
 vm.runInContext(ts.transpileModule(fn('chatAgent'),{compilerOptions:{target:ts.ScriptTarget.ES2020}}).outputText,ctx);
 await ctx.chatAgent('직접 요청');assert.deepEqual(dispatched,['ravi_agent_chat']);assert.equal(actions[0].a[0].type,'send_prepare');assert.equal(actions[0].q,'직접 요청');
 assert.equal(offered,0,'no offer once consent is saved');
-allowed=false;dispatched=[];messages.length=0;await ctx.chatAgent('취소');assert.deepEqual(dispatched,['ravi_agent_chat'],'unsaved consent still answers (general chat)');assert.equal(offered,1);
+allowed=false;dispatched=[];messages.length=0;await ctx.chatAgent('몇살이야?');assert.equal(offered,0,'general question: no card');dispatched=[];await ctx.chatAgent('내 잔액 얼마야?');assert.deepEqual(dispatched,['ravi_agent_chat'],'unsaved consent still answers (general chat)');assert.equal(offered,1);
 assert.ok(!messages.some(m=>/보내지 않았어요/.test(m.text)),'question is never dropped');
 assert.ok(!/invoke\([^\n]*(?:send_rvn|send_asset|walletpassphrase)/.test(fn('chatAgent')));
 assert.ok(mainSource.includes('raviAgentUI?.start();'),'arrival starts independently of provider availability');

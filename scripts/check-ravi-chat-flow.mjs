@@ -17,6 +17,7 @@ import { build } from 'esbuild';
 const bundle = async entry => { const r = await build({ entryPoints: [entry], bundle: true, platform: 'node', format: 'cjs', write: false }); const c = { module: { exports: {} }, exports: {}, navigator: { language: 'ko' }, localStorage: { getItem: () => null, setItem() {} }, document: { documentElement: { lang: 'ko', setAttribute() {} } } }; vm.runInNewContext(r.outputFiles[0].text, c); return c.module.exports; };
 const chat = await bundle('src/ravi-chat.ts');
 const guide = await bundle('src/ravi-guide.ts');
+const consentNeed = await bundle('src/ravi-consent-need.ts');
 const text = html => String(html).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 let passed = 0; const ok = (name) => { passed++; console.log('PASS ' + name); };
 
@@ -83,7 +84,7 @@ function harness({ consent = { reviewed: false, balance: false, transactions: fa
     offerConsent(saved) { if (declined || savedConsent.reviewed) return false; offers.push(1); held = saved; return true; },
   };
   const ctx = vm.createContext({
-    ...chat, ...guide, lang: 'ko', aiProvider: 'synthetic', chatMode: mode, aiUsableCount: usable, raviRequestPending: false, raviHeldQuestion: '',
+    ...chat, ...guide, ...consentNeed, lang: 'ko', aiProvider: 'synthetic', chatMode: mode, aiUsableCount: usable, raviRequestPending: false, raviHeldQuestion: '',
     DEBATE_ONE_NOTE: 'AI가 하나만 연결돼 있어 바로 답할게요.', TOOL_LABELS: {}, raviAgentUI: ui,
     raviHome: { sent() {}, thinking() {}, finish() {}, open() {} }, setTimeout,
     $: id => id === 'chat-q' ? input : { append() {}, lastElementChild: null },
@@ -117,22 +118,24 @@ let said = await h.send('레이븐코인은 언제 만들어졌어?');
 assert.deepEqual(said.map(m => m.who), ['me', 'ai']); assert.equal(said[1].text, '합성 AI 답');
 assert.ok(!said.some(m => /보내지 않았어요/.test(m.text)));
 assert.equal(h.calls.filter(c => c.command === 'ravi_agent_chat').length, 1);
-assert.equal(h.offers.length, 1, '답 아래에 동의 카드를 한 번 제안');
-said = await h.send('채굴은 어떻게 해?');
+assert.equal(h.offers.length, 0, '일반 질문에는 동의 카드를 붙이지 않는다');
+said = await h.send('몇살이야?'); assert.equal(h.offers.length, 0, '「몇살이야?」에 카드 없음');
+said = await h.send('내 잔액 얼마야?'); assert.equal(h.offers.length, 1, '내 정보 질문에는 답 아래 카드를 한 번 제안');
+said = await h.send('내 거래 내역 알려줘');
 assert.equal(said[1].text, '합성 AI 답', '카드가 떠 있어도 다음 질문은 막히지 않는다');
 ok('(a) unsaved consent: general answer, nothing dropped, next question not blocked');
 
 // (b) 저장 → 보류한 마지막 질문을 다시 보낸다
 said = await h.save();
 const agentCalls = h.calls.filter(c => c.command === 'ravi_agent_chat');
-assert.equal(agentCalls.length, 3); assert.equal(agentCalls[2].args.message, '채굴은 어떻게 해?');
+assert.equal(agentCalls.length, 5); assert.equal(agentCalls[4].args.message, '내 거래 내역 알려줘');
 assert.match(said[0].text, /저장했어요. 방금 질문을/); assert.equal(said.at(-1).text, '합성 AI 답');
 assert.equal(h.offers.length, 2, '저장 뒤에는 다시 제안하지 않는다(재전송 답 뒤 카드 없음)');
 ok('(b) saving consent automatically re-sends the held question once');
 
 // (c) 지금은 취소 → 일반 대화 유지
-h = harness(); await h.send('질문 하나'); h.cancel();
-said = await h.send('질문 둘');
+h = harness(); await h.send('내 잔액 알려줘'); h.cancel();
+said = await h.send('내 거래 내역 알려줘');
 assert.equal(said[1].text, '합성 AI 답'); assert.equal(h.offers.length, 1, '취소 뒤 카드는 다시 안 뜬다');
 ok('(c) "not now" keeps general chat working without re-offering');
 

@@ -281,6 +281,7 @@ import {
 import { DEVICE_STORAGE_LABEL, DEVICE_STORAGE_BUTTON, keyStorageGuide, needsKeyStorageGuide, KEYCHAIN_SAVING, keyLast4, normalizeApiKey, keyConnectionFailure, keyStorageError, SavedKeyChecks } from "./ravi-key";
 import { nameTakenFrom, strictBool } from "./name-lookup";
 import { guideById, guideHtml, raviAnswerHtml, raviCopy, raviText, raviQuestionLanguage, providerOfKey, type GuideGo } from "./ravi-guide";
+import { questionNeedsPersonalData } from "./ravi-consent-need";
 
 type Asset = {
   name: string;
@@ -10499,7 +10500,8 @@ async function chatAgent(q: string, note = "") {
     else say(safe);
     return;
   } finally { status.remove(); }
-  if (general && raviAgentUI) {
+  // 내 정보가 필요한 질문일 때만 동의 카드를 놓는다(「몇살이야?」 같은 일반 질문에는 붙이지 않는다).
+  if (general && raviAgentUI && questionNeedsPersonalData(q)) {
     raviHeldQuestion = q;
     raviAgentUI.offerConsent(() => void resendHeldQuestion());
   }

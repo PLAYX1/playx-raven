@@ -149,9 +149,14 @@ try {
       // 일반 질문 — 동의 없이 바로 답하고, 카드는 아래에 한 번만, 저장하면 보류 질문을 다시 보낸다.
       const g1 = await ask('레이븐코인은 언제 만들어졌어?');
       assert.equal(g1.filter(m => /\bai\b/.test(m.who) && /합성 AI 답: 일반 지식/.test(m.text)).length, 1, '동의 없이도 일반 답');
-      assert.equal(await page.$$eval('#chat-log .ravi-privacy', els => els.length), 1, '동의 제안 카드 하나');
-      const g2 = await ask('채굴은 어떻게 해?');
+      assert.equal(await page.$$eval('#chat-log .ravi-privacy', els => els.length), 0, '일반 질문에는 동의 카드를 붙이지 않는다');
+      const g0 = await ask('몇살이야?');
+      assert.equal(g0.filter(m => /\bai\b/.test(m.who)).length >= 1, true);
+      assert.equal(await page.$$eval('#chat-log .ravi-privacy', els => els.length), 0, '「몇살이야?」에 카드 없음');
+      const g2 = await ask('내 잔액 얼마야?');
       assert.equal(g2.filter(m => /합성 AI 답: 일반 지식/.test(m.text)).length, 1);
+      assert.equal(await page.$$eval('#chat-log .ravi-privacy', els => els.length), 1, '내 정보 질문엔 카드 하나');
+      await ask('내 거래 내역 알려줘');
       assert.equal(await page.$$eval('#chat-log .ravi-privacy', els => els.length), 1, '카드는 쌓이지 않는다');
       await page.screenshot({ path: resolve(out, `consent-offer-${width}-${scheme}.png`) });
       const nBefore = await page.evaluate(() => window.__PAYLOADS.filter(p => p.command === 'ravi_agent_chat').length);
@@ -159,7 +164,7 @@ try {
       await page.waitForFunction(k => window.__PAYLOADS.filter(p => p.command === 'ravi_agent_chat').length > k, { timeout: 5000 }, nBefore);
       await new Promise(r => setTimeout(r, 200));
       const resent = await page.evaluate(() => window.__PAYLOADS.filter(p => p.command === 'ravi_agent_chat').at(-1).message);
-      assert.equal(resent, '채굴은 어떻게 해?', '저장하면 보류한 마지막 질문을 다시 보낸다');
+      assert.equal(resent, '내 거래 내역 알려줘', '저장하면 보류한 마지막 질문을 다시 보낸다');
       assert.equal(await page.$$eval('#chat-log .ravi-privacy', els => els.length), 0);
       const payloads = await page.evaluate(() => window.__PAYLOADS);
       for (const p of payloads.filter(p => p.command === 'ravi_agent_chat')) {
@@ -209,7 +214,7 @@ try {
     assert.deepEqual(resent, ['레이븐코인은 언제 만들어졌어?'], '저장하면 보류 질문을 바로 다시 보낸다');
     const log = await page.$eval('#chat-log', e => e.textContent);
     assert.match(log, /키를 저장했어요. 방금 질문을 AI로 다시 물어볼게요/); assert.match(log, /합성 AI 답: 일반 지식/, '동의 카드에 막히지 않고 답');
-    assert.equal(await page.$$eval('#chat-log .ravi-privacy', els => els.length), 1, '카드는 답 아래 제안일 뿐');
+    assert.equal(await page.$$eval('#chat-log .ravi-privacy', els => els.length), 0, '일반 질문에는 카드 없음');
     await page.screenshot({ path: resolve(out, `key-flow-${width}.png`) });
     // 틀린 열쇠·한도·끊김 — 쉬운 문구 + 다음 행동 단추
     for (const [fail, button] of [['AI 열쇠가 맞지 않아요. 열쇠를 다시 넣어 주세요. 실행한 송금은 없어요.', 'data-guide-go="key"'], ['AI 사용 한도에 걸렸거나 AI가 바빠요. 잠시 뒤 다시 물어봐 주세요. 실행한 송금은 없어요.', 'data-ravi-ask'], ['AI에 연결하지 못했어요. 인터넷을 확인하고 잠시 뒤 다시 물어봐 주세요. 실행한 송금은 없어요.', 'data-ravi-ask']]) {
