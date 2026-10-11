@@ -5042,7 +5042,8 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
               <input type="search" id="sx-search" placeholder="설정 찾기" aria-label="설정 찾기" autocomplete="off" spellcheck="false" />
             </div>
-            <p class="sx-none" id="sx-none" role="status" hidden>찾는 설정이 없어요</p>
+            <!-- 알림 자리(role=status)는 늘 두고 안의 글만 숨겼다 보인다 — 숨은 live 영역은 나타나도 읽히지 않는다(0.9.0 병합). -->
+            <p class="sx-none" role="status"><span id="sx-none" hidden>찾는 설정이 없어요</span></p>
             <button type="button" class="sx-easy" data-sx-go="general" data-sx-to="easy-setup"><span class="ravi-static-face"></span><span class="sx-easytxt"><b>쉬운 설정</b><span>라비가 이 컴퓨터를 보고 정해 드려요</span></span></button>
             <ul class="sx-topics">
               <li><button type="button" class="sx-it" data-sx-go="general" aria-current="false"><span class="sx-ic sx-ic-gray" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/></svg></span><span class="sx-lab">일반</span></button></li>

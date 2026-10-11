@@ -1174,13 +1174,14 @@ pub(crate) const ROOM_ABOUT_MAX: usize = 80;
 /// 줄바꿈·탭 같은 제어 문자는 한 줄 목록을 깨뜨린다. 🔴 글자 방향을 뒤집는
 /// 숨은 문자(U+202A–202E, U+2066–2069)와 폭 없는 공백은 **사칭**에 쓰인다 —
 /// 눈에 「RavenVault」로 보이는데 실제 글자는 다른 이름을 만들 수 있다.
+/// 0.9.0 병합(GPT 교차검토 Q7): 아랍 글자 방향 표시 U+061C·줄/문단 구분 U+2028·U+2029 도 막는다(제어 문자 분류 밖이라 빠져 있었다).
 /// ⚠️ U+200C·U+200D(글자·그림 이모지를 잇는 것)는 막지 않는다. 여러 나라 글자와
 ///    가족 이모지가 깨진다.
 fn bad_meta_char(c: char) -> bool {
     c.is_control()
         || matches!(
             c,
-            '\u{200B}' | '\u{200E}' | '\u{200F}' | '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}' | '\u{FEFF}'
+            '\u{061C}' | '\u{200B}' | '\u{200E}' | '\u{200F}' | '\u{2028}' | '\u{2029}' | '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}' | '\u{FEFF}'
         )
 }
 
@@ -1238,11 +1239,22 @@ fn points_at_room(e: &Value, room_id: &str) -> bool {
 ///
 /// 남이 보낸 41 은 아무리 새것이어도 안 본다. 같은 시각이면 id 가 큰 쪽(어느
 /// 컴퓨터에서 봐도 같은 답이 나오게).
+///
+/// 🔴 **미래 시각 41 은 안 본다**(지금 + `META_FUTURE_SLACK` 초 넘게 앞선 것). 안 그러면 만든 열쇠로(또는 그 열쇠를
+///    훔쳐) 먼 미래 시각을 적은 41 하나가 그 뒤 정상 수정을 영영 밀어낸다(0.9.0 병합, GPT 교차검토 Q6).
 fn latest_room_meta<'a>(room_id: &str, creator: &str, metas: &'a [Value]) -> Option<&'a Value> {
+    latest_room_meta_at(room_id, creator, metas, now())
+}
+
+/// 컴퓨터 시계가 조금 다른 것은 받아 준다(10분).
+const META_FUTURE_SLACK: i64 = 600;
+
+fn latest_room_meta_at<'a>(room_id: &str, creator: &str, metas: &'a [Value], now: i64) -> Option<&'a Value> {
     metas
         .iter()
         .filter(|m| {
-            m.get("kind").and_then(Value::as_i64) == Some(KIND_ROOM_META)
+            m.get("created_at").and_then(Value::as_i64).is_some_and(|t| t <= now + META_FUTURE_SLACK)
+                && m.get("kind").and_then(Value::as_i64) == Some(KIND_ROOM_META)
                 && m.get("pubkey").and_then(Value::as_str) == Some(creator)
                 && points_at_room(m, room_id)
                 && m.get("content")
@@ -1947,7 +1959,7 @@ mod room_meta_tests {
         assert!(clean_room_meta(&"가".repeat(ROOM_NAME_MAX + 1), "").unwrap_err().contains("40자"));
         assert!(clean_room_meta("이름", &"나".repeat(ROOM_ABOUT_MAX + 1)).unwrap_err().contains("80자"));
         assert!(clean_room_meta("   ", "").unwrap_err().contains("필요합니다"));
-        for bad in ["줄\n바꿈", "탭\t이름", "널\u{0}", "RavenVault\u{202E}tlua", "숨은\u{2066}방향", "폭\u{200B}없음"] {
+        for bad in ["줄\n바꿈", "탭\t이름", "널\u{0}", "RavenVault\u{202E}tlua", "숨은\u{2066}방향", "폭\u{200B}없음", "아랍\u{061C}방향", "줄\u{2028}구분", "문단\u{2029}구분"] {
             assert!(clean_room_meta(bad, "").is_err(), "{bad:?} 가 지나갔다");
             assert!(clean_room_meta("이름", bad).is_err(), "설명 {bad:?} 가 지나갔다");
         }
@@ -1990,6 +2002,20 @@ mod room_meta_tests {
         let r = rooms_from_events(vec![room.clone()], &[forged, other, empty]);
         assert_eq!(r[0]["name"], json!("처음 이름"), "위조·다른 방·빈 이름 수정이 반영됐다");
         assert_eq!(r[0]["about"], json!("설명만"), "설명은 비우거나 바꿀 수 있다");
+    }
+
+    /// 🔴 만든 사람이 서명했어도 **먼 미래 시각** 41 은 안 본다 — 그 하나가 뒤의 정상 수정을 영영 밀어내지 않게.
+    #[test]
+    fn 미래_시각_41_은_정상_수정을_밀어내지_못한다() {
+        let room = room_by(&A, "처음 이름", "");
+        let rid = id(&room);
+        let t = now();
+        let metas = vec![meta_by(&A, &rid, "정상 수정", t - 60), meta_by(&A, &rid, "미래에 고정", t + 10 * 365 * 86_400)];
+        let r = rooms_from_events(vec![room.clone()], &metas);
+        assert_eq!(r[0]["name"], json!("정상 수정"), "먼 미래 41 이 이겼다");
+        // 시계가 조금(10분 안) 빠른 컴퓨터의 수정은 받는다.
+        let skew = rooms_from_events(vec![room], &[meta_by(&A, &rid, "시계가 5분 빠름", t + 300)]);
+        assert_eq!(skew[0]["name"], json!("시계가 5분 빠름"));
     }
 
     /// 서명이 안 맞는 방 글(kind 40)은 만든 사람을 비운다 — 「방 설정」이 아무에게도 안 뜨고 41 도 안 붙는다.

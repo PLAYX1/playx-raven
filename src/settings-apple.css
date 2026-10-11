@@ -140,6 +140,7 @@
 #page-settings .sx-search input { width: 100%; min-height: 44px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--text); padding: 0 12px 0 40px; font-size: var(--rv-fs-body); }
 #page-settings .sx-search svg { position: absolute; left: 12px; top: 13px; width: 18px; height: 18px; color: var(--muted); pointer-events: none; }
 #page-settings .sx-none { margin: -8px 12px 12px; font-size: var(--rv-fs-sub); color: var(--muted); }
+#page-settings .sx-none:has(> [hidden]) { margin: 0; } /* 글이 숨었을 때 빈 자리가 틈을 만들지 않게 */
 #page-settings button.sx-easy { display: flex; gap: 12px; align-items: center; width: calc(100% - 8px); margin: 0 4px 16px; padding: 12px; min-height: 72px; text-align: left;
   background: var(--panel); border-radius: var(--rv-r-group); box-shadow: var(--rv-shadow); font-weight: 400; }
 #page-settings button.sx-easy:hover:not(:disabled) { background: var(--panel); box-shadow: 0 0 0 2px var(--rv-navy-soft), var(--rv-shadow); }

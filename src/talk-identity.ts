@@ -47,6 +47,10 @@ export async function saveTalkName(invoke: Invoke, name: string, about = "", pic
     const ev = await invoke<unknown>("talk_profile_set", { name: clean, about, picture });
     const id = ev && typeof ev === "object" ? (ev as { id?: unknown }).id : null;
     if (typeof id !== "string" || !id) return { ok: false, error: t("이름이 저장됐는지 확인하지 못했어요. 잠시 뒤 다시 눌러 주세요.") };
+    // 서명된 이름표에 실제로 들어간 이름을 본다 — 다르면(잘림·바뀜) 「저장했어요」라고 하지 않는다(0.9.0 병합, GPT 교차검토 Q10).
+    let signed: unknown = null;
+    try { signed = JSON.parse(String((ev as { content?: unknown }).content ?? ""))?.name; } catch { /* 아래에서 실패로 */ }
+    if (signed !== clean) return { ok: false, error: t("이름이 저장됐는지 확인하지 못했어요. 잠시 뒤 다시 눌러 주세요.") };
     setMyTalkName(clean);
     return { ok: true, name: clean };
   } catch (e) {

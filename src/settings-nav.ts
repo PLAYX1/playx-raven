@@ -74,6 +74,10 @@ function goToHit(key: string, q: string): void {
   if (!spot) return;
   for (let up: HTMLElement | null = spot; up; up = up.parentElement) if (up instanceof HTMLDetailsElement) up.open = true;
   spot.scrollIntoView({ block: "center" });
+  // 키보드·화면 읽기 사용자도 그 칸으로 간다 — 스크롤만 하고 포커스가 찾기 칸에 남으면 Tab 이 엉뚱한 데서 시작한다
+  // (0.9.0 병합, GPT 교차검토 Q9). 누를 수 없는 제목·이름표는 tabIndex=-1 로 잠깐 받을 수 있게.
+  if (!spot.matches("button, summary, a[href], input, select, textarea")) spot.tabIndex = -1;
+  spot.focus({ preventScroll: true });
   spot.classList.add("justwent");
   setTimeout(() => spot.classList.remove("justwent"), 1600);
 }

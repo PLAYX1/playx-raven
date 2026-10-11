@@ -708,6 +708,10 @@ pub fn run() {
             handler(invoke)
         })
         .setup(|app| {
+            // 0.9.0 — 지갑 파일 가져오기(.rvwallet 끌어다 놓기·메뉴)가 풀어 둔 임시 wallet.dat 를 켤 때 지운다.
+            //    표(ticket)는 메모리에만 있어 껐다 켜면 어차피 못 쓴다. 강제 종료로 남은 평문 사본을 없앤다.
+            //    (server.rs 는 폰·직원 HTTP 쪽이라 walletfile 을 부르지 않는다 — walletfile 시험 규칙.)
+            let _ = walletfile::wallet_import_cancel();
             // 앱 자료 폴더를 이 사용자 전용으로 잠근다(다른 계정이 열쇠·장부를 못 읽게).
             app_folder::harden();
             if secure_update::initialize_policy(&app.package_info().version.to_string()).is_err() {

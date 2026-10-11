@@ -192,6 +192,15 @@ pub async fn restore_drop_open(path: String, mode: String, secret: String, walle
         }
     };
     key_ok();
+    // 0.9.0 병합(GPT 교차검토 Q2) — 확인(check_file)과 열어 보기(prepare/survey) 사이에 파일이 바뀌었으면
+    // 열어 본 내용이 지문과 다를 수 있다. 열어 본 뒤 한 번 더 지문을 보고, 다르면 풀어 둔 것을 치우고 멈춘다.
+    match check_file(&p.to_string_lossy()) {
+        Ok((k2, _, _, sha2, _)) if k2 == kind && sha2 == sha => {}
+        _ => {
+            let _ = cancel_all();
+            return Err("확인하는 사이에 파일이 바뀌었어요. 아무것도 바꾸지 않았어요. 처음부터 다시 해 주세요.".into());
+        }
+    }
     if keys.is_empty() {
         crate::recover::청소();
         return Err("이 백업에는 되돌릴 것이 없어요. 다른 백업을 놓아 주세요.".into());
@@ -238,18 +247,19 @@ pub async fn restore_drop_apply(ticket: String, secret: String, confirmed: bool)
         return Err("되살리기 전에 확인이 필요해요.".into());
     }
     let t = take_ticket(&ticket)?;
-    // 열어 본 그 파일이어야 한다(그 사이 바뀌었으면 되살리지 않는다).
+    // 노드가 켜져 있으면(지갑 파일 밑을 바꾸면 안 된다) 아무것도 하지 않고 표를 돌려준다.
+    if crate::raven::call_rpc("getblockchaininfo", json!([])).await.is_ok() {
+        put_back(t);
+        return Err(NODE_RUNNING_SAY.into());
+    }
+    // 열어 본 그 파일이어야 한다(그 사이 바뀌었으면 되살리지 않는다). 노드 확인(네트워크 대기) **뒤**, 적용 바로 앞에서
+    // 본다 — 확인과 적용 사이 틈을 줄인다(0.9.0 병합, GPT 교차검토 Q2).
     match check_file(&t.path.to_string_lossy()) {
         Ok((kind, _, _, sha, _)) if kind == t.kind && sha == t.sha256 => {}
         _ => {
             let _ = cancel_all();
             return Err("확인한 뒤에 파일이 바뀌었어요. 아무것도 바꾸지 않았어요. 처음부터 다시 해 주세요.".into());
         }
-    }
-    // 노드가 켜져 있으면(지갑 파일 밑을 바꾸면 안 된다) 아무것도 하지 않고 표를 돌려준다.
-    if crate::raven::call_rpc("getblockchaininfo", json!([])).await.is_ok() {
-        put_back(t);
-        return Err(NODE_RUNNING_SAY.into());
     }
     let r = match t.kind {
         Kind::Wallet => {
@@ -465,8 +475,18 @@ mod tests {
         // 되살리기는 확인 → 표 → 같은 파일 → 노드 꺼짐 → 기존 함수 순서.
         let a = body_of(c, "pub async fn restore_drop_apply");
         let at = |s: &str| a.find(s).unwrap_or_else(|| panic!("{s}"));
-        assert!(at("if !confirmed") < at("take_ticket(") && at("take_ticket(") < at("check_file(") && at("check_file(") < at("getblockchaininfo"));
-        assert!(at("getblockchaininfo") < at("wallet_import_apply(") && at("getblockchaininfo") < at("restore_apply("));
+        // 0.9.0 병합: 노드 확인(네트워크 대기)을 먼저, 지문 확인은 적용 바로 앞 — 확인과 적용 사이 틈을 줄인다.
+        assert!(at("if !confirmed") < at("take_ticket(") && at("take_ticket(") < at("getblockchaininfo") && at("getblockchaininfo") < at("check_file("));
+        assert!(at("check_file(") < at("wallet_import_apply(") && at("check_file(") < at("restore_apply("));
+        // 열어 보기도 열어 본 **뒤** 지문을 한 번 더 본다(확인과 열어 보기 사이 바꿔치기).
+        let o = body_of(c, "pub async fn restore_drop_open");
+        let first = o.find("check_file(").unwrap();
+        let again = o[first + 1..].find("check_file(").map(|i| i + first + 1).expect("열어 본 뒤 지문 재확인이 없다");
+        assert!(o.find("wallet_import_prepare").unwrap() < again && o.find("restore_survey").unwrap() < again);
+        assert!(o[again..].contains("cancel_all()"), "지문이 다르면 풀어 둔 것을 치워야 한다");
+        // 켤 때 지갑 가져오기 임시 폴더(풀어 둔 wallet.dat)를 쓴다.
+        let lib = include_str!("lib.rs");
+        assert!(lib[lib.find(".setup(|app|").unwrap()..].contains("walletfile::wallet_import_cancel()"));
         // 열어 보기는 되살리지 않는다.
         let o = body_of(c, "pub async fn restore_drop_open");
         assert!(!o.contains("restore_apply") && !o.contains("wallet_import_apply"));

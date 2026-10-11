@@ -73,7 +73,9 @@ async function open({ width = 1440, height = 900, profiles = {}, save = 'ok', la
         window.__saves.push(args.name);
         if (save === 'throw') throw '4곳 모두 받지 않았습니다. 인터넷이 되는지 확인해 주세요. 마지막 이유: synthetic';
         if (save === 'null') return null;
-        return { id: 'synthetic-event-id', pubkey: 'public-home-fixture', kind: 0 };
+        // 러스트처럼 서명한 이름표 그대로(내용에 실제로 들어간 이름). 'mismatch' 는 다른 이름이 들어간 경우.
+        const name = save === 'mismatch' ? '다른 이름' : String(args.name).trim();
+        return { id: 'synthetic-event-id', pubkey: 'public-home-fixture', kind: 0, content: JSON.stringify({ name, about: args.about ?? '', picture: '' }) };
       }
       return Object.hasOwn(extra, cmd) ? structuredClone(extra[cmd]) : real(cmd, args);
     };
@@ -125,8 +127,11 @@ test('설정 B: 찾기 — 주제를 거르고 Enter 는 맞는 칸으로 · 없
     assert.deepEqual(await visiblePanes(page), ['alerts'], '찾은 첫 주제로 넘어간다');
     await page.keyboard.press('Enter'); await settle(200);
     assert.ok(await page.$eval('#tksnd-card', (c) => c.checkVisibility()));
+    // 포커스도 찾은 칸으로 간다(찾기 칸에 남지 않는다).
+    assert.ok(await page.evaluate(() => document.activeElement?.id !== 'sx-search' && !!document.activeElement?.closest('section[data-sx-pane="alerts"]')));
     await page.$eval('#sx-search', (i) => { i.value = ''; }); await page.type('#sx-search', 'zzzz없는말'); await settle(150);
     assert.equal(await page.$eval('#sx-none', (p) => p.hidden), false);
+    assert.equal(await page.$eval('#sx-none', (p) => p.parentElement.getAttribute('role')), 'status', '알림 자리는 늘 있고 글만 나타난다');
     await page.keyboard.press('Escape'); await settle(100);
     assert.equal(await page.$eval('#sx-none', (p) => p.hidden), true);
     assert.equal((await page.$$eval('.sx-list .sx-it', (b) => b.filter((x) => !x.parentElement.hidden))).length, 8);
@@ -231,6 +236,18 @@ test('내 소개: 「내 색」 없음 · 같은 이름표 안내 · 저장 실�
     assert.equal(await page.$('#rv-profile-color'), null);
     assert.match(await page.$eval('#page-profile', (p) => p.textContent), /「이야기」에서 보이는 이름과 같은 이름표/);
     assert.ok((await page.evaluate(() => window.__removed)).includes('rv-profile-color'), '옛 「내 색」 저장값을 지운다');
+    await page.type('#rv-profile-name', '동네 꽃집');
+    await page.click('#rv-profile-save');
+    await page.waitForFunction(() => document.getElementById('rv-profile-note').textContent);
+    assert.equal(await page.$eval('#rv-profile-note', (n) => n.className), 'danger');
+    assert.doesNotMatch(await page.$eval('#rv-profile-note', (n) => n.textContent), /저장했습니다/);
+  } finally { await page.close(); }
+});
+
+test('이름 저장: 서명된 이름표의 이름이 입력과 다르면 「저장했습니다」라고 하지 않는다', async () => {
+  const { page } = await open({ profiles: {}, save: 'mismatch' });
+  try {
+    await go(page, 'profile'); await settle(500);
     await page.type('#rv-profile-name', '동네 꽃집');
     await page.click('#rv-profile-save');
     await page.waitForFunction(() => document.getElementById('rv-profile-note').textContent);

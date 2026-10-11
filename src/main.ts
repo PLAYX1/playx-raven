@@ -1585,6 +1585,11 @@ async function doRestore(directory = false, preset = "") {
     defaultPath: undefined,
   }).catch(() => null);
   if (!where || typeof where !== "string") return;
+  // 🔴 0.9.0 — 잠근 백업(.pxlock·.rvwallet)은 끌어다 놓았을 때와 **같은 확인 창**으로 보낸다(src/backup-drop-route.ts →
+  //    Rust restore_drop.rs): 지갑 암호 재인증 · 한 번 쓰는 표 · 열어 본 파일 지문 확인 · 확인 체크 뒤에만 적용.
+  //    옛 길(restore_survey → restore_apply)에는 재인증이 없어, 같은 파일을 메뉴로 고르면 더 약한 문으로 들어갔다.
+  //    잠그지 않은 zip·폴더(자동 백업 로컬 사본)는 그 확인 창이 받지 않으므로 지금처럼 옛 길.
+  if (!directory && routeBackupDrop([where])) { $("rs-result").innerHTML = ""; return; }
   $("rs-result").innerHTML = `<div class="meta" style="margin-top:9px">읽는 중…</div>`;
   try {
     // 🔴 다른 컴퓨터에서 만든 백업은 **암호가 있어야** 열린다. 그런데 암호를

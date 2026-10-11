@@ -32,7 +32,7 @@ before(async () => {
 });
 after(async () => { await browser?.close(); server?.close(); rmSync(work, { recursive: true, force: true }); });
 
-function stub({ encrypted = true, lang = 'ko', nodeRunning = false, weak = false }) {
+function stub({ encrypted = true, lang = 'ko', nodeRunning = false, weak = false, pick = '/Volumes/SYNTHETIC-USB/RavenVault-wallet-20261012.rvwallet' }) {
   localStorage.setItem('playx-raven-lang', lang);
   const T = window.__TAURI_INTERNALS__;
   const base = T.invoke;
@@ -42,7 +42,7 @@ function stub({ encrypted = true, lang = 'ko', nodeRunning = false, weak = false
     log.calls.push(cmd);
     log.args[cmd] = args ? JSON.parse(JSON.stringify(args)) : null;
     if (cmd === 'plugin:event|listen') { log.events[args.event] = args.handler; return base(cmd, args); }
-    if (cmd === 'plugin:dialog|open') return args?.options?.directory ? '/Volumes/SYNTHETIC-USB' : '/Volumes/SYNTHETIC-USB/RavenVault-wallet-20261012.rvwallet';
+    if (cmd === 'plugin:dialog|open') return args?.options?.directory ? '/Volumes/SYNTHETIC-USB' : pick;
     if (cmd.startsWith('plugin:')) return base(cmd, args);
     if (cmd === 'wallet_file_status') return { node_up: true, wallet_encrypted: encrypted, backup_pass: false };
     if (cmd === 'backup_pass_state') return { set: false, min: 10 };
@@ -184,6 +184,28 @@ test('.pxlock 놓기: 「가게 전체」 범위 · 노드가 켜져 있으면 �
     await page.waitForFunction(() => !document.getElementById('rd-dialog'));
     assert.ok((await calls(page)).includes('restore_drop_cancel'));
     assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('메뉴 「백업에서 되돌리기」로 고른 잠근 백업(.pxlock·.rvwallet)도 같은 확인 창(재인증) · 옛 restore_survey/restore_apply 를 안 부른다 · zip 은 옛 길', async () => {
+  for (const pick of ['/Volumes/SYNTHETIC-USB/RavenVault-2026-10-11.zip.pxlock', '/Volumes/SYNTHETIC-USB/RavenVault-wallet-20261012.rvwallet']) {
+    const { page, errors } = await open({ pick });
+    try {
+      await click(page, '#rs-pick');
+      await page.waitForSelector('#rd-dialog');
+      const cs = await calls(page);
+      assert.ok(cs.includes('restore_drop_inspect'), cs.join(','));
+      assert.ok(!cs.includes('restore_survey') && !cs.includes('restore_apply'), '옛 길(재인증 없음)로 들어갔다: ' + cs.join(','));
+      await click(page, '#rd-prepare');
+      await page.waitForSelector('#rd-wallet-pass'); // 지갑 암호 재인증 칸
+      assert.deepEqual(errors, []);
+    } finally { await page.close(); }
+  }
+  const { page } = await open({ pick: '/Volumes/SYNTHETIC-USB/old-backup.zip' });
+  try {
+    await click(page, '#rs-pick');
+    await page.waitForFunction(() => window.__bd.calls.includes('restore_survey'));
+    assert.equal(await page.evaluate(() => !!document.getElementById('rd-dialog')), false);
   } finally { await page.close(); }
 });
 
