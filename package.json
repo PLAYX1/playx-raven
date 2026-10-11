@@ -37,6 +37,7 @@
     "test:wallet-file": "node --test --test-concurrency=1 scripts/wallet-file.test.mjs scripts/wallet-file-browser.test.mjs",
     "test:lock": "node --test --test-concurrency=1 scripts/lock-dark.test.mjs scripts/lock-dark-browser.test.mjs",
     "test:memory": "node --test scripts/memory-budget-browser.test.mjs",
+    "test:talk-rooms": "node --test --test-concurrency=1 scripts/talk-rooms-admin.test.mjs scripts/talk-rooms-admin-browser.test.mjs",
     "measure:memory": "node scripts/measure-memory.mjs",
     "check:ravi-small": "node --test scripts/ravi-small-icons.test.mjs",
     "gallery:ravi-small": "python3 scripts/generate-ravi-tray-v2.py && node scripts/ravi-small-icons-gallery.mjs && python3 scripts/ravi-small-icons-metrics.py",
