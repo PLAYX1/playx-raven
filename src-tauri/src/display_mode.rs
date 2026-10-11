@@ -448,9 +448,15 @@ pub fn display_mode_set(app: tauri::AppHandle, prefs: Prefs) -> Result<Value, St
 }
 
 /// 대기화면 열기 — 큰 창이 있는 모니터(없으면 첫 모니터)를 덮는 전체 화면, 읽기 전용.
-#[tauri::command(async)]
-pub fn standby_open(app: tauri::AppHandle) -> Result<(), String> {
-    open_standby(&app)
+#[tauri::command]
+pub async fn standby_open(app: tauri::AppHandle) -> Result<(), String> {
+    checked_standby_open(&app).await
+}
+
+/// 🔴 지갑 암호가 없으면 대기화면(= 잠금)을 켜지 않는다 — 잠가 봐야 누구나 풀 수 있다. 암호 설정을 안내한다.
+async fn checked_standby_open(app: &tauri::AppHandle) -> Result<(), String> {
+    crate::app_lock::require_secret_to_lock().await?;
+    open_standby(app)
 }
 
 fn open_standby(app: &tauri::AppHandle) -> Result<(), String> {
@@ -523,7 +529,19 @@ pub fn on_menu(app: &tauri::AppHandle, id: &str) {
     let r = if let Some(m) = id.strip_prefix("dm-mode-") {
         display_mode_set(app.clone(), Prefs { mode: Some(m.to_string()), ..Default::default() }).map(|_| ())
     } else if id == "dm-standby" {
-        open_standby(app)
+        // 트레이 메뉴는 비동기로 확인한다. 막히면 큰 창에 안내를 띄운다(메뉴는 말할 데가 없다).
+        let h = app.clone();
+        tauri::async_runtime::spawn(async move {
+            if let Err(e) = checked_standby_open(&h).await {
+                if let Some(w) = h.get_webview_window("main") {
+                    let _ = w.show();
+                    let _ = w.set_focus();
+                }
+                let _ = h.emit("app-lock-refused", e);
+                sync_tray(&h, &settings(&h));
+            }
+        });
+        Ok(())
     } else {
         Ok(())
     };

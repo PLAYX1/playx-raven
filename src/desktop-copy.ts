@@ -56,6 +56,8 @@ export const PROMO_COPY: Record<string, [string, string, string]> = {
   "PNG를 저장하지 못했습니다. 다시 시도해 주세요.": ["Could not save PNG. Try again.", "PNGを保存できません。再試行してください。", "无法保存 PNG，请重试。"],
 };
 export const DESKTOP_COPY: Record<string, [string, string, string]> = {
+  "정보 · 오픈소스 고지": ["About · Open-source notices", "情報・オープンソースの表示", "关于 · 开源声明"],
+  "이 프로그램은 노드로 레이븐코인 코어(Ravencoin Core) v4.8.0 을 함께 씁니다. 레이븐코인 코어는 MIT 라이선스의 오픈소스입니다. 아래는 그 저작권 고지와 허가 문구 원문입니다.": ["This program uses Ravencoin Core v4.8.0 as its node. Ravencoin Core is open source under the MIT License. Below are its original copyright notice and permission text.", "このプログラムはノードとしてRavencoin Core v4.8.0を使用します。Ravencoin CoreはMITライセンスのオープンソースです。以下はその著作権表示と許諾文の原文です。", "本程序使用 Ravencoin Core v4.8.0 作为节点。Ravencoin Core 是 MIT 许可的开源软件。以下为其版权声明与许可文本原文。"],
   "백업 확인 중": ["Backup checking", "バックアップ確認中", "正在检查备份"],
   "잠금 확인 중": ["Lock checking", "ロック確認中", "正在检查锁定"],
   "잠금 미확인": ["Lock unknown", "ロック未確認", "锁定未确认"],

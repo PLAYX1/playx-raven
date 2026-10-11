@@ -6,6 +6,7 @@ import { invoke } from "@tauri-apps/api/core";
 import "./layout-tokens.css";
 import "./display-mode.css";
 import { lockCopy, enterStoreMode } from "./app-lock";
+import { handleLockRefusal } from "./wallet-file";
 
 export type DisplayMode = "window" | "mini" | "chip" | "menubar";
 type Settings = { mode: DisplayMode; hide_dock: boolean; tray_text: "alerts" | "balance" | "none"; dim_from: number; dim_to: number; shift: boolean; locale: string };
@@ -151,8 +152,10 @@ export async function mountDisplayMode(): Promise<void> {
     }
   };
   card.querySelectorAll<HTMLInputElement>('input[name="dm-mode"]').forEach((i) => i.addEventListener("change", () => i.checked && void set({ mode: i.value as DisplayMode })));
-  card.querySelector("#dm-standby")?.addEventListener("click", () => void call("standby_open").catch(() => (note.textContent = c.failed)));
-  card.querySelector("#dm-store")?.addEventListener("click", () => void enterStoreMode().catch(() => (note.textContent = c.failed)));
+  // 🔴 지갑 암호가 없으면 Rust 가 켜기를 거절한다(NEEDS_WALLET_PASS:) — 실패 문구 대신 암호 설정 안내를 띄운다.
+  const refused = (e: unknown) => { note.textContent = handleLockRefusal(e) ? "" : c.failed; };
+  card.querySelector("#dm-standby")?.addEventListener("click", () => void call("standby_open").catch(refused));
+  card.querySelector("#dm-store")?.addEventListener("click", () => void enterStoreMode().catch(refused));
   card.querySelector<HTMLSelectElement>("#dm-tray-text")?.addEventListener("change", (e) => void set({ tray_text: (e.target as HTMLSelectElement).value as Settings["tray_text"] }));
   card.querySelector<HTMLInputElement>("#dm-hide-dock")?.addEventListener("change", (e) => void set({ hide_dock: (e.target as HTMLInputElement).checked }));
   card.querySelector<HTMLInputElement>("#dm-shift")?.addEventListener("change", (e) => void set({ shift: (e.target as HTMLInputElement).checked }));

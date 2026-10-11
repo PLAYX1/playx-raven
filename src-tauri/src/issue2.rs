@@ -248,6 +248,8 @@ pub async fn reissue(
     new_ipfs: Option<String>,
     passphrase: Option<String>,
 ) -> Result<Value, String> {
+    // 🔴 메인넷 가드 — 노드를 부르기 전에. 꺼져 있으면 메인넷에서는 아무 일도 하지 않는다(issue::REAL_MAINNET_ISSUE_ENABLED).
+    crate::issue::ensure_issue_allowed().await?;
     // 🔴 **수량 0 은 거절하면 안 된다.**
     //
     //    체인은 0 을 받는다 — 레이븐코어 `assets.cpp` 의 `CheckReissueAsset`
@@ -330,6 +332,8 @@ pub async fn issue_many_unique(
     to_address: Option<String>,
     passphrase: Option<String>,
 ) -> Result<Value, String> {
+    // 🔴 메인넷 가드 — 노드를 부르기 전에. 꺼져 있으면 메인넷에서는 아무 일도 하지 않는다(issue::REAL_MAINNET_ISSUE_ENABLED).
+    crate::issue::ensure_issue_allowed().await?;
     if tags.is_empty() {
         return Err("만들 태그가 없습니다.".into());
     }
@@ -362,6 +366,8 @@ pub async fn issue_qualifier(
     qty: f64,
     passphrase: Option<String>,
 ) -> Result<Value, String> {
+    // 🔴 메인넷 가드 — 노드를 부르기 전에. 꺼져 있으면 메인넷에서는 아무 일도 하지 않는다(issue::REAL_MAINNET_ISSUE_ENABLED).
+    crate::issue::ensure_issue_allowed().await?;
     let n = if name.starts_with('#') {
         name
     } else {
@@ -423,6 +429,8 @@ pub async fn issue_restricted(
     ipfs_hash: Option<String>,
     passphrase: Option<String>,
 ) -> Result<Value, String> {
+    // 🔴 메인넷 가드 — 노드를 부르기 전에. 꺼져 있으면 메인넷에서는 아무 일도 하지 않는다(issue::REAL_MAINNET_ISSUE_ENABLED).
+    crate::issue::ensure_issue_allowed().await?;
     let n = if name.starts_with('$') { name } else { format!("${name}") };
     if verifier.trim().is_empty() {
         return Err("자격 조건이 비어 있습니다. 아무도 가질 수 없는 자산이 됩니다.".into());

@@ -120,6 +120,7 @@ mod relay;
 mod upload;
 mod spec;
 mod lockbox;
+mod walletfile;
 mod rehearse;
 // 0.4.9 — 복구 단어(12단어)로 지갑 되살리기. 검사·주소(words) · 흐름(words_restore).
 mod words;
@@ -482,6 +483,12 @@ pub fn run() {
             lockbox::backup_pass_set,
             lockbox::backup_pass_state,
             lockbox::cloud_unlock,
+            walletfile::wallet_file_status,
+            walletfile::wallet_export,
+            walletfile::wallet_import_prepare,
+            walletfile::wallet_import_apply,
+            walletfile::wallet_import_cancel,
+            walletfile::key_sheet_print,
             backup::external_drives,
             backup::cloud_folders,
             sample::sample_check,
@@ -714,6 +721,7 @@ pub fn run() {
             ravi_companion::setup(app)?;
             mini::setup(app);
             app_lock::setup(app);
+            walletfile::sweep_key_sheet();
             display_mode::setup(app);
 
             // 🔴 **화면보다 큰 창을 띄우지 않는다.**

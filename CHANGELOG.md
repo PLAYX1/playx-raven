@@ -1,5 +1,29 @@
 # 변경 기록
 
+## 0.8.7
+
+### 한국어
+
+- 지갑 파일 내보내기·가져오기(설정 → 백업): 저장할 폴더를 폴더 선택창에서 직접 고릅니다(iCloud 폴더·USB 등). 내보낸 파일(`.rvwallet`)은 항상 백업 열쇠(52글자)로 한 번 더 잠근 파일뿐이고, 잠그지 않은 파일은 만들지 않습니다. 지갑 암호가 없으면 막고 암호 설정을 안내하며, 만들기 전에 지갑 암호로 본인 확인을 합니다. 쓰기 전에 폴더·빈 공간·권한을 확인하고, 쓴 뒤에는 다시 읽어 열쇠로 풀어 원본과 같은지 확인합니다(다르면 파일을 지움). 끝에 파일 위치와 「백업 열쇠 52글자를 종이에 적었는지」 확인이 있어야 끝낼 수 있습니다.
+- 가져오기: 52글자 열쇠 또는 백업 암호로 풀어 보고, 지금 지갑은 건드리지 않습니다. 확인한 뒤 전환하면 지금 지갑을 먼저 따로 보관(`wallet.dat.before-restore…`)한 다음 바꿉니다. 노드가 켜져 있으면 거절됩니다.
+- 대기화면·잠긴 동안에는 지갑 파일 내보내기·가져오기·열쇠 인쇄가 앱 안쪽에서 거절됩니다(허용 목록에 넣지 않음).
+- 백업 화면: 「컴퓨터가 죽으면, 이 52글자가 없으면 못 엽니다」 안내와 함께 열쇠 보기 → 종이에 적기·인쇄(인쇄용 파일은 앱 전용 폴더에 만들어 브라우저로 열고 10분 뒤 지움)·복사(30초 뒤 클립보드 지움) → 12단어와 같이 보관 확인 단계를 넣었습니다.
+- 지갑 암호가 없으면 대기화면과 매장용 읽기 전용 모드를 켜지 않고 암호 설정을 안내합니다(암호 없는 지갑은 잠가도 누구나 풀 수 있기 때문).
+- 정보 화면에 Ravencoin Core v4.8.0 의 MIT 라이선스 고지(저작권 문구 포함)를 넣었습니다.
+- 안전: 실제 메인넷 자산 발행을 막는 스위치(`REAL_MAINNET_ISSUE_ENABLED`, 기본 꺼짐)를 모든 발행 명령(발행·재발행·고유·자격 증명·제한 자산·만들기 마법사) 앞에 넣었습니다. 메인넷이거나 어느 네트워크인지 모르면 노드에 보내기 전에 거절하고, 테스트넷·리그테스트(연습 모드)는 그대로 됩니다.
+- 업데이트 검증(서명된 버전·해시·순서 확인)은 그대로 유지합니다. 0.8.6 의 변경도 함께 들어 있습니다.
+
+### English
+
+- Wallet file export/import (Settings → Backup): you pick the folder yourself in the folder dialog (iCloud folder, USB, etc.). Exported files (`.rvwallet`) are always locked once more with the backup key (52 characters); an unlocked file is never created. It is refused when the wallet has no password (with guidance to set one) and asks for the wallet password to confirm it is you. Before writing it checks the folder, free space and permissions; after writing it reads the file back, unlocks it with the key and compares with the original (deleting the file if it differs). You can only finish after seeing the file location and confirming you wrote the 52-character key on paper.
+- Import: tries the 52-character key or the backup password and does not touch your current wallet. After you confirm, your current wallet is set aside first (`wallet.dat.before-restore…`) and then replaced. It is refused while the node is running.
+- While the wallet is locked (standby / store read-only), wallet file export/import and key printing are refused inside the app (not on the allowlist).
+- Backup screen: "If the computer dies, you cannot open it without these 52 characters" with show key → write/print (the printable file is made in the app-private folder, opened in the browser and deleted after 10 minutes) / copy (clipboard cleared after 30 seconds) → confirm you keep it with your 12 words.
+- Standby and store read-only mode are not turned on while the wallet has no password, and the app explains how to set one (a lock on a passwordless wallet can be opened by anyone).
+- About: added the Ravencoin Core v4.8.0 MIT license notice, including its copyright lines.
+- Safety: a switch (`REAL_MAINNET_ISSUE_ENABLED`, off by default) now guards every issuing command (issue, reissue, unique, qualifier, restricted, create wizard). On mainnet, or when the network cannot be determined, the request is refused before it reaches the node; testnet and regtest (practice mode) still work.
+- Signed update version/hash/order verification is unchanged. Includes the 0.8.6 changes.
+
 ## 0.8.6
 
 ### 한국어

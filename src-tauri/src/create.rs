@@ -215,6 +215,8 @@ pub async fn create_issue(
     passphrase: Option<String>,
     history_id: Option<String>,
 ) -> Result<Value, String> {
+    // 🔴 메인넷 가드 — 노드를 부르기 전에. 꺼져 있으면 메인넷에서는 아무 일도 하지 않는다(issue::REAL_MAINNET_ISSUE_ENABLED).
+    crate::issue::ensure_issue_allowed().await?;
     // 모양부터 본다(노드는 안 부른다). 틀린 모양이면 주인 표 자리도 읽지 않는다.
     let (method, _) = plan_call(&step, &brand, &names, quantity, ipfs_hash.as_deref(), None)?;
     // 🔴 주인 표 자리는 **보내는 흐름보다 앞에서** 읽는다 — 한 번에 하나(ISSUE_BUSY)·

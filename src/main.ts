@@ -2,6 +2,7 @@
 import "./style-attrs";
 import "./display-mode"; // 설정 「표시 방식」 칸 + 레이아웃 토큰(docs/design/window-modes.md)
 import "./app-lock"; // 잠긴 기본 화면·매장용 읽기 전용 + 다크 돈 카드(docs/design/lock-and-dark.md)
+import "./wallet-file"; // 지갑 파일 내보내기·가져오기 + 백업 열쇠 52글자 종이 단계(0.8.7)
 import "./sales-account.css";
 import { wireSalesAccount } from "./sales-account";
 import "./creator-publish.css";
@@ -1899,14 +1900,9 @@ function wireCloudKey(): void {
     //    일을 시키면 사장은 「암호가 둘인가?」로 읽고 둘 다 안 한다.
     void invoke<any>("backup_pass_state")
       .then((st) => {
-        const need = document.getElementById("ck-need");
         const box = document.getElementById("bp-box");
         if (st?.set) {
           bpMsg.textContent = "암호가 정해져 있습니다. 새 백업부터 이 암호로 열립니다.";
-          if (need)
-            need.innerHTML =
-              "<b>암호를 정해 두셨으니 이건 안 적으셔도 됩니다.</b> 새 컴퓨터에서는 그 암호를 치시면 됩니다. " +
-              "아래 열쇠는 암호를 잊었을 때 쓰는 여벌입니다.";
           // 🔴 **접기만 하면 바꿀 길이 없어진다.** 러스트는 덮어쓸 수 있는데
           //    화면이 칸을 숨겨서, 암호를 한 번 정하면 영영 못 바꿨다.
           //    접되 **여는 단추**를 남긴다.
@@ -1923,10 +1919,6 @@ function wireCloudKey(): void {
                 "바꿀 수가 없습니다. 바꾸신 뒤에 한 부 새로 만들어 두세요.";
             };
           }
-        } else if (need) {
-          need.innerHTML =
-            "🔴 <b>아직 암호를 안 정하셨습니다.</b> 컴퓨터가 죽으면 이 열쇠도 같이 사라져서 백업을 못 엽니다.<br />" +
-            "<b>아래에서 암호를 정하시거나</b>, 이 열쇠를 종이에 적어 12단어와 같이 보관하세요.";
         }
       })
       .catch(() => null);

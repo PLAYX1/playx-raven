@@ -258,11 +258,40 @@ pub async fn app_lock_state() -> Value {
     v
 }
 
-/// 화면에서 잠그기 — 매장용 읽기 전용 모드 켜기("store"). 대기화면은 `display_mode::open_standby` 가 직접 잠근다.
+/// 화면이 알아보는 접두어 — 지갑 암호가 없어서 잠금을 못 켰다(암호 설정 안내를 띄운다).
+pub const NEEDS_WALLET_PASS: &str = "NEEDS_WALLET_PASS:";
+const NEEDS_WALLET_PASS_SAY: &str = "지갑 암호가 아직 없어요. 암호가 없으면 잠가도 누구나 바로 풀 수 있어서 잠금이 의미가 없어요. 먼저 「지갑 화면 → 암호 걸기」에서 10글자 이상 암호를 정한 뒤 다시 켜 주세요.";
+const LOCK_CANNOT_CHECK_SAY: &str = "노드가 응답하지 않아 지갑 암호가 있는지 확인할 수 없어요. 노드를 켠 뒤 다시 켜 주세요.";
+
+/// 🔴 잠금을 **켜기 전** 확인(순수 함수 — 시험). 암호 없는 지갑은 잠가 봐야 누구나 풀 수 있다 — 막고 암호 설정을 안내한다.
+/// 노드가 꺼져 있어 모를 때는 백업 암호 봉투가 있을 때만(그걸로 풀 수 있으므로) 통과시킨다.
+pub fn lock_gate(wallet_encrypted: Option<bool>, backup_pass: bool) -> Result<(), String> {
+    match wallet_encrypted {
+        Some(true) => Ok(()),
+        Some(false) => Err(format!("{NEEDS_WALLET_PASS}{NEEDS_WALLET_PASS_SAY}")),
+        None if backup_pass => Ok(()),
+        None => Err(LOCK_CANNOT_CHECK_SAY.into()),
+    }
+}
+
+/// 대기화면·매장용 읽기 전용을 켜기 전에 부른다. 이미 잠겨 있으면(더 풀어 주는 일이 아니므로) 통과.
+pub async fn require_secret_to_lock() -> Result<(), String> {
+    if is_locked() {
+        return Ok(());
+    }
+    let enc = crate::raven::wallet_lock_state().await.ok().and_then(|w| w["encrypted"].as_bool());
+    lock_gate(enc, crate::lockbox::backup_pass_state()["set"].as_bool().unwrap_or(false))
+}
+
+/// 화면에서 잠그기 — 매장용 읽기 전용 모드 켜기("store"). 대기화면은 `display_mode::checked_standby_open` 가 확인 뒤 잠근다.
+/// 🔴 지갑 암호가 없으면 켜지 않는다(`lock_gate`) — 암호 설정을 안내한다.
 #[tauri::command]
-pub fn app_lock_now(reason: String) -> Result<Value, String> {
+pub async fn app_lock_now(reason: String) -> Result<Value, String> {
     if reason != "store" && reason != "manual" {
         return Err("잠금 이유가 올바르지 않아요.".into());
+    }
+    if reason == "store" {
+        require_secret_to_lock().await?;
     }
     lock(&reason).map(|s| lock_view(&s))
 }
@@ -338,6 +367,8 @@ mod tests {
         "swap_make_lot", "swap_offer", "swap_take", "fulfil_sale", "deliver_remote_sale", "auto_fulfil",
         "auto_deliver_web", "auto_enable", "sweep_run", "sweep_configure", "ledger_sweep", "split_payment",
         "mark_sent", "publish_offer", "gb_refund_mark",
+        // 지갑 파일 내보내기·가져오기·열쇠 인쇄(0.8.7)
+        "wallet_export", "wallet_import_prepare", "wallet_import_apply", "wallet_import_cancel", "wallet_file_status", "key_sheet_print",
         // 발행·자산 권한
         "issue_asset", "create_issue", "reissue", "issue_many_unique", "issue_qualifier", "issue_restricted",
         "tag_address", "untag_address", "freeze", "unfreeze", "rehearse_fund", "rehearse_issue",
@@ -547,8 +578,35 @@ mod tests {
     }
 
     #[test]
+    fn locking_needs_a_wallet_password() {
+        // 암호 없는 지갑: 막고, 화면이 알아보는 접두어로 암호 설정을 안내한다.
+        let e = lock_gate(Some(false), false).unwrap_err();
+        assert!(e.starts_with(NEEDS_WALLET_PASS) && e.contains("암호"));
+        // 백업 암호가 있어도 지갑 암호가 없다고 확인되면 막는다.
+        assert!(lock_gate(Some(false), true).is_err());
+        assert!(lock_gate(Some(true), false).is_ok());
+        // 노드가 꺼져 모를 때: 백업 암호 봉투가 있으면 통과, 없으면 막는다(접두어 없이 — 노드를 켜라는 안내).
+        assert!(lock_gate(None, true).is_ok());
+        let down = lock_gate(None, false).unwrap_err();
+        assert!(!down.starts_with(NEEDS_WALLET_PASS));
+        // 두 진입(매장 모드·대기화면)이 모두 이 확인을 거친다.
+        let me = include_str!("app_lock.rs");
+        let now = &me[me.find("pub async fn app_lock_now").unwrap()..];
+        assert!(now[..now.find("lock(&reason)").unwrap()].contains("require_secret_to_lock"));
+        let dm = include_str!("display_mode.rs");
+        let std = &dm[dm.find("pub async fn standby_open").unwrap()..];
+        assert!(std[..std.find("\n}\n").unwrap()].contains("checked_standby_open"));
+        let chk = &dm[dm.find("async fn checked_standby_open").unwrap()..];
+        let chk = &chk[..chk.find("\n}\n").unwrap()];
+        assert!(chk.find("require_secret_to_lock").unwrap() < chk.find("open_standby(").unwrap());
+        // 트레이 메뉴 길도 같은 문을 쓴다.
+        assert!(dm.contains("checked_standby_open(&h)"));
+    }
+
+    #[test]
     fn app_lock_now_only_accepts_store_or_manual() {
-        assert!(app_lock_now("standby".into()).is_err(), "대기화면 잠금은 대기화면을 열 때만");
-        assert!(app_lock_now("".into()).is_err());
+        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        assert!(rt.block_on(app_lock_now("standby".into())).is_err(), "대기화면 잠금은 대기화면을 열 때만");
+        assert!(rt.block_on(app_lock_now("".into())).is_err());
     }
 }

@@ -63,7 +63,7 @@ export async function prepareRelease(source, destination, version, statementDire
     }
   }
   const base = `https://raw.githubusercontent.com/PLAYX1/playx-raven-releases/dist/v${version}`;
-  const manifest = { version, notes: `RavenVault Desktop ${version} — 라비가 질문을 버리지 않고, 송금은 대신하지 않고 보내기 화면으로 안내합니다. 상황에 따라 라비의 표정과 말이 바뀝니다. 금액은 화면 언어의 소수점·천 단위대로 읽고 두 가지로 읽히는 입력은 거절합니다. 판매자 기능을 켜면 끌어놓기 한 화면으로 올리기·장르·템플릿을 씁니다. 칩·메뉴바만·대기화면 창 모드(읽기 전용·금액 가림 기본), 메모리 절감, 백업 폴더 이름 RavenVault, 작은 라비 얼굴·메뉴바 아이콘 대비 강화. 장터 판매·메인넷 발행은 준비 중입니다. 0.8.5 변경(라비 스토리 카드 글자, 판매 대금 받기는 「판매자 기능」을 켤 때만, 어두운 화면 단추 대비)도 포함합니다. 서명된 업데이트 버전·해시·순서 검증을 유지합니다.`, pub_date: new Date().toISOString(), platforms: {}, installers: [] };
+  const manifest = { version, notes: `RavenVault Desktop ${version} — 지갑 파일 내보내기·가져오기를 추가했습니다(폴더를 직접 골라 iCloud·USB 에 두며, 백업 열쇠 52글자로 한 번 더 잠근 파일만 만들고 지갑 암호로 본인 확인). 가져올 때는 지금 지갑을 먼저 따로 보관한 뒤 확인을 거쳐 바꿉니다. 백업 화면에 「컴퓨터가 죽으면 이 52글자가 없으면 못 엽니다」 안내와 종이 적기·인쇄 단계를 넣었습니다. 지갑 암호가 없으면 대기화면·매장용 읽기 전용을 켜지 못하고 암호 설정을 안내합니다. 정보 화면에 Ravencoin Core(MIT) 라이선스 고지를 넣었습니다. 실제 메인넷 자산 발행은 안전 스위치로 꺼 둔 채 출하합니다(테스트넷·연습은 가능). 0.8.6 변경(라비 대화·창 모드·대기화면 잠금·다크 돈 카드 등)도 포함합니다. 서명된 업데이트 버전·해시·순서 검증을 유지합니다.`, pub_date: new Date().toISOString(), platforms: {}, installers: [] };
   const needsStatement = compare(version, '0.8.4') >= 0;
   if (needsStatement) {
     const config = JSON.parse(await readFile(new URL('../src-tauri/tauri.conf.json', import.meta.url),'utf8'));

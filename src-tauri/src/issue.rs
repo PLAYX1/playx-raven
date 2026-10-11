@@ -236,6 +236,41 @@ pub async fn name_taken(name: String) -> Result<bool, String> {
     }
 }
 
+/// 🔴 **실제 메인넷 발행 스위치 — 기본 꺼짐.** 0.8.7 에서 대표 결정 전까지 메인넷(`main`)에서는 모든 발행
+/// IPC(`issue_asset` · `reissue` · `issue_many_unique` · `issue_qualifier` · `issue_restricted` ·
+/// `create_issue`)가 노드를 부르기 **전에** 거절된다. 테스트넷(`test`)·리그테스트(`regtest`)는 허용.
+/// 켜려면 이 상수를 `true` 로 바꾸고 새로 빌드한다(설정·환경 변수·화면으로 켜는 길은 없다 — 시험이 지킨다).
+pub const REAL_MAINNET_ISSUE_ENABLED: bool = false;
+
+const MAINNET_ISSUE_OFF_SAY: &str = "실제 메인넷에서의 자산 발행은 지금 꺼져 있어요(안전 잠금). 테스트넷이나 연습 모드에서는 발행할 수 있어요. 메인넷 발행은 대표 확인 뒤에 열립니다. 돈은 나가지 않았어요.";
+const CHAIN_UNKNOWN_SAY: &str = "지금 연결된 네트워크(메인넷/테스트넷)를 확인하지 못해서 발행하지 않았어요. 노드가 켜져 있는지 확인한 뒤 다시 해 주세요. 돈은 나가지 않았어요.";
+
+/// 체인 이름(`getblockchaininfo.chain`) → 발행해도 되나. 순수 함수 — 시험. `enabled` 는 상수를 받는다.
+/// 모르는 값·못 읽음은 **메인넷으로 간주**한다(안전한 쪽).
+pub fn issue_allowed_on(chain: Option<&str>, enabled: bool) -> Result<(), String> {
+    match chain {
+        Some("test") | Some("regtest") => Ok(()),
+        Some("main") if enabled => Ok(()),
+        Some("main") => Err(MAINNET_ISSUE_OFF_SAY.into()),
+        _ if enabled => Ok(()),
+        _ => Err(CHAIN_UNKNOWN_SAY.into()),
+    }
+}
+
+/// 모든 발행 IPC 가 노드에 발행을 보내기 **전에** 부르는 문.
+pub async fn ensure_issue_allowed() -> Result<(), String> {
+    #[cfg(test)]
+    {
+        // 시험에서는 노드가 없다 — 상수만 본다. (체인 판정은 `issue_allowed_on` 시험이 한다.)
+        return if REAL_MAINNET_ISSUE_ENABLED { Ok(()) } else { Err(CHAIN_UNKNOWN_SAY.into()) };
+    }
+    #[cfg(not(test))]
+    {
+        let chain = call_rpc("getblockchaininfo", json!([])).await.ok().and_then(|v| v["chain"].as_str().map(str::to_string));
+        issue_allowed_on(chain.as_deref(), REAL_MAINNET_ISSUE_ENABLED)
+    }
+}
+
 /// Issues the asset. Burns RVN. Cannot be undone.
 ///
 /// `reissuable` defaults to true at the call site for a reason: false is the
@@ -254,6 +289,8 @@ pub async fn issue_asset(
     ipfs_hash: Option<String>,
     to_address: Option<String>,
 ) -> Result<Value, String> {
+    // 🔴 메인넷 가드 — 이름 검사·조회·노드 호출보다 앞. 꺼져 있으면 아무 일도 하지 않는다.
+    ensure_issue_allowed().await?;
     let check = validate_name(name.clone());
     if !check["valid"].as_bool().unwrap_or(false) {
         return Err(format!(
@@ -510,5 +547,73 @@ mod name_lookup_tests {
             assert!(!body.contains("e.contains(\"not found\")"), "{file}: 오류 문구로 「없음」을 판단한다");
             assert!(!body.contains("name_taken(name.clone()).await.unwrap_or(false)"), "{file}: 모름을 없음으로 넘긴다");
         }
+    }
+}
+
+#[cfg(test)]
+mod mainnet_guard_tests {
+    use super::*;
+
+    #[test]
+    fn the_switch_ships_off() {
+        assert!(!REAL_MAINNET_ISSUE_ENABLED, "메인넷 발행 스위치가 켜진 채 커밋됐다");
+    }
+
+    #[test]
+    fn mainnet_is_refused_when_off_and_test_networks_pass() {
+        let e = issue_allowed_on(Some("main"), false).unwrap_err();
+        assert!(e.contains("메인넷") && e.contains("돈은 나가지 않았어요"));
+        assert!(issue_allowed_on(Some("test"), false).is_ok());
+        assert!(issue_allowed_on(Some("regtest"), false).is_ok());
+        // 모르면 거절(메인넷으로 간주).
+        assert!(issue_allowed_on(None, false).is_err());
+        assert!(issue_allowed_on(Some(""), false).is_err());
+        assert!(issue_allowed_on(Some("MAIN"), false).is_err());
+        assert!(issue_allowed_on(Some("mainnet"), false).is_err());
+        // 켜 두면 통과(대표 결정 뒤 상수만 바꾸는 길).
+        assert!(issue_allowed_on(Some("main"), true).is_ok());
+    }
+
+    #[test]
+    fn every_issue_command_checks_the_guard_before_touching_the_node() {
+        // (파일, 함수 머리, 노드/돈이 움직이는 첫 호출)
+        let cases: [(&str, &str, &str); 6] = [
+            (include_str!("issue.rs"), "pub async fn issue_asset", "lookup_name("),
+            (include_str!("issue2.rs"), "pub async fn reissue", "owner_pin("),
+            (include_str!("issue2.rs"), "pub async fn issue_many_unique", "with_wallet("),
+            (include_str!("issue2.rs"), "pub async fn issue_qualifier", "with_wallet("),
+            (include_str!("issue2.rs"), "pub async fn issue_restricted", "with_wallet("),
+            (include_str!("create.rs"), "pub async fn create_issue", "owner_pin("),
+        ];
+        for (src, head, first) in cases {
+            let at = src.find(head).unwrap_or_else(|| panic!("{head} 없음"));
+            let body = &src[at..];
+            let body = &body[..body.find("\n}\n").unwrap()];
+            let guard = body.find("ensure_issue_allowed().await?").unwrap_or_else(|| panic!("{head} 에 메인넷 가드가 없다"));
+            let touch = body.find(first).unwrap_or_else(|| panic!("{head}: {first} 없음"));
+            assert!(guard < touch, "{head}: 가드가 {first} 보다 뒤에 있다");
+        }
+    }
+
+    #[test]
+    fn no_other_path_sends_an_issue_rpc() {
+        // 발행 RPC 이름이 쓰이는 곳은 가드가 있는 함수들 + 연습(rehearse, 자체 리그테스트 노드) 뿐.
+        for (name, src) in [
+            ("ai.rs", include_str!("ai.rs")), ("ravi_agent.rs", include_str!("ravi_agent.rs")), ("server.rs", include_str!("server.rs")),
+            ("auto.rs", include_str!("auto.rs")), ("vending.rs", include_str!("vending.rs")), ("shop.rs", include_str!("shop.rs")),
+            ("send.rs", include_str!("send.rs")), ("walletx.rs", include_str!("walletx.rs")), ("remote_sales.rs", include_str!("remote_sales.rs")),
+        ] {
+            for rpc in ["\"issue\"", "\"reissue\"", "\"issueunique\"", "\"issuequalifierasset\"", "\"issuerestrictedasset\""] {
+                assert!(!src.contains(&format!("call_rpc({rpc}")), "{name} 이 {rpc} 를 가드 없이 보낸다");
+            }
+        }
+    }
+
+    #[test]
+    fn there_is_no_runtime_switch() {
+        let src = include_str!("issue.rs");
+        let prod = &src[..src.find("#[cfg(test)]\nmod name_tests").unwrap()];
+        assert!(!prod.contains("env::var") && !prod.contains("REAL_MAINNET_ISSUE_ENABLED ="), "런타임으로 켜는 길");
+        assert!(prod.contains("pub const REAL_MAINNET_ISSUE_ENABLED: bool = false;"));
     }
 }

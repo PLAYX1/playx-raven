@@ -130,7 +130,7 @@ fn ensure_no_existing_envelope() -> Result<(), String> {
 /// 낱말이 만들어지는 것을 막으려고 뺀다(Crockford 의 원래 이유).
 const ALPHABET: &[u8] = b"0123456789abcdefghjkmnpqrstvwxyz";
 
-fn to_paper(k: &[u8; 32]) -> String {
+pub(crate) fn to_paper(k: &[u8; 32]) -> String {
     // 5비트씩 끊어 52글자. 네 글자마다 띄어 읽기 쉽게.
     let mut bits = 0u32;
     let mut n = 0;
@@ -155,7 +155,7 @@ fn to_paper(k: &[u8; 32]) -> String {
         .join("-")
 }
 
-fn from_paper(s: &str) -> Result<[u8; 32], String> {
+pub(crate) fn from_paper(s: &str) -> Result<[u8; 32], String> {
     // 띄어쓰기·줄표는 무시하고, 대문자로 적었어도 받아 준다.
     // 🔴 사람은 `0` 을 `O` 로, `1` 을 `l`·`I` 로 적는다. Crockford 는 그걸
     // 받아 주게 되어 있고, 안 받아 주면 종이를 보고 그대로 쳤는데 "안 맞습니다"

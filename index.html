@@ -4988,6 +4988,34 @@
         <!-- 판매 대금 받기는 게임을 파는 사람만 쓴다. 기본은 꺼 두고 여기서만 켠다. -->
         <div class="card" id="seller-mode-card"><label class="check seller-switch"><input type="checkbox" id="seller-mode" /> <b>판매자 기능</b></label><p class="meta">내 게임을 팔 때만 켜세요</p></div>
         <div class="card desktop-language-settings"><h2>설정 · 언어</h2><div class="desktop-language-options" translate="no"><button data-language="ko">한국어</button><button data-language="en">English</button><button data-language="ja">日本語</button><button data-language="zh">简体中文</button></div><p>언어는 바로 바뀌며 다음 실행에도 기억합니다.</p><p>Mac에서 기존 앱의 파일 이름은 그대로 남을 수 있습니다. 앱 안의 이름은 RavenVault Desktop입니다.</p></div>
+        <!-- 정보 · 오픈소스 고지. 레이븐코인 코어 v4.8.0 의 COPYING(MIT) 문구를 **그대로** 싣는다 — 번역하지 않는다(translate="no"). -->
+        <div class="card" id="about-notice"><h2>정보 · 오픈소스 고지</h2>
+          <p>이 프로그램은 노드로 레이븐코인 코어(Ravencoin Core) v4.8.0 을 함께 씁니다. 레이븐코인 코어는 MIT 라이선스의 오픈소스입니다. 아래는 그 저작권 고지와 허가 문구 원문입니다.</p>
+          <details><summary>Ravencoin Core v4.8.0 — MIT License</summary>
+<pre id="about-ravencoin-license" translate="no" style="white-space:pre-wrap;font-size:12px;line-height:1.5;margin-top:8px">The MIT License (MIT)
+
+Copyright (c) 2009-2018 The Bitcoin Core developers
+Copyright (c) 2018 The Raven Core developers
+Copyright (c) 2009-2018 Raven Developers
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.</pre></details>
+        </div>
         <h2 class="title">이 컴퓨터</h2>
 
         <!-- ── 자주 쓰는 것부터 ──────────────────────────────────────────
@@ -5398,9 +5426,8 @@
                    시키는 것**이고, 그래서 「암호가 둘인가?」로 읽힌다.
                    암호가 정해져 있으면 화면이 그렇게 말한다(main.ts 가 바꾼다). -->
               <p class="meta" id="ck-need" style="margin:6px 0 10px">
-                컴퓨터가 죽으면 이 열쇠도 같이 사라집니다.
-                <b>종이에 적어 12단어와 같이 보관하세요.</b>
-                이것 없이는 클라우드 사본을 못 엽니다.
+                <b>컴퓨터가 죽으면, 이 52글자가 없으면 못 엽니다.</b>
+                종이에 적어 12단어와 같이 보관하세요.
               </p>
               <div id="ck-key" class="keyshow">눌러서 보기</div>
               <div class="row" style="margin-top:10px">
