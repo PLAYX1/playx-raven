@@ -1,0 +1,65 @@
+/* 0.9.0 「이 컴퓨터(설정)」 애플식 — 시안 ~/rv-design-089(설정 A·B). 대표 결정 2026-10-12: B 를 A 의 CSS·묶음부터 단계적으로.
+ * 🔴 style="" 속성 금지(Tauri nonce CSP 가 무시). 시안의 인라인 스타일은 전부 여기 클래스로 옮겼다.
+ * 색: 바탕·글자는 앱 그대로(--bg/--panel/--text/--muted/--line). 포인트(선택·켜짐·링크·포커스) 네이비 #2A356B,
+ *     주 단추(화면마다 하나) 진한 주황 #B4531C — 흰 글자 대비 5.01:1(#E2702A 는 3.19:1 불합격). 라비 몸 색 #E2702A 는 장식에만.
+ * 글자: 30·24·20·17(본문)·15(보조)·14(가장 작은 글자) — 14 아래 금지. 어르신 우선: 줄 56px, 누를 것 48px(최소 44px).
+ * 다크: 시안은 라이트만이다. 앱 다크 화면에서 깨지지 않게 색 변수만 앱 것을 쓰고, 네이비만 밝게 바꾼다(새 다크 디자인 아님). */
+:root {
+  --rv-navy: #2A356B; --rv-navy-ink: #2A356B; --rv-navy-soft: #E9EBF6;
+  --rv-cta: #B4531C; --rv-cta-hover: #9A4512; --rv-cta-ink: #FFFFFF;
+  --rv-fill: color-mix(in srgb, var(--text) 6%, var(--panel));
+  --rv-fill-hover: color-mix(in srgb, var(--text) 11%, var(--panel));
+  --rv-track: #8D8A82;
+  --rv-fs-large: 30px; --rv-fs-title: 24px; --rv-fs-head: 20px; --rv-fs-body: 17px; --rv-fs-sub: 15px; --rv-fs-cap: 14px;
+  --rv-row: 56px; --rv-hit: 48px; --rv-r-group: 14px; --rv-r-btn: 12px;
+  --rv-shadow: 0 1px 2px rgba(21, 22, 29, .06), 0 0 0 1px rgba(21, 22, 29, .05);
+}
+:root[data-theme="dark"] { --rv-navy: #3A4690; --rv-navy-ink: #B7C0F5; --rv-navy-soft: #262B45; --rv-track: #6B6E7C; --rv-shadow: 0 0 0 1px var(--line); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --rv-navy: #3A4690; --rv-navy-ink: #B7C0F5; --rv-navy-soft: #262B45; --rv-track: #6B6E7C; --rv-shadow: 0 0 0 1px var(--line); } }
+
+/* ── 설정 화면 바탕: 글자 단계 · 카드 · 단추 ───────────────────────────── */
+#page-settings { font-size: var(--rv-fs-body); line-height: 1.55; }
+#page-settings .meta, #page-settings .muted.sm, #page-settings .osub, #page-settings .easyseen,
+#page-settings .kv, #page-settings .lang-ai-note, #page-settings .lang-ai-note .lang-report { font-size: var(--rv-fs-sub); }
+#page-settings h2.title, #page-settings .sx-large { font-size: var(--rv-fs-large); font-weight: 700; letter-spacing: -.02em; line-height: 1.25; margin: 0 0 8px; }
+#page-settings .card h2 { font-size: var(--rv-fs-head); font-weight: 700; letter-spacing: -.01em; margin: 0 0 8px; }
+#page-settings .card h3, #page-settings .easyhead h3 { font-size: var(--rv-fs-head); font-weight: 700; color: var(--text); margin: 0 0 6px; letter-spacing: -.01em; }
+#page-settings .card > b:first-child, #page-settings .card > label > b { font-size: var(--rv-fs-body); font-weight: 600; }
+#page-settings .card, #page-settings .verdict, #page-settings .tools, #page-settings .switches {
+  border: 0; border-radius: var(--rv-r-group); box-shadow: var(--rv-shadow); background: var(--panel); padding: 16px 20px; }
+#page-settings .card .card { box-shadow: none; border: 1px solid var(--line); }
+#page-settings .card + .card, #page-settings .card + details, #page-settings details + .card { margin-top: 12px; }
+#page-settings :focus-visible { outline: 3px solid var(--rv-navy-ink); outline-offset: 2px; }
+
+/* 단추: 화면의 주 단추는 하나(주황). 나머지는 회색 채움 — 검정 꽉 찬 단추가 줄지어 있던 것을 없앤다. */
+#page-settings button { font-size: var(--rv-fs-body); font-weight: 600; min-height: var(--rv-hit); padding: 0 18px; border-radius: var(--rv-r-btn);
+  background: var(--rv-fill); border: 1px solid transparent; color: var(--text); }
+#page-settings button:hover:not(:disabled) { background: var(--rv-fill-hover); border-color: transparent; color: var(--text); }
+#page-settings button.harm, #page-settings button.harm:hover:not(:disabled) { background: #A5160F; color: #fff; }
+#page-settings #easy-go, #page-settings .sx-primary { background: var(--rv-cta); color: var(--rv-cta-ink); border-color: var(--rv-cta); }
+#page-settings #easy-go:hover:not(:disabled), #page-settings .sx-primary:hover:not(:disabled) { background: var(--rv-cta-hover); border-color: var(--rv-cta-hover); color: var(--rv-cta-ink); }
+#page-settings button::after { background: radial-gradient(circle at center, var(--rv-navy-soft) 0%, transparent 62%); }
+
+/* 쉬운 설정 — 주황 테두리 상자 대신 흰 카드 + 라비. 주 단추만 주황. */
+#page-settings .easycard { border: 0; background: var(--panel); box-shadow: var(--rv-shadow); padding: 20px 24px; }
+#page-settings #easy-go { width: auto; min-height: 56px; padding: 0 28px; font-size: 18px; }
+
+/* 언어 단추 열 개 — 한 줄씩 꽉 찬 하얀 상자 대신 작은 나눔 단추 */
+#page-settings .desktop-language-options { gap: 6px; background: var(--rv-fill); border-radius: var(--rv-r-btn); padding: 4px; }
+#page-settings .desktop-language-options button { min-height: 44px; font-size: var(--rv-fs-sub); background: none; border: 0; color: var(--muted); padding: 0 14px; }
+#page-settings .desktop-language-options button[aria-pressed="true"] { background: var(--panel); color: var(--text); border: 0; box-shadow: 0 1px 3px rgba(0, 0, 0, .14); }
+
+/* 켜고 끄는 칸 — 기본 체크 상자를 스위치(51×31, 켜짐 = 네이비)로. :has() 없이 input 하나로 그린다(옛 웹뷰). */
+#page-settings input.sx-sw, #snd-on, #tk-snd-on, #seller-mode {
+  appearance: none; -webkit-appearance: none; flex: none; margin: 0; width: 51px; height: 31px; border-radius: 999px; cursor: pointer;
+  background: var(--rv-track) radial-gradient(circle, #fff 12px, transparent 13px) no-repeat 2px 50% / 27px 27px;
+  transition: background-color .2s ease, background-position .2s ease; }
+#page-settings input.sx-sw:checked, #snd-on:checked, #tk-snd-on:checked, #seller-mode:checked { background-color: var(--rv-navy); background-position: 22px 50%; }
+#snd-card label.check, #tksnd-card label.check, #seller-mode-card label.check { justify-content: space-between; gap: 16px; min-height: var(--rv-row); font-size: var(--rv-fs-body); }
+#snd-card label.check input, #tksnd-card label.check input, #seller-mode-card label.check input { width: 51px; height: 31px; order: 2; }
+@media (prefers-reduced-motion: reduce) { #page-settings input.sx-sw, #snd-on, #tk-snd-on, #seller-mode { transition: none; } }
+
+/* 접기 칸(처음 한 번·고급)·경고 상자 */
+#page-settings .onceoff, #page-settings details.advanced { border: 0; border-radius: var(--rv-r-group); box-shadow: var(--rv-shadow); background: var(--panel); }
+#page-settings .warnbox { font-size: var(--rv-fs-sub) !important; border-radius: var(--rv-r-btn); }
+#page-settings pre { font-size: var(--rv-fs-cap); }
