@@ -9,7 +9,7 @@ const chatBundle = await build({entryPoints:['src/ravi-chat.ts'],bundle:true,pla
 const chatContext = {module:{exports:{}},exports:{},navigator:{language:'ko'},localStorage:{getItem:()=>null,setItem(){}}}; vm.runInNewContext(chatBundle.outputFiles[0].text,chatContext);
 const personaBundle = await build({entryPoints:['src/ravi-persona.ts'],bundle:true,platform:'node',format:'cjs',write:false});
 const personaContext = {module:{exports:{}},exports:{}}; vm.runInNewContext(personaBundle.outputFiles[0].text,personaContext);
-const g = {...chatContext.module.exports, ...context.module.exports, ...personaContext.module.exports, raviState:'normal', emitRaviEvent(){}};
+const g = {...chatContext.module.exports, ...context.module.exports, ...personaContext.module.exports, loadRaviPersona:async()=>personaContext.module.exports, raviState:'normal', emitRaviEvent(){}};
 const cases=JSON.parse(readFileSync('scripts/fixtures/ravi-understanding-60.json','utf8'));
 const caps=JSON.parse(readFileSync('src/ravi-capabilities.json','utf8'));
 assert.equal(cases.length,60);

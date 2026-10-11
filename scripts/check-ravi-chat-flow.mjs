@@ -77,7 +77,7 @@ const mainSource = readFileSync('src/main.ts', 'utf8'), ast = ts.createSourceFil
 const fn = name => { const n = ast.statements.find(s => ts.isFunctionDeclaration(s) && s.name?.text === name); assert.ok(n, name); return n.getText(ast); };
 const constText = name => ast.statements.find(s => ts.isVariableStatement(s) && s.declarationList.declarations[0].name.getText(ast) === name).getText(ast);
 const SPEND = /^(send_rvn|send_asset|send_many|wallet_send|sign_and_send|phone_transaction_send|broadcast)$/;
-function harness({ consent = { reviewed: false, balance: false, transactions: false, shop: false }, usable = 1, mode = 'fill', reply = '합성 AI 답' } = {}) {
+function harness({ consent = { reviewed: false, balance: false, transactions: false, shop: false }, usable = 1, mode = 'fill', reply = '합성 AI 답', personaLoad = async () => persona } = {}) {
   const messages = [], calls = [], offers = [], events = []; let held = null, declined = false, savedConsent = { ...consent };
   const input = { value: '' };
   const ui = {
@@ -85,7 +85,7 @@ function harness({ consent = { reviewed: false, balance: false, transactions: fa
     offerConsent(saved) { if (declined || savedConsent.reviewed) return false; offers.push(1); held = saved; return true; },
   };
   const ctx = vm.createContext({
-    ...chat, ...guide, ...consentNeed, ...persona, raviState: 'normal', emitRaviEvent: name => events.push(name), lang: 'ko', aiProvider: 'synthetic', chatMode: mode, aiUsableCount: usable, raviRequestPending: false, raviHeldQuestion: '',
+    ...chat, ...guide, ...consentNeed, ...persona, loadRaviPersona: personaLoad, raviState: 'normal', emitRaviEvent: name => events.push(name), lang: 'ko', aiProvider: 'synthetic', chatMode: mode, aiUsableCount: usable, raviRequestPending: false, raviHeldQuestion: '',
     DEBATE_ONE_NOTE: 'AI가 하나만 연결돼 있어 바로 답할게요.', TOOL_LABELS: {}, raviAgentUI: ui,
     raviHome: { sent() {}, thinking() {}, finish() {}, open() {} }, setTimeout,
     $: id => id === 'chat-q' ? input : { append() {}, lastElementChild: null },
@@ -139,6 +139,13 @@ s2 = await h2.send('해시율 알려줘'); assert.equal(h2.calls.filter(c => c.c
 s2 = await h2.send('너무 우울해'); assert.equal(h2.calls.filter(c => c.command === 'ravi_agent_chat').length, 2, '열쇠가 있으면 감정 표현은 AI 로');
 s2 = await h2.send('친구한테 5 RVN 보내줘'); assert.ok(!/1살이에요/.test(s2.map(m => m.text).join('')), '지갑 요청을 가로채지 않는다');
 ok('(a2) persona/crisis/chain answered locally even with a key; emotion goes to AI; wallet requests untouched');
+
+// (a3) 0.8.8 병합 — 지연 묶음(ravi-persona-lazy) 읽기가 실패해도 대화는 죽지 않고 기존 AI 경로로 간다.
+const h3 = harness({ personaLoad: async () => null });
+let s3 = await h3.send('몇살이야?');
+assert.deepEqual(s3.map(m => m.who), ['me', 'ai']); assert.equal(s3[1].text, '합성 AI 답');
+assert.equal(h3.calls.filter(c => c.command === 'ravi_agent_chat').length, 1, '읽기 실패 → AI 로(SYSTEM 정본·위기 규칙이 받는다)');
+ok('(a3) persona chunk load failure falls back to the AI path without throwing');
 
 // (b) 저장 → 보류한 마지막 질문을 다시 보낸다
 said = await h.save();

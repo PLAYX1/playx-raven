@@ -17,7 +17,7 @@ import { marketLists } from "./market-lists";
 import { openRaviStory } from "./desktop-links";
 import { inviteLink } from "./links";
 import { homeSafety } from "./home-summary";
-import { wireChainInfo } from "./chain-info-card";
+import { wireChainInfoLazy } from "./chain-info-lazy";
 import { installFirstRunBarrier, afterRaviLanding, deferUntilRaviLanding, finishRaviLanding } from "./firstrun";
 installFirstRunBarrier();
 import { rememberCompanionPage, restoreCompanionPage, mountCompanionBridge } from "./ravi-companion-bridge";
@@ -283,7 +283,7 @@ import {
 } from "./wallet-easy";
 import { DEVICE_STORAGE_LABEL, DEVICE_STORAGE_BUTTON, keyStorageGuide, needsKeyStorageGuide, KEYCHAIN_SAVING, keyLast4, normalizeApiKey, keyConnectionFailure, keyStorageError, SavedKeyChecks } from "./ravi-key";
 import { nameTakenFrom, strictBool } from "./name-lookup";
-import { raviPersonaReply, raviCrisisReply } from "./ravi-persona";
+import { loadRaviPersona } from "./ravi-persona-lazy";
 import { guideById, guideHtml, raviAnswerHtml, raviCopy, raviText, raviQuestionLanguage, providerOfKey, type GuideGo } from "./ravi-guide";
 import { questionNeedsPersonalData } from "./ravi-consent-need";
 
@@ -4744,7 +4744,7 @@ async function paintHome(): Promise<void> {
 
 /** 「만들기」 화면 들어가기 — 화면이 준비되면 채운다. */
 let createApi: CreateApi | undefined;
-let chainInfo: ReturnType<typeof wireChainInfo> | undefined;
+let chainInfo: ReturnType<typeof wireChainInfoLazy> | undefined;
 /** 끌어놓기 발행(판매자 기능). */
 let dropPublish: ReturnType<typeof wireDropPublish> | undefined;
 
@@ -10799,7 +10799,9 @@ async function chatSendExisting() {
     return;
   }
   // 🔴 2026-10-11 (0.8.8) — 위기 표현은 무엇보다 먼저, AI 열쇠와 상관없이 정해 둔 안내로 답한다(ravi-persona.ts).
-  const crisis = raviCrisisReply(q, lang);
+  //    ravi-persona 는 지연 묶음(ravi-persona-lazy.ts) — 처음 한 번만 읽는다. 읽기 실패면 null → 기존 경로(AI SYSTEM 위기 규칙).
+  const persona = await loadRaviPersona();
+  const crisis = persona?.raviCrisisReply(q, lang) ?? null;
   if (crisis) { raviPersonaSay(q, crisis); return; }
   if (isRaviHelp(q)) {
     ($("chat-q") as HTMLInputElement).value = "";
@@ -10849,7 +10851,7 @@ async function chatSendExisting() {
   // 인물 설정(몇 살·생일·누구)·인사·기분·감정·체인 정보 「읽는 도구 없음」 — ravi-persona.ts.
   // 전체 문장 인식이라 지갑 요청을 가로채지 않는다. 열쇠가 있어도 정본·체인 답은 로컬이 먼저(숫자 지어내기 방지·비용 0),
   // 감정 표현만 열쇠가 없을 때 로컬(열쇠가 있으면 AI 가 맥락을 살려 답한다).
-  const talk = raviPersonaReply(q, { uiLang: lang, mood: raviState, hasKey: !!aiProvider });
+  const talk = persona?.raviPersonaReply(q, { uiLang: lang, mood: raviState, hasKey: !!aiProvider }) ?? null;
   if (talk) { raviPersonaSay(q, talk); return; }
   if (!aiProvider) {
     chatSay("me", q);
@@ -17763,6 +17765,8 @@ window.addEventListener("DOMContentLoaded", async () => {
     await reviewSend();
   };
   raviHome = createRaviHome({ voiceProvider: () => aiProvider || "", afterLanding: afterRaviLanding, wake: wakeRavi, wallet: () => showPage("wallet"), report: () => openReport(), send: () => { void chatSend(); }, tools: () => showPage("ravi"), companion: mode => { void invoke("companion_signal", { kind: mode === "listening" || mode === "speaking" ? "idle" : mode }).catch(() => {}); } });
+  // 라비 인물·위기 대답 묶음은 입력칸에 처음 들어갈 때 미리 읽는다(첫 질문이 기다리지 않게) — ravi-persona-lazy.ts.
+  $("chat-q").addEventListener("focus", () => { void loadRaviPersona(); }, { once: true });
   raviAgentUI = createRaviAgentUI({ invoke, keyed: () => aiProvider, key: wakeRavi, dock: () => raviHome?.open(false), landed: finishRaviLanding, afterLanding: afterRaviLanding, tz: tzMin });
   afterRaviLanding(() => {
     const lifecycle = mountRaviLifecycle({ invoke: rawInvoke, pending: () => sendingNow });
@@ -18217,7 +18221,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     catch { say(t("열지 못했습니다"), t("서버 연결을 확인하고 다시 시도해 주세요.")); }
   };
   $("rv-home-games").onclick = () => showPage("games");
-  chainInfo = wireChainInfo({ invoke, showPage });
+  chainInfo = wireChainInfoLazy({ invoke, showPage });
   $("rv-home-sales").onclick = () => showPage("sales");
   // Collapse only secondary entrances in a small window. Native details keeps
   // Enter/Space, focus order and all destinations available without a custom trap.
