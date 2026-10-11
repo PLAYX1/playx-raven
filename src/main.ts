@@ -14,6 +14,7 @@ import type { wireDropPublish } from "./drop-publish";
 import { wireOpenMarket } from "./open-market";
 import { marketLists } from "./market-lists";
 import { openRaviStory } from "./desktop-links";
+import { inviteLink } from "./links";
 import { homeSafety } from "./home-summary";
 import { installFirstRunBarrier, afterRaviLanding, deferUntilRaviLanding, finishRaviLanding } from "./firstrun";
 installFirstRunBarrier();
@@ -6131,10 +6132,6 @@ async function talkPaintRooms() {
  * ⚠️ 링크에 담는 것은 **방 번호뿐**이다. 대화 내용도 열쇠도 안 담는다 —
  *    링크는 어디로든 퍼지고, 한번 퍼지면 못 거둔다.
  */
-function inviteLink(): string {
-  if (!tkRoom) return "https://rvn.ex.erci.se/talk";
-  return `https://rvn.ex.erci.se/talk?room=${encodeURIComponent(tkRoom)}`;
-}
 
 function paintInvite() {
   const host = document.getElementById("tk-invite");
@@ -6142,7 +6139,7 @@ function paintInvite() {
   const name = tkRoom ? tkRoomNames.get(tkRoom) || t("방") : t("레이븐 이야기");
   host.innerHTML = `<button class="ghost" id="tk-inv">${copyHtml("초대하기")}</button>`;
   document.getElementById("tk-inv")!.addEventListener("click", () => {
-    const url = inviteLink();
+    const url = inviteLink(tkRoom);
     // 붙여넣기 좋게 **문구까지** 담는다. 사장이 문장을 지어내지 않아도 된다.
     const msg = `${t("이 방으로 오세요")} — ${name}\n${url}`;
 
