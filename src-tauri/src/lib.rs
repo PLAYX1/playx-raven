@@ -44,6 +44,7 @@ mod electrum;
 mod moving;
 mod trust;
 mod publicbook;
+mod chain_info;
 mod health;
 mod ipfs;
 mod ipfsconf;
@@ -393,6 +394,8 @@ pub fn run() {
             ravi_agent::ravi_today,
             ravi_agent::ravi_greeting,
             ravi_agent::ravi_public_address,
+            chain_info::chain_overview,
+            chain_info::chain_security,
             ravi_voice::voice_open_microphone_settings,
             ravi_voice::voice_cancel,
             ravi_voice::voice_consent,

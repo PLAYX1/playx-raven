@@ -16,6 +16,7 @@ import { marketLists } from "./market-lists";
 import { openRaviStory } from "./desktop-links";
 import { inviteLink } from "./links";
 import { homeSafety } from "./home-summary";
+import { wireChainInfo } from "./chain-info-card";
 import { installFirstRunBarrier, afterRaviLanding, deferUntilRaviLanding, finishRaviLanding } from "./firstrun";
 installFirstRunBarrier();
 import { rememberCompanionPage, restoreCompanionPage, mountCompanionBridge } from "./ravi-companion-bridge";
@@ -4767,6 +4768,7 @@ async function paintHomeSafety(): Promise<void> {
 async function paintHome(): Promise<void> {
   void refreshOverview();
   void paintHomeSafety();
+  chainInfo?.paintHome();
   try {
     const recent: unknown = await invoke("recent_transactions", { count: 3 }).catch(() => null);
     const txs: any[] = (Array.isArray(recent) && recent.length ? recent : await 최근거래_모아읽기(3))
@@ -4790,6 +4792,7 @@ async function paintHome(): Promise<void> {
 
 /** 「만들기」 화면 들어가기 — 화면이 준비되면 채운다. */
 let createApi: CreateApi | undefined;
+let chainInfo: ReturnType<typeof wireChainInfo> | undefined;
 /** 끌어놓기 발행(판매자 기능). */
 let dropPublish: ReturnType<typeof wireDropPublish> | undefined;
 
@@ -4865,6 +4868,7 @@ function showPage(id: string) {
   if (id === "ravi" || id === "home") paintRavi();
   if (id === "home") void paintHome();
   if (id === "profile") void paintProfile();
+  if (id === "chain") chainInfo?.enter();
   paintPageTiles(id);
   document.querySelectorAll(".page").forEach((p) => p.classList.toggle("on", p.id === `page-${id}`));
   document.querySelectorAll("nav a").forEach((a) =>
@@ -18242,6 +18246,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     catch { say(t("열지 못했습니다"), t("서버 연결을 확인하고 다시 시도해 주세요.")); }
   };
   $("rv-home-games").onclick = () => showPage("games");
+  chainInfo = wireChainInfo({ invoke, showPage });
   $("rv-home-sales").onclick = () => showPage("sales");
   // Collapse only secondary entrances in a small window. Native details keeps
   // Enter/Space, focus order and all destinations available without a custom trap.

@@ -37,6 +37,7 @@ import { CREATE_COPY } from "./create-copy";
 import { CERT_COPY } from "./cert-copy";
 import { PAIRING_COPY } from "./pairing-copy";
 import { MAP_COPY } from "./map-copy";
+import { CHAIN_INFO_COPY } from "./chain-info-copy";
 import { RAVI_LIFECYCLE_COPY } from "./ravi-lifecycle-copy";
 import { RAVI_CHAT_COPY } from "./ravi-chat-copy";
 
@@ -5606,6 +5607,10 @@ Object.assign(DICT.zh, {
 
 // RV6 「폰 연결」 문구는 이미 있는 번역을 덮지 않는다(같은 한국어가 다른 화면에서 먼저 쓰였으면 그것이 이긴다).
 for (const [source, values] of Object.entries(PAIRING_COPY)) {
+  (["en", "ja", "zh"] as const).forEach((language, index) => { DICT[language][source] ??= values[index]; });
+}
+// 「체인 정보」(chain-info-card.ts) — 같은 한국어가 이미 있으면 그 번역이 이긴다. 유럽어는 영어로 내려간다.
+for (const [source, values] of Object.entries(CHAIN_INFO_COPY)) {
   (["en", "ja", "zh"] as const).forEach((language, index) => { DICT[language][source] ??= values[index]; });
 }
 // 「지도에 올리기」(map-card.ts) — 같은 한국어가 이미 있으면 그 번역이 이긴다.

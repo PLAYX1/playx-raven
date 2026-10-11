@@ -23,6 +23,7 @@
     "check:pre-release": "npm run build && node scripts/check-firstrun.mjs && npm run check:ravi-companion && npm run check:home-onescreen",
     "check:ravi-companion": "node scripts/check-ravi-companion.mjs && node scripts/check-companion-fix.mjs",
     "check:home-onescreen": "node scripts/check-home-onescreen.mjs",
+    "test:chain": "node --test scripts/chain-info.test.mjs",
     "check:i18n": "node scripts/i18n/check-packs.mjs",
     "test:i18n": "node --test scripts/i18n-packs-browser.test.mjs",
     "typecheck": "tsc --noEmit",
