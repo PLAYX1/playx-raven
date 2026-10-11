@@ -282,6 +282,7 @@ import {
 } from "./wallet-easy";
 import { DEVICE_STORAGE_LABEL, DEVICE_STORAGE_BUTTON, keyStorageGuide, needsKeyStorageGuide, KEYCHAIN_SAVING, keyLast4, normalizeApiKey, keyConnectionFailure, keyStorageError, SavedKeyChecks } from "./ravi-key";
 import { nameTakenFrom, strictBool } from "./name-lookup";
+import { raviPersonaReply, raviCrisisReply } from "./ravi-persona";
 import { guideById, guideHtml, raviAnswerHtml, raviCopy, raviText, raviQuestionLanguage, providerOfKey, type GuideGo } from "./ravi-guide";
 import { questionNeedsPersonalData } from "./ravi-consent-need";
 
@@ -10827,6 +10828,14 @@ async function chatSend() {
   try { await chatSendExisting(); } finally { raviRequestPending = false; raviHome?.finish(); }
 }
 
+/** 로컬 인물·감정·체인 답을 말풍선으로. 고정 언어 문구라 화면 번역기가 다시 칠하지 않게 translate="no". */
+function raviPersonaSay(q: string, talk: { text: string; event?: "user_thanks" | "ai_unknown" }) {
+  ($("chat-q") as HTMLInputElement).value = "";
+  chatSay("me", q);
+  chatHtml("ai", `<div translate="no">${escapeHtml(talk.text).replace(/\n/g, "<br />")}</div>`);
+  if (talk.event) emitRaviEvent(talk.event);
+}
+
 async function chatSendExisting() {
   const q = ($("chat-q") as HTMLInputElement).value.trim();
   if (!q) return;
@@ -10835,6 +10844,9 @@ async function chatSendExisting() {
     chatHtml("ai", `<div translate="no">${raviCopy(raviQuestionLanguage(q, (["ko", "en", "ja", "zh"].includes(lang) ? lang : "en") as CoreLang))("시드·키·토큰은 라비에게 보내지 마세요. 입력을 기록하지 않았어요.")}</div>`);
     return;
   }
+  // 🔴 2026-10-11 (0.8.8) — 위기 표현은 무엇보다 먼저, AI 열쇠와 상관없이 정해 둔 안내로 답한다(ravi-persona.ts).
+  const crisis = raviCrisisReply(q, lang);
+  if (crisis) { raviPersonaSay(q, crisis); return; }
   if (isRaviHelp(q)) {
     ($("chat-q") as HTMLInputElement).value = "";
     chatSay("me", q);
@@ -10880,6 +10892,11 @@ async function chatSendExisting() {
     chatHtml("ai", raviRichAnswerHtml(q, rich, (["ko", "en", "ja", "zh"].includes(lang) ? lang : "en") as CoreLang, !!aiProvider));
     return;
   }
+  // 인물 설정(몇 살·생일·누구)·인사·기분·감정·체인 정보 「읽는 도구 없음」 — ravi-persona.ts.
+  // 전체 문장 인식이라 지갑 요청을 가로채지 않는다. 열쇠가 있어도 정본·체인 답은 로컬이 먼저(숫자 지어내기 방지·비용 0),
+  // 감정 표현만 열쇠가 없을 때 로컬(열쇠가 있으면 AI 가 맥락을 살려 답한다).
+  const talk = raviPersonaReply(q, { uiLang: lang, mood: raviState, hasKey: !!aiProvider });
+  if (talk) { raviPersonaSay(q, talk); return; }
   if (!aiProvider) {
     chatSay("me", q);
     ($("chat-q") as HTMLInputElement).value = "";

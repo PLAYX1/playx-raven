@@ -7,7 +7,9 @@ const bundled = await build({entryPoints:['src/ravi-guide.ts'],bundle:true,platf
 const context = {module:{exports:{}},exports:{}}; vm.runInNewContext(bundled.outputFiles[0].text,context);
 const chatBundle = await build({entryPoints:['src/ravi-chat.ts'],bundle:true,platform:'node',format:'cjs',write:false});
 const chatContext = {module:{exports:{}},exports:{},navigator:{language:'ko'},localStorage:{getItem:()=>null,setItem(){}}}; vm.runInNewContext(chatBundle.outputFiles[0].text,chatContext);
-const g = {...chatContext.module.exports, ...context.module.exports};
+const personaBundle = await build({entryPoints:['src/ravi-persona.ts'],bundle:true,platform:'node',format:'cjs',write:false});
+const personaContext = {module:{exports:{}},exports:{}}; vm.runInNewContext(personaBundle.outputFiles[0].text,personaContext);
+const g = {...chatContext.module.exports, ...context.module.exports, ...personaContext.module.exports, raviState:'normal', emitRaviEvent(){}};
 const cases=JSON.parse(readFileSync('scripts/fixtures/ravi-understanding-60.json','utf8'));
 const caps=JSON.parse(readFileSync('src/ravi-capabilities.json','utf8'));
 assert.equal(cases.length,60);
@@ -91,7 +93,7 @@ const ctx=vm.createContext({ ...g,$:el,document:{getElementById:()=>null},aiProv
   openQrSheet:()=>calls.push(['qr']),openReceive:()=>calls.push(['receive']),openSend:()=>calls.push(['send']),openKeyCard:()=>calls.push(['key']),
   toggleDot:id=>calls.push(['dot',id]),openReport:()=>calls.push(['report']),shopTab:tab=>calls.push(['tab',tab]),
 });
-vm.runInContext(compile(fn('raviGuide')+'\n'+fn('raviOpenScreen')+'\n'+fn('raviGo')+'\n'+fn('chatSendExisting')),ctx);
+vm.runInContext(compile(fn('raviGuide')+'\n'+fn('raviPersonaSay')+'\n'+fn('raviOpenScreen')+'\n'+fn('raviGo')+'\n'+fn('chatSendExisting')),ctx);
 for(const c of cases){messages.length=0;el('chat-q').value=c.utterance;await ctx.chatSendExisting();
  assert.ok((messages.at(-1).html?.includes(`data-guide="${c.expected.intent}"`) || messages.at(-1).html?.includes('data-guide="clarify"') && (messages.at(-1).html?.includes(`data-ravi-input="${c.expected.intent}"`) || c.expected.intent==='miss' && (messages.at(-1).html?.match(/data-ravi-input=/g)||[]).length===2)),`production chat path: ${c.id}`);
 }
