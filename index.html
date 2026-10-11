@@ -4499,7 +4499,7 @@
             <p class="arhint" id="ar-followhint">손님 주소를 받아 붙여넣고 보냅니다.
               가게에서 계산할 때 저절로 따라가지 않습니다 — 모르게 받으면
               그게 뭔지 모릅니다.</p>
-            <p class="meta" id="ar-shopqty">SHOP.PLAYX 수량 확인 중…</p>
+            <p class="meta" id="ar-shopqty">가게 토큰 수량 확인 중…</p>
             <button type="button" class="ghost" id="ar-give">손님에게 보내기</button>
           </div>
         </div>
@@ -4724,6 +4724,8 @@
               <div class="meta">공개 장부에 저장되는 이름은 영문 대문자만 가능합니다. 손님이 보는 이름은 위에 적은 것입니다.</div>
 
               <label style="margin-top:12px">공개 장부에 남을 이름</label>
+              <!-- 🔴 새 가게 이름 규칙 RV.S.<가게이름>(대표 확정 2026-10-11) — 앞부분은 앱이 붙인다(src/shop-token.ts). -->
+              <div class="meta" id="sh-assetrule">공개 장부 이름은 RV.S.가게이름 모양으로 만들어집니다. RV 는 레이븐볼트 이름 규칙, S 는 가게(Shop)라는 뜻입니다. 예전에 SHOP. 으로 등록한 가게는 그 이름을 그대로 씁니다.</div>
               <input id="sh-asset" placeholder="GANGNAM_CAFE" autocomplete="off" spellcheck="false" />
               <div class="meta" id="sh-assetcheck"></div>
               <!-- 🔴 **실제로 체인에 올라간 이름.** 위 칸(`sh-asset`)은 사장이

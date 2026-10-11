@@ -2312,7 +2312,7 @@ fn base_instructions(task: &str) -> Result<&'static str, String> {
 {"names":{"ko":"","en":"","ja":"","zh":""},"description_ko":"","asset":"","location":"","delivery":false,"pickup":true}
 Rules:
 - names: the shop's name in each language, natural to a native speaker. Not transliteration where a real translation exists.
-- asset: A-Z 0-9 _ only, 3-25 chars, no SHOP. prefix, derived from the English name. This is permanent on a blockchain.
+- asset: A-Z 0-9 _ only, 3-25 chars, no RV.S. or SHOP. prefix (the app adds RV.S.), derived from the English name. This is permanent on a blockchain.
 - description_ko: ONE sentence, at most 40 Korean characters. Use only nouns and verbs the user actually wrote. If they did not say it, do not add it.
 - Never add adjectives of praise. Not 정성/최고/특별한/자랑/풍미/프리미엄/진정한. A shop that roasts its own beans is "원두를 직접 볶습니다", not "정성을 담아 최고의 원두를".
 - location: only if the user stated one, else "".

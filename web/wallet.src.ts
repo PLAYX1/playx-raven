@@ -2650,13 +2650,13 @@ let 들어오는중 = 0;
  *    그리고 그 길이 생기기 전에는 이 표를 크게 뿌리지 않는다.
  */
 function 소식표인가(name: string): boolean {
-  // 가게 표는 `SHOP.` 으로 시작하고 나눌 수 있게 찍힌 것이다.
-  return /^SHOP\./i.test(name);
+  // 가게 표는 새 가게 `RV.S.`(2026-10-11 대표 확정)·옛 가게 `SHOP.` 으로 시작하고 나눌 수 있게 찍힌 것이다.
+  return /^(?:RV\.S|SHOP)\./i.test(name);
 }
 
 function 자산을사람말로(name: string): string {
   if (!소식표인가(name)) return name;
-  const 가게 = name.replace(/^SHOP\./i, "");
+  const 가게 = name.replace(/^(?:RV\.S|SHOP)\./i, "");
   return `${가게} 가게 소식`;
 }
 

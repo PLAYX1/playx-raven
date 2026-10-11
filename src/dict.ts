@@ -700,10 +700,6 @@ export const DICT: Record<string, Record<string, string>> = {
       "Name cleared. Guests will see the asset name.",
     "사진이 너무 큽니다. 8MB 아래로 골라 주세요.":
       "The photo is too large. Please choose one under 8MB.",
-    "SHOP.PLAYX 가 없습니다. 손님에게 줄 토큰이 없습니다.":
-      "There is no SHOP.PLAYX. There is nothing to give guests.",
-    "SHOP.PLAYX 수량을 아직 못 읽었습니다. 「자산」에서 목록을 열어 주세요.":
-      "Could not read the SHOP.PLAYX balance yet. Open Assets to load the list.",
     "손님 주소를 받아 붙여넣고 보냅니다. 가게에서 계산할 때 저절로 따라가지 않습니다 — 모르게 받으면 그게 뭔지 모릅니다.":
       "Paste the guest’s address and send. It does not ride along with a shop payment — if they receive it without knowing, they will not know what it is.",
     "내 주소 채우기":
@@ -2535,10 +2531,6 @@ export const DICT: Record<string, Record<string, string>> = {
       "名前を空にしました。お客さまにはアセット名で見えます。",
     "사진이 너무 큽니다. 8MB 아래로 골라 주세요.":
       "写真が大きすぎます。8MB以下を選んでください。",
-    "SHOP.PLAYX 가 없습니다. 손님에게 줄 토큰이 없습니다.":
-      "SHOP.PLAYX がありません。お客さまに渡すトークンがありません。",
-    "SHOP.PLAYX 수량을 아직 못 읽었습니다. 「자산」에서 목록을 열어 주세요.":
-      "SHOP.PLAYX の数量をまだ読めませんでした。「資産」で一覧を開いてください。",
     "손님 주소를 받아 붙여넣고 보냅니다. 가게에서 계산할 때 저절로 따라가지 않습니다 — 모르게 받으면 그게 뭔지 모릅니다.":
       "お客さまのアドレスを貼って送ります。店の会計に自動では付きません。知らないうちに受け取ると何か分かりません。",
     "내 주소 채우기":
@@ -4370,10 +4362,6 @@ export const DICT: Record<string, Record<string, string>> = {
       "已清空名字。客人将看到资产名称。",
     "사진이 너무 큽니다. 8MB 아래로 골라 주세요.":
       "照片太大。请选择 8MB 以下的图片。",
-    "SHOP.PLAYX 가 없습니다. 손님에게 줄 토큰이 없습니다.":
-      "没有 SHOP.PLAYX。没有可发给客人的代币。",
-    "SHOP.PLAYX 수량을 아직 못 읽었습니다. 「자산」에서 목록을 열어 주세요.":
-      "尚未读到 SHOP.PLAYX 数量。请在「资产」打开列表。",
     "손님 주소를 받아 붙여넣고 보냅니다. 가게에서 계산할 때 저절로 따라가지 않습니다 — 모르게 받으면 그게 뭔지 모릅니다.":
       "粘贴客人地址后发送。不会在店内结账时自动附上——不知情地收到，就不知道那是什么。",
     "내 주소 채우기":

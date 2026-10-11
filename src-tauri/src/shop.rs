@@ -12,13 +12,83 @@
 //! *prefix* only (assets.cpp — a partial name followed by `*`), so with no
 //! shared prefix, finding shops would mean walking every asset on the chain.
 //!
-//! So shops use a root asset named `SHOP.<something>`. It is a convention, not
+//! So shops use a root asset with a shared prefix. It is a convention, not
 //! a permission — we do not own the prefix and cannot refuse anyone, because
-//! `SHOP.X` is a root asset that any wallet issues directly. The ~500 RVN burn
+//! it is a root asset that any wallet issues directly. The ~500 RVN burn
 //! is the only barrier, which is small (about ₩2,000) but not nothing.
+//!
+//! 🔴 대표 확정(2026-10-11): **새 가게부터 `RV.S.<가게이름>`** 이다 — 제작자 상품
+//! `RV.<종류글자>.<이름>`(core/creator/asset-name.ts)의 S(가게) 칸. 옛 가게는
+//! `SHOP.<이름>`(체인에 이미 `SHOP.PLAYX` 가 있다)이고 **이름을 못 바꾸므로** 목록·조회·
+//! 주인 찾기는 두 모양을 다 읽는다. 새로 만드는 이름만 `RV.S.` 다.
+//! 화면 쪽 같은 규칙: src/shop-token.ts.
 
 use crate::raven::call_rpc;
 use serde_json::{json, Value};
+
+/// 새 가게 이름 앞부분.
+pub const SHOP_PREFIX: &str = "RV.S.";
+/// 옛 가게 이름 앞부분 — 읽기 호환 전용. 새로 만들지 않는다.
+pub const LEGACY_SHOP_PREFIX: &str = "SHOP.";
+/// 가게 목록 검색 패턴(listassets). 새 것과 옛 것을 같이 읽는다.
+pub const SHOP_PATTERNS: [&str; 2] = ["RV.S.*", "SHOP.*"];
+/// 전체 이름 상한 — 코어 MAX_NAME_LENGTH 31 에서 주인 표 `!` 한 칸(issue.rs 와 같다).
+const MAX_NAME: usize = 30;
+const RESERVED: [&str; 3] = ["RVN", "RAVEN", "RAVENCOIN"];
+
+/// 가게 자산 이름인가(새 `RV.S.` · 옛 `SHOP.`). 주인 표(`!`)·하위(`/`)·유니크(`#`)는 가게 자체가 아니다.
+pub fn is_shop_asset(name: &str) -> bool {
+    let n = name.trim();
+    if n.contains(['!', '/', '#', '$', '~']) {
+        return false;
+    }
+    [SHOP_PREFIX, LEGACY_SHOP_PREFIX]
+        .iter()
+        .any(|p| n.len() > p.len() && n.starts_with(p))
+}
+
+/// 간판용 짧은 이름 — 앞부분(`RV.S.`·`SHOP.`)만 뗀다.
+pub fn shop_label(name: &str) -> &str {
+    let n = name.trim();
+    n.strip_prefix(SHOP_PREFIX)
+        .or_else(|| n.strip_prefix(LEGACY_SHOP_PREFIX))
+        .unwrap_or(n)
+}
+
+/// 새 가게 전체 이름(`RV.S.<이름>`)의 문제들. 비어 있으면 통과.
+/// 기준은 화면(src/shop-token.ts `checkShopAssetName`)·제작자 상품 규칙과 같다.
+pub fn shop_name_problems(full: &str) -> Vec<&'static str> {
+    let mut p = Vec::new();
+    let work = full.strip_prefix(SHOP_PREFIX).unwrap_or("");
+    if !full.starts_with(SHOP_PREFIX) {
+        p.push("새 가게 이름은 RV.S. 로 시작합니다. 다른 종류 글자(RV.M. 등)나 옛 SHOP. 으로는 만들 수 없어요.");
+    } else if work.is_empty() {
+        p.push("가게 이름을 영문으로 적어 주세요.");
+    }
+    if !work.is_empty() {
+        if !work
+            .bytes()
+            .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit() || b == b'.' || b == b'_')
+        {
+            p.push("가게 이름에는 영문 대문자·숫자·점(.)·밑줄(_)만 쓸 수 있어요.");
+        }
+        let punct = |c: char| c == '.' || c == '_';
+        let doubled = work
+            .as_bytes()
+            .windows(2)
+            .any(|w| punct(w[0] as char) && punct(w[1] as char));
+        if doubled || work.starts_with(punct) || work.ends_with(punct) {
+            p.push("점·밑줄을 두 번 이어 쓰거나, 점·밑줄로 시작하거나 끝날 수 없어요.");
+        }
+        if work.split('.').any(|seg| RESERVED.contains(&seg)) {
+            p.push("RVN·RAVEN·RAVENCOIN 은 가게 이름에 쓸 수 없어요.");
+        }
+    }
+    if full.len() > MAX_NAME {
+        p.push("전체 이름은 30자를 넘을 수 없어요.");
+    }
+    p
+}
 
 /// Every shop registered on the chain.
 ///
@@ -28,22 +98,46 @@ use serde_json::{json, Value};
 /// still be listed, marked as unreachable rather than silently dropped.
 #[tauri::command]
 pub async fn list_shops(count: i64, start: i64) -> Result<Value, String> {
-    let raw = call_rpc("listassets", json!(["SHOP.*", true, count, start])).await?;
-    let map = raw
-        .as_object()
-        .ok_or_else(|| "listassets did not return an object".to_string())?;
+    // 🔴 새 가게(`RV.S.*`)와 옛 가게(`SHOP.*`)를 **둘 다** 묻는다. 한쪽만 물으면 다른 쪽 가게가
+    //    장터에서 조용히 사라진다. `count`·`start` 는 패턴마다 같게 넘기고, 합친 뒤 `count` 개로 자른다
+    //    (지금 부르는 곳은 전부 start=0 — 두 패턴을 이어 넘기는 쪽수 나누기는 아직 없다).
+    //    옛 패턴(`SHOP.*`) 실패는 예전처럼 오류다. 새 패턴만 실패하면 옛 가게 목록은 그대로 보여 준다
+    //    (새 패턴 때문에 이미 쓰는 가게의 장터가 깨지면 안 된다).
+    let mut raws = Vec::with_capacity(SHOP_PATTERNS.len());
+    for pattern in SHOP_PATTERNS {
+        match call_rpc("listassets", json!([pattern, true, count, start])).await {
+            Ok(v) => raws.push(v),
+            Err(e) if pattern.starts_with(LEGACY_SHOP_PREFIX) => return Err(e),
+            Err(_) => {}
+        }
+    }
+    let shops = shops_from_listings(&raws, count)?;
+    Ok(json!({ "count": shops.len(), "shops": shops }))
+}
 
-    let mut shops = Vec::with_capacity(map.len());
-    for (name, data) in map {
-        shops.push(json!({
-            "asset": name,
-            "ipfs_hash": data.get("ipfs_hash").and_then(Value::as_str).filter(|h| !h.is_empty()),
-            "units": data.get("units"),
-            "reissuable": data.get("reissuable"),
-            // The block the shop registered in. Older is not better, but it is
-            // the one durable fact about a shop that cannot be typed in.
-            "block": data.get("block_height"),
-        }));
+/// `listassets` 답 여러 개(패턴마다 하나)를 가게 줄로 합친다. 노드는 부르지 않는다.
+/// 같은 이름이 두 답에 다 있으면 한 번만 넣는다. 가게 모양이 아닌 이름은 버린다.
+pub fn shops_from_listings(raws: &[Value], count: i64) -> Result<Vec<Value>, String> {
+    let mut seen = std::collections::BTreeSet::new();
+    let mut shops = Vec::new();
+    for raw in raws {
+        let map = raw
+            .as_object()
+            .ok_or_else(|| "listassets did not return an object".to_string())?;
+        for (name, data) in map {
+            if !is_shop_asset(name) || !seen.insert(name.clone()) {
+                continue;
+            }
+            shops.push(json!({
+                "asset": name,
+                "ipfs_hash": data.get("ipfs_hash").and_then(Value::as_str).filter(|h| !h.is_empty()),
+                "units": data.get("units"),
+                "reissuable": data.get("reissuable"),
+                // The block the shop registered in. Older is not better, but it is
+                // the one durable fact about a shop that cannot be typed in.
+                "block": data.get("block_height"),
+            }));
+        }
     }
 
     shops.sort_by(|a, b| {
@@ -52,13 +146,20 @@ pub async fn list_shops(count: i64, start: i64) -> Result<Value, String> {
             .unwrap_or("")
             .cmp(b["asset"].as_str().unwrap_or(""))
     });
-    Ok(json!({ "shops": shops, "count": shops.len() }))
+    if count >= 0 {
+        shops.truncate(count as usize);
+    }
+    Ok(shops)
 }
 
 /// Is this shop name still free?
 #[tauri::command]
 pub async fn shop_name_free(name: String) -> Result<bool, String> {
     let full = normalize_shop_name(&name);
+    // 규칙에 안 맞는 이름은 노드에 묻지도 않는다 — 「비어 있음」이 500 RVN 확인 칸을 연다.
+    if let Some(problem) = shop_name_problems(&full).first() {
+        return Err((*problem).to_string());
+    }
     // 🔴 오류 문구에 「Invalid」·「not found」가 있으면 「비어 있음」이라 답하던 것을 고쳤다 —
     //    노드 오류는 「모름」이다(`issue::lookup_name`). 모르면 오류로 돌려 화면이 「확인 불가」를 말한다.
     match crate::issue::lookup_name(&full).await {
@@ -73,11 +174,22 @@ pub async fn shop_name_free(name: String) -> Result<bool, String> {
 /// Shop names are ASCII-only and upper case because the chain says so. The name
 /// customers actually read is in the profile, in their own language — this
 /// string is an identifier, and the UI has to say so plainly or the owner will
-/// think their shop is called SHOP.GANGNAM_CAFE.
+/// think their shop is called RV.S.GANGNAM_CAFE.
+///
+/// 🔴 새 가게는 `RV.S.<이름>` 이다. 사장이 `RV.S.` 나 옛 `SHOP.` 을 직접 적었으면 떼고 다시 붙인다 —
+/// 새 가게를 옛 `SHOP.` 으로 만들지 않는다. 한글 로마자 변환은 화면(src/shop-token.ts)이 먼저 한다.
 pub fn normalize_shop_name(input: &str) -> String {
-    let cleaned: String = input
-        .trim()
-        .to_uppercase()
+    let mut rest = input.trim().to_uppercase();
+    loop {
+        if let Some(r) = rest.strip_prefix(SHOP_PREFIX) {
+            rest = r.to_string();
+        } else if let Some(r) = rest.strip_prefix(LEGACY_SHOP_PREFIX) {
+            rest = r.to_string();
+        } else {
+            break;
+        }
+    }
+    let cleaned: String = rest
         .chars()
         .map(|c| {
             if c.is_ascii_alphanumeric() || c == '.' || c == '_' {
@@ -87,12 +199,7 @@ pub fn normalize_shop_name(input: &str) -> String {
             }
         })
         .collect();
-
-    if cleaned.starts_with("SHOP.") {
-        cleaned
-    } else {
-        format!("SHOP.{cleaned}")
-    }
+    format!("{SHOP_PREFIX}{cleaned}")
 }
 
 #[tauri::command]
@@ -972,12 +1079,16 @@ pub async fn shop_history(asset: String) -> Result<Value, String> {
 }
 
 /// The name as it lives on the chain, whether or not the caller typed the prefix.
+///
+/// 이미 있는 가게를 **찾는** 쪽이다. `RV.S.`(새)·`SHOP.`(옛)를 적었으면 그대로 쓰고, 앞부분 없이
+/// 적은 짧은 이름은 예전처럼 `SHOP.` 을 붙인다 — 이 길로 옛 가게(`PLAYX` → `SHOP.PLAYX`)를 찾던
+/// 동작을 깨지 않는다. 새 가게는 전체 이름(`RV.S.…`, shop.json `chain_asset`)으로 찾는다.
 fn full_shop_name(input: &str) -> String {
     let c = input.trim().to_uppercase();
-    if c.starts_with("SHOP.") {
+    if c.starts_with(SHOP_PREFIX) || c.starts_with(LEGACY_SHOP_PREFIX) {
         c
     } else {
-        format!("SHOP.{c}")
+        format!("{LEGACY_SHOP_PREFIX}{c}")
     }
 }
 
@@ -994,6 +1105,88 @@ mod history_tests {
         assert_eq!(full_shop_name("  shop.playx  "), "SHOP.PLAYX");
         // 두 번 붙이면 SHOP.SHOP.X 가 되어 영영 못 찾는다.
         assert!(!full_shop_name("SHOP.PLAYX").starts_with("SHOP.SHOP"));
+        // 새 가게 이름은 그대로 — `SHOP.RV.S.X` 로 만들면 새 가게를 영영 못 찾는다.
+        assert_eq!(full_shop_name("rv.s.gangnam_cafe"), "RV.S.GANGNAM_CAFE");
+    }
+}
+
+#[cfg(test)]
+mod rv_s_tests {
+    use super::*;
+    use serde_json::json;
+
+    /// 새 가게는 `RV.S.<이름>` 으로 만든다. 옛 `SHOP.` 을 적어도 새 규칙으로 바꾼다.
+    #[test]
+    fn new_shops_are_named_rv_s() {
+        assert_eq!(normalize_shop_name("gangnam cafe"), "RV.S.GANGNAM_CAFE");
+        assert_eq!(normalize_shop_name("RV.S.PLAYX"), "RV.S.PLAYX");
+        assert_eq!(normalize_shop_name("  shop.playx "), "RV.S.PLAYX");
+        assert_eq!(normalize_shop_name("rv.s.shop.x"), "RV.S.X");
+        assert!(shop_name_problems(&normalize_shop_name("gangnam_cafe")).is_empty());
+        assert_eq!(shop_asset_name("kimbap".into()), "RV.S.KIMBAP");
+    }
+
+    /// 화면(src/shop-token.ts)과 같은 이름 규칙: 예약어·30자·허용 문자·점밑줄·종류 글자.
+    #[test]
+    fn the_name_rules_match_the_screen() {
+        assert!(shop_name_problems("RV.S.PLAYX").is_empty());
+        assert!(shop_name_problems("RV.S.A").is_empty(), "전체 6자 — 루트 3자 이상");
+        assert!(!shop_name_problems("RV.S.RVN").is_empty());
+        assert!(!shop_name_problems("RV.S.MY.RAVEN").is_empty(), "점으로 나뉜 어느 칸이든 예약어면 거절");
+        assert!(shop_name_problems("RV.S.RAVENS_CAFE").is_empty(), "낱말 일부는 괜찮다");
+        let thirty = format!("RV.S.{}", "A".repeat(25));
+        assert_eq!(thirty.len(), 30);
+        assert!(shop_name_problems(&thirty).is_empty());
+        assert!(!shop_name_problems(&format!("{thirty}B")).is_empty(), "31자는 거절");
+        assert!(!shop_name_problems("RV.S.CAFE-1").is_empty());
+        assert!(!shop_name_problems("RV.S.cafe").is_empty());
+        assert!(!shop_name_problems("RV.S.CAFE__1").is_empty());
+        assert!(!shop_name_problems("RV.S._CAFE").is_empty());
+        assert!(!shop_name_problems("RV.S.CAFE.").is_empty());
+        assert!(!shop_name_problems("RV.S.").is_empty());
+        assert!(!shop_name_problems("RV.M.CAFE").is_empty(), "종류 글자가 S 가 아니면 가게가 아니다");
+        assert!(!shop_name_problems("SHOP.NEWCAFE").is_empty(), "새 가게를 옛 모양으로 만들지 않는다");
+    }
+
+    /// 옛 가게(`SHOP.PLAYX`)와 새 가게(`RV.S.…`)가 같은 목록에 섞여 나온다. 주인 표·하위는 빠진다.
+    #[test]
+    fn the_directory_reads_old_and_new_shops_together() {
+        let rv = json!({
+            "RV.S.KIMBAP": { "ipfs_hash": "Qm1", "units": 8, "reissuable": 1, "block_height": 9 },
+        });
+        let legacy = json!({
+            "SHOP.PLAYX": { "ipfs_hash": "Qm2", "units": 8, "reissuable": 1, "block_height": 3 },
+            "SHOP.PLAYX/MENU": { "ipfs_hash": "", "block_height": 4 },
+        });
+        let rows = shops_from_listings(&[rv.clone(), legacy.clone(), rv], 200).unwrap();
+        let names: Vec<&str> = rows.iter().map(|r| r["asset"].as_str().unwrap()).collect();
+        assert_eq!(names, vec!["RV.S.KIMBAP", "SHOP.PLAYX"], "둘 다·한 번씩·이름순");
+        assert_eq!(rows[1]["ipfs_hash"], json!("Qm2"));
+        assert_eq!(shops_from_listings(&[legacy], 0).unwrap().len(), 0, "count 로 자른다");
+        assert!(shops_from_listings(&[json!([])], 10).is_err());
+    }
+
+    #[test]
+    fn labels_drop_either_prefix() {
+        assert_eq!(shop_label("RV.S.GANGNAM_CAFE"), "GANGNAM_CAFE");
+        assert_eq!(shop_label("SHOP.PLAYX"), "PLAYX");
+        assert_eq!(shop_label("PLAYX"), "PLAYX");
+        assert!(is_shop_asset("SHOP.PLAYX") && is_shop_asset("RV.S.KIMBAP"));
+        assert!(!is_shop_asset("SHOP.PLAYX!") && !is_shop_asset("RV.S.") && !is_shop_asset("RV.M.SONG"));
+        assert_eq!(SHOP_PATTERNS, ["RV.S.*", "SHOP.*"]);
+    }
+
+    /// 주인 찾기 규칙(`owned_shops`): 하나면 그것, 옛 것과 새 것이 같이 있으면 고르지 않는다.
+    #[test]
+    fn detect_picks_only_a_single_owner_token() {
+        let one_old = json!({ "SHOP.PLAYX!": 1, "SHOP.PLAYX": 20999999999.0 });
+        assert_eq!(owned_shops(&[one_old]), vec!["SHOP.PLAYX".to_string()]);
+        let one_new = json!({ "RV.S.KIMBAP!": 1 });
+        assert_eq!(owned_shops(&[json!({}), one_new]), vec!["RV.S.KIMBAP".to_string()]);
+        let both = owned_shops(&[json!({ "SHOP.PLAYX!": 1 }), json!({ "RV.S.KIMBAP!": 1, "RV.S.KIMBAP/X!": 1 })]);
+        assert_eq!(both, vec!["RV.S.KIMBAP".to_string(), "SHOP.PLAYX".to_string()], "둘이면 후보만");
+        // 손님으로 받은 팔로우 토큰(주인 표 없음)은 내 가게가 아니다.
+        assert!(owned_shops(&[json!({ "SHOP.OTHER": 0.00000001 })]).is_empty());
     }
 }
 
@@ -1612,11 +1805,7 @@ fn merge_profile(row: Value, profile: Option<Value>) -> Value {
     // 장터 화면(`web/shops.html`)은 한 벌뿐이고 매장 노드와 웹 양쪽에서
     // 돌아간다. 한쪽만 `title` 이고 다른 쪽이 `name` 이면, 그 화면은 한 곳에서
     // 조용히 빈 이름을 그린다 — 오류는 안 난다.
-    let fallback_title = out["asset"]
-        .as_str()
-        .unwrap_or("")
-        .trim_start_matches("SHOP.")
-        .replace('_', " ");
+    let fallback_title = shop_label(out["asset"].as_str().unwrap_or("")).replace('_', " ");
 
     let Some(p) = profile else {
         out["profile_ok"] = json!(false);
@@ -1763,21 +1952,18 @@ mod profile_merge_tests {
 /// 남의 가게 이름으로 공지가 나간다.
 #[tauri::command]
 pub async fn shop_detect_asset() -> Result<Value, String> {
-    let owned = crate::raven::call_rpc("listmyassets", json!(["SHOP*", false, 200, 0])).await?;
-    let map = owned.as_object().ok_or("지갑이 목록을 주지 않았습니다.")?;
-
-    let mut found: Vec<String> = map
-        .keys()
-        // 소유권 토큰만 본다. 수량 1개짜리 `SHOP.PLAYX` 를 갖고 있는 것은
-        // 손님도 가능하다 — 주인은 `!` 를 가진 쪽이다.
-        .filter_map(|k| k.strip_suffix('!'))
-        // 하위 자산·유니크는 가게 자체가 아니다.
-        .filter(|k| !k.contains('/') && !k.contains('#'))
-        .filter(|k| k.starts_with("SHOP."))
-        .map(|k| k.to_string())
-        .collect();
-    found.sort();
-    found.dedup();
+    // 🔴 새 가게(`RV.S.*`)와 옛 가게(`SHOP*`) 두 패턴을 다 묻는다. 한쪽만 물으면 새 가게 사장의
+    //    「체인 이름」 칸이 영영 안 채워져 공지를 못 올린다(2026-08-25 SHOP.PLAYX 때와 같은 사고).
+    //    옛 패턴 실패는 예전처럼 오류, 새 패턴만 실패하면 옛 결과로 예전과 똑같이 판단한다.
+    let mut lists = Vec::with_capacity(2);
+    for pattern in ["RV.S.*", "SHOP*"] {
+        match crate::raven::call_rpc("listmyassets", json!([pattern, false, 200, 0])).await {
+            Ok(v) => lists.push(v),
+            Err(e) if pattern.starts_with("SHOP") => return Err(e),
+            Err(_) => {}
+        }
+    }
+    let mut found = owned_shops(&lists);
 
     // 🔴 여기서 파일에 쓰지 않는다. `shop.json` 을 쓰는 곳은 화면 쪽 하나뿐이고
     //    (`saveShop`), 쓰는 곳이 둘이 되면 서로 덮어써서 사장이 방금 고친 것이
@@ -1791,6 +1977,25 @@ pub async fn shop_detect_asset() -> Result<Value, String> {
         // 잘못 고르면 남의 가게 이름으로 공지가 나간다.
         "candidates": found,
     }))
+}
+
+/// 지갑 목록(`listmyassets` 답 여러 개)에서 **내가 주인인 가게** 이름만 뽑는다. 노드는 부르지 않는다.
+///
+/// 소유권 토큰(`…!`)만 본다 — 팔로우 토큰(`SHOP.PLAYX` 0.00000001개)은 손님도 갖는다.
+/// 🔴 가정: 이 컴퓨터는 가게 하나. 여럿(옛 `SHOP.X!` + 새 `RV.S.Y!`)이면 부르는 쪽이 고르지 않는다.
+pub fn owned_shops(lists: &[Value]) -> Vec<String> {
+    let mut found: Vec<String> = lists
+        .iter()
+        .filter_map(Value::as_object)
+        .flat_map(|m| m.keys())
+        .filter_map(|k| k.strip_suffix('!'))
+        // 하위 자산·유니크는 가게 자체가 아니다(is_shop_asset 가 / # 를 거른다).
+        .filter(|k| is_shop_asset(k))
+        .map(|k| k.to_string())
+        .collect();
+    found.sort();
+    found.dedup();
+    found
 }
 
 #[cfg(test)]

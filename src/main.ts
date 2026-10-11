@@ -75,6 +75,7 @@ import { wirePhoneTransaction } from "./phone-transaction";
 import { wirePairing } from "./pairing-ui";
 import { FINGERPRINT_GUESS, wireCreate, type CreateApi } from "./create-page";
 import { readItemName, verifyLink } from "./easy-create";
+import { checkShopAssetName, shopLabel, shopTokenOf, suggestShopAssetName } from "./shop-token";
 import { requireWalletBackup, restoreIsComplete } from "./backup-result";
 import { paintWalletNotes, walletWelcome } from "./wallet-notes";
 import { wireSeedCheck } from "./seed-check";
@@ -561,7 +562,7 @@ function renderList() {
    * 이 자산이 **무엇을 못 하는지**를 적는다.
    *
    * 🔴 코어 지갑은 단위(`units`)를 들고 있는데 우리는 안 들고 있었다. 그래서
-   *    `SHOP.PLAYX` 가 **1개·쪼갤 수 없음**으로 찍혀서 손님에게 나눠 줄 수
+   *    가게 토큰(옛 가게 `SHOP.PLAYX` 실측, 새 가게는 `RV.S.<이름>`)이 **1개·쪼갤 수 없음**으로 찍혀서 손님에게 나눠 줄 수
    *    없다는 사실이 **화면 어디에도 없었다.** 팔로우가 왜 성립 안 하는지
    *    사장이 알 길이 없었다.
    *
@@ -9842,13 +9843,43 @@ async function artistLoad() {
   //    시키는 것은 안내가 아니다.
   const qty = $("ar-shopqty");
   await ensureAssets();
-  const shop = assets.get("SHOP.PLAYX");
+  // 🔴 여태 `SHOP.PLAYX` 를 박아 두었다 — 다른 가게(새 `RV.S.…` 가게 포함)는 남의 토큰 수량을 봤다.
+  //    이제 「이 가게의 토큰 이름」 한 값(shop.json chain_asset)을 읽는다. 옛 가게는 그 값이 SHOP.PLAYX 라 그대로다.
+  const token = await currentShopToken();
+  if (!token) {
+    setCopyText(qty, () => t("아직 공개 장부에 올린 가게가 없습니다. 「가게」에서 먼저 등록해 주세요."));
+    return;
+  }
+  const shop = assets.get(token);
   if (shop && shop.amount > 0) {
-    qty.textContent = tf("SHOP.PLAYX  {0}개 남음", fmtQty(shop.amount));
+    qty.textContent = tf("{0}  {1}개 남음", token, fmtQty(shop.amount));
   } else if (shop) {
-    setCopyText(qty, () => t("SHOP.PLAYX 가 없습니다. 손님에게 줄 토큰이 없습니다."));
+    setCopyText(qty, () => tf("{0} 가 없습니다. 손님에게 줄 토큰이 없습니다.", token));
   } else {
-    setCopyText(qty, () => t("SHOP.PLAYX 수량을 못 읽었습니다. 서버가 켜져 있는지 보세요."));
+    setCopyText(qty, () => tf("{0} 수량을 못 읽었습니다. 서버가 켜져 있는지 보세요.", token));
+  }
+}
+
+/**
+ * 「이 가게의 토큰 이름」 한 값 — 새 가게 `RV.S.<이름>`, 옛 가게 `SHOP.<이름>`.
+ *
+ * 근거는 `shop.json` 의 `chain_asset`(발행 성공·지갑 확인 뒤에만 채워짐). 그 칸이 비었으면 지갑의 주인 표를
+ * 읽기만 해서(`shop_detect_asset`, 쓰지 않음) **하나일 때만** 쓴다 — 여럿이면 고르지 않는다(남의 가게 이름으로
+ * 토큰을 보낼 수 있다). 🔴 가정: 이 컴퓨터는 가게 하나다.
+ */
+async function currentShopToken(): Promise<string | null> {
+  const typed = ($("sh-registered") as HTMLInputElement | null)?.value.trim() || "";
+  const fromForm = shopTokenOf({ chain_asset: typed });
+  if (fromForm) return fromForm;
+  try {
+    const saved = shopTokenOf(await invoke<any>("shop_load"));
+    if (saved) return saved;
+  } catch { /* 파일을 못 읽으면 지갑에 묻는다 */ }
+  try {
+    const r = await invoke<any>("shop_detect_asset");
+    return shopTokenOf({ chain_asset: r?.asset });
+  } catch {
+    return null;
   }
 }
 
@@ -9928,8 +9959,14 @@ async function artistGive() {
   // 🔴 채우고 나서 연다. 안 그러면 **고를 것이 하나도 없는 보내기 화면**이
   //    뜬다 — 사장은 자기에게 토큰이 없다고 읽는다.
   await ensureAssets();
+  const token = await currentShopToken();
+  // 가게를 아직 안 올렸으면 보낼 토큰이 없다 — 빈 보내기 화면 대신 가게 등록으로 데려간다.
+  if (!token) {
+    showPage("shop");
+    return;
+  }
   showPage("wallet");
-  void openSend("asset", "SHOP.PLAYX");
+  void openSend("asset", token);
 }
 
 function bindArtist() {
@@ -15812,13 +15849,25 @@ async function checkShopName() {
     $("sh-confirmbox").style.display = "none";
     return;
   }
-  const full = await invoke<string>("shop_asset_name", { input: raw });
+  // 🔴 새 가게는 `RV.S.<가게이름>`(대표 확정 2026-10-11). 이름 만들기·검사는 shop-token.ts 한 곳 —
+  //    한글은 폰과 같은 로마자 표로 바꾸고, 규칙(30자·예약어·허용 문자·종류 글자 S)에 안 맞으면 노드에 묻기 전에 멈춘다.
+  //    Rust `shop_name_free` 도 같은 규칙으로 한 번 더 막는다(화면을 건너뛴 호출 대비).
+  const full = suggestShopAssetName(raw);
+  const named = checkShopAssetName(full);
+  if (!named.valid) {
+    $("sh-assetcheck").innerHTML = `<span style="color:var(--bad)">${named.problems.map(p => escapeHtml(t(p))).join("<br />")}</span>`;
+    $("sh-cost").innerHTML = "";
+    $("sh-confirmbox").style.display = "none";
+    $("sh-confirmname").textContent = "";
+    gateShop();
+    return;
+  }
   // 🔴 노드에 묻지 못하면(오류) 「비어 있음」이 아니라 **「확인 불가」**다 — 예전에는 `free = true` 로
   //    시작해 오류를 삼켜, 모르는 채로 500 RVN 등록 확인 칸을 열었다.
   let free: boolean | null = null;
   try {
     // shop_name_free 는 「비어 있음」이 true 다(name_taken 과 반대) — 정확한 불리언만 믿는다.
-    free = strictBool(await invoke<unknown>("shop_name_free", { name: raw }));
+    free = strictBool(await invoke<unknown>("shop_name_free", { name: full }));
   } catch {
     free = null;
   }
@@ -15833,7 +15882,7 @@ async function checkShopName() {
   }
 
   $("sh-assetcheck").innerHTML = free
-    ? `공개 장부에 <code>${full}</code> 로 남습니다`
+    ? `${copyHtml("공개 장부에 이 이름으로 남습니다")} <code>${escapeHtml(full)}</code>`
     : `<span style="color:var(--bad)">이미 등록된 이름입니다. 자산 이름은 영구적이라 다시 쓸 수 없습니다.</span>`;
 
   if (free) {
@@ -15942,7 +15991,7 @@ async function registerShop() {
       //    레이븐코인의 `sendmessage` 는 「이 자산을 가진 사람 전원」에게
       //    가는데, 가진 사람이 사장 하나뿐이면 자기에게 보내는 셈이다.
       //
-      //    가게 주인임을 증명하는 것은 `SHOP.무엇!`(소유권 토큰)이지 이 자산이
+      //    가게 주인임을 증명하는 것은 `RV.S.무엇!`(옛 가게는 `SHOP.무엇!`, 소유권 토큰)이지 이 자산이
       //    아니다. 그러니 이 자산은 **처음부터 팔로우 토큰**으로 만든다.
       //    손님에게 0.00000001 씩 나눠 주면 그 사람들이 가게 공지를 받는다.
       //
@@ -16002,7 +16051,7 @@ function shopSnapshot() {
     // 🔴 이 둘이 여태 저장 안 됐다. `loadShop` 은 읽는데 저장하는 쪽이 안
     //    담아서, 사장이 적어 넣은 바깥 주소가 앱을 끄면 사라졌다.
     //    `asset` 은 더 중요하다 — 노드가 **자기 가게의 체인 이름**을 알아야
-    //    터널이 켜질 때 「SHOP.PLAYX 는 지금 여기서 주문받습니다」를 올린다.
+    //    터널이 켜질 때 「이 가게(RV.S.… 또는 옛 SHOP.…)는 지금 여기서 주문받습니다」를 올린다.
     order_url: val("sh-orderurl"),
     // 사장이 치는 중인 이름과, **실제로 체인에 올라간 이름**은 다르다.
     asset: val("sh-asset"),
@@ -16138,7 +16187,7 @@ async function pushShopLive(): Promise<void> {
  * 체인 이름이 비어 있을 때 **지갑에 물어서** 채운다.
  *
  * 사장에게 「체인 이름이 뭐였죠」라고 물으면 안 된다 — 답은 이 컴퓨터
- * 안에 이미 있다. 소유권 토큰(`SHOP.무엇!`)은 그 자산의 주인만 갖는다.
+ * 안에 이미 있다. 소유권 토큰(`RV.S.무엇!`, 옛 가게는 `SHOP.무엇!`)은 그 자산의 주인만 갖는다.
  *
  * 이게 비어 있으면 화면이 「체인에 가게를 등록하지 않았습니다」라고
  * **거짓말을 하고**, 어느 이름으로 알릴지 몰라 **릴레이 공지도 못 올린다.**
@@ -16188,19 +16237,20 @@ function lockChainName() {
     if (note) note.remove();
     return;
   }
-  // 손님에게 보이는 이름이 아니라 **체인에 박힌 이름**이다. `SHOP.` 은 관례
-  // 접두사라 칸에는 그 뒤만 적어 왔다 — 되쓸 때도 같게 맞춘다.
-  box.value = 이미.replace(/^SHOP\./, "");
+  // 손님에게 보이는 이름이 아니라 **체인에 박힌 이름**이다. `RV.S.`(새 가게)·`SHOP.`(옛 가게)는 관례
+  // 접두사라 칸에는 그 뒤만 적어 왔다 — 되쓸 때도 같게 맞춘다. 전체 이름은 칸 아래 안내에 그대로 보인다.
+  box.value = shopLabel(이미);
   box.readOnly = true;
   if (!note) {
     const p = document.createElement("p");
     p.id = "sh-assetlocked";
     p.className = "meta";
-    setCopyText(p, () => t(
-      "이미 공개 장부에 올린 이름입니다. 공개 장부 이름은 바꿀 수 없어서 잠가 두었습니다 — 다시 등록하면 RVN 이 또 탑니다.",
-    ));
     box.insertAdjacentElement("afterend", p);
   }
+  // 옛 가게(`SHOP.PLAYX`)는 그 이름 그대로 쓴다 — 새 규칙(RV.S.)으로 바꾸라고 하지 않는다(체인 이름은 못 바꾼다).
+  setCopyText(note || document.getElementById("sh-assetlocked")!, () => t(
+    "이미 공개 장부에 올린 이름입니다. 공개 장부 이름은 바꿀 수 없어서 잠가 두었습니다 — 다시 등록하면 RVN 이 또 탑니다.",
+  ) + " " + tf("이 가게의 토큰: {0}", 이미));
 }
 
 async function loadShop() {
@@ -19111,7 +19161,7 @@ async function paintHelping(): Promise<void> {
      </div>` +
     /* 🔴 **만들어 놓고 아무도 안 부르던 것**(실측 2026-09-08).
           `helping.rs` 의 `help_round()` 는 체인에서 가게 목록을 읽고
-          (`listassets SHOP.*`), 각 가게의 사진을 받아 이 컴퓨터가 들고 있게
+          (`listassets RV.S.*` + 옛 `SHOP.*`), 각 가게의 사진을 받아 이 컴퓨터가 들고 있게
           한다 — sha256 으로 대조하고, 4MB·40개 상한을 지킨다. 제대로 만들어
           놓고 `lib.rs` 에 등록만 하고 **부르는 줄이 하나도 없었다.**
           「돕기」가 상태만 보여 주고 실제로 돕지는 않고 있었던 것이다. */

@@ -390,11 +390,15 @@ pub fn build_delete_event(nostr_sk: &[u8; 32], nostr_pubkey: &str, issuer: &str,
     crate::shopkey::sign_with(nostr_sk, DELETE_KIND, Value::Array(tags), "", at)
 }
 
-/// 가게 주소 이름(slug) 제안 — 체인 이름(`SHOP.GANGNAM_CAFE` → `gangnam-cafe`)에서, 없으면 `shop`.
+/// 가게 주소 이름(slug) 제안 — 체인 이름(새 `RV.S.GANGNAM_CAFE`·옛 `SHOP.GANGNAM_CAFE` → `gangnam-cafe`)에서, 없으면 `shop`.
 /// 한 번 올린 뒤에는 **바꾸지 않는다**(가게 id 가 바뀌면 지도에 가게가 둘로 보인다).
 pub fn suggest_slug(chain_asset: &str) -> String {
     let base = chain_asset.trim();
-    let base = base.strip_prefix("SHOP.").or_else(|| base.strip_prefix("shop.")).unwrap_or(base);
+    // 새 가게 앞부분(`RV.S.`)도 뗀다 — 안 떼면 모든 새 가게 주소가 `rv-s-…` 로 시작한다.
+    let base = ["RV.S.", "rv.s.", "SHOP.", "shop."]
+        .iter()
+        .find_map(|p| base.strip_prefix(p))
+        .unwrap_or(base);
     let mut s = String::new();
     for c in base.chars() {
         let c = c.to_ascii_lowercase();
@@ -558,6 +562,7 @@ mod tests {
     fn slug_suggestion_is_valid() {
         assert_eq!(suggest_slug("SHOP.GANGNAM_CAFE"), "gangnam-cafe");
         assert_eq!(suggest_slug("SHOP.PLAYX"), "playx");
+        assert_eq!(suggest_slug("RV.S.GANGNAM_CAFE"), "gangnam-cafe", "새 가게 앞부분도 뗀다");
         assert_eq!(suggest_slug(""), "shop");
         assert_eq!(suggest_slug("가게"), "shop");
         assert!(is_slug(&suggest_slug(&"A".repeat(80))));

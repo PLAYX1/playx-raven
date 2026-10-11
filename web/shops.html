@@ -650,7 +650,7 @@
           ? rows
               .map((s) => {
                 const p = s.profile || {};
-                const label = s.asset.replace(/^SHOP\./, "");
+                const label = s.asset.replace(/^(?:RV\.S|SHOP)\./, "");
                 // 🔴 여태 `href="#"` 이었다 — **누르면 아무 일도 안 일어난다.**
                 // 손님이 가게를 찾은 다음에 할 일이 「주문」밖에 없는데,
                 // 그 버튼은 문을 연 가게에만 생긴다. 닫힌 가게를 누른 손님은
@@ -732,7 +732,7 @@
         const row = all.find((s) => s.asset === asset);
         if (!row) return;
         const p = row.profile || {};
-        const label = asset.replace(/^SHOP\./, "");
+        const label = asset.replace(/^(?:RV\.S|SHOP)\./, "");
         $("sh-name").textContent = p.name || label;
         $("sh-sub").textContent = p.desc || "";
 
@@ -891,7 +891,7 @@
           const card = el.closest(".card");
           if (card) {
             const nm = card.querySelector(".nm");
-            if (nm && p.name && nm.textContent === el.dataset.live.replace(/^SHOP\./, ""))
+            if (nm && p.name && nm.textContent === el.dataset.live.replace(/^(?:RV\.S|SHOP)\./, ""))
               nm.textContent = p.name;
             const de = card.querySelector(".de");
             if (de && (p.description || p.location))
