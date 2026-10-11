@@ -36,7 +36,7 @@ const installMocks = { fn: ({ SPEND_SRC, last4 }) => {
         if (command === 'save_api_key') { window.__SAVED_KEY_LEN = String(args.key || '').length; window.__KEYED = true; return null; }
         if (command === 'model_settings') return {};
         if (command === 'ai_check_connection') return null;
-        if (command === 'plugin:app|version') return '0.8.5';
+        if (command === 'plugin:app|version') return '0.8.6';
         if (command === 'backup_auto') return { error: 'Synthetic unavailable backup' };
         if (command === 'backup_survey') return { items: [], automatic: null };
         if (['list_assets', 'pin_list', 'my_channels'].includes(command)) return [];

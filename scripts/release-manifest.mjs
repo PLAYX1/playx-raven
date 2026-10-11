@@ -63,7 +63,7 @@ export async function prepareRelease(source, destination, version, statementDire
     }
   }
   const base = `https://raw.githubusercontent.com/PLAYX1/playx-raven-releases/dist/v${version}`;
-  const manifest = { version, notes: `RavenVault Desktop ${version} — 게임 탭의 라비 스토리 카드 글자가 보이도록 고쳤습니다. 게임 판매 대금 받기는 설정의 「판매자 기능」을 켠 경우에만 나타납니다(기본 꺼짐). 어두운 화면의 단추 글자 대비를 높였습니다. 서명된 업데이트 버전·해시·순서 검증을 유지합니다.`, pub_date: new Date().toISOString(), platforms: {}, installers: [] };
+  const manifest = { version, notes: `RavenVault Desktop ${version} — 라비가 질문을 버리지 않고, 송금은 대신하지 않고 보내기 화면으로 안내합니다. 상황에 따라 라비의 표정과 말이 바뀝니다. 금액은 화면 언어의 소수점·천 단위대로 읽고 두 가지로 읽히는 입력은 거절합니다. 판매자 기능을 켜면 끌어놓기 한 화면으로 올리기·장르·템플릿을 씁니다. 칩·메뉴바만·대기화면 창 모드(읽기 전용·금액 가림 기본), 메모리 절감, 백업 폴더 이름 RavenVault, 작은 라비 얼굴·메뉴바 아이콘 대비 강화. 장터 판매·메인넷 발행은 준비 중입니다. 0.8.5 변경(라비 스토리 카드 글자, 판매 대금 받기는 「판매자 기능」을 켤 때만, 어두운 화면 단추 대비)도 포함합니다. 서명된 업데이트 버전·해시·순서 검증을 유지합니다.`, pub_date: new Date().toISOString(), platforms: {}, installers: [] };
   const needsStatement = compare(version, '0.8.4') >= 0;
   if (needsStatement) {
     const config = JSON.parse(await readFile(new URL('../src-tauri/tauri.conf.json', import.meta.url),'utf8'));
