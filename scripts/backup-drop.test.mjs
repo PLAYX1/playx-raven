@@ -51,7 +51,8 @@ test('main.ts: onDropped 맨 앞(자산 원본 대조·끌어놓기 발행·drop
   assert.ok(at('routeBackupDrop(paths)') < at('keep.acceptsDrop()'));
   assert.ok(at('routeBackupDrop(paths)') < at('dropPublish.dropPaths'));
   assert.equal((main.match(/routeBackupDrop/g) || []).length, 2, 'import 한 줄 + 부르는 한 줄');
-  assert.ok(main.includes('import "./wallet-file";'));
+  // 0.9.0 병합: 지갑 파일 화면은 지연 로딩(메인 묶음 예산), 「지갑 암호 없음」 안내 조각만 시작 묶음에.
+  assert.ok(main.includes('void import("./wallet-file");') && main.includes('import "./wallet-lock-refusal";'));
   assert.ok(main.includes('void listen<any>("drop-files"'), 'drop-files 이벤트 배선은 그대로');
   // 확인 창은 지연 로딩(메인 묶음 예산).
   assert.match(read('src/backup-drop-route.ts'), /import\("\.\/backup-extra"\)/);

@@ -41,9 +41,9 @@ export const OFFICIAL_ROOM_IDS: readonly string[] = [];
 export const ROOM_NAME_MAX = 40;
 export const ROOM_ABOUT_MAX = 80;
 
-// 시작 묶음에 드는 문구는 이 셋뿐이다. 나머지는 시트 묶음(talk-rooms-admin-copy.ts)에 있다.
+// 시작 묶음에 드는 문구는 이 둘뿐이다(「방 설정」은 레인 A 가 desktop-copy.ts 에 같은 뜻으로 넣어 거기서 온다 — 0.9.0 병합).
+// 나머지는 시트 묶음(talk-rooms-admin-copy.ts)에 있다.
 const CORE_COPY: Record<string, [string, string, string]> = {
-  "방 설정": ["Room settings", "ルーム設定", "房间设置"],
   "이 방 숨기기": ["Hide this room", "このルームを非表示", "隐藏此房间"],
   "숨긴 방 {0}": ["Hidden rooms {0}", "非表示のルーム {0}", "已隐藏的房间 {0}"],
 };

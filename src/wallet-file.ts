@@ -8,11 +8,14 @@
 // 🔴 폴더·파일 위치는 사용자가 선택창에서 직접 고른다(플러그인 dialog `open`).
 import { invoke } from "@tauri-apps/api/core";
 import { open as pickPath } from "@tauri-apps/plugin-dialog";
-import { listen } from "@tauri-apps/api/event";
 import { lang, coreLang } from "./i18n";
+// 0.9.0 병합 — 「지갑 암호 없음」 안내(showNeedPass·handleLockRefusal)와 그 문구·el·errText 는 시작 묶음에 남는
+// 작은 모듈로 옮겼다(display-mode 가 시작 때 쓴다). 이 파일은 main.ts 가 지연 로딩한다(메인 묶음 1000KB 예산).
+// 예전 이름 그대로 다시 내보낸다 — backup-extra.ts·시험이 여기서 가져간다.
+import { NEED_COPY, el, errText, showNeedPass, handleLockRefusal, type NeedCopy } from "./wallet-lock-refusal";
+export { NEEDS_WALLET_PASS, el, errText, showNeedPass, handleLockRefusal } from "./wallet-lock-refusal";
 
 type Lang = "ko" | "en" | "ja" | "zh";
-export const NEEDS_WALLET_PASS = "NEEDS_WALLET_PASS:";
 const PAPER_FLAG = "rv-key-paper-done";
 
 type Copy = {
@@ -20,16 +23,17 @@ type Copy = {
   showKey: string; hideKey: string; keyHidden: string; keyAuto: string; copyKey: string; copied: string; copyFail: string;
   printKey: string; printOpened: string; walletPassFor: string; paperDone: string; paperDoneMark: string; paperPending: string;
   title: string; lede: string; exportBtn: string; importBtn: string;
-  blockedTitle: string; blockedBody: string; goWallet: string; close: string; nodeDown: string;
+  nodeDown: string;
   pickFolder: string; folderNone: string; folderPicked: string; exportExplain: string; walletPass: string; doExport: string; working: string;
   wrote: string; verified: string; fileAt: string; endTitle: string; endNeed: string; endAsk: string; finish: string; finished: string; seeKeyAgain: string;
   pickFile: string; fileNone: string; modeKey: string; modePass: string; secretKey: string; secretPass: string; openIt: string;
   opened: string; fingerprint: string; same: string; currentKept: string; importWarn: string; confirmSwitch: string; doSwitch: string; cancel: string;
   switched: string; keptAt: string; restartApp: string; switchFailed: string; canceled: string; empty: string;
   refusedStandby: string;
-};
+} & NeedCopy;
 
 const KO: Copy = {
+  ...NEED_COPY.ko,
   paperLead: "컴퓨터가 죽으면, 이 52글자가 없으면 못 엽니다.",
   paperLeadPass: "백업 암호를 정해 두셨어도, 암호를 잊었을 때의 마지막 열쇠는 이 52글자예요. 컴퓨터가 죽으면 이 열쇠도 같이 사라져요.",
   step1: "① 열쇠 보기", step2: "② 종이에 적거나 인쇄", step3: "③ 12단어와 같이 보관",
@@ -41,9 +45,7 @@ const KO: Copy = {
   title: "wallet.dat 백업 파일 내보내기(잠금) · 가져오기",
   lede: "레이븐 코어의 wallet.dat를 52글자 열쇠로 잠가 파일 하나(.rvwallet)로 iCloud 폴더·USB 같은 곳에 두거나, 그런 파일에서 지갑을 되살려요. 이 파일은 항상 백업 열쇠(52글자)로 한 번 더 잠기고, 레이븐볼트에서만 열 수 있어요. 레이븐 코어로 옮길 때 쓰는 「코어용 wallet.dat」은 아래에 따로 있어요.",
   exportBtn: "wallet.dat 백업 파일 내보내기(잠금)…", importBtn: "wallet.dat 백업 파일 가져오기…",
-  blockedTitle: "먼저 지갑 암호를 걸어 주세요",
-  blockedBody: "지갑 암호가 아직 없어요. 암호가 없으면 잠가도 누구나 바로 풀 수 있고, 파일로 꺼낸 지갑은 그 파일을 주운 사람이 돈을 쓸 수 있어요. 지갑 화면에서 10글자 이상 암호를 정한 뒤 다시 해 주세요.",
-  goWallet: "지갑 화면으로", close: "닫기", nodeDown: "노드가 응답하지 않아 지갑 암호가 있는지 확인할 수 없어요. 노드를 켠 뒤 다시 해 주세요.",
+  nodeDown: "노드가 응답하지 않아 지갑 암호가 있는지 확인할 수 없어요. 노드를 켠 뒤 다시 해 주세요.",
   pickFolder: "저장할 폴더 고르기…", folderNone: "아직 고르지 않았어요", folderPicked: "저장할 폴더",
   exportExplain: "iCloud Drive 폴더나 USB 같은 곳을 직접 고르세요. 파일 이름은 RavenVault-wallet-날짜.rvwallet 이에요. 만든 뒤 다시 읽어 열어 보고 원본과 같은지 확인해요.",
   walletPass: "지갑 암호 (본인 확인)", doExport: "내보내기", working: "만드는 중… (다시 읽어 확인까지 해요)",
@@ -61,6 +63,7 @@ const KO: Copy = {
   refusedStandby: "지갑 암호가 아직 없어서 켜지 않았어요. 암호가 없으면 잠가도 누구나 풀 수 있어요.",
 };
 const EN: Copy = {
+  ...NEED_COPY.en,
   paperLead: "If this computer dies, you cannot open the backup without these 52 characters.",
   paperLeadPass: "Even if you set a backup password, these 52 characters are the last key if you forget it. When the computer dies, this key dies with it.",
   step1: "1. Show the key", step2: "2. Write it down or print it", step3: "3. Keep it with your 12 words",
@@ -72,9 +75,7 @@ const EN: Copy = {
   title: "Export (locked) / import wallet.dat backup file",
   lede: "Lock Raven Core's wallet.dat with the 52-character key into one file (.rvwallet) for an iCloud folder, USB drive, etc., or restore a wallet from such a file. This file is always locked once more with the backup key (52 characters) and only RavenVault can open it. The \"wallet.dat for Raven Core\" used to move to Raven Core is separate, below.",
   exportBtn: "Export wallet.dat backup file (locked)…", importBtn: "Import wallet.dat backup file…",
-  blockedTitle: "Set a wallet password first",
-  blockedBody: "This wallet has no password yet. Without one, a lock can be opened by anyone, and anyone who finds an exported file can spend the money. Set a password of 10+ characters on the Wallet screen, then try again.",
-  goWallet: "Go to Wallet", close: "Close", nodeDown: "The node isn't responding, so we can't check whether the wallet has a password. Start the node and try again.",
+  nodeDown: "The node isn't responding, so we can't check whether the wallet has a password. Start the node and try again.",
   pickFolder: "Choose a folder…", folderNone: "Not chosen yet", folderPicked: "Save to",
   exportExplain: "Pick an iCloud Drive folder, a USB drive, etc. yourself. The file is named RavenVault-wallet-DATE.rvwallet. After writing, we read it back, open it and compare with the original.",
   walletPass: "Wallet password (to confirm it is you)", doExport: "Export", working: "Working… (includes reading back to verify)",
@@ -92,6 +93,7 @@ const EN: Copy = {
   refusedStandby: "Not turned on: the wallet has no password yet. Without one, anyone can unlock it.",
 };
 const JA: Copy = {
+  ...NEED_COPY.ja,
   paperLead: "このコンピュータが壊れると、この52文字がなければバックアップを開けません。",
   paperLeadPass: "バックアップパスワードを設定していても、忘れたときの最後の鍵はこの52文字です。コンピュータが壊れるとこの鍵も一緒に消えます。",
   step1: "① 鍵を表示", step2: "② 紙に書く・印刷", step3: "③ 12ワードと一緒に保管",
@@ -103,9 +105,7 @@ const JA: Copy = {
   title: "wallet.dat バックアップファイルの書き出し（ロック）・読み込み",
   lede: "Raven Core の wallet.dat を52文字の鍵でロックして1つのファイル（.rvwallet）にし、iCloudフォルダやUSBなどに置いたり、そのファイルからウォレットを復元したりします。このファイルは必ずバックアップ鍵（52文字）でもう一度ロックされ、RavenVault でしか開けません。Raven Core へ移るときに使う「Raven Core 用 wallet.dat」は下に別にあります。",
   exportBtn: "wallet.dat バックアップファイルを書き出す（ロック）…", importBtn: "wallet.dat バックアップファイルを読み込む…",
-  blockedTitle: "先にウォレットのパスワードを設定してください",
-  blockedBody: "ウォレットにまだパスワードがありません。パスワードがないと、ロックしても誰でも解除でき、書き出したファイルを拾った人がお金を使えます。ウォレット画面で10文字以上のパスワードを設定してから、もう一度お試しください。",
-  goWallet: "ウォレット画面へ", close: "閉じる", nodeDown: "ノードが応答しないため、パスワードの有無を確認できません。ノードを起動してからもう一度お試しください。",
+  nodeDown: "ノードが応答しないため、パスワードの有無を確認できません。ノードを起動してからもう一度お試しください。",
   pickFolder: "保存先フォルダを選ぶ…", folderNone: "まだ選んでいません", folderPicked: "保存先",
   exportExplain: "iCloud DriveのフォルダやUSBなどを自分で選んでください。ファイル名は RavenVault-wallet-日付.rvwallet です。作成後に読み直して開き、元と同じか確認します。",
   walletPass: "ウォレットのパスワード（本人確認）", doExport: "書き出す", working: "作成中…（読み直して確認するまで行います）",
@@ -123,6 +123,7 @@ const JA: Copy = {
   refusedStandby: "ウォレットにパスワードがないため、オンにしませんでした。パスワードがないと誰でも解除できます。",
 };
 const ZH: Copy = {
+  ...NEED_COPY.zh,
   paperLead: "电脑损坏后，没有这52个字符就无法打开备份。",
   paperLeadPass: "即使设置了备份密码，忘记密码时的最后一把钥匙就是这52个字符。电脑损坏时，这把钥匙也会一起消失。",
   step1: "① 查看密钥", step2: "② 写在纸上或打印", step3: "③ 与12个恢复词一起保管",
@@ -134,9 +135,7 @@ const ZH: Copy = {
   title: "导出（加锁）/ 导入 wallet.dat 备份文件",
   lede: "把 Raven Core 的 wallet.dat 用52个字符的密钥锁成一个文件（.rvwallet），放到 iCloud 文件夹、U 盘等位置，或从这样的文件恢复钱包。此文件始终会再用备份密钥（52个字符）锁一次，只能用 RavenVault 打开。迁移到 Raven Core 时使用的“Raven Core 用 wallet.dat”在下方另行提供。",
   exportBtn: "导出 wallet.dat 备份文件（加锁）…", importBtn: "导入 wallet.dat 备份文件…",
-  blockedTitle: "请先设置钱包密码",
-  blockedBody: "此钱包还没有密码。没有密码时，加锁后任何人都能直接解锁，捡到导出文件的人也能花掉钱。请在钱包页面设置10个字符以上的密码，然后重试。",
-  goWallet: "前往钱包页面", close: "关闭", nodeDown: "节点没有响应，无法确认钱包是否有密码。请启动节点后重试。",
+  nodeDown: "节点没有响应，无法确认钱包是否有密码。请启动节点后重试。",
   pickFolder: "选择保存文件夹…", folderNone: "尚未选择", folderPicked: "保存到",
   exportExplain: "请自行选择 iCloud Drive 文件夹或 U 盘等位置。文件名为 RavenVault-wallet-日期.rvwallet。写入后会重新读取、打开并与原件比对。",
   walletPass: "钱包密码（身份确认）", doExport: "导出", working: "正在生成…（包括重新读取验证）",
@@ -157,46 +156,6 @@ const COPY: Record<Lang, Copy> = { ko: KO, en: EN, ja: JA, zh: ZH };
 const c = (): Copy => COPY[coreLang(lang)] ?? KO;
 /** 시험·재사용용 — 모르는 말은 영어(i18n 규칙과 같다). */
 export const walletFileCopy = (l: string): Copy => COPY[l as Lang] ?? EN;
-
-type Child = Node | string | null | false;
-export function el<K extends keyof HTMLElementTagNameMap>(tag: K, props: Partial<Omit<HTMLElementTagNameMap[K], "style">> & { className?: string; style?: string } = {}, ...kids: Child[]): HTMLElementTagNameMap[K] {
-  const e = document.createElement(tag);
-  const { style, ...rest } = props;
-  Object.assign(e, rest);
-  if (style) e.style.cssText = style; // CSSOM 으로 — 앱 CSP 가 style="" 속성을 막는다
-  for (const k of kids) if (k) e.append(k);
-  return e;
-}
-export const errText = (e: unknown): string => String((e as Error)?.message ?? e).replace(NEEDS_WALLET_PASS, "");
-
-function gotoWallet(): void {
-  document.querySelector<HTMLElement>('nav a[data-page="wallet"]')?.click();
-}
-
-/** 지갑 암호가 없어 막혔다는 안내 상자(내보내기·대기화면·매장용 읽기 전용 공용). */
-export function showNeedPass(): void {
-  document.getElementById("wf-need-pass")?.remove();
-  const t = c();
-  const box = el("div", { id: "wf-need-pass", className: "card" },
-    el("h3", { textContent: t.blockedTitle }),
-    el("p", { className: "meta", textContent: t.blockedBody }),
-    el("div", { className: "row" },
-      Object.assign(el("button", { textContent: t.goWallet }), { onclick: () => { box.remove(); gotoWallet(); } }),
-      Object.assign(el("button", { className: "ghost", textContent: t.close }), { onclick: () => box.remove() })));
-  box.setAttribute("role", "alertdialog");
-  box.setAttribute("aria-label", t.blockedTitle);
-  Object.assign(box.style, { position: "fixed", left: "50%", top: "20%", transform: "translateX(-50%)", zIndex: "9999", maxWidth: "min(92vw,520px)", boxShadow: "0 12px 40px rgba(0,0,0,.35)", borderColor: "var(--warn)" });
-  document.body.append(box);
-  box.querySelector("button")?.focus();
-}
-
-/** Rust 가 돌려준 오류가 「지갑 암호 없음」이면 안내 상자를 띄우고 true. */
-export function handleLockRefusal(e: unknown): boolean {
-  const msg = typeof e === "string" ? e : String((e as Error)?.message ?? "");
-  if (!msg.startsWith(NEEDS_WALLET_PASS)) return false;
-  showNeedPass();
-  return true;
-}
 
 const paperDone = (): boolean => { try { return localStorage.getItem(PAPER_FLAG) === "1"; } catch { return false; } };
 const setPaperDone = (v: boolean): void => { try { v ? localStorage.setItem(PAPER_FLAG, "1") : localStorage.removeItem(PAPER_FLAG); } catch { /* 저장 안 돼도 흐름은 계속 */ } };
@@ -458,11 +417,8 @@ export async function mountWalletFile(): Promise<void> {
 }
 
 if (typeof document !== "undefined") {
-  const go = () => {
-    void mountWalletFile();
-    // 트레이 메뉴의 대기화면 켜기가 지갑 암호 없어서 거절되면 큰 창에 안내를 띄운다(Rust → app-lock-refused).
-    void listen<string>("app-lock-refused", (e) => { if (!handleLockRefusal(e.payload)) { /* 다른 이유는 조용히 */ } }).catch(() => {});
-  };
+  // 트레이 메뉴 「대기화면 켜기」 거절 안내(app-lock-refused)는 시작 묶음의 wallet-lock-refusal.ts 가 듣는다.
+  const go = () => void mountWalletFile();
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", go);
   else go();
 }

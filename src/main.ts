@@ -4,7 +4,8 @@ import "./display-mode"; // 설정 「표시 방식」 칸 + 레이아웃 토큰
 void import("./settings-nav"); // 0.9.0 설정 왼쪽 목록·주제 바꾸기·바로 가기(src/settings-nav.ts) — 레인A. 시작 묶음 1000KB 예산 때문에 따로 싣는다
 import { myHeadHtml, nameCardAfterMe, saveTalkName, setMyTalkName, wireTalkIdentity } from "./talk-identity"; // 0.9.0 이야기 이름표 — 레인A
 import "./app-lock"; // 잠긴 기본 화면·매장용 읽기 전용 + 다크 돈 카드(docs/design/lock-and-dark.md)
-import "./wallet-file"; // 지갑 파일 내보내기·가져오기 + 백업 열쇠 52글자 종이 단계(0.8.7)
+import "./wallet-lock-refusal"; // 「지갑 암호 없음」 안내 + 트레이 거절 이벤트 — 시작 때부터 필요한 작은 조각
+void import("./wallet-file"); // 지갑 파일 내보내기·가져오기 + 백업 열쇠 52글자 종이 단계(0.8.7). 0.9.0 병합: 메인 묶음 1000KB 예산 때문에 지연 로딩
 import { routeBackupDrop } from "./backup-drop-route"; // 0.9.0 — 놓은 .pxlock·.rvwallet 은 자산 드롭보다 먼저 복원 확인 창으로
 import "./sales-account.css";
 import { wireSalesAccount } from "./sales-account";

@@ -63,7 +63,8 @@ test('화면 소스: innerHTML 없음 · 로그 없음 · 열쇠는 눌러야 ·
   assert.ok(src.includes('localStorage.setItem(PAPER_FLAG, "1")'));
   // main.ts 는 import 한 줄 + 옛 ck-need 덮어쓰기 제거
   const main = read('src/main.ts');
-  assert.ok(main.includes('import "./wallet-file";'));
+  // 0.9.0 병합: 지갑 파일 화면은 지연 로딩(메인 묶음 예산), 「지갑 암호 없음」 안내 조각만 시작 묶음에.
+  assert.ok(main.includes('void import("./wallet-file");') && main.includes('import "./wallet-lock-refusal";'));
   assert.ok(!main.includes('ck-need'));
 });
 

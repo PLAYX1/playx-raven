@@ -6,7 +6,7 @@ import { invoke } from "@tauri-apps/api/core";
 import "./layout-tokens.css";
 import "./display-mode.css";
 import { lockCopy, enterStoreMode } from "./app-lock";
-import { handleLockRefusal } from "./wallet-file";
+import { handleLockRefusal } from "./wallet-lock-refusal"; // 작은 조각만 — wallet-file.ts 전체는 지연 로딩
 import { lang as appLang } from "./i18n";
 
 export type DisplayMode = "window" | "mini" | "chip" | "menubar";
