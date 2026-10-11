@@ -63,3 +63,65 @@
 #page-settings .onceoff, #page-settings details.advanced { border: 0; border-radius: var(--rv-r-group); box-shadow: var(--rv-shadow); background: var(--panel); }
 #page-settings .warnbox { font-size: var(--rv-fs-sub) !important; border-radius: var(--rv-r-btn); }
 #page-settings pre { font-size: var(--rv-fs-cap); }
+
+/* ── 2단계 A: 묶음 목록(위에서 아래로 한 줄) ─────────────────────────────── */
+#page-settings .sx-pane { max-width: 820px; margin: 0 auto; padding-bottom: 80px; }
+#page-settings .sx-head { margin: 4px 0 16px; }
+#page-settings .sx-lede { color: var(--muted); margin: 0 0 12px; font-size: var(--rv-fs-body); }
+#page-settings .sx-sec { margin-top: 40px; }
+#page-settings .sx-ptitle { font-size: var(--rv-fs-title); font-weight: 700; letter-spacing: -.015em; line-height: 1.25; margin: 0 0 4px; }
+#page-settings .ghead { font-size: var(--rv-fs-sub); font-weight: 600; color: var(--muted); margin: 28px 16px 8px; }
+#page-settings .sx-row { display: flex; align-items: center; gap: 16px; min-height: var(--rv-row); flex-wrap: wrap; }
+#page-settings .sx-stack { flex-direction: column; align-items: stretch; gap: 10px; }
+#page-settings .sx-txt { display: flex; flex-direction: column; flex: 1 1 220px; min-width: 0; }
+#page-settings .sx-t { font-weight: 600; font-size: var(--rv-fs-body); }
+#page-settings .sx-d { font-size: var(--rv-fs-sub); color: var(--muted); font-weight: 400; line-height: 1.45; margin-top: 2px; }
+#page-settings .sx-v { color: var(--muted); flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#page-settings .sx-seg { display: inline-flex; flex-wrap: wrap; gap: 2px; background: var(--rv-fill); border-radius: var(--rv-r-btn); padding: 4px; align-self: flex-start; }
+#page-settings .sx-seg button { background: none; border: 0; color: var(--muted); min-height: 44px; padding: 0 16px; }
+#page-settings .sx-seg button.on { background: var(--panel); color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, .14); }
+#page-settings .sx-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
+#page-settings .sx-acts .meta { margin: 0; }
+#page-settings .sx-grow { flex: 1 1 160px; min-width: 0; }
+#page-settings .sx-field { display: block; font-size: var(--rv-fs-sub); color: var(--muted); margin-top: 8px; }
+#page-settings .sx-field input { display: block; width: 100%; margin-top: 4px; }
+#page-settings .sx-foot { font-size: var(--rv-fs-sub); color: var(--muted); margin: 8px 16px 0; }
+#page-settings .sx-h3gap { margin-top: 24px; }
+#page-settings .sx-h4 { margin: 12px 0 0; font-size: var(--rv-fs-sub); }
+#page-settings .sx-license { white-space: pre-wrap; font-size: var(--rv-fs-cap); line-height: 1.5; margin-top: 8px; }
+#page-settings .sx-warncard { border-left: 4px solid var(--warn); }
+#page-settings .sx-kvcard { padding: 10px 12px; margin: 0 0 10px; }
+#page-settings .sx-check { display: flex; align-items: center; gap: 10px; min-height: 44px; margin-top: 12px; }
+#page-settings .warnbox { margin-top: 12px; }
+#page-settings .tools > .card, #page-settings .sx-backup .tools > .warnbox { margin-top: 16px; }
+#page-settings .tools { padding: 20px; }
+#page-settings .card > .meta:first-of-type { margin-top: 6px; }
+/* 줄 전체가 단추인 줄(「이야기에서 쓰는 이름」 → 내 소개) */
+#page-settings button.sx-linkrow { display: flex; align-items: center; gap: 12px; width: 100%; min-height: var(--rv-row); padding: 4px 0; text-align: left; background: none; border: 0; font-weight: 400; }
+#page-settings button.sx-linkrow:hover:not(:disabled) { background: none; }
+#page-settings button.sx-linkrow:hover .sx-t { color: var(--rv-navy-ink); }
+#page-settings .sx-chev { flex: none; width: 9px; height: 9px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(-45deg); margin-right: 6px; }
+/* 「자세히」 — 긴 설명문은 접어 둔다(늘 펼쳐진 문단 세 개가 스위치 하나를 덮던 것) */
+#page-settings details.sx-more { margin-top: 4px; }
+#page-settings details.sx-more > summary, #page-settings details.sx-sub > summary { list-style: none; cursor: pointer; color: var(--rv-navy-ink); font-weight: 600; font-size: var(--rv-fs-sub); display: inline-flex; align-items: center; gap: 8px; min-height: 44px; }
+#page-settings details.sx-more > summary::-webkit-details-marker, #page-settings details.sx-sub > summary::-webkit-details-marker { display: none; }
+#page-settings details.sx-more > summary::before, #page-settings details.sx-sub > summary::before { content: ""; width: 7px; height: 7px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); transition: transform .2s ease; }
+#page-settings details[open].sx-more > summary::before, #page-settings details[open].sx-sub > summary::before { transform: rotate(45deg); }
+#page-settings details.sx-sub { margin-top: 12px; }
+#page-settings details.advanced > summary { min-height: var(--rv-row); display: flex; align-items: center; padding: 0 20px; font-weight: 600; cursor: pointer; }
+#page-settings details.advanced[open] { padding-bottom: 12px; }
+#page-settings details.advanced > .card { margin: 12px 12px 0; }
+/* 라비 동의·트레이 칸 — 기본 체크 상자가 꾸밈 없이 늘어서 있던 것을 줄 목록으로 */
+#page-settings #ravi-agent-settings .card, #companion-preferences { background: var(--panel); border-radius: var(--rv-r-group); box-shadow: var(--rv-shadow); padding: 16px 20px; margin-top: 12px; }
+#ravi-agent-settings label, #companion-preferences label { display: flex !important; align-items: center; justify-content: space-between; gap: 16px; min-height: var(--rv-row); border-top: 1px solid var(--line); font-size: var(--rv-fs-body); }
+#ravi-agent-settings label input[type="checkbox"], #companion-preferences label input[type="checkbox"] { order: 2; }
+#ravi-agent-settings input[type="checkbox"], #companion-preferences input[type="checkbox"] {
+  appearance: none; -webkit-appearance: none; flex: none; margin: 0; width: 51px; height: 31px; border-radius: 999px; cursor: pointer;
+  background: var(--rv-track) radial-gradient(circle, #fff 12px, transparent 13px) no-repeat 2px 50% / 27px 27px; transition: background-color .2s ease, background-position .2s ease; }
+#ravi-agent-settings input[type="checkbox"]:checked, #companion-preferences input[type="checkbox"]:checked { background-color: var(--rv-navy); background-position: 22px 50%; }
+#companion-preferences input[type="number"], #companion-preferences select { order: 2; width: 96px; min-height: 44px; font-size: var(--rv-fs-body); }
+#companion-preferences h3 { font-size: var(--rv-fs-head); margin: 0 0 6px; }
+#companion-preferences p { font-size: var(--rv-fs-sub); color: var(--muted); }
+#ravi-voice-revoke:empty, #ravi-voice-revoke:empty + p:empty { display: none; }
+#page-settings .sx-stack .sx-txt { flex: none; }
+#page-settings .lang-ai-note .lang-report, #page-settings .lang-ai-note .lang-report:hover:not(:disabled) { background: none; color: var(--rv-navy-ink); min-height: 44px; padding: 0 6px; font-weight: 600; }

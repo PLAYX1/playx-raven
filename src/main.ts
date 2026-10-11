@@ -1,6 +1,7 @@
 // 🔴 맨 먼저 — 앱 CSP(Tauri nonce) 가 막는 style="…" 속성을 CSSOM 으로 되살린다(src/style-attrs.ts).
 import "./style-attrs";
 import "./display-mode"; // 설정 「표시 방식」 칸 + 레이아웃 토큰(docs/design/window-modes.md)
+import "./settings-nav"; // 0.9.0 설정 묶음 자리 정리·왼쪽 목록(src/settings-nav.ts) — 레인A
 import "./app-lock"; // 잠긴 기본 화면·매장용 읽기 전용 + 다크 돈 카드(docs/design/lock-and-dark.md)
 import "./wallet-file"; // 지갑 파일 내보내기·가져오기 + 백업 열쇠 52글자 종이 단계(0.8.7)
 import "./sales-account.css";
