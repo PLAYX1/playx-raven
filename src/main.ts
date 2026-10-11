@@ -2360,7 +2360,12 @@ async function checkForUpdate(quiet = true) {
   const note = document.getElementById("up-note");
   try {
     const update = await invoke<{ version: string | null }>("check_update");
-    if (!update.version) { if (note) note.textContent = "새 버전이 없습니다."; return; }
+    if (!update.version) {
+      // 🔴 「확인 중…」이 영영 안 풀렸다(0.8.4 에서 신고) — 새 버전이 없을 때 단추 글자를 되돌리지 않았다.
+      if (nag) { nag.hidden = false; nag.classList.remove("new"); setCopyText(nag, () => t("지금이 최신입니다.")); nag.onclick = () => void checkNow(); }
+      if (note) note.textContent = "새 버전이 없습니다.";
+      return;
+    }
     const version = update.version;
     if (nag) {
       nag.hidden = false; nag.classList.add("new"); nag.textContent = `${version} 업데이트`;
@@ -2373,7 +2378,11 @@ async function checkForUpdate(quiet = true) {
       };
     }
     if (note) note.textContent = "설치 직전에 서명된 버전과 패키지를 검증합니다. 검증 정보가 없는 릴리스는 설치되지 않습니다.";
-  } catch (e) { if (!quiet && note) note.textContent = errText(e); }
+  } catch (e) {
+    // 확인에 실패해도 「확인 중…」으로 남기지 않는다. 눌러서 다시 시도할 수 있게 숨긴다.
+    if (nag && !nag.classList.contains("new")) nag.hidden = true;
+    if (!quiet && note) note.textContent = errText(e);
+  }
 }
 
 /* ══ 라비 첫 화면 ═════════════════════════════════════════════════════
