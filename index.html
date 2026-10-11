@@ -5003,6 +5003,29 @@
              🔴 다른 파일이 나중에 붙이는 칸(표시 방식·폰 연결·라비 동의·트레이)은 data-sx-slot 자리로 옮겨진다.
              🔴 style="" 금지(Tauri CSP) — 새 칸은 클래스만 쓴다. -->
         <div class="sx" id="sx">
+          <!-- ── 시안 B: 왼쪽 목록(찾기 · 쉬운 설정 · 주제 8개). 넓은 창에서는 오른쪽에 한 주제씩(src/settings-nav.ts).
+               레인B 자리: 「백업과 복구」 할 일 숫자 #sx-badge-backup(지금은 숨김). -->
+          <aside class="sx-list" id="sx-list" aria-label="설정 목록">
+            <h2 class="sx-ltitle">이 컴퓨터</h2>
+            <div class="sx-search">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+              <input type="search" id="sx-search" placeholder="설정 찾기" aria-label="설정 찾기" autocomplete="off" spellcheck="false" />
+            </div>
+            <p class="sx-none" id="sx-none" role="status" hidden>찾는 설정이 없어요</p>
+            <button type="button" class="sx-easy" data-sx-go="general" data-sx-to="easy-setup"><span class="ravi-static-face"></span><span class="sx-easytxt"><b>쉬운 설정</b><span>라비가 이 컴퓨터를 보고 정해 드려요</span></span></button>
+            <ul class="sx-topics">
+              <li><button type="button" class="sx-it" data-sx-go="general" aria-current="false"><span class="sx-ic sx-ic-gray" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/></svg></span><span class="sx-lab">일반</span></button></li>
+              <li><button type="button" class="sx-it" data-sx-go="alerts" aria-current="false"><span class="sx-ic sx-ic-cta" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg></span><span class="sx-lab">알림</span></button></li>
+              <li><button type="button" class="sx-it" data-sx-go="backup" aria-current="false"><span class="sx-ic sx-ic-ok" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 3-6.2M4 4v5h5"/></svg></span><span class="sx-lab">백업과 복구</span><span class="sx-badge" id="sx-badge-backup" hidden></span></button></li>
+              <li><button type="button" class="sx-it" data-sx-go="identity" aria-current="false"><span class="sx-ic sx-ic-navy" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-5 16-5 16 0"/></svg></span><span class="sx-lab">내 이름과 열쇠</span></button></li>
+              <li class="sx-sep" role="separator"></li>
+              <li><button type="button" class="sx-it" data-sx-go="shop" aria-current="false"><span class="sx-ic sx-ic-cta" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9l1.6-4.2h12.8L20 9M4.5 9h15v10.5h-15z"/></svg></span><span class="sx-lab">가게</span></button></li>
+              <li><button type="button" class="sx-it" data-sx-go="ravi" aria-current="false"><span class="sx-ic sx-ic-ravi" aria-hidden="true"><img src="/ravi/face.webp" alt="" /></span><span class="sx-lab">라비와 AI</span></button></li>
+              <li><button type="button" class="sx-it" data-sx-go="about" aria-current="false"><span class="sx-ic sx-ic-gray" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg></span><span class="sx-lab">정보와 개발비</span></button></li>
+              <li class="sx-sep" role="separator"></li>
+              <li><button type="button" class="sx-it" data-sx-go="advanced" aria-current="false"><span class="sx-ic sx-ic-dark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 9l-4 3 4 3M16 9l4 3-4 3M13 6l-2 12"/></svg></span><span class="sx-lab">고급</span></button></li>
+            </ul>
+          </aside>
           <div class="sx-pane" id="sx-pane">
             <header class="sx-head">
               <h2 class="title sx-large">이 컴퓨터</h2>
@@ -5089,7 +5112,7 @@
                 <div class="tools">
                   <div id="bk-list"></div>
                   <div class="row sx-acts">
-                    <button id="bk-go">백업 만들기</button>
+                    <button id="bk-go" data-sx-primary>백업 만들기</button>
                     <button class="ghost" id="bk-seed">복구 단어 보기</button>
                     <span class="meta" id="bk-note"></span>
                   </div>

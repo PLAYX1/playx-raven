@@ -125,3 +125,58 @@
 #ravi-voice-revoke:empty, #ravi-voice-revoke:empty + p:empty { display: none; }
 #page-settings .sx-stack .sx-txt { flex: none; }
 #page-settings .lang-ai-note .lang-report, #page-settings .lang-ai-note .lang-report:hover:not(:disabled) { background: none; color: var(--rv-navy-ink); min-height: 44px; padding: 0 6px; font-weight: 600; }
+
+/* ── 3단계 B: 왼쪽 목록 + 오른쪽 한 주제(맥 「시스템 설정」 모양) ─────────────────── */
+#page-settings .sx-list { display: none; }
+#page-settings .sx-b { display: grid; grid-template-columns: 288px minmax(0, 1fr); gap: 40px; align-items: start; }
+#page-settings .sx-b .sx-list { display: block; position: sticky; top: 0; max-height: calc(100vh - 140px); overflow: auto; overscroll-behavior: contain;
+  background: color-mix(in srgb, var(--text) 4%, var(--bg)); border-radius: 18px; padding: 20px 12px 24px; }
+#page-settings .sx-b .sx-pane { max-width: 760px; margin: 0; width: 100%; }
+#page-settings .sx-b .sx-head, #page-settings .sx-b #pt-settings { display: none; }
+#page-settings .sx-b .sx-sec { margin-top: 0; }
+#page-settings .sx-b .sx-sec > .sx-ptitle { margin-top: 8px; }
+#page-settings .sx-ltitle { font-size: var(--rv-fs-title); font-weight: 700; letter-spacing: -.015em; margin: 4px 12px 16px; }
+#page-settings .sx-search { position: relative; margin: 0 4px 16px; }
+#page-settings .sx-search input { width: 100%; min-height: 44px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--text); padding: 0 12px 0 40px; font-size: var(--rv-fs-body); }
+#page-settings .sx-search svg { position: absolute; left: 12px; top: 13px; width: 18px; height: 18px; color: var(--muted); pointer-events: none; }
+#page-settings .sx-none { margin: -8px 12px 12px; font-size: var(--rv-fs-sub); color: var(--muted); }
+#page-settings button.sx-easy { display: flex; gap: 12px; align-items: center; width: calc(100% - 8px); margin: 0 4px 16px; padding: 12px; min-height: 72px; text-align: left;
+  background: var(--panel); border-radius: var(--rv-r-group); box-shadow: var(--rv-shadow); font-weight: 400; }
+#page-settings button.sx-easy:hover:not(:disabled) { background: var(--panel); box-shadow: 0 0 0 2px var(--rv-navy-soft), var(--rv-shadow); }
+#page-settings .sx-easytxt { display: flex; flex-direction: column; min-width: 0; }
+#page-settings .sx-easytxt b { font-weight: 700; }
+#page-settings .sx-easytxt span { font-size: var(--rv-fs-sub); color: var(--muted); line-height: 1.4; }
+#page-settings .sx-topics { list-style: none; margin: 0; padding: 0; }
+#page-settings .sx-topics li + li { margin-top: 2px; }
+#page-settings .sx-sep { height: 1px; background: var(--line); margin: 12px; }
+#page-settings button.sx-it { display: flex; align-items: center; gap: 12px; width: 100%; min-height: var(--rv-hit); padding: 0 12px; border-radius: 10px; text-align: left; font-weight: 500;
+  background: none; color: var(--text); }
+#page-settings button.sx-it:hover:not(:disabled) { background: color-mix(in srgb, var(--text) 6%, transparent); }
+#page-settings button.sx-it[aria-current="true"], #page-settings button.sx-it[aria-current="true"]:hover:not(:disabled) { background: var(--rv-navy); color: #fff; font-weight: 600; }
+#page-settings .sx-lab { flex: 1; min-width: 0; overflow-wrap: anywhere; line-height: 1.3; }
+#page-settings .sx-ic { flex: none; width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; color: #fff; overflow: hidden; }
+#page-settings .sx-ic svg { width: 18px; height: 18px; }
+#page-settings .sx-ic img { width: 30px; height: 30px; }
+#page-settings .sx-ic-gray { background: #5B5E6B; } #page-settings .sx-ic-cta { background: var(--rv-cta); } #page-settings .sx-ic-ok { background: #1F7A4D; }
+#page-settings .sx-ic-navy { background: #2A356B; } #page-settings .sx-ic-ravi { background: #9686C9; } #page-settings .sx-ic-dark { background: #3A3C47; }
+#page-settings .sx-badge { margin-left: auto; min-width: 24px; height: 24px; border-radius: 12px; background: var(--rv-cta); color: #fff; font-size: var(--rv-fs-cap); font-weight: 700; display: grid; place-items: center; padding: 0 7px; }
+#page-settings .sx-badge[hidden] { display: none; }
+#page-settings .sx-it[aria-current="true"] .sx-badge { background: #fff; color: var(--rv-cta); }
+/* B 에서는 주제마다 주 단추 하나(백업 = 백업 만들기). 한 페이지(A)일 때는 주황이 하나뿐이도록 B 에서만 칠한다. */
+#page-settings .sx-b [data-sx-primary] { background: var(--rv-cta); color: var(--rv-cta-ink); }
+#page-settings .sx-b [data-sx-primary]:hover:not(:disabled) { background: var(--rv-cta-hover); color: var(--rv-cta-ink); }
+#page-settings .sx-b details.advanced > summary { display: none; }
+#page-settings .sx-b details.advanced { background: none; box-shadow: none; }
+#page-settings .sx-b details.advanced > .card { margin: 12px 0 0; }
+#page-settings .justwent { outline: 3px solid var(--rv-navy-ink); outline-offset: 3px; border-radius: 8px; }
+/* 좁은 창(작은 노트북·창을 줄였을 때): 목록을 위로, 주제 단추는 한 줄로 흐르게 */
+@media (max-width: 980px) {
+  #page-settings .sx-b { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  #page-settings .sx-b .sx-list { position: static; max-height: none; padding: 12px; }
+  #page-settings .sx-b .sx-topics { display: flex; flex-wrap: wrap; gap: 4px; }
+  #page-settings .sx-b .sx-topics li + li { margin-top: 0; }
+  #page-settings .sx-b .sx-sep { display: none; }
+  #page-settings .sx-b button.sx-it { width: auto; }
+  #page-settings .sx-b .sx-ltitle { margin-bottom: 12px; }
+}
+#page-settings .sx-ptitle:focus { outline: none; }
