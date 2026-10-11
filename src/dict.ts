@@ -32,7 +32,7 @@
  * 🔴 열쇠는 **공백을 고르게 편 한 줄**이어야 한다. 원본 HTML 에서 줄바꿈으로
  *    쪼개진 문장도 찾을 때 한 줄로 펴서 비교하기 때문이다.
  */
-import { DESKTOP_COPY, PROMO_COPY } from "./desktop-copy";
+import { DESKTOP_COPY, PROMO_COPY, SETTINGS_TALK_090_COPY } from "./desktop-copy";
 import { CREATE_COPY } from "./create-copy";
 import { CERT_COPY } from "./cert-copy";
 import { PAIRING_COPY } from "./pairing-copy";
@@ -5661,5 +5661,9 @@ const HOME_GAP_COPY: Record<string, [string, string, string]> = {
   "보내기 전 받는 주소를 다시 확인하세요.": ["Check the recipient address again before sending.", "送金する前に、受取先アドレスをもう一度確認してください。", "发送前请再次确认收款地址。"],
 };
 for (const [source, values] of Object.entries(HOME_GAP_COPY)) {
+  (["en", "ja", "zh"] as const).forEach((language, index) => { DICT[language][source] ??= values[index]; });
+}
+// 0.9.0 레인A — 설정 주제 목록·이야기 이름 카드(desktop-copy.ts SETTINGS_TALK_090_COPY). 이미 있는 번역은 덮지 않는다.
+for (const [source, values] of Object.entries(SETTINGS_TALK_090_COPY)) {
   (["en", "ja", "zh"] as const).forEach((language, index) => { DICT[language][source] ??= values[index]; });
 }

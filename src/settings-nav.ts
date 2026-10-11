@@ -9,6 +9,8 @@
 //    사이드바 표시등 → #sec-node, 「새 버전」 → #up-box, 폰 연결 → #rvp-card …)은 전부 그 칸의 scrollIntoView 를 부른다.
 //    숨은 주제 속 칸은 스크롤해도 아무 일이 없다 — 「눌렀는데 안 간다」. 그래서 scrollIntoView 가 불리면
 //    그 칸이 든 주제를 먼저 연다(설정 화면 속 칸만, 나머지는 원래대로). 길마다 고치면 한 곳은 반드시 빠진다.
+// ⚠️ .sx·.sx-pane·.sx-list 에는 id 를 두지 않는다 — 레이아웃 관문(scripts/layout-check.mjs)이 가장 가까운 id 로 칸 이름을 짓는데,
+//    id 를 끼우면 기존 설정 칸의 이름이 바뀌어 같은 실패가 「새 실패」로 잡힌다.
 // ④ 찾기: 주제 이름·안의 글자로 거른다. Enter 는 첫 주제의 맞는 칸으로 데려간다.
 
 const ROUTED = ["firstrun-setup", "display-mode-card", "rvp-connect-settings", "rvp-card", "ravi-agent-settings", "companion-preferences"];
@@ -21,14 +23,14 @@ function route(page: HTMLElement): void {
     if (el && slot && el.parentElement !== slot) slot.append(el);
   }
   const rest = page.querySelector<HTMLElement>('[data-sx-pane="general"]');
-  for (const child of [...page.children]) if (child.id !== "sx" && rest) rest.append(child);
+  for (const child of [...page.children]) if (!child.classList.contains("sx") && rest) rest.append(child);
 }
 
 const sections = () => [...document.querySelectorAll<HTMLElement>("#page-settings section[data-sx-pane]")];
 
 /** 한 주제만 보인다. focus 면 그 주제 제목으로 키보드 자리를 옮긴다(목록에서 고른 경우). */
 export function showSettingsTopic(key: string, focus = false): void {
-  const sx = document.getElementById("sx");
+  const sx = document.querySelector("#page-settings .sx");
   if (!sx?.classList.contains("sx-b")) return;
   if (!sections().some((s) => s.dataset.sxPane === key)) return;
   const changed = key !== current;
@@ -78,7 +80,7 @@ function goToHit(key: string, q: string): void {
 
 export function mountSettingsNav(): void {
   const page = document.getElementById("page-settings");
-  const sx = document.getElementById("sx");
+  const sx = page?.querySelector<HTMLElement>(".sx");
   if (!page || !sx || page.dataset.sxMounted) return;
   page.dataset.sxMounted = "1";
   route(page);
@@ -108,7 +110,7 @@ export function mountSettingsNav(): void {
   });
 
   // 목록 안에서 ↑↓ 로 옮겨 다닌다(맥 「시스템 설정」과 같은 손버릇).
-  document.getElementById("sx-list")?.addEventListener("keydown", (e) => {
+  page.querySelector<HTMLElement>(".sx-list")?.addEventListener("keydown", (e: KeyboardEvent) => {
     if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
     const items = [...document.querySelectorAll<HTMLElement>(".sx-list .sx-it")].filter((b) => !(b.parentElement as HTMLElement).hidden);
     const i = items.indexOf(document.activeElement as HTMLElement);

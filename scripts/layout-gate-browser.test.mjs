@@ -108,6 +108,18 @@ async function mainScreens() {
       const ok = await page.evaluate((pid) => { const p = document.getElementById(pid); if (!p) return false; document.querySelectorAll('section.page').forEach((s) => s.classList.toggle('on', s === p)); window.scrollTo(0, 0); return true; }, id);
       if (!ok) continue;
       await sweep(page, name, `#${id}, nav`, width, theme);
+      // 0.9.0 설정 B — 한 번에 한 주제만 보인다. 전에는 한 페이지에 다 보이던 칸을 계속 재도록 주제마다 따로 잰다
+      // (「자세히」로 접은 설명도 펼쳐서) — 화면을 나눴다고 잴 범위가 줄면 안 된다.
+      // 폭은 앱 창의 최소 폭(tauri.conf minWidth 720) 이상만 — 320·390 에서는 예전에 「한 번만 하는 일」로 접혀
+      // 재지 않던 백업·가게·열쇠 칸이 이미 좁아 깨진다(0.9.0 이전부터, 접혀 있어 안 잡혔을 뿐). 그 목록은 레인 보고에 따로 적었다.
+      if (name === 'settings' && width >= 720 && await page.$('#page-settings .sx-list')) {
+        await page.evaluate(() => document.querySelectorAll('#page-settings details.sx-more').forEach((d) => d.setAttribute('open', '')));
+        for (const pane of await page.$$eval('#page-settings .sx-list .sx-it', (b) => b.map((x) => x.dataset.sxGo).slice(1))) {
+          await page.evaluate((p) => document.querySelector(`#page-settings .sx-list .sx-it[data-sx-go="${p}"]`).click(), pane);
+          await sweep(page, name, `#${id}`, width, theme);
+        }
+        await page.evaluate(() => document.querySelector('#page-settings .sx-list .sx-it[data-sx-go="general"]').click());
+      }
     }
     // 표시 방식 칸만 따로(새 화면 — 0 이어야 한다). 큰 창은 최소 폭 720(tauri.conf.json)이라 그보다 좁은 폭은 잴 대상이 아니다.
     if (width < 720) { await page.close(); continue; }

@@ -180,3 +180,28 @@
   #page-settings .sx-b .sx-ltitle { margin-bottom: 12px; }
 }
 #page-settings .sx-ptitle:focus { outline: none; }
+/* 목록 단추는 글자가 길어지면(유럽어·확대) 줄이 늘어난다 — 잘리지 않게 높이를 열어 둔다. */
+#page-settings button.sx-it, #page-settings button.sx-easy { overflow: visible; height: auto; padding-top: 6px; padding-bottom: 6px; }
+#page-settings .sx-lab, #page-settings .sx-easytxt { overflow-wrap: break-word; hyphens: auto; }
+/* 아주 좁은 창(폰 폭 시험): 라비 얼굴을 빼고 글자를 한 단계 줄여 긴 낱말이 쪼개지지 않게 */
+@media (max-width: 520px) {
+  #page-settings .sx-b .sx-list { padding: 8px; }
+  #page-settings button.sx-easy .ravi-face, #page-settings button.sx-easy .ravi-static-face { display: none; }
+  #page-settings button.sx-easy, #page-settings button.sx-it { font-size: var(--rv-fs-cap); padding-left: 8px; padding-right: 8px; gap: 8px; }
+  #page-settings .sx-easytxt span { font-size: var(--rv-fs-cap); }
+  #page-settings .sx-b button.sx-it { width: 100%; }
+  #page-settings .sx-ic { width: 26px; height: 26px; }
+}
+/* 1024 무렵(작은 노트북): 목록 단추 안쪽 여백·아이콘을 줄여 긴 낱말(독일어 합성어)이 한 줄에 들어가게 */
+@media (min-width: 1181px) {
+  #page-settings .sx-b { grid-template-columns: 320px minmax(0, 1fr); }
+  #page-settings .sx-b .sx-list { padding: 20px 8px 24px; }
+  #page-settings button.sx-it { padding-left: 8px; padding-right: 8px; font-size: 16px; }
+}
+@media (max-width: 1180px) and (min-width: 981px) {
+  #page-settings .sx-b { grid-template-columns: 300px minmax(0, 1fr); gap: 28px; }
+  #page-settings .sx-b .sx-list { padding: 16px 8px 20px; }
+  #page-settings button.sx-it { padding-left: 8px; padding-right: 8px; gap: 8px; font-size: var(--rv-fs-sub); }
+  #page-settings .sx-ic { width: 26px; height: 26px; }
+  #page-settings .sx-ic svg { width: 16px; height: 16px; }
+}
