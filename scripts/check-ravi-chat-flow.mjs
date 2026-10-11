@@ -18,6 +18,7 @@ const bundle = async entry => { const r = await build({ entryPoints: [entry], bu
 const chat = await bundle('src/ravi-chat.ts');
 const guide = await bundle('src/ravi-guide.ts');
 const consentNeed = await bundle('src/ravi-consent-need.ts');
+const persona = await bundle('src/ravi-persona.ts');
 const text = html => String(html).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 let passed = 0; const ok = (name) => { passed++; console.log('PASS ' + name); };
 
@@ -77,14 +78,14 @@ const fn = name => { const n = ast.statements.find(s => ts.isFunctionDeclaration
 const constText = name => ast.statements.find(s => ts.isVariableStatement(s) && s.declarationList.declarations[0].name.getText(ast) === name).getText(ast);
 const SPEND = /^(send_rvn|send_asset|send_many|wallet_send|sign_and_send|phone_transaction_send|broadcast)$/;
 function harness({ consent = { reviewed: false, balance: false, transactions: false, shop: false }, usable = 1, mode = 'fill', reply = '합성 AI 답' } = {}) {
-  const messages = [], calls = [], offers = []; let held = null, declined = false, savedConsent = { ...consent };
+  const messages = [], calls = [], offers = [], events = []; let held = null, declined = false, savedConsent = { ...consent };
   const input = { value: '' };
   const ui = {
     async consentState() { return { ...savedConsent }; },
     offerConsent(saved) { if (declined || savedConsent.reviewed) return false; offers.push(1); held = saved; return true; },
   };
   const ctx = vm.createContext({
-    ...chat, ...guide, ...consentNeed, lang: 'ko', aiProvider: 'synthetic', chatMode: mode, aiUsableCount: usable, raviRequestPending: false, raviHeldQuestion: '',
+    ...chat, ...guide, ...consentNeed, ...persona, raviState: 'normal', emitRaviEvent: name => events.push(name), lang: 'ko', aiProvider: 'synthetic', chatMode: mode, aiUsableCount: usable, raviRequestPending: false, raviHeldQuestion: '',
     DEBATE_ONE_NOTE: 'AI가 하나만 연결돼 있어 바로 답할게요.', TOOL_LABELS: {}, raviAgentUI: ui,
     raviHome: { sent() {}, thinking() {}, finish() {}, open() {} }, setTimeout,
     $: id => id === 'chat-q' ? input : { append() {}, lastElementChild: null },
@@ -102,10 +103,10 @@ function harness({ consent = { reviewed: false, balance: false, transactions: fa
       throw Error('Unexpected command ' + command);
     },
   });
-  const src = ['chatSend', 'chatSendExisting', 'chatAgent', 'chatAsk', 'resendHeldQuestion', 'chatDebate', 'raviGuide'].map(fn).join('\n');
+  const src = ['chatSend', 'chatSendExisting', 'chatAgent', 'chatAsk', 'resendHeldQuestion', 'chatDebate', 'raviGuide', 'raviPersonaSay'].map(fn).join('\n');
   vm.runInContext(ts.transpileModule(src, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText, ctx);
   return {
-    ctx, messages, calls, offers,
+    ctx, messages, calls, offers, events,
     async send(q) { input.value = q; const n = messages.length; await ctx.chatSend(); return messages.slice(n); },
     async save(next = { reviewed: true, balance: true, transactions: false, shop: false }) { savedConsent = next; const n = messages.length; held(); for (let i = 0; i < 30; i++) await new Promise(r => setTimeout(r, 0)); return messages.slice(n); },
     cancel() { declined = true; },
@@ -119,11 +120,24 @@ assert.deepEqual(said.map(m => m.who), ['me', 'ai']); assert.equal(said[1].text,
 assert.ok(!said.some(m => /보내지 않았어요/.test(m.text)));
 assert.equal(h.calls.filter(c => c.command === 'ravi_agent_chat').length, 1);
 assert.equal(h.offers.length, 0, '일반 질문에는 동의 카드를 붙이지 않는다');
-said = await h.send('몇살이야?'); assert.equal(h.offers.length, 0, '「몇살이야?」에 카드 없음');
+said = await h.send('금이 왜 비싸?'); assert.equal(h.offers.length, 0, '일반 질문에 카드 없음');
 said = await h.send('내 잔액 얼마야?'); assert.equal(h.offers.length, 1, '내 정보 질문에는 답 아래 카드를 한 번 제안');
 said = await h.send('내 거래 내역 알려줘');
 assert.equal(said[1].text, '합성 AI 답', '카드가 떠 있어도 다음 질문은 막히지 않는다');
 ok('(a) unsaved consent: general answer, nothing dropped, next question not blocked');
+
+// (a2) 0.8.8 — 인물 설정·위기·체인 「도구 없음」은 열쇠가 있어도 로컬이 먼저(AI 호출 없음), 감정은 열쇠가 있으면 AI 로
+const h2 = harness();
+const beforeCalls = h2.calls.length;
+let s2 = await h2.send('몇살이야?');
+assert.deepEqual(s2.map(m => m.who), ['me', 'ai']); assert.match(s2[1].html, /^<div translate="no">1살이에요, 8월 20일 새벽에 태어났어요/);
+s2 = await h2.send('죽고 싶어'); assert.match(s2[1].text, /109/);
+s2 = await h2.send('해시율 알려줘'); assert.match(s2[1].text, /읽는 도구가 아직 없어요/); assert.ok(h2.events.includes('ai_unknown'));
+s2 = await h2.send('고마워'); assert.ok(h2.events.includes('user_thanks'));
+assert.equal(h2.calls.length, beforeCalls, '정본·위기·체인 질문은 AI/RPC 를 부르지 않는다');
+s2 = await h2.send('너무 우울해'); assert.equal(h2.calls.filter(c => c.command === 'ravi_agent_chat').length, 1, '열쇠가 있으면 감정 표현은 AI 로');
+s2 = await h2.send('친구한테 5 RVN 보내줘'); assert.ok(!/1살이에요/.test(s2.map(m => m.text).join('')), '지갑 요청을 가로채지 않는다');
+ok('(a2) persona/crisis/chain answered locally even with a key; emotion goes to AI; wallet requests untouched');
 
 // (b) 저장 → 보류한 마지막 질문을 다시 보낸다
 said = await h.save();
