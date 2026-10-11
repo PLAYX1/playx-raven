@@ -63,7 +63,7 @@ export async function prepareRelease(source, destination, version, statementDire
     }
   }
   const base = `https://raw.githubusercontent.com/PLAYX1/playx-raven-releases/dist/v${version}`;
-  const manifest = { version, notes: `RavenVault Desktop ${version} — 지갑 파일 내보내기·가져오기를 추가했습니다(폴더를 직접 골라 iCloud·USB 에 두며, 백업 열쇠 52글자로 한 번 더 잠근 파일만 만들고 지갑 암호로 본인 확인). 가져올 때는 지금 지갑을 먼저 따로 보관한 뒤 확인을 거쳐 바꿉니다. 백업 화면에 「컴퓨터가 죽으면 이 52글자가 없으면 못 엽니다」 안내와 종이 적기·인쇄 단계를 넣었습니다. 지갑 암호가 없으면 대기화면·매장용 읽기 전용을 켜지 못하고 암호 설정을 안내합니다. 정보 화면에 Ravencoin Core(MIT) 라이선스 고지를 넣었습니다. 실제 메인넷 자산 발행은 안전 스위치로 꺼 둔 채 출하합니다(테스트넷·연습은 가능). 0.8.6 변경(라비 대화·창 모드·대기화면 잠금·다크 돈 카드 등)도 포함합니다. 서명된 업데이트 버전·해시·순서 검증을 유지합니다.`, pub_date: new Date().toISOString(), platforms: {}, installers: [] };
+  const manifest = { version, notes: `RavenVault Desktop ${version} — 지갑 파일 내보내기·가져오기를 추가했습니다(폴더를 직접 골라 iCloud·USB 에 두며, 백업 열쇠 52글자로 한 번 더 잠근 파일만 만들고 지갑 암호로 본인 확인). 가져올 때는 지금 지갑을 먼저 따로 보관한 뒤 확인을 거쳐 바꿉니다. 백업 화면에 「컴퓨터가 죽으면 이 52글자가 없으면 못 엽니다」 안내와 종이 적기·인쇄 단계를 넣었습니다. 지갑 암호가 없으면 대기화면·매장용 읽기 전용을 켜지 못하고 암호 설정을 안내합니다. 정보 화면에 Ravencoin Core(MIT) 라이선스 고지를 넣었습니다. 화면 언어에 이탈리아어·스페인어·프랑스어·포르투갈어(브라질)·독일어·러시아어를 더했습니다(AI 번역 — 설정에서 고르며, 확인이 끝나지 않은 송금·복구 단어·보안·수수료·법적 안내는 영어로 나옵니다). 실제 메인넷 자산 발행은 안전 스위치로 꺼 둔 채 출하합니다(테스트넷·연습은 가능). 0.8.6 변경(라비 대화·창 모드·대기화면 잠금·다크 돈 카드 등)도 포함합니다. 서명된 업데이트 버전·해시·순서 검증을 유지합니다.`, pub_date: new Date().toISOString(), platforms: {}, installers: [] };
   const needsStatement = compare(version, '0.8.4') >= 0;
   if (needsStatement) {
     const config = JSON.parse(await readFile(new URL('../src-tauri/tauri.conf.json', import.meta.url),'utf8'));

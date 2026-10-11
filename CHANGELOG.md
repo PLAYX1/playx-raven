@@ -11,6 +11,7 @@
 - 지갑 암호가 없으면 대기화면과 매장용 읽기 전용 모드를 켜지 않고 암호 설정을 안내합니다(암호 없는 지갑은 잠가도 누구나 풀 수 있기 때문).
 - 정보 화면에 Ravencoin Core v4.8.0 의 MIT 라이선스 고지(저작권 문구 포함)를 넣었습니다.
 - 안전: 실제 메인넷 자산 발행을 막는 스위치(`REAL_MAINNET_ISSUE_ENABLED`, 기본 꺼짐)를 모든 발행 명령(발행·재발행·고유·자격 증명·제한 자산·만들기 마법사) 앞에 넣었습니다. 메인넷이거나 어느 네트워크인지 모르면 노드에 보내기 전에 거절하고, 테스트넷·리그테스트(연습 모드)는 그대로 됩니다.
+- 화면 언어 6개 추가: 이탈리아어·스페인어·프랑스어·포르투갈어(브라질)·독일어·러시아어(AI 번역). 설정과 머리 메뉴에서 직접 골라야 하며(컴퓨터 언어만 보고 저절로 고르지 않음), 고른 말의 사전만 읽습니다(`public/i18n/<말>.json`, 번들·CSS 늘지 않음). 번역은 AI 가 했고 일부는 다른 AI 의 역번역 검수를 거쳤습니다. 송금·복구 단어·보안·수수료·메인넷·법적 문구 중 검수 합의가 없는 것은 그 말에서 영어로 나옵니다. 「AI 번역입니다 · 오류 신고」 안내를 언어 선택 옆에 둡니다. 금액 표기는 쉼표 소수 언어에서 엄격하게 읽습니다.
 - 업데이트 검증(서명된 버전·해시·순서 확인)은 그대로 유지합니다. 0.8.6 의 변경도 함께 들어 있습니다.
 
 ### English
@@ -22,6 +23,7 @@
 - Standby and store read-only mode are not turned on while the wallet has no password, and the app explains how to set one (a lock on a passwordless wallet can be opened by anyone).
 - About: added the Ravencoin Core v4.8.0 MIT license notice, including its copyright lines.
 - Safety: a switch (`REAL_MAINNET_ISSUE_ENABLED`, off by default) now guards every issuing command (issue, reissue, unique, qualifier, restricted, create wizard). On mainnet, or when the network cannot be determined, the request is refused before it reaches the node; testnet and regtest (practice mode) still work.
+- Six new screen languages (AI translation): Italian, Spanish, French, Brazilian Portuguese, German and Russian. You must pick one yourself in Settings or the header menu (the computer's language never selects them), and only the chosen language's dictionary is read (`public/i18n/<lang>.json`; bundle and CSS do not grow). The translations were produced by AI and partly cross-checked by a second AI's back-translation. Wording about sending money, recovery words, security, fees, mainnet and legal notices that has not been double-checked stays in English in those languages. An "AI translation · Report an error" note sits next to the language choice. Amounts are read strictly in comma-decimal languages.
 - Signed update version/hash/order verification is unchanged. Includes the 0.8.6 changes.
 
 ## 0.8.6

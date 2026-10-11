@@ -57,7 +57,13 @@ const EN: typeof KO = {
   failed: "Couldn't change it. Please try again.",
   saved: (m) => `Switched to ${m}.`,
 };
-const lang = () => { try { return (localStorage.getItem("playx-raven-lang") || navigator.language || "ko").startsWith("en") ? "en" : "ko"; } catch { return "ko"; } };
+const lang = () => {
+  try {
+    const saved = localStorage.getItem("playx-raven-lang") || navigator.language || "ko";
+    // 유럽어 여섯(AI 번역)은 이 창 문구를 아직 모른다 — 한국어가 아니라 영어로 보여 준다.
+    return saved.startsWith("en") || ["it", "es", "fr", "pt-BR", "de", "ru"].includes(saved) ? "en" : "ko";
+  } catch { return "ko"; }
+};
 export const copyFor = (l: string) => (l === "en" ? EN : KO);
 
 const DEFAULT: State = {

@@ -1,6 +1,8 @@
 import './ravi-microphone.css';
 import { invoke } from '@tauri-apps/api/core';
 import { lang } from './i18n';
+// 받아쓰기 서버에는 ISO 639-1 두 글자(pt-BR → pt)를 준다.
+const speechLanguage = () => lang === 'pt-BR' ? 'pt' : lang;
 import { createRaviDictation, type VoiceError, type VoiceState, type LocalRecognition } from './ravi-dictation';
 import { voiceCopy } from './ravi-voice-copy';
 
@@ -25,7 +27,7 @@ export function mountRaviMicrophone(api: { provider(): string; allowed(): boolea
     }
   }
   const controller = createRaviDictation({
-    ...api, state, language: () => lang,
+    ...api, state, language: speechLanguage,
     consent: provider => invoke<boolean>('voice_consent', { provider }),
     saveConsent: (provider, allowed) => invoke('voice_set_consent', { provider, allowed }),
     cancelRequest: () => { void invoke('voice_cancel').catch(() => {}); },

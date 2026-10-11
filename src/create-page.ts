@@ -14,7 +14,7 @@
  *   · 티켓은 끝나면 「팔기」로 이어진다.
  */
 import { setStyledSrcdoc } from "./srcdoc-style";
-import { lang, setCopyText, tf } from "./i18n";
+import { lang, coreLang, setCopyText, tf } from "./i18n";
 import { fmtCount, fmtRvn } from "./amount-ui";
 import { issuedOf, OWNER_NOT_PINNED } from "./whose";
 import {
@@ -331,7 +331,7 @@ export function wireCreate(deps: CreateDeps): CreateApi {
       recipients: (editing ? recipientSlots : parseRecipients)(recipientsIn.value).slice(0, MAX_COPIES),
       issued_on: dateIn.value || todayYmd(),
       issuer: issuerIn.value.trim(), signer: signerIn.value.trim(), description: descIn.value.trim(),
-      file_name: fileName, lang, photo_slot: bulk.photoSlot(),
+      file_name: fileName, lang: coreLang(lang), photo_slot: bulk.photoSlot(),
     };
   }
   /** 확인 표 한 줄의 칸(받는 사람 말고). 빈 발급일은 위의 발급일을 쓴다(러스트 render). */
@@ -368,7 +368,7 @@ export function wireCreate(deps: CreateDeps): CreateApi {
       ? tf("미리보기 · {0}번째 줄 · 표에서 줄을 누르면 그 사람으로 바뀌어요", at + 1)
       : t("미리보기 · 인쇄하면 이 모양이에요 (A4 한 장에 한 사람)"));
     try {
-      const [html, fonts] = await Promise.all([invoke<string>("create_certificate_preview", { entry, lang }), bulk.fontCss()]);
+      const [html, fonts] = await Promise.all([invoke<string>("create_certificate_preview", { entry, lang: coreLang(lang) }), bulk.fontCss()]);
       if (mine === previewTicket) setStyledSrcdoc(preview, html, fonts);
     } catch { /* 미리보기는 덤이다 — 칸 검사는 확인하기가 한다 */ }
   }
@@ -909,7 +909,7 @@ export function wireCreate(deps: CreateDeps): CreateApi {
   async function printOne(id: string, index: number) {
     tell(() => t("인쇄할 파일을 만드는 중…"));
     try {
-      await invoke("create_print", { id, lang, index });
+      await invoke("create_print", { id, lang: coreLang(lang), index });
       tell(() => t("브라우저에서 열었어요. ⌘P(윈도우는 Ctrl+P)를 누르면 인쇄하거나 「PDF로 저장」할 수 있어요."));
     } catch (err) { tell(() => errText(err)); }
   }
@@ -917,7 +917,7 @@ export function wireCreate(deps: CreateDeps): CreateApi {
     if (!ids.length) return;
     tell(() => t("인쇄할 파일을 만드는 중…"));
     try {
-      await invoke("create_print_many", { ids, lang });
+      await invoke("create_print_many", { ids, lang: coreLang(lang) });
       tell(() => t("브라우저에서 열었어요. ⌘P(윈도우는 Ctrl+P)를 누르면 인쇄하거나 「PDF로 저장」할 수 있어요."));
     } catch (err) { tell(() => errText(err)); }
   }
@@ -1251,7 +1251,7 @@ export function wireCreate(deps: CreateDeps): CreateApi {
     if (!e.id) return;
     tell(() => t("인쇄할 파일을 만드는 중…"));
     try {
-      await invoke("create_print", { id: e.id, lang });
+      await invoke("create_print", { id: e.id, lang: coreLang(lang) });
       tell(() => t("브라우저에서 열었어요. ⌘P(윈도우는 Ctrl+P)를 누르면 인쇄하거나 「PDF로 저장」할 수 있어요."));
     } catch (err) {
       tell(() => errText(err));

@@ -109,7 +109,7 @@ fn response_text(status: u16, bytes: &[u8], provider: &str, key: &str) -> Result
 pub async fn voice_transcribe(provider: String, audio: Vec<u8>, mime: String, duration_ms: u32, language: String) -> Result<String, String> {
     let url = endpoint(&provider)?; // Refuse unsupported companies before reading keys or audio.
     let (mime, name) = audio_format(&mime, &audio, duration_ms)?;
-    if !matches!(language.as_str(), "ko" | "en" | "ja" | "zh") { return Err("invalid_audio".into()); }
+    if !matches!(language.as_str(), "ko" | "en" | "ja" | "zh" | "it" | "es" | "fr" | "pt" | "de" | "ru") { return Err("invalid_audio".into()); }
     let generation = GENERATION.load(Ordering::SeqCst);
     if !voice_consent(provider.clone()) { return Err("consent".into()); }
     let key = crate::ai::read_key(&provider).map_err(|_| "key")?;

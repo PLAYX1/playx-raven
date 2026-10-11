@@ -267,7 +267,7 @@ import { getVersion } from "@tauri-apps/api/app";
 import { listen } from "@tauri-apps/api/event";
 
 
-import { copyHtml, setCopyText, t, tf, lang, setLang, LANG_NAMES, startI18n } from "./i18n";
+import { copyHtml, setCopyText, t, tf, lang, setLang, LANG_NAMES, startI18n, type CoreLang } from "./i18n";
 import { amountProblemText, bindAmountInput, fmtCount, fmtRvn, fmtSats, readAmount, setAmountRvn, setAmountSats } from "./amount-ui";
 import { koreanAmountWords, rvnNumberToSats, satsToRvnNumber } from "./amount-locale";
 import {
@@ -10684,17 +10684,17 @@ function wakeRavi(): void {
 
 /** 열쇠가 없을 때의 답 — 정해 둔 안내. 맞는 게 없으면 모른다고 말한다. */
 function raviGuide(q: string) {
-  const html = raviAnswerHtml(q, lang);
+  const html = raviAnswerHtml(q, (["ko", "en", "ja", "zh"].includes(lang) ? lang : "en") as CoreLang);
   // 정해 둔 안내로 답하지 못한 질문은 들고 있다가, 열쇠를 저장하면 AI 로 다시 묻는다(saveKeyCard).
   if (/data-answer-kind="(?:unsupported|clarify)"/.test(html)) raviHeldQuestion = q;
   // 정해 둔 안내로도 답이 없을 때(「아직 못 해요」) 빈손으로 끝내지 않는다 — 한 줄, 단추는 더하지 않는다.
-  chatHtml("ai", /data-answer-kind="(?:unsupported|clarify)"/.test(html) ? html + raviKeyHintHtml(q, lang) : html);
+  chatHtml("ai", /data-answer-kind="(?:unsupported|clarify)"/.test(html) ? html + raviKeyHintHtml(q, (["ko", "en", "ja", "zh"].includes(lang) ? lang : "en") as CoreLang) : html);
 }
 
 /** 「공개 조회하기」를 누른 뒤 — 사용자가 적은 주소 하나만 보낸다. 숫자와 고정 출처만 돌아온다. */
 async function raviPublicLookup(button: HTMLElement) {
   const address = button.dataset.raviPublic || "";
-  const language = (button.closest<HTMLElement>("[data-ravi-language]")?.dataset.raviLanguage || lang) as typeof lang;
+  const language = (button.closest<HTMLElement>("[data-ravi-language]")?.dataset.raviLanguage || (["ko", "en", "ja", "zh"].includes(lang) ? lang : "en") as CoreLang) as CoreLang;
   if (!address || (button as HTMLButtonElement).disabled) return;
   (button as HTMLButtonElement).disabled = true;
   chatHtml("ai", `<span class="muted" data-thinking="1">${copyHtml("공개 조회처에 묻는 중…")}</span>`);
@@ -10820,13 +10820,13 @@ async function chatSendExisting() {
   if (!q) return;
   if (containsRaviSecret(q)) {
     ($("chat-q") as HTMLInputElement).value = "";
-    chatHtml("ai", `<div translate="no">${raviCopy(raviQuestionLanguage(q, lang))("시드·키·토큰은 라비에게 보내지 마세요. 입력을 기록하지 않았어요.")}</div>`);
+    chatHtml("ai", `<div translate="no">${raviCopy(raviQuestionLanguage(q, (["ko", "en", "ja", "zh"].includes(lang) ? lang : "en") as CoreLang))("시드·키·토큰은 라비에게 보내지 마세요. 입력을 기록하지 않았어요.")}</div>`);
     return;
   }
   if (isRaviHelp(q)) {
     ($("chat-q") as HTMLInputElement).value = "";
     chatSay("me", q);
-    chatHtml("ai", raviAnswerHtml(q, lang));
+    chatHtml("ai", raviAnswerHtml(q, (["ko", "en", "ja", "zh"].includes(lang) ? lang : "en") as CoreLang));
     return;
   }
   if (isPromoRequest(q)) {
@@ -10849,7 +10849,7 @@ async function chatSendExisting() {
   if (aiProvider && isRaviSendRequest(q) && !isExplicitSendOrder(q)) {
     ($("chat-q") as HTMLInputElement).value = "";
     chatSay("me", q);
-    chatHtml("ai", raviSendAnswerHtml(q, lang));
+    chatHtml("ai", raviSendAnswerHtml(q, (["ko", "en", "ja", "zh"].includes(lang) ? lang : "en") as CoreLang));
     return;
   }
   //    「R… 잔액 얼마야?」: 적은 주소 하나만, 알리고 나서, 단추를 눌러야 공개 조회처에 묻는다.
@@ -10857,7 +10857,7 @@ async function chatSendExisting() {
   if (publicAddress) {
     ($("chat-q") as HTMLInputElement).value = "";
     chatSay("me", q);
-    chatHtml("ai", raviPublicOfferHtml(q, publicAddress, lang));
+    chatHtml("ai", raviPublicOfferHtml(q, publicAddress, (["ko", "en", "ja", "zh"].includes(lang) ? lang : "en") as CoreLang));
     return;
   }
   //    「380만개면 부자순위 몇위야?」: 순위표가 없으면 모른다고, 시세는 말한 값으로만.
@@ -10865,7 +10865,7 @@ async function chatSendExisting() {
   if (rich) {
     ($("chat-q") as HTMLInputElement).value = "";
     chatSay("me", q);
-    chatHtml("ai", raviRichAnswerHtml(q, rich, lang, !!aiProvider));
+    chatHtml("ai", raviRichAnswerHtml(q, rich, (["ko", "en", "ja", "zh"].includes(lang) ? lang : "en") as CoreLang, !!aiProvider));
     return;
   }
   if (!aiProvider) {
@@ -12515,6 +12515,14 @@ async function openEncrypt() {
   $("encbox").style.display = "";
   gateEnc();
 }
+
+// 언어를 바꾸면 따라 쳐야 할 문구도 바뀐다 — 앞서 친 확인 글은 비우고 단추를 다시 잠근다(옛 언어 글로 열려 있지 않게).
+window.addEventListener("desktop-language-change", () => {
+  const box = document.getElementById("encbox"), confirm = document.getElementById("enc-confirm") as HTMLInputElement | null;
+  if (!box || !confirm || box.style.display === "none") return;
+  confirm.value = "";
+  window.setTimeout(gateEnc, 120); // 문구가 새 말로 바뀐 뒤에 다시 판정
+});
 
 function gateEnc() {
   const v = (id: string) => ($(id) as HTMLInputElement).value;
@@ -18191,7 +18199,11 @@ window.addEventListener("DOMContentLoaded", async () => {
   const closeLanguages = () => { languageMenu.hidden = true; languageButton.setAttribute("aria-expanded", "false"); };
   languageButton.onclick = () => { languageMenu.hidden = !languageMenu.hidden; languageButton.setAttribute("aria-expanded", String(!languageMenu.hidden)); };
   document.querySelectorAll<HTMLButtonElement>("[data-language]").forEach(button => {
-    button.onclick = () => setLang(button.dataset.language as typeof lang);
+    button.onclick = () => { void setLang(button.dataset.language as typeof lang); };
+  });
+  // 「오류 신고」— 받는 메일함만 있는 주소로 메일 창을 연다. 본문에는 아무것도 미리 넣지 않는다(지갑·주소·복구 단어 금지).
+  document.querySelectorAll<HTMLButtonElement>("[data-report-translation]").forEach(button => {
+    button.onclick = () => { void openUrl(`mailto:playx@ex.erci.se?subject=${encodeURIComponent(`RavenVault Desktop translation error (${lang})`)}`).catch(() => {}); };
   });
   $("desktop-settings-go").onclick = () => { closeLanguages(); showPage("settings"); document.querySelector("main")!.scrollTop = 0; };
   document.addEventListener("keydown", event => {
@@ -18358,7 +18370,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     const say = input ? guideById(input.dataset.raviInput || "")?.say : action ? RAVI_ACTIONS.find(a => a.type === action.dataset.raviActionInput)?.say : null;
     const responseLanguage = el.closest<HTMLElement>("[data-ravi-language]")?.dataset.raviLanguage;
     const fixed = responseLanguage && ["ko", "en", "ja", "zh"].includes(responseLanguage);
-    if (say) { ($("chat-q") as HTMLInputElement).value = fixed ? raviText(say, responseLanguage as typeof lang) : t(say); raviHome?.open(); $("chat-q").focus(); }
+    if (say) { ($("chat-q") as HTMLInputElement).value = fixed ? raviText(say, responseLanguage as CoreLang) : t(say); raviHome?.open(); $("chat-q").focus(); }
   };
   $("chat-log").addEventListener("click", raviInputClick);
   document.querySelector(".rv-quick")!.addEventListener("click", raviInputClick);
@@ -18531,7 +18543,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   //    따로 내려받는 조각이라 시작 직후 곧바로 불러 붙인다. 그 사이 끌어놓기는 dropPublish 가 없으면 기존처럼 무시된다.
   void import("./drop-publish").then(({ wireDropPublish }) => {
     dropPublish = wireDropPublish({ invoke: (cmd, args) => invoke(cmd, args), back: () => showPage("games"), root: $("page-creator"),
-      openWizard: p => creatorWizard.prefill(p), lang: lang === "en" ? "en" : "ko", feeSchedule: () => mkLists.current().feeSchedule,
+      openWizard: p => creatorWizard.prefill(p), lang: lang === "ko" || lang === "ja" || lang === "zh" ? "ko" : "en", feeSchedule: () => mkLists.current().feeSchedule,
       askPassword: () => ask("지갑 비밀번호", "내 주소로 상품 정보에 서명한 뒤 지갑을 바로 잠가요.", { password: true }) });
   }).catch((e) => console.warn("drop-publish load failed", e));
   // 열린 장터(시험): 노드 자산 목록·IPFS 읽기 명령이 아직 없어 source 없이 둔다 — 화면이 「아직 없어요」라고 말한다. 판매 스위치는 core 상수(꺼짐).

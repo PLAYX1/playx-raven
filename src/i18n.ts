@@ -1,4 +1,4 @@
-/* 데스크톱 프로그램 네 나라 말 — 한국어 · 영어 · 일본어 · 중국어.
+/* 데스크톱 프로그램 열 나라 말 — 한국어 · 영어 · 일본어 · 중국어 + (AI 번역) 이탈리아어 · 스페인어 · 프랑스어 · 브라질 포르투갈어 · 독일어 · 러시아어.
  *
  * ## 웹(`web/i18n.js`)과 같은 방식이다
  *
@@ -30,7 +30,8 @@
 
 import { DICT } from "./dict";
 
-export type Lang = "ko" | "en" | "ja" | "zh";
+import { coreLang, isPackLang, loadPack, loadPackSync, packLoaded, packText, packVoice, LANGS, PACK_LANGS, type CoreLang, type PackLang, type Lang } from "./i18n-pack";
+export { coreLang, isPackLang, loadPack, packText, LANGS, PACK_LANGS, type CoreLang, type PackLang, type Lang };
 
 const KEY = "playx-raven-lang";
 
@@ -38,13 +39,14 @@ const KEY = "playx-raven-lang";
 function pick(): Lang {
   try {
     const saved = localStorage.getItem(KEY);
-    if (saved && (DICT as Record<string, unknown>)[saved]) return saved as Lang;
+    if (saved && (LANGS as readonly string[]).includes(saved)) return saved as Lang;
   } catch {
     /* localStorage 가 막혀 있어도 프로그램은 돈다 */
   }
+  // 🔴 유럽어 여섯은 AI 번역이라 컴퓨터 언어만 보고 저절로 고르지 않는다 — 사람이 직접 고른 것만 쓴다.
   const sys = (navigator.language || "en").slice(0, 2).toLowerCase();
-  if ((DICT as Record<string, unknown>)[sys]) return sys as Lang;
-  // 🔴 사전에 없는 언어(불어·독어 등)일 때 **한국어를 주면 안 된다.**
+  if (sys === "ko" || sys === "ja" || sys === "zh") return sys;
+  // 🔴 그 밖의 언어일 때 **한국어를 주면 안 된다.**
   //    그 사람에게 한국어는 빈 화면과 같다. 영어는 적어도 짐작이 된다.
   //    한국어는 컴퓨터가 한국어일 때만 나온다 — 그때는 정확히 맞는다.
   return "en";
@@ -52,11 +54,29 @@ function pick(): Lang {
 
 export let lang: Lang = pick();
 
-/** 한 마디를 옮긴다. 없으면 **한국어 그대로** — 빈 자리보다 낫다. */
+// 켤 때 저장된 유럽어 사전을 **동기로** 읽는다(i18n-pack.ts 설명). 못 읽으면 영어로 내려가고 선택값은 지우지 않는다.
+if (isPackLang(lang) && !loadPackSync(lang)) lang = "en";
+/** 예전 이름 그대로 — 켤 때 읽기는 이미 끝났다. */
+export const packReady: Promise<void> = Promise.resolve();
+
+/** 한 마디를 옮긴다. 없으면 **한국어 그대로** — 빈 자리보다 낫다. 유럽어에 없으면 영어. */
 export function t(s: string): string {
   if (lang === "ko") return s;
+  if (isPackLang(lang)) return packText(lang, s) || DICT.en?.[s] || s;
   const d = DICT[lang];
   return (d && d[s]) || s;
+}
+
+/** 이 말의 사전에 한국어 원문이 있나(영어로 내려가지 않고 정말 번역돼 있나). 시험·보고용. */
+export function hasOwnTranslation(s: string, l: Lang = lang): boolean {
+  if (l === "ko") return true;
+  if (isPackLang(l)) return !!packText(l, s);
+  return !!DICT[l]?.[s];
+}
+
+/** 라비 음성 받아쓰기 문구(ravi-voice-copy). 유럽어 사전에 없으면 undefined. */
+export function voicePack(key: string): string | undefined {
+  return packVoice(lang, key);
 }
 
 /**
@@ -67,21 +87,33 @@ export function t(s: string): string {
  */
 export function tf(source: string, ...values: unknown[]): string {
   const fill = (template: string) => template.replace(/\{(\d+)\}/g, (_, i) => String(values[Number(i)] ?? ""));
-  const translated = t(source);
-  const complete = values.every((_, i) => translated.includes(`{${i}}`));
+  let translated = t(source);
+  let complete = values.every((_, i) => translated.includes(`{${i}}`));
+  // 유럽어 번역이 값 자리를 빠뜨렸으면 한국어가 아니라 영어 틀로 내려간다.
+  if (!complete && isPackLang(lang)) {
+    translated = DICT.en?.[source] ?? source;
+    complete = values.every((_, i) => translated.includes(`{${i}}`));
+  }
   return fill(complete ? translated : source);
 }
 
-/** Change language without losing navigation, drafts, or reviewed transactions. */
-export function setLang(l: Lang) {
-  try {
-    localStorage.setItem(KEY, l);
-  } catch {
-    /* 저장 못 해도 이번 판은 바뀐다 */
-  }
-  lang = l;
-  translateDom();
-  window.dispatchEvent(new Event("desktop-language-change"));
+/**
+ * Change language without losing navigation, drafts, or reviewed transactions.
+ * 네 나라 말은 그 자리에서 바뀐다. 유럽어는 사전 파일을 읽은 뒤에 바뀐다(못 읽으면 지금 말 그대로).
+ */
+export function setLang(l: Lang): void | Promise<boolean> {
+  const apply = () => {
+    try {
+      localStorage.setItem(KEY, l);
+    } catch {
+      /* 저장 못 해도 이번 판은 바뀐다 */
+    }
+    lang = l;
+    translateDom();
+    window.dispatchEvent(new Event("desktop-language-change"));
+  };
+  if (!isPackLang(l) || packLoaded(l)) { apply(); return; }
+  return loadPack(l).then(ok => { if (ok) apply(); return ok; });
 }
 
 export const LANG_NAMES: Record<Lang, string> = {
@@ -89,6 +121,12 @@ export const LANG_NAMES: Record<Lang, string> = {
   en: "English",
   ja: "日本語",
   zh: "简体中文",
+  it: "Italiano",
+  es: "Español",
+  fr: "Français",
+  "pt-BR": "Português (Brasil)",
+  de: "Deutsch",
+  ru: "Русский",
 };
 
 /**

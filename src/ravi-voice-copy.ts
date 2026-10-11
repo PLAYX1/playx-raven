@@ -1,4 +1,5 @@
 import { lang } from './i18n';
+import { isPackLang, packVoice } from './i18n-pack';
 const copy = {
   consent: ['음성은 선택한 AI 회사로 전송돼요. 받아쓴 글을 확인한 뒤 직접 보내 주세요. 음성으로 돈 보내기·결제·삭제를 승인할 수 없어요.', 'Audio is sent to your selected AI provider. Review the transcript and send it yourself. Voice cannot approve transfers, payments or deletion.', '音声は選択したAI会社へ送信されます。文字を確認してから自分で送信してください。音声で送金・支払い・削除は承認できません。', '音频会发送给所选AI公司。请核对文字后自行发送。语音无法批准转账、付款或删除。'],
   agree: ['동의하고 말하기','Agree and speak','同意して話す','同意并说话'],
@@ -23,4 +24,8 @@ const copy = {
   response: ['받아쓴 글을 읽지 못했어요. 다시 말하거나 글로 입력해 주세요.','Could not read the transcript. Try again or type your message.','文字起こしを読み取れませんでした。もう一度話すか文字で入力してください。','无法读取转写结果，请重试或键入文字。'],
   settings: ['시스템 설정 > 개인정보 보호 및 보안 > 마이크','System Settings > Privacy & Security > Microphone','システム設定 > プライバシーとセキュリティ > マイク','系统设置 > 隐私与安全性 > 麦克风'],
 } as const;
-export function voiceCopy(key: keyof typeof copy) { return copy[key][({ko:0,en:1,ja:2,zh:3} as const)[lang]]; }
+// 유럽어 여섯: 사전 파일(public/i18n)에 있으면 그것, 없으면 영어(합의 못 받은 동의·권한 문구는 영어로 내려간다).
+export function voiceCopy(key: keyof typeof copy) {
+  if (isPackLang(lang)) return packVoice(lang, key) ?? copy[key][1];
+  return copy[key][({ko:0,en:1,ja:2,zh:3} as const)[lang]];
+}

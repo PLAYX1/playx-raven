@@ -8,6 +8,7 @@
  * 그래서 dict.ts 는 고치지 않는다.
  */
 import { DICT } from "./dict";
+import { packText } from "./i18n-pack";
 
 export const RAVI_EMOTION_COPY: Record<string, [string, string, string]> = {
   // 말풍선
@@ -79,9 +80,10 @@ const INDEX = { en: 0, ja: 1, zh: 2 } as const;
 /** 언어 코드(ko·en·ja·zh·en-US…)로 한 마디를 옮긴다. 없으면 한국어 원문. {0} 은 건수. */
 export function emotionText(source: string, locale: string, ...values: number[]): string {
   const code = locale.slice(0, 2).toLowerCase();
+  const own = packText(locale === "pt" ? "pt-BR" : locale, source) ?? packText(code, source); // 유럽어 사전(지연 로드)
   const row = RAVI_EMOTION_COPY[source];
   // 사전에 없는 언어(독일어 등)는 한국어가 아니라 영어 — i18n.ts pick() 과 같은 이유.
-  const translated = code === "ko" || !row ? source : row[(INDEX as Record<string, number>)[code] ?? 0];
+  const translated = code === "ko" || !row ? source : own ?? row[(INDEX as Record<string, number>)[code] ?? 0];
   const template = values.every((_, i) => translated.includes(`{${i}}`)) ? translated : source;
   return template.replace(/\{(\d+)\}/g, (_, i) => String(values[Number(i)] ?? ""));
 }

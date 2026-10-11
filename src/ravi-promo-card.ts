@@ -1,4 +1,4 @@
-import { lang as currentLang } from "./i18n";
+import { lang as currentLang, type CoreLang } from "./i18n";
 import { DICT } from "./dict";
 import { raviQuestionLanguage } from "./ravi-intents";
 import scene from "./assets/ravi-scene.svg?raw";
@@ -53,7 +53,7 @@ export async function promoPng(shop: PromoShop, tagline: string, qr: string, tar
 
 /** A result lives in the shared, scrolling conversation, never over the page. */
 export async function createPromoCard(host: HTMLElement, api: PromoApi, request = ""): Promise<void> {
-  const answerLanguage = raviQuestionLanguage(request, currentLang);
+  const answerLanguage = raviQuestionLanguage(request, (["ko", "en", "ja", "zh"].includes(currentLang) ? currentLang : "en") as CoreLang);
   const t = (source: string) => answerLanguage === "ko" ? source : DICT[answerLanguage]?.[source] || source;
   const button = (text: string) => { const el = node("button", t(text)); el.type = "button"; return el; };
   const card = node("section"); card.className = "ravi-promo-card";

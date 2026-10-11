@@ -8,7 +8,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open as pickPath } from "@tauri-apps/plugin-dialog";
 import { listen } from "@tauri-apps/api/event";
-import { lang } from "./i18n";
+import { lang, coreLang } from "./i18n";
 
 type Lang = "ko" | "en" | "ja" | "zh";
 export const NEEDS_WALLET_PASS = "NEEDS_WALLET_PASS:";
@@ -153,7 +153,7 @@ const ZH: Copy = {
   refusedStandby: "未开启：钱包还没有密码。没有密码时任何人都能解锁。",
 };
 const COPY: Record<Lang, Copy> = { ko: KO, en: EN, ja: JA, zh: ZH };
-const c = (): Copy => COPY[(lang as Lang)] ?? KO;
+const c = (): Copy => COPY[coreLang(lang)] ?? KO;
 /** 시험·재사용용 — 모르는 말은 영어(i18n 규칙과 같다). */
 export const walletFileCopy = (l: string): Copy => COPY[l as Lang] ?? EN;
 
@@ -262,7 +262,7 @@ async function mountPaperStep(): Promise<void> {
         onclick: async () => {
           note.textContent = "";
           try {
-            await invoke("key_sheet_print", { lang, walletPass: passIn.value });
+            await invoke("key_sheet_print", { lang: coreLang(lang), walletPass: passIn.value });
             note.textContent = t.printOpened;
           } catch (e) { if (!handleLockRefusal(e)) note.textContent = errText(e); }
           finally { passIn.value = ""; }

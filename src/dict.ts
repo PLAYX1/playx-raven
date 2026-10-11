@@ -5632,3 +5632,41 @@ const LOCK_DARK_COPY: Record<string, [string, string, string]> = {
 for (const [source, values] of Object.entries(LOCK_DARK_COPY)) {
   (["en", "ja", "zh"] as const).forEach((language, index) => { DICT[language][source] ??= values[index]; });
 }
+
+// 0.8.7 유럽어 6개 추가 — 언어 선택 옆 「AI 번역」 안내(새 문구). 유럽어 번역은 public/i18n/<말>.json.
+const AI_LANG_NOTE = "이탈리아어·스페인어·프랑스어·포르투갈어(브라질)·독일어·러시아어는 AI가 번역했어요. 틀린 곳이 있을 수 있어요. 송금·복구 단어·보안·수수료·법적 안내처럼 중요한 문구는 확인이 끝나기 전까지 영어로 나와요.";
+Object.assign(DICT.en, {
+  "AI 번역입니다": "AI translation",
+  "오류 신고": "Report an error",
+  [AI_LANG_NOTE]: "Italian, Spanish, French, Brazilian Portuguese, German and Russian are translated by AI and may contain mistakes. Important wording about sending money, recovery words, security, fees and legal notices appears in English until it has been double-checked.",
+});
+Object.assign(DICT.ja, {
+  "AI 번역입니다": "AI翻訳です",
+  "오류 신고": "誤りを報告",
+  [AI_LANG_NOTE]: "イタリア語・スペイン語・フランス語・ブラジルのポルトガル語・ドイツ語・ロシア語はAIが翻訳しており、誤りが含まれることがあります。送金・復元ワード・セキュリティ・手数料・法的な案内のうち、確認が済んでいない重要な文言は英語で表示されます。",
+});
+Object.assign(DICT.zh, {
+  "AI 번역입니다": "此为 AI 翻译",
+  "오류 신고": "报告错误",
+  [AI_LANG_NOTE]: "意大利语、西班牙语、法语、巴西葡萄牙语、德语和俄语由 AI 翻译，可能有错误。涉及汇款、恢复词、安全、手续费和法律的重要文字，在确认完成之前会以英文显示。",
+});
+
+// 0.8.7 홈 첫 화면의 문구 — 영어·일본어·중국어 번역이 빠져 있던 것(영어 화면에서도 한국어로 남았다). 이미 있는 번역은 덮지 않는다.
+const HOME_GAP_COPY: Record<string, [string, string, string]> = {
+  "알림 · 할 일": ["Alerts · To do", "お知らせ・やること", "通知 · 待办"],
+  "모두 보기": ["View all", "すべて見る", "查看全部"],
+  "가게 매출 · 오늘": ["Shop sales · today", "お店の売上・今日", "店铺销售 · 今天"],
+  "입금 대기": ["Awaiting deposit", "入金待ち", "待到账"],
+  "가까운 가게 · 게임 · 대화": ["Nearby shops · Games · Chat", "近くのお店・ゲーム・チャット", "附近店铺 · 游戏 · 聊天"],
+  "가까운 가게": ["Nearby shops", "近くのお店", "附近店铺"],
+  "게임": ["Games", "ゲーム", "游戏"],
+  "판매자 기능": ["Seller features", "販売者向け機能", "卖家功能"],
+  "내 게임을 팔 때만 켜세요": ["Turn on only when selling your game", "自分のゲームを売るときだけオンにしてください", "只有在出售自己的游戏时才开启"],
+  "시작 인사 끄기": ["Turn off the startup greeting", "起動時のあいさつをオフにする", "关闭启动问候"],
+  "라비 도구 사용 기록 보기": ["View Ravi’s tool-use log", "Raviのツール使用履歴を見る", "查看 Ravi 的工具使用记录"],
+  // 돈 보내기 전 안내 — 유럽어 여섯은 검수 합의가 없어 영어로 내려간다.
+  "보내기 전 받는 주소를 다시 확인하세요.": ["Check the recipient address again before sending.", "送金する前に、受取先アドレスをもう一度確認してください。", "发送前请再次确认收款地址。"],
+};
+for (const [source, values] of Object.entries(HOME_GAP_COPY)) {
+  (["en", "ja", "zh"] as const).forEach((language, index) => { DICT[language][source] ??= values[index]; });
+}
