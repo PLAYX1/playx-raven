@@ -1,8 +1,9 @@
 // 지갑 파일 내보내기·가져오기 + 백업 열쇠(52글자) 종이 단계 — 설정 화면의 「백업」 칸 안에 스스로 붙는다. (0.8.7)
 //
 // 🔴 이 화면은 흐름만 안내한다. 지켜야 할 것은 Rust(`walletfile.rs`)가 지킨다:
-//    평문 내보내기 없음 · 지갑 암호 없으면 거절 · 지갑 암호 재인증 · 잠긴 동안 IPC 거부 · 쓴 뒤 다시 읽어 확인 ·
-//    가져오기는 현재 지갑을 먼저 따로 보관(`recover::restore_apply`).
+//    .rvwallet 은 언제나 52글자로 잠금(평문 없음) · 지갑 암호 없으면 거절 · 지갑 암호 재인증 · 잠긴 동안 IPC 거부 ·
+//    쓴 뒤 다시 읽어 확인 · 가져오기는 현재 지갑을 먼저 따로 보관(`recover::restore_apply`).
+//    유일한 좁은 예외 「코어용 wallet.dat」(레이븐 코어로 옮기기)은 `backup-extra.ts` · Rust `wallet_core_export`.
 // 🔴 열쇠·암호는 변수에 오래 두지 않고 `textContent`/`value` 로만 다룬다(innerHTML 에 넣지 않는다). 쓰고 나면 비운다.
 // 🔴 폴더·파일 위치는 사용자가 선택창에서 직접 고른다(플러그인 dialog `open`).
 import { invoke } from "@tauri-apps/api/core";
@@ -37,9 +38,9 @@ const KO: Copy = {
   printKey: "인쇄용 파일 열기", printOpened: "브라우저에서 열었어요. ⌘P(윈도우는 Ctrl+P)로 인쇄하세요. 이 파일은 10분 뒤 프로그램이 지워요.",
   walletPassFor: "지갑 암호 (인쇄용 파일을 만들기 위한 확인)",
   paperDone: "종이에 적어서 12단어와 같이 보관했어요", paperDoneMark: "✔ 종이 보관을 확인했어요", paperPending: "아직 종이에 적었다고 확인하지 않았어요.",
-  title: "지갑 파일 내보내기 · 가져오기",
-  lede: "지갑 사본을 iCloud 폴더·USB 같은 곳에 파일 하나로 두거나, 그런 파일에서 지갑을 되살려요. 내보낸 파일은 항상 백업 열쇠(52글자)로 한 번 더 잠겨요 — 잠그지 않은 파일은 만들지 않아요.",
-  exportBtn: "지갑 파일 내보내기…", importBtn: "지갑 파일 가져오기…",
+  title: "wallet.dat 백업 파일 내보내기(잠금) · 가져오기",
+  lede: "레이븐 코어의 wallet.dat를 52글자 열쇠로 잠가 파일 하나(.rvwallet)로 iCloud 폴더·USB 같은 곳에 두거나, 그런 파일에서 지갑을 되살려요. 이 파일은 항상 백업 열쇠(52글자)로 한 번 더 잠기고, 레이븐볼트에서만 열 수 있어요. 레이븐 코어로 옮길 때 쓰는 「코어용 wallet.dat」은 아래에 따로 있어요.",
+  exportBtn: "wallet.dat 백업 파일 내보내기(잠금)…", importBtn: "wallet.dat 백업 파일 가져오기…",
   blockedTitle: "먼저 지갑 암호를 걸어 주세요",
   blockedBody: "지갑 암호가 아직 없어요. 암호가 없으면 잠가도 누구나 바로 풀 수 있고, 파일로 꺼낸 지갑은 그 파일을 주운 사람이 돈을 쓸 수 있어요. 지갑 화면에서 10글자 이상 암호를 정한 뒤 다시 해 주세요.",
   goWallet: "지갑 화면으로", close: "닫기", nodeDown: "노드가 응답하지 않아 지갑 암호가 있는지 확인할 수 없어요. 노드를 켠 뒤 다시 해 주세요.",
@@ -68,9 +69,9 @@ const EN: Copy = {
   printKey: "Open printable file", printOpened: "Opened in your browser. Press ⌘P (Ctrl+P on Windows) to print. The app deletes this file in 10 minutes.",
   walletPassFor: "Wallet password (to confirm it is you before making the printable file)",
   paperDone: "I wrote it on paper and keep it with my 12 words", paperDoneMark: "✔ Paper copy confirmed", paperPending: "You haven't confirmed a paper copy yet.",
-  title: "Export / import wallet file",
-  lede: "Put a wallet copy in one file in an iCloud folder, USB drive, etc., or restore a wallet from such a file. Exported files are always locked once more with the backup key (52 characters) — an unlocked file is never made.",
-  exportBtn: "Export wallet file…", importBtn: "Import wallet file…",
+  title: "Export (locked) / import wallet.dat backup file",
+  lede: "Lock Raven Core's wallet.dat with the 52-character key into one file (.rvwallet) for an iCloud folder, USB drive, etc., or restore a wallet from such a file. This file is always locked once more with the backup key (52 characters) and only RavenVault can open it. The \"wallet.dat for Raven Core\" used to move to Raven Core is separate, below.",
+  exportBtn: "Export wallet.dat backup file (locked)…", importBtn: "Import wallet.dat backup file…",
   blockedTitle: "Set a wallet password first",
   blockedBody: "This wallet has no password yet. Without one, a lock can be opened by anyone, and anyone who finds an exported file can spend the money. Set a password of 10+ characters on the Wallet screen, then try again.",
   goWallet: "Go to Wallet", close: "Close", nodeDown: "The node isn't responding, so we can't check whether the wallet has a password. Start the node and try again.",
@@ -99,9 +100,9 @@ const JA: Copy = {
   printKey: "印刷用ファイルを開く", printOpened: "ブラウザで開きました。⌘P（WindowsはCtrl+P）で印刷してください。このファイルは10分後にアプリが削除します。",
   walletPassFor: "ウォレットのパスワード（印刷用ファイルを作る前の本人確認）",
   paperDone: "紙に書いて12ワードと一緒に保管しました", paperDoneMark: "✔ 紙での保管を確認しました", paperPending: "紙に書いたことをまだ確認していません。",
-  title: "ウォレットファイルの書き出し・読み込み",
-  lede: "ウォレットのコピーをiCloudフォルダやUSBなどに1つのファイルとして置いたり、そのファイルからウォレットを復元したりします。書き出したファイルは必ずバックアップ鍵（52文字）でもう一度ロックされます。ロックしていないファイルは作りません。",
-  exportBtn: "ウォレットファイルを書き出す…", importBtn: "ウォレットファイルを読み込む…",
+  title: "wallet.dat バックアップファイルの書き出し（ロック）・読み込み",
+  lede: "Raven Core の wallet.dat を52文字の鍵でロックして1つのファイル（.rvwallet）にし、iCloudフォルダやUSBなどに置いたり、そのファイルからウォレットを復元したりします。このファイルは必ずバックアップ鍵（52文字）でもう一度ロックされ、RavenVault でしか開けません。Raven Core へ移るときに使う「Raven Core 用 wallet.dat」は下に別にあります。",
+  exportBtn: "wallet.dat バックアップファイルを書き出す（ロック）…", importBtn: "wallet.dat バックアップファイルを読み込む…",
   blockedTitle: "先にウォレットのパスワードを設定してください",
   blockedBody: "ウォレットにまだパスワードがありません。パスワードがないと、ロックしても誰でも解除でき、書き出したファイルを拾った人がお金を使えます。ウォレット画面で10文字以上のパスワードを設定してから、もう一度お試しください。",
   goWallet: "ウォレット画面へ", close: "閉じる", nodeDown: "ノードが応答しないため、パスワードの有無を確認できません。ノードを起動してからもう一度お試しください。",
@@ -130,9 +131,9 @@ const ZH: Copy = {
   printKey: "打开打印文件", printOpened: "已在浏览器中打开。按 ⌘P（Windows 为 Ctrl+P）打印。应用会在10分钟后删除此文件。",
   walletPassFor: "钱包密码（生成打印文件前的身份确认）",
   paperDone: "我已写在纸上，并与12个恢复词一起保管", paperDoneMark: "✔ 已确认纸质保管", paperPending: "尚未确认已写在纸上。",
-  title: "导出 / 导入钱包文件",
-  lede: "把钱包副本作为单个文件放到 iCloud 文件夹、U 盘等位置，或从这样的文件恢复钱包。导出的文件始终会再用备份密钥（52个字符）锁一次——不会生成未加锁的文件。",
-  exportBtn: "导出钱包文件…", importBtn: "导入钱包文件…",
+  title: "导出（加锁）/ 导入 wallet.dat 备份文件",
+  lede: "把 Raven Core 的 wallet.dat 用52个字符的密钥锁成一个文件（.rvwallet），放到 iCloud 文件夹、U 盘等位置，或从这样的文件恢复钱包。此文件始终会再用备份密钥（52个字符）锁一次，只能用 RavenVault 打开。迁移到 Raven Core 时使用的“Raven Core 用 wallet.dat”在下方另行提供。",
+  exportBtn: "导出 wallet.dat 备份文件（加锁）…", importBtn: "导入 wallet.dat 备份文件…",
   blockedTitle: "请先设置钱包密码",
   blockedBody: "此钱包还没有密码。没有密码时，加锁后任何人都能直接解锁，捡到导出文件的人也能花掉钱。请在钱包页面设置10个字符以上的密码，然后重试。",
   goWallet: "前往钱包页面", close: "关闭", nodeDown: "节点没有响应，无法确认钱包是否有密码。请启动节点后重试。",
@@ -158,7 +159,7 @@ const c = (): Copy => COPY[coreLang(lang)] ?? KO;
 export const walletFileCopy = (l: string): Copy => COPY[l as Lang] ?? EN;
 
 type Child = Node | string | null | false;
-function el<K extends keyof HTMLElementTagNameMap>(tag: K, props: Partial<Omit<HTMLElementTagNameMap[K], "style">> & { className?: string; style?: string } = {}, ...kids: Child[]): HTMLElementTagNameMap[K] {
+export function el<K extends keyof HTMLElementTagNameMap>(tag: K, props: Partial<Omit<HTMLElementTagNameMap[K], "style">> & { className?: string; style?: string } = {}, ...kids: Child[]): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
   const { style, ...rest } = props;
   Object.assign(e, rest);
@@ -166,7 +167,7 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, props: Partial<Omit<H
   for (const k of kids) if (k) e.append(k);
   return e;
 }
-const errText = (e: unknown): string => String((e as Error)?.message ?? e).replace(NEEDS_WALLET_PASS, "");
+export const errText = (e: unknown): string => String((e as Error)?.message ?? e).replace(NEEDS_WALLET_PASS, "");
 
 function gotoWallet(): void {
   document.querySelector<HTMLElement>('nav a[data-page="wallet"]')?.click();
@@ -452,6 +453,8 @@ export async function mountWalletFile(): Promise<void> {
   if (!document.getElementById("ck-key")) return;
   try { await mountPaperStep(); } catch { /* 종이 단계가 실패해도 아래 칸은 붙인다 */ }
   mountFileCard();
+  // 0.9.0 — 두 파일 구분표 · 끌어다 놓아 가져오기 · 레이븐 코어로 옮기기. 무거워서 따로 불러온다(메인 묶음 예산).
+  void import("./backup-extra").then((m) => m.mountBackupExtras()).catch(() => {});
 }
 
 if (typeof document !== "undefined") {

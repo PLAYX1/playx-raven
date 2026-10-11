@@ -245,7 +245,7 @@ test('트레이 거절 안내: 큰 창이 Rust 의 app-lock-refused 이벤트를
   } finally { await page.close(); }
 });
 
-for (const [lang, markers] of [['en', ['Export wallet file…', 'Set a wallet password first']], ['ja', ['ウォレットファイルを書き出す…', '先にウォレットのパスワードを設定してください']], ['zh', ['导出钱包文件…', '请先设置钱包密码']]]) {
+for (const [lang, markers] of [['en', ['Export wallet.dat backup file (locked)…', 'Set a wallet password first']], ['ja', ['wallet.dat バックアップファイルを書き出す（ロック）…', '先にウォレットのパスワードを設定してください']], ['zh', ['导出 wallet.dat 备份文件（加锁）…', '请先设置钱包密码']]]) {
   test(`네 나라 말 — ${lang}`, async () => {
     const { page } = await open({ encrypted: false, lang });
     try {
