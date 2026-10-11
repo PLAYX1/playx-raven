@@ -1,0 +1,38 @@
+/* 「방 설정」 시트·숨긴 방 (0.9.0 레인 C, 시안 talk.html aside#info). 지연 묶음과 같이 읽힌다.
+   style="" 속성은 Tauri CSP 가 무시하므로 전부 클래스. 앱 토큰을 써서 다크를 따라간다. 본문 17·보조 15·최소 14px, 누름 44px+. */
+.tkinfo{position:fixed;top:0;right:0;bottom:0;width:380px;max-width:100vw;z-index:60;overflow:auto;overscroll-behavior:contain;background:var(--panel);color:var(--text);border-left:1px solid var(--line);box-shadow:-12px 0 32px rgba(0,0,0,.18);padding:24px 20px 32px;font-size:17px;line-height:1.55;animation:tkin .32s cubic-bezier(.2,.8,.2,1)}
+@keyframes tkin{from{transform:translateX(24px);opacity:0}}
+@media (prefers-reduced-motion:reduce){.tkinfo{animation:none}}
+@media (max-width:720px){.tkinfo{width:100vw;padding:16px}}
+.tkinfo[hidden],.tkinfo [hidden]{display:none}
+.tkinfo-top{display:flex;align-items:center;gap:12px}
+.tkinfo-av{flex:none;width:56px;height:56px;border-radius:16px;display:grid;place-items:center;font-size:24px;font-weight:700;color:#fff;background:#2A356B}
+.tkinfo-kind{flex:1;font-size:15px;font-weight:600}
+.tkinfo h3{font-size:24px;line-height:1.3;margin:16px 0 4px}
+.tkinfo h3,.tkinfo-t,.tk-hiddenrow span{overflow-wrap:anywhere}
+.tkinfo-about,.tkinfo-mine,.tkinfo-kind,.tkinfo-lbl,.tkinfo-none,.tkinfo-d,.tkinfo-count,.tkinfo-note,.tkinfo-foot,.tk-hiddenwhy{color:var(--muted)}
+.tkinfo-about{margin:0 0 8px}
+.tkinfo-mine,.tkinfo-d,.tkinfo-note,.tkinfo-foot,.tkinfo-say,.tkinfo-lock,.tk-hiddenbox,.tk-hiddennote{font-size:15px}
+.tkinfo-group{border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-top:16px}
+.tkinfo-row{display:flex;align-items:center;gap:12px;width:100%;min-height:56px;padding:12px 16px;border:0;border-radius:0;background:none;color:inherit;text-align:left;font:inherit}
+.tkinfo-row+.tkinfo-row{border-top:1px solid var(--line)}
+.tkinfo-row:hover{background:var(--bg)}
+.tkinfo-txt{flex:1;min-width:0;display:flex;flex-direction:column}
+.tkinfo-lbl,.tkinfo-count{font-size:14px;font-weight:400}
+.tkinfo-t,.tkinfo-link{font-weight:600}
+.tkinfo-none{font-weight:400}
+.tkinfo-form{margin-top:16px;display:flex;flex-direction:column;gap:8px}
+.tkinfo-field{display:flex;justify-content:space-between;align-items:baseline;font-size:15px;font-weight:600}
+.tkinfo-form input{min-height:48px;padding:0 14px;border-radius:12px;border:1px solid var(--line);background:var(--bg);color:inherit;font-size:17px;width:100%;box-sizing:border-box}
+.tkinfo-acts{display:flex;gap:8px}
+.tkinfo-acts button,.tkinfo-lock button{min-height:48px;padding:0 20px}
+.tkinfo-say{margin:12px 0 0}
+.tkinfo-say:empty{display:none}
+.tkinfo-say.warn,.tkinfo-lock{color:var(--warn)}
+.tkinfo-lock,.tk-hiddenbox,.tk-hiddennote{border-radius:12px;padding:12px;border:1px solid var(--line);background:var(--bg)}
+.tkinfo-lock p,.tk-hiddennote p{margin:0 0 8px;color:var(--text)}
+.tkinfo-foot{margin:16px 0 0}
+.tk-hiddenbox,.tk-hiddennote{margin:8px 12px}
+.tk-hiddenwhy{margin:4px 0 8px}
+.tk-hiddenrow{display:flex;align-items:center;gap:8px;justify-content:space-between;min-height:44px;border-top:1px solid var(--line)}
+.tk-hiddenbox button,.tk-hiddennote button,.tkinfo-top .ghost{min-height:44px}

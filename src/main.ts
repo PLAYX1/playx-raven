@@ -16,6 +16,8 @@ import { wireOpenMarket } from "./open-market";
 import { marketLists } from "./market-lists";
 import { openRaviStory } from "./desktop-links";
 import { inviteLink } from "./links";
+// 이야기 방 운영(0.9.0 레인 C): 「방 설정」(만든 사람만 이름·설명 고치기)·「이 방 숨기기」 — 연결 줄만 여기에.
+import { wireTalkRoomsAdmin } from "./talk-rooms-admin";
 import { homeSafety } from "./home-summary";
 import { wireChainInfoLazy } from "./chain-info-lazy";
 import { installFirstRunBarrier, afterRaviLanding, deferUntilRaviLanding, finishRaviLanding } from "./firstrun";
@@ -6016,6 +6018,7 @@ async function talkPaintMe() {
   try {
     const me = await invoke<any>("talk_me");
     tkMine = String(me?.pubkey || "");
+    tkAdmin?.paint(); // 내가 누구인지 알아야 「방 설정」을 내 방에만 보인다
     await tkLoadNames([tkMine]);
     const mine = tkNames.get(tkMine);
     const shown = mine?.name ? `<span translate="no">${escapeHtml(String(mine.name))}</span>` : "";
@@ -6029,6 +6032,7 @@ async function talkPaintMe() {
 }
 
 let tkRoomNames = new Map<string, string>();
+let tkAdmin: ReturnType<typeof wireTalkRoomsAdmin> | null = null;
 
 async function talkPaintRooms() {
   const box = $("tk-rooms");
@@ -6041,7 +6045,9 @@ async function talkPaintRooms() {
   } catch {
     // 방 목록을 못 읽어도 전체 글은 보여야 한다. 조용히 넘어간다.
   }
+  rooms = tkAdmin ? tkAdmin.rooms(rooms) : rooms; // 숨긴 방 빼기·방금 바꾼 이름(talk-rooms-admin.ts)
   tkRoomNames = new Map(rooms.map((r) => [String(r.id), String(r.name)]));
+  if (tkRoom && tkRoomNames.has(tkRoom)) setCopyText($("tk-title"), () => tkRoomNames.get(tkRoom) || t("방")); // 고친 이름을 머리줄에도
   paintInvite();
   box.innerHTML =
     `<button class="room${tkRoom ? "" : " on"}" data-room="">${copyHtml("레이븐 이야기")}</button>` +
@@ -6127,6 +6133,7 @@ function paintInvite() {
     });
 
   });
+  tkAdmin?.paint(); // 「방 설정」·「이 방 숨기기」 단추를 지금 방에 맞춘다
 }
 
 /* ── 받은 글 안의 사진 ─────────────────────────────────────────────
@@ -18636,6 +18643,16 @@ window.addEventListener("DOMContentLoaded", async () => {
   });
   $("tk-reload").addEventListener("click", () => void talkPaint());
   $("tk-newroom").addEventListener("click", () => void talkNewRoom());
+  tkAdmin = wireTalkRoomsAdmin({
+    call: (cmd, args) => rawInvoke(cmd, args), // 잠김 안내는 시트 안에서 — 페이지 맨 아래 경고 상자를 붙이지 않는다
+    me: () => tkMine,
+    current: () => tkRoom,
+    sure,
+    unlock: ensureUnlocked,
+    errText,
+    reload: () => talkPaintRooms(),
+    leave: () => document.querySelector<HTMLElement>('#tk-rooms [data-room=""]')?.click(),
+  });
   $("tk-nmake").addEventListener("click", () => void talkMakeRoomGo());
   $("tk-ncancel").addEventListener("click", () => {
     $("tk-newbox").hidden = true;
