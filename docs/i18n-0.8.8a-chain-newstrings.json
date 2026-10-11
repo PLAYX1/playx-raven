@@ -1,0 +1,233 @@
+{
+ "generated_for": "desktop 0.8.8a",
+ "source": "src/chain-info-copy.ts",
+ "rule": "ko 원문 + en/ja/zh 는 앱 사전(dict.ts 에서 ??= 로 병합). 유럽어 6개(it es fr pt-BR de ru)는 사전에 없으므로 영어로 내려간다. 아래 목록을 유럽어 번역 파이프라인(AI 검수)에 넘길 때 쓴다.",
+ "count": 32,
+ "strings": [
+  {
+   "ko": "체인 정보",
+   "en": "Chain info",
+   "ja": "チェーン情報",
+   "zh": "链信息",
+   "europe_fallback": "en"
+  },
+  {
+   "ko": "내 노드와 공개 목록에서 읽은 값이에요. 숫자마다 출처와 기준 시각을 같이 보여 드려요.",
+   "en": "Values read from your own node and a public list. Every number shows its source and time.",
+   "ja": "ご自身のノードと公開リストから読み取った値です。数字ごとに出典と基準時刻を表示します。",
+   "zh": "这些数值来自你自己的节点和公开列表。每个数字都会显示来源和时间。",
+   "europe_fallback": "en"
+  },
+  {
+   "ko": "홈으로 돌아가기",
+   "en": "Back to Home",
+   "ja": "ホームに戻る",
+   "zh": "返回首页",
+   "europe_fallback": "en"
+  },
+  {
+   "ko": "새로 읽기",
+   "en": "Refresh",
+   "ja": "再読み込み",
+   "zh": "重新读取",
+   "europe_fallback": "en"
+  },
+  {
+   "ko": "블록 높이",
+   "en": "Block height",
+   "ja": "ブロック高",
+   "zh": "区块高度",
+   "europe_fallback": "en"
+  },
+  {
+   "ko": "블록 {0}",
+   "en": "Block {0}",
+   "ja": "ブロック {0}",
+   "zh": "区块 {0}",
+   "europe_fallback": "en"
+  },
+  {
+   "ko": "해시율 {0}",
+   "en": "Hashrate {0}",
+   "ja": "ハッシュレート {0}",
+   "zh": "算力 {0}",
+   "europe_fallback": "en"
+  },
+  {
+   "ko": "보안 비용 {0}/시간",
+   "en": "Security cost {0}/h",
+   "ja": "セキュリティコスト {0}/時間",
+   "zh": "安全成本 {0}/小时",
+   "europe_fallback": "en"
+  },
+  {
+   "ko": "네트워크 해시율",
+   "en": "Network hashrate",
+   "ja": "ネットワークのハッシュレート",
+   "zh": "全网算力",
+   "europe_fallback": "en"
+  },
+  {
+   "ko": "채굴 컴퓨터들의 힘이에요. 내 노드가 계산해요.",
+   "en": "The combined power of the mining computers. Your node calculates it.",
+   "ja": "マイニングコンピュータ全体の力です。ご自身のノードが計算します。",
+   "zh": "这是所有挖矿电脑的总算力，由你的节点计算。",
+   "europe_fallback": "en"
+  },
+  {
+   "ko": "난이도 {0}",
+   "en": "Difficulty {0}",
+   "ja": "難易度 {0}",
+   "zh": "难度 {0}",
+   "europe_fallback": "en"
+  },
+  {
+   "ko": "대기 거래 {0}건",
+   "en": "{0} pending transactions",
+   "ja": "待機中の取引 {0}件",
+   "zh": "待处理交易 {0} 笔",
+   "europe_fallback": "en"
+  },
+  {
+   "ko": "연결된 상대 {0}곳",
+   "en": "{0} connected peers",
+   "ja": "接続中のピア {0}件",
+   "zh": "已连接节点 {0} 个",
+   "europe_fallback": "en"
+  },
+  {
+   "ko": "출처: 내 노드 · {0}",
+   "en": "Source: your node · {0}",
+   "ja": "出典: ご自身のノード · {0}",
+   "zh": "来源：你的节点 · {0}",
+   "europe_fallback": "en"
+  },
+  {
+   "ko": "내 노드를 읽지 못했어요. 노드가 켜져 있는지 확인해 주세요.",
+   "en": "Could not read your node. Please check that the node is running.",
+   "ja": "ノードを読み取れませんでした。ノードが起動しているか確認してください。",
+   "zh": "无法读取你的节点。请确认节点正在运行。",
+   "europe_fallback": "en"
+  },
+  {
+   "ko": "내 노드가 아직 따라잡는 중이에요 ({0}%). 끝나면 숫자가 정확해져요.",
+   "en": "Your node is still catching up ({0}%). Numbers become accurate when it finishes.",
+   "ja": "ノードはまだ追いついている途中です ({0}%)。完了すると数字が正確になります。",
+   "zh": "你的节点仍在同步中（{0}%）。完成后数字才会准确。",
+   "europe_fallback": "en"
+  },
+  {
+   "ko": "따라잡는 중에는 해시율을 말씀드리지 않아요.",
+   "en": "While the node is catching up, no hashrate is shown.",
+   "ja": "追いついている間はハッシュレートを表示しません。",
+   "zh": "节点同步期间不显示算力。",
+   "europe_fallback": "en"
+  },
+  {
+   "ko": "보안 비용 (51% 공격)",
+   "en": "Security cost (51% attack)",
+   "ja": "セキュリティコスト（51%攻撃）",
+   "zh": "安全成本（51% 攻击）",
+   "europe_fallback": "en"
+  },
+  {
+   "ko": "{0} / 시간",
+   "en": "{0} / hour",
+   "ja": "{0} / 時間",
+   "zh": "{0} / 小时",
+   "europe_fallback": "en"
+  },
+  {
+   "ko": "다른 사람이 채굴 힘을 한 시간 빌려 체인을 흔드는 데 드는 값을 어림한 거예요.",
+   "en": "A rough estimate of what it would cost someone to rent mining power for one hour to disturb the chain.",
+   "ja": "誰かがマイニングパワーを1時間借りてチェーンを揺さぶるのにかかる費用の目安です。",
+   "zh": "这是他人租用一小时挖矿算力来扰乱链所需费用的粗略估算。",
+   "europe_fallback": "en"
+  },
+  {
+   "ko": "투자 조언이 아니에요. 어림값이라 실제와 다를 수 있어요.",
+   "en": "This is not investment advice. It is an estimate and may differ from reality.",
+   "ja": "投資のアドバイスではありません。目安の値で、実際とは異なる場合があります。",
+   "zh": "这不是投资建议。这只是估算值，可能与实际不同。",
+   "europe_fallback": "en",
+   "hold": "legal — 투자 조언 아님 문구는 대표 승인·합의 전까지 유럽어도 영어 유지"
+  },
+  {
+   "ko": "목록 {1}개 코인 중 {0}위",
+   "en": "{0} of {1} coins in the list",
+   "ja": "リスト{1}コイン中 {0}位",
+   "zh": "列表 {1} 个币种中第 {0} 名",
+   "europe_fallback": "en"
+  },
+  {
+   "ko": "빌릴 수 있는 힘 대비 네트워크 힘 {0}",
+   "en": "Network power vs. rentable power: {0}",
+   "ja": "レンタル可能な力に対するネットワークの力 {0}",
+   "zh": "全网算力相对可租用算力：{0}",
+   "europe_fallback": "en"
+  },
+  {
+   "ko": "출처: crypto51.app · 기준 {0}",
+   "en": "Source: crypto51.app · as of {0}",
+   "ja": "出典: crypto51.app · 基準 {0}",
+   "zh": "来源：crypto51.app · 截至 {0}",
+   "europe_fallback": "en"
+  },
+  {
+   "ko": "{0} 기준 값이에요. 갱신이 늦어지고 있어서 지금과 다를 수 있어요.",
+   "en": "This value is as of {0}. Updates are late, so it may differ now.",
+   "ja": "{0}時点の値です。更新が遅れているため、現在とは異なる場合があります。",
+   "zh": "这是 {0} 的数值。更新有延迟，现在可能已经不同。",
+   "europe_fallback": "en"
+  },
+  {
+   "ko": "3일 넘게 갱신되지 않았어요. 숫자는 참고만 해 주세요.",
+   "en": "Not updated for more than 3 days. Please treat the number as a reference only.",
+   "ja": "3日以上更新されていません。数字は参考程度にしてください。",
+   "zh": "已超过3天没有更新。数字仅供参考。",
+   "europe_fallback": "en"
+  },
+  {
+   "ko": "새로 받지 못해서 마지막으로 받은 값을 보여 드려요.",
+   "en": "Could not refresh, so the last value received is shown.",
+   "ja": "新しく取得できなかったため、最後に受け取った値を表示しています。",
+   "zh": "未能刷新，因此显示的是最后收到的数值。",
+   "europe_fallback": "en"
+  },
+  {
+   "ko": "보안 비용을 계산하는 외부 정보를 지금은 읽을 수 없어요.",
+   "en": "The outside information used to work out the security cost cannot be read right now.",
+   "ja": "セキュリティコストを計算する外部情報を今は読み取れません。",
+   "zh": "目前无法读取用于计算安全成本的外部信息。",
+   "europe_fallback": "en"
+  },
+  {
+   "ko": "방금",
+   "en": "just now",
+   "ja": "たった今",
+   "zh": "刚刚",
+   "europe_fallback": "en"
+  },
+  {
+   "ko": "{0}일 전",
+   "en": "{0} d ago",
+   "ja": "{0}日前",
+   "zh": "{0}天前",
+   "europe_fallback": "en"
+  },
+  {
+   "ko": "체인 정보 열기",
+   "en": "Open chain info",
+   "ja": "チェーン情報を開く",
+   "zh": "打开链信息",
+   "europe_fallback": "en"
+  },
+  {
+   "ko": "읽는 중…",
+   "en": "Reading…",
+   "ja": "読み込み中…",
+   "zh": "读取中…",
+   "europe_fallback": "en"
+  }
+ ]
+}

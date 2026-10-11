@@ -10,6 +10,7 @@ export const TOOL_LABELS: Record<string, string> = {
   rvn_price_krw: "원화 시세를 보고 있어요", shop_sales: "가게 매출을 보고 있어요",
   shop_orders: "주문 상태를 보고 있어요", node_status: "서버·동기화 상태를 보고 있어요",
   backup_status: "마지막 백업을 보고 있어요", fee_status: "개발비 기록을 보고 있어요",
+  chain_overview: "체인 상황을 보고 있어요", security_rank: "보안 비용을 보고 있어요",
   prepare_send: "보내기 확인을 준비하고 있어요", open_screen: "요청한 화면을 열고 있어요", prepare_promo: "홍보 도우미를 준비하고 있어요",
 };
 export type Consent = { reviewed: boolean; balance: boolean; transactions: boolean; shop: boolean };
@@ -53,6 +54,8 @@ export function toolSummary(name: string, v: any): string {
     case "node_status": return `서버 연결 · ${v.synced === true ? "동기화됨" : "동기화 중"}${numeric(v.progress) ? ` (${(v.progress * 100).toFixed(1)}%)` : ""}`;
     case "shop_sales": return `결제 ${v.sales ?? "데이터 없음"}건 · 환불 ${v.refunds ?? "데이터 없음"}건 · 순매출 ${v.total ?? "데이터 없음"} ${v.currency ?? ""}`;
     case "shop_orders": return `오늘 결제 ${v.counts?.paid_today ?? "데이터 없음"}건 · 오늘 환불 ${v.counts?.refunded_today ?? "데이터 없음"}건 · 입금 대기 ${v.counts?.awaiting_payment ?? "데이터 없음"}건`;
+    case "chain_overview": return numeric(v.blocks) ? `블록 ${v.blocks.toLocaleString("ko-KR")}${v.synced === false ? " (노드가 따라잡는 중)" : ""}${numeric(v.hashrate_hs) ? ` · 해시율 ${(v.hashrate_hs / 1e9).toLocaleString("ko-KR", { maximumFractionDigits: 1 })} GH/s` : ""}` : "체인 데이터 없음";
+    case "security_rank": return numeric(v.attack_cost_usd_hour) ? `51% 공격 비용 약 $${Math.round(v.attack_cost_usd_hour).toLocaleString("en-US")}/시간${v.status !== "ok" ? " (오래된 값)" : ""}${numeric(v.rank) && numeric(v.coin_count) ? ` · ${v.coin_count}개 중 ${v.rank}위` : ""}` : "보안 데이터 없음";
     case "fee_status": return `개발비 ${numeric(v.rate) ? v.rate * 100 : "데이터 없음"}% · 미전송 ${v.owed ?? "데이터 없음"} RVN · 전송 누계 ${v.sent_total ?? "데이터 없음"} RVN`;
     case "recent_transactions": return (v.recent || []).map((r: any) => `${r.category === "send" ? "출금" : r.category === "receive" ? "입금" : "거래"} ${r.amount ?? "데이터 없음"} RVN · 확인 ${r.confirmations ?? "데이터 없음"}회`).join("\n") || "최근 거래 없음";
     default: return "데이터 없음";
