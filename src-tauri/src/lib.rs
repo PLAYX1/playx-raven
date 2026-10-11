@@ -38,6 +38,8 @@ mod door;
 mod dropbox;
 mod drop_publish;
 mod peers;
+mod asset_keep;
+mod asset_verify;
 mod sample;
 mod recover;
 mod electrum;
@@ -507,6 +509,12 @@ pub fn run() {
             artist::artist_profile_get,
             artist::artist_profile_set,
             peers::peer_help,
+            asset_keep::asset_keep_state,
+            asset_keep::asset_keep_set,
+            asset_keep::asset_keep_auto_mine,
+            asset_keep::asset_keep_reset,
+            asset_verify::asset_verify,
+            asset_verify::asset_verify_file,
             recover::node_identity,
             recover::node_rename,
             recover::restore_survey,

@@ -26,6 +26,7 @@
     "test:chain": "node --test scripts/chain-info.test.mjs",
     "check:i18n": "node scripts/i18n/check-packs.mjs",
     "test:i18n": "node --test scripts/i18n-packs-browser.test.mjs",
+    "test:asset-keep": "node --test scripts/asset-keep.test.mjs scripts/asset-keep-browser.test.mjs",
     "typecheck": "tsc --noEmit",
     "test:mini": "node --test scripts/mini-window.test.mjs scripts/mini-window-browser.test.mjs",
     "test:modes": "node --test scripts/window-modes.test.mjs scripts/window-modes-browser.test.mjs",
