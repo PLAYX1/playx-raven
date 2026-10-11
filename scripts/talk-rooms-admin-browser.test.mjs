@@ -98,17 +98,20 @@ const shot = async (page, name) => { if (SHOTS) await page.screenshot({ path: jo
 
 test('「방 설정」은 내가 만든 방에서만 — 남의 방·레이븐 이야기에서는 숨김', async () => {
   const page = await openTalk();
-  await page.waitForFunction(() => document.getElementById('infobtn'));
-  assert.equal(await visible(page, '#infobtn'), false, '레이븐 이야기(전체 글)에서 방 설정이 보인다');
+  await page.waitForFunction(() => document.getElementById('tk-room-settings'));
+  assert.equal(await visible(page, '#tk-room-settings'), false, '레이븐 이야기(전체 글)에서 방 설정이 보인다');
   assert.equal(await page.$eval('#tk-hideroom', e => e.hidden), true, '레이븐 이야기는 방이 아니라 숨길 수 없다');
   await pick(page, THEIRS);
-  await page.waitForFunction(() => document.getElementById('infobtn').hidden === true);
+  await page.waitForFunction(() => document.getElementById('tk-room-settings').hidden === true);
   assert.equal(await page.$eval('#tk-hideroom', e => e.hidden), false, '남의 방도 내 화면에서는 숨길 수 있어야 한다');
   await pick(page, MINE);
-  await page.waitForFunction(() => document.getElementById('infobtn').hidden === false);
-  assert.equal(await text(page, '#infobtn'), '방 설정');
+  await page.waitForFunction(() => document.getElementById('tk-room-settings').hidden === false);
+  assert.equal(await text(page, '#tk-room-settings'), '방 설정');
   // 자리: 시안처럼 「초대하기」 바로 뒤.
-  assert.equal(await page.$eval('#infobtn', e => e.previousElementSibling?.id), 'tk-invite');
+  assert.equal(await page.$eval('#tk-room-settings', e => e.previousElementSibling?.id), 'tk-invite');
+  // 병합(0.9.0): 레인 A 자리 하나만 쓴다 — 머리줄에 「방 설정」 단추가 둘이 되면 안 된다.
+  assert.equal(await page.$$eval('#page-talk .chathead button', bs => bs.filter(b => b.textContent.trim() === '방 설정').length), 1, '「방 설정」 단추가 둘');
+  assert.equal(await page.$eval('#tk-room-settings', e => e.disabled), false, '연결 뒤에도 disabled');
   assert.deepEqual(page.__errors, []);
   await page.close();
 });
@@ -116,14 +119,17 @@ test('「방 설정」은 내가 만든 방에서만 — 남의 방·레이븐 �
 test('방 설정 시트 — 화면 검사 · 지갑 잠김이면 「지갑 열기」 먼저 → 다시 시도 → 몇 곳이 받았는지', async () => {
   const page = await openTalk({ locked: true, width: 1024, height: 768 });
   await pick(page, MINE);
-  await page.waitForFunction(() => document.getElementById('infobtn').hidden === false);
+  await page.waitForFunction(() => document.getElementById('tk-room-settings').hidden === false);
   // 1024 폭 머리줄: 「초대하기」·「방 설정」·「더 보기」가 한 줄, 같은 높이.
-  const heights = await page.$$eval('#page-talk .chathead :is(#tk-inv, #infobtn, #tk-more)', bs => bs.map(b => [Math.round(b.getBoundingClientRect().height), Math.round(b.getBoundingClientRect().top)]));
+  const heights = await page.$$eval('#page-talk .chathead :is(#tk-inv, #tk-room-settings, #tk-more)', bs => bs.map(b => [Math.round(b.getBoundingClientRect().height), Math.round(b.getBoundingClientRect().top)]));
   assert.equal(new Set(heights.map(h => h.join())).size, 1, `머리줄 단추가 어긋난다: ${JSON.stringify(heights)}`);
   await shot(page, 'head-1024');
-  await page.click('#infobtn');
+  await page.click('#tk-room-settings');
   await page.waitForFunction(() => document.querySelector('#info') && !document.querySelector('#info').hidden);
-  assert.equal(await page.$eval('#infobtn', e => e.getAttribute('aria-expanded')), 'true');
+  // 시트는 레인 A 가 비워 둔 자리 #tk-room-sheet 안에 붙고, 자리 상자도 같이 보인다.
+  assert.equal(await page.$eval('#info', e => e.parentElement?.id), 'tk-room-sheet');
+  assert.equal(await page.$eval('#tk-room-sheet', e => e.hidden), false);
+  assert.equal(await page.$eval('#tk-room-settings', e => e.getAttribute('aria-expanded')), 'true');
   assert.match(await text(page, '#info-nodelete'), /완전히 지울 수 없어요/);
   assert.equal(await page.$$eval('#info button', bs => bs.some(b => /지우기|삭제|나가기/.test(b.textContent))), false, '지우기·나가기 단추가 있다');
   // 1024 폭에서는 대화 위를 덮는 시트다.
@@ -184,9 +190,9 @@ test('방 설정 시트 — 화면 검사 · 지갑 잠김이면 「지갑 열�
   await page.focus('#closeinfo');
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => document.getElementById('info').hidden);
-  assert.equal(await page.evaluate(() => document.activeElement?.id), 'infobtn');
+  assert.equal(await page.evaluate(() => document.activeElement?.id), 'tk-room-settings');
   // 바뀐 것이 없으면 보내지 않는다.
-  await page.click('#infobtn');
+  await page.click('#tk-room-settings');
   await page.click('#info-edit-about');
   await page.click('#info-save');
   assert.match(await text(page, '#info-say'), /바뀐 것이 없어요/);
@@ -240,9 +246,9 @@ test('영어·일본어·중국어 — 방 설정 문구가 옮겨지고 한국�
   for (const [lang, label] of [['en', 'Room settings'], ['ja', 'ルーム設定'], ['zh', '房间设置']]) {
     const page = await openTalk({ lang });
     await pick(page, MINE);
-    await page.waitForFunction(() => document.getElementById('infobtn')?.hidden === false);
-    assert.equal(await text(page, '#infobtn'), label);
-    await page.click('#infobtn');
+    await page.waitForFunction(() => document.getElementById('tk-room-settings')?.hidden === false);
+    assert.equal(await text(page, '#tk-room-settings'), label);
+    await page.click('#tk-room-settings');
     await page.waitForFunction(() => document.querySelector('#info') && !document.querySelector('#info').hidden);
     await page.click('#info-edit-name');
     const korean = await page.$eval('#info', el => {

@@ -76,11 +76,15 @@ export function createSheet(core: AdminCore): Sheet {
   let lastFocus: HTMLElement | null = null;
 
   const page = () => document.getElementById("page-talk");
-  const infoBtn = () => document.getElementById("infobtn");
+  const infoBtn = () => document.getElementById("tk-room-settings");
+  // 병합(0.9.0): 레인 A 가 비워 둔 마운트 자리 #tk-room-sheet(.talkwrap 격자 안, display:contents) 안에 붙인다.
+  // 자리 상자의 hidden 은 시트와 같이 켜고 끈다. 자리가 없으면 예전처럼 #page-talk 에.
+  const host = () => document.getElementById("tk-room-sheet");
+  const show = (on: boolean) => { if (box) box.hidden = !on; const h = host(); if (h && box && h.contains(box)) h.hidden = !on; };
 
   function close(): void {
     if (!box || box.hidden) return;
-    box.hidden = true;
+    show(false);
     infoBtn()?.setAttribute("aria-expanded", "false");
     (lastFocus && document.contains(lastFocus) ? lastFocus : infoBtn())?.focus?.();
   }
@@ -91,7 +95,7 @@ export function createSheet(core: AdminCore): Sheet {
     aside.setAttribute("aria-modal", "false");
     aside.setAttribute("aria-labelledby", "info-h");
     aside.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); close(); } });
-    (page() ?? document.body).append(aside);
+    (host() ?? page() ?? document.body).append(aside);
     return aside;
   }
 
@@ -246,7 +250,7 @@ export function createSheet(core: AdminCore): Sheet {
     if (!room || !canEditRoom(room, deps.me())) { close(); return; }
     const open = !!box && !box.hidden;
     render(room);
-    if (open) box!.hidden = false;
+    if (open) show(true);
   }
 
   function openSettings(): void {
@@ -257,7 +261,7 @@ export function createSheet(core: AdminCore): Sheet {
     roomId = id;
     lastFocus = document.activeElement as HTMLElement | null;
     render(room);
-    box!.hidden = false;
+    show(true);
     infoBtn()?.setAttribute("aria-expanded", "true");
     document.getElementById("closeinfo")?.focus();
   }

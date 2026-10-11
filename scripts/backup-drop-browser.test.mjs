@@ -104,6 +104,9 @@ test('설정 백업 칸 순서: 두 파일 구분표 → 52글자 종이 → .rv
   try {
     const order = await page.evaluate(() => ['bk-two-files', 'ck-key', 'wf-card', 'wf-drop', 'wf-core'].map((id) => document.getElementById(id)).map((n, i, all) => i === 0 ? 0 : (all[i - 1].compareDocumentPosition(n) & Node.DOCUMENT_POSITION_FOLLOWING ? 1 : -1)));
     assert.deepEqual(order, [0, 1, 1, 1, 1]);
+    // 병합(0.9.0): 설정 B 껍데기에서는 다섯 칸이 모두 「백업과 복구」 주제 패널의 마운트 자리 안에 붙는다.
+    const inMount = await page.evaluate(() => { const m = document.getElementById('sx-backup-mount'); return m ? ['bk-two-files', 'ck-key', 'wf-card', 'wf-drop', 'wf-core'].map((id) => !!document.getElementById(id) && m.contains(document.getElementById(id))) : null; });
+    if (inMount) assert.deepEqual(inMount, [true, true, true, true, true], '백업 칸이 #sx-backup-mount 밖에 붙었다');
     assert.match(await text(page, '#bk-two-files'), /파일로 꺼내는 길은 두 가지예요.*wallet\.dat 백업 파일\(\.rvwallet\).*코어용 wallet\.dat/s);
     assert.match(await text(page, '#wf-export'), /wallet\.dat 백업 파일 내보내기\(잠금\)/);
     assert.match(await text(page, '#wf-import'), /wallet\.dat 백업 파일 가져오기/);

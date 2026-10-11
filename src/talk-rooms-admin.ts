@@ -187,11 +187,14 @@ export function wireTalkRoomsAdmin(deps: AdminDeps): AdminApi {
     const mine = canEditRoom(room, deps.me());
 
     // ① 머리줄 「방 설정」 — **내가 만든 방에서만.** 남의 방에서 눌러 봐야 할 수 있는 일이 없다.
-    //    자리는 시안(talk.html)대로 「초대하기」 바로 뒤, id 도 시안의 infobtn.
+    //    자리는 시안(talk.html)대로 「초대하기」 바로 뒤. 병합(0.9.0): 레인 A 가 index.html 에 비워 둔
+    //    `#tk-room-settings`(숨김·비활성) 하나만 쓴다 — 새로 만들지 않아 「방 설정」 단추가 둘이 되지 않는다.
+    //    (자리가 없는 옛 index.html 이면 같은 id 로 만든다.)
     const head = document.querySelector("#page-talk .chathead");
-    const info = button("infobtn", head, document.getElementById("tk-invite"), () => t("방 설정"));
+    const info = button("tk-room-settings", head, document.getElementById("tk-invite"), () => t("방 설정"));
     if (info && !info.dataset.wired) {
       info.dataset.wired = "1";
+      info.disabled = false; // 레인 A 자리는 연결 전까지 disabled — 연결했으니 푼다. 보임은 아래 hidden 이 정한다.
       info.setAttribute("aria-haspopup", "dialog");
       info.setAttribute("aria-controls", "info");
       info.setAttribute("aria-expanded", "false");

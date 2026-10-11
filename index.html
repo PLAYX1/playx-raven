@@ -3235,8 +3235,10 @@
         <div class="card rv-profile-card">
           <span id="rv-profile-face"></span>
           <p>이름표는 공개됩니다. 사진은 이 화면에 올리지 않아요.</p>
+          <!-- 0.9.0 — 「내 색」은 없앴다(대표 결정 2026-10-12). 내 표시는 이름 + 라비 캐릭터.
+               이 이름 칸은 이야기의 「내 이름」과 **같은 이름표**다(talk_profile_set 하나). -->
           <label>내 이름 <input id="rv-profile-name" maxlength="40" autocomplete="nickname" /></label>
-          <label>내 색 <input id="rv-profile-color" type="color" value="#EFEAF8" /></label>
+          <p class="rv-profile-same">여기 이름은 「이야기」에서 보이는 이름과 같은 이름표예요. 한 곳에서 바꾸면 둘 다 바뀌어요.</p>
           <h2>라비 캐릭터 고르기</h2><div id="rv-profile-characters"></div>
           <button id="rv-profile-save" type="button">저장</button><p id="rv-profile-note" role="status"></p>
         </div>
@@ -3292,6 +3294,8 @@
               <span class="meta" id="tk-me"></span>
               <span style="margin-left:auto"></span>
               <span id="tk-invite"></span>
+              <!-- 0.9.0 「방 설정」 단추 — 레인 C(src/talk-rooms-admin.ts)가 이 자리 하나만 쓴다(내가 만든 방에서만 보이고, 연결 때 disabled 를 푼다). 시트는 #tk-room-sheet 에 붙는다. -->
+              <button class="ghost" id="tk-room-settings" type="button" hidden disabled aria-controls="tk-room-sheet" aria-expanded="false">방 설정</button>
               <!-- 🔴 「⋯」 하나만 두지 않는다. 40~70대에게 점 세 개는 단추로
                    안 읽힌다. **글자로** 적는다. -->
               <button class="ghost" id="tk-more" aria-expanded="false">더 보기</button>
@@ -3339,9 +3343,34 @@
 
             <!-- 처음 세 번만. 🔴 한 번도 안 보이면 그건 없앤 것이고,
                  매번 보이면 안 읽는다. 세 번은 읽고 기억할 만큼이다. -->
+            <!-- ── 0.9.0 첫 진입 「이름을 정해 주세요」(설계안 §3-3) ── 내 이름표가 아직 없을 때 한 번.
+                 저장 결과는 talk_profile_set 이 돌려준 이벤트로 확인한다(src/talk-identity.ts). -->
+            <section id="tk-namecard" class="tk-namecard" aria-labelledby="tk-nc-h" hidden>
+              <h3 id="tk-nc-h">이름을 정해 주세요</h3>
+              <p>이 방에서 다른 분들에게 보일 이름이에요. 「내 소개」의 이름과 같은 이름표이고, 언제든 바꿀 수 있어요.</p>
+              <div class="tk-nc-pick">
+                <span class="rv-myface" id="tk-nc-face" aria-hidden="true"><img src="/ravi/face.webp" alt="" /></span>
+                <input id="tk-nc-name" maxlength="40" autocomplete="nickname" aria-label="이야기에서 쓰는 이름" placeholder="예: 동네 꽃집" />
+              </div>
+              <div class="tk-nc-acts">
+                <button id="tk-nc-save" type="button">이 이름으로 시작</button>
+                <button id="tk-nc-later" type="button" class="ghost">나중에 할게요</button>
+              </div>
+              <p id="tk-nc-msg" class="tk-nc-msg" role="status"></p>
+              <ul class="tk-rules">
+                <li>① 복구 단어(12단어)는 누구에게도, 어떤 글에도 쓰지 마세요.</li>
+                <li>② 이름은 누구나 똑같이 달 수 있어요. 돈 이야기는 이름만 믿지 마세요.</li>
+                <li>③ 번역은 틀릴 수 있어요. 원문을 함께 보세요.</li>
+              </ul>
+            </section>
+
+            <!-- 처음 세 번만(설계안 §3-4: 규칙 세 줄). 이름 카드가 떠 있으면 같은 말이라 이 띠는 숨는다. -->
             <div id="tk-first" class="tkfirst" hidden>
-              <p>⚠️ <b>이름은 누구나 같게 달 수 있습니다.</b> 돈이나 주소
-                이야기는 이름만 보고 믿지 마세요. 글은 세계 릴레이로 나갑니다.</p>
+              <ul class="tk-rules">
+                <li>① 복구 단어(12단어)는 누구에게도, 어떤 글에도 쓰지 마세요.</li>
+                <li>② 이름은 누구나 똑같이 달 수 있어요. 돈 이야기는 이름만 믿지 마세요.</li>
+                <li>③ 번역은 틀릴 수 있어요. 원문을 함께 보세요.</li>
+              </ul>
               <button class="ghost" id="tk-firstok">알겠습니다</button>
             </div>
 
@@ -3450,6 +3479,8 @@
             <p>폰에서 QR 로 친구를 추가해요.</p>
             <details><summary>고급</summary><code id="rv-person-key"></code></details>
           </aside>
+          <!-- 0.9.0 「방 설정」 시트 자리 — 레인 C 시트(aside#info)가 열릴 때 여기 붙고 함께 보인다(display:contents). -->
+          <div id="tk-room-sheet" class="tk-room-sheet" hidden></div>
         </div>
       </section>
 
@@ -4996,15 +5027,403 @@
       </section>
 
       <section class="page" id="page-settings">
-        <div class="card" translate="no"><button id="ravi-voice-revoke" type="button"></button><p id="ravi-voice-revoked" role="status"></p></div>
-        <!-- 판매 대금 받기는 게임을 파는 사람만 쓴다. 기본은 꺼 두고 여기서만 켠다. -->
-        <div class="card" id="seller-mode-card"><label class="check seller-switch"><input type="checkbox" id="seller-mode" /> <b>판매자 기능</b></label><p class="meta">내 게임을 팔 때만 켜세요</p></div>
-        <div class="card desktop-language-settings"><h2>설정 · 언어</h2><div class="desktop-language-options" translate="no"><button data-language="ko">한국어</button><button data-language="en">English</button><button data-language="ja">日本語</button><button data-language="zh">简体中文</button><button data-language="it" data-fixed-text>Italiano</button><button data-language="es" data-fixed-text>Español</button><button data-language="fr" data-fixed-text>Français</button><button data-language="pt-BR" data-fixed-text>Português (Brasil)</button><button data-language="de" data-fixed-text>Deutsch</button><button data-language="ru" data-fixed-text>Русский</button></div><p class="lang-ai-note" data-fixed-text><span>AI 번역입니다</span> · <button type="button" class="lang-report" data-report-translation>오류 신고</button></p><p>언어는 바로 바뀌며 다음 실행에도 기억합니다.</p><p class="meta" data-fixed-text>이탈리아어·스페인어·프랑스어·포르투갈어(브라질)·독일어·러시아어는 AI가 번역했어요. 틀린 곳이 있을 수 있어요. 송금·복구 단어·보안·수수료·법적 안내처럼 중요한 문구는 확인이 끝나기 전까지 영어로 나와요.</p><p>Mac에서 기존 앱의 파일 이름은 그대로 남을 수 있습니다. 앱 안의 이름은 RavenVault Desktop입니다.</p></div>
-        <!-- 정보 · 오픈소스 고지. 레이븐코인 코어 v4.8.0 의 COPYING(MIT) 문구를 **그대로** 싣는다 — 번역하지 않는다(translate="no"). -->
-        <div class="card" id="about-notice"><h2>정보 · 오픈소스 고지</h2>
-          <p>이 프로그램은 노드로 레이븐코인 코어(Ravencoin Core) v4.8.0 을 함께 씁니다. 레이븐코인 코어는 MIT 라이선스의 오픈소스입니다. 아래는 그 저작권 고지와 허가 문구 원문입니다.</p>
-          <details><summary>Ravencoin Core v4.8.0 — MIT License</summary>
-<pre id="about-ravencoin-license" translate="no" style="white-space:pre-wrap;font-size:12px;line-height:1.5;margin-top:8px">The MIT License (MIT)
+        <!-- ── 0.9.0 「이 컴퓨터」 애플식(시안 ~/rv-design-089 설정 A·B, 대표 결정 2026-10-12) ──────────────
+             주제 여덟 묶음(data-sx-pane)으로 나눈다. 1440 처럼 넓으면 왼쪽 목록 + 오른쪽 한 주제(B),
+             목록 모양과 주제 바꾸기·찾기·바로 가기는 src/settings-nav.ts. CSS 는 src/settings-apple.css.
+             🔴 요소 id 는 하나도 바꾸지 않았다 — 다른 화면의 바로 가기(jump·라비 안내)와 시험이 같은 칸을 찾는다.
+             🔴 다른 파일이 나중에 붙이는 칸(표시 방식·폰 연결·라비 동의·트레이)은 data-sx-slot 자리로 옮겨진다.
+             🔴 style="" 금지(Tauri CSP) — 새 칸은 클래스만 쓴다. -->
+        <div class="sx">
+          <!-- ── 시안 B: 왼쪽 목록(찾기 · 쉬운 설정 · 주제 8개). 넓은 창에서는 오른쪽에 한 주제씩(src/settings-nav.ts).
+               레인B 자리: 「백업과 복구」 할 일 숫자 #sx-badge-backup(지금은 숨김). -->
+          <aside class="sx-list" aria-label="설정 목록">
+            <h2 class="sx-ltitle">이 컴퓨터</h2>
+            <div class="sx-search">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+              <input type="search" id="sx-search" placeholder="설정 찾기" aria-label="설정 찾기" autocomplete="off" spellcheck="false" />
+            </div>
+            <p class="sx-none" id="sx-none" role="status" hidden>찾는 설정이 없어요</p>
+            <button type="button" class="sx-easy" data-sx-go="general" data-sx-to="easy-setup"><span class="ravi-static-face"></span><span class="sx-easytxt"><b>쉬운 설정</b><span>라비가 이 컴퓨터를 보고 정해 드려요</span></span></button>
+            <ul class="sx-topics">
+              <li><button type="button" class="sx-it" data-sx-go="general" aria-current="false"><span class="sx-ic sx-ic-gray" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/></svg></span><span class="sx-lab">일반</span></button></li>
+              <li><button type="button" class="sx-it" data-sx-go="alerts" aria-current="false"><span class="sx-ic sx-ic-cta" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg></span><span class="sx-lab">알림</span></button></li>
+              <li><button type="button" class="sx-it" data-sx-go="backup" aria-current="false"><span class="sx-ic sx-ic-ok" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 3-6.2M4 4v5h5"/></svg></span><span class="sx-lab">백업과 복구</span><span class="sx-badge" id="sx-badge-backup" hidden></span></button></li>
+              <li><button type="button" class="sx-it" data-sx-go="identity" aria-current="false"><span class="sx-ic sx-ic-navy" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-5 16-5 16 0"/></svg></span><span class="sx-lab">내 이름과 열쇠</span></button></li>
+              <li class="sx-sep" role="separator"></li>
+              <li><button type="button" class="sx-it" data-sx-go="shop" aria-current="false"><span class="sx-ic sx-ic-cta" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9l1.6-4.2h12.8L20 9M4.5 9h15v10.5h-15z"/></svg></span><span class="sx-lab">가게</span></button></li>
+              <li><button type="button" class="sx-it" data-sx-go="ravi" aria-current="false"><span class="sx-ic sx-ic-ravi" aria-hidden="true"><img src="/ravi/face.webp" alt="" /></span><span class="sx-lab">라비와 AI</span></button></li>
+              <li><button type="button" class="sx-it" data-sx-go="about" aria-current="false"><span class="sx-ic sx-ic-gray" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg></span><span class="sx-lab">정보와 개발비</span></button></li>
+              <li class="sx-sep" role="separator"></li>
+              <li><button type="button" class="sx-it" data-sx-go="advanced" aria-current="false"><span class="sx-ic sx-ic-dark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 9l-4 3 4 3M16 9l4 3-4 3M13 6l-2 12"/></svg></span><span class="sx-lab">고급</span></button></li>
+            </ul>
+          </aside>
+          <div class="sx-pane">
+            <header class="sx-head">
+              <h2 class="title sx-large">이 컴퓨터</h2>
+              <p class="sx-lede">자주 쓰는 것이 위에 있어요. 처음 한 번만 하는 것과 전문가용은 아래에 접혀 있어요.</p>
+            </header>
+            <div class="tiles pagetiles" id="pt-settings"></div>
+
+            <!-- ── 일반 ── 쉬운 설정이 제일 먼저, 그 화면의 주 단추(주황)는 여기 하나다. -->
+            <section class="sx-sec" data-sx-pane="general" aria-labelledby="sx-h-general">
+              <h2 class="sx-ptitle" id="sx-h-general">일반</h2>
+              <p class="sx-lede">자주 바꾸는 것만 모았어요.</p>
+              <div class="sx-slot" data-sx-slot="firstrun-setup"></div>
+              <!-- 🔴 이 화면에는 입력칸 24개·단추 31개가 있었다. 판단을 하나씩 사장에게 떠넘긴 결과다.
+                   값을 정하는 일은 컴퓨터를 보고 우리가 하고(src-tauri/src/spec.rs), 여기서는 읽고 한 번 누른다. -->
+              <div class="card easycard" id="easy-setup">
+                <div class="easyhead">
+                  <span class="ravi-static-face"></span>
+                  <div>
+                    <h3>쉬운 설정</h3>
+                    <div class="muted sm">이 컴퓨터를 보고 제가 정해 드릴게요.</div>
+                  </div>
+                </div>
+                <div id="easy-body"><div class="muted">컴퓨터를 살펴보는 중…</div></div>
+              </div>
+
+              <h3 class="ghead">쓰는 방식</h3>
+              <!-- 무엇으로 쓰는지. 바꿔도 아무것도 안 지운다 — 돕던 사람이 가게를 열 수도, 접을 수도 있다. -->
+              <div class="card sx-group">
+                <div class="sx-row sx-stack">
+                  <div class="sx-txt"><b class="sx-t" id="sx-mode-label">이 프로그램을 무엇으로 쓰시나요</b><span class="sx-d">바꿔도 아무것도 지워지지 않아요</span></div>
+                  <div class="sx-seg" role="group" aria-labelledby="sx-mode-label">
+                    <button class="ghost" id="mode-wallet">지갑으로만 쓰기</button>
+                    <button class="ghost" id="mode-help">레이븐코인 돕기</button>
+                    <button class="ghost" id="mode-shop">장사에 쓰기</button>
+                  </div>
+                  <p class="meta" id="mode-say"></p>
+                </div>
+              </div>
+              <!-- 판매 대금 받기는 게임을 파는 사람만 쓴다. 기본은 꺼 두고 여기서만 켠다. -->
+              <div class="card sx-group" id="seller-mode-card"><label class="check seller-switch"><span class="sx-txt"><b>판매자 기능</b><span class="sx-d">내 게임을 팔 때만 켜세요</span></span><input type="checkbox" id="seller-mode" role="switch" /></label></div>
+
+              <h3 class="ghead">화면</h3>
+              <div class="card desktop-language-settings"><h2>설정 · 언어</h2><div class="desktop-language-options" translate="no"><button data-language="ko">한국어</button><button data-language="en">English</button><button data-language="ja">日本語</button><button data-language="zh">简体中文</button><button data-language="it" data-fixed-text>Italiano</button><button data-language="es" data-fixed-text>Español</button><button data-language="fr" data-fixed-text>Français</button><button data-language="pt-BR" data-fixed-text>Português (Brasil)</button><button data-language="de" data-fixed-text>Deutsch</button><button data-language="ru" data-fixed-text>Русский</button></div><p class="lang-ai-note" data-fixed-text><span>AI 번역입니다</span> · <button type="button" class="lang-report" data-report-translation>오류 신고</button></p><p>언어는 바로 바뀌며 다음 실행에도 기억합니다.</p><details class="sx-more"><summary>자세히</summary><p class="meta" data-fixed-text>이탈리아어·스페인어·프랑스어·포르투갈어(브라질)·독일어·러시아어는 AI가 번역했어요. 틀린 곳이 있을 수 있어요. 송금·복구 단어·보안·수수료·법적 안내처럼 중요한 문구는 확인이 끝나기 전까지 영어로 나와요.</p><p>Mac에서 기존 앱의 파일 이름은 그대로 남을 수 있습니다. 앱 안의 이름은 RavenVault Desktop입니다.</p></details></div>
+              <div class="sx-slot" data-sx-slot="display-mode-card"></div>
+            </section>
+
+            <!-- ── 알림 ── 🔴 주문 소리와 대화 소리는 따로 켜고 끈다. 하나로 묶으면 대화가 시끄러워 끈 사람이
+                 주문 소리까지 잃는다. 소리도 다르다(주문 「딩—동」 두 음, 대화 낮은 「톡」 한 음). -->
+            <section class="sx-sec" data-sx-pane="alerts" aria-labelledby="sx-h-alerts">
+              <h2 class="sx-ptitle" id="sx-h-alerts">알림</h2>
+              <p class="sx-lede">꺼도 주문과 글은 그대로 들어와요. 소리와 빨간 숫자만 안 나와요.</p>
+              <div class="card sx-group" id="snd-card">
+                <label class="check"><span class="sx-txt"><b>새 주문 소리</b><span class="sx-d">주문·입금이 들어오면 소리로 알리기</span></span><input type="checkbox" id="snd-on" role="switch" checked /></label>
+                <div class="row sx-acts">
+                  <button class="ghost" id="snd-test">소리 들어보기</button>
+                  <span class="meta" id="snd-say"></span>
+                </div>
+                <details class="sx-more"><summary>자세히</summary>
+                  <p class="meta">손님 주문이 들어오거나 <b>입금이 확인되면</b> 소리로 알려 드립니다. 창을 안 보고 계실 때는 한 번 더 울립니다.</p>
+                  <p class="meta">밤새 켜 두는 컴퓨터라면 꺼 두세요. 꺼도 <b>주문은 그대로 들어옵니다</b> — 소리와 빨간 숫자만 안 나옵니다.</p>
+                </details>
+              </div>
+              <div class="card sx-group" id="tksnd-card">
+                <label class="check"><span class="sx-txt"><b>대화 알림 소리</b><span class="sx-d">이야기에 새 글이 오면 소리로 알리기</span></span><input type="checkbox" id="tk-snd-on" role="switch" checked /></label>
+                <div class="row sx-acts">
+                  <button class="ghost" id="tk-snd-test">소리 들어보기</button>
+                  <span class="meta" id="tk-snd-say"></span>
+                </div>
+                <details class="sx-more"><summary>자세히</summary>
+                  <p class="meta">「이야기」 방에 새 글이 오면 <b>낮은 소리로 한 번</b> 알려 드립니다. 주문 소리(딩—동)와 일부러 다르게 했습니다 — 돈과 말은 급한 정도가 다릅니다.</p>
+                  <p class="meta"><b>내가 쓴 글</b>에는 울리지 않습니다. <b>지금 보고 있는 방</b>에도 울리지 않습니다 — 눈앞에 글이 뜨는 것이 이미 답입니다.</p>
+                  <p class="meta">위 「새 주문 소리」와 <b>따로 켜고 끕니다.</b> 이것만 꺼도 주문 소리는 그대로 납니다. 꺼도 <b>새 글은 그대로 들어옵니다</b> — 소리와 왼쪽 「이야기」 옆 숫자만 안 나옵니다.</p>
+                </details>
+              </div>
+              <p class="sx-foot">두 소리는 따로 켜고 꺼요. 밤새 켜 두는 컴퓨터라면 꺼 두세요.</p>
+            </section>
+
+            <!-- ── 백업과 복구 ── 레인B(0.9.0 백업 화면)가 이 주제의 속을 새로 짠다. 지금은 기존 백업 칸을
+                 그대로 옮겨 담은 껍데기다. 마운트 지점: #sx-backup-mount (시안 backup.html 의 data-pane="backup"). -->
+            <section class="sx-sec" data-sx-pane="backup" aria-labelledby="sx-h-backup">
+              <h2 class="sx-ptitle" id="sx-h-backup">백업과 복구</h2>
+              <p class="sx-lede">컴퓨터가 고장 나도 돈과 가게를 되살리는 곳이에요.</p>
+              <div class="sx-backup" id="sx-backup-mount">
+                <div class="tools">
+                  <div id="bk-list"></div>
+                  <div class="row sx-acts">
+                    <button id="bk-go" data-sx-primary>백업 만들기</button>
+                    <button class="ghost" id="bk-seed">복구 단어 보기</button>
+                    <span class="meta" id="bk-note"></span>
+                  </div>
+                  <div id="bk-result"></div>
+
+                  <!-- 되돌리기. 백업만 있고 이게 없으면 백업이 아니라 습관이다. -->
+                  <div class="row sx-acts">
+                    <button class="ghost" id="rs-find">백업 찾기</button>
+                    <button class="ghost" id="rs-pick">백업에서 되돌리기</button>
+                    <button class="ghost" id="rs-folder">폴더에서 되돌리기</button>
+                    <button class="ghost" id="rs-words">복구 단어로 되살리기</button>
+                    <button class="ghost" id="rs-card">복구 카드 인쇄</button>
+                    <button class="ghost" id="rs-lost">폰을 잃어버렸어요</button>
+                  </div>
+                  <div id="rs-found"></div>
+                  <div id="rs-result"></div>
+
+                  <!-- 백업을 어디에 둘 것인가. 폴더 경로를 타이핑하게 하면 아무도 안 한다. -->
+                  <div class="card">
+                    <h3>백업 둘 곳</h3>
+                    <div id="bk-places" class="meta">찾는 중…</div>
+                    <!-- 🔴 어디에 무엇이 어떻게 가는지 한 표로 본다. -->
+                    <div class="bkgrid">
+                      <div class="bkrow bkhead"><span>어디</span><span>지갑</span><span>잠금</span></div>
+                      <div class="bkrow"><span>이 컴퓨터</span><span>들어감</span><span>안 함</span></div>
+                      <div class="bkrow"><span>USB</span><span>들어감</span><span id="bk-usbstate">잠금</span></div>
+                      <div class="bkrow"><span>클라우드</span><span>들어감</span><span>잠금</span></div>
+                    </div>
+                    <p class="meta">자동 백업의 로컬 사본에는 추가 암호화가 없습니다. 컴퓨터 계정과 디스크 잠금을 사용하세요. 직접 만든 백업 파일은 암호화합니다.</p>
+
+                    <label class="check sx-check">
+                      <input type="checkbox" id="bk-usblock" checked />
+                      <span>USB 백업도 잠그기</span>
+                    </label>
+                    <div class="meta" id="bk-usbnote">
+                      <b>켜 두시길 권합니다.</b> USB 는 잃어버리고, 빌려주고, 꽂아 둔 채로
+                      자리를 비웁니다 — 주운 사람이 가게 돈을 가져갑니다.<br />
+                      끄시면 열쇠 없이 바로 쓸 수 있지만, 그 USB 하나가 곧 지갑입니다.
+                    </div>
+
+                    <div class="warnbox">
+                      <b>클라우드로 나가는 파일은 저희가 한 번 더 잠급니다.</b>
+                      백업을 열려면 백업 암호 또는 백업 열쇠가 필요합니다. 지갑 복구 단어와는 다릅니다. 백업 파일과 별도로 안전하게 보관하세요.
+                    </div>
+
+                    <!-- 🔴 열쇠가 컴퓨터에만 있으면, 컴퓨터가 죽는 날 클라우드 사본도 같이 죽는다. 그래서 종이에 적게 한다. -->
+                    <div class="card sx-warncard">
+                      <h3>이 자물쇠의 열쇠</h3>
+                      <p class="meta" id="ck-need">
+                        <b>컴퓨터가 죽으면, 이 52글자가 없으면 못 엽니다.</b>
+                        종이에 적어 12단어와 같이 보관하세요.
+                      </p>
+                      <div id="ck-key" class="keyshow">눌러서 보기</div>
+                      <div class="row sx-acts">
+                        <button id="ck-show">열쇠 보기</button>
+                        <button class="ghost" id="ck-copy">복사</button>
+                      </div>
+                    </div>
+
+                    <!-- 🔴 긴 열쇠를 종이에 적는 사람은 많지 않다. 그래서 외우는 암호로도 열리게 한다. -->
+                    <div class="card">
+                      <h3>외우는 암호로도 열기</h3>
+                      <p class="meta">
+                        <b>「지갑」 화면에서 암호를 거시면 이것도 같이 정해집니다.</b>
+                        따로 정하실 필요가 없습니다. 아래는 지갑 암호를 아직 안 걸었거나,
+                        <b>백업만 다른 암호로</b> 두고 싶을 때 씁니다.
+                      </p>
+                      <div class="card sx-kvcard">
+                        <div class="kv"><b>지갑 암호</b><span>돈을 보낼 때 — 「지갑」 화면</span></div>
+                        <div class="kv"><b>이 암호</b><span>새 컴퓨터에서 백업을 열 때</span></div>
+                      </div>
+                      <!-- 🔴 한 번만 받으면 오타를 못 잡는다. 두 번 받는다. -->
+                      <div class="row sx-acts" id="bp-box">
+                        <input id="bp-pass" type="password" placeholder="암호 (10글자 이상)" autocomplete="new-password" class="sx-grow" />
+                        <input id="bp-pass2" type="password" placeholder="한 번 더" autocomplete="new-password" class="sx-grow" />
+                        <button id="bp-save">이 암호로 정하기</button>
+                      </div>
+                      <!-- 🔴 암호를 정하면 위 칸을 접는데, 접기만 하면 바꿀 길이 없어진다. 여는 단추를 남긴다. -->
+                      <button class="ghost" id="bp-again" style="display:none">암호 바꾸기</button>
+                      <p class="meta" id="bp-msg"></p>
+                    </div>
+                  </div>
+
+                  <!-- 레이븐 코어 폴더 연결(시안 ④). 코어와 이 프로그램은 같은 지갑이라 동시에 열 수 없다. -->
+                  <div class="card" id="wd-card">
+                    <h3>레이븐 코어 지갑</h3>
+                    <p class="meta" id="wd-note">폴더를 찾는 중…</p>
+                    <div class="kv"><b>폴더</b><span><code class="addr" id="wd-path">—</code></span></div>
+                    <div class="row sx-acts">
+                      <button class="ghost" id="wd-pick">기존 지갑 폴더 고르기</button>
+                    </div>
+                    <p class="meta">
+                      레이븐 코어를 쓰던 컴퓨터면 <b>그 wallet.dat 폴더</b>를 그대로 씁니다.
+                      코어와 이 프로그램은 같은 지갑이라 <b>동시에 열 수 없습니다.</b>
+                    </p>
+                  </div>
+
+                  <!-- 🔴 대표님: 노트북에서 항상 켜진 컴퓨터로 가게를 옮긴다. -->
+                  <div class="card">
+                    <h3>가게를 다른 컴퓨터로 옮기기</h3>
+                    <p class="meta">컴퓨터 간 직접 이사는 호환성 점검 중입니다. 암호화한 백업 파일을 USB로 옮긴 뒤 새 컴퓨터에서 되돌리기를 사용하세요.</p>
+                    <div class="row sx-acts">
+                      <button id="mv-all" disabled>전부 보내기</button>
+                      <button class="ghost" id="mv-shop" disabled>가게만 보내기</button>
+                      <button class="ghost" id="mv-get" disabled>가져오기</button>
+                    </div>
+                    <p class="meta">
+                      <b>전부</b> — 이 컴퓨터를 그만 쓰실 때. 지갑까지 갑니다<br />
+                      <b>가게만</b> — 돈은 이 컴퓨터에 남습니다. 새 컴퓨터는 카운터가 됩니다
+                    </p>
+                    <div id="mv-box"></div>
+                  </div>
+
+                  <div class="warnbox">
+                    <b>백업본을 다른 컴퓨터에서 동시에 켜지 마세요.</b>
+                    두 서버가 같은 지갑을 쓰면 같은 주소를 두 번 나눠 주고 돈을 잃습니다.
+                    원래 컴퓨터가 <b>완전히 죽었을 때만</b> 쓰세요.
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <!-- ── 내 이름과 열쇠 ── 🔴 「이야기 → 내 이름」·「내 소개 → 내 이름」은 같은 이름표(별명)다.
+                 여기 #idcard 는 그 별명을 붙이는 **열쇠** 이야기 — 폰의 나와 이 컴퓨터의 나가 같은 사람인가.
+                 ⚠️ 여기서 열쇠를 만들지 않는다. identity_status 는 묻기만 한다. -->
+            <section class="sx-sec" data-sx-pane="identity" aria-labelledby="sx-h-identity">
+              <h2 class="sx-ptitle" id="sx-h-identity">내 이름과 열쇠</h2>
+              <p class="sx-lede">이 컴퓨터의 「나」와 폰 지갑의 「나」가 같은 사람인지 봐요.</p>
+              <div class="card sx-group">
+                <button type="button" class="sx-linkrow" id="sx-talkname" data-go-page="profile">
+                  <span class="sx-txt"><b class="sx-t">이야기에서 쓰는 이름</b><span class="sx-d">「내 소개」의 이름과 같은 이름표예요. 이름은 누구나 같게 달 수 있어요</span></span>
+                  <span class="sx-v" id="sx-talkname-v" translate="no"></span><span class="sx-chev" aria-hidden="true"></span>
+                </button>
+              </div>
+              <div class="card" id="idcard">
+                <b>내 이름</b>
+                <p class="meta">
+                  이 컴퓨터의 「나」와 폰·웹 지갑의 「나」가 <b>같은 사람인지</b> 봅니다.
+                  「이야기」에 적는 별명이 아니라, 그 별명을 붙이는 <b>열쇠</b> 이야기입니다 —
+                  별명은 누구나 같게 달 수 있어서 그것으로는 같은 사람인지 알 수 없습니다.
+                </p>
+                <div id="id-body"><p class="meta">읽는 중…</p></div>
+                <!-- 🔴 8초 확인창이 그려질 자리. 안 보이는 취소 단추는 없는 것과 같다. -->
+                <div class="holdhost" id="id-hold"></div>
+                <div class="bar sx-acts">
+                  <button class="ghost" id="id-reload">다시 확인</button>
+                  <!-- 되돌리기 어려운 일 둘. 할 수 있을 때만 보인다. -->
+                  <button id="id-adopt" style="display:none">이름 합치기</button>
+                  <button class="ghost" id="id-legacy" style="display:none">옛 이름으로 되돌리기</button>
+                </div>
+                <div id="id-say"></div>
+                <details class="onceoff" id="id-paths">
+                  <summary>
+                    <span class="oico" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                           stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+                    </span>
+                    <span>
+                      <b>무엇이 12단어 어디에서 나오나</b>
+                      <span class="osub">돈 · 사람 · 가게 간판 — 어느 자리에서 뽑는지 적어 둔 표</span>
+                    </span>
+                  </summary>
+                  <div id="id-pathbody"><p class="meta">읽는 중…</p></div>
+                </details>
+              </div>
+              <div class="sx-slot" data-sx-slot="rvp-connect-settings"></div>
+              <div class="sx-slot" data-sx-slot="rvp-card"></div>
+            </section>
+
+            <!-- ── 가게 ── 이 노드가 어디인지·손님 받을 준비·금고. -->
+            <section class="sx-sec" data-sx-pane="shop" aria-labelledby="sx-h-shop">
+              <h2 class="sx-ptitle" id="sx-h-shop">가게</h2>
+              <p class="sx-lede">지점 이름 · 손님 폰 연결 · 번 돈 금고 — 처음 한 번 정하면 매일 여실 필요 없어요.</p>
+              <!-- 이 노드가 어디인지. 지점이 둘이 되는 순간 "이 컴퓨터"는 뜻이 없다. 사이드바 표시등을 누르면 여기로 온다. -->
+              <div class="card">
+                <h3 id="sec-node">이 서버</h3>
+                <label class="sx-field">
+                  이름 (지점명)
+                  <input id="nd-name" placeholder="강남지점 · 2층 계산대" autocomplete="off" />
+                </label>
+                <div class="meta" id="nd-note"></div>
+              </div>
+              <!-- 인터넷이 끊기면 결제 규칙이 달라진다. 화면이 먼저 말해야 한다. -->
+              <div id="net-banner"></div>
+              <div class="verdict" id="hz-card">
+                <div class="v-state" id="hz-state">확인 중…</div>
+                <div class="v-why" id="hz-why"></div>
+                <div class="v-fix" id="hz-fix"></div>
+                <div id="hz-extra"></div>
+              </div>
+              <div class="switches" id="sw-list"></div>
+              <!-- 훔쳐가는 문제. 카운터를 안전하게 만드는 게 아니라 얕게 만든다. -->
+              <div class="card">
+                <h3>번 돈 금고로 옮기기</h3>
+                <div class="meta">
+                  계산대에 하루치가 쌓입니다. 정해 둔 금액을 넘으면 남는 돈이 자동으로
+                  <b>다른 지갑</b>으로 갑니다. 컴퓨터를 잃어버려도 거기 있는 돈은 무사합니다.
+                </div>
+                <div class="row">
+                  <div class="sx-grow">
+                    <label>금고 주소 (이 컴퓨터가 아닌 지갑)</label>
+                    <input id="sw-to" placeholder="R…" autocomplete="off" spellcheck="false" />
+                  </div>
+                </div>
+                <div class="row">
+                  <!-- 🔴 이 두 칸은 RVN 이다. 5분마다 진짜로 돈을 보낸다 — 단위를 적고 지금 시세로 원도 보여 준다. -->
+                  <div><label>이 금액(RVN)을 넘으면</label>
+                    <input id="sw-above" inputmode="decimal" placeholder="3000" />
+                    <div class="unit" id="sw-above-krw"></div></div>
+                  <div><label>계산대에 남길 돈(RVN)</label>
+                    <input id="sw-keep" inputmode="decimal" placeholder="1000" />
+                    <div class="unit" id="sw-keep-krw"></div></div>
+                </div>
+                <div class="row sx-acts">
+                  <button id="sw-save">켜기</button>
+                  <button class="ghost" id="sw-off">끄기</button>
+                  <span class="meta" id="sw-note"></span>
+                </div>
+                <div id="sw-state" class="meta"></div>
+                <div class="warnbox">
+                  <b>금고 주소는 켤 때 고정됩니다.</b> 남이 이 컴퓨터를 만져도 목적지를 바꿀 수 없고,
+                  사장님 지갑으로 보내는 것만 할 수 있습니다. 주소를 바꾸려면 지갑 암호가 필요합니다.
+                </div>
+              </div>
+            </section>
+
+            <!-- ── 라비와 AI ── 🔴 「음성 전송 동의 철회」가 화면 맨 위 검은 단추였다(가장 드물게 쓰는 것이 맨 위). 제자리로. -->
+            <section class="sx-sec" data-sx-pane="ravi" aria-labelledby="sx-h-ravi">
+              <h2 class="sx-ptitle" id="sx-h-ravi">라비와 AI</h2>
+              <p class="sx-lede">라비에게 무엇을 보여 줄지, 언제 말을 걸지 정해요.</p>
+              <div class="sx-slot" data-sx-slot="ravi-agent-settings"></div>
+              <div class="card sx-group" translate="no"><button id="ravi-voice-revoke" type="button"></button><p id="ravi-voice-revoked" role="status"></p></div>
+              <div class="sx-slot" data-sx-slot="companion-preferences"></div>
+            </section>
+
+            <!-- ── 정보와 개발비 ── -->
+            <section class="sx-sec" data-sx-pane="about" aria-labelledby="sx-h-about">
+              <h2 class="sx-ptitle" id="sx-h-about">정보와 개발비</h2>
+              <div class="card sx-group">
+                <div class="sx-row">
+                  <span class="sx-txt"><b class="sx-t">새 버전</b><span class="sx-d">받아만 두고 고르셔요 — 장사 중에 저절로 다시 켜지지 않아요</span></span>
+                  <button class="ghost" id="up-check">새 버전 확인</button>
+                </div>
+                <!-- 판올림. 받아만 두고 사장이 고른다. -->
+                <div id="up-box" style="display:none"></div>
+              </div>
+              <!-- 🔴 개발비 칸은 「고급 → 읽기 전용」 맨 안쪽에 있었다. 숨기면 나중에 발견한 사장은 프로그램 전체를 의심한다.
+                   이름도 「수수료」가 아니라 「개발비」다(우리는 사장 매출에 끼어들지 않는다). -->
+              <div class="card feecard">
+                <h3>개발비 1%</h3>
+                <p class="meta">
+                  손님이 낸 돈의 <b>1%</b>가 이 프로그램을 만드는 곳으로 갑니다.
+                  나머지 99%는 사장님 지갑으로 바로 들어옵니다.
+                  <b>손님이 더 내는 것이 아니라</b>, 받으신 금액에서 나뉩니다.
+                </p>
+                <!-- 🔴 세 곳 다 같은 거래 안에서 나간다: 가게 주문 shop.rs · 맞교환 swap.rs · 중고 = 폰 지갑이 서명할 때(「이 물건 사기」를 눌렀을 때만). -->
+                <div class="kv"><b>붙는 곳</b><span>가게 결제 · 벤딩머신 · 자산 맞교환 · 중고 물건 사기</span></div>
+                <div class="kv"><b>안 붙는 곳</b><span>채굴 · 그냥 보내기 · 자산 발행</span></div>
+                <div class="kv"><b>가는 자리</b><span><code class="addr" id="fee-addr">읽는 중…</code></span></div>
+                <!-- 🔴 「개발비 내기 / 안 내기」 스위치는 없앴다(2026-08-23 대표님 지시). -->
+                <div class="feebox" id="fee-owedbox" style="display:none">
+                  <div class="kv"><b>쌓인 개발비</b><span id="fee-owed">0 RVN</span></div>
+                  <div class="kv"><b>여태 보낸 것</b><span id="fee-sent">0 RVN</span></div>
+                  <button class="ghost" id="fee-send">개발비 보내기</button>
+                  <div class="meta" id="fee-sendsay"></div>
+                </div>
+                <details class="sx-more"><summary>자세히</summary>
+                  <p class="meta">자산 판매·맞교환·경매 낙찰까지 모든 결제에 1%가 개발비입니다. 사람 사이 송금에는 개발비가 없습니다.</p>
+                  <p class="meta">
+                    <b>끄는 설정은 없습니다.</b> 대신 공개 장부에서 직접 대조하실 수 있고,
+                    소스가 전부 공개돼 있습니다. 카드 수수료(2~3%)와 달리
+                    <b>단말기 임대료도 정산 대기도 해지 위약금도 없습니다.</b>
+                  </p>
+                </details>
+              </div>
+              <!-- 정보 · 오픈소스 고지. 레이븐코인 코어 v4.8.0 의 COPYING(MIT) 문구를 그대로 싣는다 — 번역하지 않는다. -->
+              <div class="card" id="about-notice"><h2>정보 · 오픈소스 고지</h2>
+                <p>이 프로그램은 노드로 레이븐코인 코어(Ravencoin Core) v4.8.0 을 함께 씁니다. 레이븐코인 코어는 MIT 라이선스의 오픈소스입니다. 아래는 그 저작권 고지와 허가 문구 원문입니다.</p>
+                <details><summary>Ravencoin Core v4.8.0 — MIT License</summary>
+<pre id="about-ravencoin-license" class="sx-license" translate="no">The MIT License (MIT)
 
 Copyright (c) 2009-2018 The Bitcoin Core developers
 Copyright (c) 2018 The Raven Core developers
@@ -5027,638 +5446,172 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.</pre></details>
-        </div>
-        <h2 class="title">이 컴퓨터</h2>
-
-        <!-- ── 자주 쓰는 것부터 ──────────────────────────────────────────
-             🔴 **이 줄이 「개발비 1%」 카드 **안에** 들어가 있었다.**
-                (자문 지적 2026-08-30 · `index.html:3322` 자리)
-
-                그래서 「한 번에 준비하기」·「쉬운 설정」이 수수료 설명과
-                주소 사이에 끼어 있었다. 대표님이 **두 번** 못 찾으셨다.
-                이 파일 CSS 는 「쉬운 설정이 제일 먼저, 제일 크다」고
-                적어 두었는데, 정작 HTML 은 그 반대였다.
-
-                자주 쓰는 것이 위다. 개발비는 읽고 마는 것이라 아래로 간다. -->
-        <div class="tiles pagetiles" id="pt-settings"></div>
-
-        <!-- 무엇으로 쓰는지. 바꿔도 아무것도 안 지운다 — 돕던 사람이
-             가게를 열 수도 있고, 가게를 접고 돕기만 할 수도 있다. -->
-        <div class="card">
-          <b>이 프로그램을 무엇으로 쓰시나요</b>
-          <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">
-            <button class="ghost" id="mode-wallet">지갑으로만 쓰기</button>
-            <button class="ghost" id="mode-help">레이븐코인 돕기</button>
-            <button class="ghost" id="mode-shop">장사에 쓰기</button>
-          </div>
-          <p class="meta" id="mode-say" style="margin-top:10px"></p>
-        </div>
-
-        <!-- ── 주문 알림 소리 ──────────────────────────────────────────
-             🔴 **끌 수 있어야 한다.** 이 프로그램은 밤새 켜 두는 컴퓨터에서도
-                돈다(자동 발송·백업·재색인). 아무도 없는 사무실에서 새벽 3시에
-                「딩동」이 울리는 것은 알림이 아니라 민원이다.
-
-             기본은 켜짐이다. 장사하는 사람에게 소리 없는 주문은 놓친 주문이고,
-             「알림이 있는 줄도 몰랐다」가 「시끄러워서 껐다」보다 훨씬 나쁘다.
-             끄는 사람은 한 번 찾아 끄면 되지만, 있는 줄 모르는 사람은 영영
-             모른다.                                                    ── -->
-        <div class="card" id="snd-card">
-          <b>새 주문 소리</b>
-          <p class="meta">
-            손님 주문이 들어오거나 <b>입금이 확인되면</b> 소리로 알려 드립니다.
-            창을 안 보고 계실 때는 한 번 더 울립니다.
-          </p>
-          <label class="check">
-            <input type="checkbox" id="snd-on" checked />
-            <span>주문·입금이 들어오면 소리로 알리기</span>
-          </label>
-          <div class="row">
-            <button class="ghost" id="snd-test">소리 들어보기</button>
-            <span class="meta" id="snd-say" style="margin:0"></span>
-          </div>
-          <p class="meta">
-            밤새 켜 두는 컴퓨터라면 꺼 두세요. 꺼도 <b>주문은 그대로 들어옵니다</b> —
-            소리와 빨간 숫자만 안 나옵니다.
-          </p>
-        </div>
-
-        <!-- ── 대화 알림 소리 ──────────────────────────────────────────
-             🔴 **주문 스위치와 따로다.** 「주문은 켜고 대화는 끄고」가 보통이다 —
-                돈은 놓치면 안 되지만 이야기는 나중에 읽어도 된다. 하나로 묶으면
-                대화가 시끄러워서 끈 사람이 **주문 소리까지** 잃는다. 그게 이
-                프로그램에서 일어날 수 있는 제일 나쁜 결과다.
-
-             ⚠️ 소리도 주문과 **다르다.** 주문은 「딩—동」 두 음이 올라가고,
-                대화는 낮은 「톡」 한 음이다. 소리가 같으면 사장이 하던 일을
-                멈추고 주문표를 여는데 거기 아무것도 없다. 두어 번 그러면
-                다음부터는 진짜 주문 소리에도 안 움직인다.              ── -->
-        <div class="card" id="tksnd-card">
-          <b>대화 알림 소리</b>
-          <p class="meta">
-            「이야기」 방에 새 글이 오면 <b>낮은 소리로 한 번</b> 알려 드립니다.
-            주문 소리(딩—동)와 일부러 다르게 했습니다 — 돈과 말은 급한 정도가
-            다릅니다.
-          </p>
-          <p class="meta">
-            <b>내가 쓴 글</b>에는 울리지 않습니다.
-            <b>지금 보고 있는 방</b>에도 울리지 않습니다 — 눈앞에 글이 뜨는 것이
-            이미 답입니다.
-          </p>
-          <label class="check">
-            <input type="checkbox" id="tk-snd-on" checked />
-            <span>이야기에 새 글이 오면 소리로 알리기</span>
-          </label>
-          <div class="row">
-            <button class="ghost" id="tk-snd-test">소리 들어보기</button>
-            <span class="meta" id="tk-snd-say" style="margin:0"></span>
-          </div>
-          <p class="meta">
-            위 「새 주문 소리」와 <b>따로 켜고 끕니다.</b> 이것만 꺼도 주문 소리는
-            그대로 납니다. 꺼도 <b>새 글은 그대로 들어옵니다</b> —
-            소리와 왼쪽 「이야기」 옆 숫자만 안 나옵니다.
-          </p>
-        </div>
-
-        <div class="card" id="wd-card">
-          <b>레이븐 코어 지갑</b>
-          <p class="meta" id="wd-note" style="margin-top:8px">폴더를 찾는 중…</p>
-          <div class="kv"><b>폴더</b><span><code class="addr" id="wd-path">—</code></span></div>
-          <div class="row" style="margin-top:10px">
-            <button class="ghost" id="wd-pick">기존 지갑 폴더 고르기</button>
-          </div>
-          <p class="meta" style="margin-top:8px">
-            레이븐 코어를 쓰던 컴퓨터면 <b>그 wallet.dat 폴더</b>를 그대로 씁니다.
-            코어와 이 프로그램은 같은 지갑이라 <b>동시에 열 수 없습니다.</b>
-          </p>
-        </div>
-
-        <!-- ── 내 이름 ──────────────────────────────────────────────────
-             🔴 **여기가 「이야기 → 내 이름」과 다른 것이다.**
-
-             저기 있는 「내 이름」은 화면에 뜨는 **별명**을 정하는 자리다.
-             별명은 누구나 같게 달 수 있어서 그것은 「나」가 아니다.
-             여기는 그 별명을 붙이는 **열쇠** 이야기다 — 폰(웹 지갑)의 나와
-             이 컴퓨터의 나가 **같은 사람인가**.
-
-             ⚠️ 지갑 폴더 칸 바로 밑에 둔다. 열쇠는 12단어에서 나오고,
-                12단어는 그 폴더의 지갑에 들어 있다. 같은 이야기다.
-
-             ⚠️ 여기서 열쇠를 **만들지 않는다.** `identity_status` 는 묻기만
-                한다 — 설정 화면을 열었을 뿐인데 사람이 하나 태어나면 안 된다.
-                                                                       ── -->
-        <div class="card" id="idcard">
-          <b>내 이름</b>
-          <p class="meta" style="margin-top:8px">
-            이 컴퓨터의 「나」와 폰·웹 지갑의 「나」가 <b>같은 사람인지</b> 봅니다.
-            「이야기」에 적는 별명이 아니라, 그 별명을 붙이는 <b>열쇠</b> 이야기입니다 —
-            별명은 누구나 같게 달 수 있어서 그것으로는 같은 사람인지 알 수 없습니다.
-          </p>
-          <div id="id-body"><p class="meta">읽는 중…</p></div>
-
-          <!-- 🔴 8초 확인창이 그려질 자리. 이 자리가 없으면 확인창이
-               **접혀 있는 자산 마법사 속**에 그려져 아무도 못 본다 —
-               안 보이는 취소 단추는 없는 것과 같다. -->
-          <div class="holdhost" id="id-hold"></div>
-
-          <div class="bar" style="margin-top:12px">
-            <button class="ghost" id="id-reload">다시 확인</button>
-            <!-- 되돌리기 어려운 일 둘. 할 수 있을 때만 보인다 — 눌러도
-                 「바꿀 것이 없습니다」만 나오는 단추는 고장으로 읽힌다. -->
-            <button id="id-adopt" style="display:none">이름 합치기</button>
-            <button class="ghost" id="id-legacy" style="display:none">옛 이름으로 되돌리기</button>
-          </div>
-          <div id="id-say"></div>
-
-          <details class="onceoff" id="id-paths" style="margin-top:14px">
-            <summary>
-              <span class="oico" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-                     stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
-              </span>
-              <span>
-                <b>무엇이 12단어 어디에서 나오나</b>
-                <span class="osub">돈 · 사람 · 가게 간판 — 어느 자리에서 뽑는지 적어 둔 표</span>
-              </span>
-            </summary>
-            <div id="id-pathbody"><p class="meta">읽는 중…</p></div>
-          </details>
-        </div>
-
-        <!-- 🔴 이 칸은 여태 「고급 → 읽기 전용」 접힌 칸 **맨 안쪽**에 있었다.
-             화면 전체에서 딱 한 번, 제일 깊은 곳에.
-
-             숨기면 안 되는 이유는 정직해서가 아니라 **장사가 걸려서**다.
-             나중에 발견한 사장은 1% 가 아니라 프로그램 전체를 의심한다.
-             그리고 어차피 트랜잭션을 열어보면 드러난다 — 열어보면 드러나는
-             것을 설정으로 숨기는 것이 제일 나쁘다.
-
-             이름도 「수수료」가 아니라 「개발비」다. 수수료는 우리가 무슨
-             서비스를 해 주고 받는 값처럼 들리는데, 우리는 사장 매출에
-             끼어들지 않는다(매출은 우리 서버를 안 지나간다). 이건 이
-             프로그램을 만들고 고치는 값이다. -->
-        <div class="card feecard">
-          <h3 style="margin-top:0">개발비 1%</h3>
-          <p class="meta" style="margin:6px 0 10px">
-            손님이 낸 돈의 <b>1%</b>가 이 프로그램을 만드는 곳으로 갑니다.
-            나머지 99%는 사장님 지갑으로 바로 들어옵니다.
-            <b>손님이 더 내는 것이 아니라</b>, 받으신 금액에서 나뉩니다.
-          </p>
-          <p class="meta" style="margin:0 0 10px">자산 판매·맞교환·경매 낙찰까지 모든 결제에 1%가 개발비입니다. 사람 사이 송금에는 개발비가 없습니다.</p>
-          <!-- 🔴 **내가 이 줄을 틀리게 고칠 뻔했다**(2026-08-30).
-               「중고 물건 사기」가 거짓말인 줄 알고 뺐는데, **원래 맞는
-               말이었다.** 폰 지갑이 「이 물건 사기」로 들어온 결제에
-               개발비 출력을 직접 넣는다(`wallet.src.ts` 의 `buildAndSign`,
-               `withDevFee`). 배포된 번들에서 주소와 1% 계산을 확인했다.
-
-               세 곳 다 **같은 거래 안에서** 나간다:
-                 가게 주문  `shop.rs:415`
-                 맞교환     `swap.rs:411`
-                 중고       폰 지갑이 서명할 때
-
-               ⚠️ 다만 **「이 물건 사기」를 눌렀을 때만** 붙는다. 파는 사람
-                  주소로 직접 보내면 안 붙는다 — 막을 수 없다. 그래서 그
-                  단추가 전화보다 위에, 더 크게 있어야 한다(`shops.html:354`). -->
-          <div class="kv"><b>붙는 곳</b><span>가게 결제 · 벤딩머신 · 자산 맞교환 · 중고 물건 사기</span></div>
-          <div class="kv"><b>안 붙는 곳</b><span>채굴 · 그냥 보내기 · 자산 발행</span></div>
-          <div class="kv"><b>가는 자리</b><span><code class="addr" id="fee-addr">읽는 중…</code></span></div>
-          <!-- 🔴 여기에 「개발비 내기 / 안 내기」 스위치와 받는 주소 칸이
-               있었다. 없앴다(2026-08-23, 대표님 지시: "무조건 1% 받을거야").
-
-               반대 논리도 여기 적혀 있었다 — "못 끄는 것은 개발비가 아니라
-               세금이고, 오픈소스에서 세금은 포크 한 번으로 사라진다".
-               그 말은 지금도 맞다. 소스를 고쳐 다시 빌드하면 누구든 뺄 수 있다.
-
-               그래도 **스위치를 눈앞에 두는 것**과 **소스를 고쳐야 하는 것**은
-               다르다. 앞의 것은 설정을 여는 사람마다 한 번씩 고민하게 만든다.
-               카드 단말기는 2~3% 를 떼고 임대료를 따로 받는다. 여기는 1% 뿐이다. -->
-          <div class="feebox" id="fee-owedbox" style="display:none">
-            <div class="kv"><b>쌓인 개발비</b><span id="fee-owed">0 RVN</span></div>
-            <div class="kv"><b>여태 보낸 것</b><span id="fee-sent">0 RVN</span></div>
-            <button class="ghost" id="fee-send" style="margin-top:10px">개발비 보내기</button>
-            <div class="meta" id="fee-sendsay" style="margin-top:8px"></div>
-          </div>
-          <p class="meta" style="margin-top:10px">
-            <b>끄는 설정은 없습니다.</b> 대신 공개 장부에서 직접 대조하실 수 있고,
-            소스가 전부 공개돼 있습니다. 카드 수수료(2~3%)와 달리
-            <b>단말기 임대료도 정산 대기도 해지 위약금도 없습니다.</b>
-          </p>
-        </div>
-
-        <!-- ── 쉬운 설정 ────────────────────────────────────────────────
-             🔴 이 화면에는 입력칸 24개·단추 31개가 있었다. 판단을 하나씩
-             사장에게 떠넘긴 결과다. 복잡함은 사라지지 않는다 — 사장에게서
-             걷어내면 우리가 떠안는 것이고, 그 자리가 `src-tauri/src/spec.rs` 다.
-
-             여기서는 **읽고 한 번 누르는 것**만 한다. 값을 정하는 일은
-             컴퓨터를 보고 우리가 하고, 왜 그렇게 정했는지를 사람 말로 적는다.
-             이유 없이 정해진 값은 사장이 못 믿고, 못 믿으면 결국 아래
-             고급 설정을 열어 헤맨다. -->
-        <div class="card easycard" id="easy-setup">
-          <div class="easyhead">
-            <span class="ravi-static-face"></span>
-            <div>
-              <h3 style="margin:0">쉬운 설정</h3>
-              <div class="muted sm">이 컴퓨터를 보고 제가 정해 드릴게요.</div>
-            </div>
-          </div>
-          <div id="easy-body"><div class="muted">컴퓨터를 살펴보는 중…</div></div>
-        </div>
-
-
-
-        <!-- 🔴 여기부터는 **처음 한 번**만 하는 일이다. 화면에 한글 1,595자와
-             눌 것 61개가 한꺼번에 펼쳐져 있었고, 매일 여는 사장은 그 사이에서
-             오늘 할 일을 찾아야 했다.
-             줄이는 게 아니라 **접는다** — 숨기는 것과 접는 것은 다르다.
-             숨기면 못 찾고, 접으면 있는 줄 안다. -->
-        <details class="onceoff">
-          <summary>
-            <span class="oico" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-                   stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
-            </span>
-            <span>
-              <b>처음 한 번 하는 것들</b>
-              <span class="osub">지점 이름 · 손님 폰 연결 · 백업 · 금고 — 매일 여실 필요 없어요</span>
-            </span>
-          </summary>
-
-        <!-- 이 노드가 어디인지. 지점이 둘이 되는 순간 "이 컴퓨터"는 뜻이 없다. -->
-        <div class="card" style="margin-bottom:12px">
-          <!-- 사이드바 표시등을 누르면 여기로 온다. -->
-          <h3 id="sec-node">이 서버</h3>
-          <label style="display:block;font-size:14px;color:var(--muted);margin-top:8px">
-            이름 (지점명)
-            <input id="nd-name" placeholder="강남지점 · 2층 계산대" autocomplete="off"
-                   style="display:block;width:100%;margin-top:4px" />
-          </label>
-          <div class="meta" id="nd-note" style="margin-top:4px"></div>
-        </div>
-
-        <!-- 인터넷이 끊기면 결제 규칙이 달라진다. 화면이 먼저 말해야 한다. -->
-        <div id="net-banner"></div>
-
-        <!-- 판정 -->
-        <div class="verdict" id="hz-card">
-          <div class="v-state" id="hz-state">확인 중…</div>
-          <div class="v-why" id="hz-why"></div>
-          <div class="v-fix" id="hz-fix"></div>
-          <div id="hz-extra"></div>
-        </div>
-
-        <!-- 능력 -->
-        <div class="switches" id="sw-list"></div>
-
-        <!-- 판올림. 받아만 두고 사장이 고른다 — 장사 중에 저절로 재시작되면
-             손님 폰 서버가 끊기고 QR 이 먹통이 된다. -->
-        <div id="up-box" style="display:none;margin-bottom:16px"></div>
-
-        <!-- 한 번 하는 일 -->
-        <h3 class="grouphead">한 번 하는 일</h3>
-        <div class="tools">
-          <div id="bk-list"></div>
-          <div class="row" style="margin-top:12px">
-            <button id="bk-go">백업 만들기</button>
-        <!-- 🔴 대표님: 노트북(들고 다님)에서 항상 켜진 컴퓨터로 가게를 옮긴다.
-             여태는 백업 → 파일 옮기기 → 폴더 찾기 → 복구, 네 개의 벽이었다. -->
-        <div class="card" style="margin-top:14px">
-          <h3>가게를 다른 컴퓨터로 옮기기</h3>
-          <p class="meta">컴퓨터 간 직접 이사는 호환성 점검 중입니다. 암호화한 백업 파일을 USB로 옮긴 뒤 새 컴퓨터에서 되돌리기를 사용하세요.</p>
-          <div class="row" style="margin-top:10px;flex-wrap:wrap;gap:8px">
-            <button id="mv-all" disabled>전부 보내기</button>
-            <button class="ghost" id="mv-shop" disabled>가게만 보내기</button>
-            <button class="ghost" id="mv-get" disabled>가져오기</button>
-          </div>
-          <p class="meta" style="margin-top:6px">
-            <b>전부</b> — 이 컴퓨터를 그만 쓰실 때. 지갑까지 갑니다<br />
-            <b>가게만</b> — 돈은 이 컴퓨터에 남습니다. 새 컴퓨터는 카운터가 됩니다
-          </p>
-          <div id="mv-box"></div>
-        </div>
-
-            <button class="ghost" id="bk-seed">복구 단어 보기</button>
-            <span class="meta" id="bk-note"></span>
-          </div>
-          <div id="bk-result"></div>
-
-          <!-- 되돌리기. 백업만 있고 이게 없으면 백업이 아니라 습관이다. -->
-          <div class="row" style="margin-top:16px">
-            <button class="ghost" id="rs-find">백업 찾기</button>
-            <button class="ghost" id="rs-pick">백업에서 되돌리기</button>
-            <button class="ghost" id="rs-folder">폴더에서 되돌리기</button>
-            <button class="ghost" id="rs-words">복구 단어로 되살리기</button>
-            <button class="ghost" id="rs-card">복구 카드 인쇄</button>
-            <button class="ghost" id="rs-lost">폰을 잃어버렸어요</button>
-            <button class="ghost" id="up-check">새 버전 확인</button>
-          </div>
-          <div id="rs-found"></div>
-          <div id="rs-result"></div>
-
-          <!-- 훔쳐가는 문제. 지갑 잠금은 "못 보낸다"를 막을 뿐, "많이 들고 있다"는
-               안 고친다. 카운터를 안전하게 만드는 게 아니라 얕게 만든다. -->
-          <div class="card" style="margin-top:16px">
-            <h3>번 돈 금고로 옮기기</h3>
-            <div class="meta" style="margin-bottom:8px">
-              계산대에 하루치가 쌓입니다. 정해 둔 금액을 넘으면 남는 돈이 자동으로
-              <b>다른 지갑</b>으로 갑니다. 컴퓨터를 잃어버려도 거기 있는 돈은 무사합니다.
-            </div>
-            <div class="row">
-              <div style="flex:2">
-                <label>금고 주소 (이 컴퓨터가 아닌 지갑)</label>
-                <input id="sw-to" placeholder="R…" autocomplete="off" spellcheck="false" />
               </div>
-            </div>
-            <div class="row" style="margin-top:8px">
-              <!-- 🔴 여태 단위가 없었다. 이 두 칸은 **RVN** 인데 화면에는
-                   아무 표시가 없어서, 사장은 원으로 읽는다. 그리고 이 설정은
-                   5분마다 **진짜로 돈을 보낸다** — 잘못 읽으면 금고가 안 돌거나
-                   매출이 통째로 나간다. 단위를 적고, 지금 시세로 원이 얼마인지
-                   그 자리에서 보여 준다. -->
-              <div><label>이 금액(RVN)을 넘으면</label>
-                <input id="sw-above" inputmode="decimal" placeholder="3000" />
-                <div class="unit" id="sw-above-krw"></div></div>
-              <div><label>계산대에 남길 돈(RVN)</label>
-                <input id="sw-keep" inputmode="decimal" placeholder="1000" />
-                <div class="unit" id="sw-keep-krw"></div></div>
-            </div>
-            <div class="row" style="margin-top:8px">
-              <button id="sw-save">켜기</button>
-              <button class="ghost" id="sw-off">끄기</button>
-              <span class="meta" id="sw-note"></span>
-            </div>
-            <div id="sw-state" class="meta" style="margin-top:8px"></div>
-            <div class="warnbox" style="margin-top:8px;font-size: 14px">
-              <b>금고 주소는 켤 때 고정됩니다.</b> 남이 이 컴퓨터를 만져도 목적지를 바꿀 수 없고,
-              사장님 지갑으로 보내는 것만 할 수 있습니다. 주소를 바꾸려면 지갑 암호가 필요합니다.
-            </div>
-          </div>
+            </section>
 
-          <!-- 백업을 어디에 둘 것인가. 폴더 경로를 타이핑하게 하면 아무도 안 한다. -->
-          <div class="card" style="margin-top:12px">
-            <h3>백업 둘 곳</h3>
-            <div id="bk-places" class="meta">찾는 중…</div>
-            <!-- 🔴 여기 문구가 예전엔 「지갑 암호가 있으면 올린다」였다.
-                 그건 레이븐코인 지갑 암호에 기대는 말인데, 그 암호는 2011년
-                 방식이라 `raven` 같은 것은 2.5초에 뚫린다. 사장이 무엇을
-                 넣었는지 우리는 모르고 알 수도 없다. 그래서 이제 우리가
-                 한 번 더 잠근다(`lockbox.rs`). -->
-            <!-- 🔴 어디에 무엇이 어떻게 가는지 한 표로 본다. 여태 말로만
-                 적혀 있어서 "내 지갑이 어디 어떻게 있는지" 를 알 수 없었다. -->
-            <div class="bkgrid">
-              <div class="bkrow bkhead"><span>어디</span><span>지갑</span><span>잠금</span></div>
-              <div class="bkrow"><span>이 컴퓨터</span><span>들어감</span><span>안 함</span></div>
-              <div class="bkrow"><span>USB</span><span>들어감</span><span id="bk-usbstate">잠금</span></div>
-              <div class="bkrow"><span>클라우드</span><span>들어감</span><span>잠금</span></div>
-            </div>
-            <p class="meta" style="margin-top:6px">
-              자동 백업의 로컬 사본에는 추가 암호화가 없습니다. 컴퓨터 계정과 디스크 잠금을 사용하세요. 직접 만든 백업 파일은 암호화합니다.
-            </p>
+            <!-- ── 고급 ── 대부분은 만질 필요가 없다. 쉬운 설정이 대신 정해 둔다. -->
+            <section class="sx-sec" data-sx-pane="advanced" aria-labelledby="sx-h-advanced">
+              <h2 class="sx-ptitle" id="sx-h-advanced">고급</h2>
+              <p class="sx-lede">대부분은 만질 필요가 없어요. 쉬운 설정이 대신 정해 둬요.</p>
+              <details class="advanced">
+                <summary>고급 — 채굴 · AI 키 · 세부 설정</summary>
 
-            <label class="check" style="margin-top:12px">
-              <input type="checkbox" id="bk-usblock" checked />
-              <span>USB 백업도 잠그기</span>
-            </label>
-            <div class="meta" id="bk-usbnote">
-              <b>켜 두시길 권합니다.</b> USB 는 잃어버리고, 빌려주고, 꽂아 둔 채로
-              자리를 비웁니다 — 주운 사람이 가게 돈을 가져갑니다.<br />
-              끄시면 열쇠 없이 바로 쓸 수 있지만, 그 USB 하나가 곧 지갑입니다.
-            </div>
+                <div class="card">
+                  <h3>AI 도우미</h3>
+                  <div class="warnbox">
+                    <b>AI로 보낼 내용을 확인하세요.</b>
+                    화면 채우기는 질문·현재 가게와 메뉴·최근 대화를 함께 보냅니다.
+                    그냥 묻기는 질문을 보내며, 두 곳에 묻기는 두 제공자에게 같은 질문을 보냅니다.
+                    클라우드 제공자는 인터넷이 필요합니다. 이 컴퓨터의 AI는 미리 설치한 로컬 서버가 필요합니다.
+                  </div>
+                  <div id="keyrows"></div>
+                  <details class="sx-sub">
+                    <summary class="meta">다른 회사 · 내 컴퓨터의 AI</summary>
+                    <div class="row">
+                      <div><label>이름</label><input id="cu-label" placeholder="Grok" autocomplete="off" /></div>
+                      <div><label>모델</label><input id="cu-model" placeholder="grok-4" autocomplete="off" /></div>
+                    </div>
+                    <div class="row">
+                      <div><label>주소</label><input id="cu-url" placeholder="https://api.x.ai/v1" autocomplete="off" /></div>
+                      <div><label>키 (없으면 비움)</label><input id="cu-key" type="password" autocomplete="off" /></div>
+                    </div>
+                    <div class="meta">Ollama는 <code>http://127.0.0.1:11434/v1</code>, 키 없음.</div>
+                    <p class="meta">HTTP는 이 컴퓨터 또는 사설망의 무키 AI만 허용합니다. 로컬 AI를 선택하면 실패해도 클라우드로 질문을 넘기지 않습니다.</p>
+                    <p class="meta">같은 HTTPS 주소에서 키 칸을 비우면 기존 키를 유지합니다. 주소를 바꾸면 키를 다시 입력하세요. 삭제는 위의 지우기 단추를 누르세요.</p>
+                  </details>
+                  <div class="row sx-acts">
+                    <button class="ghost" id="key-save">저장</button>
+                    <div class="sx-grow"><label>지금 쓸 곳</label><select id="ai-pick"></select></div>
+                    <span class="meta" id="key-note"></span>
+                  </div>
 
-            <div class="warnbox" style="margin-top:12px;font-size: 14px">
-              <b>클라우드로 나가는 파일은 저희가 한 번 더 잠급니다.</b>
-              백업을 열려면 백업 암호 또는 백업 열쇠가 필요합니다. 지갑 복구 단어와는 다릅니다. 백업 파일과 별도로 안전하게 보관하세요.
-            </div>
+                  <!-- 한 곳이 막히면 다음으로 넘어간다. 그 순서가 곧 요금이다. -->
+                  <details class="sx-sub">
+                    <summary class="meta">넘어가는 순서 바꾸기</summary>
+                    <div class="meta">
+                      위에 있는 곳부터 씁니다. 막히거나 실패하면 아래로 넘어갑니다.
+                      <b>안 건드리면 지금 그대로</b> 돕니다.
+                    </div>
+                    <h4 class="sx-h4">손님 질문에 답할 때</h4>
+                    <div class="meta">하루 200번까지 옵니다. 싸고 빠른 곳이 위로 오는 게 유리합니다.</div>
+                    <div id="ord-customer"></div>
+                    <h4 class="sx-h4">사장님을 도울 때</h4>
+                    <div class="meta">가끔 씁니다. 잘하는 곳이 위로 오는 게 유리합니다.</div>
+                    <div id="ord-owner"></div>
+                    <div class="row sx-acts">
+                      <button class="ghost" id="ord-reset">기본값으로</button>
+                      <span class="meta" id="ord-note"></span>
+                    </div>
+                  </details>
+                </div>
 
-            <!-- 🔴 열쇠가 컴퓨터에만 있으면, 컴퓨터가 죽는 날 클라우드 사본도
-                 같이 죽는다. 그건 백업이 아니라 짐이다. 그래서 종이에 적게 한다. -->
-            <div class="card" style="margin-top:12px;border-color:var(--warn)">
-              <h3 style="margin-top:0">이 자물쇠의 열쇠</h3>
-              <!-- 🔴 암호를 정한 사람에게 이걸 적으라고 하면 **안 해도 되는 일을
-                   시키는 것**이고, 그래서 「암호가 둘인가?」로 읽힌다.
-                   암호가 정해져 있으면 화면이 그렇게 말한다(main.ts 가 바꾼다). -->
-              <p class="meta" id="ck-need" style="margin:6px 0 10px">
-                <b>컴퓨터가 죽으면, 이 52글자가 없으면 못 엽니다.</b>
-                종이에 적어 12단어와 같이 보관하세요.
-              </p>
-              <div id="ck-key" class="keyshow">눌러서 보기</div>
-              <div class="row" style="margin-top:10px">
-                <button id="ck-show">열쇠 보기</button>
-                <button class="ghost" id="ck-copy">복사</button>
-              </div>
-            </div>
+                <div class="card" id="mine-net-box">
+                  <h3>채굴</h3>
+                  <p class="meta">
+                    이 컴퓨터로 캐지 않습니다. <b>따로 있는 GPU 기계</b>가 캐고 수익만 이 지갑으로 옵니다.
+                  </p>
+                  <div id="mn-detect"></div>
+                  <div class="row">
+                    <div class="sx-grow"><label>캘 기계의 그래픽카드<select id="mn-gpu"></select></label></div>
+                    <div class="sx-grow"><label>전기요금 (원/kWh)<input id="mn-kwh" type="number" value="150" /></label></div>
+                  </div>
+                  <div class="row" id="mn-custom" style="display:none">
+                    <div class="sx-grow"><label>해시레이트 (MH/s)<input id="mn-mh" type="number" value="30" /></label></div>
+                    <div class="sx-grow"><label>소비전력 (W)<input id="mn-watts" type="number" value="150" /></label></div>
+                  </div>
+                  <div id="mn-calc"></div>
+                  <label class="sx-field">GPU를 몇 %로 쓸까요
+                    <input id="mn-power" type="range" min="50" max="100" step="5" value="70" />
+                  </label>
+                  <div id="mn-powernote" class="meta"></div>
+                  <div class="row">
+                    <div class="sx-grow"><label>풀<select id="mn-pool"></select></label></div>
+                    <div class="sx-grow"><label>장비 이름<input id="mn-worker" placeholder="rig1" /></label></div>
+                  </div>
+                  <div class="row sx-acts">
+                    <button class="ghost" id="mn-addr">받을 주소 만들기</button>
+                    <button class="ghost" id="mn-income">들어온 수익</button>
+                    <span class="meta" id="mine-note"></span>
+                    <span class="meta" id="mn-incomenote"></span>
+                  </div>
+                  <div id="mn-setup"></div>
+                  <div id="mn-incomebox"></div>
 
-            <!-- 🔴 위의 긴 열쇠를 종이에 적는 사람은 많지 않다. 12단어도 이미
-                 적어야 하는데 하나를 더 얹으면 안 하는 쪽으로 흐른다.
-                 그래서 **외우는 암호**로도 열리게 한다. -->
-            <div class="card" style="margin-top:12px">
-              <h3 style="margin-top:0">외우는 암호로도 열기</h3>
-              <!-- 🔴 암호가 두 군데 따로 있으면 사장은 그 둘을 헷갈린다.
-                   그래서 **지갑에 암호를 걸 때 이것도 같이 정해진다.**
-                   여기는 「아직 안 걸었거나, 따로 두고 싶을 때」의 자리다. -->
-              <p class="meta" style="margin:6px 0 10px">
-                <b>「지갑」 화면에서 암호를 거시면 이것도 같이 정해집니다.</b>
-                따로 정하실 필요가 없습니다. 아래는 지갑 암호를 아직 안 걸었거나,
-                <b>백업만 다른 암호로</b> 두고 싶을 때 씁니다.
-              </p>
-              <div class="card" style="margin:0 0 10px;padding:10px 12px">
-                <div class="kv"><b>지갑 암호</b><span>돈을 보낼 때 — 「지갑」 화면</span></div>
-                <div class="kv"><b>이 암호</b><span>새 컴퓨터에서 백업을 열 때</span></div>
-              </div>
-              <!-- 🔴 한 번만 받으면 오타를 못 잡는다. 오타 난 암호는
-                   **새 컴퓨터에서 백업을 못 여는 것**으로 나타나고, 그때는
-                   이미 늦었다. 두 번 받는다. -->
-              <div class="row" id="bp-box">
-                <input id="bp-pass" type="password" placeholder="암호 (10글자 이상)"
-                       autocomplete="new-password" style="flex:1;min-width:150px" />
-                <input id="bp-pass2" type="password" placeholder="한 번 더"
-                       autocomplete="new-password" style="flex:1;min-width:150px" />
-                <button id="bp-save">이 암호로 정하기</button>
-              </div>
-              <!-- 🔴 암호를 정하면 위 칸을 접는데, 접기만 하면 **바꿀 길이
-                   없어진다.** 여는 단추를 남긴다. -->
-              <button class="ghost" id="bp-again" style="display:none;margin-top:10px">암호 바꾸기</button>
-              <p class="meta" id="bp-msg" style="margin-top:8px"></p>
-            </div>
-          </div>
+                  <!-- 이 컴퓨터로 캐는 경우 — 무엇을 얻고 무엇을 잃는지 화면이 말한다. -->
+                  <h3 class="sx-h3gap">이 컴퓨터로도 캐기</h3>
+                  <p class="meta">
+                    계산대 컴퓨터로는 <b>전기값이 더 나갈 수 있습니다.</b> 그래도 소량이나마
+                    레이븐에 기여하고 싶을 때 켜세요. 채굴기는 우리가 넣어 두지 않았습니다 —
+                    백신이 채굴기를 악성코드로 잡는 일이 흔해서, 넣으면 앱 전체가 격리됩니다.
+                    아래에서 받아 <b>다운로드 폴더</b>에 두시면 찾아서 씁니다.
+                  </p>
+                  <div id="mn-miners"></div>
+                  <div class="row">
+                    <div class="sx-grow"><label>채굴기 실행 파일 이름<input id="mn-bin" placeholder="kawpowminer" autocomplete="off" spellcheck="false" /></label></div>
+                  </div>
+                  <div class="row sx-acts">
+                    <button id="mn-run">채굴 켜기</button>
+                    <button class="ghost" id="mn-halt">끄기</button>
+                    <span class="meta" id="mn-runnote"></span>
+                  </div>
+                  <div class="meta" id="mn-runstate"></div>
+                  <div class="meta" id="mn-net"></div>
+                </div>
 
-          <!-- 빈 화면은 전부 똑같이 생겼다. 고장난 것과 아직 아무것도 없는 것을
-               구별하려면 내용이 있어야 한다. -->
-          <div class="row" style="margin-top:16px">
-            <button class="ghost" id="sp-fill">시험용 가게 만들기</button>
-            <button class="ghost" id="sp-clear">시험용 지우기</button>
-            <span class="meta" id="sp-note"></span>
-          </div>
-          <div id="sp-result"></div>
+                <div class="card">
+                  <h3>세부 설정</h3>
+                  <p class="meta">
+                    위의 <b>오래된 컴퓨터로 아끼기</b> 스위치가 이 값들을 대신 정합니다.
+                    직접 만지실 때만 여세요.
+                  </p>
+                  <div id="cf-disk"></div>
+                  <div class="row" id="cf-templates"></div>
+                  <div id="cf-fields"></div>
+                  <div class="row sx-acts">
+                    <button id="cf-save">저장하고 다시 켜기 안내</button>
+                    <button class="ghost" id="cf-reload">되읽기</button>
+                    <span class="meta" id="cf-note"></span>
+                  </div>
+                  <div id="cf-result"></div>
+                  <div id="cf-others"></div>
 
-          <div class="warnbox" style="margin-top:12px;font-size: 14px">
-            <b>백업본을 다른 컴퓨터에서 동시에 켜지 마세요.</b>
-            두 서버가 같은 지갑을 쓰면 같은 주소를 두 번 나눠 주고 돈을 잃습니다.
-            원래 컴퓨터가 <b>완전히 죽었을 때만</b> 쓰세요.
+                  <h3 id="sec-ipfs" class="sx-h3gap">사진 보관함</h3>
+                  <!-- 🔴 「창고」라고만 하면 내 것만 넣는 곳으로 읽힌다. 실제로는 세상과 나눠 갖는 곳이다. -->
+                  <p class="lede">
+                    가게 사진·메뉴판이 여기 들어갑니다. <b>내 컴퓨터에만 있는 창고가 아니라</b>,
+                    손님 폰과 다른 서버가 같이 나눠 갖는 곳입니다 — 그래서 손님이 사진을 볼 수 있습니다.
+                    같은 파일은 언제나 같은 주소를 가지므로, <b>바뀌면 주소도 바뀝니다.</b>
+                  </p>
+                  <div class="row" id="if-profiles">
+                    <div class="tpl" data-ipfsprofile="lowpower"><b>오래된 컴퓨터</b><span>연결과 뒷일을 줄입니다</span></div>
+                    <div class="tpl" data-ipfsprofile="default-networking"><b>기본으로</b><span>원래대로</span></div>
+                  </div>
+                  <div id="if-fields"></div>
+                  <div class="row sx-acts"><span class="meta" id="if-note"></span></div>
+                  <div id="if-result"></div>
+                </div>
+
+                <!-- 빈 화면은 전부 똑같이 생겼다. 고장난 것과 아직 아무것도 없는 것을 구별하려면 내용이 있어야 한다. -->
+                <div class="card">
+                  <h3>시험용 가게</h3>
+                  <div class="row sx-acts">
+                    <button class="ghost" id="sp-fill">시험용 가게 만들기</button>
+                    <button class="ghost" id="sp-clear">시험용 지우기</button>
+                    <span class="meta" id="sp-note"></span>
+                  </div>
+                  <div id="sp-result"></div>
+                </div>
+
+                <div class="card">
+                  <h3>읽기 전용</h3>
+                  <div class="kv"><b>서버 RPC</b><span>127.0.0.1:8766 · 쿠키 인증</span></div>
+                  <div class="kv"><b>사진 보관함(IPFS) API</b><span>127.0.0.1:5001</span></div>
+                  <div class="kv"><b>사진 보관함(IPFS) 게이트웨이</b><span>127.0.0.1:8080</span></div>
+                </div>
+              </details>
+            </section>
           </div>
         </div>
-
-        <!-- 자주 안 여는 것 -->
-                </details>
-
-<details class="advanced">
-          <summary>고급 — 채굴 · AI 키 · 세부 설정</summary>
-
-          <div class="card" style="margin-top:12px">
-            <h3>AI 도우미</h3>
-            <div class="warnbox" style="font-size: 14px">
-              <b>AI로 보낼 내용을 확인하세요.</b>
-              화면 채우기는 질문·현재 가게와 메뉴·최근 대화를 함께 보냅니다.
-              그냥 묻기는 질문을 보내며, 두 곳에 묻기는 두 제공자에게 같은 질문을 보냅니다.
-              클라우드 제공자는 인터넷이 필요합니다. 이 컴퓨터의 AI는 미리 설치한 로컬 서버가 필요합니다.
-            </div>
-            <div id="keyrows"></div>
-            <details style="margin-top:12px">
-              <summary class="meta" style="cursor:pointer">다른 회사 · 내 컴퓨터의 AI</summary>
-              <div class="row" style="margin-top:8px">
-                <div><label>이름</label><input id="cu-label" placeholder="Grok" autocomplete="off" /></div>
-                <div><label>모델</label><input id="cu-model" placeholder="grok-4" autocomplete="off" /></div>
-              </div>
-              <div class="row" style="margin-top:8px">
-                <div><label>주소</label><input id="cu-url" placeholder="https://api.x.ai/v1" autocomplete="off" /></div>
-                <div><label>키 (없으면 비움)</label><input id="cu-key" type="password" autocomplete="off" /></div>
-              </div>
-              <div class="meta" style="margin-top:8px">Ollama는 <code>http://127.0.0.1:11434/v1</code>, 키 없음.</div>
-              <p class="meta" style="font-size:16px">HTTP는 이 컴퓨터 또는 사설망의 무키 AI만 허용합니다. 로컬 AI를 선택하면 실패해도 클라우드로 질문을 넘기지 않습니다.</p>
-              <p class="meta" style="font-size:16px">같은 HTTPS 주소에서 키 칸을 비우면 기존 키를 유지합니다. 주소를 바꾸면 키를 다시 입력하세요. 삭제는 위의 지우기 단추를 누르세요.</p>
-            </details>
-            <div class="row" style="margin-top:12px">
-              <button class="ghost" id="key-save">저장</button>
-              <div style="flex:1"><label>지금 쓸 곳</label><select id="ai-pick"></select></div>
-              <span class="meta" id="key-note"></span>
-            </div>
-
-            <!-- 한 곳이 막히면 다음으로 넘어간다. 그 순서가 곧 요금이다. -->
-            <details style="margin-top:12px">
-              <summary class="meta" style="cursor:pointer">넘어가는 순서 바꾸기</summary>
-              <div class="meta" style="margin-top:8px">
-                위에 있는 곳부터 씁니다. 막히거나 실패하면 아래로 넘어갑니다.
-                <b>안 건드리면 지금 그대로</b> 돕니다.
-              </div>
-
-              <h4 style="margin:12px 0 0;font-size:14px">손님 질문에 답할 때</h4>
-              <div class="meta" style="margin-top:4px">하루 200번까지 옵니다. 싸고 빠른 곳이 위로 오는 게 유리합니다.</div>
-              <div id="ord-customer"></div>
-
-              <h4 style="margin:16px 0 0;font-size:14px">사장님을 도울 때</h4>
-              <div class="meta" style="margin-top:4px">가끔 씁니다. 잘하는 곳이 위로 오는 게 유리합니다.</div>
-              <div id="ord-owner"></div>
-
-              <div class="row" style="margin-top:12px">
-                <button class="ghost" id="ord-reset">기본값으로</button>
-                <span class="meta" id="ord-note"></span>
-              </div>
-            </details>
-          </div>
-
-          <div class="card" id="mine-net-box">
-            <h3>채굴</h3>
-            <p class="meta" style="margin:0 0 12px">
-              이 컴퓨터로 캐지 않습니다. <b>따로 있는 GPU 기계</b>가 캐고 수익만 이 지갑으로 옵니다.
-            </p>
-            <div id="mn-detect"></div>
-            <div class="row">
-              <div style="flex:1"><label>캘 기계의 그래픽카드<select id="mn-gpu"></select></label></div>
-              <div style="flex:1"><label>전기요금 (원/kWh)<input id="mn-kwh" type="number" value="150" /></label></div>
-            </div>
-            <div class="row" id="mn-custom" style="display:none">
-              <div style="flex:1"><label>해시레이트 (MH/s)<input id="mn-mh" type="number" value="30" /></label></div>
-              <div style="flex:1"><label>소비전력 (W)<input id="mn-watts" type="number" value="150" /></label></div>
-            </div>
-            <div id="mn-calc"></div>
-            <label style="margin-top:12px">GPU를 몇 %로 쓸까요
-              <input id="mn-power" type="range" min="50" max="100" step="5" value="70" style="width:100%;margin-top:8px" />
-            </label>
-            <div id="mn-powernote" class="meta"></div>
-            <div class="row" style="margin-top:12px">
-              <div style="flex:1"><label>풀<select id="mn-pool"></select></label></div>
-              <div style="flex:1"><label>장비 이름<input id="mn-worker" placeholder="rig1" /></label></div>
-            </div>
-            <div class="row">
-              <button class="ghost" id="mn-addr">받을 주소 만들기</button>
-              <button class="ghost" id="mn-income">들어온 수익</button>
-              <span class="meta" id="mine-note"></span>
-              <span class="meta" id="mn-incomenote"></span>
-            </div>
-            <div id="mn-setup"></div>
-            <div id="mn-incomebox"></div>
-
-            <!-- 위는 따로 있는 GPU 기계 이야기다. 이건 이 컴퓨터로 캐는 경우 —
-                 계산대 맥미니로 큰돈이 되지는 않지만, 소량이라도 레이븐에
-                 기여하려는 사람이 많다. 그 선택을 막을 이유는 없고, 대신
-                 무엇을 얻고 무엇을 잃는지 화면이 말해야 한다. -->
-            <h3 style="margin-top:24px">이 컴퓨터로도 캐기</h3>
-            <p class="meta" style="margin:0 0 8px">
-              계산대 컴퓨터로는 <b>전기값이 더 나갈 수 있습니다.</b> 그래도 소량이나마
-              레이븐에 기여하고 싶을 때 켜세요. 채굴기는 우리가 넣어 두지 않았습니다 —
-              백신이 채굴기를 악성코드로 잡는 일이 흔해서, 넣으면 앱 전체가 격리됩니다.
-              아래에서 받아 <b>다운로드 폴더</b>에 두시면 찾아서 씁니다.
-            </p>
-            <div id="mn-miners"></div>
-            <div class="row" style="margin-top:8px">
-              <div style="flex:1"><label>채굴기 실행 파일 이름<input id="mn-bin" placeholder="kawpowminer" autocomplete="off" spellcheck="false" /></label></div>
-            </div>
-            <div class="row" style="margin-top:8px">
-              <button id="mn-run">채굴 켜기</button>
-              <button class="ghost" id="mn-halt">끄기</button>
-              <span class="meta" id="mn-runnote"></span>
-            </div>
-            <div class="meta" id="mn-runstate" style="margin-top:8px"></div>
-            <div class="meta" id="mn-net" style="margin-top:4px"></div>
-          </div>
-
-          <div class="card">
-            <h3>세부 설정</h3>
-            <p class="meta" style="margin:0 0 8px">
-              위의 <b>오래된 컴퓨터로 아끼기</b> 스위치가 이 값들을 대신 정합니다.
-              직접 만지실 때만 여세요.
-            </p>
-            <!-- 첫 화면에서 뺀 결정이 여기로 온다. 이미 노드를 돌리던 사람은
-                 처음 보는 화면이 아니라, 스스로 설정을 열었을 때 이 선택을
-                 만나야 한다. -->
-            <div id="cf-disk"></div>
-            <div class="row" id="cf-templates"></div>
-            <div id="cf-fields"></div>
-            <div class="row" style="margin-top:12px">
-              <button id="cf-save">저장하고 다시 켜기 안내</button>
-              <button class="ghost" id="cf-reload">되읽기</button>
-              <span class="meta" id="cf-note"></span>
-            </div>
-            <div id="cf-result"></div>
-            <div id="cf-others"></div>
-
-            <h3 id="sec-ipfs" style="margin-top:20px">사진 보관함</h3>
-            <!-- 🔴 「창고」라고만 하면 **내 것만 넣는 곳**으로 읽힌다. 실제로는
-                 세상과 나눠 갖는 곳이고, 그걸 모르면 「내 창고에 넣었으니 남은
-                 못 본다」고 오해한다. 사진을 올리는 사람이 알아야 할 사실이다.
-                 그리고 영문 이름을 한 번은 적어 둬야 한다 — 고장났을 때
-                 사장이 검색할 단어가 「파일창고」뿐이면 아무것도 안 나온다. -->
-            <p class="lede" style="margin-top:4px">
-              가게 사진·메뉴판이 여기 들어갑니다. <b>내 컴퓨터에만 있는 창고가 아니라</b>,
-              손님 폰과 다른 서버가 같이 나눠 갖는 곳입니다 — 그래서 손님이 사진을 볼 수 있습니다.
-              같은 파일은 언제나 같은 주소를 가지므로, <b>바뀌면 주소도 바뀝니다.</b>
-            </p>
-            <div class="row" id="if-profiles">
-              <div class="tpl" data-ipfsprofile="lowpower"><b>오래된 컴퓨터</b><span>연결과 뒷일을 줄입니다</span></div>
-              <div class="tpl" data-ipfsprofile="default-networking"><b>기본으로</b><span>원래대로</span></div>
-            </div>
-            <div id="if-fields"></div>
-            <div class="row" style="margin-top:12px"><span class="meta" id="if-note"></span></div>
-            <div id="if-result"></div>
-          </div>
-
-          <div class="card">
-            <h3>읽기 전용</h3>
-            <div class="kv"><b>서버 RPC</b><span>127.0.0.1:8766 · 쿠키 인증</span></div>
-            <div class="kv"><b>사진 보관함(IPFS) API</b><span>127.0.0.1:5001</span></div>
-            <div class="kv"><b>사진 보관함(IPFS) 게이트웨이</b><span>127.0.0.1:8080</span></div>
-          </div>
-        </details>
       </section>
     </main>
 
