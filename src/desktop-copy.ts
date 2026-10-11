@@ -2420,4 +2420,13 @@ export const DESKTOP_COPY: Record<string, [string, string, string]> = {
   "서버가 켜지지 않았습니다. 복구 단어 설정 문제로 보입니다 — 내용은 보안을 위해 옮기지 않습니다.": ["The server did not start. It looks like a recovery-word setting problem — the details are not shown for security.", "サーバーが起動しませんでした。復元用の単語の設定の問題のようです — 内容は安全のため表示しません。", "服务器没有启动。似乎是恢复单词设置的问题 — 为安全起见不显示具体内容。"],
   "지갑을 되살리는 동안과 끝난 직후에는 서버 기록을 보여 드리지 않습니다 — 복구 단어가 섞일 수 있어서입니다.": ["The server log is not shown while a wallet is being restored or right after — recovery words could be mixed in.", "ウォレットの復元中と終了直後は、サーバーの記録を表示しません — 復元用の単語が混ざる可能性があるためです。", "在恢复钱包期间及刚完成后，不显示服务器日志 — 因为其中可能混有恢复单词。"],
   "복구 단어로 지갑을 되살리는 중입니다. 끝나거나 되돌린 뒤 다시 시도해 주세요.": ["A wallet is being restored with recovery words. Please try again after it finishes or is undone.", "復元用の単語でウォレットを復元中です。終わるか元に戻した後にもう一度試してください。", "正在用恢复单词恢复钱包。请在完成或撤销后重试。"],
+  // ── 0.8.8a 자산 파일 보관 화면 — main 에서 바로 쓰는 문구만 여기(나머지는 지연 묶음 src/asset-keep-copy.ts). 유럽어 6개는 영어 폴백 — docs/i18n-0.8.8a-newstrings.json ──
+  "내 노드가 공개 장부를 직접 읽어서 확인해요.": ["My own node reads the public ledger directly to check.", "自分のノードが公開台帳を直接読んで確認します。", "由我自己的节点直接读取公开账本来确认。"],
+  "모두 다시 확인": ["Check all again", "すべて再確認", "全部重新检查"],
+  "받은 자산의 파일은 자산 화면에서 「보관」을 눌러야 이 컴퓨터가 붙잡아요. 내가 만든 자산은 자동으로 보관돼요.": ["Files of received assets are kept only after you press “Keep” on the Assets screen. Assets I made are kept automatically.", "受け取った資産のファイルは、資産画面で「保管」を押したときだけこのコンピュータが保持します。自分で作った資産は自動で保管されます。", "收到的资产的文件，只有在“资产”页面点击“保存”后，这台电脑才会保存。我创建的资产会自动保存。"],
+  "보관": ["Keep", "保管", "保存"],
+  "보관 중": ["Kept", "保管中", "保存中"],
+  "보관 해제": ["Stop keeping", "保管を解除", "取消保存"],
+  "원본 파일이 맞는지 보려면 아래 「진짜인지 확인」에서 그 파일을 대조해 보세요.": ["To check the original file, compare it under “Check it's genuine” below.", "元のファイルが正しいか確かめるには、下の「本物か確認」でそのファイルを照合してください。", "要确认原始文件是否一致，请在下方“验证真伪”中比对该文件。"],
+  "확인 안 됨": ["Not checked", "未確認", "未检查"],
 };

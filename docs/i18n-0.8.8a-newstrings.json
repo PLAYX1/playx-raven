@@ -1,0 +1,1889 @@
+{
+ "_about": "0.8.8a 에서 새로 생긴 문구. ko 원문 + en/ja/zh(코어 사전, src/desktop-copy.ts 에 이미 들어감). 유럽어 6개(it·es·fr·pt-BR·de·ru)는 아직 번역 없음 → 앱에서는 영어로 나온다. 번역팩(public/i18n/*.json, scripts/i18n/pack-extras.json 또는 rv-i18n 카탈로그)에 넣을 때 쓴다. 「위험」표시 = 돈·보안·법적 성격이라 합의 검수 전에는 영어 폴백 유지(0.8.7 정책).",
+ "risk_keys": [
+  "{0}개는 보관하지 않아요. 언제든 줄에서 「보관」을 누를 수 있어요.",
+  "「{0}」의 파일이에요. 이 컴퓨터가 마지막 사본일 수 있어요.",
+  "끌어놓은 파일의 지문이 장부와 달라요. 위조라고 단정할 수는 없어요 — 다른 파일을 놓았거나 올린 방식이 다를 수 있어요. 원본 파일로 다시 해 보세요.",
+  "끌어놓은 파일의 지문이 장부와 달라요. 이 파일이 커서 파일 보관함 방식 대조는 하지 않았어요. 위조라고 단정할 수는 없어요.",
+  "마지막 사본일 수 있음을 이해했어요",
+  "보관 설정 파일이 손상되어 자동 보관을 멈췄어요. 이미 보관 중인 파일은 그대로예요.",
+  "풀고 나면 이 파일을 열 수 없게 될 수 있어요. 다른 곳에 사본이 있는지는 알 수 없어요."
+ ],
+ "strings": [
+  {
+   "ko": "20초 동안 이 파일을 가진 컴퓨터를 찾지 못했어요. 파일이 없어졌다는 뜻이 아닙니다.",
+   "en": "No computer holding this file was found within 20 seconds. This does not mean the file is gone.",
+   "ja": "20秒以内に、このファイルを持つコンピュータが見つかりませんでした。ファイルがなくなったという意味ではありません。",
+   "zh": "20 秒内没有找到持有此文件的电脑。这并不表示文件已经消失。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "{0}, 보관 해제 중",
+   "en": "{0}, releasing",
+   "ja": "{0}、保管を解除中",
+   "zh": "{0}，正在取消保存",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "{0}, 보관 해제됨. 누르면 되돌려요",
+   "en": "{0}, released. Press to undo",
+   "ja": "{0}、保管を解除しました。押すと元に戻します",
+   "zh": "{0}，已取消保存。点击可撤销",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "{0}, 이유 보기",
+   "en": "{0}, show reason",
+   "ja": "{0}、理由を見る",
+   "zh": "{0}，查看原因",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "{0}, 파일 보관 안 함. 누르면 보관",
+   "en": "{0}, file not kept. Press to keep",
+   "ja": "{0}、ファイルは保管していません。押すと保管します",
+   "zh": "{0}，文件未保存。点击即可保存",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "{0}, 파일 보관 중. 누르면 아무 일 없음. 보관 해제는 길게 누르거나 Delete 키 또는 메뉴",
+   "en": "{0}, file kept. Pressing does nothing. To stop keeping, press and hold, use the Delete key, or open the menu",
+   "ja": "{0}、ファイルを保管中。押しても何も起きません。保管の解除は長押し、Deleteキー、またはメニューから",
+   "zh": "{0}，文件保存中。点击不会有任何变化。要取消保存，请长按、按 Delete 键或使用菜单",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "{0}, 파일 확인 안 됨. 누르면 찾아서 보관",
+   "en": "{0}, file not checked. Press to find and keep it",
+   "ja": "{0}、ファイルは未確認です。押すと探して保管します",
+   "zh": "{0}，文件尚未检查。点击将查找并保存",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "{0}, 파일을 찾지 못함. 누르면 다시 찾고, 못 찾으면 보관을 예약",
+   "en": "{0}, file not found. Press to look again; if still missing, keeping is scheduled",
+   "ja": "{0}、ファイルが見つかりません。押すと再検索し、見つからなければ保管を予約します",
+   "zh": "{0}，未找到文件。点击将重新查找，仍找不到则预约保存",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "{0}개 못 찾아 예약",
+   "en": "{0} not found, scheduled",
+   "ja": "{0}件は見つからず予約",
+   "zh": "{0} 个未找到，已预约",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "{0}개 보관",
+   "en": "{0} kept",
+   "ja": "{0}件を保管",
+   "zh": "已保存 {0} 个",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "{0}개 실패",
+   "en": "{0} failed",
+   "ja": "{0}件は失敗",
+   "zh": "{0} 个失败",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "{0}개는 보관하지 않아요. 언제든 줄에서 「보관」을 누를 수 있어요.",
+   "en": "{0} will not be kept. You can press “Keep” on its row any time.",
+   "ja": "{0}件は保管しません。いつでも行の「保管」を押せます。",
+   "zh": "不保存这 {0} 个。随时可以在该行点击“保存”。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": true
+  },
+  {
+   "ko": "「{0}」의 파일이에요. 이 컴퓨터가 마지막 사본일 수 있어요.",
+   "en": "This is the file of “{0}”. This computer may hold the last copy.",
+   "ja": "「{0}」のファイルです。このコンピュータが最後のコピーかもしれません。",
+   "zh": "这是“{0}”的文件。这台电脑可能保存着最后一份副本。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": true
+  },
+  {
+   "ko": "계속",
+   "en": "Continue",
+   "ja": "続ける",
+   "zh": "继续",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "계속 누르면 해제",
+   "en": "Keep holding to release",
+   "ja": "押し続けると解除",
+   "zh": "继续按住即解除",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "공개 장부에 있어요.",
+   "en": "It is on the public ledger.",
+   "ja": "公開台帳にあります。",
+   "zh": "公开账本上有这个资产。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "공개 장부에는 있어요. 아래에서 확인하지 못한 것을 보세요.",
+   "en": "It is on the public ledger. See below for what could not be checked.",
+   "ja": "公開台帳にはあります。確認できなかった項目は下をご覧ください。",
+   "zh": "公开账本上有。下方列出了未能确认的项目。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "공개 장부에서 이 이름을 찾지 못했어요. 이름을 다시 확인하세요.",
+   "en": "This name was not found on the public ledger. Check the name again.",
+   "ja": "公開台帳でこの名前が見つかりませんでした。名前をもう一度ご確認ください。",
+   "zh": "在公开账本上没有找到这个名称。请再核对名称。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "공개 장부와 일치합니다.",
+   "en": "It matches the public ledger.",
+   "ja": "公開台帳と一致しています。",
+   "zh": "与公开账本一致。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "그래도 계속할까요?",
+   "en": "Continue anyway?",
+   "ja": "それでも続けますか？",
+   "zh": "仍要继续吗？",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "길게 누르면 보관 해제",
+   "en": "Press and hold to stop keeping",
+   "ja": "長押しで保管を解除",
+   "zh": "长按可取消保存",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "길게 누르면 보관 해제 · Delete 키도 됩니다",
+   "en": "Press and hold to stop keeping · the Delete key works too",
+   "ja": "長押しで保管を解除 · Deleteキーでも可能です",
+   "zh": "长按可取消保存 · 也可按 Delete 键",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "끌어놓은 파일의 지문이 장부와 달라요. 위조라고 단정할 수는 없어요 — 다른 파일을 놓았거나 올린 방식이 다를 수 있어요. 원본 파일로 다시 해 보세요.",
+   "en": "The fingerprint of the dropped file differs from the ledger. That does not prove forgery — you may have dropped a different file, or it was uploaded differently. Try again with the original file.",
+   "ja": "置いたファイルの指紋が台帳と異なります。偽造とは断定できません — 別のファイルを置いたか、アップロード方法が異なる可能性があります。元のファイルでもう一度お試しください。",
+   "zh": "拖入文件的指纹与账本不同。这不能断定为伪造——可能拖入了其他文件，或上传方式不同。请用原始文件再试一次。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": true
+  },
+  {
+   "ko": "끌어놓은 파일의 지문이 장부와 달라요. 이 파일이 커서 파일 보관함 방식 대조는 하지 않았어요. 위조라고 단정할 수는 없어요.",
+   "en": "The fingerprint of the dropped file differs from the ledger. The file is too large for the file-storage-style comparison, so it was not done. This does not prove forgery.",
+   "ja": "置いたファイルの指紋が台帳と異なります。ファイルが大きいため、ファイル保管庫方式の照合は行いませんでした。偽造とは断定できません。",
+   "zh": "拖入文件的指纹与账本不同。该文件较大，未进行文件存储方式的比对。这不能断定为伪造。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": true
+  },
+  {
+   "ko": "내 노드가 공개 장부를 직접 읽어서 확인해요.",
+   "en": "My own node reads the public ledger directly to check.",
+   "ja": "自分のノードが公開台帳を直接読んで確認します。",
+   "zh": "由我自己的节点直接读取公开账本来确认。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "내 노드가 공개 장부를 직접 읽어서 확인해요. 인터넷 서버를 거치지 않아요.",
+   "en": "My own node reads the public ledger directly. No internet server is involved.",
+   "ja": "自分のノードが公開台帳を直接読んで確認します。インターネット上のサーバーは経由しません。",
+   "zh": "由我自己的节点直接读取公开账本，不经过互联网服务器。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "내 노드가 꺼져 있어서 지금은 확인할 수 없어요.",
+   "en": "My node is off, so this cannot be checked right now.",
+   "ja": "自分のノードがオフのため、今は確認できません。",
+   "zh": "我的节点已关闭，目前无法确认。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "내 노드로 답을 못 얻을 때만 인터넷 창의 확인 페이지가 대신할 수 있어요.",
+   "en": "Only when your own node cannot answer can the web verification page stand in.",
+   "ja": "自分のノードで答えが得られないときに限り、ブラウザの確認ページで代わりに確認できます。",
+   "zh": "仅当自己的节点无法给出答案时，才可改用网页确认页面。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "내 노드에 묻는 중…",
+   "en": "Asking my node…",
+   "ja": "自分のノードに問い合わせ中…",
+   "zh": "正在询问我的节点…",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "내가 만든 파일은 자동으로 보관",
+   "en": "Automatically keep files I made",
+   "ja": "自分で作ったファイルを自動で保管",
+   "zh": "自动保存我创建的文件",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "내가 만든 파일은 자동으로 보관해요.",
+   "en": "Files I made will be kept automatically.",
+   "ja": "自分で作ったファイルは自動で保管します。",
+   "zh": "将自动保存我创建的文件。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "내가 만든 파일을 자동으로 보관하지 않아요.",
+   "en": "Files I made will not be kept automatically.",
+   "ja": "自分で作ったファイルは自動では保管しません。",
+   "zh": "不会自动保存我创建的文件。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "내가 올린 파일인데 이 컴퓨터에서도 못 찾아요. 파일 보관함을 다시 켜거나, 올릴 때 쓴 원본 파일이 있으면 다시 올리세요.",
+   "en": "This is a file I uploaded, but this computer cannot find it either. Turn the file storage back on, or upload the original file again if you still have it.",
+   "ja": "自分でアップロードしたファイルですが、このコンピュータでも見つかりません。ファイル保管庫をもう一度オンにするか、元のファイルがあれば再度アップロードしてください。",
+   "zh": "这是我上传的文件，但这台电脑上也找不到。请重新开启文件存储，或在还有原始文件时重新上传。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "노드가 아직 따라잡는 중이라 숫자가 달라질 수 있어요.",
+   "en": "The node is still catching up, so these numbers may change.",
+   "ja": "ノードがまだ追いついていないため、数字が変わる可能性があります。",
+   "zh": "节点仍在同步，数字可能会变化。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "노드가 아직 장부를 읽는 중이라 지금은 알 수 없어요. 없다는 뜻이 아니에요.",
+   "en": "The node is still reading the ledger, so this cannot be known yet. It does not mean it does not exist.",
+   "ja": "ノードがまだ台帳を読み込み中のため、今は分かりません。存在しないという意味ではありません。",
+   "zh": "节点仍在读取账本，目前无法得知。这并不表示不存在。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "다른 컴퓨터와 연결되지 않았어요. 인터넷 연결을 확인해 보세요.",
+   "en": "Not connected to any other computer. Check your internet connection.",
+   "ja": "他のコンピュータに接続されていません。インターネット接続をご確認ください。",
+   "zh": "尚未连接到其他电脑。请检查网络连接。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "다시 찾기",
+   "en": "Look again",
+   "ja": "再検索",
+   "zh": "重新查找",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "다시 찾는 중…",
+   "en": "Looking again…",
+   "ja": "再検索中…",
+   "zh": "正在重新查找…",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "더 찍을 수 없고 붙은 파일도 바꿀 수 없어요.",
+   "en": "No more can be issued and the attached file cannot be changed.",
+   "ja": "追加発行できず、付属のファイルも変更できません。",
+   "zh": "无法再增发，所附文件也无法更改。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "되돌렸어요. 다시 보관 중이에요.",
+   "en": "Undone. It is being kept again.",
+   "ja": "元に戻しました。再び保管中です。",
+   "zh": "已撤销，现在再次保存中。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "되돌리지 못했어요. 「보관」을 다시 눌러 보세요.",
+   "en": "Could not undo. Press “Keep” again.",
+   "ja": "元に戻せませんでした。「保管」をもう一度押してください。",
+   "zh": "无法撤销。请再点一次“保存”。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "마지막 사본일 수 있음을 이해했어요",
+   "en": "I understand this may be the last copy",
+   "ja": "最後のコピーかもしれないことを理解しました",
+   "zh": "我明白这可能是最后一份副本",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": true
+  },
+  {
+   "ko": "마지막 확인: {0}",
+   "en": "Last checked: {0}",
+   "ja": "最終確認: {0}",
+   "zh": "上次检查：{0}",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "모두 다시 확인",
+   "en": "Check all again",
+   "ja": "すべて再確認",
+   "zh": "全部重新检查",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "모두 보관",
+   "en": "Keep all",
+   "ja": "すべて保管",
+   "zh": "全部保存",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "모두 안 함",
+   "en": "Keep none",
+   "ja": "すべて保管しない",
+   "zh": "全部不保存",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "받는 사람·제목은 공개 장부에 없어요. 발급한 곳의 종이나 파일로 확인하세요.",
+   "en": "Recipient and title are not on the public ledger. Check them against the paper or file from the issuer.",
+   "ja": "受取人・タイトルは公開台帳にありません。発行元の書類やファイルでご確認ください。",
+   "zh": "收件人和标题不在公开账本上。请对照发行方的纸质文件或文件来确认。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "받은 것도 포함",
+   "en": "Include received",
+   "ja": "受け取ったものも含める",
+   "zh": "包括收到的",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "받은 자산의 파일은 자산 화면에서 「보관」을 눌러야 이 컴퓨터가 붙잡아요. 내가 만든 자산은 자동으로 보관돼요.",
+   "en": "Files of received assets are kept only after you press “Keep” on the Assets screen. Assets I made are kept automatically.",
+   "ja": "受け取った資産のファイルは、資産画面で「保管」を押したときだけこのコンピュータが保持します。自分で作った資産は自動で保管されます。",
+   "zh": "收到的资产的文件，只有在“资产”页面点击“保存”后，这台电脑才会保存。我创建的资产会自动保存。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "발행한 사람이 현실에서 누구인지는 이 확인으로 알 수 없어요.",
+   "en": "This check cannot tell who the issuer is in real life.",
+   "ja": "この確認では、発行した人が現実で誰なのかは分かりません。",
+   "zh": "此确认无法得知发行者在现实中是谁。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "보관",
+   "en": "Keep",
+   "ja": "保管",
+   "zh": "保存",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "보관 설정 파일이 손상되어 자동 보관을 멈췄어요. 이미 보관 중인 파일은 그대로예요.",
+   "en": "The keep settings file is damaged, so automatic keeping has stopped. Files already kept are unchanged.",
+   "ja": "保管設定ファイルが破損しているため、自動保管を停止しました。すでに保管中のファイルはそのままです。",
+   "zh": "保存设置文件已损坏，自动保存已暂停。已在保存的文件不受影响。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": true
+  },
+  {
+   "ko": "보관 안 함",
+   "en": "Not kept",
+   "ja": "保管しない",
+   "zh": "未保存",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "보관 중",
+   "en": "Kept",
+   "ja": "保管中",
+   "zh": "保存中",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "보관 중: {0}",
+   "en": "Kept: {0}",
+   "ja": "保管中: {0}",
+   "zh": "保存中：{0}",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "보관 중이에요. 보관을 풀려면 길게 누르거나 Delete 키를 누르세요.",
+   "en": "It is being kept. To stop keeping, press and hold or press the Delete key.",
+   "ja": "保管中です。解除するには長押しするか、Deleteキーを押してください。",
+   "zh": "正在保存中。要取消保存，请长按或按 Delete 键。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "보관 중인 파일만 풀 수 있어요.",
+   "en": "Only files being kept can be released.",
+   "ja": "保管中のファイルのみ解除できます。",
+   "zh": "只能取消正在保存的文件。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "보관 푸는 중…",
+   "en": "Releasing…",
+   "ja": "解除中…",
+   "zh": "正在取消保存…",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "보관 해제",
+   "en": "Stop keeping",
+   "ja": "保管を解除",
+   "zh": "取消保存",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "보관 해제…",
+   "en": "Stop keeping…",
+   "ja": "保管を解除…",
+   "zh": "取消保存…",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "보관 해제됨 · 되돌리기 ({0})",
+   "en": "Released · Undo ({0})",
+   "ja": "解除しました · 元に戻す ({0})",
+   "zh": "已取消保存 · 撤销 ({0})",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "보관을 풀었어요. 5초 안에 되돌릴 수 있어요.",
+   "en": "Released. You can undo within 5 seconds.",
+   "ja": "保管を解除しました。5秒以内なら元に戻せます。",
+   "zh": "已取消保存。5 秒内可以撤销。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "보관을 풀지 못했어요.",
+   "en": "Could not release.",
+   "ja": "保管を解除できませんでした。",
+   "zh": "无法取消保存。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "보관하기를 눌러 두었어요. 그 파일이 다시 나타나면 자동으로 보관해요.",
+   "en": "Keep has been scheduled. It will be kept automatically once that file shows up again.",
+   "ja": "保管を予約しました。そのファイルが再び現れたら自動で保管します。",
+   "zh": "已预约保存。该文件重新出现后会自动保存。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "보관하지 못했어요 · 다시 눌러 보세요",
+   "en": "Could not keep · press again",
+   "ja": "保管できませんでした · もう一度押してください",
+   "zh": "保存失败 · 请再点一次",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "보관하지 못했어요. 다시 눌러 보세요.",
+   "en": "Could not keep. Press again.",
+   "ja": "保管できませんでした。もう一度押してください。",
+   "zh": "保存失败。请再点一次。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "보관할 항목 없음",
+   "en": "Nothing to keep",
+   "ja": "保管するものはありません",
+   "zh": "没有可保存的项目",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "보관함",
+   "en": "Storage",
+   "ja": "保管庫",
+   "zh": "存储",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "보관함 사용량",
+   "en": "Storage usage",
+   "ja": "保管庫の使用量",
+   "zh": "存储用量",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "보관함 용량을 읽지 못했어요.",
+   "en": "Could not read the storage size.",
+   "ja": "保管庫の容量を読み取れませんでした。",
+   "zh": "无法读取存储容量。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "보관함이 거의 찼어요",
+   "en": "Storage is almost full",
+   "ja": "保管庫がほぼ満杯です",
+   "zh": "存储空间快满了",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "보관함이 거의 찼어요. 설정에서 한도를 늘리거나 받은 파일 일부를 해제하세요.",
+   "en": "Storage is almost full. Raise the limit in Settings or release some received files.",
+   "ja": "保管庫がほぼ満杯です。設定で上限を増やすか、受け取ったファイルの一部を解除してください。",
+   "zh": "存储空间快满了。请在设置中提高上限，或取消保存部分收到的文件。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "복사하지 못했어요. 주소: {0}",
+   "en": "Could not copy. Address: {0}",
+   "ja": "コピーできませんでした。アドレス: {0}",
+   "zh": "无法复制。地址：{0}",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "새 파일을 못 받을 수 있어요. 한도를 늘리거나 받은 파일 일부를 해제하세요.",
+   "en": "New files may not be received. Raise the limit or release some received files.",
+   "ja": "新しいファイルを受け取れない可能性があります。上限を増やすか、受け取ったファイルの一部を解除してください。",
+   "zh": "可能无法接收新文件。请提高上限，或取消保存部分收到的文件。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "새로 받은 파일",
+   "en": "Newly received files",
+   "ja": "新しく受け取ったファイル",
+   "zh": "新收到的文件",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "새로 받은 파일 {0}개 · 보관할까요?",
+   "en": "{0} newly received files · keep them?",
+   "ja": "新しく受け取ったファイル {0}件 · 保管しますか？",
+   "zh": "新收到 {0} 个文件 · 要保存吗？",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "아직 이 파일이 어디 있는지 물어보지 않았어요.",
+   "en": "We have not yet asked where this file is.",
+   "ja": "このファイルがどこにあるか、まだ問い合わせていません。",
+   "zh": "还没有查询过这个文件在哪里。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "앱 안에서 확인",
+   "en": "Check inside the app",
+   "ja": "アプリ内で確認",
+   "zh": "在应用内确认",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "원본 파일 대조하기",
+   "en": "Compare with original file",
+   "ja": "元のファイルと照合",
+   "zh": "与原始文件比对",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "원본 파일이 맞는지 보려면 아래 「진짜인지 확인」에서 그 파일을 대조해 보세요.",
+   "en": "To check the original file, compare it under “Check it's genuine” below.",
+   "ja": "元のファイルが正しいか確かめるには、下の「本物か確認」でそのファイルを照合してください。",
+   "zh": "要确认原始文件是否一致，请在下方“验证真伪”中比对该文件。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "이 자산에는 파일 주소가 새겨져 있지 않아요.",
+   "en": "This asset has no file address recorded.",
+   "ja": "この資産にはファイルのアドレスが記録されていません。",
+   "zh": "此资产没有记录文件地址。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "이 자산을 가진 주소: {0}곳",
+   "en": "Addresses holding this asset: {0}",
+   "ja": "この資産を持つアドレス: {0}件",
+   "zh": "持有此资产的地址：{0} 个",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "이 컴퓨터가 가진 파일은 장부에 적힌 주소와 같아요.",
+   "en": "The file this computer holds matches the address on the ledger.",
+   "ja": "このコンピュータが持つファイルは、台帳に記録されたアドレスと一致します。",
+   "zh": "这台电脑所持有的文件与账本上记录的地址一致。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "이 컴퓨터가 더 이상 이 파일을 붙들지 않습니다. 자산 자체나 내 잔액은 그대로입니다.",
+   "en": "This computer will no longer hold this file. The asset itself and your balance are unchanged.",
+   "ja": "このコンピュータはこのファイルを保持しなくなります。資産自体と残高はそのままです。",
+   "zh": "这台电脑将不再保存此文件。资产本身和您的余额不受影响。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "이 컴퓨터가 원본 지문만 새긴 자산이에요. 원본 파일을 끌어놓으면 대조해요.",
+   "en": "This computer only recorded the original fingerprint for this asset. Drop the original file to compare.",
+   "ja": "このコンピュータは元の指紋だけを記録した資産です。元のファイルを置くと照合します。",
+   "zh": "这台电脑只为此资产记录了原始指纹。拖入原始文件即可比对。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "이 컴퓨터에 파일이 없어서 파일 쪽은 확인하지 못했어요. 원본 파일을 끌어놓으면 대조해요.",
+   "en": "This computer does not have the file, so the file side could not be checked. Drop the original file to compare.",
+   "ja": "このコンピュータにファイルがないため、ファイル側は確認できませんでした。元のファイルを置くと照合します。",
+   "zh": "这台电脑上没有该文件，因此无法确认文件部分。拖入原始文件即可比对。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "이 파일은 내가 만든 자산의 것이에요",
+   "en": "This file belongs to an asset I made",
+   "ja": "このファイルは自分で作った資産のものです",
+   "zh": "这个文件属于我创建的资产",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "이 파일은 장부에 적힌 원본과 같아요 (파일 보관함 방식).",
+   "en": "This file matches the original on the ledger (file storage method).",
+   "ja": "このファイルは台帳に記録された原本と一致します（ファイル保管庫方式）。",
+   "zh": "该文件与账本上记录的原件一致（文件存储方式）。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "이 파일은 장부에 적힌 원본과 같아요.",
+   "en": "This file matches the original on the ledger.",
+   "ja": "このファイルは台帳に記録された原本と一致します。",
+   "zh": "该文件与账本上记录的原件一致。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "이 파일의 보관을 풀까요?",
+   "en": "Stop keeping this file?",
+   "ja": "このファイルの保管を解除しますか？",
+   "zh": "要取消保存此文件吗？",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "이 확인은 내 노드가 직접 했어요 · 장부 높이 {0} · {1}",
+   "en": "My own node did this check · ledger height {0} · {1}",
+   "ja": "この確認は自分のノードが直接行いました · 台帳の高さ {0} · {1}",
+   "zh": "此确认由我自己的节点直接完成 · 账本高度 {0} · {1}",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "이어서 확인",
+   "en": "Continue checking",
+   "ja": "続けて確認",
+   "zh": "继续检查",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "이유 보기",
+   "en": "Show reason",
+   "ja": "理由を見る",
+   "zh": "查看原因",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "이제 원본 파일을 이 창에 끌어놓으세요. (1분 안에)",
+   "en": "Now drop the original file into this window (within 1 minute).",
+   "ja": "元のファイルをこのウィンドウに置いてください（1分以内）。",
+   "zh": "现在请把原始文件拖入此窗口（1 分钟内）。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "자동 보관 다시 켜기",
+   "en": "Turn automatic keeping back on",
+   "ja": "自動保管を再びオンにする",
+   "zh": "重新开启自动保存",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "자동 보관을 다시 켰어요.",
+   "en": "Automatic keeping is back on.",
+   "ja": "自動保管を再びオンにしました。",
+   "zh": "已重新开启自动保存。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "자산 {0}개 · 파일 있음 {1}개 · 보관 중 {2}개",
+   "en": "{0} assets · {1} with files · {2} kept",
+   "ja": "資産 {0}件 · ファイルあり {1}件 · 保管中 {2}件",
+   "zh": "资产 {0} 个 · 有文件 {1} 个 · 保存中 {2} 个",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "자산 자체와 내 잔액은 그대로입니다.",
+   "en": "The asset itself and your balance are unchanged.",
+   "ja": "資産自体と残高はそのままです。",
+   "zh": "资产本身和您的余额不受影响。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "종류: 고유 자산",
+   "en": "Type: unique asset",
+   "ja": "種類: ユニーク資産",
+   "zh": "类型：唯一资产",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "종류: 수량 자산",
+   "en": "Type: quantity asset",
+   "ja": "種類: 数量資産",
+   "zh": "类型：数量型资产",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "주인 표를 가진 주소: {0}곳",
+   "en": "Addresses holding the owner token: {0}",
+   "ja": "オーナートークンを持つアドレス: {0}件",
+   "zh": "持有所有者令牌的地址：{0} 个",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "주인 표를 가진 주소를 찾지 못했어요.",
+   "en": "No address holding the owner token was found.",
+   "ja": "オーナートークンを持つアドレスが見つかりませんでした。",
+   "zh": "没有找到持有所有者令牌的地址。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "주인·보유 주소는 이 노드에서 볼 수 없어요. 설정에서 자산 색인을 켜세요.",
+   "en": "Owner and holder addresses cannot be seen on this node. Turn on the asset index in Settings.",
+   "ja": "オーナー・保有アドレスはこのノードでは確認できません。設定で資産インデックスをオンにしてください。",
+   "zh": "此节点无法查看所有者和持有地址。请在设置中开启资产索引。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "주인·보유 주소를 지금은 읽지 못했어요.",
+   "en": "Could not read owner and holder addresses right now.",
+   "ja": "今はオーナー・保有アドレスを読み取れませんでした。",
+   "zh": "目前无法读取所有者和持有地址。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "주인이 더 찍거나 붙은 파일을 바꿀 수 있어요.",
+   "en": "The owner can issue more or change the attached file.",
+   "ja": "オーナーは追加発行したり、付属のファイルを変更したりできます。",
+   "zh": "所有者可以增发或更改所附文件。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "중지했어요.",
+   "en": "Stopped.",
+   "ja": "停止しました。",
+   "zh": "已停止。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "지금 보관하면 남은 공간이 5% 아래로 줄 수 있어요. 파일 크기는 미리 알 수 없어요.",
+   "en": "Keeping now may leave less than 5% free space. File sizes are not known in advance.",
+   "ja": "今保管すると、空き容量が5%未満になる可能性があります。ファイルサイズは事前に分かりません。",
+   "zh": "现在保存可能会使剩余空间低于 5%。文件大小无法提前得知。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "지금은 확인하지 못했어요. 잠시 뒤 다시 해 보세요.",
+   "en": "Could not check right now. Try again in a moment.",
+   "ja": "今は確認できませんでした。しばらくしてからもう一度お試しください。",
+   "zh": "目前无法确认。请稍后再试。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "찾지 못함 · 예약됨",
+   "en": "Not found · scheduled",
+   "ja": "見つかりません · 予約済み",
+   "zh": "未找到 · 已预约",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "파일 보관함(IPFS)이 꺼져 있어서 보관할 수 없어요. 설정에서 켜세요.",
+   "en": "File storage (IPFS) is off, so files cannot be kept. Turn it on in Settings.",
+   "ja": "ファイル保管庫（IPFS）がオフのため保管できません。設定でオンにしてください。",
+   "zh": "文件存储（IPFS）已关闭，无法保存。请在设置中开启。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "파일 보관함(IPFS)이 꺼져 있어서 찾을 수 없어요.",
+   "en": "File storage (IPFS) is off, so the file cannot be found.",
+   "ja": "ファイル保管庫（IPFS）がオフのため、探せません。",
+   "zh": "文件存储（IPFS）已关闭，无法查找。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "파일 보관함(IPFS)이 꺼져 있어요. 설정에서 켜세요.",
+   "en": "File storage (IPFS) is off. Turn it on in Settings.",
+   "ja": "ファイル保管庫（IPFS）がオフです。設定でオンにしてください。",
+   "zh": "文件存储（IPFS）已关闭。请在设置中开启。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "파일 있는 {0}개 모두 보관",
+   "en": "Keep all {0} with files",
+   "ja": "ファイルのある{0}件をすべて保管",
+   "zh": "保存全部 {0} 个有文件的项目",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "파일 지문을 계산하는 중…",
+   "en": "Calculating the file fingerprint…",
+   "ja": "ファイルの指紋を計算中…",
+   "zh": "正在计算文件指纹…",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "파일은 다른 컴퓨터에 있으면 계속 열립니다. 이 컴퓨터에서는 잠시 뒤 정리될 수 있습니다.",
+   "en": "If another computer has the file, it still opens. On this computer it may be cleaned up shortly.",
+   "ja": "ファイルが他のコンピュータにあれば、引き続き開けます。このコンピュータでは、しばらくすると整理される場合があります。",
+   "zh": "只要其他电脑上有该文件，仍可打开。在这台电脑上，稍后可能会被清理。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "파일을 가진 컴퓨터가 꺼져 있거나 인터넷이 약할 수 있어요.",
+   "en": "The computer holding the file may be off, or the internet may be weak.",
+   "ja": "ファイルを持つコンピュータの電源が切れているか、インターネットが不安定かもしれません。",
+   "zh": "持有该文件的电脑可能已关机，或网络较差。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "파일을 찾았어요.",
+   "en": "Found the file.",
+   "ja": "ファイルが見つかりました。",
+   "zh": "已找到文件。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "파일을 찾지 못했어요. 보관을 예약했어요 — 그 파일이 다시 나타나면 자동으로 보관해요.",
+   "en": "Could not find the file. Keeping is scheduled — it will be kept automatically once that file shows up again.",
+   "ja": "ファイルが見つかりませんでした。保管を予約しました — そのファイルが再び現れたら自動で保管します。",
+   "zh": "未找到文件。已预约保存 — 该文件重新出现后会自动保存。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "풀고 나면 이 파일을 열 수 없게 될 수 있어요. 다른 곳에 사본이 있는지는 알 수 없어요.",
+   "en": "After releasing, you may no longer be able to open this file. We cannot tell whether a copy exists elsewhere.",
+   "ja": "解除すると、このファイルを開けなくなる可能性があります。他の場所にコピーがあるかどうかは分かりません。",
+   "zh": "取消保存后，可能就无法再打开此文件。我们无法得知其他地方是否有副本。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": true
+  },
+  {
+   "ko": "하나씩",
+   "en": "One by one",
+   "ja": "1件ずつ",
+   "zh": "逐个处理",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "한도 늘리기",
+   "en": "Raise limit",
+   "ja": "上限を増やす",
+   "zh": "提高上限",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "확인 안 됨",
+   "en": "Not checked",
+   "ja": "未確認",
+   "zh": "未检查",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "확인 주소 복사",
+   "en": "Copy verification link",
+   "ja": "確認用リンクをコピー",
+   "zh": "复制确认链接",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "확인 주소를 복사했어요. 다른 사람에게 보내면 인터넷 창에서 확인할 수 있어요.",
+   "en": "Copied the verification link. Send it to someone and they can check in a web browser.",
+   "ja": "確認用リンクをコピーしました。相手に送れば、ブラウザで確認できます。",
+   "zh": "已复制确认链接。发给其他人后，对方可在浏览器中确认。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  },
+  {
+   "ko": "확인을 중간에 멈췄어요.",
+   "en": "Checking was stopped partway.",
+   "ja": "確認を途中で止めました。",
+   "zh": "检查在中途停止了。",
+   "euro": {
+    "it": null,
+    "es": null,
+    "fr": null,
+    "pt-BR": null,
+    "de": null,
+    "ru": null
+   },
+   "risk": false
+  }
+ ]
+}

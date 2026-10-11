@@ -6,6 +6,7 @@ import "./wallet-file"; // 지갑 파일 내보내기·가져오기 + 백업 열
 import "./sales-account.css";
 import { wireSalesAccount } from "./sales-account";
 import "./creator-publish.css";
+import { createLazyKeep } from "./asset-keep-lazy";
 import { wireCreatorPublish } from "./creator-publish";
 import "./drop-tokens.css";
 import "./drop-publish.css";
@@ -316,6 +317,18 @@ const collapsed = new Set<string>();
 // put next to a wallet.
 let scan = { running: false, done: 0, total: 0, current: "", stop: false, ms: [] as number[] };
 
+// 0.8.8a — 자산 파일 보관 화면(줄 상태·한 번 탭 보관·길게 눌러 해제·일괄 보관·용량·이유 안내·앱 안 확인). 로직은 src/asset-keep.ts(지연 묶음 — 메모리 예산), 이음매는 asset-keep-lazy.ts.
+const keep = createLazyKeep({
+  invoke: (cmd, args) => invoke(cmd, args),
+  assets, health,
+  getPinned: () => pinned, setPinned: (s) => { pinned = s; },
+  isFingerprint: (cid) => isFingerprint(cid),
+  renderList: () => renderList(), getSelected: () => selected, select: (name) => select(name),
+  errText: (e) => errText(e), verifyLink: (name) => verifyLink(name),
+  openUrl: (url) => openUrl(url), showSettings: () => showPage("settings"),
+  saveHealth: () => saveHealth(), startScan: () => void startScan(), scanRunning: () => scan.running,
+});
+
 const HEALTH_KEY = "playx-raven-health";
 /// 화면 요소를 가져온다. 없으면 버려지는 자리를 준다.
 ///
@@ -460,27 +473,12 @@ function fmtRemaining(ms: number): string {
 
 
 function badge(a: Asset): string {
-  const cid = a.ipfs_hash;
-  if (!cid) return '<span class="muted">파일 없음</span>';
-  if (isFingerprint(cid)) return `<span class="muted" title="${escapeHtml(t("파일 대신 원본 지문만 새겼어요. 올린 파일이 없어서 확인·보존할 것이 없어요."))}">${copyHtml("원본 지문")}</span>`;
-  if (pinned.has(cid)) return '<span class="ok">보존 중</span>';
-  const s = health.get(cid) ?? "unknown";
-  if (s === "found") return '<span class="warn">이 컴퓨터에 없음</span>';
-  if (s === "missing") return '<span class="muted">찾지 못함</span>';
-  if (s === "checking") return '<span class="muted">확인 중…</span>';
-  return '<span class="muted">미확인</span>';
+  return keep.badgeHtml(a);
 }
 
 function renderList() {
   const rows = [...assets.values()];
-  // 원본 지문은 파일이 아니다 — 「파일 있음」에 세지 않는다.
-  const withFile = rows.filter((a) => a.ipfs_hash && !isFingerprint(a.ipfs_hash));
-  const printed = rows.filter((a) => isFingerprint(a.ipfs_hash)).length;
-  const savable = withFile.filter((a) => health.get(a.ipfs_hash!) === "found" && !pinned.has(a.ipfs_hash!));
-
-  $("summary").textContent =
-    tf("자산 {0}개 · 파일 있음 {1}개 · 보존 중 {2}개", rows.length, withFile.length, withFile.filter(a => pinned.has(a.ipfs_hash!)).length) +
-    (printed ? tf(" · 원본 지문 {0}개", printed) : "");
+  $("summary").textContent = keep.summary();
 
   const scanBtn = $("scan") as HTMLButtonElement;
   if (scan.running) {
@@ -491,14 +489,12 @@ function renderList() {
       ? tf("{0} 확인 중 · {1}", scan.current, fmtRemaining(avg * (scan.total - scan.done)))
       : "";
   } else {
-    scanBtn.textContent = "다시 확인";
+    scanBtn.textContent = "모두 다시 확인";
     scanBtn.className = "ghost";
     $("scan-note").textContent = "";
   }
 
-  const pinBtn = $("pin-all") as HTMLButtonElement;
-  pinBtn.disabled = savable.length === 0;
-  pinBtn.textContent = savable.length ? tf("{0}개 보존하기", savable.length) : "보존할 항목 없음";
+  keep.paintBulk($("pin-all") as HTMLButtonElement);
 
   // 내가 만든 것 / 남이 보낸 것. 아무나 아무 주소로 자산을 보낼 수 있으니
   // 지갑에는 부탁한 적 없는 토큰이 쌓인다. 그것들이 내가 만든 것과 같은
@@ -595,15 +591,7 @@ function renderList() {
   }
 
   const rowHtml = (a: Asset, child: boolean) => {
-    const cid = a.ipfs_hash;
-    const canSave = cid && !isFingerprint(cid) && health.get(cid) === "found" && !pinned.has(cid);
-    // Viewing and preserving are separate gestures on purpose. If one click
-    // could mean either, every click needs a moment of thought first.
-    const act = canSave
-      ? `<button data-pin="${cid}">보존</button>`
-      : cid && pinned.has(cid)
-        ? `<button data-unpin="${cid}" class="ghost">해제</button>`
-        : "";
+    // 0.8.8a — 배지가 곧 단추다(탭 = 보관, 길게 = 해제). 단추 자리는 상태가 바뀌어도 그대로 — src/asset-keep.ts.
     // 자식 행은 전체 이름 대신 잎만 보여준다. 앞부분이 폴더 이름에 이미 있다.
     //
     // 🔴 그런데 **집안의 본체**(`PLAYX` 자신)는 앞부분을 지우고 나면 아무것도
@@ -622,8 +610,8 @@ function renderList() {
     return `<tr data-row="${a.name}" class="${selected === a.name ? "sel" : ""}${child ? " child" : ""}">
       <td class="name">${child ? '<span class="branch"></span>' : ""}${label}${own}${limits}</td>
       <td class="num">${fmtQty(a.amount)}</td>
-      <td>${badge(a)}</td>
-      <td class="act">${act}</td>
+      <td class="keepcell">${badge(a)}</td>
+      <td class="act">${keep.actHtml(a)}</td>
     </tr>`;
   };
 
@@ -659,65 +647,23 @@ function renderList() {
 
   document.querySelectorAll<HTMLElement>("[data-row]").forEach((tr) => {
     tr.onclick = (e) => {
-      if ((e.target as HTMLElement).tagName === "BUTTON") return;
+      if ((e.target as HTMLElement).closest("button")) return;
       select(tr.dataset.row!);
     };
   });
-  document.querySelectorAll<HTMLButtonElement>("[data-pin]").forEach((b) => {
-    b.onclick = async (e) => { e.stopPropagation(); await pinOne(b.dataset.pin!, b); };
-  });
-  document.querySelectorAll<HTMLButtonElement>("[data-unpin]").forEach((b) => {
-    b.onclick = async (e) => { e.stopPropagation(); await unpinOne(b.dataset.unpin!, b); };
-  });
+  keep.bindOnce();
+  keep.afterRender();
 }
 
-async function pinOne(cid: string, btn?: HTMLButtonElement) {
-  if (btn) { btn.disabled = true; btn.textContent = "보존 중…"; }
-  try {
-    await invoke("pin_add", { cid });
-    pinned.add(cid);
-  } catch (e) {
-    say(t("보존하지 못했습니다"), errText(e));
-  }
-  renderList();
-  if (selected) renderPanel();
+/// 0.8.8a — 오른쪽 패널의 「보관」·「보관 해제」도 줄 배지와 같은 흐름(src/asset-keep.ts)을 쓴다.
+/// 내 뜻을 먼저 저장하고(자동 보관이 되돌리지 못하게) 그다음 pin_add/pin_remove 를 부른다.
+/// 해제는 이 컴퓨터의 IPFS pin 만 푼다 — 파일을 지우지 않는다. 내가 만든 자산은 경고 + 확인을 거친다.
+async function pinOne(cid: string) {
+  keep.keepFromPanel(cid);
 }
 
-async function unpinOne(cid: string, btn?: HTMLButtonElement) {
-  /* 🔴 대표님 지적: "자산에서도 IPFS 이미지를 너무 쉽게 지우면 안 되지 않나?
-     내가 만든 자산의 핀을 삭제하면 내용이 없어져 버리잖아."
-
-     맞다. 남이 만든 자산이면 다른 사람도 갖고 있을 수 있지만, **내가 만든
-     자산은 이 컴퓨터가 마지막 한 부일 수 있다.** 그때 핀을 지우면 그 자산의
-     그림·음악이 세상에서 사라진다. 되돌릴 방법이 없다.
-
-     그래서 내가 만든 것이면 **자산 이름을 직접 치게** 한다. 500 RVN 을 태울
-     때 쓰는 것과 같은 문턱이다 — 되돌릴 수 없다는 점이 같기 때문이다. */
-  // 🔴 `rows` 는 renderList 안의 지역 변수다. 여기서는 원본 맵을 본다 —
-  //    짐작으로 이름을 갖다 쓰면 조용히 `undefined` 가 되고, 그러면
-  //    **내가 만든 자산도 그냥 지워진다.**
-  const owner = [...assets.values()].find((a) => a.ipfs_hash === cid && a.mine);
-  if (owner) {
-    const typed = await ask(
-      "내가 만든 자산의 파일입니다",
-      tf("이 컴퓨터가 마지막 사본일 수 있습니다. 지우면 「{0}」의 파일이 ", owner.name) +
-        `세상에서 사라지고, 되돌릴 방법이 없습니다.\n\n` +
-        `정말 지우시려면 자산 이름을 그대로 입력하세요.`,
-      { ok: "지웁니다" },
-    );
-    if (typed?.trim() !== owner.name) return;
-  } else if (!(await sure("보존을 해제할까요?", "이 컴퓨터에서 사본이 사라집니다. 다른 곳에 사본이 없으면 되찾을 수 없습니다.", "해제합니다"))) {
-    return;
-  }
-  if (btn) btn.disabled = true;
-  try {
-    await invoke("pin_remove", { cid });
-    pinned.delete(cid);
-  } catch (e) {
-    say(t("해제하지 못했습니다"), errText(e));
-  }
-  renderList();
-  if (selected) renderPanel();
+async function unpinOne(cid: string) {
+  keep.unkeepFromPanel(cid);
 }
 
 /**
@@ -850,15 +796,21 @@ async function paintHuman(a: Asset): Promise<boolean> {
       ? `<p class="meta">${copyHtml("이 컴퓨터가 만든 것이에요. 제목·받는 사람은 이 컴퓨터의 발행 기록에만 있어요.")}</p>`
       : `<p class="meta">${copyHtml("제목·받는 사람 이름은 공개 장부에 올라가지 않아요. 발급한 곳에서 받은 종이나 파일로 확인하세요.")}</p>`) +
     `<div class="verifyrow"><button class="ghost" id="p-verify" type="button">${copyHtml("진짜인지 확인")}</button>
-       <span class="meta">${copyHtml("공개 확인 페이지가 인터넷 창에서 열려요.")}</span></div>` +
+       <span class="meta">${copyHtml("내 노드가 공개 장부를 직접 읽어서 확인해요.")}</span></div>` +
     `<p class="chainname">${copyHtml("공개 장부 이름")} <code translate="no">${escapeHtml(a.name)}</code></p>`;
   const vb = document.getElementById("p-verify");
   // 확인 페이지가 `?a=` 를 받아 곧바로 찾는다(release-site verify.js).
-  if (vb) vb.onclick = () => void openUrl(verifyLink(a.name)).catch(() => {});
+  if (vb) vb.onclick = () => keep.openVerify(a);
   return true;
 }
 
+/// 0.8.8a — 기존 패널 그리기 뒤에 「진짜인지 확인」 칸(src/asset-keep.ts)을 붙인다.
 async function renderPanel() {
+  await renderPanelBase();
+  keep.paintPanel(selected ? assets.get(selected) ?? null : null);
+}
+
+async function renderPanelBase() {
   const a = selected ? assets.get(selected) : null;
   if (!a) { $("panel").className = "panel hidden"; return; }
   $("panel").className = "panel";
@@ -876,12 +828,12 @@ async function renderPanel() {
     $("p-body").innerHTML = cid
       ? `<p class="meta">${copyHtml("원본 지문")}</p><code class="addr" translate="no">${escapeHtml(cid)}</code>
          <p class="muted">${copyHtml("이 자산에는 파일 대신 원본 지문이 새겨져 있어요. 원본 파일은 올리지 않아서, 만든 사람의 컴퓨터에만 있어요.")}</p>
-         <p class="meta">${copyHtml("원본 파일이 맞는지 보려면 확인 페이지에 그 파일을 넣어 지문이 같은지 보세요.")}</p>
-         ${human ? "" : `<button class="ghost" id="p-verify">${copyHtml("확인 페이지 열기")}</button>`}`
+         <p class="meta">${copyHtml("원본 파일이 맞는지 보려면 아래 「진짜인지 확인」에서 그 파일을 대조해 보세요.")}</p>
+         ${human ? "" : `<button class="ghost" id="p-verify">${copyHtml("진짜인지 확인")}</button>`}`
       : '<p class="muted">이 자산에는 연결된 파일이 없습니다.</p>';
     // 증서·작품이면 위 사람 말 칸에 「진짜인지 확인」이 이미 있다 — 같은 단추를 둘 두지 않는다.
     const vb = human ? null : document.getElementById("p-verify");
-    if (vb) vb.onclick = () => void openUrl(verifyLink(a.name)).catch(() => {});
+    if (vb) vb.onclick = () => keep.openVerify(a);
     // 🔴 **여기서 일찍 돌아간다.** 그래서 아래에 있는 단추들(공지·나눠주기)이
     //    **파일 없는 자산에는 하나도 안 나왔다.** 그런데 그 둘은 파일과
     //    아무 상관이 없다 — 자산을 가진 사람에게 보내는 일이다.
@@ -1010,8 +962,8 @@ async function renderPanel() {
   //    문을 낸다 — 공지가 가게 탭에 링크를 남긴 것과 같다.
   if (a.mine) buttons.push(`<button class="ghost" id="p-reward">나눠주기</button>`);
   if (kind.available) buttons.push(`<button class="ghost" id="open-ext">이 컴퓨터에서 열기</button>`);
-  if (pinned.has(cid)) buttons.push(`<button class="ghost" id="p-unpin">보존 해제</button>`);
-  else if (health.get(cid) === "found") buttons.push(`<button id="p-pin">보존</button>`);
+  if (pinned.has(cid)) buttons.push(`<button class="ghost" id="p-unpin">보관 해제</button>`);
+  else buttons.push(`<button id="p-pin">보관</button>`);
   $("p-actions").innerHTML = buttons.join("");
 
   const ext = document.getElementById("open-ext");
@@ -1136,6 +1088,7 @@ async function loadAssets(thenScan = true) {
     pinned = new Set(await invoke<string[]>("pin_list"));
     fingerprints = new Set(await invoke<string[]>("create_fingerprints").catch(() => [] as string[]));
     checkOwnerTokens();
+    await keep.onLoaded();
     renderList();
     if (thenScan) startScan();
   } catch (e) {
@@ -1151,7 +1104,7 @@ async function startScan() {
   const targets = [...assets.values()]
     .filter((a) => a.ipfs_hash && !pinned.has(a.ipfs_hash))   // 보존 중인 건 물어볼 필요가 없다
     .filter((a) => !isFingerprint(a.ipfs_hash))                // 원본 지문은 파일창고에 없다 — 20초씩 기다릴 이유가 없다
-    .filter((a) => health.get(a.ipfs_hash!) !== "found")
+    .filter((a) => keep.recheckCid(a.ipfs_hash!))              // 이미 찾았거나 6시간 안에 물었는데 못 찾은 것은 다시 묻지 않는다
     .map((a) => ({ name: a.name, cid: a.ipfs_hash! }));
 
   if (!targets.length) { renderList(); return; }
@@ -1175,23 +1128,21 @@ async function startScan() {
     }
     scan.ms.push(performance.now() - t0);
     scan.done++;
+    keep.stamp(t.cid);
     saveHealth();
     renderList();
     if (selected) renderPanel();
   }
 
+  keep.scanEnded(scan.stop);
   scan.running = false;
   scan.current = "";
   renderList();
 }
 
 async function pinAll() {
-  const targets = [...assets.values()]
-    .filter((a) => a.ipfs_hash && !isFingerprint(a.ipfs_hash) && health.get(a.ipfs_hash) === "found" && !pinned.has(a.ipfs_hash))
-    .map((a) => a.ipfs_hash!);
-  for (const cid of targets) {
-    try { await invoke("pin_add", { cid }); pinned.add(cid); renderList(); } catch {}
-  }
+  // 0.8.8a — 진행률·중지·결과·용량 점검이 있는 일괄 보관(src/asset-keep.ts).
+  await keep.bulkKeep();
 }
 
 /* ── 화면 전환 ───────────────────────────────────────────────
@@ -5393,6 +5344,9 @@ async function onDropped(paths: string[]) {
   dropVeil(false);
   const j = dropJob();
   if (!j.ok || !paths.length) return;
+
+  // 0.8.8a — 「원본 파일 대조하기」를 누른 뒤 1분 안에 놓은 파일은 진짜인지 확인에만 쓴다(src/asset-keep.ts).
+  if (keep.acceptsDrop()) { await keep.handleDrop(paths); return; }
 
   // 끌어놓기 발행 화면: 놓은 파일·폴더를 그대로 상품으로(러스트가 「방금 놓은 것」만 읽는다 — drop_publish.rs).
   if (currentPage === "creator") {
