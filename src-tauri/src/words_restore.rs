@@ -1202,7 +1202,7 @@ pub async fn words_restore_check(words: String, passphrase: Option<String>) -> V
         Err(p) => return problem_value(&p),
     };
     if !passphrase_fits(pass.expose()) {
-        return json!({ "ok": false, "kind": "passphrase", "message": "추가 암호에 # 이나 앞뒤 빈칸이 있으면 이 방법으로는 건넬 수 없습니다. 그런 암호였다면 레이븐 코어(Raven-Qt)에서 되살려 주세요." });
+        return json!({ "ok": false, "kind": "passphrase", "message": "추가 암호에 # 이나 앞뒤 빈칸이 있으면 이 방법으로는 건넬 수 없습니다. 그런 암호였다면 이 화면으로는 되살릴 수 없으니, 다른 백업(wallet.dat 백업 파일이나 가게 전체 백업)이 있으면 그것으로 되살려 주세요." });
     }
     let Some((recv, chg)) = words::addresses(&phrase, pass.expose(), 20, 20, words::MAINNET) else {
         return json!({ "ok": false, "kind": "derive", "message": "주소를 만들지 못했습니다." });

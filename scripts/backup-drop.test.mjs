@@ -75,6 +75,14 @@ test('화면 문구: 한·영·일·중 같은 칸 · 빈 칸 없음 · 유럽�
   // 호환은 「코어 버전에 따라 다를 수 있어요」로만 — 「몇 버전에서 열립니다」 같은 말이 없다.
   assert.match(ko.t1, /코어 버전에 따라 다를 수 있어요/);
   assert.match(ko.coreOpens, /버전에 따라 다를 수 있어요/);
+  // 실측 범위(2026-10-12): 함께 든 코어 4.8.0 끼리만 확인 · 쓰려면 지갑 암호 · 잔액은 동기화 뒤 · 다른 버전 미확인.
+  for (const [c, pass, sync, other] of [[ko, /지갑 암호가 필요/, /동기화\) 뒤에 보여요/, /다른 버전의 코어에서는 확인하지 못했어요/], [en, /need the wallet password/, /after Core has finished syncing/, /not checked other Core versions/], [ja, /パスワードが必要/, /同期を終えてから/, /確認していません/], [zh, /需要钱包密码/, /同步完区块链后/, /尚未确认/]]) {
+    assert.match(c.t2, pass); assert.match(c.t2, sync); assert.match(c.t3, /4\.8\.0/); assert.match(c.t3, other);
+  }
+  for (const c of [ko, en, ja, zh]) for (const v of leaves(c)) {
+    assert.doesNotMatch(v, /12 ?단어|12 words|12語|12个|12 個/, `코어용 안내에 12단어 복구 주장 금지: ${v}`);
+    assert.doesNotMatch(v, /모든 (레이븐 )?코어|any (version of )?Raven Core|열자마자|right after (it )?opens/i, v);
+  }
   for (const c of [ko, en, ja, zh]) for (const v of leaves(c)) {
     assert.doesNotMatch(v, /v?\d+\.\d+(\.\d+)?\s*(이상|버전에서|에서 열립니다|or later|and later|以降|及以上)/, v);
     assert.doesNotMatch(v, /(반드시|확실히|항상) 열(려요|립니다)|always opens|guaranteed/i, v);

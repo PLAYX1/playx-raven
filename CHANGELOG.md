@@ -1,5 +1,31 @@
 # 변경 기록
 
+## 0.9.0
+
+### 한국어
+
+- 설정 화면 개편: 왼쪽 목록(설정 찾기 · 쉬운 설정 · 주제 8개)에서 주제를 고르면 오른쪽에 그 주제 하나만 보입니다. 찾기는 주제 이름과 안의 글자를 찾고, ↑↓ 키로 주제를 옮길 수 있습니다. 좁은 창에서는 목록이 위로 갑니다.
+- 이야기: 처음 들어오면 「이름을 정해 주세요」 카드가 나옵니다(「나중에 할게요」를 누르면 다시 뜨지 않음). 내 글에도 이름과 라비 아이콘이 붙습니다. 「내 색」 설정은 없앴습니다.
+- 이야기 방: 내가 만든 방에서만 「방 설정」으로 방 이름(40자)·설명(80자)을 고칠 수 있습니다(방을 만든 열쇠로 서명, 공개 릴레이 몇 곳이 받았는지 표시). 남이 보낸 이름 변경은 무시합니다. 「이 방 숨기기」로 방을 목록에서 숨기고 「숨긴 방」에서 되돌릴 수 있습니다. 공개 릴레이에 올라간 방은 완전히 지울 수 없어 「지우기」는 두지 않았습니다.
+- 백업: 이름을 「wallet.dat 백업 파일 내보내기(잠금)」·「wallet.dat 백업 파일 가져오기」로 정리하고, 레이븐볼트용(.rvwallet, 52글자 열쇠로 한 번 더 잠금)과 레이븐 코어용(코어용 wallet.dat)을 구분표로 보여 줍니다.
+- 끌어다 놓아 복원: `.rvwallet`(wallet.dat만) 또는 `.pxlock`(가게 전체 백업)을 창에 끌어다 놓으면 먼저 무엇을 되살리는지 보여 주고, 열쇠·백업 암호와 지갑 암호 확인, 열어 보기, 확인 체크를 거친 뒤에만 기존 복원 기능으로 되살립니다. 노드가 켜져 있으면 아무것도 바꾸지 않습니다. 지금 것은 지우지 않고 따로 보관합니다.
+- 레이븐 코어로 옮기기: 「코어용 wallet.dat」을 고른 폴더에 새 파일로 꺼냅니다(52글자 잠금 없음, 지갑 암호로만 보호). 지갑 암호가 있어야만 되고, 지갑 암호를 한 번 더 확인하며, 노드가 만든 사본을 다시 읽어 대조합니다. 함께 든 레이븐 코어(4.8.0)가 만든 이 파일이 같은 코어에서 열리는 것은 시험으로 확인했습니다. 쓰려면 지갑 암호가 필요하고 잔액은 블록체인 동기화 뒤에 보입니다. 다른 버전의 코어에서는 확인하지 않았습니다.
+- 가게: 새 가게의 공개 이름은 `RV.S.<가게이름>` 으로 만들어집니다. 옛 `SHOP.*` 가게는 그대로 읽고 씁니다. 가게 토큰 수량·보내기가 고정 `SHOP.PLAYX` 대신 이 가게의 토큰 이름을 씁니다.
+- 12단어로 되살리기: 추가 암호에 `#` 이나 앞뒤 빈칸이 있을 때의 안내를 확인되지 않은 「레이븐 코어에서 되살리기」 대신 다른 백업으로 되살리라는 안내로 바꿨습니다.
+- 업데이트 검증(서명된 버전·해시·순서 확인)은 그대로 유지합니다. 0.8.5~0.8.8 의 변경도 함께 들어 있습니다.
+
+### English
+
+- Settings redesign: pick a topic in the list on the left (search settings · easy settings · 8 topics) and only that topic is shown on the right. Search matches topic names and the text inside; ↑↓ keys move between topics. In a narrow window the list moves to the top.
+- Chat: the first visit shows a "Choose your name" card ("Later" does not show it again). Your own messages now carry your name and Ravi icon too. The "My colour" setting was removed.
+- Chat rooms: only in rooms you created, "Room settings" lets you edit the room name (40 characters) and description (80 characters), signed with the key that created the room, showing how many public relays accepted it. Name changes from anyone else are ignored. "Hide this room" hides a room from the list and "Hidden rooms" brings it back. There is no "Delete", because rooms on public relays cannot be fully removed.
+- Backup: renamed to "Export wallet.dat backup file (locked)" / "Import wallet.dat backup file", with a table that separates the RavenVault file (.rvwallet, locked once more with the 52-character key) from the Raven Core file (wallet.dat for Raven Core).
+- Drag-and-drop restore: drop a `.rvwallet` (wallet.dat only) or `.pxlock` (full shop backup) onto the window. It first shows what would be restored, then asks for the key or backup password and the wallet password, opens it to check, and restores with the existing restore functions only after you tick the confirmation. Nothing changes while the node is running. What you have now is set aside, not deleted.
+- Move to Raven Core: saves a "wallet.dat for Raven Core" as a new file in a folder you choose (no 52-character lock; protected only by the wallet password). It requires a wallet password, asks for it once more, and reads the node's copy back to compare. We tested that this file, made by the bundled Raven Core (4.8.0), opens in that same Core. Using it needs the wallet password, and the balance appears after the blockchain has synced. Other Core versions were not tested.
+- Shop: new shops get the public name `RV.S.<shop name>`. Older `SHOP.*` shops keep working. Shop token amounts and sending use this shop's token name instead of a fixed `SHOP.PLAYX`.
+- Restore from 12 words: when the extra passphrase contains `#` or leading/trailing spaces, the message now points to another backup instead of the unverified "restore in Raven Core".
+- Signed update version/hash/order verification is unchanged. Includes the 0.8.5–0.8.8 changes.
+
 ## 0.8.8
 
 ### 한국어
