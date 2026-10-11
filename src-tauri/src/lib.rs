@@ -494,6 +494,7 @@ pub fn run() {
             walletfile::wallet_import_apply,
             walletfile::wallet_import_cancel,
             walletfile::key_sheet_print,
+            walletfile::wallet_core_export,
             backup::external_drives,
             backup::cloud_folders,
             sample::sample_check,

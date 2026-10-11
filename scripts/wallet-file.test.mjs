@@ -17,11 +17,11 @@ async function load(file) {
 }
 if (typeof globalThis.navigator === 'undefined') globalThis.navigator = { language: 'ko' };
 const wf = await load('wallet-file.ts');
-const NEW = ['wallet_export', 'wallet_import_prepare', 'wallet_import_apply', 'wallet_import_cancel', 'wallet_file_status', 'key_sheet_print'];
+const NEW = ['wallet_export', 'wallet_import_prepare', 'wallet_import_apply', 'wallet_import_cancel', 'wallet_file_status', 'key_sheet_print', 'wallet_core_export'];
 
 const leaves = (o) => Object.values(o).flatMap((v) => (typeof v === 'object' ? leaves(v) : [v]));
 
-test('새 IPC 6개: 허용 목록(잠긴 동안)에 없고, lib.rs 문지기 뒤에 등록돼 있고, 폰·직원 HTTP 에 없다', () => {
+test('새 IPC 7개(0.9.0 코어용 포함): 허용 목록(잠긴 동안)에 없고, lib.rs 문지기 뒤에 등록돼 있고, 폰·직원 HTTP 에 없다', () => {
   const lockSrc = read('src-tauri/src/app_lock.rs');
   const list = lockSrc.slice(lockSrc.indexOf('pub const LOCKED_ALLOWED'), lockSrc.indexOf('];', lockSrc.indexOf('pub const LOCKED_ALLOWED')));
   const allowed = [...list.matchAll(/"([a-z_0-9]+)"/g)].map((m) => m[1]);
