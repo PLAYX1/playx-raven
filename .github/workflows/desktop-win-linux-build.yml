@@ -1,0 +1,262 @@
+# 윈도우·리눅스 데스크탑 시험 빌드 — 손으로만 돌린다.
+#
+# 이 워크플로는 **설치 파일을 만들어 Actions 아티팩트로만** 올린다.
+#   - 서명 없음 (윈도우 Authenticode·업데이트 minisign 둘 다 안 함)
+#   - 비밀(secrets)·토큰 사용 없음, permissions 는 contents: read 뿐
+#   - 릴리스 업로드·dist 브랜치 푸시·업데이트 서버 반영 없음
+#   - 자동 업데이트 산출물(createUpdaterArtifacts)은 끈다 — 윈도우·리눅스 자동
+#     업데이트는 이번에 켜지 않는다(src-tauri/src/update_policy.rs 가 darwin- 만 허용).
+#
+# 정식 공개 흐름은 release.yml 이고, 이 파일은 그것을 바꾸지 않는다.
+name: 윈도우·리눅스 시험 빌드 (서명 없음)
+
+on:
+  workflow_dispatch:
+    inputs:
+      targets:
+        description: "만들 대상"
+        type: choice
+        options: [both, windows, linux]
+        default: both
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-win-linux-build-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  # 레이븐 코어 4.8.0 공식 배포 (https://github.com/RavenProject/Ravencoin/releases/tag/v4.8.0)
+  # SHA-256: GitHub 자산 digest 와 공식 .sha256sum 파일 내용이 같다(2026-10-12 13:23 KST 대조).
+  RAVEN_BASE: https://github.com/RavenProject/Ravencoin/releases/download/v4.8.0
+  RAVEN_WIN_FILE: raven-4.8.0-225491298-win64.zip
+  RAVEN_WIN_SHA256: 7b39dface10966fc92703eacd9e562cd61d9c18f1fcad5dcbc196742e0ff1752
+  RAVEN_LINUX_FILE: raven-4.8.0-225491298-x86_64-linux-gnu.tar.gz
+  RAVEN_LINUX_SHA256: cb359b6a5b42e47068cd655231484fcc763d2f79eae5ea318b029c704a4dc020
+  # kubo 0.43.0 공식 배포 (https://github.com/ipfs/kubo/releases/tag/v0.43.0)
+  # SHA-512: 공식 .sha512 파일 내용과 같다(2026-10-12 13:24 KST 대조).
+  KUBO_BASE: https://github.com/ipfs/kubo/releases/download/v0.43.0
+  KUBO_WIN_FILE: kubo_v0.43.0_windows-amd64.zip
+  KUBO_WIN_SHA512: 0486721fc406d36c9d70d16dc3984e70c50d5f1d1c890de3864a6904564080adb3f73546162ad30a8e1ee43024a18bf900fbda2b6c131197351ff2e8b9782178
+  KUBO_LINUX_FILE: kubo_v0.43.0_linux-amd64.tar.gz
+  KUBO_LINUX_SHA512: 6af21cd24a307d94326807b3d3827064c74fb7122f83b6940af250e6ae40da250e0ec0e1f3551256b78cd204623ed56c32ce735bbe28bdcc787b36943c52458a
+  # 맥에서 cargo check 를 통과시킨 것과 같은 판. 올릴 때는 여기만 바꾼다.
+  RUST_TOOLCHAIN: 1.98.1
+  CARGO_TERM_COLOR: never
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        label: [windows, linux]
+        # 잡 단위 if 에서는 matrix 를 못 쓴다 — 고른 대상만 남기도록 여기서 뺀다.
+        exclude:
+          - label: ${{ inputs.targets == 'linux' && 'windows' || 'none' }}
+          - label: ${{ inputs.targets == 'windows' && 'linux' || 'none' }}
+        include:
+          - label: windows
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            bundles: nsis,msi
+          # ⚠️ ubuntu-latest(24.04)에서 만든 AppImage·deb 는 glibc 2.39 이상이 필요하다
+          #    (= 우분투 24.04 이상). 22.04 라벨은 release.yml 이 큐에 영원히 남는 것을
+          #    겪어서 쓰지 않는다.
+          - label: linux
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            bundles: appimage,deb
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    steps:
+      # 🔴 윈도우 러너는 core.autocrlf=true 라 체크아웃이 \r\n 이 된다. 이 저장소의
+      #    시험 다수가 include_str!/readFileSync 로 소스 글자를 읽어 "\n" 으로 자른다
+      #    (메모리 feedback_windows_only_build_breaks: 0.2.8 윈도우 판이 이것으로 죽었다).
+      #    맥과 같은 바이트로 체크아웃한다.
+      - name: 줄바꿈 그대로 받기
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: 리눅스 재료 (Tauri v2 공식 목록)
+        if: matrix.label == 'linux'
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          # https://v2.tauri.app/start/prerequisites/ (Debian/Ubuntu) +
+          # https://v2.tauri.app/distribute/pipelines/github/ 의 patchelf·xdg-utils
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev build-essential curl wget file \
+            libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev \
+            patchelf xdg-utils
+          pkg-config --exists gtk+-3.0 webkit2gtk-4.1 || { echo "🔴 gtk/webkit2gtk 없음"; exit 1; }
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20
+
+      # 서드파티 Rust 액션 대신 러너에 깔린 rustup 으로 판을 고정한다.
+      - name: Rust ${{ env.RUST_TOOLCHAIN }}
+        run: |
+          set -euo pipefail
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --target "${{ matrix.target }}"
+          rustup default "$RUST_TOOLCHAIN"
+          rustc --version
+          cargo --version
+
+      # ── 같이 넣는 실행 파일: 받고 → 해시 대조 → 틀리면 멈춘다 ──────────
+      - name: 레이븐 노드·파일창고 받기 + 해시 대조
+        run: |
+          set -euo pipefail
+          sha256() { if command -v sha256sum >/dev/null; then sha256sum "$1" | cut -d" " -f1; else shasum -a 256 "$1" | cut -d" " -f1; fi; }
+          sha512() { if command -v sha512sum >/dev/null; then sha512sum "$1" | cut -d" " -f1; else shasum -a 512 "$1" | cut -d" " -f1; fi; }
+          fetch() {
+            for try in 1 2 3; do
+              curl -fsSL --retry 2 --retry-delay 3 --max-time 300 "$1" -o "$2" && return 0
+              echo "받기 실패 ($try/3): $1"; sleep 5
+            done
+            echo "🔴 못 받았습니다: $1"; exit 1
+          }
+          if [ "${{ matrix.label }}" = windows ]; then
+            RF=$RAVEN_WIN_FILE; RW=$RAVEN_WIN_SHA256; KF=$KUBO_WIN_FILE; KW=$KUBO_WIN_SHA512; EXT=.exe
+          else
+            RF=$RAVEN_LINUX_FILE; RW=$RAVEN_LINUX_SHA256; KF=$KUBO_LINUX_FILE; KW=$KUBO_LINUX_SHA512; EXT=
+          fi
+          W="$RUNNER_TEMP/vendor-dl"; mkdir -p "$W/node" "$W/ipfs" src-tauri/vendor
+          fetch "$RAVEN_BASE/$RF" "$W/$RF"
+          fetch "$KUBO_BASE/$KF" "$W/$KF"
+          GOT=$(sha256 "$W/$RF"); [ "$GOT" = "$RW" ] || { echo "🔴 ravend 해시 불일치: 받은 $GOT / 적힌 $RW"; exit 1; }
+          GOT=$(sha512 "$W/$KF"); [ "$GOT" = "$KW" ] || { echo "🔴 kubo 해시 불일치: 받은 $GOT / 적힌 $KW"; exit 1; }
+          echo "해시 일치: $RF (sha256) · $KF (sha512)"
+          case "$RF" in *.zip) unzip -q "$W/$RF" -d "$W/node" ;; *) tar -xzf "$W/$RF" -C "$W/node" ;; esac
+          case "$KF" in *.zip) unzip -q "$W/$KF" -d "$W/ipfs" ;; *) tar -xzf "$W/$KF" -C "$W/ipfs" ;; esac
+          BIN=$(find "$W/node" -type f -name "ravend$EXT" | head -1); [ -n "$BIN" ] || { echo "🔴 꾸러미 안에 ravend$EXT 없음"; exit 1; }
+          cp "$BIN" "src-tauri/vendor/ravend$EXT"
+          BIN=$(find "$W/ipfs" -type f -name "ipfs$EXT" | head -1); [ -n "$BIN" ] || { echo "🔴 꾸러미 안에 ipfs$EXT 없음"; exit 1; }
+          cp "$BIN" "src-tauri/vendor/ipfs$EXT"
+          chmod +x src-tauri/vendor/* || true
+          ls -la src-tauri/vendor/
+          {
+            echo "### 같이 넣은 실행 파일 (${{ matrix.label }})"
+            echo '```'
+            for f in src-tauri/vendor/ravend$EXT src-tauri/vendor/ipfs$EXT; do echo "$(sha256 "$f")  $f"; done
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # release.yml 과 같은 방식: 이 빌드 안에서만 tauri.conf.json 의 resources 를 켠다
+      # (저장소의 tauri.conf.json 은 바꾸지 않는다 — 커밋되지 않는 CI 작업본).
+      - name: 같이 넣은 것 등록 + 업데이트 산출물 끄기
+        run: |
+          set -euo pipefail
+          node -e "
+            const fs=require('fs'), p='src-tauri/tauri.conf.json';
+            const d=JSON.parse(fs.readFileSync(p,'utf8'));
+            d.bundle.resources=['vendor/ravend*','vendor/ipfs*'];
+            d.bundle.createUpdaterArtifacts=false;
+            fs.writeFileSync(p, JSON.stringify(d,null,2)+'\n');
+            console.log('resources:', d.bundle.resources.join(' '), '/ createUpdaterArtifacts:', d.bundle.createUpdaterArtifacts);
+          "
+
+      - run: npm ci
+
+      - name: 타입 검사 (tsc)
+        run: npm run typecheck
+
+      - name: 언어 사전 검사
+        run: npm run check:i18n
+
+      - name: cargo check (시험 포함)
+        working-directory: src-tauri
+        run: cargo check --locked --tests --target "${{ matrix.target }}"
+
+      # 이 대상에서 꼭 맞아야 하는 시험만 필수로 둔다: 창 숨김 명령, 데이터 경로,
+      # 업데이트 정책(윈도우·리눅스 설치 차단 유지), 같이 넣은 실행 파일 찾기.
+      - name: 필수 시험 (대상 OS 에서 의미 있는 것)
+        working-directory: src-tauri
+        run: |
+          set -euo pipefail
+          export RV_BACKUP_FIXTURE_ROOT="$RUNNER_TEMP/rv-fixture"
+          mkdir -p "$RV_BACKUP_FIXTURE_ROOT"
+          for f in quiet:: paths:: update_policy:: services::tests; do
+            cargo test --locked --lib --target "${{ matrix.target }}" -- "$f" --test-threads=1
+          done
+
+      # 전체 시험은 이 대상에서 한 번도 돈 적이 없다. 결과를 기록만 하고 빌드는 계속한다.
+      - name: 전체 시험 (참고용 — 실패해도 계속)
+        continue-on-error: true
+        working-directory: src-tauri
+        run: |
+          export RV_BACKUP_FIXTURE_ROOT="$RUNNER_TEMP/rv-fixture-all"
+          mkdir -p "$RV_BACKUP_FIXTURE_ROOT"
+          set -o pipefail
+          cargo test --locked --target "${{ matrix.target }}" 2>&1 | tee "$RUNNER_TEMP/cargo-test-${{ matrix.label }}.log"
+          cd .. && cargo test --locked --manifest-path qa/restore-safety/Cargo.toml -- --test-threads=1 2>&1 | tee -a "$RUNNER_TEMP/cargo-test-${{ matrix.label }}.log"
+
+      - name: 설치 파일 만들기 (서명 없음)
+        env:
+          # linuxdeploy 의 strip 이 24.04 라이브러리(.relr.dyn)에서 죽는 일을 피한다.
+          NO_STRIP: "true"
+        run: npx tauri build --ci --no-sign --target "${{ matrix.target }}" --bundles "${{ matrix.bundles }}"
+
+      - name: 설치 파일 안에 노드·파일창고가 들어갔나
+        run: |
+          set -euo pipefail
+          B="src-tauri/target/${{ matrix.target }}/release/bundle"
+          ls -laR "$B" | head -80 || true
+          if [ "${{ matrix.label }}" = windows ]; then
+            # NSIS 는 resources 를 설치 폴더의 vendor\ 에 푼다. 설치기 안 목록을 7-Zip 으로 본다
+            # (windows-latest 러너에 7z 가 깔려 있다).
+            NSIS=$(ls "$B"/nsis/*.exe | head -1)
+            LIST=$(7z l "$NSIS")
+            for f in ravend.exe ipfs.exe; do
+              printf '%s\n' "$LIST" | grep -iE "vendor[\\/]$f" || { echo "🔴 NSIS 안에 vendor\\$f 없음"; exit 1; }
+            done
+            ls "$B"/msi/*.msi
+          else
+            DEB=$(ls "$B"/deb/*.deb | head -1)
+            dpkg-deb -c "$DEB" | grep -E 'usr/lib/RavenVault Desktop/vendor/ravend$' || { echo "🔴 deb 안에 ravend 없음"; exit 1; }
+            dpkg-deb -c "$DEB" | grep -E 'usr/lib/RavenVault Desktop/vendor/ipfs$' || { echo "🔴 deb 안에 ipfs 없음"; exit 1; }
+            AI=$(ls "$B"/appimage/*.AppImage | head -1)
+            chmod +x "$AI"
+            ( cd "$RUNNER_TEMP" && "$GITHUB_WORKSPACE/$AI" --appimage-extract >/dev/null )
+            for f in ravend ipfs; do
+              [ -x "$RUNNER_TEMP/squashfs-root/usr/lib/RavenVault Desktop/vendor/$f" ] || { echo "🔴 AppImage 안에 $f 없음"; exit 1; }
+            done
+          fi
+
+      - name: 산출물 모으기 + SHA-256 기록
+        run: |
+          set -euo pipefail
+          B="src-tauri/target/${{ matrix.target }}/release/bundle"
+          O="$RUNNER_TEMP/out"; mkdir -p "$O"
+          if [ "${{ matrix.label }}" = windows ]; then
+            cp "$B"/nsis/*.exe "$B"/msi/*.msi "$O"/
+          else
+            cp "$B"/appimage/*.AppImage "$B"/deb/*.deb "$O"/
+          fi
+          [ -f "$RUNNER_TEMP/cargo-test-${{ matrix.label }}.log" ] && cp "$RUNNER_TEMP/cargo-test-${{ matrix.label }}.log" "$O"/ || true
+          cd "$O"
+          if command -v sha256sum >/dev/null; then sha256sum -- * > SHA256SUMS.txt; else shasum -a 256 -- * > SHA256SUMS.txt; fi
+          {
+            echo "### 산출물 SHA-256 (${{ matrix.label }}, 커밋 ${GITHUB_SHA})"
+            echo '```'
+            cat SHA256SUMS.txt
+            echo '```'
+            echo "서명 없음 — 시험용. 공개 배포물 아님."
+          } >> "$GITHUB_STEP_SUMMARY"
+          ls -la
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ravenvault-desktop-${{ matrix.label }}-unsigned-${{ github.sha }}
+          path: ${{ runner.temp }}/out/
+          if-no-files-found: error
+          retention-days: 14
