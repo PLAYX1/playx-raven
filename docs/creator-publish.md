@@ -82,7 +82,7 @@ sha256:<signature 칸을 뺀 매니페스트 정본 JSON 의 SHA-256 hex>
 - 이름 규칙: 영문 대문자·숫자·`.`·`_`, 점·밑줄 연속/처음/끝 금지, RVN·RAVEN·RAVENCOIN 금지, 전체 30자(주인 표 `!` 자리). assets.cpp 정규식을 옮긴 것이며 이번에 원본을 다시 대조하지 않았다.
 - 소각액: 루트 500·하위 100·고유 5·재발행 100 RVN(데스크탑 issue.rs·issue2.rs 상수). 노드에 묻는 RPC 가 없어 **체인 파라미터와 대조할 수 없다** →
   화면에 「체인과 대조: 확인 불가」로 표시한다. 대조 값이 들어오는데 다르면(`mismatch`) 발행을 막는다.
-- 실제 메인넷 발행 스위치 `REAL_MAINNET_ISSUE_ENABLED = false`(`core/creator/publish.ts`). 꺼져 있는 동안 메인넷에서는 발행 단추가 잠기고, 시험망(test·regtest)에서만 노드 `issue_asset` 을 부른다.
+- 실제 메인넷 발행 스위치 `REAL_MAINNET_ISSUE_ENABLED`(`core/creator/publish.ts` ← `core/creator/mainnet-switch.json` 의 `issue`, 커밋된 기본값 false). 꺼져 있는 동안 메인넷에서는 발행 단추가 잠기고, 시험망(test·regtest)에서만 노드 `issue_asset` 을 부른다.
 - 발행 형태: qty 1, units 0, reissuable true(매니페스트를 고치려면 재발행이 필요하므로 잠그지 않는다). 발행 명령은 기존 `issue_asset`(주인 표 제자리 유지 포함)을 그대로 쓴다.
 
 ## 4. 보관(pin) 어댑터 — 누가 계속 붙들고 있나
@@ -133,7 +133,7 @@ sha256:<signature 칸을 뺀 매니페스트 정본 JSON 의 SHA-256 hex>
 | 3 | 수수료율 | 초안 15%(`DRAFT_PLATFORM_FEE_BPS`) | 규약 v4 상수 하나 |
 | 4 | 검증 방식·운영 키 | 허용 목록 Ed25519, 내장 키 없음 | 키 생성 장소·두 사람 확인·만료(B2) |
 | 5 | 미검증 노출 범위 | 발견은 되지만 외부 링크만 | 기본 화면에 숨길지(설계 T12), 한국 사용자 처리 |
-| 6 | 메인넷 발행 켜기 | `REAL_MAINNET_ISSUE_ENABLED = false` | 소각액 대조·접두어·핀 주체 결정 뒤 |
+| 6 | 메인넷 발행 켜기 | `core/creator/mainnet-switch.json` `issue: false` (docs/mainnet-enable.md) | 소각액 대조·접두어·핀 주체 결정 뒤 |
 | 7 | 등록 신청서 전달 경로 | 화면에서 복사만 | 대외 메일 등 |
 | 8 | 파일 크기·개수 상한 | 게임 25MB/200MB/2000, 음악 200MB/400MB/20 | 보관 비용과 함께 |
 | 9 | 법률 확인 | — | 통신판매중개·특금법·게임물 등급·콘텐츠 책임·세무 — 전문가 확인 필요 |

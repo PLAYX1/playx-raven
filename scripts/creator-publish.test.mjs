@@ -6,6 +6,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { createHash } from 'node:crypto';
 import { build } from 'esbuild';
+import { SW } from './mainnet-switch-state.mjs';
 
 async function moduleAt(path) {
   const built = await build({ entryPoints: [path], bundle: true, write: false, platform: 'node', format: 'cjs', logLevel: 'silent' });
@@ -26,7 +27,23 @@ test('vendored creator core is byte-identical to the pinned copy (and to the wal
   for (const f of files) assert.equal(digest(f), pins.files[f], `vendored drift: ${f}`);
   const root = process.env.RV_WALLET_CORE || '/Users/gimmusong/wt-rv-signed-lists-core';
   if (!existsSync(`${root}/core/creator/manifest.ts`)) { t.skip('wallet checkout absent; pinned hashes still checked'); return; }
-  for (const f of files) assert.equal(digest(f), digest(`${root}/${f}`), `differs from wallet source: ${f}`);
+  // 지갑 원본과 다른 곳은 스위치 두 줄뿐이다(pins.patches). 원본에 그 패치를 적용한 바이트와 같아야 한다.
+  const patched = f => { let t = readFileSync(`${root}/${f}`, 'utf8'); for (const { find, replace } of pins.patches?.[f] ?? []) { assert.ok(t.includes(find), `patch anchor missing in wallet source: ${f}`); t = t.replace(find, () => replace); } return createHash('sha256').update(t).digest('hex'); };
+  for (const f of files) assert.equal(digest(f), patched(f), `differs from wallet source (+declared patches): ${f}`);
+});
+
+test('스위치 한 곳: 지갑 core 두 상수와 Rust 상수가 같은 파일 값을 따른다 · 켜는 것은 acknowledged 가 같이 있을 때만', async () => {
+  assert.equal(core.REAL_MAINNET_ISSUE_ENABLED, SW.issue); assert.equal(core.OPEN_MARKET_SALES_ENABLED, SW.sales);
+  for (const k of ['issue', 'sales', 'acknowledged', 'verifiedOnly']) assert.equal(typeof SW[k], 'boolean', k);
+  // 켜진 채 슬쩍 커밋되는 것을 막는다: 켜려면 같은 파일에서 acknowledged 를 사람이 true 로 바꿔야 한다(enable 커밋이 한다).
+  if (SW.issue || SW.sales) assert.equal(SW.acknowledged, true, '스위치가 켜졌는데 acknowledged 가 false 다 — enable 커밋이 아니면 켜지 마라');
+  else assert.equal(SW.acknowledged, false, '꺼져 있는데 acknowledged 만 true 다');
+  // 파일 서식(Rust const 스캐너가 읽는 모양): 키마다 한 줄, 콜론 뒤 한 칸.
+  const raw = readFileSync('core/creator/mainnet-switch.json', 'utf8');
+  for (const k of ['issue', 'sales', 'acknowledged', 'verifiedOnly']) assert.match(raw, new RegExp(`^  "${k}": (true|false),?$`, 'm'), k);
+  // 두 TS 상수는 JSON 을 직접 읽을 뿐 다른 값을 박지 않는다.
+  assert.match(readFileSync('core/creator/publish.ts', 'utf8'), /export const REAL_MAINNET_ISSUE_ENABLED: boolean = MAINNET_SWITCH\.issue;/);
+  assert.match(readFileSync('core/creator/open-market.ts', 'utf8'), /export const OPEN_MARKET_SALES_ENABLED: boolean = MAINNET_SWITCH\.sales;/);
 });
 
 test('kubo pin adapter = existing ipfs_add_file (CIDv0, pinned); signer = sign_message, password only after a lock error', async () => {
@@ -72,8 +89,9 @@ test('desktop bundle: publish → verify → plan (root RV.<kind>., anyone, 500 
   assert.ok(core.planIssue({ ...base, chain: 'regtest', type: 'music' }).blockers.some(b => b.includes('종류 글자')), 'kind letter must match the manifest type');
   assert.ok(core.planIssue({ ...base, chain: 'regtest', nameTaken: null }).blockers.some(b => b.includes('확인 불가')), 'unknown duplicate blocks');
   const main = core.planIssue({ ...base, chain: 'main' });
-  assert.equal(main.canIssue, false); assert.ok(main.blockers.some(b => b.includes('실제 발행은 아직 꺼져 있어요')));
-  assert.equal(core.REAL_MAINNET_ISSUE_ENABLED, false); assert.equal(core.OPEN_MARKET_SALES_ENABLED, false);
+  // 메인넷 판정은 스위치 파일을 따른다(꺼짐 = 잠금, 켜짐 = 이 잠금 항목만 사라지고 나머지 검사는 그대로).
+  assert.equal(main.blockers.some(b => b.includes('실제 발행은 아직 꺼져 있어요')), !SW.issue);
+  assert.equal(main.canIssue, SW.issue);
   assert.equal(main.burn.status, 'unverifiable'); assert.equal(main.burn.rvn, 500);
 });
 

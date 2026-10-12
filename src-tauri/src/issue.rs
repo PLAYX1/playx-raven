@@ -236,11 +236,40 @@ pub async fn name_taken(name: String) -> Result<bool, String> {
     }
 }
 
-/// 🔴 **실제 메인넷 발행 스위치 — 기본 꺼짐.** 0.8.7 에서 대표 결정 전까지 메인넷(`main`)에서는 모든 발행
+/// 메인넷 발행·판매 스위치 파일(지갑 core 의 TS 상수 두 개와 **같은 파일**). 서식은 키마다 한 줄, 콜론 뒤 한 칸.
+const MAINNET_SWITCH_JSON: &str = include_str!("../../core/creator/mainnet-switch.json");
+
+/// `"key": true` 인가. 파일에서 그 키 줄을 찾아 값이 `true` 로 시작하면 참, 그 밖(없음·false·이상한 값)은 전부 **거짓**.
+/// const fn 이라 빌드 때 정해진다 — 실행 중에 바꾸는 길은 없다. (파일 모양이 약속과 다르면 시험이 깨지게 해 둔다.)
+pub(crate) const fn switch_flag(src: &str, key: &str) -> bool {
+    let (s, k) = (src.as_bytes(), key.as_bytes());
+    // 찾는 모양: `"` key `": `
+    let need = k.len() + 4;
+    let mut i = 0;
+    while i + need <= s.len() {
+        let mut ok = s[i] == b'"';
+        let mut j = 0;
+        while ok && j < k.len() {
+            ok = s[i + 1 + j] == k[j];
+            j += 1;
+        }
+        if ok && s[i + 1 + k.len()] == b'"' && s[i + 2 + k.len()] == b':' && s[i + 3 + k.len()] == b' ' {
+            let v = i + need;
+            return v + 4 <= s.len() && s[v] == b't' && s[v + 1] == b'r' && s[v + 2] == b'u' && s[v + 3] == b'e';
+        }
+        i += 1;
+    }
+    false
+}
+
+/// 🔴 **실제 메인넷 발행 스위치 — 커밋된 기본값은 꺼짐.** 0.8.7 에서 대표 결정 전까지 메인넷(`main`)에서는 모든 발행
 /// IPC(`issue_asset` · `reissue` · `issue_many_unique` · `issue_qualifier` · `issue_restricted` ·
 /// `create_issue`)가 노드를 부르기 **전에** 거절된다. 테스트넷(`test`)·리그테스트(`regtest`)는 허용.
-/// 켜려면 이 상수를 `true` 로 바꾸고 새로 빌드한다(설정·환경 변수·화면으로 켜는 길은 없다 — 시험이 지킨다).
-pub const REAL_MAINNET_ISSUE_ENABLED: bool = false;
+/// 0.9.2: 값은 `core/creator/mainnet-switch.json` 의 `issue` 한 줄 — 지갑 core TS 두 상수(발행·판매)와 같은 파일이다.
+/// 켜는 길은 그 파일을 바꾼 별도 「enable」 커밋을 얹어 새로 빌드하는 것뿐이다(설정·환경 변수·화면으로 켜는 길은 없다 — 시험이 지킨다).
+pub const REAL_MAINNET_ISSUE_ENABLED: bool = switch_flag(MAINNET_SWITCH_JSON, "issue");
+/// 판매(장터 구매 결제) 스위치 — 위와 같은 파일의 `sales`.
+pub const OPEN_MARKET_SALES_ENABLED: bool = switch_flag(MAINNET_SWITCH_JSON, "sales");
 
 const MAINNET_ISSUE_OFF_SAY: &str = "실제 메인넷에서의 자산 발행은 지금 꺼져 있어요(안전 잠금). 테스트넷이나 연습 모드에서는 발행할 수 있어요. 메인넷 발행은 대표 확인 뒤에 열립니다. 돈은 나가지 않았어요.";
 const CHAIN_UNKNOWN_SAY: &str = "지금 연결된 네트워크(메인넷/테스트넷)를 확인하지 못해서 발행하지 않았어요. 노드가 켜져 있는지 확인한 뒤 다시 해 주세요. 돈은 나가지 않았어요.";
@@ -261,8 +290,8 @@ pub fn issue_allowed_on(chain: Option<&str>, enabled: bool) -> Result<(), String
 pub async fn ensure_issue_allowed() -> Result<(), String> {
     #[cfg(test)]
     {
-        // 시험에서는 노드가 없다 — 상수만 본다. (체인 판정은 `issue_allowed_on` 시험이 한다.)
-        return if REAL_MAINNET_ISSUE_ENABLED { Ok(()) } else { Err(CHAIN_UNKNOWN_SAY.into()) };
+        // 시험에서는 노드가 없다 — 스위치 값과 상관없이 늘 거절한다(시험이 노드를 건드리지 않게). 체인 판정은 `issue_allowed_on` 시험이 한다.
+        return Err(CHAIN_UNKNOWN_SAY.into());
     }
     #[cfg(not(test))]
     {
@@ -555,8 +584,25 @@ mod mainnet_guard_tests {
     use super::*;
 
     #[test]
-    fn the_switch_ships_off() {
-        assert!(!REAL_MAINNET_ISSUE_ENABLED, "메인넷 발행 스위치가 켜진 채 커밋됐다");
+    fn the_switch_follows_the_one_file_and_cannot_be_on_without_acknowledgement() {
+        let v: Value = serde_json::from_str(MAINNET_SWITCH_JSON).expect("mainnet-switch.json 이 JSON 이 아니다");
+        let flag = |k: &str| v[k].as_bool().unwrap_or_else(|| panic!("{k} 가 불리언이 아니다"));
+        // const 스캐너가 serde 로 읽은 값과 같다(서식이 약속과 달라지면 여기서 깨진다).
+        assert_eq!(REAL_MAINNET_ISSUE_ENABLED, flag("issue"));
+        assert_eq!(OPEN_MARKET_SALES_ENABLED, flag("sales"));
+        // 켜려면 같은 파일에서 acknowledged 를 사람이 true 로 바꿔야 한다 — enable 커밋이 아닌 커밋에서 슬쩍 켜지지 않는다.
+        if flag("issue") || flag("sales") {
+            assert!(flag("acknowledged"), "스위치가 켜졌는데 acknowledged 가 false 다");
+        } else {
+            assert!(!flag("acknowledged"), "꺼져 있는데 acknowledged 만 true 다");
+        }
+        // 스캐너 자체: 없는 키·false·모양이 다른 값은 모두 거짓.
+        assert!(switch_flag("{\n  \"issue\": true,\n}", "issue"));
+        assert!(!switch_flag("{\n  \"issue\": false,\n}", "issue"));
+        assert!(!switch_flag("{\n  \"issue\":true,\n}", "issue"));
+        assert!(!switch_flag("{}", "issue"));
+        assert!(!switch_flag("\"issue\": tru", "issue"));
+        assert!(!switch_flag("\"issues\": true", "issue"));
     }
 
     #[test]
@@ -613,7 +659,8 @@ mod mainnet_guard_tests {
     fn there_is_no_runtime_switch() {
         let src = include_str!("issue.rs");
         let prod = &src[..src.find("#[cfg(test)]\nmod name_tests").unwrap()];
-        assert!(!prod.contains("env::var") && !prod.contains("REAL_MAINNET_ISSUE_ENABLED ="), "런타임으로 켜는 길");
-        assert!(prod.contains("pub const REAL_MAINNET_ISSUE_ENABLED: bool = false;"));
+        assert!(!prod.contains("env::var"), "런타임으로 켜는 길");
+        assert!(prod.contains("pub const REAL_MAINNET_ISSUE_ENABLED: bool = switch_flag(MAINNET_SWITCH_JSON, \"issue\");"));
+        assert!(prod.contains("include_str!(\"../../core/creator/mainnet-switch.json\")"));
     }
 }

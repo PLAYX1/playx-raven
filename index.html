@@ -3922,6 +3922,7 @@
             <dt>상품 등록증 이름</dt><dd><code id="cw-c-name"></code></dd>
             <dt>체인 중복 조회</dt><dd><b id="cw-c-dup" role="status"></b> <button type="button" class="ghost" id="cw-c-dup-recheck">다시 조회</button></dd>
             <dt>보증(소각)</dt><dd><b id="cw-c-burn"></b><br /><span class="meta" id="cw-c-burn-check"></span></dd>
+            <dt>드는 돈</dt><dd id="cw-c-total"></dd>
             <dt>판매 수수료</dt><dd id="cw-c-fee"></dd>
             <dt>네트워크</dt><dd id="cw-c-chain"></dd>
           </dl>
@@ -3957,6 +3958,8 @@
         <p class="creator-note" role="note" id="mk-note"></p>
         <p class="meta" id="mk-lists-say" role="status"></p>
         <button type="button" class="ghost" id="mk-lists-refresh" hidden>목록 새로 받기</button>
+        <p class="meta" id="mk-hidden-say" role="status"></p>
+        <button type="button" class="ghost" id="mk-hidden-reset" hidden>숨긴 상품 다시 보기</button>
         <div id="mk-list-view">
           <div class="mk-tabs" id="mk-tabs" role="group" aria-label="종류별로 보기"></div>
           <ul class="mk-list" id="mk-list"></ul>
@@ -3972,21 +3975,29 @@
           <div id="mk-d-preview"></div>
           <button type="button" class="ghost" id="mk-d-check">자동 점검</button>
           <div id="mk-d-check-say" role="status"></div>
-          <button type="button" id="mk-d-buy" disabled>구매하기</button>
+          <button type="button" id="mk-d-buy" disabled>결제 내용 보기</button>
           <p class="meta" id="mk-d-buy-say" role="status"></p>
+          <button type="button" class="ghost" id="mk-d-report">이 상품 신고하기</button>
+          <button type="button" class="ghost" id="mk-d-hide">이 상품 내 목록에서 숨기기</button>
+          <p class="meta" id="mk-d-report-note"></p>
+          <p class="meta" id="mk-d-report-say" role="status"></p>
           <button type="button" class="ghost" id="mk-d-back">목록으로</button>
         </div>
         <div id="mk-confirm" class="card" hidden>
-          <h2>구매 확인</h2>
+          <h2>결제 확인</h2>
           <ul id="mk-c-lines"></ul>
+          <h3>알아 둘 사실</h3>
+          <ul id="mk-c-facts" class="wz-warnlist"></ul>
+          <h3>보내는 곳과 금액</h3>
+          <ul id="mk-c-outputs"></ul>
           <p class="meta" id="mk-c-note"></p>
           <ul id="mk-c-blockers"></ul>
-          <button type="button" id="mk-c-pay">이 금액으로 사기</button>
+          <button type="button" id="mk-c-pay">승인하고 보내기</button>
           <button type="button" class="ghost" id="mk-c-cancel">취소</button>
           <p id="mk-c-say" role="status"></p>
         </div>
         <div class="card">
-          <h2>내 구매 목록</h2>
+          <h2>내 결제 기록</h2>
           <ul id="mk-purchases"></ul>
         </div>
         <button type="button" class="ghost" id="market-back">게임으로 돌아가기</button>

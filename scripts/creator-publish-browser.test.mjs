@@ -16,6 +16,7 @@ import { tmpdir } from 'node:os';
 import { build } from 'esbuild';
 import puppeteer from 'puppeteer-core';
 import { installFixture } from './desktop-fixture.mjs';
+import { SW } from './mainnet-switch-state.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const built = await build({ entryPoints: [join(root, 'scripts/fixtures/creator-core-entry.ts')], bundle: true, write: false, platform: 'node', format: 'cjs', logLevel: 'silent' });
@@ -88,6 +89,8 @@ function installCreatorHarness({ chain, balance, taken, failPinAt, dead, nameUnk
     if (cmd === 'receive_address') return { address: window.__testAddress, reused: true, mine: true };
     if (cmd === 'issue_asset') { calls.push({ cmd, args }); return { txid: 'cd'.repeat(32), owner_token: args.name + '!' }; }
     if (cmd === 'new_address') return window.__testAddress;
+    if (cmd === 'market_list_assets') { calls.push({ cmd, pattern: args.pattern }); return []; } // 0.9.2: 장터가 노드 목록을 부른다 — 모의 노드는 빈 목록
+    if (cmd === 'market_chain_tip') return { chain, height: null, synced: false };
     return base(cmd, args);
   };
   window.__TAURI_INTERNALS__.invoke = wrap; window.__TAURI__.core.invoke = wrap;
@@ -186,7 +189,7 @@ async function bookFlow(page, report, tag) {
   assert.equal(await stepNow(page), 0);
   assert.match(await text(page, '#cw-guide'), /보증.*수수료가 아니에요.*수수료 일정을 아직 받지 못했어요.*300 RVN 에 팔리면 → 무료 기간에는 나 300 RVN · 수수료 0 RVN, 그 뒤 나 285 RVN · 수수료 15 RVN.*규칙: 시작 뒤 약 6개월 수수료 0%, 그 뒤 5%.*최대 500 RVN.*파일 보관은 내 책임.*환불 책임은 판매자.*전문가 확인/);
   assert.doesNotMatch(await text(page, '#cw-guide'), /15%/, 'no hard-coded 15% draft');
-  assert.match(await text(page, '#cw-switch-note'), /메인넷 등록은 꺼져.*판매\(구매 결제\)는 꺼져/);
+  assert.match(await text(page, '#cw-switch-note'), new RegExp(`메인넷 등록은 ${SW.issue ? '열려' : '꺼져'}.*판매\\(구매 결제\\)는 ${SW.sales ? '열려' : '꺼져'}`));
   assert.equal(await disabled(page, '#cw-start'), true, 'must tick 「읽었어요」');
   await shot(0);
   await page.click('#cw-guide-ok'); await page.click('#cw-start');
@@ -268,7 +271,7 @@ test('book: guide → ①…⑧ on the mock chain; every step audited at 390/144
       assert.match(await page.$eval('#cw-share', t => t.value), /RV\.B\.SEA_BOOK[\s\S]*열린 장터[\s\S]*ipfs:\/\/Qm/);
       const asked = calls.filter(c => c.cmd === 'name_taken').map(c => c.name);
       assert.ok(asked.length >= 2 && asked.every(n => /^RV\.B\./.test(n)) && asked.at(-1) === 'RV.B.SEA_BOOK', `chain duplicate lookups: ${asked}`);
-      assert.match(await text(page, '#cw-sales'), /판매 기능이 아직 꺼져 있어 판매가 없어요/);
+      assert.match(await text(page, '#cw-sales'), SW.sales ? /판매 현황을 읽지 못했어요/ : /판매 기능이 아직 꺼져 있어 판매가 없어요/);
       const req = JSON.parse(await page.$eval('#cw-request', t => t.value));
       assert.deepEqual([req.status, req.asset, req.type, req.issueTxid], ['unverified', 'RV.B.SEA_BOOK', 'book', 'cd'.repeat(32)]);
       assert.equal(await page.evaluate(() => localStorage.getItem('rv-creator-draft-v2')), null, 'draft cleared after issuing');
@@ -410,6 +413,7 @@ test('chain duplicate lookup: 「확인 불가」 is shown on ③ and ⑦ and bl
 
 test('cost shortfall and mainnet lock block issuing; bad files are refused; game kind warns that code runs', { timeout: 300_000 }, async () => {
   for (const [opts, expectCost, expectBlock] of [[{ balance: 100 }, /400\.01 RVN 이 모자라요/, /모자라요/], [{ chain: 'main' }, /잔액이 충분해요/, /실제 발행은 아직 꺼져 있어요/]]) {
+    if (opts.chain === 'main' && SW.issue) continue; // 메인넷 스위치가 켜진 빌드(enable 커밋)에서는 이 잠금 항목이 없다 — 나머지 잠금(소각액·잔액·이름)은 위 경우가 지킨다
     const page = await openCreator(opts);
     await page.click('#cw-guide-ok'); await page.click('#cw-start');
     await page.click('input[name="cw-type"][value="game"]'); await next(page, 2);
@@ -481,22 +485,32 @@ async function marketFixture() {
   const store = Object.fromEntries([...pin.stored.entries()].map(([k, v]) => [k, Array.from(v)]));
   return { assets, store };
 }
-async function openMarket(opts = {}, { salesEnabled = true, withBuy = true } = {}) {
+async function openMarket(opts = {}, { salesEnabled = true, withBuy = true, verifiedOnly = false, purchaseMode = null } = {}) {
   const page = await openApp(opts);
   await page.click('#market-open');
   await page.waitForFunction(() => document.querySelector('#page-market.on'));
-  await page.waitForFunction(() => /아직 없어요/.test(document.querySelector('#mk-list-say').textContent));
+  await page.waitForFunction(() => /아직 올라온 상품이 없어요/.test(document.querySelector('#mk-list-say').textContent));
+  assert.equal((await page.evaluate(() => window.__creatorCalls)).some(c => c.cmd === 'market_list_assets' && c.pattern === 'RV.*'), true, '앱 장터가 노드 목록 명령을 부른다');
   const fx = await marketFixture();
   await page.addScriptTag({ content: marketBundle });
   await page.evaluate((fx, salesEnabled, withBuy, args) => {
-    window.__buys = []; window.__patterns = [];
+    window.__buys = []; window.__patterns = []; window.__opened = []; window.__pcalls = [];
+    // 모의 결제 길(0.9.2): 준비(돈 안 나감) → 승인 → 전송. tamper = 준비된 거래의 판매자 몫이 화면과 다르다.
+    const purchase = args.purchaseMode ? {
+      prepare: async r => { window.__pcalls.push(['prepare', r]);
+        const outputs = [{ role: 'seller', address: r.sellerAddress, atoms: r.sellerAtoms }, ...(r.feeAtoms !== '0' ? [{ role: 'fee', address: 'RLFnbkjmf1VCVq7D9TZvRp7fv6W97rm2cB', atoms: r.feeAtoms }] : []), { role: 'memo', address: null, atoms: '0' }, { role: 'change', address: 'RChangeMine', atoms: '123400000' }];
+        if (args.purchaseMode === 'tamper') outputs[0] = { ...outputs[0], atoms: '1' };
+        return { id: 'p1', asset: r.asset, outputs, networkFeeAtoms: '226000', totalAtoms: String(BigInt(r.sellerAtoms) + BigInt(r.feeAtoms) + 226000n), sellerAtoms: r.sellerAtoms, feeAtoms: r.feeAtoms, chain: 'regtest', memoScript: '6a0452564450', ownerId: 'owner-x' }; },
+      send: async p => { window.__pcalls.push(['send', p.id]); return { txid: 'cd'.repeat(32) }; },
+      cancel: () => window.__pcalls.push(['cancel']) } : undefined;
     const sched = window.__policySchedule(args.sched);
-    const m = window.__wireOpenMarket({ back: () => {}, salesEnabled, now: () => Date.parse('2026-10-12T00:00:00Z'), feeSchedule: () => sched, chainHeight: () => args.tip,
+    const m = window.__wireOpenMarket({ back: () => {}, salesEnabled, verifiedOnly: args.verifiedOnly, now: () => Date.parse('2026-10-12T00:00:00Z'), feeSchedule: () => sched, chainHeight: () => args.tip,
       // 노드가 검색어를 무시하고 전부 돌려주는 최악의 경우 — 화면(discoverListings)이 종류 글자로 다시 걸러야 한다.
       source: { assets: async p => { window.__patterns.push(p); return fx.assets; }, fetch: async cid => fx.store[cid] ? Uint8Array.from(fx.store[cid]) : null },
-      buy: withBuy ? async r => { window.__buys.push(r); return { txid: 'ab'.repeat(32) }; } : undefined });
+      buy: withBuy ? async r => { window.__buys.push(r); return { txid: 'ab'.repeat(32) }; } : undefined,
+      purchase, openExternal: u => { window.__opened.push(u); } });
     return m.load();
-  }, fx, salesEnabled, withBuy, { sched: SCHED_ARGS, tip: PAID_TIP });
+  }, fx, salesEnabled, withBuy, { sched: SCHED_ARGS, tip: PAID_TIP, verifiedOnly, purchaseMode });
   await page.waitForFunction(() => document.querySelectorAll('#mk-list .mk-item').length === 4);
   return page;
 }
@@ -554,9 +568,9 @@ test('buyer: list → detail → auto-check → preview → confirm (fee split) 
   }
   await page.setViewport({ width: 1440, height: 900 }); await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'light' }]); await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
   await page.click('#mk-c-pay');
-  await page.waitForFunction(() => /샀어요/.test(document.querySelector('#mk-c-say').textContent));
+  await page.waitForFunction(() => /보냈어요/.test(document.querySelector('#mk-c-say').textContent));
   assert.deepEqual(await page.evaluate(() => window.__buys), [{ asset: 'RV.B.SEA_BOOK', sellerAddress: RECEIVING, priceAtoms: '30000000000', sellerAtoms: '28500000000', feeAtoms: '1500000000', feeBps: 500, tier: 'bonded' }]);
-  assert.match(await text(page, '#mk-purchases'), /바다 이야기 · RV\.B\.SEA_BOOK · 판매자 285 RVN \+ 수수료 15 RVN · 거래 abababababab/);
+  assert.match(await text(page, '#mk-purchases'), /바다 이야기 · RV\.B\.SEA_BOOK · 판매자 285 RVN \+ 수수료 15 RVN · 거래 abababababab….*자산은 받지 않았어요/);
   // Music: preview player limited to its window.
   await page.click('#mk-c-cancel'); await page.click('#mk-d-back');
   await openItem(page, 'RV.M.MORNING_SONG');
@@ -632,7 +646,7 @@ test('fee schedule: wizard notice reads the signed schedule (0% now → date/blo
   const fx = await marketFixture();
   await page.addScriptTag({ content: marketBundle });
   await page.evaluate(fx => { window.__buys = [];
-    return window.__wireOpenMarket({ back: () => {}, salesEnabled: true, now: () => Date.parse('2026-10-12T00:00:00Z'), feeSchedule: () => null,
+    return window.__wireOpenMarket({ back: () => {}, salesEnabled: true, verifiedOnly: false, now: () => Date.parse('2026-10-12T00:00:00Z'), feeSchedule: () => null,
       source: { assets: async () => fx.assets, fetch: async cid => fx.store[cid] ? Uint8Array.from(fx.store[cid]) : null }, buy: async r => { window.__buys.push(r); return { txid: 'ab'.repeat(32) }; } }).load(); }, fx);
   await page.waitForFunction(() => document.querySelectorAll('#mk-list .mk-item').length === 4);
   await openItem(page, 'RV.B.SEA_BOOK');
@@ -644,5 +658,105 @@ test('fee schedule: wizard notice reads the signed schedule (0% now → date/blo
   assert.equal(await disabled(page, '#mk-c-pay'), true);
   await page.evaluate(() => document.querySelector('#mk-c-pay').click());
   assert.deepEqual(await page.evaluate(() => window.__buys), []);
+  await page.close();
+});
+
+
+/* ── 0.9.2: 결제 준비/승인 분리 · 1단계 제한 · 사실 문구 · 신고/숨김 ── */
+async function bondedBook(page) {
+  await openItem(page, 'RV.B.SEA_BOOK');
+  await page.click('#mk-d-check');
+  await page.waitForFunction(() => document.querySelector('#mk-d-badge').textContent === '보증 · 미검증');
+}
+
+test('purchase: the confirm screen only PREPARES (nothing sent), shows seller/fee/network/total, and sends once after explicit approval; the record says no asset was received', { timeout: 300_000 }, async () => {
+  const page = await openMarket({}, { purchaseMode: 'ok' });
+  await bondedBook(page);
+  await page.click('#mk-d-buy');
+  await page.waitForFunction(() => document.querySelectorAll('#mk-c-outputs li').length >= 5 && !document.querySelector('#mk-c-pay').disabled);
+  const calls = await page.evaluate(() => window.__pcalls);
+  assert.deepEqual(calls.map(c => c[0]), ['prepare'], '확인 화면에 들어온 것만으로는 아무것도 보내지 않는다');
+  assert.equal(calls[0][1].tier, 'bonded'); assert.equal(calls[0][1].sellerAtoms, '28500000000'); assert.equal(calls[0][1].feeAtoms, '1500000000');
+  const outs = await text(page, '#mk-c-outputs');
+  assert.match(outs, new RegExp(`판매자 받는 주소 ${RECEIVING} ← 285 RVN`));
+  assert.match(outs, /레이븐볼트 수수료 주소 RLFnbkjmf1VCVq7D9TZvRp7fv6W97rm2cB ← 15 RVN/);
+  assert.match(outs, /체인 기록\(메모\) — 0 RVN/);
+  assert.match(outs, /거스름 1\.234 RVN 은 내 지갑으로 돌아와요/);
+  assert.match(outs, /네트워크 수수료 약 0\.00226 RVN.*내 지갑에서 나가는 돈\(거스름 제외\) 300\.00226 RVN/);
+  const facts = await text(page, '#mk-c-facts');
+  assert.match(facts, /내 지갑으로 오지 않고, 내 지갑에 새 자산이 생기지 않아요/);
+  assert.match(facts, /공개 IPFS.*누구나 받을 수 있어서.*권한을 만들어 주지는 않아요/);
+  assert.match(facts, /되돌릴 수 없어요.*환불은 판매자와 직접/);
+  assert.equal(await page.$eval('#mk-c-pay', b => b.textContent), '승인하고 보내기');
+  const prepReport = {};
+  for (const width of [390, 1440]) for (const theme of ['light', 'dark']) {
+    await page.setViewport({ width, height: 844 }); await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: theme }]); await page.evaluate(t => { document.documentElement.dataset.theme = t; }, theme);
+    await audit(page, '#page-market', `market-prepared-${width}-${theme}`, prepReport);
+  }
+  await page.setViewport({ width: 1440, height: 900 }); await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'light' }]); await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
+  for (const [k, v] of Object.entries(prepReport)) { assert.ok(v.measured > 5, k); assert.deepEqual(v.low, [], `${k} low contrast: ${JSON.stringify(v.low)}`); assert.deepEqual(v.overflow, [], `${k} overflow: ${JSON.stringify(v.overflow)}`); }
+  await page.click('#mk-c-pay');
+  await page.waitForFunction(() => /보냈어요/.test(document.querySelector('#mk-c-say').textContent));
+  assert.deepEqual((await page.evaluate(() => window.__pcalls)).map(c => c[0]), ['prepare', 'send']);
+  assert.match(await text(page, '#mk-purchases'), /바다 이야기 · RV\.B\.SEA_BOOK · 판매자 285 RVN \+ 수수료 15 RVN \+ 네트워크 0\.00226 RVN · 거래 cdcdcdcdcdcd….*자산은 받지 않았어요/);
+  const rec = JSON.parse(await page.evaluate(() => localStorage.getItem('rv-market-purchases-v1')))[0];
+  assert.equal(rec.assetReceived, false); assert.equal(rec.tier, 'bonded'); assert.equal(rec.networkFeeRvn, '0.00226'); assert.equal(rec.memoScript, '6a0452564450'); assert.equal(rec.sellerAddress, RECEIVING);
+  // 두 번 눌러도 다시 보내지 않는다.
+  await page.evaluate(() => document.querySelector('#mk-c-pay').click());
+  assert.equal((await page.evaluate(() => window.__pcalls)).filter(c => c[0] === 'send').length, 1);
+  await page.close();
+});
+
+test('purchase: cancelling before approval discards the prepared transaction and never sends; a prepared transaction that differs from the screen is refused', { timeout: 300_000 }, async () => {
+  let page = await openMarket({}, { purchaseMode: 'ok' });
+  await bondedBook(page);
+  await page.click('#mk-d-buy');
+  await page.waitForFunction(() => !document.querySelector('#mk-c-pay').disabled);
+  await page.click('#mk-c-cancel');
+  assert.deepEqual((await page.evaluate(() => window.__pcalls)).map(c => c[0]), ['prepare', 'cancel']);
+  await page.evaluate(() => document.querySelector('#mk-c-pay').click());
+  assert.equal((await page.evaluate(() => window.__pcalls)).filter(c => c[0] === 'send').length, 0);
+  await page.close();
+  page = await openMarket({}, { purchaseMode: 'tamper' });
+  await bondedBook(page);
+  await page.click('#mk-d-buy');
+  await page.waitForFunction(() => /화면과 달라요/.test(document.querySelector('#mk-c-blockers').textContent));
+  assert.match(await text(page, '#mk-c-blockers'), /판매자 몫이 화면과 달라요.*돈은 나가지 않았어요/);
+  assert.equal(await disabled(page, '#mk-c-pay'), true);
+  await page.evaluate(() => document.querySelector('#mk-c-pay').click());
+  assert.deepEqual((await page.evaluate(() => window.__pcalls)).map(c => c[0]), ['prepare', 'cancel']);
+  await page.close();
+});
+
+test('1단계 제한: 허용 목록이 비어 있으면(출하 상태) 판매 스위치가 켜져 있어도 아무 상품도 결제되지 않는다 — 준비도 부르지 않는다', { timeout: 300_000 }, async () => {
+  const page = await openMarket({}, { purchaseMode: 'ok', verifiedOnly: true });
+  await bondedBook(page);
+  assert.equal(await disabled(page, '#mk-d-buy'), true);
+  assert.match(await text(page, '#mk-d-buy-say'), /허용 목록에 있는 상품만 결제할 수 있어요.*허용 목록이 비어 있어서 아직 결제할 수 있는 상품이 없어요/);
+  await page.evaluate(() => document.querySelector('#mk-d-buy').click());
+  assert.equal(await page.$eval('#mk-confirm', e => e.hidden), true);
+  assert.deepEqual(await page.evaluate(() => window.__pcalls), []);
+  assert.deepEqual(await page.evaluate(() => window.__buys), []);
+  await page.close();
+});
+
+test('신고·숨김: 신고는 메일 작성 창(자리표시 정책 문구), 숨김은 내 목록에서만 · 되돌릴 수 있다', { timeout: 300_000 }, async () => {
+  const page = await openMarket({}, { purchaseMode: 'ok' });
+  await openItem(page, 'RV.B.SEA_BOOK');
+  assert.match(await text(page, '#mk-d-report-note'), /정해지는 중이라 지금은 약속할 수 없어요.*내 컴퓨터의 목록에서만 숨겨요/);
+  await page.click('#mk-d-report');
+  await page.waitForFunction(() => window.__opened.length === 1);
+  const url = await page.evaluate(() => window.__opened[0]);
+  assert.ok(url.startsWith('mailto:playx@ex.erci.se?subject='), url);
+  assert.match(decodeURIComponent(url), /RV\.B\.SEA_BOOK/); assert.match(decodeURIComponent(url), /Qm[1-9A-HJ-NP-Za-km-z]{44}/); assert.match(decodeURIComponent(url), new RegExp(RECEIVING));
+  assert.match(await text(page, '#mk-d-report-say'), /메일 작성 창을 열었어요/);
+  await page.click('#mk-d-hide');
+  await page.waitForFunction(() => document.querySelectorAll('#mk-list .mk-item').length === 3);
+  assert.equal((await page.$$eval('#mk-list .mk-item', b => b.map(x => x.dataset.asset))).includes('RV.B.SEA_BOOK'), false);
+  assert.match(await text(page, '#mk-hidden-say'), /내가 숨긴 상품 1개/);
+  assert.equal(await page.$eval('#mk-hidden-reset', b => b.hidden), false);
+  await page.click('#mk-hidden-reset');
+  await page.waitForFunction(() => document.querySelectorAll('#mk-list .mk-item').length === 4);
+  assert.equal(await page.$eval('#mk-hidden-reset', b => b.hidden), true);
   await page.close();
 });

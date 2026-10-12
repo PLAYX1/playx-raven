@@ -82,7 +82,7 @@ test('정보 화면 MIT 고지: 저작권 문구 원문 · 번역 제외 · 안�
 
 test('메인넷 발행 스위치: 상수는 꺼짐, 모든 발행 명령 앞에 가드, 런타임으로 켜는 길 없음', () => {
   const issue = read('src-tauri/src/issue.rs');
-  assert.ok(issue.includes('pub const REAL_MAINNET_ISSUE_ENABLED: bool = false;'));
+  assert.ok(issue.includes('pub const REAL_MAINNET_ISSUE_ENABLED: bool = switch_flag(MAINNET_SWITCH_JSON, "issue");')); // 값은 core/creator/mainnet-switch.json 한 곳
   for (const [file, fn] of [['issue2.rs', 'pub async fn reissue'], ['issue2.rs', 'pub async fn issue_many_unique'], ['issue2.rs', 'pub async fn issue_qualifier'],
     ['issue2.rs', 'pub async fn issue_restricted'], ['create.rs', 'pub async fn create_issue'], ['issue.rs', 'pub async fn issue_asset']]) {
     const s = read('src-tauri/src/' + file);

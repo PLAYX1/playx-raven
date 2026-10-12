@@ -501,7 +501,9 @@ export function wireCreatorPublish(deps: CreatorDeps) {
       chainBurnRvn: null, typedName: input('cw-typed').value.trim(), realMainnetEnabled: REAL_MAINNET_ISSUE_ENABLED, type: published.manifest.type });
     const c = costPlan({ burnRvn: plan.burn.rvn, networkFeeAtoms: null, balanceAtoms });
     el('cw-c-burn').textContent = `${plan.burn.rvn} RVN — 수수료가 아니라 보증이에요(소각, 아무도 받지 않음)`;
-    el('cw-c-burn-check').textContent = plan.burn.status === 'unverifiable' ? '체인과 대조: 확인 불가 — 저장소에 적힌 값이에요. 노드에 묻는 방법이 없어 실제 소각액과 대조하지 못했어요.' : plan.burn.say;
+    el('cw-c-burn-check').textContent = plan.burn.status === 'unverifiable' ? '체인과 대조: 확인 불가 — 저장소에 적힌 값이에요. 노드에 묻는 방법이 없어 실제 소각액과 대조하지 못했어요(시험망 대조 필요).' : plan.burn.say;
+    // 드는 돈 한 줄: 소각 + 네트워크 수수료(추정이면 추정이라고) = 합계. 확인 화면에서 숫자가 한눈에 맞아야 한다.
+    el('cw-c-total').textContent = `소각 ${atomsToRvn(c.burnAtoms)} RVN + 네트워크 수수료 약 ${atomsToRvn(c.networkFeeAtoms)} RVN${c.networkFeeEstimated ? '(추정)' : ''} = 합계 ${atomsToRvn(c.totalAtoms)} RVN`;
     list(el('cw-c-irreversible'), plan.irreversible);
     const blockers = plan.blockers.filter(b => !b.includes('다시 적어'));
     if (c.enough === false) blockers.push(`잔액이 ${atomsToRvn(c.shortAtoms)} RVN 모자라요 → ⑤ 단계의 받는 주소로 RVN 을 받은 뒤 다시 와 주세요.`);

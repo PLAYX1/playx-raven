@@ -61,6 +61,7 @@ mod map_format;
 mod price;
 mod refund;
 mod issue;
+mod market;
 mod issue_unknown;
 mod cert_assets;
 mod create;
@@ -611,6 +612,12 @@ pub fn run() {
             drop_publish::creator_dropped_list,
             drop_publish::creator_dropped_read,
             drop_publish::creator_cid_read,
+            market::market_list_assets,
+            market::market_chain_tip,
+            market::market_http_get,
+            market::market_purchase_prepare,
+            market::market_purchase_send,
+            market::market_purchase_cancel,
             shopkey::shopkey_origin,
             shopmove::shop_key_move_plan,
             shopmove::shop_key_move,

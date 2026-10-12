@@ -18,6 +18,7 @@ import "./drop-publish.css";
 import type { wireDropPublish } from "./drop-publish";
 import { wireOpenMarket } from "./open-market";
 import { marketLists } from "./market-lists";
+import { marketListSources, nodeChainTip, nodeMarketSource, nodePurchase } from "./market-node";
 import { openRaviStory } from "./desktop-links";
 import { inviteLink } from "./links";
 // 이야기 방 운영(0.9.0 레인 C): 「방 설정」(만든 사람만 이름·설명 고치기)·「이 방 숨기기」 — 연결 줄만 여기에.
@@ -18608,7 +18609,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("game-sales-open").onclick = () => showPage("sales");
   $("creator-open").onclick = () => showPage("creator");
   // 장터 목록(허용·차단·수수료 일정)은 한 곳에서 읽는다 — 마법사의 수수료 안내와 장터 구매 확인이 같은 서명된 일정을 쓴다.
-  const mkLists = marketLists();
+  const mkLists = marketLists({ sources: marketListSources((cmd, args) => invoke(cmd, args)) }); // 믿는 키가 비어 있는 동안은 받지 않는다(market-lists.ts)
   const creatorWizard = wireCreatorPublish({ invoke: (cmd, args) => invoke(cmd, args), back: () => showPage("games"), feeSchedule: () => mkLists.current().feeSchedule,
     askPassword: () => ask("지갑 비밀번호", "내 주소로 상품 정보에 서명한 뒤 지갑을 바로 잠가요.", { password: true }) });
   // 끌어놓기 발행(한 화면) — 「내 상품 올리기」의 기본 화면. 9단계 마법사는 「자세히」로 남는다(src/drop-publish.ts).
@@ -18618,8 +18619,12 @@ window.addEventListener("DOMContentLoaded", async () => {
       openWizard: p => creatorWizard.prefill(p), lang: lang === "ko" || lang === "ja" || lang === "zh" ? "ko" : "en", feeSchedule: () => mkLists.current().feeSchedule,
       askPassword: () => ask("지갑 비밀번호", "내 주소로 상품 정보에 서명한 뒤 지갑을 바로 잠가요.", { password: true }) });
   }).catch((e) => console.warn("drop-publish load failed", e));
-  // 열린 장터(시험): 노드 자산 목록·IPFS 읽기 명령이 아직 없어 source 없이 둔다 — 화면이 「아직 없어요」라고 말한다. 판매 스위치는 core 상수(꺼짐).
-  const market = wireOpenMarket({ back: () => showPage("games"), lists: mkLists });
+  // 열린 장터(시험): 목록 = 노드 listassets + 이 컴퓨터 IPFS(market-node.ts). 결제 = 준비(거래만 만듦) → 사람이 승인 → 전송.
+  //    판매 스위치(core/creator/mainnet-switch.json)가 꺼져 있으면 결제 단추는 확인 화면까지만 간다. 1단계는 서명된 허용 목록에 있는 상품만 결제한다.
+  const market = wireOpenMarket({ back: () => showPage("games"), lists: mkLists,
+    source: nodeMarketSource((cmd, args) => invoke(cmd, args)), tip: () => nodeChainTip((cmd, args) => invoke(cmd, args)),
+    purchase: nodePurchase((cmd, args) => invoke(cmd, args), () => ask("지갑 비밀번호", "이 결제를 서명한 뒤 지갑을 바로 잠가요.", { password: true })),
+    openExternal: (url) => openUrl(url) });
   $("market-open").onclick = () => { showPage("market"); void market.load(); };
   const sellerBox = $("seller-mode") as HTMLInputElement;
   sellerBox.onchange = () => {

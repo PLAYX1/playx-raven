@@ -1,5 +1,6 @@
 // Drop-to-publish (desktop): kind detection, safe renaming, pasted CID parsing, template/theme rules, manifest v3 extension
 // (v2 compatible), safety gates and the state machine. Pure — no network, no IPFS, no node, no real issuance. Throwaway keys only.
+import { SW } from './mainnet-switch-state.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
@@ -166,7 +167,8 @@ test('safety gates: same checks as the wizard — taken/unknown name, burn misma
   assert.deepEqual(blockIds(okGate({ nameTaken: 'checking' })), ['chain-name']);
   assert.deepEqual(blockIds(okGate({ chainBurnRvn: 400 })), ['burn']);
   assert.equal(D.dropGates(okGate({ chainBurnRvn: 500 })).chips.find(c => c.id === 'burn').status, 'pass');
-  assert.deepEqual(blockIds(okGate({ chain: 'main' })), ['network']);
+  assert.deepEqual(blockIds(okGate({ chain: 'main', realMainnetEnabled: false })), ['network']);
+  assert.deepEqual(blockIds(okGate({ chain: 'main' })), SW.issue ? [] : ['network'], '스위치 파일을 따른다');
   assert.equal(D.dropGates(okGate({ chain: 'main', realMainnetEnabled: true })).canPublish, true);
   assert.deepEqual(blockIds(okGate({ chain: 'unknown' })), ['network']);
   assert.deepEqual(blockIds(okGate({ pastedCids: [{ cid: 'Qm' + 'b'.repeat(44), alive: false }] })), ['cid']);
@@ -192,7 +194,7 @@ test('safety gates: same checks as the wizard — taken/unknown name, burn misma
   assert.equal(D.dropGates(game).chips.find(c => c.id === 'runs-code').status, 'warn');
   // The final authority after upload is core planIssue: it agrees on the locks.
   const plan = D.planIssue({ asset: 'RV.B.SEA_BOOK', manifestCid: 'Qm' + 'c'.repeat(44), chain: 'main', ownedAssets: [], nameTaken: null, chainBurnRvn: null, typedName: 'RV.B.SEA_BOOK', type: 'book' });
-  assert.equal(plan.canIssue, false); assert.equal(plan.blockers.length, 2);
+  assert.equal(plan.canIssue, false); assert.equal(plan.blockers.length, SW.issue ? 1 : 2, '이름 확인 불가 + (스위치가 꺼져 있을 때만) 메인넷 잠금');
 });
 
 test('state machine: drop/pick/paste → detect → preview → confirm (cancel) → publishing → done; publishing ignores new drops', () => {

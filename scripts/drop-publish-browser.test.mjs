@@ -5,6 +5,7 @@
 // text never parsed as HTML), and a layout matrix: widths 320·390·768·1024·1440 × light/dark × ko·de·ru·pseudo +60%·+100%
 // (no horizontal overflow, no clipped text, no overlapping controls, hit targets ≥ 44px, text contrast ≥ 4.5:1).
 // Screenshots go to RV_DROP_SHOTS (the gallery uses them). Keys are throwaway.
+import { SW } from './mainnet-switch-state.mjs';
 import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -293,6 +294,7 @@ test('keyboard only: paste field → Enter → template by keyboard → publish 
 
 test('safety locks stay: taken name, unknown name (「확인 불가」 + 다시 조회), mainnet switch off — publish disabled, nothing issued', { timeout: 180_000 }, async () => {
   for (const [opts, re] of [[{ taken: ['RV.B.SEA'] }, /이미 있는 이름/], [{ nameUnknown: true }, /확인 불가/], [{ chain: 'main' }, /실제 발행은 아직 꺼져/]]) {
+    if (opts.chain === 'main' && SW.issue) continue; // 스위치가 켜진 빌드(enable 커밋)에서는 이 잠금 항목이 없다
     const page = await openDrop(opts);
     const input = await page.$('#dp-files');
     await input.uploadFile(...BOOK.map(f => join(fileDir, f.name)));

@@ -5,14 +5,37 @@
     "core/creator/limits.ts": "f37eaf05505f97aac67fb1b8230017db8a529d62341390301c119895da269420",
     "core/creator/asset-name.ts": "0ffee8f76e94f95b4f5f8073f6c6de1c869f69cfaf273a5815fee2a762956a1e",
     "core/creator/manifest.ts": "06fadfc973b0280d5b86b84d953edff496e02ae74ca5c2544d4f5ade4a9b4812",
-    "core/creator/publish.ts": "166800cb37b9747c4ba71a2761739e37589e55241cf65386c773e02542350e40",
+    "core/creator/publish.ts": "fca91552ce5f7c58d68663241703655359ee450251531a085d629a0b96d2315a",
     "core/creator/fee-schedule.ts": "db2dd8f5d4fd7d16463e10f4464ff01c87ec61461d26b3fb404d45aab6f7fff8",
     "core/creator/listing.ts": "0f57f2052d299f4998b37711f9a0ccc4a6a35c069f322dcf59b21fafa492d1a2",
-    "core/creator/open-market.ts": "c60484cf2e828f3fc430398c1860874308cc04fe4d36d3bea3195c3f950825ba",
+    "core/creator/open-market.ts": "ba7b8e282b6e2810458904881c843c77d6bc2230026f62fd34586d2eb26ecbc8",
     "core/creator/ticket.ts": "97f89f9fdc7daab00b2677b8b9247cc83ccbd66348dc0c2e91fcfc57854ae842",
     "core/game-registry/platform-fee.ts": "630e744f94ec8d98f0d9a22204b5e9e6029a3c10d0aafce2045900cf8ecea729",
     "core/signed-lists/envelope.ts": "5fa05029c3f3c3dbf23c5c961b4685abb7204bdd855609cfd53dd4733f38950d",
     "core/signed-lists/creator-parts.ts": "cebe19ae2c6a57a0b0de7b7e5c8b49b95dcf8897c9baa8bdb8d48d6fb8e4e0c4",
     "core/signed-lists/sources.ts": "488040d9d7632249821fb15e76cadec508af30a7387e6b66cbed4577aaa041c0"
-  }
+  },
+  "patches": {
+    "core/creator/publish.ts": [
+      {
+        "find": "import { sha256Hex } from './bytes';",
+        "replace": "import { sha256Hex } from './bytes';\nimport MAINNET_SWITCH from './mainnet-switch.json';"
+      },
+      {
+        "find": "export const REAL_MAINNET_ISSUE_ENABLED = false;",
+        "replace": "export const REAL_MAINNET_ISSUE_ENABLED: boolean = MAINNET_SWITCH.issue;"
+      }
+    ],
+    "core/creator/open-market.ts": [
+      {
+        "find": "import { splitPrice } from '../game-registry/platform-fee';",
+        "replace": "import { splitPrice } from '../game-registry/platform-fee';\nimport MAINNET_SWITCH from './mainnet-switch.json';"
+      },
+      {
+        "find": "export const OPEN_MARKET_SALES_ENABLED = false;",
+        "replace": "export const OPEN_MARKET_SALES_ENABLED: boolean = MAINNET_SWITCH.sales;"
+      }
+    ]
+  },
+  "patchNote": "0.9.2: 스위치 두 줄만 core/creator/mainnet-switch.json 을 읽도록 바꾼 것이 지갑 원본과 다른 전부다. 시험은 원본에 이 패치를 적용한 바이트와 비교한다. 지갑 저장소도 같은 패치를 받아야 두 곳이 다시 바이트 동일해진다."
 }

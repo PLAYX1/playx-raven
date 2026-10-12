@@ -5,15 +5,19 @@ import { discoverListings, type ChainAsset, type CreatorAllowlist, type CreatorD
 import type { BookSection, MusicSection, TicketSection, GameSection, DigitalSection } from '../core/creator/manifest';
 import type { MarketLists } from './market-lists';
 import { BOND_BLOCKER_SAY, BONDED_WARNING, BOND_SAY, OPEN_MARKET_SALES_ENABLED, autoCheck, purchaseSummary, type AutoCheck } from '../core/creator/open-market';
-import { bpsPercent, estimateHeight, heightDateKo, manifestFeeRef, marketRate, type FeeSchedule } from '../core/creator/fee-schedule';
+import { MARKET_FEE_ADDRESS, bpsPercent, estimateHeight, heightDateKo, manifestFeeRef, marketRate, type FeeSchedule } from '../core/creator/fee-schedule';
+import MAINNET_SWITCH from '../core/creator/mainnet-switch.json';
+import * as T from './market-copy';
 
 /*
  * 데스크탑 「열린 장터(시험)」 — 구매자 최소 화면: 목록 → 상세(미리듣기·미리보기) → 구매 확인(수수료 분리 금액) → 내 구매 목록.
  *
  * 🔴 지금 이 화면은 **시험 전용**이다(판매자 기능 뒤에 숨김):
- *   · 노드에서 「RV.*」(종류 탭은 「RV.M.*」 등 — kindSearchPattern) 자산 목록과 IPFS 파일을 읽는 데스크탑 명령이 아직 없다 → source 를 주입하지 않으면 「목록을 읽는 기능이 아직 없어요」.
- *   · 판매 스위치(OPEN_MARKET_SALES_ENABLED)가 꺼져 있어 구매 단추는 확인 화면까지만 가고 잠긴다. 시험만 salesEnabled·buy 를 주입한다.
- *   · 실제 구매 거래(판매자 몫 + 수수료 출력 + 메모)는 지갑 저장소 core/creator/purchase.ts + 기존 v4 부품이 만들고 시험한다(데스크탑은 아직 연결 안 함).
+ *   · 0.9.2: 노드 「RV.*」(종류 탭은 「RV.M.*」 등 — kindSearchPattern) 목록과 이 컴퓨터 IPFS 읽기는 market-node.ts 어댑터가 deps.source 로 넣는다(없으면 「목록을 읽는 기능이 아직 없어요」).
+ *   · 판매 스위치(OPEN_MARKET_SALES_ENABLED = core/creator/mainnet-switch.json)가 꺼져 있으면 결제 단추는 확인 화면까지만 가고 잠긴다. 시험만 salesEnabled·buy·purchase 를 주입한다.
+ *   · 1단계 제한(verifiedOnly): 서명된 허용 목록(검증됨)에 있는 상품만 결제한다. 허용 목록이 비어 있으면(출하 상태) 아무 것도 결제되지 않는다.
+ *   · 결제 = deps.purchase.prepare(거래만 만듦, 돈 안 나감) → 확인 화면에 받는 곳·금액·네트워크 수수료 → 사람이 「승인하고 보내기」 → deps.purchase.send. 승인 없이는 send 를 부르지 않는다.
+ *     거래 조립·서명은 러스트(market.rs)와 노드가 한다. 지갑 저장소 purchase.ts 는 복사하지 않았다(아래 「지갑 레인 과제」).
  * 판정(검증됨·보증·미검증·숨김)은 전부 core/creator/listing.ts — 여기서 다시 판단하지 않는다.
  */
 
@@ -23,8 +27,21 @@ export type MarketSource = {
   fetch(cid: string): Promise<Uint8Array | null>;
   allowlist?: CreatorAllowlist | null; denylist?: CreatorDenylist | null;
 };
-export type BuyRequest = { asset: string; sellerAddress: string; priceAtoms: string; sellerAtoms: string; feeAtoms: string; feeBps: number; tier: 'bonded' | 'verified' };
-export type Purchase = { asset: string; title: string; txid: string; sellerRvn: string; feeRvn: string; at: string };
+export type BuyRequest = { asset: string; sellerAddress: string; priceAtoms: string; sellerAtoms: string; feeAtoms: string; feeBps: number; tier: 'bonded' | 'verified';
+  /** 검증됨(허용 목록) 상품의 메모 번호. 보증(b)층은 지갑 예약값을 쓴다. */
+  gameIndex?: number };
+/** 결제 기록. 🔴 구매자는 자산을 받지 않는다 — assetReceived 는 늘 false 로 남긴다(사실 기록). */
+export type Purchase = { asset: string; title: string; txid: string; sellerRvn: string; feeRvn: string; at: string;
+  manifestCid?: string; sellerAddress?: string; feeBps?: number; tier?: 'bonded' | 'verified'; networkFeeRvn?: string; memoScript?: string; ownerId?: string; chain?: string; assetReceived?: false };
+export type PreparedOutput = { role: 'seller' | 'fee' | 'memo' | 'change'; address: string | null; atoms: string };
+/** 노드가 만든 뒤 다시 검사한 거래 요약(돈은 아직 안 나갔다). */
+export type Prepared = { id: string; asset: string; outputs: PreparedOutput[]; networkFeeAtoms: string; totalAtoms: string; sellerAtoms: string; feeAtoms: string; chain: string; memoScript: string; ownerId: string };
+export type MarketPurchaseDeps = {
+  prepare(r: BuyRequest): Promise<Prepared>;
+  /** 사람이 「승인하고 보내기」를 누른 뒤에만 불린다. */
+  send(p: Prepared): Promise<{ txid: string }>;
+  cancel(): void;
+};
 export type MarketDeps = {
   back: () => void; source?: MarketSource | null; now?: () => number; storage?: Storage | null;
   /** 서명된 최신 허용·차단 목록(market-lists.ts). 있으면 source.allowlist/denylist 보다 앞선다 — 목록을 다시 그릴 때마다 지금 것을 읽는다. */
@@ -35,7 +52,16 @@ export type MarketDeps = {
   chainHeight?: () => number | null;
   /** 시험만: 판매 스위치를 대신 켜고, 구매 거래를 모의로 만든다. */
   salesEnabled?: boolean; buy?: (r: BuyRequest) => Promise<{ txid: string }>;
+  /** 실제 구매 길(준비 → 승인 → 전송). 있으면 buy 보다 앞선다. 판매 스위치가 켜져 있을 때만 쓰인다. */
+  purchase?: MarketPurchaseDeps | null;
+  /** 체인 팁 높이를 새로 읽는다(요율은 팁 + 1 에서 정해진다). 읽으면 chainHeight 보다 앞선다. */
+  tip?: () => Promise<number | null>;
+  /** 1단계 제한: true 면 서명된 허용 목록(검증됨)에 있는 상품만 결제한다. 기본 = mainnet-switch.json 의 verifiedOnly(커밋 기본 true). */
+  verifiedOnly?: boolean;
+  /** 신고 메일 열기(mailto). 없으면 복사로 대신한다. */
+  openExternal?: (url: string) => void | Promise<void>;
 };
+export const HIDDEN_KEY = 'rv-market-hidden-v1';
 export const PURCHASES_KEY = 'rv-market-purchases-v1';
 
 const el = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -52,6 +78,19 @@ export function wireOpenMarket(deps: MarketDeps) {
   const store = (() => { try { return deps.storage === undefined ? window.localStorage : deps.storage; } catch { return null; } })();
   const now = () => deps.now?.() ?? Date.now();
   const salesOn = deps.salesEnabled ?? OPEN_MARKET_SALES_ENABLED;
+  const verifiedOnly = deps.verifiedOnly ?? MAINNET_SWITCH.verifiedOnly;
+  let lastTip: number | null = null, confirmSeq = 0, prepared: Prepared | null = null;
+  /** 이 상품을 결제해도 되나(1단계 제한까지 합쳐서). 이유는 화면에 그대로 보인다. */
+  const payGate = (l: Shown): { ok: boolean; say: string } => {
+    if (!l.payment) return { ok: false, say: '이 상품은 지금 지갑으로 결제할 수 없어요.' };
+    if (verifiedOnly && l.status !== 'verified') {
+      const anyVerified = (deps.lists?.current().allowlist ?? deps.source?.allowlist ?? null)?.entries?.length;
+      return { ok: false, say: anyVerified ? T.VERIFIED_ONLY_NOT_LISTED : T.VERIFIED_ONLY_EMPTY };
+    }
+    return { ok: true, say: '' };
+  };
+  const hiddenSet = (): Set<string> => { try { const a = JSON.parse(store?.getItem(HIDDEN_KEY) ?? '[]'); return new Set(Array.isArray(a) ? a.filter((x: unknown) => typeof x === 'string') : []); } catch { return new Set(); } };
+  const saveHidden = (h: Set<string>) => { try { store?.setItem(HIDDEN_KEY, JSON.stringify([...h].slice(-500))); } catch { /* 저장 못 하면 이번 화면에서만 숨는다 */ } };
   const checks = new Map<string, AutoCheck>();
   const blobs: string[] = [];
   let listings: Shown[] = [], current: Shown | null = null, busy = false, kind: ContentType | null = null;
@@ -64,7 +103,7 @@ export function wireOpenMarket(deps: MarketDeps) {
     const ceiling = l.status === 'verified' ? l.entry.feeBps : null;
     const ref = manifestFeeRef(l.manifest.fee, ceiling);
     if (!ref.ok || ref.scheduleId !== schedule.scheduleId) return { bps: null, say: '이 상품의 수수료 칸이 레이븐볼트 수수료 일정과 맞지 않아요 → 살 수 없어요.' };
-    const tip = deps.chainHeight?.() ?? null;
+    const tip = deps.chainHeight?.() ?? lastTip;
     const height = (tip ?? estimateHeight(schedule, now())) + 1;
     try {
       const r = marketRate({ schedule, kind: l.manifest.type, seller: { address: l.manifest.creator.address, receivingAddress: l.manifest.creator.receivingAddress }, height, priceAtoms: l.manifest.price.atoms, ceilingBps: ceiling });
@@ -93,7 +132,7 @@ export function wireOpenMarket(deps: MarketDeps) {
   const readPurchases = (): Purchase[] => { try { return JSON.parse(store?.getItem(PURCHASES_KEY) ?? '[]') as Purchase[]; } catch { return []; } };
   function paintPurchases() {
     const p = readPurchases();
-    list(el('mk-purchases'), p.length ? p.map(x => `${x.title} · ${x.asset} · 판매자 ${x.sellerRvn} RVN + 수수료 ${x.feeRvn} RVN · 거래 ${x.txid.slice(0, 12)}…`) : ['아직 산 것이 없어요.']);
+    list(el('mk-purchases'), p.length ? p.map(x => `${x.title} · ${x.asset} · 판매자 ${x.sellerRvn} RVN + 수수료 ${x.feeRvn} RVN${x.networkFeeRvn ? ` + 네트워크 ${x.networkFeeRvn} RVN` : ''} · 거래 ${x.txid.slice(0, 12)}… · 자산은 받지 않았어요(기록만)`) : [T.PURCHASES_EMPTY]);
   }
   function view(which: 'list' | 'detail' | 'confirm') {
     el('mk-list-view').hidden = which !== 'list'; el('mk-detail').hidden = which !== 'detail'; el('mk-confirm').hidden = which !== 'confirm';
@@ -123,16 +162,28 @@ export function wireOpenMarket(deps: MarketDeps) {
     };
   }
 
+  function paintHidden() {
+    const n = hiddenSet().size, say = document.getElementById('mk-hidden-say'), btn = document.getElementById('mk-hidden-reset');
+    if (say) say.textContent = n ? T.HIDDEN_SAY(n) : '';
+    if (btn) btn.hidden = n === 0;
+  }
+  const hiddenReset = document.getElementById('mk-hidden-reset');
+  if (hiddenReset) hiddenReset.onclick = () => { saveHidden(new Set()); void load(); };
+
   async function load() {
     view('list'); el('mk-list-say').textContent = '불러오는 중…';
     if (!deps.source) { el('mk-list').replaceChildren(); el('mk-list-say').textContent = '장터 목록을 읽는 기능이 아직 없어요(다음 단계: 노드 자산 목록·IPFS 읽기 연결).'; return; }
     try {
+      if (deps.tip) lastTip = await deps.tip().catch(() => null);
       const assets = await deps.source.assets(kindSearchPattern(kind));
       const signed = deps.lists?.current() ?? null;
       paintListsSay();
       listings = await discoverListings({ assets, fetchManifest: c => deps.source!.fetch(c), allowlist: signed ? signed.allowlist : deps.source.allowlist ?? null,
         denylist: signed ? signed.denylist : deps.source.denylist ?? null,
         autoChecks: checks, now: now(), type: kind }) as Shown[];
+      const hid = hiddenSet();
+      listings = listings.filter(l => !hid.has(l.asset));
+      paintHidden();
     } catch (e) { el('mk-list-say').textContent = `목록을 못 읽었어요(${String((e as Error)?.message ?? e)}) → 노드가 켜져 있는지 확인하고 다시 열어 주세요.`; return; }
     el('mk-list').replaceChildren(...listings.map(l => {
       const li = document.createElement('li');
@@ -215,9 +266,27 @@ export function wireOpenMarket(deps: MarketDeps) {
     el('mk-d-check').hidden = l.status === 'verified' && !!l.autoCheck;
     el('mk-d-check-say').textContent = l.autoCheck ? `자동 점검: ${l.autoCheck.status === 'fail' ? '통과 못 함 — ' + l.autoCheck.problems[0] : l.autoCheck.status === 'warn' ? '통과(주의 있음)' : '통과'}` : '';
     const buy = el<HTMLButtonElement>('mk-d-buy');
-    buy.disabled = !l.payment;
-    el('mk-d-buy-say').textContent = l.payment ? (salesOn ? '' : '구매 확인 화면까지 볼 수 있어요. 판매 기능은 아직 꺼져 있어요.') : '이 상품은 지금 지갑으로 살 수 없어요.';
+    const gate = payGate(l);
+    buy.disabled = !gate.ok;
+    el('mk-d-buy-say').textContent = gate.ok ? (salesOn ? '' : '결제 내용까지 볼 수 있어요. 판매 기능은 아직 꺼져 있어요.') : gate.say;
+    const rs = document.getElementById('mk-d-report-say'); if (rs) rs.textContent = '';
+    const rn = document.getElementById('mk-d-report-note'); if (rn) rn.textContent = `${T.REPORT_NOTE} ${T.HIDE_NOTE}`;
   }
+
+  /* 신고(메일) · 내 목록에서 숨기기 — 처리 정책은 대표 결정 전이라 문구는 자리표시다. */
+  const reportBody = (l: Shown) => [`상품 등록증 이름: ${l.asset}`, `상품 정보 주소(CID): ${l.manifestCid}`, `판매자 주소: ${l.manifest.creator.address}`, `받는 주소: ${l.manifest.creator.receivingAddress}`,
+    `표시: ${l.badge}`, '', '신고 이유(적어 주세요):', ''].join('\n');
+  const reportBtn = document.getElementById('mk-d-report');
+  if (reportBtn) reportBtn.onclick = async () => {
+    if (!current) return;
+    const say = document.getElementById('mk-d-report-say')!;
+    const url = `mailto:${T.REPORT_CONTACT}?subject=${encodeURIComponent('[열린 장터 신고] ' + current.asset)}&body=${encodeURIComponent(reportBody(current))}`;
+    try { if (deps.openExternal) { await deps.openExternal(url); say.textContent = T.REPORT_OPENED; return; } } catch { /* 복사로 */ }
+    try { await navigator.clipboard.writeText(`${T.REPORT_CONTACT}\n${reportBody(current)}`); say.textContent = `${T.REPORT_COPIED} ${T.REPORT_CONTACT}`; }
+    catch { say.textContent = `${T.REPORT_FAILED} ${T.REPORT_CONTACT}`; }
+  };
+  const hideBtn = document.getElementById('mk-d-hide');
+  if (hideBtn) hideBtn.onclick = () => { if (!current) return; const h = hiddenSet(); h.add(current.asset); saveHidden(h); current = null; void load(); };
 
   el('mk-d-check').onclick = async () => {
     if (!current || !deps.source || busy) return;
@@ -231,38 +300,97 @@ export function wireOpenMarket(deps: MarketDeps) {
     const again = listings.find(l => l.asset === current!.asset);
     if (again) { (again as { _bytes?: Map<string, Uint8Array> })._bytes = c.status === 'fail' ? undefined : bytes; detail(again); }
   };
-  el('mk-d-buy').onclick = () => {
-    if (!current?.payment) return;
-    const rate = rateOf(current);
-    const s = rate.bps === null ? null : purchaseSummary(current.manifest, rate.bps);
-    if (!current.manifest.price) return;
+  const clearPrepared = () => { if (prepared) deps.purchase?.cancel(); prepared = null; };
+  const payBtn = () => el<HTMLButtonElement>('mk-c-pay');
+  const buyRequest = (l: Shown, s: NonNullable<ReturnType<typeof purchaseSummary>>): BuyRequest => ({ asset: l.asset, sellerAddress: l.manifest.creator.receivingAddress, priceAtoms: l.manifest.price!.atoms,
+    sellerAtoms: rvnToAtoms(s.sellerRvn)!, feeAtoms: rvnToAtoms(s.feeRvn)!, feeBps: s.feeBps, tier: l.status === 'verified' ? 'verified' : 'bonded',
+    ...(l.status === 'verified' ? { gameIndex: l.entry.gameIndex } : {}) });
+  /** 준비된 거래가 화면에 보인 약속(판매자 몫·수수료·받는 주소)과 정확히 같은가. 어긋나면 사유 한 줄. */
+  function preparedMismatch(l: Shown, r: BuyRequest, p: Prepared): string | null {
+    const out = (role: PreparedOutput['role']) => p.outputs.filter(o => o.role === role);
+    const [sellerOut, feeOut] = [out('seller'), out('fee')];
+    if (p.asset !== l.asset) return '준비된 거래의 상품이 달라요.';
+    if (sellerOut.length !== 1 || sellerOut[0].address !== r.sellerAddress || sellerOut[0].atoms !== r.sellerAtoms || p.sellerAtoms !== r.sellerAtoms) return '준비된 거래의 판매자 몫이 화면과 달라요.';
+    if (r.feeAtoms === '0' ? feeOut.length !== 0 : feeOut.length !== 1 || feeOut[0].address !== MARKET_FEE_ADDRESS || feeOut[0].atoms !== r.feeAtoms || p.feeAtoms !== r.feeAtoms) return '준비된 거래의 수수료가 화면과 달라요.';
+    if (out('memo').length !== 1) return '준비된 거래에 기록(메모)이 없어요.';
+    return null;
+  }
+  function paintPrepared(p: Prepared) {
+    const rows: string[] = [];
+    for (const o of p.outputs) {
+      if (o.role === 'seller') rows.push(`판매자 받는 주소 ${o.address} ← ${atomsToRvn(o.atoms)} RVN`);
+      else if (o.role === 'fee') rows.push(`레이븐볼트 수수료 주소 ${o.address} ← ${atomsToRvn(o.atoms)} RVN`);
+      else if (o.role === 'memo') rows.push('체인 기록(메모) — 0 RVN. 이 계정이 이 상품 값을 냈다는 표시만 남아요.');
+      else rows.push(`거스름 ${atomsToRvn(o.atoms)} RVN 은 내 지갑으로 돌아와요(${o.address}).`);
+    }
+    if (!p.outputs.some(o => o.role === 'fee')) rows.push('수수료 출력 없음(수수료 0%) — 기록(메모)만 남아요.');
+    rows.push(`네트워크 수수료 약 ${atomsToRvn(p.networkFeeAtoms)} RVN`, `내 지갑에서 나가는 돈(거스름 제외) ${atomsToRvn(p.totalAtoms)} RVN`);
+    list(el('mk-c-outputs'), rows);
+  }
+  el('mk-d-buy').onclick = async () => {
+    if (!current?.payment || !current.manifest.price) return;
+    const l = current, seq = ++confirmSeq;
+    clearPrepared();
+    if (deps.tip) lastTip = await deps.tip().catch(() => null);
+    if (seq !== confirmSeq) return;
+    const rate = rateOf(l);
+    const s = rate.bps === null ? null : purchaseSummary(l.manifest, rate.bps);
     view('confirm');
-    list(el('mk-c-lines'), [`${current.manifest.title} (${current.asset})`, ...(s ? s.lines : [`가격 ${atomsToRvn(current.manifest.price.atoms)} RVN`]), rate.say]);
+    list(el('mk-c-lines'), [`${l.manifest.title} (${l.asset})`, ...(s ? s.lines : [`가격 ${atomsToRvn(l.manifest.price!.atoms)} RVN`]), rate.say]);
+    list(el('mk-c-facts'), [...T.MARKET_FACTS]);
+    list(el('mk-c-outputs'), []);
     el('mk-c-note').textContent = '판매자 몫은 판매자 받는 주소로 바로, 수수료는 레이븐볼트 수수료 주소로 — 한 거래 안에서 지갑이 나눠요. 레이븐볼트가 돈을 맡지 않아요.' +
-      (current.status === 'bonded' ? ' ' + BONDED_WARNING : '');
-    const blockers = salesOn ? [] : ['판매 기능이 아직 꺼져 있어요(대표 결정 대기). 지금은 살 수 없어요.'];
+      (l.status === 'bonded' ? ' ' + BONDED_WARNING : '');
+    const gate = payGate(l);
+    const blockers = salesOn ? [] : ['판매 기능이 아직 꺼져 있어요(대표 결정 대기). 지금은 결제할 수 없어요.'];
+    if (!gate.ok) blockers.push(gate.say);
     if (!s) blockers.push(rate.say);
-    if (salesOn && !deps.buy) blockers.push('이 데스크탑은 아직 구매 거래를 만들 수 없어요(지갑 연결 전).');
+    if (salesOn && !deps.purchase && !deps.buy) blockers.push('이 데스크탑은 아직 결제 거래를 만들 수 없어요(지갑 연결 전).');
     list(el('mk-c-blockers'), blockers, 'creator-bad');
-    el<HTMLButtonElement>('mk-c-pay').disabled = blockers.length > 0;
-    el('mk-c-say').textContent = '';
+    payBtn().disabled = true; el('mk-c-say').textContent = '';
+    if (blockers.length > 0 || !s) return;
+    if (deps.purchase) {
+      // 거래를 만들기만 한다(서명·전파 없음). 사람이 받는 곳·금액을 보고 승인해야 한 번 더 부른다.
+      el('mk-c-say').textContent = T.PREPARING; busy = true;
+      try {
+        const req = buyRequest(l, s);
+        const p = await deps.purchase.prepare(req);
+        if (seq !== confirmSeq) { deps.purchase.cancel(); return; }
+        const bad = preparedMismatch(l, req, p);
+        if (bad) { deps.purchase.cancel(); list(el('mk-c-blockers'), [`${bad} → 보내지 않았어요. 돈은 나가지 않았어요.`], 'creator-bad'); el('mk-c-say').textContent = ''; return; }
+        prepared = p; paintPrepared(p); el('mk-c-note').textContent += ' ' + T.PREPARED_NOTE;
+        el('mk-c-say').textContent = ''; payBtn().disabled = false;
+      } catch (e) {
+        if (seq === confirmSeq) { list(el('mk-c-blockers'), [`거래를 만들지 못했어요(${String((e as Error)?.message ?? e)}) → 돈은 나가지 않았어요.`], 'creator-bad'); el('mk-c-say').textContent = ''; }
+      } finally { busy = false; }
+    } else payBtn().disabled = false;
   };
-  el('mk-c-pay').onclick = async () => {
-    if (!current || !deps.buy || !salesOn || busy || !current.manifest.price) return;
-    const rate = rateOf(current);
+  payBtn().onclick = async () => {
+    const l = current;
+    if (!l || (!deps.buy && !deps.purchase) || !salesOn || busy || !l.manifest.price || !payGate(l).ok) return;
+    const rate = rateOf(l);
     if (rate.bps === null) return;
-    const s = purchaseSummary(current.manifest, rate.bps)!;
-    busy = true; el<HTMLButtonElement>('mk-c-pay').disabled = true; el('mk-c-say').textContent = '보내는 중…';
+    const s = purchaseSummary(l.manifest, rate.bps)!;
+    const req = buyRequest(l, s);
+    if (deps.purchase && !prepared) return; // 준비·확인 없이는 보내지 않는다
+    busy = true; payBtn().disabled = true; el('mk-c-say').textContent = '보내는 중…';
     try {
-      const r = await deps.buy({ asset: current.asset, sellerAddress: current.manifest.creator.receivingAddress, priceAtoms: current.manifest.price.atoms,
-        sellerAtoms: rvnToAtoms(s.sellerRvn)!, feeAtoms: rvnToAtoms(s.feeRvn)!, feeBps: s.feeBps, tier: current.status === 'verified' ? 'verified' : 'bonded' });
-      const p: Purchase = { asset: current.asset, title: current.manifest.title, txid: r.txid, sellerRvn: s.sellerRvn, feeRvn: s.feeRvn, at: new Date(now()).toISOString() };
-      try { store?.setItem(PURCHASES_KEY, JSON.stringify([p, ...readPurchases()].slice(0, 500))); } catch { /* 저장 못 해도 거래는 체인에 있다 */ }
-      paintPurchases(); el('mk-c-say').textContent = '샀어요. 내 구매 목록에 넣었어요.';
-    } catch (e) { el('mk-c-say').textContent = `사지 못했어요(${String((e as Error)?.message ?? e)}) → 잔액을 확인하고 다시 해 주세요.`; el<HTMLButtonElement>('mk-c-pay').disabled = false; }
+      const p0 = prepared;
+      const r = deps.purchase && p0 ? await deps.purchase.send(p0) : await deps.buy!(req);
+      prepared = null;
+      const rec: Purchase = { asset: l.asset, title: l.manifest.title, txid: r.txid, sellerRvn: s.sellerRvn, feeRvn: s.feeRvn, at: new Date(now()).toISOString(),
+        manifestCid: l.manifestCid, sellerAddress: req.sellerAddress, feeBps: s.feeBps, tier: req.tier, assetReceived: false,
+        ...(p0 ? { networkFeeRvn: atomsToRvn(p0.networkFeeAtoms), memoScript: p0.memoScript, ownerId: p0.ownerId, chain: p0.chain } : {}) };
+      try { store?.setItem(PURCHASES_KEY, JSON.stringify([rec, ...readPurchases()].slice(0, 500))); } catch { /* 저장 못 해도 거래는 체인에 있다 */ }
+      paintPurchases(); el('mk-c-say').textContent = T.PAID_SAY;
+    } catch (e) {
+      const m = String((e as Error)?.message ?? e);
+      if (m.startsWith('SENT_UNKNOWN')) { prepared = null; el('mk-c-say').textContent = T.SENT_UNKNOWN_SAY; }
+      else { el('mk-c-say').textContent = `보내지 못했어요(${m}) → 잔액을 확인하고 확인 화면부터 다시 해 주세요.`; if (!deps.purchase) payBtn().disabled = false; }
+    }
     finally { busy = false; }
   };
-  el('mk-c-cancel').onclick = () => { if (current) detail(current); };
+  el('mk-c-cancel').onclick = () => { confirmSeq++; clearPrepared(); if (current) detail(current); };
   el('mk-d-back').onclick = () => view('list');
   el('market-back').onclick = deps.back;
   paintPurchases(); paintTabs();
