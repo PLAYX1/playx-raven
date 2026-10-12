@@ -29,7 +29,7 @@
 
 use serde_json::{json, Value};
 use std::io::{BufRead, BufReader};
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, Stdio};
 use std::sync::Mutex;
 
 /// The running tunnel, if any. Killed when the app exits or the owner stops it.
@@ -218,7 +218,8 @@ pub fn tunnel_start(port: u16) -> Result<Value, String> {
     //    🔴 이름으로 싹 죽이지 않는다. **우리 포트를 물고 있는 것만** 고른다 —
     //    남이 자기 일로 켜 둔 cloudflared 를 죽이면 그건 우리가 낸 사고다.
     kill_orphans(port);
-    let mut child = Command::new(exe)
+    // 윈도우에서 cloudflared 콘솔 창이 뜨지 않게 한다(맥·리눅스는 Command::new 와 같다).
+    let mut child = crate::quiet::cmd(exe)
         .args([
             "tunnel",
             "--url",

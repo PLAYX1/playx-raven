@@ -701,6 +701,11 @@ pub fn stop_ours(name: &str) {
 /// Stops only what this app started.
 #[tauri::command]
 pub fn services_stop() -> Result<Value, String> {
+    // 🔴 윈도우만 노드가 우리 `Child` 로 남는다(유닉스는 `-daemon` 이라 목록에 없다).
+    //    그래서 윈도우에서는 아래 `kill`(TerminateProcess)이 장부를 쓰던 노드를
+    //    그대로 끊었다. 먼저 `stop` 으로 부탁하고 스스로 닫힐 때까지 기다린다.
+    #[cfg(target_os = "windows")]
+    windows_polite_node_stop(std::time::Duration::from_secs(20));
     let mut stopped = Vec::new();
     if let Ok(mut g) = OURS.lock() {
         if let Some(list) = g.as_mut() {
@@ -713,6 +718,34 @@ pub fn services_stop() -> Result<Value, String> {
         }
     }
     Ok(json!({ "stopped": stopped }))
+}
+
+/// 윈도우: 우리가 띄운 노드가 살아 있으면 RPC `stop` 을 보내고 **스스로 끝날 때까지**
+/// (최대 `max`) 기다린다. 끝나지 않으면 부르는 쪽이 예전처럼 `kill` 한다.
+#[cfg(target_os = "windows")]
+fn windows_polite_node_stop(max: std::time::Duration) {
+    fn node_alive() -> bool {
+        OURS.lock()
+            .ok()
+            .and_then(|mut g| {
+                g.as_mut().map(|list| {
+                    list.iter_mut()
+                        .any(|(n, c)| n == "node" && matches!(c.try_wait(), Ok(None)))
+                })
+            })
+            .unwrap_or(false)
+    }
+    if !node_alive() {
+        return;
+    }
+    let asked = crate::rt::block(async { crate::raven::call_rpc("stop", json!([])).await }).is_ok();
+    if !asked {
+        return;
+    }
+    let t0 = std::time::Instant::now();
+    while node_alive() && t0.elapsed() < max {
+        std::thread::sleep(std::time::Duration::from_millis(250));
+    }
 }
 
 /// 앱이 끝날 때 **우리가 켠 것만** 끈다.

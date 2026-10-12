@@ -121,7 +121,7 @@ fn free_bytes(dir: &Path) -> Option<u64> {
         if !drive.chars().all(|c| c.is_ascii_alphabetic()) {
             return None;
         }
-        let out = std::process::Command::new("powershell")
+        let out = crate::quiet::cmd("powershell")
             .args(["-NoProfile", "-Command", &format!("(Get-PSDrive {drive}).Free")])
             .output()
             .ok()?;

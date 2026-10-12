@@ -52,7 +52,7 @@ fn memory_gb() -> Option<f64> {
     #[cfg(target_os = "windows")]
     {
         // wmic 은 최신 윈도우에서 빠지는 중이라 PowerShell 로 묻는다.
-        let out = std::process::Command::new("powershell")
+        let out = crate::quiet::cmd("powershell")
             .args([
                 "-NoProfile",
                 "-Command",
@@ -95,7 +95,7 @@ fn free_gb() -> Option<f64> {
     #[cfg(windows)]
     {
         let drive = probe.to_string_lossy().chars().take(2).collect::<String>();
-        let out = std::process::Command::new("powershell")
+        let out = crate::quiet::cmd("powershell")
             .args([
                 "-NoProfile",
                 "-Command",

@@ -40,7 +40,7 @@ fn machine_id() -> Option<Vec<u8>> {
 #[cfg(all(not(test), target_os = "windows"))]
 fn machine_id() -> Option<Vec<u8>> {
     // Fixed registry query, no user-controlled command/path or shell.
-    let output = std::process::Command::new("reg.exe")
+    let output = crate::quiet::cmd("reg.exe")
         .args(["query", r"HKLM\SOFTWARE\Microsoft\Cryptography", "/v", "MachineGuid", "/reg:64"])
         .output().ok()?;
     if !output.status.success() { return None; }

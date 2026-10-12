@@ -1747,25 +1747,56 @@ async fn api_shop(State(state): State<ServerState>) -> impl IntoResponse {
 /// or a laptop that travels — should not have to remember to change a setting
 /// for its opening hours to keep meaning what they say.
 fn local_tz_offset_min() -> i64 {
-    // 표준 라이브러리에는 시간대가 없다. `date` 는 어느 유닉스에나 있고,
-    // 실패하면 UTC 로 떨어진다 — 그때는 시간표가 어긋날 뿐 화면은 산다.
-    std::process::Command::new("date")
-        .arg("+%z")
-        .output()
-        .ok()
-        .and_then(|o| String::from_utf8(o.stdout).ok())
-        .and_then(|s| {
-            let s = s.trim();
-            let sign = if s.starts_with('-') { -1 } else { 1 };
-            let d = s.trim_start_matches(['+', '-']);
-            if d.len() < 4 {
-                return None;
-            }
-            let h: i64 = d[..2].parse().ok()?;
-            let m: i64 = d[2..4].parse().ok()?;
-            Some(sign * (h * 60 + m))
-        })
-        .unwrap_or(0)
+    // 🔴 윈도우에는 `date +%z` 가 없다(`date` 는 cmd 내장 명령이고 형식도 다르다).
+    //    예전엔 실패해서 늘 UTC(0) 로 떨어졌다 — 한국 가게면 영업시간이 9시간
+    //    어긋난다. 윈도우는 OS 에 직접 묻는다(창 없음·프로세스 없음).
+    #[cfg(target_os = "windows")]
+    {
+        windows_tz_offset_min().unwrap_or(0)
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        // 표준 라이브러리에는 시간대가 없다. `date` 는 어느 유닉스에나 있고,
+        // 실패하면 UTC 로 떨어진다 — 그때는 시간표가 어긋날 뿐 화면은 산다.
+        std::process::Command::new("date")
+            .arg("+%z")
+            .output()
+            .ok()
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .and_then(|s| {
+                let s = s.trim();
+                let sign = if s.starts_with('-') { -1 } else { 1 };
+                let d = s.trim_start_matches(['+', '-']);
+                if d.len() < 4 {
+                    return None;
+                }
+                let h: i64 = d[..2].parse().ok()?;
+                let m: i64 = d[2..4].parse().ok()?;
+                Some(sign * (h * 60 + m))
+            })
+            .unwrap_or(0)
+    }
+}
+
+/// 윈도우: 지금 이 컴퓨터의 UTC 와의 차이(분). `date +%z` 와 같은 부호(동쪽 +).
+///
+/// `GetTimeZoneInformation` 의 Bias 는 「UTC = 현지 + Bias」라 부호가 반대다.
+/// 서머타임 중이면 DaylightBias, 아니면 StandardBias 를 더한다.
+#[cfg(target_os = "windows")]
+fn windows_tz_offset_min() -> Option<i64> {
+    use windows_sys::Win32::System::Time::{GetTimeZoneInformation, TIME_ZONE_INFORMATION};
+    const TIME_ZONE_ID_INVALID: u32 = 0xFFFF_FFFF;
+    const TIME_ZONE_ID_STANDARD: u32 = 1;
+    const TIME_ZONE_ID_DAYLIGHT: u32 = 2;
+    let mut tz = TIME_ZONE_INFORMATION::default();
+    let id = unsafe { GetTimeZoneInformation(&mut tz) };
+    let extra = match id {
+        TIME_ZONE_ID_INVALID => return None,
+        TIME_ZONE_ID_DAYLIGHT => tz.DaylightBias,
+        TIME_ZONE_ID_STANDARD => tz.StandardBias,
+        _ => 0,
+    };
+    Some(-(i64::from(tz.Bias) + i64::from(extra)))
 }
 
 #[derive(serde::Deserialize)]
@@ -3785,6 +3816,24 @@ pub fn address_check(state: tauri::State<'_, ServerState>) -> Value {
 /// 컴퓨터가 알 수 없고, 폰을 들고 있는 사람은 한 번 눌러 보면 안다.
 #[tauri::command]
 pub fn all_local_ips() -> Vec<String> {
+    // 🔴 윈도우에는 ifconfig·ip 가 없어 늘 `local_ip()` 하나로 떨어졌다.
+    //    `ipconfig` 를 창 없이 읽어, 아래 해석기가 아는 `inet <주소>` 줄로 바꾼다.
+    //    「IPv4」 글자는 한국어·영어 윈도우 모두 그대로 나온다.
+    #[cfg(target_os = "windows")]
+    let out = crate::quiet::cmd("ipconfig").output().map(|o| {
+        let raw = String::from_utf8_lossy(&o.stdout).to_string();
+        let mut lines = String::new();
+        for l in raw.lines().filter(|l| l.contains("IPv4")) {
+            if let Some(v) = l.rsplit(':').next() {
+                let ip = v.trim().trim_end_matches("(Preferred)").trim_end_matches("(기본 설정)").trim();
+                lines.push_str("inet ");
+                lines.push_str(ip);
+                lines.push('\n');
+            }
+        }
+        std::process::Output { status: o.status, stdout: lines.into_bytes(), stderr: Vec::new() }
+    });
+    #[cfg(not(target_os = "windows"))]
     let out = std::process::Command::new("/sbin/ifconfig")
         .output()
         .or_else(|_| std::process::Command::new("ip").arg("addr").output());

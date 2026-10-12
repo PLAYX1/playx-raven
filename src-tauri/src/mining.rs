@@ -427,7 +427,7 @@ pub async fn mining_status() -> Result<Value, String> {
 // 프로그램이 남아 있으면, 그건 사장이 모르는 사이 나가는 돈이다.
 
 use std::io::{BufRead, BufReader};
-use std::process::{Child, Command as ProcCommand, Stdio};
+use std::process::{Child, Stdio};
 use std::sync::Mutex;
 
 static MINER: Mutex<Option<Child>> = Mutex::new(None);
@@ -462,7 +462,7 @@ fn find_miner(name: &str) -> Option<String> {
     }
     // PATH 에 있으면 그걸로.
     // 윈도우에는 `which` 가 없다. `where` 다.
-    ProcCommand::new(if cfg!(windows) { "where" } else { "which" })
+    crate::quiet::cmd(if cfg!(windows) { "where" } else { "which" })
         .arg(name)
         .output()
         .ok()
