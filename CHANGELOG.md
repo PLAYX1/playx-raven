@@ -1,5 +1,29 @@
 # 변경 기록
 
+## 0.9.1
+
+### 한국어
+
+- 인텔 맥(x86_64) 설치 파일을 추가합니다. Apple Silicon 판과 같은 0.9.1 코드로 만듭니다.
+- 윈도우·리눅스 지원 준비로 고친 것(맥 동작은 바뀌지 않음):
+  - 윈도우: 가게 시간대가 늘 UTC 로 잡히던 것을 고쳐 윈도우 시간대 설정(서머타임 포함)을 읽습니다.
+  - 윈도우: 메모리·디스크 조회, 기기 ID, 채굴기 찾기, 터널을 부를 때 검은 콘솔 창이 깜빡이지 않게 했습니다.
+  - 윈도우: 노드를 끌 때 먼저 정상 종료(RPC stop)를 요청하고 최대 20초 기다린 뒤에만 강제로 끝냅니다.
+  - 윈도우: 폰 연결에 쓰는 집 안 주소를 ipconfig 에서 모두 읽습니다.
+  - 리눅스: deb·AppImage 에 같이 넣은 노드·파일창고(`usr/lib/RavenVault Desktop/vendor/`)를 찾습니다.
+- 자동 업데이트 대상은 맥(Apple Silicon·Intel)입니다. 업데이트 검증(서명된 버전·해시·순서 확인)은 그대로 유지합니다. 0.9.0 의 변경도 함께 들어 있습니다.
+
+### English
+
+- Adds an Intel Mac (x86_64) installer, built from the same 0.9.1 code as the Apple Silicon version.
+- Fixes made while preparing Windows and Linux support (macOS behaviour is unchanged):
+  - Windows: the shop time zone was always UTC; it now reads the Windows time zone setting (including daylight saving time).
+  - Windows: no black console window flashes when checking memory/disk, reading the device ID, finding the miner or starting the tunnel.
+  - Windows: stopping the node first asks it to shut down cleanly (RPC stop) and waits up to 20 seconds before forcing it to end.
+  - Windows: all home network addresses used for phone pairing are read from ipconfig.
+  - Linux: finds the bundled node and file store inside deb and AppImage packages (`usr/lib/RavenVault Desktop/vendor/`).
+- Automatic updates cover macOS (Apple Silicon and Intel). Signed update version/hash/order verification is unchanged. Includes the 0.9.0 changes.
+
 ## 0.9.0
 
 ### 한국어
