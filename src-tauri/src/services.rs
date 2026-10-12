@@ -111,8 +111,22 @@ fn bundled_src(name: &str) -> Option<std::path::PathBuf> {
             return Some(p);
         }
     }
+    // 🔴 리눅스 deb·AppImage 는 Tauri 가 resources 를 `usr/lib/<productName>/` 아래에
+    //    넣는다(tauri-utils `resource_dir`: exe/../lib/<productName>). 위 목록에는
+    //    그 자리가 없어서 같이 넣은 ravend·ipfs 를 못 찾았다.
+    #[cfg(target_os = "linux")]
+    {
+        let p = dir.join("../lib").join(LINUX_PRODUCT_NAME).join("vendor").join(&file);
+        if p.is_file() {
+            return Some(p);
+        }
+    }
     None
 }
+
+/// `tauri.conf.json` 의 `productName`. 리눅스 resources 폴더 이름이 이것이다.
+#[cfg(any(target_os = "linux", test))]
+const LINUX_PRODUCT_NAME: &str = "RavenVault Desktop";
 
 pub fn which(name: &str) -> Option<String> {
     // 🔴 **이미 깔려 있는 것이 먼저다.** 우리가 넣은 것은 아무것도 없을 때의
@@ -807,6 +821,15 @@ pub async fn open_shop() -> Result<Value, String> {
 #[cfg(test)]
 mod tests {
     use super::node_why;
+
+    /// 리눅스 deb·AppImage 의 resources 폴더 이름은 `productName` 이다.
+    /// 이름을 바꾸면서 이 상수를 잊으면 리눅스에서 같이 넣은 노드를 못 찾는다.
+    #[test]
+    fn 리눅스_resources_폴더_이름은_제품_이름과_같다() {
+        let conf: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.conf.json")).expect("tauri.conf.json");
+        assert_eq!(conf["productName"].as_str(), Some(super::LINUX_PRODUCT_NAME));
+    }
 
     /// 🔴 **설치 폴더의 것을 그대로 돌리면 업데이트가 막힌다.**
     ///    윈도우는 돌고 있는 실행 파일을 못 덮어쓰는데, 우리는 앱을 닫아도
