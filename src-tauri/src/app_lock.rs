@@ -371,6 +371,8 @@ mod tests {
         "wallet_export", "wallet_import_prepare", "wallet_import_apply", "wallet_import_cancel", "wallet_file_status", "key_sheet_print",
         // 코어용 wallet.dat 꺼내기 · 끌어다 놓은 백업에서 되살리기(0.9.0)
         "wallet_core_export", "restore_drop_inspect", "restore_drop_open", "restore_drop_apply", "restore_drop_cancel",
+        // 구매자 열람권(RV-LOCK v1) 열쇠 보관·백업·결제 거래 읽기
+        "lock_secret_put", "lock_secret_get", "lock_key_export", "lock_key_import", "lock_tx_info", "lock_cid_range",
         // 발행·자산 권한
         "issue_asset", "create_issue", "reissue", "issue_many_unique", "issue_qualifier", "issue_restricted",
         "tag_address", "untag_address", "freeze", "unfreeze", "rehearse_fund", "rehearse_issue",

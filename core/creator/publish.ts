@@ -7,6 +7,8 @@ import {
   type CreatorManifest, type Details, type FileEntry, type UnsignedManifest,
 } from './manifest';
 import { atomsToRvn } from './bytes';
+import { buildLockSection, sealLockedFile, type Rng } from './lock';
+import { MAX_PREVIEW_CLIP_BYTES, type LockFile } from './manifest';
 import { scheduleFee } from './fee-schedule';
 import { REAL_MAINNET_ISSUE_ENABLED } from './mainnet-switches';
 
@@ -71,6 +73,13 @@ export type PublishInput = {
   /** 종류별 칸(limits.ts CONTENT_TYPES[type].detailKeys). 화면이 만들고, 매니페스트 검사기가 엄격히 본다. */
   details: Details;
   now: Date; prefix?: string;
+  /**
+   * 열람 보호(RV-LOCK v1, lock.ts). 주면 files 의 모든 내용 파일을 상품 열쇠(key)로 암호화해 올리고, 매니페스트에 lock 칸을 넣는다.
+   * 🔴 평문으로 남는 것은 previewClip(짧은 미리듣기·미리보기 클립) 하나뿐이다 — 본 파일은 하나도 평문으로 올리지 않는다.
+   * previewClip 은 files 에 넣지 않는다(넣으면 암호화된다). details.previewFile 은 previewClip.path 또는 null 이어야 한다.
+   * 열쇠(key)는 발행을 부른 쪽이 만들고 **판매자만 보관**한다(백업은 화면의 책임 — 잃으면 판매자도 못 연다).
+   */
+  lock?: { key: Uint8Array; previewClip?: FileInput | null; rng?: Rng; deliver?: string[] };
 };
 /**
  * 이어 올리기: 이미 보관한 파일의 SHA-256 → CID. 화면이 저장해 두었다가(파일 바이트는 저장하지 않는다) 다시 열면 넘긴다.
@@ -82,10 +91,24 @@ export type PublishResult = {
   check: FilesCheck; manifest: CreatorManifest; manifestBytes: Uint8Array; manifestCid: string; manifestSha256: string; pinnedBy: string; real: boolean;
 };
 
+const LOCK_TYPES: readonly ContentType[] = ['music', 'book', 'digital'];
+/** 열람 보호면 클립을 내용 파일 목록 끝에 붙여 한 묶음으로 검사한다(클립도 확장자·머리·크기 검사를 받는다). */
+const allFilesOf = (input: PublishInput): FileInput[] => input.lock?.previewClip ? [...input.files, { ...input.lock.previewClip, role: 'content' as const }] : input.files;
+
 /** 올리기 전에 할 수 있는 검사 전부(파일·이름·주소). 돈도 네트워크도 쓰지 않는다. */
 export function precheck(input: PublishInput): { check: FilesCheck; problems: string[] } {
-  const check = checkFiles(input.type, input.files);
+  const check = checkFiles(input.type, allFilesOf(input));
   const problems = check.problems.map(p => p.path ? `${p.path}: ${p.say}` : p.say);
+  if (input.lock) {
+    if (!LOCK_TYPES.includes(input.type)) problems.push('이 종류는 열람 보호를 걸 수 없어요(게임·티켓).');
+    if (input.lock.key.length !== 32) problems.push('상품 열쇠가 올바르지 않아요.');
+    const clip = input.lock.previewClip ?? null;
+    if (clip && input.type === 'digital') problems.push('이 종류에는 미리보기 클립이 없어요.');
+    if (clip && clip.bytes.length > MAX_PREVIEW_CLIP_BYTES) problems.push('미리듣기·미리보기 클립이 너무 커요. 짧게 잘라 주세요.');
+    if (clip && input.files.some(f => f.path === clip.path || sha256Hex(f.bytes) === sha256Hex(clip.bytes))) problems.push('미리듣기·미리보기 클립은 본 파일과 다른 파일이어야 해요.');
+    const pf = (input.details as { previewFile?: string | null }).previewFile;
+    if ((input.type === 'music' || input.type === 'book') && (pf ?? null) !== (clip?.path ?? null)) problems.push('열람 보호 상품의 미리듣기 파일은 따로 만든 클립이어야 해요(본 파일을 그대로 고를 수 없어요).');
+  }
   const name = checkCreatorAssetName(input.asset, input.prefix ?? CREATOR_ASSET_PREFIX, { type: input.type });
   problems.push(...name.problems);
   if (!isRvnAddress(input.creatorAddress)) problems.push('제작자 주소(R…)가 올바르지 않아요.');
@@ -102,12 +125,23 @@ export async function publishContent(input: PublishInput, pin: PinAdapter, sign:
   opts: { cache?: PinCache; onProgress?: (p: PublishProgress) => void } = {}): Promise<PublishResult> {
   const { check, problems } = precheck(input);
   if (problems.length) throw new CreatorError('manifest-files', problems.join(' / '));
-  const byPath = new Map(input.files.map(f => [f.path, f]));
+  const byPath = new Map(allFilesOf(input).map(f => [f.path, f]));
   const cache = opts.cache ?? new Map();
   const total = check.files.length + 1;
   let done = 0;
+  const lockFiles: Array<LockFile> = [];
+  const clipPath = input.lock?.previewClip?.path ?? null;
   const entryOf = async (path: string): Promise<FileEntry> => {
     const f = byPath.get(path)!, c = check.files.find(x => x.path === path)!;
+    if (input.lock && c.role === 'content' && path !== clipPath) {
+      // 열람 보호: 암호문만 보관한다. 조각 nonce 가 난수라 같은 파일도 올릴 때마다 CID 가 달라진다(이어 올리기 캐시를 쓰지 않는다).
+      const sealed = sealLockedFile({ key: input.lock.key, asset: input.asset, path, bytes: f.bytes, rng: input.lock.rng });
+      const r = await pin.add(path, sealed.cipher);
+      if (!CID_V0.test(r.cid) || r.size !== sealed.cipher.length) throw new CreatorError('manifest-files', `보관소가 이상한 답을 줬어요: ${path}`);
+      lockFiles.push({ path, cid: r.cid, plainSize: sealed.plainSize, plainSha256: sealed.plainSha256 });
+      opts.onProgress?.({ done: ++done, total, path, skipped: false });
+      return { path, cid: r.cid, sha256: sha256Hex(sealed.cipher), size: sealed.cipher.length, mime: c.mime };
+    }
     const sha = sha256Hex(f.bytes);
     const hit = cache.get(sha);
     let r: PinResult;
@@ -129,6 +163,7 @@ export async function publishContent(input: PublishInput, pin: PinAdapter, sign:
     files, cover, creator: { address: input.creatorAddress, receivingAddress: input.receivingAddress },
     price: input.priceAtoms === null ? null : { atoms: input.priceAtoms }, fee: input.declaredFeeBps === undefined ? scheduleFee(input.feeScheduleId) : { policy: FEE_POLICY, declaredBps: input.declaredFeeBps },
     details: input.details, createdAt: input.now.toISOString(),
+    ...(input.lock ? { lock: buildLockSection({ asset: input.asset, key: input.lock.key, files: lockFiles, deliver: input.lock.deliver }) } : {}),
   };
   const signature = await sign(input.creatorAddress, manifestSigningMessage(unsigned));
   const manifest = withSignature(unsigned, input.creatorAddress, signature);

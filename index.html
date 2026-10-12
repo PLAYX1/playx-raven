@@ -3812,7 +3812,9 @@
             <li><b>되돌릴 수 없어요.</b> 상품 등록증(레이븐코인 자산)은 지우거나 이름을 바꿀 수 없고, 보증으로 소각한 RVN 은 돌아오지 않아요.</li>
             <li><b>파일 보관은 내 책임이에요.</b> 파일은 이 컴퓨터의 IPFS 보관함에 있어요. 컴퓨터를 끄거나 파일을 지우면 구매자가 못 받을 수 있어요. 외부 보관 서비스는 아직 정하지 않았어요.</li>
             <li><b>환불 책임은 판매자(나)에게 있어요.</b> 레이븐볼트는 돈을 맡지 않아 대신 돌려줄 수 없어요. 티켓은 재판매·환불·행사 취소 책임도 판매자에게 있어요.</li>
-            <li><b>올린 파일은 공개돼요.</b> IPFS 파일은 주소(CID)를 아는 사람 누구나 받을 수 있어요. 구매는 「소장 기록과 판매자 응원」이고, 파일을 잠그는 장치(DRM)는 없어요.</li>
+            <li><b>암호화를 켜면(음악·책·그 밖의 디지털 상품, 권장) 파일은 암호문으로 올라가요.</b> 구매자가 결제한 주소로 서명한 열람 요청을 보내오면, 내가 확인하고 열람 키를 보내 줘요(직접 전달, 이 컴퓨터가 켜져 있을 때). 열쇠를 받은 사람이 남에게 주는 것은 기술로 막을 수 없어요. 미리듣기·미리보기는 따로 잘라 만든 짧은 파일만 공개돼요.</li>
+            <li><b>암호화를 끄면 올린 파일은 공개돼요.</b> IPFS 파일은 주소(CID)를 아는 사람 누구나 받을 수 있고, 미리듣기 구간도 화면에서만 정한 것이에요(곡 전체가 공개 IPFS 에 있어요).</li>
+            <li><b>상품 열쇠를 잃으면 복구할 수 없어요.</b> 올리고 나면 열쇠 파일을 저장하라고 안내해요. 저장하기 전에는 등록할 수 없어요.</li>
             <li>처음에는 「미검증」이에요. 자동 점검을 통과하면 「보증 · 미검증」 표시와 경고를 달고 팔 수 있어요(게임은 검증된 뒤에만 결제가 돼요).</li>
             <li>세금·통신판매·공연·표 재판매 같은 법률 문제는 <b>전문가 확인이 필요해요.</b> 레이븐볼트는 이를 판단하지 않아요.</li>
           </ul>
@@ -3864,7 +3866,7 @@
             <label class="check"><input type="checkbox" id="cw-cap-payment" /> 지갑 결제 요청(검증 뒤에만 켜져요)</label>
           </div>
           <div id="cw-fields-music" class="cw-fields" hidden>
-            <label class="creator-field">미리듣기 파일<select id="cw-preview-file"></select></label>
+            <label class="creator-field">미리듣기로 쓸 곡(없음을 고르면 미리듣기 없이 올려요)<select id="cw-preview-file"></select></label>
             <span class="creator-asset-row"><label class="creator-field">미리듣기 시작(초)<input id="cw-preview-start" inputmode="numeric" value="0" /></label>
             <label class="creator-field">끝(초)<input id="cw-preview-end" inputmode="numeric" value="30" /></label></span>
           </div>
@@ -3886,6 +3888,10 @@
           </div>
           <div id="cw-fields-digital" class="cw-fields" hidden>
             <label class="creator-field">상품 종류 한 줄(예: 그림 모음, 악보)<input id="cw-d-label" maxlength="40" /></label>
+          </div>
+          <div id="cw-lock-box" class="cw-fields" hidden>
+            <label class="check"><input type="checkbox" id="cw-lock-on" checked /> 파일을 암호화해서 올리기 (권장)</label>
+            <ul class="meta" id="cw-lock-say"></ul>
           </div>
         </div>
 
@@ -3913,6 +3919,13 @@
           <button type="button" id="cw-upload">올리고 서명하기</button>
           <button type="button" class="ghost" id="cw-pin-check" disabled>내 파일이 지금 받아지는지 확인</button>
           <p class="meta" id="cw-pin-say" role="status"></p>
+          <div id="cw-lock-backup" class="card" hidden>
+            <h3>열쇠 파일을 꼭 저장해 두세요</h3>
+            <p class="creator-bad">이 열쇠를 잃으면 나도 이 상품의 파일을 열 수 없고, 구매자에게 열람 키를 보내 줄 수도 없어요. 복구할 방법이 없어요.</p>
+            <p class="meta">열쇠 파일은 「백업 열쇠(52글자)」로 한 번 더 잠가서 내가 고른 폴더(iCloud·USB 등)에 한 파일로 저장해요. 지갑 복구 단어와는 별개예요. 백업 열쇠는 종이에 적어 12단어 옆에 두세요.</p>
+            <button type="button" id="cw-lock-save">열쇠 파일 저장(폴더 고르기)</button>
+            <p id="cw-lock-save-say" role="status"></p>
+          </div>
           <details class="cw-why"><summary>왜 필요해요?</summary><p>파일은 IPFS 라는 나눠 보관하는 저장소에 올라가요. 누군가(지금은 이 컴퓨터) 계속 보관해야 구매자가 받을 수 있어요. 중간에 닫아도, 다시 열어 같은 파일을 고르면 올린 것은 건너뛰어요.</p></details>
         </div>
 
@@ -3944,7 +3957,29 @@
           <button type="button" class="ghost" id="cw-share-copy">공유 글 복사</button>
           <h3>판매 현황</h3>
           <p id="cw-sales" role="status"></p>
+          <p class="meta" id="cw-lock-done" hidden>이 상품은 암호화돼 있어요. 구매자가 열람 요청 글을 보내오면 이 화면 맨 아래 「구매자 열람 요청 처리」에서 확인하고 열람 허가 글을 만들어 보내 주세요.</p>
           <details><summary>검증 신청서(선택)</summary><label class="creator-field">「검증됨」을 받으려면 이 신청서를 보내요(보내는 곳은 정해지면 알려 드려요)<textarea id="cw-request" rows="6" readonly></textarea></label></details>
+        </div>
+
+        <button type="button" class="ghost" id="lk-s-toggle" aria-expanded="false" aria-controls="lk-seller">구매자 열람 요청 처리 (암호화한 상품)</button>
+        <div class="card" id="lk-seller" hidden>
+          <h2>구매자 열람 요청 처리</h2>
+          <p class="creator-note" role="note">구매자가 보낸 열람 요청 글을 확인해요: 글의 서명 → 결제 거래 → 결제한 주소와 서명한 주소가 같은지 → 이 상품의 정당한 결제인지 → 확인 수(6 이상)를 차례로 봐요. 모두 맞으면 구매자의 열람 공개키로 싼 열람 허가 글을 만들어요. 허가 글은 메신저·메일 등으로 직접 보내 주세요. 열쇠를 받은 사람이 남에게 주는 것은 기술로 막을 수 없어요.</p>
+          <label class="creator-field">상품<select id="lk-s-asset"></select></label>
+          <p class="meta" id="lk-s-key" role="status"></p>
+          <label class="creator-field">구매자가 보낸 열람 요청 글<textarea id="lk-s-request" rows="3" spellcheck="false" placeholder="RVLQ1.…"></textarea></label>
+          <button type="button" id="lk-s-go">확인하고 열람 허가 만들기</button>
+          <p id="lk-s-say" role="status"></p>
+          <label class="creator-field" id="lk-s-grant-wrap" hidden>열람 허가 글(구매자에게 보내 주세요)<textarea id="lk-s-grant" rows="3" readonly></textarea></label>
+          <button type="button" class="ghost" id="lk-s-copy" hidden>허가 글 복사</button>
+          <button type="button" class="ghost" id="lk-s-restore-toggle" aria-expanded="false" aria-controls="lk-s-restore-box">이 컴퓨터에 열쇠가 없을 때(백업 파일에서 되돌리기)</button>
+          <div id="lk-s-restore-box" hidden>
+            <p class="meta">저장해 둔 열쇠 파일(.pxlock)과 백업 열쇠(52글자)로 되돌려요. 이미 다른 열쇠가 있는 상품에는 덮어쓰지 않아요.</p>
+            <button type="button" class="ghost" id="lk-s-pick">열쇠 파일 고르기</button>
+            <label class="creator-field">백업 열쇠(52글자)<input id="lk-s-paper" autocomplete="off" spellcheck="false" /></label>
+            <button type="button" id="lk-s-restore">되돌리기</button>
+            <p id="lk-s-restore-say" role="status"></p>
+          </div>
         </div>
 
         <p class="cw-error" id="cw-error" role="alert"></p>
@@ -3999,6 +4034,26 @@
         <div class="card">
           <h2>내 결제 기록</h2>
           <ul id="mk-purchases"></ul>
+        </div>
+        <div class="card" id="lk-buyer" hidden>
+          <h2>구매한 파일 열기 (암호화된 상품)</h2>
+          <p class="creator-note" role="note" id="lk-b-note">구매하면 열람 키가 전달됩니다. 파일 공유는 기술로 막을 수 없습니다. 판매자 컴퓨터가 켜져 있을 때 열람 허가가 오기 때문에 바로 열리지 않을 수 있어요.</p>
+          <p id="lk-b-title"></p>
+          <p class="meta" id="lk-b-state" role="status"></p>
+          <div id="lk-b-request-box" hidden>
+            <button type="button" id="lk-b-make">열람 요청 만들기</button>
+            <label class="creator-field">열람 요청 글(판매자에게 보내 주세요)<textarea id="lk-b-request" rows="3" readonly></textarea></label>
+            <button type="button" class="ghost" id="lk-b-copy">요청 글 복사</button>
+            <label class="creator-field">판매자가 보내 준 열람 허가 글<textarea id="lk-b-grant" rows="3" spellcheck="false" placeholder="RVLG1.…"></textarea></label>
+            <button type="button" id="lk-b-accept">허가 글 확인</button>
+          </div>
+          <div id="lk-b-open-box" hidden>
+            <div id="lk-b-files-slot"></div>
+            <button type="button" class="ghost" id="lk-b-cancel" hidden>취소</button>
+            <div id="lk-b-media"></div>
+          </div>
+          <p id="lk-b-say" role="status"></p>
+          <button type="button" class="ghost" id="lk-b-close">닫기</button>
         </div>
         <button type="button" class="ghost" id="market-back">게임으로 돌아가기</button>
       </section>

@@ -123,6 +123,9 @@ async function openCreator(opts) {
   // 「내 상품 올리기」는 이제 끌어놓기 화면(drop-publish.ts)으로 열린다. 이 시험은 9단계 마법사 = 「자세히(단계별로)」.
   await page.click('#dp-detail');
   await page.waitForFunction(() => document.querySelector('#page-creator').dataset.mode === 'wizard');
+  // 2026-10-13 열람권(RV-LOCK v1): 음악·책·디지털은 암호화가 기본값(켜짐)이다. 이 파일의 시험은 옛(평문) 올리기 규칙을 보는 것이라 끄고 시작한다.
+  // 암호화 켜짐 흐름은 scripts/lock-ui-browser.test.mjs 가 본다.
+  await page.$eval('#cw-lock-on', e => { e.checked = false; });
   return page;
 }
 const text = (page, sel) => page.$eval(sel, e => e.tagName === 'TEXTAREA' ? e.value : e.textContent.replace(/\s+/g, ' ').trim());

@@ -10,6 +10,7 @@ import { PAYMENT_ALLOWLIST_ONLY } from '../core/creator/mainnet-switches';
 import { paymentGate } from '../core/creator/payment-allowlist';
 import { purchasePlan } from '../core/creator/purchase-plan';
 import * as T from './market-copy';
+import { LOCK_COPY } from './lock-ui';
 
 /*
  * 데스크탑 「열린 장터(시험)」 — 구매자 최소 화면: 목록 → 상세(미리듣기·미리보기) → 구매 확인(수수료 분리 금액) → 내 구매 목록.
@@ -62,6 +63,8 @@ export type MarketDeps = {
   verifiedOnly?: boolean;
   /** 신고 메일 열기(mailto). 없으면 복사로 대신한다. */
   openExternal?: (url: string) => void | Promise<void>;
+  /** 구매한 암호화 상품의 열람 요청·허가·열기(lock-ui.ts wireLockBuyer). 없으면 결제 기록에 열람 단추가 없다. */
+  lockBuyer?: { open(p: Purchase): void | Promise<void> } | null;
 };
 export const HIDDEN_KEY = 'rv-market-hidden-v1';
 export const PURCHASES_KEY = 'rv-market-purchases-v1';
@@ -136,7 +139,14 @@ export function wireOpenMarket(deps: MarketDeps) {
   const readPurchases = (): Purchase[] => { try { return JSON.parse(store?.getItem(PURCHASES_KEY) ?? '[]') as Purchase[]; } catch { return []; } };
   function paintPurchases() {
     const p = readPurchases();
-    list(el('mk-purchases'), p.length ? p.map(x => `${x.title} · ${x.asset} · 판매자 ${x.sellerRvn} RVN + 수수료 ${x.feeRvn} RVN${x.networkFeeRvn ? ` + 네트워크 ${x.networkFeeRvn} RVN` : ''} · 거래 ${x.txid.slice(0, 12)}… · 자산은 받지 않았어요(기록만)`) : [T.PURCHASES_EMPTY]);
+    const text = (x: Purchase) => `${x.title} · ${x.asset} · 판매자 ${x.sellerRvn} RVN + 수수료 ${x.feeRvn} RVN${x.networkFeeRvn ? ` + 네트워크 ${x.networkFeeRvn} RVN` : ''} · 거래 ${x.txid.slice(0, 12)}… · 자산은 받지 않았어요(기록만)`;
+    if (!deps.lockBuyer) { list(el('mk-purchases'), p.length ? p.map(text) : [T.PURCHASES_EMPTY]); return; }
+    const buyer = deps.lockBuyer;
+    el('mk-purchases').replaceChildren(...(p.length ? p.map(x => {
+      const li = document.createElement('li'); li.textContent = text(x);
+      if (x.manifestCid) { const b = document.createElement('button'); b.type = 'button'; b.className = 'ghost mk-open-lock'; b.textContent = '열람하기'; b.onclick = () => void buyer.open(x); li.append(' ', b); }
+      return li;
+    }) : [Object.assign(document.createElement('li'), { textContent: T.PURCHASES_EMPTY })]));
   }
   function view(which: 'list' | 'detail' | 'confirm') {
     el('mk-list-view').hidden = which !== 'list'; el('mk-detail').hidden = which !== 'detail'; el('mk-confirm').hidden = which !== 'confirm';
@@ -216,13 +226,19 @@ export function wireOpenMarket(deps: MarketDeps) {
     const blob = (path: string, mime: string) => { const b = files.get(path); if (!b) return null; const u = URL.createObjectURL(new Blob([b.slice().buffer as ArrayBuffer], { type: mime })); blobs.push(u); return u; };
     const m = l.manifest;
     if (m.type === 'music') {
-      const d = m.details as MusicSection, f = m.files.find(x => x.path === d.previewFile)!;
-      const u = blob(f.path, f.mime); if (!u) return;
-      const audio = document.createElement('audio'); audio.controls = true; audio.src = u; audio.id = 'mk-d-audio';
-      audio.addEventListener('loadedmetadata', () => { audio.currentTime = d.previewStartMs / 1000; });
-      audio.addEventListener('timeupdate', () => { if (audio.currentTime * 1000 >= d.previewEndMs) audio.pause(); });
-      const p = document.createElement('p'); p.className = 'meta'; p.textContent = `미리듣기 ${Math.round(d.previewStartMs / 1000)}초~${Math.round(d.previewEndMs / 1000)}초`;
-      box.append(p, audio);
+      const d = m.details as MusicSection;
+      if (d.previewFile === null || d.previewStartMs === null || d.previewEndMs === null) {
+        const p = document.createElement('p'); p.className = 'meta'; p.textContent = '이 상품은 미리듣기가 없어요.'; box.append(p);
+      } else {
+        const f = m.files.find(x => x.path === d.previewFile)!, from = d.previewStartMs, to = d.previewEndMs;
+        const u = blob(f.path, f.mime); if (!u) return;
+        const audio = document.createElement('audio'); audio.controls = true; audio.src = u; audio.id = 'mk-d-audio';
+        audio.addEventListener('loadedmetadata', () => { audio.currentTime = from / 1000; });
+        audio.addEventListener('timeupdate', () => { if (audio.currentTime * 1000 >= to) audio.pause(); });
+        const p = document.createElement('p'); p.className = 'meta';
+        p.textContent = m.lock ? `미리듣기 ${Math.round((to - from) / 1000)}초 — 따로 잘라 만든 짧은 파일이에요` : `미리듣기 ${Math.round(from / 1000)}초~${Math.round(to / 1000)}초 (옛 형식: 곡 전체가 공개 IPFS 에 있어요)`;
+        box.append(p, audio);
+      }
     } else if (m.type === 'book') {
       const d = m.details as BookSection;
       if (d.previewFile) {
@@ -260,11 +276,12 @@ export function wireOpenMarket(deps: MarketDeps) {
       const b = m.details as BookSection;
       rows.push(['형식', b.format.toUpperCase()], ['미리보기', b.previewFile ? `${b.previewPages}쪽` : '없음'], ['전체 쪽수', b.pageCount ? `${b.pageCount}쪽` : '모름']);
     } else if (m.type === 'music') {
-      const d = m.details as MusicSection; rows.push(['미리듣기', `${Math.round(d.previewStartMs / 1000)}~${Math.round(d.previewEndMs / 1000)}초`]);
+      const d = m.details as MusicSection;
+      rows.push(['미리듣기', d.previewFile === null || d.previewStartMs === null || d.previewEndMs === null ? '없음' : m.lock ? `${Math.round((d.previewEndMs - d.previewStartMs) / 1000)}초(따로 잘라 만든 파일)` : `${Math.round(d.previewStartMs / 1000)}~${Math.round(d.previewEndMs / 1000)}초(곡 전체가 공개 IPFS 에 있어요)`]);
     } else if (m.type === 'game') {
       const g = m.details as GameSection; rows.push(['외부 링크', g.origin ?? '없음']);
     } else rows.push(['종류', (m.details as DigitalSection).label]);
-    rows.push(['파일', `${m.files.length}개 · 구매해도 파일은 공개 IPFS 에 있어요(잠금 없음)`]);
+    rows.push(['파일', m.lock ? `${m.files.length}개 · ${LOCK_COPY.buyerFileFact}` : `${m.files.length}개 · 구매해도 파일은 공개 IPFS 에 있어요(잠금 없음)`]);
     facts(el('mk-d-facts'), rows);
     previewBox(l);
     el('mk-d-check').hidden = l.status === 'verified' && !!l.autoCheck;
@@ -346,7 +363,7 @@ export function wireOpenMarket(deps: MarketDeps) {
     const s = rate.bps === null ? null : purchaseSummary(l.manifest, rate.bps);
     view('confirm');
     list(el('mk-c-lines'), [`${l.manifest.title} (${l.asset})`, ...(s ? s.lines : [`가격 ${atomsToRvn(l.manifest.price!.atoms)} RVN`]), rate.say]);
-    list(el('mk-c-facts'), [...T.MARKET_FACTS]);
+    list(el('mk-c-facts'), [...(l.manifest.lock ? T.MARKET_FACTS_LOCKED : T.MARKET_FACTS)]);
     list(el('mk-c-outputs'), []);
     el('mk-c-note').textContent = '판매자 몫은 판매자 받는 주소로 바로, 수수료는 레이븐볼트 수수료 주소로 — 한 거래 안에서 지갑이 나눠요. 레이븐볼트가 돈을 맡지 않아요.' +
       (l.status === 'bonded' ? ' ' + BONDED_WARNING : '');

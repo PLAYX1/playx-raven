@@ -1,11 +1,11 @@
 {
-  "source": "ravenvault 저장소 브랜치 claude/rv-wallet-mainnet-integrated (메인넷 발행·판매 준비 통합 — 스위치 JSON 한 파일 · 운영 키 한 곳 · 결제 허용 목록 · 구매 계획/주인 번호 공용 벡터 · 서명된 상품 목록)",
+  "source": "ravenvault 저장소 브랜치 claude/rv-wallet-mainnet-integrated (메인넷 발행·판매 준비 통합 — 스위치 JSON 한 파일 · 운영 키 한 곳 · 결제 허용 목록 · 구매 계획/주인 번호 공용 벡터 · 서명된 상품 목록) + RV-LOCK v1 열람권(claude/rv-wallet-lock)",
   "files": {
     "core/creator/bytes.ts": "b3092fe7d6ebdc52881280f61bd21322a2ddff1be5b547d915ce6cf5ee72dbd6",
     "core/creator/limits.ts": "f37eaf05505f97aac67fb1b8230017db8a529d62341390301c119895da269420",
     "core/creator/asset-name.ts": "0ffee8f76e94f95b4f5f8073f6c6de1c869f69cfaf273a5815fee2a762956a1e",
-    "core/creator/manifest.ts": "06fadfc973b0280d5b86b84d953edff496e02ae74ca5c2544d4f5ade4a9b4812",
-    "core/creator/publish.ts": "bc117231445b676bcaf353542d8b9ed583234e7c6caf72d035a6d5df21688db4",
+    "core/creator/manifest.ts": "5ebc3e4a200e518196ba4f484d97a53115766b586707673d16659135d7d6168f",
+    "core/creator/publish.ts": "29b3eab6888e3b7df18d7703e7295be59974c6614c17baf012017a1624ca8374",
     "core/creator/fee-schedule.ts": "8d70690d3beaf22655700e383b06422cf693b0df9fbe9b4d64465ebeed22dd1e",
     "core/creator/listing.ts": "e3647410a95c992d85504ad58f56cc732e0d396f1207f04f887384e4f2830a1c",
     "core/creator/open-market.ts": "1eada10588cfb483011760a834d07633ee3962abda619ffd858043f246486b03",
@@ -21,7 +21,10 @@
     "core/creator/purchase-plan-vectors.json": "a3abe435e2e9a386c420b2769c839b4b747d6032620af2de920149dc7118207e",
     "core/creator/owner-id.ts": "9b3acf744210a570b73e952fc3508bee8bc3aedc826dd8dd66af51bbae811e90",
     "core/creator/owner-id-vectors.json": "33923301c3b28f9965f39ebf3df37d8872560f8903bd3a80b0a8ad53fb265d85",
-    "core/signed-lists/market-catalog.ts": "82ff5465e7499093bc32b44720c20eb2bd6a8cac94a2680528cf7581a97e23ea"
+    "core/signed-lists/market-catalog.ts": "82ff5465e7499093bc32b44720c20eb2bd6a8cac94a2680528cf7581a97e23ea",
+    "core/creator/lock.ts": "4970d3442549628238bc39ecd3a3a79fa901d93b0a94b21800c644be58a91040",
+    "core/creator/lock-payment.ts": "11c834511c75d01397c62b813b320612665aecc64c081d6152aba2911a10d2bc",
+    "core/creator/clip.ts": "262541727a8d1fbb3cb06f5acf1c9add46e146e5e34c2ad8a438530ae2b31e3f"
   },
-  "note": "0.9.2 통합: 이전의 「스위치 두 줄 패치」는 없다 — 지갑 원본이 mainnet-switches.ts 를 거쳐 core/creator/mainnet-switch.json 을 읽도록 바뀌어 모든 파일이 지갑 원본과 바이트 동일하다(patches 없음). 스위치 JSON(core/creator/mainnet-switch.json)은 enable 커밋이 바꾸는 파일이라 해시를 고정하지 않는다 — 지갑 원본과의 바이트 동일은 지갑 저장소의 scripts/check-mainnet-switches.mjs --desktop 가 확인한다."
+  "note": "0.9.2 통합: 이전의 「스위치 두 줄 패치」는 없다 — 지갑 원본이 mainnet-switches.ts 를 거쳐 core/creator/mainnet-switch.json 을 읽도록 바뀌어 모든 파일이 지갑 원본과 바이트 동일하다(patches 없음). 스위치 JSON(core/creator/mainnet-switch.json)은 enable 커밋이 바꾸는 파일이라 해시를 고정하지 않는다 — 지갑 원본과의 바이트 동일은 지갑 저장소의 scripts/check-mainnet-switches.mjs --desktop 가 확인한다. RV-LOCK v1(2026-10-13): lock.ts · lock-payment.ts · clip.ts 추가, manifest.ts(lock 칸·미리듣기 끔)·publish.ts(lock 옵션) 갱신 — 지갑 저장소 브랜치 claude/rv-wallet-lock 원본과 바이트 동일."
 }

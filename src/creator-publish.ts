@@ -7,6 +7,7 @@ import { CreatorError, isRvnAddress, validateManifest, type CreatorManifest, typ
 import { BOND_SAY, OPEN_MARKET_SALES_ENABLED, feeNotice, type FeeNoticeOptions } from '../core/creator/open-market';
 import { MARKET_FEE_BPS_CEILING, type FeeSchedule } from '../core/creator/fee-schedule';
 import { splitPrice } from '../core/game-registry/platform-fee';
+import { LOCK_COPY, lockableType, lockedInputFor, markBackedUp, readBackups, saveKeyFile, type ClipMaker } from './lock-ui';
 
 /** 일정이 받을 수 있는 가장 높은 요율(코드 천장)로 나눠도 판매자 몫이 남는가 — 매니페스트 검사와 같은 기준. */
 const splitsAtCeiling = (atoms: string) => { try { splitPrice(atoms, MARKET_FEE_BPS_CEILING); return true; } catch { return false; } };
@@ -77,7 +78,7 @@ export type MineItem = { asset: string; title: string; type: ContentType; manife
 const STEPS = ['안내', '종류', '파일', '이름·가격', '점검', '드는 돈', '올리기', '확인', '완료'];
 const FALLBACK_WORD: Record<ContentType, string> = { game: 'GAME', music: 'SONG', book: 'BOOK', ticket: 'TICKET', digital: 'ITEM' };
 const FIELD_IDS = ['cw-title', 'cw-desc', 'cw-asset', 'cw-price', 'cw-address', 'cw-entry', 'cw-origin', 'cw-cap-identity', 'cw-cap-payment', 'cw-preview-file',
-  'cw-preview-start', 'cw-preview-end', 'cw-book-file', 'cw-book-preview', 'cw-book-pages', 'cw-book-total', 'cw-t-event', 'cw-t-start', 'cw-t-end', 'cw-t-venue',
+  'cw-preview-start', 'cw-preview-end', 'cw-lock-on', 'cw-book-file', 'cw-book-preview', 'cw-book-pages', 'cw-book-total', 'cw-t-event', 'cw-t-start', 'cw-t-end', 'cw-t-venue',
   'cw-t-qty', 'cw-t-refund', 'cw-t-contact', 'cw-d-label', 'cw-guide-ok'];
 
 const el = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -112,6 +113,10 @@ export type CreatorDeps = {
    * 요율 숫자는 전부 여기서 읽는다(15% 하드코딩 없음).
    */
   feeSchedule?: () => FeeSchedule | null;
+  /** 열쇠 파일을 저장할 폴더 고르기(폴더 선택창). 없으면 저장 단추가 폴더를 못 골라 안내만 한다. */
+  pickFolder?: () => Promise<string | null>;
+  /** 미리듣기 클립 만들기(기본 = 웹뷰 소리 해독기). 시험이 모의로 바꾼다. */
+  makeClip?: ClipMaker;
 };
 
 export function wireCreatorPublish(deps: CreatorDeps) {
@@ -198,6 +203,38 @@ export function wireCreatorPublish(deps: CreatorDeps) {
   input('cw-guide-ok').onchange = () => { (el('cw-start') as HTMLButtonElement).disabled = !input('cw-guide-ok').checked; };
   el('cw-start').onclick = () => { if (input('cw-guide-ok').checked) go(1); };
 
+  /* ── 열람 보호(RV-LOCK v1) ── */
+  const lockOn = () => lockableType(type) && input('cw-lock-on').checked;
+  function paintLock() {
+    const can = lockableType(type);
+    el('cw-lock-box').hidden = !can;
+    if (can) list(el('cw-lock-say'), input('cw-lock-on').checked ? [...LOCK_COPY.onLines(type)] : [...LOCK_COPY.offLines]);
+  }
+  input('cw-lock-on').addEventListener('change', () => { paintLock(); published = published && step < 6 ? null : published; saveDraft(); });
+  el<HTMLSelectElement>('cw-preview-file').addEventListener('change', () => { el<HTMLSelectElement>('cw-preview-file').dataset.touched = '1'; });
+  const store0 = (() => { try { return deps.storage === undefined ? window.localStorage : deps.storage; } catch { return null; } })();
+  const backedUp = () => !published?.manifest.lock || !!readBackups(store0)[published.manifest.asset];
+  function paintBackup() {
+    const box = el('cw-lock-backup');
+    box.hidden = !published?.manifest.lock;
+    if (box.hidden) return;
+    const done = readBackups(store0)[published!.manifest.asset];
+    el('cw-lock-save-say').textContent = done ? `${LOCK_COPY.backupHead} (${new Date(done.at).toLocaleString('ko-KR')})` : LOCK_COPY.backupMissing;
+    el('cw-lock-save-say').className = done ? 'creator-good' : 'creator-bad';
+  }
+  el('cw-lock-save').onclick = async () => {
+    if (!published?.manifest.lock || busy) return;
+    const asset = published.manifest.asset;
+    try {
+      const folder = await deps.pickFolder?.();
+      if (!folder) { el('cw-lock-save-say').textContent = '폴더를 고르지 않았어요 → 다시 눌러 iCloud·USB 같은 곳을 골라 주세요.'; return; }
+      const r = await saveKeyFile(deps.invoke, asset, folder);
+      markBackedUp(store0, asset, now().toISOString());
+      paintBackup(); paintNext();
+      el('cw-lock-save-say').textContent += ` 저장한 곳: ${r.path}`;
+    } catch (e) { el('cw-lock-save-say').textContent = `저장하지 못했어요(${errText(e)}) → 다른 폴더를 골라 다시 눌러 주세요. 저장하기 전에는 등록할 수 없어요.`; el('cw-lock-save-say').className = 'creator-bad'; }
+  };
+
   /* ── ① 종류 ── */
   function paintKinds() {
     const box = el('cw-kinds');
@@ -213,6 +250,7 @@ export function wireCreatorPublish(deps: CreatorDeps) {
     }));
     for (const id of CONTENT_TYPE_IDS) el(`cw-fields-${id}`).hidden = type !== id;
     el('cw-folder-wrap').hidden = type !== 'game';
+    paintLock();
     if (type) {
       const exts = [...CONTENT_TYPES[type].ext].map(e => '.' + e);
       input('cw-files').accept = exts.join(',');
@@ -230,7 +268,8 @@ export function wireCreatorPublish(deps: CreatorDeps) {
   function paintFiles() {
     const paths = content.map(f => f.path);
     fillSelect('cw-entry', paths.filter(p => ['html', 'htm'].includes(extOf(p))));
-    fillSelect('cw-preview-file', paths);
+    fillSelect('cw-preview-file', paths, true);
+    if (el<HTMLSelectElement>('cw-preview-file').value === '' && paths.length && !el<HTMLSelectElement>('cw-preview-file').dataset.touched) el<HTMLSelectElement>('cw-preview-file').value = paths[0];
     fillSelect('cw-book-file', paths.filter(p => ['pdf', 'epub'].includes(extOf(p))));
     fillSelect('cw-book-preview', paths.filter(p => extOf(p) === 'pdf'), true);
     if (el<HTMLSelectElement>('cw-book-preview').value === '' && paths.length > 1) {
@@ -350,7 +389,11 @@ export function wireCreatorPublish(deps: CreatorDeps) {
     const address = input('cw-address').value.trim();
     switch (type) {
       case 'game': return { entry: sel('cw-entry'), origin: input('cw-origin').value.trim() || null, capabilities: { identity: input('cw-cap-identity').checked, payment: input('cw-cap-payment').checked } };
-      case 'music': return { previewFile: sel('cw-preview-file'), previewStartMs: Math.round(num('cw-preview-start') * 1000), previewEndMs: Math.round(num('cw-preview-end') * 1000) };
+      case 'music': {
+        const pf = sel('cw-preview-file') || null;
+        return pf ? { previewFile: pf, previewStartMs: Math.round(num('cw-preview-start') * 1000), previewEndMs: Math.round(num('cw-preview-end') * 1000) }
+          : { previewFile: null, previewStartMs: null, previewEndMs: null };
+      }
       case 'book': {
         const pv = sel('cw-book-preview') || null, book = sel('cw-book-file');
         return { bookFile: book, format: extOf(book) === 'epub' ? 'epub' : 'pdf', previewFile: pv, previewPages: pv ? Math.round(num('cw-book-pages')) : 0,
@@ -378,7 +421,7 @@ export function wireCreatorPublish(deps: CreatorDeps) {
     if (inp.priceAtoms === 'invalid') p.push('가격이 숫자가 아니에요 → 예: 20 또는 12.5');
     if (inp.priceAtoms && inp.priceAtoms !== 'invalid' && !splitsAtCeiling(inp.priceAtoms)) p.push('가격이 너무 작아요 → 수수료를 떼고도 남도록 올려 주세요.');
     const d = inp.details as unknown as Record<string, unknown>;
-    if (type === 'music' && !((d.previewEndMs as number) > (d.previewStartMs as number) + 999 && (d.previewEndMs as number) - (d.previewStartMs as number) <= 60_000))
+    if (type === 'music' && d.previewFile && !((d.previewEndMs as number) > (d.previewStartMs as number) + 999 && (d.previewEndMs as number) - (d.previewStartMs as number) <= 60_000))
       p.push('미리듣기 구간이 이상해요 → 1초 이상 60초 이하로 정해 주세요.');
     if (type === 'book' && !d.bookFile) p.push('책 파일(PDF·EPUB)이 없어요 → ② 단계에서 책 파일을 넣어 주세요.');
     if (type === 'book' && d.previewFile && !((d.previewPages as number) >= 1 && (d.previewPages as number) <= 50)) p.push('미리보기 쪽수가 이상해요 → 1~50 사이로 적어 주세요.');
@@ -451,7 +494,8 @@ export function wireCreatorPublish(deps: CreatorDeps) {
   function paintUpload() {
     (el('cw-upload') as HTMLButtonElement).disabled = !!published || busy;
     (el('cw-pin-check') as HTMLButtonElement).disabled = !published || busy;
-    if (published) { progress(1, 1); el('cw-upload-say').textContent = '다 올렸어요. 아직 아무에게도 보이지 않아요 — 마지막 확인에서 등록해야 목록에 나타나요.'; }
+    paintBackup();
+    if (published) { progress(1, 1); el('cw-upload-say').textContent = published.manifest.lock ? '암호화해서 다 올렸어요. 아래 열쇠 파일을 저장해야 다음으로 갈 수 있어요. 아직 아무에게도 보이지 않아요 — 마지막 확인에서 등록해야 목록에 나타나요.' : '다 올렸어요. 아직 아무에게도 보이지 않아요 — 마지막 확인에서 등록해야 목록에 나타나요.'; }
     else if (!content.length && CONTENT_TYPES[type ?? 'digital'].minFiles > 0) el('cw-upload-say').textContent = '이어서 하는 중이면 ② 단계에서 같은 파일을 다시 골라 주세요. 이미 올린 파일은 건너뛰어요.';
     else { progress(0, 1); el('cw-upload-say').textContent = cache.size ? `이미 올린 파일 ${cache.size}개는 건너뛰어요.` : ''; }
   }
@@ -461,7 +505,13 @@ export function wireCreatorPublish(deps: CreatorDeps) {
     busy = true; paintUpload();
     el('cw-upload-say').textContent = pin.real ? '올리는 중… 파일이 많으면 오래 걸려요. 닫아도 다음에 이어서 할 수 있어요.' : '시험 보관소에 올리는 중…';
     try {
-      const r: PublishResult = await publishContent(gather(), pin, sign, { cache, onProgress: p => {
+      let inp = gather();
+      if (lockOn()) {
+        const prep = await lockedInputFor(deps.invoke, inp, { makeClip: deps.makeClip });
+        inp = prep.input;
+        if (prep.notes.length) setError(prep.notes.join(' '));
+      }
+      const r: PublishResult = await publishContent(inp, pin, sign, { cache, onProgress: p => {
         progress(p.done, p.total); el('cw-upload-say').textContent = `${p.done}/${p.total} · ${p.path}${p.skipped ? ' (이미 올림 — 건너뜀)' : ''}`; saveDraft(); } });
       published = { manifestCid: r.manifestCid, manifestSha256: r.manifestSha256, manifest: r.manifest, pinnedBy: r.pinnedBy };
       saveDraft();
@@ -507,8 +557,9 @@ export function wireCreatorPublish(deps: CreatorDeps) {
     list(el('cw-c-irreversible'), plan.irreversible);
     const blockers = plan.blockers.filter(b => !b.includes('다시 적어'));
     if (c.enough === false) blockers.push(`잔액이 ${atomsToRvn(c.shortAtoms)} RVN 모자라요 → ⑤ 단계의 받는 주소로 RVN 을 받은 뒤 다시 와 주세요.`);
+    if (!backedUp()) blockers.push(LOCK_COPY.backupMissing);
     list(el('cw-c-blockers'), blockers, 'creator-bad');
-    (el('cw-issue') as HTMLButtonElement).disabled = !plan.canIssue || c.enough === false || busy;
+    (el('cw-issue') as HTMLButtonElement).disabled = !plan.canIssue || c.enough === false || busy || !backedUp();
   }
   input('cw-typed').addEventListener('input', paintPlan);
   el('cw-c-dup-recheck').onclick = async () => {
@@ -519,6 +570,7 @@ export function wireCreatorPublish(deps: CreatorDeps) {
   };
   async function issue() {
     if (!published || !plan?.canIssue || busy) return;
+    if (!backedUp()) { el('cw-issue-say').textContent = LOCK_COPY.backupMissing; return; }
     busy = true; (el('cw-issue') as HTMLButtonElement).disabled = true;
     el('cw-issue-say').textContent = '등록하는 중…';
     try {
@@ -532,6 +584,7 @@ export function wireCreatorPublish(deps: CreatorDeps) {
       el<HTMLTextAreaElement>('cw-share').value = [`「${m.title}」을(를) 레이븐볼트 열린 장터에 올렸어요.`, `상품 등록증 이름: ${m.asset}`,
         '레이븐볼트 → 게임 → 열린 장터에서 이 이름으로 찾을 수 있어요(장터는 아직 시험 중).', `매니페스트: ipfs://${published.manifestCid}`].join('\n');
       el('cw-issue-say').textContent = '';
+      el('cw-lock-done').hidden = !m.lock;
       dropDraft(); published = null; content = []; cover = []; cache = new Map();
       go(8); await paintMine();
     } catch (e) {
@@ -561,6 +614,7 @@ export function wireCreatorPublish(deps: CreatorDeps) {
     if (step === 3) { const p = infoProblems(); return p[0] ?? null; }
     if (step === 4) { const r = checkResult(); return r.problems[0] ?? null; }
     if (step === 6 && !published) return '먼저 올려 주세요.';
+    if (step === 6 && published && !backedUp()) return LOCK_COPY.backupMissing;
     return null;
   }
   function paintNext() { const why = canNext(); (el('cw-next') as HTMLButtonElement).disabled = why !== null; (el('cw-next') as HTMLButtonElement).title = why ?? ''; }

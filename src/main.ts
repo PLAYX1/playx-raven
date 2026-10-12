@@ -11,7 +11,8 @@ import "./sales-account.css";
 import { wireSalesAccount } from "./sales-account";
 import "./creator-publish.css";
 import { createLazyKeep } from "./asset-keep-lazy";
-import { wireCreatorPublish } from "./creator-publish";
+import { wireCreatorPublish, MINE_KEY } from "./creator-publish";
+import { wireLockBuyer, wireLockSeller } from "./lock-ui";
 import "./drop-tokens.css";
 import "./drop-publish.css";
 // 끌어놓기 발행은 「내 상품 올리기」에서만 쓰여 시작 묶음에서 떼어 낸다(메모리 예산: 가장 큰 묶음 ≤ 1000KB).
@@ -18610,18 +18611,32 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("creator-open").onclick = () => showPage("creator");
   // 장터 목록(허용·차단·수수료 일정)은 한 곳에서 읽는다 — 마법사의 수수료 안내와 장터 구매 확인이 같은 서명된 일정을 쓴다.
   const mkLists = marketLists({ sources: marketListSources((cmd, args) => invoke(cmd, args)) }); // 믿는 키가 비어 있는 동안은 받지 않는다(market-lists.ts)
+  // 암호화 상품(RV-LOCK v1)의 열쇠 파일 저장 폴더 고르기 — 경로를 타이핑하게 하지 않는다.
+  const pickKeyFolder = async (): Promise<string | null> => {
+    const dir = await pickFile({ title: "열쇠 파일을 둘 폴더를 고르세요(iCloud·USB 등)", directory: true, multiple: false }).catch(() => null);
+    return typeof dir === "string" ? dir : null;
+  };
   const creatorWizard = wireCreatorPublish({ invoke: (cmd, args) => invoke(cmd, args), back: () => showPage("games"), feeSchedule: () => mkLists.current().feeSchedule,
+    pickFolder: pickKeyFolder,
     askPassword: () => ask("지갑 비밀번호", "내 주소로 상품 정보에 서명한 뒤 지갑을 바로 잠가요.", { password: true }) });
   // 끌어놓기 발행(한 화면) — 「내 상품 올리기」의 기본 화면. 9단계 마법사는 「자세히」로 남는다(src/drop-publish.ts).
   //    따로 내려받는 조각이라 시작 직후 곧바로 불러 붙인다. 그 사이 끌어놓기는 dropPublish 가 없으면 기존처럼 무시된다.
   void import("./drop-publish").then(({ wireDropPublish }) => {
     dropPublish = wireDropPublish({ invoke: (cmd, args) => invoke(cmd, args), back: () => showPage("games"), root: $("page-creator"),
-      openWizard: p => creatorWizard.prefill(p), lang: lang === "ko" || lang === "ja" || lang === "zh" ? "ko" : "en", feeSchedule: () => mkLists.current().feeSchedule,
+      openWizard: p => creatorWizard.prefill(p), pickFolder: pickKeyFolder, lang: lang === "ko" || lang === "ja" || lang === "zh" ? "ko" : "en", feeSchedule: () => mkLists.current().feeSchedule,
       askPassword: () => ask("지갑 비밀번호", "내 주소로 상품 정보에 서명한 뒤 지갑을 바로 잠가요.", { password: true }) });
   }).catch((e) => console.warn("drop-publish load failed", e));
   // 열린 장터(시험): 목록 = 노드 listassets + 이 컴퓨터 IPFS(market-node.ts). 결제 = 준비(거래만 만듦) → 사람이 승인 → 전송.
   //    판매 스위치(core/creator/mainnet-switch.json)가 꺼져 있으면 결제 단추는 확인 화면까지만 간다. 1단계는 서명된 허용 목록에 있는 상품만 결제한다.
-  const market = wireOpenMarket({ back: () => showPage("games"), lists: mkLists,
+  const lockSource = nodeMarketSource((cmd, args) => invoke(cmd, args));
+  // 구매한 암호화 상품 열기(열람 요청 → 허가 → 복호). 판매자 쪽 처리 화면은 「내 상품 올리기」 맨 아래.
+  const lockBuyer = wireLockBuyer({ invoke: (cmd, args) => invoke(cmd, args), fetch: (cid) => lockSource.fetch(cid),
+    askPassword: () => ask("지갑 비밀번호", "결제한 주소로 열람 요청에 서명한 뒤 지갑을 바로 잠가요.", { password: true }) });
+  wireLockSeller({ invoke: (cmd, args) => invoke(cmd, args), fetch: (cid) => lockSource.fetch(cid),
+    mine: () => { try { const a = JSON.parse(localStorage.getItem(MINE_KEY) ?? "[]"); return Array.isArray(a) ? a : []; } catch { return []; } },
+    verifiedIndex: (asset) => mkLists.current().allowlist?.entries?.find((e) => e.asset === asset)?.gameIndex ?? null,
+    pickFile: async () => { const f = await pickFile({ title: "열쇠 파일(.pxlock)을 고르세요", multiple: false, directory: false, filters: [{ name: "RavenVault lock key", extensions: ["pxlock"] }] }).catch(() => null); return typeof f === "string" ? f : null; } });
+  const market = wireOpenMarket({ back: () => showPage("games"), lists: mkLists, lockBuyer,
     source: nodeMarketSource((cmd, args) => invoke(cmd, args)), tip: () => nodeChainTip((cmd, args) => invoke(cmd, args)),
     purchase: nodePurchase((cmd, args) => invoke(cmd, args), () => ask("지갑 비밀번호", "이 결제를 서명한 뒤 지갑을 바로 잠가요.", { password: true })),
     openExternal: (url) => openUrl(url) });

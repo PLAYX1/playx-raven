@@ -9,6 +9,7 @@ import {
   NETWORK_FEE_FALLBACK_ATOMS, REAL_MAINNET_ISSUE_ENABLED, costPlan, planIssue, publishContent,
   type CidProbe, type Issuer, type MessageSigner, type PinAdapter, type PinCache, type PublishInput,
 } from '../core/creator/publish';
+import { LOCK_COPY, lockableType, lockedInputFor, markBackedUp, readBackups, saveKeyFile, type ClipMaker } from './lock-ui';
 import { kuboPinAdapter, nodeIssuer, nodeProbe, nodeSigner, MINE_KEY, type MineItem } from './creator-publish';
 import { copy, stretchText, type CopyKey, type DropLang } from './drop-copy';
 import { defaultPreview, defaultPrice, guessDrop, kindWord, parsePastedCid, suggestAsset, type DroppedFile, type Guess, type MusicFormat } from './drop-detect';
@@ -46,6 +47,8 @@ export type DropDeps = {
   /** 서명된 수수료 일정(마법사와 같은 것 — main.ts 의 marketLists). 없으면 정책 출발값으로 안내만 하고 판매는 닫혀 있다. */
   feeSchedule?: () => FeeSchedule | null;
   lang?: DropLang; stretch?: number;
+  /** 열람 보호(RV-LOCK v1): 열쇠 파일을 저장할 폴더 고르기 · 미리듣기 클립 만들기(시험이 바꾼다). */
+  pickFolder?: () => Promise<string | null>; makeClip?: ClipMaker;
 };
 export type WizardPrefill = { type: ContentType; content: FileInput[]; cover: FileInput[]; fields: Record<string, string | boolean> };
 
@@ -115,6 +118,8 @@ export function wireDropPublish(deps: DropDeps) {
   const sign: MessageSigner = nodeSigner(deps.invoke, deps.askPassword);
   const store = (() => { try { return deps.storage === undefined ? window.localStorage : deps.storage; } catch { return null; } })();
   const now = () => deps.now?.() ?? new Date();
+  /** 암호화 상품이면 열쇠 파일을 저장해야 발행을 마칠 수 있다(열쇠를 잃으면 판매자도 못 연다). */
+  const needsBackup = () => !!published?.manifest.lock && !readBackups(store)[published.manifest.asset];
 
   /* ── 상태 ── */
   let state: DropState = 'idle';
@@ -402,6 +407,8 @@ export function wireDropPublish(deps: DropDeps) {
     if (entering) card.classList.add('dp-enter');
     out.push(head, card);
     if (published) out.push(h('p', { class: 'dp-note', role: 'note' }, sayRaw('파일은 이미 다 올렸어요. 발행만 남았어요.')));
+    if (lockableType(type) && !published) out.push(h('p', { class: 'dp-note', role: 'note', id: 'dp-lock-note' }, sayRaw(LOCK_COPY.onLines(type)[0] + ' ' + LOCK_COPY.onLines(type)[1])));
+    if (published?.manifest.lock) out.push(backupCard());
     if (!DROP_MANIFEST_V3_ENABLED && (look.template !== defaultTemplate(type, format) || look.theme !== 'auto' || look.tagline || genre.main || genre.tags.length || (type === 'music' && tracks.length > 1)))
       out.push(h('p', { class: 'dp-note', role: 'note', id: 'dp-v3-note' }, sayRaw('꾸밈(모양·색·한 줄 소개)·장르·태그와 곡 목록은 지금은 내 화면 미리보기에만 있어요. 구매자 지갑이 새 상품 정보(v3)를 읽게 된 뒤에 함께 실려요.')));
     if (!(published && !content.length)) out.push(decorate());
@@ -434,6 +441,25 @@ export function wireDropPublish(deps: DropDeps) {
     out.push(cost, act, why);
     if (!(published && !content.length)) out.push(advanced());
     return out;
+  }
+
+  function backupCard(): HTMLElement {
+    const box = h('section', { class: 'dp-checks', id: 'dp-lock-backup' });
+    const done = readBackups(store)[published!.manifest.asset];
+    box.append(h('p', { class: done ? 'dp-note' : 'dp-why', role: 'status', id: 'dp-lock-backup-say' }, sayRaw(done ? LOCK_COPY.backupHead : LOCK_COPY.backupMissing)));
+    box.append(h('p', { class: 'dp-hint' }, sayRaw('이 열쇠를 잃으면 나도 이 상품의 파일을 열 수 없고, 구매자에게 열람 키를 보내 줄 수도 없어요. 복구할 방법이 없어요.')));
+    const b = h('button', { type: 'button', class: 'ghost dp-btn', id: 'dp-lock-save' }, sayRaw('열쇠 파일 저장(폴더 고르기)'));
+    b.onclick = async () => {
+      const asset = published!.manifest.asset;
+      try {
+        const folder = await deps.pickFolder?.();
+        if (!folder) { setMessage(sayRaw('폴더를 고르지 않았어요 → 다시 눌러 iCloud·USB 같은 곳을 골라 주세요.')); return; }
+        await saveKeyFile(deps.invoke, asset, folder);
+        markBackedUp(store, asset, now().toISOString()); setMessage(''); paint();
+      } catch (e) { setMessage(sayRaw(`열쇠 파일을 저장하지 못했어요(${errText(e)}) → 다른 폴더를 골라 다시 눌러 주세요.`)); }
+    };
+    box.append(b);
+    return box;
   }
 
   function chipsBox(chips: Chip[]): HTMLElement {
@@ -661,18 +687,23 @@ export function wireDropPublish(deps: DropDeps) {
       state = 'publishing'; // refreshChain 이 그리는 동안 상태가 바뀌지 않게 다시 못박는다.
       const g = gates();
       if (!g.canPublish) { busy = false; fire('blocked'); return; }
-      const inp = gather();
+      let inp = gather();
       if (!published) {
+        // 열람 보호: 음악·책·그 밖의 디지털 상품은 파일을 암호화해서 올린다(미리듣기·미리보기만 따로 잘라 평문). 새 상품 정보(v3) 경로는 아직 꺼져 있어 암호화를 지원하지 않는다.
+        if (lockableType(inp.type) && !DROP_MANIFEST_V3_ENABLED) { const prep = await lockedInputFor(deps.invoke, inp, { makeClip: deps.makeClip }); inp = prep.input; if (prep.notes.length) setMessage(sayRaw(prep.notes.join(' '))); }
         const onProgress = (p: { done: number; total: number; path: string }) => { progress = p; const bar = stage.querySelector('.dp-progress'); if (bar) { const pct = Math.round(p.done / p.total * 100); bar.setAttribute('aria-valuenow', String(pct)); (bar.firstElementChild as HTMLElement).style.width = pct + '%'; } announce(`${p.done}/${p.total} · ${p.path}`); saveDraft(); };
         if (DROP_MANIFEST_V3_ENABLED) {
           const lk = { ...look, imageFiles: [] as FileInput[] };
-          const r = await publishV3(inp, { genre, look: lk, music: type === 'music' ? musicExtFrom(format ?? 'single', tracks, { startMs: (inp.details as MusicSection).previewStartMs, endMs: (inp.details as MusicSection).previewEndMs }) : null }, pin, sign, { cache, onProgress });
+          const r = await publishV3(inp, { genre, look: lk, music: type === 'music' ? musicExtFrom(format ?? 'single', tracks, { startMs: (inp.details as MusicSection).previewStartMs ?? 0, endMs: (inp.details as MusicSection).previewEndMs ?? 0 }) : null }, pin, sign, { cache, onProgress });
           published = { manifestCid: r.manifestCid, manifestSha256: r.manifestSha256, manifest: r.manifest as unknown as CreatorManifest, pinnedBy: r.pinnedBy };
         } else {
           const r = await publishContent(inp, pin, sign, { cache, onProgress });
           published = { manifestCid: r.manifestCid, manifestSha256: r.manifestSha256, manifest: r.manifest, pinnedBy: r.pinnedBy };
         }
         saveDraft();
+      }
+      if (needsBackup()) {
+        setMessage(sayRaw(LOCK_COPY.backupMissing)); busy = false; fire('blocked'); return;
       }
       // 최종 판정 = core planIssue(마법사와 같은 함수). 사람이 이름을 다시 적는 칸 대신 확인 창 한 번(설계 §6).
       const plan = planIssue({ asset: published.manifest.asset, manifestCid: published.manifestCid, chain, ownedAssets: [], nameTaken: taken === 'checking' ? null : taken,

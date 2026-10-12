@@ -23,7 +23,7 @@ const PNG = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 
 
 test('vendored creator core is byte-identical to the pinned copy (and to the wallet source when present)', t => {
   const files = Object.keys(pins.files);
-  assert.equal(files.length, 21); // 통합(2026-10-12): + mainnet-switches · operating-keys · payment-allowlist · purchase-plan(+벡터) · owner-id(+벡터) · market-catalog. 스위치 JSON 은 고정하지 않는다.
+  assert.equal(files.length, 24); // 열람권(2026-10-13): + lock · lock-payment · clip. 통합(2026-10-12): + mainnet-switches · operating-keys · payment-allowlist · purchase-plan(+벡터) · owner-id(+벡터) · market-catalog. 스위치 JSON 은 고정하지 않는다.
   assert.equal(pins.patches, undefined, '통합 뒤에는 복사본에 패치가 없다 — 지갑 원본과 바이트 동일');
   for (const f of files) assert.equal(digest(f), pins.files[f], `vendored drift: ${f}`);
   const root = process.env.RV_WALLET_CORE || '/Users/gimmusong/wt-rv-wallet-mainnet';

@@ -124,6 +124,7 @@ mod relay;
 mod upload;
 mod spec;
 mod lockbox;
+mod lockkey;
 mod walletfile;
 // 0.9.0 — 끌어다 놓은 백업(.pxlock·.rvwallet)에서 되살리기. 기존 복원 함수만 부른다.
 mod restore_drop;
@@ -488,6 +489,12 @@ pub fn run() {
             backup::usb_lock_read,
             backup::usb_lock_set,
             lockbox::cloud_key_show,
+            lockkey::lock_secret_put,
+            lockkey::lock_secret_get,
+            lockkey::lock_key_export,
+            lockkey::lock_key_import,
+            lockkey::lock_tx_info,
+            lockkey::lock_cid_range,
             lockbox::backup_pass_set,
             lockbox::backup_pass_state,
             lockbox::cloud_unlock,

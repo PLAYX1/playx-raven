@@ -94,6 +94,15 @@ function installDropHarness({ chain, balance, taken, nameUnknown, cidStore, fake
     if (cmd === 'wallet_balance') return { confirmed: balance, unconfirmed: 0 };
     if (cmd === 'issue_asset') { calls.push({ cmd, args }); return { txid: 'cd'.repeat(32), owner_token: args.name + '!' }; }
     if (cmd === 'new_address') return window.__testAddress;
+    // Encryption is on by default for music/book/digital. These legacy-flow tests are not about the key screen, so the product key is accepted and
+    // the key-file backup is pre-marked done here (the backup gate itself is covered in lock-ui-browser.test.mjs).
+    if (cmd === 'lock_secret_put') {
+      calls.push({ cmd, name: args.name });
+      if (args.name.startsWith('s.')) { const o = JSON.parse(localStorage.getItem('rv-lock-backup-v1') || '{}'); o[args.name.slice(2)] = { at: '2026-10-13T00:00:00.000Z' }; localStorage.setItem('rv-lock-backup-v1', JSON.stringify(o)); }
+      (window.__secrets ??= new Map()).set(args.name, args.hex);
+      return { ok: true, created: true };
+    }
+    if (cmd === 'lock_secret_get') return { hex: (window.__secrets ??= new Map()).get(args.name) ?? null };
     return base(cmd, args);
   };
   window.__TAURI_INTERNALS__.invoke = wrap; window.__TAURI__.core.invoke = wrap;
@@ -178,7 +187,7 @@ test('drag & drop anywhere: veil appears, album detected (EP, cover, track order
   const manifestB64 = await page.evaluate(cid => window.__pinned.get(cid), issued[0].ipfsHash);
   const v = C.verifyManifest(Buffer.from(manifestB64, 'base64'), { expectedAsset: issued[0].name });
   assert.equal(v.signedBy, ADDRESS); assert.deepEqual(v.manifest.files.map(f => f.path).length, 3);
-  assert.equal(v.manifest.details.previewFile, v.manifest.files[0].path, 'preview = first track');
+  assert.ok(v.manifest.lock, 'music is encrypted by default'); assert.equal(v.manifest.details.previewFile, null, 'no decodable audio in this fixture → no short clip, preview off (never the full track)');
   assert.match(await txt(page, '#dp-done-h'), /발행했어요/);
   assert.equal(await page.evaluate(() => localStorage.getItem('rv-drop-draft-v1')), null, 'draft cleared');
   assert.ok(JSON.parse(await page.evaluate(() => localStorage.getItem('rv-creator-mine-v1'))).some(m => m.asset === issued[0].name), 'shared 「내 상품」 list');
@@ -250,7 +259,7 @@ test('IPFS address paste: dead CID refused; a manifest CID goes straight to issu
   await waitPublishable(page);
   await publishFlow(page);
   const adds = (await page.evaluate(() => window.__dropCalls)).filter(c => c.cmd === 'ipfs_add_file').map(c => c.name);
-  assert.deepEqual(adds, ['manifest.json'], 'the pasted file is reused by CID, only the manifest is added');
+  assert.equal(adds.at(-1), 'manifest.json'); assert.equal(adds.length, 2, 'encrypted by default: the pasted file is re-uploaded as ciphertext, then the manifest');
   await page.close();
 });
 

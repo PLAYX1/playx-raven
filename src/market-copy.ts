@@ -14,6 +14,14 @@ export const MARKET_FACTS: readonly string[] = Object.freeze([
   '이 화면은 시험 단계예요. 이 결제가 어떤 권리나 효력을 주는지는 아직 정해지지 않았어요.',
 ]);
 
+/** 열람 보호(RV-LOCK v1)가 걸린 상품의 결제 확인 사실 문구. 「상품 파일은 공개」 대신 쓴다 — 기술로 막을 수 없는 것을 같이 말한다. */
+export const MARKET_FACTS_LOCKED: readonly string[] = Object.freeze([
+  MARKET_FACTS[0], MARKET_FACTS[1],
+  '상품 파일은 암호화돼 있어요. 결제한 뒤 열람 요청 글을 판매자에게 보내면 열람 키가 돌아와요. 판매자 컴퓨터가 켜져 있을 때만 키가 와서 바로 열리지 않을 수 있어요.',
+  '열람 키를 받은 사람이 파일이나 키를 남에게 주는 것은 기술로 막을 수 없어요. 한 번 받은 키는 거둘 수 없어요.',
+  MARKET_FACTS[3], MARKET_FACTS[4],
+]);
+
 export const BUTTON_DETAIL = '결제 내용 보기';
 export const BUTTON_APPROVE = '승인하고 보내기';
 export const BUTTON_CANCEL = '취소';
@@ -43,6 +51,6 @@ export const UNHIDE_ALL = '숨긴 상품 다시 보기';
 
 /** 시험이 금지어를 찾는 문장 전부(함수 문구는 예시 값으로). */
 export function allMarketCopy(): string[] {
-  return [...MARKET_FACTS, BUTTON_DETAIL, BUTTON_APPROVE, BUTTON_CANCEL, CONFIRM_TITLE, PURCHASES_TITLE, PURCHASES_EMPTY, PREPARING, PREPARED_NOTE, PAID_SAY,
+  return [...MARKET_FACTS, ...MARKET_FACTS_LOCKED, BUTTON_DETAIL, BUTTON_APPROVE, BUTTON_CANCEL, CONFIRM_TITLE, PURCHASES_TITLE, PURCHASES_EMPTY, PREPARING, PREPARED_NOTE, PAID_SAY,
     SENT_UNKNOWN_SAY, VERIFIED_ONLY_EMPTY, VERIFIED_ONLY_NOT_LISTED, REPORT_LABEL, REPORT_NOTE, REPORT_OPENED, REPORT_COPIED, REPORT_FAILED, HIDE_LABEL, HIDE_NOTE, HIDDEN_SAY(2), UNHIDE_ALL];
 }

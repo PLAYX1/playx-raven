@@ -1,14 +1,17 @@
 # core/creator — 지갑 저장소에서 복사
 
-원본: `ravenvault` 저장소 `core/creator/*` (브랜치 `claude/rv-wallet-mainnet-integrated` — 메인넷 발행·판매 준비 통합 2026-10-12, 그 아래로 `claude/rv-asset-name-rv`·`claude/rv-signed-lists-core` 의 규칙 포함).
+원본: `ravenvault` 저장소 `core/creator/*` (브랜치 `claude/rv-wallet-lock` = `claude/rv-wallet-mainnet-integrated` 위에 구매자 열람권(RV-LOCK v1)을 얹은 것; 그 아래 통합 브랜치 `claude/rv-wallet-mainnet-integrated` — 메인넷 발행·판매 준비 통합 2026-10-12, 그 아래로 `claude/rv-asset-name-rv`·`claude/rv-signed-lists-core` 의 규칙 포함).
 아래 파일은 원본과 **바이트가 같아야** 한다. SHA-256 은 `vendor-sha256.json` 에 고정했고 `scripts/creator-publish.test.mjs` 가 확인한다
 (원본 체크아웃이 있으면 원본과도 직접 비교하고, 없으면 그 시험만 SKIP 으로 명시한다).
 
-- `core/creator/bytes.ts` · `limits.ts` · `asset-name.ts` · `manifest.ts` · `publish.ts` · `fee-schedule.ts` · `listing.ts` · `open-market.ts` · `ticket.ts`
+- `core/creator/bytes.ts` · `limits.ts` · `asset-name.ts` · `manifest.ts` · `publish.ts` · `fee-schedule.ts` · `listing.ts` · `open-market.ts` · `ticket.ts` · `lock.ts` · `lock-payment.ts` · `clip.ts`
   (`fee-schedule.ts` = 장터 수수료 일정 — 지갑 브랜치 `claude/rv-signed-lists-core` 위 2026-10-11, docs/fee-schedule.md)
 - 통합(2026-10-12) 새 파일: `core/creator/mainnet-switches.ts` · `operating-keys.ts` · `payment-allowlist.ts` · `purchase-plan.ts` + `purchase-plan-vectors.json` · `owner-id.ts` + `owner-id-vectors.json`, `core/signed-lists/market-catalog.ts`(서명된 상품 목록 클라이언트 — 아직 화면에 연결하지 않음).
   `publish.ts`·`open-market.ts` 는 스위치 값을 `mainnet-switches.ts` 에서 다시 내보내는 지갑 원본 그대로다 — **패치 없음**(이전 0.9.2 의 「스위치 두 줄 패치」는 사라졌다).
   `core/creator/mainnet-switch.json` 도 지갑 원본과 같은 파일이지만 enable 커밋이 바꾸는 파일이라 `vendor-sha256.json` 에 해시를 고정하지 않는다(지갑 `scripts/check-mainnet-switches.mjs --desktop` 가 확인).
+- 열람권(RV-LOCK v1, 2026-10-13) 새 파일: `core/creator/lock.ts`(조각 암호화·열람 요청/허가·판매자 처리) · `core/creator/lock-payment.ts`(판매자 몫 검사기) · `core/creator/clip.ts`(미리듣기 클립 PCM→WAV).
+  `manifest.ts`(선택 `lock` 칸·음악 미리듣기 끔)·`publish.ts`(`lock` 옵션)는 같은 원본의 갱신본이다 — **패치 없음**. 시험(`lock.test.ts` · `lock-vectors.json`)은 지갑 저장소에서 돈다.
+  🔴 암호 조합은 독립 검수 전이다(lock.ts 머리 주석).
 - `core/game-registry/platform-fee.ts` (수수료 분할 — 지갑 v4 와 같은 파일)
 - `core/signed-lists/envelope.ts` · `creator-parts.ts` · `sources.ts` (서명된 허용·차단 목록 실행 중 갱신 — 지갑 브랜치 `claude/rv-signed-lists-core`. 지갑 쪽 `wallet.ts`·`boot.ts`(게임 등록부 연결)는 복사하지 않았다)
 

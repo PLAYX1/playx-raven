@@ -1,7 +1,7 @@
 /* 끌어놓기 발행(src/drop-publish.ts) + 판매 페이지 템플릿(src/drop-look.ts). 변수는 drop-tokens.css. */
 
 /* ── 모드: 끌어놓기 화면 / 자세히(마법사) ── */
-#page-creator[data-mode="drop"] > :not(.dp) { display: none !important; }
+#page-creator[data-mode="drop"] > :not(.dp):not(#lk-s-toggle):not(#lk-seller) { display: none !important; }
 #page-creator[data-mode="wizard"] > .dp { display: none !important; }
 #page-creator .dp-to-drop { margin: 8px 0; }
 

@@ -37,29 +37,50 @@ export const MAX_MANIFEST_BYTES = 64 * 1024;
 export const MAX_PRICE_ATOMS = 100_000n * 100_000_000n;
 export const MAX_PREVIEW_MS = 60_000;
 export const MAX_PREVIEW_PAGES = 50;
+/** RV-LOCK v1: 암호화된 상품의 미리듣기·미리보기 클립(평문 별도 파일)의 크기 상한. 본 파일이 아니라 잘라 낸 짧은 조각이어야 한다. */
+export const MAX_PREVIEW_CLIP_BYTES = 8 * 1024 * 1024;
 export const MAX_TICKETS = 100_000;
 
 export type FileEntry = { path: string; cid: string; sha256: string; size: number; mime: string };
 export type GameSection = { entry: string; origin: string | null; capabilities: { identity: boolean; payment: boolean } };
-export type MusicSection = { previewFile: string; previewStartMs: number; previewEndMs: number };
+/** previewFile null = 미리듣기 없음(세 칸이 함께 null). 암호화 상품(lock)에서는 previewFile 이 본 곡과 다른 **짧은 평문 클립**이어야 한다. */
+export type MusicSection = { previewFile: string | null; previewStartMs: number | null; previewEndMs: number | null };
 export type BookSection = { bookFile: string; format: 'pdf' | 'epub'; previewFile: string | null; previewPages: number; pageCount: number | null };
 /** 사용(입장) 확인 = 서버 없이: 제작자(또는 제작자가 정한 확인 담당 주소)가 서명한 입장 코드를 문 앞 기기가 오프라인으로 검사한다(ticket.ts). */
 export type TicketSection = { eventName: string; startsAt: string; endsAt: string | null; venue: string; quantity: number;
   redemption: { method: 'creator-signed-code'; checkerAddress: string }; refundPolicy: string; contact: string };
 export type DigitalSection = { label: string };
 export type Details = GameSection | MusicSection | BookSection | TicketSection | DigitalSection;
+/*
+ * RV-LOCK v1 — 열람 보호(암호화) 표시. 🔴 독립 검수 필요(암호 조합은 core/creator/lock.ts 머리 주석 참조).
+ *   · files[] 에서 lock.files 에 적힌 경로는 **암호문**이다: cid·sha256·size 는 암호문 기준, path·mime 은 평문 기준.
+ *   · lock.files[i] = { path, cid(= files[] 의 같은 경로 cid), plainSize, plainSha256 }. 암호문 크기 = plainSize + 40 × ceil(plainSize / chunk).
+ *   · keyId = 상품 열쇠 K 의 지문(열쇠 자체가 아님). 열람 허가를 풀어 얻은 K 가 이 지문과 맞는지 확인한다.
+ *   · 이 칸은 매니페스트 서명 범위 안이다(제작자가 서명). 없으면 평문 상품(옛 형식 그대로).
+ */
+export const LOCK_SCHEME = 'rv-lock-v1';
+export const LOCK_CHUNK_BYTES = 65536;
+export const LOCK_WRAP = 'x25519-hkdf-sha256-xchacha20poly1305';
+export const LOCK_DELIVER = ['manual', 'chain-mailbox', 'server'] as const;
+/** 조각 하나가 평문보다 큰 만큼(nonce 24 + 인증 태그 16). */
+export const LOCK_CHUNK_OVERHEAD = 40;
+export type LockFile = { path: string; cid: string; plainSize: number; plainSha256: string };
+export type LockSection = { scheme: typeof LOCK_SCHEME; chunk: typeof LOCK_CHUNK_BYTES; keyId: string; wrap: typeof LOCK_WRAP; deliver: string[]; files: LockFile[] };
+export const lockCipherSize = (plainSize: number): number => plainSize + LOCK_CHUNK_OVERHEAD * Math.max(1, Math.ceil(plainSize / LOCK_CHUNK_BYTES));
 export type UnsignedManifest = {
   format: typeof MANIFEST_FORMAT; version: typeof MANIFEST_VERSION; type: ContentType; asset: string;
   title: string; description: string; files: FileEntry[]; cover: FileEntry | null;
   creator: { address: string; receivingAddress: string };
   price: { atoms: string } | null; fee: ManifestFee;
   details: Details; createdAt: string;
+  /** 있을 때만(열람 보호 상품). 키 자체가 없는 매니페스트가 옛 형식이다. */
+  lock?: LockSection;
 };
 export type ManifestSignature = { scheme: typeof MANIFEST_SIGN_SCHEME; domain: typeof MANIFEST_SIGN_DOMAIN; address: string; value: string };
 export type CreatorManifest = UnsignedManifest & { signature: ManifestSignature };
 
 export type CreatorErrorCode = 'manifest-shape' | 'manifest-type' | 'manifest-files' | 'manifest-price' | 'manifest-asset' | 'manifest-signature' |
-  'manifest-too-large' | 'manifest-json' | 'file-hash' | 'allowlist-signature' | 'allowlist-shape' | 'purchase-closed' | 'purchase-invalid';
+  'manifest-too-large' | 'manifest-json' | 'manifest-lock' | 'file-hash' | 'allowlist-signature' | 'allowlist-shape' | 'purchase-closed' | 'purchase-invalid';
 export class CreatorError extends Error {
   constructor(readonly code: CreatorErrorCode, readonly detail = '') { super(detail ? `${code}: ${detail}` : code); this.name = 'CreatorError'; }
 }
@@ -125,13 +146,14 @@ export const encodeManifest = (doc: CreatorManifest): Uint8Array => utf8(canonic
 
 /* ── 검사 ───────────────────────────────────────────────────────────── */
 
-function checkFileEntry(f: unknown, type: ContentType | 'cover'): FileEntry {
+function checkFileEntry(f: unknown, type: ContentType | 'cover', encrypted = false): FileEntry {
   if (!plain(f) || !keysAre(f, 'path,cid,sha256,size,mime')) return fail('manifest-files', 'entry-keys');
   if (!safePath(f.path) || typeof f.cid !== 'string' || !CID_V0.test(f.cid) || typeof f.sha256 !== 'string' || !SHA.test(f.sha256)) fail('manifest-files', 'entry-format');
   const ext = extOf(f.path);
   if (!allowedExt(type).has(ext) || MIME_BY_EXT[ext] !== f.mime) fail('manifest-files', 'type');
   const max = type === 'cover' ? LIMITS.cover.maxFileBytes : CONTENT_TYPES[type].maxFileBytes;
-  if (!int(f.size, 1, max)) fail('manifest-files', 'size');
+  // 암호문은 평문 상한 + 조각마다 40바이트까지 커질 수 있다.
+  if (!int(f.size, 1, encrypted ? lockCipherSize(max) : max)) fail('manifest-files', 'size');
   return f as FileEntry;
 }
 
@@ -152,8 +174,13 @@ function checkDetails(type: ContentType, x: Loose, files: FileEntry[], price: un
       if (!u || u.protocol !== 'https:' || u.origin !== x.origin || /(^|\.)ex\.erci\.se$/i.test(u.hostname)) fail('manifest-type', 'origin');
     }
   } else if (type === 'music') {
-    if (!has(x.previewFile)) fail('manifest-type', 'preview-file');
-    if (!int(x.previewStartMs, 0, 24 * 3600_000) || !int(x.previewEndMs, x.previewStartMs + 1000, x.previewStartMs + MAX_PREVIEW_MS)) fail('manifest-type', 'preview-range');
+    if (x.previewFile === null) {
+      // 미리듣기 끔: 세 칸이 함께 null. (클립을 만들 수 없을 때의 사실 그대로의 상태 — 「30초 공개」를 말하지 않는다.)
+      if (x.previewStartMs !== null || x.previewEndMs !== null) fail('manifest-type', 'preview-range');
+    } else {
+      if (!has(x.previewFile)) fail('manifest-type', 'preview-file');
+      if (!int(x.previewStartMs, 0, 24 * 3600_000) || !int(x.previewEndMs, x.previewStartMs + 1000, x.previewStartMs + MAX_PREVIEW_MS)) fail('manifest-type', 'preview-range');
+    }
   } else if (type === 'book') {
     if (!has(x.bookFile) || (x.format !== 'pdf' && x.format !== 'epub') || extOf(x.bookFile) !== x.format) fail('manifest-type', 'book-file');
     if (x.previewFile === null) { if (x.previewPages !== 0) fail('manifest-type', 'preview-pages'); }
@@ -171,9 +198,53 @@ function checkDetails(type: ContentType, x: Loose, files: FileEntry[], price: un
   }
 }
 
+
+const LOCKABLE: readonly ContentType[] = ['music', 'book', 'digital'];
+/** lock 칸의 모양만 본다(files 와의 대조는 checkLockAgainstFiles). 모르는 칸·빠진 칸은 거절. */
+function checkLockShape(x: unknown): LockSection {
+  if (!plain(x) || !keysAre(x, 'scheme,chunk,keyId,wrap,deliver,files')) return fail('manifest-lock', 'keys');
+  if (x.scheme !== LOCK_SCHEME || x.chunk !== LOCK_CHUNK_BYTES || x.wrap !== LOCK_WRAP) fail('manifest-lock', 'scheme');
+  if (typeof x.keyId !== 'string' || !/^[a-f0-9]{32}$/.test(x.keyId)) fail('manifest-lock', 'key-id');
+  if (!Array.isArray(x.deliver) || x.deliver.length < 1 || x.deliver.length > LOCK_DELIVER.length ||
+      new Set(x.deliver).size !== x.deliver.length || x.deliver.some((d: unknown) => !(LOCK_DELIVER as readonly unknown[]).includes(d))) fail('manifest-lock', 'deliver');
+  if (!Array.isArray(x.files) || x.files.length < 1 || x.files.length > 50) fail('manifest-lock', 'files');
+  for (const f of x.files as unknown[]) {
+    if (!plain(f) || !keysAre(f, 'path,cid,plainSize,plainSha256') || !safePath(f.path) || typeof f.cid !== 'string' || !CID_V0.test(f.cid) ||
+        typeof f.plainSha256 !== 'string' || !SHA.test(f.plainSha256) || !int(f.plainSize, 1, 200 * 1024 * 1024)) fail('manifest-lock', 'file');
+  }
+  return x as LockSection;
+}
+
+/** lock 의 각 항목이 files[] 의 암호문 항목과 맞는지, 그리고 종류별로 평문 본 파일이 하나도 남지 않았는지. */
+function checkLockAgainstFiles(lock: LockSection, type: ContentType, files: FileEntry[], details: Loose): void {
+  const byPath = new Map(files.map(f => [f.path, f]));
+  const locked = new Set<string>();
+  for (const lf of lock.files) {
+    const entry = byPath.get(lf.path);
+    if (!entry || locked.has(lf.path)) return fail('manifest-lock', 'path');
+    locked.add(lf.path);
+    if (entry.cid !== lf.cid) fail('manifest-lock', 'cid');
+    if (entry.size !== lockCipherSize(lf.plainSize)) fail('manifest-lock', 'cipher-size');
+    if (entry.sha256 === lf.plainSha256) fail('manifest-lock', 'plain-is-cipher');
+    if (lf.plainSize > CONTENT_TYPES[type].maxFileBytes) fail('manifest-lock', 'plain-size');
+  }
+  // 미리듣기·미리보기 클립만 평문일 수 있다. 그 밖의 파일은 전부 암호문 — 평문 본 파일을 같이 올려 두는 사칭을 막는다.
+  const previewPath = type === 'music' || type === 'book' ? details.previewFile : null;
+  for (const f of files) {
+    if (f.path === previewPath) {
+      if (locked.has(f.path)) fail('manifest-lock', 'preview-locked');
+      if (f.size > MAX_PREVIEW_CLIP_BYTES) fail('manifest-lock', 'preview-too-big');
+      // 클립이 본 파일의 사본이면(같은 평문 해시) 클립이 아니다.
+      if (lock.files.some(lf => lf.plainSha256 === f.sha256)) fail('manifest-lock', 'preview-is-full');
+    } else if (!locked.has(f.path)) fail('manifest-lock', 'plain-file');
+  }
+  if (type === 'book' && !locked.has(details.bookFile)) fail('manifest-lock', 'book-plain');
+}
+
 /** 엄격 검사: 모르는 칸·빠진 칸·틀린 모양은 전부 거절. 서명은 보지 않는다(verifyManifest 가 본다). */
 export function validateManifest(raw: unknown, prefix: string = CREATOR_ASSET_PREFIX): CreatorManifest {
-  if (!plain(raw) || !keysAre(raw, 'format,version,type,asset,title,description,files,cover,creator,price,fee,details,createdAt,signature')) return fail('manifest-shape', 'keys');
+  const baseKeys = 'format,version,type,asset,title,description,files,cover,creator,price,fee,details,createdAt,signature';
+  if (!plain(raw) || !keysAre(raw, 'lock' in raw ? baseKeys + ',lock' : baseKeys)) return fail('manifest-shape', 'keys');
   const d = raw as Loose;
   if (d.format !== MANIFEST_FORMAT || d.version !== MANIFEST_VERSION) fail('manifest-shape', 'format');
   if (!isContentType(d.type)) fail('manifest-type');
@@ -186,10 +257,18 @@ export function validateManifest(raw: unknown, prefix: string = CREATOR_ASSET_PR
   if (!text(d.title, 1, 80) || !text(d.description, 0, 2000) || d.title.trim() !== d.title || !d.title.trim()) fail('manifest-shape', 'title');
   if (!isoTime(d.createdAt)) fail('manifest-shape', 'createdAt');
   if (!Array.isArray(d.files) || d.files.length < rule.minFiles || d.files.length > rule.maxFiles) fail('manifest-files', 'count');
-  const files = (d.files as unknown[]).map(f => checkFileEntry(f, type));
+  let lock: LockSection | null = null;
+  if ('lock' in d) {
+    if (!LOCKABLE.includes(type)) fail('manifest-lock', 'type');
+    lock = checkLockShape(d.lock);
+  }
+  const lockedPaths = new Set(lock ? lock.files.map(f => f.path) : []);
+  const files = (d.files as unknown[]).map(f => checkFileEntry(f, type, plain(f) && lockedPaths.has(f.path)));
   const paths = new Set(files.map(f => f.path.toLowerCase()));
   if (paths.size !== files.length) fail('manifest-files', 'duplicate');
-  if (files.reduce((n, f) => n + f.size, 0) > rule.maxTotalBytes) fail('manifest-files', 'total');
+  // 합계는 평문 크기로 센다(암호문 덧붙임은 상한에 넣지 않는다).
+  const lockPlain = new Map((lock?.files ?? []).map(f => [f.path, f.plainSize]));
+  if (files.reduce((n, f) => n + (lockPlain.get(f.path) ?? f.size), 0) > rule.maxTotalBytes) fail('manifest-files', 'total');
   if (d.cover !== null) { const c = checkFileEntry(d.cover, 'cover'); if (paths.has(c.path.toLowerCase())) fail('manifest-files', 'cover-duplicate'); }
   if (!plain(d.creator) || !keysAre(d.creator, 'address,receivingAddress') || !isRvnAddress(d.creator.address) || !isRvnAddress(d.creator.receivingAddress)) fail('manifest-shape', 'creator');
   const scheduleRef = plain(d.fee) && keysAre(d.fee, 'policy,scheduleId') && d.fee.policy === FEE_SCHEDULE_POLICY &&
@@ -202,6 +281,7 @@ export function validateManifest(raw: unknown, prefix: string = CREATOR_ASSET_PR
     try { splitPrice(d.price.atoms, scheduleRef ? MARKET_FEE_BPS_CEILING : d.fee.declaredBps); } catch { fail('manifest-price', 'split'); }
   }
   checkDetails(type, d.details, files, d.price);
+  if (lock) checkLockAgainstFiles(lock, type, files, d.details);
   if (!plain(d.signature) || !keysAre(d.signature, 'scheme,domain,address,value') || d.signature.scheme !== MANIFEST_SIGN_SCHEME ||
       d.signature.domain !== MANIFEST_SIGN_DOMAIN || typeof d.signature.value !== 'string' || d.signature.value.length > 200) fail('manifest-signature', 'shape');
   try { canonicalJson(d); } catch { fail('manifest-shape', 'canonical'); }
