@@ -1,6 +1,7 @@
 import { ed25519 } from '@noble/curves/ed25519';
 import { sha256 } from '@noble/hashes/sha256';
 import { b64urlDecode, b64urlEncode, hex, plain, sha256Hex, utf8, type Loose } from '../creator/bytes';
+import { OPERATING_LIST_KEYS } from '../creator/operating-keys';
 
 /**
  * 정본 JSON(키 정렬·공백 없음). 게임 등록부(core/game-registry/allowlist.ts canonicalJson)와 같은 규칙 — 유한한 수는 받는다
@@ -64,10 +65,10 @@ export const MAX_TRANSITIONS = 64;
 
 export type ListKey = { readonly keyId: string; readonly publicKey: string };
 /**
- * 바깥 서명(묶음)을 믿는 내장 공개키. 🔴 **비어 있다** — 운영 키를 누가 어디서 만들지(대표 결정) 정하기 전에는 출하 앱이
+ * 바깥 서명(묶음)을 믿는 내장 공개키. 값은 core/creator/operating-keys.ts 한 곳에서 읽는다. 🔴 **비어 있다** — 운영 키를 누가 어디서 만들지(대표 결정) 정하기 전에는 출하 앱이
  * 어떤 묶음도 받아들이지 않는다(늘 내장 기본값). 시험은 일회용 키를 넘긴다. 키 교체는 여기 한 줄 추가 + 키 전환 문.
  */
-export const SIGNED_LISTS_PUBLIC_KEYS: readonly ListKey[] = Object.freeze([]);
+export const SIGNED_LISTS_PUBLIC_KEYS: readonly ListKey[] = OPERATING_LIST_KEYS;
 
 export type PartPayload = { doc: unknown; signature: unknown };
 export type KeyTransition = {

@@ -1,41 +1,27 @@
 {
-  "source": "ravenvault 저장소 브랜치 claude/rv-signed-lists-core (기준 02ba506 위 — 장터 수수료 일정: 서명된 목록의 날짜(블록 높이)별 요율)",
+  "source": "ravenvault 저장소 브랜치 claude/rv-wallet-mainnet-integrated (메인넷 발행·판매 준비 통합 — 스위치 JSON 한 파일 · 운영 키 한 곳 · 결제 허용 목록 · 구매 계획/주인 번호 공용 벡터 · 서명된 상품 목록)",
   "files": {
     "core/creator/bytes.ts": "b3092fe7d6ebdc52881280f61bd21322a2ddff1be5b547d915ce6cf5ee72dbd6",
     "core/creator/limits.ts": "f37eaf05505f97aac67fb1b8230017db8a529d62341390301c119895da269420",
     "core/creator/asset-name.ts": "0ffee8f76e94f95b4f5f8073f6c6de1c869f69cfaf273a5815fee2a762956a1e",
     "core/creator/manifest.ts": "06fadfc973b0280d5b86b84d953edff496e02ae74ca5c2544d4f5ade4a9b4812",
-    "core/creator/publish.ts": "fca91552ce5f7c58d68663241703655359ee450251531a085d629a0b96d2315a",
-    "core/creator/fee-schedule.ts": "db2dd8f5d4fd7d16463e10f4464ff01c87ec61461d26b3fb404d45aab6f7fff8",
-    "core/creator/listing.ts": "0f57f2052d299f4998b37711f9a0ccc4a6a35c069f322dcf59b21fafa492d1a2",
-    "core/creator/open-market.ts": "ba7b8e282b6e2810458904881c843c77d6bc2230026f62fd34586d2eb26ecbc8",
+    "core/creator/publish.ts": "bc117231445b676bcaf353542d8b9ed583234e7c6caf72d035a6d5df21688db4",
+    "core/creator/fee-schedule.ts": "8d70690d3beaf22655700e383b06422cf693b0df9fbe9b4d64465ebeed22dd1e",
+    "core/creator/listing.ts": "e3647410a95c992d85504ad58f56cc732e0d396f1207f04f887384e4f2830a1c",
+    "core/creator/open-market.ts": "1eada10588cfb483011760a834d07633ee3962abda619ffd858043f246486b03",
     "core/creator/ticket.ts": "97f89f9fdc7daab00b2677b8b9247cc83ccbd66348dc0c2e91fcfc57854ae842",
     "core/game-registry/platform-fee.ts": "630e744f94ec8d98f0d9a22204b5e9e6029a3c10d0aafce2045900cf8ecea729",
-    "core/signed-lists/envelope.ts": "5fa05029c3f3c3dbf23c5c961b4685abb7204bdd855609cfd53dd4733f38950d",
+    "core/signed-lists/envelope.ts": "ac0f4db099957063a4185eff1a234ba6d7276502996916d8967c1fb9f39e95c4",
     "core/signed-lists/creator-parts.ts": "cebe19ae2c6a57a0b0de7b7e5c8b49b95dcf8897c9baa8bdb8d48d6fb8e4e0c4",
-    "core/signed-lists/sources.ts": "488040d9d7632249821fb15e76cadec508af30a7387e6b66cbed4577aaa041c0"
+    "core/signed-lists/sources.ts": "488040d9d7632249821fb15e76cadec508af30a7387e6b66cbed4577aaa041c0",
+    "core/creator/mainnet-switches.ts": "866636f03a2c8354fe5106b1232185fc620b7612a8d67d0f7f5acc57ea772561",
+    "core/creator/operating-keys.ts": "4039cc02f93d53757a673f523713e9708b685380b49f694e7c007fb02e02e664",
+    "core/creator/payment-allowlist.ts": "1d1a107f58049e7c870172f7fa23accbf8aae2ac2aecdf9baaef9313c6f67d6a",
+    "core/creator/purchase-plan.ts": "18809c5dba86283d4c59160a3a120778ae46557c0401bbe7a3378ab2829dc135",
+    "core/creator/purchase-plan-vectors.json": "a3abe435e2e9a386c420b2769c839b4b747d6032620af2de920149dc7118207e",
+    "core/creator/owner-id.ts": "9b3acf744210a570b73e952fc3508bee8bc3aedc826dd8dd66af51bbae811e90",
+    "core/creator/owner-id-vectors.json": "33923301c3b28f9965f39ebf3df37d8872560f8903bd3a80b0a8ad53fb265d85",
+    "core/signed-lists/market-catalog.ts": "82ff5465e7499093bc32b44720c20eb2bd6a8cac94a2680528cf7581a97e23ea"
   },
-  "patches": {
-    "core/creator/publish.ts": [
-      {
-        "find": "import { sha256Hex } from './bytes';",
-        "replace": "import { sha256Hex } from './bytes';\nimport MAINNET_SWITCH from './mainnet-switch.json';"
-      },
-      {
-        "find": "export const REAL_MAINNET_ISSUE_ENABLED = false;",
-        "replace": "export const REAL_MAINNET_ISSUE_ENABLED: boolean = MAINNET_SWITCH.issue;"
-      }
-    ],
-    "core/creator/open-market.ts": [
-      {
-        "find": "import { splitPrice } from '../game-registry/platform-fee';",
-        "replace": "import { splitPrice } from '../game-registry/platform-fee';\nimport MAINNET_SWITCH from './mainnet-switch.json';"
-      },
-      {
-        "find": "export const OPEN_MARKET_SALES_ENABLED = false;",
-        "replace": "export const OPEN_MARKET_SALES_ENABLED: boolean = MAINNET_SWITCH.sales;"
-      }
-    ]
-  },
-  "patchNote": "0.9.2: 스위치 두 줄만 core/creator/mainnet-switch.json 을 읽도록 바꾼 것이 지갑 원본과 다른 전부다. 시험은 원본에 이 패치를 적용한 바이트와 비교한다. 지갑 저장소도 같은 패치를 받아야 두 곳이 다시 바이트 동일해진다."
+  "note": "0.9.2 통합: 이전의 「스위치 두 줄 패치」는 없다 — 지갑 원본이 mainnet-switches.ts 를 거쳐 core/creator/mainnet-switch.json 을 읽도록 바뀌어 모든 파일이 지갑 원본과 바이트 동일하다(patches 없음). 스위치 JSON(core/creator/mainnet-switch.json)은 enable 커밋이 바꾸는 파일이라 해시를 고정하지 않는다 — 지갑 원본과의 바이트 동일은 지갑 저장소의 scripts/check-mainnet-switches.mjs --desktop 가 확인한다."
 }

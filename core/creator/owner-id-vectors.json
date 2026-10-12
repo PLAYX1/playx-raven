@@ -1,0 +1,43 @@
+{
+  "_note": "주인 ID 공용 벡터 — 지갑 core/creator/owner-id.ts 와 데스크탑 복사본이 같은 값을 내야 한다. 지갑 원본이 정본이고 데스크탑은 바이트 동일 복사.",
+  "cases": [
+    {
+      "name": "0x01 반복 · rv-b-sea-book",
+      "publicKeyHex": "0101010101010101010101010101010101010101010101010101010101010101",
+      "gameId": "rv-b-sea-book",
+      "ownerId": "e1045b56-ded6-4aaf-a529-e0f0668fe9ea"
+    },
+    {
+      "name": "0..31 · rv-b-sea-book",
+      "publicKeyHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "gameId": "rv-b-sea-book",
+      "ownerId": "57e90bc6-0a3c-478c-89df-a93682103b84"
+    },
+    {
+      "name": "0..31 · 같은 키, 다른 게임 → 다른 번호",
+      "publicKeyHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "gameId": "demo-game",
+      "ownerId": "aa66254c-5100-426c-97bd-5e3554503395"
+    },
+    {
+      "name": "0xff 반복 · ab",
+      "publicKeyHex": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "gameId": "ab",
+      "ownerId": "6690b891-79c9-4b3d-8519-ee50dd6f5165"
+    }
+  ],
+  "errors": [
+    {
+      "name": "키 31바이트",
+      "publicKeyHex": "00000000000000000000000000000000000000000000000000000000000000",
+      "gameId": "rv-b-sea-book",
+      "code": "owner-id-key"
+    },
+    {
+      "name": "게임 번호 대문자",
+      "publicKeyHex": "0000000000000000000000000000000000000000000000000000000000000000",
+      "gameId": "Bad",
+      "code": "owner-id-game"
+    }
+  ]
+}

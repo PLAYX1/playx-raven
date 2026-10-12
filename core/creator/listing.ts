@@ -7,6 +7,7 @@ import { CID_V0, CreatorError, isRvnAddress, verifyManifest, type CreatorManifes
 import { isContentType, type ContentType } from './limits';
 import { assetPrefixFor, nameConflicts } from './asset-name';
 import { activeFeeSchedule, freeListingAllowed, manifestFeeRef, type FeeSchedule } from './fee-schedule';
+import { OPERATING_LIST_KEYS } from './operating-keys';
 import { BONDED_BADGE, OPEN_MARKET_GAME_INDEX, bondBlockers, type AutoCheck, type BondBlocker } from './open-market';
 
 /*
@@ -30,7 +31,7 @@ export const CREATOR_DENYLIST_FORMAT = 'rv-creator-denylist';
 export const CREATOR_DENYLIST_DOMAIN = 'RAVENVAULT-CREATOR-DENYLIST-V1';
 export const CREATOR_DENY_SIGNATURE_FORMAT = 'rv-creator-denylist-signature';
 export type AllowlistKey = { readonly keyId: string; readonly publicKey: string };
-export const CREATOR_ALLOWLIST_PUBLIC_KEYS: readonly AllowlistKey[] = Object.freeze([]);
+export const CREATOR_ALLOWLIST_PUBLIC_KEYS: readonly AllowlistKey[] = OPERATING_LIST_KEYS;
 
 export type AllowlistEntry = {
   asset: string; type: ContentType; manifestCid: string; manifestSha256: string; creatorAddress: string; receivingAddress: string;

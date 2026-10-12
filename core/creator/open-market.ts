@@ -1,5 +1,5 @@
 import { splitPrice } from '../game-registry/platform-fee';
-import MAINNET_SWITCH from './mainnet-switch.json';
+import { OPEN_MARKET_SALES_ENABLED } from './mainnet-switches';
 import {
   BLOCKS_PER_DAY, MARKET_SCHEDULE_ID, activeFeeSchedule, bpsPercent, estimateHeight, heightDateKo, manifestFeeRef, marketRate, policySchedule, ruleFor,
   type FeeSchedule, type MarketRate, type RateReason, type SellerRef,
@@ -24,8 +24,8 @@ import { checkFileBytes, type CreatorManifest, type TicketSection } from './mani
  */
 
 /* 판매 수수료율은 상수가 아니다 — 서명된 수수료 일정(fee-schedule.ts)에서 구매 시점(체인 높이)마다 계산한다. 15% 초안 상수는 없앴다(2026-10-11). */
-/** 🔴 판매 스위치(대표 결정). false 인 동안 제작자 상품 구매 거래는 만들지 않는다. 시험만 salesEnabled 로 연다. */
-export const OPEN_MARKET_SALES_ENABLED: boolean = MAINNET_SWITCH.sales;
+/** 🔴 판매 스위치(대표 결정). false 인 동안 제작자 상품 구매 거래는 만들지 않는다. 시험만 salesEnabled 로 연다. 상수는 mainnet-switches.ts 한 곳. */
+export { OPEN_MARKET_SALES_ENABLED };
 /** (b)층 구매 메모의 gameIndex. 허용 목록(0..0xfffd)·게임 등록부와 겹치지 않는 영구 예약 번호. 0xffff 는 시험 데모 게임. */
 export const OPEN_MARKET_GAME_INDEX = 0xfffe;
 /** (b)층 한 건 가격 상한(초안, 대표 결정). 보증 500 RVN 보다 큰 돈을 미검증 제작자에게 한 번에 보내지 않게 한다. */

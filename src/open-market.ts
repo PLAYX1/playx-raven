@@ -6,7 +6,9 @@ import type { BookSection, MusicSection, TicketSection, GameSection, DigitalSect
 import type { MarketLists } from './market-lists';
 import { BOND_BLOCKER_SAY, BONDED_WARNING, BOND_SAY, OPEN_MARKET_SALES_ENABLED, autoCheck, purchaseSummary, type AutoCheck } from '../core/creator/open-market';
 import { MARKET_FEE_ADDRESS, bpsPercent, estimateHeight, heightDateKo, manifestFeeRef, marketRate, type FeeSchedule } from '../core/creator/fee-schedule';
-import MAINNET_SWITCH from '../core/creator/mainnet-switch.json';
+import { PAYMENT_ALLOWLIST_ONLY } from '../core/creator/mainnet-switches';
+import { paymentGate } from '../core/creator/payment-allowlist';
+import { purchasePlan } from '../core/creator/purchase-plan';
 import * as T from './market-copy';
 
 /*
@@ -78,16 +80,18 @@ export function wireOpenMarket(deps: MarketDeps) {
   const store = (() => { try { return deps.storage === undefined ? window.localStorage : deps.storage; } catch { return null; } })();
   const now = () => deps.now?.() ?? Date.now();
   const salesOn = deps.salesEnabled ?? OPEN_MARKET_SALES_ENABLED;
-  const verifiedOnly = deps.verifiedOnly ?? MAINNET_SWITCH.verifiedOnly;
+  const verifiedOnly = deps.verifiedOnly ?? PAYMENT_ALLOWLIST_ONLY;
   let lastTip: number | null = null, confirmSeq = 0, prepared: Prepared | null = null;
   /** 이 상품을 결제해도 되나(1단계 제한까지 합쳐서). 이유는 화면에 그대로 보인다. */
   const payGate = (l: Shown): { ok: boolean; say: string } => {
-    if (!l.payment) return { ok: false, say: '이 상품은 지금 지갑으로 결제할 수 없어요.' };
-    if (verifiedOnly && l.status !== 'verified') {
+    // 판정은 지갑 core 의 paymentGate 한 곳(checkCreatorPurchase 와 같은 함수) — 화면이 따로 만든 규칙이 아니다.
+    const gate = paymentGate(l, verifiedOnly);
+    if (gate.ok) return { ok: true, say: '' };
+    if (gate.reason === 'not-on-payment-allowlist') {
       const anyVerified = (deps.lists?.current().allowlist ?? deps.source?.allowlist ?? null)?.entries?.length;
       return { ok: false, say: anyVerified ? T.VERIFIED_ONLY_NOT_LISTED : T.VERIFIED_ONLY_EMPTY };
     }
-    return { ok: true, say: '' };
+    return { ok: false, say: '이 상품은 지금 지갑으로 결제할 수 없어요.' };
   };
   const hiddenSet = (): Set<string> => { try { const a = JSON.parse(store?.getItem(HIDDEN_KEY) ?? '[]'); return new Set(Array.isArray(a) ? a.filter((x: unknown) => typeof x === 'string') : []); } catch { return new Set(); } };
   const saveHidden = (h: Set<string>) => { try { store?.setItem(HIDDEN_KEY, JSON.stringify([...h].slice(-500))); } catch { /* 저장 못 하면 이번 화면에서만 숨는다 */ } };
@@ -310,6 +314,11 @@ export function wireOpenMarket(deps: MarketDeps) {
     const out = (role: PreparedOutput['role']) => p.outputs.filter(o => o.role === role);
     const [sellerOut, feeOut] = [out('seller'), out('fee')];
     if (p.asset !== l.asset) return '준비된 거래의 상품이 달라요.';
+    // 화면에 보인 금액·메모가 지갑 core 의 구매 계획(purchasePlan, 러스트 검사와 같은 공유 벡터)과 같은지 먼저 본다.
+    let plan: ReturnType<typeof purchasePlan>;
+    try { plan = purchasePlan({ priceAtoms: r.priceAtoms, feeBps: r.feeBps, sellerAddress: r.sellerAddress, feeAddress: MARKET_FEE_ADDRESS, memoScript: p.memoScript }); }
+    catch { return '준비된 거래를 수수료 규칙과 맞춰 볼 수 없어요.'; }
+    if (plan.sellerAtoms !== r.sellerAtoms || plan.feeAtoms !== r.feeAtoms) return '화면에 보인 금액이 수수료 규칙과 달라요.';
     if (sellerOut.length !== 1 || sellerOut[0].address !== r.sellerAddress || sellerOut[0].atoms !== r.sellerAtoms || p.sellerAtoms !== r.sellerAtoms) return '준비된 거래의 판매자 몫이 화면과 달라요.';
     if (r.feeAtoms === '0' ? feeOut.length !== 0 : feeOut.length !== 1 || feeOut[0].address !== MARKET_FEE_ADDRESS || feeOut[0].atoms !== r.feeAtoms || p.feeAtoms !== r.feeAtoms) return '준비된 거래의 수수료가 화면과 달라요.';
     if (out('memo').length !== 1) return '준비된 거래에 기록(메모)이 없어요.';

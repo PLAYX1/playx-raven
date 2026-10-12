@@ -1,6 +1,5 @@
 import { sha256 } from '@noble/hashes/sha256';
 import { sha256Hex } from './bytes';
-import MAINNET_SWITCH from './mainnet-switch.json';
 import { burnCheck, checkCreatorAssetName, CREATOR_ASSET_PREFIX, type BurnCheck } from './asset-name';
 import { checkFiles, type ContentType, type FileInput, type FilesCheck } from './limits';
 import {
@@ -9,6 +8,7 @@ import {
 } from './manifest';
 import { atomsToRvn } from './bytes';
 import { scheduleFee } from './fee-schedule';
+import { REAL_MAINNET_ISSUE_ENABLED } from './mainnet-switches';
 
 /*
  * 「내 콘텐츠 올리기」 흐름의 순수 부분: 파일 검사 → 보관(pin) → 매니페스트 → 제작자 서명 → 자기 검사 → 매니페스트 보관 → 발행 계획.
@@ -145,9 +145,9 @@ export async function publishContent(input: PublishInput, pin: PinAdapter, sign:
 
 /**
  * 🔴 실제 메인넷 발행 스위치. false 인 동안 화면은 메인넷에서 발행 단추를 잠그고, 시험망(test·regtest)에서만 노드 발행을 부른다.
- *    접두어·소각액 대조·핀 주체가 정해진 뒤 대표가 켠다. 이 상수 한 곳.
+ *    접두어·소각액 대조·핀 주체가 정해진 뒤 대표가 켠다. 상수는 mainnet-switches.ts 한 곳에 있고 여기서는 다시 내보내기만 한다.
  */
-export const REAL_MAINNET_ISSUE_ENABLED: boolean = MAINNET_SWITCH.issue;
+export { REAL_MAINNET_ISSUE_ENABLED };
 export const TEST_CHAINS: ReadonlySet<string> = new Set(['test', 'regtest']);
 
 export type IssueParams = { name: string; qty: 1; units: 0; reissuable: true; ipfsHash: string };

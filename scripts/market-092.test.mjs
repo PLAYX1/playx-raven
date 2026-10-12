@@ -140,9 +140,30 @@ test('문구: 새 장터 문구에 금지어가 없고, 사실 문구 세 가지
   assert.match(copy.REPORT_NOTE, /정해지는 중이라 지금은 약속할 수 없어요/);
 });
 
+test('지갑과 공유한 벡터: 구매 계획(출력 목록+메모)·주인 번호 도출이 지갑 core 복사본에서 같은 값을 낸다 · 러스트 검사(market.rs)도 같은 벡터를 읽는다', async () => {
+  const plan = await moduleAt('core/creator/purchase-plan.ts');
+  const owner = await moduleAt('core/creator/owner-id.ts');
+  const pv = JSON.parse(read('core/creator/purchase-plan-vectors.json'));
+  for (const c of pv.cases) assert.deepEqual(plan.purchasePlan(c.input), c.expect, c.name);
+  for (const e of pv.errors) assert.throws(() => plan.purchasePlan(e.input), err => err.code === e.expectError, e.name);
+  // 데스크탑이 만드는 RVDP 메모(market-node.ts)도 계획이 받아들이는 모양이다.
+  const memo = node.memoScriptAccount({ gameIndex: 12, itemId: 'C1', ownerId: 'aaaaaaaa-bbbb-4ccc-9ddd-eeeeeeeeeeee', nonce: 1 });
+  assert.ok(plan.memoScriptOk(memo), memo);
+  const ov = JSON.parse(read('core/creator/owner-id-vectors.json'));
+  const bytes = h => Uint8Array.from(h.match(/../g), x => parseInt(x, 16));
+  for (const c of ov.cases) assert.equal(owner.ownerIdFromPublicKey(bytes(c.publicKeyHex), c.gameId), c.ownerId, c.name);
+  for (const e of ov.errors) assert.throws(() => owner.ownerIdFromPublicKey(bytes(e.publicKeyHex), e.gameId), err => err.code === e.code, e.name);
+  // 러스트 시험이 이 벡터 파일을 include_str! 로 읽는다(바이트 동일 복사 하나뿐).
+  assert.ok(read('src-tauri/src/market.rs').includes('include_str!("../../core/creator/purchase-plan-vectors.json")'));
+  // 화면은 판정·계획을 따로 만들지 않고 지갑 core 의 함수를 쓴다.
+  const om = read('src/open-market.ts');
+  assert.ok(om.includes("from '../core/creator/payment-allowlist'") && om.includes('paymentGate(l, verifiedOnly)'));
+  assert.ok(om.includes("from '../core/creator/purchase-plan'") && om.includes('purchasePlan({'));
+});
+
 test('1단계 제한·스위치 기본값: 커밋된 verifiedOnly 는 true, 그 값이 장터 코드에 연결돼 있다', () => {
   assert.equal(SW.verifiedOnly, true, '1단계 제한(검증됨 전용)이 풀린 채 커밋됐다');
-  assert.ok(read('src/open-market.ts').includes("deps.verifiedOnly ?? MAINNET_SWITCH.verifiedOnly"));
+  assert.ok(read('src/open-market.ts').includes("deps.verifiedOnly ?? PAYMENT_ALLOWLIST_ONLY"));
   assert.ok(read('src/open-market.ts').includes('!payGate(l).ok'), '결제 단추 핸들러가 게이트를 다시 본다');
 });
 

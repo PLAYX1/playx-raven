@@ -3,6 +3,7 @@ import { sha256 } from '@noble/hashes/sha256';
 import { decodeBase58Check } from '../wallet-offline/base58check';
 import { b64urlDecode, b64urlEncode, canonicalJson, hex, plain, sha256Hex, utf8, type Loose } from './bytes';
 import { isContentType, type ContentType } from './limits';
+import { OPERATING_LIST_KEYS } from './operating-keys';
 
 /*
  * 장터 수수료 일정(fee schedule) — 대표 확정 2026-10-11. 요율은 코드 상수가 아니라 **서명된 목록 묶음의 데이터**다.
@@ -47,8 +48,8 @@ export const BLOCK_MS = 60_000;
 export const BOUNDARY_TOLERANCE_BLOCKS = 120;
 
 export type ScheduleKey = { readonly keyId: string; readonly publicKey: string };
-/** 일정 안쪽 서명을 믿는 내장 키. 🔴 비어 있다(운영 키 대표 결정 전) — 묶음의 믿는 목록 키(partKeys)로만 검증된다. */
-export const FEE_SCHEDULE_PUBLIC_KEYS: readonly ScheduleKey[] = Object.freeze([]);
+/** 일정 안쪽 서명을 믿는 내장 키 — 값은 operating-keys.ts 한 곳. 🔴 비어 있다(운영 키 대표 결정 전) — 묶음의 믿는 목록 키(partKeys)로만 검증된다. */
+export const FEE_SCHEDULE_PUBLIC_KEYS: readonly ScheduleKey[] = OPERATING_LIST_KEYS;
 
 /**
  * 받은 일정이 하나도 없을 때(새 설치 + 목록 못 받음, 또는 출하 상태처럼 목록 키가 비어 있음) 🔶 대표 결정.

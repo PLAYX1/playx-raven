@@ -202,6 +202,18 @@ fn memo_ok(script: &str) -> bool {
         && usize::from_str_radix(&script[2..4], 16).map(|n| n * 2 + 4 == script.len()).unwrap_or(false)
 }
 
+/// 구매 계획의 입력 규칙(지갑 core `purchase-plan.ts` 와 같다): 메모 모양 · 판매자 주소 ≠ 수수료 주소(요율 0 이어도, 수수료 주소가 주어졌다면).
+/// 노드를 부르지 않는 순수 함수 — 시험이 공유 벡터로 지갑과 맞춰 본다.
+pub fn validate_plan_inputs(seller: &str, fee_address: Option<&str>, memo_script: &str) -> Result<(), String> {
+    if !memo_ok(memo_script) {
+        return Err("기록(메모) 모양이 올바르지 않아요.".into());
+    }
+    if fee_address == Some(seller) {
+        return Err("판매자 주소와 수수료 주소가 같아서 만들지 않았어요.".into());
+    }
+    Ok(())
+}
+
 /// 노드가 채운 거래(`decoderawtransaction`)가 **정확히 약속대로**인지 본다. 노드를 부르지 않는 순수 함수 — 시험.
 /// `mine` = 이 주소가 이 지갑 것인가. 통과하면 화면에 보여 줄 출력 목록을 돌려준다.
 pub fn inspect_decoded(decoded: &Value, e: &Expected, mine: &dyn Fn(&str) -> bool) -> Result<Vec<Value>, String> {
@@ -270,13 +282,9 @@ pub async fn market_purchase_prepare(
     }
     let seller_atoms = parse_atoms(&seller_atoms, false)?;
     let fee_atoms = parse_atoms(&fee_atoms, true)?;
+    // 입력 규칙은 지갑 core 의 구매 계획(purchase-plan.ts)과 같다 — 공유 벡터(purchase-plan-vectors.json)로 시험.
+    validate_plan_inputs(&seller_address, fee_address.as_deref(), &memo_script)?;
     let fee_address = if fee_atoms > 0 { Some(fee_address.ok_or("수수료 주소가 없어요.")?) } else { None };
-    if !memo_ok(&memo_script) {
-        return Err("기록(메모) 모양이 올바르지 않아요.".into());
-    }
-    if fee_address.as_deref() == Some(seller_address.as_str()) {
-        return Err("판매자 주소와 수수료 주소가 같아서 만들지 않았어요.".into());
-    }
     for a in std::iter::once(&seller_address).chain(fee_address.iter()) {
         let v = call_rpc("validateaddress", json!([a])).await?;
         if !v["isvalid"].as_bool().unwrap_or(false) {
@@ -466,6 +474,72 @@ mod tests {
         let mut d = good();
         d["vout"].as_array_mut().unwrap().remove(0);
         assert!(inspect_decoded(&d, &e, &mine).is_err());
+    }
+
+    /// 지갑 core 와 같은 벡터(`core/creator/purchase-plan-vectors.json`, 바이트 동일 복사)로 맞춰 본다:
+    /// 기대 출력으로 가짜 `decoderawtransaction` 을 만들어 검사기가 받아들이고, 금액·주소·구성을 하나라도 바꾸면 거절하는지.
+    #[test]
+    fn 지갑과_공유한_구매_계획_벡터와_맞는다() {
+        let v: Value = serde_json::from_str(include_str!("../../core/creator/purchase-plan-vectors.json")).unwrap();
+        let cases = v["cases"].as_array().unwrap();
+        assert!(cases.len() >= 4);
+        for c in cases {
+            let name = c["name"].as_str().unwrap();
+            let outs = c["expect"]["outputs"].as_array().unwrap();
+            let of = |role: &str| outs.iter().find(|o| o["role"] == role);
+            let seller = of("seller").unwrap();
+            let fee = of("fee");
+            let memo = of("memo").unwrap()["scriptHex"].as_str().unwrap().to_string();
+            let input = &c["input"];
+            let fee_addr_in = input["feeAddress"].as_str().unwrap();
+            assert!(validate_plan_inputs(input["sellerAddress"].as_str().unwrap(), Some(fee_addr_in), &memo).is_ok(), "{name}: 입력");
+            let e = Expected {
+                seller: seller["address"].as_str().unwrap().into(),
+                seller_atoms: seller["atoms"].as_str().unwrap().parse().unwrap(),
+                fee_address: fee.map(|f| f["address"].as_str().unwrap().to_string()),
+                fee_atoms: fee.map(|f| f["atoms"].as_str().unwrap().parse().unwrap()).unwrap_or(0),
+                memo_script: memo.clone(),
+            };
+            // 판매자 몫 + 수수료 = 가격(지갑 벡터가 이미 보장) — 러스트 쪽도 같은 합.
+            assert_eq!((e.seller_atoms + e.fee_atoms).to_string(), input["priceAtoms"].as_str().unwrap(), "{name}: 합");
+            let atoms = |s: u64| s as f64 / 1e8;
+            let mut vout = vec![out("pubkeyhash", Some(e.seller.as_str()), atoms(e.seller_atoms), "76a9")];
+            if let Some(f) = &e.fee_address {
+                vout.push(out("pubkeyhash", Some(f.as_str()), atoms(e.fee_atoms), "76a9"));
+            }
+            vout.push(out("nulldata", None, 0.0, &memo));
+            let good = json!({ "vout": vout.clone() });
+            let rows = inspect_decoded(&good, &e, &mine).unwrap_or_else(|er| panic!("{name}: {er}"));
+            let roles: Vec<&str> = rows.iter().map(|r| r["role"].as_str().unwrap()).collect();
+            let want: Vec<&str> = outs.iter().map(|o| o["role"].as_str().unwrap()).collect();
+            assert_eq!(roles, want, "{name}: 출력 순서/구성이 지갑 벡터와 같다");
+            // 거스름 하나는 늘 허용, 둘은 거절.
+            let mut with_change = vout.clone();
+            with_change.push(out("pubkeyhash", Some(MINE), 1.0, "76a9"));
+            assert!(inspect_decoded(&json!({ "vout": with_change.clone() }), &e, &mine).is_ok(), "{name}: 거스름 1");
+            with_change.push(out("pubkeyhash", Some(MINE), 1.0, "76a9"));
+            assert!(inspect_decoded(&json!({ "vout": with_change }), &e, &mine).is_err(), "{name}: 거스름 2");
+            // 판매자 금액을 1 atom 바꾸면 거절 · 수수료 출력이 없어야 하는 사례에 수수료 주소 출력을 끼우면 거절 · 메모를 바꾸면 거절.
+            let mut bad = vout.clone();
+            bad[0] = out("pubkeyhash", Some(e.seller.as_str()), atoms(e.seller_atoms - 1), "76a9");
+            assert!(inspect_decoded(&json!({ "vout": bad }), &e, &mine).is_err(), "{name}: 판매자 -1");
+            if e.fee_address.is_none() {
+                let mut extra = vout.clone();
+                extra.insert(1, out("pubkeyhash", Some(FEE), 1.0, "76a9"));
+                assert!(inspect_decoded(&json!({ "vout": extra }), &e, &mine).is_err(), "{name}: 요율 0 인데 수수료 출력");
+            }
+            let mut m = vout.clone();
+            *m.last_mut().unwrap() = out("nulldata", None, 0.0, "6a0452564451");
+            assert!(inspect_decoded(&json!({ "vout": m }), &e, &mine).is_err(), "{name}: 메모 바뀜");
+        }
+        for er in v["errors"].as_array().unwrap() {
+            if er["rust"] != true {
+                continue;
+            }
+            let i = &er["input"];
+            let r = validate_plan_inputs(i["sellerAddress"].as_str().unwrap(), i["feeAddress"].as_str(), i["memoScript"].as_str().unwrap());
+            assert!(r.is_err(), "{}: 러스트도 거절해야 한다", er["name"]);
+        }
     }
 
     #[test]

@@ -23,13 +23,12 @@ const PNG = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 
 
 test('vendored creator core is byte-identical to the pinned copy (and to the wallet source when present)', t => {
   const files = Object.keys(pins.files);
-  assert.equal(files.length, 13); // + core/creator/fee-schedule.ts (2026-10-11)
+  assert.equal(files.length, 21); // 통합(2026-10-12): + mainnet-switches · operating-keys · payment-allowlist · purchase-plan(+벡터) · owner-id(+벡터) · market-catalog. 스위치 JSON 은 고정하지 않는다.
+  assert.equal(pins.patches, undefined, '통합 뒤에는 복사본에 패치가 없다 — 지갑 원본과 바이트 동일');
   for (const f of files) assert.equal(digest(f), pins.files[f], `vendored drift: ${f}`);
-  const root = process.env.RV_WALLET_CORE || '/Users/gimmusong/wt-rv-signed-lists-core';
+  const root = process.env.RV_WALLET_CORE || '/Users/gimmusong/wt-rv-wallet-mainnet';
   if (!existsSync(`${root}/core/creator/manifest.ts`)) { t.skip('wallet checkout absent; pinned hashes still checked'); return; }
-  // 지갑 원본과 다른 곳은 스위치 두 줄뿐이다(pins.patches). 원본에 그 패치를 적용한 바이트와 같아야 한다.
-  const patched = f => { let t = readFileSync(`${root}/${f}`, 'utf8'); for (const { find, replace } of pins.patches?.[f] ?? []) { assert.ok(t.includes(find), `patch anchor missing in wallet source: ${f}`); t = t.replace(find, () => replace); } return createHash('sha256').update(t).digest('hex'); };
-  for (const f of files) assert.equal(digest(f), patched(f), `differs from wallet source (+declared patches): ${f}`);
+  for (const f of files) assert.equal(digest(f), createHash('sha256').update(readFileSync(`${root}/${f}`)).digest('hex'), `differs from wallet source: ${f}`);
 });
 
 test('스위치 한 곳: 지갑 core 두 상수와 Rust 상수가 같은 파일 값을 따른다 · 켜는 것은 acknowledged 가 같이 있을 때만', async () => {
@@ -41,9 +40,11 @@ test('스위치 한 곳: 지갑 core 두 상수와 Rust 상수가 같은 파일 
   // 파일 서식(Rust const 스캐너가 읽는 모양): 키마다 한 줄, 콜론 뒤 한 칸.
   const raw = readFileSync('core/creator/mainnet-switch.json', 'utf8');
   for (const k of ['issue', 'sales', 'acknowledged', 'verifiedOnly']) assert.match(raw, new RegExp(`^  "${k}": (true|false),?$`, 'm'), k);
-  // 두 TS 상수는 JSON 을 직접 읽을 뿐 다른 값을 박지 않는다.
-  assert.match(readFileSync('core/creator/publish.ts', 'utf8'), /export const REAL_MAINNET_ISSUE_ENABLED: boolean = MAINNET_SWITCH\.issue;/);
-  assert.match(readFileSync('core/creator/open-market.ts', 'utf8'), /export const OPEN_MARKET_SALES_ENABLED: boolean = MAINNET_SWITCH\.sales;/);
+  // TS 상수는 지갑 core mainnet-switches.ts 한 곳이 JSON 을 읽어 내보낸다(복사본 publish.ts · open-market.ts 는 다시 내보내기만).
+  assert.match(readFileSync('core/creator/mainnet-switches.ts', 'utf8'), /export const REAL_MAINNET_ISSUE_ENABLED: boolean = MAINNET_SWITCH\.issue;/);
+  assert.match(readFileSync('core/creator/mainnet-switches.ts', 'utf8'), /export const OPEN_MARKET_SALES_ENABLED: boolean = MAINNET_SWITCH\.sales;/);
+  assert.match(readFileSync('core/creator/mainnet-switches.ts', 'utf8'), /export const PAYMENT_ALLOWLIST_ONLY: boolean = MAINNET_SWITCH\.verifiedOnly;/);
+  for (const f of ['publish.ts', 'open-market.ts']) assert.doesNotMatch(readFileSync(`core/creator/${f}`, 'utf8'), /MAINNET_SWITCH|export const (REAL_MAINNET_ISSUE_ENABLED|OPEN_MARKET_SALES_ENABLED)\b/, `${f} 가 스위치 값을 또 갖는다`);
 });
 
 test('kubo pin adapter = existing ipfs_add_file (CIDv0, pinned); signer = sign_message, password only after a lock error', async () => {
