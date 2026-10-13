@@ -21,6 +21,8 @@ const built = await build({ entryPoints: [join(root, 'scripts/fixtures/lock-entr
 const mod = { exports: {} };
 new Function('require', 'exports', 'module', built.outputFiles[0].text)(createRequire(import.meta.url), mod.exports, mod);
 const L = mod.exports;
+// 🔒 옛 이름 발행 화면 흐름 시험은 잠금(CREATOR_PUBLISH_PAUSED)이 풀릴 때만 돈다(지우지 않는다). 지갑 core 가 옛 RV. 새 발행을 늘 막으므로 풀 때 새 이름 규칙으로 다시 쓴다.
+const PAUSED_SKIP = L.CREATOR_PUBLISH_PAUSED ? '「내 상품 올리기」 임시 잠금 중(src/creator-pause.ts) — 옛 RV. 이름으로 올리고 등록하는 화면 흐름. 잠금 해제 때 새 이름 규칙으로 다시 쓴다' : false;
 
 const RECEIVING = 'RCJPGkCQi5NpBgtj8qkjGcSugfWRa3iQiS';
 const SELLER_KEY = L.randomKey(), SELLER = L.addressOf(SELLER_KEY);
@@ -189,7 +191,7 @@ async function product() {
   const K = L.newProductKey();
   const pin = new L.MockPinAdapter();
   const clip = wav(2);
-  const r = await L.publishContent({ type: 'music', asset: ASSET, title: '잠긴 노래', description: '', priceAtoms: RVN(20), creatorAddress: SELLER, receivingAddress: RECEIVING,
+  const r = await L.legacyManifestForTest({ type: 'music', asset: ASSET, title: '잠긴 노래', description: '', priceAtoms: RVN(20), creatorAddress: SELLER, receivingAddress: RECEIVING,
     files: [{ path: 'song.wav', bytes: TRACK, mime: 'audio/wav' }, { path: 'cover.png', bytes: PNG, mime: 'image/png', role: 'cover' }],
     details: { previewFile: 'preview-clip.wav', previewStartMs: 0, previewEndMs: 2000 }, now: new Date('2026-10-13T00:00:00Z'),
     lock: { key: K, previewClip: { path: 'preview-clip.wav', bytes: clip, mime: 'audio/wav' } } }, pin, async (_a, m) => L.signMessageForTest(m, SELLER_KEY));
@@ -214,7 +216,7 @@ const prep = ({ r, sellerHasKey, purchase }) => ({ fn: (a) => {
 }, arg: { pinned: r.pinned, tx: r.tx, asset: ASSET, manifestCid: r.manifestCid, keyHex: hex(r.key), receiving: RECEIVING, sellerHasKey, purchase } });
 
 /* ═════════════ A. wizard with encryption on ═════════════ */
-test('wizard (music, encryption on by default): key saved on this computer BEFORE anything is pinned · ciphertext pinned · short clip separate · issuing blocked until the key file is saved', { timeout: 300_000 }, async () => {
+test('wizard (music, encryption on by default): key saved on this computer BEFORE anything is pinned · ciphertext pinned · short clip separate · issuing blocked until the key file is saved', { timeout: 300_000, skip: PAUSED_SKIP }, async () => {
   const page = await openApp();
   await page.click('#creator-open');
   await page.waitForFunction(() => document.querySelector('#page-creator.on'));
@@ -291,7 +293,7 @@ test('wizard (music, encryption on by default): key saved on this computer BEFOR
   await page.close();
 });
 
-test('wizard with encryption switched off says the files are public (honest legacy path) and shows no key screen', { timeout: 120_000 }, async () => {
+test('wizard with encryption switched off says the files are public (honest legacy path) and shows no key screen', { timeout: 120_000, skip: PAUSED_SKIP }, async () => {
   const page = await openApp();
   await page.click('#creator-open'); await page.waitForFunction(() => document.querySelector('#page-creator.on'));
   await page.click('#dp-detail'); await page.waitForFunction(() => document.querySelector('#page-creator').dataset.mode === 'wizard');
@@ -469,7 +471,7 @@ test('buyer panel: a payment from an address this wallet cannot sign for (e.g. e
   await page.close();
   // 암호화 없는 옛 상품
   const plainPin = new L.MockPinAdapter();
-  const plain = await L.publishContent({ type: 'digital', asset: 'RV.X.PLAIN_E2E', title: '평문', description: '', priceAtoms: RVN(5), creatorAddress: SELLER, receivingAddress: RECEIVING,
+  const plain = await L.legacyManifestForTest({ type: 'digital', asset: 'RV.X.PLAIN_E2E', title: '평문', description: '', priceAtoms: RVN(5), creatorAddress: SELLER, receivingAddress: RECEIVING,
     files: [{ path: 'a.png', bytes: PNG, mime: 'image/png' }], details: { label: '그림' }, now: new Date('2026-10-13T00:00:00Z') }, plainPin, async (_a, m) => L.signMessageForTest(m, SELLER_KEY));
   const p2 = await openApp({ extra: { fn: a => { const t = setInterval(() => { if (window.__pinned) { clearInterval(t); for (const [cid, arr] of a.pinned) window.__pinned.set(cid, Uint8Array.from(arr)); localStorage.setItem('rv-market-purchases-v1', JSON.stringify([{ asset: a.asset, title: '평문', txid: 'ee'.repeat(32), sellerRvn: '4', feeRvn: '1', at: '2026-10-13T00:00:00.000Z', manifestCid: a.cid, assetReceived: false }])); } }, 1); },
     arg: { pinned: [...plainPin.stored.entries()].map(([c, b]) => [c, Array.from(b)]), asset: 'RV.X.PLAIN_E2E', cid: plain.manifestCid } } });

@@ -22,7 +22,10 @@ const root = resolve(import.meta.dirname, '..');
 const built = await build({ entryPoints: [join(root, 'scripts/fixtures/creator-core-entry.ts')], bundle: true, write: false, platform: 'node', format: 'cjs', logLevel: 'silent' });
 const core = { exports: {} };
 new Function('require', 'exports', 'module', built.outputFiles[0].text)(createRequire(import.meta.url), core.exports, core);
-const { mockCid, signMessageForTest, randomKey, addressOf, verifyManifest, publishContent, MockPinAdapter } = core.exports;
+// 장터 쪽 시험 상품(이미 체인에 있는 옛 RV. 상품)은 시험 고정물 legacyManifestForTest 로 재현한다 — 새 발행(publishContent)은 옛 이름을 막는다.
+const { mockCid, signMessageForTest, randomKey, addressOf, verifyManifest, legacyManifestForTest, MockPinAdapter, CREATOR_PUBLISH_PAUSED, CREATOR_PAUSE_SAY } = core.exports;
+// 🔒 옛 이름 발행 화면 흐름 시험은 잠금(CREATOR_PUBLISH_PAUSED)이 풀릴 때만 돈다(지우지 않는다). 지갑 core 가 옛 RV. 새 발행을 늘 막으므로 풀 때 새 이름 규칙으로 다시 쓴다.
+const PAUSED_SKIP = CREATOR_PUBLISH_PAUSED ? '「내 상품 올리기」 임시 잠금 중(src/creator-pause.ts) — 옛 RV. 이름으로 올리고 등록하는 화면 흐름. 잠금 해제 때 새 이름 규칙으로 다시 쓴다' : false;
 const marketBundle = (await build({ stdin: { contents: "import { wireOpenMarket } from './src/open-market.ts'; import { policySchedule } from './core/creator/fee-schedule.ts'; window.__wireOpenMarket = wireOpenMarket; window.__policySchedule = policySchedule;", resolveDir: root, loader: 'ts' },
   bundle: true, write: false, platform: 'browser', format: 'iife', logLevel: 'silent' })).outputFiles[0].text;
 // 수수료 일정 화면 시험: 같은 화면 모듈(마법사)을 서명된 일정이 있는 상태로 다시 연결한다(출하 데스크탑은 일정을 받는 길·키가 없어 늘 「아직 못 받음」).
@@ -258,7 +261,7 @@ async function bookFlow(page, report, tag) {
   return page;
 }
 
-test('book: guide → ①…⑧ on the mock chain; every step audited at 390/1440 × light/dark (screenshot, contrast ≥ 4.5:1, no overflow)', { timeout: 600_000 }, async () => {
+test('book: guide → ①…⑧ on the mock chain; every step audited at 390/1440 × light/dark (screenshot, contrast ≥ 4.5:1, no overflow)', { timeout: 600_000, skip: PAUSED_SKIP }, async () => {
   const report = {};
   for (const width of [390, 1440]) for (const theme of ['light', 'dark']) {
     const page = await openCreator({ width, height: 844, theme });
@@ -292,7 +295,7 @@ test('book: guide → ①…⑧ on the mock chain; every step audited at 390/144
   }
 });
 
-test('resume: an upload that fails half-way is continued later without re-uploading finished files; pin check finds a missing file', { timeout: 300_000 }, async () => {
+test('resume: an upload that fails half-way is continued later without re-uploading finished files; pin check finds a missing file', { timeout: 300_000, skip: PAUSED_SKIP }, async () => {
   let page = await openCreator({ failPinAt: 3 });
   await page.click('#cw-guide-ok'); await page.click('#cw-start');
   await page.click('input[name="cw-type"][value="book"]');
@@ -332,7 +335,7 @@ test('resume: an upload that fails half-way is continued later without re-upload
   await page.close();
 });
 
-test('name: taken on chain blocks, official-looking and lookalike warn; ticket details reach a verifiable manifest', { timeout: 300_000 }, async () => {
+test('name: taken on chain blocks, official-looking and lookalike warn; ticket details reach a verifiable manifest', { timeout: 300_000, skip: PAUSED_SKIP }, async () => {
   const page = await openCreator({ taken: ['RV.T.AUTUMN_LIVE'] });
   await page.click('#cw-guide-ok'); await page.click('#cw-start');
   await page.click('input[name="cw-type"][value="ticket"]'); await next(page, 2);
@@ -366,7 +369,7 @@ test('name: taken on chain blocks, official-looking and lookalike warn; ticket d
   await page.close();
 });
 
-test('chain duplicate lookup: 「확인 불가」 is shown on ③ and ⑦ and blocks issuing until a re-check answers', { timeout: 300_000 }, async () => {
+test('chain duplicate lookup: 「확인 불가」 is shown on ③ and ⑦ and blocks issuing until a re-check answers', { timeout: 300_000, skip: PAUSED_SKIP }, async () => {
   const page = await openCreator({ nameUnknown: true });
   await page.click('#cw-guide-ok'); await page.click('#cw-start');
   await page.click('input[name="cw-type"][value="game"]'); await next(page, 2);
@@ -414,7 +417,7 @@ test('chain duplicate lookup: 「확인 불가」 is shown on ③ and ⑦ and bl
   await page.close();
 });
 
-test('cost shortfall and mainnet lock block issuing; bad files are refused; game kind warns that code runs', { timeout: 300_000 }, async () => {
+test('cost shortfall and mainnet lock block issuing; bad files are refused; game kind warns that code runs', { timeout: 300_000, skip: PAUSED_SKIP }, async () => {
   for (const [opts, expectCost, expectBlock] of [[{ balance: 100 }, /400\.01 RVN 이 모자라요/, /모자라요/], [{ chain: 'main' }, /잔액이 충분해요/, /실제 발행은 아직 꺼져 있어요/]]) {
     if (opts.chain === 'main' && SW.issue) continue; // 메인넷 스위치가 켜진 빌드(enable 커밋)에서는 이 잠금 항목이 없다 — 나머지 잠금(소각액·잔액·이름)은 위 경우가 지킨다
     const page = await openCreator(opts);
@@ -458,6 +461,53 @@ test('cost shortfall and mainnet lock block issuing; bad files are refused; game
   await page.close();
 });
 
+test('잠금 상태(출하 연결): 「내 상품 올리기」 마법사는 쉬운 안내 한 줄 · 시작·올리기·등록이 막히고 억지로 눌러도 아무것도 올리거나 서명·등록하지 않는다 · 이어하기도 등록에서 막힌다 · 390/1440 × light/dark', { timeout: 300_000 }, async () => {
+  assert.equal(CREATOR_PUBLISH_PAUSED, true);
+  const report = {};
+  for (const width of [390, 1440]) for (const theme of ['light', 'dark']) {
+    const page = await openCreator({ width, height: 844, theme });
+    assert.equal(await text(page, '#cw-paused'), CREATOR_PAUSE_SAY + ' 준비가 끝나면 다시 열려요.');
+    assert.equal(await page.$eval('#cw-paused', e => e.getAttribute('role')), 'status');
+    assert.equal(await page.$eval('#dp-paused', e => e.textContent.includes('새 발행 방식으로 옮기는 중')), true, 'drop screen says the same');
+    await page.click('#cw-guide-ok');
+    assert.equal(await disabled(page, '#cw-start'), true, 'start stays locked even after 「읽었어요」');
+    await page.evaluate(() => { const b = document.querySelector('#cw-start'); b.disabled = false; b.click(); }); // 단추를 우회해도 함수 입구가 막는다
+    assert.equal(await stepNow(page), 0);
+    assert.match(await text(page, '#cw-error'), /새 발행 방식으로 옮기는 중/);
+    assert.equal(await disabled(page, '#cw-upload'), true);
+    await page.evaluate(() => { document.querySelector('#cw-upload').disabled = false; document.querySelector('#cw-upload').click(); document.querySelector('#cw-issue').disabled = false; document.querySelector('#cw-issue').click(); });
+    await new Promise(r => setTimeout(r, 300));
+    const touched = (await page.evaluate(() => window.__creatorCalls)).filter(c => ['ipfs_add_file', 'sign_message', 'issue_asset'].includes(c.cmd));
+    assert.deepEqual(touched, [], 'nothing pinned, signed or issued');
+    await audit(page, '#page-creator', `paused-${width}-${theme}`, report);
+    await page.close();
+  }
+  for (const [k, v] of Object.entries(report)) {
+    assert.ok(v.measured > 3, `${k}: measured too little`);
+    assert.deepEqual(v.low, [], `${k} low contrast: ${JSON.stringify(v.low)}`);
+    assert.deepEqual(v.overflow, [], `${k} overflow: ${JSON.stringify(v.overflow)}`);
+  }
+  // 지난번에 다 올려 둔 초안(옛 RV. 상품)을 이어서 열어도 ⑦에서 등록은 막히고 막힌 이유 맨 앞에 안내가 있다.
+  const pub = await legacyManifestForTest({ type: 'book', asset: 'RV.B.SEA_BOOK', title: '바다 이야기', description: '', creatorAddress: ADDRESS, receivingAddress: ADDRESS, priceAtoms: null,
+    files: [{ path: 'sea.pdf', bytes: new TextEncoder().encode('%PDF-1.7\nx\n%%EOF'), mime: 'application/pdf' }],
+    details: { bookFile: 'sea.pdf', format: 'pdf', previewFile: null, previewPages: 0, pageCount: null }, now: new Date('2026-10-10T00:00:00Z') }, new MockPinAdapter(), async (_a, m) => signMessageForTest(m, KEY));
+  const draft = JSON.stringify({ step: 7, type: 'book', fields: { 'cw-title': '바다 이야기', 'cw-address': ADDRESS, 'cw-asset': 'SEA_BOOK' }, cache: [],
+    published: { manifestCid: pub.manifestCid, manifestSha256: pub.manifestSha256, manifest: pub.manifest, pinnedBy: 'test' }, savedAt: '2026-10-10T00:00:00Z' });
+  const page = await openCreator({ draft });
+  await page.click('#cw-resume-go');
+  await page.waitForFunction(() => Number([...document.querySelectorAll('#page-creator .cw-panel')].find(p => !p.hidden)?.dataset.step) === 7);
+  await page.waitForFunction(() => document.querySelector('#cw-c-blockers li'));
+  assert.match(await page.$eval('#cw-c-blockers li', e => e.textContent), /새 발행 방식으로 옮기는 중/);
+  await page.type('#cw-typed', 'RV.B.SEA_BOOK');
+  assert.equal(await disabled(page, '#cw-issue'), true);
+  await page.evaluate(() => { document.querySelector('#cw-issue').disabled = false; document.querySelector('#cw-issue').click(); });
+  await new Promise(r => setTimeout(r, 300));
+  assert.match(await text(page, '#cw-issue-say'), /새 발행 방식으로 옮기는 중/);
+  assert.equal((await page.evaluate(() => window.__creatorCalls)).filter(c => c.cmd === 'issue_asset').length, 0, 'nothing issued from a resumed draft');
+  assert.deepEqual(page.__errors ?? [], []);
+  await page.close();
+});
+
 test('seller switch off: creator and market entries are hidden, inert and route-blocked', { timeout: 120_000 }, async () => {
   const page = await openApp({ seller: false });
   for (const id of ['#creator-open', '#market-open', '#page-creator', '#page-market']) {
@@ -475,14 +525,14 @@ async function marketFixture() {
   const pin = new MockPinAdapter();
   const sign = async (_a, m) => signMessageForTest(m, KEY);
   const common = { creatorAddress: ADDRESS, receivingAddress: RECEIVING, declaredFeeBps: 1500, now: new Date('2026-10-10T00:00:00Z'), description: '시험 상품' };
-  const book = await publishContent({ ...common, type: 'book', asset: 'RV.B.SEA_BOOK', title: '바다 이야기', priceAtoms: '30000000000',
+  const book = await legacyManifestForTest({ ...common, type: 'book', asset: 'RV.B.SEA_BOOK', title: '바다 이야기', priceAtoms: '30000000000',
     files: [{ path: 'sea.pdf', bytes: PDF('book'), mime: '' }, { path: 'sea-preview.pdf', bytes: PDF('pv'), mime: '' }, { path: 'cover.png', bytes: PNG(5), mime: '', role: 'cover' }],
     details: { bookFile: 'sea.pdf', format: 'pdf', previewFile: 'sea-preview.pdf', previewPages: 5, pageCount: 80 } }, pin, sign);
-  const fake = await publishContent({ ...common, type: 'book', asset: 'RV.B.SEA_B00K', title: '바다 이야기', priceAtoms: '30000000000', creatorAddress: ADDRESS,
+  const fake = await legacyManifestForTest({ ...common, type: 'book', asset: 'RV.B.SEA_B00K', title: '바다 이야기', priceAtoms: '30000000000', creatorAddress: ADDRESS,
     files: [{ path: 'sea.pdf', bytes: PDF('copy'), mime: '' }], details: { bookFile: 'sea.pdf', format: 'pdf', previewFile: null, previewPages: 0, pageCount: null } }, pin, sign);
-  const music = await publishContent({ ...common, type: 'music', asset: 'RV.M.MORNING_SONG', title: '아침 노래', priceAtoms: '2000000000',
+  const music = await legacyManifestForTest({ ...common, type: 'music', asset: 'RV.M.MORNING_SONG', title: '아침 노래', priceAtoms: '2000000000',
     files: [{ path: 'song.mp3', bytes: MP3, mime: '' }], details: { previewFile: 'song.mp3', previewStartMs: 0, previewEndMs: 30000 } }, pin, sign);
-  const game = await publishContent({ ...common, type: 'game', asset: 'RV.G.STAR_RUN', title: '별 달리기', priceAtoms: '3000000000',
+  const game = await legacyManifestForTest({ ...common, type: 'game', asset: 'RV.G.STAR_RUN', title: '별 달리기', priceAtoms: '3000000000',
     files: FILES.game.map(f => ({ path: f.name, bytes: f.bytes, mime: f.type })), details: { entry: 'index.html', origin: 'https://star-run.example', capabilities: { identity: false, payment: true } } }, pin, sign);
   const assets = [book, fake, music, game].map(r => ({ name: r.manifest.asset, ipfs_hash: r.manifestCid }));
   const store = Object.fromEntries([...pin.stored.entries()].map(([k, v]) => [k, Array.from(v)]));
@@ -615,7 +665,8 @@ test('fee schedule: wizard notice reads the signed schedule (0% now → date/blo
     await page.evaluate(args => {
       const pc = document.getElementById('page-creator'); pc.replaceWith(pc.cloneNode(true)); // 출하 연결의 이벤트를 떼고 같은 모듈을 일정과 함께 다시 연결
       const sched = window.__policySchedule(args);
-      window.__wireCreatorPublish({ invoke: (c, a) => window.__TAURI__.core.invoke(c, a), back: () => {}, askPassword: async () => null, feeSchedule: () => sched });
+      // 수수료 안내만 본다(올리기·등록 없음) — 단계를 넘기려고 임시 잠금을 이 연결에서만 끈다.
+      window.__wireCreatorPublish({ invoke: (c, a) => window.__TAURI__.core.invoke(c, a), back: () => {}, askPassword: async () => null, feeSchedule: () => sched, paused: false });
     }, SCHED_ARGS);
     await page.waitForFunction(() => /블록 4262520/.test(document.querySelector('#cw-guide-fee').textContent), { timeout: 10000 });
     const guide = await text(page, '#cw-guide-fee');

@@ -1,16 +1,14 @@
 import { sha256 } from '@noble/hashes/sha256';
 import { sha256Hex } from './bytes';
 import { burnCheck, checkCreatorAssetName, CREATOR_ASSET_PREFIX, type BurnCheck } from './asset-name';
-import { checkFiles, type ContentType, type FileInput, type FilesCheck } from './limits';
-import {
-  CID_V0, CreatorError, FEE_POLICY, MANIFEST_FORMAT, MANIFEST_VERSION, encodeManifest, isRvnAddress, manifestSigningMessage, verifyManifest, withSignature,
-  type CreatorManifest, type Details, type FileEntry, type UnsignedManifest,
-} from './manifest';
+import type { ContentType, FileInput, FilesCheck } from './limits';
+import { CID_V0, CreatorError, type CreatorManifest, type Details } from './manifest';
 import { atomsToRvn } from './bytes';
-import { buildLockSection, sealLockedFile, type Rng } from './lock';
-import { MAX_PREVIEW_CLIP_BYTES, type LockFile } from './manifest';
-import { scheduleFee } from './fee-schedule';
+import type { Rng } from './lock';
+import { legacyIssueGuard } from '../brand/legacy-asset';
 import { REAL_MAINNET_ISSUE_ENABLED } from './mainnet-switches';
+import { RVN_ASSET_TESTNET, chainAssetIssueGate, isConfirmedChain, type ConfirmedChain } from './asset-testnet';
+import { assembleManifest, baseChecks } from './manifest-assemble';
 
 /*
  * 「내 콘텐츠 올리기」 흐름의 순수 부분: 파일 검사 → 보관(pin) → 매니페스트 → 제작자 서명 → 자기 검사 → 매니페스트 보관 → 발행 계획.
@@ -91,89 +89,26 @@ export type PublishResult = {
   check: FilesCheck; manifest: CreatorManifest; manifestBytes: Uint8Array; manifestCid: string; manifestSha256: string; pinnedBy: string; real: boolean;
 };
 
-const LOCK_TYPES: readonly ContentType[] = ['music', 'book', 'digital'];
-/** 열람 보호면 클립을 내용 파일 목록 끝에 붙여 한 묶음으로 검사한다(클립도 확장자·머리·크기 검사를 받는다). */
-const allFilesOf = (input: PublishInput): FileInput[] => input.lock?.previewClip ? [...input.files, { ...input.lock.previewClip, role: 'content' as const }] : input.files;
-
-/** 올리기 전에 할 수 있는 검사 전부(파일·이름·주소). 돈도 네트워크도 쓰지 않는다. */
+/**
+ * 올리기 전에 할 수 있는 검사 전부(파일·이름·주소). 돈도 네트워크도 쓰지 않는다.
+ * 🔴 옛 `RV.` 이름은 새로 만들 수 없다(결정문 §26·§29 ④·§31 ⓑ) — 우회 칸은 없다. 옛 자산 읽기는 verifyManifest·parseLegacyAssetName 으로.
+ */
 export function precheck(input: PublishInput): { check: FilesCheck; problems: string[] } {
-  const check = checkFiles(input.type, allFilesOf(input));
-  const problems = check.problems.map(p => p.path ? `${p.path}: ${p.say}` : p.say);
-  if (input.lock) {
-    if (!LOCK_TYPES.includes(input.type)) problems.push('이 종류는 열람 보호를 걸 수 없어요(게임·티켓).');
-    if (input.lock.key.length !== 32) problems.push('상품 열쇠가 올바르지 않아요.');
-    const clip = input.lock.previewClip ?? null;
-    if (clip && input.type === 'digital') problems.push('이 종류에는 미리보기 클립이 없어요.');
-    if (clip && clip.bytes.length > MAX_PREVIEW_CLIP_BYTES) problems.push('미리듣기·미리보기 클립이 너무 커요. 짧게 잘라 주세요.');
-    if (clip && input.files.some(f => f.path === clip.path || sha256Hex(f.bytes) === sha256Hex(clip.bytes))) problems.push('미리듣기·미리보기 클립은 본 파일과 다른 파일이어야 해요.');
-    const pf = (input.details as { previewFile?: string | null }).previewFile;
-    if ((input.type === 'music' || input.type === 'book') && (pf ?? null) !== (clip?.path ?? null)) problems.push('열람 보호 상품의 미리듣기 파일은 따로 만든 클립이어야 해요(본 파일을 그대로 고를 수 없어요).');
-  }
-  const name = checkCreatorAssetName(input.asset, input.prefix ?? CREATOR_ASSET_PREFIX, { type: input.type });
-  problems.push(...name.problems);
-  if (!isRvnAddress(input.creatorAddress)) problems.push('제작자 주소(R…)가 올바르지 않아요.');
-  if (!isRvnAddress(input.receivingAddress)) problems.push('판매 대금 받을 주소(R…)가 올바르지 않아요.');
-  if (!input.title.trim()) problems.push('제목을 적어 주세요.');
+  const { check, problems } = baseChecks(input);
+  const legacy = legacyIssueGuard(input.asset);
+  if (!legacy.allowed) problems.push(legacy.say);
   return { check, problems };
 }
 
 /**
- * 올리기: 파일을 하나씩 보관하고 CID 를 받아 매니페스트를 만들고, 제작자 주소로 서명하고, 서명을 스스로 다시 확인한 뒤
+ * 올리기: 파일을 하나씩 보관하고 CID 를 받아 매니페스트를 만들고, 제작자 서명하고, 서명을 스스로 다시 확인한 뒤
  * 매니페스트 자체를 보관한다. 하나라도 틀리면 멈춘다(반쯤 올라간 파일은 보관소에 남을 수 있다 — 화면이 알린다).
  */
 export async function publishContent(input: PublishInput, pin: PinAdapter, sign: MessageSigner,
   opts: { cache?: PinCache; onProgress?: (p: PublishProgress) => void } = {}): Promise<PublishResult> {
   const { check, problems } = precheck(input);
   if (problems.length) throw new CreatorError('manifest-files', problems.join(' / '));
-  const byPath = new Map(allFilesOf(input).map(f => [f.path, f]));
-  const cache = opts.cache ?? new Map();
-  const total = check.files.length + 1;
-  let done = 0;
-  const lockFiles: Array<LockFile> = [];
-  const clipPath = input.lock?.previewClip?.path ?? null;
-  const entryOf = async (path: string): Promise<FileEntry> => {
-    const f = byPath.get(path)!, c = check.files.find(x => x.path === path)!;
-    if (input.lock && c.role === 'content' && path !== clipPath) {
-      // 열람 보호: 암호문만 보관한다. 조각 nonce 가 난수라 같은 파일도 올릴 때마다 CID 가 달라진다(이어 올리기 캐시를 쓰지 않는다).
-      const sealed = sealLockedFile({ key: input.lock.key, asset: input.asset, path, bytes: f.bytes, rng: input.lock.rng });
-      const r = await pin.add(path, sealed.cipher);
-      if (!CID_V0.test(r.cid) || r.size !== sealed.cipher.length) throw new CreatorError('manifest-files', `보관소가 이상한 답을 줬어요: ${path}`);
-      lockFiles.push({ path, cid: r.cid, plainSize: sealed.plainSize, plainSha256: sealed.plainSha256 });
-      opts.onProgress?.({ done: ++done, total, path, skipped: false });
-      return { path, cid: r.cid, sha256: sha256Hex(sealed.cipher), size: sealed.cipher.length, mime: c.mime };
-    }
-    const sha = sha256Hex(f.bytes);
-    const hit = cache.get(sha);
-    let r: PinResult;
-    if (hit && CID_V0.test(hit.cid) && hit.size === f.bytes.length) r = hit;
-    else {
-      r = await pin.add(path, f.bytes);
-      if (!CID_V0.test(r.cid) || r.size !== f.bytes.length) throw new CreatorError('manifest-files', `보관소가 이상한 답을 줬어요: ${path}`);
-      cache.set(sha, { cid: r.cid, size: r.size });
-    }
-    opts.onProgress?.({ done: ++done, total, path, skipped: r === hit });
-    return { path, cid: r.cid, sha256: sha, size: f.bytes.length, mime: c.mime };
-  };
-  const files: FileEntry[] = [];
-  for (const c of check.files.filter(x => x.role === 'content')) files.push(await entryOf(c.path));
-  const coverFile = check.files.find(x => x.role === 'cover');
-  const cover = coverFile ? await entryOf(coverFile.path) : null;
-  const unsigned: UnsignedManifest = {
-    format: MANIFEST_FORMAT, version: MANIFEST_VERSION, type: input.type, asset: input.asset, title: input.title.trim(), description: input.description.trim(),
-    files, cover, creator: { address: input.creatorAddress, receivingAddress: input.receivingAddress },
-    price: input.priceAtoms === null ? null : { atoms: input.priceAtoms }, fee: input.declaredFeeBps === undefined ? scheduleFee(input.feeScheduleId) : { policy: FEE_POLICY, declaredBps: input.declaredFeeBps },
-    details: input.details, createdAt: input.now.toISOString(),
-    ...(input.lock ? { lock: buildLockSection({ asset: input.asset, key: input.lock.key, files: lockFiles, deliver: input.lock.deliver }) } : {}),
-  };
-  const signature = await sign(input.creatorAddress, manifestSigningMessage(unsigned));
-  const manifest = withSignature(unsigned, input.creatorAddress, signature);
-  const manifestBytes = encodeManifest(manifest);
-  // 올리기 전에 받는 사람과 똑같이 검사한다 — 서명이 틀린 매니페스트를 세상에 내보내지 않는다.
-  const verified = verifyManifest(manifestBytes, { expectedAsset: input.asset, prefix: input.prefix });
-  const m = await pin.add('manifest.json', manifestBytes);
-  if (!CID_V0.test(m.cid)) throw new CreatorError('manifest-files', '매니페스트 CID 가 이상해요');
-  opts.onProgress?.({ done: ++done, total, path: 'manifest.json', skipped: false });
-  return { check, manifest, manifestBytes, manifestCid: m.cid, manifestSha256: verified.bytesSha256, pinnedBy: pin.holder, real: pin.real };
+  return assembleManifest(input, check, pin, sign, opts);
 }
 
 /* ── 발행 계획 ──────────────────────────────────────────────────────── */
@@ -195,14 +130,32 @@ export interface Issuer { issue(params: IssueParams): Promise<{ txid: string }> 
  * 발행 확인 화면에 그릴 모든 것과 「지금 발행해도 되나」. 사람이 이름을 다시 적는 것(typedName)까지 맞아야 canIssue.
  * 자산은 qty 1·units 0·reissuable true 로 만든다(설계 §2.2 — 매니페스트를 고치려면 재발행이 필요하므로 잠그지 않는다).
  */
-export function planIssue(p: { asset: string; manifestCid: string; chain: string; ownedAssets: readonly string[]; nameTaken: boolean | null;
+/** planIssue 가 받는 접두어: 기본값만(다른 접두어로 바꿔 옛 이름 가드·이름 규칙을 비켜 가는 길을 닫는다). 바꾸려면 asset-name.ts 기본값 한 곳. */
+export const ISSUE_PREFIXES: ReadonlySet<string> = new Set([CREATOR_ASSET_PREFIX]);
+
+/**
+ * chain 은 호출자 문자열이 아니라 confirmNodeChain(노드 보고, 검증 함수) 결과여야 한다(R25 리뷰 #10).
+ * 🔴 지금 기본 접두어는 옛 규칙 「RV.」 이고 그 새 발행은 늘 막히므로, 이 옛 흐름으로는 어떤 이름도 발행 가능(canIssue)이 되지 않는다.
+ *    새 체인 자산은 publish-route.ts planChainAssetIssueV2(§31 ⓒ) 로만.
+ */
+export function planIssue(p: { asset: string; manifestCid: string; chain: ConfirmedChain | null; ownedAssets: readonly string[]; nameTaken: boolean | null;
   chainBurnRvn: number | null; typedName: string; prefix?: string; realMainnetEnabled?: boolean;
+  /** 새 체인 자산 시험망 플래그(기본 asset-testnet.ts RVN_ASSET_TESTNET). 켜도 메인넷은 열리지 않는다. */
+  assetTestnet?: boolean;
   /** 매니페스트 종류. 주면 이름의 종류 글자와 같아야 한다(사칭 방지). */
   type?: ContentType }): IssuePlan {
-  const name = checkCreatorAssetName(p.asset, p.prefix ?? CREATOR_ASSET_PREFIX, { type: p.type ?? null });
+  const prefix = p.prefix ?? CREATOR_ASSET_PREFIX;
+  const name = checkCreatorAssetName(p.asset, prefix, { type: p.type ?? null });
   const burn = burnCheck(name.kind, p.chainBurnRvn);
-  const testChain = TEST_CHAINS.has(p.chain);
+  const confirmed = isConfirmedChain(p.chain);
+  const chainName = confirmed ? p.chain!.chain : 'unconfirmed';
+  const testChain = confirmed && TEST_CHAINS.has(chainName);
   const blockers: string[] = [...name.problems];
+  if (!ISSUE_PREFIXES.has(prefix)) blockers.push(`이름 접두어는 기본값(${CREATOR_ASSET_PREFIX})만 쓸 수 있어요.`);
+  const legacy = legacyIssueGuard(p.asset);
+  if (!legacy.allowed) blockers.push(legacy.say);
+  // §31 ⓒ: 옛 이름이 아닌 체인 자산 발행은 시험망 플래그 뒤에서만(메인넷 스위치와 독립, 메인넷은 항상 막힘).
+  blockers.push(...chainAssetIssueGate(confirmed ? p.chain : null, p.assetTestnet ?? RVN_ASSET_TESTNET).blockers);
   if (!CID_V0.test(p.manifestCid)) blockers.push('매니페스트 CID 가 없어요. 먼저 올려 주세요.');
   if (name.ownerTokenNeeded && !p.ownedAssets.includes(name.ownerTokenNeeded))
     blockers.push(`이 이름 아래 만들려면 이 지갑에 「${name.ownerTokenNeeded}」 주인 표가 있어야 해요.`);
@@ -218,7 +171,7 @@ export function planIssue(p: { asset: string; manifestCid: string; chain: string
     '등록해도 「검증됨」이 아니에요. 자동 점검을 통과하면 「보증」 표시와 경고를 달고 팔 수 있고(실행되는 게임은 제외), 신원·세이브 연결은 검증된 뒤에만 돼요.',
     '환불·배송·티켓 취소 같은 판매 책임은 제작자에게 있어요. 레이븐볼트는 돈을 맡지 않아 대신 돌려줄 수 없어요.',
   ];
-  return { params: { name: p.asset, qty: 1, units: 0, reissuable: true, ipfsHash: p.manifestCid }, burn, canIssue: blockers.length === 0, blockers, irreversible, chain: p.chain, testChain };
+  return { params: { name: p.asset, qty: 1, units: 0, reissuable: true, ipfsHash: p.manifestCid }, burn, canIssue: blockers.length === 0, blockers, irreversible, chain: chainName, testChain };
 }
 
 /** 시험용 발행기: 노드를 부르지 않고 부름만 기록한다. */

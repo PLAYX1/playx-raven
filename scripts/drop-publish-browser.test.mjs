@@ -25,6 +25,8 @@ const built = await build({ entryPoints: [join(root, 'scripts/fixtures/drop-entr
 const D = { exports: {} };
 new Function('require', 'exports', 'module', built.outputFiles[0].text)(createRequire(import.meta.url), D.exports, D);
 const C = D.exports;
+// 🔒 옛 이름 발행 화면 흐름 시험은 잠금(CREATOR_PUBLISH_PAUSED)이 풀릴 때만 돈다(지우지 않는다). 지갑 core 가 옛 RV. 새 발행을 늘 막으므로 풀 때 새 이름 규칙으로 다시 쓴다.
+const PAUSED_SKIP = C.CREATOR_PUBLISH_PAUSED ? '「내 상품 올리기」 임시 잠금 중(src/creator-pause.ts) — 옛 RV. 이름으로 올리고 등록하는 화면 흐름. 잠금 해제 때 새 이름 규칙으로 다시 쓴다' : false;
 const uiBundle = (await build({ stdin: { contents: "import { wireDropPublish } from './src/drop-publish.ts'; import { renderStorefront, TEMPLATE_IDS, THEME_IDS } from './src/drop-look.ts'; Object.assign(window, { __wireDropPublish: wireDropPublish, __renderStorefront: renderStorefront, __TEMPLATE_IDS: TEMPLATE_IDS, __THEME_IDS: THEME_IDS });", resolveDir: root, loader: 'ts' },
   bundle: true, write: false, platform: 'browser', format: 'iife', logLevel: 'silent' })).outputFiles[0].text;
 const KEY = C.randomKey(), ADDRESS = C.addressOf(KEY);
@@ -156,7 +158,7 @@ async function publishFlow(page) {
   await waitState(page, 'done', 20000);
 }
 
-test('drag & drop anywhere: veil appears, album detected (EP, cover, track order), preview → one confirm → mock issue', { timeout: 180_000 }, async () => {
+test('drag & drop anywhere: veil appears, album detected (EP, cover, track order), preview → one confirm → mock issue', { timeout: 180_000, skip: PAUSED_SKIP }, async () => {
   const page = await openDrop();
   assert.equal(await state(page), 'idle');
   assert.match(await txt(page, '#dp-zone'), /여기에 놓으면 상품이 만들어져요/);
@@ -228,10 +230,10 @@ test('desktop path: Tauri drop-files event with a folder → creator_dropped_lis
   await page.close();
 });
 
-test('IPFS address paste: dead CID refused; a manifest CID goes straight to issue (no re-upload); a file CID becomes a product', { timeout: 180_000 }, async () => {
+test('IPFS address paste: dead CID refused; a manifest CID goes straight to issue (no re-upload); a file CID becomes a product', { timeout: 180_000, skip: PAUSED_SKIP }, async () => {
   // A manifest made beforehand (mock pin) — the paste must verify it and only issue.
   const pin = new C.MockPinAdapter();
-  const r = await C.publishContent({ type: 'book', asset: 'RV.B.SEA_PASTE', title: 'Pasted Book', description: '', files: [{ path: 'sea.pdf', bytes: PDF('x'), mime: 'application/pdf' }],
+  const r = await C.legacyManifestForTest({ type: 'book', asset: 'RV.B.SEA_PASTE', title: 'Pasted Book', description: '', files: [{ path: 'sea.pdf', bytes: PDF('x'), mime: 'application/pdf' }],
     creatorAddress: ADDRESS, receivingAddress: ADDRESS, priceAtoms: '1000000000', declaredFeeBps: 1500, details: { bookFile: 'sea.pdf', format: 'pdf', previewFile: null, previewPages: 0, pageCount: null }, now: new Date() },
   pin, async (_a, m) => C.signMessageForTest(m, KEY));
   const cidStore = Object.fromEntries([...pin.stored].map(([c, b]) => [c, b64(b)]));
@@ -263,7 +265,7 @@ test('IPFS address paste: dead CID refused; a manifest CID goes straight to issu
   await page.close();
 });
 
-test('keyboard only: paste field → Enter → template by keyboard → publish → confirm → done; Escape cancels the dialog', { timeout: 120_000 }, async () => {
+test('keyboard only: paste field → Enter → template by keyboard → publish → confirm → done; Escape cancels the dialog', { timeout: 120_000, skip: PAUSED_SKIP }, async () => {
   const pngCid = C.mockCid(PNG(6));
   const page = await openDrop({ cidStore: { [pngCid]: b64(PNG(6)) } });
   await page.focus('#dp-title');
@@ -301,7 +303,7 @@ test('keyboard only: paste field → Enter → template by keyboard → publish 
   await page.close();
 });
 
-test('safety locks stay: taken name, unknown name (「확인 불가」 + 다시 조회), mainnet switch off — publish disabled, nothing issued', { timeout: 180_000 }, async () => {
+test('safety locks stay: taken name, unknown name (「확인 불가」 + 다시 조회), mainnet switch off — publish disabled, nothing issued', { timeout: 180_000, skip: PAUSED_SKIP }, async () => {
   for (const [opts, re] of [[{ taken: ['RV.B.SEA'] }, /이미 있는 이름/], [{ nameUnknown: true }, /확인 불가/], [{ chain: 'main' }, /실제 발행은 아직 꺼져/]]) {
     if (opts.chain === 'main' && SW.issue) continue; // 스위치가 켜진 빌드(enable 커밋)에서는 이 잠금 항목이 없다
     const page = await openDrop(opts);
@@ -322,6 +324,36 @@ test('safety locks stay: taken name, unknown name (「확인 불가」 + 다시 
     assert.equal((await page.evaluate(() => window.__dropCalls)).filter(c => c.cmd === 'issue_asset').length, 0);
     await page.close();
   }
+});
+
+test('잠금 상태(출하 연결): 끌어놓기 화면은 쉬운 안내 한 줄 · 놓은 파일의 미리보기·점검은 보이지만 「발행」은 막히고 억지로 눌러도 확인 창도 안 열리고 아무것도 올리거나 서명·등록하지 않는다 · 390/1440 × light/dark', { timeout: 300_000 }, async () => {
+  assert.equal(C.CREATOR_PUBLISH_PAUSED, true);
+  const report = {};
+  const measure = async page => {
+    await page.mouse.move(1, 1);
+    await page.waitForFunction(() => document.getAnimations().filter(a => a.playState === 'running').length === 0, { timeout: 4000 }).catch(() => {});
+    return { problems: await page.evaluate(layoutProblems, ['#dp']), low: (await page.evaluate(textContrast, '#dp')).filter(x => x.ratio < 4.5) };
+  };
+  for (const width of [390, 1440]) for (const theme of ['light', 'dark']) {
+    const page = await openDrop({ width, theme });
+    assert.match(await txt(page, '#dp-paused'), /^새 발행 방식으로 옮기는 중이라 지금은 상품 올리기를 잠시 사용할 수 없어요\./);
+    report[`${width}-${theme}-idle`] = await measure(page);
+    await htmlDrop(page, ALBUM, { target: '.app, body' });
+    await waitState(page, 'blocked');
+    await page.waitForFunction(() => /새 발행 방식으로 옮기는 중/.test(document.querySelector('#dp-why')?.textContent ?? ''));
+    assert.equal(await page.$eval('#dp-publish', b => b.disabled), true);
+    assert.match(await txt(page, '#dp-chips'), /새 발행 방식으로 옮기는 중/);
+    assert.match(await txt(page, '#dp-card'), /숲의 노래.*바다.*하늘/, 'preview still shows what was dropped');
+    await page.evaluate(() => { const b = document.querySelector('#dp-publish'); b.disabled = false; b.click(); });
+    await new Promise(r => setTimeout(r, 300));
+    assert.equal(await page.$eval('#dp-confirm', d => d.open), false, 'no confirm dialog');
+    const touched = (await page.evaluate(() => window.__dropCalls)).filter(c => ['ipfs_add_file', 'sign_message', 'issue_asset'].includes(c.cmd));
+    assert.deepEqual(touched, [], 'nothing pinned, signed or issued');
+    report[`${width}-${theme}-blocked`] = await measure(page);
+    assert.deepEqual(page.__errors ?? [], []);
+    await page.close();
+  }
+  for (const [k, v] of Object.entries(report)) { assert.deepEqual(v.problems, [], `${k} layout`); assert.deepEqual(v.low, [], `${k} contrast`); }
 });
 
 test('templates × themes: trust strip is always first and readable; user text is never HTML; unsafe image URLs are dropped', { timeout: 120_000 }, async () => {
@@ -416,7 +448,7 @@ async function rewire(page, { lang, stretch }) {
   }, { lang, stretch });
 }
 
-test('layout matrix: 320·390·768·1024·1440 × light/dark × ko·de·ru·+60%·+100% — no overflow, clipping, overlap; targets ≥ 44px; contrast ≥ 4.5:1', { timeout: 1_200_000 }, async () => {
+test('layout matrix: 320·390·768·1024·1440 × light/dark × ko·de·ru·+60%·+100% — no overflow, clipping, overlap; targets ≥ 44px; contrast ≥ 4.5:1', { timeout: 1_200_000, skip: PAUSED_SKIP }, async () => {
   const quick = !!process.env.RV_DROP_MATRIX_QUICK;
   const LANGS = [{ id: 'ko', lang: 'ko', stretch: 1 }, { id: 'de', lang: 'de', stretch: 1 }, { id: 'ru', lang: 'ru', stretch: 1 }, { id: 'ps60', lang: 'ko', stretch: 1.6 }, { id: 'ps100', lang: 'en', stretch: 2 }].slice(0, quick ? 1 : 5);
   const SHOT = process.env.RV_DROP_SHOTS;

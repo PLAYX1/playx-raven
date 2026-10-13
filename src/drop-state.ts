@@ -44,7 +44,7 @@ export const DROP_TRANSITIONS = T;
 /* ── (2) 안전 장치 칩 ────────────────────────────────────────────────── */
 
 export type ChipStatus = 'pass' | 'warn' | 'block';
-export type Chip = { id: 'files' | 'info' | 'name' | 'lookalike' | 'chain-name' | 'burn' | 'cid' | 'network' | 'balance' | 'runs-code'; status: ChipStatus; say: string; next?: string };
+export type Chip = { id: 'paused' | 'files' | 'info' | 'name' | 'lookalike' | 'chain-name' | 'burn' | 'cid' | 'network' | 'balance' | 'runs-code'; status: ChipStatus; say: string; next?: string };
 
 export type GateInput = {
   input: PublishInput;

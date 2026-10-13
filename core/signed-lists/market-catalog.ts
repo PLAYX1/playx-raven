@@ -5,6 +5,7 @@ import { isContentType, type ContentType } from '../creator/limits';
 import { CID_V0, CreatorError, isRvnAddress, verifyManifest, type CreatorManifest } from '../creator/manifest';
 import { OPERATING_LIST_KEYS } from '../creator/operating-keys';
 import { MAX_BUNDLE_BYTES, canonicalJson, keyIdOf, type ListKey } from './envelope';
+import { SIGNING_DOMAINS, brandUrl } from '../brand/brand';
 import { httpSource, storageStore, type FetchLike, type ListSource, type StateStore } from './sources';
 
 /*
@@ -33,9 +34,9 @@ import { httpSource, storageStore, type FetchLike, type ListSource, type StateSt
  */
 
 export const CATALOG_FORMAT = 'rv-market-catalog';
-export const CATALOG_DOMAIN = 'RAVENVAULT-MARKET-CATALOG-V1';
+export const CATALOG_DOMAIN = SIGNING_DOMAINS.MARKET_CATALOG_V1;
 export const CATALOG_STATE_FORMAT = 'rv-market-catalog-state';
-export const MARKET_CATALOG_URL = 'https://ravenvault.ex.erci.se/lists/market-catalog.json';
+export const MARKET_CATALOG_URL = brandUrl('/lists/market-catalog.json');
 export const CATALOG_MAX_BYTES = Math.min(2 * 1024 * 1024, MAX_BUNDLE_BYTES);
 export const CATALOG_MAX_ENTRIES = 2000;
 export const CATALOG_MAX_LIFETIME_MS = 60 * 24 * 3600 * 1000;

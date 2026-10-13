@@ -39,7 +39,7 @@ const section = html.slice(html.indexOf('<section class="page" id="page-market"'
 const KEY = C.randomKey(), ADDRESS = C.addressOf(KEY), RECEIVING = 'RCJPGkCQi5NpBgtj8qkjGcSugfWRa3iQiS';
 const pin = new C.MockPinAdapter();
 const MP3 = Uint8Array.from([0x49, 0x44, 0x33, 3, 0, 0, 0, 0, 0, 0, 0xff, 0xfb, 0x90, 0x64]);
-const song = await C.publishContent({ type: 'music', asset: 'RV.M.MORNING_SONG', title: '아침 노래', description: '짧은 노래', files: [{ path: 'm.mp3', bytes: MP3, mime: 'audio/mpeg' }],
+const song = await C.legacyManifestForTest({ type: 'music', asset: 'RV.M.MORNING_SONG', title: '아침 노래', description: '짧은 노래', files: [{ path: 'm.mp3', bytes: MP3, mime: 'audio/mpeg' }],
   creatorAddress: ADDRESS, receivingAddress: RECEIVING, priceAtoms: '2000000000', declaredFeeBps: 1500, details: { previewFile: 'm.mp3', previewStartMs: 0, previewEndMs: 30000 },
   now: new Date('2026-10-10T09:00:00.000Z') }, pin, async (_a, m) => C.signMessageForTest(m, KEY));
 const store = Object.fromEntries([...pin.stored.entries()].map(([k, v]) => [k, Array.from(v)]));

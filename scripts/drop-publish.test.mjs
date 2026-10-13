@@ -101,7 +101,8 @@ async function musicInput(asset = 'RV.M.RAIN_EP') {
   };
 }
 
-test('manifest v3: look + tracks signed under the V3 domain, verified like v2, readable next to v2; v2 stays the default', async () => {
+// 🔒 아래 v3·안전 점검 시험은 옛 RV. 이름으로 새로 올리는 경로를 탄다 — 잠금이 풀릴 때만 돈다(지우지 않는다). 지갑 core 가 옛 이름 새 발행을 늘 막으므로 풀 때 새 이름 규칙으로 다시 쓴다.
+test('manifest v3: look + tracks signed under the V3 domain, verified like v2, readable next to v2; v2 stays the default', { skip: D.CREATOR_PUBLISH_PAUSED ? '「내 상품 올리기」 임시 잠금 중(src/creator-pause.ts) — 옛 RV. 이름 발행 시험. 잠금 해제 때 새 이름 규칙으로 다시 쓴다' : false }, async () => {
   assert.equal(D.DROP_MANIFEST_V3_ENABLED, false, 'v3 publishing stays off until the wallet repo reads it');
   const { input, tracks } = await musicInput();
   const pin = new D.MockPinAdapter();
@@ -125,7 +126,7 @@ test('manifest v3: look + tracks signed under the V3 domain, verified like v2, r
   assert.equal(D.verifyManifest(D.encodeManifest(re)).signedBy, ADDRESS);
 });
 
-test('manifest v3: tampering and inconsistent fields are refused', async () => {
+test('manifest v3: tampering and inconsistent fields are refused', { skip: D.CREATOR_PUBLISH_PAUSED ? '「내 상품 올리기」 임시 잠금 중(src/creator-pause.ts) — 옛 RV. 이름 발행 시험. 잠금 해제 때 새 이름 규칙으로 다시 쓴다' : false }, async () => {
   const { input, tracks } = await musicInput();
   const r = await D.publishV3(input, { look: null, music: D.musicExtFrom('ep', tracks, { startMs: 0, endMs: 30000 }) }, new D.MockPinAdapter(), signer);
   const m = JSON.parse(new TextDecoder().decode(r.manifestBytes));
@@ -157,7 +158,22 @@ const okGate = (patch = {}) => ({
 });
 const blockIds = g => D.dropGates(g).blockers.map(c => c.id);
 
-test('safety gates: same checks as the wizard — taken/unknown name, burn mismatch, mainnet lock, dead CID, balance, bad files', () => {
+test('잠금 상태: 끌어놓기 점검은 옛 RV. 이름을 막고(그 밖의 점검 줄은 그대로 보임), 마지막 판정 planIssue 도 막는다', () => {
+  assert.equal(D.CREATOR_PUBLISH_PAUSED, true);
+  const g = D.dropGates(okGate());
+  assert.equal(g.canPublish, false);
+  assert.deepEqual(g.blockers.map(b => b.id), ['info']);
+  assert.match(g.blockers[0].say, /옛 이름 규칙\(RV\.\)/);
+  assert.deepEqual(blockIds(okGate({ nameTaken: true })), ['info', 'chain-name'], 'other checks still run and show');
+  assert.ok(blockIds(okGate({ chain: 'main', realMainnetEnabled: false })).includes('network'));
+  const pre = D.dropGates({ ...okGate(), prepublished: { asset: 'RV.B.SEA_BOOK' }, input: { ...okGate().input, files: [] } });
+  assert.equal(pre.chips.find(c => c.id === 'files').status, 'pass', 'an already-published manifest still reads as checked');
+  const plan = D.planIssue({ asset: 'RV.B.SEA_BOOK', manifestCid: 'Qm' + 'c'.repeat(44), chain: D.confirmNodeChain({ chain: 'regtest', genesisHash: 'ab'.repeat(32) }, () => true),
+    ownedAssets: [], nameTaken: false, chainBurnRvn: null, typedName: 'RV.B.SEA_BOOK', type: 'book' });
+  assert.equal(plan.canIssue, false); assert.ok(plan.blockers.some(b => b.includes('옛 이름 규칙')));
+});
+
+test('safety gates: same checks as the wizard — taken/unknown name, burn mismatch, mainnet lock, dead CID, balance, bad files', { skip: D.CREATOR_PUBLISH_PAUSED ? '「내 상품 올리기」 임시 잠금 중(src/creator-pause.ts) — 옛 RV. 이름 발행 시험. 잠금 해제 때 새 이름 규칙으로 다시 쓴다' : false }, () => {
   const ok = D.dropGates(okGate());
   assert.equal(ok.canPublish, true, JSON.stringify(ok.blockers));
   assert.equal(ok.chips.find(c => c.id === 'burn').status, 'warn', 'burn amount shown as 「확인 불가」, not hidden');

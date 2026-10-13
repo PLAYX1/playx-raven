@@ -8,6 +8,7 @@ import { BOND_SAY, OPEN_MARKET_SALES_ENABLED, feeNotice, type FeeNoticeOptions }
 import { MARKET_FEE_BPS_CEILING, type FeeSchedule } from '../core/creator/fee-schedule';
 import { splitPrice } from '../core/game-registry/platform-fee';
 import { LOCK_COPY, lockableType, lockedInputFor, markBackedUp, readBackups, saveKeyFile, type ClipMaker } from './lock-ui';
+import { CREATOR_PAUSE_SAY, CREATOR_PUBLISH_PAUSED, pauseNotice } from './creator-pause';
 
 /** 일정이 받을 수 있는 가장 높은 요율(코드 천장)로 나눠도 판매자 몫이 남는가 — 매니페스트 검사와 같은 기준. */
 const splitsAtCeiling = (atoms: string) => { try { splitPrice(atoms, MARKET_FEE_BPS_CEILING); return true; } catch { return false; } };
@@ -117,6 +118,8 @@ export type CreatorDeps = {
   pickFolder?: () => Promise<string | null>;
   /** 미리듣기 클립 만들기(기본 = 웹뷰 소리 해독기). 시험이 모의로 바꾼다. */
   makeClip?: ClipMaker;
+  /** 올리기·등록 임시 잠금(기본 = creator-pause.ts 의 CREATOR_PUBLISH_PAUSED). 시험만 바꿔 넣는다. */
+  paused?: boolean;
 };
 
 export function wireCreatorPublish(deps: CreatorDeps) {
@@ -126,6 +129,7 @@ export function wireCreatorPublish(deps: CreatorDeps) {
   const sign = nodeSigner(deps.invoke, deps.askPassword);
   const store = (() => { try { return deps.storage === undefined ? window.localStorage : deps.storage; } catch { return null; } })();
   const now = () => deps.now?.() ?? new Date();
+  const paused = deps.paused ?? CREATOR_PUBLISH_PAUSED;
   // 수수료 안내의 「지금」 = 체인 높이. 메인넷 노드가 다 따라잡았을 때만 그 높이를 쓰고, 아니면 일정의 시작 시각으로 어림(화면에 「예상」).
   let chainHeight: number | null = null;
   const readChainHeight = async () => {
@@ -200,8 +204,13 @@ export function wireCreatorPublish(deps: CreatorDeps) {
   void readChainHeight().then(paintGuideFee);
   el('cw-switch-note').textContent = `지금은 시험 단계예요. 실제 메인넷 등록은 ${REAL_MAINNET_ISSUE_ENABLED ? '열려' : '꺼져'} 있고, 판매(구매 결제)는 ${OPEN_MARKET_SALES_ENABLED ? '열려' : '꺼져'} 있어요(대표 결정 대기). 시험망에서만 등록할 수 있어요.`;
   el('cw-test-note').textContent = '시험 단계 — 실제 메인넷 등록·판매는 꺼져 있어요.';
-  input('cw-guide-ok').onchange = () => { (el('cw-start') as HTMLButtonElement).disabled = !input('cw-guide-ok').checked; };
-  el('cw-start').onclick = () => { if (input('cw-guide-ok').checked) go(1); };
+  // 임시 잠금(creator-pause.ts): 안내 한 줄 + 시작·올리기·등록 단추를 막는다. 이미 올린 상품 보기·열람 처리는 그대로.
+  if (paused) {
+    const n = pauseNotice(document, 'cw-paused', paused); if (n && !el('cw-paused')) el('cw-test-note').after(n);
+    for (const id of ['cw-start', 'cw-upload', 'cw-issue']) (el(id) as HTMLButtonElement).disabled = true;
+  }
+  input('cw-guide-ok').onchange = () => { (el('cw-start') as HTMLButtonElement).disabled = paused || !input('cw-guide-ok').checked; };
+  el('cw-start').onclick = () => { if (paused) { setError(CREATOR_PAUSE_SAY); return; } if (input('cw-guide-ok').checked) go(1); };
 
   /* ── 열람 보호(RV-LOCK v1) ── */
   const lockOn = () => lockableType(type) && input('cw-lock-on').checked;
@@ -492,7 +501,7 @@ export function wireCreatorPublish(deps: CreatorDeps) {
     el('cw-progress').setAttribute('aria-valuenow', String(pct)); el('cw-progress-bar').style.width = pct + '%';
   }
   function paintUpload() {
-    (el('cw-upload') as HTMLButtonElement).disabled = !!published || busy;
+    (el('cw-upload') as HTMLButtonElement).disabled = paused || !!published || busy;
     (el('cw-pin-check') as HTMLButtonElement).disabled = !published || busy;
     paintBackup();
     if (published) { progress(1, 1); el('cw-upload-say').textContent = published.manifest.lock ? '암호화해서 다 올렸어요. 아래 열쇠 파일을 저장해야 다음으로 갈 수 있어요. 아직 아무에게도 보이지 않아요 — 마지막 확인에서 등록해야 목록에 나타나요.' : '다 올렸어요. 아직 아무에게도 보이지 않아요 — 마지막 확인에서 등록해야 목록에 나타나요.'; }
@@ -501,6 +510,7 @@ export function wireCreatorPublish(deps: CreatorDeps) {
   }
   async function upload() {
     if (busy || published) return;
+    if (paused) { setError(CREATOR_PAUSE_SAY); return; }
     if (!runCheck()) { setError('점검에서 고칠 곳이 있어요 → ④ 단계로 돌아가 고쳐 주세요.'); return; }
     busy = true; paintUpload();
     el('cw-upload-say').textContent = pin.real ? '올리는 중… 파일이 많으면 오래 걸려요. 닫아도 다음에 이어서 할 수 있어요.' : '시험 보관소에 올리는 중…';
@@ -547,7 +557,8 @@ export function wireCreatorPublish(deps: CreatorDeps) {
   }
   function paintPlan() {
     if (!published) return;
-    plan = planIssue({ asset: published.manifest.asset, manifestCid: published.manifestCid, chain, ownedAssets: [], nameTaken: taken,
+    // chain 자리는 노드 확인 결과(confirmNodeChain)만 받는다. 옛 이름 경로는 잠겨 있어(위 paused · core 옛 이름 차단) 확인 없이 null — 늘 막힌다.
+    plan = planIssue({ asset: published.manifest.asset, manifestCid: published.manifestCid, chain: null, ownedAssets: [], nameTaken: taken,
       chainBurnRvn: null, typedName: input('cw-typed').value.trim(), realMainnetEnabled: REAL_MAINNET_ISSUE_ENABLED, type: published.manifest.type });
     const c = costPlan({ burnRvn: plan.burn.rvn, networkFeeAtoms: null, balanceAtoms });
     el('cw-c-burn').textContent = `${plan.burn.rvn} RVN — 수수료가 아니라 보증이에요(소각, 아무도 받지 않음)`;
@@ -558,8 +569,9 @@ export function wireCreatorPublish(deps: CreatorDeps) {
     const blockers = plan.blockers.filter(b => !b.includes('다시 적어'));
     if (c.enough === false) blockers.push(`잔액이 ${atomsToRvn(c.shortAtoms)} RVN 모자라요 → ⑤ 단계의 받는 주소로 RVN 을 받은 뒤 다시 와 주세요.`);
     if (!backedUp()) blockers.push(LOCK_COPY.backupMissing);
+    if (paused) blockers.unshift(CREATOR_PAUSE_SAY);
     list(el('cw-c-blockers'), blockers, 'creator-bad');
-    (el('cw-issue') as HTMLButtonElement).disabled = !plan.canIssue || c.enough === false || busy || !backedUp();
+    (el('cw-issue') as HTMLButtonElement).disabled = paused || !plan.canIssue || c.enough === false || busy || !backedUp();
   }
   input('cw-typed').addEventListener('input', paintPlan);
   el('cw-c-dup-recheck').onclick = async () => {
@@ -569,6 +581,7 @@ export function wireCreatorPublish(deps: CreatorDeps) {
     paintDup(el('cw-c-dup'), taken); paintPlan();
   };
   async function issue() {
+    if (paused) { el('cw-issue-say').textContent = CREATOR_PAUSE_SAY; return; }
     if (!published || !plan?.canIssue || busy) return;
     if (!backedUp()) { el('cw-issue-say').textContent = LOCK_COPY.backupMissing; return; }
     busy = true; (el('cw-issue') as HTMLButtonElement).disabled = true;
@@ -641,8 +654,8 @@ export function wireCreatorPublish(deps: CreatorDeps) {
       if (e.type === 'checkbox') e.checked = v === true; else e.value = String(v);
       if (id === 'cw-asset' && v) e.dataset.touched = '1';
     }
-    (el('cw-start') as HTMLButtonElement).disabled = !input('cw-guide-ok').checked;
+    (el('cw-start') as HTMLButtonElement).disabled = paused || !input('cw-guide-ok').checked;
     go(3);
   }
-  return { go, paintMine, prefill, get step() { return step; } };
+  return { go, paintMine, prefill, get step() { return step; }, get paused() { return paused; } };
 }

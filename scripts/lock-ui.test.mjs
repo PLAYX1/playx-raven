@@ -14,6 +14,7 @@ async function moduleAt(path) {
 }
 const ui = await moduleAt('src/lock-ui.ts');
 const core = await moduleAt('scripts/fixtures/lock-entry.ts');
+// 매니페스트 조립은 시험 고정물 legacyManifestForTest(옛 RV. 이름 재현 — 체인에 아무것도 안 함)로 한다. 새 발행(publishContent)은 옛 이름을 막고, 화면의 올리기는 잠겨 있다(src/creator-pause.ts).
 const enc = s => new TextEncoder().encode(s);
 const PNG = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 73, 72, 68, 82]);
 const MP3 = n => { const b = Uint8Array.from({ length: n }, (_, i) => (i * 29 + 11) & 255); b.set([0x49, 0x44, 0x33, 3, 0, 0, 0, 0, 0, 0, 0xff, 0xfb]); return b; };
@@ -63,7 +64,7 @@ test('음악: 고른 구간을 별도 클립으로 · 못 자르면 미리듣기
   assert.deepEqual(prep.input.details, { previewFile: 'preview-clip.wav', previewStartMs: 0, previewEndMs: 2000 });
   assert(prep.input.files.some(x => x.path === 'song.mp3'), 'the full track stays in the encrypted set');
   const pin = new core.MockPinAdapter();
-  const r = await core.publishContent(prep.input, pin, sign);
+  const r = await core.legacyManifestForTest(prep.input, pin, sign);
   assert.equal(r.manifest.lock.files.length, 1); assert.equal(r.manifest.lock.files[0].path, 'song.mp3');
   const stored = [...pin.stored.values()];
   const full = Buffer.from(music().files[0].bytes);
@@ -73,7 +74,7 @@ test('음악: 고른 구간을 별도 클립으로 · 못 자르면 미리듣기
   const off = await ui.lockedInputFor(fakeInvoke().invoke, music(), { makeClip: async () => null });
   assert.equal(off.previewOff, true); assert.equal(off.notes[0], ui.LOCK_COPY.noClip);
   assert.deepEqual(off.input.details, { previewFile: null, previewStartMs: null, previewEndMs: null }); assert.equal(off.input.lock.previewClip, null);
-  const r2 = await core.publishContent(off.input, new core.MockPinAdapter(), sign);
+  const r2 = await core.legacyManifestForTest(off.input, new core.MockPinAdapter(), sign);
   assert.equal(r2.manifest.details.previewFile, null); assert.equal(r2.manifest.files.filter(x => x.mime.startsWith('audio')).length, 1);
   // 미리듣기를 아예 안 고른 경우도 끔
   const none = await ui.lockedInputFor(fakeInvoke().invoke, music({ details: { previewFile: null, previewStartMs: null, previewEndMs: null } }), { makeClip: async () => { throw new Error('must not be called'); } });
@@ -89,15 +90,15 @@ test('책·디지털: 미리보기 PDF 는 암호화에서 빼 클립으로, 책
     details: { bookFile: 'sea.pdf', format: 'pdf', previewFile: 'sea-preview.pdf', previewPages: 5, pageCount: 80 } };
   const p = await ui.lockedInputFor(fakeInvoke().invoke, book);
   assert.equal(p.input.lock.previewClip.path, 'sea-preview.pdf'); assert.deepEqual(p.input.files.map(f => f.path), ['sea.pdf']);
-  const r = await core.publishContent(p.input, new core.MockPinAdapter(), sign);
+  const r = await core.legacyManifestForTest(p.input, new core.MockPinAdapter(), sign);
   assert.deepEqual(r.manifest.lock.files.map(f => f.path), ['sea.pdf']); assert.equal(r.manifest.details.previewFile, 'sea-preview.pdf');
   const noPv = await ui.lockedInputFor(fakeInvoke().invoke, { ...book, details: { ...book.details, previewFile: null, previewPages: 0 }, files: [book.files[0]] });
-  const r2 = await core.publishContent(noPv.input, new core.MockPinAdapter(), sign);
+  const r2 = await core.legacyManifestForTest(noPv.input, new core.MockPinAdapter(), sign);
   assert.equal(r2.manifest.details.previewFile, null);
   const digital = { type: 'digital', asset: 'RV.X.LOCK_UI', title: '그림', description: '', priceAtoms: null, creatorAddress: ADDRESS, receivingAddress: RECEIVING, now: NOW,
     files: [{ path: 'a.png', bytes: PNG, mime: 'image/png' }, { path: 'b.pdf', bytes: PDF('x'), mime: 'application/pdf' }], details: { label: '모음' } };
   const d = await ui.lockedInputFor(fakeInvoke().invoke, digital);
-  const rd = await core.publishContent(d.input, new core.MockPinAdapter(), sign);
+  const rd = await core.legacyManifestForTest(d.input, new core.MockPinAdapter(), sign);
   assert.deepEqual(rd.manifest.lock.files.map(f => f.path).sort(), ['a.png', 'b.pdf']);
   assert.equal(ui.lockableType('game'), false); assert.equal(ui.lockableType('ticket'), false); assert.equal(ui.lockableType('music'), true);
 });

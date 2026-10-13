@@ -15,6 +15,10 @@
 - `core/game-registry/platform-fee.ts` (수수료 분할 — 지갑 v4 와 같은 파일)
 - `core/signed-lists/envelope.ts` · `creator-parts.ts` · `sources.ts` (서명된 허용·차단 목록 실행 중 갱신 — 지갑 브랜치 `claude/rv-signed-lists-core`. 지갑 쪽 `wallet.ts`·`boot.ts`(게임 등록부 연결)는 복사하지 않았다)
 
+- 동기화(2026-10-14, 지갑 통합 브랜치 `claude/rv-real-integ` 커밋 `25329eb` — 리뷰 수리 fix1·fix2·fix3 이후): `publish.ts`·`market-catalog.ts` 갱신본 + 새 파일 `core/creator/asset-testnet.ts`(노드 망 확인 `confirmNodeChain` — `planIssue` 의 `chain` 은 이제 확인 결과만 받는다) · `core/creator/manifest-assemble.ts` · `core/brand/brand.ts` · `core/brand/legacy-asset.ts` — 패치 없음, `vendor-sha256.json` 갱신.
+  옛 `RV.` 이름 새 발행은 core 가 막는다(`legacyIssueGuard`, 우회 칸 없음). 데스크탑 화면은 그와 별개로 `src/creator-pause.ts` 의 `CREATOR_PUBLISH_PAUSED` 로 올리기·등록 단추를 잠근다(대표 결정 2026-10-14).
+  `core/creator/legacy-manifest-fixture.ts` 도 같은 원본에서 복사했다 — **시험 전용**(이미 있는 옛 상품을 시험 안에서 재현해 읽기·검증·구매·열람 경로를 시험). 앱 코드(`src/**`)는 이것과 `manifest-assemble.ts` 를 import 하지 않는다(`scripts/creator-publish.test.mjs` 가 확인).
+
 복사하지 않은 것: `core/creator/purchase.ts`(구매자 거래 — 지갑의 직접 결제 부품에 기댄다)와 시험 파일. 구매자 쪽 거래 시험은 지갑 저장소에서 돈다. 데스크탑은 `purchase.ts` 대신 공통 순수 부품(`purchase-plan.ts`·`payment-allowlist.ts`·`owner-id.ts`)을 쓰고, 러스트 거래 검사는 같은 공유 벡터로 시험한다.
 
 `manifest.ts` 는 `core/wallet-offline/base58check.ts`(이미 같은 바이트로 복사돼 있음)와 `core/playx-asset-proof/crypto.ts` 의 `concatBytes` 를 쓴다.

@@ -35,12 +35,19 @@ test('invoke 오류(노드 문구가 무엇이든)·이상한 답 → 확인 불
 });
 
 test('확인 불가면 발행 계획이 막힌다(planIssue nameTaken: null)', () => {
-  const base = { asset: 'RV.M.FOREST', manifestCid: 'QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG', chain: 'regtest', ownedAssets: [], chainBurnRvn: null, typedName: 'RV.M.FOREST', type: 'music' };
-  assert.equal(planIssue({ ...base, nameTaken: false }).canIssue, true);
+  // 2026-10-14 동기화 뒤: 옛 RV. 이름 새 발행은 core 가 늘 막고(legacyIssueGuard) 「내 상품 올리기」도 잠겨 있다 — 어떤 답이든 canIssue 는 false.
+  //   여기서 지키는 것은 그대로: 「확인 불가(null)」는 그 자체로 막힘 한 줄을 더하고, 없음(false)은 그 줄을 더하지 않는다.
+  const base = { asset: 'RV.M.FOREST', manifestCid: 'QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG', chain: null, ownedAssets: [], chainBurnRvn: null, typedName: 'RV.M.FOREST', type: 'music' };
+  const free = planIssue({ ...base, nameTaken: false });
+  assert.equal(free.canIssue, false);
+  assert.ok(free.blockers.some(b => b.includes('옛 이름 규칙')), 'legacy guard');
+  assert.ok(!free.blockers.some(b => b.includes('확인 불가')), 'a clear 「없음」 adds no unknown-duplicate blocker');
   const unknown = planIssue({ ...base, nameTaken: nameTakenFrom('weird') });
   assert.equal(unknown.canIssue, false);
   assert.ok(unknown.blockers.some(b => b.includes('확인 불가')));
-  assert.equal(planIssue({ ...base, nameTaken: true }).canIssue, false);
+  const taken = planIssue({ ...base, nameTaken: true });
+  assert.equal(taken.canIssue, false);
+  assert.ok(taken.blockers.some(b => b.includes('이미 있는 이름')));
 });
 
 test('화면 코드에 「오류를 삼켜 없음으로」 넘기는 옛 모양이 없다', () => {

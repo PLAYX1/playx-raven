@@ -17,6 +17,7 @@ import { DROP_MANIFEST_V3_ENABLED, musicExtFrom, publishV3, readManifestAny } fr
 import { THEMES, THEME_IDS, THEME_LABEL, TEMPLATES, defaultTemplate, renderStorefront, templatesFor, type Look, type StoreModel, type TemplateId, type ThemeId } from './drop-look';
 import { genreLabel, genresFor, parseGenreTags, suggestGenre, type GenreValue } from './drop-genre';
 import { acceptsDrop, dropGates, nextState, type Chip, type DropEvent, type DropState } from './drop-state';
+import { CREATOR_PAUSE_NEXT, CREATOR_PAUSE_SAY, CREATOR_PUBLISH_PAUSED, pauseNotice } from './creator-pause';
 
 /*
  * 「끌어놓기 발행」 — 한 화면 + 단추 하나. 기존 9단계 마법사(creator-publish.ts)는 「자세히(단계별로)」로 남긴다.
@@ -49,6 +50,8 @@ export type DropDeps = {
   lang?: DropLang; stretch?: number;
   /** 열람 보호(RV-LOCK v1): 열쇠 파일을 저장할 폴더 고르기 · 미리듣기 클립 만들기(시험이 바꾼다). */
   pickFolder?: () => Promise<string | null>; makeClip?: ClipMaker;
+  /** 올리기·등록 임시 잠금(기본 = creator-pause.ts 의 CREATOR_PUBLISH_PAUSED). 시험만 바꿔 넣는다. */
+  paused?: boolean;
 };
 export type WizardPrefill = { type: ContentType; content: FileInput[]; cover: FileInput[]; fields: Record<string, string | boolean> };
 
@@ -118,6 +121,7 @@ export function wireDropPublish(deps: DropDeps) {
   const sign: MessageSigner = nodeSigner(deps.invoke, deps.askPassword);
   const store = (() => { try { return deps.storage === undefined ? window.localStorage : deps.storage; } catch { return null; } })();
   const now = () => deps.now?.() ?? new Date();
+  const paused = deps.paused ?? CREATOR_PUBLISH_PAUSED;
   /** 암호화 상품이면 열쇠 파일을 저장해야 발행을 마칠 수 있다(열쇠를 잃으면 판매자도 못 연다). */
   const needsBackup = () => !!published?.manifest.lock && !readBackups(store)[published.manifest.asset];
 
@@ -160,7 +164,8 @@ export function wireDropPublish(deps: DropDeps) {
   const folderIn = h('input', { type: 'file', multiple: '', webkitdirectory: '', id: 'dp-folder', class: 'dp-hidden-input', tabindex: '-1', 'aria-hidden': 'true' }) as HTMLInputElement;
   const coverIn = h('input', { type: 'file', accept: '.png,.jpg,.jpeg,.webp', id: 'dp-cover-in', class: 'dp-hidden-input', tabindex: '-1', 'aria-hidden': 'true' }) as HTMLInputElement;
   const dialog = h('dialog', { class: 'dp-dialog', id: 'dp-confirm', 'aria-labelledby': 'dp-confirm-h' }) as HTMLDialogElement;
-  shell.append(bar, testNote, resume, live, err, stage, filesIn, folderIn, coverIn, dialog);
+  const pausedNote = pauseNotice(doc, 'dp-paused', paused);
+  shell.append(bar, testNote, ...(pausedNote ? [pausedNote] : []), resume, live, err, stage, filesIn, folderIn, coverIn, dialog);
   doc.body.append(veil);
   deps.root.prepend(shell);
   deps.root.dataset.mode = 'drop';
@@ -310,7 +315,13 @@ export function wireDropPublish(deps: DropDeps) {
       creatorAddress: fields.address.trim(), receivingAddress: fields.address.trim(), priceAtoms: price ? (rvnToAtoms(price) ?? 'invalid') : null,
       details: details(), now: now() };
   }
-  const gates = () => dropGates({ prepublished: published && !content.length ? { asset: published.manifest.asset } : null, input: gather(), nameTaken: taken, neighbors, chain, chainBurnRvn: null, balanceAtoms, pastedCids, realMainnetEnabled: REAL_MAINNET_ISSUE_ENABLED, now: now().getTime() });
+  /** 임시 잠금이면 맨 앞에 「잠시 쉬어요」 막힘 한 줄을 더한다(나머지 점검은 그대로 보여 준다). */
+  const withPause = (g: { chips: Chip[]; canPublish: boolean; blockers: Chip[] }) => {
+    if (!paused) return g;
+    const chip: Chip = { id: 'paused', status: 'block', say: CREATOR_PAUSE_SAY, next: CREATOR_PAUSE_NEXT };
+    return { chips: [chip, ...g.chips], canPublish: false, blockers: [chip, ...g.blockers] };
+  };
+  const gates = () => withPause(dropGates({ prepublished: published && !content.length ? { asset: published.manifest.asset } : null, input: gather(), nameTaken: taken, neighbors, chain, chainBurnRvn: null, balanceAtoms, pastedCids, realMainnetEnabled: REAL_MAINNET_ISSUE_ENABLED, now: now().getTime() }));
 
   /* ── 그리기 ── */
   let lastPainted: DropState | null = null;
@@ -658,8 +669,10 @@ export function wireDropPublish(deps: DropDeps) {
 
   /* ── 확인 창(되돌릴 수 없다는 한 번만) ── */
   function openConfirm() {
+    if (paused) { setMessage(sayRaw(CREATOR_PAUSE_SAY)); return; }
     const inp = gather();
-    const plan = planIssue({ asset: inp.asset, manifestCid: '', chain, ownedAssets: [], nameTaken: taken === 'checking' ? null : taken, chainBurnRvn: null, typedName: inp.asset, type });
+    // chain 자리는 노드 확인 결과(confirmNodeChain)만. 옛 이름 경로는 잠겨 있어 확인 없이 null — 늘 막힌다.
+    const plan = planIssue({ asset: inp.asset, manifestCid: '', chain: null, ownedAssets: [], nameTaken: taken === 'checking' ? null : taken, chainBurnRvn: null, typedName: inp.asset, type });
     const c = costPlan({ burnRvn: plan.burn.rvn, networkFeeAtoms: null, balanceAtoms });
     dialog.replaceChildren();
     dialog.append(h('h2', { id: 'dp-confirm-h' }, say('confirmTitle')));
@@ -681,6 +694,7 @@ export function wireDropPublish(deps: DropDeps) {
   /* ── 발행 ── */
   async function runPublish() {
     if (busy) return;
+    if (paused) { setMessage(sayRaw(CREATOR_PAUSE_SAY)); fire('blocked'); return; }
     busy = true; setMessage(''); progress = { done: 0, total: 0, path: '' }; paint();
     try {
       await refreshChain();
@@ -706,7 +720,7 @@ export function wireDropPublish(deps: DropDeps) {
         setMessage(sayRaw(LOCK_COPY.backupMissing)); busy = false; fire('blocked'); return;
       }
       // 최종 판정 = core planIssue(마법사와 같은 함수). 사람이 이름을 다시 적는 칸 대신 확인 창 한 번(설계 §6).
-      const plan = planIssue({ asset: published.manifest.asset, manifestCid: published.manifestCid, chain, ownedAssets: [], nameTaken: taken === 'checking' ? null : taken,
+      const plan = planIssue({ asset: published.manifest.asset, manifestCid: published.manifestCid, chain: null, ownedAssets: [], nameTaken: taken === 'checking' ? null : taken,
         chainBurnRvn: null, typedName: published.manifest.asset, realMainnetEnabled: REAL_MAINNET_ISSUE_ENABLED, type: published.manifest.type });
       const c = costPlan({ burnRvn: plan.burn.rvn, networkFeeAtoms: null, balanceAtoms });
       if (!plan.canIssue || c.enough === false) {
