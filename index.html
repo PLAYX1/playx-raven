@@ -3775,12 +3775,15 @@
         </div>
         <button type="button" id="sales-back">홈으로 돌아가기</button>
       </section>
+      <!-- 판매자 기능을 켠 사람만. 화면은 src/device-connect.ts · src/bulk-products-ui.ts 가 처음 열 때 그린다. -->
+      <section class="page" id="page-devices" data-seller-only hidden inert></section>
       <section class="page" id="page-games">
         <h1>게임</h1>
         <button class="card" id="ravi-story-open" type="button"><strong>라비 스토리</strong><span>기본 브라우저에서 게임 열기</span></button>
         <button type="button" id="game-sales-open" data-seller-only hidden inert>게임 판매 대금 받기</button>
         <button type="button" id="creator-open" data-seller-only hidden inert>내 상품 올리기</button>
         <button type="button" id="market-open" data-seller-only hidden inert>열린 장터(시험)</button>
+        <button type="button" id="devices-open" data-seller-only hidden inert>기기 연결</button>
         <p id="game-notice" role="status"></p>
       </section>
       <!-- 판매자 기능을 켠 사람만. 규칙은 core/creator, 화면 배선은 src/creator-publish.ts(마법사)·src/open-market.ts(장터) -->
