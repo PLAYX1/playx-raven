@@ -115,6 +115,7 @@ mod server;
 mod services;
 mod shop;
 mod shopkey;
+mod storesign;
 mod shopmove;
 mod shopseal;
 mod devfee;
@@ -336,6 +337,8 @@ pub fn run() {
             walletx::channel_leave,
             nostrpub::nostr_publish,
             shopkey::shop_pubkey,
+            storesign::store_key_info,
+            storesign::store_sign_digest,
             devfee::fee_owed,
             ticket::ticket_find,
             ticket::ticket_use,

@@ -379,7 +379,7 @@ mod tests {
         // 지갑 암호·복구 단어·열쇠
         "unlock_for", "encrypt_wallet", "change_passphrase", "reveal_seed", "sales_account_reveal",
         "sales_account_balance", "cloud_key_show", "cloud_unlock", "backup_pass_set", "identity_adopt_person_key",
-        "identity_restore_legacy_key", "shop_key_move", "shop_key_move_plan", "shop_pubkey", "artist_pubkey",
+        "identity_restore_legacy_key", "shop_key_move", "shop_key_move_plan", "shop_pubkey", "artist_pubkey", "store_key_info", "store_sign_digest",
         "words_restore_preflight", "words_restore_check", "words_restore_start", "words_restore_rescan",
         "words_restore_abort", "words_restore_undo", "words_restore_close", "restore_apply", "restore_survey",
         // 백업 내보내기
