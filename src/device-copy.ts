@@ -47,6 +47,7 @@ export const DEVICE_COPY: Record<string, [string, string, string]> = {
   "쓰는 중": ["In use", "使用中", "使用中"],
   "기간 지남": ["Expired", "期間切れ", "已过期"],
   "끊음": ["Disconnected", "切断済み", "已断开"],
+  "가게 키 있음 · 키 지문 {0} · 가게 문서(번호)가 아직 없어 발급과 끊기는 닫혀 있어요.": ["Shop key present · key fingerprint {0} · no shop document (number) yet, so issuing and disconnecting stay closed.", "店の鍵あり・鍵の指紋 {0}・店舗文書（番号）がまだないため、発行と切断は閉じています。", "已有店铺密钥 · 密钥指纹 {0} · 尚无店铺文档（编号），因此发放和断开保持关闭。"],
   "가게 키 연결됨 · 키 지문 {0}": ["Shop key connected · key fingerprint {0}", "店の鍵に接続済み・鍵の指紋 {0}", "店铺密钥已连接 · 密钥指纹 {0}"],
   "가게 키 서명이 아직 연결되지 않았어요(연결 전). 목록은 볼 수 있지만 발급과 끊기는 닫혀 있어요.": ["Shop-key signing is not connected yet. You can view the list, but issuing and disconnecting are closed.", "店の鍵による署名はまだ接続されていません（接続前）。一覧は見られますが、発行と切断はできません。", "店铺密钥签名尚未连接（连接前）。可以查看列表，但无法签发和断开。"],
   "철회 목록이 아직 없어요. 첫 발급 때 만들어요.": ["There is no revocation list yet. It is made at the first issue.", "失効リストはまだありません。最初の発行時に作ります。", "还没有吊销列表，首次签发时会创建。"],

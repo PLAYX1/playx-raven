@@ -4,6 +4,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { build } from 'esbuild';
+import { pbkdf2Sync } from 'node:crypto';
+import { HDKey } from '@scure/bip32';
+import { secp256k1 } from '@noble/curves/secp256k1';
 
 globalThis.navigator ??= { language: 'ko' }; // node 20 에는 없다(i18n.ts 가 켤 때 읽는다)
 const built = await build({ entryPoints: ['scripts/fixtures/biz-entry.ts'], bundle: true, write: false, platform: 'node', format: 'cjs', logLevel: 'silent', loader: { '.css': 'empty', '.txt': 'text' } });
@@ -191,4 +194,87 @@ test('화면 문구는 영어·일본어·중국어가 모두 있다 · 금지 �
   for (const bad of ['검증된', '정품 보증', '안전한 거래', '사기 방지', '최고의 암호화폐', '비트코인만큼', '비트코인보다']) assert.ok(!all.includes(bad), bad);
   const code = all.split('\n').filter(l => !/^\s*(\*|\/\*|\/\/)/.test(l)).join('\n'); // 주석의 🔴 표시는 저장소 관례 — 화면 글자만 본다
   assert.ok(!/\p{Extended_Pictographic}/u.test(code), '이모지 금지');
+});
+
+/* ── 가게 키 서명(Rust store_sign_digest 를 같은 규칙으로 흉내 낸 가짜 invoke) — 가짜 12단어만 ── */
+const WORDS = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
+const SHOP_PATH = "m/44'/175'/7'/1'/0'"; // 데스크탑 identity.rs PATH_SHOP — src-tauri 시험이 같은 공개키·서명을 확인한다
+const shopPriv = HDKey.fromMasterSeed(pbkdf2Sync(WORDS, 'mnemonic', 2048, 64, 'sha512')).derive(SHOP_PATH).privateKey;
+const SHOP_PUB = Buffer.from(secp256k1.getPublicKey(shopPriv, true)).toString('hex');
+const RUST_VECTOR = { pub: '037821115dd0aa762d3a393fa861ce8e784403b9e0ec578bc37e72e6e9e70a1c09',
+  sig: '2e638d02c47357cba4160021eb21e518bfbbf5201c87c7f5c2e70c48c72ba10032ee07c72c73826d9cfe997b1a61412d37c8420f3033640bb36b732b0d18dd37' };
+const fakeInvoke = (opts = {}) => {
+  const calls = [];
+  const fn = async (cmd, args) => {
+    calls.push({ cmd, args });
+    if (opts.locked) throw '지갑이 잠겨 있어요. 잠금을 푼 뒤 다시 해 주세요.';
+    if (cmd === 'store_key_info') return { store_key: SHOP_PUB };
+    if (cmd === 'store_sign_digest') {
+      if (!/^[0-9a-f]{64}$/.test(args.digest) || !args.reason || args.reason.length > 80) throw '서명할 내용의 모양이 맞지 않아요.';
+      if ('badReply' in opts) return opts.badReply;
+      return { store_key: SHOP_PUB, sig: secp256k1.sign(Uint8Array.from(args.digest.match(/../g), b => parseInt(b, 16)), shopPriv, { lowS: true }).toCompactHex() };
+    }
+    throw 'unknown';
+  };
+  fn.calls = calls; return fn;
+};
+
+test('가게 키 서명: 파생 공개키가 Rust 시험 벡터와 같고, 기기 증서 발급·끊기가 코어 검증을 통과한다', async () => {
+  assert.equal(SHOP_PUB, RUST_VECTOR.pub);
+  const d = Uint8Array.from('0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20'.match(/../g), b => parseInt(b, 16));
+  assert.equal(secp256k1.sign(d, shopPriv, { lowS: true }).toCompactHex(), RUST_VECTOR.sig);
+  const inv = fakeInvoke();
+  const port = B.tauriStoreKey(inv, async () => STORE_ID);
+  const info = await port.info();
+  assert.deepEqual(info, { storeId: STORE_ID, storeKey: SHOP_PUB });
+  const k = { storeId: info.storeId, storeKey: info.storeKey, sign: port.signDigest };
+  const r1 = await B.issueFor(B.emptyState(), k, input(21), NOW);
+  assert.equal(B.verifyDeviceCert(r1.cert, SHOP_PUB, NOW, r1.state.list).ok, true);
+  const s2 = await B.revokeFor(r1.state, k, r1.cert.deviceId, NOW + 1000);
+  assert.equal(B.verifyDeviceRevocationList(s2.list, SHOP_PUB, STORE_ID).seq, 2);
+  assert.ok(inv.calls.every(c => c.cmd !== 'store_sign_digest' || (/^[0-9a-f]{64}$/.test(c.args.digest) && c.args.reason.length <= 80)));
+});
+
+test('가게 키 서명: 앱 잠금 중 거절 · 잘못된 요청/응답 거절 · 오류에 열쇠·단어가 없다', async () => {
+  const locked = B.tauriStoreKey(fakeInvoke({ locked: true }), async () => STORE_ID);
+  await assert.rejects(() => locked.info());
+  await assert.rejects(() => locked.signDigest(new Uint8Array(32)));
+  const ok = B.tauriStoreKey(fakeInvoke(), async () => STORE_ID);
+  await assert.rejects(() => ok.signDigest(new Uint8Array(31)), /store-sign-digest/);
+  await assert.rejects(() => ok.signDigest('zz'), /store-sign-digest/);
+  for (const bad of [null, {}, { sig: 'zz' }, { sig: 'a'.repeat(127) }, { sig: 'A'.repeat(128) }]) {
+    await assert.rejects(() => B.tauriStoreKey(fakeInvoke({ badReply: bad }), async () => STORE_ID).signDigest(new Uint8Array(32)), /store-sign-reply/);
+  }
+  // 가게 번호가 없으면 키만 보이고 발급은 닫힌다
+  assert.deepEqual(await B.tauriStoreKey(fakeInvoke(), async () => null).info(), { storeId: null, storeKey: SHOP_PUB });
+  assert.deepEqual(await B.tauriStoreKey(fakeInvoke(), async () => 'zz').info(), { storeId: null, storeKey: SHOP_PUB });
+  // 다른 키의 서명이 오면(키 불일치) 코어가 거절한다
+  const other = secp256k1.sign(new Uint8Array(32).fill(1), B.fakePriv(9), { lowS: true }).toCompactHex();
+  const mism = B.tauriStoreKey(fakeInvoke({ badReply: { sig: other } }), async () => STORE_ID);
+  await assert.rejects(() => B.issueFor(B.emptyState(), { storeId: STORE_ID, storeKey: SHOP_PUB, sign: mism.signDigest }, input(22), NOW));
+  const msgs = [];
+  try { await locked.signDigest(new Uint8Array(32)); } catch (e) { msgs.push(String(e?.message ?? e)); }
+  for (const m of msgs) assert.ok(!m.includes(Buffer.from(shopPriv).toString('hex')) && !m.includes('abandon'));
+});
+
+test('대량 등록 서명: 잠금이면 서명도 안 하고, 잠금이 풀려도 서명까지만 — 올리기는 호출하지 않는다', async () => {
+  const mine = { ...ctx, seller: SHOP_PUB, payTo: B.sellerAddressOf ? B.sellerAddressOf(SHOP_PUB) : ctx.payTo };
+  const r = B.parseBulkProducts(csv([`여름 사진집,digital,1.5,설명,https://files.example.com/a.zip,${sha},1000,30,10`]), mine);
+  assert.equal(r.drafts.length, 1, JSON.stringify(r.rowErrors));
+  const draft = r.drafts[0];
+  assert.equal(B.CREATOR_PUBLISH_PAUSED, true, '잠금 상수는 풀지 않았다');
+  // 잠금: 서명 요청도 없다
+  const inv1 = fakeInvoke();
+  const paused = B.storeKeyBulkPublisher(B.tauriStoreKey(inv1, async () => STORE_ID), true, true);
+  assert.equal(paused.ready, false); assert.equal(paused.signReady, true);
+  assert.equal((await paused.publish(draft)).ok, false);
+  assert.equal(inv1.calls.length, 0);
+  // 가상으로 잠금이 풀린 경우: 서명은 되지만 올리기는 부르지 않는다(결과는 항상 ok:false)
+  const inv2 = fakeInvoke();
+  const open = B.storeKeyBulkPublisher(B.tauriStoreKey(inv2, async () => STORE_ID), false, true);
+  const out = await open.publish(draft);
+  assert.equal(out.ok, false);
+  assert.match(out.say, /올리기 길이 아직 연결되지 않았어요/);
+  assert.equal(open.signed.length, 1);
+  assert.equal(inv2.calls.filter(c => c.cmd !== 'store_sign_digest').length, 0);
 });

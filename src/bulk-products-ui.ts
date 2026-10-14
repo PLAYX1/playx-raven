@@ -11,7 +11,8 @@
  * style="…" 속성은 쓰지 않는다(CSP) — 모양은 bulk-products-ui.css.
  */
 import { BULK_LIMITS, parseBulkProducts, type BulkContext, type BulkDraft, type BulkIssue, type BulkResult } from "../core/creator/bulk-products";
-import { feeTrackHash, sellerAddressOf, zeroFeeTrack } from "../core/creator/product-doc";
+import { feeTrackHash, sellerAddressOf, signProductDoc, zeroFeeTrack, type ProductDoc } from "../core/creator/product-doc";
+import type { StoreKeyPort } from "./device-connect";
 import { CREATOR_PUBLISH_PAUSED } from "./creator-pause";
 import { DICT } from "./dict";
 import { BULK_COPY } from "./bulk-copy";
@@ -39,10 +40,31 @@ export type PublishOutcome = { ok: true; id?: string } | { ok: false; say: strin
 export type BulkPublishPort = {
   /** 서명해서 올리기를 시도할 수 있나(연결됐고 잠금이 풀렸나). */
   readonly ready: boolean;
+  /** 가게 키 서명 길이 열려 있나(화면에 「서명 준비됨」을 보이는 데만 쓴다 — 올릴 수 있다는 뜻이 아니다). */
+  readonly signReady?: boolean;
   publish(draft: BulkDraft): Promise<PublishOutcome>;
 };
 /** 아무것도 올리지 않는 자리. 기존 발행 경로가 붙기 전까지의 기본값. */
 export const nullBulkPublisher: BulkPublishPort = { ready: false, publish: async () => ({ ok: false, say: "올리기 길이 아직 연결되지 않았어요." }) };
+
+/**
+ * 가게 키 서명이 이어진 올리기 자리. 🔴 잠금(paused)이 true 이면 서명도 하지 않고 아무것도 보내지 않는다.
+ * 잠금이 풀려도 여기서는 서명만 하고(signProductDoc — 서명자가 draft.body.seller 와 다르면 거절) 올리기/전파는 부르지 않는다 —
+ * 실제 발행 경로가 붙기 전까지 결과는 늘 「올리기 길 연결 전」이다.
+ */
+export function storeKeyBulkPublisher(key: StoreKeyPort, paused: boolean = CREATOR_PUBLISH_PAUSED, connected: boolean = false): BulkPublishPort & { signed: ProductDoc[] } {
+  const signed: ProductDoc[] = [];
+  return {
+    signed,
+    ready: !paused && connected,
+    signReady: connected,
+    publish: async draft => {
+      if (paused) return { ok: false, say: "지금은 올리기를 잠가 두었어요" };
+      try { signed.push(await signProductDoc(key.signDigest, draft.body)); } catch { return { ok: false, say: "서명하지 못했어요. 다시 해 주세요." }; }
+      return { ok: false, say: "서명은 준비됐지만 올리기 길이 아직 연결되지 않았어요." };
+    },
+  };
+}
 
 /* ── 순수 규칙 ─────────────────────────────────────────────── */
 
@@ -153,7 +175,7 @@ export function mountBulkScreen(root: HTMLElement, deps: BulkScreenDeps = {}) {
     });
   }
   const gateOf = (d: BulkDraft) => publishGate({ paused, real, confirmed: confirmed.has(d.line), ready: pub.ready });
-  const gateNote = (g: PublishGate) => g === "paused" ? t("지금은 올리기를 잠가 두었어요") : g === "placeholder" ? t("판매자 정보 연결 전") : g === "unplugged" ? t("올리기 길 연결 전") : g === "unconfirmed" ? t("먼저 확인해 주세요") : "";
+  const gateNote = (g: PublishGate) => g === "paused" ? (pub.signReady ? t("서명 준비됨 · 올리기는 잠겨 있어요") : t("지금은 올리기를 잠가 두었어요")) : g === "placeholder" ? t("판매자 정보 연결 전") : g === "unplugged" ? t("올리기 길 연결 전") : g === "unconfirmed" ? t("먼저 확인해 주세요") : "";
 
   function paintDrafts() {
     const box = el(root, "bk-drafts");

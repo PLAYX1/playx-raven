@@ -34,13 +34,41 @@ for (const [source, values] of Object.entries(DEVICE_COPY)) {
 
 /** 가게 키 서명 자리. info() 가 null 이면 「가게 키 연결 전」 — 발급·끊기는 닫힌다. */
 export type StoreKeyPort = {
-  info(): Promise<{ storeId: string; storeKey: string } | null>;
+  /** storeId 가 null 이면 「가게 키는 있으나 가게 문서(번호)가 없다」 — 키 지문은 보이고 발급·끊기는 닫힌다. */
+  info(): Promise<{ storeId: string | null; storeKey: string } | null>;
   signDigest: SignDigest;
 };
 export const nullStoreKey: StoreKeyPort = {
   info: async () => null,
   signDigest: async () => { throw new Error("store-key-not-connected"); },
 };
+
+type Invoke0 = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+const SHA_HEX = /^[0-9a-f]{64}$/, PUB_HEX = /^0[23][0-9a-f]{64}$/;
+const unhex = (h: string) => Uint8Array.from(h.match(/../g) ?? [], b => parseInt(b, 16));
+/**
+ * 데스크탑 가게 키(Rust `store_key_info` · `store_sign_digest`). 키·12단어는 Rust 안에만 있고 여기에는 공개키와 서명만 온다.
+ * 서명할 때마다 Rust 가 사장에게 사유를 보여 주고 확인을 받는다(앱 잠금 중이면 거절). reason 은 80자 이하 한 줄.
+ * storeId = 가게 문서(rev 0 해시) — 데스크탑에는 아직 가게 문서를 만드는 길이 없어 호출자가 넘긴다(없으면 null → 발급 닫힘).
+ */
+export function tauriStoreKey(invoke: Invoke0, storeId: () => Promise<string | null> = async () => null, reason = "가게 기기·상품 서명"): StoreKeyPort {
+  return {
+    info: async () => {
+      const r = await invoke<{ store_key?: string }>("store_key_info");
+      if (!r || typeof r.store_key !== "string" || !PUB_HEX.test(r.store_key)) return null;
+      const id = await storeId().catch(() => null);
+      return { storeId: id && SHA_HEX.test(id) ? id : null, storeKey: r.store_key };
+    },
+    signDigest: async digest => {
+      if (!(digest instanceof Uint8Array) || digest.length !== 32) throw new Error("store-sign-digest");
+      const hex = Array.from(digest, b => b.toString(16).padStart(2, "0")).join("");
+      const r = await invoke<{ sig?: string }>("store_sign_digest", { digest: hex, reason });
+      // 오류 문구는 Rust 의 고정 문장뿐이지만 화면 코드에는 옮기지 않는다(코드만).
+      if (!r || typeof r.sig !== "string" || !/^[0-9a-f]{128}$/.test(r.sig)) throw new Error("store-sign-reply");
+      return unhex(r.sig);
+    },
+  };
+}
 
 /** 새 기기와 주고받는 자리(같은 Wi-Fi). 지금은 아무것도 보내지 않는다. */
 export type DeviceLinkPort = {
@@ -275,6 +303,7 @@ export function mountDeviceScreen(root: HTMLElement, deps: DeviceScreenDeps = {}
   root.innerHTML = MARKUP;
   let state = store.load();
   let signing: Signing | null = null;
+  let keyOnly: string | null = null;
   let busy = false;
 
   const say = (render: () => string) => setCopyText(el(root, "dv-say"), render);
@@ -291,6 +320,7 @@ export function mountDeviceScreen(root: HTMLElement, deps: DeviceScreenDeps = {}
     const n = now();
     setCopyText(el(root, "dv-keystate"), () => signing
       ? tf("가게 키 연결됨 · 키 지문 {0}", signing.storeKey.slice(0, 12))
+      : keyOnly ? tf("가게 키 있음 · 키 지문 {0} · 가게 문서(번호)가 아직 없어 발급과 끊기는 닫혀 있어요.", keyOnly.slice(0, 12))
       : t("가게 키 서명이 아직 연결되지 않았어요(연결 전). 목록은 볼 수 있지만 발급과 끊기는 닫혀 있어요."));
     setCopyText(el(root, "dv-liststate"), () => !state.list
       ? t("철회 목록이 아직 없어요. 첫 발급 때 만들어요.")
@@ -320,7 +350,12 @@ export function mountDeviceScreen(root: HTMLElement, deps: DeviceScreenDeps = {}
   }
 
   async function refreshKey() {
-    try { const i = await key.info(); signing = i ? { storeId: i.storeId, storeKey: i.storeKey, sign: key.signDigest } : null; } catch { signing = null; }
+    keyOnly = null;
+    try {
+      const i = await key.info();
+      signing = i && i.storeId ? { storeId: i.storeId, storeKey: i.storeKey, sign: key.signDigest } : null;
+      if (i && !i.storeId) keyOnly = i.storeKey;
+    } catch { signing = null; }
     paint();
   }
   async function act(run: () => Promise<void>) {

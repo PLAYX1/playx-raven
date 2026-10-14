@@ -8,6 +8,7 @@ export * from '../../src/device-connect';
 export * from '../../src/bulk-products-ui';
 export { parseBulkProducts, BULK_LIMITS } from '../../core/creator/bulk-products';
 export { CREATOR_PUBLISH_PAUSED } from '../../src/creator-pause';
+export { sellerAddressOf } from '../../core/creator/product-doc';
 export { t, tf, hasOwnTranslation } from '../../src/i18n';
 export { deviceCertId, verifyDeviceCert, verifyDeviceRevocationList, DEVICE_CERT_DEFAULT_DAYS, DEVICE_ROLE_SCOPES, deviceIdOf, encodeDeviceCert };
 /** 시험용 고정 가짜 키(실제 키 아님). */

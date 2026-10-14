@@ -4800,6 +4800,8 @@ function setupNavMore() {
   sync();
 }
 
+/** 가게 문서(번호) — 데스크탑에는 가게 문서를 만드는 길이 아직 없어 저장된 값이 있을 때만 쓴다(없으면 null → 기기 발급 닫힘). */
+const storeDocId = async (): Promise<string | null> => { try { return localStorage.getItem("rv.store-doc-id"); } catch { return null; } };
 let salesAccount: ReturnType<typeof wireSalesAccount> | undefined;
 let deviceScreen: ReturnType<typeof import("./device-connect").mountDeviceScreen> | undefined;
 let bulkScreen: ReturnType<typeof import("./bulk-products-ui").mountBulkScreen> | undefined;
@@ -4869,9 +4871,15 @@ function showPage(id: string) {
   if (id === "reward") void loadReward();
   if (id === "create") createApi?.enter();
   // 판매자 화면 둘 — 처음 열 때 따로 내려받아 그린다(시작 번들에 넣지 않는다). 다시 열면 새로 읽는다.
-  if (id === "devices") void import("./device-connect").then(({ mountDeviceScreen, pairingQr }) => { if (!deviceScreen) deviceScreen = mountDeviceScreen($("page-devices"), { qr: pairingQr((cmd, args) => invoke(cmd, args)),
+  if (id === "devices") void import("./device-connect").then(({ mountDeviceScreen, pairingQr, tauriStoreKey }) => { if (!deviceScreen) deviceScreen = mountDeviceScreen($("page-devices"), { qr: pairingQr((cmd, args) => invoke(cmd, args)), storeKey: tauriStoreKey((cmd, args) => invoke(cmd, args), storeDocId),
     confirm: (title, message) => sure(title, message, t("끊기")) }); else deviceScreen.enter(); }).catch((e) => console.warn("device-connect load failed", e));
-  if (id === "bulk") void import("./bulk-products-ui").then(({ mountBulkScreen }) => { if (!bulkScreen) bulkScreen = mountBulkScreen($("page-bulk")); else bulkScreen.enter(); }).catch((e) => console.warn("bulk-products-ui load failed", e));
+  if (id === "bulk") void Promise.all([import("./bulk-products-ui"), import("./device-connect")]).then(async ([{ mountBulkScreen, storeKeyBulkPublisher }, { tauriStoreKey }]) => {
+    if (bulkScreen) { bulkScreen.enter(); return; }
+    // 서명 길만 잇는다. 올리기 잠금(CREATOR_PUBLISH_PAUSED)은 그대로 — 잠겨 있으면 서명도 하지 않는다.
+    const key = tauriStoreKey((cmd, args) => invoke(cmd, args), storeDocId, "상품 대량 등록 서명");
+    const connected = await key.info().then(i => !!i, () => false);
+    bulkScreen = mountBulkScreen($("page-bulk"), { publisher: storeKeyBulkPublisher(key, undefined, connected) });
+  }).catch((e) => console.warn("bulk-products-ui load failed", e));
   if (id === "artist") void artistLoad();
   // 🔴 **여태 모드를 바꿀 때만 그렸다.** 메뉴로 「돕는 중」에 다시 들어오면
   //    빈 화면이었다 — 8초 타이머가 도는 동안만 채워지고, 장사 모드에서는
