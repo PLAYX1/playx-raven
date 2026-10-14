@@ -175,8 +175,13 @@ test('creator page is seller-only and route-guarded in source (same pattern as t
   assert.match(html, /<button type="button" id="creator-open" data-seller-only hidden inert>/);
   assert.match(html, /<section class="page" id="page-market" data-seller-only hidden inert>/);
   assert.match(html, /<button type="button" id="market-open" data-seller-only hidden inert>/);
-  assert.match(main, /if \(\(id === "sales" \|\| id === "creator" \|\| id === "market"\) && !sellerModeOn\(\)\) return;/);
-  assert.match(main, /currentPage === "sales" \|\| currentPage === "creator" \|\| currentPage === "market"\)\) showPage\("settings"\)/);
+  assert.match(main, /if \(\(id === "sales" \|\| id === "creator" \|\| id === "market" \|\| id === "devices" \|\| id === "bulk"\) && !sellerModeOn\(\)\) return;/);
+  assert.match(main, /currentPage === "sales" \|\| currentPage === "creator" \|\| currentPage === "market" \|\| currentPage === "devices" \|\| currentPage === "bulk"\)\) showPage\("settings"\)/);
+  // 판매자 화면 둘(기기 연결 · 상품 대량 등록)도 같은 길로 잠긴다.
+  assert.match(html, /<section class="page" id="page-devices" data-seller-only hidden inert>/);
+  assert.match(html, /<section class="page" id="page-bulk" data-seller-only hidden inert>/);
+  assert.match(html, /<button type="button" id="devices-open" data-seller-only hidden inert>/);
+  assert.match(html, /<button type="button" id="bulk-open" data-seller-only hidden inert>/);
   // The UI modules never log and never read the seed; signing goes through the node only.
   for (const f of ['src/creator-publish.ts', 'src/open-market.ts']) {
     const src = readFileSync(f, 'utf8');

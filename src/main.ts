@@ -4536,7 +4536,7 @@ function applySellerMode() {
   });
   const box = document.getElementById("seller-mode") as HTMLInputElement | null;
   if (box) box.checked = on;
-  if (!on && (currentPage === "sales" || currentPage === "creator" || currentPage === "market" || currentPage === "devices")) showPage("settings");
+  if (!on && (currentPage === "sales" || currentPage === "creator" || currentPage === "market" || currentPage === "devices" || currentPage === "bulk")) showPage("settings");
 }
 let lastReceivedHomeTx: string | null = null;
 
@@ -4802,10 +4802,11 @@ function setupNavMore() {
 
 let salesAccount: ReturnType<typeof wireSalesAccount> | undefined;
 let deviceScreen: ReturnType<typeof import("./device-connect").mountDeviceScreen> | undefined;
+let bulkScreen: ReturnType<typeof import("./bulk-products-ui").mountBulkScreen> | undefined;
 
 function showPage(id: string) {
   // 판매자 기능이 꺼져 있으면 판매 화면은 열리지 않는다(메뉴가 숨겨진 것만으로는 부족하다).
-  if ((id === "sales" || id === "creator" || id === "market" || id === "devices") && !sellerModeOn()) return;
+  if ((id === "sales" || id === "creator" || id === "market" || id === "devices" || id === "bulk") && !sellerModeOn()) return;
   if (id !== currentPage) salesAccount?.hide();
   // 🔴 화면을 떠나면 그 화면 때문에 도는 타이머를 끈다.
   //
@@ -4870,6 +4871,7 @@ function showPage(id: string) {
   // 판매자 화면 둘 — 처음 열 때 따로 내려받아 그린다(시작 번들에 넣지 않는다). 다시 열면 새로 읽는다.
   if (id === "devices") void import("./device-connect").then(({ mountDeviceScreen, pairingQr }) => { if (!deviceScreen) deviceScreen = mountDeviceScreen($("page-devices"), { qr: pairingQr((cmd, args) => invoke(cmd, args)),
     confirm: (title, message) => sure(title, message, t("끊기")) }); else deviceScreen.enter(); }).catch((e) => console.warn("device-connect load failed", e));
+  if (id === "bulk") void import("./bulk-products-ui").then(({ mountBulkScreen }) => { if (!bulkScreen) bulkScreen = mountBulkScreen($("page-bulk")); else bulkScreen.enter(); }).catch((e) => console.warn("bulk-products-ui load failed", e));
   if (id === "artist") void artistLoad();
   // 🔴 **여태 모드를 바꿀 때만 그렸다.** 메뉴로 「돕는 중」에 다시 들어오면
   //    빈 화면이었다 — 8초 타이머가 도는 동안만 채워지고, 장사 모드에서는
@@ -18613,6 +18615,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("sales-back").onclick = () => showPage("home");
   $("game-sales-open").onclick = () => showPage("sales");
   $("creator-open").onclick = () => showPage("creator");
+  $("bulk-open").onclick = () => showPage("bulk");
   $("devices-open").onclick = () => showPage("devices");
   // 장터 목록(허용·차단·수수료 일정)은 한 곳에서 읽는다 — 마법사의 수수료 안내와 장터 구매 확인이 같은 서명된 일정을 쓴다.
   const mkLists = marketLists({ sources: marketListSources((cmd, args) => invoke(cmd, args)) }); // 믿는 키가 비어 있는 동안은 받지 않는다(market-lists.ts)

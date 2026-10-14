@@ -44,9 +44,9 @@
     "timersFiredIn5s": 0
   },
   "bundle": {
-    "jsTotalKB": 2880,
+    "jsTotalKB": 2960,
     "largestJsKB": 1060,
     "indexHtmlKB": 480,
-    "cssTotalKB": 84
+    "cssTotalKB": 88
   }
 }

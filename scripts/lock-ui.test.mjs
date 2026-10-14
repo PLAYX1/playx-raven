@@ -149,6 +149,9 @@ test('상품 문서 새 선택 칸: 데스크탑에는 상품 문서 파서가 �
   const walk = d => readdirSync(d).flatMap(n => { const p = `${d}/${n}`; return statSync(p).isDirectory() ? walk(p) : /\.(rs|ts|tsx|js|mjs)$/.test(n) ? [p] : []; });
   for (const f of [...walk('src'), ...walk('src-tauri/src')]) {
     const t = readFileSync(f, 'utf8');
+    // 「상품 대량 등록」 화면은 core 의 대량 등록 파서를 부르며 임시 판매자 정보에 product-doc 의 세 함수(feeTrackHash·sellerAddressOf·zeroFeeTrack)만 쓴다 —
+    // 상품 문서를 읽거나 검증하는 함수(validate/verify)와 §38 칸은 직접 다루지 않는다.
+    if (f === 'src/bulk-products-ui.ts') { assert.ok(!/validateProductDoc|verifyProductDoc|productLockProblem|mediaHashItemProblem|downloadDays\b(?!\s*:)/.test(t.replace(/draft\.downloadDays|d\.downloadDays/g, '')), '대량 등록 화면이 상품 문서를 직접 읽는다'); continue; }
     assert.ok(!/RAVENVAULT-PRODUCT-V1|product-doc['"]|productLockProblem|mediaHashItemProblem|downloadDays/.test(t), `상품 문서 파서가 생겼다(${f}) — 지갑 원본을 복사하고 §38 선택 칸 시험을 붙여라`);
   }
   const prep = await ui.lockedInputFor(fakeInvoke().invoke, music(), { makeClip: async () => WAV(64_000) });
