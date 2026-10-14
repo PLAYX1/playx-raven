@@ -65,6 +65,35 @@ export function derivePrivateKeyOnly(
   } finally { child.wipePrivateData(); root.wipePrivateData(); }
 }
 
+/**
+ * 전부 hardened 인 전용 키 경로 m/44'/175'/<account>'/<branch>'/<index>' — 돈 주소 경로(마지막 두 자리가 hardened 아님)와 모양이 다르다.
+ * 가게 서명 키(core/store/store-key.ts)처럼 돈이 오가지 않는 용도가 쓴다. 지갑 주소 탐색(discovery)은 이 경로를 보지 않는다.
+ */
+export type HardenedKeyPath = { purpose: 44; coinType: 175; account: number; branch: number; index: number };
+export function hardenedPathString(p: HardenedKeyPath): string {
+  if (p.purpose !== 44 || p.coinType !== 175) throw new Error('지원하지 않는 키 경로입니다');
+  assertIndex(p.account, 'account'); assertIndex(p.branch, 'branch'); assertIndex(p.index, 'index');
+  return `m/44'/175'/${p.account}'/${p.branch}'/${p.index}'`;
+}
+/** 호출자가 결과를 fill(0) 해야 한다. */
+export function derivePrivateKeyAtHardenedPath(seed: Uint8Array, p: HardenedKeyPath): Uint8Array {
+  const root = master(seed);
+  const child = root.derive(hardenedPathString(p));
+  try {
+    const privateKey = child.privateKey;
+    if (!privateKey) throw new Error('개인키 파생에 실패했습니다');
+    return Uint8Array.from(privateKey);
+  } finally { child.wipePrivateData(); root.wipePrivateData(); }
+}
+export function deriveAddressAtHardenedPath(seed: Uint8Array, p: HardenedKeyPath): DerivedAddress {
+  const privateKey = derivePrivateKeyAtHardenedPath(seed, p);
+  try {
+    const publicKey = secp256k1.pointFromScalar(privateKey, true);
+    if (!publicKey) throw new Error('공개키 파생에 실패했습니다');
+    return addressFromPublicKey(publicKey);
+  } finally { privateKey.fill(0); }
+}
+
 function master(seed: Uint8Array): HDKey {
   if (!(seed instanceof Uint8Array) || seed.length < 16) {
     throw new Error('시드는 16바이트 이상의 Uint8Array 여야 합니다');

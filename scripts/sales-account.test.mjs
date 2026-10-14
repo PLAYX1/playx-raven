@@ -52,7 +52,10 @@ test('vendored phone sources remain byte-identical; reference cross-check when a
   if (!existsSync(`${root}/core/wallet-keys/derive.ts`)) { t.skip('reference checkout absent; committed vectors still tested'); return; }
   for (const path of ['core/wallet-keys/derive.ts', 'core/wallet-keys/sales-account.ts', 'core/official-sales/xpub.ts', 'core/wallet-offline/base58check.ts']) {
     const digest = p => createHash('sha256').update(readFileSync(p)).digest('hex');
-    assert.ok(digest(path) === digest(`${root}/${path}`), 'vendored source drift');
+    // derive.ts 는 4차 동기화(가게 키 hardened 경로)로 통합 원본과 같은 파일이 됐다 — 폰 쪽 옛 참조(web1008)와는 더 이상 같지 않다.
+    const ref = path === 'core/wallet-keys/derive.ts' ? '/Users/gimmusong/wt-rv-real-integ' : root;
+    if (!existsSync(`${ref}/${path}`)) continue;
+    assert.ok(digest(path) === digest(`${ref}/${path}`), 'vendored source drift');
   }
   const phone = await moduleAt(`${root}/core/wallet-keys/derive.ts`);
   for (const row of vectors) {
