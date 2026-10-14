@@ -47,3 +47,10 @@ core/brand/forbidden-phrases.ts, core/signer/{signmessage,test-key}.ts, core/wal
 ### 막힌 점 / 대표 결정
 - 동기화는 `claude/rv-storekey` 가 통합에 합쳐진 뒤. 지금은 **대기**.
 - 데스크탑 어댑터 2개가 원본과 달라 「전부 덮어쓰기」 식 동기화는 안 된다 — 파일 목록 기준으로만.
+
+## 3. 진행 결과 (2026-10-15)
+- 동기화 끝(4차, 통합 0334229): `core/store/{store-doc,limits,photo,store-key}.ts` 바이트 복사, `vendor-sha256.json` 68개, `core/creator/PROVENANCE.md` 4차 단락.
+  `core/wallet-keys/derive.ts` 는 통합 원본과 같은 파일로 갱신(hardened 경로 함수·타입 추가뿐). 어댑터 `crypto-backend.ts`·`playx-asset-proof/crypto.ts` 는 그대로.
+- 「기기 연결」 화면 맨 위에 「가게 번호」 카드(`src/store-doc-ui.ts`): 가게 이름·지역·분류·소개 → 「가게 문서 만들기」 → 확인 → 가게 키 서명(사장 확인창에 사유) → 번호 표시.
+  저장은 이 기기(localStorage `rv-store-doc-v1`). 옛 임시 연결점 `rv.store-doc-id` 는 쓰지 않는다. 게시·업로드 길 없음, 파일 내보내기만(한 번 더 확인).
+- 번호가 있고 저장된 문서의 공개키가 지금 가게 키와 같을 때만 기기 증서 발급·끊기(철회 목록 서명)가 열린다. 새 기기와 주고받는 길은 여전히 「연결 전」.

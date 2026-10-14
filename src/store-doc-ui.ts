@@ -9,11 +9,10 @@
  * style="…" 속성은 쓰지 않는다(CSP) — 모양은 device-connect.css.
  */
 import {
-  StoreError, encodeStoreDoc, signStoreDoc, storeDocHash, storeIdOf, storeKeyFingerprint, storeSigningMessage, validateStoreDoc, verifyStoreDoc,
+  StoreError, encodeStoreDoc, signStoreDoc, storeDocHash, storeIdOf, storeKeyFingerprint, validateStoreDoc, verifyStoreDoc,
   type StoreBody, type StoreDoc,
 } from "../core/store/store-doc";
 import { STORE_CATEGORIES, STORE_CATEGORY_LABELS, STORE_DEFAULT_LIFETIME_SECONDS, STORE_INTRO_MAX, STORE_NAME_MAX, STORE_NOTICE_DEFAULT, STORE_REGION_MAX, type StoreCategory } from "../core/store/limits";
-import { recoverMessagePublicKey } from "../core/creator/product-doc";
 import { DICT } from "./dict";
 import { STORE_DOC_COPY } from "./store-doc-copy";
 import { copyHtml, setCopyText, t, tf } from "./i18n";
@@ -60,15 +59,15 @@ export async function createStoreDoc(key: StoreKeyPort, input: StoreInput, nowMs
 /* ── 저장(이 기기 안) ─────────────────────────────────────── */
 
 export type StoreDocStorage = { load(): StoreDocRecord | null; save(r: StoreDocRecord): void };
-/** 읽을 때마다 core 규칙으로 다시 거른다: 모양 · rev 0 · 서명자 = seller. (만료는 보지 않는다 — 번호는 만료돼도 그대로다.) */
+/** 읽을 때마다 core 규칙으로 다시 거른다: 모양 · rev 0 · 서명자 = seller(core verifyStoreDoc). (만료는 보지 않는다 — 번호는 만료돼도 그대로다.) */
 export function recordFrom(raw: unknown): StoreDocRecord | null {
   try {
     const r = raw as { doc?: unknown; createdAt?: unknown };
     if (!r || typeof r !== "object") return null;
     const doc = validateStoreDoc(r.doc);
     if (doc.rev !== 0) return null;
-    const signer = recoverMessagePublicKey(storeSigningMessage(doc), doc.sig);
-    if (signer === null || signer !== doc.seller) return null;
+    // 서명 확인은 core verifyStoreDoc 으로, 시각은 발행 시각에 맞춘다 — 지금 만료됐어도 번호(본문 해시)는 그대로이므로 거르지 않는다.
+    verifyStoreDoc(encodeStoreDoc(doc), { now: doc.issuedAt });
     return { doc, storeId: storeIdOf(doc), createdAt: typeof r.createdAt === "number" && Number.isFinite(r.createdAt) ? r.createdAt : 0 };
   } catch { return null; }
 }
