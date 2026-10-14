@@ -142,12 +142,12 @@ test('러스트: 열쇠·백업·거래 읽기 명령이 등록돼 있고, 잠�
 // §38 상품 문서 새 선택 칸(2026-10-14, 지갑 claude/rv-real-integ 91aef5a): lock · lock.files[].cipher · format · downloadDays · media 객체 항목.
 // 확인 결과: 데스크탑(Rust·TS)에는 상품 문서(RAVENVAULT-PRODUCT-V1) 파서가 없다 — 그래서 그 칸을 거절할 곳도 없다.
 // 데스크탑이 읽는 서명 문서는 제작자 매니페스트(rv-creator-manifest v2)뿐이고, 그 lock 칸은 지갑 원본(바이트 동일 복사)처럼 정확한 키만 받는다.
-// 누가 데스크탑에 상품 문서 파서를 새로 들이면 이 시험이 멈춰 세운다 — 그때는 지갑 product-doc.ts·product-lock-shape.ts·media-ref.ts·download-terms.ts 를 복사해 새 칸을 받게 하라(직접 짜지 말 것).
+// 3차 동기화(6c923e2)로 지갑 product-doc.ts 등이 core/ 에 바이트 그대로 들어왔다(bulk-products.ts 의 의존) — core/ 는 이제 검사 제외(지갑 원본 해시로 고정).
+// 그래도 데스크탑 자체 코드(src · src-tauri/src)가 상품 문서 파서를 새로 짜거나 직접 쓰면 이 시험이 멈춰 세운다 — 쓰려면 지갑 원본의 새 칸 시험을 함께 붙여라(직접 짜지 말 것).
 test('상품 문서 새 선택 칸: 데스크탑에는 상품 문서 파서가 없다 · 매니페스트 lock 칸은 지갑 원본과 같게 정확한 키만', async () => {
   const { readdirSync, statSync } = await import('node:fs');
   const walk = d => readdirSync(d).flatMap(n => { const p = `${d}/${n}`; return statSync(p).isDirectory() ? walk(p) : /\.(rs|ts|tsx|js|mjs)$/.test(n) ? [p] : []; });
-  // core/brand/brand.ts 는 서명 domain 이름 목록(SIGNING_DOMAINS.PRODUCT_V1)만 갖는다 — 파서가 아니고 어디서도 쓰지 않는다.
-  for (const f of [...walk('src'), ...walk('src-tauri/src'), ...walk('core')].filter(f => f !== 'core/brand/brand.ts')) {
+  for (const f of [...walk('src'), ...walk('src-tauri/src')]) {
     const t = readFileSync(f, 'utf8');
     assert.ok(!/RAVENVAULT-PRODUCT-V1|product-doc['"]|productLockProblem|mediaHashItemProblem|downloadDays/.test(t), `상품 문서 파서가 생겼다(${f}) — 지갑 원본을 복사하고 §38 선택 칸 시험을 붙여라`);
   }

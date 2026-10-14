@@ -39,3 +39,4 @@ export const RECEIPT_PARAMS = {
 
 export const CSV_NOTICE = '거래 사실의 요약이며 세무 신고 자료가 아닙니다. 과세 여부·세율·신고는 판매자 책임입니다.';
 export const CSV_ADDRESS_NOTICE = '상대 주소는 체인에 공개된 주소이며, 파일을 남에게 보내면 주소와 상품의 연결이 함께 노출됩니다.';
+export const CSV_TOTALS_NOTICE = '합계는 이 파일에 담긴 영수증의 RVN 을 더한 값입니다. 세액은 계산하지 않았으니 세무 전문가와 확인하세요.';
