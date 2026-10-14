@@ -23,6 +23,7 @@ import type { SignDigest } from "../core/signer/signmessage";
 import { DICT } from "./dict";
 import { DEVICE_COPY } from "./device-copy";
 import { copyHtml, setCopyText, t, tf } from "./i18n";
+import { downloadExport, localStoreDocStorage, mountStoreDocCard, type StoreDocStorage } from "./store-doc-ui";
 import "./device-connect.css";
 
 /* 이 화면의 문구는 화면을 처음 열 때 사전에 합친다(시작 묶음을 키우지 않으려고 dict.ts 에 넣지 않는다). 이미 있는 번역은 덮지 않는다. */
@@ -37,6 +38,8 @@ export type StoreKeyPort = {
   /** storeId 가 null 이면 「가게 키는 있으나 가게 문서(번호)가 없다」 — 키 지문은 보이고 발급·끊기는 닫힌다. */
   info(): Promise<{ storeId: string | null; storeKey: string } | null>;
   signDigest: SignDigest;
+  /** 같은 키로 서명하되 사장 확인창에 다른 사유를 보인다(80자 이하). 연결 전 포트에는 없다. */
+  withReason?(reason: string): StoreKeyPort;
 };
 export const nullStoreKey: StoreKeyPort = {
   info: async () => null,
@@ -49,10 +52,10 @@ const unhex = (h: string) => Uint8Array.from(h.match(/../g) ?? [], b => parseInt
 /**
  * 데스크탑 가게 키(Rust `store_key_info` · `store_sign_digest`). 키·12단어는 Rust 안에만 있고 여기에는 공개키와 서명만 온다.
  * 서명할 때마다 Rust 가 사장에게 사유를 보여 주고 확인을 받는다(앱 잠금 중이면 거절). reason 은 80자 이하 한 줄.
- * storeId = 가게 문서(rev 0 해시) — 데스크탑에는 아직 가게 문서를 만드는 길이 없어 호출자가 넘긴다(없으면 null → 발급 닫힘).
+ * storeId = 가게 문서(rev 0 해시) — 「가게 번호」 카드(store-doc-ui.ts)로 만들어 이 기기에 저장한 값을 호출자가 넘긴다(없으면 null → 발급 닫힘).
  */
 export function tauriStoreKey(invoke: Invoke0, storeId: () => Promise<string | null> = async () => null, reason = "가게 기기·상품 서명"): StoreKeyPort {
-  return {
+  const port: StoreKeyPort = {
     info: async () => {
       const r = await invoke<{ store_key?: string }>("store_key_info");
       if (!r || typeof r.store_key !== "string" || !PUB_HEX.test(r.store_key)) return null;
@@ -67,7 +70,9 @@ export function tauriStoreKey(invoke: Invoke0, storeId: () => Promise<string | n
       if (!r || typeof r.sig !== "string" || !/^[0-9a-f]{128}$/.test(r.sig)) throw new Error("store-sign-reply");
       return unhex(r.sig);
     },
+    withReason: next => tauriStoreKey(invoke, storeId, next),
   };
+  return port;
 }
 
 /** 새 기기와 주고받는 자리(같은 Wi-Fi). 지금은 아무것도 보내지 않는다. */
@@ -216,8 +221,11 @@ export async function revokeFor(state: DeviceState, k: Signing, deviceId: string
 export type DeviceScreenDeps = {
   storeKey?: StoreKeyPort; link?: DeviceLinkPort; qr?: DeviceQrPort; store?: DeviceStore;
   now?: () => number;
-  /** 확인창. 기본은 window.confirm. 취소하면 false. */
-  confirm?: (title: string, message: string) => Promise<boolean>;
+  /** 확인창. 기본은 window.confirm. 취소하면 false. okLabel 은 확인 단추 글자. */
+  confirm?: (title: string, message: string, okLabel?: string) => Promise<boolean>;
+  /** 「가게 번호」 카드가 쓰는 저장소(이 기기 안)와 파일 내보내기. */
+  storeDocs?: StoreDocStorage;
+  exportFile?: (name: string, bytes: Uint8Array) => Promise<void>;
   copyText?: (text: string) => Promise<void>;
 };
 
@@ -249,6 +257,7 @@ const MARKUP = `
   <h1>${copyHtml("기기 연결")}</h1>
   <p class="meta">${copyHtml("이 컴퓨터(가게 키 PC)가 새 폰이나 보조 컴퓨터를 등록해요. 등록된 기기는 정해진 일만 하고, 기간이 지나면 저절로 멈춰요.")}</p>
   <p class="meta dv-keystate" id="dv-keystate" role="status"></p>
+  <div class="card dv-card" id="dv-storecard"></div>
   <div class="card dv-card">
     <h2>${copyHtml("연결된 기기")}</h2>
     <p class="meta" id="dv-liststate"></p>
@@ -298,15 +307,24 @@ export function mountDeviceScreen(root: HTMLElement, deps: DeviceScreenDeps = {}
   const key = deps.storeKey ?? nullStoreKey, link = deps.link ?? nullDeviceLink, qr = deps.qr ?? nullDeviceQr;
   const store = deps.store ?? localDeviceStore();
   const now = deps.now ?? (() => Date.now());
-  const confirmBox = deps.confirm ?? (async (title: string, message: string) => window.confirm(`${title}\n${message}`));
+  const confirmBox = deps.confirm ?? (async (title: string, message: string, _ok?: string) => window.confirm(`${title}\n${message}`));
+  const storeDocs = deps.storeDocs ?? localStoreDocStorage();
   const copy = deps.copyText ?? (async (text: string) => { await navigator.clipboard.writeText(text); });
   root.innerHTML = MARKUP;
   let state = store.load();
   let signing: Signing | null = null;
   let keyOnly: string | null = null;
   let busy = false;
+  const REASON_ISSUE = "기기 증서 발급 - 새 기기를 등록합니다", REASON_REVOKE = "기기 끊기 - 철회 목록을 새로 서명합니다";
+  const withReason = (k: Signing, reason: string): Signing => {
+    const port = key.withReason?.(reason);
+    return port ? { ...k, sign: port.signDigest } : k;
+  };
 
   const say = (render: () => string) => setCopyText(el(root, "dv-say"), render);
+  const storeCard = mountStoreDocCard(el(root, "dv-storecard"), {
+    key, docs: storeDocs, now, confirm: confirmBox, exportFile: deps.exportFile ?? downloadExport, onChange: () => { void refreshKey(); },
+  });
   const roleSel = el<HTMLSelectElement>(root, "dv-role"), ttlSel = el<HTMLSelectElement>(root, "dv-ttl");
   for (const r of DEVICE_ROLES) roleSel.add(new Option(t(ROLE_LABEL[r]), r));
   for (const d of DEVICE_TTL_DAYS) ttlSel.add(new Option(d === DEVICE_CERT_DEFAULT_DAYS ? tf("{0}일 (기본 · 잠정)", d) : tf("{0}일", d), String(d)));
@@ -320,7 +338,7 @@ export function mountDeviceScreen(root: HTMLElement, deps: DeviceScreenDeps = {}
     const n = now();
     setCopyText(el(root, "dv-keystate"), () => signing
       ? tf("가게 키 연결됨 · 키 지문 {0}", signing.storeKey.slice(0, 12))
-      : keyOnly ? tf("가게 키 있음 · 키 지문 {0} · 가게 문서(번호)가 아직 없어 발급과 끊기는 닫혀 있어요.", keyOnly.slice(0, 12))
+      : keyOnly ? tf("가게 키 있음 · 키 지문 {0} · 가게 문서(번호)가 아직 없어 발급과 끊기는 닫혀 있어요. 아래 「가게 번호」에서 만들 수 있어요.", keyOnly.slice(0, 12))
       : t("가게 키 서명이 아직 연결되지 않았어요(연결 전). 목록은 볼 수 있지만 발급과 끊기는 닫혀 있어요."));
     setCopyText(el(root, "dv-liststate"), () => !state.list
       ? t("철회 목록이 아직 없어요. 첫 발급 때 만들어요.")
@@ -354,6 +372,7 @@ export function mountDeviceScreen(root: HTMLElement, deps: DeviceScreenDeps = {}
     try {
       const i = await key.info();
       signing = i && i.storeId ? { storeId: i.storeId, storeKey: i.storeKey, sign: key.signDigest } : null;
+      storeCard.paint();
       if (i && !i.storeId) keyOnly = i.storeKey;
     } catch { signing = null; }
     paint();
@@ -379,7 +398,7 @@ export function mountDeviceScreen(root: HTMLElement, deps: DeviceScreenDeps = {}
       if (!pub) pub = (await link.receiveKey().catch(() => null)) ?? "";
       const name = el<HTMLInputElement>(root, "dv-name").value.trim();
       if (!name) { say(() => t("기기 이름을 적어 주세요.")); return; }
-      const r = await issueFor(state, signing, { devicePubKey: pub, role: roleSel.value as DeviceRole, ttlMs: Number(ttlSel.value) * DAY_MS, name }, now());
+      const r = await issueFor(state, withReason(signing, REASON_ISSUE), { devicePubKey: pub, role: roleSel.value as DeviceRole, ttlMs: Number(ttlSel.value) * DAY_MS, name }, now());
       state = r.state; store.save(state);
       el<HTMLTextAreaElement>(root, "dv-cert").value = new TextDecoder().decode(encodeDeviceCert(r.cert));
       el(root, "dv-result").hidden = false;
@@ -390,7 +409,7 @@ export function mountDeviceScreen(root: HTMLElement, deps: DeviceScreenDeps = {}
     else if (b.id === "dv-copy") void copy(el<HTMLTextAreaElement>(root, "dv-cert").value).then(() => say(() => t("복사했어요."))).catch(() => say(() => t("복사하지 못했어요. 글을 직접 끌어 선택해 복사해 주세요.")));
     else if (b.id === "dv-resign") void act(async () => {
       if (!signing) throw new Error("store-key-not-connected");
-      state = { ...state, list: await resignList(state, signing, now()) }; store.save(state);
+      state = { ...state, list: await resignList(state, withReason(signing, REASON_REVOKE), now()) }; store.save(state);
       say(() => t("철회 목록을 새로 서명했어요."));
     });
     else if (b.dataset.revoke) {
@@ -399,7 +418,7 @@ export function mountDeviceScreen(root: HTMLElement, deps: DeviceScreenDeps = {}
         if (!signing) throw new Error("store-key-not-connected");
         const ok = await confirmBox(t("이 기기를 끊을까요?"), `${t("끊으면 그 기기는 바로 멈춰요.")}\n${t("이미 복사된 지난 데이터는 되돌릴 수 없어요.")}\n${t("잃어버린 기기라면 끊은 뒤 데이터 열쇠도 새것으로 바꿔 주세요.")}`);
         if (!ok) return;
-        state = await revokeFor(state, signing, id, now()); store.save(state);
+        state = await revokeFor(state, withReason(signing, REASON_REVOKE), id, now()); store.save(state);
         say(() => t("기기를 끊었어요. 이미 복사된 지난 데이터는 되돌릴 수 없어요. 데이터 열쇠는 새것으로 바꿔 주세요."));
       });
     }

@@ -278,3 +278,124 @@ test('대량 등록 서명: 잠금이면 서명도 안 하고, 잠금이 풀려�
   assert.equal(open.signed.length, 1);
   assert.equal(inv2.calls.filter(c => c.cmd !== 'store_sign_digest').length, 0);
 });
+
+/* ── 가게 문서(가게 번호) 만들기 — 가짜 12단어 ── */
+const SD_NOW = 1_790_000_000_000;
+const SD_INPUT = { name: '무송 체육관 스토어', intro: '직접 만든 굿즈를 팝니다.', category: 'retail', region: '서울 마포' };
+const signCalls = inv => inv.calls.filter(c => c.cmd === 'store_sign_digest');
+
+test('가게 문서: 가짜 12단어 → 서명 → core 검증 → 가게 번호(rev 0 본문 해시) · 사유는 80자 이하로 확인창에 전달', async () => {
+  const inv = fakeInvoke();
+  const rec = await B.createStoreDoc(B.tauriStoreKey(inv), SD_INPUT, SD_NOW);
+  assert.equal(rec.doc.seller, SHOP_PUB); assert.equal(rec.doc.rev, 0); assert.equal(rec.doc.id, null); assert.equal(rec.doc.prev, null);
+  assert.deepEqual(rec.doc.contacts, []); assert.deepEqual(rec.doc.photos, []); assert.equal(rec.doc.notice, 'on-request');
+  assert.equal(rec.storeId, B.storeDocHash(rec.doc)); assert.equal(rec.storeId, B.storeIdOf(rec.doc)); assert.match(rec.storeId, /^[0-9a-f]{64}$/);
+  // 받는 쪽(폰 core 와 같은 파일)이 바이트로 다시 확인한다
+  const v = B.verifyStoreDoc(B.exportBytes(rec), { now: SD_NOW / 1000, expectedId: rec.storeId });
+  assert.equal(v.idProven, true); assert.equal(v.storeId, rec.storeId);
+  assert.equal(rec.doc.expiresAt - rec.doc.issuedAt, 90 * 86400);
+  const calls = signCalls(inv);
+  assert.equal(calls.length, 1); assert.equal(calls[0].args.reason, B.STORE_DOC_REASON); assert.ok(calls[0].args.reason.length <= 80);
+  // 같은 12단어·같은 입력·같은 시각이면 같은 번호(결정적), 다른 이름이면 다른 번호
+  const again = await B.createStoreDoc(B.tauriStoreKey(fakeInvoke()), SD_INPUT, SD_NOW);
+  assert.equal(again.storeId, rec.storeId);
+  const other = await B.createStoreDoc(B.tauriStoreKey(fakeInvoke()), { ...SD_INPUT, name: '다른 가게' }, SD_NOW);
+  assert.notEqual(other.storeId, rec.storeId);
+  assert.equal(B.exportName(rec), `rv-store-${rec.storeId.slice(0, 12)}.json`);
+});
+
+test('가게 문서 거절: 잘못된 입력은 서명 확인창 전에 막힌다 · 잠금 · 다른 키의 서명 · 오류에 열쇠 없음', async () => {
+  const bad = [
+    { ...SD_INPUT, name: '' }, { ...SD_INPUT, name: 'x'.repeat(41) }, { ...SD_INPUT, name: '공식 인증 가게' },
+    { ...SD_INPUT, region: '' }, { ...SD_INPUT, region: '마포구 12-3번지' }, { ...SD_INPUT, category: '' }, { ...SD_INPUT, category: 'weapons' },
+    { ...SD_INPUT, intro: '정품 보증 100%' }, { ...SD_INPUT, intro: 'x'.repeat(401) },
+  ];
+  for (const input of bad) {
+    const inv = fakeInvoke();
+    await assert.rejects(() => B.createStoreDoc(B.tauriStoreKey(inv), input, SD_NOW), /store-/, JSON.stringify(input));
+    assert.equal(signCalls(inv).length, 0, '입력 오류는 사장 확인창(서명 요청) 전에 막힌다');
+  }
+  // 앱 잠금 중: info 부터 거절 — 서명 요청 없음
+  const lockedInv = fakeInvoke({ locked: true });
+  await assert.rejects(() => B.createStoreDoc(B.tauriStoreKey(lockedInv), SD_INPUT, SD_NOW));
+  assert.equal(signCalls(lockedInv).length, 0);
+  // 사장이 확인창에서 거절 → 고정 문장만
+  const declined = async cmd => { if (cmd === 'store_key_info') return { store_key: SHOP_PUB }; throw '사장님이 서명을 허락하지 않았어요.'; };
+  await assert.rejects(() => B.createStoreDoc(B.tauriStoreKey(declined), SD_INPUT, SD_NOW), /signer-failed/);
+  // 연결 전
+  await assert.rejects(() => B.createStoreDoc(B.nullStoreKey, SD_INPUT, SD_NOW), /store-key-not-connected/);
+  // 다른 키가 서명해서 돌려주면(키 불일치) core 가 거절하고 저장할 문서가 없다
+  const other = secp256k1.sign(new Uint8Array(32).fill(3), B.fakePriv(9), { lowS: true }).toCompactHex();
+  await assert.rejects(() => B.createStoreDoc(B.tauriStoreKey(fakeInvoke({ badReply: { sig: other } })), SD_INPUT, SD_NOW));
+  // 화면 문장에 열쇠·단어가 없다
+  const msgs = [];
+  for (const e of [new Error('store-text'), new Error('store-key-not-connected'), new Error('store-verify'), new Error('abandon abandon x')]) msgs.push(B.storeErrorSay(e));
+  for (const m of msgs) assert.ok(!m.includes(Buffer.from(shopPriv).toString('hex')) && !m.includes('abandon'));
+});
+
+test('가게 문서 저장: 다시 읽으면 core 규칙으로 거른다(변조·rev≠0 거절) · 키가 바뀌면 번호를 내주지 않는다', async () => {
+  const rec = await B.createStoreDoc(B.tauriStoreKey(fakeInvoke()), SD_INPUT, SD_NOW);
+  const mem = B.memoryStoreDocStorage(); assert.equal(mem.load(), null);
+  mem.save(rec); assert.equal(mem.load().storeId, rec.storeId);
+  // localStorage 모양 저장소
+  const data = new Map(); const st = { getItem: k => data.get(k) ?? null, setItem: (k, v) => data.set(k, v) };
+  const ls = B.localStoreDocStorage(st); ls.save(rec);
+  assert.equal(ls.load().storeId, rec.storeId);
+  const raw = JSON.parse(data.get(B.STORE_DOC_STORAGE_KEY));
+  for (const mutate of [r => { r.doc.name = '바꾼 이름'; }, r => { r.doc.sig = r.doc.sig.slice(0, -4) + 'AAAA'; }, r => { r.doc.rev = 1; r.doc.id = 'ab'.repeat(32); r.doc.prev = 'cd'.repeat(32); }, r => { r.doc.seller = '02' + '11'.repeat(32); }, r => { delete r.doc; }]) {
+    const copy = structuredClone(raw); mutate(copy); data.set(B.STORE_DOC_STORAGE_KEY, JSON.stringify(copy));
+    assert.equal(ls.load(), null);
+  }
+  data.set(B.STORE_DOC_STORAGE_KEY, '{broken'); assert.equal(ls.load(), null);
+  // 번호는 지금 가게 키가 문서의 seller 와 같을 때만
+  assert.equal(B.matchedStoreId(rec, SHOP_PUB), rec.storeId);
+  assert.equal(B.matchedStoreId(rec, B.pubOf(B.fakePriv(9))), null);
+  assert.equal(B.matchedStoreId(null, SHOP_PUB), null);
+  assert.equal(B.matchedStoreId(rec, null), null);
+  assert.equal(await B.savedStoreId(fakeInvoke(), mem), rec.storeId);
+  assert.equal(await B.savedStoreId(async () => ({ store_key: B.pubOf(B.fakePriv(9)) }), mem), null);
+  assert.equal(await B.savedStoreId(fakeInvoke(), B.memoryStoreDocStorage()), null);
+  await assert.rejects(() => B.savedStoreId(fakeInvoke({ locked: true }), mem));
+});
+
+test('가게 번호가 있으면 기기 증서 발급과 끊기가 열린다 · 폰 core(verifyDeviceCert)가 확인 · 끊으면 거절 · 사유 전달', async () => {
+  const inv = fakeInvoke();
+  const rec = await B.createStoreDoc(B.tauriStoreKey(inv), SD_INPUT, SD_NOW);
+  const mem = B.memoryStoreDocStorage(rec);
+  // 번호 없음 → 키만 보이고 발급은 닫힘(info.storeId null)
+  const noDoc = B.tauriStoreKey(inv, () => B.savedStoreId(inv, B.memoryStoreDocStorage()));
+  assert.deepEqual(await noDoc.info(), { storeId: null, storeKey: SHOP_PUB });
+  // 번호 있음 → 열림
+  const port = B.tauriStoreKey(inv, () => B.savedStoreId(inv, mem));
+  const info = await port.info();
+  assert.equal(info.storeId, rec.storeId);
+  const k = { storeId: info.storeId, storeKey: info.storeKey, sign: port.withReason('기기 증서 발급 - 시험').signDigest };
+  const r1 = await B.issueFor(B.emptyState(), k, input(31), NOW);
+  assert.equal(r1.cert.storeId, rec.storeId);
+  const ok = B.verifyDeviceCert(r1.cert, rec.doc.seller, NOW, r1.state.list);
+  assert.equal(ok.ok, true, JSON.stringify(ok));
+  // 끊기 → 철회 목록에 그 증서 번호 · 이후 같은 증서는 거절
+  const s2 = await B.revokeFor(r1.state, k, r1.cert.deviceId, NOW + 1000);
+  assert.ok(s2.list.revoked.includes(B.deviceCertId(r1.cert)));
+  assert.equal(B.verifyDeviceRevocationList(s2.list, rec.doc.seller, rec.storeId).seq, 2);
+  const after = B.verifyDeviceCert(r1.cert, rec.doc.seller, NOW + 2000, s2.list);
+  assert.equal(after.ok, false); assert.ok(after.reason);
+  assert.equal(B.deviceRows(s2, NOW + 2000)[0].status, 'revoked');
+  // 다른 가게 번호로 만든 철회 목록은 받아주지 않는다
+  assert.throws(() => B.verifyDeviceRevocationList(s2.list, rec.doc.seller, 'cd'.repeat(32)));
+  // 서명 요청에는 사유가 붙었다(80자 이하)
+  for (const c of signCalls(inv)) assert.ok(c.args.reason && c.args.reason.length <= 80);
+  assert.ok(signCalls(inv).some(c => c.args.reason === '기기 증서 발급 - 시험'));
+});
+
+test('가게 번호 카드 문구: 영·일·중 번역 있음 · 금지 문구 없음 · 올리기 길 없음', () => {
+  for (const k of lits('src/store-doc-ui.ts')) for (const l of ['en', 'ja', 'zh']) assert.ok(B.hasOwnTranslation(k, l), `${l} 번역 없음: ${k}`);
+  for (const k of ['음식점', '카페', '소매', '중고', '음악', '책', '게임', '서비스', '디지털', '기타']) for (const l of ['en', 'ja', 'zh']) assert.ok(B.hasOwnTranslation(k, l), `${l}: ${k}`);
+  const src = readFileSync('src/store-doc-ui.ts', 'utf8') + readFileSync('src/store-doc-copy.ts', 'utf8');
+  for (const bad of ['검증된', '정품 보증', '안전한 거래', '사기 방지', '최고의 암호화폐', '비트코인만큼', '비트코인보다']) assert.ok(!src.includes(bad), bad);
+  const code = src.split('\n').filter(l => !/^\s*(\*|\/\*|\/\/)/.test(l)).join('\n');
+  assert.ok(!/\p{Extended_Pictographic}/u.test(code), '이모지 금지');
+  // 게시·업로드 길이 없다: 네트워크·게시 호출이 이 화면 코드에 없다
+  assert.ok(!/fetch\(|XMLHttpRequest|WebSocket|publish|upload\(|ipfs|sendBeacon/i.test(code.replace(/올리지|publish\w*|업로드/gi, '')), '게시/업로드 호출 없음');
+  assert.ok(!/rv\.store-doc-id/.test(readFileSync('src/main.ts', 'utf8')), '임시 연결점(rv.store-doc-id)은 없앴다');
+});

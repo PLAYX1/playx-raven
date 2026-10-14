@@ -4800,8 +4800,8 @@ function setupNavMore() {
   sync();
 }
 
-/** 가게 문서(번호) — 데스크탑에는 가게 문서를 만드는 길이 아직 없어 저장된 값이 있을 때만 쓴다(없으면 null → 기기 발급 닫힘). */
-const storeDocId = async (): Promise<string | null> => { try { return localStorage.getItem("rv.store-doc-id"); } catch { return null; } };
+/** 가게 번호 — 「기기 연결」 화면의 「가게 문서 만들기」로 이 기기에 저장한 가게 문서(rev 0)의 번호. 문서가 없거나 지금 가게 키와 다르면 null → 기기 발급 닫힘. */
+const storeDocId = async (): Promise<string | null> => { try { return await (await import("./store-doc-ui")).savedStoreId((cmd, args) => invoke(cmd, args)); } catch { return null; } };
 let salesAccount: ReturnType<typeof wireSalesAccount> | undefined;
 let deviceScreen: ReturnType<typeof import("./device-connect").mountDeviceScreen> | undefined;
 let bulkScreen: ReturnType<typeof import("./bulk-products-ui").mountBulkScreen> | undefined;
@@ -4872,7 +4872,7 @@ function showPage(id: string) {
   if (id === "create") createApi?.enter();
   // 판매자 화면 둘 — 처음 열 때 따로 내려받아 그린다(시작 번들에 넣지 않는다). 다시 열면 새로 읽는다.
   if (id === "devices") void import("./device-connect").then(({ mountDeviceScreen, pairingQr, tauriStoreKey }) => { if (!deviceScreen) deviceScreen = mountDeviceScreen($("page-devices"), { qr: pairingQr((cmd, args) => invoke(cmd, args)), storeKey: tauriStoreKey((cmd, args) => invoke(cmd, args), storeDocId),
-    confirm: (title, message) => sure(title, message, t("끊기")) }); else deviceScreen.enter(); }).catch((e) => console.warn("device-connect load failed", e));
+    confirm: (title, message, okLabel) => sure(title, message, okLabel ?? t("끊기")) }); else deviceScreen.enter(); }).catch((e) => console.warn("device-connect load failed", e));
   if (id === "bulk") void Promise.all([import("./bulk-products-ui"), import("./device-connect")]).then(async ([{ mountBulkScreen, storeKeyBulkPublisher }, { tauriStoreKey }]) => {
     if (bulkScreen) { bulkScreen.enter(); return; }
     // 서명 길만 잇는다. 올리기 잠금(CREATOR_PUBLISH_PAUSED)은 그대로 — 잠겨 있으면 서명도 하지 않는다.

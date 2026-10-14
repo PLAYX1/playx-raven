@@ -6,6 +6,9 @@ import { deviceCertId, verifyDeviceCert, DEVICE_CERT_DEFAULT_DAYS, DEVICE_ROLE_S
 import { verifyDeviceRevocationList } from '../../core/device/revoke';
 export * from '../../src/device-connect';
 export * from '../../src/bulk-products-ui';
+export * from '../../src/store-doc-ui';
+export { verifyStoreDoc, storeIdOf, storeDocHash, encodeStoreDoc, StoreError } from '../../core/store/store-doc';
+export { storeKeyInfo, STORE_KEY_BIP32 } from '../../core/store/store-key';
 export { parseBulkProducts, BULK_LIMITS } from '../../core/creator/bulk-products';
 export { CREATOR_PUBLISH_PAUSED } from '../../src/creator-pause';
 export { sellerAddressOf } from '../../core/creator/product-doc';
