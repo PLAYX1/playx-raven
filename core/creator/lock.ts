@@ -1,3 +1,4 @@
+import { FINAL_MIN_CONFIRMATIONS } from '../receipts/params';
 import { x25519 } from '@noble/curves/ed25519';
 import { xchacha20poly1305 } from '@noble/ciphers/chacha.js';
 import { hkdf } from '@noble/hashes/hkdf';
@@ -5,7 +6,7 @@ import { sha256 } from '@noble/hashes/sha256';
 import { b64urlDecode, b64urlEncode, canonicalJson, hex, plain, sha256Hex, utf8, type Loose } from './bytes';
 import {
   LOCK_CHUNK_BYTES, LOCK_CHUNK_OVERHEAD, LOCK_SCHEME, LOCK_WRAP, lockCipherSize, recoverMessageAddress,
-  type CreatorManifest, type LockFile, type LockSection,
+  type LockFile, type LockSection,
 } from './manifest';
 
 /*
@@ -45,6 +46,13 @@ import {
 
 export type LockErrorCode =
   | 'key' | 'key-id' | 'format' | 'asset' | 'size' | 'chunk' | 'plain-hash' | 'aborted' | 'too-big' | 'grant' | 'request-signature' | 'wrong-key';
+/**
+ * 열람 함수가 읽는 잠금 묶음 = 잠금 이름(asset) + 서명된 잠금 정보(lock). 이 두 칸만 본다.
+ * 제작자 매니페스트(CreatorManifest)는 이 모양을 그대로 만족하고, 상품 문서는 product-lock.ts productLockHolder 가 만든다
+ * (예전에는 상품 문서 쪽이 매니페스트 모양으로 형 변환해 넘겼다). lock 이 없거나 null 이면 열람 보호 상품이 아니다.
+ */
+export type LockHolder = { readonly asset: string; readonly lock?: LockSection | null };
+
 export class LockError extends Error {
   constructor(readonly code: LockErrorCode, readonly detail = '') { super(detail ? `${code}: ${detail}` : code); this.name = 'LockError'; }
 }
@@ -57,7 +65,7 @@ export const LOCK_REQ_DOMAIN = 'RAVENVAULT-LOCK-REQ-V1';
 export const REQUEST_PREFIX = 'RVLQ1.';
 export const GRANT_PREFIX = 'RVLG1.';
 /** 판매자 기본: 열람 요청에 필요한 최소 확인 수(대표 결정 항목 — 설계 §5.3 ②. 게임 결제 층 confirmationTiers 와 같은 6). */
-export const DEFAULT_MIN_CONFIRMATIONS = 6;
+export const DEFAULT_MIN_CONFIRMATIONS = FINAL_MIN_CONFIRMATIONS; // = 6, 확인 수 이원화(시험망 실측 반영, 대표 승인 10-14)
 /** 한 결제(txid)에 서로 다른 열람 공개키로 내줄 수 있는 최대 허가 수(기기를 잃고 다시 요청하는 경우 몫 — 대표 결정 항목). */
 export const DEFAULT_MAX_KEYS_PER_PAYMENT = 3;
 /** 한 번에 메모리에 복호해 담는 파일의 상한. 이보다 크면 거절(메모리 폭주 방지). */
@@ -222,7 +230,7 @@ const grantAad = (g: Pick<LockGrant, 'asset' | 'txid' | 'keyId' | 'lockPub' | 'e
 const wrapKeyOf = (shared: Uint8Array, eph: Uint8Array, lockPub: Uint8Array) => hkdf(sha256, shared, concat(eph, lockPub), utf8('rv-lock-wrap-v1'), 32);
 
 /** K 를 구매자 열람 공개키로 싼다. K 가 매니페스트의 지문과 맞는지 먼저 확인한다(틀린 열쇠를 내주지 않는다). */
-export function createLockGrant(p: { manifest: CreatorManifest; key: Uint8Array; request: Pick<LockRequest, 'asset' | 'txid' | 'lockPub'>; rng?: Rng }): string {
+export function createLockGrant(p: { manifest: LockHolder; key: Uint8Array; request: Pick<LockRequest, 'asset' | 'txid' | 'lockPub'>; rng?: Rng }): string {
   const lock = p.manifest.lock;
   if (!lock) return fail('format', 'no-lock');
   if (p.request.asset !== p.manifest.asset) fail('asset');
@@ -260,7 +268,7 @@ export function decodeLockGrant(text: string): LockGrant | null {
  * 구매자: 허가를 풀어 K 를 얻는다. 거절하는 경우 — 모양이 틀림 · 다른 상품/다른 결제(txid) · 내 열람 공개키가 아님 · 변조 · 푼 K 의 지문이
  * 매니페스트 lock.keyId 와 다름(가짜 허가). 조용히 쓰레기 열쇠를 돌려주지 않는다.
  */
-export function openLockGrant(p: { grantText: string; manifest: CreatorManifest; txid: string; lockPriv: Uint8Array }): Uint8Array {
+export function openLockGrant(p: { grantText: string; manifest: LockHolder; txid: string; lockPriv: Uint8Array }): Uint8Array {
   const lock = p.manifest.lock;
   if (!lock) return fail('format', 'no-lock');
   const g = decodeLockGrant(p.grantText);
@@ -313,7 +321,7 @@ const SAY: Record<string, string> = {
  * 같은 열람 공개키로 다시 오면 같은 K 를 새 봉투에 담아 다시 내준다(메시지를 잃은 경우). 다른 공개키는 maxKeysPerPayment 까지.
  */
 export function processLockRequest(p: {
-  requestText: string; manifest: CreatorManifest; key: Uint8Array; tx: LockTx | null; verifyPayment: PaymentVerifier;
+  requestText: string; manifest: LockHolder; key: Uint8Array; tx: LockTx | null; verifyPayment: PaymentVerifier;
   ledger: LockLedger; now: number; minConfirmations?: number; maxKeysPerPayment?: number; rng?: Rng;
 }): RequestVerdict {
   const no = (code: Exclude<RequestVerdict, { ok: true }>['code'], wait = false, detail?: string): RequestVerdict => ({ ok: false, code, say: SAY[code] ?? code, wait, detail });

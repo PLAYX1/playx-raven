@@ -10,7 +10,7 @@
     "core/creator/listing.ts": "e3647410a95c992d85504ad58f56cc732e0d396f1207f04f887384e4f2830a1c",
     "core/creator/open-market.ts": "1eada10588cfb483011760a834d07633ee3962abda619ffd858043f246486b03",
     "core/creator/ticket.ts": "97f89f9fdc7daab00b2677b8b9247cc83ccbd66348dc0c2e91fcfc57854ae842",
-    "core/game-registry/platform-fee.ts": "630e744f94ec8d98f0d9a22204b5e9e6029a3c10d0aafce2045900cf8ecea729",
+    "core/game-registry/platform-fee.ts": "5bf9ffe9828b508522d2ad1f72512167db613a25736255c84bf56d32c2c6f400",
     "core/signed-lists/envelope.ts": "ac0f4db099957063a4185eff1a234ba6d7276502996916d8967c1fb9f39e95c4",
     "core/signed-lists/creator-parts.ts": "cebe19ae2c6a57a0b0de7b7e5c8b49b95dcf8897c9baa8bdb8d48d6fb8e4e0c4",
     "core/signed-lists/sources.ts": "488040d9d7632249821fb15e76cadec508af30a7387e6b66cbed4577aaa041c0",
@@ -22,14 +22,15 @@
     "core/creator/owner-id.ts": "9b3acf744210a570b73e952fc3508bee8bc3aedc826dd8dd66af51bbae811e90",
     "core/creator/owner-id-vectors.json": "33923301c3b28f9965f39ebf3df37d8872560f8903bd3a80b0a8ad53fb265d85",
     "core/signed-lists/market-catalog.ts": "ee9f45e62caab7f81bf4adb0957b85e1fb2f20fa6f52860f89199abed4ca38a4",
-    "core/creator/lock.ts": "4970d3442549628238bc39ecd3a3a79fa901d93b0a94b21800c644be58a91040",
+    "core/creator/lock.ts": "52b165f87967ef0efd9c69b7434a9adc09db2fc4324b38f7b639fc79d24c7502",
     "core/creator/lock-payment.ts": "11c834511c75d01397c62b813b320612665aecc64c081d6152aba2911a10d2bc",
     "core/creator/clip.ts": "262541727a8d1fbb3cb06f5acf1c9add46e146e5e34c2ad8a438530ae2b31e3f",
     "core/creator/asset-testnet.ts": "ee53ec3b4300a6a124e146c30abfef42ae0fba1b8e63d07902fd4b883294f7c9",
     "core/creator/manifest-assemble.ts": "a2c9bc470613eff722eea8b8caa90684dad5b3d6020f58296d54a893c39a0a18",
     "core/brand/brand.ts": "148acee2dbb36917ba54b4381b8e14f39c7b6d38e12e84202aa465b052c018bf",
     "core/brand/legacy-asset.ts": "c9528dd4cd65813570137bf76fb971c8c9fc2590c58293bc171acd1918e39dcb",
-    "core/creator/legacy-manifest-fixture.ts": "85ecda857767e6fc1f60f7f554c07cb7641b4afbe4008543a46f6b2702f96aa0"
+    "core/creator/legacy-manifest-fixture.ts": "85ecda857767e6fc1f60f7f554c07cb7641b4afbe4008543a46f6b2702f96aa0",
+    "core/receipts/params.ts": "90c7db94ecc01f0b326f16bd7021e2034c138b22b0676ec3d6b60c65d40b800f"
   },
-  "note": "0.9.2 통합: 이전의 「스위치 두 줄 패치」는 없다 — 지갑 원본이 mainnet-switches.ts 를 거쳐 core/creator/mainnet-switch.json 을 읽도록 바뀌어 모든 파일이 지갑 원본과 바이트 동일하다(patches 없음). 스위치 JSON(core/creator/mainnet-switch.json)은 enable 커밋이 바꾸는 파일이라 해시를 고정하지 않는다 — 지갑 원본과의 바이트 동일은 지갑 저장소의 scripts/check-mainnet-switches.mjs --desktop 가 확인한다. RV-LOCK v1(2026-10-13): lock.ts · lock-payment.ts · clip.ts 추가, manifest.ts(lock 칸·미리듣기 끔)·publish.ts(lock 옵션) 갱신 — 지갑 저장소 브랜치 claude/rv-wallet-lock 원본과 바이트 동일. 2026-10-14 동기화: 지갑 통합 브랜치 claude/rv-real-integ 25329eb(리뷰 수리 fix1·fix2·fix3 이후) 기준 — publish.ts 갱신(manifest-assemble 로 조립 분리·asset-testnet·brand/legacy-asset 사용), market-catalog.ts 갱신(brand/brand 사용), 새 파일 asset-testnet.ts(노드 망 확인 confirmNodeChain) · manifest-assemble.ts · brand/brand.ts · brand/legacy-asset.ts · legacy-manifest-fixture.ts(시험 전용 — 앱 코드 import 금지, scripts/creator-publish.test.mjs 가 확인). 패치 없음."
+  "note": "0.9.2 통합: 이전의 「스위치 두 줄 패치」는 없다 — 지갑 원본이 mainnet-switches.ts 를 거쳐 core/creator/mainnet-switch.json 을 읽도록 바뀌어 모든 파일이 지갑 원본과 바이트 동일하다(patches 없음). 스위치 JSON(core/creator/mainnet-switch.json)은 enable 커밋이 바꾸는 파일이라 해시를 고정하지 않는다 — 지갑 원본과의 바이트 동일은 지갑 저장소의 scripts/check-mainnet-switches.mjs --desktop 가 확인한다. RV-LOCK v1(2026-10-13): lock.ts · lock-payment.ts · clip.ts 추가, manifest.ts(lock 칸·미리듣기 끔)·publish.ts(lock 옵션) 갱신 — 지갑 저장소 브랜치 claude/rv-wallet-lock 원본과 바이트 동일. 2026-10-14 동기화: 지갑 통합 브랜치 claude/rv-real-integ 25329eb(리뷰 수리 fix1·fix2·fix3 이후) 기준 — publish.ts 갱신(manifest-assemble 로 조립 분리·asset-testnet·brand/legacy-asset 사용), market-catalog.ts 갱신(brand/brand 사용), 새 파일 asset-testnet.ts(노드 망 확인 confirmNodeChain) · manifest-assemble.ts · brand/brand.ts · brand/legacy-asset.ts · legacy-manifest-fixture.ts(시험 전용 — 앱 코드 import 금지, scripts/creator-publish.test.mjs 가 확인). 패치 없음. 2026-10-14 2차 동기화: 지갑 통합 브랜치 claude/rv-real-integ 91aef5a 기준 — lock.ts 갱신(LockHolder 모양·확인 수 FINAL_MIN_CONFIRMATIONS=6 을 core/receipts/params.ts 에서), platform-fee.ts 주석만 갱신, 새 파일 core/receipts/params.ts(lock.ts 의존). 패치 없음. 상품 문서(RAVENVAULT-PRODUCT-V1, product-doc.ts)는 데스크탑이 읽지 않아 복사하지 않는다(scripts/lock-ui.test.mjs 가 고정)."
 }

@@ -19,6 +19,10 @@
   옛 `RV.` 이름 새 발행은 core 가 막는다(`legacyIssueGuard`, 우회 칸 없음). 데스크탑 화면은 그와 별개로 `src/creator-pause.ts` 의 `CREATOR_PUBLISH_PAUSED` 로 올리기·등록 단추를 잠근다(대표 결정 2026-10-14).
   `core/creator/legacy-manifest-fixture.ts` 도 같은 원본에서 복사했다 — **시험 전용**(이미 있는 옛 상품을 시험 안에서 재현해 읽기·검증·구매·열람 경로를 시험). 앱 코드(`src/**`)는 이것과 `manifest-assemble.ts` 를 import 하지 않는다(`scripts/creator-publish.test.mjs` 가 확인).
 
+- 2차 동기화(2026-10-14, 지갑 통합 브랜치 `claude/rv-real-integ` 커밋 `91aef5a`): `lock.ts` 갱신(열람 함수가 `LockHolder` = asset+lock 두 칸만 받음 · 확인 수 6 을 `FINAL_MIN_CONFIRMATIONS` 로) + 새 의존 파일 `core/receipts/params.ts`, `core/game-registry/platform-fee.ts` 주석 갱신 — 패치 없음, `vendor-sha256.json` 갱신.
+  상품 문서(`RAVENVAULT-PRODUCT-V1`, 지갑 `core/creator/product-doc.ts` — §38 새 선택 칸 lock·lock.files[].cipher·format·downloadDays·media 객체 항목)는 **데스크탑이 읽지 않는다**(Rust·TS 어디에도 파서 없음) — 복사하지 않았다.
+  데스크탑이 읽는 것은 제작자 매니페스트(`rv-creator-manifest` v2, 위 `manifest.ts`)뿐이고, 그 lock 칸은 지갑 원본과 같게 정확한 키만 받는다. `scripts/lock-ui.test.mjs` 가 둘 다 고정한다.
+
 복사하지 않은 것: `core/creator/purchase.ts`(구매자 거래 — 지갑의 직접 결제 부품에 기댄다)와 시험 파일. 구매자 쪽 거래 시험은 지갑 저장소에서 돈다. 데스크탑은 `purchase.ts` 대신 공통 순수 부품(`purchase-plan.ts`·`payment-allowlist.ts`·`owner-id.ts`)을 쓰고, 러스트 거래 검사는 같은 공유 벡터로 시험한다.
 
 `manifest.ts` 는 `core/wallet-offline/base58check.ts`(이미 같은 바이트로 복사돼 있음)와 `core/playx-asset-proof/crypto.ts` 의 `concatBytes` 를 쓴다.

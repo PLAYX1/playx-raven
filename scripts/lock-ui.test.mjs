@@ -138,3 +138,31 @@ test('러스트: 열쇠·백업·거래 읽기 명령이 등록돼 있고, 잠�
   assert.match(rs, /create_new\(true\)/, '덮어쓰기 없음'); assert.match(rs, /0o600/);
   assert.ok(!/println!|eprintln!|log::|tracing::/.test(rs.replace(/\/\/.*$/gm, '')), '비밀을 로그로 남기는 호출이 없다');
 });
+
+// §38 상품 문서 새 선택 칸(2026-10-14, 지갑 claude/rv-real-integ 91aef5a): lock · lock.files[].cipher · format · downloadDays · media 객체 항목.
+// 확인 결과: 데스크탑(Rust·TS)에는 상품 문서(RAVENVAULT-PRODUCT-V1) 파서가 없다 — 그래서 그 칸을 거절할 곳도 없다.
+// 데스크탑이 읽는 서명 문서는 제작자 매니페스트(rv-creator-manifest v2)뿐이고, 그 lock 칸은 지갑 원본(바이트 동일 복사)처럼 정확한 키만 받는다.
+// 누가 데스크탑에 상품 문서 파서를 새로 들이면 이 시험이 멈춰 세운다 — 그때는 지갑 product-doc.ts·product-lock-shape.ts·media-ref.ts·download-terms.ts 를 복사해 새 칸을 받게 하라(직접 짜지 말 것).
+test('상품 문서 새 선택 칸: 데스크탑에는 상품 문서 파서가 없다 · 매니페스트 lock 칸은 지갑 원본과 같게 정확한 키만', async () => {
+  const { readdirSync, statSync } = await import('node:fs');
+  const walk = d => readdirSync(d).flatMap(n => { const p = `${d}/${n}`; return statSync(p).isDirectory() ? walk(p) : /\.(rs|ts|tsx|js|mjs)$/.test(n) ? [p] : []; });
+  // core/brand/brand.ts 는 서명 domain 이름 목록(SIGNING_DOMAINS.PRODUCT_V1)만 갖는다 — 파서가 아니고 어디서도 쓰지 않는다.
+  for (const f of [...walk('src'), ...walk('src-tauri/src'), ...walk('core')].filter(f => f !== 'core/brand/brand.ts')) {
+    const t = readFileSync(f, 'utf8');
+    assert.ok(!/RAVENVAULT-PRODUCT-V1|product-doc['"]|productLockProblem|mediaHashItemProblem|downloadDays/.test(t), `상품 문서 파서가 생겼다(${f}) — 지갑 원본을 복사하고 §38 선택 칸 시험을 붙여라`);
+  }
+  const prep = await ui.lockedInputFor(fakeInvoke().invoke, music(), { makeClip: async () => WAV(64_000) });
+  const r = await core.legacyManifestForTest(prep.input, new core.MockPinAdapter(), sign);
+  const base = JSON.parse(new TextDecoder().decode(r.manifestBytes));
+  assert.equal(core.verifyManifest(base).manifest.lock.files.length, 1, '기준: 잠긴 매니페스트는 통과');
+  const mutate = f => { const m = structuredClone(base); f(m); return m; };
+  const cipher = { urls: ['https://seller.example/a.bin'], sha256: 'ab'.repeat(32), size: r.manifest.lock.files[0].plainSize + 1 };
+  assert.throws(() => core.verifyManifest(mutate(m => { m.lock.files[0].cipher = cipher; })), /manifest-lock: file/);
+  assert.throws(() => core.verifyManifest(mutate(m => { m.lock.files[0].format = 'mp3'; })), /manifest-lock: file/);
+  assert.throws(() => core.verifyManifest(mutate(m => { m.lock.downloadDays = 90; })), /manifest-lock: keys/);
+  assert.throws(() => core.verifyManifest(mutate(m => { m.media = [{ sha256: 'ab'.repeat(32) }]; })), /manifest-shape: keys/);
+  // 상품 문서 모양을 매니페스트로 잘못 넘겨도 받지 않는다(서로 다른 형식 — 섞이지 않는다).
+  const productDoc = { v: 1, kind: 'music', seller: '02' + 'ab'.repeat(32), payTo: RECEIVING, title: '노래', price: '100000000', media: [{ sha256: 'ab'.repeat(32) }],
+    feeBps: 300, feeSchedule: 'cd'.repeat(32), rev: 0, id: null, prev: null, lock: { downloadDays: 90 }, sig: '' };
+  assert.throws(() => core.verifyManifest(productDoc), /manifest-shape: keys/);
+});
