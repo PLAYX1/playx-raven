@@ -118,6 +118,7 @@ mod shopkey;
 mod storesign;
 mod shopmove;
 mod lan_proof;
+mod lan_cert;
 mod shopseal;
 mod devfee;
 mod payout_guard;

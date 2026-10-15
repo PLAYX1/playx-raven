@@ -43,13 +43,17 @@ pub fn require_nonce(body: &Value) -> Result<&str, &'static str> {
 }
 
 /// 폰 canonicalJson 과 같은 규칙: 객체 키는 UTF-16 코드 유닛 순, 공백 없음, 숫자는 정수만.
-fn canonical(v: &Value, out: &mut String) -> Result<(), &'static str> {
+pub(crate) fn canonical(v: &Value, out: &mut String) -> Result<(), &'static str> {
     match v {
         Value::Null => out.push_str("null"),
         Value::Bool(b) => out.push_str(if *b { "true" } else { "false" }),
         Value::Number(n) => {
-            if n.is_f64() {
-                return Err("canonical");
+            // 폰 canonicalJson 은 안전 정수(±2^53-1)만 받는다. 소수·그보다 큰 정수는 거절.
+            const MAX_SAFE: i64 = 9_007_199_254_740_991;
+            match (n.as_i64(), n.as_u64()) {
+                (Some(i), _) if i.abs() <= MAX_SAFE => {}
+                (None, Some(u)) if u <= MAX_SAFE as u64 => {}
+                _ => return Err("canonical"),
             }
             out.push_str(&n.to_string());
         }
@@ -82,7 +86,7 @@ fn canonical(v: &Value, out: &mut String) -> Result<(), &'static str> {
     Ok(())
 }
 
-fn canonical_string(v: &Value) -> Result<String, &'static str> {
+pub(crate) fn canonical_string(v: &Value) -> Result<String, &'static str> {
     let mut s = String::new();
     canonical(v, &mut s)?;
     Ok(s)
