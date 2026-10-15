@@ -51,6 +51,8 @@ fn deny(status: u16, reason: &str) -> LanResponse {
 pub struct LanServerState {
     /// 가게 공개키(압축 hex) — 호출자가 검증된 가게 문서에서 준다.
     pub store_key: String,
+    /// 가게 번호(64 hex). 처리기는 증서 안의 번호를 쓰고, 이 값은 철회 목록 갱신·상태 표시용이다. 모르면 빈 문자열.
+    pub store_id: String,
     pub data_key: DataKey,
     /// 최신 서명된 철회 목록. 없으면 모든 증서를 거절한다(닫힌 실패).
     pub revocation: Mutex<Option<Value>>,
@@ -65,6 +67,7 @@ impl LanServerState {
     pub fn new(store_key: String, data_key: DataKey, revocation: Option<Value>, store: LanStore) -> Self {
         LanServerState {
             store_key,
+            store_id: String::new(),
             data_key,
             revocation: Mutex::new(revocation),
             store: Mutex::new(store),

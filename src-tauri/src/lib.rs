@@ -347,6 +347,7 @@ pub fn run() {
             storesign::store_sign_digest,
             lan_mount::lan_sync_status,
             lan_mount::lan_store_set,
+            lan_mount::lan_revocation_update,
             devfee::fee_owed,
             ticket::ticket_find,
             ticket::ticket_use,

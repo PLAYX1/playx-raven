@@ -68,6 +68,7 @@ impl MountState {
 pub struct LanSlot {
     state: Mutex<Option<Arc<LanServerState>>>,
     mount: Mutex<MountState>,
+    rev: Mutex<RevMeta>,
 }
 
 impl LanSlot {
@@ -266,7 +267,11 @@ pub fn build_state(keys: &dyn LanKeySource, log_dir: &Path, now_ms: i64) -> Resu
     let id = keys.store_identity()?;
     let data_key = keys.data_key()?;
     let store = crate::lan_store::LanStore::open(log_dir, now_ms).map_err(|_| MountState::StoreFailed)?;
-    Ok(LanServerState::new(id.store_key, data_key, keys.revocation_list(), store))
+    // 저장해 둔 목록도 가게 키 서명·가게 번호를 다시 본다. 못 넘으면 없는 것으로(= 모든 증서 거절, 닫힌 실패).
+    let list = keys.revocation_list().filter(|l| crate::lan_cert::verify_revocation_list(l, &id.store_key, &id.store_id).is_ok());
+    let mut st = LanServerState::new(id.store_key, data_key, list, store);
+    st.store_id = id.store_id;
+    Ok(st)
 }
 
 fn now_ms() -> i64 {
@@ -277,13 +282,147 @@ fn now_ms() -> i64 {
 pub fn arm_from_disk(slot: &LanSlot) -> MountState {
     let dir = lan_dir();
     let cfg = read_config(&dir);
-    slot.arm(&cfg, || build_state(&FileLanKeys::new(dir.clone()), &dir.join(LOG_DIR), now_ms()))
+    let m = slot.arm(&cfg, || build_state(&FileLanKeys::new(dir.clone()), &dir.join(LOG_DIR), now_ms()));
+    slot.note_loaded_list();
+    m
 }
 
-/// 화면이 읽는 상태. 비밀 값(열쇠·목록 본문)은 싣지 않는다.
+// ── ③ 철회 목록 갱신 ────────────────────────────────────────
+//
+// 규칙(core 와 같음): 목록이 없거나 서명 시각이 24시간을 넘으면 **모든 증서를 거절**한다(`lan_cert` stale-revocation-list).
+// 그래서 가게 키 PC 가 하루 안에 같은 목록을 seq+1 로 다시 서명해 이 길로 넣어 줘야 한다.
+// 🔴 자동 재서명은 없다: 가게 키 서명은 매번 사장 확인창을 거친다(`storesign::store_sign_digest`). 화면은 `refreshBy` 전에 사장에게 묻는다.
+// 실패하면 지금 목록을 그대로 둔다(망가진/옛 목록으로 바꾸지 않는다). 지금 목록이 낡았으면 그대로 「모두 거절 중」이라고 보인다.
+
+/// 마지막 갱신 기록(메모리). 목록 본문은 담지 않는다.
+#[derive(Debug, Clone, Default)]
+pub struct RevMeta {
+    pub seq: Option<u64>,
+    pub issued_at: Option<i64>,
+    pub last_try_at: Option<i64>,
+    pub last_ok_at: Option<i64>,
+    pub last_result: Option<&'static str>,
+    pub last_error: Option<&'static str>,
+}
+
+impl LanSlot {
+    pub fn rev_meta(&self) -> RevMeta {
+        self.rev.lock().map(|m| m.clone()).unwrap_or_default()
+    }
+    fn with_rev(&self, f: impl FnOnce(&mut RevMeta)) {
+        if let Ok(mut m) = self.rev.lock() {
+            f(&mut m);
+        }
+    }
+    /// 켤 때 실린 목록의 번호·시각을 적는다(이미 검증된 것만 실린다).
+    fn note_loaded_list(&self) {
+        let Some(st) = self.state() else { return };
+        let list = st.revocation.lock().ok().and_then(|l| l.clone());
+        let info = list.and_then(|l| crate::lan_cert::verify_revocation_list(&l, &st.store_key, &st.store_id).ok());
+        self.with_rev(|m| {
+            m.seq = info.as_ref().map(|i| i.seq);
+            m.issued_at = info.as_ref().map(|i| i.issued_at);
+        });
+    }
+}
+
+/// 새로 서명된 철회 목록을 받는다. 순서: 가게 확인 → core 받기 규칙(후퇴·되살리기 금지) → 미래 시각 거절 → **디스크 저장 성공** → 메모리 교체.
+pub fn update_revocation(slot: &LanSlot, keys: &dyn LanKeySource, raw: &Value, now: i64) -> Value {
+    use crate::lan_cert::{accept_revocation_list, ListAccept, DEVICE_CLOCK_SKEW_MS};
+    slot.with_rev(|m| m.last_try_at = Some(now));
+    let fail = |code: &'static str| {
+        slot.with_rev(|m| {
+            m.last_error = Some(code);
+            m.last_result = Some("failed");
+        });
+        json!({ "ok": false, "error": code, "revocation": revocation_status(slot, now) })
+    };
+    let id = match keys.store_identity() {
+        Ok(id) => id,
+        Err(m) => return fail(m.code()),
+    };
+    let armed = slot.state().filter(|st| st.store_key == id.store_key);
+    let current = armed.as_ref().and_then(|st| st.revocation.lock().ok().and_then(|l| l.clone())).or_else(|| keys.revocation_list());
+    match accept_revocation_list(current.as_ref(), raw, &id.store_key, &id.store_id) {
+        Err(r) => fail(r.code()),
+        Ok(ListAccept::KeptCurrent) => {
+            slot.with_rev(|m| {
+                m.last_result = Some("kept-current");
+                m.last_error = None;
+            });
+            json!({ "ok": true, "changed": false, "revocation": revocation_status(slot, now) })
+        }
+        Ok(ListAccept::Newer(list, info)) => {
+            if info.issued_at > now + DEVICE_CLOCK_SKEW_MS {
+                return fail("not-yet");
+            }
+            if keys.save_revocation_list(&list).is_err() {
+                return fail("save-failed");
+            }
+            if let Some(st) = armed {
+                if let Ok(mut g) = st.revocation.lock() {
+                    *g = Some(list);
+                }
+            }
+            slot.with_rev(|m| {
+                m.seq = Some(info.seq);
+                m.issued_at = Some(info.issued_at);
+                m.last_ok_at = Some(now);
+                m.last_result = Some("updated");
+                m.last_error = None;
+            });
+            json!({ "ok": true, "changed": true, "revocation": revocation_status(slot, now) })
+        }
+    }
+}
+
+/// 철회 목록 상태 — 갱신 시각·마감·실패를 정직하게.
+pub fn revocation_status(slot: &LanSlot, now: i64) -> Value {
+    use crate::lan_cert::{DEVICE_CLOCK_SKEW_MS, REVOCATION_LIST_MAX_AGE_MS};
+    let m = slot.rev_meta();
+    let present = m.issued_at.is_some();
+    let stale = m.issued_at.map_or(true, |t| now - t > REVOCATION_LIST_MAX_AGE_MS);
+    let future = m.issued_at.is_some_and(|t| t > now + DEVICE_CLOCK_SKEW_MS);
+    let rejects_all = !present || stale || future;
+    let say = if !present {
+        "기기 확인 목록이 없어 모든 기기를 막고 있어요. 「기기 연결」에서 목록을 새로 만들어 주세요."
+    } else if rejects_all {
+        "기기 확인 목록이 하루가 지나 모든 기기를 막고 있어요. 이 컴퓨터에서 목록을 다시 확인해 주세요."
+    } else {
+        "기기 확인 목록이 최신이에요."
+    };
+    json!({
+        "present": present,
+        "seq": m.seq,
+        "issuedAt": m.issued_at,
+        "refreshBy": m.issued_at.map(|t| t + REVOCATION_LIST_MAX_AGE_MS),
+        "ageMs": m.issued_at.map(|t| now - t),
+        "stale": stale,
+        "rejectsAll": rejects_all,
+        "lastTryAt": m.last_try_at,
+        "lastOkAt": m.last_ok_at,
+        "lastResult": m.last_result,
+        "lastError": m.last_error,
+        // 다시 서명은 사장 확인창을 거친다 — 저절로 되지 않는다.
+        "autoRefresh": false,
+        "say": say,
+    })
+}
+
+/// 화면이 읽는 상태. 비밀 값(열쇠·목록 본문)은 싣지 않는다. 파일을 읽지 않는다(메모리만).
 pub fn status_json(slot: &LanSlot) -> Value {
+    status_json_at(slot, now_ms())
+}
+pub fn status_json_at(slot: &LanSlot, now: i64) -> Value {
     let m = slot.mount_state();
-    json!({ "state": m.code(), "on": m == MountState::On, "say": m.say() })
+    json!({ "state": m.code(), "on": m == MountState::On, "say": m.say(), "revocation": revocation_status(slot, now) })
+}
+
+/// 가게 키 PC 화면이 새로 서명한 철회 목록을 넣는 길(`device-connect.ts resignList` 뒤에 부른다).
+/// 스위치가 꺼져 있어도 저장해 둔다 — 켤 때 그 목록으로 시작한다. 목록은 서명된 공개 문서라 비밀이 아니다.
+#[tauri::command]
+pub fn lan_revocation_update(state: tauri::State<'_, crate::server::ServerState>, list: Value) -> Value {
+    update_revocation(&state.lan_slot(), &FileLanKeys::new(lan_dir()), &list, now_ms())
 }
 
 /// 같은 와이파이 기기 복사 상태(읽기만).
@@ -517,5 +656,120 @@ pub(crate) mod tests {
         let s = status_json(&slot).to_string();
         assert!(s.contains("\"on\":true"));
         assert!(!s.contains(&"07".repeat(32)) && !s.contains(vec()["storeKey"].as_str().unwrap()));
+    }
+
+    fn signed_list(seq: u64, issued: i64, revoked: &[&str]) -> Value {
+        let v = vec();
+        let body = json!({ "v": 1, "storeId": v["storeId"], "seq": seq, "revoked": revoked, "issuedAt": issued, "prunedBefore": 0 });
+        crate::lan_cert::sign_doc(crate::lan_cert::DEVICE_REVOKE_DOMAIN, &body, v["storeKey"].as_str().unwrap(), crate::lan_cert::tests::synth_signer).unwrap()
+    }
+    fn pull(st: &LanServerState, n: u8) -> u16 {
+        let v = vec();
+        let body = json!({ "cert": v["certs"]["replica"], "cursor": 0, "nonce": format!("{:02x}", n).repeat(16) });
+        crate::lan_handler::handle_pull(st, &serde_json::to_vec(&body).unwrap()).status
+    }
+
+    #[test]
+    fn a_fresh_list_reopens_the_door_and_a_day_later_it_closes_again() {
+        const DAY: i64 = 24 * 3600_000;
+        let d = fixture("rev");
+        let v = vec();
+        let t0 = v["now"].as_i64().unwrap();
+        let keys = synth();
+        *keys.list.lock().unwrap() = Some(v["lists"]["stale"].clone()); // seq 3, 하루 넘게 낡음
+        let slot = LanSlot::default();
+        slot.arm(&LanConfig { enabled: true }, || build_state(&keys, &d.join("log"), t0).map(|mut st| {
+            st.clock = Box::new(move || t0); // 시험 벡터 시각에 고정
+            st
+        }));
+        slot.note_loaded_list();
+        let st = slot.state().unwrap();
+        let s = status_json_at(&slot, t0);
+        assert_eq!(s["revocation"]["stale"], true);
+        assert_eq!(s["revocation"]["rejectsAll"], true, "낡은 목록 = 모두 거절이라고 정직하게");
+        assert_eq!(pull(&st, 1), 403);
+
+        // 새로 서명한 목록(seq 4, 지금 시각) → 저장 → 바로 문이 열린다.
+        let fresh = signed_list(4, t0, &[]);
+        let r = update_revocation(&slot, &keys, &fresh, t0);
+        assert_eq!(r["ok"], true, "{r}");
+        assert_eq!(r["revocation"]["rejectsAll"], false);
+        assert_eq!(r["revocation"]["refreshBy"], t0 + DAY);
+        assert_eq!(keys.list.lock().unwrap().as_ref(), Some(&fresh), "디스크(공급자)에 먼저 저장");
+        assert_eq!(pull(&st, 2), 200);
+
+        // 하루가 지나면 상태가 다시 「모두 거절」.
+        let later = t0 + DAY + 1;
+        assert_eq!(status_json_at(&slot, later)["revocation"]["rejectsAll"], true);
+    }
+
+    #[test]
+    fn a_failed_update_keeps_the_current_list_and_says_why() {
+        let d = fixture("revfail");
+        let v = vec();
+        let t0 = v["now"].as_i64().unwrap();
+        let keys = synth(); // empty 목록(seq 1, 신선)
+        let slot = LanSlot::default();
+        slot.arm(&LanConfig { enabled: true }, || build_state(&keys, &d.join("log"), t0));
+        slot.note_loaded_list();
+        let st = slot.state().unwrap();
+        let before = st.revocation.lock().unwrap().clone();
+        let a = "aa".repeat(32);
+        // ① 서명이 틀린 목록
+        let mut forged = signed_list(5, t0, &[]);
+        forged["seq"] = json!(6);
+        let r = update_revocation(&slot, &keys, &forged, t0);
+        assert_eq!((r["ok"].clone(), r["error"].clone()), (json!(false), json!("signature")));
+        // ② 미래 시각
+        let r = update_revocation(&slot, &keys, &signed_list(5, t0 + 3_600_000, &[]), t0);
+        assert_eq!(r["error"], "not-yet");
+        // ③ 저장 실패
+        struct NoSave(SynthKeys);
+        impl LanKeySource for NoSave {
+            fn store_identity(&self) -> Result<StoreIdentity, MountState> { self.0.store_identity() }
+            fn data_key(&self) -> Result<DataKey, MountState> { self.0.data_key() }
+            fn revocation_list(&self) -> Option<Value> { self.0.revocation_list() }
+            fn save_revocation_list(&self, _: &Value) -> Result<(), String> { Err("disk".into()) }
+        }
+        let r = update_revocation(&slot, &NoSave(synth()), &signed_list(5, t0, &[a.as_str()]), t0);
+        assert_eq!(r["error"], "save-failed");
+        assert_eq!(*st.revocation.lock().unwrap(), before, "실패하면 지금 목록 그대로");
+        assert_eq!(r["revocation"]["lastError"], "save-failed");
+        assert_eq!(r["revocation"]["rejectsAll"], false, "지금 목록이 아직 신선하면 계속 받는다");
+        // ④ 옛 번호는 바꾸지 않음(성공이지만 changed=false)
+        let r = update_revocation(&slot, &keys, &v["lists"]["empty"], t0);
+        assert_eq!((r["ok"].clone(), r["changed"].clone()), (json!(true), json!(false)));
+        // ⑤ 가게 번호가 없으면
+        let mut k = synth();
+        k.id = Err(MountState::NoStore);
+        assert_eq!(update_revocation(&slot, &k, &signed_list(9, t0, &[]), t0)["error"], "no-store");
+        // 상태에 목록 본문·서명이 실리지 않는다.
+        let s = status_json_at(&slot, t0).to_string();
+        assert!(!s.contains(v["lists"]["empty"]["sig"].as_str().unwrap()));
+    }
+
+    #[test]
+    fn a_saved_list_with_a_bad_signature_is_not_loaded() {
+        let d = fixture("revbad");
+        let v = vec();
+        let keys = synth();
+        let mut bad = v["lists"]["empty"].clone();
+        bad["seq"] = json!(7);
+        *keys.list.lock().unwrap() = Some(bad);
+        let st = build_state(&keys, &d.join("log"), v["now"].as_i64().unwrap()).unwrap();
+        assert!(st.revocation.lock().unwrap().is_none(), "망가진 목록은 없는 것으로 = 모두 거절");
+    }
+
+    #[test]
+    fn while_off_an_update_is_saved_for_later_without_mounting() {
+        let v = vec();
+        let t0 = v["now"].as_i64().unwrap();
+        let keys = synth();
+        *keys.list.lock().unwrap() = None;
+        let slot = LanSlot::default();
+        let r = update_revocation(&slot, &keys, &signed_list(2, t0, &[]), t0);
+        assert_eq!(r["ok"], true, "{r}");
+        assert!(keys.list.lock().unwrap().is_some());
+        assert!(slot.router().is_none(), "목록을 넣어도 스위치는 그대로 꺼짐");
     }
 }

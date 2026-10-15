@@ -35,3 +35,18 @@
 | 데이터 열쇠 | `lan/data-key.json` `{v:1,version,key}` 을 **읽기만**. 만드는 코드 없음 → 지금은 늘 `no-data-key` 로 꺼진 채 | 만들기 시점·기기에 나눠 주기(`sealDataKey`)·백업 판 5·회전은 서로 묶인 결정이다. 반쪽만 만들면 열쇠가 백업 밖에 생긴다 |
 | 빠진 것이 있으면 | 경로를 만들지 않고 이유 코드(`no-store`·`bad-store`·`no-data-key`·`bad-data-key`·`store-failed`)를 `lan_sync_status` 로 보인다. 열쇠·목록 본문은 싣지 않는다 | 정직한 상태 |
 | 시험에서 한 것/안 한 것 | `lan_store_set` 은 **실행하지 않음**(12단어를 노드에서 받는다). 그 안의 순수 함수 `store_identity_from_words` 만 공개 BIP39 시험 단어(abandon…about)로 시험 | 지시: 실제 지갑·12단어 금지 |
+
+## ③ 철회 목록 갱신 경로
+
+| 결정 | 선택 | 근거 |
+|---|---|---|
+| 들어오는 길 | `lan_revocation_update(list)` 명령. 가게 키 PC 화면이 `device-connect.ts resignList` 로 새로 서명한 목록을 넣는다(화면 연결은 레인 G 몫 — 이 레인은 `src/` 를 안 고침) | 목록 서명은 화면 쪽 `store_sign_digest`(사장 확인창)로 이미 된다 |
+| 받기 규칙 | `lan_cert::accept_revocation_list` = core `acceptDeviceRevocationList` 와 같음: 서명·가게 번호 확인, 같거나 옛 번호는 무시(`kept-current`), 시각·가지치기 후퇴 거절(`rollback`), 같은 가지치기에서 철회 번호 빼기 거절(`shrunk`). 더해서 5분 넘는 미래 시각은 `not-yet` 거절 | 폰 정본 그대로 + 미래 목록으로 모든 기기가 막히는 사고 방지 |
+| 순서 | 확인 → **디스크 저장(0600, 원자적) 성공** → 메모리 교체 | 저장 실패인데 메모리만 바뀌면 다시 켤 때 옛 목록으로 돌아간다 |
+| 실패하면 | 지금 목록을 그대로 둔다. 상태에 `lastError`(signature·other-store·shape·rollback·shrunk·not-yet·save-failed·no-store)·`lastTryAt` 를 남긴다 | 정직한 상태 |
+| 상태 칸 | `lan_sync_status.revocation` = `present·seq·issuedAt·refreshBy(=issuedAt+24h)·ageMs·stale·rejectsAll·lastTryAt·lastOkAt·lastResult·lastError·autoRefresh(false)·say`. 목록 본문·서명은 싣지 않음. 파일을 읽지 않음(메모리만) | 「24시간 넘으면 모두 거절」을 사장이 미리 알게 |
+| 저장해 둔 목록 | 켤 때 가게 키 서명·가게 번호를 다시 본다. 못 넘으면 없는 것으로(= 모두 거절, 닫힌 실패) | 파일이 바뀌어도 열리지 않게 |
+| 꺼져 있을 때 | 받은 목록은 저장만 하고 스위치는 그대로 | 켤 때 그 목록으로 시작 |
+| 🔴 자동 재서명 | **없음**(`autoRefresh:false`). 가게 키 서명은 매번 사장 확인창을 거친다 | 「신경 안 써도 자동」과 충돌 → 대표 결정 필요: ⓐ 하루 한 번 확인창 감수, ⓑ 기기용 목록 주기 완화(Fable 제안 7일, §40-B 미표결), ⓒ 철회 목록 전용 서명 열쇠를 따로 두고 자동 서명(새 키 = 새 설계) |
+| 덤으로 고친 것 | 레인 E `check_revocations` 가 칸이 빠진 목록에서 `o["issuedAt"]` 로 **패닉**하던 것 → `shape` 로 거절(시험 추가) | serde_json Map 색인은 없는 키에서 패닉한다 |
+| 서명 함수 | `lan_cert::sign_doc` = core `signShopDoc`+`finishSignature`(낮은 S·복구 번호를 가게 키로 확정·자기 검증). 열쇠는 보지 않고 다이제스트 서명 콜백만 받는다 | 폰 시험 벡터의 목록 3개·증서 6개를 합성 키(0x11)로 다시 서명하면 **바이트까지 같다**(RFC6979) |

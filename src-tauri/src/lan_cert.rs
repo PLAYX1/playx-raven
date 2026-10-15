@@ -219,6 +219,9 @@ fn check_revocations(cert: &VerifiedCert, not_after: i64, store_key: &str, now: 
         && int_in(&o["seq"], 1, MAX_SAFE).is_some()
         && time(&o["issuedAt"]).is_some()
         && o["sig"].is_string();
+    if !well_formed {
+        return Some(CertReason::Shape); // 칸이 빠진 목록에서 아래 o["…"] 가 패닉하지 않게 먼저 끊는다
+    }
     let issued_at = time(&o["issuedAt"]);
     let pruned = int_in(&o["prunedBefore"], 0, issued_at.unwrap_or(-1));
     let revoked: Option<Vec<&str>> = o["revoked"].as_array().and_then(|a| {
@@ -280,8 +283,146 @@ pub fn verify_device_cert_any(raw: &Value, store_key: &str, now_ms: i64, revocat
     }
 }
 
+// ── 철회 목록 받기(갱신 경로) · 문서 서명 ─────────────────────────
+
+/// 확인을 통과한 철회 목록의 요약.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ListInfo {
+    pub seq: u64,
+    pub issued_at: i64,
+    pub pruned_before: i64,
+    pub revoked: Vec<String>,
+}
+
+/// core `verifyDeviceRevocationList` — 모양 → 같은 가게 → 가게 키 서명. 시각(신선도)은 보지 않는다(증서 확인 때 본다).
+pub fn verify_revocation_list(raw: &Value, store_key: &str, store_id: &str) -> Result<ListInfo, CertReason> {
+    let o = read_doc(raw, MAX_REVOKE_BYTES).map_err(|_| CertReason::Shape)?;
+    let well_formed = keys_are(o, &["v", "storeId", "seq", "revoked", "issuedAt", "prunedBefore", "sig"])
+        && o["v"].as_u64() == Some(1)
+        && is_sha(&o["storeId"])
+        && o["sig"].is_string();
+    if !well_formed {
+        return Err(CertReason::Shape);
+    }
+    let seq = int_in(&o["seq"], 1, MAX_SAFE);
+    let issued_at = time(&o["issuedAt"]);
+    let pruned = int_in(&o["prunedBefore"], 0, issued_at.unwrap_or(-1));
+    let revoked: Option<Vec<String>> = o["revoked"].as_array().and_then(|a| {
+        if a.len() > MAX_REVOKED {
+            return None;
+        }
+        a.iter().map(|x| is_sha(x).then(|| x.as_str().unwrap_or_default().to_string())).collect()
+    });
+    let (Some(seq), Some(issued_at), Some(pruned_before), Some(revoked)) = (seq, issued_at, pruned, revoked) else {
+        return Err(CertReason::Shape);
+    };
+    if !revoked.windows(2).all(|w| w[0] < w[1]) {
+        return Err(CertReason::Shape);
+    }
+    if o["storeId"].as_str() != Some(store_id) {
+        return Err(CertReason::OtherStore);
+    }
+    if !is_public_key(store_key) || !signed_by(DEVICE_REVOKE_DOMAIN, o, store_key) {
+        return Err(CertReason::Signature);
+    }
+    Ok(ListInfo { seq: seq as u64, issued_at, pruned_before, revoked })
+}
+
+/// 새 목록을 받을지.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ListAccept {
+    /// 새 목록으로 바꾼다.
+    Newer(Value, ListInfo),
+    /// 같거나 옛 번호라 지금 것을 그대로 둔다(core 도 이전 것을 돌려준다).
+    KeptCurrent,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ListReject {
+    Bad(CertReason),
+    /// 시각·가지치기가 뒤로 갔다.
+    Rollback,
+    /// 같은 가지치기인데 철회된 번호가 빠졌다(되살리기 시도).
+    Shrunk,
+}
+impl ListReject {
+    pub fn code(self) -> &'static str {
+        match self {
+            Self::Bad(r) => r.as_str(),
+            Self::Rollback => "rollback",
+            Self::Shrunk => "shrunk",
+        }
+    }
+}
+
+/// core `acceptDeviceRevocationList` — 번호·시각·가지치기 후퇴 금지, 철회 번호를 빼서 되살리기 금지.
+/// 지금 것(`current`)이 확인을 못 넘으면(망가졌으면) 새 목록만으로 판단한다.
+pub fn accept_revocation_list(current: Option<&Value>, raw: &Value, store_key: &str, store_id: &str) -> Result<ListAccept, ListReject> {
+    let next = verify_revocation_list(raw, store_key, store_id).map_err(ListReject::Bad)?;
+    let Some(prev) = current.and_then(|c| verify_revocation_list(c, store_key, store_id).ok()) else {
+        return Ok(ListAccept::Newer(raw.clone(), next));
+    };
+    if next.seq <= prev.seq {
+        return Ok(ListAccept::KeptCurrent);
+    }
+    if next.issued_at < prev.issued_at || next.pruned_before < prev.pruned_before {
+        return Err(ListReject::Rollback);
+    }
+    if next.pruned_before == prev.pruned_before && prev.revoked.iter().any(|id| !next.revoked.contains(id)) {
+        return Err(ListReject::Shrunk);
+    }
+    Ok(ListAccept::Newer(raw.clone(), next))
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SignError {
+    Shape,
+    Signer,
+    KeyMismatch,
+    SelfVerify,
+}
+
+/// core `signShopDoc` + `finishSignature` — sig 를 뺀 본문의 정본 해시로 문구를 만들고, `sign`(32바이트 다이제스트 →
+/// compact 64바이트 r‖s)으로 서명한 뒤 낮은 S 로 맞추고, 복구 번호를 가게 키로 확정해 65바이트 base64 를 붙인다.
+/// 🔴 `sign` 은 열쇠를 가진 쪽(운영 = `storesign` 의 사장 확인 흐름)이다. 이 함수는 열쇠를 보지 않는다.
+pub fn sign_doc<F>(domain: &str, body: &Value, store_key: &str, sign: F) -> Result<Value, SignError>
+where
+    F: FnOnce(&[u8; 32]) -> Result<[u8; 64], ()>,
+{
+    let mut o = body.as_object().cloned().ok_or(SignError::Shape)?;
+    o.shift_remove("sig");
+    if !is_public_key(store_key) {
+        return Err(SignError::Shape);
+    }
+    let bh = body_hash(&o).ok_or(SignError::Shape)?;
+    let hash = message_hash(&format!("{domain}\nsha256:{bh}"));
+    let raw = sign(&hash).map_err(|_| SignError::Signer)?;
+    let mut sig = Signature::from_compact(&raw).map_err(|_| SignError::Signer)?;
+    sig.normalize_s();
+    let compact = sig.serialize_compact();
+    let msg = Message::from_digest(hash);
+    let secp = Secp256k1::verification_only();
+    let mut found = None;
+    for i in 0..4 {
+        let Ok(rid) = RecoveryId::try_from(i) else { continue };
+        let Ok(rs) = RecoverableSignature::from_compact(&compact, rid) else { continue };
+        if secp.recover_ecdsa(&msg, &rs).map(|k| hex::encode(k.serialize())).ok().as_deref() == Some(store_key) {
+            found = Some(i as u8);
+            break;
+        }
+    }
+    let rid = found.ok_or(SignError::KeyMismatch)?;
+    let mut out = [0u8; 65];
+    out[0] = 31 + rid;
+    out[1..].copy_from_slice(&compact);
+    o.insert("sig".into(), Value::from(STANDARD.encode(out)));
+    if !signed_by(domain, &o, store_key) {
+        return Err(SignError::SelfVerify);
+    }
+    Ok(Value::Object(o))
+}
+
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use serde_json::json;
 
@@ -423,5 +564,72 @@ mod tests {
         let l = &v["lists"]["empty"];
         assert!(verify_device_cert_any(&v["certs"]["remote"], &k, n, Some(l), &["replicate", "read"]).is_ok());
         assert_eq!(verify_device_cert_any(&v["certs"]["remote"], &k, n, Some(l), &["replicate"]).unwrap_err(), CertReason::Scope);
+    }
+
+    /// 시험 전용 합성 가게 개인키(0x11 반복) — 폰 시험 벡터를 만든 그 값. 실제 키 아님.
+    pub(crate) fn synth_signer(d: &[u8; 32]) -> Result<[u8; 64], ()> {
+        let sk = secp256k1::SecretKey::from_byte_array(&[0x11u8; 32]).map_err(|_| ())?;
+        Ok(Secp256k1::new().sign_ecdsa(&Message::from_digest(*d), &sk).serialize_compact())
+    }
+
+    #[test]
+    fn signing_gives_the_same_bytes_as_the_phone() {
+        let v = v();
+        for name in ["empty", "revoked", "stale"] {
+            let l = &v["lists"][name];
+            let again = sign_doc(DEVICE_REVOKE_DOMAIN, l, &sk(&v), synth_signer).unwrap();
+            assert_eq!(&again, l, "목록 {name} 서명이 폰과 다르다");
+        }
+        for (name, c) in v["certs"].as_object().unwrap() {
+            let again = sign_doc(DEVICE_CERT_DOMAIN, c, &sk(&v), synth_signer).unwrap();
+            assert_eq!(&again, c, "증서 {name} 서명이 폰과 다르다");
+        }
+        // 다른 키로 서명하면 가게 키와 맞지 않아 거절(복구 번호를 못 찾음).
+        let other = |d: &[u8; 32]| -> Result<[u8; 64], ()> {
+            let k = secp256k1::SecretKey::from_byte_array(&[0x22u8; 32]).unwrap();
+            Ok(Secp256k1::new().sign_ecdsa(&Message::from_digest(*d), &k).serialize_compact())
+        };
+        assert_eq!(sign_doc(DEVICE_REVOKE_DOMAIN, &v["lists"]["empty"], &sk(&v), other), Err(SignError::KeyMismatch));
+        assert_eq!(sign_doc(DEVICE_REVOKE_DOMAIN, &v["lists"]["empty"], &sk(&v), |_| Err(())), Err(SignError::Signer));
+        assert_eq!(sign_doc(DEVICE_REVOKE_DOMAIN, &json!([1]), &sk(&v), synth_signer), Err(SignError::Shape));
+    }
+
+    fn list(v: &Value, seq: u64, issued: i64, revoked: &[&str], pruned: i64) -> Value {
+        let body = json!({ "v": 1, "storeId": v["storeId"], "seq": seq, "revoked": revoked, "issuedAt": issued, "prunedBefore": pruned });
+        sign_doc(DEVICE_REVOKE_DOMAIN, &body, &sk(v), synth_signer).unwrap()
+    }
+
+    #[test]
+    fn a_list_is_accepted_only_forward() {
+        let v = v();
+        let (k, id, t) = (sk(&v), v["storeId"].as_str().unwrap().to_string(), now(&v));
+        let a = "aa".repeat(32);
+        let b = "bb".repeat(32);
+        let l1 = list(&v, 1, t, &[a.as_str()], 0);
+        assert!(matches!(accept_revocation_list(None, &l1, &k, &id), Ok(ListAccept::Newer(_, ListInfo { seq: 1, .. }))));
+        let l2 = list(&v, 2, t + 1000, &[a.as_str(), b.as_str()], 0);
+        assert!(matches!(accept_revocation_list(Some(&l1), &l2, &k, &id), Ok(ListAccept::Newer(_, _))));
+        assert_eq!(accept_revocation_list(Some(&l2), &l1, &k, &id), Ok(ListAccept::KeptCurrent), "옛 번호는 무시");
+        assert_eq!(accept_revocation_list(Some(&l2), &l2, &k, &id), Ok(ListAccept::KeptCurrent));
+        let back = list(&v, 3, t - 1000, &[a.as_str(), b.as_str()], 0);
+        assert_eq!(accept_revocation_list(Some(&l2), &back, &k, &id), Err(ListReject::Rollback));
+        let shrunk = list(&v, 3, t + 2000, &[b.as_str()], 0);
+        assert_eq!(accept_revocation_list(Some(&l2), &shrunk, &k, &id), Err(ListReject::Shrunk), "철회한 기기를 되살릴 수 없다");
+        let pruned = list(&v, 3, t + 2000, &[b.as_str()], 5);
+        assert!(matches!(accept_revocation_list(Some(&l2), &pruned, &k, &id), Ok(ListAccept::Newer(_, _))), "가지치기를 올리면 뺄 수 있다");
+        let mut forged = l2.clone();
+        forged["seq"] = json!(9);
+        assert_eq!(accept_revocation_list(Some(&l1), &forged, &k, &id), Err(ListReject::Bad(CertReason::Signature)));
+        assert_eq!(accept_revocation_list(None, &l1, &k, &"cd".repeat(32)), Err(ListReject::Bad(CertReason::OtherStore)));
+        assert_eq!(accept_revocation_list(None, &json!({}), &k, &id), Err(ListReject::Bad(CertReason::Shape)));
+    }
+
+    #[test]
+    fn a_list_missing_fields_is_shape_not_a_panic() {
+        let v = v();
+        let c = &v["certs"]["remote"];
+        for bad in [json!({}), json!({ "v": 1 }), json!({ "v": 1, "storeId": v["storeId"], "seq": 1, "sig": "x" })] {
+            assert_eq!(verify_device_cert(c, &sk(&v), now(&v), Some(&bad), None).err(), Some(CertReason::Shape), "{bad}");
+        }
     }
 }
