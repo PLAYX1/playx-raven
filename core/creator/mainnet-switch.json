@@ -1,7 +1,7 @@
 {
   "_note": "메인넷 발행·판매 스위치 — 이 파일 한 곳(지갑 원본이 정본, 데스크탑 core/creator/mainnet-switch.json 은 바이트 동일 복사). 지갑 core mainnet-switches.ts(→ publish.ts · open-market.ts · purchase.ts)와 데스크탑 Rust(issue.rs · market.rs)가 모두 이 파일을 읽는다. 켜는 것은 별도 enable 커밋(이 파일의 issue·sales·acknowledged 세 줄)뿐이다. 서식(키마다 한 줄, 콜론 뒤 한 칸)을 바꾸지 마라 — Rust const 스캐너가 읽는다.",
-  "issue": false,
-  "sales": false,
-  "acknowledged": false,
+  "issue": true,
+  "sales": true,
+  "acknowledged": true,
   "verifiedOnly": true
 }
