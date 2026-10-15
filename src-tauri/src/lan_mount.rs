@@ -1171,7 +1171,7 @@ pub(crate) mod tests {
         meta.revoked_at_rotation.clear();
         // ④ 철회된 기기의 세션이 남음
         let mut revoked_sess = kit::record(5, &kit::all(), &l2);
-        revoked_sess.sessions.insert(lost.cert_id.clone(), crate::lan_keys::SessionEntry { key: crate::lan_keys::Secret32(lost.session), device_id: lost.device_id.clone(), cert_sig: lost.cert["sig"].as_str().unwrap().into() });
+        revoked_sess.sessions.insert(lost.cert_id.clone(), crate::lan_keys::SessionEntry { key: crate::lan_keys::Secret32(lost.session), device_id: lost.device_id.clone(), cert_sig: lost.cert["sig"].as_str().unwrap().into(), envelope: None });
         // ⑤ 목록 서명 깨짐
         let mut forged = kit::record(5, &kit::all(), &l2).to_json();
         forged["revocations"]["revoked"] = json!([]);

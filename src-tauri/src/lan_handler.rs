@@ -1144,7 +1144,7 @@ mod tests {
             data_key: crate::lan_seal::DataKey { version: key_version, key: b32(v["dataKey"]["keyHex"].as_str().unwrap()) },
             sessions: [(
                 v["device"]["certId"].as_str().unwrap().to_string(),
-                SessionEntry { key: Secret32(b32(v["envelope"]["sessionKeyHex"].as_str().unwrap())), device_id: cert["deviceId"].as_str().unwrap().into(), cert_sig: cert["sig"].as_str().unwrap().into() },
+                SessionEntry { key: Secret32(b32(v["envelope"]["sessionKeyHex"].as_str().unwrap())), device_id: cert["deviceId"].as_str().unwrap().into(), cert_sig: cert["sig"].as_str().unwrap().into(), envelope: None },
             )]
             .into_iter()
             .collect(),

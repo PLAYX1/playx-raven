@@ -97,7 +97,7 @@ pub fn record(version: u64, devs: &[Dev], list: &Value) -> LanKeyRecord {
         sessions: devs
             .iter()
             .filter(|d| !revoked.contains(&d.cert_id))
-            .map(|d| (d.cert_id.clone(), SessionEntry { key: Secret32(d.session), device_id: d.device_id.clone(), cert_sig: d.cert["sig"].as_str().unwrap().to_string() }))
+            .map(|d| (d.cert_id.clone(), SessionEntry { key: Secret32(d.session), device_id: d.device_id.clone(), cert_sig: d.cert["sig"].as_str().unwrap().to_string(), envelope: None }))
             .collect(),
         revocation_seq: list["seq"].as_u64().unwrap(),
         revoked_at_rotation: revoked,
