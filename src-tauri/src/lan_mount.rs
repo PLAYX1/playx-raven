@@ -5,6 +5,9 @@
 //! 🔴 기본 꺼짐. 앱 폴더 `lan/settings.json` 의 `lanSync` 가 **불리언 true** 일 때만 켠다(`LanConfig::from_json`).
 //!    파일이 없거나 모양이 틀리면 꺼짐. 꺼져 있으면 열쇠 파일은 **읽지도 않는다**.
 //! 🔴 끄면 이미 붙은 경로도 곧바로 404(`LanServerState::live`). 켜기는 폰 서버를 다시 켤 때 반영된다(라우터는 시작 때 한 번 만든다).
+//! 🔴 켜기/다시 켜기마다 가게 번호·가게 키·데이터 열쇠·철회 목록 파일을 **다시 읽는다**. 지문이 같으면 그대로, 다르면 재료를 바꾸고,
+//!    가게 번호가 바뀌면 그 가게의 로그(`lan/log/<가게 번호>/`)로 저장소까지 바꾼다 — 옛 가게 로그와 새 가게 증서가 섞이지 않는다.
+//!    다시 읽다 실패하면(파일 망가짐 등) 붙어 있던 경로도 멈춘다(닫힌 실패).
 
 #![allow(dead_code)]
 
@@ -69,6 +72,18 @@ pub struct LanSlot {
     state: Mutex<Option<Arc<LanServerState>>>,
     mount: Mutex<MountState>,
     rev: Mutex<RevMeta>,
+    /// 철회 목록 갱신(읽기→판정→저장→교체)과 켜기(재료 다시 읽기)를 한 줄로 세운다(L5).
+    serial: Mutex<()>,
+}
+
+/// 켜기에 쓸 재료(디스크에서 막 읽은 것). 저장소는 아직 열지 않았다 — 같은 가게면 지금 것을 그대로 쓴다.
+pub struct LanMaterial {
+    pub auth: crate::lan_handler::LanAuth,
+    /// 이 가게의 로그 폴더(가게 번호별).
+    pub log_dir: PathBuf,
+    pub now_ms: i64,
+    /// 시험 전용: 새 상태의 시계를 고정한다.
+    pub clock: Option<Box<dyn Fn() -> i64 + Send + Sync>>,
 }
 
 impl LanSlot {
@@ -84,7 +99,7 @@ impl LanSlot {
         }
     }
     /// 스위치를 내린다: 붙어 있던 경로도 곧바로 404. 상태(로그 파일 잠금)는 버리지 않는다 —
-    /// 서버가 도는 동안 다시 켜면 같은 상태를 다시 쓴다(옛 라우터가 잠금을 쥔 채 남아 있어 새로 열 수 없다).
+    /// 서버가 도는 동안 다시 켜면 같은 상태를 다시 쓴다(옛 라우터가 같은 상태를 쥐고 있다).
     pub fn disarm(&self) {
         if let Some(st) = self.state() {
             st.live.store(false, Ordering::SeqCst);
@@ -92,32 +107,73 @@ impl LanSlot {
         self.set_mount(MountState::Off);
     }
     /// 켠다. 스위치가 꺼져 있으면 `make` 를 부르지 않는다(열쇠 파일을 읽지 않는다).
-    /// 이미 만든 상태가 있으면 그대로 다시 켠다.
+    /// 켜져 있으면 **매번** `make` 로 재료를 새로 읽어 지금 상태와 맞춘다(M1):
+    ///   지문 같음 → 그대로 · 같은 가게 → 재료만 교체 · 다른 가게 → 그 가게 로그로 저장소까지 교체 · 고장 난 저장소 → 다시 열어 복구.
+    /// 읽기·열기에 실패하면 이미 붙은 경로도 멈추고(live=false) 그 이유를 돌려준다.
     pub fn arm<F>(&self, cfg: &LanConfig, make: F) -> MountState
     where
-        F: FnOnce() -> Result<LanServerState, MountState>,
+        F: FnOnce() -> Result<LanMaterial, MountState>,
     {
         if !cfg.enabled {
             self.disarm();
             return MountState::Off;
         }
-        if let Some(cur) = self.state() {
-            cur.live.store(true, Ordering::SeqCst);
-            self.set_mount(MountState::On);
-            return MountState::On;
-        }
-        let m = match make() {
-            Ok(st) => {
+        let _serial = self.serial.lock().unwrap_or_else(|p| p.into_inner());
+        let cur = self.state();
+        let stop = |m: MountState| {
+            if let Some(st) = &cur {
+                st.live.store(false, Ordering::SeqCst);
+            }
+            self.set_mount(m);
+            m
+        };
+        let mat = match make() {
+            Ok(m) => m,
+            Err(MountState::On) => return stop(MountState::StoreFailed),
+            Err(m) => return stop(m),
+        };
+        match &cur {
+            None => {
+                let store = match crate::lan_store::LanStore::open(&mat.log_dir, mat.now_ms) {
+                    Ok(s) => s,
+                    Err(_) => return stop(MountState::StoreFailed),
+                };
+                let mut st = LanServerState::new(mat.auth, store);
+                if let Some(c) = mat.clock {
+                    st.clock = c;
+                }
                 if let Ok(mut g) = self.state.lock() {
                     *g = Some(Arc::new(st));
                 }
-                MountState::On
             }
-            Err(MountState::On) => MountState::StoreFailed,
-            Err(m) => m,
-        };
-        self.set_mount(m);
-        m
+            Some(st) => {
+                let (same_store, failed) = st.store.lock().map(|s| (s.store_id == mat.auth.store_id && s.log_dir() == mat.log_dir, s.is_failed())).unwrap_or((false, true));
+                if same_store {
+                    if failed {
+                        let ok = st.store.lock().map(|mut s| s.recover(mat.now_ms).is_ok()).unwrap_or(false);
+                        if !ok {
+                            return stop(MountState::StoreFailed);
+                        }
+                    }
+                    if st.auth().fingerprint() != mat.auth.fingerprint() && st.replace_auth(mat.auth).is_err() {
+                        return stop(MountState::StoreFailed);
+                    }
+                } else {
+                    // 가게가 바뀌었다 — 새 가게의 로그를 연다(가게별 폴더라 옛 잠금과 부딪치지 않는다).
+                    st.live.store(false, Ordering::SeqCst);
+                    let store = match crate::lan_store::LanStore::open(&mat.log_dir, mat.now_ms) {
+                        Ok(s) => s,
+                        Err(_) => return stop(MountState::StoreFailed),
+                    };
+                    st.replace_store_and_auth(mat.auth, store);
+                }
+                st.live.store(true, Ordering::SeqCst);
+            }
+        }
+        self.set_mount(MountState::On);
+        drop(_serial);
+        self.note_loaded_list();
+        MountState::On
     }
     /// `build_phone_router` 가 붙일 조각. 켜져 있지 않으면 None — 경로 자체가 없다.
     pub fn router(&self) -> Option<axum::Router> {
@@ -262,16 +318,16 @@ pub fn store_identity_from_words(words: &mut String, pass: &mut String, store_id
     StoreIdentity::checked(store_id, &pk?).ok_or("가게 번호 모양이 맞지 않아요.")
 }
 
-/// 공급자에서 처리기 상태를 만든다. 하나라도 빠지면 그 이유(경로는 만들지 않음).
-pub fn build_state(keys: &dyn LanKeySource, log_dir: &Path, now_ms: i64) -> Result<LanServerState, MountState> {
+/// 공급자에서 켜기 재료를 만든다(파일을 다시 읽는다). 하나라도 빠지면 그 이유(경로는 만들지 않음).
+/// 로그 폴더는 가게 번호별: `<log_root>/<가게 번호>/`.
+pub fn build_material(keys: &dyn LanKeySource, log_root: &Path, now_ms: i64) -> Result<LanMaterial, MountState> {
     let id = keys.store_identity()?;
     let data_key = keys.data_key()?;
-    let store = crate::lan_store::LanStore::open(log_dir, now_ms).map_err(|_| MountState::StoreFailed)?;
     // 저장해 둔 목록도 가게 키 서명·가게 번호를 다시 본다. 못 넘으면 없는 것으로(= 모든 증서 거절, 닫힌 실패).
     let list = keys.revocation_list().filter(|l| crate::lan_cert::verify_revocation_list(l, &id.store_key, &id.store_id).is_ok());
-    let mut st = LanServerState::new(id.store_key, data_key, list, store);
-    st.store_id = id.store_id;
-    Ok(st)
+    let log_dir = log_root.join(&id.store_id);
+    let auth = crate::lan_handler::LanAuth::new(id.store_key, id.store_id, data_key, list);
+    Ok(LanMaterial { auth, log_dir, now_ms, clock: None })
 }
 
 fn now_ms() -> i64 {
@@ -282,9 +338,7 @@ fn now_ms() -> i64 {
 pub fn arm_from_disk(slot: &LanSlot) -> MountState {
     let dir = lan_dir();
     let cfg = read_config(&dir);
-    let m = slot.arm(&cfg, || build_state(&FileLanKeys::new(dir.clone()), &dir.join(LOG_DIR), now_ms()));
-    slot.note_loaded_list();
-    m
+    slot.arm(&cfg, || build_material(&FileLanKeys::new(dir.clone()), &dir.join(LOG_DIR), now_ms()))
 }
 
 // ── ③ 철회 목록 갱신 ────────────────────────────────────────
@@ -317,8 +371,8 @@ impl LanSlot {
     /// 켤 때 실린 목록의 번호·시각을 적는다(이미 검증된 것만 실린다).
     fn note_loaded_list(&self) {
         let Some(st) = self.state() else { return };
-        let list = st.revocation.lock().ok().and_then(|l| l.clone());
-        let info = list.and_then(|l| crate::lan_cert::verify_revocation_list(&l, &st.store_key, &st.store_id).ok());
+        let auth = st.auth();
+        let info = auth.revocation_info().cloned();
         self.with_rev(|m| {
             m.seq = info.as_ref().map(|i| i.seq);
             m.issued_at = info.as_ref().map(|i| i.issued_at);
@@ -327,8 +381,10 @@ impl LanSlot {
 }
 
 /// 새로 서명된 철회 목록을 받는다. 순서: 가게 확인 → core 받기 규칙(후퇴·되살리기 금지) → 미래 시각 거절 → **디스크 저장 성공** → 메모리 교체.
+/// 읽기(지금 목록)→판정→저장→교체를 `serial` 잠금 하나로 묶는다(L5) — 동시에 두 목록이 들어와 낮은 번호가 덮어쓰지 않게.
 pub fn update_revocation(slot: &LanSlot, keys: &dyn LanKeySource, raw: &Value, now: i64) -> Value {
     use crate::lan_cert::{accept_revocation_list, ListAccept, DEVICE_CLOCK_SKEW_MS};
+    let _serial = slot.serial.lock().unwrap_or_else(|p| p.into_inner());
     slot.with_rev(|m| m.last_try_at = Some(now));
     let fail = |code: &'static str| {
         slot.with_rev(|m| {
@@ -341,8 +397,13 @@ pub fn update_revocation(slot: &LanSlot, keys: &dyn LanKeySource, raw: &Value, n
         Ok(id) => id,
         Err(m) => return fail(m.code()),
     };
-    let armed = slot.state().filter(|st| st.store_key == id.store_key);
-    let current = armed.as_ref().and_then(|st| st.revocation.lock().ok().and_then(|l| l.clone())).or_else(|| keys.revocation_list());
+    // 켜진 상태가 **같은 가게(키와 번호 둘 다)** 일 때만 그 메모리 목록을 기준으로 삼고 바꾼다. 다른 가게로 켜져 있으면
+    // 디스크에만 저장하고, 다음 켜기 때 재료를 다시 읽으며 가게째 바뀐다.
+    let armed = slot.state().filter(|st| {
+        let a = st.auth();
+        a.store_key == id.store_key && a.store_id == id.store_id
+    });
+    let current = armed.as_ref().and_then(|st| st.revocation_list()).or_else(|| keys.revocation_list());
     match accept_revocation_list(current.as_ref(), raw, &id.store_key, &id.store_id) {
         Err(r) => fail(r.code()),
         Ok(ListAccept::KeptCurrent) => {
@@ -360,9 +421,7 @@ pub fn update_revocation(slot: &LanSlot, keys: &dyn LanKeySource, raw: &Value, n
                 return fail("save-failed");
             }
             if let Some(st) = armed {
-                if let Ok(mut g) = st.revocation.lock() {
-                    *g = Some(list);
-                }
+                st.set_revocation(Some(list));
             }
             slot.with_rev(|m| {
                 m.seq = Some(info.seq);
@@ -463,19 +522,30 @@ pub(crate) mod tests {
         std::fs::create_dir_all(&d).unwrap();
         d
     }
-    /// 합성 값만: 시험 벡터의 가게 공개키(개인키 0x11 반복으로 폰이 만든 것)·합성 데이터 열쇠.
-    pub(crate) fn synthetic_state(dir: &Path, list: &str) -> LanServerState {
-        let v = vec();
-        let now = v["now"].as_i64().unwrap();
+    fn synth_key() -> DataKey {
         let mut k = [0u8; 32];
         for (i, b) in k.iter_mut().enumerate() {
             *b = i as u8 + 1;
         }
+        DataKey { version: 3, key: k }
+    }
+    /// 합성 값만: 시험 벡터의 가게 공개키(개인키 0x11 반복으로 폰이 만든 것)·합성 데이터 열쇠.
+    pub(crate) fn synthetic_state(dir: &Path, list: &str) -> LanServerState {
+        let v = vec();
+        let now = v["now"].as_i64().unwrap();
         let store = LanStore::open(&dir.join("log"), now).unwrap();
-        let mut st = LanServerState::new(v["storeKey"].as_str().unwrap().into(), DataKey { version: 3, key: k }, Some(v["lists"][list].clone()), store);
+        let auth = crate::lan_handler::LanAuth::new(v["storeKey"].as_str().unwrap().into(), v["storeId"].as_str().unwrap().into(), synth_key(), Some(v["lists"][list].clone()));
+        let mut st = LanServerState::new(auth, store);
         st.clock = Box::new(move || now);
         st.seal_nonce = Box::new(|| [9u8; 24]);
         st
+    }
+    /// 켜기 재료(합성). 시계는 시험 벡터 시각에 고정.
+    pub(crate) fn synthetic_material(dir: &Path, list: &str) -> LanMaterial {
+        let v = vec();
+        let now = v["now"].as_i64().unwrap();
+        let auth = crate::lan_handler::LanAuth::new(v["storeKey"].as_str().unwrap().into(), v["storeId"].as_str().unwrap().into(), synth_key(), Some(v["lists"][list].clone()));
+        LanMaterial { auth, log_dir: dir.join("log"), now_ms: now, clock: Some(Box::new(move || now)) }
     }
 
     #[test]
@@ -526,19 +596,144 @@ pub(crate) mod tests {
     fn arm_then_disarm_cuts_the_running_routes() {
         let d = fixture("arm");
         let slot = LanSlot::default();
-        assert_eq!(slot.arm(&LanConfig { enabled: true }, || Ok(synthetic_state(&d, "empty"))), MountState::On);
+        assert_eq!(slot.arm(&LanConfig { enabled: true }, || Ok(synthetic_material(&d, "empty"))), MountState::On);
         let st = slot.state().unwrap();
+        let auth0 = st.auth();
         assert!(slot.router().is_some());
-        // 다시 켜도 같은 상태(로그 파일 잠금을 두 번 잡지 않는다).
-        assert_eq!(slot.arm(&LanConfig { enabled: true }, || panic!("두 번 만들면 안 된다")), MountState::On);
+        // 다시 켜면 재료를 다시 읽는다 — 같으면(지문 같음) 같은 상태·같은 재료 그대로(로그 잠금을 두 번 잡지 않는다).
+        assert_eq!(slot.arm(&LanConfig { enabled: true }, || Ok(synthetic_material(&d, "empty"))), MountState::On);
         assert!(Arc::ptr_eq(&st, &slot.state().unwrap()));
-        slot.arm(&LanConfig::default(), || panic!("꺼짐"));
+        assert!(Arc::ptr_eq(&auth0, &st.auth()), "바뀐 것이 없으면 재료도 그대로");
+        slot.arm(&LanConfig::default(), || panic!("꺼짐이면 파일을 읽지 않는다"));
         assert!(!st.live.load(Ordering::SeqCst), "끄면 이미 붙은 경로도 멈춘다");
         assert!(slot.router().is_none());
         assert_eq!(slot.mount_state(), MountState::Off);
-        // 서버가 도는 중에 다시 켜면 같은 상태를 다시 쓴다(로그 잠금을 새로 잡지 않는다).
-        assert_eq!(slot.arm(&LanConfig { enabled: true }, || panic!("새로 만들면 잠금 충돌")), MountState::On);
+        // 서버가 도는 중에 다시 켜면 같은 상태를 다시 쓴다.
+        assert_eq!(slot.arm(&LanConfig { enabled: true }, || Ok(synthetic_material(&d, "empty"))), MountState::On);
         assert!(st.live.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn m1_rearm_rereads_keys_and_follows_a_new_data_key() {
+        let d = fixture("rekey");
+        let slot = LanSlot::default();
+        slot.arm(&LanConfig { enabled: true }, || Ok(synthetic_material(&d, "empty")));
+        let st = slot.state().unwrap();
+        assert_eq!(pull(&st, 1), 200);
+        // 데이터 열쇠 파일이 새 판으로 바뀌었다 → 다시 켜면 새 열쇠로.
+        let mut m = synthetic_material(&d, "empty");
+        m.auth = crate::lan_handler::LanAuth::new(m.auth.store_key.clone(), m.auth.store_id.clone(), DataKey { version: 4, key: [9u8; 32] }, m.auth.revocation().cloned());
+        assert_eq!(slot.arm(&LanConfig { enabled: true }, || Ok(m)), MountState::On);
+        assert!(Arc::ptr_eq(&st, &slot.state().unwrap()), "옛 라우터가 쥔 같은 상태가 새 재료를 쓴다");
+        assert_eq!(st.auth().data_key.version, 4);
+        // 철회 목록이 디스크에서 망가졌으면(서명 깨짐) 다시 켤 때 없는 것으로 = 모두 거절.
+        let v = vec();
+        let mut bad = v["lists"]["empty"].clone();
+        bad["seq"] = json!(41);
+        let keys = synth();
+        *keys.list.lock().unwrap() = Some(bad);
+        let mut keys = keys;
+        keys.key = Ok(DataKey { version: 4, key: [9u8; 32] });
+        assert_eq!(slot.arm(&LanConfig { enabled: true }, || build_material(&keys, &d.join("log-root"), v["now"].as_i64().unwrap()).map(|mut m| {
+            m.log_dir = d.join("log"); // 같은 가게·같은 로그
+            m
+        })), MountState::On);
+        assert!(st.revocation_list().is_none());
+        assert_eq!(pull(&st, 2), 403);
+        // 다시 켤 때 열쇠 파일이 망가졌으면 붙어 있던 경로도 멈춘다(닫힌 실패).
+        assert_eq!(slot.arm(&LanConfig { enabled: true }, || Err(MountState::BadDataKey)), MountState::BadDataKey);
+        assert!(!st.live.load(Ordering::SeqCst));
+        assert!(slot.router().is_none());
+    }
+
+    #[test]
+    fn m1_a_new_store_number_swaps_the_log_and_refuses_old_store_certs() {
+        let d = fixture("restore");
+        let v = vec();
+        let now = v["now"].as_i64().unwrap();
+        let slot = LanSlot::default();
+        slot.arm(&LanConfig { enabled: true }, || Ok(synthetic_material(&d, "empty")));
+        let st = slot.state().unwrap();
+        st.store.lock().unwrap().append_chunk(&"01".repeat(32), "x", &[json!({ "id": "aa".repeat(16), "origin": "bb".repeat(16), "seq": 1, "ts": 1, "kind": "draft", "data": 1 })]).unwrap();
+        assert_eq!(st.store.lock().unwrap().len(), 1);
+        // 같은 가게 키, 다른 가게 번호(B) — 목록은 B 것이 없다.
+        let other = "cd".repeat(32);
+        let m = LanMaterial {
+            auth: crate::lan_handler::LanAuth::new(v["storeKey"].as_str().unwrap().into(), other.clone(), DataKey { version: 3, key: [7u8; 32] }, None),
+            log_dir: d.join("log-b"),
+            now_ms: now,
+            clock: None,
+        };
+        assert_eq!(slot.arm(&LanConfig { enabled: true }, || Ok(m)), MountState::On);
+        assert!(Arc::ptr_eq(&st, &slot.state().unwrap()));
+        assert_eq!(st.auth().store_id, other);
+        assert_eq!(st.store.lock().unwrap().store_id, other);
+        assert_eq!(st.store.lock().unwrap().len(), 0, "B 가게는 A 가게 로그를 보지 않는다");
+        // A 가게 증서는 B 상태에서 받지 않는다.
+        let r = crate::lan_handler::handle_pull(&st, &serde_json::to_vec(&json!({ "cert": v["certs"]["replica"], "cursor": 0, "nonce": "ab".repeat(16) })).unwrap());
+        assert_eq!(r.status, 403);
+        // A 로 되돌리면 A 로그가 다시 보인다(가게별 폴더 — 옛 잠금은 풀렸다).
+        assert_eq!(slot.arm(&LanConfig { enabled: true }, || Ok(synthetic_material(&d, "empty"))), MountState::On);
+        assert_eq!(st.store.lock().unwrap().len(), 1);
+        assert_eq!(pull(&st, 3), 200);
+    }
+
+    #[test]
+    fn m1_rearm_recovers_a_failed_store() {
+        let d = fixture("recover");
+        let slot = LanSlot::default();
+        slot.arm(&LanConfig { enabled: true }, || Ok(synthetic_material(&d, "empty")));
+        let st = slot.state().unwrap();
+        st.store.lock().unwrap().fail_mode = Some(crate::lan_store::FailMode::WriteAndRollback);
+        assert_eq!(pull(&st, 1), 500);
+        assert_eq!(pull(&st, 2), 500, "복구 전에는 계속 실패");
+        assert_eq!(slot.arm(&LanConfig { enabled: true }, || Ok(synthetic_material(&d, "empty"))), MountState::On);
+        assert_eq!(pull(&st, 3), 200);
+    }
+
+    #[test]
+    fn l5_revocation_updates_and_arming_share_one_lock() {
+        // 갱신 도중(잠금 보유)에는 다른 갱신·켜기가 끼어들지 못한다: 잠금을 쥔 채 다른 스레드의 갱신이 끝나지 않는지 본다.
+        let d = fixture("serial");
+        let v = vec();
+        let t0 = v["now"].as_i64().unwrap();
+        let slot = Arc::new(LanSlot::default());
+        slot.arm(&LanConfig { enabled: true }, || Ok(synthetic_material(&d, "empty")));
+        let keys = Arc::new(synth());
+        let held = slot.serial.lock().unwrap();
+        let (s2, k2) = (slot.clone(), keys.clone());
+        let fresh = signed_list(5, t0, &[]);
+        let h = std::thread::spawn(move || update_revocation(&s2, &*k2, &fresh, t0));
+        std::thread::sleep(std::time::Duration::from_millis(150));
+        assert!(!h.is_finished(), "잠금을 쥔 동안 갱신이 진행되면 안 된다");
+        drop(held);
+        let r = h.join().unwrap();
+        assert_eq!(r["changed"], true, "{r}");
+        // 순서대로 들어온 낮은 번호는 높은 번호를 덮지 못한다.
+        let r = update_revocation(&slot, &*keys, &signed_list(4, t0, &[]), t0);
+        assert_eq!(r["changed"], false);
+        assert_eq!(slot.state().unwrap().auth().revocation_info().unwrap().seq, 5);
+    }
+
+    #[test]
+    fn l5_an_update_for_another_store_does_not_touch_the_running_state() {
+        let d = fixture("revother");
+        let v = vec();
+        let t0 = v["now"].as_i64().unwrap();
+        let slot = LanSlot::default();
+        // 다른 가게 번호(cd..)로 켜져 있다.
+        let m = LanMaterial {
+            auth: crate::lan_handler::LanAuth::new(v["storeKey"].as_str().unwrap().into(), "cd".repeat(32), DataKey { version: 3, key: [7u8; 32] }, None),
+            log_dir: d.join("log-b"),
+            now_ms: t0,
+            clock: None,
+        };
+        slot.arm(&LanConfig { enabled: true }, || Ok(m));
+        let keys = synth(); // 디스크의 가게 = ab..
+        let r = update_revocation(&slot, &keys, &signed_list(5, t0, &[]), t0);
+        assert_eq!(r["ok"], true, "{r}");
+        assert!(slot.state().unwrap().revocation_list().is_none(), "다른 가게 상태에 A 목록을 넣지 않는다");
+        assert_eq!(keys.list.lock().unwrap().as_ref().unwrap()["seq"], 5, "디스크에는 저장");
     }
 
     /// 합성 공급자(시험 전용).
@@ -572,24 +767,25 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn build_state_needs_every_piece() {
+    fn build_material_needs_every_piece() {
         let d = fixture("build");
         let v = vec();
         let now = v["now"].as_i64().unwrap();
-        let st = build_state(&synth(), &d.join("log"), now).unwrap();
-        assert_eq!(st.store_key, v["storeKey"].as_str().unwrap());
-        assert_eq!(st.data_key.version, 3);
-        assert!(st.revocation.lock().unwrap().is_some());
-        drop(st);
+        let m = build_material(&synth(), &d.join("log"), now).unwrap();
+        assert_eq!(m.auth.store_key, v["storeKey"].as_str().unwrap());
+        assert_eq!(m.auth.data_key.version, 3);
+        assert!(m.auth.revocation().is_some());
+        assert_eq!(m.log_dir, d.join("log").join(v["storeId"].as_str().unwrap()), "로그는 가게 번호별 폴더");
         let mut k = synth();
         k.id = Err(MountState::NoStore);
-        assert_eq!(build_state(&k, &d.join("log2"), now).err(), Some(MountState::NoStore));
+        assert_eq!(build_material(&k, &d.join("log2"), now).err().map(|e| e), Some(MountState::NoStore));
         let mut k = synth();
         k.key = Err(MountState::NoDataKey);
-        assert_eq!(build_state(&k, &d.join("log3"), now).err(), Some(MountState::NoDataKey));
-        // 로그 폴더를 다른 쪽이 쥐고 있으면 StoreFailed.
-        let held = crate::lan_store::LanStore::open(&d.join("log4"), now).unwrap();
-        assert_eq!(build_state(&synth(), &d.join("log4"), now).err(), Some(MountState::StoreFailed));
+        assert_eq!(build_material(&k, &d.join("log3"), now).err(), Some(MountState::NoDataKey));
+        // 로그 폴더를 다른 쪽이 쥐고 있으면 켜기가 StoreFailed.
+        let held = crate::lan_store::LanStore::open(&d.join("log4").join(v["storeId"].as_str().unwrap()), now).unwrap();
+        let slot = LanSlot::default();
+        assert_eq!(slot.arm(&LanConfig { enabled: true }, || build_material(&synth(), &d.join("log4"), now)), MountState::StoreFailed);
         drop(held);
     }
 
@@ -652,7 +848,7 @@ pub(crate) mod tests {
         let d = fixture("status");
         let slot = LanSlot::default();
         assert_eq!(status_json(&slot)["state"], "off");
-        slot.arm(&LanConfig { enabled: true }, || build_state(&synth(), &d.join("log"), vec()["now"].as_i64().unwrap()));
+        slot.arm(&LanConfig { enabled: true }, || build_material(&synth(), &d.join("log"), vec()["now"].as_i64().unwrap()));
         let s = status_json(&slot).to_string();
         assert!(s.contains("\"on\":true"));
         assert!(!s.contains(&"07".repeat(32)) && !s.contains(vec()["storeKey"].as_str().unwrap()));
@@ -678,11 +874,10 @@ pub(crate) mod tests {
         let keys = synth();
         *keys.list.lock().unwrap() = Some(v["lists"]["stale"].clone()); // seq 3, 하루 넘게 낡음
         let slot = LanSlot::default();
-        slot.arm(&LanConfig { enabled: true }, || build_state(&keys, &d.join("log"), t0).map(|mut st| {
-            st.clock = Box::new(move || t0); // 시험 벡터 시각에 고정
-            st
+        slot.arm(&LanConfig { enabled: true }, || build_material(&keys, &d.join("log"), t0).map(|mut m| {
+            m.clock = Some(Box::new(move || t0)); // 시험 벡터 시각에 고정
+            m
         }));
-        slot.note_loaded_list();
         let st = slot.state().unwrap();
         let s = status_json_at(&slot, t0);
         assert_eq!(s["revocation"]["stale"], true);
@@ -710,10 +905,9 @@ pub(crate) mod tests {
         let t0 = v["now"].as_i64().unwrap();
         let keys = synth(); // empty 목록(seq 1, 신선)
         let slot = LanSlot::default();
-        slot.arm(&LanConfig { enabled: true }, || build_state(&keys, &d.join("log"), t0));
-        slot.note_loaded_list();
+        slot.arm(&LanConfig { enabled: true }, || build_material(&keys, &d.join("log"), t0));
         let st = slot.state().unwrap();
-        let before = st.revocation.lock().unwrap().clone();
+        let before = st.revocation_list();
         let a = "aa".repeat(32);
         // ① 서명이 틀린 목록
         let mut forged = signed_list(5, t0, &[]);
@@ -733,7 +927,7 @@ pub(crate) mod tests {
         }
         let r = update_revocation(&slot, &NoSave(synth()), &signed_list(5, t0, &[a.as_str()]), t0);
         assert_eq!(r["error"], "save-failed");
-        assert_eq!(*st.revocation.lock().unwrap(), before, "실패하면 지금 목록 그대로");
+        assert_eq!(st.revocation_list(), before, "실패하면 지금 목록 그대로");
         assert_eq!(r["revocation"]["lastError"], "save-failed");
         assert_eq!(r["revocation"]["rejectsAll"], false, "지금 목록이 아직 신선하면 계속 받는다");
         // ④ 옛 번호는 바꾸지 않음(성공이지만 changed=false)
@@ -756,8 +950,8 @@ pub(crate) mod tests {
         let mut bad = v["lists"]["empty"].clone();
         bad["seq"] = json!(7);
         *keys.list.lock().unwrap() = Some(bad);
-        let st = build_state(&keys, &d.join("log"), v["now"].as_i64().unwrap()).unwrap();
-        assert!(st.revocation.lock().unwrap().is_none(), "망가진 목록은 없는 것으로 = 모두 거절");
+        let m = build_material(&keys, &d.join("log"), v["now"].as_i64().unwrap()).unwrap();
+        assert!(m.auth.revocation().is_none(), "망가진 목록은 없는 것으로 = 모두 거절");
     }
 
     #[test]

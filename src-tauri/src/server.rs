@@ -6495,7 +6495,7 @@ mod lan_mount_in_phone_router {
         let st = super::ServerState::default();
         let d = crate::lan_mount::tests::fixture("srv");
         let on = crate::lan_handler::LanConfig { enabled: true };
-        assert_eq!(st.lan.arm(&on, || Ok(crate::lan_mount::tests::synthetic_state(&d, "empty"))), crate::lan_mount::MountState::On);
+        assert_eq!(st.lan.arm(&on, || Ok(crate::lan_mount::tests::synthetic_material(&d, "empty"))), crate::lan_mount::MountState::On);
         let app = super::build_phone_router(st.clone());
         let (s, body) = post(&app, "192.168.0.10:8790", "/lan/pull", &pull_body()).await;
         assert_eq!(s, StatusCode::OK, "{body}");
