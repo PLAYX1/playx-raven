@@ -23,3 +23,8 @@
 /* 가게 번호 카드 — 64자 번호가 좁은 창에서 넘치지 않게 줄바꿈한다. */
 #page-devices #sd-id { display: block; max-width: 100%; overflow-wrap: anywhere; word-break: break-all; font-family: ui-monospace, Menlo, monospace; font-size: 13px; white-space: normal; }
 #page-devices #sd-form textarea { width: 100%; max-width: 100%; box-sizing: border-box; }
+/* 폰 연결 — 대기 중인 폰 줄 */
+#page-devices .dv-pending { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 8px; }
+#page-devices .dv-pending li { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; }
+#page-devices .dv-pending b { font-size: 20px; letter-spacing: 2px; }
+#page-devices .dv-pname { font-weight: 700; }

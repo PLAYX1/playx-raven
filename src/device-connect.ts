@@ -122,6 +122,53 @@ export function pairingQr(invoke: Invoke): DeviceQrPort {
   };
 }
 
+/* ── 폰 연결(같은 와이파이 짝 맺기 · 레인 Y 화면) ─────────────── */
+/**
+ * Rust `lan_sync_status` · `lan_pair_offer` · `lan_pair_pending` · `lan_pair_approve`(lan_mount.rs)를 그대로 부른다.
+ * 🔴 같은 와이파이 자동 복사(lanSync)는 기본 꺼짐 — 켜는 것은 대표 승인 사항이라 이 화면은 켜지 않는다. 꺼져 있으면 「꺼져 있어요」만 말한다.
+ * 🔴 새 기기 허락의 사장 확인은 Rust 가 1번만 묻는다(증서 + 열쇠 봉투 묶음 서명). 열쇠·12단어는 웹뷰를 지나지 않는다. 화면에는 QR 글(비밀 없음)·이름·확인 번호·지문만 온다.
+ */
+export type LanSyncStatus = { on: boolean; state: string; say: string };
+export type LanPairOffer = { svg: string; expiresAt: number; restartNeeded: boolean; say: string };
+export type LanPairPending = { name: string; code: string; fingerprint: string; approved: boolean; devicePubKey: string };
+export type LanPairPort = {
+  status(): Promise<LanSyncStatus>;
+  offer(storeName: string): Promise<LanPairOffer>;
+  pending(): Promise<LanPairPending[]>;
+  approve(devicePubKey: string, role: DeviceRole, knownCerts: readonly DeviceCert[]): Promise<{ cert: DeviceCert; say: string }>;
+};
+export const nullLanPair: LanPairPort = {
+  status: async () => ({ on: false, state: "off", say: "" }),
+  offer: async () => { throw new Error("lan-off"); },
+  pending: async () => [],
+  approve: async () => { throw new Error("lan-off"); },
+};
+export function tauriLanPair(invoke: Invoke0): LanPairPort {
+  return {
+    status: async () => {
+      const r = await invoke<{ on?: boolean; state?: string; say?: string }>("lan_sync_status");
+      return { on: r?.on === true, state: String(r?.state ?? "off"), say: String(r?.say ?? "") };
+    },
+    offer: async storeName => {
+      const r = await invoke<{ offerText?: string; expiresAt?: number; restartNeeded?: boolean; say?: string }>("lan_pair_offer", { storeName });
+      if (!r || typeof r.offerText !== "string") throw new Error("lan-pair-offer");
+      const svg = await invoke<string>("qr_svg", { text: r.offerText });
+      return { svg, expiresAt: Number(r.expiresAt) || 0, restartNeeded: r.restartNeeded === true, say: String(r.say ?? "") };
+    },
+    pending: async () => {
+      const r = await invoke<unknown>("lan_pair_pending");
+      return (Array.isArray(r) ? r : []).map((p: Record<string, unknown>) => ({
+        name: String(p.name ?? ""), code: String(p.code ?? ""), fingerprint: String(p.fingerprint ?? ""), approved: p.approved === true, devicePubKey: String(p.devicePubKey ?? ""),
+      }));
+    },
+    approve: async (devicePubKey, role, knownCerts) => {
+      const r = await invoke<{ ok?: boolean; cert?: DeviceCert; say?: string }>("lan_pair_approve", { devicePubKey, role, knownCerts });
+      if (!r || r.ok !== true || !r.cert) throw new Error("lan-pair-approve");
+      return { cert: r.cert, say: String(r.say ?? "") };
+    },
+  };
+}
+
 /* ── 저장 ──────────────────────────────────────────────────── */
 
 export type DeviceState = {
@@ -256,6 +303,8 @@ export type DeviceScreenDeps = {
   storeKey?: StoreKeyPort; link?: DeviceLinkPort; qr?: DeviceQrPort; store?: DeviceStore;
   /** 기기 끊기(운영 = tauriDisconnect). 없으면 「나눠 준 열쇠 없음」으로 보고 목록만 서명한다(시험·연결 전). */
   disconnect?: DeviceDisconnectPort;
+  /** 폰 연결(운영 = tauriLanPair). 없으면 「꺼져 있어요」로 보인다. */
+  lanPair?: LanPairPort;
   now?: () => number;
   /** 확인창. 기본은 window.confirm. 취소하면 false. okLabel 은 확인 단추 글자. */
   confirm?: (title: string, message: string, okLabel?: string) => Promise<boolean>;
@@ -329,6 +378,24 @@ const MARKUP = `
       <div class="dv-row"><button type="button" id="dv-copy" class="ghost">${copyHtml("복사")}</button></div>
     </div>
   </div>
+  <div class="card dv-card" id="lp-card">
+    <h2>${copyHtml("폰 연결")}</h2>
+    <p class="meta">${copyHtml("같은 와이파이의 폰을 이 컴퓨터에 연결해요. 폰에서 QR 을 읽으면 폰에 확인 번호가 떠요. 이 화면의 번호와 같을 때만 허락해 주세요.")}</p>
+    <p class="warnbox" id="lp-state" role="status"></p>
+    <div id="lp-body" hidden>
+      <div class="dv-form">
+        <label>${copyHtml("가게 이름")} <input id="lp-store" maxlength="40" autocomplete="off" /></label>
+        <label>${copyHtml("역할")} <select id="lp-role"></select></label>
+        <p class="meta" id="lp-rolehelp"></p>
+      </div>
+      <div class="dv-row"><button type="button" id="lp-start">${copyHtml("폰 연결 시작")}</button><button type="button" id="lp-stop" class="ghost" hidden>${copyHtml("연결 닫기")}</button></div>
+      <div class="dv-qrbox" id="lp-qrbox" hidden><div class="dv-qr" id="lp-qrimg" translate="no"></div><p class="meta" id="lp-qrhelp"></p></div>
+      <h3>${copyHtml("연결을 기다리는 폰")}</h3>
+      <p class="meta" id="lp-none">${copyHtml("아직 없어요. 폰에서 QR 을 읽으면 여기에 나와요.")}</p>
+      <ul class="dv-pending" id="lp-list"></ul>
+      <p class="meta" id="lp-say" role="status" aria-live="polite"></p>
+    </div>
+  </div>
   <div class="card dv-card dv-note">
     <h2>${copyHtml("기기를 끊을 때 알아 두세요")}</h2>
     <p>${copyHtml("끊으면 그 기기는 새 증서 확인에서 바로 멈춰요.")}</p>
@@ -340,7 +407,7 @@ const MARKUP = `
 
 /** 화면을 root 안에 그린다. 연결 자리는 deps 로 바꿔 끼운다. */
 export function mountDeviceScreen(root: HTMLElement, deps: DeviceScreenDeps = {}) {
-  const key = deps.storeKey ?? nullStoreKey, link = deps.link ?? nullDeviceLink, qr = deps.qr ?? nullDeviceQr, disconnect = deps.disconnect ?? nullDisconnect;
+  const key = deps.storeKey ?? nullStoreKey, link = deps.link ?? nullDeviceLink, qr = deps.qr ?? nullDeviceQr, disconnect = deps.disconnect ?? nullDisconnect, lan = deps.lanPair ?? nullLanPair;
   const store = deps.store ?? localDeviceStore();
   const now = deps.now ?? (() => Date.now());
   const confirmBox = deps.confirm ?? (async (title: string, message: string, _ok?: string) => window.confirm(`${title}\n${message}`));
@@ -413,6 +480,44 @@ export function mountDeviceScreen(root: HTMLElement, deps: DeviceScreenDeps = {}
     } catch { signing = null; }
     paint();
   }
+
+  /* ── 폰 연결 ── */
+  const lpRole = el<HTMLSelectElement>(root, "lp-role");
+  for (const r of DEVICE_ROLES) lpRole.add(new Option(t(ROLE_LABEL[r]), r));
+  lpRole.value = "remote";
+  const lpHelp = () => setCopyText(el(root, "lp-rolehelp"), () => t(ROLE_HELP[lpRole.value as DeviceRole]));
+  lpRole.onchange = lpHelp; lpHelp();
+  const lpSay = (render: () => string) => setCopyText(el(root, "lp-say"), render);
+  let lpOn = false, lpStateSay = "", lpTimer: ReturnType<typeof setInterval> | null = null, lpExpires = 0, lpPending: LanPairPending[] = [], lpBusy = false;
+  const lpStop = () => {
+    if (lpTimer !== null) { clearInterval(lpTimer); lpTimer = null; }
+    el(root, "lp-qrbox").hidden = true; el(root, "lp-stop").hidden = true; lpExpires = 0;
+  };
+  function lpPaint() {
+    setCopyText(el(root, "lp-state"), () => lpOn ? t("폰 연결을 쓸 수 있어요.") : lpStateSay ? lpStateSay : t("같은 와이파이 자동 복사가 꺼져 있어요."));
+    el(root, "lp-body").hidden = !lpOn;
+    const list = el(root, "lp-list");
+    list.innerHTML = lpPending.map(p => `<li data-pk="${esc(p.devicePubKey)}"><span class="dv-pname" translate="no">${esc(p.name)}</span>
+      <span class="meta">${copyHtml("확인 번호")}: <b translate="no">${esc(p.code)}</b> · ${copyHtml("지문")}: <span translate="no">${esc(p.fingerprint)}</span></span>
+      ${p.approved ? `<span class="meta">${copyHtml("허락했어요")}</span>` : `<button type="button" data-lp-approve="${esc(p.devicePubKey)}" ${lpBusy ? "disabled" : ""}>${copyHtml("허락")}</button>`}</li>`).join("");
+    el(root, "lp-none").hidden = lpPending.length > 0;
+    (el(root, "lp-start") as HTMLButtonElement).disabled = lpBusy || !lpOn;
+  }
+  async function lpRefreshStatus() {
+    try { const s = await lan.status(); lpOn = s.on || (s.state !== "off" && s.state !== ""); lpStateSay = s.say; } catch { lpOn = false; lpStateSay = ""; }
+    if (!lpOn) lpStop();
+    lpPaint();
+  }
+  async function lpPoll() {
+    if (lpExpires && now() > lpExpires) { lpStop(); lpPending = []; lpSay(() => t("연결 시간이 끝났어요. 다시 시작해 주세요.")); lpPaint(); return; }
+    try { lpPending = await lan.pending(); } catch { lpPending = []; }
+    lpPaint();
+  }
+  async function lpAct(run: () => Promise<void>) {
+    if (lpBusy) return; lpBusy = true; lpPaint();
+    try { await run(); } catch (e) { const m = errCode(e); lpSay(() => (/[가-힣]/.test(m) ? m : t("폰 연결에 실패했어요. 아무것도 바뀌지 않았어요."))); } finally { lpBusy = false; lpPaint(); }
+  }
+  void lpRefreshStatus();
   async function act(run: () => Promise<void>) {
     if (busy) return; busy = true; paint();
     try { await run(); } catch (e) { const c = errCode(e); say(() => certErrorSay(c)); } finally { busy = false; paint(); }
@@ -421,6 +526,27 @@ export function mountDeviceScreen(root: HTMLElement, deps: DeviceScreenDeps = {}
   root.addEventListener("click", ev => {
     const b = (ev.target as HTMLElement).closest("button");
     if (!b) return;
+    if (b.id === "lp-start") return void lpAct(async () => {
+      const storeName = el<HTMLInputElement>(root, "lp-store").value.trim();
+      if (!storeName) { lpSay(() => t("가게 이름을 적어 주세요.")); return; }
+      const o = await lan.offer(storeName);
+      el(root, "lp-qrimg").innerHTML = o.svg; el(root, "lp-qrbox").hidden = false; el(root, "lp-stop").hidden = false;
+      setCopyText(el(root, "lp-qrhelp"), () => t("폰에서 이 QR 을 읽어 주세요. 10분 동안 쓸 수 있어요."));
+      lpExpires = o.expiresAt;
+      lpSay(() => (o.restartNeeded ? t("처음 연결이라 기기끼리 나눌 열쇠를 만들었어요. 폰 연결 서버를 한 번 껐다 켜 주세요.") : ""));
+      if (lpTimer === null) lpTimer = setInterval(() => { void lpPoll(); }, 2000);
+      await lpPoll();
+    });
+    if (b.id === "lp-stop") { lpStop(); lpPending = []; lpSay(() => ""); lpPaint(); return; }
+    if (b.dataset.lpApprove) {
+      const pk = b.dataset.lpApprove, who = lpPending.find(p => p.devicePubKey === pk);
+      return void lpAct(async () => {
+        const r = await lan.approve(pk, lpRole.value as DeviceRole, state.history);
+        state = { ...state, history: [...state.history, r.cert], names: { ...state.names, [r.cert.deviceId]: (who?.name ?? "").trim().slice(0, 40) } }; store.save(state);
+        lpSay(() => t("새 폰을 연결했어요. 폰 화면에서 「완료」를 눌러 주세요."));
+        await lpPoll(); paint();
+      });
+    }
     if (b.id === "dv-qr") void act(async () => {
       const shown = await qr.show().catch(() => null);
       if (!shown) { say(() => t("QR 을 만들지 못했어요. 폰 연결 서버가 켜져 있는지 확인해 주세요.")); return; }
@@ -464,7 +590,7 @@ export function mountDeviceScreen(root: HTMLElement, deps: DeviceScreenDeps = {}
   });
   void refreshKey();
   return {
-    enter() { state = store.load(); void refreshKey(); },
+    enter() { state = store.load(); void refreshKey(); void lpRefreshStatus(); },
     /** 시험·연결용: 새 기기가 확인된 때를 적는다. */
     markSeen(deviceId: string, at: number) { state = { ...state, lastSeen: { ...state.lastSeen, [deviceId]: at } }; store.save(state); paint(); },
     state: () => state,

@@ -4871,7 +4871,7 @@ function showPage(id: string) {
   if (id === "reward") void loadReward();
   if (id === "create") createApi?.enter();
   // 판매자 화면 둘 — 처음 열 때 따로 내려받아 그린다(시작 번들에 넣지 않는다). 다시 열면 새로 읽는다.
-  if (id === "devices") void import("./device-connect").then(({ mountDeviceScreen, pairingQr, tauriStoreKey, tauriDisconnect }) => { if (!deviceScreen) deviceScreen = mountDeviceScreen($("page-devices"), { qr: pairingQr((cmd, args) => invoke(cmd, args)), storeKey: tauriStoreKey((cmd, args) => invoke(cmd, args), storeDocId), disconnect: tauriDisconnect((cmd, args) => invoke(cmd, args)),
+  if (id === "devices") void import("./device-connect").then(({ mountDeviceScreen, pairingQr, tauriStoreKey, tauriDisconnect, tauriLanPair }) => { if (!deviceScreen) deviceScreen = mountDeviceScreen($("page-devices"), { qr: pairingQr((cmd, args) => invoke(cmd, args)), storeKey: tauriStoreKey((cmd, args) => invoke(cmd, args), storeDocId), disconnect: tauriDisconnect((cmd, args) => invoke(cmd, args)), lanPair: tauriLanPair((cmd, args) => invoke(cmd, args)),
     confirm: (title, message, okLabel) => sure(title, message, okLabel ?? t("끊기")) }); else deviceScreen.enter(); }).catch((e) => console.warn("device-connect load failed", e));
   if (id === "bulk") void Promise.all([import("./bulk-products-ui"), import("./device-connect")]).then(async ([{ mountBulkScreen, storeKeyBulkPublisher }, { tauriStoreKey }]) => {
     if (bulkScreen) { bulkScreen.enter(); return; }
