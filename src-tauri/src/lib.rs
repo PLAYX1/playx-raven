@@ -345,6 +345,8 @@ pub fn run() {
             shopkey::shop_pubkey,
             storesign::store_key_info,
             storesign::store_sign_digest,
+            lan_mount::lan_sync_status,
+            lan_mount::lan_store_set,
             devfee::fee_owed,
             ticket::ticket_find,
             ticket::ticket_use,

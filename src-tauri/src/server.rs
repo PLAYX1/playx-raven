@@ -3647,6 +3647,9 @@ pub async fn start_phone_server(
         return Err("이 컴퓨터에서 안전한 임의 값을 만들지 못해 원격 접속을 켜지 않았습니다.".into());
     }
 
+    // 같은 와이파이 기기 복사: 스위치(lan/settings.json 의 lanSync 불리언 true)가 켜져 있을 때만 붙는다. 기본 꺼짐.
+    // 꺼져 있으면 열쇠 파일을 읽지 않는다. 결과는 `lan_sync_status` 로 화면에 정직하게 보인다.
+    let _ = crate::lan_mount::arm_from_disk(&st.lan);
     let app = build_phone_router(st.clone());
 
     // 이 컴퓨터의 릴레이가 **정말로** 듣고 있는가. 아래 세 갈래 중 하나로만 켜진다.
@@ -4389,6 +4392,13 @@ pub fn qr_svg(text: String) -> Result<String, String> {
         .dark_color(svg::Color("#111111"))
         .light_color(svg::Color("#ffffff"))
         .build())
+}
+
+impl ServerState {
+    /// 같은 와이파이 기기 복사 칸(`lan_mount` 명령이 읽는다).
+    pub fn lan_slot(&self) -> Arc<crate::lan_mount::LanSlot> {
+        self.lan.clone()
+    }
 }
 
 impl Default for ServerState {

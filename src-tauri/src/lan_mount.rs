@@ -147,6 +147,166 @@ pub fn write_config(dir: &Path, on: bool) -> Result<(), String> {
     crate::server::atomic_write_0600(&dir.join(SETTINGS_FILE), &doc).map_err(|_| "설정을 저장하지 못했어요.".to_string())
 }
 
+// ── ② 열쇠 공급 ──────────────────────────────────────────────
+//
+// 어디에 무엇이 있나(코드 근거 — 2026-10-15 이 브랜치):
+//   · 가게 공개키: Rust 가 12단어에서 그때그때 뽑는다(`storesign::store_key_info`, 경로 `identity::PATH_SHOP`). 저장된 곳 없음.
+//   · 가게 번호(storeId): 화면(웹뷰) localStorage 에만 있다(`src/store-doc-ui.ts localStoreDocStorage`, 키 rv-store-doc). Rust 는 못 읽는다.
+//   · 철회 목록: 화면 localStorage `rv-devices-v1` 에만 있다(`src/device-connect.ts localDeviceStore`). 서명은 `store_sign_digest`(사장 확인창).
+//   · 데이터 열쇠: **어디에도 없다**(Rust·화면 전체 검색 0건 — 화면 문구만 있음). 만들기·나눠 주기(sealDataKey)·백업 판 5 는 결정 대기.
+// 그래서 운영 공급자는 앱 폴더 `lan/` 의 파일 세 개를 읽는다. 가게 키는 Rust 가 12단어로 직접 뽑아 적고(화면이 준 키를 믿지 않음),
+// 가게 번호만 화면이 준다(틀려도 그 번호로 서명된 증서가 없으니 문이 열리지 않는다 — 닫힌 실패).
+
+pub const STORE_FILE: &str = "store.json";
+pub const DATA_KEY_FILE: &str = "data-key.json";
+pub const REVOCATION_FILE: &str = "revocation.json";
+pub const LOG_DIR: &str = "log";
+
+/// 가게 번호 + 가게 공개키(압축 hex).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StoreIdentity {
+    pub store_id: String,
+    pub store_key: String,
+}
+
+fn is_sha_hex(s: &str) -> bool {
+    s.len() == 64 && s.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+}
+
+impl StoreIdentity {
+    pub fn checked(store_id: &str, store_key: &str) -> Option<Self> {
+        (is_sha_hex(store_id) && crate::lan_cert::is_public_key(store_key)).then(|| StoreIdentity { store_id: store_id.into(), store_key: store_key.into() })
+    }
+}
+
+/// 처리기에 줄 값의 공급자. 시험 = 합성 값, 운영 = `FileLanKeys`.
+pub trait LanKeySource: Send + Sync {
+    fn store_identity(&self) -> Result<StoreIdentity, MountState>;
+    fn data_key(&self) -> Result<crate::lan_seal::DataKey, MountState>;
+    /// 마지막으로 받아 둔 서명된 철회 목록(없으면 None → 모든 증서 거절).
+    fn revocation_list(&self) -> Option<Value>;
+    fn save_revocation_list(&self, list: &Value) -> Result<(), String>;
+}
+
+/// 운영 공급자 — 앱 폴더 `lan/` 의 파일(0600).
+pub struct FileLanKeys {
+    pub dir: PathBuf,
+}
+impl FileLanKeys {
+    pub fn new(dir: PathBuf) -> Self {
+        FileLanKeys { dir }
+    }
+    fn read(&self, name: &str) -> Option<Result<Value, ()>> {
+        match std::fs::read_to_string(self.dir.join(name)) {
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+            Err(_) => Some(Err(())),
+            Ok(t) => Some(serde_json::from_str::<Value>(&t).map_err(|_| ())),
+        }
+    }
+    /// 가게 번호 기록. 가게 키는 호출자가 12단어에서 직접 뽑은 값이어야 한다(`store_identity_from_words`).
+    pub fn save_store_identity(&self, id: &StoreIdentity) -> Result<(), String> {
+        let doc = serde_json::to_vec_pretty(&json!({ "v": 1, "storeId": id.store_id, "storeKey": id.store_key })).unwrap_or_default();
+        crate::server::atomic_write_0600(&self.dir.join(STORE_FILE), &doc).map_err(|_| "가게 번호를 저장하지 못했어요.".to_string())
+    }
+}
+impl LanKeySource for FileLanKeys {
+    fn store_identity(&self) -> Result<StoreIdentity, MountState> {
+        let v = match self.read(STORE_FILE) {
+            None => return Err(MountState::NoStore),
+            Some(Err(())) => return Err(MountState::BadStore),
+            Some(Ok(v)) => v,
+        };
+        let ok = v.as_object().map_or(false, |o| o.len() == 3) && v["v"].as_u64() == Some(1);
+        match (ok, v["storeId"].as_str(), v["storeKey"].as_str()) {
+            (true, Some(id), Some(k)) => StoreIdentity::checked(id, k).ok_or(MountState::BadStore),
+            _ => Err(MountState::BadStore),
+        }
+    }
+    /// 모양: `{"v":1,"version":<1 이상>,"key":"<64 hex, 전부 0 아님>"}`. 🔴 이 파일을 만드는 코드는 아직 없다(결정 대기).
+    fn data_key(&self) -> Result<crate::lan_seal::DataKey, MountState> {
+        let v = match self.read(DATA_KEY_FILE) {
+            None => return Err(MountState::NoDataKey),
+            Some(Err(())) => return Err(MountState::BadDataKey),
+            Some(Ok(v)) => v,
+        };
+        let ok = v.as_object().map_or(false, |o| o.len() == 3) && v["v"].as_u64() == Some(1);
+        let version = v["version"].as_u64().filter(|n| (1..=9_007_199_254_740_991).contains(n));
+        let key = v["key"].as_str().filter(|k| is_sha_hex(k)).and_then(|k| hex::decode(k).ok());
+        match (ok, version, key) {
+            (true, Some(version), Some(bytes)) if bytes.iter().any(|b| *b != 0) => {
+                let mut key = [0u8; 32];
+                key.copy_from_slice(&bytes);
+                Ok(crate::lan_seal::DataKey { version, key })
+            }
+            _ => Err(MountState::BadDataKey),
+        }
+    }
+    fn revocation_list(&self) -> Option<Value> {
+        self.read(REVOCATION_FILE).and_then(Result::ok).filter(Value::is_object)
+    }
+    fn save_revocation_list(&self, list: &Value) -> Result<(), String> {
+        let doc = serde_json::to_vec(list).map_err(|_| "철회 목록을 저장하지 못했어요.".to_string())?;
+        crate::server::atomic_write_0600(&self.dir.join(REVOCATION_FILE), &doc).map_err(|_| "철회 목록을 저장하지 못했어요.".to_string())
+    }
+}
+
+/// 12단어에서 가게 공개키를 뽑아 가게 번호와 묶는다. 단어와 비밀 열쇠는 바로 지운다(`storesign` 과 같은 규칙).
+pub fn store_identity_from_words(words: &mut String, pass: &mut String, store_id: &str) -> Result<StoreIdentity, &'static str> {
+    let sk = crate::storesign::store_secret(words, pass);
+    crate::words::wipe(words);
+    crate::words::wipe(pass);
+    let mut sk = sk.ok_or(crate::storesign::ERR_KEY)?;
+    let pk = crate::storesign::pubkey_hex(&sk);
+    crate::words::wipe_bytes(&mut sk);
+    StoreIdentity::checked(store_id, &pk?).ok_or("가게 번호 모양이 맞지 않아요.")
+}
+
+/// 공급자에서 처리기 상태를 만든다. 하나라도 빠지면 그 이유(경로는 만들지 않음).
+pub fn build_state(keys: &dyn LanKeySource, log_dir: &Path, now_ms: i64) -> Result<LanServerState, MountState> {
+    let id = keys.store_identity()?;
+    let data_key = keys.data_key()?;
+    let store = crate::lan_store::LanStore::open(log_dir, now_ms).map_err(|_| MountState::StoreFailed)?;
+    Ok(LanServerState::new(id.store_key, data_key, keys.revocation_list(), store))
+}
+
+fn now_ms() -> i64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as i64)
+}
+
+/// `start_phone_server` 가 부른다. 스위치가 꺼져 있으면(기본) 아무 파일도 더 읽지 않는다.
+pub fn arm_from_disk(slot: &LanSlot) -> MountState {
+    let dir = lan_dir();
+    let cfg = read_config(&dir);
+    slot.arm(&cfg, || build_state(&FileLanKeys::new(dir.clone()), &dir.join(LOG_DIR), now_ms()))
+}
+
+/// 화면이 읽는 상태. 비밀 값(열쇠·목록 본문)은 싣지 않는다.
+pub fn status_json(slot: &LanSlot) -> Value {
+    let m = slot.mount_state();
+    json!({ "state": m.code(), "on": m == MountState::On, "say": m.say() })
+}
+
+/// 같은 와이파이 기기 복사 상태(읽기만).
+#[tauri::command]
+pub fn lan_sync_status(state: tauri::State<'_, crate::server::ServerState>) -> Value {
+    status_json(&state.lan_slot())
+}
+
+/// 가게 번호를 LAN 복사용으로 적는다. 가게 키는 화면이 주지 않는다 — Rust 가 12단어에서 직접 뽑는다(앱 잠금 중 거절).
+#[tauri::command]
+pub async fn lan_store_set(store_id: String) -> Result<Value, String> {
+    if crate::app_lock::is_locked() {
+        return Err(crate::storesign::ERR_LOCKED.into());
+    }
+    if !is_sha_hex(&store_id) {
+        return Err("가게 번호 모양이 맞지 않아요.".into());
+    }
+    let (mut w, mut p) = crate::identity::words_async().await.map_err(crate::identity::SeedFailure::public_error)?;
+    let id = store_identity_from_words(&mut w, &mut p, &store_id).map_err(String::from)?;
+    FileLanKeys::new(lan_dir()).save_store_identity(&id)?;
+    Ok(json!({ "storeId": id.store_id, "fingerprint": crate::storesign::fingerprint(&id.store_key) }))
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
@@ -240,5 +400,122 @@ pub(crate) mod tests {
         // 서버가 도는 중에 다시 켜면 같은 상태를 다시 쓴다(로그 잠금을 새로 잡지 않는다).
         assert_eq!(slot.arm(&LanConfig { enabled: true }, || panic!("새로 만들면 잠금 충돌")), MountState::On);
         assert!(st.live.load(Ordering::SeqCst));
+    }
+
+    /// 합성 공급자(시험 전용).
+    pub(crate) struct SynthKeys {
+        pub id: Result<StoreIdentity, MountState>,
+        pub key: Result<DataKey, MountState>,
+        pub list: Mutex<Option<Value>>,
+    }
+    impl LanKeySource for SynthKeys {
+        fn store_identity(&self) -> Result<StoreIdentity, MountState> {
+            self.id.clone()
+        }
+        fn data_key(&self) -> Result<DataKey, MountState> {
+            self.key.clone()
+        }
+        fn revocation_list(&self) -> Option<Value> {
+            self.list.lock().unwrap().clone()
+        }
+        fn save_revocation_list(&self, list: &Value) -> Result<(), String> {
+            *self.list.lock().unwrap() = Some(list.clone());
+            Ok(())
+        }
+    }
+    pub(crate) fn synth() -> SynthKeys {
+        let v = vec();
+        SynthKeys {
+            id: Ok(StoreIdentity::checked(v["storeId"].as_str().unwrap(), v["storeKey"].as_str().unwrap()).unwrap()),
+            key: Ok(DataKey { version: 3, key: [7u8; 32] }),
+            list: Mutex::new(Some(v["lists"]["empty"].clone())),
+        }
+    }
+
+    #[test]
+    fn build_state_needs_every_piece() {
+        let d = fixture("build");
+        let v = vec();
+        let now = v["now"].as_i64().unwrap();
+        let st = build_state(&synth(), &d.join("log"), now).unwrap();
+        assert_eq!(st.store_key, v["storeKey"].as_str().unwrap());
+        assert_eq!(st.data_key.version, 3);
+        assert!(st.revocation.lock().unwrap().is_some());
+        drop(st);
+        let mut k = synth();
+        k.id = Err(MountState::NoStore);
+        assert_eq!(build_state(&k, &d.join("log2"), now).err(), Some(MountState::NoStore));
+        let mut k = synth();
+        k.key = Err(MountState::NoDataKey);
+        assert_eq!(build_state(&k, &d.join("log3"), now).err(), Some(MountState::NoDataKey));
+        // 로그 폴더를 다른 쪽이 쥐고 있으면 StoreFailed.
+        let held = crate::lan_store::LanStore::open(&d.join("log4"), now).unwrap();
+        assert_eq!(build_state(&synth(), &d.join("log4"), now).err(), Some(MountState::StoreFailed));
+        drop(held);
+    }
+
+    #[test]
+    fn file_keys_read_only_well_formed_files() {
+        let d = fixture("files");
+        let k = FileLanKeys::new(d.clone());
+        assert_eq!(k.store_identity(), Err(MountState::NoStore));
+        assert_eq!(k.data_key().err(), Some(MountState::NoDataKey));
+        assert!(k.revocation_list().is_none());
+        let v = vec();
+        let id = StoreIdentity::checked(v["storeId"].as_str().unwrap(), v["storeKey"].as_str().unwrap()).unwrap();
+        k.save_store_identity(&id).unwrap();
+        assert_eq!(k.store_identity().unwrap(), id);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(std::fs::metadata(d.join(STORE_FILE)).unwrap().permissions().mode() & 0o777, 0o600);
+        }
+        for bad in [
+            "{broken".to_string(),
+            json!({ "v": 1, "storeId": "AB".repeat(32), "storeKey": v["storeKey"] }).to_string(),
+            json!({ "v": 1, "storeId": v["storeId"], "storeKey": "02".to_string() + &"00".repeat(32) }).to_string(),
+            json!({ "v": 2, "storeId": v["storeId"], "storeKey": v["storeKey"] }).to_string(),
+            json!({ "v": 1, "storeId": v["storeId"], "storeKey": v["storeKey"], "x": 1 }).to_string(),
+        ] {
+            std::fs::write(d.join(STORE_FILE), &bad).unwrap();
+            assert_eq!(k.store_identity(), Err(MountState::BadStore), "{bad}");
+        }
+        // 합성 데이터 열쇠 파일(시험 폴더 안에만).
+        std::fs::write(d.join(DATA_KEY_FILE), json!({ "v": 1, "version": 2, "key": "07".repeat(32) }).to_string()).unwrap();
+        let dk = k.data_key().unwrap();
+        assert_eq!((dk.version, dk.key), (2, [7u8; 32]));
+        for bad in [
+            json!({ "v": 1, "version": 0, "key": "07".repeat(32) }),
+            json!({ "v": 1, "version": 2, "key": "00".repeat(32) }),
+            json!({ "v": 1, "version": 2, "key": "07".repeat(31) }),
+            json!({ "v": 1, "version": "2", "key": "07".repeat(32) }),
+            json!({ "v": 1, "version": 2, "key": "07".repeat(32), "seed": "x" }),
+        ] {
+            std::fs::write(d.join(DATA_KEY_FILE), bad.to_string()).unwrap();
+            assert_eq!(k.data_key().err(), Some(MountState::BadDataKey), "{bad}");
+        }
+    }
+
+    #[test]
+    fn the_store_key_comes_from_the_words_not_from_the_screen() {
+        // 공개 BIP39 시험 단어(합성) — storesign 시험과 같은 값.
+        let mut w = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about".to_string();
+        let mut p = String::new();
+        let id = store_identity_from_words(&mut w, &mut p, &"ab".repeat(32)).unwrap();
+        assert_eq!(id.store_key, "037821115dd0aa762d3a393fa861ce8e784403b9e0ec578bc37e72e6e9e70a1c09");
+        assert!(!w.contains("abandon"), "단어는 쓰고 바로 지운다");
+        let mut w = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about".to_string();
+        assert!(store_identity_from_words(&mut w, &mut String::new(), "nothex").is_err());
+    }
+
+    #[test]
+    fn status_carries_no_secret_values() {
+        let d = fixture("status");
+        let slot = LanSlot::default();
+        assert_eq!(status_json(&slot)["state"], "off");
+        slot.arm(&LanConfig { enabled: true }, || build_state(&synth(), &d.join("log"), vec()["now"].as_i64().unwrap()));
+        let s = status_json(&slot).to_string();
+        assert!(s.contains("\"on\":true"));
+        assert!(!s.contains(&"07".repeat(32)) && !s.contains(vec()["storeKey"].as_str().unwrap()));
     }
 }
