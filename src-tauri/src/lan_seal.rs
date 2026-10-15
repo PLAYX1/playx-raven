@@ -31,11 +31,16 @@ pub enum SealError {
     OutOfRange(&'static str),
 }
 
-/// 데이터 열쇠 — 판 번호와 32바이트.
+/// 데이터 열쇠 — 판 번호와 32바이트. 떨어질 때(복사본 포함) 열쇠 바이트를 지운다(`words::wipe_bytes`, 새 크레이트 없음).
 #[derive(Clone)]
 pub struct DataKey {
     pub version: u64,
     pub key: [u8; 32],
+}
+impl Drop for DataKey {
+    fn drop(&mut self) {
+        crate::words::wipe_bytes(&mut self.key);
+    }
 }
 
 pub struct ChunkBinding<'a> {
@@ -104,6 +109,11 @@ pub fn open_chunk(raw: &Value, key: &DataKey, bind: &ChunkBinding) -> Result<Vec
     let plain = cipher
         .decrypt(XNonce::from_slice(&nonce_bytes), Payload { msg: &ct_bytes, aad: &aad })
         .map_err(|_| SealError::Forbidden)?;
+    // 평문 상한은 복호화 직후에 본다. 64KiB 를 넘는 항목이 저장되면 다른 기기의 pull 이 그 자리에서 영영 막힌다
+    // (응답 봉인 `seal_chunk` 가 같은 상한으로 거절하므로). 암호문 상한(SEALED_MAX_CHARS)만으로는 막을 수 없다.
+    if plain.len() > CHUNK_MAX_BYTES {
+        return Err(SealError::OutOfRange("chunk-bytes"));
+    }
     let text = std::str::from_utf8(&plain).map_err(|_| SealError::Malformed("plain"))?;
     let list: Value = serde_json::from_str(text).map_err(|_| SealError::Malformed("plain"))?;
     let arr = list.as_array().ok_or(SealError::Malformed("entries"))?;
@@ -258,6 +268,40 @@ mod tests {
         assert_eq!(seal_chunk(&many, &k, &b, &nz), Err(SealError::OutOfRange("chunk-size")));
         let s = seal_plain(b"not json", &k, &b, &nz);
         assert_eq!(open_chunk(&s, &k, &b), Err(SealError::Malformed("plain")));
+    }
+
+    #[test]
+    fn a_plaintext_over_64k_is_refused_right_after_decrypting() {
+        let v = v();
+        let k = key(&v);
+        let b = bind(&v["bind"]);
+        let nz = nonce(&v);
+        // 항목 하나, 평문 65,537바이트 — 암호문 상한은 통과하지만 평문 상한에서 막혀야 한다.
+        let mut e = v["entries"][0].clone();
+        e["data"] = json!("");
+        let base = serde_json::to_string(&vec![e.clone()]).unwrap().len();
+        e["data"] = json!("x".repeat(CHUNK_MAX_BYTES + 1 - base));
+        let plain = serde_json::to_string(&vec![e.clone()]).unwrap();
+        assert_eq!(plain.len(), CHUNK_MAX_BYTES + 1);
+        let s = seal_chunk_unchecked(&[e.clone()], &k, &b, &nz);
+        assert!(s["ct"].as_str().unwrap().len() <= SEALED_MAX_CHARS, "암호문 상한은 통과하는 크기");
+        assert_eq!(open_chunk(&s, &k, &b), Err(SealError::OutOfRange("chunk-bytes")));
+        // 정확히 64KiB 는 열린다.
+        e["data"] = json!("x".repeat(CHUNK_MAX_BYTES - base));
+        let s = seal_chunk_unchecked(&[e.clone()], &k, &b, &nz);
+        assert_eq!(open_chunk(&s, &k, &b).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn a_dropped_data_key_wipes_its_bytes() {
+        let mut slot = std::mem::MaybeUninit::<DataKey>::uninit();
+        slot.write(DataKey { version: 1, key: [0xab; 32] });
+        // 제자리에서 drop 한 뒤 같은 메모리를 읽는다(시험 전용).
+        unsafe {
+            std::ptr::drop_in_place(slot.as_mut_ptr());
+            let after = std::ptr::read(std::ptr::addr_of!((*slot.as_ptr()).key));
+            assert_eq!(after, [0u8; 32]);
+        }
     }
 
     fn seal_plain(plain: &[u8], k: &DataKey, b: &ChunkBinding, n: &[u8; 24]) -> Value {

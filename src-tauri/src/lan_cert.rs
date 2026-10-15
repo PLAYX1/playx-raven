@@ -267,6 +267,48 @@ pub fn verify_device_cert(raw: &Value, store_key: &str, now_ms: i64, revocation:
 
 /// `any_scope` 중 하나라도 있으면 통과(여러 맡김 중 하나가 필요한 /lan/push·/lan/pull 용). 비어 있으면 맡김 검사 없음.
 pub fn verify_device_cert_any(raw: &Value, store_key: &str, now_ms: i64, revocation: Option<&Value>, any_scope: &[&str]) -> Result<VerifiedCert, CertReason> {
+    let (c, not_after) = verify_cert_body(raw, store_key, now_ms, any_scope)?;
+    match check_revocations(&c, not_after, store_key, now_ms, revocation) {
+        Some(r) => Err(r),
+        None => Ok(c),
+    }
+}
+
+/// 미리 확인해 둔 철회 목록(서명·모양·가게 번호를 한 번만 본 결과)으로 증서를 확인한다 — 요청마다 목록 서명(ECDSA 복구)을
+/// 다시 하지 않기 위한 캐시 경로. `list` 는 `verify_revocation_list(목록, store_key, list_store_id)` 의 결과여야 한다.
+/// 판정 순서·사유는 `verify_device_cert_any` 와 같다(시험 `prechecked_list_gives_the_same_answers` 가 모든 벡터로 대조).
+pub fn verify_device_cert_prechecked(
+    raw: &Value,
+    store_key: &str,
+    now_ms: i64,
+    list: Option<&Result<ListInfo, CertReason>>,
+    list_store_id: &str,
+    any_scope: &[&str],
+) -> Result<VerifiedCert, CertReason> {
+    let (c, not_after) = verify_cert_body(raw, store_key, now_ms, any_scope)?;
+    let info = match list {
+        None => return Err(CertReason::NoRevocationList),
+        Some(Err(r)) => return Err(*r),
+        Some(Ok(i)) => i,
+    };
+    // check_revocations 순서: (모양·서명은 미리 봄) → 다른 가게 → not-yet → 낡음 → 철회
+    if list_store_id != c.store_id {
+        return Err(CertReason::OtherStore);
+    }
+    if now_ms + DEVICE_CLOCK_SKEW_MS < info.issued_at {
+        return Err(CertReason::NotYet);
+    }
+    if now_ms - info.issued_at > REVOCATION_LIST_MAX_AGE_MS {
+        return Err(CertReason::StaleRevocationList);
+    }
+    if not_after <= info.pruned_before || info.revoked.iter().any(|r| r == &c.cert_id) {
+        return Err(CertReason::Revoked);
+    }
+    Ok(c)
+}
+
+/// 시각 → 모양 → 서명 → not-yet → expired → 맡김. 통과하면 (증서, notAfter).
+fn verify_cert_body(raw: &Value, store_key: &str, now_ms: i64, any_scope: &[&str]) -> Result<(VerifiedCert, i64), CertReason> {
     if !(MIN_NOW_MS..=MAX_TIME_MS).contains(&now_ms) {
         return Err(CertReason::BadClock);
     }
@@ -284,10 +326,7 @@ pub fn verify_device_cert_any(raw: &Value, store_key: &str, now_ms: i64, revocat
     if !any_scope.is_empty() && !any_scope.iter().any(|s| c.scopes.iter().any(|x| x == s)) {
         return Err(CertReason::Scope);
     }
-    match check_revocations(&c, not_after, store_key, now_ms, revocation) {
-        Some(r) => Err(r),
-        None => Ok(c),
-    }
+    Ok((c, not_after))
 }
 
 // ── 철회 목록 받기(갱신 경로) · 문서 서명 ─────────────────────────
@@ -432,6 +471,38 @@ where
 pub(crate) mod tests {
     use super::*;
     use serde_json::json;
+
+    /// 캐시 경로(미리 확인한 목록)가 원래 경로와 모든 증서·목록·시각에서 같은 답을 내는지.
+    #[test]
+    fn prechecked_list_gives_the_same_answers() {
+        let v = v();
+        let key = sk(&v);
+        let sid = v["storeId"].as_str().unwrap();
+        let mut lists: Vec<Option<Value>> = v["lists"].as_object().unwrap().values().cloned().map(Some).collect();
+        lists.push(None);
+        let mut bad = v["lists"]["empty"].clone();
+        bad["seq"] = json!(77); // 서명 깨짐
+        lists.push(Some(bad));
+        let mut shape = v["lists"]["empty"].clone();
+        shape.as_object_mut().unwrap().remove("prunedBefore");
+        lists.push(Some(shape));
+        let n0 = now(&v);
+        for t in [n0, n0 + REVOCATION_LIST_MAX_AGE_MS + 1, n0 - 40 * 24 * 3600_000] {
+            for l in &lists {
+                let pre = l.as_ref().map(|l| verify_revocation_list(l, &key, sid));
+                for (name, cert) in v["certs"].as_object().unwrap() {
+                    for scopes in [&[][..], &["read", "replicate"][..], &["draft"][..]] {
+                        let a = verify_device_cert_any(cert, &key, t, l.as_ref(), scopes).map(|c| c.cert_id);
+                        let b = verify_device_cert_prechecked(cert, &key, t, pre.as_ref(), sid, scopes).map(|c| c.cert_id);
+                        assert_eq!(a, b, "{name} t={t} scopes={scopes:?}");
+                    }
+                }
+            }
+        }
+        // 목록 가게 번호가 증서와 다르면 other-store.
+        let pre = verify_revocation_list(&v["lists"]["empty"], &key, sid);
+        assert_eq!(verify_device_cert_prechecked(&v["certs"]["remote"], &key, n0, Some(&pre), &"cd".repeat(32), &[]).err(), Some(CertReason::OtherStore));
+    }
 
     fn v() -> Value {
         serde_json::from_str(include_str!("../testdata/rv-lan-cert-vectors.json")).unwrap()
