@@ -516,10 +516,60 @@ fn customer_path(path: &str) -> bool {
 /// and the default is the safe half of it. The token is 32 random bytes and is
 /// not guessable; what this limits is the amount of surface a stranger can
 /// reach at all.
+/// `/lan/*` 전용의 더 좁은 안쪽 판정(L3). `from_outside` 는 Host 접두사만 보아 `10.example.com` 같은 공개 이름도
+/// 안쪽으로 셌다. 기기 복사는 같은 와이파이의 폰만 쓰므로:
+///   · 프록시·터널이 붙이는 머리(cf-connecting-ip·cf-ray·x-forwarded-*·forwarded·x-real-ip 등)가 하나라도 있으면 바깥.
+///   · Host 는 정확히 하나, 사설·링크 로컬 **IPv4 숫자 주소**(포트는 숫자만) 또는 `<이름>.local` 만 안쪽.
+///   · localhost·127.0.0.1 은 바깥으로 센다 — 터널이 넘겨주는 곳이 바로 그 주소이고, 폰은 그 이름으로 오지 않는다.
+fn lan_from_outside(headers: &HeaderMap) -> bool {
+    const PROXY_HEADERS: [&str; 11] = [
+        "cf-connecting-ip",
+        "cf-ray",
+        "cf-ipcountry",
+        "cf-visitor",
+        "cdn-loop",
+        "x-forwarded-for",
+        "x-forwarded-host",
+        "x-forwarded-proto",
+        "x-forwarded-port",
+        "forwarded",
+        "x-real-ip",
+    ];
+    if PROXY_HEADERS.iter().any(|h| headers.contains_key(*h)) {
+        return true;
+    }
+    let mut hosts = headers.get_all("host").iter();
+    let (Some(host), None) = (hosts.next(), hosts.next()) else { return true };
+    let Ok(host) = host.to_str() else { return true };
+    let host = host.to_ascii_lowercase();
+    let name = match host.rsplit_once(':') {
+        Some((n, port)) => {
+            if port.is_empty() || port.len() > 5 || !port.bytes().all(|b| b.is_ascii_digit()) {
+                return true;
+            }
+            n.to_string()
+        }
+        None => host,
+    };
+    if let Ok(ip) = name.parse::<std::net::Ipv4Addr>() {
+        // 숫자 네 칸 그대로여야 한다(parse 는 "010.1.1.1" 같은 모양을 거절한다).
+        return !(ip.is_private() || ip.is_link_local());
+    }
+    if let Some(label) = name.strip_suffix(".local") {
+        let ok = !label.is_empty()
+            && label.len() <= 63
+            && label.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
+            && !label.starts_with('-')
+            && !label.ends_with('-');
+        return !ok;
+    }
+    true
+}
+
 fn outside_blocked(state: &ServerState, headers: &HeaderMap, path: &str) -> bool {
     // 기기 복사는 같은 와이파이 전용이다. 원격 관리를 켜도 터널로는 열지 않는다.
     if path.starts_with("/lan/") || path == "/lan" {
-        return from_outside(headers);
+        return lan_from_outside(headers) || from_outside(headers);
     }
     if !from_outside(headers) || customer_path(path) {
         return false;
@@ -6505,6 +6555,22 @@ mod lan_mount_in_phone_router {
         for host in ["shop.example.com", "abc.trycloudflare.com", ""] {
             let (s, _) = post(&app, host, "/lan/pull", &pull_body()).await;
             assert_eq!(s, StatusCode::FORBIDDEN, "바깥 {host:?} 에서 /lan 이 열렸다");
+        }
+        // Host 접두사만 사설 대역처럼 꾸민 공개 이름·프록시 머리가 붙은 요청·루프백도 /lan 에서는 바깥이다(L3).
+        for host in ["10.example.com", "192.168.attacker.example", "10.0.0.1.nip.io", "localhost:8790", "127.0.0.1:8790", "203.0.113.9:8790", "mac..local", "-x.local"] {
+            let (s, _) = post(&app, host, "/lan/pull", &pull_body()).await;
+            assert_eq!(s, StatusCode::FORBIDDEN, "{host:?} 에서 /lan 이 열렸다");
+        }
+        for (h, v) in [("cf-connecting-ip", "198.51.100.7"), ("cf-ray", "8a1b2c3d4e5f-ICN"), ("x-forwarded-for", "198.51.100.7"), ("x-forwarded-host", "shop.example.com"), ("forwarded", "for=198.51.100.7")] {
+            let req = axum::http::Request::post("/lan/pull").header("host", "192.168.0.10:8790").header(h, v).header("content-type", "application/json")
+                .body(axum::body::Body::from(serde_json::to_vec(&pull_body()).unwrap())).unwrap();
+            assert_eq!(app.clone().oneshot(req).await.unwrap().status(), StatusCode::FORBIDDEN, "{h} 가 붙은 요청이 /lan 을 열었다");
+        }
+        // 같은 와이파이의 숫자 주소·.local 이름은 그대로 들어온다(nonce 는 매번 새로).
+        for (i, host) in ["10.0.1.7:8790", "172.16.5.1:8790", "mac-mini.local:8790", "169.254.3.4:8790"].iter().enumerate() {
+            let body = json!({ "cert": crate::lan_mount::tests::vec()["certs"]["replica"], "cursor": 0, "nonce": format!("{:032x}", 0x100 + i) });
+            let (s, b) = post(&app, host, "/lan/pull", &body).await;
+            assert_eq!(s, StatusCode::OK, "{host} 가 막혔다: {b}");
         }
         // 그 사이에도 원격 관리 길은 원래대로(이 바꿈이 다른 길을 막지 않는다).
         let req = axum::http::Request::get("/admin").header("host", "shop.example.com").body(axum::body::Body::empty()).unwrap();
