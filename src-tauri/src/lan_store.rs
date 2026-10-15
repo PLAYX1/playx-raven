@@ -56,7 +56,7 @@ pub struct LanStore {
     nonces: HashMap<String, i64>,
     nonce_order: VecDeque<(i64, String)>,
     #[cfg(test)]
-    fail_next_write: bool,
+    pub(crate) fail_next_write: bool,
 }
 
 fn is_hex(s: &str, n: usize) -> bool {

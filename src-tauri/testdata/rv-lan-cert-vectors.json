@@ -22,8 +22,8 @@
   "replica": {
    "v": 1,
    "storeId": "abababababababababababababababababababababababababababababababab",
-   "deviceId": "2b74b42c7ca6da1dc4b3842f829b0ece0e6abeaef8d046320c1e2227047ea39b",
-   "devicePubKey": "0257eb3638f51f4dc5c8d5a7324b47df99e816cfcc5b5eb1245bc8c98029f9e674",
+   "deviceId": "edd2d5db034b61ab36fe61905fce32d79d9f502cc9f76c0f710174d605bc9cb0",
+   "devicePubKey": "0263c24955ff1e53b5f0de3f61507581494b8a843370f228efdee6a887f2c4cf42",
    "role": "replica",
    "scopes": [
     "read",
@@ -32,7 +32,21 @@
    "issuedAt": 1799999999000,
    "notAfter": 1800086400000,
    "serial": 2,
-   "sig": "Hx1I2RjAcdOgrq+3DE1W5Ek9/8hbW/dYM/n0NKaW9j9DOTWoNM/aq35Hy3xPgcV1leNfBdzHj2bvmXTTIIK/+jo="
+   "sig": "H+M/C3i//hy4PqDoapXfypY1gJTSUEETr5yYXXGX6h2+fOeuhO1ljKfypQDa3NR4Tez6P1+0HJjALoQEkAMswHk="
+  },
+  "draftOnly": {
+   "v": 1,
+   "storeId": "abababababababababababababababababababababababababababababababab",
+   "deviceId": "564341bee9b4caeb45774c8f23649c5a94aa94ed255909490a51d957141a9ec8",
+   "devicePubKey": "02505f234a81fe3af88625ebda259dbaec44c72b181e2f64735f8b8ec8d7cf7377",
+   "role": "remote",
+   "scopes": [
+    "draft"
+   ],
+   "issuedAt": 1799999999000,
+   "notAfter": 1800086400000,
+   "serial": 6,
+   "sig": "HxZ6ZFxTMSL4FbGaCAismiyQUhFps5VtoVbZgTB21LHVX2CbhO6FO0Yxjzrpq9gmGflUhNvavNeOP855dL10VgA="
   },
   "revokedCert": {
    "v": 1,
