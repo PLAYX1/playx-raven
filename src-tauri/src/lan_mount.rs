@@ -8,6 +8,10 @@
 //! 🔴 켜기/다시 켜기마다 가게 번호·가게 키·데이터 열쇠·철회 목록 파일을 **다시 읽는다**. 지문이 같으면 그대로, 다르면 재료를 바꾸고,
 //!    가게 번호가 바뀌면 그 가게의 로그(`lan/log/<가게 번호>/`)로 저장소까지 바꾼다 — 옛 가게 로그와 새 가게 증서가 섞이지 않는다.
 //!    다시 읽다 실패하면(파일 망가짐 등) 붙어 있던 경로도 멈춘다(닫힌 실패).
+//! 🔴 v2 열쇠 기록(`lan/keys.json`, 규격 §4): 데이터 열쇠 판·기기별 세션 열쇠·회전 메타·회전 때 철회 목록을 한 파일에.
+//!    읽는 시점 = 켜기·다시 켜기·회전 저장 직후. 받는 조건(§4.2) — 목록 서명·가게, 메타 = 그 목록, 철회된 세션 없음(`LanKeyRecord::check`),
+//!    판 단조·목록 seq 단조(`check_against`). 조건을 못 넘은 **새** 기록은 받지 않고 지금 상태를 그대로 두며 화면에 이유를 보인다.
+//!    회전 관문(§4.3)은 요청마다 처리기가 본다(503 rotation-required) — 여기서는 상태에 「멈춤」을 정직하게 보인다.
 
 #![allow(dead_code)]
 
@@ -37,6 +41,8 @@ pub enum MountState {
     BadDataKey,
     /// 로그 저장소를 열지 못했다(다른 프로그램이 쓰는 중·디스크 오류).
     StoreFailed,
+    /// 열쇠 기록이 받는 조건(§4.2)을 못 넘었다 — 목록 서명·메타·철회된 세션.
+    KeysRejected,
     /// 켜져서 받는 중.
     On,
 }
@@ -49,6 +55,7 @@ impl MountState {
             Self::NoDataKey => "no-data-key",
             Self::BadDataKey => "bad-data-key",
             Self::StoreFailed => "store-failed",
+            Self::KeysRejected => "keys-rejected",
             Self::On => "on",
         }
     }
@@ -61,6 +68,7 @@ impl MountState {
             Self::NoDataKey => "기기끼리 나눌 데이터 열쇠가 아직 없어요.",
             Self::BadDataKey => "데이터 열쇠 기록이 망가져 있어요.",
             Self::StoreFailed => "복사 기록을 열지 못했어요. 앱을 다시 켜 주세요.",
+            Self::KeysRejected => "데이터 열쇠 기록이 철회 목록과 맞지 않아 쓰지 않았어요. 기기 연결 화면에서 열쇠를 다시 바꿔 주세요.",
             Self::On => "같은 와이파이의 내 기기와 자동으로 복사하고 있어요.",
         }
     }
@@ -74,6 +82,8 @@ pub struct LanSlot {
     rev: Mutex<RevMeta>,
     /// 철회 목록 갱신(읽기→판정→저장→교체)과 켜기(재료 다시 읽기)를 한 줄로 세운다(L5).
     serial: Mutex<()>,
+    /// 마지막으로 받지 않은 열쇠 기록의 이유(지금 상태는 그대로 둔다 — §4.2). 받으면 지운다.
+    keys_err: Mutex<Option<&'static str>>,
 }
 
 /// 켜기에 쓸 재료(디스크에서 막 읽은 것). 저장소는 아직 열지 않았다 — 같은 가게면 지금 것을 그대로 쓴다.
@@ -155,8 +165,17 @@ impl LanSlot {
                             return stop(MountState::StoreFailed);
                         }
                     }
-                    if st.auth().fingerprint() != mat.auth.fingerprint() && st.replace_auth(mat.auth).is_err() {
-                        return stop(MountState::StoreFailed);
+                    if st.auth().fingerprint() != mat.auth.fingerprint() {
+                        // §4.2 ①② — 열쇠 판·목록 seq 는 뒤로 가지 않는다. 못 넘으면 지금 상태(검증된 옛 기록)를 그대로 두고 이유만 남긴다.
+                        if let Err(code) = accept_newer(&st.auth(), &mat.auth) {
+                            self.set_keys_err(Some(code));
+                            st.live.store(true, Ordering::SeqCst);
+                            self.set_mount(MountState::On);
+                            return MountState::On;
+                        }
+                        if st.replace_auth(mat.auth).is_err() {
+                            return stop(MountState::StoreFailed);
+                        }
                     }
                 } else {
                     // 가게가 바뀌었다 — 새 가게의 로그를 연다(가게별 폴더라 옛 잠금과 부딪치지 않는다).
@@ -171,9 +190,18 @@ impl LanSlot {
             }
         }
         self.set_mount(MountState::On);
+        self.set_keys_err(None);
         drop(_serial);
         self.note_loaded_list();
         MountState::On
+    }
+    fn set_keys_err(&self, e: Option<&'static str>) {
+        if let Ok(mut g) = self.keys_err.lock() {
+            *g = e;
+        }
+    }
+    pub fn keys_error(&self) -> Option<&'static str> {
+        self.keys_err.lock().ok().and_then(|g| *g)
     }
     /// `build_phone_router` 가 붙일 조각. 켜져 있지 않으면 None — 경로 자체가 없다.
     pub fn router(&self) -> Option<axum::Router> {
@@ -321,8 +349,20 @@ pub fn store_identity_from_words(words: &mut String, pass: &mut String, store_id
 pub fn build_material(keys: &dyn LanKeySource, log_root: &Path, now_ms: i64) -> Result<LanMaterial, MountState> {
     let id = keys.store_identity()?;
     let record = keys.key_record()?;
+    // §4.2 ③④ + 함께 저장된 목록의 서명·가게. 못 넘으면 이 기록은 쓰지 않는다.
+    record.check(&id.store_key, &id.store_id).map_err(|_| MountState::KeysRejected)?;
     // 저장해 둔 목록도 가게 키 서명·가게 번호를 다시 본다. 못 넘으면 없는 것으로(= 모든 증서 거절, 닫힌 실패).
-    let list = keys.revocation_list().filter(|l| crate::lan_cert::verify_revocation_list(l, &id.store_key, &id.store_id).is_ok());
+    let disk = keys.revocation_list().filter(|l| crate::lan_cert::verify_revocation_list(l, &id.store_key, &id.store_id).is_ok());
+    // 회전 저장은 열쇠 기록(목록 동봉)을 먼저, revocation.json 을 나중에 쓴다. 그 사이에 멈췄으면 기록 쪽 목록이 더 새것 —
+    // 받기 규칙(후퇴·되살리기 금지)으로 더 새것을 고르고 디스크 목록도 맞춰 둔다(실패해도 메모리는 새 목록 — 다음 켜기 때 다시).
+    let list = match crate::lan_cert::accept_revocation_list(disk.as_ref(), &record.revocations, &id.store_key, &id.store_id) {
+        Ok(crate::lan_cert::ListAccept::Newer(l, _)) if disk.as_ref() != Some(&l) => {
+            let _ = keys.save_revocation_list(&l);
+            Some(l)
+        }
+        Ok(_) => disk.or_else(|| Some(record.revocations.clone())),
+        Err(_) => return Err(MountState::KeysRejected),
+    };
     let log_dir = log_root.join(&id.store_id);
     let auth = crate::lan_handler::LanAuth::new(id.store_key, id.store_id, record, list);
     Ok(LanMaterial { auth, log_dir, now_ms, clock: None })
@@ -345,6 +385,84 @@ pub fn arm_from_disk(slot: &LanSlot) -> MountState {
 // 그래서 가게 키 PC 가 하루 안에 같은 목록을 seq+1 로 다시 서명해 이 길로 넣어 줘야 한다.
 // 🔴 자동 재서명은 없다: 가게 키 서명은 매번 사장 확인창을 거친다(`storesign::store_sign_digest`). 화면은 `refreshBy` 전에 사장에게 묻는다.
 // 실패하면 지금 목록을 그대로 둔다(망가진/옛 목록으로 바꾸지 않는다). 지금 목록이 낡았으면 그대로 「모두 거절 중」이라고 보인다.
+
+/// §4.2 ①② — 같은 가게의 지금 재료(`cur`)에서 새 재료(`next`)로 바꿔도 되나: 열쇠 기록이 뒤로 가지 않고, 목록 seq 도 뒤로 가지 않는다.
+fn accept_newer(cur: &crate::lan_handler::LanAuth, next: &crate::lan_handler::LanAuth) -> Result<(), &'static str> {
+    next.keys.check_against(&cur.keys).map_err(|e| e.code())?;
+    match (cur.revocation_info(), next.revocation_info()) {
+        (Some(a), Some(b)) if b.seq < a.seq => Err("keys-list-rollback"),
+        (Some(_), None) if next.revocation().is_some() => Err("keys-list"),
+        _ => Ok(()),
+    }
+}
+
+/// 회전 결과를 저장하고 바로 쓴다(규격 §4.1 ②③). `record` = 열쇠 기록 v2(새 데이터 열쇠·남은 기기 세션·새 철회 목록 동봉).
+/// 순서: 모양 → §4.2 ③④(목록 서명·메타·철회된 세션 없음) → 지금 기록보다 새 판인지(①②) → **열쇠 기록 원자 저장**(임시 → fsync →
+/// 이름 바꾸기 → 폴더 fsync) → 철회 목록 저장 → 켜져 있으면 재료를 한 번에 교체(옛 열쇠·옛 세션은 떨어지며 지워진다).
+/// 🔴 회전 자체(새 데이터 열쇠 만들기·봉투 봉인·가게 키 서명)는 이 함수 밖이다 — 그 코드는 아직 없다(결정 표 L-6).
+pub fn save_rotation(slot: &LanSlot, keys: &dyn LanKeySource, record: &Value) -> Value {
+    let _serial = slot.serial.lock().unwrap_or_else(|p| p.into_inner());
+    let fail = |code: &'static str| json!({ "ok": false, "error": code });
+    let id = match keys.store_identity() {
+        Ok(id) => id,
+        Err(m) => return fail(m.code()),
+    };
+    let rec = match crate::lan_keys::LanKeyRecord::parse(record) {
+        Ok(r) => r,
+        Err(e) => return fail(e.code()),
+    };
+    if let Err(e) = rec.check(&id.store_key, &id.store_id) {
+        return fail(e.code());
+    }
+    let next = crate::lan_handler::LanAuth::new(id.store_key.clone(), id.store_id.clone(), rec.clone(), Some(rec.revocations.clone()));
+    let armed = slot.state().filter(|st| {
+        let a = st.auth();
+        a.store_key == id.store_key && a.store_id == id.store_id
+    });
+    // 지금 기준: 켜진 상태가 있으면 그것, 없으면 디스크의 기록(있으면).
+    let current = armed.as_ref().map(|st| st.auth()).or_else(|| {
+        keys.key_record().ok().map(|r| Arc::new(crate::lan_handler::LanAuth::new(id.store_key.clone(), id.store_id.clone(), r, keys.revocation_list())))
+    });
+    if let Some(cur) = &current {
+        if let Err(code) = accept_newer(cur, &next) {
+            return fail(code);
+        }
+    }
+    if keys.save_key_record(&rec.to_json()).is_err() {
+        return fail("save-failed");
+    }
+    // 목록은 열쇠 기록에도 들어 있으므로 여기서 실패해도 다음 켜기 때 기록 쪽 목록을 고른다(build_material).
+    let list_saved = keys.save_revocation_list(&rec.revocations).is_ok();
+    if let Some(st) = &armed {
+        if st.replace_auth(next).is_err() {
+            return fail("other-store");
+        }
+    }
+    slot.set_keys_err(None);
+    slot.note_loaded_list();
+    json!({ "ok": true, "keyVersion": rec.key_version(), "sessions": rec.sessions.len(), "listSaved": list_saved, "applied": armed.is_some() })
+}
+
+/// 열쇠 상태(비밀 값 없음): 판·세션 수·회전 관문·마지막 거절 이유.
+pub fn keys_status(slot: &LanSlot) -> Value {
+    let Some(st) = slot.state() else { return json!({ "present": false, "lastError": slot.keys_error() }) };
+    let a = st.auth();
+    let gate = if a.gate_ok() { "ok" } else { "rotation-required" };
+    let say = if a.gate_ok() {
+        "기기별 열쇠가 철회 목록과 맞아요."
+    } else {
+        "끊은 기기가 있는데 데이터 열쇠를 아직 바꾸지 않아 자동 복사를 멈췄어요. 기기 연결 화면에서 열쇠를 바꿔 주세요."
+    };
+    json!({
+        "present": true,
+        "keyVersion": a.key_version(),
+        "sessions": a.keys.sessions.len(),
+        "revocationSeq": a.keys.revocation_seq,
+        "gate": gate,
+        "lastError": slot.keys_error(),
+        "say": say,
+    })
+}
 
 /// 마지막 갱신 기록(메모리). 목록 본문은 담지 않는다.
 #[derive(Debug, Clone, Default)]
@@ -428,7 +546,8 @@ pub fn update_revocation(slot: &LanSlot, keys: &dyn LanKeySource, raw: &Value, n
                 m.last_result = Some("updated");
                 m.last_error = None;
             });
-            json!({ "ok": true, "changed": true, "revocation": revocation_status(slot, now) })
+            // 회전 없이 새로 철회된 증서가 있으면 관문이 닫힌다(처리기 503) — 화면이 바로 알 수 있게 열쇠 상태를 함께 싣는다.
+            json!({ "ok": true, "changed": true, "revocation": revocation_status(slot, now), "keys": keys_status(slot) })
         }
     }
 }
@@ -472,7 +591,7 @@ pub fn status_json(slot: &LanSlot) -> Value {
 }
 pub fn status_json_at(slot: &LanSlot, now: i64) -> Value {
     let m = slot.mount_state();
-    json!({ "state": m.code(), "on": m == MountState::On, "say": m.say(), "revocation": revocation_status(slot, now) })
+    json!({ "state": m.code(), "on": m == MountState::On, "say": m.say(), "revocation": revocation_status(slot, now), "keys": keys_status(slot) })
 }
 
 /// 가게 키 PC 화면이 새로 서명한 철회 목록을 넣는 길(`device-connect.ts resignList` 뒤에 부른다).
@@ -621,7 +740,7 @@ pub(crate) mod tests {
         assert_eq!(st.auth().key_version(), 4);
         assert_eq!(pull_v(&st, 9, 3), 410, "옛 판 요청은 열쇠 필요");
         assert_eq!(pull_v(&st, 10, 4), 200);
-        // 철회 목록이 디스크에서 망가졌으면(서명 깨짐) 다시 켤 때 없는 것으로 = 모두 거절.
+        // 철회 목록이 디스크에서 망가졌으면(서명 깨짐) 디스크 목록은 버리고, 열쇠 기록에 함께 서명돼 있는 목록을 쓴다.
         let v = vec();
         let mut bad = v["lists"]["empty"].clone();
         bad["seq"] = json!(41);
@@ -632,8 +751,14 @@ pub(crate) mod tests {
             m.log_dir = d.join("log"); // 같은 가게·같은 로그
             m
         })), MountState::On);
-        assert!(st.revocation_list().is_none());
-        assert_eq!(pull(&st, 2), 403);
+        assert_eq!(st.revocation_list(), Some(kit::list(1, &[])), "망가진 디스크 목록 대신 기록 쪽 서명된 목록");
+        assert_eq!(pull(&st, 2), 200);
+        // 기록 쪽 목록까지 깨졌으면 그 기록은 받지 않는다 — 처음 켜기라면 경로를 만들지 않는다.
+        let mut broken = kit::record(4, &kit::all(), &kit::list(1, &[])).to_json();
+        broken["revocations"]["seq"] = json!(77);
+        let bad_keys = synth();
+        *bad_keys.key.lock().unwrap() = Ok(LanKeyRecord::parse(&broken).unwrap());
+        assert_eq!(build_material(&bad_keys, &d.join("log-x"), kit::NOW).err(), Some(MountState::KeysRejected));
         // 다시 켤 때 열쇠 파일이 망가졌으면 붙어 있던 경로도 멈춘다(닫힌 실패).
         assert_eq!(slot.arm(&LanConfig { enabled: true }, || Err(MountState::BadDataKey)), MountState::BadDataKey);
         assert!(!st.live.load(Ordering::SeqCst));
@@ -961,7 +1086,12 @@ pub(crate) mod tests {
         bad["seq"] = json!(7);
         *keys.list.lock().unwrap() = Some(bad);
         let m = build_material(&keys, &d.join("log"), v["now"].as_i64().unwrap()).unwrap();
-        assert!(m.auth.revocation().is_none(), "망가진 목록은 없는 것으로 = 모두 거절");
+        assert_eq!(m.auth.revocation(), Some(&kit::list(1, &[])), "망가진 디스크 목록은 버리고 열쇠 기록의 서명된 목록");
+        // 디스크에도 기록에도 쓸 목록이 없으면(기록 목록의 서명이 깨짐) 켜지 않는다.
+        let mut j = kit::record(3, &kit::all(), &kit::list(1, &[])).to_json();
+        j["revocations"]["revoked"] = json!(["aa".repeat(32)]);
+        *keys.key.lock().unwrap() = Ok(LanKeyRecord::parse(&j).unwrap());
+        assert_eq!(build_material(&keys, &d.join("log"), v["now"].as_i64().unwrap()).err(), Some(MountState::KeysRejected));
     }
 
     #[test]
@@ -975,5 +1105,201 @@ pub(crate) mod tests {
         assert_eq!(r["ok"], true, "{r}");
         assert!(keys.list.lock().unwrap().is_some());
         assert!(slot.router().is_none(), "목록을 넣어도 스위치는 그대로 꺼짐");
+    }
+
+    // ── v2 회전 저장·다시 읽기 ───────────────────────────────────────
+
+    fn armed(name: &str) -> (LanSlot, Arc<LanServerState>, SynthKeys, PathBuf) {
+        let d = fixture(name);
+        let keys = synth();
+        let slot = LanSlot::default();
+        assert_eq!(slot.arm(&LanConfig { enabled: true }, || build_material(&keys, &d.join("log"), kit::NOW).map(|mut m| {
+            m.clock = Some(Box::new(|| kit::NOW));
+            m
+        })), MountState::On);
+        let st = slot.state().unwrap();
+        (slot, st, keys, d)
+    }
+    fn pull_as(st: &LanServerState, dev: &kit::Dev, n: u32, version: u64) -> (u16, Option<String>) {
+        let r = kit::post(st, false, &kit::pull_req_v(dev, 0, &kit::nonce(n), version));
+        (r.status, r.body["reason"].as_str().map(str::to_string))
+    }
+
+    /// 철회 + 회전을 한 번에 저장하면 즉시 새 판으로: 남은 기기는 새 판만, 끊긴 기기는 revoked, 옛 판은 410.
+    #[test]
+    fn v2_a_saved_rotation_swaps_keys_list_and_sessions_at_once() {
+        let (slot, st, keys, _d) = armed("rotate");
+        let (lost, me) = (kit::remote(), kit::replica());
+        assert_eq!(pull_as(&st, &me, 1, 3).0, 200);
+        let old = st.auth();
+        let rotated = kit::record(4, &kit::all(), &kit::list(2, &[&lost.cert_id]));
+        let r = save_rotation(&slot, &keys, &rotated.to_json());
+        assert_eq!(r["ok"], true, "{r}");
+        assert_eq!((r["keyVersion"].as_u64(), r["applied"].as_bool(), r["listSaved"].as_bool()), (Some(4), Some(true), Some(true)));
+        let a = st.auth();
+        assert!(!Arc::ptr_eq(&old, &a), "재료 한 벌이 통째로 바뀐다");
+        assert_eq!((a.key_version(), a.revocation_info().unwrap().seq, a.gate_ok()), (4, 2, true));
+        assert!(!a.keys.sessions.contains_key(&lost.cert_id), "끊긴 기기의 세션은 없다");
+        assert_eq!(keys.key.lock().unwrap().as_ref().unwrap().to_json(), rotated.to_json(), "디스크(공급자)에 열쇠 기록");
+        assert_eq!(keys.list.lock().unwrap().as_ref().unwrap()["seq"], 2, "디스크에 새 목록");
+        assert_eq!(pull_as(&st, &me, 2, 3), (410, Some("key-version".into())), "옛 판 = 열쇠 필요");
+        assert_eq!(pull_as(&st, &me, 3, 4).0, 200);
+        assert_eq!(pull_as(&st, &lost, 4, 4), (403, Some("revoked".into())));
+        assert_eq!(pull_as(&st, &lost, 5, 3), (403, Some("revoked".into())), "옛 열쇠를 쥐고 있어도");
+        let s = status_json_at(&slot, kit::NOW);
+        assert_eq!((s["keys"]["keyVersion"].as_u64(), s["keys"]["gate"].as_str()), (Some(4), Some("ok")));
+        assert!(!s.to_string().contains(&hex::encode(rotated.data_key.key)), "상태에 열쇠 바이트 없음");
+    }
+
+    /// 받는 조건(§4.2)을 못 넘은 회전은 저장도 교체도 하지 않는다.
+    #[test]
+    fn v2_a_bad_rotation_is_refused_and_changes_nothing() {
+        let (slot, st, keys, _d) = armed("rotbad");
+        let lost = kit::remote();
+        let good = kit::record(4, &kit::all(), &kit::list(2, &[&lost.cert_id]));
+        assert_eq!(save_rotation(&slot, &keys, &good.to_json())["ok"], true);
+        let before = st.auth().fingerprint();
+        let saved = keys.key.lock().unwrap().as_ref().unwrap().to_json();
+        let l2 = kit::list(2, &[&lost.cert_id]);
+        // ① 같은 판에 다른 열쇠(되감기·덮어쓰기)
+        let mut same = kit::record(4, &kit::all(), &l2);
+        same.data_key.key[0] ^= 1;
+        // ② 옛 판
+        let older = kit::record(3, &kit::all(), &l2);
+        // ③ 메타가 목록과 다름
+        let mut meta = kit::record(5, &kit::all(), &l2);
+        meta.revoked_at_rotation.clear();
+        // ④ 철회된 기기의 세션이 남음
+        let mut revoked_sess = kit::record(5, &kit::all(), &l2);
+        revoked_sess.sessions.insert(lost.cert_id.clone(), crate::lan_keys::SessionEntry { key: crate::lan_keys::Secret32(lost.session), device_id: lost.device_id.clone(), cert_sig: lost.cert["sig"].as_str().unwrap().into() });
+        // ⑤ 목록 서명 깨짐
+        let mut forged = kit::record(5, &kit::all(), &l2).to_json();
+        forged["revocations"]["revoked"] = json!([]);
+        forged["revokedAtRotation"] = json!([]);
+        // ⑥ 지금보다 옛 목록(seq 1)으로 회전
+        let old_list = kit::record(5, &kit::all(), &kit::list(1, &[]));
+        // ⑦ 모양
+        let shape = json!({ "v": 1, "version": 5, "key": "07".repeat(32) });
+        for (want, rec) in [
+            ("keys-rollback", same.to_json()),
+            ("keys-rollback", older.to_json()),
+            ("keys-meta", meta.to_json()),
+            ("keys-revoked-session", revoked_sess.to_json()),
+            ("keys-list", forged),
+            ("keys-list-rollback", old_list.to_json()),
+            ("keys-shape", shape),
+        ] {
+            let r = save_rotation(&slot, &keys, &rec);
+            assert_eq!((r["ok"].clone(), r["error"].as_str()), (json!(false), Some(want)), "{r}");
+            assert_eq!(st.auth().fingerprint(), before, "{want}: 상태 그대로");
+            assert_eq!(keys.key.lock().unwrap().as_ref().unwrap().to_json(), saved, "{want}: 디스크 그대로");
+        }
+        assert_eq!(pull_as(&st, &kit::replica(), 1, 4).0, 200);
+    }
+
+    /// 철회만 하고 회전을 안 하면(다른 화면·수동 편집) 동기화 전체가 503, 상태에도 「멈춤」. 회전을 저장하면 다시 열린다.
+    #[test]
+    fn v2_revoking_without_rotating_closes_the_gate_until_rotation() {
+        let (slot, st, keys, _d) = armed("gate");
+        let (lost, me) = (kit::remote(), kit::replica());
+        let l2 = kit::list(2, &[&lost.cert_id]);
+        let r = update_revocation(&slot, &keys, &l2, kit::NOW);
+        assert_eq!(r["changed"], true, "{r}");
+        assert_eq!(r["keys"]["gate"], "rotation-required", "갱신 응답에서 바로 보인다");
+        assert_eq!(pull_as(&st, &me, 1, 3), (503, Some("rotation-required".into())));
+        assert_eq!(status_json_at(&slot, kit::NOW)["keys"]["gate"], "rotation-required");
+        // 다시 켜도(같은 디스크) 닫힌 그대로 — 조용히 넘어가지 않는다.
+        assert_eq!(slot.arm(&LanConfig { enabled: true }, || build_material(&keys, &fixture("gate-x").join("log"), kit::NOW).map(|mut m| {
+            m.log_dir = st.store.lock().unwrap().log_dir();
+            m
+        })), MountState::On);
+        assert_eq!(pull_as(&st, &me, 2, 3).0, 503);
+        let r = save_rotation(&slot, &keys, &kit::record(4, &kit::all(), &l2).to_json());
+        assert_eq!(r["ok"], true, "{r}");
+        assert_eq!(pull_as(&st, &me, 3, 4).0, 200);
+        assert_eq!(status_json_at(&slot, kit::NOW)["keys"]["gate"], "ok");
+    }
+
+    /// 열쇠 기록은 저장됐는데 revocation.json 저장 전에 멈춘 경우: 다시 켜면 기록 쪽(더 새) 목록을 고른다 — 반쪽 회전이 남지 않는다.
+    #[test]
+    fn v2_a_crash_between_the_two_files_recovers_from_the_key_record() {
+        let (slot, _st, keys, d) = armed("halfway");
+        let lost = kit::remote();
+        struct NoListSave<'a>(&'a SynthKeys);
+        impl LanKeySource for NoListSave<'_> {
+            fn store_identity(&self) -> Result<StoreIdentity, MountState> { self.0.store_identity() }
+            fn key_record(&self) -> Result<LanKeyRecord, MountState> { self.0.key_record() }
+            fn save_key_record(&self, r: &Value) -> Result<(), String> { self.0.save_key_record(r) }
+            fn revocation_list(&self) -> Option<Value> { self.0.revocation_list() }
+            fn save_revocation_list(&self, _: &Value) -> Result<(), String> { Err("disk".into()) }
+        }
+        let r = save_rotation(&slot, &NoListSave(&keys), &kit::record(4, &kit::all(), &kit::list(2, &[&lost.cert_id])).to_json());
+        assert_eq!((r["ok"].as_bool(), r["listSaved"].as_bool()), (Some(true), Some(false)), "{r}");
+        assert_eq!(keys.list.lock().unwrap().as_ref().unwrap()["seq"], 1, "디스크 목록은 옛것(멈춘 상황)");
+        // 새 프로세스처럼 처음부터 켠다.
+        let fresh = LanSlot::default();
+        assert_eq!(fresh.arm(&LanConfig { enabled: true }, || build_material(&keys, &d.join("log2"), kit::NOW).map(|mut m| {
+            m.clock = Some(Box::new(|| kit::NOW));
+            m
+        })), MountState::On);
+        let st = fresh.state().unwrap();
+        assert_eq!((st.auth().key_version(), st.auth().revocation_info().unwrap().seq, st.auth().gate_ok()), (4, 2, true));
+        assert_eq!(keys.list.lock().unwrap().as_ref().unwrap()["seq"], 2, "디스크 목록도 기록 쪽으로 맞춘다");
+        assert_eq!(pull_as(&st, &lost, 1, 4).1.as_deref(), Some("revoked"));
+    }
+
+    /// 다시 켤 때 디스크에 옛 판 기록이 놓여 있으면(되감기) 받지 않고, 지금 상태로 계속 받으며 이유를 보인다(§4.2).
+    #[test]
+    fn v2_rearm_never_goes_back_to_an_older_key_record() {
+        let (slot, st, keys, d) = armed("rearm-old");
+        let lost = kit::remote();
+        let l2 = kit::list(2, &[&lost.cert_id]);
+        assert_eq!(save_rotation(&slot, &keys, &kit::record(4, &kit::all(), &l2).to_json())["ok"], true);
+        // 누군가 옛 기록(판 3, 목록 seq 1)을 디스크에 되돌려 놓았다.
+        *keys.key.lock().unwrap() = Ok(kit::record(3, &kit::all(), &kit::list(1, &[])));
+        let rearm = || slot.arm(&LanConfig { enabled: true }, || build_material(&keys, &d.join("log"), kit::NOW));
+        assert_eq!(rearm(), MountState::On);
+        assert_eq!(st.auth().key_version(), 4, "옛 기록으로 바꾸지 않는다");
+        assert_eq!(status_json_at(&slot, kit::NOW)["keys"]["lastError"], "keys-rollback");
+        assert_eq!(pull_as(&st, &kit::replica(), 1, 4).0, 200);
+        assert_eq!(pull_as(&st, &lost, 2, 3).1.as_deref(), Some("revoked"));
+        // 디스크가 다시 맞으면 이유가 지워진다.
+        *keys.key.lock().unwrap() = Ok(kit::record(4, &kit::all(), &l2));
+        assert_eq!(rearm(), MountState::On);
+        assert!(status_json_at(&slot, kit::NOW)["keys"]["lastError"].is_null());
+    }
+
+    /// 실제 파일 공급자: 회전 저장은 keys.json(0600)·revocation.json 을 원자적으로 쓰고, 임시 파일을 남기지 않으며, 다시 읽으면 같은 재료.
+    #[test]
+    fn v2_file_keys_save_a_rotation_atomically() {
+        let d = fixture("rotfiles");
+        let k = FileLanKeys::new(d.clone());
+        k.save_store_identity(&StoreIdentity::checked(&kit::store_id(), kit::STORE_KEY).unwrap()).unwrap();
+        k.save_key_record(&kit::record(3, &kit::all(), &kit::list(1, &[])).to_json()).unwrap();
+        k.save_revocation_list(&kit::list(1, &[])).unwrap();
+        let slot = LanSlot::default();
+        assert_eq!(slot.arm(&LanConfig { enabled: true }, || build_material(&k, &d.join(LOG_DIR), kit::NOW).map(|mut m| {
+            m.clock = Some(Box::new(|| kit::NOW));
+            m
+        })), MountState::On);
+        let lost = kit::remote();
+        let rotated = kit::record(4, &kit::all(), &kit::list(2, &[&lost.cert_id]));
+        assert_eq!(save_rotation(&slot, &k, &rotated.to_json())["ok"], true);
+        let names: Vec<String> = std::fs::read_dir(&d).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().to_string()).collect();
+        assert!(names.iter().all(|n| !n.ends_with(".tmp")), "{names:?}");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            for f in [DATA_KEY_FILE, REVOCATION_FILE] {
+                assert_eq!(std::fs::metadata(d.join(f)).unwrap().permissions().mode() & 0o777, 0o600, "{f}");
+            }
+        }
+        assert_eq!(k.key_record().unwrap().to_json(), rotated.to_json());
+        assert_eq!(k.revocation_list().unwrap()["seq"], 2);
+        // 다시 읽은 재료 = 지금 재료(지문 같음 → 그대로).
+        let st = slot.state().unwrap();
+        let a = st.auth();
+        assert_eq!(slot.arm(&LanConfig { enabled: true }, || build_material(&k, &d.join(LOG_DIR), kit::NOW)), MountState::On);
+        assert!(Arc::ptr_eq(&a, &st.auth()));
     }
 }
