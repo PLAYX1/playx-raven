@@ -20,6 +20,8 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 pub const LAN_PROOF_DOMAIN: &str = "RAVENVAULT-LAN-PROOF-V1";
+/// LAN v2(docs/LAN-REQUEST-SIGNING.md §3.2): 같은 칸, 도메인만 V2, 열쇠는 기기별 확인값 열쇠(`lan_keys::derive_lan_key(.., Proof, ..)`).
+pub const LAN_PROOF_V2_DOMAIN: &str = "RAVENVAULT-LAN-PROOF-V2";
 
 /// 어느 가게·증서·기기에 대한 응답인지.
 pub struct ProofBinding<'a> {
@@ -92,12 +94,12 @@ pub(crate) fn canonical_string(v: &Value) -> Result<String, &'static str> {
     Ok(s)
 }
 
-fn mac(key: &[u8; 32], kind: &str, version: u64, b: &ProofBinding, nonce: &str, fields: Vec<Value>) -> Result<String, &'static str> {
+fn mac(domain: &str, key: &[u8; 32], kind: &str, version: u64, b: &ProofBinding, nonce: &str, fields: Vec<Value>) -> Result<String, &'static str> {
     if !is_lan_nonce(nonce) {
         return Err("bad-nonce");
     }
     let mut all = vec![
-        Value::from(LAN_PROOF_DOMAIN),
+        Value::from(domain),
         Value::from(kind),
         Value::from(version),
         Value::from(b.store_id),
@@ -112,9 +114,38 @@ fn mac(key: &[u8; 32], kind: &str, version: u64, b: &ProofBinding, nonce: &str, 
     Ok(hex::encode(m.finalize().into_bytes()))
 }
 
-/// push 응답의 확인값 — 조각 번호·개수.
+/// push 응답의 확인값 — 조각 번호·개수. (v1 — 기존 벡터 호환 확인용으로만 남긴다. 처리기는 `push_proof_v2`.)
 pub fn push_proof(key: &[u8; 32], version: u64, b: &ProofBinding, nonce: &str, chunk_id: &str, count: u64) -> Result<String, &'static str> {
-    mac(key, "push", version, b, nonce, vec![Value::from(chunk_id), Value::from(count)])
+    mac(LAN_PROOF_DOMAIN, key, "push", version, b, nonce, vec![Value::from(chunk_id), Value::from(count)])
+}
+
+/// v2 push 확인값 — `proof_key` = 그 기기의 확인값 열쇠(데이터 열쇠가 아니다).
+pub fn push_proof_v2(proof_key: &[u8; 32], version: u64, b: &ProofBinding, nonce: &str, chunk_id: &str, count: u64) -> Result<String, &'static str> {
+    mac(LAN_PROOF_V2_DOMAIN, proof_key, "push", version, b, nonce, vec![Value::from(chunk_id), Value::from(count)])
+}
+
+/// v2 pull 확인값 — 칸은 v1 과 같다.
+#[allow(clippy::too_many_arguments)]
+pub fn pull_proof_v2(
+    proof_key: &[u8; 32],
+    version: u64,
+    b: &ProofBinding,
+    nonce: &str,
+    from: u64,
+    next: u64,
+    more: bool,
+    chunk_id: Option<&str>,
+    sealed: Option<&Value>,
+) -> Result<String, &'static str> {
+    mac(LAN_PROOF_V2_DOMAIN, proof_key, "pull", version, b, nonce, pull_fields(from, next, more, chunk_id, sealed)?)
+}
+
+fn pull_fields(from: u64, next: u64, more: bool, chunk_id: Option<&str>, sealed: Option<&Value>) -> Result<Vec<Value>, &'static str> {
+    let sealed_hash = match sealed {
+        None | Some(Value::Null) => Value::Null,
+        Some(s) => Value::from(hex::encode(Sha256::digest(canonical_string(s)?.as_bytes()))),
+    };
+    Ok(vec![Value::from(from), Value::from(next), Value::from(more), chunk_id.map_or(Value::Null, Value::from), sealed_hash])
 }
 
 /// pull 응답의 확인값 — 요청 커서·next·more·조각 번호·봉인 조각 해시. 빈 응답(조각 없음)도 인증된다.
@@ -129,18 +160,7 @@ pub fn pull_proof(
     chunk_id: Option<&str>,
     sealed: Option<&Value>,
 ) -> Result<String, &'static str> {
-    let sealed_hash = match sealed {
-        None | Some(Value::Null) => Value::Null,
-        Some(s) => Value::from(hex::encode(Sha256::digest(canonical_string(s)?.as_bytes()))),
-    };
-    mac(
-        key,
-        "pull",
-        version,
-        b,
-        nonce,
-        vec![Value::from(from), Value::from(next), Value::from(more), chunk_id.map_or(Value::Null, Value::from), sealed_hash],
-    )
+    mac(LAN_PROOF_DOMAIN, key, "pull", version, b, nonce, pull_fields(from, next, more, chunk_id, sealed)?)
 }
 
 /// 길이가 같은 두 확인값을 시간 차 없이 비교한다.
@@ -216,6 +236,26 @@ mod tests {
         assert!(require_nonce(&json!({"nonce": "0123456789abcdef0123456789abcdef"})).is_ok());
         let v = v();
         assert_eq!(push_proof(&key(&v), 3, &bind(&v), "short", "x", 1), Err("bad-nonce"));
+    }
+
+    /// v2 확인값 3건(push · pull 조각 있음 · pull 빈 응답)이 폰과 같은 값. 열쇠 = 벡터의 proofKeyHex.
+    #[test]
+    fn v2_proofs_match_the_phone() {
+        let v: Value = serde_json::from_str(include_str!("../testdata/rv-lan-v2-vectors.json")).unwrap();
+        let mut k = [0u8; 32];
+        k.copy_from_slice(&hex::decode(v["lanKeys"]["proofKeyHex"].as_str().unwrap()).unwrap());
+        let c = &v["device"]["cert"];
+        let b = ProofBinding { store_id: c["storeId"].as_str().unwrap(), cert_id: v["device"]["certId"].as_str().unwrap(), device_id: c["deviceId"].as_str().unwrap() };
+        let p = &v["proofs"];
+        let push = &p["push"];
+        assert_eq!(push_proof_v2(&k, 3, &b, push["nonce"].as_str().unwrap(), push["chunkId"].as_str().unwrap(), push["count"].as_u64().unwrap()).unwrap(), push["proof"].as_str().unwrap());
+        for name in ["pullWithChunk", "pullEmpty"] {
+            let q = &p[name];
+            let got = pull_proof_v2(&k, 3, &b, q["nonce"].as_str().unwrap(), q["from"].as_u64().unwrap(), q["next"].as_u64().unwrap(), q["more"].as_bool().unwrap(), q["chunkId"].as_str(), Some(&q["sealed"])).unwrap();
+            assert_eq!(got, q["proof"].as_str().unwrap(), "{name}");
+        }
+        // 같은 열쇠·같은 칸이라도 v1 도메인이면 다른 값(도메인 분리).
+        assert_ne!(push_proof(&k, 3, &b, push["nonce"].as_str().unwrap(), push["chunkId"].as_str().unwrap(), 1).unwrap(), push["proof"].as_str().unwrap());
     }
 
     #[test]
