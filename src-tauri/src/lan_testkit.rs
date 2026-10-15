@@ -3,7 +3,7 @@
 //! 요청은 폰 `signLanRequest` 와 같은 서명 본문(`lan_handler::request_sig_body`)에 기기 키로 서명한다.
 
 use crate::lan_cert::{sign_doc, validate_cert_with, DEVICE_CERT_DOMAIN, DEVICE_REVOKE_DOMAIN};
-use crate::lan_handler::{request_sig_body, LanAuth, LanFields, LanServerState, LAN_REQUEST_DOMAIN};
+use crate::lan_handler::{request_sig_body_dir, LanAuth, LanDir, LanFields, LanServerState, LAN_REQUEST_DOMAIN};
 use crate::lan_keys::{derive_lan_keys, LanDerivedKeys, LanKeyRecord, Secret32, SessionEntry};
 use crate::lan_seal::{chunk_id_of, seal_chunk, ChunkBinding, DataKey};
 use crate::lan_store::LanStore;
@@ -144,8 +144,12 @@ pub fn entry_kind(origin: &str, i: u8, kind: &str) -> Value {
 /// 기기 키로 서명한 와이어 본문(폰 `signLanRequest`). `cert`·`signer` 를 따로 줄 수 있다(남의 증서·남의 키 시험).
 pub fn sign_wire(cert: &Value, signer: &[u8; 32], key_version: u64, nonce: &str, ts: i64, fields: LanFields) -> Value {
     let (_, c) = validate_cert_with(cert, true).unwrap();
-    let push = matches!(fields, LanFields::Push { .. });
-    let body = Value::Object(request_sig_body(push, &c, key_version, nonce, ts, &fields).unwrap());
+    let dir = match fields {
+        LanFields::Push { .. } => LanDir::Push,
+        LanFields::Pull { .. } => LanDir::Pull,
+        LanFields::Latest => LanDir::Latest,
+    };
+    let body = Value::Object(request_sig_body_dir(dir, &c, key_version, nonce, ts, &fields).unwrap());
     let secp = Secp256k1::new();
     let sk = SecretKey::from_byte_array(signer).unwrap();
     let signer_pub = hex::encode(sk.public_key(&secp).serialize());
@@ -158,8 +162,16 @@ pub fn sign_wire(cert: &Value, signer: &[u8; 32], key_version: u64, nonce: &str,
             w["sealed"] = sealed;
         }
         LanFields::Pull { cursor } => w["cursor"] = json!(cursor),
+        LanFields::Latest => {}
     }
     w
+}
+/// latest 요청(§7.3) — 폰이 가진 판 `held`(0 = 아직 없음).
+pub fn latest_req(d: &Dev, n: &str, held: u64) -> Value {
+    sign_wire(&d.cert, &d.sk, held, n, NOW, LanFields::Latest)
+}
+pub fn post_route(st: &LanServerState, route: crate::lan_handler::Route, req: &Value) -> crate::lan_handler::LanResponse {
+    crate::lan_handler::handle_route(st, route, &serde_json::to_vec(req).unwrap())
 }
 
 /// push 요청(그 기기의 봉인 열쇠로 봉인, 판 `version`). → (요청, 조각 번호)

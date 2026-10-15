@@ -208,6 +208,49 @@
    "message": "RAVENVAULT-LAN-REQ-V2\nsha256:f59b08081a4f17bc90d6d017ed262c335f5d70afbd6f0b945830c629769e43d4",
    "digestHex": "84edd95656c62886208290f8f9c128713b120752a833b940ed66be678a4987d2",
    "sig": "H5G+5eGUcV8snXcA2uurlgoj0G30kIjcqA8/vSpnMbFUSk/bXXUrojUV5JEC7UWGVjEhe+38NoYL4dNrgSEtR+A="
+  },
+  "latest": {
+   "wire": {
+    "v": 2,
+    "cert": {
+     "v": 1,
+     "storeId": "abababababababababababababababababababababababababababababababab",
+     "deviceId": "4fbd1a1ef83d7d2610fd02a7812dafa7542c73c339f1db66a0d2950a859a8759",
+     "devicePubKey": "02eec7245d6b7d2ccb30380bfbe2a3648cd7a942653f5aa340edcea1f283686619",
+     "role": "remote",
+     "scopes": [
+      "read",
+      "draft"
+     ],
+     "issuedAt": 1799996400000,
+     "notAfter": 1800086400000,
+     "serial": 1,
+     "sig": "HzvAgBGvqr5QkcIcoFKOkJGCPoFxMtK2dvaUDFIHyMVjAtGIKeQlvIQr2Afb/HQ7Sa2BiKdNuzx4/YS6MiN2Vaw="
+    },
+    "keyVersion": 2,
+    "ts": 1800000000000,
+    "nonce": "00112233445566778899aabbccddeeff",
+    "sig": "IMZ6c6CPmjo1BcfOCdYqsu046yDnREfToyV6drKXNv3OeZ25hZBfdhpGAOaZwLVCHc/RZhdMy2pJK9XTgpG3Pj4="
+   },
+   "sigBody": {
+    "v": 2,
+    "dir": "latest",
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "certId": "e40d8b0504d46107e9858881e40028844ab8b57620cbd780b6b643b36dc5af57",
+    "deviceId": "4fbd1a1ef83d7d2610fd02a7812dafa7542c73c339f1db66a0d2950a859a8759",
+    "keyVersion": 2,
+    "nonce": "00112233445566778899aabbccddeeff",
+    "ts": 1800000000000,
+    "chunkId": null,
+    "count": null,
+    "cursor": null,
+    "sealedHash": null
+   },
+   "sigBodyCanonical": "{\"certId\":\"e40d8b0504d46107e9858881e40028844ab8b57620cbd780b6b643b36dc5af57\",\"chunkId\":null,\"count\":null,\"cursor\":null,\"deviceId\":\"4fbd1a1ef83d7d2610fd02a7812dafa7542c73c339f1db66a0d2950a859a8759\",\"dir\":\"latest\",\"keyVersion\":2,\"nonce\":\"00112233445566778899aabbccddeeff\",\"sealedHash\":null,\"storeId\":\"abababababababababababababababababababababababababababababababab\",\"ts\":1800000000000,\"v\":2}",
+   "bodySha256": "2fd9cdc3f15521dd9a7489f68a5e92c5073d16ee42a072d528829df83886f1b4",
+   "message": "RAVENVAULT-LAN-REQ-V2\nsha256:2fd9cdc3f15521dd9a7489f68a5e92c5073d16ee42a072d528829df83886f1b4",
+   "digestHex": "a4882cb58a7825cec56a5dfe712d2d31d58b3a257a91e9f97a5839f971d027e2",
+   "sig": "IMZ6c6CPmjo1BcfOCdYqsu046yDnREfToyV6drKXNv3OeZ25hZBfdhpGAOaZwLVCHc/RZhdMy2pJK9XTgpG3Pj4="
   }
  },
  "verify": [
@@ -217,6 +260,15 @@
    "now": 1800000000000,
    "serverKeyVersion": 3,
    "seenNonces": [],
+   "revocationList": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 4,
+    "revoked": [],
+    "issuedAt": 1799996400000,
+    "prunedBefore": 0,
+    "sig": "Hwl8efLT0bTewyKSlEjoFyCLbLC4xE3JRXDp2d1VVE0cCZsNBG+sM2g9qLKW7Omne3NcjPLbZfcFGeSjAm0/YhA="
+   },
    "request": {
     "v": 2,
     "cert": {
@@ -255,6 +307,15 @@
    "now": 1800000000000,
    "serverKeyVersion": 3,
    "seenNonces": [],
+   "revocationList": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 4,
+    "revoked": [],
+    "issuedAt": 1799996400000,
+    "prunedBefore": 0,
+    "sig": "Hwl8efLT0bTewyKSlEjoFyCLbLC4xE3JRXDp2d1VVE0cCZsNBG+sM2g9qLKW7Omne3NcjPLbZfcFGeSjAm0/YhA="
+   },
    "request": {
     "v": 2,
     "cert": {
@@ -286,6 +347,15 @@
    "now": 1800000300000,
    "serverKeyVersion": 3,
    "seenNonces": [],
+   "revocationList": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 4,
+    "revoked": [],
+    "issuedAt": 1799996400000,
+    "prunedBefore": 0,
+    "sig": "Hwl8efLT0bTewyKSlEjoFyCLbLC4xE3JRXDp2d1VVE0cCZsNBG+sM2g9qLKW7Omne3NcjPLbZfcFGeSjAm0/YhA="
+   },
    "request": {
     "v": 2,
     "cert": {
@@ -317,6 +387,15 @@
    "now": 1800000000000,
    "serverKeyVersion": 3,
    "seenNonces": [],
+   "revocationList": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 4,
+    "revoked": [],
+    "issuedAt": 1799996400000,
+    "prunedBefore": 0,
+    "sig": "Hwl8efLT0bTewyKSlEjoFyCLbLC4xE3JRXDp2d1VVE0cCZsNBG+sM2g9qLKW7Omne3NcjPLbZfcFGeSjAm0/YhA="
+   },
    "request": {
     "v": 2,
     "cert": {
@@ -355,6 +434,15 @@
    "now": 1800000000000,
    "serverKeyVersion": 3,
    "seenNonces": [],
+   "revocationList": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 4,
+    "revoked": [],
+    "issuedAt": 1799996400000,
+    "prunedBefore": 0,
+    "sig": "Hwl8efLT0bTewyKSlEjoFyCLbLC4xE3JRXDp2d1VVE0cCZsNBG+sM2g9qLKW7Omne3NcjPLbZfcFGeSjAm0/YhA="
+   },
    "request": {
     "v": 2,
     "cert": {
@@ -393,6 +481,15 @@
    "now": 1800000000000,
    "serverKeyVersion": 3,
    "seenNonces": [],
+   "revocationList": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 4,
+    "revoked": [],
+    "issuedAt": 1799996400000,
+    "prunedBefore": 0,
+    "sig": "Hwl8efLT0bTewyKSlEjoFyCLbLC4xE3JRXDp2d1VVE0cCZsNBG+sM2g9qLKW7Omne3NcjPLbZfcFGeSjAm0/YhA="
+   },
    "request": {
     "v": 2,
     "cert": {
@@ -424,6 +521,15 @@
    "now": 1800000000000,
    "serverKeyVersion": 3,
    "seenNonces": [],
+   "revocationList": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 4,
+    "revoked": [],
+    "issuedAt": 1799996400000,
+    "prunedBefore": 0,
+    "sig": "Hwl8efLT0bTewyKSlEjoFyCLbLC4xE3JRXDp2d1VVE0cCZsNBG+sM2g9qLKW7Omne3NcjPLbZfcFGeSjAm0/YhA="
+   },
    "request": {
     "v": 2,
     "cert": {
@@ -455,6 +561,15 @@
    "now": 1800000000000,
    "serverKeyVersion": 3,
    "seenNonces": [],
+   "revocationList": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 4,
+    "revoked": [],
+    "issuedAt": 1799996400000,
+    "prunedBefore": 0,
+    "sig": "Hwl8efLT0bTewyKSlEjoFyCLbLC4xE3JRXDp2d1VVE0cCZsNBG+sM2g9qLKW7Omne3NcjPLbZfcFGeSjAm0/YhA="
+   },
    "request": {
     "v": 2,
     "cert": {
@@ -486,6 +601,15 @@
    "now": 1800000300001,
    "serverKeyVersion": 3,
    "seenNonces": [],
+   "revocationList": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 4,
+    "revoked": [],
+    "issuedAt": 1799996400000,
+    "prunedBefore": 0,
+    "sig": "Hwl8efLT0bTewyKSlEjoFyCLbLC4xE3JRXDp2d1VVE0cCZsNBG+sM2g9qLKW7Omne3NcjPLbZfcFGeSjAm0/YhA="
+   },
    "request": {
     "v": 2,
     "cert": {
@@ -517,6 +641,15 @@
    "now": 1799999699999,
    "serverKeyVersion": 3,
    "seenNonces": [],
+   "revocationList": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 4,
+    "revoked": [],
+    "issuedAt": 1799996400000,
+    "prunedBefore": 0,
+    "sig": "Hwl8efLT0bTewyKSlEjoFyCLbLC4xE3JRXDp2d1VVE0cCZsNBG+sM2g9qLKW7Omne3NcjPLbZfcFGeSjAm0/YhA="
+   },
    "request": {
     "v": 2,
     "cert": {
@@ -550,6 +683,15 @@
    "seenNonces": [
     "e40d8b0504d46107e9858881e40028844ab8b57620cbd780b6b643b36dc5af57:fedcba9876543210fedcba9876543210"
    ],
+   "revocationList": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 4,
+    "revoked": [],
+    "issuedAt": 1799996400000,
+    "prunedBefore": 0,
+    "sig": "Hwl8efLT0bTewyKSlEjoFyCLbLC4xE3JRXDp2d1VVE0cCZsNBG+sM2g9qLKW7Omne3NcjPLbZfcFGeSjAm0/YhA="
+   },
    "request": {
     "v": 2,
     "cert": {
@@ -581,6 +723,15 @@
    "now": 1800000000000,
    "serverKeyVersion": 3,
    "seenNonces": [],
+   "revocationList": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 4,
+    "revoked": [],
+    "issuedAt": 1799996400000,
+    "prunedBefore": 0,
+    "sig": "Hwl8efLT0bTewyKSlEjoFyCLbLC4xE3JRXDp2d1VVE0cCZsNBG+sM2g9qLKW7Omne3NcjPLbZfcFGeSjAm0/YhA="
+   },
    "request": {
     "cert": {
      "v": 1,
@@ -608,6 +759,15 @@
    "now": 1800000000000,
    "serverKeyVersion": 3,
    "seenNonces": [],
+   "revocationList": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 4,
+    "revoked": [],
+    "issuedAt": 1799996400000,
+    "prunedBefore": 0,
+    "sig": "Hwl8efLT0bTewyKSlEjoFyCLbLC4xE3JRXDp2d1VVE0cCZsNBG+sM2g9qLKW7Omne3NcjPLbZfcFGeSjAm0/YhA="
+   },
    "request": {
     "v": 2,
     "cert": {
@@ -640,6 +800,15 @@
    "now": 1800000000000,
    "serverKeyVersion": 3,
    "seenNonces": [],
+   "revocationList": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 4,
+    "revoked": [],
+    "issuedAt": 1799996400000,
+    "prunedBefore": 0,
+    "sig": "Hwl8efLT0bTewyKSlEjoFyCLbLC4xE3JRXDp2d1VVE0cCZsNBG+sM2g9qLKW7Omne3NcjPLbZfcFGeSjAm0/YhA="
+   },
    "request": {
     "v": 2,
     "cert": {
@@ -671,6 +840,388 @@
     "sig": "IBRlPKAmBExXAiNDrR9ZNyUdU/cf3I6MZ3M8hPn2GhGUUp+x1rK4/d7DtPC0yEqqXLWeQqVRgKfd3Xdyxw5NYD0="
    },
    "expect": "shape"
+  },
+  {
+   "name": "latest-ok-older-key",
+   "dir": "latest",
+   "now": 1800000000000,
+   "serverKeyVersion": 3,
+   "seenNonces": [],
+   "revocationList": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 4,
+    "revoked": [],
+    "issuedAt": 1799996400000,
+    "prunedBefore": 0,
+    "sig": "Hwl8efLT0bTewyKSlEjoFyCLbLC4xE3JRXDp2d1VVE0cCZsNBG+sM2g9qLKW7Omne3NcjPLbZfcFGeSjAm0/YhA="
+   },
+   "request": {
+    "v": 2,
+    "cert": {
+     "v": 1,
+     "storeId": "abababababababababababababababababababababababababababababababab",
+     "deviceId": "4fbd1a1ef83d7d2610fd02a7812dafa7542c73c339f1db66a0d2950a859a8759",
+     "devicePubKey": "02eec7245d6b7d2ccb30380bfbe2a3648cd7a942653f5aa340edcea1f283686619",
+     "role": "remote",
+     "scopes": [
+      "read",
+      "draft"
+     ],
+     "issuedAt": 1799996400000,
+     "notAfter": 1800086400000,
+     "serial": 1,
+     "sig": "HzvAgBGvqr5QkcIcoFKOkJGCPoFxMtK2dvaUDFIHyMVjAtGIKeQlvIQr2Afb/HQ7Sa2BiKdNuzx4/YS6MiN2Vaw="
+    },
+    "keyVersion": 2,
+    "ts": 1800000000000,
+    "nonce": "00112233445566778899aabbccddeeff",
+    "sig": "IMZ6c6CPmjo1BcfOCdYqsu046yDnREfToyV6drKXNv3OeZ25hZBfdhpGAOaZwLVCHc/RZhdMy2pJK9XTgpG3Pj4="
+   },
+   "expect": "ok"
+  },
+  {
+   "name": "latest-tampered-keyVersion",
+   "dir": "latest",
+   "now": 1800000000000,
+   "serverKeyVersion": 3,
+   "seenNonces": [],
+   "revocationList": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 4,
+    "revoked": [],
+    "issuedAt": 1799996400000,
+    "prunedBefore": 0,
+    "sig": "Hwl8efLT0bTewyKSlEjoFyCLbLC4xE3JRXDp2d1VVE0cCZsNBG+sM2g9qLKW7Omne3NcjPLbZfcFGeSjAm0/YhA="
+   },
+   "request": {
+    "v": 2,
+    "cert": {
+     "v": 1,
+     "storeId": "abababababababababababababababababababababababababababababababab",
+     "deviceId": "4fbd1a1ef83d7d2610fd02a7812dafa7542c73c339f1db66a0d2950a859a8759",
+     "devicePubKey": "02eec7245d6b7d2ccb30380bfbe2a3648cd7a942653f5aa340edcea1f283686619",
+     "role": "remote",
+     "scopes": [
+      "read",
+      "draft"
+     ],
+     "issuedAt": 1799996400000,
+     "notAfter": 1800086400000,
+     "serial": 1,
+     "sig": "HzvAgBGvqr5QkcIcoFKOkJGCPoFxMtK2dvaUDFIHyMVjAtGIKeQlvIQr2Afb/HQ7Sa2BiKdNuzx4/YS6MiN2Vaw="
+    },
+    "keyVersion": 3,
+    "ts": 1800000000000,
+    "nonce": "00112233445566778899aabbccddeeff",
+    "sig": "IMZ6c6CPmjo1BcfOCdYqsu046yDnREfToyV6drKXNv3OeZ25hZBfdhpGAOaZwLVCHc/RZhdMy2pJK9XTgpG3Pj4="
+   },
+   "expect": "bad-request-sig"
+  },
+  {
+   "name": "latest-pull-body",
+   "dir": "latest",
+   "now": 1800000000000,
+   "serverKeyVersion": 3,
+   "seenNonces": [],
+   "revocationList": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 4,
+    "revoked": [],
+    "issuedAt": 1799996400000,
+    "prunedBefore": 0,
+    "sig": "Hwl8efLT0bTewyKSlEjoFyCLbLC4xE3JRXDp2d1VVE0cCZsNBG+sM2g9qLKW7Omne3NcjPLbZfcFGeSjAm0/YhA="
+   },
+   "request": {
+    "v": 2,
+    "cert": {
+     "v": 1,
+     "storeId": "abababababababababababababababababababababababababababababababab",
+     "deviceId": "4fbd1a1ef83d7d2610fd02a7812dafa7542c73c339f1db66a0d2950a859a8759",
+     "devicePubKey": "02eec7245d6b7d2ccb30380bfbe2a3648cd7a942653f5aa340edcea1f283686619",
+     "role": "remote",
+     "scopes": [
+      "read",
+      "draft"
+     ],
+     "issuedAt": 1799996400000,
+     "notAfter": 1800086400000,
+     "serial": 1,
+     "sig": "HzvAgBGvqr5QkcIcoFKOkJGCPoFxMtK2dvaUDFIHyMVjAtGIKeQlvIQr2Afb/HQ7Sa2BiKdNuzx4/YS6MiN2Vaw="
+    },
+    "keyVersion": 3,
+    "ts": 1800000000000,
+    "nonce": "fedcba9876543210fedcba9876543210",
+    "cursor": 5,
+    "sig": "H5G+5eGUcV8snXcA2uurlgoj0G30kIjcqA8/vSpnMbFUSk/bXXUrojUV5JEC7UWGVjEhe+38NoYL4dNrgSEtR+A="
+   },
+   "expect": "shape"
+  },
+  {
+   "name": "latest-signature-on-pull",
+   "dir": "pull",
+   "now": 1800000000000,
+   "serverKeyVersion": 3,
+   "seenNonces": [],
+   "revocationList": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 4,
+    "revoked": [],
+    "issuedAt": 1799996400000,
+    "prunedBefore": 0,
+    "sig": "Hwl8efLT0bTewyKSlEjoFyCLbLC4xE3JRXDp2d1VVE0cCZsNBG+sM2g9qLKW7Omne3NcjPLbZfcFGeSjAm0/YhA="
+   },
+   "request": {
+    "v": 2,
+    "cert": {
+     "v": 1,
+     "storeId": "abababababababababababababababababababababababababababababababab",
+     "deviceId": "4fbd1a1ef83d7d2610fd02a7812dafa7542c73c339f1db66a0d2950a859a8759",
+     "devicePubKey": "02eec7245d6b7d2ccb30380bfbe2a3648cd7a942653f5aa340edcea1f283686619",
+     "role": "remote",
+     "scopes": [
+      "read",
+      "draft"
+     ],
+     "issuedAt": 1799996400000,
+     "notAfter": 1800086400000,
+     "serial": 1,
+     "sig": "HzvAgBGvqr5QkcIcoFKOkJGCPoFxMtK2dvaUDFIHyMVjAtGIKeQlvIQr2Afb/HQ7Sa2BiKdNuzx4/YS6MiN2Vaw="
+    },
+    "keyVersion": 2,
+    "ts": 1800000000000,
+    "nonce": "00112233445566778899aabbccddeeff",
+    "sig": "IMZ6c6CPmjo1BcfOCdYqsu046yDnREfToyV6drKXNv3OeZ25hZBfdhpGAOaZwLVCHc/RZhdMy2pJK9XTgpG3Pj4=",
+    "cursor": 5
+   },
+   "expect": "bad-request-sig"
+  },
+  {
+   "name": "latest-replay",
+   "dir": "latest",
+   "now": 1800000000000,
+   "serverKeyVersion": 3,
+   "seenNonces": [
+    "e40d8b0504d46107e9858881e40028844ab8b57620cbd780b6b643b36dc5af57:00112233445566778899aabbccddeeff"
+   ],
+   "revocationList": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 4,
+    "revoked": [],
+    "issuedAt": 1799996400000,
+    "prunedBefore": 0,
+    "sig": "Hwl8efLT0bTewyKSlEjoFyCLbLC4xE3JRXDp2d1VVE0cCZsNBG+sM2g9qLKW7Omne3NcjPLbZfcFGeSjAm0/YhA="
+   },
+   "request": {
+    "v": 2,
+    "cert": {
+     "v": 1,
+     "storeId": "abababababababababababababababababababababababababababababababab",
+     "deviceId": "4fbd1a1ef83d7d2610fd02a7812dafa7542c73c339f1db66a0d2950a859a8759",
+     "devicePubKey": "02eec7245d6b7d2ccb30380bfbe2a3648cd7a942653f5aa340edcea1f283686619",
+     "role": "remote",
+     "scopes": [
+      "read",
+      "draft"
+     ],
+     "issuedAt": 1799996400000,
+     "notAfter": 1800086400000,
+     "serial": 1,
+     "sig": "HzvAgBGvqr5QkcIcoFKOkJGCPoFxMtK2dvaUDFIHyMVjAtGIKeQlvIQr2Afb/HQ7Sa2BiKdNuzx4/YS6MiN2Vaw="
+    },
+    "keyVersion": 2,
+    "ts": 1800000000000,
+    "nonce": "00112233445566778899aabbccddeeff",
+    "sig": "IMZ6c6CPmjo1BcfOCdYqsu046yDnREfToyV6drKXNv3OeZ25hZBfdhpGAOaZwLVCHc/RZhdMy2pJK9XTgpG3Pj4="
+   },
+   "expect": "replay"
+  },
+  {
+   "name": "latest-old-v1-shape",
+   "dir": "latest",
+   "now": 1800000000000,
+   "serverKeyVersion": 3,
+   "seenNonces": [],
+   "revocationList": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 4,
+    "revoked": [],
+    "issuedAt": 1799996400000,
+    "prunedBefore": 0,
+    "sig": "Hwl8efLT0bTewyKSlEjoFyCLbLC4xE3JRXDp2d1VVE0cCZsNBG+sM2g9qLKW7Omne3NcjPLbZfcFGeSjAm0/YhA="
+   },
+   "request": {
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "devicePubKey": "02eec7245d6b7d2ccb30380bfbe2a3648cd7a942653f5aa340edcea1f283686619"
+   },
+   "expect": "old-protocol"
+  },
+  {
+   "name": "latest-revoked-gets-list-only",
+   "dir": "latest",
+   "now": 1800000000000,
+   "serverKeyVersion": 3,
+   "seenNonces": [],
+   "revocationList": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 5,
+    "revoked": [
+     "e40d8b0504d46107e9858881e40028844ab8b57620cbd780b6b643b36dc5af57"
+    ],
+    "issuedAt": 1800000000000,
+    "prunedBefore": 0,
+    "sig": "ICa5JiVfyHPwOL56ivrrFN0Pw2PhHagLbYeB+/DaiEVhBJbYYX4AQE8wWKL8TUMHGfqgR0cagBONanee2u2MTp4="
+   },
+   "request": {
+    "v": 2,
+    "cert": {
+     "v": 1,
+     "storeId": "abababababababababababababababababababababababababababababababab",
+     "deviceId": "4fbd1a1ef83d7d2610fd02a7812dafa7542c73c339f1db66a0d2950a859a8759",
+     "devicePubKey": "02eec7245d6b7d2ccb30380bfbe2a3648cd7a942653f5aa340edcea1f283686619",
+     "role": "remote",
+     "scopes": [
+      "read",
+      "draft"
+     ],
+     "issuedAt": 1799996400000,
+     "notAfter": 1800086400000,
+     "serial": 1,
+     "sig": "HzvAgBGvqr5QkcIcoFKOkJGCPoFxMtK2dvaUDFIHyMVjAtGIKeQlvIQr2Afb/HQ7Sa2BiKdNuzx4/YS6MiN2Vaw="
+    },
+    "keyVersion": 2,
+    "ts": 1800000000000,
+    "nonce": "00112233445566778899aabbccddeeff",
+    "sig": "IMZ6c6CPmjo1BcfOCdYqsu046yDnREfToyV6drKXNv3OeZ25hZBfdhpGAOaZwLVCHc/RZhdMy2pJK9XTgpG3Pj4="
+   },
+   "expect": "lapsed-revoked"
+  },
+  {
+   "name": "pull-revoked",
+   "dir": "pull",
+   "now": 1800000000000,
+   "serverKeyVersion": 3,
+   "seenNonces": [],
+   "revocationList": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 5,
+    "revoked": [
+     "e40d8b0504d46107e9858881e40028844ab8b57620cbd780b6b643b36dc5af57"
+    ],
+    "issuedAt": 1800000000000,
+    "prunedBefore": 0,
+    "sig": "ICa5JiVfyHPwOL56ivrrFN0Pw2PhHagLbYeB+/DaiEVhBJbYYX4AQE8wWKL8TUMHGfqgR0cagBONanee2u2MTp4="
+   },
+   "request": {
+    "v": 2,
+    "cert": {
+     "v": 1,
+     "storeId": "abababababababababababababababababababababababababababababababab",
+     "deviceId": "4fbd1a1ef83d7d2610fd02a7812dafa7542c73c339f1db66a0d2950a859a8759",
+     "devicePubKey": "02eec7245d6b7d2ccb30380bfbe2a3648cd7a942653f5aa340edcea1f283686619",
+     "role": "remote",
+     "scopes": [
+      "read",
+      "draft"
+     ],
+     "issuedAt": 1799996400000,
+     "notAfter": 1800086400000,
+     "serial": 1,
+     "sig": "HzvAgBGvqr5QkcIcoFKOkJGCPoFxMtK2dvaUDFIHyMVjAtGIKeQlvIQr2Afb/HQ7Sa2BiKdNuzx4/YS6MiN2Vaw="
+    },
+    "keyVersion": 3,
+    "ts": 1800000000000,
+    "nonce": "fedcba9876543210fedcba9876543210",
+    "cursor": 5,
+    "sig": "H5G+5eGUcV8snXcA2uurlgoj0G30kIjcqA8/vSpnMbFUSk/bXXUrojUV5JEC7UWGVjEhe+38NoYL4dNrgSEtR+A="
+   },
+   "expect": "revoked"
+  },
+  {
+   "name": "latest-expired-gets-list-only",
+   "dir": "latest",
+   "now": 1800086400000,
+   "serverKeyVersion": 3,
+   "seenNonces": [],
+   "revocationList": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 4,
+    "revoked": [],
+    "issuedAt": 1799996400000,
+    "prunedBefore": 0,
+    "sig": "Hwl8efLT0bTewyKSlEjoFyCLbLC4xE3JRXDp2d1VVE0cCZsNBG+sM2g9qLKW7Omne3NcjPLbZfcFGeSjAm0/YhA="
+   },
+   "request": {
+    "v": 2,
+    "cert": {
+     "v": 1,
+     "storeId": "abababababababababababababababababababababababababababababababab",
+     "deviceId": "4fbd1a1ef83d7d2610fd02a7812dafa7542c73c339f1db66a0d2950a859a8759",
+     "devicePubKey": "02eec7245d6b7d2ccb30380bfbe2a3648cd7a942653f5aa340edcea1f283686619",
+     "role": "remote",
+     "scopes": [
+      "read",
+      "draft"
+     ],
+     "issuedAt": 1799996400000,
+     "notAfter": 1800086400000,
+     "serial": 1,
+     "sig": "HzvAgBGvqr5QkcIcoFKOkJGCPoFxMtK2dvaUDFIHyMVjAtGIKeQlvIQr2Afb/HQ7Sa2BiKdNuzx4/YS6MiN2Vaw="
+    },
+    "keyVersion": 3,
+    "ts": 1800086400000,
+    "nonce": "ffeeddccbbaa99887766554433221100",
+    "sig": "IM7NiZJg8YCG0XeA4yg9mVmuTJI/mMscAlGY+cqoY63ae3KSz2vmBTSzgZHJfKB8tZdSq97h4QXtE/9ipXGjU+8="
+   },
+   "expect": "lapsed-expired"
+  },
+  {
+   "name": "pull-expired",
+   "dir": "pull",
+   "now": 1800086400000,
+   "serverKeyVersion": 3,
+   "seenNonces": [],
+   "revocationList": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 4,
+    "revoked": [],
+    "issuedAt": 1799996400000,
+    "prunedBefore": 0,
+    "sig": "Hwl8efLT0bTewyKSlEjoFyCLbLC4xE3JRXDp2d1VVE0cCZsNBG+sM2g9qLKW7Omne3NcjPLbZfcFGeSjAm0/YhA="
+   },
+   "request": {
+    "v": 2,
+    "cert": {
+     "v": 1,
+     "storeId": "abababababababababababababababababababababababababababababababab",
+     "deviceId": "4fbd1a1ef83d7d2610fd02a7812dafa7542c73c339f1db66a0d2950a859a8759",
+     "devicePubKey": "02eec7245d6b7d2ccb30380bfbe2a3648cd7a942653f5aa340edcea1f283686619",
+     "role": "remote",
+     "scopes": [
+      "read",
+      "draft"
+     ],
+     "issuedAt": 1799996400000,
+     "notAfter": 1800086400000,
+     "serial": 1,
+     "sig": "HzvAgBGvqr5QkcIcoFKOkJGCPoFxMtK2dvaUDFIHyMVjAtGIKeQlvIQr2Afb/HQ7Sa2BiKdNuzx4/YS6MiN2Vaw="
+    },
+    "keyVersion": 3,
+    "ts": 1800000000000,
+    "nonce": "fedcba9876543210fedcba9876543210",
+    "cursor": 5,
+    "sig": "H5G+5eGUcV8snXcA2uurlgoj0G30kIjcqA8/vSpnMbFUSk/bXXUrojUV5JEC7UWGVjEhe+38NoYL4dNrgSEtR+A="
+   },
+   "expect": "expired"
   }
  ],
  "proofs": {
@@ -784,6 +1335,23 @@
     "sig": "Hwl8efLT0bTewyKSlEjoFyCLbLC4xE3JRXDp2d1VVE0cCZsNBG+sM2g9qLKW7Omne3NcjPLbZfcFGeSjAm0/YhA="
    },
    "expect": "rotation-required"
+  }
+ ],
+ "pairCode": [
+  {
+   "nonce": "0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f",
+   "devicePubKey": "02eec7245d6b7d2ccb30380bfbe2a3648cd7a942653f5aa340edcea1f283686619",
+   "code": "004205"
+  },
+  {
+   "nonce": "00000000000000000000000000000000",
+   "devicePubKey": "02eec7245d6b7d2ccb30380bfbe2a3648cd7a942653f5aa340edcea1f283686619",
+   "code": "549034"
+  },
+  {
+   "nonce": "abababababababababababababababab",
+   "devicePubKey": "0324653eac434488002cc06bbfb7f10fe18991e35f9fe4302dbea6d2353dc0ab1c",
+   "code": "921358"
   }
  ]
 }

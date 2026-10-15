@@ -22,7 +22,7 @@
 
 #![allow(dead_code)] // 켜는 쪽(server.rs 장착)은 이 레인 밖
 
-use crate::lan_cert::{signed_by, verify_device_cert_prechecked, verify_revocation_list, CertReason, ListInfo, VerifiedCert, MAX_TIME_MS, MIN_NOW_MS};
+use crate::lan_cert::{signed_by, validate_cert_with, verify_device_cert_prechecked, verify_revocation_list, CertReason, ListInfo, VerifiedCert, DEVICE_CERT_DOMAIN, MAX_TIME_MS, MIN_NOW_MS};
 use crate::lan_keys::{derive_lan_keys, rotation_gate_ok, LanDerivedKeys, LanKeyRecord};
 use crate::lan_proof::{canonical_string, is_lan_nonce, pull_proof_v2, push_proof_v2, ProofBinding};
 use crate::lan_seal::{chunk_id_of, open_chunk, seal_chunk, ChunkBinding, SealError, CHUNK_MAX_BYTES, CHUNK_MAX_ENTRIES};
@@ -193,6 +193,8 @@ pub struct LanServerState {
     pub inflight: AtomicUsize,
     rate: Mutex<RateWindow>,
     pub counters: LanCounters,
+    /// 짝 맺기(레인 Y §7.1·7.2): 사장이 연 연결 안내와 대기 중인 기기. 메모리에만(10분 뒤 사라진다).
+    pub pair: Mutex<crate::lan_pair::PairBook>,
 }
 impl LanServerState {
     pub fn new(auth: LanAuth, store: LanStore) -> Self {
@@ -206,6 +208,7 @@ impl LanServerState {
             inflight: AtomicUsize::new(0),
             rate: Mutex::new(RateWindow::default()),
             counters: LanCounters::default(),
+            pair: Mutex::new(crate::lan_pair::PairBook::default()),
         }
     }
     /// 지금 인증 재료(요청 하나가 처음부터 끝까지 같은 벌을 쓴다).
@@ -302,11 +305,33 @@ fn deny_reason(reason: &'static str) -> LanResponse {
     deny(reason_status(reason), reason)
 }
 
+/// 요청 방향(서명 본문의 `dir`). latest = 철회 목록·봉투 받기(§7.3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LanDir {
+    Push,
+    Pull,
+    Latest,
+}
+impl LanDir {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Push => "push",
+            Self::Pull => "pull",
+            Self::Latest => "latest",
+        }
+    }
+    fn of_push(push: bool) -> Self {
+        if push { Self::Push } else { Self::Pull }
+    }
+}
+
 /// 요청별 칸.
 #[derive(Debug, Clone, PartialEq)]
 pub enum LanFields {
     Push { chunk_id: String, count: u64, sealed: Value },
     Pull { cursor: u64 },
+    /// latest 는 칸이 없다(서명 본문의 chunkId·count·cursor·sealedHash 모두 null).
+    Latest,
 }
 
 /// 확인을 통과한 요청(⓪~⑥). 세션 열쇠(⑦)는 호출자가 `session_keys` 로.
@@ -321,6 +346,8 @@ pub struct LanVerified {
     pub ts: i64,
     pub key_version: u64,
     pub fields: LanFields,
+    /// latest 에서만: 증서가 철회(`revoked`)·만료(`expired`)됐지만 가게 서명·기기 서명·시각·nonce 는 맞음 → 목록만 준다(봉투 없음).
+    pub lapsed: Option<&'static str>,
 }
 
 fn int_in(v: &Value, min: u64, max: u64) -> Option<u64> {
@@ -332,16 +359,21 @@ fn is_chunk_id(s: &str) -> bool {
 
 /// 서명되는 본문(규격 §2.2) — 와이어에는 실리지 않고 양쪽이 요청 칸에서 다시 만든다. `sig` 칸은 넣지 않는다.
 pub(crate) fn request_sig_body(push: bool, c: &VerifiedCert, key_version: u64, nonce: &str, ts: i64, fields: &LanFields) -> Result<Map<String, Value>, &'static str> {
-    let (chunk_id, count, cursor, sealed_hash) = match fields {
-        LanFields::Push { chunk_id, count, sealed } if push => {
+    request_sig_body_dir(LanDir::of_push(push), c, key_version, nonce, ts, fields)
+}
+/// 방향을 받는 판(latest 포함). 방향과 칸이 맞지 않으면 shape.
+pub(crate) fn request_sig_body_dir(dir: LanDir, c: &VerifiedCert, key_version: u64, nonce: &str, ts: i64, fields: &LanFields) -> Result<Map<String, Value>, &'static str> {
+    let (chunk_id, count, cursor, sealed_hash) = match (dir, fields) {
+        (LanDir::Push, LanFields::Push { chunk_id, count, sealed }) => {
             let h = hex::encode(Sha256::digest(canonical_string(sealed)?.as_bytes()));
             (Value::from(chunk_id.as_str()), Value::from(*count), Value::Null, Value::from(h))
         }
-        LanFields::Pull { cursor } if !push => (Value::Null, Value::Null, Value::from(*cursor), Value::Null),
+        (LanDir::Pull, LanFields::Pull { cursor }) => (Value::Null, Value::Null, Value::from(*cursor), Value::Null),
+        (LanDir::Latest, LanFields::Latest) => (Value::Null, Value::Null, Value::Null, Value::Null),
         _ => return Err("shape"),
     };
     let v = json!({
-        "v": LAN_WIRE_VERSION, "dir": if push { "push" } else { "pull" }, "storeId": c.store_id, "certId": c.cert_id, "deviceId": c.device_id,
+        "v": LAN_WIRE_VERSION, "dir": dir.as_str(), "storeId": c.store_id, "certId": c.cert_id, "deviceId": c.device_id,
         "keyVersion": key_version, "nonce": nonce, "ts": ts, "chunkId": chunk_id, "count": count, "cursor": cursor, "sealedHash": sealed_hash,
     });
     match v {
@@ -354,6 +386,12 @@ pub(crate) fn request_sig_body(push: bool, c: &VerifiedCert, key_version: u64, n
 /// 판·모양 → 증서(가게 서명·기한·철회·맡김·가게 번호) → 기기 서명 → 시각 창 → nonce(보기만) → 열쇠 판.
 /// `seen(certId, nonce)` 는 이미 쓴 nonce 면 true — **기록하지 않는다**(기록은 봉인 확인까지 끝난 뒤 저장소 잠금 안에서).
 pub fn verify_lan_request(auth: &LanAuth, raw: &Value, push: bool, now: i64, seen: &dyn Fn(&str, &str) -> bool) -> Result<LanVerified, &'static str> {
+    verify_lan_request_dir(auth, raw, LanDir::of_push(push), now, seen)
+}
+
+/// 방향을 받는 판 — TS `verifyLanRequest(raw, dir, …)`. latest(§7.3): 맡김 검사 없음, keyVersion ≥ 0 이고 서버 판과 맞추지 않음,
+/// 증서가 철회·만료만으로 실패하면(가게 서명은 맞음) 기기 서명·시각·nonce 까지 본 뒤 `lapsed` 로 통과.
+pub fn verify_lan_request_dir(auth: &LanAuth, raw: &Value, dir: LanDir, now: i64, seen: &dyn Fn(&str, &str) -> bool) -> Result<LanVerified, &'static str> {
     let Some(o) = raw.as_object() else { return Err("shape") };
     if o.get("v").and_then(Value::as_u64) != Some(LAN_WIRE_VERSION) {
         return Err("old-protocol");
@@ -361,37 +399,54 @@ pub fn verify_lan_request(auth: &LanAuth, raw: &Value, push: bool, now: i64, see
     if matches!(o.get("cert"), None | Some(Value::Null)) {
         return Err("no-cert");
     }
-    let want: &[&str] = if push {
-        &["v", "cert", "keyVersion", "ts", "nonce", "chunkId", "count", "sealed", "sig"]
-    } else {
-        &["v", "cert", "keyVersion", "ts", "nonce", "cursor", "sig"]
+    let want: &[&str] = match dir {
+        LanDir::Push => &["v", "cert", "keyVersion", "ts", "nonce", "chunkId", "count", "sealed", "sig"],
+        LanDir::Pull => &["v", "cert", "keyVersion", "ts", "nonce", "cursor", "sig"],
+        LanDir::Latest => &["v", "cert", "keyVersion", "ts", "nonce", "sig"],
     };
     let nonce = o.get("nonce").and_then(Value::as_str).filter(|n| is_lan_nonce(n));
     let ts = o.get("ts").and_then(|t| int_in(t, 1, MAX_TIME_MS as u64));
-    let key_version = o.get("keyVersion").and_then(|k| int_in(k, 1, MAX_SAFE));
+    let key_version = o.get("keyVersion").and_then(|k| int_in(k, if dir == LanDir::Latest { 0 } else { 1 }, MAX_SAFE));
     let sig = o.get("sig").and_then(Value::as_str).filter(|s| s.len() <= 200);
     let shape_ok = o.len() == want.len() && want.iter().all(|k| o.contains_key(*k));
     let (true, Some(nonce), Some(ts), Some(key_version), Some(sig)) = (shape_ok, nonce, ts, key_version, sig) else { return Err("shape") };
-    let fields = if push {
-        let chunk_id = o["chunkId"].as_str().filter(|c| is_chunk_id(c)).ok_or("shape")?;
-        let count = int_in(&o["count"], 1, 1000).ok_or("shape")?;
-        if !o["sealed"].is_object() {
-            return Err("shape");
+    let fields = match dir {
+        LanDir::Push => {
+            let chunk_id = o["chunkId"].as_str().filter(|c| is_chunk_id(c)).ok_or("shape")?;
+            let count = int_in(&o["count"], 1, 1000).ok_or("shape")?;
+            if !o["sealed"].is_object() {
+                return Err("shape");
+            }
+            LanFields::Push { chunk_id: chunk_id.to_string(), count, sealed: o["sealed"].clone() }
         }
-        LanFields::Push { chunk_id: chunk_id.to_string(), count, sealed: o["sealed"].clone() }
-    } else {
-        LanFields::Pull { cursor: int_in(&o["cursor"], 0, MAX_SAFE).ok_or("shape")? }
+        LanDir::Pull => LanFields::Pull { cursor: int_in(&o["cursor"], 0, MAX_SAFE).ok_or("shape")? },
+        LanDir::Latest => LanFields::Latest,
     };
     if !(MIN_NOW_MS..=MAX_TIME_MS).contains(&now) {
         return Err("request-time");
     }
-    let scopes: &[&str] = if push { &PUSH_SCOPES } else { &PULL_SCOPES };
-    let cert = verify_device_cert_prechecked(&o["cert"], &auth.store_key, now, auth.rev_checked.as_ref(), &auth.store_id, scopes).map_err(cert_reason)?;
+    let scopes: &[&str] = match dir {
+        LanDir::Push => &PUSH_SCOPES,
+        LanDir::Pull => &PULL_SCOPES,
+        LanDir::Latest => &[],
+    };
+    let (cert, lapsed) = match verify_device_cert_prechecked(&o["cert"], &auth.store_key, now, auth.rev_checked.as_ref(), &auth.store_id, scopes) {
+        Ok(c) => (c, None),
+        Err(r @ (CertReason::Revoked | CertReason::Expired)) if dir == LanDir::Latest => {
+            // 끊긴·만료된 기기도 서명된 목록은 받는다(스스로 「끊김」 확인). 가게 서명이 맞는 증서여야 한다(위 판정은 서명 뒤 사유).
+            let (co, c) = validate_cert_with(&o["cert"], true).map_err(|_| "bad-cert")?;
+            if !signed_by(DEVICE_CERT_DOMAIN, co, &auth.store_key) {
+                return Err("bad-cert");
+            }
+            (c, Some(r.as_str()))
+        }
+        Err(r) => return Err(cert_reason(r)),
+    };
     // 증서는 이 가게 것이어야 한다(같은 가게 키를 쓰는 다른 가게 번호의 증서를 받지 않는다).
     if cert.store_id != auth.store_id {
         return Err("other-store");
     }
-    let mut body = request_sig_body(push, &cert, key_version, nonce, ts as i64, &fields)?;
+    let mut body = request_sig_body_dir(dir, &cert, key_version, nonce, ts as i64, &fields)?;
     body.insert("sig".into(), Value::from(sig));
     if !signed_by(LAN_REQUEST_DOMAIN, &body, &cert.device_pub_key) {
         return Err("bad-request-sig");
@@ -402,12 +457,13 @@ pub fn verify_lan_request(auth: &LanAuth, raw: &Value, push: bool, now: i64, see
     if seen(&cert.cert_id, nonce) {
         return Err("replay");
     }
-    if key_version != auth.key_version() {
+    // latest 는 판을 맞추지 않는다(옛 판의 폰이 새 봉투를 받으러 오는 길). push·pull 은 봉투를 열기 전에 410.
+    if dir != LanDir::Latest && key_version != auth.key_version() {
         return Err("key-version");
     }
     let cert_sig = o["cert"]["sig"].as_str().unwrap_or_default().to_string();
     let not_after = o["cert"]["notAfter"].as_i64().unwrap_or(now);
-    Ok(LanVerified { cert, cert_sig, not_after, nonce: nonce.to_string(), ts: ts as i64, key_version, fields })
+    Ok(LanVerified { cert, cert_sig, not_after, nonce: nonce.to_string(), ts: ts as i64, key_version, fields, lapsed })
 }
 
 /// ⑦ 이 서버가 그 증서(같은 certId·같은 기기·**같은 증서 서명**)에 세션 열쇠를 줬는지 → 그 기기의 봉인·확인값 열쇠.
@@ -617,29 +673,176 @@ pub fn handle_pull(st: &LanServerState, body: &[u8]) -> LanResponse {
     LanResponse { status: 200, body: json!({ "from": from, "next": i, "more": more, "chunkId": chunk_id, "sealed": sealed, "proof": proof }) }
 }
 
+/// `/lan/latest`(§7.3): 기기 키 서명 요청 → 서명된 철회 목록 + (살아 있고 이 PC 가 낸 그 증서면) 그 증서 앞 현재 판 봉투.
+/// 순서 = 관문(503) → 본문 → 전체 속도 → 확인(lapsed 허용) → 이 PC 증서 대조(세션 칸의 기기·증서 서명이 다르면 403 bad-cert)
+/// → 기기 속도 → 저장소 잠금 안에서 nonce 기록 → 응답. 서명 없는 옛 모양은 400 old-protocol(봉투를 아무에게나 주지 않는다).
+pub fn handle_latest(st: &LanServerState, body: &[u8]) -> LanResponse {
+    let auth = st.auth();
+    if !auth.gate_ok() {
+        return deny_reason("rotation-required");
+    }
+    let req = match parse(body) {
+        Ok(m) => Value::Object(m),
+        Err(e) => return e,
+    };
+    let now = (st.clock)();
+    if !st.rate_ok(now, None) {
+        return st.limited("rate");
+    }
+    let seen = |_cert_id: &str, nonce: &str| st.store.lock().map(|s| s.nonce_seen(nonce)).unwrap_or(false);
+    let v = match verify_lan_request_dir(&auth, &req, LanDir::Latest, now, &seen) {
+        Ok(v) => v,
+        Err(r) => return deny_reason(r),
+    };
+    let session = if v.lapsed.is_none() { auth.keys.sessions.get(&v.cert.cert_id) } else { None };
+    if let Some(e) = session {
+        if e.device_id != v.cert.device_id || e.cert_sig != v.cert_sig {
+            return deny_reason("bad-cert");
+        }
+    }
+    if !st.rate_ok(now, Some(&v.cert.device_id)) {
+        return st.limited("rate");
+    }
+    let mut store = match lock_store(st, &auth) {
+        Ok(s) => s,
+        Err(e) => return e,
+    };
+    let nonce_until = v.not_after.max(now).saturating_add(LAN_REQUEST_WINDOW_MS * 2);
+    if let Err(e) = store.use_nonce(&v.nonce, &v.cert.device_id, now, nonce_until) {
+        return store_err(st, e);
+    }
+    drop(store);
+    let mut out = json!({ "revocationList": auth.revocation().cloned().unwrap_or(Value::Null) });
+    if let Some(env) = session.and_then(|e| e.envelope.clone()) {
+        out["dataKey"] = env;
+    }
+    LanResponse { status: 200, body: out }
+}
+
+/// `/lan/hello`(§7.1, 서명 없음): 사장이 연 연결 안내의 1회용 번호를 아는 기기만 대기 줄에 선다 → 6자리 확인 번호.
+pub fn handle_hello(st: &LanServerState, body: &[u8]) -> LanResponse {
+    let auth = st.auth();
+    if !auth.gate_ok() {
+        return deny_reason("rotation-required");
+    }
+    let req = match parse(body) {
+        Ok(m) => m,
+        Err(e) => return e,
+    };
+    let now = (st.clock)();
+    if !st.rate_ok(now, None) {
+        return st.limited("rate");
+    }
+    let s = |k: &str| req.get(k).and_then(Value::as_str).unwrap_or_default();
+    if req.len() != 4 || s("storeId") != auth.store_id {
+        return deny(403, "bad-offer");
+    }
+    let Ok(mut book) = st.pair.lock() else { return deny(500, "internal") };
+    match book.hello(&auth.store_id, s("nonce"), s("devicePubKey"), s("deviceName"), now) {
+        Ok(code) => LanResponse { status: 200, body: json!({ "code": code }) },
+        Err("pair-full") => st.limited("pair-full"),
+        Err(r) => deny(403, r),
+    }
+}
+
+/// `/lan/grant`(§7.2, 서명 없음): 사장이 허락했으면 증서 + 지금 철회 목록 + 그 증서 앞 현재 판 봉투, 아직이면 pending.
+pub fn handle_grant(st: &LanServerState, body: &[u8]) -> LanResponse {
+    let auth = st.auth();
+    if !auth.gate_ok() {
+        return deny_reason("rotation-required");
+    }
+    let req = match parse(body) {
+        Ok(m) => m,
+        Err(e) => return e,
+    };
+    let now = (st.clock)();
+    if !st.rate_ok(now, None) {
+        return st.limited("rate");
+    }
+    let s = |k: &str| req.get(k).and_then(Value::as_str).unwrap_or_default();
+    if req.len() != 3 || s("storeId") != auth.store_id {
+        return deny(403, "bad-offer");
+    }
+    let granted = match st.pair.lock() {
+        Ok(book) => book.granted(&auth.store_id, s("nonce"), s("devicePubKey"), now),
+        Err(_) => return deny(500, "internal"),
+    };
+    let cert = match granted {
+        Err(r) => return deny(403, r),
+        Ok(None) => return LanResponse { status: 200, body: json!({ "pending": true }) },
+        Ok(Some(c)) => c,
+    };
+    let Ok((_, c)) = validate_cert_with(&cert, true) else { return deny(500, "internal") };
+    let env = auth.keys.sessions.get(&c.cert_id).filter(|e| e.cert_sig == cert["sig"].as_str().unwrap_or_default()).and_then(|e| e.envelope.clone());
+    let mut out = json!({ "cert": cert, "revocationList": auth.revocation().cloned().unwrap_or(Value::Null) });
+    if let Some(env) = env {
+        out["dataKey"] = env;
+    }
+    LanResponse { status: 200, body: out }
+}
+
 /// axum 조각. 꺼짐(기본)이면 None — 아무 경로도 만들지 않는다. 호출자가 기존 라우터에 `merge` 한다(이 파일은 listen 하지 않음).
 pub fn router(cfg: &LanConfig, st: Arc<LanServerState>) -> Option<axum::Router> {
     use axum::{body::Bytes, extract::DefaultBodyLimit, http::StatusCode, routing::post, Json, Router};
     if !cfg.enabled {
         return None;
     }
-    async fn run(st: Arc<LanServerState>, body: Bytes, push: bool) -> (StatusCode, Json<Value>) {
+    async fn run(st: Arc<LanServerState>, body: Bytes, route: Route) -> (StatusCode, Json<Value>) {
         if !st.live.load(std::sync::atomic::Ordering::SeqCst) {
             return (StatusCode::NOT_FOUND, Json(json!({ "reason": "off" })));
         }
-        let res = tokio::task::spawn_blocking(move || handle(&st, push, &body)).await;
+        let res = tokio::task::spawn_blocking(move || handle_route(&st, route, &body)).await;
         match res {
             Ok(r) => (StatusCode::from_u16(r.status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR), Json(r.body)),
             Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "reason": "internal" }))),
         }
     }
-    let (a, b) = (st.clone(), st);
+    let (a, b, c, d, e) = (st.clone(), st.clone(), st.clone(), st.clone(), st);
     Some(
         Router::new()
-            .route("/lan/push", post(move |body: Bytes| run(a.clone(), body, true)))
-            .route("/lan/pull", post(move |body: Bytes| run(b.clone(), body, false)))
+            .route("/lan/push", post(move |body: Bytes| run(a.clone(), body, Route::Push)))
+            .route("/lan/pull", post(move |body: Bytes| run(b.clone(), body, Route::Pull)))
+            .route("/lan/latest", post(move |body: Bytes| run(c.clone(), body, Route::Latest)))
+            .route("/lan/hello", post(move |body: Bytes| run(d.clone(), body, Route::Hello)))
+            .route("/lan/grant", post(move |body: Bytes| run(e.clone(), body, Route::Grant)))
             .layer(DefaultBodyLimit::max(MAX_REQUEST_BYTES)),
     )
+}
+
+/// 라우터가 부르는 경로.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Route {
+    Push,
+    Pull,
+    Latest,
+    Hello,
+    Grant,
+}
+/// 동시 처리 상한을 지키며 경로별 처리기를 부른다.
+pub fn handle_route(st: &LanServerState, route: Route, body: &[u8]) -> LanResponse {
+    match route {
+        Route::Push => handle(st, true, body),
+        Route::Pull => handle(st, false, body),
+        other => {
+            struct Guard<'a>(&'a AtomicUsize);
+            impl Drop for Guard<'_> {
+                fn drop(&mut self) {
+                    self.0.fetch_sub(1, Ordering::SeqCst);
+                }
+            }
+            if st.inflight.fetch_add(1, Ordering::SeqCst) >= MAX_INFLIGHT {
+                st.inflight.fetch_sub(1, Ordering::SeqCst);
+                st.counters.limited.fetch_add(1, Ordering::Relaxed);
+                return deny(503, "busy");
+            }
+            let _g = Guard(&st.inflight);
+            match other {
+                Route::Latest => handle_latest(st, body),
+                Route::Hello => handle_hello(st, body),
+                _ => handle_grant(st, body),
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1127,6 +1330,119 @@ mod tests {
         assert_eq!(post(&st, false, &pull_req(&kit::replica(), 0, &nonce(2))).body["reason"], "bad-cert");
     }
 
+    // ── 레인 Y: /lan/latest · /lan/hello · /lan/grant ─────────────────────────
+
+    /// 표준 상태에 봉투가 든 세션을 하나 더한다(합성 eph·nonce, 합성 가게 키 서명).
+    fn with_envelope(d: &Dev, version: u64) -> (LanServerState, PathBuf, Value) {
+        let list = kit::list(1, &[]);
+        let mut rec = kit::record(version, &kit::all(), &list);
+        let (env, session) = crate::lan_keys::seal_data_key_with_session(&kit::data_key(version), &d.cert, kit::STORE_KEY, &[0x55; 32], &[0x66; 24], crate::lan_cert::tests::synth_signer).unwrap();
+        let e = rec.sessions.get_mut(&d.cert_id).unwrap();
+        e.key = session;
+        e.envelope = Some(env.clone());
+        rec.check(kit::STORE_KEY, &kit::store_id()).unwrap();
+        let (st, p) = kit::state_with("latest", LanAuth::new(kit::STORE_KEY.into(), kit::store_id(), rec, Some(list)));
+        (st, p, env)
+    }
+
+    #[test]
+    fn y_latest_gives_the_list_and_only_my_envelope() {
+        let d = kit::remote();
+        let (st, _p, env) = with_envelope(&d, 3);
+        let r = kit::post_route(&st, Route::Latest, &kit::latest_req(&d, &nonce(1), 2));
+        assert_eq!(r.status, 200, "{}", r.body);
+        assert_eq!(r.body["dataKey"], env, "자기 증서 앞 봉투");
+        assert_eq!(r.body["revocationList"], kit::list(1, &[]));
+        // 판 0(아직 열쇠 없음)도 받는다.
+        assert_eq!(kit::post_route(&st, Route::Latest, &kit::latest_req(&d, &nonce(2), 0)).status, 200);
+        // 봉투가 없는 세션(다른 기기)은 목록만.
+        let r = kit::post_route(&st, Route::Latest, &kit::latest_req(&kit::replica(), &nonce(3), 3));
+        assert_eq!(r.status, 200);
+        assert!(r.body.get("dataKey").is_none());
+        // 같은 요청 재전송 → 403 replay.
+        let req = kit::latest_req(&d, &nonce(4), 3);
+        assert_eq!(kit::post_route(&st, Route::Latest, &req).status, 200);
+        assert_eq!(reason(&kit::post_route(&st, Route::Latest, &req)), (403, Some("replay")));
+        // 서명 없는 옛 모양 → 400, 봉투 없음.
+        let r = kit::post_route(&st, Route::Latest, &json!({ "storeId": kit::store_id(), "devicePubKey": d.pub_hex }));
+        assert_eq!(reason(&r), (400, Some("old-protocol")));
+        assert!(r.body.get("dataKey").is_none());
+        // 남의 증서 + 내 키 서명 → 403 bad-request-sig(봉투 없음).
+        let forged = kit::sign_wire(&d.cert, &kit::replica().sk, 3, &nonce(5), NOW, LanFields::Latest);
+        let r = kit::post_route(&st, Route::Latest, &forged);
+        assert_eq!(reason(&r), (403, Some("bad-request-sig")));
+        assert!(r.body.get("dataKey").is_none());
+        // latest 서명을 pull 로 옮겨 쓰기 → 서명 불일치.
+        let mut moved = kit::latest_req(&d, &nonce(6), 3);
+        moved["cursor"] = json!(0);
+        assert_eq!(reason(&post(&st, false, &moved)), (403, Some("bad-request-sig")));
+    }
+
+    #[test]
+    fn y_latest_for_a_revoked_or_foreign_cert() {
+        let d = kit::remote();
+        let (st, _p, _env) = with_envelope(&d, 3);
+        // 이 PC 가 낸 증서와 같은 번호지만 다른 증서 문서(세션 칸의 증서 서명과 다름) → 403 bad-cert.
+        let other = kit::dev_at(0x41, "remote", &["read"], 1, NOW - 2000, 24 * 3600_000);
+        assert_eq!(other.cert_id, d.cert_id);
+        assert_eq!(reason(&kit::post_route(&st, Route::Latest, &kit::latest_req(&other, &nonce(1), 3))), (403, Some("bad-cert")));
+        // 철회(회전 함께) 뒤: 끊긴 기기는 서명된 목록만(봉투 없음), 남은 기기는 새 판 봉투.
+        let l2 = kit::list(2, &[&d.cert_id]);
+        let rec = kit::record(4, &kit::all(), &l2);
+        st.replace_auth(LanAuth::new(kit::STORE_KEY.into(), kit::store_id(), rec, Some(l2.clone()))).unwrap();
+        let r = kit::post_route(&st, Route::Latest, &kit::latest_req(&d, &nonce(2), 3));
+        assert_eq!(r.status, 200, "{}", r.body);
+        assert_eq!(r.body["revocationList"], l2);
+        assert!(r.body.get("dataKey").is_none(), "끊긴 기기에는 봉투 없음");
+        assert_eq!(reason(&post(&st, false, &kit::pull_req_v(&d, 0, &nonce(3), 4))), (403, Some("revoked")), "동기화는 그대로 거절");
+        // 끊긴 증서 + 남의 키 서명 → 목록도 없음.
+        let forged = kit::sign_wire(&d.cert, &kit::replica().sk, 3, &nonce(4), NOW, LanFields::Latest);
+        assert_eq!(reason(&kit::post_route(&st, Route::Latest, &forged)), (403, Some("bad-request-sig")));
+        // 만료된 기기도 목록만.
+        let r = kit::post_route(&st, Route::Latest, &kit::latest_req(&kit::expired(), &nonce(5), 3));
+        assert_eq!(r.status, 200);
+        assert!(r.body.get("dataKey").is_none());
+        // 회전 없이 철회만 → 503(목록도 봉투도 없음).
+        st.set_revocation(Some(kit::list(3, &[&d.cert_id, &kit::replica().cert_id])));
+        let r = kit::post_route(&st, Route::Latest, &kit::latest_req(&kit::remote(), &nonce(6), 4));
+        assert_eq!(reason(&r), (503, Some("rotation-required")));
+        assert!(r.body.get("revocationList").is_none());
+        assert_eq!(reason(&kit::post_route(&st, Route::Hello, &json!({}))), (503, Some("rotation-required")));
+    }
+
+    #[test]
+    fn y_hello_then_grant_hands_over_the_cert_list_and_envelope() {
+        let d = kit::remote();
+        let (st, _p, env) = with_envelope(&d, 3);
+        let n = "0f".repeat(16);
+        let hello = json!({ "storeId": kit::store_id(), "nonce": n, "devicePubKey": d.pub_hex, "deviceName": "시험 폰" });
+        assert_eq!(reason(&kit::post_route(&st, Route::Hello, &hello)), (403, Some("bad-offer")), "안내를 열기 전");
+        st.pair.lock().unwrap().open_with(&kit::store_id(), &n, NOW);
+        let r = kit::post_route(&st, Route::Hello, &hello);
+        assert_eq!(r.status, 200);
+        assert_eq!(r.body["code"], crate::lan_pair::pair_code(&n, &d.pub_hex));
+        let grant = json!({ "storeId": kit::store_id(), "nonce": n, "devicePubKey": d.pub_hex });
+        assert_eq!(kit::post_route(&st, Route::Grant, &grant).body, json!({ "pending": true }));
+        assert!(st.pair.lock().unwrap().mark_approved(&d.pub_hex, d.cert.clone()));
+        let r = kit::post_route(&st, Route::Grant, &grant);
+        assert_eq!(r.status, 200);
+        assert_eq!(r.body["cert"], d.cert);
+        assert_eq!(r.body["dataKey"], env);
+        assert_eq!(r.body["revocationList"], kit::list(1, &[]));
+        // 다른 1회용 번호·다른 가게·칸 더하기는 거절.
+        let mut bad = grant.clone();
+        bad["nonce"] = json!("11".repeat(16));
+        assert_eq!(reason(&kit::post_route(&st, Route::Grant, &bad)), (403, Some("bad-offer")));
+        let mut bad = grant.clone();
+        bad["storeId"] = json!("cd".repeat(32));
+        assert_eq!(reason(&kit::post_route(&st, Route::Grant, &bad)), (403, Some("bad-offer")));
+        let mut bad = grant.clone();
+        bad["x"] = json!(1);
+        assert_eq!(reason(&kit::post_route(&st, Route::Grant, &bad)), (403, Some("bad-offer")));
+        // 꺼지면(스위치 내림) 라우터 전체가 404 — 이 처리기는 라우터 뒤에만 있다.
+        assert!(router(&LanConfig::default(), Arc::new(kit::state("off").0)).is_none(), "기본 꺼짐이면 경로 자체가 없다");
+    }
+
     // ── H1 v2: 요청 서명 · 열쇠 나누기 · 회전 관문 ─────────────────────────
 
     fn vectors() -> Value {
@@ -1155,39 +1471,51 @@ mod tests {
         LanAuth::new(v["store"]["storeKey"].as_str().unwrap().into(), v["store"]["storeId"].as_str().unwrap().into(), rec, Some(list))
     }
 
-    /// 서버 판정 14건이 TS `verifyLanRequest` 와 같다.
+    /// 서버 판정 24건(방향 push·pull 17 + latest 7)이 TS `verifyLanRequest` 와 같다. latest 의 끊긴·만료 증서는 `lapsed-<사유>`.
     #[test]
     fn v2_server_verdicts_match_the_phone_vectors() {
         let v = vectors();
         let cases = v["verify"].as_array().unwrap();
-        assert_eq!(cases.len(), 14);
+        assert_eq!(cases.len(), 24);
+        let mut latest = 0;
         for c in cases {
-            let a = vector_auth(&v, c["serverKeyVersion"].as_u64().unwrap());
+            let mut a = vector_auth(&v, c["serverKeyVersion"].as_u64().unwrap());
+            if c["revocationList"] != v["revocationList"] {
+                a = a.with_revocation(Some(c["revocationList"].clone()));
+            }
             let seen_list: Vec<String> = c["seenNonces"].as_array().unwrap().iter().map(|x| x.as_str().unwrap().to_string()).collect();
             let seen = |cid: &str, n: &str| seen_list.contains(&format!("{cid}:{n}"));
-            let push = c["dir"] == "push";
-            let got = match verify_lan_request(&a, &c["request"], push, c["now"].as_i64().unwrap(), &seen) {
-                Ok(_) => "ok",
-                Err(r) => r,
+            let dir = match c["dir"].as_str().unwrap() {
+                "push" => LanDir::Push,
+                "pull" => LanDir::Pull,
+                _ => {
+                    latest += 1;
+                    LanDir::Latest
+                }
+            };
+            let got = match verify_lan_request_dir(&a, &c["request"], dir, c["now"].as_i64().unwrap(), &seen) {
+                Ok(x) => x.lapsed.map_or("ok".to_string(), |l| format!("lapsed-{l}")),
+                Err(r) => r.to_string(),
             };
             assert_eq!(got, c["expect"].as_str().unwrap(), "{}", c["name"]);
         }
+        assert_eq!(latest, 7);
     }
 
     /// 서명 본문·정본 JSON·해시·signmessage 다이제스트가 폰과 같은 바이트이고, 벡터 서명이 기기 키로 확인된다.
     #[test]
     fn v2_request_signing_bytes_match_the_phone() {
         let v = vectors();
-        for dir in ["push", "pull"] {
+        for dir in ["push", "pull", "latest"] {
             let r = &v["requests"][dir];
             let w = &r["wire"];
             let (_, c) = crate::lan_cert::validate_cert_with(&w["cert"], true).unwrap();
-            let fields = if dir == "push" {
-                LanFields::Push { chunk_id: w["chunkId"].as_str().unwrap().into(), count: w["count"].as_u64().unwrap(), sealed: w["sealed"].clone() }
-            } else {
-                LanFields::Pull { cursor: w["cursor"].as_u64().unwrap() }
+            let (d, fields) = match dir {
+                "push" => (LanDir::Push, LanFields::Push { chunk_id: w["chunkId"].as_str().unwrap().into(), count: w["count"].as_u64().unwrap(), sealed: w["sealed"].clone() }),
+                "pull" => (LanDir::Pull, LanFields::Pull { cursor: w["cursor"].as_u64().unwrap() }),
+                _ => (LanDir::Latest, LanFields::Latest),
             };
-            let body = Value::Object(request_sig_body(dir == "push", &c, w["keyVersion"].as_u64().unwrap(), w["nonce"].as_str().unwrap(), w["ts"].as_i64().unwrap(), &fields).unwrap());
+            let body = Value::Object(request_sig_body_dir(d, &c, w["keyVersion"].as_u64().unwrap(), w["nonce"].as_str().unwrap(), w["ts"].as_i64().unwrap(), &fields).unwrap());
             assert_eq!(body, r["sigBody"], "{dir}: 서명 본문");
             let canon = canonical_string(&body).unwrap();
             assert_eq!(canon, r["sigBodyCanonical"].as_str().unwrap(), "{dir}");
@@ -1205,7 +1533,7 @@ mod tests {
             assert_eq!(kit::remote().pub_hex, c.device_pub_key, "표준 합성 remote = 벡터 기기 키(0x41)");
             assert!(!signed_by(LAN_REQUEST_DOMAIN, &signed, &kit::replica().pub_hex), "{dir}: 다른 키로는 아니다");
             // Rust 가 같은 합성 기기 키로 서명해도 같은 바이트(RFC6979).
-            let again = kit::sign_wire(&w["cert"], &b32(v["device"]["devicePrivHex_TEST_ONLY"].as_str().unwrap()), 3, w["nonce"].as_str().unwrap(), w["ts"].as_i64().unwrap(), fields);
+            let again = kit::sign_wire(&w["cert"], &b32(v["device"]["devicePrivHex_TEST_ONLY"].as_str().unwrap()), w["keyVersion"].as_u64().unwrap(), w["nonce"].as_str().unwrap(), w["ts"].as_i64().unwrap(), fields);
             assert_eq!(&again, w, "{dir}: 와이어 전체가 같은 바이트");
         }
     }
