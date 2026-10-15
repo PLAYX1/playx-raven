@@ -1,0 +1,33 @@
+{
+ "key_hex": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+ "key_version": 3,
+ "bind": {
+  "storeId": "abababababababababababababababababababababababababababababababab",
+  "certId": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+  "deviceId": "efefefefefefefefefefefefefefefef"
+ },
+ "nonce": "0123456789abcdef0123456789abcdef",
+ "chunk_id": "1111111111111111111111111111111111111111111111111111111111111111",
+ "sealed": {
+  "v": 1,
+  "keyVersion": 3,
+  "nonce": "222222222222222222222222222222222222222222222222",
+  "ct": "AbC+/9=="
+ },
+ "push": {
+  "count": 7,
+  "proof": "31551e799f4591176aa99ae7574958e7b10bb32f31a0ea1b670c307cdbf863b5"
+ },
+ "pull_with_chunk": {
+  "from": 5,
+  "next": 55,
+  "more": true,
+  "proof": "334316336065ae3160168dfde72b355b1fa0ca9c5bdbb4ec42d59b5c805198d3"
+ },
+ "pull_empty": {
+  "from": 9,
+  "next": 9,
+  "more": false,
+  "proof": "e492d181b165241b45dc7043b389d4f12539586ee6d79af155dd95ba76b83a7f"
+ }
+}

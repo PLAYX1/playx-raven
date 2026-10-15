@@ -3068,6 +3068,7 @@ dependencies = [
  "futures-util",
  "hex",
  "hkdf",
+ "hmac",
  "keyring",
  "libc",
  "minisign-verify",

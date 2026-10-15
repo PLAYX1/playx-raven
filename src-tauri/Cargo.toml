@@ -76,6 +76,7 @@ serde_json = { version = "1", features = ["preserve_order"] }
 x25519-dalek = { version = "2", features = ["static_secrets"] }
 chacha20poly1305 = "0.10"
 hkdf = "0.12"
+hmac = "0.12"
 # Serves the phone screens — the owner's remote control and the customer's
 # order page — from this machine over the local network. Tauri already pulls in
 # tokio, so this adds a router and nothing heavier.
