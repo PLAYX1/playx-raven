@@ -6515,7 +6515,7 @@ mod refund_outcome_tests {
 #[cfg(test)]
 mod lan_mount_in_phone_router {
     use axum::http::StatusCode;
-    use serde_json::{json, Value};
+    use serde_json::Value;
     use tower::ServiceExt;
 
     async fn post(app: &axum::Router, host: &str, path: &str, body: &Value) -> (StatusCode, Value) {
@@ -6527,8 +6527,11 @@ mod lan_mount_in_phone_router {
         (status, serde_json::from_slice(&bytes).unwrap_or(Value::Null))
     }
     fn pull_body() -> Value {
-        let v = crate::lan_mount::tests::vec();
-        json!({ "cert": v["certs"]["replica"], "cursor": 0, "nonce": "ab".repeat(16) })
+        pull_with("ab".repeat(16))
+    }
+    /// 합성 replica 기기 키로 서명한 v2 pull(nonce 마다 새 서명).
+    fn pull_with(nonce: String) -> Value {
+        crate::lan_testkit::pull_req(&crate::lan_testkit::replica(), 0, &nonce)
     }
 
     #[tokio::test]
@@ -6568,7 +6571,7 @@ mod lan_mount_in_phone_router {
         }
         // 같은 와이파이의 숫자 주소·.local 이름은 그대로 들어온다(nonce 는 매번 새로).
         for (i, host) in ["10.0.1.7:8790", "172.16.5.1:8790", "mac-mini.local:8790", "169.254.3.4:8790"].iter().enumerate() {
-            let body = json!({ "cert": crate::lan_mount::tests::vec()["certs"]["replica"], "cursor": 0, "nonce": format!("{:032x}", 0x100 + i) });
+            let body = pull_with(format!("{:032x}", 0x100 + i));
             let (s, b) = post(&app, host, "/lan/pull", &body).await;
             assert_eq!(s, StatusCode::OK, "{host} 가 막혔다: {b}");
         }
@@ -6577,7 +6580,7 @@ mod lan_mount_in_phone_router {
         assert_ne!(app.clone().oneshot(req).await.unwrap().status(), StatusCode::FORBIDDEN);
         // 스위치를 내리면 이미 붙은 길도 곧바로 멈춘다.
         st.lan.disarm();
-        let (s, _) = post(&app, "192.168.0.10:8790", "/lan/pull", &json!({ "cert": crate::lan_mount::tests::vec()["certs"]["replica"], "cursor": 0, "nonce": "cd".repeat(16) })).await;
+        let (s, _) = post(&app, "192.168.0.10:8790", "/lan/pull", &pull_with("cd".repeat(16))).await;
         assert_eq!(s, StatusCode::NOT_FOUND);
     }
 }

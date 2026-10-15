@@ -215,7 +215,9 @@ pub fn write_config(dir: &Path, on: bool) -> Result<(), String> {
 // 가게 번호만 화면이 준다(틀려도 그 번호로 서명된 증서가 없으니 문이 열리지 않는다 — 닫힌 실패).
 
 pub const STORE_FILE: &str = "store.json";
-pub const DATA_KEY_FILE: &str = "data-key.json";
+/// 열쇠 기록 v2(`lan_keys::LanKeyRecord` — 데이터 열쇠·세션 표·회전 메타·회전 때 철회 목록). 옛 v1 `data-key.json` 은 읽지 않는다
+/// (v1 와이어를 받지 않으므로 세션 표 없는 열쇠는 쓸 곳이 없다 — 그 파일을 만든 코드도 없었다).
+pub const DATA_KEY_FILE: &str = "keys.json";
 pub const REVOCATION_FILE: &str = "revocation.json";
 pub const LOG_DIR: &str = "log";
 
@@ -239,7 +241,10 @@ impl StoreIdentity {
 /// 처리기에 줄 값의 공급자. 시험 = 합성 값, 운영 = `FileLanKeys`.
 pub trait LanKeySource: Send + Sync {
     fn store_identity(&self) -> Result<StoreIdentity, MountState>;
-    fn data_key(&self) -> Result<crate::lan_seal::DataKey, MountState>;
+    /// 열쇠 기록(모양만 확인된 것). 없으면 NoDataKey, 모양이 틀리면 BadDataKey.
+    fn key_record(&self) -> Result<crate::lan_keys::LanKeyRecord, MountState>;
+    /// 열쇠 기록 저장(0600·원자적: 임시 파일 → fsync → 이름 바꾸기 → 폴더 fsync).
+    fn save_key_record(&self, record: &Value) -> Result<(), String>;
     /// 마지막으로 받아 둔 서명된 철회 목록(없으면 None → 모든 증서 거절).
     fn revocation_list(&self) -> Option<Value>;
     fn save_revocation_list(&self, list: &Value) -> Result<(), String>;
@@ -279,24 +284,17 @@ impl LanKeySource for FileLanKeys {
             _ => Err(MountState::BadStore),
         }
     }
-    /// 모양: `{"v":1,"version":<1 이상>,"key":"<64 hex, 전부 0 아님>"}`. 🔴 이 파일을 만드는 코드는 아직 없다(결정 대기).
-    fn data_key(&self) -> Result<crate::lan_seal::DataKey, MountState> {
-        let v = match self.read(DATA_KEY_FILE) {
-            None => return Err(MountState::NoDataKey),
-            Some(Err(())) => return Err(MountState::BadDataKey),
-            Some(Ok(v)) => v,
-        };
-        let ok = v.as_object().map_or(false, |o| o.len() == 3) && v["v"].as_u64() == Some(1);
-        let version = v["version"].as_u64().filter(|n| (1..=9_007_199_254_740_991).contains(n));
-        let key = v["key"].as_str().filter(|k| is_sha_hex(k)).and_then(|k| hex::decode(k).ok());
-        match (ok, version, key) {
-            (true, Some(version), Some(bytes)) if bytes.iter().any(|b| *b != 0) => {
-                let mut key = [0u8; 32];
-                key.copy_from_slice(&bytes);
-                Ok(crate::lan_seal::DataKey { version, key })
-            }
-            _ => Err(MountState::BadDataKey),
+    /// 모양: `lan_keys::LanKeyRecord::parse`(v:2). 🔴 이 파일을 처음 만드는 코드(데이터 열쇠 생성·회전)는 아직 없다(결정 대기).
+    fn key_record(&self) -> Result<crate::lan_keys::LanKeyRecord, MountState> {
+        match self.read(DATA_KEY_FILE) {
+            None => Err(MountState::NoDataKey),
+            Some(Err(())) => Err(MountState::BadDataKey),
+            Some(Ok(v)) => crate::lan_keys::LanKeyRecord::parse(&v).map_err(|_| MountState::BadDataKey),
         }
+    }
+    fn save_key_record(&self, record: &Value) -> Result<(), String> {
+        let doc = serde_json::to_vec(record).map_err(|_| "열쇠 기록을 저장하지 못했어요.".to_string())?;
+        crate::server::atomic_write_0600(&self.dir.join(DATA_KEY_FILE), &doc).map_err(|_| "열쇠 기록을 저장하지 못했어요.".to_string())
     }
     fn revocation_list(&self) -> Option<Value> {
         self.read(REVOCATION_FILE).and_then(Result::ok).filter(Value::is_object)
@@ -322,11 +320,11 @@ pub fn store_identity_from_words(words: &mut String, pass: &mut String, store_id
 /// 로그 폴더는 가게 번호별: `<log_root>/<가게 번호>/`.
 pub fn build_material(keys: &dyn LanKeySource, log_root: &Path, now_ms: i64) -> Result<LanMaterial, MountState> {
     let id = keys.store_identity()?;
-    let data_key = keys.data_key()?;
+    let record = keys.key_record()?;
     // 저장해 둔 목록도 가게 키 서명·가게 번호를 다시 본다. 못 넘으면 없는 것으로(= 모든 증서 거절, 닫힌 실패).
     let list = keys.revocation_list().filter(|l| crate::lan_cert::verify_revocation_list(l, &id.store_key, &id.store_id).is_ok());
     let log_dir = log_root.join(&id.store_id);
-    let auth = crate::lan_handler::LanAuth::new(id.store_key, id.store_id, data_key, list);
+    let auth = crate::lan_handler::LanAuth::new(id.store_key, id.store_id, record, list);
     Ok(LanMaterial { auth, log_dir, now_ms, clock: None })
 }
 
@@ -508,8 +506,9 @@ pub async fn lan_store_set(store_id: String) -> Result<Value, String> {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
-    use crate::lan_seal::DataKey;
+    use crate::lan_keys::LanKeyRecord;
     use crate::lan_store::LanStore;
+    use crate::lan_testkit as kit;
 
     pub(crate) fn vec() -> Value {
         serde_json::from_str(include_str!("../testdata/rv-lan-cert-vectors.json")).unwrap()
@@ -522,30 +521,24 @@ pub(crate) mod tests {
         std::fs::create_dir_all(&d).unwrap();
         d
     }
-    fn synth_key() -> DataKey {
-        let mut k = [0u8; 32];
-        for (i, b) in k.iter_mut().enumerate() {
-            *b = i as u8 + 1;
+    /// 합성 목록 이름 → 가게 키(0x11 합성)로 서명한 목록. empty = seq 1 빈 목록, stale = 하루 넘게 낡음.
+    pub(crate) fn named_list(name: &str) -> Value {
+        match name {
+            "stale" => kit::list_at(1, kit::NOW - 25 * 3600_000, &[]),
+            _ => kit::list(1, &[]),
         }
-        DataKey { version: 3, key: k }
     }
-    /// 합성 값만: 시험 벡터의 가게 공개키(개인키 0x11 반복으로 폰이 만든 것)·합성 데이터 열쇠.
+    /// 합성 값만: 합성 가게(0x11)·합성 기기·합성 데이터 열쇠 판 3.
     pub(crate) fn synthetic_state(dir: &Path, list: &str) -> LanServerState {
-        let v = vec();
-        let now = v["now"].as_i64().unwrap();
-        let store = LanStore::open(&dir.join("log"), now).unwrap();
-        let auth = crate::lan_handler::LanAuth::new(v["storeKey"].as_str().unwrap().into(), v["storeId"].as_str().unwrap().into(), synth_key(), Some(v["lists"][list].clone()));
-        let mut st = LanServerState::new(auth, store);
-        st.clock = Box::new(move || now);
+        let store = LanStore::open(&dir.join("log"), kit::NOW).unwrap();
+        let mut st = LanServerState::new(kit::auth(3, &kit::all(), &named_list(list)), store);
+        st.clock = Box::new(|| kit::NOW);
         st.seal_nonce = Box::new(|| [9u8; 24]);
         st
     }
-    /// 켜기 재료(합성). 시계는 시험 벡터 시각에 고정.
+    /// 켜기 재료(합성). 시계는 시험 시각에 고정.
     pub(crate) fn synthetic_material(dir: &Path, list: &str) -> LanMaterial {
-        let v = vec();
-        let now = v["now"].as_i64().unwrap();
-        let auth = crate::lan_handler::LanAuth::new(v["storeKey"].as_str().unwrap().into(), v["storeId"].as_str().unwrap().into(), synth_key(), Some(v["lists"][list].clone()));
-        LanMaterial { auth, log_dir: dir.join("log"), now_ms: now, clock: Some(Box::new(move || now)) }
+        LanMaterial { auth: kit::auth(3, &kit::all(), &named_list(list)), log_dir: dir.join("log"), now_ms: kit::NOW, clock: Some(Box::new(|| kit::NOW)) }
     }
 
     #[test]
@@ -622,18 +615,19 @@ pub(crate) mod tests {
         assert_eq!(pull(&st, 1), 200);
         // 데이터 열쇠 파일이 새 판으로 바뀌었다 → 다시 켜면 새 열쇠로.
         let mut m = synthetic_material(&d, "empty");
-        m.auth = crate::lan_handler::LanAuth::new(m.auth.store_key.clone(), m.auth.store_id.clone(), DataKey { version: 4, key: [9u8; 32] }, m.auth.revocation().cloned());
+        m.auth = kit::auth(4, &kit::all(), &kit::list(1, &[]));
         assert_eq!(slot.arm(&LanConfig { enabled: true }, || Ok(m)), MountState::On);
         assert!(Arc::ptr_eq(&st, &slot.state().unwrap()), "옛 라우터가 쥔 같은 상태가 새 재료를 쓴다");
-        assert_eq!(st.auth().data_key.version, 4);
+        assert_eq!(st.auth().key_version(), 4);
+        assert_eq!(pull_v(&st, 9, 3), 410, "옛 판 요청은 열쇠 필요");
+        assert_eq!(pull_v(&st, 10, 4), 200);
         // 철회 목록이 디스크에서 망가졌으면(서명 깨짐) 다시 켤 때 없는 것으로 = 모두 거절.
         let v = vec();
         let mut bad = v["lists"]["empty"].clone();
         bad["seq"] = json!(41);
         let keys = synth();
         *keys.list.lock().unwrap() = Some(bad);
-        let mut keys = keys;
-        keys.key = Ok(DataKey { version: 4, key: [9u8; 32] });
+        *keys.key.lock().unwrap() = Ok(kit::record(4, &kit::all(), &kit::list(1, &[])));
         assert_eq!(slot.arm(&LanConfig { enabled: true }, || build_material(&keys, &d.join("log-root"), v["now"].as_i64().unwrap()).map(|mut m| {
             m.log_dir = d.join("log"); // 같은 가게·같은 로그
             m
@@ -659,7 +653,7 @@ pub(crate) mod tests {
         // 같은 가게 키, 다른 가게 번호(B) — 목록은 B 것이 없다.
         let other = "cd".repeat(32);
         let m = LanMaterial {
-            auth: crate::lan_handler::LanAuth::new(v["storeKey"].as_str().unwrap().into(), other.clone(), DataKey { version: 3, key: [7u8; 32] }, None),
+            auth: crate::lan_handler::LanAuth::new(v["storeKey"].as_str().unwrap().into(), other.clone(), kit::record(3, &kit::all(), &kit::list(1, &[])), None),
             log_dir: d.join("log-b"),
             now_ms: now,
             clock: None,
@@ -670,7 +664,7 @@ pub(crate) mod tests {
         assert_eq!(st.store.lock().unwrap().store_id, other);
         assert_eq!(st.store.lock().unwrap().len(), 0, "B 가게는 A 가게 로그를 보지 않는다");
         // A 가게 증서는 B 상태에서 받지 않는다.
-        let r = crate::lan_handler::handle_pull(&st, &serde_json::to_vec(&json!({ "cert": v["certs"]["replica"], "cursor": 0, "nonce": "ab".repeat(16) })).unwrap());
+        let r = kit::post(&st, false, &kit::pull_req(&kit::replica(), 0, &"ab".repeat(16)));
         assert_eq!(r.status, 403);
         // A 로 되돌리면 A 로그가 다시 보인다(가게별 폴더 — 옛 잠금은 풀렸다).
         assert_eq!(slot.arm(&LanConfig { enabled: true }, || Ok(synthetic_material(&d, "empty"))), MountState::On);
@@ -723,7 +717,7 @@ pub(crate) mod tests {
         let slot = LanSlot::default();
         // 다른 가게 번호(cd..)로 켜져 있다.
         let m = LanMaterial {
-            auth: crate::lan_handler::LanAuth::new(v["storeKey"].as_str().unwrap().into(), "cd".repeat(32), DataKey { version: 3, key: [7u8; 32] }, None),
+            auth: crate::lan_handler::LanAuth::new(v["storeKey"].as_str().unwrap().into(), "cd".repeat(32), kit::record(3, &kit::all(), &kit::list(1, &[])), None),
             log_dir: d.join("log-b"),
             now_ms: t0,
             clock: None,
@@ -739,15 +733,19 @@ pub(crate) mod tests {
     /// 합성 공급자(시험 전용).
     pub(crate) struct SynthKeys {
         pub id: Result<StoreIdentity, MountState>,
-        pub key: Result<DataKey, MountState>,
+        pub key: Mutex<Result<LanKeyRecord, MountState>>,
         pub list: Mutex<Option<Value>>,
     }
     impl LanKeySource for SynthKeys {
         fn store_identity(&self) -> Result<StoreIdentity, MountState> {
             self.id.clone()
         }
-        fn data_key(&self) -> Result<DataKey, MountState> {
-            self.key.clone()
+        fn key_record(&self) -> Result<LanKeyRecord, MountState> {
+            self.key.lock().unwrap().clone()
+        }
+        fn save_key_record(&self, record: &Value) -> Result<(), String> {
+            *self.key.lock().unwrap() = Ok(LanKeyRecord::parse(record).map_err(|e| e.code().to_string())?);
+            Ok(())
         }
         fn revocation_list(&self) -> Option<Value> {
             self.list.lock().unwrap().clone()
@@ -761,8 +759,8 @@ pub(crate) mod tests {
         let v = vec();
         SynthKeys {
             id: Ok(StoreIdentity::checked(v["storeId"].as_str().unwrap(), v["storeKey"].as_str().unwrap()).unwrap()),
-            key: Ok(DataKey { version: 3, key: [7u8; 32] }),
-            list: Mutex::new(Some(v["lists"]["empty"].clone())),
+            key: Mutex::new(Ok(kit::record(3, &kit::all(), &kit::list(1, &[])))),
+            list: Mutex::new(Some(kit::list(1, &[]))),
         }
     }
 
@@ -773,14 +771,14 @@ pub(crate) mod tests {
         let now = v["now"].as_i64().unwrap();
         let m = build_material(&synth(), &d.join("log"), now).unwrap();
         assert_eq!(m.auth.store_key, v["storeKey"].as_str().unwrap());
-        assert_eq!(m.auth.data_key.version, 3);
+        assert_eq!(m.auth.key_version(), 3);
         assert!(m.auth.revocation().is_some());
         assert_eq!(m.log_dir, d.join("log").join(v["storeId"].as_str().unwrap()), "로그는 가게 번호별 폴더");
         let mut k = synth();
         k.id = Err(MountState::NoStore);
         assert_eq!(build_material(&k, &d.join("log2"), now).err().map(|e| e), Some(MountState::NoStore));
-        let mut k = synth();
-        k.key = Err(MountState::NoDataKey);
+        let k = synth();
+        *k.key.lock().unwrap() = Err(MountState::NoDataKey);
         assert_eq!(build_material(&k, &d.join("log3"), now).err(), Some(MountState::NoDataKey));
         // 로그 폴더를 다른 쪽이 쥐고 있으면 켜기가 StoreFailed.
         let held = crate::lan_store::LanStore::open(&d.join("log4").join(v["storeId"].as_str().unwrap()), now).unwrap();
@@ -794,7 +792,7 @@ pub(crate) mod tests {
         let d = fixture("files");
         let k = FileLanKeys::new(d.clone());
         assert_eq!(k.store_identity(), Err(MountState::NoStore));
-        assert_eq!(k.data_key().err(), Some(MountState::NoDataKey));
+        assert_eq!(k.key_record().err(), Some(MountState::NoDataKey));
         assert!(k.revocation_list().is_none());
         let v = vec();
         let id = StoreIdentity::checked(v["storeId"].as_str().unwrap(), v["storeKey"].as_str().unwrap()).unwrap();
@@ -815,20 +813,31 @@ pub(crate) mod tests {
             std::fs::write(d.join(STORE_FILE), &bad).unwrap();
             assert_eq!(k.store_identity(), Err(MountState::BadStore), "{bad}");
         }
-        // 합성 데이터 열쇠 파일(시험 폴더 안에만).
-        std::fs::write(d.join(DATA_KEY_FILE), json!({ "v": 1, "version": 2, "key": "07".repeat(32) }).to_string()).unwrap();
-        let dk = k.data_key().unwrap();
-        assert_eq!((dk.version, dk.key), (2, [7u8; 32]));
-        for bad in [
-            json!({ "v": 1, "version": 0, "key": "07".repeat(32) }),
-            json!({ "v": 1, "version": 2, "key": "00".repeat(32) }),
-            json!({ "v": 1, "version": 2, "key": "07".repeat(31) }),
-            json!({ "v": 1, "version": "2", "key": "07".repeat(32) }),
-            json!({ "v": 1, "version": 2, "key": "07".repeat(32), "seed": "x" }),
-        ] {
-            std::fs::write(d.join(DATA_KEY_FILE), bad.to_string()).unwrap();
-            assert_eq!(k.data_key().err(), Some(MountState::BadDataKey), "{bad}");
+        // 합성 열쇠 기록 파일(시험 폴더 안에만) — 저장은 0600·원자적.
+        let rec = kit::record(2, &kit::all(), &kit::list(1, &[]));
+        k.save_key_record(&rec.to_json()).unwrap();
+        let got = k.key_record().unwrap();
+        assert_eq!((got.key_version(), got.to_json()), (2, rec.to_json()));
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(std::fs::metadata(d.join(DATA_KEY_FILE)).unwrap().permissions().mode() & 0o777, 0o600);
         }
+        assert!(std::fs::read_dir(&d).unwrap().all(|e| !e.unwrap().file_name().to_string_lossy().ends_with(".tmp")), "임시 파일이 남지 않는다");
+        let mut j0 = rec.to_json();
+        j0["keyVersion"] = json!(0);
+        let mut j1 = rec.to_json();
+        j1["dataKey"] = json!("00".repeat(32));
+        let mut j2 = rec.to_json();
+        j2["keyVersion"] = json!("2");
+        let mut j3 = rec.to_json();
+        j3["seed"] = json!("x");
+        for bad in [json!({ "v": 1, "version": 2, "key": "07".repeat(32) }), j0, j1, j2, j3] {
+            std::fs::write(d.join(DATA_KEY_FILE), bad.to_string()).unwrap();
+            assert_eq!(k.key_record().err(), Some(MountState::BadDataKey), "{bad}");
+        }
+        std::fs::write(d.join(DATA_KEY_FILE), "{broken").unwrap();
+        assert_eq!(k.key_record().err(), Some(MountState::BadDataKey));
     }
 
     #[test]
@@ -851,18 +860,18 @@ pub(crate) mod tests {
         slot.arm(&LanConfig { enabled: true }, || build_material(&synth(), &d.join("log"), vec()["now"].as_i64().unwrap()));
         let s = status_json(&slot).to_string();
         assert!(s.contains("\"on\":true"));
-        assert!(!s.contains(&"07".repeat(32)) && !s.contains(vec()["storeKey"].as_str().unwrap()));
+        assert!(!s.contains(&hex::encode(kit::data_key(3).key)) && !s.contains(vec()["storeKey"].as_str().unwrap()));
+        assert!(!s.contains(&hex::encode(kit::replica().session)), "세션 열쇠도 싣지 않는다");
     }
 
     fn signed_list(seq: u64, issued: i64, revoked: &[&str]) -> Value {
-        let v = vec();
-        let body = json!({ "v": 1, "storeId": v["storeId"], "seq": seq, "revoked": revoked, "issuedAt": issued, "prunedBefore": 0 });
-        crate::lan_cert::sign_doc(crate::lan_cert::DEVICE_REVOKE_DOMAIN, &body, v["storeKey"].as_str().unwrap(), crate::lan_cert::tests::synth_signer).unwrap()
+        kit::list_at(seq, issued, revoked)
     }
     fn pull(st: &LanServerState, n: u8) -> u16 {
-        let v = vec();
-        let body = json!({ "cert": v["certs"]["replica"], "cursor": 0, "nonce": format!("{:02x}", n).repeat(16) });
-        crate::lan_handler::handle_pull(st, &serde_json::to_vec(&body).unwrap()).status
+        pull_v(st, n, st.auth().key_version())
+    }
+    fn pull_v(st: &LanServerState, n: u8, version: u64) -> u16 {
+        kit::post(st, false, &kit::pull_req_v(&kit::replica(), 0, &format!("{:02x}", n).repeat(16), version)).status
     }
 
     #[test]
@@ -872,7 +881,7 @@ pub(crate) mod tests {
         let v = vec();
         let t0 = v["now"].as_i64().unwrap();
         let keys = synth();
-        *keys.list.lock().unwrap() = Some(v["lists"]["stale"].clone()); // seq 3, 하루 넘게 낡음
+        *keys.list.lock().unwrap() = Some(named_list("stale")); // seq 1, 하루 넘게 낡음
         let slot = LanSlot::default();
         slot.arm(&LanConfig { enabled: true }, || build_material(&keys, &d.join("log"), t0).map(|mut m| {
             m.clock = Some(Box::new(move || t0)); // 시험 벡터 시각에 고정
@@ -921,7 +930,8 @@ pub(crate) mod tests {
         struct NoSave(SynthKeys);
         impl LanKeySource for NoSave {
             fn store_identity(&self) -> Result<StoreIdentity, MountState> { self.0.store_identity() }
-            fn data_key(&self) -> Result<DataKey, MountState> { self.0.data_key() }
+            fn key_record(&self) -> Result<LanKeyRecord, MountState> { self.0.key_record() }
+            fn save_key_record(&self, r: &Value) -> Result<(), String> { self.0.save_key_record(r) }
             fn revocation_list(&self) -> Option<Value> { self.0.revocation_list() }
             fn save_revocation_list(&self, _: &Value) -> Result<(), String> { Err("disk".into()) }
         }

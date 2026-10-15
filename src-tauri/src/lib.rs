@@ -125,6 +125,8 @@ mod lan_handler;
 mod lan_mount;
 mod lan_issue;
 mod lan_keys;
+#[cfg(test)]
+mod lan_testkit;
 mod shopseal;
 mod devfee;
 mod payout_guard;
