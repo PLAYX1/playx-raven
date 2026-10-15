@@ -9,7 +9,7 @@
 //!   동시 처리 상한 → ⓪ 회전 관문(철회만 되고 열쇠 회전이 없으면 503 rotation-required, 본문도 읽지 않음) → 크기 제한 → JSON 객체
 //!   → 전체 속도 → ① 판·모양(v:2 아니면 old-protocol, 칸이 정확히 같아야) → ② 증서(서명·만료·철회·맡김·**이 가게 번호**)
 //!   → ③ 기기 서명(도메인 RAVENVAULT-LAN-REQ-V2, 기대 키 = 증서 devicePubKey, low-S) → ④ 시각 창 ±5분 → ⑤ 이미 쓴 nonce 인지 보기만
-//!   → ⑥ 열쇠 판(keyVersion = 서버 판, 아니면 410) → ⑦ 이 증서의 세션 열쇠(증서 서명 바이트까지 일치, 없으면 410) → 기기 속도
+//!   → ⑥ 열쇠 판(keyVersion = 서버 판, 아니면 410) → ⑦ 이 증서의 세션 열쇠(없으면 410, 증서 서명 바이트가 다르면 403 bad-cert) → 기기 속도
 //!   → (push) 봉인 열기(그 기기의 **봉인 열쇠**, 평문 ≤ 64KiB) → 조각 번호·개수·출처·종류별 맡김·재직렬화 크기 대조
 //!   → 저장소 잠금(가게가 바뀌는 중이면 503, 고장 상태면 500) → 충돌 422 → nonce 기록(상한 429) → 저장(성공해야 다음)
 //!   → 응답에 그 기기의 **확인값 열쇠**로 만든 v2 확인값 부착
@@ -411,13 +411,14 @@ pub fn verify_lan_request(auth: &LanAuth, raw: &Value, push: bool, now: i64, see
 }
 
 /// ⑦ 이 서버가 그 증서(같은 certId·같은 기기·**같은 증서 서명**)에 세션 열쇠를 줬는지 → 그 기기의 봉인·확인값 열쇠.
-/// 없으면 None(= 410 key-version: 폰은 「열쇠 필요」).
-pub fn session_keys(auth: &LanAuth, v: &LanVerified) -> Option<LanDerivedKeys> {
-    let e = auth.keys.sessions.get(&v.cert.cert_id)?;
+/// certId 의 세션이 없으면 `key-version`(410 — 폰은 「열쇠 필요」: 봉투를 아직 못 받았거나 회전 때 빠졌다).
+/// 세션은 있는데 기기·증서 서명 바이트가 다르면 이 PC 가 낸 그 증서가 아니다 → `bad-cert`(403, 폰 가짜 서버와 같은 판정).
+pub fn session_keys(auth: &LanAuth, v: &LanVerified) -> Result<LanDerivedKeys, &'static str> {
+    let e = auth.keys.sessions.get(&v.cert.cert_id).ok_or("key-version")?;
     if e.device_id != v.cert.device_id || e.cert_sig != v.cert_sig {
-        return None;
+        return Err("bad-cert");
     }
-    derive_lan_keys(&auth.keys.data_key, &e.key.0, &v.cert.store_id, &v.cert.cert_id).ok()
+    derive_lan_keys(&auth.keys.data_key, &e.key.0, &v.cert.store_id, &v.cert.cert_id).map_err(|_| "key-version")
 }
 
 fn binding(c: &VerifiedCert) -> ProofBinding<'_> {
@@ -474,7 +475,7 @@ fn admit(st: &LanServerState, push: bool, body: &[u8]) -> Result<(Arc<LanAuth>, 
     }
     let seen = |_cert_id: &str, nonce: &str| st.store.lock().map(|s| s.nonce_seen(nonce)).unwrap_or(false);
     let v = verify_lan_request(&auth, &req, push, now, &seen).map_err(deny_reason)?;
-    let keys = session_keys(&auth, &v).ok_or_else(|| deny_reason("key-version"))?;
+    let keys = session_keys(&auth, &v).map_err(deny_reason)?;
     if !st.rate_ok(now, Some(&v.cert.device_id)) {
         return Err(st.limited("rate"));
     }
@@ -1396,7 +1397,7 @@ mod tests {
         assert!(open_chunk(&forged, &vk.seal, &cb).is_err());
     }
 
-    /// 옛 열쇠: 회전 뒤(판 4) 옛 판으로 보낸 요청은 410, 새 판인데 세션이 없는(회전 때 빠진) 기기·증서 서명이 다른 기기도 410.
+    /// 옛 열쇠: 회전 뒤(판 4) 옛 판으로 보낸 요청은 410, 새 판인데 세션이 없는 기기도 410. 증서 서명이 세션 표와 다르면 403 bad-cert.
     #[test]
     fn v2_old_key_version_or_missing_session_is_410() {
         let rv = kit::revoked();
@@ -1408,10 +1409,10 @@ mod tests {
         // 세션 표에 없는 기기(새로 낸 증서인데 봉투를 아직 못 받음)
         let newbie = kit::dev(0x51, "replica", &["read", "replicate"], 9);
         assert_eq!(reason(&post(&st, false, &kit::pull_req_v(&newbie, 0, &nonce(3), 4))), (410, Some("key-version")));
-        // 같은 certId(같은 일련번호)인데 다른 증서 문서 — 세션 표의 증서 서명과 다르다.
+        // 같은 certId(같은 일련번호)인데 다른 증서 문서 — 세션 표의 증서 서명과 다르다 = 이 PC 가 낸 그 증서가 아니다.
         let twin = kit::dev(0x52, "replica", &["read", "replicate"], me.cert["serial"].as_u64().unwrap());
         assert_eq!(twin.cert_id, me.cert_id);
-        assert_eq!(reason(&post(&st, false, &kit::pull_req_v(&twin, 0, &nonce(4), 4))), (410, Some("key-version")));
+        assert_eq!(reason(&post(&st, false, &kit::pull_req_v(&twin, 0, &nonce(4), 4))), (403, Some("bad-cert")));
         // 410 이전 단계까지 통과했지만 nonce 는 기록되지 않는다(열쇠 판·세션이 맞아야 기록).
         let logged = log_len(&d);
         let _ = post(&st, false, &kit::pull_req_v(&me, 0, &nonce(5), 3));
