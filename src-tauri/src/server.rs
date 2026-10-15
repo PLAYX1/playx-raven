@@ -138,6 +138,8 @@ pub struct ServerState {
     /// False by default. A tunnel forwards the whole port, and three of the
     /// four screens behind it are not for strangers. See `outside_blocked`.
     remote_admin: Arc<Mutex<bool>>,
+    /// 같은 와이파이 기기 복사(`/lan/push`·`/lan/pull`). 기본 비어 있음 = 경로 없음. `lan_mount` 참고.
+    lan: Arc<crate::lan_mount::LanSlot>,
     /// 이 주문이 확인되면 개발비로 적어야 할 RVN.
     ///
     /// 🔴 `order_expect`(가게 몫) 튜플에 끼워 넣지 않는다. 그 값은 여러 곳에서
@@ -515,6 +517,10 @@ fn customer_path(path: &str) -> bool {
 /// not guessable; what this limits is the amount of surface a stranger can
 /// reach at all.
 fn outside_blocked(state: &ServerState, headers: &HeaderMap, path: &str) -> bool {
+    // 기기 복사는 같은 와이파이 전용이다. 원격 관리를 켜도 터널로는 열지 않는다.
+    if path.starts_with("/lan/") || path == "/lan" {
+        return from_outside(headers);
+    }
     if !from_outside(headers) || customer_path(path) {
         return false;
     }
@@ -3561,6 +3567,12 @@ fn build_phone_router(st: ServerState) -> axum::Router {
     // 🔴 바깥(터널)에서 온 요청은 손님 경로만 받는다. 이 규칙을 핸들러마다 기억하게
     //    두었더니 `/api/owner-ask`·`/api/keepphoto`·`/api/bug-reports`·`/move/{code}` 가
     //    검사 없이 인터넷에 열려 있었다. 이제 라우터 한 곳에서 모든 경로에 건다.
+    // 🔴 같은 와이파이 기기 복사. 켜져 있을 때만 경로가 생긴다(기본 없음). 새 포트가 아니라 이 라우터에 붙는다 —
+    //    아래 두 문지기가 그대로 덮고, 바깥(터널)에서 온 `/lan/*` 은 `outside_blocked` 가 늘 막는다.
+    let admin = match st.lan.router() {
+        Some(lan) => admin.merge(lan.with_state::<ServerState>(())),
+        None => admin,
+    };
     let app = customer
         .merge(admin)
         // 안쪽(먼저 붙인 것이 안쪽): 평문 손님 정보 세기·막기 → 바깥: 문 앞 검문.
@@ -3622,6 +3634,7 @@ pub async fn start_phone_server(
         ticket_day: state.ticket_day.clone(),
         last_sweep: state.last_sweep.clone(),
         remote_admin: state.remote_admin.clone(),
+        lan: state.lan.clone(),
         order_table: state.order_table.clone(),
         order_expect: state.order_expect.clone(),
         order_until: state.order_until.clone(),
@@ -4415,6 +4428,7 @@ impl Default for ServerState {
             ticket_day: Arc::new(Mutex::new(0)),
             last_sweep: Arc::new(Mutex::new(0)),
             remote_admin: Arc::new(Mutex::new(false)),
+            lan: Arc::new(crate::lan_mount::LanSlot::default()),
             order_table: Arc::new(Mutex::new(std::collections::HashMap::new())),
             order_expect: Arc::new(Mutex::new(std::collections::HashMap::new())),
             order_until: Arc::new(Mutex::new(std::collections::HashMap::new())),
@@ -6434,5 +6448,60 @@ mod refund_outcome_tests {
         let (env,ctx)=super::desktop_security_tests::envelope(&token,"/api/staff/refund","POST",json!({"order_address":order,"request_id":id,"to":"bad","krw":-1.0,"reason":"synthetic reason","passphrase":null}));
         let (_,wire)=super::desktop_security_tests::request(&st,crate::shopseal::SEAL_PATH,None,&env.to_string()).await;
         assert_eq!(crate::shopseal::open_response(&ctx,&wire).unwrap()["body"]["refund_outcome"],"unresolved");
+    }
+}
+
+/// 같은 와이파이 기기 복사(`/lan/*`)를 **진짜 폰 서버 라우터**에 붙였을 때의 문 — 합성 값만.
+#[cfg(test)]
+mod lan_mount_in_phone_router {
+    use axum::http::StatusCode;
+    use serde_json::{json, Value};
+    use tower::ServiceExt;
+
+    async fn post(app: &axum::Router, host: &str, path: &str, body: &Value) -> (StatusCode, Value) {
+        let req = axum::http::Request::post(path).header("host", host).header("content-type", "application/json")
+            .body(axum::body::Body::from(serde_json::to_vec(body).unwrap())).unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        let status = res.status();
+        let bytes = axum::body::to_bytes(res.into_body(), 1 << 20).await.unwrap();
+        (status, serde_json::from_slice(&bytes).unwrap_or(Value::Null))
+    }
+    fn pull_body() -> Value {
+        let v = crate::lan_mount::tests::vec();
+        json!({ "cert": v["certs"]["replica"], "cursor": 0, "nonce": "ab".repeat(16) })
+    }
+
+    #[tokio::test]
+    async fn off_by_default_there_is_no_lan_path() {
+        let _home = super::order_persistence_tests::TestHome::new();
+        let app = super::build_phone_router(super::ServerState::default());
+        let (s, _) = post(&app, "192.168.0.10:8790", "/lan/pull", &pull_body()).await;
+        assert_eq!(s, StatusCode::NOT_FOUND, "기본 꺼짐 = 경로 자체가 없다");
+    }
+
+    #[tokio::test]
+    async fn on_it_answers_inside_the_shop_and_never_through_the_tunnel() {
+        let _home = super::order_persistence_tests::TestHome::new();
+        let st = super::ServerState::default();
+        let d = crate::lan_mount::tests::fixture("srv");
+        let on = crate::lan_handler::LanConfig { enabled: true };
+        assert_eq!(st.lan.arm(&on, || Ok(crate::lan_mount::tests::synthetic_state(&d, "empty"))), crate::lan_mount::MountState::On);
+        let app = super::build_phone_router(st.clone());
+        let (s, body) = post(&app, "192.168.0.10:8790", "/lan/pull", &pull_body()).await;
+        assert_eq!(s, StatusCode::OK, "{body}");
+        assert!(body["proof"].is_string(), "응답에 확인값이 붙는다");
+        // 원격 관리를 켜도 바깥(터널)에서 온 /lan/* 은 막는다.
+        *st.remote_admin.lock().unwrap() = true;
+        for host in ["shop.example.com", "abc.trycloudflare.com", ""] {
+            let (s, _) = post(&app, host, "/lan/pull", &pull_body()).await;
+            assert_eq!(s, StatusCode::FORBIDDEN, "바깥 {host:?} 에서 /lan 이 열렸다");
+        }
+        // 그 사이에도 원격 관리 길은 원래대로(이 바꿈이 다른 길을 막지 않는다).
+        let req = axum::http::Request::get("/admin").header("host", "shop.example.com").body(axum::body::Body::empty()).unwrap();
+        assert_ne!(app.clone().oneshot(req).await.unwrap().status(), StatusCode::FORBIDDEN);
+        // 스위치를 내리면 이미 붙은 길도 곧바로 멈춘다.
+        st.lan.disarm();
+        let (s, _) = post(&app, "192.168.0.10:8790", "/lan/pull", &json!({ "cert": crate::lan_mount::tests::vec()["certs"]["replica"], "cursor": 0, "nonce": "cd".repeat(16) })).await;
+        assert_eq!(s, StatusCode::NOT_FOUND);
     }
 }

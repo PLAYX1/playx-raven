@@ -58,6 +58,8 @@ pub struct LanServerState {
     pub clock: Box<dyn Fn() -> i64 + Send + Sync>,
     /// 봉인 nonce(24바이트) 공급 — 기본은 OS 난수.
     pub seal_nonce: Box<dyn Fn() -> [u8; 24] + Send + Sync>,
+    /// 지금 받는가. 끄면(스위치 내림) 이미 붙은 경로도 곧바로 404 로 답한다 — 서버를 다시 켤 때까지 기다리지 않는다.
+    pub live: std::sync::atomic::AtomicBool,
 }
 impl LanServerState {
     pub fn new(store_key: String, data_key: DataKey, revocation: Option<Value>, store: LanStore) -> Self {
@@ -68,6 +70,7 @@ impl LanServerState {
             store: Mutex::new(store),
             clock: Box::new(|| std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as i64)),
             seal_nonce: Box::new(|| rand::random::<[u8; 24]>()),
+            live: std::sync::atomic::AtomicBool::new(true),
         }
     }
 }
@@ -236,6 +239,9 @@ pub fn router(cfg: &LanConfig, st: Arc<LanServerState>) -> Option<axum::Router> 
         return None;
     }
     async fn run(st: Arc<LanServerState>, body: Bytes, push: bool) -> (StatusCode, Json<Value>) {
+        if !st.live.load(std::sync::atomic::Ordering::SeqCst) {
+            return (StatusCode::NOT_FOUND, Json(json!({ "reason": "off" })));
+        }
         let res = tokio::task::spawn_blocking(move || if push { handle_push(&st, &body) } else { handle_pull(&st, &body) }).await;
         match res {
             Ok(r) => (StatusCode::from_u16(r.status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR), Json(r.body)),
@@ -556,7 +562,13 @@ mod tests {
         assert_eq!(st.store.lock().unwrap().len(), 1);
         let res = app.clone().oneshot(Request::post("/lan/push").body(Body::from(vec![b'x'; MAX_REQUEST_BYTES + 10])).unwrap()).await.unwrap();
         assert_eq!(res.status(), 413);
-        let res = app.oneshot(Request::get("/lan/push").body(Body::empty()).unwrap()).await.unwrap();
+        let res = app.clone().oneshot(Request::get("/lan/push").body(Body::empty()).unwrap()).await.unwrap();
         assert_eq!(res.status(), 405);
+        // 스위치를 내리면 이미 붙은 경로도 아무것도 처리하지 않는다.
+        st.live.store(false, std::sync::atomic::Ordering::SeqCst);
+        let (req, _, _) = push_req(&v, "remote", &[entry(dev, 2)], &nonce(2));
+        let res = app.oneshot(Request::post("/lan/push").body(Body::from(serde_json::to_vec(&req).unwrap())).unwrap()).await.unwrap();
+        assert_eq!(res.status(), 404);
+        assert_eq!(st.store.lock().unwrap().len(), 1, "꺼진 뒤에는 저장하지 않는다");
     }
 }
