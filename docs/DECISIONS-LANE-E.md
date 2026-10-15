@@ -8,3 +8,4 @@
 | 서명 복구 | `secp256k1` 크레이트에 `recovery` 기능만 켬 (새 크레이트 없음) | 폰은 복구한 키가 가게 키와 바이트까지 같은지 본다. 단순 검증은 복구 번호가 틀려도 통과하므로 같지 않다 |
 | 가게 키·데이터 열쇠 | 처리기는 호출자가 준 값만 쓴다. 이 레인은 12단어·지갑·.env 를 열지 않는다 | 지시: 실제 키 금지 |
 | 이 레인에서 안 만든 것 | 「우리가 낸 증서 목록과 대조」(FakeDesktop 의 `issued` 검사) | 폰 정본 `verifyDeviceCert` 에 없는 가짜 서버 전용 추가 검사. 서명 + 철회 목록으로 충분하다 |
+| ② 봉인 열기 규격 | `src-tauri/src/lan_seal.rs` — 폰 `phone/network/real/lan/seal.ts` 와 같음: XChaCha20-Poly1305, 열쇠 = 데이터 열쇠 32바이트 그대로, AAD = 정본JSON[도메인, 가게, 증서, 기기, 방향, 조각 번호, 커서, 열쇠 판], 봉투 `{v,keyVersion,nonce(hex48),ct(base64)}` | 폰이 같은 열쇠·nonce 로 만든 값(`testdata/rv-lan-seal-vectors.json`)을 Rust 가 열고, Rust 가 닫은 값이 바이트까지 같다. 다른 기기/가게/증서/방향/조각/커서로 옮기면 안 열린다 |
