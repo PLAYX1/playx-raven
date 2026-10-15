@@ -50,3 +50,14 @@
 | 🔴 자동 재서명 | **없음**(`autoRefresh:false`). 가게 키 서명은 매번 사장 확인창을 거친다 | 「신경 안 써도 자동」과 충돌 → 대표 결정 필요: ⓐ 하루 한 번 확인창 감수, ⓑ 기기용 목록 주기 완화(Fable 제안 7일, §40-B 미표결), ⓒ 철회 목록 전용 서명 열쇠를 따로 두고 자동 서명(새 키 = 새 설계) |
 | 덤으로 고친 것 | 레인 E `check_revocations` 가 칸이 빠진 목록에서 `o["issuedAt"]` 로 **패닉**하던 것 → `shape` 로 거절(시험 추가) | serde_json Map 색인은 없는 키에서 패닉한다 |
 | 서명 함수 | `lan_cert::sign_doc` = core `signShopDoc`+`finishSignature`(낮은 S·복구 번호를 가게 키로 확정·자기 검증). 열쇠는 보지 않고 다이제스트 서명 콜백만 받는다 | 폰 시험 벡터의 목록 3개·증서 6개를 합성 키(0x11)로 다시 서명하면 **바이트까지 같다**(RFC6979) |
+
+## ④ RV6 페어링 ↔ 기기 증서 발급
+
+| 결정 | 선택 | 근거 |
+|---|---|---|
+| RV6 에 그대로 붙일 수 있나 | **그대로는 불가.** RV6 v1 HELLO 는 `phone_sign`(BIP340 x-only 32바이트)·`phone_dh`(X25519)만 싣는다. 증서는 압축 secp256k1 공개키(02/03 + 32바이트)가 필요하고, 폰은 그 개인키로 데이터 열쇠 봉투를 연다(`openDataKey` ECDH) | `~/ravenvault/docs/RV6-pairing-protocol.md` §1·§4, `pairing/proto.rs` `TranscriptKeys`, 통합 `core/device/cert.ts`·`data-key.ts` |
+| 붙이는 길(결정 대기) | ⓐ RV6 채널(SAS 로 확인된 `ch_key`)에 새 종류 `req.device{devicePubKey}` → 데스크톱 「폰 요청」 → 사장 허락 → 증서+철회 목록 답. 규격 변경이라 v2 또는 확장 표기 필요(문서: 「규칙을 바꾸면 v2」). ⓑ `"02"‖phone_sign` 으로 같은 키를 재사용 — 페어링 서명 키를 데이터 열쇠 ECDH 에도 쓰는 교차 사용이라 **권하지 않음**. ⓒ 폰 통합 브랜치가 가정한 `/lan/hello`·`/lan/grant`·`/lan/latest`(`device-link.ts`, `fake-desktop.ts`) — 6자리 확인이 `sha256(nonce‖공개키)` 라 데스크톱 신원 확인이 RV6 보다 약하다 | 추천 ⓐ: 이미 사장 허락·6자리 대조·채널 봉함이 있는 길 |
+| Rust 발급 함수 | `lan_issue::issue_device_cert` = core `issueDeviceCert`(본문 모양 → 이력: 같은 가게·가게 키 서명·일련번호 중복 금지 → 서명 → 철회 목록으로 다시 확인). `cert_body` = core `DEVICE_ROLE_SCOPES` 표·수명 1ms~30일 | 폰 정본 |
+| 폰과 같은 바이트 | 폰이 합성 키(0x11)로 낸 증서 3개(remote·replica·revokedCert)를 이력을 쌓으며 다시 발급 → **정본 JSON 바이트까지 같다**. `deviceIdOf` 도 같다 | `testdata/rv-lan-cert-vectors.json` |
+| 운영 흐름 | `issue_with_store_key` = `storesign::sign_flow` 와 같은 순서(잠금 → 모양 → 사장 확인 → 12단어 → 서명 → 지우기)·같은 고정 오류 문장. **실행 안 함, 부르는 명령도 없음** | 화면 쪽 발급(`device-connect.ts issueFor` + `store_sign_digest`)이 이미 있다. Rust 발급은 ⓐ 가 정해지면 RV6 처리기에서 부른다 |
+| 시험 | 합성 키·공개 BIP39 시험 단어(abandon…about)만 | 지시 |

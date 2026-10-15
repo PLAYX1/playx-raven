@@ -174,8 +174,15 @@ pub fn device_cert_id(store_id: &str, serial: u64) -> String {
 }
 
 fn validate_cert(raw: &Value) -> Result<(&serde_json::Map<String, Value>, VerifiedCert), ()> {
+    validate_cert_with(raw, true)
+}
+
+/// core `validateDeviceCert(raw, withSig)` — `with_sig=false` 는 서명 전 본문(발급 때).
+pub(crate) fn validate_cert_with(raw: &Value, with_sig: bool) -> Result<(&serde_json::Map<String, Value>, VerifiedCert), ()> {
     let o = read_doc(raw, MAX_DEVICE_CERT_BYTES)?;
-    if !keys_are(o, &["v", "storeId", "deviceId", "devicePubKey", "role", "scopes", "issuedAt", "notAfter", "serial", "sig"]) {
+    const BODY: [&str; 9] = ["v", "storeId", "deviceId", "devicePubKey", "role", "scopes", "issuedAt", "notAfter", "serial"];
+    let want: Vec<&str> = BODY.iter().copied().chain(with_sig.then_some("sig")).collect();
+    if !keys_are(o, &want) {
         return Err(());
     }
     let pk = o["devicePubKey"].as_str().filter(|k| is_public_key(k)).ok_or(())?;
@@ -198,7 +205,7 @@ fn validate_cert(raw: &Value) -> Result<(&serde_json::Map<String, Value>, Verifi
         return Err(());
     }
     let (issued, not_after) = (time(&o["issuedAt"]).ok_or(())?, time(&o["notAfter"]).ok_or(())?);
-    if not_after <= issued || not_after - issued > DEVICE_CERT_MAX_MS || !o["sig"].is_string() {
+    if not_after <= issued || not_after - issued > DEVICE_CERT_MAX_MS || (with_sig && !o["sig"].is_string()) {
         return Err(());
     }
     let store_id = o["storeId"].as_str().ok_or(())?.to_string();

@@ -123,6 +123,7 @@ mod lan_seal;
 mod lan_store;
 mod lan_handler;
 mod lan_mount;
+mod lan_issue;
 mod shopseal;
 mod devfee;
 mod payout_guard;
