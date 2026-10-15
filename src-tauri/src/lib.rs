@@ -126,6 +126,7 @@ mod lan_mount;
 mod lan_issue;
 mod lan_keys;
 mod lan_pair;
+mod lan_rotate;
 #[cfg(test)]
 mod lan_testkit;
 mod shopseal;
@@ -353,6 +354,10 @@ pub fn run() {
             lan_mount::lan_sync_status,
             lan_mount::lan_store_set,
             lan_mount::lan_revocation_update,
+            lan_mount::lan_pair_offer,
+            lan_mount::lan_pair_pending,
+            lan_mount::lan_pair_approve,
+            lan_mount::lan_device_disconnect,
             devfee::fee_owed,
             ticket::ticket_find,
             ticket::ticket_use,

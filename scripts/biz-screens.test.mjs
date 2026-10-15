@@ -76,6 +76,39 @@ test('기기 끊기: 철회 목록 seq+1 · 그 증서만 거절 · 다른 기�
   await assert.rejects(() => B.revokeFor(after, K, 'cd'.repeat(32), NOW + 40), /device-unknown/);
 });
 
+test('레인 Y 끊기 단추: Rust 회전 한 길만 · 열쇠 없음일 때만 목록 서명 · 그 기기를 빼먹은 목록·옛 목록은 거절', async () => {
+  let s = (await B.issueFor(B.emptyState(), K, input(11), NOW)).state;
+  s = (await B.issueFor(s, K, input(12), NOW + 10)).state;
+  const id = B.deviceIdOf(dev(11));
+  const certId = B.deviceRows(s, NOW + 20).find(r => r.deviceId === id).certId;
+  // ① 나눠 준 열쇠가 있음 → Rust 가 서명한 새 목록을 그대로 받는다(화면은 서명하지 않는다).
+  const signed = [];
+  const K2 = { ...K, sign: async d => { signed.push(d); return K.sign(d); } };
+  const calls = [];
+  const rustList = await B.resignList(s, K, NOW + 20, [certId]);
+  const port = { disconnect: async (...args) => { calls.push(args); return { rotated: true, list: rustList }; } };
+  const r = await B.disconnectFor(s, K2, port, id, NOW + 20);
+  assert.equal(r.rotated, true); assert.equal(r.state.list.seq, rustList.seq);
+  assert.equal(signed.length, 0, '화면은 가게 키 서명을 하지 않는다(Rust 묶음 서명)');
+  assert.equal(calls.length, 1); assert.equal(calls[0][0], id); assert.equal(calls[0][2].length, 2, '이력(공개 증서)을 넘긴다');
+  // ② 열쇠 없음 → 그때만 화면이 목록을 서명(옛 동작).
+  const r2 = await B.disconnectFor(s, K2, B.nullDisconnect, id, NOW + 20);
+  assert.equal(r2.rotated, false); assert.ok(r2.state.list.revoked.includes(certId)); assert.equal(signed.length, 1);
+  // ③ 그 기기를 빼먹은 목록 · 다른 가게 키 목록 · 모르는 기기는 거절.
+  const wrong = await B.resignList(s, K, NOW + 20, []);
+  await assert.rejects(() => B.disconnectFor(s, K, { disconnect: async () => ({ rotated: true, list: wrong }) }, id, NOW + 20), /device-disconnect/);
+  const other = { storeId: STORE_ID, storeKey: B.pubOf(B.fakePriv(9)), sign: B.signerOf(B.fakePriv(9)) };
+  const foreign = await B.resignList({ ...s, list: null }, other, NOW + 20, [certId]);
+  await assert.rejects(() => B.disconnectFor(s, K, { disconnect: async () => ({ rotated: true, list: foreign }) }, id, NOW + 20));
+  await assert.rejects(() => B.disconnectFor(s, K, port, 'cd'.repeat(32), NOW + 20), /device-unknown/);
+  // ④ tauri 자리: 명령 이름·인자 모양, 열쇠 없음 응답.
+  const seen = [];
+  const inv = async (cmd, args) => { seen.push({ cmd, args }); return { ok: true, noDataKey: true }; };
+  assert.deepEqual(await B.tauriDisconnect(inv).disconnect(id, '직원 폰', s.history, s.list), { noDataKey: true });
+  assert.equal(seen[0].cmd, 'lan_device_disconnect'); assert.deepEqual(Object.keys(seen[0].args).sort(), ['deviceId', 'deviceName', 'knownCerts', 'knownList']);
+  await assert.rejects(() => B.tauriDisconnect(async () => ({ ok: false })).disconnect(id, 'x', [], null), /device-disconnect/);
+});
+
 test('철회 목록 후퇴 금지: 옛 판(seq 낮음)을 다시 올려도 현재 판이 그대로다', async () => {
   let s = (await B.issueFor(B.emptyState(), K, input(11), NOW)).state;
   const old = s.list;

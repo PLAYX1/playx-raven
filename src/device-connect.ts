@@ -9,7 +9,9 @@
  * 🔴 QR: 기존 RV6 폰 연결 QR(`pairing_show_qr`)을 그대로 부른다 — 규격을 바꾸지 않는다. 증서에 쓸 기기 공개키는 아직 그 QR 로 받을 수 없어
  *    새 기기가 알려 준 공개키를 칸에 붙여 넣는다(받는 길이 생기면 DeviceLinkPort.receiveKey 로 대체).
  * 🔴 기본 만료 7일은 잠정(core DEVICE_CERT_DEFAULT_DAYS) — 대표 결정 대기. 화면에도 「잠정」이라고 적는다.
- * 🔴 끊기: 철회 목록을 새로 서명해 올린다. 이미 그 기기가 복사해 간 지난 데이터는 되돌릴 수 없다는 문구는 법적 확인 필요(문구 확정 전).
+ * 🔴 끊기(레인 Y): 「끊기」 단추는 Rust `lan_device_disconnect` 한 길만 부른다 — 철회와 데이터 열쇠 회전을 한 동작으로(사장 확인 1번, 열쇠는 웹뷰를 지나지 않음).
+ *    Rust 가 「나눠 준 열쇠가 아직 없음(noDataKey)」이라고 답할 때만 여기서 목록만 새로 서명한다(바꿀 열쇠가 없으니 그것으로 안전).
+ *    이미 그 기기가 복사해 간 지난 데이터는 되돌릴 수 없다는 문구는 법적 확인 필요(문구 확정 전).
  * style="…" 속성은 쓰지 않는다(CSP) — 모양은 device-connect.css.
  */
 import {
@@ -85,6 +87,24 @@ export type DeviceLinkPort = {
   deliverCert(cert: DeviceCert): Promise<boolean>;
 };
 export const nullDeviceLink: DeviceLinkPort = { connected: false, receiveKey: async () => null, deliverCert: async () => false };
+
+/**
+ * 기기 끊기 자리(레인 Y). 운영 = Rust `lan_device_disconnect`(회전 + 철회를 한 번에, 사장 확인 1번).
+ * noDataKey = 기기끼리 나눈 데이터 열쇠가 아직 없음 → 화면이 목록만 새로 서명해도 안전하다. 그 밖에는 Rust 가 서명한 새 목록을 돌려준다.
+ */
+export type DisconnectResult = { noDataKey: true } | { noDataKey?: false; rotated: boolean; list: unknown };
+export type DeviceDisconnectPort = { disconnect(deviceId: string, name: string, history: readonly DeviceCert[], list: DeviceRevocationList | null): Promise<DisconnectResult> };
+export const nullDisconnect: DeviceDisconnectPort = { disconnect: async () => ({ noDataKey: true }) };
+export function tauriDisconnect(invoke: Invoke0): DeviceDisconnectPort {
+  return {
+    disconnect: async (deviceId, name, history, list) => {
+      const r = await invoke<{ ok?: boolean; noDataKey?: boolean; rotated?: boolean; list?: unknown }>("lan_device_disconnect", { deviceId, deviceName: name.slice(0, 40), knownCerts: history, knownList: list });
+      if (r && r.noDataKey === true) return { noDataKey: true };
+      if (!r || r.ok !== true || r.list === undefined) throw new Error("device-disconnect");
+      return { rotated: r.rotated === true, list: r.list };
+    },
+  };
+}
 
 export type ShownQr = { svg: string; expiresAt: number; fingerprint: string };
 export type DeviceQrPort = { show(): Promise<ShownQr | null>; cancel(): Promise<void> };
@@ -208,7 +228,10 @@ export async function issueFor(state: DeviceState, k: Signing, input: IssueInput
   if (!verified.ok) throw new Error("device-verify:" + verified.reason);
   return { cert, state: { ...state, list, history: [...state.history, cert], names: { ...state.names, [cert.deviceId]: input.name.trim().slice(0, 40) } } };
 }
-/** 기기 끊기: 그 증서 번호를 철회 목록에 넣어 새로 서명한다. */
+/**
+ * 목록만 새로 서명하는 끊기 — **화면 단추에서 직접 부르지 않는다**. `disconnectFor` 가 Rust 에게서 「나눠 준 열쇠 없음」을 받았을 때만 쓴다
+ * (열쇠가 있으면 목록만 바꾸는 것은 끊긴 기기가 옛 열쇠를 쥔 채 남는 길이라 Rust 가 거절하고, 처리기 관문도 멈춘다).
+ */
 export async function revokeFor(state: DeviceState, k: Signing, deviceId: string, now: number): Promise<DeviceState> {
   const row = deviceRows(state, now).find(r => r.deviceId === deviceId);
   if (!row) throw new Error("device-unknown");
@@ -216,10 +239,23 @@ export async function revokeFor(state: DeviceState, k: Signing, deviceId: string
   return { ...state, list };
 }
 
+/** 「끊기」 단추가 부르는 유일한 길: Rust 회전(철회 + 새 열쇠, 사장 확인 1번). 나눠 준 열쇠가 없을 때만 목록 서명으로 끝낸다. */
+export async function disconnectFor(state: DeviceState, k: Signing, port: DeviceDisconnectPort, deviceId: string, now: number): Promise<{ state: DeviceState; rotated: boolean }> {
+  const row = deviceRows(state, now).find(r => r.deviceId === deviceId);
+  if (!row) throw new Error("device-unknown");
+  const r = await port.disconnect(deviceId, row.name, state.history, state.list);
+  if (r.noDataKey === true) return { state: await revokeFor(state, k, deviceId, now), rotated: false };
+  const list = acceptDeviceRevocationList(state.list, r.list, k.storeKey, k.storeId);
+  if (!list.revoked.includes(row.certId)) throw new Error("device-disconnect");
+  return { state: { ...state, list }, rotated: r.rotated };
+}
+
 /* ── 화면 ──────────────────────────────────────────────────── */
 
 export type DeviceScreenDeps = {
   storeKey?: StoreKeyPort; link?: DeviceLinkPort; qr?: DeviceQrPort; store?: DeviceStore;
+  /** 기기 끊기(운영 = tauriDisconnect). 없으면 「나눠 준 열쇠 없음」으로 보고 목록만 서명한다(시험·연결 전). */
+  disconnect?: DeviceDisconnectPort;
   now?: () => number;
   /** 확인창. 기본은 window.confirm. 취소하면 false. okLabel 은 확인 단추 글자. */
   confirm?: (title: string, message: string, okLabel?: string) => Promise<boolean>;
@@ -297,14 +333,14 @@ const MARKUP = `
     <h2>${copyHtml("기기를 끊을 때 알아 두세요")}</h2>
     <p>${copyHtml("끊으면 그 기기는 새 증서 확인에서 바로 멈춰요.")}</p>
     <p>${copyHtml("이미 복사된 지난 데이터는 되돌릴 수 없어요.")}</p>
-    <p>${copyHtml("잃어버린 기기라면 끊은 뒤 데이터 열쇠도 새것으로 바꾸는 게 좋아요. 새 열쇠는 남은 기기에만 나눠요.")}</p>
+    <p>${copyHtml("끊기를 누르면 데이터 열쇠도 함께 새것으로 바뀌어요. 새 열쇠는 남은 기기에만 나눠요.")}</p>
     <!-- 법적 확인 필요: 「되돌릴 수 없어요」 문구와 개인정보 안내 범위는 법무 확인 전 초안이다(core/device/data-key.ts DATA_KEY_NOTES 와 같은 상태). -->
   </div>
 `;
 
 /** 화면을 root 안에 그린다. 연결 자리는 deps 로 바꿔 끼운다. */
 export function mountDeviceScreen(root: HTMLElement, deps: DeviceScreenDeps = {}) {
-  const key = deps.storeKey ?? nullStoreKey, link = deps.link ?? nullDeviceLink, qr = deps.qr ?? nullDeviceQr;
+  const key = deps.storeKey ?? nullStoreKey, link = deps.link ?? nullDeviceLink, qr = deps.qr ?? nullDeviceQr, disconnect = deps.disconnect ?? nullDisconnect;
   const store = deps.store ?? localDeviceStore();
   const now = deps.now ?? (() => Date.now());
   const confirmBox = deps.confirm ?? (async (title: string, message: string, _ok?: string) => window.confirm(`${title}\n${message}`));
@@ -416,10 +452,13 @@ export function mountDeviceScreen(root: HTMLElement, deps: DeviceScreenDeps = {}
       const id = b.dataset.revoke;
       void act(async () => {
         if (!signing) throw new Error("store-key-not-connected");
-        const ok = await confirmBox(t("이 기기를 끊을까요?"), `${t("끊으면 그 기기는 바로 멈춰요.")}\n${t("이미 복사된 지난 데이터는 되돌릴 수 없어요.")}\n${t("잃어버린 기기라면 끊은 뒤 데이터 열쇠도 새것으로 바꿔 주세요.")}`);
+        const ok = await confirmBox(t("이 기기를 끊을까요?"), `${t("끊으면 그 기기는 바로 멈춰요.")}\n${t("남은 기기에는 새 열쇠를 나눠 줘요. 확인은 한 번만 하면 돼요.")}\n${t("이미 복사된 지난 데이터는 되돌릴 수 없어요.")}`);
         if (!ok) return;
-        state = await revokeFor(state, withReason(signing, REASON_REVOKE), id, now()); store.save(state);
-        say(() => t("기기를 끊었어요. 이미 복사된 지난 데이터는 되돌릴 수 없어요. 데이터 열쇠는 새것으로 바꿔 주세요."));
+        const r = await disconnectFor(state, withReason(signing, REASON_REVOKE), disconnect, id, now());
+        state = r.state; store.save(state);
+        say(() => r.rotated
+          ? t("기기를 끊고 새 열쇠로 바꿨어요. 남은 기기는 같은 와이파이에서 앱을 열면 새 열쇠를 받아요. 이미 복사된 지난 데이터는 되돌릴 수 없어요.")
+          : t("기기를 끊었어요. 이미 복사된 지난 데이터는 되돌릴 수 없어요. 기기끼리 나눈 열쇠는 아직 없어서 바꿀 것이 없어요."));
       });
     }
   });
