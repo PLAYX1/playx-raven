@@ -1,5 +1,23 @@
 # 변경 기록
 
+## 0.9.2
+
+### 한국어
+
+- 「폰 연결」을 더합니다(기본 꺼짐). 같은 집 안 와이파이에서 내 폰을 이 데스크탑에 연결해 가게 정보를 주고받는 기능입니다. 기기 연결 화면의 「폰 연결」 카드에서 새 기기 연결 요청을 보고 허락할 수 있고, 꺼져 있으면 꺼져 있다고 그대로 보여 줍니다. 바깥 인터넷(터널)으로는 열리지 않습니다.
+- 폰 연결 보안을 강화했습니다: 요청마다 기기 개인키 서명을 확인하고, 기기마다 증서를 발급해 서명·만료·철회·권한을 확인합니다. 기기를 끊으면 데이터 열쇠를 새로 바꾸고 그 기기를 철회 목록에 올리는 일을 한 번의 확인으로 함께 합니다. 옛 방식 요청은 거절합니다. 철회 목록은 서명을 확인하고, 되돌리거나 오래된 목록은 받지 않습니다.
+- 메인넷(진짜 레이븐 체인) 자산 발행·판매 스위치가 켜진 상태로 들어 있습니다. 자산 발행에는 되돌릴 수 없는 500 RVN 보증 소각이 따릅니다. 한 번 태운 RVN 은 돌려받을 수 없으니, 화면에 뜬 이름과 금액을 꼭 확인하고 진행하세요.
+- 맥 빌드 스크립트(build-app.sh)가 옛 앱 이름 때문에 빌드 뒤 서명 단계에서 실패하던 것을 고쳤습니다(앱 동작은 바뀌지 않음).
+- 자동 업데이트 대상은 맥(Apple Silicon·Intel)입니다. 업데이트 검증(서명된 버전·해시·순서 확인)은 그대로 유지합니다. 0.9.1 의 변경도 함께 들어 있습니다.
+
+### English
+
+- Adds "Phone pairing" (off by default): connect your phone to this desktop over the same home Wi-Fi to exchange store data. The device-connection screen has a "Phone pairing" card where you can see and approve new device requests; when it is off, it says so. It is never opened through the internet tunnel.
+- Hardens phone pairing: every request is signed with the device's private key, each device gets a certificate whose signature, expiry, revocation and permissions are checked. Disconnecting a device rotates the data key and revokes that device in one confirmed step. Old-protocol requests are refused. The revocation list is signature-checked, and rollbacks or stale lists are rejected.
+- The mainnet (real Ravencoin chain) asset issue/sale switch ships turned on. Issuing an asset comes with an irreversible 500 RVN burn as a deposit. Burned RVN cannot be recovered, so check the name and amount shown on screen before you continue.
+- Fixes the macOS build script (build-app.sh), whose signing step failed after the build because of an old app name (no change to app behaviour).
+- Automatic updates cover macOS (Apple Silicon and Intel). Signed update version/hash/order verification is unchanged. Includes the 0.9.1 changes.
+
 ## 0.9.1
 
 ### 한국어
