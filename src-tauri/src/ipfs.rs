@@ -327,6 +327,7 @@ pub async fn open_external(url: String) -> Result<(), String> {
         "https://console.groq.com/",         // 열쇠 받기 — Groq
         "https://console.anthropic.com/",    // 열쇠 받기 — Anthropic
         "https://console.x.ai/",             // 열쇠 받기 — xAI
+        "https://dev.meta.ai/",              // 열쇠 받기 — Meta AI
         "https://aistudio.google.com/",      // 열쇠 받기 — Google (…/apikey)
         "https://platform.openai.com/",      // 열쇠 받기 — OpenAI
         "https://openrouter.ai/",            // 열쇠 받기 — OpenRouter

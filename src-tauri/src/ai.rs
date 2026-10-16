@@ -633,7 +633,7 @@ fn migrate_locked(provider: &str, s: &dyn KeyStore) -> Result<Option<String>, St
 pub fn migrate_keys_on_start() {
     std::thread::spawn(|| {
         let Ok(_guard) = lock_keys() else { return };
-        for provider in ["anthropic", "openai", "google", "groq", "xai", "custom"] {
+        for provider in ["anthropic", "openai", "google", "groq", "xai", "meta", "custom"] {
             if let Ok(s) = store(provider) {
             #[cfg(any(test, target_os = "macos", target_os = "windows"))]
             {
@@ -789,7 +789,7 @@ fn key_path(provider: &str) -> PathBuf {
 fn known(p: &str) -> bool {
     matches!(
         p,
-        "anthropic" | "openai" | "google" | "groq" | "xai" | "custom"
+        "anthropic" | "openai" | "google" | "groq" | "xai" | "meta" | "custom"
     )
 }
 
@@ -802,6 +802,7 @@ fn openai_compat(provider: &str) -> Option<(&'static str, &'static str)> {
         "openai" => Some(("https://api.openai.com/v1", DEFAULT_OPENAI)),
         "groq" => Some(("https://api.groq.com/openai/v1", DEFAULT_GROQ)),
         "xai" => Some(("https://api.x.ai/v1", DEFAULT_XAI)),
+        "meta" => Some(("https://api.meta.ai/v1", DEFAULT_META)),
         _ => None,
     }
 }
@@ -817,6 +818,7 @@ const DEFAULT_OPENAI: &str = "gpt-4o";
 const DEFAULT_GOOGLE: &str = "gemini-3.8-flash";
 const DEFAULT_GROQ: &str = "openai/gpt-oss-120b";
 const DEFAULT_XAI: &str = "grok-4";
+const DEFAULT_META: &str = "muse-spark-1.3";
 
 pub fn default_model(provider: &str) -> &'static str {
     match provider {
@@ -825,6 +827,7 @@ pub fn default_model(provider: &str) -> &'static str {
         "google" => DEFAULT_GOOGLE,
         "groq" => DEFAULT_GROQ,
         "xai" => DEFAULT_XAI,
+        "meta" => DEFAULT_META,
         _ => "",
     }
 }
@@ -1234,7 +1237,7 @@ mod auto_model_tests {
 #[tauri::command]
 pub fn model_settings() -> Value {
     let mut out = serde_json::Map::new();
-    for p in ["anthropic", "openai", "google", "groq", "xai"] {
+    for p in ["anthropic", "openai", "google", "groq", "xai", "meta"] {
         out.insert(
             p.to_string(),
             json!({ "model": model_for(p), "default": default_model(p) }),
@@ -1380,7 +1383,7 @@ pub fn api_key_status() -> Value {
     let mut storage_errors = serde_json::Map::new();
     let mut sources = serde_json::Map::new();
     let custom = if guard.is_ok() { custom_config() } else { None };
-    for provider in ["anthropic", "openai", "google", "groq", "xai", "custom"] {
+    for provider in ["anthropic", "openai", "google", "groq", "xai", "meta", "custom"] {
         let status = if guard.is_ok() { key_status_with_source_locked(provider) }
             else { Err(StoreError::Unavailable.safe_message("get")) };
         if let Err(error) = &status { storage_errors.insert(provider.into(), json!(error)); }
@@ -1393,7 +1396,7 @@ pub fn api_key_status() -> Value {
             && custom.as_ref().is_some_and(|(_, base, _)| base.starts_with("http://"));
         available.insert(provider.into(), json!(if provider == "custom" { custom.is_some() && (has || local) } else { has }));
     }
-    let plaintext = ["anthropic", "openai", "google", "groq", "xai", "custom"].iter()
+    let plaintext = ["anthropic", "openai", "google", "groq", "xai", "meta", "custom"].iter()
         .any(|p| key_path(p).is_file() && !deleted_path(p).exists());
     let warning = guard.as_ref().err().cloned().or_else(|| plaintext.then(||
         "AI 키가 OS 보안 저장소 대신 이 컴퓨터의 평문 파일에 남아 있습니다(파일 권한 0600).".to_string()));
@@ -1406,6 +1409,7 @@ pub fn api_key_status() -> Value {
         "google": available["google"],
         "groq": available["groq"],
         "xai": available["xai"],
+        "meta": available["meta"],
         "custom": custom.is_some(),
         "custom_label": custom.map(|c| c.0).unwrap_or_default(),
         "last4": suffixes,
@@ -1488,7 +1492,7 @@ mod connection_tests {
     use super::*;
     #[test]
     fn check_is_get_without_prompt_url_key_or_fallback() {
-        for provider in ["anthropic", "google", "openai", "groq", "xai"] {
+        for provider in ["anthropic", "google", "openai", "groq", "xai", "meta"] {
             let request = connection_request(provider, "fixture-only").unwrap().build().unwrap();
             assert!(request.method() == reqwest::Method::GET);
             assert!(request.url().path().ends_with("/models"));
@@ -3234,10 +3238,10 @@ fn sanitize_roster(v: &Value) -> Option<Value> {
 /// `dbcache`. But an owner who does care can reorder them (`ai_order_save`),
 /// and the saved order wins. Not offering the choice and hiding it are
 /// different things; this hides it without taking it away.
-const CUSTOMER_ORDER: [&str; 5] = ["groq", "google", "xai", "openai", "anthropic"];
+const CUSTOMER_ORDER: [&str; 6] = ["groq", "google", "xai", "openai", "anthropic", "meta"];
 
 /// The same list, best-first, for work the owner does a few times a day.
-const OWNER_ORDER: [&str; 5] = ["anthropic", "openai", "xai", "google", "groq"];
+const OWNER_ORDER: [&str; 6] = ["anthropic", "openai", "xai", "google", "groq", "meta"];
 
 /// The providers that actually have a key, in the order we should try them.
 ///

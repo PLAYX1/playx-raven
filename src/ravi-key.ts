@@ -107,7 +107,7 @@ export class SavedKeyChecks {
     try { storage.removeItem("rv-ai-pending-checks"); } catch { /* storage may be disabled */ }
     try {
       const saved = JSON.parse(storage.getItem("rv-ai-rejected-keys") || "{}");
-      for (const provider of ["google", "openai", "anthropic", "groq", "xai", "custom"]) {
+      for (const provider of ["google", "openai", "anthropic", "groq", "xai", "meta", "custom"]) {
         const status = saved?.[provider];
         if ([400, 401, 403].includes(status)) {
           this.rejected.set(provider, status);

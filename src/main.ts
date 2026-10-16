@@ -9074,6 +9074,7 @@ const PROVIDERS: Record<string, [string, string, string]> = {
   google: ["Google (Gemini)", "AIza…", "https://aistudio.google.com/apikey"],
   openai: ["OpenAI", "sk-…", "https://platform.openai.com/api-keys"],
   groq: ["Groq", "gsk_…", "https://console.groq.com/keys"],
+  meta: ["Meta AI", "", "https://dev.meta.ai/docs/authentication"],
 };
 
 // ── 넘어가는 순서 ──────────────────────────────────────────────────────────

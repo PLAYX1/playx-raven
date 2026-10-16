@@ -1,5 +1,19 @@
 # 변경 기록
 
+## 0.9.3
+
+### 한국어
+
+- AI 열쇠 넣기에 Meta AI 를 더합니다(주소 api.meta.ai/v1, 기본 모델 muse-spark-1.3). 설정의 AI 열쇠 칸에 「Meta AI」가 생기고, 모델 이름은 다른 회사처럼 직접 바꿀 수 있습니다. 열쇠 받는 곳 안내(dev.meta.ai)도 열립니다.
+- 새로 허용한 인터넷 주소는 Meta AI 하나뿐입니다. 그 밖의 연결 범위·판매·메인넷 동작은 0.9.2 와 같습니다.
+- 자동 업데이트 대상은 맥(Apple Silicon·Intel)입니다. 0.9.2 의 변경도 함께 들어 있습니다.
+
+### English
+
+- Adds Meta AI as an AI-key provider (endpoint api.meta.ai/v1, default model muse-spark-1.3). A "Meta AI" row appears in the AI key settings; the model name can be overridden like any other provider, and the key-help link (dev.meta.ai) opens.
+- Meta AI is the only newly allowed internet address. Everything else (other connections, sales, mainnet behaviour) is the same as 0.9.2.
+- Automatic updates cover macOS (Apple Silicon and Intel). Includes the 0.9.2 changes.
+
 ## 0.9.2
 
 ### 한국어
