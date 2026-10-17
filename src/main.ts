@@ -13101,7 +13101,11 @@ async function autoRound() {
           skipped.map((s: any) => `${s.asset} — ${s.why}`).join("<br>") + `</div>`
         : "") +
       (r.error ? `<div class="warnbox" style="margin-top:12px">${r.error}</div>` : "");
-  } catch {}
+  } catch (e) {
+    // 조용히 삼키면 「켜 둔 채 멈춘 것」과 구별되지 않는다 — 이유를 한 줄 보인다.
+    const box = document.getElementById("vd-result");
+    if (box) box.innerHTML = `<div class="warnbox" style="margin-top:12px"><b>자동 발송이 이번 회전에 멈췄습니다</b><br>${escapeHtml(errText(e))}<br>노드·잠금·암호 상태를 확인하세요. 다음 회전에 다시 시도합니다.</div>`;
+  }
 }
 
 /* ══ 곡 자산 꾸미기 — Pages 처럼 보면서 만든다 ═══════════════════════════
@@ -18333,6 +18337,14 @@ window.addEventListener("DOMContentLoaded", async () => {
   compactHome.addEventListener("change", fitHomeExtras);
   $("rv-home-activity-all").onclick = () => { showPage("wallet"); jumpToEl("w-txs"); };
   $("rv-home-more").onclick = () => showPage("wallet");
+  // 시트(발행 마법사·복구 단어 입력 등)를 Esc 로 닫는다 — 마우스 없이도 빠져나올 수 있게. 닫기 단추를 그대로 누른다.
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key !== "Escape" || ev.defaultPrevented) return;
+    const open = [...document.querySelectorAll<HTMLElement>(".sheet")].filter((el) => !el.hidden && el.offsetParent !== null);
+    const top = open[open.length - 1];
+    const close = top?.querySelector<HTMLButtonElement>('button[id$="-cancel"], button[id$="-close"]');
+    if (close && !close.disabled) { ev.preventDefault(); close.click(); }
+  });
 
   $("fee-send").addEventListener("click", () => void sendOwed());
   void paintFeePick();

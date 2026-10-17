@@ -257,3 +257,9 @@ body:has(#page-home.on) #ravi-launcher { display:none; }
   }
   #page-home .overview-actions button { flex:1; min-width:0; }
 }
+
+/* 0.9.4 누르기 쉬운 크기 — 눌러야 하는 단추는 44px·15px 이상(조사에서 32~36px·13px 로 나온 것들). */
+#upnag, .hidnote button, .cr-one, .act button, .mnacts button, .ordrow button, .keyrow button,
+.chat-mode button, .keyask button, .abkrow button, .wrs-sug button, #rw-mine, button.link, .linkbtn {
+  min-height:44px; font-size:15px;
+}
