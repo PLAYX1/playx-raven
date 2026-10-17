@@ -232,3 +232,28 @@ body:has(#page-home.on) #ravi-launcher { display:none; }
 .ravi-arrival-skip { pointer-events:auto; position:absolute; top:100%; left:50%; transform:translateX(-50%); white-space:nowrap; background:var(--panel); color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:8px 16px; min-height:44px; font:inherit; font-size:14px; }
 .ravi-arrival-skip[hidden] { display:none!important; }
 .ravi-arrival-skip:focus-visible { outline:3px solid var(--ravi-soft); outline-offset:3px; }
+
+/* 0.9.4 홈 단순화 — 모바일 홈과 같은 방향. 큰 잔액 · 받기(구리금)/보내기(윤곽) · 라비는 작게 · 나머지는 필요할 때만. */
+#page-home .rv-home-grid, #page-home .rv-home-grid:has(#rv-home-today[hidden]) {
+  grid-template-areas:"bal bal" "conversation act" "safe safe" "today extras";
+  grid-template-rows:none; grid-auto-rows:auto;
+}
+#page-home .rv-home-grid > div { min-height:0; }
+#page-home .rv-home-balance { padding:28px 32px !important; }
+#page-home .rv-home-balance .overview h2 { display:block; font-size:16px; color:var(--home-muted); margin-bottom:4px; }
+#page-home #overview-balance { font-size:clamp(44px,5vw,64px); line-height:1.15; }
+#page-home .overview-actions { gap:14px; margin-top:14px; }
+#page-home .overview-actions button { min-height:64px !important; min-width:160px; font-size:18px !important; font-weight:700; border-radius:16px; }
+#page-home #overview-receive { order:0; background:#E2702A; color:#15161D; border:2px solid #E2702A; }
+#page-home #overview-receive:hover { background:#F08A4B; }
+#page-home #rv-home-send { order:1; background:transparent; color:var(--home-ink); border:2px solid #E2702A; }
+#page-home #rv-home-more { display:none; }
+#page-home .rv-home-safety:not(:has([data-tone="warn"],[data-tone="bad"])) { display:none !important; }
+#page-home .rv-home-safety .rv-home-address-note { display:none; }
+#page-home .rv-home-extras summary span { display:none; }
+@media(max-width:760px) {
+  #page-home .rv-home-grid, #page-home .rv-home-grid:has(#rv-home-today[hidden]) {
+    grid-template-areas:"bal" "act" "conversation" "safe" "today" "extras";
+  }
+  #page-home .overview-actions button { flex:1; min-width:0; }
+}

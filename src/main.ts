@@ -4694,7 +4694,7 @@ async function paintHomeToday(): Promise<void> {
   try {
     const sh = await invoke<any>("shop_load");
     // 가게 유무는 기존 코드와 같은 기준(이름이 있는가)으로 판정한다.
-    if (!sh || !(sh.name || sh.name_en)) { if (seq === homeTodaySeq) { box.hidden = false; body.innerHTML = `<p>${copyHtml("아직 가게가 없습니다")}</p>`; } return; }
+    if (!sh || !(sh.name || sh.name_en)) { if (seq === homeTodaySeq) { box.hidden = true; body.innerHTML = `<p>${copyHtml("아직 가게가 없습니다")}</p>`; } return; }
     const ymd = todayYmd();
     const r: any = await invoke("ledger_range", { fromYmd: ymd, toYmd: ymd, tzOffsetMin: tzMin() });
     const pend: any = await invoke("ledger_pending").catch(() => null);
@@ -18328,7 +18328,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   // Enter/Space, focus order and all destinations available without a custom trap.
   const compactHome = matchMedia("(max-width:1100px), (max-height:680px)");
   const homeExtras = $("rv-home-extras") as HTMLDetailsElement;
-  const fitHomeExtras = () => { homeExtras.open = !compactHome.matches; };
+  const fitHomeExtras = () => { homeExtras.open = false; void compactHome; };
   fitHomeExtras();
   compactHome.addEventListener("change", fitHomeExtras);
   $("rv-home-activity-all").onclick = () => { showPage("wallet"); jumpToEl("w-txs"); };
