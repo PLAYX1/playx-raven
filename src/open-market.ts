@@ -136,7 +136,7 @@ export function wireOpenMarket(deps: MarketDeps) {
   }
 
   el('mk-note').textContent = `시험 화면이에요. 「검증됨」은 레이븐볼트가 검토한 판매자, 「보증 · 미검증」은 자동 점검과 보증만 통과한 판매자, 「미검증」은 외부 링크로만 볼 수 있어요. 판매(구매 결제)는 ${salesOn ? '시험용으로 켜져' : '아직 꺼져'} 있어요.`;
-  const readPurchases = (): Purchase[] => { try { return JSON.parse(store?.getItem(PURCHASES_KEY) ?? '[]') as Purchase[]; } catch { return []; } };
+  const readPurchases = (): Purchase[] => { try { const a: unknown = JSON.parse(store?.getItem(PURCHASES_KEY) ?? '[]'); return Array.isArray(a) ? a.filter((x): x is Purchase => !!x && typeof x === 'object' && !Array.isArray(x)) : []; } catch { return []; } };
   function paintPurchases() {
     const p = readPurchases();
     const text = (x: Purchase) => `${x.title} · ${x.asset} · 판매자 ${x.sellerRvn} RVN + 수수료 ${x.feeRvn} RVN${x.networkFeeRvn ? ` + 네트워크 ${x.networkFeeRvn} RVN` : ''} · 거래 ${x.txid.slice(0, 12)}… · 자산은 받지 않았어요(기록만)`;

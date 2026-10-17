@@ -18634,6 +18634,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   salesAccount = wireSalesAccount({ invoke, cancelAsk: () => askClose(null), active: () => currentPage === "sales",
     ask: () => ask("지갑 비밀번호 재인증", "판매 전용 번호를 만든 뒤 지갑을 바로 잠가요.", { password: true }) });
   $("sales-back").onclick = () => showPage("home");
+  $("reward-back").onclick = () => showPage("home");
+  $("parts-back").onclick = () => showPage("home");
   $("game-sales-open").onclick = () => showPage("sales");
   $("creator-open").onclick = () => showPage("creator");
   $("bulk-open").onclick = () => showPage("bulk");

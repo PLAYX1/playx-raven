@@ -199,7 +199,9 @@ export function parseDraft(raw: string | null): CreateDraft | null {
     if (v.version !== 1 || !["certificate", "ticket", "work"].includes(v.kind) || typeof v.title !== "string" || v.title.length > 80) return null;
     if (!Number.isInteger(v.count) || v.count < 1 || v.count > max || !validBrand(v.brand)) return null;
     // 거래 번호는 모를 수 있다(보냈는지 모름 → 체인에서 찾아 푼 것). 그때는 빈 글자.
-    if (!["brand-sent", "done", "sent-unknown"].includes(v.stage) || !/^(?:[a-f0-9]{64})?$/.test(v.txid) || !Number.isSafeInteger(v.updatedAt)) return null;
+    if (!["brand-sent", "done", "sent-unknown"].includes(v.stage) || !/^(?:[a-f0-9]{64})?$/.test(v.txid)) return null;
+    // 갱신 시각이 없거나 틀려도 이어하기가 사라지지 않게 지금 시각으로 채운다.
+    if (!Number.isSafeInteger(v.updatedAt)) v.updatedAt = Date.now();
     if (v.step !== undefined && !["brand", "ticket", "uniques"].includes(v.step)) return null;
     if (v.stage === "sent-unknown" && !v.step) return null;
     if (v.fingerprint !== undefined && !/^Qm[1-9A-HJ-NP-Za-km-z]{44}$/.test(v.fingerprint)) return null;
