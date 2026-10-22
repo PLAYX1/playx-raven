@@ -336,6 +336,11 @@ jobs:
           cp "$BIN" "src-tauri/vendor/$(basename "$BIN")"
           chmod +x "src-tauri/vendor/$(basename "$BIN")" || true
 
+      # 라비 목소리 모델(약 380MB)은 저장소에 없다 — 내려받아 크기·sha256 을 맞춘다(틀리면 여기서 멈춘다).
+      - name: 라비 목소리 모델 받기 + 해시 대조
+        shell: bash
+        run: node scripts/fetch-ravi-voice.mjs
+
       # 🔴 파일이 **정말 있을 때만** `resources` 를 켠다. 글로브가 아무것도
       #    못 찾으면 Tauri 빌드가 통째로 멈춘다(실측:
       #    "glob pattern … didn't match any files").
@@ -350,7 +355,8 @@ jobs:
             const have=fs.existsSync(dir)?fs.readdirSync(dir):[];
             const res=['vendor/ravend*','vendor/ipfs*']
               .filter(g=>have.some(f=>f.startsWith(g.split('/')[1].replace('*',''))));
-            if (!res.length) { console.log('같이 넣을 것이 없습니다.'); process.exit(0); }
+            // 라비 목소리 모델(resources/ravi-voice)은 늘 같이 넣는다 — 저장소 설정의 값을 덮어쓰지 않게 다시 적는다.
+            res.push('resources/ravi-voice/**/*');
             const d=JSON.parse(fs.readFileSync(p,'utf8'));
             d.bundle.resources=res;
             fs.writeFileSync(p, JSON.stringify(d,null,2)+'\n');

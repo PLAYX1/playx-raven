@@ -9605,7 +9605,7 @@ function chatPut(who: "me" | "ai" | "did", html: string) {
   if (who === "ai") div.querySelector(".msgravi")?.replaceWith(raviFace(raviState, 32, { round: true }));
   div.querySelectorAll(".ravi-mount").forEach(slot => slot.replaceWith(raviFace(raviState, 64)));
   $("chat-log").appendChild(div);
-  if (who === "ai" && !div.querySelector("[data-thinking]")) raviHome?.reply(div.querySelector(".msgtxt")?.textContent || "");
+  if (who === "ai" && !div.querySelector("[data-thinking]")) raviHome?.reply(div.querySelector(".msgtxt")?.textContent || "", div);
   raviHome?.message(who === "ai" && !div.querySelector("[data-thinking]"));
 }
 
@@ -17973,7 +17973,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     // The original review recalculates fee and requires the owner's existing confirmation.
     await reviewSend();
   };
-  raviHome = createRaviHome({ voiceProvider: () => aiProvider || "", afterLanding: afterRaviLanding, wake: wakeRavi, wallet: () => showPage("wallet"), report: () => openReport(), send: () => { void chatSend(); }, tools: () => showPage("ravi"), companion: mode => { void invoke("companion_signal", { kind: mode === "listening" || mode === "speaking" ? "idle" : mode }).catch(() => {}); } });
+  raviHome = createRaviHome({ invoke: rawInvoke, voiceProvider: () => aiProvider || "", afterLanding: afterRaviLanding, wake: wakeRavi, wallet: () => showPage("wallet"), report: () => openReport(), send: () => { void chatSend(); }, tools: () => showPage("ravi"), companion: mode => { void invoke("companion_signal", { kind: mode === "listening" || mode === "speaking" ? "idle" : mode }).catch(() => {}); } });
   // 라비 인물·위기 대답 묶음은 입력칸에 처음 들어갈 때 미리 읽는다(첫 질문이 기다리지 않게) — ravi-persona-lazy.ts.
   $("chat-q").addEventListener("focus", () => { void loadRaviPersona(); }, { once: true });
   raviAgentUI = createRaviAgentUI({ invoke, keyed: () => aiProvider, key: wakeRavi, dock: () => raviHome?.open(false), landed: finishRaviLanding, afterLanding: afterRaviLanding, tz: tzMin });

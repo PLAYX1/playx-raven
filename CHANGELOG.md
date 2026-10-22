@@ -1,5 +1,23 @@
 # 변경 기록
 
+## 0.9.5 (준비 중 — 판 번호는 아직 올리지 않았습니다)
+
+### 한국어
+
+- 라비가 답을 읽어 줄 때 이제 **라비 목소리**(Supertonic 3, 한국어 여성 목소리)를 씁니다. 이 컴퓨터 안에서 만들며 인터넷으로 보내지 않습니다. 목소리 파일이 없거나 깨졌거나, 만드는 데 너무 오래 걸리거나, 만들기에 실패하면 자동으로 기존 기기 목소리로 읽어서 라비는 늘 말할 수 있습니다.
+- 설정 「라비와 AI」에 「라비 목소리: 라비 목소리(기본) / 기기 목소리」 선택을 더했습니다. 기존 「답 읽어 주기」 켜짐·꺼짐은 그대로입니다.
+- 라비 목소리로 읽는 동안과 그 답 말풍선 옆에 「AI 음성」 표시가 늘 보입니다(기계가 만든 음성임을 밝히는 목소리 라이선스 OpenRAIL-M 의 요구).
+- 「정보와 개발비」의 오픈소스 고지에 Supertonic 3 (OpenRAIL-M)·onnxruntime-web 출처와 라이선스 원문을 더했습니다.
+- ⚠ **설치 파일이 약 380MB 커집니다.** 목소리 모델(약 383MB)을 설치 폴더 안에 함께 넣기 때문입니다(앱 자료 폴더로 복사하지 않습니다). 처음 읽어 줄 때만 모델을 메모리에 올리고(수 초), 5분 동안 말이 없으면 다시 내려놓습니다.
+
+### English
+
+- When Ravi reads replies aloud she now uses the **Ravi voice** (Supertonic 3, Korean female voice), generated on this computer and never sent over the internet. If the voice files are missing or damaged, synthesis is too slow, or it fails, the app automatically falls back to the existing device voice, so Ravi can always speak.
+- Adds "Ravi's voice: Ravi's voice (default) / Device voice" to Settings > Ravi and AI. The existing "Read replies aloud" on/off is unchanged.
+- An "AI voice" label is always shown while the Ravi voice is speaking and next to that reply bubble (the voice license, OpenRAIL-M, requires disclosing machine-generated speech).
+- Adds Supertonic 3 (OpenRAIL-M) and onnxruntime-web credits plus the full license text to the open-source notice in "About and developer fee".
+- ⚠ **The installer grows by about 380 MB** because the voice model (about 383 MB) is bundled inside the install folder (it is not copied to the app data folder). The model is loaded into memory only when Ravi first reads aloud (a few seconds) and released after 5 idle minutes.
+
 ## 0.9.4
 
 ### 한국어

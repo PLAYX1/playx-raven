@@ -4,6 +4,7 @@ mod rt;
 mod auction;
 mod ai;
 mod ravi_voice;
+mod ravi_tts;
 mod ravi_agent;
 mod ravi_companion;
 mod ravi_lifecycle;
@@ -435,6 +436,8 @@ pub fn run() {
             ravi_voice::voice_consent,
             ravi_voice::voice_set_consent,
             ravi_voice::voice_transcribe,
+            ravi_tts::ravi_tts_status,
+            ravi_tts::ravi_tts_read,
             ai::ai_chat,
             ai::ai_promo,
             ai::save_custom_provider,

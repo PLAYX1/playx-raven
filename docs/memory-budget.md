@@ -233,6 +233,8 @@
 
 번들 예산: 기존 `preflight.mjs` 에는 **크기 예산이 없었다**(배선·자원 검사만). 이 시험의 번들 항목(JS 2,600KB·최대 청크 1,000KB·index.html 480KB·CSS 60KB)이 첫 예산이다.
 
+**JS 총량 예산 2,960KB → 3,000KB (2026-10-23, 라비 목소리).** 이유: 라비 목소리(Supertonic 3) 연결 코드 약 20KB 가 들어왔다 — 합성 계산(`ravi-tts-core`)·워커·관리자·「AI 음성」 표시·설정/정보 화면 연결. 전부 **처음 말할 때 불러오는 조각**(워커 6KB·관리자 3KB·진짜 의존물 0.5KB)과 홈 묶음 증가(약 5KB)이며 시작 묶음의 큰 덩어리는 아니다. 실행 중 비용(워커 메모리·모델)은 이 예산 밖이다: 맥 headless Chrome 에서 모델을 올리고 6초 문장을 만드는 동안 Chrome 전 프로세스 합계 최대 약 2.1GB(실측 2026-10-23, 메인 스레드 방식 시험 페이지). 그래서 모델은 **처음 읽을 때만** 올리고 말이 5분 없으면 내려놓는다. CSS 합계 88→90KB 는 「AI 음성」 표시 규칙 약 0.6KB 때문이다(88.4→89KB 로 반올림이 넘어감). 가장 큰 묶음 1,060KB 는 올리지 않았다(ORT 런타임 68KB·wasm 11MB 는 `public/ravi-tts/` 정적 파일이라 JS 묶음 밖).
+
 **CSS 예산 60KB → 72KB (2026-10-11, 통합 `claude/rv-desktop-final`).** 이유: 0.8.6 통합에서 새 화면 네 개의 스타일이 함께 들어왔다 —
 끌어놓기 발행(`drop-publish.css` 20.7KB + `drop-tokens.css` 1.2KB), 라비 감정(`ravi-emotion.css` 5.9KB), 창 모드
 (`display-mode.css` 2.8KB·`layout-tokens.css` 7.0KB·`standby.css` 3.5KB, 원본 기준). 빌드 결과 CSS 합계 66.7KB.

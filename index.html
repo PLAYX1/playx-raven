@@ -4083,7 +4083,7 @@
           <div class="ravihi"><h2 id="ravi-hello">밤의 물결, 곁에 있는 라비.</h2><p id="ravi-sub" class="lede">AI 키를 넣으면 라비가 깨어나요</p></div>
           <button id="ravi-stage" type="button" aria-label="잠든 라비 깨우기"><span id="ravi-rig"></span></button>
           <p id="ravi-state">잠듦 · 느린 숨</p>
-          <div class="ravi-caption-area"><p id="ravi-caption" aria-live="polite" translate="no">라비가 잠들어 있어요. 눌러서 깨워 주세요.</p><p id="ravi-transcript" translate="no"></p></div>
+          <div class="ravi-caption-area"><p id="ravi-caption" aria-live="polite" translate="no">라비가 잠들어 있어요. 눌러서 깨워 주세요.</p><p id="ravi-transcript" translate="no"></p><span id="ravi-ai-voice" class="ai-voice-badge" hidden>AI 음성</span></div>
           <button id="ravi-open" type="button">라비와 대화</button>
         </div>
         <!-- 🔴 타일은 여덟 개까지다. 더 늘리면 다시 '찾는 화면'이 된다.
@@ -5455,6 +5455,13 @@
               <h2 class="sx-ptitle" id="sx-h-ravi">라비와 AI</h2>
               <p class="sx-lede">라비에게 무엇을 보여 줄지, 언제 말을 걸지 정해요.</p>
               <div class="sx-slot" data-sx-slot="ravi-agent-settings"></div>
+              <div class="card sx-group" id="ravi-voice-kind-card">
+                <div class="sx-row">
+                  <span class="sx-txt"><b class="sx-t">라비 목소리</b><span class="sx-d">라비가 답을 읽어 줄 때 쓰는 목소리예요. 「라비 목소리」는 이 컴퓨터 안에서 만드는 AI 음성이고, 인터넷으로 보내지 않아요.</span></span>
+                  <select id="ravi-voice-kind" aria-label="라비 목소리"><option value="ravi">라비 목소리(기본)</option><option value="device">기기 목소리</option></select>
+                </div>
+                <p id="ravi-voice-kind-note" class="sx-d" role="status"></p>
+              </div>
               <div class="card sx-group" translate="no"><button id="ravi-voice-revoke" type="button"></button><p id="ravi-voice-revoked" role="status"></p></div>
               <div class="sx-slot" data-sx-slot="companion-preferences"></div>
             </section>
@@ -5502,6 +5509,8 @@
               <!-- 정보 · 오픈소스 고지. 레이븐코인 코어 v4.8.0 의 COPYING(MIT) 문구를 그대로 싣는다 — 번역하지 않는다. -->
               <div class="card" id="about-notice"><h2>정보 · 오픈소스 고지</h2>
                 <p>이 프로그램은 노드로 레이븐코인 코어(Ravencoin Core) v4.8.0 을 함께 씁니다. 레이븐코인 코어는 MIT 라이선스의 오픈소스입니다. 아래는 그 저작권 고지와 허가 문구 원문입니다.</p>
+                <p id="about-supertonic" translate="no">라비 목소리 / Ravi voice: Supertonic 3 (Supertone Inc., 2026) — OpenRAIL-M license. https://huggingface.co/supertone-oss-archive/supertonic-3 · onnxruntime-web (Microsoft, MIT). 이 목소리는 AI 가 만든 음성입니다. / This voice is AI-generated speech. 라이선스 전문은 설치 폴더의 ravi-voice/LICENSE 파일에 들어 있습니다. / The full license text is in ravi-voice/LICENSE in the install folder.</p>
+                <details id="about-supertonic-license"><summary>Supertonic 3 — OpenRAIL-M License</summary><pre id="about-supertonic-license-text" class="sx-license" translate="no">(불러오는 중 / loading…)</pre></details>
                 <details><summary>Ravencoin Core v4.8.0 — MIT License</summary>
 <pre id="about-ravencoin-license" class="sx-license" translate="no">The MIT License (MIT)
 

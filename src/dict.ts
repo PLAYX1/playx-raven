@@ -77,6 +77,12 @@ const RAVI_HOME_COPY: Record<string, [string, string, string]> = {
   "답 읽어 주기 켜짐": ["Read replies aloud: on", "回答の読み上げ：オン", "朗读回答：开"],
   "음성으로는 승인할 수 없어요": ["Voice cannot approve payments", "音声では承認できません", "语音无法批准付款"],
   "이 기기에서는 글로 물어봐 주세요": ["Please ask by typing on this device", "この機器では文字で質問してください", "请在此设备上打字提问"],
+  "AI 음성": ["AI voice", "AI音声", "AI语音"],
+  "라비 목소리": ["Ravi’s voice", "ラビの声", "拉比的声音"],
+  "라비 목소리(기본)": ["Ravi’s voice (default)", "ラビの声（標準）", "拉比的声音（默认）"],
+  "기기 목소리": ["Device voice", "端末の音声", "设备语音"],
+  "라비가 답을 읽어 줄 때 쓰는 목소리예요. 「라비 목소리」는 이 컴퓨터 안에서 만드는 AI 음성이고, 인터넷으로 보내지 않아요.": ["The voice Ravi uses when reading replies aloud. “Ravi’s voice” is AI-generated speech made on this computer and is not sent over the internet.", "ラビが答えを読み上げるときの声です。「ラビの声」はこのコンピューター内で作るAI音声で、インターネットには送りません。", "拉比朗读回答时使用的声音。“拉比的声音”是在这台电脑上生成的AI语音，不会通过互联网发送。"],
+  "이 설치에는 라비 목소리 파일이 없어서 지금은 기기 목소리로 말해요.": ["This install has no Ravi voice files, so she speaks with the device voice for now.", "このインストールにはラビの声のファイルがないため、今は端末の音声で話します。", "此安装中没有拉比的声音文件，目前使用设备语音。"],
 };
 
 export const DICT: Record<string, Record<string, string>> = {

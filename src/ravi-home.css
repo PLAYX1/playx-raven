@@ -263,3 +263,9 @@ body:has(#page-home.on) #ravi-launcher { display:none; }
 .chat-mode button, .keyask button, .abkrow button, .wrs-sug button, #rw-mine, button.link, .linkbtn {
   min-height:44px; font-size:15px;
 }
+
+/* 「AI 음성」: 라비 목소리(기계 음성)로 읽는 동안·그 말풍선 옆에 항상 보인다(OpenRAIL-M 고지). */
+.ai-voice-badge, .ai-voice-tag { display:inline-block; font-size:12px; line-height:1; padding:4px 8px; border-radius:999px; border:1px solid #1f224e; color:#1f224e; background:#eef0ff; font-weight:600; white-space:nowrap; }
+.ai-voice-badge[hidden] { display:none !important; }
+.ai-voice-badge { margin-top:6px; }
+.ai-voice-tag { flex:none; align-self:flex-start; margin-top:4px; }

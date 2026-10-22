@@ -159,11 +159,15 @@ jobs:
           node -e "
             const fs=require('fs'), p='src-tauri/tauri.conf.json';
             const d=JSON.parse(fs.readFileSync(p,'utf8'));
-            d.bundle.resources=['vendor/ravend*','vendor/ipfs*'];
+            d.bundle.resources=['vendor/ravend*','vendor/ipfs*','resources/ravi-voice/**/*']; // 라비 목소리 모델도 같이(저장소 설정의 값을 덮어쓰지 않도록 다시 적는다)
             d.bundle.createUpdaterArtifacts=false;
             fs.writeFileSync(p, JSON.stringify(d,null,2)+'\n');
             console.log('resources:', d.bundle.resources.join(' '), '/ createUpdaterArtifacts:', d.bundle.createUpdaterArtifacts);
           "
+
+      # 라비 목소리 모델(약 380MB): 저장소에는 없다. 내려받아 크기·sha256 을 맞춘 뒤 설치 파일에 넣는다(실패하면 여기서 멈춘다).
+      - name: 라비 목소리 모델 받기 + 해시 대조
+        run: node scripts/fetch-ravi-voice.mjs
 
       - run: npm ci
 
