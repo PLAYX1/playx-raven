@@ -173,7 +173,16 @@ export function wireDropPublish(deps: DropDeps) {
   deps.root.insertBefore(toDrop, shell.nextSibling);
 
   /* ── 초안 ── */
-  const readDraft = (): Draft | null => { try { const t = store?.getItem(DROP_DRAFT_KEY); const d = t ? JSON.parse(t) as Draft : null; return d?.v === 1 ? d : null; } catch { return null; } };
+  const readDraft = (): Draft | null => { try { const t = store?.getItem(DROP_DRAFT_KEY); const d = t ? JSON.parse(t) as Draft : null; if (!d || typeof d !== 'object' || d.v !== 1) return null;
+    // 필드가 일부 빠진 기록도 화면이 죽지 않게 — 형이 틀리면 기본값으로 채운다.
+    const obj = (x: unknown) => !!x && typeof x === 'object' && !Array.isArray(x);
+    return { ...d,
+      fileShas: Array.isArray(d.fileShas) ? d.fileShas.filter((x): x is string => typeof x === 'string') : [],
+      fields: obj(d.fields) ? d.fields : { ...EMPTY_FIELDS },
+      tracks: Array.isArray(d.tracks) ? d.tracks.filter(x => obj(x) && typeof x.path === 'string') : [],
+      cache: Array.isArray(d.cache) ? d.cache.filter(x => Array.isArray(x) && typeof x[0] === 'string' && obj(x[1])) : [],
+      look: obj(d.look) ? d.look : { template: defaultTemplate(d.type, d.format ?? null), theme: 'auto', tagline: '', coverImage: null, background: null, gallery: [] },
+      published: obj(d.published) && obj(d.published?.manifest) ? d.published : null }; } catch { return null; } };
   const saveDraft = () => {
     if (!guess && !published) return;
     if (state === 'done') return;
