@@ -8,6 +8,10 @@
 - 앱 자료 폴더 이름을 PlayXRaven 에서 RavenVault 로 바꿉니다. 옛 폴더만 있으면 이름만 바꾸고(복사·삭제 없음), 둘 다 자료가 있으면 합치지 않고 RavenVault 를 쓰며 안내합니다. 바꿀 수 없으면 옛 폴더를 그대로 씁니다.
 - 「문제 알리기」에 「노드 기록도 같이 보내기」를 더합니다(기본 꺼짐). 보내기 전에 가려진 내용을 미리 볼 수 있고, 컴퓨터 사용자 이름·IP·지갑 주소·열쇠처럼 보이는 줄은 가려서 마지막 약 100줄만 갑니다. 서버가 60초 넘게 안 켜지면 「기록과 함께 알리기」 단추가 나옵니다.
 - 홈 화면을 단순하게 정리했습니다(큰 잔액, 받기·보내기 큰 단추, 안전 띠는 필요할 때만).
+- 켜기 전에 데이터 폴더가 있는 드라이브의 남은 공간을 확인해, 약 40GB 보다 적으면 「남은 공간이 부족합니다(현재 ○○GB, 필요 약 40GB)」를 보여 줍니다. 막지는 않고 그래도 켤지 묻습니다. 공간을 못 재면 아무 말 없이 켭니다.
+- 「메모리 넉넉히 주기」가 컴퓨터 전체가 아니라 지금 비어 있는 메모리를 읽어 정합니다(빈 메모리의 약 1/4, 최소 450MB·최대 4096MB). 실제로 적용한 값을 화면에 그대로 적습니다. 못 읽으면 예전 셈을 씁니다.
+- 「한 번에 준비하기」에서 「백신에서 빼기」가 늘 「결과를 못 읽었습니다」로 나오던 문제를 고칩니다(윈도우가 결과 파일 맨 앞에 붙이는 눈에 안 보이는 표시 때문이었습니다). 그래도 자동으로 안 되면 Windows 보안에서 직접 폴더를 제외하는 방법을 화면에 보여 줍니다.
+- 「진행이 멈춰 있습니다」 카드에 「기록과 함께 알리기」 단추를 더합니다.
 
 ### English
 
@@ -15,6 +19,10 @@
 - Renames the app data folder from PlayXRaven to RavenVault. If only the old folder exists it is renamed (no copy, no delete); if both hold data they are not merged, RavenVault is used and a notice is shown. If the rename is not possible, the old folder keeps being used.
 - Adds "Also send node log" to Report a problem (off by default). You can preview what will be sent; user names, IPs, wallet addresses and key-like lines are masked and only the last ~100 lines are sent. A "Report with log" button appears when the node does not start within 60 seconds.
 - Simplifies the home screen (large balance, large receive/send buttons, safety bar only when needed).
+- Before starting, checks free space on the drive holding the data folder; below about 40 GB it shows "Not enough free space (now XX GB, about 40 GB needed)". It does not block: it asks whether to start anyway, and stays silent if the space cannot be measured.
+- "Give memory generously" now reads the currently free memory instead of total memory (about 1/4 of free, min 450 MB, max 4096 MB) and shows the value actually applied. If free memory cannot be read, the old calculation is used.
+- Fixes "Exclude from antivirus" in "Prepare in one go" always showing "could not read the result" (an invisible marker Windows puts at the start of the result file). If it still cannot be done automatically, the screen explains how to exclude the folder by hand in Windows Security.
+- Adds a "Report with log" button to the "Progress has stalled" card.
 
 ## 0.9.3
 

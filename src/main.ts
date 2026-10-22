@@ -3494,10 +3494,29 @@ function turnOnBtn(id: string): string {
 }
 
 /** 위 단추를 눌리게 묶는다. HTML 을 넣은 뒤에 부른다. */
+/**
+ * 켜기 전 디스크 남은 공간 확인. 🔴 막지 않는다 — 모자라면 알리고, 그래도 켤지 묻는다.
+ * 못 재면(known=false) 아무 말 없이 통과한다. 반환값 false 는 사람이 「그만두기」를 고른 때뿐.
+ */
+async function diskOkToStart(): Promise<boolean> {
+  try {
+    const d = await invoke<any>("start_disk_check");
+    if (!d?.known || !d?.short) return true;
+    return await sure(
+      `${t("남은 공간이 부족합니다")}(${t("현재")} ${Number(d.free_gb)}GB, ${t("필요 약")} ${Number(d.need_gb)}GB)`,
+      t("장부가 커서 공간이 모자라면 중간에 멈출 수 있습니다. 그래도 켜시겠습니까?"),
+      t("그래도 켜기")
+    );
+  } catch {
+    return true;
+  }
+}
+
 function bindTurnOn(id: string, cmd: string) {
   const b = document.getElementById(id);
   if (!b) return;
   b.addEventListener("click", async () => {
+    if (!(await diskOkToStart())) return;
     (b as HTMLButtonElement).disabled = true;
     const say = document.getElementById(`${id}-say`);
     if (say) setCopyText(say, () => t("켜는 중…"));
@@ -3611,7 +3630,7 @@ async function speedCard(): Promise<string> {
     //    묻게 됐다. 같은 것을 두 이름으로 부르면 안 된다 — 오늘만 두 번째다.
     return `<div class="card" style="margin-top:12px;border-color:var(--brand)">
         <h3>${copyHtml("빠르게 따라잡기")}</h3>
-        <p class="meta">${copyHtml("서버에 메모리를 더 주면 장부를 훨씬 빨리 훑습니다.")}</p>
+        <p class="meta">${s.lower ? copyHtml("지금 잡아 둔 메모리가 이 컴퓨터의 빈 메모리보다 많습니다. 줄이면 서버가 멈추는 것을 막을 수 있습니다.") : copyHtml("서버에 메모리를 더 주면 장부를 훨씬 빨리 훑습니다.")}</p>
         <div class="kv"><b>${copyHtml("지금 메모리")}</b><span>${Number(s.now).toLocaleString()} MB</span></div>
         <div class="kv"><b>${copyHtml("권하는 값")}</b><span><b>${Number(s.suggest).toLocaleString()} MB</b></span></div>
         <p class="meta">${escapeHtml(String(s.why || ""))}</p>
@@ -3731,7 +3750,9 @@ function bindPrep(behind: number) {
           (x: any) =>
             `<div class="kv"><b>${escapeHtml(String(x.what))}</b><span class="${
               x.ok ? "ok" : "danger"
-            }">${escapeHtml(String(x.say))}</span></div>`
+            }">${escapeHtml(String(x.say))}</span></div>${
+              x.howto ? `<p class="meta" style="margin:4px 0 8px">${escapeHtml(String(x.howto))}</p>` : ""
+            }`
         )
         .join("");
       // 🔴 우리가 **못 하는 것을 먼저** 말한다. 다 된 줄 알고 기다리는 것이
@@ -3803,6 +3824,7 @@ async function stallCard(): Promise<string> {
         <div class="row" style="margin-top:10px">
           <button class="ghost" id="nd-restart">${copyHtml("서버 껐다 켜기")}</button>
           <button class="ghost" id="nd-log">${copyHtml("서버가 뭐 하는지 보기")}</button>
+          <button class="ghost" id="nd-stall-report">${copyHtml("기록과 함께 알리기")}</button>
           <span class="meta" id="nd-restartsay"></span>
         </div>
         <div id="nd-logbox"></div>
@@ -3820,6 +3842,8 @@ async function stallCard(): Promise<string> {
  *    「멈춘 것 같다」까지가 우리가 말할 수 있는 전부다.
  */
 function bindLog() {
+  document.getElementById("nd-stall-report")?.addEventListener("click", () =>
+    openReport(t("서버(노드)가 켜졌는데 블록이 한참 안 움직여요."), { category: "install-run", attachLog: true }));
   const b = document.getElementById("nd-log");
   if (!b) return;
   b.addEventListener("click", async () => {
@@ -4060,6 +4084,7 @@ async function paintPartBody(): Promise<void> {
         const go = document.getElementById("nd-go");
         if (go) {
           go.addEventListener("click", async () => {
+            if (!(await diskOkToStart())) return;
             (go as HTMLButtonElement).disabled = true;
             setCopyText($("nd-say"), () => t("켜는 중…"));
             // 60초가 넘도록 안 끝나면 앱이 먼저 「기록과 함께 알리기」 를 내민다.

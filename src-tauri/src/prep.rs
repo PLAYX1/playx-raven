@@ -79,7 +79,7 @@ $r -join "`n" | Set-Content -Path '{done}' -Encoding UTF8
         ])
         .output();
 
-    let text = std::fs::read_to_string(&done).unwrap_or_default();
+    let text = std::fs::read(&done).map(|b| decode_prep_text(&b)).unwrap_or_default();
     let _ = std::fs::remove_file(&script);
     let _ = std::fs::remove_file(&done);
 
@@ -95,14 +95,7 @@ $r -join "`n" | Set-Content -Path '{done}' -Encoding UTF8
         ];
     }
 
-    let got = |k: &str| -> (bool, String) {
-        for line in text.lines() {
-            if let Some(v) = line.strip_prefix(&format!("{k}=")) {
-                return (v.trim() == "ok", v.trim().to_string());
-            }
-        }
-        (false, "결과를 못 읽었습니다.".into())
-    };
+    let got = |k: &str| -> (bool, String) { prep_value(&text, k) };
     let (av1, av1w) = got("av-raven");
     let (av2, _) = got("av-app");
     let (fw1, fw1w) = got("fw-node");
@@ -129,6 +122,44 @@ $r -join "`n" | Set-Content -Path '{done}' -Encoding UTF8
     ]
 }
 
+
+/// 관리자 창이 적어 둔 결과 파일을 글자로 바꾼다.
+///
+/// 🔴 「결과를 못 읽었습니다」의 원인: 윈도우 PowerShell 5 의 `Set-Content -Encoding UTF8` 은
+///    파일 맨 앞에 **BOM(눈에 안 보이는 표시)** 을 붙인다. 그러면 첫 줄이 `\u{feff}av-raven=ok`
+///    가 되어 `av-raven=` 으로 찾을 때 못 찾는다 — 첫 항목(백신)만 늘 「못 읽었습니다」가 된 까닭이다.
+///    UTF-16 으로 적힌 경우도 같이 풀어 준다.
+#[allow(dead_code)]
+pub fn decode_prep_text(bytes: &[u8]) -> String {
+    if bytes.len() >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE {
+        let u: Vec<u16> = bytes[2..].chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
+        return String::from_utf16_lossy(&u);
+    }
+    String::from_utf8_lossy(bytes).trim_start_matches('\u{feff}').to_string()
+}
+
+/// `key=값` 한 줄을 찾는다. (성공 여부, 값 또는 안내문). 줄 앞뒤 공백·BOM·`\r` 은 무시한다.
+pub fn prep_value(text: &str, key: &str) -> (bool, String) {
+    let prefix = format!("{key}=");
+    for line in text.lines() {
+        let line = line.trim().trim_start_matches('\u{feff}');
+        if let Some(v) = line.strip_prefix(&prefix) {
+            let v = v.trim();
+            return (v == "ok", v.to_string());
+        }
+    }
+    (false, "결과를 못 읽었습니다.".into())
+}
+
+/// 백신 제외를 **사람이 직접** 하는 방법. 자동이 안 됐을 때 화면에 그대로 보여 준다.
+pub fn av_howto(folder: &str) -> String {
+    format!(
+        "직접 하시려면 — ① 윈도우 시작 → 「Windows 보안」 열기 ② 「바이러스 및 위협 방지」 \
+         ③ 「바이러스 및 위협 방지 설정」 아래 「설정 관리」 ④ 아래로 내려 「제외」 → 「제외 추가 또는 제거」 \
+         ⑤ 「제외 추가」 → 「폴더」 ⑥ 이 폴더를 고릅니다: {folder}"
+    )
+}
+
 #[cfg(not(target_os = "windows"))]
 fn admin_part(_raven: &str, _app: &str) -> Vec<Value> {
     // 맥에는 이런 예외 설정 자체가 없다. 있는 척하지 않는다.
@@ -149,6 +180,13 @@ pub async fn pc_prepare(boost: bool) -> Result<Value, String> {
         .await
         .unwrap_or_default();
     out.extend(admin);
+    // 🔴 자동이 안 됐으면 「못 했습니다」로 끝내지 않고 **사람이 직접 하는 방법**을 붙인다.
+    let folder_now = raven.to_string_lossy().to_string();
+    for st in out.iter_mut() {
+        if st["what"] == json!("백신에서 빼기") && st["ok"] != json!(true) {
+            st["howto"] = json!(av_howto(&folder_now));
+        }
+    }
 
     // ── ② 메모리 (관리자 필요 없음) ─────────────────────────────────
     //    🔴 껐다 켜야 적용된다. 여기서 켜지 않는다 — 결제 확인이 몇 분 멈추고,
@@ -158,10 +196,16 @@ pub async fn pc_prepare(boost: bool) -> Result<Value, String> {
             Ok(v) => out.push(step(
                 "메모리 넉넉히 주기",
                 true,
-                &format!(
-                    "{} MB 로 올렸습니다. 서버를 껐다 켜야 적용됩니다.",
-                    v.get("mb").and_then(Value::as_i64).unwrap_or(0)
-                ),
+                &match v.get("free_mb").and_then(Value::as_u64) {
+                    Some(f) => format!(
+                        "이 컴퓨터 빈 메모리가 약 {f}MB 라서 {} MB 로 맞췄습니다. 서버를 껐다 켜야 적용됩니다.",
+                        v.get("mb").and_then(Value::as_i64).unwrap_or(0)
+                    ),
+                    None => format!(
+                        "빈 메모리를 못 읽어서 {} MB 로 맞췄습니다. 서버를 껐다 켜야 적용됩니다.",
+                        v.get("mb").and_then(Value::as_i64).unwrap_or(0)
+                    ),
+                },
             )),
             Err(e) => out.push(step("메모리 넉넉히 주기", false, &e)),
         }
@@ -210,6 +254,39 @@ mod tests {
         let src = include_str!("prep.rs");
         let end = src.find("#[cfg(test)]").unwrap_or(src.len());
         &src[..end]
+    }
+
+    use super::*;
+
+    /// 🔴 BOM 이 붙은 결과 파일에서도 첫 줄(백신)을 읽어야 한다 — 「결과를 못 읽었습니다」의 원인.
+    #[test]
+    fn 결과_파일_맨앞_BOM_이_있어도_읽는다() {
+        let raw = b"\xEF\xBB\xBFav-raven=ok\r\nav-app=ok\r\nfw-node=ok\r\nfw-ipfs=\xEC\x8B\xA4\xED\x8C\xA8\r\n";
+        let t = decode_prep_text(raw);
+        assert_eq!(prep_value(&t, "av-raven"), (true, "ok".to_string()));
+        assert_eq!(prep_value(&t, "av-app"), (true, "ok".to_string()));
+        assert_eq!(prep_value(&t, "fw-ipfs"), (false, "실패".to_string()));
+        assert_eq!(prep_value(&t, "없는키").1, "결과를 못 읽었습니다.");
+        // BOM 을 안 걷고 곧바로 줄 검사해도 통과해야 한다
+        assert!(prep_value("\u{feff}av-raven=ok", "av-raven").0);
+    }
+
+    #[test]
+    fn 결과_파일이_UTF16_이어도_읽는다() {
+        let mut b = vec![0xFF, 0xFE];
+        for u in "av-raven=ok\r\nfw-node=ok\r\n".encode_utf16() {
+            b.extend_from_slice(&u.to_le_bytes());
+        }
+        let t = decode_prep_text(&b);
+        assert!(prep_value(&t, "av-raven").0 && prep_value(&t, "fw-node").0);
+    }
+
+    #[test]
+    fn 직접_하는_방법을_쉬운_말로_보여_준다() {
+        let h = av_howto("C:\\Users\\a\\AppData\\Roaming\\Raven");
+        for w in ["Windows 보안", "바이러스 및 위협 방지", "설정 관리", "제외", "폴더", "AppData"] {
+            assert!(h.contains(w), "{w} 가 없다");
+        }
     }
 
     /// 🔴 관리자 창을 **두 번 띄우면 두 번째는 대개 「아니오」**다.

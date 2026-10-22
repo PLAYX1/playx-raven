@@ -26,6 +26,7 @@ mod nodever;
 mod noncustody;
 mod wording;
 mod prep;
+mod resources;
 mod setupflow;
 mod quiet;
 mod helping;
@@ -698,6 +699,7 @@ pub fn run() {
             reindex_run::chain_broken,
             reindex_run::chain_heal,
             prep::pc_prepare,
+            resources::start_disk_check,
             setupflow::shop_setup,
             nodever::node_version,
             mode::mode_get,

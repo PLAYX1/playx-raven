@@ -334,19 +334,35 @@ pub async fn dbcache_suggest() -> Value {
     //    모르면 모른다고 적고, 안전한 값을 권한다.
     let measured = crate::setup::memory_gb();
     let gb = measured.unwrap_or(8);
-    let want = suggest_mb(gb);
     let now = conf_read()["values"]["dbcache"].as_i64().unwrap_or(450);
+    // 🔴 전체 메모리가 아니라 **지금 비어 있는 메모리**를 본다. 다른 프로그램이 7GB 를 쓰고
+    //    있는 컴퓨터에 4GB 를 잡으면 노드가 멈춘다. 못 읽으면 예전 셈(전체 메모리 기준)을 쓴다.
+    let free_mb = tauri::async_runtime::spawn_blocking(crate::resources::free_memory_mb)
+        .await
+        .ok()
+        .flatten();
+    let want = crate::resources::dbcache_for_free(free_mb, suggest_mb(gb));
+    let lower = now > want + 512;
+    let why = match free_mb {
+        Some(f) => format!(
+            "이 컴퓨터 빈 메모리가 약 {}MB 라서 {}MB 로 맞췄습니다. \
+             다 따라잡은 뒤에는 되돌리는 편이 좋습니다 — 계산대 메모리를 서버가 계속 물고 있으면 주문 화면이 느려집니다.",
+            f, want
+        ),
+        None => format!(
+            "빈 메모리를 못 읽어서, 이 컴퓨터 전체 메모리({gb}GB)를 기준으로 {}MB 로 맞췄습니다.",
+            want
+        ),
+    };
     json!({
         "memory_gb": gb,
         "measured": measured.is_some(),
+        "free_mb": free_mb,
         "now": now,
         "suggest": want,
-        "worth_it": want > now + 512,
-        "why": format!(
-            "이 컴퓨터 메모리가 {gb}GB 입니다. 따라잡는 동안 {}MB 를 주면 훨씬 빨라집니다. \
-             다 따라잡은 뒤에는 되돌리는 편이 좋습니다 — 계산대 메모리를 서버가 계속 물고 있으면 주문 화면이 느려집니다.",
-            want
-        ),
+        "lower": lower,
+        "worth_it": want > now + 512 || lower,
+        "why": why,
     })
 }
 
@@ -438,6 +454,8 @@ pub async fn dbcache_boost() -> Result<Value, String> {
     conf_write(Value::Object(vals))?;
     Ok(json!({
         "set": want,
+        "mb": want,
+        "free_mb": s["free_mb"].clone(),
         // 🔴 다시 켜야 한다는 말을 반드시 한다. 안 그러면 사장은 값만
         //    바꿔 놓고 「똑같이 느리다」고 겪는다.
         "note": "설정했습니다. **서버를 껐다 켜야** 적용됩니다 — 재색인은 이어서 합니다(처음부터 다시 하지 않습니다).",
