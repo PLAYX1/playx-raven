@@ -1,5 +1,21 @@
 # 변경 기록
 
+## 0.9.4
+
+### 한국어
+
+- 새 윈도우 PC 에서 「RVN 서버」가 켜지지 않던 문제를 고칩니다. 노드 데이터 폴더(%APPDATA%\Raven)가 없으면 코어가 멈췄는데, 이제 켜기 전에 앱이 폴더를 만듭니다(있으면 그대로 둡니다).
+- 앱 자료 폴더 이름을 PlayXRaven 에서 RavenVault 로 바꿉니다. 옛 폴더만 있으면 이름만 바꾸고(복사·삭제 없음), 둘 다 자료가 있으면 합치지 않고 RavenVault 를 쓰며 안내합니다. 바꿀 수 없으면 옛 폴더를 그대로 씁니다.
+- 「문제 알리기」에 「노드 기록도 같이 보내기」를 더합니다(기본 꺼짐). 보내기 전에 가려진 내용을 미리 볼 수 있고, 컴퓨터 사용자 이름·IP·지갑 주소·열쇠처럼 보이는 줄은 가려서 마지막 약 100줄만 갑니다. 서버가 60초 넘게 안 켜지면 「기록과 함께 알리기」 단추가 나옵니다.
+- 홈 화면을 단순하게 정리했습니다(큰 잔액, 받기·보내기 큰 단추, 안전 띠는 필요할 때만).
+
+### English
+
+- Fixes the node failing to start on a fresh Windows PC: the core stopped when the data folder (%APPDATA%\Raven) did not exist; the app now creates it before starting (an existing folder is left untouched).
+- Renames the app data folder from PlayXRaven to RavenVault. If only the old folder exists it is renamed (no copy, no delete); if both hold data they are not merged, RavenVault is used and a notice is shown. If the rename is not possible, the old folder keeps being used.
+- Adds "Also send node log" to Report a problem (off by default). You can preview what will be sent; user names, IPs, wallet addresses and key-like lines are masked and only the last ~100 lines are sent. A "Report with log" button appears when the node does not start within 60 seconds.
+- Simplifies the home screen (large balance, large receive/send buttons, safety bar only when needed).
+
 ## 0.9.3
 
 ### 한국어
