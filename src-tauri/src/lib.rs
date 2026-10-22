@@ -90,6 +90,7 @@ mod wiring;
 mod knowledge;
 mod nostrpub;
 mod app_folder;
+mod app_dir_move;
 mod pairing;
 mod paths;
 mod swap;
@@ -148,6 +149,8 @@ mod words_restore;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // 앱 자료 폴더 이전(PlayXRaven → RavenVault)은 다른 어떤 것보다 먼저 — 자식 프로세스를 켜기 전.
+    paths::init_early();
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())

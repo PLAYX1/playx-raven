@@ -13,7 +13,7 @@
 - 🔴 실행 중인 `/Applications/PLAY X Raven.app`(설치된 0.4.2)과 포트 8790 에 쓰기 금지. `/Applications` 의 파일 이름을 바꾸지 말 것. 실제 노드에 `sendrawtransaction`·`issue` 금지. `.env*`·지갑 파일·12단어 읽기 금지. pkill/sudo 금지.
 
 ## 절대 바꾸면 안 되는 것 (기존 사용자 지갑·업데이트가 끊긴다)
-앱 식별자 `se.erci.ex.playx.raven`, 실행 파일 `playx-raven`, 자료 폴더 `PlayXRaven`, `src-tauri/src/paths.rs`, 업데이터 공개키·endpoint, Windows 설치 GUID/UpgradeCode/레지스트리 경로, 이미 공개된 릴리스 파일. `scripts/desktop-installer-identity.test.mjs` 가 계속 통과해야 한다.
+앱 식별자 `se.erci.ex.playx.raven`, 실행 파일 `playx-raven`, 자료 폴더(옛 `PlayXRaven` → `RavenVault`, `app_dir_move.rs` 로 이전), `src-tauri/src/paths.rs`, 업데이터 공개키·endpoint, Windows 설치 GUID/UpgradeCode/레지스트리 경로, 이미 공개된 릴리스 파일. `scripts/desktop-installer-identity.test.mjs` 가 계속 통과해야 한다.
 
 ## 해야 할 일
 

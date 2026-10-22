@@ -17760,6 +17760,20 @@ async function loadOrders() {
 // ── 가게 찾기 ──
 window.addEventListener("DOMContentLoaded", async () => {
   const theme = $("rv-theme") as HTMLSelectElement;
+  // 0.9.4 — 자료 폴더 이름을 RavenVault 로 옮기다 막혔거나, 옛 폴더에도 자료가 있을 때 쉬운 말로 알린다.
+  void invoke<any>("datadir_status").then((d) => {
+    const n = d?.app_folder_notice;
+    if (!n?.message) return;
+    const bar = document.createElement("div");
+    bar.setAttribute("role", "status");
+    bar.style.cssText = "position:fixed;left:12px;right:12px;bottom:12px;z-index:9999;padding:12px 14px;border-radius:10px;background:#fff8e1;color:#4a3b00;border:1px solid #e0c060;font-size:14px;line-height:1.5";
+    bar.textContent = String(n.message) + "  ";
+    const ok = document.createElement("button");
+    ok.textContent = "확인";
+    ok.onclick = () => bar.remove();
+    bar.appendChild(ok);
+    document.body.appendChild(bar);
+  }).catch(() => {});
   const savedTheme = localStorage.getItem("ravenvault-theme");
   theme.value = ["light", "dark"].includes(savedTheme || "") ? savedTheme! : "system";
   document.documentElement.dataset.theme = theme.value;

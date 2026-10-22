@@ -9,9 +9,12 @@
 //! have been ten edits, and the one that got missed would not fail to compile —
 //! it would quietly read an empty folder and look like a shop with no data.
 //!
-//! ⚠️ The folder name is load-bearing. It is paired with the bundle identifier
-//! `se.erci.ex.playx.raven`, and renaming it orphans every shop's settings,
-//! members and ledger. Nothing here should ever be "tidied up".
+//! ⚠️ The folder name is load-bearing. Until 0.9.3 it was `PlayXRaven`; from 0.9.4
+//! it is `RavenVault`. Changing it WITHOUT a migration orphans every shop's
+//! settings, members and ledger, so the switch is done only through
+//! `app_dir_move` (rename, never copy/delete; falls back to the old folder if the
+//! rename is refused). The bundle identifier `se.erci.ex.playx.raven` is NOT tied
+//! to this folder name and stays unchanged (auto-update / webview storage).
 
 use std::path::PathBuf;
 
@@ -33,10 +36,42 @@ pub fn app_dir() -> PathBuf {
     default_app_dir()
 }
 
-pub fn default_app_dir() -> PathBuf { base().join(APP_FOLDER) }
+pub fn default_app_dir() -> PathBuf { resolved_default().dir.clone() }
 
-/// 폴더 이름. 번들 identifier 와 짝이라 절대 바꾸지 않는다.
-const APP_FOLDER: &str = "PlayXRaven";
+/// 폴더 이름(0.9.4~). 옛 이름 `PlayXRaven` 은 `app_dir_move` 가 한 번만 옮긴다.
+/// 번들 identifier 와는 무관하다 — identifier 는 바꾸지 않는다.
+pub const APP_FOLDER: &str = crate::app_dir_move::NEW_FOLDER;
+
+/// 처음 부르는 순간 한 번 정해진다(옛 폴더 이전 포함). 앱이 켜질 때 `init_early()` 가
+/// 자식 프로세스를 켜기 전에 먼저 부른다. 시험에서는 디스크를 옮기지 않는다.
+fn resolved_default() -> &'static crate::app_dir_move::Resolved {
+    static R: std::sync::OnceLock<crate::app_dir_move::Resolved> = std::sync::OnceLock::new();
+    R.get_or_init(|| {
+        #[cfg(test)]
+        { return crate::app_dir_move::Resolved { dir: base().join(APP_FOLDER), legacy: base().join(crate::app_dir_move::LEGACY_FOLDER), outcome: crate::app_dir_move::Outcome::InUse }; }
+        #[cfg(not(test))]
+        {
+            let r = crate::app_dir_move::resolve_at(&base(), &crate::app_dir_move::processes_running_inside, &|a, b| std::fs::rename(a, b));
+            eprintln!("앱 자료 폴더: {} ({:?})", r.dir.display(), r.outcome);
+            r
+        }
+    })
+}
+
+/// 앱이 켜지는 가장 이른 자리에서 부른다 — `app_dir()` 이 쓰이기 전, ravend/ipfs 를 켜기 전.
+pub fn init_early() { let _ = resolved_default(); }
+
+/// 화면에 알릴 일(옛 폴더 폴백·두 폴더 모두 자료). 없으면 None.
+pub fn app_folder_notice() -> Option<serde_json::Value> {
+    if std::env::var("PLAYX_RAVEN_HOME").map(|v| !v.trim().is_empty()).unwrap_or(false) { return None; }
+    resolved_default().notice()
+}
+
+/// 저장해 둔 문자열 속 옛 앱 폴더 경로를 지금 폴더로 바꿔 읽는다(표시용, 디스크 불변).
+pub fn rebase_legacy_path(s: &str) -> String {
+    let r = resolved_default();
+    crate::app_dir_move::rebase_path_str(s, &r.legacy, &r.dir)
+}
 
 /// 이 컴퓨터가 프로그램 데이터를 두는 자리.
 ///
@@ -269,6 +304,7 @@ pub fn datadir_status() -> serde_json::Value {
         // 이미 받아 둔 체인이 몇 GB인가. 0 이면 처음부터 받아야 한다.
         "chain_gb": blocks_gb,
         "has_chain": blocks_gb >= 1,
+        "app_folder_notice": app_folder_notice(),
         "candidates": datadir_candidates().iter().map(|p| p.to_string_lossy().to_string()).collect::<Vec<_>>(),
     })
 }
@@ -413,10 +449,12 @@ mod tests {
         assert_eq!(app_dir(), override_dir);
         std::env::set_var("PLAYX_RAVEN_HOME", "   ");
         assert!(
-            app_dir().to_string_lossy().contains("PlayXRaven"),
+            app_dir().to_string_lossy().contains("RavenVault"),
             "빈 값이 진짜 폴더를 가려서는 안 된다"
         );
         std::env::remove_var("PLAYX_RAVEN_HOME");
-        assert!(app_dir().to_string_lossy().contains("PlayXRaven"));
+        assert!(app_dir().to_string_lossy().contains("RavenVault"));
+        assert_eq!(APP_FOLDER, "RavenVault");
+        assert_eq!(crate::app_dir_move::LEGACY_FOLDER, "PlayXRaven");
     }
 }

@@ -140,7 +140,7 @@ pub fn backup_survey() -> Value {
             { "name": "사진 보관함 원본·공개 장부", "why": "사진 보관함 원본은 별도로 보관하고, 공개 장부는 서버에서 다시 동기화하세요." },
         ],
         "last": last_backup(),
-        "automatic": std::fs::read(app_dir().join("backup-auto-status.json")).ok().and_then(|b| serde_json::from_slice::<Value>(&b).ok()),
+        "automatic": std::fs::read(app_dir().join("backup-auto-status.json")).ok().and_then(|b| serde_json::from_slice::<Value>(&b).ok()).map(rebase_dest),
     })
 }
 
@@ -153,7 +153,16 @@ fn last_backup() -> Value {
     std::fs::read_to_string(stamp_path())
         .ok()
         .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+        .map(rebase_dest)
         .unwrap_or(Value::Null)
+}
+
+/// 저장된 기록의 `dest` 가 옛 앱 폴더(PlayXRaven) 아래였으면 지금 폴더로 바꿔 보인다.
+fn rebase_dest(mut v: Value) -> Value {
+    if let Some(d) = v.get("dest").and_then(Value::as_str).map(crate::paths::rebase_legacy_path) {
+        v["dest"] = Value::String(d);
+    }
+    v
 }
 
 /// Copies the irreplaceable files to a folder the owner chose.

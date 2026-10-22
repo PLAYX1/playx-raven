@@ -18,7 +18,7 @@
 | 잠금 확장자 | `.pxlock` **유지** | `.잠김` | 아래 「확장자」 |
 | 잠금 파일 머리말 | `PXRLOCK1` (안 바뀜, 형식) | — | `lockbox.rs` |
 | 저장 중 잠금 | `.RavenVault.zip.pxlock.publish-lock` | — | `backup_storage.rs` |
-| 앱 데이터 폴더 | `PlayXRaven` (**절대 안 바꿈** — 번들 ID 짝) | — | `paths.rs` |
+| 앱 데이터 폴더 | `RavenVault` (옛 `PlayXRaven` 에서 이전 — `app_dir_move.rs`; 번들 ID 는 안 바꿈) | — | `paths.rs` |
 | 화면 글자 | 「레이븐볼트 백업」 | (옛 이름은 목록에 작게 「옛 이름」) | `main.ts`·`dict.ts` |
 
 zip 안 설명서는 `READ-ME.txt` 그대로다.

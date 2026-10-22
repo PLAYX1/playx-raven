@@ -35,11 +35,11 @@ assert.equal(config.identifier, previous.identifier);
 assert.deepEqual(config.plugins.updater, previous.plugins.updater);
 assert.match(read('src-tauri/Cargo.toml'), /name = "playx-raven"/);
 const paths = read('src-tauri/src/paths.rs');
-assert.match(paths, /pub fn default_app_dir\(\) -> PathBuf \{ base\(\)\.join\(APP_FOLDER\) \}/);
+assert.match(paths, /pub fn default_app_dir\(\) -> PathBuf \{ resolved_default\(\)\.dir\.clone\(\) \}/);
 // v0.3.8 predates wallet-mode startup, synthetic test isolation and the persistent
 // panel. This repair must preserve the accepted efcc880 core, not undo those fixes.
 const baseline = 'efcc880';
-for (const path of ['src-tauri/src/paths.rs', 'src-tauri/src/mining.rs', 'src-tauri/src/ipfs.rs', 'src-tauri/src/boot.rs', 'src-tauri/src/auto.rs', 'src-tauri/src/shop.rs', 'src-tauri/src/auction.rs', 'src-tauri/src/artist.rs', 'web/buy.html']) {
+for (const path of ['src-tauri/src/mining.rs', 'src-tauri/src/ipfs.rs', 'src-tauri/src/boot.rs', 'src-tauri/src/auto.rs', 'src-tauri/src/shop.rs', 'src-tauri/src/auction.rs', 'src-tauri/src/artist.rs', 'web/buy.html']) {
   let current = read(path);
   // This repair adds one exact, separately tested application target. Preserve
   // every pre-existing IPFS/parser/URL rule byte-for-byte around that addition.
@@ -51,7 +51,8 @@ for (const path of ['src-tauri/src/paths.rs', 'src-tauri/src/mining.rs', 'src-ta
   }
   assert.equal(current, execFileSync('git', ['show', baseline + ':' + path], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 }), path + ' must preserve the accepted core behavior');
 }
-assert.match(paths, /const APP_FOLDER: &str = "PlayXRaven"/);
+assert.match(paths, /pub const APP_FOLDER: &str = crate::app_dir_move::NEW_FOLDER;/);
+assert.match(read('src-tauri/src/app_dir_move.rs'), /NEW_FOLDER: &str = "RavenVault"[\s\S]*LEGACY_FOLDER: &str = "PlayXRaven"/);
 assert.match(paths, /RV_BACKUP_FIXTURE_ROOT/);
 assert.match(paths, /path.starts_with\(test_fixture_root\(\)\)/);
 execFileSync(process.execPath, ['--test', 'docs/handoff-1006/secfix1.test.mjs'], { stdio: 'pipe' });
