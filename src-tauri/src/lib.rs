@@ -71,6 +71,7 @@ mod ledger;
 mod issue2;
 mod raven;
 mod report;
+mod report_log;
 mod roles;
 mod send;
 mod setup;
@@ -322,6 +323,7 @@ pub fn run() {
             spec::suggest_setup,
             upload::ipfs_keep_url,
             report::report_send,
+            report::report_log_preview,
             report::report_flush,
             report::report_parked,
             rehearse::rehearse_start,

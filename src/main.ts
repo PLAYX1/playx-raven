@@ -2742,8 +2742,8 @@ function rpScreen(): string {
 
 let rpPick: [string, string] | null = null;
 
-function openReport(prefill = "") {
-  if (deferUntilRaviLanding(() => openReport(prefill))) return;
+function openReport(prefill = "", opts: { category?: string; attachLog?: boolean } = {}) {
+  if (deferUntilRaviLanding(() => openReport(prefill, opts))) return;
   const wrap = $("rpwrap");
   const text = $("rp-text") as HTMLTextAreaElement;
   const chips = $("rp-chips");
@@ -2757,20 +2757,64 @@ function openReport(prefill = "") {
       chips.querySelectorAll("[data-rc]").forEach((x) => x.classList.remove("on"));
       b.classList.add("on");
       rpPick = RP_CATS[+b.dataset.rc!];
+      // 「프로그램이 안 켜져요」 는 서버 기록이 제일 필요한 신고라 기록을 기본으로 켠다(끌 수 있다).
+      if (rpPick[0] === "install-run") (document.getElementById("rp-log") as HTMLInputElement).checked = true;
+      rpWhat();
+      rpLogRefresh();
     };
   });
-  // 무엇을 같이 보내는지 **먼저 보여 준다.** 몰래 담으면 그건 수집이다.
+  // 기록은 기본 꺼짐. 몰래 담지 않는다.
+  const logBox = document.getElementById("rp-log") as HTMLInputElement;
+  logBox.checked = !!opts.attachLog;
+  logBox.onchange = () => { rpWhat(); rpLogRefresh(); };
+  (document.getElementById("rp-log-view") as HTMLElement).onclick = () => void rpLogShow(true);
+  document.getElementById("rp-log-pre")!.style.display = "none";
+  if (opts.category) {
+    chips.querySelector<HTMLElement>(`[data-rc="${RP_CATS.findIndex((c) => c[0] === opts.category)}"]`)?.click();
+    logBox.checked = !!opts.attachLog || logBox.checked;
+  }
+  rpWhat();
+  if (logBox.checked) void rpLogShow(true);
+  wrap.style.display = "flex";
+  setTimeout(() => text.focus(), 60);
+}
+
+/** 무엇을 같이 보내는지 **먼저 보여 준다.** 몰래 담으면 그건 수집이다. */
+function rpWhat() {
   // 🔴 값이 섞인 문장이라 화면 걷기로는 못 옮긴다 — 조각으로 쪼개져서
   //    사전 열쇠와 안 맞는다. 이런 자리만 `t()` 로 직접 옮긴다.
+  const withLog = (document.getElementById("rp-log") as HTMLInputElement | null)?.checked;
   $("rp-what").innerHTML =
     `${copyHtml("같이 보내는 것")} — <b>${escapeHtml(rpScreen())}</b> ${copyHtml("화면")} · ` +
     // 판 번호는 화면에 이미 있다(사이드바 로고 옆). 없는 이름을 새로
     // 만들면 두 곳이 어긋난다.
     `${rpErrors.length ? `${rpErrors.length}${t("건의 오류")}` : t("오류 없음")} · ` +
-    `${copyHtml("판")} ${document.querySelector(".brand span")?.textContent || "?"}<br />` +
+    `${copyHtml("판")} ${document.querySelector(".brand span")?.textContent || "?"} · ` +
+    `${withLog ? t("서버 기록 마지막 부분(가린 것)") : t("서버 기록은 보내지 않음")}<br />` +
     `${t("지갑 12단어·열쇠·주소·잔액은 보내지 않습니다.")}`;
-  wrap.style.display = "flex";
-  setTimeout(() => text.focus(), 60);
+}
+
+/** 체크를 켜면 보낼 글자를 바로 보여 주고, 끄면 접는다. */
+function rpLogRefresh() {
+  const on = (document.getElementById("rp-log") as HTMLInputElement).checked;
+  if (on) void rpLogShow(false);
+  else document.getElementById("rp-log-pre")!.style.display = "none";
+}
+
+/** 가려진 기록을 **보내는 것과 똑같이** 보여 준다. */
+async function rpLogShow(force: boolean) {
+  const pre = document.getElementById("rp-log-pre")!;
+  if (!force && pre.style.display === "none" && !(document.getElementById("rp-log") as HTMLInputElement).checked) return;
+  pre.style.display = "block";
+  pre.textContent = t("읽는 중…");
+  try {
+    const r = await invoke<any>("report_log_preview");
+    pre.textContent = r?.ok
+      ? String(r.text || "")
+      : String(r?.why || t("서버 기록을 읽지 못했습니다. 이 경우 기록은 보내지 않습니다."));
+  } catch {
+    pre.textContent = t("서버 기록을 읽지 못했습니다. 이 경우 기록은 보내지 않습니다.");
+  }
 }
 
 async function sendReport() {
@@ -2792,6 +2836,8 @@ async function sendReport() {
         //    곳이 없습니다」라는 결과만 보고 원인을 못 찾는다 — 실제로 그랬다.
         phone_error: lastPhoneError,
       },
+      // 🔴 체크했을 때만. 가리는 일은 러스트가 한다.
+      attachLog: (document.getElementById("rp-log") as HTMLInputElement).checked,
     });
     // 🔴 못 보냈으면 못 보냈다고 말한다. "고맙습니다" 만 띄우면 사장은
     //    보냈다고 여기고, 우리는 못 받는다. 대신 사라지지는 않는다.
@@ -4016,6 +4062,21 @@ async function paintPartBody(): Promise<void> {
           go.addEventListener("click", async () => {
             (go as HTMLButtonElement).disabled = true;
             setCopyText($("nd-say"), () => t("켜는 중…"));
+            // 60초가 넘도록 안 끝나면 앱이 먼저 「기록과 함께 알리기」 를 내민다.
+            // 사장이 원인을 찾아 헤매지 않게 — 원인은 서버 기록에만 있는 경우가 많다.
+            const stuckTimer = setTimeout(() => {
+              if (document.getElementById("nd-stuck")) return;
+              const say = document.getElementById("nd-say");
+              if (!say) return;
+              const sb = document.createElement("button");
+              sb.id = "nd-stuck";
+              sb.className = "ghost";
+              sb.style.marginTop = "10px";
+              sb.textContent = t("노드가 안 켜졌어요. 기록과 함께 알리기");
+              sb.addEventListener("click", () =>
+                openReport(t("서버(노드)가 60초가 넘도록 안 켜져요."), { category: "install-run", attachLog: true }));
+              say.insertAdjacentElement("afterend", sb);
+            }, 60_000);
             try {
               const r = await invoke<any>("services_start");
               // 🔴 못 켠 이유를 **그대로 보여 준다.** 레이븐 코어가 켜져 있어서
@@ -4027,6 +4088,10 @@ async function paintPartBody(): Promise<void> {
               setCopyText($("nd-say"), () => why || t("켰습니다. 잠시 뒤 다시 봐 주세요."));
             } catch (e) {
               $("nd-say").textContent = String((e as Error)?.message || e);
+            } finally {
+              // 호출이 끝났으면(켜졌든 실패했든) 단추를 치운다.
+              clearTimeout(stuckTimer);
+              document.getElementById("nd-stuck")?.remove();
             }
             setTimeout(() => void paintPart(), 3000);
           });

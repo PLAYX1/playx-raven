@@ -2756,6 +2756,12 @@
         <textarea id="rp-text" rows="4"
                   placeholder="예: 보내기를 눌렀는데 아무 일도 없어요"></textarea>
         <div class="meta" id="rp-what"></div>
+        <label class="meta" style="display:flex;gap:8px;align-items:center;margin-top:8px">
+          <input type="checkbox" id="rp-log" />
+          <span>노드 기록도 같이 보내기</span>
+        </label>
+        <button class="ghost" id="rp-log-view" type="button" style="margin-top:6px">보낼 기록 보기</button>
+        <pre id="rp-log-pre" class="meta" style="display:none;max-height:180px;overflow:auto;white-space:pre-wrap;word-break:break-all;font-size:11px;margin-top:6px"></pre>
         <div class="askrow">
           <button class="ghost" id="rp-cancel">그만두기</button>
           <button id="rp-send">보내기</button>

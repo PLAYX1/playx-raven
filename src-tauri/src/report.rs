@@ -67,22 +67,15 @@ fn park(payload: &Value) {
     }
 }
 
-/// 화면이 부른다. **못 보내도 오류를 던지지 않는다** —
-/// 사장 입장에서는 적어서 눌렀으면 그걸로 끝이어야 한다.
-/// 다만 "지금 갔는지 / 쌓아 뒀는지" 는 정직하게 알려 준다.
-#[tauri::command]
-pub async fn report_send(
-    title: String,
-    description: String,
-    category: String,
-    screen: String,
+/// 신고 본문을 만든다. 🔴 `node_log` 는 **사장이 체크했을 때만** 넘어온다(`None` 이면 키 자체가 없다).
+/// 시험하기 쉽게 보내는 일과 따로 뒀다.
+fn build_payload(
+    desc: &str,
+    category: &str,
+    screen: &str,
     context: Option<Value>,
-) -> Result<Value, String> {
-    let desc = description.trim();
-    if desc.is_empty() {
-        return Err("무엇이 잘못됐는지 한 줄만 적어 주세요.".into());
-    }
-
+    node_log: Option<String>,
+) -> Value {
     // 화면이 보낸 것 위에 이 컴퓨터의 형편을 얹는다.
     let mut ctx = context.unwrap_or_else(|| json!({}));
     if let Some(o) = ctx.as_object_mut() {
@@ -96,9 +89,14 @@ pub async fn report_send(
         //    전부 메인 홈으로 섞여 들어간다.
         o.insert("pathname".into(), json!("/rvn"));
         o.insert("host".into(), json!("rvn.ex.erci.se"));
+        // 화면이 몰래 끼워 넣은 기록은 믿지 않는다 — 가린 기록만 여기서 넣는다.
+        o.remove("node_log");
+        if let Some(log) = node_log {
+            o.insert("node_log".into(), json!(log));
+        }
     }
 
-    let payload = json!({
+    json!({
         // 제목을 따로 묻지 않는다. 두 칸을 채우라고 하면 안 적는다.
         "title": format!("[프로그램] {}", desc.chars().take(60).collect::<String>()),
         "description": desc,
@@ -107,13 +105,50 @@ pub async fn report_send(
         "device_info": format!("RavenVault Desktop {} · {} {}",
             env!("CARGO_PKG_VERSION"), std::env::consts::OS, std::env::consts::ARCH),
         "context": ctx,
-    });
+    })
+}
+
+/// 보내기 전에 화면에 보여 줄 **가린 노드 기록.** 보낼 때 쓰는 것과 같은 함수의 결과다.
+#[tauri::command]
+pub fn report_log_preview() -> Value {
+    match crate::report_log::read_node_log() {
+        Some(text) => json!({ "ok": true, "text": text, "lines": text.lines().count() }),
+        None => json!({
+            "ok": false,
+            "why": "서버 기록을 읽지 못했거나 아직 기록이 없습니다. 이 경우 기록은 보내지 않습니다."
+        }),
+    }
+}
+
+/// 화면이 부른다. **못 보내도 오류를 던지지 않는다** —
+/// 사장 입장에서는 적어서 눌렀으면 그걸로 끝이어야 한다.
+/// 다만 "지금 갔는지 / 쌓아 뒀는지" 는 정직하게 알려 준다.
+///
+/// `attach_log` 가 `true` 일 때만 가린 노드 기록을 함께 보낸다(기본은 안 보냄).
+#[tauri::command]
+pub async fn report_send(
+    title: String,
+    description: String,
+    category: String,
+    screen: String,
+    context: Option<Value>,
+    attach_log: Option<bool>,
+) -> Result<Value, String> {
+    let _ = title;
+    let desc = description.trim();
+    if desc.is_empty() {
+        return Err("무엇이 잘못됐는지 한 줄만 적어 주세요.".into());
+    }
+
+    let log = if attach_log == Some(true) { crate::report_log::read_node_log() } else { None };
+    let attached = log.is_some();
+    let payload = build_payload(desc, &category, &screen, context, log);
 
     if post_once(&payload).await {
-        Ok(json!({ "sent": true }))
+        Ok(json!({ "sent": true, "log_attached": attached }))
     } else {
         park(&payload);
-        Ok(json!({ "sent": false, "parked": true }))
+        Ok(json!({ "sent": false, "parked": true, "log_attached": attached }))
     }
 }
 
@@ -222,5 +257,28 @@ mod tests {
         let code = src.split("#[cfg(test)]").next().unwrap_or("");
         assert!(code.contains(r#""pathname".into(), json!("/rvn")"#));
         assert!(code.contains(r#""host".into(), json!("rvn.ex.erci.se")"#));
+    }
+
+    /// 체크하지 않으면(None) 기록 키가 아예 없다. 화면이 끼워 넣은 것도 지운다.
+    #[test]
+    fn no_log_key_unless_attached() {
+        let p = build_payload("안 켜져요", "install-run", "서버", Some(json!({ "node_log": "몰래" })), None);
+        assert!(p["context"].get("node_log").is_none());
+        assert_eq!(p["context"]["pathname"], "/rvn");
+    }
+
+    #[test]
+    fn log_key_present_when_attached() {
+        let p = build_payload("안 켜져요", "install-run", "서버", None, Some("a\nb".into()));
+        assert_eq!(p["context"]["node_log"], "a\nb");
+    }
+
+    /// 쌓아 두는 경로도 같은 본문(park 는 payload 를 그대로 적는다).
+    #[test]
+    fn parked_payload_keeps_the_log() {
+        let p = build_payload("x", "ui", "홈", None, Some("L".into()));
+        let line = format!("{p}");
+        let back: Value = serde_json::from_str(&line).unwrap();
+        assert_eq!(back["context"]["node_log"], "L");
     }
 }
