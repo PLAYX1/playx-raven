@@ -349,6 +349,11 @@ pub async fn start_parts(files: bool) -> Result<Value, String> {
         skipped.push(json!({ "what": "노드", "why": "이미 켜져 있습니다" }));
     } else if let Some(path) = which("ravend") {
         let datadir = crate::paths::raven_dir().to_string_lossy().to_string();
+        // 🔴 새 컴퓨터에는 이 폴더(%APPDATA%\Raven)가 없다. 코어는 없는 폴더를
+        //    만들어 주지 않고 "Specified data directory … does not exist" 로
+        //    죽는다 — 윈도우 새 설치에서 노드가 영영 안 켜진 원인이었다.
+        //    만들기만 한다(있으면 그대로, 지우거나 건드리지 않는다).
+        let _ = std::fs::create_dir_all(&datadir);
 
         // 🔴 자산 색인을 켜면 **다시 훑어야 한다.** 그런데 코어는 자산 색인이
         // 바뀐 것을 **검사하지 않는다**(init.cpp 에 txindex·addressindex 분기는
