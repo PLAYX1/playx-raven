@@ -427,6 +427,14 @@ pub async fn start_parts(files: bool) -> Result<Value, String> {
             cmd.arg("-reindex-chainstate");
         } else if need_reindex || need_words_reindex {
             cmd.arg("-reindex");
+        } else if (want_asset || want_addr) && chain_is_empty(&datadir) {
+            // 🔴 새 컴퓨터에서 노드가 켜진 지 26초 만에 스스로 꺼졌다. 로그:
+            //    「You need to rebuild the database using -reindex-chainstate to change
+            //     -addressindex … Aborted block database rebuild. Exiting.」
+            //    장부 DB 가 색인 없이 처음 만들어진 뒤 색인을 켜고 다시 켜면 코어가 안 뜬다.
+            //    장부가 **비어 있으면**(맨 처음 블록뿐) 다시 만드는 데 드는 것이 없다 —
+            //    그래서 이때만 `-reindex` 를 붙인다. 이미 받은 장부에는 절대 안 붙는다.
+            cmd.arg("-reindex");
         }
         match spawn_node(cmd, &datadir).await {
             Ok(child) => {
@@ -554,6 +562,53 @@ async fn spawn_node(mut cmd: Command, datadir: &str) -> Result<Option<Child>, St
         }
     }
     out
+}
+
+/// 장부가 **맨 처음 블록뿐인가**(= 다시 만들어도 잃을 것이 없는가).
+/// 첫 블록 파일(`blocks/blk00000.dat`)이 있고 1MB 도 안 될 때만 참이다.
+/// 파일이 없거나(새 폴더) 크면(이미 받는 중) 거짓 — 그때는 건드리지 않는다.
+fn chain_is_empty(datadir: &str) -> bool {
+    let f = std::path::Path::new(datadir).join("blocks").join("blk00000.dat");
+    match std::fs::metadata(&f) {
+        Ok(m) => m.is_file() && m.len() < 1_000_000,
+        Err(_) => false,
+    }
+}
+
+#[cfg(test)]
+mod chain_empty_tests {
+    use super::chain_is_empty;
+
+    fn tmp(name: &str) -> std::path::PathBuf {
+        let d = std::env::temp_dir().join(format!("rv-chain-empty-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(d.join("blocks")).unwrap();
+        d
+    }
+
+    #[test]
+    fn genesis_only_is_empty() {
+        let d = tmp("genesis");
+        std::fs::write(d.join("blocks").join("blk00000.dat"), vec![0u8; 303]).unwrap();
+        assert!(chain_is_empty(d.to_str().unwrap()));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn downloaded_chain_is_not_empty() {
+        let d = tmp("synced");
+        std::fs::write(d.join("blocks").join("blk00000.dat"), vec![0u8; 2_000_000]).unwrap();
+        assert!(!chain_is_empty(d.to_str().unwrap()));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn missing_blocks_file_is_not_touched() {
+        let d = tmp("missing");
+        assert!(!chain_is_empty(d.to_str().unwrap()));
+        assert!(!chain_is_empty("/없는/폴더/아무거나"));
+        let _ = std::fs::remove_dir_all(&d);
+    }
 }
 
 /// 띄운 뒤 `debug.log` 에 **새로 붙은 부분**만 읽는다.
