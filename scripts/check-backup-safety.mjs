@@ -58,6 +58,8 @@ mod paths {
     pub fn app_dir() -> PathBuf { home().join("app") }
     pub fn app_file(name: &str) -> PathBuf { app_dir().join(name) }
     pub fn raven_dir() -> PathBuf { home().join("node") }
+    // 실제 paths.rs 의 옛 위치 → 새 위치 변환. 시험 자리에는 옛 위치가 없으므로 그대로 돌려준다.
+    pub fn rebase_legacy_path(s: &str) -> String { s.to_string() }
 }
 mod raven {
     use serde_json::{json, Value};

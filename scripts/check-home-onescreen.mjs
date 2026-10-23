@@ -29,8 +29,9 @@ function checkLayout(source) {
   const card = declarations(source, '#page-home .rv-home-grid > div');
   const button = declarations(source, '#page-home button');
   assert.equal(grid['grid-template-columns'],'repeat(2,minmax(0,1fr))');
-  assert.equal(grid['grid-template-areas'],'"bal safe" "act conversation" "today extras"');
-  assert.equal(grid['grid-template-rows'],'var(--home-row-top) var(--home-row-middle) var(--home-row-bottom)');
+  // 0.9.4 홈 단순화: 큰 잔액이 윗줄 전체, 받기·보내기와 대화가 한 줄, 안전 띠는 필요할 때만, 행 높이는 내용이 정한다.
+  assert.equal(grid['grid-template-areas'],'"bal bal" "conversation act" "safe safe" "today extras"');
+  assert.equal(grid['grid-template-rows'],'none');
   assert.equal(card.width,'100%'); assert.equal(card['box-sizing'],'border-box');
   assert.equal(card['align-self'],'stretch'); assert.equal(card.padding,'var(--home-pad)');
   assert.equal(declarations(source,'#page-home .rv-home-grid',true)['grid-template-columns'],'minmax(0,1fr)');
@@ -93,22 +94,23 @@ const fn=name=>ast.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text=
 const nodes=new Map();const el=id=>{if(!nodes.has(id))nodes.set(id,{innerHTML:'',textContent:'',hidden:false});return nodes.get(id);};
 let shop={name:'fixture'}, fail=false;
 const escape=s=>String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
-const context=vm.createContext({$:el,document:{getElementById:el,querySelector:()=>null},homeTodaySeq:0,lastReceivedHomeTx:null,chainInfo:{paintHome(){context.chainPainted=(context.chainPainted||0)+1;}},lang:'ko',안본주문:2,
+const context=vm.createContext({$:el,document:{getElementById:el,querySelector:()=>null},homeTodaySeq:0,homePendingOrders:[],lastReceivedHomeTx:null,chainInfo:{paintHome(){context.chainPainted=(context.chainPainted||0)+1;}},lang:'ko',안본주문:2,
   t:s=>s,tf:(s,...a)=>String(s).replace(/\{(\d)\}/g,(_,i)=>String(a[i])),fmtRvn:n=>String(n),copyHtml:escape,escapeHtml:escape,refreshOverview(){},paintHomeSafety(){},todayYmd:()=>'',tzMin:()=>0,
   invoke:async command=>{
     if(command==='shop_load'){if(fail)throw Error('fixture');return shop;}
     if(command==='ledger_range')return {total:12000,currency:'KRW',sales:4};
-    if(command==='ledger_pending')return {count:2};
+    if(command==='ledger_pending')return {count:2,orders:[{},{}]};
     if(command==='recent_transactions')return Array.from({length:7},(_,i)=>({time:100+i,amount:10,category:'receive',confirmations:6,asset_name:'<fixture>'}));
     if(command==='talk_rooms')return Array.from({length:5},()=>({name:'<fixture>',about:'summary'}));
     throw Error(`Forbidden or unmodelled command: ${command}`);
   }});
-vm.runInContext(compile(fn('paintHomeToday')+'\n'+fn('paintHome')),context);
+vm.runInContext(compile(fn('pendingRow')+'\n'+fn('paintHomeToday')+'\n'+fn('paintHome')),context);
 await context.paintHome(); await context.paintHomeToday();
 assert.equal(context.chainPainted,1,'0.8.8: 홈을 그리면 체인 요약 줄도 한 번 갱신한다');
 assert.equal((el('rv-home-txs').innerHTML.match(/class="rv-home-entry"/g)||[]).length,3);
 assert.ok(el('rv-home-txs').innerHTML.includes('&lt;fixture&gt;'));
-assert.equal((el('rv-home-today-body').innerHTML.match(/class="rv-home-entry"/g)||[]).length,4);
+assert.equal((el('rv-home-today-body').innerHTML.match(/class="rv-home-entry[ "]/g)||[]).length,4);
+assert.ok(el('rv-home-today-body').innerHTML.includes('data-pend="list"'),'0.9.5: 입금 대기 줄은 목록 시트를 여는 단추');
 shop=null;await context.paintHomeToday();assert.ok(el('rv-home-today-body').innerHTML.includes('아직 가게'));
 fail=true;await context.paintHomeToday();assert.ok(el('rv-home-today-body').innerHTML.includes('확인하지 못했습니다'));assert.equal(el('rv-home-today').hidden,false);
 writeFileSync(`${out}/arithmetic.json`,JSON.stringify({kind:'CSS arithmetic; not browser measurement',...layout,renderFixtures:'passed',mutationSensitivity:'passed',unverified:['Actual font shaping/wrapping','Browser cascade, screenshots, focus traversal','Tauri WebView, display scaling, translated copy']},null,2)+'\n');

@@ -249,6 +249,9 @@ restored = restored.replace('!define MANUPRODUCTKEY "${MANUKEY}\\${LEGACYPRODUCT
 restored = restored.replace('    ; RavenVault: recognize either display name, with the unchanged publisher.\n    StrCmp "$R1" "${MANUFACTURER}" 0 wix_loop\n    StrCmp "$R0" "${PRODUCTNAME}" wix_product_match\n    StrCmp "$R0" "${LEGACYPRODUCTNAME}" 0 wix_loop\n    wix_product_match:', '    StrCmp "$R0$R1" "${PRODUCTNAME}${MANUFACTURER}" 0 wix_loop');
 restored = restored.replace(/; RavenVault compatibility: rename only a shortcut[\s\S]*?!macroend\n\n/, '');
 restored = restored.replaceAll('  !insertmacro RavenVaultMigrateLegacyShortcut "$SMPROGRAMS\\$AppStartMenuFolder"\n', '').replaceAll('  !insertmacro RavenVaultMigrateLegacyShortcut "$SMPROGRAMS"\n', '').replaceAll('  !insertmacro RavenVaultMigrateLegacyShortcut "$DESKTOP"\n', '');
+// 0.9.5: 설치 전에 이 폴더의 옛 ravend/ipfs 를 정리하는 문서화된 추가분(윈도우 자동 업데이트). 원본에는 없다.
+restored = restored.replace(/; ── 🔴 설치 전에 옛 번들 노드·파일창고를 정리한다[\s\S]*?!macroend\n\n/, '');
+restored = restored.replace('  !insertmacro RavenVaultStopBundledServices\n', '');
 const digest = value => createHash('sha256').update(value).digest('hex');
 assert.equal(digest(restored), '20f4ecc730defb71f1342eaeaec4021df13be3d843abba0effe88ea5835fa079', 'Unexpected NSIS change beyond the documented patch');
 const restoredWix = wix.split('\n').slice(5).join('\n').replaceAll('Key="Software\\\\{{manufacturer}}\\PLAY X Raven"', 'Key="Software\\\\{{manufacturer}}\\\\{{product_name}}"');
