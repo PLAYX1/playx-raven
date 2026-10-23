@@ -666,6 +666,10 @@ jobs:
             if git ls-tree --name-only HEAD -- "$f" | grep -qx "$f"; then git checkout -- "$f"; fi
           done
           ls
+      # 서명은 설치된 `tauri` 도구(npx --no-install)를 쓴다. 이 작업에는 빌드 작업과 달리 도구가 없어서
+      # 이 단계가 없으면 서명이 바로 실패한다(실행 39978957167). 설치 스크립트는 돌리지 않는다.
+      - name: Install the signing tool (no install scripts)
+        run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Prepare, sign and verify the release (nothing is pushed here)
         env:
           RELEASE_VERSION: ${{ inputs.version }}

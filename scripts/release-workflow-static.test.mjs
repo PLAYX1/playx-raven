@@ -24,6 +24,13 @@ test('the published dist branch is never cloned in full (it is >14GB)', () => {
   assert.match(block, /git read-tree HEAD/, 'the index must hold the whole tree or the commit would delete old releases');
 });
 
+test('the signing tool is installed before the sign step, without install scripts', () => {
+  const install = publish.indexOf('- name: Install the signing tool');
+  const sign = publish.indexOf('- name: Prepare, sign and verify');
+  assert.ok(install > 0 && install < sign, 'tauri must be installed before signing');
+  assert.match(publish.slice(install, sign), /npm ci --ignore-scripts/);
+});
+
 test('dry_run input defaults to true', () => {
   const at = text.indexOf('dry_run:');
   assert.ok(at > 0);

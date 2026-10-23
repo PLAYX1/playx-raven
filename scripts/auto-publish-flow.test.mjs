@@ -4,7 +4,7 @@ import { generateKeyPairSync, sign as edSign, createHash } from 'node:crypto';
 import { mkdtemp, writeFile, readFile, rm, mkdir, rename, access } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { readPublished, nextSequence, runFlow, tauriSign, STATEMENT_DAYS } from './auto-publish-flow.mjs';
+import { readPublished, nextSequence, runFlow, tauriSign, redactedTail, STATEMENT_DAYS } from './auto-publish-flow.mjs';
 import { SIGNED_PACKAGES } from './signed-release-metadata.mjs';
 
 const NOW = new Date('2026-10-23T00:00:00Z');
@@ -109,9 +109,18 @@ test('tauriSign passes the key only through the environment, hides tool output a
     assert.equal(await tauriSign({ run })(file), 'MINISIG TEXT');
     assert.deepEqual(calls[0].argv, ['--no-install', 'tauri', 'signer', 'sign', file]);
     assert.ok(!calls[0].argv.join(' ').includes('synthetic-not-a-key'), 'key must not be on the command line');
-    assert.deepEqual(calls[0].opt.stdio, ['ignore', 'ignore', 'ignore']);
+    assert.deepEqual(calls[0].opt.stdio, ['ignore', 'ignore', 'pipe']);
     assert.equal(await exists(`${file}.sig`), false, 'raw .sig is removed');
     delete process.env.TAURI_SIGNING_PRIVATE_KEY;
     await assert.rejects(tauriSign({ run })(file), /not available/);
   } finally { if (saved === undefined) delete process.env.TAURI_SIGNING_PRIVATE_KEY; else process.env.TAURI_SIGNING_PRIVATE_KEY = saved; await rm(dir, { recursive: true, force: true }); }
+});
+
+test('failure text shows the cause but never the key or password', () => {
+  const key = 'dW50cnVzdGVkIGNvbW1lbnQ6IHNlY3JldCBrZXk=SECRETKEYTEXT';
+  const text = `error: failed to decode secret key\nthe key ${key} is bad\npassword hunter2x was wrong`;
+  const out = redactedTail(text, [key, 'hunter2x']);
+  assert.match(out, /failed to decode secret key/);
+  assert.doesNotMatch(out, /SECRETKEYTEXT|hunter2x/);
+  assert.equal(redactedTail('', []), '(no error text)');
 });

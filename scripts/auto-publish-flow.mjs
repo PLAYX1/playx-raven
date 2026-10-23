@@ -66,12 +66,19 @@ export function pythonPrepare({ python = 'python3' } = {}) {
     if (r.status !== 0) throw new Error(`Statement preparation failed for ${target}: ${(r.stderr || '').trim()}`);
   };
 }
+/** Last lines of the tool's error text with the key and password removed, so a failure can be diagnosed from the log. */
+export function redactedTail(text, secrets = [process.env.TAURI_SIGNING_PRIVATE_KEY, process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD]) {
+  let out = String(text ?? '');
+  for (const secret of secrets) if (secret && secret.length >= 4) out = out.split(secret).join('***');
+  out = out.replace(/[A-Za-z0-9+/=]{40,}/g, '***').trim().split('\n').slice(-6).join(' | ');
+  return out ? out.slice(0, 400) : '(no error text)';
+}
 /** Real signer: `tauri signer sign` reads the key only from the environment; the output is decoded into a .minisig. */
 export function tauriSign({ run = spawnSync } = {}) {
   return async file => {
     if (!process.env.TAURI_SIGNING_PRIVATE_KEY) throw new Error('Signing key is not available in this job');
-    const r = run('npx', ['--no-install', 'tauri', 'signer', 'sign', file], { encoding: 'utf8', env: process.env, stdio: ['ignore', 'ignore', 'ignore'] });
-    if (r.status !== 0) throw new Error(`Statement signing failed for ${path.basename(file)} (output hidden on purpose)`);
+    const r = run('npx', ['--no-install', 'tauri', 'signer', 'sign', file], { encoding: 'utf8', env: process.env, stdio: ['ignore', 'ignore', 'pipe'] });
+    if (r.status !== 0) throw new Error(`Statement signing failed for ${path.basename(file)}: ${redactedTail(r.stderr)}`);
     const sig = await readFile(`${file}.sig`, 'utf8');
     await rm(`${file}.sig`, { force: true });
     return Buffer.from(sig.trim(), 'base64').toString('utf8');
