@@ -16,7 +16,11 @@ export const TARGET_INSTALLERS = Object.freeze({
   'windows-x86_64': ['windows.exe', 'windows.msi'], 'darwin-aarch64': ['mac-apple-silicon.dmg'],
   'darwin-x86_64': ['mac-intel.dmg'], 'linux-x86_64': ['linux.AppImage'],
 });
-const SIGNED_TARGETS = Object.freeze(['darwin-aarch64', 'darwin-x86_64']);
+// Targets whose release statement is always required when the target is listed (the original, shipped behavior).
+export const MAC_SIGNED_TARGETS = Object.freeze(['darwin-aarch64', 'darwin-x86_64']);
+// Opt-in targets: a signed statement is required for them only in strict mode (the CLI, and the offline
+// release builder), so a release without their statements keeps auto-update blocked for them.
+export const EXTENDED_SIGNED_TARGETS = Object.freeze(['windows-x86_64', 'linux-x86_64']);
 const MAX_MANIFEST_BYTES = 64 * 1024;
 const MAX_ARTIFACT_BYTES = 95_000_000;
 export class InvalidRelease extends Error {}
@@ -54,10 +58,12 @@ function artifactUrls(version, suffix) {
 }
 
 // Return a canonical projection, so JSON property / installer ordering is immaterial.
-export function validatePublishedManifest(value, expectedVersion, targets) {
+export function validatePublishedManifest(value, expectedVersion, targets, { strictSigned = false } = {}) {
   checkVersion(expectedVersion);
   targets = checkTargets(targets);
-  const signedTargets = SIGNED_TARGETS.filter(t => targets.includes(t));
+  const present = value && value.signed_releases && typeof value.signed_releases === 'object' ? value.signed_releases : {};
+  const signedTargets = [...MAC_SIGNED_TARGETS, ...EXTENDED_SIGNED_TARGETS]
+    .filter(t => targets.includes(t) && (MAC_SIGNED_TARGETS.includes(t) || strictSigned || Object.hasOwn(present, t)));
   const included = new Set(targets.flatMap(t => TARGET_INSTALLERS[t]));
   if (!value || typeof value !== 'object') throw new InvalidRelease('Invalid release manifest');
   checkVersion(value.version);
@@ -166,12 +172,12 @@ async function checkArtifact(fetcher, item, signal) {
   const bytes = lengthHeader(response, MAX_ARTIFACT_BYTES);
   if (bytes !== null && item.bytes !== undefined && bytes !== item.bytes) throw new InvalidRelease('Public artifact size does not match its manifest');
 }
-async function attemptVerification(version, targets, fetcher, signal) {
+async function attemptVerification(version, targets, fetcher, signal, strictSigned) {
   const raw = await Promise.all([
     readManifest(fetcher, `${PUBLIC_BASE}latest.json`, signal),
     readManifest(fetcher, `${PUBLIC_BASE}v${version}/manifest.json`, signal),
   ]);
-  const [latest, immutable] = raw.map(value => validatePublishedManifest(value, version, targets));
+  const [latest, immutable] = raw.map(value => validatePublishedManifest(value, version, targets, { strictSigned }));
   if (JSON.stringify(latest) !== JSON.stringify(immutable)) throw new InvalidRelease('Latest and immutable release manifests disagree');
   const artifacts = new Map(Object.values(latest.platforms).map(item => [item.url, { url: item.url }]));
   for (const item of latest.installers) artifacts.set(item.url, { url: item.url, bytes: item.bytes });
@@ -197,7 +203,7 @@ async function attemptVerification(version, targets, fetcher, signal) {
 }
 
 export async function verifyPublishedRelease(version, {
-  targets, fetcher = fetch, now = () => performance.now(), sleep = ms => new Promise(resolve => setTimeout(resolve, ms)),
+  targets, strictSigned = false, fetcher = fetch, now = () => performance.now(), sleep = ms => new Promise(resolve => setTimeout(resolve, ms)),
   cacheWaitMs = 15 * 60_000, retryMs = 30_000, attemptTimeoutMs = 20_000, onRetry = () => {},
 } = {}) {
   checkVersion(version);
@@ -218,7 +224,7 @@ export async function verifyPublishedRelease(version, {
           reject(new NotVisible('Public release request timed out'));
         }, timeoutMs);
       });
-      const result = await Promise.race([attemptVerification(version, targets, fetcher, controller.signal), timeout]);
+      const result = await Promise.race([attemptVerification(version, targets, fetcher, controller.signal, strictSigned), timeout]);
       return { ...result, attempts, elapsedMs: Math.round(now() - start) };
     } catch (error) {
       if (error instanceof InvalidRelease) throw error;
@@ -237,7 +243,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
     const { targets, rest } = parseTargetsArg(process.argv.slice(2));
     if (rest.length !== 1) throw new Error('Usage: node scripts/verify-published-release.mjs major.minor.patch --targets darwin-aarch64[,darwin-x86_64,windows-x86_64,linux-x86_64]');
     const result = await verifyPublishedRelease(rest[0], {
-      targets,
+      targets, strictSigned: true,
       onRetry: ({ attempt, elapsedMs, reason }) => console.log(`Waiting for public cache (attempt ${attempt}, ${Math.round(elapsedMs / 1000)}s): ${reason}`),
     });
     console.log(JSON.stringify(result));

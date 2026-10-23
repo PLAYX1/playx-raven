@@ -20,12 +20,20 @@ export function verifyStatement(text, signature, publicKey, expected, now = Math
       || !Number.isSafeInteger(release.expires) || release.expires <= now) throw Error('Release statement binding/expiry mismatch');
   return {statement:text,signature};
 }
+// Update package per signed target. Windows signs the NSIS installer .exe itself (it is the updater package);
+// Linux signs the AppImage. A target is signed only when it is listed in `targets`.
+export const SIGNED_PACKAGES = Object.freeze([
+  ['darwin-aarch64','mac-apple-silicon.tar.gz'],['darwin-x86_64','mac-intel.tar.gz'],
+  ['windows-x86_64','windows.exe'],['linux-x86_64','linux.AppImage'],
+]);
 export async function signedReleaseMetadata(directory, source, prefix, version, publicKey, targets = ['darwin-aarch64','darwin-x86_64']) {
   if (!directory) throw Error('Signed release statement directory required (secfix1)');
   const output={};
-  for (const [target,suffix] of [['darwin-aarch64','mac-apple-silicon.tar.gz'],['darwin-x86_64','mac-intel.tar.gz']].filter(([t])=>targets.includes(t))) {
+  for (const [target,suffix] of SIGNED_PACKAGES.filter(([t])=>targets.includes(t))) {
     const file=path.join(directory,`${target}.json`);
-    const text=await readFile(file,'utf8'), signature=await readFile(`${file}.minisig`,'utf8');
+    let text,signature;
+    try { text=await readFile(file,'utf8'); signature=await readFile(`${file}.minisig`,'utf8'); }
+    catch (e) { if (e.code==='ENOENT') throw Error(`Signed release statement missing for ${target}: ${path.basename(file)} and .minisig are required`); throw e; }
     const bytes=await readFile(path.join(source,prefix+suffix));
     output[target]=verifyStatement(text,signature,publicKey,{version,target,sha256:createHash('sha256').update(bytes).digest('hex')});
   }
