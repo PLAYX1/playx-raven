@@ -641,34 +641,33 @@ jobs:
           set -euo pipefail
           mkdir rel
           find all -type f -exec cp {} rel/ \;
-      - name: Prepare existing release-repository credential
-        env:
-          KEY: ${{ secrets.RELEASES_DEPLOY_KEY }}
+      # 🔴 여기서 게시하지 않는다 (2026-10-23 정비).
+      #    0.8.4 부터 `release-manifest.mjs` 는 「서명된 진술 폴더」 없이는 멈춘다
+      #    (Signed release statement directory required). 진술은 오프라인 minisign
+      #    열쇠로 맥에서만 서명하고, 그 열쇠는 CI 에 맡기지 않는다. 그래서 예전처럼
+      #    이 자리에서 dist 에 올리는 호출은 반드시 실패했다. CI 는 서명된 산출물을
+      #    만들고 검산해서 묶음으로 내놓는 데까지만 하고, 게시는 사람이 맥에서 한다.
+      #    순서: docs/handoff/release-windows-linux-updates.md
+      - name: List the signed release candidate (checksums only)
         run: |
           set -euo pipefail
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
-      - name: Publish complete version without replacing previous artifacts
-        env:
-          RELEASE_VERSION: ${{ inputs.version }}
+          cd rel
+          for f in *; do
+            size=$(wc -c < "$f")
+            [ "$size" -lt 95000000 ] || { echo "🔴 95MB 상한을 넘습니다: $f ($size)"; exit 1; }
+          done
+          sha256sum * | tee ../release-candidate-SHA256SUMS.txt
+          for need in windows.exe windows.exe.sig linux.AppImage linux.AppImage.sig; do
+            ls ./*-"$need" >/dev/null 2>&1 || { echo "🔴 없습니다: $need"; exit 1; }
+          done
+          echo "✅ 윈도우 .exe/.sig 와 리눅스 .AppImage/.sig 가 있습니다"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-candidate
+          path: |
+            rel/*
+            release-candidate-SHA256SUMS.txt
+      - name: Next step is manual and offline
         run: |
-          set -euo pipefail
-          V="${RELEASE_VERSION:-${GITHUB_REF_NAME#v}}"
-          git clone --depth 1 --branch dist git@github.com:PLAYX1/playx-raven-releases.git pub
-          node scripts/release-manifest.mjs rel pub "$V" --targets windows-x86_64,darwin-aarch64,darwin-x86_64,linux-x86_64
-          cd pub
-          git config user.name playx1
-          git config user.email playexercise@gmail.com
-          git add --pathspec-from-file=../release-paths.txt
-          git commit -m "RavenVault Desktop $V"
-          git push origin HEAD:dist
-      - name: Verify public version and every updater URL
-        env:
-          RELEASE_VERSION: ${{ inputs.version }}
-        run: |
-          set -euo pipefail
-          V="${RELEASE_VERSION:-${GITHUB_REF_NAME#v}}"
-          node scripts/verify-published-release.mjs "$V" --targets windows-x86_64,darwin-aarch64,darwin-x86_64,linux-x86_64
+          echo "이 묶음은 게시되지 않았습니다. 맥에서 진술 서명 후 게시하세요."
+          echo "순서: docs/handoff/release-windows-linux-updates.md"
