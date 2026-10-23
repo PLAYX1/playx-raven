@@ -82,6 +82,24 @@ Var NoShortcutMode
 Var WixMode
 Var OldMainBinaryName
 
+; ── 🔴 설치 전에 옛 번들 노드·파일창고를 정리한다 (윈도우 실기 시험 필요) ─────────────
+; 앱이 업데이트 직전에 자기가 켠 노드(RPC stop)·ipfs 를 먼저 정상 종료한다(secure_update.rs).
+; 그래도 **이 설치 폴더($INSTDIR) 안의** ravend.exe / ipfs.exe 가 남아 파일을 잡고 있으면
+; 덮어쓰기가 「다음 파일을 열 수 없습니다」로 멈춘다(옛 판은 설치 폴더에서 바로 띄웠다).
+; - 이름만으로 죽이지 않는다: 사장이 따로 켠 레이븐 코어/IPFS(다른 폴더)는 우리 것이 아니다.
+;   실행 파일 경로가 `$INSTDIR\` 로 시작하는 것만 대상이다.
+; - 순서: 최대 15초 스스로 닫히길 기다린다(앱이 이미 stop 을 보냈다) → 남은 것만 강제 종료.
+; - 실패해도 설치는 계속한다(여기서 막으면 업데이트가 영영 안 된다).
+; - $INSTDIR 에 따옴표·작은따옴표가 있어도 안전하도록 환경변수로 넘긴다.
+!macro RavenVaultStopBundledServices
+  Push $R9
+  System::Call 'Kernel32::SetEnvironmentVariable(t "RV_INSTDIR", t "$INSTDIR")'
+  nsExec::Exec `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "try { $$d = $$env:RV_INSTDIR.TrimEnd('\') + '\'; $$n = 'ravend','ipfs'; $$f = { Get-Process -Name $$n -ErrorAction SilentlyContinue | Where-Object { $$_.Path -and $$_.Path.StartsWith($$d, [StringComparison]::OrdinalIgnoreCase) } }; for ($$i = 0; $$i -lt 30 -and @(& $$f).Count -gt 0; $$i++) { Start-Sleep -Milliseconds 500 }; @(& $$f) | Stop-Process -Force -ErrorAction SilentlyContinue } catch {}"`
+  Pop $R9 ; nsExec 종료 코드는 버린다(실패해도 설치는 계속)
+  Pop $R9 ; 위에서 Push 한 원래 값 복원
+  Sleep 500
+!macroend
+
 Name "${PRODUCTNAME}"
 BrandingText "${COPYRIGHT}"
 OutFile "${OUTFILE}"
@@ -653,6 +671,7 @@ Section Install
   !endif
 
   !insertmacro CheckIfAppIsRunning "${MAINBINARYNAME}.exe" "${PRODUCTNAME}"
+  !insertmacro RavenVaultStopBundledServices
 
   ; Copy main executable
   File "${MAINBINARYSRCPATH}"

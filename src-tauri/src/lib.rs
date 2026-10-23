@@ -114,6 +114,7 @@ mod vending;
 mod remote_sales;
 mod sales_account;
 mod update_policy;
+mod pe_version;
 mod secure_update;
 mod wallet;
 mod server;

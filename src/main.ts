@@ -2329,7 +2329,7 @@ async function checkForUpdate(quiet = true) {
   const nag = document.getElementById("upnag") as HTMLButtonElement | null;
   const note = document.getElementById("up-note");
   try {
-    const update = await invoke<{ version: string | null }>("check_update");
+    const update = await invoke<{ version: string | null; manual?: boolean }>("check_update");
     if (!update.version) {
       // 🔴 「확인 중…」이 영영 안 풀렸다(0.8.4 에서 신고) — 새 버전이 없을 때 단추 글자를 되돌리지 않았다.
       if (nag) { nag.hidden = false; nag.classList.remove("new"); setCopyText(nag, () => t("지금이 최신입니다.")); nag.onclick = () => void checkNow(); }
@@ -2337,6 +2337,16 @@ async function checkForUpdate(quiet = true) {
       return;
     }
     const version = update.version;
+    // 🔴 리눅스 deb/rpm · 윈도우 MSI 처럼 앱이 스스로 못 바꾸는 설치: 설치 단추 대신 안내만.
+    if (update.manual) {
+      const guide = t("이 설치 방식에서는 자동으로 바꿀 수 없습니다. 새 설치 파일을 내려받아 주세요.");
+      if (nag) {
+        nag.hidden = false; nag.classList.add("new"); nag.textContent = `${version} 업데이트`;
+        nag.onclick = () => { if (note) note.textContent = guide; };
+      }
+      if (note) note.textContent = guide;
+      return;
+    }
     if (nag) {
       nag.hidden = false; nag.classList.add("new"); nag.textContent = `${version} 업데이트`;
       nag.onclick = async () => {

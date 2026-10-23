@@ -1649,6 +1649,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "Right now money can be sent without a passphrase. Lock it before you leave your seat.",
     "지금이 최신입니다.":
       "You are up to date.",
+    "이 설치 방식에서는 자동으로 바꿀 수 없습니다. 새 설치 파일을 내려받아 주세요.":
+      "This installation type cannot update itself. Please download the new installer.",
     "지도 앱에서 복사해 붙여넣기":
       "Copy from a maps app and paste",
     "지도 주소를 복사했습니다. 브라우저에 붙여넣으세요.":
@@ -3480,6 +3482,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "今はパスフレーズなしで送れる状態です。席を離れる前にロックしてください。",
     "지금이 최신입니다.":
       "これが最新です。",
+    "이 설치 방식에서는 자동으로 바꿀 수 없습니다. 새 설치 파일을 내려받아 주세요.":
+      "このインストール方法では自動で更新できません。新しいインストーラーをダウンロードしてください。",
     "지도 앱에서 복사해 붙여넣기":
       "地図アプリからコピーして貼り付け",
     "지도 주소를 복사했습니다. 브라우저에 붙여넣으세요.":
@@ -5311,6 +5315,8 @@ export const DICT: Record<string, Record<string, string>> = {
       "当前状态下无需密码即可转账。离开座位前请锁定。",
     "지금이 최신입니다.":
       "已是最新版本。",
+    "이 설치 방식에서는 자동으로 바꿀 수 없습니다. 새 설치 파일을 내려받아 주세요.":
+      "此安装方式无法自动更新。请下载新的安装程序。",
     "지도 앱에서 복사해 붙여넣기":
       "从地图应用复制后粘贴",
     "지도 주소를 복사했습니다. 브라우저에 붙여넣으세요.":
