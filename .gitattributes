@@ -1,2 +1,8 @@
 # Keep the reviewed upstream installer bytes stable on Windows runners.
 src-tauri/installer/* text eol=lf
+# The wallet integrity manifest hashes these bytes. A Windows runner that converts them to CRLF makes
+# `check-wallet-manifest` fail with "manifest is stale" even though nothing changed (release run 39911289557).
+web/*.js text eol=lf
+web/*.ts text eol=lf
+web/*.html text eol=lf
+web/*.json text eol=lf
