@@ -1,3 +1,4 @@
+import {fileURLToPath} from 'node:url';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, writeFile, mkdir, rm, readFile, stat } from 'node:fs/promises';
@@ -91,7 +92,7 @@ test('targets must be listed explicitly: missing, empty, unknown or duplicate ta
 }));
 test('CLI refuses to run without --targets',async()=>{
   const {execFile}=await import('node:child_process');
-  const r=await new Promise(res=>execFile(process.execPath,[new URL('./release-manifest.mjs',import.meta.url).pathname,'/nonexistent-in','/nonexistent-out','0.4.0'],(e,o,er)=>res({code:e?.code,er})));
+  const r=await new Promise(res=>execFile(process.execPath,[fileURLToPath(new URL('./release-manifest.mjs',import.meta.url)),'/nonexistent-in','/nonexistent-out','0.4.0'],(e,o,er)=>res({code:e?.code,er})));
   assert.notEqual(r.code,0); assert.match(r.er,/--targets/);
 });
 test('partial release: only listed target is published, other aliases untouched, others carried with their old version',()=>fixture(async(source,out)=>{
