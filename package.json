@@ -28,6 +28,7 @@
     "test:i18n": "node --test scripts/i18n-packs-browser.test.mjs",
     "test:asset-keep": "node --test scripts/asset-keep.test.mjs scripts/asset-keep-browser.test.mjs",
     "typecheck": "tsc --noEmit",
+    "check:bundle-resources": "node scripts/check-bundle-resources.mjs",
     "test:mini": "node --test scripts/mini-window.test.mjs scripts/mini-window-browser.test.mjs",
     "test:modes": "node --test scripts/window-modes.test.mjs scripts/window-modes-browser.test.mjs",
     "test:layout": "node --test scripts/layout-gate-browser.test.mjs",

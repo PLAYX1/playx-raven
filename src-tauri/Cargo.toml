@@ -83,7 +83,7 @@ hmac = "0.12"
 # 🔴 `ws` 를 켠다. 이 프로그램이 **릴레이 노릇**을 하려면 웹소켓을 받아야
 # 한다 — 지금은 남의 릴레이 세 곳에 올리기만 한다.
 axum = { version = "0.8", features = ["ws"] }
-tokio = { version = "1", features = ["rt-multi-thread", "net", "macros"] }
+tokio = { version = "1", features = ["rt-multi-thread", "net", "macros", "time", "io-util"] }
 # The owner scans this to reach their own node without typing an IP.
 qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 # 라우터에 **진짜 요청**을 넣는다(`oneshot`). 시험 전용이었지만, 이제 봉함 길

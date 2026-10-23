@@ -97,11 +97,21 @@ export function createRaviHome(api: { afterLanding?(run: () => void): void; wake
   // 설정 「라비 목소리」: 라비 목소리(기본) / 기기 목소리. 기존 읽어 주기 켜짐·꺼짐과 따로 저장한다.
   const kind = byId("ravi-voice-kind") as HTMLSelectElement, kindNote = byId("ravi-voice-kind-note");
   try { kind.value = localStorage.getItem("rv-ravi-voice") === "device" ? "device" : "ravi"; } catch { kind.value = "ravi"; }
+  // 라비 목소리 받기(모델은 설치 파일에 없다): 설정 카드 + 말풍선 옆 안내. 끝나면 합성 엔진을 새로 만든다.
+  const wantRavi = () => kind.value === "ravi";
+  const laterKey = "rv-ravi-pack-later";
+  const pack = api.invoke ? import("./ravi-voice-pack").then(m => m.mountVoicePack({
+    invoke: api.invoke!,
+    reset() { ttsNow?.dispose(); ttsNow = null; ttsLoad = null; aiTag.hidden = true; },
+    useRavi() { try { localStorage.setItem("rv-ravi-voice", "ravi"); } catch { /* 저장 못 해도 이번 실행엔 기본값 */ } kind.value = "ravi"; if (readEnabled) void raviSpeech?.warm(); kindHint(); },
+    later: { get() { try { return localStorage.getItem(laterKey) === "1"; } catch { return false; } }, set(v) { try { v ? localStorage.setItem(laterKey, "1") : localStorage.removeItem(laterKey); } catch { /* 이번 실행에만 */ } } },
+  })).then(p => { void p?.refresh(wantRavi); return p; }).catch(() => undefined) : undefined;
   const kindHint = () => {
     kindNote.textContent = "";
+    void pack?.then(p => p?.setWant(wantRavi));
     if (kind.value !== "ravi" || !api.invoke) return;
-    // 설치에 목소리 파일이 없거나 깨졌으면 미리 알려 준다(말은 기기 목소리로 나온다).
-    void api.invoke("ravi_tts_status").then(r => { if (kind.value === "ravi" && !(r as { ok?: boolean } | null)?.ok) kindNote.textContent = t("이 설치에는 라비 목소리 파일이 없어서 지금은 기기 목소리로 말해요."); }).catch(() => {});
+    // 아직 안 받았거나 파일이 깨졌으면 미리 알려 준다(말은 기기 목소리로 나온다).
+    void api.invoke("ravi_tts_status").then(r => { if (kind.value === "ravi" && !(r as { ok?: boolean } | null)?.ok) kindNote.textContent = t("라비 목소리를 아직 받지 않아서 지금은 기기 목소리로 말해요. 아래 「받기」를 누르면 받아요."); }).catch(() => {});
   };
   kind.onchange = () => {
     try { localStorage.setItem("rv-ravi-voice", kind.value); } catch { /* 저장 못 해도 이번 실행엔 기본값으로 */ }

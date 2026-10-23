@@ -275,3 +275,9 @@ body:has(#page-home.on) #ravi-launcher { display:none; }
 .rv-pend-item { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; padding:10px 0; border-bottom:1px solid var(--line); }
 .rv-pend-item small { display:block; color:var(--muted); font-size:13px; }
 .rv-pend-item strong { text-align:right; white-space:nowrap; }
+
+/* 라비 목소리 받기 안내(말풍선 옆) */
+#ravi-panel .ravi-pack-nudge { order:3; flex:none; display:flex; align-items:center; justify-content:space-between; gap:8px; padding:0 12px 8px; }
+#ravi-panel .ravi-pack-nudge p { font-size:12px; margin:0; }
+#ravi-panel .ravi-pack-nudge span { display:flex; gap:6px; flex:none; }
+#ravi-panel .ravi-pack-nudge[hidden] { display:none; }

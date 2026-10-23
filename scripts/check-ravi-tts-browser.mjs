@@ -2,6 +2,9 @@
 //   A. 모델 정상: 「AI 음성」 표시가 말하는 동안·말풍선 옆에 보이고, 소리가 실제로 만들어져 재생된다(실제 모델 사용)
 //   B. 리소스 없음: 기기 목소리(speechSynthesis)로 자동 폴백, 「AI 음성」 표시는 꺼진다
 //   C. 설정 「기기 목소리」: 라비 목소리 명령을 아예 부르지 않는다
+//   E. 모델이 설치 파일에 없다 → 「받기」(가짜 진행) → 완료되면 자동으로 라비 목소리 → 「지우기」 → 기기 목소리
+//   F. 받기 실패(가짜 끊김) → 쉬운 안내 + 기기 목소리 폴백
+// 모델 파일 위치: 앱에서는 앱 자료 폴더 ravi-voice/. 이 시험은 RV_MODEL_DIR(없으면 src-tauri/resources/ravi-voice)의 파일을 "받은 것처럼" 조각으로 준다.
 // 앱의 CSP(tauri.conf.json)를 그대로 씌워서 wasm·워커가 막히지 않는지도 같이 본다.
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync, mkdtempSync, statSync, openSync, readSync, closeSync } from 'node:fs';
@@ -10,7 +13,7 @@ import { tmpdir } from 'node:os';
 import puppeteer from 'puppeteer-core';
 import http from 'node:http';
 const root = resolve(import.meta.dirname, '..'), dist = resolve(root, 'dist');
-const modelDir = resolve(root, 'src-tauri/resources/ravi-voice');
+const modelDir = process.env.RV_MODEL_DIR ? resolve(process.env.RV_MODEL_DIR) : resolve(root, 'src-tauri/resources/ravi-voice');
 const profile = mkdtempSync(resolve(tmpdir(), 'rv-tts-'));
 const FILES = { dp: 'onnx/duration_predictor.onnx', enc: 'onnx/text_encoder.onnx', vec: 'onnx/vector_estimator.onnx', voc: 'onnx/vocoder.onnx', cfg: 'onnx/tts.json', indexer: 'onnx/unicode_indexer.json', style: 'voice_styles/F1.json', license: 'LICENSE' };
 const hasModel = Object.values(FILES).every(f => existsSync(resolve(modelDir, f)));
@@ -59,9 +62,18 @@ const mocks = ({ tts }) => {
   };
   const flag = () => window.__AIFLAGS.push(!document.getElementById('ravi-ai-voice').hidden);
   setInterval(() => { try { flag(); } catch { /* 아직 없음 */ } }, 100);
+  // 가짜 「라비 목소리 받기」: 상태를 물을 때마다 4분의 1씩 진행 → 끝나면 설치됨(또는 실패). 진짜 받기는 Rust(ravi_voice_pack.rs, cargo test 로 시험).
+  let installed = !tts.missing && !tts.download, dl = null, last = null;
   window.__TAURI_INTERNALS__ = { invoke: async (c, a) => {
     window.__CALLS.push(c);
-    if (c === 'ravi_tts_status') return tts.missing ? { ok: false, missing: ['vec'] } : { ok: true, sizes };
+    if (c === 'ravi_tts_status') return installed ? { ok: true, sizes } : { ok: false, missing: ['vec'] };
+    if (c === 'ravi_voice_pack_status') {
+      if (dl) { dl.done += dl.total / 4; if (dl.done >= dl.total) { if (tts.fail) last = { ok: false, reason: 'network' }; else { installed = true; last = { ok: true }; } dl = null; } }
+      return { installed, removable: installed, downloading: !!dl, done: dl ? dl.done : 0, total: dl ? dl.total : 401301114, last };
+    }
+    if (c === 'ravi_voice_download') { if (installed) return { ok: true, already: true }; last = null; dl = { done: 0, total: 401301114 }; return { ok: true, started: true }; }
+    if (c === 'ravi_voice_cancel') { dl = null; last = { ok: false, reason: 'cancelled' }; return { ok: true }; }
+    if (c === 'ravi_voice_remove') { installed = false; last = null; return { ok: true }; }
     if (c === 'ravi_tts_read') { const r = await fetch(`/__tts/${a.key}?o=${a.offset}&l=${a.len}`); return await r.arrayBuffer(); }
     if (c === 'node_status') return { blocks: 1000, headers: 1000, progress: 1, peers: 3 };
     if (c === 'wallet_balance') return { confirmed: 12.5, unconfirmed: 0 };
@@ -143,6 +155,50 @@ try {
     await page.click('#ravi-read'); await sleep(300); await ask(page);
     await page.waitForFunction(() => window.__DEVICE.length >= 1, { timeout: 8000 });
     assert.ok(!(await page.evaluate(() => window.__CALLS)).some(c => c.startsWith('ravi_tts_read')), '모델을 읽지 않았다');
+  });
+  const cardNote = page => page.$eval('#ravi-pack-note', e => e.textContent);
+  // E. 설치 파일에 모델 없음 → 받기 → 라비 목소리 → 지우기 → 기기 목소리
+  await scenario('E 받기 후 라비 목소리', { download: true }, async page => {
+    await page.waitForFunction(() => !document.getElementById('ravi-pack-nudge').hidden, { timeout: 5000 });
+    assert.match(await page.$eval('#ravi-pack-nudge-text', e => e.textContent), /380MB/);
+    assert.ok(await page.$eval('#ravi-pack-nudge-later', e => !e.hidden), '「나중에」 단추');
+    await page.click('#ravi-pack-nudge-get');
+    await page.waitForFunction(() => /받는 중/.test(document.getElementById('ravi-pack-note').textContent), { timeout: 5000 });
+    assert.equal(await page.$eval('#ravi-pack-bar', e => e.hidden), false, '진행 막대');
+    assert.equal(await page.$eval('#ravi-pack-cancel', e => e.hidden), false, '취소 단추');
+    await page.waitForFunction(() => /받았어요/.test(document.getElementById('ravi-pack-note').textContent), { timeout: 15000 });
+    assert.equal(await page.$eval('#ravi-pack-nudge', e => e.hidden), true, '다 받으면 안내가 사라진다');
+    assert.equal(await page.$eval('#ravi-voice-kind', e => e.value), 'ravi');
+    await page.click('#ravi-read'); await sleep(300); await ask(page);
+    await page.waitForFunction(() => !document.getElementById('ravi-ai-voice').hidden, { timeout: 5000 });
+    await page.waitForFunction(() => window.__PLAYED.length >= 1, { timeout: Number(process.env.RV_WAIT || 150000) });
+    assert.equal(await page.evaluate(() => window.__DEVICE.length), 0, '받은 뒤에는 기기 목소리를 안 썼다');
+    await page.waitForFunction(() => document.getElementById('ravi-ai-voice').hidden, { timeout: 15000 });
+    // 지우기: 한 번은 확인, 두 번째에 지움 → 기기 목소리
+    await page.evaluate(() => document.getElementById('ravi-pack-remove').click());
+    assert.match(await page.$eval('#ravi-pack-remove', e => e.textContent), /정말 지울까요/);
+    await page.evaluate(() => document.getElementById('ravi-pack-remove').click());
+    await page.waitForFunction(() => /지웠어요/.test(document.getElementById('ravi-pack-note').textContent), { timeout: 5000 });
+    await page.$eval('#chat-q', el => { el.value = '레이븐코인은 언제 만들어졌어?'; }); await page.click('#chat-go');
+    await page.waitForFunction(() => window.__DEVICE.length >= 1, { timeout: 15000 });
+    assert.equal(await page.$eval('#ravi-ai-voice', e => e.hidden), true, '지운 뒤에는 AI 음성 표시 없음');
+    console.log('E: 받기 → 라비 목소리 재생 → 지우기 → 기기 목소리 통과');
+  });
+  // F. 받기 실패 → 안내 + 기기 목소리
+  await scenario('F 받기 실패', { download: true, fail: true }, async page => {
+    await page.waitForFunction(() => !document.getElementById('ravi-pack-nudge').hidden, { timeout: 5000 });
+    await page.click('#ravi-pack-nudge-get');
+    await page.waitForFunction(() => /인터넷이 끊겼/.test(document.getElementById('ravi-pack-note').textContent), { timeout: 15000 });
+    assert.match(await cardNote(page), /기기 목소리/);
+    assert.equal(await page.$eval('#ravi-pack-get', e => e.textContent), '다시 받기');
+    await page.click('#ravi-read'); await sleep(300); await ask(page);
+    await page.waitForFunction(() => window.__DEVICE.length >= 1, { timeout: 8000 });
+    assert.equal(await page.evaluate(() => window.__PLAYED.length), 0);
+    assert.equal(await page.$$eval('#chat-log .msg.ai .ai-voice-tag', e => e.length), 0, '폴백 답에는 AI 음성 표시 없음');
+    // 「나중에」: 안내가 사라진다
+    await page.evaluate(() => document.getElementById('ravi-pack-later').click());
+    assert.equal(await page.$eval('#ravi-pack-nudge', e => e.hidden), true);
+    assert.ok(!(await page.evaluate(() => window.__CALLS)).some(c => c === 'ravi_tts_read'), '모델을 읽지 않았다');
   });
   // D. 설정 문구·정보 화면(고지)
   await scenario('D 설정·정보', {}, async page => {

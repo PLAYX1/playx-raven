@@ -8,7 +8,7 @@
 - 설정 「라비와 AI」에 「라비 목소리: 라비 목소리(기본) / 기기 목소리」 선택을 더했습니다. 기존 「답 읽어 주기」 켜짐·꺼짐은 그대로입니다.
 - 라비 목소리로 읽는 동안과 그 답 말풍선 옆에 「AI 음성」 표시가 늘 보입니다(기계가 만든 음성임을 밝히는 목소리 라이선스 OpenRAIL-M 의 요구).
 - 「정보와 개발비」의 오픈소스 고지에 Supertonic 3 (OpenRAIL-M)·onnxruntime-web 출처와 라이선스 원문을 더했습니다.
-- ⚠ **설치 파일이 약 380MB 커집니다.** 목소리 모델(약 383MB)을 설치 폴더 안에 함께 넣기 때문입니다(앱 자료 폴더로 복사하지 않습니다). 처음 읽어 줄 때만 모델을 메모리에 올리고(수 초), 5분 동안 말이 없으면 다시 내려놓습니다.
+- 라비 목소리는 처음에 동의하면 한 번 내려받습니다(약 380MB). 설치 파일에는 들어 있지 않습니다(설치 파일 크기는 0.9.4 와 거의 같습니다). 설정 「라비와 AI」의 「라비 목소리 받기」(또는 라비 창 옆 안내)에서 「받기」를 누르면 앱 자료 폴더에 받고, 크기와 sha256 이 맞을 때만 씁니다. 받기 전·실패·지운 뒤에는 기기 목소리로 말하며, 언제든 「지우기」로 지울 수 있습니다. 새로 허용한 인터넷 주소는 huggingface.co(라비 목소리 받기 전용) 하나뿐입니다. 처음 읽어 줄 때만 모델을 메모리에 올리고(수 초), 5분 동안 말이 없으면 다시 내려놓습니다.
 
 ### English
 
@@ -16,7 +16,7 @@
 - Adds "Ravi's voice: Ravi's voice (default) / Device voice" to Settings > Ravi and AI. The existing "Read replies aloud" on/off is unchanged.
 - An "AI voice" label is always shown while the Ravi voice is speaking and next to that reply bubble (the voice license, OpenRAIL-M, requires disclosing machine-generated speech).
 - Adds Supertonic 3 (OpenRAIL-M) and onnxruntime-web credits plus the full license text to the open-source notice in "About and developer fee".
-- ⚠ **The installer grows by about 380 MB** because the voice model (about 383 MB) is bundled inside the install folder (it is not copied to the app data folder). The model is loaded into memory only when Ravi first reads aloud (a few seconds) and released after 5 idle minutes.
+- The Ravi voice is downloaded once, with your consent (about 380 MB). It is not inside the installer (installer size stays about the same as 0.9.4). Press "Download" under Settings > Ravi and AI > "Get Ravi's voice" (or in the notice next to Ravi's window); the files go to the app data folder and are used only after their size and sha256 match. Before the download, after a failure, or after deleting them, the device voice is used; "Delete" removes them any time. The only newly allowed internet address is huggingface.co, used solely for this voice download. The model is loaded into memory only when Ravi first reads aloud (a few seconds) and released after 5 idle minutes.
 
 ## 0.9.4
 

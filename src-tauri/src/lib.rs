@@ -5,6 +5,7 @@ mod auction;
 mod ai;
 mod ravi_voice;
 mod ravi_tts;
+mod ravi_voice_pack;
 mod ravi_agent;
 mod ravi_companion;
 mod ravi_lifecycle;
@@ -438,6 +439,10 @@ pub fn run() {
             ravi_voice::voice_transcribe,
             ravi_tts::ravi_tts_status,
             ravi_tts::ravi_tts_read,
+            ravi_voice_pack::ravi_voice_download,
+            ravi_voice_pack::ravi_voice_cancel,
+            ravi_voice_pack::ravi_voice_remove,
+            ravi_voice_pack::ravi_voice_pack_status,
             ai::ai_chat,
             ai::ai_promo,
             ai::save_custom_provider,

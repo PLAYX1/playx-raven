@@ -1,5 +1,6 @@
-//! 라비 목소리(Supertonic 3) 모델 읽기 — **설치 폴더의 리소스에서 읽기만 한다.**
-//! 앱 자료 폴더로 복사하지 않고, 내려받지도 않는다(네트워크 없음). 합성 자체는 화면 쪽 워커가 한다.
+//! 라비 목소리(Supertonic 3) 모델 읽기 — **앱 자료 폴더 `ravi-voice/` 에서 읽기만 한다.**
+//! 모델은 설치 파일에 들어 있지 않다. 사용자가 동의하면 `ravi_voice_pack.rs` 가 한 번 받아 둔다. 여기는 네트워크가 없다.
+//! 합성 자체는 화면 쪽 워커가 한다.
 //!
 //! 화면은 글자 이름표(`key`)만 넘기고, 경로는 여기서만 만든다 → 이름표 밖의 파일은 읽을 수 없다.
 //! 없거나 크기가 다르면 `ravi_tts_status` 가 「못 쓴다」를 알리고, 화면은 기기 목소리로 말한다.
@@ -25,8 +26,18 @@ fn entry(key: &str) -> Option<(&'static str, u64)> {
     FILES.iter().find(|(k, _, _)| *k == key).map(|(_, p, s)| (*p, *s))
 }
 
-/// 설치 폴더 리소스 `ravi-voice/`. 개발 중에는 저장소의 `src-tauri/resources/ravi-voice` 도 본다.
-fn roots(app: &tauri::AppHandle) -> Vec<PathBuf> {
+/// 받아 둔 모델 폴더: 앱 자료 폴더 `ravi-voice/`(RavenVault 폴더 이전 규칙을 따른다). 받기는 `ravi_voice_pack.rs`.
+pub fn pack_dir() -> PathBuf { crate::paths::app_dir().join("ravi-voice") }
+
+/// 모델을 읽는 곳. 설치 파일에는 모델이 없다(LICENSE·manifest.json 만). 개발 중에는 저장소의 `src-tauri/resources/ravi-voice` 도 본다.
+fn roots() -> Vec<PathBuf> {
+    let mut v = vec![pack_dir()];
+    if cfg!(debug_assertions) { v.push(Path::new(env!("CARGO_MANIFEST_DIR")).join("resources").join("ravi-voice")); }
+    v
+}
+
+/// 설치 파일에 같이 들어 있는 작은 파일(LICENSE) 자리 — 모델을 안 받았어도 라이선스 원문은 보여 준다.
+fn bundled_roots(app: &tauri::AppHandle) -> Vec<PathBuf> {
     use tauri::Manager;
     let mut v = Vec::new();
     if let Ok(dir) = app.path().resource_dir() { v.push(dir.join("ravi-voice")); v.push(dir.join("resources").join("ravi-voice")); }
@@ -39,8 +50,15 @@ pub fn missing_in(root: &Path) -> Vec<&'static str> {
     FILES.iter().filter(|(_, rel, size)| std::fs::metadata(root.join(rel)).map(|m| !m.is_file() || m.len() != *size).unwrap_or(true)).map(|(k, _, _)| *k).collect()
 }
 
-fn complete_root(app: &tauri::AppHandle) -> Option<PathBuf> {
-    roots(app).into_iter().find(|r| missing_in(r).is_empty())
+fn complete_root() -> Option<PathBuf> {
+    roots().into_iter().find(|r| missing_in(r).is_empty())
+}
+
+/// 모델을 쓸 수 있는가(받아 뒀고 크기가 다 맞음).
+pub fn is_installed(_app: &tauri::AppHandle) -> bool { complete_root().is_some() }
+
+fn license_ok(root: &Path) -> bool {
+    FILES.iter().find(|(k, _, _)| *k == "license").map(|(_, rel, size)| std::fs::metadata(root.join(rel)).map(|m| m.is_file() && m.len() == *size).unwrap_or(false)).unwrap_or(false)
 }
 
 /// 순수: 이름표 + 범위 → 읽은 바이트. 범위가 파일 밖이면 오류.
@@ -56,11 +74,11 @@ pub fn read_range(root: &Path, key: &str, offset: u64, len: u64) -> Result<Vec<u
 }
 
 #[tauri::command]
-pub async fn ravi_tts_status(app: tauri::AppHandle) -> Value {
-    match complete_root(&app) {
+pub async fn ravi_tts_status(_app: tauri::AppHandle) -> Value {
+    match complete_root() {
         Some(_) => json!({ "ok": true, "sizes": FILES.iter().map(|(k, _, s)| json!([k, s])).collect::<Vec<_>>() }),
         None => {
-            let miss = roots(&app).first().map(|r| missing_in(r)).unwrap_or_else(|| vec!["root"]);
+            let miss = roots().first().map(|r| missing_in(r)).unwrap_or_else(|| vec!["root"]);
             json!({ "ok": false, "missing": miss })
         }
     }
@@ -68,7 +86,12 @@ pub async fn ravi_tts_status(app: tauri::AppHandle) -> Value {
 
 #[tauri::command]
 pub async fn ravi_tts_read(app: tauri::AppHandle, key: String, offset: u64, len: u64) -> Result<tauri::ipc::Response, String> {
-    let root = complete_root(&app).ok_or("missing")?;
+    // 라이선스 원문은 모델을 안 받았어도 설치 파일 쪽 사본으로 읽어 준다(이름표 8개 밖은 여전히 못 읽는다).
+    let root = match complete_root() {
+        Some(r) => r,
+        None if key == "license" => bundled_roots(&app).into_iter().chain(roots()).find(|r| license_ok(r)).ok_or("missing")?,
+        None => return Err("missing".into()),
+    };
     tauri::async_runtime::spawn_blocking(move || read_range(&root, &key, offset, len)).await.map_err(|_| "join".to_string())?.map(tauri::ipc::Response::new)
 }
 
