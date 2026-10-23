@@ -79,10 +79,10 @@ test('one missing installer, package or updater signature stops the whole publis
   assert.equal(await exists(path.join(pub, 'latest.json')), false);
   assert.equal(await exists(path.join(pub, 'v0.9.6')), false);
 }));
-test('a file at or over 95MB stops the publish', () => env(async ({ dir, pub, args }) => {
+test('a file at or over 99MB stops the publish', () => env(async ({ dir, pub, args }) => {
   const source = await candidate(dir, '0.9.6');
-  await writeFile(path.join(source, 'RavenVault-Desktop-0.9.6-linux.AppImage'), Buffer.alloc(95_000_000));
-  await assert.rejects(runFlow({ source, ...args('0.9.6') }), /95MB/);
+  await writeFile(path.join(source, 'RavenVault-Desktop-0.9.6-linux.AppImage'), Buffer.alloc(99_000_000));
+  await assert.rejects(runFlow({ source, ...args('0.9.6') }), /99MB/);
   assert.equal(await exists(path.join(pub, 'latest.json')), false);
 }));
 test('statements signed with the wrong key are rejected before publish files exist', () => env(async ({ dir, pub, args }) => {

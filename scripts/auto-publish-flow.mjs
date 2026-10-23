@@ -14,7 +14,8 @@ import { validatePublishedManifest, TARGET_INSTALLERS, InvalidRelease } from './
 
 export const STATEMENT_DAYS = 30; // same lifetime run-091-intel.sh has always used
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
-const MAX_BYTES = 95_000_000;
+// GitHub 은 파일 하나가 100MiB(104,857,600바이트)를 넘으면 푸시를 거부한다. 그보다 아래의 여유선.
+const MAX_BYTES = 99_000_000;
 const cmp = (a, b) => { const x = a.split('.').map(Number), y = b.split('.').map(Number); return x.reduce((o, n, i) => o || Math.sign(n - y[i]), 0); };
 
 /** Version and highest statement sequence in the currently published latest.json (null when none). */
@@ -54,7 +55,7 @@ export async function checkCandidate(source, version, targets = ALL_RELEASE_TARG
   if (missing.length) throw new Error(`Release candidate is incomplete; nothing will be published. Missing: ${missing.join(', ')}`);
   for (const name of files) {
     const info = await stat(path.join(source, name));
-    if (!info.isFile() || info.size < 1 || info.size >= MAX_BYTES) throw new Error(`Release file is empty or at/over the 95MB limit: ${name}`);
+    if (!info.isFile() || info.size < 1 || info.size >= MAX_BYTES) throw new Error(`Release file is empty or at/over the 99MB limit: ${name}`);
   }
   return prefix;
 }
@@ -91,7 +92,7 @@ export async function verifyLocalPub(pub, version, targets = ALL_RELEASE_TARGETS
   if (JSON.stringify(a) !== JSON.stringify(b)) throw new InvalidRelease('Latest and immutable release manifests disagree');
   for (const name of await readdir(path.join(pub, `v${version}`))) {
     const info = await stat(path.join(pub, `v${version}`, name));
-    if (info.size >= MAX_BYTES) throw new Error(`Publish file at/over the 95MB limit: ${name}`);
+    if (info.size >= MAX_BYTES) throw new Error(`Publish file at/over the 99MB limit: ${name}`);
   }
   return a;
 }

@@ -35,7 +35,7 @@ export async function prepareRelease(source, destination, version, statementDire
     if (!match) throw new Error(`Unexpected release file: ${name}`);
     if (!listedLabels.has(match[1])) throw new Error(`Release file for a target that is not listed: ${name}`);
     const info = await stat(path.join(source, name));
-    if (!info.isFile() || info.size < 1 || info.size >= 95_000_000) throw new Error(`Unsupported release file size: ${name}`);
+    if (!info.isFile() || info.size < 1 || info.size >= 99_000_000) throw new Error(`Unsupported release file size: ${name}`);
     const data = await readFile(path.join(source, name));
     assets.push({ name, bytes: data.length, sha256: createHash('sha256').update(data).digest('hex') });
   }

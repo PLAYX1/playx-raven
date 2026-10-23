@@ -22,7 +22,7 @@ export const MAC_SIGNED_TARGETS = Object.freeze(['darwin-aarch64', 'darwin-x86_6
 // release builder), so a release without their statements keeps auto-update blocked for them.
 export const EXTENDED_SIGNED_TARGETS = Object.freeze(['windows-x86_64', 'linux-x86_64']);
 const MAX_MANIFEST_BYTES = 64 * 1024;
-const MAX_ARTIFACT_BYTES = 95_000_000;
+const MAX_ARTIFACT_BYTES = 99_000_000;
 export class InvalidRelease extends Error {}
 class NotVisible extends Error {}
 
