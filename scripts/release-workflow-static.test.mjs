@@ -16,6 +16,14 @@ test('publish job exists and pushes only when not a dry run', () => {
   assert.doesNotMatch(publish, /if: \$\{\{ false \}\}/, 'the post-publish check must stay on');
 });
 
+test('the published dist branch is never cloned in full (it is >14GB)', () => {
+  const at = publish.indexOf('- name: Read the published dist branch');
+  assert.ok(at > 0);
+  const block = publish.slice(at, publish.indexOf('- name: Prepare, sign and verify'));
+  assert.match(block, /git clone --depth 1 --filter=blob:none --no-checkout --branch dist/);
+  assert.match(block, /git read-tree HEAD/, 'the index must hold the whole tree or the commit would delete old releases');
+});
+
 test('dry_run input defaults to true', () => {
   const at = text.indexOf('dry_run:');
   assert.ok(at > 0);

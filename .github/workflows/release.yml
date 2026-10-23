@@ -655,7 +655,17 @@ jobs:
       - name: Read the published dist branch (read-only)
         run: |
           set -euo pipefail
-          git clone --depth 1 --branch dist https://github.com/PLAYX1/playx-raven-releases.git pub
+          # dist 에는 지금까지 올린 설치 파일이 전부 쌓여 있어 14GB 가 넘는다(2026-10-23 실측 527개·14.8GB).
+          # 통째로 받으면 멈추거나 러너 디스크가 찬다. 파일 내용은 받지 않고(blob:none) 목록만 받은 뒤,
+          # 게시 스크립트가 읽는 두 파일(latest.json·SHA256SUMS.txt)만 꺼낸다. read-tree 로 색인을 채워 두어
+          # 나중 커밋이 옛 파일을 지우지 않는다.
+          git clone --depth 1 --filter=blob:none --no-checkout --branch dist https://github.com/PLAYX1/playx-raven-releases.git pub
+          cd pub
+          git read-tree HEAD
+          for f in latest.json SHA256SUMS.txt; do
+            if git ls-tree --name-only HEAD -- "$f" | grep -qx "$f"; then git checkout -- "$f"; fi
+          done
+          ls
       - name: Prepare, sign and verify the release (nothing is pushed here)
         env:
           RELEASE_VERSION: ${{ inputs.version }}
