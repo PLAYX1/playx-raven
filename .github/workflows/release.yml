@@ -19,6 +19,11 @@ on:
       version:
         description: "판 번호 (예: 0.1.1)"
         required: true
+      dry_run:
+        description: "연습: 빌드·서명·검산까지만 하고 게시(푸시)는 안 함 (태그 푸시는 항상 실제 게시)"
+        type: boolean
+        required: false
+        default: true
       verify_only:
         description: "게시된 판만 확인 (빌드·서명·게시 안 함)"
         type: boolean
@@ -641,40 +646,64 @@ jobs:
           set -euo pipefail
           mkdir rel
           find all -type f -exec cp {} rel/ \;
-      # 🔴 여기서 게시하지 않는다 (2026-10-23 정비).
-      #    0.8.4 부터 `release-manifest.mjs` 는 「서명된 진술 폴더」 없이는 멈춘다
-      #    (Signed release statement directory required). 진술은 오프라인 minisign
-      #    열쇠로 맥에서만 서명하고, 그 열쇠는 CI 에 맡기지 않는다. 그래서 예전처럼
-      #    이 자리에서 dist 에 올리는 호출은 반드시 실패했다. CI 는 서명된 산출물을
-      #    만들고 검산해서 묶음으로 내놓는 데까지만 하고, 게시는 사람이 맥에서 한다.
-      #    순서: docs/handoff/release-windows-linux-updates.md
-      - name: List the signed release candidate (checksums only)
+      # 자동 게시 (2026-10-23). 진술 서명 열쇠 = 앱의 updater 공개키와 짝인 TAURI_SIGNING_PRIVATE_KEY
+      # (빌드 단계가 이미 패키지 .sig 에 쓰는 같은 비밀값 — 새 비밀값 없음).
+      # 순서: dist 읽기 전용 clone → 번호 +1·서명·검산(auto-publish-flow) → 후보 업로드 →
+      #       (dry_run 이 아닐 때만) 한 번에 커밋·푸시 → 공개 주소 검증.
+      # 게시 전에 대표 승인을 한 번 받고 싶으면 이 작업에 `environment: release-approval` 한 줄을 더하고
+      # GitHub 저장소 설정 > Environments 에서 그 이름에 Required reviewers 를 켠다.
+      - name: Read the published dist branch (read-only)
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --branch dist https://github.com/PLAYX1/playx-raven-releases.git pub
+      - name: Prepare, sign and verify the release (nothing is pushed here)
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          V="${RELEASE_VERSION:-${GITHUB_REF_NAME#v}}"
+          node scripts/auto-publish-flow.mjs flow rel pub "$V"
+      - name: List the signed release (checksums only)
         run: |
           set -euo pipefail
           cd rel
-          for f in *; do
-            size=$(wc -c < "$f")
-            [ "$size" -lt 95000000 ] || { echo "🔴 95MB 상한을 넘습니다: $f ($size)"; exit 1; }
-          done
           sha256sum * | tee ../release-candidate-SHA256SUMS.txt
-          for need in windows.exe windows.exe.sig linux.AppImage linux.AppImage.sig; do
-            ls ./*-"$need" >/dev/null 2>&1 || { echo "🔴 없습니다: $need"; exit 1; }
-          done
-          echo "✅ 윈도우 .exe/.sig 와 리눅스 .AppImage/.sig 가 있습니다"
       - uses: actions/upload-artifact@v4
         with:
           name: release-candidate
           path: |
             rel/*
             release-candidate-SHA256SUMS.txt
-      - name: Next step is manual and offline
+            release-paths.txt
+      - name: Prepare release-repository credential
+        if: ${{ inputs.dry_run != true }}
+        env:
+          KEY: ${{ secrets.RELEASES_DEPLOY_KEY }}
         run: |
-          echo "이 묶음은 게시되지 않았습니다. 맥에서 진술 서명 후 게시하세요."
-          echo "순서: docs/handoff/release-windows-linux-updates.md"
-      # 게시는 사람이 맥에서 하므로 이 작업에서는 돌리지 않는다(게시 전에는 공개 판이 아직 없어 항상 실패한다).
-      # 게시한 뒤 확인은 「게시된 판만 확인」(verify_only)으로 이 워크플로를 다시 돌리거나 로컬에서 같은 명령을 쓴다.
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+      - name: Publish the whole version in one commit
+        if: ${{ inputs.dry_run != true }}
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          V="${RELEASE_VERSION:-${GITHUB_REF_NAME#v}}"
+          cd pub
+          git remote set-url origin git@github.com:PLAYX1/playx-raven-releases.git
+          git config user.name playx1
+          git config user.email playexercise@gmail.com
+          git add --pathspec-from-file=../release-paths.txt
+          git commit -m "RavenVault Desktop $V"
+          git push origin HEAD:dist
       - name: Verify public version and every updater URL
-        if: ${{ false }}
+        if: ${{ inputs.dry_run != true }}
         env:
           RELEASE_VERSION: ${{ inputs.version }}
         run: |
