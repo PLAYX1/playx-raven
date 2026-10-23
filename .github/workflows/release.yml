@@ -671,3 +671,13 @@ jobs:
         run: |
           echo "이 묶음은 게시되지 않았습니다. 맥에서 진술 서명 후 게시하세요."
           echo "순서: docs/handoff/release-windows-linux-updates.md"
+      # 게시는 사람이 맥에서 하므로 이 작업에서는 돌리지 않는다(게시 전에는 공개 판이 아직 없어 항상 실패한다).
+      # 게시한 뒤 확인은 「게시된 판만 확인」(verify_only)으로 이 워크플로를 다시 돌리거나 로컬에서 같은 명령을 쓴다.
+      - name: Verify public version and every updater URL
+        if: ${{ false }}
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          V="${RELEASE_VERSION:-${GITHUB_REF_NAME#v}}"
+          node scripts/verify-published-release.mjs "$V" --targets windows-x86_64,darwin-aarch64,darwin-x86_64,linux-x86_64
