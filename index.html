@@ -3110,6 +3110,13 @@
       </section>
 
       <!-- 회원 등록·수정. 만료도 정지도 여기서 고친다 — 체인은 안 건드린다. -->
+      <div id="pendsheet" class="sheet hidden" role="dialog" aria-modal="true" aria-labelledby="ps-title">
+        <div class="sheet-box">
+          <div class="sheet-head"><span id="ps-title">입금 대기 주문</span><button class="ghost" id="ps-cancel" type="button">닫기</button></div>
+          <div id="ps-list"></div>
+          <div class="sheet-foot"><button class="ghost" id="hp-go" type="button">매출 화면에서 자세히 보기</button></div>
+        </div>
+      </div>
       <div id="msheet" class="sheet hidden">
         <div class="sheet-box">
           <div class="sheet-head"><span id="ms-title">회원 등록</span><button class="ghost" id="ms-cancel">취소</button></div>

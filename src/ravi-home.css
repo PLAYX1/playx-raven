@@ -269,3 +269,9 @@ body:has(#page-home.on) #ravi-launcher { display:none; }
 .ai-voice-badge[hidden] { display:none !important; }
 .ai-voice-badge { margin-top:6px; }
 .ai-voice-tag { flex:none; align-self:flex-start; margin-top:4px; }
+#page-home #rv-home-today-body button.rv-home-pending { background:transparent; border:0; color:inherit; font:inherit; text-align:left; cursor:pointer; padding:0; min-height:44px; }
+#page-home #rv-home-today-body button.rv-home-pending:focus-visible { outline:2px solid var(--home-action); outline-offset:2px; }
+#page-home #rv-home-today-body button.rv-home-pending span { text-decoration:underline; text-underline-offset:3px; }
+.rv-pend-item { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; padding:10px 0; border-bottom:1px solid var(--line); }
+.rv-pend-item small { display:block; color:var(--muted); font-size:13px; }
+.rv-pend-item strong { text-align:right; white-space:nowrap; }

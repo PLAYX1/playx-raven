@@ -4776,6 +4776,33 @@ async function loadGroup(): Promise<void> {
 /// 이미 있는 장부(ledger_range·ledger_pending)와 새 주문 숫자만 읽는다 — 새 계산·새 저장 없음.
 /// 발송·환불·공동구매의 상세 내역은 「더 보기」의 가게 화면에서 확인한다.
 let homeTodaySeq = 0;
+let homePendingOrders: any[] = [];
+/** 홈 카드의 「입금 대기」 줄 — 0건이면 누를 수 없는 줄, 못 읽었으면 매출 화면으로, 있으면 목록 시트. */
+function pendingRow(pend: any): string {
+  if (!pend) return `<button type="button" class="rv-home-entry rv-home-pending" data-pend="sales"><span>${escapeHtml(t("입금 대기"))}</span><b>${escapeHtml(t("확인 못 함"))}</b></button>`;
+  const n = Number(pend.count || 0);
+  if (!n) return `<div class="rv-home-entry"><span>${escapeHtml(t("입금 대기"))}</span><b>0</b></div>`;
+  return `<button type="button" class="rv-home-entry rv-home-pending" data-pend="list" aria-haspopup="dialog"><span>${escapeHtml(t("입금 대기"))}</span><b>${n}</b></button>`;
+}
+/** 입금 대기 주문 목록. 칸은 ledger_pending 이 주는 것만: items·krw+currency·rvn·table·quoted_at. */
+function openPendingSheet(): void {
+  const list = [...homePendingOrders].sort((a, b) => Number(b?.quoted_at || 0) - Number(a?.quoted_at || 0));
+  $("ps-list").innerHTML = list.length ? list.map((o) => {
+    const its = Array.isArray(o?.items) ? o.items : [];
+    const what = its.map((i: any) => `${String(i?.name || "")}${Number(i?.qty) > 1 ? " × " + Number(i.qty) : ""}`).filter(Boolean).join(" / ") || t("주문");
+    const cur = o?.currency ? " " + String(o.currency) : "";
+    const amount = o?.krw != null ? fmtRvn(Number(o.krw), { code: "", maxFraction: String(o?.currency || "") === "RVN" ? 8 : 2 }) + cur : "";
+    const rvn = o?.rvn != null && Number(o.rvn) > 0 ? fmtRvn(Number(o.rvn), { code: "", maxFraction: 8 }) + " RVN" : "";
+    const at = Number(o?.quoted_at || 0);
+    const old = at > 0 && Date.now() / 1000 - at > 86400; // 장부가 하루 지난 대기 주문을 버리는 기준과 같다
+    const table = o?.table ? ` · ${t("테이블")} ${String(o.table)}` : "";
+    return `<div class="rv-home-entry rv-pend-item"><span class="rv-home-tx-main"><span translate="no">${escapeHtml(what)}</span><small>${escapeHtml(at > 0 ? ago(at) : "")}${escapeHtml(table)}${old ? " · " + escapeHtml(t("오래 기다림")) : ""}</small><small>${escapeHtml(t("손님이 보내기로 한 RVN 입금이 아직 확인되지 않았습니다"))}</small></span><strong>${escapeHtml(amount)}${rvn ? `<small>${escapeHtml(rvn)}</small>` : ""}</strong></div>`;
+  }).join("") : `<p>${escapeHtml(t("입금 대기가 없습니다"))}</p>`;
+  $("pendsheet").classList.remove("hidden");
+  ($("ps-cancel") as HTMLButtonElement).focus();
+}
+function closePendingSheet(): void { $("pendsheet").classList.add("hidden"); }
+function goHomeSales(): void { showPage("shop"); shopTab(안본주문 > 0 ? "orders" : "sales"); }
 async function paintHomeToday(): Promise<void> {
   const box = document.getElementById("rv-home-today");
   const body = document.getElementById("rv-home-today-body");
@@ -4789,6 +4816,7 @@ async function paintHomeToday(): Promise<void> {
     const r: any = await invoke("ledger_range", { fromYmd: ymd, toYmd: ymd, tzOffsetMin: tzMin() });
     const pend: any = await invoke("ledger_pending").catch(() => null);
     if (seq !== homeTodaySeq) return;
+    homePendingOrders = pend && Array.isArray(pend.orders) ? pend.orders : [];
     // 🔴 통화가 섞였거나 못 읽은 줄이 있으면 합계를 확정 금액처럼 보이지 않는다(매출 화면과 같은 기준).
     const doubtful = !!r?.mixed_currency || !!r?.unreadable_rows;
     const cur = r?.currency ? " " + String(r.currency) : "";
@@ -4801,7 +4829,7 @@ async function paintHomeToday(): Promise<void> {
       row(t("오늘 받은 금액"), money) +
       row(t("판매"), String(Number(r?.sales || 0))) +
       row(t("새 주문"), String(안본주문)) +
-      row(t("입금 대기"), pend ? String(Number(pend.count || 0)) : t("확인 못 함"));
+      pendingRow(pend);
     box.hidden = false;
   } catch {
     // 조회 실패를 빈 가게나 매출 0으로 표시하지 않는다.
@@ -18022,10 +18050,16 @@ window.addEventListener("DOMContentLoaded", async () => {
     (a as HTMLElement).onclick = () => showPage((a as HTMLElement).dataset.page!);
   });
   setupNavMore();
-  document.getElementById("rv-home-shop")?.addEventListener("click", () => {
-    showPage("shop");
-    shopTab(안본주문 > 0 ? "orders" : "sales");
+  document.getElementById("rv-home-shop")?.addEventListener("click", goHomeSales);
+  document.getElementById("rv-home-today-body")?.addEventListener("click", (ev) => {
+    const b = (ev.target as HTMLElement).closest<HTMLElement>("[data-pend]");
+    if (!b) return;
+    if (b.dataset.pend === "list") openPendingSheet(); else goHomeSales();
   });
+  $("ps-cancel").addEventListener("click", closePendingSheet);
+  // 공용 Esc 처리는 position:fixed 시트를 못 찾는다(offsetParent=null) — 이 시트는 스스로 Esc 로 닫는다.
+  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && !$("pendsheet").classList.contains("hidden")) { ev.preventDefault(); closePendingSheet(); } });
+  $("hp-go").addEventListener("click", () => { closePendingSheet(); goHomeSales(); });
   // 0.4.8-B 잔액 카드 — 큰 단추 「받기」, 작은 줄 「최근 거래」「주소 확인」. (「보내기」는 아래 w-send-rvn)
   $("w-receive").addEventListener("click", () => void openReceive());
   $("w-go-txs").addEventListener("click", () => jumpToEl("w-txs"));
