@@ -2362,7 +2362,7 @@ async function checkForUpdate(quiet = true) {
     if (nag) {
       nag.hidden = false; nag.classList.add("new"); nag.textContent = `${version} 업데이트`;
       nag.onclick = async () => {
-        if (!await sure("업데이트 설치", `${version} 설치 후 앱이 재시작될 수 있습니다.`, "설치")) return;
+        if (!await sure("업데이트 설치", `${version} 설치 뒤 앱이 저절로 다시 켜집니다(서버도 잠시 멈췄다 켜집니다).`, "설치")) return;
         nag.disabled = true;
         try { await invoke("install_update", { expectedVersion: version }); }
         catch (e) { if (note) note.textContent = errText(e); }

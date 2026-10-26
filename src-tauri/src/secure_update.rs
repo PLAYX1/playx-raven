@@ -98,7 +98,7 @@ pub async fn check_update(app: tauri::AppHandle) -> Result<Value, String> {
     })
 }
 
-/// 🔴 윈도우 전용: 설치기가 파일을 덮어쓰기 **전에** 이 앱이 켠 것들을 정상 종료한다.
+/// 🔴 설치기가 파일을 덮어쓰기 **전에**(그리고 설치 뒤 우리가 다시 켜기 전에) 이 앱이 켠 것들을 정상 종료한다.
 ///
 /// 윈도우 `update.install` 은 설치기를 띄운 뒤 `std::process::exit(0)` 로 끝낸다. 그러면
 /// `RunEvent::Exit` 처리(lib.rs)가 **건너뛰어져** 노드(`stop` RPC)·파일창고·채굴기·바깥 연결·
@@ -107,7 +107,6 @@ pub async fn check_update(app: tauri::AppHandle) -> Result<Value, String> {
 /// - 노드는 RPC `stop` 으로 부탁하고 스스로 닫히길 기다린 뒤에만 강제 종료한다(services.rs).
 /// - 사장이 따로 켠 코어는 건드리지 않는다(우리 목록에 있는 것만).
 /// - 실패·시간 초과여도 설치는 막지 않는다(막으면 업데이트가 영영 안 된다).
-#[cfg(windows)]
 async fn stop_services_before_install() -> bool {
     let work = tokio::task::spawn_blocking(|| {
         crate::mining::stop_on_exit();
@@ -171,7 +170,8 @@ pub async fn install_update(app: tauri::AppHandle, expected_version: String) -> 
         now,
     )?;
     // 검증을 모두 통과한 뒤에만(= 거부될 업데이트로 가게를 멈추지 않는다) 정리한다.
-    #[cfg(windows)]
+    // 🔴 맥·리눅스도 같다: 설치 뒤에 우리가 직접 다시 켜므로(아래 restart), 노드를 먼저 정상 종료해 두지
+    //    않으면 새 앱이 옛 노드와 데이터 폴더를 놓고 다툰다.
     if !stop_services_before_install().await {
         eprintln!("update: 설치 전 정리가 시간 안에 끝나지 않았습니다(설치는 계속).");
     }
@@ -179,9 +179,12 @@ pub async fn install_update(app: tauri::AppHandle, expected_version: String) -> 
         #[cfg(windows)]
         let msg = "업데이트 설치 실패 (최소 허용 버전은 유지됩니다.) 지갑 서버가 멈춰 있을 수 있으니 앱을 껐다가 다시 켜 주세요.";
         #[cfg(not(windows))]
-        let msg = "업데이트 설치 실패 (최소 허용 버전은 유지됩니다.)";
+        let msg = "업데이트 설치 실패 (최소 허용 버전은 유지됩니다.) 지갑 서버가 멈춰 있을 수 있으니 앱을 껐다가 다시 켜 주세요.";
         msg.to_string()
-    })
+    })?;
+    // 🔴 「업데이트를 눌러도 그대로이고, 껐다 켜야 새 판」 — 맥은 파일만 바꾸고 앱을 다시 켜 주지 않았다
+    //    (윈도우는 설치기가 앱을 끝내므로 여기까지 오지 않는다). 설치가 끝났으면 바로 새 판으로 다시 켠다.
+    app.restart()
 }
 
 #[cfg(test)]
