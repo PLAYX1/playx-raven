@@ -1,5 +1,27 @@
 # 변경 기록
 
+## 0.9.6
+
+### 한국어
+
+- 서버를 처음 켤 때 지금 단계(연결 중·장부 받는 중), 켜진 지 몇 분째인지, 처음에는 30분~1시간 걸릴 수 있다는 안내를 보여 줍니다. 홈은 시작하는 동안 「확인 못 함」 대신 「서버가 시작되면 나와요」라고 말합니다.
+- 「문제 알리기」에 서버·노드 이야기를 쓰면 「노드 기록도 같이 보내기」를 자동으로 켜고 이유를 알려 드립니다(끄면 그대로 둡니다).
+- 이야기에서 글을 눌러 **답장**할 수 있습니다. 입력칸 위에 누구에게 보내는지 보이고, 답글에는 원글 한 줄이 인용됩니다.
+- 서버 화면에 「바깥 접속」 줄이 생겼습니다. 다른 컴퓨터가 이 서버로 들어오는 연결이 있는지, 없으면 왜 없는지 알려 줍니다.
+- **노드 현황 사이트(ravencoin-nodes)에 이 서버가 잡히도록 바깥 접속(UPnP)을 처음 한 번 자동으로 켭니다.** 공유기가 UPnP 를 지원하면 TCP 8767 이 열립니다. 지갑 열쇠·송금 권한은 이 길로 나가지 않습니다. 설정 「바깥 접속 자동으로 열기」에서 끄실 수 있고, 한 번 정한 값은 다시 바꾸지 않습니다. 켠 뒤 서버를 다시 시작해야 적용되며 현황 사이트에는 하루쯤 뒤에 나타납니다.
+- 라비가 「내 노드가 현황 사이트에 안 보여요」라고 물으면 바깥 접속·포트 열기·기다리는 시간·공유 IP 같은 이유를 안내합니다.
+- 장터에서 지운 글이 계속 보이던 문제를 고쳤습니다(웹).
+
+### English
+
+- Shows the current step, minutes since start, and a "first start can take 30–60 minutes" note while the server starts; Home says "appears once the server starts" instead of "unknown".
+- Writing about the server or node in "Report a problem" now turns on "Attach node log" and says why.
+- You can **reply** to a post in Talk; the composer shows who you are replying to and replies quote one line of the original.
+- The server screen has an "Outside connection" row showing whether other computers can connect in, and why not if they cannot.
+- **To get this server listed on the node status site, outside access (UPnP) is turned on once automatically.** If your router supports UPnP, TCP 8767 opens. Wallet keys and spending rights never travel on this path. You can turn it off in Settings; a choice you made is never overridden. Restart the server to apply; the status site may take about a day to list it.
+- Ravi now explains why a node may not appear on the status site (outside access, port forwarding, waiting time, shared IP).
+- Fixes deleted market posts that kept showing (web).
+
 ## 0.9.5
 
 ### 한국어
