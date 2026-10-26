@@ -88,6 +88,15 @@ pub fn conf_options() -> Value {
             "danger": true
         },
         {
+            // 🔴 기본 꺼짐(recommended 0). 모든 사용자의 노드를 바깥에 열지 않는다 — 켜는 사람만.
+            "key": "upnp", "label": "바깥 접속 자동으로 열기", "unit": "", "type": "switch",
+            "recommended": 0, "off": 0,
+            "what": "공유기가 이 기능(UPnP)을 지원하면 서버가 TCP 8767 포트를 스스로 열어, 다른 서버가 이 컴퓨터에 접속할 수 있게 합니다. 노드 현황 사이트에 이 노드가 잡히려면 필요합니다.",
+            "cost": "인터넷 사용량이 조금 늘 수 있습니다",
+            "warn": "잔액·송금에는 필요 없습니다. 지갑 열쇠와 송금 권한은 열리지 않습니다. 공유기가 UPnP 를 막았거나 통신사 공유 IP 이면 열리지 않습니다. 켠 뒤 서버를 다시 시작해야 적용되고, 현황 사이트에는 하루쯤 뒤에 잡힙니다.",
+            "danger": false
+        },
+        {
             "key": "server", "label": "이 앱과 연결", "unit": "", "type": "switch",
             "recommended": 1, "off": 0,
             "what": "이 프로그램이 서버와 말할 수 있게 합니다.",
@@ -138,7 +147,7 @@ pub fn conf_read() -> Value {
             Some((k, v)) => {
                 let k = k.trim();
                 let v = v.trim();
-                if ["prune", "dbcache", "maxconnections", "maxmempool", "assetindex", "addressindex", "server"]
+                if ["prune", "dbcache", "maxconnections", "maxmempool", "assetindex", "addressindex", "server", "upnp"]
                     .contains(&k)
                 {
                     known.insert(k.to_string(), json!(v.parse::<i64>().unwrap_or(0)));
@@ -174,7 +183,7 @@ pub fn conf_write(values: Value) -> Result<Value, String> {
         let _ = std::fs::copy(&path, path.with_extension("conf.bak"));
     }
 
-    let managed = ["prune", "dbcache", "maxconnections", "maxmempool", "assetindex", "addressindex", "server"];
+    let managed = ["prune", "dbcache", "maxconnections", "maxmempool", "assetindex", "addressindex", "server", "upnp"];
     let mut out: Vec<String> = Vec::new();
 
     // 우리 것이 아닌 줄은 순서까지 그대로 남긴다.

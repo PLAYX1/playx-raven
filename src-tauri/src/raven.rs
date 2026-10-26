@@ -554,6 +554,44 @@ pub async fn wallet_balance() -> Result<Value, String> {
     }))
 }
 
+/// 바깥에서 들어오는 연결이 있는가.
+///
+/// 연결된 상대(`getpeerinfo`) 중 `inbound` 인 곳이 있으면 이 노드는 접속을 **받고 있다**.
+/// 없다고 해서 막혀 있다고 단정하지 않는다(아무도 아직 안 왔을 수도 있다) — 「못 받는 것으로 보임」까지만 말한다.
+/// 연결이 하나도 없거나 읽지 못하면 `unknown`: 모르는 것을 없다고 하지 않는다.
+pub(crate) fn reach_from_peers(peers: &Value) -> Value {
+    let Some(list) = peers.as_array() else { return json!({"state": "unknown"}) };
+    let total = list.len();
+    let inbound = list.iter().filter(|p| p.get("inbound").and_then(Value::as_bool) == Some(true)).count();
+    let state = if total == 0 { "unknown" } else if inbound > 0 { "receiving" } else { "not_seen" };
+    json!({"state": state, "inbound": inbound, "total": total})
+}
+
+#[tauri::command]
+pub async fn node_reachability() -> Value {
+    match call_rpc("getpeerinfo", json!([])).await {
+        Ok(v) => reach_from_peers(&v),
+        Err(_) => json!({"state": "unknown"}),
+    }
+}
+
+#[cfg(test)]
+mod reach_tests {
+    use super::*;
+
+    #[test]
+    fn reach_counts_inbound_peers_and_never_guesses() {
+        let some = json!([{"inbound": false}, {"inbound": true}, {"inbound": false}]);
+        assert_eq!(reach_from_peers(&some), json!({"state": "receiving", "inbound": 1, "total": 3}));
+        let none = json!([{"inbound": false}, {"inbound": false}]);
+        assert_eq!(reach_from_peers(&none)["state"], "not_seen");
+        // 연결이 없거나 모양이 다르면 모른다 — 「막혔다」고 하지 않는다.
+        assert_eq!(reach_from_peers(&json!([]))["state"], "unknown");
+        assert_eq!(reach_from_peers(&json!({"error": "x"}))["state"], "unknown");
+        assert_eq!(reach_from_peers(&json!([{"addr": "1.2.3.4"}]))["state"], "not_seen");
+    }
+}
+
 /// Recent wallet activity, newest first.
 ///
 /// 🔴 **자산은 여기 안 나온다.** 코어의 `listtransactions` 는 자산 배열을

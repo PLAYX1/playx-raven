@@ -237,6 +237,7 @@ pub fn run() {
             pairing::pairing_set_public_backup,
             pairing::pairing_waiting,
             raven::node_status,
+            raven::node_reachability,
             raven::network_state,
             raven::list_assets,
             raven::new_address,

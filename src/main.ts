@@ -4186,10 +4186,19 @@ async function paintPartBody(): Promise<void> {
       // 20초를 모아야 첫 값이 나온다. 그동안은 재는 중이라고 말한다.
       const rateText =
         rate > 0 ? `${t("초당")} ${rate.toLocaleString()}${t("블록")}` : t("재는 중… (20초)");
+      // 바깥에서 들어오는 연결이 있는지 — 없다고 고장이 아니다(공유기가 막는 집이 많다). 모르면 「확인 중」.
+      const reach = await invoke<any>("node_reachability").catch(() => null);
+      const reachText =
+        reach?.state === "receiving"
+          ? `${t("받는 중")} (${reach.inbound}${t("곳")})`
+          : reach?.state === "not_seen"
+            ? t("아직 못 받음")
+            : t("확인 중");
       box.innerHTML =
         card(
           [
             [t("연결"), s?.peers != null ? `${s.peers}${t("곳")}` : t("확인 중")],
+            [t("바깥 접속"), reachText],
             [t("블록"), Number(s?.blocks ?? 0).toLocaleString()],
             // 판을 숨기지 않는다. 못 읽었으면 못 읽었다고 적는다.
             [
@@ -4227,6 +4236,13 @@ async function paintPartBody(): Promise<void> {
               ? t("따라잡는 동안에는 방금 들어온 결제가 늦게 보입니다.")
               : t("이 컴퓨터가 공개 장부를 통째로 들고 있습니다. 남에게 묻지 않습니다."),
         ) +
+        (reach?.state === "not_seen"
+          ? `<div class="card" style="margin-top:12px">
+               <h3>${copyHtml("바깥 접속을 아직 못 받고 있어요")}</h3>
+               <p class="meta">${copyHtml("고장이 아닙니다. 잔액·송금에는 영향이 없고, 집 공유기가 들어오는 접속을 막고 있는 경우가 많아요. 노드 현황 사이트에 이 노드가 잡히길 원할 때만 설정하세요.")}</p>
+               <p class="meta">${copyHtml("공유기에서 TCP 8767 포트를 이 컴퓨터로 열거나, 설정의 「바깥 접속 자동으로 열기」를 켜고 서버를 다시 시작한 뒤, 컴퓨터를 켜 둔 채 하루쯤 기다려 주세요. 통신사 공유 IP 면 열 수 없습니다.")}</p>
+             </div>`
+          : "") +
         // 🔴 못 따라잡는 판이면 **제일 먼저** 말한다. 며칠 기다린 뒤에
         //    알게 되면 그 며칠이 통째로 버려진다.
         (nv?.ok === false
