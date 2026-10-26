@@ -1,5 +1,15 @@
 # 변경 기록
 
+## 0.9.7
+
+### 한국어
+
+- **업데이트 단추를 누르면 앱이 저절로 다시 켜집니다.** 전에는 설치만 하고 그대로여서 껐다 켜야 새 판이 보였습니다(맥·리눅스). 설치 전에 서버를 정상 종료하고, 설치가 끝나면 새 판으로 바로 다시 켭니다. 이 수정은 0.9.7 을 받은 뒤 다음 업데이트부터 적용됩니다.
+
+### English
+
+- **The update button now restarts the app by itself.** Before, it only installed and the old version kept running until you quit and reopened it (macOS, Linux). The server is stopped cleanly before installing and the app relaunches into the new version. This takes effect from the update after 0.9.7.
+
 ## 0.9.6
 
 ### 한국어
