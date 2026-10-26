@@ -1411,6 +1411,9 @@
     },
     "settings": {
       "page": "settings"
+    },
+    "talk": {
+      "page": "talk"
     }
   }
 }

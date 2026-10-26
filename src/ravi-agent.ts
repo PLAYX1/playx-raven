@@ -11,6 +11,8 @@ export const TOOL_LABELS: Record<string, string> = {
   shop_orders: "주문 상태를 보고 있어요", node_status: "서버·동기화 상태를 보고 있어요",
   backup_status: "마지막 백업을 보고 있어요", fee_status: "개발비 기록을 보고 있어요",
   chain_overview: "체인 상황을 보고 있어요", security_rank: "보안 비용을 보고 있어요",
+  node_reach: "바깥 접속 상태를 보고 있어요", settings_status: "서버 설정을 보고 있어요", groupbuy_status: "공동구매 현황을 보고 있어요",
+  prepare_node: "서버 동작을 준비하고 있어요", prepare_setting: "설정 바꾸기를 준비하고 있어요",
   prepare_send: "보내기 확인을 준비하고 있어요", open_screen: "요청한 화면을 열고 있어요", prepare_promo: "홍보 도우미를 준비하고 있어요",
 };
 export type Consent = { reviewed: boolean; balance: boolean; transactions: boolean; shop: boolean };

@@ -10775,6 +10775,8 @@ async function chatAgent(q: string, note = "") {
         if (done.length) chatSay("did", done.join(" · "));
       } else if (p.name === "open_screen") raviOpenScreen(p.args.screen);
       else if (p.name === "prepare_promo") await openRaviPromo(q);
+      else if (p.name === "prepare_node") raviConfirmNode(p.args.action);
+      else if (p.name === "prepare_setting") raviConfirmSetting(p.args.key, p.args.value);
     }
   } catch (e) {
     // Backend emits fixed errors only; never display arbitrary transport payloads.
@@ -10790,6 +10792,50 @@ async function chatAgent(q: string, note = "") {
     raviHeldQuestion = q;
     raviAgentUI.offerConsent(() => void resendHeldQuestion());
   }
+}
+
+/**
+ * 라비가 「준비」한 서버 동작·설정을 **사람이 한 번 더 눌러야** 실행한다.
+ * 라비는 말만 하고 손은 안 댄다 — 이 단추가 유일한 실행 지점이다.
+ */
+function raviConfirmCard(text: string, label: string, run: () => Promise<string>) {
+  chatHtml("ai", `<p>${escapeHtml(text)}</p><div class="guidego"><button type="button" class="ghost" data-ravi-confirm="1">${escapeHtml(label)}</button></div>`);
+  const card = $("chat-log").lastElementChild;
+  const btn = card?.querySelector<HTMLButtonElement>("[data-ravi-confirm]");
+  if (!btn) return;
+  btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    try { chatSay("did", await run()); }
+    catch (e) { chatSay("did", errText(e)); btn.disabled = false; }
+  }, { once: true });
+}
+
+function raviConfirmNode(action: string) {
+  const say = { start: ["서버를 켤까요?", "서버 켜기"], stop: ["서버를 끌까요? 가게 주문 확인과 지갑이 잠시 멈춥니다.", "서버 끄기"], restart: ["서버를 다시 시작할까요? 잠시 멈췄다가 켜집니다.", "다시 시작"] }[action];
+  if (!say) return;
+  raviConfirmCard(say[0], say[1], async () => {
+    if (action !== "start") await invoke("services_stop");
+    if (action !== "stop") {
+      const r = await invoke<any>("services_start");
+      const why = (r?.skipped || []).filter((x: any) => x?.what === "노드").map((x: any) => String(x.why || "")).join(" ");
+      return why || (action === "stop" ? "껐어요." : "켰어요. 잠시 뒤 서버 화면에서 상태를 봐 주세요.");
+    }
+    return "껐어요.";
+  });
+}
+
+const RAVI_SETTING_NAME: Record<string, string> = { upnp: "바깥 접속 자동으로 열기", maxconnections: "최대 연결 수", dbcache: "메모리 넉넉히 주기(MB)" };
+function raviConfirmSetting(key: string, value: number) {
+  const name = RAVI_SETTING_NAME[key];
+  if (!name) return;
+  const shown = key === "upnp" ? (value === 1 ? "켜기" : "끄기") : `${value}`;
+  raviConfirmCard(`「${name}」를 ${shown}(으)로 바꿀까요? 서버를 다시 시작해야 적용돼요.`, "바꾸기", async () => {
+    const cur = await invoke<any>("conf_read");
+    const vals: Record<string, number> = { ...(cur?.values || {}) };
+    vals[key] = value;
+    await invoke("conf_write", { values: vals });
+    return `바꿨어요. 서버를 다시 시작하면 적용돼요.`;
+  });
 }
 
 /** 동의 카드에서 「선택 저장」 — 사용자가 다시 치지 않아도 보류한 질문을 고른 정보까지 보고 다시 답한다. */
