@@ -123,6 +123,26 @@ fn prep_conf() -> Vec<String> {
         }
     }
 
+    // ③ 바깥 접속(UPnP). **줄이 아예 없고, 한 번도 안 물었을 때만** 켠다.
+    //
+    //    코어지갑은 설치하면 8767 이 열려 노드 현황 사이트에 바로 잡히는데
+    //    우리 서버는 안 열려서 「반영이 안 된다」는 말이 나왔다. 사장이 직접 정한
+    //    값(upnp=0 이든 1 이든 줄이 있으면)은 절대 안 바꾸고, 표시 파일을 남겨
+    //    한 번만 한다 — 설정에서 껐다가 「기본값으로」 눌러도 다시 켜지 않는다.
+    //    열리는 것은 TCP 8767(노드끼리 말하는 길) 하나뿐이고 지갑 열쇠·송금
+    //    권한은 그 길로 나가지 않는다.
+    let upnp_stamp = crate::paths::app_file("upnp-default-asked");
+    if !upnp_stamp.exists() {
+        let _ = std::fs::write(&upnp_stamp, "1");
+        if !vals.contains_key("upnp") {
+            want.insert("upnp".into(), json!(1));
+            did.push(
+                "바깥 접속 자동 열기(UPnP)를 켰습니다 — 노드 현황 사이트에 이 서버가 잡히게 합니다. 설정에서 끄실 수 있습니다"
+                    .to_string(),
+            );
+        }
+    }
+
     if did.is_empty() {
         return did;
     }
@@ -312,5 +332,17 @@ mod tests {
             body.contains("has_chain") && body.contains("if !has_chain"),
             "장부가 있는지 안 보고 색인을 켜고 있다"
         );
+    }
+
+    /// 바깥 접속(UPnP)은 처음 한 번만, 줄이 없을 때만 켠다. 사장이 정한 값을
+    /// 이기려 들면 안 된다 — 표시 파일과 `contains_key` 둘 다 있어야 한다.
+    #[test]
+    fn 바깥_접속은_한_번만_그리고_사장이_정한_값은_지킨다() {
+        let src = include_str!("boot.rs");
+        let i = src.find("fn prep_conf").expect("설정 함수가 있어야 한다");
+        let end = src[i..].find("\nfn mining_why").unwrap_or(src.len() - i);
+        let body = &src[i..i + end];
+        assert!(body.contains("upnp-default-asked"), "한 번만 한다는 표시 파일이 없다");
+        assert!(body.contains(r#"!vals.contains_key("upnp")"#), "사장이 정한 upnp 값을 덮어쓴다");
     }
 }
