@@ -180,7 +180,7 @@ pub fn sample_fill(now_unix: i64, force: bool) -> Result<Value, String> {
         "menu": 4,
         "members": 4,
         "sessions": 2,
-        "note": "체인과 지갑은 건드리지 않았습니다. 전부 이 컴퓨터의 파일뿐입니다.",
+        "note": "공개 장부와 지갑은 건드리지 않았습니다. 전부 이 컴퓨터의 파일뿐입니다.",
         "walk": [
             "내 가게 → 메뉴판: 가격 없는 줄이 어떻게 보이나",
             "내 가게 → 가게 정보: 좌표가 들어갔으니 지도에서 확인이 열리나",

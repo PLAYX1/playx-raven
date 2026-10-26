@@ -1,0 +1,10 @@
+{
+  "physics": "passed",
+  "frameIndependence": "30/60 FPS < 1e-7",
+  "scheduler": "passed",
+  "rssParser": "passed",
+  "nativeGUI": "unverified",
+  "globalShortcut": "blocked: official plugin unavailable",
+  "realAI": false,
+  "realPayments": false
+}

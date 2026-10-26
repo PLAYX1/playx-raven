@@ -28,3 +28,5 @@ grep -q "30402" shops.bundle.js || { echo "🔴 NIP-99 kind 가 번들에 없습
 m=$(wc -c < shops.bundle.js)
 [ "$m" -gt 30000 ] || { echo "🔴 가게 번들이 너무 작습니다($m)"; exit 1; }
 echo "가게 번들 $m 바이트"
+
+node ../scripts/build-wallet-integrity.mjs

@@ -1,0 +1,316 @@
+{
+  "base": "52f11f0",
+  "javascript": [
+    {
+      "file": "scripts/check-ai-safety.mjs",
+      "code": 0,
+      "seconds": 2.45,
+      "result": "passed"
+    },
+    {
+      "file": "scripts/check-backup-result.mjs",
+      "code": 0,
+      "seconds": 0.09,
+      "result": "passed"
+    },
+    {
+      "file": "scripts/check-backup-safety.mjs",
+      "code": 0,
+      "seconds": 6.67,
+      "note": "Missing synthetic notification adapter added; 15 safety tests passed on rerun.",
+      "result": "passed"
+    },
+    {
+      "file": "scripts/check-backup-ui.mjs",
+      "code": 1,
+      "seconds": 0.19,
+      "result": "environment-blocked",
+      "reason": "Loopback socket bind denied (EPERM)"
+    },
+    {
+      "file": "scripts/check-cert-photos.mjs",
+      "code": 1,
+      "seconds": 0.5,
+      "result": "environment-blocked",
+      "reason": "Chrome process launch blocked"
+    },
+    {
+      "file": "scripts/check-cert-roster.mjs",
+      "code": 0,
+      "seconds": 0.6,
+      "result": "passed"
+    },
+    {
+      "file": "scripts/check-certificate-bulk-ui.mjs",
+      "code": 1,
+      "seconds": 0.43,
+      "result": "environment-blocked",
+      "reason": "Chrome process launch blocked"
+    },
+    {
+      "file": "scripts/check-certificate-preview.mjs",
+      "code": 1,
+      "seconds": 0.89,
+      "result": "environment-blocked",
+      "reason": "Loopback socket bind denied (EPERM)"
+    },
+    {
+      "file": "scripts/check-desktop-identity-fix.mjs",
+      "code": 1,
+      "seconds": 0.14,
+      "result": "environment-blocked",
+      "reason": "Loopback socket bind denied (EPERM)"
+    },
+    {
+      "file": "scripts/check-desktop-integration.mjs",
+      "code": 0,
+      "seconds": 0.32,
+      "result": "passed"
+    },
+    {
+      "file": "scripts/check-desktop-languages.mjs",
+      "code": 1,
+      "seconds": 0.26,
+      "result": "environment-blocked",
+      "reason": "Loopback socket bind denied (EPERM)"
+    },
+    {
+      "file": "scripts/check-desktop-ux.mjs",
+      "code": 1,
+      "seconds": 0.18,
+      "result": "environment-blocked",
+      "reason": "Loopback socket bind denied (EPERM)"
+    },
+    {
+      "file": "scripts/check-easy-create.mjs",
+      "code": 0,
+      "seconds": 0.08,
+      "result": "passed"
+    },
+    {
+      "file": "scripts/check-firstrun.mjs",
+      "code": 0,
+      "seconds": 0.61,
+      "result": "passed"
+    },
+    {
+      "file": "scripts/check-issue-gate.mjs",
+      "code": 0,
+      "seconds": 0.05,
+      "result": "passed"
+    },
+    {
+      "file": "scripts/check-local-wallet-publish.mjs",
+      "code": 0,
+      "seconds": 0.15,
+      "result": "passed"
+    },
+    {
+      "file": "scripts/check-map-copy.mjs",
+      "code": 0,
+      "seconds": 0.13,
+      "result": "passed"
+    },
+    {
+      "file": "scripts/check-merchant-map.mjs",
+      "code": 0,
+      "seconds": 0.13,
+      "result": "passed"
+    },
+    {
+      "file": "scripts/check-peer-help.mjs",
+      "code": 0,
+      "seconds": 0.05,
+      "result": "passed"
+    },
+    {
+      "file": "scripts/check-phone-transaction.mjs",
+      "code": 0,
+      "seconds": 0.14,
+      "result": "passed"
+    },
+    {
+      "file": "scripts/check-ravi-agent.mjs",
+      "code": 0,
+      "seconds": 32.73,
+      "result": "passed"
+    },
+    {
+      "file": "scripts/check-ravi-companion.mjs",
+      "code": 0,
+      "seconds": 0.13,
+      "result": "passed"
+    },
+    {
+      "file": "scripts/check-ravi-key.mjs",
+      "code": 0,
+      "seconds": 1.85,
+      "result": "passed"
+    },
+    {
+      "file": "scripts/check-ravi-panel-browser.mjs",
+      "code": 1,
+      "seconds": 0.89,
+      "result": "environment-blocked",
+      "reason": "Chrome process launch blocked"
+    },
+    {
+      "file": "scripts/check-ravi-panel.mjs",
+      "code": 0,
+      "seconds": 0.51,
+      "result": "passed"
+    },
+    {
+      "file": "scripts/check-ravi-promo-browser.mjs",
+      "code": 1,
+      "seconds": 0.77,
+      "result": "environment-blocked",
+      "reason": "Chrome process launch blocked"
+    },
+    {
+      "file": "scripts/check-ravi-promo-card.mjs",
+      "code": 0,
+      "seconds": 0.72,
+      "result": "passed"
+    },
+    {
+      "file": "scripts/check-ravi-promo.mjs",
+      "code": 0,
+      "seconds": 2.44,
+      "result": "passed"
+    },
+    {
+      "file": "scripts/check-ravi-similarity.mjs",
+      "code": 0,
+      "seconds": 1.74,
+      "result": "passed"
+    },
+    {
+      "file": "scripts/check-ravi-state.mjs",
+      "code": 0,
+      "seconds": 0.67,
+      "result": "passed"
+    },
+    {
+      "file": "scripts/check-ravi-understanding-browser.mjs",
+      "code": 1,
+      "seconds": 0.4,
+      "result": "environment-blocked",
+      "reason": "Chrome process launch blocked"
+    },
+    {
+      "file": "scripts/check-ravi-understanding.mjs",
+      "code": 0,
+      "seconds": 1.43,
+      "result": "passed"
+    },
+    {
+      "file": "scripts/check-ravi-understanding2.mjs",
+      "code": 0,
+      "seconds": 6.47,
+      "result": "passed"
+    },
+    {
+      "file": "scripts/check-ravi-understanding3.mjs",
+      "code": 0,
+      "seconds": 1.2,
+      "result": "passed"
+    },
+    {
+      "file": "scripts/check-ravi-understanding5.mjs",
+      "code": 0,
+      "seconds": 3.79,
+      "result": "passed"
+    },
+    {
+      "file": "scripts/check-ravi-voice.mjs",
+      "code": 0,
+      "seconds": 0.4,
+      "result": "passed"
+    },
+    {
+      "file": "scripts/check-restore-vectors.mjs",
+      "code": 1,
+      "seconds": 0.77,
+      "result": "environment-blocked",
+      "reason": "Loopback socket bind denied (EPERM)"
+    },
+    {
+      "file": "scripts/check-send-confirmation.mjs",
+      "code": 0,
+      "seconds": 0.84,
+      "result": "passed"
+    },
+    {
+      "file": "scripts/check-shop-seal.mjs",
+      "code": 0,
+      "seconds": 0.13,
+      "result": "passed"
+    },
+    {
+      "file": "scripts/check-staff-refund.mjs",
+      "code": 0,
+      "seconds": 0.18,
+      "result": "passed"
+    },
+    {
+      "file": "scripts/check-style-csp.mjs",
+      "code": 1,
+      "seconds": 0.13,
+      "result": "environment-blocked",
+      "reason": "Loopback socket bind denied (EPERM)"
+    },
+    {
+      "file": "scripts/check-wallet-easy.mjs",
+      "code": 1,
+      "seconds": 0.13,
+      "result": "environment-blocked",
+      "reason": "Loopback socket bind denied (EPERM)"
+    },
+    {
+      "file": "scripts/check-wallet-vault.mjs",
+      "code": 0,
+      "seconds": 0.95,
+      "result": "passed"
+    },
+    {
+      "file": "scripts/check-words-restore.mjs",
+      "code": 1,
+      "seconds": 0.13,
+      "result": "environment-blocked",
+      "reason": "Loopback socket bind denied (EPERM)"
+    },
+    {
+      "file": "scripts/check-desktop-mutation.mjs",
+      "code": 1,
+      "seconds": 8.16,
+      "result": "expected-mutation-detected"
+    },
+    {
+      "file": "scripts/check-companion-fix.mjs",
+      "code": 0,
+      "result": "passed"
+    }
+  ],
+  "build": "passed",
+  "preRelease": "passed",
+  "rustFull": {
+    "passed": 757,
+    "failedEnvironment": 7,
+    "ignored": 13
+  },
+  "rustAvailable": {
+    "passed": 757,
+    "failed": 0,
+    "ignored": 13,
+    "filteredEnvironment": 7
+  },
+  "geometryPropertyCases": 101376,
+  "nativeCapture": "unverified",
+  "nativeRSS": "unmeasured",
+  "browserPreview": "blocked: file protocol not allowed by browser security policy",
+  "globalShortcut": "not implemented: official plugin absent from local dependencies/cache",
+  "realPayments": false,
+  "push": false,
+  "tagsCreated": false
+}

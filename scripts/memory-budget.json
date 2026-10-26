@@ -1,0 +1,52 @@
+{
+  "_about": "Frontend memory budgets checked by scripts/memory-budget-browser.test.mjs (headless Chrome, synthetic fixture). Measured 2026-10-11 on the base branch: heap 7.4-7.6MB, DOM 10.6-11.1k nodes, 705-737 listeners, leak slope 2.6KB/nav, hidden 24 IPC/min (all work, no drawing), companion 4.9MB/302 nodes, mini 0.8MB/97 nodes, JS 2.29MB, largest chunk 927KB. Raising a number needs a reason in docs/memory-budget.md.",
+  "mainWindow": {
+    "heapUsedMB": 10,
+    "domNodes": 13000,
+    "listeners": 900,
+    "decodedImageMB": 4
+  },
+  "leak": {
+    "navigations": 100,
+    "heapSlopeKBPerNav": 20,
+    "nodeSlopePerNav": 5,
+    "listenerSlopePerNav": 1,
+    "heapGrowthMB": 2,
+    "intervalsAlive": 25
+  },
+  "hidden": {
+    "seconds": 32,
+    "raf": 0,
+    "timeoutsPerMinute": 30,
+    "invokesPerMinute": 30,
+    "allowedInvokes": [
+      "wallet_since", "wallet_balance", "wallet_lock_state", "node_status", "backup_survey", "incoming_payments",
+      "talk_read", "reindex_state", "reindex_window", "words_restore_status", "load_orders", "service_health",
+      "sweep_run", "backup_auto", "report_flush", "relay_status"
+    ],
+    "_allowedInvokes": "Work that must continue while nobody looks (deposit watch, order/chat notices, scheduled reindex, auto-backup). Drawing-only calls (money_status, pairing_waiting, ...) must not appear here."
+  },
+  "motion": {
+    "rafPerSecondHomeReduced": 130,
+    "_rafPerSecondHomeReduced": "Current ~120 + measurement slack (two rigs at 60fps, one of them invisible). Target after the rig fix proposed in docs/memory-budget.md: <= 15."
+  },
+  "companion": {
+    "heapUsedMB": 8,
+    "domNodes": 600,
+    "listeners": 80,
+    "hiddenRaf": 0,
+    "hiddenInvokes": 0
+  },
+  "mini": {
+    "heapUsedMB": 2,
+    "domNodes": 300,
+    "listeners": 40,
+    "timersFiredIn5s": 0
+  },
+  "bundle": {
+    "jsTotalKB": 3000,
+    "largestJsKB": 1060,
+    "indexHtmlKB": 480,
+    "cssTotalKB": 90
+  }
+}

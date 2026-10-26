@@ -196,7 +196,7 @@ try {
     if (lang === 'ko') await page.screenshot({ path: resolve(out, 'review-fee-ko.png') });
 
     // 수수료를 못 구하면 지어내지 않는다 / 모자라면 말한다.
-    for (const [mode, re] of [['fail', { ko: /노드가 정해요/, en: /node sets the fee/, ja: /ノードが決め/, zh: /由节点决定/ }], ['short', { ko: /모자라요/, en: /not enough/, ja: /足りません/, zh: /余额不足/ }]]) {
+    for (const [mode, re] of [['fail', { ko: /서버가 정해요/, en: /server sets the fee/, ja: /サーバーが決め/, zh: /由服务器决定/ }], ['short', { ko: /모자라요/, en: /not enough/, ja: /足りません/, zh: /余额不足/ }]]) {
       await page.evaluate((m) => { window.__S.feeMode = m; }, mode);
       await tap(page, '#s-back');
       await tap(page, '#s-review');
@@ -246,8 +246,11 @@ try {
     assert.equal(await page.$eval('#chat-log .msg.ai:last-child [data-guide]', (e) => e.dataset.guide), 'miss', '모르는 질문은 모른다고');
     R.guideHangul = lang === 'ko' ? [] : await hangul(page, '#chat-log');
     if (lang === 'ko') await page.screenshot({ path: resolve(out, 'ravi-guide-ko.png') });
-    // 답 아래 단추가 제자리로 데려간다.
-    await tap(page, '#chat-log .msg.ai:last-child [data-guide-topic="receive"]');
+    // Unknown money question offers nearby guidance; choosing a button only fills input.
+    await page.type('#chat-q', '10 RVN에 대해 설명해줘');
+    await tap(page, '#chat-go');
+    await tap(page, '#chat-log .msg.ai:last-child [data-ravi-input="receive"]');
+    await tap(page, '#chat-go');
     await tap(page, '#chat-log .msg.ai:last-child [data-guide-go="receive"]');
     await page.waitForSelector('#w-addr-text');
     assert.equal(await page.$eval('.page.on', (e) => e.id), 'page-wallet');

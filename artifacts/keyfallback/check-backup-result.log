@@ -1,0 +1,2 @@
+PASS actual UI boundary rejects omitted, empty, unverified and unencrypted wallet backups
+PASS partial, failed and empty restores are never complete

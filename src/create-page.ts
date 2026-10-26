@@ -14,7 +14,8 @@
  *   · 티켓은 끝나면 「팔기」로 이어진다.
  */
 import { setStyledSrcdoc } from "./srcdoc-style";
-import { lang, setCopyText, tf } from "./i18n";
+import { lang, coreLang, setCopyText, tf } from "./i18n";
+import { fmtCount, fmtRvn } from "./amount-ui";
 import { issuedOf, OWNER_NOT_PINNED } from "./whose";
 import {
   MAX_COPIES, MAX_TICKETS, brandCandidates, brandFrom, fileFingerprint, findFreeRun, itemNames,
@@ -257,7 +258,7 @@ export function wireCreate(deps: CreateDeps): CreateApi {
       brandSel.replaceChildren(...s.brands.map((b) => option(b, false)), ...pending.map((b) => option(b, true)));
     } catch (e) {
       el("cr-brand-wrap").hidden = true; el("cr-maker-wrap").hidden = false;
-      tell(() => tf("노드 지갑을 읽지 못했습니다: {0}", errText(e)));
+      tell(() => tf("서버 지갑을 읽지 못했습니다: {0}", errText(e)));
     }
     paintMaker();
     void bulk.loadMarks();
@@ -266,7 +267,7 @@ export function wireCreate(deps: CreateDeps): CreateApi {
   function paintMaker() {
     const preview = brandFrom(makerIn.value);
     const out = el("cr-maker-say");
-    if (preview) setCopyText(out, () => tf("체인에는 {0}(으)로 새겨요", preview));
+    if (preview) setCopyText(out, () => tf("공개 장부에는 {0}(으)로 새겨요", preview));
     else if (makerIn.value.trim()) setCopyText(out, () => t("영문이나 한글로 3자 이상 적어 주세요."));
     else out.replaceChildren();
   }
@@ -275,8 +276,8 @@ export function wireCreate(deps: CreateDeps): CreateApi {
     el("cr-file-clear").hidden = !fingerprint;
     // 🔴 지문은 소금 없이 파일 그대로의 해시다. 짧거나 양식이 뻔한 문서는 누가 후보를
     //    만들어 대 보면 맞출 수 있다 — 정직하게 한 줄 말한다.
-    if (fingerprint) setCopyText(out, () => `${tf("붙인 파일 · {0} · 원본은 이 컴퓨터에 두고, 지문만 체인에 새겨요.", fileName)} ${t(FINGERPRINT_GUESS)}`);
-    else setCopyText(out, () => t("파일은 올리지 않아요. 이 컴퓨터에서 지문만 만들어 체인에 새겨요."));
+    if (fingerprint) setCopyText(out, () => `${tf("붙인 파일 · {0} · 원본은 이 컴퓨터에 두고, 지문만 공개 장부에 새겨요.", fileName)} ${t(FINGERPRINT_GUESS)}`);
+    else setCopyText(out, () => t("파일은 올리지 않아요. 이 컴퓨터에서 지문만 만들어 공개 장부에 새겨요."));
   }
   function paintRecipientsSay() {
     const people = parseRecipients(recipientsIn.value);
@@ -330,7 +331,7 @@ export function wireCreate(deps: CreateDeps): CreateApi {
       recipients: (editing ? recipientSlots : parseRecipients)(recipientsIn.value).slice(0, MAX_COPIES),
       issued_on: dateIn.value || todayYmd(),
       issuer: issuerIn.value.trim(), signer: signerIn.value.trim(), description: descIn.value.trim(),
-      file_name: fileName, lang, photo_slot: bulk.photoSlot(),
+      file_name: fileName, lang: coreLang(lang), photo_slot: bulk.photoSlot(),
     };
   }
   /** 확인 표 한 줄의 칸(받는 사람 말고). 빈 발급일은 위의 발급일을 쓴다(러스트 render). */
@@ -367,7 +368,7 @@ export function wireCreate(deps: CreateDeps): CreateApi {
       ? tf("미리보기 · {0}번째 줄 · 표에서 줄을 누르면 그 사람으로 바뀌어요", at + 1)
       : t("미리보기 · 인쇄하면 이 모양이에요 (A4 한 장에 한 사람)"));
     try {
-      const [html, fonts] = await Promise.all([invoke<string>("create_certificate_preview", { entry, lang }), bulk.fontCss()]);
+      const [html, fonts] = await Promise.all([invoke<string>("create_certificate_preview", { entry, lang: coreLang(lang) }), bulk.fontCss()]);
       if (mine === previewTicket) setStyledSrcdoc(preview, html, fonts);
     } catch { /* 미리보기는 덤이다 — 칸 검사는 확인하기가 한다 */ }
   }
@@ -426,12 +427,12 @@ export function wireCreate(deps: CreateDeps): CreateApi {
       if (roster && !pick.length) throw new Error(t("발행할 줄이 없어요. 확인 표에서 받는 사람을 채우거나 발행 체크를 켜 주세요."));
       const people = roster ? pick.map((i) => roster[i].row.recipient) : parseRecipients(recipientsIn.value);
       // 🔴 제목은 로마자로 바뀌어 체인 이름에 영원히 남는다. 받는 사람 이름이 섞이면 안 된다.
-      if (people.some((p) => p.length >= 2 && title.includes(p))) throw new Error(t("제목에 받는 사람 이름이 들어 있어요. 제목은 증서 번호(체인)에 들어가니, 이름은 받는 사람 칸에만 적어 주세요."));
+      if (people.some((p) => p.length >= 2 && title.includes(p))) throw new Error(t("제목에 받는 사람 이름이 들어 있어요. 제목은 증서 번호(공개 장부)에 들어가니, 이름은 받는 사람 칸에만 적어 주세요."));
       if (!roster && kind === "certificate" && people.length > MAX_COPIES) throw new Error(tf("받는 사람은 한 번에 {0}명까지예요. 나눠서 만들어 주세요.", MAX_COPIES));
       if (people.some((p) => p.length > 60)) throw new Error(t("받는 사람 이름은 60자까지 적을 수 있어요."));
       const count = roster ? pick.length : kind === "certificate" && people.length ? people.length : Number(countIn.value);
       const max = roster ? MAX_BATCH_ROWS : kind === "ticket" ? MAX_TICKETS : MAX_COPIES;
-      if (!Number.isInteger(count) || count < 1 || count > max) throw new Error(tf("1부터 {0}까지 적어 주세요.", max.toLocaleString("en-US")));
+      if (!Number.isInteger(count) || count < 1 || count > max) throw new Error(tf("1부터 {0}까지 적어 주세요.", fmtCount(max)));
       const s = await loadStatus();
       const pending = s.pending ?? [];
       const wanted = s.brands.length || pending.length ? brandSel.value : brandFrom(makerIn.value);
@@ -506,15 +507,15 @@ export function wireCreate(deps: CreateDeps): CreateApi {
         return d;
       };
       bill.append(
-        cell(node("b", () => tf("{0}장", n.toLocaleString("en-US"))), "발행할 증서"),
-        cell(data("b", `${rvnText(r.total)} RVN`), "체인 수수료 합계"),
+        cell(node("b", () => tf("{0}장", fmtCount(n))), "발행할 증서"),
+        cell(data("b", `${rvnText(r.total)} RVN`), "공개 장부 수수료 합계"),
         cell(data("b", `${rvnText(s.spendable)} RVN`), "지갑 잔액", s.spendable < r.total ? "short" : ""),
       );
       parts.push(bill);
-      parts.push(node("p", () => tf("한 장에 {0} RVN이 체인에 태워지고, 보낼 때마다 네트워크 수수료가 조금 붙어요 · {1}번에 나눠 보내요(한 번에 {2}장까지).", 5, chunks, MAX_COPIES), "meta"));
+      parts.push(node("p", () => tf("한 장에 {0} RVN이 공개 장부에 태워지고, 보낼 때마다 네트워크 수수료가 조금 붙어요 · {1}번에 나눠 보내요(한 번에 {2}장까지).", 5, chunks, MAX_COPIES), "meta"));
       const withPhoto = b.photoSlot ? b.lines.filter((l) => l.photo).length : 0;
       if (withPhoto) parts.push(node("p", () => tf("사진 {0}장을 함께 인쇄해요 · 사진은 이 컴퓨터에만 둬요.", withPhoto), "meta"));
-      parts.push(node("p", "받는 사람·과정·사진은 체인에 올리지 않아요. 인쇄하는 종이와 이 컴퓨터에만 남아요.", "meta"));
+      parts.push(node("p", "받는 사람·과정·사진은 공개 장부에 올리지 않아요. 인쇄하는 종이와 이 컴퓨터에만 남아요.", "meta"));
       if (r.needsBrand && chunks > 1) {
         parts.push(node("p", () => tf("처음 한 번은 이름 등록이 먼저예요 — 등록과 함께 첫 {0}장을 만들고, 기록되면(1~2분) 「나머지 이어서 만들기」로 {1}장을 더 만들어요.", r.count, n - r.count), "meta"));
       }
@@ -525,16 +526,16 @@ export function wireCreate(deps: CreateDeps): CreateApi {
         parts.push(node("p", () => tf("받는 사람 {0}명", people.length), "meta"));
         parts.push(data("p", people.length > 3 ? `${people.slice(0, 3).join(", ")} …` : people.join(", "), "meta"));
       }
-      parts.push(node("p", "받는 사람·발급자·설명은 체인에 올리지 않아요. 인쇄하는 종이와 이 컴퓨터에만 남아요.", "meta"));
+      parts.push(node("p", "받는 사람·발급자·설명은 공개 장부에 올리지 않아요. 인쇄하는 종이와 이 컴퓨터에만 남아요.", "meta"));
     }
     const shown = b ? leftRows(b) : r.names.length;
     parts.push(
-      node("p", r.kind === "certificate" ? "증서 번호(체인에 새겨질 이름)" : "체인에 새겨질 이름", "meta"),
+      node("p", r.kind === "certificate" ? "증서 번호(공개 장부에 새겨질 이름)" : "공개 장부에 새겨질 이름", "meta"),
       data("p", shown > 1 ? tf("{0} 외 {1}장", r.names[0], shown - 1) : r.names[0], "cr-name"),
     );
     parts.push(node("p", r.fingerprint ? () => tf("파일 지문을 함께 새겨요 · {0}", r.fileName) : () => t("파일 없이 만들어요."), "meta"));
-    if (r.kind === "ticket") parts.push(node("p", () => tf("티켓 {0}장 · 나중에 더 만들 수 있어요", r.count.toLocaleString("en-US")), "meta"));
-    if (!b) parts.push(node("p", "필요한 RVN", "meta"), data("p", `${r.total.toLocaleString("en-US", { maximumFractionDigits: 2 })} RVN`, "cr-cost"));
+    if (r.kind === "ticket") parts.push(node("p", () => tf("티켓 {0}장 · 나중에 더 만들 수 있어요", fmtCount(r.count)), "meta"));
+    if (!b) parts.push(node("p", "필요한 RVN", "meta"), data("p", `${fmtRvn(r.total)}`, "cr-cost"));
     if (r.needsBrand) parts.push(node("p", () => tf("처음 한 번은 이름 {0} 등록(500 RVN)이 들어가요. 다음부터는 만드는 값만 들어요.", r.brand), "meta"));
     parts.push(node("p", "이 RVN은 네트워크에 태워져 이름과 기록을 지키는 데 쓰여요. 저희가 받는 돈이 아니에요.", "meta"));
 
@@ -563,7 +564,7 @@ export function wireCreate(deps: CreateDeps): CreateApi {
     let pass: HTMLInputElement | null = null, typed: HTMLInputElement | null = null;
     const actions = actionsRow();
     if (short > 0) {
-      parts.push(node("p", () => tf("{0} RVN이 더 필요해요 · 지갑 화면의 받기 주소로 다른 지갑이나 거래소에서 보내 주세요.", short.toLocaleString("en-US", { maximumFractionDigits: 2 })), "cr-warn"));
+      parts.push(node("p", () => tf("{0} RVN이 더 필요해요 · 지갑 화면의 받기 주소로 다른 지갑이나 거래소에서 보내 주세요.", fmtRvn(short, { code: "" })), "cr-warn"));
       actions.append(button("받기 주소 보기", () => go("wallet")), button("다시 확인하기", () => void check(), true));
     } else {
       if (r.needsBrand) {
@@ -585,7 +586,7 @@ export function wireCreate(deps: CreateDeps): CreateApi {
       if (r.needsBrand) parts.push(node("p", "두 번 진행해요. 먼저 이름 등록, 기록된 뒤에 만들기.", "meta"));
       const makeBtn = r.needsBrand || !b
         ? button(r.needsBrand ? "이름 등록하고 만들기" : "만들기", () => void make(r, pass))
-        : node("button", () => tf("{0}장 만들기", leftRows(b).toLocaleString("en-US")));
+        : node("button", () => tf("{0}장 만들기", fmtCount(leftRows(b))));
       if (b && !r.needsBrand) { makeBtn.setAttribute("type", "button"); makeBtn.addEventListener("click", () => void make(r, pass)); }
       makeBtn.id = "cr-make";
       const gate = () => {
@@ -604,7 +605,7 @@ export function wireCreate(deps: CreateDeps): CreateApi {
   }
 
   /* ── 4. 만들기 ───────────────────────────────────────────────────── */
-  const rvnText = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 2 });
+  const rvnText = (n: number) => fmtRvn(n, { code: "" });
   async function make(r: Review, pass: HTMLInputElement | null) {
     if (busy) return;
     if (loadDraft()?.stage === "sent-unknown") { paintUnknown(); return; }
@@ -684,7 +685,7 @@ export function wireCreate(deps: CreateDeps): CreateApi {
     if (makeBtn) makeBtn.disabled = true;
     let passphrase: string | null = null;
     try {
-      const ok = await deps.hold(tf("「{0}」 {1}장을 만들어요", r.title, leftRows(b).toLocaleString("en-US")), tf("{0} RVN이 태워지고 되돌릴 수 없어요", rvnText(r.total)));
+      const ok = await deps.hold(tf("「{0}」 {1}장을 만들어요", r.title, fmtCount(leftRows(b))), tf("{0} RVN이 태워지고 되돌릴 수 없어요", rvnText(r.total)));
       if (!ok) { if (makeBtn) makeBtn.disabled = false; return; }
       passphrase = pass?.value || null;
       if (pass) pass.value = "";
@@ -763,8 +764,8 @@ export function wireCreate(deps: CreateDeps): CreateApi {
       list.append(li);
     });
     waitBox.replaceChildren(
-      node("h3", () => tf("{0}장을 만드는 중이에요", total.toLocaleString("en-US"))),
-      node("p", "창을 닫지 마세요 — 50장씩 나눠 보내요. 한 묶음에 보통 몇 초, 노드가 바쁘면 더 걸려요.", "meta"),
+      node("h3", () => tf("{0}장을 만드는 중이에요", fmtCount(total))),
+      node("p", "창을 닫지 마세요 — 50장씩 나눠 보내요. 한 묶음에 보통 몇 초, 서버가 바쁘면 더 걸려요.", "meta"),
       bar,
       node("p", () => tf("{0} / {1}장", done, total), "meta"),
       list,
@@ -908,7 +909,7 @@ export function wireCreate(deps: CreateDeps): CreateApi {
   async function printOne(id: string, index: number) {
     tell(() => t("인쇄할 파일을 만드는 중…"));
     try {
-      await invoke("create_print", { id, lang, index });
+      await invoke("create_print", { id, lang: coreLang(lang), index });
       tell(() => t("브라우저에서 열었어요. ⌘P(윈도우는 Ctrl+P)를 누르면 인쇄하거나 「PDF로 저장」할 수 있어요."));
     } catch (err) { tell(() => errText(err)); }
   }
@@ -916,7 +917,7 @@ export function wireCreate(deps: CreateDeps): CreateApi {
     if (!ids.length) return;
     tell(() => t("인쇄할 파일을 만드는 중…"));
     try {
-      await invoke("create_print_many", { ids, lang });
+      await invoke("create_print_many", { ids, lang: coreLang(lang) });
       tell(() => t("브라우저에서 열었어요. ⌘P(윈도우는 Ctrl+P)를 누르면 인쇄하거나 「PDF로 저장」할 수 있어요."));
     } catch (err) { tell(() => errText(err)); }
   }
@@ -1004,8 +1005,8 @@ export function wireCreate(deps: CreateDeps): CreateApi {
     const probe = d.step === "brand" ? d.brand : (d.names?.[0] ?? "");
     waitBox.replaceChildren(
       node("h3", "보냈는지 아직 몰라요 — 기록될 때까지 기다려 주세요"),
-      node("p", "노드가 제때 답하지 않았어요. 이미 보냈을 수 있으니 다시 만들지 마세요 — 같은 것이 두 번 태워질 수 있어요. 기록되면 여기서 저절로 이어져요.", "meta"),
-      node("p", d.step === "brand" ? "등록할 이름" : "체인에 새겨질 이름", "meta"),
+      node("p", "서버가 제때 답하지 않았어요. 이미 보냈을 수 있으니 다시 만들지 마세요 — 같은 것이 두 번 태워질 수 있어요. 기록되면 여기서 저절로 이어져요.", "meta"),
+      node("p", d.step === "brand" ? "등록할 이름" : "공개 장부에 새겨질 이름", "meta"),
       data("p", d.step !== "brand" && (d.names?.length ?? 0) > 1 ? tf("{0} 외 {1}장", probe, (d.names?.length ?? 1) - 1) : probe, "cr-name"),
       state,
       actionsRow(again, giveUp),
@@ -1061,12 +1062,12 @@ export function wireCreate(deps: CreateDeps): CreateApi {
           return;
         }
         if (gone) {
-          setCopyText(state, () => t("한 시간 넘게 체인과 지갑 어디에도 안 보여요 — 보내지 않은 것으로 보여요. 처음부터 다시 만들 수 있어요."));
+          setCopyText(state, () => t("한 시간 넘게 공개 장부와 지갑 어디에도 안 보여요 — 보내지 않은 것으로 보여요. 처음부터 다시 만들 수 있어요."));
           giveUp.hidden = false;
         } else if (sending) {
           setCopyText(state, () => t(SENDING_NOTE));
         } else {
-          setCopyText(state, () => t("아직 안 보여요. 노드가 따라잡는 중일 수 있어요 — 조금 더 기다려 주세요."));
+          setCopyText(state, () => t("아직 안 보여요. 서버가 따라잡는 중일 수 있어요 — 조금 더 기다려 주세요."));
         }
       } catch (e) {
         setCopyText(state, () => errText(e));
@@ -1210,7 +1211,7 @@ export function wireCreate(deps: CreateDeps): CreateApi {
     if (e.id) {
       const id = e.id;
       secondary.append(button("기록에서 지우기", async () => {
-        const ok = await deps.sure(t("이 기록을 지울까요?"), t("받는 사람 이름과 인쇄 파일이 이 컴퓨터에서 지워져요. 체인에 만든 것은 그대로 남아요."), t("지웁니다"));
+        const ok = await deps.sure(t("이 기록을 지울까요?"), t("받는 사람 이름과 인쇄 파일이 이 컴퓨터에서 지워져요. 공개 장부에 만든 것은 그대로 남아요."), t("지웁니다"));
         if (!ok) return;
         await invoke("create_history_forget", { id }).catch((err) => tell(() => errText(err)));
         const d = loadDraft();
@@ -1250,7 +1251,7 @@ export function wireCreate(deps: CreateDeps): CreateApi {
     if (!e.id) return;
     tell(() => t("인쇄할 파일을 만드는 중…"));
     try {
-      await invoke("create_print", { id: e.id, lang });
+      await invoke("create_print", { id: e.id, lang: coreLang(lang) });
       tell(() => t("브라우저에서 열었어요. ⌘P(윈도우는 Ctrl+P)를 누르면 인쇄하거나 「PDF로 저장」할 수 있어요."));
     } catch (err) {
       tell(() => errText(err));

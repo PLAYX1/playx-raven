@@ -1,0 +1,12 @@
+PASS B 폰·웹 코드(/Users/gimmusong/ravenvault/core/wallet-keys) = 표 — 벡터 5개 × 받기 25 · 거스름 25
+file:///Users/gimmusong/wt-rv-desktop-simple/scripts/check-restore-vectors.mjs:129
+    throw new Error('빈 포트를 못 찾았다');
+          ^
+
+Error: 빈 포트를 못 찾았다
+    at freePort (file:///Users/gimmusong/wt-rv-desktop-simple/scripts/check-restore-vectors.mjs:129:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async startNode (file:///Users/gimmusong/wt-rv-desktop-simple/scripts/check-restore-vectors.mjs:136:18)
+    at async file:///Users/gimmusong/wt-rv-desktop-simple/scripts/check-restore-vectors.mjs:198:20
+
+Node.js v20.20.0

@@ -169,7 +169,7 @@ mod tests {
         for l in [
             "NewravenMain", "가족 바이낸스", "망고팜", "디센트 지갑",
             "작은 지갑", "레이븐바이낸스", "nowpayment",
-            "PLAYX 풀노드로 전송", "문트리로 BM26 전달", "",
+            "PLAYX 풀서버로 전송", "문트리로 BM26 전달", "",
         ] {
             assert!(!is_machine_label(l), "{l} 가 숨겨진다");
         }

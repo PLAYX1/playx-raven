@@ -1,0 +1,1357 @@
+{
+ "_note": "합성 열쇠만. 규격 docs/LAN-REQUEST-SIGNING.md. 생성기 phone/network/real/lan/lan-v2-vectors.test.ts (--write). 실제 키·지갑 아님.",
+ "domains": {
+  "request": "RAVENVAULT-LAN-REQ-V2",
+  "key": "RAVENVAULT-LAN-KEY-V2",
+  "proof": "RAVENVAULT-LAN-PROOF-V2",
+  "session": "RAVENVAULT-LAN-SESSION-V1",
+  "seal": "RAVENVAULT-LAN-CHUNK-V1"
+ },
+ "windowMs": 300000,
+ "now": 1800000000000,
+ "store": {
+  "storeId": "abababababababababababababababababababababababababababababababab",
+  "storeKey": "034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa",
+  "storePrivHex_TEST_ONLY": "1111111111111111111111111111111111111111111111111111111111111111"
+ },
+ "device": {
+  "devicePubKey": "02eec7245d6b7d2ccb30380bfbe2a3648cd7a942653f5aa340edcea1f283686619",
+  "devicePrivHex_TEST_ONLY": "4141414141414141414141414141414141414141414141414141414141414141",
+  "otherDevicePrivHex_TEST_ONLY": "4242424242424242424242424242424242424242424242424242424242424242",
+  "cert": {
+   "v": 1,
+   "storeId": "abababababababababababababababababababababababababababababababab",
+   "deviceId": "4fbd1a1ef83d7d2610fd02a7812dafa7542c73c339f1db66a0d2950a859a8759",
+   "devicePubKey": "02eec7245d6b7d2ccb30380bfbe2a3648cd7a942653f5aa340edcea1f283686619",
+   "role": "remote",
+   "scopes": [
+    "read",
+    "draft"
+   ],
+   "issuedAt": 1799996400000,
+   "notAfter": 1800086400000,
+   "serial": 1,
+   "sig": "HzvAgBGvqr5QkcIcoFKOkJGCPoFxMtK2dvaUDFIHyMVjAtGIKeQlvIQr2Afb/HQ7Sa2BiKdNuzx4/YS6MiN2Vaw="
+  },
+  "certId": "e40d8b0504d46107e9858881e40028844ab8b57620cbd780b6b643b36dc5af57"
+ },
+ "revocationList": {
+  "v": 1,
+  "storeId": "abababababababababababababababababababababababababababababababab",
+  "seq": 4,
+  "revoked": [],
+  "issuedAt": 1799996400000,
+  "prunedBefore": 0,
+  "sig": "Hwl8efLT0bTewyKSlEjoFyCLbLC4xE3JRXDp2d1VVE0cCZsNBG+sM2g9qLKW7Omne3NcjPLbZfcFGeSjAm0/YhA="
+ },
+ "dataKey": {
+  "version": 3,
+  "keyHex": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20"
+ },
+ "envelope": {
+  "ephPrivHex_TEST_ONLY": "5555555555555555555555555555555555555555555555555555555555555555",
+  "nonceHex": "666666666666666666666666666666666666666666666666",
+  "sealed": {
+   "v": 1,
+   "storeId": "abababababababababababababababababababababababababababababababab",
+   "certId": "e40d8b0504d46107e9858881e40028844ab8b57620cbd780b6b643b36dc5af57",
+   "deviceId": "4fbd1a1ef83d7d2610fd02a7812dafa7542c73c339f1db66a0d2950a859a8759",
+   "devicePubKey": "02eec7245d6b7d2ccb30380bfbe2a3648cd7a942653f5aa340edcea1f283686619",
+   "keyVersion": 3,
+   "keyId": "cbb6d4e2a8713ace1ef3735889af8eacd9f378b2e9aa53ce081a6fa321d2fe58",
+   "eph": "029ac20335eb38768d2052be1dbbc3c8f6178407458e51e6b4ad22f1d91758895b",
+   "nonce": "666666666666666666666666666666666666666666666666",
+   "ct": "3c2af0ba2328557c2444dbd8e9d70dfe249e54cdc4a536227d6e57313f8ece6c37d8f6e39592c57da8a335a8a527410e",
+   "sig": "IFueVIvfMBhK5XZZ4Z4rqJRHH95XrtefyXUk3J5z2aQYYOHiZ5Ve8R9QfnyHEfTXkwDmKRrSgs+fc8ojBZmKQQI="
+  },
+  "sharedCompressedHex": "03100c946e9d6e6fdb6c744c7f33f839c562e70659d3a816eb5ba9d951b86e12b6",
+  "sessionKeyHex": "b19d2551f99b918f19387c0f544b1e097fcf2d512f2bda7930f0b2b04b6203e8",
+  "sessionHkdf": {
+   "ikm": "sharedCompressed(33B)",
+   "salt": "eph(33B) || devicePubKey(33B)",
+   "info": "RAVENVAULT-LAN-SESSION-V1",
+   "length": 32
+  }
+ },
+ "lanKeys": {
+  "sealInfo": "[\"RAVENVAULT-LAN-KEY-V2\",\"seal\",\"abababababababababababababababababababababababababababababababab\",\"e40d8b0504d46107e9858881e40028844ab8b57620cbd780b6b643b36dc5af57\",3]",
+  "proofInfo": "[\"RAVENVAULT-LAN-KEY-V2\",\"proof\",\"abababababababababababababababababababababababababababababababab\",\"e40d8b0504d46107e9858881e40028844ab8b57620cbd780b6b643b36dc5af57\",3]",
+  "hkdf": {
+   "ikm": "dataKey(32B)",
+   "salt": "sessionKey(32B)",
+   "length": 32
+  },
+  "sealKeyHex": "acf5ae84027d3f1b4b0b1e4108756333a0fad86729a0370dfe96f66c604ae6eb",
+  "proofKeyHex": "273c4da33d44af115fe2e1ede6d0afb6300c64ce61eba08b637be95a6f09b7a6"
+ },
+ "chunk": {
+  "entries": [
+   {
+    "id": "1212121212121212121212121212121212121212121212121212121212121212",
+    "origin": "4fbd1a1ef83d7d2610fd02a7812dafa7542c73c339f1db66a0d2950a859a8759",
+    "seq": 1,
+    "ts": 1799999995000,
+    "kind": "note",
+    "data": {
+     "n": 1
+    }
+   }
+  ],
+  "rngNonceHex": "777777777777777777777777777777777777777777777777",
+  "bind": {
+   "storeId": "abababababababababababababababababababababababababababababababab",
+   "certId": "e40d8b0504d46107e9858881e40028844ab8b57620cbd780b6b643b36dc5af57",
+   "deviceId": "4fbd1a1ef83d7d2610fd02a7812dafa7542c73c339f1db66a0d2950a859a8759",
+   "dir": "push",
+   "chunkId": "840e1bb09e8d5c6111727795a2e521d2036da7f08d66a499c019e64e336a3cf6",
+   "from": 0
+  },
+  "sealed": {
+   "v": 1,
+   "keyVersion": 3,
+   "nonce": "777777777777777777777777777777777777777777777777",
+   "ct": "EXMLreE6kqteyXoFNYgU+YVSPyJbkwwTZFDkDFrQCOp0iuK4kZE0aomG+GC4X+TcesJdmiJb1SIXwOhS/84zzMhMedWDRpk0fyHNHyk+0eUq2GMCalGv5rWn7UbO+WKnT08wUdmZegkN6iIvxDPV/WRMdM5+W3dRVu7EaKvsi0zpHrkxAt+DxHrPuRnuZVaA0gm5cC36vh2tr21uQafMnc7jKuMjnSFRgLQCaj6+Jsq5gF9qbqCzOVK77ui8Y5EknHSDc2StAALuaB2/tmTTCeOQKA57cuIntG9x//wlrg=="
+  }
+ },
+ "requests": {
+  "push": {
+   "wire": {
+    "v": 2,
+    "cert": {
+     "v": 1,
+     "storeId": "abababababababababababababababababababababababababababababababab",
+     "deviceId": "4fbd1a1ef83d7d2610fd02a7812dafa7542c73c339f1db66a0d2950a859a8759",
+     "devicePubKey": "02eec7245d6b7d2ccb30380bfbe2a3648cd7a942653f5aa340edcea1f283686619",
+     "role": "remote",
+     "scopes": [
+      "read",
+      "draft"
+     ],
+     "issuedAt": 1799996400000,
+     "notAfter": 1800086400000,
+     "serial": 1,
+     "sig": "HzvAgBGvqr5QkcIcoFKOkJGCPoFxMtK2dvaUDFIHyMVjAtGIKeQlvIQr2Afb/HQ7Sa2BiKdNuzx4/YS6MiN2Vaw="
+    },
+    "keyVersion": 3,
+    "ts": 1800000000000,
+    "nonce": "0123456789abcdef0123456789abcdef",
+    "chunkId": "840e1bb09e8d5c6111727795a2e521d2036da7f08d66a499c019e64e336a3cf6",
+    "count": 1,
+    "sealed": {
+     "v": 1,
+     "keyVersion": 3,
+     "nonce": "777777777777777777777777777777777777777777777777",
+     "ct": "EXMLreE6kqteyXoFNYgU+YVSPyJbkwwTZFDkDFrQCOp0iuK4kZE0aomG+GC4X+TcesJdmiJb1SIXwOhS/84zzMhMedWDRpk0fyHNHyk+0eUq2GMCalGv5rWn7UbO+WKnT08wUdmZegkN6iIvxDPV/WRMdM5+W3dRVu7EaKvsi0zpHrkxAt+DxHrPuRnuZVaA0gm5cC36vh2tr21uQafMnc7jKuMjnSFRgLQCaj6+Jsq5gF9qbqCzOVK77ui8Y5EknHSDc2StAALuaB2/tmTTCeOQKA57cuIntG9x//wlrg=="
+    },
+    "sig": "IBRlPKAmBExXAiNDrR9ZNyUdU/cf3I6MZ3M8hPn2GhGUUp+x1rK4/d7DtPC0yEqqXLWeQqVRgKfd3Xdyxw5NYD0="
+   },
+   "sigBody": {
+    "v": 2,
+    "dir": "push",
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "certId": "e40d8b0504d46107e9858881e40028844ab8b57620cbd780b6b643b36dc5af57",
+    "deviceId": "4fbd1a1ef83d7d2610fd02a7812dafa7542c73c339f1db66a0d2950a859a8759",
+    "keyVersion": 3,
+    "nonce": "0123456789abcdef0123456789abcdef",
+    "ts": 1800000000000,
+    "chunkId": "840e1bb09e8d5c6111727795a2e521d2036da7f08d66a499c019e64e336a3cf6",
+    "count": 1,
+    "cursor": null,
+    "sealedHash": "ff7a575c622b34957f20eea06786f2c36e9870411bf8732bf94e60d5c8d3dfb1"
+   },
+   "sigBodyCanonical": "{\"certId\":\"e40d8b0504d46107e9858881e40028844ab8b57620cbd780b6b643b36dc5af57\",\"chunkId\":\"840e1bb09e8d5c6111727795a2e521d2036da7f08d66a499c019e64e336a3cf6\",\"count\":1,\"cursor\":null,\"deviceId\":\"4fbd1a1ef83d7d2610fd02a7812dafa7542c73c339f1db66a0d2950a859a8759\",\"dir\":\"push\",\"keyVersion\":3,\"nonce\":\"0123456789abcdef0123456789abcdef\",\"sealedHash\":\"ff7a575c622b34957f20eea06786f2c36e9870411bf8732bf94e60d5c8d3dfb1\",\"storeId\":\"abababababababababababababababababababababababababababababababab\",\"ts\":1800000000000,\"v\":2}",
+   "bodySha256": "2a1b6d2d78e47b0e0e66c2b22dff80dca822ff37023a799485b4bad05c8d9559",
+   "message": "RAVENVAULT-LAN-REQ-V2\nsha256:2a1b6d2d78e47b0e0e66c2b22dff80dca822ff37023a799485b4bad05c8d9559",
+   "digestHex": "e4d9148d4a5ce57e798f0190e0c5655e8c0672514cf6a9e4313fb0d14a1194da",
+   "sig": "IBRlPKAmBExXAiNDrR9ZNyUdU/cf3I6MZ3M8hPn2GhGUUp+x1rK4/d7DtPC0yEqqXLWeQqVRgKfd3Xdyxw5NYD0="
+  },
+  "pull": {
+   "wire": {
+    "v": 2,
+    "cert": {
+     "v": 1,
+     "storeId": "abababababababababababababababababababababababababababababababab",
+     "deviceId": "4fbd1a1ef83d7d2610fd02a7812dafa7542c73c339f1db66a0d2950a859a8759",
+     "devicePubKey": "02eec7245d6b7d2ccb30380bfbe2a3648cd7a942653f5aa340edcea1f283686619",
+     "role": "remote",
+     "scopes": [
+      "read",
+      "draft"
+     ],
+     "issuedAt": 1799996400000,
+     "notAfter": 1800086400000,
+     "serial": 1,
+     "sig": "HzvAgBGvqr5QkcIcoFKOkJGCPoFxMtK2dvaUDFIHyMVjAtGIKeQlvIQr2Afb/HQ7Sa2BiKdNuzx4/YS6MiN2Vaw="
+    },
+    "keyVersion": 3,
+    "ts": 1800000000000,
+    "nonce": "fedcba9876543210fedcba9876543210",
+    "cursor": 5,
+    "sig": "H5G+5eGUcV8snXcA2uurlgoj0G30kIjcqA8/vSpnMbFUSk/bXXUrojUV5JEC7UWGVjEhe+38NoYL4dNrgSEtR+A="
+   },
+   "sigBody": {
+    "v": 2,
+    "dir": "pull",
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "certId": "e40d8b0504d46107e9858881e40028844ab8b57620cbd780b6b643b36dc5af57",
+    "deviceId": "4fbd1a1ef83d7d2610fd02a7812dafa7542c73c339f1db66a0d2950a859a8759",
+    "keyVersion": 3,
+    "nonce": "fedcba9876543210fedcba9876543210",
+    "ts": 1800000000000,
+    "chunkId": null,
+    "count": null,
+    "cursor": 5,
+    "sealedHash": null
+   },
+   "sigBodyCanonical": "{\"certId\":\"e40d8b0504d46107e9858881e40028844ab8b57620cbd780b6b643b36dc5af57\",\"chunkId\":null,\"count\":null,\"cursor\":5,\"deviceId\":\"4fbd1a1ef83d7d2610fd02a7812dafa7542c73c339f1db66a0d2950a859a8759\",\"dir\":\"pull\",\"keyVersion\":3,\"nonce\":\"fedcba9876543210fedcba9876543210\",\"sealedHash\":null,\"storeId\":\"abababababababababababababababababababababababababababababababab\",\"ts\":1800000000000,\"v\":2}",
+   "bodySha256": "f59b08081a4f17bc90d6d017ed262c335f5d70afbd6f0b945830c629769e43d4",
+   "message": "RAVENVAULT-LAN-REQ-V2\nsha256:f59b08081a4f17bc90d6d017ed262c335f5d70afbd6f0b945830c629769e43d4",
+   "digestHex": "84edd95656c62886208290f8f9c128713b120752a833b940ed66be678a4987d2",
+   "sig": "H5G+5eGUcV8snXcA2uurlgoj0G30kIjcqA8/vSpnMbFUSk/bXXUrojUV5JEC7UWGVjEhe+38NoYL4dNrgSEtR+A="
+  },
+  "latest": {
+   "wire": {
+    "v": 2,
+    "cert": {
+     "v": 1,
+     "storeId": "abababababababababababababababababababababababababababababababab",
+     "deviceId": "4fbd1a1ef83d7d2610fd02a7812dafa7542c73c339f1db66a0d2950a859a8759",
+     "devicePubKey": "02eec7245d6b7d2ccb30380bfbe2a3648cd7a942653f5aa340edcea1f283686619",
+     "role": "remote",
+     "scopes": [
+      "read",
+      "draft"
+     ],
+     "issuedAt": 1799996400000,
+     "notAfter": 1800086400000,
+     "serial": 1,
+     "sig": "HzvAgBGvqr5QkcIcoFKOkJGCPoFxMtK2dvaUDFIHyMVjAtGIKeQlvIQr2Afb/HQ7Sa2BiKdNuzx4/YS6MiN2Vaw="
+    },
+    "keyVersion": 2,
+    "ts": 1800000000000,
+    "nonce": "00112233445566778899aabbccddeeff",
+    "sig": "IMZ6c6CPmjo1BcfOCdYqsu046yDnREfToyV6drKXNv3OeZ25hZBfdhpGAOaZwLVCHc/RZhdMy2pJK9XTgpG3Pj4="
+   },
+   "sigBody": {
+    "v": 2,
+    "dir": "latest",
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "certId": "e40d8b0504d46107e9858881e40028844ab8b57620cbd780b6b643b36dc5af57",
+    "deviceId": "4fbd1a1ef83d7d2610fd02a7812dafa7542c73c339f1db66a0d2950a859a8759",
+    "keyVersion": 2,
+    "nonce": "00112233445566778899aabbccddeeff",
+    "ts": 1800000000000,
+    "chunkId": null,
+    "count": null,
+    "cursor": null,
+    "sealedHash": null
+   },
+   "sigBodyCanonical": "{\"certId\":\"e40d8b0504d46107e9858881e40028844ab8b57620cbd780b6b643b36dc5af57\",\"chunkId\":null,\"count\":null,\"cursor\":null,\"deviceId\":\"4fbd1a1ef83d7d2610fd02a7812dafa7542c73c339f1db66a0d2950a859a8759\",\"dir\":\"latest\",\"keyVersion\":2,\"nonce\":\"00112233445566778899aabbccddeeff\",\"sealedHash\":null,\"storeId\":\"abababababababababababababababababababababababababababababababab\",\"ts\":1800000000000,\"v\":2}",
+   "bodySha256": "2fd9cdc3f15521dd9a7489f68a5e92c5073d16ee42a072d528829df83886f1b4",
+   "message": "RAVENVAULT-LAN-REQ-V2\nsha256:2fd9cdc3f15521dd9a7489f68a5e92c5073d16ee42a072d528829df83886f1b4",
+   "digestHex": "a4882cb58a7825cec56a5dfe712d2d31d58b3a257a91e9f97a5839f971d027e2",
+   "sig": "IMZ6c6CPmjo1BcfOCdYqsu046yDnREfToyV6drKXNv3OeZ25hZBfdhpGAOaZwLVCHc/RZhdMy2pJK9XTgpG3Pj4="
+  }
+ },
+ "verify": [
+  {
+   "name": "push-ok",
+   "dir": "push",
+   "now": 1800000000000,
+   "serverKeyVersion": 3,
+   "seenNonces": [],
+   "revocationList": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 4,
+    "revoked": [],
+    "issuedAt": 1799996400000,
+    "prunedBefore": 0,
+    "sig": "Hwl8efLT0bTewyKSlEjoFyCLbLC4xE3JRXDp2d1VVE0cCZsNBG+sM2g9qLKW7Omne3NcjPLbZfcFGeSjAm0/YhA="
+   },
+   "request": {
+    "v": 2,
+    "cert": {
+     "v": 1,
+     "storeId": "abababababababababababababababababababababababababababababababab",
+     "deviceId": "4fbd1a1ef83d7d2610fd02a7812dafa7542c73c339f1db66a0d2950a859a8759",
+     "devicePubKey": "02eec7245d6b7d2ccb30380bfbe2a3648cd7a942653f5aa340edcea1f283686619",
+     "role": "remote",
+     "scopes": [
+      "read",
+      "draft"
+     ],
+     "issuedAt": 1799996400000,
+     "notAfter": 1800086400000,
+     "serial": 1,
+     "sig": "HzvAgBGvqr5QkcIcoFKOkJGCPoFxMtK2dvaUDFIHyMVjAtGIKeQlvIQr2Afb/HQ7Sa2BiKdNuzx4/YS6MiN2Vaw="
+    },
+    "keyVersion": 3,
+    "ts": 1800000000000,
+    "nonce": "0123456789abcdef0123456789abcdef",
+    "chunkId": "840e1bb09e8d5c6111727795a2e521d2036da7f08d66a499c019e64e336a3cf6",
+    "count": 1,
+    "sealed": {
+     "v": 1,
+     "keyVersion": 3,
+     "nonce": "777777777777777777777777777777777777777777777777",
+     "ct": "EXMLreE6kqteyXoFNYgU+YVSPyJbkwwTZFDkDFrQCOp0iuK4kZE0aomG+GC4X+TcesJdmiJb1SIXwOhS/84zzMhMedWDRpk0fyHNHyk+0eUq2GMCalGv5rWn7UbO+WKnT08wUdmZegkN6iIvxDPV/WRMdM5+W3dRVu7EaKvsi0zpHrkxAt+DxHrPuRnuZVaA0gm5cC36vh2tr21uQafMnc7jKuMjnSFRgLQCaj6+Jsq5gF9qbqCzOVK77ui8Y5EknHSDc2StAALuaB2/tmTTCeOQKA57cuIntG9x//wlrg=="
+    },
+    "sig": "IBRlPKAmBExXAiNDrR9ZNyUdU/cf3I6MZ3M8hPn2GhGUUp+x1rK4/d7DtPC0yEqqXLWeQqVRgKfd3Xdyxw5NYD0="
+   },
+   "expect": "ok"
+  },
+  {
+   "name": "pull-ok",
+   "dir": "pull",
+   "now": 1800000000000,
+   "serverKeyVersion": 3,
+   "seenNonces": [],
+   "revocationList": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 4,
+    "revoked": [],
+    "issuedAt": 1799996400000,
+    "prunedBefore": 0,
+    "sig": "Hwl8efLT0bTewyKSlEjoFyCLbLC4xE3JRXDp2d1VVE0cCZsNBG+sM2g9qLKW7Omne3NcjPLbZfcFGeSjAm0/YhA="
+   },
+   "request": {
+    "v": 2,
+    "cert": {
+     "v": 1,
+     "storeId": "abababababababababababababababababababababababababababababababab",
+     "deviceId": "4fbd1a1ef83d7d2610fd02a7812dafa7542c73c339f1db66a0d2950a859a8759",
+     "devicePubKey": "02eec7245d6b7d2ccb30380bfbe2a3648cd7a942653f5aa340edcea1f283686619",
+     "role": "remote",
+     "scopes": [
+      "read",
+      "draft"
+     ],
+     "issuedAt": 1799996400000,
+     "notAfter": 1800086400000,
+     "serial": 1,
+     "sig": "HzvAgBGvqr5QkcIcoFKOkJGCPoFxMtK2dvaUDFIHyMVjAtGIKeQlvIQr2Afb/HQ7Sa2BiKdNuzx4/YS6MiN2Vaw="
+    },
+    "keyVersion": 3,
+    "ts": 1800000000000,
+    "nonce": "fedcba9876543210fedcba9876543210",
+    "cursor": 5,
+    "sig": "H5G+5eGUcV8snXcA2uurlgoj0G30kIjcqA8/vSpnMbFUSk/bXXUrojUV5JEC7UWGVjEhe+38NoYL4dNrgSEtR+A="
+   },
+   "expect": "ok"
+  },
+  {
+   "name": "pull-ok-window-edge",
+   "dir": "pull",
+   "now": 1800000300000,
+   "serverKeyVersion": 3,
+   "seenNonces": [],
+   "revocationList": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 4,
+    "revoked": [],
+    "issuedAt": 1799996400000,
+    "prunedBefore": 0,
+    "sig": "Hwl8efLT0bTewyKSlEjoFyCLbLC4xE3JRXDp2d1VVE0cCZsNBG+sM2g9qLKW7Omne3NcjPLbZfcFGeSjAm0/YhA="
+   },
+   "request": {
+    "v": 2,
+    "cert": {
+     "v": 1,
+     "storeId": "abababababababababababababababababababababababababababababababab",
+     "deviceId": "4fbd1a1ef83d7d2610fd02a7812dafa7542c73c339f1db66a0d2950a859a8759",
+     "devicePubKey": "02eec7245d6b7d2ccb30380bfbe2a3648cd7a942653f5aa340edcea1f283686619",
+     "role": "remote",
+     "scopes": [
+      "read",
+      "draft"
+     ],
+     "issuedAt": 1799996400000,
+     "notAfter": 1800086400000,
+     "serial": 1,
+     "sig": "HzvAgBGvqr5QkcIcoFKOkJGCPoFxMtK2dvaUDFIHyMVjAtGIKeQlvIQr2Afb/HQ7Sa2BiKdNuzx4/YS6MiN2Vaw="
+    },
+    "keyVersion": 3,
+    "ts": 1800000000000,
+    "nonce": "fedcba9876543210fedcba9876543210",
+    "cursor": 5,
+    "sig": "H5G+5eGUcV8snXcA2uurlgoj0G30kIjcqA8/vSpnMbFUSk/bXXUrojUV5JEC7UWGVjEhe+38NoYL4dNrgSEtR+A="
+   },
+   "expect": "ok"
+  },
+  {
+   "name": "tampered-count",
+   "dir": "push",
+   "now": 1800000000000,
+   "serverKeyVersion": 3,
+   "seenNonces": [],
+   "revocationList": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 4,
+    "revoked": [],
+    "issuedAt": 1799996400000,
+    "prunedBefore": 0,
+    "sig": "Hwl8efLT0bTewyKSlEjoFyCLbLC4xE3JRXDp2d1VVE0cCZsNBG+sM2g9qLKW7Omne3NcjPLbZfcFGeSjAm0/YhA="
+   },
+   "request": {
+    "v": 2,
+    "cert": {
+     "v": 1,
+     "storeId": "abababababababababababababababababababababababababababababababab",
+     "deviceId": "4fbd1a1ef83d7d2610fd02a7812dafa7542c73c339f1db66a0d2950a859a8759",
+     "devicePubKey": "02eec7245d6b7d2ccb30380bfbe2a3648cd7a942653f5aa340edcea1f283686619",
+     "role": "remote",
+     "scopes": [
+      "read",
+      "draft"
+     ],
+     "issuedAt": 1799996400000,
+     "notAfter": 1800086400000,
+     "serial": 1,
+     "sig": "HzvAgBGvqr5QkcIcoFKOkJGCPoFxMtK2dvaUDFIHyMVjAtGIKeQlvIQr2Afb/HQ7Sa2BiKdNuzx4/YS6MiN2Vaw="
+    },
+    "keyVersion": 3,
+    "ts": 1800000000000,
+    "nonce": "0123456789abcdef0123456789abcdef",
+    "chunkId": "840e1bb09e8d5c6111727795a2e521d2036da7f08d66a499c019e64e336a3cf6",
+    "count": 2,
+    "sealed": {
+     "v": 1,
+     "keyVersion": 3,
+     "nonce": "777777777777777777777777777777777777777777777777",
+     "ct": "EXMLreE6kqteyXoFNYgU+YVSPyJbkwwTZFDkDFrQCOp0iuK4kZE0aomG+GC4X+TcesJdmiJb1SIXwOhS/84zzMhMedWDRpk0fyHNHyk+0eUq2GMCalGv5rWn7UbO+WKnT08wUdmZegkN6iIvxDPV/WRMdM5+W3dRVu7EaKvsi0zpHrkxAt+DxHrPuRnuZVaA0gm5cC36vh2tr21uQafMnc7jKuMjnSFRgLQCaj6+Jsq5gF9qbqCzOVK77ui8Y5EknHSDc2StAALuaB2/tmTTCeOQKA57cuIntG9x//wlrg=="
+    },
+    "sig": "IBRlPKAmBExXAiNDrR9ZNyUdU/cf3I6MZ3M8hPn2GhGUUp+x1rK4/d7DtPC0yEqqXLWeQqVRgKfd3Xdyxw5NYD0="
+   },
+   "expect": "bad-request-sig"
+  },
+  {
+   "name": "tampered-sealed",
+   "dir": "push",
+   "now": 1800000000000,
+   "serverKeyVersion": 3,
+   "seenNonces": [],
+   "revocationList": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 4,
+    "revoked": [],
+    "issuedAt": 1799996400000,
+    "prunedBefore": 0,
+    "sig": "Hwl8efLT0bTewyKSlEjoFyCLbLC4xE3JRXDp2d1VVE0cCZsNBG+sM2g9qLKW7Omne3NcjPLbZfcFGeSjAm0/YhA="
+   },
+   "request": {
+    "v": 2,
+    "cert": {
+     "v": 1,
+     "storeId": "abababababababababababababababababababababababababababababababab",
+     "deviceId": "4fbd1a1ef83d7d2610fd02a7812dafa7542c73c339f1db66a0d2950a859a8759",
+     "devicePubKey": "02eec7245d6b7d2ccb30380bfbe2a3648cd7a942653f5aa340edcea1f283686619",
+     "role": "remote",
+     "scopes": [
+      "read",
+      "draft"
+     ],
+     "issuedAt": 1799996400000,
+     "notAfter": 1800086400000,
+     "serial": 1,
+     "sig": "HzvAgBGvqr5QkcIcoFKOkJGCPoFxMtK2dvaUDFIHyMVjAtGIKeQlvIQr2Afb/HQ7Sa2BiKdNuzx4/YS6MiN2Vaw="
+    },
+    "keyVersion": 3,
+    "ts": 1800000000000,
+    "nonce": "0123456789abcdef0123456789abcdef",
+    "chunkId": "840e1bb09e8d5c6111727795a2e521d2036da7f08d66a499c019e64e336a3cf6",
+    "count": 1,
+    "sealed": {
+     "v": 1,
+     "keyVersion": 3,
+     "nonce": "777777777777777777777777777777777777777777777777",
+     "ct": "AXMLreE6kqteyXoFNYgU+YVSPyJbkwwTZFDkDFrQCOp0iuK4kZE0aomG+GC4X+TcesJdmiJb1SIXwOhS/84zzMhMedWDRpk0fyHNHyk+0eUq2GMCalGv5rWn7UbO+WKnT08wUdmZegkN6iIvxDPV/WRMdM5+W3dRVu7EaKvsi0zpHrkxAt+DxHrPuRnuZVaA0gm5cC36vh2tr21uQafMnc7jKuMjnSFRgLQCaj6+Jsq5gF9qbqCzOVK77ui8Y5EknHSDc2StAALuaB2/tmTTCeOQKA57cuIntG9x//wlrg=="
+    },
+    "sig": "IBRlPKAmBExXAiNDrR9ZNyUdU/cf3I6MZ3M8hPn2GhGUUp+x1rK4/d7DtPC0yEqqXLWeQqVRgKfd3Xdyxw5NYD0="
+   },
+   "expect": "bad-request-sig"
+  },
+  {
+   "name": "tampered-cursor",
+   "dir": "pull",
+   "now": 1800000000000,
+   "serverKeyVersion": 3,
+   "seenNonces": [],
+   "revocationList": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 4,
+    "revoked": [],
+    "issuedAt": 1799996400000,
+    "prunedBefore": 0,
+    "sig": "Hwl8efLT0bTewyKSlEjoFyCLbLC4xE3JRXDp2d1VVE0cCZsNBG+sM2g9qLKW7Omne3NcjPLbZfcFGeSjAm0/YhA="
+   },
+   "request": {
+    "v": 2,
+    "cert": {
+     "v": 1,
+     "storeId": "abababababababababababababababababababababababababababababababab",
+     "deviceId": "4fbd1a1ef83d7d2610fd02a7812dafa7542c73c339f1db66a0d2950a859a8759",
+     "devicePubKey": "02eec7245d6b7d2ccb30380bfbe2a3648cd7a942653f5aa340edcea1f283686619",
+     "role": "remote",
+     "scopes": [
+      "read",
+      "draft"
+     ],
+     "issuedAt": 1799996400000,
+     "notAfter": 1800086400000,
+     "serial": 1,
+     "sig": "HzvAgBGvqr5QkcIcoFKOkJGCPoFxMtK2dvaUDFIHyMVjAtGIKeQlvIQr2Afb/HQ7Sa2BiKdNuzx4/YS6MiN2Vaw="
+    },
+    "keyVersion": 3,
+    "ts": 1800000000000,
+    "nonce": "fedcba9876543210fedcba9876543210",
+    "cursor": 6,
+    "sig": "H5G+5eGUcV8snXcA2uurlgoj0G30kIjcqA8/vSpnMbFUSk/bXXUrojUV5JEC7UWGVjEhe+38NoYL4dNrgSEtR+A="
+   },
+   "expect": "bad-request-sig"
+  },
+  {
+   "name": "tampered-keyVersion",
+   "dir": "pull",
+   "now": 1800000000000,
+   "serverKeyVersion": 3,
+   "seenNonces": [],
+   "revocationList": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 4,
+    "revoked": [],
+    "issuedAt": 1799996400000,
+    "prunedBefore": 0,
+    "sig": "Hwl8efLT0bTewyKSlEjoFyCLbLC4xE3JRXDp2d1VVE0cCZsNBG+sM2g9qLKW7Omne3NcjPLbZfcFGeSjAm0/YhA="
+   },
+   "request": {
+    "v": 2,
+    "cert": {
+     "v": 1,
+     "storeId": "abababababababababababababababababababababababababababababababab",
+     "deviceId": "4fbd1a1ef83d7d2610fd02a7812dafa7542c73c339f1db66a0d2950a859a8759",
+     "devicePubKey": "02eec7245d6b7d2ccb30380bfbe2a3648cd7a942653f5aa340edcea1f283686619",
+     "role": "remote",
+     "scopes": [
+      "read",
+      "draft"
+     ],
+     "issuedAt": 1799996400000,
+     "notAfter": 1800086400000,
+     "serial": 1,
+     "sig": "HzvAgBGvqr5QkcIcoFKOkJGCPoFxMtK2dvaUDFIHyMVjAtGIKeQlvIQr2Afb/HQ7Sa2BiKdNuzx4/YS6MiN2Vaw="
+    },
+    "keyVersion": 4,
+    "ts": 1800000000000,
+    "nonce": "fedcba9876543210fedcba9876543210",
+    "cursor": 5,
+    "sig": "H5G+5eGUcV8snXcA2uurlgoj0G30kIjcqA8/vSpnMbFUSk/bXXUrojUV5JEC7UWGVjEhe+38NoYL4dNrgSEtR+A="
+   },
+   "expect": "bad-request-sig"
+  },
+  {
+   "name": "other-device-signature",
+   "dir": "pull",
+   "now": 1800000000000,
+   "serverKeyVersion": 3,
+   "seenNonces": [],
+   "revocationList": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 4,
+    "revoked": [],
+    "issuedAt": 1799996400000,
+    "prunedBefore": 0,
+    "sig": "Hwl8efLT0bTewyKSlEjoFyCLbLC4xE3JRXDp2d1VVE0cCZsNBG+sM2g9qLKW7Omne3NcjPLbZfcFGeSjAm0/YhA="
+   },
+   "request": {
+    "v": 2,
+    "cert": {
+     "v": 1,
+     "storeId": "abababababababababababababababababababababababababababababababab",
+     "deviceId": "4fbd1a1ef83d7d2610fd02a7812dafa7542c73c339f1db66a0d2950a859a8759",
+     "devicePubKey": "02eec7245d6b7d2ccb30380bfbe2a3648cd7a942653f5aa340edcea1f283686619",
+     "role": "remote",
+     "scopes": [
+      "read",
+      "draft"
+     ],
+     "issuedAt": 1799996400000,
+     "notAfter": 1800086400000,
+     "serial": 1,
+     "sig": "HzvAgBGvqr5QkcIcoFKOkJGCPoFxMtK2dvaUDFIHyMVjAtGIKeQlvIQr2Afb/HQ7Sa2BiKdNuzx4/YS6MiN2Vaw="
+    },
+    "keyVersion": 3,
+    "ts": 1800000000000,
+    "nonce": "fedcba9876543210fedcba9876543210",
+    "cursor": 5,
+    "sig": "H6oct/GeT1RamcHYszeg7Cq8lPGSmUIaMu64xzjndKcfD8WeH0TQP6p8P6vMsa7Sfp+MRRQwWRab/8qnGI/fTQ8="
+   },
+   "expect": "bad-request-sig"
+  },
+  {
+   "name": "outside-window-late",
+   "dir": "pull",
+   "now": 1800000300001,
+   "serverKeyVersion": 3,
+   "seenNonces": [],
+   "revocationList": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 4,
+    "revoked": [],
+    "issuedAt": 1799996400000,
+    "prunedBefore": 0,
+    "sig": "Hwl8efLT0bTewyKSlEjoFyCLbLC4xE3JRXDp2d1VVE0cCZsNBG+sM2g9qLKW7Omne3NcjPLbZfcFGeSjAm0/YhA="
+   },
+   "request": {
+    "v": 2,
+    "cert": {
+     "v": 1,
+     "storeId": "abababababababababababababababababababababababababababababababab",
+     "deviceId": "4fbd1a1ef83d7d2610fd02a7812dafa7542c73c339f1db66a0d2950a859a8759",
+     "devicePubKey": "02eec7245d6b7d2ccb30380bfbe2a3648cd7a942653f5aa340edcea1f283686619",
+     "role": "remote",
+     "scopes": [
+      "read",
+      "draft"
+     ],
+     "issuedAt": 1799996400000,
+     "notAfter": 1800086400000,
+     "serial": 1,
+     "sig": "HzvAgBGvqr5QkcIcoFKOkJGCPoFxMtK2dvaUDFIHyMVjAtGIKeQlvIQr2Afb/HQ7Sa2BiKdNuzx4/YS6MiN2Vaw="
+    },
+    "keyVersion": 3,
+    "ts": 1800000000000,
+    "nonce": "fedcba9876543210fedcba9876543210",
+    "cursor": 5,
+    "sig": "H5G+5eGUcV8snXcA2uurlgoj0G30kIjcqA8/vSpnMbFUSk/bXXUrojUV5JEC7UWGVjEhe+38NoYL4dNrgSEtR+A="
+   },
+   "expect": "request-time"
+  },
+  {
+   "name": "outside-window-early",
+   "dir": "pull",
+   "now": 1799999699999,
+   "serverKeyVersion": 3,
+   "seenNonces": [],
+   "revocationList": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 4,
+    "revoked": [],
+    "issuedAt": 1799996400000,
+    "prunedBefore": 0,
+    "sig": "Hwl8efLT0bTewyKSlEjoFyCLbLC4xE3JRXDp2d1VVE0cCZsNBG+sM2g9qLKW7Omne3NcjPLbZfcFGeSjAm0/YhA="
+   },
+   "request": {
+    "v": 2,
+    "cert": {
+     "v": 1,
+     "storeId": "abababababababababababababababababababababababababababababababab",
+     "deviceId": "4fbd1a1ef83d7d2610fd02a7812dafa7542c73c339f1db66a0d2950a859a8759",
+     "devicePubKey": "02eec7245d6b7d2ccb30380bfbe2a3648cd7a942653f5aa340edcea1f283686619",
+     "role": "remote",
+     "scopes": [
+      "read",
+      "draft"
+     ],
+     "issuedAt": 1799996400000,
+     "notAfter": 1800086400000,
+     "serial": 1,
+     "sig": "HzvAgBGvqr5QkcIcoFKOkJGCPoFxMtK2dvaUDFIHyMVjAtGIKeQlvIQr2Afb/HQ7Sa2BiKdNuzx4/YS6MiN2Vaw="
+    },
+    "keyVersion": 3,
+    "ts": 1800000000000,
+    "nonce": "fedcba9876543210fedcba9876543210",
+    "cursor": 5,
+    "sig": "H5G+5eGUcV8snXcA2uurlgoj0G30kIjcqA8/vSpnMbFUSk/bXXUrojUV5JEC7UWGVjEhe+38NoYL4dNrgSEtR+A="
+   },
+   "expect": "request-time"
+  },
+  {
+   "name": "replay",
+   "dir": "pull",
+   "now": 1800000000000,
+   "serverKeyVersion": 3,
+   "seenNonces": [
+    "e40d8b0504d46107e9858881e40028844ab8b57620cbd780b6b643b36dc5af57:fedcba9876543210fedcba9876543210"
+   ],
+   "revocationList": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 4,
+    "revoked": [],
+    "issuedAt": 1799996400000,
+    "prunedBefore": 0,
+    "sig": "Hwl8efLT0bTewyKSlEjoFyCLbLC4xE3JRXDp2d1VVE0cCZsNBG+sM2g9qLKW7Omne3NcjPLbZfcFGeSjAm0/YhA="
+   },
+   "request": {
+    "v": 2,
+    "cert": {
+     "v": 1,
+     "storeId": "abababababababababababababababababababababababababababababababab",
+     "deviceId": "4fbd1a1ef83d7d2610fd02a7812dafa7542c73c339f1db66a0d2950a859a8759",
+     "devicePubKey": "02eec7245d6b7d2ccb30380bfbe2a3648cd7a942653f5aa340edcea1f283686619",
+     "role": "remote",
+     "scopes": [
+      "read",
+      "draft"
+     ],
+     "issuedAt": 1799996400000,
+     "notAfter": 1800086400000,
+     "serial": 1,
+     "sig": "HzvAgBGvqr5QkcIcoFKOkJGCPoFxMtK2dvaUDFIHyMVjAtGIKeQlvIQr2Afb/HQ7Sa2BiKdNuzx4/YS6MiN2Vaw="
+    },
+    "keyVersion": 3,
+    "ts": 1800000000000,
+    "nonce": "fedcba9876543210fedcba9876543210",
+    "cursor": 5,
+    "sig": "H5G+5eGUcV8snXcA2uurlgoj0G30kIjcqA8/vSpnMbFUSk/bXXUrojUV5JEC7UWGVjEhe+38NoYL4dNrgSEtR+A="
+   },
+   "expect": "replay"
+  },
+  {
+   "name": "old-protocol-v1",
+   "dir": "pull",
+   "now": 1800000000000,
+   "serverKeyVersion": 3,
+   "seenNonces": [],
+   "revocationList": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 4,
+    "revoked": [],
+    "issuedAt": 1799996400000,
+    "prunedBefore": 0,
+    "sig": "Hwl8efLT0bTewyKSlEjoFyCLbLC4xE3JRXDp2d1VVE0cCZsNBG+sM2g9qLKW7Omne3NcjPLbZfcFGeSjAm0/YhA="
+   },
+   "request": {
+    "cert": {
+     "v": 1,
+     "storeId": "abababababababababababababababababababababababababababababababab",
+     "deviceId": "4fbd1a1ef83d7d2610fd02a7812dafa7542c73c339f1db66a0d2950a859a8759",
+     "devicePubKey": "02eec7245d6b7d2ccb30380bfbe2a3648cd7a942653f5aa340edcea1f283686619",
+     "role": "remote",
+     "scopes": [
+      "read",
+      "draft"
+     ],
+     "issuedAt": 1799996400000,
+     "notAfter": 1800086400000,
+     "serial": 1,
+     "sig": "HzvAgBGvqr5QkcIcoFKOkJGCPoFxMtK2dvaUDFIHyMVjAtGIKeQlvIQr2Afb/HQ7Sa2BiKdNuzx4/YS6MiN2Vaw="
+    },
+    "cursor": 5,
+    "nonce": "fedcba9876543210fedcba9876543210"
+   },
+   "expect": "old-protocol"
+  },
+  {
+   "name": "extra-field",
+   "dir": "pull",
+   "now": 1800000000000,
+   "serverKeyVersion": 3,
+   "seenNonces": [],
+   "revocationList": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 4,
+    "revoked": [],
+    "issuedAt": 1799996400000,
+    "prunedBefore": 0,
+    "sig": "Hwl8efLT0bTewyKSlEjoFyCLbLC4xE3JRXDp2d1VVE0cCZsNBG+sM2g9qLKW7Omne3NcjPLbZfcFGeSjAm0/YhA="
+   },
+   "request": {
+    "v": 2,
+    "cert": {
+     "v": 1,
+     "storeId": "abababababababababababababababababababababababababababababababab",
+     "deviceId": "4fbd1a1ef83d7d2610fd02a7812dafa7542c73c339f1db66a0d2950a859a8759",
+     "devicePubKey": "02eec7245d6b7d2ccb30380bfbe2a3648cd7a942653f5aa340edcea1f283686619",
+     "role": "remote",
+     "scopes": [
+      "read",
+      "draft"
+     ],
+     "issuedAt": 1799996400000,
+     "notAfter": 1800086400000,
+     "serial": 1,
+     "sig": "HzvAgBGvqr5QkcIcoFKOkJGCPoFxMtK2dvaUDFIHyMVjAtGIKeQlvIQr2Afb/HQ7Sa2BiKdNuzx4/YS6MiN2Vaw="
+    },
+    "keyVersion": 3,
+    "ts": 1800000000000,
+    "nonce": "fedcba9876543210fedcba9876543210",
+    "cursor": 5,
+    "sig": "H5G+5eGUcV8snXcA2uurlgoj0G30kIjcqA8/vSpnMbFUSk/bXXUrojUV5JEC7UWGVjEhe+38NoYL4dNrgSEtR+A=",
+    "extra": 1
+   },
+   "expect": "shape"
+  },
+  {
+   "name": "push-body-on-pull",
+   "dir": "pull",
+   "now": 1800000000000,
+   "serverKeyVersion": 3,
+   "seenNonces": [],
+   "revocationList": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 4,
+    "revoked": [],
+    "issuedAt": 1799996400000,
+    "prunedBefore": 0,
+    "sig": "Hwl8efLT0bTewyKSlEjoFyCLbLC4xE3JRXDp2d1VVE0cCZsNBG+sM2g9qLKW7Omne3NcjPLbZfcFGeSjAm0/YhA="
+   },
+   "request": {
+    "v": 2,
+    "cert": {
+     "v": 1,
+     "storeId": "abababababababababababababababababababababababababababababababab",
+     "deviceId": "4fbd1a1ef83d7d2610fd02a7812dafa7542c73c339f1db66a0d2950a859a8759",
+     "devicePubKey": "02eec7245d6b7d2ccb30380bfbe2a3648cd7a942653f5aa340edcea1f283686619",
+     "role": "remote",
+     "scopes": [
+      "read",
+      "draft"
+     ],
+     "issuedAt": 1799996400000,
+     "notAfter": 1800086400000,
+     "serial": 1,
+     "sig": "HzvAgBGvqr5QkcIcoFKOkJGCPoFxMtK2dvaUDFIHyMVjAtGIKeQlvIQr2Afb/HQ7Sa2BiKdNuzx4/YS6MiN2Vaw="
+    },
+    "keyVersion": 3,
+    "ts": 1800000000000,
+    "nonce": "0123456789abcdef0123456789abcdef",
+    "chunkId": "840e1bb09e8d5c6111727795a2e521d2036da7f08d66a499c019e64e336a3cf6",
+    "count": 1,
+    "sealed": {
+     "v": 1,
+     "keyVersion": 3,
+     "nonce": "777777777777777777777777777777777777777777777777",
+     "ct": "EXMLreE6kqteyXoFNYgU+YVSPyJbkwwTZFDkDFrQCOp0iuK4kZE0aomG+GC4X+TcesJdmiJb1SIXwOhS/84zzMhMedWDRpk0fyHNHyk+0eUq2GMCalGv5rWn7UbO+WKnT08wUdmZegkN6iIvxDPV/WRMdM5+W3dRVu7EaKvsi0zpHrkxAt+DxHrPuRnuZVaA0gm5cC36vh2tr21uQafMnc7jKuMjnSFRgLQCaj6+Jsq5gF9qbqCzOVK77ui8Y5EknHSDc2StAALuaB2/tmTTCeOQKA57cuIntG9x//wlrg=="
+    },
+    "sig": "IBRlPKAmBExXAiNDrR9ZNyUdU/cf3I6MZ3M8hPn2GhGUUp+x1rK4/d7DtPC0yEqqXLWeQqVRgKfd3Xdyxw5NYD0="
+   },
+   "expect": "shape"
+  },
+  {
+   "name": "latest-ok-older-key",
+   "dir": "latest",
+   "now": 1800000000000,
+   "serverKeyVersion": 3,
+   "seenNonces": [],
+   "revocationList": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 4,
+    "revoked": [],
+    "issuedAt": 1799996400000,
+    "prunedBefore": 0,
+    "sig": "Hwl8efLT0bTewyKSlEjoFyCLbLC4xE3JRXDp2d1VVE0cCZsNBG+sM2g9qLKW7Omne3NcjPLbZfcFGeSjAm0/YhA="
+   },
+   "request": {
+    "v": 2,
+    "cert": {
+     "v": 1,
+     "storeId": "abababababababababababababababababababababababababababababababab",
+     "deviceId": "4fbd1a1ef83d7d2610fd02a7812dafa7542c73c339f1db66a0d2950a859a8759",
+     "devicePubKey": "02eec7245d6b7d2ccb30380bfbe2a3648cd7a942653f5aa340edcea1f283686619",
+     "role": "remote",
+     "scopes": [
+      "read",
+      "draft"
+     ],
+     "issuedAt": 1799996400000,
+     "notAfter": 1800086400000,
+     "serial": 1,
+     "sig": "HzvAgBGvqr5QkcIcoFKOkJGCPoFxMtK2dvaUDFIHyMVjAtGIKeQlvIQr2Afb/HQ7Sa2BiKdNuzx4/YS6MiN2Vaw="
+    },
+    "keyVersion": 2,
+    "ts": 1800000000000,
+    "nonce": "00112233445566778899aabbccddeeff",
+    "sig": "IMZ6c6CPmjo1BcfOCdYqsu046yDnREfToyV6drKXNv3OeZ25hZBfdhpGAOaZwLVCHc/RZhdMy2pJK9XTgpG3Pj4="
+   },
+   "expect": "ok"
+  },
+  {
+   "name": "latest-tampered-keyVersion",
+   "dir": "latest",
+   "now": 1800000000000,
+   "serverKeyVersion": 3,
+   "seenNonces": [],
+   "revocationList": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 4,
+    "revoked": [],
+    "issuedAt": 1799996400000,
+    "prunedBefore": 0,
+    "sig": "Hwl8efLT0bTewyKSlEjoFyCLbLC4xE3JRXDp2d1VVE0cCZsNBG+sM2g9qLKW7Omne3NcjPLbZfcFGeSjAm0/YhA="
+   },
+   "request": {
+    "v": 2,
+    "cert": {
+     "v": 1,
+     "storeId": "abababababababababababababababababababababababababababababababab",
+     "deviceId": "4fbd1a1ef83d7d2610fd02a7812dafa7542c73c339f1db66a0d2950a859a8759",
+     "devicePubKey": "02eec7245d6b7d2ccb30380bfbe2a3648cd7a942653f5aa340edcea1f283686619",
+     "role": "remote",
+     "scopes": [
+      "read",
+      "draft"
+     ],
+     "issuedAt": 1799996400000,
+     "notAfter": 1800086400000,
+     "serial": 1,
+     "sig": "HzvAgBGvqr5QkcIcoFKOkJGCPoFxMtK2dvaUDFIHyMVjAtGIKeQlvIQr2Afb/HQ7Sa2BiKdNuzx4/YS6MiN2Vaw="
+    },
+    "keyVersion": 3,
+    "ts": 1800000000000,
+    "nonce": "00112233445566778899aabbccddeeff",
+    "sig": "IMZ6c6CPmjo1BcfOCdYqsu046yDnREfToyV6drKXNv3OeZ25hZBfdhpGAOaZwLVCHc/RZhdMy2pJK9XTgpG3Pj4="
+   },
+   "expect": "bad-request-sig"
+  },
+  {
+   "name": "latest-pull-body",
+   "dir": "latest",
+   "now": 1800000000000,
+   "serverKeyVersion": 3,
+   "seenNonces": [],
+   "revocationList": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 4,
+    "revoked": [],
+    "issuedAt": 1799996400000,
+    "prunedBefore": 0,
+    "sig": "Hwl8efLT0bTewyKSlEjoFyCLbLC4xE3JRXDp2d1VVE0cCZsNBG+sM2g9qLKW7Omne3NcjPLbZfcFGeSjAm0/YhA="
+   },
+   "request": {
+    "v": 2,
+    "cert": {
+     "v": 1,
+     "storeId": "abababababababababababababababababababababababababababababababab",
+     "deviceId": "4fbd1a1ef83d7d2610fd02a7812dafa7542c73c339f1db66a0d2950a859a8759",
+     "devicePubKey": "02eec7245d6b7d2ccb30380bfbe2a3648cd7a942653f5aa340edcea1f283686619",
+     "role": "remote",
+     "scopes": [
+      "read",
+      "draft"
+     ],
+     "issuedAt": 1799996400000,
+     "notAfter": 1800086400000,
+     "serial": 1,
+     "sig": "HzvAgBGvqr5QkcIcoFKOkJGCPoFxMtK2dvaUDFIHyMVjAtGIKeQlvIQr2Afb/HQ7Sa2BiKdNuzx4/YS6MiN2Vaw="
+    },
+    "keyVersion": 3,
+    "ts": 1800000000000,
+    "nonce": "fedcba9876543210fedcba9876543210",
+    "cursor": 5,
+    "sig": "H5G+5eGUcV8snXcA2uurlgoj0G30kIjcqA8/vSpnMbFUSk/bXXUrojUV5JEC7UWGVjEhe+38NoYL4dNrgSEtR+A="
+   },
+   "expect": "shape"
+  },
+  {
+   "name": "latest-signature-on-pull",
+   "dir": "pull",
+   "now": 1800000000000,
+   "serverKeyVersion": 3,
+   "seenNonces": [],
+   "revocationList": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 4,
+    "revoked": [],
+    "issuedAt": 1799996400000,
+    "prunedBefore": 0,
+    "sig": "Hwl8efLT0bTewyKSlEjoFyCLbLC4xE3JRXDp2d1VVE0cCZsNBG+sM2g9qLKW7Omne3NcjPLbZfcFGeSjAm0/YhA="
+   },
+   "request": {
+    "v": 2,
+    "cert": {
+     "v": 1,
+     "storeId": "abababababababababababababababababababababababababababababababab",
+     "deviceId": "4fbd1a1ef83d7d2610fd02a7812dafa7542c73c339f1db66a0d2950a859a8759",
+     "devicePubKey": "02eec7245d6b7d2ccb30380bfbe2a3648cd7a942653f5aa340edcea1f283686619",
+     "role": "remote",
+     "scopes": [
+      "read",
+      "draft"
+     ],
+     "issuedAt": 1799996400000,
+     "notAfter": 1800086400000,
+     "serial": 1,
+     "sig": "HzvAgBGvqr5QkcIcoFKOkJGCPoFxMtK2dvaUDFIHyMVjAtGIKeQlvIQr2Afb/HQ7Sa2BiKdNuzx4/YS6MiN2Vaw="
+    },
+    "keyVersion": 2,
+    "ts": 1800000000000,
+    "nonce": "00112233445566778899aabbccddeeff",
+    "sig": "IMZ6c6CPmjo1BcfOCdYqsu046yDnREfToyV6drKXNv3OeZ25hZBfdhpGAOaZwLVCHc/RZhdMy2pJK9XTgpG3Pj4=",
+    "cursor": 5
+   },
+   "expect": "bad-request-sig"
+  },
+  {
+   "name": "latest-replay",
+   "dir": "latest",
+   "now": 1800000000000,
+   "serverKeyVersion": 3,
+   "seenNonces": [
+    "e40d8b0504d46107e9858881e40028844ab8b57620cbd780b6b643b36dc5af57:00112233445566778899aabbccddeeff"
+   ],
+   "revocationList": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 4,
+    "revoked": [],
+    "issuedAt": 1799996400000,
+    "prunedBefore": 0,
+    "sig": "Hwl8efLT0bTewyKSlEjoFyCLbLC4xE3JRXDp2d1VVE0cCZsNBG+sM2g9qLKW7Omne3NcjPLbZfcFGeSjAm0/YhA="
+   },
+   "request": {
+    "v": 2,
+    "cert": {
+     "v": 1,
+     "storeId": "abababababababababababababababababababababababababababababababab",
+     "deviceId": "4fbd1a1ef83d7d2610fd02a7812dafa7542c73c339f1db66a0d2950a859a8759",
+     "devicePubKey": "02eec7245d6b7d2ccb30380bfbe2a3648cd7a942653f5aa340edcea1f283686619",
+     "role": "remote",
+     "scopes": [
+      "read",
+      "draft"
+     ],
+     "issuedAt": 1799996400000,
+     "notAfter": 1800086400000,
+     "serial": 1,
+     "sig": "HzvAgBGvqr5QkcIcoFKOkJGCPoFxMtK2dvaUDFIHyMVjAtGIKeQlvIQr2Afb/HQ7Sa2BiKdNuzx4/YS6MiN2Vaw="
+    },
+    "keyVersion": 2,
+    "ts": 1800000000000,
+    "nonce": "00112233445566778899aabbccddeeff",
+    "sig": "IMZ6c6CPmjo1BcfOCdYqsu046yDnREfToyV6drKXNv3OeZ25hZBfdhpGAOaZwLVCHc/RZhdMy2pJK9XTgpG3Pj4="
+   },
+   "expect": "replay"
+  },
+  {
+   "name": "latest-old-v1-shape",
+   "dir": "latest",
+   "now": 1800000000000,
+   "serverKeyVersion": 3,
+   "seenNonces": [],
+   "revocationList": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 4,
+    "revoked": [],
+    "issuedAt": 1799996400000,
+    "prunedBefore": 0,
+    "sig": "Hwl8efLT0bTewyKSlEjoFyCLbLC4xE3JRXDp2d1VVE0cCZsNBG+sM2g9qLKW7Omne3NcjPLbZfcFGeSjAm0/YhA="
+   },
+   "request": {
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "devicePubKey": "02eec7245d6b7d2ccb30380bfbe2a3648cd7a942653f5aa340edcea1f283686619"
+   },
+   "expect": "old-protocol"
+  },
+  {
+   "name": "latest-revoked-gets-list-only",
+   "dir": "latest",
+   "now": 1800000000000,
+   "serverKeyVersion": 3,
+   "seenNonces": [],
+   "revocationList": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 5,
+    "revoked": [
+     "e40d8b0504d46107e9858881e40028844ab8b57620cbd780b6b643b36dc5af57"
+    ],
+    "issuedAt": 1800000000000,
+    "prunedBefore": 0,
+    "sig": "ICa5JiVfyHPwOL56ivrrFN0Pw2PhHagLbYeB+/DaiEVhBJbYYX4AQE8wWKL8TUMHGfqgR0cagBONanee2u2MTp4="
+   },
+   "request": {
+    "v": 2,
+    "cert": {
+     "v": 1,
+     "storeId": "abababababababababababababababababababababababababababababababab",
+     "deviceId": "4fbd1a1ef83d7d2610fd02a7812dafa7542c73c339f1db66a0d2950a859a8759",
+     "devicePubKey": "02eec7245d6b7d2ccb30380bfbe2a3648cd7a942653f5aa340edcea1f283686619",
+     "role": "remote",
+     "scopes": [
+      "read",
+      "draft"
+     ],
+     "issuedAt": 1799996400000,
+     "notAfter": 1800086400000,
+     "serial": 1,
+     "sig": "HzvAgBGvqr5QkcIcoFKOkJGCPoFxMtK2dvaUDFIHyMVjAtGIKeQlvIQr2Afb/HQ7Sa2BiKdNuzx4/YS6MiN2Vaw="
+    },
+    "keyVersion": 2,
+    "ts": 1800000000000,
+    "nonce": "00112233445566778899aabbccddeeff",
+    "sig": "IMZ6c6CPmjo1BcfOCdYqsu046yDnREfToyV6drKXNv3OeZ25hZBfdhpGAOaZwLVCHc/RZhdMy2pJK9XTgpG3Pj4="
+   },
+   "expect": "lapsed-revoked"
+  },
+  {
+   "name": "pull-revoked",
+   "dir": "pull",
+   "now": 1800000000000,
+   "serverKeyVersion": 3,
+   "seenNonces": [],
+   "revocationList": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 5,
+    "revoked": [
+     "e40d8b0504d46107e9858881e40028844ab8b57620cbd780b6b643b36dc5af57"
+    ],
+    "issuedAt": 1800000000000,
+    "prunedBefore": 0,
+    "sig": "ICa5JiVfyHPwOL56ivrrFN0Pw2PhHagLbYeB+/DaiEVhBJbYYX4AQE8wWKL8TUMHGfqgR0cagBONanee2u2MTp4="
+   },
+   "request": {
+    "v": 2,
+    "cert": {
+     "v": 1,
+     "storeId": "abababababababababababababababababababababababababababababababab",
+     "deviceId": "4fbd1a1ef83d7d2610fd02a7812dafa7542c73c339f1db66a0d2950a859a8759",
+     "devicePubKey": "02eec7245d6b7d2ccb30380bfbe2a3648cd7a942653f5aa340edcea1f283686619",
+     "role": "remote",
+     "scopes": [
+      "read",
+      "draft"
+     ],
+     "issuedAt": 1799996400000,
+     "notAfter": 1800086400000,
+     "serial": 1,
+     "sig": "HzvAgBGvqr5QkcIcoFKOkJGCPoFxMtK2dvaUDFIHyMVjAtGIKeQlvIQr2Afb/HQ7Sa2BiKdNuzx4/YS6MiN2Vaw="
+    },
+    "keyVersion": 3,
+    "ts": 1800000000000,
+    "nonce": "fedcba9876543210fedcba9876543210",
+    "cursor": 5,
+    "sig": "H5G+5eGUcV8snXcA2uurlgoj0G30kIjcqA8/vSpnMbFUSk/bXXUrojUV5JEC7UWGVjEhe+38NoYL4dNrgSEtR+A="
+   },
+   "expect": "revoked"
+  },
+  {
+   "name": "latest-expired-gets-list-only",
+   "dir": "latest",
+   "now": 1800086400000,
+   "serverKeyVersion": 3,
+   "seenNonces": [],
+   "revocationList": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 4,
+    "revoked": [],
+    "issuedAt": 1799996400000,
+    "prunedBefore": 0,
+    "sig": "Hwl8efLT0bTewyKSlEjoFyCLbLC4xE3JRXDp2d1VVE0cCZsNBG+sM2g9qLKW7Omne3NcjPLbZfcFGeSjAm0/YhA="
+   },
+   "request": {
+    "v": 2,
+    "cert": {
+     "v": 1,
+     "storeId": "abababababababababababababababababababababababababababababababab",
+     "deviceId": "4fbd1a1ef83d7d2610fd02a7812dafa7542c73c339f1db66a0d2950a859a8759",
+     "devicePubKey": "02eec7245d6b7d2ccb30380bfbe2a3648cd7a942653f5aa340edcea1f283686619",
+     "role": "remote",
+     "scopes": [
+      "read",
+      "draft"
+     ],
+     "issuedAt": 1799996400000,
+     "notAfter": 1800086400000,
+     "serial": 1,
+     "sig": "HzvAgBGvqr5QkcIcoFKOkJGCPoFxMtK2dvaUDFIHyMVjAtGIKeQlvIQr2Afb/HQ7Sa2BiKdNuzx4/YS6MiN2Vaw="
+    },
+    "keyVersion": 3,
+    "ts": 1800086400000,
+    "nonce": "ffeeddccbbaa99887766554433221100",
+    "sig": "IM7NiZJg8YCG0XeA4yg9mVmuTJI/mMscAlGY+cqoY63ae3KSz2vmBTSzgZHJfKB8tZdSq97h4QXtE/9ipXGjU+8="
+   },
+   "expect": "lapsed-expired"
+  },
+  {
+   "name": "pull-expired",
+   "dir": "pull",
+   "now": 1800086400000,
+   "serverKeyVersion": 3,
+   "seenNonces": [],
+   "revocationList": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 4,
+    "revoked": [],
+    "issuedAt": 1799996400000,
+    "prunedBefore": 0,
+    "sig": "Hwl8efLT0bTewyKSlEjoFyCLbLC4xE3JRXDp2d1VVE0cCZsNBG+sM2g9qLKW7Omne3NcjPLbZfcFGeSjAm0/YhA="
+   },
+   "request": {
+    "v": 2,
+    "cert": {
+     "v": 1,
+     "storeId": "abababababababababababababababababababababababababababababababab",
+     "deviceId": "4fbd1a1ef83d7d2610fd02a7812dafa7542c73c339f1db66a0d2950a859a8759",
+     "devicePubKey": "02eec7245d6b7d2ccb30380bfbe2a3648cd7a942653f5aa340edcea1f283686619",
+     "role": "remote",
+     "scopes": [
+      "read",
+      "draft"
+     ],
+     "issuedAt": 1799996400000,
+     "notAfter": 1800086400000,
+     "serial": 1,
+     "sig": "HzvAgBGvqr5QkcIcoFKOkJGCPoFxMtK2dvaUDFIHyMVjAtGIKeQlvIQr2Afb/HQ7Sa2BiKdNuzx4/YS6MiN2Vaw="
+    },
+    "keyVersion": 3,
+    "ts": 1800000000000,
+    "nonce": "fedcba9876543210fedcba9876543210",
+    "cursor": 5,
+    "sig": "H5G+5eGUcV8snXcA2uurlgoj0G30kIjcqA8/vSpnMbFUSk/bXXUrojUV5JEC7UWGVjEhe+38NoYL4dNrgSEtR+A="
+   },
+   "expect": "expired"
+  }
+ ],
+ "proofs": {
+  "push": {
+   "nonce": "0123456789abcdef0123456789abcdef",
+   "chunkId": "840e1bb09e8d5c6111727795a2e521d2036da7f08d66a499c019e64e336a3cf6",
+   "count": 1,
+   "proof": "ea5ebc2629ac84450f173a1e24cfbe092f8d6b6a1382fda02f88f46c7ef61b97"
+  },
+  "pullWithChunk": {
+   "nonce": "fedcba9876543210fedcba9876543210",
+   "from": 5,
+   "next": 6,
+   "more": false,
+   "chunkId": "1111111111111111111111111111111111111111111111111111111111111111",
+   "sealed": {
+    "v": 1,
+    "keyVersion": 3,
+    "nonce": "888888888888888888888888888888888888888888888888",
+    "ct": "yQxA9+1IxbLhJOdAfyKHEKVl9XCQNS6GwdTr0keT4LnliuB9/kjP3bbbelfqyNFABYFCrLZW9h4aHl/yKSg5JVbPvmKBrBZBXi4SfPosb1Qn2VwnNlBOzmuVrNUtB4VQeErObCnCNlYrD/NpEGBUjCZb2qoYfJEo+6mHr3li7R+wPJj+RQvw66LLJPAEw4Pnbx4bNBh9cSchl1jVjoPi2K3AB6vbPvftZ7jlnE4vTdFq9CaIzbcVR9usOcQ5IyFJuKfcu0GbhNFV/BEBM0EIjwiXTLWK4pRx5NH+2gn/wA=="
+   },
+   "proof": "3af1b28b20400541d12d4d3b677d2a9c35f1fbc19a1ca7a9d5aa226c7d6f405c"
+  },
+  "pullEmpty": {
+   "nonce": "fedcba9876543210fedcba9876543210",
+   "from": 5,
+   "next": 5,
+   "more": false,
+   "chunkId": null,
+   "sealed": null,
+   "proof": "1490a6260e898f36c4217b2d74c45c04f086568458e79f20fed67ea6aaf33e3c"
+  }
+ },
+ "rotationGate": [
+  {
+   "name": "covered",
+   "meta": {
+    "keyVersion": 3,
+    "revocationSeq": 4,
+    "revokedAtRotation": []
+   },
+   "list": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 4,
+    "revoked": [],
+    "issuedAt": 1799996400000,
+    "prunedBefore": 0,
+    "sig": "Hwl8efLT0bTewyKSlEjoFyCLbLC4xE3JRXDp2d1VVE0cCZsNBG+sM2g9qLKW7Omne3NcjPLbZfcFGeSjAm0/YhA="
+   },
+   "expect": "ok"
+  },
+  {
+   "name": "new-revocation-without-rotation",
+   "meta": {
+    "keyVersion": 3,
+    "revocationSeq": 4,
+    "revokedAtRotation": []
+   },
+   "list": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 5,
+    "revoked": [
+     "e40d8b0504d46107e9858881e40028844ab8b57620cbd780b6b643b36dc5af57"
+    ],
+    "issuedAt": 1800000000000,
+    "prunedBefore": 0,
+    "sig": "ICa5JiVfyHPwOL56ivrrFN0Pw2PhHagLbYeB+/DaiEVhBJbYYX4AQE8wWKL8TUMHGfqgR0cagBONanee2u2MTp4="
+   },
+   "expect": "rotation-required"
+  },
+  {
+   "name": "rotated-after-revocation",
+   "meta": {
+    "keyVersion": 4,
+    "revocationSeq": 5,
+    "revokedAtRotation": [
+     "e40d8b0504d46107e9858881e40028844ab8b57620cbd780b6b643b36dc5af57"
+    ]
+   },
+   "list": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 5,
+    "revoked": [
+     "e40d8b0504d46107e9858881e40028844ab8b57620cbd780b6b643b36dc5af57"
+    ],
+    "issuedAt": 1800000000000,
+    "prunedBefore": 0,
+    "sig": "ICa5JiVfyHPwOL56ivrrFN0Pw2PhHagLbYeB+/DaiEVhBJbYYX4AQE8wWKL8TUMHGfqgR0cagBONanee2u2MTp4="
+   },
+   "expect": "ok"
+  },
+  {
+   "name": "list-older-than-key-record",
+   "meta": {
+    "keyVersion": 4,
+    "revocationSeq": 5,
+    "revokedAtRotation": [
+     "e40d8b0504d46107e9858881e40028844ab8b57620cbd780b6b643b36dc5af57"
+    ]
+   },
+   "list": {
+    "v": 1,
+    "storeId": "abababababababababababababababababababababababababababababababab",
+    "seq": 4,
+    "revoked": [],
+    "issuedAt": 1799996400000,
+    "prunedBefore": 0,
+    "sig": "Hwl8efLT0bTewyKSlEjoFyCLbLC4xE3JRXDp2d1VVE0cCZsNBG+sM2g9qLKW7Omne3NcjPLbZfcFGeSjAm0/YhA="
+   },
+   "expect": "rotation-required"
+  }
+ ],
+ "pairCode": [
+  {
+   "nonce": "0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f",
+   "devicePubKey": "02eec7245d6b7d2ccb30380bfbe2a3648cd7a942653f5aa340edcea1f283686619",
+   "code": "004205"
+  },
+  {
+   "nonce": "00000000000000000000000000000000",
+   "devicePubKey": "02eec7245d6b7d2ccb30380bfbe2a3648cd7a942653f5aa340edcea1f283686619",
+   "code": "549034"
+  },
+  {
+   "nonce": "abababababababababababababababab",
+   "devicePubKey": "0324653eac434488002cc06bbfb7f10fe18991e35f9fe4302dbea6d2353dc0ab1c",
+   "code": "921358"
+  }
+ ]
+}

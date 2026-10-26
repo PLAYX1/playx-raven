@@ -8,7 +8,7 @@
  *    발행 전까지는 러스트에도 안 간다. 발행할 때 만든 기록(0600)과 사진 폴더(0600)로만.
  * 🔴 AI 는 제안만 한다. 읽은 명단은 반드시 이 확인 표를 거치고, 발행은 사람이 누른다.
  */
-import { lang, setCopyText, tf } from "./i18n";
+import { lang, coreLang, setCopyText, tf } from "./i18n";
 import { MAX_COPIES, parseRecipients, type CertTemplate } from "./easy-create";
 import {
   MAX_COURSE_CHARS, MAX_GRADE_CHARS, MAX_ISSUE_YEAR, MAX_NUMBER_CHARS, MAX_ROSTER_ROWS, MIN_ISSUE_YEAR, ROSTER_FIELDS, ROSTER_LABELS,
@@ -737,7 +737,7 @@ export function wireBulk(deps: BulkDeps): BulkApi {
     setCopyText(phraseSay, () => t("라비가 쓰는 중…"));
     try {
       // 받는 사람 이름은 보내지 않는다 — 양식·제목·발급처만.
-      const input = JSON.stringify({ template: deps.template(), title: deps.title().trim(), issuer: deps.issuer().trim(), lang });
+      const input = JSON.stringify({ template: deps.template(), title: deps.title().trim(), issuer: deps.issuer().trim(), lang: coreLang(lang) });
       const r = await invoke<{ phrases?: unknown }>("ai_fill", { provider, task: "cert_phrases", input });
       const list = Array.isArray(r?.phrases) ? r.phrases.filter((p): p is string => typeof p === "string" && !!p.trim()).slice(0, 3) : [];
       if (!list.length) {

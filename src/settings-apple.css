@@ -1,0 +1,220 @@
+/* 0.9.0 「이 컴퓨터(설정)」 애플식 — 시안 ~/rv-design-089(설정 A·B). 대표 결정 2026-10-12: B 를 A 의 CSS·묶음부터 단계적으로.
+ * 🔴 style="" 속성 금지(Tauri nonce CSP 가 무시). 시안의 인라인 스타일은 전부 여기 클래스로 옮겼다.
+ * 색: 바탕·글자는 앱 그대로(--bg/--panel/--text/--muted/--line). 포인트(선택·켜짐·링크·포커스) 네이비 #2A356B,
+ *     주 단추(화면마다 하나) 진한 주황 #B4531C — 흰 글자 대비 5.01:1(#E2702A 는 3.19:1 불합격). 라비 몸 색 #E2702A 는 장식에만.
+ * 글자: 30·24·20·17(본문)·15(보조)·14(가장 작은 글자) — 14 아래 금지. 어르신 우선: 줄 56px, 누를 것 48px(최소 44px).
+ * 다크: 시안은 라이트만이다. 앱 다크 화면에서 깨지지 않게 색 변수만 앱 것을 쓰고, 네이비만 밝게 바꾼다(새 다크 디자인 아님). */
+:root {
+  --rv-navy: #2A356B; --rv-navy-ink: #2A356B; --rv-navy-soft: #E9EBF6;
+  --rv-cta: #B4531C; --rv-cta-hover: #9A4512; --rv-cta-ink: #FFFFFF;
+  --rv-fill: color-mix(in srgb, var(--text) 6%, var(--panel));
+  --rv-fill-hover: color-mix(in srgb, var(--text) 11%, var(--panel));
+  --rv-track: #8D8A82;
+  --rv-fs-large: 30px; --rv-fs-title: 24px; --rv-fs-head: 20px; --rv-fs-body: 17px; --rv-fs-sub: 15px; --rv-fs-cap: 14px;
+  --rv-row: 56px; --rv-hit: 48px; --rv-r-group: 14px; --rv-r-btn: 12px;
+  --rv-shadow: 0 1px 2px rgba(21, 22, 29, .06), 0 0 0 1px rgba(21, 22, 29, .05);
+}
+:root[data-theme="dark"] { --rv-navy: #3A4690; --rv-navy-ink: #B7C0F5; --rv-navy-soft: #262B45; --rv-track: #6B6E7C; --rv-shadow: 0 0 0 1px var(--line); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --rv-navy: #3A4690; --rv-navy-ink: #B7C0F5; --rv-navy-soft: #262B45; --rv-track: #6B6E7C; --rv-shadow: 0 0 0 1px var(--line); } }
+
+/* ── 설정 화면 바탕: 글자 단계 · 카드 · 단추 ───────────────────────────── */
+#page-settings { font-size: var(--rv-fs-body); line-height: 1.55; }
+#page-settings .meta, #page-settings .muted.sm, #page-settings .osub, #page-settings .easyseen,
+#page-settings .kv, #page-settings .lang-ai-note, #page-settings .lang-ai-note .lang-report { font-size: var(--rv-fs-sub); }
+#page-settings h2.title, #page-settings .sx-large { font-size: var(--rv-fs-large); font-weight: 700; letter-spacing: -.02em; line-height: 1.25; margin: 0 0 8px; }
+#page-settings .card h2 { font-size: var(--rv-fs-head); font-weight: 700; letter-spacing: -.01em; margin: 0 0 8px; }
+#page-settings .card h3, #page-settings .easyhead h3 { font-size: var(--rv-fs-head); font-weight: 700; color: var(--text); margin: 0 0 6px; letter-spacing: -.01em; }
+#page-settings .card > b:first-child, #page-settings .card > label > b { font-size: var(--rv-fs-body); font-weight: 600; }
+#page-settings .card, #page-settings .verdict, #page-settings .tools, #page-settings .switches {
+  border: 0; border-radius: var(--rv-r-group); box-shadow: var(--rv-shadow); background: var(--panel); padding: 16px 20px; }
+#page-settings .card .card { box-shadow: none; border: 1px solid var(--line); }
+#page-settings .card + .card, #page-settings .card + details, #page-settings details + .card { margin-top: 12px; }
+#page-settings :focus-visible { outline: 3px solid var(--rv-navy-ink); outline-offset: 2px; }
+
+/* 단추: 화면의 주 단추는 하나(주황). 나머지는 회색 채움 — 검정 꽉 찬 단추가 줄지어 있던 것을 없앤다. */
+#page-settings button { font-size: var(--rv-fs-body); font-weight: 600; min-height: var(--rv-hit); padding: 0 18px; border-radius: var(--rv-r-btn);
+  background: var(--rv-fill); border: 1px solid transparent; color: var(--text); }
+#page-settings button:hover:not(:disabled) { background: var(--rv-fill-hover); border-color: transparent; color: var(--text); }
+#page-settings button.harm, #page-settings button.harm:hover:not(:disabled) { background: #A5160F; color: #fff; }
+#page-settings #easy-go, #page-settings .sx-primary { background: var(--rv-cta); color: var(--rv-cta-ink); border-color: var(--rv-cta); }
+#page-settings #easy-go:hover:not(:disabled), #page-settings .sx-primary:hover:not(:disabled) { background: var(--rv-cta-hover); border-color: var(--rv-cta-hover); color: var(--rv-cta-ink); }
+#page-settings button::after { background: radial-gradient(circle at center, var(--rv-navy-soft) 0%, transparent 62%); }
+
+/* 쉬운 설정 — 주황 테두리 상자 대신 흰 카드 + 라비. 주 단추만 주황. */
+#page-settings .easycard { border: 0; background: var(--panel); box-shadow: var(--rv-shadow); padding: 20px 24px; }
+#page-settings #easy-go { width: auto; min-height: 56px; padding: 0 28px; font-size: 18px; }
+
+/* 언어 단추 열 개 — 한 줄씩 꽉 찬 하얀 상자 대신 작은 나눔 단추 */
+#page-settings .desktop-language-options { gap: 6px; background: var(--rv-fill); border-radius: var(--rv-r-btn); padding: 4px; }
+#page-settings .desktop-language-options button { min-height: 44px; font-size: var(--rv-fs-sub); background: none; border: 0; color: var(--muted); padding: 0 14px; }
+#page-settings .desktop-language-options button[aria-pressed="true"] { background: var(--panel); color: var(--text); border: 0; box-shadow: 0 1px 3px rgba(0, 0, 0, .14); }
+
+/* 켜고 끄는 칸 — 기본 체크 상자를 스위치(51×31, 켜짐 = 네이비)로. :has() 없이 input 하나로 그린다(옛 웹뷰). */
+#page-settings input.sx-sw, #snd-on, #tk-snd-on, #seller-mode {
+  appearance: none; -webkit-appearance: none; flex: none; margin: 0; width: 51px; height: 31px; border-radius: 999px; cursor: pointer;
+  background: var(--rv-track) radial-gradient(circle, #fff 12px, transparent 13px) no-repeat 2px 50% / 27px 27px;
+  transition: background-color .2s ease, background-position .2s ease; }
+#page-settings input.sx-sw:checked, #snd-on:checked, #tk-snd-on:checked, #seller-mode:checked { background-color: var(--rv-navy); background-position: 22px 50%; }
+#snd-card label.check, #tksnd-card label.check, #seller-mode-card label.check { justify-content: space-between; gap: 16px; min-height: var(--rv-row); font-size: var(--rv-fs-body); }
+#snd-card label.check input, #tksnd-card label.check input, #seller-mode-card label.check input { width: 51px; height: 31px; order: 2; }
+@media (prefers-reduced-motion: reduce) { #page-settings input.sx-sw, #snd-on, #tk-snd-on, #seller-mode { transition: none; } }
+
+/* 접기 칸(처음 한 번·고급)·경고 상자 */
+#page-settings .onceoff, #page-settings details.advanced { border: 0; border-radius: var(--rv-r-group); box-shadow: var(--rv-shadow); background: var(--panel); }
+#page-settings .warnbox { font-size: var(--rv-fs-sub) !important; border-radius: var(--rv-r-btn); }
+#page-settings pre { font-size: var(--rv-fs-cap); }
+
+/* ── 2단계 A: 묶음 목록(위에서 아래로 한 줄) ─────────────────────────────── */
+#page-settings .sx-pane { max-width: 820px; margin: 0 auto; padding-bottom: 80px; }
+#page-settings .sx-head { margin: 4px 0 16px; }
+#page-settings .sx-lede { color: var(--muted); margin: 0 0 12px; font-size: var(--rv-fs-body); }
+#page-settings .sx-sec { margin-top: 40px; }
+#page-settings .sx-ptitle { font-size: var(--rv-fs-title); font-weight: 700; letter-spacing: -.015em; line-height: 1.25; margin: 0 0 4px; }
+#page-settings .ghead { font-size: var(--rv-fs-sub); font-weight: 600; color: var(--muted); margin: 28px 16px 8px; }
+#page-settings .sx-row { display: flex; align-items: center; gap: 16px; min-height: var(--rv-row); flex-wrap: wrap; }
+#page-settings .sx-stack { flex-direction: column; align-items: stretch; gap: 10px; }
+#page-settings .sx-txt { display: flex; flex-direction: column; flex: 1 1 220px; min-width: 0; }
+#page-settings .sx-t { font-weight: 600; font-size: var(--rv-fs-body); }
+#page-settings .sx-d { font-size: var(--rv-fs-sub); color: var(--muted); font-weight: 400; line-height: 1.45; margin-top: 2px; }
+#page-settings .sx-v { color: var(--muted); flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#page-settings .sx-seg { display: inline-flex; flex-wrap: wrap; gap: 2px; background: var(--rv-fill); border-radius: var(--rv-r-btn); padding: 4px; align-self: flex-start; }
+#page-settings .sx-seg button { background: none; border: 0; color: var(--muted); min-height: 44px; padding: 0 16px; }
+#page-settings .sx-seg button.on { background: var(--panel); color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, .14); }
+#page-settings .sx-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
+#page-settings .sx-acts .meta { margin: 0; }
+#page-settings .sx-grow { flex: 1 1 160px; min-width: 0; }
+#page-settings .sx-field { display: block; font-size: var(--rv-fs-sub); color: var(--muted); margin-top: 8px; }
+#page-settings .sx-field input { display: block; width: 100%; margin-top: 4px; }
+#page-settings .sx-foot { font-size: var(--rv-fs-sub); color: var(--muted); margin: 8px 16px 0; }
+#page-settings .sx-h3gap { margin-top: 24px; }
+#page-settings .sx-h4 { margin: 12px 0 0; font-size: var(--rv-fs-sub); }
+#page-settings .sx-license { white-space: pre-wrap; font-size: var(--rv-fs-cap); line-height: 1.5; margin-top: 8px; }
+#page-settings .sx-warncard { border-left: 4px solid var(--warn); }
+#page-settings .sx-kvcard { padding: 10px 12px; margin: 0 0 10px; }
+#page-settings .sx-check { display: flex; align-items: center; gap: 10px; min-height: 44px; margin-top: 12px; }
+#page-settings .warnbox { margin-top: 12px; }
+#page-settings .tools > .card, #page-settings .sx-backup .tools > .warnbox { margin-top: 16px; }
+#page-settings .tools { padding: 20px; }
+#page-settings .card > .meta:first-of-type { margin-top: 6px; }
+/* 줄 전체가 단추인 줄(「이야기에서 쓰는 이름」 → 내 소개) */
+#page-settings button.sx-linkrow { display: flex; align-items: center; gap: 12px; width: 100%; min-height: var(--rv-row); padding: 4px 0; text-align: left; background: none; border: 0; font-weight: 400; }
+#page-settings button.sx-linkrow:hover:not(:disabled) { background: none; }
+#page-settings button.sx-linkrow:hover .sx-t { color: var(--rv-navy-ink); }
+#page-settings .sx-chev { flex: none; width: 9px; height: 9px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(-45deg); margin-right: 6px; }
+/* 「자세히」 — 긴 설명문은 접어 둔다(늘 펼쳐진 문단 세 개가 스위치 하나를 덮던 것) */
+#page-settings details.sx-more { margin-top: 4px; }
+#page-settings details.sx-more > summary, #page-settings details.sx-sub > summary { list-style: none; cursor: pointer; color: var(--rv-navy-ink); font-weight: 600; font-size: var(--rv-fs-sub); display: inline-flex; align-items: center; gap: 8px; min-height: 44px; }
+#page-settings details.sx-more > summary::-webkit-details-marker, #page-settings details.sx-sub > summary::-webkit-details-marker { display: none; }
+#page-settings details.sx-more > summary::before, #page-settings details.sx-sub > summary::before { content: ""; width: 7px; height: 7px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); transition: transform .2s ease; }
+#page-settings details[open].sx-more > summary::before, #page-settings details[open].sx-sub > summary::before { transform: rotate(45deg); }
+#page-settings details.sx-sub { margin-top: 12px; }
+#page-settings details.advanced > summary { min-height: var(--rv-row); display: flex; align-items: center; padding: 0 20px; font-weight: 600; cursor: pointer; }
+#page-settings details.advanced[open] { padding-bottom: 12px; }
+#page-settings details.advanced > .card { margin: 12px 12px 0; }
+/* 라비 동의·트레이 칸 — 기본 체크 상자가 꾸밈 없이 늘어서 있던 것을 줄 목록으로 */
+#page-settings #ravi-agent-settings .card, #companion-preferences { background: var(--panel); border-radius: var(--rv-r-group); box-shadow: var(--rv-shadow); padding: 16px 20px; margin-top: 12px; }
+#ravi-agent-settings label, #companion-preferences label { display: flex !important; align-items: center; justify-content: space-between; gap: 16px; min-height: var(--rv-row); border-top: 1px solid var(--line); font-size: var(--rv-fs-body); }
+#ravi-agent-settings label input[type="checkbox"], #companion-preferences label input[type="checkbox"] { order: 2; }
+#ravi-agent-settings input[type="checkbox"], #companion-preferences input[type="checkbox"] {
+  appearance: none; -webkit-appearance: none; flex: none; margin: 0; width: 51px; height: 31px; border-radius: 999px; cursor: pointer;
+  background: var(--rv-track) radial-gradient(circle, #fff 12px, transparent 13px) no-repeat 2px 50% / 27px 27px; transition: background-color .2s ease, background-position .2s ease; }
+#ravi-agent-settings input[type="checkbox"]:checked, #companion-preferences input[type="checkbox"]:checked { background-color: var(--rv-navy); background-position: 22px 50%; }
+#companion-preferences input[type="number"], #companion-preferences select { order: 2; width: 96px; min-height: 44px; font-size: var(--rv-fs-body); }
+#companion-preferences h3 { font-size: var(--rv-fs-head); margin: 0 0 6px; }
+#companion-preferences p { font-size: var(--rv-fs-sub); color: var(--muted); }
+#ravi-voice-revoke:empty, #ravi-voice-revoke:empty + p:empty { display: none; }
+#page-settings .sx-stack .sx-txt { flex: none; }
+#page-settings .lang-ai-note .lang-report, #page-settings .lang-ai-note .lang-report:hover:not(:disabled) { background: none; color: var(--rv-navy-ink); min-height: 44px; padding: 0 6px; font-weight: 600; }
+
+/* ── 3단계 B: 왼쪽 목록 + 오른쪽 한 주제(맥 「시스템 설정」 모양) ─────────────────── */
+#page-settings .sx-list { display: none; }
+#page-settings .sx-b { display: grid; grid-template-columns: 288px minmax(0, 1fr); gap: 40px; align-items: start; }
+#page-settings .sx-b .sx-list { display: block; position: sticky; top: 0; max-height: calc(100vh - 140px); overflow: auto; overscroll-behavior: contain;
+  background: color-mix(in srgb, var(--text) 4%, var(--bg)); border-radius: 18px; padding: 20px 12px 24px; }
+#page-settings .sx-b .sx-pane { max-width: 760px; margin: 0; width: 100%; }
+#page-settings .sx-b .sx-head, #page-settings .sx-b #pt-settings { display: none; }
+#page-settings .sx-b .sx-sec { margin-top: 0; }
+#page-settings .sx-b .sx-sec > .sx-ptitle { margin-top: 8px; }
+#page-settings .sx-ltitle { font-size: var(--rv-fs-title); font-weight: 700; letter-spacing: -.015em; margin: 4px 12px 16px; }
+#page-settings .sx-search { position: relative; margin: 0 4px 16px; }
+#page-settings .sx-search input { width: 100%; min-height: 44px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--text); padding: 0 12px 0 40px; font-size: var(--rv-fs-body); }
+#page-settings .sx-search svg { position: absolute; left: 12px; top: 13px; width: 18px; height: 18px; color: var(--muted); pointer-events: none; }
+#page-settings .sx-none { margin: -8px 12px 12px; font-size: var(--rv-fs-sub); color: var(--muted); }
+#page-settings .sx-none:has(> [hidden]) { margin: 0; } /* 글이 숨었을 때 빈 자리가 틈을 만들지 않게 */
+#page-settings button.sx-easy { display: flex; gap: 12px; align-items: center; width: calc(100% - 8px); margin: 0 4px 16px; padding: 12px; min-height: 72px; text-align: left;
+  background: var(--panel); border-radius: var(--rv-r-group); box-shadow: var(--rv-shadow); font-weight: 400; }
+#page-settings button.sx-easy:hover:not(:disabled) { background: var(--panel); box-shadow: 0 0 0 2px var(--rv-navy-soft), var(--rv-shadow); }
+#page-settings .sx-easytxt { display: flex; flex-direction: column; min-width: 0; }
+#page-settings .sx-easytxt b { font-weight: 700; }
+#page-settings .sx-easytxt span { font-size: var(--rv-fs-sub); color: var(--muted); line-height: 1.4; }
+#page-settings .sx-topics { list-style: none; margin: 0; padding: 0; }
+#page-settings .sx-topics li + li { margin-top: 2px; }
+#page-settings .sx-sep { height: 1px; background: var(--line); margin: 12px; }
+#page-settings button.sx-it { display: flex; align-items: center; gap: 12px; width: 100%; min-height: var(--rv-hit); padding: 0 12px; border-radius: 10px; text-align: left; font-weight: 500;
+  background: none; color: var(--text); }
+#page-settings button.sx-it:hover:not(:disabled) { background: color-mix(in srgb, var(--text) 6%, transparent); }
+#page-settings button.sx-it[aria-current="true"], #page-settings button.sx-it[aria-current="true"]:hover:not(:disabled) { background: var(--rv-navy); color: #fff; font-weight: 600; }
+#page-settings .sx-lab { flex: 1; min-width: 0; overflow-wrap: anywhere; line-height: 1.3; }
+#page-settings .sx-ic { flex: none; width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; color: #fff; overflow: hidden; }
+#page-settings .sx-ic svg { width: 18px; height: 18px; }
+#page-settings .sx-ic img { width: 30px; height: 30px; }
+#page-settings .sx-ic-gray { background: #5B5E6B; } #page-settings .sx-ic-cta { background: var(--rv-cta); } #page-settings .sx-ic-ok { background: #1F7A4D; }
+#page-settings .sx-ic-navy { background: #2A356B; } #page-settings .sx-ic-ravi { background: #9686C9; } #page-settings .sx-ic-dark { background: #3A3C47; }
+#page-settings .sx-badge { margin-left: auto; min-width: 24px; height: 24px; border-radius: 12px; background: var(--rv-cta); color: #fff; font-size: var(--rv-fs-cap); font-weight: 700; display: grid; place-items: center; padding: 0 7px; }
+#page-settings .sx-badge[hidden] { display: none; }
+#page-settings .sx-it[aria-current="true"] .sx-badge { background: #fff; color: var(--rv-cta); }
+/* B 에서는 주제마다 주 단추 하나(백업 = 백업 만들기). 한 페이지(A)일 때는 주황이 하나뿐이도록 B 에서만 칠한다. */
+#page-settings .sx-b [data-sx-primary] { background: var(--rv-cta); color: var(--rv-cta-ink); }
+#page-settings .sx-b [data-sx-primary]:hover:not(:disabled) { background: var(--rv-cta-hover); color: var(--rv-cta-ink); }
+#page-settings .sx-b details.advanced > summary { display: none; }
+#page-settings .sx-b details.advanced { background: none; box-shadow: none; }
+#page-settings .sx-b details.advanced > .card { margin: 12px 0 0; }
+#page-settings .justwent { outline: 3px solid var(--rv-navy-ink); outline-offset: 3px; border-radius: 8px; }
+/* 좁은 창(작은 노트북·창을 줄였을 때): 목록을 위로, 주제 단추는 한 줄로 흐르게 */
+@media (max-width: 980px) {
+  #page-settings .sx-b { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  #page-settings .sx-b .sx-list { position: static; max-height: none; padding: 12px; }
+  #page-settings .sx-b .sx-topics { display: flex; flex-wrap: wrap; gap: 4px; }
+  #page-settings .sx-b .sx-topics li + li { margin-top: 0; }
+  #page-settings .sx-b .sx-sep { display: none; }
+  #page-settings .sx-b button.sx-it { width: auto; }
+  #page-settings .sx-b .sx-ltitle { margin-bottom: 12px; }
+}
+#page-settings .sx-ptitle:focus { outline: none; }
+/* 목록 단추는 글자가 길어지면(유럽어·확대) 줄이 늘어난다 — 잘리지 않게 높이를 열어 둔다. */
+#page-settings button.sx-it, #page-settings button.sx-easy { overflow: visible; height: auto; padding-top: 6px; padding-bottom: 6px; }
+#page-settings .sx-lab, #page-settings .sx-easytxt { overflow-wrap: break-word; hyphens: auto; }
+/* 아주 좁은 창(폰 폭 시험): 라비 얼굴을 빼고 글자를 한 단계 줄여 긴 낱말이 쪼개지지 않게 */
+@media (max-width: 520px) {
+  #page-settings .sx-b .sx-list { padding: 8px; }
+  #page-settings button.sx-easy .ravi-face, #page-settings button.sx-easy .ravi-static-face { display: none; }
+  #page-settings button.sx-easy, #page-settings button.sx-it { font-size: var(--rv-fs-cap); padding-left: 8px; padding-right: 8px; gap: 8px; }
+  #page-settings .sx-easytxt span { font-size: var(--rv-fs-cap); }
+  #page-settings .sx-b button.sx-it { width: 100%; }
+  #page-settings .sx-ic { width: 26px; height: 26px; }
+}
+/* 1024 무렵(작은 노트북): 목록 단추 안쪽 여백·아이콘을 줄여 긴 낱말(독일어 합성어)이 한 줄에 들어가게 */
+@media (min-width: 1181px) {
+  #page-settings .sx-b { grid-template-columns: 320px minmax(0, 1fr); }
+  #page-settings .sx-b .sx-list { padding: 20px 8px 24px; }
+  #page-settings button.sx-it { padding-left: 8px; padding-right: 8px; font-size: 16px; }
+}
+@media (max-width: 1180px) and (min-width: 981px) {
+  #page-settings .sx-b { grid-template-columns: 300px minmax(0, 1fr); gap: 28px; }
+  #page-settings .sx-b .sx-list { padding: 16px 8px 20px; }
+  #page-settings button.sx-it { padding-left: 8px; padding-right: 8px; gap: 8px; font-size: var(--rv-fs-sub); }
+  #page-settings .sx-ic { width: 26px; height: 26px; }
+  #page-settings .sx-ic svg { width: 16px; height: 16px; }
+}
+
+/* 0.9.0 병합 — 레인 B 백업 칸(두 파일 구분표·wallet.dat 백업 파일 단추)이 설정 B 의 주제 패널(768px 창에서 516px)
+   안에 들어오며 생긴 레이아웃 관문 실패 3건: 표 칸이 긴 낱말 최소 폭 때문에 넘침(clip·offscreen), 단추 안 낱말 쪼개짐(word-split). */
+#sx-backup-mount .bkrow { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr); }
+#sx-backup-mount .bkrow > * { min-width: 0; overflow-wrap: anywhere; }
+#sx-backup-mount #wf-card > .row { display: flex; flex-wrap: wrap; gap: 8px; }
+#sx-backup-mount :is(#wf-export, #wf-import) { flex: 0 1 auto; word-break: keep-all; } /* 끝 덩어리 「…(잠금)…」는 wallet-file.ts label() 이 한 줄로 묶는다 */
+
+/* 라비 목소리 받기 카드 */
+#page-settings .ravi-pack-actions { display:flex; flex-wrap:wrap; gap:8px; }
+#page-settings .ravi-pack-bar { width:100%; height:8px; margin-top:6px; }
+#page-settings .ravi-pack-actions button[hidden], #page-settings .ravi-pack-bar[hidden] { display:none; }

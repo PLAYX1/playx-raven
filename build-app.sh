@@ -19,7 +19,7 @@ MODE="${1:-debug}"
 
 NODE_OPTIONS=--max-old-space-size=8192 npx tauri build $FLAG --bundles app
 
-APP="src-tauri/target/$MODE/bundle/macos/PLAY X Raven.app"
+APP="src-tauri/target/$MODE/bundle/macos/RavenVault Desktop.app"
 [ -d "$APP" ] || { echo "🔴 번들이 없습니다: $APP"; exit 1; }
 
 codesign --force --deep --sign - "$APP"

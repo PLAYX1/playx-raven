@@ -46,6 +46,7 @@ use std::sync::Mutex;
 ///   30078 — 가게가 「지금 여기서 주문받습니다」를 올리는 글
 ///   30402 — 파는 물건(NIP-99). 장터의 물건 탭이 읽는다.
 ///      40 — 방 만들기 (NIP-28)
+///      41 — 방 이름·설명 수정 (NIP-28). 누가 고칠 수 있는지는 읽는 쪽(talk.rs)이 본다.
 ///      42 — 방에 쓴 글 (NIP-28)
 ///       1 — 사람 글
 ///
@@ -61,11 +62,11 @@ use std::sync::Mutex;
 /// 답은 「전부냐 아무것도 아니냐」가 아니었다. **레이븐 이야기만 남긴다.**
 /// 그 밖의 글은 지나가게 두되(중계는 한다) 디스크에 안 쓴다.
 /// 우리가 세상의 저장소일 이유는 없지만, 레이븐 이야기의 저장소일 이유는 있다.
-const KINDS: [i64; 5] = [30078, 30402, 40, 42, 1];
+const KINDS: [i64; 6] = [30078, 30402, 40, 41, 42, 1];
 
 /// 대화 글의 종류. 이 셋은 위의 가게 규칙(JSON·d 태그)을 적용하면 안 된다 —
 /// 사람이 쓴 글은 JSON 이 아니다.
-const TALK_KINDS: [i64; 3] = [40, 42, 1];
+const TALK_KINDS: [i64; 4] = [40, 41, 42, 1];
 
 /// 들고 있을 글의 최대 수. 넘치면 오래된 것부터 버린다.
 ///
@@ -140,7 +141,7 @@ fn peek<T>(f: impl FnOnce(&Vec<Value>) -> T) -> T {
 /// 🔴 안 하면 아무나 남의 이름으로 「이 가게는 여기서 주문받습니다」를 올릴
 /// 수 있고, 우리가 그것을 손님에게 나른다. 릴레이가 하는 일 중 이것만은
 /// 빠뜨리면 안 된다.
-fn verify(e: &Value) -> bool {
+pub(crate) fn verify(e: &Value) -> bool {
     use secp256k1::{schnorr::Signature, Secp256k1, XOnlyPublicKey};
     use sha2::{Digest, Sha256};
 
@@ -726,6 +727,15 @@ pub fn relay_status() -> Value {
 
 #[cfg(test)]
 mod tests {
+
+    /// 방 이름·설명 수정(kind 41)도 레이븐 이야기다 — 우리 릴레이가 안 남기면 이 컴퓨터는
+    /// 공개 릴레이가 다 막힌 날 고친 이름을 못 본다. 누가 고칠 수 있는지는 talk.rs 가 본다.
+    #[test]
+    fn room_meta_edits_are_kept_as_talk() {
+        assert!(KINDS.contains(&41) && TALK_KINDS.contains(&41));
+        let e = json!({ "kind": 41, "content": "{\"name\":\"방\"}", "tags": [["e", "a".repeat(64), "", "root"], ["t", "ravencoin"]] });
+        assert_eq!(super::smells_bad(&e), None, "레이븐 표가 붙은 방 수정 글을 버린다");
+    }
     /// 🔴 종류만 막고 **내용은 안 막고 있었다**(제미나이 지적). 껍데기가
     /// 맞으면 누구든 사장 컴퓨터에 아무 글이나 남길 수 있었다.
     #[test]
@@ -858,7 +868,7 @@ mod tests {
         use futures_util::{SinkExt, StreamExt};
         use tokio_tungstenite::tungstenite::Message as M;
         let _g = crate::paths::TEST_ENV.lock().unwrap_or_else(|e| e.into_inner());
-        let home = std::env::temp_dir().join(format!("rv6-relay-{}", std::process::id()));
+        let home = crate::paths::test_fixture_root().join(format!("rv6-relay-{}", std::process::id()));
         std::fs::create_dir_all(&home).unwrap();
         std::env::set_var("PLAYX_RAVEN_HOME", &home);
 

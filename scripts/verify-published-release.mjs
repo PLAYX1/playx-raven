@@ -10,15 +10,43 @@ export const PLATFORMS = Object.freeze({
   'linux-x86_64': 'linux.AppImage',
 });
 export const INSTALLERS = Object.freeze(['windows.exe', 'windows.msi', 'mac-apple-silicon.dmg', 'mac-intel.dmg', 'linux.AppImage']);
+export const ALL_TARGETS = Object.freeze(Object.keys(PLATFORMS));
+// Which installers belong to which updater target. A partial release must name its targets explicitly.
+export const TARGET_INSTALLERS = Object.freeze({
+  'windows-x86_64': ['windows.exe', 'windows.msi'], 'darwin-aarch64': ['mac-apple-silicon.dmg'],
+  'darwin-x86_64': ['mac-intel.dmg'], 'linux-x86_64': ['linux.AppImage'],
+});
+// Targets whose release statement is always required when the target is listed (the original, shipped behavior).
+export const MAC_SIGNED_TARGETS = Object.freeze(['darwin-aarch64', 'darwin-x86_64']);
+// Opt-in targets: a signed statement is required for them only in strict mode (the CLI, and the offline
+// release builder), so a release without their statements keeps auto-update blocked for them.
+export const EXTENDED_SIGNED_TARGETS = Object.freeze(['windows-x86_64', 'linux-x86_64']);
 const MAX_MANIFEST_BYTES = 64 * 1024;
-const MAX_ARTIFACT_BYTES = 95_000_000;
-class InvalidRelease extends Error {}
+const MAX_ARTIFACT_BYTES = 99_000_000;
+export class InvalidRelease extends Error {}
 class NotVisible extends Error {}
 
 function checkVersion(version) {
   if (typeof version !== 'string' || version.length > 32 || !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version)) {
     throw new InvalidRelease('Invalid release version; use a canonical major.minor.patch version');
   }
+}
+/** Explicit target list only: no default, no unknown or duplicate names. Returned in canonical order. */
+export function checkTargets(targets) {
+  if (!Array.isArray(targets) || targets.length < 1) throw new InvalidRelease('Release targets must be listed explicitly (--targets)');
+  if (new Set(targets).size !== targets.length || targets.some(t => !ALL_TARGETS.includes(t))) throw new InvalidRelease('Unknown or duplicate release target');
+  return ALL_TARGETS.filter(t => targets.includes(t));
+}
+export function parseTargetsArg(argv) {
+  const at = argv.indexOf('--targets');
+  if (at < 0 || typeof argv[at + 1] !== 'string' || argv[at + 1].startsWith('--')) throw new InvalidRelease('Missing required --targets list (e.g. --targets darwin-aarch64)');
+  const rest = argv.slice(0, at).concat(argv.slice(at + 2));
+  if (rest.includes('--targets')) throw new InvalidRelease('--targets may be given only once');
+  return { targets: checkTargets(argv[at + 1].split(',')), rest };
+}
+function newer(a, b) {
+  const x = a.split('.').map(Number), y = b.split('.').map(Number);
+  return x.reduce((order, n, i) => order || Math.sign(n - y[i]), 0) > 0;
 }
 function exactKeys(value, keys, name) {
   if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).sort().join('\0') !== [...keys].sort().join('\0')) {
@@ -30,19 +58,42 @@ function artifactUrls(version, suffix) {
 }
 
 // Return a canonical projection, so JSON property / installer ordering is immaterial.
-export function validatePublishedManifest(value, expectedVersion) {
+export function validatePublishedManifest(value, expectedVersion, targets, { strictSigned = false } = {}) {
   checkVersion(expectedVersion);
+  targets = checkTargets(targets);
+  const present = value && value.signed_releases && typeof value.signed_releases === 'object' ? value.signed_releases : {};
+  const signedTargets = [...MAC_SIGNED_TARGETS, ...EXTENDED_SIGNED_TARGETS]
+    .filter(t => targets.includes(t) && (MAC_SIGNED_TARGETS.includes(t) || strictSigned || Object.hasOwn(present, t)));
+  const included = new Set(targets.flatMap(t => TARGET_INSTALLERS[t]));
   if (!value || typeof value !== 'object') throw new InvalidRelease('Invalid release manifest');
   checkVersion(value.version);
   if (value.version !== expectedVersion) throw new NotVisible(`Expected ${expectedVersion}; public manifest still reports ${value.version}`);
-  exactKeys(value, ['version', 'notes', 'pub_date', 'platforms', 'installers'], 'manifest');
+  const needsStatement = expectedVersion.split('.').map(Number).reduce((order,n,i)=>order || Math.sign(n-[0,8,4][i]),0) >= 0;
+  exactKeys(value, ['version', 'notes', 'pub_date', 'platforms', 'installers', ...(needsStatement ? ['signed_releases'] : [])], 'manifest');
+  const signed = {};
+  if (needsStatement) {
+    exactKeys(value.signed_releases, signedTargets, 'signed releases');
+    for (const target of signedTargets) {
+      const item = value.signed_releases[target];
+      exactKeys(item, ['statement','signature'], 'signed release');
+      if (typeof item.statement !== 'string' || item.statement.length > 4096 || typeof item.signature !== 'string'
+          || item.signature.length < 100 || item.signature.length > 4096) throw new InvalidRelease('Invalid signed statement encoding');
+      let statement;
+      try { statement = JSON.parse(item.statement); } catch { throw new InvalidRelease('Invalid signed statement JSON'); }
+      exactKeys(statement, ['version','target','sha256','sequence','expires'], 'release statement');
+      if (statement.version !== expectedVersion || statement.target !== target || !/^[a-f0-9]{64}$/.test(statement.sha256)
+          || !Number.isSafeInteger(statement.sequence) || statement.sequence < 1
+          || !Number.isSafeInteger(statement.expires) || statement.expires <= Math.floor(Date.now()/1000)) throw new InvalidRelease('Invalid signed statement binding');
+      signed[target] = {statement:item.statement,signature:item.signature};
+    }
+  }
   if (typeof value.notes !== 'string' || value.notes.length > 16_384) throw new InvalidRelease('Invalid release notes');
   if (typeof value.pub_date !== 'string' || !Number.isFinite(Date.parse(value.pub_date)) || new Date(value.pub_date).toISOString() !== value.pub_date) {
     throw new InvalidRelease('Invalid publication date');
   }
-  exactKeys(value.platforms, Object.keys(PLATFORMS), 'updater platform');
+  exactKeys(value.platforms, targets, 'updater platform');
   const platforms = {};
-  for (const [platform, suffix] of Object.entries(PLATFORMS)) {
+  for (const [platform, suffix] of Object.entries(PLATFORMS).filter(([p]) => targets.includes(p))) {
     const item = value.platforms[platform];
     exactKeys(item, ['signature', 'url'], 'updater item');
     if (!artifactUrls(expectedVersion, suffix).includes(item.url)) throw new InvalidRelease(`Invalid immutable updater URL: ${platform}`);
@@ -57,13 +108,19 @@ export function validatePublishedManifest(value, expectedVersion) {
     const found = value.installers.filter(item => item?.platform === suffix);
     if (found.length !== 1) throw new InvalidRelease(`Missing or duplicate installer: ${suffix}`);
     const item = found[0];
-    exactKeys(item, ['platform', 'url', 'bytes', 'sha256'], 'installer');
-    if (!artifactUrls(expectedVersion, suffix).includes(item.url)) throw new InvalidRelease(`Invalid immutable installer URL: ${suffix}`);
+    // Installers of targets outside this release keep their earlier version's immutable entry, labeled with that version.
+    const own = included.has(suffix);
+    exactKeys(item, own ? ['platform', 'url', 'bytes', 'sha256'] : ['platform', 'url', 'bytes', 'sha256', 'version'], 'installer');
+    if (!own) {
+      checkVersion(item.version);
+      if (!newer(expectedVersion, item.version)) throw new InvalidRelease(`Carried installer must be from an older version: ${suffix}`);
+    }
+    if (!artifactUrls(own ? expectedVersion : item.version, suffix).includes(item.url)) throw new InvalidRelease(`Invalid immutable installer URL: ${suffix}`);
     if (!Number.isSafeInteger(item.bytes) || item.bytes < 1 || item.bytes >= MAX_ARTIFACT_BYTES) throw new InvalidRelease(`Invalid installer size: ${suffix}`);
     if (typeof item.sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(item.sha256)) throw new InvalidRelease(`Invalid installer hash: ${suffix}`);
-    return { platform: suffix, url: item.url, bytes: item.bytes, sha256: item.sha256 };
+    return { platform: suffix, url: item.url, bytes: item.bytes, sha256: item.sha256, ...(own ? {} : { version: item.version }) };
   });
-  return { version: value.version, notes: value.notes, pub_date: value.pub_date, platforms, installers };
+  return { version: value.version, notes: value.notes, pub_date: value.pub_date, platforms, installers, ...(needsStatement ? {signed_releases:signed} : {}) };
 }
 
 function lengthHeader(response, limit) {
@@ -115,12 +172,12 @@ async function checkArtifact(fetcher, item, signal) {
   const bytes = lengthHeader(response, MAX_ARTIFACT_BYTES);
   if (bytes !== null && item.bytes !== undefined && bytes !== item.bytes) throw new InvalidRelease('Public artifact size does not match its manifest');
 }
-async function attemptVerification(version, fetcher, signal) {
+async function attemptVerification(version, targets, fetcher, signal, strictSigned) {
   const raw = await Promise.all([
     readManifest(fetcher, `${PUBLIC_BASE}latest.json`, signal),
     readManifest(fetcher, `${PUBLIC_BASE}v${version}/manifest.json`, signal),
   ]);
-  const [latest, immutable] = raw.map(value => validatePublishedManifest(value, version));
+  const [latest, immutable] = raw.map(value => validatePublishedManifest(value, version, targets, { strictSigned }));
   if (JSON.stringify(latest) !== JSON.stringify(immutable)) throw new InvalidRelease('Latest and immutable release manifests disagree');
   const artifacts = new Map(Object.values(latest.platforms).map(item => [item.url, { url: item.url }]));
   for (const item of latest.installers) artifacts.set(item.url, { url: item.url, bytes: item.bytes });
@@ -146,10 +203,11 @@ async function attemptVerification(version, fetcher, signal) {
 }
 
 export async function verifyPublishedRelease(version, {
-  fetcher = fetch, now = () => performance.now(), sleep = ms => new Promise(resolve => setTimeout(resolve, ms)),
+  targets, strictSigned = false, fetcher = fetch, now = () => performance.now(), sleep = ms => new Promise(resolve => setTimeout(resolve, ms)),
   cacheWaitMs = 15 * 60_000, retryMs = 30_000, attemptTimeoutMs = 20_000, onRetry = () => {},
 } = {}) {
   checkVersion(version);
+  targets = checkTargets(targets);
   for (const [name, value, min, max] of [['cacheWaitMs', cacheWaitMs, 0, 900_000], ['retryMs', retryMs, 1, 30_000], ['attemptTimeoutMs', attemptTimeoutMs, 1, 20_000]]) {
     if (!Number.isFinite(value) || value < min || value > max) throw new InvalidRelease(`Invalid ${name} limit`);
   }
@@ -166,7 +224,7 @@ export async function verifyPublishedRelease(version, {
           reject(new NotVisible('Public release request timed out'));
         }, timeoutMs);
       });
-      const result = await Promise.race([attemptVerification(version, fetcher, controller.signal), timeout]);
+      const result = await Promise.race([attemptVerification(version, targets, fetcher, controller.signal, strictSigned), timeout]);
       return { ...result, attempts, elapsedMs: Math.round(now() - start) };
     } catch (error) {
       if (error instanceof InvalidRelease) throw error;
@@ -182,8 +240,10 @@ export async function verifyPublishedRelease(version, {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   try {
-    if (process.argv.length !== 3) throw new Error('Usage: node scripts/verify-published-release.mjs major.minor.patch');
-    const result = await verifyPublishedRelease(process.argv[2], {
+    const { targets, rest } = parseTargetsArg(process.argv.slice(2));
+    if (rest.length !== 1) throw new Error('Usage: node scripts/verify-published-release.mjs major.minor.patch --targets darwin-aarch64[,darwin-x86_64,windows-x86_64,linux-x86_64]');
+    const result = await verifyPublishedRelease(rest[0], {
+      targets, strictSigned: true,
       onRetry: ({ attempt, elapsedMs, reason }) => console.log(`Waiting for public cache (attempt ${attempt}, ${Math.round(elapsedMs / 1000)}s): ${reason}`),
     });
     console.log(JSON.stringify(result));

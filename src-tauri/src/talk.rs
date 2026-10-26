@@ -91,14 +91,15 @@ fn key() -> Result<[u8; 32], String> {
     }
 
     let (sk, from) = match from_seed() {
-        Some(b) => (b, "seed"),
-        None => (
+        Ok(b) => (b, "seed"),
+        Err(crate::identity::SeedFailure::NotMnemonic) => (
             secp256k1::Secp256k1::new()
                 .generate_keypair(&mut rand::thread_rng())
                 .0
                 .secret_bytes(),
             "random",
         ),
+        Err(e) => return Err(e.public_error()),
     };
     let p = key_file();
     if let Some(d) = p.parent() {
@@ -137,8 +138,9 @@ fn key() -> Result<[u8; 32], String> {
 ///    보기 때문에, 이미 이름이 있는 사람은 아무 일도 일어나지 않는다.
 ///
 /// ⚠️ 12단어는 `identity.rs` 안에서만 쓰이고 어디에도 안 남는다.
-fn from_seed() -> Option<[u8; 32]> {
-    crate::identity::person_key()
+fn from_seed() -> Result<[u8; 32], crate::identity::SeedFailure> {
+    let (words, pass) = crate::identity::words_from_node()?;
+    crate::identity::person_key_from(&words, &pass).ok_or(crate::identity::SeedFailure::Other)
 }
 
 // 옛 방식(표식 해시)으로 뽑은 이야기 열쇠는 `identity::both_keys_async` 가
@@ -313,22 +315,9 @@ pub async fn talk_profiles(pubkeys: Vec<String>) -> Result<Value, String> {
 /// 제일 나쁘다.
 #[tauri::command]
 pub fn recovery_status() -> Value {
-    let words = crate::rt::block(async {
-        crate::raven::call_rpc("getmywords", json!([])).await
-    });
-    // 잠긴 것과 12단어가 없는 것은 **다른 말**이다. 잠긴 것은 열면 되고,
-    // 없는 것은 지갑을 새로 만들어 옮겨야 한다. 뭉뚱그리면 안 된다.
-    let (seed, seed_why) = match &words {
+    let (seed, seed_why) = match crate::identity::words_from_node() {
         Ok(_) => (true, "12단어가 있습니다.".to_string()),
-        Err(e) if e.contains("passphrase") || e.contains("잠") => (
-            false,
-            "지갑이 잠겨 있어 확인하지 못했습니다. 열고 다시 봐 주세요.".into(),
-        ),
-        Err(_) => (
-            false,
-            "이 지갑은 12단어로 만들어지지 않았습니다. 그래서 씨앗만으로는 되살릴 수 없습니다."
-                .into(),
-        ),
+        Err(e) => (false, e.public_error()),
     };
 
     let shop = crate::shopkey::shopkey_origin();
@@ -344,7 +333,7 @@ pub fn recovery_status() -> Value {
             { "what": "지갑 · 돈", "ok": seed,
               "why": "12단어로 만든 지갑이면 어느 기계에서도 같은 주소가 나옵니다." },
             { "what": "가진 자산 · 가게", "ok": true,
-              "why": "체인에 있습니다. 지갑이 되살아나면 자산도 같이 보입니다." },
+              "why": "공개 장부에 있습니다. 지갑이 되살아나면 자산도 같이 보입니다." },
             { "what": "가게 간판 열쇠",
               "ok": shop["recoverable"].as_bool().unwrap_or(false) || !shop["exists"].as_bool().unwrap_or(false),
               "why": shop["why"].as_str().unwrap_or("아직 만들지 않았습니다 — 만들 때 12단어에서 뽑습니다.") },
@@ -823,8 +812,12 @@ pub async fn talk_my_assets() -> Value {
 }
 
 /// 그 방이 자산을 요구하나. 요구하면 그 이름.
+///
+/// ⚠️ 방 정보 수정(kind 41)은 **안 읽는다.** 자산은 방을 만든 글(kind 40)에서만
+///    나온다 — 수정 글로 「누가 쓸 수 있나」가 바뀌면 안 된다. 그래서 글 하나
+///    쓸 때마다 수정 글까지 묻는 왕복도 생기지 않는다.
 async fn room_asset(room_id: &str) -> Option<String> {
-    let rooms = talk_rooms().await.ok()?;
+    let rooms = json!(rooms_from_events(room_events().await.ok()?, &[]));
     rooms
         .as_array()?
         .iter()
@@ -1039,11 +1032,33 @@ pub async fn talk_translate(text: String, to: String) -> Result<Value, String> {
         .to_string())
 }
 
+/// 방을 만든 글(kind 40)들. 세계 방 50개가 한계다(`main.ts` 「어느 방을 지켜볼까」).
+async fn room_events() -> Result<Vec<Value>, String> {
+    crate::nostrpub::nostr_query_tag(vec![KIND_ROOM], "t".into(), vec![TAG.into()], 50).await
+}
+
 /// 방 목록. 우리가 만든 것과 남이 만든 것을 같이 본다.
+///
+/// 방마다 **만든 사람의 공개키**(`pubkey`)를 같이 준다 — 화면이 「방 설정」
+/// 단추를 그 사람에게만 보이려고 쓴다. 이름·설명은 만든 사람이 올린 **가장
+/// 최근 수정 글**(kind 41)이 있으면 그것으로 바꿔 준다(`meta_at`).
 #[tauri::command]
 pub async fn talk_rooms() -> Result<Value, String> {
-    let got =
-        crate::nostrpub::nostr_query_tag(vec![KIND_ROOM], "t".into(), vec![TAG.into()], 50).await?;
+    let (got, metas) = tokio::join!(
+        room_events(),
+        crate::nostrpub::nostr_query_tag(
+            vec![KIND_ROOM_META],
+            "t".into(),
+            vec![TAG.into()],
+            200
+        ),
+    );
+    // 🔴 수정 글을 못 읽어도 방 목록은 보여야 한다 — 만든 때 이름으로 나올 뿐이다.
+    Ok(json!(rooms_from_events(got?, &metas.unwrap_or_default())))
+}
+
+/// 방을 만든 글들 → 화면에 줄 방 목록. 수정 글(`metas`)은 검증해서 반영한다.
+fn rooms_from_events(got: Vec<Value>, metas: &[Value]) -> Vec<Value> {
     let mut out = Vec::new();
     let mut seen = std::collections::HashSet::new();
     for e in got {
@@ -1061,27 +1076,299 @@ pub async fn talk_rooms() -> Result<Value, String> {
         // 🔴 자산을 **두 곳에서** 찾는다. 태그가 규격이고 본문은 받침이다 —
         //    태그만 보면 옛 프로그램이 만든 방을 못 읽고, 본문만 보면
         //    태그로 거르는 릴레이에서 안 걸린다.
-        let asset = e
-            .get("tags")
-            .and_then(Value::as_array)
-            .and_then(|ts| {
-                ts.iter().find_map(|t| {
-                    let a = t.as_array()?;
-                    (a.first()?.as_str()? == "asset").then(|| a.get(1)?.as_str())?
-                })
-            })
-            .or_else(|| body.get("asset").and_then(Value::as_str))
-            .unwrap_or("")
-            .to_string();
+        let asset = room_asset_of(&e, &body);
+        // 🔴 만든 사람은 **서명을 확인한 뒤에만** 적는다. 릴레이는 아무 글이나
+        //    줄 수 있다 — 확인 안 한 공개키를 믿으면, 남의 방에 「방 설정」이
+        //    뜨거나 남이 보낸 수정 글이 그 방 이름을 바꾼다.
+        let creator = room_creator(&e).unwrap_or_default();
+        let mut name = body.get("name").and_then(Value::as_str).unwrap_or("이름 없는 방").to_string();
+        let mut about = body.get("about").and_then(Value::as_str).unwrap_or("").to_string();
+        let mut meta_at = Value::Null;
+        if !creator.is_empty() {
+            if let Some(m) = latest_room_meta(id, &creator, metas) {
+                let mb: Value = m
+                    .get("content")
+                    .and_then(Value::as_str)
+                    .and_then(|c| serde_json::from_str(c).ok())
+                    .unwrap_or(Value::Null);
+                // 이름이 비었거나 못 읽으면 **이름은 그대로** 둔다 — 빈 이름의 방이
+                // 목록에 생기면 아무도 못 찾는다. 설명은 비우는 것도 뜻이 있다.
+                if let Some(n) = mb.get("name").and_then(Value::as_str) {
+                    let n = shown_meta_text(n, ROOM_NAME_MAX);
+                    if !n.is_empty() {
+                        name = n;
+                    }
+                }
+                if let Some(a) = mb.get("about").and_then(Value::as_str) {
+                    about = shown_meta_text(a, ROOM_ABOUT_MAX);
+                }
+                meta_at = m.get("created_at").cloned().unwrap_or(Value::Null);
+            }
+        }
         out.push(json!({
             "id": id,
-            "name": body.get("name").and_then(Value::as_str).unwrap_or("이름 없는 방"),
-            "about": body.get("about").and_then(Value::as_str).unwrap_or(""),
+            "name": name,
+            "about": about,
+            // ⚠️ 자산은 **만든 글(kind 40)에서만** 온다. 수정 글은 「누가 쓸 수
+            //    있나」를 못 바꾼다.
             "asset": asset,
             "created_at": e.get("created_at"),
+            "pubkey": creator,
+            "meta_at": meta_at,
         }));
     }
-    Ok(json!(out))
+    out
+}
+
+/// 방을 만든 글에 걸린 자산. 태그가 규격이고 본문은 받침이다.
+fn room_asset_of(e: &Value, body: &Value) -> String {
+    e.get("tags")
+        .and_then(Value::as_array)
+        .and_then(|ts| {
+            ts.iter().find_map(|t| {
+                let a = t.as_array()?;
+                (a.first()?.as_str()? == "asset").then(|| a.get(1)?.as_str())?
+            })
+        })
+        .or_else(|| body.get("asset").and_then(Value::as_str))
+        .unwrap_or("")
+        .to_string()
+}
+
+/* ── 방 이름·설명 고치기 (NIP-28 kind 41) ─────────────────────────────────
+ *
+ * 대표님(설계안 P1): 오타 하나에 새 방을 파야 하고, 옛 방은 목록에 영원히 남는다.
+ *
+ * ## 🔴 누가 고칠 수 있나 — **방을 만든 열쇠 하나뿐**
+ *
+ * 공개 릴레이에는 누구나 kind 41 을 올릴 수 있다. 그러니 「받은 41 을 그대로
+ * 반영」하면 **아무나 남의 방 이름을 바꾼다** — 공식 방 이름을 「계좌가
+ * 바뀌었습니다」로 바꾸는 것도 된다. 그래서 읽는 쪽이 셋을 다 본다:
+ *
+ *   ① 서명이 맞는가(`relay::verify`) — 릴레이가 지어낸 글을 거른다
+ *   ② 글쓴이가 **그 방을 만든 글(kind 40)의 서명자**와 같은가
+ *   ③ 그 방을 가리키는가(`e` 태그)
+ *
+ * 쓰는 쪽도 같은 선을 지킨다: 내 이야기 열쇠로 만든 방이 릴레이에서 확인될
+ * 때만 서명한다. 새 열쇠를 파생하지 않는다 — 글·방을 만든 그 `key()` 다.
+ *
+ * ## ⚠️ 못 하는 것
+ *
+ * - **방 지우기는 없다.** 공개 릴레이에 올라간 방은 우리가 지울 수 없다.
+ *   삭제 요청(kind 5)은 부탁일 뿐이라 「지워졌다」고 말할 수 없다. 화면은
+ *   「숨기기(내 화면만)」와 「이름 바꾸기」만 준다.
+ * - **다른 Nostr 앱이 41 을 반영하는지는 앱마다 다르다.** 우리 앱은 위 규칙대로
+ *   반영한다. 다른 앱에서는 옛 이름으로 보일 수 있다고 화면이 말한다.
+ * - **자산(누가 쓸 수 있나)은 못 바꾼다.** 수정 글에 적혀 있어도 안 읽는다.
+ */
+
+/// 방 정보 수정(NIP-28).
+const KIND_ROOM_META: i64 = 41;
+/// 방 이름 한계. 방 만들기 칸(`maxlength="40"`)·내 이름(`talk_profile_set`)과 같다.
+pub(crate) const ROOM_NAME_MAX: usize = 40;
+/// 한 줄 설명 한계. 방 만들기 칸(`maxlength="80"`)과 같다.
+pub(crate) const ROOM_ABOUT_MAX: usize = 80;
+
+/// 방 이름·설명에 못 쓰는 글자.
+///
+/// 줄바꿈·탭 같은 제어 문자는 한 줄 목록을 깨뜨린다. 🔴 글자 방향을 뒤집는
+/// 숨은 문자(U+202A–202E, U+2066–2069)와 폭 없는 공백은 **사칭**에 쓰인다 —
+/// 눈에 「RavenVault」로 보이는데 실제 글자는 다른 이름을 만들 수 있다.
+/// 0.9.0 병합(GPT 교차검토 Q7): 아랍 글자 방향 표시 U+061C·줄/문단 구분 U+2028·U+2029 도 막는다(제어 문자 분류 밖이라 빠져 있었다).
+/// ⚠️ U+200C·U+200D(글자·그림 이모지를 잇는 것)는 막지 않는다. 여러 나라 글자와
+///    가족 이모지가 깨진다.
+fn bad_meta_char(c: char) -> bool {
+    c.is_control()
+        || matches!(
+            c,
+            '\u{061C}' | '\u{200B}' | '\u{200E}' | '\u{200F}' | '\u{2028}' | '\u{2029}' | '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}' | '\u{FEFF}'
+        )
+}
+
+/// 사람이 적은 이름·설명을 검사한다. 고친 값(앞뒤 공백 뺀 것)을 돌려준다.
+///
+/// 🔴 **열쇠를 꺼내기 전에** 부른다. 잠긴 지갑을 열게 해 놓고 「이름이 너무
+///    깁니다」로 끝나면 사람은 암호를 괜히 넣은 것이다.
+pub(crate) fn clean_room_meta(name: &str, about: &str) -> Result<(String, String), String> {
+    let name = name.trim();
+    let about = about.trim();
+    if name.is_empty() {
+        return Err("방 이름이 필요합니다. 빈 이름으로는 바꿀 수 없습니다.".into());
+    }
+    if name.chars().any(bad_meta_char) {
+        return Err("방 이름에 쓸 수 없는 글자(줄바꿈·제어 문자·숨은 방향 문자)가 들어 있습니다.".into());
+    }
+    if about.chars().any(bad_meta_char) {
+        return Err("한 줄 설명에 쓸 수 없는 글자(줄바꿈·제어 문자·숨은 방향 문자)가 들어 있습니다.".into());
+    }
+    let n = name.chars().count();
+    if n > ROOM_NAME_MAX {
+        return Err(format!("방 이름이 너무 깁니다({n}자). {ROOM_NAME_MAX}자 아래로 줄여 주세요."));
+    }
+    let a = about.chars().count();
+    if a > ROOM_ABOUT_MAX {
+        return Err(format!("한 줄 설명이 너무 깁니다({a}자). {ROOM_ABOUT_MAX}자 아래로 줄여 주세요."));
+    }
+    Ok((name.to_string(), about.to_string()))
+}
+
+/// 남이 올린 이름·설명을 **보여 줄 때** 다듬는다. 못 쓰는 글자는 빼고 한계에서 자른다.
+fn shown_meta_text(s: &str, max: usize) -> String {
+    let kept: String = s.chars().filter(|c| !bad_meta_char(*c)).collect();
+    kept.trim().chars().take(max).collect()
+}
+
+/// 이 방 만든 글(kind 40)의 **서명을 확인한** 만든 사람. 확인 못 하면 `None`.
+fn room_creator(e: &Value) -> Option<String> {
+    if e.get("kind").and_then(Value::as_i64) != Some(KIND_ROOM) || !crate::relay::verify(e) {
+        return None;
+    }
+    e.get("pubkey").and_then(Value::as_str).map(str::to_string)
+}
+
+/// 이 글이 그 방을 가리키나(`["e", 방번호, …]`).
+fn points_at_room(e: &Value, room_id: &str) -> bool {
+    e.get("tags").and_then(Value::as_array).is_some_and(|ts| {
+        ts.iter().any(|t| {
+            t.get(0).and_then(Value::as_str) == Some("e") && t.get(1).and_then(Value::as_str) == Some(room_id)
+        })
+    })
+}
+
+/// 그 방에 반영할 수정 글 — **만든 사람이 서명한 것 중 가장 새것.**
+///
+/// 남이 보낸 41 은 아무리 새것이어도 안 본다. 같은 시각이면 id 가 큰 쪽(어느
+/// 컴퓨터에서 봐도 같은 답이 나오게).
+///
+/// 🔴 **미래 시각 41 은 안 본다**(지금 + `META_FUTURE_SLACK` 초 넘게 앞선 것). 안 그러면 만든 열쇠로(또는 그 열쇠를
+///    훔쳐) 먼 미래 시각을 적은 41 하나가 그 뒤 정상 수정을 영영 밀어낸다(0.9.0 병합, GPT 교차검토 Q6).
+fn latest_room_meta<'a>(room_id: &str, creator: &str, metas: &'a [Value]) -> Option<&'a Value> {
+    latest_room_meta_at(room_id, creator, metas, now())
+}
+
+/// 컴퓨터 시계가 조금 다른 것은 받아 준다(10분).
+const META_FUTURE_SLACK: i64 = 600;
+
+fn latest_room_meta_at<'a>(room_id: &str, creator: &str, metas: &'a [Value], now: i64) -> Option<&'a Value> {
+    metas
+        .iter()
+        .filter(|m| {
+            m.get("created_at").and_then(Value::as_i64).is_some_and(|t| t <= now + META_FUTURE_SLACK)
+                && m.get("kind").and_then(Value::as_i64) == Some(KIND_ROOM_META)
+                && m.get("pubkey").and_then(Value::as_str) == Some(creator)
+                && points_at_room(m, room_id)
+                && m.get("content")
+                    .and_then(Value::as_str)
+                    .and_then(|c| serde_json::from_str::<Value>(c).ok())
+                    .is_some_and(|v| v.is_object())
+                && crate::relay::verify(m)
+        })
+        .max_by(|a, b| {
+            let at = |e: &Value| e.get("created_at").and_then(Value::as_i64).unwrap_or(0);
+            let id = |e: &Value| e.get("id").and_then(Value::as_str).unwrap_or("").to_string();
+            at(a).cmp(&at(b)).then_with(|| id(a).cmp(&id(b)))
+        })
+}
+
+/// 이 컴퓨터 안의 릴레이 주소인가. 「공개 릴레이 몇 곳」을 셀 때 뺀다.
+fn is_local_relay(url: &str) -> bool {
+    url.starts_with("ws://127.0.0.1") || url.starts_with("ws://localhost")
+}
+
+/// 방 이름·설명을 고친다. **방을 만든 이야기 열쇠로만** 서명한다.
+///
+/// 응답의 `public_ok`/`public_total` 은 공개 릴레이 중 몇 곳이 받았는지다 —
+/// 화면이 「몇 곳이 받았어요」를 그대로 적는다. 한 곳도 못 받으면 오류다.
+#[tauri::command]
+pub async fn talk_room_meta_set(room: String, name: String, about: String) -> Result<Value, String> {
+    room_meta_set_with(
+        &room,
+        &name,
+        &about,
+        key,
+        |me| async move {
+            let v = crate::nostrpub::nostr_query(vec![KIND_ROOM], vec![me], vec![]).await?;
+            Ok(v.get("events").and_then(Value::as_array).cloned().unwrap_or_default())
+        },
+        crate::nostrpub::nostr_publish,
+        now(),
+    )
+    .await
+}
+
+/// `talk_room_meta_set` 의 몸통. 열쇠·릴레이를 밖에서 받는다 — 시험이 가짜를 끼운다.
+async fn room_meta_set_with<K, Q, QF, P, PF>(
+    room: &str,
+    name: &str,
+    about: &str,
+    key: K,
+    my_rooms: Q,
+    publish: P,
+    at: i64,
+) -> Result<Value, String>
+where
+    K: FnOnce() -> Result<[u8; 32], String>,
+    Q: FnOnce(String) -> QF,
+    QF: std::future::Future<Output = Result<Vec<Value>, String>>,
+    P: FnOnce(Value) -> PF,
+    PF: std::future::Future<Output = Result<Value, String>>,
+{
+    let room = room.trim().to_ascii_lowercase();
+    if room.len() != 64 || !room.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err("방 번호가 올바르지 않습니다.".into());
+    }
+    let (name, about) = clean_room_meta(name, about)?;
+    // 🔴 지갑이 잠겨 있고 이야기 열쇠가 아직 없으면 여기서 `[SEED_LOCKED]` 로
+    //    멈춘다. 화면이 그 표를 보고 「지갑 열기」를 먼저 안내한다.
+    let sk = key()?;
+    let me = crate::shopkey::pubkey_of(&sk)?;
+    let mine = my_rooms(me.clone())
+        .await
+        .map_err(|e| format!("릴레이에서 이 방을 확인하지 못했습니다. 잠시 뒤 다시 해 주세요: {e}"))?;
+    let room_ev = mine
+        .iter()
+        .find(|e| e.get("id").and_then(Value::as_str) == Some(room.as_str()) && room_creator(e).as_deref() == Some(me.as_str()))
+        .ok_or_else(|| {
+            "이 방을 만든 열쇠로 확인되지 않았습니다. 방 이름·설명은 방을 만든 사람만 바꿀 수 있습니다. \
+             (방을 방금 만들었다면 릴레이에 닿을 때까지 잠시 뒤 다시 해 주세요.)"
+                .to_string()
+        })?;
+    let body: Value = room_ev
+        .get("content")
+        .and_then(Value::as_str)
+        .and_then(|c| serde_json::from_str(c).ok())
+        .unwrap_or(Value::Null);
+    let asset = room_asset_of(room_ev, &body);
+    let mut content = json!({ "name": name, "about": about, "picture": "" });
+    if !asset.is_empty() {
+        // 다른 앱이 수정 글로 정보를 통째로 바꿔도 자산 표시가 안 사라지게 그대로 옮겨 적는다.
+        content["asset"] = json!(asset);
+    }
+    let tags = json!([["e", room, "", "root"], ["t", TAG]]);
+    let ev = crate::shopkey::sign_with(&sk, KIND_ROOM_META, tags, &content.to_string(), at)?;
+    let sent = publish(ev.clone()).await?;
+    let list = |k: &str| -> Vec<String> {
+        sent.get(k)
+            .and_then(Value::as_array)
+            .map(|a| {
+                a.iter()
+                    .filter_map(|x| x.as_str().map(str::to_string).or_else(|| x.get("relay").and_then(Value::as_str).map(str::to_string)))
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+    let (ok, failed) = (list("ok"), list("failed"));
+    let public_ok = ok.iter().filter(|u| !is_local_relay(u)).count();
+    let public_total = public_ok + failed.iter().filter(|u| !is_local_relay(u)).count();
+    Ok(json!({
+        "event": ev,
+        "sent": sent,
+        "name": name,
+        "about": about,
+        "public_ok": public_ok,
+        "public_total": public_total,
+        "local_ok": ok.iter().any(|u| is_local_relay(u)),
+    }))
 }
 
 #[cfg(test)]
@@ -1462,7 +1749,7 @@ mod gate_tests {
         let body = &src[i..i + end];
         assert!(
             body.contains("unknown.is_none()"),
-            "확인 못 했을 때도 막고 있다 — 노드가 훑는 동안 자기 방에 자기가 못 쓴다"
+            "확인 못 했을 때도 막고 있다 — 서버가 훑는 동안 자기 방에 자기가 못 쓴다"
         );
     }
 
@@ -1500,5 +1787,274 @@ mod gate_tests {
             head.contains("공개 릴레이는 우리 규칙을 모른다"),
             "우리가 강제 못 하는 범위를 안 적고 있다"
         );
+    }
+}
+
+#[cfg(test)]
+mod room_meta_tests {
+    //! 방 이름·설명 고치기(kind 41). 릴레이는 전부 가짜다 — 밖으로 안 나간다.
+    use super::*;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    const A: [u8; 32] = [7u8; 32];
+    const B: [u8; 32] = [9u8; 32];
+
+    fn ev(sk: &[u8; 32], kind: i64, tags: Value, content: &str, at: i64) -> Value {
+        crate::shopkey::sign_with(sk, kind, tags, content, at).expect("서명")
+    }
+    fn room_by(sk: &[u8; 32], name: &str, asset: &str) -> Value {
+        let mut tags = vec![json!(["t", TAG])];
+        if !asset.is_empty() {
+            tags.push(json!(["asset", asset]));
+        }
+        ev(sk, KIND_ROOM, json!(tags), &json!({ "name": name, "about": "처음 설명", "asset": asset }).to_string(), now() - 600)
+    }
+    fn meta_by(sk: &[u8; 32], room: &str, name: &str, at: i64) -> Value {
+        ev(sk, KIND_ROOM_META, json!([["e", room, "", "root"], ["t", TAG]]), &json!({ "name": name, "about": "고친 설명" }).to_string(), at)
+    }
+    fn id(e: &Value) -> String {
+        e["id"].as_str().unwrap().to_string()
+    }
+    fn fake_sent() -> Value {
+        json!({ "ok": ["ws://127.0.0.1:8787/api/relay", "wss://relay.damus.io"],
+                "failed": [{ "relay": "wss://nos.lol", "why": "가짜" }, { "relay": "wss://relay.primal.net", "why": "가짜" }] })
+    }
+
+    /// 🔴 좋은 입력이 **통과하는지 먼저** 본다. 그다음 내 열쇠로 서명됐는지·방을 가리키는지·
+    ///    공개 중계 검사(`validate_publish_event`)를 통과하는지 본다.
+    #[tokio::test]
+    async fn 방을_만든_열쇠로_kind_41_을_서명한다() {
+        let room = room_by(&A, "서울 주짓수 모임", "");
+        let rid = id(&room);
+        let got = std::sync::Mutex::new(None::<Value>);
+        let r = room_meta_set_with(
+            &rid,
+            "  서울 주짓수 모임(목)  ",
+            "매주 목요일 스파링",
+            || Ok(A),
+            |me| {
+                assert_eq!(me, crate::shopkey::pubkey_of(&A).unwrap(), "내 공개키로 내 방을 찾아야 한다");
+                let room = room.clone();
+                async move { Ok(vec![room]) }
+            },
+            |e| {
+                *got.lock().unwrap() = Some(e);
+                async { Ok(fake_sent()) }
+            },
+            now(),
+        )
+        .await
+        .expect("내 방은 고칠 수 있어야 한다");
+        let e = got.lock().unwrap().clone().expect("올려야 한다");
+        assert_eq!(e["kind"], json!(41));
+        assert_eq!(e["pubkey"], json!(crate::shopkey::pubkey_of(&A).unwrap()), "방을 만든 열쇠가 아니다");
+        assert!(crate::relay::verify(&e), "서명이 안 맞는다");
+        assert!(points_at_room(&e, &rid), "어느 방인지 안 적었다");
+        assert!(e["tags"].as_array().unwrap().iter().any(|t| t == &json!(["t", TAG])), "레이븐 표가 없다 — 우리 릴레이가 안 남긴다");
+        let c: Value = serde_json::from_str(e["content"].as_str().unwrap()).unwrap();
+        assert_eq!(c["name"], json!("서울 주짓수 모임(목)"), "앞뒤 공백을 안 뺐다");
+        assert_eq!(c["about"], json!("매주 목요일 스파링"));
+        assert_eq!(crate::nostrpub::validate_publish_event(&e), Ok(()), "중계 검사가 41 을 막는다");
+        // 정직한 결과: 공개 릴레이 3곳 중 1곳, 이 컴퓨터 릴레이는 받음.
+        assert_eq!(r["public_ok"], json!(1));
+        assert_eq!(r["public_total"], json!(3));
+        assert_eq!(r["local_ok"], json!(true));
+    }
+
+    /// 자산 방이면 자산을 수정 글에도 그대로 옮겨 적는다(다른 앱이 정보를 통째로 바꿔도 안 사라지게).
+    #[tokio::test]
+    async fn 자산은_그대로_옮겨_적는다() {
+        let room = room_by(&A, "단골 방", "SHOP.PLAYX");
+        let rid = id(&room);
+        let got = std::sync::Mutex::new(None::<Value>);
+        room_meta_set_with(&rid, "단골 방 2", "", || Ok(A), |_| async move { Ok(vec![room]) }, |e| {
+            *got.lock().unwrap() = Some(e);
+            async { Ok(fake_sent()) }
+        }, now())
+        .await
+        .unwrap();
+        let e = got.lock().unwrap().clone().unwrap();
+        let c: Value = serde_json::from_str(e["content"].as_str().unwrap()).unwrap();
+        assert_eq!(c["asset"], json!("SHOP.PLAYX"));
+    }
+
+    /// 🔴 남이 만든 방은 고칠 수 없다 — **서명하지도 올리지도 않는다.**
+    #[tokio::test]
+    async fn 남이_만든_방은_고치지_않는다() {
+        let room = room_by(&B, "남의 방", "");
+        let rid = id(&room);
+        let sent = AtomicBool::new(false);
+        let e = room_meta_set_with(&rid, "빼앗은 이름", "", || Ok(A), |_| async move { Ok(vec![room]) }, |_| {
+            sent.store(true, Ordering::SeqCst);
+            async { Ok(fake_sent()) }
+        }, now())
+        .await
+        .unwrap_err();
+        assert!(e.contains("만든 사람만"), "왜 안 되는지 안 말한다: {e}");
+        assert!(!sent.load(Ordering::SeqCst), "남의 방 수정 글을 올렸다");
+    }
+
+    /// 릴레이가 **서명을 바꿔치기한** 방 글을 줘도 내 방으로 믿지 않는다.
+    #[tokio::test]
+    async fn 위조된_방_글은_믿지_않는다() {
+        let mut room = room_by(&A, "내 방", "");
+        let rid = id(&room);
+        room["content"] = json!("{\"name\":\"바꿔치기\"}");
+        let sent = AtomicBool::new(false);
+        let r = room_meta_set_with(&rid, "새 이름", "", || Ok(A), |_| async move { Ok(vec![room]) }, |_| {
+            sent.store(true, Ordering::SeqCst);
+            async { Ok(fake_sent()) }
+        }, now())
+        .await;
+        assert!(r.is_err() && !sent.load(Ordering::SeqCst), "서명 안 맞는 방 글을 믿었다");
+    }
+
+    /// 🔴 지갑이 잠겨 있으면 `[SEED_LOCKED]` 를 그대로 돌려준다(화면이 「지갑 열기」를 먼저 안내).
+    ///    릴레이에 묻지도 올리지도 않는다.
+    #[tokio::test]
+    async fn 지갑이_잠겨_있으면_거절하고_아무데도_안_간다() {
+        let asked = AtomicBool::new(false);
+        let sent = AtomicBool::new(false);
+        let e = room_meta_set_with(
+            &"a".repeat(64),
+            "새 이름",
+            "",
+            || Err(crate::identity::SeedFailure::Locked.public_error()),
+            |_| {
+                asked.store(true, Ordering::SeqCst);
+                async { Ok(vec![]) }
+            },
+            |_| {
+                sent.store(true, Ordering::SeqCst);
+                async { Ok(fake_sent()) }
+            },
+            now(),
+        )
+        .await
+        .unwrap_err();
+        assert!(e.contains("[SEED_LOCKED]"), "잠김 표가 사라졌다 — 화면이 「지갑 열기」를 못 띄운다: {e}");
+        assert!(!asked.load(Ordering::SeqCst) && !sent.load(Ordering::SeqCst));
+    }
+
+    /// 🔴 이름 검사는 **열쇠를 꺼내기 전에.** 잠긴 지갑을 열게 해 놓고 「너무 깁니다」로 끝나면 안 된다.
+    #[tokio::test]
+    async fn 잘못된_이름은_열쇠를_꺼내기_전에_멈춘다() {
+        let keyed = AtomicBool::new(false);
+        let e = room_meta_set_with(&"a".repeat(64), &"가".repeat(41), "", || {
+            keyed.store(true, Ordering::SeqCst);
+            Ok(A)
+        }, |_| async { Ok(vec![]) }, |_| async { Ok(fake_sent()) }, now())
+        .await
+        .unwrap_err();
+        assert!(e.contains("너무 깁니다"), "{e}");
+        assert!(!keyed.load(Ordering::SeqCst), "검사 전에 열쇠를 꺼냈다");
+        // 방 번호가 이상해도 같다.
+        assert!(room_meta_set_with("../x", "이름", "", || Ok(A), |_| async { Ok(vec![]) }, |_| async { Ok(fake_sent()) }, now()).await.is_err());
+    }
+
+    /// 길이·빈 이름·제어 문자. 한 글자 차이로 갈리는지까지 본다.
+    #[test]
+    fn 길이와_못_쓰는_글자() {
+        assert!(clean_room_meta(&"가".repeat(ROOM_NAME_MAX), &"나".repeat(ROOM_ABOUT_MAX)).is_ok(), "딱 맞는 것이 막혔다");
+        assert!(clean_room_meta(&"가".repeat(ROOM_NAME_MAX + 1), "").unwrap_err().contains("40자"));
+        assert!(clean_room_meta("이름", &"나".repeat(ROOM_ABOUT_MAX + 1)).unwrap_err().contains("80자"));
+        assert!(clean_room_meta("   ", "").unwrap_err().contains("필요합니다"));
+        for bad in ["줄\n바꿈", "탭\t이름", "널\u{0}", "RavenVault\u{202E}tlua", "숨은\u{2066}방향", "폭\u{200B}없음", "아랍\u{061C}방향", "줄\u{2028}구분", "문단\u{2029}구분"] {
+            assert!(clean_room_meta(bad, "").is_err(), "{bad:?} 가 지나갔다");
+            assert!(clean_room_meta("이름", bad).is_err(), "설명 {bad:?} 가 지나갔다");
+        }
+        // 이모지 잇는 글자(ZWJ)·여러 나라 글자는 막지 않는다.
+        assert!(clean_room_meta("가족 \u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}", "Café · 東京 · Москва").is_ok());
+        assert_eq!(clean_room_meta("  이름  ", "  설명  ").unwrap(), ("이름".to_string(), "설명".to_string()));
+    }
+
+    /// 🔴 **남이 보낸 41 은 무시한다.** 더 새것이어도. 그리고 만든 사람의 것 중 가장 새것을 쓴다.
+    #[test]
+    fn 남의_41_은_무시하고_만든_사람의_최신만_반영한다() {
+        let room = room_by(&A, "처음 이름", "SHOP.PLAYX");
+        let rid = id(&room);
+        let t = now();
+        let metas = vec![
+            meta_by(&A, &rid, "만든 사람 옛 수정", t - 300),
+            meta_by(&A, &rid, "만든 사람 새 수정", t - 100),
+            meta_by(&B, &rid, "남이 바꾼 이름(가장 새것)", t - 10),
+        ];
+        let rooms = rooms_from_events(vec![room.clone()], &metas);
+        assert_eq!(rooms.len(), 1);
+        let r = &rooms[0];
+        assert_eq!(r["name"], json!("만든 사람 새 수정"));
+        assert_eq!(r["about"], json!("고친 설명"));
+        assert_eq!(r["pubkey"], json!(crate::shopkey::pubkey_of(&A).unwrap()));
+        assert_eq!(r["meta_at"], json!(t - 100));
+        // ⚠️ 자산은 만든 글에서만 — 수정 글은 「누가 쓸 수 있나」를 못 바꾼다.
+        assert_eq!(r["asset"], json!("SHOP.PLAYX"));
+
+        // 남의 것만 있으면 처음 이름 그대로.
+        let only_b = rooms_from_events(vec![room.clone()], &[meta_by(&B, &rid, "남", t)]);
+        assert_eq!(only_b[0]["name"], json!("처음 이름"));
+        assert_eq!(only_b[0]["meta_at"], Value::Null);
+
+        // 위조(내용을 바꿔 서명이 안 맞는) 41·다른 방을 가리키는 41·빈 이름 41 도 안 쓴다.
+        let mut forged = meta_by(&A, &rid, "원래", t);
+        forged["content"] = json!("{\"name\":\"위조\"}");
+        let other = meta_by(&A, &"b".repeat(64), "다른 방", t);
+        let empty = ev(&A, KIND_ROOM_META, json!([["e", rid, "", "root"]]), "{\"name\":\"  \",\"about\":\"설명만\"}", t + 5);
+        let r = rooms_from_events(vec![room.clone()], &[forged, other, empty]);
+        assert_eq!(r[0]["name"], json!("처음 이름"), "위조·다른 방·빈 이름 수정이 반영됐다");
+        assert_eq!(r[0]["about"], json!("설명만"), "설명은 비우거나 바꿀 수 있다");
+    }
+
+    /// 🔴 만든 사람이 서명했어도 **먼 미래 시각** 41 은 안 본다 — 그 하나가 뒤의 정상 수정을 영영 밀어내지 않게.
+    #[test]
+    fn 미래_시각_41_은_정상_수정을_밀어내지_못한다() {
+        let room = room_by(&A, "처음 이름", "");
+        let rid = id(&room);
+        let t = now();
+        let metas = vec![meta_by(&A, &rid, "정상 수정", t - 60), meta_by(&A, &rid, "미래에 고정", t + 10 * 365 * 86_400)];
+        let r = rooms_from_events(vec![room.clone()], &metas);
+        assert_eq!(r[0]["name"], json!("정상 수정"), "먼 미래 41 이 이겼다");
+        // 시계가 조금(10분 안) 빠른 컴퓨터의 수정은 받는다.
+        let skew = rooms_from_events(vec![room], &[meta_by(&A, &rid, "시계가 5분 빠름", t + 300)]);
+        assert_eq!(skew[0]["name"], json!("시계가 5분 빠름"));
+    }
+
+    /// 서명이 안 맞는 방 글(kind 40)은 만든 사람을 비운다 — 「방 설정」이 아무에게도 안 뜨고 41 도 안 붙는다.
+    #[test]
+    fn 위조된_방_글에는_만든_사람이_없다() {
+        let mut room = room_by(&A, "처음", "");
+        let rid = id(&room);
+        room["content"] = json!("{\"name\":\"바꿔치기\"}");
+        let r = rooms_from_events(vec![room], &[meta_by(&A, &rid, "수정", now())]);
+        assert_eq!(r[0]["pubkey"], json!(""));
+        assert_eq!(r[0]["name"], json!("바꿔치기"), "목록은 예전처럼 보인다(검증은 만든 사람·수정에만)");
+    }
+
+    /// 남이 올린 이름에 숨은 방향 문자가 있으면 빼고, 한계에서 자른다.
+    #[test]
+    fn 보여_줄_때도_다듬는다() {
+        assert_eq!(shown_meta_text("Raven\u{202E}Vault\n", 40), "RavenVault");
+        assert_eq!(shown_meta_text(&"가".repeat(100), 40).chars().count(), 40);
+    }
+
+    /// 중계 검사: 41 은 방 번호(`e`)가 있어야 하고 내용은 JSON 객체여야 한다.
+    #[test]
+    fn 중계_검사는_방_번호_없는_41_을_막는다() {
+        let no_e = ev(&A, KIND_ROOM_META, json!([["t", TAG]]), "{\"name\":\"x\"}", now());
+        assert!(crate::nostrpub::validate_publish_event(&no_e).is_err());
+        let not_json = ev(&A, KIND_ROOM_META, json!([["e", "a".repeat(64)]]), "그냥 글", now());
+        assert!(crate::nostrpub::validate_publish_event(&not_json).is_err());
+        let good = ev(&A, KIND_ROOM_META, json!([["e", "a".repeat(64)]]), "{\"name\":\"x\"}", now());
+        assert_eq!(crate::nostrpub::validate_publish_event(&good), Ok(()));
+    }
+
+    /// 방 목록은 수정 글을 묻고, 글을 쓸 때(`room_asset`)는 안 묻는다.
+    #[test]
+    fn 글_쓸_때는_수정_글을_안_묻는다() {
+        let src = include_str!("talk.rs");
+        let i = src.find("async fn room_asset(").expect("있어야 한다");
+        let end = src[i..].find("\n}\n").unwrap();
+        let body = &src[i..i + end];
+        assert!(!body.contains("talk_rooms()"), "글 하나 쓸 때마다 수정 글까지 묻는다");
+        assert!(body.contains("&[]"), "자산을 수정 글 없이 읽어야 한다");
     }
 }

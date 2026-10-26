@@ -495,7 +495,7 @@ fn sheets_of(entry: &Value, lang: &str, preview: bool, only: Option<usize>, m: &
         .map(|a| a.iter().filter_map(Value::as_str).collect())
         .unwrap_or_default();
     if names.is_empty() {
-        return Err("아직 체인 이름이 없어요. 만들기가 끝난 뒤에 인쇄할 수 있어요.".into());
+        return Err("아직 공개 장부 이름이 없어요. 만들기가 끝난 뒤에 인쇄할 수 있어요.".into());
     }
     let recipients: Vec<&str> = entry
         .get("recipients")

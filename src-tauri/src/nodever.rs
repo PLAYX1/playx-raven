@@ -60,7 +60,7 @@ pub fn version_of(path: &str) -> Option<String> {
 #[tauri::command]
 pub fn node_version() -> Value {
     let Some(path) = crate::services::which("ravend") else {
-        return json!({ "known": false, "why": "노드 프로그램을 찾지 못했습니다." });
+        return json!({ "known": false, "why": "서버 프로그램을 찾지 못했습니다." });
     };
     let line = version_of(&path);
     let ver = line.as_deref().and_then(parse);

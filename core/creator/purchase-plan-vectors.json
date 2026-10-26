@@ -1,0 +1,246 @@
+{
+  "_note": "구매 계획 공용 벡터 — 지갑 purchase-plan.ts 와 데스크탑(market.rs · market-092.test.mjs)이 같이 읽는다. 지갑 원본이 정본이고 데스크탑은 바이트 동일 복사. rust:true 인 오류 사례는 러스트 검사도 같은 이유로 거절해야 한다.",
+  "cases": [
+    {
+      "name": "300 RVN, 5%: 판매자 285 + 수수료 15 + 메모",
+      "input": {
+        "priceAtoms": "30000000000",
+        "feeBps": 500,
+        "sellerAddress": "RSellerAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "feeAddress": "RFeeBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+        "memoScript": "6a0452564450"
+      },
+      "expect": {
+        "outputs": [
+          {
+            "role": "seller",
+            "address": "RSellerAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "atoms": "28500000000"
+          },
+          {
+            "role": "fee",
+            "address": "RFeeBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+            "atoms": "1500000000"
+          },
+          {
+            "role": "memo",
+            "address": null,
+            "atoms": "0",
+            "scriptHex": "6a0452564450"
+          }
+        ],
+        "sellerAtoms": "28500000000",
+        "feeAtoms": "1500000000"
+      }
+    },
+    {
+      "name": "요율 0: 수수료 출력 없음",
+      "input": {
+        "priceAtoms": "30000000000",
+        "feeBps": 0,
+        "sellerAddress": "RSellerAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "feeAddress": "RFeeBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+        "memoScript": "6a0452564450"
+      },
+      "expect": {
+        "outputs": [
+          {
+            "role": "seller",
+            "address": "RSellerAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "atoms": "30000000000"
+          },
+          {
+            "role": "memo",
+            "address": null,
+            "atoms": "0",
+            "scriptHex": "6a0452564450"
+          }
+        ],
+        "sellerAtoms": "30000000000",
+        "feeAtoms": "0"
+      }
+    },
+    {
+      "name": "최대 15%",
+      "input": {
+        "priceAtoms": "30000000000",
+        "feeBps": 1500,
+        "sellerAddress": "RSellerAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "feeAddress": "RFeeBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+        "memoScript": "6a0452564450"
+      },
+      "expect": {
+        "outputs": [
+          {
+            "role": "seller",
+            "address": "RSellerAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "atoms": "25500000000"
+          },
+          {
+            "role": "fee",
+            "address": "RFeeBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+            "atoms": "4500000000"
+          },
+          {
+            "role": "memo",
+            "address": null,
+            "atoms": "0",
+            "scriptHex": "6a0452564450"
+          }
+        ],
+        "sellerAtoms": "25500000000",
+        "feeAtoms": "4500000000"
+      }
+    },
+    {
+      "name": "수수료 먼지 한계로 올림(가격 0.0001 RVN)",
+      "input": {
+        "priceAtoms": "10000",
+        "feeBps": 500,
+        "sellerAddress": "RSellerAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "feeAddress": "RFeeBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+        "memoScript": "6a0452564450"
+      },
+      "expect": {
+        "outputs": [
+          {
+            "role": "seller",
+            "address": "RSellerAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "atoms": "9000"
+          },
+          {
+            "role": "fee",
+            "address": "RFeeBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+            "atoms": "1000"
+          },
+          {
+            "role": "memo",
+            "address": null,
+            "atoms": "0",
+            "scriptHex": "6a0452564450"
+          }
+        ],
+        "sellerAtoms": "9000",
+        "feeAtoms": "1000"
+      }
+    },
+    {
+      "name": "판매자 몫이 먼지 한계 딱 맞음",
+      "input": {
+        "priceAtoms": "2000",
+        "feeBps": 1500,
+        "sellerAddress": "RSellerAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "feeAddress": "RFeeBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+        "memoScript": "6a0452564450"
+      },
+      "expect": {
+        "outputs": [
+          {
+            "role": "seller",
+            "address": "RSellerAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "atoms": "1000"
+          },
+          {
+            "role": "fee",
+            "address": "RFeeBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+            "atoms": "1000"
+          },
+          {
+            "role": "memo",
+            "address": null,
+            "atoms": "0",
+            "scriptHex": "6a0452564450"
+          }
+        ],
+        "sellerAtoms": "1000",
+        "feeAtoms": "1000"
+      }
+    }
+  ],
+  "errors": [
+    {
+      "name": "판매자 주소 = 수수료 주소",
+      "input": {
+        "priceAtoms": "30000000000",
+        "feeBps": 500,
+        "sellerAddress": "RSellerAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "feeAddress": "RSellerAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "memoScript": "6a0452564450"
+      },
+      "expectError": "fee-equals-seller",
+      "rust": true
+    },
+    {
+      "name": "요율 0 이어도 같은 주소는 거절",
+      "input": {
+        "priceAtoms": "30000000000",
+        "feeBps": 0,
+        "sellerAddress": "RSellerAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "feeAddress": "RSellerAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "memoScript": "6a0452564450"
+      },
+      "expectError": "fee-equals-seller",
+      "rust": true
+    },
+    {
+      "name": "메모 길이 안 맞음",
+      "input": {
+        "priceAtoms": "30000000000",
+        "feeBps": 500,
+        "sellerAddress": "RSellerAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "feeAddress": "RFeeBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+        "memoScript": "6a0552564450"
+      },
+      "expectError": "memo-invalid",
+      "rust": true
+    },
+    {
+      "name": "메모가 OP_RETURN 아님",
+      "input": {
+        "priceAtoms": "30000000000",
+        "feeBps": 500,
+        "sellerAddress": "RSellerAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "feeAddress": "RFeeBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+        "memoScript": "6b0452564450"
+      },
+      "expectError": "memo-invalid",
+      "rust": true
+    },
+    {
+      "name": "판매자 몫이 먼지",
+      "input": {
+        "priceAtoms": "1500",
+        "feeBps": 500,
+        "sellerAddress": "RSellerAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "feeAddress": "RFeeBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+        "memoScript": "6a0452564450"
+      },
+      "expectError": "price-too-small",
+      "rust": false
+    },
+    {
+      "name": "요율 15% 초과",
+      "input": {
+        "priceAtoms": "30000000000",
+        "feeBps": 1501,
+        "sellerAddress": "RSellerAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "feeAddress": "RFeeBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+        "memoScript": "6a0452564450"
+      },
+      "expectError": "fee-bps",
+      "rust": false
+    },
+    {
+      "name": "가격 0",
+      "input": {
+        "priceAtoms": "0",
+        "feeBps": 500,
+        "sellerAddress": "RSellerAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "feeAddress": "RFeeBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+        "memoScript": "6a0452564450"
+      },
+      "expectError": "price-format",
+      "rust": false
+    }
+  ]
+}

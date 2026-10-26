@@ -78,7 +78,7 @@ impl DataDirGuard {
             .try_lock()
             .map_err(|_| "다른 복원이 진행 중입니다. 끝난 뒤 다시 시도해 주세요.".to_string())?;
         let canonical = fs::canonicalize(directory)
-            .map_err(|e| format!("노드 폴더를 확인하지 못했습니다. 폴더를 확인해 주세요: {e}"))?;
+            .map_err(|e| format!("서버 폴더를 확인하지 못했습니다. 폴더를 확인해 주세요: {e}"))?;
         let dir_file = open_directory(&canonical).map_err(lock_error)?;
         let path = canonical.join(".lock");
         let mut options = OpenOptions::new();
@@ -101,7 +101,7 @@ impl DataDirGuard {
         }
         let file = options.open(path).map_err(lock_error)?;
         if !file.metadata().map_err(lock_error)?.is_file() {
-            return Err("노드 잠금 파일이 일반 파일이 아닙니다. 폴더를 확인해 주세요.".into());
+            return Err("서버 잠금 파일이 일반 파일이 아닙니다. 폴더를 확인해 주세요.".into());
         }
         lock(&file).map_err(lock_error)?;
         let guard = Self {
@@ -124,7 +124,7 @@ impl DataDirGuard {
             && same_file_at(&self.directory, &self.canonical).unwrap_or(false)
             && same_file_at(&self.file, &self.canonical.join(".lock")).unwrap_or(false);
         if !valid {
-            return Err("노드 폴더나 잠금 파일이 바뀌었습니다. 복원을 멈췄습니다. 폴더를 확인한 뒤 다시 시도해 주세요.".into());
+            return Err("서버 폴더나 잠금 파일이 바뀌었습니다. 복원을 멈췄습니다. 폴더를 확인한 뒤 다시 시도해 주세요.".into());
         }
         Ok(())
     }
@@ -137,7 +137,7 @@ impl DataDirGuard {
         self.check()?;
         if destination != self.canonical.join("wallet.dat") {
             return Err(
-                "확인한 노드 폴더의 지갑만 되돌릴 수 있습니다. 폴더를 다시 확인해 주세요.".into(),
+                "확인한 서버 폴더의 지갑만 되돌릴 수 있습니다. 폴더를 다시 확인해 주세요.".into(),
             );
         }
         // Do not open a hard-link alias of .lock: closing it would drop a POSIX lock.
@@ -152,7 +152,7 @@ impl DataDirGuard {
 
 fn lock_error(e: io::Error) -> String {
     format!(
-        "노드 폴더를 단독으로 사용할 수 없습니다. 노드를 완전히 종료한 뒤 다시 시도해 주세요: {e}"
+        "서버 폴더를 단독으로 사용할 수 없습니다. 서버를 완전히 종료한 뒤 다시 시도해 주세요: {e}"
     )
 }
 

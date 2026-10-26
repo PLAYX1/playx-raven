@@ -620,17 +620,18 @@ pub async fn auto_deliver_web(
             continue;
         }
 
-        // 30초만 열고 바로 잠근다.
-        if let Err(e) = call_rpc("walletpassphrase", json!([pass, 30])).await {
-            skipped.push(json!({ "id": id, "asset": asset, "why": format!("지갑을 못 열었습니다 — {e}") }));
-            break; // 암호가 틀리면 나머지도 다 실패한다. 헛돌지 않는다.
-        }
-        let r = call_rpc("transfer", json!([asset, qty, to, "", 0, "", ""])).await;
-        let _ = call_rpc("walletlock", json!([])).await;
+        let order = serde_json::from_value::<crate::remote_sales::Order>(json!({
+            "id": id, "asset": asset, "qty": qty, "to": to,
+            "order_addr": it["order_addr"], "paid_rvn": it["paid_rvn"],
+            "payment_txid": it["payment_txid"], "payment_vout": it["payment_vout"],
+        }));
+        let r = match order {
+            Ok(order) => crate::remote_sales::deliver(order, Some(pass.clone())).await,
+            Err(_) => Err("주문 결제 증빙이 없습니다.".into()),
+        };
 
         match r {
-            Ok(v) => {
-                let txid = v.as_array().and_then(|a| a.first()).and_then(Value::as_str).unwrap_or("").to_string();
+            Ok(txid) => {
                 if txid.is_empty() {
                     skipped.push(json!({ "id": id, "asset": asset, "why": "전송 번호를 못 받았습니다" }));
                 } else {

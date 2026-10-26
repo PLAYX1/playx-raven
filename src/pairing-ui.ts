@@ -11,6 +11,7 @@
  */
 import { invoke } from "@tauri-apps/api/core";
 import { copyHtml, setCopyText, t, tf } from "./i18n";
+import { setAmountRvn } from "./amount-ui";
 import "./pairing-ui.css";
 
 type Perms = { view: boolean; request: boolean; money: "desktop" | "phone"; daily_limit_rvn: number };
@@ -79,7 +80,7 @@ const CARD = `
       <p class="rvp-sub">${copyHtml("돈이 나가는 일")}</p>
       <label><input type="radio" name="rvp-money" id="rvp-money-desk" value="desktop" checked /> ${copyHtml("이 컴퓨터에서 확인 (기본)")}</label>
       <label><input type="radio" name="rvp-money" id="rvp-money-phone" value="phone" /> ${copyHtml("폰 승인 허용 — 하루 한도 안에서만")}</label>
-      <label class="rvp-limit">${copyHtml("하루 한도 (RVN, 최근 24시간)")} <input type="number" id="rvp-limit" min="0" step="1" value="0" /></label>
+      <label class="rvp-limit">${copyHtml("하루 한도 (최대 1,000 RVN, 최근 24시간)")} <input type="number" id="rvp-limit" max="1000" min="0" step="1" value="0" /></label>
       <p class="meta">${copyHtml("폰 승인이어도 지갑이 잠겨 있으면 풀릴 때까지 기다려요. 자산 보내기는 언제나 이 컴퓨터에서 확인해요.")}</p>
     </fieldset>
     <div class="rvp-row">
@@ -110,7 +111,7 @@ function permsText(p: Perms) {
   const parts: string[] = [];
   if (p.view) parts.push(copyHtml("보기"));
   if (p.request) parts.push(copyHtml("요청"));
-  parts.push(p.money === "phone" ? `${copyHtml("폰 승인")} <span translate="no">${esc(p.daily_limit_rvn)} RVN</span>` : copyHtml("돈은 이 컴퓨터에서 확인"));
+  parts.push(p.money === "phone" && p.daily_limit_rvn > 1000 ? copyHtml("기존 한도가 1,000 RVN을 초과해 자동 송금이 중지되었습니다. 다시 연결해 주세요.") : p.money === "phone" ? `${copyHtml("폰 승인")} <span translate="no">${esc(p.daily_limit_rvn)} RVN</span>` : copyHtml("돈은 이 컴퓨터에서 확인"));
   return parts.join(" · ");
 }
 function summary(r: Req) {
@@ -248,7 +249,7 @@ async function openRequest(id: string) {
     window.setTimeout(() => {
       const a = el("s-addr") as HTMLInputElement | null, q = el("s-qty") as HTMLInputElement | null;
       if (a && q) {
-        a.value = to; q.value = String(amount);
+        a.value = to; setAmountRvn(q, amount); // 지역 형식으로(de 「1,5」) — 글자 「1.5」를 넣으면 de 에서 막힌다
         a.dispatchEvent(new Event("input", { bubbles: true }));
         q.dispatchEvent(new Event("input", { bubbles: true }));
       }
@@ -333,9 +334,21 @@ export function wirePairing(confirmBox?: Ask) {
   card.className = "card rvp";
   card.id = "rvp-card";
   card.innerHTML = CARD;
+  card.hidden = true;
   const lang = settings.querySelector(".desktop-language-settings");
   if (lang) lang.after(card); else settings.prepend(card);
   wireCard(card);
+  for (const page of [settings, document.getElementById("page-wallet")]) {
+    if (!page) continue;
+    const connect = document.createElement("button");
+    connect.type = "button"; connect.id = page === settings ? "rvp-connect-settings" : "rvp-connect-wallet";
+    setCopyText(connect, () => t("휴대폰 연결"));
+    connect.onclick = () => {
+      (document.querySelector('nav [data-page="settings"]') as HTMLElement | null)?.click();
+      card.hidden = false; card.scrollIntoView({ block: "start" }); void refresh();
+    };
+    page.prepend(connect);
+  }
 
   // 구석 알림 — 설정을 안 보고 있어도 폰 요청·연결 요청을 놓치지 않게.
   const notice = document.createElement("button");
@@ -345,7 +358,7 @@ export function wirePairing(confirmBox?: Ask) {
   document.body.append(notice);
   notice.addEventListener("click", () => {
     (document.querySelector('nav [data-page="settings"]') as HTMLElement | null)?.click();
-    window.setTimeout(() => card.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+    window.setTimeout(() => el("rvp-connect-settings")?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
   });
 
   // 기존 보내기 화면에서 보내기가 끝났다 → 그게 폰 요청이었다면 폰에 「완료」.
@@ -358,8 +371,9 @@ export function wirePairing(confirmBox?: Ask) {
   });
 
   const onSettings = () => document.getElementById("page-settings")?.classList.contains("on");
-  let lastSeenGuest = new Set<string>();
+  // 창을 안 보는 동안은 그리지도 묻지도 않는다(알림 띠는 보여야 의미가 있다). 다시 보면 다음 주기에 살아난다.
   window.setInterval(() => {
+    if (document.hidden) return;
     if (onSettings()) notice.hidden = true;
     if (onSettings()) void refresh();
     else paintQr();
@@ -368,19 +382,14 @@ export function wirePairing(confirmBox?: Ask) {
   const poll = async () => {
     try {
       const w = await invoke<{ requests: number; pending: boolean; guestqr: string[] } | null>("pairing_waiting");
-      const n = w?.requests ?? 0, pending = !!w?.pending;
+      const n = Math.max(w?.requests ?? 0, w?.guestqr?.length ?? 0), pending = !!w?.pending;
       notice.hidden = !(n || pending) || !!onSettings();
       setCopyText(notice, () => pending ? t("폰이 연결을 기다려요 — 확인하기") : tf("폰 요청 {0}건 — 보기", n));
-      // 손님 QR 띄우기는 확인 없이 바로(허락할 때 「요청」을 준 폰만 보낼 수 있다).
-      for (const id of w?.guestqr ?? []) {
-        if (lastSeenGuest.has(id)) continue;
-        lastSeenGuest.add(id);
-        void act(() => openRequest(id));
-      }
-      if (lastSeenGuest.size > 200) lastSeenGuest = new Set();
+      // Requests only announce themselves. Opening/acknowledging requires a click.
+
     } catch { notice.hidden = true; }
   };
-  window.setInterval(poll, 10_000);
+  window.setInterval(() => { if (!document.hidden) void poll(); }, 10_000);
   void poll();
   void refresh();
 }

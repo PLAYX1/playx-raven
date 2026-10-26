@@ -260,7 +260,7 @@ pub(crate) mod tests {
     use super::*;
     pub(crate) fn in_sandbox<T>(f: impl FnOnce() -> T) -> T {
         let _guard = crate::paths::TEST_ENV.lock().unwrap_or_else(|e| e.into_inner());
-        let dir = std::env::temp_dir().join(format!("raven-member-privacy-test-{}", std::process::id()));
+        let dir = crate::paths::test_fixture_root().join(format!("raven-member-privacy-test-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         struct Home(std::path::PathBuf, Option<std::ffi::OsString>);

@@ -1,0 +1,52 @@
+[
+  {
+    "check": "security-node",
+    "exit": 0,
+    "oom": false,
+    "outputBytes": 2469,
+    "passed": true
+  },
+  {
+    "check": "desktop-tsc",
+    "exit": 0,
+    "oom": false,
+    "outputBytes": 0,
+    "passed": true
+  },
+  {
+    "check": "web-tsc",
+    "exit": 0,
+    "oom": false,
+    "outputBytes": 0,
+    "passed": true
+  },
+  {
+    "check": "manifest",
+    "exit": 0,
+    "oom": false,
+    "outputBytes": 28,
+    "passed": true
+  },
+  {
+    "check": "diff-check",
+    "exit": 0,
+    "oom": false,
+    "outputBytes": 0,
+    "passed": true
+  },
+  {
+    "check": "npm run build",
+    "exit": 0,
+    "passed": true,
+    "evidence": "build.txt; shell exit verified separately"
+  },
+  {
+    "check": "cargo test --offline --lib",
+    "exit": 101,
+    "passed": false,
+    "passedCases": 757,
+    "failedCases": 7,
+    "ignoredCases": 13,
+    "evidence": "cargo-test-final.txt; all failures EPERM listener bind"
+  }
+]

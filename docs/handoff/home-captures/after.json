@@ -1,0 +1,22 @@
+{
+  "status": "blocked",
+  "phase": "after",
+  "kind": "production dist / real Chrome geometry",
+  "fixture": "synthetic unlocked wallet; 42.125 RVN; 8 transactions; 3 assets; one AI provider available (no key material)",
+  "sales": "shop/ledger absent or present; gated sales-account disclosure is never requested",
+  "network": "only this run’s 127.0.0.1 static origin allowed; all other requests aborted; WebSocket/WebTransport disabled",
+  "checks": [],
+  "errors": [
+    {
+      "stage": "launch",
+      "reason": "Error: Failed to launch the browser process!\n\n\nTROUBLESHOOTING: https://pptr.dev/troubleshooting\n"
+    }
+  ],
+  "buildHTMLHash": "d012506c4255a772edccece5cf130cea9c263767a5c233c81a07510e1fcfdd3a",
+  "buildAssets": {
+    "/assets/main-OLptdB-8.js": "30f804959c27df6f9de2c9a28593a6703a504399fae87c70daa80e4d51c03a13",
+    "/assets/ravi-physics-D5U2PGIY.js": "8cc5b20e7863ff3da85893c15a3b4947fdc7a841ad9f41b31bff4bc63f7326c3",
+    "/assets/ravi-physics-Bi_zR948.css": "07b5c39460934eae4ef5b3d9e13689045ad5e56d8dd651d54474950b8b461b7c",
+    "/assets/main-DyO-a0Kn.css": "10f4a7f63673979a1aa547d51beb049859f33320c133492bc3b162e1e338e6b4"
+  }
+}

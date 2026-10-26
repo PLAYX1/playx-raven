@@ -40,7 +40,7 @@ macOS `keyring`은 `security-framework`의 `set_generic_password`/`find_generic_
 
 현재 `ai.rs`에서 키 읽기 실패는 AI 키가 없는 것처럼 보일 수 있다(`api_key_status`가 저장소 오류를 버리고 `has_key=false`로 표시). 실제 AI 사용도 실패한다. 키가 지워졌다고 단정하거나 기존 키체인 항목을 삭제하지 말고, 우선 macOS 키체인 허용 대화상자에서 **허용**을 선택하게 안내한다. 그래도 읽히지 않으면 설정 → AI에서 사용자가 자신의 키를 다시 붙여 넣고 저장하게 안내한다. 새 코드가 키체인 항목을 읽거나 갱신하지 못할 수 있으므로 실제 0.5.1 → 0.5.2 시험에서 재입력 성공까지 확인해야 한다. AI 키는 백업 ZIP에 포함되지 않는다.
 
-파일 기반 데이터는 코드 서명 ACL에 묶이지 않는다. `paths.rs`의 맥 앱 데이터는 `~/Library/Application Support/PlayXRaven`, Raven Core 기본 데이터는 `~/Library/Application Support/Raven`이며, 선택한 별도 Raven 데이터 폴더는 앱 데이터의 `raven-datadir.txt`를 통해 찾는다. `wallet.dat`와 체인, 앱 설정·가게 데이터, 사용자가 고른 백업 위치는 동일 사용자·동일 경로에서 이어질 것으로 예상된다. 다만 파일 권한, 이동식 디스크 접근, 실제 업데이트 절차까지는 사용자 환경에서 실측해야 한다. 번들 identifier `se.erci.ex.playx.raven`은 유지했다.
+파일 기반 데이터는 코드 서명 ACL에 묶이지 않는다. `paths.rs`의 맥 앱 데이터는 `~/Library/Application Support/RavenVault`(0.9.3까지 `PlayXRaven`, 켤 때 이름만 바꿈), Raven Core 기본 데이터는 `~/Library/Application Support/Raven`이며, 선택한 별도 Raven 데이터 폴더는 앱 데이터의 `raven-datadir.txt`를 통해 찾는다. `wallet.dat`와 체인, 앱 설정·가게 데이터, 사용자가 고른 백업 위치는 동일 사용자·동일 경로에서 이어질 것으로 예상된다. 다만 파일 권한, 이동식 디스크 접근, 실제 업데이트 절차까지는 사용자 환경에서 실측해야 한다. 번들 identifier `se.erci.ex.playx.raven`은 유지했다.
 
 ## 인증서 수령 뒤 0.5.1 → 0.5.2 실제 시험
 

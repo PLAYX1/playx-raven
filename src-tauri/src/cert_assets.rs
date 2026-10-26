@@ -340,7 +340,7 @@ mod tests {
 
     #[test]
     fn 떨어뜨린_것만_표와_사진만_읽는다() {
-        let dir = std::env::temp_dir().join(format!("rv-drop-{:x}", rand::random::<u64>()));
+        let dir = crate::paths::test_fixture_root().join(format!("rv-drop-{:x}", rand::random::<u64>()));
         std::fs::create_dir_all(dir.join("photos")).unwrap();
         std::fs::write(dir.join("명단.xlsx"), b"PK").unwrap();
         std::fs::write(dir.join("wallet.dat"), b"secret").unwrap();

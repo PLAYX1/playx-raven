@@ -1,0 +1,283 @@
+/* Only the conversation uses motion. Amounts, addresses and approval stay still. */
+#ravi-rig, #ravi-panel-rig, #ravi-launcher-rig { display:block; height:100%; width:100%; }
+#ravi-rig svg, #ravi-panel-rig svg, #ravi-launcher-rig svg { display:block; height:100%; width:100%; overflow:hidden; pointer-events:none; stroke:none; fill:none; }
+#ravi-caption { font-size:18px; line-height:1.5; margin:0; overflow-wrap:anywhere; }
+#ravi-transcript { display:none; }
+#ravi-open { min-height:56px; padding:12px 28px; background:#1f224e; color:#fff; }
+#ravi-tools { margin-top:20px; }
+#ravi-tools > summary { min-height:56px; display:flex; align-items:center; cursor:pointer; }
+#ravi-tools .rv-home-ravi { display:flex; flex-wrap:wrap; gap:12px; position:static; margin-top:12px; }
+.ravi-key-status { display:flex; align-items:center; gap:12px; }
+/* Author display rules must never resurrect a hidden legacy face or approval card. */
+.ravi-face[hidden], #ravi-panel[hidden], #ravi-launcher[hidden], #ravi-new[hidden], #ravi-key[hidden], #rv-send-card[hidden] { display:none !important; }
+#ravi-panel { --text:#1f224e; --muted:#59637d; --bg:#f7fafb; --panel:#fff; --line:#d9e1ec; --ravi-soft:#b4531c; --faint:#59637d; --warn:#8a5a00; --ok:#1f7a4d; /* 대화창은 늘 밝다 — 다크 화면의 밝은 색 변수가 새어 들면 글자가 안 보인다(2026-10-11 「라비 안내」 1.9:1) */ position:fixed; right:16px; bottom:16px; width:440px; height:min(580px,calc(100dvh - 136px)); max-width:calc(100vw - 120px); z-index:65; display:flex; flex-direction:column; color:var(--text); background:var(--panel); border:1px solid var(--line); border-radius:22px; box-shadow:0 12px 48px #1f224e30; overflow:hidden; }
+#ravi-panel.large { width:640px; height:calc(100dvh - 136px); }
+#ravi-panel button { font-size:14px; min-height:40px; padding:8px 12px; color:var(--text); background:#fff; border:1px solid var(--line); flex:none; }
+#ravi-panel button:focus-visible, #ravi-panel textarea:focus-visible, #ravi-launcher:focus-visible { outline:3px solid #a94622; outline-offset:-3px; }
+#ravi-panel button:disabled { opacity:.5; }
+#ravi-panel .ravi-panel-head { display:flex; align-items:center; gap:8px; padding:8px 12px; flex:none; border-bottom:1px solid var(--line); }
+#ravi-panel #ravi-panel-stage { width:64px; height:64px; padding:0; border:0; background:transparent; }
+.ravi-panel-title { flex:1; min-width:0; }
+.ravi-panel-title strong { font-size:17px; }
+#ravi-panel-state { font-size:13px; line-height:1.4; margin:4px 0 0; overflow-wrap:anywhere; }
+#ravi-panel #ravi-chatwrap { flex:1; min-height:0; display:flex; width:100%; }
+#ravi-panel #chat { position:relative; inset:auto; width:100%; height:100%; min-height:0; max-width:none; display:flex; flex-direction:column; border:0; padding:0; box-shadow:none; background:#fff; color:var(--text); overflow:hidden; }
+#ravi-panel .ravi-history { order:1; flex:1; min-height:0; position:relative; display:flex; }
+#ravi-panel #chat-log { flex:1; min-height:0; max-height:none; padding:16px; overflow:auto; overscroll-behavior:contain; overflow-anchor:none; font-size:16px; }
+#ravi-panel .msg { font-size:16px; line-height:1.6; max-width:95%; padding:10px 12px; margin-bottom:12px; overflow-wrap:anywhere; }
+#ravi-panel .msg.ai { display:flex; gap:8px; background:#f7fafb; border:1px solid var(--line); }
+#ravi-panel .msgtxt { min-width:0; flex:1; }
+#ravi-panel .msg .ravi-face { width:32px !important; height:32px !important; animation:none; }
+#ravi-panel .msg.me { background:#1f224e; color:#fff; }
+#ravi-panel #ravi-new { position:absolute; bottom:8px; left:50%; transform:translateX(-50%); background:#1f224e; color:#fff; border:0; box-shadow:0 2px 10px #1f224e30; }
+#ravi-panel .rv-quick { order:2; display:flex; flex-wrap:nowrap; overflow-x:auto; flex:none; gap:8px; margin:0; padding:8px 12px; max-width:none; overscroll-behavior:contain; }
+#ravi-panel .rv-quick button { white-space:nowrap; border-radius:999px; }
+#ravi-panel .ravi-voice-row { order:3; flex:none; display:flex; align-items:center; justify-content:space-between; gap:8px; padding:0 12px 8px; }
+#ravi-panel .ravi-voice-row p { font-size:12px; margin:0; }
+#ravi-panel #ravi-read[aria-pressed="true"] { color:#a94621; }
+#ravi-panel .chat-in { order:4; flex:none; display:flex; align-items:center; padding:8px 12px; gap:6px; border-top:1px solid var(--line); background:#fff; }
+#ravi-panel #chat-q { min-width:0; flex:1; height:64px; min-height:64px; max-height:64px; resize:none; margin:0; padding:8px; font-family:inherit; font-size:16px; line-height:1.4; border:1px solid var(--line); border-radius:12px; background:#f7fafb; color:var(--text); }
+#ravi-panel #chat-go { background:#1f224e; color:#fff; }
+#ravi-panel .chat-mode { order:0; flex:none; display:flex; flex-wrap:nowrap; overflow-x:auto; gap:6px; padding:6px 12px; border:0; }
+#ravi-panel .chat-mode button { white-space:nowrap; font-size:13px; min-height:32px; padding:4px 10px; }
+#ravi-panel .chat-mode button.on { border-color:#1f224e; background:#eef0f7; }
+#ravi-panel #ravi-key, #ravi-panel #rv-send-card { position:absolute; inset:0 0 86px; z-index:2; overflow:auto; margin:0; border:0; border-radius:0; background:#fff; padding:16px; }
+#ravi-panel.reviewing .chat-in { visibility:hidden; }
+#ravi-launcher { position:fixed; right:20px; bottom:20px; width:72px; height:72px; padding:0; border:1px solid #d9e1ec; border-radius:50%; background:#f7fafb; box-shadow:0 6px 24px #1f224e30; z-index:65; }
+.ravi-sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
+.ravi-promo-entry { flex:none; padding:0 12px 6px; }
+.ravi-promo-entry button { min-height:32px; font-size:13px; }
+#ravi-panel .ravi-promo-card { min-width:0; width:100%; box-sizing:border-box; }
+#ravi-panel .ravi-promo-card h3 { margin:0 0 8px; }
+#ravi-panel .promo-actions, #ravi-panel .promo-tabs { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0; }
+#ravi-panel .promo-tabs button { flex:1 1 auto; min-height:36px; font-size:13px; }
+#ravi-panel .promo-tabs [aria-selected="true"] { background:#1f224e; color:#fff; }
+#ravi-panel .ravi-promo-card textarea { display:block; box-sizing:border-box; width:100%; min-width:0; resize:vertical; min-height:160px; max-height:320px; font:inherit; margin:8px 0; }
+#ravi-panel .ravi-promo-card input, #ravi-panel .ravi-promo-card select { box-sizing:border-box; max-width:100%; font:inherit; }
+#ravi-panel .ravi-promo-card label, #ravi-panel .ravi-promo-card input { display:block; width:100%; }
+#ravi-panel .ravi-promo-card img { width:100%; height:auto; border-radius:12px; }
+#ravi-panel .ravi-promo-card p { font-size:13px; overflow-wrap:anywhere; }
+#ravi-panel .promo-warning { color:#a13b17; }
+/* Toasts occupy the space to the left of even the expanded panel. */
+#ravibub.ravibub, #live-note, #live-note.on, #busybar { left:104px !important; right:auto !important; bottom:20px !important; transform:none !important; max-width:min(380px,calc(100vw - 776px)) !important; width:auto; box-sizing:border-box; }
+@media(max-width:900px) { #ravibub.ravibub, #live-note, #busybar { top:96px !important; bottom:auto !important; max-width:calc(100vw - 136px) !important; } }
+.ravi-paused .ravi-face, .ravi-paused .ravi-face * { animation:none !important; transition:none !important; }
+#askwrap.on .askbox { --panel:#fff; --bg:#fff; --text:#1f224e; --muted:#59637d; --line:#d9e1ec; background:#fff !important; color:#1f224e; animation:none !important; }
+/* 돈 화면(지갑 잔액·보내기 작성/검토·복구 단어·12단어 되살리기)의 흰 카드는 **라이트 테마에서만**.
+   다크에서 흰색으로 강제하던 규칙은 폐지(대표 결정 2026-10-11) → 다크 돈 카드·민감 화면은 src/money-card.css.
+   :where() 로 감싸 옛 규칙과 같은 우선순위를 지킨다(라이트 화면은 한 픽셀도 바뀌지 않는다). */
+:where(:root[data-theme="light"]) :is(#send-review, #send-compose, #w-balance, #sdw .sheet-box, #wrs .sheet-box) { --panel:#fff; --bg:#fff; --text:#1f224e; --muted:#59637d; --line:#d9e1ec; background:#fff !important; color:#1f224e; animation:none !important; }
+@media (prefers-color-scheme: light) { :where(:root:not([data-theme="dark"])) :is(#send-review, #send-compose, #w-balance, #sdw .sheet-box, #wrs .sheet-box) { --panel:#fff; --bg:#fff; --text:#1f224e; --muted:#59637d; --line:#d9e1ec; background:#fff !important; color:#1f224e; animation:none !important; } }
+.ravi-approval-note { font-size:16px; margin:16px 0; }
+@media(max-width:740px) {
+  #ravi-conversation { padding:12px; }
+  #ravi-panel { right:8px; bottom:8px; max-width:calc(100vw - 104px); }
+  #ravi-panel .ravi-panel-head { gap:4px; padding:6px; }
+  #ravi-panel button { padding:6px; }
+  #ravi-panel .chat-in { padding:6px; }
+}
+@media(prefers-reduced-motion:reduce) {
+  #ravi-conversation *, .ravi-face, .ravi-face * { animation:none !important; transition:none !important; scroll-behavior:auto !important; }
+}
+
+#ravi-panel .promo-actions [aria-pressed="true"] { background:#1f224e; color:#fff; }
+
+/* Arrival motion is articulated by ravi-opening; CSS only handles presentation. */
+.ravi-arrival { position:fixed; left:50%; top:46%; transform:translate(-50%,-50%); z-index:64; width:min(520px,calc(100vw - 32px)); text-align:center; pointer-events:none; }
+.ravi-arrival-bird { display:inline-block; cursor:pointer; pointer-events:auto; width:220px; height:245px; padding:0; border:0; background:transparent; box-shadow:none; }
+.ravi-arrival-bubble { pointer-events:auto; padding:20px; color:var(--text); background:var(--panel); border:1px solid var(--line); box-shadow:0 18px 70px #10152c26; border-radius:24px; animation:ravi-hello .35s both; }
+.ravi-arrival-bubble strong { font-size:24px; }
+.ravi-arrival-bubble p { white-space:pre-line; line-height:1.6; }
+.ravi-arrival-bubble button { margin:4px; }
+.ravi-arrival.docking { animation:ravi-dock .35s both; }
+.ravi-privacy label, #ravi-agent-settings > label { display:flex; align-items:center; gap:10px; margin:12px 0; }
+.ravi-privacy input, #ravi-agent-settings input { width:20px; height:20px; }
+.ravi-audit { white-space:pre-wrap; max-height:280px; overflow:auto; font-size:13px; }
+.ravi-local-tools button { margin:4px; }
+.ravi-tool-result { white-space:pre-line; }
+@keyframes ravi-hello { from { opacity:0; } to { opacity:1; } }
+@keyframes ravi-dock { to { opacity:0; transform:translate(20vw,25vh) scale(.3); } }
+@media(prefers-reduced-motion:reduce) {
+  .ravi-arrival-bird, .ravi-arrival-bubble { animation:ravi-hello .25s both; }
+  .ravi-arrival.docking { animation:ravi-hello .25s reverse both; }
+}
+
+/* Landing is the only automatic foreground presentation. Defensive paint barrier,
+   paired with the action queue so hidden dialogs cannot receive focus or input. */
+html[data-ravi-arriving] :is(.sheet, [role="dialog"], dialog, #askwrap, #rpwrap, #onboard, #hello, #send-review, #qrwrap, #chat, #ravi-panel, #ravi-launcher, #ravi-key, #rv-send-card, #phone-tx-send, #rvp-notice, #ravibub, #neworder, #live-note, #dropveil, .ravi-arrival-bubble) { display:none!important; }
+.ravi-arrival-bubble[hidden], #rvp-card[hidden] { display:none!important; }
+
+/* Home budgets are a fallback check, not proof of browser geometry.
+   check-home-browser.mjs measures the production dist cascade and text layout.
+   Keep overflow available for zoom, unusual copy and expanded secondary links. */
+#page-home {
+  --home-gap:10px; --home-pad:12px; --home-row-top:148px;
+  --home-row-middle:208px; --home-row-bottom:112px;
+  --home-ink:#1f224e; --home-muted:#59637d; --home-paper:#ffffff;
+  --home-good:#226b43; --home-warn:#805000; --home-bad:#a52a22;
+  --home-line:#d9e1ec; --home-tint:#f3f5fa; --home-action:#1f224e;
+  --home-on-action:#ffffff; --home-focus:#805000;
+  --text:var(--home-ink); --muted:var(--home-muted); --ok:var(--home-good);
+  padding:0; color:var(--home-ink); font-size:15px; line-height:1.4;
+}
+:root[data-theme="dark"] #page-home {
+  --home-ink:#ecedf3; --home-muted:#b7bdd0; --home-paper:#15161d;
+  --home-good:#6fd1a0; --home-warn:#f2c36a; --home-bad:#ffaaa2;
+  --home-line:#45495b; --home-tint:#222531; --home-action:#ecedf3;
+  --home-on-action:#15161d; --home-focus:#f2c36a;
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme="light"]) #page-home {
+    --home-ink:#ecedf3; --home-muted:#b7bdd0; --home-paper:#15161d;
+    --home-good:#6fd1a0; --home-warn:#f2c36a; --home-bad:#ffaaa2;
+    --home-line:#45495b; --home-tint:#222531; --home-action:#ecedf3;
+    --home-on-action:#15161d; --home-focus:#f2c36a;
+  }
+}
+main:has(> #page-home.on) { padding:10px 24px; }
+#page-home > h1 { font-size:22px; line-height:28px; margin:0 0 8px; }
+#page-home .rv-home-grid, #page-home .rv-home-grid:has(#rv-home-today[hidden]) {
+  display:grid; grid-template-columns:repeat(2,minmax(0,1fr));
+  grid-template-areas:"bal safe" "act conversation" "today extras";
+  grid-template-rows:var(--home-row-top) var(--home-row-middle) var(--home-row-bottom);
+  gap:var(--home-gap); align-items:stretch;
+}
+#page-home .rv-home-grid > div {
+  --line:var(--home-line); --panel:var(--home-paper); --text:var(--home-ink); --muted:var(--home-muted);
+  min-width:0; width:100%; align-self:stretch; padding:var(--home-pad) !important;
+  border:1px solid var(--line) !important; border-radius:16px; background:var(--home-paper) !important;
+  color:var(--home-ink); box-sizing:border-box;
+}
+#page-home .rv-home-grid h2 { display:block; margin:0; font-size:17px; line-height:24px; color:var(--home-ink); }
+#page-home .rv-home-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:36px; margin-bottom:6px; }
+#page-home button, #page-home summary { min-height:36px !important; min-width:36px; padding:6px 12px; margin:0; font-size:15px !important; line-height:22px; border-radius:10px; }
+#page-home button.ghost, #page-home #overview-receive { background:var(--home-paper); color:var(--home-ink); border:1px solid var(--home-line); }
+#page-home button.ghost:hover:not(:disabled), #page-home #overview-receive:hover { background:var(--home-tint); }
+#page-home button:focus-visible, #page-home summary:focus-visible { outline:3px solid var(--home-focus); outline-offset:2px; }
+#page-home .rv-home-balance { display:block; overflow:visible; }
+#page-home .rv-home-balance::before { display:none; }
+#page-home .overview { display:block; border:0; padding:0; margin:0; }
+#page-home .overview-values { display:flex; align-items:center; gap:12px; margin:0 0 6px; }
+#page-home #overview-balance { font-size:clamp(28px,2.8vw,40px); line-height:40px; white-space:nowrap; font-variant-numeric:tabular-nums; }
+#page-home #overview-incoming-row { display:block; min-width:0; font-size:15px; line-height:20px; color:var(--home-muted); }
+#page-home #overview-incoming { display:block; font-size:15px; font-variant-numeric:tabular-nums; }
+#page-home .overview-actions { display:flex; gap:8px; }
+#page-home .overview-actions button { min-height:44px !important; border-radius:6px; }
+#page-home #rv-home-send { order:0; min-width:100px; background:var(--home-action); color:var(--home-on-action); }
+#page-home #overview-receive { order:0; }
+#page-home .rv-home-safety { display:block; }
+#page-home .rv-home-signals { display:flex; flex-wrap:wrap; align-items:center; gap:4px 8px; margin:0; }
+#page-home .rv-home-signals > span { display:inline-flex; align-items:center; gap:6px; padding:4px 6px; border-radius:8px; background:var(--home-tint); white-space:nowrap; font-size:15px; }
+#page-home [data-tone="good"] { color:var(--home-good); }
+#page-home [data-tone="warn"] { color:var(--home-warn); }
+#page-home [data-tone="bad"] { color:var(--home-bad); }
+#page-home .rv-home-signals > span::before { content:""; width:6px; height:6px; border-radius:50%; background:currentColor; flex:none; }
+#page-home .rv-home-address-note { margin:6px 0 0; font-size:15px; line-height:21px; color:var(--home-muted); }
+#page-home #ravi-home-slot { grid-area:conversation; }
+#page-home #ravi-conversation { padding:0; border:0; background:transparent; color:var(--home-ink); text-align:left; height:100%; }
+#page-home #ravi-balance, #page-home .ravihi { display:none; }
+#page-home #ravi-conversation .ravihero { display:grid; grid-template-columns:96px minmax(0,1fr); grid-template-rows:auto auto 44px; gap:8px 12px; align-items:center; align-content:center; padding:0; margin:0; height:100%; }
+#page-home #ravi-stage { grid-column:1; grid-row:1 / 4; width:96px; height:108px; padding:0; border:0; box-shadow:none; background:transparent; }
+#page-home #ravi-state { margin:0; font-size:15px !important; line-height:24px; color:var(--home-muted); }
+#page-home .ravi-caption-area { min-width:0; }
+#page-home #ravi-caption { margin:0; font-size:15px !important; line-height:24px; overflow-wrap:anywhere; }
+#page-home #ravi-open { justify-self:start; min-height:44px !important; background:var(--home-action); color:var(--home-on-action); }
+#page-home #rv-home-today-body { display:grid; grid-template-columns:1.8fr repeat(3,minmax(0,1fr)); gap:8px; }
+#page-home #rv-home-today-body > p { grid-column:1 / -1; margin:4px 0; }
+#page-home #rv-home-today-body .rv-home-entry { display:flex; flex-direction:column; align-items:stretch; justify-content:start; gap:0; border:0; padding:0; min-height:0; font-size:15px; line-height:21px; }
+#page-home #rv-home-today-body b { font-size:17px; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+#page-home .rv-home-entry { display:flex; align-items:center; gap:10px; padding:1px 0; min-height:46px; border-bottom:1px solid var(--home-line); font-size:15px; line-height:21px; }
+#page-home .rv-home-entry:last-child { border-bottom:0; }
+#page-home .rv-home-entry small { display:block; color:var(--home-muted); font-size:15px; line-height:21px; }
+#page-home .rv-home-entry .rv-home-icon { width:32px; height:32px; font-size:20px; border-radius:8px; color:var(--home-warn); background:var(--home-tint); }
+#page-home .rv-home-entry .rv-home-icon.receive { color:var(--home-good); background:var(--home-tint); }
+#page-home .rv-home-entry strong { font-variant-numeric:tabular-nums; text-align:right; white-space:nowrap; }
+#page-home .rv-home-tx-main { min-width:0; flex:1; }
+#page-home .rv-home-tx-main, #page-home .rv-home-entry small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#page-home .rv-home-extras { grid-area:extras; }
+#page-home summary { cursor:pointer; padding:6px 0; color:var(--home-ink); }
+#page-home summary span { margin-left:8px; color:var(--home-muted); }
+#page-home .rv-home-shortcuts { display:flex; gap:8px; margin-top:6px; flex-wrap:wrap; }
+/* Closed details must remove secondary controls from layout as well as Tab.
+   Do not rely on the browser's skipped-content layout for these flex children. */
+#page-home #rv-home-extras:not([open]) > .rv-home-shortcuts { display:none; }
+#page-home > .seed-recovery { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:56px; margin:8px 0 0; padding:5px 12px; width:100%; border:1px solid var(--home-warn); border-radius:16px; background:var(--home-tint); color:var(--home-ink); font-size:15px; line-height:22px; }
+#page-home > .seed-recovery button { flex:none; background:var(--home-action); color:var(--home-on-action); }
+#page-home [hidden] { display:none !important; }
+/* Home already has the same conversation control; a floating duplicate would
+   cover the last card in a short window. */
+body:has(#page-home.on) #ravi-launcher { display:none; }
+@media(max-width:1100px), (max-height:680px) {
+  #page-home { --home-pad:10px; --home-gap:8px; --home-row-top:140px; --home-row-middle:202px; --home-row-bottom:108px; }
+  main:has(> #page-home.on) { padding:8px 16px; }
+  #page-home .rv-home-signals { gap:4px; }
+  #page-home .rv-home-extras { align-self:start; }
+}
+/* Below the supported desktop widths, allow reflow/zoom instead of clipping. */
+@media(max-width:760px) {
+  #page-home .rv-home-grid, #page-home .rv-home-grid:has(#rv-home-today[hidden]) {
+    grid-template-columns:minmax(0,1fr); grid-template-areas:"bal" "safe" "act" "conversation" "today" "extras";
+    grid-template-rows:none; grid-auto-rows:auto;
+  }
+  #page-home .rv-home-grid > div { min-height:112px; }
+  #page-home .overview-values, #page-home > .seed-recovery { flex-wrap:wrap; }
+}
+
+.ravi-arrival-bird svg { width:100%; height:100%; overflow:visible; }
+.ravi-arrival-bird:focus-visible { outline:3px solid var(--ravi-soft); outline-offset:6px; border-radius:28px; }
+
+.ravi-arrival { top:32%; }
+.ravi-arrival-bubble { position:absolute; top:100%; left:0; width:100%; box-sizing:border-box; max-height:54vh; overflow:auto; }
+
+.ravi-arrival-skip { pointer-events:auto; position:absolute; top:100%; left:50%; transform:translateX(-50%); white-space:nowrap; background:var(--panel); color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:8px 16px; min-height:44px; font:inherit; font-size:14px; }
+.ravi-arrival-skip[hidden] { display:none!important; }
+.ravi-arrival-skip:focus-visible { outline:3px solid var(--ravi-soft); outline-offset:3px; }
+
+/* 0.9.4 홈 단순화 — 모바일 홈과 같은 방향. 큰 잔액 · 받기(구리금)/보내기(윤곽) · 라비는 작게 · 나머지는 필요할 때만. */
+#page-home .rv-home-grid, #page-home .rv-home-grid:has(#rv-home-today[hidden]) {
+  grid-template-areas:"bal bal" "conversation act" "safe safe" "today extras";
+  grid-template-rows:none; grid-auto-rows:auto;
+}
+#page-home .rv-home-grid > div { min-height:0; }
+#page-home .rv-home-balance { padding:28px 32px !important; }
+#page-home .rv-home-balance .overview h2 { display:block; font-size:16px; color:var(--home-muted); margin-bottom:4px; }
+#page-home #overview-balance { font-size:clamp(44px,5vw,64px); line-height:1.15; }
+#page-home .overview-actions { gap:14px; margin-top:14px; }
+#page-home .overview-actions button { min-height:64px !important; min-width:160px; font-size:18px !important; font-weight:700; border-radius:16px; }
+#page-home #overview-receive { order:0; background:#E2702A; color:#15161D; border:2px solid #E2702A; }
+#page-home #overview-receive:hover { background:#F08A4B; }
+#page-home #rv-home-send { order:1; background:transparent; color:var(--home-ink); border:2px solid #E2702A; }
+#page-home #rv-home-more { display:none; }
+#page-home .rv-home-safety:not(:has([data-tone="warn"],[data-tone="bad"])) { display:none !important; }
+#page-home .rv-home-safety .rv-home-address-note { display:none; }
+#page-home .rv-home-extras summary span { display:none; }
+@media(max-width:760px) {
+  #page-home .rv-home-grid, #page-home .rv-home-grid:has(#rv-home-today[hidden]) {
+    grid-template-areas:"bal" "act" "conversation" "safe" "today" "extras";
+  }
+  #page-home .overview-actions button { flex:1; min-width:0; }
+}
+
+/* 0.9.4 누르기 쉬운 크기 — 눌러야 하는 단추는 44px·15px 이상(조사에서 32~36px·13px 로 나온 것들). */
+#upnag, .hidnote button, .cr-one, .act button, .mnacts button, .ordrow button, .keyrow button,
+.chat-mode button, .keyask button, .abkrow button, .wrs-sug button, #rw-mine, button.link, .linkbtn {
+  min-height:44px; font-size:15px;
+}
+
+/* 「AI 음성」: 라비 목소리(기계 음성)로 읽는 동안·그 말풍선 옆에 항상 보인다(OpenRAIL-M 고지). */
+.ai-voice-badge, .ai-voice-tag { display:inline-block; font-size:12px; line-height:1; padding:4px 8px; border-radius:999px; border:1px solid #1f224e; color:#1f224e; background:#eef0ff; font-weight:600; white-space:nowrap; }
+.ai-voice-badge[hidden] { display:none !important; }
+.ai-voice-badge { margin-top:6px; }
+.ai-voice-tag { flex:none; align-self:flex-start; margin-top:4px; }
+#page-home #rv-home-today-body button.rv-home-pending { background:transparent; border:0; color:inherit; font:inherit; text-align:left; cursor:pointer; padding:0; min-height:44px; }
+#page-home #rv-home-today-body button.rv-home-pending:focus-visible { outline:2px solid var(--home-action); outline-offset:2px; }
+#page-home #rv-home-today-body button.rv-home-pending span { text-decoration:underline; text-underline-offset:3px; }
+.rv-pend-item { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; padding:10px 0; border-bottom:1px solid var(--line); }
+.rv-pend-item small { display:block; color:var(--muted); font-size:13px; }
+.rv-pend-item strong { text-align:right; white-space:nowrap; }
+
+/* 라비 목소리 받기 안내(말풍선 옆) */
+#ravi-panel .ravi-pack-nudge { order:3; flex:none; display:flex; align-items:center; justify-content:space-between; gap:8px; padding:0 12px 8px; }
+#ravi-panel .ravi-pack-nudge p { font-size:12px; margin:0; }
+#ravi-panel .ravi-pack-nudge span { display:flex; gap:6px; flex:none; }
+#ravi-panel .ravi-pack-nudge[hidden] { display:none; }

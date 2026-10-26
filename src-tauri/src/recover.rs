@@ -348,6 +348,17 @@ fn unpack_with(input: &str, pass: &str) -> Result<PathBuf, String> {
                             .into(),
                     );
                 }
+                // 0.9.0 — 종이에 적은 52글자 열쇠도 받는다(다른 컴퓨터에서 만든 백업을 그 컴퓨터의
+                //    열쇠로). 52글자로 읽히고 그 열쇠로 열리면 끝, 아니면 아래 백업 암호 길로 간다.
+                if let Ok(k) = crate::lockbox::from_paper(pass) {
+                    if crate::lockbox::unlock_file(&p, &opened, &k).is_ok() {
+                        done = true;
+                    } else {
+                        let _ = std::fs::remove_file(&opened);
+                    }
+                }
+            }
+            if !done {
                 let (_body, env) = crate::lockbox::strip_wrap(&raw);
                 let env = env.ok_or_else(|| {
                 "이 백업에는 암호로 여는 길이 없습니다. 만든 컴퓨터의 열쇠(9agn-…)가 있어야 합니다.".to_string()
@@ -434,7 +445,7 @@ pub fn restore_survey(folder: String, pass: Option<String>) -> Result<Value, Str
     if let Some(n) = count_in("create_history.json", "entries") {
         items.push(
             json!({ "key": "create", "what": "만든 기록", "detail": format!("{n}건"),
-                           "why": "증명서 받는 사람 이름·다시 인쇄 — 체인에는 없습니다" }),
+                           "why": "증명서 받는 사람 이름·다시 인쇄 — 공개 장부에는 없습니다" }),
         );
     }
     if let Some(n) = count_in("tickets.json", "tickets") {
@@ -814,7 +825,7 @@ mod restore_files {
             }
             *changed = true;
             if !backup.is_file() {
-                return Err(io::Error::other("교체한 이전 파일을 확인하지 못했습니다. 노드를 켜지 말고 보존 파일을 확인해 주세요."));
+                return Err(io::Error::other("교체한 이전 파일을 확인하지 못했습니다. 서버를 켜지 말고 보존 파일을 확인해 주세요."));
             }
             Ok(())
         }
@@ -928,7 +939,7 @@ mod restore_files {
                 .map_err(|e| e.to_string())?
                 != expected
             {
-                return Err("교체 후 파일을 확인하지 못했습니다. 보존한 이전 파일로 확인하기 전에는 노드를 켜지 마세요.".into());
+                return Err("교체 후 파일을 확인하지 못했습니다. 보존한 이전 파일로 확인하기 전에는 서버를 켜지 마세요.".into());
             }
             Ok(())
         })();
@@ -967,7 +978,7 @@ mod restore_files {
             Ok(previous) => {
                 changed = true;
                 done.push(json!({"what": label, "previous": previous,
-                        "note": if label == "지갑" { "노드를 켜면 적용됩니다. 지갑의 유효성은 노드가 확인합니다." } else { "" }}));
+                        "note": if label == "지갑" { "서버를 켜면 적용됩니다. 지갑의 유효성은 서버가 확인합니다." } else { "" }}));
             }
             Err(error) => {
                 changed |= error.changed;
@@ -979,7 +990,7 @@ mod restore_files {
             let result = (|| {
                 if rpc_responding {
                     return Err(error(
-                        "노드가 응답하고 있습니다. 노드를 완전히 종료한 뒤 다시 시도해 주세요.",
+                        "서버가 응답하고 있습니다. 서버를 완전히 종료한 뒤 다시 시도해 주세요.",
                     ));
                 }
                 let guard = DataDirGuard::acquire(raven_dir).map_err(error)?;
@@ -1039,7 +1050,7 @@ mod restore_files {
     }
     pub(super) fn extract_archive(path: &Path, scratch: &Path) -> Result<(), String> {
         let mut zip = zip::ZipArchive::new(regular_file(path).map_err(|e| e.to_string())?)
-            .map_err(|_| "이 파일은 RavenVault Desktop 백업이 아닙니다.".to_string())?;
+            .map_err(|_| "이 파일은 레이븐볼트 백업이 아닙니다.".to_string())?;
         if zip.len() > 1024 {
             return Err("백업 항목이 너무 많습니다. 다른 백업을 골라 주세요.".into());
         }
@@ -1178,11 +1189,11 @@ pub fn recovery_card() -> Value {
         "shop_name": shop.get("name").cloned().unwrap_or(json!("")),
         "backup_folder": dir().join("backups").to_string_lossy(),
         "steps": [
-            "새 컴퓨터에 레이븐 노드와 이 프로그램을 설치합니다.",
-            "노드를 아직 켜지 마세요.",
+            "새 컴퓨터에 레이븐 서버와 이 프로그램을 설치합니다.",
+            "서버를 아직 켜지 마세요.",
             "이 프로그램을 열고 [이 컴퓨터] → [되돌리기]에서 백업 폴더를 고릅니다.",
             "회원 수와 메뉴 개수가 맞는지 눈으로 확인하고 되돌립니다.",
-            "노드를 켭니다. 장부를 따라잡는 동안에도 주문은 받을 수 있습니다.",
+            "서버를 켭니다. 장부를 따라잡는 동안에도 주문은 받을 수 있습니다.",
             "폰 QR을 다시 뽑아 직원들에게 나눠 줍니다 — 옛 QR은 더 이상 안 됩니다.",
         ],
         "warnings": [
@@ -1216,8 +1227,37 @@ pub fn phone_lost_plan() -> Value {
 
 /// Where the backups actually are, and how stale.
 #[tauri::command]
-pub fn backup_folders() -> Value {
-    restore_files::backup_list(&dir().join("backups"), &crate::backup::complete_snapshot)
+pub async fn backup_folders() -> Value {
+    // Hashing files on cloud folders can take a while; keep it off the UI thread.
+    tokio::task::spawn_blocking(|| {
+        let root = dir().join("backups");
+        let local = restore_files::backup_list(&root, &crate::backup::complete_snapshot);
+        let found = combined_backups(&local, &crate::backup::backup_places());
+        json!({"root": local["root"], "folders": local["folders"], "items": found["items"], "rejected": found["rejected"]})
+    }).await.unwrap_or_else(|_| json!({"folders": [], "items": [], "rejected": []}))
+}
+
+/// This computer's dated folders and every named backup elsewhere, one list.
+/// Old names (`PLAYXRaven…`) and the new name (`RavenVault…`) are read together;
+/// nothing found is changed.
+fn combined_backups(local: &Value, places: &[(String, PathBuf)]) -> Value {
+    let mut extra = Vec::new();
+    let mut invalid = Vec::new();
+    for f in local["folders"].as_array().into_iter().flatten() {
+        if f["verification"] == "invalid" {
+            invalid.push(json!({"path": f["path"], "place": "이 컴퓨터", "why": f["warning"]}));
+            continue;
+        }
+        let path = PathBuf::from(f["path"].as_str().unwrap_or(""));
+        let at = std::fs::metadata(path.join(".backup-complete.json")).or_else(|_| std::fs::metadata(&path))
+            .and_then(|m| m.modified()).ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|d| d.as_secs()).unwrap_or(0);
+        extra.push(json!({"kind": "folder", "path": f["path"], "name": f["day"], "day": f["day"].as_str().map(|d| d.get(..10).unwrap_or(d)),
+            "place": "이 컴퓨터", "scheme": "app", "previous": false, "locked": false, "at": at, "verification": f["verification"]}));
+    }
+    let mut found = crate::backup_find::find(places, &crate::backup::complete_snapshot, extra);
+    if let Some(r) = found["rejected"].as_array_mut() { r.extend(invalid); }
+    found
 }
 
 #[cfg(test)]
@@ -1279,6 +1319,89 @@ mod tests {
     }
 
     use super::*;
+
+    /// 옛 이름(`PLAYXRaven-Backup/…/PLAYXRaven.zip.pxlock`)과 새 이름
+    /// (`RavenVault-Backup/RavenVault.zip.pxlock`)을 한 목록에서 찾고, 찾은 것을
+    /// 실제 되돌리기 첫 단계(`restore_survey`)로 연다. 찾기는 아무것도 안 바꾼다.
+    #[test]
+    fn old_and_new_named_backups_are_found_together_and_open() {
+        let _guard = crate::paths::TEST_ENV.lock().unwrap_or_else(|e| e.into_inner());
+        let home = crate::paths::test_fixture_root().join(format!("recover-names-{:x}", rand::random::<u64>()));
+        let app = home.join("app");
+        std::fs::create_dir_all(&app).unwrap();
+        let prior = std::env::var_os("PLAYX_RAVEN_HOME");
+        std::env::set_var("PLAYX_RAVEN_HOME", &app);
+        let key = crate::lockbox::key_get_or_make().unwrap();
+        let make = |dest: &std::path::Path, shop: &str| {
+            let plain = home.join("plain.zip");
+            let mut zip = zip::ZipWriter::new(std::fs::File::create(&plain).unwrap());
+            let o: zip::write::FileOptions<()> = zip::write::FileOptions::default();
+            zip.start_file("wallet.dat", o).unwrap();
+            std::io::Write::write_all(&mut zip, b"synthetic wallet bytes, never a real wallet").unwrap();
+            zip.start_file("shop.json", o).unwrap();
+            std::io::Write::write_all(&mut zip, json!({"name": shop, "menu": []}).to_string().as_bytes()).unwrap();
+            zip.finish().unwrap();
+            std::fs::create_dir_all(dest.parent().unwrap()).unwrap();
+            crate::lockbox::lock_file(&plain, dest, &key).unwrap();
+            std::fs::remove_file(plain).unwrap();
+        };
+        let drive = home.join("drive");
+        let old = drive.join("PLAYXRaven-Backup").join("RavenVault Desktop 백업").join("PLAYXRaven.zip.pxlock");
+        let new = drive.join("RavenVault-Backup").join("RavenVault.zip.pxlock");
+        make(&old, "synthetic old shop");
+        make(&new, "synthetic new shop");
+        let bytes = std::fs::read(&new).unwrap();
+        use sha2::Digest;
+        std::fs::write(crate::backup::receipt_path(&new), json!({"day": "2026-10-10", "at": 4_102_444_800u64,
+            "size": bytes.len(), "sha256": hex::encode(sha2::Sha256::digest(&bytes))}).to_string()).unwrap();
+        let old_before = std::fs::read(&old).unwrap();
+
+        let local = restore_files::backup_list(&app.join("backups"), &crate::backup::complete_snapshot);
+        let found = combined_backups(&local, &[("fixture".into(), drive.clone())]);
+        let items = found["items"].as_array().unwrap();
+        assert_eq!(items.len(), 2, "{found}");
+        assert_eq!(items[0]["scheme"], "ravenvault", "newest first: {found}");
+        assert_eq!(items[1]["scheme"], "playxraven");
+        for (item, shop) in items.iter().zip(["synthetic new shop", "synthetic old shop"]) {
+            let survey = restore_survey(item["path"].as_str().unwrap().into(), None).unwrap();
+            assert!(survey.to_string().contains(shop), "{survey}");
+            assert!(survey["items"].as_array().unwrap().iter().any(|i| i["key"] == "wallet"));
+            cleanup_opened().unwrap();
+        }
+        assert_eq!(std::fs::read(&old).unwrap(), old_before, "old backup must stay untouched");
+        match prior { Some(p) => std::env::set_var("PLAYX_RAVEN_HOME", p), None => std::env::remove_var("PLAYX_RAVEN_HOME") }
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    /// 0.9.0 — 다른 컴퓨터에서 만든 `.pxlock` 을 그 컴퓨터의 종이 열쇠(52글자)로 연다(끌어다 놓은 복원).
+    /// 틀린 52글자·빈 칸은 열리지 않고, 이 컴퓨터 열쇠·백업 암호 길은 그대로다.
+    #[test]
+    fn a_backup_from_another_computer_opens_with_its_paper_key() {
+        let _guard = crate::paths::TEST_ENV.lock().unwrap_or_else(|e| e.into_inner());
+        let home = crate::paths::test_fixture_root().join(format!("recover-paper-{:x}", rand::random::<u64>()));
+        let app = home.join("app");
+        std::fs::create_dir_all(&app).unwrap();
+        let prior = std::env::var_os("PLAYX_RAVEN_HOME");
+        std::env::set_var("PLAYX_RAVEN_HOME", &app);
+        let other: [u8; 32] = [42u8; 32]; // 「다른 컴퓨터」의 열쇠 — 이 컴퓨터 열쇠와 다르다.
+        assert_ne!(crate::lockbox::key_get_or_make().unwrap(), other);
+        let plain = home.join("plain.zip");
+        let mut zip = zip::ZipWriter::new(std::fs::File::create(&plain).unwrap());
+        let o: zip::write::FileOptions<()> = zip::write::FileOptions::default();
+        zip.start_file("shop.json", o).unwrap();
+        std::io::Write::write_all(&mut zip, json!({"name": "synthetic paper shop", "menu": []}).to_string().as_bytes()).unwrap();
+        zip.finish().unwrap();
+        let locked = home.join("RavenVault.zip.pxlock");
+        crate::lockbox::lock_file(&plain, &locked, &other).unwrap();
+        let path = locked.to_string_lossy().to_string();
+        assert!(restore_survey(path.clone(), None).is_err(), "열쇠 없이 열렸다");
+        assert!(restore_survey(path.clone(), Some(crate::lockbox::to_paper(&[7u8; 32]))).is_err(), "틀린 52글자로 열렸다");
+        let ok = restore_survey(path.clone(), Some(crate::lockbox::to_paper(&other))).unwrap();
+        assert!(ok.to_string().contains("synthetic paper shop"), "{ok}");
+        cleanup_opened().unwrap();
+        match prior { Some(p) => std::env::set_var("PLAYX_RAVEN_HOME", p), None => std::env::remove_var("PLAYX_RAVEN_HOME") }
+        let _ = std::fs::remove_dir_all(&home);
+    }
 
     #[test]
     fn a_missing_folder_is_refused() {

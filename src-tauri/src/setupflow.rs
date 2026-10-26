@@ -126,7 +126,7 @@ pub async fn shop_setup() -> Value {
         step(
             "asset",
             "가게 이름 만들기",
-            "가게 이름을 블록체인에 냅니다. 이게 있어야 손님이 찾아옵니다. 한 번만 하면 됩니다.",
+            "가게 이름을 공개 장부에 냅니다. 이게 있어야 손님이 찾아옵니다. 한 번만 하면 됩니다.",
             "shop",
             asset_state,
             &asset_note,

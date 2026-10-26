@@ -1,0 +1,18 @@
+file:///Users/gimmusong/wt-rv-desktop-simple/node_modules/@puppeteer/browsers/lib/esm/launch.js:303
+                reject(new Error([
+                       ^
+
+Error: Failed to launch the browser process!
+
+
+TROUBLESHOOTING: https://pptr.dev/troubleshooting
+
+    at Interface.onClose (file:///Users/gimmusong/wt-rv-desktop-simple/node_modules/@puppeteer/browsers/lib/esm/launch.js:303:24)
+    at Interface.emit (node:events:536:35)
+    at Interface.close (node:internal/readline/interface:530:10)
+    at Socket.onend (node:internal/readline/interface:256:10)
+    at Socket.emit (node:events:536:35)
+    at endReadableNT (node:internal/streams/readable:1698:12)
+    at process.processTicksAndRejections (node:internal/process/task_queues:82:21)
+
+Node.js v20.20.0

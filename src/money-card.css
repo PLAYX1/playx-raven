@@ -1,0 +1,16 @@
+/* 다크 돈 카드 · 민감 화면 — docs/design/lock-and-dark.md §3. 라이트는 ravi-home.css 의 흰 카드 그대로.
+   구조·강조 자리(큰 금액·합계)는 그대로, 표면만 어둡게: 경계 3:1 이상, 글자 4.5:1 이상(시험이 잰다).
+   복구 단어(#sdw)·12단어 되살리기(#wrs)는 돈 카드가 아니라 민감 화면 — 윗줄 경고색 띠. */
+:where(:root[data-theme="dark"]) :is(#send-review,#send-compose,#w-balance,#sdw .sheet-box,#wrs .sheet-box) { --panel:#1a1c26; --bg:#12131a; --line:#6b7088; --muted:#b7bdd0; background:var(--panel); border:1px solid var(--line); animation:none; }
+:where(:root[data-theme="dark"]) :is(#sdw,#wrs) .sheet-box { --panel:#16171f; box-shadow:inset 0 4px 0 var(--warn); }
+:where(:root[data-theme="dark"]) :is(#send-review,#send-compose) input { border-color:var(--line); }
+@media (prefers-color-scheme: dark) {
+  :where(:root:not([data-theme="light"])) :is(#send-review,#send-compose,#w-balance,#sdw .sheet-box,#wrs .sheet-box) { --panel:#1a1c26; --bg:#12131a; --line:#6b7088; --muted:#b7bdd0; background:var(--panel); border:1px solid var(--line); animation:none; }
+  :where(:root:not([data-theme="light"])) :is(#sdw,#wrs) .sheet-box { --panel:#16171f; box-shadow:inset 0 4px 0 var(--warn); }
+  :where(:root:not([data-theme="light"])) :is(#send-review,#send-compose) input { border-color:var(--line); }
+}
+.rv-money-state { margin: 0 0 var(--sp-3); font-size: var(--fs-sm); color: var(--muted); overflow-wrap: anywhere; }
+.sdw-words, .sdw-words * { -webkit-user-select: none; user-select: none; }
+.sdw-timer { margin: var(--sp-2) 0 0; font-size: var(--fs-sm); color: var(--muted); font-variant-numeric: tabular-nums; }
+.sdw-copywarn:empty { display: none; }
+.sdw-sensitive { margin: 0 0 var(--sp-2); font-size: var(--fs-sm); font-weight: 600; }

@@ -1,0 +1,92 @@
+[
+  {
+    "script": "check-ravi-panel-browser.mjs",
+    "status": 1,
+    "signal": null,
+    "classification": "environment-blocked"
+  },
+  {
+    "script": "check-ravi-panel.mjs",
+    "status": 0,
+    "signal": null,
+    "classification": "pass"
+  },
+  {
+    "script": "check-ravi-promo-browser.mjs",
+    "status": 1,
+    "signal": null,
+    "classification": "environment-blocked"
+  },
+  {
+    "script": "check-ravi-promo-card.mjs",
+    "status": 0,
+    "signal": null,
+    "classification": "pass"
+  },
+  {
+    "script": "check-ravi-promo.mjs",
+    "status": 0,
+    "signal": null,
+    "classification": "pass"
+  },
+  {
+    "script": "check-ravi-state.mjs",
+    "status": 0,
+    "signal": null,
+    "classification": "pass"
+  },
+  {
+    "script": "check-ravi-understanding-browser.mjs",
+    "status": 1,
+    "signal": null,
+    "classification": "environment-blocked"
+  },
+  {
+    "script": "check-ravi-understanding.mjs",
+    "status": 0,
+    "signal": null,
+    "classification": "pass"
+  },
+  {
+    "script": "check-ravi-understanding2.mjs",
+    "status": 0,
+    "signal": null,
+    "classification": "pass"
+  },
+  {
+    "script": "check-wallet-easy.mjs",
+    "status": 1,
+    "signal": null,
+    "classification": "environment-blocked"
+  },
+  {
+    "script": "check-desktop-integration.mjs",
+    "status": 0,
+    "signal": null,
+    "classification": "pass"
+  },
+  {
+    "script": "check-ai-safety.mjs",
+    "status": 0,
+    "signal": null,
+    "classification": "pass"
+  },
+  {
+    "script": "check-send-confirmation.mjs",
+    "status": 0,
+    "signal": null,
+    "classification": "pass"
+  },
+  {
+    "script": "check-phone-transaction.mjs",
+    "status": 0,
+    "signal": null,
+    "classification": "pass"
+  },
+  {
+    "script": "check-backup-safety.mjs",
+    "status": 0,
+    "signal": null,
+    "classification": "pass"
+  }
+]

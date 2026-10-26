@@ -1,0 +1,36 @@
+/* 「방 설정」 시트·숨긴 방 문구 (0.9.0 레인 C) — 한국어 원문이 열쇠, 값은 [영어, 일본어, 중국어].
+ * 시트 묶음(talk-rooms-admin-sheet.ts)이 읽힐 때 DICT 에 더한다(같은 한국어가 이미 있으면 그 번역이 이긴다).
+ * 유럽어 6개는 이 문구가 사전 팩(public/i18n)에 들어가기 전까지 **영어로 내려간다**(i18n.ts t()).
+ */
+export const TALK_ROOMS_ADMIN_COPY: Record<string, [string, string, string]> = {
+  "닫기": ["Close", "閉じる", "关闭"],
+  "한 줄 설명": ["One-line description", "ひとこと説明", "一句话介绍"],
+  "(없음)": ["(none)", "（なし）", "（无）"],
+  "수정": ["Edit", "編集", "修改"],
+  "취소": ["Cancel", "キャンセル", "取消"],
+  "저장하는 중…": ["Saving…", "保存中…", "正在保存…"],
+  "내가 만든 방이에요. 이름과 설명은 나만 바꿀 수 있어요.": ["You created this room. Only you can change its name and description.", "あなたが作ったルームです。名前と説明を変えられるのはあなただけです。", "这是你创建的房间。只有你可以修改名称和介绍。"],
+  "바꾼 이름은 릴레이에 닿는 대로 모두에게 보여요. 다른 Nostr 앱에서는 옛 이름으로 보일 수 있어요.": ["The new name appears for everyone as relays receive it. Other Nostr apps may keep showing the old name.", "変更した名前はリレーに届きしだい全員に表示されます。ほかの Nostr アプリでは古い名前のまま表示されることがあります。", "新名称送达中继后会对所有人显示。其他 Nostr 应用可能仍显示旧名称。"],
+  "방 이름이 필요해요.": ["A room name is required.", "ルーム名が必要です。", "需要填写房间名称。"],
+  "방 이름은 {0}자까지 쓸 수 있어요. 지금 {1}자예요.": ["Room names can be up to {0} characters. This one has {1}.", "ルーム名は{0}文字までです。いまは{1}文字です。", "房间名称最多 {0} 个字，现在是 {1} 个字。"],
+  "한 줄 설명은 {0}자까지 쓸 수 있어요. 지금 {1}자예요.": ["The description can be up to {0} characters. This one has {1}.", "ひとこと説明は{0}文字までです。いまは{1}文字です。", "介绍最多 {0} 个字，现在是 {1} 个字。"],
+  "줄바꿈이나 보이지 않는 특수 문자는 쓸 수 없어요.": ["Line breaks and invisible special characters are not allowed.", "改行や見えない特殊文字は使えません。", "不能使用换行或不可见的特殊字符。"],
+  "바뀐 것이 없어요.": ["Nothing changed.", "変更はありません。", "没有任何更改。"],
+  "이름을 바꿨어요. 공개 릴레이 {1}곳 중 {0}곳이 받았어요.": ["Name changed. {0} of {1} public relays accepted it.", "名前を変更しました。公開リレー{1}か所のうち{0}か所が受け取りました。", "名称已更改。{1} 个公共中继中有 {0} 个已接收。"],
+  "이 컴퓨터의 릴레이에도 저장했어요.": ["Also saved on this computer’s relay.", "このコンピューターのリレーにも保存しました。", "也已保存到这台电脑的中继。"],
+  "공개 릴레이는 한 곳도 받지 않았어요. 지금은 이 컴퓨터에서만 바뀐 이름이 보여요. 잠시 뒤 다시 저장해 주세요.": ["No public relay accepted it. For now the new name shows only on this computer. Please save again in a moment.", "公開リレーはどこも受け取りませんでした。いまは変更した名前がこのコンピューターでしか表示されません。少ししてからもう一度保存してください。", "没有任何公共中继接收。目前只有这台电脑显示新名称。请稍后再保存一次。"],
+  "이름을 바꾸지 못했어요. 원래 이름 그대로예요.": ["Could not change the name. The original name is unchanged.", "名前を変更できませんでした。元の名前のままです。", "未能更改名称，仍为原名称。"],
+  "지갑이 잠겨 있어요. 방 이름을 바꾸려면 지갑을 한 번 열어야 해요. 지갑 암호만 묻고, 복구 단어는 묻지 않아요.": ["Your wallet is locked. To rename the room, open the wallet once. Only the wallet password is asked — never your recovery words.", "ウォレットがロックされています。ルーム名を変えるには、ウォレットを一度開く必要があります。聞くのはウォレットのパスワードだけで、復元ワードは聞きません。", "钱包已锁定。要修改房间名称，需要打开一次钱包。只会询问钱包密码，绝不会询问恢复词。"],
+  "지갑을 열면 방 이름 바꾸기를 다시 시도합니다.": ["Opening the wallet will retry the room rename.", "ウォレットを開くと、ルーム名の変更をもう一度試します。", "打开钱包后会重新尝试修改房间名称。"],
+  "내 목록에서만 사라져요. 다른 사람 화면에는 그대로 보여요. 「숨긴 방」에서 되돌릴 수 있어요.": ["It disappears only from your list. Others still see it. You can bring it back from “Hidden rooms”.", "自分の一覧からだけ消えます。ほかの人の画面にはそのまま表示されます。「非表示のルーム」から戻せます。", "只会从你的列表中消失，其他人仍能看到。可在“已隐藏的房间”中恢复。"],
+  "이 방은 공개 릴레이에 있어서 완전히 지울 수 없어요. 숨기거나 이름을 바꿀 수 있어요.": ["This room lives on public relays, so it cannot be fully deleted. You can hide it or rename it.", "このルームは公開リレーにあるため、完全には削除できません。非表示にするか名前を変えることはできます。", "此房间位于公共中继上，无法彻底删除。你可以隐藏它或修改名称。"],
+  "공개 방이라 글은 세계 릴레이로 함께 나가요.": ["This is a public room, so messages go out to relays worldwide.", "公開ルームなので、投稿は世界のリレーに送られます。", "这是公开房间，消息会发送到全球中继。"],
+  "공식 방을 숨길까요?": ["Hide the official room?", "公式ルームを非表示にしますか？", "要隐藏官方房间吗？"],
+  "「RavenVault 레이븐볼트」는 레이븐볼트의 공식 안내 방이에요. 숨기면 새 공지를 목록에서 못 보게 돼요. 이 컴퓨터에서만 숨겨지고, 「숨긴 방」에서 언제든 되돌릴 수 있어요.": ["“RavenVault 레이븐볼트” is RavenVault’s official announcement room. If you hide it, new notices will not appear in your list. It is hidden only on this computer, and you can bring it back from “Hidden rooms” at any time.", "「RavenVault 레이븐볼트」は RavenVault の公式案内ルームです。非表示にすると新しいお知らせが一覧に出なくなります。このコンピューターでだけ非表示になり、「非表示のルーム」からいつでも戻せます。", "“RavenVault 레이븐볼트”是 RavenVault 的官方公告房间。隐藏后，新公告不会出现在列表中。只在这台电脑上隐藏，可随时在“已隐藏的房间”中恢复。"],
+  "숨기기": ["Hide", "非表示にする", "隐藏"],
+  "「{0}」 방을 숨겼어요. 이 컴퓨터에서만 숨겨져요 — 다른 사람 화면에는 그대로 보여요.": ["Hid the room “{0}”. It is hidden only on this computer — others still see it.", "「{0}」ルームを非表示にしました。このコンピューターでだけ非表示です — ほかの人の画面にはそのまま表示されます。", "已隐藏房间“{0}”。只在这台电脑上隐藏 — 其他人仍能看到。"],
+  "숨긴 방": ["Hidden rooms", "非表示のルーム", "已隐藏的房间"],
+  "이 컴퓨터에서만 숨겼어요. 다른 사람 화면과 다른 기기에는 그대로 보여요. 방 자체는 지워지지 않아요.": ["Hidden only on this computer. Others and your other devices still see these rooms. The rooms themselves are not deleted.", "このコンピューターでだけ非表示にしています。ほかの人の画面やほかの端末にはそのまま表示されます。ルーム自体は削除されません。", "只在这台电脑上隐藏。其他人和你的其他设备仍能看到这些房间。房间本身不会被删除。"],
+  "다시 보이기": ["Show again", "再表示", "重新显示"],
+  "숨긴 방이 없어요.": ["No hidden rooms.", "非表示のルームはありません。", "没有已隐藏的房间。"],
+};

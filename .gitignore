@@ -41,3 +41,6 @@ backup-*.zip
 # 🔴 자동 판올림 서명 열쇠. 새면 남이 가짜 판올림을 밀어넣는다.
 *.key
 updater.key*
+
+# 라비 목소리 모델(약 380MB) — 저장소에 넣지 않는다. 빌드 전에 scripts/fetch-ravi-voice.mjs 가 채운다.
+src-tauri/resources/ravi-voice/onnx/*.onnx

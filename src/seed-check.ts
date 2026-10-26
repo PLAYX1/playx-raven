@@ -39,6 +39,9 @@ const CHECKED_KEY = "rv-seed-checked";
 const PHRASE = "암호를 잊으면 되돌릴 수 없다";
 /** 묻는 자리(사람이 세는 번호). 폰·웹과 같다. */
 const ASK_AT = [2, 6, 10];
+/** 🔴 자동 가림 — 단어를 보여 준 뒤 이 시간이 지나면 단어를 지우고 암호 단계로 돌아간다(다시 보려면 재인증).
+ *  12단어를 종이에 옮겨 적을 시간(3분). 「틀려서 다시 보여 줌」은 다시 센다. 2026-10-11 대표 결정 ②. */
+export const AUTO_HIDE_MS = 180_000;
 
 export function seedChecked(): boolean {
   try {
@@ -89,12 +92,51 @@ export function wireSeedCheck(deps: SeedCheckDeps): { open: () => void } {
   let extra = false;
   /** 창을 닫았는데 뒤에서 노드를 기다리던 것이 화면을 다시 그리지 않게. */
   let run = 0;
+  /** 자동 가림 시계(단어가 메모리에 있는 동안만 돈다). */
+  let hideAt = 0;
+  let hideTimer = 0;
+  let tickTimer = 0;
+
+  const stopTimer = () => {
+    window.clearTimeout(hideTimer);
+    window.clearInterval(tickTimer);
+    hideTimer = tickTimer = hideAt = 0;
+  };
 
   const forget = () => {
+    stopTimer();
     words.fill("");
     words = [];
     extra = false;
   };
+
+  /** 단어가 보이는(또는 확인 중인) 동안: 남은 시간 표시 + 끝나면 지우고 암호 단계로. */
+  const startTimer = () => {
+    stopTimer();
+    hideAt = Date.now() + AUTO_HIDE_MS;
+    const paint = () => {
+      const el = document.getElementById("sdw-timer");
+      if (el) setCopyText(el, () => tf("화면 보호 켜짐 · {0}초 뒤에 단어를 저절로 가려요", Math.max(0, Math.ceil((hideAt - Date.now()) / 1000))));
+    };
+    paint();
+    tickTimer = window.setInterval(paint, 1000);
+    hideTimer = window.setTimeout(() => {
+      forget();
+      paintReveal(false, t("시간이 지나 단어를 가렸어요. 다시 보려면 지갑 암호를 넣어 주세요."));
+    }, AUTO_HIDE_MS);
+  };
+
+  /** 복사·끌기·오른쪽 클릭을 막는다(단어가 화면에 있을 때만). 막았으면 주의 문구를 띄운다. */
+  const blockCopy = (e: Event) => {
+    if (!words.length || !sheet || sheet.classList.contains("hidden")) return;
+    const target = e.target as Node | null;
+    if (e.type !== "copy" && e.type !== "cut" && !(target && body?.contains(target))) return;
+    e.preventDefault();
+    (e as ClipboardEvent).clipboardData?.setData("text/plain", "");
+    const warn = document.getElementById("sdw-copywarn");
+    if (warn) setCopyText(warn, () => t("복사하지 마세요. 종이에 손으로 적어 주세요."));
+  };
+  for (const type of ["copy", "cut", "contextmenu", "dragstart"]) document.addEventListener(type, blockCopy, true);
 
   const close = () => {
     run++;
@@ -131,7 +173,7 @@ export function wireSeedCheck(deps: SeedCheckDeps): { open: () => void } {
          <b>${copyHtml("이 암호를 잊으면 돈과 자산은 영원히 사라집니다.")}</b><br />
          ${copyHtml("이 앱도, 레이븐코인도, 누구도 되돌릴 수 없습니다. 복구 방법이 없습니다.")}
        </div>
-       <p class="meta sdw-gap">${copyHtml("암호를 걸면 지갑 프로그램(노드)이 잠깐 꺼졌다가 저절로 다시 켜져요. 1~2분쯤 걸리고, 켜지면 바로 다음 단계로 넘어가요.")}</p>
+       <p class="meta sdw-gap">${copyHtml("암호를 걸면 지갑 프로그램(서버)이 잠깐 꺼졌다가 저절로 다시 켜져요. 1~2분쯤 걸리고, 켜지면 바로 다음 단계로 넘어가요.")}</p>
        ${shop ? `<div class="warnbox sdw-gap">${copyHtml("그동안 가게의 결제 확인도 멈춰요. 영업 중이면 나중에 하세요.")}</div>` : ""}
        <label class="sdw-gap">${copyHtml("새 암호 (10자 이상)")}<input id="sdw-new" type="password" autocomplete="new-password" /></label>
        <label>${copyHtml("한 번 더")}<input id="sdw-new2" type="password" autocomplete="new-password" /></label>
@@ -203,7 +245,7 @@ export function wireSeedCheck(deps: SeedCheckDeps): { open: () => void } {
       const el = document.getElementById("sdw-wait");
       if (el && mine === run) setCopyText(el, () => t(s));
     };
-    say("지갑 프로그램(노드)이 꺼지기를 기다리는 중…");
+    say("지갑 프로그램(서버)이 꺼지기를 기다리는 중…");
     // ① 꺼질 때까지(최대 90초 — 장부를 디스크에 내리느라 늦게 꺼지는 컴퓨터가 있다).
     //    꺼지기 전에 켜라고 하면 「이미 켜져 있다」로 끝나고, 곧 꺼진다.
     let down = false;
@@ -221,7 +263,7 @@ export function wireSeedCheck(deps: SeedCheckDeps): { open: () => void } {
     }
     // 잠금 파일이 풀릴 틈을 준다. 바로 켜면 「이미 쓰는 중」으로 죽는다.
     if (down) await sleep(2000);
-    say("지갑 프로그램(노드)을 다시 켜는 중…");
+    say("지갑 프로그램(서버)을 다시 켜는 중…");
     let lastStart = 0;
     const start = async () => {
       lastStart = Date.now();
@@ -251,7 +293,7 @@ export function wireSeedCheck(deps: SeedCheckDeps): { open: () => void } {
         if (warming(e)) say("장부를 여는 중이에요. 몇 분 걸릴 수 있어요…");
         else if (Date.now() - lastStart > 15_000) {
           // 켜라고 했는데 아직 꺼져 있다 — 꺼지던 중에 불렀을 수 있다. 한 번 더.
-          say("지갑 프로그램(노드)을 다시 켜는 중…");
+          say("지갑 프로그램(서버)을 다시 켜는 중…");
           await start();
         }
       }
@@ -266,10 +308,11 @@ export function wireSeedCheck(deps: SeedCheckDeps): { open: () => void } {
   }
 
   /* ── ② 암호 넣고 단어 보기 ─────────────────────────────────── */
-  function paintReveal(justLocked: boolean) {
+  function paintReveal(justLocked: boolean, note = "") {
     show(
       "reveal",
-      `${justLocked ? `<p class="okline">${copyHtml("지갑이 다시 열렸어요. 방금 만든 암호를 한 번 더 넣어 주세요.")}</p>` : ""}
+      `${note ? `<div class="warnbox">${esc(note)}</div>` : ""}
+       ${justLocked ? `<p class="okline">${copyHtml("지갑이 다시 열렸어요. 방금 만든 암호를 한 번 더 넣어 주세요.")}</p>` : ""}
        <p>${copyHtml("지갑 암호를 넣으면 복구 단어가 보여요. 주변에 사람이 없는지 먼저 보세요.")}</p>
        <label class="sdw-gap">${copyHtml("지갑 암호")}<input id="sdw-pass" type="password" autocomplete="current-password" /></label>
        <button id="sdw-show">${copyHtml("단어 보기")}</button>
@@ -290,6 +333,7 @@ export function wireSeedCheck(deps: SeedCheckDeps): { open: () => void } {
         extra = !!r?.has_extra_passphrase;
         if (!words.length) throw new Error(t("이 지갑에는 복구 단어가 없습니다."));
         paintWords("");
+        startTimer();
       } catch (e) {
         pass.value = "";
         if (mine !== run) return;
@@ -307,6 +351,7 @@ export function wireSeedCheck(deps: SeedCheckDeps): { open: () => void } {
     show(
       "words",
       `${again ? `<div class="warnbox">${esc(again)}</div>` : ""}
+       <p class="sdw-sensitive">${copyHtml("민감한 화면 — 복구 단어")}</p>
        <div class="warnbox sdw-gap">
          <b>${copyHtml("이 단어를 아는 사람은 지갑 전부를 가져갈 수 있습니다.")}</b><br />
          ${copyHtml("사진 찍지 마세요. 메모 앱에 적지 마세요. 남에게 보여주지 마세요.")}<br />
@@ -316,6 +361,8 @@ export function wireSeedCheck(deps: SeedCheckDeps): { open: () => void } {
          .map((w, i) => `<div class="seedword"><i>${i + 1}</i>${esc(w)}</div>`)
          .join("")}</div>
        ${extra ? `<p class="danger">${copyHtml("이 지갑에는 단어 외에 추가 암호가 걸려 있습니다. 그 암호도 함께 기억해야 복구됩니다.")}</p>` : ""}
+       <p class="sdw-timer" id="sdw-timer" role="timer" aria-live="off"></p>
+       <p class="danger sdw-copywarn" id="sdw-copywarn" role="alert"></p>
        <p class="meta">${copyHtml("다 적으셨으면 아래를 누르세요. 적은 종이를 보고 2·6·10번째 단어를 여쭤볼게요.")}</p>
        <button id="sdw-written">${copyHtml("다 적었어요")}</button>`,
     );
@@ -346,6 +393,7 @@ export function wireSeedCheck(deps: SeedCheckDeps): { open: () => void } {
         // 🔴 틀리면 다시 보여 준다. 종이에 잘못 적힌 줄은 지금 고쳐야 한다 —
         //    되살리는 날에는 고칠 수 없다.
         paintWords(tf("{0}번째 단어가 종이와 달라요. 적은 것을 하나씩 맞춰 보고 고쳐 주세요.", wrong.join("·")));
+        startTimer();
         return;
       }
       markChecked();

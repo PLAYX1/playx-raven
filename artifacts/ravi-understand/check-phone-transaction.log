@@ -1,0 +1,2 @@
+PASS mesh parts: reversed order, identical duplicate, missing, corrupt hash, conflicting duplicate, version, duplicate parameter, size cap, single envelope
+PASS desktop fixture accepted by actual phone parser; real mocked Rust route response accepted by actual phone network validator

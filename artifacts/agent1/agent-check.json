@@ -1,0 +1,7 @@
+{
+  "vm": "passed",
+  "rust": "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 750 filtered out; finished in 4.17s",
+  "browser": "미검증: Chrome 실행 실패",
+  "realAI": false,
+  "realRPC": false
+}

@@ -171,7 +171,7 @@ async fn run() -> Result<Value, String> {
             if held {
                 agent_release();
             }
-            format!("노드를 다시 띄우지 못했습니다: {e}")
+            format!("서버를 다시 띄우지 못했습니다: {e}")
         })?;
 
     // ── 5. 정말 떴는지 본다 ──────────────────────────────────────────
@@ -192,7 +192,7 @@ async fn run() -> Result<Value, String> {
         }
         RUNNING.store(false, Ordering::Relaxed);
         crate::awake::sync_with_mode();
-        return Err("노드가 다시 뜨지 않았습니다. 「이 컴퓨터」에서 상태를 봐 주세요.".into());
+        return Err("서버가 다시 뜨지 않았습니다. 「이 컴퓨터」에서 상태를 봐 주세요.".into());
     }
     // ── 6. 감독자는 **아직 올리지 않는다** ───────────────────────────
     // 🔴 그록 지적. 지금 올리면 launchd 가 `RunAtLoad` 로 **두 번째**
@@ -275,8 +275,8 @@ mod tests {
     fn launchd_를_먼저_내린다() {
         let src = include_str!("reindex_run.rs");
         let hold = src.find("let held = agent_hold();").expect("launchd 를 내리는 자리가 있어야 한다");
-        let stop = src.find(r#"call_rpc("stop""#).expect("노드를 끄는 자리가 있어야 한다");
-        assert!(hold < stop, "노드를 끄기 **전에** launchd 를 내려야 한다");
+        let stop = src.find(r#"call_rpc("stop""#).expect("서버를 끄는 자리가 있어야 한다");
+        assert!(hold < stop, "서버를 끄기 **전에** launchd 를 내려야 한다");
     }
 }
 
@@ -357,7 +357,7 @@ pub async fn sync_stalled() -> Value {
         "stalled": quiet_min >= 10,
         "blocks": blocks,
         "quiet_min": quiet_min,
-        "why": "블록 수가 늘지 않고 있습니다. 디스크가 꽉 찼거나, 노드가 멈췄을 수 있습니다.",
+        "why": "블록 수가 늘지 않고 있습니다. 디스크가 꽉 찼거나, 서버가 멈췄을 수 있습니다.",
     })
 }
 
@@ -380,10 +380,10 @@ pub fn node_log_tail() -> Value {
     // 🔴 0.4.9 — 복구 단어로 되살리는 동안과 끝난 직후(사람이 「닫기」를 누르기 전)에는 노드 기록을
     //    보이지도, 「이 글자 복사」로 내보내지도 않는다(설계서 부록 A 3·4).
     if crate::words_restore::log_hidden() {
-        return json!({ "ok": false, "why": "지갑을 되살리는 동안과 끝난 직후에는 노드 기록을 보여 드리지 않습니다 — 복구 단어가 섞일 수 있어서입니다." });
+        return json!({ "ok": false, "why": "지갑을 되살리는 동안과 끝난 직후에는 서버 기록을 보여 드리지 않습니다 — 복구 단어가 섞일 수 있어서입니다." });
     }
     let Ok(meta) = std::fs::metadata(&p) else {
-        return json!({ "ok": false, "why": "노드 기록 파일을 찾지 못했습니다.", "path": p.to_string_lossy() });
+        return json!({ "ok": false, "why": "서버 기록 파일을 찾지 못했습니다.", "path": p.to_string_lossy() });
     };
     // 끝에서부터 읽는다. 앞에서 읽으면 수백 MB 를 훑는다.
     let want: u64 = 16 * 1024;
@@ -525,7 +525,7 @@ pub fn chain_broken() -> Value {
     json!({
         "known": true,
         "broken": broken && !recovered,
-        "why": "장부가 깨졌습니다. 노드가 켜질 때마다 그 자리를 만나 스스로 꺼집니다.",
+        "why": "장부가 깨졌습니다. 서버가 켜질 때마다 그 자리를 만나 스스로 꺼집니다.",
         "how": "계산을 다시 하면 고쳐집니다. 블록 파일은 그대로 쓰므로 다시 받지 않습니다.",
     })
 }
@@ -598,7 +598,7 @@ mod broken_tests {
             assert!(
                 code.contains(&format!("\"{표시}")) || code.contains(표시),
                 "「{표시}」 을 「일하는 중」 표시로 안 보고 있다 — \
-                 재계산 중인 노드를 「깨졌다」고 말하게 된다"
+                 재계산 중인 서버를 「깨졌다」고 말하게 된다"
             );
         }
     }

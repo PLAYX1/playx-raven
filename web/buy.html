@@ -147,13 +147,14 @@
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <link rel="icon" href="/favicon-32.png" sizes="32x32" />
     <link rel="icon" href="/rvn-icon-192.png" sizes="192x192" />
-    <meta property="og:type" content="website" />
+    <!-- 미리보기 카드는 가게 컴퓨터가 내줄 때 그 판매 건의 이름·사진으로 갈아 끼운다
+         (src-tauri/src/og.rs). 그림은 이 컴퓨터의 /ipfs/ 에서만 — 남의 서버 그림 금지.
+         표시(og 주석) 두 개를 지우지 말 것. -->
+    <!--og--><meta property="og:type" content="website" />
     <meta property="og:title" content="물건 사기" />
     <meta property="og:description" content="레이븐코인으로 바로 삽니다." />
-    <meta property="og:image" content="https://rvn.ex.erci.se/og-raven.png" />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
-    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:card" content="summary" />
+    <!--/og-->
   </head>
   <body>
     <h1 id="name">불러오는 중…</h1>

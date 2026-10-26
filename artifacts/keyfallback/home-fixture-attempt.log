@@ -1,0 +1,3 @@
+Command: RV_BACKUP_FIXTURE_ROOT=$HOME/rv-test-fixture cargo test --manifest-path src-tauri/Cargo.toml
+create synthetic test subtree: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+test result: FAILED. 541 passed; 213 failed; 13 ignored; 0 measured; 0 filtered out; finished in 4.63s

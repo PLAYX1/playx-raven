@@ -1,0 +1,2 @@
+PASS production panel: shared DOM, bottom follow, dynamic content/resize, reader position/new-reply chip, Enter/Shift+Enter/IME, send focus/late focus, nonmodal Escape, stored open/size, approval pause, unavailable/corrupt storage
+PASS production chatSend: duplicate-request guard, immediate retained input focus, next draft survives, delayed completion never steals focus

@@ -280,6 +280,33 @@ pub fn read_metadata(doc: Value, lang: String) -> Value {
     })
 }
 
+fn is_keychain_access_target(path: &str) -> bool {
+    cfg!(target_os = "macos") && path == "/System/Applications/Utilities/Keychain Access.app"
+}
+
+pub(crate) fn is_microphone_settings_target(url: &str) -> bool {
+    cfg!(target_os = "macos") && url == "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone"
+}
+
+#[cfg(test)]
+#[test]
+fn microphone_settings_is_exact() {
+    let url = "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone";
+    assert_eq!(is_microphone_settings_target(url), cfg!(target_os = "macos"));
+    for bad in [format!("{url}&other=true"), format!("{url}#fragment"), url.replace("Microphone", "Camera")] {
+        assert!(!is_microphone_settings_target(&bad));
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn keychain_access_is_an_exact_path() {
+    assert_eq!(is_keychain_access_target("/System/Applications/Utilities/Keychain Access.app"), cfg!(target_os = "macos"));
+    for path in ["/Applications/Other.app", "/System/Applications/Utilities/Keychain Access.app/other", "file:///System/Applications/Utilities/Keychain Access.app", "/System/Applications/Utilities/Keychain Access.app --args"] {
+        assert!(!is_keychain_access_target(path));
+    }
+}
+
 /// Hands a local gateway URL to the system browser.
 ///
 /// Rendering arbitrary PDFs and documents inside a wallet-adjacent window is not
@@ -300,6 +327,7 @@ pub async fn open_external(url: String) -> Result<(), String> {
         "https://console.groq.com/",         // 열쇠 받기 — Groq
         "https://console.anthropic.com/",    // 열쇠 받기 — Anthropic
         "https://console.x.ai/",             // 열쇠 받기 — xAI
+        "https://dev.meta.ai/",              // 열쇠 받기 — Meta AI
         "https://aistudio.google.com/",      // 열쇠 받기 — Google (…/apikey)
         "https://platform.openai.com/",      // 열쇠 받기 — OpenAI
         "https://openrouter.ai/",            // 열쇠 받기 — OpenRouter
@@ -310,7 +338,7 @@ pub async fn open_external(url: String) -> Result<(), String> {
         "https://www.ravencoin.org/",        // 레이븐코인 공식
         "https://rvn.ex.erci.se/",           // 우리 사이트
     ];
-    if !ALLOWED.iter().any(|p| url.starts_with(p)) {
+    if !is_keychain_access_target(&url) && !is_microphone_settings_target(&url) && !ALLOWED.iter().any(|p| url.starts_with(p)) {
         // 오류 문구도 한국어로. 영어 원문은 사장에게 아무것도 알려주지 않는다.
         return Err(format!(
             "이 주소는 열지 않습니다. 우리가 아는 곳만 엽니다.\n{url}"
@@ -378,9 +406,9 @@ pub async fn ipfs_set_storage_max(gb: f64) -> Result<Value, String> {
         .post(format!("{API}/config?arg=Datastore.StorageMax&arg={want}"))
         .send()
         .await
-        .map_err(|e| format!("IPFS 에 닿지 못했습니다: {e}"))?;
+        .map_err(|e| format!("사진 보관함에 닿지 못했습니다: {e}"))?;
     if !r.status().is_success() {
-        return Err(format!("IPFS 가 거절했습니다({}).", r.status()));
+        return Err(format!("사진 보관함이 거절했습니다({}).", r.status()));
     }
     Ok(json!({ "storage_max": want, "needs_restart": true }))
 }

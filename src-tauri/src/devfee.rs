@@ -46,12 +46,14 @@ fn read() -> Value {
         .unwrap_or_else(|| json!({ "owed": 0.0, "sent_total": 0.0, "history": [] }))
 }
 
-fn write(v: &Value) {
-    let p = ledger_file();
-    if let Some(dir) = p.parent() {
-        let _ = std::fs::create_dir_all(dir);
-    }
-    let _ = std::fs::write(&p, serde_json::to_vec_pretty(v).unwrap_or_default());
+fn write(v: &Value) -> Result<(), String> {
+    let bytes = serde_json::to_vec_pretty(v).map_err(|_| "개발비 장부 형식 오류")?;
+    crate::payout_guard::atomic_write(&ledger_file(), &bytes)
+}
+
+fn read_checked() -> Result<Value, String> {
+    let bytes = std::fs::read(ledger_file()).map_err(|_| "개발비 장부를 확인할 수 없습니다.")?;
+    serde_json::from_slice(&bytes).map_err(|_| "개발비 장부가 손상되었습니다. 정산을 보류합니다.".into())
 }
 
 /// 장부 읽기→쓰기를 한 번에 하나만 지나가게 한다(동기 자물쇠 — 안에서 기다리지 않는다).
@@ -176,6 +178,7 @@ pub fn refund_credit(refunded_rvn: f64) -> f64 {
     if rate <= 0.0 {
         return 0.0;
     }
+    let _g = LEDGER_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let mut v = read();
     let owed = v["owed"].as_f64().unwrap_or(0.0);
     if owed <= 0.0 {
@@ -187,7 +190,7 @@ pub fn refund_credit(refunded_rvn: f64) -> f64 {
     if let Some(h) = v["history"].as_array_mut() {
         h.push(json!({ "order": "refund", "rvn": -back, "at": now() }));
     }
-    write(&v);
+    if write(&v).is_err() { return 0.0; }
     back
 }
 
@@ -302,7 +305,10 @@ pub async fn accrue(order_addr: &str, fee_rvn: f64) {
             h.drain(0..n - 5_000);
         }
     }
-    write(&v);
+    if write(&v).is_err() {
+        // No error contents: account data must never reach logs.
+        eprintln!("개발비 적립 저장 실패 — 장부 확인 필요");
+    }
 }
 
 fn now() -> i64 {
@@ -387,7 +393,7 @@ pub async fn fee_pay() -> Result<Value, String> {
     let Some(_pay) = PayGuard::take() else {
         return Err("이미 개발비를 보내는 중입니다. 잠시 뒤에 다시 확인해 주세요.".into());
     };
-    let v = read();
+    let v = read_checked()?;
     let owed = round8(v["owed"].as_f64().unwrap_or(0.0));
     let (_rate, addr) = crate::shop::fee_config();
 
@@ -395,10 +401,16 @@ pub async fn fee_pay() -> Result<Value, String> {
         return Err("보낼 주소가 아직 정해지지 않았습니다.".into());
     }
     // 수수료보다 적은 돈을 보내면 보내는 값보다 드는 값이 크다.
-    if owed < 0.01 {
+    if !owed.is_finite() || owed < 0.01 || owed > 1_000.0 {
         return Err("아직 보낼 만큼 쌓이지 않았습니다.".into());
     }
 
+    let intent = serde_json::to_vec(&json!({"owed": owed, "address": addr})).map_err(|_| "정산 기록 오류")?;
+    let id = format!("{:032x}", rand::random::<u128>());
+    let guard = match crate::payout_guard::begin(&crate::paths::app_file("payouts"), "devfee", &id, &intent)? {
+        crate::payout_guard::Begin::New(g) => g,
+        crate::payout_guard::Begin::Done(_) => return Err("이미 처리한 정산입니다.".into()),
+    };
     let txid = crate::raven::call_rpc(
         "sendtoaddress",
         json!([addr, owed, "RavenVault Desktop 개발비", "", false]),
@@ -414,7 +426,7 @@ pub async fn fee_pay() -> Result<Value, String> {
     // 다시 읽어서 **보낸 만큼만** 뺀다 — 통째로 0 으로 만들면 그 사이의
     // 결제 한 건이 조용히 사라진다.
     let _g = LEDGER_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    let mut fresh = read();
+    let mut fresh = read_checked()?;
     let left = round8((fresh["owed"].as_f64().unwrap_or(0.0) - owed).max(0.0));
     fresh["owed"] = json!(left);
     fresh["sent_total"] = json!(round8(
@@ -423,7 +435,8 @@ pub async fn fee_pay() -> Result<Value, String> {
     if let Some(h) = fresh["history"].as_array_mut() {
         h.push(json!({ "sent": owed, "txid": txid, "at": now() }));
     }
-    write(&fresh);
+    write(&fresh)?;
+    guard.complete(&txid)?;
 
     Ok(json!({ "txid": txid, "sent": owed, "left": left }))
 }
@@ -462,7 +475,7 @@ mod tests {
         //    쌓이자 시험이 깨졌다 — 시험이 남의 돈 장부를 보고 있었다.
         //    옆의 환불 시험처럼 공용 자물쇠를 잡고 임시 폴더로 보낸다.
         let _g = crate::paths::TEST_ENV.lock().unwrap_or_else(|e| e.into_inner());
-        let d = std::env::temp_dir().join("playx-devfee-zero-test");
+        let d = crate::paths::test_fixture_root().join("playx-devfee-zero-test");
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
         std::env::set_var("PLAYX_RAVEN_HOME", &d);
@@ -521,7 +534,7 @@ mod tests {
         // 🔴 대표님의 진짜 장부를 건드리면 안 된다. `paths.rs` 의 공용
         //    자물쇠를 잡고 임시 폴더로 보낸다.
         let _g = crate::paths::TEST_ENV.lock().unwrap_or_else(|e| e.into_inner());
-        let d = std::env::temp_dir().join("playx-devfee-refund-test");
+        let d = crate::paths::test_fixture_root().join("playx-devfee-refund-test");
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
         std::env::set_var("PLAYX_RAVEN_HOME", &d);
@@ -612,7 +625,7 @@ mod tests {
         // 두 번 떼지 않는지: 체인에 이미 있는지 보고 적어야 한다.
         assert!(
             auto.contains("fee_in_tx"),
-            "자판기가 체인을 안 보고 적는다 — 우리 지갑으로 낸 손님에게서 1% 를 두 번 뗀다."
+            "자판기가 공개 장부를 안 보고 적는다 — 우리 지갑으로 낸 손님에게서 1% 를 두 번 뗀다."
         );
     }
 

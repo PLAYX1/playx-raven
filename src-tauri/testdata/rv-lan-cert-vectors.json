@@ -1,0 +1,165 @@
+{
+ "now": 1800000000000,
+ "storeKey": "034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa",
+ "storeId": "abababababababababababababababababababababababababababababababab",
+ "deviceKeyHex": "0257eb3638f51f4dc5c8d5a7324b47df99e816cfcc5b5eb1245bc8c98029f9e674",
+ "certs": {
+  "remote": {
+   "v": 1,
+   "storeId": "abababababababababababababababababababababababababababababababab",
+   "deviceId": "2b74b42c7ca6da1dc4b3842f829b0ece0e6abeaef8d046320c1e2227047ea39b",
+   "devicePubKey": "0257eb3638f51f4dc5c8d5a7324b47df99e816cfcc5b5eb1245bc8c98029f9e674",
+   "role": "remote",
+   "scopes": [
+    "read",
+    "draft"
+   ],
+   "issuedAt": 1799999999000,
+   "notAfter": 1800086400000,
+   "serial": 1,
+   "sig": "IJW8cz52zSVZ9lXkvoBIPJyTuJJ3UFDANkbHv+4XKHnjKap8q+fgz3HvLbX7c/rYbt1JeyvGz4L+FS7sRPdMWug="
+  },
+  "replica": {
+   "v": 1,
+   "storeId": "abababababababababababababababababababababababababababababababab",
+   "deviceId": "edd2d5db034b61ab36fe61905fce32d79d9f502cc9f76c0f710174d605bc9cb0",
+   "devicePubKey": "0263c24955ff1e53b5f0de3f61507581494b8a843370f228efdee6a887f2c4cf42",
+   "role": "replica",
+   "scopes": [
+    "read",
+    "replicate"
+   ],
+   "issuedAt": 1799999999000,
+   "notAfter": 1800086400000,
+   "serial": 2,
+   "sig": "H+M/C3i//hy4PqDoapXfypY1gJTSUEETr5yYXXGX6h2+fOeuhO1ljKfypQDa3NR4Tez6P1+0HJjALoQEkAMswHk="
+  },
+  "draftOnly": {
+   "v": 1,
+   "storeId": "abababababababababababababababababababababababababababababababab",
+   "deviceId": "564341bee9b4caeb45774c8f23649c5a94aa94ed255909490a51d957141a9ec8",
+   "devicePubKey": "02505f234a81fe3af88625ebda259dbaec44c72b181e2f64735f8b8ec8d7cf7377",
+   "role": "remote",
+   "scopes": [
+    "draft"
+   ],
+   "issuedAt": 1799999999000,
+   "notAfter": 1800086400000,
+   "serial": 6,
+   "sig": "HxZ6ZFxTMSL4FbGaCAismiyQUhFps5VtoVbZgTB21LHVX2CbhO6FO0Yxjzrpq9gmGflUhNvavNeOP855dL10VgA="
+  },
+  "revokedCert": {
+   "v": 1,
+   "storeId": "abababababababababababababababababababababababababababababababab",
+   "deviceId": "2b74b42c7ca6da1dc4b3842f829b0ece0e6abeaef8d046320c1e2227047ea39b",
+   "devicePubKey": "0257eb3638f51f4dc5c8d5a7324b47df99e816cfcc5b5eb1245bc8c98029f9e674",
+   "role": "remote",
+   "scopes": [
+    "read",
+    "draft"
+   ],
+   "issuedAt": 1799999999000,
+   "notAfter": 1800086400000,
+   "serial": 3,
+   "sig": "Hyotej1buNl/3vraa8QGcWYFPFk7BJ8efke9/KHYDhBhIl8+m3q8no8Hui4aWb2dHx8JO1lF0qqPU01bvBgsbs0="
+  },
+  "expired": {
+   "v": 1,
+   "storeId": "abababababababababababababababababababababababababababababababab",
+   "deviceId": "2b74b42c7ca6da1dc4b3842f829b0ece0e6abeaef8d046320c1e2227047ea39b",
+   "devicePubKey": "0257eb3638f51f4dc5c8d5a7324b47df99e816cfcc5b5eb1245bc8c98029f9e674",
+   "role": "remote",
+   "scopes": [
+    "read"
+   ],
+   "issuedAt": 1799999995000,
+   "notAfter": 1799999999000,
+   "serial": 4,
+   "sig": "H1K3kEnCgL5GSvmRuRoH6vTHkFkSyH/s1aSPZexadcD/RMaJQ/g6mtxOnyZu+4hSH9myTK21Dn+Ttl1dOajWgHE="
+  },
+  "future": {
+   "v": 1,
+   "storeId": "abababababababababababababababababababababababababababababababab",
+   "deviceId": "2b74b42c7ca6da1dc4b3842f829b0ece0e6abeaef8d046320c1e2227047ea39b",
+   "devicePubKey": "0257eb3638f51f4dc5c8d5a7324b47df99e816cfcc5b5eb1245bc8c98029f9e674",
+   "role": "remote",
+   "scopes": [
+    "read"
+   ],
+   "issuedAt": 1800000600000,
+   "notAfter": 1800000700000,
+   "serial": 5,
+   "sig": "HzskUcKS/IK2e9ipOXI2p4F8Kkgcrqpj5M6fZcK0H+rvIFl6/WrMPXCt9jokukorEIJPhU+nC0qrJJY0jtm+ZIk="
+  }
+ },
+ "lists": {
+  "empty": {
+   "v": 1,
+   "storeId": "abababababababababababababababababababababababababababababababab",
+   "seq": 1,
+   "revoked": [],
+   "issuedAt": 1800000000000,
+   "prunedBefore": 0,
+   "sig": "H1KfU3XxgeWZgDewjdkFZpNoNZnPp0kHOqQYuSCa3rznYjBKhYtNzme40sUdVGZH34RDQavZ4CtcFL3dq4TT9y0="
+  },
+  "revoked": {
+   "v": 1,
+   "storeId": "abababababababababababababababababababababababababababababababab",
+   "seq": 2,
+   "revoked": [
+    "8cb994fa29142d46b72469664dbebb72fcbd9261be3d3eae409059490fa3a052"
+   ],
+   "issuedAt": 1800000000000,
+   "prunedBefore": 0,
+   "sig": "Hz5xG6BKkNDV1nvHGlHsGv+PjXE4dR/tcUSnkLfkNONjR5SeiOqJUIlQy5EmeNzSa72F7bIvdH1NOF/bfaJEzuM="
+  },
+  "stale": {
+   "v": 1,
+   "storeId": "abababababababababababababababababababababababababababababababab",
+   "seq": 3,
+   "revoked": [],
+   "issuedAt": 1799910000000,
+   "prunedBefore": 0,
+   "sig": "ICTRZC8Gplf5mTBvA44+gwtE5d9lrQtIaaz4hpxKrMIVW6Glh1vKY2/Avn6KXtwZ/16NcjzsbnIi6c4n8DSGk7I="
+  }
+ },
+ "certIds": {
+  "remote": "e40d8b0504d46107e9858881e40028844ab8b57620cbd780b6b643b36dc5af57",
+  "revokedCert": "8cb994fa29142d46b72469664dbebb72fcbd9261be3d3eae409059490fa3a052"
+ },
+ "ts": {
+  "remote_ok": {
+   "ok": true,
+   "certId": "e40d8b0504d46107e9858881e40028844ab8b57620cbd780b6b643b36dc5af57"
+  },
+  "remote_scope_draft": {
+   "ok": true,
+   "certId": "e40d8b0504d46107e9858881e40028844ab8b57620cbd780b6b643b36dc5af57"
+  },
+  "remote_scope_replicate": {
+   "ok": false,
+   "reason": "scope"
+  },
+  "revoked": {
+   "ok": false,
+   "reason": "revoked"
+  },
+  "expired": {
+   "ok": false,
+   "reason": "expired"
+  },
+  "future": {
+   "ok": false,
+   "reason": "not-yet"
+  },
+  "stale": {
+   "ok": false,
+   "reason": "stale-revocation-list"
+  },
+  "nolist": {
+   "ok": false,
+   "reason": "no-revocation-list"
+  }
+ },
+ "wrongStoreKey": "031195a8046dcbb8e17034bca630065e7a0982e4e36f6f7e5a8d4554e4846fcd99"
+}

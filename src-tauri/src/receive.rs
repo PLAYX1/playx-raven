@@ -77,7 +77,7 @@ where
     F: Future<Output = Result<Value, String>>,
 {
     let v = rpc("validateaddress", json!([address])).await?;
-    usable(&v).ok_or_else(|| "노드가 이 주소를 이 지갑의 받는 주소로 확인해 주지 않았어요. 보여 드리지 않을게요.".to_string())
+    usable(&v).ok_or_else(|| "서버가 이 주소를 이 지갑의 받는 주소로 확인해 주지 않았어요. 보여 드리지 않을게요.".to_string())
 }
 
 /// 받는 주소 하나. `fresh` 면 늘 새로 만든다.
@@ -263,7 +263,7 @@ mod tests {
 
     #[test]
     fn 그림은_svg_로만_덮어쓰지_않는다() {
-        let dir = std::env::temp_dir().join(format!("rv-recv-qr-{}", std::process::id()));
+        let dir = crate::paths::test_fixture_root().join(format!("rv-recv-qr-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let a = dir.join("받는주소.svg");
         assert_eq!(svg_path(a.to_str().unwrap()).unwrap(), a);

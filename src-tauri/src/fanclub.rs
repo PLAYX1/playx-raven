@@ -209,7 +209,7 @@ fn needs_index(v: &Value) -> bool {
 /// 자산 색인을 켜라는 말. 얼마나 걸리는지까지 적는다 — 「켜세요」만
 /// 적어 두면 장사 중에 켰다가 몇 시간 동안 노드가 멈춘다.
 const FIX_INDEX: &str = "자산 색인이 꺼져 있어 몇 분이 가졌는지 셀 수 없습니다. \
-「이 컴퓨터 → 고급 → 자산 전체 색인」을 켜고 노드를 다시 시작하세요. \
+「이 컴퓨터 → 고급 → 자산 전체 색인」을 켜고 서버를 다시 시작하세요. \
 이미 다 받아 놓은 컴퓨터라면 처음부터 다시 훑느라 몇 시간 걸립니다 — 밤에 켜세요.";
 
 /// 자산 몇 개 중 몇 개에 방이 있나 — **를 사람이 읽는 말로.**
@@ -256,7 +256,7 @@ async fn soft_count(asset: &str, why: &str) -> Value {
         "say": format!("{asset} — 몇 분이 가졌는지는 아직 못 셌습니다."),
         "why": match &어디까지 {
             Some(p) => format!("{why} {p} 다 훑으면 셀 수 있습니다."),
-            None => format!("{why} 노드가 장부를 다 훑으면 셀 수 있습니다."),
+            None => format!("{why} 서버가 장부를 다 훑으면 셀 수 있습니다."),
         },
         // 🔴 **못 세도 공지는 보낼 수 있다.** 이걸 안 적으면 사장이 멈춘다.
         "ok_without": "이 숫자가 없어도 공지를 보내는 데는 지장이 없습니다.",
@@ -403,7 +403,7 @@ pub async fn fan_rooms() -> Value {
     //    방이 없는 것은 상태지 오류가 아니므로, 없을 때는 다음에 할 일을
     //    적는다. 다 있을 때는 「모두」라고 적는다 — 「2개 중 2개」도 셈이다.
     let say = if let Some(w) = &assets_why {
-        format!("자산을 읽지 못했습니다: {w}\n노드가 꺼져 있거나 장부를 다시 훑는 중일 수 있습니다. 자산이 없다는 뜻이 아닙니다.")
+        format!("자산을 읽지 못했습니다: {w}\n서버가 꺼져 있거나 장부를 다시 훑는 중일 수 있습니다. 자산이 없다는 뜻이 아닙니다.")
     } else if let Some(w) = &rooms_why {
         format!("자산은 {}개 읽었지만 방 목록을 읽지 못했습니다: {w}", g.len())
     } else {
@@ -636,14 +636,14 @@ pub async fn fan_holders(asset: String) -> Result<Value, String> {
     //    오류다 — 그건 사람이 켜 줘야 바뀌는 일이기 때문이다.
     let v = match crate::raven::call_rpc("listaddressesbyasset", json!([a, true])).await {
         Ok(v) => v,
-        Err(e) => return Ok(soft_count(&a, &format!("노드가 답하지 않았습니다: {e}")).await),
+        Err(e) => return Ok(soft_count(&a, &format!("서버가 답하지 않았습니다: {e}")).await),
     };
     // 🔴 색인이 꺼져 있으면 이 노드는 **오류 문장을 정상 응답으로** 준다.
     if needs_index(&v) {
         return Err(FIX_INDEX.into());
     }
     let Some(n) = holders_count(&v) else {
-        return Ok(soft_count(&a, "노드가 숫자로 답하지 않았습니다.").await);
+        return Ok(soft_count(&a, "서버가 숫자로 답하지 않았습니다.").await);
     };
     Ok(json!({
         "asset": a,

@@ -1,0 +1,69 @@
+/* 레이븐볼트 레이아웃 토큰 — 간격·글자·줄 높이·칸 최소 폭·누름 영역·움직임.
+ * 규칙 문서: docs/design/layout-tokens.md. 새 화면은 이 변수만 쓴다(숫자 직접 쓰기 금지).
+ * 색은 기존 index.html 의 --bg/--panel/--text/--muted/--line/--ravi… 를 그대로 쓴다(정체성 유지 — 바꾸지 않는다).
+ * 🔴 style="" 속성 금지(Tauri nonce CSP 가 무시). 이 파일은 'self' 스타일시트라 CSP 와 무관하게 적용된다.
+ */
+:root {
+  /* 간격 — 4px 격자 */
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 20px; --sp-6: 24px; --sp-8: 32px; --sp-10: 40px;
+  /* 글자 — 본문 15, 최소 12(그 아래 금지). 큰 숫자는 음의 자간 */
+  --fs-xs: 12px; --fs-sm: 13px; --fs-md: 15px; --fs-lg: 17px; --fs-xl: 20px; --fs-2xl: 28px; --fs-num: clamp(28px, 4vw, 44px);
+  --lh-tight: 1.15; --lh-snug: 1.3; --lh-body: 1.5;
+  --tr-display: -0.02em; --tr-body: 0; --tr-small: 0.01em;
+  /* 칸 — 한 줄 칸 최소 폭(글자 6자 + 여백), 본문 최대 폭, 말풍선 최대 폭 */
+  --col-min: 7.5em; --measure: 68ch; --bubble-max: min(72%, 560px);
+  /* 누름 영역 — 권장 44, 하한 24(작은 창의 보조 단추) */
+  --hit: 44px; --hit-min: 24px; --gap-hit: 8px;
+  --radius-sm: 6px; --radius: 10px; --radius-lg: 14px; --radius-bubble: 18px;
+  /* 움직임 — 자주 쓰는 동작은 짧게, 들어옴은 ease-out, 화면 위 이동은 ease-in-out */
+  --ease-out: cubic-bezier(.23, 1, .32, 1);
+  --ease-in-out: cubic-bezier(.77, 0, .175, 1);
+  --dur-press: 100ms; --dur-fast: 160ms; --dur-base: 220ms; --dur-slow: 320ms;
+}
+
+/* ── 고침(작고 안전한 것만: 대비·겹침·잘림). 고치기 전·후 숫자: docs/design/window-modes.md 부록 ── */
+/*rv-design-fixes-start*/
+/* ① 전역 button:hover 가 ghost 단추에도 짙은 --brand-light 배경을 깔아 글자가 사라졌다(라이트 1.3:1·다크 1.9:1).
+ *    ghost 는 배경을 글자색 8% 로만 물들인다. 개별 화면 규칙(.gdel 등, 더 구체적)은 그대로 이긴다. */
+html body button.ghost:hover:not(:disabled) { background: color-mix(in srgb, var(--text) 8%, transparent); color: var(--text); border-color: color-mix(in srgb, var(--text) 45%, transparent); }
+/* ② 다크에서 --danger(#A5160F)가 글자로 쓰이면 2.3:1 — 글자일 때만 밝은 빨강(단추 배경은 그대로). */
+:root[data-theme="dark"] :not(button).danger { color: #ff8a80; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) :not(button).danger { color: #ff8a80; } }
+/* ③ 라비 「돈 상태」 다크 글자 3.3~3.6:1 → 다크 전용 밝은 톤 */
+:root[data-theme="dark"] #money-status .bad { color: #ff8a80; }
+:root[data-theme="dark"] #money-status .warn { color: #f2c36a; }
+:root[data-theme="dark"] #money-status .good { color: #6fd1a0; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) #money-status .bad { color: #ff8a80; } :root:not([data-theme="light"]) #money-status .warn { color: #f2c36a; } :root:not([data-theme="light"]) #money-status .good { color: #6fd1a0; } }
+/* ④ 주문 순번 흐림(opacity .55) 4.0:1 → .72 */
+.ordrow .rank { opacity: .72; }
+/* ⑤ 체인 등록 칩(라이트) 주황 글자 2.7:1 → 짙은 주황 5.4:1 */
+:root:not([data-theme="dark"]) .chainmark.on { color: #9a4512; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .chainmark.on { color: var(--ravi-soft); } }
+/* ⑥ 머리 「설정 · 한국어」 단추가 좁은 폭에서 한 글자씩 세로로 쪼개졌다 — 낱말 단위로만 줄바꿈 */
+#desktop-preferences, #desktop-preferences * { word-break: keep-all; overflow-wrap: normal; white-space: nowrap; }
+/* ⑦ index.html 의 `main button { overflow-wrap:anywhere }` 는 단추 최소 폭을 0 으로 만들어 넓은 자리에서도
+ *    「설 / 정」「Einstellung / en」처럼 낱말을 쪼갰다. 낱말 단위 줄바꿈 + 정말 안 들어갈 때만 쪼갬(break-word). */
+html body main button { overflow-wrap: break-word; word-break: keep-all; }
+/*rv-design-fixes-end*/
+
+/* ── 대화(카카오톡 기준) 컴포넌트 — src/chat-thread.ts. 기존 라비 대화에도 같은 규칙을 단계적으로 ── */
+.rvc { display: flex; flex-direction: column; min-height: 0; height: 100%; background: var(--bg, #fff); }
+.rvc-log { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--sp-3) var(--sp-3) var(--sp-2); display: flex; flex-direction: column; gap: var(--sp-2); scroll-padding-bottom: var(--sp-4); }
+.rvc-day { align-self: center; font-size: var(--fs-xs); color: var(--muted); padding: 2px var(--sp-2); border-radius: 999px; background: color-mix(in srgb, var(--text) 6%, transparent); }
+.rvc-row { display: flex; align-items: flex-end; gap: 6px; min-width: 0; }
+.rvc-row.me { flex-direction: row-reverse; }
+.rvc-bubble { max-width: var(--bubble-max); min-width: 2.5em; padding: 9px 12px; border-radius: var(--radius-bubble); background: var(--panel); color: var(--text); border: 1px solid var(--line); font-size: var(--fs-md); line-height: var(--lh-snug); overflow-wrap: anywhere; word-break: keep-all; white-space: pre-wrap; }
+.rvc-row.me .rvc-bubble { background: var(--my-bubble, var(--brand)); color: var(--my-text, #fff); border-color: transparent; }
+.rvc-bubble code, .rvc-bubble .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .92em; word-break: break-all; }
+.rvc-time { flex: none; font-size: var(--fs-xs); color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; padding-bottom: 2px; }
+.rvc-input { display: flex; align-items: flex-end; gap: var(--sp-2); padding: var(--sp-2); border-top: 1px solid var(--line); background: var(--panel); }
+.rvc-input textarea { flex: 1 1 auto; min-width: 0; min-height: var(--hit); max-height: 9.5em; resize: none; overflow-y: auto; box-sizing: border-box; padding: 10px 12px; border-radius: 20px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font: inherit; font-size: var(--fs-md); line-height: var(--lh-snug); overflow-wrap: anywhere; }
+.rvc-input button { flex: none; min-width: var(--hit); min-height: var(--hit); border-radius: 22px; }
+.rvc-jump { position: sticky; bottom: var(--sp-2); align-self: center; min-height: 32px; padding: 0 var(--sp-3); border-radius: 999px; font-size: var(--fs-sm); }
+.rvc-log:focus-visible, .rvc-bubble:focus-visible, .rvc-input textarea:focus-visible { outline: 2px solid var(--focus, #1f5fd6); outline-offset: 2px; }
+@container (max-width: 360px) { .rvc-bubble { --bubble-max: 86%; } .rvc-time { display: none; } }
+@media (prefers-reduced-motion: no-preference) {
+  .rvc-row.new { animation: rvc-in var(--dur-fast) var(--ease-out); }
+  @keyframes rvc-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+}
+@media (prefers-reduced-motion: reduce) { .rvc-log { scroll-behavior: auto; } }

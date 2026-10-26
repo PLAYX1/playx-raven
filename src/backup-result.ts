@@ -12,7 +12,7 @@ export function requireWalletBackup(value: unknown): WalletBackupResult {
   const entries = result && Array.isArray(result.inside) ? result.inside : [];
   if (!result || result.wallet_included !== true || result.locked !== true || result.verified !== true ||
       !entries.some(entry => entry?.name === "wallet.dat" && Number(entry.size) > 0)) {
-    throw new Error("지갑이 포함된 백업을 확인하지 못했습니다. 노드 연결을 확인한 뒤 다시 백업하세요.");
+    throw new Error("지갑이 포함된 백업을 확인하지 못했습니다. 서버 연결을 확인한 뒤 다시 백업하세요.");
   }
   return {
     name: String(result.name || ""), size_text: String(result.size_text || ""),

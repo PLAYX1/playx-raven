@@ -1,0 +1,301 @@
+TAP version 13
+# Subtest: normal crop upload and cleanup
+ok 1 - normal crop upload and cleanup
+  ---
+  duration_ms: 1.727417
+  ...
+# Subtest: unsupported File decode uses img.decode
+ok 2 - unsupported File decode uses img.decode
+  ---
+  duration_ms: 0.492958
+  ...
+# Subtest: stalled bitmap uses img.decode
+ok 3 - stalled bitmap uses img.decode
+  ---
+  duration_ms: 5.332667
+  ...
+# Subtest: null toBlob falls back to toDataURL
+ok 4 - null toBlob falls back to toDataURL
+  ---
+  duration_ms: 0.480708
+  ...
+# Subtest: stalled toBlob falls back to toDataURL
+ok 5 - stalled toBlob falls back to toDataURL
+  ---
+  duration_ms: 5.469208
+  ...
+# Subtest: both decoders stall uploads original bytes
+ok 6 - both decoders stall uploads original bytes
+  ---
+  duration_ms: 11.946584
+  ...
+# Subtest: both encoders stall uploads original bytes
+ok 7 - both encoders stall uploads original bytes
+  ---
+  duration_ms: 10.653667
+  ...
+# Subtest: canvas drawing fails uploads original bytes
+ok 8 - canvas drawing fails uploads original bytes
+  ---
+  duration_ms: 0.226583
+  ...
+# Subtest: preview timeout still uploads and reports the failed stage
+ok 9 - preview timeout still uploads and reports the failed stage
+  ---
+  duration_ms: 5.532042
+  ...
+# Subtest: bytes timeout ends with a stage-specific error
+ok 10 - bytes timeout ends with a stage-specific error
+  ---
+  duration_ms: 6.269833
+  ...
+# Subtest: upload timeout ends with a stage-specific error
+ok 11 - upload timeout ends with a stage-specific error
+  ---
+  duration_ms: 6.351042
+  ...
+# Subtest: missing CID and rejected upload have a safe message
+ok 12 - missing CID and rejected upload have a safe message
+  ---
+  duration_ms: 0.631083
+  ...
+# Subtest: size, unsupported type, and original magic are checked before upload
+ok 13 - size, unsupported type, and original magic are checked before upload
+  ---
+  duration_ms: 14.852
+  ...
+# Subtest: late bitmap is closed and cannot cause a second upload
+ok 14 - late bitmap is closed and cannot cause a second upload
+  ---
+  duration_ms: 7.428959
+  ...
+# Subtest: time limiter handles sync throws, deadlines, and late completions
+ok 15 - time limiter handles sync throws, deadlines, and late completions
+  ---
+  duration_ms: 6.724041
+  ...
+# Subtest: browser adapter rejects null toBlob and empty toDataURL
+ok 16 - browser adapter rejects null toBlob and empty toDataURL
+  ---
+  duration_ms: 0.481917
+  ...
+# Subtest: browser adapter crops the centre to 512 square and rejects a missing context
+ok 17 - browser adapter crops the centre to 512 square and rejects a missing context
+  ---
+  duration_ms: 0.213667
+  ...
+# Subtest: FileReader stall is aborted and its late callback never paints a preview
+ok 18 - FileReader stall is aborted and its late callback never paints a preview
+  ---
+  duration_ms: 5.118875
+  ...
+# Subtest: img.decode timeout and success both revoke object URLs
+ok 19 - img.decode timeout and success both revoke object URLs
+  ---
+  duration_ms: 6.203417
+  ...
+# Subtest: locked inline control retries once only after successful unlock
+ok 20 - locked inline control retries once only after successful unlock
+  ---
+  duration_ms: 0.46625
+  ...
+# Subtest: all photo error copy has translations in each language
+ok 21 - all photo error copy has translations in each language
+  ---
+  duration_ms: 2.365375
+  ...
+# Subtest: actual artistSave wiring preserves the form and auto-publishes after unlock
+ok 22 - actual artistSave wiring preserves the form and auto-publishes after unlock
+  ---
+  duration_ms: 309.55625
+  ...
+# PASS actual NSIS restore code preserves legacy HKCU/HKLM paths and uninstall identity while displaying RavenVault
+# PASS actual MSI discovery loop accepts old/new names with matching publisher; original uninstall ordering retained
+# PASS actual shortcut macro only migrates this install; unrelated targets, occupied names and removed shortcuts preserved
+# PASS Rust Handlebars 6.3.0 with Tauri two-pass escape settings renders all six exact registry keys
+# PASS actual WiX registry searches preserve custom MSI path and original MSI-over-NSIS priority; all six saved/search keys stable
+# PASS unmodified portions exactly match the official CLI 2.11.4 source hashes and MIT license
+# Subtest: /Users/gimmusong/wt-rv-desktop-simple/scripts/desktop-installer-identity.test.mjs
+ok 2 - /Users/gimmusong/wt-rv-desktop-simple/scripts/desktop-installer-identity.test.mjs
+  ---
+  duration_ms: 9430.825625
+  ...
+# Subtest: all platforms publish immutable version URLs, hashes, aliases and preserve older files
+ok 24 - all platforms publish immutable version URLs, hashes, aliases and preserve older files
+  ---
+  duration_ms: 75.354083
+  ...
+# Subtest: missing platform and missing signature stop publication
+ok 25 - missing platform and missing signature stop publication
+  ---
+  duration_ms: 10.417542
+  ...
+# Subtest: invalid version and malformed signature fail before writing
+ok 26 - invalid version and malformed signature fail before writing
+  ---
+  duration_ms: 18.540584
+  ...
+# Subtest: Linux RPM output produced by the real Tauri build is preserved
+ok 27 - Linux RPM output produced by the real Tauri build is preserved
+  ---
+  duration_ms: 39.749667
+  ...
+# Subtest: RavenVault keeps the original wallet, updater and Windows MSI identity
+ok 28 - RavenVault keeps the original wallet, updater and Windows MSI identity
+  ---
+  duration_ms: 0.859792
+  ...
+# Subtest: publishing an older or equal version cannot downgrade a newer public update
+ok 29 - publishing an older or equal version cannot downgrade a newer public update
+  ---
+  duration_ms: 14.786166
+  ...
+# Subtest: new installer brand keeps both latest aliases and old immutable files
+ok 30 - new installer brand keeps both latest aliases and old immutable files
+  ---
+  duration_ms: 42.516875
+  ...
+# Subtest: exact four updater platforms / five installers produce only seven deduplicated artifact HEAD requests
+ok 31 - exact four updater platforms / five installers produce only seven deduplicated artifact HEAD requests
+  ---
+  duration_ms: 28.527
+  ...
+# Subtest: 50 seconds of stale raw cache recovers without rebuilding or publishing
+ok 32 - 50 seconds of stale raw cache recovers without rebuilding or publishing
+  ---
+  duration_ms: 1.893584
+  ...
+# Subtest: cache may remain stale for fifteen minutes; final bounded attempt succeeds
+ok 33 - cache may remain stale for fifteen minutes; final bounded attempt succeeds
+  ---
+  duration_ms: 11.192042
+  ...
+# Subtest: permanently wrong version fails after bounded retries
+ok 34 - permanently wrong version fails after bounded retries
+  ---
+  duration_ms: 0.880792
+  ...
+# Subtest: missing public artifact fails instead of reporting a successful release
+ok 35 - missing public artifact fails instead of reporting a successful release
+  ---
+  duration_ms: 1.21475
+  ...
+# Subtest: schema, exact platform identities and immutable URLs reject malformed public metadata
+ok 36 - schema, exact platform identities and immutable URLs reject malformed public metadata
+  ---
+  duration_ms: 0.457791
+  ...
+# Subtest: same-version metadata mismatch is rejected before any artifact request
+ok 37 - same-version metadata mismatch is rejected before any artifact request
+  ---
+  duration_ms: 0.774416
+  ...
+# Subtest: oversized manifest and a nonresponsive public request fail within limits
+ok 38 - oversized manifest and a nonresponsive public request fail within limits
+  ---
+  duration_ms: 5.253834
+  ...
+# Subtest: verify-only workflow cannot build, sign, or publish and shares the postpublish verifier
+ok 39 - verify-only workflow cannot build, sign, or publish and shares the postpublish verifier
+  ---
+  duration_ms: 2.059042
+  ...
+# Subtest: new RavenVault Desktop URLs pass the same immutable manifest and HEAD checks
+ok 40 - new RavenVault Desktop URLs pass the same immutable manifest and HEAD checks
+  ---
+  duration_ms: 1.358583
+  ...
+# Subtest: new release verification fails if an old latest alias disappears
+ok 41 - new release verification fails if an old latest alias disappears
+  ---
+  duration_ms: 1.189917
+  ...
+# Subtest: 문구 표: 모든 줄이 4개 언어로 차 있다
+ok 42 - 문구 표: 모든 줄이 4개 언어로 차 있다
+  ---
+  duration_ms: 4.282708
+  ...
+# Subtest: 환불 문구: 가게 정책으로 적고 법률 확정 표현을 쓰지 않는다(§18.4)
+ok 43 - 환불 문구: 가게 정책으로 적고 법률 확정 표현을 쓰지 않는다(§18.4)
+  ---
+  duration_ms: 0.150083
+  ...
+# Subtest: 택배 조회 링크: 폰 앱 courier-links.ts 와 같은 주소 형식
+ok 44 - 택배 조회 링크: 폰 앱 courier-links.ts 와 같은 주소 형식
+  ---
+  duration_ms: 0.274791
+  ...
+# Subtest: 저장은 이 가게 주소(host) 한정이고 같은 주문은 합쳐진다
+ok 45 - 저장은 이 가게 주소(host) 한정이고 같은 주문은 합쳐진다
+  ---
+  duration_ms: 0.265
+  ...
+# Subtest: 상태 한 줄: 신청함 → 결제 확인 → 준비 중 → 발송함/나왔어요 → 전달됨
+ok 46 - 상태 한 줄: 신청함 → 결제 확인 → 준비 중 → 발송함/나왔어요 → 전달됨
+  ---
+  duration_ms: 0.546375
+  ...
+# Subtest: 결제한 진행 중 예약은 목록에서 뺄 수 없다(취소로 오해) · 끝난 것만
+ok 47 - 결제한 진행 중 예약은 목록에서 뺄 수 없다(취소로 오해) · 끝난 것만
+  ---
+  duration_ms: 0.091666
+  ...
+# Subtest: 오래된 끝난 것만 치운다
+ok 48 - 오래된 끝난 것만 치운다
+  ---
+  duration_ms: 0.149667
+  ...
+# Subtest: 마지막 확인 N분 전
+ok 49 - 마지막 확인 N분 전
+  ---
+  duration_ms: 0.150875
+  ...
+# Subtest: 받는 날을 크게: 예약 시각 우선, 공동구매는 받는 날
+ok 50 - 받는 날을 크게: 예약 시각 우선, 공동구매는 받는 날
+  ---
+  duration_ms: 15.653125
+  ...
+# Subtest: 환불 없음 확인은 공동구매·시각 예약에만
+ok 51 - 환불 없음 확인은 공동구매·시각 예약에만
+  ---
+  duration_ms: 0.244333
+  ...
+# Subtest: 대기 신청: 못 물어봤다고 지우지 않는다
+ok 52 - 대기 신청: 못 물어봤다고 지우지 않는다
+  ---
+  duration_ms: 0.091167
+  ...
+# Subtest: 화면: 결제 전 약속이 주문 만들기보다 먼저, 환불·취소 신청 단추 없음, 꺼짐 안내
+ok 53 - 화면: 결제 전 약속이 주문 만들기보다 먼저, 환불·취소 신청 단추 없음, 꺼짐 안내
+  ---
+  duration_ms: 0.2195
+  ...
+# Subtest: 가게 표는 사람 말로 읽힌다
+ok 54 - 가게 표는 사람 말로 읽힌다
+  ---
+  duration_ms: 1.13425
+  ...
+# Subtest: 이름이 없으면 지어내지 않고 앞 8글자를 쓴다
+ok 55 - 이름이 없으면 지어내지 않고 앞 8글자를 쓴다
+  ---
+  duration_ms: 0.123791
+  ...
+# Subtest: 얼굴 주소는 https 만 받는다
+ok 56 - 얼굴 주소는 https 만 받는다
+  ---
+  duration_ms: 0.147792
+  ...
+# Subtest: 색은 이름이 아니라 열쇠에서 나온다
+ok 57 - 색은 이름이 아니라 열쇠에서 나온다
+  ---
+  duration_ms: 0.135083
+  ...
+1..57
+# tests 57
+# suites 0
+# pass 57
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 9438.418875

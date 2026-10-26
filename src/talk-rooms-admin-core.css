@@ -1,0 +1,4 @@
+/* 「방 설정」 단추(시작 묶음 — 시트보다 먼저 그려진다). 「초대하기」·「더 보기」와 같은 크기. */
+#page-talk .chathead #tk-room-settings{flex:none;height:40px;min-height:40px!important;padding:0 14px;font-size:14px!important;line-height:1.4;white-space:nowrap}
+#tk-room-settings[hidden],#tk-hideroom[hidden],#tk-hiddenrooms[hidden]{display:none}
+.tk-hiddenrooms{margin:8px 12px 0}

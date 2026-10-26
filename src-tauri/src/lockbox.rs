@@ -130,7 +130,7 @@ fn ensure_no_existing_envelope() -> Result<(), String> {
 /// 낱말이 만들어지는 것을 막으려고 뺀다(Crockford 의 원래 이유).
 const ALPHABET: &[u8] = b"0123456789abcdefghjkmnpqrstvwxyz";
 
-fn to_paper(k: &[u8; 32]) -> String {
+pub(crate) fn to_paper(k: &[u8; 32]) -> String {
     // 5비트씩 끊어 52글자. 네 글자마다 띄어 읽기 쉽게.
     let mut bits = 0u32;
     let mut n = 0;
@@ -155,7 +155,7 @@ fn to_paper(k: &[u8; 32]) -> String {
         .join("-")
 }
 
-fn from_paper(s: &str) -> Result<[u8; 32], String> {
+pub(crate) fn from_paper(s: &str) -> Result<[u8; 32], String> {
     // 띄어쓰기·줄표는 무시하고, 대문자로 적었어도 받아 준다.
     // 🔴 사람은 `0` 을 `O` 로, `1` 을 `l`·`I` 로 적는다. Crockford 는 그걸
     // 받아 주게 되어 있고, 안 받아 주면 종이를 보고 그대로 쳤는데 "안 맞습니다"
@@ -359,6 +359,13 @@ pub async fn backup_pass_set(pass: String, wallet_pass: Option<String>) -> Resul
     Ok(json!({ "ok": true }))
 }
 
+/// 넣은 암호가 백업 암호 봉투를 여나 — 봉투가 없거나 읽을 수 없으면 None.
+/// 지갑 잠금 풀기(`app_lock::app_unlock`)가 노드가 꺼져 있을 때만 쓴다. 열쇠는 곧바로 버린다.
+pub fn pass_matches(pass: &str) -> Option<bool> {
+    let blob = pass_read_checked().ok().flatten()?;
+    Some(unwrap_key(&blob, pass).map(|mut k| k.fill(0)).is_ok())
+}
+
 /// 암호가 정해져 있나.
 #[tauri::command]
 pub fn backup_pass_state() -> Value {
@@ -509,7 +516,7 @@ mod tests {
     /// 잠그고 여는 것이 실제로 되는지. 그리고 **틀린 열쇠로는 안 열리는지.**
     #[test]
     fn it_locks_and_only_the_right_key_opens_it() {
-        let dir = std::env::temp_dir().join("playx-lockbox-test");
+        let dir = crate::paths::test_fixture_root().join("playx-lockbox-test");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let src = dir.join("plain.bin");
@@ -539,7 +546,7 @@ mod tests {
     /// 같은 파일" 이라는 사실이 밖에서 보인다.
     #[test]
     fn locking_twice_does_not_give_the_same_file() {
-        let dir = std::env::temp_dir().join("playx-lockbox-test2");
+        let dir = crate::paths::test_fixture_root().join("playx-lockbox-test2");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let src = dir.join("p.bin");
@@ -613,8 +620,7 @@ mod backup_safety_tests {
     impl Fixture {
         fn new() -> Self {
             let guard = crate::paths::TEST_ENV.lock().unwrap_or_else(|e| e.into_inner());
-            let root = PathBuf::from(std::env::var_os("RV_BACKUP_FIXTURE_ROOT")
-                .expect("Set RV_BACKUP_FIXTURE_ROOT to a dedicated repository fixture directory"));
+            let root = crate::paths::test_fixture_root();
             assert!(root.is_absolute() && root.is_dir());
             let path = root.join(format!("lockbox-{}-{}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
             std::fs::create_dir(&path).unwrap();

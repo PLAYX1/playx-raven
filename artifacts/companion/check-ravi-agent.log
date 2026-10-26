@@ -1,0 +1,6 @@
+PASS arrival once/session, opt-out, storage failure fallback, truthful and locked summaries
+PASS production UI: offline tools, key card, greeting consent, opt-in defaults/save failure/cancel, settings and audit
+PASS chat integration passes only preparation actions, consent blocks dispatch, reduced-motion fade and folded eyelid invariant
+PASS test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 757 filtered out; finished in 4.07s
+미검증: Chrome 실행 실패
+PASS Ravi agent mock checks; browser status recorded separately

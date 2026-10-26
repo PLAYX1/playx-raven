@@ -89,7 +89,7 @@ fn prep_conf() -> Vec<String> {
     // ① 우리가 노드에 말을 걸려면 이게 있어야 한다. 없으면 아무것도 못 읽는다.
     if !is("server") {
         want.insert("server".into(), json!(1));
-        did.push("노드에 말을 걸 수 있게 열었습니다".to_string());
+        did.push("서버에 말을 걸 수 있게 열었습니다".to_string());
     }
 
     // ② 색인. **장부가 아직 없을 때만** 켠다.

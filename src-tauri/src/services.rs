@@ -111,8 +111,22 @@ fn bundled_src(name: &str) -> Option<std::path::PathBuf> {
             return Some(p);
         }
     }
+    // 🔴 리눅스 deb·AppImage 는 Tauri 가 resources 를 `usr/lib/<productName>/` 아래에
+    //    넣는다(tauri-utils `resource_dir`: exe/../lib/<productName>). 위 목록에는
+    //    그 자리가 없어서 같이 넣은 ravend·ipfs 를 못 찾았다.
+    #[cfg(target_os = "linux")]
+    {
+        let p = dir.join("../lib").join(LINUX_PRODUCT_NAME).join("vendor").join(&file);
+        if p.is_file() {
+            return Some(p);
+        }
+    }
     None
 }
+
+/// `tauri.conf.json` 의 `productName`. 리눅스 resources 폴더 이름이 이것이다.
+#[cfg(any(target_os = "linux", test))]
+const LINUX_PRODUCT_NAME: &str = "RavenVault Desktop";
 
 pub fn which(name: &str) -> Option<String> {
     // 🔴 **이미 깔려 있는 것이 먼저다.** 우리가 넣은 것은 아무것도 없을 때의
@@ -272,9 +286,9 @@ pub async fn services_status() -> Value {
             // 0.1.5 부터 윈도우·리눅스는 설치 파일에 같이 들어간다.
             // 맥(애플 실리콘)은 공식 배포가 없어 아직 따로 깔아야 한다.
             "install": if cfg!(target_os = "macos") {
-                "레이븐 노드를 설치해 주세요. 애플 실리콘 맥은 공식 배포가 없어 아직 같이 넣지 못합니다."
+                "레이븐 서버를 설치해 주세요. 애플 실리콘 맥은 공식 배포가 없어 아직 같이 넣지 못합니다."
             } else {
-                "노드가 없습니다. RavenVault Desktop 을 다시 받아 설치하시면 같이 들어옵니다."
+                "서버가 없습니다. RavenVault Desktop 을 다시 받아 설치하시면 같이 들어옵니다."
             },
             // 못 찾았으면 어디를 봤는지 같이 준다. 사장이 자기 설치 자리를
             // 알려 주면 그 자리를 다음 판에 넣을 수 있다.
@@ -335,6 +349,11 @@ pub async fn start_parts(files: bool) -> Result<Value, String> {
         skipped.push(json!({ "what": "노드", "why": "이미 켜져 있습니다" }));
     } else if let Some(path) = which("ravend") {
         let datadir = crate::paths::raven_dir().to_string_lossy().to_string();
+        // 🔴 새 컴퓨터에는 이 폴더(%APPDATA%\Raven)가 없다. 코어는 없는 폴더를
+        //    만들어 주지 않고 "Specified data directory … does not exist" 로
+        //    죽는다 — 윈도우 새 설치에서 노드가 영영 안 켜진 원인이었다.
+        //    만들기만 한다(있으면 그대로, 지우거나 건드리지 않는다).
+        let _ = std::fs::create_dir_all(&datadir);
 
         // 🔴 자산 색인을 켜면 **다시 훑어야 한다.** 그런데 코어는 자산 색인이
         // 바뀐 것을 **검사하지 않는다**(init.cpp 에 txindex·addressindex 분기는
@@ -408,6 +427,14 @@ pub async fn start_parts(files: bool) -> Result<Value, String> {
             cmd.arg("-reindex-chainstate");
         } else if need_reindex || need_words_reindex {
             cmd.arg("-reindex");
+        } else if (want_asset || want_addr) && chain_is_empty(&datadir) {
+            // 🔴 새 컴퓨터에서 노드가 켜진 지 26초 만에 스스로 꺼졌다. 로그:
+            //    「You need to rebuild the database using -reindex-chainstate to change
+            //     -addressindex … Aborted block database rebuild. Exiting.」
+            //    장부 DB 가 색인 없이 처음 만들어진 뒤 색인을 켜고 다시 켜면 코어가 안 뜬다.
+            //    장부가 **비어 있으면**(맨 처음 블록뿐) 다시 만드는 데 드는 것이 없다 —
+            //    그래서 이때만 `-reindex` 를 붙인다. 이미 받은 장부에는 절대 안 붙는다.
+            cmd.arg("-reindex");
         }
         match spawn_node(cmd, &datadir).await {
             Ok(child) => {
@@ -428,7 +455,7 @@ pub async fn start_parts(files: bool) -> Result<Value, String> {
                     "note": if need_reindex {
                         "자산 색인을 만드느라 처음부터 다시 훑습니다 — 몇 시간 걸립니다. 그동안 주문 확인이 멈춥니다."
                     } else {
-                        "따라잡는 중입니다. 처음이면 며칠 걸릴 수 있습니다 — 남은 시간은 「이 컴퓨터 → RVN 노드」에서 보입니다"
+                        "따라잡는 중입니다. 처음이면 며칠 걸릴 수 있습니다 — 남은 시간은 「이 컴퓨터 → RVN 서버」에서 보입니다"
                     },
                     "reindexing": need_reindex,
                 }));
@@ -535,6 +562,53 @@ async fn spawn_node(mut cmd: Command, datadir: &str) -> Result<Option<Child>, St
         }
     }
     out
+}
+
+/// 장부가 **맨 처음 블록뿐인가**(= 다시 만들어도 잃을 것이 없는가).
+/// 첫 블록 파일(`blocks/blk00000.dat`)이 있고 1MB 도 안 될 때만 참이다.
+/// 파일이 없거나(새 폴더) 크면(이미 받는 중) 거짓 — 그때는 건드리지 않는다.
+fn chain_is_empty(datadir: &str) -> bool {
+    let f = std::path::Path::new(datadir).join("blocks").join("blk00000.dat");
+    match std::fs::metadata(&f) {
+        Ok(m) => m.is_file() && m.len() < 1_000_000,
+        Err(_) => false,
+    }
+}
+
+#[cfg(test)]
+mod chain_empty_tests {
+    use super::chain_is_empty;
+
+    fn tmp(name: &str) -> std::path::PathBuf {
+        let d = std::env::temp_dir().join(format!("rv-chain-empty-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(d.join("blocks")).unwrap();
+        d
+    }
+
+    #[test]
+    fn genesis_only_is_empty() {
+        let d = tmp("genesis");
+        std::fs::write(d.join("blocks").join("blk00000.dat"), vec![0u8; 303]).unwrap();
+        assert!(chain_is_empty(d.to_str().unwrap()));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn downloaded_chain_is_not_empty() {
+        let d = tmp("synced");
+        std::fs::write(d.join("blocks").join("blk00000.dat"), vec![0u8; 2_000_000]).unwrap();
+        assert!(!chain_is_empty(d.to_str().unwrap()));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn missing_blocks_file_is_not_touched() {
+        let d = tmp("missing");
+        assert!(!chain_is_empty(d.to_str().unwrap()));
+        assert!(!chain_is_empty("/없는/폴더/아무거나"));
+        let _ = std::fs::remove_dir_all(&d);
+    }
 }
 
 /// 띄운 뒤 `debug.log` 에 **새로 붙은 부분**만 읽는다.
@@ -649,7 +723,7 @@ fn node_why(raw: &str) -> String {
     // 🔴 0.4.9 — 틀린 복구 단어를 받은 코어는 단어 전체를 오류 문장에 넣는다(설계서 F7). 그 문장이
     //    여기서 화면 오류가 되고 「문제 알리기」에 실린다. 그런 줄은 통째로 바꾼다 — 앞 200자도 안 옮긴다.
     if crate::words_restore::masks_node_error(raw) {
-        return "노드가 켜지지 않았습니다. 복구 단어 설정 문제로 보입니다 — 내용은 보안을 위해 옮기지 않습니다.".into();
+        return "서버가 켜지지 않았습니다. 복구 단어 설정 문제로 보입니다 — 내용은 보안을 위해 옮기지 않습니다.".into();
     }
     let low = raw.to_lowercase();
     if low.contains("cannot obtain a lock") || low.contains("probably already running") {
@@ -660,13 +734,13 @@ fn node_why(raw: &str) -> String {
     if low.contains("-daemon is not supported") {
         // 여기 오면 안 된다 — 윈도우에서는 `-daemon` 을 안 붙이니까. 오면
         // 그건 위의 갈래가 깨진 것이므로, 그렇게 적는다.
-        return "이 컴퓨터에서는 노드를 뒤로 돌릴 수 없습니다. 프로그램을 다시 받아 주세요.".into();
+        return "이 컴퓨터에서는 서버를 뒤로 돌릴 수 없습니다. 프로그램을 다시 받아 주세요.".into();
     }
     if raw.is_empty() {
-        return "노드가 켜지자마자 멈췄습니다. 레이븐 코어가 켜져 있는지 확인해 주세요.".into();
+        return "서버가 켜지자마자 멈췄습니다. 레이븐 코어가 켜져 있는지 확인해 주세요.".into();
     }
     // 모르는 이유는 지어내지 않는다. 코어가 한 말을 그대로 옮긴다.
-    format!("노드가 켜지지 않았습니다: {}", raw.chars().take(200).collect::<String>())
+    format!("서버가 켜지지 않았습니다: {}", raw.chars().take(200).collect::<String>())
 }
 
 fn remember(name: &str, child: Child) {
@@ -701,6 +775,11 @@ pub fn stop_ours(name: &str) {
 /// Stops only what this app started.
 #[tauri::command]
 pub fn services_stop() -> Result<Value, String> {
+    // 🔴 윈도우만 노드가 우리 `Child` 로 남는다(유닉스는 `-daemon` 이라 목록에 없다).
+    //    그래서 윈도우에서는 아래 `kill`(TerminateProcess)이 장부를 쓰던 노드를
+    //    그대로 끊었다. 먼저 `stop` 으로 부탁하고 스스로 닫힐 때까지 기다린다.
+    #[cfg(target_os = "windows")]
+    windows_polite_node_stop(std::time::Duration::from_secs(20));
     let mut stopped = Vec::new();
     if let Ok(mut g) = OURS.lock() {
         if let Some(list) = g.as_mut() {
@@ -713,6 +792,34 @@ pub fn services_stop() -> Result<Value, String> {
         }
     }
     Ok(json!({ "stopped": stopped }))
+}
+
+/// 윈도우: 우리가 띄운 노드가 살아 있으면 RPC `stop` 을 보내고 **스스로 끝날 때까지**
+/// (최대 `max`) 기다린다. 끝나지 않으면 부르는 쪽이 예전처럼 `kill` 한다.
+#[cfg(target_os = "windows")]
+fn windows_polite_node_stop(max: std::time::Duration) {
+    fn node_alive() -> bool {
+        OURS.lock()
+            .ok()
+            .and_then(|mut g| {
+                g.as_mut().map(|list| {
+                    list.iter_mut()
+                        .any(|(n, c)| n == "node" && matches!(c.try_wait(), Ok(None)))
+                })
+            })
+            .unwrap_or(false)
+    }
+    if !node_alive() {
+        return;
+    }
+    let asked = crate::rt::block(async { crate::raven::call_rpc("stop", json!([])).await }).is_ok();
+    if !asked {
+        return;
+    }
+    let t0 = std::time::Instant::now();
+    while node_alive() && t0.elapsed() < max {
+        std::thread::sleep(std::time::Duration::from_millis(250));
+    }
 }
 
 /// 앱이 끝날 때 **우리가 켠 것만** 끈다.
@@ -775,6 +882,15 @@ pub async fn open_shop() -> Result<Value, String> {
 mod tests {
     use super::node_why;
 
+    /// 리눅스 deb·AppImage 의 resources 폴더 이름은 `productName` 이다.
+    /// 이름을 바꾸면서 이 상수를 잊으면 리눅스에서 같이 넣은 노드를 못 찾는다.
+    #[test]
+    fn 리눅스_resources_폴더_이름은_제품_이름과_같다() {
+        let conf: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.conf.json")).expect("tauri.conf.json");
+        assert_eq!(conf["productName"].as_str(), Some(super::LINUX_PRODUCT_NAME));
+    }
+
     /// 🔴 **설치 폴더의 것을 그대로 돌리면 업데이트가 막힌다.**
     ///    윈도우는 돌고 있는 실행 파일을 못 덮어쓰는데, 우리는 앱을 닫아도
     ///    파일창고가 살아 있게 떼어 놨다. 그래서 설치 프로그램이 그 파일에서
@@ -804,7 +920,7 @@ mod tests {
         // 윈도우에서는 그 자리에서 죽는다. 명령줄로 눌러 끈다.
         assert!(
             body.contains(&format!("\"-daemon{}0\"", "=")),
-            "설정 파일의 daemon=1 을 안 누르면 윈도우에서 노드가 죽는다"
+            "설정 파일의 daemon=1 을 안 누르면 윈도우에서 서버가 죽는다"
         );
         // 잡에서 안 빠져나오면 앱을 닫을 때 노드도 같이 죽는다.
         assert!(body.contains("BREAKAWAY"), "잡에서 빠져나와야 밤새 산다");
@@ -858,7 +974,7 @@ mod tests {
     ///    「띄우기 전 길이 뒤에 붙은 것만」 읽는 설계가 맞는지 확인한다.
     #[test]
     fn 지난번_락은_오늘_일이_아니다() {
-        let dir = std::env::temp_dir().join(format!("pxr-log-{}", std::process::id()));
+        let dir = crate::paths::test_fixture_root().join(format!("pxr-log-{}", std::process::id()));
         let _ = std::fs::create_dir_all(&dir);
         let log = dir.join("debug.log");
         // 지난주에 락 충돌이 한 번 있었다.
@@ -878,7 +994,7 @@ mod tests {
 
     #[test]
     fn 이번에_난_락은_잡는다() {
-        let dir = std::env::temp_dir().join(format!("pxr-log2-{}", std::process::id()));
+        let dir = crate::paths::test_fixture_root().join(format!("pxr-log2-{}", std::process::id()));
         let _ = std::fs::create_dir_all(&dir);
         let log = dir.join("debug.log");
         std::fs::write(&log, "2026-08-25 Raven server starting\n").unwrap();

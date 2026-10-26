@@ -124,15 +124,47 @@ pub fn peer_remove(address: String) -> Result<Value, String> {
 #[tauri::command]
 pub async fn pin_my_assets() -> Result<Value, String> {
     let assets = crate::raven::list_assets().await?;
+    // 🔴 0.8.8a — 내 뜻(`asset_keep.rs`)을 먼저 읽는다. 「보관 안 하기」는 건너뛰고, 받은 자산의 파일은
+    //    사용자가 화면에서 묻기 전에는 붙잡지 않는다. 설정을 못 읽으면(손상·옛 보관 미이전) 아무것도 안 한다.
+    let prefs = crate::asset_keep::ensure_migrated().await;
+    let mine_by_name: std::collections::HashMap<String, bool> =
+        assets.iter().map(|a| (a.name.clone(), a.mine)).collect();
     // 🔴 「만들기」의 원본 지문은 파일이 아니다 — 올린 적이 없어서 붙들 것이 없다.
     //    예전에는 지문마다 5분씩 기다렸다(50장이면 몇 시간). 이 컴퓨터가 지문으로
     //    만든 것은 기록에 있으니 여기서 뺀다.
     let fingerprints = crate::create_history::fingerprint_set();
-    let cids: Vec<String> = file_cids(assets.into_iter().map(|a| (a.name, a.ipfs_hash)), &fingerprints)
-        .into_iter()
-        .map(|(name, cid)| format!("{name}\u{1}{cid}"))
-        .collect();
-    pin_these(cids).await
+    let (cids, held_back) = split_by_policy(
+        file_cids(assets.into_iter().map(|a| (a.name, a.ipfs_hash)), &fingerprints),
+        &mine_by_name,
+        &prefs,
+    );
+    let cids: Vec<String> = cids.into_iter().map(|(name, cid)| format!("{name}\u{1}{cid}")).collect();
+    let mut out = pin_these(cids).await?;
+    out["held_back"] = json!(held_back);
+    // 받은 자산 때문에 아무것도 안 붙잡았으면 이유를 말한다 — 「지킬 파일이 없습니다」로만 읽히지 않게.
+    if held_back > 0 && out["pinned"].as_array().is_some_and(|a| a.is_empty()) {
+        out["note"] = json!("받은 자산의 파일은 자산 화면에서 「보관」을 눌러야 이 컴퓨터가 붙잡아요. 내가 만든 자산은 자동으로 보관돼요.");
+    }
+    Ok(out)
+}
+
+/// 자동 보관 대상을 내 뜻(`asset_keep`)으로 거른다. (허용, 내 뜻 때문에 건너뛴 개수)
+fn split_by_policy(
+    files: Vec<(String, String)>,
+    mine_by_name: &std::collections::HashMap<String, bool>,
+    prefs: &crate::asset_keep::Prefs,
+) -> (Vec<(String, String)>, usize) {
+    let mut keep = Vec::new();
+    let mut held_back = 0usize;
+    for (name, cid) in files {
+        let mine = mine_by_name.get(&name).copied().unwrap_or(false);
+        if crate::asset_keep::auto_allowed(prefs, mine, &cid) {
+            keep.push((name, cid));
+        } else {
+            held_back += 1;
+        }
+    }
+    (keep, held_back)
 }
 
 /// 자산 목록에서 **파일을 가리키는 것만** — 주인 표·빈 해시·이 컴퓨터가 만든
@@ -175,6 +207,15 @@ fn note_missed(cid: &str) {
             m.clear();
         }
         m.insert(cid.to_string(), std::time::Instant::now());
+    }
+}
+
+/// 사용자가 「보관하기」를 눌렀다 — 6시간 기다리지 않고 다음 주기에 곧바로 다시 찾는다(`asset_keep.rs`).
+pub(crate) fn forget_missed(cid: &str) {
+    if let Ok(mut g) = MISSED.lock() {
+        if let Some(m) = g.as_mut() {
+            m.remove(cid);
+        }
     }
 }
 
@@ -254,10 +295,16 @@ async fn pin_these(items: Vec<String>) -> Result<Value, String> {
     let mut fingerprints_skipped = 0usize;
     let fingerprints = crate::create_history::fingerprint_set();
 
+    let mut declined = 0usize;
     for (name, cid) in assets {
         // 이 컴퓨터가 원본 지문으로 만든 것 — 파일이 아니다.
         if fingerprints.contains(&cid) {
             fingerprints_skipped += 1;
+            continue;
+        }
+        // 🔴 내가 「보관 안 하기」로 정한 것은 어느 길로 와도(자동·내 파일 지키기·서로 돕기) 붙잡지 않는다.
+        if crate::asset_keep::load().is_skipped(&cid) {
+            declined += 1;
             continue;
         }
         // ── 체인 대조. 못 물어보면 **붙들지 않는다.** ──
@@ -287,7 +334,17 @@ async fn pin_these(items: Vec<String>) -> Result<Value, String> {
             continue;
         }
 
+        // 기다리는 사이에 사용자가 보관 안 하기로 바꿨을 수 있다 — 붙잡기 직전에 한 번 더 본다.
+        if crate::asset_keep::load().is_skipped(&cid) {
+            declined += 1;
+            continue;
+        }
         match crate::ipfs::pin_add(cid.clone()).await {
+            // 붙잡는 동안(큰 파일은 몇 분) 사용자가 「보관 안 하기」로 풀었으면 그 뜻이 이긴다 — 방금 붙잡은 것을 다시 푼다.
+            Ok(true) if crate::asset_keep::load().is_skipped(&cid) => {
+                let _ = crate::ipfs::pin_remove(cid.clone()).await;
+                declined += 1;
+            }
             Ok(true) => pinned.push(json!({ "asset": name, "cid": cid })),
             // 붙들지 못했으면 한동안 다시 묻지 않는다 — 안 그러면 돌 때마다 5분씩 기다린다.
             Ok(false) | Err(_) => {
@@ -302,7 +359,8 @@ async fn pin_these(items: Vec<String>) -> Result<Value, String> {
         "failed": failed,
         "no_file": skipped,
         "fingerprints": fingerprints_skipped,
-        "note": "체인이 가리키는 것만 받았습니다. 이 컴퓨터가 계속 갖고 있으니, 발행한 컴퓨터가 꺼져 있어도 손님 화면에서 열립니다.",
+        "declined": declined,
+        "note": "공개 장부가 가리키는 것만 받았습니다. 이 컴퓨터가 계속 갖고 있으니, 발행한 컴퓨터가 꺼져 있어도 손님 화면에서 열립니다.",
     }))
 }
 
@@ -432,6 +490,30 @@ mod tests {
             assert_eq!(r["pinned"], json!([]));
             assert_eq!(r["failed"], json!([]));
         });
+    }
+
+    /// 🔴 0.8.8a — 자동 보관은 「보관 안 하기」와 아직 안 정한 받은 자산을 건너뛴다. 내가 만든 것은 그대로 대상.
+    #[test]
+    fn 자동_보관은_내_뜻을_따른다() {
+        use crate::asset_keep::{Decision, Prefs};
+        let mut prefs = Prefs { migrated: true, ..Prefs::default() };
+        prefs.decisions.insert(FP.to_string(), Decision::Skip);
+        let files = vec![
+            ("MINE/A".to_string(), FILE.to_string()),
+            ("GOT/B".to_string(), "QmGotUndecidedAssetFile0000000000000000000000".to_string()),
+            ("MINE/SKIPPED".to_string(), FP.to_string()),
+            ("GOT/KEPT".to_string(), "QmGotKeptByThePerson0000000000000000000000000".to_string()),
+        ];
+        prefs.decisions.insert("QmGotKeptByThePerson0000000000000000000000000".to_string(), Decision::Keep);
+        let mine: std::collections::HashMap<String, bool> = [("MINE/A", true), ("MINE/SKIPPED", true), ("GOT/B", false), ("GOT/KEPT", false)]
+            .into_iter().map(|(k, v)| (k.to_string(), v)).collect();
+        let (keep, held) = super::split_by_policy(files, &mine, &prefs);
+        let names: Vec<&str> = keep.iter().map(|(n, _)| n.as_str()).collect();
+        assert_eq!(names, vec!["MINE/A", "GOT/KEPT"]);
+        assert_eq!(held, 2);
+        // 설정을 못 읽는 중(손상·미이전)에는 아무것도 붙잡지 않는다.
+        let (none, held) = super::split_by_policy(vec![("MINE/A".to_string(), FILE.to_string())], &mine, &Prefs::default());
+        assert!(none.is_empty() && held == 1);
     }
 
     /// 폴더(곡·영상 묶음)도 파일과 똑같이 「있음」이어야 한다. 가짜 파일창고를 띄워

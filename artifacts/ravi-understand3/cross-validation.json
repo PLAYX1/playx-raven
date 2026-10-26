@@ -1,0 +1,69 @@
+{
+  "bundleBudget": {
+    "baseline": "a4d5fd5",
+    "baselineBytes": 72521,
+    "currentBytes": 94423,
+    "addedBytes": 21902,
+    "limitBytes": 30000
+  },
+  "production": {
+    "total": 624,
+    "direct": 368,
+    "correct": 365,
+    "wrong": 3,
+    "candidates": 233,
+    "candidateCorrect": 169,
+    "refusalCorrect": 11,
+    "passRate": 0.8733974358974359,
+    "wrongMatchRate": 0.008152173913043478
+  },
+  "method": "stratified 5-fold; example-only calibration; held-out IDF; cosine of character and NFD jamo 2/3-grams plus Latin-token anchors",
+  "examples": 624,
+  "intents": 35,
+  "limits": {
+    "high": 0.68,
+    "low": 0.15,
+    "margin": 0.06
+  },
+  "metrics": {
+    "total": 624,
+    "direct": 51,
+    "correct": 51,
+    "wrong": 0,
+    "candidates": 531,
+    "candidateCorrect": 363,
+    "refused": 42,
+    "refusalCorrect": 6,
+    "rawTop1Accuracy": 0.5673076923076923,
+    "directAccuracy": 1,
+    "wrongMatchRate": 0,
+    "passRate": 0.6730769230769231
+  },
+  "folds": [
+    {
+      "fold": 0,
+      "total": 139
+    },
+    {
+      "fold": 1,
+      "total": 138
+    },
+    {
+      "fold": 2,
+      "total": 135
+    },
+    {
+      "fold": 3,
+      "total": 106
+    },
+    {
+      "fold": 4,
+      "total": 106
+    }
+  ],
+  "recommended": {
+    "high": 0.68,
+    "low": 0.15,
+    "margin": 0.06
+  }
+}

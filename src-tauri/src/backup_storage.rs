@@ -143,7 +143,7 @@ fn replace(from: &Path, to: &Path) -> io::Result<()> { fs::rename(from, to) }
 #[cfg(windows)]
 fn replace(from: &Path, to: &Path) -> io::Result<()> { windows::replace(from, to) }
 
-fn previous_path(latest: &Path) -> Result<PathBuf, String> {
+pub(crate) fn previous_path(latest: &Path) -> Result<PathBuf, String> {
     let name = latest.file_name().and_then(|n| n.to_str())
         .ok_or("백업 파일 이름을 읽지 못했습니다. 저장할 파일 이름을 확인하세요.")?;
     let (stem, suffix) = if let Some(stem) = name.strip_suffix(".zip.pxlock") { (stem, ".zip.pxlock") }
@@ -151,7 +151,9 @@ fn previous_path(latest: &Path) -> Result<PathBuf, String> {
         else if let Some((stem, _)) = name.rsplit_once('.') { (stem, &name[stem.len()..]) }
         else { (name, "") };
     if stem.is_empty() { return Err("백업 파일 이름이 비어 있습니다. 다른 이름을 골라 주세요.".into()); }
-    Ok(latest.with_file_name(format!("{stem}-이전{suffix}")))
+    // ASCII only, like every name written to disk (older app versions wrote
+    // `-이전`; those files are left as they are and still found read-only).
+    Ok(latest.with_file_name(format!("{stem}-previous{suffix}")))
 }
 
 struct DestinationLock { path: PathBuf, owned: bool }
@@ -350,7 +352,7 @@ mod tests {
     }
     #[test]
     fn successful_publication_rotates_both_supported_extensions() {
-        for name in ["PLAYXRaven.zip", "PLAYXRaven.zip.pxlock", "wallet.dat", ".backup-complete.json"] {
+        for name in ["RavenVault.zip", "RavenVault.zip.pxlock", "wallet.dat", ".backup-complete.json"] {
             let f = fixture();
             let (staged, latest, previous) = setup(f.path(), name);
             publish_file(&staged, &latest).unwrap();
@@ -367,7 +369,7 @@ mod tests {
         publish_with(&staged, &latest, &mut |point| { points.push(point.to_string()); Ok(()) }).unwrap();
         for stop in 0..points.len() {
             let f = fixture();
-            let (staged, latest, previous) = setup(f.path(), "PLAYXRaven.zip.pxlock");
+            let (staged, latest, previous) = setup(f.path(), "RavenVault.zip.pxlock");
             let mut index = 0;
             let mut triggered = false;
             let result = publish_with(&staged, &latest, &mut |_| {
@@ -384,7 +386,7 @@ mod tests {
     #[test]
     fn rollback_failure_keeps_original_snapshots_and_blocks_retry() {
         let f = fixture();
-        let (staged, latest, previous) = setup(f.path(), "PLAYXRaven.zip.pxlock");
+        let (staged, latest, previous) = setup(f.path(), "RavenVault.zip.pxlock");
         let error = publish_with(&staged, &latest, &mut |point| {
             if point == "published:verify" || point == "rollback_latest:replace" || point == "rollback_previous:replace" {
                 Err(io::Error::other("synthetic persistent disk failure"))
@@ -404,8 +406,8 @@ mod tests {
     #[test]
     fn stale_lock_and_invalid_source_never_touch_existing_backups() {
         let f = fixture();
-        let (staged, latest, previous) = setup(f.path(), "PLAYXRaven.zip.pxlock");
-        let lock = f.path().join(".PLAYXRaven.zip.pxlock.publish-lock");
+        let (staged, latest, previous) = setup(f.path(), "RavenVault.zip.pxlock");
+        let lock = f.path().join(".RavenVault.zip.pxlock.publish-lock");
         fs::write(&lock, b"synthetic interrupted process").unwrap();
         assert!(publish_file(&staged, &latest).is_err());
         assert_eq!(fs::read(&lock).unwrap(), b"synthetic interrupted process");
@@ -420,7 +422,7 @@ mod tests {
         for prior in [false, true] {
             let f = fixture();
             let staged = f.path().join("staged.bin");
-            let latest = f.path().join("PLAYXRaven.zip");
+            let latest = f.path().join("RavenVault.zip");
             let previous = previous_path(&latest).unwrap();
             fs::write(&staged, b"synthetic new backup").unwrap();
             if prior { fs::write(&previous, b"older successful backup").unwrap(); }
@@ -432,7 +434,7 @@ mod tests {
             else { assert!(!previous.exists()); }
         }
         let f = fixture();
-        let (staged, latest, previous) = setup(f.path(), "PLAYXRaven.zip.pxlock");
+        let (staged, latest, previous) = setup(f.path(), "RavenVault.zip.pxlock");
         fs::remove_file(&previous).unwrap();
         assert!(publish_with(&staged, &latest, &mut |point| {
             if point == "published:sync" { Err(io::Error::other("synthetic sync failure")) } else { Ok(()) }
@@ -462,7 +464,7 @@ mod tests {
         use std::os::unix::fs::symlink;
         let f = fixture();
         let source = f.path().join("source");
-        let latest = f.path().join("PLAYXRaven.zip");
+        let latest = f.path().join("RavenVault.zip");
         fs::write(&source, b"synthetic source").unwrap();
         symlink(&source, &latest).unwrap();
         assert!(publish_file(&source, &latest).is_err());
@@ -473,7 +475,7 @@ mod tests {
     #[test]
     fn readback_detects_actual_corruption_before_replacing_either_backup() {
         let f = fixture();
-        let (staged, latest, previous) = setup(f.path(), "PLAYXRaven.zip.pxlock");
+        let (staged, latest, previous) = setup(f.path(), "RavenVault.zip.pxlock");
         assert!(publish_with(&staged, &latest, &mut |point| {
             if point == "new:verify" {
                 let work = fs::read_dir(f.path())?.filter_map(Result::ok).find(|e| e.file_name().to_string_lossy().starts_with(".rv-backup-")).unwrap().path();
@@ -487,7 +489,7 @@ mod tests {
     #[test]
     fn concurrent_publication_is_rejected_while_the_first_owns_the_destination() {
         let f = fixture();
-        let (staged, latest, previous) = setup(f.path(), "PLAYXRaven.zip.pxlock");
+        let (staged, latest, previous) = setup(f.path(), "RavenVault.zip.pxlock");
         let (ready_tx, ready_rx) = std::sync::mpsc::channel();
         let (resume_tx, resume_rx) = std::sync::mpsc::channel();
         let thread_staged = staged.clone();

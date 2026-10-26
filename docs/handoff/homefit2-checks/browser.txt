@@ -1,0 +1,16 @@
+PASS 1024x640 light no-sales: y=0px x=0px
+PASS 1024x640 light sales: y=0px x=0px
+PASS 1024x640 dark no-sales: y=0px x=0px
+PASS 1024x640 dark sales: y=0px x=0px
+PASS 1280x720 light no-sales: y=0px x=0px
+PASS 1280x720 light sales: y=0px x=0px
+PASS 1280x720 dark no-sales: y=0px x=0px
+PASS 1280x720 dark sales: y=0px x=0px
+PASS 1440x900 light no-sales: y=0px x=0px
+PASS 1440x900 light sales: y=0px x=0px
+PASS 1440x900 dark no-sales: y=0px x=0px
+PASS 1440x900 dark sales: y=0px x=0px
+PASS 1728x1117 light no-sales: y=0px x=0px
+PASS 1728x1117 light sales: y=0px x=0px
+PASS 1728x1117 dark no-sales: y=0px x=0px
+PASS 1728x1117 dark sales: y=0px x=0px

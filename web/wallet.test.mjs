@@ -59,6 +59,10 @@ test("가게 표는 사람 말로 읽힌다", () => {
   // 🔴 `SHOP.PLAYX 0.00000001개` 는 40~70대에게 「이게 뭐야」다.
   assert.equal(자산을사람말로("SHOP.PLAYX"), "PLAYX 가게 소식");
   assert.equal(소식표인가("SHOP.PLAYX"), true);
+  // 새 가게(RV.S.<이름>)도 같은 「가게 소식」이다. 다른 종류(RV.M. 음악)는 아니다.
+  assert.equal(자산을사람말로("RV.S.KIMBAP"), "KIMBAP 가게 소식");
+  assert.equal(소식표인가("RV.S.KIMBAP"), true);
+  assert.equal(소식표인가("RV.M.SONG"), false);
   // 가게 표가 아닌 것은 **건드리지 않는다.** 이름을 지어내면 그게 거짓이다.
   assert.equal(자산을사람말로("PLAYX"), "PLAYX");
   assert.equal(자산을사람말로("PLAYX/MUSIC"), "PLAYX/MUSIC");

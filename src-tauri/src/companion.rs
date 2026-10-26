@@ -542,7 +542,7 @@ async fn broadcast(r: &impl ChainRpc, raw: &str) -> Answer {
     let expected = txid(raw)?;
     synced(r)
         .await
-        .map_err(|_| "메인넷 노드의 연결과 동기화 상태를 확인하세요.")?;
+        .map_err(|_| "메인넷 서버의 연결과 동기화 상태를 확인하세요.")?;
     let result = r
         .call("sendrawtransaction", json!([raw]))
         .await

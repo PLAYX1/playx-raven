@@ -1,0 +1,30 @@
+[
+  {
+    "command": "npm run check:pre-release",
+    "code": 0
+  },
+  {
+    "command": "node scripts/check-ravi-panel.mjs",
+    "code": 0
+  },
+  {
+    "command": "node scripts/check-ravi-state.mjs",
+    "code": 0
+  },
+  {
+    "command": "node scripts/check-ravi-key.mjs",
+    "code": 0
+  },
+  {
+    "command": "node scripts/check-ai-safety.mjs",
+    "code": 0
+  },
+  {
+    "command": "node scripts/check-send-confirmation.mjs",
+    "code": 0
+  },
+  {
+    "command": "node scripts/check-ravi-companion.mjs",
+    "code": 0
+  }
+]

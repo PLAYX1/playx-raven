@@ -9,9 +9,12 @@
 //! have been ten edits, and the one that got missed would not fail to compile —
 //! it would quietly read an empty folder and look like a shop with no data.
 //!
-//! ⚠️ The folder name is load-bearing. It is paired with the bundle identifier
-//! `se.erci.ex.playx.raven`, and renaming it orphans every shop's settings,
-//! members and ledger. Nothing here should ever be "tidied up".
+//! ⚠️ The folder name is load-bearing. Until 0.9.3 it was `PlayXRaven`; from 0.9.4
+//! it is `RavenVault`. Changing it WITHOUT a migration orphans every shop's
+//! settings, members and ledger, so the switch is done only through
+//! `app_dir_move` (rename, never copy/delete; falls back to the old folder if the
+//! rename is refused). The bundle identifier `se.erci.ex.playx.raven` is NOT tied
+//! to this folder name and stays unchanged (auto-update / webview storage).
 
 use std::path::PathBuf;
 
@@ -24,16 +27,51 @@ use std::path::PathBuf;
 pub fn app_dir() -> PathBuf {
     if let Ok(p) = std::env::var("PLAYX_RAVEN_HOME") {
         if !p.trim().is_empty() {
-            return PathBuf::from(p);
+            let path = PathBuf::from(p);
+            #[cfg(test)]
+            assert!(path.starts_with(test_fixture_root()) && !path.components().any(|c| c == std::path::Component::ParentDir), "test app override must be inside its synthetic fixture subtree");
+            return path;
         }
     }
     default_app_dir()
 }
 
-pub fn default_app_dir() -> PathBuf { base().join(APP_FOLDER) }
+pub fn default_app_dir() -> PathBuf { resolved_default().dir.clone() }
 
-/// 폴더 이름. 번들 identifier 와 짝이라 절대 바꾸지 않는다.
-const APP_FOLDER: &str = "PlayXRaven";
+/// 폴더 이름(0.9.4~). 옛 이름 `PlayXRaven` 은 `app_dir_move` 가 한 번만 옮긴다.
+/// 번들 identifier 와는 무관하다 — identifier 는 바꾸지 않는다.
+pub const APP_FOLDER: &str = crate::app_dir_move::NEW_FOLDER;
+
+/// 처음 부르는 순간 한 번 정해진다(옛 폴더 이전 포함). 앱이 켜질 때 `init_early()` 가
+/// 자식 프로세스를 켜기 전에 먼저 부른다. 시험에서는 디스크를 옮기지 않는다.
+fn resolved_default() -> &'static crate::app_dir_move::Resolved {
+    static R: std::sync::OnceLock<crate::app_dir_move::Resolved> = std::sync::OnceLock::new();
+    R.get_or_init(|| {
+        #[cfg(test)]
+        { return crate::app_dir_move::Resolved { dir: base().join(APP_FOLDER), legacy: base().join(crate::app_dir_move::LEGACY_FOLDER), outcome: crate::app_dir_move::Outcome::InUse }; }
+        #[cfg(not(test))]
+        {
+            let r = crate::app_dir_move::resolve_at(&base(), &crate::app_dir_move::processes_running_inside, &|a, b| std::fs::rename(a, b));
+            eprintln!("앱 자료 폴더: {} ({:?})", r.dir.display(), r.outcome);
+            r
+        }
+    })
+}
+
+/// 앱이 켜지는 가장 이른 자리에서 부른다 — `app_dir()` 이 쓰이기 전, ravend/ipfs 를 켜기 전.
+pub fn init_early() { let _ = resolved_default(); }
+
+/// 화면에 알릴 일(옛 폴더 폴백·두 폴더 모두 자료). 없으면 None.
+pub fn app_folder_notice() -> Option<serde_json::Value> {
+    if std::env::var("PLAYX_RAVEN_HOME").map(|v| !v.trim().is_empty()).unwrap_or(false) { return None; }
+    resolved_default().notice()
+}
+
+/// 저장해 둔 문자열 속 옛 앱 폴더 경로를 지금 폴더로 바꿔 읽는다(표시용, 디스크 불변).
+pub fn rebase_legacy_path(s: &str) -> String {
+    let r = resolved_default();
+    crate::app_dir_move::rebase_path_str(s, &r.legacy, &r.dir)
+}
 
 /// 이 컴퓨터가 프로그램 데이터를 두는 자리.
 ///
@@ -43,28 +81,26 @@ const APP_FOLDER: &str = "PlayXRaven";
 /// 회원 장부·주문이 매번 다른 자리에 생긴다. 사장은 "어제 것이 없어졌다" 고
 /// 겪는다.
 fn base() -> PathBuf {
-    #[cfg(target_os = "macos")]
-    {
-        return home().join("Library/Application Support");
+    platform_base(std::env::consts::OS, |key| std::env::var(key).ok())
+}
+fn platform_base(platform: &str, env: impl Fn(&str)->Option<String>) -> PathBuf {
+    #[cfg(test)]
+    { let _=&env; return synthetic_base(platform); }
+    #[cfg(not(test))]
+    match platform {
+        "macos" => home().join("Library/Application Support"),
+        "windows" => env("LOCALAPPDATA").filter(|p|!p.is_empty()).map(PathBuf::from)
+            .unwrap_or_else(||home().join("AppData").join("Local")),
+        _ => env("XDG_DATA_HOME").filter(|p|!p.is_empty()).map(PathBuf::from)
+            .unwrap_or_else(||home().join(".local").join("share")),
     }
-    #[cfg(target_os = "windows")]
-    {
-        // 로밍이 아니라 Local 이다. 지갑과 34GB 체인은 서버로 따라다니면 안 된다.
-        if let Ok(p) = std::env::var("LOCALAPPDATA") {
-            if !p.is_empty() {
-                return PathBuf::from(p);
-            }
-        }
-        return home().join("AppData").join("Local");
-    }
-    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-    {
-        if let Ok(p) = std::env::var("XDG_DATA_HOME") {
-            if !p.is_empty() {
-                return PathBuf::from(p);
-            }
-        }
-        return home().join(".local").join("share");
+}
+#[cfg(test)]
+fn synthetic_base(platform:&str)->PathBuf {
+    match platform {
+        "macos"=>home().join("Library/Application Support"),
+        "windows"=>home().join("AppData").join("Local"),
+        _=>home().join(".local").join("share"),
     }
 }
 
@@ -73,6 +109,10 @@ fn base() -> PathBuf {
 /// 어느 쪽도 없으면 **현재 폴더로 떨어뜨리지 않는다.** 상대 경로에 지갑
 /// 백업을 쓰면 실행 위치에 따라 파일이 흩어지고, 그건 없는 것보다 나쁘다.
 pub fn home() -> PathBuf {
+    #[cfg(test)]
+    { return test_fixture_root().join("synthetic-home"); }
+    #[cfg(not(test))]
+    {
     for k in ["HOME", "USERPROFILE"] {
         if let Ok(p) = std::env::var(k) {
             if !p.trim().is_empty() {
@@ -82,6 +122,7 @@ pub fn home() -> PathBuf {
     }
     // 마지막 수단. 임시 폴더는 지워질 수 있지만 **어디인지는 안다.**
     std::env::temp_dir()
+    }
 }
 
 /// 레이븐 코어가 쓰는 **기본** 폴더. 우리가 만든 것이 아니라 코어의 규칙이다.
@@ -90,22 +131,25 @@ pub fn home() -> PathBuf {
 /// · 리눅스 `~/.raven`. 리눅스만 숨김 폴더인 것은 코어가 그렇게 정했기
 /// 때문이고, 우리가 바꾸면 코어 지갑과 서로 다른 지갑을 보게 된다.
 pub fn default_raven_dir() -> PathBuf {
-    #[cfg(target_os = "macos")]
-    {
-        return home().join("Library/Application Support/Raven");
+    platform_raven_dir(std::env::consts::OS, |key|std::env::var(key).ok())
+}
+fn platform_raven_dir(platform:&str, env:impl Fn(&str)->Option<String>)->PathBuf {
+    #[cfg(test)]
+    { let _=&env; return synthetic_raven_dir(platform); }
+    #[cfg(not(test))]
+    match platform {
+        "macos"=>home().join("Library/Application Support/Raven"),
+        "windows"=>env("APPDATA").filter(|p|!p.is_empty()).map(|p|PathBuf::from(p).join("Raven"))
+            .unwrap_or_else(||home().join("AppData").join("Roaming").join("Raven")),
+        _=>home().join(".raven"),
     }
-    #[cfg(target_os = "windows")]
-    {
-        if let Ok(p) = std::env::var("APPDATA") {
-            if !p.is_empty() {
-                return PathBuf::from(p).join("Raven");
-            }
-        }
-        return home().join("AppData").join("Roaming").join("Raven");
-    }
-    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-    {
-        return home().join(".raven");
+}
+#[cfg(test)]
+fn synthetic_raven_dir(platform:&str)->PathBuf {
+    match platform {
+        "macos"=>home().join("Library/Application Support/Raven"),
+        "windows"=>home().join("AppData").join("Roaming").join("Raven"),
+        _=>home().join(".raven"),
     }
 }
 
@@ -164,20 +208,18 @@ fn datadir_candidates() -> Vec<PathBuf> {
     push(&mut out, home().join(".raven"));
     #[cfg(target_os = "windows")]
     {
+        #[cfg(not(test))]
         if let Ok(p) = std::env::var("LOCALAPPDATA") {
-            if !p.is_empty() {
-                push(&mut out, PathBuf::from(p).join("Raven"));
-            }
+            if !p.is_empty() { push(&mut out,PathBuf::from(p).join("Raven")); }
         }
         push(&mut out, home().join("AppData").join("Roaming").join("RavenCore"));
-        if let Some(p) = windows_qt_datadir() {
-            push(&mut out, p);
-        }
+        #[cfg(not(test))]
+        if let Some(p)=windows_qt_datadir() { push(&mut out,p); }
     }
     out
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", not(test)))]
 fn windows_qt_datadir() -> Option<PathBuf> {
     // Raven-Qt 가 데이터 폴더를 옮겼으면 레지스트리에 남는다.
     let out = crate::quiet::cmd("reg")
@@ -262,6 +304,7 @@ pub fn datadir_status() -> serde_json::Value {
         // 이미 받아 둔 체인이 몇 GB인가. 0 이면 처음부터 받아야 한다.
         "chain_gb": blocks_gb,
         "has_chain": blocks_gb >= 1,
+        "app_folder_notice": app_folder_notice(),
         "candidates": datadir_candidates().iter().map(|p| p.to_string_lossy().to_string()).collect::<Vec<_>>(),
     })
 }
@@ -298,12 +341,43 @@ pub fn app_file(name: &str) -> PathBuf {
 /// 🔴 `PLAYX_RAVEN_HOME` 은 프로세스 전역이다. 이걸 세우는 시험 둘이 동시에
 /// 돌면 한쪽이 다른 쪽의 값을 지운다 — 실제로 수수료 시험이 그렇게 깨졌다.
 /// 파일을 건드리는 시험은 전부 이 자물쇠를 잡고 들어간다.
+/// Each lib-test process gets a new synthetic subtree. No real home, wallet
+/// discovery, config or credentials are reachable even between env overrides.
+#[cfg(test)]
+pub fn test_fixture_root() -> PathBuf {
+    static ROOT: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+    ROOT.get_or_init(|| {
+        let root = PathBuf::from(std::env::var_os("RV_BACKUP_FIXTURE_ROOT")
+            .expect("Set RV_BACKUP_FIXTURE_ROOT to a dedicated synthetic fixture parent"));
+        assert!(root.is_absolute());
+        let dir = root.join(format!("desktop-lib-{}-{:x}", std::process::id(), rand::random::<u64>()));
+        std::fs::create_dir_all(&dir).expect("create synthetic test subtree");
+        dir
+    }).clone()
+}
+
 #[cfg(test)]
 pub static TEST_ENV: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_platform_test_path_ignores_external_environment_and_registry() {
+        let root=test_fixture_root();
+        let outside=root.parent().unwrap().join("uncreated-synthetic-env-escape");
+        for platform in ["macos","windows","linux"] {
+            let reads=std::cell::Cell::new(0);
+            let fake_env=|_:&str| { reads.set(reads.get()+1);Some(outside.to_string_lossy().to_string()) };
+            assert_eq!(platform_base(platform,&fake_env).starts_with(&root),true,"{platform} app folder escaped fixture");
+            assert_eq!(platform_raven_dir(platform,&fake_env).starts_with(&root),true,"{platform} Raven folder escaped fixture");
+            assert_eq!(reads.get(),0,"test paths must not read LOCALAPPDATA/XDG_DATA_HOME/APPDATA");
+        }
+        let source=include_str!("paths.rs");
+        assert!(source.contains("#[cfg(all(target_os = \"windows\", not(test)))]\nfn windows_qt_datadir()"),"test wallet discovery cannot query the Windows registry");
+        assert!(default_app_dir().starts_with(&root));assert!(default_raven_dir().starts_with(&root));
+    }
 
     /// 🔴 여태 macOS 경로가 **여덟 파일에** 흩어져 있었다. 윈도우에는 `HOME`
     /// 이 없어 빈 문자열이 되고, 경로가 **지금 있는 폴더 기준 상대 경로**로
@@ -312,14 +386,16 @@ mod tests {
     #[test]
     fn no_path_is_ever_relative() {
         let _g = super::TEST_ENV.lock().unwrap_or_else(|e| e.into_inner());
-        for k in ["HOME", "USERPROFILE", "LOCALAPPDATA", "APPDATA", "XDG_DATA_HOME", "PLAYX_RAVEN_HOME"] {
-            std::env::remove_var(k);
-        }
+        // Process HOME/USERPROFILE are never changed by tests. Exercise the
+        // no-override branch only; cfg(test) paths remain fixture-contained.
+        let old = std::env::var_os("PLAYX_RAVEN_HOME");
+        std::env::remove_var("PLAYX_RAVEN_HOME");
         // 환경변수가 하나도 없어도 절대 경로여야 한다. 상대 경로에 지갑
         // 백업을 쓰면 실행 위치에 따라 파일이 흩어진다 — 없는 것보다 나쁘다.
         assert!(app_dir().is_absolute(), "앱 폴더가 상대 경로다: {:?}", app_dir());
         assert!(raven_dir().is_absolute(), "레이븐 폴더가 상대 경로다: {:?}", raven_dir());
         assert!(home().is_absolute(), "홈이 상대 경로다: {:?}", home());
+        if let Some(v) = old { std::env::set_var("PLAYX_RAVEN_HOME", v); }
     }
 
     /// 코어 폴더 이름을 우리가 바꾸면 **코어 지갑과 서로 다른 지갑을 본다.**
@@ -357,7 +433,7 @@ mod tests {
 
     #[test]
     fn a_folder_without_wallet_dat_is_not_a_wallet() {
-        let tmp = std::env::temp_dir().join("playx-raven-nowallet");
+        let tmp = test_fixture_root().join("playx-raven-nowallet");
         let _ = std::fs::create_dir_all(&tmp);
         assert!(!has_wallet(&tmp));
         let _ = std::fs::remove_dir_all(&tmp);
@@ -368,14 +444,17 @@ mod tests {
         let _g = super::TEST_ENV.lock().unwrap_or_else(|e| e.into_inner());
         // 빈 값으로 덮어쓰는 사고를 막는다. 빈 문자열을 경로로 받아들이면
         // 앱 데이터가 파일시스템 루트로 향한다.
-        std::env::set_var("PLAYX_RAVEN_HOME", "/tmp/playx-raven-paths-test");
-        assert_eq!(app_dir(), PathBuf::from("/tmp/playx-raven-paths-test"));
+        let override_dir = test_fixture_root().join("paths-override");
+        std::env::set_var("PLAYX_RAVEN_HOME", &override_dir);
+        assert_eq!(app_dir(), override_dir);
         std::env::set_var("PLAYX_RAVEN_HOME", "   ");
         assert!(
-            app_dir().to_string_lossy().contains("PlayXRaven"),
+            app_dir().to_string_lossy().contains("RavenVault"),
             "빈 값이 진짜 폴더를 가려서는 안 된다"
         );
         std::env::remove_var("PLAYX_RAVEN_HOME");
-        assert!(app_dir().to_string_lossy().contains("PlayXRaven"));
+        assert!(app_dir().to_string_lossy().contains("RavenVault"));
+        assert_eq!(APP_FOLDER, "RavenVault");
+        assert_eq!(crate::app_dir_move::LEGACY_FOLDER, "PlayXRaven");
     }
 }

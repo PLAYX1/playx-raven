@@ -1,0 +1,13 @@
+{
+  "code": 101,
+  "lines": [
+    "test ai::connection_tests::loopback_mock_covers_http_refusal_and_delayed_response ... FAILED",
+    "test ai_endpoint::tests::redirects_cannot_forward_a_question_to_another_destination ... FAILED",
+    "test peers::tests::폴더_주소도_파일처럼_살아_있다고_본다 ... FAILED",
+    "test relay::tests::live_push_and_pairing_rooms_stay_off_disk ... FAILED",
+    "test server::bind_probe::binding_the_phone_port_is_fast ... FAILED",
+    "test server::wallet_usability_tests::actual_loopback_listener_supplies_peer_and_never_trusts_forwarding_headers ... FAILED",
+    "test upload::photo_security_tests::streaming_size_mime_and_magic_are_checked_without_length ... FAILED",
+    "test result: FAILED. 757 passed; 7 failed; 13 ignored; 0 measured; 0 filtered out; finished in 25.44s"
+  ]
+}

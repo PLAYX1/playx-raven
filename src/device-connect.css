@@ -1,0 +1,30 @@
+/* 「기기 연결」 화면. style="…" 속성 대신 여기서만 모양을 준다(CSP). 색은 index.html 의 토큰을 그대로 쓴다. */
+#page-devices [hidden] { display: none !important; }
+#page-devices .dv-card { margin: 16px 0; padding: 20px; max-width: 1100px; }
+#page-devices h3 { margin: 18px 0 6px; font-size: 16px; }
+#page-devices .dv-tablewrap { overflow-x: auto; position: relative; }
+#page-devices .dv-table { min-width: 640px; }
+#page-devices .dv-table th, #page-devices .dv-table td { text-align: left; padding: 8px 10px; vertical-align: middle; overflow-wrap: anywhere; }
+#page-devices .dv-name { font-weight: 700; }
+#page-devices tr[data-status="revoked"] td, #page-devices tr[data-status="expired"] td { color: var(--muted); }
+#page-devices .dv-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+#page-devices .dv-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin: 10px 0; }
+#page-devices button { min-height: 44px; }
+#page-devices .dv-form { display: grid; gap: 10px; max-width: 560px; }
+#page-devices .dv-form label, #page-devices .dv-key { display: grid; gap: 4px; font-weight: 600; }
+#page-devices .dv-key { max-width: 720px; }
+#page-devices input, #page-devices select { min-height: 40px; max-width: 100%; }
+#page-devices .dv-qrbox { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; margin: 8px 0; }
+#page-devices .dv-qr { width: 240px; height: 240px; padding: 6px; background: #fff; border: 1px solid var(--line); border-radius: 10px; flex: none; }
+#page-devices .dv-qr svg { width: 100%; height: 100%; display: block; }
+#page-devices .dv-result textarea { width: 100%; max-width: 100%; box-sizing: border-box; font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
+#page-devices .dv-note p { margin: 6px 0; }
+#page-devices .dv-keystate { font-weight: 600; }
+/* 가게 번호 카드 — 64자 번호가 좁은 창에서 넘치지 않게 줄바꿈한다. */
+#page-devices #sd-id { display: block; max-width: 100%; overflow-wrap: anywhere; word-break: break-all; font-family: ui-monospace, Menlo, monospace; font-size: 13px; white-space: normal; }
+#page-devices #sd-form textarea { width: 100%; max-width: 100%; box-sizing: border-box; }
+/* 폰 연결 — 대기 중인 폰 줄 */
+#page-devices .dv-pending { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 8px; }
+#page-devices .dv-pending li { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; }
+#page-devices .dv-pending b { font-size: 20px; letter-spacing: 2px; }
+#page-devices .dv-pname { font-weight: 700; }

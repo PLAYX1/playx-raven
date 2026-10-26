@@ -1,0 +1,105 @@
+/* 자산 파일 보관 화면 (0.8.8a) — src/asset-keep.ts. 색은 앱 토큰(--ok --warn --danger --muted --line --panel --text)만 쓴다. 인라인 style 속성은 CSP 때문에 쓰지 않는다. */
+
+/* 줄 배지 = 단추. 칸을 고정해서 상태가 바뀌어도 위치·크기가 그대로이고, 긴 말(de·it·ru)은 말줄임 + 툴팁. */
+#assets td.keepcell { width: 150px; max-width: 150px; }
+.keepbtn { position: relative; display: inline-flex; align-items: center; gap: 6px; width: 100%; max-width: 142px; min-height: 44px; padding: 4px 10px;
+  border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--text); font: inherit; font-size: 14px; line-height: 1.2;
+  cursor: pointer; overflow: hidden; touch-action: manipulation; -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
+.keepbtn .klabel { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+.keepbtn .kdot { flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+.keepbtn .klock { flex: none; width: 13px; height: 13px; color: var(--muted); }
+.keepbtn:focus-visible { outline: 3px solid var(--brand-light, #5874cf); outline-offset: 2px; }
+.keepbtn.kb-kept { border-color: color-mix(in srgb, var(--ok) 55%, var(--line)); }
+.keepbtn.kb-kept .kdot { background: var(--ok); }
+.keepbtn.kb-off { border-style: solid; color: var(--text); }
+.keepbtn.kb-off .kdot { background: transparent; border: 2px solid var(--muted); }
+.keepbtn.kb-unknown { border-style: dashed; color: var(--muted); }
+.keepbtn.kb-unknown .kdot { background: transparent; border: 2px dotted var(--muted); }
+.keepbtn.kb-missing { border-color: color-mix(in srgb, var(--warn) 60%, var(--line)); }
+.keepbtn.kb-missing .kdot { background: var(--warn); }
+.keepbtn.kb-busy { border-style: dotted; color: var(--muted); cursor: progress; }
+.keepbtn.kb-undo { border-color: var(--warn); color: var(--text); }
+.keepbtn.kb-undo .kdot { background: var(--warn); }
+/* 앱 기본 단추의 :hover(파란 바탕)보다 힘이 세야 한다 — 같은 힘이면 늦게 읽힌 쪽이 이긴다. */
+button.keepbtn:hover:not(:disabled) { background: color-mix(in srgb, var(--text) 6%, transparent); border-color: var(--line); color: var(--text); }
+button.keepbtn.kb-kept:hover:not(:disabled) { border-color: color-mix(in srgb, var(--ok) 55%, var(--line)); }
+button.keepbtn.kb-missing:hover:not(:disabled) { border-color: color-mix(in srgb, var(--warn) 60%, var(--line)); }
+button.keepbtn.kb-undo:hover:not(:disabled) { border-color: var(--warn); }
+button.keepbtn.holding:hover:not(:disabled) { border-color: var(--danger); }
+
+/* 진행 막대(아래 가는 줄). 보관하는 중에는 흐르고, 길게 누르는 중에는 0.6초 동안 차오른다. */
+.keepbtn .kbar { position: absolute; left: 0; bottom: 0; height: 3px; width: 0; background: var(--ok); pointer-events: none; }
+.keepbtn.kb-busy .kbar { width: 40%; background: var(--muted); animation: kbusy 1.2s ease-in-out infinite alternate; }
+.keepbtn.holding .kbar { background: var(--danger); animation: khold 0.6s linear var(--hold-delay, 0ms) forwards; }
+@keyframes kbusy { from { transform: translateX(0); } to { transform: translateX(150%); } }
+@keyframes khold { from { width: 0; } to { width: 100%; } }
+/* 진행 링: 숫자 속성을 지원하는 화면에서는 가장자리에 링이 차오른다. */
+@property --kp { syntax: "<number>"; inherits: false; initial-value: 0; }
+.keepbtn .kring { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0;
+  background: conic-gradient(var(--danger) calc(var(--kp) * 1%), transparent 0);
+  -webkit-mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0); mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  padding: 3px; }
+.keepbtn.holding .kring { opacity: 1; animation: kring 0.6s linear var(--hold-delay, 0ms) forwards; }
+@keyframes kring { from { --kp: 0; } to { --kp: 100; } }
+.keepbtn.holding { border-color: var(--danger); }
+/* 움직임 줄이기: 링·흐름 대신 6단계로 채워지는 막대. */
+@media (prefers-reduced-motion: reduce) {
+  .keepbtn.holding .kring { opacity: 0; animation: none; }
+  .keepbtn.holding .kbar { animation: khold 0.6s steps(6, end) var(--hold-delay, 0ms) forwards; }
+  .keepbtn.kb-busy .kbar { animation: none; width: 100%; }
+}
+.kfail { display: block; margin-top: 2px; max-width: 142px; font-size: 12.5px; line-height: 1.35; color: var(--danger); }
+.keepq { min-width: 36px; padding: 2px 8px; border-radius: 999px; }
+
+/* 위쪽 줄 */
+.keep-bar { margin: 6px 0 10px; display: flex; flex-direction: column; gap: 6px; }
+#keep-main { display: flex; flex-direction: column; gap: 6px; }
+.keep-cap { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 14px; }
+.kcap-meter { display: inline-block; width: 180px; height: 10px; border-radius: 6px; background: color-mix(in srgb, var(--text) 12%, transparent); overflow: hidden; vertical-align: middle; }
+.kcap-meter i { display: block; height: 100%; width: 0; background: var(--ok); }
+.kcap-meter.warn i { background: var(--warn); }
+.kcap-meter.full i { background: var(--danger); }
+.kcap-num { color: var(--muted); }
+.kcap-warn.warn { color: var(--warn); font-weight: 600; }
+.kcap-warn.full { color: var(--danger); font-weight: 600; }
+.kcap-off { color: var(--warn); font-weight: 600; }
+.keep-note { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); font-size: 14px; }
+.keep-note.ask { border-color: color-mix(in srgb, var(--brand-light, #5874cf) 55%, var(--line)); }
+.keep-note.bad { border-color: var(--danger); color: var(--text); }
+.keep-note .kclose { margin-left: auto; }
+.keep-opts { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 14px; color: var(--muted); }
+.keep-opts label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.keep-live { min-height: 1.3em; font-size: 14px; color: var(--muted); }
+
+/* 안내 창 · 메뉴 · 이유 안내 */
+.keep-dlg-wrap { position: fixed; inset: 0; z-index: 9000; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.45); padding: 16px; }
+.keep-dlg { width: min(460px, 100%); max-height: 90vh; overflow: auto; padding: 20px; border-radius: 14px; background: var(--panel); color: var(--text); border: 1px solid var(--line); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3); }
+.keep-dlg.danger { border-color: var(--danger); }
+.keep-dlg h3 { margin: 0 0 8px; font-size: 17px; }
+.keep-dlg p { margin: 6px 0; line-height: 1.6; }
+.keep-dlg-check { display: flex; align-items: flex-start; gap: 8px; margin: 12px 0; font-weight: 600; cursor: pointer; }
+.keep-dlg-btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.keep-dlg-btns button { min-height: 44px; padding: 8px 16px; }
+.keep-dlg-btns button.danger { background: var(--danger); color: #fff; border-color: var(--danger); }
+.keep-dlg-btns button:disabled { opacity: 0.5; cursor: not-allowed; }
+.keep-menu { position: fixed; z-index: 9100; min-width: 180px; display: flex; flex-direction: column; padding: 4px; border-radius: 10px; background: var(--panel); border: 1px solid var(--line); box-shadow: 0 8px 28px rgba(0, 0, 0, 0.25); }
+.keep-menu button { text-align: left; min-height: 44px; padding: 6px 12px; border: 0; border-radius: 8px; background: transparent; color: var(--text); font: inherit; cursor: pointer; }
+.keep-menu button:hover:not(:disabled), .keep-menu button:focus-visible { background: color-mix(in srgb, var(--text) 10%, transparent); color: var(--text); outline: none; }
+.keep-pop { position: fixed; z-index: 9050; width: min(340px, calc(100vw - 16px)); padding: 12px 14px; border-radius: 12px; background: var(--panel); color: var(--text); border: 1px solid var(--line); box-shadow: 0 8px 28px rgba(0, 0, 0, 0.25); font-size: 14px; }
+.keep-pop p { margin: 0 0 8px; line-height: 1.6; }
+.keep-pop-btns { display: flex; flex-wrap: wrap; gap: 6px; }
+.keep-pop-btns button { min-height: 40px; }
+
+/* 오른쪽 패널: 진짜인지 확인 */
+.keep-panel { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.keep-panel h4 { margin: 0 0 6px; font-size: 15px; }
+.kv-btns { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.kv-btns button { min-height: 40px; }
+.kv-head { margin: 8px 0 4px; font-weight: 700; }
+.kv-head.kv-ok { color: var(--ok); } .kv-head.kv-warn { color: var(--warn); } .kv-head.kv-bad { color: var(--danger); } .kv-head.kv-unknown { color: var(--warn); }
+.kv-bad-txt { color: var(--danger); }
+.kv-list { list-style: none; margin: 4px 0 8px; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 14px; line-height: 1.55; }
+.kv-list li { display: flex; gap: 8px; }
+.kv-list .kv-i { flex: none; width: 1.4em; text-align: center; font-weight: 700; }
+.kv-ok .kv-i { color: var(--ok); } .kv-warn .kv-i { color: var(--warn); } .kv-bad .kv-i { color: var(--danger); } .kv-unknown .kv-i { color: var(--muted); } .kv-info .kv-i { color: var(--muted); }
+.kv-armed { color: var(--brand-light, #5874cf); font-weight: 600; }

@@ -1,0 +1,17 @@
+{
+  "method": "Pillow 16-color quantization of original crop (65,75)-(280,440); dominant character colors rounded from quantization centroids",
+  "colors": {
+    "navy": "#2a356b",
+    "deep": "#212a5a",
+    "ink": "#1f224e",
+    "facet": "#353f73",
+    "blue": "#263265",
+    "soft": "#4c518c",
+    "purple": "#69659b",
+    "ribbon": "#9272a5",
+    "ribbon-light": "#9b7e9f",
+    "orange": "#e16638",
+    "peach": "#f3a46a",
+    "face": "#f5c297"
+  }
+}

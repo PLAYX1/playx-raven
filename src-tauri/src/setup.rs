@@ -411,7 +411,7 @@ pub async fn apply_setup(conf: Value, ipfs_profile: String) -> Result<Value, Str
         "conf_written": true,
         "ipfs_applied": ipfs,
         "needs_node_restart": true,
-        "note": "노드를 다시 켜야 적용됩니다. 영업 중이면 마감 뒤에 하세요.",
+        "note": "서버를 다시 켜야 적용됩니다. 영업 중이면 마감 뒤에 하세요.",
     }))
 }
 

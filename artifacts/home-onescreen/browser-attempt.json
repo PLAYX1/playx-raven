@@ -1,0 +1,5 @@
+{
+  "launch": "blocked",
+  "geometry": "not measured",
+  "reason": "Failed to launch the browser process!\n\n\nTROUBLESHOOTING: https://pptr.dev/troubleshooting\n"
+}

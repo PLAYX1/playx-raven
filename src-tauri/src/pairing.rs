@@ -134,7 +134,7 @@ pub async fn pairing_approve(view: bool, request: bool, money: String, daily_lim
     if money != "desktop" && money != "phone" {
         return Err("돈이 나가는 일의 방식을 다시 골라 주세요.".into());
     }
-    if daily_limit_rvn > 1_000_000 {
+    if daily_limit_rvn > proto::MAX_PHONE_DAILY_RVN {
         return Err("하루 한도가 너무 커요.".into());
     }
     let perms = Perms { view, request, money, daily_limit_rvn };

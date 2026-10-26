@@ -103,18 +103,19 @@ fn load_or_make() -> Result<[u8; 32], String> {
     //    대표님: "레이븐코인 seed 만 입력해서 복구하면 기존에 사용하던
     //    모든게 복구가 되었으면 좋겠는데."
     //
-    //    그러려면 이 열쇠도 씨앗에서 나와야 한다. 지갑이 잠겨 있거나
-    //    12단어로 만든 지갑이 아니면 예전처럼 무작위로 만든다 — 그때는
+    //    그러려면 이 열쇠도 씨앗에서 나와야 한다. 잠김·연결 실패는 오류다.
+    //    12단어로 만들지 않은 것이 확인된 지갑만 무작위로 만든다 — 그때는
     //    백업이 유일한 길이고, 파일에 그렇게 적어 둔다.
     let (bytes, from) = match from_seed() {
-        Some(b) => (b, "seed"),
-        None => (
+        Ok(b) => (b, "seed"),
+        Err(crate::identity::SeedFailure::NotMnemonic) => (
             Secp256k1::new()
                 .generate_keypair(&mut rand::thread_rng())
                 .0
                 .secret_bytes(),
             "random",
         ),
+        Err(e) => return Err(e.public_error()),
     };
     let body = json!({
         "sk": hex::encode(bytes),
@@ -136,6 +137,14 @@ fn load_or_make() -> Result<[u8; 32], String> {
         let _ = std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o600));
     }
     Ok(bytes)
+}
+
+/// 가게 열쇠의 비밀값 — **이 프로그램 안에서만** 쓴다(`map.rs` 가 지도 서명 열쇠를 뽑는 씨앗).
+///
+/// 🔴 화면·로그·릴레이로 절대 내보내지 않는다. 밖으로 나가는 것은 여기서 뽑은
+///    열쇠의 **공개키·서명**뿐이다.
+pub(crate) fn secret_for_derivation() -> Result<[u8; 32], String> {
+    load_or_make()
 }
 
 /// 12단어에서 이 가게의 열쇠를 뽑는다.
@@ -187,7 +196,7 @@ const fn same(a: &str, b: &str) -> bool {
 //    둘 다 되돌릴 수 없는 사고라, 실수로는 못 바꾸게 막아 둔다.
 const _: () = assert!(
     same(SEED_TAG, "PLAYX-RAVEN-SHOPKEY-v1"),
-    "간판 표식을 바꾸면 체인에 박힌 공개키와 어긋나 가게가 죽는다."
+    "간판 표식을 바꾸면 공개 장부에 박힌 공개키와 어긋나 가게가 죽는다."
 );
 const _: () = assert!(
     same(SEED_TAG_TALK, "PLAYX-RAVEN-TALKKEY-v1"),
@@ -222,18 +231,13 @@ fn derive_with(tag: &str, words: &str, passphrase: &str) -> Option<[u8; 32]> {
     secp256k1::SecretKey::from_byte_array(&out).ok().map(|_| out)
 }
 
-/// 노드에 12단어를 물어본다. 잠겨 있거나 12단어로 만든 지갑이 아니면 `None`.
+/// 노드에 12단어를 물어본다. 실패 원인을 공통 분류로 보존한다.
 ///
 /// ⚠️ 12단어는 **여기서만** 쓰고 어디에도 안 남긴다. 로그에도, 파일에도,
 ///    화면에도 안 나간다. 나가는 것은 해시 결과뿐이다.
-fn from_seed() -> Option<[u8; 32]> {
-    let v = crate::rt::block(async {
-        crate::raven::call_rpc("getmywords", json!([])).await
-    })
-    .ok()?;
-    let words = v.get("word_list").and_then(Value::as_str)?;
-    let pass = v.get("passphrase").and_then(Value::as_str).unwrap_or("");
-    derive_from_words(words, pass)
+fn from_seed() -> Result<[u8; 32], crate::identity::SeedFailure> {
+    let (words, pass) = crate::identity::words_from_node()?;
+    derive_from_words(&words, &pass).ok_or(crate::identity::SeedFailure::Other)
 }
 
 /// 지금 열쇠를 **12단어에서 나온 것으로 바꿔 넣는다.**
@@ -245,7 +249,7 @@ fn from_seed() -> Option<[u8; 32]> {
 /// 옛 열쇠는 **지우지 않고** `shopkey-old-*.json` 으로 옆에 남긴다.
 /// 되돌릴 일이 생길 수 있고, 지운 것은 못 되돌린다.
 pub fn install_seed_key() -> Result<String, String> {
-    let sk = from_seed().ok_or("12단어를 읽지 못했습니다.")?;
+    let sk = from_seed().map_err(crate::identity::SeedFailure::public_error)?;
     let p = key_file();
     if p.exists() {
         let stamp = std::time::SystemTime::now()
@@ -422,6 +426,11 @@ pub async fn announce(asset: &str, url: &str) -> Result<Value, String> {
 ///
 /// 그래서 주소만 싣는다. 사진을 바꾸면 새 주소를 실어 다시 올리면 그만이고,
 /// **소각은 0원**이다.
+/// 좌표를 소수 둘째 자리로 뭉갠다(약 1.1km). 릴레이에 정확한 위치를 남기지 않기 위해서다.
+pub(crate) fn coarse_coord(v: f64) -> f64 {
+    (v * 100.0).round() / 100.0
+}
+
 fn living_profile() -> Vec<(String, Value)> {
     let sh: Value = std::fs::read_to_string(crate::paths::app_file("shop.json"))
         .ok()
@@ -457,9 +466,12 @@ fn living_profile() -> Vec<(String, Value)> {
     ] {
         take(k);
     }
+    // 🔴 정확한 좌표는 릴레이에 올리지 않는다. 소수 둘째 자리(약 1km)로 뭉갠다.
+    //    가게 주소(`location`)는 사장이 직접 적은 글이고, 좌표는 「가까운 순」을
+    //    매길 때만 쓰이므로 1km 칸이면 충분하다. 정확한 값은 shop.json 에만 남는다.
     for k in ["lat", "lon"] {
         if let Some(v) = sh.get(k).and_then(Value::as_f64) {
-            out.push((k.to_string(), json!(v)));
+            out.push((k.to_string(), json!(coarse_coord(v))));
         }
     }
     for k in ["pickup", "delivery", "closed_now"] {
@@ -500,7 +512,7 @@ pub async fn shop_refresh() -> Result<Value, String> {
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .ok_or_else(|| {
-            "아직 체인에 등록하지 않으셨습니다. 등록하시면 손님이 장터에서 찾을 수 있습니다."
+            "아직 공개 장부에 등록하지 않으셨습니다. 등록하시면 손님이 장터에서 찾을 수 있습니다."
                 .to_string()
         })?;
     let url = crate::tunnel::tunnel_status()["url"]
@@ -571,5 +583,19 @@ mod crossreport {
             // 열쇠 없는 기계에서 시험 전체가 빨개진다.
             Err(e) => println!("CROSSCHECK-SKIP {e}"),
         }
+    }
+}
+
+#[cfg(test)]
+mod coarse_coord_tests {
+    use super::coarse_coord;
+
+    #[test]
+    fn exact_shop_coordinates_are_rounded_before_going_to_relays() {
+        assert_eq!(coarse_coord(37.498095), 37.5);
+        assert_eq!(coarse_coord(127.027610), 127.03);
+        assert_eq!(coarse_coord(37.344712), 37.34);
+        // 약 1km 안쪽 차이는 같은 값이 된다 — 정확한 가게 위치를 거꾸로 알 수 없다.
+        assert_eq!(coarse_coord(37.3447), coarse_coord(37.3449));
     }
 }

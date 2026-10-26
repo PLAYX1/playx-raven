@@ -94,6 +94,7 @@
          빨갛게 만들면 해야 할 때 망설인다. 되돌릴 수 없다는 경고는 아래 문장이
          맡는다. (var(--warn) 은 다크모드에서 밝은 노랑이라 흰 글씨가 안 읽힌다.) */
       #p-refund label { display: block; margin-top: 16px; }
+      #p-refund .note { font-size: 15px; }
       #rf-go { width: 100%; min-height: 56px; margin-top: 16px; border: 0;
                border-radius: 12px; background: var(--accent); color: var(--on-fill);
                font-size: 17px; font-weight: 600; font-family: inherit; cursor: pointer; }
@@ -364,12 +365,8 @@
 
     <div class="pane" id="p-refund">
       <div id="rf-limits" class="note"></div>
-      <!-- 체인은 보낸 사람을 기록하지 않는다. 그래서 손님에게 주소를 물어야
-           하고, 그 사실을 화면이 먼저 말해야 한다. -->
-      <p class="note">
-        <b>손님에게 받을 주소를 물어보세요.</b> 체인은 누가 보냈는지 기록하지 않아서
-        돌려줄 곳을 우리가 알 수 없습니다.
-      </p>
+      <p class="note">직원은 확인된 원 결제의 보낸 주소로만 환불할 수 있습니다. 거래소 결제·다른 주소 환불은 사장님께 부탁하세요.</p>
+      <label>주문의 결제 주소<input id="rf-order" autocomplete="off" spellcheck="false" /></label>
       <label>손님 주소<input id="rf-to" autocomplete="off" spellcheck="false" /></label>
       <label><span id="rf-amt-l">금액</span><input id="rf-krw" type="number" inputmode="decimal" min="0" step="any" /></label>
       <label>사유<input id="rf-why" value="주문 취소" autocomplete="off" /></label>
@@ -500,6 +497,7 @@
       <button data-p="ravi">라비</button>
     </nav>
 
+    <script src="/shop-seal.bundle.js"></script>
     <script>
       // 사장이 친 글자라도 그대로 넣지 않는다. 메뉴 이름에 `<` 하나가 들어가면
       // 그 아래 표가 통째로 안 그려지고, 화면은 "매출이 없습니다" 처럼 보인다.
@@ -508,26 +506,8 @@
           .replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
       const $ = (id) => document.getElementById(id);
-      const q = new URLSearchParams(location.search).get("t");
-      const keep = {
-        get(k) { try { return localStorage.getItem(k); } catch { return null; } },
-        set(k, v) { try { localStorage.setItem(k, v); } catch {} },
-        del(k) { try { localStorage.removeItem(k); } catch {} },
-      };
-      // 아이폰은 「홈 화면에 추가」한 앱과 사파리가 **저장소를 따로** 쓴다.
-      // 사파리에서 주소의 열쇠를 지워 버리면, 홈 화면에 추가한 앱은 열쇠 없이
-      // 열린다(직원은 「연결이 풀렸다」만 본다). 그래서 아이폰 사파리에서만
-      // 주소에 열쇠를 남겨 둔다 — 직원 자기 폰이고, 사장이 언제든 끊을 수 있다.
-      const IOS = /iP(hone|ad|od)/.test(navigator.userAgent) ||
-        (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-      const STANDALONE = navigator.standalone === true ||
-        (window.matchMedia && matchMedia("(display-mode: standalone)").matches);
-      const token = q || keep.get("rv-staff-t") || sessionStorage.getItem("ft") || "";
-      if (q) {
-        sessionStorage.setItem("ft", token);
-        keep.set("rv-staff-t", token);
-        if (!(IOS && !STANDALONE)) history.replaceState(null, "", "/staff");
-      }
+      let token = "";
+      try { token = window.RVShopSeal.connection().token; } catch { /* guidance is visible above */ }
       const H = { "x-playx-token": token, "content-type": "application/json" };
 
       // 환불 탭이 이걸 부르는데 정의가 없었다. 함수가 없으면 그 줄에서 멈추므로
@@ -598,6 +578,21 @@
       };
       $("rf-krw").addEventListener("input", rfLabel);
 
+      let refundRequestId = "";
+      let refundPending = null;
+      const refundPendingKey = "rv-refund-pending";
+      try {
+        if (window.isSecureContext) {
+          const pending = JSON.parse(sessionStorage.getItem(refundPendingKey) || "null");
+          if (pending && /^[a-f0-9]{32}$/.test(pending.id)) {
+            refundRequestId = pending.id; refundPending = pending;
+            $("rf-order").value = pending.order; $("rf-to").value = pending.to; $("rf-krw").value = pending.krw;
+            if (typeof pending.reason === "string") $("rf-why").value = pending.reason;
+            rfLabel();
+          }
+        }
+      } catch {}
+
       $("rf-go").onclick = async () => {
         const to = $("rf-to").value.trim();
         const krw = Number($("rf-krw").value);
@@ -611,12 +606,36 @@
         const was = $("rf-go").textContent;
         $("rf-go").textContent = rfT("보내는 중…");
         try {
+          if (!refundRequestId) {
+            refundRequestId = Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, "0")).join("");
+            refundPending = {id:refundRequestId,order:$("rf-order").value.trim(),to,krw,reason:$("rf-why").value};
+          }
+          // Keep the original uncertain intent even when a later retry edits inputs.
+          // A storage failure aborts before transport and keeps the in-memory ID.
+          sessionStorage.setItem(refundPendingKey, JSON.stringify(refundPending));
           const r = await api("/api/staff/refund", {
             to, krw, reason: $("rf-why").value, passphrase: null,
+            order_address: $("rf-order").value.trim(),
+            request_id: refundRequestId,
           });
-          if (r.error) throw new Error(r.error);
+          if (r.error) {
+            // api() only returns a body opened by the authenticated seal adapter.
+            // Plain outer errors fail decryption. Match the ORIGINAL saved intent.
+            const p = refundPending, intent = r.request;
+            if (r.refund_outcome === "not_sent" && p && r.request_id === p.id && intent
+                && intent.order_address === p.order && intent.to === p.to && intent.amount === p.krw
+                && (intent.reason == null || intent.reason === p.reason)) {
+              sessionStorage.removeItem(refundPendingKey);
+              refundRequestId = ""; refundPending = null;
+              throw new Error(rfT("전송되지 않았습니다. 주소와 금액을 확인한 뒤 환불 버튼을 다시 눌러 새 요청을 시작하세요."));
+            }
+            throw new Error(r.error);
+          }
           if (r.currency) rfCur = r.currency;
           say("ok", rfT("{0} ({1} RVN) 돌려줬어요. 오늘 남은 한도 {2} · 사장님께 알림이 갔어요.", money(r.amount ?? r.krw), r.rvn, money(r.left ?? r.left_krw)));
+          sessionStorage.removeItem(refundPendingKey);
+          refundRequestId = ""; refundPending = null;
+          $("rf-order").value = "";
           $("rf-to").value = "";
           $("rf-krw").value = "";
           loadLimits();

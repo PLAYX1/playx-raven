@@ -96,7 +96,7 @@ pub async fn broadcast(
         .timeout(std::time::Duration::from_secs(60))
         .send()
         .await
-        .map_err(|e| format!("IPFS에 올리지 못했습니다: {e}"))?;
+        .map_err(|e| format!("사진 보관함에 올리지 못했습니다: {e}"))?;
 
     let text = response.text().await.map_err(|e| e.to_string())?;
     let cid = text
@@ -104,7 +104,7 @@ pub async fn broadcast(
         .filter_map(|l| serde_json::from_str::<Value>(l).ok())
         .filter_map(|v| v.get("Hash").and_then(Value::as_str).map(str::to_string))
         .next_back()
-        .ok_or_else(|| "IPFS가 해시를 돌려주지 않았습니다".to_string())?;
+        .ok_or_else(|| "사진 보관함(IPFS)이 해시를 돌려주지 않았습니다".to_string())?;
 
     // `sendmessage` takes the asset name; the node appends `!` itself if the
     // administrator token is what is needed.
@@ -194,11 +194,11 @@ pub async fn pubsub_ready() -> Value {
             json!({
                 "ready": enabled,
                 "how": if enabled { "" } else {
-                    "IPFS를 --enable-pubsub-experiment 로 다시 시작하면 켜집니다."
+                    "사진 보관함을 --enable-pubsub-experiment 로 다시 시작하면 켜집니다."
                 },
             })
         }
-        None => json!({ "ready": false, "how": "IPFS가 꺼져 있습니다." }),
+        None => json!({ "ready": false, "how": "사진 보관함이 꺼져 있습니다." }),
     }
 }
 
@@ -225,7 +225,7 @@ pub async fn pubsub_send(topic: String, from: String, text: String) -> Result<()
         .map_err(|e| format!("보내지 못했습니다: {e}"))?;
 
     if !response.status().is_success() {
-        return Err(format!("IPFS가 거부했습니다: {}", response.status()));
+        return Err(format!("사진 보관함이 거부했습니다: {}", response.status()));
     }
     Ok(())
 }

@@ -215,6 +215,8 @@ pub async fn create_issue(
     passphrase: Option<String>,
     history_id: Option<String>,
 ) -> Result<Value, String> {
+    // 🔴 메인넷 가드 — 노드를 부르기 전에. 꺼져 있으면 메인넷에서는 아무 일도 하지 않는다(issue::REAL_MAINNET_ISSUE_ENABLED).
+    crate::issue::ensure_issue_allowed().await?;
     // 모양부터 본다(노드는 안 부른다). 틀린 모양이면 주인 표 자리도 읽지 않는다.
     let (method, _) = plan_call(&step, &brand, &names, quantity, ipfs_hash.as_deref(), None)?;
     // 🔴 주인 표 자리는 **보내는 흐름보다 앞에서** 읽는다 — 한 번에 하나(ISSUE_BUSY)·
@@ -306,7 +308,7 @@ impl Drop for Flight {
 }
 
 /// 🔴 화면이 이 글자를 알아본다(`create-page.ts`) — 바꾸면 거기도.
-pub const ALREADY_THERE: &str = "ALREADY_THERE: 이 이름은 이미 체인이나 지갑에 있어요. 방금 보낸 것이 기록된 것일 수 있으니 다시 만들지 말고 「만든 것」과 자산 화면을 먼저 확인해 주세요.";
+pub const ALREADY_THERE: &str = "ALREADY_THERE: 이 이름은 이미 공개 장부가나 지갑에 있어요. 방금 보낸 것이 기록된 것일 수 있으니 다시 만들지 말고 「만든 것」과 자산 화면을 먼저 확인해 주세요.";
 
 async fn issue_now(method: &'static str, params: Value, passphrase: Option<String>) -> Result<String, String> {
     crate::issue2::with_wallet(passphrase, || async {
@@ -319,7 +321,7 @@ async fn issue_now(method: &'static str, params: Value, passphrase: Option<Strin
         if txid.is_empty() {
             // 🔴 노드는 부름을 받았다 — 거래 번호만 없다. 「실패」로 보고 다시 열면 두 번 태울
             //    수 있으니 「보냈는지 모름」으로 돌려준다.
-            return Err(format!("{}노드가 거래 번호를 돌려주지 않았어요. 보냈는지 아직 몰라요 — 기록될 때까지 기다려 주세요. 같은 것을 다시 보내지 마세요.", crate::raven::SENT_UNKNOWN));
+            return Err(format!("{}서버가 거래 번호를 돌려주지 않았어요. 보냈는지 아직 몰라요 — 기록될 때까지 기다려 주세요. 같은 것을 다시 보내지 마세요.", crate::raven::SENT_UNKNOWN));
         }
         crate::refund::remember_ours(&txid);
         Ok(txid)
@@ -460,7 +462,7 @@ mod tests {
     /// 화면(easy-create.ts)·폰·확인 페이지와 **같은 지문**이 나와야 한다.
     #[test]
     fn 떨어뜨린_문서의_지문은_화면과_같고_떨어뜨린_것만_읽는다() {
-        let dir = std::env::temp_dir().join(format!("rv-fp-{}-{:x}", std::process::id(), rand::random::<u32>()));
+        let dir = crate::paths::test_fixture_root().join(format!("rv-fp-{}-{:x}", std::process::id(), rand::random::<u32>()));
         std::fs::create_dir_all(&dir).unwrap();
         let file = dir.join("수료 명단.pdf");
         std::fs::write(&file, b"synthetic artwork bytes for RavenVault create test\n").unwrap();

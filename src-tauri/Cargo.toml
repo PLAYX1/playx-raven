@@ -5,7 +5,7 @@ name = "playx-raven"
 # 여기가 처음 만든 뒤로 `0.1.0` 그대로였다. 그래서 사장님이 신고를 보내도
 # **어느 판에서 난 일인지 알 수가 없었다** — 신고의 값어치가 절반이 된다.
 # 판을 올릴 때 `tauri.conf.json` 과 **같이** 올린다.
-version = "0.6.0"
+version = "0.9.5"
 description = "레이븐 노드 · IPFS · 채굴 · 자판기 · 가게 계산대를 한 프로그램으로"
 authors = ["PLAY X"]
 edition = "2021"
@@ -31,6 +31,12 @@ open = "5"
 # OpenSSL just to talk to 127.0.0.1.
 zip = { version = "2", default-features = false, features = ["deflate"] }
 sha2 = "0.10"
+semver = "1"
+minisign-verify = "0.2"
+base64 = "0.22"
+flate2 = "1"
+tar = "0.4"
+plist = "1"
 # 클라우드로 나가는 백업을 우리가 한 번 더 잠근다.
 # 🔴 레이븐코인 지갑 암호는 2011년 방식(SHA-512 25,000회)이라 GPU 로 초당
 #    8만 개를 시험할 수 있다. 영단어 하나짜리 암호는 2.5초에 뚫린다.
@@ -46,9 +52,9 @@ futures-util = "0.3"
 # 가게 주소를 노드가 **스스로** 공지하려면 서명할 열쇠가 있어야 한다.
 # 🔴 지갑의 12단어에서 뽑지 않는다 — 그 열쇠는 브라우저 안에서만 살아야 하고,
 #    노드로 내려오는 순간 가게 돈과 가게 간판이 같은 열쇠를 쓰게 된다.
-secp256k1 = { version = "0.30", features = ["rand", "std"] }
+secp256k1 = { version = "0.30", features = ["rand", "std", "recovery"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "multipart"] }
-tauri = { version = "2", features = ["tray-icon"] }
+tauri = { version = "2", features = ["tray-icon", "macos-private-api"] }
 tauri-plugin-opener = "2"
 # 파일 고르기는 OS 가 해야 한다. 경로를 타이핑하게 하면 아무도 안 한다.
 tauri-plugin-dialog = "2"
@@ -70,13 +76,14 @@ serde_json = { version = "1", features = ["preserve_order"] }
 x25519-dalek = { version = "2", features = ["static_secrets"] }
 chacha20poly1305 = "0.10"
 hkdf = "0.12"
+hmac = "0.12"
 # Serves the phone screens — the owner's remote control and the customer's
 # order page — from this machine over the local network. Tauri already pulls in
 # tokio, so this adds a router and nothing heavier.
 # 🔴 `ws` 를 켠다. 이 프로그램이 **릴레이 노릇**을 하려면 웹소켓을 받아야
 # 한다 — 지금은 남의 릴레이 세 곳에 올리기만 한다.
 axum = { version = "0.8", features = ["ws"] }
-tokio = { version = "1", features = ["rt-multi-thread", "net", "macros"] }
+tokio = { version = "1", features = ["rt-multi-thread", "net", "macros", "time", "io-util"] }
 # The owner scans this to reach their own node without typing an IP.
 qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 # 라우터에 **진짜 요청**을 넣는다(`oneshot`). 시험 전용이었지만, 이제 봉함 길
@@ -90,9 +97,24 @@ libc = "0.2"
 
 [target.'cfg(windows)'.dependencies]
 # 0.4.9 — 복구 단어를 노드에 건네는 이름 있는 파이프(현재 사용자만 · 원격 거부). words_restore.rs `win_pipe`.
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_System_IO", "Win32_System_Pipes", "Win32_Security", "Win32_Security_Authorization"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_System_IO", "Win32_System_Pipes", "Win32_Security", "Win32_Security_Authorization", "Win32_System_Time"] }
 
 # 라비 AI 키는 OS 보안 저장소(맥 키체인·윈도 자격 증명 관리자)에만 둔다.
 # 리눅스는 CI 에 dbus 가 없어 기존 0600 파일을 그대로 쓴다(ai.rs cfg).
 [target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
 keyring = { version = "3", features = ["apple-native", "windows-native"] }
+
+# 미니 창 OS 알림(입금 감지·확인·노드 이상). 🔴 플러그인(tauri-plugin-notification)이 아니라
+# 그 밑의 notify-rust 를 Rust 에서만 쓴다 — 플러그인은 모든 창에 JS 를 심고 IPC 명령 3개를 새로 연다.
+# 여기는 창이 알림을 부를 길이 아예 없다(알림 본문은 Rust 가 가림 규칙을 거쳐 만든다). 리눅스는 dbus
+# (zbus)를 끌고 오므로 넣지 않는다 → 트레이·미니 창만. 판은 플러그인 2.3.3 이 받는 4.x 와 같다.
+[target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies.notify-rust]
+version = "4.11"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# Downcast keyring's native error to OSStatus without formatting its message.
+security-framework = "3"
+
+[dev-dependencies]
+ring = "0.17"
+blake2 = "0.10"

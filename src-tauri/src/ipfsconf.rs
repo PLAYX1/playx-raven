@@ -53,7 +53,7 @@ pub fn ipfs_options() -> Value {
     json!([
         {
             "key": "Datastore.StorageMax", "label": "저장 한도", "type": "size",
-            "what": "IPFS가 이 컴퓨터에서 쓸 수 있는 최대 용량입니다.",
+            "what": "사진 보관함이 이 컴퓨터에서 쓸 수 있는 최대 용량입니다.",
             "cost": "보존한 자산 파일이 여기 들어갑니다. 꽉 차면 새 파일을 못 받습니다.",
             "warn": "보존(핀)한 것은 한도를 넘어도 지워지지 않습니다. 대신 새로 못 받습니다."
         },
@@ -65,7 +65,7 @@ pub fn ipfs_options() -> Value {
         },
         {
             "key": "Swarm.ConnMgr.HighWater", "label": "최대 연결", "type": "number",
-            "what": "다른 IPFS 노드와 몇 개까지 연결할지.",
+            "what": "다른 사진 보관함 서버와 몇 개까지 연결할지.",
             "cost": "오래된 컴퓨터는 낮추세요 (40 정도). 기본은 96입니다.",
             "warn": ""
         },
@@ -76,10 +76,10 @@ pub fn ipfs_options() -> Value {
             "warn": ""
         },
         {
-            "key": "Pubsub.Enabled", "label": "노드끼리 대화", "type": "switch",
+            "key": "Pubsub.Enabled", "label": "서버끼리 대화", "type": "switch",
             "what": "다른 가게와 직접 메시지를 주고받는 기능입니다.",
             "cost": "",
-            "warn": "실험 기능입니다. 켜려면 IPFS를 다시 시작해야 합니다."
+            "warn": "실험 기능입니다. 켜려면 사진 보관함을 다시 시작해야 합니다."
         }
     ])
 }
@@ -105,7 +105,7 @@ pub async fn ipfs_config_read() -> Result<Value, String> {
         .timeout(std::time::Duration::from_secs(12))
         .send()
         .await
-        .map_err(|e| format!("IPFS에 연결하지 못했습니다: {e}"))?
+        .map_err(|e| format!("사진 보관함에 연결하지 못했습니다: {e}"))?
         .json()
         .await
         .map_err(|e| e.to_string())?;
@@ -139,7 +139,7 @@ pub async fn ipfs_config_write(key: String, value: String, is_json: bool) -> Res
 
     if !r.status().is_success() {
         let body = r.text().await.unwrap_or_default();
-        return Err(format!("IPFS가 거부했습니다: {}", body.chars().take(160).collect::<String>()));
+        return Err(format!("사진 보관함이 거부했습니다: {}", body.chars().take(160).collect::<String>()));
     }
     Ok(())
 }
@@ -162,7 +162,7 @@ pub async fn ipfs_apply_profile(name: String) -> Result<Value, String> {
         .map_err(|e| format!("적용하지 못했습니다: {e}"))?;
 
     if !r.status().is_success() {
-        return Err(format!("IPFS가 거부했습니다: {}", r.status()));
+        return Err(format!("사진 보관함이 거부했습니다: {}", r.status()));
     }
     Ok(json!({ "applied": name, "needs_restart": true }))
 }
@@ -203,7 +203,7 @@ pub async fn chain_ipfs_link() -> Result<Value, String> {
         "gc_period": gc,
         // 체인은 가리키기만 하고, 파일을 지키는 것은 이쪽이다. 이 한 문장이
         // 이 앱이 존재하는 이유다.
-        "meaning": "체인은 '이 자산이 저 파일을 가리킨다'만 기록합니다. \
+        "meaning": "공개 장부는 '이 자산이 저 파일을 가리킨다'만 기록합니다. \
                     파일 자체는 누군가 보관해야 남고, 보존하지 않은 것은 \
                     청소 때 이 컴퓨터에서 사라집니다.",
     }))

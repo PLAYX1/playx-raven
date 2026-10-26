@@ -1,0 +1,34 @@
+/* 잠긴 기본 화면 · 매장용 읽기 전용(src/app-lock.ts). 색은 앱 변수, 간격은 layout-tokens.css.
+   🔴 덮개는 라비 등장(data-ravi-arriving)이 대화상자를 숨기는 규칙보다 이겨야 한다 — 잠긴 화면이 사라지면 안 된다. */
+.rv-lock { position: fixed; inset: 0; z-index: 2147483000; display: grid; place-items: center; overflow-y: auto; padding: var(--sp-6) var(--sp-4); background: var(--bg); color: var(--text); }
+.rv-lock[hidden], html .rv-lock[hidden] { display: none !important; }
+html[data-ravi-arriving] #app-lock.rv-lock:not([hidden]) { display: grid !important; }
+.rv-lock-box { width: min(520px, 100%); display: grid; gap: var(--sp-4); }
+.rv-lock-head { display: flex; align-items: center; gap: var(--sp-3); }
+.rv-lock-ico { flex: none; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--rvl-edge); color: var(--text); }
+.rv-lock-ico svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.rv-lock h2 { margin: 0; font-size: var(--fs-xl); line-height: var(--lh-snug); overflow-wrap: anywhere; word-break: keep-all; }
+.rv-lock-lede { margin: 0; color: var(--muted); font-size: var(--fs-md); line-height: var(--lh-body); overflow-wrap: anywhere; word-break: keep-all; }
+.rv-lock-feed { padding: var(--sp-4); border: 1px solid var(--rvl-edge); border-radius: var(--radius-lg); background: var(--panel); display: grid; gap: var(--sp-2); min-width: 0; }
+.rv-lock-tag { margin: 0; justify-self: start; padding: 2px var(--sp-2); border: 1px solid var(--rvl-edge); border-radius: 999px; font-size: var(--fs-sm); color: var(--text); }
+.rv-lock-bal { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-1) var(--sp-3); }
+.rv-lock-bal .k { color: var(--muted); font-size: var(--fs-sm); }
+#rv-lock-balance { font-size: var(--fs-num); line-height: var(--lh-tight); letter-spacing: var(--tr-display); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.rv-lock-incoming, .rv-lock-node { margin: 0; color: var(--muted); font-size: var(--fs-sm); }
+.rv-lock-feed h3 { margin: var(--sp-2) 0 0; font-size: var(--fs-sm); color: var(--muted); font-weight: 600; }
+.rv-lock-recent { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-1); }
+.rv-lock-recent li { display: grid; grid-template-columns: auto 1fr auto; gap: var(--sp-2); align-items: baseline; min-width: 0; font-size: var(--fs-md); }
+.rv-lock-recent .v { text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.rv-lock-recent .m, .rv-lock-recent .empty { color: var(--muted); font-size: var(--fs-sm); }
+.rv-lock-form { display: grid; gap: var(--sp-2); }
+.rv-lock-form[hidden] { display: none; }
+.rv-lock-form label { font-size: var(--fs-sm); color: var(--muted); }
+.rv-lock-row { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.rv-lock-row input { flex: 1 1 14em; min-width: 0; min-height: var(--hit); border: 1px solid var(--rvl-edge); background: var(--panel); color: var(--text); }
+.rv-lock-row button { flex: 0 1 auto; min-height: var(--hit); word-break: keep-all; }
+.rv-lock-warn { margin: 0; padding: var(--sp-2) var(--sp-3); border: 1px solid var(--warn); border-radius: var(--radius); font-size: var(--fs-sm); color: var(--text); overflow-wrap: anywhere; }
+.rv-lock-err { margin: 0; min-height: 1.4em; font-size: var(--fs-sm); font-weight: 600; }
+.rv-lock-more { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.rv-lock-more button { min-height: var(--hit); word-break: keep-all; }
+/* 경계 한 색으로 두 테마: 라이트 바탕 4.6~5.0:1, 다크 바탕 3.6~3.8:1(조작·경계 3:1). 오류 글자는 .danger(다크 밝은 빨강은 layout-tokens). */
+.rv-lock { --rvl-edge: #6b7088; }

@@ -1,0 +1,2 @@
+"NSMicrophoneUsageDescription" = "말을 글로 받아쓰려면 마이크 사용을 허용해 주세요. 음성은 동의한 AI 회사로 전송됩니다.";
+"NSSpeechRecognitionUsageDescription" = "기기에서 말을 글로 받아쓰는 데 음성 인식을 사용합니다.";

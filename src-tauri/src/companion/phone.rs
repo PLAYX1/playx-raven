@@ -3,8 +3,8 @@ use super::*;
 
 const BAD: &str =
     "거래 코드의 형식·버전·길이를 확인하세요. 폰에서 서명한 거래 코드를 다시 복사하세요.";
-const NODE: &str = "노드에 연결하지 못했습니다. 이 컴퓨터에서 노드 상태를 확인하세요.";
-const MAINNET: &str = "메인넷 노드와 메인넷 받는 주소만 사용할 수 있습니다.";
+const NODE: &str = "서버에 연결하지 못했습니다. 이 컴퓨터에서 서버 상태를 확인하세요.";
+const MAINNET: &str = "메인넷 서버와 메인넷 받는 주소만 사용할 수 있습니다.";
 struct Signed {
     hex: String,
     inputs: Vec<(String, u32)>,
@@ -140,9 +140,9 @@ pub(super) fn relay_error(e: &crate::raven::RpcFailure) -> &'static str {
     match e.code {
         Some(-27) => "이미 네트워크에 알려진 거래입니다. 거래 ID로 확인하세요.",
         Some(-25) => {
-            "입력을 찾을 수 없습니다. 이미 사용했거나 아직 노드가 확인하지 못한 입력입니다."
+            "입력을 찾을 수 없습니다. 이미 사용했거나 아직 서버가 확인하지 못한 입력입니다."
         }
-        Some(-26) => "노드가 거래를 거부했습니다. 서명·잔액·수수료를 폰에서 다시 확인하세요.",
+        Some(-26) => "서버가 거래를 거부했습니다. 서명·잔액·수수료를 폰에서 다시 확인하세요.",
         Some(-22) => BAD,
         _ => "전파 결과를 확인 못 했습니다. 다시 보내기 전에 거래 ID로 확인하세요.",
     }
@@ -158,7 +158,7 @@ async fn review(r: &impl ChainRpc, code: &str) -> Answer {
         return Err(MAINNET);
     }
     if info["initialblockdownload"] != false {
-        return Err("노드가 동기화 중입니다. 완료한 뒤 다시 확인하세요.");
+        return Err("서버가 동기화 중입니다. 완료한 뒤 다시 확인하세요.");
     }
     let decoded = r
         .call("decoderawtransaction", json!([signed.hex]))

@@ -28,7 +28,7 @@
 //! ## 어떻게 하나
 //!
 //! ```text
-//! ① 체인에 묻는다        listassets SHOP.*  → 이름마다 ipfs_hash
+//! ① 체인에 묻는다        listassets RV.S.* + 옛 SHOP.*  → 이름마다 ipfs_hash
 //! ② 이미 갖고 있나       block/stat         → 있으면 건너뛴다
 //! ③ 아무 데서나 받는다   가게 주소(릴레이 힌트) → 게이트웨이
 //! ④ 🔴 해시를 대조한다   sha256(받은 것) == CID 안의 32바이트
@@ -372,12 +372,23 @@ async fn fetch_local(cid: &str) -> Option<Vec<u8>> {
 /// 계산대 디스크를 남의 사진으로 채우면 그건 도움이 아니라 민폐다.
 #[tauri::command]
 pub async fn help_round() -> Result<Value, String> {
-    let raw = crate::raven::call_rpc(
-        "listassets",
-        json!(["SHOP.*", true, MAX_SHOPS, 0]),
-    )
-    .await?;
-    let map = raw.as_object().ok_or("체인이 목록을 주지 않았습니다.")?;
+    // 🔴 새 가게(`RV.S.*`)와 옛 가게(`SHOP.*`)를 둘 다 붙잡는다(shop.rs SHOP_PATTERNS 한 곳).
+    //    옛 패턴 실패는 예전처럼 오류, 새 패턴만 실패하면 옛 가게는 그대로 돕는다.
+    let mut map = serde_json::Map::new();
+    for pattern in crate::shop::SHOP_PATTERNS {
+        let raw = match crate::raven::call_rpc("listassets", json!([pattern, true, MAX_SHOPS, 0])).await {
+            Ok(v) => v,
+            Err(e) if pattern.starts_with(crate::shop::LEGACY_SHOP_PREFIX) => return Err(e),
+            Err(_) => continue,
+        };
+        let part = raw.as_object().ok_or("공개 장부가 목록을 주지 않았습니다.")?;
+        for (k, v) in part {
+            if map.len() >= MAX_SHOPS {
+                break;
+            }
+            map.entry(k.clone()).or_insert_with(|| v.clone());
+        }
+    }
 
     let mut held = 0usize;
     let mut fetched = 0usize;

@@ -1,13 +1,58 @@
 // 🔴 맨 먼저 — 앱 CSP(Tauri nonce) 가 막는 style="…" 속성을 CSSOM 으로 되살린다(src/style-attrs.ts).
 import "./style-attrs";
+import "./display-mode"; // 설정 「표시 방식」 칸 + 레이아웃 토큰(docs/design/window-modes.md)
+void import("./settings-nav"); // 0.9.0 설정 왼쪽 목록·주제 바꾸기·바로 가기(src/settings-nav.ts) — 레인A. 시작 묶음 1000KB 예산 때문에 따로 싣는다
+import { myHeadHtml, nameCardAfterMe, saveTalkName, setMyTalkName, wireTalkIdentity } from "./talk-identity"; // 0.9.0 이야기 이름표 — 레인A
+import "./app-lock"; // 잠긴 기본 화면·매장용 읽기 전용 + 다크 돈 카드(docs/design/lock-and-dark.md)
+import "./wallet-lock-refusal"; // 「지갑 암호 없음」 안내 + 트레이 거절 이벤트 — 시작 때부터 필요한 작은 조각
+void import("./wallet-file"); // 지갑 파일 내보내기·가져오기 + 백업 열쇠 52글자 종이 단계(0.8.7). 0.9.0 병합: 메인 묶음 1000KB 예산 때문에 지연 로딩
+import { routeBackupDrop } from "./backup-drop-route"; // 0.9.0 — 놓은 .pxlock·.rvwallet 은 자산 드롭보다 먼저 복원 확인 창으로
+import "./sales-account.css";
+import { wireSalesAccount } from "./sales-account";
+import "./creator-publish.css";
+import { createLazyKeep } from "./asset-keep-lazy";
+import { wireCreatorPublish, MINE_KEY } from "./creator-publish";
+import { wireLockBuyer, wireLockSeller } from "./lock-ui";
+import "./drop-tokens.css";
+import "./drop-publish.css";
+// 끌어놓기 발행은 「내 상품 올리기」에서만 쓰여 시작 묶음에서 떼어 낸다(메모리 예산: 가장 큰 묶음 ≤ 1000KB).
+import type { wireDropPublish } from "./drop-publish";
+import { wireOpenMarket } from "./open-market";
+import { marketLists } from "./market-lists";
+import { marketListSources, nodeChainTip, nodeMarketSource, nodePurchase } from "./market-node";
+import { openRaviStory } from "./desktop-links";
+import { inviteLink } from "./links";
+// 이야기 방 운영(0.9.0 레인 C): 「방 설정」(만든 사람만 이름·설명 고치기)·「이 방 숨기기」 — 연결 줄만 여기에.
+import { wireTalkRoomsAdmin } from "./talk-rooms-admin";
+import { homeSafety } from "./home-summary";
+import { wireChainInfoLazy } from "./chain-info-lazy";
+import { installFirstRunBarrier, afterRaviLanding, deferUntilRaviLanding, finishRaviLanding } from "./firstrun";
+installFirstRunBarrier();
+import { rememberCompanionPage, restoreCompanionPage, mountCompanionBridge } from "./ravi-companion-bridge";
+import { browserPhotoApi, uploadArtistPhoto, photoErrorText, PhotoFailure } from "./artist-photo";
+import { seedErrorKind, seedErrorMessage, seedUnlockButton } from "./seed-recovery";
+import { createRaviAgentUI, TOOL_LABELS } from "./ravi-agent";
+import { isRaviSendRequest, isExplicitSendOrder, raviSendAnswerHtml, parseRichQuestion, raviRichAnswerHtml, publicAddressQuestion, raviPublicOfferHtml, raviPublicResultHtml, raviKeyHintHtml, raviFailureNextHtml, raviConnectedHtml, type PublicAddress } from "./ravi-chat";
+let raviAgentUI: ReturnType<typeof createRaviAgentUI> | null = null;
+import { createRaviHome } from "./ravi-home";
+import { mountRaviLifecycle } from "./ravi-lifecycle";
+import { createPromoCard } from "./ravi-promo-card";
+import { isPromoRequest } from "./ravi-promo";
+import { isRaviHelp, raviHelpHtml, raviStarterHtml, RAVI_GREETING, RAVI_ACTIONS, RAVI_SCREENS, raviActionAllowed, containsRaviSecret } from "./ravi-guide";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+let raviHome: ReturnType<typeof createRaviHome> | null = null;
 import { raviFace, setMood, RAVI_CHARACTERS, type RaviMood } from "./ravi-face";
 let raviState: RaviMood = "sleep";
 let lastKeyState: boolean | null = null;
 let raviAnimation = 0;
 function setAllRaviMood(mood: RaviMood): void {
   raviState = mood;
+  raviHome?.mood(mood);
   document.querySelectorAll<HTMLElement>(".ravi-face").forEach(face => setMood(face, mood));
 }
+// 라비 감정 엔진(ravi-emotion*.ts) — 상황 이벤트 → 표정·한마디. 기본 얼굴은 위 setAllRaviMood 를 그대로 거친다.
+import { mountRaviEmotionApp, emitRaviEvent } from "./ravi-emotion-app";
+queueMicrotask(() => mountRaviEmotionApp({ setMood: setAllRaviMood, rest: () => (aiProvider ? "normal" : "sleep") }));
 function applyRaviCharacter(): void {
   const selected = RAVI_CHARACTERS.find(character => character.id === localStorage.getItem("rv-ravi-character")) || RAVI_CHARACTERS[0];
   document.querySelectorAll<HTMLElement>(".ravi-face").forEach(face => {
@@ -38,11 +83,13 @@ import { wirePhoneTransaction } from "./phone-transaction";
 import { wirePairing } from "./pairing-ui";
 import { FINGERPRINT_GUESS, wireCreate, type CreateApi } from "./create-page";
 import { readItemName, verifyLink } from "./easy-create";
+import { checkShopAssetName, shopLabel, shopTokenOf, suggestShopAssetName } from "./shop-token";
 import { requireWalletBackup, restoreIsComplete } from "./backup-result";
 import { paintWalletNotes, walletWelcome } from "./wallet-notes";
 import { wireSeedCheck } from "./seed-check";
 import { wireWordsRestore } from "./words-restore";
-import { invoke as rawInvoke } from "@tauri-apps/api/core";
+import { wireMapCard } from "./map-card";
+import { Channel, invoke as rawInvoke } from "@tauri-apps/api/core";
 
 /**
  * 오래 걸리는 일에 **「하는 중」을 자동으로 보여 준다.**
@@ -186,6 +233,23 @@ async function invoke<T = any>(cmd: string, args?: any): Promise<T> {
   }
   try {
     return (await readNative<T>(cmd, args)) as T;
+  } catch (e) {
+    if (cmd !== "artist_profile_set" && seedErrorKind(e) === "LOCKED") {
+      const page = document.querySelector<HTMLElement>(".page.on");
+      if (page && !page.querySelector(".seed-recovery")) {
+        const note = document.createElement("div");
+        note.className = "warnbox seed-recovery";
+        note.textContent = errText(e);
+        page.append(note);
+        addSeedUnlock(note, e, async () => {
+          note.remove();
+          if (cmd.startsWith("identity_")) await idLoad();
+          else if (cmd.startsWith("shop")) await paintKeyMove();
+          else if (cmd.startsWith("talk_")) await talkPaintMe();
+        });
+      }
+    }
+    throw e;
   } finally {
     if (mine) {
       busyCount--;
@@ -213,9 +277,11 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { openRavenVaultWallet, RAVENVAULT_WALLET, LEGACY_LOCAL_WALLET } from "./desktop-links";
 import { getVersion } from "@tauri-apps/api/app";
 import { listen } from "@tauri-apps/api/event";
-import { check as checkUpdate } from "@tauri-apps/plugin-updater";
-import { relaunch } from "@tauri-apps/plugin-process";
-import { copyHtml, setCopyText, t, tf, lang, setLang, LANG_NAMES, startI18n } from "./i18n";
+
+
+import { copyHtml, setCopyText, t, tf, lang, setLang, LANG_NAMES, startI18n, type CoreLang } from "./i18n";
+import { amountProblemText, bindAmountInput, fmtCount, fmtRvn, fmtSats, readAmount, setAmountRvn, setAmountSats } from "./amount-ui";
+import { koreanAmountWords, rvnNumberToSats, satsToRvnNumber } from "./amount-locale";
 import {
   issuedOf, looksLikeAddress, ownerRowsHtml, OWNER_NOT_PINNED, whoseHtml, whoseQuestion,
   type Issued, type OwnerRow, type WhoseResult,
@@ -224,7 +290,12 @@ import {
 import {
   loadPayees, payeeName, pickerHtml, receiveHtml, recentPayees, RECEIVE_MESSAGE, savePayee, sentHtml,
 } from "./wallet-easy";
-import { guideById, guideHtml, guideMissHtml, matchGuide, providerOfKey, type GuideGo } from "./ravi-guide";
+import { DEVICE_STORAGE_LABEL, DEVICE_STORAGE_BUTTON, keyStorageGuide, needsKeyStorageGuide, KEYCHAIN_SAVING, keyLast4, normalizeApiKey, keyConnectionFailure, keyStorageError, SavedKeyChecks } from "./ravi-key";
+import { nameTakenFrom, strictBool } from "./name-lookup";
+import { loadRaviPersona } from "./ravi-persona-lazy";
+import { raviCrisisReply } from "./ravi-crisis";
+import { guideById, guideHtml, raviAnswerHtml, raviCopy, raviText, raviQuestionLanguage, providerOfKey, type GuideGo } from "./ravi-guide";
+import { questionNeedsPersonalData } from "./ravi-consent-need";
 
 type Asset = {
   name: string;
@@ -257,6 +328,18 @@ const collapsed = new Set<string>();
 // Scanning is cancellable. A background job you cannot stop is not something to
 // put next to a wallet.
 let scan = { running: false, done: 0, total: 0, current: "", stop: false, ms: [] as number[] };
+
+// 0.8.8a — 자산 파일 보관 화면(줄 상태·한 번 탭 보관·길게 눌러 해제·일괄 보관·용량·이유 안내·앱 안 확인). 로직은 src/asset-keep.ts(지연 묶음 — 메모리 예산), 이음매는 asset-keep-lazy.ts.
+const keep = createLazyKeep({
+  invoke: (cmd, args) => invoke(cmd, args),
+  assets, health,
+  getPinned: () => pinned, setPinned: (s) => { pinned = s; },
+  isFingerprint: (cid) => isFingerprint(cid),
+  renderList: () => renderList(), getSelected: () => selected, select: (name) => select(name),
+  errText: (e) => errText(e), verifyLink: (name) => verifyLink(name),
+  openUrl: (url) => openUrl(url), showSettings: () => showPage("settings"),
+  saveHealth: () => saveHealth(), startScan: () => void startScan(), scanRunning: () => scan.running,
+});
 
 const HEALTH_KEY = "playx-raven-health";
 /// 화면 요소를 가져온다. 없으면 버려지는 자리를 준다.
@@ -367,14 +450,15 @@ document.addEventListener(
 /// **화면에 올리기 전에** 여기서 옮긴다.
 function errText(e: unknown): string {
   // 「보냈는지 모름」 표지는 화면이 알아보는 데만 쓴다 — 사람에게는 문장만.
-  return t(String(e).trim().replace(/SENT_UNKNOWN: /g, ""));
+  return t(seedErrorMessage(String(e).trim().replace(/SENT_UNKNOWN: /g, "")));
 }
 
 function fmtQty(n: number): string {
   // 정수면 소수점을 붙이지 않는다. 고유 자산이 "1.00000000"으로 보이면
   // 이게 하나뿐인 물건이라는 사실이 숫자 뒤에 숨는다.
-  if (Number.isInteger(n)) return n.toLocaleString();
-  return String(parseFloat(n.toFixed(8)));
+  // 2026-10-11 — 화면 언어의 숫자 형식(de 「1.234,5」). 8자리 보존·0 아닌 값은 0 으로 안 보임(amount-locale.ts).
+  if (Number.isInteger(n)) return fmtCount(n);
+  return fmtRvn(n, { code: "" });
 }
 
 function fmtBytes(n: number): string {
@@ -401,27 +485,12 @@ function fmtRemaining(ms: number): string {
 
 
 function badge(a: Asset): string {
-  const cid = a.ipfs_hash;
-  if (!cid) return '<span class="muted">파일 없음</span>';
-  if (isFingerprint(cid)) return `<span class="muted" title="${escapeHtml(t("파일 대신 원본 지문만 새겼어요. 올린 파일이 없어서 확인·보존할 것이 없어요."))}">${copyHtml("원본 지문")}</span>`;
-  if (pinned.has(cid)) return '<span class="ok">보존 중</span>';
-  const s = health.get(cid) ?? "unknown";
-  if (s === "found") return '<span class="warn">이 컴퓨터에 없음</span>';
-  if (s === "missing") return '<span class="muted">찾지 못함</span>';
-  if (s === "checking") return '<span class="muted">확인 중…</span>';
-  return '<span class="muted">미확인</span>';
+  return keep.badgeHtml(a);
 }
 
 function renderList() {
   const rows = [...assets.values()];
-  // 원본 지문은 파일이 아니다 — 「파일 있음」에 세지 않는다.
-  const withFile = rows.filter((a) => a.ipfs_hash && !isFingerprint(a.ipfs_hash));
-  const printed = rows.filter((a) => isFingerprint(a.ipfs_hash)).length;
-  const savable = withFile.filter((a) => health.get(a.ipfs_hash!) === "found" && !pinned.has(a.ipfs_hash!));
-
-  $("summary").textContent =
-    tf("자산 {0}개 · 파일 있음 {1}개 · 보존 중 {2}개", rows.length, withFile.length, withFile.filter(a => pinned.has(a.ipfs_hash!)).length) +
-    (printed ? tf(" · 원본 지문 {0}개", printed) : "");
+  $("summary").textContent = keep.summary();
 
   const scanBtn = $("scan") as HTMLButtonElement;
   if (scan.running) {
@@ -432,14 +501,12 @@ function renderList() {
       ? tf("{0} 확인 중 · {1}", scan.current, fmtRemaining(avg * (scan.total - scan.done)))
       : "";
   } else {
-    scanBtn.textContent = "다시 확인";
+    scanBtn.textContent = "모두 다시 확인";
     scanBtn.className = "ghost";
     $("scan-note").textContent = "";
   }
 
-  const pinBtn = $("pin-all") as HTMLButtonElement;
-  pinBtn.disabled = savable.length === 0;
-  pinBtn.textContent = savable.length ? tf("{0}개 보존하기", savable.length) : "보존할 항목 없음";
+  keep.paintBulk($("pin-all") as HTMLButtonElement);
 
   // 내가 만든 것 / 남이 보낸 것. 아무나 아무 주소로 자산을 보낼 수 있으니
   // 지갑에는 부탁한 적 없는 토큰이 쌓인다. 그것들이 내가 만든 것과 같은
@@ -503,7 +570,7 @@ function renderList() {
    * 이 자산이 **무엇을 못 하는지**를 적는다.
    *
    * 🔴 코어 지갑은 단위(`units`)를 들고 있는데 우리는 안 들고 있었다. 그래서
-   *    `SHOP.PLAYX` 가 **1개·쪼갤 수 없음**으로 찍혀서 손님에게 나눠 줄 수
+   *    가게 토큰(옛 가게 `SHOP.PLAYX` 실측, 새 가게는 `RV.S.<이름>`)이 **1개·쪼갤 수 없음**으로 찍혀서 손님에게 나눠 줄 수
    *    없다는 사실이 **화면 어디에도 없었다.** 팔로우가 왜 성립 안 하는지
    *    사장이 알 길이 없었다.
    *
@@ -536,15 +603,7 @@ function renderList() {
   }
 
   const rowHtml = (a: Asset, child: boolean) => {
-    const cid = a.ipfs_hash;
-    const canSave = cid && !isFingerprint(cid) && health.get(cid) === "found" && !pinned.has(cid);
-    // Viewing and preserving are separate gestures on purpose. If one click
-    // could mean either, every click needs a moment of thought first.
-    const act = canSave
-      ? `<button data-pin="${cid}">보존</button>`
-      : cid && pinned.has(cid)
-        ? `<button data-unpin="${cid}" class="ghost">해제</button>`
-        : "";
+    // 0.8.8a — 배지가 곧 단추다(탭 = 보관, 길게 = 해제). 단추 자리는 상태가 바뀌어도 그대로 — src/asset-keep.ts.
     // 자식 행은 전체 이름 대신 잎만 보여준다. 앞부분이 폴더 이름에 이미 있다.
     //
     // 🔴 그런데 **집안의 본체**(`PLAYX` 자신)는 앞부분을 지우고 나면 아무것도
@@ -563,8 +622,8 @@ function renderList() {
     return `<tr data-row="${a.name}" class="${selected === a.name ? "sel" : ""}${child ? " child" : ""}">
       <td class="name">${child ? '<span class="branch"></span>' : ""}${label}${own}${limits}</td>
       <td class="num">${fmtQty(a.amount)}</td>
-      <td>${badge(a)}</td>
-      <td class="act">${act}</td>
+      <td class="keepcell">${badge(a)}</td>
+      <td class="act">${keep.actHtml(a)}</td>
     </tr>`;
   };
 
@@ -600,65 +659,23 @@ function renderList() {
 
   document.querySelectorAll<HTMLElement>("[data-row]").forEach((tr) => {
     tr.onclick = (e) => {
-      if ((e.target as HTMLElement).tagName === "BUTTON") return;
+      if ((e.target as HTMLElement).closest("button")) return;
       select(tr.dataset.row!);
     };
   });
-  document.querySelectorAll<HTMLButtonElement>("[data-pin]").forEach((b) => {
-    b.onclick = async (e) => { e.stopPropagation(); await pinOne(b.dataset.pin!, b); };
-  });
-  document.querySelectorAll<HTMLButtonElement>("[data-unpin]").forEach((b) => {
-    b.onclick = async (e) => { e.stopPropagation(); await unpinOne(b.dataset.unpin!, b); };
-  });
+  keep.bindOnce();
+  keep.afterRender();
 }
 
-async function pinOne(cid: string, btn?: HTMLButtonElement) {
-  if (btn) { btn.disabled = true; btn.textContent = "보존 중…"; }
-  try {
-    await invoke("pin_add", { cid });
-    pinned.add(cid);
-  } catch (e) {
-    say(t("보존하지 못했습니다"), errText(e));
-  }
-  renderList();
-  if (selected) renderPanel();
+/// 0.8.8a — 오른쪽 패널의 「보관」·「보관 해제」도 줄 배지와 같은 흐름(src/asset-keep.ts)을 쓴다.
+/// 내 뜻을 먼저 저장하고(자동 보관이 되돌리지 못하게) 그다음 pin_add/pin_remove 를 부른다.
+/// 해제는 이 컴퓨터의 IPFS pin 만 푼다 — 파일을 지우지 않는다. 내가 만든 자산은 경고 + 확인을 거친다.
+async function pinOne(cid: string) {
+  keep.keepFromPanel(cid);
 }
 
-async function unpinOne(cid: string, btn?: HTMLButtonElement) {
-  /* 🔴 대표님 지적: "자산에서도 IPFS 이미지를 너무 쉽게 지우면 안 되지 않나?
-     내가 만든 자산의 핀을 삭제하면 내용이 없어져 버리잖아."
-
-     맞다. 남이 만든 자산이면 다른 사람도 갖고 있을 수 있지만, **내가 만든
-     자산은 이 컴퓨터가 마지막 한 부일 수 있다.** 그때 핀을 지우면 그 자산의
-     그림·음악이 세상에서 사라진다. 되돌릴 방법이 없다.
-
-     그래서 내가 만든 것이면 **자산 이름을 직접 치게** 한다. 500 RVN 을 태울
-     때 쓰는 것과 같은 문턱이다 — 되돌릴 수 없다는 점이 같기 때문이다. */
-  // 🔴 `rows` 는 renderList 안의 지역 변수다. 여기서는 원본 맵을 본다 —
-  //    짐작으로 이름을 갖다 쓰면 조용히 `undefined` 가 되고, 그러면
-  //    **내가 만든 자산도 그냥 지워진다.**
-  const owner = [...assets.values()].find((a) => a.ipfs_hash === cid && a.mine);
-  if (owner) {
-    const typed = await ask(
-      "내가 만든 자산의 파일입니다",
-      tf("이 컴퓨터가 마지막 사본일 수 있습니다. 지우면 「{0}」의 파일이 ", owner.name) +
-        `세상에서 사라지고, 되돌릴 방법이 없습니다.\n\n` +
-        `정말 지우시려면 자산 이름을 그대로 입력하세요.`,
-      { ok: "지웁니다" },
-    );
-    if (typed?.trim() !== owner.name) return;
-  } else if (!(await sure("보존을 해제할까요?", "이 컴퓨터에서 사본이 사라집니다. 다른 곳에 사본이 없으면 되찾을 수 없습니다.", "해제합니다"))) {
-    return;
-  }
-  if (btn) btn.disabled = true;
-  try {
-    await invoke("pin_remove", { cid });
-    pinned.delete(cid);
-  } catch (e) {
-    say(t("해제하지 못했습니다"), errText(e));
-  }
-  renderList();
-  if (selected) renderPanel();
+async function unpinOne(cid: string) {
+  keep.unkeepFromPanel(cid);
 }
 
 /**
@@ -789,17 +806,23 @@ async function paintHuman(a: Asset): Promise<boolean> {
     (who ? kv("받는 사람", who) : "") +
     (made
       ? `<p class="meta">${copyHtml("이 컴퓨터가 만든 것이에요. 제목·받는 사람은 이 컴퓨터의 발행 기록에만 있어요.")}</p>`
-      : `<p class="meta">${copyHtml("제목·받는 사람 이름은 체인에 올라가지 않아요. 발급한 곳에서 받은 종이나 파일로 확인하세요.")}</p>`) +
+      : `<p class="meta">${copyHtml("제목·받는 사람 이름은 공개 장부에 올라가지 않아요. 발급한 곳에서 받은 종이나 파일로 확인하세요.")}</p>`) +
     `<div class="verifyrow"><button class="ghost" id="p-verify" type="button">${copyHtml("진짜인지 확인")}</button>
-       <span class="meta">${copyHtml("공개 확인 페이지가 인터넷 창에서 열려요.")}</span></div>` +
-    `<p class="chainname">${copyHtml("체인 이름")} <code translate="no">${escapeHtml(a.name)}</code></p>`;
+       <span class="meta">${copyHtml("내 노드가 공개 장부를 직접 읽어서 확인해요.")}</span></div>` +
+    `<p class="chainname">${copyHtml("공개 장부 이름")} <code translate="no">${escapeHtml(a.name)}</code></p>`;
   const vb = document.getElementById("p-verify");
   // 확인 페이지가 `?a=` 를 받아 곧바로 찾는다(release-site verify.js).
-  if (vb) vb.onclick = () => void openUrl(verifyLink(a.name)).catch(() => {});
+  if (vb) vb.onclick = () => keep.openVerify(a);
   return true;
 }
 
+/// 0.8.8a — 기존 패널 그리기 뒤에 「진짜인지 확인」 칸(src/asset-keep.ts)을 붙인다.
 async function renderPanel() {
+  await renderPanelBase();
+  keep.paintPanel(selected ? assets.get(selected) ?? null : null);
+}
+
+async function renderPanelBase() {
   const a = selected ? assets.get(selected) : null;
   if (!a) { $("panel").className = "panel hidden"; return; }
   $("panel").className = "panel";
@@ -817,12 +840,12 @@ async function renderPanel() {
     $("p-body").innerHTML = cid
       ? `<p class="meta">${copyHtml("원본 지문")}</p><code class="addr" translate="no">${escapeHtml(cid)}</code>
          <p class="muted">${copyHtml("이 자산에는 파일 대신 원본 지문이 새겨져 있어요. 원본 파일은 올리지 않아서, 만든 사람의 컴퓨터에만 있어요.")}</p>
-         <p class="meta">${copyHtml("원본 파일이 맞는지 보려면 확인 페이지에 그 파일을 넣어 지문이 같은지 보세요.")}</p>
-         ${human ? "" : `<button class="ghost" id="p-verify">${copyHtml("확인 페이지 열기")}</button>`}`
+         <p class="meta">${copyHtml("원본 파일이 맞는지 보려면 아래 「진짜인지 확인」에서 그 파일을 대조해 보세요.")}</p>
+         ${human ? "" : `<button class="ghost" id="p-verify">${copyHtml("진짜인지 확인")}</button>`}`
       : '<p class="muted">이 자산에는 연결된 파일이 없습니다.</p>';
     // 증서·작품이면 위 사람 말 칸에 「진짜인지 확인」이 이미 있다 — 같은 단추를 둘 두지 않는다.
     const vb = human ? null : document.getElementById("p-verify");
-    if (vb) vb.onclick = () => void openUrl(verifyLink(a.name)).catch(() => {});
+    if (vb) vb.onclick = () => keep.openVerify(a);
     // 🔴 **여기서 일찍 돌아간다.** 그래서 아래에 있는 단추들(공지·나눠주기)이
     //    **파일 없는 자산에는 하나도 안 나왔다.** 그런데 그 둘은 파일과
     //    아무 상관이 없다 — 자산을 가진 사람에게 보내는 일이다.
@@ -852,7 +875,7 @@ async function renderPanel() {
   try {
     kind = await invoke("content_kind", { cid });
   } catch {
-    $("p-body").innerHTML = '<p class="muted">로컬 IPFS가 꺼져 있어 이 컴퓨터에서 열 수 없습니다.</p>';
+    $("p-body").innerHTML = '<p class="muted">로컬 사진 보관함이 꺼져 있어 이 컴퓨터에서 열 수 없습니다.</p>';
     return;
   }
   if (selected !== a.name) return; // 사용자가 그 사이 다른 행을 골랐다
@@ -951,8 +974,8 @@ async function renderPanel() {
   //    문을 낸다 — 공지가 가게 탭에 링크를 남긴 것과 같다.
   if (a.mine) buttons.push(`<button class="ghost" id="p-reward">나눠주기</button>`);
   if (kind.available) buttons.push(`<button class="ghost" id="open-ext">이 컴퓨터에서 열기</button>`);
-  if (pinned.has(cid)) buttons.push(`<button class="ghost" id="p-unpin">보존 해제</button>`);
-  else if (health.get(cid) === "found") buttons.push(`<button id="p-pin">보존</button>`);
+  if (pinned.has(cid)) buttons.push(`<button class="ghost" id="p-unpin">보관 해제</button>`);
+  else buttons.push(`<button id="p-pin">보관</button>`);
   $("p-actions").innerHTML = buttons.join("");
 
   const ext = document.getElementById("open-ext");
@@ -1077,6 +1100,7 @@ async function loadAssets(thenScan = true) {
     pinned = new Set(await invoke<string[]>("pin_list"));
     fingerprints = new Set(await invoke<string[]>("create_fingerprints").catch(() => [] as string[]));
     checkOwnerTokens();
+    await keep.onLoaded();
     renderList();
     if (thenScan) startScan();
   } catch (e) {
@@ -1092,7 +1116,7 @@ async function startScan() {
   const targets = [...assets.values()]
     .filter((a) => a.ipfs_hash && !pinned.has(a.ipfs_hash))   // 보존 중인 건 물어볼 필요가 없다
     .filter((a) => !isFingerprint(a.ipfs_hash))                // 원본 지문은 파일창고에 없다 — 20초씩 기다릴 이유가 없다
-    .filter((a) => health.get(a.ipfs_hash!) !== "found")
+    .filter((a) => keep.recheckCid(a.ipfs_hash!))              // 이미 찾았거나 6시간 안에 물었는데 못 찾은 것은 다시 묻지 않는다
     .map((a) => ({ name: a.name, cid: a.ipfs_hash! }));
 
   if (!targets.length) { renderList(); return; }
@@ -1116,23 +1140,21 @@ async function startScan() {
     }
     scan.ms.push(performance.now() - t0);
     scan.done++;
+    keep.stamp(t.cid);
     saveHealth();
     renderList();
     if (selected) renderPanel();
   }
 
+  keep.scanEnded(scan.stop);
   scan.running = false;
   scan.current = "";
   renderList();
 }
 
 async function pinAll() {
-  const targets = [...assets.values()]
-    .filter((a) => a.ipfs_hash && !isFingerprint(a.ipfs_hash) && health.get(a.ipfs_hash) === "found" && !pinned.has(a.ipfs_hash))
-    .map((a) => a.ipfs_hash!);
-  for (const cid of targets) {
-    try { await invoke("pin_add", { cid }); pinned.add(cid); renderList(); } catch {}
-  }
+  // 0.8.8a — 진행률·중지·결과·용량 점검이 있는 일괄 보관(src/asset-keep.ts).
+  await keep.bulkKeep();
 }
 
 /* ── 화면 전환 ───────────────────────────────────────────────
@@ -1150,6 +1172,8 @@ let askResolve: ((v: string | null) => void) | null = null;
 
 function askClose(v: string | null) {
   $("askwrap").classList.remove("on");
+  // The password must not remain in the hidden input after closing the sheet.
+  ($("ask-input") as HTMLInputElement).value = "";
   const r = askResolve;
   askResolve = null;
   r?.(v);
@@ -1161,6 +1185,7 @@ function ask(
   message = "",
   opts: { value?: string; password?: boolean; numeric?: boolean; ok?: string } = {}
 ): Promise<string | null> {
+  if (document.documentElement.hasAttribute("data-ravi-arriving")) return new Promise(resolve => afterRaviLanding(() => { void ask(title, message, opts).then(resolve); }));
   $("ask-title").textContent = title;
   $("ask-msg").textContent = message;
   const input = $("ask-input") as HTMLInputElement;
@@ -1178,6 +1203,7 @@ function ask(
 
 /// 예/아니오만. 예면 true.
 function sure(title: string, message = "", ok = "네"): Promise<boolean> {
+  if (document.documentElement.hasAttribute("data-ravi-arriving")) return new Promise(resolve => afterRaviLanding(() => { void sure(title, message, ok).then(resolve); }));
   $("ask-title").textContent = title;
   $("ask-msg").textContent = message;
   $("ask-input").style.display = "none";
@@ -1191,6 +1217,7 @@ function sure(title: string, message = "", ok = "네"): Promise<boolean> {
 const ASK_ALT = "\u0000ask-alt";
 /// 둘 중 하나를 고른다(그리고 취소). 고른 쪽 `"yes"`·`"alt"`, 취소면 null.
 function choose(title: string, message: string, yes: string, alt: string): Promise<"yes" | "alt" | null> {
+  if (document.documentElement.hasAttribute("data-ravi-arriving")) return new Promise(resolve => afterRaviLanding(() => { void choose(title, message, yes, alt).then(resolve); }));
   $("ask-title").textContent = title;
   $("ask-msg").textContent = message;
   $("ask-input").style.display = "none";
@@ -1204,6 +1231,7 @@ function choose(title: string, message: string, yes: string, alt: string): Promi
 
 /// 알리기만. 되돌릴 것이 없을 때.
 function say(title: string, message = ""): Promise<unknown> {
+  if (document.documentElement.hasAttribute("data-ravi-arriving")) return new Promise(resolve => afterRaviLanding(() => { void say(title, message).then(resolve); }));
   $("ask-title").textContent = title;
   $("ask-msg").textContent = message;
   $("ask-input").style.display = "none";
@@ -1311,14 +1339,7 @@ async function idLoad() {
     idKeyRow(t("이 컴퓨터"), nowPk, idFromWord(s?.now?.from)) +
     idKeyRow(t("폰 · 웹 지갑"), canon, t("12단어에서 나오는 이름")) +
     // 🔴 러스트의 `advice` 를 **그대로.** 무엇을 하면 되는지가 여기 들어 있다.
-    (s?.advice ? `<p class="meta" style="margin-top:10px">${escapeHtml(String(s.advice))}</p>` : "") +
-    // 12단어를 못 읽었으면 그 사실이 이 화면에서 제일 중요한 소식이다.
-    (canon
-      ? ""
-      : `<div class="warnbox" style="margin-top:10px">
-           <b>${copyHtml("12단어를 읽지 못했습니다.")}</b>
-           ${copyHtml("지갑이 잠겨 있으면 열어 주세요. 12단어로 만든 지갑이 아니면, 이 이름은 백업 파일이 유일한 사본입니다 — 파일을 잃으면 이 이름으로 다시 못 돌아옵니다.")}
-         </div>`) +
+    (s?.advice ? `<p class="meta" style="margin-top:10px">${escapeHtml(errText(s.advice))}</p>` : "") +
     // 옛 이름. 있고 지금 이름과 다를 때만 말한다.
     (leg && leg !== nowPk
       ? `<h3 class="grouphead">${copyHtml("옛 이름")}</h3>` +
@@ -1339,6 +1360,7 @@ async function idLoad() {
 
   // 단추는 **할 수 있을 때만** 보인다. 눌러도 「바꿀 것이 없습니다」만
   // 돌아오는 단추는 고장으로 읽힌다.
+  if (s?.seed_error) addSeedUnlock(body, s.seed_error, idLoad);
   if (canon && same !== true) adopt.style.display = "";
   if (leg && nowPk && leg !== nowPk) legacy.style.display = "";
 }
@@ -1386,7 +1408,7 @@ async function idAdopt() {
         "② 두 이름을 잇는 글(「같은 사람입니다」)을 양쪽 열쇠로 서명해 세계 릴레이에 올립니다. " +
         "한번 퍼진 글은 되거둘 수 없습니다. " +
         "③ 옛 열쇠 파일은 지우지 않고 talkkey-old-<시각>.json 으로 옆에 남깁니다. " +
-        "④ 가게 간판 열쇠는 바뀌지 않습니다 — 그 공개키는 체인에 박혀 있습니다.",
+        "④ 가게 간판 열쇠는 바뀌지 않습니다 — 그 공개키는 공개 장부에 박혀 있습니다.",
     ),
   );
   if (!ok) return;
@@ -1499,12 +1521,56 @@ async function sampleClear() {
   }
 }
 
-async function doRestore(directory = false) {
+// 백업 찾기 — 새 이름(RavenVault-Backup)과 옛 이름(PLAYXRaven-Backup 등)을 한 번에
+// 찾아 한 목록으로 보인다. 찾기는 아무 파일도 바꾸지 않는다(backup_find.rs).
+// 화면에는 모두 「레이븐볼트 백업」으로 적고, 옛 이름이면 작게만 표시한다.
+async function findBackups() {
+  const box = $("rs-found");
+  box.innerHTML = `<div class="meta" style="margin-top:9px">${copyHtml("찾는 중…")}</div>`;
+  try {
+    const r: any = await invoke("backup_folders");
+    const items: any[] = Array.isArray(r?.items) ? r.items : [];
+    const rejected: any[] = Array.isArray(r?.rejected) ? r.rejected : [];
+    const rejectedNote = rejected.length
+      ? `<p class="meta" style="margin-top:8px">${escapeHtml(tf("확인되지 않아 목록에서 뺀 파일 {0}개 — 손상됐거나 끝까지 저장되지 않은 백업입니다.", rejected.length))}</p>`
+      : "";
+    if (!items.length) {
+      box.innerHTML = `<div class="meta" style="margin-top:9px">${copyHtml("찾은 백업이 없습니다. 「백업에서 되돌리기」로 직접 고르세요.")}</div>` + rejectedNote;
+      return;
+    }
+    const row = (it: any, i: number) => {
+      const tags: string[] = [];
+      if (it.scheme === "playxraven") tags.push(t("옛 이름"));
+      if (it.previous) tags.push(t("이전 판"));
+      if (it.verification !== "complete") tags.push(t("완료 기록 없음"));
+      const size = Number(it.size) > 0 ? fmtBytes(Number(it.size)) : t("폴더");
+      return `<div class="found-row">
+          <div class="found-what"><b>${escapeHtml(String(it.day || ""))} · ${escapeHtml(t(String(it.place || "")))}</b>
+            <span class="meta">${copyHtml("레이븐볼트 백업")} · ${escapeHtml(size)}${tags.length ? ` · <small>${escapeHtml(tags.join(" · "))}</small>` : ""}</span></div>
+          <button class="ghost" data-found="${i}">${copyHtml("이 백업 열기")}</button>
+        </div>`;
+    };
+    box.innerHTML =
+      `<div class="card" style="margin-top:11px"><h3>${escapeHtml(tf("찾은 레이븐볼트 백업 {0}개", items.length))}</h3>` +
+      `<p class="meta">${copyHtml("최근 것이 위에 있습니다. 같은 백업이 여러 곳에 있으면 한 번만 보입니다.")}</p>` +
+      items.map(row).join("") + rejectedNote + `</div>`;
+    box.querySelectorAll<HTMLButtonElement>("[data-found]").forEach((button) => {
+      button.onclick = () => {
+        const it = items[Number(button.dataset.found)];
+        if (it?.path) void doRestore(it.kind === "folder", String(it.path));
+      };
+    });
+  } catch (e) {
+    box.innerHTML = `<div class="warnbox" style="margin-top:11px">${escapeHtml(errText(e))}</div>`;
+  }
+}
+
+async function doRestore(directory = false, preset = "") {
   // 경로를 타이핑하게 하지 않는다. 이 파일 3,457행에 내가 직접 적어 둔 문장이
   // "폴더 경로를 타이핑하게 하는 것은 백업을 안 하게 하는 가장 확실한 방법"
   // 인데, 만들 때만 지키고 **되돌릴 때는 안 지키고 있었다.**
   // 파일 고르기는 OS 가 한다 — 사람은 파인더에서 눈으로 찾는 데 익숙하다.
-  const where = await pickFile({
+  const where = preset || await pickFile({
     title: t(directory ? "되돌릴 백업 폴더를 고르세요" : "되돌릴 백업을 고르세요"),
     multiple: false,
     directory,
@@ -1515,12 +1581,17 @@ async function doRestore(directory = false) {
     //
     //    `잠김` 은 옛 이름이다. 이미 그렇게 만들어 둔 백업이 있으니 계속 받는다.
     filters: directory ? undefined : [
-      { name: "RavenVault Desktop 백업", extensions: ["pxlock", "zip", "잠김"] },
+      { name: t("레이븐볼트 백업"), extensions: ["pxlock", "zip", "잠김"] },
       { name: "모든 파일", extensions: ["*"] },
     ],
     defaultPath: undefined,
   }).catch(() => null);
   if (!where || typeof where !== "string") return;
+  // 🔴 0.9.0 — 잠근 백업(.pxlock·.rvwallet)은 끌어다 놓았을 때와 **같은 확인 창**으로 보낸다(src/backup-drop-route.ts →
+  //    Rust restore_drop.rs): 지갑 암호 재인증 · 한 번 쓰는 표 · 열어 본 파일 지문 확인 · 확인 체크 뒤에만 적용.
+  //    옛 길(restore_survey → restore_apply)에는 재인증이 없어, 같은 파일을 메뉴로 고르면 더 약한 문으로 들어갔다.
+  //    잠그지 않은 zip·폴더(자동 백업 로컬 사본)는 그 확인 창이 받지 않으므로 지금처럼 옛 길.
+  if (!directory && routeBackupDrop([where])) { $("rs-result").innerHTML = ""; return; }
   $("rs-result").innerHTML = `<div class="meta" style="margin-top:9px">읽는 중…</div>`;
   try {
     // 🔴 다른 컴퓨터에서 만든 백업은 **암호가 있어야** 열린다. 그런데 암호를
@@ -1560,7 +1631,7 @@ async function doRestore(directory = false) {
       const keys = r.items.map((i: any) => i.key);
       const ok = await sure(
         "되돌릴까요?",
-        "지금 있는 것은 옆에 따로 남겨 둡니다.\n지갑을 되돌리려면 노드가 꺼져 있어야 합니다.",
+        "지금 있는 것은 옆에 따로 남겨 둡니다.\n지갑을 되돌리려면 서버가 꺼져 있어야 합니다.",
         "되돌립니다"
       );
       if (!ok) return;
@@ -1578,7 +1649,7 @@ async function doRestore(directory = false) {
           done.map(d => `<div class="kv"><b>${escapeHtml(String(d.what))}</b><span>${escapeHtml(String(d.note || t("완료")))}</span></div>`).join("") +
           (failed.length ? `<div class="warnbox">${failed.map(f => `${escapeHtml(String(f.what))} — ${escapeHtml(String(f.why))}`).join("<br>")}</div>` : "") +
           (previous.length ? `<p>${copyHtml("보존한 이전 파일을 확인하기 전에는 지우지 마세요.")}</p>` + previous.map(p => `<div class="kv"><b>${escapeHtml(String(p.what))}</b><code style="overflow-wrap:anywhere">${escapeHtml(p.previous)}</code></div>`).join("") : "") +
-          (!complete && failed.some(f => f.changed) ? `<div class="warnbox">${copyHtml("일부 파일이 바뀌었습니다. 보존한 이전 파일을 확인하기 전에는 노드를 켜지 마세요.")}</div>` : "") +
+          (!complete && failed.some(f => f.changed) ? `<div class="warnbox">${copyHtml("일부 파일이 바뀌었습니다. 보존한 이전 파일을 확인하기 전에는 서버를 켜지 마세요.")}</div>` : "") +
           (res?.cleanup_warning ? `<div class="warnbox">${escapeHtml(String(res.cleanup_warning))}</div>` : "") +
           `<p class="meta">${escapeHtml(String(res?.note || ""))}</p></div>`;
       } catch (e) {
@@ -1597,7 +1668,7 @@ async function showCard() {
     $("rs-result").innerHTML =
       `<div class="card" style="margin-top:11px">
          <h3>복구 카드 — 인쇄해서 서랍에</h3>
-         <div class="kv"><b>노드</b><span>${c.node?.name || "(이름 없음)"} · ${c.node?.id}</span></div>
+         <div class="kv"><b>서버</b><span>${c.node?.name || "(이름 없음)"} · ${c.node?.id}</span></div>
          <div class="kv"><b>가게</b><span>${c.shop_name || "-"}</span></div>
          <div class="kv"><b>백업 위치</b><span>${c.backup_folder}</span></div>
          <ol style="margin:12px 0 0 18px;font-size:14px;line-height:1.9">
@@ -1707,10 +1778,10 @@ async function paintSweepKrw(): Promise<void> {
       const inp = document.getElementById(inId) as HTMLInputElement | null;
       const out = document.getElementById(outId);
       if (!inp || !out) continue;
-      const n = Number(inp.value.trim());
+      const n = amountOrNaN(bindAmountInput(inp));
       out.textContent =
         inp.value.trim() && isFinite(n) && n > 0
-          ? tf("지금 시세로 약 {0}원", Math.round(n * rate).toLocaleString())
+          ? tf("지금 시세로 약 {0}원", fmtCount(Math.round(n * rate)))
           : "";
     }
   };
@@ -1799,14 +1870,9 @@ function wireCloudKey(): void {
     //    일을 시키면 사장은 「암호가 둘인가?」로 읽고 둘 다 안 한다.
     void invoke<any>("backup_pass_state")
       .then((st) => {
-        const need = document.getElementById("ck-need");
         const box = document.getElementById("bp-box");
         if (st?.set) {
           bpMsg.textContent = "암호가 정해져 있습니다. 새 백업부터 이 암호로 열립니다.";
-          if (need)
-            need.innerHTML =
-              "<b>암호를 정해 두셨으니 이건 안 적으셔도 됩니다.</b> 새 컴퓨터에서는 그 암호를 치시면 됩니다. " +
-              "아래 열쇠는 암호를 잊었을 때 쓰는 여벌입니다.";
           // 🔴 **접기만 하면 바꿀 길이 없어진다.** 러스트는 덮어쓸 수 있는데
           //    화면이 칸을 숨겨서, 암호를 한 번 정하면 영영 못 바꿨다.
           //    접되 **여는 단추**를 남긴다.
@@ -1823,10 +1889,6 @@ function wireCloudKey(): void {
                 "바꿀 수가 없습니다. 바꾸신 뒤에 한 부 새로 만들어 두세요.";
             };
           }
-        } else if (need) {
-          need.innerHTML =
-            "🔴 <b>아직 암호를 안 정하셨습니다.</b> 컴퓨터가 죽으면 이 열쇠도 같이 사라져서 백업을 못 엽니다.<br />" +
-            "<b>아래에서 암호를 정하시거나</b>, 이 열쇠를 종이에 적어 12단어와 같이 보관하세요.";
         }
       })
       .catch(() => null);
@@ -1957,7 +2019,7 @@ async function paintEasySetup(): Promise<void> {
     typeof x === "number" ? `${x}${unit}` : t("모름");
 
   const rows = [
-    ["블록체인",
+    ["공개 장부",
       sug.full_chain
         ? "전부 이 컴퓨터에 둡니다"
         : "가볍게 시작합니다"],
@@ -2157,7 +2219,7 @@ async function paintStatusDots() {
     const synced = (n?.progress ?? 0) > 0.9999;
     // 🔴 「따라잡는 중」만 적으면 **끝이 안 보인다.** 34GB 를 훑는 동안
     //    사장은 이게 10분짜리인지 하루짜리인지 알 수가 없다. 숫자를 준다.
-    set("d-node", "d-node-t", true, synced ? "RVN 노드 켜짐" : tf("노드 {0}%", pct.toFixed(1)));
+    set("d-node", "d-node-t", true, synced ? "RVN 서버 켜짐" : tf("서버 {0}%", pct.toFixed(1)));
     setSyncBar(synced ? null : pct);
     nodeUp = true;
     nodeWarming = false;
@@ -2171,7 +2233,7 @@ async function paintStatusDots() {
       "d-node",
       "d-node-t",
       nodeWarming,
-      nodeWarming ? "RVN 노드 여는 중" : "RVN 노드 꺼짐"
+      nodeWarming ? "RVN 서버 여는 중" : "RVN 서버 꺼짐"
     );
     setSyncBar(null);
     nodeUp = false;
@@ -2213,9 +2275,16 @@ async function paintStatusDots() {
       }
       dotSum.out = outUp;
       paintDotSum();
+      // 여섯째 — 손님 폰 지도에 올라가 있나(map.rs). 「올림」이면 켜져 있는 동안 5분마다 「영업 중」 신호.
+      try {
+        const m = await invoke<any>("map_status");
+        set("d-map", "d-map-t", !!m?.registered, m?.registered ? "지도: 올림" : "지도: 안 올림");
+      } catch {
+        set("d-map", "d-map-t", false, "지도: 안 올림");
+      }
     })();
   } catch {
-    set("d-ipfs", "d-ipfs-t", false, "파일창고(IPFS) 꺼짐");
+    set("d-ipfs", "d-ipfs-t", false, "사진 보관함 꺼짐");
   }
 }
 
@@ -2238,35 +2307,6 @@ async function paintStatusDots() {
  * 🔴 장사 중에 저절로 다시 시작되면 손님 QR 이 먹통이 된다. 그래서
  *    받는 것까지는 자동이어도 **다시 시작은 사람이 정한다.**
  */
-async function doInstall(up: any) {
-  const nag = document.getElementById("upnag") as HTMLButtonElement | null;
-  const ok = await sure(
-    t("지금 받아서 설치할까요?"),
-    `${t("새 버전")} ${up?.version ?? ""} · ` +
-      t("받은 뒤 프로그램이 다시 시작합니다. 손님이 주문 중이면 그 화면이 끊깁니다.")
-  );
-  if (!ok) return;
-  try {
-    if (nag) {
-      nag.disabled = true;
-      setCopyText(nag, () => t("받는 중…"));
-    }
-    await up.downloadAndInstall((e: any) => {
-      // 얼마나 왔는지 말한다. 큰 파일이라 아무 말이 없으면 멎은 줄 안다.
-      if (e?.event === "Progress" && nag) {
-        setCopyText(nag, () => t("받는 중…"));
-      }
-      if (e?.event === "Finished" && nag) setCopyText(nag, () => t("설치 중…"));
-    });
-    await relaunch();
-  } catch (e) {
-    if (nag) {
-      nag.disabled = false;
-      setCopyText(nag, () => t("새 버전 받기"));
-    }
-    await sure(t("받지 못했습니다"), errText(e), t("닫기"));
-  }
-}
 
 async function checkNow() {
   const nag = document.getElementById("upnag") as HTMLButtonElement | null;
@@ -2286,97 +2326,42 @@ async function checkNow() {
 }
 
 async function checkForUpdate(quiet = true) {
+  const nag = document.getElementById("upnag") as HTMLButtonElement | null;
+  const note = document.getElementById("up-note");
   try {
-    const up = await checkUpdate();
-    const nag = document.getElementById("upnag") as HTMLButtonElement | null;
-    if (!up) {
-      // 🔴 **감추지 않는다.** 「최신이다」도 답이다. 아무 말이 없으면
-      //    사장은 확인이 된 건지 안 된 건지 알 수 없다.
-      if (nag) {
-        nag.hidden = false;
-        nag.classList.remove("new");
-        setCopyText(nag, () => t("최신 버전"));
-        nag.onclick = () => void checkNow();
-      }
-      if (!quiet) $("up-note").textContent = "지금이 최신입니다.";
+    const update = await invoke<{ version: string | null; manual?: boolean }>("check_update");
+    if (!update.version) {
+      // 🔴 「확인 중…」이 영영 안 풀렸다(0.8.4 에서 신고) — 새 버전이 없을 때 단추 글자를 되돌리지 않았다.
+      if (nag) { nag.hidden = false; nag.classList.remove("new"); setCopyText(nag, () => t("지금이 최신입니다.")); nag.onclick = () => void checkNow(); }
+      if (note) note.textContent = "새 버전이 없습니다.";
       return;
     }
-    // 🔴 **늘 보이는 자리에 먼저 말한다.** 아래 자세한 칸은 「설정」 화면
-    //    안쪽 스크롤 한참 밑에 있다 — 앱은 새 판이 있는 걸 알면서도
-    //    보이는 데서는 아무 말도 안 했다. 그래서 몇 판이나 뒤처진 채로
-    //    쓰고 계셨다. 판 번호 옆에 붙여 두고, 누르면 그 칸으로 데려간다.
-    if (nag) {
-      nag.hidden = false;
-      // 🔴 이때만 눈에 띄게 한다. 최신일 때도 주황이면 늘 할 일이 있는
-      //    것처럼 보이고, 그러면 진짜 있을 때 안 보인다.
-      nag.classList.add("new");
-      setCopyText(nag, () => t("새 버전 받기"));
-      // 🔴 **이름이 「받기」면 받아야 한다.** 여태 화면만 옮겼다 —
-      //    사장은 눌렀는데 아무 일도 안 일어난다고 겪었고, 실제 설치는
-      //    저 아래 「받아서 설치」를 **또** 눌러야 했다. 그 칸이 화면
-      //    밖에 있으면 그런 단추가 있는 줄도 모른다.
-      nag.onclick = () => void doInstall(up);
-    }
-    // 무엇이 바뀌는지 말하지 않고 "새 버전" 만 띄우면 아무도 안 누른다.
-    $("up-box").style.display = "";
-    $("up-box").innerHTML =
-      `<div class="card" style="border-color:var(--ravi)">
-         <h3>${tf("새 버전이 있습니다 — {0}", escapeHtml(up.version))}</h3>
-         <p class="meta" style="white-space:pre-wrap">${escapeHtml(up.body || "").slice(0, 600)}</p>
-         <div class="row" style="margin-top:12px">
-           <button id="up-go">받아서 설치</button>
-           <button class="ghost" id="up-later">나중에</button>
-           <span class="meta" id="up-note"></span>
-         </div>
-         <p class="note" style="margin-top:10px">
-           설치하면 프로그램이 <b>다시 시작</b>합니다. 그동안 손님 QR 이 잠깐
-           멈추니, <b>손님이 없을 때</b> 누르세요.
-         </p>
-       </div>`;
-    ($("up-go") as HTMLElement).onclick = async () => {
-      const ok = await sure(
-        "지금 설치할까요?",
-        "프로그램이 다시 시작합니다. 손님이 주문 중이면 그 화면이 끊깁니다.",
-        "설치",
-      );
-      if (!ok) return;
-      $("up-note").textContent = "받는 중…";
-      try {
-        let got = 0;
-        let total = 0;
-        await up.downloadAndInstall((e: any) => {
-          if (e.event === "Started") total = e.data?.contentLength || 0;
-          if (e.event === "Progress") {
-            got += e.data?.chunkLength || 0;
-            $("up-note").textContent = total
-              ? tf("받는 중 {0}%", Math.round((got / total) * 100))
-              : "받는 중…";
-          }
-          if (e.event === "Finished") $("up-note").textContent = "설치 중…";
-        });
-        await relaunch();
-      } catch (e) {
-        $("up-note").innerHTML = `<span class="warn">${escapeHtml(errText(e))}</span>`;
+    const version = update.version;
+    // 🔴 리눅스 deb/rpm · 윈도우 MSI 처럼 앱이 스스로 못 바꾸는 설치: 설치 단추 대신 안내만.
+    if (update.manual) {
+      const guide = t("이 설치 방식에서는 자동으로 바꿀 수 없습니다. 새 설치 파일을 내려받아 주세요.");
+      if (nag) {
+        nag.hidden = false; nag.classList.add("new"); nag.textContent = `${version} 업데이트`;
+        nag.onclick = () => { if (note) note.textContent = guide; };
       }
-    };
-    ($("up-later") as HTMLElement).onclick = () => {
-      $("up-box").style.display = "none";
-      // 이 큰 칸만 접는다. **판 번호 옆의 작은 표시는 남긴다** — 새 판이
-      // 있다는 사실 자체를 감추면, 그게 지금까지 벌어진 일이다.
-      localStorage.setItem("playx-raven-update-snooze", String(Date.now()));
-    };
-  } catch (e) {
-    // 업데이트 서버가 없거나 인터넷이 끊긴 것은 사고가 아니다. 조용히 넘긴다 —
-    // 다만 사장이 직접 눌러 확인했을 때는 말해 준다.
-    // 🔴 「확인 중…」에서 멈춘 채로 두면 사장은 프로그램이 멎은 줄 안다.
-    const nag2 = document.getElementById("upnag") as HTMLButtonElement | null;
-    if (nag2) {
-      nag2.hidden = false;
-      nag2.classList.remove("new");
-      setCopyText(nag2, () => t("확인 못 했습니다"));
-      nag2.onclick = () => void checkNow();
+      if (note) note.textContent = guide;
+      return;
     }
-    if (!quiet) $("up-note").textContent = "확인하지 못했습니다. 인터넷을 확인해 주세요.";
+    if (nag) {
+      nag.hidden = false; nag.classList.add("new"); nag.textContent = `${version} 업데이트`;
+      nag.onclick = async () => {
+        if (!await sure("업데이트 설치", `${version} 설치 후 앱이 재시작될 수 있습니다.`, "설치")) return;
+        nag.disabled = true;
+        try { await invoke("install_update", { expectedVersion: version }); }
+        catch (e) { if (note) note.textContent = errText(e); }
+        finally { nag.disabled = false; }
+      };
+    }
+    if (note) note.textContent = "설치 직전에 서명된 버전과 패키지를 검증합니다. 검증 정보가 없는 릴리스는 설치되지 않습니다.";
+  } catch (e) {
+    // 확인에 실패해도 「확인 중…」으로 남기지 않는다. 눌러서 다시 시도할 수 있게 숨긴다.
+    if (nag && !nag.classList.contains("new")) nag.hidden = true;
+    if (!quiet && note) note.textContent = errText(e);
   }
 }
 
@@ -2578,14 +2563,14 @@ async function drawMoneyStatus(): Promise<void> {
   const n = s.node || {};
   줄들.push(
     n.ok
-      ? 줄("노드", n.behind > 20 ? tf("{0}블록 뒤", n.behind) : tf("블록 {0}", Number(n.blocks).toLocaleString()),
+      ? 줄("서버", n.behind > 20 ? tf("{0}블록 뒤", n.behind) : tf("블록 {0}", Number(n.blocks).toLocaleString()),
            n.behind > 20 ? "warn" : "good", String(n.why || ""))
-      : 줄("노드", "꺼짐", "bad", String(n.why || "")),
+      : 줄("서버", "꺼짐", "bad", String(n.why || "")),
   );
 
   const w = s.wallet || {};
   const 지갑글 = w.state === "locked" ? "잠김" : w.state === "unlocked" ? "열림" : "암호 없음";
-  줄들.push(줄("지갑", `${지갑글} · ${Number(w.rvn || 0).toLocaleString()} RVN`,
+  줄들.push(줄("지갑", `${지갑글} · ${fmtRvn(Number(w.rvn || 0))}`,
                 w.state === "unlocked" ? "warn" : "good", String(w.why || "")));
 
   // 🔴 여기가 핵심이다.
@@ -2614,9 +2599,10 @@ async function refreshOverview() {
   setCopyText($("overview-node"), () => n && typeof progress === "number" && Number.isFinite(progress)
     ? progress < 0.9999 ? `${t("동기화")} ${Math.max(0, Math.min(100, progress * 100)).toFixed(1)}%` : t("켜짐")
     : nodeUp === false ? t("꺼짐") : t("확인 못 함"));
+  $("rv-home-server-state").dataset.tone = !n ? "bad" : typeof progress !== "number" || !Number.isFinite(progress) || progress < 0.9999 ? "warn" : "good";
   const confirmed = wallet.status === "fulfilled" ? wallet.value?.confirmed : undefined;
   setCopyText($("overview-balance"), () => typeof confirmed === "number" && Number.isFinite(confirmed) && confirmed >= 0
-    ? `${confirmed.toLocaleString(lang, {maximumFractionDigits:8})} RVN` : t("확인 못 함"));
+    ? fmtRvn(confirmed) : t("확인 못 함"));
   $("overview-balance").classList.toggle("unknown", !(typeof confirmed === "number" && Number.isFinite(confirmed) && confirmed >= 0));
   /* 🔴 0.4.8-B — 방금 받은 10 RVN 이 여기서는 **0** 으로만 보였다(RV3 T04). 확정 잔액에 섞지는
      않는다(확인 전 돈을 쓸 수 있는 돈처럼 보이면 안 된다) — 옆에 「들어오는 중」으로 따로 적는다.
@@ -2625,7 +2611,7 @@ async function refreshOverview() {
   const row = document.getElementById("overview-incoming-row");
   const show = Number.isFinite(incoming) && incoming > 0;
   if (row) row.hidden = !show;
-  if (show) setCopyText($("overview-incoming"), () => `${incoming.toLocaleString(lang, { maximumFractionDigits: 8 })} RVN`);
+  if (show) setCopyText($("overview-incoming"), () => fmtRvn(incoming));
 }
 
 /** 라비 화면을 그린다. 상태가 바뀔 때마다 다시 부른다. */
@@ -2640,7 +2626,7 @@ function paintRavi() {
   const hi = $("ravi-hello");
   const sub = $("ravi-sub");
   if (hi && sub) {
-    hi.textContent = t("라비");
+    hi.textContent = t("밤의 물결, 곁에 있는 라비.");
     sub.textContent = aiProvider ? t("AI 도우미 · 물어본 것만 봐요") : t("AI 키를 넣으면 라비가 깨어나요");
   }
   /* 🔴 아직 안 된 것이 있으면 **타일에 적어 둔다.** 눌러 보고 알게 하면
@@ -2766,7 +2752,8 @@ function rpScreen(): string {
 
 let rpPick: [string, string] | null = null;
 
-function openReport(prefill = "") {
+function openReport(prefill = "", opts: { category?: string; attachLog?: boolean } = {}) {
+  if (deferUntilRaviLanding(() => openReport(prefill, opts))) return;
   const wrap = $("rpwrap");
   const text = $("rp-text") as HTMLTextAreaElement;
   const chips = $("rp-chips");
@@ -2780,20 +2767,64 @@ function openReport(prefill = "") {
       chips.querySelectorAll("[data-rc]").forEach((x) => x.classList.remove("on"));
       b.classList.add("on");
       rpPick = RP_CATS[+b.dataset.rc!];
+      // 「프로그램이 안 켜져요」 는 서버 기록이 제일 필요한 신고라 기록을 기본으로 켠다(끌 수 있다).
+      if (rpPick[0] === "install-run") (document.getElementById("rp-log") as HTMLInputElement).checked = true;
+      rpWhat();
+      rpLogRefresh();
     };
   });
-  // 무엇을 같이 보내는지 **먼저 보여 준다.** 몰래 담으면 그건 수집이다.
+  // 기록은 기본 꺼짐. 몰래 담지 않는다.
+  const logBox = document.getElementById("rp-log") as HTMLInputElement;
+  logBox.checked = !!opts.attachLog;
+  logBox.onchange = () => { rpWhat(); rpLogRefresh(); };
+  (document.getElementById("rp-log-view") as HTMLElement).onclick = () => void rpLogShow(true);
+  document.getElementById("rp-log-pre")!.style.display = "none";
+  if (opts.category) {
+    chips.querySelector<HTMLElement>(`[data-rc="${RP_CATS.findIndex((c) => c[0] === opts.category)}"]`)?.click();
+    logBox.checked = !!opts.attachLog || logBox.checked;
+  }
+  rpWhat();
+  if (logBox.checked) void rpLogShow(true);
+  wrap.style.display = "flex";
+  setTimeout(() => text.focus(), 60);
+}
+
+/** 무엇을 같이 보내는지 **먼저 보여 준다.** 몰래 담으면 그건 수집이다. */
+function rpWhat() {
   // 🔴 값이 섞인 문장이라 화면 걷기로는 못 옮긴다 — 조각으로 쪼개져서
   //    사전 열쇠와 안 맞는다. 이런 자리만 `t()` 로 직접 옮긴다.
+  const withLog = (document.getElementById("rp-log") as HTMLInputElement | null)?.checked;
   $("rp-what").innerHTML =
     `${copyHtml("같이 보내는 것")} — <b>${escapeHtml(rpScreen())}</b> ${copyHtml("화면")} · ` +
     // 판 번호는 화면에 이미 있다(사이드바 로고 옆). 없는 이름을 새로
     // 만들면 두 곳이 어긋난다.
     `${rpErrors.length ? `${rpErrors.length}${t("건의 오류")}` : t("오류 없음")} · ` +
-    `${copyHtml("판")} ${document.querySelector(".brand span")?.textContent || "?"}<br />` +
+    `${copyHtml("판")} ${document.querySelector(".brand span")?.textContent || "?"} · ` +
+    `${withLog ? t("서버 기록 마지막 부분(가린 것)") : t("서버 기록은 보내지 않음")}<br />` +
     `${t("지갑 12단어·열쇠·주소·잔액은 보내지 않습니다.")}`;
-  wrap.style.display = "flex";
-  setTimeout(() => text.focus(), 60);
+}
+
+/** 체크를 켜면 보낼 글자를 바로 보여 주고, 끄면 접는다. */
+function rpLogRefresh() {
+  const on = (document.getElementById("rp-log") as HTMLInputElement).checked;
+  if (on) void rpLogShow(false);
+  else document.getElementById("rp-log-pre")!.style.display = "none";
+}
+
+/** 가려진 기록을 **보내는 것과 똑같이** 보여 준다. */
+async function rpLogShow(force: boolean) {
+  const pre = document.getElementById("rp-log-pre")!;
+  if (!force && pre.style.display === "none" && !(document.getElementById("rp-log") as HTMLInputElement).checked) return;
+  pre.style.display = "block";
+  pre.textContent = t("읽는 중…");
+  try {
+    const r = await invoke<any>("report_log_preview");
+    pre.textContent = r?.ok
+      ? String(r.text || "")
+      : String(r?.why || t("서버 기록을 읽지 못했습니다. 이 경우 기록은 보내지 않습니다."));
+  } catch {
+    pre.textContent = t("서버 기록을 읽지 못했습니다. 이 경우 기록은 보내지 않습니다.");
+  }
 }
 
 async function sendReport() {
@@ -2815,6 +2846,8 @@ async function sendReport() {
         //    곳이 없습니다」라는 결과만 보고 원인을 못 찾는다 — 실제로 그랬다.
         phone_error: lastPhoneError,
       },
+      // 🔴 체크했을 때만. 가리는 일은 러스트가 한다.
+      attachLog: (document.getElementById("rp-log") as HTMLInputElement).checked,
     });
     // 🔴 못 보냈으면 못 보냈다고 말한다. "고맙습니다" 만 띄우면 사장은
     //    보냈다고 여기고, 우리는 못 받는다. 대신 사라지지는 않는다.
@@ -2895,7 +2928,7 @@ async function 라비살피기() {
             page: "reward",
             el: "rw-gate",
             say: t(
-              "자산 색인이 꺼져 있어 명단을 못 셉니다. 켜려면 43GB 를 다시 훑고 그동안 노드가 멈춥니다 — 문 닫는 시간에 하세요.",
+              "자산 색인이 꺼져 있어 명단을 못 셉니다. 켜려면 43GB 를 다시 훑고 그동안 서버가 멈춥니다 — 문 닫는 시간에 하세요.",
             ),
           }),
       });
@@ -2959,7 +2992,7 @@ function shopTodo(): { bad: boolean; label: string; why: string; go?: () => void
   return [
     {
       bad: !(nodeUp ?? true),
-      label: (nodeWarming ? "노드가 여는 중이에요" : "노드가 꺼져 있어요"),
+      label: (nodeWarming ? "서버가 여는 중이에요" : "서버가 꺼져 있어요"),
       why: ("결제가 들어와도 확인을 못 합니다."),
       go: () => { $("qrwrap").style.display = "none"; showPage("settings"); },
     },
@@ -2983,7 +3016,7 @@ function shopTodo(): { bad: boolean; label: string; why: string; go?: () => void
       //    「등록하지 않았습니다」를 계속 띄웠다. 실제로 그 상태였다.
       //    등록됐다는 증거는 **체인에 올라간 이름**(`sh-registered`)이다.
       bad: !val("sh-registered"),
-      label: ("체인에 가게를 등록하지 않았습니다"),
+      label: ("공개 장부에 가게를 등록하지 않았습니다"),
       why: ("같은 와이파이 주문은 됩니다. 다만 가게 목록에는 안 뜹니다."),
       // 탭만 열면 또 찾아야 한다. **체인에 남을 이름 칸**까지 데려간다.
       go: () => {
@@ -3019,6 +3052,7 @@ function shopTodo(): { bad: boolean; label: string; why: string; go?: () => void
 }
 
 async function openQrSheet() {
+  if (deferUntilRaviLanding(() => { void openQrSheet(); })) return;
   const wrap = $("qrwrap");
   const body = $("qr-body");
   wrap.style.display = "flex";
@@ -3073,6 +3107,7 @@ async function openQrSheet() {
       } catch {
         return `<code class="addr qrurl">${escapeHtml(url)}</code>`;
       }
+      if (new URL(url).protocol === "ravenvault-shop:") return `<span class="meta" style="font-size:15px">${copyHtml("RavenVault 폰 앱에서 연결 QR을 찍어 주세요.")}</span>`;
       const hosts = extraIps.length ? extraIps : [String(r.ip)];
       return hosts
         .map((ip) => `<code class="addr qrurl">http://${escapeHtml(ip)}:${escapeHtml(String(r.port))}${escapeHtml(path)}</code>`)
@@ -3080,6 +3115,7 @@ async function openQrSheet() {
     };
 
     body.innerHTML = todoHtml +
+      (r.credentials_renewed ? `<div class="meta" style="font-size:15px">${copyHtml("연결 열쇠가 만료되어 새로 만들었습니다. RavenVault 폰 앱에서 새 QR을 다시 찍어 주세요.")}</div>` : "") +
       `<div class="qrmain">${custQr}
          <div>
            <b style="font-size:19px">${copyHtml("손님")}</b>
@@ -3094,7 +3130,7 @@ async function openQrSheet() {
        </div>` +
       `<div class="meta" style="margin-bottom:8px">
          🔴 ${copyHtml("아래 셋에는 열쇠가 들어 있습니다. 붙이지 말고, 찍을 때만 보여 주세요.")}
-         ${copyHtml("QR 이 안 열리면 아래 주소를 폰 브라우저에 치세요.")}
+         ${copyHtml("RavenVault 폰 앱에서 연결 QR을 찍어 주세요.")}
        </div>` +
       `<div class="qrothers">
          <div class="qrcard haskey">${adminQr}<b>${copyHtml("사장님만")}</b>
@@ -3163,7 +3199,7 @@ async function openQrSheet() {
     body.innerHTML = todoHtml +
       `<div class="warnbox">
          <b>${copyHtml("손님 폰 서버를 켜지 못했습니다.")}</b><br />
-         ${copyHtml("노드가 켜져 있는지 보시고, 잠시 뒤에 다시 눌러 주세요.")}
+         ${copyHtml("서버가 켜져 있는지 보시고, 잠시 뒤에 다시 눌러 주세요.")}
        </div>
        <div class="meta" style="margin-top:10px">${escapeHtml(errText(e))}</div>`;
   }
@@ -3193,6 +3229,8 @@ function setOpenState(closed: boolean) {
   box.dispatchEvent(new Event("change", { bubbles: true }));
   paintOpenPick();
   paintRavi();
+  // 지도에 올린 가게면 「영업 중」/「닫힘」 신호를 5분 기다리지 않고 바로 보낸다.
+  mapCard.openChanged();
 }
 
 /* ══ 화면마다 큰 아이콘 줄 ═══════════════════════════════════════════
@@ -3466,17 +3504,36 @@ function turnOnBtn(id: string): string {
 }
 
 /** 위 단추를 눌리게 묶는다. HTML 을 넣은 뒤에 부른다. */
+/**
+ * 켜기 전 디스크 남은 공간 확인. 🔴 막지 않는다 — 모자라면 알리고, 그래도 켤지 묻는다.
+ * 못 재면(known=false) 아무 말 없이 통과한다. 반환값 false 는 사람이 「그만두기」를 고른 때뿐.
+ */
+async function diskOkToStart(): Promise<boolean> {
+  try {
+    const d = await invoke<any>("start_disk_check");
+    if (!d?.known || !d?.short) return true;
+    return await sure(
+      `${t("남은 공간이 부족합니다")}(${t("현재")} ${Number(d.free_gb)}GB, ${t("필요 약")} ${Number(d.need_gb)}GB)`,
+      t("장부가 커서 공간이 모자라면 중간에 멈출 수 있습니다. 그래도 켜시겠습니까?"),
+      t("그래도 켜기")
+    );
+  } catch {
+    return true;
+  }
+}
+
 function bindTurnOn(id: string, cmd: string) {
   const b = document.getElementById(id);
   if (!b) return;
   b.addEventListener("click", async () => {
+    if (!(await diskOkToStart())) return;
     (b as HTMLButtonElement).disabled = true;
     const say = document.getElementById(`${id}-say`);
     if (say) setCopyText(say, () => t("켜는 중…"));
     try {
       const r = await invoke<any>(cmd);
       // 못 켰으면 이유를 그대로 보여 준다. 조용히 실패하면 또 누른다.
-      const why = (r?.skipped || []).map((x: any) => `${x.what}: ${x.why}`).join(" · ");
+      const why = (r?.skipped || []).map((x: any) => `${t(x.what === "노드" ? "서버" : x.what === "IPFS" ? "사진 보관함" : x.what)}: ${x.why}`).join(" · ");
       if (say) setCopyText(say, () => why || t("켰습니다. 잠시 뒤 다시 봐 주세요."));
     } catch (e) {
       if (say) say.textContent = String((e as Error)?.message || e);
@@ -3512,7 +3569,7 @@ async function bootStrip(): Promise<string> {
   const notes: string[] = (r.notes || []).map(String);
   const bad: string[] = (r.skipped || [])
     .filter((x: any) => !String(x?.why || "").includes("이미 켜져"))
-    .map((x: any) => `${x.what} — ${x.why}`);
+    .map((x: any) => `${t(x.what === "노드" ? "서버" : x.what === "IPFS" ? "사진 보관함" : x.what)} — ${x.why}`);
   if (!notes.length && !bad.length) return "";
   return (
     `<div class="card" data-bootstrip style="margin-bottom:14px">` +
@@ -3566,7 +3623,7 @@ async function speedCard(): Promise<string> {
     return `<div class="card" style="margin-top:12px">
         <h3>${copyHtml("빠르게 따라잡기")}</h3>
         <p class="meta danger">${escapeHtml(errText(e))}</p>
-        <p class="meta">${copyHtml("「노드 설정 열기」에서 「메모리 사용」을 2000 이상으로 직접 정하셔도 됩니다.")}</p>
+        <p class="meta">${copyHtml("「서버 설정 열기」에서 「메모리 사용」을 2000 이상으로 직접 정하셔도 됩니다.")}</p>
       </div>`;
   }
   try {
@@ -3583,11 +3640,11 @@ async function speedCard(): Promise<string> {
     //    묻게 됐다. 같은 것을 두 이름으로 부르면 안 된다 — 오늘만 두 번째다.
     return `<div class="card" style="margin-top:12px;border-color:var(--brand)">
         <h3>${copyHtml("빠르게 따라잡기")}</h3>
-        <p class="meta">${copyHtml("노드에 메모리를 더 주면 장부를 훨씬 빨리 훑습니다.")}</p>
+        <p class="meta">${s.lower ? copyHtml("지금 잡아 둔 메모리가 이 컴퓨터의 빈 메모리보다 많습니다. 줄이면 서버가 멈추는 것을 막을 수 있습니다.") : copyHtml("서버에 메모리를 더 주면 장부를 훨씬 빨리 훑습니다.")}</p>
         <div class="kv"><b>${copyHtml("지금 메모리")}</b><span>${Number(s.now).toLocaleString()} MB</span></div>
         <div class="kv"><b>${copyHtml("권하는 값")}</b><span><b>${Number(s.suggest).toLocaleString()} MB</b></span></div>
         <p class="meta">${escapeHtml(String(s.why || ""))}</p>
-        ${s.measured ? "" : `<p class="meta warn">${copyHtml("이 컴퓨터의 메모리를 못 읽어서 8GB 로 셈했습니다. 실제와 다르면 「노드 설정 열기」에서 직접 정하세요.")}</p>`}
+        ${s.measured ? "" : `<p class="meta warn">${copyHtml("이 컴퓨터의 메모리를 못 읽어서 8GB 로 셈했습니다. 실제와 다르면 「서버 설정 열기」에서 직접 정하세요.")}</p>`}
         <div class="row" style="margin-top:10px">
           <button id="nd-fast">${copyHtml("빠르게 따라잡기")}</button>
           <span class="meta" id="nd-fastsay"></span>
@@ -3670,8 +3727,8 @@ function slowCard(behind: number, rate: number): string {
       <p class="meta">${copyHtml("지금 속도로는")} ${Math.round(day)}${copyHtml("일 걸립니다. 아래 셋 중 하나가 원인인 경우가 대부분입니다.")}</p>
       <div class="kv"><b>${copyHtml("① 디스크")}</b><span>${copyHtml("HDD 면 SSD 보다 20~50배 느립니다. 작업 관리자 → 성능 → 디스크 에서 보실 수 있습니다.")}</span></div>
       <div class="kv"><b>${copyHtml("② 백신")}</b><span>${copyHtml("장부 폴더를 검사에서 빼야 합니다 — 위 「한 번에 준비하기」가 해 드립니다.")}</span></div>
-      <div class="kv"><b>${copyHtml("③ 색인")}</b><span>${copyHtml("「이 노드로 지갑도 열기」를 켜 두면 여러 배 느려집니다. 급하시면 다 따라잡은 뒤에 켜셔도 됩니다.")}</span></div>
-      <p class="meta" style="margin-top:10px">${copyHtml("그리고 다 따라잡기 전에도 가게는 여실 수 있습니다 — 노드가 따라잡는 동안에는 결제가 늦게 보일 뿐입니다.")}</p>
+      <div class="kv"><b>${copyHtml("③ 색인")}</b><span>${copyHtml("「이 서버로 지갑도 열기」를 켜 두면 여러 배 느려집니다. 급하시면 다 따라잡은 뒤에 켜셔도 됩니다.")}</span></div>
+      <p class="meta" style="margin-top:10px">${copyHtml("그리고 다 따라잡기 전에도 가게는 여실 수 있습니다 — 서버가 따라잡는 동안에는 결제가 늦게 보일 뿐입니다.")}</p>
     </div>`;
 }
 
@@ -3703,7 +3760,9 @@ function bindPrep(behind: number) {
           (x: any) =>
             `<div class="kv"><b>${escapeHtml(String(x.what))}</b><span class="${
               x.ok ? "ok" : "danger"
-            }">${escapeHtml(String(x.say))}</span></div>`
+            }">${escapeHtml(String(x.say))}</span></div>${
+              x.howto ? `<p class="meta" style="margin:4px 0 8px">${escapeHtml(String(x.howto))}</p>` : ""
+            }`
         )
         .join("");
       // 🔴 우리가 **못 하는 것을 먼저** 말한다. 다 된 줄 알고 기다리는 것이
@@ -3771,10 +3830,11 @@ async function stallCard(): Promise<string> {
         <h3>${copyHtml("진행이 멈춰 있습니다")}</h3>
         <div class="kv"><b>${copyHtml("블록")}</b><span>${Number(s.blocks).toLocaleString()}</span></div>
         <div class="kv"><b>${copyHtml("안 움직인 시간")}</b><span>${Number(s.quiet_min)}${copyHtml("분")}</span></div>
-        <p class="meta">${copyHtml("확인하실 것 — ① 이 컴퓨터의 남은 디스크 공간(장부에 40GB 넘게 듭니다) ② 노드를 껐다 켜 보기. 재색인은 이어서 합니다.")}</p>
+        <p class="meta">${copyHtml("확인하실 것 — ① 이 컴퓨터의 남은 디스크 공간(장부에 40GB 넘게 듭니다) ② 서버를 껐다 켜 보기. 재색인은 이어서 합니다.")}</p>
         <div class="row" style="margin-top:10px">
-          <button class="ghost" id="nd-restart">${copyHtml("노드 껐다 켜기")}</button>
-          <button class="ghost" id="nd-log">${copyHtml("노드가 뭐 하는지 보기")}</button>
+          <button class="ghost" id="nd-restart">${copyHtml("서버 껐다 켜기")}</button>
+          <button class="ghost" id="nd-log">${copyHtml("서버가 뭐 하는지 보기")}</button>
+          <button class="ghost" id="nd-stall-report">${copyHtml("기록과 함께 알리기")}</button>
           <span class="meta" id="nd-restartsay"></span>
         </div>
         <div id="nd-logbox"></div>
@@ -3792,6 +3852,8 @@ async function stallCard(): Promise<string> {
  *    「멈춘 것 같다」까지가 우리가 말할 수 있는 전부다.
  */
 function bindLog() {
+  document.getElementById("nd-stall-report")?.addEventListener("click", () =>
+    openReport(t("서버(노드)가 켜졌는데 블록이 한참 안 움직여요."), { category: "install-run", attachLog: true }));
   const b = document.getElementById("nd-log");
   if (!b) return;
   b.addEventListener("click", async () => {
@@ -3853,7 +3915,7 @@ async function restoreCard(): Promise<string> {
         <h3>${copyHtml("메모리 되돌리기")}</h3>
         <div class="kv"><b>${copyHtml("지금")}</b><span>${now.toLocaleString()} MB</span></div>
         <div class="kv"><b>${copyHtml("되돌릴 값")}</b><span>450 MB</span></div>
-        <p class="meta">${copyHtml("다 따라잡았습니다. 이제 이만큼 필요 없습니다 — 계산대 메모리를 노드가 계속 물고 있으면 주문 화면이 느려집니다.")}</p>
+        <p class="meta">${copyHtml("다 따라잡았습니다. 이제 이만큼 필요 없습니다 — 계산대 메모리를 서버가 계속 물고 있으면 주문 화면이 느려집니다.")}</p>
         <div class="row" style="margin-top:10px">
           <button class="ghost" id="nd-back">${copyHtml("메모리 되돌리기")}</button>
           <span class="meta" id="nd-backsay"></span>
@@ -3879,7 +3941,7 @@ function bindRestore() {
         return;
       }
       const ok = await sure(
-        t("노드를 껐다 켤까요?"),
+        t("서버를 껐다 켤까요?"),
         t("그래야 적용됩니다. 그동안 결제 확인이 멈추고, 얼마나 걸릴지는 장부 크기에 따라 다릅니다.")
       );
       if (!ok) {
@@ -3912,7 +3974,7 @@ function bindSpeed() {
       say.innerHTML =
         `<span class="ok">${Number(r.set).toLocaleString()} MB ${copyHtml("로 정했습니다")}</span>`;
       const ok = await sure(
-        t("노드를 껐다 켤까요?"),
+        t("서버를 껐다 켤까요?"),
         t("그래야 적용됩니다. 재색인은 이어서 합니다 — 처음부터 다시 하지 않습니다. 몇 분 동안 결제 확인이 멈춥니다.")
       );
       if (!ok) return;
@@ -3936,7 +3998,7 @@ async function paintPartBody(): Promise<void> {
 
   try {
     if (partOpen === "node") {
-      if (title) title.textContent = "RVN 노드";
+      if (title) title.textContent = "RVN 서버";
       // 🔴 노드가 꺼져 있으면 `node_status` 가 던진다. 여태 그 영어 오류만
       //    화면에 남고 **끝이었다** — 왜 안 뜨는지도, 켜는 단추도 없었다.
       //    「.cookie 를 못 읽었습니다」는 증상이지 원인이 아니다.
@@ -3957,7 +4019,7 @@ async function paintPartBody(): Promise<void> {
         if (warming) {
           box.innerHTML =
             `<div class="card">
-               <h3>${copyHtml("노드가 시작하는 중입니다")}</h3>
+               <h3>${copyHtml("서버가 시작하는 중입니다")}</h3>
                <p class="meta">${copyHtml("장부를 확인하고 있습니다. 몇 분 걸립니다 — 그동안 아무것도 안 하셔도 됩니다.")}</p>
                <p class="meta" style="opacity:.7">${escapeHtml(msg.slice(0, 120))}</p>
              </div>`;
@@ -3981,11 +4043,11 @@ async function paintPartBody(): Promise<void> {
           box.innerHTML =
             `<div class="card" style="border-color:var(--warn)">
                <h3>${copyHtml("장부가 깨졌습니다")}</h3>
-               <p class="meta">${copyHtml("그래서 노드가 켜질 때마다 그 자리를 만나 스스로 꺼집니다. 「지금 켜기」를 눌러도 소용이 없습니다.")}</p>
+               <p class="meta">${copyHtml("그래서 서버가 켜질 때마다 그 자리를 만나 스스로 꺼집니다. 「지금 켜기」를 눌러도 소용이 없습니다.")}</p>
                <p class="meta">${copyHtml("계산을 다시 하면 고쳐집니다. 블록 파일은 그대로 쓰므로 다시 받지 않습니다 — 몇 시간 걸릴 수 있고, 그동안 컴퓨터를 켜 두시면 됩니다.")}</p>
                <div class="row" style="margin-top:12px">
                  <button id="nd-heal">${copyHtml("장부 고치기")}</button>
-                 <button class="ghost" id="nd-log">${copyHtml("노드가 뭐 하는지 보기")}</button>
+                 <button class="ghost" id="nd-log">${copyHtml("서버가 뭐 하는지 보기")}</button>
                  <span class="meta" id="nd-say"></span>
                </div>
                <div id="nd-logbox"></div>
@@ -4012,13 +4074,13 @@ async function paintPartBody(): Promise<void> {
         }
         box.innerHTML =
           `<div class="card">
-             <h3>${copyHtml("노드가 꺼져 있습니다")}</h3>
-             <p class="meta">${copyHtml("결제 확인도 색인도 이 노드가 합니다.")}</p>
+             <h3>${copyHtml("서버가 꺼져 있습니다")}</h3>
+             <p class="meta">${copyHtml("결제 확인도 색인도 이 서버가 합니다.")}</p>
              ${
                n.installed
                  ? `<p class="meta">${copyHtml("프로그램은 있습니다")} — <code class="addr">${escapeHtml(String(n.path || ""))}</code></p>
                     <button id="nd-go" style="margin-top:12px">${copyHtml("지금 켜기")}</button>`
-                 : `<p class="meta" style="color:var(--warn)">${copyHtml("노드 프로그램을 찾지 못했습니다.")}</p>
+                 : `<p class="meta" style="color:var(--warn)">${copyHtml("서버 프로그램을 찾지 못했습니다.")}</p>
                     <p class="meta">${escapeHtml(String(n.install || ""))}</p>` +
                    (looked.length
                      ? `<details style="margin-top:10px"><summary class="meta">${copyHtml("어디를 봤는지 보기")}</summary>
@@ -4032,8 +4094,24 @@ async function paintPartBody(): Promise<void> {
         const go = document.getElementById("nd-go");
         if (go) {
           go.addEventListener("click", async () => {
+            if (!(await diskOkToStart())) return;
             (go as HTMLButtonElement).disabled = true;
             setCopyText($("nd-say"), () => t("켜는 중…"));
+            // 60초가 넘도록 안 끝나면 앱이 먼저 「기록과 함께 알리기」 를 내민다.
+            // 사장이 원인을 찾아 헤매지 않게 — 원인은 서버 기록에만 있는 경우가 많다.
+            const stuckTimer = setTimeout(() => {
+              if (document.getElementById("nd-stuck")) return;
+              const say = document.getElementById("nd-say");
+              if (!say) return;
+              const sb = document.createElement("button");
+              sb.id = "nd-stuck";
+              sb.className = "ghost";
+              sb.style.marginTop = "10px";
+              sb.textContent = t("노드가 안 켜졌어요. 기록과 함께 알리기");
+              sb.addEventListener("click", () =>
+                openReport(t("서버(노드)가 60초가 넘도록 안 켜져요."), { category: "install-run", attachLog: true }));
+              say.insertAdjacentElement("afterend", sb);
+            }, 60_000);
             try {
               const r = await invoke<any>("services_start");
               // 🔴 못 켠 이유를 **그대로 보여 준다.** 레이븐 코어가 켜져 있어서
@@ -4045,6 +4123,10 @@ async function paintPartBody(): Promise<void> {
               setCopyText($("nd-say"), () => why || t("켰습니다. 잠시 뒤 다시 봐 주세요."));
             } catch (e) {
               $("nd-say").textContent = String((e as Error)?.message || e);
+            } finally {
+              // 호출이 끝났으면(켜졌든 실패했든) 단추를 치운다.
+              clearTimeout(stuckTimer);
+              document.getElementById("nd-stuck")?.remove();
             }
             setTimeout(() => void paintPart(), 3000);
           });
@@ -4075,7 +4157,7 @@ async function paintPartBody(): Promise<void> {
             [t("블록"), Number(s?.blocks ?? 0).toLocaleString()],
             // 판을 숨기지 않는다. 못 읽었으면 못 읽었다고 적는다.
             [
-              t("노드 판"),
+              t("서버 판"),
               nv?.line
                 ? String(nv.line).replace(/^.*?(v[0-9].*)$/, "$1") +
                   (nv.ok === false ? ` ⚠️` : "")
@@ -4107,20 +4189,20 @@ async function paintPartBody(): Promise<void> {
               )
             : behind > 0
               ? t("따라잡는 동안에는 방금 들어온 결제가 늦게 보입니다.")
-              : t("이 컴퓨터가 체인을 통째로 들고 있습니다. 남에게 묻지 않습니다."),
+              : t("이 컴퓨터가 공개 장부를 통째로 들고 있습니다. 남에게 묻지 않습니다."),
         ) +
         // 🔴 못 따라잡는 판이면 **제일 먼저** 말한다. 며칠 기다린 뒤에
         //    알게 되면 그 며칠이 통째로 버려진다.
         (nv?.ok === false
           ? `<div class="card" style="margin-top:12px;border-color:var(--danger)">
-               <h3>${copyHtml("이 노드 판으로는 끝까지 못 갑니다")}</h3>
+               <h3>${copyHtml("이 서버 판으로는 끝까지 못 갑니다")}</h3>
                <p class="meta">${escapeHtml(String(nv?.say || ""))}</p>
                <p class="meta"><code class="addr">${escapeHtml(String(nv?.path || ""))}</code></p>
              </div>`
           : "") +
         (behind > 0 ? await stallCard() : "") + slowCard(behind, rate) + prepCard(behind) +
         (behind > 0 ? await speedCard() : await restoreCard()) + (await indexCard()) +
-        goto("settings", t("노드 설정 열기"));
+        goto("settings", t("서버 설정 열기"));
       bindSpeed();
       bindRestore();
       bindRestart();
@@ -4153,7 +4235,7 @@ async function paintPartBody(): Promise<void> {
               t("켜려면 두 가지가 필요합니다 — 캐는 프로그램(kawpowminer)과 받을 주소.")
         ) + goto("settings", t(on ? "채굴 설정 열기" : "채굴 켜는 곳으로"));
     } else if (partOpen === "ipfs") {
-      if (title) title.textContent = "파일창고 (IPFS)";
+      if (title) title.textContent = "사진 보관함";
       const s = await invoke<any>("ipfs_status");
       box.innerHTML = !s?.running
         ? card([[t("지금"), t("꺼져 있습니다")]], t("사진과 메뉴판이 여기 들어갑니다. 꺼져 있으면 손님이 사진을 못 봅니다.")) +
@@ -4164,7 +4246,7 @@ async function paintPartBody(): Promise<void> {
               [t("지키는 파일"), `${pinned.size.toLocaleString()}${t("개")}`],
               [t("판"), String(s.version || "—").slice(0, 22)],
             ],
-            t("내 컴퓨터에만 있는 창고가 아니라, 손님 폰과 다른 노드가 같이 나눠 갖는 곳입니다.")
+            t("내 컴퓨터에만 있는 창고가 아니라, 손님 폰과 다른 서버가 같이 나눠 갖는 곳입니다.")
           ) +
           /* 🔴 **서로 보완하는 자리.** 대표님: "탈중앙인데 서로가 보완해
              가면서 가는 구조가 좋은데 말야. 내 406호 컴퓨터와 내 맥북이
@@ -4330,7 +4412,7 @@ function bindIndexCard(): void {
     now.onclick = async () => {
       if (!confirm("지금 시작하면 몇 시간 동안 입금 확인이 멈춥니다. 시작할까요?")) return;
       now.disabled = true;
-      say("노드를 다시 띄우는 중입니다…");
+      say("서버를 다시 띄우는 중입니다…");
       try {
         await invoke("reindex_start");
         say("시작했습니다. 이 화면에서 진행을 보실 수 있습니다.");
@@ -4391,7 +4473,7 @@ async function indexCard(): Promise<string> {
   }
   if (st.done) {
     return card([[t("주소 색인"), t("켜져 있습니다")]],
-      t("이 노드가 손님 지갑의 잔액 질문에 직접 답합니다. 남의 서버에 안 묻습니다."));
+      t("이 서버가 손님 지갑의 잔액 질문에 직접 답합니다. 남의 서버에 안 묻습니다."));
   }
 
   const now = Math.floor(Date.now() / 1000);
@@ -4419,7 +4501,7 @@ async function indexCard(): Promise<string> {
     can = true;
   }
   return `<div class="card">
-      <b>${copyHtml("주소 색인 — 이 노드로 지갑도 열기")}</b>
+      <b>${copyHtml("주소 색인 — 이 서버로 지갑도 열기")}</b>
       <p class="meta" style="margin-top:8px">${copyHtml("지금은 손님 지갑이 잔액을 우리 서버 한 곳에 묻습니다. 이걸 켜면 이 컴퓨터가 직접 답합니다. 대신 한 번 다시 훑어야 하고, 그동안 입금 확인이 멈춥니다.")}</p>
       <p class="meta" style="margin-top:8px"><b>${escapeHtml(say)}</b></p>
       ${can ? `<label style="display:flex;align-items:center;gap:10px;margin-top:12px;cursor:pointer">
@@ -4510,8 +4592,8 @@ async function paintOwed() {
       return;
     }
     box.style.display = "";
-    $("fee-owed").textContent = `${owed.toFixed(8).replace(/0+$/, "").replace(/\.$/, "")} RVN`;
-    $("fee-sent").textContent = `${sent.toFixed(8).replace(/0+$/, "").replace(/\.$/, "")} RVN`;
+    $("fee-owed").textContent = fmtRvn(owed);
+    $("fee-sent").textContent = fmtRvn(sent);
     const btn = $("fee-send") as HTMLButtonElement;
     // 🔴 못 보내는 이유를 눌러 보고 알게 하지 않는다. 미리 말한다.
     btn.disabled = !o.ready || owed < 0.01;
@@ -4543,6 +4625,19 @@ async function sendOwed() {
 
 /** 지금 열려 있는 화면. 끌어다 놓기가 **자리마다 다르게** 굴려면 필요하다. */
 let currentPage = "home";
+/** 판매자 기능(게임 판매 대금 받기). 기본 꺼짐 — 켜면 판매 메뉴·바로가기가 나타난다. 이 컴퓨터에만 저장. */
+const SELLER_MODE_KEY = "rv-seller-mode";
+function sellerModeOn(): boolean { try { return localStorage.getItem(SELLER_MODE_KEY) === "1"; } catch { return false; } }
+function applySellerMode() {
+  const on = sellerModeOn();
+  document.querySelectorAll<HTMLElement>("[data-seller-only]").forEach(el => {
+    el.hidden = !on;
+    if (on) el.removeAttribute("inert"); else el.setAttribute("inert", "");
+  });
+  const box = document.getElementById("seller-mode") as HTMLInputElement | null;
+  if (box) box.checked = on;
+  if (!on && (currentPage === "sales" || currentPage === "creator" || currentPage === "market" || currentPage === "devices" || currentPage === "bulk")) showPage("settings");
+}
 let lastReceivedHomeTx: string | null = null;
 
 async function paintProfile(): Promise<void> {
@@ -4564,12 +4659,12 @@ async function paintProfile(): Promise<void> {
   }
   $("rv-profile-face").replaceChildren(raviFace(raviState, 116, { round: true }));
   applyRaviCharacter();
-  ($("rv-profile-color") as HTMLInputElement).value = localStorage.getItem("rv-profile-color") || "#EFEAF8";
   try {
     const me = await invoke<any>("talk_me");
     const key = String(me.pubkey || "");
     const profiles = await invoke<any>("talk_profiles", { pubkeys: [key] });
     ($("rv-profile-name") as HTMLInputElement).value = String(profiles?.[key]?.name || "");
+    setMyTalkName(String(profiles?.[key]?.name || ""));
   } catch { /* Profile name can be set while relays are unavailable. */ }
 }
 
@@ -4687,87 +4782,114 @@ async function loadGroup(): Promise<void> {
   });
 }
 
-/// 0.6.0-A2 — 홈의 「오늘 가게」 카드. 가게를 만든 사람에게만 보인다.
+/// 홈의 「오늘 가게」 카드. 가게 없음과 조회 실패도 명시한다.
 /// 이미 있는 장부(ledger_range·ledger_pending)와 새 주문 숫자만 읽는다 — 새 계산·새 저장 없음.
-/// 발송·환불·공동구매 줄은 그 기능이 생길 때 여기에 더한다(RV7 §14.3-1).
+/// 발송·환불·공동구매의 상세 내역은 「더 보기」의 가게 화면에서 확인한다.
 let homeTodaySeq = 0;
+let homePendingOrders: any[] = [];
+/** 홈 카드의 「입금 대기」 줄 — 0건이면 누를 수 없는 줄, 못 읽었으면 매출 화면으로, 있으면 목록 시트. */
+function pendingRow(pend: any): string {
+  if (!pend) return `<button type="button" class="rv-home-entry rv-home-pending" data-pend="sales"><span>${escapeHtml(t("입금 대기"))}</span><b>${escapeHtml(t("확인 못 함"))}</b></button>`;
+  const n = Number(pend.count || 0);
+  if (!n) return `<div class="rv-home-entry"><span>${escapeHtml(t("입금 대기"))}</span><b>0</b></div>`;
+  return `<button type="button" class="rv-home-entry rv-home-pending" data-pend="list" aria-haspopup="dialog"><span>${escapeHtml(t("입금 대기"))}</span><b>${n}</b></button>`;
+}
+/** 입금 대기 주문 목록. 칸은 ledger_pending 이 주는 것만: items·krw+currency·rvn·table·quoted_at. */
+function openPendingSheet(): void {
+  const list = [...homePendingOrders].sort((a, b) => Number(b?.quoted_at || 0) - Number(a?.quoted_at || 0));
+  $("ps-list").innerHTML = list.length ? list.map((o) => {
+    const its = Array.isArray(o?.items) ? o.items : [];
+    const what = its.map((i: any) => `${String(i?.name || "")}${Number(i?.qty) > 1 ? " × " + Number(i.qty) : ""}`).filter(Boolean).join(" / ") || t("주문");
+    const cur = o?.currency ? " " + String(o.currency) : "";
+    const amount = o?.krw != null ? fmtRvn(Number(o.krw), { code: "", maxFraction: String(o?.currency || "") === "RVN" ? 8 : 2 }) + cur : "";
+    const rvn = o?.rvn != null && Number(o.rvn) > 0 ? fmtRvn(Number(o.rvn), { code: "", maxFraction: 8 }) + " RVN" : "";
+    const at = Number(o?.quoted_at || 0);
+    const old = at > 0 && Date.now() / 1000 - at > 86400; // 장부가 하루 지난 대기 주문을 버리는 기준과 같다
+    const table = o?.table ? ` · ${t("테이블")} ${String(o.table)}` : "";
+    return `<div class="rv-home-entry rv-pend-item"><span class="rv-home-tx-main"><span translate="no">${escapeHtml(what)}</span><small>${escapeHtml(at > 0 ? ago(at) : "")}${escapeHtml(table)}${old ? " · " + escapeHtml(t("오래 기다림")) : ""}</small><small>${escapeHtml(t("손님이 보내기로 한 RVN 입금이 아직 확인되지 않았습니다"))}</small></span><strong>${escapeHtml(amount)}${rvn ? `<small>${escapeHtml(rvn)}</small>` : ""}</strong></div>`;
+  }).join("") : `<p>${escapeHtml(t("입금 대기가 없습니다"))}</p>`;
+  $("pendsheet").classList.remove("hidden");
+  ($("ps-cancel") as HTMLButtonElement).focus();
+}
+function closePendingSheet(): void { $("pendsheet").classList.add("hidden"); }
+function goHomeSales(): void { showPage("shop"); shopTab(안본주문 > 0 ? "orders" : "sales"); }
 async function paintHomeToday(): Promise<void> {
   const box = document.getElementById("rv-home-today");
   const body = document.getElementById("rv-home-today-body");
   if (!box || !body) return;
   const seq = ++homeTodaySeq; // 늦게 끝난 옛 호출이 새 숫자를 덮지 않게
   try {
-    const sh = await invoke<any>("shop_load").catch(() => null);
+    const sh = await invoke<any>("shop_load");
     // 가게 유무는 기존 코드와 같은 기준(이름이 있는가)으로 판정한다.
-    if (!sh || !(sh.name || sh.name_en)) { if (seq === homeTodaySeq) box.hidden = true; return; }
+    if (!sh || !(sh.name || sh.name_en)) { if (seq === homeTodaySeq) { box.hidden = true; body.innerHTML = `<p>${copyHtml("아직 가게가 없습니다")}</p>`; } return; }
     const ymd = todayYmd();
     const r: any = await invoke("ledger_range", { fromYmd: ymd, toYmd: ymd, tzOffsetMin: tzMin() });
     const pend: any = await invoke("ledger_pending").catch(() => null);
-    const gb: any = await invoke("gb_overview", { todayYmd: ymd, nowUnix: Math.floor(Date.now() / 1000) }).catch(() => null);
     if (seq !== homeTodaySeq) return;
-    // 공동구매가 있을 때만 두 줄(RV7 §17.2): 가게 사정 환불, 결제 차례를 알릴 분. 발송할 것은 배달하는 가게만.
-    const gbItems: any[] = gb?.items || [];
-    const offered = gbItems.reduce((n, it) => n + (it.waiting || []).filter((w: any) => w.state === "offered").length, 0);
-    const gbLine = (label: string) => `<div class="rv-home-entry"><span>${escapeHtml(label)}</span><b></b></div>`;
-    const gbRows = gbItems.length
-      ? (Number(gb.refund_due) > 0 ? gbLine(tf("환불 대기(가게 사정) {0}건", gb.refund_due)) : "") +
-        (offered > 0 ? gbLine(tf("결제 차례를 알릴 분 {0}명", offered)) : "") +
-        (sh.delivery && Number(gb.to_ship) > 0 ? gbLine(tf("송장 넣을 주문 {0}건", gb.to_ship)) : "")
-      : "";
+    homePendingOrders = pend && Array.isArray(pend.orders) ? pend.orders : [];
     // 🔴 통화가 섞였거나 못 읽은 줄이 있으면 합계를 확정 금액처럼 보이지 않는다(매출 화면과 같은 기준).
     const doubtful = !!r?.mixed_currency || !!r?.unreadable_rows;
     const cur = r?.currency ? " " + String(r.currency) : "";
     const money = doubtful
       ? t("매출 화면에서 확인")
-      : Number(r?.total || 0).toLocaleString(lang, { maximumFractionDigits: 2 }) + cur;
+      : fmtRvn(Number(r?.total || 0), { code: "", maxFraction: String(r?.currency || "") === "RVN" ? 8 : 2 }) + cur;
     const row = (label: string, value: string) =>
       `<div class="rv-home-entry"><span>${escapeHtml(label)}</span><b>${escapeHtml(value)}</b></div>`;
     body.innerHTML =
       row(t("오늘 받은 금액"), money) +
-      row(tf("판매 {0}건", Number(r?.sales || 0)), "") +
-      row(tf("안 본 새 주문 {0}건", 안본주문), "") +
-      row(tf("입금 대기 {0}건", Number(pend?.count || 0)), "") +
-      gbRows;
+      row(t("판매"), String(Number(r?.sales || 0))) +
+      row(t("새 주문"), String(안본주문)) +
+      pendingRow(pend);
     box.hidden = false;
   } catch {
-    // 장부를 못 읽었으면 조용히 접는다. 없는 숫자를 지어내지 않는다.
-    if (seq === homeTodaySeq) box.hidden = true;
+    // 조회 실패를 빈 가게나 매출 0으로 표시하지 않는다.
+    if (seq === homeTodaySeq) { box.hidden = false; body.innerHTML = `<p>${copyHtml("가게 상태를 확인하지 못했습니다. 더 보기에서 다시 확인하세요.")}</p>`; }
+  }
+}
+
+let homeSafetySeq = 0;
+async function paintHomeSafety(): Promise<void> {
+  const seq = ++homeSafetySeq;
+  const [lock, backup] = await Promise.allSettled([invoke<any>("wallet_lock_state"), invoke<any>("backup_survey")]);
+  if (seq !== homeSafetySeq) return;
+  const summary = homeSafety(lock.status === "fulfilled" ? lock.value : null, backup.status === "fulfilled" ? backup.value : null, latestAutomaticBackupIssue);
+  for (const key of ["lock", "backup"] as const) {
+    const el = $(key === "lock" ? "rv-home-lock-state" : "rv-home-backup-state");
+    el.textContent = t(summary[key].label);
+    el.dataset.tone = summary[key].tone;
   }
 }
 
 async function paintHome(): Promise<void> {
   void refreshOverview();
-  const safe = document.getElementById("rv-home-safe");
-  if (safe) safe.textContent = nodeUp ? t("노드와 연결됨") : t("노드 상태를 확인하세요");
+  void paintHomeSafety();
+  chainInfo?.paintHome();
   try {
-    const recent: unknown = await invoke("recent_transactions", { count: 4 }).catch(() => null);
-    const txs: any[] = (Array.isArray(recent) && recent.length ? recent : await 최근거래_모아읽기(4))
+    const recent: unknown = await invoke("recent_transactions", { count: 3 }).catch(() => null);
+    const txs: any[] = (Array.isArray(recent) && recent.length ? recent : await 최근거래_모아읽기(3))
       .sort((a, b) => Number(b?.time || 0) - Number(a?.time || 0));
     const received = txs.find(tx => tx.category === "receive");
     if (received?.txid && lastReceivedHomeTx && received.txid !== lastReceivedHomeTx) {
-      setAllRaviMood("surprised");
-      setTimeout(() => setAllRaviMood(aiProvider ? "normal" : "sleep"), 1300);
+      emitRaviEvent("deposit_seen");
     }
     if (received?.txid) lastReceivedHomeTx = String(received.txid);
-    $("rv-home-txs").innerHTML = txs.map(tx => {
+    $("rv-home-txs").innerHTML = txs.slice(0, 3).map(tx => {
       const received = tx.category === "receive";
       const amount = Number(tx.amount || 0);
       const checks = Math.max(0, Number(tx.confirmations || 0));
       const state = checks >= 6 ? t("확인 완료") : tf("확인 중 {0}/6", checks);
       const when = Number(tx.time) > 0 ? new Date(Number(tx.time) * 1000).toLocaleString(lang, { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" }) : "";
-      return `<div class="rv-home-entry"><span class="rv-home-icon ${received ? "receive" : "send"}" aria-hidden="true">${received ? "↓" : "↑"}</span><span class="rv-home-tx-main">${copyHtml(received ? "받음" : "보냄")} · ${escapeHtml(String(tx.asset_name || "RVN"))}<small>${escapeHtml(when)} · ${escapeHtml(state)}</small></span><strong class="${received ? "ok" : ""}">${received ? "+" : "−"}${escapeHtml(Math.abs(amount).toLocaleString(lang))}</strong></div>`;
+      return `<div class="rv-home-entry"><span class="rv-home-icon ${received ? "receive" : "send"}" aria-hidden="true">${received ? "↓" : "↑"}</span><span class="rv-home-tx-main">${copyHtml(received ? "받음" : "보냄")} · ${escapeHtml(String(tx.asset_name || "RVN"))}<small>${escapeHtml(when)} · ${escapeHtml(state)}</small></span><strong class="${received ? "ok" : ""}">${received ? "+" : "−"}${escapeHtml(fmtRvn(Math.abs(amount), { code: "" }))}</strong></div>`;
     }).join("") || `<p>${copyHtml("최근 거래가 없습니다")}</p>`;
   } catch { $("rv-home-txs").textContent = t("거래 내역을 읽지 못했습니다"); }
   void paintHomeToday();
-  try {
-    const rooms: any[] = await invoke("talk_rooms");
-    $("rv-home-rooms").innerHTML = `<div class="rv-home-entry">${copyHtml("라비")} · ${copyHtml("AI 도우미")}</div>` +
-      (Array.isArray(rooms) ? rooms.slice(0, 3).map(room => `<div class="rv-home-entry" translate="no">${escapeHtml(String(room.name || ""))}</div>`).join("") : "");
-  } catch { $("rv-home-rooms").textContent = t("대화를 읽지 못했습니다"); }
 }
 
 /** 「만들기」 화면 들어가기 — 화면이 준비되면 채운다. */
 let createApi: CreateApi | undefined;
+let chainInfo: ReturnType<typeof wireChainInfoLazy> | undefined;
+/** 끌어놓기 발행(판매자 기능). */
+let dropPublish: ReturnType<typeof wireDropPublish> | undefined;
 
 /// 0.6.0 — 왼쪽 메뉴 「더 보기」. 늘 보이는 것은 홈·라비·자산 셋이다(지갑·돕기 모드는 그 화면이 셋 자리에 든다).
 /// - 접힌 안의 화면을 열면(라비가 데려가도) showPage 가 펼친다 — 지금 어디 있는지 사라지면 안 된다.
@@ -4806,7 +4928,16 @@ function setupNavMore() {
   sync();
 }
 
+/** 가게 번호 — 「기기 연결」 화면의 「가게 문서 만들기」로 이 기기에 저장한 가게 문서(rev 0)의 번호. 문서가 없거나 지금 가게 키와 다르면 null → 기기 발급 닫힘. */
+const storeDocId = async (): Promise<string | null> => { try { return await (await import("./store-doc-ui")).savedStoreId((cmd, args) => invoke(cmd, args)); } catch { return null; } };
+let salesAccount: ReturnType<typeof wireSalesAccount> | undefined;
+let deviceScreen: ReturnType<typeof import("./device-connect").mountDeviceScreen> | undefined;
+let bulkScreen: ReturnType<typeof import("./bulk-products-ui").mountBulkScreen> | undefined;
+
 function showPage(id: string) {
+  // 판매자 기능이 꺼져 있으면 판매 화면은 열리지 않는다(메뉴가 숨겨진 것만으로는 부족하다).
+  if ((id === "sales" || id === "creator" || id === "market" || id === "devices" || id === "bulk") && !sellerModeOn()) return;
+  if (id !== currentPage) salesAccount?.hide();
   // 🔴 화면을 떠나면 그 화면 때문에 도는 타이머를 끈다.
   //
   //    「부품」 화면을 한 번 열었다가 지갑으로 나가면, **앱을 끌 때까지**
@@ -4827,13 +4958,16 @@ function showPage(id: string) {
 
   if (currentPage !== id) {
     document.querySelectorAll<HTMLInputElement>('#keyrows input[type="password"], #cu-key, #ravi-key-input').forEach(input => { input.value = ""; });
-    if (currentPage === "ravi") closeKeyCard();
+    if (currentPage === "ravi" || currentPage === "home") closeKeyCard();
   }
   currentPage = id;
+  rememberCompanionPage(id);
+  raviHome?.page(id);
   document.body.classList.toggle("rv-talk-layout", id === "talk");
-  if (id === "ravi") paintRavi();
+  if (id === "ravi" || id === "home") paintRavi();
   if (id === "home") void paintHome();
   if (id === "profile") void paintProfile();
+  if (id === "chain") chainInfo?.enter();
   paintPageTiles(id);
   document.querySelectorAll(".page").forEach((p) => p.classList.toggle("on", p.id === `page-${id}`));
   document.querySelectorAll("nav a").forEach((a) =>
@@ -4864,6 +4998,16 @@ function showPage(id: string) {
   }
   if (id === "reward") void loadReward();
   if (id === "create") createApi?.enter();
+  // 판매자 화면 둘 — 처음 열 때 따로 내려받아 그린다(시작 번들에 넣지 않는다). 다시 열면 새로 읽는다.
+  if (id === "devices") void import("./device-connect").then(({ mountDeviceScreen, pairingQr, tauriStoreKey, tauriDisconnect, tauriLanPair }) => { if (!deviceScreen) deviceScreen = mountDeviceScreen($("page-devices"), { qr: pairingQr((cmd, args) => invoke(cmd, args)), storeKey: tauriStoreKey((cmd, args) => invoke(cmd, args), storeDocId), disconnect: tauriDisconnect((cmd, args) => invoke(cmd, args)), lanPair: tauriLanPair((cmd, args) => invoke(cmd, args)),
+    confirm: (title, message, okLabel) => sure(title, message, okLabel ?? t("끊기")) }); else deviceScreen.enter(); }).catch((e) => console.warn("device-connect load failed", e));
+  if (id === "bulk") void Promise.all([import("./bulk-products-ui"), import("./device-connect")]).then(async ([{ mountBulkScreen, storeKeyBulkPublisher }, { tauriStoreKey }]) => {
+    if (bulkScreen) { bulkScreen.enter(); return; }
+    // 서명 길만 잇는다. 올리기 잠금(CREATOR_PUBLISH_PAUSED)은 그대로 — 잠겨 있으면 서명도 하지 않는다.
+    const key = tauriStoreKey((cmd, args) => invoke(cmd, args), storeDocId, "상품 대량 등록 서명");
+    const connected = await key.info().then(i => !!i, () => false);
+    bulkScreen = mountBulkScreen($("page-bulk"), { publisher: storeKeyBulkPublisher(key, undefined, connected) });
+  }).catch((e) => console.warn("bulk-products-ui load failed", e));
   if (id === "artist") void artistLoad();
   // 🔴 **여태 모드를 바꿀 때만 그렸다.** 메뉴로 「돕는 중」에 다시 들어오면
   //    빈 화면이었다 — 8초 타이머가 도는 동안만 채워지고, 장사 모드에서는
@@ -4899,19 +5043,20 @@ function showPage(id: string) {
 }
 
 /* ── 지갑 ─────────────────────────────────────────────────── */
+let walletWasLocked: boolean | null = null;
 async function loadWallet() {
   // 주인 표 줄은 따로 읽는다 — 느려도 잔액·잠금이 기다리지 않게.
   void paintOwners();
   try {
     const b: any = await invoke("wallet_balance");
-    $("w-confirmed").textContent = `${b.confirmed.toLocaleString(undefined, { maximumFractionDigits: 8 })} RVN`;
+    $("w-confirmed").textContent = fmtRvn(b.confirmed);
     // Unconfirmed money is shown apart from spendable money on purpose: a shop
     // that ships on an unconfirmed payment can be paid with one that never lands.
     // 🔴 0.4.8-B — 「확인 대기 중」은 처음 쓰는 사람에게 「내 돈인지 아닌지」가 안 읽혔다(RV3 T04).
     //    「들어오는 중」으로 부르고, 언제 쓸 수 있게 되는지 한 줄을 붙인다. 합치지는 않는다.
     const incoming = Number(b.unconfirmed) > 0;
     setCopyText($("w-unconfirmed"), () => incoming
-      ? `${t("들어오는 중")} ${b.unconfirmed.toLocaleString(lang, { maximumFractionDigits: 8 })} RVN`
+      ? `${t("들어오는 중")} ${fmtRvn(b.unconfirmed)}`
       : "");
     $("w-incoming-note").hidden = !incoming;
   } catch (e) {
@@ -4931,6 +5076,15 @@ async function loadWallet() {
       rx="2"/><path d="M8 11V7a4 4 0 0 1 7.5-2"/></svg>`;
 
     const l: any = await invoke("wallet_lock_state");
+    const locked = !!l.encrypted && !l.unlocked;
+    if (locked && walletWasLocked === false) {
+      document.querySelectorAll<HTMLInputElement>('input[type="password"]').forEach((input) => { input.value = ""; });
+    }
+    walletWasLocked = locked;
+    if (sendPreview) {
+      $("r-passbox").style.display = locked ? "" : "none";
+      gateSend();
+    }
     const enc = $("w-enc") as HTMLButtonElement;
     const lockNow = $("w-lock-now") as HTMLButtonElement;
 
@@ -4998,7 +5152,7 @@ async function loadWallet() {
             ${addrLine}${noteLine}
             <div class="meta">${when}</div>
           </td>
-          <td class="num ${incoming ? "ok" : "danger"}">${amt.toLocaleString(undefined, { maximumFractionDigits: 8 })}</td>
+          <td class="num ${incoming ? "ok" : "danger"}">${fmtRvn(amt, { code: "" })}</td>
           <td class="num">${t.confirmations ?? 0}</td>
         </tr>`;
       })
@@ -5069,7 +5223,7 @@ async function openReceive(fresh = false) {
   const addr = String(r?.address ?? "").trim();
   // 🔴 노드가 「이 지갑 것」이라고 한 것만 보여 준다. 모양이 이상하거나 확인이 없으면 안 그린다.
   if (!looksLikeAddress(addr) || r?.mine !== true) {
-    host.innerHTML = `<div class="warnbox">${copyHtml("노드가 이 주소를 이 지갑의 받는 주소로 확인해 주지 않았어요. 보여 드리지 않을게요.")}</div>`;
+    host.innerHTML = `<div class="warnbox">${copyHtml("서버가 이 주소를 이 지갑의 받는 주소로 확인해 주지 않았어요. 보여 드리지 않을게요.")}</div>`;
     return;
   }
   host.innerHTML = receiveHtml(addr, r?.reused === true, copyHtml, escapeHtml);
@@ -5133,13 +5287,13 @@ async function checkWhose(raw?: string) {
   try {
     const r = await invoke<WhoseResult | null>("addr_whose", { address: text });
     if (seq !== whoseSeq) return;          // 그사이 다른 주소를 넣었다 — 옛 답을 그리지 않는다
-    if (!r || typeof r !== "object" || !r.state) throw new Error(t("노드가 답하지 않았어요."));
+    if (!r || typeof r !== "object" || !r.state) throw new Error(t("서버가 답하지 않았어요."));
     whoseLast = r;
     out.innerHTML = whoseHtml(r);
   } catch (e) {
     if (seq !== whoseSeq) return;
     whoseLast = null;
-    out.innerHTML = `<div class="warnbox">${copyHtml("노드에 묻지 못했어요.")} ${escapeHtml(errText(e))}</div>`;
+    out.innerHTML = `<div class="warnbox">${copyHtml("서버에 묻지 못했어요.")} ${escapeHtml(errText(e))}</div>`;
   }
 }
 
@@ -5178,11 +5332,11 @@ const raviWhoseSaid: { box: HTMLElement; r: WhoseResult }[] = [];
  * (라비 첫 화면의 `do` 칸과 같은 원칙 — 열쇠 없이 되는 일은 AI 를 거치지 않는다.)
  */
 async function raviWhose(address: string) {
-  chatHtml("ai", `<span class="muted" data-thinking="1">${copyHtml("노드에 묻는 중…")}</span>`);
+  chatHtml("ai", `<span class="muted" data-thinking="1">${copyHtml("서버에 묻는 중…")}</span>`);
   try {
     const r = await invoke<WhoseResult | null>("addr_whose", { address });
     chatPopThinking();
-    if (!r || typeof r !== "object" || !r.state) throw new Error(t("노드가 답하지 않았어요."));
+    if (!r || typeof r !== "object" || !r.state) throw new Error(t("서버가 답하지 않았어요."));
     chatHtml("ai", whoseHtml(r, "ravi"));
     const box = $("chat-log").lastElementChild?.querySelector<HTMLElement>(".msgtxt");
     if (box) {
@@ -5191,7 +5345,7 @@ async function raviWhose(address: string) {
     }
   } catch (e) {
     chatPopThinking();
-    chatHtml("ai", `<span class="warn">${copyHtml("노드에 묻지 못했어요.")} ${escapeHtml(errText(e))}</span>`);
+    chatHtml("ai", `<span class="warn">${copyHtml("서버에 묻지 못했어요.")} ${escapeHtml(errText(e))}</span>`);
   }
 }
 
@@ -5282,6 +5436,10 @@ function dropJob(): DropJob {
         why: t("PDF·한글·워드·사진 파일을 놓으면 지문만 만들어 적어요. 파일은 어디에도 올리지 않아요."),
         ok: true,
       };
+    case "creator":
+      // 끌어놓기 발행: 놓기만 하면 상품 미리보기가 만들어진다(아직 아무 데도 안 올린다 — 「발행」을 눌러야 올라간다).
+      if (dropPublish && $("page-creator").dataset.mode !== "wizard") return dropPublish.overlayCopy();
+      return { title: t("여기서는 받지 않습니다"), why: t("「끌어놓기 화면으로」를 누른 뒤 놓아 주세요."), ok: false };
     case "talk":
       return {
         title: t("사진을 글에 붙입니다"),
@@ -5293,7 +5451,7 @@ function dropJob(): DropJob {
     case "shop":
       return {
         title: t("가게 사진으로 씁니다"),
-        why: t("가게 정보에 붙습니다. 체인은 안 건드리므로 값이 들지 않습니다."),
+        why: t("가게 정보에 붙습니다. 공개 장부는 안 건드리므로 값이 들지 않습니다."),
         ok: true,
       };
     default:
@@ -5346,8 +5504,20 @@ function looksLikeImage(path: string): boolean {
 
 async function onDropped(paths: string[]) {
   dropVeil(false);
+  // 0.9.0 — 백업 파일(.pxlock·.rvwallet)은 어느 화면에서든 확장자로 먼저 가른다. 섞여 있어도 자산 흐름으로
+  //    넘기지 않는다(src/backup-drop-route.ts). 확인 창만 열고, 바꾸는 것은 확인 뒤 Rust(restore_drop.rs).
+  if (routeBackupDrop(paths)) return;
   const j = dropJob();
   if (!j.ok || !paths.length) return;
+
+  // 0.8.8a — 「원본 파일 대조하기」를 누른 뒤 1분 안에 놓은 파일은 진짜인지 확인에만 쓴다(src/asset-keep.ts).
+  if (keep.acceptsDrop()) { await keep.handleDrop(paths); return; }
+
+  // 끌어놓기 발행 화면: 놓은 파일·폴더를 그대로 상품으로(러스트가 「방금 놓은 것」만 읽는다 — drop_publish.rs).
+  if (currentPage === "creator") {
+    if (dropPublish && $("page-creator").dataset.mode !== "wizard") await dropPublish.dropPaths(paths);
+    return;
+  }
 
   const vids = paths.filter((p) => /\.(mp4|mov|avi|mkv|webm|m4v)$/i.test(p));
   const files = paths.filter(looksLikeImage);
@@ -5391,6 +5561,15 @@ async function onDropped(paths: string[]) {
       const 이름 = docs[0].split(/[\\/]/).pop() || "";
       if (await sure(t("이 문서로 증명서 만들기"), `${tf("「{0}」의 지문만 만들어 증명서에 적어요. 파일은 어디에도 올리지 않아요.", 이름)}\n${t(FINGERPRINT_GUESS)}`, t("이 문서로 증명서 만들기"))) {
         await certificateFromDropped(docs[0]);
+      }
+      return;
+    }
+    // 판매자 기능이 켜져 있으면 「상품으로 올리기」를 한 번 여쭌다(자동으로 올리지 않는다 — 미리보기만 만든다).
+    if (sellerModeOn() && dropPublish) {
+      if (await sure(t("이 파일로 상품을 만들까요?"), t("「내 상품 올리기」에서 미리보기를 만들어요. 「발행」을 누르기 전에는 아무 데도 올리지 않아요."), t("상품 만들기"))) {
+        showPage("creator");
+        $("page-creator").dataset.mode = "drop";
+        await dropPublish.dropPaths(paths);
       }
       return;
     }
@@ -5489,7 +5668,7 @@ async function paintKeyMove() {
      <div class="kv"><b>${copyHtml("지금 열쇠")}</b><span><code class="addr">${escapeHtml(String(p.now_pubkey || "").slice(0, 16))}…</code></span></div>
      <div class="kv"><b>${copyHtml("새 열쇠")}</b><span><code class="addr">${escapeHtml(String(p.new_pubkey || "—").slice(0, 16))}…</code> ${copyHtml("(12단어에서)")}</span></div>
      <div class="kv"><b>${copyHtml("지금 수량")}</b><span>${Number(p.amount || 0).toLocaleString()}${copyHtml("개")}</span></div>
-     ${blocked ? `<p class="meta danger" style="margin-top:10px">${escapeHtml(blocked)}</p>` : `
+     ${blocked ? `<p class="meta danger" style="margin-top:10px">${escapeHtml(errText(blocked))}</p>` : `
      <label style="margin-top:12px">${copyHtml("이참에 더 찍을 수량")}
        <input id="km-qty" type="number" min="0" step="1" value="${max}" /></label>
      <div class="meta">
@@ -5501,7 +5680,7 @@ async function paintKeyMove() {
        <div class="meta" style="margin-top:6px;line-height:1.9">
          · ${copyHtml("100 RVN 이 소각됩니다. 돌아오지 않습니다.")}<br />
          · ${copyHtml("가게 정보를 그대로 가져와 열쇠 한 줄만 바꿔 다시 새깁니다 — 다른 정보는 안 잃습니다.")}<br />
-         · ${copyHtml("체인에 새긴 뒤에야 열쇠 파일을 바꿉니다. 실패하면 아무것도 안 바뀝니다.")}<br />
+         · ${copyHtml("공개 장부에 새긴 뒤에야 열쇠 파일을 바꿉니다. 실패하면 아무것도 안 바뀝니다.")}<br />
          · ${copyHtml("옛 열쇠는 지우지 않고 옆에 남깁니다.")}<br />
          · ${copyHtml("「재발행 가능」은 켠 채로 둡니다 — 끄면 결제 주소도 영영 못 바꿉니다.")}<br />
          · ${copyHtml("확인되기까지 몇 분 걸리고, 그동안 손님 화면은 옛 정보를 봅니다.")}
@@ -5511,6 +5690,7 @@ async function paintKeyMove() {
        <button id="km-go">${copyHtml("100 RVN 소각하고 바꾸기")}</button>
        <span class="meta" id="km-note"></span>
      </div>`}`;
+  if (blocked) addSeedUnlock(body, blocked, paintKeyMove);
   const go = document.getElementById("km-go");
   if (go) go.addEventListener("click", () => void doKeyMove(p));
 }
@@ -5529,7 +5709,7 @@ async function doKeyMove(p: any) {
       t("되돌릴 수 없습니다.")
   );
   if (!ok) return;
-  if (!(await ensureUnlocked(t("체인에 새기려면 지갑을 열어야 합니다.")))) return;
+  if (!(await ensureUnlocked(t("공개 장부에 새기려면 지갑을 열어야 합니다.")))) return;
   const btn = $("km-go") as HTMLButtonElement;
   btn.disabled = true;
   setCopyText($("km-note"), () => t("새기는 중… 몇 분 걸립니다"));
@@ -5994,8 +6174,10 @@ async function talkPaintMe() {
   try {
     const me = await invoke<any>("talk_me");
     tkMine = String(me?.pubkey || "");
+    tkAdmin?.paint(); // 내가 누구인지 알아야 「방 설정」을 내 방에만 보인다
     await tkLoadNames([tkMine]);
     const mine = tkNames.get(tkMine);
+    nameCardAfterMe(tkNames.has(tkMine), String(mine?.name || "")); // 0.9.0 첫 진입 이름 카드(src/talk-identity.ts)
     const shown = mine?.name ? `<span translate="no">${escapeHtml(String(mine.name))}</span>` : "";
     // 머리줄은 좁다. 긴 설명은 「내 이름」 단추 안에서 말한다.
     $("tk-me").innerHTML =
@@ -6007,6 +6189,7 @@ async function talkPaintMe() {
 }
 
 let tkRoomNames = new Map<string, string>();
+let tkAdmin: ReturnType<typeof wireTalkRoomsAdmin> | null = null;
 
 async function talkPaintRooms() {
   const box = $("tk-rooms");
@@ -6019,7 +6202,9 @@ async function talkPaintRooms() {
   } catch {
     // 방 목록을 못 읽어도 전체 글은 보여야 한다. 조용히 넘어간다.
   }
+  rooms = tkAdmin ? tkAdmin.rooms(rooms) : rooms; // 숨긴 방 빼기·방금 바꾼 이름(talk-rooms-admin.ts)
   tkRoomNames = new Map(rooms.map((r) => [String(r.id), String(r.name)]));
+  if (tkRoom && tkRoomNames.has(tkRoom)) setCopyText($("tk-title"), () => tkRoomNames.get(tkRoom) || t("방")); // 고친 이름을 머리줄에도
   paintInvite();
   box.innerHTML =
     `<button class="room${tkRoom ? "" : " on"}" data-room="">${copyHtml("레이븐 이야기")}</button>` +
@@ -6071,10 +6256,6 @@ async function talkPaintRooms() {
  * ⚠️ 링크에 담는 것은 **방 번호뿐**이다. 대화 내용도 열쇠도 안 담는다 —
  *    링크는 어디로든 퍼지고, 한번 퍼지면 못 거둔다.
  */
-function inviteLink(): string {
-  if (!tkRoom) return "https://rvn.ex.erci.se/talk";
-  return `https://rvn.ex.erci.se/talk?room=${encodeURIComponent(tkRoom)}`;
-}
 
 function paintInvite() {
   const host = document.getElementById("tk-invite");
@@ -6082,7 +6263,7 @@ function paintInvite() {
   const name = tkRoom ? tkRoomNames.get(tkRoom) || t("방") : t("레이븐 이야기");
   host.innerHTML = `<button class="ghost" id="tk-inv">${copyHtml("초대하기")}</button>`;
   document.getElementById("tk-inv")!.addEventListener("click", () => {
-    const url = inviteLink();
+    const url = inviteLink(tkRoom);
     // 붙여넣기 좋게 **문구까지** 담는다. 사장이 문장을 지어내지 않아도 된다.
     const msg = `${t("이 방으로 오세요")} — ${name}\n${url}`;
 
@@ -6109,6 +6290,7 @@ function paintInvite() {
     });
 
   });
+  tkAdmin?.paint(); // 「방 설정」·「이 방 숨기기」 단추를 지금 방에 맞춘다
 }
 
 /* ── 받은 글 안의 사진 ─────────────────────────────────────────────
@@ -6309,14 +6491,15 @@ async function talkPaint() {
         //    🔴 예전에는 `who === prev` 만 봤다. 그래서 어제 마지막으로 쓴
         //       사람이 오늘 아침 첫 글을 쓰면 **이름이 안 붙었다** — 밤을
         //       사이에 두고 이어 쓴 것처럼 보였다.
-        //    ⚠️ 내 글에는 이름을 안 적는다. 오른쪽에 붙은 파란 풍선이 이미
-        //       「나」다. 「나」라고 또 적으면 내 말마다 이름표가 하나씩 더
-        //       붙는데, 그게 카톡과 게시판을 가르는 자리다.
+        //    🔴 0.9.0 — 내 글에도 내 이름·아이콘을 단다(대표 결정 2026-10-12, 이전 「카톡식, 내 글엔 이름 없음」을
+        //       뒤집음). 남들 눈에 내가 어떤 이름으로 보이는지가 내 화면에서도 보여야 한다. 이어 쓴 글에는 안 단다.
         const 이어짐 =
           !day && i > 0 && 쓴이[i - 1] === who && ms - 때[i - 1] < TK_이음;
         const head =
-          mine || 이어짐
+          이어짐
             ? ""
+            : mine
+            ? myHeadHtml(String(tkNames.get(who)?.name || ""))
             : `<div class="who" style="--h:${tkHue(who)}"><span class="rv-avatar" aria-hidden="true">${escapeHtml((tkNames.get(who)?.name || "레").slice(0,1))}</span> ${tkWho(who)}</div>`;
 
         // ③ 시각은 **덩어리의 마지막 글 옆에** 한 번. 한 사람이 세 줄을
@@ -6466,8 +6649,10 @@ async function talkSetName() {
   })) || "";
   setCopyText($("tk-note"), () => t("올리는 중…"));
   try {
-    await invoke("talk_profile_set", { name, about, picture: String(now?.picture || "") });
-    tkNames.set(tkMine, { name, about, picture: now?.picture || "" });
+    // 0.9.0 — 결과를 확인한 것만 「정했습니다」(talk-identity.ts saveTalkName).
+    const r = await saveTalkName(invoke, name, about, String(now?.picture || ""));
+    if (!r.ok) throw r.error;
+    tkNames.set(tkMine, { name: r.name, about, picture: now?.picture || "" });
     $("tk-note").innerHTML = `<span class="ok">${copyHtml("이름을 정했습니다")}</span>`;
     void talkPaintMe();
     void talkPaint();
@@ -6901,7 +7086,7 @@ async function talkNewRoom() {
       ? list.length
         ? t("고르시면 그 자산을 가진 분만 이 방에 글을 씁니다. 넘기면 그 순간 끊깁니다.")
         : t("가진 자산이 없습니다 — 누구나 들어오는 방이 됩니다.")
-      : t("지금은 자산을 확인할 수 없습니다(노드가 따라잡는 중). 누구나 들어오는 방으로 만드실 수 있습니다."));
+      : t("지금은 자산을 확인할 수 없습니다(서버가 따라잡는 중). 누구나 들어오는 방으로 만드실 수 있습니다."));
   } catch {
     setCopyText($("tk-nhint"), () => t("자산을 확인하지 못했습니다."));
   }
@@ -7168,7 +7353,7 @@ async function fanMakeRoom(asset: string) {
     // 🔴 **못 골랐으면 못 골랐다고 말한다.** 조용히 「누구나」로 두면
     //    사장은 자산 방을 만든 줄 알고 아무나 쓸 수 있는 방을 만든다.
     $("tk-nsay").innerHTML =
-      `<span class="danger">${escapeHtml(asset)} ${copyHtml("을(를) 자산 목록에서 못 찾았습니다. 노드가 장부를 훑는 중일 수 있습니다 — 자산 칸을 직접 확인해 주세요.")}</span>`;
+      `<span class="danger">${escapeHtml(asset)} ${copyHtml("을(를) 자산 목록에서 못 찾았습니다. 서버가 장부를 훑는 중일 수 있습니다 — 자산 칸을 직접 확인해 주세요.")}</span>`;
   }
   $("tk-newbox").scrollIntoView({ behavior: "smooth", block: "center" });
 }
@@ -7391,7 +7576,7 @@ async function swapMakeLot() {
 async function swapMakeOffer() {
   const asset = ($("sw-asset") as HTMLInputElement).value.trim();
   const amount = parseFloat(($("sw-amt") as HTMLInputElement).value) || 0;
-  const price = parseFloat(($("sw-price") as HTMLInputElement).value) || 0;
+  const price = amountOrNaN(bindAmountInput($("sw-price") as HTMLInputElement)) || 0;
   const box = $("sw-offer");
   if (!(await ensureUnlocked("제안에 서명하려면 지갑을 열어야 합니다."))) return;
   box.innerHTML = `<p class="meta">${copyHtml("만드는 중…")}</p>`;
@@ -7400,8 +7585,8 @@ async function swapMakeOffer() {
     box.innerHTML =
       `<div class="card" style="margin-top:12px">
          <h3>${copyHtml("제안을 만들었습니다")}</h3>
-         <div class="kv"><b>${copyHtml("파는 것")}</b><span>${escapeHtml(asset)} ${amount.toLocaleString()}${copyHtml("개")}</span></div>
-         <div class="kv"><b>${copyHtml("받을 돈")}</b><span>${price.toLocaleString()} RVN</span></div>
+         <div class="kv"><b>${copyHtml("파는 것")}</b><span>${escapeHtml(asset)} ${fmtQty(amount)}${copyHtml("개")}</span></div>
+         <div class="kv"><b>${copyHtml("받을 돈")}</b><span>${fmtRvn(price)}</span></div>
          <p class="meta">🔴 ${copyHtml("이 글자만으로는 아무 일도 안 일어납니다. 사는 사람이 RVN 을 붙여야 거래가 됩니다 — 그래서 아무 데나 보내셔도 됩니다.")}</p>
          <textarea readonly rows="3" id="sw-out">${escapeHtml(String(r.hex))}</textarea>
          <div class="row" style="margin-top:10px">
@@ -7423,7 +7608,7 @@ async function swapLook() {
   const hex = ($("sw-hex") as HTMLTextAreaElement).value.trim();
   const box = $("sw-take");
   if (!hex) return;
-  box.innerHTML = `<p class="meta">${copyHtml("체인에 물어보는 중…")}</p>`;
+  box.innerHTML = `<p class="meta">${copyHtml("공개 장부에 물어보는 중…")}</p>`;
   try {
     const r = await invoke<any>("swap_check", { hex });
     if (!r.ok) {
@@ -7432,11 +7617,11 @@ async function swapLook() {
     }
     box.innerHTML =
       `<div class="card" style="margin-top:12px">
-         <div class="kv"><b>${copyHtml("받는 것")}</b><span>${escapeHtml(String(r.asset))} ${Number(r.amount).toLocaleString()}${copyHtml("개")}</span></div>
-         <div class="kv"><b>${copyHtml("파는 사람에게")}</b><span>${Number(r.price).toLocaleString()} RVN</span></div>
-         <div class="kv"><b>${copyHtml("개발비 1%")}</b><span>${Number(r.fee || 0).toLocaleString()} RVN</span></div>
-         <div class="kv"><b>${copyHtml("모두")}</b><span><b>${Number(r.total || r.price).toLocaleString()} RVN</b></span></div>
-         <div class="kv"><b>${copyHtml("한 개당")}</b><span>${Number(r.each).toLocaleString()} RVN</span></div>
+         <div class="kv"><b>${copyHtml("받는 것")}</b><span>${escapeHtml(String(r.asset))} ${fmtQty(Number(r.amount))}${copyHtml("개")}</span></div>
+         <div class="kv"><b>${copyHtml("파는 사람에게")}</b><span>${fmtRvn(Number(r.price))}</span></div>
+         <div class="kv"><b>${copyHtml("개발비 1%")}</b><span>${fmtRvn(Number(r.fee || 0))}</span></div>
+         <div class="kv"><b>${copyHtml("모두")}</b><span><b>${fmtRvn(Number(r.total || r.price))}</b></span></div>
+         <div class="kv"><b>${copyHtml("한 개당")}</b><span>${fmtRvn(Number(r.each))}</span></div>
          <p class="meta">${copyHtml("한 거래 안에서 동시에 오갑니다. 먼저 보내지 않습니다.")}</p>
          <div class="row" style="margin-top:12px"><button id="sw-buy">${copyHtml("사기")}</button>
            <span class="meta" id="sw-note"></span></div>
@@ -7459,10 +7644,10 @@ async function swapBuy(hex: string, info: any) {
     const dry = await invoke<any>("swap_take", { hex, broadcast: false, passphrase: null });
     const ok = await sure(
       t("이대로 보낼까요?"),
-      tf("{0} {1}개를 받고 ", info.asset, Number(info.amount).toLocaleString()) +
-        tf("모두 {0} RVN 을 냅니다 ", Number(info.total || info.price).toLocaleString()) +
-        tf("(파는 사람 {0} · 개발비 {1}). ", Number(info.price).toLocaleString(), Number(info.fee || 0).toLocaleString()) +
-        tf("그 밖에 체인 수수료 {0} RVN. 되돌릴 수 없습니다.", dry.fee)
+      tf("{0} {1}개를 받고 ", info.asset, fmtQty(Number(info.amount))) +
+        tf("모두 {0} RVN 을 냅니다 ", fmtRvn(Number(info.total || info.price), { code: "" })) +
+        tf("(파는 사람 {0} · 개발비 {1}). ", fmtRvn(Number(info.price), { code: "" }), fmtRvn(Number(info.fee || 0), { code: "" })) +
+        tf("그 밖에 공개 장부 수수료 {0} RVN. 되돌릴 수 없습니다.", dry.fee)
     );
     if (!ok) { $("sw-note").textContent = ""; return; }
     const r = await invoke<any>("swap_take", { hex, broadcast: true, passphrase: null });
@@ -7536,7 +7721,7 @@ async function renderKinds() {
     .map(
       (k) => `<div class="choice${못내는이유(k) ? " blocked" : ""}" data-kind="${k.id}">
         <b>${k.name} <span class="form">${k.form}</span></b>
-        <span>${k.one_line} · <b>${tf("{0} RVN 소각", k.burn.toLocaleString())}</b></span>
+        <span>${k.one_line} · <b>${tf("{0} RVN 소각", fmtRvn(k.burn, { code: "" }))}</b></span>
         <div class="ex">
           ${k.examples
             .map((e: any) => `<div class="exrow"><b>${e.case}</b><span><code>${e.name}</code> — ${e.why}</span></div>`)
@@ -7662,7 +7847,7 @@ function wizGo(step: number) {
 
   if (wizStep === 5) renderSummary();
   const next = $("wz-next") as HTMLButtonElement;
-  next.textContent = wizStep === 5 ? tf("{0} RVN 소각하고 발행", burnNow().toLocaleString()) : "다음";
+  next.textContent = wizStep === 5 ? tf("{0} RVN 소각하고 발행", fmtRvn(burnNow(), { code: "" })) : "다음";
   wizGate();
 }
 
@@ -7694,7 +7879,7 @@ function renderExtra() {
       </div>
       <label style="margin-top:12px">처음 받을 주소
         <input id="x-to" spellcheck="false" placeholder="R..." /></label>
-      <div class="meta">🔴 이 주소에도 위 딱지가 붙어 있어야 합니다. 안 붙어 있으면 노드가 거절합니다.</div>`;
+      <div class="meta">🔴 이 주소에도 위 딱지가 붙어 있어야 합니다. 안 붙어 있으면 서버가 거절합니다.</div>`;
     ["x-verifier", "x-to"].forEach((id) =>
       $(id).addEventListener("input", () => wizGate())
     );
@@ -7777,15 +7962,20 @@ async function checkIssueName() {
 
   // 이름이 남았는지는 체인이 답한다. 남이 가져간 이름은 영원히 못 쓰고,
   // 그걸 실패한 트랜잭션으로 알게 되면 RVN이 날아간다.
-  let taken = false;
-  try { taken = await invoke<boolean>("name_taken", { name }); } catch {}
+  // 🔴 오류 = **확인 불가**(「없음」이 아니다). 예전에는 오류를 삼켜 taken=false 로 넘겼다.
+  let taken: boolean | null = null;
+  try { taken = nameTakenFrom(await invoke<unknown>("name_taken", { name })); } catch { taken = null; }
+  if (taken === null) {
+    note.innerHTML = `<span class="danger">확인 불가: 이 이름이 공개 장부에 이미 있는지 노드에 묻지 못했습니다. 노드가 다 따라잡은 뒤 다시 확인해 주세요.</span>`;
+    return;
+  }
   // 🔴 「더 찍기」와 「고유 여러 개」는 **이미 가진 자산에 얹는 것**이다.
   //    그런데 여기서 「이미 존재하는 이름」을 무조건 막고 있어서, 그 둘은
   //    2단계를 **영영 통과할 수 없었다.** 고를 수는 있는데 갈 수가 없었다.
   if (NEEDS_EXISTING.includes(wizKind)) {
     if (!taken) {
       note.innerHTML =
-        `<span class="danger">체인에 없는 이름입니다. ` +
+        `<span class="danger">공개 장부에 없는 이름입니다. ` +
         (wizKind === "reissue" ? "더 찍으려면" : "고유 자산을 붙이려면") +
         ` 이미 가진 자산의 이름을 넣으세요.</span>`;
       return;
@@ -7891,7 +8081,7 @@ function renderSummary() {
   }
 
   const need = burnNow();
-  $("i-cost").innerHTML = `<div class="burn danger">${tf("{0} RVN 소각", need.toLocaleString())}</div>
+  $("i-cost").innerHTML = `<div class="burn danger">${tf("{0} RVN 소각", fmtRvn(need, { code: "" }))}</div>
     <div class="meta">소각된 RVN은 돌아오지 않습니다. 네트워크 수수료는 별도입니다.</div>
     <div class="meta" id="i-have">지갑 확인 중…</div>`;
   // 🔴 여기에 `issueCheck.name` 을 넣어 뒀었다. 즉 **정답을 칸 안에 흐리게
@@ -7913,8 +8103,8 @@ function renderSummary() {
       const have = b?.confirmed ?? 0;
       const ok = have >= need + 0.1;
       $("i-have").innerHTML = ok
-        ? tf("지갑에 {0} RVN 있습니다.", have.toLocaleString(undefined, { maximumFractionDigits: 2 }))
-        : `<span class="danger">${tf("지갑에 {0} RVN뿐입니다 — {1} RVN 더 넣으셔야 합니다.", have.toLocaleString(undefined, { maximumFractionDigits: 2 }), (need - have).toFixed(2))}</span>`;
+        ? tf("지갑에 {0} RVN 있습니다.", fmtRvn(have, { code: "" }))
+        : `<span class="danger">${tf("지갑에 {0} RVN뿐입니다 — {1} RVN 더 넣으셔야 합니다.", fmtRvn(have, { code: "" }), fmtSats((rvnNumberToSats(need) ?? 0n) - (rvnNumberToSats(have) ?? 0n), { code: "" }))}</span>`;
       // 🔴 여태 **나가는 돈만** 보여 줬다. 배당은 dry-run 으로 "무엇이
       // 어떻게 되는지" 를 강제로 보게 하는데, 발행은 소각량 한 줄뿐이었다.
       //
@@ -7922,8 +8112,7 @@ function renderSummary() {
       // 잘 모른다. **끝난 뒤의 모습**을 같이 보여 준다 — 그게 결정에 쓰이는
       // 숫자다. 그리고 되돌릴 수 없는 것을 그 옆에 나란히 적는다.
       const after = have - need;
-      const rvn = (n: number) =>
-        n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+      const rvn = (n: number) => fmtRvn(n, { code: "" });
       const forever: string[] = [tf("이름 「{0}」 은 영원히 바뀌지 않습니다", issueCheck?.name || "")];
       if (!re && wizKind !== "unique") {
         forever.push("재발행을 껐으므로 수량과 파일을 영원히 못 바꿉니다");
@@ -7989,7 +8178,7 @@ function renderSummary() {
       });
       // 이 단계의 「다음」은 되돌릴 수 없는 발행이다. 앞 단계들과 글자가
       // 같으면 손이 습관대로 누른다. 대가를 버튼 안에 둔다.
-      go.textContent = tf("발행하기 · {0} RVN 소각", need.toLocaleString(undefined, { maximumFractionDigits: 2 }));
+      go.textContent = tf("발행하기 · {0} RVN 소각", fmtRvn(need, { code: "" }));
     })
     .catch(() => {
       $("i-have").textContent = "";
@@ -8008,6 +8197,10 @@ function renderSummary() {
 ///
 /// 이미 열려 있거나 암호가 없는 지갑이면 아무것도 묻지 않는다.
 /// 취소하면 `false` 를 준다 — 부르는 쪽이 거기서 멈춰야 한다.
+function addSeedUnlock(host: HTMLElement, error: unknown, retry: () => Promise<unknown>) {
+  seedUnlockButton(host, error, () => ensureUnlocked(t("지갑을 열면 방금 하던 일을 다시 시도합니다.")), retry, t("지갑 열기"));
+}
+
 async function ensureUnlocked(why: string): Promise<boolean> {
   try {
     const lock: any = await invoke("wallet_lock_state");
@@ -8383,7 +8576,7 @@ async function doIssue() {
          <p class="meta">값을 넣으면 <b>rvn.ex.erci.se 상점</b>과
             <b>레이븐홀드 장터</b>에 함께 올라갑니다. 나중에 해도 됩니다.</p>
          <label>값 (RVN)</label>
-         <input id="sell-rvn" type="number" min="1" step="1" placeholder="예: 100" />
+         <input id="sell-rvn" type="text" inputmode="decimal" autocomplete="off" placeholder="예: 100" />
          <label>보여줄 이름</label>
          <input id="sell-title" type="text" maxlength="60" value="${escapeHtml(issueCheck.name)}" />
          <button id="sell-list" type="button">상점에 올리기</button>
@@ -8403,7 +8596,7 @@ async function doIssue() {
       wizUnknown.set(name, Date.now());
       marked = false;
       void invoke("issue_unknown_mark", { name, kind: wizKind, probe, state: "unknown" }).catch(() => {});
-      $("i-result").innerHTML = `<div class="warnbox" style="margin-top:12px"><b>${copyHtml("보냈는지 아직 몰라요 — 기록될 때까지 기다려 주세요")}</b><br />${copyHtml("노드가 제때 답하지 않았어요. 이미 보냈을 수 있으니 다시 보내지 마세요. 몇 분 뒤 자산 화면에서 기록됐는지 확인해 주세요.")}</div>`;
+      $("i-result").innerHTML = `<div class="warnbox" style="margin-top:12px"><b>${copyHtml("보냈는지 아직 몰라요 — 기록될 때까지 기다려 주세요")}</b><br />${copyHtml("서버가 제때 답하지 않았어요. 이미 보냈을 수 있으니 다시 보내지 마세요. 몇 분 뒤 자산 화면에서 기록됐는지 확인해 주세요.")}</div>`;
       finished = true;
       wizFinish(btn);
       return;
@@ -8431,7 +8624,7 @@ function 바로팔기배선(asset: string, kind: string) {
   const btn = $("sell-list") as HTMLButtonElement | null;
   if (!btn) return;
   btn.onclick = async () => {
-    const rvn = parseFloat(($("sell-rvn") as HTMLInputElement).value);
+    const rvn = amountOrNaN(bindAmountInput($("sell-rvn") as HTMLInputElement));
     const title = ($("sell-title") as HTMLInputElement).value.trim();
     if (!Number.isFinite(rvn) || rvn <= 0) { 말("값을 넣어 주세요. 값 없는 물건은 상점에 못 세웁니다."); return; }
     if (!title) { 말("보여줄 이름을 넣어 주세요."); return; }
@@ -8559,6 +8752,7 @@ async function 지갑감시() {
   감시_마지막블록 = 다음;
   if (!들어온것.length) return;
   알린걸_기억(들어온것);
+  raviHome?.joy();
 
   // 화면을 새 사실로 맞춘다. 잔액과 자산 목록 둘 다 — 자산이 들어왔는데
   // 목록이 옛것이면 「보이는데 못 쓰는」 상태가 된다.
@@ -8574,7 +8768,7 @@ async function 지갑감시() {
   const 무엇 = 첫?.asset_name || "RVN";
   const 얼마 = Number(첫?.amount) || 0;
   const 더 = 들어온것.length > 1 ? tf(" 외 {0}건", 들어온것.length - 1) : "";
-  살짝알림(tf("{0} {1} 이 들어왔습니다{2}", 무엇, 얼마.toLocaleString(), 더));
+  살짝알림(tf("{0} {1} 이 들어왔습니다{2}", 무엇, fmtQty(얼마), 더));
 }
 
 /// 화면을 가리지 않고 알리는 한 줄. 확인을 누르게 하지 않는다 —
@@ -8639,6 +8833,7 @@ async function openSend(mode: "asset" | "rvn", preselect?: string) {
 }
 
 function closeSend() {
+  emitRaviEvent("send_closed");
   sendMode = null;
   sendPreview = null;
   $("send-compose").style.display = "none";
@@ -8671,20 +8866,22 @@ function pickPayee(address: string) {
 }
 
 /** 수수료 한 줄 — RVN 은 노드에 읽기로만 묻는다(`sendfee.rs`, 서명·전파 없음). 못 구하면 지어내지 않는다. */
-const FEE_UNKNOWN = "수수료는 노드가 정해요(보통 0.01 RVN 안팎).";
+const FEE_UNKNOWN = "수수료는 서버가 정해요(보통 0.01 RVN 안팎).";
 function paintSendFee(fee: any, amount: number, asset: string | null) {
   const feeBox = $("r-fee"), feeNote = $("r-feenote"), total = $("r-total");
   const known = !asset && fee && typeof fee.fee === "number" && Number.isFinite(fee.fee) && fee.short !== true;
   if (known) {
-    setCopyText(feeBox, () => `${fmtQty(fee.fee)} RVN`);
-    setCopyText(feeNote, () => t("노드가 지금 계산한 값이에요. 보낼 때 노드가 다시 계산해 아주 조금 다를 수 있어요."));
-    setCopyText(total, () => `${fmtQty(Number(fee.total ?? amount + fee.fee))} RVN`);
+    setCopyText(feeBox, () => fmtRvn(fee.fee));
+    setCopyText(feeNote, () => t("서버가 지금 계산한 값이에요. 보낼 때 서버가 다시 계산해 아주 조금 다를 수 있어요."));
+    // 합계는 사토시로 더한다(0.1 + 0.2 ≠ 0.3). 노드가 준 합계가 있으면 그 값.
+    const sum = fee.total != null ? rvnNumberToSats(Number(fee.total)) : (rvnNumberToSats(amount) ?? 0n) + (rvnNumberToSats(fee.fee) ?? 0n);
+    setCopyText(total, () => (sum === null ? t(FEE_UNKNOWN) : fmtSats(sum)));
     return;
   }
   setCopyText(feeBox, () => t(FEE_UNKNOWN));
   setCopyText(feeNote, () => asset ? t("수수료는 RVN 으로 내요.")
     : fee?.short === true ? t("수수료까지 합치면 잔액이 모자라요. 금액을 조금 줄여 주세요.")
-    : t("이번 수수료를 노드에 묻지 못했어요."));
+    : t("이번 수수료를 서버에 묻지 못했어요."));
   setCopyText(total, () => asset ? tf("{0} {1} + 수수료(RVN)", fmtQty(amount), asset) : tf("{0} RVN + 수수료", fmtQty(amount)));
 }
 
@@ -8695,13 +8892,35 @@ function composeChanged() {
     pickedAddr = "";
     $("s-addrnote").textContent = "";
   }
-  const qty = parseFloat(($("s-qty") as HTMLInputElement).value);
-  ($("s-review") as HTMLButtonElement).disabled = !(addr.length > 20 && qty > 0);
+  // 2026-10-11 — 금액은 화면 언어의 규칙으로만 읽는다. 모호하면(de 「1.234」) 값을 정하지 않고 막는다.
+  const qtyEl = $("s-qty") as HTMLInputElement;
+  const parsed = readAmount(qtyEl);
+  setCopyText($("s-qtynote"), () => (parsed.ok || parsed.problem === "empty" ? "" : amountProblemText(qtyEl, readAmount(qtyEl))));
+  ($("s-review") as HTMLButtonElement).disabled = !(addr.length > 20 && parsed.ok);
+}
+
+/** 금액 칸 → 노드에 넘길 수. 못 읽으면 NaN(부르는 쪽의 「금액을 확인」 안내가 그대로 막는다). */
+function amountOrNaN(el: HTMLInputElement): number {
+  const r = readAmount(el);
+  if (!r.ok) return NaN;
+  try { return satsToRvnNumber(r.sats); } catch { return NaN; }
 }
 
 async function reviewSend() {
   const address = ($("s-addr") as HTMLInputElement).value.trim();
-  const amount = parseFloat(($("s-qty") as HTMLInputElement).value);
+  const qtyEl = $("s-qty") as HTMLInputElement;
+  const parsedQty = readAmount(qtyEl);
+  if (!parsedQty.ok) {
+    setCopyText($("s-qtynote"), () => amountProblemText(qtyEl, readAmount(qtyEl)));
+    ($("s-review") as HTMLButtonElement).disabled = true;
+    return;
+  }
+  // 정수 사토시 → 노드 명령의 수. 이진 수로 정확히 못 담는 값이면 보내지 않는다.
+  let amount: number;
+  try { amount = satsToRvnNumber(parsedQty.sats); } catch {
+    setCopyText($("s-qtynote"), () => t("금액이 너무 커요."));
+    return;
+  }
   const asset = sendMode === "asset" ? ($("s-asset") as HTMLSelectElement).value : null;
 
   const btn = $("s-review") as HTMLButtonElement;
@@ -8719,9 +8938,9 @@ async function reviewSend() {
   btn.disabled = false;
 
   if (!sendPreview.valid) {
-    setAllRaviMood("worried");
+    emitRaviEvent("send_invalid");
     $("s-addrnote").innerHTML =
-      `<span style="color:var(--bad)">이 체인의 주소가 아닙니다. 한 글자라도 틀리면 이렇게 나옵니다.</span>`;
+      `<span style="color:var(--bad)">이 공개 장부의 주소가 아닙니다. 한 글자라도 틀리면 이렇게 나옵니다.</span>`;
     return;
   }
   $("s-addrnote").textContent = "";
@@ -8732,21 +8951,24 @@ async function reviewSend() {
   // 0.4.8-B — 이 컴퓨터에 저장한 받을 사람 이름도 보여 준다. 🔴 그래도 「처음 보내는 주소」 경고는
   //    노드의 보낸 기록(h.known)으로만 정한다 — 이름을 저장했다고 경고를 끄지 않는다.
   const who = String(h.label || payeeName(address) || "");
-  const first = `<span class="warn">${copyHtml("처음 보내는 주소")}</span>`;
+  const first = `<span class="warn">${copyHtml("처음 보내는 주소예요. 주소 앞뒤 글자를 한 번 더 확인하세요")}</span>`;
   $("r-who").innerHTML = who
     ? `<b translate="no">${escapeHtml(who)}</b>${h.known ? "" : ` · ${first}`}`
-    : first;
-  $("r-addr").textContent = address;
+    : h.known ? "" : first;
+  $("r-addr").textContent = address.match(/.{1,4}/g)?.join(" ") || address;
   $("r-hist").textContent = h.known
     ? tf("지난번 {0} · {1}", h.last_amount ?? "?", h.last_time ? ago(h.last_time) : "")
     : "";
 
   $("r-what").textContent = asset ?? "RVN";
-  $("r-amount").textContent = `${amount}${asset ? "" : " RVN"}`;
+  $("r-amount").textContent = asset ? fmtQty(amount) : fmtRvn(amount);
+  // 대표 결정 2026-10-11 — 한국어 화면은 읽는 말도 함께(「천이백삼십사 RVN」). 쉼표·점이 낀 입력에서 특히 오독을 잡는다.
+  $("r-amount-words").textContent = lang === "ko" && !asset ? `${koreanAmountWords(parsedQty.sats)} RVN` : "";
+  setCopyText($("r-krw"), () => t("원화 환산 정보 없음"));
 
   const warns: string[] = [];
   if (!sendPreview.enough)
-    warns.push(tf("보유 {0}. 보내려는 {1}보다 적습니다.", sendPreview.held, amount));
+    warns.push(tf("보유 {0}. 보내려는 {1}보다 적습니다.", fmtQty(Number(sendPreview.held)), fmtQty(amount)));
   if (sendPreview.is_mine) warns.push("내 지갑끼리 옮기기예요. 돈은 그대로이고 수수료만 나가요.");
   if (라비가채운보내기 && !sendPreview.is_mine) warns.push(t("라비가 채운 주소입니다. 받을 분이 알려 준 주소와 끝까지 같은지 확인하세요."));
   $("r-warn").innerHTML = warns.length
@@ -8793,17 +9015,24 @@ async function reviewSend() {
   setCopyText($("r-fee"), () => t("수수료 계산 중…"));
   $("r-feenote").textContent = "";
   $("r-total").textContent = "";
-  const [lock, fee] = await Promise.all([
+  const [lock, fee, rate] = await Promise.all([
     invoke<any>("wallet_lock_state").catch(() => null),
     asset ? Promise.resolve(null) : invoke<any>("send_fee", { address, amount }).catch(() => null),
+    asset ? Promise.resolve(null) : invoke<any>("rvn_rate", { currency: "KRW" }).catch(() => null),
   ]);
   paintSendFee(fee, amount, asset);
+  const won = amount * Number(rate?.rate);
+  if (!asset && Number(rate?.rate) > 0 && Number.isFinite(won)) {
+    setCopyText($("r-krw"), () => tf("지금 시세로 약 {0}원", fmtCount(Math.round(won))));
+  }
   const needPass = lock && lock.encrypted && !lock.unlocked;
   $("r-passbox").style.display = needPass ? "" : "none";
   ($("s-pass") as HTMLInputElement).value = "";
 
   $("send-compose").style.display = "none";
   $("send-review").style.display = "";
+  $("r-state").hidden = false;
+  emitRaviEvent("send_review");
   gateSend();
 }
 
@@ -8816,14 +9045,14 @@ function gateSend() {
   const tailOk =
     !needTail || tail.toLowerCase() === String(sendPreview.address).slice(-4).toLowerCase();
   const go = $("s-go") as HTMLButtonElement;
-  go.disabled = !tailOk || (needPass && !pass) || !sendPreview.enough;
+  go.disabled = sendingNow || !tailOk || (needPass && !pass) || !sendPreview.enough;
   // 네 자를 다 쳤는데 안 맞으면 말해 준다. 조용히 버튼만 막으면 사람은
   // 자기가 오타를 낸 줄 알고 다시 친다 — 정작 봐야 할 것은 주소다.
   $("s-tailwarn").innerHTML =
     needTail && tail.length >= 4 && !tailOk
       ? `<span class="danger">원본과 다릅니다. 주소가 바뀌었을 수 있으니 보내지 마세요.</span>`
       : "";
-  if (needTail && tail.length >= 4 && !tailOk) setAllRaviMood("worried");
+  if (needTail && tail.length >= 4 && !tailOk) emitRaviEvent("risk_warning");
   // 대가를 버튼에 박는다. 누르는 순간 손이 보는 것은 옆의 설명문이 아니라
   // 버튼이고, 체인에 나간 전송은 되돌릴 방법이 없다.
   const amt = Number(sendPreview.amount ?? sendPreview.rvn ?? 0);
@@ -8831,8 +9060,12 @@ function gateSend() {
   go.textContent = amt > 0 ? tf("{0} {1} 보내기", fmtQty(amt), what) : "보내기";
 }
 
+let sendingNow = false;
 async function doSend() {
-  if (!sendPreview) return;
+  if (!sendPreview || sendingNow) return;
+  sendingNow = true;
+  sendPreview.requestId ??= crypto.randomUUID();
+  const approved = sendPreview;
   const btn = $("s-go") as HTMLButtonElement;
   const wasLabel = btn.textContent;
   btn.disabled = true;
@@ -8840,32 +9073,34 @@ async function doSend() {
   const pass = ($("s-pass") as HTMLInputElement).value || null;
   // 결과 화면에 쓸 것 — 보낸 뒤에는 sendPreview 를 비운다.
   const sent = {
-    address: String(sendPreview.address),
-    amount: fmtQty(Number(sendPreview.amount)),
-    what: sendMode === "asset" ? String(sendPreview.asset) : "RVN",
-    isMine: sendPreview.is_mine === true,
+    address: String(approved.address),
+    amount: fmtQty(Number(approved.amount)),
+    what: sendMode === "asset" ? String(approved.asset) : "RVN",
+    isMine: approved.is_mine === true,
   };
 
   try {
     const txid =
       sendMode === "asset"
         ? await invoke<string>("send_asset", {
-            asset: sendPreview.asset,
-            qty: sendPreview.amount,
-            toAddress: sendPreview.address,
+            asset: approved.asset,
+            qty: approved.amount,
+            toAddress: approved.address,
             passphrase: pass,
+            requestId: approved.requestId,
           })
         : await invoke<string>("send_rvn", {
-            toAddress: sendPreview.address,
-            amount: sendPreview.amount,
+            toAddress: approved.address,
+            amount: approved.amount,
             comment: null,
             passphrase: pass,
+            requestId: approved.requestId,
           });
-    setAllRaviMood("happy");
-    setTimeout(() => setAllRaviMood(aiProvider ? "normal" : "sleep"), 1400);
+    await invoke("send_ack", { requestId: approved.requestId });
+    emitRaviEvent("send_done");
 
     // RV6: 폰 요청으로 채운 보내기였다면 폰에 「완료」를 알린다(pairing-ui.ts 가 맞춰 본다).
-    window.dispatchEvent(new CustomEvent("rv-sent", { detail: { txid: String(txid ?? ""), address: sent.address, amount: Number(sendPreview.amount), what: sent.what } }));
+    window.dispatchEvent(new CustomEvent("rv-sent", { detail: { txid: String(txid ?? ""), address: sent.address, amount: Number(approved.amount), what: sent.what } }));
     // 🔴 0.4.8-B — 결과가 「트랜잭션 + 64자」였다(RV3 T05). 사람이 확인할 것은 **얼마를 누구에게**다.
     //    거래 번호는 「자세히」 안으로. 이름이 없으면 그 자리에서 붙여 저장하게 한다(이 컴퓨터에만).
     const name = payeeName(sent.address);
@@ -8896,7 +9131,8 @@ async function doSend() {
     //    보이는 단추를 두면 안 된다.
     const back = $("s-back") as HTMLElement | null;
     if (back) back.style.display = "none";
-    sendPreview = null;
+    $("r-state").hidden = true; // 「아직 보내지 않았어요」는 보낸 뒤에는 거짓말이다
+    if (sendPreview === approved) sendPreview = null;
     loadWallet();
     // 🔴 여태 `loadWallet()` 만 불렀다. 그래서 RVN 잔액은 줄어드는데
     //    **자산 목록은 옛날 그대로**였다 — 100장을 다 보내고도 목록에는
@@ -8905,10 +9141,14 @@ async function doSend() {
     void loadAssets(false);
   } catch (e) {
     $("s-result").innerHTML = `<div class="warnbox" style="margin-top:12px">${escapeHtml(errText(e))}</div>`;
-    // 실패했으니 다시 누를 수 있어야 하고, 라벨도 금액으로 돌아와야 한다.
+    // 미확인 지급은 Rust의 영속 잠금이 재시도/재시작에도 차단한다.
     // "보내는 중…" 이 남아 있으면 얼마를 보내려던 건지 사라진다.
     btn.textContent = wasLabel || "보내기";
     btn.disabled = false;
+  } finally {
+    ($("s-pass") as HTMLInputElement).value = "";
+    sendingNow = false;
+    if (sendPreview) gateSend();
   }
   btn.textContent = "보내기";
 }
@@ -8948,6 +9188,8 @@ let shopMenuCid: string | null = null;
 // thing on this screen — the burn — still needs the name retyped by hand.
 
 let aiProvider: string | null = null;
+// A saved key wakes Ravi immediately; checks are advisory except explicit rejection.
+const keyChecks = new SavedKeyChecks(localStorage);
 
 /// 열쇠를 넣는 칸의 순서. 위에 있는 것이 먼저 눈에 들어오고, 대부분은
 /// 첫 칸 하나만 채운다. 그래서 이 순서는 취향이 아니라 기본값에 가깝다.
@@ -8960,6 +9202,7 @@ const PROVIDERS: Record<string, [string, string, string]> = {
   google: ["Google (Gemini)", "AIza…", "https://aistudio.google.com/apikey"],
   openai: ["OpenAI", "sk-…", "https://platform.openai.com/api-keys"],
   groq: ["Groq", "gsk_…", "https://console.groq.com/keys"],
+  meta: ["Meta AI", "", "https://dev.meta.ai/docs/authentication"],
 };
 
 // ── 넘어가는 순서 ──────────────────────────────────────────────────────────
@@ -9064,6 +9307,76 @@ async function resetOrder() {
   }
 }
 
+function keyStorageSourceHtml(st: any, provider: string): string {
+  const source = st.storage_sources?.[provider];
+  const row = (content: string) => `<div class="key-storage-status">${content}</div>`;
+  if (source === "device-encrypted") return row(`<span class="meta">${copyHtml(DEVICE_STORAGE_LABEL)}</span>`
+    + (keyStoragePlatform === "linux" ? "" : `<button type="button" class="ghost" data-move-key="${provider}">${copyHtml("키체인으로 옮기기")}</button>`));
+  if (st.storage_errors?.[provider]) return row(`<span class="meta">${escapeHtml(keyStorageError(st.storage_errors[provider], t, keyStoragePlatform))}</span><button type="button" class="ghost" data-storage-help="${provider}">${copyHtml("키 저장 도움말")}</button>`);
+  return source === "keychain" ? row(`<span class="meta">${copyHtml("OS 보안 저장소에 저장됨")}</span>`)
+    : source === "file" || source === "legacy-file" ? row(`<span class="meta">${copyHtml("이 컴퓨터의 파일에 저장됨")}</span>`) : "";
+}
+
+function showKeyStorageHelp(note: HTMLElement, error: unknown, provider: string, pendingKey = "", retryMove = false) {
+  document.getElementById(`${note.id}-storage-help`)?.remove();
+  const custom = provider === "custom" && pendingKey ? {
+    label: ($("cu-label") as HTMLInputElement).value.trim(),
+    base_url: ($("cu-url") as HTMLInputElement).value.trim(),
+    model: ($("cu-model") as HTMLInputElement).value.trim(),
+  } : undefined;
+  const box = document.createElement("div");
+  box.id = `${note.id}-storage-help`;
+  box.className = "card key-storage-help";
+  const lines = keyStoragePlatform === "linux" || needsKeyStorageGuide(error) ? keyStorageGuide(keyStoragePlatform) : [keyStorageError(error, t, keyStoragePlatform)];
+  box.innerHTML = lines.map(line => `<p>${copyHtml(line)}</p>`).join("");
+  const add = (label: string, action: () => Promise<void>) => {
+    const button = document.createElement("button");
+    button.type = "button"; button.textContent = t(label); button.className = "ghost";
+    button.onclick = async () => {
+      const buttons = box.querySelectorAll("button"); buttons.forEach(b => b.disabled = true);
+      try { await action(); }
+      catch (failure) { note.textContent = keyStorageError(failure, t, keyStoragePlatform); }
+      finally { buttons.forEach(b => b.disabled = false); }
+    };
+    box.append(button);
+  };
+  if (keyStoragePlatform === "macos") add("키체인 접근 열기", async () => {
+    await invoke("open_external", { url: "/System/Applications/Utilities/Keychain Access.app" });
+  });
+  const finish = async () => {
+    pendingKey = ""; box.remove(); keyChecks.forget(provider);
+    await refreshKeys(provider, true);
+  };
+  add("다시 시도", async () => {
+    if (pendingKey) {
+      if (custom) await invoke("save_custom_provider", { label: custom.label, baseUrl: custom.base_url, model: custom.model, key: pendingKey });
+      else await invoke("save_api_key", { provider, key: pendingKey });
+      await finish();
+    }
+    else if (retryMove) { await invoke("move_api_key_to_keychain", { provider }); await finish(); }
+    else { await refreshKeys("", true); }
+  });
+  if (pendingKey && keyStoragePlatform !== "linux") add(DEVICE_STORAGE_BUTTON, async () => {
+    await invoke("save_device_api_key", { provider, key: pendingKey, consent: true, custom });
+    await finish();
+    note.textContent = t(DEVICE_STORAGE_LABEL);
+  });
+  add("닫기", async () => { pendingKey = ""; box.remove(); });
+  note.after(box);
+}
+
+async function deleteSavedKey(provider: string) {
+  let failure: unknown;
+  try { await invoke("delete_api_key", { provider }); }
+  catch (error) { failure = error; }
+  // A native deletion failure can still leave a durable tombstone and no local key.
+  keyChecks.forget(provider);
+  document.getElementById("key-note-storage-help")?.remove();
+  document.getElementById("kc-note-storage-help")?.remove();
+  await refreshKeys();
+  if (failure !== undefined) setCopyText($("key-note"), () => keyStorageError(failure, t, keyStoragePlatform));
+}
+
 function renderKeyRows(st: any, models: any) {
   aiKeyed = st.available || {};
   renderOrder("customer");
@@ -9074,21 +9387,32 @@ function renderKeyRows(st: any, models: any) {
         st.has_key?.[p]
           ? // 모델 이름은 회사가 예고 없이 바꾼다. 우리 배포를 기다리지 않고
             // 직접 고칠 수 있어야 한다.
-            `<div class="keyrow"><span class="who">${label} · ····${escapeHtml(String(st.last4?.[p] || ""))}</span>
+            `<div class="keyrow"><span class="who">${label}${keyLast4(st.last4?.[p]) ? ` · ····${escapeHtml(keyLast4(st.last4?.[p]))}` : ""}</span>
                <input id="model-${p}" value="${escapeHtml(models?.[p]?.model || "")}"
                       placeholder="${escapeHtml(models?.[p]?.default || "")}" autocomplete="off" spellcheck="false" />
-               <button class="ghost" data-delkey="${p}">지우기</button></div>`
+               <button class="ghost" data-delkey="${p}">지우기</button>${keyStorageSourceHtml(st, p)}</div>`
           : `<div class="keyrow"><span class="who">${label}</span>
                <input id="key-${p}" type="password" placeholder="${ph}" autocomplete="off" />
-               <button class="ghost" data-console="${console_}">열쇠 받기</button></div>`
+               <button class="ghost" data-console="${console_}">열쇠 받기</button>${keyStorageSourceHtml(st, p)}</div>`
       )
       .join("") +
     (st.custom
       ? `<div class="keyrow"><span class="who">${escapeHtml(st.custom_label || "커스텀")}</span>
-           <span class="saved">${st.has_key?.custom ? `····${escapeHtml(String(st.last4?.custom || ""))}` : "키 없음"}</span>
-           <button class="ghost" data-delkey="custom">지우기</button></div>`
+           <span class="saved">${st.has_key?.custom ? (keyLast4(st.last4?.custom) ? `····${escapeHtml(keyLast4(st.last4?.custom))}` : "") : "키 없음"}</span>
+           <button class="ghost" data-delkey="custom">지우기</button>${keyStorageSourceHtml(st, "custom")}</div>`
       : "");
 
+  $("keyrows").querySelectorAll<HTMLElement>("[data-move-key]").forEach(button => {
+    button.onclick = async () => {
+      button.setAttribute("disabled", "true");
+      try { await invoke("move_api_key_to_keychain", { provider: button.dataset.moveKey }); await refreshKeys(); }
+      catch (error) { showKeyStorageHelp($("key-note"), error, button.dataset.moveKey!, "", true); }
+      finally { button.removeAttribute("disabled"); }
+    };
+  });
+  $("keyrows").querySelectorAll<HTMLElement>("[data-storage-help]").forEach(button => {
+    button.onclick = () => showKeyStorageHelp($("key-note"), st.storage_errors?.[button.dataset.storageHelp!], button.dataset.storageHelp!);
+  });
   $("keyrows")
     .querySelectorAll("[data-console]")
     .forEach((b) => {
@@ -9106,17 +9430,19 @@ function renderKeyRows(st: any, models: any) {
     .forEach((b) => {
       (b as HTMLElement).onclick = async () => {
         const p = (b as HTMLElement).dataset.delkey!;
-        await invoke("delete_api_key", { provider: p });
-        await refreshKeys();
+        await deleteSavedKey(p);
       };
     });
 }
 
-async function refreshKeys() {
+async function refreshKeys(preferred = "", keepKeyCard = false, refreshRows = true) {
   try {
     const st = (await invoke<any>("api_key_status")) || {};
-    const models = await invoke<any>("model_settings").catch(() => ({}));
-    renderKeyRows(st, models);
+    if (["macos", "windows", "linux"].includes(st.platform)) keyStoragePlatform = st.platform;
+    if (refreshRows) {
+      const models = await invoke<any>("model_settings").catch(() => ({}));
+      renderKeyRows(st, models);
+    } else aiKeyed = st.available || {};
     const have = [...Object.keys(PROVIDERS), "custom"].filter((p) => st.available?.[p]);
     const labelOf = (p: string) =>
       p === "custom" ? st.custom_label || "커스텀" : PROVIDERS[p][0];
@@ -9125,28 +9451,29 @@ async function refreshKeys() {
     // whatever is available. Silently switching providers on someone who chose
     // one would show up as a surprise bill on the wrong account.
     const sel = $("ai-pick") as HTMLSelectElement;
-    const previous = sel.value;
+    const previous = preferred || sel.value;
     sel.innerHTML = have.map((p) => `<option value="${p}">${escapeHtml(labelOf(p))}</option>`).join("");
-    if (have.includes(previous)) sel.value = previous;
-    aiProvider = sel.value || null;
+    const usable = have.filter(p => !keyChecks.rejected.has(p));
+    aiUsableCount = usable.length;
+    paintDebateAvailability();
+    sel.value = usable.includes(previous) ? previous : usable[0] || have[0] || "";
+    aiProvider = usable.includes(sel.value) ? sel.value : null;
+    try { localStorage.setItem("rv-voice-provider", aiProvider || ""); } catch { /* Optional provider metadata only. */ }
     paintRaviBadge();
     const raviSub = document.getElementById("ravi-sub");
-    if (raviSub) raviSub.textContent = aiProvider ? t("AI 도우미 · 물어본 것만 봐요") : t("AI 키를 넣으면 라비가 깨어나요");
+    if (raviSub) raviSub.textContent = aiProvider ? t("AI 도우미 · 물어본 것만 봐요") : t("눌러서 깨우기");
     // 0.4.8-B — 라비 화면의 「AI 열쇠 넣기」는 열쇠가 없을 때만 보인다.
     const keyOpen = document.getElementById("ravi-keyopen");
-    if (keyOpen) keyOpen.hidden = !!aiProvider;
+    if (keyOpen) { keyOpen.hidden = !!aiProvider; setCopyText(keyOpen, () => t("눌러서 깨우기")); }
     const keyHost = document.getElementById("ravi-key");
-    if (keyHost && !aiProvider && keyHost.hidden) {
-      keyHost.innerHTML = keyCardHtml();
-      keyHost.hidden = false;
-    }
-    if (keyHost && aiProvider && !keyHost.hidden) closeKeyCard();
+    if (!keepKeyCard && keyHost && aiProvider && !keyHost.hidden) closeKeyCard();
     const last4 = document.getElementById("ravi-key-last4");
-    if (last4) last4.textContent = aiProvider && st.last4?.[aiProvider] ? `····${String(st.last4[aiProvider])}` : "";
+    const suffix = aiProvider ? keyLast4(st.last4?.[aiProvider]) : "";
+    if (last4) last4.textContent = suffix ? `····${suffix}` : "";
     const deleteButton = document.getElementById("ravi-key-delete");
     if (deleteButton) deleteButton.hidden = !aiProvider;
 
-    $("key-note").textContent = st.warning || (have.length ? "AI 설정이 있습니다. 연결은 아직 확인하지 않았습니다." : "아직 없습니다");
+    setCopyText($("key-note"), () => [st.warning ? t("저장된 키를 읽지 못했어요. OS 보안 저장소 권한을 확인하고 키를 다시 저장해 주세요.") : "", keyStatusMessage()].filter(Boolean).join(" ") || t(have.length ? "AI 설정이 있습니다. 연결은 아직 확인하지 않았습니다." : "아직 없습니다"));
     // 대화창은 쓸 수 있는 곳이 하나라도 있을 때만 의미가 있다.
     // 🔴 여태 API 키가 없으면 이 버튼을 **숨겼다.** 그러면 Ravi 가 있다는
     // 것을 알 길이 없다 — 키를 넣을 이유도 못 만난다.
@@ -9157,7 +9484,7 @@ async function refreshKeys() {
     //    떠 있고, 오른쪽 아래 내용을 가린다(그록 감사 2026-08-27).
     //    지금 어느 화면인지 보고 정한다.
     void refreshOverview();
-    const keyed = [...Object.keys(PROVIDERS), "custom"].some(provider => st.available?.[provider]);
+    const keyed = !!aiProvider;
     if (lastKeyState === null) setAllRaviMood(keyed ? "normal" : "sleep");
     else if (keyed !== lastKeyState) void animateRavi(keyed);
     lastKeyState = keyed;
@@ -9175,7 +9502,44 @@ async function refreshKeys() {
         delete note.dataset.keyHint;
       }
     });
+    // One background GET per stored provider at startup, also after a new save.
+    for (const provider of have) void checkSavedKey(provider);
   } catch {}
+}
+
+function keyStatusMessage(): string {
+  return Object.keys(aiKeyed).filter(p => aiKeyed[p]).map(p => {
+    const result = keyChecks.results.get(p);
+    if (result) return keyConnectionMessage(result, p);
+    if (keyChecks.pending.has(p)) return `${PROVIDERS[p]?.[0] || "AI"}: ${t("연결을 확인하는 중…")}`;
+    if (keyChecks.results.has(p)) return `${PROVIDERS[p]?.[0] || "AI"}: ${t("연결을 확인했어요.")}`;
+    return "";
+  }).filter(Boolean).join(" ");
+}
+
+/// 방금 저장한 열쇠의 회사 — 그 연결 확인이 성공하면 「연결됐어요」 한 줄을 한 번만 띄운다.
+let raviKeyJustSaved = "";
+async function checkSavedKey(provider: string, force = false): Promise<void> {
+  const version = keyChecks.begin(provider, force);
+  if (version === null) return;
+  paintRaviBadge();
+  let error: unknown;
+  try { await invoke("ai_check_connection", { provider }); }
+  catch (failure) { error = failure; }
+  if (!keyChecks.finish(provider, version, error)) return;
+  // Advisory results must not rebuild settings inputs while someone is typing.
+  await refreshKeys("", true, false);
+  const result = keyChecks.results.get(provider);
+  const note = document.getElementById("kc-note");
+  if (note && keyPick === provider && !note.dataset.keySaveFailed) setCopyText(note, () => result ? keyConnectionMessage(result, provider) : t("연결을 확인했어요."));
+  const justSaved = raviKeyJustSaved === provider;
+  if (justSaved) raviKeyJustSaved = "";
+  if (result && aiKeyed[provider]) {
+    chatHtml("ai", `<p>${escapeHtml(keyConnectionMessage(result, provider))}</p>` +
+      (keyConnectionFailure(result).rejected
+        ? `<div class="guidego"><button type="button" class="ghost" data-guide-go="key">${copyHtml("열쇠 다시 넣기")}</button></div>`
+        : `<p>${copyHtml("저장된 키로 라비는 깨어 있어요. 연결 확인은 참고용이에요.")}</p>`));
+  } else if (!result && justSaved && aiProvider) chatHtml("ai", raviConnectedHtml(copyHtml));
 }
 
 /// 지금 시세. 메뉴 가격 옆에 RVN 환산이 붙는 근거다.
@@ -9200,37 +9564,48 @@ async function showRate() {
 }
 
 async function saveKeys() {
+  document.getElementById("key-note-storage-help")?.remove();
   const btn = $("key-save") as HTMLButtonElement;
   btn.disabled = true;
+  setCopyText($("key-note"), () => t(KEYCHAIN_SAVING));
   const warnings: string[] = [];
+  let failedProvider = "";
+  let failedKey = "";
   try {
     const cu = ($("cu-url") as HTMLInputElement).value.trim();
     if (cu) {
+      failedProvider = "custom"; failedKey = normalizeApiKey(($("cu-key") as HTMLInputElement).value);
       const result = await invoke<{ warning?: string }>("save_custom_provider", {
         label: ($("cu-label") as HTMLInputElement).value.trim(),
         baseUrl: cu,
         model: ($("cu-model") as HTMLInputElement).value.trim(),
-        key: ($("cu-key") as HTMLInputElement).value.trim(),
+        key: normalizeApiKey(($("cu-key") as HTMLInputElement).value),
       });
       if (result.warning) warnings.push(result.warning);
       ($("cu-key") as HTMLInputElement).value = "";
+      keyChecks.forget("custom");
+      failedProvider = ""; failedKey = "";
     }
     for (const p of Object.keys(PROVIDERS)) {
       const el = document.getElementById(`key-${p}`) as HTMLInputElement | null;
       if (el && el.value.trim()) {
-        const result = await invoke<{ warning?: string }>("save_api_key", { provider: p, key: el.value.trim() });
+        failedProvider = p; failedKey = normalizeApiKey(el.value);
+        const result = await invoke<{ warning?: string }>("save_api_key", { provider: p, key: normalizeApiKey(el.value) });
         if (result.warning) warnings.push(result.warning);
         el.value = "";
+        keyChecks.forget(p);
+        failedProvider = ""; failedKey = "";
       }
       const m = document.getElementById(`model-${p}`) as HTMLInputElement | null;
       if (m) await invoke("save_model", { provider: p, model: m.value.trim() });
     }
-    await invoke("ai_models_refresh").catch(() => {});
     await refreshKeys();
+    void invoke("ai_models_refresh").catch(() => {}).then(() => refreshKeys());
     if (warnings.length) $("key-note").textContent = `키가 저장됐습니다. ${warnings.join("; ")}`;
   } catch (e) {
     await refreshKeys().catch(() => {});
-    $("key-note").textContent = `${errText(e)} 다시 확인해 주세요`;
+    setCopyText($("key-note"), () => `${t("키 저장에 실패했어요.")} ${keyStorageError(e, t, keyStoragePlatform)}`);
+    if (failedProvider) showKeyStorageHelp($("key-note"), e, failedProvider, failedKey);
   } finally {
     document.querySelectorAll<HTMLInputElement>('#keyrows input[type="password"], #cu-key').forEach(input => { input.value = ""; });
     btn.disabled = false;
@@ -9244,7 +9619,6 @@ async function saveKeys() {
 // pick from a list this code already knows how to do. Nothing on that list
 // spends, burns, or issues.
 
-const chatHistory: any[] = [];
 
 function chatSay(who: "me" | "ai" | "did", text: string) {
   chatPut(who, `<span${who === "me" ? ' translate="no"' : ""}>${escapeHtml(text).replace(/\n/g, "<br />")}</span>`);
@@ -9269,7 +9643,8 @@ function chatPut(who: "me" | "ai" | "did", html: string) {
   if (who === "ai") div.querySelector(".msgravi")?.replaceWith(raviFace(raviState, 32, { round: true }));
   div.querySelectorAll(".ravi-mount").forEach(slot => slot.replaceWith(raviFace(raviState, 64)));
   $("chat-log").appendChild(div);
-  $("chat-log").scrollTop = $("chat-log").scrollHeight;
+  if (who === "ai" && !div.querySelector("[data-thinking]")) raviHome?.reply(div.querySelector(".msgtxt")?.textContent || "", div);
+  raviHome?.message(who === "ai" && !div.querySelector("[data-thinking]"));
 }
 
 const SHOP_FIELDS: Record<string, string> = {
@@ -9284,7 +9659,6 @@ const SHOP_FIELDS: Record<string, string> = {
   // 🔴 돈 받을 주소(`sh-addr`)와 소각 확인칸(`sh-confirm`)은 **일부러 없다.**
   // 그 둘은 틀리면 되돌릴 수 없다 — 라비가 채우면 사장은 화면에 뜬 것을
   // 확인이라 여기고 그대로 누른다.
-  order_url: "sh-orderurl",
 };
 
 /**
@@ -9610,7 +9984,7 @@ async function artistLoad() {
       setCopyText(seal, () => t("PLAYX 주인이 올린 소개입니다"));
     } else {
       seal.className = "arseal warn";
-      setCopyText(seal, () => t(String(chk?.why || "체인이 가리키는 열쇠와 이 컴퓨터가 다릅니다.")));
+      setCopyText(seal, () => t(String(chk?.why || "공개 장부가 가리키는 열쇠와 이 컴퓨터가 다릅니다.")));
     }
   } catch (e) {
     seal.className = "arseal muted";
@@ -9637,13 +10011,43 @@ async function artistLoad() {
   //    시키는 것은 안내가 아니다.
   const qty = $("ar-shopqty");
   await ensureAssets();
-  const shop = assets.get("SHOP.PLAYX");
+  // 🔴 여태 `SHOP.PLAYX` 를 박아 두었다 — 다른 가게(새 `RV.S.…` 가게 포함)는 남의 토큰 수량을 봤다.
+  //    이제 「이 가게의 토큰 이름」 한 값(shop.json chain_asset)을 읽는다. 옛 가게는 그 값이 SHOP.PLAYX 라 그대로다.
+  const token = await currentShopToken();
+  if (!token) {
+    setCopyText(qty, () => t("아직 공개 장부에 올린 가게가 없습니다. 「가게」에서 먼저 등록해 주세요."));
+    return;
+  }
+  const shop = assets.get(token);
   if (shop && shop.amount > 0) {
-    qty.textContent = tf("SHOP.PLAYX  {0}개 남음", fmtQty(shop.amount));
+    qty.textContent = tf("{0}  {1}개 남음", token, fmtQty(shop.amount));
   } else if (shop) {
-    setCopyText(qty, () => t("SHOP.PLAYX 가 없습니다. 손님에게 줄 토큰이 없습니다."));
+    setCopyText(qty, () => tf("{0} 가 없습니다. 손님에게 줄 토큰이 없습니다.", token));
   } else {
-    setCopyText(qty, () => t("SHOP.PLAYX 수량을 못 읽었습니다. 노드가 켜져 있는지 보세요."));
+    setCopyText(qty, () => tf("{0} 수량을 못 읽었습니다. 서버가 켜져 있는지 보세요.", token));
+  }
+}
+
+/**
+ * 「이 가게의 토큰 이름」 한 값 — 새 가게 `RV.S.<이름>`, 옛 가게 `SHOP.<이름>`.
+ *
+ * 근거는 `shop.json` 의 `chain_asset`(발행 성공·지갑 확인 뒤에만 채워짐). 그 칸이 비었으면 지갑의 주인 표를
+ * 읽기만 해서(`shop_detect_asset`, 쓰지 않음) **하나일 때만** 쓴다 — 여럿이면 고르지 않는다(남의 가게 이름으로
+ * 토큰을 보낼 수 있다). 🔴 가정: 이 컴퓨터는 가게 하나다.
+ */
+async function currentShopToken(): Promise<string | null> {
+  const typed = ($("sh-registered") as HTMLInputElement | null)?.value.trim() || "";
+  const fromForm = shopTokenOf({ chain_asset: typed });
+  if (fromForm) return fromForm;
+  try {
+    const saved = shopTokenOf(await invoke<any>("shop_load"));
+    if (saved) return saved;
+  } catch { /* 파일을 못 읽으면 지갑에 묻는다 */ }
+  try {
+    const r = await invoke<any>("shop_detect_asset");
+    return shopTokenOf({ chain_asset: r?.asset });
+  } catch {
+    return null;
   }
 }
 
@@ -9651,62 +10055,41 @@ async function artistLoad() {
  *  세계 게이트웨이를 기다리지 않아도 되고, 혼합 콘텐츠에도 안 걸린다. */
 let arPickedPreview = "";
 
+let arPhotoBusy = false;
+let arSaving = false;
 async function artistPick(file: File) {
-  if (file.size > 8 * 1024 * 1024) {
-    $("ar-picnote").innerHTML = `<span class="danger">${copyHtml("사진이 너무 큽니다. 8MB 아래로 골라 주세요.")}</span>`;
-    return;
-  }
-  setCopyText($("ar-picnote"), () => t("사진 줄이는 중…"));
+  if (arPhotoBusy || arSaving) return;
+  arPhotoBusy = true;
+  const controls = ["ar-pick", "ar-facebtn", "ar-save"].map(id => $(id) as HTMLButtonElement);
+  controls.forEach(button => { button.disabled = true; });
+  arPickedPreview = "";
   try {
-    // 정사각형으로 가운데를 자른다. 얼굴은 어디서나 동그란 자리에 들어간다.
-    const bitmap = await createImageBitmap(file);
-    const side = Math.min(bitmap.width, bitmap.height);
-    const canvas = document.createElement("canvas");
-    canvas.width = canvas.height = 512;
-    canvas.getContext("2d")!.drawImage(
-      bitmap, (bitmap.width - side) / 2, (bitmap.height - side) / 2, side, side, 0, 0, 512, 512);
-    const blob: Blob = await new Promise((ok, no) =>
-      canvas.toBlob((b) => (b ? ok(b) : no(new Error("사진을 못 줄였습니다."))), "image/jpeg", 0.82));
-
-    // 🔴 **미리보기는 `data:` 로 본다.**
-    //
-    //    여태 `http://127.0.0.1:8080/ipfs/…` 을 넣고 있었다. 앱 화면은
-    //    `https` 문맥이라 웹뷰가 그걸 **혼합 콘텐츠로 조용히 막는다** —
-    //    오류도 안 뜨고 자리만 빈다. 대표님이 본 "사진 올렸는데 안나와"가
-    //    이것이다. 게다가 그 주소는 이 컴퓨터에서만 열려서, 애초에
-    //    미리보기 말고는 쓸 데가 없다.
-    const dataUrl: string = await new Promise((ok, no) => {
-      const r = new FileReader();
-      r.onload = () => ok(String(r.result));
-      r.onerror = () => no(new Error("사진을 못 읽었습니다."));
-      r.readAsDataURL(blob);
-    });
-    arPickedPreview = dataUrl;
-    arPaintPreview();
-
-    // 🔴 **팬이 보는 것은 `data:` 가 아니라 주소다.** 릴레이 한 건이 32KB 고
-    //    넘으면 **조용히 버린다**(`relay.rs:76`). 사진을 이름표 안에 담으면
-    //    이름표가 통째로 안 나간다. 그리고 러스트 쪽 문이 `https://` 만
-    //    받는다(`artist.rs` check_picture) — 담는 길은 아예 없다.
-    setCopyText($("ar-picnote"), () => t("파일창고에 올리는 중…"));
-    const added = await invoke<any>("ipfs_add_file", { file: { name: "face.jpg", bytes: Array.from(new Uint8Array(await blob.arrayBuffer())) } });
-    const cid = String(added?.cid || "");
-    if (!cid) throw new Error("파일창고가 사진 주소를 안 돌려줬습니다. 노드가 켜져 있는지 보세요.");
-
-    // ⚠️ **처음 여는 팬은 20초쯤 기다린다.** 실측(2026-08-31): 이 컴퓨터에서
-    //    갓 올린 파일을 ipfs.io 가 받아 가는 데 19.5초 걸렸다 — 세계에서
-    //    이 파일을 가진 곳이 아직 우리뿐이라 찾는 데 그만큼 든다. 한 번
-    //    받아 가면 그다음은 빠르다. 우리 노드가 계속 켜져 있어야 한다.
-    arPicture = `https://ipfs.io/ipfs/${cid}`;
+    const result = await uploadArtistPhoto(file,
+      browserPhotoApi(file => invoke("ipfs_add_file", { file })),
+      message => setCopyText($("ar-picnote"), () => t(message)),
+      data => { arPickedPreview = data; arPaintPreview(); });
+    arPicture = `https://ipfs.io/ipfs/${result.cid}`;
     $("ar-picnote").innerHTML =
-      `<span class="ok">${copyHtml("사진 준비됐습니다")} · ${Math.round(blob.size / 1024)}KB</span><br />` +
+      `<span class="ok">${copyHtml("사진 준비됐습니다")} · ${Math.round(result.size / 1024)}KB</span><br />` +
+      (result.original ? `<span class="meta">${copyHtml("사진을 줄이지 못해 원본 JPG/PNG를 올립니다.")}</span><br />` : "") +
+      result.diagnostics.map(e => `<span class="meta">${escapeHtml(t(photoErrorText(e)))}</span><br />`).join("") +
       `<span class="meta">${copyHtml("아래 「이 소개 올리기」를 눌러야 팬에게 보입니다. 팬 화면에 처음 뜨기까지 20초쯤 걸립니다.")}</span>`;
   } catch (e) {
-    $("ar-picnote").innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
+    arPickedPreview = "";
+    arPaintPreview();
+    const message = e instanceof PhotoFailure ? photoErrorText(e)
+      : e instanceof Error && ["사진이 너무 큽니다. 8MB 아래로 골라 주세요.", "JPG 또는 PNG 사진을 골라 주세요."].includes(e.message)
+        ? e.message : photoErrorText(e);
+    $("ar-picnote").innerHTML = `<span class="danger">${escapeHtml(t(message))}</span>`;
+  } finally {
+    arPhotoBusy = false;
+    controls.forEach(button => { button.disabled = false; });
   }
 }
 
 async function artistSave() {
+  if (arPhotoBusy || arSaving) return;
+  arSaving = true;
   const btn = $("ar-save") as HTMLButtonElement;
   const say = $("ar-say");
   btn.disabled = true;
@@ -9732,7 +10115,9 @@ async function artistSave() {
     arPaintPreview();
   } catch (e) {
     say.innerHTML = `<span class="danger">${escapeHtml(errText(e))}</span>`;
+    addSeedUnlock(say, e, artistSave);
   } finally {
+    arSaving = false;
     btn.disabled = false;
     btn.textContent = 옛;
   }
@@ -9742,8 +10127,14 @@ async function artistGive() {
   // 🔴 채우고 나서 연다. 안 그러면 **고를 것이 하나도 없는 보내기 화면**이
   //    뜬다 — 사장은 자기에게 토큰이 없다고 읽는다.
   await ensureAssets();
+  const token = await currentShopToken();
+  // 가게를 아직 안 올렸으면 보낼 토큰이 없다 — 빈 보내기 화면 대신 가게 등록으로 데려간다.
+  if (!token) {
+    showPage("shop");
+    return;
+  }
   showPage("wallet");
-  void openSend("asset", "SHOP.PLAYX");
+  void openSend("asset", token);
 }
 
 function bindArtist() {
@@ -9764,14 +10155,14 @@ function bindArtist() {
 }
 
 const RAVI_SPOTS: Record<string, { page: string; el?: string; say: string }> = {
-  "새 자산 만들기": { page: "assets", el: "as-new", say: "회원권·쿠폰·굿즈를 만드는 곳입니다" },
-  "가게 열기": { page: "shop", el: "sh-save", say: "손님이 볼 화면을 여는 곳입니다" },
+  "새 자산 만들기": { page: "assets", el: "new-asset", say: "회원권·쿠폰·굿즈를 만드는 곳입니다" },
+  "가게 열기": { page: "shop", el: "sh-ko", say: "손님이 볼 화면을 여는 곳입니다" },
   "문 등록": { page: "door", el: "dr-doors", say: "입구 문을 등록하는 곳입니다" },
   "회원 등록": { page: "door", el: "dr-new", say: "회원을 등록하는 곳입니다" },
   "이야기 방 만들기": { page: "talk", el: "tk-newroom", say: "방을 만드는 곳입니다" },
   "방 초대하기": { page: "talk", el: "tk-inv", say: "초대 링크를 만드는 곳입니다" },
   "이 컴퓨터 준비하기": { page: "parts", el: "pc-go", say: "백신·방화벽·메모리를 한 번에 정합니다" },
-  "노드 상태": { page: "parts", say: "노드가 어떤지 보는 곳입니다" },
+  "노드 상태": { page: "parts", say: "서버가 어떤지 보는 곳입니다" },
   // 🔴 대표님: "라비가 이걸 어떻게 사용하는지도 다 설명이 가능해야해"
   //    1차 메뉴 중 **「나눠주기」와 「내 가게」를 라비가 못 가리켰다.**
   //    누가 「자산 가진 사람들한테 나눠주려면 어디로 가?」 하고 물으면
@@ -9870,19 +10261,28 @@ function paintRaviFace() {
 function paintRaviBadge(): void {
   try {
     const on = !!aiProvider;
+    raviHome?.connected(on);
+    const wake = document.getElementById("rv-home-ravi-open");
+    if (wake) setCopyText(wake, () => t(on ? "보내기" : "눌러서 깨우기"));
     const b = document.getElementById("rv-header-ravi");
     if (b) {
       b.dataset.ai = on ? "on" : "off";
-      const label = `${t("라비")} · ${t(on ? "AI 켜짐" : "AI 꺼짐")}`;
-      b.title = label;
-      b.setAttribute("aria-label", label);
+      const label = `${t("라비")} · ${t(on ? "AI 켜짐" : "눌러서 깨우기")}`;
+      const status = keyStatusMessage();
+      b.title = status ? `${label} · ${status}` : label;
+      b.setAttribute("aria-label", b.title);
     }
     const nm = document.getElementById("rv-header-ravi-name");
     if (nm) setCopyText(nm, () => `${t("라비")} · ${t(on ? "켜짐" : "꺼짐")}`);
     const pill = document.getElementById("rv-home-ai-pill");
     if (pill) {
       pill.dataset.ai = on ? "on" : "off";
-      setCopyText(pill, () => t(on ? "AI 켜짐" : "AI 꺼짐 · 정해진 안내만"));
+      const status = keyStatusMessage();
+      pill.title = status;
+      const summary = [...keyChecks.rejected.keys()].some(p => aiKeyed[p]) ? "키 거절" :
+        [...keyChecks.results].some(([p, result]) => aiKeyed[p] && result) ? "연결 확인 실패" :
+        keyChecks.pending.size ? "연결 확인 중" : "";
+      setCopyText(pill, () => `${t(on ? "AI 켜짐" : "AI 꺼짐 · 정해진 안내만")}${summary ? ` · ${t(summary)}` : ""}`);
     }
     const q = document.getElementById("rv-home-ravi-q") as HTMLInputElement | null;
     if (q) q.placeholder = t("예: 수료증 120장 만들어 줘");
@@ -9891,9 +10291,41 @@ function paintRaviBadge(): void {
   }
 }
 
+/** AI 색상 제안은 대화창에서만 본다. 공개 화면은 사람이 저장해야 바뀐다. */
+function previewRaviTheme(rawAccent: unknown, rawTint: unknown): boolean {
+  const hex = (v: unknown) => /^[0-9a-f]{6}$/i.test(String(v ?? "")) ? `#${String(v)}` : "";
+  const accent = hex(rawAccent), tint = hex(rawTint);
+  if (!accent) return false;
+  chatHtml("ai", `<section data-theme-preview><p>${copyHtml("가게 색 미리보기 — 저장을 누르면 적용됩니다.")}</p>` +
+    `<div data-theme-swatch>${copyHtml("주문하기")}</div>` +
+    `<button type="button" data-theme-save>${copyHtml("저장")}</button> ` +
+    `<button type="button" class="ghost" data-theme-cancel>${copyHtml("취소")}</button><p data-theme-note aria-live="polite"></p></section>`);
+  const card = $("chat-log").lastElementChild!.querySelector<HTMLElement>("[data-theme-preview]")!;
+  const swatch = card.querySelector<HTMLElement>("[data-theme-swatch]")!;
+  swatch.style.backgroundColor = accent;
+  swatch.style.color = "#fff";
+  card.style.backgroundColor = tint || "";
+  const save = card.querySelector<HTMLButtonElement>("[data-theme-save]")!;
+  const cancel = card.querySelector<HTMLButtonElement>("[data-theme-cancel]")!;
+  cancel.onclick = () => card.remove();
+  save.onclick = async () => {
+    save.disabled = true; cancel.disabled = true;
+    const note = card.querySelector<HTMLElement>("[data-theme-note]")!;
+    try {
+      await invoke("theme_save", { accent, tint: tint || null });
+      setCopyText(note, () => t("가게 색을 저장했습니다."));
+    } catch (e) {
+      setCopyText(note, () => tf("색을 못 바꿨습니다. {0}", errText(e)));
+      save.disabled = false;
+    } finally { cancel.disabled = false; }
+  };
+  return true;
+}
+
 function applyActions(actions: any[], typed = ""): string[] {
   const done: string[] = [];
   for (const a of actions || []) {
+    if (!raviActionAllowed(a?.type)) continue;
     try {
       switch (a.type) {
         // 🔴 **라비가 단추를 가리킨다. 누르지는 않는다.**
@@ -9902,7 +10334,7 @@ function applyActions(actions: any[], typed = ""): string[] {
           const spot = RAVI_SPOTS[String(a.spot || "")];
           if (!spot) break; // 지어낸 이름은 조용히 무시한다
           raviPoint(spot);
-          done.push(`${a.spot} — ${spot.say}`);
+          done.push(`${a.spot === "노드 상태" ? "서버 상태" : a.spot} — ${spot.say}`);
           break;
         }
         // 🔴 보내기는 **준비만** 한다. 주소·금액을 채워 확인 화면까지 열고, 누르는 것은 사장이다.
@@ -9926,11 +10358,11 @@ function applyActions(actions: any[], typed = ""): string[] {
             await openSend(asset ? "asset" : "rvn", asset || undefined);
             라비가채운보내기 = true;
             ($("s-addr") as HTMLInputElement).value = to;
-            ($("s-qty") as HTMLInputElement).value = String(amt);
+            setAmountRvn($("s-qty") as HTMLInputElement, amt);
             composeChanged();
             await reviewSend();
           })();
-          done.push(tf("보내기 확인 화면을 열었습니다 — {0} {1}, 누르는 것은 사장님입니다", String(amt), asset || "RVN"));
+          done.push(tf("보내기 확인 화면을 열었습니다 — {0} {1}, 누르는 것은 사장님입니다", fmtQty(amt), asset || "RVN"));
           break;
         }
         // 🔴 환불은 **창만 채워 연다.** 대상은 사장님 장부에서 온 번호(r1…)만 받고 금액도 장부 값이다.
@@ -9961,6 +10393,15 @@ function applyActions(actions: any[], typed = ""): string[] {
           done.push(t("그림 만들기를 사장님께 물어봤습니다"));
           break;
         }
+        // 🔴 지도 올리기는 **준비만** 한다. 이름·업종·동네를 채워 카드를 보여 주고,
+        //    [올리기]는 사장님이 누른다(공개 릴레이에 나가는 일이다).
+        //    동네는 표에 있는 칸(또는 표의 동네 이름)만 — 지어낸 칸·정확 좌표는 거절한다.
+        //    가게 링크는 라비가 채우지 않는다(조종당하면 손님을 가짜 링크로 보낼 수 있다).
+        case "map_register_prepare": {
+          const r = mapCard.prepare({ name: a.name, category: a.category, area: a.area });
+          done.push(r.message);
+          break;
+        }
         case "shop_set": {
           // 🔴 주문 링크는 라비가 채우지 않는다 — 조종당하면 손님을 가짜 링크로 보낼 수 있다.
           if (a.field === "order_url") break;
@@ -9968,6 +10409,10 @@ function applyActions(actions: any[], typed = ""): string[] {
           if (!id) break;
           ($(id) as HTMLInputElement).value = String(a.value ?? "");
           done.push(`${a.field} → ${a.value}`);
+          break;
+        }
+        case "promo_create": {
+          if (isPromoRequest(typed)) void openRaviPromo(typed);
           break;
         }
         // 사장이 **제일 자주 하는 일**이다 — "오늘 쉰다", "재료 떨어졌다".
@@ -9981,7 +10426,7 @@ function applyActions(actions: any[], typed = ""): string[] {
           // 이유를 같이 적는다. 닫힌 문만 보는 것과 "재료가 떨어졌습니다" 를
           // 보는 것은 손님에게 아주 다른 일이다.
           if (note && typeof a.note === "string") note.value = a.note.slice(0, 60);
-          done.push(a.today ? tf("오늘 쉼{0}", a.note ? ` — ${a.note}` : "") : "다시 엽니다");
+          done.push(t("휴무 초안") + " — " + t("아직 저장하지 않은 초안이에요. 가게 화면에서 직접 값을 바꾸면 앱이 자동 저장해요."));
           break;
         }
         // 🔴 홈 화면을 사장이 늘린다. 우리가 정한 여덟 개가 전부가 아니다.
@@ -10079,50 +10524,14 @@ function applyActions(actions: any[], typed = ""): string[] {
           done.push(tf("메뉴 {0}개 모두 지움", menuItems.length));
           menuItems.length = 0;
           break;
-        case "issue_set": {
-          const id = { name: "i-name", qty: "i-qty", units: "i-units" }[
-            a.field as string
-          ];
-          if (a.field === "reissuable") {
-            ($("i-reissuable") as HTMLInputElement).checked = !!a.value;
-            done.push(tf("재발행 {0}", t(a.value ? "가능" : "불가")));
-          } else if (id) {
-            ($(id) as HTMLInputElement).value = String(a.value ?? "");
-            done.push(tf("발행 {0} → {1}", a.field, a.value));
-            // 이름이 바뀌면 체인에 이미 있는지 다시 확인해야 한다.
-            if (a.field === "name") checkIssueName();
-          }
-          break;
-        }
         case "go":
-          if (["assets", "wallet", "issue", "shop", "order", "settings"].includes(a.screen)) {
-            showPage(a.screen);
+          if (raviOpenScreen(a.screen)) {
             done.push(tf("{0} 화면으로 이동", a.screen));
           }
           break;
 
-        // 🔴 이 케이스가 **없었다.** 라비에게는 색 바꾸는 법을 7줄에 걸쳐
-        // 가르쳐 놓고(`ai.rs:321·329`), 받는 쪽이 비어 있었다. 뒤쪽은
-        // 멀쩡히 있다(`shop.rs` theme_read/save, `server.rs` 경로).
-        // **중간만 끊겨서**, 사장이 "가게 색 바꿔줘" 하면 라비는 바꿨다고
-        // 답하고 아무 일도 일어나지 않았다. 거짓말을 하게 만든 셈이다.
         case "theme": {
-          const hex = (v: unknown) =>
-            /^[0-9a-f]{6}$/i.test(String(v ?? "")) ? `#${String(v)}` : "";
-          const accent = hex(a.accent);
-          const tint = hex(a.tint);
-          if (!accent) break;
-          // ⚠️ 옅은 accent 는 노드가 거절한다(`shop.rs`의 `ok_accent`) —
-          // 흰 글자가 안 읽히는 주문 단추가 되기 때문이다. 거절당하면
-          // 그 사실을 그대로 말한다. 조용히 넘기면 또 거짓말이 된다.
-          // `applyActions` 는 동기 함수다. 여기서 기다리면 나머지 동작이
-          // 멈추므로 보내 놓고, 결과는 대화창에 따로 적는다.
-          void invoke("theme_save", { accent, tint: tint || null })
-            .then(() => chatSay("ai", tf("가게 색을 {0} 로 바꿨습니다.", accent)))
-            .catch((e) =>
-              chatSay("ai", tf("색을 못 바꿨습니다. {0}", String((e as Error)?.message || e))),
-            );
-          done.push(tf("가게 색 {0} 로 바꾸는 중", accent));
+          if (previewRaviTheme(a.accent, a.tint)) done.push(t("가게 색 미리보기 — 저장을 누르면 적용됩니다."));
           break;
         }
         // 목록에 없는 것은 조용히 버린다. 모르는 동작을 추측해서 실행하면 안 된다.
@@ -10143,9 +10552,7 @@ let chatMode: "fill" | "ask" | "debate" = "fill";
 /// 지금 무엇을 시키는 중인지. 이름만으로는 모자란다 —
 /// 「둘에게」가 무엇 둘인지 대표가 물었고, 그건 이름이 틀렸다는 뜻이다.
 const MODE_SAY: Record<string, string> = {
-  fill:
-    "가게 이름이나 메뉴를 <b>말로 알려주시면</b> 화면에 채워 드릴게요.<br />" +
-    '<span class="muted">발행·전송·소각은 하지 못합니다. 그건 직접 누르셔야 합니다.</span>',
+  fill: RAVI_GREETING,
   ask: "무엇이든 물어보세요. <b>화면은 건드리지 않습니다.</b>",
   debate:
     "서로 다른 <b>AI 두 곳</b>에 같은 것을 묻고 <b>양쪽 답을 그대로</b> 보여 드려요.<br />" +
@@ -10158,6 +10565,23 @@ const MODE_HINT: Record<string, string> = {
   ask: "레이븐코인으로 받으면 뭐가 좋아?",
   debate: "커피값을 4500원으로 올릴까?",
 };
+
+/// 쓸 수 있는 AI 가 몇 곳인가(거절된 열쇠는 뺀다). 「두 곳에 묻기」는 둘 이상일 때만 보인다.
+let aiUsableCount = 0;
+/// 열쇠가 하나뿐인데 「두 곳에 묻기」로 물었을 때, 답과 **같은 말풍선** 맨 위에 붙는 한 줄.
+const DEBATE_ONE_NOTE = "AI가 하나만 연결돼 있어 바로 답할게요.";
+
+/** 🔴 2026-10-11 — 열쇠가 하나인데 「두 곳에 묻기」가 보여, 누르면 「회사·열쇠」 안내 한 줄만 나오고
+ *  답은 동의 카드에서 멈췄다. 하나뿐이면 단추를 감추고, 골라 두었던 모드는 「그냥 묻기」로 칠한다. */
+function paintDebateAvailability() {
+  const b = document.querySelector<HTMLElement>('#chat-mode [data-mode="debate"]');
+  if (b) b.hidden = aiUsableCount < 2;
+  if (aiUsableCount < 2 && chatMode === "debate") {
+    paintChatMode("fill");
+    const intro = document.querySelector<HTMLElement>("#chat-log .msg.intro .msgtxt");
+    if (intro) intro.innerHTML = copyHtml(RAVI_GREETING);
+  }
+}
 
 /** 고른 모드를 단추·안내 칸에만 입힌다(말풍선은 안 남긴다) — 켤 때 쓴다. */
 function paintChatMode(m: "fill" | "ask" | "debate") {
@@ -10191,21 +10615,70 @@ function setChatMode(m: "fill" | "ask" | "debate") {
     log.prepend(intro);
   }
   intro.innerHTML =
-    `<span class="msgravi"></span><div class="msgtxt">${MODE_SAY[m]}</div>`;
+    `<span class="msgravi"></span><div class="msgtxt">${!aiProvider || m === "fill" ? copyHtml(RAVI_GREETING) : MODE_SAY[m]}</div>`;
   intro.querySelector(".msgravi")?.replaceWith(raviFace(raviState, 32, { round: true }));
 }
 
-async function chatAsk(q: string) {
-  setAllRaviMood("thinking");
-  chatHtml("ai", "<span class=\"muted\" data-thinking=\"1\">생각하는 중…</span>");
+async function chatAsk(q: string) { await chatAgent(q); }
+
+/// 정보 선택을 저장하면 다시 보낼 질문 — 마지막으로 「내 정보 없이」 답한 것 하나.
+let raviHeldQuestion = "";
+
+/**
+ * 🔴 2026-10-11 — 정보 선택을 저장하지 않으면 질문을 **버렸다**(「정보 선택을 저장하지 않아 질문을 AI에
+ *    보내지 않았어요」). 카드는 「모두 꺼도 일반 대화는 쓸 수 있어요」라고 약속하는데 말이다. 게다가 카드가
+ *    떠 있는 동안 다음 질문은 조용히 무시됐다(대표가 같은 질문을 두 번 쳐도 답이 없었다).
+ *    이제: 저장 전이면 **내 정보 없이 바로 답하고**(백엔드가 개인 정보 도구를 빼고 묻는다),
+ *    카드는 답 아래에 한 번만 조용히 놓는다. 저장하면 그 질문을 다시 보낸다.
+ */
+async function chatAgent(q: string, note = "") {
+  const consent = raviAgentUI ? await raviAgentUI.consentState() : null;
+  const general = !consent?.reviewed;
+  const say = (text: string) => note
+    ? chatHtml("ai", `<p class="muted">${copyHtml(note)}</p><p>${escapeHtml(text).replace(/\n/g, "<br />")}</p>`)
+    : chatSay("ai", text);
+  const status = document.createElement("p"); status.setAttribute("role", "status");
+  status.textContent = "라비가 질문을 살펴보고 있어요…"; $("chat-log").append(status);
+  const progress = new Channel<string>();
+  progress.onmessage = name => { status.setAttribute("data-ravi-tool", "working"); status.textContent = Object.prototype.hasOwnProperty.call(TOOL_LABELS, name) ? `라비가 ${TOOL_LABELS[name]}…` : "라비가 확인하고 있어요…"; };
   try {
-    const r = await invoke<any>("ai_ask_owner", { provider: aiProvider, question: q, owner: await ownerSnapshot(q) });
-    chatPopThinking();
-    chatHtml("ai", escapeHtml(r?.text || "").replace(/\n/g, "<br />"));
-  } catch (e: any) {
-    chatPopThinking();
-    chatHtml("ai", `<span class="warn">${escapeHtml(errText(e))}</span>`);
+    const r = await invoke<any>("ravi_agent_chat", { provider: aiProvider, message: q, tz: tzMin(), progress });
+    if (containsRaviSecret(String(r.reply || ""))) { say("답에 민감한 정보가 있어 표시하지 않았어요."); return; }
+    say(r.reply || "답 데이터 없음");
+    for (const p of r.prepared || []) {
+      if (p.name === "prepare_send") {
+        // Backend bound these values to this question; retain the original send safety checks too.
+        const done = applyActions([{ type: "send_prepare", to: p.args.address, amount: p.args.amount }], q);
+        if (done.length) chatSay("did", done.join(" · "));
+      } else if (p.name === "open_screen") raviOpenScreen(p.args.screen);
+      else if (p.name === "prepare_promo") await openRaviPromo(q);
+    }
+  } catch (e) {
+    // Backend emits fixed errors only; never display arbitrary transport payloads.
+    const safe = typeof e === "string" && !containsRaviSecret(e) && e.length < 180 ? e : "라비 요청을 마치지 못했어요.";
+    // 열쇠가 틀렸으면 「열쇠 다시 넣기」, 바쁘거나 끊겼으면 「다시 묻기」 — 다음에 할 일을 단추로.
+    const next = raviFailureNextHtml(safe, q, copyHtml);
+    if (next) chatHtml("ai", `${note ? `<p class="muted">${copyHtml(note)}</p>` : ""}<p>${copyHtml(safe)}</p>${next}`);
+    else say(safe);
+    return;
+  } finally { status.remove(); }
+  // 내 정보가 필요한 질문일 때만 동의 카드를 놓는다(「몇살이야?」 같은 일반 질문에는 붙이지 않는다).
+  if (general && raviAgentUI && questionNeedsPersonalData(q)) {
+    raviHeldQuestion = q;
+    raviAgentUI.offerConsent(() => void resendHeldQuestion());
   }
+}
+
+/** 동의 카드에서 「선택 저장」 — 사용자가 다시 치지 않아도 보류한 질문을 고른 정보까지 보고 다시 답한다. */
+async function resendHeldQuestion(lead = "저장했어요. 방금 질문을 고른 정보까지 보고 다시 답할게요.") {
+  const q = raviHeldQuestion;
+  raviHeldQuestion = "";
+  if (!q || !aiProvider) return;
+  chatSay("ai", lead);
+  while (raviRequestPending) await new Promise(r => setTimeout(r, 100));
+  raviRequestPending = true;
+  raviHome?.thinking();
+  try { await chatAgent(q); } finally { raviRequestPending = false; raviHome?.finish(); }
 }
 
 async function chatDebate(q: string) {
@@ -10223,6 +10696,11 @@ async function chatDebate(q: string) {
     chatHtml("ai", `<div class="duo">${one(r?.a)}${one(r?.b)}</div>`);
   } catch (e: any) {
     chatPopThinking();
+    // 열쇠가 하나뿐이면 「두 곳에 묻기」는 못 돌지만 질문은 그대로 답해야 한다 —
+    // 에러만 보이고 답이 없으면 처음 쓰는 사람은 라비가 고장 난 줄 안다.
+    // 🔴 2026-10-11 — 여기서 안내 한 말풍선 + 답 한 말풍선으로 나뉘었고, 답 쪽은 동의 카드에서 멈춰
+    //    안내만 남았다. 이제 안내 한 줄은 답과 같은 말풍선 맨 위에 붙는다.
+    if (String(e).includes("두 곳 이상의 API")) return chatAgent(q, DEBATE_ONE_NOTE);
     chatHtml("ai", `<span class="warn">${escapeHtml(errText(e))}</span>`);
   }
 }
@@ -10245,6 +10723,7 @@ function chatPopThinking() {
    ② 열쇠 넣는 곳은 라비 화면 안에: 회사마다 「어디서 받나요」, 붙여 넣는 칸 **하나**, 저장.
       저장은 「이 컴퓨터 › AI 열쇠」와 **같은 명령**(`save_api_key`, 0600 파일)이다 — 방식은 안 바꾼다.
    🔴 열쇠 칸은 password 칸이고, 어디에도 적지(로그) 않는다. 저장이 끝나면 칸을 비운다. */
+let keyStoragePlatform = /Win/.test(navigator.platform) ? "windows" : /Mac/.test(navigator.platform) ? "macos" : "linux";
 let keyPick = "anthropic";
 
 function keyCardHtml(): string {
@@ -10263,14 +10742,17 @@ function keyCardHtml(): string {
     `<button type="button" class="kc-where" data-kc-where="${escapeHtml(pickedConsole)}">${copyHtml("어디서 받나요")} ↗</button></div>` +
     `<label class="kc-label" for="ravi-key-input">${copyHtml("받은 열쇠를 여기에 붙여 넣으세요")}</label>` +
     `<div class="kc-in"><input id="ravi-key-input" type="password" autocomplete="off" spellcheck="false" placeholder="${escapeHtml(ph)}" />` +
-    `<button type="button" id="ravi-key-save">${copyHtml("저장")}</button></div>` +
+    `<button type="button" id="ravi-key-save">${copyHtml("저장하고 연결 확인")}</button></div>` +
+    `<button type="button" class="ghost" data-kc-check${aiKeyed[keyPick] ? "" : " hidden"}>${copyHtml("저장된 키로 연결 확인")}</button>` +
     `<p class="meta">${copyHtml("열쇠는 이 컴퓨터에만 저장돼요. AI 에게 물을 때만 고른 회사로 함께 보내지고, 우리 서버로는 가지 않아요.")}</p>` +
-    `<p class="meta kc-note" id="kc-note" aria-live="polite"></p>` +
+    `<p class="meta kc-note" id="kc-note" aria-live="polite">${escapeHtml(keyChecks.results.get(keyPick) ? keyConnectionMessage(keyChecks.results.get(keyPick), keyPick) : "")}</p>` +
     `<p class="meta">${copyHtml("내 컴퓨터에서 돌리는 AI 나 다른 곳은 「이 컴퓨터 › AI 열쇠」에서 넣어요.")}</p>` +
     `</section>`;
 }
 
 function openKeyCard() {
+  if (deferUntilRaviLanding(openKeyCard)) return;
+  raviHome?.open(false);
   const host = $("ravi-key");
   host.innerHTML = keyCardHtml();
   host.hidden = false;
@@ -10282,14 +10764,16 @@ function closeKeyCard() {
   const host = $("ravi-key");
   const input = document.getElementById("ravi-key-input") as HTMLInputElement | null;
   if (input) input.value = "";
+  document.getElementById("kc-note-storage-help")?.remove();
   host.hidden = true;
   host.innerHTML = "";
 }
 
 /** clear=true 는 사람이 회사를 직접 고른 때만 — 붙여 넣은 키로 회사를 알아본 때(자동)는 칸을 지우면 방금 붙인 키가 사라진다(0.5.0 결함). */
 function pickKeyProvider(p: string, clear = true) {
-  if (!PROVIDERS[p]) return;
+  if (!PROVIDERS[p] || (document.getElementById("ravi-key-save") as HTMLButtonElement | null)?.disabled) return;
   keyPick = p;
+  document.getElementById("kc-note-storage-help")?.remove();
   document.querySelectorAll<HTMLElement>("#ravi-key [data-kc-pick]").forEach((pick) => {
     const on = pick.dataset.kcPick === p;
     pick.classList.toggle("on", on);
@@ -10299,41 +10783,115 @@ function pickKeyProvider(p: string, clear = true) {
   ($("ravi-key").querySelector("[data-kc-where]") as HTMLElement).dataset.kcWhere = PROVIDERS[p][2];
   const input = document.getElementById("ravi-key-input") as HTMLInputElement | null;
   if (input) { if (clear) input.value = ""; input.placeholder = PROVIDERS[p][1]; }
+  const retry = $("ravi-key").querySelector<HTMLButtonElement>("[data-kc-check]");
+  if (retry) retry.hidden = !aiKeyed[p];
+  delete $("kc-note").dataset.keySaveFailed;
+  setCopyText($("kc-note"), () => keyChecks.results.get(p) ? keyConnectionMessage(keyChecks.results.get(p), p) : "");
 }
 
-async function saveKeyCard() {
+function keyConnectionMessage(error: unknown, provider = ""): string {
+  const failure = keyConnectionFailure(error);
+  const label = PROVIDERS[provider]?.[0];
+  const company = label ? `${label}: ` : "";
+  const google = provider === "google" && (failure.status === 400 || failure.status === 401 || failure.status === 403)
+    ? ` ${t("Google AI Studio의 API 키(AIza…)인지, Generative Language API가 켜져 있는지 확인해 주세요.")}` : "";
+  return `${company}${t(failure.phrase)}${google}${failure.status === undefined ? "" : ` (${failure.status})`}`;
+}
+
+async function saveKeyCard(checkOnly = false) {
   const input = $("ravi-key-input") as HTMLInputElement;
   const note = $("kc-note");
-  const key = input.value.trim();
-  if (!key) return void setCopyText(note, () => t("칸이 비어 있어요. 키를 붙여넣고 다시 눌러 주세요."));
   const btn = $("ravi-key-save") as HTMLButtonElement;
-  btn.disabled = true;
-  try {
-    await invoke("save_api_key", { provider: keyPick, key });
+  if (btn.disabled) return;
+  document.getElementById("kc-note-storage-help")?.remove();
+  const provider = keyPick;
+  delete note.dataset.keySaveFailed;
+  if (checkOnly) {
     input.value = "";
-    await refreshKeys();
-    const label = PROVIDERS[keyPick]?.[0] || keyPick;
+    if (!aiKeyed[provider] || keyChecks.pending.has(provider)) return;
+    setCopyText(note, () => t("연결을 확인하는 중…"));
+    void checkSavedKey(provider, true);
+    return;
+  }
+  const key = normalizeApiKey(input.value);
+  if (!key) return void setCopyText(note, () => t("칸이 비어 있어요. 키를 붙여넣고 다시 눌러 주세요."));
+  const detected = providerOfKey(key);
+  if (detected && detected !== provider || /\s/.test(key)) {
+    input.value = "";
+    return void setCopyText(note, () => t("키 형식이 고른 회사와 맞지 않아요. 키를 발급한 회사를 다시 골라 주세요."));
+  }
+  btn.disabled = true;
+  setCopyText(note, () => t(KEYCHAIN_SAVING));
+  try {
+    try { await invoke("save_api_key", { provider, key }); }
+    catch (error) {
+      await refreshKeys("", true);
+      note.dataset.keySaveFailed = "1";
+      setCopyText(note, () => `${t("키 저장에 실패했어요.")} ${keyStorageError(error, t, keyStoragePlatform)}`);
+      showKeyStorageHelp(note, error, provider, key);
+      return;
+    }
+    input.value = "";
+    keyChecks.forget(provider);
+    await refreshKeys(provider, true);
     closeKeyCard();
-    // 깨어나는 순간을 보여 준다. "됐어요" 한 줄보다 이게 기억에 남는다.
-    chatHtml("ai",
-      `<div class="wake awake"><span class="ravi-mount"></span>` +
-      `<div><b>${copyHtml("안녕하세요, 라비예요.")}</b><br />` +
-      `<span class="muted">${tf("{0} 열쇠를 저장했어요. 이제 무엇이든 물어보세요.", `<span translate="no">${escapeHtml(label)}</span>`)}</span></div></div>`);
-  } catch (e) {
-    setCopyText(note, () => `${errText(e)} 다시 넣어 주세요`);
+    // 🔴 2026-10-11 대표: 「열쇠를 넣고 나면 반드시 작동해야 한다」. 들고 있던 질문이 있으면 바로 다시 묻고
+    //    (동의 카드·두 곳에 묻기에 막히지 않는다 — 저장 전이면 내 정보 없이 답한다), 없으면 연결 확인 뒤
+    //    「연결됐어요 · 한 번 물어볼까요?」를 띄운다(checkSavedKey).
+    if (raviHeldQuestion && aiProvider) void resendHeldQuestion("키를 저장했어요. 방금 질문을 AI로 다시 물어볼게요.");
+    else { raviKeyJustSaved = provider; chatHtml("ai", `<p>${copyHtml("키를 저장했어요. 연결을 확인하고 있어요.")}</p>`); }
   } finally {
     input.value = "";
     btn.disabled = false;
   }
 }
 
+function wakeRavi(): void {
+  showPage("ravi");
+  if (!aiProvider) {
+    const selected = ($("ai-pick") as HTMLSelectElement).value;
+    if (PROVIDERS[selected]) keyPick = selected;
+    openKeyCard();
+  }
+}
+
 /** 열쇠가 없을 때의 답 — 정해 둔 안내. 맞는 게 없으면 모른다고 말한다. */
 function raviGuide(q: string) {
-  const topic = matchGuide(q);
-  chatHtml("ai", topic ? guideHtml(topic, copyHtml) : guideMissHtml(copyHtml));
+  const html = raviAnswerHtml(q, (["ko", "en", "ja", "zh"].includes(lang) ? lang : "en") as CoreLang);
+  // 정해 둔 안내로 답하지 못한 질문은 들고 있다가, 열쇠를 저장하면 AI 로 다시 묻는다(saveKeyCard).
+  if (/data-answer-kind="(?:unsupported|clarify)"/.test(html)) raviHeldQuestion = q;
+  // 정해 둔 안내로도 답이 없을 때(「아직 못 해요」) 빈손으로 끝내지 않는다 — 한 줄, 단추는 더하지 않는다.
+  chatHtml("ai", /data-answer-kind="(?:unsupported|clarify)"/.test(html) ? html + raviKeyHintHtml(q, (["ko", "en", "ja", "zh"].includes(lang) ? lang : "en") as CoreLang) : html);
+}
+
+/** 「공개 조회하기」를 누른 뒤 — 사용자가 적은 주소 하나만 보낸다. 숫자와 고정 출처만 돌아온다. */
+async function raviPublicLookup(button: HTMLElement) {
+  const address = button.dataset.raviPublic || "";
+  const language = (button.closest<HTMLElement>("[data-ravi-language]")?.dataset.raviLanguage || (["ko", "en", "ja", "zh"].includes(lang) ? lang : "en") as CoreLang) as CoreLang;
+  if (!address || (button as HTMLButtonElement).disabled) return;
+  (button as HTMLButtonElement).disabled = true;
+  chatHtml("ai", `<span class="muted" data-thinking="1">${copyHtml("공개 조회처에 묻는 중…")}</span>`);
+  try {
+    const r = await invoke<PublicAddress>("ravi_public_address", { address });
+    chatPopThinking();
+    chatHtml("ai", raviPublicResultHtml(r, language));
+  } catch (e) {
+    chatPopThinking();
+    chatHtml("ai", `<span class="warn">${escapeHtml(errText(e))}</span>`);
+  }
 }
 
 /** 안내 답 아래 단추가 데려가는 곳. */
+function raviOpenScreen(screen: unknown): boolean {
+  // Old model replies may use legacy screen names; connect them to real pages.
+  const name = screen === "order" ? "orders" : screen === "issue" ? "create" : String(screen ?? "");
+  const target = Object.prototype.hasOwnProperty.call(RAVI_SCREENS, name) ? RAVI_SCREENS[name] : null;
+  if (!target) return false;
+  showPage(target.page);
+  if (target.tab) shopTab(target.tab);
+  return true;
+}
+
 function raviGo(to: GuideGo) {
   const jumpTo = jumpToEl;
   switch (to) {
@@ -10346,6 +10904,15 @@ function raviGo(to: GuideGo) {
     case "assets": showPage("assets"); return;
     case "node": toggleDot("node"); return;
     case "key": openKeyCard(); return;
+    case "orders": raviOpenScreen("orders"); return;
+    case "sales": raviOpenScreen("sales"); return;
+    case "shop": raviOpenScreen("shop"); return;
+    case "reward": showPage("reward"); return;
+    case "phone": showPage("settings"); jumpTo("rvp-card"); return;
+    case "talk": showPage("talk"); return;
+    case "settings": showPage("settings"); return;
+    case "report": openReport(); return;
+    case "qr": showPage("shop"); void openQrSheet(); return;
   }
 }
 
@@ -10380,61 +10947,84 @@ async function raviImage(prompt: string) {
 
 /** 라비에게 넘기는 사장님 화면 — 읽기 전용, 필요한 것만. 주소·열쇠는 넣지 않는다. */
 const 환불후보 = new Map<string, { order: string; rvn: number; item: string }>();
-async function ownerSnapshot(asked = ""): Promise<Record<string, unknown>> {
-  const out: Record<string, unknown> = {};
+
+let raviRequestPending = false;
+let promoOpening = false;
+async function openRaviPromo(request = "") {
+  if (promoOpening) return;
+  promoOpening = true;
+  raviHome?.open();
+  chatHtml("ai", '<div data-promo-host="1"></div>');
+  const host = $("chat-log").lastElementChild?.querySelector<HTMLElement>("[data-promo-host]");
   try {
-    const b: any = await invoke("wallet_balance");
-    out.wallet = { rvn_confirmed: Number(b.confirmed) || 0, rvn_incoming: Number(b.unconfirmed) || 0 };
-  } catch {}
-  try {
-    // 이 지갑의 받는 주소(비밀 아님). 노드가 「내 것」이라고 확인한 것만 — 「내 주소로 보내줘」에 쓴다.
-    const r: any = await invoke("receive_address", { fresh: false });
-    const a = String(r?.address ?? "").trim();
-    if (r?.mine === true && looksLikeAddress(a)) {
-      최근내주소 = a;
-      // AI 회사로는 「내 주소/내 지갑」을 말했을 때만 나간다.
-      if (/내\s*(주소|지갑)|my\s+(address|wallet)/i.test(asked)) (out.wallet as any) = { ...((out.wallet as any) || {}), my_receive_address: a };
-    }
-  } catch {}
-  try {
-    const p: any = await invoke("ledger_pending");
-    // 「입금 대기」= 손님이 주문했지만 아직 결제가 안 들어온 주문. 하루 지나면 사라진다.
-    out.awaiting_payment = {
-      meaning: "orders placed by customers whose payment has not arrived yet (dropped after 24h)",
-      count: Number(p?.count || 0),
-      orders: (p?.orders || []).slice(0, 10).map((o: any) => ({
-        items: Array.isArray(o.items) ? o.items.map((i: any) => `${i.name ?? ""}${i.qty > 1 ? " x" + i.qty : ""}`).slice(0, 6) : [],
-        rvn: o.rvn, price: o.krw, currency: o.currency, table: o.table ?? null,
-        minutes_ago: o.quoted_at ? Math.max(0, Math.round((Date.now() / 1000 - Number(o.quoted_at)) / 60)) : null,
-      })),
-    };
-  } catch {}
-  try {
-    const ymd = todayYmd();
-    const r: any = await invoke("ledger_range", { fromYmd: ymd, toYmd: ymd, tzOffsetMin: tzMin() });
-    out.today = { sales: Number(r?.sales || 0), total: r?.mixed_currency ? null : Number(r?.total || 0), currency: r?.currency ?? null };
-    const gb: any = await invoke("gb_overview", { todayYmd: ymd, nowUnix: Math.floor(Date.now() / 1000) }).catch(() => null);
-    if (gb) {
-      // 환불 대상은 주소가 아니라 짧은 번호(r1, r2…)로만 AI 에 준다 — AI 가 주소를 고르지 못하게.
-      환불후보.clear();
-      const cands: any[] = [];
-      for (const it of (gb.items || []) as any[]) {
-        for (const r of (it.refund_due || []) as any[]) {
-          if (cands.length >= 10 || !looksLikeAddress(String(r.order))) continue;
-          const ref = "r" + (cands.length + 1);
-          환불후보.set(ref, { order: String(r.order), rvn: Number(r.rvn) || 0, item: String(it.item) });
-          cands.push({ ref, item: String(it.item), qty: r.qty, rvn: r.rvn });
+    if (host) await createPromoCard(host, {
+      load: async () => {
+        const saved = await invoke<any>("shop_load") || {};
+        if (!saved.order_url && !saved.chain_asset && !saved.page_url && !saved.shop_url) {
+          // Only the public customer page; never owner/staff URLs or pairing credentials.
+          const base = await invoke<any>("public_base", { localIp: serverIp || "127.0.0.1", port: 8790 }).catch(() => null);
+          if (base?.base && (base.public || serverIp)) saved.page_url = `${String(base.base).replace(/\/$/, "")}/`;
         }
-      }
-      out.group_buy = { refund_due: gb.refund_due, to_ship: gb.to_ship, items: (gb.items || []).length, refund_candidates: cands };
-    }
-  } catch {}
-  return out;
+        return saved;
+      },
+      keyed: () => !!aiProvider,
+      generate: (language, request, target) => invoke("ai_promo", { provider: aiProvider, language, request, target }),
+      qr: text => invoke<string>("qr_svg", { text }),
+      save: async b64 => {
+        const path = await pickSavePath({ defaultPath: `ravi-promo-${Date.now()}.png`, filters: [{ name: "PNG", extensions: ["png"] }] });
+        if (!path) return false;
+        await invoke("image_save", { path, b64 });
+        return true;
+      },
+    }, request);
+  } finally { promoOpening = false; }
 }
 
 async function chatSend() {
+  if (raviRequestPending || !($("chat-q") as HTMLInputElement).value.trim()) return;
+  raviRequestPending = true;
+  raviHome?.sent();
+  raviHome?.thinking();
+  try { await chatSendExisting(); } finally { raviRequestPending = false; raviHome?.finish(); }
+}
+
+/** 로컬 인물·감정·체인 답을 말풍선으로. 고정 언어 문구라 화면 번역기가 다시 칠하지 않게 translate="no". */
+function raviPersonaSay(q: string, talk: { text: string; event?: "user_thanks" | "ai_unknown" }) {
+  ($("chat-q") as HTMLInputElement).value = "";
+  chatSay("me", q);
+  chatHtml("ai", `<div translate="no">${escapeHtml(talk.text).replace(/\n/g, "<br />")}</div>`);
+  if (talk.event) emitRaviEvent(talk.event);
+}
+
+async function chatSendExisting() {
   const q = ($("chat-q") as HTMLInputElement).value.trim();
   if (!q) return;
+  // 🔴 2026-10-11 (0.8.8) — 위기 표현은 무엇보다 먼저(비밀 검사보다도), AI 열쇠·지연 묶음과 상관없이 정해 둔 안내로 답한다(ravi-crisis.ts, main 묶음).
+  //    비밀처럼 보이는 글이 섞였으면 입력을 말풍선에 다시 보이지 않고 안내만 한다(아무 데도 보내지 않는다).
+  const crisis = raviCrisisReply(q, lang);
+  if (crisis) {
+    if (containsRaviSecret(q)) { ($("chat-q") as HTMLInputElement).value = ""; chatHtml("ai", `<div translate="no">${escapeHtml(crisis.text)}</div>`); return; }
+    raviPersonaSay(q, crisis); return;
+  }
+  if (containsRaviSecret(q)) {
+    ($("chat-q") as HTMLInputElement).value = "";
+    chatHtml("ai", `<div translate="no">${raviCopy(raviQuestionLanguage(q, (["ko", "en", "ja", "zh"].includes(lang) ? lang : "en") as CoreLang))("시드·키·토큰은 라비에게 보내지 마세요. 입력을 기록하지 않았어요.")}</div>`);
+    return;
+  }
+  // 인물 설정·감정·체인 대답은 지연 묶음(ravi-persona-lazy.ts) — 처음 한 번만 읽는다. 읽기 실패면 null → 기존 경로.
+  const persona = await loadRaviPersona();
+  if (isRaviHelp(q)) {
+    ($("chat-q") as HTMLInputElement).value = "";
+    chatSay("me", q);
+    chatHtml("ai", raviAnswerHtml(q, (["ko", "en", "ja", "zh"].includes(lang) ? lang : "en") as CoreLang));
+    return;
+  }
+  if (isPromoRequest(q)) {
+    ($("chat-q") as HTMLInputElement).value = "";
+    chatSay("me", q);
+    await openRaviPromo(q);
+    return;
+  }
   // 🔴 「R… 내 거야?」는 AI 에게 보내지 않는다 — 노드가 정확히 아는 것을 AI 가 짐작하게
   //    두면 안 된다. 열쇠가 없어도, 어느 모드든 규칙으로 바로 답한다(0.4.6).
   const whoseAddr = whoseQuestion(q);
@@ -10443,6 +11033,36 @@ async function chatSend() {
     chatSay("me", q);
     return void raviWhose(whoseAddr);
   }
+  // 🔴 2026-10-11 — AI 에게 맡기면 안 되는 세 가지는 열쇠가 있어도 정해 둔 답으로 바로 답한다(ravi-chat.ts).
+  //    「돈 보내줘」: 라비는 대신 보내지 않는다 — 보내기 화면 단추 + 안전 요령.
+  //    (주소와 「숫자 RVN」을 둘 다 적은 직접 지시만 기존 「확인 화면 준비」로 간다. 확정은 사람이 누른다.)
+  if (aiProvider && isRaviSendRequest(q) && !isExplicitSendOrder(q)) {
+    ($("chat-q") as HTMLInputElement).value = "";
+    chatSay("me", q);
+    chatHtml("ai", raviSendAnswerHtml(q, (["ko", "en", "ja", "zh"].includes(lang) ? lang : "en") as CoreLang));
+    return;
+  }
+  //    「R… 잔액 얼마야?」: 적은 주소 하나만, 알리고 나서, 단추를 눌러야 공개 조회처에 묻는다.
+  const publicAddress = publicAddressQuestion(q);
+  if (publicAddress) {
+    ($("chat-q") as HTMLInputElement).value = "";
+    chatSay("me", q);
+    chatHtml("ai", raviPublicOfferHtml(q, publicAddress, (["ko", "en", "ja", "zh"].includes(lang) ? lang : "en") as CoreLang));
+    return;
+  }
+  //    「380만개면 부자순위 몇위야?」: 순위표가 없으면 모른다고, 시세는 말한 값으로만.
+  const rich = parseRichQuestion(q);
+  if (rich) {
+    ($("chat-q") as HTMLInputElement).value = "";
+    chatSay("me", q);
+    chatHtml("ai", raviRichAnswerHtml(q, rich, (["ko", "en", "ja", "zh"].includes(lang) ? lang : "en") as CoreLang, !!aiProvider));
+    return;
+  }
+  // 인물 설정(몇 살·생일·누구)·인사·기분·감정·체인 정보 「읽는 도구 없음」 — ravi-persona.ts.
+  // 전체 문장 인식이라 지갑 요청을 가로채지 않는다. 열쇠가 있어도 정본·체인 답은 로컬이 먼저(숫자 지어내기 방지·비용 0),
+  // 감정 표현만 열쇠가 없을 때 로컬(열쇠가 있으면 AI 가 맥락을 살려 답한다).
+  const talk = persona?.raviPersonaReply(q, { uiLang: lang, mood: raviState, hasKey: !!aiProvider }) ?? null;
+  if (talk) { raviPersonaSay(q, talk); return; }
   if (!aiProvider) {
     chatSay("me", q);
     ($("chat-q") as HTMLInputElement).value = "";
@@ -10452,51 +11072,15 @@ async function chatSend() {
   chatSay("me", q);
 
   if (chatMode === "ask") return chatAsk(q);
-  if (chatMode === "debate") return chatDebate(q);
-
-  const val = (id: string) => ($(id) as HTMLInputElement)?.value || "";
-  const state = {
-    shop: {
-      name_ko: val("sh-ko"),
-      name_en: val("sh-en"),
-      description: val("sh-desc"),
-      location: val("sh-loc"),
-      asset: val("sh-asset"),
-      pickup: ($("sh-pickup") as HTMLInputElement)?.checked,
-      delivery: ($("sh-delivery") as HTMLInputElement)?.checked,
-    },
-    // 🔴 기간·재고도 보낸다. 안 보내면 라비가 「하루권 얼마야?」에 답을
-    //    못 하고, 이미 있는 이용권을 또 만들라고 한다. 빈 값은 안 보낸다 —
-    //    토큰만 늘고 뜻은 그대로다.
-    menu: menuItems.map((m, i) => ({
-      index: i,
-      name: m.name,
-      price: m.price,
-      ...(m.pass_months ? { pass_months: m.pass_months } : {}),
-      ...(m.pass_days ? { pass_days: m.pass_days } : {}),
-      ...(m.stock != null ? { stock: m.stock } : {}),
-    })),
-    currency: ($("mn-cur") as HTMLSelectElement)?.value,
-    owner: await ownerSnapshot(q),
-  };
-
-  try {
-    const r = await invoke<any>("ai_chat", {
-      provider: aiProvider,
-      message: q,
-      state,
-      // 마지막 몇 마디만 보낸다. 전부 보내면 매번 값이 늘어난다.
-      history: chatHistory.slice(-6),
-    });
-    chatSay("ai", r.reply || "");
-    const done = applyActions(r.actions, q);
-    // 무엇을 바꿨는지 눈에 보여야 한다. 조용히 고치면 나중에 원인을 못 찾는다.
-    if (done.length) chatSay("did", done.join(" · "));
-
-    chatHistory.push({ role: "user", text: q }, { role: "assistant", text: r.reply || "" });
-  } catch (e) {
-    chatSay("ai", errText(e));
+  // 0.8.8 병합(GPT 교차검토): 체인 수치 질문(해시율·블록·보안 비용·시세)은 토론 모드여도 읽기 도구·출처·기준 시각 규칙이 있는
+  // chatAgent 로 보낸다 — ai_debate 에는 도구가 없어 숫자를 지어낼 수 있다.
+  if (chatMode === "debate") {
+    if (persona?.classifyChainQuestion(q, lang)) return chatAgent(q);
+    return aiUsableCount >= 2 ? chatDebate(q) : chatAgent(q, DEBATE_ONE_NOTE);
   }
+
+  await chatAgent(q);
+
 }
 
 
@@ -10534,7 +11118,7 @@ async function rhPaint(): Promise<void> {
     $("rh-out").innerHTML = st?.running
       ? `<div class="rhbadge">연습 중</div>
          <div class="meta" style="margin-top:6px">
-           ${tf("연습용 돈 {0} RVN · 만들어 본 자산 {1}개", Number(st.balance || 0).toLocaleString(undefined, { maximumFractionDigits: 0 }), st.assets || 0)}
+           ${tf("연습용 돈 {0} RVN · 만들어 본 자산 {1}개", fmtRvn(Number(st.balance || 0), { code: "" }), st.assets || 0)}
          </div>`
       : "";
   } catch {
@@ -10546,7 +11130,7 @@ function wireRehearse(): void {
   const start = document.getElementById("rh-start");
   if (!start) return;
   start.onclick = async () => {
-    await rhSay("연습용 체인을 켜는 중…");
+    await rhSay("연습용 공개 장부를 켜는 중…");
     try {
       await invoke("rehearse_start");
       // 돈이 없으면 발행이 안 된다. 켜자마자 만들어 둔다 — 묻지 않는다.
@@ -10572,7 +11156,7 @@ function wireRehearse(): void {
       });
       // ⚠️ 여기서 "발행했습니다" 라고만 쓰면 진짜와 헷갈린다. 연습이라고 적는다.
       await rhSay(
-        tf("연습으로 만들었습니다. 진짜로 하시면 이대로 됩니다. (연습용 잔액 {0} RVN)", Number(r?.balance || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })),
+        tf("연습으로 만들었습니다. 진짜로 하시면 이대로 됩니다. (연습용 잔액 {0} RVN)", fmtRvn(Number(r?.balance || 0), { code: "" })),
       );
       await rhPaint();
     } catch (e) {
@@ -10736,7 +11320,7 @@ async function fillSample() {
   shopIcon = "QmZYRLyTXskYN89TSrhELMm5CCHRi3RyXCjSyABz8tRbvK";
   $("sh-picprev").innerHTML =
     `<img src="http://127.0.0.1:8080/ipfs/${shopIcon}" alt="" style="max-width:180px;border-radius:8px;margin-top:8px" />`;
-  $("sh-picnote").textContent = "샘플 사진 (IPFS에 올라가 있습니다)";
+  $("sh-picnote").textContent = "샘플 사진 (사진 보관함에 올라가 있습니다)";
 
   menuItems.length = 0;
   menuItems.push(
@@ -11966,7 +12550,7 @@ function msNumChanged() {
   const v = ($("ms-num") as HTMLSelectElement).value;
   $("ms-numnote").innerHTML = v
     ? `<span class="ok">이미 있는 번호를 씁니다</span> — 소각되는 RVN이 없습니다`
-    : "체인에 새 번호를 찍습니다. 손님이 번호를 갖고 오셨으면 위에서 고르세요.";
+    : "공개 장부에 새 번호를 찍습니다. 손님이 번호를 갖고 오셨으면 위에서 고르세요.";
   $("ms-chain").style.display = v ? "none" : "";
 }
 
@@ -12027,7 +12611,7 @@ async function saveMember() {
       const root = (($("sh-asset") as HTMLInputElement)?.value || "GYM").trim();
       asset = await invoke<string>("member_number", { root, seed });
 
-      $("ms-note2").textContent = "체인에 회원번호를 찍는 중…";
+      $("ms-note2").textContent = "공개 장부에 회원번호를 찍는 중…";
       const lock = await invoke<any>("wallet_lock_state").catch(() => null);
       const pass =
         lock?.encrypted && !lock?.unlocked
@@ -12046,7 +12630,7 @@ async function saveMember() {
         //    회원을 열 명 등록하면 50 RVN 이다. 사장이 알고 눌러야 한다.
         if (
           !(await holdBeforeDoing(
-            tf("회원 이름표 「{0}」 을(를) 체인에 만듭니다", asset),
+            tf("회원 이름표 「{0}」 을(를) 공개 장부에 만듭니다", asset),
             "5 RVN 이 타서 없어집니다. 되돌릴 수 없습니다.",
           ))
         ) {
@@ -12132,6 +12716,14 @@ async function openEncrypt() {
   gateEnc();
 }
 
+// 언어를 바꾸면 따라 쳐야 할 문구도 바뀐다 — 앞서 친 확인 글은 비우고 단추를 다시 잠근다(옛 언어 글로 열려 있지 않게).
+window.addEventListener("desktop-language-change", () => {
+  const box = document.getElementById("encbox"), confirm = document.getElementById("enc-confirm") as HTMLInputElement | null;
+  if (!box || !confirm || box.style.display === "none") return;
+  confirm.value = "";
+  window.setTimeout(gateEnc, 120); // 문구가 새 말로 바뀐 뒤에 다시 판정
+});
+
 function gateEnc() {
   const v = (id: string) => ($(id) as HTMLInputElement).value;
   const ok =
@@ -12175,8 +12767,8 @@ async function doEncrypt() {
         .then(() => true)
         .catch(() => false);
       $("enc-result").innerHTML =
-        `<div class="warnbox" style="margin-top:12px"><b>암호를 걸었습니다. 노드가 꺼졌습니다.</b><br />
-         레이븐 노드를 다시 켜야 가게가 다시 돕니다. 암호를 종이에 적어 안전한 곳에 두세요 —
+        `<div class="warnbox" style="margin-top:12px"><b>암호를 걸었습니다. 서버가 꺼졌습니다.</b><br />
+         레이븐 서버를 다시 켜야 가게가 다시 돕니다. 암호를 종이에 적어 안전한 곳에 두세요 —
          이 컴퓨터가 아닌 곳에.<br /><br />
          ${
            alsoBackup
@@ -12247,7 +12839,7 @@ async function sellRate() {
 async function listOffer() {
   if (!sellTarget) return;
   const qty = parseFloat(($("sl-qty") as HTMLInputElement).value);
-  const price = parseFloat(($("sl-price") as HTMLInputElement).value);
+  const price = amountOrNaN(bindAmountInput($("sl-price") as HTMLInputElement));
   if (!(qty > 0) || !(price > 0)) {
     $("sl-note").textContent = "수량과 가격을 넣어 주세요";
     return;
@@ -12476,6 +13068,8 @@ async function fulfil(sale: any) {
       passphrase: pass,
       paidRvn: Number(sale.paid) || null,
       orderAddr: sale.address ?? null,
+      paymentTxid: sale.txid ?? null,
+      paymentVout: sale.vout ?? null,
     });
     $("vd-result").innerHTML =
       `<div class="card" style="margin-top:12px"><h3>보냈습니다</h3>
@@ -12528,6 +13122,7 @@ async function 웹주문확인(물어봐도되나 = false) {
     return;
   }
   try {
+    const completion = await invoke<{ pending: number }>("retry_remote_completions", { token: 열쇠 });
     const r = await fetch("https://rvn.ex.erci.se/api/rvn/deliveries", {
       headers: { "x-rvn-delivery-token": 열쇠 },
     });
@@ -12547,6 +13142,7 @@ async function 웹주문확인(물어봐도되나 = false) {
     $("wo-note").textContent = 웹주문들.length
       ? tf("{0}건이 기다리고 있습니다. 보낼 때마다 지갑 암호를 한 번 받습니다.", 웹주문들.length)
       : "열쇠가 확인됐습니다. 지금 기다리는 주문은 없습니다 — 웹에서 누가 사면 여기에 뜹니다.";
+    if (completion.pending) $("wo-note").textContent += " 완료 기록/미확인 주문이 로컬 재시도 대기 중입니다.";
     $("wo-list").innerHTML = 웹주문들
       .map((o, i) => `<tr>
           <td translate="no">${escapeHtml(o.title || o.asset)}<div class="meta">${escapeHtml(o.asset)}</div></td>
@@ -12582,21 +13178,15 @@ async function 웹주문보내기(i: number) {
   if (!lock?.unlocked && !pass) return;
 
   try {
-    const txid = await invoke<string>("fulfil_sale", {
-      asset: o.asset,
-      qty: Number(o.qty) || 1,
-      toAddress: String(o.to),
+    const txid = await invoke<string>("deliver_remote_sale", {
+      order: { id: o.id, asset: o.asset, qty: Number(o.qty), to: String(o.to),
+        order_addr: o.order_addr, paid_rvn: o.paid_rvn,
+        payment_txid: o.payment_txid, payment_vout: o.payment_vout },
       passphrase: pass,
     });
-    /* 🔴 **보낸 뒤에만** 알린다. 먼저 알리고 전송이 실패하면 그 주문은
-       목록에서 빠지는데 사람은 못 받는다 — 영영 사라진다. */
-    await fetch("https://rvn.ex.erci.se/api/rvn/deliveries", {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-rvn-delivery-token": 열쇠 },
-      body: JSON.stringify({ id: o.id, txid }),
-    }).catch(() => {});
+    const completion = await invoke<{ pending: number }>("retry_remote_completions", { token: 열쇠 });
     $("wo-result").innerHTML =
-      `<div class="card" style="margin-top:12px"><h3>보냈습니다</h3>
+      `<div class="card" style="margin-top:12px"><h3>${completion.pending ? "전달됨 · 서버 완료 기록 재시도 대기" : "보냈습니다"}</h3>
        <div class="kv"><b>트랜잭션</b><code class="addr">${escapeHtml(txid)}</code></div></div>`;
     웹주문확인();
     loadAssets(false);
@@ -12639,7 +13229,11 @@ async function autoRound() {
           skipped.map((s: any) => `${s.asset} — ${s.why}`).join("<br>") + `</div>`
         : "") +
       (r.error ? `<div class="warnbox" style="margin-top:12px">${r.error}</div>` : "");
-  } catch {}
+  } catch (e) {
+    // 조용히 삼키면 「켜 둔 채 멈춘 것」과 구별되지 않는다 — 이유를 한 줄 보인다.
+    const box = document.getElementById("vd-result");
+    if (box) box.innerHTML = `<div class="warnbox" style="margin-top:12px"><b>자동 발송이 이번 회전에 멈췄습니다</b><br>${escapeHtml(errText(e))}<br>노드·잠금·암호 상태를 확인하세요. 다음 회전에 다시 시도합니다.</div>`;
+  }
 }
 
 /* ══ 곡 자산 꾸미기 — Pages 처럼 보면서 만든다 ═══════════════════════════
@@ -12852,13 +13446,8 @@ async function 웹자동배송() {
 
     /* 🔴 **보낸 뒤에만** 웹에 알린다. 먼저 알리고 전송이 실패하면 그 주문은
        목록에서 빠지는데 사람은 못 받는다 — 영영 사라진다. */
-    for (const s of res.sent || []) {
-      await fetch("https://rvn.ex.erci.se/api/rvn/deliveries", {
-        method: "POST",
-        headers: { "content-type": "application/json", "x-rvn-delivery-token": 열쇠 },
-        body: JSON.stringify({ id: s.id, txid: s.txid }),
-      }).catch(() => {});
-    }
+    const completion = await invoke<{ pending: number }>("retry_remote_completions", { token: 열쇠 });
+    if (completion.pending) $("wo-note").textContent = "전달 결과 또는 서버 완료 기록 확인 대기 중입니다. 자산을 다시 보내지 않습니다.";
     if ((res.sent || []).length) {
       웹주문확인();
       loadAssets(false);
@@ -12912,8 +13501,8 @@ async function toggleAuto() {
     const ex = await invoke<any>("exposure").catch(() => null);
     // 조언이 아니라 숫자로 보여준다.
     $("vd-autonote").innerHTML = ex
-      ? `이 컴퓨터에 <b>${ex.rvn.toLocaleString()} RVN</b>` +
-        (ex.krw ? tf(" (약 {0}원)", Math.round(ex.krw).toLocaleString()) : "") +
+      ? `이 컴퓨터에 <b>${fmtRvn(ex.rvn)}</b>` +
+        (ex.krw ? tf(" (약 {0}원)", fmtCount(Math.round(ex.krw))) : "") +
         ` 있습니다. 털리면 이만큼입니다.`
       : "";
   } catch (e) {
@@ -12954,7 +13543,7 @@ async function loadChannels() {
 async function sendNotice() {
   const btn = $("nt-go") as HTMLButtonElement;
   btn.disabled = true;
-  $("nt-note").textContent = "IPFS에 올리고 체인에 기록하는 중…";
+  $("nt-note").textContent = "사진 보관함에 올리고 공개 장부에 기록하는 중…";
   try {
     const r = await invoke<any>("broadcast", {
       channel: ($("nt-ch") as HTMLSelectElement).value,
@@ -13001,7 +13590,7 @@ async function checkPubsub() {
   try {
     const r = await invoke<any>("pubsub_ready");
     $("ps-state").innerHTML = r.ready
-      ? `<span class="ok">노드끼리 직접 대화할 수 있습니다.</span> 서버도 수수료도 없습니다.`
+      ? `<span class="ok">서버끼리 직접 대화할 수 있습니다.</span> 서버도 수수료도 없습니다.`
       : `<b>아직 켜져 있지 않습니다.</b><br />${r.how}`;
     ($("ps-go") as HTMLButtonElement).disabled = !r.ready;
   } catch {}
@@ -13053,10 +13642,10 @@ async function doRefund(payAddress: string, suggested: number, boxId = "or-refun
   box.innerHTML =
     `<div class="card" style="margin-top:12px">
        <h3>${copyHtml("환불하기")}</h3>
-       <p class="meta">${copyHtml("받은 금액은")} ${suggested} RVN ${copyHtml("입니다. 일부만 돌려주시려면 더 적게 넣으세요.")}</p>
+       <p class="meta">${copyHtml("받은 금액은")} ${escapeHtml(fmtRvn(suggested))} ${copyHtml("입니다. 일부만 돌려주시려면 더 적게 넣으세요.")}</p>
        <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
          <label class="meta" for="rf-amt">${copyHtml("얼마를 돌려드릴까요? (RVN)")}</label>
-         <input id="rf-amt" inputmode="decimal" value="${suggested}" />
+         <input id="rf-amt" inputmode="decimal" />
          <label class="meta" for="rf-to">${copyHtml("어느 주소로 돌려드릴까요?")}</label>
          <input id="rf-to" placeholder="R..." autocomplete="off" spellcheck="false" />
          <p class="meta" id="rf-fromsay">${copyHtml("보낸 주소를 찾는 중…")}</p>
@@ -13075,6 +13664,7 @@ async function doRefund(payAddress: string, suggested: number, boxId = "or-refun
          <span class="meta" id="rf-say"></span>
        </div>
      </div>`;
+  setAmountRvn(bindAmountInput($("rf-amt") as HTMLInputElement), suggested);
   ($("rf-to") as HTMLInputElement).focus();
 
   // 🔴 대표님: "상대방 지갑주소가 안 보이던데."
@@ -13110,7 +13700,13 @@ async function doRefund(payAddress: string, suggested: number, boxId = "or-refun
     box.innerHTML = "";
   });
   $("rf-go").addEventListener("click", async () => {
-    const amount = parseFloat(($("rf-amt") as HTMLInputElement).value);
+    const rfEl = $("rf-amt") as HTMLInputElement;
+    const rfParsed = readAmount(rfEl);
+    if (!rfParsed.ok && rfParsed.problem !== "empty") {
+      $("rf-say").innerHTML = `<span class="danger">${escapeHtml(amountProblemText(rfEl, rfParsed))}</span>`;
+      return;
+    }
+    const amount = amountOrNaN(rfEl);
     const to = ($("rf-to") as HTMLInputElement).value.trim();
     const reason = ($("rf-why") as HTMLInputElement).value.trim();
     const pass = needPass ? ($("rf-pass") as HTMLInputElement).value : null;
@@ -13126,7 +13722,7 @@ async function doRefund(payAddress: string, suggested: number, boxId = "or-refun
     // 🔴 **되돌릴 수 없다.** 주소와 금액을 그대로 다시 보여 주고 묻는다.
     const ok = await sure(
       t("이 주소로 보낼까요?"),
-      `${amount} RVN\n${to}\n\n${t("보내면 되돌릴 수 없습니다.")}`,
+      `${fmtRvn(amount)}\n${to}\n\n${t("보내면 되돌릴 수 없습니다.")}`,
     );
     if (!ok) return;
     const b = $("rf-go") as HTMLButtonElement;
@@ -13141,7 +13737,7 @@ async function doRefund(payAddress: string, suggested: number, boxId = "or-refun
       });
       box.innerHTML =
         `<div class="card" style="margin-top:12px"><h3>${copyHtml("환불했습니다")}</h3>
-         <div class="kv"><b>${copyHtml("금액")}</b><span>${r.amount} RVN</span></div>
+         <div class="kv"><b>${copyHtml("금액")}</b><span>${escapeHtml(fmtRvn(Number(r.amount)))}</span></div>
          <div class="kv"><b>${copyHtml("거래 번호")}</b><code class="addr">${escapeHtml(String(r.txid))}</code></div></div>`;
       loadWallet();
       try { await onDone?.(); } catch { /* 환불은 나갔다. 표시만 못 했으면 다음에 다시 보인다. */ }
@@ -13541,7 +14137,7 @@ async function loadIpfsConf() {
           try {
             await invoke("ipfs_config_write", { key, value, isJson });
             $("if-result").innerHTML =
-              `<div class="meta ok" style="margin-top:9px">${tf("{0} → {1} · IPFS를 다시 켜야 적용됩니다", escapeHtml(key), escapeHtml(value))}</div>`;
+              `<div class="meta ok" style="margin-top:9px">${tf("{0} → {1} · 사진 보관함을 다시 켜야 적용됩니다", escapeHtml(key), escapeHtml(value))}</div>`;
           } catch (err) {
             $("if-result").innerHTML = `<div class="warnbox" style="margin-top:9px">${escapeHtml(errText(err))}</div>`;
           }
@@ -13556,7 +14152,7 @@ async function loadIpfsConf() {
           try {
             await invoke("ipfs_apply_profile", { name });
             $("if-result").innerHTML =
-              `<div class="card" style="margin-top:10px">적용했습니다. <b>IPFS를 다시 켜야</b> 반영됩니다.
+              `<div class="card" style="margin-top:10px">적용했습니다. <b>사진 보관함을 다시 켜야</b> 반영됩니다.
                보존한 파일은 그대로입니다.</div>`;
             loadIpfsConf();
           } catch (err) {
@@ -13685,7 +14281,7 @@ async function saveConf() {
     $("cf-result").innerHTML =
       `<div class="card" style="margin-top:12px"><h3>저장했습니다</h3>` +
       (r.wrote || []).map((w: any) => `<div class="kv"><b>${w.key}</b><span>${w.value}</span></div>`).join("") +
-      `<p class="meta"><b>노드를 다시 켜야 적용됩니다.</b> 지금은 아직 예전 설정으로 돌고 있습니다.<br />
+      `<p class="meta"><b>서버를 다시 켜야 적용됩니다.</b> 지금은 아직 예전 설정으로 돌고 있습니다.<br />
        이전 설정은 <code>raven.conf.bak</code> 로 남겼습니다.</p></div>`;
     $("cf-note").textContent = "";
   } catch (e) {
@@ -13779,7 +14375,7 @@ function rwArgs(dry: boolean) {
     asset: ($("rw-asset") as HTMLInputElement).value.trim(),
     height: Number(($("rw-height") as HTMLInputElement).value),
     payWith: ($("rw-pay") as HTMLInputElement).value.trim(),
-    amount: parseFloat(($("rw-amt") as HTMLInputElement).value),
+    amount: amountOrNaN(bindAmountInput($("rw-amt") as HTMLInputElement)),
     skip: ($("rw-skip") as HTMLInputElement).value
       .split(",")
       .map((x) => x.trim())
@@ -13936,7 +14532,7 @@ async function loadBackup() {
       .map((i: any) => `<div class="kv"><b>${escapeHtml(String(i.name))}</b><span>${
         i.exists ? fmtBytes(i.size) : "<span class='warn'>없음</span>"
       } — ${escapeHtml(String(i.why))}</span></div>`).join("") +
-      `<p class="meta">${copyHtml("브라우저·PWA 지갑과 파일, IPFS 원본, AI API 키는 이 백업에 포함되지 않습니다.")}</p>`;
+      `<p class="meta">${copyHtml("브라우저·PWA 지갑과 파일, 사진 보관함(IPFS) 원본, AI API 키는 이 백업에 포함되지 않습니다.")}</p>`;
     const issue = latestAutomaticBackupIssue || b.automatic?.error || b.automatic?.warning;
     if (issue) $("bk-list").innerHTML += `<div class="warnbox">${escapeHtml(String(issue))}</div>`;
   } catch {}
@@ -13953,8 +14549,10 @@ async function loadSweep() {
     const on = !!s?.enabled && !!s?.to;
     if (on) {
       (($("sw-to") as HTMLInputElement).value ||= String(s.to || ""));
-      (($("sw-above") as HTMLInputElement).value ||= String(s.above ?? ""));
-      (($("sw-keep") as HTMLInputElement).value ||= String(s.keep ?? ""));
+      // 저장된 값(수)은 이 언어의 입력 글자로 넣는다(de 「3000,5」). 「String(수)」의 점은 de 에서 막힌다.
+      const aboveEl = bindAmountInput($("sw-above") as HTMLInputElement), keepEl = bindAmountInput($("sw-keep") as HTMLInputElement);
+      if (!aboveEl.value && s.above != null) setAmountRvn(aboveEl, Number(s.above));
+      if (!keepEl.value && s.keep != null) setAmountRvn(keepEl, Number(s.keep));
     }
     $("sw-state").innerHTML = on
       ? `켜져 있습니다 — <b>${fmtQty(Number(s.above))} RVN</b> 을 넘으면 ` +
@@ -13967,8 +14565,17 @@ async function loadSweep() {
 
 async function saveSweep(enabled: boolean) {
   const to = ($("sw-to") as HTMLInputElement).value.trim();
-  const above = parseFloat(($("sw-above") as HTMLInputElement).value);
-  const keep = parseFloat(($("sw-keep") as HTMLInputElement).value);
+  // 🔴 2026-10-11 — 여태 parseFloat 였다: de 에서 「3.000」(삼천)이 3 으로 읽혀 3 RVN 넘으면 쓸어 갔다.
+  //    켤 때는 두 칸 다 이 언어 규칙으로 정확히 읽혀야 한다. 못 읽으면 저장하지 않는다(0 으로 바꾸지 않는다).
+  const aboveEl = bindAmountInput($("sw-above") as HTMLInputElement), keepEl = bindAmountInput($("sw-keep") as HTMLInputElement);
+  if (enabled) {
+    for (const el of [aboveEl, keepEl]) {
+      const r = readAmount(el);
+      if (!r.ok && !(r.problem === "zero" && el === keepEl)) { $("sw-note").textContent = amountProblemText(el, r); el.focus(); return; }
+    }
+  }
+  const above = amountOrNaN(aboveEl);
+  const keep = keepEl.value.trim() && readAmount(keepEl).ok ? amountOrNaN(keepEl) : 0;
   $("sw-note").textContent = enabled ? "확인 중…" : "끄는 중…";
   try {
     // 끌 때는 주소를 검사하지 않는다 — 잘못 저장해 둔 주소 때문에 끌 수조차
@@ -14096,6 +14703,7 @@ async function doBackup(destFolder = ""): Promise<string> {
   $("bk-note").textContent = "백업 중…";
   try {
     const r = requireWalletBackup(await invoke("backup_zip", { destFolder, label, includeWallet: true }));
+    emitRaviEvent("backup_done");
     // 🔴 **어디에 만들었는지 짐작해서 적지 않는다.** 「바탕화면에 있습니다」로
     //    박아 뒀는데 기본 폴더를 서류함으로 바꾸자 그 문장이 거짓말이 됐고,
     //    사장은 바탕화면을 뒤졌다. 러스트가 돌려준 **진짜 경로**를 읽는다.
@@ -14109,7 +14717,7 @@ async function doBackup(destFolder = ""): Promise<string> {
          <div class="kv"><b>${escapeHtml(r.name)}</b><span>${escapeHtml(r.size_text)}</span></div>
          <p class="meta">${escapeHtml(whereText)}</p>
          <p>${copyHtml("아래 파일을 담았습니다. 백업 파일과 백업 암호 또는 백업 열쇠를 별도로 보관하세요.")}</p>
-         <p class="meta">${copyHtml("브라우저·PWA 지갑과 파일, IPFS 원본, AI API 키는 이 백업에 포함되지 않습니다.")}</p>
+         <p class="meta">${copyHtml("브라우저·PWA 지갑과 파일, 사진 보관함(IPFS) 원본, AI API 키는 이 백업에 포함되지 않습니다.")}</p>
          ${(r.inside || []).map((i: any) => `<div class="kv"><b>${escapeHtml(i.name)}</b><span>${escapeHtml(i.what)}</span></div>`).join("")}
        </div>` +
       (r.warning
@@ -14198,6 +14806,7 @@ function obShow(step: ObStep) {
 }
 
 async function startOnboard() {
+  if (deferUntilRaviLanding(() => { void startOnboard(); })) return;
   $("onboard").classList.remove("hidden");
   obShow("scan");
 
@@ -14323,9 +14932,9 @@ async function obChoose(shopOnly: boolean) {
   const DEFAULTS: Record<string, number> = { dbcache: 450, maxconnections: 125, maxmempool: 300, server: 0 };
   const WORDS: Record<string, string> = {
     dbcache: "메모리 사용",
-    maxconnections: "다른 노드와 연결",
+    maxconnections: "다른 서버와 연결",
     maxmempool: "대기 중인 거래 보관",
-    server: "이 앱이 노드에 말 걸기",
+    server: "이 앱이 서버에 말 걸기",
     prune: "장부 정리",
   };
   let cur: Record<string, number> = {};
@@ -14349,8 +14958,8 @@ async function obChoose(shopOnly: boolean) {
       ? `<div>장부 — <b>갖고 있는 것에서 옛 것을 지웁니다.</b> 다시 받지 않습니다.</div>`
       : `<div>장부 — <b>손대지 않습니다.</b> 지금 것 그대로 둡니다.</div>`
   );
-  rows.push(`<div>사진 창고(IPFS) — 설정을 <b>${obRec.ipfs_profile}</b>로 맞춥니다.</div>`);
-  rows.push(`<div style="margin-top:8px;color:var(--faint)">노드를 다시 켤 때 적용됩니다.</div>`);
+  rows.push(`<div>사진 보관함(IPFS) — 설정을 <b>${obRec.ipfs_profile}</b>로 맞춥니다.</div>`);
+  rows.push(`<div style="margin-top:8px;color:var(--faint)">서버를 다시 켤 때 적용됩니다.</div>`);
   $("ob-nums").innerHTML = rows.join("");
 
   obShow("verdict");
@@ -14433,9 +15042,9 @@ function switches(): Switch[] {
     {
       id: "autostart",
       title: "정전 뒤 자동으로 켜기",
-      desc: "전원이 돌아오면 노드가 저절로 켜집니다. 앱은 켜지지 않습니다.",
+      desc: "전원이 돌아오면 서버가 저절로 켜집니다. 앱은 켜지지 않습니다.",
       on: () => autostartOn,
-      body: `<div class="meta">노드만 켭니다. 앱까지 저절로 켜지면 아무도 없는 방에서 지갑이 열립니다.</div>`,
+      body: `<div class="meta">서버만 켭니다. 앱까지 저절로 켜지면 아무도 없는 방에서 지갑이 열립니다.</div>`,
       apply: "지금 켜기",
       run: async () => { await toggleAutostart(); },
     },
@@ -14445,7 +15054,7 @@ function switches(): Switch[] {
       desc: "디스크 45 GB → 5 GB, 메모리와 연결도 줄입니다.",
       on: () => lowspecOn,
       body: `<div class="warnbox" style="font-size:14px">
-               <b>한 번 켜면 되돌릴 수 없습니다.</b> 끄려면 체인을 처음부터 다시 받아야 합니다(몇 시간).
+               <b>한 번 켜면 되돌릴 수 없습니다.</b> 끄려면 공개 장부를 처음부터 다시 받아야 합니다(몇 시간).
              </div>`,
       apply: "저장하고 다시 켜기 안내",
       run: async () => { await applyLowspec(); },
@@ -14532,7 +15141,7 @@ async function refreshSwitchState() {
 async function applyLowspec() {
   const on = lowspecOn;
   if (!on) {
-    if (!(await sure("장부를 5 GB로 줄일까요?", "되돌리려면 체인을 처음부터 다시 받아야 합니다.", "줄입니다")))
+    if (!(await sure("장부를 5 GB로 줄일까요?", "되돌리려면 공개 장부를 처음부터 다시 받아야 합니다.", "줄입니다")))
       return;
   }
   const values = on
@@ -14543,8 +15152,8 @@ async function applyLowspec() {
   say(
     "저장했습니다",
     on
-      ? "설정을 되돌렸습니다. 다만 이미 지워진 블록은 다시 받아야 합니다.\n노드를 다시 켜 주세요."
-      : "노드를 다시 켜야 적용됩니다."
+      ? "설정을 되돌렸습니다. 다만 이미 지워진 블록은 다시 받아야 합니다.\n서버를 다시 켜 주세요."
+      : "서버를 다시 켜야 적용됩니다."
   );
 }
 
@@ -14566,7 +15175,7 @@ async function checkHealth() {
     $$("hz-card").className = `verdict ${tone}`;
     $$("hz-state").textContent =
       { ok: "지금 주문을 받을 수 있습니다", down: "주문을 받을 수 없습니다",
-        catching_up: "노드가 따라잡는 중입니다", no_orders: "손님이 주문할 곳이 없습니다",
+        catching_up: "서버가 따라잡는 중입니다", no_orders: "손님이 주문할 곳이 없습니다",
         no_photos: "사진이 손님에게 안 보입니다", local_only: "매장 안에서만 받습니다" }[
         h.state as string
       ] || String(h.state);
@@ -14578,7 +15187,7 @@ async function checkHealth() {
       h.state === "ok"
         ? ""
         : `<div class="meta" style="margin-top:10px">
-             ${tf("노드 {0} · IPFS {1} · 폰 {2}{3}", t(h.node ? "켜짐" : "꺼짐"), t(h.ipfs ? "켜짐" : "꺼짐"), t(h.phone ? "켜짐" : "꺼짐"), h.behind ? tf(" · {0} 블록 남음", h.behind) : "")}
+             ${tf("서버 {0} · 사진 보관함 {1} · 폰 {2}{3}", t(h.node ? "켜짐" : "꺼짐"), t(h.ipfs ? "켜짐" : "꺼짐"), t(h.phone ? "켜짐" : "꺼짐"), h.behind ? tf(" · {0} 블록 남음", h.behind) : "")}
            </div>`;
   } catch (e) {
     // 🔴 **빈 `catch` 였다.** 그래서 못 물어봤을 때 이 카드가 처음 글자인
@@ -14589,7 +15198,7 @@ async function checkHealth() {
     $$("hz-card").className = "verdict warn";
     setCopyText($$("hz-state"), () => t("지금 받을 수 있는지 못 알아봤습니다"));
     $$("hz-why").textContent = errText(e);
-    setCopyText($$("hz-fix"), () => t("노드가 켜져 있는지 보고, 잠시 뒤 이 화면을 다시 열어 주세요."));
+    setCopyText($$("hz-fix"), () => t("서버가 켜져 있는지 보고, 잠시 뒤 이 화면을 다시 열어 주세요."));
     $$("hz-extra").innerHTML = "";
   }
 }
@@ -14612,7 +15221,7 @@ async function toggleAutostart() {
       const p = await invoke<any>("default_paths");
       if (!p.ravend) {
         throw new Error(
-          "ravend 를 찾지 못했습니다. 레이븐 노드를 어디에 설치하셨는지 확인해 주세요."
+          "ravend 를 찾지 못했습니다. 레이븐 서버를 어디에 설치하셨는지 확인해 주세요."
         );
       }
       await invoke("autostart_enable", { ravendPath: p.ravend, dataDir: p.data_dir });
@@ -14704,7 +15313,7 @@ async function refreshTunnel() {
              이 주소는 <b>임시입니다.</b> 앱이나 터널을 다시 켜면 바뀌고,
              이미 올린 링크는 열리지 않습니다. 자주 파실 거면 고정 주소가 필요합니다.<br />
              그리고 이 통로는 <b>Cloudflare를 지나갑니다</b> — 결제는 여전히 손님 지갑이 서명하고
-             체인이 정산하지만, 화면 자체는 그 회사를 거쳐 전달됩니다.
+             공개 장부가 정산하지만, 화면 자체는 그 회사를 거쳐 전달됩니다.
            </p>
          </div>`
       : "";
@@ -14781,12 +15390,12 @@ async function startPhone() {
       }
 
     // 사장·직원·검표 QR에는 각각 다른 열쇠가 들어 있다. 손님 QR만 붙여도 된다.
-    phoneQr = foreverQr +
-      `<div class="qrbox">${adminQr}<div class="cap"><b>사장님만</b>돈·발행·설정 전부</div>${oneLink(r.admin_url)}</div>` +
-      `<div class="qrbox">${staffQr}<div class="cap"><b>직원</b>주문·회원확인만</div>${oneLink(r.staff_url)}</div>` +
-      `<div class="qrbox">${scanQr}<div class="cap"><b>검표 태블릿</b>문 앞에 두는 화면</div>${oneLink(r.scan_url)}</div>` +
+    phoneQr = (r.credentials_renewed ? `<div class="meta" style="font-size:15px">${copyHtml("연결 열쇠가 만료되어 새로 만들었습니다. RavenVault 폰 앱에서 새 QR을 다시 찍어 주세요.")}</div>` : "") + foreverQr +
+      `<div class="qrbox">${adminQr}<div class="cap"><b>사장님만</b>돈·발행·설정 전부</div>${copyHtml("RavenVault 폰 앱에서 연결 QR을 찍어 주세요.")}</div>` +
+      `<div class="qrbox">${staffQr}<div class="cap"><b>직원</b>주문·회원확인만</div>${copyHtml("RavenVault 폰 앱에서 연결 QR을 찍어 주세요.")}</div>` +
+      `<div class="qrbox">${scanQr}<div class="cap"><b>검표 태블릿</b>문 앞에 두는 화면</div>${copyHtml("RavenVault 폰 앱에서 연결 QR을 찍어 주세요.")}</div>` +
       `<div class="qrbox">${custQr}<div class="cap"><b>손님</b>카운터에 붙이세요</div>${oneLink(r.customer_url)}</div>` +
-      `<div class="meta" style="width:100%;margin-top:8px">${tf("{0}:{1} · 폰을 같은 와이파이에 붙이고 찍으세요. QR 이 안 열리면 위 주소를 치세요.", r.ip, r.port)}</div>` +
+      `<div class="meta" style="width:100%;margin-top:8px">${escapeHtml(r.ip)}:${escapeHtml(String(r.port))} · ${copyHtml("RavenVault 폰 앱에서 연결 QR을 찍어 주세요.")}</div>` +
       // 손님 QR 에는 열쇠가 없어 붙여도 된다. 나머지 셋에는 열쇠가 들어 있어
       // 인쇄해 벽에 붙이면 그건 열쇠를 벽에 붙이는 것이다.
       `<div class="tblbox">
@@ -14969,7 +15578,7 @@ function paintChainMark() {
   const btn = document.getElementById("sh-refresh");
   if (btn) btn.style.display = asset ? "" : "none";
   el.className = asset ? "chainmark on" : "chainmark";
-  setCopyText(el, () => asset ? tf("체인에 등록됨 · {0}", asset) : t("이 컴퓨터에만 있습니다"));
+  setCopyText(el, () => asset ? tf("공개 장부에 등록됨 · {0}", asset) : t("이 컴퓨터에만 있습니다"));
   el.title = asset
     ? ""
     : t("손님은 QR 로 옵니다. 장터에서 찾게 하려면 아래에서 등록하세요.");
@@ -15412,14 +16021,40 @@ async function checkShopName() {
     $("sh-confirmbox").style.display = "none";
     return;
   }
-  const full = await invoke<string>("shop_asset_name", { input: raw });
-  let free = true;
+  // 🔴 새 가게는 `RV.S.<가게이름>`(대표 확정 2026-10-11). 이름 만들기·검사는 shop-token.ts 한 곳 —
+  //    한글은 폰과 같은 로마자 표로 바꾸고, 규칙(30자·예약어·허용 문자·종류 글자 S)에 안 맞으면 노드에 묻기 전에 멈춘다.
+  //    Rust `shop_name_free` 도 같은 규칙으로 한 번 더 막는다(화면을 건너뛴 호출 대비).
+  const full = suggestShopAssetName(raw);
+  const named = checkShopAssetName(full);
+  if (!named.valid) {
+    $("sh-assetcheck").innerHTML = `<span style="color:var(--bad)">${named.problems.map(p => escapeHtml(t(p))).join("<br />")}</span>`;
+    $("sh-cost").innerHTML = "";
+    $("sh-confirmbox").style.display = "none";
+    $("sh-confirmname").textContent = "";
+    gateShop();
+    return;
+  }
+  // 🔴 노드에 묻지 못하면(오류) 「비어 있음」이 아니라 **「확인 불가」**다 — 예전에는 `free = true` 로
+  //    시작해 오류를 삼켜, 모르는 채로 500 RVN 등록 확인 칸을 열었다.
+  let free: boolean | null = null;
   try {
-    free = await invoke<boolean>("shop_name_free", { name: raw });
-  } catch {}
+    // shop_name_free 는 「비어 있음」이 true 다(name_taken 과 반대) — 정확한 불리언만 믿는다.
+    free = strictBool(await invoke<unknown>("shop_name_free", { name: full }));
+  } catch {
+    free = null;
+  }
+  if (free === null) {
+    $("sh-assetcheck").innerHTML = `<span style="color:var(--bad)">확인 불가: 이 이름이 이미 있는지 노드에 묻지 못했어요. 노드가 다 따라잡은 뒤 이름을 다시 적어 확인해 주세요.</span>`;
+    $("sh-cost").innerHTML = "";
+    $("sh-confirmbox").style.display = "none";
+    // 앞서 확인한 다른 이름이 확인 칸에 남아 등록 단추를 열지 않게 비운다.
+    $("sh-confirmname").textContent = "";
+    gateShop();
+    return;
+  }
 
   $("sh-assetcheck").innerHTML = free
-    ? `체인에 <code>${full}</code> 로 남습니다`
+    ? `${copyHtml("공개 장부에 이 이름으로 남습니다")} <code>${escapeHtml(full)}</code>`
     : `<span style="color:var(--bad)">이미 등록된 이름입니다. 자산 이름은 영구적이라 다시 쓸 수 없습니다.</span>`;
 
   if (free) {
@@ -15528,7 +16163,7 @@ async function registerShop() {
       //    레이븐코인의 `sendmessage` 는 「이 자산을 가진 사람 전원」에게
       //    가는데, 가진 사람이 사장 하나뿐이면 자기에게 보내는 셈이다.
       //
-      //    가게 주인임을 증명하는 것은 `SHOP.무엇!`(소유권 토큰)이지 이 자산이
+      //    가게 주인임을 증명하는 것은 `RV.S.무엇!`(옛 가게는 `SHOP.무엇!`, 소유권 토큰)이지 이 자산이
       //    아니다. 그러니 이 자산은 **처음부터 팔로우 토큰**으로 만든다.
       //    손님에게 0.00000001 씩 나눠 주면 그 사람들이 가게 공지를 받는다.
       //
@@ -15556,10 +16191,10 @@ async function registerShop() {
 
     $("sh-result").innerHTML =
       `<div class="card" style="margin-top:12px"><h3>가게가 등록되었습니다</h3>
-       <div class="kv"><b>체인 이름</b><span>${asset}</span></div>
+       <div class="kv"><b>공개 장부 이름</b><span>${asset}</span></div>
        <div class="kv"><b>프로필</b><code class="addr">${up.cid}</code></div>
        <div class="kv"><b>트랜잭션</b><code class="addr">${txid}</code></div>
-       <p class="meta">확인되면 전 세계 어느 노드에서도 이 가게가 보입니다.</p></div>`;
+       <p class="meta">확인되면 전 세계 어느 서버에서도 이 가게가 보입니다.</p></div>`;
     $("sh-confirmbox").style.display = "none";
   } catch (e) {
     $("sh-result").innerHTML = `<div class="warnbox" style="margin-top:12px">${escapeHtml(errText(e))}</div>`;
@@ -15588,7 +16223,7 @@ function shopSnapshot() {
     // 🔴 이 둘이 여태 저장 안 됐다. `loadShop` 은 읽는데 저장하는 쪽이 안
     //    담아서, 사장이 적어 넣은 바깥 주소가 앱을 끄면 사라졌다.
     //    `asset` 은 더 중요하다 — 노드가 **자기 가게의 체인 이름**을 알아야
-    //    터널이 켜질 때 「SHOP.PLAYX 는 지금 여기서 주문받습니다」를 올린다.
+    //    터널이 켜질 때 「이 가게(RV.S.… 또는 옛 SHOP.…)는 지금 여기서 주문받습니다」를 올린다.
     order_url: val("sh-orderurl"),
     // 사장이 치는 중인 이름과, **실제로 체인에 올라간 이름**은 다르다.
     asset: val("sh-asset"),
@@ -15724,7 +16359,7 @@ async function pushShopLive(): Promise<void> {
  * 체인 이름이 비어 있을 때 **지갑에 물어서** 채운다.
  *
  * 사장에게 「체인 이름이 뭐였죠」라고 물으면 안 된다 — 답은 이 컴퓨터
- * 안에 이미 있다. 소유권 토큰(`SHOP.무엇!`)은 그 자산의 주인만 갖는다.
+ * 안에 이미 있다. 소유권 토큰(`RV.S.무엇!`, 옛 가게는 `SHOP.무엇!`)은 그 자산의 주인만 갖는다.
  *
  * 이게 비어 있으면 화면이 「체인에 가게를 등록하지 않았습니다」라고
  * **거짓말을 하고**, 어느 이름으로 알릴지 몰라 **릴레이 공지도 못 올린다.**
@@ -15774,19 +16409,20 @@ function lockChainName() {
     if (note) note.remove();
     return;
   }
-  // 손님에게 보이는 이름이 아니라 **체인에 박힌 이름**이다. `SHOP.` 은 관례
-  // 접두사라 칸에는 그 뒤만 적어 왔다 — 되쓸 때도 같게 맞춘다.
-  box.value = 이미.replace(/^SHOP\./, "");
+  // 손님에게 보이는 이름이 아니라 **체인에 박힌 이름**이다. `RV.S.`(새 가게)·`SHOP.`(옛 가게)는 관례
+  // 접두사라 칸에는 그 뒤만 적어 왔다 — 되쓸 때도 같게 맞춘다. 전체 이름은 칸 아래 안내에 그대로 보인다.
+  box.value = shopLabel(이미);
   box.readOnly = true;
   if (!note) {
     const p = document.createElement("p");
     p.id = "sh-assetlocked";
     p.className = "meta";
-    setCopyText(p, () => t(
-      "이미 체인에 올린 이름입니다. 체인 이름은 바꿀 수 없어서 잠가 두었습니다 — 다시 등록하면 RVN 이 또 탑니다.",
-    ));
     box.insertAdjacentElement("afterend", p);
   }
+  // 옛 가게(`SHOP.PLAYX`)는 그 이름 그대로 쓴다 — 새 규칙(RV.S.)으로 바꾸라고 하지 않는다(체인 이름은 못 바꾼다).
+  setCopyText(note || document.getElementById("sh-assetlocked")!, () => t(
+    "이미 공개 장부에 올린 이름입니다. 공개 장부 이름은 바꿀 수 없어서 잠가 두었습니다 — 다시 등록하면 RVN 이 또 탑니다.",
+  ) + " " + tf("이 가게의 토큰: {0}", 이미));
 }
 
 async function loadShop() {
@@ -16069,7 +16705,7 @@ async function sayPrice(i: number) {
   }
   // 여덟 자리를 넘는 자리는 체인에서 잘린다. 잘린다고 미리 말해 준다.
   const cut = Math.round(v * 1e8) / 1e8;
-  setCopyText(el, () => cut !== v ? `${t("체인에는")} ${cut} RVN ${t("으로 올라갑니다")}` : "");
+  setCopyText(el, () => cut !== v ? `${t("공개 장부에는")} ${cut} RVN ${t("으로 올라갑니다")}` : "");
 }
 
 /** 「8월 23일에 사면 9월 22일까지」 — 사장이 카운터에서 할 말 그대로. */
@@ -17256,11 +17892,24 @@ async function loadOrders() {
 // ── 가게 찾기 ──
 window.addEventListener("DOMContentLoaded", async () => {
   const theme = $("rv-theme") as HTMLSelectElement;
+  // 0.9.4 — 자료 폴더 이름을 RavenVault 로 옮기다 막혔거나, 옛 폴더에도 자료가 있을 때 쉬운 말로 알린다.
+  void invoke<any>("datadir_status").then((d) => {
+    const n = d?.app_folder_notice;
+    if (!n?.message) return;
+    const bar = document.createElement("div");
+    bar.setAttribute("role", "status");
+    bar.style.cssText = "position:fixed;left:12px;right:12px;bottom:12px;z-index:9999;padding:12px 14px;border-radius:10px;background:#fff8e1;color:#4a3b00;border:1px solid #e0c060;font-size:14px;line-height:1.5";
+    bar.textContent = String(n.message) + "  ";
+    const ok = document.createElement("button");
+    ok.textContent = "확인";
+    ok.onclick = () => bar.remove();
+    bar.appendChild(ok);
+    document.body.appendChild(bar);
+  }).catch(() => {});
   const savedTheme = localStorage.getItem("ravenvault-theme");
   theme.value = ["light", "dark"].includes(savedTheme || "") ? savedTheme! : "system";
   document.documentElement.dataset.theme = theme.value;
   theme.onchange = () => { document.documentElement.dataset.theme = theme.value; localStorage.setItem("ravenvault-theme", theme.value); };
-  $("ravi-face").replaceWith(Object.assign(raviFace("sleep", 184), { id: "ravi-face" }));
   // 왼쪽 맨 앞 아이콘은 라비다(아래 rv-header-ravi). 예전 앱 로고 자리는 비운다.
   $("rv-desktop-logo").remove();
   $("rv-onboard-face").appendChild(raviFace("sleep", 150));
@@ -17271,12 +17920,12 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("rv-header-ravi-face").appendChild(raviFace("sleep", 40, { round: true }));
   $("rv-header-ravi").title = t("라비");
   $("rv-header-ravi").setAttribute("aria-label", t("라비"));
-  $("rv-header-ravi").onclick = () => showPage("ravi");
+  $("rv-header-ravi").onclick = () => raviHome?.open();
   const homeAsk = () => {
     const hq = $("rv-home-ravi-q") as HTMLInputElement;
     const v = hq.value.trim();
+    if (!v) { raviHome?.open(); return; }
     showPage("ravi");
-    if (!v) return;
     ($("chat-q") as HTMLInputElement).value = v;
     hq.value = "";
     void chatSend();
@@ -17301,30 +17950,43 @@ window.addEventListener("DOMContentLoaded", async () => {
   });
   $("rv-room-ravi-face").appendChild(raviFace("sleep", 50, { round: true }));
   applyRaviCharacter();
-  $("rv-room-ravi").onclick = () => showPage("ravi");
+  $("rv-room-ravi").onclick = wakeRavi;
+  // 0.9.0 — 「내 색」 없앰. 이름은 이야기와 같은 이름표(talk-identity.ts 가 저장 결과를 확인한다).
   $("rv-profile-save").onclick = async () => {
     const name = ($("rv-profile-name") as HTMLInputElement).value.trim();
-    const color = ($("rv-profile-color") as HTMLInputElement).value;
-    if (!name) { $("rv-profile-note").textContent = t("이름을 적어 주세요"); return; }
+    const note = $("rv-profile-note");
+    if (!name) { note.textContent = t("이름을 적어 주세요"); return; }
+    let pk = "", existing: any = {};
     try {
-      const me = await invoke<any>("talk_me");
-      const pk = String(me.pubkey || "");
-      const existing = await invoke<any>("talk_profiles", { pubkeys: [pk] }).catch(() => ({}));
-      await invoke("talk_profile_set", { name, about: String(existing?.[pk]?.about || ""), picture: String(existing?.[pk]?.picture || "") });
-      localStorage.setItem("rv-profile-color", color);
-      $("rv-person-avatar").style.background = color;
-      $("rv-profile-note").textContent = t("이름을 저장했습니다");
-    } catch (e) { $("rv-profile-note").textContent = errText(e); }
+      pk = String((await invoke<any>("talk_me"))?.pubkey || "");
+      existing = await invoke<any>("talk_profiles", { pubkeys: [pk] }).catch(() => ({}));
+    } catch (e) { note.className = "danger"; note.textContent = errText(e); return; }
+    const r = await saveTalkName(invoke, name, String(existing?.[pk]?.about || ""), String(existing?.[pk]?.picture || ""));
+    note.className = r.ok ? "ok" : "danger";
+    note.textContent = r.ok ? t("이름을 저장했습니다") : r.error;
+    if (r.ok && pk) tkNames.set(pk, { ...(tkNames.get(pk) || {}), name: r.name });
   };
   $("rv-add-friend").onclick = () => { showPage("settings"); document.getElementById("rvp-card")?.scrollIntoView(); };
-  document.querySelectorAll<HTMLButtonElement>("[data-rv-question]").forEach(button => {
-    button.onclick = () => { ($("chat-q") as HTMLInputElement).value = button.dataset.rvQuestion || ""; void chatSend(); };
-  });
+  const paintRaviStarters = () => {
+    const quick = document.querySelector(".rv-quick")!;
+    quick.querySelectorAll("[data-rv-question], [data-ravi-starters]").forEach(el => el.remove());
+    const host = document.createElement("span");
+    host.dataset.raviStarters = "";
+    host.innerHTML = raviStarterHtml(copyHtml);
+    quick.prepend(host);
+  };
+  paintRaviStarters();
+  window.addEventListener("desktop-language-change", paintRaviStarters);
   $("rv-send-request").onclick = () => { $("rv-send-card").hidden = false; $("rv-send-to").focus(); };
+  $("rv-send-close").onclick = () => { $("rv-send-card").hidden = true; raviHome?.open(); };
   ["rv-send-to", "rv-send-amount"].forEach(id => $(id).addEventListener("input", () => { $("rv-send-continue").hidden = true; $("rv-send-summary").textContent = ""; }));
+  bindAmountInput($("rv-send-amount") as HTMLInputElement);
   $("rv-send-check").onclick = async () => {
     const address = ($("rv-send-to") as HTMLInputElement).value.trim();
-    const amount = Number(($("rv-send-amount") as HTMLInputElement).value);
+    const amountEl = $("rv-send-amount") as HTMLInputElement;
+    const parsedAmount = readAmount(amountEl);
+    if (!parsedAmount.ok && parsedAmount.problem !== "empty") { $("rv-send-summary").textContent = amountProblemText(amountEl, parsedAmount); return; }
+    const amount = amountOrNaN(amountEl);
     if (!address || !Number.isFinite(amount) || amount <= 0) { $("rv-send-summary").textContent = t("받는 주소와 금액을 확인해 주세요"); return; }
     try {
       const preview = await invoke<any>("preview_send", { address, asset: null, amount });
@@ -17332,33 +17994,54 @@ window.addEventListener("DOMContentLoaded", async () => {
       const fee = await invoke<any>("send_fee", { address, amount });
       if (typeof fee?.fee !== "number" || fee.short) { $("rv-send-summary").textContent = t("수수료를 확인하지 못했습니다. 지갑 화면에서 다시 시도해 주세요"); return; }
       const name = payeeName(address) || t("이름 없음");
-      $("rv-send-summary").textContent = `${t("받는 사람")}: ${name} · ${amount} RVN · ${t("수수료")}: ${fee.fee} RVN`;
+      $("rv-send-summary").textContent = `${t("받는 사람")}: ${name} · ${fmtRvn(amount)} · ${t("수수료")}: ${fmtRvn(fee.fee)}`;
       $("rv-send-continue").hidden = false;
     } catch (e) { $("rv-send-summary").textContent = errText(e); }
   };
   $("rv-send-continue").onclick = async () => {
     const address = ($("rv-send-to") as HTMLInputElement).value.trim();
-    const amount = ($("rv-send-amount") as HTMLInputElement).value;
+    // 글자가 아니라 받아들인 사토시를 넘긴다(두 칸이 같은 언어여도 재해석 여지를 없앤다).
+    const parsedAmount = readAmount($("rv-send-amount") as HTMLInputElement);
     showPage("wallet");
     await openSend("rvn");
     ($("s-addr") as HTMLInputElement).value = address;
-    ($("s-qty") as HTMLInputElement).value = amount;
+    setAmountSats($("s-qty") as HTMLInputElement, parsedAmount.ok ? parsedAmount.sats : null);
     composeChanged();
+    $("rv-send-card").hidden = true;
     // The original review recalculates fee and requires the owner's existing confirmation.
     await reviewSend();
   };
-  const Speech = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-  if (Speech) {
-    const voice = $("rv-voice") as HTMLButtonElement;
-    voice.hidden = false;
-    voice.onclick = () => { const recognition = new Speech(); recognition.lang = lang; recognition.onresult = (event: any) => { ($("chat-q") as HTMLInputElement).value = String(event.results?.[0]?.[0]?.transcript || ""); }; recognition.start(); };
+  raviHome = createRaviHome({ invoke: rawInvoke, voiceProvider: () => aiProvider || "", afterLanding: afterRaviLanding, wake: wakeRavi, wallet: () => showPage("wallet"), report: () => openReport(), send: () => { void chatSend(); }, tools: () => showPage("ravi"), companion: mode => { void invoke("companion_signal", { kind: mode === "listening" || mode === "speaking" ? "idle" : mode }).catch(() => {}); } });
+  // 라비 인물·위기 대답 묶음은 입력칸에 처음 들어갈 때 미리 읽는다(첫 질문이 기다리지 않게) — ravi-persona-lazy.ts.
+  $("chat-q").addEventListener("focus", () => { void loadRaviPersona(); }, { once: true });
+  raviAgentUI = createRaviAgentUI({ invoke, keyed: () => aiProvider, key: wakeRavi, dock: () => raviHome?.open(false), landed: finishRaviLanding, afterLanding: afterRaviLanding, tz: tzMin });
+  afterRaviLanding(() => {
+    const lifecycle = mountRaviLifecycle({ invoke: rawInvoke, pending: () => sendingNow });
+    const requested = () => { void rawInvoke<boolean>("ravi_take_close_request").then(on => { if (on) void lifecycle.requestClose(); }).catch(() => {}); };
+    void listen("ravi-close-requested", requested).then(requested).catch(() => {});
+  });
+  for (const id of ["ravi-promo-open", "ravi-menu-promo", "ravi-tools-promo", "sh-promo"]) {
+    $(id).onclick = () => { void openRaviPromo(); };
   }
+  // The original small home input remains reachable among the expanded tools.
+  $("ravi-tools").appendChild($("rv-home-ravi"));
+  const balanceSource = $("overview-balance");
+  const balanceCopy = () => { $("ravi-balance-value").textContent = balanceSource.textContent; };
+  new MutationObserver(balanceCopy).observe(balanceSource, { childList: true, characterData: true, subtree: true });
+  balanceCopy(); paintRaviBadge();
+  try {
+    const appWindow = getCurrentWindow();
+    void appWindow.isFocused().then(focused => { if (typeof focused === "boolean") raviHome?.background(!focused); }).catch(() => {});
+    void appWindow.onFocusChanged(({ payload }) => raviHome?.background(!payload)).catch(() => {});
+  } catch { /* synthetic browser tests have no native window */ }
+
   loadHealth();
   // 🔴 **부르는 줄.** 화면만 만들고 이 줄을 안 쓰면 오늘만 여섯 번 본 그 병이다.
   //    켤 때 한 번, 그리고 1분마다. 이 프로그램에는 이미 타이머가 여럿이라
   //    자주 물어보지 않는다 — 돈이 도는지는 초 단위로 볼 것이 아니다.
   void drawMoneyStatus();
-  setInterval(() => void drawMoneyStatus(), 60_000);
+  // 그리는 일이라 창을 안 보는 동안은 쉰다(쉬는중 규칙). 다시 보면 다음 1분 안에 살아난다.
+  setInterval(() => { if (!쉬는중()) void drawMoneyStatus(); }, 60_000);
   let nameTimer: any;
   $("i-name").addEventListener("input", () => {
     clearTimeout(nameTimer);
@@ -17377,10 +18060,16 @@ window.addEventListener("DOMContentLoaded", async () => {
     (a as HTMLElement).onclick = () => showPage((a as HTMLElement).dataset.page!);
   });
   setupNavMore();
-  document.getElementById("rv-home-shop")?.addEventListener("click", () => {
-    showPage("shop");
-    shopTab(안본주문 > 0 ? "orders" : "sales");
+  document.getElementById("rv-home-shop")?.addEventListener("click", goHomeSales);
+  document.getElementById("rv-home-today-body")?.addEventListener("click", (ev) => {
+    const b = (ev.target as HTMLElement).closest<HTMLElement>("[data-pend]");
+    if (!b) return;
+    if (b.dataset.pend === "list") openPendingSheet(); else goHomeSales();
   });
+  $("ps-cancel").addEventListener("click", closePendingSheet);
+  // 공용 Esc 처리는 position:fixed 시트를 못 찾는다(offsetParent=null) — 이 시트는 스스로 Esc 로 닫는다.
+  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && !$("pendsheet").classList.contains("hidden")) { ev.preventDefault(); closePendingSheet(); } });
+  $("hp-go").addEventListener("click", () => { closePendingSheet(); goHomeSales(); });
   // 0.4.8-B 잔액 카드 — 큰 단추 「받기」, 작은 줄 「최근 거래」「주소 확인」. (「보내기」는 아래 w-send-rvn)
   $("w-receive").addEventListener("click", () => void openReceive());
   $("w-go-txs").addEventListener("click", () => jumpToEl("w-txs"));
@@ -17401,6 +18090,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     if ((e as KeyboardEvent).key === "Escape" && askResolve) askClose(null);
   });
   $("nd-name").addEventListener("change", saveNode);
+  $("rs-find").addEventListener("click", () => void findBackups());
   $("rs-pick").addEventListener("click", () => void doRestore());
   $("rs-folder").addEventListener("click", () => void doRestore(true));
   $("sp-fill").addEventListener("click", () => sampleFill(false));
@@ -17446,9 +18136,16 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("w-send-asset").addEventListener("click", () => void openSend("asset"));
   $("w-send-rvn").addEventListener("click", () => void openSend("rvn"));
   $("s-cancel").addEventListener("click", closeSend);
+  bindAmountInput($("s-qty") as HTMLInputElement);
   ["s-addr", "s-qty"].forEach((id) => $(id).addEventListener("input", composeChanged));
   $("s-review").addEventListener("click", reviewSend);
+  $("r-addr").addEventListener("copy", (event) => {
+    if (!event.clipboardData) return;
+    event.preventDefault();
+    event.clipboardData.setData("text/plain", ($("r-addr").textContent || "").replace(/ /g, ""));
+  });
   $("s-back").addEventListener("click", () => {
+    ($("s-pass") as HTMLInputElement).value = "";
     $("send-review").style.display = "none";
     $("send-compose").style.display = "";
   });
@@ -17742,10 +18439,21 @@ window.addEventListener("DOMContentLoaded", async () => {
   const closeLanguages = () => { languageMenu.hidden = true; languageButton.setAttribute("aria-expanded", "false"); };
   languageButton.onclick = () => { languageMenu.hidden = !languageMenu.hidden; languageButton.setAttribute("aria-expanded", String(!languageMenu.hidden)); };
   document.querySelectorAll<HTMLButtonElement>("[data-language]").forEach(button => {
-    button.onclick = () => setLang(button.dataset.language as typeof lang);
+    button.onclick = () => { void setLang(button.dataset.language as typeof lang); };
+  });
+  // 「오류 신고」— 받는 메일함만 있는 주소로 메일 창을 연다. 본문에는 아무것도 미리 넣지 않는다(지갑·주소·복구 단어 금지).
+  document.querySelectorAll<HTMLButtonElement>("[data-report-translation]").forEach(button => {
+    button.onclick = () => { void openUrl(`mailto:playx@ex.erci.se?subject=${encodeURIComponent(`RavenVault Desktop translation error (${lang})`)}`).catch(() => {}); };
   });
   $("desktop-settings-go").onclick = () => { closeLanguages(); showPage("settings"); document.querySelector("main")!.scrollTop = 0; };
-  document.addEventListener("keydown", event => { if (event.key === "Escape") { closeLanguages(); languageButton.focus(); } });
+  document.addEventListener("keydown", event => {
+    // A closed language menu must not steal Escape/focus from the Ravi panel.
+    if (event.key !== "Escape" || event.defaultPrevented || languageMenu.hidden) return;
+    const ownedFocus = languageMenu.contains(document.activeElement) || document.activeElement === languageButton;
+    closeLanguages();
+    event.preventDefault();
+    if (ownedFocus) languageButton.focus({ preventScroll: true });
+  });
   document.addEventListener("click", event => { if (!(event.target as Element).closest(".desktop-header")) closeLanguages(); });
   const syncLanguage = () => {
     $("desktop-language-name").textContent = LANG_NAMES[lang];
@@ -17757,10 +18465,34 @@ window.addEventListener("DOMContentLoaded", async () => {
   window.addEventListener("desktop-language-change", paintRaviBadge);
   syncLanguage();
   $("overview-receive").onclick = () => { showPage("wallet"); void openReceive(); };
-  $("overview-phone").onclick = () => { const panel = $("phone-tx-panel") as HTMLDetailsElement; panel.open = true; panel.scrollIntoView(); $("phone-tx-code").focus(); };
+  $("overview-phone").onclick = () => { showPage("ravi"); ($("ravi-tools") as HTMLDetailsElement).open = true; const panel = $("phone-tx-panel") as HTMLDetailsElement; panel.open = true; panel.scrollIntoView(); $("phone-tx-code").focus(); };
   $("rv-home-send").onclick = () => { showPage("wallet"); void openSend("rvn"); };
   $("rv-home-backup").onclick = () => showPage("settings");
   $("rv-home-chat").onclick = () => showPage("talk");
+  $("rv-home-nearby").onclick = async () => {
+    try { await invoke("start_phone_server"); await invoke("open_share", { url: "http://127.0.0.1:8790/shops" }); }
+    catch { say(t("열지 못했습니다"), t("서버 연결을 확인하고 다시 시도해 주세요.")); }
+  };
+  $("rv-home-games").onclick = () => showPage("games");
+  chainInfo = wireChainInfoLazy({ invoke, showPage });
+  $("rv-home-sales").onclick = () => showPage("sales");
+  // Collapse only secondary entrances in a small window. Native details keeps
+  // Enter/Space, focus order and all destinations available without a custom trap.
+  const compactHome = matchMedia("(max-width:1100px), (max-height:680px)");
+  const homeExtras = $("rv-home-extras") as HTMLDetailsElement;
+  const fitHomeExtras = () => { homeExtras.open = false; void compactHome; };
+  fitHomeExtras();
+  compactHome.addEventListener("change", fitHomeExtras);
+  $("rv-home-activity-all").onclick = () => { showPage("wallet"); jumpToEl("w-txs"); };
+  $("rv-home-more").onclick = () => showPage("wallet");
+  // 시트(발행 마법사·복구 단어 입력 등)를 Esc 로 닫는다 — 마우스 없이도 빠져나올 수 있게. 닫기 단추를 그대로 누른다.
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key !== "Escape" || ev.defaultPrevented) return;
+    const open = [...document.querySelectorAll<HTMLElement>(".sheet")].filter((el) => !el.hidden && el.offsetParent !== null);
+    const top = open[open.length - 1];
+    const close = top?.querySelector<HTMLButtonElement>('button[id$="-cancel"], button[id$="-close"]');
+    if (close && !close.disabled) { ev.preventDefault(); close.click(); }
+  });
 
   $("fee-send").addEventListener("click", () => void sendOwed());
   void paintFeePick();
@@ -17769,6 +18501,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("d-mine-row").addEventListener("click", () => toggleDot("mine"));
   $("d-relay-row").addEventListener("click", () => toggleDot("relay"));
   $("d-out-row").addEventListener("click", () => toggleDot("out"));
+  $("d-map-row")?.addEventListener("click", () => { showPage("shop"); shopTab("mine"); jumpToEl("mp-card"); void mapCard.refresh(); });
 
   async function paintWalletDir() {
     const pathEl = document.getElementById("wd-path");
@@ -17876,12 +18609,29 @@ window.addEventListener("DOMContentLoaded", async () => {
       b.onclick = () => setChatMode(b.dataset.mode as "fill" | "ask" | "debate");
     });
   restoreChatMode();
-  if (!$("chat-log").children.length) chatSay("ai", t("무엇을 도와드릴까요? 보내기·받기·백업·대화 무엇이든 물어보세요."));
+  if (!$("chat-log").children.length) chatSay("ai", t(RAVI_GREETING));
   // 0.4.8-B 라비 안내 답의 단추 · AI 열쇠 넣기 카드.
+  const raviInputClick = (e: Event) => {
+    const el = e.target as HTMLElement;
+    if (el.closest("[data-ravi-help]")) { chatHtml("ai", raviHelpHtml(copyHtml)); return; }
+    const input = el.closest<HTMLElement>("[data-ravi-input]");
+    const action = el.closest<HTMLElement>("[data-ravi-action-input]");
+    const say = input ? guideById(input.dataset.raviInput || "")?.say : action ? RAVI_ACTIONS.find(a => a.type === action.dataset.raviActionInput)?.say : null;
+    const responseLanguage = el.closest<HTMLElement>("[data-ravi-language]")?.dataset.raviLanguage;
+    const fixed = responseLanguage && ["ko", "en", "ja", "zh"].includes(responseLanguage);
+    if (say) { ($("chat-q") as HTMLInputElement).value = fixed ? raviText(say, responseLanguage as CoreLang) : t(say); raviHome?.open(); $("chat-q").focus(); }
+  };
+  $("chat-log").addEventListener("click", raviInputClick);
+  document.querySelector(".rv-quick")!.addEventListener("click", raviInputClick);
   $("chat-log").addEventListener("click", (e) => {
     const el = e.target as HTMLElement;
     const go = el.closest<HTMLElement>("[data-guide-go]");
     if (go) return raviGo(go.dataset.guideGo as GuideGo);
+    const lookup = el.closest<HTMLElement>("[data-ravi-public]");
+    if (lookup) return void raviPublicLookup(lookup);
+    // 「다시 묻기」·「한 번 물어볼까요?」 — 적힌 질문을 칸에 넣고 바로 보낸다(보통 보내기와 같은 길).
+    const again = el.closest<HTMLElement>("[data-ravi-ask]");
+    if (again?.dataset.raviAsk) { ($("chat-q") as HTMLInputElement).value = again.dataset.raviAsk; void chatSend(); return; }
     const topic = el.closest<HTMLElement>("[data-guide-topic]");
     const g = topic ? guideById(topic.dataset.guideTopic || "") : null;
     if (g) chatHtml("ai", guideHtml(g, copyHtml));
@@ -17890,8 +18640,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("ravi-key-delete").addEventListener("click", async () => {
     if (!aiProvider) return;
     const provider = aiProvider;
-    await invoke("delete_api_key", { provider });
-    await refreshKeys();
+    await deleteSavedKey(provider);
   });
   $("ravi-key").addEventListener("click", (e) => {
     const el = e.target as HTMLElement;
@@ -17905,26 +18654,24 @@ window.addEventListener("DOMContentLoaded", async () => {
       return;
     }
     if (el.closest("[data-kc='close']")) return closeKeyCard();
+    if (el.closest("[data-kc-check]")) { void saveKeyCard(true); return; }
     if (el.closest("#ravi-key-save")) void saveKeyCard();
   });
   $("ravi-key").addEventListener("input", (e) => {
     const el = e.target as HTMLInputElement;
     if (el.id !== "ravi-key-input") return;
-    const p = providerOfKey(el.value);
+    const p = providerOfKey(normalizeApiKey(el.value));
     if (p && p !== keyPick) pickKeyProvider(p, false);
   });
   $("ravi-key").addEventListener("keydown", (e) => {
     if ((e as KeyboardEvent).key === "Enter" && (e.target as HTMLElement).id === "ravi-key-input") void saveKeyCard();
   });
-  $("chat-q").addEventListener("keydown", (e) => {
-    if ((e as KeyboardEvent).key === "Enter") chatSend();
-  });
   $("ai-pick").addEventListener("change", () => {
-    aiProvider = ($("ai-pick") as HTMLSelectElement).value || null;
-    paintRaviBadge();
+    void refreshKeys();
   });
   $("mn-cur").addEventListener("change", showRate);
-  refreshKeys();
+  void refreshKeys().catch(() => {});
+  raviAgentUI?.start();
   showRate();
   let shopTimer: any;
   $("sh-asset").addEventListener("input", () => {
@@ -18032,6 +18779,56 @@ window.addEventListener("DOMContentLoaded", async () => {
     };
   });
   $("sh-sample").addEventListener("click", fillSample);
+  salesAccount = wireSalesAccount({ invoke, cancelAsk: () => askClose(null), active: () => currentPage === "sales",
+    ask: () => ask("지갑 비밀번호 재인증", "판매 전용 번호를 만든 뒤 지갑을 바로 잠가요.", { password: true }) });
+  $("sales-back").onclick = () => showPage("home");
+  $("reward-back").onclick = () => showPage("home");
+  $("parts-back").onclick = () => showPage("home");
+  $("game-sales-open").onclick = () => showPage("sales");
+  $("creator-open").onclick = () => showPage("creator");
+  $("bulk-open").onclick = () => showPage("bulk");
+  $("devices-open").onclick = () => showPage("devices");
+  // 장터 목록(허용·차단·수수료 일정)은 한 곳에서 읽는다 — 마법사의 수수료 안내와 장터 구매 확인이 같은 서명된 일정을 쓴다.
+  const mkLists = marketLists({ sources: marketListSources((cmd, args) => invoke(cmd, args)) }); // 믿는 키가 비어 있는 동안은 받지 않는다(market-lists.ts)
+  // 암호화 상품(RV-LOCK v1)의 열쇠 파일 저장 폴더 고르기 — 경로를 타이핑하게 하지 않는다.
+  const pickKeyFolder = async (): Promise<string | null> => {
+    const dir = await pickFile({ title: "열쇠 파일을 둘 폴더를 고르세요(iCloud·USB 등)", directory: true, multiple: false }).catch(() => null);
+    return typeof dir === "string" ? dir : null;
+  };
+  const creatorWizard = wireCreatorPublish({ invoke: (cmd, args) => invoke(cmd, args), back: () => showPage("games"), feeSchedule: () => mkLists.current().feeSchedule,
+    pickFolder: pickKeyFolder,
+    askPassword: () => ask("지갑 비밀번호", "내 주소로 상품 정보에 서명한 뒤 지갑을 바로 잠가요.", { password: true }) });
+  // 끌어놓기 발행(한 화면) — 「내 상품 올리기」의 기본 화면. 9단계 마법사는 「자세히」로 남는다(src/drop-publish.ts).
+  //    따로 내려받는 조각이라 시작 직후 곧바로 불러 붙인다. 그 사이 끌어놓기는 dropPublish 가 없으면 기존처럼 무시된다.
+  void import("./drop-publish").then(({ wireDropPublish }) => {
+    dropPublish = wireDropPublish({ invoke: (cmd, args) => invoke(cmd, args), back: () => showPage("games"), root: $("page-creator"),
+      openWizard: p => creatorWizard.prefill(p), pickFolder: pickKeyFolder, lang: lang === "ko" || lang === "ja" || lang === "zh" ? "ko" : "en", feeSchedule: () => mkLists.current().feeSchedule,
+      askPassword: () => ask("지갑 비밀번호", "내 주소로 상품 정보에 서명한 뒤 지갑을 바로 잠가요.", { password: true }) });
+  }).catch((e) => console.warn("drop-publish load failed", e));
+  // 열린 장터(시험): 목록 = 노드 listassets + 이 컴퓨터 IPFS(market-node.ts). 결제 = 준비(거래만 만듦) → 사람이 승인 → 전송.
+  //    판매 스위치(core/creator/mainnet-switch.json)가 꺼져 있으면 결제 단추는 확인 화면까지만 간다. 1단계는 서명된 허용 목록에 있는 상품만 결제한다.
+  const lockSource = nodeMarketSource((cmd, args) => invoke(cmd, args));
+  // 구매한 암호화 상품 열기(열람 요청 → 허가 → 복호). 판매자 쪽 처리 화면은 「내 상품 올리기」 맨 아래.
+  const lockBuyer = wireLockBuyer({ invoke: (cmd, args) => invoke(cmd, args), fetch: (cid) => lockSource.fetch(cid),
+    askPassword: () => ask("지갑 비밀번호", "결제한 주소로 열람 요청에 서명한 뒤 지갑을 바로 잠가요.", { password: true }) });
+  wireLockSeller({ invoke: (cmd, args) => invoke(cmd, args), fetch: (cid) => lockSource.fetch(cid),
+    mine: () => { try { const a = JSON.parse(localStorage.getItem(MINE_KEY) ?? "[]"); return Array.isArray(a) ? a : []; } catch { return []; } },
+    verifiedIndex: (asset) => mkLists.current().allowlist?.entries?.find((e) => e.asset === asset)?.gameIndex ?? null,
+    pickFile: async () => { const f = await pickFile({ title: "열쇠 파일(.pxlock)을 고르세요", multiple: false, directory: false, filters: [{ name: "RavenVault lock key", extensions: ["pxlock"] }] }).catch(() => null); return typeof f === "string" ? f : null; } });
+  const market = wireOpenMarket({ back: () => showPage("games"), lists: mkLists, lockBuyer,
+    source: nodeMarketSource((cmd, args) => invoke(cmd, args)), tip: () => nodeChainTip((cmd, args) => invoke(cmd, args)),
+    purchase: nodePurchase((cmd, args) => invoke(cmd, args), () => ask("지갑 비밀번호", "이 결제를 서명한 뒤 지갑을 바로 잠가요.", { password: true })),
+    openExternal: (url) => openUrl(url) });
+  $("market-open").onclick = () => { showPage("market"); void market.load(); };
+  const sellerBox = $("seller-mode") as HTMLInputElement;
+  sellerBox.onchange = () => {
+    try { if (sellerBox.checked) localStorage.setItem(SELLER_MODE_KEY, "1"); else localStorage.removeItem(SELLER_MODE_KEY); } catch { sellerBox.checked = false; }
+    applySellerMode();
+  };
+  applySellerMode();
+  $("ravi-story-open").onclick = () => { void openRaviStory({ openExternal: openUrl }).catch(() => {
+    $("game-notice").textContent = "기본 브라우저를 열지 못했어요. 잠시 후 다시 눌러 주세요.";
+  }); };
   $("w-enc").addEventListener("click", openEncrypt);
   $("enc-cancel").addEventListener("click", () => ($("encbox").style.display = "none"));
   ["enc-old", "enc-new", "enc-new2", "enc-confirm"].forEach((id) =>
@@ -18039,7 +18836,16 @@ window.addEventListener("DOMContentLoaded", async () => {
   );
   $("enc-go").addEventListener("click", doEncrypt);
   $("w-lock-now").addEventListener("click", async () => {
+    salesAccount?.hide();
     await invoke("lock_wallet").catch(() => {});
+    emitRaviEvent("wallet_locked");
+    document.querySelectorAll<HTMLInputElement>('input[type="password"]').forEach((input) => { input.value = ""; });
+    if (!$("sdw").classList.contains("hidden")) $("sdw-close").click();
+    if (!$("wrs").classList.contains("hidden")) $("wrs-close").click();
+    if (sendPreview) {
+      $("r-passbox").style.display = "";
+      gateSend();
+    }
     loadWallet();
   });
   $("new-asset").addEventListener("click", openWizard);
@@ -18053,6 +18859,16 @@ window.addEventListener("DOMContentLoaded", async () => {
   });
   $("tk-reload").addEventListener("click", () => void talkPaint());
   $("tk-newroom").addEventListener("click", () => void talkNewRoom());
+  tkAdmin = wireTalkRoomsAdmin({
+    call: (cmd, args) => rawInvoke(cmd, args), // 잠김 안내는 시트 안에서 — 페이지 맨 아래 경고 상자를 붙이지 않는다
+    me: () => tkMine,
+    current: () => tkRoom,
+    sure,
+    unlock: ensureUnlocked,
+    errText,
+    reload: () => talkPaintRooms(),
+    leave: () => document.querySelector<HTMLElement>('#tk-rooms [data-room=""]')?.click(),
+  });
   $("tk-nmake").addEventListener("click", () => void talkMakeRoomGo());
   $("tk-ncancel").addEventListener("click", () => {
     $("tk-newbox").hidden = true;
@@ -18069,6 +18885,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     });
   }
   $("tk-name").addEventListener("click", () => void talkSetName());
+  wireTalkIdentity({ invoke, current: () => tkNames.get(tkMine) || null, onSaved: (name) => { tkNames.set(tkMine, { ...(tkNames.get(tkMine) || {}), name }); void talkPaintMe(); void talkPaint(); } }); // 0.9.0 첫 진입 이름 카드
   bindArtist();
   // ── 접기·펴기 ────────────────────────────────────────────────────
   // 🔴 단추 다섯을 하나로 접었다. 접은 것은 **없앤 것이 아니다** — 여는
@@ -18174,7 +18991,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   //    안 일어난다 — 만들어 놓고 안 부르는 그 병이다.
   void listen("drop-enter", () => dropVeil(true));
   void listen("drop-leave", () => dropVeil(false));
-  void listen<any>("drop-files", (e) => void onDropped(e.payload?.paths || []));
+  void listen<any>("drop-files", (e) => afterRaviLanding(() => { void onDropped(e.payload?.paths || []); }));
   // 엔터로 보낸다. 줄바꿈은 Shift+Enter — 대화창의 기본 약속이다.
   $("tk-text").addEventListener("keydown", (e) => {
     const k = e as KeyboardEvent;
@@ -18291,8 +19108,9 @@ window.addEventListener("DOMContentLoaded", async () => {
           void loadBackup();
         }
       })
-      .catch(() => { const note = document.getElementById("bk-note"); if (note) setCopyText(note, () => t("자동 백업을 확인하지 못했습니다. 노드 연결을 확인하고 백업을 다시 실행하세요.")); });
+      .catch(() => { const note = document.getElementById("bk-note"); if (note) setCopyText(note, () => t("자동 백업을 확인하지 못했습니다. 서버 연결을 확인하고 백업을 다시 실행하세요.")); });
   backupTick();
+  setInterval(() => { if ($("page-home").classList.contains("on")) { void paintHomeSafety(); void refreshOverview(); } }, 20000);
   setInterval(backupTick, 6 * 60 * 60 * 1000);
   // 인터넷이 끊기는 것은 화면을 열어 볼 때가 아니라 장사 중에 일어난다.
   setInterval(() => void quietly(loadNet), 30_000);
@@ -18357,9 +19175,11 @@ window.addEventListener("DOMContentLoaded", async () => {
     $(id)?.addEventListener("input", saveShop)
   );
 
-  if (!localStorage.getItem(ONBOARD_KEY)) {
-    startOnboard();
-  }
+  // Setup stays available without interrupting the first greeting.
+  const setup = document.createElement("button");
+  setup.id = "firstrun-setup"; setup.textContent = t("초기 설정");
+  setup.onclick = () => afterRaviLanding(() => { void startOnboard(); });
+  $("page-settings").prepend(setup);
   $("ob-only").addEventListener("click", () => obChoose(true));
   $("ob-also").addEventListener("click", () => obChoose(false));
   $("ob-override").addEventListener("click", () => obChoose(true));
@@ -18377,7 +19197,9 @@ window.addEventListener("DOMContentLoaded", async () => {
   // 🔴 `paintRavi()` 만 부르면 안 된다. 첫 화면이 HTML 에서 이미 켜져
   //    있어 `showPage` 를 안 지나가고, 그러면 떠 있는 단추를 숨기는
   //    처리도 안 돈다 — 대화창 위에 대화창으로 가는 단추가 떠 있었다.
-  showPage("home");
+  const restoredPage = restoreCompanionPage();
+  showPage(restoredPage === "ravi" ? "home" : restoredPage);
+  void mountCompanionBridge();
   loadAssets();
   // 코어 지갑처럼 들어오는 것을 그 자리에서 알린다. 레이븐 블록이 약 60초라
   // 15초면 늦지 않고, 노드를 두드리는 부담도 작다.
@@ -18392,7 +19214,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   void reindexTick();
   window.setInterval(() => void reindexTick(), 60_000);
   // 0.4.9 — 되살리기가 중간에 멈춰 있으면(노드를 못 켜는 상태) 먼저 알리고, 「마감 뒤 찾기」 예약을 1분마다 본다.
-  wordsRestore.checkOnStart();
+  afterRaviLanding(() => wordsRestore.checkOnStart());
   window.setInterval(() => wordsRestore.tick(), 60_000);
   // Status is cheap; the IPFS scan is not, and is deliberately not on a timer.
 });
@@ -18412,7 +19234,8 @@ async function applyMode(): Promise<void> {
   }
   const hello = document.getElementById("hello");
   if (!m?.chosen) {
-    if (hello) hello.style.display = "";
+    // Mode selection is available in Settings; startup never opens the chooser.
+    if (hello) hello.style.display = "none";
     return;
   }
   if (hello) hello.style.display = "none";
@@ -18507,6 +19330,12 @@ const wordsRestore = wireWordsRestore({
   },
 });
 
+/** 「내 가게 → 지도에 올리기」(map-card.ts · map.rs). 라비는 prepare 로 칸만 채운다. */
+const mapCard = wireMapCard({ invoke, showShop: () => { showPage("shop"); shopTab("mine"); } });
+void mapCard.refresh();
+document.querySelectorAll('[data-page="shop"]').forEach((a) => a.addEventListener("click", () => void mapCard.refresh()));
+window.addEventListener("rv-map-changed", () => void paintStatusDots());
+
 /**
  * 「지갑」 모드면 왼쪽 메뉴의 지갑을 **맨 위**로 올린다. 다른 모드로 바꾸면
  * 원래 자리로 돌려 놓는다 — 자리를 기억해 두지 않으면 돌아갈 곳을 모른다.
@@ -18542,7 +19371,7 @@ async function paintHelping(): Promise<void> {
     card(
       [
         [
-          t("체인 지키기"),
+          t("공개 장부 지키기"),
           node?.blocks
             ? `${t("블록")} ${Number(node.blocks).toLocaleString()} · ${t("이웃")} ${Number(node.peers ?? 0)}${t("곳")}`
             : on(false),
@@ -18561,17 +19390,17 @@ async function paintHelping(): Promise<void> {
     // 🔴 정직하게. 지금은 색인이 꺼져 있어서 이 노드가 남의 지갑을 돕지는
     //    못한다. 돕고 있다고 적으면 안 된다.
     `<div class="card"><b>${copyHtml("아직 못 하고 있는 것")}</b>
-       <p class="meta" style="margin-top:8px">${copyHtml("이 노드는 아직 남의 지갑 잔액을 대신 답해 주지 못합니다. 주소 색인이 꺼져 있기 때문입니다. 켜면 이 컴퓨터가 실제로 남을 돕게 됩니다.")}</p>
+       <p class="meta" style="margin-top:8px">${copyHtml("이 서버는 아직 남의 지갑 잔액을 대신 답해 주지 못합니다. 주소 색인이 꺼져 있기 때문입니다. 켜면 이 컴퓨터가 실제로 남을 돕게 됩니다.")}</p>
        <button data-part-go="node" style="margin-top:12px">${copyHtml("주소 색인 켜기")}</button>
      </div>` +
     /* 🔴 **만들어 놓고 아무도 안 부르던 것**(실측 2026-09-08).
           `helping.rs` 의 `help_round()` 는 체인에서 가게 목록을 읽고
-          (`listassets SHOP.*`), 각 가게의 사진을 받아 이 컴퓨터가 들고 있게
+          (`listassets RV.S.*` + 옛 `SHOP.*`), 각 가게의 사진을 받아 이 컴퓨터가 들고 있게
           한다 — sha256 으로 대조하고, 4MB·40개 상한을 지킨다. 제대로 만들어
           놓고 `lib.rs` 에 등록만 하고 **부르는 줄이 하나도 없었다.**
           「돕기」가 상태만 보여 주고 실제로 돕지는 않고 있었던 것이다. */
     `<div class="card"><b>${copyHtml("가게 사진 대신 들어 주기")}</b>
-       <p class="meta" style="margin-top:8px">${copyHtml("체인에 올라온 가게들의 사진을 이 컴퓨터가 함께 들고 있습니다. 그 가게 컴퓨터가 꺼져 있어도 손님 화면에서 사진이 열립니다. 체인이 가리키는 것만, 하나에 4MB까지만 받습니다.")}</p>
+       <p class="meta" style="margin-top:8px">${copyHtml("공개 장부에 올라온 가게들의 사진을 이 컴퓨터가 함께 들고 있습니다. 그 가게 컴퓨터가 꺼져 있어도 손님 화면에서 사진이 열립니다. 공개 장부가 가리키는 것만, 하나에 4MB까지만 받습니다.")}</p>
        <div id="hp-round-out" class="meta" style="margin-top:8px"></div>
        <button id="hp-round" style="margin-top:12px">${copyHtml("지금 한 바퀴 돕기")}</button>
      </div>`;
@@ -18582,7 +19411,7 @@ async function paintHelping(): Promise<void> {
     단추.onclick = async () => {
       const 자리 = document.getElementById("hp-round-out");
       단추.disabled = true;
-      if (자리) setCopyText(자리, () => t("체인에서 가게를 읽는 중…"));
+      if (자리) setCopyText(자리, () => t("공개 장부에서 가게를 읽는 중…"));
       try {
         const r = await invoke<any>("help_round");
         /* 숫자를 정직하게 적는다. 「도왔습니다」만 적으면 아무것도 안 해도

@@ -1,0 +1,46 @@
+{
+  "ko": [
+    "살아 있는 AI 라비: AI 키를 넣으면 깨어나고 말로 물어볼 수 있습니다. 음성으로 돈을 승인할 수 없습니다.",
+    "가게 QR 주문과 계산대를 제공합니다.",
+    "원화 매출장부를 CSV로 내보냅니다. 주문마다 환율·거래소·txid를 기록합니다.",
+    "라비 홍보 도우미로 홍보 글과 공유 이미지를 만듭니다.",
+    "손님은 설치 없이 QR로 폰에서 주문합니다. 한국어·영어·일본어·중국어를 지원합니다.",
+    "비수탁: 운영자는 열쇠와 복구 단어를 보관하지 않습니다.",
+    "일반 송금에는 개발비가 없습니다. 결제·판매·맞교환·경매·중고 거래에는 1% 개발비가 있으며 끄는 설정이 없습니다.",
+    "오픈소스 MIT 라이선스입니다.",
+    "RVN 값은 변동합니다. 보낸 돈은 되돌릴 수 없습니다."
+  ],
+  "en": [
+    "Living AI Ravi wakes when you add an AI key and answers voice questions. Voice cannot authorize money.",
+    "Shop QR ordering and a checkout counter.",
+    "Export a KRW sales ledger as CSV, with exchange rate, exchange and txid for each order.",
+    "Ravi promotion helper creates copy and share images.",
+    "Customers order on their phones by QR without installation, in Korean, English, Japanese or Chinese.",
+    "Non-custodial: the operator does not store keys or recovery words.",
+    "Ordinary transfers have no developer fee. Payments, sales, swaps, auctions and used goods have a 1% developer fee with no setting to disable it.",
+    "Open source under MIT.",
+    "RVN value fluctuates. Sent money cannot be reversed."
+  ],
+  "ja": [
+    "生きているAIラビはAIキーを入れると目を覚まし、声で質問できます。音声で送金を承認することはできません。",
+    "店舗のQR注文とレジを提供します。",
+    "ウォン売上帳簿をCSVで出力。注文ごとに為替レート・取引所・txidを記録します。",
+    "ラビ宣伝ヘルパーで宣伝文と共有画像を作ります。",
+    "お客様はインストールなしでQRからスマホで注文。韓国語・英語・日本語・中国語に対応します。",
+    "非カストディ型：運営者は鍵と復元単語を保管しません。",
+    "通常の送金に開発者手数料はありません。決済・販売・交換・オークション・中古取引は1%で、無効にする設定はありません。",
+    "MITライセンスのオープンソースです。",
+    "RVNの価値は変動します。送ったお金は取り消せません。"
+  ],
+  "zh": [
+    "有生命感的AI拉比：添加AI密钥后醒来，可以语音提问。不能通过语音批准付款。",
+    "提供店铺二维码点单和收银台。",
+    "韩元销售账簿可导出CSV，每笔订单记录汇率、交易所和txid。",
+    "拉比宣传助手制作文案和分享图片。",
+    "顾客无需安装，通过二维码在手机点单。支持韩语、英语、日语和中文。",
+    "非托管：运营方不保存密钥或助记词。",
+    "普通转账无开发费。支付、销售、交换、拍卖和二手交易收取1%开发费，无法通过设置关闭。",
+    "MIT许可证开源。",
+    "RVN价值会波动。已发送的资金无法撤回。"
+  ]
+}

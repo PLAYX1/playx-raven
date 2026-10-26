@@ -42,14 +42,24 @@ tokio = { version = "1", features = ["rt-multi-thread", "net", "macros", "sync"]
 writeFileSync(resolve(out, 'src/main.rs'), `#![allow(dead_code,unused_mut,unused_variables)]
 mod backup;
 mod lockbox;
+mod ravi_companion {
+    pub fn notify(kind: &'static str) { assert_eq!(kind, "backup"); }
+}
 ${baseline ? '' : 'mod backup_storage;'}
 mod paths {
     use std::path::PathBuf;
     pub static TEST_ENV: std::sync::Mutex<()> = std::sync::Mutex::new(());
     pub fn home() -> PathBuf { PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("synthetic") }
+    pub fn test_fixture_root() -> std::path::PathBuf {
+        let root = home().join("test-fixtures");
+        std::fs::create_dir_all(&root).expect("Create isolated test fixture root");
+        root
+    }
     pub fn app_dir() -> PathBuf { home().join("app") }
     pub fn app_file(name: &str) -> PathBuf { app_dir().join(name) }
     pub fn raven_dir() -> PathBuf { home().join("node") }
+    // 실제 paths.rs 의 옛 위치 → 새 위치 변환. 시험 자리에는 옛 위치가 없으므로 그대로 돌려준다.
+    pub fn rebase_legacy_path(s: &str) -> String { s.to_string() }
 }
 mod raven {
     use serde_json::{json, Value};

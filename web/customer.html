@@ -333,6 +333,43 @@
       .notice .nt { font-weight: 700; font-size: 16px; color: var(--fg); }
       .notice .nb { margin-top: 4px; font-size: 15px; line-height: 1.6;
         color: var(--fg); white-space: pre-wrap; }
+
+      /* ── 「내 예약」·꺼짐 안내·결제 전 약속 ─────────────────────────────
+         어르신이 다음 날 다시 열어 「언제 받지?」를 읽는 자리다. 글자 16px 이상,
+         누르는 것은 48px 이상. 받는 날이 제일 크다. */
+      .mine { margin: 8px 0 16px; }
+      .mine h2 { font-size: 18px; margin: 4px 0 4px; }
+      .mine .minesub { font-size: 16px; color: var(--muted); line-height: 1.6; margin-bottom: 8px; }
+      .minecard { border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px;
+                  margin: 10px 0; background: var(--bg); font-size: 16px; line-height: 1.6; }
+      .minecard.wait { background: var(--ravi-tint, #f3eee6); }
+      .minewhenlb { font-size: 16px; color: var(--muted); }
+      .minewhen { font-size: 24px; font-weight: 700; line-height: 1.3; margin: 2px 0 6px; }
+      .minestate { font-size: 18px; font-weight: 700; }
+      .mineitems { font-size: 16px; color: var(--muted); margin-top: 4px; }
+      .mineago { font-size: 16px; color: var(--warn); margin-top: 4px; }
+      .minepolicy { font-size: 16px; color: var(--muted); margin-top: 8px; line-height: 1.6; }
+      .minecard .steps { color: var(--accent); }
+      .minecard .stp .lb { font-size: 14px; }
+      .minerow { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+      .minebtn, .minerow button, .minerow a { min-height: 48px; padding: 0 16px; border-radius: 12px;
+                  font-size: 16px; font-family: inherit; display: inline-flex; align-items: center;
+                  justify-content: center; text-decoration: none; cursor: pointer; }
+      .minerow button { border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
+      .minerow a.track { background: var(--accent); color: var(--on-fill); border: 0; font-weight: 700; }
+      .offcard { margin: 12px 0; padding: 20px 16px; border-radius: 16px; text-align: center;
+                 background: var(--panel); border: 1px solid var(--line); }
+      .offcard img { width: 120px; height: auto; border-radius: 14px; }
+      .offcard .ot { font-size: 20px; font-weight: 700; margin-top: 10px; }
+      .offcard .os { font-size: 16px; color: var(--muted); line-height: 1.7; margin-top: 6px; }
+      .offcard button { margin-top: 14px; min-height: 52px; min-width: 160px; padding: 0 20px; border: 0;
+                        border-radius: 12px; background: var(--accent); color: var(--on-fill);
+                        font-size: 17px; font-weight: 700; font-family: inherit; cursor: pointer; }
+      .policybig { font-size: 19px; font-weight: 700; line-height: 1.6; margin: 4px 0 10px; }
+      .policysmall { font-size: 16px; color: var(--muted); line-height: 1.6; margin: 6px 0; }
+      .policysmall:empty { display: none; }
+      .policymini { font-size: 14px; color: var(--muted); margin-top: 2px; }
+      .bar button, .waitsheet .walletbtn, .slotno { min-height: 48px; }
 </style>
     <script src="/i18n.js"></script>
     <script src="/ravi.js"></script>
@@ -347,13 +384,15 @@
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <link rel="icon" href="/favicon-32.png" sizes="32x32" />
     <link rel="icon" href="/rvn-icon-192.png" sizes="192x192" />
-    <meta property="og:type" content="website" />
+    <!-- 🔴 미리보기 카드는 가게 컴퓨터가 내줄 때 **가게 이름·간판 사진**으로 갈아 끼운다
+         (src-tauri/src/og.rs). 미리보기 로봇은 스크립트를 안 돌려서 화면이 나중에 그리는
+         이름을 못 본다. 그림은 가게가 가진 사진만 — 남의 서버 그림은 쓰지 않는다.
+         아래는 가게가 아직 없을 때의 기본값이다. 표시(og 주석) 두 개를 지우지 말 것. -->
+    <!--og--><meta property="og:type" content="website" />
     <meta property="og:title" content="주문하기" />
     <meta property="og:description" content="QR을 찍으면 이 화면이 뜹니다. 앱을 깔지 않으셔도 됩니다." />
-    <meta property="og:image" content="https://rvn.ex.erci.se/og-raven.png" />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
-    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:card" content="summary" />
+    <!--/og-->
   </head>
   <body>
     <div class="openbar" id="openbar"></div>
@@ -372,7 +411,10 @@
            메뉴보다 **위**에 둔다 — "오늘 재료 떨어졌습니다" 를 메뉴 아래에서
            보면 이미 고르고 난 뒤다. -->
       <div id="notices"></div>
-      <div id="waitbar"></div>
+      <!-- 가게 컴퓨터가 꺼져 API 가 안 되면 여기에 안내 + [다시 시도]. 빈 화면을 남기지 않는다. -->
+      <div id="offline" role="status" aria-live="polite"></div>
+      <!-- 「내 예약」: 이 브라우저에 저장된 신청(이 가게 주소 한정). 대기 신청도 여기 같이 뜬다. -->
+      <section id="mine" class="mine" aria-labelledby="mine-h" hidden></section>
       <div id="menu"><div class="empty">메뉴를 불러오는 중…</div></div>
 
       <div class="ask" id="ask" data-ravi style="display:none">
@@ -413,6 +455,19 @@
         <div class="fiat" id="w-say" style="margin-top:10px"></div>
         <button class="walletbtn" id="w-go" style="margin-top:12px">대기 신청하기</button>
         <button class="slotno" id="w-no">그만두기</button>
+      </div>
+    </div>
+    <!-- 🔴 결제 앞의 약속(§18). 공동구매·시각 예약은 「환불 없음」을 먼저 크게 보이고
+         [확인했어요]를 눌러야 주문(결제 QR)이 만들어진다. 법률 확정 표현은 쓰지 않는다
+         — 「가게 정책」으로 적는다(§18.4, 실제 적용은 대표가 전문가 확인). -->
+    <div class="slotwrap" id="policywrap" role="dialog" aria-modal="true" aria-labelledby="policyhead">
+      <div class="slotsheet waitsheet">
+        <div class="slothead" id="policyhead"></div>
+        <div class="policybig" id="policytext"></div>
+        <div class="policysmall" id="policyshop"></div>
+        <div class="policysmall" id="policywait"></div>
+        <button class="walletbtn minebtn" id="policyok"></button>
+        <button class="slotno" id="policyno"></button>
       </div>
     </div>
     </div>
@@ -481,6 +536,261 @@
       </div>
     </dialog>
 
+    <script id="mine-logic">
+      /* ── 손님 「내 예약」 순수 로직 (RV7 §17·§18·§19·§23) ─────────────────
+       *
+       * DOM·네트워크를 만지지 않는다. 그래서 node 시험이 이 블록만 떼어 돌린다
+       * (web/customer-mine.test.mjs). 화면 그리기는 아래 본문 스크립트가 한다.
+       *
+       * - 저장: 이 브라우저 localStorage, **이 가게 주소(host) 한정** 열쇠. 서버도
+       *   서비스워커도 없다(§23). 링크를 잃어도 같은 폰에서 이 가게 주소를 열면 보인다.
+       * - 주문 주소가 곧 열쇠다(/api/order-state 와 같은 규칙). 이름·전화는 없다.
+       * - 결제한 예약에는 **취소·환불 단추가 없다**(§18). 「대기 신청」만 취소된다.
+       * - 송장은 택배사 공식 조회 링크로 끝낸다(§19). 앱은 배송 상태를 조회·저장하지 않는다.
+       *   목록은 폰 앱 core/shop-today/courier-links.ts 와 같은 주소 형식이다.
+       */
+      (function (root) {
+        var T = {
+          mine_title: ["내 예약", "My orders & reservations", "予約・注文", "我的预订"],
+          mine_sub: ["이 폰(이 브라우저)에만 저장돼요. 링크를 잃어도 이 가게 주소를 다시 열면 보여요.",
+            "Saved only on this phone (this browser). Even if you lose the link, open this shop’s address again to see them.",
+            "このスマホ(このブラウザ)にだけ保存されます。リンクをなくしても、このお店のアドレスを開けば表示されます。",
+            "仅保存在这部手机(此浏览器)中。即使丢了链接，再次打开本店地址即可看到。"],
+          st_unpaid: ["신청함 · 결제 전", "Requested · not paid yet", "申込済み・未払い", "已申请・未付款"],
+          st_unpaid_late: ["결제하지 않았어요 · 금액 유효 시간이 지났어요", "Not paid · the price has expired", "未払い・金額の有効時間が過ぎました", "未付款・报价已过期"],
+          st_short: ["금액이 모자라요 · 같은 주소로 나머지를 보내 주세요", "Amount short · send the rest to the same address", "金額が足りません・同じアドレスに残りを送ってください", "金额不足・请向同一地址补足"],
+          st_late: ["시간이 지난 뒤 돈이 도착했어요 · 가게에 확인해 주세요", "Payment arrived after the time limit · please check with the shop", "期限後に入金されました・お店に確認してください", "超时后到账・请向店家确认"],
+          st_paid: ["결제 확인", "Payment confirmed", "支払い確認", "已确认付款"],
+          st_making: ["준비 중", "Preparing", "準備中", "准备中"],
+          st_shipped: ["발송함", "Shipped", "発送済み", "已发货"],
+          st_ready: ["나왔어요", "Ready", "できました", "已完成"],
+          st_done: ["전달됨", "Delivered", "お渡し済み", "已交付"],
+          st_lost: ["가게가 이 신청을 찾지 못해요 · 가게에 물어봐 주세요", "The shop can’t find this order · please ask the shop", "お店がこの申込を見つけられません・お店に聞いてください", "店家找不到此订单・请询问店家"],
+          step_applied: ["신청함", "Requested", "申込", "已申请"],
+          step_paid: ["결제 확인", "Paid", "支払い", "已付款"],
+          step_making: ["준비 중", "Preparing", "準備中", "准备中"],
+          step_shipped: ["발송함", "Shipped", "発送", "已发货"],
+          step_ready: ["나왔어요", "Ready", "完成", "已完成"],
+          step_done: ["전달됨", "Delivered", "お渡し", "已交付"],
+          pickup: ["받는 날", "Pickup date", "受取日", "取货日"],
+          booked: ["예약 시간", "Reserved time", "予約時間", "预约时间"],
+          order_no: ["주문번호 {0}", "Order no. {0}", "注文番号 {0}", "订单号 {0}"],
+          ship_line: ["발송함 · {0} {1}", "Shipped · {0} {1}", "発送済み・{0} {1}", "已发货・{0} {1}"],
+          track: ["{0} 배송 조회", "Track on {0}", "{0}で配送状況を見る", "在{0}查询物流"],
+          track_note: ["택배사 사이트가 열려요. 이 화면은 배송 상태를 따로 모으지 않아요.",
+            "Opens the courier’s website. This page doesn’t collect delivery status.",
+            "宅配会社のサイトが開きます。この画面は配送状況を集めません。",
+            "将打开快递公司网站。本页面不收集物流状态。"],
+          ago_now: ["마지막 확인 방금", "Last checked just now", "最終確認 たった今", "最后确认 刚刚"],
+          ago_min: ["마지막 확인 {0}분 전", "Last checked {0} min ago", "最終確認 {0}分前", "最后确认 {0}分钟前"],
+          ago_hour: ["마지막 확인 {0}시간 전", "Last checked {0} h ago", "最終確認 {0}時間前", "最后确认 {0}小时前"],
+          ago_day: ["마지막 확인 {0}일 전", "Last checked {0} days ago", "最終確認 {0}日前", "最后确认 {0}天前"],
+          policy_title: ["결제 전에 꼭 읽어 주세요", "Please read before paying", "お支払いの前に必ずお読みください", "付款前请务必阅读"],
+          policy: ["가게 정책: 결제한 예약은 취소·환불이 되지 않아요. 가게 사정으로 드리지 못하는 경우에는 사장님이 직접 돌려 보내 드려요.",
+            "Shop policy: paid reservations can’t be cancelled or refunded. If the shop can’t provide it for its own reasons, the owner sends the money back personally.",
+            "お店の方針: 支払い済みの予約は取消・返金できません。お店の都合でお渡しできない場合は、店主が直接返金します。",
+            "店铺政策：已付款的预订不能取消或退款。如因店家原因无法提供，店主会亲自退款。"],
+          policy_short: ["결제한 예약은 취소·환불 안 돼요 (가게 사정이면 환불)", "Paid reservations: no cancel/refund (refund if the shop can’t provide)", "支払い済み予約は取消・返金不可(お店の都合なら返金)", "已付款预订不可取消/退款(店家原因除外)"],
+          policy_wait: ["결제 없이 「대기 신청」만 하면 마감 전까지 언제든 취소할 수 있어요.", "A free “waitlist request” (no payment) can be cancelled any time before the deadline.", "支払いなしの「キャンセル待ち」は締切前ならいつでも取り消せます。", "不付款的「候补申请」在截止前可随时取消。"],
+          policy_shop: ["가게 안내: {0}", "Shop note: {0}", "お店から: {0}", "店家说明: {0}"],
+          policy_ok: ["확인했어요", "I understand", "確認しました", "我已了解"],
+          policy_no: ["그만두기", "Go back", "やめる", "返回"],
+          offline_title: ["사장님 컴퓨터가 꺼져 있어요", "The shop’s computer is off", "店主のパソコンが切れています", "店主的电脑已关闭"],
+          offline_sub: ["사장님이 켜면 다시 열려요. 저장된 내 예약은 아래에 마지막으로 확인한 상태로 보여요.",
+            "It opens again when the owner turns it on. Your saved orders below show their last checked status.",
+            "店主が電源を入れるとまた開きます。保存した予約は最後に確認した状態で下に表示されます。",
+            "店主开机后会重新开放。下方保存的预订显示最后确认的状态。"],
+          offline_auto: ["30초마다 저절로 다시 확인해요.", "Checks again automatically every 30 seconds.", "30秒ごとに自動で確認します。", "每30秒自动重新检查。"],
+          retry: ["다시 시도", "Try again", "もう一度", "重试"],
+          checking: ["확인하는 중…", "Checking…", "確認中…", "检查中…"],
+          remove: ["목록에서 빼기", "Remove from list", "一覧から外す", "从列表移除"],
+          wait_n: ["대기 {0}번 · 자리가 보장되지 않아요", "Waitlist no. {0} · a spot isn’t guaranteed", "キャンセル待ち {0}番・席は保証されません", "候补第{0}位・不保证名额"],
+          wait_hint: ["자리가 나면 순서대로 결제 차례를 알려 드려요.", "When a spot opens, you’ll be offered payment in order.", "空きが出たら順番に支払いのご案内をします。", "有名额时将按顺序通知您付款。"],
+          wait_offer: ["결제 차례예요 · {0}까지 결제하면 확정돼요", "Your turn to pay · confirmed if paid by {0}", "お支払いの番です・{0}までに支払うと確定", "轮到您付款・{0}前付款即确认"],
+          wait_cancel: ["대기 취소", "Cancel waitlist", "キャンセル待ちを取消", "取消候补"],
+          wait_take: ["{0}개 담기", "Add {0} to cart", "{0}個カートへ", "加入{0}件"],
+          wait_word: ["대기 신청", "Waitlist", "キャンセル待ち", "候补申请"],
+        };
+        var LANGS = ["ko", "en", "ja", "zh"];
+        var LOCALE = { ko: "ko-KR", en: "en-US", ja: "ja-JP", zh: "zh-CN" };
+
+        function tr(k, lang, a, b) {
+          var row = T[k];
+          if (!row) return k;
+          var i = LANGS.indexOf(lang);
+          var s = row[i < 0 ? 0 : i] || row[0];
+          return s.replace("{0}", a == null ? "" : String(a)).replace("{1}", b == null ? "" : String(b));
+        }
+
+        // 택배사 공식 조회 주소. 폰 앱 courier-links.ts 와 같은 형식·같은 허용 호스트.
+        // ⚠️ 택배사가 주소를 바꾸면 여기 한 곳만 고친다. 링크가 깨져도 번호는 보인다.
+        var COURIERS = [
+          { id: "cj", names: ["CJ대한통운", "CJ", "대한통운"], url: "https://www.cjlogistics.com/ko/tool/parcel/tracking?gnbInvcNo={no}", len: [10, 12] },
+          { id: "hanjin", names: ["한진택배", "한진"], url: "https://www.hanjin.com/kor/CMS/DeliveryMgr/WaybillResult.do?mCode=MN038&schLang=KR&wblnumText2={no}", len: [10, 12] },
+          { id: "lotte", names: ["롯데택배", "롯데", "롯데글로벌로지스"], url: "https://www.lotteglogis.com/home/reservation/tracking/linkView?InvNo={no}", len: [10, 13] },
+          { id: "epost", names: ["우체국택배", "우체국"], url: "https://service.epost.go.kr/trace.RetrieveDomRigiTraceList.comm?sid1={no}", len: [13, 13] },
+          { id: "logen", names: ["로젠택배", "로젠"], url: "https://www.ilogen.com/web/personal/trace/{no}", len: [11, 11] },
+        ];
+        var COURIER_HOSTS = ["www.cjlogistics.com", "www.hanjin.com", "www.lotteglogis.com", "service.epost.go.kr", "www.ilogen.com"];
+
+        function courierOf(carrier) {
+          var c = String(carrier || "").replace(/\s+/g, "");
+          for (var i = 0; i < COURIERS.length; i++) {
+            if (COURIERS[i].id === c || COURIERS[i].names.indexOf(c) >= 0) return COURIERS[i];
+          }
+          return null;
+        }
+
+        /** 조회 링크. 모르는 택배사·이상한 번호·허용 밖 주소면 "" (버튼을 숨기고 번호만 보인다). */
+        function courierLink(carrier, number) {
+          var c = courierOf(carrier);
+          if (!c) return "";
+          var n = String(number == null ? "" : number).replace(/[\s-]/g, "");
+          if (!/^\d+$/.test(n) || n.length < c.len[0] || n.length > c.len[1]) return "";
+          var u = c.url.replace("{no}", encodeURIComponent(n));
+          try {
+            var p = new URL(u);
+            return p.protocol === "https:" && COURIER_HOSTS.indexOf(p.hostname) >= 0 ? u : "";
+          } catch (e) { return ""; }
+        }
+
+        // ── 저장 ─────────────────────────────────────────────────────────
+        var MAX = 30;
+        function key(host) { return "rv-mine:" + String(host || ""); }
+        function load(storage, host) {
+          try {
+            var v = JSON.parse(storage.getItem(key(host)) || "[]");
+            return Array.isArray(v) ? v.filter(function (e) { return e && typeof e.a === "string" && e.a; }) : [];
+          } catch (e) { return []; }
+        }
+        function save(storage, host, list) {
+          try { storage.setItem(key(host), JSON.stringify(list.slice(-MAX))); return true; } catch (e) { return false; }
+        }
+        /** 같은 주문 주소면 합치고, 없으면 뒤에 붙인다. 원본을 바꾸지 않는다. */
+        function upsert(list, entry) {
+          var out = list.slice(), hit = false;
+          for (var i = 0; i < out.length; i++) {
+            if (out[i].a === entry.a) { out[i] = Object.assign({}, out[i], entry); hit = true; }
+          }
+          if (!hit) out.push(entry);
+          return out;
+        }
+        /** /api/order-state 답을 주문 한 줄에 반영한다. `checked` 는 확인한 시각(ms). */
+        function applyState(e, r, nowMs) {
+          var n = Object.assign({}, e, { checked: nowMs });
+          if (!r || typeof r.state !== "string") return e;
+          n.state = r.state;
+          if (r.ticket) n.ticket = r.ticket;
+          if (r.booking && r.booking.at) n.slot = r.booking.at;
+          n.ship = r.ship && r.ship.number ? { carrier: String(r.ship.carrier || ""), number: String(r.ship.number) } : (n.ship || null);
+          return n;
+        }
+
+        /** 한 줄 상태. step: 0 신청함 1 결제 확인 2 준비 중 3 발송함/나왔어요 4 전달됨, -1 = 단계 밖. */
+        function stageOf(e, nowSec) {
+          var s = e.state || "waiting", ship = !!(e.ship && e.ship.number);
+          if (s === "unknown") return { key: "st_lost", step: -1, end: true };
+          if (s === "waiting") {
+            var late = e.exp && nowSec > e.exp + 120;
+            return late ? { key: "st_unpaid_late", step: -1, end: true } : { key: "st_unpaid", step: 0, end: false };
+          }
+          if (s === "short") return { key: "st_short", step: 0, end: false };
+          if (s === "expired") return { key: "st_late", step: -1, end: false };
+          if (s === "done") return { key: "st_done", step: 4, end: true, ship: ship };
+          if (ship) return { key: "st_shipped", step: 3, end: false, ship: true };
+          if (s === "ready") return { key: "st_ready", step: 3, end: false };
+          if (s === "making") return { key: "st_making", step: 2, end: false };
+          if (s === "paid") return { key: "st_paid", step: 1, end: false };
+          return { key: "st_lost", step: -1, end: true };
+        }
+        function stepLabels(ship, lang) {
+          return ["step_applied", "step_paid", "step_making", ship ? "step_shipped" : "step_ready", "step_done"]
+            .map(function (k) { return tr(k, lang); });
+        }
+        /** 다시 물어볼 필요가 있나. 끝난 것(전달됨·찾지 못함·안 낸 것)은 묻지 않는다. */
+        function live(e, nowSec) { return !stageOf(e, nowSec).end; }
+        /** 손님이 목록에서 뺄 수 있나. **결제한 진행 중 예약은 못 뺀다** — 취소로 오해한다. */
+        function removable(e, nowSec) { return stageOf(e, nowSec).end; }
+        /** 오래된 끝난 것만 치운다: 전달됨 30일, 안 낸 것·찾지 못함 3일. 진행 중은 그대로. */
+        function prune(list, nowMs) {
+          var nowSec = Math.floor(nowMs / 1000);
+          return list.filter(function (e) {
+            var st = stageOf(e, nowSec);
+            if (!st.end) return true;
+            var age = nowMs - (e.made || 0);
+            return age < (st.key === "st_done" ? 30 : 3) * 86400000;
+          });
+        }
+
+        function agoText(nowMs, checkedMs, lang) {
+          if (!checkedMs) return "";
+          var m = Math.max(0, Math.floor((nowMs - checkedMs) / 60000));
+          if (m < 1) return tr("ago_now", lang);
+          if (m < 60) return tr("ago_min", lang, m);
+          if (m < 48 * 60) return tr("ago_hour", lang, Math.floor(m / 60));
+          return tr("ago_day", lang, Math.floor(m / 1440));
+        }
+
+        /** "2026-11-05" → 「11월 5일 (목)」(손님 말로). 모양이 틀리면 원문. */
+        function dayText(ymd, lang) {
+          var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ymd || "").trim());
+          if (!m) return String(ymd || "");
+          var d = new Date(+m[1], +m[2] - 1, +m[3]);
+          var thisYear = new Date().getFullYear() === +m[1];
+          var o = { month: "long", day: "numeric", weekday: "short" };
+          if (!thisYear) o.year = "numeric";
+          try { return d.toLocaleDateString(LOCALE[lang] || "ko-KR", o); } catch (e) { return ymd; }
+        }
+        function timeText(unix, lang) {
+          var d = new Date(unix * 1000);
+          try {
+            return d.toLocaleString(LOCALE[lang] || "ko-KR",
+              { month: "long", day: "numeric", weekday: "short", hour: "numeric", minute: "2-digit" });
+          } catch (e) { return d.toString(); }
+        }
+        /** 크게 보여 줄 날: 예약 시각이 있으면 그것, 공동구매면 받는 날. */
+        function whenOf(e, lang) {
+          if (e.slot) return { label: tr("booked", lang), text: timeText(e.slot, lang) };
+          var p = Array.isArray(e.pickup) ? e.pickup.filter(Boolean) : (e.pickup ? [e.pickup] : []);
+          if (p.length) return { label: tr("pickup", lang), text: p.map(function (x) { return dayText(x, lang); }).join(" · ") };
+          return null;
+        }
+
+        /** 결제 전에 「환불 없음」을 확인받아야 하는 주문인가 — 공동구매 품목이나 시각 예약. */
+        function needsPolicy(chosen, menu, slot) {
+          if (typeof slot === "number") return true;
+          return (chosen || []).some(function (c) {
+            var it = (menu || []).find(function (m) { return m && m.name === c.name; });
+            return !!(it && it.group && c.qty > 0);
+          });
+        }
+        /** 가게가 그 품목에 직접 적은 환불 안내(있으면). 길면 자른다. */
+        function shopPolicyNotes(chosen, menu) {
+          var out = [];
+          (chosen || []).forEach(function (c) {
+            var it = (menu || []).find(function (m) { return m && m.name === c.name; });
+            var r = it && typeof it.refund === "string" ? it.refund.trim().slice(0, 200) : "";
+            if (r && out.indexOf(r) < 0) out.push(r);
+          });
+          return out;
+        }
+
+        /** 대기 신청 응답 실패를 구분한다: 404 = 그런 신청 없음(지움), 그 밖 = 못 물어봄(남김). */
+        function waitFate(status) {
+          if (status === 404) return "gone";
+          if (status >= 200 && status < 300) return "ok";
+          return "unreachable";
+        }
+
+        root.RVMine = {
+          T: T, tr: tr, LANGS: LANGS, COURIERS: COURIERS, courierOf: courierOf, courierLink: courierLink,
+          key: key, load: load, save: save, upsert: upsert, applyState: applyState,
+          stageOf: stageOf, stepLabels: stepLabels, live: live, removable: removable, prune: prune,
+          agoText: agoText, dayText: dayText, whenOf: whenOf,
+          needsPolicy: needsPolicy, shopPolicyNotes: shopPolicyNotes, waitFate: waitFate,
+        };
+      })(typeof window !== "undefined" ? window : globalThis);
+    </script>
     <script>
       const $ = (id) => document.getElementById(id);
       let shop = {}, items = [], cart = {}, left = {}, rate = null, symbol = "₩", currency = "KRW";
@@ -588,8 +898,22 @@
       };
 
       async function load() {
-        const r = await fetch("/api/shop").then((x) => x.json());
+        // 🔴 가게 컴퓨터가 꺼지면 여기서 던졌고, 화면은 「불러오는 중…」에 멈췄다(빈 화면).
+        //    터널은 꺼진 가게 대신 502·530 HTML 을 돌려주므로 상태 번호도 본다.
+        let r;
+        try {
+          const res = await fetch("/api/shop", { cache: "no-store" });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          r = await res.json();
+          if (!r || typeof r !== "object") throw new Error("bad");
+        } catch {
+          showOffline();
+          return;
+        }
+        hideOffline();
         shop = r.shop || {};
+        // 꺼졌을 때 가게 이름이라도 보이게 이 주소 한정으로 기억해 둔다.
+        try { store.setItem("rv-shop:" + HOST, JSON.stringify({ name: shop.name || "" })); } catch {}
         $("name").textContent = shop.name || "가게";
         $("desc").textContent = shop.description || "";
         $("loc").textContent = shop.location || "";
@@ -616,7 +940,7 @@
         // 노드가 켜져 있는 것과 가게가 열려 있는 것은 다르다. 새벽에도 노드는
         // 돌기 때문에, 여기서 말해 주지 않으면 아무도 만들지 않을 커피가
         // 결제된다. 맨 위에 두는 이유는 스크롤하기 전에 보여야 해서다.
-        if (TABLE) {
+        if (TABLE && !document.querySelector(".tablebar")) {
           $("openbar").insertAdjacentHTML("afterend",
             `<div class="tablebar">${TABLE}번 테이블</div>`);
         }
@@ -657,6 +981,7 @@
                          이름에 기대지 않고 메뉴에 적힌 값을 그대로 적는다. -->
                     ${spanOf(it) ? `<div class="span">${spanOf(it)}</div>` : ""}
                     ${it.group ? `<div class="span">공동구매 · ${esc(it.group.pickup)} 받음 · ${esc(it.group.deadline)} 마감${Number(it.group.min) > 1 ? ` · ${esc(it.group.min)}개 모이면 진행` : ""}</div>` : ""}
+                    ${it.group ? `<div class="policymini">${esc(tr("policy_short"))}</div>` : ""}
                     <div class="pr">${fmt(it.price || 0, it.currency)}</div>
                     ${
                       // 🔴 RVN 환산은 **그 품목의 통화가 가게 통화와 같을 때만**
@@ -707,15 +1032,32 @@
         if (r.ai) $("ask").style.display = "";
       }
 
-      // ── 공동구매 대기 ─────────────────────────────────────────────
-      // 이 폰에 번호와 열쇠만 둔다. 연락처는 가게 컴퓨터에만 있다.
+      // ── 「내 예약」 + 공동구매 대기 ─────────────────────────────────────
+      // 이 폰에 주문 주소·대기 번호와 열쇠만 둔다. 연락처는 가게 컴퓨터에만 있다.
+      // 순수 로직은 위 `mine-logic` 블록(RVMine)에 있고 node 시험이 돈다.
+      const M = window.RVMine;
+      const L = window.PXLANG || "ko";
+      const tr = (k, a, b) => M.tr(k, L, a, b);
+      const HOST = location.host;
+      // localStorage 는 막힌 브라우저(사생활 보호 창 등)에서 읽기만 해도 던진다.
+      const store = (() => {
+        try { const s = window.localStorage; s.getItem("x"); return s; }
+        catch { return { getItem: () => null, setItem: () => {} }; }
+      })();
+      let offline = false;      // 가게 컴퓨터에 닿지 못하는 중
+      let offTimer = null;
+
+      function mineLoad() { return M.prune(M.load(store, HOST), Date.now()); }
+      function mineSave(list) { M.save(store, HOST, list); }
+      function mineRecord(entry) { mineSave(M.upsert(mineLoad(), entry)); }
+
       const WAIT_KEY = "rv-waits";
       let waitPay = null; // 결제 차례를 받아 주문할 때 붙이는 {id,key}
-      function waitsLoad() { try { return JSON.parse(localStorage.getItem(WAIT_KEY) || "[]"); } catch { return []; } }
-      function waitsSave(v) { try { localStorage.setItem(WAIT_KEY, JSON.stringify(v.slice(-10))); } catch {} }
+      function waitsLoad() { try { return JSON.parse(store.getItem(WAIT_KEY) || "[]"); } catch { return []; } }
+      function waitsSave(v) { try { store.setItem(WAIT_KEY, JSON.stringify(v.slice(-10))); } catch {} }
       function waitAsk(it) {
         if (!it) return;
-        $("waithead").textContent = `${it.name} 대기 신청`;
+        $("waithead").textContent = `${it.name} · ${tr("wait_word")}`;
         $("w-say").textContent = "";
         $("waitwrap").classList.add("on");
         $("w-no").onclick = () => $("waitwrap").classList.remove("on");
@@ -725,42 +1067,137 @@
           try {
             const r = await fetch("/api/wait", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).then((x) => x.json());
             if (r.error) throw new Error(r.error);
-            waitsSave([...waitsLoad(), { id: r.id, key: r.key, item: it.name, qty: body.qty }]);
+            waitsSave([...waitsLoad(), { id: r.id, key: r.key, item: it.name, qty: body.qty, state: "waiting", checked: Date.now() }]);
             $("waitwrap").classList.remove("on");
-            void paintWaits();
+            void refreshMine();
           } catch (e) { $("w-say").textContent = e.message || "신청하지 못했어요."; }
           finally { $("w-go").disabled = false; }
         };
       }
-      async function paintWaits() {
-        const mine = waitsLoad();
-        if (!mine.length) { $("waitbar").innerHTML = ""; return; }
-        const keep = [], html = [];
-        for (const w of mine) {
+      // 옛 이름. 다른 곳에서 부르던 것을 살려 둔다.
+      const paintWaits = () => refreshMine();
+
+      /* 가게에 다시 물어 저장된 것을 새로 고친다.
+         🔴 **못 물어봤다고 지우지 않는다.** 예전에는 대기 신청을 묻다 실패하면
+            목록에서 빠졌다 — 가게 컴퓨터가 잠깐 꺼진 사이 손님의 대기 번호가 사라졌다.
+            404(그런 신청 없음)일 때만 지운다. */
+      async function refreshMine() {
+        const now = Date.now(), nowSec = Math.floor(now / 1000);
+        let reached = false, failed = false;
+        // 주문
+        let list = mineLoad();
+        for (let i = 0; i < list.length; i++) {
+          if (!M.live(list[i], nowSec)) continue;
+          try {
+            const res = await fetch(`/api/order-state?a=${encodeURIComponent(list[i].a)}`, { cache: "no-store" });
+            if (!res.ok) throw new Error(String(res.status));
+            list[i] = M.applyState(list[i], await res.json(), now);
+            reached = true;
+          } catch { failed = true; }
+        }
+        mineSave(list);
+        // 대기 신청
+        const keep = [];
+        for (const w of waitsLoad()) {
+          let res = null;
+          try { res = await fetch(`/api/wait?id=${encodeURIComponent(w.id)}&k=${encodeURIComponent(w.key)}`, { cache: "no-store" }); } catch {}
+          const fate = res ? M.waitFate(res.status) : "unreachable";
+          if (fate === "gone") { reached = true; continue; }
+          if (fate === "unreachable") { failed = true; keep.push(w); continue; }
           let r = null;
-          try { r = await fetch(`/api/wait?id=${encodeURIComponent(w.id)}&k=${encodeURIComponent(w.key)}`).then((x) => x.ok ? x.json() : null); } catch {}
-          if (!r || !["waiting", "offered"].includes(r.state)) continue;
-          keep.push(w);
-          const until = r.until ? new Date(r.until * 1000).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" }) : "";
-          html.push(r.state === "offered"
-            ? `<div class="waitbar"><b>${esc(r.item)} 결제 차례예요</b><div>${until}까지 결제하면 확정돼요. 지나면 다음 분께 넘어가요.</div>
-                 <div class="row2"><button data-wpay="${esc(w.id)}">${esc(r.qty)}개 담기</button><button data-wx="${esc(w.id)}">취소</button></div></div>`
-            : `<div class="waitbar"><b>${esc(r.item)} 대기 ${esc(r.position || "")}번</b><div>자리가 나면 순서대로 결제 차례를 알려 드려요.</div>
-                 <div class="row2"><button data-wx="${esc(w.id)}">대기 취소</button></div></div>`);
+          try { r = await res.json(); } catch { failed = true; keep.push(w); continue; }
+          reached = true;
+          if (!["waiting", "offered"].includes(r.state)) continue; // 취소됨·결제됨·지남은 목록에서 뺀다
+          keep.push({ ...w, state: r.state, position: r.position || w.position, until: r.until || null, checked: now });
         }
         waitsSave(keep);
-        $("waitbar").innerHTML = html.join("");
-        document.querySelectorAll("[data-wx]").forEach((b) => {
+        if (failed && !reached) offline = true;
+        else if (reached) {
+          // 다시 닿았다. 꺼짐 안내가 떠 있으면 메뉴부터 다시 불러온다.
+          if (offline && $("offline").innerHTML) { offline = false; void load(); return; }
+          offline = false;
+        }
+        paintMine();
+      }
+
+      function stepsHtml(st) {
+        if (st.step < 0) return "";
+        const labels = M.stepLabels(!!st.ship, L);
+        return `<div class="steps">${labels.map((lb, i) => `<div class="stp ${i <= st.step ? "on" : ""}">
+                  <span class="dot"></span><span class="lb">${esc(lb)}</span></div>`).join("")}</div>`;
+      }
+
+      function paintMine() {
+        const box = $("mine");
+        if (!box) return;
+        const now = Date.now(), nowSec = Math.floor(now / 1000);
+        const list = mineLoad();
+        const waits = waitsLoad();
+        if (!list.length && !waits.length) { box.hidden = true; box.innerHTML = ""; return; }
+        // 오래 못 본 값에만 「마지막 확인」을 단다. 방금 본 값에 붙이면 잡음이다.
+        const ago = (c) => (offline || (c && now - c > 90_000)) ? M.agoText(now, c, L) : "";
+
+        const waitCards = waits.map((w) => {
+          const until = w.until ? new Date(w.until * 1000).toLocaleString(undefined, { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" }) : "";
+          const a = ago(w.checked);
+          return w.state === "offered"
+            ? `<div class="minecard wait"><div class="minestate">${esc(w.item)}</div>
+                 <div>${esc(tr("wait_offer", until))}</div>${a ? `<div class="mineago">${esc(a)}</div>` : ""}
+                 <div class="minerow"><button data-wpay="${esc(w.id)}" ${offline ? "disabled" : ""}>${esc(tr("wait_take", w.qty))}</button>
+                 <button data-wx="${esc(w.id)}" ${offline ? "disabled" : ""}>${esc(tr("wait_cancel"))}</button></div></div>`
+            : `<div class="minecard wait"><div class="minestate">${esc(w.item)}</div>
+                 <div>${esc(tr("wait_n", w.position || "?"))}</div><div class="mineitems">${esc(tr("wait_hint"))}</div>
+                 ${a ? `<div class="mineago">${esc(a)}</div>` : ""}
+                 <div class="minerow"><button data-wx="${esc(w.id)}" ${offline ? "disabled" : ""}>${esc(tr("wait_cancel"))}</button></div></div>`;
+        });
+
+        const orderCards = list.slice().reverse().map((e) => {
+          const st = M.stageOf(e, nowSec);
+          const when = M.whenOf(e, L);
+          const a = ago(e.checked);
+          const what = (e.items || []).map((x) => `${esc(x.name)} × ${esc(x.qty)}`).join(", ");
+          let ship = "";
+          if (e.ship && e.ship.number) {
+            const link = M.courierLink(e.ship.carrier, e.ship.number);
+            ship = `<div style="margin-top:6px">${esc(tr("ship_line", e.ship.carrier, e.ship.number))}</div>`
+              + (link ? `<div class="minerow"><a class="track" href="${esc(link)}" target="_blank" rel="noopener noreferrer">${esc(tr("track", e.ship.carrier))}</a></div>
+                         <div class="mineitems">${esc(tr("track_note"))}</div>` : "");
+          }
+          // 🔴 결제한 예약에는 취소·환불 단추가 **없다**(§18). 문구만 계속 보인다.
+          const paidish = st.step >= 1 || e.state === "short" || e.state === "expired";
+          return `<div class="minecard">
+              ${when ? `<div class="minewhenlb">${esc(when.label)}</div><div class="minewhen">${esc(when.text)}</div>` : ""}
+              <div class="minestate">${esc(tr(st.key))}</div>
+              ${stepsHtml(st)}
+              ${e.ticket ? `<div class="mineitems">${esc(tr("order_no", e.ticket))}</div>` : ""}
+              ${what ? `<div class="mineitems">${what}</div>` : ""}
+              ${ship}
+              ${a ? `<div class="mineago">${esc(a)}</div>` : ""}
+              ${e.policy && (paidish || st.step === 0) ? `<div class="minepolicy">${esc(tr("policy_short"))}</div>` : ""}
+              ${M.removable(e, nowSec) ? `<div class="minerow"><button data-mx="${esc(e.a)}">${esc(tr("remove"))}</button></div>` : ""}
+            </div>`;
+        });
+
+        box.hidden = false;
+        box.innerHTML = `<h2 id="mine-h">${esc(tr("mine_title"))}</h2>
+          <div class="minesub">${esc(tr("mine_sub"))}</div>${waitCards.join("")}${orderCards.join("")}`;
+
+        box.querySelectorAll("[data-wx]").forEach((b) => {
           b.onclick = async () => {
-            const w = keep.find((x) => String(x.id) === b.dataset.wx);
+            const w = waitsLoad().find((x) => String(x.id) === b.dataset.wx);
             if (!w) return;
-            await fetch("/api/wait/cancel", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: w.id, k: w.key }) }).catch(() => {});
-            void paintWaits();
+            b.disabled = true;
+            try {
+              const res = await fetch("/api/wait/cancel", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: w.id, k: w.key }) });
+              const r = await res.json().catch(() => ({}));
+              if (!res.ok && r.error) { alert(r.error); b.disabled = false; return; }
+            } catch { showOffline(); return; }
+            void refreshMine();
           };
         });
-        document.querySelectorAll("[data-wpay]").forEach((b) => {
+        box.querySelectorAll("[data-wpay]").forEach((b) => {
           b.onclick = () => {
-            const w = keep.find((x) => String(x.id) === b.dataset.wpay);
+            const w = waitsLoad().find((x) => String(x.id) === b.dataset.wpay);
             const i = items.findIndex((it) => it.name === w?.item);
             if (!w || i < 0) return;
             waitPay = { id: w.id, key: w.key };
@@ -770,7 +1207,71 @@
             bump(i, w.qty);
           };
         });
+        box.querySelectorAll("[data-mx]").forEach((b) => {
+          b.onclick = () => {
+            const nowSec2 = Math.floor(Date.now() / 1000);
+            // 끝난 것만 뺀다. 진행 중인 결제 예약은 단추 자체가 없다.
+            mineSave(mineLoad().filter((e) => !(e.a === b.dataset.mx && M.removable(e, nowSec2))));
+            paintMine();
+          };
+        });
       }
+
+      /* 가게 컴퓨터가 꺼졌을 때(§23). 서버가 없으므로 주문은 받지 않는다 — 유실 방지가 먼저다.
+         ⚠️ 컴퓨터가 꺼져 있으면 터널도 죽어서 이 페이지 자체가 안 열린다(Cloudflare 오류 화면).
+            이 안내는 **페이지가 열린 뒤** 가게에 닿지 못할 때(열어 둔 탭, 노드만 멈춤)를 위한 것이다. */
+      function showOffline() {
+        offline = true;
+        let cached = "";
+        try { cached = JSON.parse(store.getItem("rv-shop:" + HOST) || "{}").name || ""; } catch {}
+        if (cached && $("name").textContent === "불러오는 중…") $("name").textContent = cached;
+        else if ($("name").textContent === "불러오는 중…") $("name").textContent = "";
+        $("openbar").className = "openbar off";
+        $("openbar").innerHTML = `<span class="dot"></span>${esc(tr("offline_title"))}`;
+        $("offline").innerHTML = `<div class="offcard">
+            <img src="/raven-sleep.webp" alt="" onerror="this.remove()" />
+            <div class="ot">${esc(tr("offline_title"))}</div>
+            <div class="os">${esc(tr("offline_sub"))}<br />${esc(tr("offline_auto"))}</div>
+            <button id="offretry">${esc(tr("retry"))}</button>
+          </div>`;
+        $("offretry").onclick = () => {
+          $("offretry").disabled = true;
+          $("offretry").textContent = tr("checking");
+          void load();
+        };
+        $("menu").innerHTML = "";
+        $("order").disabled = true;
+        paintMine();
+        clearTimeout(offTimer);
+        offTimer = setTimeout(() => { if (offline) void load(); }, 30_000);
+      }
+      function hideOffline() {
+        offline = false;
+        clearTimeout(offTimer);
+        $("offline").innerHTML = "";
+      }
+
+      /* 결제 앞 약속(§18). 공동구매·시각 예약이면 「환불 없음」을 먼저 보이고 [확인했어요]를
+         눌러야 주문(결제 QR)이 만들어진다. 그만두면 아무것도 만들지 않는다. */
+      function askPolicy(chosen) {
+        $("policyhead").textContent = tr("policy_title");
+        $("policytext").textContent = tr("policy");
+        $("policyshop").textContent = M.shopPolicyNotes(chosen, items).map((n) => tr("policy_shop", n)).join("\n");
+        $("policywait").textContent = chosen.some((c) => items.find((it) => it.name === c.name)?.group) ? tr("policy_wait") : "";
+        $("policyok").textContent = tr("policy_ok");
+        $("policyno").textContent = tr("policy_no");
+        $("policywrap").classList.add("on");
+        return new Promise((done) => {
+          const close = (v) => { $("policywrap").classList.remove("on"); done(v); };
+          $("policyok").onclick = () => close(true);
+          $("policyno").onclick = () => close(false);
+        });
+      }
+
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") void refreshMine();
+      });
+      setInterval(() => { if (document.visibilityState === "visible" && !offline) void refreshMine(); }, 30_000);
 
       // 값이 바뀐 자리를 한 번 튀게 한다. 애니메이션을 다시 걸려면 클래스를
       // 뗐다가 붙여야 하고, 그 사이 브라우저가 다시 계산하게 만들어야 한다.
@@ -834,6 +1335,10 @@
         if (slotWant === "cancelled") return;
         if (slotWant === "none") { /* 예약이 필요 없는 주문 */ }
 
+        // 🔴 결제 앞 약속(§18): 공동구매·시각 예약은 「환불 없음」을 확인해야 주문이 만들어진다.
+        const policyAsked = M.needsPolicy(chosen, items, slotWant);
+        if (policyAsked && !(await askPolicy(chosen))) return;
+
         $("order").disabled = true;
         try {
           const res = await fetch("/api/order", {
@@ -848,6 +1353,21 @@
             }),
           }).then((x) => x.json());
           if (res.error) throw new Error(res.error);
+
+          // 「내 예약」에 남긴다 — 링크를 잃어도 이 폰에서 이 가게 주소를 열면 보인다.
+          {
+            const pick = [...new Set(chosen
+              .map((c) => items.find((it) => it.name === c.name)?.group?.pickup)
+              .filter(Boolean))];
+            mineRecord({
+              a: res.address, made: Date.now(), checked: Date.now(), state: "waiting",
+              items: chosen.map((c) => ({ name: c.name, qty: c.qty })),
+              total, cur: currency, pickup: pick,
+              slot: typeof slotWant === "number" ? slotWant : null,
+              exp: res.quote?.expires_at || null, policy: policyAsked,
+            });
+            paintMine();
+          }
 
           $("p-shop").textContent = res.shop || "";
           $("p-rvn").textContent = `${res.quote.rvn} RVN`;
@@ -924,7 +1444,9 @@
           }
           $("paydlg").showModal();
         } catch (e) {
-          alert(e.message || e);
+          // 가게 컴퓨터에 닿지 못했다(네트워크 오류·터널이 돌려준 HTML). 꺼짐 안내로 바꾼다.
+          if (e instanceof TypeError || e instanceof SyntaxError) showOffline();
+          else alert(e.message || e);
         }
         // 주문이 생겼으면 다시 켜지 않는다. 당황한 손님이 한 번 더 누르면
         // /api/order 가 또 나가고 주문이 둘이 된다.
@@ -975,6 +1497,15 @@
         const tick = async () => {
           try {
             const r = await fetch(`/api/order-state?a=${encodeURIComponent(address)}`).then((x) => x.json());
+            // 「내 예약」 쪽도 같은 값으로 맞춘다(바뀐 것이 있을 때만 다시 그린다).
+            {
+              const before = mineLoad().find((e) => e.a === address);
+              if (before) {
+                const after = M.applyState(before, r, Date.now());
+                mineSave(M.upsert(mineLoad(), after));
+                if (before.state !== after.state || JSON.stringify(before.ship) !== JSON.stringify(after.ship)) paintMine();
+              }
+            }
             if (r.ticket) ticket = r.ticket;
 
             /* 🔴 기간 이용권을 샀으면 **표를 그린다.** 커피처럼 「만드는 중」
@@ -1029,7 +1560,12 @@
                </div>`
               + (booking ? bookingHtml(booking) : "")
               + (passes.length ? passesHtml(passes) : "")
-              + (r.ship ? `<div class="shipcard"><b>보냈어요</b> · ${esc(r.ship.carrier)} ${esc(r.ship.number)}${r.ship.url ? `<div style="margin-top:8px"><a href="${esc(r.ship.url)}" target="_blank" rel="noopener noreferrer">배송 조회</a></div>` : ""}</div>` : "");
+              + (r.ship ? (() => {
+                  // 조회 링크는 택배사 공식 주소 목록(RVMine.COURIERS)으로만 만든다 — 폰 앱과 같은 형식.
+                  const link = M.courierLink(r.ship.carrier, r.ship.number);
+                  return `<div class="shipcard">${esc(tr("ship_line", r.ship.carrier, r.ship.number))}${link
+                    ? `<div class="minerow"><a class="track" href="${esc(link)}" target="_blank" rel="noopener noreferrer">${esc(tr("track", r.ship.carrier))}</a></div>` : ""}</div>`;
+                })() : "");
 
             // 🔴 손님은 이 화면을 보고 서 있지 않는다. 카톡을 보거나 폰을 넣어
             // 둔다. 소리만으로는 시끄러운 가게에서 못 듣는다 — 다른 앱을 보고
@@ -1279,6 +1815,8 @@
         return `<img src="/api/qr?text=${encodeURIComponent(text)}" alt="결제 QR" style="width:200px;height:200px;background:#fff;padding:8px;border-radius:10px;display:block;margin:16px auto 8px" />`;
       }
 
+      // 저장된 「내 예약」은 가게에 묻기 전에 먼저 그린다 — 꺼져 있어도 마지막 상태가 보인다.
+      paintMine();
       load();
     </script>
       <script>

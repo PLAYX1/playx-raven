@@ -1,0 +1,19 @@
+{
+  "plugin": "tauri-plugin-global-shortcut",
+  "official": true,
+  "installed": false,
+  "attempts": [
+    {
+      "mode": "cargo add --offline",
+      "exit": 101,
+      "reason": "crate not present in registry cache"
+    },
+    {
+      "mode": "cargo add online",
+      "exit": 101,
+      "reason": "index.crates.io DNS unavailable; Cargo internal retries exhausted"
+    }
+  ],
+  "manifestChanged": false,
+  "lockfileChanged": false
+}

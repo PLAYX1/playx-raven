@@ -1,7 +1,24 @@
+use tauri::Manager;
 mod artist;
 mod rt;
 mod auction;
 mod ai;
+mod ravi_voice;
+mod ravi_tts;
+mod ravi_voice_pack;
+mod ravi_agent;
+mod ravi_companion;
+mod ravi_lifecycle;
+mod companion_layout;
+// 미니 창(애플 뮤직 미니 플레이어처럼) — 읽기 전용. 창·문지기(mini) · 판단(mini_feed) · 지켜보기(mini_watch).
+mod mini;
+mod mini_feed;
+mod mini_watch;
+// 표시 방식(큰 창·작은 창·칩·메뉴바만) + 대기화면 — docs/design/window-modes.md
+mod display_mode;
+// 지갑 잠금(대기화면 진입 즉시·매장용 읽기 전용) — docs/design/lock-and-dark.md
+mod app_lock;
+mod ai_budget;
 mod ai_endpoint;
 mod companion;
 mod auto;
@@ -11,22 +28,28 @@ mod nodever;
 mod noncustody;
 mod wording;
 mod prep;
+mod resources;
 mod setupflow;
 mod quiet;
 mod helping;
 mod backup;
+mod backup_find;
 mod backup_storage;
 mod classes;
 mod conf;
 mod door;
 mod dropbox;
+mod drop_publish;
 mod peers;
+mod asset_keep;
+mod asset_verify;
 mod sample;
 mod recover;
 mod electrum;
 mod moving;
 mod trust;
 mod publicbook;
+mod chain_info;
 mod health;
 mod ipfs;
 mod ipfsconf;
@@ -35,9 +58,13 @@ mod msg;
 mod pass;
 mod member_privacy;
 mod place;
+// 「내 가게를 지도에 올리기」 — 이름표·영업 중 신호(폰 지도 형식 정본: ravenvault docs/MERCHANT-EVENT-FORMAT.md).
+mod map;
+mod map_format;
 mod price;
 mod refund;
 mod issue;
+mod market;
 mod issue_unknown;
 mod cert_assets;
 mod create;
@@ -47,6 +74,7 @@ mod ledger;
 mod issue2;
 mod raven;
 mod report;
+mod report_log;
 mod roles;
 mod send;
 mod setup;
@@ -66,6 +94,7 @@ mod wiring;
 mod knowledge;
 mod nostrpub;
 mod app_folder;
+mod app_dir_move;
 mod pairing;
 mod paths;
 mod swap;
@@ -82,19 +111,42 @@ mod reindex;
 mod reindex_run;
 mod tunnel;
 mod vending;
+mod remote_sales;
+mod sales_account;
+mod update_policy;
+mod pe_version;
+mod secure_update;
 mod wallet;
 mod server;
 mod services;
 mod shop;
 mod shopkey;
+mod storesign;
 mod shopmove;
+mod lan_proof;
+mod lan_cert;
+mod lan_seal;
+mod lan_store;
+mod lan_handler;
+mod lan_mount;
+mod lan_issue;
+mod lan_keys;
+mod lan_pair;
+mod lan_rotate;
+#[cfg(test)]
+mod lan_testkit;
 mod shopseal;
 mod devfee;
+mod payout_guard;
 mod ticket;
 mod relay;
 mod upload;
 mod spec;
 mod lockbox;
+mod lockkey;
+mod walletfile;
+// 0.9.0 — 끌어다 놓은 백업(.pxlock·.rvwallet)에서 되살리기. 기존 복원 함수만 부른다.
+mod restore_drop;
 mod rehearse;
 // 0.4.9 — 복구 단어(12단어)로 지갑 되살리기. 검사·주소(words) · 흐름(words_restore).
 mod words;
@@ -102,14 +154,77 @@ mod words_restore;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // 앱 자료 폴더 이전(PlayXRaven → RavenVault)은 다른 어떤 것보다 먼저 — 자식 프로세스를 켜기 전.
+    paths::init_early();
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
+        // No updater IPC permissions: installation is only exposed via secure_update.
+        .plugin(tauri_plugin_updater::Builder::default().build())
         .plugin(tauri_plugin_process::init())
         // The owner token is minted once per run and lives only in memory.
         .manage(server::ServerState::default())
-        .invoke_handler(tauri::generate_handler![
+        .on_window_event(|window, event| {
+            if window.label() == "main" {
+                display_mode::on_main_event(window.app_handle(), event);
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                    ravi_lifecycle::request_close(window.app_handle());
+                }
+            }
+        })
+        .invoke_handler(|invoke| {
+            if !ravi_companion::command_allowed(invoke.message.webview_ref().label(), invoke.message.command()) {
+                invoke.resolver.reject("라비 작은 창에서는 이 작업을 할 수 없어요.");
+                return true;
+            }
+            // 🔴 미니 창은 읽기 전용 다섯 명령만(mini::MINI_COMMANDS). 보내기·잠금 풀기·복구 단어는 여기서 막힌다.
+            if !mini::command_allowed(invoke.message.webview_ref().label(), invoke.message.command()) {
+                invoke.resolver.reject("미니 창에서는 이 작업을 할 수 없어요. 큰 화면을 열어 주세요.");
+                return true;
+            }
+            // 🔴 대기화면은 읽기 전용 두 명령만(display_mode::STANDBY_COMMANDS).
+            if !display_mode::command_allowed(invoke.message.webview_ref().label(), invoke.message.command()) {
+                invoke.resolver.reject("대기화면에서는 이 작업을 할 수 없어요.");
+                return true;
+            }
+            // 🔴 지갑이 잠겨 있으면(대기화면 진입·매장용 읽기 전용) 허용 목록 밖 명령은 전부 거부 —
+            //    보내기·서명·복구 단어·백업 내보내기·열쇠. 단일 진실은 app_lock(메모리 + app-lock.json).
+            if !app_lock::command_allowed(invoke.message.command()) {
+                invoke.resolver.reject("지갑이 잠겨 있어요. 잠금을 푼 뒤 다시 해 주세요.");
+                return true;
+            }
+            let handler: fn(tauri::ipc::Invoke<tauri::Wry>) -> bool = tauri::generate_handler![
+            ravi_lifecycle::ravi_lifecycle_status,
+            ravi_lifecycle::ravi_take_close_request,
+            ravi_lifecycle::ravi_prepare_quit,
+            ravi_lifecycle::ravi_finish_quit,
+            ravi_lifecycle::ravi_cancel_quit,
+            ravi_lifecycle::ravi_hide_main,
+            ravi_companion::companion_settings,
+            ravi_companion::companion_save,
+            ravi_companion::companion_open_main,
+            ravi_companion::companion_show,
+            ravi_companion::companion_bubble,
+            ravi_companion::companion_sample,
+            ravi_companion::companion_move,
+            ravi_companion::companion_signal,
+            ravi_companion::companion_click,
+            ravi_companion::companion_dismiss,
+            ravi_companion::companion_hold,
+            mini::mini_state,
+            mini::mini_set,
+            mini::mini_show,
+            mini::mini_open_main,
+            mini::mini_seen,
+            display_mode::display_mode_get,
+            display_mode::display_mode_set,
+            display_mode::standby_open,
+            display_mode::standby_state,
+            display_mode::standby_exit,
+            app_lock::app_lock_state,
+            app_lock::app_unlock,
+            app_lock::app_lock_now,
             pairing::pairing_state,
             pairing::pairing_show_qr,
             pairing::pairing_cancel_qr,
@@ -192,6 +307,7 @@ pub fn run() {
             send::send_asset,
             send::transfer_ownership,
             send::send_rvn,
+            send::send_ack,
             upload::ipfs_add_file,
             upload::ipfs_add_bundle,
             upload::build_metadata,
@@ -211,6 +327,7 @@ pub fn run() {
             spec::suggest_setup,
             upload::ipfs_keep_url,
             report::report_send,
+            report::report_log_preview,
             report::report_flush,
             report::report_parked,
             rehearse::rehearse_start,
@@ -241,6 +358,15 @@ pub fn run() {
             walletx::channel_leave,
             nostrpub::nostr_publish,
             shopkey::shop_pubkey,
+            storesign::store_key_info,
+            storesign::store_sign_digest,
+            lan_mount::lan_sync_status,
+            lan_mount::lan_store_set,
+            lan_mount::lan_revocation_update,
+            lan_mount::lan_pair_offer,
+            lan_mount::lan_pair_pending,
+            lan_mount::lan_pair_approve,
+            lan_mount::lan_device_disconnect,
             devfee::fee_owed,
             ticket::ticket_find,
             ticket::ticket_use,
@@ -283,8 +409,11 @@ pub fn run() {
             shop::pay_order,
             shop::broadcast_message,
             ai::save_api_key,
+            ai::save_device_api_key,
+            ai::move_api_key_to_keychain,
             ai::delete_api_key,
             ai::api_key_status,
+            ai::ai_check_connection,
             ai::ai_order_read,
             ai::ai_debate,
             ai::ai_ask_owner,
@@ -293,7 +422,30 @@ pub fn run() {
             ai::ai_read_image,
             ai::ai_answer,
             ai::ai_answer_any,
+            ravi_agent::ravi_agent_chat,
+            ravi_agent::ravi_consent,
+            ravi_agent::ravi_consent_save,
+            ravi_agent::ravi_audit,
+            ravi_agent::ravi_tool_registry,
+            ravi_agent::ravi_tool,
+            ravi_agent::ravi_today,
+            ravi_agent::ravi_greeting,
+            ravi_agent::ravi_public_address,
+            chain_info::chain_overview,
+            chain_info::chain_security,
+            ravi_voice::voice_open_microphone_settings,
+            ravi_voice::voice_cancel,
+            ravi_voice::voice_consent,
+            ravi_voice::voice_set_consent,
+            ravi_voice::voice_transcribe,
+            ravi_tts::ravi_tts_status,
+            ravi_tts::ravi_tts_read,
+            ravi_voice_pack::ravi_voice_download,
+            ravi_voice_pack::ravi_voice_cancel,
+            ravi_voice_pack::ravi_voice_remove,
+            ravi_voice_pack::ravi_voice_pack_status,
             ai::ai_chat,
+            ai::ai_promo,
             ai::save_custom_provider,
             ai::model_settings,
             ai::ai_models_refresh,
@@ -304,10 +456,16 @@ pub fn run() {
             wallet::encrypt_wallet,
             wallet::change_passphrase,
             wallet::unlock_for,
+            sales_account::sales_account_reveal,
+            sales_account::sales_account_balance,
             wallet::lock_wallet,
             vending::sellable_assets,
             vending::pending_sales,
+            secure_update::check_update,
+            secure_update::install_update,
             vending::fulfil_sale,
+            remote_sales::deliver_remote_sale,
+            remote_sales::retry_remote_completions,
             auto::auto_fulfil,
             auto::auto_usage,
             auto::auto_enable,
@@ -368,9 +526,26 @@ pub fn run() {
             backup::usb_lock_read,
             backup::usb_lock_set,
             lockbox::cloud_key_show,
+            lockkey::lock_secret_put,
+            lockkey::lock_secret_get,
+            lockkey::lock_key_export,
+            lockkey::lock_key_import,
+            lockkey::lock_tx_info,
+            lockkey::lock_cid_range,
             lockbox::backup_pass_set,
             lockbox::backup_pass_state,
             lockbox::cloud_unlock,
+            walletfile::wallet_file_status,
+            walletfile::wallet_export,
+            walletfile::wallet_import_prepare,
+            walletfile::wallet_import_apply,
+            walletfile::wallet_import_cancel,
+            walletfile::key_sheet_print,
+            walletfile::wallet_core_export,
+            restore_drop::restore_drop_inspect,
+            restore_drop::restore_drop_open,
+            restore_drop::restore_drop_apply,
+            restore_drop::restore_drop_cancel,
             backup::external_drives,
             backup::cloud_folders,
             sample::sample_check,
@@ -386,6 +561,12 @@ pub fn run() {
             artist::artist_profile_get,
             artist::artist_profile_set,
             peers::peer_help,
+            asset_keep::asset_keep_state,
+            asset_keep::asset_keep_set,
+            asset_keep::asset_keep_auto_mine,
+            asset_keep::asset_keep_reset,
+            asset_verify::asset_verify,
+            asset_verify::asset_verify_file,
             recover::node_identity,
             recover::node_rename,
             recover::restore_survey,
@@ -462,10 +643,25 @@ pub fn run() {
             place::parse_coords,
             place::distance_m,
             place::directions_links,
+            map::map_load,
+            map::map_check,
+            map::map_publish,
+            map::map_unpublish,
+            map::map_status,
+            map::map_presence_now,
             price::rvn_rate,
             price::quote_price,
             boot::boot_report,
             upload::ipfs_add_dropped,
+            drop_publish::creator_dropped_list,
+            drop_publish::creator_dropped_read,
+            drop_publish::creator_cid_read,
+            market::market_list_assets,
+            market::market_chain_tip,
+            market::market_http_get,
+            market::market_purchase_prepare,
+            market::market_purchase_send,
+            market::market_purchase_cancel,
             shopkey::shopkey_origin,
             shopmove::shop_key_move_plan,
             shopmove::shop_key_move,
@@ -483,6 +679,8 @@ pub fn run() {
             talk::talk_replies,
             talk::talk_translate,
             talk::talk_make_room,
+            // 방 이름·설명 고치기(NIP-28 kind 41) — 방을 만든 이야기 열쇠로만 서명한다.
+            talk::talk_room_meta_set,
             talk::talk_my_assets,
             talk::talk_delete_request,
             talk::talk_profile_set,
@@ -510,6 +708,7 @@ pub fn run() {
             reindex_run::chain_broken,
             reindex_run::chain_heal,
             prep::pc_prepare,
+            resources::start_disk_check,
             setupflow::shop_setup,
             nodever::node_version,
             mode::mode_get,
@@ -557,10 +756,19 @@ pub fn run() {
             server::load_orders,
             server::order_states,
             server::set_order_state,
-        ])
+        ];
+            handler(invoke)
+        })
         .setup(|app| {
+            // 0.9.0 — 지갑 파일 가져오기(.rvwallet 끌어다 놓기·메뉴)가 풀어 둔 임시 wallet.dat 를 켤 때 지운다.
+            //    표(ticket)는 메모리에만 있어 껐다 켜면 어차피 못 쓴다. 강제 종료로 남은 평문 사본을 없앤다.
+            //    (server.rs 는 폰·직원 HTTP 쪽이라 walletfile 을 부르지 않는다 — walletfile 시험 규칙.)
+            let _ = walletfile::wallet_import_cancel();
             // 앱 자료 폴더를 이 사용자 전용으로 잠근다(다른 계정이 열쇠·장부를 못 읽게).
             app_folder::harden();
+            if secure_update::initialize_policy(&app.package_info().version.to_string()).is_err() {
+                eprintln!("최소 허용 버전 기록 실패: 업데이트 확인 및 설치 시 다시 검증합니다.");
+            }
             ai::migrate_keys_on_start();
             tauri::async_runtime::spawn(member_privacy::run_cleanup());
             // 「만들기」 기록 정리 — 보관 기간 지난 받는 사람 이름, 7일 지난 인쇄 파일,
@@ -583,105 +791,14 @@ pub fn run() {
             //    밤새 들어온 입금이 아침까지 확인되지 않는다.
             //    「돕기」인 사람의 노트북은 건드리지 않는다(배터리는 그 사람 것).
             awake::sync_with_mode();
-            // ── 창을 닫아도 가게는 계속 돈다 ────────────────────────────
-            //
-            // 🔴 X 를 누르면 앱이 통째로 끝나고 있었다. 그러면 **손님 폰
-            // 서버(8790)가 같이 죽는다** — QR 을 찍어도 아무 화면이 안 뜨고,
-            // 결제한 손님의 주문 상태가 안 바뀌고, 자동 발송과 채굴이 멈춘다.
-            // `ravend` 는 별도 데몬이라 살아남지만, 가게는 이미 멈춘 뒤다.
-            //
-            // 계산대 컴퓨터는 원래 안 끄는 물건이다. X 는 **창을 치우는 것**이고,
-            // 진짜로 끄는 것은 메뉴 막대에서 따로 고른다.
-            use tauri::menu::{Menu, MenuItem};
-            use tauri::tray::TrayIconBuilder;
+            // 지도에 올려 둔 가게면 켜자마자 「영업 중」 신호를 한 번, 그 뒤 5분마다(map.rs).
+            map::start();
             use tauri::Manager;
-
-            let open = MenuItem::with_id(app, "open", "RavenVault Desktop 열기", true, None::<&str>)?;
-            // "종료" 라고만 쓰면 창 닫기와 같은 것으로 읽힌다. 무엇이 멈추는지 쓴다.
-            let quit = MenuItem::with_id(
-                app,
-                "quit",
-                "완전히 끄기 (손님 주문도 멈춥니다)",
-                true,
-                None::<&str>,
-            )?;
-            let menu = Menu::with_items(app, &[&open, &quit])?;
-
-            TrayIconBuilder::with_id("main")
-                .icon(app.default_window_icon().cloned().ok_or("아이콘 없음")?)
-                .tooltip("RavenVault Desktop — 가게가 돌고 있습니다")
-                .menu(&menu)
-                .show_menu_on_left_click(false)
-                .on_menu_event(|app, e| match e.id().as_ref() {
-                    "open" => {
-                        if let Some(w) = app.get_webview_window("main") {
-                            let _ = w.show();
-                            let _ = w.unminimize();
-                            let _ = w.set_focus();
-                        }
-                    }
-                    "quit" => app.exit(0),
-                    _ => {}
-                })
-                .on_tray_icon_event(|tray, event| {
-                    // 아이콘을 그냥 누르면 창을 다시 연다. 메뉴를 열어야만
-                    // 돌아올 수 있으면 아무도 못 찾는다.
-                    if let tauri::tray::TrayIconEvent::Click { button, .. } = event {
-                        if button == tauri::tray::MouseButton::Left {
-                            if let Some(w) = tray.app_handle().get_webview_window("main") {
-                                let _ = w.show();
-                                let _ = w.set_focus();
-                            }
-                        }
-                    }
-                })
-                .build(app)?;
-
-            if let Some(w) = app.get_webview_window("main") {
-                let h = app.handle().clone();
-                w.on_window_event(move |e| {
-                    // 🔴 **떨어뜨린 자리가 곧 뜻이다.**
-                    //
-                    //    대표님: "자산을 발행하기 위해 드랍할 곳이 있고 아닌
-                    //    곳이 있어야 할 것 같아. 화면에 그걸 잘 설명해 줘야 하고."
-                    //
-                    //    맞다. 채팅에 사진을 떨어뜨린 사람은 **글에 붙이려는**
-                    //    것이지 500 RVN 을 태우려는 게 아니다. 그래서 자리마다
-                    //    다른 일이 일어나고, 끌고 오는 **그 순간** 화면이
-                    //    무슨 일이 일어날지 말한다.
-                    //
-                    //    경로는 여기서 기억해 둔다. 화면이 「이 경로를 올려 줘」
-                    //    라고 말할 수 있게 되는데, 아무 경로나 받으면 화면이
-                    //    뚫리는 날 wallet.dat 이 공개 파일창고로 올라간다.
-                    if let tauri::WindowEvent::DragDrop(d) = e {
-                        use tauri::DragDropEvent as D;
-                        let (name, payload) = match d {
-                            D::Enter { .. } => ("drop-enter", serde_json::json!({})),
-                            D::Leave => ("drop-leave", serde_json::json!({})),
-                            D::Drop { paths, .. } => {
-                                let list: Vec<String> =
-                                    paths.iter().map(|p| p.to_string_lossy().to_string()).collect();
-                                crate::dropbox::remember(&list);
-                                ("drop-files", serde_json::json!({ "paths": list }))
-                            }
-                            _ => ("drop-leave", serde_json::json!({})),
-                        };
-                        // `Emitter` 를 여기서 들인다 — 파일 위쪽에 두면 이
-                        // 블록이 없는 빌드에서 「안 쓰는 import」 경고가 난다.
-                        use tauri::Emitter as _;
-                        if let Some(win) = h.get_webview_window("main") {
-                            let _ = win.emit(name, payload);
-                        }
-                    }
-                    if let tauri::WindowEvent::CloseRequested { api, .. } = e {
-                        // 끄지 않고 감춘다. 가게는 계속 돈다.
-                        api.prevent_close();
-                        if let Some(w) = h.get_webview_window("main") {
-                            let _ = w.hide();
-                        }
-                    }
-                });
-            }
+            ravi_companion::setup(app)?;
+            mini::setup(app);
+            app_lock::setup(app);
+            walletfile::sweep_key_sheet();
+            display_mode::setup(app);
 
             // 🔴 **화면보다 큰 창을 띄우지 않는다.**
             //
@@ -780,18 +897,13 @@ pub fn run() {
             // ⚠️ `has_visible_windows` 가 참이면 이미 보이는 창이 있다는 뜻이라
             //    그때 또 부르면 남의 창을 앞으로 끌어온다.
             #[cfg(target_os = "macos")]
-            if let tauri::RunEvent::Reopen { has_visible_windows, .. } = event {
-                if !has_visible_windows {
-                    // `Manager` 를 여기서 들인다 — 파일 위쪽에 두면 이 블록이
-                    // 없는 다른 OS 빌드에서 "안 쓰는 import" 경고가 난다.
-                    use tauri::Manager as _;
-                    if let Some(w) = _app.get_webview_window("main") {
-                        let _ = w.show();
-                        let _ = w.unminimize();
-                        let _ = w.set_focus();
-                    }
-                }
+            if let tauri::RunEvent::Reopen { .. } = event {
+                let _ = ravi_companion::open_main(_app);
                 return;
+            }
+            if let tauri::RunEvent::ExitRequested { code: None, api, .. } = &event {
+                api.prevent_exit();
+                ravi_lifecycle::request_close(_app);
             }
             // 앱이 끝나면 채굴기도 끝난다. 이게 없으면 창을 닫은 뒤에도
             // 채굴기가 살아남아 전기를 계속 먹는데, 화면에는 아무것도 없어서
@@ -818,6 +930,8 @@ pub fn run() {
                 //    죽였다 — 그때까지는 문이 열린 채다.
                 //
                 //    ⚠️ 껐다고 믿는 사람에게 열린 문은 가장 나쁜 종류의 구멍이다.
+                // 지도의 「영업 중」을 거둔다(3초까지만 시도 — 종료를 붙잡지 않는다).
+                crate::map::stop_on_exit();
                 crate::tunnel::stop_on_exit();
             }
         });

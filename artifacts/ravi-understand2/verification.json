@@ -1,0 +1,118 @@
+{
+  "build": "pass",
+  "exam": {
+    "total": 120,
+    "pass": 120,
+    "wrong": 0,
+    "languageLeaks": 0
+  },
+  "training": {
+    "intents": 34,
+    "examples": 272,
+    "overlap": 0
+  },
+  "node": {
+    "pass": 57,
+    "fail": 0
+  },
+  "rust": {
+    "requested": "test result: FAILED. 522 passed; 202 failed; 13 ignored; 0 measured; 0 filtered out; finished in 2.41s",
+    "writableFixture": "test result: FAILED. 718 passed; 6 failed; 13 ignored; 0 measured; 0 filtered out; finished in 10.27s",
+    "remaining": "6 EPERM localhost bind failures"
+  },
+  "checks": [
+    {
+      "script": "check-ravi-panel-browser.mjs",
+      "status": 1,
+      "signal": null,
+      "classification": "environment-blocked"
+    },
+    {
+      "script": "check-ravi-panel.mjs",
+      "status": 0,
+      "signal": null,
+      "classification": "pass"
+    },
+    {
+      "script": "check-ravi-promo-browser.mjs",
+      "status": 1,
+      "signal": null,
+      "classification": "environment-blocked"
+    },
+    {
+      "script": "check-ravi-promo-card.mjs",
+      "status": 0,
+      "signal": null,
+      "classification": "pass"
+    },
+    {
+      "script": "check-ravi-promo.mjs",
+      "status": 0,
+      "signal": null,
+      "classification": "pass"
+    },
+    {
+      "script": "check-ravi-state.mjs",
+      "status": 0,
+      "signal": null,
+      "classification": "pass"
+    },
+    {
+      "script": "check-ravi-understanding-browser.mjs",
+      "status": 1,
+      "signal": null,
+      "classification": "environment-blocked"
+    },
+    {
+      "script": "check-ravi-understanding.mjs",
+      "status": 0,
+      "signal": null,
+      "classification": "pass"
+    },
+    {
+      "script": "check-ravi-understanding2.mjs",
+      "status": 0,
+      "signal": null,
+      "classification": "pass"
+    },
+    {
+      "script": "check-wallet-easy.mjs",
+      "status": 1,
+      "signal": null,
+      "classification": "environment-blocked"
+    },
+    {
+      "script": "check-desktop-integration.mjs",
+      "status": 0,
+      "signal": null,
+      "classification": "pass"
+    },
+    {
+      "script": "check-ai-safety.mjs",
+      "status": 0,
+      "signal": null,
+      "classification": "pass"
+    },
+    {
+      "script": "check-send-confirmation.mjs",
+      "status": 0,
+      "signal": null,
+      "classification": "pass"
+    },
+    {
+      "script": "check-phone-transaction.mjs",
+      "status": 0,
+      "signal": null,
+      "classification": "pass"
+    },
+    {
+      "script": "check-backup-safety.mjs",
+      "status": 0,
+      "signal": null,
+      "classification": "pass"
+    }
+  ],
+  "browser": "blocked, not claimed as rendered UI pass",
+  "realAI": false,
+  "realTransfer": false
+}

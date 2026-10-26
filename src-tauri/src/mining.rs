@@ -98,13 +98,13 @@ pub async fn mining_reality(hashrate_mh: f64, watts: f64, krw_per_kwh: f64) -> R
         "contribution": {
             // 이미 하고 있는 것. 이 문장이 먼저 와야 한다 — 노드는 이미 켜져
             // 있고, 검증하고 전파하는 것 자체가 채굴과 별개인 기여다.
-            "already": "노드를 켜 두신 것만으로 이미 기여하고 계십니다. 거래를 스스로 검증하고 이웃에게 전파합니다.",
+            "already": "서버를 켜 두신 것만으로 이미 기여하고 계십니다. 거래를 스스로 검증하고 이웃에게 전파합니다.",
             "hash_note": format!(
                 "채굴을 켜면 네트워크 해시의 약 {:.1} 백만분율을 보탭니다.",
                 share * 1_000_000.0
             ),
             // 여기가 진짜 갈림길이다.
-            "solo_vs_pool": "풀에 붙으면 해시는 보태지만 블록에 어떤 거래를 담을지는 풀이 정합니다. 탈중앙에 온전히 보태려면 자기 노드에 대고 캐는 솔로여야 합니다.",
+            "solo_vs_pool": "풀에 붙으면 해시는 보태지만 블록에 어떤 거래를 담을지는 풀이 정합니다. 탈중앙에 온전히 보태려면 자기 서버에 대고 캐는 솔로여야 합니다.",
             "solo_days_per_block": if share > 0.0 { 1.0 / (BLOCKS_PER_DAY * share) } else { f64::INFINITY },
             "solo_block_krw": reward * krw_per_rvn,
         },
@@ -199,7 +199,7 @@ fn detect_gpu_uncached() -> Value {
         } else if nvidia || amd {
             (
                 true,
-                "이 카드로 캘 수 있습니다. 다만 이 컴퓨터가 노드도 돌리고 있으면                  가게 화면이 느려집니다 — 채굴은 다른 기계에서 하세요.",
+                "이 카드로 캘 수 있습니다. 다만 이 컴퓨터가 서버도 돌리고 있으면                  가게 화면이 느려집니다 — 채굴은 다른 기계에서 하세요.",
             )
         } else {
             (
@@ -427,7 +427,7 @@ pub async fn mining_status() -> Result<Value, String> {
 // 프로그램이 남아 있으면, 그건 사장이 모르는 사이 나가는 돈이다.
 
 use std::io::{BufRead, BufReader};
-use std::process::{Child, Command as ProcCommand, Stdio};
+use std::process::{Child, Stdio};
 use std::sync::Mutex;
 
 static MINER: Mutex<Option<Child>> = Mutex::new(None);
@@ -462,7 +462,7 @@ fn find_miner(name: &str) -> Option<String> {
     }
     // PATH 에 있으면 그걸로.
     // 윈도우에는 `which` 가 없다. `where` 다.
-    ProcCommand::new(if cfg!(windows) { "where" } else { "which" })
+    crate::quiet::cmd(if cfg!(windows) { "where" } else { "which" })
         .arg(name)
         .output()
         .ok()

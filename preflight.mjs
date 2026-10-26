@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './scripts/check-wallet-manifest.mjs';
 /**
  * 배포 전 검사 — **조용히 안 도는 코드**를 잡는다.
  *

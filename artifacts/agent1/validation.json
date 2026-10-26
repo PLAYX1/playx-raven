@@ -1,0 +1,53 @@
+{
+  "baseline": "690679d",
+  "build": "passed: npm run build",
+  "initial_home_fixture": "blocked: sandbox denied fixture directory creation",
+  "rust_full": [
+    "test result: FAILED. 738 passed; 7 failed; 13 ignored; 0 measured; 0 filtered out; finished in 18.16s"
+  ],
+  "rust_full_failed": [
+    "ai::connection_tests::loopback_mock_covers_http_refusal_and_delayed_response",
+    "ai_endpoint::tests::redirects_cannot_forward_a_question_to_another_destination",
+    "peers::tests::폴더_주소도_파일처럼_살아_있다고_본다",
+    "relay::tests::live_push_and_pairing_rooms_stay_off_disk",
+    "server::bind_probe::binding_the_phone_port_is_fast",
+    "server::wallet_usability_tests::actual_loopback_listener_supplies_peer_and_never_trusts_forwarding_headers",
+    "upload::photo_security_tests::streaming_size_mime_and_magic_are_checked_without_length"
+  ],
+  "rust_available_command": "RV_BACKUP_FIXTURE_ROOT=/tmp/rv-test-fixture cargo test --manifest-path src-tauri/Cargo.toml -- --test-threads=1 (seven named socket tests skipped)",
+  "rust_available": [
+    "test result: ok. 738 passed; 0 failed; 13 ignored; 0 measured; 7 filtered out; finished in 23.76s",
+    "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+  ],
+  "new_check": {
+    "vm": "passed",
+    "rust": "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 750 filtered out; finished in 4.17s",
+    "browser": "미검증: Chrome 실행 실패",
+    "realAI": false,
+    "realRPC": false
+  },
+  "offline_exams": {
+    "60": {
+      "pass": 60,
+      "total": 60
+    },
+    "120": {
+      "pass": 120,
+      "total": 120
+    }
+  },
+  "browser": "unverified: Chrome launch failed in three existing scripts and new agent check",
+  "dependencies_added": false,
+  "real_ai_or_mainnet_used": false,
+  "sha256": {
+    "src/main.ts": "0de68984c3d7a1d8372038b12d497dcc6473b49f6ffbae6af16352c3e7c2c8a9",
+    "src/ravi-agent.ts": "7072930730eaed6086cb071ab9cc11cdb072b1211bea37fbf2023a557ea965c1",
+    "src/ravi-home.css": "ddab734cb11a14b9c4243bc860841b37c96c88f0f5bc84e017dfb028e322ff88",
+    "src-tauri/src/ravi_agent.rs": "df23d5ce1dff87f03926c822c796940d92013ac19f63217004c5677ee9426f64",
+    "src-tauri/src/ai.rs": "d5f5b33635bc36dfbcb4877377b2647d9168bfc0a02ba5701d94cd163c9e5176",
+    "src-tauri/src/ai_budget.rs": "3e6d41e7e2392bf95bce622d6a0dc8e88435cda391c337691702793a74703ce7",
+    "src-tauri/src/lib.rs": "fe2bb16ae7dd9c1589186a4ffa3e08ac63622ef5210d9e96aaaa0351d06ed493",
+    "scripts/check-ravi-agent.mjs": "0a3353396ccbd22c7f64ec18525bedc2ae8307ecaa8db963ff23c14787390117"
+  }
+}

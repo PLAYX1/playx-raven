@@ -1,0 +1,31 @@
+/* 라비 대화 흐름(2026-10-11)의 화면 문구 — 한국어 원문이 열쇠, [영어, 일본어, 중국어].
+ * 질문 언어로 고정되는 답(ravi-chat.ts)은 ravi-capabilities.json 의 copy 표를 쓰고,
+ * 여기는 화면 언어를 따르는 말(동의 카드·짧은 알림·백엔드 고정 오류)이다.
+ * dict.ts 가 이미 가진 번역은 덮지 않는다(??=). */
+export const RAVI_CHAT_COPY: Record<string, [string, string, string]> = {
+  "AI가 하나만 연결돼 있어 바로 답할게요.": ["Only one AI is connected, so I will answer directly.", "AIが1つだけつながっているので、そのまま答えますね。", "目前只连接了一个 AI，我直接回答。"],
+  "저장했어요. 방금 질문을 고른 정보까지 보고 다시 답할게요.": ["Saved. I will answer your last question again using the information you chose.", "保存しました。選んだ情報も見て、さっきの質問にもう一度答えます。", "已保存。我会参考您选择的信息，重新回答刚才的问题。"],
+  "공개 조회처에 묻는 중…": ["Asking the public lookup…", "公開照会先に問い合わせ中…", "正在询问公开查询服务…"],
+  "방금은 내 정보 없이 답했어요. 잔액·거래·가게 정보를 보고 답하길 원하시면 골라서 저장하세요. 저장하면 방금 질문을 다시 물어볼게요.": ["I just answered without your information. If you want me to look at your balance, transactions or shop data, choose them and save. I will then ask your last question again.", "今回はあなたの情報なしで答えました。残高・取引・お店の情報を見て答えてほしい場合は、選んで保存してください。保存すると、さっきの質問をもう一度聞きます。", "刚才是在不使用您信息的情况下回答的。如果希望我参考余额、交易或店铺信息，请选择并保存。保存后我会重新提问刚才的问题。"],
+  "라비에게 보여 줄 정보": ["Information Ravi may see", "Raviに見せる情報", "允许 Ravi 查看的信息"],
+  "선택한 정보 중 질문에 필요한 요약만 AI에 전달해요. 주소·주문 메모·고객 이름은 보내지 않아요. 모두 꺼도 일반 대화와 로컬 조회는 쓸 수 있어요. 설정에서 언제든 바꿀 수 있어요.": ["Only the summary a question needs, from what you choose, is sent to AI. Addresses, order notes and customer names are not sent. With everything off you can still chat and use local lookups. You can change this any time in Settings.", "選んだ情報のうち、質問に必要な要約だけをAIに送ります。アドレス・注文メモ・お客様の名前は送りません。すべてオフでも普通の会話とローカル照会は使えます。設定でいつでも変えられます。", "只会把所选信息中回答问题所需的摘要发送给 AI。不会发送地址、订单备注和顾客姓名。全部关闭也可以正常聊天和使用本地查询。可随时在设置中更改。"],
+  "잔액": ["Balance", "残高", "余额"],
+  "최근 거래 요약": ["Recent transaction summary", "最近の取引の要約", "近期交易摘要"],
+  "가게 매출·주문·개발비": ["Shop sales, orders and developer fee", "お店の売上・注文・開発費", "店铺销售额、订单和开发费"],
+  "선택 저장": ["Save choice", "選択を保存", "保存选择"],
+  "지금은 취소": ["Not now", "今はやめる", "暂时不用"],
+  "저장하지 못했어요. 정보는 전달하지 않았어요.": ["Could not save. No information was sent.", "保存できませんでした。情報は送っていません。", "未能保存。没有发送任何信息。"],
+  "레이븐코인 주소 형식이 아니에요.": ["That is not a Ravencoin address.", "Ravencoinのアドレス形式ではありません。", "这不是 Ravencoin 地址格式。"],
+  "공개 조회처가 늦게 답해 멈췄어요.": ["The public lookup was too slow, so I stopped.", "公開照会先の応答が遅いため止めました。", "公开查询服务响应太慢，已停止。"],
+  "공개 조회처에 묻지 못했어요. 잠시 뒤 다시 해 주세요.": ["Could not ask the public lookup. Please try again in a moment.", "公開照会先に問い合わせできませんでした。少ししてからもう一度お試しください。", "未能询问公开查询服务。请稍后再试。"],
+  "AI 열쇠가 맞지 않아요. 열쇠를 다시 넣어 주세요. 실행한 송금은 없어요.": ["The AI key does not work. Please enter the key again. No money was sent.", "AIキーが合いません。キーをもう一度入れてください。送金は行っていません。", "AI 密钥不正确。请重新输入密钥。没有执行任何转账。"],
+  "AI 사용 한도에 걸렸거나 AI가 바빠요. 잠시 뒤 다시 물어봐 주세요. 실행한 송금은 없어요.": ["The AI usage limit was reached or the AI is busy. Please ask again in a moment. No money was sent.", "AIの利用上限に達したか、AIが混み合っています。少ししてからもう一度聞いてください。送金は行っていません。", "已达到 AI 使用上限或 AI 正忙。请稍后再问。没有执行任何转账。"],
+  "AI에 연결하지 못했어요. 인터넷을 확인하고 잠시 뒤 다시 물어봐 주세요. 실행한 송금은 없어요.": ["Could not reach the AI. Check your internet and ask again in a moment. No money was sent.", "AIにつながりませんでした。インターネットを確認して、少ししてからもう一度聞いてください。送金は行っていません。", "无法连接 AI。请检查网络，稍后再问。没有执行任何转账。"],
+  "AI 응답을 받지 못했어요. 실행한 송금은 없어요.": ["No answer came from the AI. No money was sent.", "AIから答えを受け取れませんでした。送金は行っていません。", "没有收到 AI 的回答。没有执行任何转账。"],
+  "열쇠 다시 넣기": ["Enter the key again", "キーを入れ直す", "重新输入密钥"],
+  "다시 묻기": ["Ask again", "もう一度聞く", "再问一次"],
+  "연결됐어요 · 한 번 물어볼까요?": ["Connected · Want to try a question?", "つながりました · 一度聞いてみますか？", "已连接 · 要试着问一个问题吗？"],
+  "레이븐코인은 어떤 코인이야?": ["What kind of coin is Ravencoin?", "Ravencoinはどんなコイン？", "Ravencoin 是什么样的币？"],
+  "키를 저장했어요. 방금 질문을 AI로 다시 물어볼게요.": ["Key saved. I will ask your last question again with AI.", "キーを保存しました。さっきの質問をAIでもう一度聞きますね。", "密钥已保存。我会用 AI 重新问刚才的问题。"],
+  "키를 저장했어요. 연결을 확인하고 있어요.": ["Key saved. Checking the connection.", "キーを保存しました。接続を確認しています。", "密钥已保存。正在检查连接。"],
+};

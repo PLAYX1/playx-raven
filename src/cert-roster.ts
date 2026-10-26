@@ -442,7 +442,7 @@ const RESULT_COLS: { key: keyof IssuedRow; label: string; wch: number }[] = [
   { key: "grade", label: "등급", wch: 8 },
   { key: "date", label: "발급일", wch: 12 },
   { key: "number", label: "번호", wch: 16 },
-  { key: "asset", label: "체인 이름", wch: 32 },
+  { key: "asset", label: "공개 장부 이름", wch: 32 },
   { key: "txid", label: "거래 번호", wch: 66 },
   { key: "verifyUrl", label: "확인 주소", wch: 60 },
 ];

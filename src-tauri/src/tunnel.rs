@@ -29,7 +29,7 @@
 
 use serde_json::{json, Value};
 use std::io::{BufRead, BufReader};
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, Stdio};
 use std::sync::Mutex;
 
 /// The running tunnel, if any. Killed when the app exits or the owner stops it.
@@ -67,12 +67,8 @@ pub fn urlencode(s: &str) -> String {
 ///
 /// 그래서 **아는 자리를 직접 본다.** PATH 는 마지막 수단이다.
 pub fn find_cloudflared() -> Option<std::path::PathBuf> {
-    // 우리가 직접 받아 둔 것이 있으면 그게 첫째다 — 사장이 아무것도 안 해도
-    // 되는 유일한 길이고, brew 가 지워도 살아 있다.
-    let ours = crate::paths::app_file("cloudflared");
-    if ours.is_file() {
-        return Some(ours);
-    }
+    // 대표 확인 필요: 과거 앱 자동 다운로드 파일은 해시가 없어 실행하지 않는다.
+    // 아래 OS 패키지 관리자/관리자 설치 경로만 탐지한다.
     for p in [
         "/opt/homebrew/bin/cloudflared", // 애플 실리콘 brew
         "/usr/local/bin/cloudflared",    // 인텔 brew · 수동 설치
@@ -85,17 +81,8 @@ pub fn find_cloudflared() -> Option<std::path::PathBuf> {
             return Some(p);
         }
     }
-    // 마지막으로 PATH. 터미널에서 켠 경우에는 이쪽이 맞는다.
-    // 🔴 윈도우에는 `which` 가 없다. `where` 다. 그래서 cloudflared 를
-    //    멀쩡히 깔아 둔 윈도우 사장에게 「없습니다」라고 말했다.
-    crate::quiet::cmd(if cfg!(windows) { "where" } else { "which" })
-        .arg("cloudflared")
-        .output()
-        .ok()
-        .filter(|o| o.status.success())
-        .and_then(|o| String::from_utf8(o.stdout).ok())
-        .map(|s| std::path::PathBuf::from(s.trim()))
-        .filter(|p| p.is_file())
+    None
+
 }
 
 /// Is cloudflared installed, and is a tunnel up?
@@ -216,7 +203,7 @@ pub fn tunnel_start(port: u16) -> Result<Value, String> {
     // 전체 경로로 부른다. 이름만 주면 PATH 를 타고, Finder 에서 켠 앱의
     // PATH 에는 brew 자리가 없다.
     let exe = find_cloudflared()
-        .ok_or_else(|| "cloudflared 를 찾지 못했습니다. 「받기」를 눌러 주세요.".to_string())?;
+        .ok_or_else(|| "자동 설치는 중지되었습니다. 대표가 확인한 cloudflared를 OS 패키지 관리자로 설치해 주세요.".to_string())?;
 
     // 🔴 **앞서 남은 유령을 먼저 치운다.**
     //
@@ -231,7 +218,8 @@ pub fn tunnel_start(port: u16) -> Result<Value, String> {
     //    🔴 이름으로 싹 죽이지 않는다. **우리 포트를 물고 있는 것만** 고른다 —
     //    남이 자기 일로 켜 둔 cloudflared 를 죽이면 그건 우리가 낸 사고다.
     kill_orphans(port);
-    let mut child = Command::new(exe)
+    // 윈도우에서 cloudflared 콘솔 창이 뜨지 않게 한다(맥·리눅스는 Command::new 와 같다).
+    let mut child = crate::quiet::cmd(exe)
         .args([
             "tunnel",
             "--url",
@@ -611,83 +599,9 @@ pub fn share_targets(text: String, url: String) -> Value {
 /// 남의 컴퓨터에 낯선 실행파일을 심는 일이 된다.
 #[tauri::command]
 pub async fn tunnel_install() -> Result<Value, String> {
-    if let Some(p) = find_cloudflared() {
-        return Ok(json!({ "ok": true, "already": true, "path": p.to_string_lossy() }));
-    }
-
-    // 이 컴퓨터에 맞는 파일. 이름을 틀리면 받아 놓고 안 돌아간다.
-    let name = match (std::env::consts::OS, std::env::consts::ARCH) {
-        ("macos", "aarch64") => "cloudflared-darwin-arm64.tgz",
-        ("macos", _) => "cloudflared-darwin-amd64.tgz",
-        ("linux", "aarch64") => "cloudflared-linux-arm64",
-        ("linux", _) => "cloudflared-linux-amd64",
-        ("windows", _) => "cloudflared-windows-amd64.exe",
-        _ => return Err("이 컴퓨터에 맞는 파일이 없습니다.".into()),
-    };
-    let url = format!(
-        "https://github.com/cloudflare/cloudflared/releases/latest/download/{name}"
-    );
-
-    let client = reqwest::Client::builder()
-        // 40MB 안팎이다. 가게 인터넷이 느릴 수 있으니 넉넉히 둔다.
-        .timeout(std::time::Duration::from_secs(300))
-        .build()
-        .map_err(|e| e.to_string())?;
-    let body = client
-        .get(&url)
-        .send()
-        .await
-        .map_err(|e| format!("받지 못했습니다: {e}"))?
-        .error_for_status()
-        .map_err(|e| format!("받지 못했습니다: {e}"))?
-        .bytes()
-        .await
-        .map_err(|e| format!("받는 중 끊겼습니다: {e}"))?;
-
-    let dest = crate::paths::app_file("cloudflared");
-    if let Some(d) = dest.parent() {
-        let _ = std::fs::create_dir_all(d);
-    }
-
-    if name.ends_with(".tgz") {
-        // 맥 판은 tar.gz 로 온다. 압축 도구는 맥에 기본으로 있다.
-        let tmp = crate::paths::app_file("cloudflared.tgz");
-        std::fs::write(&tmp, &body).map_err(|e| format!("저장하지 못했습니다: {e}"))?;
-        let out = Command::new("/usr/bin/tar")
-            .arg("-xzf")
-            .arg(&tmp)
-            .arg("-C")
-            .arg(dest.parent().unwrap_or(std::path::Path::new(".")))
-            .output()
-            .map_err(|e| format!("압축을 풀지 못했습니다: {e}"))?;
-        let _ = std::fs::remove_file(&tmp);
-        if !out.status.success() {
-            return Err("압축을 풀지 못했습니다.".into());
-        }
-    } else {
-        std::fs::write(&dest, &body).map_err(|e| format!("저장하지 못했습니다: {e}"))?;
-    }
-
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        // 실행 권한이 없으면 받아 놓고 「없습니다」가 그대로 뜬다.
-        let _ = std::fs::set_permissions(&dest, std::fs::Permissions::from_mode(0o755));
-    }
-
-    // 🔴 받았다고 말하기 전에 **정말 돌아가는지** 확인한다. 반쯤 받힌 파일이
-    // 자리에 있으면 그 뒤로 「깔려 있다」고 나오면서 켜지지는 않는다.
-    let ok = Command::new(&dest)
-        .arg("--version")
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false);
-    if !ok {
-        let _ = std::fs::remove_file(&dest);
-        return Err("받은 파일이 돌아가지 않습니다. 잠시 뒤 다시 눌러 주세요.".into());
-    }
-
-    Ok(json!({ "ok": true, "already": false, "path": dest.to_string_lossy() }))
+    // 대표 확인 필요: 공식 고정 버전과 플랫폼별 SHA-256을 소스에 검토·고정하기
+    // 전에는 네트워크 다운로드/압축 해제/--version 실행을 모두 금지한다.
+    Err("자동 설치는 꺼져 있습니다. 대표가 공식 버전·체크섬을 확인한 뒤 OS 패키지 관리자로 설치해 주세요.".into())
 }
 
 #[cfg(test)]

@@ -106,7 +106,6 @@ fn now() -> i64 {
 
 fn key() -> Result<[u8; 32], String> {
     crate::identity::artist_key()
-        .ok_or_else(|| "12단어를 읽지 못했습니다. 지갑이 잠겨 있으면 먼저 열어 주세요.".to_string())
 }
 
 /// 이 컴퓨터의 아티스트 공개키. **체인에 박힌 것과 같아야 한다.**
@@ -162,9 +161,9 @@ pub async fn artist_check(asset: String) -> Result<Value, String> {
         "mine": mine,
         "chain": chain,
         "why": if ok { "" } else if chain.is_empty() {
-            "체인 프로필에 열쇠가 안 적혀 있습니다."
+            "공개 장부 프로필에 열쇠가 안 적혀 있습니다."
         } else {
-            "체인이 가리키는 열쇠와 이 컴퓨터의 열쇠가 다릅니다. 12단어가 같은지 확인해 주세요."
+            "공개 장부가 가리키는 열쇠와 이 컴퓨터의 열쇠가 다릅니다. 12단어가 같은지 확인해 주세요."
         },
     }))
 }
@@ -319,7 +318,7 @@ mod tests {
         let body = &rest[..end];
         assert!(
             body.contains("artist_key"),
-            "아티스트 열쇠를 안 고른다 — 올리면 체인이 가리키는 사람과 다른 사람이 된다"
+            "아티스트 열쇠를 안 고른다 — 올리면 공개 장부가 가리키는 사람과 다른 사람이 된다"
         );
         assert!(
             !body.contains("person_key"),

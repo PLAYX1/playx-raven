@@ -633,7 +633,7 @@ mod tests {
         let _g = crate::paths::TEST_ENV
             .lock()
             .unwrap_or_else(|e| e.into_inner());
-        let dir = std::env::temp_dir().join("playx-raven-ticket-test");
+        let dir = crate::paths::test_fixture_root().join("playx-raven-ticket-test");
         let _ = std::fs::create_dir_all(&dir);
         std::env::set_var("PLAYX_RAVEN_HOME", &dir);
         let _ = std::fs::remove_file(dir.join("tickets.json"));

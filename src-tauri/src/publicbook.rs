@@ -130,6 +130,7 @@ pub async fn address(addr: &str) -> Result<Value, String> {
 ///
 /// ⚠️ 여기 오는 것은 **이미 서명된 것**이다. 열쇠는 손님 폰을 안 떠난다.
 pub async fn broadcast(hex: &str) -> Result<String, String> {
+    let _transfer = crate::ravi_lifecycle::begin_transfer()?;
     let r: Value = client()?
         .post(format!("{BOOK}/api/v2/sendtx/"))
         .header("content-type", "text/plain")

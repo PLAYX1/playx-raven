@@ -46,7 +46,7 @@ pub const PHRASE_ASIDE: &str = "지금 지갑을 옆에 둡니다";
 /// 옛 거래를 찾는 동안 노드에 묻는 모든 질문이 받는 답(raven.rs).
 pub const RESCANNING_SAY: &str =
     "지갑을 되살리는 중입니다 — 옛 거래를 찾고 있습니다. 끝나면 다시 입금을 확인합니다.";
-const HOLD_SAY: &str = "지갑을 되살리는 중이라 노드를 켜지 않았습니다. 「이 컴퓨터 › 백업 › 복구 단어로 되살리기」에서 이어 하거나 옛 지갑으로 되돌려 주세요.";
+const HOLD_SAY: &str = "지갑을 되살리는 중이라 서버를 켜지 않았습니다. 「이 컴퓨터 › 백업 › 복구 단어로 되살리기」에서 이어 하거나 옛 지갑으로 되돌려 주세요.";
 /// 윈도우에서 노드가 파이프를 안 읽었다 — 화면이 「임시 파일로 건네기」를 따로 묻는다.
 pub const PIPE_UNREAD: &str = "PIPE_UNREAD: 이 컴퓨터에서는 디스크에 흔적 없이 단어를 건네지 못했습니다. 지금 지갑과 단어는 그대로입니다.";
 const MASKED_LINE: &str = "(복구 단어가 들어 있을 수 있는 줄이라 가렸습니다)";
@@ -240,8 +240,8 @@ impl Ctx {
 }
 
 async fn direct_call(d: &Direct, method: &str, params: Value, secs: u64) -> Result<Value, String> {
-    let cookie = std::fs::read_to_string(&d.cookie).map_err(|_| "노드에 닿지 못했습니다.".to_string())?;
-    let (user, pass) = cookie.trim().split_once(':').ok_or("노드에 닿지 못했습니다.")?;
+    let cookie = std::fs::read_to_string(&d.cookie).map_err(|_| "서버에 닿지 못했습니다.".to_string())?;
+    let (user, pass) = cookie.trim().split_once(':').ok_or("서버에 닿지 못했습니다.")?;
     let r = reqwest::Client::new()
         .post(format!("http://127.0.0.1:{}", d.port))
         .basic_auth(user, Some(pass))
@@ -249,8 +249,8 @@ async fn direct_call(d: &Direct, method: &str, params: Value, secs: u64) -> Resu
         .json(&json!({ "jsonrpc": "1.0", "id": "words", "method": method, "params": params }))
         .send()
         .await
-        .map_err(|_| "노드에 닿지 못했습니다.".to_string())?;
-    let v: Value = r.json().await.map_err(|_| "노드와의 연결이 끊겼습니다.".to_string())?;
+        .map_err(|_| "서버에 닿지 못했습니다.".to_string())?;
+    let v: Value = r.json().await.map_err(|_| "서버와의 연결이 끊겼습니다.".to_string())?;
     if let Some(e) = v.get("error").filter(|e| !e.is_null()) {
         return Err(format!("{method}: {}", e.get("message").and_then(Value::as_str).unwrap_or("error")));
     }
@@ -300,19 +300,19 @@ async fn wait_ready(ctx: &Ctx, from: u64, mut child: Option<&mut std::process::C
         }
         if let Some(c) = child.as_deref_mut() {
             if let Ok(Some(_)) = c.try_wait() {
-                return Err("노드가 켜지자마자 멈췄습니다. 옛 지갑은 옆에 그대로 있습니다.".into());
+                return Err("서버가 켜지자마자 멈췄습니다. 옛 지갑은 옆에 그대로 있습니다.".into());
             }
         }
         let added = log_since(ctx, from);
         if added.contains("Shutdown: done") {
             if added.to_ascii_lowercase().contains("cannot obtain a lock") {
-                return Err("다른 프로그램(레이븐 코어 등)이 노드 폴더를 쓰고 있습니다. 그 프로그램을 끄고 이어 해 주세요. 옛 지갑은 옆에 그대로 있습니다.".into());
+                return Err("다른 프로그램(레이븐 코어 등)이 서버 폴더를 쓰고 있습니다. 그 프로그램을 끄고 이어 해 주세요. 옛 지갑은 옆에 그대로 있습니다.".into());
             }
-            return Err("노드가 켜지다가 멈췄습니다. 옛 지갑은 옆에 그대로 있습니다.".into());
+            return Err("서버가 켜지다가 멈췄습니다. 옛 지갑은 옆에 그대로 있습니다.".into());
         }
         tokio::time::sleep(Duration::from_millis(1000)).await;
     }
-    Err("노드가 오래 답하지 않습니다. 옛 지갑은 옆에 그대로 있습니다.".into())
+    Err("서버가 오래 답하지 않습니다. 옛 지갑은 옆에 그대로 있습니다.".into())
 }
 
 /// 노드에 「그만」이라 하고, **정말 꺼질 때까지**(`.lock` 이 풀릴 때까지) 기다린다.
@@ -324,13 +324,13 @@ async fn stop_and_wait(ctx: &Ctx) -> Result<(), String> {
         let answering = rpc(ctx, "getblockcount", json!([])).await.is_ok();
         if !answering && crate::recover::datadir_free(&ctx.datadir) {
             return if unclean(&ctx.datadir) {
-                Err("노드가 깨끗이 꺼지지 않았습니다. 노드를 한 번 켰다가 끈 뒤 다시 해 주세요. 지금 지갑은 그대로입니다.".into())
+                Err("서버가 깨끗이 꺼지지 않았습니다. 서버를 한 번 켰다가 끈 뒤 다시 해 주세요. 지금 지갑은 그대로입니다.".into())
             } else {
                 Ok(())
             };
         }
     }
-    Err("노드가 5분 안에 꺼지지 않았습니다. 지금 지갑은 그대로입니다.".into())
+    Err("서버가 5분 안에 꺼지지 않았습니다. 지금 지갑은 그대로입니다.".into())
 }
 
 /// 코어는 깨끗이 끝나면 지갑 DB 의 `database/` 기록을 지운다(wallet/db.cpp 629–632).
@@ -453,7 +453,7 @@ async fn spawn_with_words(ctx: &Ctx, phrase: &Phrase, pass: &Secret, file: bool)
     use std::ffi::CString;
     use std::os::unix::ffi::OsStrExt;
     use std::os::unix::fs::{FileTypeExt, PermissionsExt};
-    let ravend = ctx.ravend.clone().ok_or("노드 프로그램(ravend)을 찾지 못했습니다.")?;
+    let ravend = ctx.ravend.clone().ok_or("서버 프로그램(ravend)을 찾지 못했습니다.")?;
     let dir = make_pipe_dir(ctx)?;
     let conf = dir.0.join(format!("c-{:016x}.conf", rand::random::<u64>()));
     let mut body = channel_body(ctx, phrase, pass);
@@ -490,7 +490,7 @@ async fn spawn_with_words(ctx: &Ctx, phrase: &Phrase, pass: &Secret, file: bool)
         // 🔴 stderr 를 읽지 않는다 — 틀린 단어였다면 코어가 거기에 단어를 적는다.
         .stderr(std::process::Stdio::null());
     let mut child = cmd.spawn().map_err(|_| {
-        "노드를 띄우지 못했습니다. 옛 지갑은 옆에 그대로 있습니다.".to_string()
+        "서버를 띄우지 못했습니다. 옛 지갑은 옆에 그대로 있습니다.".to_string()
     })?;
     if !file {
         // FIFO 에 쓴다: 노드가 읽으러 열 때까지 막히지 않게 O_NONBLOCK 으로 두드리다가,
@@ -508,7 +508,7 @@ async fn spawn_with_words(ctx: &Ctx, phrase: &Phrase, pass: &Secret, file: bool)
         if !wrote {
             let _ = child.kill();
             let _ = child.wait();
-            return Err("노드가 단어 통로를 열지 않았습니다. 옛 지갑은 옆에 그대로 있습니다.".into());
+            return Err("서버가 단어 통로를 열지 않았습니다. 옛 지갑은 옆에 그대로 있습니다.".into());
         }
     }
     words::wipe(&mut body);
@@ -528,7 +528,7 @@ async fn spawn_with_words(ctx: &Ctx, phrase: &Phrase, pass: &Secret, file: bool)
     drop(dir);
     match status {
         Some(s) if s.success() => Ok(None),
-        _ => Err("노드가 켜지지 않았습니다. 옛 지갑은 옆에 그대로 있습니다.".into()),
+        _ => Err("서버가 켜지지 않았습니다. 옛 지갑은 옆에 그대로 있습니다.".into()),
     }
 }
 
@@ -570,38 +570,12 @@ fn scrub_file(path: &Path) {
 #[cfg(windows)]
 async fn spawn_with_words(ctx: &Ctx, phrase: &Phrase, pass: &Secret, file: bool) -> Result<Option<std::process::Child>, String> {
     use std::os::windows::process::CommandExt;
-    let ravend = ctx.ravend.clone().ok_or("노드 프로그램(ravend)을 찾지 못했습니다.")?;
+    let ravend = ctx.ravend.clone().ok_or("서버 프로그램(ravend)을 찾지 못했습니다.")?;
     const NO_WINDOW: u32 = 0x0800_0000;
     let mut body = channel_body(ctx, phrase, pass);
     if file {
-        // A-2 — 사람이 「임시 파일로 건네기」를 따로 고른 때만 온다.
-        let dir = make_pipe_dir(ctx)?;
-        let conf = dir.0.join(format!("c-{:016x}.conf", rand::random::<u64>()));
-        let w = std::fs::write(&conf, body.as_bytes());
         words::wipe(&mut body);
-        w.map_err(|_| "단어를 건넬 통로를 만들지 못했습니다.".to_string())?;
-        let child = std::process::Command::new(&ravend)
-            .args(creation_args(ctx, &conf.to_string_lossy()))
-            .arg("-daemon=0")
-            .creation_flags(NO_WINDOW)
-            .stdin(std::process::Stdio::null())
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .spawn();
-        let mut child = match child {
-            Ok(c) => c,
-            Err(_) => {
-                scrub_file(&conf);
-                return Err("노드를 띄우지 못했습니다. 옛 지갑은 옆에 그대로 있습니다.".into());
-            }
-        };
-        // 윈도우는 「읽었다」를 알려 주는 부모 종료가 없다 — RPC 가 답하면 설정은 이미 읽었다.
-        let from = log_len(ctx);
-        let ready = wait_ready(ctx, from, Some(&mut child), 900).await;
-        scrub_file(&conf);
-        drop(dir);
-        ready?;
-        return Ok(Some(child));
+        return Err("복구 단어를 임시 파일로 전달하는 기능은 중지되었습니다. 이름 있는 파이프를 사용해 주세요.".into());
     }
     let name = format!(r"\\.\pipe\ravenvault-{:016x}", rand::random::<u64>());
     let server = win_pipe::Server::create(&name).map_err(|_| {
@@ -623,7 +597,7 @@ async fn spawn_with_words(ctx: &Ctx, phrase: &Phrase, pass: &Secret, file: bool)
         Ok(c) => c,
         Err(_) => {
             writer.cancel(&name);
-            return Err("노드를 띄우지 못했습니다. 옛 지갑은 옆에 그대로 있습니다.".into());
+            return Err("서버를 띄우지 못했습니다. 옛 지갑은 옆에 그대로 있습니다.".into());
         }
     };
     // 노드가 파이프를 읽었나 — 최대 90초. 【윈도우 미실측】 mingw 빌드 ravend 의
@@ -850,13 +824,13 @@ pub(crate) async fn survey(ctx: &Ctx) -> Value {
     };
     let brand_new = !wallet_file && !running;
     let blocked: Option<&str> = if conf_has("disablewallet") || conf_has("wallet") {
-        Some("이 컴퓨터의 노드 설정이 지갑을 끄거나 다른 지갑 파일을 쓰게 되어 있어 여기서는 되살릴 수 없습니다.")
+        Some("이 컴퓨터의 서버 설정이 지갑을 끄거나 다른 지갑 파일을 쓰게 되어 있어 여기서는 되살릴 수 없습니다.")
     } else if ctx.ravend.is_none() {
-        Some("노드 프로그램(ravend)을 찾지 못했습니다. RavenVault Desktop 을 다시 설치해 주세요.")
+        Some("서버 프로그램(ravend)을 찾지 못했습니다. RavenVault Desktop 을 다시 설치해 주세요.")
     } else if !running && wallet_file {
-        Some("노드를 켜서 지금 지갑을 확인한 뒤에 할 수 있습니다. 왼쪽 아래 연결 점을 눌러 노드를 켜 주세요.")
+        Some("서버를 켜서 지금 지갑을 확인한 뒤에 할 수 있습니다. 왼쪽 아래 연결 점을 눌러 서버를 켜 주세요.")
     } else if running && !wallet_read {
-        Some("지갑을 읽지 못했습니다. 노드가 다 켜진 뒤(몇 분) 다시 열어 주세요.")
+        Some("지갑을 읽지 못했습니다. 서버가 다 켜진 뒤(몇 분) 다시 열어 주세요.")
     } else {
         None
     };
@@ -877,6 +851,8 @@ pub(crate) async fn survey(ctx: &Ctx) -> Value {
 
 /// 흐름 전체. 단어는 여기로 **옮겨져** 들어오고, 이 함수가 끝나면 떨어지며 지워진다.
 pub(crate) async fn run_flow(ctx: &Ctx, phrase: Phrase, pass: Secret, opts: Opts) -> Result<Value, String> {
+    #[cfg(windows)]
+    if opts.file { return Err("임시 파일 복구는 중지되었습니다. 이름 있는 파이프를 사용해 주세요.".into()); }
     let info = survey(ctx).await;
     if let Some(b) = info["blocked"].as_str() {
         // 새 컴퓨터가 아닌데 막힌 경우만 멈춘다. (지갑 자리가 비어 있는 이어 하기는 아래에서 따로 본다.)
@@ -927,7 +903,7 @@ pub(crate) async fn run_flow(ctx: &Ctx, phrase: Phrase, pass: Secret, opts: Opts
                 return Err(abandon(ctx, &mut st, e));
             }
         } else if !crate::recover::datadir_free(&ctx.datadir) {
-            return Err(abandon(ctx, &mut st, "다른 프로그램이 노드 폴더를 쓰고 있습니다. 그 프로그램을 끄고 다시 해 주세요.".into()));
+            return Err(abandon(ctx, &mut st, "다른 프로그램이 서버 폴더를 쓰고 있습니다. 그 프로그램을 끄고 다시 해 주세요.".into()));
         }
         // ── 2. 옆에 두기 ───────────────────────────────────────────────
         match set_aside(ctx, "before-words") {
@@ -999,7 +975,7 @@ pub(crate) async fn run_flow(ctx: &Ctx, phrase: Phrase, pass: Secret, opts: Opts
             let _ = c.wait();
         }
         if attempt >= 2 {
-            return Err(keep(ctx, &mut st, "다른 프로그램이 노드를 먼저 켜서 단어가 들어가지 않았습니다. 레이븐 코어 등을 끄고 이어 해 주세요.".into()));
+            return Err(keep(ctx, &mut st, "다른 프로그램이 서버를 먼저 켜서 단어가 들어가지 않았습니다. 레이븐 코어 등을 끄고 이어 해 주세요.".into()));
         }
     };
     st.stage = "created".into();
@@ -1069,7 +1045,7 @@ async fn start_normal(ctx: &Ctx, st: &mut State) -> Result<(), String> {
             let _ = crate::services::start_parts(files).await;
         }
     } else {
-        let ravend = ctx.ravend.clone().ok_or("노드 프로그램(ravend)을 찾지 못했습니다.")?;
+        let ravend = ctx.ravend.clone().ok_or("서버 프로그램(ravend)을 찾지 못했습니다.")?;
         let mut cmd = std::process::Command::new(ravend);
         cmd.arg(format!("-datadir={}", ctx.datadir.to_string_lossy())).arg("-server=1").args(&ctx.extra);
         #[cfg(unix)]
@@ -1078,7 +1054,7 @@ async fn start_normal(ctx: &Ctx, st: &mut State) -> Result<(), String> {
     }
     write_state(&ctx.app_dir, st)?;
     wait_ready(ctx, from, None, 900).await.map_err(|_| {
-        "지갑은 되살렸지만 노드가 아직 안 켜졌습니다. 왼쪽 아래 연결 점을 눌러 켠 뒤 「옛 거래 찾기」를 눌러 주세요.".to_string()
+        "지갑은 되살렸지만 서버가 아직 안 켜졌습니다. 왼쪽 아래 연결 점을 눌러 켠 뒤 「옛 거래 찾기」를 눌러 주세요.".to_string()
     })
 }
 
@@ -1160,7 +1136,7 @@ pub(crate) async fn undo(ctx: &Ctx) -> Result<Value, String> {
     let mut st = read_state(&ctx.app_dir).ok_or("되돌릴 되살리기 기록이 없습니다.")?;
     let aside = st.aside.clone().ok_or("옆에 둔 옛 지갑이 없습니다(처음부터 지갑이 없던 컴퓨터).")?;
     if std::fs::symlink_metadata(ctx.datadir.join(&aside)).is_err() {
-        return Err("옆에 둔 옛 지갑 파일을 찾지 못했습니다. 노드 폴더를 확인해 주세요.".into());
+        return Err("옆에 둔 옛 지갑 파일을 찾지 못했습니다. 서버 폴더를 확인해 주세요.".into());
     }
     if ctx.is_app() && !st.held_agent {
         st.held_agent = crate::reindex_run::agent_hold();
@@ -1226,7 +1202,7 @@ pub async fn words_restore_check(words: String, passphrase: Option<String>) -> V
         Err(p) => return problem_value(&p),
     };
     if !passphrase_fits(pass.expose()) {
-        return json!({ "ok": false, "kind": "passphrase", "message": "추가 암호에 # 이나 앞뒤 빈칸이 있으면 이 방법으로는 건넬 수 없습니다. 그런 암호였다면 레이븐 코어(Raven-Qt)에서 되살려 주세요." });
+        return json!({ "ok": false, "kind": "passphrase", "message": "추가 암호에 # 이나 앞뒤 빈칸이 있으면 이 방법으로는 건넬 수 없습니다. 그런 암호였다면 이 화면으로는 되살릴 수 없으니, 다른 백업(wallet.dat 백업 파일이나 가게 전체 백업)이 있으면 그것으로 되살려 주세요." });
     }
     let Some((recv, chg)) = words::addresses(&phrase, pass.expose(), 20, 20, words::MAINNET) else {
         return json!({ "ok": false, "kind": "derive", "message": "주소를 만들지 못했습니다." });
@@ -1438,7 +1414,7 @@ mod tests {
     const V1: &str = "legal winner thank year wave sausage worth useful legal winner thank yellow";
 
     fn scratch(name: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("rvw-{name}-{}-{:x}", std::process::id(), rand::random::<u32>()));
+        let d = crate::paths::test_fixture_root().join(format!("rvw-{name}-{}-{:x}", std::process::id(), rand::random::<u32>()));
         std::fs::create_dir_all(&d).unwrap();
         d
     }
@@ -1517,10 +1493,10 @@ mod tests {
     #[test]
     fn gate_blocks_only_while_wallet_slot_is_empty() {
         for s in ["set_aside", "creating", "undoing"] {
-            assert!(blocking_stage(s), "{s} 에서 노드를 켜면 무작위 지갑이 생긴다");
+            assert!(blocking_stage(s), "{s} 에서 서버를 켜면 무작위 지갑이 생긴다");
         }
         for s in ["", "created", "restarting", "rescanning", "rescan_wait", "rescan_stopped", "done", "closed", "undone", "reindexing"] {
-            assert!(!blocking_stage(s), "{s} 에서 노드를 막으면 안 된다");
+            assert!(!blocking_stage(s), "{s} 에서 서버를 막으면 안 된다");
         }
         // 서비스·재색인 쪽이 정말 이 문을 묻는지(소스).
         let services = include_str!("services.rs");

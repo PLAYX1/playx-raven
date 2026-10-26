@@ -1,0 +1,456 @@
+{
+  "entry": "production chatSend; no AI key; amount+send reaches explicit send guide, not a transfer parser or RPC",
+  "total": 40,
+  "pass": 40,
+  "direct": 25,
+  "candidates": 15,
+  "wrong": 0,
+  "languageLeaks": 0,
+  "rows": [
+    {
+      "q": "내 레이븐 몇 개야",
+      "expected": "balance",
+      "intent": "clarify",
+      "candidates": [
+        "balance",
+        "about"
+      ],
+      "language": "ko",
+      "expectedLanguage": "ko",
+      "pass": true,
+      "wrong": false
+    },
+    {
+      "q": "엄마한테 10개 보내줘",
+      "expected": "send",
+      "intent": "send",
+      "candidates": [],
+      "language": "ko",
+      "expectedLanguage": "ko",
+      "pass": true,
+      "wrong": false
+    },
+    {
+      "q": "잘못 보냈어 되돌려줘",
+      "expected": "undo",
+      "intent": "clarify",
+      "candidates": [
+        "undo",
+        "receive"
+      ],
+      "language": "ko",
+      "expectedLanguage": "ko",
+      "pass": true,
+      "wrong": false
+    },
+    {
+      "q": "폰 바꾸면 지갑 어떻게 옮겨",
+      "expected": "backup",
+      "intent": "clarify",
+      "candidates": [
+        "backup",
+        "send"
+      ],
+      "language": "ko",
+      "expectedLanguage": "ko",
+      "pass": true,
+      "wrong": false
+    },
+    {
+      "q": "AI 깨우는 법",
+      "expected": "key",
+      "intent": "clarify",
+      "candidates": [
+        "key",
+        "reward"
+      ],
+      "language": "ko",
+      "expectedLanguage": "ko",
+      "pass": true,
+      "wrong": false
+    },
+    {
+      "q": "오늘 얼마 팔았어",
+      "expected": "sales",
+      "intent": "sales",
+      "candidates": [],
+      "language": "ko",
+      "expectedLanguage": "ko",
+      "pass": true,
+      "wrong": false
+    },
+    {
+      "q": "카톡에 올릴 글 써줘",
+      "expected": "promo",
+      "intent": "promo",
+      "candidates": [],
+      "language": "ko",
+      "expectedLanguage": "ko",
+      "pass": true,
+      "wrong": false
+    },
+    {
+      "q": "이 앱 뭐하는 거야",
+      "expected": "about",
+      "intent": "clarify",
+      "candidates": [
+        "about",
+        "safety"
+      ],
+      "language": "ko",
+      "expectedLanguage": "ko",
+      "pass": true,
+      "wrong": false
+    },
+    {
+      "q": "일본어로",
+      "expected": "language",
+      "intent": "language",
+      "candidates": [],
+      "language": "ja",
+      "expectedLanguage": "ja",
+      "pass": true,
+      "wrong": false
+    },
+    {
+      "q": "앱이 이상해",
+      "expected": "report",
+      "intent": "clarify",
+      "candidates": [
+        "report",
+        "about"
+      ],
+      "language": "ko",
+      "expectedLanguage": "ko",
+      "pass": true,
+      "wrong": false
+    },
+    {
+      "q": "누가 나한테 보내 준다는데 뭐 알려줘야 돼",
+      "expected": "receive",
+      "intent": "receive",
+      "candidates": [],
+      "language": "ko",
+      "expectedLanguage": "ko",
+      "pass": true,
+      "wrong": false
+    },
+    {
+      "q": "라비 말 안 해",
+      "expected": "key",
+      "intent": "clarify",
+      "candidates": [
+        "key",
+        "help"
+      ],
+      "language": "ko",
+      "expectedLanguage": "ko",
+      "pass": true,
+      "wrong": false
+    },
+    {
+      "q": "해킹 당하면",
+      "expected": "safety",
+      "intent": "safety",
+      "candidates": [],
+      "language": "ko",
+      "expectedLanguage": "ko",
+      "pass": true,
+      "wrong": false
+    },
+    {
+      "q": "안녕",
+      "expected": "help",
+      "intent": "clarify",
+      "candidates": [
+        "help",
+        "fee"
+      ],
+      "language": "ko",
+      "expectedLanguage": "ko",
+      "pass": true,
+      "wrong": false
+    },
+    {
+      "q": "내 코인 수가 궁금한데",
+      "expected": "balance",
+      "intent": "clarify",
+      "candidates": [
+        "balance",
+        "receipt"
+      ],
+      "language": "ko",
+      "expectedLanguage": "ko",
+      "pass": true,
+      "wrong": false
+    },
+    {
+      "q": "친구가 코인 준다는데 어디로 받지",
+      "expected": "receive",
+      "intent": "clarify",
+      "candidates": [
+        "receive",
+        "orders"
+      ],
+      "language": "ko",
+      "expectedLanguage": "ko",
+      "pass": true,
+      "wrong": false
+    },
+    {
+      "q": "받을 사람을 틀렸는데 다시 돌릴 수 있나",
+      "expected": "undo",
+      "intent": "clarify",
+      "candidates": [
+        "undo",
+        "password"
+      ],
+      "language": "ko",
+      "expectedLanguage": "ko",
+      "pass": true,
+      "wrong": false
+    },
+    {
+      "q": "새 기기에 지갑을 복원하려는데",
+      "expected": "backup",
+      "intent": "backup",
+      "candidates": [],
+      "language": "ko",
+      "expectedLanguage": "ko",
+      "pass": true,
+      "wrong": false
+    },
+    {
+      "q": "AI 대답을 들으려면 무엇부터 설정해",
+      "expected": "key",
+      "intent": "clarify",
+      "candidates": [
+        "key",
+        "receive"
+      ],
+      "language": "ko",
+      "expectedLanguage": "ko",
+      "pass": true,
+      "wrong": false
+    },
+    {
+      "q": "가게 판매한 합계 볼 수 있을까",
+      "expected": "sales",
+      "intent": "sales",
+      "candidates": [],
+      "language": "ko",
+      "expectedLanguage": "ko",
+      "pass": true,
+      "wrong": false
+    },
+    {
+      "q": "가게 광고를 카카오톡에 공유하고 싶어",
+      "expected": "promo",
+      "intent": "clarify",
+      "candidates": [
+        "promo",
+        "media"
+      ],
+      "language": "ko",
+      "expectedLanguage": "ko",
+      "pass": true,
+      "wrong": false
+    },
+    {
+      "q": "프로그램이 자꾸 먹통이 된다",
+      "expected": "report",
+      "intent": "report",
+      "candidates": [],
+      "language": "ko",
+      "expectedLanguage": "ko",
+      "pass": true,
+      "wrong": false
+    },
+    {
+      "q": "여기 지갑 믿고 써도 되나",
+      "expected": "safety",
+      "intent": "clarify",
+      "candidates": [
+        "safety",
+        "promo"
+      ],
+      "language": "ko",
+      "expectedLanguage": "ko",
+      "pass": true,
+      "wrong": false
+    },
+    {
+      "q": "커피 메뉴에 하나 추가하고 싶은데",
+      "expected": "menu",
+      "intent": "menu",
+      "candidates": [],
+      "language": "ko",
+      "expectedLanguage": "ko",
+      "pass": true,
+      "wrong": false
+    },
+    {
+      "q": "손님 주문이 들어온 것 확인할래",
+      "expected": "orders",
+      "intent": "orders",
+      "candidates": [],
+      "language": "ko",
+      "expectedLanguage": "ko",
+      "pass": true,
+      "wrong": false
+    },
+    {
+      "q": "테이블 QR을 종이에 인쇄할래",
+      "expected": "qr",
+      "intent": "qr",
+      "candidates": [],
+      "language": "ko",
+      "expectedLanguage": "ko",
+      "pass": true,
+      "wrong": false
+    },
+    {
+      "q": "매출 CSV를 세무사에게 보내야 하는데",
+      "expected": "export",
+      "intent": "export",
+      "candidates": [],
+      "language": "ko",
+      "expectedLanguage": "ko",
+      "pass": true,
+      "wrong": false
+    },
+    {
+      "q": "온라인 주문 링크 수정할 수 있나",
+      "expected": "order-link",
+      "intent": "order-link",
+      "candidates": [],
+      "language": "ko",
+      "expectedLanguage": "ko",
+      "pass": true,
+      "wrong": false
+    },
+    {
+      "q": "우리 매장 연락처를 바꾸려는데",
+      "expected": "shop",
+      "intent": "clarify",
+      "candidates": [
+        "shop",
+        "create"
+      ],
+      "language": "ko",
+      "expectedLanguage": "ko",
+      "pass": true,
+      "wrong": false
+    },
+    {
+      "q": "내가 받았던 쿠폰 목록을 보자",
+      "expected": "assets",
+      "intent": "assets",
+      "candidates": [],
+      "language": "ko",
+      "expectedLanguage": "ko",
+      "pass": true,
+      "wrong": false
+    },
+    {
+      "q": "신규 회원권 발행 준비를 할래",
+      "expected": "create",
+      "intent": "create",
+      "candidates": [],
+      "language": "ko",
+      "expectedLanguage": "ko",
+      "pass": true,
+      "wrong": false
+    },
+    {
+      "q": "수료증 진위 검증할 수 있나",
+      "expected": "cert",
+      "intent": "cert",
+      "candidates": [],
+      "language": "ko",
+      "expectedLanguage": "ko",
+      "pass": true,
+      "wrong": false
+    },
+    {
+      "q": "친구랑 채팅하려면 어디 눌러",
+      "expected": "talk",
+      "intent": "talk",
+      "candidates": [],
+      "language": "ko",
+      "expectedLanguage": "ko",
+      "pass": true,
+      "wrong": false
+    },
+    {
+      "q": "휴대폰과 컴퓨터 페어링 해보자",
+      "expected": "phone",
+      "intent": "phone",
+      "candidates": [],
+      "language": "ko",
+      "expectedLanguage": "ko",
+      "pass": true,
+      "wrong": false
+    },
+    {
+      "q": "시드 단어는 어디에 보관해야 하니",
+      "expected": "seed",
+      "intent": "seed",
+      "candidates": [],
+      "language": "ko",
+      "expectedLanguage": "ko",
+      "pass": true,
+      "wrong": false
+    },
+    {
+      "q": "노드 동기화가 진행되고 있나",
+      "expected": "sync",
+      "intent": "sync",
+      "candidates": [],
+      "language": "ko",
+      "expectedLanguage": "ko",
+      "pass": true,
+      "wrong": false
+    },
+    {
+      "q": "돈 보낼 때 수수료가 얼마나 나올까",
+      "expected": "fee",
+      "intent": "fee",
+      "candidates": [],
+      "language": "ko",
+      "expectedLanguage": "ko",
+      "pass": true,
+      "wrong": false
+    },
+    {
+      "q": "내일 비 와?",
+      "expected": "miss",
+      "intent": "miss",
+      "candidates": [],
+      "language": "ko",
+      "expectedLanguage": "ko",
+      "pass": true,
+      "wrong": false
+    },
+    {
+      "q": "비트코인 거래 대신 해줄래",
+      "expected": "miss",
+      "intent": "miss",
+      "candidates": [],
+      "language": "ko",
+      "expectedLanguage": "ko",
+      "pass": true,
+      "wrong": false
+    },
+    {
+      "q": "오늘 날씨 예측해줘",
+      "expected": "miss",
+      "intent": "miss",
+      "candidates": [],
+      "language": "ko",
+      "expectedLanguage": "ko",
+      "pass": true,
+      "wrong": false
+    }
+  ]
+}

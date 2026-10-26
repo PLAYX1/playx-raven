@@ -1,0 +1,194 @@
+{
+  "kind": "CSS arithmetic; not browser measurement",
+  "checks": [
+    {
+      "width": 1024,
+      "height": 640,
+      "rows": [
+        140,
+        202,
+        108
+      ],
+      "estimatedHeight": 628,
+      "estimatedSpare": 12,
+      "disclosure": "collapsed"
+    },
+    {
+      "width": 1280,
+      "height": 720,
+      "rows": [
+        148,
+        208,
+        112
+      ],
+      "estimatedHeight": 654,
+      "estimatedSpare": 66,
+      "disclosure": "expanded"
+    },
+    {
+      "width": 1440,
+      "height": 900,
+      "rows": [
+        148,
+        208,
+        112
+      ],
+      "estimatedHeight": 654,
+      "estimatedSpare": 246,
+      "disclosure": "expanded"
+    },
+    {
+      "width": 1728,
+      "height": 1117,
+      "rows": [
+        148,
+        208,
+        112
+      ],
+      "estimatedHeight": 654,
+      "estimatedSpare": 463,
+      "disclosure": "expanded"
+    }
+  ],
+  "contrasts": [
+    {
+      "theme": "light",
+      "foreground": "#1f224e",
+      "background": "#ffffff",
+      "ratio": 15.031308839053752
+    },
+    {
+      "theme": "light",
+      "foreground": "#1f224e",
+      "background": "#f3f5fa",
+      "ratio": 13.780364613917765
+    },
+    {
+      "theme": "light",
+      "foreground": "#59637d",
+      "background": "#ffffff",
+      "ratio": 5.990348408414971
+    },
+    {
+      "theme": "light",
+      "foreground": "#59637d",
+      "background": "#f3f5fa",
+      "ratio": 5.491816189544601
+    },
+    {
+      "theme": "light",
+      "foreground": "#226b43",
+      "background": "#ffffff",
+      "ratio": 6.457279043575974
+    },
+    {
+      "theme": "light",
+      "foreground": "#226b43",
+      "background": "#f3f5fa",
+      "ratio": 5.919887654965432
+    },
+    {
+      "theme": "light",
+      "foreground": "#805000",
+      "background": "#ffffff",
+      "ratio": 6.850872141992458
+    },
+    {
+      "theme": "light",
+      "foreground": "#805000",
+      "background": "#f3f5fa",
+      "ratio": 6.280724922283679
+    },
+    {
+      "theme": "light",
+      "foreground": "#a52a22",
+      "background": "#ffffff",
+      "ratio": 7.108641499814984
+    },
+    {
+      "theme": "light",
+      "foreground": "#a52a22",
+      "background": "#f3f5fa",
+      "ratio": 6.517042050427622
+    },
+    {
+      "theme": "light",
+      "foreground": "#ffffff",
+      "background": "#1f224e",
+      "ratio": 15.031308839053752
+    },
+    {
+      "theme": "dark",
+      "foreground": "#ecedf3",
+      "background": "#15161d",
+      "ratio": 15.436787141854408
+    },
+    {
+      "theme": "dark",
+      "foreground": "#ecedf3",
+      "background": "#222531",
+      "ratio": 13.053409279843551
+    },
+    {
+      "theme": "dark",
+      "foreground": "#b7bdd0",
+      "background": "#15161d",
+      "ratio": 9.621600050457854
+    },
+    {
+      "theme": "dark",
+      "foreground": "#b7bdd0",
+      "background": "#222531",
+      "ratio": 8.1360636919751
+    },
+    {
+      "theme": "dark",
+      "foreground": "#6fd1a0",
+      "background": "#15161d",
+      "ratio": 9.707818993970301
+    },
+    {
+      "theme": "dark",
+      "foreground": "#6fd1a0",
+      "background": "#222531",
+      "ratio": 8.208970777303252
+    },
+    {
+      "theme": "dark",
+      "foreground": "#f2c36a",
+      "background": "#15161d",
+      "ratio": 10.983947595734001
+    },
+    {
+      "theme": "dark",
+      "foreground": "#f2c36a",
+      "background": "#222531",
+      "ratio": 9.28807025438103
+    },
+    {
+      "theme": "dark",
+      "foreground": "#ffaaa2",
+      "background": "#15161d",
+      "ratio": 9.896687562352454
+    },
+    {
+      "theme": "dark",
+      "foreground": "#ffaaa2",
+      "background": "#222531",
+      "ratio": 8.36867879818448
+    },
+    {
+      "theme": "dark",
+      "foreground": "#15161d",
+      "background": "#ecedf3",
+      "ratio": 15.436787141854408
+    }
+  ],
+  "renderFixtures": "passed",
+  "mutationSensitivity": "passed",
+  "unverified": [
+    "Actual font shaping/wrapping",
+    "Browser cascade, screenshots, focus traversal",
+    "Tauri WebView, display scaling, translated copy"
+  ]
+}

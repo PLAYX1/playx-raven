@@ -151,7 +151,7 @@ pub(crate) fn is_send_method(method: &str) -> bool {
 
 fn sent_unknown_message(method: &str, secs: u64) -> String {
     format!(
-        "{SENT_UNKNOWN}노드가 {secs}초 안에 답하지 않았어요 ({method}). 보냈는지 아직 몰라요 — 기록될 때까지 기다려 주세요. 같은 것을 다시 보내지 마세요."
+        "{SENT_UNKNOWN}서버가 {secs}초 안에 답하지 않았어요 ({method}). 보냈는지 아직 몰라요 — 기록될 때까지 기다려 주세요. 같은 것을 다시 보내지 마세요."
     )
 }
 
@@ -197,6 +197,11 @@ pub async fn call_rpc(method: &str, params: Value) -> Result<Value, String> {
 /// Preserve numeric RPC error codes for public chain adapters without exposing
 /// node credentials, configuration paths, or raw RPC errors to browsers.
 pub(crate) async fn call_rpc_detailed(method: &str, params: Value) -> Result<Value, RpcFailure> {
+    let _transfer = if is_send_method(method) { Some(crate::ravi_lifecycle::begin_transfer()?) } else { None };
+    #[cfg(test)]
+    { let _ = (method, params); return Err("Synthetic lib tests cannot access a live node; inject a mock RPC backend".into()); }
+    #[cfg(not(test))]
+    {
     // 🔴 0.4.9 — 지갑을 되살리며 옛 거래를 찾는 동안(`rescanblockchain`) 코어는 `cs_main` 을
     //    쥐고 있어 거의 모든 질문이 20초 뒤 시간 초과로 끝난다. 그 사이 주기 질문 네 개가
     //    대기열(`rpc_gate`)을 막고, 화면은 「노드가 답하지 않습니다」로 고장처럼 보인다.
@@ -238,9 +243,9 @@ pub(crate) async fn call_rpc_detailed(method: &str, params: Value) -> Result<Val
             } else if e.is_timeout() {
                 // 타임아웃이 없던 시절, 노드가 한 번 늦으면 화면이 "확인 중…"에서
                 // 영영 멈췄다. 멈춘 화면은 고장난 화면과 구별되지 않는다.
-                format!("노드가 {RPC_TIMEOUT_SECS}초 안에 답하지 않았습니다 ({method}). 따라잡는 중이거나 바쁠 수 있습니다.")
+                format!("서버가 {RPC_TIMEOUT_SECS}초 안에 답하지 않았습니다 ({method}). 따라잡는 중이거나 바쁠 수 있습니다.")
             } else {
-                format!("노드에 닿지 못했습니다 ({}): {e}", rpc_url())
+                format!("서버에 닿지 못했습니다 ({}): {e}", rpc_url())
             }
         })?;
 
@@ -271,7 +276,7 @@ pub(crate) async fn call_rpc_detailed(method: &str, params: Value) -> Result<Val
             //    할 수 있는 일이 적힌 한 문장으로 바꾼다.
             if msg.contains("NOT YET ACTIVE") {
                 return Err(
-                    "자산 색인이 꺼져 있습니다. 「이 컴퓨터 → RVN 노드」에서 색인을 켜면 \
+                    "자산 색인이 꺼져 있습니다. 「이 컴퓨터 → RVN 서버」에서 색인을 켜면 \
                      회원권·표·굿즈가 보입니다. 한 번 켜면 장부를 다시 훑느라 몇 시간 걸립니다."
                         .into(),
                 );
@@ -280,10 +285,56 @@ pub(crate) async fn call_rpc_detailed(method: &str, params: Value) -> Result<Val
         }
     }
 
+    if let Some(result) = parsed.get("result") { crate::ravi_companion::observe_rpc(method, result); }
     Ok(parsed
         .get("result")
         .cloned()
         .ok_or_else(|| format!("{method}: response had no result"))?)
+    }
+}
+
+/// Secret-bearing local RPC. Fixed allowlist, no observer/logging/raw errors;
+/// owned JSON buffers are wiped before release. Never exposed as a Tauri command.
+pub(crate) async fn sales_secret_rpc(method: &str, mut params: Value) -> Result<Value, String> {
+    fn wipe(v: &mut Value) {
+        match v {
+            Value::String(s) => crate::words::wipe(s),
+            Value::Array(a) => a.iter_mut().for_each(wipe),
+            Value::Object(o) => o.values_mut().for_each(wipe),
+            _ => {}
+        }
+    }
+    struct Body(Vec<u8>);
+    impl Drop for Body { fn drop(&mut self) { crate::words::wipe_bytes(&mut self.0); } }
+    if !matches!(method, "walletpassphrase" | "getmywords") {
+        wipe(&mut params); return Err("판매 계정 인증 실패".into());
+    }
+    #[cfg(test)]
+    { wipe(&mut params); return Err("Synthetic tests cannot access a live node".into()); }
+    #[cfg(not(test))]
+    {
+        let mut value = json!({"jsonrpc":"1.0","id":"sales","method":method});
+        value["params"] = params.take();
+        let encoded = serde_json::to_vec(&value);
+        wipe(&mut value);
+        let mut body = Body(encoded.map_err(|_| "판매 계정 인증 실패")?);
+        let mut cookie = read_cookie().map_err(|_| "판매 계정 인증 실패")?;
+        let auth = cookie.split_once(':').ok_or("판매 계정 인증 실패")?;
+        let request = client().post(rpc_url()).basic_auth(auth.0, Some(auth.1))
+            .header("Content-Type", "application/json").body(body.0.clone())
+            .timeout(std::time::Duration::from_secs(15));
+        crate::words::wipe(&mut cookie);
+        crate::words::wipe_bytes(&mut body.0);
+        let response = request.send().await.map_err(|_| "판매 계정 인증 실패")?;
+        let mut bytes = Body(response.bytes().await.map_err(|_| "판매 계정 인증 실패")?.to_vec());
+        let parsed = serde_json::from_slice::<Value>(&bytes.0);
+        crate::words::wipe_bytes(&mut bytes.0);
+        let mut parsed = parsed.map_err(|_| "판매 계정 인증 실패")?;
+        if !parsed["error"].is_null() { wipe(&mut parsed); return Err("판매 계정 인증 실패".into()); }
+        let result = parsed.get_mut("result").map(Value::take).ok_or("판매 계정 인증 실패")?;
+        wipe(&mut parsed);
+        Ok(result)
+    }
 }
 
 /// 오래 걸리는 부름 하나(0.4.9 — `rescanblockchain`). 몇 시간이 걸릴 수 있다.
@@ -293,6 +344,10 @@ pub(crate) async fn call_rpc_detailed(method: &str, params: Value) -> Result<Val
 ///    나머지 화면이 셋으로 버틴다. 끊겨도 노드 안의 훑기는 계속되므로, 부르는 쪽이
 ///    `debug.log` 와 뒤이은 질문으로 끝났는지 판단한다(words_restore.rs).
 pub(crate) async fn call_rpc_long(method: &str, params: Value, secs: u64) -> Result<Value, String> {
+    #[cfg(test)]
+    { let _ = (method, params, secs); return Err("Synthetic lib tests cannot access a live node".into()); }
+    #[cfg(not(test))]
+    {
     let cookie = read_cookie()?;
     let (user, pass) = cookie
         .split_once(':')
@@ -305,11 +360,11 @@ pub(crate) async fn call_rpc_long(method: &str, params: Value, secs: u64) -> Res
         .timeout(std::time::Duration::from_secs(secs))
         .send()
         .await
-        .map_err(|e| format!("노드와의 연결이 끊겼습니다 ({method}): {}", if e.is_timeout() { "시간 초과" } else { "연결" }))?;
+        .map_err(|e| format!("서버와의 연결이 끊겼습니다 ({method}): {}", if e.is_timeout() { "시간 초과" } else { "연결" }))?;
     let parsed: Value = response
         .json()
         .await
-        .map_err(|_| format!("노드와의 연결이 끊겼습니다 ({method})"))?;
+        .map_err(|_| format!("서버와의 연결이 끊겼습니다 ({method})"))?;
     if let Some(err) = parsed.get("error").filter(|e| !e.is_null()) {
         let msg = err.get("message").and_then(Value::as_str).unwrap_or("unknown error");
         return Err(format!("{method}: {msg}"));
@@ -318,6 +373,7 @@ pub(crate) async fn call_rpc_long(method: &str, params: Value, secs: u64) -> Res
         .get("result")
         .cloned()
         .ok_or_else(|| format!("{method}: response had no result"))
+    }
 }
 
 #[derive(Deserialize)]
@@ -545,7 +601,7 @@ pub async fn wallet_asset_txs() -> Result<Value, String> {
 pub(crate) fn asset_transactions_of(mut v: Value) -> Result<Value, String> {
     match v.get_mut("asset_transactions").map(Value::take) {
         Some(rows @ Value::Array(_)) => Ok(rows),
-        _ => Err("지갑의 자산 기록을 읽지 못했어요. 노드가 따라잡은 뒤 다시 해 주세요.".into()),
+        _ => Err("지갑의 자산 기록을 읽지 못했어요. 서버가 따라잡은 뒤 다시 해 주세요.".into()),
     }
 }
 

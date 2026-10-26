@@ -279,7 +279,7 @@ mod tests {
     #[test]
     fn 앱을_다시_켜도_기억한다() {
         let _env = crate::paths::TEST_ENV.lock().unwrap_or_else(|e| e.into_inner());
-        let dir = std::env::temp_dir().join(format!("rv-issue-unknown-{:x}", rand::random::<u64>()));
+        let dir = crate::paths::test_fixture_root().join(format!("rv-issue-unknown-{:x}", rand::random::<u64>()));
         std::fs::create_dir_all(&dir).unwrap();
         let old = std::env::var("PLAYX_RAVEN_HOME").ok();
         std::env::set_var("PLAYX_RAVEN_HOME", &dir);

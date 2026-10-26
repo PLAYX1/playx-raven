@@ -1,0 +1,2 @@
+"NSMicrophoneUsageDescription" = "请允许使用麦克风以将语音转为文字。经您同意，音频将发送给所选AI公司。";
+"NSSpeechRecognitionUsageDescription" = "使用语音识别在此设备上将语音转为文字。";

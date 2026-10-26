@@ -57,9 +57,10 @@ RavenVault Desktop (this program)
 - Nothing passes through our server. The shop's own computer answers the
   customer's phone directly. We cannot see the shop's sales, and we could not
   hand them over if asked.
-- Shops register as a chain asset named SHOP.<name>, so the shop list is read
-  from the chain rather than from anyone's database. We do not own the SHOP.
-  prefix and cannot refuse anyone.
+- New shops register as a chain asset named RV.S.<name> (RV naming rule, S for
+  shop); shops registered earlier keep their SHOP.<name> asset, and both are
+  read. The shop list comes from the chain rather than from anyone's database.
+  We do not own either prefix and cannot refuse anyone.
 - The wallet stays locked while trading: it can hand out payment addresses but
   cannot send. Stealing the computer does not steal the coins.
 - The mascot is Ravi, a raven.

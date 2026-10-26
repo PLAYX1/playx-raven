@@ -1,0 +1,62 @@
+[
+  {
+    "check": "build",
+    "exitCode": 0,
+    "seconds": 4.2
+  },
+  {
+    "check": "check-ravi-panel-browser",
+    "exitCode": 1,
+    "seconds": 0.92
+  },
+  {
+    "check": "check-ravi-panel",
+    "exitCode": 0,
+    "seconds": 0.5
+  },
+  {
+    "check": "check-ravi-promo-browser",
+    "exitCode": 1,
+    "seconds": 0.66
+  },
+  {
+    "check": "check-ravi-promo-card",
+    "exitCode": 0,
+    "seconds": 0.65
+  },
+  {
+    "check": "check-ravi-promo",
+    "exitCode": 0,
+    "seconds": 2.6
+  },
+  {
+    "check": "check-ravi-similarity",
+    "exitCode": 0,
+    "seconds": 1.33
+  },
+  {
+    "check": "check-ravi-state",
+    "exitCode": 0,
+    "seconds": 0.65
+  },
+  {
+    "check": "check-ravi-understanding-browser",
+    "exitCode": 1,
+    "seconds": 0.47
+  },
+  {
+    "check": "check-ravi-understanding",
+    "exitCode": 0,
+    "seconds": 1.43
+  },
+  {
+    "check": "check-ravi-understanding2",
+    "exitCode": 0,
+    "seconds": 5.15
+  },
+  {
+    "check": "check-ravi-understanding3",
+    "exitCode": 0,
+    "seconds": 1.26
+  }
+]

@@ -59,7 +59,7 @@ pub async fn rehearse_start() -> Result<Value, String> {
     }
     let Some(ravend) = which("ravend") else {
         return Err(
-            "레이븐 노드가 깔려 있어야 연습도 할 수 있습니다. 연습은 진짜와 같은 \
+            "레이븐 서버가 깔려 있어야 연습도 할 수 있습니다. 연습은 진짜와 같은 \
              프로그램을 씁니다 — 그래야 연습이 됩니다."
                 .into(),
         );
@@ -80,7 +80,7 @@ pub async fn rehearse_start() -> Result<Value, String> {
     crate::quiet::cmd(&ravend)
         .args(&args)
         .spawn()
-        .map_err(|e| format!("연습용 노드를 켜지 못했습니다: {e}"))?;
+        .map_err(|e| format!("연습용 서버를 켜지 못했습니다: {e}"))?;
 
     // 켜지기를 기다린다. 안 기다리면 다음 명령이 전부 실패한다.
     for _ in 0..30 {
@@ -89,7 +89,7 @@ pub async fn rehearse_start() -> Result<Value, String> {
             return Ok(json!({ "running": true, "already": false }));
         }
     }
-    Err("연습용 노드가 15초 안에 켜지지 않았습니다.".into())
+    Err("연습용 서버가 15초 안에 켜지지 않았습니다.".into())
 }
 
 /// 연습용 노드를 끈다.
@@ -185,11 +185,11 @@ async fn rpc(method: &str, params: Value) -> Result<Value, String> {
         .timeout(std::time::Duration::from_secs(120))
         .send()
         .await
-        .map_err(|e| format!("연습용 노드에 닿지 못했습니다: {e}"))?;
+        .map_err(|e| format!("연습용 서버에 닿지 못했습니다: {e}"))?;
     let v: Value = r
         .json()
         .await
-        .map_err(|e| format!("연습용 노드가 이상한 답을 했습니다: {e}"))?;
+        .map_err(|e| format!("연습용 서버가 이상한 답을 했습니다: {e}"))?;
     if let Some(err) = v.get("error").filter(|e| !e.is_null()) {
         return Err(
             err.get("message")
@@ -243,14 +243,14 @@ mod tests {
     /// 포트가 겹치는 순간 연습 발행이 **진짜 500 RVN** 을 태운다.
     #[test]
     fn the_rehearsal_never_touches_the_real_node() {
-        assert_ne!(PORT, 8766, "진짜 노드 포트와 같다");
+        assert_ne!(PORT, 8766, "진짜 서버 포트와 같다");
         assert_ne!(PORT, 18770, "테스트넷 포트와 같다");
         let src = include_str!("rehearse.rs");
         // 진짜 노드로 가는 함수를 실수로 쓰면 안 된다.
         let code = src.split("#[cfg(test)]").next().unwrap_or("");
         assert!(
             !code.contains("crate::raven::call_rpc"),
-            "연습 코드가 진짜 노드의 call_rpc 를 쓴다"
+            "연습 코드가 진짜 서버의 call_rpc 를 쓴다"
         );
     }
 

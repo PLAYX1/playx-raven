@@ -1,0 +1,1042 @@
+{
+ "generated_for": "desktop 0.8.7",
+ "runtime_keys": 3932,
+ "rule": "합의·일반 UI 는 포함 / money_security·legal 은 합의 없으면 영어 / hold·flagged 도 영어",
+ "langs": {
+  "it": {
+   "rv_i18n_merged_at": "2026-10-11T10:43:54.040Z",
+   "glossary_version": "2026-10-11.2",
+   "entries": 3883,
+   "voice": 22,
+   "from": {
+    "agreed": 768,
+    "verified": 3122,
+    "machine-only": 0,
+    "extras": 15
+   },
+   "missing_runtime_keys": 50,
+   "english_fallback_total": 50,
+   "held_by_rule": 40
+  },
+  "es": {
+   "rv_i18n_merged_at": "2026-10-11T10:43:54.674Z",
+   "glossary_version": "2026-10-11.2",
+   "entries": 3906,
+   "voice": 20,
+   "from": {
+    "agreed": 768,
+    "verified": 281,
+    "machine-only": 2862,
+    "extras": 15
+   },
+   "missing_runtime_keys": 27,
+   "english_fallback_total": 27,
+   "held_by_rule": 19
+  },
+  "fr": {
+   "rv_i18n_merged_at": "2026-10-11T10:43:55.869Z",
+   "glossary_version": "2026-10-11.2",
+   "entries": 3903,
+   "voice": 20,
+   "from": {
+    "agreed": 766,
+    "verified": 280,
+    "machine-only": 2862,
+    "extras": 15
+   },
+   "missing_runtime_keys": 30,
+   "english_fallback_total": 30,
+   "held_by_rule": 22
+  },
+  "pt-BR": {
+   "rv_i18n_merged_at": "2026-10-11T10:43:56.450Z",
+   "glossary_version": "2026-10-11.2",
+   "entries": 3911,
+   "voice": 20,
+   "from": {
+    "agreed": 768,
+    "verified": 229,
+    "machine-only": 2919,
+    "extras": 15
+   },
+   "missing_runtime_keys": 22,
+   "english_fallback_total": 22,
+   "held_by_rule": 14
+  },
+  "de": {
+   "rv_i18n_merged_at": "2026-10-11T10:43:55.303Z",
+   "glossary_version": "2026-10-11.2",
+   "entries": 3912,
+   "voice": 20,
+   "from": {
+    "agreed": 771,
+    "verified": 227,
+    "machine-only": 2919,
+    "extras": 15
+   },
+   "missing_runtime_keys": 21,
+   "english_fallback_total": 21,
+   "held_by_rule": 13
+  },
+  "ru": {
+   "rv_i18n_merged_at": "2026-10-11T10:43:57.034Z",
+   "glossary_version": "2026-10-11.2",
+   "entries": 3912,
+   "voice": 20,
+   "from": {
+    "agreed": 771,
+    "verified": 211,
+    "machine-only": 2935,
+    "extras": 15
+   },
+   "missing_runtime_keys": 21,
+   "english_fallback_total": 21,
+   "held_by_rule": 13
+  }
+ },
+ "english_fallbacks": {
+  "it": {
+   "held_by_rule": [
+    {
+     "key": "가게를 아껴 주는 분이 {0}명 생겼어요.",
+     "category": "game_ravi_marketing",
+     "grade": "C",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "{0}블록 뒤",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "{0}: 마감일이 받는 날보다 늦어요.",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "무엇이든 물어봅니다. 화면은 안 건드립니다",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "메모는 한 회원에 50개까지 적을 수 있습니다.",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "열 다시 맞추기",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "네트워크에 기록되면(보통 1~2분) 완료돼요. 보낸 것은 되돌릴 수 없어요.",
+     "category": "money_security",
+     "grade": "A",
+     "reason": "hold",
+     "status": "hold"
+    },
+    {
+     "key": "한가해지면 알아서 시작하기",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "체인에 보낸 송금은 되돌릴 수 없어요. 주문 취소·환불은 가게의 주문 화면에서 확인하고 직접 승인해 주세요.",
+     "category": "money_security",
+     "grade": "A",
+     "reason": "hold",
+     "status": "hold"
+    },
+    {
+     "key": "서버 따라잡는 중",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "로 남습니다",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "줄입니다",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "받는 날",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "아니요. 한 번 보낸 것은 누구도 되돌릴 수 없어요 — 이 앱도, 레이븐코인도요.",
+     "category": "money_security",
+     "grade": "A",
+     "reason": "hold",
+     "status": "hold"
+    },
+    {
+     "key": "무엇으로 줄까요",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "루트 자산",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "로 시작합니다 — 예:",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "지금 쓸 곳",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "자산을 하나 만들려고 합니다. 무엇을 물어봐야 하는지부터 알려 주세요.",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "기본값으로",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "사장님을 도울 때",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "지도에 올릴 내용을 채웠습니다 — 확인하고 [올리기]는 사장님이 누릅니다",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "계속 됩니다 — {0}",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "이름표는 공개됩니다. 사진은 이 화면에 올리지 않아요.",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "가게·브랜드 (루트)",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "봅니다. 「이야기」에 적는 별명이 아니라, 그 별명을 붙이는",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "밤새 켜 두는 컴퓨터라면 꺼 두세요. 꺼도",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "하위는",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "이 컴퓨터가 털리면 재고뿐 아니라",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "{0}줄 중 {1}장 발행",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "가게를 아껴 주는 분이 생겼어요.",
+     "category": "game_ravi_marketing",
+     "grade": "C",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "저 컴퓨터 파일도 내가 들기",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "사진·엑셀은 이 컴퓨터에서 붙여 주세요. 만들기 화면에서 평소처럼 확인하고 발행해요.",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "만 적습니다. 칸이 많으면 안 적게 됩니다.",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "하나",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "{0}개 — {1}{2}",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "{0}: 받는 날과 마감일을 골라 주세요.",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "마지막 자동 정리: {0} · {1}명 정리",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "그림 만들기를 사장님께 물어봤습니다",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "이야기입니다 — 별명은 누구나 같게 달 수 있어서 그것으로는 같은 사람인지 알 수 없습니다.",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    }
+   ],
+   "not_in_catalog": [
+    "정보 · 오픈소스 고지",
+    "이 프로그램은 노드로 레이븐코인 코어(Ravencoin Core) v4.8.0 을 함께 씁니다. 레이븐코인 코어는 MIT 라이선스의 오픈소스입니다. 아래는 그 저작권 고지와 허가 문구 원문입니다.",
+    "민감한 화면 — 복구 단어",
+    "화면 보호 켜짐 · {0}초 뒤에 단어를 저절로 가려요",
+    "시간이 지나 단어를 가렸어요. 다시 보려면 지갑 암호를 넣어 주세요.",
+    "복사하지 마세요. 종이에 손으로 적어 주세요.",
+    "아직 보내지 않았어요 — 받는 사람·통화(RVN 또는 자산)·금액·수수료를 확인한 뒤 「보내기」를 누르세요.",
+    "지갑이 잠겨 있어요. 잠금을 푼 뒤 다시 해 주세요.",
+    "지갑이 잠긴 동안에는 금액 가리기·캡처 보호를 끌 수 없어요.",
+    "보내기 전 받는 주소를 다시 확인하세요."
+   ]
+  },
+  "es": {
+   "held_by_rule": [
+    {
+     "key": "내 이름이 아니에요. {0}(으)로 새로 등록할게요.",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "새로 적는 개인정보가 있어요. 회원에게 동의를 받았는지 확인해 주세요.",
+     "category": "legal",
+     "grade": "B",
+     "reason": "critical-no-consensus",
+     "status": "machine-only"
+    },
+    {
+     "key": "{0}명 · 한 사람에 한 장씩 {0}장을 만들어요.",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "김하늘\n이바다",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "열 다시 맞추기",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "네트워크에 기록되면(보통 1~2분) 완료돼요. 보낸 것은 되돌릴 수 없어요.",
+     "category": "money_security",
+     "grade": "A",
+     "reason": "hold",
+     "status": "hold"
+    },
+    {
+     "key": "받는 사람은 {0}명까지 적을 수 있어요 — 만든 장수만큼이에요.",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "위의",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "체인에 보낸 송금은 되돌릴 수 없어요. 주문 취소·환불은 가게의 주문 화면에서 확인하고 직접 승인해 주세요.",
+     "category": "money_security",
+     "grade": "A",
+     "reason": "hold",
+     "status": "hold"
+    },
+    {
+     "key": "아니요. 한 번 보낸 것은 누구도 되돌릴 수 없어요 — 이 앱도, 레이븐코인도요.",
+     "category": "money_security",
+     "grade": "A",
+     "reason": "hold",
+     "status": "hold"
+    },
+    {
+     "key": "지금 쓸 곳",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "공개 장부에는",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "거절된 것",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "회원권과 출입 기록은 남습니다. 보관기간이 지난 개인정보는 자동 삭제됩니다.",
+     "category": "legal",
+     "grade": "B",
+     "reason": "critical-no-consensus",
+     "status": "machine-only"
+    },
+    {
+     "key": "— {이름}·{과정} 은 줄마다 바뀌어 들어가요",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "됩니다.",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "{0}줄 중 {1}장 발행",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "agree",
+     "category": "legal",
+     "grade": "B",
+     "reason": "critical-no-consensus",
+     "status": "machine-only"
+    },
+    {
+     "key": "settings",
+     "category": "legal",
+     "grade": "B",
+     "reason": "critical-no-consensus",
+     "status": "machine-only"
+    }
+   ],
+   "not_in_catalog": [
+    "정보 · 오픈소스 고지",
+    "이 프로그램은 노드로 레이븐코인 코어(Ravencoin Core) v4.8.0 을 함께 씁니다. 레이븐코인 코어는 MIT 라이선스의 오픈소스입니다. 아래는 그 저작권 고지와 허가 문구 원문입니다.",
+    "민감한 화면 — 복구 단어",
+    "화면 보호 켜짐 · {0}초 뒤에 단어를 저절로 가려요",
+    "시간이 지나 단어를 가렸어요. 다시 보려면 지갑 암호를 넣어 주세요.",
+    "복사하지 마세요. 종이에 손으로 적어 주세요.",
+    "아직 보내지 않았어요 — 받는 사람·통화(RVN 또는 자산)·금액·수수료를 확인한 뒤 「보내기」를 누르세요.",
+    "지갑이 잠겨 있어요. 잠금을 푼 뒤 다시 해 주세요.",
+    "지갑이 잠긴 동안에는 금액 가리기·캡처 보호를 끌 수 없어요.",
+    "보내기 전 받는 주소를 다시 확인하세요."
+   ]
+  },
+  "fr": {
+   "held_by_rule": [
+    {
+     "key": "내 이름이 아니에요. {0}(으)로 새로 등록할게요.",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "새로 적는 개인정보가 있어요. 회원에게 동의를 받았는지 확인해 주세요.",
+     "category": "legal",
+     "grade": "B",
+     "reason": "critical-no-consensus",
+     "status": "machine-only"
+    },
+    {
+     "key": "김하늘\n이바다",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "트레이에 두기",
+     "category": "game_ravi_marketing",
+     "grade": "C",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "열 다시 맞추기",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "장사에 쓰기",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "네트워크에 기록되면(보통 1~2분) 완료돼요. 보낸 것은 되돌릴 수 없어요.",
+     "category": "money_security",
+     "grade": "A",
+     "reason": "hold",
+     "status": "hold"
+    },
+    {
+     "key": "체인에 보낸 송금은 되돌릴 수 없어요. 주문 취소·환불은 가게의 주문 화면에서 확인하고 직접 승인해 주세요.",
+     "category": "money_security",
+     "grade": "A",
+     "reason": "hold",
+     "status": "hold"
+    },
+    {
+     "key": "아니요. 한 번 보낸 것은 누구도 되돌릴 수 없어요 — 이 앱도, 레이븐코인도요.",
+     "category": "money_security",
+     "grade": "A",
+     "reason": "hold",
+     "status": "hold"
+    },
+    {
+     "key": "무엇으로 줄까요",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "지금 쓸 곳",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "공개 장부에는",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "회원권과 출입 기록은 남습니다. 보관기간이 지난 개인정보는 자동 삭제됩니다.",
+     "category": "legal",
+     "grade": "B",
+     "reason": "critical-no-consensus",
+     "status": "machine-only"
+    },
+    {
+     "key": "— {이름}·{과정} 은 줄마다 바뀌어 들어가요",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "주인 표가 있는 주소를 확인하지 못해, 서버가 새 거스름 주소로 옮겼을 수 있어요. 지갑 화면 「내 주인 표」에서 지금 주소를 확인해 주세요.",
+     "category": "money_security",
+     "grade": "A",
+     "reason": "hold",
+     "status": "hold"
+    },
+    {
+     "key": "됩니다.",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "{0}줄 중 {1}장 발행",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "입니다.",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "으로 갑니다. 컴퓨터를 잃어버려도 거기 있는 돈은 무사합니다.",
+     "category": "money_security",
+     "grade": "A",
+     "reason": "hold",
+     "status": "hold"
+    },
+    {
+     "key": "에 두시면 찾아서 씁니다.",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "agree",
+     "category": "legal",
+     "grade": "B",
+     "reason": "critical-no-consensus",
+     "status": "machine-only"
+    },
+    {
+     "key": "settings",
+     "category": "legal",
+     "grade": "B",
+     "reason": "critical-no-consensus",
+     "status": "machine-only"
+    }
+   ],
+   "not_in_catalog": [
+    "정보 · 오픈소스 고지",
+    "이 프로그램은 노드로 레이븐코인 코어(Ravencoin Core) v4.8.0 을 함께 씁니다. 레이븐코인 코어는 MIT 라이선스의 오픈소스입니다. 아래는 그 저작권 고지와 허가 문구 원문입니다.",
+    "민감한 화면 — 복구 단어",
+    "화면 보호 켜짐 · {0}초 뒤에 단어를 저절로 가려요",
+    "시간이 지나 단어를 가렸어요. 다시 보려면 지갑 암호를 넣어 주세요.",
+    "복사하지 마세요. 종이에 손으로 적어 주세요.",
+    "아직 보내지 않았어요 — 받는 사람·통화(RVN 또는 자산)·금액·수수료를 확인한 뒤 「보내기」를 누르세요.",
+    "지갑이 잠겨 있어요. 잠금을 푼 뒤 다시 해 주세요.",
+    "지갑이 잠긴 동안에는 금액 가리기·캡처 보호를 끌 수 없어요.",
+    "보내기 전 받는 주소를 다시 확인하세요."
+   ]
+  },
+  "pt-BR": {
+   "held_by_rule": [
+    {
+     "key": "새로 적는 개인정보가 있어요. 회원에게 동의를 받았는지 확인해 주세요.",
+     "category": "legal",
+     "grade": "B",
+     "reason": "critical-no-consensus",
+     "status": "machine-only"
+    },
+    {
+     "key": "김하늘\n이바다",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "열 다시 맞추기",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "네트워크에 기록되면(보통 1~2분) 완료돼요. 보낸 것은 되돌릴 수 없어요.",
+     "category": "money_security",
+     "grade": "A",
+     "reason": "hold",
+     "status": "hold"
+    },
+    {
+     "key": "체인에 보낸 송금은 되돌릴 수 없어요. 주문 취소·환불은 가게의 주문 화면에서 확인하고 직접 승인해 주세요.",
+     "category": "money_security",
+     "grade": "A",
+     "reason": "hold",
+     "status": "hold"
+    },
+    {
+     "key": "아니요. 한 번 보낸 것은 누구도 되돌릴 수 없어요 — 이 앱도, 레이븐코인도요.",
+     "category": "money_security",
+     "grade": "A",
+     "reason": "hold",
+     "status": "hold"
+    },
+    {
+     "key": "지금 쓸 곳",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "거절된 것",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "회원권과 출입 기록은 남습니다. 보관기간이 지난 개인정보는 자동 삭제됩니다.",
+     "category": "legal",
+     "grade": "B",
+     "reason": "critical-no-consensus",
+     "status": "machine-only"
+    },
+    {
+     "key": "— {이름}·{과정} 은 줄마다 바뀌어 들어가요",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "{0}줄 중 {1}장 발행",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "에 두시면 찾아서 씁니다.",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "agree",
+     "category": "legal",
+     "grade": "B",
+     "reason": "critical-no-consensus",
+     "status": "machine-only"
+    },
+    {
+     "key": "settings",
+     "category": "legal",
+     "grade": "B",
+     "reason": "critical-no-consensus",
+     "status": "machine-only"
+    }
+   ],
+   "not_in_catalog": [
+    "정보 · 오픈소스 고지",
+    "이 프로그램은 노드로 레이븐코인 코어(Ravencoin Core) v4.8.0 을 함께 씁니다. 레이븐코인 코어는 MIT 라이선스의 오픈소스입니다. 아래는 그 저작권 고지와 허가 문구 원문입니다.",
+    "민감한 화면 — 복구 단어",
+    "화면 보호 켜짐 · {0}초 뒤에 단어를 저절로 가려요",
+    "시간이 지나 단어를 가렸어요. 다시 보려면 지갑 암호를 넣어 주세요.",
+    "복사하지 마세요. 종이에 손으로 적어 주세요.",
+    "아직 보내지 않았어요 — 받는 사람·통화(RVN 또는 자산)·금액·수수료를 확인한 뒤 「보내기」를 누르세요.",
+    "지갑이 잠겨 있어요. 잠금을 푼 뒤 다시 해 주세요.",
+    "지갑이 잠긴 동안에는 금액 가리기·캡처 보호를 끌 수 없어요.",
+    "보내기 전 받는 주소를 다시 확인하세요."
+   ]
+  },
+  "de": {
+   "held_by_rule": [
+    {
+     "key": "새로 적는 개인정보가 있어요. 회원에게 동의를 받았는지 확인해 주세요.",
+     "category": "legal",
+     "grade": "B",
+     "reason": "critical-no-consensus",
+     "status": "machine-only"
+    },
+    {
+     "key": "김하늘\n이바다",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "트레이에 두기",
+     "category": "game_ravi_marketing",
+     "grade": "C",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "열 다시 맞추기",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "무엇으로 줄까요",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "지금 쓸 곳",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "거절된 것",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "회원권과 출입 기록은 남습니다. 보관기간이 지난 개인정보는 자동 삭제됩니다.",
+     "category": "legal",
+     "grade": "B",
+     "reason": "critical-no-consensus",
+     "status": "machine-only"
+    },
+    {
+     "key": "— {이름}·{과정} 은 줄마다 바뀌어 들어가요",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "{0}줄 중 {1}장 발행",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "에 두시면 찾아서 씁니다.",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "agree",
+     "category": "legal",
+     "grade": "B",
+     "reason": "critical-no-consensus",
+     "status": "machine-only"
+    },
+    {
+     "key": "settings",
+     "category": "legal",
+     "grade": "B",
+     "reason": "critical-no-consensus",
+     "status": "machine-only"
+    }
+   ],
+   "not_in_catalog": [
+    "정보 · 오픈소스 고지",
+    "이 프로그램은 노드로 레이븐코인 코어(Ravencoin Core) v4.8.0 을 함께 씁니다. 레이븐코인 코어는 MIT 라이선스의 오픈소스입니다. 아래는 그 저작권 고지와 허가 문구 원문입니다.",
+    "민감한 화면 — 복구 단어",
+    "화면 보호 켜짐 · {0}초 뒤에 단어를 저절로 가려요",
+    "시간이 지나 단어를 가렸어요. 다시 보려면 지갑 암호를 넣어 주세요.",
+    "복사하지 마세요. 종이에 손으로 적어 주세요.",
+    "아직 보내지 않았어요 — 받는 사람·통화(RVN 또는 자산)·금액·수수료를 확인한 뒤 「보내기」를 누르세요.",
+    "지갑이 잠겨 있어요. 잠금을 푼 뒤 다시 해 주세요.",
+    "지갑이 잠긴 동안에는 금액 가리기·캡처 보호를 끌 수 없어요.",
+    "보내기 전 받는 주소를 다시 확인하세요."
+   ]
+  },
+  "ru": {
+   "held_by_rule": [
+    {
+     "key": "새로 적는 개인정보가 있어요. 회원에게 동의를 받았는지 확인해 주세요.",
+     "category": "legal",
+     "grade": "B",
+     "reason": "critical-no-consensus",
+     "status": "machine-only"
+    },
+    {
+     "key": "김하늘\n이바다",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "이 컴퓨터, 가게에만 쓰시나요?",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "나머지 {0}장은 안 나갔어요{1}. 이미 만든 줄은 다시 만들지 않아요.",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "열림 시간(초)",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "열 다시 맞추기",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "무엇으로 줄까요",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "지금 쓸 곳",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "회원권과 출입 기록은 남습니다. 보관기간이 지난 개인정보는 자동 삭제됩니다.",
+     "category": "legal",
+     "grade": "B",
+     "reason": "critical-no-consensus",
+     "status": "machine-only"
+    },
+    {
+     "key": "— {이름}·{과정} 은 줄마다 바뀌어 들어가요",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "에 두시면 찾아서 씁니다.",
+     "category": "general_ui",
+     "grade": "B",
+     "reason": "flagged",
+     "status": "flagged"
+    },
+    {
+     "key": "agree",
+     "category": "legal",
+     "grade": "B",
+     "reason": "critical-no-consensus",
+     "status": "machine-only"
+    },
+    {
+     "key": "settings",
+     "category": "legal",
+     "grade": "B",
+     "reason": "critical-no-consensus",
+     "status": "machine-only"
+    }
+   ],
+   "not_in_catalog": [
+    "정보 · 오픈소스 고지",
+    "이 프로그램은 노드로 레이븐코인 코어(Ravencoin Core) v4.8.0 을 함께 씁니다. 레이븐코인 코어는 MIT 라이선스의 오픈소스입니다. 아래는 그 저작권 고지와 허가 문구 원문입니다.",
+    "민감한 화면 — 복구 단어",
+    "화면 보호 켜짐 · {0}초 뒤에 단어를 저절로 가려요",
+    "시간이 지나 단어를 가렸어요. 다시 보려면 지갑 암호를 넣어 주세요.",
+    "복사하지 마세요. 종이에 손으로 적어 주세요.",
+    "아직 보내지 않았어요 — 받는 사람·통화(RVN 또는 자산)·금액·수수료를 확인한 뒤 「보내기」를 누르세요.",
+    "지갑이 잠겨 있어요. 잠금을 푼 뒤 다시 해 주세요.",
+    "지갑이 잠긴 동안에는 금액 가리기·캡처 보호를 끌 수 없어요.",
+    "보내기 전 받는 주소를 다시 확인하세요."
+   ]
+  }
+ }
+}
