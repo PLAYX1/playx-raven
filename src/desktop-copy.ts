@@ -1457,6 +1457,7 @@ export const DESKTOP_COPY: Record<string, [string, string, string]> = {
   "처음 켜거나 다시 설치한 뒤에는 30분~1시간 넘게 걸릴 수 있어요. 컴퓨터를 끄지 말고 이 앱을 켜 두세요. 끝나면 잔액이 나옵니다.": ["The first start, or one after reinstalling, can take 30 minutes to over an hour. Keep the computer on and this app open. Your balance appears when it finishes.", "初回の起動や再インストール後は、30分から1時間以上かかることがあります。パソコンの電源を切らず、このアプリを開いたままにしてください。終わると残高が表示されます。", "首次启动或重新安装后，可能需要 30 分钟到一个多小时。请不要关闭电脑，并保持此应用打开。完成后会显示余额。"],
   "시작하는 중": ["Starting", "起動中", "启动中"],
   "서버가 시작되면 나와요": ["Shown once the server starts", "サーバーの起動後に表示されます", "服务器启动后显示"],
+  "서버 문제로 보여서 노드 기록을 같이 보내도록 켰어요. 보낼 내용은 아래에서 볼 수 있고, 원치 않으면 끄세요.": ["It looks like a server problem, so the node log is switched on to be sent with your report. You can see exactly what will be sent below, and turn it off if you prefer.", "サーバーの問題のようなので、ノードの記録を一緒に送る設定にしました。送る内容は下で確認でき、不要ならオフにできます。", "这看起来是服务器问题，所以已开启随报告发送节点记录。下方可以看到将发送的内容，不需要可以关闭。"],
   "장사로 바꿨습니다.": ["Switched to business mode.", "営業モードに切り替えました。", "已切换到营业模式。"],
   "재는 중…": ["Measuring…", "計測中…", "测量中…"],
   "재는 중… (20초)": ["Measuring… (20 sec)", "計測中…（20秒）", "测量中…（20秒）"],

@@ -63,7 +63,23 @@ try {
   while (SENT.length < 2) await new Promise(r => setTimeout(r, 100));
   sent = SENT[1];
   assert.equal(sent.attachLog, false);
+  // 서버 얘기를 쓰면 기록이 켜지고 이유 안내가 뜬다. 사용자가 끄면 더 쓰는 글에도 다시 켜지 않는다.
+  await page.evaluate(() => document.getElementById('rp-open').click());
+  await page.waitForFunction(() => document.getElementById('rpwrap').style.display === 'flex', { polling: 100 });
+  assert.equal(await page.$eval('#rp-log', e => e.checked), false, '열 때는 꺼짐');
+  assert.equal(await page.$eval('#rp-log-hint', e => e.hidden), true, '안내 숨김');
+  await page.type('#rp-text', '서버 연결이 안 돼요');
+  assert.equal(await page.$eval('#rp-log', e => e.checked), true, '서버 얘기 → 기록 켜짐');
+  assert.equal(await page.$eval('#rp-log-hint', e => e.hidden), false, '이유 안내 보임');
+  await page.waitForFunction(() => /<사용자>/.test(document.getElementById('rp-log-pre').textContent), { polling: 100 });
+  await page.click('#rp-log');
+  assert.equal(await page.$eval('#rp-log', e => e.checked), false, '사용자가 끔');
+  await page.type('#rp-text', ' 노드도 이상해요');
+  assert.equal(await page.$eval('#rp-log', e => e.checked), false, '끈 뒤에는 다시 켜지 않음');
+  await page.click('#rp-send');
+  while (SENT.length < 3) await new Promise(r => setTimeout(r, 100));
+  assert.equal(SENT[2].attachLog, false);
   errors = errors.filter(m => !/reading 'node'/.test(m));
   assert.deepEqual(errors, [], '화면 오류 없음: ' + errors.join('|'));
-  console.log('PASS 노드 기록 첨부 화면: 기본 꺼짐·미리보기·install-run 자동 켜짐·끄면 안 보냄');
+  console.log('PASS 노드 기록 첨부 화면: 기본 꺼짐·미리보기·install-run 자동 켜짐·끄면 안 보냄·서버 얘기를 쓰면 켜짐(끈 뒤엔 유지)');
 } finally { await browser?.close(); rmSync(profile, { recursive: true, force: true }); }

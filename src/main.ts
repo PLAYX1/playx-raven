@@ -2765,6 +2765,9 @@ function rpScreen(): string {
 }
 
 let rpPick: [string, string] | null = null;
+/** 글에 서버·노드 얘기가 있으면 노드 기록이 원인 찾기에 필요하다. 사용자가 직접 켜거나 끈 뒤에는 건드리지 않는다. */
+const RP_SERVER_WORDS = /서버|노드|안\s*켜|켜지지|연결|동기화|잔액|블록|장부/;
+let rpLogTouched = false;
 
 function openReport(prefill = "", opts: { category?: string; attachLog?: boolean } = {}) {
   if (deferUntilRaviLanding(() => openReport(prefill, opts))) return;
@@ -2790,7 +2793,19 @@ function openReport(prefill = "", opts: { category?: string; attachLog?: boolean
   // 기록은 기본 꺼짐. 몰래 담지 않는다.
   const logBox = document.getElementById("rp-log") as HTMLInputElement;
   logBox.checked = !!opts.attachLog;
-  logBox.onchange = () => { rpWhat(); rpLogRefresh(); };
+  rpLogTouched = false;
+  const logHint = document.getElementById("rp-log-hint") as HTMLElement;
+  logHint.hidden = true;
+  logBox.onchange = () => { rpLogTouched = true; logHint.hidden = true; rpWhat(); rpLogRefresh(); };
+  // 서버 얘기를 쓰면 기록을 같이 보내도록 켠다 — 화면에 보이고 끌 수 있고, 보낼 글자는 아래에서 그대로 본다.
+  text.oninput = () => {
+    if (rpLogTouched || logBox.checked || !RP_SERVER_WORDS.test(text.value)) return;
+    logBox.checked = true;
+    logHint.textContent = t("서버 문제로 보여서 노드 기록을 같이 보내도록 켰어요. 보낼 내용은 아래에서 볼 수 있고, 원치 않으면 끄세요.");
+    logHint.hidden = false;
+    rpWhat();
+    rpLogRefresh();
+  };
   (document.getElementById("rp-log-view") as HTMLElement).onclick = () => void rpLogShow(true);
   document.getElementById("rp-log-pre")!.style.display = "none";
   if (opts.category) {
