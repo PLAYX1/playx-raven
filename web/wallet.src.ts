@@ -16,7 +16,7 @@ import { rvn, toBitcoinJS } from "@hyperbitjs/chains";
 import RavencoinKey from "@ravenrebels/ravencoin-key";
 import { sign } from "@ravenrebels/ravencoin-sign-transaction";
 import { wordlists } from "bip39";
-import { signEvent, KIND_LISTING, type NostrEvent } from "./nostr";
+import { signEvent, KIND_LISTING, withoutDeleted, type NostrEvent } from "./nostr";
 import * as nip17 from "./nip17";
 import { schnorr } from "@noble/curves/secp256k1";
 import { bytesToHex } from "@noble/hashes/utils";
@@ -1882,6 +1882,16 @@ async function loadMine(): Promise<void> {
     }).then((x) => x.json());
     if (r?.error) throw new Error(r.error);
     events = (r?.events || []) as NostrEvent[];
+    // 내가 지워 달라고 한 글은 릴레이가 안 들어줘도 내 목록에서 뺀다.
+    // (못 읽으면 거르지 않는다 — 있는 글을 없다고 하는 쪽이 더 나쁘다.)
+    try {
+      const dr = await fetch("/api/nostr/query", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ filter: { kinds: [5], authors: [nostrPubHex()] } }),
+      }).then((x) => x.json());
+      events = withoutDeleted(events, (dr?.events || []) as NostrEvent[]);
+    } catch { /* 위 이유 */ }
   } catch (e) {
     // 못 읽은 것과 없는 것은 다르다. 있는 사람에게 없다고 말하지 않는다.
     box.innerHTML = `<p class="sub">목록을 못 불러왔습니다. ${escapeHtml(
@@ -2018,6 +2028,7 @@ async function removeListing(e: NostrEvent | undefined): Promise<void> {
       tags: [
         ["e", e.id],
         ["a", `${KIND_LISTING}:${e.pubkey}:${tagOf(e, "d")}`],
+        ["k", String(KIND_LISTING)],
       ],
       content: "판매자가 내렸습니다.",
     });

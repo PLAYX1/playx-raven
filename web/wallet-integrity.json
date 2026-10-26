@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "sourceDigest": "00f92f089057809e88a5b414cb74d4b1cada36620ac3876914b9d3c6fe260fc7",
+  "sourceDigest": "fc09c96bca957c2af5d4c0b4eb52ceea430473c881ef235dc68cd91824642d70",
   "assets": {
     "/report.js": "sha256-kclmeXlgNnGZjRUnPwPSPZNmJmxQk4xBEauLQk45Mng=",
     "/i18n.js": "sha256-3KyMC03UMtOPGKfzFmUhBhU1PpPOPh1H/dZ5Hlv8LKo=",
     "/shop-seal.bundle.js": "sha256-8YfknBGrxoEHi2TaCTmjIdMZ95Tzpk9gtOMb8lpb93M=",
-    "/wallet.bundle.js": "sha256-2iJgi7hzAO+Ga5Ljrxs7beNm5LZfam+MxXd81wIi3Gs=",
+    "/wallet.bundle.js": "sha256-MWRQaa4uimHaDrGjO9ZzLtF0Y73ZkobEbuB0ZHz8k/A=",
     "/help.js": "sha256-xL/s6KdQBONiDbcek/JfxDWoggMMLmA6iZJ24WD8M+8=",
     "/wallet-boot.js": "sha256-YhOWdIhS7rotFBeky33puY8wny4ammo1Vg1rqTGW9s8="
   }

@@ -3,7 +3,7 @@
 //! 가게는 체인에서, 물건은 Nostr 에서 온다. 손님에게는 둘 다 "여기서 살 수
 //! 있는 것" 이므로 한 화면에 둔다 — 어디에 저장되는지는 우리 사정이다.
 
-import { query, tag, KIND_LISTING, type NostrEvent } from "./nostr";
+import { query, tag, KIND_LISTING, withoutDeleted, type NostrEvent } from "./nostr";
 
 /**
  * geohash → 대략의 위도·경도.
@@ -700,7 +700,12 @@ async function loadItems(): Promise<void> {
     me = await myPlace();
     // 값을 RVN 으로 바꿔야 「이 물건 사기」가 그려진다. 목록과 같이 가져온다.
     await Promise.all([loadRate("KRW"), loadRate("USD")]);
-    const evs = await query({ kinds: [KIND_LISTING], limit: 200 }, { ms: 8000 });
+    // 지움 요청(kind 5)도 같이 읽는다. 릴레이가 안 들어줘도 우리 화면이 거른다.
+    const [listed, deletions] = await Promise.all([
+      query({ kinds: [KIND_LISTING], limit: 200 }, { ms: 8000 }),
+      query({ kinds: [5], limit: 500 }, { ms: 8000 }),
+    ]);
+    const evs = withoutDeleted(listed, deletions);
 
     // 🔴 여태 **공개 릴레이의 모든 글**을 그대로 보여 줬다. 화면이 남의
     // 나라 자전거와 `180,000 sats`(비트코인 단위)로 가득했다 — 40~70대에게는

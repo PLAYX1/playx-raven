@@ -210,3 +210,39 @@ export function publish(
     }
   });
 }
+
+
+/**
+ * 판매자가 지워 달라고 한(kind 5, NIP-09) 글을 목록에서 뺀다.
+ *
+ * 🔴 릴레이가 지움 요청을 안 들어주면 지운 글이 계속 돌아온다 —
+ * 「내가 쓴 글 삭제가 안 된다」 신고(2026-08-31)가 이것이다. 그래서
+ * 릴레이를 믿지 않고 **지움 요청 자체를 읽어서** 우리 화면이 거른다.
+ *
+ * 규칙(NIP-09):
+ * - 지움 요청은 **같은 사람의 글**에만 듣는다. 남의 글을 지우는 척하는
+ *   요청은 무시한다.
+ * - `e` 태그는 그 글 하나, `a` 태그(kind:pubkey:d)는 그 요청 시각 **이전까지의**
+ *   모든 판. 요청 뒤에 다시 올린 글은 살린다.
+ */
+export function withoutDeleted(listings: NostrEvent[], deletions: NostrEvent[]): NostrEvent[] {
+  const ids = new Set<string>();
+  const coords = new Map<string, number>();
+  for (const d of deletions) {
+    if (d.kind !== 5) continue;
+    for (const t of d.tags) {
+      if (t[0] === "e" && t[1]) ids.add(`${d.pubkey}:${t[1]}`);
+      if (t[0] === "a" && t[1]) {
+        const [k, pk] = t[1].split(":");
+        if (pk !== d.pubkey || k !== String(KIND_LISTING)) continue;
+        coords.set(t[1], Math.max(coords.get(t[1]) ?? 0, d.created_at));
+      }
+    }
+  }
+  return listings.filter((e) => {
+    if (ids.has(`${e.pubkey}:${e.id}`)) return false;
+    const dt = e.tags.find((t) => t[0] === "d")?.[1] ?? "";
+    const at = coords.get(`${KIND_LISTING}:${e.pubkey}:${dt}`);
+    return !(at != null && e.created_at <= at);
+  });
+}
