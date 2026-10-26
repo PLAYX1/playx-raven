@@ -11,6 +11,7 @@
 - **노드 현황 사이트(ravencoin-nodes)에 이 서버가 잡히도록 바깥 접속(UPnP)을 처음 한 번 자동으로 켭니다.** 공유기가 UPnP 를 지원하면 TCP 8767 이 열립니다. 지갑 열쇠·송금 권한은 이 길로 나가지 않습니다. 설정 「바깥 접속 자동으로 열기」에서 끄실 수 있고, 한 번 정한 값은 다시 바꾸지 않습니다. 켠 뒤 서버를 다시 시작해야 적용되며 현황 사이트에는 하루쯤 뒤에 나타납니다.
 - 라비가 「내 노드가 현황 사이트에 안 보여요」라고 물으면 바깥 접속·포트 열기·기다리는 시간·공유 IP 같은 이유를 안내합니다.
 - 장터에서 지운 글이 계속 보이던 문제를 고쳤습니다(웹).
+- 라비가 더 많은 일을 거듭니다: 바깥 접속·서버 설정·공동구매 현황을 읽어 설명하고, 「서버 켜 줘/꺼 줘/다시 시작」과 「바깥 접속 켜 줘·연결 수·메모리 바꿔 줘」를 **준비**합니다. 준비한 뒤에는 확인 단추를 눌러야만 실행됩니다. 바꿀 수 있는 설정은 바깥 접속·최대 연결 수·메모리 셋뿐이고, 송금 실행·열쇠·12단어는 여전히 못 만집니다. 「이야기」 화면도 열어 줍니다.
 
 ### English
 
@@ -21,6 +22,7 @@
 - **To get this server listed on the node status site, outside access (UPnP) is turned on once automatically.** If your router supports UPnP, TCP 8767 opens. Wallet keys and spending rights never travel on this path. You can turn it off in Settings; a choice you made is never overridden. Restart the server to apply; the status site may take about a day to list it.
 - Ravi now explains why a node may not appear on the status site (outside access, port forwarding, waiting time, shared IP).
 - Fixes deleted market posts that kept showing (web).
+- Ravi can do more: it reads outside access, server settings and group-buy status, and **prepares** "start/stop/restart the server" and "turn on outside access / set max connections / memory". Nothing runs until you press the confirm button. Only those three settings can be changed; sending money, keys and the recovery words stay off limits. It can also open the Talk screen.
 
 ## 0.9.5
 
