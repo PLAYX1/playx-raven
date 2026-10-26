@@ -5765,6 +5765,8 @@ async function doKeyMove(p: any) {
 
 let tkRoom = "";
 let tkMine = "";
+/** 지금 답장하려는 글. 입력칸 위에 「누구에게」를 보여 주고, 보내면 비운다. 방을 옮기면 버린다. */
+let tkReply: { id: string; pub: string; room: string; who: string; snip: string } | null = null;
 /** 공개키 → 이름표. 없는 사람은 여기 없다 — **없는 이름을 지어내지 않는다.** */
 const tkNames = new Map<string, any>();
 
@@ -6462,12 +6464,57 @@ function tkWatchPics(box: HTMLElement) {
  *    릴레이에 남는 것은 원문이고, 번역은 읽기 위한 보조다. 번역 서버가
  *    죽어도 대화는 그대로 보여야 한다.
  */
+/** 글 한 줄 미리보기(사진 주소·줄바꿈 정리). */
+function tkSnip(text: string, max = 30): string {
+  const one = String(text || "").replace(/\s+/g, " ").trim();
+  return Array.from(one).slice(0, max).join("") + (Array.from(one).length > max ? "…" : "");
+}
+
+/** 이름 글자(태그 없이). 이름을 안 정했으면 열쇠 앞자리. */
+function tkNameText(pk: string): string {
+  const n = String(tkNames.get(pk)?.name || "").trim();
+  return n || pk.slice(0, 8);
+}
+
+/** 이 글이 답글이면 가리키는 글의 id(`reply` 표 → 없으면 첫 `e` 표). 방 글이 아니라 **글**을 가리킨 것만. */
+function tkParentOf(e: any, roomId: string): string {
+  const tags: any[] = Array.isArray(e?.tags) ? e.tags : [];
+  const es = tags.filter((x) => Array.isArray(x) && x[0] === "e" && typeof x[1] === "string");
+  const marked = es.find((x) => x[3] === "reply");
+  if (marked) return String(marked[1]);
+  // 옛 글: 표가 하나뿐이고 그게 방이면 답글이 아니다.
+  const first = es[0];
+  return first && String(first[1]) !== roomId && first[3] !== "root" ? String(first[1]) : "";
+}
+
+/** 이 글이 나(`tkMine`)에게 온 답인가 — `p` 표에 내 열쇠가 있고 가리키는 글이 있을 때. */
+function tkIsReplyToMe(e: any): boolean {
+  const tags: any[] = Array.isArray(e?.tags) ? e.tags : [];
+  return !!tkMine && tags.some((x) => Array.isArray(x) && x[0] === "p" && x[1] === tkMine);
+}
+
+function tkPaintReplyBar() {
+  const bar = document.getElementById("tk-replybar");
+  const label = document.getElementById("tk-replytext");
+  if (!bar || !label) return;
+  if (!tkReply) { bar.hidden = true; label.textContent = ""; return; }
+  label.textContent = tf("{0}에게 답장 · {1}", tkReply.who, tkReply.snip);
+  bar.hidden = false;
+}
+
+function tkSetReply(r: typeof tkReply) {
+  tkReply = r;
+  tkPaintReplyBar();
+  if (r) (document.getElementById("tk-text") as HTMLTextAreaElement | null)?.focus();
+}
+
 async function talkPaint() {
   const box = $("tk-list");
   // ⚠️ 어느 방을 읽는지 **여기서 붙잡아 둔다.** 릴레이가 답하는 사이에
   //    사장이 다른 방을 누르면 `tkRoom` 이 바뀌어, 아래에서 이 목록을
   //    엉뚱한 방의 것으로 세게 된다.
   const 읽은방 = tkRoom;
+  if (tkReply && tkReply.room !== 읽은방) tkSetReply(null);
   const wasAtBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80 || !box.dataset.loaded;
   const previousTop = box.scrollTop;
   if (!box.dataset.loaded) box.innerHTML = `<div class="meta" style="margin:auto">${copyHtml("세계 릴레이에서 읽는 중…")}</div>`;
@@ -6566,16 +6613,28 @@ async function talkPaint() {
             ? `<p class="moneywarn">${copyHtml("돈·주소가 적힌 글입니다. 이름은 누구나 같게 달 수 있으니, 보내기 전에 다른 길로 한 번 확인하세요.")}</p>`
             : "";
 
+        // 답글이면 어느 글에 대한 답인지 한 줄로. 가리키는 글이 지금 목록에 없으면 이름 없이 말만 한다.
+        const 부모id = tkParentOf(e, 읽은방);
+        const 부모 = 부모id ? asc.find((x) => String(x.id || "") === 부모id) ?? all.find((x) => String(x.id || "") === 부모id) : null;
+        const 인용 = 부모id
+          ? `<div class="replyquote${tkIsReplyToMe(e) && !mine ? " tome" : ""}">↪ ${
+              부모
+                ? `${escapeHtml(tkNameText(String(부모.pubkey || "")))} · ${escapeHtml(tkSnip(String(부모.content || ""), 28))}`
+                : copyHtml("이전 글에 대한 답장")
+            }</div>`
+          : "";
+
         return (
           day +
           head +
           `<div class="line${mine ? " me" : ""}">
-             <div class="bub${mine ? " me" : ""}" data-say="${id}"><span translate="no">${escapeHtml(본문)}</span>${pic ? tkPicHtml(pic) : ""}</div>
+             <div class="bub${mine ? " me" : ""}" data-say="${id}">${인용}<span translate="no">${escapeHtml(본문)}</span>${pic ? tkPicHtml(pic) : ""}</div>
              ${clock}
            </div>` +
           조심 +
           `
            <div class="bubacts${mine ? " r" : ""}" data-acts="${id}">
+             <button data-reply="${id}">${copyHtml("답장")}</button>
              <button data-tr="${id}">${copyHtml("내 말로")}</button>
              <button data-keep="${id}">${copyHtml("간직")}</button>` +
           // 내 글에는 안 붙인다. 나를 안 보기로 할 이유가 없고,
@@ -6617,6 +6676,16 @@ async function talkPaint() {
         box.querySelectorAll(".bubacts.on").forEach((x) => x.classList.remove("on"));
         // 같은 글을 다시 누르면 닫힌다 — 연 것을 못 닫으면 그것도 갇힌 것이다.
         if (acts && !이미열림) acts.classList.add("on");
+      };
+    });
+    box.querySelectorAll("[data-reply]").forEach((b) => {
+      (b as HTMLElement).onclick = () => {
+        const gid = String((b as HTMLElement).dataset.reply || "");
+        const target = list.find((x) => String(x.id || "") === gid);
+        if (!target) return;
+        const pub = String(target.pubkey || "");
+        tkSetReply({ id: gid, pub, room: 읽은방, who: tkNameText(pub), snip: tkSnip(String(target.content || "")) });
+        box.querySelectorAll(".bubacts.on").forEach((x) => x.classList.remove("on"));
       };
     });
     box.querySelectorAll("[data-tr]").forEach((b) => {
@@ -6942,7 +7011,8 @@ async function talkSend() {
   box.style.height = "auto";
   $("tk-note").textContent = "";
   try {
-    await invoke("talk_post", { text, room: tkRoom || null });
+    await invoke("talk_post", { text, room: tkRoom || null, replyTo: tkReply?.id ?? null, replyPub: tkReply?.pub ?? null });
+    tkSetReply(null);
     // 또렷해진다. 「올렸습니다」 같은 알림은 안 띄운다 — 풍선이 곧 답이다.
     임시?.classList.remove("pending");
     const 시각 = 임시?.querySelector(".tstamp");
@@ -7021,9 +7091,10 @@ async function talkSendPhoto(text: string) {
       bytes: p.path ? null : (p.bytes ?? null),
       text,
       room: tkRoom || null,
-      replyTo: null,
-      replyPub: null,
+      replyTo: tkReply?.id ?? null,
+      replyPub: tkReply?.pub ?? null,
     });
+    tkSetReply(null);
     box.value = "";
     box.style.height = "auto";
     tkClearPhoto();
@@ -18888,6 +18959,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   // 이야기. 🔴 러스트만 만들고 이 다섯 줄을 안 쓰면 오늘 하루 종일 고친
   //    그 병이 그대로 반복된다.
   $("tk-send").addEventListener("click", () => void talkSend());
+  document.getElementById("tk-replyx")?.addEventListener("click", () => tkSetReply(null));
   $("tk-new-messages").addEventListener("click", () => {
     const list = $("tk-list");
     list.scrollTop = list.scrollHeight;

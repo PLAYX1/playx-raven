@@ -353,6 +353,17 @@
         color: var(--text); cursor: pointer; }
       /* 단추를 숨겼으면 **어떻게 꺼내는지 적어 둔다.** 숨긴 기능은 안 적으면
          없앤 기능이다 — 「내 말로」·「간직」은 이 앱만 하는 일이라 더 그렇다. */
+      /* 답장 — 입력칸 위의 「누구에게」 줄과, 말풍선 안의 인용 한 줄. */
+      .replybar { display: flex; gap: 8px; align-items: center; justify-content: space-between;
+        margin: 0 14px 6px; padding: 8px 12px; border-radius: 10px; font-size: 15px;
+        background: var(--bg); border: 1px solid var(--line); color: var(--text); }
+      .replybar[hidden] { display: none; }
+      .replybar span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .replybar button { min-height: 44px; min-width: 44px; border-radius: 10px; border: 1px solid var(--line);
+        background: var(--bg); color: var(--text); cursor: pointer; font-size: 15px; }
+      .replyquote { margin: 0 0 6px; padding: 4px 8px; border-left: 3px solid var(--line);
+        font-size: 13px; opacity: .8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .replyquote.tome { border-left-color: var(--accent, #7aa2ff); opacity: 1; }
       .talkhint { margin: 0; padding: 9px 14px 0; font-size: 15px;
         color: var(--muted); }
 
@@ -3353,6 +3364,7 @@
               <p class="meta">글을 <b>누르면</b> 「내 말로」·「간직」·「안 보기」
                 단추가 나옵니다. 사진은 아래 <b>「사진」</b> 단추로 고르거나
                 창에 <b>끌어다 놓으면</b> 됩니다.</p>
+              <p class="meta">「답장」을 누르면 그 글에 답으로 붙고, 상대에게 알림이 갑니다.</p>
             </div>
 
             <!-- 처음 세 번만. 🔴 한 번도 안 보이면 그건 없앤 것이고,
@@ -3462,6 +3474,11 @@
                 <div id="tk-photoprog" class="photoprog" hidden></div>
               </div>
               <button id="tk-photocancel">취소</button>
+            </div>
+
+            <div class="replybar" id="tk-replybar" hidden>
+              <span id="tk-replytext"></span>
+              <button id="tk-replyx" type="button" aria-label="답장 취소">✕</button>
             </div>
 
             <div class="composer">

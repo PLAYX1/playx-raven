@@ -352,6 +352,25 @@ pub fn recovery_status() -> Value {
     })
 }
 
+/// 답글에 붙는 표. 가리키는 글(`reply`)이 먼저이고, 방 글이면 방(`root`)도 단다(NIP-10).
+///
+/// 🔴 방 표(`root`)가 없으면 답글이 **방 화면에 안 뜬다** — 방 글은 방 id 를 가리키는
+///    `e` 표로 찾기 때문이다. 부모 글만 가리키면 쓴 사람 화면에서도 사라진다.
+/// 🔴 `p` 가 없으면 상대는 자기 글에 답이 달린 줄 모른다(세상 모든 Nostr 앱이 그 표로 알림을 만든다).
+fn reply_tags(room: &Option<String>, parent: &str, reply_pub: &Option<String>) -> Vec<Value> {
+    let mut t = vec![json!(["e", parent, "", "reply"])];
+    if let Some(r) = room {
+        if r != parent {
+            t.push(json!(["e", r, "", "root"]));
+        }
+    }
+    t.push(json!(["t", TAG]));
+    if let Some(pk) = reply_pub {
+        t.push(json!(["p", pk]));
+    }
+    t
+}
+
 /// 글을 쓴다. 방을 지정하면 그 방에, 아니면 모두에게.
 #[tauri::command]
 pub async fn talk_post(
@@ -391,17 +410,11 @@ pub async fn talk_post(
     //    상대는 자기 글에 답이 달린 줄 모른다 — 세상 모든 Nostr 앱이
     //    그 태그로 알림을 만든다.
     let (kind, tags) = match (&room, &reply_to) {
-        (_, Some(id)) => {
-            let mut t = vec![json!(["e", id, "", "reply"]), json!(["t", TAG])];
-            if let Some(pk) = &reply_pub {
-                t.push(json!(["p", pk]));
-            }
+        (_, Some(id)) => (
             // 방 안의 답글은 방 글이고, 밖의 답글은 그냥 글이다.
-            (
-                if room.is_some() { KIND_ROOM_MSG } else { KIND_NOTE },
-                Value::Array(t),
-            )
-        }
+            if room.is_some() { KIND_ROOM_MSG } else { KIND_NOTE },
+            Value::Array(reply_tags(&room, id, &reply_pub)),
+        ),
         (Some(id), None) => (KIND_ROOM_MSG, json!([["e", id, "", "root"], ["t", TAG]])),
         (None, None) => (KIND_NOTE, json!([["t", TAG]])),
     };
@@ -702,15 +715,9 @@ pub async fn talk_photo_post(
     ]);
     let (kind, tags) = match (&room, &reply_to) {
         (_, Some(id)) => {
-            let mut t = vec![
-                json!(["e", id, "", "reply"]),
-                json!(["t", TAG]),
-                imeta,
-                json!(["ipfs", cid]),
-            ];
-            if let Some(pk) = &reply_pub {
-                t.push(json!(["p", pk]));
-            }
+            let mut t = reply_tags(&room, id, &reply_pub);
+            t.push(imeta);
+            t.push(json!(["ipfs", cid]));
             (
                 if room.is_some() { KIND_ROOM_MSG } else { KIND_NOTE },
                 Value::Array(t),
@@ -974,9 +981,13 @@ pub async fn talk_replies(ids: Vec<String>) -> Result<Value, String> {
         let Some(tags) = e.get("tags").and_then(Value::as_array) else {
             continue;
         };
+        // 방 표(`root`)가 앞에 올 수 있어서, 가리키는 글은 `reply` 표를 먼저 찾는다.
+        let is_e = |t: &&Value| t.get(0).and_then(Value::as_str) == Some("e");
         let Some(parent) = tags
             .iter()
-            .find(|t| t.get(0).and_then(Value::as_str) == Some("e"))
+            .filter(is_e)
+            .find(|t| t.get(3).and_then(Value::as_str) == Some("reply"))
+            .or_else(|| tags.iter().find(is_e))
             .and_then(|t| t.get(1).and_then(Value::as_str))
         else {
             continue;
@@ -2057,4 +2068,22 @@ mod room_meta_tests {
         assert!(!body.contains("talk_rooms()"), "글 하나 쓸 때마다 수정 글까지 묻는다");
         assert!(body.contains("&[]"), "자산을 수정 글 없이 읽어야 한다");
     }
+
+    #[test]
+    fn reply_tags_point_to_parent_and_keep_the_room() {
+        let tags = reply_tags(&Some("room1".into()), "parent1", &Some("pk1".into()));
+        // 가리키는 글이 먼저, 방(root)이 따라온다 — 방 화면이 이 답글을 찾을 수 있어야 한다.
+        assert_eq!(tags[0], json!(["e", "parent1", "", "reply"]));
+        assert!(tags.contains(&json!(["e", "room1", "", "root"])));
+        assert!(tags.contains(&json!(["p", "pk1"])));
+        assert!(tags.contains(&json!(["t", TAG])));
+        // 방 밖의 답글에는 root 가 없다.
+        let plain = reply_tags(&None, "parent1", &None);
+        assert!(!plain.iter().any(|t| t[3] == json!("root")));
+        assert!(!plain.iter().any(|t| t[0] == json!("p")));
+        // 방 글 자체에 다는 답이면 같은 표를 두 번 달지 않는다.
+        let same = reply_tags(&Some("room1".into()), "room1", &None);
+        assert_eq!(same.iter().filter(|t| t[0] == json!("e")).count(), 1);
+    }
+
 }
