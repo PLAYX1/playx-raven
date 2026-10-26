@@ -2139,6 +2139,18 @@ function isWarming(err: unknown): boolean {
   );
 }
 
+/** 시작하는 중이면 지금 어느 단계인지(사람 말). 모르면 빈 글. */
+function warmPhase(msg: string): string {
+  if (/Loading block index/i.test(msg)) return "블록 목록을 읽는 중";
+  if (/Verifying/i.test(msg)) return "블록을 확인하는 중";
+  if (/Rewinding|Activating/i.test(msg)) return "장부를 정리하는 중";
+  if (/Loading wallet/i.test(msg)) return "지갑을 여는 중";
+  return "";
+}
+
+/** 「시작하는 중」 화면이 처음 뜬 때(ms). 시작이 끝나면 null — 「켜진 지 몇 분째」를 보여 주려는 것. */
+let warmSince: number | null = null;
+
 /** 표시등이 「시작하는 중」을 아는가. 라비도 이 값을 본다. */
 let nodeWarming = false;
 
@@ -2596,13 +2608,15 @@ async function refreshOverview() {
   const [node, wallet] = await Promise.allSettled([invoke<any>("node_status"), invoke<any>("wallet_balance")]);
   const n = node.status === "fulfilled" ? node.value : null;
   const progress = n?.progress;
+  // 시작하는 중이면 「확인 못 함」이 아니라 지금 상태를 말한다 — 노드는 살아 있고 장부를 읽는 중이다.
+  const warming = node.status === "rejected" && isWarming(node.reason);
   setCopyText($("overview-node"), () => n && typeof progress === "number" && Number.isFinite(progress)
     ? progress < 0.9999 ? `${t("동기화")} ${Math.max(0, Math.min(100, progress * 100)).toFixed(1)}%` : t("켜짐")
-    : nodeUp === false ? t("꺼짐") : t("확인 못 함"));
+    : warming ? t("시작하는 중") : nodeUp === false ? t("꺼짐") : t("확인 못 함"));
   $("rv-home-server-state").dataset.tone = !n ? "bad" : typeof progress !== "number" || !Number.isFinite(progress) || progress < 0.9999 ? "warn" : "good";
   const confirmed = wallet.status === "fulfilled" ? wallet.value?.confirmed : undefined;
   setCopyText($("overview-balance"), () => typeof confirmed === "number" && Number.isFinite(confirmed) && confirmed >= 0
-    ? fmtRvn(confirmed) : t("확인 못 함"));
+    ? fmtRvn(confirmed) : warming ? t("서버가 시작되면 나와요") : t("확인 못 함"));
   $("overview-balance").classList.toggle("unknown", !(typeof confirmed === "number" && Number.isFinite(confirmed) && confirmed >= 0));
   /* 🔴 0.4.8-B — 방금 받은 10 RVN 이 여기서는 **0** 으로만 보였다(RV3 T04). 확정 잔액에 섞지는
      않는다(확인 전 돈을 쓸 수 있는 돈처럼 보이면 안 된다) — 옆에 「들어오는 중」으로 따로 적는다.
@@ -4006,6 +4020,7 @@ async function paintPartBody(): Promise<void> {
       let s: any = null;
       try {
         s = await invoke<any>("node_status");
+        warmSince = null;
       } catch (e) {
         // 🔴 노드가 **시작하는 중**이면 코어는 「장부 읽는 중」이라고 답한다.
         //    44GB 를 확인하는 데 몇 분 걸린다. 그걸 오류로 보고 「꺼져
@@ -4016,11 +4031,17 @@ async function paintPartBody(): Promise<void> {
         const msg = String((e as Error)?.message || e);
         // 표시등과 **같은 판별**을 쓴다. 두 벌로 두면 한쪽만 고쳐진다.
         const warming = isWarming(msg);
+        if (!warming) warmSince = null;
         if (warming) {
+          if (warmSince === null) warmSince = Date.now();
+          const phase = warmPhase(msg);
+          const minutes = Math.max(0, Math.floor((Date.now() - warmSince) / 60000));
           box.innerHTML =
             `<div class="card">
                <h3>${copyHtml("서버가 시작하는 중입니다")}</h3>
                <p class="meta">${copyHtml("장부를 확인하고 있습니다. 몇 분 걸립니다 — 그동안 아무것도 안 하셔도 됩니다.")}</p>
+               ${phase ? `<p class="meta">${escapeHtml(tf("지금은 「{0}」 단계예요 · 켜진 지 {1}분째", t(phase), minutes))}</p>` : ""}
+               <p class="meta">${copyHtml("처음 켜거나 다시 설치한 뒤에는 30분~1시간 넘게 걸릴 수 있어요. 컴퓨터를 끄지 말고 이 앱을 켜 두세요. 끝나면 잔액이 나옵니다.")}</p>
                <p class="meta" style="opacity:.7">${escapeHtml(msg.slice(0, 120))}</p>
              </div>`;
           setTimeout(() => void paintPart(), 5000);
