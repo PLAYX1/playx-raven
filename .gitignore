@@ -44,3 +44,16 @@ updater.key*
 
 # 라비 목소리 모델(약 380MB) — 저장소에 넣지 않는다. 빌드 전에 scripts/fetch-ravi-voice.mjs 가 채운다.
 src-tauri/resources/ravi-voice/onnx/*.onnx
+
+# 설계·연구·작업 기록은 비공개 저장소(PLAYX1/ravenvault, private/desktop-docs)에 둔다 — 2026-11-01 대표 결정.
+/DESIGN*.md
+/RESEARCH*.md
+/BACKUP-UPGRADE-DELIVERY.md
+/handoff-*.md
+/test-result.txt
+/docs/handoff/
+/docs/DECISIONS-*.md
+/docs/HANDOFF-*.md
+/docs/*-report.md
+/docs/handoff-1006/*
+!/docs/handoff-1006/secfix1.test.mjs

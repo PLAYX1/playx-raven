@@ -70,8 +70,7 @@ listing through the wallet.
 It does not apply to: mining, plain sends, or issuing assets.
 
 **You can turn it off** in settings, and you can change the address it goes to.
-A fee you cannot turn off is not a fee, it is a tax — and in open source, a tax
-disappears with one fork. The address is
+A fee you cannot turn off is not a fee, it is a tax. The address is
 [`RLFnbkjmf1VCVq7D9TZvRp7fv6W97rm2cB`](https://rvn.cryptoscope.io/address/?address=RLFnbkjmf1VCVq7D9TZvRp7fv6W97rm2cB);
 check it on chain.
 
@@ -128,4 +127,11 @@ message, so the answer is visible to whoever hits the same thing next.
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+The source is published so anyone can check what the wallet does with their
+keys and money.
+
+From 2026-11-01 (version 0.9.7 onward) it is licensed under the
+[PolyForm Shield License 1.0.0](LICENSE): you may read, run, change and use it,
+including in your own shop, but not to offer a product that competes with
+RavenVault. Copies taken before that date stay under the MIT license they came
+with.
