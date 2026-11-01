@@ -43,4 +43,5 @@ export const WALLET_LINK_COPY: Record<string, [string, string, string]> = {
   "남은 시간 {0}초": ["{0} seconds left", "残り {0} 秒", "剩余 {0} 秒"],
   "승인하고 {0} RVN 보내기": ["Approve and send {0} RVN", "承認して {0} RVN を送る", "批准并发送 {0} RVN"],
   "폰이 보낸 요청 {0}건이 승인을 기다려요.": ["{0} request(s) from your phone are waiting for approval.", "スマホからのリクエスト {0} 件が承認を待っています。", "有 {0} 个来自手机的请求等待批准。"],
+  "폰에서 연결을 취소했어요. 연결하지 않았어요. 처음부터 다시 해 주세요.": ["The phone cancelled the link. Nothing was linked. Please start again.", "スマホ側で連携が取り消されました。連携していません。最初からやり直してください。", "手机已取消连接，未建立连接。请重新开始。"],
 };

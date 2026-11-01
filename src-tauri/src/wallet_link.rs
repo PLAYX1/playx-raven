@@ -45,6 +45,9 @@ const MAX_PHONE_ADDRESSES: usize = 8;
 const LANE: &str = "wallet-link";
 const AUTH_ERROR: &str = "지갑을 열지 못했어요. 암호가 설정된 12단어 지갑인지, 서버가 켜져 있는지 확인해 주세요.";
 const NOT_MINE: &str = "이 지갑의 받는 주소를 확인하지 못해 연결하지 않았어요. 12단어(BIP44)로 만든 지갑에서만 연결할 수 있어요.";
+const PHONE_CANCELLED: &str = "폰에서 연결을 취소했어요. 연결하지 않았어요. 처음부터 다시 해 주세요.";
+const APP_LOCKED: &str = "앱이 잠겨 보내지 않았어요. 잠금을 푼 뒤 다시 확인하고 승인해 주세요.";
+const OVER_LIMIT: &str = "수수료까지 합치면 오늘 한도를 넘어요.";
 const CHANGED: &str = "확인한 거래가 바뀌었어요(동전이 이미 쓰였거나 내용이 달라졌어요). 다시 확인한 뒤 승인해 주세요.";
 
 // ── 작은 검사 ───────────────────────────────────────────────────────
@@ -422,6 +425,9 @@ struct Req {
     result: Option<Value>,
     #[serde(default)]
     result_published: bool,
+    /// 승인할 때 확인한 수수료. 하루 한도와 쓴 돈 기록에 금액과 함께 들어간다.
+    #[serde(default)]
+    fee: u64,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct Spend { link_id: String, at: i64, sats: u64 }
@@ -434,6 +440,8 @@ struct State {
     spends: BTreeMap<String, Spend>,
     wraps: BTreeMap<String, i64>,
     last_fetch: i64,
+    /// 아직 연결 기록이 없는 연결 id 로 온 서명된 끊기(연결 id → 서명한 폰 키). 「같아요」 전에 폰이 취소한 경우를 막는다.
+    orphan_revokes: BTreeMap<String, (String, i64)>,
 }
 fn state_file(dir: &Path) -> PathBuf { dir.join("state.json") }
 fn load(dir: &Path) -> Result<State, String> {
@@ -449,12 +457,15 @@ fn save(dir: &Path, s: &State) -> Result<(), String> {
 fn spent_today(s: &State, link: &str, now: i64, except: &str) -> u64 {
     let done: u64 = s.spends.iter().filter(|(id, x)| x.link_id == link && x.at > now - DAY_MS && id.as_str() != except).map(|(_, x)| x.sats).sum();
     let flying: u64 = s.requests.iter().filter(|(id, r)| r.link_id == link && id.as_str() != except && !s.spends.contains_key(id.as_str())
-        && matches!(r.status.as_str(), "sending" | "unknown")).map(|(_, r)| r.sats).sum();
+        && matches!(r.status.as_str(), "sending" | "unknown")).map(|(_, r)| r.sats.saturating_add(r.fee)).sum();
     done + flying
 }
 fn prune(s: &mut State, now: i64) {
     s.seen.retain(|_, at| *at > now - SEEN_RETAIN_MS);
-    s.wraps.retain(|_, at| *at > now - WRAP_RETAIN_MS);
+    // 커서가 멈춰 있으면(덜 읽음) 그 커서보다 앞의 겉봉도 다시 올 수 있다 — 그만큼 더 기억한다.
+    let wrap_cut = (now - WRAP_RETAIN_MS).min(s.last_fetch.saturating_mul(1000) - WRAP_RETAIN_MS);
+    s.wraps.retain(|_, at| *at > wrap_cut);
+    s.orphan_revokes.retain(|_, (_, at)| *at > now - WRAP_RETAIN_MS);
     s.spends.retain(|_, x| x.at > now - 2 * DAY_MS);
     s.requests.retain(|_, r| r.status == "pending" || r.status == "sending" || r.status == "unknown" || r.received > now - 7 * DAY_MS);
 }
@@ -462,12 +473,13 @@ fn prune(s: &mut State, now: i64) {
 // ── 바깥(노드·릴레이) ──────────────────────────────────────────────
 pub(crate) trait Net {
     async fn publish(&self, event: Value) -> Result<(), String>;
-    async fn fetch(&self, pubkey: &str, since: i64) -> Result<Vec<Value>, String>;
+    /// (겉봉들, 끝까지 다 읽었나). 덜 읽었으면 커서를 옮기지 않는다.
+    async fn fetch(&self, pubkey: &str, since: i64) -> Result<(Vec<Value>, bool), String>;
 }
 struct Relays;
 impl Net for Relays {
     async fn publish(&self, event: Value) -> Result<(), String> { crate::nostrpub::nostr_publish(event).await.map(|_| ()) }
-    async fn fetch(&self, pubkey: &str, since: i64) -> Result<Vec<Value>, String> { crate::nostrpub::nostr_query_inbox(pubkey, since).await }
+    async fn fetch(&self, pubkey: &str, since: i64) -> Result<(Vec<Value>, bool), String> { crate::nostrpub::nostr_query_inbox(pubkey, since).await }
 }
 fn dir() -> PathBuf { crate::paths::app_file("wallet-link") }
 fn payouts(dir: &Path) -> PathBuf {
@@ -477,7 +489,7 @@ fn payouts(dir: &Path) -> PathBuf {
 // ── 화면이 들고 있지 않는 것(메모리) ────────────────────────────────
 struct Session { xpub: String, first: String, name: String, authed: i64, offer: Option<Offer>, candidate: Option<Accept> }
 #[derive(Clone)]
-struct Review { hex: String, fingerprint: String, inputs: Vec<(String, u64)>, at: i64 }
+struct Review { hex: String, fingerprint: String, inputs: Vec<(String, u64)>, fee: u64, at: i64 }
 static SESSION: std::sync::Mutex<Option<Session>> = std::sync::Mutex::new(None);
 static REVIEWS: std::sync::LazyLock<std::sync::Mutex<HashMap<(PathBuf, String), Review>>> = std::sync::LazyLock::new(Default::default);
 static GATE: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
@@ -544,6 +556,7 @@ fn confirm_in(dir: &Path, sess: &Session, daily_rvn: &str, phone_name: &str, now
     let daily = parse_rvn(daily_rvn).filter(|d| *d >= 1 && *d <= DAILY_DEFAULT_SATS).ok_or("하루 한도는 0보다 크고 1,000 RVN 이하로 적어 주세요.")?;
     let mut s = load(dir)?;
     if s.links.iter().any(|l| l.link_id == a.link_id) { return Err("이미 연결된 폰이에요.".into()); }
+    if s.orphan_revokes.get(&a.link_id).is_some_and(|(k, _)| *k == a.phone_key) { return Err(PHONE_CANCELLED.into()); }
     s.links.push(Link { link_id: a.link_id.clone(), phone_key: a.phone_key.clone(), phone_addresses: a.phone_addresses.clone(),
         name: clean_name(phone_name, "내 폰"), daily_sats: daily, created: now, revoked: false, revoked_at: None, revoke_out: None });
     if s.last_fetch == 0 { s.last_fetch = now / 1000; }
@@ -575,7 +588,10 @@ fn process(dir: &Path, sk: &[u8; 32], gifts: &[Value], now: i64, session: Option
                 let Some(sess) = session.as_deref_mut() else { continue };
                 let Some(o) = sess.offer.clone() else { continue };
                 if sess.candidate.is_some() || now > o.expires + ACCEPT_GRACE_MS { continue; }
-                if let Some(a) = verify_accept(&msg, &o).filter(|a| a.phone_key == from) { sess.candidate = Some(a); }
+                if let Some(a) = verify_accept(&msg, &o).filter(|a| a.phone_key == from) {
+                    // 이 연결을 폰이 이미 취소했다면(끊기가 먼저 도착) 후보로도 올리지 않는다.
+                    if !s.orphan_revokes.get(&a.link_id).is_some_and(|(k, _)| *k == a.phone_key) { sess.candidate = Some(a); }
+                }
             }
             "request" => {
                 let Some(lid) = msg.get("body").and_then(|b| b.get("linkId")).and_then(Value::as_str) else { continue };
@@ -588,7 +604,7 @@ fn process(dir: &Path, sk: &[u8; 32], gifts: &[Value], now: i64, session: Option
                         // 🔴 서명보다 먼저 기록한다. 이 저장이 실패하면 화면에 띄우지도 않는다.
                         s.seen.insert(r.id.clone(), now);
                         s.requests.insert(r.id.clone(), Req { link_id: r.link_id, kind: kind.into(), to: r.to, sats: r.sats, created: r.created,
-                            expires: r.expires, received: now, status: "pending".into(), txid: None, refused: None, result: None, result_published: false });
+                            expires: r.expires, received: now, status: "pending".into(), txid: None, refused: None, result: None, result_published: false, fee: 0 });
                         save(dir, &s)?;
                     }
                     (Check::No("seen"), _) => {
@@ -599,7 +615,7 @@ fn process(dir: &Path, sk: &[u8; 32], gifts: &[Value], now: i64, session: Option
                         s.seen.insert(r.id.clone(), now);
                         let res = sign_body("result", json!({"v": 1, "linkId": r.link_id, "id": r.id, "refused": why}), sk)?;
                         s.requests.insert(r.id.clone(), Req { link_id: r.link_id, kind: "refused".into(), to: r.to, sats: r.sats, created: r.created,
-                            expires: r.expires, received: now, status: "refused".into(), txid: None, refused: Some(why.into()), result: Some(res.clone()), result_published: false });
+                            expires: r.expires, received: now, status: "refused".into(), txid: None, refused: Some(why.into()), result: Some(res.clone()), result_published: false, fee: 0 });
                         out.push((link.phone_key.clone(), "result", res));
                     }
                     _ => {}
@@ -613,6 +629,9 @@ fn process(dir: &Path, sk: &[u8; 32], gifts: &[Value], now: i64, session: Option
                         l.revoked_at = Some(now);
                         cancel_pending(&mut s, &lid);
                     }
+                } else if !s.links.iter().any(|l| l.link_id == lid) && verify_revoke(&msg, &from, &lid) {
+                    // 아직 「같아요」 전인 연결(또는 모르는 연결)의 끊기 — 버리지 않고 남긴다. 확인 단계가 이것을 보고 막는다.
+                    s.orphan_revokes.insert(lid, (from.clone(), now));
                 }
             }
             _ => {}
@@ -679,24 +698,28 @@ async fn inbox_with(net: &impl Net, dir: &Path, sk: &[u8; 32], now: i64) -> Resu
     let since = load(dir)?.last_fetch;
     let since = if since > 0 { since } else { now / 1000 } - WRAP_SKEW_SEC;
     let fetched = net.fetch(&key, since).await;
-    let gifts = fetched.as_ref().map(Vec::as_slice).unwrap_or(&[]);
+    let gifts = fetched.as_ref().map(|(g, _)| g.as_slice()).unwrap_or(&[]);
     let (out, offer) = {
         let mut g = SESSION.lock().map_err(|_| "x")?;
         let out = process(dir, sk, gifts, now, g.as_mut())?;
         let offer = g.as_ref().and_then(|sess| {
             let o = sess.offer.as_ref()?;
             Some(match &sess.candidate {
+                Some(a) if load(dir).ok()?.orphan_revokes.get(&a.link_id).is_some_and(|(k, _)| *k == a.phone_key) => json!({ "stage": "cancelled" }),
                 Some(a) => json!({ "stage": "confirm", "code": confirm_code(o, &a.phone_key), "phoneKey": a.phone_key, "phoneAddresses": a.phone_addresses, "offer": o }),
                 None => json!({ "stage": "waiting", "expires": o.expires }),
             })
         });
         (out, offer)
     };
-    if fetched.is_ok() { let mut s = load(dir)?; s.last_fetch = now / 1000; save(dir, &s)?; }
+    // 🔴 끝까지 읽었을 때만 커서를 옮긴다. 덜 읽었으면 다음에 같은 자리부터 다시 읽는다.
+    let complete = matches!(fetched, Ok((_, true)));
+    if complete { let mut s = load(dir)?; s.last_fetch = now / 1000; save(dir, &s)?; }
     deliver(net, dir, sk, out).await?;
     let mut v = view(dir, now)?;
     v["offer"] = offer.unwrap_or(Value::Null);
     v["online"] = json!(fetched.is_ok());
+    v["complete"] = json!(complete);
     Ok(v)
 }
 /// 화면이 잠기지 않은 동안 주기적으로 부른다(앱 잠금 중에는 app_lock 이 막는다). 승인은 하지 않는다.
@@ -711,11 +734,11 @@ pub fn wallet_link_list() -> Result<Value, String> { view(&dir(), now_ms()) }
 
 // ── 승인 화면(실제 거래를 만들어 보여 준다) ───────────────────────────
 fn fingerprint(hex_tx: &str) -> String { hex::encode(&Sha256::digest(hex_tx.as_bytes())[..16]) }
-fn live_request(s: &State, id: &str, now: i64) -> Result<(Req, Link), String> {
+fn live_request(s: &State, id: &str, now: i64, fee: u64) -> Result<(Req, Link), String> {
     let r = s.requests.get(id).filter(|r| r.status == "pending").cloned().ok_or("이미 처리했거나 없는 요청이에요.")?;
     let l = s.links.iter().find(|l| l.link_id == r.link_id && !l.revoked).cloned().ok_or("연결이 끊긴 폰의 요청이에요.")?;
     if r.expires < now { return Err("요청 시간(10분)이 지났어요.".into()); }
-    if spent_today(s, &l.link_id, now, id).saturating_add(r.sats) > l.daily_sats { return Err("오늘 한도를 넘어요.".into()); }
+    if spent_today(s, &l.link_id, now, id).saturating_add(r.sats).saturating_add(fee) > l.daily_sats { return Err(OVER_LIMIT.into()); }
     Ok((r, l))
 }
 /// 입력 동전마다 아직 안 쓰였는지 보고 금액을 더한다. 하나라도 쓰였으면 None(=거래가 바뀜).
@@ -729,7 +752,7 @@ async fn input_values(rpc: &impl SalesRpc, inputs: &[(String, u64)]) -> Option<u
 }
 async fn review_with(rpc: &impl SalesRpc, dir: &Path, id: &str, now: i64) -> Result<Value, String> {
     let s = load(dir)?;
-    let (r, l) = live_request(&s, id, now)?;
+    let (r, l) = live_request(&s, id, now, 0)?;
     let change = rpc.call("listreceivedbyaddress", json!([0, true])).await.ok().as_ref().and_then(crate::sendfee::change_from);
     let mut outs = serde_json::Map::new();
     outs.insert(r.to.clone(), json!(rvn_text(r.sats)));
@@ -762,8 +785,9 @@ async fn review_with(rpc: &impl SalesRpc, dir: &Path, id: &str, now: i64) -> Res
     let fee = in_total.checked_sub(out_total).ok_or("금액 오류")?;
     let node_fee = funded.get("fee").and_then(Value::as_f64).and_then(to_sats).ok_or("서버가 수수료를 알려 주지 않았어요.")?;
     if fee.abs_diff(node_fee) > 1 || fee > FEE_CAP_SATS { return Err("수수료가 이상해서 멈췄어요.".into()); }
+    live_request(&s, id, now, fee)?;
     let fp = fingerprint(&hex_tx);
-    REVIEWS.lock().map_err(|_| "x")?.insert((dir.to_path_buf(), id.to_string()), Review { hex: hex_tx, fingerprint: fp.clone(), inputs, at: now });
+    REVIEWS.lock().map_err(|_| "x")?.insert((dir.to_path_buf(), id.to_string()), Review { hex: hex_tx, fingerprint: fp.clone(), inputs, fee, at: now });
     Ok(json!({ "id": id, "short": false, "kind": r.kind, "to": r.to, "sats": r.sats.to_string(), "feeSats": fee.to_string(),
         "totalSats": (r.sats + fee).to_string(), "fingerprint": fp, "phoneName": l.name, "expires": r.expires,
         "isMine": change.as_deref() == Some(r.to.as_str()) }))
@@ -794,7 +818,7 @@ fn finish(dir: &Path, sk: &[u8; 32], id: &str, txid: &str, now: i64) -> Result<(
     r.status = "sent".into();
     r.txid = Some(txid.into());
     if r.result.is_none() || r.result.as_ref().and_then(|v| v.pointer("/body/txid")).and_then(Value::as_str) != Some(txid) { r.result = Some(res); r.result_published = false; }
-    let (link, sats, out) = (r.link_id.clone(), r.sats, r.result.clone().expect("set"));
+    let (link, sats, out) = (r.link_id.clone(), r.sats.saturating_add(r.fee), r.result.clone().expect("set"));
     s.spends.entry(id.into()).or_insert(Spend { link_id: link.clone(), at: now, sats });
     let to = s.links.iter().find(|l| l.link_id == link).map(|l| l.phone_key.clone()).ok_or("연결 기록이 없어요.")?;
     save(dir, &s)?;
@@ -807,10 +831,15 @@ async fn approve_with(rpc: &impl SalesRpc, net: &impl Net, dir: &Path, sk: &[u8;
         deliver(net, dir, sk, vec![(to, "result", res)]).await?;
         return Ok(json!({ "txid": txid, "again": true }));
     }
-    let s = load(dir)?;
-    let (r, _) = live_request(&s, id, now)?;
+    // 앱 잠금은 IPC 입구에서만 보는 것이 아니다: 여기서 차례 번호를 잡고, 서명 직전·전파 직전에 다시 본다.
+    let epoch = crate::app_lock::unlocked_epoch().ok_or(APP_LOCKED)?;
     let key = (dir.to_path_buf(), id.to_string());
     let review = REVIEWS.lock().map_err(|_| "x")?.get(&key).cloned().filter(|v| v.fingerprint == fp && now - v.at < 5 * 60_000).ok_or(CHANGED)?;
+    let mut s = load(dir)?;
+    let (r, _) = live_request(&s, id, now, review.fee)?;
+    // 수수료를 먼저 기록한다 — 보내는 중·결과 모름 상태도 금액+수수료로 한도에 잡힌다.
+    if let Some(x) = s.requests.get_mut(id) { x.fee = review.fee; }
+    save(dir, &s)?;
     // 보여 준 뒤 동전이 쓰였으면 이 승인은 무효.
     if input_values(rpc, &review.inputs).await.is_none() { REVIEWS.lock().map_err(|_| "x")?.remove(&key); return Err(CHANGED.into()); }
     let intent = format!("link|{}|{}|{}|{}", r.link_id, r.to, r.sats, review.fingerprint).into_bytes();
@@ -821,16 +850,20 @@ async fn approve_with(rpc: &impl SalesRpc, net: &impl Net, dir: &Path, sk: &[u8;
             crate::payout_guard::Begin::New(g) => g,
         };
         { let mut s = load(dir)?; if let Some(x) = s.requests.get_mut(id) { x.status = "sending".into(); } save(dir, &s)?; }
+        let back_to_pending = || -> Result<(), String> { let mut s = load(dir)?; if let Some(x) = s.requests.get_mut(id) { x.status = "pending".into(); } save(dir, &s) };
+        if !crate::app_lock::still_unlocked(epoch) { guard.abandon_unsent()?; back_to_pending()?; return Err(APP_LOCKED.to_string()); }
         let signed = match rpc.call("signrawtransaction", json!([review.hex.clone()])).await {
             Ok(v) if v.get("complete") == Some(&json!(true)) && v.get("hex").and_then(Value::as_str).is_some() => v["hex"].as_str().unwrap_or("").to_string(),
             _ => {
                 // 서명조차 못 했으면 아무것도 나가지 않았다 — 기록을 풀고 대기로 되돌린다.
                 guard.abandon_unsent()?;
-                let mut s = load(dir)?; if let Some(x) = s.requests.get_mut(id) { x.status = "pending".into(); } save(dir, &s)?;
+                back_to_pending()?;
                 return Err("서명하지 못했어요. 지갑 잠금과 서버 상태를 확인해 주세요.".to_string());
             }
         };
         let txid = rpc.call("decoderawtransaction", json!([signed])).await.ok().and_then(|v| v.get("txid").and_then(Value::as_str).map(str::to_string));
+        // 서명한 거래는 아직 이 컴퓨터 안에만 있다. 그사이 잠겼으면 버리고 아무것도 내보내지 않는다.
+        if !crate::app_lock::still_unlocked(epoch) { guard.abandon_unsent()?; back_to_pending()?; return Err(APP_LOCKED.to_string()); }
         match rpc.call("sendrawtransaction", json!([signed])).await {
             Ok(v) if v.as_str().is_some_and(hex64) => { let t = v.as_str().unwrap_or("").to_string(); guard.complete(&t)?; Ok(t) }
             other => {
@@ -904,7 +937,8 @@ mod tests {
     fn vectors() -> Value { serde_json::from_str(include_str!("../../scripts/fixtures/wallet-link-vectors.json")).unwrap() }
     fn key(v: &Value, k: &str) -> [u8; 32] { hex::decode(v[k].as_str().unwrap()).unwrap().try_into().unwrap() }
     fn tmp(name: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("rv-wallet-link-{name}-{}-{}", std::process::id(), now_ms()));
+        static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let d = std::env::temp_dir().join(format!("rv-wallet-link-{name}-{}-{}-{}", std::process::id(), now_ms(), N.fetch_add(1, std::sync::atomic::Ordering::SeqCst)));
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
         d
@@ -997,28 +1031,30 @@ mod tests {
     }
 
     // ── 가짜 노드·릴레이 ──
-    struct Mock { replies: RefCell<HashMap<String, VecDeque<Result<Value, String>>>>, calls: RefCell<Vec<String>> }
+    struct Mock { replies: RefCell<HashMap<String, VecDeque<Result<Value, String>>>>, calls: RefCell<Vec<String>>, lock_on: RefCell<Option<&'static str>> }
     impl Mock {
         fn new(rows: Vec<(&str, Result<Value, String>)>) -> Self {
             let mut m: HashMap<String, VecDeque<_>> = HashMap::new();
             for (k, v) in rows { m.entry(k.into()).or_default().push_back(v); }
-            Mock { replies: RefCell::new(m), calls: RefCell::new(vec![]) }
+            Mock { replies: RefCell::new(m), calls: RefCell::new(vec![]), lock_on: RefCell::new(None) }
         }
         fn count(&self, m: &str) -> usize { self.calls.borrow().iter().filter(|c| *c == m).count() }
     }
     impl SalesRpc for Mock {
         async fn call(&self, method: &str, _p: Value) -> Result<Value, String> {
             self.calls.borrow_mut().push(method.into());
+            // 이 부름이 도는 사이 앱이 잠겼다고 친다(시험 실의 메모리 잠금).
+            if *self.lock_on.borrow() == Some(method) { crate::app_lock::lock_in_memory_for_test(); }
             let mut r = self.replies.borrow_mut();
             let q = r.get_mut(method).unwrap_or_else(|| panic!("unexpected RPC {method}"));
             if q.len() > 1 { q.pop_front().unwrap() } else { q.front().cloned().unwrap() }
         }
     }
     #[derive(Default)]
-    struct FakeNet { inbox: Vec<Value>, sent: RefCell<Vec<Value>> }
+    struct FakeNet { inbox: Vec<Value>, sent: RefCell<Vec<Value>>, incomplete: bool }
     impl Net for FakeNet {
         async fn publish(&self, e: Value) -> Result<(), String> { self.sent.borrow_mut().push(e); Ok(()) }
-        async fn fetch(&self, _p: &str, _s: i64) -> Result<Vec<Value>, String> { Ok(self.inbox.clone()) }
+        async fn fetch(&self, _p: &str, _s: i64) -> Result<(Vec<Value>, bool), String> { Ok((self.inbox.clone(), !self.incomplete)) }
     }
 
     #[tokio::test]
@@ -1097,7 +1133,7 @@ mod tests {
         assert_eq!((rpc.count("signrawtransaction"), rpc.count("sendrawtransaction")), (1, 1));
         let s = load(&d).unwrap();
         assert_eq!(s.requests[&rid].status, "sent");
-        assert_eq!(s.spends[&rid].sats, 20_000_000_000);
+        assert_eq!(s.spends[&rid].sats, 20_001_000_000, "spent record = amount + reviewed fee");
         let phone = key(&v, "phoneSecret");
         let last = net.sent.borrow().last().cloned().unwrap();
         let (_, t, res) = open(&phone, &last).unwrap();
@@ -1186,6 +1222,97 @@ mod tests {
         assert!(t == "revoke" && verify_revoke(&rv, v["deskKey"].as_str().unwrap(), v["linkId"].as_str().unwrap()));
         assert!(load(&d3).unwrap().links[0].revoke_out.is_none(), "delivered");
         for d in [d, d2, d3] { let _ = std::fs::remove_dir_all(d); }
+    }
+
+    fn session_of(v: &Value) -> Session {
+        let o = offer_of(v);
+        Session { xpub: o.xpub.clone(), first: o.first_address.clone(), name: o.name.clone(), authed: 0, offer: Some(o), candidate: None }
+    }
+    #[test]
+    fn a_phone_revoke_before_confirmation_blocks_the_link_in_either_order() {
+        let v = vectors();
+        let (now, desk) = (v["now"].as_i64().unwrap() + 1000, key(&v, "deskSecret"));
+        for order in [["accept", "revoke"], ["revoke", "accept"]] {
+            let d = tmp("orphan");
+            let mut sess = session_of(&v);
+            let gifts: Vec<Value> = order.iter().map(|t| gift(&v, t, 0)).collect();
+            // 한 번에 오든, 따로따로 오든.
+            for g in &gifts { process(&d, &desk, std::slice::from_ref(g), now, Some(&mut sess)).unwrap(); }
+            let s = load(&d).unwrap();
+            assert!(s.orphan_revokes.contains_key(v["linkId"].as_str().unwrap()), "revoke kept, not consumed");
+            if let Some(_) = &sess.candidate {
+                assert_eq!(confirm_in(&d, &sess, "1000", "폰", now).unwrap_err(), PHONE_CANCELLED);
+            }
+            assert!(load(&d).unwrap().links.is_empty(), "never activated ({order:?})");
+            let _ = std::fs::remove_dir_all(d);
+        }
+        // 위조된 끊기(다른 열쇠 서명)는 남기지 않는다.
+        let d = tmp("orphan-forged");
+        let mut forged = v["revoke"].clone();
+        forged["body"]["at"] = json!(1);
+        let ev = pack(&key(&v, "phoneSecret"), v["deskKey"].as_str().unwrap(), "revoke", &forged).unwrap();
+        process(&d, &desk, &[ev], now, None).unwrap();
+        assert!(load(&d).unwrap().orphan_revokes.is_empty());
+    }
+
+    #[tokio::test]
+    async fn an_incomplete_inbox_read_does_not_move_the_cursor() {
+        let v = vectors();
+        let (now, desk) = (v["now"].as_i64().unwrap() + 2000, key(&v, "deskSecret"));
+        let d = linked_dir(&v, "cursor");
+        let before = load(&d).unwrap().last_fetch;
+        let net = FakeNet { incomplete: true, ..Default::default() };
+        let out = inbox_with(&net, &d, &desk, now + 3_600_000).await.unwrap();
+        assert_eq!((out["complete"].clone(), load(&d).unwrap().last_fetch), (json!(false), before));
+        inbox_with(&FakeNet::default(), &d, &desk, now + 3_600_000).await.unwrap();
+        assert_eq!(load(&d).unwrap().last_fetch, (now + 3_600_000) / 1000);
+    }
+
+    async fn ready_to_approve(v: &Value, name: &str, rpc: &Mock) -> (PathBuf, String, String) {
+        let (now, desk) = (v["now"].as_i64().unwrap() + 2000, key(v, "deskSecret"));
+        let d = linked_dir(v, name);
+        inbox_with(&FakeNet { inbox: vec![gift(v, "request", 0)], ..Default::default() }, &d, &desk, now).await.unwrap();
+        let rid = "11".repeat(32);
+        let fp = review_with(rpc, &d, &rid, now).await.unwrap()["fingerprint"].as_str().unwrap().to_string();
+        (d, rid, fp)
+    }
+    /// 앱 잠금은 실(thread)마다 따로라 바퀴마다 새 시험으로 돈다.
+    async fn lock_mid_approval(when: &'static str, signs: usize) {
+        let v = vectors();
+        let (now, desk) = (v["now"].as_i64().unwrap() + 2000, key(&v, "deskSecret"));
+        let rpc = chain_rpc(&v, true);
+        let (d, rid, fp) = ready_to_approve(&v, when, &rpc).await;
+        *rpc.lock_on.borrow_mut() = Some(when);
+        let net = FakeNet::default();
+        assert_eq!(approve_with(&rpc, &net, &d, &desk, &rid, &fp, None, now).await.unwrap_err(), APP_LOCKED);
+        assert_eq!((rpc.count("signrawtransaction"), rpc.count("sendrawtransaction")), (signs, 0), "locked during {when}");
+        assert_eq!(load(&d).unwrap().requests[&rid].status, "pending");
+        assert!(net.sent.borrow().is_empty());
+        // 아무것도 안 나갔으므로 지급 기록은 풀려 있다.
+        assert!(matches!(crate::payout_guard::begin(&payouts(&d), LANE, &rid, b"x").unwrap(), crate::payout_guard::Begin::New(_)));
+        // 잠긴 뒤에는 시작도 안 한다.
+        assert_eq!(approve_with(&rpc, &net, &d, &desk, &rid, &fp, None, now).await.unwrap_err(), APP_LOCKED);
+        assert_eq!(rpc.count("signrawtransaction"), signs);
+        let _ = std::fs::remove_dir_all(d);
+    }
+    #[tokio::test]
+    async fn locking_the_app_before_signing_stops_the_payout() { lock_mid_approval("getwalletinfo", 0).await }
+    #[tokio::test]
+    async fn locking_the_app_after_signing_stops_the_broadcast() { lock_mid_approval("signrawtransaction", 1).await }
+
+    #[tokio::test]
+    async fn the_daily_limit_counts_the_reviewed_fee() {
+        let v = vectors();
+        let now = v["now"].as_i64().unwrap() + 2000;
+        let rpc = chain_rpc(&v, true);
+        let d = linked_dir(&v, "feelimit");
+        let mut s = load(&d).unwrap();
+        s.links[0].daily_sats = 20_000_000_000; // 정확히 요청 금액(200 RVN) — 수수료 0.01 을 더하면 넘는다.
+        save(&d, &s).unwrap();
+        inbox_with(&FakeNet { inbox: vec![gift(&v, "request", 0)], ..Default::default() }, &d, &key(&v, "deskSecret"), now).await.unwrap();
+        assert_eq!(load(&d).unwrap().requests[&"11".repeat(32)].status, "pending", "amount alone fits");
+        assert_eq!(review_with(&rpc, &d, &"11".repeat(32), now).await.unwrap_err(), OVER_LIMIT);
+        let _ = std::fs::remove_dir_all(d);
     }
 
     #[test]

@@ -127,6 +127,38 @@ async fn send_one(url: &str, msg: &str) -> Result<(), String> {
 mod tests {
     use super::*;
 
+    fn synthetic(n: i64, at: i64) -> Value { json!({ "id": format!("{n:064x}"), "created_at": at }) }
+    /// 가짜 릴레이: until 이하를 새것부터 limit 개.
+    fn pager(all: Vec<Value>, eose_from: usize) -> impl FnMut(Option<i64>) -> std::future::Ready<Result<(Vec<Value>, bool), String>> {
+        let mut calls = 0usize;
+        move |until| {
+            calls += 1;
+            let mut v: Vec<Value> = all.iter().filter(|e| until.is_none_or(|u| e["created_at"].as_i64().unwrap() <= u)).cloned().collect();
+            v.sort_by_key(|e| -e["created_at"].as_i64().unwrap());
+            v.truncate(INBOX_PAGE);
+            std::future::ready(Ok((v, calls < eose_from)))
+        }
+    }
+    #[tokio::test]
+    async fn inbox_pages_past_a_flood_and_reports_incomplete_reads() {
+        // 450장(그중 가장 오래된 한 장이 진짜 끊기라고 치자) — 첫 쪽 200장만 읽으면 안 보인다.
+        let flood: Vec<Value> = (0..450).map(|i| synthetic(i, 1_000_000 + i)).collect();
+        let (got, done) = page_all(pager(flood.clone(), usize::MAX), 50).await.unwrap();
+        assert!(done && got.len() == 450 && got.iter().any(|e| e["created_at"] == 1_000_000));
+        // 둘째 쪽에서 EOSE 없이 끊김 → 다 읽은 것이 아니다.
+        let (_, done) = page_all(pager(flood.clone(), 2), 50).await.unwrap();
+        assert!(!done);
+        // 쪽 수 상한에 닿아도 다 읽은 것이 아니다.
+        let (_, done) = page_all(pager(flood, usize::MAX), 2).await.unwrap();
+        assert!(!done);
+        // 한 초에 한 쪽 넘게 몰려 더 나아갈 수 없으면 다 읽은 것이 아니다.
+        let same: Vec<Value> = (0..300).map(|i| synthetic(i, 5)).collect();
+        let (_, done) = page_all(pager(same, usize::MAX), 50).await.unwrap();
+        assert!(!done);
+        let (got, done) = page_all(pager((0..10).map(|i| synthetic(i, i)).collect(), usize::MAX), 50).await.unwrap();
+        assert!(done && got.len() == 10);
+    }
+
     /// 서명이 빠진 것을 넘기면 릴레이가 조용히 버린다 — 사람은 올린 줄 알고
     /// 기다린다. 나가기 전에 우리가 막는다.
     #[tokio::test]
@@ -332,30 +364,110 @@ pub async fn nostr_query_authors(
 
 /// 한 열쇠에게 온 겉봉(NIP-17 kind 1059)만 읽는다 — 지갑 연결의 받은 쪽지함(wallet_link.rs).
 /// 겉봉 시각은 최대 이틀 앞당겨지므로 `since` 는 부르는 쪽이 이미 이틀 뺀 값을 준다.
-/// 공개키 하나·종류 하나·개수 상한이 있다(통째 긁기 아님). 릴레이 하나라도 답하면 Ok.
-pub(crate) async fn nostr_query_inbox(pubkey: &str, since: i64) -> Result<Vec<Value>, String> {
+///
+/// 🔴 끝까지 넘겨 읽는다. 연결 공개키는 공개돼 있어 누구나 그 키로 겉봉 수백 장을 쌓을 수 있다 —
+///    한 번 200장만 읽으면 진짜 「끊기」가 밀려나 안 보인다. 그래서 `until` 로 페이지를 넘기고,
+///    어느 릴레이에서든 끝(EOSE)까지 못 읽었으면 「다 읽음」이 아니라고 돌려준다(부르는 쪽은 커서를 안 옮긴다).
+/// 돌려주는 값: (겉봉들, 닿은 릴레이를 모두 끝까지 읽었나). 한 곳도 안 닿으면 Err.
+pub(crate) async fn nostr_query_inbox(pubkey: &str, since: i64) -> Result<(Vec<Value>, bool), String> {
     if pubkey.len() != 64 || !pubkey.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) {
         return Err("받는 열쇠가 올바르지 않습니다.".into());
     }
-    let sub = "wl1";
-    let req = serde_json::to_string(&json!(["REQ", sub, { "kinds": [1059], "#p": [pubkey], "since": since.max(0), "limit": 200 }]))
-        .map_err(|e| format!("보낼 것을 만들지 못했습니다: {e}"))?;
+    let pubkey = pubkey.to_string();
     use futures_util::future::join_all;
-    let got = join_all(targets().iter().map(|u| read_one(u, &req, sub))).await;
-    let mut any = false;
+    let got = join_all(targets().into_iter().map(|url| {
+        let pubkey = pubkey.clone();
+        async move {
+            page_all(|until| {
+                let mut f = json!({ "kinds": [1059], "#p": [pubkey], "since": since.max(0), "limit": INBOX_PAGE });
+                if let Some(u) = until { f["until"] = json!(u); }
+                let req = serde_json::to_string(&json!(["REQ", "wl1", f])).unwrap_or_default();
+                let url = url.clone();
+                async move { read_one_eose(&url, &req, "wl1").await }
+            }, INBOX_MAX_PAGES).await
+        }
+    })).await;
+    let (mut any, mut complete) = (false, true);
     let mut seen: std::collections::HashMap<String, Value> = std::collections::HashMap::new();
-    for events in got.into_iter().flatten() {
+    for r in got {
+        let Ok((events, done)) = r else { continue };
         any = true;
+        complete &= done;
         for e in events {
-            if let Some(id) = e.get("id").and_then(Value::as_str) {
-                seen.entry(id.to_string()).or_insert(e);
-            }
+            if let Some(id) = e.get("id").and_then(Value::as_str) { seen.entry(id.to_string()).or_insert(e); }
         }
     }
     if !any {
         return Err("릴레이에 닿지 못했습니다. 인터넷을 확인해 주세요.".into());
     }
-    Ok(seen.into_values().collect())
+    Ok((seen.into_values().collect(), complete))
+}
+pub(crate) const INBOX_PAGE: usize = 200;
+const INBOX_MAX_PAGES: usize = 50;
+
+/// `until` 을 오래된 쪽으로 옮기며 끝까지 읽는다. `page(until)` = (그 쪽 글, EOSE 를 받았나).
+/// 다 읽었으면 true. 첫 쪽부터 실패하면 Err, 중간에 끊기거나·EOSE 없이 끝나거나·더 못 나아가면(같은 초에 한 쪽 넘게) false.
+pub(crate) async fn page_all<F, Fut>(mut page: F, max_pages: usize) -> Result<(Vec<Value>, bool), String>
+where
+    F: FnMut(Option<i64>) -> Fut,
+    Fut: std::future::Future<Output = Result<(Vec<Value>, bool), String>>,
+{
+    let mut all: std::collections::HashMap<String, Value> = std::collections::HashMap::new();
+    let mut until: Option<i64> = None;
+    for n in 0..max_pages {
+        let (events, eose) = match page(until).await {
+            Ok(v) => v,
+            Err(e) if n == 0 => return Err(e),
+            Err(_) => return Ok((all.into_values().collect(), false)),
+        };
+        let count = events.len();
+        let oldest = events.iter().filter_map(|e| e.get("created_at").and_then(Value::as_i64)).min();
+        let mut fresh = 0;
+        for e in events {
+            if let Some(id) = e.get("id").and_then(Value::as_str).map(str::to_string) {
+                if !all.contains_key(&id) { all.insert(id, e); fresh += 1; }
+            }
+        }
+        if !eose { return Ok((all.into_values().collect(), false)); }
+        if count < INBOX_PAGE { return Ok((all.into_values().collect(), true)); }
+        match oldest {
+            // until 은 그 초를 포함한다 — 새 글이 하나도 없으면 더 나아갈 수 없다.
+            Some(o) if fresh > 0 => until = Some(o),
+            _ => return Ok((all.into_values().collect(), false)),
+        }
+    }
+    Ok((all.into_values().collect(), false))
+}
+
+/// read_one 과 같되, 개수로 끊지 않고 EOSE 를 받았는지까지 돌려준다(쪽 넘기기용).
+async fn read_one_eose(url: &str, req: &str, sub: &str) -> Result<(Vec<Value>, bool), String> {
+    use futures_util::{SinkExt, StreamExt};
+    use tokio_tungstenite::tungstenite::Message;
+    let (mut ws, _) = tokio::time::timeout(std::time::Duration::from_secs(7), tokio_tungstenite::connect_async(url))
+        .await
+        .map_err(|_| "연결이 오래 걸립니다".to_string())?
+        .map_err(|e| format!("연결 실패: {e}"))?;
+    ws.send(Message::Text(req.to_string().into())).await.map_err(|e| format!("보내지 못했습니다: {e}"))?;
+    let mut out = Vec::new();
+    let mut eose = false;
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(10);
+    while out.len() <= 4 * INBOX_PAGE {
+        let left = deadline.saturating_duration_since(tokio::time::Instant::now());
+        if left.is_zero() { break; }
+        let Ok(Some(Ok(msg))) = tokio::time::timeout(left, ws.next()).await else { break };
+        let Message::Text(t) = msg else { continue };
+        let Ok(v) = serde_json::from_str::<Value>(&t) else { continue };
+        let Some(a) = v.as_array() else { continue };
+        if a.get(1).and_then(Value::as_str) != Some(sub) { continue; }
+        match a.first().and_then(Value::as_str) {
+            Some("EOSE") => { eose = true; break; }
+            Some("EVENT") => if let Some(e) = a.get(2) { out.push(e.clone()); },
+            Some("CLOSED") => break,
+            _ => {}
+        }
+    }
+    let _ = ws.close(None).await;
+    Ok((out, eose))
 }
 
 async fn read_one(url: &str, req: &str, sub: &str) -> Result<Vec<Value>, String> {

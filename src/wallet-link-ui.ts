@@ -9,7 +9,7 @@ type Offer = { v: 1; chain: "rvn-main"; account: 0; desktopKey: string; name: st
 type LinkRow = { linkId: string; name: string; phoneAddresses: string[]; dailySats: string; spentToday: string; created: number; revoked: boolean };
 type Pending = { id: string; linkId: string; phoneName: string; kind: "fill" | "send"; to: string; sats: string; created: number; expires: number };
 type Inbox = { pending: Pending[]; links: LinkRow[]; online?: boolean;
-  offer: null | { stage: "waiting"; expires: number } | { stage: "confirm"; code: string; phoneKey: string; phoneAddresses: string[]; offer: Offer } };
+  offer: null | { stage: "waiting"; expires: number } | { stage: "cancelled" } | { stage: "confirm"; code: string; phoneKey: string; phoneAddresses: string[]; offer: Offer } };
 type Review = { id: string; short: boolean; kind?: "fill" | "send"; to?: string; sats?: string; feeSats?: string; totalSats?: string; fingerprint?: string; phoneName?: string; expires?: number };
 
 const $ = (id: string) => document.getElementById(id) as HTMLElement;
@@ -132,7 +132,8 @@ export function wireWalletLink(deps: { invoke: Invoke; ask: () => Promise<string
     try {
       const box = await invoke<Inbox>("wallet_link_inbox");
       apply(box);
-      if (box.offer?.stage === "confirm" && offer && $("wl-confirm").hidden) await showConfirm(box.offer.offer, box.offer.phoneKey, box.offer.code, box.offer.phoneAddresses);
+      if (box.offer?.stage === "cancelled" && offer) await cancelOffer(t("폰에서 연결을 취소했어요. 연결하지 않았어요. 처음부터 다시 해 주세요."));
+      else if (box.offer?.stage === "confirm" && offer && $("wl-confirm").hidden) await showConfirm(box.offer.offer, box.offer.phoneKey, box.offer.code, box.offer.phoneAddresses);
     } catch { /* 앱 잠금·인터넷 끊김 — 다음 차례에 다시 */ }
     finally { polling = false; schedule(offer ? 4_000 : 30_000); }
   }

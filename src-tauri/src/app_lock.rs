@@ -122,19 +122,21 @@ struct Inner {
     /// 연달아 틀린 횟수와 다음 시도 가능 시각(유닉스 초). 메모리에만.
     failures: u32,
     next_try: i64,
+    /// 잠글 때마다 하나씩 는다. 돈 경로가 「시작한 뒤로 한 번도 안 잠겼나」를 같은 자물쇠 안에서 본다.
+    epoch: u64,
 }
 
 #[cfg(not(test))]
 fn cell() -> &'static Mutex<Inner> {
     static CELL: OnceLock<Mutex<Inner>> = OnceLock::new();
-    CELL.get_or_init(|| Mutex::new(Inner { state: read_file(), failures: 0, next_try: 0 }))
+    CELL.get_or_init(|| Mutex::new(Inner { state: read_file(), failures: 0, next_try: 0, epoch: 0 }))
 }
 
 /// 시험에서는 실(thread)마다 따로 — 한 시험이 잠근 것이 동시에 도는 다른 시험(폰 환불 등)을 막지 않게.
 #[cfg(test)]
 fn cell() -> &'static Mutex<Inner> {
     thread_local! {
-        static CELL: &'static Mutex<Inner> = Box::leak(Box::new(Mutex::new(Inner { state: State::default(), failures: 0, next_try: 0 })));
+        static CELL: &'static Mutex<Inner> = Box::leak(Box::new(Mutex::new(Inner { state: State::default(), failures: 0, next_try: 0, epoch: 0 })));
     }
     CELL.with(|c| *c)
 }
@@ -143,6 +145,27 @@ static APP: OnceLock<tauri::AppHandle> = OnceLock::new();
 
 pub fn is_locked() -> bool {
     cell().lock().unwrap_or_else(|e| e.into_inner()).state.locked
+}
+
+/// 돈 경로(wallet_link 승인)가 시작할 때: 잠기지 않았으면 지금의 잠금 차례 번호.
+pub(crate) fn unlocked_epoch() -> Option<u64> {
+    let g = cell().lock().unwrap_or_else(|e| e.into_inner());
+    (!g.state.locked).then_some(g.epoch)
+}
+
+/// 서명 직전·전파 직전에 다시 본다: 지금도 안 잠겼고, 그사이 한 번도 잠긴 적이 없나(잠갔다 푼 것도 무효).
+/// 잠금 전환(`lock`)과 같은 자물쇠 안에서 읽으므로 둘이 엇갈리지 않는다.
+pub(crate) fn still_unlocked(epoch: u64) -> bool {
+    let g = cell().lock().unwrap_or_else(|e| e.into_inner());
+    !g.state.locked && g.epoch == epoch
+}
+
+/// 시험 전용: 파일·창 없이 메모리에서만 잠근다(실마다 따로인 cell).
+#[cfg(test)]
+pub(crate) fn lock_in_memory_for_test() {
+    let mut g = cell().lock().unwrap_or_else(|e| e.into_inner());
+    g.state = State::locked("manual", 1);
+    g.epoch += 1;
 }
 
 pub fn state() -> State {
@@ -168,6 +191,7 @@ pub fn lock(reason: &str) -> Result<State, String> {
         let mut g = cell().lock().unwrap_or_else(|e| e.into_inner());
         let since = if g.state.locked { g.state.since } else { Some(now()) };
         g.state = State { since, ..State::locked(reason, now()) };
+        g.epoch = g.epoch.wrapping_add(1);
         g.state.clone()
     };
     let saved = persist(&s);
