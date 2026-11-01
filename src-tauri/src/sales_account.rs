@@ -7,7 +7,7 @@ const READ_ERROR: &str = "금액을 확인하지 못했어요. 메인넷 동기�
 static GATE: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 struct Secret<const N: usize>([u8; N]);
 impl<const N: usize> Drop for Secret<N> { fn drop(&mut self) { wipe_bytes(&mut self.0); } }
-struct Text(String);
+pub(crate) struct Text(pub(crate) String);
 impl Drop for Text { fn drop(&mut self) { wipe(&mut self.0); } }
 struct SecretJson(Value);
 impl Drop for SecretJson { fn drop(&mut self) {
@@ -20,12 +20,16 @@ impl Drop for SecretJson { fn drop(&mut self) {
 
 /// Native counterpart of the vendored phone core deriveAccount(seed, 100).
 /// Only the account-level public serialization is returned (BIP32 xpub version).
-pub(crate) fn account_xpub(seed: &[u8; 64]) -> Option<String> {
+#[cfg(test)]
+pub(crate) fn account_xpub(seed: &[u8; 64]) -> Option<String> { account_xpub_at(seed, 100) }
+/// Same derivation for any hardened account m/44'/175'/<account>' (wallet link uses account 0).
+pub(crate) fn account_xpub_at(seed: &[u8; 64], account: u32) -> Option<String> {
+    if account >= 0x80000000 { return None; }
     use secp256k1::{PublicKey, SecretKey, Scalar, Secp256k1};
     let secp = Secp256k1::new();
     let mut node = Secret(hmac_sha512(b"Bitcoin seed", &[seed]));
     let mut fingerprint = [0u8; 4];
-    for index in [44u32, 175, 100] {
+    for index in [44u32, 175, account] {
         let key = Secret::<32>(node.0[..32].try_into().ok()?);
         let mut sk = SecretKey::from_byte_array(&key.0).ok()?;
         let public = PublicKey::from_secret_key(&secp, &sk).serialize();
@@ -50,16 +54,16 @@ pub(crate) fn account_xpub(seed: &[u8; 64]) -> Option<String> {
     // base58check prepends one byte; remainder includes the final 3 version bytes.
     let mut payload = vec![0x88, 0xb2, 0x1e, 3];
     payload.extend_from_slice(&fingerprint);
-    payload.extend_from_slice(&(0x80000000u32 + 100).to_be_bytes());
+    payload.extend_from_slice(&(0x80000000u32 + account).to_be_bytes());
     payload.extend_from_slice(&node.0[32..]);
     payload.extend_from_slice(&public);
     Some(crate::words::base58check(0x04, &payload))
 }
 
-trait SalesRpc {
+pub(crate) trait SalesRpc {
     async fn call(&self, method: &str, params: Value) -> Result<Value, String>;
 }
-struct NativeRpc;
+pub(crate) struct NativeRpc;
 impl SalesRpc for NativeRpc {
     async fn call(&self, method: &str, params: Value) -> Result<Value, String> {
         if matches!(method, "walletpassphrase" | "getmywords") {
@@ -76,6 +80,11 @@ pub async fn sales_account_reveal(passphrase: String) -> Result<String, String> 
     reveal_with(&NativeRpc, passphrase).await
 }
 async fn reveal_with(rpc: &impl SalesRpc, passphrase: Text) -> Result<String, String> {
+    reveal_account_with(rpc, passphrase, 100).await
+}
+/// Re-authenticates with the wallet password even when the wallet is already open, derives one
+/// account xpub (public only), and relocks. Callers map the single sanitized error to their own words.
+pub(crate) async fn reveal_account_with(rpc: &impl SalesRpc, passphrase: Text, account: u32) -> Result<String, String> {
     let state = rpc.call("getwalletinfo", json!([])).await.map_err(|_| AUTH_ERROR)?;
     if state["unlocked_until"].as_i64().is_none() || passphrase.0.is_empty() { return Err(AUTH_ERROR.into()); }
     // Relock even an already-open wallet: an existing unlocked session is not reauthentication.
@@ -91,7 +100,7 @@ async fn reveal_with(rpc: &impl SalesRpc, passphrase: Text) -> Result<String, St
         if !extra.is_ascii() { return Err(AUTH_ERROR.to_string()); }
         let checked = crate::words::check(phrase).map_err(|_| AUTH_ERROR)?;
         let seed = Secret(crate::identity::seed_from_words(checked.expose(), extra).ok_or(AUTH_ERROR)?);
-        account_xpub(&seed.0).ok_or(AUTH_ERROR.to_string())
+        account_xpub_at(&seed.0, account).ok_or(AUTH_ERROR.to_string())
     }.await;
     let locked = rpc.call("walletlock", json!([])).await;
     if locked.is_err() { return Err(AUTH_ERROR.into()); }

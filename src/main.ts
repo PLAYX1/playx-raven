@@ -9,6 +9,8 @@ void import("./wallet-file"); // 지갑 파일 내보내기·가져오기 + 백�
 import { routeBackupDrop } from "./backup-drop-route"; // 0.9.0 — 놓은 .pxlock·.rvwallet 은 자산 드롭보다 먼저 복원 확인 창으로
 import "./sales-account.css";
 import { wireSalesAccount } from "./sales-account";
+import "./wallet-link.css";
+import { wireWalletLink } from "./wallet-link-ui";
 import "./creator-publish.css";
 import { createLazyKeep } from "./asset-keep-lazy";
 import { wireCreatorPublish, MINE_KEY } from "./creator-publish";
@@ -18950,6 +18952,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("sh-sample").addEventListener("click", fillSample);
   salesAccount = wireSalesAccount({ invoke, cancelAsk: () => askClose(null), active: () => currentPage === "sales",
     ask: () => ask("지갑 비밀번호 재인증", "판매 전용 번호를 만든 뒤 지갑을 바로 잠가요.", { password: true }) });
+  wireWalletLink({ invoke, ask: () => ask("지갑 비밀번호 재인증", "폰과 연결할 받기 전용 번호를 만든 뒤 지갑을 바로 잠가요.", { password: true }) });
   $("sales-back").onclick = () => showPage("home");
   $("reward-back").onclick = () => showPage("home");
   $("parts-back").onclick = () => showPage("home");

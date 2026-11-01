@@ -75,6 +75,8 @@ serde_json = { version = "1", features = ["preserve_order"] }
 #   서명은 위의 secp256k1(BIP340 schnorr)을 그대로 쓴다.
 x25519-dalek = { version = "2", features = ["static_secrets"] }
 chacha20poly1305 = "0.10"
+# 폰과 지갑 연결(wallet_link.rs)의 NIP-44 v2 — 이야기 쪽지와 같은 암호(ChaCha20 + HMAC). 위 판이 이미 쓰는 0.9.
+chacha20 = "0.9"
 hkdf = "0.12"
 hmac = "0.12"
 # Serves the phone screens — the owner's remote control and the customer's

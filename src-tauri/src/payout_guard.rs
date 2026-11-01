@@ -131,6 +131,12 @@ pub fn begin(dir: &Path, lane: &str, id: &str, intent: &[u8]) -> Result<Begin, S
     }
 }
 impl Pending {
+    /// Only for a caller that KNOWS nothing reached the network (e.g. signing itself failed,
+    /// no broadcast attempted). Anything ambiguous must keep the marker (fail closed).
+    pub fn abandon_unsent(self) -> Result<(), String> {
+        fs::remove_file(&self.marker).map_err(|_| BLOCKED)?;
+        sync_parent(&self.marker)
+    }
     pub fn complete_waiting_ack(&self, txid: &str) -> Result<(), String> {
         if txid.len() != 64 || !txid.bytes().all(|b| b.is_ascii_hexdigit()) {
             return Err(BLOCKED.into());

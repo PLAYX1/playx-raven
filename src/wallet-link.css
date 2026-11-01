@@ -1,0 +1,32 @@
+/* 설정 「폰과 지갑 연결」 + 폰 요청 승인 창 (src/wallet-link-ui.ts). */
+#wl-card .wl-warn { color: var(--warn); }
+#wl-card .wl-field, #wl-modal .wl-field { display: flex; flex-direction: column; gap: 6px; margin: 12px 0; font-size: 14px; color: var(--muted); }
+#wl-card .wl-field input, #wl-modal .wl-field input { font-size: 16px; padding: 10px 12px; }
+#wl-card button { min-height: 44px; margin: 6px 6px 6px 0; }
+#wl-qrimg { display: block; background: #fff; border-radius: 8px; margin: 12px 0; }
+#wl-card .wl-q { font-size: 17px; font-weight: 600; margin-top: 12px; }
+#wl-card .wl-code { font-size: 40px; font-weight: 700; letter-spacing: 0.08em; font-variant-numeric: tabular-nums; margin: 8px 0 12px; }
+.wl-mono { font-family: ui-monospace, monospace; font-size: 13px; overflow-wrap: anywhere; white-space: pre-line; user-select: text; }
+#wl-card .wl-sub { margin-top: 20px; font-size: 15px; }
+#wl-card .wl-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+#wl-card .wl-rowtxt { display: flex; flex-direction: column; gap: 2px; margin-right: auto; }
+#wl-card .wl-d { font-size: 13px; color: var(--muted); }
+#wl-msg.wl-bad { color: var(--danger); }
+#wl-waiting { padding: 10px 12px; border: 1px solid var(--brand); border-radius: 10px; }
+
+#wl-modal { position: fixed; inset: 0; z-index: 190; display: none; align-items: center; justify-content: center; padding: 24px;
+  background: color-mix(in srgb, #000 38%, transparent); }
+#wl-modal.on { display: flex; }
+#wl-modal .wl-box { width: 500px; max-width: 100%; max-height: 100%; overflow-y: auto; background: var(--panel);
+  border: 2px solid var(--ok); border-radius: 14px; padding: 24px; }
+#wl-modal.wl-send .wl-box { border-color: var(--danger); }
+#wl-modal h3 { font-size: 20px; font-weight: 600; margin-bottom: 8px; color: var(--ok); }
+#wl-modal.wl-send h3 { color: var(--danger); }
+#wl-modal .wl-lead { font-size: 15px; color: var(--muted); line-height: 1.6; }
+#wl-modal .wl-label { margin-top: 14px; font-size: 13px; color: var(--muted); }
+#wl-modal .wl-short { font-family: ui-monospace, monospace; font-size: 30px; font-weight: 700; letter-spacing: 0.04em; margin: 2px 0; }
+#wl-modal.wl-send .wl-short { color: var(--danger); }
+#wl-modal .wl-sum { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 14px 0; font-size: 16px; }
+#wl-modal .wl-sum dt { color: var(--muted); }
+#wl-modal .wl-sum dd { margin: 0; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+#wl-modal .wl-say { min-height: 1.4em; font-size: 14px; color: var(--danger); }

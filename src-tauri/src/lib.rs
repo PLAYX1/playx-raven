@@ -113,6 +113,7 @@ mod tunnel;
 mod vending;
 mod remote_sales;
 mod sales_account;
+mod wallet_link;
 mod update_policy;
 mod pe_version;
 mod secure_update;
@@ -459,6 +460,16 @@ pub fn run() {
             wallet::unlock_for,
             sales_account::sales_account_reveal,
             sales_account::sales_account_balance,
+            wallet_link::wallet_link_offer,
+            wallet_link::wallet_link_offer_again,
+            wallet_link::wallet_link_cancel,
+            wallet_link::wallet_link_confirm,
+            wallet_link::wallet_link_list,
+            wallet_link::wallet_link_inbox,
+            wallet_link::wallet_link_review,
+            wallet_link::wallet_link_approve,
+            wallet_link::wallet_link_refuse,
+            wallet_link::wallet_link_revoke,
             wallet::lock_wallet,
             vending::sellable_assets,
             vending::pending_sales,

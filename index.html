@@ -2781,6 +2781,22 @@
       </div>
     </div>
 
+    <!-- 폰 요청 승인 창. 자동 승인 없음 — 단추를 누를 때만 보낸다. -->
+    <div id="wl-modal" role="dialog" aria-modal="true" aria-labelledby="wl-m-title">
+      <div class="wl-box">
+        <h3 id="wl-m-title"></h3>
+        <p class="wl-lead" id="wl-m-lead"></p>
+        <p class="wl-label">받는 곳</p>
+        <p class="wl-short" id="wl-m-short" translate="no"></p>
+        <p class="wl-mono" id="wl-m-addr" translate="no"></p>
+        <dl class="wl-sum"><dt>보낼 돈</dt><dd id="wl-m-amount"></dd><dt>수수료</dt><dd id="wl-m-fee"></dd><dt>모두</dt><dd id="wl-m-total"></dd></dl>
+        <label class="wl-field" id="wl-m-tailbox" hidden><span>확인을 위해 받는 주소의 끝 4자리를 적어 주세요</span><input id="wl-m-tail" maxlength="4" autocomplete="off" /></label>
+        <label class="wl-field" id="wl-m-passbox" hidden><span>지갑 비밀번호</span><input id="wl-m-pass" type="password" autocomplete="off" /></label>
+        <p class="wl-say" id="wl-m-say" role="status"></p>
+        <div class="askrow"><button type="button" class="ghost" id="wl-m-later">나중에</button><button type="button" class="ghost" id="wl-m-no">거절</button><button type="button" id="wl-m-go" disabled>승인</button></div>
+      </div>
+    </div>
+
     <!-- 묻는 창. 브라우저 것이 아니라 우리 것이다. -->
     <div id="askwrap">
       <div class="askbox">
@@ -5417,6 +5433,34 @@
               </div>
               <div class="sx-slot" data-sx-slot="rvp-connect-settings"></div>
               <div class="sx-slot" data-sx-slot="rvp-card"></div>
+              <!-- 폰과 지갑 연결(src/wallet-link-ui.ts · src-tauri/src/wallet_link.rs). 비밀은 화면에 없다. -->
+              <div class="card" id="wl-card">
+                <h3>폰과 지갑 연결</h3>
+                <p class="meta">폰에서 이 컴퓨터 지갑(주 지갑)의 잔액과 받는 주소를 볼 수 있게 해요. 복구 단어와 열쇠는 폰으로 가지 않아요. 이 컴퓨터에서 돈이 나갈 때는 언제나 여기서 내가 승인해요.</p>
+                <p class="meta wl-warn">폰을 잃어버리면 이 지갑의 거래 내역이 보일 수 있어요. 돈은 꺼낼 수 없어요. 폰은 공개 인덱서에서 잔액을 직접 읽어요.</p>
+                <label class="check"><input type="checkbox" id="wl-agree" /> <span>알겠어요. 이 지갑을 내 폰과 연결할게요.</span></label>
+                <label class="wl-field"><span>이 컴퓨터 지갑 이름</span><input id="wl-name" maxlength="40" value="데스크탑 지갑" /></label>
+                <button type="button" id="wl-make" disabled>연결 QR 만들기</button>
+                <div id="wl-qr" hidden>
+                  <img id="wl-qrimg" width="220" height="220" alt="폰과 지갑 연결 QR 코드" />
+                  <p id="wl-left" role="status"></p>
+                  <div class="bar"><button type="button" id="wl-again" hidden>QR 새로 만들기</button><button type="button" class="ghost" id="wl-stop">그만두기</button></div>
+                </div>
+                <div id="wl-confirm" hidden>
+                  <p class="wl-q">폰 화면의 숫자와 같나요?</p>
+                  <p class="wl-code" id="wl-code" translate="no"></p>
+                  <p class="meta">폰이 「폰으로 채우기」에 쓸 받는 주소</p>
+                  <p class="wl-mono" id="wl-phoneaddr" translate="no"></p>
+                  <label class="wl-field"><span>이 폰의 이름</span><input id="wl-phonename" maxlength="40" value="내 폰" /></label>
+                  <label class="wl-field"><span>하루에 폰 요청으로 나갈 수 있는 돈(RVN) · 1,000 보다 낮출 수만 있어요</span><input id="wl-daily" inputmode="decimal" value="1000" /></label>
+                  <div class="bar"><button type="button" id="wl-yes">같아요</button><button type="button" class="ghost" id="wl-no">아니에요 · 취소</button></div>
+                </div>
+                <p id="wl-waiting" hidden><span id="wl-waiting-n"></span> <button type="button" class="ghost" id="wl-waiting-open">보기</button></p>
+                <h3 class="wl-sub">연결된 폰</h3>
+                <p class="meta" id="wl-empty">아직 연결된 폰이 없어요.</p>
+                <div id="wl-list"></div>
+                <p id="wl-msg" role="status"></p>
+              </div>
             </section>
 
             <!-- ── 가게 ── 이 노드가 어디인지·손님 받을 준비·금고. -->

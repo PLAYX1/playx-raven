@@ -378,7 +378,8 @@ mod tests {
         "tag_address", "untag_address", "freeze", "unfreeze", "rehearse_fund", "rehearse_issue",
         // 지갑 암호·복구 단어·열쇠
         "unlock_for", "encrypt_wallet", "change_passphrase", "reveal_seed", "sales_account_reveal",
-        "sales_account_balance", "cloud_key_show", "cloud_unlock", "backup_pass_set", "identity_adopt_person_key",
+        "sales_account_balance", "wallet_link_offer", "wallet_link_offer_again", "wallet_link_confirm",
+        "wallet_link_inbox", "wallet_link_review", "wallet_link_approve", "wallet_link_refuse", "wallet_link_revoke", "cloud_key_show", "cloud_unlock", "backup_pass_set", "identity_adopt_person_key",
         "identity_restore_legacy_key", "shop_key_move", "shop_key_move_plan", "shop_pubkey", "artist_pubkey", "store_key_info", "store_sign_digest",
         "words_restore_preflight", "words_restore_check", "words_restore_start", "words_restore_rescan",
         "words_restore_abort", "words_restore_undo", "words_restore_close", "restore_apply", "restore_survey",

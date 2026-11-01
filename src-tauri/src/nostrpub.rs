@@ -330,6 +330,34 @@ pub async fn nostr_query_authors(
     Ok(seen.into_values().collect())
 }
 
+/// 한 열쇠에게 온 겉봉(NIP-17 kind 1059)만 읽는다 — 지갑 연결의 받은 쪽지함(wallet_link.rs).
+/// 겉봉 시각은 최대 이틀 앞당겨지므로 `since` 는 부르는 쪽이 이미 이틀 뺀 값을 준다.
+/// 공개키 하나·종류 하나·개수 상한이 있다(통째 긁기 아님). 릴레이 하나라도 답하면 Ok.
+pub(crate) async fn nostr_query_inbox(pubkey: &str, since: i64) -> Result<Vec<Value>, String> {
+    if pubkey.len() != 64 || !pubkey.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) {
+        return Err("받는 열쇠가 올바르지 않습니다.".into());
+    }
+    let sub = "wl1";
+    let req = serde_json::to_string(&json!(["REQ", sub, { "kinds": [1059], "#p": [pubkey], "since": since.max(0), "limit": 200 }]))
+        .map_err(|e| format!("보낼 것을 만들지 못했습니다: {e}"))?;
+    use futures_util::future::join_all;
+    let got = join_all(targets().iter().map(|u| read_one(u, &req, sub))).await;
+    let mut any = false;
+    let mut seen: std::collections::HashMap<String, Value> = std::collections::HashMap::new();
+    for events in got.into_iter().flatten() {
+        any = true;
+        for e in events {
+            if let Some(id) = e.get("id").and_then(Value::as_str) {
+                seen.entry(id.to_string()).or_insert(e);
+            }
+        }
+    }
+    if !any {
+        return Err("릴레이에 닿지 못했습니다. 인터넷을 확인해 주세요.".into());
+    }
+    Ok(seen.into_values().collect())
+}
+
 async fn read_one(url: &str, req: &str, sub: &str) -> Result<Vec<Value>, String> {
     use futures_util::{SinkExt, StreamExt};
     use tokio_tungstenite::tungstenite::Message;
