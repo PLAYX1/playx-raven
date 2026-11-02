@@ -1,10 +1,10 @@
 {
-  "source": "ravenvault 저장소(폰) 브랜치 claude/rv-link-phone 커밋 03f4527(link.ts·link.test.ts 는 11-03 하루 한도 최대 = 총발행량 21,000,000,000 RVN 「한도 없음」으로 데스크탑에서 먼저 고침 — 폰 저장소에 같은 바이트로 옮긴다) — 바이트 그대로 복사, 패치 없음. core/talk/relay.ts 는 복사하지 않았다: 데스크탑 화면은 connect-src self 라 릴레이 왕래는 러스트(nostrpub.rs·wallet_link.rs)가 한다. transport.ts 의 그 줄은 import type 이라 빌드에서 지워지고, transport.ts 는 시험에서만 쓴다.",
+  "source": "ravenvault 저장소(폰) 브랜치 claude/rv-link-phone 커밋 03f4527(link.ts·link.test.ts 는 11-03 하루 한도 최대 = 총발행량 21,000,000,000 RVN 「한도 없음」으로 데스크탑에서 먼저 고침 — 폰 저장소에 같은 바이트로 옮긴다) · 11-03 「받았어요」(seen) 종류를 데스크탑에서 먼저 더함 — 폰 저장소에 같은 바이트로 옮긴다 — 바이트 그대로 복사, 패치 없음. core/talk/relay.ts 는 복사하지 않았다: 데스크탑 화면은 connect-src self 라 릴레이 왕래는 러스트(nostrpub.rs·wallet_link.rs)가 한다. transport.ts 의 그 줄은 import type 이라 빌드에서 지워지고, transport.ts 는 시험에서만 쓴다.",
   "files": {
-    "core/wallet-link/link.ts": "aca2665c340b101ffcddd46d141f94200415d6eb7a18a3c57a3aec22aef33205",
-    "core/wallet-link/transport.ts": "988a449c6e1cada7d2e4c8bb847beec31bf7cb3a3913e992374366cdf93e7251",
-    "core/wallet-link/link.test.ts": "ac95f9d37bc34d3c50b8370da6a0016bdc30109a80a414d7b058ecdb19be8cf6",
-    "core/wallet-link/transport.test.ts": "a1f4df9c4624b5bdc13bf338e93232a1d3da3142656f2c18dacbc75f116370ba",
+    "core/wallet-link/link.ts": "eff79d23e88bab161ed5172887b6dfbdcb836942604db6ff6549fe433c882bf8",
+    "core/wallet-link/transport.ts": "d3b65a28e9b5e3b64d9d92d97ca8fc6389a92eda95734eff776383baa4a03d48",
+    "core/wallet-link/link.test.ts": "b8ba60b243e682a461ab419e9d5c8bacfee5affc49644e6cb712eaf3ef269bec",
+    "core/wallet-link/transport.test.ts": "0db07b0f29cc9d00191e7f0bee7d138ae1e68400640e7d395796e0404b05a429",
     "core/talk/event.ts": "3f2e5f576472d5b030b81e268c4fc81e12cc1c45addeea94c5880170118594d8",
     "core/talk/nip44.ts": "1809c9fcc3b44f17d8a689b163485c91c624b7f2ee3993fc621b0f119a277e66",
     "core/talk/nip17.ts": "1db456750d68bf7c21c9a05c26d5c9a67941019e6510981deaf1d98f39d97229",

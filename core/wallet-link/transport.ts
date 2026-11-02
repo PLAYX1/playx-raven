@@ -7,14 +7,16 @@
 import { KIND_WRAP, unwrap, wrapFor } from '../talk/nip17';
 import type { NostrEvent } from '../talk/event';
 import type { TalkFilter } from '../talk/relay';
-import type { LinkAccept, LinkRequest, LinkResult, LinkRevoke, Signed } from './link';
+import type { LinkAccept, LinkRequest, LinkResult, LinkRevoke, LinkSeen, Signed } from './link';
 
 export type LinkMessage =
   | { t: 'accept'; s: Signed<LinkAccept> }
   | { t: 'request'; s: Signed<LinkRequest> }
+  | { t: 'seen'; s: Signed<LinkSeen> }
   | { t: 'result'; s: Signed<LinkResult> }
   | { t: 'revoke'; s: Signed<LinkRevoke> };
-const TYPES = new Set(['accept', 'request', 'result', 'revoke']);
+/** 모르는 종류는 null(조용히 버림) — 「seen」 이전 폰은 데스크탑의 「받았어요」를 이렇게 버린다. */
+const TYPES = new Set(['accept', 'request', 'seen', 'result', 'revoke']);
 const MARK = 'rvwl1';
 /** 겉봉 시각은 NIP-17 규칙대로 최대 이틀 앞당겨진다 — 구독·조회는 이만큼 앞에서부터. */
 export const LINK_WRAP_SKEW_SEC = 2 * 86_400;

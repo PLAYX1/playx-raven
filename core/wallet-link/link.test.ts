@@ -5,8 +5,8 @@ import { schnorr } from '../crypto-backend';
 import { publicKeyOf } from '../talk/event';
 import { canonicalJson } from '../creator/bytes';
 import {
-  checkLinkRequest, encodeLinkOffer, linkConfirmCode, linkId, linkReceiveAddress, parseLinkOffer, signLinkAccept, signLinkRequest, signLinkResult,
-  verifyLinkAccept, verifyLinkResult, LINK_DAILY_SATS, type LinkOffer, type LinkRecord, type LinkRequest,
+  checkLinkRequest, encodeLinkOffer, linkConfirmCode, linkId, linkReceiveAddress, parseLinkOffer, signLinkAccept, signLinkRequest, signLinkResult, signLinkSeen,
+  verifyLinkAccept, verifyLinkResult, verifyLinkSeen, LINK_DAILY_SATS, type LinkOffer, type LinkRecord, type LinkRequest, type LinkSeen,
 } from './link';
 
 const hex = (b: Uint8Array) => Array.from(b, x => x.toString(16).padStart(2, '0')).join('');
@@ -73,4 +73,17 @@ assert.equal(verifyLinkResult(res, deskKey, id).txid, 'aa'.repeat(32));
 assert.throws(() => verifyLinkResult(res, phoneKey, id));
 assert.throws(() => verifyLinkResult(res, deskKey, 'ff'.repeat(32)));
 assert.throws(() => signLinkResult({ v: 1, linkId: id, id: '11'.repeat(32) }, desk), 'txid or refused');
+
+// 받았어요(데스크탑 → 폰): 데스크탑 키로만, 이 연결에만. 한도 없음(총발행량)까지 · 넘으면 거절.
+const seenBody: LinkSeen = { v: 1, linkId: id, id: '11'.repeat(32), at: now + 1000, dailySats: '100000000000', spentToday: '0' };
+const seen = signLinkSeen(seenBody, desk);
+assert.equal(canonicalJson(verifyLinkSeen(seen, deskKey, id)), canonicalJson(seenBody));
+assert.throws(() => verifyLinkSeen(seen, phoneKey, id), 'phone key is not the desktop');
+assert.throws(() => verifyLinkSeen(seen, deskKey, 'ff'.repeat(32)), 'other link');
+assert.throws(() => verifyLinkSeen({ ...seen, body: { ...seen.body, spentToday: '1' } }, deskKey, id), 'tampered');
+assert.throws(() => verifyLinkSeen(signLinkResult({ v: 1, linkId: id, id: '11'.repeat(32), txid: 'aa'.repeat(32) }, desk) as never, deskKey, id), 'a result is not a seen');
+assert.equal(verifyLinkSeen(signLinkSeen({ ...seenBody, dailySats: LINK_DAILY_SATS.toString() }, desk), deskKey, id).dailySats, LINK_DAILY_SATS.toString());
+assert.throws(() => signLinkSeen({ ...seenBody, dailySats: (LINK_DAILY_SATS + 1n).toString() }, desk), 'over the total supply');
+assert.throws(() => signLinkSeen({ ...seenBody, dailySats: '0' }, desk), 'zero limit');
+assert.throws(() => signLinkSeen({ ...seenBody, spentToday: '01' }, desk), 'canonical integer text');
 console.log('wallet-link ok');

@@ -140,6 +140,27 @@ export function verifyLinkResult(s: Signed<LinkResult>, desktopKey: string, link
   return { ...b };
 }
 
+/**
+ * 데스크탑 → 폰 「받았어요」(데스크탑 연결 키 서명). 요청을 검사해 승인 대기 목록에 올린 때 한 번 보낸다 — 승인이 아니다.
+ * dailySats·spentToday = 그때 이 연결의 하루 한도·지난 24시간 쓴 것(사토시 정수 글자). dailySats 가 LINK_DAILY_SATS 면 「한도 없음」.
+ * 옛 폰은 이 종류를 모르니 조용히 버리고, 옛 데스크탑은 보내지 않는다 — 폰은 이것 없이도 결과만으로 동작한다.
+ */
+export type LinkSeen = { v: 1; linkId: string; id: string; at: number; dailySats: string; spentToday: string };
+const DAILY = /^[1-9]\d{0,18}$/, SPENT = /^(0|[1-9]\d{0,19})$/;
+function seenShapeOk(b: LinkSeen | undefined): b is LinkSeen {
+  return !!b && b.v === 1 && HEX64.test(b.linkId) && HEX64.test(b.id) && int(b.at, 1) && typeof b.dailySats === 'string' && DAILY.test(b.dailySats)
+    && BigInt(b.dailySats) <= LINK_DAILY_SATS && typeof b.spentToday === 'string' && SPENT.test(b.spentToday);
+}
+export function signLinkSeen(body: LinkSeen, desktopSecret: Uint8Array): Signed<LinkSeen> {
+  if (!seenShapeOk(body)) throw new Error('link-seen');
+  return sign('seen', body, desktopSecret);
+}
+export function verifyLinkSeen(s: Signed<LinkSeen>, desktopKey: string, linkIdHere: string): LinkSeen {
+  const b = s?.body;
+  if (!seenShapeOk(b) || b.linkId !== linkIdHere || !verify('seen', s, desktopKey)) throw new Error('link-seen');
+  return { v: 1, linkId: b.linkId, id: b.id, at: b.at, dailySats: b.dailySats, spentToday: b.spentToday };
+}
+
 /** 연결 끊기(어느 쪽이든 자기 연결 키로 서명). 받은 쪽은 그 연결의 대기 요청을 모두 버리고 철회로 기록한다. */
 export type LinkRevoke = { v: 1; linkId: string; at: number };
 export function signLinkRevoke(body: LinkRevoke, secret: Uint8Array): Signed<LinkRevoke> {

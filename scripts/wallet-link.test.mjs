@@ -66,10 +66,11 @@ function write() {
   const revoke = link.signLinkRevoke({ v: 1, linkId: d.linkId, at: now + 5 }, phone);
   const result = link.signLinkResult({ v: 1, linkId: d.linkId, id: '11'.repeat(32), txid: 'aa'.repeat(32) }, desk);
   const refused = link.signLinkResult({ v: 1, linkId: d.linkId, id: '22'.repeat(32), refused: 'refused' }, desk);
-  const bodies = [['accept', accept.body], ['request', requestFill.body], ['revoke', revoke.body], ['result', result.body], ['result', refused.body]];
+  const seen = link.signLinkSeen({ v: 1, linkId: d.linkId, id: '11'.repeat(32), at: now + 2000, dailySats: '100000000000', spentToday: '0' }, desk);
+  const bodies = [['accept', accept.body], ['request', requestFill.body], ['revoke', revoke.body], ['result', result.body], ['result', refused.body], ['seen', seen.body]];
   const gifts = [['accept', accept], ['request', requestFill], ['request', requestSend], ['revoke', revoke]]
     .map(([t, s]) => ({ t, event: transport.packLinkMessage(phone, d.deskKey, { t, s }) }));
-  const out = { ...d, accept, requestFill, requestSend, revoke, result, refused,
+  const out = { ...d, accept, requestFill, requestSend, revoke, result, refused, seen,
     digests: bodies.map(([tag, body]) => ({ tag, body, hex: digest(tag, body) })), gifts };
   writeFileSync(VECTORS, JSON.stringify(out, null, 2) + '\n');
 }
@@ -100,6 +101,8 @@ test('shared vectors still match the vendored TypeScript (Rust reads the same fi
   assert.equal(link.verifyLinkRevoke(v.revoke, v.phoneKey, v.linkId).at, v.now + 5);
   assert.equal(link.verifyLinkResult(v.result, v.deskKey, v.linkId).txid, 'aa'.repeat(32));
   assert.equal(link.verifyLinkResult(v.refused, v.deskKey, v.linkId).refused, 'refused');
+  assert.equal(link.verifyLinkSeen(v.seen, v.deskKey, v.linkId).dailySats, '100000000000');
+  assert.throws(() => link.verifyLinkSeen(v.seen, v.phoneKey, v.linkId));
   const desk = unhex(v.deskSecret);
   for (const g of v.gifts) {
     const got = transport.openLinkMessage(desk, g.event, v.phoneKey);

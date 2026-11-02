@@ -152,6 +152,17 @@
     },
     "sig": "a7ff62298da232ba1f282564ddab3a19c8fa1b38d0d73fb862687846f60fe617474e36b0488cc5bd7eff00f65a1c0077065017ae23cd0df609fd9c40c55c7ce7"
   },
+  "seen": {
+    "body": {
+      "v": 1,
+      "linkId": "13c9e0c6d33ef0de2f0f9bb4b7b4cd82a4dc6c3b206bfcb104e69993e8f35fc4",
+      "id": "1111111111111111111111111111111111111111111111111111111111111111",
+      "at": 1793600002000,
+      "dailySats": "100000000000",
+      "spentToday": "0"
+    },
+    "sig": "0f00890ea022400d9c0df9f2962b6ed4cc250164e54ceb3c7d8cb3ed841d48dedd795dfc120129bcc598448f9cc6d12d518b3cea17c73e48bc7a6a5e1abfc2fd"
+  },
   "digests": [
     {
       "tag": "accept",
@@ -208,6 +219,18 @@
         "refused": "refused"
       },
       "hex": "5d1c46ebbffd7e233b3c2399c5199a39a66bbc1986b03b403e36261b21c14fb5"
+    },
+    {
+      "tag": "seen",
+      "body": {
+        "v": 1,
+        "linkId": "13c9e0c6d33ef0de2f0f9bb4b7b4cd82a4dc6c3b206bfcb104e69993e8f35fc4",
+        "id": "1111111111111111111111111111111111111111111111111111111111111111",
+        "at": 1793600002000,
+        "dailySats": "100000000000",
+        "spentToday": "0"
+      },
+      "hex": "53a79115b67fbf35ddee70115c4eb84c79a75a3df5c7accc6cf3a06bc58b1f0e"
     }
   ],
   "gifts": [

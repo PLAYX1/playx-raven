@@ -433,6 +433,9 @@ struct Req {
     /// 승인할 때 확인한 수수료. 하루 한도와 쓴 돈 기록에 금액과 함께 들어간다.
     #[serde(default)]
     fee: u64,
+    /// 서명한 「받았어요」(seen) — 아직 못 보냈으면 대기 중인 동안 다음 확인 때 다시 보낸다. 보내면 비운다.
+    #[serde(default)]
+    seen_out: Option<Value>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct Spend { link_id: String, at: i64, sats: u64 }
@@ -608,11 +611,17 @@ fn process(dir: &Path, sk: &[u8; 32], gifts: &[Value], now: i64, session: Option
                 let spent = spent_today(&s, &link.link_id, now, &rid);
                 match check_request(&msg, &link, now, seen, spent) {
                     (Check::Ok(kind), Some(r)) => {
+                        // 폰에 「받았어요」(승인 아님): 이 연결의 하루 한도·지난 24시간 쓴 것만 — 결과보다 더 많은 것은 싣지 않는다.
+                        // 서명이 안 되면(그럴 일 없음) 보내지 않을 뿐 요청은 그대로 받는다 — 폰은 이것 없이도 동작한다.
+                        let seen_out = sign_body("seen", json!({"v": 1, "linkId": r.link_id, "id": r.id, "at": now,
+                            "dailySats": link.daily_sats.to_string(), "spentToday": spent.to_string()}), sk).ok();
                         // 🔴 서명보다 먼저 기록한다. 이 저장이 실패하면 화면에 띄우지도 않는다.
                         s.seen.insert(r.id.clone(), now);
                         s.requests.insert(r.id.clone(), Req { link_id: r.link_id, kind: kind.into(), to: r.to, sats: r.sats, created: r.created,
-                            expires: r.expires, received: now, status: "pending".into(), txid: None, refused: None, result: None, result_published: false, fee: 0 });
+                            expires: r.expires, received: now, status: "pending".into(), txid: None, refused: None, result: None, result_published: false, fee: 0,
+                            seen_out: seen_out.clone() });
                         save(dir, &s)?;
+                        if let Some(sv) = seen_out { out.push((link.phone_key.clone(), "seen", sv)); }
                     }
                     (Check::No("seen"), _) => {
                         // 같은 요청이 다시 왔다: 다시 서명하지 않고 이미 낸 결과를 그대로 다시 보낸다.
@@ -622,7 +631,7 @@ fn process(dir: &Path, sk: &[u8; 32], gifts: &[Value], now: i64, session: Option
                         s.seen.insert(r.id.clone(), now);
                         let res = sign_body("result", json!({"v": 1, "linkId": r.link_id, "id": r.id, "refused": why}), sk)?;
                         s.requests.insert(r.id.clone(), Req { link_id: r.link_id, kind: "refused".into(), to: r.to, sats: r.sats, created: r.created,
-                            expires: r.expires, received: now, status: "refused".into(), txid: None, refused: Some(why.into()), result: Some(res.clone()), result_published: false, fee: 0 });
+                            expires: r.expires, received: now, status: "refused".into(), txid: None, refused: Some(why.into()), result: Some(res.clone()), result_published: false, fee: 0, seen_out: None });
                         out.push((link.phone_key.clone(), "result", res));
                     }
                     _ => {}
@@ -653,7 +662,12 @@ fn process(dir: &Path, sk: &[u8; 32], gifts: &[Value], now: i64, session: Option
         r.refused = Some("expired".into());
         r.result = Some(res);
     }
-    // 아직 못 보낸 결과·끊기를 다시 보낸다.
+    // 아직 못 보낸 「받았어요」(대기 중일 때만 — 결과가 나면 의미 없다)·결과·끊기를 다시 보낸다.
+    for r in s.requests.values().filter(|r| r.status == "pending") {
+        if let (Some(sv), Some(l)) = (&r.seen_out, s.links.iter().find(|l| l.link_id == r.link_id && !l.revoked)) {
+            if !out.iter().any(|(_, _, v)| v == sv) { out.push((l.phone_key.clone(), "seen", sv.clone())); }
+        }
+    }
     for (_, r) in s.requests.iter() {
         if let (Some(res), false) = (&r.result, r.result_published) {
             if let Some(l) = s.links.iter().find(|l| l.link_id == r.link_id) {
@@ -673,13 +687,14 @@ fn cancel_pending(s: &mut State, link_id: &str) {
         r.result = None;
     }
 }
-/// 보낸 것을 기록에 표시한다(결과는 publish 성공 시 result_published, 끊기는 revoke_out 비움).
+/// 보낸 것을 기록에 표시한다(결과는 publish 성공 시 result_published, 받았어요는 seen_out·끊기는 revoke_out 비움).
 fn mark_sent(dir: &Path, sent: &[(&'static str, Value)]) -> Result<(), String> {
     if sent.is_empty() { return Ok(()); }
     let mut s = load(dir)?;
     for (t, v) in sent {
         if *t == "result" { for r in s.requests.values_mut() { if r.result.as_ref() == Some(v) { r.result_published = true; } } }
         if *t == "revoke" { for l in s.links.iter_mut() { if l.revoke_out.as_ref() == Some(v) { l.revoke_out = None; } } }
+        if *t == "seen" { for r in s.requests.values_mut() { if r.seen_out.as_ref() == Some(v) { r.seen_out = None; } } }
     }
     save(dir, &s)
 }
@@ -996,6 +1011,12 @@ mod tests {
         // 여기서 서명한 결과: 같은 다이제스트(위에서 확인)·표준 BIP340 이라 폰 verifyLinkResult 가 받는다.
         let mine = sign_body("result", v["result"]["body"].clone(), &key(&v, "deskSecret")).unwrap();
         assert!(verify_body("result", &mine, v["deskKey"].as_str().unwrap()));
+        // 「받았어요」: TS 가 서명한 것이 여기서 맞고(다이제스트는 위 digests 에 있다), 다른 꼬리표·다른 키로는 안 맞는다.
+        assert!(verify_body("seen", &v["seen"], v["deskKey"].as_str().unwrap()), "TS-signed seen verifies here");
+        assert!(!verify_body("result", &v["seen"], v["deskKey"].as_str().unwrap()), "domain tag separates seen from result");
+        assert!(!verify_body("seen", &v["seen"], phone));
+        let mine = sign_body("seen", v["seen"]["body"].clone(), &key(&v, "deskSecret")).unwrap();
+        assert!(verify_body("seen", &mine, v["deskKey"].as_str().unwrap()));
     }
 
     #[test]
@@ -1078,9 +1099,12 @@ mod tests {
         }
     }
     #[derive(Default)]
-    struct FakeNet { inbox: Vec<Value>, sent: RefCell<Vec<Value>>, incomplete: bool }
+    struct FakeNet { inbox: Vec<Value>, sent: RefCell<Vec<Value>>, incomplete: bool, down: std::cell::Cell<bool> }
     impl Net for FakeNet {
-        async fn publish(&self, e: Value) -> Result<(), String> { self.sent.borrow_mut().push(e); Ok(()) }
+        async fn publish(&self, e: Value) -> Result<(), String> {
+            if self.down.get() { return Err("down".into()); }
+            self.sent.borrow_mut().push(e); Ok(())
+        }
         async fn fetch(&self, _p: &str, _s: i64) -> Result<(Vec<Value>, bool), String> { Ok((self.inbox.clone(), !self.incomplete)) }
     }
 
@@ -1178,6 +1202,49 @@ mod tests {
         assert_eq!(again, vec![res]);
         assert_eq!(rpc.count("signrawtransaction"), 1);
         assert!(load(&d).unwrap().requests.values().filter(|r| r.status == "pending").count() == 0);
+    }
+
+    /// 폰이 여는 것처럼(데스크탑 open 은 데스크탑이 받는 종류만 연다 — seen 은 데스크탑이 받지 않는다).
+    fn open_as_phone(my: &[u8; 32], gift: &Value) -> Option<(String, String, Value)> {
+        let (from, text) = unwrap(my, gift)?;
+        let v: Value = serde_json::from_str(&text).ok()?;
+        Some((from, v.get("rvwl1")?.as_str()?.to_string(), v.get("s")?.clone()))
+    }
+    #[tokio::test]
+    async fn a_stored_request_tells_the_phone_seen_once_and_retries_when_delivery_fails() {
+        let v = vectors();
+        let (now, desk, phone) = (v["now"].as_i64().unwrap() + 2000, key(&v, "deskSecret"), key(&v, "phoneSecret"));
+        let (desk_key, lid) = (v["deskKey"].as_str().unwrap(), v["linkId"].as_str().unwrap());
+        let d = linked_dir(&v, "seen");
+        // 릴레이가 안 될 때 받은 요청: 기록은 되고 「받았어요」는 남아 있다.
+        let net = FakeNet { inbox: vec![gift(&v, "request", 0)], ..Default::default() };
+        net.down.set(true);
+        inbox_with(&net, &d, &desk, now).await.unwrap();
+        let rid = "11".repeat(32);
+        assert!(load(&d).unwrap().requests[&rid].seen_out.is_some(), "kept for the next check");
+        // 다음 확인 때 다시 보낸다 — 한 번만.
+        net.down.set(false);
+        inbox_with(&net, &d, &desk, now + 5000).await.unwrap();
+        let sent: Vec<(String, String, Value)> = net.sent.borrow().iter().filter_map(|e| open_as_phone(&phone, e)).collect();
+        assert_eq!(sent.len(), 1, "one seen, nothing else");
+        let (from, t, sv) = &sent[0];
+        assert_eq!((from.as_str(), t.as_str()), (desk_key, "seen"));
+        assert!(verify_body("seen", sv, desk_key));
+        assert_eq!(sv["body"], json!({"v": 1, "linkId": lid, "id": rid, "at": now, "dailySats": (1_000u64 * 100_000_000).to_string(), "spentToday": "0"}));
+        assert!(load(&d).unwrap().requests[&rid].seen_out.is_none(), "delivered");
+        inbox_with(&net, &d, &desk, now + 9000).await.unwrap();
+        assert_eq!(net.sent.borrow().len(), 1, "not resent");
+        // 결과가 난 요청의 못 보낸 「받았어요」는 다시 보내지 않는다(결과가 대신 간다).
+        let d2 = linked_dir(&v, "seen2");
+        let down = FakeNet { inbox: vec![gift(&v, "request", 1)], ..Default::default() };
+        down.down.set(true);
+        inbox_with(&down, &d2, &desk, now).await.unwrap();
+        let up = FakeNet::default();
+        refuse_with(&up, &d2, &desk, &"22".repeat(32)).await.unwrap();
+        inbox_with(&up, &d2, &desk, now + 5000).await.unwrap();
+        let kinds: Vec<String> = up.sent.borrow().iter().filter_map(|e| open_as_phone(&phone, e)).map(|(_, t, _)| t).collect();
+        assert_eq!(kinds, vec!["result".to_string()]);
+        for d in [d, d2] { let _ = std::fs::remove_dir_all(d); }
     }
 
     #[tokio::test]
