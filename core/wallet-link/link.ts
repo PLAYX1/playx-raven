@@ -25,7 +25,7 @@ export const LINK_REQUEST_TTL_MS = 10 * 60_000;
 /** 쓴 요청 id 를 이만큼 기억한다(만료창의 여러 배 — 늦게 다시 온 같은 요청을 다시 서명하지 않게). */
 export const LINK_SEEN_RETAIN_MS = 6 * LINK_REQUEST_TTL_MS;
 /** 하루 합계 제안값(연결 때 데스크탑에서 확인·낮추기). */
-export const LINK_DAILY_SATS = 1000n * 100_000_000n;
+export const LINK_DAILY_SATS = 100_000n * 100_000_000n;
 const MAX_PHONE_ADDRESSES = 8;
 
 const HEX64 = /^[0-9a-f]{64}$/, SIG = /^[0-9a-f]{128}$/, ADDRESS = /^R[1-9A-HJ-NP-Za-km-z]{25,34}$/, SATS = /^[1-9]\d{0,17}$/;

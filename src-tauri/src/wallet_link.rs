@@ -39,7 +39,7 @@ const SEEN_RETAIN_MS: i64 = 86_400_000;
 const WRAP_RETAIN_MS: i64 = 3 * 86_400_000;
 const WRAP_SKEW_SEC: i64 = 2 * 86_400;
 const DAY_MS: i64 = 86_400_000;
-pub(crate) const DAILY_DEFAULT_SATS: u64 = 1000 * 100_000_000;
+pub(crate) const DAILY_DEFAULT_SATS: u64 = 100_000 * 100_000_000;
 const FEE_CAP_SATS: u64 = 100_000_000;
 const MAX_PHONE_ADDRESSES: usize = 8;
 const LANE: &str = "wallet-link";
@@ -549,11 +549,11 @@ fn parse_rvn(text: &str) -> Option<u64> {
     if a.is_empty() || a.len() > 10 || b.len() > 8 || !a.bytes().all(|c| c.is_ascii_digit()) || !b.bytes().all(|c| c.is_ascii_digit()) { return None; }
     Some(a.parse::<u64>().ok()? * 100_000_000 + format!("{b:0<8}").parse::<u64>().ok()?)
 }
-/// 두 화면의 숫자가 같다고 사람이 눌렀을 때만 저장한다. 하루 한도는 1,000 RVN 이하로만.
+/// 두 화면의 숫자가 같다고 사람이 눌렀을 때만 저장한다. 하루 한도는 100,000 RVN 이하로만(11-02 대표: 1,000 RVN ≈ 1,850원은 너무 작다).
 fn confirm_in(dir: &Path, sess: &Session, daily_rvn: &str, phone_name: &str, now: i64) -> Result<Value, String> {
     let (o, a) = (sess.offer.as_ref().ok_or("연결 QR 이 없어요.")?, sess.candidate.as_ref().ok_or("폰의 응답을 아직 받지 못했어요.")?);
     if now > o.expires + ACCEPT_GRACE_MS { return Err("시간이 지났어요. QR 을 새로 만들어 주세요.".into()); }
-    let daily = parse_rvn(daily_rvn).filter(|d| *d >= 1 && *d <= DAILY_DEFAULT_SATS).ok_or("하루 한도는 0보다 크고 1,000 RVN 이하로 적어 주세요.")?;
+    let daily = parse_rvn(daily_rvn).filter(|d| *d >= 1 && *d <= DAILY_DEFAULT_SATS).ok_or("하루 한도는 0보다 크고 100,000 RVN 이하로 적어 주세요.")?;
     let mut s = load(dir)?;
     if s.links.iter().any(|l| l.link_id == a.link_id) { return Err("이미 연결된 폰이에요.".into()); }
     if s.orphan_revokes.get(&a.link_id).is_some_and(|(k, _)| *k == a.phone_key) { return Err(PHONE_CANCELLED.into()); }
@@ -987,7 +987,7 @@ mod tests {
         assert_eq!(check_request(&v["requestFill"], &link, now + 700_000, false, 0).0, Check::No("expired"));
         assert_eq!(check_request(&v["requestFill"], &link, now, true, 0).0, Check::No("seen"));
         assert_eq!(check_request(&v["requestFill"], &Link { revoked: true, ..link.clone() }, now, false, 0).0, Check::No("revoked"));
-        assert_eq!(check_request(&v["requestFill"], &link, now, false, 90_000_000_000).0, Check::No("daily-limit"));
+        assert_eq!(check_request(&v["requestFill"], &link, now, false, 9_990_000_000_000).0, Check::No("daily-limit"));
     }
 
     #[test]
@@ -1084,7 +1084,7 @@ mod tests {
         let accept = v["gifts"].as_array().unwrap().iter().find(|g| g["t"] == "accept").unwrap()["event"].clone();
         process(&d, &key(v, "deskSecret"), &[accept], v["now"].as_i64().unwrap() + 1000, Some(&mut sess)).unwrap();
         assert!(sess.candidate.is_some(), "accept arrived");
-        assert!(confirm_in(&d, &sess, "1001", "폰", v["now"].as_i64().unwrap()).is_err(), "cannot raise the daily limit");
+        assert!(confirm_in(&d, &sess, "100001", "폰", v["now"].as_i64().unwrap()).is_err(), "cannot raise the daily limit");
         confirm_in(&d, &sess, "1000", "폰", v["now"].as_i64().unwrap()).unwrap();
         d
     }
@@ -1317,7 +1317,7 @@ mod tests {
 
     #[test]
     fn daily_limit_text_and_link_key_storage() {
-        assert_eq!(parse_rvn("1,000"), Some(DAILY_DEFAULT_SATS));
+        assert_eq!(parse_rvn("100,000"), Some(DAILY_DEFAULT_SATS));
         assert_eq!(parse_rvn("0.5"), Some(50_000_000));
         assert_eq!(parse_rvn("1.123456789"), None);
         let a = link_secret().unwrap();

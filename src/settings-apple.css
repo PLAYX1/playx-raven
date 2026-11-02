@@ -144,6 +144,8 @@
 #page-settings button.sx-easy { display: flex; gap: 12px; align-items: center; width: calc(100% - 8px); margin: 0 4px 16px; padding: 12px; min-height: 72px; text-align: left;
   background: var(--panel); border-radius: var(--rv-r-group); box-shadow: var(--rv-shadow); font-weight: 400; }
 #page-settings button.sx-easy:hover:not(:disabled) { background: var(--panel); box-shadow: 0 0 0 2px var(--rv-navy-soft), var(--rv-shadow); }
+#page-settings .sx-easyico { display: grid; place-items: center; width: 48px; height: 48px; flex: none; border-radius: 12px; background: var(--rv-navy-soft); color: var(--rv-navy-ink); }
+#page-settings .sx-easyico svg { width: 26px; height: 26px; }
 #page-settings .sx-easytxt { display: flex; flex-direction: column; min-width: 0; }
 #page-settings .sx-easytxt b { font-weight: 700; }
 #page-settings .sx-easytxt span { font-size: var(--rv-fs-sub); color: var(--muted); line-height: 1.4; }

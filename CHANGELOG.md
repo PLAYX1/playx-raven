@@ -1,11 +1,25 @@
 # 변경 기록
 
+## 0.9.9
+
+### 한국어
+
+- 설정 맨 위 「쉬운 설정」 아래에 **「폰과 지갑 연결」** 단추를 두었습니다. 누르면 바로 연결 칸으로 갑니다.
+- 폰 요청으로 하루에 나갈 수 있는 돈의 최대 한도를 1,000 RVN 에서 **100,000 RVN** 으로 올렸습니다(돈은 여전히 데스크탑에서 승인해야만 나갑니다). 이미 연결한 폰은 한 번 끊고 다시 연결하면 새 한도를 고를 수 있습니다.
+- QR 아래에 「폰에서 『같아요 · 연결』을 누르면 여기에 확인 숫자가 나와요」를 적고, 폰 주소 줄을 「이 폰의 지갑 주소」로 알아보기 쉽게 바꿨습니다.
+
+### English
+
+- A **"Link wallet with phone"** button now sits under "Easy setup" at the top of Settings and jumps straight to the link card.
+- The daily limit for phone requests can now go up to **100,000 RVN** (was 1,000). Money still leaves only after approval on the desktop. Unlink and link again to pick the new limit for an already linked phone.
+- The QR card now says the check number appears after you tap "They match · Link" on the phone, and the phone address row is labelled "This phone's wallet addresses".
+
 ## 0.9.8
 
 ### 한국어
 
 - **폰과 지갑 연결.** 설정 → 「폰과 지갑 연결」에서 QR을 띄우고 폰으로 찍은 뒤, 두 화면의 6자리 숫자가 같은지 확인하면 연결됩니다. 폰에서 이 지갑의 잔액을 보고 이 지갑으로 바로 보낼 수 있습니다.
-- 폰에서 「폰으로 채우기」나 보내기를 요청하면 데스크탑에 금액과 받는 곳이 뜨고, **데스크탑에서 승인해야만** 돈이 나갑니다. 복구 단어와 서명 열쇠는 폰으로 가지 않습니다. 하루 한도는 1,000 RVN(수수료 포함)입니다.
+- 폰에서 「폰으로 채우기」나 보내기를 요청하면 데스크탑에 금액과 받는 곳이 뜨고, **데스크탑에서 승인해야만** 돈이 나갑니다. 복구 단어와 서명 열쇠는 폰으로 가지 않습니다. 하루 한도는 1,000 RVN(수수료 포함)입니다(0.9.9 에서 100,000 RVN 으로 올림).
 - 연결은 어느 쪽에서든 끊을 수 있고, 승인하는 도중 앱을 잠그면 보내지 않습니다.
 
 ### English

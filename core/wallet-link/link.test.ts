@@ -63,8 +63,8 @@ assert.equal((checkLinkRequest(signLinkRequest(req({ linkId: 'ee'.repeat(32) }),
 assert.equal((checkLinkRequest(fill, link, now + 700_000, new Set(), []) as { reason: string }).reason, 'expired');
 assert.equal((checkLinkRequest(fill, link, now, new Set(['11'.repeat(32)]), []) as { reason: string }).reason, 'seen');
 assert.equal((checkLinkRequest(fill, { ...link, revoked: true }, now, new Set(), []) as { reason: string }).reason, 'revoked');
-assert.equal((checkLinkRequest(fill, link, now, new Set(), [{ at: now - 3_600_000, sats: 90_000_000_000n }]) as { reason: string }).reason, 'daily-limit');
-assert(checkLinkRequest(fill, link, now, new Set(), [{ at: now - 90_000_000, sats: 90_000_000_000n }]).ok, 'yesterday does not count');
+assert.equal((checkLinkRequest(fill, link, now, new Set(), [{ at: now - 3_600_000, sats: 9_990_000_000_000n }]) as { reason: string }).reason, 'daily-limit');
+assert(checkLinkRequest(fill, link, now, new Set(), [{ at: now - 90_000_000, sats: 9_990_000_000_000n }]).ok, 'yesterday does not count');
 assert.throws(() => signLinkRequest(req({ expires: now + 3_600_000 }), phone), 'ttl over 10 minutes');
 
 // 결과: 데스크탑 키로만, 이 연결에만.

@@ -5166,6 +5166,7 @@
             <!-- 알림 자리(role=status)는 늘 두고 안의 글만 숨겼다 보인다 — 숨은 live 영역은 나타나도 읽히지 않는다(0.9.0 병합). -->
             <p class="sx-none" role="status"><span id="sx-none" hidden>찾는 설정이 없어요</span></p>
             <button type="button" class="sx-easy" data-sx-go="general" data-sx-to="easy-setup"><span class="ravi-static-face"></span><span class="sx-easytxt"><b>쉬운 설정</b><span>라비가 이 컴퓨터를 보고 정해 드려요</span></span></button>
+            <button type="button" class="sx-easy" data-sx-go="identity" data-sx-to="wl-card"><span class="sx-easyico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg></span><span class="sx-easytxt"><b>폰과 지갑 연결</b><span>폰에서 이 지갑 잔액을 보고, 돈은 여기서 승인해요</span></span></button>
             <ul class="sx-topics">
               <li><button type="button" class="sx-it" data-sx-go="general" aria-current="false"><span class="sx-ic sx-ic-gray" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/></svg></span><span class="sx-lab">일반</span></button></li>
               <li><button type="button" class="sx-it" data-sx-go="alerts" aria-current="false"><span class="sx-ic sx-ic-cta" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg></span><span class="sx-lab">알림</span></button></li>
@@ -5443,16 +5444,17 @@
                 <button type="button" id="wl-make" disabled>연결 QR 만들기</button>
                 <div id="wl-qr" hidden>
                   <img id="wl-qrimg" width="220" height="220" alt="폰과 지갑 연결 QR 코드" />
+                  <p class="meta">폰에서 이 QR을 찍고 「같아요 · 연결」을 누르면 여기에 확인 숫자가 나와요.</p>
                   <p id="wl-left" role="status"></p>
                   <div class="bar"><button type="button" id="wl-again" hidden>QR 새로 만들기</button><button type="button" class="ghost" id="wl-stop">그만두기</button></div>
                 </div>
                 <div id="wl-confirm" hidden>
                   <p class="wl-q">폰 화면의 숫자와 같나요?</p>
                   <p class="wl-code" id="wl-code" translate="no"></p>
-                  <p class="meta">폰이 「폰으로 채우기」에 쓸 받는 주소</p>
+                  <p class="meta">이 폰의 지갑 주소 · 「폰으로 채우기」는 이 주소로만 보내요</p>
                   <p class="wl-mono" id="wl-phoneaddr" translate="no"></p>
                   <label class="wl-field"><span>이 폰의 이름</span><input id="wl-phonename" maxlength="40" value="내 폰" /></label>
-                  <label class="wl-field"><span>하루에 폰 요청으로 나갈 수 있는 돈(RVN) · 1,000 보다 낮출 수만 있어요</span><input id="wl-daily" inputmode="decimal" value="1000" /></label>
+                  <label class="wl-field"><span>하루에 폰 요청으로 나갈 수 있는 돈(RVN) · 100,000 보다 낮출 수만 있어요</span><input id="wl-daily" inputmode="decimal" value="100000" /></label>
                   <div class="bar"><button type="button" id="wl-yes">같아요</button><button type="button" class="ghost" id="wl-no">아니에요 · 취소</button></div>
                 </div>
                 <p id="wl-waiting" hidden><span id="wl-waiting-n"></span> <button type="button" class="ghost" id="wl-waiting-open">보기</button></p>
