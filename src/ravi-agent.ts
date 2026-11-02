@@ -8,11 +8,11 @@ let greeted = false;
 export const TOOL_LABELS: Record<string, string> = {
   wallet_balance: "잔액을 보고 있어요", recent_transactions: "최근 거래 요약을 보고 있어요",
   rvn_price_krw: "원화 시세를 보고 있어요", shop_sales: "가게 매출을 보고 있어요",
-  shop_orders: "주문 상태를 보고 있어요", node_status: "서버·동기화 상태를 보고 있어요",
+  shop_orders: "주문 상태를 보고 있어요", node_status: "노드·동기화 상태를 보고 있어요",
   backup_status: "마지막 백업을 보고 있어요", fee_status: "개발비 기록을 보고 있어요",
   chain_overview: "체인 상황을 보고 있어요", security_rank: "보안 비용을 보고 있어요",
-  node_reach: "바깥 접속 상태를 보고 있어요", settings_status: "서버 설정을 보고 있어요", groupbuy_status: "공동구매 현황을 보고 있어요",
-  prepare_node: "서버 동작을 준비하고 있어요", prepare_setting: "설정 바꾸기를 준비하고 있어요",
+  node_reach: "바깥 접속 상태를 보고 있어요", settings_status: "노드 설정을 보고 있어요", groupbuy_status: "공동구매 현황을 보고 있어요",
+  prepare_node: "노드 동작을 준비하고 있어요", prepare_setting: "설정 바꾸기를 준비하고 있어요",
   prepare_send: "보내기 확인을 준비하고 있어요", open_screen: "요청한 화면을 열고 있어요", prepare_promo: "홍보 도우미를 준비하고 있어요",
 };
 export type Consent = { reviewed: boolean; balance: boolean; transactions: boolean; shop: boolean };
@@ -41,8 +41,8 @@ export function todayLines(v: any): string[] {
   if (numeric(at)) two.push(tf("마지막 백업 {0}", new Date(at * 1000).toLocaleDateString("ko-KR")));
   else two.push(t("백업 기록 데이터 없음"));
   const node = v.node_status;
-  if (node?.status === "ok" && typeof node.synced === "boolean") two.push(node.synced ? t("서버 연결 · 동기화됨") : t("서버 연결 · 동기화 중"));
-  else two.push(t("서버 상태 데이터 없음"));
+  if (node?.status === "ok" && typeof node.synced === "boolean") two.push(node.synced ? t("노드 연결 · 동기화됨") : t("노드 연결 · 동기화 중"));
+  else two.push(t("노드 상태 데이터 없음"));
   return [one.join(" · "), two.join(" · ")];
 }
 export function toolSummary(name: string, v: any): string {
@@ -53,7 +53,7 @@ export function toolSummary(name: string, v: any): string {
     case "wallet_balance": return numeric(v.confirmed) ? `확인된 잔액 ${v.confirmed} RVN` : "잔액 데이터 없음";
     case "rvn_price_krw": return numeric(v.rate) ? `1 RVN = ${v.rate} KRW${v.unstable ? " · 시세 차이 큼" : ""}` : "시세 데이터 없음";
     case "backup_status": return numeric(v.last_success_at) ? `마지막 백업 ${new Date(v.last_success_at * 1000).toLocaleString()}` : "백업 기록 데이터 없음";
-    case "node_status": return `서버 연결 · ${v.synced === true ? "동기화됨" : "동기화 중"}${numeric(v.progress) ? ` (${(v.progress * 100).toFixed(1)}%)` : ""}`;
+    case "node_status": return `노드 연결 · ${v.synced === true ? "동기화됨" : "동기화 중"}${numeric(v.progress) ? ` (${(v.progress * 100).toFixed(1)}%)` : ""}`;
     case "shop_sales": return `결제 ${v.sales ?? "데이터 없음"}건 · 환불 ${v.refunds ?? "데이터 없음"}건 · 순매출 ${v.total ?? "데이터 없음"} ${v.currency ?? ""}`;
     case "shop_orders": return `오늘 결제 ${v.counts?.paid_today ?? "데이터 없음"}건 · 오늘 환불 ${v.counts?.refunded_today ?? "데이터 없음"}건 · 입금 대기 ${v.counts?.awaiting_payment ?? "데이터 없음"}건`;
     case "chain_overview": return numeric(v.blocks) ? `블록 ${v.blocks.toLocaleString("ko-KR")}${v.synced === false ? " (노드가 따라잡는 중)" : ""}${numeric(v.hashrate_hs) ? ` · 해시율 ${(v.hashrate_hs / 1e9).toLocaleString("ko-KR", { maximumFractionDigits: 1 })} GH/s` : ""}` : "체인 데이터 없음";

@@ -11,7 +11,7 @@ export const CREATE_COPY: Record<string, [string, string, string]> = {
   "그림·음악·사진. 한정판 몇 장을 만들어 원본을 증명해요.": ["Art, music, photos. Make a limited edition that proves the original.", "絵・音楽・写真。限定版を作ってオリジナルを証明します。", "画作、音乐、照片。制作限量版，证明原作。"],
   "기록 기다리는 중": ["Waiting for the record", "記録を待っています", "等待记录"],
   "기록 완료 · 이제 마저 만들면 돼요.": ["Recorded · Now just finish creating.", "記録済み · あとは作成を仕上げるだけです。", "已记录 · 现在完成创建即可。"],
-  "서버 지갑을 읽지 못했습니다: {0}": ["Could not read the server wallet: {0}", "サーバーのウォレットを読めませんでした: {0}", "无法读取服务器钱包：{0}"],
+  "노드 지갑을 읽지 못했습니다: {0}": ["Could not read the node wallet: {0}", "ノードのウォレットを読めませんでした: {0}", "无法读取节点钱包：{0}"],
   "누구 이름으로": ["Under which name", "だれの名前で", "用谁的名义"],
   "다른 것 고르기": ["Choose something else", "ほかのものを選ぶ", "选择其他"],
   "다시 확인하기": ["Check again", "もう一度確認", "再次检查"],

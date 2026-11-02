@@ -282,3 +282,13 @@ body:has(#page-home.on) #ravi-launcher { display:none; }
 #ravi-panel .ravi-pack-nudge p { font-size:12px; margin:0; }
 #ravi-panel .ravi-pack-nudge span { display:flex; gap:6px; flex:none; }
 #ravi-panel .ravi-pack-nudge[hidden] { display:none; }
+
+/* 11-03 폰과 지갑 연결 입구 — 연결 전엔 카드, 연결 뒤엔 한 줄(wallet-link-ui.ts onState). */
+#page-home .rv-home-phonelink { display:flex; flex-direction:column; align-items:flex-start; gap:2px; width:100%; margin:14px 0 0 !important; padding:12px 16px !important;
+  text-align:left; background:var(--home-tint); color:var(--home-ink); border:2px solid #E2702A; border-radius:14px; min-height:56px !important; }
+#page-home .rv-home-phonelink b { font-size:17px; }
+#page-home .rv-home-phonelink span { font-size:14px; color:var(--home-muted); font-weight:400; }
+#page-home .rv-home-phonelink[data-linked="1"] { flex-direction:row; align-items:center; gap:8px; padding:6px 12px !important; min-height:40px !important; border:1px solid var(--home-line); background:transparent; }
+#page-home .rv-home-phonelink[data-linked="1"] b { font-size:15px; font-weight:600; }
+#page-home .rv-home-phonelink[data-linked="1"][data-waiting="1"] { border:2px solid #E2702A; background:var(--home-tint); }
+#page-home .rv-home-phonelink[data-linked="1"][data-waiting="1"] b { color:#B4501A; }

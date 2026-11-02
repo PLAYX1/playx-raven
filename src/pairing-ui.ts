@@ -49,7 +49,7 @@ type Ask = (title: string, message: string) => Promise<boolean>;
 let ask: Ask = async (title, message) => window.confirm(`${title}\n${message}`);
 
 const CARD = `
-  <h2>${copyHtml("폰 연결")}</h2>
+  <h2>${copyHtml("폰으로 가게 보기(같은 와이파이)")}</h2>
   <p class="meta">${copyHtml("폰으로 QR 을 찍으면, 폰에서 이 컴퓨터의 잔액·증서·매출을 보고 요청을 보낼 수 있어요.")}</p>
   <p class="meta">${copyHtml("폰 지갑과 이 컴퓨터 지갑은 섞이지 않아요. 복구 단어와 개인키는 이 컴퓨터 밖으로 나가지 않아요.")}</p>
   <div class="rvp-qrbox">
@@ -342,7 +342,8 @@ export function wirePairing(confirmBox?: Ask) {
     if (!page) continue;
     const connect = document.createElement("button");
     connect.type = "button"; connect.id = page === settings ? "rvp-connect-settings" : "rvp-connect-wallet";
-    setCopyText(connect, () => t("휴대폰 연결"));
+    // 11-03 감사 A3: 폰 입구 셋을 하는 일로 구분 — 이것은 같은 와이파이에서 폰으로 가게(잔액·증서·매출)를 보고 요청하는 연결.
+    setCopyText(connect, () => t("폰으로 가게 보기(같은 와이파이)"));
     connect.onclick = () => {
       (document.querySelector('nav [data-page="settings"]') as HTMLElement | null)?.click();
       card.hidden = false; card.scrollIntoView({ block: "start" }); void refresh();
@@ -357,8 +358,10 @@ export function wirePairing(confirmBox?: Ask) {
   notice.hidden = true;
   document.body.append(notice);
   notice.addEventListener("click", () => {
+    // 11-03 감사 A2: 「보기」를 눌렀으면 요청이 든 카드를 바로 펼쳐 보여 준다(입구 단추에서 멈추지 않게).
     (document.querySelector('nav [data-page="settings"]') as HTMLElement | null)?.click();
-    window.setTimeout(() => el("rvp-connect-settings")?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+    card.hidden = false; void refresh();
+    window.setTimeout(() => card.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
   });
 
   // 기존 보내기 화면에서 보내기가 끝났다 → 그게 폰 요청이었다면 폰에 「완료」.
@@ -389,7 +392,8 @@ export function wirePairing(confirmBox?: Ask) {
 
     } catch { notice.hidden = true; }
   };
-  window.setInterval(() => { if (!document.hidden) void poll(); }, 10_000);
+  // 11-03 감사 B7: 10초 → 3초(폰에서 보낸 요청을 기다리는 사람이 있다). 창을 안 볼 때는 묻지 않는다.
+  window.setInterval(() => { if (!document.hidden) void poll(); }, 3_000);
   void poll();
   void refresh();
 }

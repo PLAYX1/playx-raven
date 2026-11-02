@@ -30,3 +30,12 @@
 #wl-modal .wl-sum dt { color: var(--muted); }
 #wl-modal .wl-sum dd { margin: 0; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
 #wl-modal .wl-say { min-height: 1.4em; font-size: 14px; color: var(--danger); }
+#wl-modal .wl-sum dd#wl-m-phone, #wl-modal .wl-sum dd#wl-m-when { font-weight: 500; }
+/* 미리 채운 값(이름)은 접어 둔다 — 보이는 길은 체크 → QR → 숫자 → 「같아요 · 연결」. */
+#wl-card .wl-more { margin: 6px 0; font-size: 14px; color: var(--muted); }
+#wl-card .wl-more summary { cursor: pointer; min-height: 32px; display: flex; align-items: center; }
+#wl-card .wl-only { margin: 10px 0 0; font-size: 14px; font-weight: 600; }
+#wl-card .wl-left { font-size: 13px; color: var(--ok); }
+#wl-card .wl-limit { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; }
+#wl-card .wl-limit input { width: 140px; font-size: 16px; padding: 8px 10px; }
+#wl-card .wl-rowbtns { display: flex; flex-wrap: wrap; justify-content: flex-end; }

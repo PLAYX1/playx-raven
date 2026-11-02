@@ -4,7 +4,7 @@ export const PAIRING_COPY: Record<string, [string, string, string]> = {
   "{0}분 전": ["{0} min ago", "{0}分前", "{0} 分钟前"],
   "{0}시간 전": ["{0} h ago", "{0}時間前", "{0} 小时前"],
   "{0}일 전": ["{0} days ago", "{0}日前", "{0} 天前"],
-  "휴대폰 연결": ["Connect phone", "スマホを接続", "连接手机"],
+  "폰으로 가게 보기(같은 와이파이)": ["View the shop on your phone (same Wi‑Fi)", "スマホで店を見る（同じWi‑Fi）", "用手机查看店铺（同一 Wi‑Fi）"],
   "초기 설정": ["Initial setup", "初期設定", "初始设置"],
   "폰 연결": ["Phone link", "スマホ連携", "手机连接"],
   "폰으로 QR 을 찍으면, 폰에서 이 컴퓨터의 잔액·증서·매출을 보고 요청을 보낼 수 있어요.": ["Scan the QR with your phone to see this computer’s balance, certificates and sales, and to send requests from the phone.", "スマホで QR を読み取ると、このコンピュータの残高・証書・売上をスマホで見たり、依頼を送ったりできます。", "用手机扫描二维码后，即可在手机上查看这台电脑的余额、证书和销售额，并发送请求。"],

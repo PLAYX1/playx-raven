@@ -63,7 +63,7 @@ export function wireSalesAccount(deps: {
       element('sales-public').replaceChildren(number, image, title, ...rows);
       timer = setTimeout(() => { hide(); notice('1분이 지나 번호를 숨겼어요. 다시 보려면 인증해 주세요.'); }, SALES_TTL);
       notice('게임 설정과 믿을 수 있는 대표·관리자에게만 이 번호를 알려 주세요.');
-    } catch { if (visible(at)) notice('판매 계정을 열지 못했어요. 암호가 설정된 12단어 지갑과 서버 상태를 확인해 주세요.'); }
+    } catch { if (visible(at)) notice('판매 계정을 열지 못했어요. 암호가 설정된 12단어 지갑과 노드 상태를 확인해 주세요.'); }
     finally { password = null; busy = false; controls(); }
   };
   button('sales-hide').onclick = () => { hide(); notice('번호를 숨겼어요.'); };

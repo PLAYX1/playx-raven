@@ -36,7 +36,7 @@ export const RAVI_LIFECYCLE_COPY:Record<string,[string,string,string]>={
   '오늘 순매출 {0} {1}':['Net sales today {0} {1}','今日の純売上 {0} {1}','今天净销售额 {0} {1}'],
   '마지막 백업 {0}':['Last backup {0}','最終バックアップ {0}','上次备份 {0}'],
   '백업 기록 데이터 없음':['No backup record data','バックアップ記録のデータがありません','没有备份记录数据'],
-  '서버 연결 · 동기화됨':['Server connected · Synced','サーバー接続 · 同期済み','服务器已连接 · 已同步'],
-  '서버 연결 · 동기화 중':['Server connected · Syncing','サーバー接続 · 同期中','服务器已连接 · 正在同步'],
-  '서버 상태 데이터 없음':['No server status data','サーバーの状態データがありません','没有服务器状态数据'],
+  '노드 연결 · 동기화됨':['Node connected · Synced','ノード接続 · 同期済み','节点已连接 · 已同步'],
+  '노드 연결 · 동기화 중':['Node connected · Syncing','ノード接続 · 同期中','节点已连接 · 正在同步'],
+  '노드 상태 데이터 없음':['No node status data','ノードの状態データがありません','没有节点状态数据'],
 };

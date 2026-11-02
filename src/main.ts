@@ -10,7 +10,7 @@ import { routeBackupDrop } from "./backup-drop-route"; // 0.9.0 — 놓은 .pxlo
 import "./sales-account.css";
 import { wireSalesAccount } from "./sales-account";
 import "./wallet-link.css";
-import { wireWalletLink } from "./wallet-link-ui";
+import { wireWalletLink, type WalletLinkState } from "./wallet-link-ui";
 import "./creator-publish.css";
 import { createLazyKeep } from "./asset-keep-lazy";
 import { wireCreatorPublish, MINE_KEY } from "./creator-publish";
@@ -257,8 +257,11 @@ async function invoke<T = any>(cmd: string, args?: any): Promise<T> {
       busyCount--;
       if (busyCount <= 0) busyDone();
     }
+    // 11-03 감사 B10: 켜기·끄기 직후 왼쪽 표시등을 10초 주기까지 기다리지 않고 바로(1초 뒤 한 번 더 — 프로세스가 막 뜨는 중).
+    if (STATUS_FLIP.has(cmd)) { void quietly(paintStatusDots); setTimeout(() => void quietly(paintStatusDots), 1500); }
   }
 }
+const STATUS_FLIP = new Set(["services_start", "services_stop", "start_phone_server", "stop_phone_server", "ipfs_start", "ipfs_stop", "miner_start", "miner_stop", "relay_start", "relay_stop", "tunnel_start", "tunnel_stop", "node_restart"]);
 
 function busyDone() {
   busyCount = 0;
@@ -877,7 +880,7 @@ async function renderPanelBase() {
   try {
     kind = await invoke("content_kind", { cid });
   } catch {
-    $("p-body").innerHTML = '<p class="muted">로컬 사진 보관함이 꺼져 있어 이 컴퓨터에서 열 수 없습니다.</p>';
+    $("p-body").innerHTML = '<p class="muted">로컬 IPFS 파일창고가 꺼져 있어 이 컴퓨터에서 열 수 없습니다.</p>';
     return;
   }
   if (selected !== a.name) return; // 사용자가 그 사이 다른 행을 골랐다
@@ -1633,7 +1636,7 @@ async function doRestore(directory = false, preset = "") {
       const keys = r.items.map((i: any) => i.key);
       const ok = await sure(
         "되돌릴까요?",
-        "지금 있는 것은 옆에 따로 남겨 둡니다.\n지갑을 되돌리려면 서버가 꺼져 있어야 합니다.",
+        "지금 있는 것은 옆에 따로 남겨 둡니다.\n지갑을 되돌리려면 노드가 꺼져 있어야 합니다.",
         "되돌립니다"
       );
       if (!ok) return;
@@ -1651,7 +1654,7 @@ async function doRestore(directory = false, preset = "") {
           done.map(d => `<div class="kv"><b>${escapeHtml(String(d.what))}</b><span>${escapeHtml(String(d.note || t("완료")))}</span></div>`).join("") +
           (failed.length ? `<div class="warnbox">${failed.map(f => `${escapeHtml(String(f.what))} — ${escapeHtml(String(f.why))}`).join("<br>")}</div>` : "") +
           (previous.length ? `<p>${copyHtml("보존한 이전 파일을 확인하기 전에는 지우지 마세요.")}</p>` + previous.map(p => `<div class="kv"><b>${escapeHtml(String(p.what))}</b><code style="overflow-wrap:anywhere">${escapeHtml(p.previous)}</code></div>`).join("") : "") +
-          (!complete && failed.some(f => f.changed) ? `<div class="warnbox">${copyHtml("일부 파일이 바뀌었습니다. 보존한 이전 파일을 확인하기 전에는 서버를 켜지 마세요.")}</div>` : "") +
+          (!complete && failed.some(f => f.changed) ? `<div class="warnbox">${copyHtml("일부 파일이 바뀌었습니다. 보존한 이전 파일을 확인하기 전에는 노드를 켜지 마세요.")}</div>` : "") +
           (res?.cleanup_warning ? `<div class="warnbox">${escapeHtml(String(res.cleanup_warning))}</div>` : "") +
           `<p class="meta">${escapeHtml(String(res?.note || ""))}</p></div>`;
       } catch (e) {
@@ -1670,7 +1673,7 @@ async function showCard() {
     $("rs-result").innerHTML =
       `<div class="card" style="margin-top:11px">
          <h3>복구 카드 — 인쇄해서 서랍에</h3>
-         <div class="kv"><b>서버</b><span>${c.node?.name || "(이름 없음)"} · ${c.node?.id}</span></div>
+         <div class="kv"><b>노드</b><span>${c.node?.name || "(이름 없음)"} · ${c.node?.id}</span></div>
          <div class="kv"><b>가게</b><span>${c.shop_name || "-"}</span></div>
          <div class="kv"><b>백업 위치</b><span>${c.backup_folder}</span></div>
          <ol style="margin:12px 0 0 18px;font-size:14px;line-height:1.9">
@@ -2167,7 +2170,8 @@ const dotSum: DotSum = { node: "unknown", pct: 0, relay: null, out: null };
 /** 점 하나의 색과 말. 순서가 곧 급함이다. */
 function sumOfDots(s: DotSum, mode: string): { cls: "on" | "warn" | "bad" | "off"; say: () => string } {
   if (s.node === "unknown") return { cls: "off", say: () => t("확인 중…") };
-  if (s.node === "down") return { cls: "bad", say: () => t("끊김") };
+  // 11-03: 문제일 때는 무엇이 왜인지 사람 말로(「끊김」만으로는 뭘 해야 할지 모른다). 누르면 바로 노드 화면(wireDotSum).
+  if (s.node === "down") return { cls: "bad", say: () => t("RVN 노드 꺼짐 · 눌러서 켜기") };
   if (s.node === "warm") return { cls: "warn", say: () => t("장부 여는 중") };
   if (mode === "shop" && s.relay === false) return { cls: "warn", say: () => t("손님 화면 꺼짐") };
   if (s.node === "sync") {
@@ -2185,7 +2189,7 @@ function paintDotSum() {
   if (d) d.className = `dot ${r.cls}`;
   if (label) setCopyText(label, r.say);
   const row = document.getElementById("d-sum-row");
-  if (row) { row.title = r.say(); row.setAttribute("aria-label", r.say()); }
+  if (row) { row.title = r.say(); row.setAttribute("aria-label", r.say()); row.dataset.tone = r.cls === "on" ? "ok" : r.cls; }
 }
 
 /** 점을 누르면 다섯 줄을 펼치고 접는다. 이 사람이 펼쳐 둔 것은 기억한다(이 컴퓨터에만). */
@@ -2203,6 +2207,8 @@ function wireDotSum() {
     set(false);
   }
   row.addEventListener("click", () => {
+    // 11-03 감사 A4: 노드가 꺼져 있으면 펼치기 대신 바로 노드 화면(맨 위 「지금 켜기」)으로 — 두 번 누를 일을 한 번으로.
+    if (dotSum.node === "down") { set(true); toggleDot("node"); return; }
     const open = foot.classList.contains("folded");
     set(open);
     try {
@@ -2216,14 +2222,20 @@ function wireDotSum() {
 async function paintStatusDots() {
   if (쉬는중()) return; // 창을 안 보는 동안은 그리지 않는다
 
-  const set = (dot: string, label: string, ok: boolean, text: string) => {
+  // 11-03 대표 「차분하게」: 정상(켜짐)·사람이 고른 꺼짐은 작은 점 + 짧은 말로 조용히(data-tone ok·quiet),
+  // 문제(노드 꺼짐·따라잡는 중)는 색과 이유로 눈에 띄게(warn·bad). 이유 전체는 title 에.
+  const set = (dot: string, label: string, ok: boolean, text: string, tone?: "ok" | "quiet" | "warn" | "bad", why = "") => {
     const d = document.getElementById(dot);
-    const t = document.getElementById(label);
+    const lab = document.getElementById(label);
     if (d) {
-      d.classList.toggle("on", ok);
-      d.classList.toggle("off", !ok);
+      d.classList.toggle("on", ok && tone !== "warn");
+      d.classList.toggle("off", !ok && tone !== "bad");
+      d.classList.toggle("warn", tone === "warn");
+      d.classList.toggle("bad", tone === "bad");
+      const row = d.closest<HTMLElement>(".dotrow");
+      if (row) { row.dataset.tone = tone || (ok ? "ok" : "quiet"); row.title = why ? `${t(text)} — ${t(why)}` : t(text); }
     }
-    if (t) t.textContent = text;
+    if (lab) lab.textContent = text;
   };
 
   try {
@@ -2233,7 +2245,8 @@ async function paintStatusDots() {
     const synced = (n?.progress ?? 0) > 0.9999;
     // 🔴 「따라잡는 중」만 적으면 **끝이 안 보인다.** 34GB 를 훑는 동안
     //    사장은 이게 10분짜리인지 하루짜리인지 알 수가 없다. 숫자를 준다.
-    set("d-node", "d-node-t", true, synced ? "RVN 서버 켜짐" : tf("서버 {0}%", pct.toFixed(1)));
+    set("d-node", "d-node-t", true, synced ? "RVN 노드 켜짐" : tf("노드 {0}%", pct.toFixed(1)), synced ? "ok" : "warn",
+      synced ? "" : "따라잡는 중이에요. 방금 들어온 돈이 늦게 보일 수 있어요.");
     setSyncBar(synced ? null : pct);
     nodeUp = true;
     nodeWarming = false;
@@ -2247,7 +2260,9 @@ async function paintStatusDots() {
       "d-node",
       "d-node-t",
       nodeWarming,
-      nodeWarming ? "RVN 서버 여는 중" : "RVN 서버 꺼짐"
+      nodeWarming ? "RVN 노드 여는 중" : "RVN 노드 꺼짐 · 눌러서 켜기",
+      nodeWarming ? "warn" : "bad",
+      nodeWarming ? "장부를 여는 중이에요. 처음이면 몇 분 걸려요." : "노드가 꺼져 있어 잔액·입금 확인·보내기가 멈춰 있어요."
     );
     setSyncBar(null);
     nodeUp = false;
@@ -2260,7 +2275,7 @@ async function paintStatusDots() {
 
   try {
     const i = await invoke<any>("ipfs_status");
-    set("d-ipfs", "d-ipfs-t", !!i?.running, i?.running ? "파일창고 켜짐" : "파일창고 꺼짐");
+    set("d-ipfs", "d-ipfs-t", !!i?.running, i?.running ? "IPFS 켜짐" : "IPFS 꺼짐");
     // 채굴과 릴레이도 같이. 넷이 이 프로그램의 전부다.
     void (async () => {
       try {
@@ -2298,7 +2313,7 @@ async function paintStatusDots() {
       }
     })();
   } catch {
-    set("d-ipfs", "d-ipfs-t", false, "사진 보관함 꺼짐");
+    set("d-ipfs", "d-ipfs-t", false, "IPFS 꺼짐");
   }
 }
 
@@ -2364,7 +2379,7 @@ async function checkForUpdate(quiet = true) {
     if (nag) {
       nag.hidden = false; nag.classList.add("new"); nag.textContent = `${version} 업데이트`;
       nag.onclick = async () => {
-        if (!await sure("업데이트 설치", `${version} 설치 뒤 앱이 저절로 다시 켜집니다(서버도 잠시 멈췄다 켜집니다).`, "설치")) return;
+        if (!await sure("업데이트 설치", `${version} 설치 뒤 앱이 저절로 다시 켜집니다(노드도 잠시 멈췄다 켜집니다).`, "설치")) return;
         nag.disabled = true;
         try { await invoke("install_update", { expectedVersion: version }); }
         catch (e) { if (note) note.textContent = errText(e); }
@@ -2577,9 +2592,9 @@ async function drawMoneyStatus(): Promise<void> {
   const n = s.node || {};
   줄들.push(
     n.ok
-      ? 줄("서버", n.behind > 20 ? tf("{0}블록 뒤", n.behind) : tf("블록 {0}", Number(n.blocks).toLocaleString()),
+      ? 줄("노드", n.behind > 20 ? tf("{0}블록 뒤", n.behind) : tf("블록 {0}", Number(n.blocks).toLocaleString()),
            n.behind > 20 ? "warn" : "good", String(n.why || ""))
-      : 줄("서버", "꺼짐", "bad", String(n.why || "")),
+      : 줄("노드", "꺼짐", "bad", String(n.why || "")),
   );
 
   const w = s.wallet || {};
@@ -2606,6 +2621,8 @@ async function drawMoneyStatus(): Promise<void> {
 }
 
 /** Read existing commands only; unknown balances never become zero. */
+/** 홈이 마지막으로 읽은 확정 잔액(지갑 화면이 「—」 대신 먼저 보인다). */
+let lastOverviewConfirmed: number | null = null;
 async function refreshOverview() {
   const [node, wallet] = await Promise.allSettled([invoke<any>("node_status"), invoke<any>("wallet_balance")]);
   const n = node.status === "fulfilled" ? node.value : null;
@@ -2617,8 +2634,9 @@ async function refreshOverview() {
     : warming ? t("시작하는 중") : nodeUp === false ? t("꺼짐") : t("확인 못 함"));
   $("rv-home-server-state").dataset.tone = !n ? "bad" : typeof progress !== "number" || !Number.isFinite(progress) || progress < 0.9999 ? "warn" : "good";
   const confirmed = wallet.status === "fulfilled" ? wallet.value?.confirmed : undefined;
+  if (typeof confirmed === "number" && Number.isFinite(confirmed) && confirmed >= 0) lastOverviewConfirmed = confirmed;
   setCopyText($("overview-balance"), () => typeof confirmed === "number" && Number.isFinite(confirmed) && confirmed >= 0
-    ? fmtRvn(confirmed) : warming ? t("서버가 시작되면 나와요") : t("확인 못 함"));
+    ? fmtRvn(confirmed) : warming ? t("노드가 시작되면 나와요") : t("확인 못 함"));
   $("overview-balance").classList.toggle("unknown", !(typeof confirmed === "number" && Number.isFinite(confirmed) && confirmed >= 0));
   /* 🔴 0.4.8-B — 방금 받은 10 RVN 이 여기서는 **0** 으로만 보였다(RV3 T04). 확정 잔액에 섞지는
      않는다(확인 전 돈을 쓸 수 있는 돈처럼 보이면 안 된다) — 옆에 「들어오는 중」으로 따로 적는다.
@@ -2803,7 +2821,7 @@ function openReport(prefill = "", opts: { category?: string; attachLog?: boolean
   text.oninput = () => {
     if (rpLogTouched || logBox.checked || !RP_SERVER_WORDS.test(text.value)) return;
     logBox.checked = true;
-    logHint.textContent = t("서버 문제로 보여서 노드 기록을 같이 보내도록 켰어요. 보낼 내용은 아래에서 볼 수 있고, 원치 않으면 끄세요.");
+    logHint.textContent = t("노드 문제로 보여서 노드 기록을 같이 보내도록 켰어요. 보낼 내용은 아래에서 볼 수 있고, 원치 않으면 끄세요.");
     logHint.hidden = false;
     rpWhat();
     rpLogRefresh();
@@ -2831,7 +2849,7 @@ function rpWhat() {
     // 만들면 두 곳이 어긋난다.
     `${rpErrors.length ? `${rpErrors.length}${t("건의 오류")}` : t("오류 없음")} · ` +
     `${copyHtml("판")} ${document.querySelector(".brand span")?.textContent || "?"} · ` +
-    `${withLog ? t("서버 기록 마지막 부분(가린 것)") : t("서버 기록은 보내지 않음")}<br />` +
+    `${withLog ? t("노드 기록 마지막 부분(가린 것)") : t("노드 기록은 보내지 않음")}<br />` +
     `${t("지갑 12단어·열쇠·주소·잔액은 보내지 않습니다.")}`;
 }
 
@@ -2852,9 +2870,9 @@ async function rpLogShow(force: boolean) {
     const r = await invoke<any>("report_log_preview");
     pre.textContent = r?.ok
       ? String(r.text || "")
-      : String(r?.why || t("서버 기록을 읽지 못했습니다. 이 경우 기록은 보내지 않습니다."));
+      : String(r?.why || t("노드 기록을 읽지 못했습니다. 이 경우 기록은 보내지 않습니다."));
   } catch {
-    pre.textContent = t("서버 기록을 읽지 못했습니다. 이 경우 기록은 보내지 않습니다.");
+    pre.textContent = t("노드 기록을 읽지 못했습니다. 이 경우 기록은 보내지 않습니다.");
   }
 }
 
@@ -2959,7 +2977,7 @@ async function 라비살피기() {
             page: "reward",
             el: "rw-gate",
             say: t(
-              "자산 색인이 꺼져 있어 명단을 못 셉니다. 켜려면 43GB 를 다시 훑고 그동안 서버가 멈춥니다 — 문 닫는 시간에 하세요.",
+              "자산 색인이 꺼져 있어 명단을 못 셉니다. 켜려면 43GB 를 다시 훑고 그동안 노드가 멈춥니다 — 문 닫는 시간에 하세요.",
             ),
           }),
       });
@@ -3023,7 +3041,7 @@ function shopTodo(): { bad: boolean; label: string; why: string; go?: () => void
   return [
     {
       bad: !(nodeUp ?? true),
-      label: (nodeWarming ? "서버가 여는 중이에요" : "서버가 꺼져 있어요"),
+      label: (nodeWarming ? "노드가 여는 중이에요" : "노드가 꺼져 있어요"),
       why: ("결제가 들어와도 확인을 못 합니다."),
       go: () => { $("qrwrap").style.display = "none"; showPage("settings"); },
     },
@@ -3230,7 +3248,7 @@ async function openQrSheet() {
     body.innerHTML = todoHtml +
       `<div class="warnbox">
          <b>${copyHtml("손님 폰 서버를 켜지 못했습니다.")}</b><br />
-         ${copyHtml("서버가 켜져 있는지 보시고, 잠시 뒤에 다시 눌러 주세요.")}
+         ${copyHtml("노드가 켜져 있는지 보시고, 잠시 뒤에 다시 눌러 주세요.")}
        </div>
        <div class="meta" style="margin-top:10px">${escapeHtml(errText(e))}</div>`;
   }
@@ -3564,7 +3582,7 @@ function bindTurnOn(id: string, cmd: string) {
     try {
       const r = await invoke<any>(cmd);
       // 못 켰으면 이유를 그대로 보여 준다. 조용히 실패하면 또 누른다.
-      const why = (r?.skipped || []).map((x: any) => `${t(x.what === "노드" ? "서버" : x.what === "IPFS" ? "사진 보관함" : x.what)}: ${x.why}`).join(" · ");
+      const why = (r?.skipped || []).map((x: any) => `${t(x.what === "노드" ? "노드" : x.what === "IPFS" ? "IPFS 파일창고" : x.what)}: ${x.why}`).join(" · ");
       if (say) setCopyText(say, () => why || t("켰습니다. 잠시 뒤 다시 봐 주세요."));
     } catch (e) {
       if (say) say.textContent = String((e as Error)?.message || e);
@@ -3600,7 +3618,7 @@ async function bootStrip(): Promise<string> {
   const notes: string[] = (r.notes || []).map(String);
   const bad: string[] = (r.skipped || [])
     .filter((x: any) => !String(x?.why || "").includes("이미 켜져"))
-    .map((x: any) => `${t(x.what === "노드" ? "서버" : x.what === "IPFS" ? "사진 보관함" : x.what)} — ${x.why}`);
+    .map((x: any) => `${t(x.what === "노드" ? "노드" : x.what === "IPFS" ? "IPFS 파일창고" : x.what)} — ${x.why}`);
   if (!notes.length && !bad.length) return "";
   return (
     `<div class="card" data-bootstrip style="margin-bottom:14px">` +
@@ -3654,7 +3672,7 @@ async function speedCard(): Promise<string> {
     return `<div class="card" style="margin-top:12px">
         <h3>${copyHtml("빠르게 따라잡기")}</h3>
         <p class="meta danger">${escapeHtml(errText(e))}</p>
-        <p class="meta">${copyHtml("「서버 설정 열기」에서 「메모리 사용」을 2000 이상으로 직접 정하셔도 됩니다.")}</p>
+        <p class="meta">${copyHtml("「노드 설정 열기」에서 「메모리 사용」을 2000 이상으로 직접 정하셔도 됩니다.")}</p>
       </div>`;
   }
   try {
@@ -3671,11 +3689,11 @@ async function speedCard(): Promise<string> {
     //    묻게 됐다. 같은 것을 두 이름으로 부르면 안 된다 — 오늘만 두 번째다.
     return `<div class="card" style="margin-top:12px;border-color:var(--brand)">
         <h3>${copyHtml("빠르게 따라잡기")}</h3>
-        <p class="meta">${s.lower ? copyHtml("지금 잡아 둔 메모리가 이 컴퓨터의 빈 메모리보다 많습니다. 줄이면 서버가 멈추는 것을 막을 수 있습니다.") : copyHtml("서버에 메모리를 더 주면 장부를 훨씬 빨리 훑습니다.")}</p>
+        <p class="meta">${s.lower ? copyHtml("지금 잡아 둔 메모리가 이 컴퓨터의 빈 메모리보다 많습니다. 줄이면 노드가 멈추는 것을 막을 수 있습니다.") : copyHtml("노드에 메모리를 더 주면 장부를 훨씬 빨리 훑습니다.")}</p>
         <div class="kv"><b>${copyHtml("지금 메모리")}</b><span>${Number(s.now).toLocaleString()} MB</span></div>
         <div class="kv"><b>${copyHtml("권하는 값")}</b><span><b>${Number(s.suggest).toLocaleString()} MB</b></span></div>
         <p class="meta">${escapeHtml(String(s.why || ""))}</p>
-        ${s.measured ? "" : `<p class="meta warn">${copyHtml("이 컴퓨터의 메모리를 못 읽어서 8GB 로 셈했습니다. 실제와 다르면 「서버 설정 열기」에서 직접 정하세요.")}</p>`}
+        ${s.measured ? "" : `<p class="meta warn">${copyHtml("이 컴퓨터의 메모리를 못 읽어서 8GB 로 셈했습니다. 실제와 다르면 「노드 설정 열기」에서 직접 정하세요.")}</p>`}
         <div class="row" style="margin-top:10px">
           <button id="nd-fast">${copyHtml("빠르게 따라잡기")}</button>
           <span class="meta" id="nd-fastsay"></span>
@@ -3758,8 +3776,8 @@ function slowCard(behind: number, rate: number): string {
       <p class="meta">${copyHtml("지금 속도로는")} ${Math.round(day)}${copyHtml("일 걸립니다. 아래 셋 중 하나가 원인인 경우가 대부분입니다.")}</p>
       <div class="kv"><b>${copyHtml("① 디스크")}</b><span>${copyHtml("HDD 면 SSD 보다 20~50배 느립니다. 작업 관리자 → 성능 → 디스크 에서 보실 수 있습니다.")}</span></div>
       <div class="kv"><b>${copyHtml("② 백신")}</b><span>${copyHtml("장부 폴더를 검사에서 빼야 합니다 — 위 「한 번에 준비하기」가 해 드립니다.")}</span></div>
-      <div class="kv"><b>${copyHtml("③ 색인")}</b><span>${copyHtml("「이 서버로 지갑도 열기」를 켜 두면 여러 배 느려집니다. 급하시면 다 따라잡은 뒤에 켜셔도 됩니다.")}</span></div>
-      <p class="meta" style="margin-top:10px">${copyHtml("그리고 다 따라잡기 전에도 가게는 여실 수 있습니다 — 서버가 따라잡는 동안에는 결제가 늦게 보일 뿐입니다.")}</p>
+      <div class="kv"><b>${copyHtml("③ 색인")}</b><span>${copyHtml("「이 노드로 지갑도 열기」를 켜 두면 여러 배 느려집니다. 급하시면 다 따라잡은 뒤에 켜셔도 됩니다.")}</span></div>
+      <p class="meta" style="margin-top:10px">${copyHtml("그리고 다 따라잡기 전에도 가게는 여실 수 있습니다 — 노드가 따라잡는 동안에는 결제가 늦게 보일 뿐입니다.")}</p>
     </div>`;
 }
 
@@ -3861,10 +3879,10 @@ async function stallCard(): Promise<string> {
         <h3>${copyHtml("진행이 멈춰 있습니다")}</h3>
         <div class="kv"><b>${copyHtml("블록")}</b><span>${Number(s.blocks).toLocaleString()}</span></div>
         <div class="kv"><b>${copyHtml("안 움직인 시간")}</b><span>${Number(s.quiet_min)}${copyHtml("분")}</span></div>
-        <p class="meta">${copyHtml("확인하실 것 — ① 이 컴퓨터의 남은 디스크 공간(장부에 40GB 넘게 듭니다) ② 서버를 껐다 켜 보기. 재색인은 이어서 합니다.")}</p>
+        <p class="meta">${copyHtml("확인하실 것 — ① 이 컴퓨터의 남은 디스크 공간(장부에 40GB 넘게 듭니다) ② 노드를 껐다 켜 보기. 재색인은 이어서 합니다.")}</p>
         <div class="row" style="margin-top:10px">
-          <button class="ghost" id="nd-restart">${copyHtml("서버 껐다 켜기")}</button>
-          <button class="ghost" id="nd-log">${copyHtml("서버가 뭐 하는지 보기")}</button>
+          <button class="ghost" id="nd-restart">${copyHtml("노드 껐다 켜기")}</button>
+          <button class="ghost" id="nd-log">${copyHtml("노드가 뭐 하는지 보기")}</button>
           <button class="ghost" id="nd-stall-report">${copyHtml("기록과 함께 알리기")}</button>
           <span class="meta" id="nd-restartsay"></span>
         </div>
@@ -3884,7 +3902,7 @@ async function stallCard(): Promise<string> {
  */
 function bindLog() {
   document.getElementById("nd-stall-report")?.addEventListener("click", () =>
-    openReport(t("서버(노드)가 켜졌는데 블록이 한참 안 움직여요."), { category: "install-run", attachLog: true }));
+    openReport(t("노드(노드)가 켜졌는데 블록이 한참 안 움직여요."), { category: "install-run", attachLog: true }));
   const b = document.getElementById("nd-log");
   if (!b) return;
   b.addEventListener("click", async () => {
@@ -3946,7 +3964,7 @@ async function restoreCard(): Promise<string> {
         <h3>${copyHtml("메모리 되돌리기")}</h3>
         <div class="kv"><b>${copyHtml("지금")}</b><span>${now.toLocaleString()} MB</span></div>
         <div class="kv"><b>${copyHtml("되돌릴 값")}</b><span>450 MB</span></div>
-        <p class="meta">${copyHtml("다 따라잡았습니다. 이제 이만큼 필요 없습니다 — 계산대 메모리를 서버가 계속 물고 있으면 주문 화면이 느려집니다.")}</p>
+        <p class="meta">${copyHtml("다 따라잡았습니다. 이제 이만큼 필요 없습니다 — 계산대 메모리를 노드가 계속 물고 있으면 주문 화면이 느려집니다.")}</p>
         <div class="row" style="margin-top:10px">
           <button class="ghost" id="nd-back">${copyHtml("메모리 되돌리기")}</button>
           <span class="meta" id="nd-backsay"></span>
@@ -3972,7 +3990,7 @@ function bindRestore() {
         return;
       }
       const ok = await sure(
-        t("서버를 껐다 켤까요?"),
+        t("노드를 껐다 켤까요?"),
         t("그래야 적용됩니다. 그동안 결제 확인이 멈추고, 얼마나 걸릴지는 장부 크기에 따라 다릅니다.")
       );
       if (!ok) {
@@ -4005,7 +4023,7 @@ function bindSpeed() {
       say.innerHTML =
         `<span class="ok">${Number(r.set).toLocaleString()} MB ${copyHtml("로 정했습니다")}</span>`;
       const ok = await sure(
-        t("서버를 껐다 켤까요?"),
+        t("노드를 껐다 켤까요?"),
         t("그래야 적용됩니다. 재색인은 이어서 합니다 — 처음부터 다시 하지 않습니다. 몇 분 동안 결제 확인이 멈춥니다.")
       );
       if (!ok) return;
@@ -4026,10 +4044,15 @@ async function paintPartBody(): Promise<void> {
   const box = document.getElementById("pt-body");
   if (!box) return;
   const title = document.getElementById("pt-title");
+  // 11-03: 「RVN 노드」·「IPFS 파일창고」가 처음 나오는 곳 — 제목 아래 쉬운 한 줄.
+  const lead = document.getElementById("pt-lead");
+  const LEAD: Partial<Record<Part, string>> = { node: "레이븐코인 장부를 이 컴퓨터가 직접 지켜요. 잔액·입금 확인·보내기가 여기로 돼요.",
+    ipfs: "사진·파일을 여러 컴퓨터가 함께 보관하는 곳(IPFS)이에요." };
+  if (lead) { const l = LEAD[partOpen]; lead.hidden = !l; if (l) setCopyText(lead, () => t(l)); }
 
   try {
     if (partOpen === "node") {
-      if (title) title.textContent = "RVN 서버";
+      if (title) title.textContent = "RVN 노드";
       // 🔴 노드가 꺼져 있으면 `node_status` 가 던진다. 여태 그 영어 오류만
       //    화면에 남고 **끝이었다** — 왜 안 뜨는지도, 켜는 단추도 없었다.
       //    「.cookie 를 못 읽었습니다」는 증상이지 원인이 아니다.
@@ -4055,7 +4078,7 @@ async function paintPartBody(): Promise<void> {
           const minutes = Math.max(0, Math.floor((Date.now() - warmSince) / 60000));
           box.innerHTML =
             `<div class="card">
-               <h3>${copyHtml("서버가 시작하는 중입니다")}</h3>
+               <h3>${copyHtml("노드가 시작하는 중입니다")}</h3>
                <p class="meta">${copyHtml("장부를 확인하고 있습니다. 몇 분 걸립니다 — 그동안 아무것도 안 하셔도 됩니다.")}</p>
                ${phase ? `<p class="meta">${escapeHtml(tf("지금은 「{0}」 단계예요 · 켜진 지 {1}분째", t(phase), minutes))}</p>` : ""}
                <p class="meta">${copyHtml("처음 켜거나 다시 설치한 뒤에는 30분~1시간 넘게 걸릴 수 있어요. 컴퓨터를 끄지 말고 이 앱을 켜 두세요. 끝나면 잔액이 나옵니다.")}</p>
@@ -4081,11 +4104,11 @@ async function paintPartBody(): Promise<void> {
           box.innerHTML =
             `<div class="card" style="border-color:var(--warn)">
                <h3>${copyHtml("장부가 깨졌습니다")}</h3>
-               <p class="meta">${copyHtml("그래서 서버가 켜질 때마다 그 자리를 만나 스스로 꺼집니다. 「지금 켜기」를 눌러도 소용이 없습니다.")}</p>
+               <p class="meta">${copyHtml("그래서 노드가 켜질 때마다 그 자리를 만나 스스로 꺼집니다. 「지금 켜기」를 눌러도 소용이 없습니다.")}</p>
                <p class="meta">${copyHtml("계산을 다시 하면 고쳐집니다. 블록 파일은 그대로 쓰므로 다시 받지 않습니다 — 몇 시간 걸릴 수 있고, 그동안 컴퓨터를 켜 두시면 됩니다.")}</p>
                <div class="row" style="margin-top:12px">
                  <button id="nd-heal">${copyHtml("장부 고치기")}</button>
-                 <button class="ghost" id="nd-log">${copyHtml("서버가 뭐 하는지 보기")}</button>
+                 <button class="ghost" id="nd-log">${copyHtml("노드가 뭐 하는지 보기")}</button>
                  <span class="meta" id="nd-say"></span>
                </div>
                <div id="nd-logbox"></div>
@@ -4112,13 +4135,13 @@ async function paintPartBody(): Promise<void> {
         }
         box.innerHTML =
           `<div class="card">
-             <h3>${copyHtml("서버가 꺼져 있습니다")}</h3>
-             <p class="meta">${copyHtml("결제 확인도 색인도 이 서버가 합니다.")}</p>
+             <h3>${copyHtml("노드가 꺼져 있습니다")}</h3>
+             <p class="meta">${copyHtml("결제 확인도 색인도 이 노드가 합니다.")}</p>
              ${
                n.installed
                  ? `<p class="meta">${copyHtml("프로그램은 있습니다")} — <code class="addr">${escapeHtml(String(n.path || ""))}</code></p>
                     <button id="nd-go" style="margin-top:12px">${copyHtml("지금 켜기")}</button>`
-                 : `<p class="meta" style="color:var(--warn)">${copyHtml("서버 프로그램을 찾지 못했습니다.")}</p>
+                 : `<p class="meta" style="color:var(--warn)">${copyHtml("노드 프로그램을 찾지 못했습니다.")}</p>
                     <p class="meta">${escapeHtml(String(n.install || ""))}</p>` +
                    (looked.length
                      ? `<details style="margin-top:10px"><summary class="meta">${copyHtml("어디를 봤는지 보기")}</summary>
@@ -4136,7 +4159,7 @@ async function paintPartBody(): Promise<void> {
             (go as HTMLButtonElement).disabled = true;
             setCopyText($("nd-say"), () => t("켜는 중…"));
             // 60초가 넘도록 안 끝나면 앱이 먼저 「기록과 함께 알리기」 를 내민다.
-            // 사장이 원인을 찾아 헤매지 않게 — 원인은 서버 기록에만 있는 경우가 많다.
+            // 사장이 원인을 찾아 헤매지 않게 — 원인은 노드 기록에만 있는 경우가 많다.
             const stuckTimer = setTimeout(() => {
               if (document.getElementById("nd-stuck")) return;
               const say = document.getElementById("nd-say");
@@ -4147,7 +4170,7 @@ async function paintPartBody(): Promise<void> {
               sb.style.marginTop = "10px";
               sb.textContent = t("노드가 안 켜졌어요. 기록과 함께 알리기");
               sb.addEventListener("click", () =>
-                openReport(t("서버(노드)가 60초가 넘도록 안 켜져요."), { category: "install-run", attachLog: true }));
+                openReport(t("노드(노드)가 60초가 넘도록 안 켜져요."), { category: "install-run", attachLog: true }));
               say.insertAdjacentElement("afterend", sb);
             }, 60_000);
             try {
@@ -4204,7 +4227,7 @@ async function paintPartBody(): Promise<void> {
             [t("블록"), Number(s?.blocks ?? 0).toLocaleString()],
             // 판을 숨기지 않는다. 못 읽었으면 못 읽었다고 적는다.
             [
-              t("서버 판"),
+              t("노드 판"),
               nv?.line
                 ? String(nv.line).replace(/^.*?(v[0-9].*)$/, "$1") +
                   (nv.ok === false ? ` ⚠️` : "")
@@ -4242,21 +4265,21 @@ async function paintPartBody(): Promise<void> {
           ? `<div class="card" style="margin-top:12px">
                <h3>${copyHtml("바깥 접속을 아직 못 받고 있어요")}</h3>
                <p class="meta">${copyHtml("고장이 아닙니다. 잔액·송금에는 영향이 없고, 집 공유기가 들어오는 접속을 막고 있는 경우가 많아요. 노드 현황 사이트에 이 노드가 잡히길 원할 때만 설정하세요.")}</p>
-               <p class="meta">${copyHtml("공유기에서 TCP 8767 포트를 이 컴퓨터로 열거나, 설정의 「바깥 접속 자동으로 열기」를 켜고 서버를 다시 시작한 뒤, 컴퓨터를 켜 둔 채 하루쯤 기다려 주세요. 통신사 공유 IP 면 열 수 없습니다.")}</p>
+               <p class="meta">${copyHtml("공유기에서 TCP 8767 포트를 이 컴퓨터로 열거나, 설정의 「바깥 접속 자동으로 열기」를 켜고 노드를 다시 시작한 뒤, 컴퓨터를 켜 둔 채 하루쯤 기다려 주세요. 통신사 공유 IP 면 열 수 없습니다.")}</p>
              </div>`
           : "") +
         // 🔴 못 따라잡는 판이면 **제일 먼저** 말한다. 며칠 기다린 뒤에
         //    알게 되면 그 며칠이 통째로 버려진다.
         (nv?.ok === false
           ? `<div class="card" style="margin-top:12px;border-color:var(--danger)">
-               <h3>${copyHtml("이 서버 판으로는 끝까지 못 갑니다")}</h3>
+               <h3>${copyHtml("이 노드 판으로는 끝까지 못 갑니다")}</h3>
                <p class="meta">${escapeHtml(String(nv?.say || ""))}</p>
                <p class="meta"><code class="addr">${escapeHtml(String(nv?.path || ""))}</code></p>
              </div>`
           : "") +
         (behind > 0 ? await stallCard() : "") + slowCard(behind, rate) + prepCard(behind) +
         (behind > 0 ? await speedCard() : await restoreCard()) + (await indexCard()) +
-        goto("settings", t("서버 설정 열기"));
+        goto("settings", t("노드 설정 열기"));
       bindSpeed();
       bindRestore();
       bindRestart();
@@ -4289,7 +4312,7 @@ async function paintPartBody(): Promise<void> {
               t("켜려면 두 가지가 필요합니다 — 캐는 프로그램(kawpowminer)과 받을 주소.")
         ) + goto("settings", t(on ? "채굴 설정 열기" : "채굴 켜는 곳으로"));
     } else if (partOpen === "ipfs") {
-      if (title) title.textContent = "사진 보관함";
+      if (title) title.textContent = "IPFS 파일창고";
       const s = await invoke<any>("ipfs_status");
       box.innerHTML = !s?.running
         ? card([[t("지금"), t("꺼져 있습니다")]], t("사진과 메뉴판이 여기 들어갑니다. 꺼져 있으면 손님이 사진을 못 봅니다.")) +
@@ -4325,7 +4348,7 @@ async function paintPartBody(): Promise<void> {
              <button class="ghost" id="pn-help">${copyHtml("저 컴퓨터 파일도 내가 들기")}</button>
              <div class="msg" id="pn-say"></div>
            </div>` +
-          goto("settings", t("파일창고 설정 열기"));
+          goto("settings", t("IPFS 파일창고 설정 열기"));
       bindTurnOn("ip-go", "services_start");
       bindPeerHelp();
     } else if (partOpen === "relay") {
@@ -4466,7 +4489,7 @@ function bindIndexCard(): void {
     now.onclick = async () => {
       if (!confirm("지금 시작하면 몇 시간 동안 입금 확인이 멈춥니다. 시작할까요?")) return;
       now.disabled = true;
-      say("서버를 다시 띄우는 중입니다…");
+      say("노드를 다시 띄우는 중입니다…");
       try {
         await invoke("reindex_start");
         say("시작했습니다. 이 화면에서 진행을 보실 수 있습니다.");
@@ -4527,7 +4550,7 @@ async function indexCard(): Promise<string> {
   }
   if (st.done) {
     return card([[t("주소 색인"), t("켜져 있습니다")]],
-      t("이 서버가 손님 지갑의 잔액 질문에 직접 답합니다. 남의 서버에 안 묻습니다."));
+      t("이 노드가 손님 지갑의 잔액 질문에 직접 답합니다. 남의 서버에 안 묻습니다."));
   }
 
   const now = Math.floor(Date.now() / 1000);
@@ -4555,7 +4578,7 @@ async function indexCard(): Promise<string> {
     can = true;
   }
   return `<div class="card">
-      <b>${copyHtml("주소 색인 — 이 서버로 지갑도 열기")}</b>
+      <b>${copyHtml("주소 색인 — 이 노드로 지갑도 열기")}</b>
       <p class="meta" style="margin-top:8px">${copyHtml("지금은 손님 지갑이 잔액을 우리 서버 한 곳에 묻습니다. 이걸 켜면 이 컴퓨터가 직접 답합니다. 대신 한 번 다시 훑어야 하고, 그동안 입금 확인이 멈춥니다.")}</p>
       <p class="meta" style="margin-top:8px"><b>${escapeHtml(say)}</b></p>
       ${can ? `<label style="display:flex;align-items:center;gap:10px;margin-top:12px;cursor:pointer">
@@ -4620,7 +4643,7 @@ function bindTableQr() {
     const tables = raw ? raw.split(/[,\s]+/).filter(Boolean) : ["카운터"];
     setCopyText(note, () => t("만드는 중…"));
     try {
-      // 주소를 지금 다시 읽는다. 서버를 켤 때 잡은 값을 쓰면, 공유기가 새
+      // 주소를 지금 다시 읽는다. 노드를 켤 때 잡은 값을 쓰면, 공유기가 새
       // 주소를 준 뒤에 인쇄한 QR 이 죽은 주소를 가리킨다.
       const ip = await invoke<string>("now_ip").catch(() => serverIp || "127.0.0.1");
       const r = await invoke<any>("table_qr_sheet", { ip, tables });
@@ -4918,6 +4941,12 @@ async function paintHome(): Promise<void> {
   void refreshOverview();
   void paintHomeSafety();
   chainInfo?.paintHome();
+  await paintHomeTxs();
+  void paintHomeToday();
+}
+
+/** 홈 최근 거래 셋(확인 n/6). 11-03 감사 B4: 홈 주기 바퀴마다 다시 그려 확인 수가 멈춰 보이지 않게. */
+async function paintHomeTxs(): Promise<void> {
   try {
     const recent: unknown = await invoke("recent_transactions", { count: 3 }).catch(() => null);
     const txs: any[] = (Array.isArray(recent) && recent.length ? recent : await 최근거래_모아읽기(3))
@@ -4936,7 +4965,6 @@ async function paintHome(): Promise<void> {
       return `<div class="rv-home-entry"><span class="rv-home-icon ${received ? "receive" : "send"}" aria-hidden="true">${received ? "↓" : "↑"}</span><span class="rv-home-tx-main">${copyHtml(received ? "받음" : "보냄")} · ${escapeHtml(String(tx.asset_name || "RVN"))}<small>${escapeHtml(when)} · ${escapeHtml(state)}</small></span><strong class="${received ? "ok" : ""}">${received ? "+" : "−"}${escapeHtml(fmtRvn(Math.abs(amount), { code: "" }))}</strong></div>`;
     }).join("") || `<p>${copyHtml("최근 거래가 없습니다")}</p>`;
   } catch { $("rv-home-txs").textContent = t("거래 내역을 읽지 못했습니다"); }
-  void paintHomeToday();
 }
 
 /** 「만들기」 화면 들어가기 — 화면이 준비되면 채운다. */
@@ -4985,6 +5013,23 @@ function setupNavMore() {
 /** 가게 번호 — 「기기 연결」 화면의 「가게 문서 만들기」로 이 기기에 저장한 가게 문서(rev 0)의 번호. 문서가 없거나 지금 가게 키와 다르면 null → 기기 발급 닫힘. */
 const storeDocId = async (): Promise<string | null> => { try { return await (await import("./store-doc-ui")).savedStoreId((cmd, args) => invoke(cmd, args)); } catch { return null; } };
 let salesAccount: ReturnType<typeof wireSalesAccount> | undefined;
+let walletLink: ReturnType<typeof wireWalletLink> | undefined;
+/**
+ * 홈 「폰과 지갑 연결」 입구와 사이드바 「승인 대기」 줄(11-03). wallet-link-ui 가 목록을 읽을 때마다 부른다.
+ * 연결 전 = 큰 카드 · 연결 뒤 = 한 줄 · 기다리는 요청이 있으면 홈·사이드바 둘 다 주황으로 늘 보인다(접혀 있어도).
+ */
+function paintHomePhone(st: WalletLinkState) {
+  const btn = document.getElementById("rv-home-phone"), tt = document.getElementById("rv-home-phone-t"), dd = document.getElementById("rv-home-phone-d");
+  if (btn && tt && dd) {
+    btn.dataset.linked = st.linked > 0 ? "1" : "0";
+    btn.dataset.waiting = st.waiting > 0 ? "1" : "0";
+    if (st.linked === 0) { setCopyText(tt, () => t("폰과 지갑 연결")); setCopyText(dd, () => t("폰에서 이 지갑 잔액을 보고, 돈은 여기서 승인해요")); }
+    else if (st.waiting > 0) { setCopyText(tt, () => tf("폰 요청 {0}건 · 눌러서 승인하기", st.waiting)); setCopyText(dd, () => tf("연결된 폰 {0}대", st.linked)); }
+    else { setCopyText(tt, () => tf("연결된 폰 {0}대 · 요청 확인 중", st.linked)); dd.textContent = ""; }
+  }
+  const row = document.getElementById("d-link-row"), lt = document.getElementById("d-link-t");
+  if (row && lt) { row.hidden = st.waiting === 0; if (st.waiting) setCopyText(lt, () => tf("폰 요청 {0}건 승인 대기", st.waiting)); }
+}
 let deviceScreen: ReturnType<typeof import("./device-connect").mountDeviceScreen> | undefined;
 let bulkScreen: ReturnType<typeof import("./bulk-products-ui").mountBulkScreen> | undefined;
 
@@ -5101,7 +5146,9 @@ let walletWasLocked: boolean | null = null;
 async function loadWallet() {
   // 주인 표 줄은 따로 읽는다 — 느려도 잔액·잠금이 기다리지 않게.
   void paintOwners();
-  try {
+  // 11-03 감사 B6: 「—」로 기다리게 하지 않는다 — 홈이 방금 읽은 잔액을 먼저 보이고, 세 가지(잔액·잠금·거래)를 한꺼번에 읽는다.
+  if (lastOverviewConfirmed !== null && !$("w-confirmed").textContent?.trim().match(/\d/)) $("w-confirmed").textContent = fmtRvn(lastOverviewConfirmed);
+  const balanceP = (async () => { try {
     const b: any = await invoke("wallet_balance");
     $("w-confirmed").textContent = fmtRvn(b.confirmed);
     // Unconfirmed money is shown apart from spendable money on purpose: a shop
@@ -5117,9 +5164,9 @@ async function loadWallet() {
     $("w-confirmed").textContent = "—";
     $("w-unconfirmed").textContent = errText(e);
     $("w-incoming-note").hidden = true;
-  }
+  } })();
 
-  try {
+  const lockP = (async () => { try {
     // 자물쇠는 글자와 그림을 같이 준다. 그림만 있으면 무슨 뜻인지 모르고,
     // 글자만 있으면 눈에 안 들어온다. 70대도 25살도 같은 화면을 본다.
     const shut = `<svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -5173,9 +5220,9 @@ async function loadWallet() {
     $("w-lock").textContent = "확인 불가";
     $("w-lock").className = "state muted";
     $("w-lock-detail").textContent = errText(e);
-  }
+  } })();
 
-  try {
+  const txP = (async () => { try {
     const txs: any[] = await 최근거래_모아읽기(15);
     $("w-txs").innerHTML = txs
       .slice()
@@ -5213,7 +5260,8 @@ async function loadWallet() {
       .join("") || '<tr><td colspan="3" class="muted">거래 내역이 없습니다</td></tr>';
   } catch (e) {
     $("w-txs").innerHTML = `<tr><td colspan="3" class="muted">${escapeHtml(errText(e))}</td></tr>`;
-  }
+  } })();
+  await Promise.all([balanceP, lockP, txP]);
 }
 
 /* ── 받기 (0.4.8-B · RV3 🔴5) ────────────────────────────────────────
@@ -5257,7 +5305,7 @@ async function copyInto(btn: HTMLElement, text: string, label: string) {
 }
 
 async function openReceive(fresh = false) {
-  await showBackupReminder();
+  // 11-03 감사 A11: 백업 안내 창이 주소보다 먼저 막아섰다 — 주소를 먼저 보이고, 안내는 주소 아래 한 줄로(없애지 않는다).
   // 한 번에 하나 — 보내기 칸이 열려 있으면 닫는다(받기와 보내기가 한 화면에 섞이면 오송금 자리다).
   closeSend();
   const host = $("w-addr");
@@ -5277,10 +5325,18 @@ async function openReceive(fresh = false) {
   const addr = String(r?.address ?? "").trim();
   // 🔴 노드가 「이 지갑 것」이라고 한 것만 보여 준다. 모양이 이상하거나 확인이 없으면 안 그린다.
   if (!looksLikeAddress(addr) || r?.mine !== true) {
-    host.innerHTML = `<div class="warnbox">${copyHtml("서버가 이 주소를 이 지갑의 받는 주소로 확인해 주지 않았어요. 보여 드리지 않을게요.")}</div>`;
+    host.innerHTML = `<div class="warnbox">${copyHtml("노드가 이 주소를 이 지갑의 받는 주소로 확인해 주지 않았어요. 보여 드리지 않을게요.")}</div>`;
     return;
   }
   host.innerHTML = receiveHtml(addr, r?.reused === true, copyHtml, escapeHtml);
+  if (!localStorage.getItem("rv-v2-backup-reminded")) {
+    const bk = document.createElement("p"); bk.className = "meta wrecv-backup";
+    bk.innerHTML = `${copyHtml("지갑과 대화 열쇠를 잃지 않도록 백업해 두세요. 설정에서 백업할 수 있어요.")} <button type="button" class="ghost" id="w-recv-bk">${copyHtml("백업하기")}</button> <button type="button" class="ghost" id="w-recv-bkok">${copyHtml("알겠습니다")}</button>`;
+    (host.querySelector(".wrecv") || host).append(bk);
+    const done = () => { try { localStorage.setItem("rv-v2-backup-reminded", "1"); } catch { /* 다음에 또 한 줄 보일 뿐 */ } bk.remove(); };
+    $("w-recv-bk").onclick = () => { done(); showPage("settings"); $("sx-h-backup").scrollIntoView({ block: "start" }); };
+    $("w-recv-bkok").onclick = done;
+  }
   void invoke<string>("qr_svg", { text: addr })
     .then((svg) => {
       const box = document.getElementById("w-qr");
@@ -5341,13 +5397,13 @@ async function checkWhose(raw?: string) {
   try {
     const r = await invoke<WhoseResult | null>("addr_whose", { address: text });
     if (seq !== whoseSeq) return;          // 그사이 다른 주소를 넣었다 — 옛 답을 그리지 않는다
-    if (!r || typeof r !== "object" || !r.state) throw new Error(t("서버가 답하지 않았어요."));
+    if (!r || typeof r !== "object" || !r.state) throw new Error(t("노드가 답하지 않았어요."));
     whoseLast = r;
     out.innerHTML = whoseHtml(r);
   } catch (e) {
     if (seq !== whoseSeq) return;
     whoseLast = null;
-    out.innerHTML = `<div class="warnbox">${copyHtml("서버에 묻지 못했어요.")} ${escapeHtml(errText(e))}</div>`;
+    out.innerHTML = `<div class="warnbox">${copyHtml("노드에 묻지 못했어요.")} ${escapeHtml(errText(e))}</div>`;
   }
 }
 
@@ -5386,11 +5442,11 @@ const raviWhoseSaid: { box: HTMLElement; r: WhoseResult }[] = [];
  * (라비 첫 화면의 `do` 칸과 같은 원칙 — 열쇠 없이 되는 일은 AI 를 거치지 않는다.)
  */
 async function raviWhose(address: string) {
-  chatHtml("ai", `<span class="muted" data-thinking="1">${copyHtml("서버에 묻는 중…")}</span>`);
+  chatHtml("ai", `<span class="muted" data-thinking="1">${copyHtml("노드에 묻는 중…")}</span>`);
   try {
     const r = await invoke<WhoseResult | null>("addr_whose", { address });
     chatPopThinking();
-    if (!r || typeof r !== "object" || !r.state) throw new Error(t("서버가 답하지 않았어요."));
+    if (!r || typeof r !== "object" || !r.state) throw new Error(t("노드가 답하지 않았어요."));
     chatHtml("ai", whoseHtml(r, "ravi"));
     const box = $("chat-log").lastElementChild?.querySelector<HTMLElement>(".msgtxt");
     if (box) {
@@ -5399,7 +5455,7 @@ async function raviWhose(address: string) {
     }
   } catch (e) {
     chatPopThinking();
-    chatHtml("ai", `<span class="warn">${copyHtml("서버에 묻지 못했어요.")} ${escapeHtml(errText(e))}</span>`);
+    chatHtml("ai", `<span class="warn">${copyHtml("노드에 묻지 못했어요.")} ${escapeHtml(errText(e))}</span>`);
   }
 }
 
@@ -6462,7 +6518,7 @@ function tkWatchPics(box: HTMLElement) {
     };
     // 🔴 **왜** 안 뜨는지를 갈라서 말한다. 원인이 다르면 할 일도 다르다.
     img.onerror = () =>
-      실패(t("이 컴퓨터의 파일창고가 꺼져 있거나, 보낸 분이 컴퓨터를 끄셔서 사진이 어디에도 남아 있지 않습니다."));
+      실패(t("이 컴퓨터의 IPFS 파일창고가 꺼져 있거나, 보낸 분이 컴퓨터를 끄셔서 사진이 어디에도 남아 있지 않습니다."));
     // 눌러서 크게 본다. 우리 창은 좁으니 인터넷 창에 맡긴다.
     img.onclick = (ev) => {
       ev.stopPropagation();
@@ -6847,7 +6903,7 @@ async function talkKeep(id: string, list: any[]) {
       t("남이 쓴 글을 굳힐까요?"),
       // ⚠️ 「릴레이가 지워도 남습니다」도 과장이었다 — 남는 곳은
       //    **이 컴퓨터**다. 그 조건을 빼고 말하면 또 다른 거짓말이 된다.
-      t("이 컴퓨터의 파일창고에 사본이 생깁니다. 주소를 아는 누구나 볼 수 있고, 쓰신 분은 이 일을 모릅니다."),
+      t("이 컴퓨터의 IPFS 파일창고에 사본이 생깁니다. 주소를 아는 누구나 볼 수 있고, 쓰신 분은 이 일을 모릅니다."),
       t("굳힙니다"),
     );
     if (!ok) return;
@@ -7211,7 +7267,7 @@ async function talkNewRoom() {
       ? list.length
         ? t("고르시면 그 자산을 가진 분만 이 방에 글을 씁니다. 넘기면 그 순간 끊깁니다.")
         : t("가진 자산이 없습니다 — 누구나 들어오는 방이 됩니다.")
-      : t("지금은 자산을 확인할 수 없습니다(서버가 따라잡는 중). 누구나 들어오는 방으로 만드실 수 있습니다."));
+      : t("지금은 자산을 확인할 수 없습니다(노드가 따라잡는 중). 누구나 들어오는 방으로 만드실 수 있습니다."));
   } catch {
     setCopyText($("tk-nhint"), () => t("자산을 확인하지 못했습니다."));
   }
@@ -7478,7 +7534,7 @@ async function fanMakeRoom(asset: string) {
     // 🔴 **못 골랐으면 못 골랐다고 말한다.** 조용히 「누구나」로 두면
     //    사장은 자산 방을 만든 줄 알고 아무나 쓸 수 있는 방을 만든다.
     $("tk-nsay").innerHTML =
-      `<span class="danger">${escapeHtml(asset)} ${copyHtml("을(를) 자산 목록에서 못 찾았습니다. 서버가 장부를 훑는 중일 수 있습니다 — 자산 칸을 직접 확인해 주세요.")}</span>`;
+      `<span class="danger">${escapeHtml(asset)} ${copyHtml("을(를) 자산 목록에서 못 찾았습니다. 노드가 장부를 훑는 중일 수 있습니다 — 자산 칸을 직접 확인해 주세요.")}</span>`;
   }
   $("tk-newbox").scrollIntoView({ behavior: "smooth", block: "center" });
 }
@@ -8004,7 +8060,7 @@ function renderExtra() {
       </div>
       <label style="margin-top:12px">처음 받을 주소
         <input id="x-to" spellcheck="false" placeholder="R..." /></label>
-      <div class="meta">🔴 이 주소에도 위 딱지가 붙어 있어야 합니다. 안 붙어 있으면 서버가 거절합니다.</div>`;
+      <div class="meta">🔴 이 주소에도 위 딱지가 붙어 있어야 합니다. 안 붙어 있으면 노드가 거절합니다.</div>`;
     ["x-verifier", "x-to"].forEach((id) =>
       $(id).addEventListener("input", () => wizGate())
     );
@@ -8721,7 +8777,7 @@ async function doIssue() {
       wizUnknown.set(name, Date.now());
       marked = false;
       void invoke("issue_unknown_mark", { name, kind: wizKind, probe, state: "unknown" }).catch(() => {});
-      $("i-result").innerHTML = `<div class="warnbox" style="margin-top:12px"><b>${copyHtml("보냈는지 아직 몰라요 — 기록될 때까지 기다려 주세요")}</b><br />${copyHtml("서버가 제때 답하지 않았어요. 이미 보냈을 수 있으니 다시 보내지 마세요. 몇 분 뒤 자산 화면에서 기록됐는지 확인해 주세요.")}</div>`;
+      $("i-result").innerHTML = `<div class="warnbox" style="margin-top:12px"><b>${copyHtml("보냈는지 아직 몰라요 — 기록될 때까지 기다려 주세요")}</b><br />${copyHtml("노드가 제때 답하지 않았어요. 이미 보냈을 수 있으니 다시 보내지 마세요. 몇 분 뒤 자산 화면에서 기록됐는지 확인해 주세요.")}</div>`;
       finished = true;
       wizFinish(btn);
       return;
@@ -8774,7 +8830,7 @@ function 바로팔기배선(asset: string, kind: string) {
         body: JSON.stringify({ asset, kind: 종류, title, rvn, payTo, by: ($("ar-name") as HTMLInputElement).value.trim() }),
       });
       const d = await r.json().catch(() => ({}) as any);
-      if (!r.ok || !d.ok) throw new Error(d.error || tf("서버 {0}", r.status));
+      if (!r.ok || !d.ok) throw new Error(d.error || tf("노드 {0}", r.status));
       말("올렸습니다. 상점과 레이븐홀드 장터에 함께 보입니다.");
       btn.textContent = "올렸습니다";
     } catch (e: any) {
@@ -8991,13 +9047,13 @@ function pickPayee(address: string) {
 }
 
 /** 수수료 한 줄 — RVN 은 노드에 읽기로만 묻는다(`sendfee.rs`, 서명·전파 없음). 못 구하면 지어내지 않는다. */
-const FEE_UNKNOWN = "수수료는 서버가 정해요(보통 0.01 RVN 안팎).";
+const FEE_UNKNOWN = "수수료는 노드가 정해요(보통 0.01 RVN 안팎).";
 function paintSendFee(fee: any, amount: number, asset: string | null) {
   const feeBox = $("r-fee"), feeNote = $("r-feenote"), total = $("r-total");
   const known = !asset && fee && typeof fee.fee === "number" && Number.isFinite(fee.fee) && fee.short !== true;
   if (known) {
     setCopyText(feeBox, () => fmtRvn(fee.fee));
-    setCopyText(feeNote, () => t("서버가 지금 계산한 값이에요. 보낼 때 서버가 다시 계산해 아주 조금 다를 수 있어요."));
+    setCopyText(feeNote, () => t("노드가 지금 계산한 값이에요. 보낼 때 노드가 다시 계산해 아주 조금 다를 수 있어요."));
     // 합계는 사토시로 더한다(0.1 + 0.2 ≠ 0.3). 노드가 준 합계가 있으면 그 값.
     const sum = fee.total != null ? rvnNumberToSats(Number(fee.total)) : (rvnNumberToSats(amount) ?? 0n) + (rvnNumberToSats(fee.fee) ?? 0n);
     setCopyText(total, () => (sum === null ? t(FEE_UNKNOWN) : fmtSats(sum)));
@@ -9006,7 +9062,7 @@ function paintSendFee(fee: any, amount: number, asset: string | null) {
   setCopyText(feeBox, () => t(FEE_UNKNOWN));
   setCopyText(feeNote, () => asset ? t("수수료는 RVN 으로 내요.")
     : fee?.short === true ? t("수수료까지 합치면 잔액이 모자라요. 금액을 조금 줄여 주세요.")
-    : t("이번 수수료를 서버에 묻지 못했어요."));
+    : t("이번 수수료를 노드에 묻지 못했어요."));
   setCopyText(total, () => asset ? tf("{0} {1} + 수수료(RVN)", fmtQty(amount), asset) : tf("{0} RVN + 수수료", fmtQty(amount)));
 }
 
@@ -9223,6 +9279,8 @@ async function doSend() {
           });
     await invoke("send_ack", { requestId: approved.requestId });
     emitRaviEvent("send_done");
+    // 11-03 감사 B5: 보낸 직후 홈 잔액·최근 거래를 바로 다시 읽는다(5초 바퀴를 기다리지 않게).
+    void quietly(refreshOverview); void quietly(paintHomeTxs);
 
     // RV6: 폰 요청으로 채운 보내기였다면 폰에 「완료」를 알린다(pairing-ui.ts 가 맞춰 본다).
     window.dispatchEvent(new CustomEvent("rv-sent", { detail: { txid: String(txid ?? ""), address: sent.address, amount: Number(approved.amount), what: sent.what } }));
@@ -10149,7 +10207,7 @@ async function artistLoad() {
   } else if (shop) {
     setCopyText(qty, () => tf("{0} 가 없습니다. 손님에게 줄 토큰이 없습니다.", token));
   } else {
-    setCopyText(qty, () => tf("{0} 수량을 못 읽었습니다. 서버가 켜져 있는지 보세요.", token));
+    setCopyText(qty, () => tf("{0} 수량을 못 읽었습니다. 노드가 켜져 있는지 보세요.", token));
   }
 }
 
@@ -10287,7 +10345,7 @@ const RAVI_SPOTS: Record<string, { page: string; el?: string; say: string }> = {
   "이야기 방 만들기": { page: "talk", el: "tk-newroom", say: "방을 만드는 곳입니다" },
   "방 초대하기": { page: "talk", el: "tk-inv", say: "초대 링크를 만드는 곳입니다" },
   "이 컴퓨터 준비하기": { page: "parts", el: "pc-go", say: "백신·방화벽·메모리를 한 번에 정합니다" },
-  "노드 상태": { page: "parts", say: "서버가 어떤지 보는 곳입니다" },
+  "노드 상태": { page: "parts", say: "노드가 어떤지 보는 곳입니다" },
   // 🔴 대표님: "라비가 이걸 어떻게 사용하는지도 다 설명이 가능해야해"
   //    1차 메뉴 중 **「나눠주기」와 「내 가게」를 라비가 못 가리켰다.**
   //    누가 「자산 가진 사람들한테 나눠주려면 어디로 가?」 하고 물으면
@@ -10459,7 +10517,7 @@ function applyActions(actions: any[], typed = ""): string[] {
           const spot = RAVI_SPOTS[String(a.spot || "")];
           if (!spot) break; // 지어낸 이름은 조용히 무시한다
           raviPoint(spot);
-          done.push(`${a.spot === "노드 상태" ? "서버 상태" : a.spot} — ${spot.say}`);
+          done.push(`${a.spot === "노드 상태" ? "노드 상태" : a.spot} — ${spot.say}`);
           break;
         }
         // 🔴 보내기는 **준비만** 한다. 주소·금액을 채워 확인 화면까지 열고, 누르는 것은 사장이다.
@@ -10765,9 +10823,20 @@ async function chatAgent(q: string, note = "") {
   const status = document.createElement("p"); status.setAttribute("role", "status");
   status.textContent = "라비가 질문을 살펴보고 있어요…"; $("chat-log").append(status);
   const progress = new Channel<string>();
-  progress.onmessage = name => { status.setAttribute("data-ravi-tool", "working"); status.textContent = Object.prototype.hasOwnProperty.call(TOOL_LABELS, name) ? `라비가 ${TOOL_LABELS[name]}…` : "라비가 확인하고 있어요…"; };
+  progress.onmessage = name => { if (!slow) { status.setAttribute("data-ravi-tool", "working"); status.textContent = Object.prototype.hasOwnProperty.call(TOOL_LABELS, name) ? `라비가 ${TOOL_LABELS[name]}…` : "라비가 확인하고 있어요…"; } };
+  // 11-03 감사 B14: 30초가 넘으면 멈춘 것처럼 보인다 — 「아직 생각 중」과 「그만두기」를 준다.
+  // 그만두면 늦게 온 답은 버린다(준비된 보내기·설정도 띄우지 않는다). 뒤에서 도는 요청 자체는 끝까지 간다.
+  let slow = false, dropped = false;
+  const slowTimer = window.setTimeout(() => {
+    slow = true;
+    status.textContent = t("아직 생각 중이에요 · 오래 걸리면 그만두고 다시 물어봐 주세요.") + " ";
+    const stop = document.createElement("button"); stop.type = "button"; stop.className = "ghost"; stop.textContent = t("그만두기");
+    stop.onclick = () => { dropped = true; status.remove(); chatSay("ai", t("그만뒀어요. 다시 물어봐 주세요.")); };
+    status.append(stop);
+  }, 30_000);
   try {
     const r = await invoke<any>("ravi_agent_chat", { provider: aiProvider, message: q, tz: tzMin(), progress });
+    if (dropped) return;
     if (containsRaviSecret(String(r.reply || ""))) { say("답에 민감한 정보가 있어 표시하지 않았어요."); return; }
     say(r.reply || "답 데이터 없음");
     for (const p of r.prepared || []) {
@@ -10781,6 +10850,7 @@ async function chatAgent(q: string, note = "") {
       else if (p.name === "prepare_setting") raviConfirmSetting(p.args.key, p.args.value);
     }
   } catch (e) {
+    if (dropped) return;
     // Backend emits fixed errors only; never display arbitrary transport payloads.
     const safe = typeof e === "string" && !containsRaviSecret(e) && e.length < 180 ? e : "라비 요청을 마치지 못했어요.";
     // 열쇠가 틀렸으면 「열쇠 다시 넣기」, 바쁘거나 끊겼으면 「다시 묻기」 — 다음에 할 일을 단추로.
@@ -10788,7 +10858,7 @@ async function chatAgent(q: string, note = "") {
     if (next) chatHtml("ai", `${note ? `<p class="muted">${copyHtml(note)}</p>` : ""}<p>${copyHtml(safe)}</p>${next}`);
     else say(safe);
     return;
-  } finally { status.remove(); }
+  } finally { clearTimeout(slowTimer); status.remove(); }
   // 내 정보가 필요한 질문일 때만 동의 카드를 놓는다(「몇살이야?」 같은 일반 질문에는 붙이지 않는다).
   if (general && raviAgentUI && questionNeedsPersonalData(q)) {
     raviHeldQuestion = q;
@@ -10813,14 +10883,14 @@ function raviConfirmCard(text: string, label: string, run: () => Promise<string>
 }
 
 function raviConfirmNode(action: string) {
-  const say = { start: ["서버를 켤까요?", "서버 켜기"], stop: ["서버를 끌까요? 가게 주문 확인과 지갑이 잠시 멈춥니다.", "서버 끄기"], restart: ["서버를 다시 시작할까요? 잠시 멈췄다가 켜집니다.", "다시 시작"] }[action];
+  const say = { start: ["노드를 켤까요?", "노드 켜기"], stop: ["노드를 끌까요? 가게 주문 확인과 지갑이 잠시 멈춥니다.", "노드 끄기"], restart: ["노드를 다시 시작할까요? 잠시 멈췄다가 켜집니다.", "다시 시작"] }[action];
   if (!say) return;
   raviConfirmCard(say[0], say[1], async () => {
     if (action !== "start") await invoke("services_stop");
     if (action !== "stop") {
       const r = await invoke<any>("services_start");
       const why = (r?.skipped || []).filter((x: any) => x?.what === "노드").map((x: any) => String(x.why || "")).join(" ");
-      return why || (action === "stop" ? "껐어요." : "켰어요. 잠시 뒤 서버 화면에서 상태를 봐 주세요.");
+      return why || (action === "stop" ? "껐어요." : "켰어요. 잠시 뒤 노드 화면에서 상태를 봐 주세요.");
     }
     return "껐어요.";
   });
@@ -10831,12 +10901,12 @@ function raviConfirmSetting(key: string, value: number) {
   const name = RAVI_SETTING_NAME[key];
   if (!name) return;
   const shown = key === "upnp" ? (value === 1 ? "켜기" : "끄기") : `${value}`;
-  raviConfirmCard(`「${name}」를 ${shown}(으)로 바꿀까요? 서버를 다시 시작해야 적용돼요.`, "바꾸기", async () => {
+  raviConfirmCard(`「${name}」를 ${shown}(으)로 바꿀까요? 노드를 다시 시작해야 적용돼요.`, "바꾸기", async () => {
     const cur = await invoke<any>("conf_read");
     const vals: Record<string, number> = { ...(cur?.values || {}) };
     vals[key] = value;
     await invoke("conf_write", { values: vals });
-    return `바꿨어요. 서버를 다시 시작하면 적용돼요.`;
+    return `바꿨어요. 노드를 다시 시작하면 적용돼요.`;
   });
 }
 
@@ -11491,7 +11561,7 @@ async function fillSample() {
   shopIcon = "QmZYRLyTXskYN89TSrhELMm5CCHRi3RyXCjSyABz8tRbvK";
   $("sh-picprev").innerHTML =
     `<img src="http://127.0.0.1:8080/ipfs/${shopIcon}" alt="" style="max-width:180px;border-radius:8px;margin-top:8px" />`;
-  $("sh-picnote").textContent = "샘플 사진 (사진 보관함에 올라가 있습니다)";
+  $("sh-picnote").textContent = "샘플 사진 (IPFS 파일창고에 올라가 있습니다)";
 
   menuItems.length = 0;
   menuItems.push(
@@ -11565,7 +11635,7 @@ function pickShopPhotos() {
       if (!out.length) throw new Error("읽을 수 있는 사진이 없습니다.");
       setCopyText(note, () => t("올리는 중…"));
       const up = await invoke<any>("ipfs_add_bundle", { files: out, metadata: null });
-      if (!up?.cid) throw new Error("파일창고가 주소를 주지 않았습니다.");
+      if (!up?.cid) throw new Error("IPFS 파일창고가 주소를 주지 않았습니다.");
       shopPhotosCid = up.cid;
       $("sh-picsprev").innerHTML = out
         .map(
@@ -11582,7 +11652,7 @@ function pickShopPhotos() {
     } catch (e) {
       // 사진이 안 올라간 것을 조용히 넘기지 않는다.
       $("sh-picsnote").innerHTML =
-        `<span class="warn"><b>못 올렸습니다.</b> 왼쪽 「파일창고」가 켜져 있는지 봐 주세요. ` +
+        `<span class="warn"><b>못 올렸습니다.</b> 왼쪽 「IPFS 파일창고」가 켜져 있는지 봐 주세요. ` +
         `<span class="meta">${escapeHtml(String((e as Error)?.message || e).slice(0, 70))}</span></span>`;
     }
   };
@@ -11635,7 +11705,7 @@ function pickShopPhoto() {
         // 🔴 **두 번째 무언 경로였다.** 응답 모양이 다르면 `catch` 에도 안
         //    걸리고 조용히 빈 문자열이 되어, 사진이 통째로 공지에 실렸다.
         //    페이블 지적. 없으면 없다고 던진다.
-        if (!up?.cid) throw new Error("파일창고가 주소를 주지 않았습니다.");
+        if (!up?.cid) throw new Error("IPFS 파일창고가 주소를 주지 않았습니다.");
         cid = `${up.cid}/icon.jpg`;
       } catch (e) {
         // 🔴 **조용히 비상 경로로 떨어지면 안 된다.** 실제로 그 일이 났고,
@@ -11656,9 +11726,9 @@ function pickShopPhoto() {
         // 괄호 안 작은 글씨로 적으면 사장은 그냥 넘어간다. 문제로 보이게 한다.
         $("sh-picnote").innerHTML =
           `<span class="warnbox" style="display:block;margin-top:8px">` +
-          `<b>파일창고에 못 올렸습니다.</b> 사진을 공지 안에 그대로 담았습니다 — ` +
+          `<b>IPFS 파일창고에 못 올렸습니다.</b> 사진을 공지 안에 그대로 담았습니다 — ` +
           `공지가 무거워져서 <b>사진을 더 넣으면 손님에게 안 갑니다.</b><br />` +
-          `왼쪽 「파일창고」가 켜져 있는지 보시고 다시 올려 주세요.` +
+          `왼쪽 「IPFS 파일창고」가 켜져 있는지 보시고 다시 올려 주세요.` +
           (picFail ? `<br /><span class="meta">${escapeHtml(picFail)}</span>` : "") +
           `</span>`;
       }
@@ -12099,7 +12169,7 @@ async function deleteMember() {
 // 다시 부르면 느리고 깜박인다. 고른 칩과 검색어는 명단을 다시 불러와도 남는다 —
 // 입장 한 번 누를 때마다 사장이 조건을 다시 고르게 하면 안 된다.
 
-/** 「분류 없음」 칩. 분류 이름에는 제어문자가 못 들어가서(서버가 거절) 겹치지 않는다. */
+/** 「분류 없음」 칩. 분류 이름에는 제어문자가 못 들어가서(노드가 거절) 겹치지 않는다. */
 const NO_GROUP = "\u0000none";
 type RosterStatus = "" | "active" | "ending" | "over";
 let rosterAll: any[] = [];
@@ -12313,7 +12383,7 @@ let shopGroups: string[] = [];
 let groupSaving: Promise<unknown> = Promise.resolve();
 const groupStatusTimers = new WeakMap<HTMLElement, ReturnType<typeof setTimeout>>();
 
-/** 서버 오류 「GROUP_INVALID: …」 에서 사람에게 보일 한 문장만. */
+/** 노드 오류 「GROUP_INVALID: …」 에서 사람에게 보일 한 문장만. */
 function groupErr(e: unknown): string {
   const raw = String(e ?? "").trim();
   const m = raw.match(/^(GROUP_INVALID|NOT_MEMBER|MEMBER_REDACTED):\s*([\s\S]*)$/);
@@ -12511,7 +12581,7 @@ function renderMemberMemos(asset: string, memos: MemberMemo[]) {
     list.append(empty);
     return;
   }
-  // 새 메모가 맨 위. 지울 때는 서버가 원래 순서의 index 와 at 을 둘 다 맞춰 본다.
+  // 새 메모가 맨 위. 지울 때는 노드가 원래 순서의 index 와 at 을 둘 다 맞춰 본다.
   const box = document.createElement("div");
   box.className = "msmemo-list";
   memos.map((memo, index) => ({ memo, index })).sort((a, b) => b.memo.at - a.memo.at).forEach(({ memo, index }) => {
@@ -12633,7 +12703,7 @@ async function openMember(asset?: string): Promise<void> {
   if (asset) {
     const [r] = await Promise.all([invoke<any>("list_members", { nowUnix: nowSec() }), groupsReady]);
     const m = (r.members || []).find((x: any) => x.asset === asset);
-    // 정보가 정리된 회원에게는 분류를 붙일 수 없다(서버도 거절한다). 칩을 숨긴다.
+    // 정보가 정리된 회원에게는 분류를 붙일 수 없다(노드도 거절한다). 칩을 숨긴다.
     msGroupsSel = m ? memberGroupsOf(m) : [];
     renderMsGroups(!!m && m.redacted !== true);
     await paintMemberConsent(m || null);
@@ -13303,7 +13373,7 @@ async function 웹주문확인(물어봐도되나 = false) {
       throw new Error("열쇠가 맞지 않습니다. 다시 넣어 주세요.");
     }
     const d = await r.json().catch(() => ({}) as any);
-    if (!r.ok || !d.ok) throw new Error(d.error || tf("서버 {0}", r.status));
+    if (!r.ok || !d.ok) throw new Error(d.error || tf("노드 {0}", r.status));
     웹주문들 = Array.isArray(d.items) ? d.items : [];
     /* 🔴 여기서 **성공하면 칸을 숨기고 있었다**(대표 지적 2026-09-08:
        「다시 확인 눌러도 배송열쇠 입력란 안나오네 아까 입력한게 유효한가?」).
@@ -13357,7 +13427,7 @@ async function 웹주문보내기(i: number) {
     });
     const completion = await invoke<{ pending: number }>("retry_remote_completions", { token: 열쇠 });
     $("wo-result").innerHTML =
-      `<div class="card" style="margin-top:12px"><h3>${completion.pending ? "전달됨 · 서버 완료 기록 재시도 대기" : "보냈습니다"}</h3>
+      `<div class="card" style="margin-top:12px"><h3>${completion.pending ? "전달됨 · 노드 완료 기록 재시도 대기" : "보냈습니다"}</h3>
        <div class="kv"><b>트랜잭션</b><code class="addr">${escapeHtml(txid)}</code></div></div>`;
     웹주문확인();
     loadAssets(false);
@@ -13618,7 +13688,7 @@ async function 웹자동배송() {
     /* 🔴 **보낸 뒤에만** 웹에 알린다. 먼저 알리고 전송이 실패하면 그 주문은
        목록에서 빠지는데 사람은 못 받는다 — 영영 사라진다. */
     const completion = await invoke<{ pending: number }>("retry_remote_completions", { token: 열쇠 });
-    if (completion.pending) $("wo-note").textContent = "전달 결과 또는 서버 완료 기록 확인 대기 중입니다. 자산을 다시 보내지 않습니다.";
+    if (completion.pending) $("wo-note").textContent = "전달 결과 또는 노드 완료 기록 확인 대기 중입니다. 자산을 다시 보내지 않습니다.";
     if ((res.sent || []).length) {
       웹주문확인();
       loadAssets(false);
@@ -13714,7 +13784,7 @@ async function loadChannels() {
 async function sendNotice() {
   const btn = $("nt-go") as HTMLButtonElement;
   btn.disabled = true;
-  $("nt-note").textContent = "사진 보관함에 올리고 공개 장부에 기록하는 중…";
+  $("nt-note").textContent = "IPFS 파일창고에 올리고 공개 장부에 기록하는 중…";
   try {
     const r = await invoke<any>("broadcast", {
       channel: ($("nt-ch") as HTMLSelectElement).value,
@@ -14308,7 +14378,7 @@ async function loadIpfsConf() {
           try {
             await invoke("ipfs_config_write", { key, value, isJson });
             $("if-result").innerHTML =
-              `<div class="meta ok" style="margin-top:9px">${tf("{0} → {1} · 사진 보관함을 다시 켜야 적용됩니다", escapeHtml(key), escapeHtml(value))}</div>`;
+              `<div class="meta ok" style="margin-top:9px">${tf("{0} → {1} · IPFS 파일창고를 다시 켜야 적용됩니다", escapeHtml(key), escapeHtml(value))}</div>`;
           } catch (err) {
             $("if-result").innerHTML = `<div class="warnbox" style="margin-top:9px">${escapeHtml(errText(err))}</div>`;
           }
@@ -14703,7 +14773,7 @@ async function loadBackup() {
       .map((i: any) => `<div class="kv"><b>${escapeHtml(String(i.name))}</b><span>${
         i.exists ? fmtBytes(i.size) : "<span class='warn'>없음</span>"
       } — ${escapeHtml(String(i.why))}</span></div>`).join("") +
-      `<p class="meta">${copyHtml("브라우저·PWA 지갑과 파일, 사진 보관함(IPFS) 원본, AI API 키는 이 백업에 포함되지 않습니다.")}</p>`;
+      `<p class="meta">${copyHtml("브라우저·PWA 지갑과 파일, IPFS 파일창고 원본, AI API 키는 이 백업에 포함되지 않습니다.")}</p>`;
     const issue = latestAutomaticBackupIssue || b.automatic?.error || b.automatic?.warning;
     if (issue) $("bk-list").innerHTML += `<div class="warnbox">${escapeHtml(String(issue))}</div>`;
   } catch {}
@@ -14888,7 +14958,7 @@ async function doBackup(destFolder = ""): Promise<string> {
          <div class="kv"><b>${escapeHtml(r.name)}</b><span>${escapeHtml(r.size_text)}</span></div>
          <p class="meta">${escapeHtml(whereText)}</p>
          <p>${copyHtml("아래 파일을 담았습니다. 백업 파일과 백업 암호 또는 백업 열쇠를 별도로 보관하세요.")}</p>
-         <p class="meta">${copyHtml("브라우저·PWA 지갑과 파일, 사진 보관함(IPFS) 원본, AI API 키는 이 백업에 포함되지 않습니다.")}</p>
+         <p class="meta">${copyHtml("브라우저·PWA 지갑과 파일, IPFS 파일창고 원본, AI API 키는 이 백업에 포함되지 않습니다.")}</p>
          ${(r.inside || []).map((i: any) => `<div class="kv"><b>${escapeHtml(i.name)}</b><span>${escapeHtml(i.what)}</span></div>`).join("")}
        </div>` +
       (r.warning
@@ -15103,9 +15173,9 @@ async function obChoose(shopOnly: boolean) {
   const DEFAULTS: Record<string, number> = { dbcache: 450, maxconnections: 125, maxmempool: 300, server: 0 };
   const WORDS: Record<string, string> = {
     dbcache: "메모리 사용",
-    maxconnections: "다른 서버와 연결",
+    maxconnections: "다른 노드와 연결",
     maxmempool: "대기 중인 거래 보관",
-    server: "이 앱이 서버에 말 걸기",
+    server: "이 앱이 노드에 말 걸기",
     prune: "장부 정리",
   };
   let cur: Record<string, number> = {};
@@ -15142,7 +15212,7 @@ async function obApply() {
   btn.textContent = "켜는 중…";
   try {
     await invoke("apply_setup", { conf: obRec.conf, ipfsProfile: obRec.ipfs_profile });
-    // 장부와 사진 창고를 켠다. 바깥 주소와 지갑 암호는 아직 묻지 않는다.
+    // 장부와 IPFS 파일창고를 켠다. 바깥 주소와 지갑 암호는 아직 묻지 않는다.
     await invoke("open_shop").catch(() => {});
   } catch {}
   btn.textContent = "이대로 켜기";
@@ -15213,7 +15283,7 @@ function switches(): Switch[] {
     {
       id: "autostart",
       title: "정전 뒤 자동으로 켜기",
-      desc: "전원이 돌아오면 서버가 저절로 켜집니다. 앱은 켜지지 않습니다.",
+      desc: "전원이 돌아오면 노드가 저절로 켜집니다. 앱은 켜지지 않습니다.",
       on: () => autostartOn,
       body: `<div class="meta">서버만 켭니다. 앱까지 저절로 켜지면 아무도 없는 방에서 지갑이 열립니다.</div>`,
       apply: "지금 켜기",
@@ -15323,8 +15393,8 @@ async function applyLowspec() {
   say(
     "저장했습니다",
     on
-      ? "설정을 되돌렸습니다. 다만 이미 지워진 블록은 다시 받아야 합니다.\n서버를 다시 켜 주세요."
-      : "서버를 다시 켜야 적용됩니다."
+      ? "설정을 되돌렸습니다. 다만 이미 지워진 블록은 다시 받아야 합니다.\n노드를 다시 켜 주세요."
+      : "노드를 다시 켜야 적용됩니다."
   );
 }
 
@@ -15346,7 +15416,7 @@ async function checkHealth() {
     $$("hz-card").className = `verdict ${tone}`;
     $$("hz-state").textContent =
       { ok: "지금 주문을 받을 수 있습니다", down: "주문을 받을 수 없습니다",
-        catching_up: "서버가 따라잡는 중입니다", no_orders: "손님이 주문할 곳이 없습니다",
+        catching_up: "노드가 따라잡는 중입니다", no_orders: "손님이 주문할 곳이 없습니다",
         no_photos: "사진이 손님에게 안 보입니다", local_only: "매장 안에서만 받습니다" }[
         h.state as string
       ] || String(h.state);
@@ -15358,7 +15428,7 @@ async function checkHealth() {
       h.state === "ok"
         ? ""
         : `<div class="meta" style="margin-top:10px">
-             ${tf("서버 {0} · 사진 보관함 {1} · 폰 {2}{3}", t(h.node ? "켜짐" : "꺼짐"), t(h.ipfs ? "켜짐" : "꺼짐"), t(h.phone ? "켜짐" : "꺼짐"), h.behind ? tf(" · {0} 블록 남음", h.behind) : "")}
+             ${tf("노드 {0} · IPFS 파일창고 {1} · 폰 {2}{3}", t(h.node ? "켜짐" : "꺼짐"), t(h.ipfs ? "켜짐" : "꺼짐"), t(h.phone ? "켜짐" : "꺼짐"), h.behind ? tf(" · {0} 블록 남음", h.behind) : "")}
            </div>`;
   } catch (e) {
     // 🔴 **빈 `catch` 였다.** 그래서 못 물어봤을 때 이 카드가 처음 글자인
@@ -15369,7 +15439,7 @@ async function checkHealth() {
     $$("hz-card").className = "verdict warn";
     setCopyText($$("hz-state"), () => t("지금 받을 수 있는지 못 알아봤습니다"));
     $$("hz-why").textContent = errText(e);
-    setCopyText($$("hz-fix"), () => t("서버가 켜져 있는지 보고, 잠시 뒤 이 화면을 다시 열어 주세요."));
+    setCopyText($$("hz-fix"), () => t("노드가 켜져 있는지 보고, 잠시 뒤 이 화면을 다시 열어 주세요."));
     $$("hz-extra").innerHTML = "";
   }
 }
@@ -15392,7 +15462,7 @@ async function toggleAutostart() {
       const p = await invoke<any>("default_paths");
       if (!p.ravend) {
         throw new Error(
-          "ravend 를 찾지 못했습니다. 레이븐 서버를 어디에 설치하셨는지 확인해 주세요."
+          "ravend 를 찾지 못했습니다. 레이븐 노드를 어디에 설치하셨는지 확인해 주세요."
         );
       }
       await invoke("autostart_enable", { ravendPath: p.ravend, dataDir: p.data_dir });
@@ -15882,7 +15952,7 @@ async function saveDoor() {
 // 못하면 아무도 만들지 않을 커피가 결제된다.
 
 /// 화면에는 월요일부터 보인다. 안쪽 번호는 일=0 — 유닉스 요일과 맞춰야
-/// 서버와 같은 답이 나온다.
+/// 노드와 같은 답이 나온다.
 const WEEK: Array<[number, string]> = [
   [1, "월"], [2, "화"], [3, "수"], [4, "목"], [5, "금"], [6, "토"], [0, "일"],
 ];
@@ -15937,7 +16007,7 @@ function readHours(): Record<string, { open: string; close: string }> {
   for (const [d] of WEEK) {
     const o = ($(`hr-o-${d}`) as HTMLInputElement)?.value || "";
     const c = ($(`hr-c-${d}`) as HTMLInputElement)?.value || "";
-    // 한쪽만 적힌 요일은 시간표가 아니다. 반쪽짜리를 저장하면 서버가
+    // 한쪽만 적힌 요일은 시간표가 아니다. 반쪽짜리를 저장하면 노드가
     // 그 요일을 통째로 쉬는 날로 읽고, 사장은 왜 안 열리는지 못 찾는다.
     if (o && c) out[String(d)] = { open: o, close: c };
   }
@@ -16293,12 +16363,12 @@ async function registerShop() {
   // 🔴 사진이 `data:` 로 남아 있으면 여기서 고친다.
   //
   //    실측(이 가게): `shop.json` 의 `icon` 이 17,379바이트짜리 `data:` 였다.
-  //    사진을 고를 때 파일창고가 잠깐 안 돌아서 비상 경로로 떨어진 것이고,
+  //    사진을 고를 때 IPFS 파일창고가 잠깐 안 돌아서 비상 경로로 떨어진 것이고,
   //    그 뒤로 **아무도 다시 시도하지 않았다.** 결과가 셋이었다:
   //      · 공지에서는 `data:` 가 걸러진다(32KB 상한) → 손님에게 안 간다
   //      · 체인에 올라간 프로필의 `icon` 은 `null` 이었다 → 손님에게 안 간다
   //      · 사장 화면에는 보인다 → **올라간 줄 안다**
-  //    사진을 다시 고르라고 하지 않는다. 지금 파일창고가 돌면 지금 올린다.
+  //    사진을 다시 고르라고 하지 않는다. 지금 IPFS 파일창고가 돌면 지금 올린다.
   await healIcon();
 
   try {
@@ -16415,24 +16485,24 @@ function shopSnapshot() {
 }
 
 /**
- * 사진이 문서 안에 통째로 들어 있으면 파일창고로 옮기고 **주소만** 남긴다.
+ * 사진이 문서 안에 통째로 들어 있으면 IPFS 파일창고로 옮기고 **주소만** 남긴다.
  *
- * 사진을 고를 때 파일창고가 안 돌면 비상으로 `data:` 를 들고 있는다. 그건
+ * 사진을 고를 때 IPFS 파일창고가 안 돌면 비상으로 `data:` 를 들고 있는다. 그건
  * 사장 화면에서는 보이지만 **손님에게는 한 번도 안 간다** — 공지에서는
  * 32KB 상한 때문에 걸러지고, 체인 프로필에도 안 실린다.
  *
- * 그래서 올리기 직전에 한 번 더 해 본다. 파일창고는 대개 그 사이에 켜진다.
+ * 그래서 올리기 직전에 한 번 더 해 본다. IPFS 파일창고는 대개 그 사이에 켜진다.
  * 실패하면 조용히 넘어가지 않고 그대로 둔다 — 사진 때문에 가게 등록 자체를
  * 막을 이유는 없지만, 안 된 것을 됐다고 하지도 않는다.
  */
 /**
- * 메뉴를 파일창고에 올려 두고 주소만 들고 온다.
+ * 메뉴를 IPFS 파일창고에 올려 두고 주소만 들고 온다.
  *
  * 이걸 해야 **가게를 꺼도 손님이 메뉴를 본다.** 지금까지 메뉴는 이 컴퓨터
  * 밖으로 나간 적이 없어서, 문 닫은 가게를 누르면 아무것도 없었다.
  *
  * 바뀐 게 없으면 안 올린다 — 같은 내용은 같은 주소가 나오지만, 그래도
- * 문 열 때마다 파일창고를 두드릴 이유는 없다.
+ * 문 열 때마다 IPFS 파일창고를 두드릴 이유는 없다.
  */
 let lastMenuJson = "";
 async function publishMenu(items: unknown[]): Promise<void> {
@@ -16452,7 +16522,7 @@ async function publishMenu(items: unknown[]): Promise<void> {
     });
     // 🔴 폴더 주소를 준다. 파일 이름까지 붙여야 손님이 메뉴를 읽는다 —
     //    이름 없이 폴더만 주면 목록이 온다(사진에서 두 번 겪은 함정).
-    if (!up?.cid) throw new Error("파일창고가 주소를 주지 않았습니다.");
+    if (!up?.cid) throw new Error("IPFS 파일창고가 주소를 주지 않았습니다.");
     shopMenuCid = `${up.cid}/menu.json`;
     lastMenuJson = json;
   } catch {
@@ -16473,10 +16543,10 @@ async function healIcon(): Promise<void> {
       metadata: null,
     });
     // 폴더 주소를 준다. 파일 이름까지 붙여야 그림이 나온다.
-    if (!up?.cid) throw new Error("파일창고가 주소를 주지 않았습니다.");
+    if (!up?.cid) throw new Error("IPFS 파일창고가 주소를 주지 않았습니다.");
     shopIcon = `${up.cid}/icon.jpg`;
     const note = $("sh-picnote");
-    if (note) setCopyText(note, () => t("사진을 파일창고에 올렸습니다."));
+    if (note) setCopyText(note, () => t("사진을 IPFS 파일창고에 올렸습니다."));
     void saveShop();
   } catch (e) {
     const note = $("sh-picnote");
@@ -16500,12 +16570,12 @@ function saveShop() {
     // 🔴 **손님 화면까지 같이 고친다.**
     //
     // 여태 `shop_save` 만 했다 — 그건 이 컴퓨터의 파일에만 적는 것이고,
-    // 손님 폰이 보는 것은 서버가 들고 있는 사본이다. 그래서 사장이 값을
+    // 손님 폰이 보는 것은 노드가 들고 있는 사본이다. 그래서 사장이 값을
     // 고쳐도 손님은 **옛 값을 보고, 옛 값으로 결제**했다. 「메뉴판 올리기」를
     // 눌러야만 반영됐는데, 그건 IPFS 에 올리는 것이지 값을 고치는 것이
     // 아니다 — 사장이 그 둘을 구별할 이유가 없다.
     //
-    // 서버가 안 켜져 있으면 조용히 아무 일도 안 한다.
+    // 노드가 안 켜져 있으면 조용히 아무 일도 안 한다.
     void pushShopLive();
   }, 600) as unknown as number;
 }
@@ -16668,7 +16738,7 @@ async function loadShop() {
         `<img src="${escapeHtml(src)}" alt="" ` +
         `style="max-width:180px;border-radius:8px;margin-top:8px" ` +
         `onerror="this.replaceWith(Object.assign(document.createElement('p'),` +
-        `{className:'meta',textContent:'사진은 올라가 있습니다. 파일창고가 꺼져 있어 지금은 못 보여 드립니다.'}))" />`;
+        `{className:'meta',textContent:'사진은 올라가 있습니다. IPFS 파일창고가 꺼져 있어 지금은 못 보여 드립니다.'}))" />`;
     }
   }
   // 이미 올려 둔 가게 안 사진을 다시 보여 준다. 안 보여 주면 사장은
@@ -17645,7 +17715,8 @@ function 알림배선() {
   // 켜자마자 한 번 — 이 첫 바퀴가 「이미 아는 주문」을 조용히 적는 자리다.
   // 3초 미루는 것은 노드가 아직 안 깼을 때 첫 물음이 그냥 실패하기 때문이다.
   setTimeout(() => void 주문지킴이(), 3000);
-  setInterval(() => void 주문지킴이(), 30000);
+  // 11-03 감사 B8: 새 주문 알림 30초 → 10초.
+  setInterval(() => void 주문지킴이(), 10000);
 }
 
 /* ── 대화 알림 ────────────────────────────────────────────────────────
@@ -17886,6 +17957,7 @@ let 대화지킴이도는중 = false;
  * 45초다. 주문(30초)보다 느리게 둔다 — 말은 30초 늦게 알아도 아무 일도
  * 안 일어나고, 릴레이는 남의 서버라 덜 두드릴수록 좋다.
  */
+let 대화지킴이마지막 = 0;
 async function 대화지킴이() {
   if (!대화알림켜짐() && currentPage !== "talk") return;
   if (대화지킴이도는중) return;
@@ -17900,7 +17972,8 @@ async function 대화지킴이() {
         // 열쇠를 못 읽으면 이번 바퀴는 넘긴다. `대화살피기` 가 또 막는다.
       }
     }
-    for (const 방 of 지켜보는방()) {
+    // 11-03 감사 B2: 방을 하나씩 차례로 읽지 않고 한꺼번에(방마다 릴레이를 기다리면 방 수만큼 늦는다).
+    await Promise.all(지켜보는방().map(async (방) => {
       try {
         // 30개면 45초 사이에 온 글을 놓칠 일이 없다. 화면(60개)보다 적게
         // 받는 것은 이건 읽으려는 것이 아니라 **세려는 것**이기 때문이다.
@@ -17909,7 +17982,8 @@ async function 대화지킴이() {
       } catch {
         // 릴레이 한 곳이 죽어도 다음 방은 본다. 조용히 다음 바퀴에 다시 본다.
       }
-    }
+    }));
+    대화지킴이마지막 = Date.now();
   } finally {
     대화지킴이도는중 = false;
   }
@@ -17957,7 +18031,8 @@ function 대화알림배선() {
   // 주문 지킴이(3초)와 겹치지 않게 하기 위해서다 — 켜자마자 릴레이와 노드를
   // 동시에 두드리면 느린 컴퓨터에서 첫 화면이 멈춘 것처럼 보인다.
   setTimeout(() => void 대화지킴이(), 6000);
-  setInterval(() => void 대화지킴이(), 45000);
+  // 11-03 감사 B2: 이야기 화면을 보고 있으면 5초, 아니면 예전처럼 45초마다.
+  setInterval(() => { if ((currentPage === "talk" && !document.hidden) || Date.now() - 대화지킴이마지막 >= 45000) void 대화지킴이(); }, 5000);
 }
 
 // ── 주문 ──
@@ -18542,9 +18617,12 @@ window.addEventListener("DOMContentLoaded", async () => {
   //    설치는 여전히 사장이 누를 때만 한다 — 장사 중에 저절로 다시
   //    시작되면 손님 QR 이 먹통이 된다.
   setTimeout(() => void checkForUpdate(true), 8000);
-  // 노드는 조용히 죽는다. 20초마다 다시 본다 — 죽은 걸 늦게 아는 것이
+  // 11-03 감사 B11: 며칠씩 켜 두는 계산대도 새 판을 알게 6시간마다 한 번 더(알림만 — 설치는 여전히 사람이 누른다).
+  setInterval(() => void quietly(() => checkForUpdate(true)), 6 * 60 * 60 * 1000);
+  // 노드는 조용히 죽는다. 10초마다 다시 본다 — 죽은 걸 늦게 아는 것이
   // 카운터에서 제일 비싸다.
-  setInterval(() => void quietly(paintStatusDots), 20_000);
+  // 11-03 감사 B10: 20초 → 10초(켜고 끈 직후는 아래 toggle 쪽에서 바로 다시 그린다).
+  setInterval(() => void quietly(paintStatusDots), 10_000);
   loadBackup();
   $("abk-new").addEventListener("click", () => void newAddrWithName());
   $("up-check").addEventListener("click", () => {
@@ -18638,13 +18716,18 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("overview-receive").onclick = () => { showPage("wallet"); void openReceive(); };
   $("overview-phone").onclick = () => { showPage("ravi"); ($("ravi-tools") as HTMLDetailsElement).open = true; const panel = $("phone-tx-panel") as HTMLDetailsElement; panel.open = true; panel.scrollIntoView(); $("phone-tx-code").focus(); };
   $("rv-home-send").onclick = () => { showPage("wallet"); void openSend("rvn"); };
-  $("rv-home-backup").onclick = () => showPage("settings");
+  // 11-03 감사 A5: 설정 첫 화면에서 멈추지 말고 「백업과 복구」 주제까지 바로 연다(scrollIntoView 가 그 주제를 연다 — settings-nav.ts).
+  $("rv-home-backup").onclick = () => { showPage("settings"); $("sx-h-backup").scrollIntoView({ block: "start" }); };
   // 폰 연결 입구를 홈에도(11-02 GPT·그록: 설정 두 번은 어르신에게 멀다). 설정 맨 위 바로가기와 같은 곳으로 간다.
-  $("rv-home-phone").onclick = () => { showPage("settings"); document.querySelector<HTMLElement>('button.sx-easy[data-sx-to="wl-card"]')?.click(); };
+  // 11-03: 첫 화면 받기/보내기 아래 카드. 기다리는 요청이 있으면 승인 창을 바로 연다(설정을 거치지 않는다).
+  $("rv-home-phone").onclick = () => {
+    if ($("rv-home-phone").dataset.waiting === "1" && walletLink) { walletLink.openWaiting(); return; }
+    showPage("settings"); document.querySelector<HTMLElement>('button.sx-easy[data-sx-to="wl-card"]')?.click();
+  };
   $("rv-home-chat").onclick = () => showPage("talk");
   $("rv-home-nearby").onclick = async () => {
     try { await invoke("start_phone_server"); await invoke("open_share", { url: "http://127.0.0.1:8790/shops" }); }
-    catch { say(t("열지 못했습니다"), t("서버 연결을 확인하고 다시 시도해 주세요.")); }
+    catch { say(t("열지 못했습니다"), t("노드 연결을 확인하고 다시 시도해 주세요.")); }
   };
   $("rv-home-games").onclick = () => showPage("games");
   chainInfo = wireChainInfoLazy({ invoke, showPage });
@@ -18653,7 +18736,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   // Enter/Space, focus order and all destinations available without a custom trap.
   const compactHome = matchMedia("(max-width:1100px), (max-height:680px)");
   const homeExtras = $("rv-home-extras") as HTMLDetailsElement;
-  const fitHomeExtras = () => { homeExtras.open = false; void compactHome; };
+  // 11-03 감사 A7: 늘 접혀 있었다(open=false 고정) — 넓은 창에서는 펼쳐 둔다. 좁은 창에서만 접는다.
+  const fitHomeExtras = () => { homeExtras.open = !compactHome.matches; };
   fitHomeExtras();
   compactHome.addEventListener("change", fitHomeExtras);
   $("rv-home-activity-all").onclick = () => { showPage("wallet"); jumpToEl("w-txs"); };
@@ -18672,6 +18756,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("d-node-row").addEventListener("click", () => toggleDot("node"));
   wireDotSum();
   $("d-mine-row").addEventListener("click", () => toggleDot("mine"));
+  $("d-link-row").addEventListener("click", () => walletLink?.openWaiting());
   $("d-relay-row").addEventListener("click", () => toggleDot("relay"));
   $("d-out-row").addEventListener("click", () => toggleDot("out"));
   $("d-map-row")?.addEventListener("click", () => { showPage("shop"); shopTab("mine"); jumpToEl("mp-card"); void mapCard.refresh(); });
@@ -18717,8 +18802,8 @@ window.addEventListener("DOMContentLoaded", async () => {
         if (say) setCopyText(say, () => t(pick === "help"
           ? "돕기로 바꿨습니다. 가게 정보는 그대로 있습니다."
           : pick === "wallet"
-            // 러스트가 우리가 켠 파일창고·바깥 연결을 끈다(mode_set) — 한 일을 그대로 말한다.
-            ? "지갑으로만 쓰기로 바꿨습니다. 이 앱이 켠 파일창고·바깥 연결은 껐고, 가게 정보는 그대로 있습니다."
+            // 러스트가 우리가 켠 IPFS 파일창고·바깥 연결을 끈다(mode_set) — 한 일을 그대로 말한다.
+            ? "지갑으로만 쓰기로 바꿨습니다. 이 앱이 켠 IPFS 파일창고·바깥 연결은 껐고, 가게 정보는 그대로 있습니다."
             : "장사로 바꿨습니다."));
       } catch (e) {
         if (say) say.textContent = errText(e);
@@ -18954,7 +19039,11 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("sh-sample").addEventListener("click", fillSample);
   salesAccount = wireSalesAccount({ invoke, cancelAsk: () => askClose(null), active: () => currentPage === "sales",
     ask: () => ask("지갑 비밀번호 재인증", "판매 전용 번호를 만든 뒤 지갑을 바로 잠가요.", { password: true }) });
-  wireWalletLink({ invoke, ask: () => ask("지갑 비밀번호 재인증", "폰과 연결할 받기 전용 번호를 만든 뒤 지갑을 바로 잠가요.", { password: true }) });
+  walletLink = wireWalletLink({ invoke,
+    ask: (why) => why === "limit"
+      ? ask("지갑 비밀번호 재인증", "폰 요청으로 하루에 나갈 수 있는 돈을 바꿔요. 확인한 뒤 지갑을 바로 잠가요.", { password: true })
+      : ask("지갑 비밀번호 재인증", "폰과 연결할 받기 전용 번호를 만든 뒤 지갑을 바로 잠가요.", { password: true }),
+    onState: paintHomePhone });
   $("sales-back").onclick = () => showPage("home");
   $("reward-back").onclick = () => showPage("home");
   $("parts-back").onclick = () => showPage("home");
@@ -19283,9 +19372,10 @@ window.addEventListener("DOMContentLoaded", async () => {
           void loadBackup();
         }
       })
-      .catch(() => { const note = document.getElementById("bk-note"); if (note) setCopyText(note, () => t("자동 백업을 확인하지 못했습니다. 서버 연결을 확인하고 백업을 다시 실행하세요.")); });
+      .catch(() => { const note = document.getElementById("bk-note"); if (note) setCopyText(note, () => t("자동 백업을 확인하지 못했습니다. 노드 연결을 확인하고 백업을 다시 실행하세요.")); });
   backupTick();
-  setInterval(() => { if ($("page-home").classList.contains("on")) { void paintHomeSafety(); void refreshOverview(); } }, 20000);
+  // 11-03 감사 B4/B5: 20초 → 5초, 최근 거래(확인 n/6)도 같이. 창을 안 볼 때(쉬는중)는 쉰다.
+  setInterval(() => { if ($("page-home").classList.contains("on") && !쉬는중()) { void quietly(paintHomeSafety); void quietly(refreshOverview); void quietly(paintHomeTxs); } }, 5000);
   setInterval(backupTick, 6 * 60 * 60 * 1000);
   // 인터넷이 끊기는 것은 화면을 열어 볼 때가 아니라 장사 중에 일어난다.
   setInterval(() => void quietly(loadNet), 30_000);
@@ -19379,7 +19469,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   // 코어 지갑처럼 들어오는 것을 그 자리에서 알린다. 레이븐 블록이 약 60초라
   // 15초면 늦지 않고, 노드를 두드리는 부담도 작다.
   void 지갑감시();
-  if (!감시타이머) 감시타이머 = window.setInterval(() => void 지갑감시(), 15000);
+  // 11-03 감사 B3: 입금 감지 15초 → 5초(listsinceblock 한 번 — 가볍다).
+  if (!감시타이머) 감시타이머 = window.setInterval(() => void 지갑감시(), 5000);
   // 🔴 **맨 마지막**에 부른다. 이걸 먼저 부르면 아직 안 그려진 메뉴를
   //    숨기려 들고, 그러면 「돕기」로 골라도 가게 메뉴가 남는다.
   void applyMode();
@@ -19565,7 +19656,7 @@ async function paintHelping(): Promise<void> {
     // 🔴 정직하게. 지금은 색인이 꺼져 있어서 이 노드가 남의 지갑을 돕지는
     //    못한다. 돕고 있다고 적으면 안 된다.
     `<div class="card"><b>${copyHtml("아직 못 하고 있는 것")}</b>
-       <p class="meta" style="margin-top:8px">${copyHtml("이 서버는 아직 남의 지갑 잔액을 대신 답해 주지 못합니다. 주소 색인이 꺼져 있기 때문입니다. 켜면 이 컴퓨터가 실제로 남을 돕게 됩니다.")}</p>
+       <p class="meta" style="margin-top:8px">${copyHtml("이 노드는 아직 남의 지갑 잔액을 대신 답해 주지 못합니다. 주소 색인이 꺼져 있기 때문입니다. 켜면 이 컴퓨터가 실제로 남을 돕게 됩니다.")}</p>
        <button data-part-go="node" style="margin-top:12px">${copyHtml("주소 색인 켜기")}</button>
      </div>` +
     /* 🔴 **만들어 놓고 아무도 안 부르던 것**(실측 2026-09-08).

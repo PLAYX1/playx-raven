@@ -36,7 +36,7 @@ export const PHOTO_MESSAGES: Record<PhotoStage, [string, string]> = {
   "data-url": ["사진 압축(toDataURL)에 실패했습니다.", "사진 압축(toDataURL)이 8초 안에 끝나지 않았습니다."],
   preview: ["사진 미리보기를 읽지 못했습니다.", "사진 미리보기를 8초 안에 읽지 못했습니다."],
   bytes: ["업로드할 사진 파일을 읽지 못했습니다.", "업로드할 사진 파일을 8초 안에 읽지 못했습니다."],
-  upload: ["파일창고에 사진을 올리지 못했습니다. 파일창고가 켜져 있는지 확인해 주세요.", "파일창고 업로드가 30초 안에 끝나지 않았습니다. 파일창고와 연결 상태를 확인해 주세요."],
+  upload: ["IPFS 파일창고에 사진을 올리지 못했습니다. IPFS 파일창고가 켜져 있는지 확인해 주세요.", "IPFS 파일창고 업로드가 30초 안에 끝나지 않았습니다. IPFS 파일창고와 연결 상태를 확인해 주세요."],
 };
 export function photoErrorText(e: unknown): string {
   return e instanceof PhotoFailure ? PHOTO_MESSAGES[e.stage][Number(e.timedOut)] : "사진을 준비하지 못했습니다. 다른 JPG 또는 PNG 사진을 골라 주세요.";
@@ -154,7 +154,7 @@ export async function uploadArtistPhoto(file: File, api: PhotoApi,
   const bytes = new Uint8Array(await photoLimit(() => api.bytes(blob), limits.read, "bytes"));
   if (original && !(type === "image/jpeg" ? bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
     : [137, 80, 78, 71, 13, 10, 26, 10].every((v, i) => bytes[i] === v))) throw new PhotoFailure("bytes", false);
-  progress("파일창고에 올리는 중…");
+  progress("IPFS 파일창고에 올리는 중…");
   const name = (original ? type : blob.type) === "image/png" ? "face.png" : "face.jpg";
   const added = await photoLimit(() => api.upload({ name, bytes: Array.from(bytes) }), limits.upload, "upload");
   const cid = String(added?.cid || "");

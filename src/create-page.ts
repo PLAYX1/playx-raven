@@ -85,7 +85,8 @@ const DRAFT_KEY = "playx-raven-create-draft";
 /** 확인 표 한 번에 — cert-types 의 MAX_ROSTER_ROWS 와 같다. */
 const MAX_BATCH_ROWS = 500;
 const ISSUER_KEY = "playx-raven-create-issuer";
-const POLL_MS = 20_000;
+/** 11-03 감사 B9: 발행 확인 20초 → 5초(블록이 잡혔는지 기다리는 화면). */
+const POLL_MS = 5_000;
 /** 지문은 공개된다 — 짧거나 양식이 정해진 문서는 지문만으로 내용을 맞춰 볼 수 있다. */
 export const FINGERPRINT_GUESS = "짧거나 양식이 정해진 문서는 지문만으로도 내용을 짐작당할 수 있어요 — 알려지면 안 되는 문서는 붙이지 마세요.";
 const KIND_NAME: Record<CreateKind, string> = { certificate: "증명서", ticket: "티켓", work: "작품" };
@@ -258,7 +259,7 @@ export function wireCreate(deps: CreateDeps): CreateApi {
       brandSel.replaceChildren(...s.brands.map((b) => option(b, false)), ...pending.map((b) => option(b, true)));
     } catch (e) {
       el("cr-brand-wrap").hidden = true; el("cr-maker-wrap").hidden = false;
-      tell(() => tf("서버 지갑을 읽지 못했습니다: {0}", errText(e)));
+      tell(() => tf("노드 지갑을 읽지 못했습니다: {0}", errText(e)));
     }
     paintMaker();
     void bulk.loadMarks();
@@ -765,7 +766,7 @@ export function wireCreate(deps: CreateDeps): CreateApi {
     });
     waitBox.replaceChildren(
       node("h3", () => tf("{0}장을 만드는 중이에요", fmtCount(total))),
-      node("p", "창을 닫지 마세요 — 50장씩 나눠 보내요. 한 묶음에 보통 몇 초, 서버가 바쁘면 더 걸려요.", "meta"),
+      node("p", "창을 닫지 마세요 — 50장씩 나눠 보내요. 한 묶음에 보통 몇 초, 노드가 바쁘면 더 걸려요.", "meta"),
       bar,
       node("p", () => tf("{0} / {1}장", done, total), "meta"),
       list,
@@ -1005,7 +1006,7 @@ export function wireCreate(deps: CreateDeps): CreateApi {
     const probe = d.step === "brand" ? d.brand : (d.names?.[0] ?? "");
     waitBox.replaceChildren(
       node("h3", "보냈는지 아직 몰라요 — 기록될 때까지 기다려 주세요"),
-      node("p", "서버가 제때 답하지 않았어요. 이미 보냈을 수 있으니 다시 만들지 마세요 — 같은 것이 두 번 태워질 수 있어요. 기록되면 여기서 저절로 이어져요.", "meta"),
+      node("p", "노드가 제때 답하지 않았어요. 이미 보냈을 수 있으니 다시 만들지 마세요 — 같은 것이 두 번 태워질 수 있어요. 기록되면 여기서 저절로 이어져요.", "meta"),
       node("p", d.step === "brand" ? "등록할 이름" : "공개 장부에 새겨질 이름", "meta"),
       data("p", d.step !== "brand" && (d.names?.length ?? 0) > 1 ? tf("{0} 외 {1}장", probe, (d.names?.length ?? 1) - 1) : probe, "cr-name"),
       state,
@@ -1067,7 +1068,7 @@ export function wireCreate(deps: CreateDeps): CreateApi {
         } else if (sending) {
           setCopyText(state, () => t(SENDING_NOTE));
         } else {
-          setCopyText(state, () => t("아직 안 보여요. 서버가 따라잡는 중일 수 있어요 — 조금 더 기다려 주세요."));
+          setCopyText(state, () => t("아직 안 보여요. 노드가 따라잡는 중일 수 있어요 — 조금 더 기다려 주세요."));
         }
       } catch (e) {
         setCopyText(state, () => errText(e));

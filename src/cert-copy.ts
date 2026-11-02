@@ -133,7 +133,7 @@ export const CERT_COPY: Record<string, [string, string, string]> = {
   "지갑 잔액": ["Wallet balance", "ウォレット残高", "钱包余额"],
   "지우지 못했어요.": ["Could not delete.", "削除できませんでした。", "无法删除。"],
   "짝 없는 사진 {0}장: {1}": ["{0} unmatched photos: {1}", "組のない写真{0}枚: {1}", "未匹配的照片 {0} 张：{1}"],
-  "창을 닫지 마세요 — 50장씩 나눠 보내요. 한 묶음에 보통 몇 초, 서버가 바쁘면 더 걸려요.": ["Don't close this window — sent in batches of 50. Each batch usually takes a few seconds, longer if the server is busy.", "ウィンドウを閉じないでください — 50枚ずつ分けて送ります。1つの束につき通常数秒、サーバーが忙しいともっとかかります。", "请不要关闭窗口 — 将按每批 50 张分批发送。每批通常需要几秒，服务器繁忙时会更久。"],
+  "창을 닫지 마세요 — 50장씩 나눠 보내요. 한 묶음에 보통 몇 초, 노드가 바쁘면 더 걸려요.": ["Don't close this window — sent in batches of 50. Each batch usually takes a few seconds, longer if the node is busy.", "ウィンドウを閉じないでください — 50枚ずつ分けて送ります。1つの束につき通常数秒、ノードが忙しいともっとかかります。", "请不要关闭窗口 — 将按每批 50 张分批发送。每批通常需要几秒，节点繁忙时会更久。"],
   "처음 한 번은 이름 등록이 먼저예요 — 등록과 함께 첫 {0}장을 만들고, 기록되면(1~2분) 「나머지 이어서 만들기」로 {1}장을 더 만들어요.": ["The first time, name registration comes first — the first {0} are created together with the registration, and once it's recorded (1–2 minutes), use Continue with the rest to create {1} more.", "初回だけ名前の登録が先です — 登録と一緒に最初の{0}枚を作り、記録されたら（1〜2分）「残りを続けて作る」で残り{1}枚を作ります。", "第一次需要先注册名称 — 注册的同时创建前 {0} 张，记录完成后（1–2 分钟），用「继续创建剩余」再创建 {1} 张。"],
   "공개 장부 수수료 합계": ["Total public ledger fees", "公開台帳手数料の合計", "公开账本上手续费合计"],
   "투명 PNG · 한 번 올리면 다음에도 써요": ["Transparent PNG · Upload once and it's used next time too", "透過PNG · 一度アップロードすれば次回も使います", "透明 PNG · 上传一次，下次也会使用"],

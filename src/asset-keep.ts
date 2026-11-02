@@ -518,7 +518,7 @@ export function createAssetKeep(deps: KeepDeps) {
       const list = await deps.invoke<string[]>("pin_list");
       const cur = deps.getPinned();
       if (list.length !== cur.size || list.some((c) => !cur.has(c))) { deps.setPinned(new Set(list)); deps.renderList(); }
-    } catch { /* 파일창고가 꺼져 있으면 지난 값을 둔다 */ }
+    } catch { /* IPFS 파일창고가 꺼져 있으면 지난 값을 둔다 */ }
   }
 
   /** 자산을 새로 불러온 직후 한 번. */
