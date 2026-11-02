@@ -104,7 +104,7 @@ const context=vm.createContext({$:el,document:{getElementById:el,querySelector:(
     if(command==='talk_rooms')return Array.from({length:5},()=>({name:'<fixture>',about:'summary'}));
     throw Error(`Forbidden or unmodelled command: ${command}`);
   }});
-vm.runInContext(compile(fn('pendingRow')+'\n'+fn('paintHomeToday')+'\n'+fn('paintHome')),context);
+vm.runInContext(compile(fn('pendingRow')+'\n'+fn('paintHomeToday')+'\n'+fn('paintHomeTxs')+'\n'+fn('paintHome')),context);
 await context.paintHome(); await context.paintHomeToday();
 assert.equal(context.chainPainted,1,'0.8.8: 홈을 그리면 체인 요약 줄도 한 번 갱신한다');
 assert.equal((el('rv-home-txs').innerHTML.match(/class="rv-home-entry"/g)||[]).length,3);
