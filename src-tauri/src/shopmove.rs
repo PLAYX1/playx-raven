@@ -163,7 +163,7 @@ pub async fn shop_key_move(qty: f64, passphrase: Option<String>) -> Result<Value
     .await?;
     let new_cid = added["cid"].as_str().unwrap_or("").to_string();
     if new_cid.is_empty() {
-        return Err("새 가게 정보를 파일창고에 올리지 못했습니다.".into());
+        return Err("새 가게 정보를 IPFS 파일창고에 올리지 못했습니다.".into());
     }
 
     // ── 체인에 새긴다 ─────────────────────────────────────────────

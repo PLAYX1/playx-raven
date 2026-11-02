@@ -233,7 +233,7 @@ mod tests {
         merge_seen(&mut incoming, &current);
         assert_eq!(incoming[0]["stock"], 3, "아침 숫자 8 이 팔린 만큼을 되살렸다");
         assert_eq!(incoming[1]["stock"], 20, "사장이 고친 숫자는 그대로");
-        assert_eq!(incoming[2]["stock"], 4, "서버가 모르는 품목은 들어온 숫자");
+        assert_eq!(incoming[2]["stock"], 4, "노드가 모르는 품목은 들어온 숫자");
         assert!(incoming[3].get("stock").is_none());
         assert!(incoming.as_array().unwrap().iter().all(|x| x.get("stock_seen").is_none()), "stock_seen 은 저장되지 않는다");
     }

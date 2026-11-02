@@ -52,7 +52,7 @@ fn ipfs_repo_ready() -> bool {
 /// 파일을 나르는 자리지, 파일을 나르려고 있는 자리가 아니다.
 fn ipfs_init() -> Result<(), String> {
     let Some(path) = crate::services::which("ipfs") else {
-        return Err("파일창고 프로그램이 없습니다".into());
+        return Err("IPFS 파일창고 프로그램이 없습니다".into());
     };
     let out = crate::quiet::cmd(&path)
         .args(["init", "--profile=lowpower"])
@@ -89,7 +89,7 @@ fn prep_conf() -> Vec<String> {
     // ① 우리가 노드에 말을 걸려면 이게 있어야 한다. 없으면 아무것도 못 읽는다.
     if !is("server") {
         want.insert("server".into(), json!(1));
-        did.push("서버에 말을 걸 수 있게 열었습니다".to_string());
+        did.push("노드에 말을 걸 수 있게 열었습니다".to_string());
     }
 
     // ② 색인. **장부가 아직 없을 때만** 켠다.
@@ -137,7 +137,7 @@ fn prep_conf() -> Vec<String> {
         if !vals.contains_key("upnp") {
             want.insert("upnp".into(), json!(1));
             did.push(
-                "바깥 접속 자동 열기(UPnP)를 켰습니다 — 노드 현황 사이트에 이 서버가 잡히게 합니다. 설정에서 끄실 수 있습니다"
+                "바깥 접속 자동 열기(UPnP)를 켰습니다 — 노드 현황 사이트에 이 노드가 잡히게 합니다. 설정에서 끄실 수 있습니다"
                     .to_string(),
             );
         }
@@ -249,8 +249,8 @@ pub async fn run() -> Value {
     let parts = crate::mode::autostart_now(); // 0.4.8 — 「지갑」은 노드만 알아서 켠다(mode.rs)
     if parts.files && !ipfs_repo_ready() && crate::services::which("ipfs").is_some() {
         match ipfs_init() {
-            Ok(()) => notes.push("파일창고를 처음 준비했습니다".into()),
-            Err(e) => ipfs_note = Some(format!("파일창고를 준비하지 못했습니다: {e}")),
+            Ok(()) => notes.push("IPFS 파일창고를 처음 준비했습니다".into()),
+            Err(e) => ipfs_note = Some(format!("IPFS 파일창고를 준비하지 못했습니다: {e}")),
         }
     }
 
@@ -270,7 +270,7 @@ pub async fn run() -> Value {
         Err(e) => (vec![], vec![json!({ "what": "켜기", "why": e })]),
     };
     if let Some(n) = ipfs_note {
-        skipped.push(json!({ "what": "파일창고", "why": n }));
+        skipped.push(json!({ "what": "IPFS", "why": n }));
     }
 
     json!({

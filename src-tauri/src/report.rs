@@ -115,7 +115,7 @@ pub fn report_log_preview() -> Value {
         Some(text) => json!({ "ok": true, "text": text, "lines": text.lines().count() }),
         None => json!({
             "ok": false,
-            "why": "서버 기록을 읽지 못했거나 아직 기록이 없습니다. 이 경우 기록은 보내지 않습니다."
+            "why": "노드 기록을 읽지 못했거나 아직 기록이 없습니다. 이 경우 기록은 보내지 않습니다."
         }),
     }
 }
@@ -262,14 +262,14 @@ mod tests {
     /// 체크하지 않으면(None) 기록 키가 아예 없다. 화면이 끼워 넣은 것도 지운다.
     #[test]
     fn no_log_key_unless_attached() {
-        let p = build_payload("안 켜져요", "install-run", "서버", Some(json!({ "node_log": "몰래" })), None);
+        let p = build_payload("안 켜져요", "install-run", "노드", Some(json!({ "node_log": "몰래" })), None);
         assert!(p["context"].get("node_log").is_none());
         assert_eq!(p["context"]["pathname"], "/rvn");
     }
 
     #[test]
     fn log_key_present_when_attached() {
-        let p = build_payload("안 켜져요", "install-run", "서버", None, Some("a\nb".into()));
+        let p = build_payload("안 켜져요", "install-run", "노드", None, Some("a\nb".into()));
         assert_eq!(p["context"]["node_log"], "a\nb");
     }
 

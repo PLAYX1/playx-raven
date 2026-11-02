@@ -67,7 +67,7 @@ pub async fn encrypt_wallet(passphrase: String, confirm: String) -> Result<Value
     match &before {
         Err(e) => {
             return Err(format!(
-                "서버에 연결하지 못했습니다. 암호를 걸지 않았습니다. ({e})"
+                "노드에 연결하지 못했습니다. 암호를 걸지 않았습니다. ({e})"
             ))
         }
         Ok(i) => {
@@ -131,7 +131,7 @@ fn unlock_failure_message(e: crate::raven::RpcFailure) -> String {
     if e.code == Some(-14) {
         "암호가 맞지 않습니다.".into()
     } else {
-        "지갑 잠금을 해제하지 못했습니다. 서버 연결과 지갑 상태를 확인한 뒤 다시 시도해 주세요.".into()
+        "지갑 잠금을 해제하지 못했습니다. 노드 연결과 지갑 상태를 확인한 뒤 다시 시도해 주세요.".into()
     }
 }
 

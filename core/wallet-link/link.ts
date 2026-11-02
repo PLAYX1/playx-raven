@@ -24,8 +24,9 @@ export const LINK_OFFER_TTL_MS = 60_000;
 export const LINK_REQUEST_TTL_MS = 10 * 60_000;
 /** 쓴 요청 id 를 이만큼 기억한다(만료창의 여러 배 — 늦게 다시 온 같은 요청을 다시 서명하지 않게). */
 export const LINK_SEEN_RETAIN_MS = 6 * LINK_REQUEST_TTL_MS;
-/** 하루 합계 제안값(연결 때 데스크탑에서 확인·낮추기). */
-export const LINK_DAILY_SATS = 100_000n * 100_000_000n;
+/** 하루 합계의 최대 = RVN 총발행량(21,000,000,000 RVN) — 이 값이면 「한도 없음」. 실제 한도는 연결 때 데스크탑이 정한다(기본 1,000 RVN).
+ *  한도가 없어도 돈은 언제나 데스크탑에서 사람이 승인해야 나간다. */
+export const LINK_DAILY_SATS = 21_000_000_000n * 100_000_000n;
 const MAX_PHONE_ADDRESSES = 8;
 
 const HEX64 = /^[0-9a-f]{64}$/, SIG = /^[0-9a-f]{128}$/, ADDRESS = /^R[1-9A-HJ-NP-Za-km-z]{25,34}$/, SATS = /^[1-9]\d{0,17}$/;

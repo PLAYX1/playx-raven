@@ -120,7 +120,7 @@ impl Resolved {
             Outcome::Legacy(why) => ("using-old-folder", format!(
                 "자료 폴더 이름을 {NEW_FOLDER}로 바꾸려 했지만 {} 이번에는 옛 폴더({})를 그대로 써요. 자료는 그대로 안전하고, 프로그램을 다시 켜면 한 번 더 시도해요.",
                 match why {
-                    Why::ProgramRunning => "노드나 파일창고가 아직 돌고 있어서".to_string(),
+                    Why::ProgramRunning => "노드나 IPFS 파일창고가 아직 돌고 있어서".to_string(),
                     Why::RenameFailed(_) => "다른 프로그램이 폴더를 쓰고 있어서".to_string(),
                     Why::NewHasNoData => format!("새 폴더({NEW_FOLDER})에 다른 파일이 이미 있어서"),
                     Why::NewIsNotAFolder => format!("{NEW_FOLDER} 자리에 폴더가 아닌 것이 있어서"),

@@ -368,14 +368,14 @@ pub async fn nostr_query_authors(
 /// 🔴 끝까지 넘겨 읽는다. 연결 공개키는 공개돼 있어 누구나 그 키로 겉봉 수백 장을 쌓을 수 있다 —
 ///    한 번 200장만 읽으면 진짜 「끊기」가 밀려나 안 보인다. 그래서 `until` 로 페이지를 넘기고,
 ///    어느 릴레이에서든 끝(EOSE)까지 못 읽었으면 「다 읽음」이 아니라고 돌려준다(부르는 쪽은 커서를 안 옮긴다).
-/// 돌려주는 값: (겉봉들, 닿은 릴레이를 모두 끝까지 읽었나). 한 곳도 안 닿으면 Err.
+/// 돌려주는 값: (겉봉들, 끝까지 읽은 릴레이가 있나). 한 곳도 안 닿으면 Err.
 pub(crate) async fn nostr_query_inbox(pubkey: &str, since: i64) -> Result<(Vec<Value>, bool), String> {
     if pubkey.len() != 64 || !pubkey.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) {
         return Err("받는 열쇠가 올바르지 않습니다.".into());
     }
     let pubkey = pubkey.to_string();
-    use futures_util::future::join_all;
-    let got = join_all(targets().into_iter().map(|url| {
+    use futures_util::stream::{FuturesUnordered, StreamExt};
+    let mut runs: FuturesUnordered<_> = targets().into_iter().map(|url| {
         let pubkey = pubkey.clone();
         async move {
             page_all(|until| {
@@ -386,22 +386,34 @@ pub(crate) async fn nostr_query_inbox(pubkey: &str, since: i64) -> Result<(Vec<V
                 async move { read_one_eose(&url, &req, "wl1").await }
             }, INBOX_MAX_PAGES).await
         }
-    })).await;
-    let (mut any, mut complete) = (false, true);
+    }).collect();
+    // 11-03 감사 B1: 가장 느린 릴레이(연결 7초+읽기 10초)까지 기다리지 않는다. 한 곳이라도 끝(EOSE)까지 다 읽으면
+    // 짧은 유예(INBOX_GRACE) 동안 들어온 것만 더 합치고 돌려준다. 늦은 곳의 겉봉은 다음 확인(이틀 창을 다시 읽는다)에서 잡힌다.
+    // 「다 읽음」(커서 이동)은 끝까지 읽은 릴레이가 하나라도 있을 때만 — 그 곳이 본 범위는 빠짐없이 읽은 것이다.
+    let (mut any, mut complete) = (false, false);
     let mut seen: std::collections::HashMap<String, Value> = std::collections::HashMap::new();
-    for r in got {
-        let Ok((events, done)) = r else { continue };
-        any = true;
-        complete &= done;
+    let mut take = |r: Result<(Vec<Value>, bool), String>, any: &mut bool, complete: &mut bool| {
+        let Ok((events, done)) = r else { return };
+        *any = true;
+        *complete |= done;
         for e in events {
             if let Some(id) = e.get("id").and_then(Value::as_str) { seen.entry(id.to_string()).or_insert(e); }
         }
+    };
+    while let Some(r) = runs.next().await {
+        take(r, &mut any, &mut complete);
+        if complete { break; }
+    }
+    if complete {
+        let grace = tokio::time::Instant::now() + INBOX_GRACE;
+        while let Ok(Some(r)) = tokio::time::timeout_at(grace, runs.next()).await { take(r, &mut any, &mut complete); }
     }
     if !any {
         return Err("릴레이에 닿지 못했습니다. 인터넷을 확인해 주세요.".into());
     }
     Ok((seen.into_values().collect(), complete))
 }
+const INBOX_GRACE: std::time::Duration = std::time::Duration::from_millis(800);
 pub(crate) const INBOX_PAGE: usize = 200;
 const INBOX_MAX_PAGES: usize = 50;
 

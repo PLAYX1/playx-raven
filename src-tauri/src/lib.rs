@@ -470,6 +470,7 @@ pub fn run() {
             wallet_link::wallet_link_approve,
             wallet_link::wallet_link_refuse,
             wallet_link::wallet_link_revoke,
+            wallet_link::wallet_link_set_limit,
             wallet::lock_wallet,
             vending::sellable_assets,
             vending::pending_sales,

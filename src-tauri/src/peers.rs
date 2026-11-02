@@ -541,7 +541,7 @@ mod tests {
             let api = format!("http://{addr}/api/v0");
             // 예전 잣대(cat)는 폴더를 「없음」으로 봤다 — 이 가짜가 kubo 와 같게 구는지부터.
             let cat = reqwest::Client::new().post(format!("{api}/cat?arg={DIR}&length=1")).send().await.unwrap();
-            assert!(!cat.status().is_success(), "가짜 파일창고도 폴더에 cat 오류를 내야 시험이 된다");
+            assert!(!cat.status().is_success(), "가짜 IPFS 파일창고도 폴더에 cat 오류를 내야 시험이 된다");
             assert!(super::root_alive_at(&api, DIR, 5).await, "폴더 묶음은 살아 있다");
             assert!(super::root_alive_at(&api, FILE, 5).await, "보통 파일도 그대로 살아 있다");
             assert!(!super::root_alive_at(&api, GONE, 5).await, "아무도 없는 것만 「없음」");

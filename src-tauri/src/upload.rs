@@ -50,16 +50,16 @@ async fn post_multipart(query: &str, form: reqwest::multipart::Form) -> Result<S
         .timeout(std::time::Duration::from_secs(600))
         .send()
         .await
-        .map_err(|e| format!("사진 보관함에 올리지 못했습니다: {e}"))?;
+        .map_err(|e| format!("IPFS 파일창고에 올리지 못했습니다: {e}"))?;
 
     if !response.status().is_success() {
-        return Err(format!("사진 보관함이 거부했습니다: {}", response.status()));
+        return Err(format!("IPFS 파일창고가 거부했습니다: {}", response.status()));
     }
 
     response
         .text()
         .await
-        .map_err(|e| format!("사진 보관함 응답을 읽지 못했습니다: {e}"))
+        .map_err(|e| format!("IPFS 파일창고 응답을 읽지 못했습니다: {e}"))
 }
 
 /// Adds a single file and returns its CIDv0.
@@ -74,7 +74,7 @@ pub async fn ipfs_add_file(file: Incoming) -> Result<Value, String> {
     let hash = added
         .last()
         .map(|a| a.hash.clone())
-        .ok_or_else(|| "사진 보관함(IPFS)이 해시를 돌려주지 않았습니다".to_string())?;
+        .ok_or_else(|| "IPFS 파일창고가 해시를 돌려주지 않았습니다".to_string())?;
 
     Ok(json!({ "cid": hash, "name": file.name, "size": size }))
 }
@@ -365,7 +365,7 @@ pub async fn ipfs_add_bundle(
         .iter()
         .find(|a| a.name.is_empty())
         .or_else(|| added.last())
-        .ok_or_else(|| "사진 보관함(IPFS)이 폴더 해시를 돌려주지 않았습니다".to_string())?;
+        .ok_or_else(|| "IPFS 파일창고가 폴더 해시를 돌려주지 않았습니다".to_string())?;
 
     Ok(json!({ "cid": dir.hash, "files": listed }))
 }
@@ -462,11 +462,11 @@ pub async fn ipfs_keep_url(url: String) -> Value {
     let part = reqwest::multipart::Part::bytes(bytes.to_vec()).file_name(name);
     let form = reqwest::multipart::Form::new().part("file", part);
     let Ok(body) = post_multipart("pin=true&cid-version=0", form).await else {
-        return json!({ "kept": false, "why": "파일창고가 꺼져 있습니다" });
+        return json!({ "kept": false, "why": "IPFS 파일창고가 꺼져 있습니다" });
     };
     match parse_added(&body).last() {
         Some(a) => json!({ "kept": true, "cid": a.hash, "bytes": bytes.len() }),
-        None => json!({ "kept": false, "why": "파일창고가 답을 안 했습니다" }),
+        None => json!({ "kept": false, "why": "IPFS 파일창고가 답을 안 했습니다" }),
     }
 }
 

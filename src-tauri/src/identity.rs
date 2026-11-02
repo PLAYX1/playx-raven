@@ -341,10 +341,10 @@ pub(crate) enum SeedFailure { Unavailable, Locked, NotMnemonic, Other }
 impl SeedFailure {
     pub(crate) fn message(self) -> &'static str {
         match self {
-            Self::Unavailable => "RVN 서버에 연결하지 못했습니다. 「이 컴퓨터 → RVN 서버」에서 켜져 있는지 확인해 주세요.",
+            Self::Unavailable => "RVN 노드에 연결하지 못했습니다. 「이 컴퓨터 → RVN 노드」에서 켜져 있는지 확인해 주세요.",
             Self::Locked => "지갑이 잠겨 있어 12단어를 읽을 수 없습니다. 「지갑 열기」를 눌러 주세요.",
             Self::NotMnemonic => "이 지갑은 12단어로 만든 지갑이 아닙니다. 먼저 설정에서 지갑과 열쇠를 파일로 백업해 주세요. 12단어가 필요한 기능은 12단어 지갑을 새로 만들거나, 가진 12단어로 「설정 → 복구 단어로 되살리기」를 이용해 주세요. 기존 지갑을 지우거나 덮어쓰지 마세요.",
-            Self::Other => "12단어를 확인하지 못했습니다. 서버가 바쁘거나 지갑 조회에 문제가 있을 수 있습니다. 잠시 뒤 다시 시도해 주세요.",
+            Self::Other => "12단어를 확인하지 못했습니다. 노드가 바쁘거나 지갑 조회에 문제가 있을 수 있습니다. 잠시 뒤 다시 시도해 주세요.",
         }
     }
     pub(crate) fn public_error(self) -> String {
@@ -362,7 +362,7 @@ pub(crate) fn classify_seed_rpc(e: &crate::raven::RpcFailure) -> SeedFailure {
     if e.code == Some(-4) && msg.contains("wallet doesn't have 12 words") {
         return SeedFailure::NotMnemonic;
     }
-    if e.code.is_none() && (msg.contains("서버에 닿지 못했습니다") || msg.contains("the node is probably not running")) {
+    if e.code.is_none() && (msg.contains("노드에 닿지 못했습니다") || msg.contains("the node is probably not running")) {
         return SeedFailure::Unavailable;
     }
     SeedFailure::Other
@@ -754,9 +754,9 @@ mod seed_failure_tests {
         assert_eq!(failure(Some(-4), "other wallet error"), SeedFailure::Other);
         assert_eq!(failure(Some(-14), "incorrect passphrase"), SeedFailure::Other);
         assert_eq!(failure(Some(-32601), "Method not found"), SeedFailure::Other);
-        assert_eq!(failure(None, "서버에 닿지 못했습니다 (synthetic)"), SeedFailure::Unavailable);
+        assert_eq!(failure(None, "노드에 닿지 못했습니다 (synthetic)"), SeedFailure::Unavailable);
         assert_eq!(failure(None, "The node is probably not running, or was started without server=1."), SeedFailure::Unavailable);
-        assert_eq!(failure(None, "서버가 20초 안에 답하지 않았습니다"), SeedFailure::Other);
+        assert_eq!(failure(None, "노드가 20초 안에 답하지 않았습니다"), SeedFailure::Other);
         assert_eq!(failure(None, "Malformed .cookie file"), SeedFailure::Other);
         assert_eq!(failure(None, "passphrase"), SeedFailure::Other);
     }

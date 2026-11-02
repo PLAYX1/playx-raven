@@ -587,7 +587,7 @@ mod tests {
     fn 잠김_오류만_준비를_되살린다() {
         assert!(is_before_signing("지갑이 잠겨 있습니다. 암호가 필요합니다."));
         assert!(is_before_signing("암호가 맞지 않습니다."));
-        assert!(!is_before_signing("SENT_UNKNOWN: 서버가 180초 안에 답하지 않았어요"));
+        assert!(!is_before_signing("SENT_UNKNOWN: 노드가 180초 안에 답하지 않았어요"));
         assert!(!is_before_signing("서명을 마치지 못했어요."));
     }
 

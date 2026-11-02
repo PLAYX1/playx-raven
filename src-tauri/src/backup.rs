@@ -137,7 +137,7 @@ pub fn backup_survey() -> Value {
         "excluded": [
             { "name": "AI 열쇠", "why": "복구 뒤 설정에서 다시 입력하세요." },
             { "name": "브라우저·PWA 지갑과 파일", "why": "해당 웹앱에서 별도로 내보내세요." },
-            { "name": "사진 보관함 원본·공개 장부", "why": "사진 보관함 원본은 별도로 보관하고, 공개 장부는 서버에서 다시 동기화하세요." },
+            { "name": "IPFS 파일창고 원본·공개 장부", "why": "IPFS 파일창고 원본은 별도로 보관하고, 공개 장부는 노드에서 다시 동기화하세요." },
         ],
         "last": last_backup(),
         "automatic": std::fs::read(app_dir().join("backup-auto-status.json")).ok().and_then(|b| serde_json::from_slice::<Value>(&b).ok()).map(rebase_dest),
@@ -603,9 +603,9 @@ async fn prepare_backup(include_wallet: bool) -> Result<PreparedBackup, String> 
     if include_wallet {
         let wallet = workspace.path().join("wallet.dat");
         crate::raven::call_rpc("backupwallet", json!([wallet.to_string_lossy()])).await
-            .map_err(|_| "지갑을 백업하지 못했습니다. 서버가 켜져 있고 연결되는지 확인한 뒤 다시 백업하세요. 기존 백업은 교체하지 않았습니다.".to_string())?;
+            .map_err(|_| "지갑을 백업하지 못했습니다. 노드가 켜져 있고 연결되는지 확인한 뒤 다시 백업하세요. 기존 백업은 교체하지 않았습니다.".to_string())?;
         let (size, sha256) = file_digest(&wallet)?;
-        if size == 0 { return Err("서버가 빈 지갑 사본을 만들었습니다. 서버 상태를 확인한 뒤 다시 백업하세요.".into()); }
+        if size == 0 { return Err("노드가 빈 지갑 사본을 만들었습니다. 노드 상태를 확인한 뒤 다시 백업하세요.".into()); }
         inside.push(json!({"name": "wallet.dat", "what": "지갑 열쇠", "size": size, "sha256": sha256}));
     }
     for (name, source, what) in manifest() {
@@ -632,7 +632,7 @@ async fn prepare_backup(include_wallet: bool) -> Result<PreparedBackup, String> 
 
 fn backup_readme(prepared: &PreparedBackup) -> String {
     let names = prepared.inside.iter().filter_map(|v| v["name"].as_str()).collect::<Vec<_>>().join("\n");
-    format!("RavenVault Desktop backup\n\nIncluded files / 포함한 파일:\n{names}\n\nNot included / 포함하지 않음: blockchain, IPFS media, browser/PWA wallet and files, AI API keys.\n공개 장부, 사진 보관함(IPFS) 원본, 브라우저/PWA 지갑과 파일, AI API 키는 별도로 보관하세요.\n\nRestore / 되돌리기: 앱의 [이 컴퓨터] → [되돌리기]에서 이 백업을 고르세요.\n다른 컴퓨터에서는 백업 암호 또는 백업 열쇠가 필요합니다. 지갑 복구 단어와는 다릅니다.\n지갑을 복원하기 전에 Ravencoin 서버를 완전히 종료하세요. 같은 지갑을 여러 컴퓨터에서 동시에 사용하지 마세요.\n")
+    format!("RavenVault Desktop backup\n\nIncluded files / 포함한 파일:\n{names}\n\nNot included / 포함하지 않음: blockchain, IPFS media, browser/PWA wallet and files, AI API keys.\n공개 장부, IPFS 파일창고 원본, 브라우저/PWA 지갑과 파일, AI API 키는 별도로 보관하세요.\n\nRestore / 되돌리기: 앱의 [이 컴퓨터] → [되돌리기]에서 이 백업을 고르세요.\n다른 컴퓨터에서는 백업 암호 또는 백업 열쇠가 필요합니다. 지갑 복구 단어와는 다릅니다.\n지갑을 복원하기 전에 Ravencoin 노드를 완전히 종료하세요. 같은 지갑을 여러 컴퓨터에서 동시에 사용하지 마세요.\n")
 }
 
 fn write_archive(prepared: &PreparedBackup, out: &Path) -> Result<(), String> {

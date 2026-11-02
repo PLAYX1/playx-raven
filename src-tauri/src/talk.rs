@@ -347,7 +347,7 @@ pub fn recovery_status() -> Value {
             { "what": "쓴 글 · 방", "ok": true,
               "why": "릴레이에 있습니다. 이름 열쇠가 되살아나면 내 글로 다시 찾습니다." },
             { "what": "사진 · 메뉴", "ok": true,
-              "why": "파일창고에 있습니다. 아무도 안 들고 있으면 찾을 수 없게 되니, 이 컴퓨터가 계속 들고 있습니다." },
+              "why": "IPFS 파일창고에 있습니다. 아무도 안 들고 있으면 찾을 수 없게 되니, 이 컴퓨터가 계속 들고 있습니다." },
         ],
     })
 }
@@ -665,7 +665,7 @@ pub async fn talk_photo_post(
     let status = crate::ipfs::ipfs_status().await.unwrap_or(json!({ "running": false }));
     if !status.get("running").and_then(Value::as_bool).unwrap_or(false) {
         return Err(
-            "사진을 둘 파일창고가 꺼져 있습니다. 「켜기」를 눌러 파일창고를 켠 다음 \
+            "사진을 둘 IPFS 파일창고가 꺼져 있습니다. 「켜기」를 눌러 IPFS 파일창고를 켠 다음 \
              다시 보내 주세요. 글은 지금도 보낼 수 있습니다."
                 .into(),
         );
@@ -688,7 +688,7 @@ pub async fn talk_photo_post(
     let cid = added
         .get("cid")
         .and_then(Value::as_str)
-        .ok_or_else(|| "파일창고가 사진 주소를 안 돌려줬습니다.".to_string())?
+        .ok_or_else(|| "IPFS 파일창고가 사진 주소를 안 돌려줬습니다.".to_string())?
         .to_string();
 
     // 6) 글을 만든다.
@@ -739,7 +739,7 @@ pub async fn talk_photo_post(
 
     // 7) 🔴 **되는 척하지 않는다.** 이 말을 화면이 그대로 띄워야 한다.
     let say = if peers == Some(0) {
-        "사진을 올렸습니다. 다만 지금 이 컴퓨터가 파일창고 그물에 아무와도 이어져 \
+        "사진을 올렸습니다. 다만 지금 이 컴퓨터가 IPFS 파일창고 그물에 아무와도 이어져 \
          있지 않아, 밖에 계신 분은 이 사진을 못 받습니다. 잠시 뒤 다시 확인해 주세요."
     } else {
         "사진은 지금 이 컴퓨터가 들고 있습니다. 다른 곳에 사본이 생기기 전까지는, \
@@ -1693,11 +1693,11 @@ mod gate_tests {
     #[test]
     fn 검사가_모두_올리기_전에_있다() {
         let f = 사진_함수();
-        let 올림 = f.find("ipfs_add_file").expect("파일창고에 올리는 곳이 있어야 한다");
+        let 올림 = f.find("ipfs_add_file").expect("IPFS 파일창고에 올리는 곳이 있어야 한다");
         for (무엇, 글자) in [
             ("사진인지", "photo_kind"),
             ("방에 쓸 수 있는지", "hold_state"),
-            ("파일창고가 켜져 있는지", "ipfs_status"),
+            ("IPFS 파일창고가 켜져 있는지", "ipfs_status"),
         ] {
             let i = f.find(글자).unwrap_or_else(|| panic!("{무엇} 을 안 보고 있다"));
             assert!(i < 올림, "{무엇} 를 올린 다음에 보고 있다");
@@ -1760,7 +1760,7 @@ mod gate_tests {
         let body = &src[i..i + end];
         assert!(
             body.contains("unknown.is_none()"),
-            "확인 못 했을 때도 막고 있다 — 서버가 훑는 동안 자기 방에 자기가 못 쓴다"
+            "확인 못 했을 때도 막고 있다 — 노드가 훑는 동안 자기 방에 자기가 못 쓴다"
         );
     }
 

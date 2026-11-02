@@ -2,7 +2,7 @@
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use crate::{identity::hmac_sha512, words::{wipe, wipe_bytes}};
-const AUTH_ERROR: &str = "판매 계정을 열지 못했어요. 암호가 설정된 12단어 지갑과 서버 상태를 확인해 주세요.";
+const AUTH_ERROR: &str = "판매 계정을 열지 못했어요. 암호가 설정된 12단어 지갑과 노드 상태를 확인해 주세요.";
 const READ_ERROR: &str = "금액을 확인하지 못했어요. 메인넷 동기화와 주소 색인을 확인해 주세요. 확인 실패는 잔액 0이 아니에요.";
 static GATE: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 struct Secret<const N: usize>([u8; N]);

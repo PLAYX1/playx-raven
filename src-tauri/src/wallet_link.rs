@@ -39,15 +39,20 @@ const SEEN_RETAIN_MS: i64 = 86_400_000;
 const WRAP_RETAIN_MS: i64 = 3 * 86_400_000;
 const WRAP_SKEW_SEC: i64 = 2 * 86_400;
 const DAY_MS: i64 = 86_400_000;
-pub(crate) const DAILY_DEFAULT_SATS: u64 = 100_000 * 100_000_000;
+/// 하루 한도의 최대 = RVN 총발행량(21,000,000,000 RVN). 이 값이면 「한도 없음」(11-03 대표). 폰 core 의 LINK_DAILY_SATS 와 같은 값.
+/// 한도가 없어도 돈은 언제나 여기서 사람이 승인해야 나간다(자동 승인 없음).
+pub(crate) const DAILY_MAX_SATS: u64 = 21_000_000_000 * 100_000_000;
+/// 새 연결의 기본 하루 한도(11-03 대표 결정: 1,000 RVN). 칸을 비워 두면 이 값.
+pub(crate) const DAILY_DEFAULT_SATS: u64 = 1_000 * 100_000_000;
 const FEE_CAP_SATS: u64 = 100_000_000;
 const MAX_PHONE_ADDRESSES: usize = 8;
 const LANE: &str = "wallet-link";
-const AUTH_ERROR: &str = "지갑을 열지 못했어요. 암호가 설정된 12단어 지갑인지, 서버가 켜져 있는지 확인해 주세요.";
+const AUTH_ERROR: &str = "지갑을 열지 못했어요. 암호가 설정된 12단어 지갑인지, 노드가 켜져 있는지 확인해 주세요.";
 const NOT_MINE: &str = "이 지갑의 받는 주소를 확인하지 못해 연결하지 않았어요. 12단어(BIP44)로 만든 지갑에서만 연결할 수 있어요.";
 const PHONE_CANCELLED: &str = "폰에서 연결을 취소했어요. 연결하지 않았어요. 처음부터 다시 해 주세요.";
 const APP_LOCKED: &str = "앱이 잠겨 보내지 않았어요. 잠금을 푼 뒤 다시 확인하고 승인해 주세요.";
 const OVER_LIMIT: &str = "수수료까지 합치면 오늘 한도를 넘어요.";
+const LIMIT_BAD: &str = "하루 한도는 0보다 큰 RVN 수로 적어 주세요. 제한을 두지 않으려면 「한도 없음」을 고르세요.";
 const CHANGED: &str = "확인한 거래가 바뀌었어요(동전이 이미 쓰였거나 내용이 달라졌어요). 다시 확인한 뒤 승인해 주세요.";
 
 // ── 작은 검사 ───────────────────────────────────────────────────────
@@ -455,10 +460,11 @@ fn save(dir: &Path, s: &State) -> Result<(), String> {
     crate::payout_guard::atomic_write(&state_file(dir), &serde_json::to_vec_pretty(s).map_err(|_| "기록 오류")?)
 }
 fn spent_today(s: &State, link: &str, now: i64, except: &str) -> u64 {
-    let done: u64 = s.spends.iter().filter(|(id, x)| x.link_id == link && x.at > now - DAY_MS && id.as_str() != except).map(|(_, x)| x.sats).sum();
+    // 한도 없음(총발행량)이어도 넘치지 않게 모두 saturating 으로 더한다.
+    let done: u64 = s.spends.iter().filter(|(id, x)| x.link_id == link && x.at > now - DAY_MS && id.as_str() != except).fold(0u64, |a, (_, x)| a.saturating_add(x.sats));
     let flying: u64 = s.requests.iter().filter(|(id, r)| r.link_id == link && id.as_str() != except && !s.spends.contains_key(id.as_str())
-        && matches!(r.status.as_str(), "sending" | "unknown")).map(|(_, r)| r.sats.saturating_add(r.fee)).sum();
-    done + flying
+        && matches!(r.status.as_str(), "sending" | "unknown")).fold(0u64, |a, (_, r)| a.saturating_add(r.sats.saturating_add(r.fee)));
+    done.saturating_add(flying)
 }
 fn prune(s: &mut State, now: i64) {
     s.seen.retain(|_, at| *at > now - SEEN_RETAIN_MS);
@@ -546,14 +552,15 @@ pub fn wallet_link_cancel() -> Result<(), String> {
 fn parse_rvn(text: &str) -> Option<u64> {
     let t = text.trim().replace(',', "");
     let (a, b) = t.split_once('.').unwrap_or((&t, ""));
-    if a.is_empty() || a.len() > 10 || b.len() > 8 || !a.bytes().all(|c| c.is_ascii_digit()) || !b.bytes().all(|c| c.is_ascii_digit()) { return None; }
+    if a.is_empty() || a.len() > 11 || b.len() > 8 || !a.bytes().all(|c| c.is_ascii_digit()) || !b.bytes().all(|c| c.is_ascii_digit()) { return None; }
     Some(a.parse::<u64>().ok()? * 100_000_000 + format!("{b:0<8}").parse::<u64>().ok()?)
 }
-/// 두 화면의 숫자가 같다고 사람이 눌렀을 때만 저장한다. 하루 한도는 100,000 RVN 이하로만(11-02 대표: 1,000 RVN ≈ 1,850원은 너무 작다).
+/// 두 화면의 숫자가 같다고 사람이 눌렀을 때만 저장한다. 하루 한도: 기본 1,000 RVN(칸이 비면) · 원하는 만큼 · 「한도 없음」=DAILY_MAX_SATS(11-03 대표).
 fn confirm_in(dir: &Path, sess: &Session, daily_rvn: &str, phone_name: &str, now: i64) -> Result<Value, String> {
     let (o, a) = (sess.offer.as_ref().ok_or("연결 QR 이 없어요.")?, sess.candidate.as_ref().ok_or("폰의 응답을 아직 받지 못했어요.")?);
     if now > o.expires + ACCEPT_GRACE_MS { return Err("시간이 지났어요. QR 을 새로 만들어 주세요.".into()); }
-    let daily = parse_rvn(daily_rvn).filter(|d| *d >= 1 && *d <= DAILY_DEFAULT_SATS).ok_or("하루 한도는 0보다 크고 100,000 RVN 이하로 적어 주세요.")?;
+    let daily = if daily_rvn.trim().is_empty() { Some(DAILY_DEFAULT_SATS) } else { parse_rvn(daily_rvn).filter(|d| *d >= 1 && *d <= DAILY_MAX_SATS) }
+        .ok_or(LIMIT_BAD)?;
     let mut s = load(dir)?;
     if s.links.iter().any(|l| l.link_id == a.link_id) { return Err("이미 연결된 폰이에요.".into()); }
     if s.orphan_revokes.get(&a.link_id).is_some_and(|(k, _)| *k == a.phone_key) { return Err(PHONE_CANCELLED.into()); }
@@ -764,7 +771,7 @@ async fn review_with(rpc: &impl SalesRpc, dir: &Path, id: &str, now: i64) -> Res
         Err(e) if e.to_lowercase().contains("insufficient") => return Ok(json!({ "id": id, "short": true })),
         Err(e) => return Err(e),
     };
-    let hex_tx = funded.get("hex").and_then(Value::as_str).ok_or("서버가 거래를 만들지 못했어요.")?.to_string();
+    let hex_tx = funded.get("hex").and_then(Value::as_str).ok_or("노드가 거래를 만들지 못했어요.")?.to_string();
     let tx = rpc.call("decoderawtransaction", json!([hex_tx])).await?;
     let inputs: Vec<(String, u64)> = tx.get("vin").and_then(Value::as_array).ok_or("거래를 읽지 못했어요.")?.iter()
         .map(|i| Some((i.get("txid")?.as_str().filter(|t| hex64(t))?.to_string(), i.get("vout")?.as_u64()?))).collect::<Option<_>>().ok_or("거래를 읽지 못했어요.")?;
@@ -783,7 +790,7 @@ async fn review_with(rpc: &impl SalesRpc, dir: &Path, id: &str, now: i64) -> Res
     if paid != 1 || to_me > 1 || inputs.is_empty() { return Err("요청과 다른 거래가 만들어져 멈췄어요.".into()); }
     let in_total = input_values(rpc, &inputs).await.ok_or(CHANGED)?;
     let fee = in_total.checked_sub(out_total).ok_or("금액 오류")?;
-    let node_fee = funded.get("fee").and_then(Value::as_f64).and_then(to_sats).ok_or("서버가 수수료를 알려 주지 않았어요.")?;
+    let node_fee = funded.get("fee").and_then(Value::as_f64).and_then(to_sats).ok_or("노드가 수수료를 알려 주지 않았어요.")?;
     if fee.abs_diff(node_fee) > 1 || fee > FEE_CAP_SATS { return Err("수수료가 이상해서 멈췄어요.".into()); }
     live_request(&s, id, now, fee)?;
     let fp = fingerprint(&hex_tx);
@@ -858,7 +865,7 @@ async fn approve_with(rpc: &impl SalesRpc, net: &impl Net, dir: &Path, sk: &[u8;
                 // 서명조차 못 했으면 아무것도 나가지 않았다 — 기록을 풀고 대기로 되돌린다.
                 guard.abandon_unsent()?;
                 back_to_pending()?;
-                return Err("서명하지 못했어요. 지갑 잠금과 서버 상태를 확인해 주세요.".to_string());
+                return Err("서명하지 못했어요. 지갑 잠금과 노드 상태를 확인해 주세요.".to_string());
             }
         };
         let txid = rpc.call("decoderawtransaction", json!([signed])).await.ok().and_then(|v| v.get("txid").and_then(Value::as_str).map(str::to_string));
@@ -927,6 +934,25 @@ pub async fn wallet_link_revoke(link_id: String) -> Result<(), String> {
     let sk = link_secret()?;
     revoke_with(&Relays, &dir(), &sk.0, &link_id, now_ms()).await
 }
+/// 연결을 끊지 않고 하루 한도만 바꾼다(올리기·낮추기·한도 없음). 이미 나간 오늘 몫은 그대로 센다.
+fn set_limit_in(dir: &Path, link_id: &str, daily_rvn: &str, now: i64) -> Result<Value, String> {
+    let daily = parse_rvn(daily_rvn).filter(|d| *d >= 1 && *d <= DAILY_MAX_SATS).ok_or(LIMIT_BAD)?;
+    let mut s = load(dir)?;
+    let l = s.links.iter_mut().find(|l| l.link_id == link_id && !l.revoked).ok_or("이미 끊었거나 없는 연결이에요.")?;
+    l.daily_sats = daily;
+    save(dir, &s)?;
+    view(dir, now)
+}
+/// 🔴 돈이 나갈 수 있는 크기를 바꾸므로 연결 QR 을 만들 때와 같은 암호 재인증(이미 열려 있어도)을 거친다.
+#[tauri::command]
+pub async fn wallet_link_set_limit(link_id: String, daily_rvn: String, passphrase: String) -> Result<Value, String> {
+    let passphrase = Text(passphrase);
+    let _gate = GATE.lock().await;
+    // 숫자가 틀렸으면 암호를 묻기 전에 바로 알린다(지갑을 열었다 잠그는 수고를 아낀다).
+    parse_rvn(&daily_rvn).filter(|d| *d >= 1 && *d <= DAILY_MAX_SATS).ok_or(LIMIT_BAD)?;
+    reveal_main_with(&crate::sales_account::NativeRpc, passphrase).await?;
+    set_limit_in(&dir(), &link_id, &daily_rvn, now_ms())
+}
 
 #[cfg(test)]
 mod tests {
@@ -977,7 +1003,7 @@ mod tests {
         let v = vectors();
         let now = v["now"].as_i64().unwrap();
         let link = Link { link_id: v["linkId"].as_str().unwrap().into(), phone_key: v["phoneKey"].as_str().unwrap().into(),
-            phone_addresses: vec![v["phoneAddress"].as_str().unwrap().into()], name: "폰".into(), daily_sats: DAILY_DEFAULT_SATS,
+            phone_addresses: vec![v["phoneAddress"].as_str().unwrap().into()], name: "폰".into(), daily_sats: DAILY_MAX_SATS,
             created: now, revoked: false, revoked_at: None, revoke_out: None };
         assert_eq!(check_request(&v["requestFill"], &link, now + 1000, false, 0).0, Check::Ok("fill"));
         assert_eq!(check_request(&v["requestSend"], &link, now, false, 0).0, Check::Ok("send"));
@@ -987,7 +1013,8 @@ mod tests {
         assert_eq!(check_request(&v["requestFill"], &link, now + 700_000, false, 0).0, Check::No("expired"));
         assert_eq!(check_request(&v["requestFill"], &link, now, true, 0).0, Check::No("seen"));
         assert_eq!(check_request(&v["requestFill"], &Link { revoked: true, ..link.clone() }, now, false, 0).0, Check::No("revoked"));
-        assert_eq!(check_request(&v["requestFill"], &link, now, false, 9_990_000_000_000).0, Check::No("daily-limit"));
+        assert_eq!(check_request(&v["requestFill"], &link, now, false, DAILY_MAX_SATS - 1).0, Check::No("daily-limit"));
+        assert_eq!(check_request(&v["requestFill"], &link, now, false, u64::MAX).0, Check::No("daily-limit"), "no overflow");
     }
 
     #[test]
@@ -1084,7 +1111,7 @@ mod tests {
         let accept = v["gifts"].as_array().unwrap().iter().find(|g| g["t"] == "accept").unwrap()["event"].clone();
         process(&d, &key(v, "deskSecret"), &[accept], v["now"].as_i64().unwrap() + 1000, Some(&mut sess)).unwrap();
         assert!(sess.candidate.is_some(), "accept arrived");
-        assert!(confirm_in(&d, &sess, "100001", "폰", v["now"].as_i64().unwrap()).is_err(), "cannot raise the daily limit");
+        assert!(confirm_in(&d, &sess, "21000000000.00000001", "폰", v["now"].as_i64().unwrap()).is_err(), "cannot go over the total supply");
         confirm_in(&d, &sess, "1000", "폰", v["now"].as_i64().unwrap()).unwrap();
         d
     }
@@ -1316,8 +1343,50 @@ mod tests {
     }
 
     #[test]
+    fn a_blank_daily_limit_uses_the_1000_rvn_default() {
+        let v = vectors();
+        let d = tmp("default-limit");
+        let mut sess = session_of(&v);
+        process(&d, &key(&v, "deskSecret"), &[gift(&v, "accept", 0)], v["now"].as_i64().unwrap() + 1000, Some(&mut sess)).unwrap();
+        let out = confirm_in(&d, &sess, "  ", "폰", v["now"].as_i64().unwrap()).unwrap();
+        assert_eq!(out["dailySats"], json!((1_000u64 * 100_000_000).to_string()));
+        assert_eq!(load(&d).unwrap().links[0].daily_sats, DAILY_DEFAULT_SATS);
+        let _ = std::fs::remove_dir_all(d);
+    }
+
+    #[test]
+    fn the_daily_limit_can_be_changed_without_unlinking() {
+        let v = vectors();
+        let now = v["now"].as_i64().unwrap() + 2000;
+        let d = linked_dir(&v, "setlimit");
+        let lid = v["linkId"].as_str().unwrap();
+        // 올리기(1,000 → 50,000) · 낮추기(→ 0.5) — 연결은 그대로 산다.
+        let out = set_limit_in(&d, lid, "50,000", now).unwrap();
+        assert_eq!(out["links"][0]["dailySats"], json!((50_000u64 * 100_000_000).to_string()));
+        set_limit_in(&d, lid, "0.5", now).unwrap();
+        assert_eq!(load(&d).unwrap().links[0].daily_sats, 50_000_000);
+        assert!(!load(&d).unwrap().links[0].revoked);
+        // 최대(총발행량 = 한도 없음)는 되고 넘으면·0·글자는 안 된다. 실패해도 값은 그대로.
+        set_limit_in(&d, lid, "21,000,000,000", now).unwrap();
+        for bad in ["21000000000.00000001", "21000000001", "99999999999", "0", "0.0", "", "abc", "-5", "1e3"] {
+            assert!(set_limit_in(&d, lid, bad, now).is_err(), "{bad}");
+        }
+        assert_eq!(load(&d).unwrap().links[0].daily_sats, DAILY_MAX_SATS);
+        assert!(set_limit_in(&d, &"ee".repeat(32), "10", now).is_err(), "unknown link");
+        // 끊은 연결은 바꿀 수 없다.
+        let mut s = load(&d).unwrap();
+        s.links[0].revoked = true;
+        save(&d, &s).unwrap();
+        assert!(set_limit_in(&d, lid, "10", now).is_err(), "revoked link");
+        assert_eq!(load(&d).unwrap().links[0].daily_sats, DAILY_MAX_SATS);
+        let _ = std::fs::remove_dir_all(d);
+    }
+
+    #[test]
     fn daily_limit_text_and_link_key_storage() {
-        assert_eq!(parse_rvn("100,000"), Some(DAILY_DEFAULT_SATS));
+        assert_eq!(parse_rvn("100,000"), Some(100_000 * 100_000_000));
+        assert_eq!(parse_rvn("21,000,000,000"), Some(DAILY_MAX_SATS));
+        assert_eq!(parse_rvn("999999999999"), None, "12 digits");
         assert_eq!(parse_rvn("0.5"), Some(50_000_000));
         assert_eq!(parse_rvn("1.123456789"), None);
         let a = link_secret().unwrap();

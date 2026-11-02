@@ -190,7 +190,7 @@ fn spends_not_ours(since: &Value, cutoff: i64, ours: &HashSet<String>) -> Result
     let rvn = since
         .get("transactions")
         .and_then(Value::as_array)
-        .ok_or("지갑 기록을 읽지 못했어요. 서버가 따라잡은 뒤 다시 해 주세요.")?;
+        .ok_or("지갑 기록을 읽지 못했어요. 노드가 따라잡은 뒤 다시 해 주세요.")?;
     let assets = crate::raven::asset_transactions_of(since.clone())?;
     let mut found = Vec::new();
     for (tx, asset_row) in rvn

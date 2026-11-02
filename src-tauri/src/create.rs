@@ -321,7 +321,7 @@ async fn issue_now(method: &'static str, params: Value, passphrase: Option<Strin
         if txid.is_empty() {
             // 🔴 노드는 부름을 받았다 — 거래 번호만 없다. 「실패」로 보고 다시 열면 두 번 태울
             //    수 있으니 「보냈는지 모름」으로 돌려준다.
-            return Err(format!("{}서버가 거래 번호를 돌려주지 않았어요. 보냈는지 아직 몰라요 — 기록될 때까지 기다려 주세요. 같은 것을 다시 보내지 마세요.", crate::raven::SENT_UNKNOWN));
+            return Err(format!("{}노드가 거래 번호를 돌려주지 않았어요. 보냈는지 아직 몰라요 — 기록될 때까지 기다려 주세요. 같은 것을 다시 보내지 마세요.", crate::raven::SENT_UNKNOWN));
         }
         crate::refund::remember_ours(&txid);
         Ok(txid)

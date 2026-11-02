@@ -233,7 +233,7 @@ mod tests {
 
     #[test]
     fn 오류_문구는_무엇이든_모름이다() {
-        for e in ["Invalid asset name", "Asset not found", "not found", "", "서버에 닿지 못했습니다"] {
+        for e in ["Invalid asset name", "Asset not found", "not found", "", "노드에 닿지 못했습니다"] {
             let (s, _) = classify("A", Ok(&synced()), Err(e));
             assert_eq!(s, "unknown", "{e:?}");
         }

@@ -151,7 +151,7 @@ pub(crate) fn is_send_method(method: &str) -> bool {
 
 fn sent_unknown_message(method: &str, secs: u64) -> String {
     format!(
-        "{SENT_UNKNOWN}서버가 {secs}초 안에 답하지 않았어요 ({method}). 보냈는지 아직 몰라요 — 기록될 때까지 기다려 주세요. 같은 것을 다시 보내지 마세요."
+        "{SENT_UNKNOWN}노드가 {secs}초 안에 답하지 않았어요 ({method}). 보냈는지 아직 몰라요 — 기록될 때까지 기다려 주세요. 같은 것을 다시 보내지 마세요."
     )
 }
 
@@ -243,9 +243,9 @@ pub(crate) async fn call_rpc_detailed(method: &str, params: Value) -> Result<Val
             } else if e.is_timeout() {
                 // 타임아웃이 없던 시절, 노드가 한 번 늦으면 화면이 "확인 중…"에서
                 // 영영 멈췄다. 멈춘 화면은 고장난 화면과 구별되지 않는다.
-                format!("서버가 {RPC_TIMEOUT_SECS}초 안에 답하지 않았습니다 ({method}). 따라잡는 중이거나 바쁠 수 있습니다.")
+                format!("노드가 {RPC_TIMEOUT_SECS}초 안에 답하지 않았습니다 ({method}). 따라잡는 중이거나 바쁠 수 있습니다.")
             } else {
-                format!("서버에 닿지 못했습니다 ({}): {e}", rpc_url())
+                format!("노드에 닿지 못했습니다 ({}): {e}", rpc_url())
             }
         })?;
 
@@ -276,7 +276,7 @@ pub(crate) async fn call_rpc_detailed(method: &str, params: Value) -> Result<Val
             //    할 수 있는 일이 적힌 한 문장으로 바꾼다.
             if msg.contains("NOT YET ACTIVE") {
                 return Err(
-                    "자산 색인이 꺼져 있습니다. 「이 컴퓨터 → RVN 서버」에서 색인을 켜면 \
+                    "자산 색인이 꺼져 있습니다. 「이 컴퓨터 → RVN 노드」에서 색인을 켜면 \
                      회원권·표·굿즈가 보입니다. 한 번 켜면 장부를 다시 훑느라 몇 시간 걸립니다."
                         .into(),
                 );
@@ -360,11 +360,11 @@ pub(crate) async fn call_rpc_long(method: &str, params: Value, secs: u64) -> Res
         .timeout(std::time::Duration::from_secs(secs))
         .send()
         .await
-        .map_err(|e| format!("서버와의 연결이 끊겼습니다 ({method}): {}", if e.is_timeout() { "시간 초과" } else { "연결" }))?;
+        .map_err(|e| format!("노드와의 연결이 끊겼습니다 ({method}): {}", if e.is_timeout() { "시간 초과" } else { "연결" }))?;
     let parsed: Value = response
         .json()
         .await
-        .map_err(|_| format!("서버와의 연결이 끊겼습니다 ({method})"))?;
+        .map_err(|_| format!("노드와의 연결이 끊겼습니다 ({method})"))?;
     if let Some(err) = parsed.get("error").filter(|e| !e.is_null()) {
         let msg = err.get("message").and_then(Value::as_str).unwrap_or("unknown error");
         return Err(format!("{method}: {msg}"));
@@ -387,33 +387,31 @@ struct ChainInfo {
 /// Height, sync progress, and whether the node is reachable at all.
 #[tauri::command]
 pub async fn node_status() -> Result<Value, String> {
-    let raw = call_rpc("getblockchaininfo", json!([])).await?;
+    // 11-03 감사 B12: 세 물음(장부 정보·맨 끝 블록 시각·연결 수)을 차례로 기다리지 않고 한꺼번에 묻는다.
+    // 동시에 셋 — RPC 동시 4개 제한(rpc_gate) 안이다.
+    let tip = async {
+        match call_rpc("getbestblockhash", json!([])).await {
+            Ok(hash) => match hash.as_str() {
+                Some(h) => call_rpc("getblockheader", json!([h])).await.ok().and_then(|hdr| hdr.get("time").and_then(Value::as_i64)),
+                None => None,
+            },
+            Err(_) => None,
+        }
+    };
+    let (raw, tip_time, peers) = tokio::join!(call_rpc("getblockchaininfo", json!([])), tip, call_rpc("getconnectioncount", json!([])));
     let info: ChainInfo =
-        serde_json::from_value(raw).map_err(|e| format!("Unexpected chain info: {e}"))?;
+        serde_json::from_value(raw?).map_err(|e| format!("Unexpected chain info: {e}"))?;
 
     // The tip's timestamp is what actually answers "is this node alive right
     // now" — a height is just a number to anyone who is not a node operator.
     // getblockchaininfo gives a median-of-11 time, which lags a few minutes, so
     // ask the tip itself.
-    let tip_time = match call_rpc("getbestblockhash", json!([])).await {
-        Ok(hash) => match hash.as_str() {
-            Some(h) => call_rpc("getblockheader", json!([h]))
-                .await
-                .ok()
-                .and_then(|hdr| hdr.get("time").and_then(Value::as_i64)),
-            None => None,
-        },
-        Err(_) => None,
-    }
-    .or(info.mediantime);
+    let tip_time = tip_time.or(info.mediantime);
 
     // 🔴 **연결 수를 같이 준다.** 「지금 얼마나 이어져 있나」가 사장이 진짜
     // 묻는 것이다 — 블록 수만 보면 멈춘 노드와 도는 노드를 구별 못 한다.
     // 못 읽어도 나머지는 보여야 하므로 실패는 `null` 이다.
-    let peers = call_rpc("getconnectioncount", json!([]))
-        .await
-        .ok()
-        .and_then(|v| v.as_i64());
+    let peers = peers.ok().and_then(|v| v.as_i64());
 
     Ok(json!({
         "peers": peers,
@@ -543,10 +541,10 @@ pub async fn list_assets() -> Result<Vec<AssetEntry>, String> {
 /// be paid with a transaction that never confirms.
 #[tauri::command]
 pub async fn wallet_balance() -> Result<Value, String> {
-    let confirmed = call_rpc("getbalance", json!([])).await?;
-    let unconfirmed = call_rpc("getunconfirmedbalance", json!([]))
-        .await
-        .unwrap_or(json!(0.0));
+    // 11-03 감사 B12: 두 잔액을 한꺼번에 묻는다.
+    let (confirmed, unconfirmed) = tokio::join!(call_rpc("getbalance", json!([])), call_rpc("getunconfirmedbalance", json!([])));
+    let confirmed = confirmed?;
+    let unconfirmed = unconfirmed.unwrap_or(json!(0.0));
 
     Ok(json!({
         "confirmed": confirmed.as_f64().unwrap_or(0.0),
@@ -639,7 +637,7 @@ pub async fn wallet_asset_txs() -> Result<Value, String> {
 pub(crate) fn asset_transactions_of(mut v: Value) -> Result<Value, String> {
     match v.get_mut("asset_transactions").map(Value::take) {
         Some(rows @ Value::Array(_)) => Ok(rows),
-        _ => Err("지갑의 자산 기록을 읽지 못했어요. 서버가 따라잡은 뒤 다시 해 주세요.".into()),
+        _ => Err("지갑의 자산 기록을 읽지 못했어요. 노드가 따라잡은 뒤 다시 해 주세요.".into()),
     }
 }
 
