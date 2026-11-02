@@ -1,5 +1,7 @@
 // 「폰과 지갑 연결」 화면 말(영·일·중). 열쇠는 한국어 원문 그대로(i18n.ts 규칙). 유럽어 여섯은 아직 없어 영어로 내려간다.
 export const WALLET_LINK_COPY: Record<string, [string, string, string]> = {
+  "체크하면 「연결 QR 만들기」 단추가 켜져요.": ["Tick the box to turn on “Make link QR”.", "チェックすると「連携QRを作る」ボタンが押せます。", "勾选后「生成连接二维码」按钮即可使用。"],
+  "폰에서도 「같아요 · 연결」을 눌러 주세요. 숫자가 다르면 「아니에요 · 취소」.": ["Tap “They match · Link” on the phone too. If the numbers differ, choose “No · Cancel”.", "スマホでも「同じです・連携」を押してください。数字が違うときは「違います・キャンセル」。", "请在手机上也点「一致 · 连接」。数字不同请点「不一致 · 取消」。"],
   "폰과 지갑 연결": ["Link wallet with phone", "スマホとウォレットを連携", "将钱包与手机连接"],
   "폰에서 이 컴퓨터 지갑(주 지갑)의 잔액과 받는 주소를 볼 수 있게 해요. 복구 단어와 열쇠는 폰으로 가지 않아요. 이 컴퓨터에서 돈이 나갈 때는 언제나 여기서 내가 승인해요.": [
     "Lets your phone see this computer's main wallet balance and receiving addresses. Recovery words and keys never go to the phone. Money leaves this computer only when you approve it here.",

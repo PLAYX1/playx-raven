@@ -18639,6 +18639,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("overview-phone").onclick = () => { showPage("ravi"); ($("ravi-tools") as HTMLDetailsElement).open = true; const panel = $("phone-tx-panel") as HTMLDetailsElement; panel.open = true; panel.scrollIntoView(); $("phone-tx-code").focus(); };
   $("rv-home-send").onclick = () => { showPage("wallet"); void openSend("rvn"); };
   $("rv-home-backup").onclick = () => showPage("settings");
+  // 폰 연결 입구를 홈에도(11-02 GPT·그록: 설정 두 번은 어르신에게 멀다). 설정 맨 위 바로가기와 같은 곳으로 간다.
+  $("rv-home-phone").onclick = () => { showPage("settings"); document.querySelector<HTMLElement>('button.sx-easy[data-sx-to="wl-card"]')?.click(); };
   $("rv-home-chat").onclick = () => showPage("talk");
   $("rv-home-nearby").onclick = async () => {
     try { await invoke("start_phone_server"); await invoke("open_share", { url: "http://127.0.0.1:8790/shops" }); }

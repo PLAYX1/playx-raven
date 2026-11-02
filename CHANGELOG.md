@@ -4,13 +4,15 @@
 
 ### 한국어
 
-- 설정 맨 위 「쉬운 설정」 아래에 **「폰과 지갑 연결」** 단추를 두었습니다. 누르면 바로 연결 칸으로 갑니다.
+- **「폰과 지갑 연결」 입구를 두 곳에 두었습니다:** 홈 「알림 · 할 일」 줄의 단추, 설정 맨 위 「쉬운 설정」 아래 바로가기. 누르면 바로 연결 칸으로 갑니다.
+- 숫자 확인 순서를 바로잡았습니다: 폰에서 「데스크탑에 숫자 띄우기」 → 두 화면 숫자를 보고 → 양쪽에서 「같아요」. 체크칸 아래에 「체크하면 『연결 QR 만들기』 단추가 켜져요」.
 - 폰 요청으로 하루에 나갈 수 있는 돈의 최대 한도를 1,000 RVN 에서 **100,000 RVN** 으로 올렸습니다(돈은 여전히 데스크탑에서 승인해야만 나갑니다). 이미 연결한 폰은 한 번 끊고 다시 연결하면 새 한도를 고를 수 있습니다.
 - QR 아래에 「폰에서 『같아요 · 연결』을 누르면 여기에 확인 숫자가 나와요」를 적고, 폰 주소 줄을 「이 폰의 지갑 주소」로 알아보기 쉽게 바꿨습니다.
 
 ### English
 
-- A **"Link wallet with phone"** button now sits under "Easy setup" at the top of Settings and jumps straight to the link card.
+- **Two ways in to "Link wallet with phone":** a button on Home ("Alerts · To do") and a shortcut under "Easy setup" at the top of Settings.
+- The check-number order is fixed: the phone first shows the number on the desktop, you compare both screens, then tap "They match" on both. The checkbox now says it turns on "Make link QR".
 - The daily limit for phone requests can now go up to **100,000 RVN** (was 1,000). Money still leaves only after approval on the desktop. Unlink and link again to pick the new limit for an already linked phone.
 - The QR card now says the check number appears after you tap "They match · Link" on the phone, and the phone address row is labelled "This phone's wallet addresses".
 

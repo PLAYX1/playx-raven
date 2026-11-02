@@ -31,7 +31,7 @@ export function wireWalletLink(deps: { invoke: Invoke; ask: () => Promise<string
 
   // ── 연결 만들기 ──
   const agree = $("wl-agree") as HTMLInputElement, make = $("wl-make") as HTMLButtonElement;
-  agree.onchange = () => { make.disabled = !agree.checked; };
+  agree.onchange = () => { make.disabled = !agree.checked; $("wl-agree-hint").hidden = agree.checked; };
   make.disabled = true;
   function stopOffer() { offer = null; clearInterval(offerTimer); $("wl-qr").hidden = true; $("wl-confirm").hidden = true; make.hidden = false; }
   async function showOffer(o: Offer) {
@@ -88,7 +88,7 @@ export function wireWalletLink(deps: { invoke: Invoke; ask: () => Promise<string
   $("wl-yes").onclick = async () => {
     try {
       await invoke("wallet_link_confirm", { dailyRvn: ($("wl-daily") as HTMLInputElement).value, phoneName: ($("wl-phonename") as HTMLInputElement).value });
-      stopOffer(); agree.checked = false; make.disabled = true;
+      stopOffer(); agree.checked = false; make.disabled = true; $("wl-agree-hint").hidden = false;
       msg(t("연결했어요. 폰에서 이 컴퓨터 지갑의 잔액과 받는 주소를 볼 수 있어요."));
       await refresh();
     } catch (e) { msg(errOf(e), true); }

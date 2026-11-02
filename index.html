@@ -3774,7 +3774,7 @@
             </div>
           </div>
           <div class="rv-home-safety">
-            <div class="rv-home-heading"><h2>알림 · 할 일</h2><button id="rv-home-backup" class="ghost" type="button">백업 확인</button></div>
+            <div class="rv-home-heading"><h2>알림 · 할 일</h2><span class="rv-home-actions"><button id="rv-home-phone" class="ghost" type="button">폰과 지갑 연결</button><button id="rv-home-backup" class="ghost" type="button">백업 확인</button></span></div>
             <div id="rv-home-safe" class="rv-home-signals" role="status"><span id="rv-home-backup-state" data-tone="warn">백업 확인 중</span><span id="rv-home-lock-state" data-tone="warn">잠금 확인 중</span><span id="rv-home-server-state" data-tone="warn">서버 <span id="overview-node">확인 못 함</span></span></div>
             <p class="rv-home-address-note">보내기 전 받는 주소를 다시 확인하세요.</p>
           </div>
@@ -5440,6 +5440,7 @@
                 <p class="meta">폰에서 이 컴퓨터 지갑(주 지갑)의 잔액과 받는 주소를 볼 수 있게 해요. 복구 단어와 열쇠는 폰으로 가지 않아요. 이 컴퓨터에서 돈이 나갈 때는 언제나 여기서 내가 승인해요.</p>
                 <p class="meta wl-warn">폰을 잃어버리면 이 지갑의 거래 내역이 보일 수 있어요. 돈은 꺼낼 수 없어요. 폰은 공개 인덱서에서 잔액을 직접 읽어요.</p>
                 <label class="check"><input type="checkbox" id="wl-agree" /> <span>알겠어요. 이 지갑을 내 폰과 연결할게요.</span></label>
+                <p class="meta" id="wl-agree-hint">체크하면 「연결 QR 만들기」 단추가 켜져요.</p>
                 <label class="wl-field"><span>이 컴퓨터 지갑 이름</span><input id="wl-name" maxlength="40" value="데스크탑 지갑" /></label>
                 <button type="button" id="wl-make" disabled>연결 QR 만들기</button>
                 <div id="wl-qr" hidden>
@@ -5451,6 +5452,7 @@
                 <div id="wl-confirm" hidden>
                   <p class="wl-q">폰 화면의 숫자와 같나요?</p>
                   <p class="wl-code" id="wl-code" translate="no"></p>
+                  <p class="meta">폰에서도 「같아요 · 연결」을 눌러 주세요. 숫자가 다르면 「아니에요 · 취소」.</p>
                   <p class="meta">이 폰의 지갑 주소 · 「폰으로 채우기」는 이 주소로만 보내요</p>
                   <p class="wl-mono" id="wl-phoneaddr" translate="no"></p>
                   <label class="wl-field"><span>이 폰의 이름</span><input id="wl-phonename" maxlength="40" value="내 폰" /></label>
