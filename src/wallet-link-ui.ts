@@ -2,6 +2,7 @@
 // 비밀(연결 열쇠·복구 단어·암호 저장)은 화면에 없다 — 서명·봉인·지급은 전부 러스트(src-tauri/src/wallet_link.rs).
 // 화면은 공개 값(연결 제안·확인 숫자·요청 내용·수수료)만 보여 주고, 사람이 누른 것만 러스트에 전한다.
 // 🔴 자동 승인 없음: 승인 단추는 사람이 누를 때만 wallet_link_approve 를 부른다.
+import { getCurrentWindow, UserAttentionType } from "@tauri-apps/api/window";
 import { t, tf } from "./i18n";
 
 type Invoke = <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
@@ -122,20 +123,26 @@ export function wireWalletLink(deps: { invoke: Invoke; ask: () => Promise<string
   $("wl-waiting-open").onclick = () => { deferred.clear(); nextModal(); };
 
   // ── 받은 요청 확인(앱이 열려 있고 잠기지 않은 동안) ──
+  // 빠르게: 연결 중 1.5초 · 화면이 보이면 3초 · 창이 가려져도 10초. 연결이 없으면 멈춘다(refresh 가 다시 깨운다).
+  const POLL_OFFER_MS = 1_500, POLL_VISIBLE_MS = 3_000, POLL_HIDDEN_MS = 10_000;
+  const live = (text: string, bad = false) => { const el = $("wl-live"); el.hidden = !text; el.textContent = text; el.classList.toggle("wl-bad", bad); };
   function schedule(ms: number) { clearTimeout(pollTimer); pollTimer = setTimeout(poll, ms); }
   async function poll() {
     if (polling) return;
     const active = links.some(l => !l.revoked);
-    if (!offer && !active) return;
-    if (document.hidden && !offer) { schedule(30_000); return; }
+    if (!offer && !active) { live(""); return; }
     polling = true;
     try {
+      const before = new Set(pending.map(p => p.id));
       const box = await invoke<Inbox>("wallet_link_inbox");
       apply(box);
+      live(box.online === false ? t("인터넷에 닿지 못해 폰 요청을 아직 못 받아요. 잠시 뒤 저절로 다시 확인해요.") : t("폰 요청을 몇 초마다 확인하고 있어요."), box.online === false);
+      // 창이 가려져 있을 때 새 요청이 오면 작업 표시줄·독에서 알린다(승인은 여전히 사람이 직접).
+      if (document.hidden && box.pending.some(p => !before.has(p.id))) void getCurrentWindow().requestUserAttention(UserAttentionType.Critical).catch(() => {});
       if (box.offer?.stage === "cancelled" && offer) await cancelOffer(t("폰에서 연결을 취소했어요. 연결하지 않았어요. 처음부터 다시 해 주세요."));
       else if (box.offer?.stage === "confirm" && offer && $("wl-confirm").hidden) await showConfirm(box.offer.offer, box.offer.phoneKey, box.offer.code, box.offer.phoneAddresses);
-    } catch { /* 앱 잠금·인터넷 끊김 — 다음 차례에 다시 */ }
-    finally { polling = false; schedule(offer ? 4_000 : 30_000); }
+    } catch (e) { live(tf("폰 요청을 확인하지 못했어요: {0}", errOf(e)), true); /* 앱 잠금·인터넷 끊김 — 다음 차례에 다시 */ }
+    finally { polling = false; schedule(offer ? POLL_OFFER_MS : document.hidden ? POLL_HIDDEN_MS : POLL_VISIBLE_MS); }
   }
   function apply(box: Pick<Inbox, "pending" | "links">) {
     links = box.links; pending = box.pending;

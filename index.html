@@ -5445,20 +5445,21 @@
                 <button type="button" id="wl-make" disabled>연결 QR 만들기</button>
                 <div id="wl-qr" hidden>
                   <img id="wl-qrimg" width="220" height="220" alt="폰과 지갑 연결 QR 코드" />
-                  <p class="meta">폰에서 이 QR을 찍고 「같아요 · 연결」을 누르면 여기에 확인 숫자가 나와요.</p>
+                  <p class="meta">폰에서 이 QR을 찍고 「데스크탑에 숫자 띄우기」를 누르면 여기에 확인 숫자가 나와요.</p>
                   <p id="wl-left" role="status"></p>
                   <div class="bar"><button type="button" id="wl-again" hidden>QR 새로 만들기</button><button type="button" class="ghost" id="wl-stop">그만두기</button></div>
                 </div>
                 <div id="wl-confirm" hidden>
                   <p class="wl-q">폰 화면의 숫자와 같나요?</p>
                   <p class="wl-code" id="wl-code" translate="no"></p>
-                  <p class="meta">폰에서도 「같아요 · 연결」을 눌러 주세요. 숫자가 다르면 「아니에요 · 취소」.</p>
+                  <p class="meta">폰에서도 「같아요 · 연결」을 눌러 주세요. 숫자가 다르면 「달라요 · 그만두기」.</p>
                   <p class="meta">이 폰의 지갑 주소 · 「폰으로 채우기」는 이 주소로만 보내요</p>
                   <p class="wl-mono" id="wl-phoneaddr" translate="no"></p>
                   <label class="wl-field"><span>이 폰의 이름</span><input id="wl-phonename" maxlength="40" value="내 폰" /></label>
                   <label class="wl-field"><span>하루에 폰 요청으로 나갈 수 있는 돈(RVN) · 100,000 보다 낮출 수만 있어요</span><input id="wl-daily" inputmode="decimal" value="100000" /></label>
                   <div class="bar"><button type="button" id="wl-yes">같아요</button><button type="button" class="ghost" id="wl-no">아니에요 · 취소</button></div>
                 </div>
+                <p class="meta" id="wl-live" hidden></p>
                 <p id="wl-waiting" hidden><span id="wl-waiting-n"></span> <button type="button" class="ghost" id="wl-waiting-open">보기</button></p>
                 <h3 class="wl-sub">연결된 폰</h3>
                 <p class="meta" id="wl-empty">아직 연결된 폰이 없어요.</p>

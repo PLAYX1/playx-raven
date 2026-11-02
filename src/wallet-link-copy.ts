@@ -1,7 +1,7 @@
 // 「폰과 지갑 연결」 화면 말(영·일·중). 열쇠는 한국어 원문 그대로(i18n.ts 규칙). 유럽어 여섯은 아직 없어 영어로 내려간다.
 export const WALLET_LINK_COPY: Record<string, [string, string, string]> = {
   "체크하면 「연결 QR 만들기」 단추가 켜져요.": ["Tick the box to turn on “Make link QR”.", "チェックすると「連携QRを作る」ボタンが押せます。", "勾选后「生成连接二维码」按钮即可使用。"],
-  "폰에서도 「같아요 · 연결」을 눌러 주세요. 숫자가 다르면 「아니에요 · 취소」.": ["Tap “They match · Link” on the phone too. If the numbers differ, choose “No · Cancel”.", "スマホでも「同じです・連携」を押してください。数字が違うときは「違います・キャンセル」。", "请在手机上也点「一致 · 连接」。数字不同请点「不一致 · 取消」。"],
+  "폰에서도 「같아요 · 연결」을 눌러 주세요. 숫자가 다르면 「달라요 · 그만두기」.": ["Tap “Same · Link” on the phone too. If the numbers differ, choose “Different · Stop”.", "スマホでも「同じです · 連携」を押してください。数字が違うときは「違います · やめる」。", "请在手机上也点「一致 · 连接」。数字不同请点「不一致 · 停止」。"],
   "폰과 지갑 연결": ["Link wallet with phone", "スマホとウォレットを連携", "将钱包与手机连接"],
   "폰에서 이 컴퓨터 지갑(주 지갑)의 잔액과 받는 주소를 볼 수 있게 해요. 복구 단어와 열쇠는 폰으로 가지 않아요. 이 컴퓨터에서 돈이 나갈 때는 언제나 여기서 내가 승인해요.": [
     "Lets your phone see this computer's main wallet balance and receiving addresses. Recovery words and keys never go to the phone. Money leaves this computer only when you approve it here.",
@@ -18,7 +18,7 @@ export const WALLET_LINK_COPY: Record<string, [string, string, string]> = {
   "그만두기": ["Stop", "やめる", "停止"],
   "폰 화면의 숫자와 같나요?": ["Does it match the number on your phone?", "スマホ画面の数字と同じですか？", "与手机屏幕上的数字一致吗？"],
   "이 폰의 지갑 주소 · 「폰으로 채우기」는 이 주소로만 보내요": ["This phone's wallet addresses · “Fill my phone” sends only here", "このスマホのウォレットアドレス・「スマホへ補充」はここにだけ送ります", "这部手机的钱包地址 ·「充值到手机」只会转到这里"],
-  "폰에서 이 QR을 찍고 「같아요 · 연결」을 누르면 여기에 확인 숫자가 나와요.": ["Scan this QR on the phone and tap “They match · Link”; the check number then appears here.", "スマホでこのQRを読み取り「同じ・連携」を押すと、ここに確認の数字が出ます。", "用手机扫描此二维码并点「一致 · 连接」后，这里会显示确认数字。"],
+  "폰에서 이 QR을 찍고 「데스크탑에 숫자 띄우기」를 누르면 여기에 확인 숫자가 나와요.": ["Scan this QR on the phone and tap “Show number on desktop”; the check number then appears here.", "スマホでこのQRを読み取り「デスクトップに数字を出す」を押すと、ここに確認の数字が出ます。", "用手机扫描此二维码并点「在电脑上显示数字」后，这里会显示确认数字。"],
   "폰에서 이 지갑 잔액을 보고, 돈은 여기서 승인해요": ["See this wallet's balance on your phone; approve payments here", "スマホでこのウォレットの残高を見て、支払いはここで承認します", "在手机上查看此钱包余额，付款在这里批准"],
   "이 폰의 이름": ["Name of this phone", "このスマホの名前", "这部手机的名称"],
   "하루에 폰 요청으로 나갈 수 있는 돈(RVN) · 100,000 보다 낮출 수만 있어요": ["Daily limit for phone requests (RVN) · can only be lowered from 100,000", "スマホのリクエストで1日に出せる金額（RVN）・100,000より下げることだけできます", "每天可通过手机请求转出的金额（RVN）· 只能低于 100,000"],
@@ -48,4 +48,7 @@ export const WALLET_LINK_COPY: Record<string, [string, string, string]> = {
   "승인하고 {0} RVN 보내기": ["Approve and send {0} RVN", "承認して {0} RVN を送る", "批准并发送 {0} RVN"],
   "폰이 보낸 요청 {0}건이 승인을 기다려요.": ["{0} request(s) from your phone are waiting for approval.", "スマホからのリクエスト {0} 件が承認を待っています。", "有 {0} 个来自手机的请求等待批准。"],
   "폰에서 연결을 취소했어요. 연결하지 않았어요. 처음부터 다시 해 주세요.": ["The phone cancelled the link. Nothing was linked. Please start again.", "スマホ側で連携が取り消されました。連携していません。最初からやり直してください。", "手机已取消连接，未建立连接。请重新开始。"],
+  "폰 요청을 몇 초마다 확인하고 있어요.": ["Checking for phone requests every few seconds.", "数秒ごとにスマホからのリクエストを確認しています。", "正在每隔几秒检查手机请求。"],
+  "인터넷에 닿지 못해 폰 요청을 아직 못 받아요. 잠시 뒤 저절로 다시 확인해요.": ["Can't reach the internet, so phone requests can't arrive yet. It will check again automatically.", "インターネットにつながらず、スマホのリクエストをまだ受け取れません。少しして自動で再確認します。", "无法连接网络，暂时收不到手机请求，稍后会自动重试。"],
+  "폰 요청을 확인하지 못했어요: {0}": ["Couldn't check phone requests: {0}", "スマホのリクエストを確認できませんでした: {0}", "未能检查手机请求：{0}"],
 };
