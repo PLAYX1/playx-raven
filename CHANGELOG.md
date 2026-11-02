@@ -1,5 +1,19 @@
 # 변경 기록
 
+## 0.9.8
+
+### 한국어
+
+- **폰과 지갑 연결.** 설정 → 「폰과 지갑 연결」에서 QR을 띄우고 폰으로 찍은 뒤, 두 화면의 6자리 숫자가 같은지 확인하면 연결됩니다. 폰에서 이 지갑의 잔액을 보고 이 지갑으로 바로 보낼 수 있습니다.
+- 폰에서 「폰으로 채우기」나 보내기를 요청하면 데스크탑에 금액과 받는 곳이 뜨고, **데스크탑에서 승인해야만** 돈이 나갑니다. 복구 단어와 서명 열쇠는 폰으로 가지 않습니다. 하루 한도는 1,000 RVN(수수료 포함)입니다.
+- 연결은 어느 쪽에서든 끊을 수 있고, 승인하는 도중 앱을 잠그면 보내지 않습니다.
+
+### English
+
+- **Link your phone.** Settings → "Link wallet with phone" shows a QR code; scan it with the phone and check that both screens show the same 6 digits. The phone can then see this wallet's balance and send to it directly.
+- When the phone asks to top itself up or to send, the desktop shows the amount and destination, and **money leaves only after you approve on the desktop**. Recovery words and signing keys never go to the phone. Daily limit is 1,000 RVN including fees.
+- Either side can unlink, and locking the app during approval cancels the send.
+
 ## 0.9.7
 
 ### 한국어
