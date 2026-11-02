@@ -1,5 +1,23 @@
 # 변경 기록
 
+## 0.9.10
+
+### 한국어
+
+- **반응이 빨라졌습니다:** 폰 요청을 3초마다 확인합니다(창이 가려지면 10초). 새 요청이 오면 작업 표시줄이 알려 주고, 폰에는 「컴퓨터가 요청을 받았어요」가 바로 뜹니다. 입금·홈·연결 확인도 5초 안팎으로 줄였습니다.
+- 이름을 알기 쉽게 바꿨습니다: 「RVN 노드」, 「IPFS 파일창고」.
+- 폰 하루 한도: 기본 1,000 RVN, 「한도 없음」도 고를 수 있습니다. 연결을 끊지 않고 「한도 바꾸기」로 바꿉니다(비밀번호 확인). 돈은 여전히 데스크탑에서 승인해야만 나갑니다.
+- 홈에 「폰과 지갑 연결」 카드, 연결 단추 「같아요 · 연결」/「달라요 · 그만두기」, 승인 창 제목에 어느 폰으로 보내는지 표시합니다.
+- 라비가 30초 넘게 생각하면 「아직 생각 중 · 그만두기」가 나옵니다.
+
+### English
+
+- **Faster:** phone requests are checked every 3 s (10 s when hidden), the taskbar flashes on a new request, and the phone immediately shows that the computer got it. Deposit, home and pairing checks now refresh in about 5 s.
+- Clearer names: "RVN node" and "IPFS file storage".
+- Phone daily limit: 1,000 RVN by default, or "No limit". Change it without unlinking (password required). Money still leaves only after approval on the desktop.
+- A "Link wallet with phone" card on Home, clearer link buttons, and the approval window names the phone you send to.
+- When Ravi thinks longer than 30 s you can stop it.
+
 ## 0.9.9
 
 ### 한국어
