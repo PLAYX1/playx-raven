@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, writeFile, mkdir, rm, readFile, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { prepareRelease, installerSuffixes, ALL_RELEASE_TARGETS } from './release-manifest.mjs';
+import { prepareRelease, releaseNotes, installerSuffixes, ALL_RELEASE_TARGETS } from './release-manifest.mjs';
 async function fixture(fn, brand = "PLAY-X-Raven") {
   const dir = await mkdtemp(path.join(tmpdir(), 'ravenvault-release-')), source=path.join(dir,'in'), out=path.join(dir,'out');
   await mkdir(source); await mkdir(out);
@@ -152,3 +152,13 @@ test('partial release refuses when there is nothing valid to carry for the other
   await assert.rejects(prepareRelease(next,out,'0.4.1',undefined,['darwin-aarch64']),/Invalid carried installer entry/);
   await assert.rejects(stat(path.join(out,'v0.4.1')));
 }));
+test('update notes come from that version in CHANGELOG.md, not an old fixed text', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'rv-notes-'));
+  const file = path.join(dir, 'CHANGELOG.md');
+  await writeFile(file, '# 변경 기록\n\n## 1.2.3\n\n### 한국어\n\n- **빨라졌습니다:** 3초마다\n- 이름 정리\n\n### English\n\n- Faster\n\n## 1.2.2\n\n### 한국어\n\n- 옛 판\n');
+  const notes = await releaseNotes('1.2.3', file);
+  assert.match(notes, /^RavenVault Desktop 1\.2\.3 — 빨라졌습니다: 3초마다 이름 정리 /);
+  assert.doesNotMatch(notes, /옛 판|Faster|\*\*|Meta AI/);
+  assert.match(await releaseNotes('9.9.9', file), /^RavenVault Desktop 9\.9\.9 자동 업데이트/);
+  await rm(dir, { recursive: true, force: true });
+});
