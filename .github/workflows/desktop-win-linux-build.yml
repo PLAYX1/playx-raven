@@ -53,34 +53,38 @@ env:
   CARGO_TERM_COLOR: never
 
 jobs:
+  # 🔴 matrix 의 exclude 뒤에 include 가 돌아서, 뺀 대상(예: pi 만 골랐는데 windows)이 include 로 **새로 생겼다**(11-05 실행 42014455101).
+  #    고른 대상만 담은 목록을 먼저 만들어 그대로 넘긴다.
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.pick.outputs.matrix }}
+    steps:
+      - id: pick
+        env:
+          TARGETS: ${{ inputs.targets }}
+        run: |
+          win='{"label":"windows","os":"windows-latest","target":"x86_64-pc-windows-msvc","bundles":"nsis,msi"}'
+          # ⚠️ ubuntu-latest(24.04)에서 만든 AppImage·deb 는 glibc 2.39 이상(우분투 24.04 이상).
+          lin='{"label":"linux","os":"ubuntu-latest","target":"x86_64-unknown-linux-gnu","bundles":"appimage,deb"}'
+          # 라즈베리파이 4·5 — GitHub ARM 러너에서 바로 만든다. glibc 2.39 이상 = 라즈베리파이 OS trixie(데비안 13) 이상.
+          pi='{"label":"pi","os":"ubuntu-24.04-arm","target":"aarch64-unknown-linux-gnu","bundles":"deb,appimage"}'
+          case "$TARGETS" in
+            windows) m="[$win]" ;;
+            linux) m="[$lin]" ;;
+            pi) m="[$pi]" ;;
+            all) m="[$win,$lin,$pi]" ;;
+            *) m="[$win,$lin]" ;;
+          esac
+          echo "matrix=$m" >> "$GITHUB_OUTPUT"
+          echo "만들 대상: $m"
+
   build:
+    needs: plan
     strategy:
       fail-fast: false
       matrix:
-        label: [windows, linux, pi]
-        # 잡 단위 if 에서는 matrix 를 못 쓴다 — 고른 대상만 남기도록 여기서 뺀다.
-        exclude:
-          - label: ${{ (inputs.targets == 'linux' || inputs.targets == 'pi') && 'windows' || 'none' }}
-          - label: ${{ (inputs.targets == 'windows' || inputs.targets == 'pi') && 'linux' || 'none' }}
-          - label: ${{ (inputs.targets == 'windows' || inputs.targets == 'linux' || inputs.targets == 'both') && 'pi' || 'none' }}
-        include:
-          - label: windows
-            os: windows-latest
-            target: x86_64-pc-windows-msvc
-            bundles: nsis,msi
-          # ⚠️ ubuntu-latest(24.04)에서 만든 AppImage·deb 는 glibc 2.39 이상이 필요하다
-          #    (= 우분투 24.04 이상). 22.04 라벨은 release.yml 이 큐에 영원히 남는 것을
-          #    겪어서 쓰지 않는다.
-          - label: linux
-            os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            bundles: appimage,deb
-          # 라즈베리파이판 — GitHub 의 ARM 러너(공개 저장소 무료)에서 바로 만든다(교차 빌드 아님).
-          # ⚠️ 24.04 에서 만들어 glibc 2.39 이상 필요 = 라즈베리파이 OS trixie(데비안 13) 이상.
-          - label: pi
-            os: ubuntu-24.04-arm
-            target: aarch64-unknown-linux-gnu
-            bundles: deb,appimage
+        include: ${{ fromJSON(needs.plan.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     defaults:

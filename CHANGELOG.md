@@ -1,5 +1,23 @@
 # 변경 기록
 
+## 0.9.12
+
+### 한국어
+
+- **폰·웹 레이븐볼트의 피드와 같은 글이 됩니다:** 「모두에게」 답글을 표준(NIP-10) 모양으로 남겨, 폰에서 단 답과 데스크탑에서 단 답이 같은 글 아래 모입니다. 폰에서 올린 사진도 보입니다.
+- **이름표에서 레이븐코인 보내기:** 상대가 자기 지갑 열쇠로 서명해 이름표에 건 받기 주소가 있으면, 그 사람 글에 「레이븐코인 보내기」가 나옵니다. 누르면 보내기 화면에 주소만 채워지고 금액은 직접 넣습니다.
+- 이름표를 고쳐도 폰이나 다른 앱이 넣어 둔 칸(받기 주소 등)이 지워지지 않습니다.
+- PLAY X 릴레이가 이름표·팔로우·북마크·지우기 요청도 보관합니다.
+- 업데이트 안내문이 옛 문구 대신 이 변경 기록을 보여 줍니다.
+
+### English
+
+- **Same posts as the phone and web feed:** public replies now use the standard (NIP-10) shape, so replies from phone and desktop gather under the same post. Photos posted from the phone now show.
+- **Send Ravencoin from a name tag:** when someone has linked a receiving address to their name tag with a wallet-key signature, their posts show "Send Ravencoin". It fills in only the address; you enter the amount.
+- Editing your name tag no longer erases fields added by the phone or other apps (such as the receiving address).
+- The PLAY X relay now keeps name tags, follow lists, bookmarks and delete requests.
+- Update notes now show this changelog instead of an old fixed text.
+
 ## 0.9.11
 
 ### 한국어
