@@ -676,7 +676,8 @@ pub async fn serve(mut ws: WebSocket) {
         let msg = tokio::select! {
             m = ws.recv() => { heard = std::time::Instant::now(); m },
             _ = ping.tick() => {
-                if heard.elapsed().as_secs() >= SILENT_CLOSE_SECS || ws.send(Message::Ping(Vec::new().into())).await.is_err() {
+                let pinged = tokio::time::timeout(std::time::Duration::from_secs(10), ws.send(Message::Ping(Vec::new().into()))).await;
+                if heard.elapsed().as_secs() >= SILENT_CLOSE_SECS || !matches!(pinged, Ok(Ok(()))) {
                     let _ = ws.send(Message::Close(None)).await;
                     return;
                 }
@@ -687,7 +688,9 @@ pub async fn serve(mut ws: WebSocket) {
                     Ok(e) => {
                         let hits: Vec<String> = subs.iter().filter(|(_, fs)| fs.iter().any(|f| matches(&e, f))).map(|(id, _)| id.clone()).collect();
                         for id in hits {
-                            if ws.send(Message::Text(json!(["EVENT", id, e]).to_string().into())).await.is_err() {
+                            // 읽지 않는 상대에게 밀다가 영영 멈추지 않게 10초 제한.
+                            let pushed = tokio::time::timeout(std::time::Duration::from_secs(10), ws.send(Message::Text(json!(["EVENT", id, e]).to_string().into()))).await;
+                            if !matches!(pushed, Ok(Ok(()))) {
                                 return;
                             }
                         }
@@ -727,7 +730,8 @@ pub async fn serve(mut ws: WebSocket) {
                     pair_times.len() > PAIR_PER_MINUTE
                 } else {
                     sent += 1;
-                    sent > 200 || !author_budget_ok(e.get("pubkey").and_then(Value::as_str).unwrap_or(""))
+                    // 열쇠별 예산은 **서명이 맞는 글만** 센다(11-07 재검사: 남의 공개키를 적은 가짜 글로 그 사람을 막을 수 있었다).
+                    sent > 200 || (verify(&e) && !author_budget_ok(e.get("pubkey").and_then(Value::as_str).unwrap_or("")))
                 };
                 if limited {
                     let _ = ws
