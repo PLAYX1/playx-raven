@@ -2544,4 +2544,8 @@ export const SETTINGS_TALK_090_COPY: Record<string, [string, string, string]> = 
   "저장한 글이에요. 나만 봅니다.": ["Your saved posts. Only you can see them.", "保存した投稿です。自分だけが見られます。", "你保存的动态，只有你能看到。"],
   "새 받기 주소로 연결": ["Link a new receive address", "新しい受取アドレスで連携", "用新收款地址关联"],
   "연결 끊기": ["Unlink", "連携を解除", "解除关联"],
+  "팔로우": ["Follow", "フォロー", "关注"],
+  "팔로우 중": ["Following", "フォロー中", "已关注"],
+  "팔로우만 보기": ["Following only", "フォロー中のみ", "只看关注"],
+  "전체 보기": ["Show all", "すべて表示", "查看全部"],
 };

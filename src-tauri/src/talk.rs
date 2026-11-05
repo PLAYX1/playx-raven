@@ -331,6 +331,71 @@ fn latest_profile_body(old: &[Value], me: &str) -> Value {
         .unwrap_or_else(|| json!({}))
 }
 
+// ── 팔로우 — NIP-02 kind 3(폰 core/talk/feed.ts followDraft 와 같은 규약) ──
+// 공개 목록이다. 통째로 바뀌므로 고치기 직전에 가장 늦은 목록을 읽고, 다른 앱이 남긴 표·content 는 그대로 둔다.
+// 🔴 못 읽었으면(릴레이 하나도 안 닿음) 쓰지 않는다 — 빈 목록으로 남의 팔로우를 지운다.
+pub(crate) const KIND_FOLLOWS: i64 = 3;
+
+fn follow_ids(list: Option<&Value>) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for t in list.and_then(|e| e.get("tags")).and_then(Value::as_array).cloned().unwrap_or_default() {
+        if t.get(0).and_then(Value::as_str) == Some("p") {
+            if let Some(pk) = t.get(1).and_then(Value::as_str) {
+                if pk.len() == 64 && pk.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) && !out.iter().any(|x| x == pk) {
+                    out.push(pk.to_string());
+                }
+            }
+        }
+    }
+    out
+}
+
+fn follow_tags(list: Option<&Value>, pubkey: &str, follow: bool) -> Value {
+    let mut tags: Vec<Value> = list
+        .and_then(|e| e.get("tags"))
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|t| !(t.get(0).and_then(Value::as_str) == Some("p") && t.get(1).and_then(Value::as_str) == Some(pubkey)))
+        .collect();
+    if follow {
+        tags.push(json!(["p", pubkey]));
+    }
+    Value::Array(tags)
+}
+
+async fn my_follow_list(me: &str) -> Result<Option<Value>, String> {
+    let got = crate::nostrpub::nostr_query_authors(vec![KIND_FOLLOWS], vec![me.to_string()], 5)
+        .await
+        .map_err(|e| format!("팔로우 목록을 읽지 못했습니다: {e}"))?;
+    Ok(got.into_iter().find(|e| e.get("pubkey").and_then(Value::as_str) == Some(me) && e.get("kind").and_then(Value::as_i64) == Some(KIND_FOLLOWS)))
+}
+
+/// 내가 팔로우한 사람들(공개키).
+#[tauri::command]
+pub async fn talk_follows() -> Result<Value, String> {
+    let me = crate::shopkey::pubkey_of(&key()?)?;
+    Ok(json!({ "ids": follow_ids(my_follow_list(&me).await?.as_ref()) }))
+}
+
+/// 팔로우하기·그만하기.
+#[tauri::command]
+pub async fn talk_follow_set(pubkey: String, follow: bool) -> Result<Value, String> {
+    let pubkey = pubkey.trim().to_ascii_lowercase();
+    if pubkey.len() != 64 || !pubkey.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err("이 사람을 찾지 못했습니다.".into());
+    }
+    let sk = key()?;
+    let me = crate::shopkey::pubkey_of(&sk)?;
+    let old = my_follow_list(&me).await?;
+    let content = old.as_ref().and_then(|e| e.get("content")).and_then(Value::as_str).unwrap_or("").to_string();
+    let tags = follow_tags(old.as_ref(), &pubkey, follow);
+    let ev = crate::shopkey::sign_with(&sk, KIND_FOLLOWS, tags, &content, now())?;
+    crate::nostrpub::nostr_publish(ev.clone()).await?;
+    Ok(json!({ "ids": follow_ids(Some(&ev)) }))
+}
+
 // ── 북마크 — NIP-51 kind 10003, 항목을 NIP-44 로 나 자신에게 잠근다(폰 core/talk/bookmarks.ts 와 같은 규약) ──
 //
 // 평문 = 태그 배열 JSON [["e","<글 번호>"], …]. 다른 앱이 넣은 항목(a·t…)은 그대로 둔다.
@@ -441,7 +506,7 @@ fn merged_profile(old: &[Value], me: &str, name: &str, about: &str, picture: &st
 /// **없는 이름을 지어내지 않는다.**
 #[tauri::command]
 pub async fn talk_profiles(pubkeys: Vec<String>) -> Result<Value, String> {
-    let got = crate::nostrpub::nostr_query_authors(vec![KIND_PROFILE], pubkeys, 60).await?;
+    let got = crate::nostrpub::nostr_query_authors(vec![KIND_PROFILE], pubkeys, 60).await.unwrap_or_default();
     let mut out = serde_json::Map::new();
     for e in got {
         let Some(pk) = e.get("pubkey").and_then(Value::as_str) else {
@@ -1605,7 +1670,18 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{open_bookmarks, bookmark_ids, bookmark_items};
+    use super::{open_bookmarks, bookmark_ids, bookmark_items, follow_ids, follow_tags};
+    #[test]
+    fn follows_keep_other_apps_tags() {
+        let a = "a".repeat(64);
+        let b = "b".repeat(64);
+        let old = json!({ "tags": [["p", a, "wss://hint"], ["t", "other-app"]] });
+        let added = json!({ "tags": follow_tags(Some(&old), &b, true) });
+        assert_eq!(follow_ids(Some(&added)), vec![a.clone(), b.clone()]);
+        let removed = json!({ "tags": follow_tags(Some(&added), &a, false) });
+        assert_eq!(follow_ids(Some(&removed)), vec![b]);
+        assert!(removed["tags"].as_array().unwrap().iter().any(|t| t[0] == "t"), "다른 앱 표는 그대로");
+    }
     use serde_json::json;
     #[test]
     fn bookmarks_round_trip_and_keep_other_items() {

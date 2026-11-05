@@ -6110,6 +6110,38 @@ function talkUnmute(pk: string) {
   void talkPaint();
 }
 
+// ── 팔로우(11-07) — 공개 목록 kind 3. 「팔로우만 보기」는 이 컴퓨터에 기억한다. ──
+let tkFollows: Set<string> | null = null;
+let tkFollowOnly = (() => { try { return localStorage.getItem("rv.talk.followOnly") === "1"; } catch { return false; } })();
+
+async function tkLoadFollows() {
+  const r = await invoke<any>("talk_follows");
+  tkFollows = new Set<string>(Array.isArray(r?.ids) ? r.ids.map(String) : []);
+}
+
+async function tkToggleFollow(pk: string, btn?: HTMLButtonElement) {
+  if (!/^[0-9a-f]{64}$/.test(pk)) return;
+  if (btn) btn.disabled = true;
+  try {
+    if (!tkFollows) await tkLoadFollows();
+    const r = await invoke<any>("talk_follow_set", { pubkey: pk, follow: !tkFollows!.has(pk) });
+    tkFollows = new Set<string>(Array.isArray(r?.ids) ? r.ids.map(String) : []);
+    document.querySelectorAll<HTMLButtonElement>(`[data-follow="${pk}"]`).forEach((b) => setCopyText(b, () => t(tkFollows!.has(pk) ? "팔로우 중" : "팔로우")));
+  } catch (e) {
+    const note = btn?.closest(".bubacts")?.querySelector(".meta") as HTMLElement | null;
+    if (note) note.textContent = errText(e);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+function tkPaintFollowOnly() {
+  const b = document.getElementById("tk-followonly");
+  if (!b) return;
+  b.setAttribute("aria-pressed", tkFollowOnly ? "true" : "false");
+  setCopyText(b, () => t(tkFollowOnly ? "전체 보기" : "팔로우만 보기"));
+}
+
 // ── 북마크(11-06) — 러스트가 kind 10003 을 12단어 열쇠로 잠가 둔다. 폰·웹과 같은 목록. ──
 let tkBm: Set<string> | null = null;
 
@@ -6710,7 +6742,9 @@ async function talkPaint() {
     // 안 보기 한 사람의 글을 뺀다. 🔴 **거른 것을 말없이 없애지 않는다** —
     //    윗줄에 몇 개를 숨겼는지 적고, 거기서 바로 명단을 열 수 있게 한다.
     //    그래야 "어제 있던 글이 없어졌다" 가 고장으로 읽히지 않는다.
-    const asc = all.filter((e) => !tkMuted[String(e.pubkey || "")]);
+    if (!읽은방 && tkFollowOnly && !tkFollows) { try { await tkLoadFollows(); } catch { /* 못 읽으면 전체를 보인다 */ } }
+    const 팔로우만 = !읽은방 && tkFollowOnly && !!tkFollows;
+    const asc = all.filter((e) => !tkMuted[String(e.pubkey || "")] && (!팔로우만 || tkFollows!.has(String(e.pubkey || "")) || String(e.pubkey || "") === tkMine));
     const hid = all.length - asc.length;
     const hidNote = hid
       ? `<div class="hidnote">${copyHtml("안 보기 한 분의 글")} ${hid}${copyHtml("개를 숨겼습니다")} ·
@@ -6809,6 +6843,10 @@ async function talkPaint() {
           (!읽은방 && /^[0-9a-f]{64}$/.test(id)
             ? `<button data-bm="${id}">${copyHtml(tkBm?.has(id) ? "저장됨" : "저장")}</button><button data-share="${id}">${copyHtml("링크 복사")}</button>`
             : "") +
+          // 11-07: 팔로우(kind 3, 폰과 같은 공개 목록). 내 글에는 안 단다.
+          (!읽은방 && !mine && /^[0-9a-f]{64}$/.test(who)
+            ? `<button data-follow="${escapeHtml(who)}">${copyHtml(tkFollows?.has(who) ? "팔로우 중" : "팔로우")}</button>`
+            : "") +
           // 내 글에는 안 붙인다. 나를 안 보기로 할 이유가 없고,
           // 눌렀다가 내 글이 사라지면 그것부터 고장으로 읽힌다.
           (mine ? "" : `<button data-mute="${escapeHtml(who)}">${copyHtml("안 보기")}</button>`) +
@@ -6872,6 +6910,12 @@ async function talkPaint() {
       (b as HTMLElement).onclick = (ev) => {
         ev.stopPropagation();
         void tkToggleBookmark(String((b as HTMLElement).dataset.bm || ""), b as HTMLButtonElement);
+      };
+    });
+    box.querySelectorAll("[data-follow]").forEach((b) => {
+      (b as HTMLElement).onclick = (ev) => {
+        ev.stopPropagation();
+        void tkToggleFollow(String((b as HTMLElement).dataset.follow || ""), b as HTMLButtonElement);
       };
     });
     box.querySelectorAll("[data-share]").forEach((b) => {
@@ -19342,6 +19386,13 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("tk-muted").addEventListener("click", () => talkToggleMuted());
   $("tk-bm").addEventListener("click", () => { const b = $("tk-bmbox"); b.hidden = !b.hidden; if (!b.hidden) void talkPaintBookmarks(); });
   $("tk-bmclose").addEventListener("click", () => { $("tk-bmbox").hidden = true; });
+  tkPaintFollowOnly();
+  $("tk-followonly").addEventListener("click", () => {
+    tkFollowOnly = !tkFollowOnly;
+    try { localStorage.setItem("rv.talk.followOnly", tkFollowOnly ? "1" : "0"); } catch { /* 기억 못 해도 지금은 바뀐다 */ }
+    tkPaintFollowOnly();
+    void talkPaint();
+  });
   $("tk-rvnlink").addEventListener("click", () => { const b = $("tk-rvnbox"); b.hidden = !b.hidden; if (!b.hidden) { $("tk-rvnsay").textContent = ""; void talkPaintRvnLink(); } });
   $("tk-rvnclose").addEventListener("click", () => { $("tk-rvnbox").hidden = true; });
   $("tk-rvnfresh").addEventListener("click", () => void talkRvnLink(true));

@@ -702,6 +702,8 @@ pub fn run() {
             talk::talk_my_rvn,
             talk::talk_bookmarks,
             talk::talk_bookmark_set,
+            talk::talk_follows,
+            talk::talk_follow_set,
             talk::recovery_status,
             // 팬클럽. 자산마다 방을 묶어 보고, 여러 방에 한 번에 공지하고,
             // 몇 분이 가지셨는지 **숫자만** 센다(주소는 안 돌려준다).

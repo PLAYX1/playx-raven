@@ -360,6 +360,10 @@ pub async fn nostr_query_authors(
     //    한꺼번에 물으면 최대 7초다 — 제일 느린 한 곳만큼만 기다린다.
     use futures_util::future::join_all;
     let got = join_all(targets().iter().map(|u| read_one(u, &req, sub))).await;
+    // 11-07: 한 곳도 답하지 않았으면 「없음」이 아니라 「모름」이다 — 고치기 전에 읽는 쪽(이름표·북마크·팔로우)이 빈 목록으로 덮어쓰지 않게.
+    if !got.iter().any(|r| r.is_ok()) {
+        return Err("릴레이에 하나도 닿지 못했습니다. 인터넷 연결을 확인해 주세요.".into());
+    }
     for r in got {
         if let Ok(events) = r {
             for e in events {
