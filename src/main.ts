@@ -6727,6 +6727,10 @@ async function talkPaint() {
           // 내 글에는 안 붙인다. 나를 안 보기로 할 이유가 없고,
           // 눌렀다가 내 글이 사라지면 그것부터 고장으로 읽힌다.
           (mine ? "" : `<button data-mute="${escapeHtml(who)}">${copyHtml("안 보기")}</button>`) +
+          // 11-06: 이름표에 서명으로 건 받기 주소가 있는 사람에게만 — 보내기 화면을 그 주소만 채워 연다(금액은 사장이 넣는다, 글 팁 아님).
+          (!mine && /^R[1-9A-HJ-NP-Za-km-z]{33}$/.test(String(tkNames.get(who)?.rvn_address || ""))
+            ? `<button data-pay="${escapeHtml(String(tkNames.get(who).rvn_address))}" data-payname="${escapeHtml(tkNameText(who))}">${copyHtml("레이븐코인 보내기")}</button>`
+            : "") +
             // 🔴 내 글에만. 이름이 「삭제」가 아니라 **「지우기 요청」**인 것이
             //    전부다 — Nostr 의 지움은 **부탁**이지 명령이 아니고, 릴레이가
             //    따를 의무가 없다. 「삭제」라 적으면 지워졌다고 믿는데 안 지워진다.
@@ -6763,6 +6767,20 @@ async function talkPaint() {
         box.querySelectorAll(".bubacts.on").forEach((x) => x.classList.remove("on"));
         // 같은 글을 다시 누르면 닫힌다 — 연 것을 못 닫으면 그것도 갇힌 것이다.
         if (acts && !이미열림) acts.classList.add("on");
+      };
+    });
+    box.querySelectorAll("[data-pay]").forEach((b) => {
+      (b as HTMLElement).onclick = (ev) => {
+        ev.stopPropagation();
+        const to = String((b as HTMLElement).dataset.pay || "");
+        if (!/^R[1-9A-HJ-NP-Za-km-z]{33}$/.test(to)) return;
+        void (async () => {
+          showPage("wallet");
+          await openSend("rvn");
+          ($("s-addr") as HTMLInputElement).value = to;
+          composeChanged();
+          $("s-addrnote").textContent = tf("{0}님 이름표의 받기 주소를 채웠습니다(주소 연결 서명 확인). 이름은 누구나 같게 지을 수 있으니 주소 끝 글자를 한 번 더 확인하세요.", String((b as HTMLElement).dataset.payname || ""));
+        })();
       };
     });
     box.querySelectorAll("[data-reply]").forEach((b) => {

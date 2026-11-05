@@ -319,10 +319,44 @@ pub async fn talk_profiles(pubkeys: Vec<String>) -> Result<Value, String> {
                 "name": name.chars().take(40).collect::<String>(),
                 "about": body.get("about").and_then(Value::as_str).unwrap_or(""),
                 "picture": body.get("picture").and_then(Value::as_str).unwrap_or(""),
+                // 서명으로 확인된 레이븐코인 받기 주소만 싣는다(없거나 틀리면 "") — 폰 core/talk/rvn-link.ts 와 같은 규칙.
+                "rvn_address": verified_rvn_address(pk, &body),
             }),
         );
     }
     Ok(Value::Object(out))
+}
+
+/// 이름표에 건 레이븐코인 받기 주소를 확인한다(폰 core/talk/rvn-link.ts 와 같은 문구·같은 시험 벡터).
+///
+///   서명 문구: `RAVENVAULT-NOSTR-ADDR-V1\nmainnet\n<주소>\n<이벤트 pubkey>` (Ravencoin signmessage, 65바이트 복구형 base64)
+/// 🔴 문구의 공개키는 content 가 아니라 **이벤트 pubkey** — 남의 증명을 복사해 붙이면 실패한다. 메인넷 P2PKH 만.
+/// 「믿을 사람」 증명이 아니다. 화면은 「주소 연결 서명 확인」까지만 말한다.
+pub(crate) fn verified_rvn_address(event_pubkey: &str, body: &Value) -> String {
+    use base64::{engine::general_purpose::STANDARD, Engine as _};
+    use secp256k1::ecdsa::{RecoverableSignature, RecoveryId};
+    use secp256k1::{Message, Secp256k1};
+    use sha2::{Digest, Sha256};
+    let (Some(addr), Some(proof)) = (body.get("rvn_address").and_then(Value::as_str), body.get("rvn_proof").and_then(Value::as_str)) else {
+        return String::new();
+    };
+    let ok_addr = addr.len() == 34 && addr.starts_with('R') && addr.chars().all(|c| c.is_ascii_alphanumeric() && !"0OIl".contains(c));
+    if !ok_addr || proof.len() > 200 || event_pubkey.len() != 64 || !event_pubkey.chars().all(|c| c.is_ascii_hexdigit()) {
+        return String::new();
+    }
+    let Ok(bytes) = STANDARD.decode(proof) else { return String::new() };
+    if bytes.len() != 65 || !(27..=34).contains(&bytes[0]) {
+        return String::new();
+    }
+    let compressed = bytes[0] >= 31;
+    let Ok(rid) = RecoveryId::try_from(((bytes[0] - 27) & 3) as i32) else { return String::new() };
+    let Ok(rsig) = RecoverableSignature::from_compact(&bytes[1..], rid) else { return String::new() };
+    let msg = format!("RAVENVAULT-NOSTR-ADDR-V1\nmainnet\n{addr}\n{event_pubkey}");
+    let hash = crate::lan_cert::message_hash(&msg);
+    let Ok(key) = Secp256k1::verification_only().recover_ecdsa(&Message::from_digest(hash), &rsig) else { return String::new() };
+    let pk: Vec<u8> = if compressed { key.serialize().to_vec() } else { key.serialize_uncompressed().to_vec() };
+    let got = crate::words::base58check(crate::words::MAINNET, &crate::words::ripemd160(&Sha256::digest(&pk)));
+    if got == addr { got } else { String::new() }
 }
 
 /// **12단어만으로 어디까지 되살아나는가.**
@@ -2132,6 +2166,13 @@ mod room_meta_tests {
         assert_eq!(deep[1], json!(["e", "parent1", "", "reply"]));
         assert!(deep.contains(&json!(["p", "pk1"])) && deep.contains(&json!(["t", TAG])));
         // 방 글 자체에 다는 답이면 같은 표를 두 번 달지 않는다.
+        // 받기 주소 증명 — 폰 core/talk/rvn-link.test.ts 와 같은 벡터(지갑 키 0x11…11, nostr pubkey aa…aa).
+        let ok = json!({ "rvn_address": "RYJ1Jbofs42vuRygtXb1GqTFnoYzbEGsk4", "rvn_proof": "IAw06RpeOkJrCiemRiSqUAkvvXxP934rnoxzObXa/OV5N2Guqm2bfMLpDPXKHgEi2ChoB3Gjtc83n6gboRwyamY=" });
+        assert_eq!(verified_rvn_address(&"a".repeat(64), &ok), "RYJ1Jbofs42vuRygtXb1GqTFnoYzbEGsk4", "폰과 같은 벡터가 통과한다");
+        assert_eq!(verified_rvn_address(&"b".repeat(64), &ok), "", "남의 이름표에 복사한 증명은 실패");
+        let mut other = ok.clone(); other["rvn_address"] = json!("RDtFvAbLXy1HQ1fXHDdqC3RVbYvCH6ffRo");
+        assert_eq!(verified_rvn_address(&"a".repeat(64), &other), "", "다른 주소는 실패");
+        assert_eq!(verified_rvn_address(&"a".repeat(64), &json!({ "rvn_address": "RYJ1Jbofs42vuRygtXb1GqTFnoYzbEGsk4" })), "");
         // 이름표: 다른 칸은 남고 이름·소개·그림만 바뀐다.
         let old = vec![json!({ "kind": 0, "pubkey": "me", "created_at": 5, "content": "{\"name\":\"옛\",\"lud16\":\"a@b\",\"rvn_address\":\"Rx\"}" }),
                        json!({ "kind": 0, "pubkey": "me", "created_at": 1, "content": "{\"name\":\"더 옛\"}" })];

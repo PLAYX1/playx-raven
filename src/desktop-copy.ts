@@ -504,6 +504,8 @@ export const DESKTOP_COPY: Record<string, [string, string, string]> = {
   "1주": ["1 week", "1週間", "1 周"],
   "1회 차감": ["Use 1 visit", "1回消化", "扣 1 次"],
   "사진 서버에서 받지 못했습니다. 인터넷 연결을 확인해 주세요.": ["Could not get it from the photo server. Check your internet connection.", "写真サーバーから受け取れませんでした。インターネット接続を確認してください。", "无法从图片服务器获取。请检查网络连接。"],
+  "레이븐코인 보내기": ["Send Ravencoin", "レイヴンコインを送る", "发送渡鸦币"],
+  "{0}님 이름표의 받기 주소를 채웠습니다(주소 연결 서명 확인). 이름은 누구나 같게 지을 수 있으니 주소 끝 글자를 한 번 더 확인하세요.": ["Filled in the receiving address from {0}'s name tag (address link signature verified). Anyone can use the same name, so check the last characters of the address once more.", "{0}さんの名札の受け取りアドレスを入れました（アドレス連携の署名を確認）。名前は誰でも同じものを付けられるので、アドレスの末尾をもう一度確かめてください。", "已填入 {0} 名片上的收款地址（地址关联签名已验证）。任何人都可以用同样的名字，请再核对一次地址末尾。"],
   "25초를 기다렸는데 아직 못 받았습니다. 보낸 분의 컴퓨터가 켜져 있어야 받을 수 있습니다.": ["Waited 25 seconds, but nothing has arrived yet. The sender's computer must be on for you to receive it.", "25秒待ちましたが、まだ受け取れていません。送った方のパソコンがついていないと受け取れません。", "已等待 25 秒，仍未收到。发送方的电脑必须开着才能收到。"],
   "2시간": ["2 hours", "2時間", "2 小时"],
   "2일": ["2 days", "2日間", "2 天"],
