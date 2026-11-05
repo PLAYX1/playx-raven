@@ -385,6 +385,34 @@ pub async fn nostr_query_authors(
     Ok(seen.into_values().collect())
 }
 
+/// 글 번호로 글을 읽는다(북마크 화면). 번호는 64자리 16진수만, 50개까지. 릴레이는 한꺼번에 묻는다.
+pub(crate) async fn nostr_query_ids(kinds: Vec<i64>, ids: Vec<String>) -> Result<Vec<Value>, String> {
+    let ids: Vec<String> = ids
+        .into_iter()
+        .filter(|a| a.len() == 64 && a.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)))
+        .take(50)
+        .collect();
+    if ids.is_empty() || kinds.is_empty() {
+        return Ok(vec![]);
+    }
+    let sub = "i1";
+    let req = serde_json::to_string(&json!(["REQ", sub, { "ids": ids, "kinds": kinds, "limit": ids.len() }]))
+        .map_err(|e| format!("보낼 것을 만들지 못했습니다: {e}"))?;
+    use futures_util::future::join_all;
+    let got = join_all(targets().iter().map(|u| read_one(u, &req, sub))).await;
+    let mut seen: std::collections::HashMap<String, Value> = std::collections::HashMap::new();
+    for events in got.into_iter().flatten() {
+        for e in events {
+            if let Some(id) = e.get("id").and_then(Value::as_str) {
+                if ids.iter().any(|i| i == id) {
+                    seen.entry(id.to_string()).or_insert(e);
+                }
+            }
+        }
+    }
+    Ok(seen.into_values().collect())
+}
+
 /// 한 열쇠에게 온 겉봉(NIP-17 kind 1059)만 읽는다 — 지갑 연결의 받은 쪽지함(wallet_link.rs).
 /// 겉봉 시각은 최대 이틀 앞당겨지므로 `since` 는 부르는 쪽이 이미 이틀 뺀 값을 준다.
 ///

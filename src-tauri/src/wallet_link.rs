@@ -218,7 +218,7 @@ pub(crate) fn receive_address(xpub: &str, index: u32) -> Option<String> {
 }
 
 // ── NIP-44 v2 · NIP-17(core/talk/nip44.ts·nip17.ts 와 같은 바이트) ────────
-fn conv_key(my: &[u8; 32], their_x: &str) -> Option<[u8; 32]> {
+pub(crate) fn conv_key(my: &[u8; 32], their_x: &str) -> Option<[u8; 32]> {
     let mut p = vec![2u8];
     p.extend(hex::decode(their_x).ok().filter(|b| b.len() == 32)?);
     let point = secp256k1::PublicKey::from_slice(&p).ok()?;
@@ -250,7 +250,7 @@ fn mac(k: &[u8; 76], nonce: &[u8], ct: &[u8]) -> hmac::Hmac<Sha256> {
     m.update(ct);
     m
 }
-fn nip44_encrypt(plain: &str, conv: &[u8; 32], nonce: [u8; 32]) -> Option<String> {
+pub(crate) fn nip44_encrypt(plain: &str, conv: &[u8; 32], nonce: [u8; 32]) -> Option<String> {
     use base64::Engine;
     use hmac::Mac;
     let b = plain.as_bytes();
@@ -267,7 +267,7 @@ fn nip44_encrypt(plain: &str, conv: &[u8; 32], nonce: [u8; 32]) -> Option<String
     out.extend(tag);
     Some(base64::engine::general_purpose::STANDARD.encode(out))
 }
-fn nip44_decrypt(payload: &str, conv: &[u8; 32]) -> Option<String> {
+pub(crate) fn nip44_decrypt(payload: &str, conv: &[u8; 32]) -> Option<String> {
     use base64::Engine;
     use hmac::Mac;
     if payload.len() < 132 || payload.len() > 87_472 || payload.starts_with('#') { return None; }
@@ -283,7 +283,7 @@ fn nip44_decrypt(payload: &str, conv: &[u8; 32]) -> Option<String> {
     if len < 1 || buf.len() != 2 + padded_len(len) { return None; }
     String::from_utf8(buf[2..2 + len].to_vec()).ok()
 }
-fn random32() -> [u8; 32] {
+pub(crate) fn random32() -> [u8; 32] {
     use rand::RngCore;
     let mut b = [0u8; 32];
     rand::rngs::OsRng.fill_bytes(&mut b);

@@ -698,6 +698,10 @@ pub fn run() {
             talk::talk_delete_request,
             talk::talk_profile_set,
             talk::talk_profiles,
+            talk::talk_rvn_link,
+            talk::talk_my_rvn,
+            talk::talk_bookmarks,
+            talk::talk_bookmark_set,
             talk::recovery_status,
             // 팬클럽. 자산마다 방을 묶어 보고, 여러 방에 한 번에 공지하고,
             // 몇 분이 가지셨는지 **숫자만** 센다(주소는 안 돌려준다).

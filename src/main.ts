@@ -6110,6 +6110,87 @@ function talkUnmute(pk: string) {
   void talkPaint();
 }
 
+// ── 북마크(11-06) — 러스트가 kind 10003 을 12단어 열쇠로 잠가 둔다. 폰·웹과 같은 목록. ──
+let tkBm: Set<string> | null = null;
+
+async function tkLoadBookmarks(): Promise<any[]> {
+  const r = await invoke<any>("talk_bookmarks");
+  tkBm = new Set<string>(Array.isArray(r?.ids) ? r.ids.map(String) : []);
+  return Array.isArray(r?.notes) ? r.notes : [];
+}
+
+async function tkToggleBookmark(id: string, btn?: HTMLButtonElement) {
+  if (!/^[0-9a-f]{64}$/.test(id)) return;
+  const note = document.querySelector(`[data-note="${id}"]`) as HTMLElement | null;
+  if (btn) btn.disabled = true;
+  try {
+    if (!tkBm) await tkLoadBookmarks();
+    const keep = !tkBm!.has(id);
+    const r = await invoke<any>("talk_bookmark_set", { id, keep });
+    tkBm = new Set<string>(Array.isArray(r?.ids) ? r.ids.map(String) : []);
+    if (btn) setCopyText(btn, () => t(tkBm!.has(id) ? "저장됨" : "저장"));
+    if (!$("tk-bmbox").hidden) void talkPaintBookmarks();
+  } catch (e) {
+    if (note) note.textContent = errText(e);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function talkPaintBookmarks() {
+  const list = $("tk-bmlist");
+  list.innerHTML = `<p class="meta">${copyHtml("불러오는 중…")}</p>`;
+  try {
+    const notes = await tkLoadBookmarks();
+    await tkLoadNames(notes.map((e) => String(e.pubkey || "")));
+    if (!tkBm!.size) { list.innerHTML = `<p class="meta">${copyHtml("아직 저장한 글이 없어요. 모두에게 글을 누르고 「저장」을 눌러 보세요.")}</p>`; return; }
+    const missing = tkBm!.size - notes.length;
+    list.innerHTML = notes.map((e) => {
+      const id = String(e.id || "");
+      return `<div class="muterow"><span><b>${escapeHtml(tkNameText(String(e.pubkey || "")))}</b> · ${escapeHtml(tkSnip(String(e.content || ""), 60))}
+        <small class="meta">${escapeHtml(new Date(Number(e.created_at || 0) * 1000).toLocaleString())}</small></span>
+        <button class="ghost" data-bmout="${escapeHtml(id)}">${copyHtml("빼기")}</button></div>`;
+    }).join("") + (missing > 0 ? `<p class="meta">${escapeHtml(tf("{0}개는 릴레이에서 글을 찾지 못했어요(지워졌거나 아직 안 닿음).", String(missing)))}</p>` : "");
+    list.querySelectorAll<HTMLElement>("[data-bmout]").forEach((b) => {
+      b.onclick = () => void tkToggleBookmark(String(b.dataset.bmout || ""), b as HTMLButtonElement);
+    });
+  } catch (e) {
+    list.innerHTML = `<p class="meta">${escapeHtml(errText(e))}</p>`;
+  }
+}
+
+// ── 받기 주소 연결(11-06) — 이름표 kind 0 의 rvn_address·rvn_proof. 서명은 노드(signmessage)가 한다. ──
+async function talkPaintRvnLink() {
+  const now = $("tk-rvnnow"), off = $("tk-rvnoff") as HTMLButtonElement;
+  now.textContent = t("확인하는 중…");
+  try {
+    const r = await invoke<any>("talk_my_rvn");
+    const a = String(r?.address || "");
+    now.textContent = a ? tf("지금 걸린 주소: {0}", a) : t("아직 걸린 주소가 없어요.");
+    off.hidden = !a;
+  } catch (e) {
+    now.textContent = errText(e);
+  }
+}
+
+async function talkRvnLink(fresh: boolean) {
+  const say = $("tk-rvnsay"), pass = $("tk-rvnpass") as HTMLInputElement;
+  if (!fresh) {
+    const ok = await sure(t("받기 주소 연결을 끊을까요?"), t("이름표에서 주소를 뺍니다. 이미 본 사람이나 옛 이름표 사본에는 남을 수 있어요."), t("끊습니다"));
+    if (!ok) return;
+  }
+  say.textContent = t("서명해서 올리는 중…");
+  try {
+    const r = await invoke<any>("talk_rvn_link", { address: "", fresh, passphrase: pass.value || null });
+    pass.value = "";
+    say.textContent = r?.address ? tf("연결했어요: {0}", String(r.address)) : t("연결을 끊었어요.");
+    void talkPaintRvnLink();
+  } catch (e) {
+    pass.value = "";
+    say.textContent = errText(e);
+  }
+}
+
 /** 안 보기 명단을 열고 닫는다. 열 때만 다시 그린다. */
 function talkToggleMuted() {
   const box = $("tk-mutebox");
@@ -6724,6 +6805,10 @@ async function talkPaint() {
              <button data-reply="${id}">${copyHtml("답장")}</button>
              <button data-tr="${id}">${copyHtml("내 말로")}</button>
              <button data-keep="${id}">${copyHtml("간직")}</button>` +
+          // 11-06: 모두에게 글만 — 북마크(폰·웹과 같은 목록)·공유 링크(ravenvault.ex.erci.se/n/…, 서명 확인 페이지).
+          (!읽은방 && /^[0-9a-f]{64}$/.test(id)
+            ? `<button data-bm="${id}">${copyHtml(tkBm?.has(id) ? "저장됨" : "저장")}</button><button data-share="${id}">${copyHtml("링크 복사")}</button>`
+            : "") +
           // 내 글에는 안 붙인다. 나를 안 보기로 할 이유가 없고,
           // 눌렀다가 내 글이 사라지면 그것부터 고장으로 읽힌다.
           (mine ? "" : `<button data-mute="${escapeHtml(who)}">${copyHtml("안 보기")}</button>`) +
@@ -6781,6 +6866,24 @@ async function talkPaint() {
           composeChanged();
           $("s-addrnote").textContent = tf("{0}님 이름표의 받기 주소를 채웠습니다(주소 연결 서명 확인). 이름은 누구나 같게 지을 수 있으니 주소 끝 글자를 한 번 더 확인하세요.", String((b as HTMLElement).dataset.payname || ""));
         })();
+      };
+    });
+    box.querySelectorAll("[data-bm]").forEach((b) => {
+      (b as HTMLElement).onclick = (ev) => {
+        ev.stopPropagation();
+        void tkToggleBookmark(String((b as HTMLElement).dataset.bm || ""), b as HTMLButtonElement);
+      };
+    });
+    box.querySelectorAll("[data-share]").forEach((b) => {
+      (b as HTMLElement).onclick = (ev) => {
+        ev.stopPropagation();
+        const gid = String((b as HTMLElement).dataset.share || "");
+        const note = box.querySelector(`[data-note="${gid}"]`) as HTMLElement | null;
+        const url = `https://ravenvault.ex.erci.se/n/${gid}`;
+        void navigator.clipboard.writeText(url).then(
+          () => { if (note) note.textContent = t("글 링크를 복사했어요. 카카오톡 등에 붙여 넣어 보내세요."); },
+          () => { if (note) note.textContent = url; },
+        );
       };
     });
     box.querySelectorAll("[data-reply]").forEach((b) => {
@@ -19237,6 +19340,12 @@ window.addEventListener("DOMContentLoaded", async () => {
   // 안 보기. 🔴 러스트만 있고 여기가 비면 단추가 죽는다 — 이 앱이 여러 번
   //    걸린 병이다. 명단·전체 되돌리기·닫기 세 줄을 반드시 같이 묶는다.
   $("tk-muted").addEventListener("click", () => talkToggleMuted());
+  $("tk-bm").addEventListener("click", () => { const b = $("tk-bmbox"); b.hidden = !b.hidden; if (!b.hidden) void talkPaintBookmarks(); });
+  $("tk-bmclose").addEventListener("click", () => { $("tk-bmbox").hidden = true; });
+  $("tk-rvnlink").addEventListener("click", () => { const b = $("tk-rvnbox"); b.hidden = !b.hidden; if (!b.hidden) { $("tk-rvnsay").textContent = ""; void talkPaintRvnLink(); } });
+  $("tk-rvnclose").addEventListener("click", () => { $("tk-rvnbox").hidden = true; });
+  $("tk-rvnfresh").addEventListener("click", () => void talkRvnLink(true));
+  $("tk-rvnoff").addEventListener("click", () => void talkRvnLink(false));
   $("tk-muteclose").addEventListener("click", () => {
     $("tk-mutebox").hidden = true;
     tkJustBack = [];

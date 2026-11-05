@@ -269,6 +269,149 @@ pub async fn talk_profile_set(
     Ok(ev)
 }
 
+/// 이름표에 레이븐코인 받기 주소를 건다(폰 「받기 주소 연결」과 같은 문구·같은 칸). `address` 가 비면 뗀다.
+///
+/// 이 컴퓨터 지갑(노드)의 주소만 — 노드가 `signmessage` 로 서명한다(개인키는 노드 밖으로 안 나간다).
+/// `fresh` 면 새 받기 주소를 만들어 건다(권함: 주소를 공개하면 그 주소의 잔액·거래를 누구나 본다).
+/// 🔴 서명을 올리기 전에 우리 확인 함수로 다시 확인한다 — 폰이 못 읽는 증명은 올리지 않는다.
+/// 🔴 옛 이름표를 못 읽으면 올리지 않는다(이름·사진이 지워지지 않게).
+#[tauri::command]
+pub async fn talk_rvn_link(address: String, fresh: bool, passphrase: Option<String>) -> Result<Value, String> {
+    let sk = key()?;
+    let me = crate::shopkey::pubkey_of(&sk)?;
+    let old = crate::nostrpub::nostr_query_authors(vec![KIND_PROFILE], vec![me.clone()], 5)
+        .await
+        .map_err(|e| format!("지금 이름표를 읽지 못해 올리지 않았습니다(다른 칸이 지워지지 않게): {e}"))?;
+    let mut body = latest_profile_body(&old, &me);
+    let o = body.as_object_mut().expect("object");
+    let mut linked = String::new();
+    let addr = if fresh {
+        crate::raven::call_rpc("getnewaddress", json!(["이야기 받기"])).await?.as_str().unwrap_or("").to_string()
+    } else {
+        address.trim().to_string()
+    };
+    if addr.is_empty() {
+        o.remove("rvn_address");
+        o.remove("rvn_proof");
+    } else {
+        let message = format!("RAVENVAULT-NOSTR-ADDR-V1\nmainnet\n{addr}\n{me}");
+        let signed = crate::walletx::sign_message(addr.clone(), message, passphrase).await?;
+        let proof = signed.get("signature").and_then(Value::as_str).unwrap_or("").to_string();
+        o.insert("rvn_address".into(), json!(addr));
+        o.insert("rvn_proof".into(), json!(proof));
+        linked = verified_rvn_address(&me, &body);
+        if linked != addr {
+            return Err("서명을 확인하지 못해 올리지 않았습니다. 메인넷의 R 로 시작하는 주소만 걸 수 있어요.".into());
+        }
+    }
+    if body.get("name").and_then(Value::as_str).unwrap_or("").is_empty() {
+        return Err("먼저 이야기에서 쓸 이름을 정해 주세요.".into());
+    }
+    let ev = crate::shopkey::sign_with(&sk, KIND_PROFILE, json!([["t", TAG]]), &body.to_string(), now())?;
+    crate::nostrpub::nostr_publish(ev).await?;
+    Ok(json!({ "address": linked }))
+}
+
+/// 내 이름표에 걸린(서명 확인된) 받기 주소. 없으면 "".
+#[tauri::command]
+pub async fn talk_my_rvn() -> Result<Value, String> {
+    let sk = key()?;
+    let me = crate::shopkey::pubkey_of(&sk)?;
+    let old = crate::nostrpub::nostr_query_authors(vec![KIND_PROFILE], vec![me.clone()], 5).await?;
+    Ok(json!({ "address": verified_rvn_address(&me, &latest_profile_body(&old, &me)) }))
+}
+
+fn latest_profile_body(old: &[Value], me: &str) -> Value {
+    old.iter()
+        .filter(|e| e.get("kind").and_then(Value::as_i64) == Some(KIND_PROFILE) && e.get("pubkey").and_then(Value::as_str) == Some(me))
+        .max_by_key(|e| e.get("created_at").and_then(Value::as_i64).unwrap_or(0))
+        .and_then(|e| e.get("content").and_then(Value::as_str))
+        .and_then(|c| serde_json::from_str::<Value>(c).ok())
+        .filter(Value::is_object)
+        .unwrap_or_else(|| json!({}))
+}
+
+// ── 북마크 — NIP-51 kind 10003, 항목을 NIP-44 로 나 자신에게 잠근다(폰 core/talk/bookmarks.ts 와 같은 규약) ──
+//
+// 평문 = 태그 배열 JSON [["e","<글 번호>"], …]. 다른 앱이 넣은 항목(a·t…)은 그대로 둔다.
+// 🔴 kind 10003 은 통째로 바뀐다 — 가장 늦은 목록을 먼저 읽고, **풀지 못한 목록 위에는 쓰지 않는다.**
+pub(crate) const KIND_BOOKMARKS: i64 = 10003;
+
+fn open_bookmarks(latest: Option<&Value>, sk: &[u8; 32], me: &str) -> Result<Vec<Vec<String>>, String> {
+    let Some(ev) = latest else { return Ok(vec![]) };
+    let strs = |v: &Value| -> Option<Vec<String>> {
+        v.as_array()?.iter().map(|x| x.as_str().map(str::to_string)).collect()
+    };
+    let mut items: Vec<Vec<String>> = ev.get("tags").and_then(Value::as_array).map(|a| a.iter().filter_map(strs).filter(|t| !t.is_empty()).collect()).unwrap_or_default();
+    let content = ev.get("content").and_then(Value::as_str).unwrap_or("");
+    if content.is_empty() {
+        return Ok(items);
+    }
+    const CANT: &str = "북마크 목록을 풀지 못했습니다. 다른 앱이 다른 방식으로 잠근 목록일 수 있어요. 덮어쓰지 않고 그대로 둡니다.";
+    let conv = crate::wallet_link::conv_key(sk, me).ok_or(CANT)?;
+    let plain = crate::wallet_link::nip44_decrypt(content, &conv).ok_or(CANT)?;
+    let arr: Value = serde_json::from_str(&plain).map_err(|_| CANT.to_string())?;
+    let list = arr.as_array().ok_or(CANT)?;
+    for t in list {
+        items.push(strs(t).ok_or(CANT)?);
+    }
+    Ok(items)
+}
+
+fn bookmark_ids(items: &[Vec<String>]) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for t in items {
+        if t.len() >= 2 && t[0] == "e" && t[1].len() == 64 && t[1].bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) && !out.contains(&t[1]) {
+            out.push(t[1].clone());
+        }
+    }
+    out
+}
+
+fn bookmark_items(items: Vec<Vec<String>>, id: &str, keep: bool) -> Vec<Vec<String>> {
+    let mut rest: Vec<Vec<String>> = items.into_iter().filter(|t| !(t.len() >= 2 && t[0] == "e" && t[1] == id)).collect();
+    if keep {
+        rest.push(vec!["e".into(), id.to_string()]);
+    }
+    rest
+}
+
+async fn my_bookmarks(sk: &[u8; 32], me: &str) -> Result<Vec<Vec<String>>, String> {
+    let got = crate::nostrpub::nostr_query_authors(vec![KIND_BOOKMARKS], vec![me.to_string()], 5)
+        .await
+        .map_err(|e| format!("북마크 목록을 읽지 못했습니다: {e}"))?;
+    open_bookmarks(got.iter().find(|e| e.get("pubkey").and_then(Value::as_str) == Some(me)), sk, me)
+}
+
+/// 저장한 글 번호들과 그 글들(새것이 위). 글을 못 찾은 번호는 ids 에만 있다.
+#[tauri::command]
+pub async fn talk_bookmarks() -> Result<Value, String> {
+    let sk = key()?;
+    let me = crate::shopkey::pubkey_of(&sk)?;
+    let ids = bookmark_ids(&my_bookmarks(&sk, &me).await?);
+    let mut notes = crate::nostrpub::nostr_query_ids(vec![KIND_NOTE], ids.iter().rev().take(50).cloned().collect()).await.unwrap_or_default();
+    notes.sort_by_key(|e| -(e.get("created_at").and_then(Value::as_i64).unwrap_or(0)));
+    Ok(json!({ "ids": ids, "notes": notes }))
+}
+
+/// 글 하나를 저장하거나 뺀다.
+#[tauri::command]
+pub async fn talk_bookmark_set(id: String, keep: bool) -> Result<Value, String> {
+    let id = id.trim().to_ascii_lowercase();
+    if id.len() != 64 || !id.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err("저장할 글을 찾지 못했습니다.".into());
+    }
+    let sk = key()?;
+    let me = crate::shopkey::pubkey_of(&sk)?;
+    let items = bookmark_items(my_bookmarks(&sk, &me).await?, &id, keep);
+    let plain = serde_json::to_string(&items).map_err(|e| e.to_string())?;
+    let conv = crate::wallet_link::conv_key(&sk, &me).ok_or("잠그지 못했습니다.")?;
+    let content = crate::wallet_link::nip44_encrypt(&plain, &conv, crate::wallet_link::random32()).ok_or("잠그지 못했습니다. 목록이 너무 깁니다.")?;
+    let ev = crate::shopkey::sign_with(&sk, KIND_BOOKMARKS, json!([]), &content, now())?;
+    crate::nostrpub::nostr_publish(ev).await?;
+    Ok(json!({ "ids": bookmark_ids(&items) }))
+}
+
 /// 가장 늦은 내 이름표 위에 이름·소개·그림만 고친다. 다른 칸은 그대로 둔다.
 fn merged_profile(old: &[Value], me: &str, name: &str, about: &str, picture: &str) -> Value {
     let latest = old
@@ -1462,6 +1605,29 @@ where
 
 #[cfg(test)]
 mod tests {
+    use super::{open_bookmarks, bookmark_ids, bookmark_items};
+    use serde_json::json;
+    #[test]
+    fn bookmarks_round_trip_and_keep_other_items() {
+        let sk = [0x22u8; 32];
+        let me = crate::shopkey::pubkey_of(&sk).unwrap();
+        let conv = crate::wallet_link::conv_key(&sk, &me).unwrap();
+        let a = "a".repeat(64);
+        let b = "b".repeat(64);
+        let plain = serde_json::to_string(&vec![vec!["a".to_string(), "30402:x:y".into()], vec!["e".into(), a.clone()]]).unwrap();
+        let ev = json!({ "pubkey": me, "kind": 10003, "tags": [], "content": crate::wallet_link::nip44_encrypt(&plain, &conv, [7u8; 32]).unwrap() });
+        let items = open_bookmarks(Some(&ev), &sk, &me).unwrap();
+        assert_eq!(bookmark_ids(&items), vec![a.clone()]);
+        let more = bookmark_items(items.clone(), &b, true);
+        assert_eq!(bookmark_ids(&more), vec![a.clone(), b.clone()]);
+        let less = bookmark_items(more, &a, false);
+        assert_eq!(bookmark_ids(&less), vec![b]);
+        assert!(less.iter().any(|t| t[0] == "a"), "다른 앱 항목을 지우지 않는다");
+        let bad = json!({ "pubkey": me, "kind": 10003, "tags": [], "content": "not-nip44" });
+        assert!(open_bookmarks(Some(&bad), &sk, &me).is_err(), "못 푼 목록 위에는 쓰지 않는다");
+        assert!(open_bookmarks(None, &sk, &me).unwrap().is_empty());
+    }
+
     /// 🔴 가게 간판 열쇠와 사람 열쇠가 **같으면 안 된다.** 간판을 직원에게
     ///    맡기는 순간 그 사람이 내 이름으로 글을 쓸 수 있게 된다.
     #[test]
