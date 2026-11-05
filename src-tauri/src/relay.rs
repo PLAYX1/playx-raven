@@ -62,11 +62,19 @@ use std::sync::Mutex;
 /// 답은 「전부냐 아무것도 아니냐」가 아니었다. **레이븐 이야기만 남긴다.**
 /// 그 밖의 글은 지나가게 두되(중계는 한다) 디스크에 안 쓴다.
 /// 우리가 세상의 저장소일 이유는 없지만, 레이븐 이야기의 저장소일 이유는 있다.
-const KINDS: [i64; 6] = [30078, 30402, 40, 41, 42, 1];
+///       5 — 지우기 요청(NIP-09). ravencoin 표가 있는 것만(폰·데스크탑이 단다).
+///  0·3·10003 — 이름표·팔로우·북마크(NIP-01/02/51). **사람마다 하나만** 남는 글이다.
+///       이미 레이븐 이야기를 남긴 사람 것만 받는다(이름표는 ravencoin 표로도) — 남의 SNS 목록 창고가 되지 않게.
+///       11-06 GPT 지적: 이걸 안 받아서 우리 릴레이만 읽으면 이름이 안 뜨고 팔로우·북마크가 사라졌다.
+const KINDS: [i64; 10] = [30078, 30402, 40, 41, 42, 1, 5, 0, 3, 10003];
+
+/// 사람마다 하나만 남는 글(NIP-01 replaceable: 0·3·10000~19999). 같은 사람·같은 종류면 옛것을 지운다.
+const PERSON_KINDS: [i64; 3] = [0, 3, 10003];
+fn replaceable(kind: i64) -> bool { kind == 0 || kind == 3 || (10000..20000).contains(&kind) }
 
 /// 대화 글의 종류. 이 셋은 위의 가게 규칙(JSON·d 태그)을 적용하면 안 된다 —
 /// 사람이 쓴 글은 JSON 이 아니다.
-const TALK_KINDS: [i64; 4] = [40, 41, 42, 1];
+const TALK_KINDS: [i64; 5] = [40, 41, 42, 1, 5];
 
 /// 들고 있을 글의 최대 수. 넘치면 오래된 것부터 버린다.
 ///
@@ -242,6 +250,9 @@ fn smells_bad(e: &Value) -> Option<String> {
     if TALK_KINDS.contains(&kind) {
         return talk_smells_bad(e);
     }
+    if PERSON_KINDS.contains(&kind) {
+        return person_smells_bad(e);
+    }
     // ① 통째로 너무 크다. 가게 이름·전화·좌표·영업시간·메뉴를 다 합쳐도
     //    몇 KB 다. 그보다 크면 이건 정보가 아니라 짐이다.
     let size = serde_json::to_string(e).map(|s| s.len()).unwrap_or(0);
@@ -300,6 +311,44 @@ fn talk_smells_bad(e: &Value) -> Option<String> {
         return None;
     }
     Some("레이븐 이야기가 아니라서 저장하지 않습니다".into())
+}
+
+/// 이름표·팔로우·북마크를 **저장할** 것인가. 크기 한도 + 이미 레이븐 이야기를 남긴 사람(이름표는 ravencoin 표도 된다).
+fn person_smells_bad(e: &Value) -> Option<String> {
+    let size = serde_json::to_string(e).map(|s| s.len()).unwrap_or(0);
+    if size > MAX_EVENT_BYTES {
+        return Some(format!("글이 너무 큽니다({size}바이트)"));
+    }
+    let pk = e.get("pubkey").and_then(Value::as_str).unwrap_or("");
+    if known_author(pk) {
+        return None;
+    }
+    let tagged = e.get("tags").and_then(Value::as_array).map(|t| {
+        t.iter().any(|x| x.get(0).and_then(Value::as_str) == Some("t") && x.get(1).and_then(Value::as_str) == Some("ravencoin"))
+    }).unwrap_or(false);
+    if e.get("kind").and_then(Value::as_i64) == Some(0) && tagged {
+        return None;
+    }
+    Some("레이븐 이야기를 남긴 사람 것만 저장합니다".into())
+}
+
+/// 이 사람이 남긴 레이븐 이야기(글·방·이름표)가 이미 있나.
+fn known_author(pk: &str) -> bool {
+    if pk.is_empty() {
+        return false;
+    }
+    STORE
+        .lock()
+        .ok()
+        .and_then(|g| {
+            g.as_ref().map(|v| {
+                v.iter().any(|x| {
+                    x.get("pubkey").and_then(Value::as_str) == Some(pk)
+                        && matches!(x.get("kind").and_then(Value::as_i64), Some(0 | 1 | 40 | 41 | 42))
+                })
+            })
+        })
+        .unwrap_or(false)
 }
 
 /// 레이븐 이야기인가. 위 셋을 순서대로 본다.
@@ -400,7 +449,9 @@ fn store(e: Value) -> (bool, String) {
     if at > now + 900 {
         return (false, "invalid: 시각이 미래입니다".into());
     }
-    if at < now - 90 * 86_400 {
+    // 이름표·팔로우·북마크는 몇 달 안 고치는 게 보통이라 오래돼도 받는다(사람마다 하나라 쌓이지 않는다).
+    let person = PERSON_KINDS.contains(&e.get("kind").and_then(Value::as_i64).unwrap_or(-1));
+    if !person && at < now - 90 * 86_400 {
         return (false, "invalid: 너무 오래된 글입니다".into());
     }
     let kind = e.get("kind").and_then(Value::as_i64).unwrap_or(0);
@@ -418,7 +469,23 @@ fn store(e: Value) -> (bool, String) {
     let at = e.get("created_at").and_then(Value::as_i64).unwrap_or(0);
 
     with(|v| {
-        if (30000..40000).contains(&kind) {
+        if replaceable(kind) {
+            // 같은 사람의 더 새 이름표·목록이 있으면 이 글은 옛것이다.
+            let same = |x: &Value| x.get("kind").and_then(Value::as_i64) == Some(kind) && x.get("pubkey").and_then(Value::as_str) == Some(pk.as_str());
+            // NIP-01: 더 늦은 것이 이기고, 같은 시각이면 id 가 사전순으로 작은 것이 이긴다(GPT 2차 지적 — 도착 순서로 정하면 릴레이마다 달라진다).
+            let my_id = e.get("id").and_then(Value::as_str).unwrap_or("").to_string();
+            let wins_over_me = |x: &Value| {
+                let xa = x.get("created_at").and_then(Value::as_i64).unwrap_or(0);
+                xa > at || (xa == at && x.get("id").and_then(Value::as_str).unwrap_or("") < my_id.as_str())
+            };
+            if v.iter().any(|x| same(x) && wins_over_me(x)) {
+                return (true, "옛 글입니다".into());
+            }
+            if v.iter().any(|x| x.get("id") == e.get("id")) {
+                return (true, "이미 있습니다".into());
+            }
+            v.retain(|x| !same(x));
+        } else if (30000..40000).contains(&kind) {
             // 같은 자리에 더 새 글이 이미 있으면 이 글은 옛것이다.
             let newer = v.iter().any(|x| {
                 x.get("kind").and_then(Value::as_i64) == Some(kind)
@@ -735,6 +802,23 @@ mod tests {
         assert!(KINDS.contains(&41) && TALK_KINDS.contains(&41));
         let e = json!({ "kind": 41, "content": "{\"name\":\"방\"}", "tags": [["e", "a".repeat(64), "", "root"], ["t", "ravencoin"]] });
         assert_eq!(super::smells_bad(&e), None, "레이븐 표가 붙은 방 수정 글을 버린다");
+    }
+    /// 11-06: 이름표·팔로우·북마크·지우기 요청도 받는다 — 단 레이븐 이야기를 남긴 사람 것만, 사람마다 하나만.
+    #[test]
+    fn person_lists_are_kept_only_for_raven_people() {
+        use super::*;
+        for k in [0, 3, 5, 10003] { assert!(KINDS.contains(&k), "kind {k} 를 받는다"); }
+        assert!(replaceable(0) && replaceable(3) && replaceable(10003) && !replaceable(1) && !replaceable(30402));
+        let stranger = "9".repeat(64);
+        // 처음 보는 사람의 팔로우·북마크는 저장하지 않는다(남의 SNS 창고가 되지 않게).
+        assert!(person_smells_bad(&json!({ "kind": 3, "pubkey": stranger, "tags": [["p", "a".repeat(64)]], "content": "" })).is_some());
+        assert!(person_smells_bad(&json!({ "kind": 10003, "pubkey": stranger, "tags": [], "content": "x" })).is_some());
+        // 이름표는 ravencoin 표가 있으면 처음 보는 사람이어도 받는다(폰·데스크탑이 단다).
+        assert!(person_smells_bad(&json!({ "kind": 0, "pubkey": stranger, "tags": [["t", "ravencoin"]], "content": "{}" })).is_none());
+        assert!(person_smells_bad(&json!({ "kind": 0, "pubkey": stranger, "tags": [], "content": "{}" })).is_some());
+        // 지우기 요청은 대화 잣대 — ravencoin 표가 있어야 한다.
+        assert!(smells_bad(&json!({ "kind": 5, "pubkey": stranger, "tags": [["e", "a".repeat(64)], ["t", "ravencoin"]], "content": "" })).is_none());
+        assert!(smells_bad(&json!({ "kind": 5, "pubkey": stranger, "tags": [["e", "a".repeat(64)]], "content": "" })).is_some());
     }
     /// 🔴 종류만 막고 **내용은 안 막고 있었다**(제미나이 지적). 껍데기가
     /// 맞으면 누구든 사장 컴퓨터에 아무 글이나 남길 수 있었다.

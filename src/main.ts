@@ -5840,7 +5840,7 @@ async function doKeyMove(p: any) {
 let tkRoom = "";
 let tkMine = "";
 /** 지금 답장하려는 글. 입력칸 위에 「누구에게」를 보여 주고, 보내면 비운다. 방을 옮기면 버린다. */
-let tkReply: { id: string; pub: string; room: string; who: string; snip: string } | null = null;
+let tkReply: { id: string; pub: string; room: string; who: string; snip: string; root?: string } | null = null;
 /** 공개키 → 이름표. 없는 사람은 여기 없다 — **없는 이름을 지어내지 않는다.** */
 const tkNames = new Map<string, any>();
 
@@ -6432,7 +6432,15 @@ function tkPicOf(e: any): { cid: string; gateway: string; size: number } | null 
   // (damus·primal)에서 온 사진도 그러면 그려진다.
   const 남의것 = url.match(/\/ipfs\/([A-Za-z0-9]+)/)?.[1] || "";
   const 진짜 = cid || 남의것;
-  if (!진짜) return null;
+  if (!진짜) {
+    // 11-06: 폰·웹 RavenVault 와 다른 Nostr 앱은 사진을 Blossom(https)에 올린다 — CID 가 없다. 그 주소를 그대로 그린다(img-src https: 허용).
+    // 🔴 아무 https 주소나 자동으로 열면 글쓴이 서버가 읽는 사람의 IP·읽은 시각을 안다(GPT 2차 지적).
+    //    폰·웹 RavenVault 가 쓰는 공용 사진 서버(nostr.build)만 자동으로 그리고, 나머지는 본문 주소 그대로 둔다(눌러야 열린다).
+    let 아는곳 = false;
+    try { const h = new URL(url).hostname; 아는곳 = h === "nostr.build" || h.endsWith(".nostr.build"); } catch { 아는곳 = false; }
+    const 그림 = 아는곳 && /^image\//.test(뽑기("m")) && /^https:\/\/[^\s"'<>]{4,500}$/.test(url);
+    return 그림 ? { cid: "", gateway: url, size } : null;
+  }
   return { cid: 진짜, gateway: url || `https://ipfs.io/ipfs/${진짜}`, size };
 }
 
@@ -6460,7 +6468,7 @@ function tkStripPicUrl(content: string, cid: string): string {
  *    **왜 그런지**를 적고, 다시 받을 길과 인터넷 창으로 여는 길을 준다.
  */
 function tkPicHtml(p: { cid: string; gateway: string; size: number }): string {
-  const local = `http://127.0.0.1:8080/ipfs/${p.cid}`;
+  const local = p.cid ? `http://127.0.0.1:8080/ipfs/${p.cid}` : p.gateway;
   return (
     `<div class="picwrap" data-cid="${escapeHtml(p.cid)}" data-gw="${escapeHtml(p.gateway)}">` +
     `<div class="picwait">${copyHtml("사진을 받는 중…")}</div>` +
@@ -6501,7 +6509,7 @@ function tkWatchPics(box: HTMLElement) {
         w.innerHTML =
           `<div class="picwait">${copyHtml("사진을 받는 중…")}</div>` +
           `<img class="bubpic" alt="${t("사진")}" hidden ` +
-          `src="http://127.0.0.1:8080/ipfs/${escapeHtml(String(w.dataset.cid || ""))}?t=${Date.now()}" />`;
+          `src="${escapeHtml(w.dataset.cid ? `http://127.0.0.1:8080/ipfs/${String(w.dataset.cid)}?t=${Date.now()}` : String(w.dataset.gw || ""))}" />`;
         tkWatchPics(w.parentElement || w);
       };
       const web = w.querySelector("[data-picweb]") as HTMLElement | null;
@@ -6518,11 +6526,13 @@ function tkWatchPics(box: HTMLElement) {
     };
     // 🔴 **왜** 안 뜨는지를 갈라서 말한다. 원인이 다르면 할 일도 다르다.
     img.onerror = () =>
-      실패(t("이 컴퓨터의 IPFS 파일창고가 꺼져 있거나, 보낸 분이 컴퓨터를 끄셔서 사진이 어디에도 남아 있지 않습니다."));
+      실패(w.dataset.cid
+        ? t("이 컴퓨터의 IPFS 파일창고가 꺼져 있거나, 보낸 분이 컴퓨터를 끄셔서 사진이 어디에도 남아 있지 않습니다.")
+        : t("사진 서버에서 받지 못했습니다. 인터넷 연결을 확인해 주세요."));
     // 눌러서 크게 본다. 우리 창은 좁으니 인터넷 창에 맡긴다.
     img.onclick = (ev) => {
       ev.stopPropagation();
-      void openUrl(`http://127.0.0.1:8080/ipfs/${String(w.dataset.cid || "")}`);
+      void openUrl(w.dataset.cid ? `http://127.0.0.1:8080/ipfs/${String(w.dataset.cid)}` : String(w.dataset.gw || ""));
     };
     window.setTimeout(
       () => 실패(t("25초를 기다렸는데 아직 못 받았습니다. 보낸 분의 컴퓨터가 켜져 있어야 받을 수 있습니다.")),
@@ -6556,6 +6566,9 @@ function tkParentOf(e: any, roomId: string): string {
   const es = tags.filter((x) => Array.isArray(x) && x[0] === "e" && typeof x[1] === "string");
   const marked = es.find((x) => x[3] === "reply");
   if (marked) return String(marked[1]);
+  // NIP-10: 맨 위 글에 바로 단 답은 root 표 하나뿐이다(폰·11-06 이후 데스크탑). 방 글의 root 는 방이라 답글이 아니다.
+  const rootTag = es.find((x) => x[3] === "root");
+  if (rootTag && String(rootTag[1]) !== roomId) return String(rootTag[1]);
   // 옛 글: 표가 하나뿐이고 그게 방이면 답글이 아니다.
   const first = es[0];
   return first && String(first[1]) !== roomId && first[3] !== "root" ? String(first[1]) : "";
@@ -6675,7 +6688,7 @@ async function talkPaint() {
         //    빼고 — 사진을 바로 아래 그리므로 같은 말을 두 번 하는 셈이다.
         const pic = tkPicOf(e);
         const 본문 = pic
-          ? tkStripPicUrl(String(e.content || ""), pic.cid)
+          ? (pic.cid ? tkStripPicUrl(String(e.content || ""), pic.cid) : String(e.content || "").split("\n").filter((l) => l.trim() !== pic.gateway).join("\n").trim())
           : String(e.content || "");
 
         // ⑤ 🔴 **돈·주소가 적힌 글에는 그 자리에서 표시한다.** 늘 떠 있는
@@ -6758,7 +6771,9 @@ async function talkPaint() {
         const target = list.find((x) => String(x.id || "") === gid);
         if (!target) return;
         const pub = String(target.pubkey || "");
-        tkSetReply({ id: gid, pub, room: 읽은방, who: tkNameText(pub), snip: tkSnip(String(target.content || "")) });
+        // 모두에게 글의 답은 맨 위 글(root)을 같이 넘긴다(NIP-10) — 폰은 이 표로 한 글 아래 답을 모은다.
+        const 맨위 = 읽은방 ? "" : String((Array.isArray(target.tags) ? target.tags : []).find((x: any) => Array.isArray(x) && x[0] === "e" && x[3] === "root")?.[1] || "");
+        tkSetReply({ id: gid, pub, room: 읽은방, who: tkNameText(pub), snip: tkSnip(String(target.content || "")), root: 맨위 || undefined });
         box.querySelectorAll(".bubacts.on").forEach((x) => x.classList.remove("on"));
       };
     });
@@ -7085,7 +7100,7 @@ async function talkSend() {
   box.style.height = "auto";
   $("tk-note").textContent = "";
   try {
-    await invoke("talk_post", { text, room: tkRoom || null, replyTo: tkReply?.id ?? null, replyPub: tkReply?.pub ?? null });
+    await invoke("talk_post", { text, room: tkRoom || null, replyTo: tkReply?.id ?? null, replyPub: tkReply?.pub ?? null, replyRoot: tkReply?.root ?? null });
     tkSetReply(null);
     // 또렷해진다. 「올렸습니다」 같은 알림은 안 띄운다 — 풍선이 곧 답이다.
     임시?.classList.remove("pending");
@@ -7167,6 +7182,7 @@ async function talkSendPhoto(text: string) {
       room: tkRoom || null,
       replyTo: tkReply?.id ?? null,
       replyPub: tkReply?.pub ?? null,
+      replyRoot: tkReply?.root ?? null,
     });
     tkSetReply(null);
     box.value = "";

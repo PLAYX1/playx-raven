@@ -242,8 +242,9 @@ pub fn talk_me() -> Result<Value, String> {
 
 /// 내 이름표를 정한다.
 ///
-/// ⚠️ 이름표에는 **표(`t`)를 안 붙인다.** 이름표는 레이븐 이야기가 아니라
-///    「나」다. 표를 붙이면 이야기 목록에 이름표가 섞여 나온다.
+/// 11-06: 이름표에도 `t=ravencoin` 표를 단다(폰·웹과 같게). 우리 릴레이가 처음 보는 사람의 이름표를 이 표로 알아보고 남긴다.
+///    목록 질의는 모두 kind 를 지정하므로 이야기 목록에 이름표가 섞이지 않는다.
+/// 🔴 kind 0 은 통째로 바뀐다 — 옛 이름표를 먼저 읽어 다른 앱·폰이 넣은 칸(rvn_address·lud16…)을 지우지 않는다(GPT 지적). 못 읽으면 올리지 않는다.
 #[tauri::command]
 pub async fn talk_profile_set(
     name: String,
@@ -258,15 +259,37 @@ pub async fn talk_profile_set(
         return Err("이름이 너무 깁니다. 40자 아래로 줄여 주세요.".into());
     }
     let sk = key()?;
-    let body = json!({
-        "name": name,
-        "about": about.trim(),
-        "picture": picture.trim(),
-    })
-    .to_string();
-    let ev = crate::shopkey::sign_with(&sk, KIND_PROFILE, json!([]), &body, now())?;
+    let me = crate::shopkey::pubkey_of(&sk)?;
+    let old = crate::nostrpub::nostr_query_authors(vec![KIND_PROFILE], vec![me.clone()], 5)
+        .await
+        .map_err(|e| format!("지금 이름표를 읽지 못해 올리지 않았습니다(다른 칸이 지워지지 않게): {e}"))?;
+    let body = merged_profile(&old, &me, name, about.trim(), picture.trim()).to_string();
+    let ev = crate::shopkey::sign_with(&sk, KIND_PROFILE, json!([["t", TAG]]), &body, now())?;
     crate::nostrpub::nostr_publish(ev.clone()).await?;
     Ok(ev)
+}
+
+/// 가장 늦은 내 이름표 위에 이름·소개·그림만 고친다. 다른 칸은 그대로 둔다.
+fn merged_profile(old: &[Value], me: &str, name: &str, about: &str, picture: &str) -> Value {
+    let latest = old
+        .iter()
+        .filter(|e| e.get("kind").and_then(Value::as_i64) == Some(KIND_PROFILE) && e.get("pubkey").and_then(Value::as_str) == Some(me))
+        .max_by_key(|e| e.get("created_at").and_then(Value::as_i64).unwrap_or(0));
+    let mut body = latest
+        .and_then(|e| e.get("content").and_then(Value::as_str))
+        .and_then(|c| serde_json::from_str::<Value>(c).ok())
+        .filter(Value::is_object)
+        .unwrap_or_else(|| json!({}));
+    let o = body.as_object_mut().expect("object");
+    o.insert("name".into(), json!(name));
+    o.insert("display_name".into(), json!(name));
+    o.insert("about".into(), json!(about));
+    if picture.is_empty() {
+        o.remove("picture");
+    } else {
+        o.insert("picture".into(), json!(picture));
+    }
+    body
 }
 
 /// 여러 사람의 이름표를 한 번에 가져온다. `{ 공개키: {name, about, picture} }`.
@@ -358,6 +381,23 @@ pub fn recovery_status() -> Value {
 ///    `e` 표로 찾기 때문이다. 부모 글만 가리키면 쓴 사람 화면에서도 사라진다.
 /// 🔴 `p` 가 없으면 상대는 자기 글에 답이 달린 줄 모른다(세상 모든 Nostr 앱이 그 표로 알림을 만든다).
 fn reply_tags(room: &Option<String>, parent: &str, reply_pub: &Option<String>) -> Vec<Value> {
+    reply_tags_in(room, parent, reply_pub, &None)
+}
+
+/// 답글 표. 방 밖(모두에게)은 NIP-10 대로 — 맨 위 글에 바로 단 답은 `[e 맨위 "" root]`,
+/// 답에 다시 단 답은 `[e 맨위 "" root][e 부모 "" reply]`(11-06 폰과 맞춤 · GPT 지적: 예전에는 reply 만 달아 맨 위 글을 잃었다).
+fn reply_tags_in(room: &Option<String>, parent: &str, reply_pub: &Option<String>, thread_root: &Option<String>) -> Vec<Value> {
+    if room.is_none() {
+        let mut t = match thread_root.as_deref().filter(|r| !r.is_empty() && *r != parent) {
+            Some(r) => vec![json!(["e", r, "", "root"]), json!(["e", parent, "", "reply"])],
+            None => vec![json!(["e", parent, "", "root"])],
+        };
+        t.push(json!(["t", TAG]));
+        if let Some(pk) = reply_pub {
+            t.push(json!(["p", pk]));
+        }
+        return t;
+    }
     let mut t = vec![json!(["e", parent, "", "reply"])];
     if let Some(r) = room {
         if r != parent {
@@ -378,11 +418,13 @@ pub async fn talk_post(
     room: Option<String>,
     reply_to: Option<String>,
     reply_pub: Option<String>,
+    reply_root: Option<String>,
 ) -> Result<Value, String> {
     let text = text.trim().to_string();
     if text.is_empty() {
         return Err("쓸 내용이 없습니다.".into());
     }
+    let reply_root = reply_root.filter(|r| r.len() == 64 && r.chars().all(|c| c.is_ascii_hexdigit()));
     // 🔴 **자산 방이면 가진 사람만 쓴다.**
     //
     //    ⚠️ 모를 때는 막지 않는다. 노드가 장부를 다시 훑는 중이면
@@ -413,7 +455,7 @@ pub async fn talk_post(
         (_, Some(id)) => (
             // 방 안의 답글은 방 글이고, 밖의 답글은 그냥 글이다.
             if room.is_some() { KIND_ROOM_MSG } else { KIND_NOTE },
-            Value::Array(reply_tags(&room, id, &reply_pub)),
+            Value::Array(reply_tags_in(&room, id, &reply_pub, &reply_root)),
         ),
         (Some(id), None) => (KIND_ROOM_MSG, json!([["e", id, "", "root"], ["t", TAG]])),
         (None, None) => (KIND_NOTE, json!([["t", TAG]])),
@@ -608,7 +650,9 @@ pub async fn talk_photo_post(
     room: Option<String>,
     reply_to: Option<String>,
     reply_pub: Option<String>,
+    reply_root: Option<String>,
 ) -> Result<Value, String> {
+    let reply_root = reply_root.filter(|r| r.len() == 64 && r.chars().all(|c| c.is_ascii_hexdigit()));
     let text = text.unwrap_or_default().trim().to_string();
     if text.chars().count() > PHOTO_TEXT_MAX {
         return Err(format!(
@@ -715,7 +759,7 @@ pub async fn talk_photo_post(
     ]);
     let (kind, tags) = match (&room, &reply_to) {
         (_, Some(id)) => {
-            let mut t = reply_tags(&room, id, &reply_pub);
+            let mut t = reply_tags_in(&room, id, &reply_pub, &reply_root);
             t.push(imeta);
             t.push(json!(["ipfs", cid]));
             (
@@ -2078,10 +2122,25 @@ mod room_meta_tests {
         assert!(tags.contains(&json!(["p", "pk1"])));
         assert!(tags.contains(&json!(["t", TAG])));
         // 방 밖의 답글에는 root 가 없다.
+        // 방 밖: 맨 위 글에 바로 단 답은 root 하나(NIP-10), 답의 답은 root + reply.
         let plain = reply_tags(&None, "parent1", &None);
-        assert!(!plain.iter().any(|t| t[3] == json!("root")));
+        assert_eq!(plain[0], json!(["e", "parent1", "", "root"]));
+        assert!(!plain.iter().any(|t| t[3] == json!("reply")));
         assert!(!plain.iter().any(|t| t[0] == json!("p")));
+        let deep = reply_tags_in(&None, "parent1", &Some("pk1".into()), &Some("top1".into()));
+        assert_eq!(deep[0], json!(["e", "top1", "", "root"]));
+        assert_eq!(deep[1], json!(["e", "parent1", "", "reply"]));
+        assert!(deep.contains(&json!(["p", "pk1"])) && deep.contains(&json!(["t", TAG])));
         // 방 글 자체에 다는 답이면 같은 표를 두 번 달지 않는다.
+        // 이름표: 다른 칸은 남고 이름·소개·그림만 바뀐다.
+        let old = vec![json!({ "kind": 0, "pubkey": "me", "created_at": 5, "content": "{\"name\":\"옛\",\"lud16\":\"a@b\",\"rvn_address\":\"Rx\"}" }),
+                       json!({ "kind": 0, "pubkey": "me", "created_at": 1, "content": "{\"name\":\"더 옛\"}" })];
+        let m = merged_profile(&old, "me", "새", "소개", "");
+        assert_eq!(m["name"], json!("새"));
+        assert_eq!(m["lud16"], json!("a@b"));
+        assert_eq!(m["rvn_address"], json!("Rx"));
+        assert!(m.get("picture").is_none());
+        assert_eq!(merged_profile(&[], "me", "a", "", "p")["picture"], json!("p"));
         let same = reply_tags(&Some("room1".into()), "room1", &None);
         assert_eq!(same.iter().filter(|t| t[0] == json!("e")).count(), 1);
     }

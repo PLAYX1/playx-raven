@@ -503,6 +503,7 @@ export const DESKTOP_COPY: Record<string, [string, string, string]> = {
   "1시간 30분": ["1 hr 30 min", "1時間30分", "1 小时 30 分钟"],
   "1주": ["1 week", "1週間", "1 周"],
   "1회 차감": ["Use 1 visit", "1回消化", "扣 1 次"],
+  "사진 서버에서 받지 못했습니다. 인터넷 연결을 확인해 주세요.": ["Could not get it from the photo server. Check your internet connection.", "写真サーバーから受け取れませんでした。インターネット接続を確認してください。", "无法从图片服务器获取。请检查网络连接。"],
   "25초를 기다렸는데 아직 못 받았습니다. 보낸 분의 컴퓨터가 켜져 있어야 받을 수 있습니다.": ["Waited 25 seconds, but nothing has arrived yet. The sender's computer must be on for you to receive it.", "25秒待ちましたが、まだ受け取れていません。送った方のパソコンがついていないと受け取れません。", "已等待 25 秒，仍未收到。发送方的电脑必须开着才能收到。"],
   "2시간": ["2 hours", "2時間", "2 小时"],
   "2일": ["2 days", "2日間", "2 天"],

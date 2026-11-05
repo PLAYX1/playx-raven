@@ -559,7 +559,7 @@ pub async fn fan_announce(
     let results = join_all(
         targets
             .iter()
-            .map(|(_, id, _)| crate::talk::talk_post(body.clone(), Some(id.clone()), None, None)),
+            .map(|(_, id, _)| crate::talk::talk_post(body.clone(), Some(id.clone()), None, None, None)),
     )
     .await;
 
