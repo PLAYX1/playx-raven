@@ -1,5 +1,19 @@
 # 변경 기록
 
+## 0.9.13
+
+### 한국어
+
+- **북마크:** 「모두에게」 글을 누르고 「저장」하면 폰·웹 레이븐볼트와 같은 북마크 목록에 들어갑니다. 12단어 열쇠로 잠가 두어 나만 봅니다. 더 보기 → 북마크에서 모아 봅니다.
+- **받기 주소 연결:** 더 보기 → 받기 주소 연결에서 이 컴퓨터 지갑의 새 받기 주소를 이름표에 서명해 겁니다. 그러면 폰·웹·데스크탑에서 내 글에 「레이븐코인 보내기」가 나옵니다.
+- **글 링크 복사:** 「모두에게」 글의 링크를 복사해 카카오톡 등으로 보낼 수 있습니다. 앱이 없어도 열리고, 서명을 확인한 글만 보여 줍니다.
+
+### English
+
+- **Bookmarks:** click a public post and choose "Save" to add it to the same bookmark list as the phone and web wallet. It is locked with your 12-word key, so only you can see it. Open it from More → Bookmarks.
+- **Link receive address:** More → Link receive address signs a new receive address from this computer's wallet onto your name tag, so others see "Send Ravencoin" on your posts on phone, web and desktop.
+- **Copy post link:** copy a link to a public post to share in any chat app. It opens without the app and shows only signature-checked posts.
+
 ## 0.9.12
 
 ### 한국어
