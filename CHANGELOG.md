@@ -1,5 +1,17 @@
 # 변경 기록
 
+## 0.9.11
+
+### 한국어
+
+- **이야기 글이 빨리 올라갑니다:** 바깥 릴레이 한 곳이 받으면 바로 「올렸어요」가 뜨고, 나머지는 뒤에서 계속 올립니다. 느린 곳 때문에 몇 초씩 멈추던 것이 없어졌습니다.
+- PLAY X가 늘 켜 두는 릴레이를 더했습니다. 처음 쓰는 사람의 글이 일부 공개 릴레이에서 사라지던 문제를 막습니다. 폰·웹 레이븐볼트와 같은 곳을 씁니다.
+
+### English
+
+- **Posts go out faster:** as soon as one outside relay accepts a post you see "Posted", and the rest keep sending in the background.
+- Added the always-on PLAY X relay, so first posts from new users no longer vanish from some public relays. Phone and web RavenVault use the same relay.
+
 ## 0.9.10
 
 ### 한국어

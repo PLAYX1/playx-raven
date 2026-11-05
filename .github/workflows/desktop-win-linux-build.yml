@@ -8,7 +8,7 @@
 #     업데이트는 이번에 켜지 않는다(src-tauri/src/update_policy.rs 가 darwin- 만 허용).
 #
 # 정식 공개 흐름은 release.yml 이고, 이 파일은 그것을 바꾸지 않는다.
-name: 윈도우·리눅스 시험 빌드 (서명 없음)
+name: 윈도우·리눅스·라즈베리파이 시험 빌드 (서명 없음)
 
 on:
   workflow_dispatch:
@@ -16,7 +16,8 @@ on:
       targets:
         description: "만들 대상"
         type: choice
-        options: [both, windows, linux]
+        # pi = 라즈베리파이 4·5 (64비트 ARM, 라즈베리파이 OS trixie 이상)
+        options: [both, windows, linux, pi, all]
         default: both
 
 permissions:
@@ -34,6 +35,9 @@ env:
   RAVEN_WIN_SHA256: 7b39dface10966fc92703eacd9e562cd61d9c18f1fcad5dcbc196742e0ff1752
   RAVEN_LINUX_FILE: raven-4.8.0-225491298-x86_64-linux-gnu.tar.gz
   RAVEN_LINUX_SHA256: cb359b6a5b42e47068cd655231484fcc763d2f79eae5ea318b029c704a4dc020
+  # 라즈베리파이(aarch64): GitHub 자산 digest 와 공식 .sha256sum 이 같다(2026-11-05 대조).
+  RAVEN_PI_FILE: raven-4.8.0-225491298-aarch64-linux-gnu.tar.gz
+  RAVEN_PI_SHA256: 7283f63f56d7ef86a8b3c42520537299db694aad2bba61a158c25d00f53cf539
   # kubo 0.43.0 공식 배포 (https://github.com/ipfs/kubo/releases/tag/v0.43.0)
   # SHA-512: 공식 .sha512 파일 내용과 같다(2026-10-12 13:24 KST 대조).
   KUBO_BASE: https://github.com/ipfs/kubo/releases/download/v0.43.0
@@ -41,6 +45,9 @@ env:
   KUBO_WIN_SHA512: 0486721fc406d36c9d70d16dc3984e70c50d5f1d1c890de3864a6904564080adb3f73546162ad30a8e1ee43024a18bf900fbda2b6c131197351ff2e8b9782178
   KUBO_LINUX_FILE: kubo_v0.43.0_linux-amd64.tar.gz
   KUBO_LINUX_SHA512: 6af21cd24a307d94326807b3d3827064c74fb7122f83b6940af250e6ae40da250e0ec0e1f3551256b78cd204623ed56c32ce735bbe28bdcc787b36943c52458a
+  # 라즈베리파이(arm64): 공식 .sha512 파일 내용 그대로(2026-11-05 대조).
+  KUBO_PI_FILE: kubo_v0.43.0_linux-arm64.tar.gz
+  KUBO_PI_SHA512: aae6c766ec2436f27bbd2d6ab5f8de7d2ced4dc83abc5b54b17bd58a80c28f1ea2e38840305e22f08bd01c55cf8263745675da1bbda2ac0bcde268e9e61e3818
   # 맥에서 cargo check 를 통과시킨 것과 같은 판. 올릴 때는 여기만 바꾼다.
   RUST_TOOLCHAIN: 1.98.1
   CARGO_TERM_COLOR: never
@@ -50,11 +57,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        label: [windows, linux]
+        label: [windows, linux, pi]
         # 잡 단위 if 에서는 matrix 를 못 쓴다 — 고른 대상만 남기도록 여기서 뺀다.
         exclude:
-          - label: ${{ inputs.targets == 'linux' && 'windows' || 'none' }}
-          - label: ${{ inputs.targets == 'windows' && 'linux' || 'none' }}
+          - label: ${{ (inputs.targets == 'linux' || inputs.targets == 'pi') && 'windows' || 'none' }}
+          - label: ${{ (inputs.targets == 'windows' || inputs.targets == 'pi') && 'linux' || 'none' }}
+          - label: ${{ (inputs.targets == 'windows' || inputs.targets == 'linux' || inputs.targets == 'both') && 'pi' || 'none' }}
         include:
           - label: windows
             os: windows-latest
@@ -67,6 +75,12 @@ jobs:
             os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             bundles: appimage,deb
+          # 라즈베리파이판 — GitHub 의 ARM 러너(공개 저장소 무료)에서 바로 만든다(교차 빌드 아님).
+          # ⚠️ 24.04 에서 만들어 glibc 2.39 이상 필요 = 라즈베리파이 OS trixie(데비안 13) 이상.
+          - label: pi
+            os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            bundles: deb,appimage
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     defaults:
@@ -87,7 +101,7 @@ jobs:
           persist-credentials: false
 
       - name: 리눅스 재료 (Tauri v2 공식 목록)
-        if: matrix.label == 'linux'
+        if: runner.os == 'Linux'
         run: |
           set -euo pipefail
           sudo apt-get update
@@ -127,6 +141,8 @@ jobs:
           }
           if [ "${{ matrix.label }}" = windows ]; then
             RF=$RAVEN_WIN_FILE; RW=$RAVEN_WIN_SHA256; KF=$KUBO_WIN_FILE; KW=$KUBO_WIN_SHA512; EXT=.exe
+          elif [ "${{ matrix.label }}" = pi ]; then
+            RF=$RAVEN_PI_FILE; RW=$RAVEN_PI_SHA256; KF=$KUBO_PI_FILE; KW=$KUBO_PI_SHA512; EXT=
           else
             RF=$RAVEN_LINUX_FILE; RW=$RAVEN_LINUX_SHA256; KF=$KUBO_LINUX_FILE; KW=$KUBO_LINUX_SHA512; EXT=
           fi

@@ -12,7 +12,10 @@
 
 use serde_json::{json, Value};
 
-const RELAYS: [&str; 3] = [
+const RELAYS: [&str; 4] = [
+    // PLAY X 가 늘 켜 두는 릴레이(N100). 새 사용자 글을 지우지 않고 남긴다 —
+    // damus·nos.lol 은 새 열쇠의 글을 OK 라 답하고 버리는 일이 있었다(11-05 실측).
+    "wss://playx.taile277f6.ts.net/relay",
     "wss://relay.damus.io",
     "wss://nos.lol",
     "wss://relay.primal.net",
@@ -52,19 +55,39 @@ pub async fn nostr_publish(event: Value) -> Result<Value, String> {
     //    그 화면은 아무도 안 쓴다.
     //
     //    한꺼번에 물으면 최대 7초다 — 제일 느린 한 곳만큼만 기다린다.
-    use futures_util::future::join_all;
-    let urls = targets();
-    let results = join_all(urls.iter().map(|u| send_one(u, &msg))).await;
-    for (url, r) in urls.into_iter().zip(results) {
+    //
+    //    🔴 그리고 **전부 끝날 때까지 기다리지도 않는다.** 내 컴퓨터 안 릴레이와
+    //    바깥 한 곳이 받으면 바로 "올렸어요" 다. 나머지는 뒤에서 계속 올린다
+    //    (폰·웹과 같은 규칙). 느린 한 곳 때문에 글쓰기가 6초씩 멈추지 않는다.
+    use futures_util::stream::{FuturesUnordered, StreamExt};
+    let local = targets().into_iter().next().unwrap_or_default();
+    let mut runs: FuturesUnordered<_> = targets()
+        .into_iter()
+        .map(|url| {
+            let msg = msg.clone();
+            async move { let r = send_one(&url, &msg).await; (url, r) }
+        })
+        .collect();
+    let mut outside_ok = false;
+    while let Some((url, r)) = runs.next().await {
         match r {
-            Ok(()) => ok.push(url.clone()),
+            Ok(()) => {
+                if url != local { outside_ok = true; }
+                ok.push(url);
+            }
             Err(e) => failed.push(json!({ "relay": url, "why": e })),
         }
+        if outside_ok { break; }
+    }
+    if !runs.is_empty() {
+        let left = runs.len();
+        tokio::spawn(async move { while runs.next().await.is_some() {} });
+        failed.push(json!({ "relay": format!("나머지 {left}곳"), "why": "아직 답이 없어요(뒤에서 계속 올리는 중)." }));
     }
     if ok.is_empty() {
         return Err(format!(
             "{}곳 모두 받지 않았습니다. 인터넷이 되는지 확인해 주세요. 마지막 이유: {}",
-            RELAYS.len(),
+            RELAYS.len() + 1,
             failed
                 .last()
                 .and_then(|f| f["why"].as_str())
