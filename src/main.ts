@@ -13951,9 +13951,9 @@ async function loadInbox() {
           .map((m) => {
             const n = m.notice?.playx_notice || {};
             return `<div class="notice">
-              <h4>${n.title || m.channel || "공지"}</h4>
-              ${n.body ? `<div>${n.body}</div>` : `<div class="meta">내용을 불러오지 못했습니다</div>`}
-              <div class="when">${m.channel || ""}${m.time ? " · " + ago(m.time) : ""}</div>
+              <h4>${escapeHtml(String(n.title || m.channel || "공지"))}</h4>
+              ${n.body ? `<div style="white-space:pre-wrap">${escapeHtml(String(n.body))}</div>` : `<div class="meta">내용을 불러오지 못했습니다</div>`}
+              <div class="when">${escapeHtml(String(m.channel || ""))}${m.time ? " · " + escapeHtml(ago(m.time)) : ""}</div>
             </div>`;
           })
           .join("")

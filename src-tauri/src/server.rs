@@ -753,6 +753,22 @@ async fn api_claim(
         .ok()
         .and_then(|m| m.get(&body.id).and_then(|o| o.get("rvn")).and_then(Value::as_f64))
         .unwrap_or(0.0);
+    // 11-07 감사: 없는 상품 번호로도 새 주소를 만들고 주문 장부를 다시 썼다(인증 없는 자리라 끝없이 늘릴 수 있었다).
+    //   → 가게가 올린 상품일 때만, 가게 전체로 1분에 30건까지(미결제 신청은 지우지 않으므로 총량 제한은 두지 않는다).
+    let listed = body.id.len() <= 128 && state.offers.lock().map(|m| m.contains_key(&body.id)).unwrap_or(false);
+    if !listed {
+        return (StatusCode::NOT_FOUND, Json(json!({ "error": "지금 파는 상품이 아닙니다." })));
+    }
+    {
+        static CLAIM_TIMES: std::sync::Mutex<std::collections::VecDeque<std::time::Instant>> = std::sync::Mutex::new(std::collections::VecDeque::new());
+        let mut q = CLAIM_TIMES.lock().unwrap_or_else(|e| e.into_inner());
+        let now = std::time::Instant::now();
+        while q.front().is_some_and(|t| now.duration_since(*t).as_secs() >= 60) { q.pop_front(); }
+        if q.len() >= 30 {
+            return (StatusCode::TOO_MANY_REQUESTS, Json(json!({ "error": "주문이 몰리고 있습니다. 1분 뒤에 다시 해 주세요." })));
+        }
+        q.push_back(now);
+    }
 
     let address = match crate::raven::new_address(format!("sell:{}", body.id)).await {
         Ok(a) => a,
@@ -1555,26 +1571,37 @@ async fn ipfs_relay(
         .build()
         .unwrap_or_default();
 
+    // 11-07 감사: 인증 없는 자리라 큰 CID 를 동시에 여럿 부르면 메모리가 바닥난다 → 동시 4개·한 번 32MiB 까지만.
+    const IPFS_RELAY_MAX: usize = 32 * 1024 * 1024;
+    static IPFS_RELAY_SLOTS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(4);
+    let Ok(_permit) = IPFS_RELAY_SLOTS.try_acquire() else {
+        return (StatusCode::SERVICE_UNAVAILABLE, relay_headers("text/plain".to_string()), Vec::new());
+    };
     match client.get(&url).send().await {
-        Ok(r) if r.status().is_success() => {
+        Ok(mut r) if r.status().is_success() => {
             let kind = r
                 .headers()
                 .get(reqwest::header::CONTENT_TYPE)
                 .and_then(|v| v.to_str().ok())
                 .unwrap_or("application/octet-stream")
                 .to_string();
-            match r.bytes().await {
-                Ok(b) => (
-                    StatusCode::OK,
-                    relay_headers(kind),
-                    b.to_vec(),
-                ),
-                Err(_) => (
-                    StatusCode::BAD_GATEWAY,
-                    relay_headers("text/plain".to_string()),
-                    Vec::new(),
-                ),
+            if r.content_length().is_some_and(|n| n as usize > IPFS_RELAY_MAX) {
+                return (StatusCode::PAYLOAD_TOO_LARGE, relay_headers("text/plain".to_string()), Vec::new());
             }
+            let mut body: Vec<u8> = Vec::new();
+            loop {
+                match r.chunk().await {
+                    Ok(Some(c)) => {
+                        if body.len() + c.len() > IPFS_RELAY_MAX {
+                            return (StatusCode::PAYLOAD_TOO_LARGE, relay_headers("text/plain".to_string()), Vec::new());
+                        }
+                        body.extend_from_slice(&c);
+                    }
+                    Ok(None) => break,
+                    Err(_) => return (StatusCode::BAD_GATEWAY, relay_headers("text/plain".to_string()), Vec::new()),
+                }
+            }
+            (StatusCode::OK, relay_headers(kind), body)
         }
         _ => (
             StatusCode::NOT_FOUND,
@@ -2582,7 +2609,7 @@ async fn api_order(
 
 /// 릴레이로 붙는 자리. 웹소켓으로 올라탄다.
 async fn relay_upgrade(ws: axum::extract::ws::WebSocketUpgrade) -> impl IntoResponse {
-    ws.on_upgrade(crate::relay::serve)
+    ws.max_message_size(512 * 1024).max_frame_size(512 * 1024).on_upgrade(crate::relay::serve)
 }
 
 #[derive(serde::Deserialize)]

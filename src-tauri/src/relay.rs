@@ -524,9 +524,18 @@ fn store(e: Value) -> (bool, String) {
             return (true, "이미 있습니다".into());
         }
         v.push(e.clone());
-        if v.len() > MAX_EVENTS {
-            let cut = v.len() - MAX_EVENTS;
-            v.drain(0..cut);
+        // 11-07 감사: 오래된 것부터 자르면 한 사람이 재접속하며 5,000개를 채워 남의 글(가게 공지 포함)을 모두 밀어낸다.
+        //   → 넘칠 때는 **가장 많이 쓴 사람의 가장 오래된 글**부터 뺀다. 한 열쇠의 도배는 자기 글만 밀어낸다.
+        while v.len() > MAX_EVENTS {
+            let mut counts: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
+            for x in v.iter() {
+                *counts.entry(x.get("pubkey").and_then(Value::as_str).unwrap_or("")).or_default() += 1;
+            }
+            let top = counts.into_iter().max_by_key(|(_, n)| *n).map(|(k, _)| k.to_string()).unwrap_or_default();
+            match v.iter().position(|x| x.get("pubkey").and_then(Value::as_str).unwrap_or("") == top) {
+                Some(i) => { v.remove(i); }
+                None => { v.remove(0); }
+            }
         }
         (true, String::new())
     })
@@ -620,6 +629,28 @@ impl Drop for ConnSlot {
     }
 }
 
+/// 11-07 감사: 연결마다 200개 제한은 다시 붙으면 풀린다 → 열쇠마다 한 시간 200개를 연결과 상관없이 센다.
+const AUTHOR_PER_HOUR: u32 = 200;
+fn author_budget_ok(pubkey: &str) -> bool {
+    use std::sync::Mutex;
+    static BUDGET: std::sync::OnceLock<Mutex<std::collections::HashMap<String, (std::time::Instant, u32)>>> = std::sync::OnceLock::new();
+    let mut m = BUDGET.get_or_init(Default::default).lock().unwrap_or_else(|e| e.into_inner());
+    let now = std::time::Instant::now();
+    if m.len() > 20_000 {
+        m.retain(|_, (at, _)| now.duration_since(*at).as_secs() < 3600);
+    }
+    let slot = m.entry(pubkey.to_string()).or_insert((now, 0));
+    if now.duration_since(slot.0).as_secs() >= 3600 {
+        *slot = (now, 0);
+    }
+    slot.1 += 1;
+    slot.1 <= AUTHOR_PER_HOUR
+}
+
+/// 11-07 감사: 말 없는 연결이 자리 64개를 영영 붙잡지 않게 — 60초마다 ping, 150초 동안 아무것도(pong 포함) 안 오면 끊는다.
+const PING_EVERY_SECS: u64 = 60;
+const SILENT_CLOSE_SECS: u64 = 150;
+
 pub async fn serve(mut ws: WebSocket) {
     let Some(_slot) = ConnSlot::take() else {
         let _ = ws
@@ -638,9 +669,19 @@ pub async fn serve(mut ws: WebSocket) {
     let mut pair_times: std::collections::VecDeque<std::time::Instant> = Default::default();
     let mut subs: Vec<(String, Vec<Value>)> = Vec::new();
     let mut rx = live().subscribe();
+    let mut heard = std::time::Instant::now();
+    let mut ping = tokio::time::interval(std::time::Duration::from_secs(PING_EVERY_SECS));
+    ping.tick().await;
     loop {
         let msg = tokio::select! {
-            m = ws.recv() => m,
+            m = ws.recv() => { heard = std::time::Instant::now(); m },
+            _ = ping.tick() => {
+                if heard.elapsed().as_secs() >= SILENT_CLOSE_SECS || ws.send(Message::Ping(Vec::new().into())).await.is_err() {
+                    let _ = ws.send(Message::Close(None)).await;
+                    return;
+                }
+                continue;
+            }
             pushed = rx.recv() => {
                 match pushed {
                     Ok(e) => {
@@ -686,7 +727,7 @@ pub async fn serve(mut ws: WebSocket) {
                     pair_times.len() > PAIR_PER_MINUTE
                 } else {
                     sent += 1;
-                    sent > 200
+                    sent > 200 || !author_budget_ok(e.get("pubkey").and_then(Value::as_str).unwrap_or(""))
                 };
                 if limited {
                     let _ = ws
@@ -958,7 +999,7 @@ mod tests {
 
         let app = axum::Router::new().route(
             "/api/relay",
-            axum::routing::get(|ws: axum::extract::ws::WebSocketUpgrade| async { ws.on_upgrade(serve) }),
+            axum::routing::get(|ws: axum::extract::ws::WebSocketUpgrade| async { ws.max_message_size(512 * 1024).max_frame_size(512 * 1024).on_upgrade(serve) }),
         );
         let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = l.local_addr().unwrap();

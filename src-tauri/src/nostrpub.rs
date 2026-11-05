@@ -524,7 +524,7 @@ async fn read_one_eose(url: &str, req: &str, sub: &str) -> Result<(Vec<Value>, b
         if a.get(1).and_then(Value::as_str) != Some(sub) { continue; }
         match a.first().and_then(Value::as_str) {
             Some("EOSE") => { eose = true; break; }
-            Some("EVENT") => if let Some(e) = a.get(2) { out.push(e.clone()); },
+            Some("EVENT") => if let Some(e) = a.get(2).filter(|e| crate::relay::verify(e)) { out.push(e.clone()); },
             Some("CLOSED") => break,
             _ => {}
         }
@@ -574,7 +574,7 @@ async fn read_one(url: &str, req: &str, sub: &str) -> Result<Vec<Value>, String>
         if a.first().and_then(Value::as_str) == Some("EVENT")
             && a.get(1).and_then(Value::as_str) == Some(sub)
         {
-            if let Some(e) = a.get(2) {
+            if let Some(e) = a.get(2).filter(|e| crate::relay::verify(e)) {
                 out.push(e.clone());
             }
         }
