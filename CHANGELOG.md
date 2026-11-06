@@ -7,12 +7,18 @@
 - **북마크:** 「모두에게」 글을 누르고 「저장」하면 폰·웹 레이븐볼트와 같은 북마크 목록에 들어갑니다. 12단어 열쇠로 잠가 두어 나만 봅니다. 더 보기 → 북마크에서 모아 봅니다.
 - **받기 주소 연결:** 더 보기 → 받기 주소 연결에서 이 컴퓨터 지갑의 새 받기 주소를 이름표에 서명해 겁니다. 그러면 폰·웹·데스크탑에서 내 글에 「레이븐코인 보내기」가 나옵니다.
 - **글 링크 복사:** 「모두에게」 글의 링크를 복사해 카카오톡 등으로 보낼 수 있습니다. 앱이 없어도 열리고, 서명을 확인한 글만 보여 줍니다.
+- **팔로우:** 글쓴이를 팔로우하고 「팔로우만 보기」로 그 사람들 글만 모아 봅니다. 폰·웹과 같은 팔로우 목록입니다.
+- **보안 강화:** 릴레이에서 받은 글·이름표는 서명을 확인한 것만 씁니다(남의 이름표에 다른 받기 주소를 끼워 넣는 길을 막음). 큰 파일·큰 메시지·빈 연결·반복 주문·도배로 이 컴퓨터를 느리게 만드는 길을 막고, 자산 공지에 숨긴 화면 조작 글자를 그대로 보여 주지 않습니다.
+- 릴레이가 하나도 답하지 않으면 이름표·북마크·팔로우를 빈 목록으로 덮어쓰지 않고 오류로 알립니다.
 
 ### English
 
 - **Bookmarks:** click a public post and choose "Save" to add it to the same bookmark list as the phone and web wallet. It is locked with your 12-word key, so only you can see it. Open it from More → Bookmarks.
 - **Link receive address:** More → Link receive address signs a new receive address from this computer's wallet onto your name tag, so others see "Send Ravencoin" on your posts on phone, web and desktop.
 - **Copy post link:** copy a link to a public post to share in any chat app. It opens without the app and shows only signature-checked posts.
+- **Follow:** follow authors and use "Following only" to see just their posts. It is the same follow list as the phone and web wallet.
+- **Security hardening:** posts and name tags from relays are used only when their signatures check out (closing a way to slip a different receive address into someone's name tag). Large files, oversized messages, idle connections, repeated orders and flooding can no longer slow this computer down, and markup hidden in asset announcements is shown as plain text.
+- If no relay answers, name tag, bookmark and follow lists are no longer overwritten with an empty list; you see an error instead.
 
 ## 0.9.12
 
