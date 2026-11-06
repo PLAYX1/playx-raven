@@ -5,7 +5,7 @@ name = "playx-raven"
 # 여기가 처음 만든 뒤로 `0.1.0` 그대로였다. 그래서 사장님이 신고를 보내도
 # **어느 판에서 난 일인지 알 수가 없었다** — 신고의 값어치가 절반이 된다.
 # 판을 올릴 때 `tauri.conf.json` 과 **같이** 올린다.
-version = "0.9.15"
+version = "0.9.17"
 description = "레이븐 노드 · IPFS · 채굴 · 자판기 · 가게 계산대를 한 프로그램으로"
 authors = ["PLAY X"]
 edition = "2021"
@@ -116,6 +116,16 @@ version = "4.11"
 [target.'cfg(target_os = "macos")'.dependencies]
 # Downcast keyring's native error to OSStatus without formatting its message.
 security-framework = "3"
+
+[features]
+# regtest(가짜 사슬) 통합 시험 전용. 켜면 RV_HARNESS_RELAY·RV_HARNESS_FEE_ADDRESS 를 읽는다.
+# 🔴 출시 빌드에서 켜지 말 것 — 기본은 꺼져 있다.
+regtest-harness = []
+
+[[test]]
+name = "market_regtest"
+path = "tests/market_regtest.rs"
+required-features = ["regtest-harness"]
 
 [dev-dependencies]
 ring = "0.17"

@@ -5033,6 +5033,37 @@ function paintHomePhone(st: WalletLinkState) {
 let deviceScreen: ReturnType<typeof import("./device-connect").mountDeviceScreen> | undefined;
 let bulkScreen: ReturnType<typeof import("./bulk-products-ui").mountBulkScreen> | undefined;
 
+/* ── 0.9.17 장터·「내 글」·피드 메뉴 (src/listing-market.ts — 처음 쓸 때 따로 내려받는다) ── */
+const listingDeps = () => ({ invoke: <T = any>(cmd: string, args?: Record<string, unknown>) => invoke<T>(cmd, args), ensureUnlocked, errText, fmtQty });
+let listingMarket: { enter(open?: "browse" | "mine"): void } | undefined;
+let tradeOpen: "browse" | "mine" | undefined;
+function openTrade(open?: "browse" | "mine") {
+  tradeOpen = open;
+  showPage("trade");
+}
+/** 「피드」 메뉴로 들어왔나. 이야기 화면은 같고, 왼쪽 메뉴에서 어느 줄이 켜질지만 다르다. */
+let feedNav = false;
+function syncFeedNav(id: string) {
+  document.querySelectorAll<HTMLElement>('nav a[data-page="talk"]').forEach((a) =>
+    a.classList.toggle("on", id === "talk" && (a.dataset.feed ? feedNav : !feedNav)));
+}
+/** 「피드」 — 이야기의 공개 방(「모두에게」, tkRoom="")을 X 식 글 목록(feedmode)으로 연다. */
+function openFeed() {
+  if (tkRoom !== "") {
+    tkRoom = "";
+    delete $("tk-list").dataset.loaded;
+    $("tk-new-messages").hidden = true;
+    setCopyText($("tk-title"), () => t("레이븐 이야기"));
+    $("rv-person-name").textContent = t("레이븐 이야기");
+    const avatar = $("rv-person-avatar");
+    avatar.dataset.initial = ($("rv-person-name").textContent || "레").slice(0, 1);
+    avatar.style.setProperty("--h", String(tkHue("raven")));
+    $("rv-person-key").textContent = "";
+  }
+  feedNav = true;
+  showPage("talk");
+}
+
 function showPage(id: string) {
   // 판매자 기능이 꺼져 있으면 판매 화면은 열리지 않는다(메뉴가 숨겨진 것만으로는 부족하다).
   if ((id === "sales" || id === "creator" || id === "market" || id === "devices" || id === "bulk") && !sellerModeOn()) return;
@@ -5066,12 +5097,19 @@ function showPage(id: string) {
   if (id === "ravi" || id === "home") paintRavi();
   if (id === "home") void paintHome();
   if (id === "profile") void paintProfile();
+  if (id === "profile") void import("./listing-market").then(({ paintMyPosts }) => paintMyPosts($("rv-profile-posts"), listingDeps(), openFeed)).catch((e) => console.warn("listing-market load failed", e));
+  if (id === "trade") void import("./listing-market").then(({ mountListingMarket }) => {
+    if (!listingMarket) listingMarket = mountListingMarket($("page-trade"), listingDeps());
+    if (currentPage === "trade") listingMarket.enter(tradeOpen);
+    tradeOpen = undefined;
+  }).catch((e) => console.warn("listing-market load failed", e));
   if (id === "chain") chainInfo?.enter();
   paintPageTiles(id);
   document.querySelectorAll(".page").forEach((p) => p.classList.toggle("on", p.id === `page-${id}`));
   document.querySelectorAll("nav a").forEach((a) =>
     a.classList.toggle("on", (a as HTMLElement).dataset.page === id));
   $("rv-header-ravi")?.classList.toggle("on", id === "ravi");
+  syncFeedNav(id);
   if (document.querySelector(`nav a.navmore[data-page="${id}"]`)) navMoreSetOpen?.(true);
   if (id === "wallet") loadWallet();
   // 0.4.8 — 지갑 화면 맨 위 알림 줄(「지갑이 준비됐어요」·복구 단어 확인). 배치는 안 건드리고 칸 하나만.
@@ -6449,6 +6487,7 @@ async function talkPaintRooms() {
   box.querySelectorAll("[data-room]").forEach((b) => {
     (b as HTMLElement).onclick = () => {
       tkRoom = String((b as HTMLElement).dataset.room || "");
+      if (tkRoom) { feedNav = false; syncFeedNav(currentPage); }
       delete $("tk-list").dataset.loaded;
       $("tk-new-messages").hidden = true;
       // 한 번 연 방은 나가 있어도 지켜본다 — 그 방에 새 글이 오면 알린다.
@@ -7957,11 +7996,16 @@ async function swapMakeOffer() {
            <button class="ghost" id="sw-copy">${copyHtml("글자 복사")}</button>
            <span class="meta" id="sw-copied"></span>
          </div>
+         <div id="sw-publish"></div>
        </div>`;
     $("sw-copy").addEventListener("click", async () => {
       await navigator.clipboard.writeText(String(r.hex)).catch(() => {});
       setCopyText($("sw-copied"), () => t("복사했습니다"));
     });
+    // 0.9.17 — 글자를 복사해 보내는 것 말고, 장터에 올려 누구나 보게 한다(사람이 「올리기」를 눌러야 올라간다).
+    void import("./listing-market").then(({ mountPublishForm }) =>
+      mountPublishForm($("sw-publish"), { hex: String(r.hex), asset, amount, price }, listingDeps(), (tab) => openTrade(tab)))
+      .catch((e) => console.warn("listing-market load failed", e));
   } catch (e) {
     box.innerHTML = `<p class="meta danger">${escapeHtml(errText(e))}</p>`;
   }
@@ -18502,8 +18546,15 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.querySelectorAll("nav a").forEach((a) => {
     const label = a.querySelector("span")?.textContent?.trim();
     if (label) { a.setAttribute("aria-label", t(label)); a.setAttribute("title", t(label)); }
-    (a as HTMLElement).onclick = () => showPage((a as HTMLElement).dataset.page!);
+    (a as HTMLElement).onclick = (ev) => {
+      const link = a as HTMLElement;
+      if (link.getAttribute("href") === "#") ev.preventDefault();
+      if (link.dataset.feed) { openFeed(); return; }
+      if (link.dataset.page === "talk") feedNav = false;
+      showPage(link.dataset.page!);
+    };
   });
+  $("sw-go-market").addEventListener("click", () => openTrade("browse"));
   setupNavMore();
   document.getElementById("rv-home-shop")?.addEventListener("click", goHomeSales);
   document.getElementById("rv-home-today-body")?.addEventListener("click", (ev) => {

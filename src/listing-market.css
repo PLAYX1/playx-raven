@@ -1,0 +1,46 @@
+/* 0.9.17 맞교환 장터 · 「장터에 올리기」 · 「내 글」 (src/listing-market.ts). style 속성 대신 여기(CSP nonce). */
+.lm-tabs, .lm-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+.lm-tabs[hidden], .lm-chips[hidden] { display: none; }
+.lm-tabs button, .lm-chips button { min-height: 40px; margin: 0; padding: 6px 14px; border-radius: 999px;
+  background: var(--panel); color: var(--text); border: 1px solid var(--line); }
+.lm-tabs button[aria-pressed="true"], .lm-chips button[aria-pressed="true"] { border: 2px solid var(--text); font-weight: 700; }
+.lm-tabs button { font-size: 16px; }
+.lm-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.lm-list { list-style: none; padding: 0; margin: 10px 0; display: grid; gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.lm-card { display: flex; flex-direction: column; gap: 0; padding: 0; overflow: hidden; margin: 0; }
+.lm-card .lm-body { padding: 12px 16px 14px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.lm-card h3 { margin: 4px 0 0; font-size: 17px; overflow-wrap: anywhere; }
+.lm-card p { margin: 0; overflow-wrap: anywhere; }
+.lm-sum { color: var(--muted); font-size: 14px; white-space: pre-wrap; }
+.lm-asset { font-size: 14px; }
+.lm-price { font-size: 16px; }
+.lm-top { display: flex; gap: 6px; flex-wrap: wrap; }
+.lm-cat, .lm-status { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 13px; font-weight: 600;
+  background: color-mix(in srgb, var(--brand) 12%, transparent); color: var(--text); }
+.lm-status { background: color-mix(in srgb, var(--ok) 14%, transparent); }
+.lm-pic img { display: block; width: 100%; max-height: 220px; object-fit: cover; background: var(--bg); }
+.lm-pic-ask { display: flex; flex-direction: column; gap: 4px; padding: 10px 16px 0; }
+.lm-pic-ask .meta { font-size: 13px; }
+.lm-acts { margin-top: 8px; }
+.lm-acts button { min-height: 44px; }
+/* 살 수 없는 것 — 회색으로, 이유는 또렷하게. */
+.lm-off { opacity: .62; filter: grayscale(1); }
+.lm-off .lm-why { opacity: 1; }
+.lm-why { color: var(--danger); font-size: 14px; }
+.lm-confirm { margin-top: 10px; padding: 12px 14px; border: 2px solid var(--ravi, #e7731f); border-radius: 12px; background: var(--panel); }
+.lm-confirm h4 { margin: 0 0 8px; font-size: 16px; }
+.lm-confirm .row { margin-top: 10px; gap: 8px; }
+.lm-confirm button { min-height: 44px; }
+.lm-warn { margin: 8px 0 0; font-weight: 600; color: var(--text); }
+.lm-txid code { overflow-wrap: anywhere; word-break: break-all; font-size: 13px; }
+.lm-publish { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.lm-publish label { display: block; }
+.lm-publish input, .lm-publish textarea, .lm-publish select { width: 100%; box-sizing: border-box; }
+.lm-publish #lm-pub-open { align-self: flex-start; }
+.lm-publish .lm-list { grid-template-columns: minmax(0, 360px); }
+#lm-pub-form[hidden], #lm-pub-check[hidden], .lm-publish button[hidden] { display: none; }
+.lm-posts { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 8px; }
+.lm-posts li { padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+.lm-posts p { margin: 4px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.lm-posts time { font-size: 13px; }

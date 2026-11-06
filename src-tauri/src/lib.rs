@@ -65,6 +65,11 @@ mod price;
 mod refund;
 mod issue;
 mod market;
+mod market_listing;
+/// regtest(가짜 사슬) 통합 시험 전용 입구. 기본 빌드에는 없다 — `tests/market_regtest.rs`.
+#[cfg(feature = "regtest-harness")]
+#[doc(hidden)]
+pub mod regtest_harness;
 mod issue_unknown;
 mod cert_assets;
 mod create;
@@ -715,6 +720,13 @@ pub fn run() {
             swap::swap_offer,
             swap::swap_check,
             swap::swap_take,
+            // 0.9.17 릴레이 장터 — 맞교환 반쪽을 kind 30402 글로 올리고 읽는다. 사는 쪽은 체인을 믿는다.
+            market_listing::market_publish_listing,
+            market_listing::market_browse,
+            market_listing::market_my_listings,
+            market_listing::market_cancel_listing,
+            market_listing::swap_take_listing,
+            market_listing::talk_my_posts,
             server::start_phone_server,
             server::publish_shop,
             reindex::reindex_window,

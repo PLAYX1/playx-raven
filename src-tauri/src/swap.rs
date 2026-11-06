@@ -86,6 +86,21 @@ async fn relock(was: bool) {
     }
 }
 
+/// 장터 글(`market_listing.rs`)이 **같은 잠금 길**을 쓰게 연다. 동작은 위와 한 글자도 안 다르다.
+pub(crate) async fn unlock_for(passphrase: Option<String>) -> Result<bool, String> {
+    unlock(passphrase).await
+}
+
+/// 위 `relock` 그대로. 연 것은 끝나면 반드시 다시 잠근다.
+pub(crate) async fn relock_for(was: bool) {
+    relock(was).await
+}
+
+/// 장터에 올리기 전에 **같은 0번 출력 확인**을 한 번 더 한다(`check_offer_shape` 그대로).
+pub(crate) fn offer_shape_ok(dec: &Value, pay_to: &str, price: f64) -> Result<(), String> {
+    check_offer_shape(dec, pay_to, price)
+}
+
 fn f(v: &Value) -> f64 {
     v.as_f64().unwrap_or(0.0)
 }
@@ -425,7 +440,7 @@ pub async fn swap_take(
     for u in &picked {
         ins.push(json!({ "txid": u["txid"], "vout": u["vout"] }));
     }
-    let change = got - price - fee_dev - FEE;
+    let change = change_after(got, price, fee_dev);
     let mut outs = serde_json::Map::new();
     outs.insert(seller.clone(), json!(price));
     outs.insert(asset_to.clone(), json!({ "transfer": { asset.clone(): amount } }));
@@ -484,6 +499,15 @@ pub async fn swap_take(
     }))
 }
 
+/// 사는 쪽 거스름돈. **사토시(8자리)로 맞춘다.**
+///
+/// 🔴 그냥 빼면 부동소수점 찌꺼기가 남는다 — regtest 실측(11-07): 2000 RVN 에서 50.5 를 산 뒤
+///    30 RVN 물건을 사려 하자 거스름돈이 `1919.0000000000002` 가 되어 노드가
+///    `createrawtransaction: Invalid amount` 로 거절했다. 값에 따라 **사기 단추가 그냥 안 되는** 병이다.
+fn change_after(got: f64, price: f64, fee_dev: f64) -> f64 {
+    ((got - price - fee_dev - FEE) * 1e8).round() / 1e8
+}
+
 /// 완성본이 내가 의도한 모양인가. 위 ②·③ 을 마지막으로 한 번 더 막는다.
 fn check_take_shape(
     dec: &Value,
@@ -528,6 +552,21 @@ fn check_take_shape(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 거스름돈에 8자리를 넘는 찌꺼기가 남으면 노드가 거래를 통째로 거절한다(regtest 실측 값).
+    #[test]
+    fn 거스름돈은_사토시로_맞춘다() {
+        let got = 2000.0 - 50.0 - 0.5 - FEE; // 앞선 구매 뒤 남은 RVN (1949.4)
+        assert_ne!(got - 30.0 - 0.3 - FEE, 1919.0, "찌꺼기가 생기는 값이어야 시험이 뜻이 있다");
+        let c = change_after(got, 30.0, 0.3);
+        assert_eq!(c, 1919.0);
+        for (g, p, d) in [(1949.4, 30.0, 0.3), (10.7, 0.3, 0.0), (123.456789, 7.77777777, 0.0777778)] {
+            let c = change_after(g, p, d);
+            let s = format!("{c}");
+            let decimals = s.split('.').nth(1).map(str::len).unwrap_or(0);
+            assert!(decimals <= 8, "{s} 은 8자리를 넘는다");
+        }
+    }
 
     #[test]
     fn 사토시_아래는_같은_값으로_본다() {

@@ -30,6 +30,11 @@ const RELAYS: [&str; 4] = [
 /// 하고, 그게 이 판이 탈중앙인 이유다. 우리 릴레이는 빠른 길일 뿐
 /// 유일한 길이 아니다.
 fn targets() -> Vec<String> {
+    // regtest 시험 전용(기본 빌드에는 없다): 공개 릴레이에 가짜 사슬 글을 올리지 않게 한 곳만 쓴다.
+    #[cfg(feature = "regtest-harness")]
+    if let Some(u) = std::env::var("RV_HARNESS_RELAY").ok().filter(|u| !u.is_empty()) {
+        return vec![u];
+    }
     let mut out = vec![format!("ws://127.0.0.1:{}/api/relay", crate::server::PORT)];
     out.extend(RELAYS.iter().map(|s| s.to_string()));
     out

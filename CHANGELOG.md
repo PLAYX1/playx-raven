@@ -1,5 +1,23 @@
 # 변경 기록
 
+## 0.9.17
+
+### 한국어
+
+- **장터:** 「더 보기 → 장터」에서 노래·게임·이미지·책·티켓·작품 같은 자산 판매 글을 둘러보고 살 수 있습니다. 판매 글은 판 사람이 서명해 공개 릴레이에 올리고, 가격·받는 주소·자산·수량은 사기 전에 블록체인에서 다시 확인합니다. 맞지 않는 글은 회색으로 보이고 살 수 없습니다.
+- **사기는 두 번 확인:** 「사기」를 누르면 받을 것·판 사람 몫·개발비 1%·수수료를 먼저 보여 주고, 「정말 사기」를 눌러야 보냅니다. 돈은 한 거래 안에서 판 사람에게 바로 갑니다.
+- **장터에 올리기·내리기:** 맞교환 판매 제안을 만든 뒤 제목·설명·종류를 적어 장터에 올릴 수 있습니다. 「내 판매 글」에서 내리면 그 자산을 내 새 주소로 옮겨, 예전 판매 제안으로는 더 살 수 없게 합니다.
+- **피드 메뉴:** 「모두에게」 공개 글을 왼쪽 메뉴 「피드」에서 바로 엽니다. 「내 소개」에 내가 쓴 글이 모여 보입니다.
+- **고침:** 맞교환으로 살 때 금액에 따라 노드가 「Invalid amount」로 거절하던 문제(거스름돈 소수점 찌꺼기)를 고쳤습니다. 내 컴퓨터 릴레이가 장터 판매 글을 버리던 문제를 고쳤습니다.
+
+### English
+
+- **Marketplace:** browse and buy asset listings (music, games, images, books, tickets, works) under More → Market. Listings are signed by the seller and published to public relays; price, payout address, asset and amount are re-checked on the blockchain before you buy. Listings that do not match are greyed out and cannot be bought.
+- **Buying asks twice:** Buy first shows what you get, the seller's share, the 1% developer fee and network fee; nothing is sent until you press Buy now. The seller is paid directly in the same transaction.
+- **List and unlist:** after creating a swap sell offer you can publish it to the market with a title, description and category. Unlisting from My listings moves the asset to a fresh address of yours so the old offer can no longer be filled.
+- **Feed menu:** open public "Everyone" posts from the new Feed menu item. Your own posts now appear on your profile.
+- **Fixes:** swap purchases no longer fail with "Invalid amount" for some prices (change rounding). The built-in relay no longer drops market listings.
+
 ## 0.9.15
 
 ### 한국어

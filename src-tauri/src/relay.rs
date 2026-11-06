@@ -253,6 +253,17 @@ fn smells_bad(e: &Value) -> Option<String> {
     if PERSON_KINDS.contains(&kind) {
         return person_smells_bad(e);
     }
+    // 0.9.17 맞교환 물건(kind 30402 + `rv-swap` 표)은 가게 공지가 아니다 — 본문은 설명 글이고
+    // `d` 는 `rvswap:<txid>:<vout>` 이다. 아래 ②③ 에 대면 **우리 릴레이가 장터 물건을 전부 버린다**
+    // (regtest 실측 11-07: 「가게 글의 모양이 아닙니다」). 대신 사는 쪽과 같은 모양 검사
+    // (`market_listing::parse_listing`)를 통과한 것만 받는다. 체인 확인은 읽는 쪽이 한다.
+    if kind == 30402 && has_t(e, "rv-swap") {
+        let size = serde_json::to_string(e).map(|s| s.len()).unwrap_or(0);
+        if size > MAX_EVENT_BYTES {
+            return Some(format!("물건 글이 너무 큽니다({size}바이트)"));
+        }
+        return crate::market_listing::parse_listing(e).err().map(|why| format!("맞교환 물건 모양이 아닙니다: {why}"));
+    }
     // ① 통째로 너무 크다. 가게 이름·전화·좌표·영업시간·메뉴를 다 합쳐도
     //    몇 KB 다. 그보다 크면 이건 정보가 아니라 짐이다.
     let size = serde_json::to_string(e).map(|s| s.len()).unwrap_or(0);
@@ -282,6 +293,12 @@ fn smells_bad(e: &Value) -> Option<String> {
         return Some("어느 가게 것인지 적혀 있지 않습니다".into());
     }
     None
+}
+
+fn has_t(e: &Value, val: &str) -> bool {
+    e.get("tags").and_then(Value::as_array).is_some_and(|t| {
+        t.iter().any(|x| x.get(0).and_then(Value::as_str) == Some("t") && x.get(1).and_then(Value::as_str) == Some(val))
+    })
 }
 
 /// 대화 글을 **저장할** 것인가.
@@ -865,6 +882,31 @@ mod tests {
         assert!(smells_bad(&json!({ "kind": 5, "pubkey": stranger, "tags": [["e", "a".repeat(64)], ["t", "ravencoin"]], "content": "" })).is_none());
         assert!(smells_bad(&json!({ "kind": 5, "pubkey": stranger, "tags": [["e", "a".repeat(64)]], "content": "" })).is_some());
     }
+    /// 🔴 0.9.17 장터 물건(30402 + rv-swap)을 우리 릴레이가 버리고 있었다(regtest 실측 11-07) —
+    /// 본문이 JSON 이 아니고 d 가 자산 이름이 아니라서. 모양이 맞는 물건만 받고, 가게 공지 규칙은 그대로.
+    #[test]
+    fn swap_listings_are_kept_but_only_well_formed() {
+        use super::*;
+        let tx = "ab".repeat(32);
+        let good = json!({ "kind": 30402, "content": "설명 글", "tags": [
+            ["d", format!("rvswap:{tx}:1")], ["title", "물건"], ["summary", "설명"], ["published_at", "1"],
+            ["price", "2.50000000", "RVN"], ["t", "playx"], ["t", "ravencoin"], ["t", "rv-swap"], ["t", "game"],
+            ["status", "active"], ["asset", "RVTESTGAME", "1"], ["outpoint", tx, "1"], ["pay", "mPayAddr111"],
+            ["swap", "0200aa", "v1"],
+        ]});
+        assert_eq!(smells_bad(&good), None, "모양이 맞는 맞교환 물건을 버린다");
+        let mut bad = good.clone();
+        bad["tags"][0] = json!(["d", format!("rvswap:{tx}:0")]);
+        assert!(smells_bad(&bad).is_some(), "d 와 동전이 다른 물건을 받는다");
+        let mut big = good.clone();
+        big["content"] = json!("x".repeat(MAX_EVENT_BYTES));
+        assert!(smells_bad(&big).is_some(), "너무 큰 물건 글을 받는다");
+        // rv-swap 표가 없는 30402 는 여전히 가게 공지 규칙(본문 JSON·d 자산 이름).
+        let mut shop = good.clone();
+        shop["tags"].as_array_mut().unwrap().retain(|t| t[1] != "rv-swap");
+        assert!(smells_bad(&shop).is_some(), "가게 공지 규칙이 풀렸다");
+    }
+
     /// 🔴 종류만 막고 **내용은 안 막고 있었다**(제미나이 지적). 껍데기가
     /// 맞으면 누구든 사장 컴퓨터에 아무 글이나 남길 수 있었다.
     #[test]

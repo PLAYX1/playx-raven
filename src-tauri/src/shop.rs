@@ -1231,6 +1231,11 @@ fn fee_path() -> std::path::PathBuf {
 /// ⚠️ 여기를 다시 「끌 수 있게」 만들려는 사람에게: 화면·랜딩·라비 프롬프트
 /// 세 곳이 **끌 수 없다고 적혀 있다.** 코드만 고치면 그 셋이 거짓말이 된다.
 pub fn fee_config() -> (f64, String) {
+    // regtest 시험 전용(기본 빌드에는 없다): 메인넷 주소는 가짜 사슬에서 안 받으므로 시험 주소로 바꾼다.
+    #[cfg(feature = "regtest-harness")]
+    if let Some(a) = std::env::var("RV_HARNESS_FEE_ADDRESS").ok().filter(|a| !a.is_empty()) {
+        return (DEFAULT_FEE_RATE, a);
+    }
     (DEFAULT_FEE_RATE, PLATFORM_ADDRESS.to_string())
 }
 

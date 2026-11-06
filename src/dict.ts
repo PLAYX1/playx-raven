@@ -41,6 +41,7 @@ import { CHAIN_INFO_COPY } from "./chain-info-copy";
 import { RAVI_LIFECYCLE_COPY } from "./ravi-lifecycle-copy";
 import { RAVI_CHAT_COPY } from "./ravi-chat-copy";
 import { WALLET_LINK_COPY } from "./wallet-link-copy";
+import { LISTING_MARKET_COPY } from "./listing-market-copy";
 
 const ARTIST_PHOTO_COPY: Record<string, [string, string, string]> = {
   "사진 읽는 중…": ["Reading photo…", "写真を読み込み中…", "正在读取照片…"],
@@ -5718,5 +5719,9 @@ for (const [source, values] of Object.entries(SETTINGS_TALK_090_COPY)) {
 }
 // 폰과 지갑 연결(src/wallet-link-ui.ts). 이미 있는 번역은 덮지 않는다.
 for (const [source, values] of Object.entries(WALLET_LINK_COPY)) {
+  (["en", "ja", "zh"] as const).forEach((language, index) => { DICT[language][source] ??= values[index]; });
+}
+// 0.9.17 「피드」 메뉴·「내 글」·맞교환 장터(src/listing-market.ts). 이미 있는 번역은 덮지 않는다.
+for (const [source, values] of Object.entries(LISTING_MARKET_COPY)) {
   (["en", "ja", "zh"] as const).forEach((language, index) => { DICT[language][source] ??= values[index]; });
 }
