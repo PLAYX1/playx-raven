@@ -125,7 +125,8 @@ jobs:
             libwebkit2gtk-4.1-dev \
             build-essential curl wget file \
             libxdo-dev libssl-dev \
-            libayatana-appindicator3-dev librsvg2-dev patchelf
+            libayatana-appindicator3-dev librsvg2-dev patchelf xdg-utils
+          # xdg-utils: ARM 기계(ubuntu-24.04-arm)에는 기본으로 없어 AppImage 묶기가 「xdg-open binary not found」로 죽었다(11-06 실행 42200871686).
           # 위가 Tauri v2 공식 목록이다. gtk·pango·cairo·atk 는 webkit2gtk 가
           # 의존으로 끌어오므로 따로 적지 않는다 — 적으면 이름이 판마다 달라
           # 오히려 깨진다(ubuntu-24.04 에서 libgdk-pixbuf-2.0-dev 가 그랬다).
