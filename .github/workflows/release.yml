@@ -69,7 +69,7 @@ jobs:
           # 그래서 넷을 다 여기서 만든다. 손으로 올리는 단계가 없어졌고,
           # 그 단계가 없어졌다는 건 **"맥만 옛 판" 사고가 구조적으로 불가능**
           # 해졌다는 뜻이다. 잊을 수 있는 일은 언젠가 잊는다.
-          - os: macos-14          # 애플 실리콘 (M1 이상)
+          - os: macos-15          # 애플 실리콘 (M1 이상) — 11-06 macos-14 은퇴(「not supported」 즉시 실패)
             target: aarch64-apple-darwin
             label: mac-apple-silicon
           # 🔴 macos-13(인텔)·ubuntu-22.04 는 깃허브가 은퇴시키는 중이다.
