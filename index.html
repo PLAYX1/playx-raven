@@ -269,6 +269,13 @@
       .line { display: flex; align-items: flex-end; gap: 7px; max-width: 84%;
         align-self: flex-start; }
       .line.me { align-self: flex-end; flex-direction: row-reverse; }
+      /* 「모두에게」 = X 식 글 목록(11-06): 풍선·좌우 없이 왼쪽 정렬, 글쓴이 줄 위에 가는 선, 본문은 이름 아래 들여쓰기. */
+      #tk-list.feedmode .line, #tk-list.feedmode .line.me { align-self: stretch; max-width: none; flex-direction: row; padding-left: 40px; }
+      #tk-list.feedmode .bub, #tk-list.feedmode .bub.me { background: transparent; color: var(--text); border: 0; border-radius: 10px; padding: 4px 8px; font-size: 17px; }
+      #tk-list.feedmode .bub:hover { background: var(--panel); }
+      #tk-list.feedmode .bub.me .tr { border-top-color: var(--line); color: var(--muted); }
+      #tk-list.feedmode .who, #tk-list.feedmode .who.me { flex-direction: row; justify-content: flex-start; align-self: stretch; border-top: 1px solid var(--line); padding-top: 14px; margin: 10px 0 2px 0; }
+      #tk-list.feedmode .bubacts, #tk-list.feedmode .bubacts.r { justify-content: flex-start; margin-right: 0; padding-left: 40px; }
       /* 이어 쓴 말은 붙인다. 사람이 바뀌면 위에서 `.who` 가 숨을 띄운다. */
       .line + .line { margin-top: 1px; }
 
@@ -2337,6 +2344,8 @@
       .rv-header-ravi-face { position:relative; }
       .rv-header-ravi-face::after { content:""; position:absolute; right:-2px; bottom:-2px; width:14px; height:14px; border-radius:50%; background:#8a8f98; border:2px solid var(--panel, #fff); box-sizing:border-box; }
       .rv-header-ravi[data-ai="on"] .rv-header-ravi-face::after { background:#1f9d55; }
+      #rv-theme-toggle { display:flex; align-items:center; justify-content:center; width:64px; min-height:64px; border-radius:16px; background:var(--panel); color:var(--text); border:1px solid var(--line); padding:0; margin-left:auto; }
+      #rv-theme-toggle svg { width:24px; height:24px; }
       #desktop-preferences { display:flex; align-items:center; gap:10px; border-radius:16px; background:#fff; color:#111; min-height:64px; font-size:16px; border:1px solid var(--line); }
       .desktop-header svg, .overview svg { width:24px; height:24px; flex:none; }
       #desktop-language-menu { position:absolute; right:24px; top:76px; width:360px; background:#fff; border:1px solid var(--line); border-radius:16px; padding:16px; box-shadow:0 8px 24px #0002; }
@@ -2685,6 +2694,7 @@
     <header class="desktop-header" data-tauri-drag-region>
       <button id="rv-header-ravi" class="rv-header-ravi" type="button" aria-label="라비"><span class="rv-header-ravi-face" id="rv-header-ravi-face"></span><span class="rv-header-ravi-name" id="rv-header-ravi-name">라비</span></button>
       <div class="desktop-logo" data-tauri-drag-region><span id="rv-desktop-logo"></span><strong data-tauri-drag-region>RavenVault Desktop</strong></div>
+      <button id="rv-theme-toggle" type="button" aria-label="어두운 화면으로"></button>
       <button id="desktop-preferences" type="button" aria-expanded="false" aria-controls="desktop-language-menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 7h4m4 0h8M4 17h8m4 0h4" stroke-linecap="round"/><circle cx="10" cy="7" r="2"/><circle cx="14" cy="17" r="2"/></svg><span>언어 · 화면</span><span aria-hidden="true">·</span><span id="desktop-language-name" translate="no">한국어</span></button>
       <div id="desktop-language-menu" hidden><label for="rv-theme">화면 밝기</label><select id="rv-theme"><option value="system">시스템</option><option value="light">밝게</option><option value="dark">어둡게</option></select><div class="desktop-language-options" translate="no"><button data-language="ko">한국어</button><button data-language="en">English</button><button data-language="ja">日本語</button><button data-language="zh">简体中文</button><button data-language="it" data-fixed-text>Italiano</button><button data-language="es" data-fixed-text>Español</button><button data-language="fr" data-fixed-text>Français</button><button data-language="pt-BR" data-fixed-text>Português (Brasil)</button><button data-language="de" data-fixed-text>Deutsch</button><button data-language="ru" data-fixed-text>Русский</button></div><p class="lang-ai-note" data-fixed-text><span>AI 번역입니다</span> · <button type="button" class="lang-report" data-report-translation>오류 신고</button></p><button id="desktop-settings-go">설정으로</button></div>
     </header>

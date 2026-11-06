@@ -6760,6 +6760,8 @@ async function talkPaint() {
     tk겹친이름세기(쓴이);
     const 날 = 때.map((ms) => new Date(ms).toDateString());
 
+    // 11-06 대표 「대화 디자인이 진짜 X 같아야」 — 「모두에게」(공개 글)는 풍선이 아니라 X 처럼 평평한 글 목록. 방은 풍선 그대로.
+    box.classList.toggle("feedmode", !읽은방);
     box.innerHTML = hidNote + asc
       .map((e, i) => {
         const who = 쓴이[i];
@@ -18333,10 +18335,26 @@ window.addEventListener("DOMContentLoaded", async () => {
     bar.appendChild(ok);
     document.body.appendChild(bar);
   }).catch(() => {});
+  // 11-06 대표 「기본을 밝은 화면」 — 아무것도 안 고른 사람은 밝게. 「시스템」은 고른 사람만. 폰·웹과 같은 규칙.
   const savedTheme = localStorage.getItem("ravenvault-theme");
-  theme.value = ["light", "dark"].includes(savedTheme || "") ? savedTheme! : "system";
+  theme.value = ["light", "dark", "system"].includes(savedTheme || "") ? savedTheme! : "light";
+  const themeToggle = $("rv-theme-toggle");
+  const isLightNow = () => theme.value === "light" || (theme.value === "system" && !matchMedia("(prefers-color-scheme: dark)").matches);
+  const paintThemeToggle = () => {
+    const light = isLightNow();
+    // 밝을 때는 달(어둡게로), 어두울 때는 해(밝게로).
+    themeToggle.innerHTML = light
+      ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z" stroke-linejoin="round"/></svg>'
+      : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8" stroke-linecap="round"/></svg>';
+    themeToggle.setAttribute("aria-label", t(light ? "어두운 화면으로" : "밝은 화면으로"));
+    themeToggle.title = t(light ? "어두운 화면으로" : "밝은 화면으로");
+  };
+  const applyTheme = () => { document.documentElement.dataset.theme = theme.value; localStorage.setItem("ravenvault-theme", theme.value); paintThemeToggle(); };
   document.documentElement.dataset.theme = theme.value;
-  theme.onchange = () => { document.documentElement.dataset.theme = theme.value; localStorage.setItem("ravenvault-theme", theme.value); };
+  paintThemeToggle();
+  theme.onchange = applyTheme;
+  themeToggle.onclick = () => { theme.value = isLightNow() ? "dark" : "light"; applyTheme(); };
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", paintThemeToggle);
   // 왼쪽 맨 앞 아이콘은 라비다(아래 rv-header-ravi). 예전 앱 로고 자리는 비운다.
   $("rv-desktop-logo").remove();
   $("rv-onboard-face").appendChild(raviFace("sleep", 150));

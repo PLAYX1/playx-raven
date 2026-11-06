@@ -1,5 +1,17 @@
 # 변경 기록
 
+## 0.9.14
+
+### 한국어
+
+- **밝은 화면이 기본:** 처음 열면 밝은 화면입니다. 위쪽 오른쪽 달 단추를 누르면 어두운 화면, 해 단추를 누르면 다시 밝은 화면이 됩니다. 「언어 · 화면」에서 「시스템」도 고를 수 있습니다. 폰·웹 레이븐볼트와 같은 규칙입니다.
+- **「모두에게」가 X 처럼:** 공개 글이 말풍선 대신 평평한 글 목록으로 보입니다. 글쓴이마다 가는 선으로 나뉘어 읽기 쉽습니다. 방 대화는 그대로 말풍선입니다.
+
+### English
+
+- **Light mode by default:** the app opens in light mode. Use the moon button at the top right for dark mode and the sun button to switch back. "System" is still available under Language · Display. Same rule as the phone and web wallet.
+- **Public posts read like a feed:** posts in "Everyone" now show as a clean, flat list with a thin line between authors instead of chat bubbles. Rooms keep chat bubbles.
+
 ## 0.9.13
 
 ### 한국어

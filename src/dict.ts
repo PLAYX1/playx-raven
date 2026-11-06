@@ -696,6 +696,10 @@ export const DICT: Record<string, Record<string, string>> = {
       "AI is on. Ask anything you wonder about.",
     "매출 화면에서 확인":
       "Check on the Sales screen",
+    "어두운 화면으로":
+      "Switch to dark",
+    "밝은 화면으로":
+      "Switch to light",
     "더 보기, 안 본 소식 있음":
       "More, unseen updates",
     "더 보기":
@@ -2527,6 +2531,10 @@ export const DICT: Record<string, Record<string, string>> = {
       "AIがオンです。気になることを聞いてください。",
     "매출 화면에서 확인":
       "売上画面で確認",
+    "어두운 화면으로":
+      "ダーク表示にする",
+    "밝은 화면으로":
+      "ライト表示にする",
     "더 보기, 안 본 소식 있음":
       "もっと見る、未確認の更新あり",
     "더 보기":
@@ -4358,6 +4366,10 @@ export const DICT: Record<string, Record<string, string>> = {
       "AI 已开启。有疑问尽管提问。",
     "매출 화면에서 확인":
       "请在销售页面确认",
+    "어두운 화면으로":
+      "切换到深色",
+    "밝은 화면으로":
+      "切换到浅色",
     "더 보기, 안 본 소식 있음":
       "更多，有未查看的更新",
     "더 보기":
