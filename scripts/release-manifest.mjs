@@ -5,10 +5,10 @@ import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const installerSuffixes = ['windows.exe','windows.msi','mac-apple-silicon.dmg','mac-intel.dmg','linux.AppImage'];
-export const ALL_RELEASE_TARGETS = Object.freeze(['windows-x86_64','darwin-aarch64','darwin-x86_64','linux-x86_64']);
-const platforms = { 'windows.exe':'windows-x86_64', 'mac-apple-silicon.tar.gz':'darwin-aarch64', 'mac-intel.tar.gz':'darwin-x86_64', 'linux.AppImage':'linux-x86_64' };
-const labels = { 'windows-x86_64':'windows', 'darwin-aarch64':'mac-apple-silicon', 'darwin-x86_64':'mac-intel', 'linux-x86_64':'linux' };
+export const installerSuffixes = ['windows.exe','windows.msi','mac-apple-silicon.dmg','mac-intel.dmg','linux.AppImage','linux-arm64.AppImage'];
+export const ALL_RELEASE_TARGETS = Object.freeze(['windows-x86_64','darwin-aarch64','darwin-x86_64','linux-x86_64','linux-aarch64']);
+const platforms = { 'windows.exe':'windows-x86_64', 'mac-apple-silicon.tar.gz':'darwin-aarch64', 'mac-intel.tar.gz':'darwin-x86_64', 'linux.AppImage':'linux-x86_64', 'linux-arm64.AppImage':'linux-aarch64' };
+const labels = { 'windows-x86_64':'windows', 'darwin-aarch64':'mac-apple-silicon', 'darwin-x86_64':'mac-intel', 'linux-x86_64':'linux', 'linux-aarch64':'linux-arm64' };
 const semver = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const compare = (a, b) => a.split('.').map(Number).reduce((order, n, i) => order || Math.sign(n - b.split('.').map(Number)[i]), 0);
 /**
@@ -18,7 +18,7 @@ const compare = (a, b) => a.split('.').map(Number).reduce((order, n, i) => order
  * release's immutable files labeled with that older version.
  */
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const NOTES_TAIL = '자동 업데이트 대상은 맥(Apple Silicon·Intel), 윈도우(설치 파일 .exe), 리눅스(AppImage)입니다. MSI·deb 로 설치했다면 새 설치 파일을 직접 받아 설치합니다.';
+const NOTES_TAIL = '자동 업데이트 대상은 맥(Apple Silicon·Intel), 윈도우(설치 파일 .exe), 리눅스·라즈베리파이(AppImage)입니다. MSI·deb 로 설치했다면 새 설치 파일을 직접 받아 설치합니다.';
 /** 앱 안 업데이트 안내문 = CHANGELOG.md 의 그 판 「### 한국어」 항목. 판마다 손으로 고치던 옛 문구가 몇 판째 그대로 나가던 것을 막는다. */
 export async function releaseNotes(version, changelog = path.join(ROOT, 'CHANGELOG.md')) {
   let text = '';
@@ -42,7 +42,7 @@ export async function prepareRelease(source, destination, version, statementDire
   for (const suffix of Object.keys(ownPlatforms)) if (!files.includes(prefix + suffix + '.sig')) throw new Error(`Missing updater signature: ${suffix}`);
   const assets = [];
   for (const name of files) {
-    const match = name.startsWith(prefix) && /^(?:RavenVault-Desktop|PLAY-X-Raven)-[\d.]+-(windows|mac-apple-silicon|mac-intel|linux)\.(?:exe|msi|dmg|AppImage|deb|rpm|tar\.gz)(?:\.sig)?$/.exec(name);
+    const match = name.startsWith(prefix) && /^(?:RavenVault-Desktop|PLAY-X-Raven)-[\d.]+-(windows|mac-apple-silicon|mac-intel|linux-arm64|linux)\.(?:exe|msi|dmg|AppImage|deb|rpm|tar\.gz)(?:\.sig)?$/.exec(name);
     if (!match) throw new Error(`Unexpected release file: ${name}`);
     if (!listedLabels.has(match[1])) throw new Error(`Release file for a target that is not listed: ${name}`);
     const info = await stat(path.join(source, name));
@@ -107,7 +107,7 @@ export async function prepareRelease(source, destination, version, statementDire
     let text = '';
     try { text = await readFile(path.join(destination, 'SHA256SUMS.txt'), 'utf8'); } catch (e) { if (e.code !== 'ENOENT') throw e; }
     carriedSums = text.split('\n').filter(line => {
-      const m = /^[a-f0-9]{64} {2}v(\d+\.\d+\.\d+)\/(?:RavenVault-Desktop|PLAY-X-Raven)-\1-(windows|mac-apple-silicon|mac-intel|linux)\.[A-Za-z.]+$/.exec(line);
+      const m = /^[a-f0-9]{64} {2}v(\d+\.\d+\.\d+)\/(?:RavenVault-Desktop|PLAY-X-Raven)-\1-(windows|mac-apple-silicon|mac-intel|linux-arm64|linux)\.[A-Za-z.]+$/.exec(line);
       return m && versions.has(m[1]) && keep.has(m[2]);
     });
   }

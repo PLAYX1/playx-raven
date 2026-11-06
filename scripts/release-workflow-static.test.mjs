@@ -64,3 +64,13 @@ test('publish is serialized and needs a successful build', () => {
   assert.match(text, /concurrency:\n  group: release\n  cancel-in-progress: false/);
   assert.match(publish, /needs: build\n(?:\s+#.*\n)*\s+if: success\(\)/);
 });
+
+test('Raspberry Pi target: the build matrix has a native ARM Linux entry and both --targets lists include linux-aarch64', () => {
+  const entry = text.match(/- os: ubuntu-24\.04-arm\n\s+target: aarch64-unknown-linux-gnu\n\s+label: linux-arm64\n/);
+  assert.ok(entry, 'matrix entry for ubuntu-24.04-arm / aarch64-unknown-linux-gnu / linux-arm64');
+  assert.equal([...text.matchAll(/- os: ubuntu-latest\n\s+target: x86_64-unknown-linux-gnu\n\s+label: linux\n/g)].length, 1, 'PC Linux entry is unchanged');
+  const lists = [...text.matchAll(/verify-published-release\.mjs "\$[A-Z_{}]+[^\n]*--targets ([^\s]+)/g)].map(m => m[1].split(','));
+  assert.equal(lists.length, 2, 'verify job and post-publish check');
+  for (const list of lists) assert.deepEqual(list, ['windows-x86_64', 'darwin-aarch64', 'darwin-x86_64', 'linux-x86_64', 'linux-aarch64']);
+  assert.match(publish, /auto-publish-flow\.mjs flow rel pub/);
+});

@@ -26,7 +26,7 @@ const SIG = Buffer.from('synthetic signature '.repeat(20)).toString('base64');
 async function candidate(dir, version, skip = []) {
   const src = path.join(dir, 'rel'); await mkdir(src, { recursive: true });
   const P = `RavenVault-Desktop-${version}-`;
-  const names = ['windows.exe', 'windows.msi', 'mac-apple-silicon.dmg', 'mac-intel.dmg', 'linux.AppImage', 'mac-apple-silicon.tar.gz', 'mac-intel.tar.gz'];
+  const names = ['windows.exe', 'windows.msi', 'mac-apple-silicon.dmg', 'mac-intel.dmg', 'linux.AppImage', 'linux-arm64.AppImage', 'mac-apple-silicon.tar.gz', 'mac-intel.tar.gz'];
   for (const n of names) if (!skip.includes(n)) await writeFile(path.join(src, P + n), `synthetic ${n} ${version}`);
   for (const [, n] of SIGNED_PACKAGES) if (!skip.includes(n + '.sig')) await writeFile(path.join(src, P + n + '.sig'), SIG);
   return src;
@@ -39,12 +39,12 @@ async function env(fn) {
 }
 const exists = p => access(p).then(() => true, () => false);
 
-test('first publication: date-based sequence, 30-day expiry, all four targets signed and written', () => env(async ({ dir, pub, args }) => {
+test('first publication: date-based sequence, 30-day expiry, all five targets signed and written', () => env(async ({ dir, pub, args }) => {
   const source = await candidate(dir, '0.9.6');
   const r = await runFlow({ source, ...args('0.9.6') });
   assert.equal(r.sequence, 2026102301);
   const latest = JSON.parse(await readFile(path.join(pub, 'latest.json'), 'utf8'));
-  assert.deepEqual(Object.keys(latest.signed_releases).sort(), ['darwin-aarch64', 'darwin-x86_64', 'linux-x86_64', 'windows-x86_64']);
+  assert.deepEqual(Object.keys(latest.signed_releases).sort(), ['darwin-aarch64', 'darwin-x86_64', 'linux-aarch64', 'linux-x86_64', 'windows-x86_64']);
   for (const item of Object.values(latest.signed_releases)) {
     const s = JSON.parse(item.statement);
     assert.equal(s.sequence, 2026102301); assert.equal(s.version, '0.9.6'); assert.equal(s.expires, Math.floor(NOW / 1000) + STATEMENT_DAYS * 86400);
@@ -71,7 +71,7 @@ test('same or lower version than the published one is refused and nothing is wri
   assert.equal(await exists(path.join(pub, 'v0.9.5')), false);
 }));
 test('one missing installer, package or updater signature stops the whole publish before any file is written', () => env(async ({ dir, pub, args }) => {
-  for (const skip of ['linux.AppImage', 'windows.exe.sig', 'mac-intel.tar.gz', 'windows.msi', 'linux.AppImage.sig']) {
+  for (const skip of ['linux.AppImage', 'windows.exe.sig', 'mac-intel.tar.gz', 'windows.msi', 'linux.AppImage.sig', 'linux-arm64.AppImage', 'linux-arm64.AppImage.sig']) {
     const source = await candidate(dir, '0.9.6', [skip]);
     await assert.rejects(runFlow({ source, ...args('0.9.6') }), /incomplete/, skip);
     await rm(source, { recursive: true });

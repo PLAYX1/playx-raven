@@ -107,6 +107,25 @@ test('linux: wrong name version, non-ELF, wrong machine, no AppImage marker, tru
   assert.notEqual(run(f, 'linux-x86_64', null, out).status, 0);
   await assert.rejects(readFile(out));
 }));
+test('linux-aarch64 (Raspberry Pi): ELF machine 183 AppImage accepted; machine 62 (x86_64) is rejected for it, and 183 stays rejected for linux-x86_64', () => withDir(async dir => {
+  const f = path.join(dir, 'RavenVault-Desktop-0.9.6-linux-arm64.AppImage'), out = path.join(dir, 'linux-aarch64.json');
+  await writeFile(f, syntheticAppImage({ machine: 183 }));
+  const r = run(f, 'linux-aarch64', '0.9.6', out);
+  assert.equal(r.status, 0, r.stderr); assert.match(r.stdout, /NOT checked/);
+  const s = JSON.parse(await readFile(out, 'utf8'));
+  assert.deepEqual(Object.keys(s), ['version', 'sha256', 'target', 'expires', 'sequence']);
+  assert.equal(s.target, 'linux-aarch64'); assert.equal(s.version, '0.9.6'); assert.match(s.sha256, /^[a-f0-9]{64}$/);
+  const bad = path.join(dir, 'bad.json');
+  await writeFile(f, syntheticAppImage({ machine: 62 }));
+  const x = run(f, 'linux-aarch64', '0.9.6', bad); assert.notEqual(x.status, 0); assert.match(x.stderr, /machine 62/);
+  await writeFile(f, syntheticAppImage({ machine: 183 }));
+  const y = run(f, 'linux-x86_64', '0.9.6', bad); assert.notEqual(y.status, 0); assert.match(y.stderr, /machine 183/);
+  for (const [name, bytes] of [['RavenVault-Desktop-0.9.5-linux-arm64.AppImage', syntheticAppImage({ machine: 183 })], ['RavenVault-Desktop-0.9.6-linux-arm64.AppImage', syntheticAppImage({ machine: 183, ai: false })], ['RavenVault-Desktop-0.9.6-linux-arm64.deb', syntheticAppImage({ machine: 183 })]]) {
+    const g = path.join(dir, name); await writeFile(g, bytes); assert.notEqual(run(g, 'linux-aarch64', '0.9.6', bad).status, 0, name);
+  }
+  assert.notEqual(run(f, 'linux-aarch64', null, bad).status, 0);
+  await assert.rejects(readFile(bad));
+}));
 test('mac behavior is unchanged: darwin choices still exist and a non-tarball is refused', () => withDir(async dir => {
   const f = path.join(dir, 'x.tar.gz'); await writeFile(f, 'not gzip');
   const r = run(f, 'darwin-aarch64', null, path.join(dir, 'o.json'));

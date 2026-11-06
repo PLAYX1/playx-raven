@@ -31,7 +31,7 @@ pub enum InstallKind {
 pub fn install_kind(target: &str, appimage_env: Option<&str>, url_path: &str) -> InstallKind {
     let path = url_path.to_ascii_lowercase();
     match target {
-        "linux-x86_64" => {
+        "linux-x86_64" | "linux-aarch64" => {
             let ok_env = appimage_env.is_some_and(|p| p.starts_with('/') && !p.trim().is_empty());
             if ok_env && !path.ends_with(".deb") && !path.ends_with(".rpm") {
                 InstallKind::Auto
@@ -204,6 +204,13 @@ mod tests {
         assert_eq!(install_kind(l, Some("/x/RV.AppImage"), "/d/RV.rpm"), InstallKind::Manual);
     }
     #[test]
+    fn raspberry_pi_follows_the_same_appimage_rule() {
+        let p = "linux-aarch64";
+        assert_eq!(install_kind(p, Some("/home/pi/RV.AppImage"), "/d/RV-linux-arm64.AppImage"), InstallKind::Auto);
+        assert_eq!(install_kind(p, None, "/d/RV-linux-arm64.AppImage"), InstallKind::Manual);
+        assert_eq!(install_kind(p, Some("/x/RV.AppImage"), "/d/RV_arm64.deb"), InstallKind::Manual);
+    }
+    #[test]
     fn windows_only_nsis_exe_is_automatic_and_mac_is_unchanged() {
         let w = "windows-x86_64";
         assert_eq!(install_kind(w, None, "/d/RV_x64-setup.exe"), InstallKind::Auto);
@@ -214,7 +221,7 @@ mod tests {
     #[test]
     fn no_signed_statement_means_no_offer() {
         let none = json!({"version":"1.0.0"});
-        for t in ["darwin-aarch64", "darwin-x86_64", "windows-x86_64", "linux-x86_64"] {
+        for t in ["darwin-aarch64", "darwin-x86_64", "windows-x86_64", "linux-x86_64", "linux-aarch64"] {
             assert_eq!(availability(t, &none, Some("/a.AppImage"), "/x"), Availability::NotPublished, "{t}");
             assert!(matches!(availability(t, &signed(t), Some("/a.AppImage"), "/x"), Availability::Offer(_)), "{t}");
             // 다른 대상의 진술은 이 대상을 열어 주지 않는다
@@ -225,7 +232,7 @@ mod tests {
         assert_eq!(availability("windows-x86_64", &half, None, "/x"), Availability::NotPublished);
         // 켜지 않은 대상은 진술이 있어도 막힌다
         assert_eq!(availability("windows-aarch64", &signed("windows-aarch64"), None, "/x"), Availability::NotEnabled);
-        assert_eq!(availability("linux-aarch64", &signed("linux-aarch64"), None, "/x"), Availability::NotEnabled);
+        assert_eq!(availability("linux-armv7", &signed("linux-armv7"), None, "/x"), Availability::NotEnabled);
     }
     #[test]
     fn linux_deb_install_is_manual_even_when_published() {

@@ -5,13 +5,15 @@ Sign the exact output separately with the release authority's minisign (prehashe
 Targets and what is read from the package (the package is never executed):
   darwin-aarch64 / darwin-x86_64  .app.tar.gz  embedded Info.plist version (unchanged behavior)
   windows-x86_64                  NSIS setup .exe  embedded PE ProductVersion, must equal --version
-  linux-x86_64                    .AppImage  ELF/AppImage markers + file name; internal version is NOT read
+  linux-x86_64 / linux-aarch64    .AppImage  ELF/AppImage markers + machine + file name; internal version is NOT read
 For windows/linux a human passes --version; it is cross-checked, never trusted alone.
 """
 import argparse,hashlib,json,plistlib,re,struct,tarfile,time
 from pathlib import Path
 
-TARGETS=['darwin-aarch64','darwin-x86_64','windows-x86_64','linux-x86_64']
+TARGETS=['darwin-aarch64','darwin-x86_64','windows-x86_64','linux-x86_64','linux-aarch64']
+# ELF e_machine expected per Linux target: x86_64 = 62, aarch64 (Raspberry Pi 4/5, 64-bit) = 183.
+LINUX_MACHINE={'linux-x86_64':62,'linux-aarch64':183}
 SEMVER=re.compile(r'^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$')
 
 class PackageError(Exception):pass
@@ -133,8 +135,8 @@ def check_windows(package,version):
         raise PackageError(f'version mismatch: --version {version} but the installer says {", ".join(seen)}')
     return f'installer ProductVersion read and matches {version}'
 
-def check_linux(package,version):
-    if package.suffix!='.AppImage':raise PackageError('linux-x86_64 needs the .AppImage file')
+def check_linux(package,version,target='linux-x86_64'):
+    if package.suffix!='.AppImage':raise PackageError(f'{target} needs the .AppImage file')
     if not re.search(r'(?<![\d.])'+re.escape(version)+r'(?![\d.])',package.name):
         raise PackageError(f'file name "{package.name}" does not contain version {version}')
     with open(package,'rb') as f:
@@ -143,7 +145,7 @@ def check_linux(package,version):
     if head[4]!=2 or head[5]!=1:raise PackageError('not a 64-bit little-endian ELF')
     with open(package,'rb') as f:
         machine=struct.unpack('<H',_read(f,18,2,'ELF machine'))[0]
-    if machine!=62:raise PackageError(f'not an x86_64 ELF (machine {machine})')
+    if machine!=LINUX_MACHINE[target]:raise PackageError(f'not a {target.split("-",1)[1]} ELF (machine {machine})')
     if head[8:10]!=b'AI' or head[10] not in (1,2):raise PackageError('AppImage marker (AI at byte 8) missing')
     return 'AppImage markers and file name match; the version inside the AppImage is NOT checked'
 
@@ -166,9 +168,9 @@ def main():
                 if not isinstance(version,str):p.error('embedded version missing')
             if a.version is not None and a.version!=version:p.error(f'--version {a.version} does not match embedded version {version}')
         else:
-            if a.version is None:p.error('--version is required for windows-x86_64 and linux-x86_64')
+            if a.version is None:p.error('--version is required for windows-x86_64, linux-x86_64 and linux-aarch64')
             version=a.version
-            note=(check_windows if a.target=='windows-x86_64' else check_linux)(a.package,version)
+            note=check_windows(a.package,version) if a.target=='windows-x86_64' else check_linux(a.package,version,a.target)
     except PackageError as e:
         p.error(str(e))
     statement={'version':version,'sha256':hashlib.file_digest(a.package.open('rb'),'sha256').hexdigest(),'target':a.target,'expires':a.expires,'sequence':a.sequence}

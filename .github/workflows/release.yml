@@ -52,7 +52,7 @@ jobs:
       - name: Verify existing public release
         env:
           RELEASE_VERSION: ${{ inputs.version }}
-        run: node scripts/verify-published-release.mjs "$RELEASE_VERSION" --targets windows-x86_64,darwin-aarch64,darwin-x86_64,linux-x86_64
+        run: node scripts/verify-published-release.mjs "$RELEASE_VERSION" --targets windows-x86_64,darwin-aarch64,darwin-x86_64,linux-x86_64,linux-aarch64
 
   build:
     if: inputs.verify_only != true
@@ -90,6 +90,13 @@ jobs:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             label: linux
+          # 라즈베리파이 4·5 (64비트 ARM, 라즈베리파이 OS bookworm·trixie). 0.9.15 부터 정식.
+          # 깃허브의 ARM 리눅스 기계에서 직접 만든다(교차 빌드 아님) — 11-05 시험 빌드
+          # (desktop-win-linux-build.yml 실행 42014455101)로 같은 기계·같은 대상이 성공했다.
+          # PC 리눅스와 같은 설계: 노드·파일창고는 넣지 않는다(AppImage 가 커져 깃에 못 올림).
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            label: linux-arm64
 
     runs-on: ${{ matrix.os }}
     steps:
@@ -181,7 +188,7 @@ jobs:
         #    릴리스 자산으로 올리면 되지만, 그건 다른 저장소라 토큰이 따로
         #    필요하다(github.token 은 403). 대표에게 토큰을 만들어 달라고
         #    하는 대신, 지금은 리눅스만 예전처럼 따로 깔게 둔다.
-        if: matrix.target != 'x86_64-unknown-linux-gnu'
+        if: ${{ !startsWith(matrix.os, 'ubuntu') }}  # 리눅스(PC·라즈베리파이)는 노드를 넣지 않는 설계
         shell: bash
         run: |
           set -euo pipefail
@@ -277,7 +284,7 @@ jobs:
         #    릴리스 자산으로 올리면 되지만, 그건 다른 저장소라 토큰이 따로
         #    필요하다(github.token 은 403). 대표에게 토큰을 만들어 달라고
         #    하는 대신, 지금은 리눅스만 예전처럼 따로 깔게 둔다.
-        if: matrix.target != 'x86_64-unknown-linux-gnu'
+        if: ${{ !startsWith(matrix.os, 'ubuntu') }}  # 리눅스(PC·라즈베리파이)는 노드를 넣지 않는 설계
         shell: bash
         run: |
           set -euo pipefail
@@ -428,7 +435,12 @@ jobs:
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: npx tauri build --target ${{ matrix.target }} --verbose
+        shell: bash
+        run: |
+          # 라즈베리파이(ARM 24.04)만: linuxdeploy 의 strip 이 24.04 라이브러리(.relr.dyn)에서
+          # 죽는 일을 피한다 — 시험 빌드에서 쓰던 설정 그대로. PC 리눅스·윈도우는 바꾸지 않는다.
+          if [ "${{ matrix.label }}" = linux-arm64 ]; then export NO_STRIP=true; fi
+          npx tauri build --target ${{ matrix.target }} --verbose
 
       # Tauri는 앱을 공증·staple한다. 배포할 DMG도 별도로 공증·staple한다.
       - name: 맥 DMG 공증·staple
@@ -590,7 +602,7 @@ jobs:
       #    오늘 세 번째다. 검사를 넣을 때는 막아야 할 것뿐 아니라
       #    **막지 말아야 할 것**도 반드시 같이 봐야 한다.
       - name: 노드·파일창고가 준비됐나
-        if: matrix.target != 'x86_64-unknown-linux-gnu'
+        if: ${{ !startsWith(matrix.os, 'ubuntu') }}  # 리눅스(PC·라즈베리파이)는 노드를 넣지 않는 설계
         shell: bash
         run: |
           set -euo pipefail
@@ -723,4 +735,4 @@ jobs:
         run: |
           set -euo pipefail
           V="${RELEASE_VERSION:-${GITHUB_REF_NAME#v}}"
-          node scripts/verify-published-release.mjs "$V" --targets windows-x86_64,darwin-aarch64,darwin-x86_64,linux-x86_64
+          node scripts/verify-published-release.mjs "$V" --targets windows-x86_64,darwin-aarch64,darwin-x86_64,linux-x86_64,linux-aarch64

@@ -24,7 +24,7 @@ export function verifyStatement(text, signature, publicKey, expected, now = Math
 // Linux signs the AppImage. A target is signed only when it is listed in `targets`.
 export const SIGNED_PACKAGES = Object.freeze([
   ['darwin-aarch64','mac-apple-silicon.tar.gz'],['darwin-x86_64','mac-intel.tar.gz'],
-  ['windows-x86_64','windows.exe'],['linux-x86_64','linux.AppImage'],
+  ['windows-x86_64','windows.exe'],['linux-x86_64','linux.AppImage'],['linux-aarch64','linux-arm64.AppImage'],
 ]);
 export async function signedReleaseMetadata(directory, source, prefix, version, publicKey, targets = ['darwin-aarch64','darwin-x86_64']) {
   if (!directory) throw Error('Signed release statement directory required (secfix1)');

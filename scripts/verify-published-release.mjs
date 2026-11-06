@@ -8,19 +8,21 @@ export const PLATFORMS = Object.freeze({
   'darwin-aarch64': 'mac-apple-silicon.tar.gz',
   'darwin-x86_64': 'mac-intel.tar.gz',
   'linux-x86_64': 'linux.AppImage',
+  'linux-aarch64': 'linux-arm64.AppImage', // 라즈베리파이 4·5 (64비트) — 0.9.15 부터
 });
-export const INSTALLERS = Object.freeze(['windows.exe', 'windows.msi', 'mac-apple-silicon.dmg', 'mac-intel.dmg', 'linux.AppImage']);
+export const INSTALLERS = Object.freeze(['windows.exe', 'windows.msi', 'mac-apple-silicon.dmg', 'mac-intel.dmg', 'linux.AppImage', 'linux-arm64.AppImage']);
 export const ALL_TARGETS = Object.freeze(Object.keys(PLATFORMS));
 // Which installers belong to which updater target. A partial release must name its targets explicitly.
 export const TARGET_INSTALLERS = Object.freeze({
   'windows-x86_64': ['windows.exe', 'windows.msi'], 'darwin-aarch64': ['mac-apple-silicon.dmg'],
   'darwin-x86_64': ['mac-intel.dmg'], 'linux-x86_64': ['linux.AppImage'],
+  'linux-aarch64': ['linux-arm64.AppImage'],
 });
 // Targets whose release statement is always required when the target is listed (the original, shipped behavior).
 export const MAC_SIGNED_TARGETS = Object.freeze(['darwin-aarch64', 'darwin-x86_64']);
 // Opt-in targets: a signed statement is required for them only in strict mode (the CLI, and the offline
 // release builder), so a release without their statements keeps auto-update blocked for them.
-export const EXTENDED_SIGNED_TARGETS = Object.freeze(['windows-x86_64', 'linux-x86_64']);
+export const EXTENDED_SIGNED_TARGETS = Object.freeze(['windows-x86_64', 'linux-x86_64', 'linux-aarch64']);
 const MAX_MANIFEST_BYTES = 64 * 1024;
 const MAX_ARTIFACT_BYTES = 99_000_000;
 export class InvalidRelease extends Error {}
@@ -103,7 +105,7 @@ export function validatePublishedManifest(value, expectedVersion, targets, { str
     }
     platforms[platform] = { signature: item.signature, url: item.url };
   }
-  if (!Array.isArray(value.installers) || value.installers.length !== INSTALLERS.length) throw new InvalidRelease('Expected exactly five installers');
+  if (!Array.isArray(value.installers) || value.installers.length !== INSTALLERS.length) throw new InvalidRelease(`Expected exactly ${INSTALLERS.length} installers`);
   const installers = INSTALLERS.map(suffix => {
     const found = value.installers.filter(item => item?.platform === suffix);
     if (found.length !== 1) throw new InvalidRelease(`Missing or duplicate installer: ${suffix}`);
@@ -241,7 +243,7 @@ export async function verifyPublishedRelease(version, {
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   try {
     const { targets, rest } = parseTargetsArg(process.argv.slice(2));
-    if (rest.length !== 1) throw new Error('Usage: node scripts/verify-published-release.mjs major.minor.patch --targets darwin-aarch64[,darwin-x86_64,windows-x86_64,linux-x86_64]');
+    if (rest.length !== 1) throw new Error('Usage: node scripts/verify-published-release.mjs major.minor.patch --targets darwin-aarch64[,darwin-x86_64,windows-x86_64,linux-x86_64,linux-aarch64]');
     const result = await verifyPublishedRelease(rest[0], {
       targets, strictSigned: true,
       onRetry: ({ attempt, elapsedMs, reason }) => console.log(`Waiting for public cache (attempt ${attempt}, ${Math.round(elapsedMs / 1000)}s): ${reason}`),

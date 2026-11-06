@@ -9,13 +9,13 @@ async function fixture(fn, brand = "PLAY-X-Raven") {
   const dir = await mkdtemp(path.join(tmpdir(), 'ravenvault-release-')), source=path.join(dir,'in'), out=path.join(dir,'out');
   await mkdir(source); await mkdir(out);
   for (const suffix of new Set([...installerSuffixes,'mac-apple-silicon.tar.gz','mac-intel.tar.gz'])) await writeFile(path.join(source,`${brand}-0.4.0-${suffix}`),`synthetic installer ${suffix}`);
-  for (const suffix of ['windows.exe','mac-apple-silicon.tar.gz','mac-intel.tar.gz','linux.AppImage']) await writeFile(path.join(source,`${brand}-0.4.0-${suffix}.sig`),Buffer.from('synthetic signature '.repeat(20)).toString('base64'));
+  for (const suffix of ['windows.exe','mac-apple-silicon.tar.gz','mac-intel.tar.gz','linux.AppImage','linux-arm64.AppImage']) await writeFile(path.join(source,`${brand}-0.4.0-${suffix}.sig`),Buffer.from('synthetic signature '.repeat(20)).toString('base64'));
   try { await fn(source,out); } finally { await rm(dir,{recursive:true,force:true}); }
 }
 test('all platforms publish immutable version URLs, hashes, aliases and preserve older files',()=>fixture(async(source,out)=>{
   await writeFile(path.join(out,'older-installer.exe'),'keep');
   const {manifest,paths}=await prepareRelease(source,out,'0.4.0',undefined,ALL_RELEASE_TARGETS);
-  assert.equal(Object.keys(manifest.platforms).length,4); assert.equal(manifest.installers.length,5);
+  assert.equal(Object.keys(manifest.platforms).length,5); assert.equal(manifest.installers.length,6);
   assert.ok(Object.values(manifest.platforms).every(p=>p.url.includes('/v0.4.0/PLAY-X-Raven-0.4.0-')&&!p.url.includes('latest-')));
   for(const item of manifest.installers) assert.match(item.sha256,/^[a-f0-9]{64}$/);
   assert.equal(await readFile(path.join(out,'older-installer.exe'),'utf8'),'keep');
@@ -97,13 +97,13 @@ test('CLI refuses to run without --targets',async()=>{
 });
 test('partial release: only listed target is published, other aliases untouched, others carried with their old version',()=>fixture(async(source,out)=>{
   await prepareRelease(source,out,'0.4.0',undefined,ALL_RELEASE_TARGETS);
-  const before={}; for (const s of ['windows.exe','windows.msi','mac-intel.dmg','mac-intel.tar.gz','linux.AppImage']) for (const b of ['PLAY-X-Raven','RavenVault-Desktop']) before[`${b}-latest-${s}`]=await readFile(path.join(out,`${b}-latest-${s}`));
+  const before={}; for (const s of ['windows.exe','windows.msi','mac-intel.dmg','mac-intel.tar.gz','linux.AppImage','linux-arm64.AppImage']) for (const b of ['PLAY-X-Raven','RavenVault-Desktop']) before[`${b}-latest-${s}`]=await readFile(path.join(out,`${b}-latest-${s}`));
   const oldLatest=JSON.parse(await readFile(path.join(out,'latest.json'),'utf8'));
   const next=path.join(path.dirname(source),'next'); await mkdir(next);
   await writeTarget(next,'0.4.1','arm',['mac-apple-silicon.dmg','mac-apple-silicon.tar.gz'],['mac-apple-silicon.tar.gz']);
   const {manifest,paths}=await prepareRelease(next,out,'0.4.1',undefined,['darwin-aarch64']);
   assert.deepEqual(Object.keys(manifest.platforms),['darwin-aarch64']);
-  assert.equal(manifest.installers.length,5);
+  assert.equal(manifest.installers.length,6);
   for (const item of manifest.installers) {
     if (item.platform==='mac-apple-silicon.dmg') { assert.equal(item.version,undefined); assert.match(item.url,/\/v0\.4\.1\/RavenVault-Desktop-0\.4\.1-mac-apple-silicon\.dmg$/); }
     else assert.deepEqual(item,{...oldLatest.installers.find(o=>o.platform===item.platform),version:'0.4.0'});
@@ -117,7 +117,7 @@ test('partial release: only listed target is published, other aliases untouched,
   assert.ok(!sums.some(l=>l.includes('v0.4.0/PLAY-X-Raven-0.4.0-mac-apple-silicon')),'replaced target drops its old checksum lines');
   const latest=JSON.parse(await readFile(path.join(out,'latest.json'),'utf8'));
   assert.ok(validatePublishedManifest(latest,'0.4.1',['darwin-aarch64']));
-  assert.throws(()=>validatePublishedManifest(latest,'0.4.1',['darwin-aarch64','darwin-x86_64','windows-x86_64','linux-x86_64']));
+  assert.throws(()=>validatePublishedManifest(latest,'0.4.1',['darwin-aarch64','darwin-x86_64','windows-x86_64','linux-x86_64','linux-aarch64']));
   assert.throws(()=>validatePublishedManifest(oldLatest,'0.4.0',['darwin-aarch64']),'a full manifest is not a darwin-only manifest');
   assert.throws(()=>validatePublishedManifest(latest,'0.4.1',undefined),/targets/i);
   const bumped=structuredClone(latest); bumped.installers.find(i=>i.version).version='0.4.1';
@@ -151,6 +151,28 @@ test('partial release refuses when there is nothing valid to carry for the other
   await writeFile(path.join(out,'latest.json'),JSON.stringify(latest));
   await assert.rejects(prepareRelease(next,out,'0.4.1',undefined,['darwin-aarch64']),/Invalid carried installer entry/);
   await assert.rejects(stat(path.join(out,'v0.4.1')));
+}));
+test('Raspberry Pi AppImage (linux-arm64) maps to linux-aarch64 and PC linux.AppImage stays linux-x86_64, with no cross-matching',()=>fixture(async(source,out)=>{
+  assert.ok(ALL_RELEASE_TARGETS.includes('linux-aarch64')); assert.ok(installerSuffixes.includes('linux-arm64.AppImage'));
+  const {manifest}=await prepareRelease(source,out,'0.4.0',undefined,ALL_RELEASE_TARGETS);
+  assert.match(manifest.platforms['linux-aarch64'].url,/\/v0\.4\.0\/PLAY-X-Raven-0\.4\.0-linux-arm64\.AppImage$/);
+  assert.match(manifest.platforms['linux-x86_64'].url,/\/v0\.4\.0\/PLAY-X-Raven-0\.4\.0-linux\.AppImage$/);
+  assert.notEqual(manifest.platforms['linux-aarch64'].signature,undefined);
+  assert.equal(manifest.installers.filter(i=>i.platform==='linux.AppImage').length,1); assert.equal(manifest.installers.filter(i=>i.platform==='linux-arm64.AppImage').length,1);
+  assert.equal(await readFile(path.join(out,'RavenVault-Desktop-latest-linux-arm64.AppImage'),'utf8'),'synthetic installer linux-arm64.AppImage');
+  assert.equal(await readFile(path.join(out,'RavenVault-Desktop-latest-linux.AppImage'),'utf8'),'synthetic installer linux.AppImage');
+}));
+test('partial release of only linux-aarch64 takes only the arm64 AppImage; the PC AppImage is an unlisted target and is refused',()=>fixture(async(source,out)=>{
+  await prepareRelease(source,out,'0.4.0',undefined,ALL_RELEASE_TARGETS);
+  const next=path.join(path.dirname(source),'next'); await mkdir(next);
+  await writeTarget(next,'0.4.1','pi',['linux-arm64.AppImage'],['linux-arm64.AppImage']);
+  const {manifest}=await prepareRelease(next,out,'0.4.1',undefined,['linux-aarch64']);
+  assert.deepEqual(Object.keys(manifest.platforms),['linux-aarch64']);
+  assert.equal(manifest.installers.find(i=>i.platform==='linux.AppImage').version,'0.4.0');
+  assert.equal(manifest.installers.find(i=>i.platform==='linux-arm64.AppImage').version,undefined);
+  const next2=path.join(path.dirname(source),'next2'); await mkdir(next2);
+  await writeTarget(next2,'0.4.2','pi',['linux-arm64.AppImage','linux.AppImage'],['linux-arm64.AppImage']);
+  await assert.rejects(prepareRelease(next2,out,'0.4.2',undefined,['linux-aarch64']),/not listed/);
 }));
 test('update notes come from that version in CHANGELOG.md, not an old fixed text', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'rv-notes-'));

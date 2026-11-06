@@ -1,5 +1,17 @@
 # 변경 기록
 
+## 0.9.15
+
+### 한국어
+
+- **라즈베리파이 정식 지원:** 라즈베리파이 4·5 (64비트 라즈베리파이 OS)용 설치 파일(AppImage)이 다른 컴퓨터와 같이 나갑니다. 이 판부터는 프로그램 안의 업데이트 단추로 새 판을 받습니다.
+- **맞는 컴퓨터 파일만 설치:** 자동 업데이트가 받은 파일이 이 컴퓨터용(PC 리눅스·라즈베리파이)인지 먼저 확인하고, 아니면 설치하지 않습니다.
+
+### English
+
+- **Raspberry Pi support:** an AppImage for Raspberry Pi 4/5 (64-bit Raspberry Pi OS) now ships with every release, and from this version on it updates itself with the in-app update button.
+- **Only the right file is installed:** the updater first checks that a downloaded Linux file is built for this computer (PC or Raspberry Pi) and refuses it otherwise.
+
 ## 0.9.14
 
 ### 한국어

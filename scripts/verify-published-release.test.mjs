@@ -14,9 +14,9 @@ const { PUBLIC_BASE, verifyPublishedRelease, validatePublishedManifest, ALL_TARG
 const version = '0.4.1';
 const platformPairs = [
   ['windows-x86_64', 'windows.exe'], ['darwin-aarch64', 'mac-apple-silicon.tar.gz'],
-  ['darwin-x86_64', 'mac-intel.tar.gz'], ['linux-x86_64', 'linux.AppImage'],
+  ['darwin-x86_64', 'mac-intel.tar.gz'], ['linux-x86_64', 'linux.AppImage'], ['linux-aarch64', 'linux-arm64.AppImage'],
 ];
-const installerNames = ['windows.exe', 'windows.msi', 'mac-apple-silicon.dmg', 'mac-intel.dmg', 'linux.AppImage'];
+const installerNames = ['windows.exe', 'windows.msi', 'mac-apple-silicon.dmg', 'mac-intel.dmg', 'linux.AppImage', 'linux-arm64.AppImage'];
 function manifest(v = version) {
   const url = suffix => `${PUBLIC_BASE}v${v}/PLAY-X-Raven-${v}-${suffix}`;
   return {
@@ -46,13 +46,13 @@ function clock() {
   return { now: () => time, sleep: async ms => { time += ms; } };
 }
 
-test('exact four updater platforms / five installers produce only seven deduplicated artifact HEAD requests', async () => {
+test('exact five updater platforms / six installers produce only eight deduplicated artifact HEAD requests', async () => {
   const f = fixture();
   const result = await verifyPublishedRelease(version, { targets: ALL_TARGETS,  ...f, cacheWaitMs: 0 });
-  assert.deepEqual({ ...result, elapsedMs: 0 }, { version, updaterPlatforms: 4, installers: 5, artifacts: 7, attempts: 1, elapsedMs: 0 });
+  assert.deepEqual({ ...result, elapsedMs: 0 }, { version, updaterPlatforms: 5, installers: 6, artifacts: 8, attempts: 1, elapsedMs: 0 });
   assert.equal(f.calls.filter(c => c.method === 'GET').length, 2);
-  assert.equal(f.calls.filter(c => c.method === 'HEAD').length, 7);
-  assert.equal(new Set(f.calls.map(c => c.url)).size, 9);
+  assert.equal(f.calls.filter(c => c.method === 'HEAD').length, 8);
+  assert.equal(new Set(f.calls.map(c => c.url)).size, 10);
 });
 test('50 seconds of stale raw cache recovers without rebuilding or publishing', async () => {
   const time = clock();
@@ -124,9 +124,9 @@ test('new RavenVault Desktop URLs pass the same immutable manifest and HEAD chec
   const renamed=()=>JSON.parse(JSON.stringify(manifest()).replaceAll('PLAY-X-Raven-','RavenVault-Desktop-'));
   const f=fixture({latest:renamed,immutable:renamed});
   const result=await verifyPublishedRelease(version, { targets: ALL_TARGETS, ...f,cacheWaitMs:0});
-  assert.equal(result.artifacts,21);
-  assert.equal(f.calls.filter(c=>c.method==='HEAD'&&c.url.includes('/PLAY-X-Raven-latest-')).length,7);
-  assert.equal(f.calls.filter(c=>c.method==='HEAD'&&c.url.includes('/RavenVault-Desktop-latest-')).length,7);
+  assert.equal(result.artifacts,24);
+  assert.equal(f.calls.filter(c=>c.method==='HEAD'&&c.url.includes('/PLAY-X-Raven-latest-')).length,8);
+  assert.equal(f.calls.filter(c=>c.method==='HEAD'&&c.url.includes('/RavenVault-Desktop-latest-')).length,8);
   const bad=renamed();bad.platforms['darwin-aarch64'].url=bad.platforms['darwin-aarch64'].url.replace(version,'9.9.9');
   assert.throws(()=>validatePublishedManifest(bad, version, ALL_TARGETS),/Invalid immutable updater URL/);
 });

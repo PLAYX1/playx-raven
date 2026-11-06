@@ -44,12 +44,14 @@ pub const UPDATE_TARGETS_ENABLED: &[&str] = &[
     "darwin-x86_64",
     "windows-x86_64",
     "linux-x86_64",
+    // 라즈베리파이 4·5 (64비트 ARM 리눅스) — 0.9.15 부터 정식 출시·자동 업데이트.
+    "linux-aarch64",
 ];
 
 /// 🟡 **낮은 보증** 모드를 허용하는 대상. 패키지 안의 버전을 앱이 읽지 못하고
 /// 서명된 진술의 version 을 그대로 믿는 대상만 여기에 둔다. 기본은 리눅스(AppImage)뿐.
 /// 맥·윈도우는 반드시 `Verified` 여야 하므로 여기에 넣지 않는다.
-pub const STATEMENT_ONLY_TARGETS: &[&str] = &["linux-x86_64"];
+pub const STATEMENT_ONLY_TARGETS: &[&str] = &["linux-x86_64", "linux-aarch64"];
 
 /// 패키지 바이트에서 앱이 얼마나 버전을 확인했는가.
 #[derive(Debug, PartialEq, Eq)]
@@ -73,10 +75,29 @@ pub fn is_appimage(bytes: &[u8]) -> bool {
         && (bytes[10] == 1 || bytes[10] == 2)
 }
 
+/// 이 리눅스 대상이 받아야 할 ELF 기계 번호(e_machine, 64비트 리틀엔디언 기준).
+/// x86_64 = 62, aarch64 = 183. 라즈베리파이에 PC 용 AppImage 가 깔려 앱이 안 켜지는 일을 막는다.
+fn linux_machine(target: &str) -> Option<u16> {
+    match target {
+        "linux-x86_64" => Some(62),
+        "linux-aarch64" => Some(183),
+        _ => None,
+    }
+}
+
+/// AppImage 이면서 **이 기계용**인가: 64비트·리틀엔디언 ELF 이고 e_machine 이 대상과 같다.
+pub fn is_appimage_for(bytes: &[u8], target: &str) -> bool {
+    let Some(want) = linux_machine(target) else { return false };
+    is_appimage(bytes)
+        && bytes[4] == 2
+        && bytes[5] == 1
+        && u16::from_le_bytes([bytes[18], bytes[19]]) == want
+}
+
 /// 설치 직전 패키지를 **실행·압축해제 없이** 검사한다. 대상별로:
 /// - `darwin-*`: 서명된 tar.gz 안 Info.plist → `Verified`
 /// - `windows-x86_64`: NSIS exe 의 VS_VERSIONINFO → `Verified`
-/// - `linux-x86_64`: AppImage 형식만 → `StatementOnly`
+/// - `linux-x86_64`·`linux-aarch64`: AppImage 형식 + 기계 번호만 → `StatementOnly`
 /// - 그 밖: Err (설치 차단)
 pub fn package_version(bytes: &[u8], target: &str) -> Result<PackageVersion, String> {
     if !UPDATE_TARGETS_ENABLED.contains(&target) {
@@ -84,11 +105,13 @@ pub fn package_version(bytes: &[u8], target: &str) -> Result<PackageVersion, Str
     }
     match target {
         "windows-x86_64" => crate::pe_version::product_version(bytes).map(PackageVersion::Verified),
-        "linux-x86_64" => {
-            if is_appimage(bytes) {
-                Ok(PackageVersion::StatementOnly)
-            } else {
+        "linux-x86_64" | "linux-aarch64" => {
+            if !is_appimage(bytes) {
                 Err("AppImage 형식이 아닙니다. 설치 차단".into())
+            } else if !is_appimage_for(bytes, target) {
+                Err("이 컴퓨터용 AppImage 가 아닙니다. 설치 차단".into())
+            } else {
+                Ok(PackageVersion::StatementOnly)
             }
         }
         _ => darwin_package_version(bytes).map(PackageVersion::Verified),
@@ -319,11 +342,18 @@ mod platform_tests {
     use crate::pe_version::tests::synthetic_installer;
     const WIN: &str = "windows-x86_64";
     const LIN: &str = "linux-x86_64";
-    fn appimage() -> Vec<u8> {
+    const PI: &str = "linux-aarch64";
+    fn appimage_machine(machine: u16) -> Vec<u8> {
         let mut b = vec![0u8; 256];
         b[..4].copy_from_slice(b"\x7fELF");
+        b[4] = 2; // 64비트
+        b[5] = 1; // 리틀엔디언
         b[8..11].copy_from_slice(b"AI\x02");
+        b[18..20].copy_from_slice(&machine.to_le_bytes());
         b
+    }
+    fn appimage() -> Vec<u8> {
+        appimage_machine(62)
     }
     fn rel(target: &str, v: &str, b: &[u8], seq: u64) -> Release {
         Release {
@@ -344,15 +374,15 @@ mod platform_tests {
     fn enabled_targets_are_pinned() {
         assert_eq!(
             UPDATE_TARGETS_ENABLED,
-            &["darwin-aarch64", "darwin-x86_64", "windows-x86_64", "linux-x86_64"]
+            &["darwin-aarch64", "darwin-x86_64", "windows-x86_64", "linux-x86_64", "linux-aarch64"]
         );
-        assert_eq!(STATEMENT_ONLY_TARGETS, &["linux-x86_64"]);
+        assert_eq!(STATEMENT_ONLY_TARGETS, &["linux-x86_64", "linux-aarch64"]);
     }
 
     #[test]
     fn unknown_targets_are_still_rejected() {
         let (f, root) = floor("unknown");
-        for t in ["windows-aarch64", "linux-aarch64", "freebsd-x86_64", "windows", "", "linux-x86_64 "] {
+        for t in ["windows-aarch64", "linux-arm64", "linux-armv7", "freebsd-x86_64", "windows", "", "linux-x86_64 "] {
             let w = synthetic_installer("0.9.5");
             assert!(package_version(&w, t).is_err(), "{t}");
             assert!(enforce(&f, "0.9.0", "0.9.5", &rel(t, "0.9.5", &w, 1), &w, t, 100).is_err(), "{t}");
@@ -400,6 +430,31 @@ mod platform_tests {
         // 맥 tar.gz·MSI 모양(CFB 머리)·zip 은 윈도우 대상에서 거부
         assert!(package_version(&[0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1], WIN).is_err());
         assert!(package_version(b"PK\x03\x04zipzip", WIN).is_err());
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn appimage_must_match_this_computer() {
+        let pc = appimage();
+        let pi = appimage_machine(183);
+        assert_eq!(package_version(&pi, PI).unwrap(), PackageVersion::StatementOnly);
+        assert_eq!(package_version(&pc, LIN).unwrap(), PackageVersion::StatementOnly);
+        // PC 용을 라즈베리파이에, 라즈베리파이용을 PC 에 — 둘 다 거부
+        assert!(package_version(&pc, PI).is_err());
+        assert!(package_version(&pi, LIN).is_err());
+        // 32비트(armv7 등)·빅엔디언 ELF 는 거부
+        let mut b32 = pi.clone();
+        b32[4] = 1;
+        assert!(package_version(&b32, PI).is_err());
+        let mut be = pi.clone();
+        be[5] = 2;
+        assert!(package_version(&be, PI).is_err());
+        assert!(package_version(&appimage_machine(40), PI).is_err()); // 32비트 ARM 번호
+        // 라즈베리파이도 서명된 진술 정책을 그대로 받는다
+        let (f, root) = floor("pi");
+        let r = rel(PI, "0.9.15", &pi, 1);
+        enforce(&f, "0.9.14", "0.9.15", &r, &pi, PI, 100).unwrap();
+        assert!(enforce(&f, "0.9.14", "0.9.15", &rel(LIN, "0.9.15", &pi, 2), &pi, PI, 100).is_err());
         let _ = std::fs::remove_dir_all(root);
     }
 
