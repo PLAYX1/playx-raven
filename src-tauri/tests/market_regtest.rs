@@ -35,6 +35,42 @@ const ASSET: &str = "RVTESTGAME";
 const PASS: &str = "synthetic-regtest-only-pass";
 const SELLER_SK: &str = "1111111111111111111111111111111111111111111111111111111111111111";
 const BUYER_SK: &str = "2222222222222222222222222222222222222222222222222222222222222222";
+/// 0.9.18 폰에서 판매: 데스크탑 연결 열쇠·폰 연결 열쇠(시험 전용 고정값 — 폰은 서명만 흉내 낸다).
+const DESK_LINK_SK: &str = "3333333333333333333333333333333333333333333333333333333333333333";
+const PHONE_LINK_SK: &str = "4444444444444444444444444444444444444444444444444444444444444444";
+
+fn ms() -> i64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as i64
+}
+
+fn sell_body(lid: &str, id: &str, amount: &str, price: &str) -> Value {
+    let now = ms();
+    json!({"v": 1, "linkId": lid, "id": id, "asset": ASSET, "amount": amount, "priceRvn": price, "title": format!("폰에서 판 게임 아이템 {amount}개"),
+        "summary": "폰 판매 regtest", "category": "game", "created": now, "expires": now + 600_000})
+}
+
+/// 판매 일을 끝(published 등)까지 돌린다. lot 이면 한 블록 캔다. pending_human 이면 거기서 멈춘다.
+async fn run_sell(net: &Net, id: &str, until: &[&str]) -> Value {
+    for round in 0..12 {
+        h::wl_tick(DESK_LINK_SK).await.expect("판매 일 돌리기");
+        let j = h::wl_job(id).unwrap();
+        let st = j["job"]["status"].as_str().unwrap_or("").to_string();
+        println!("  판매 일 {round}: {st} {}", j["job"]["reason"]);
+        if until.contains(&st.as_str()) {
+            return j;
+        }
+        assert!(!["refused", "failed", "cancelled"].contains(&st.as_str()) || until.contains(&st.as_str()), "판매 일이 {st} 로 끝났다: {}", j["job"]["reason"]);
+        if st == "lot" {
+            net.mine(1);
+        }
+    }
+    panic!("판매 일이 {until:?} 에 닿지 않았다");
+}
+
+fn sell_result<'a>(j: &'a Value, id: &str, status: &str) -> &'a Value {
+    j["results"].as_array().unwrap().iter().find(|r| r["body"]["id"] == id && r["body"]["status"] == status)
+        .unwrap_or_else(|| panic!("{id} 의 {status} 결과가 없다: {}", j["results"]))
+}
 
 fn bin() -> PathBuf {
     std::env::var("RV_REGTEST_BIN")
@@ -405,6 +441,68 @@ async fn market_listing_end_to_end_on_regtest() {
     let m1 = find_view(&mine, &d).expect("팔린 것도 내 목록에");
     println!("  ✔ 내 목록: 내린 것 status={} · 팔린 것 status={} check={}", m2["status"], m1["status"], m1["check"]);
 
+    // ═══ 6. 폰에서 판매(0.9.18) ═══════════════════════════════════════
+    println!("\n[6] 폰에서 판매");
+    as_actor(&net.a);
+    let (lid, desk_key) = h::wl_link_phone(DESK_LINK_SK, PHONE_LINK_SK, 3).expect("시험 폰 연결");
+    let before = asset_balance(&net.a, ASSET);
+    // 6a. 2개를 40 RVN 에: 딱 맞는 묶음이 없어 새로 만든다 → 1블록 → 제안 → 글.
+    let sid = "61".repeat(32);
+    let s1 = h::wl_phone_sign(PHONE_LINK_SK, "sell", sell_body(&lid, &sid, "2", "40.00000000")).unwrap();
+    h::wl_deliver(DESK_LINK_SK, PHONE_LINK_SK, "sell", &s1).unwrap();
+    let j = run_sell(&net, &sid, &["published"]).await;
+    let pd = j["job"]["d"].as_str().unwrap().to_string();
+    let (pt, pv) = (j["job"]["outpoint"][0].as_str().unwrap().to_string(), j["job"]["outpoint"][1].as_u64().unwrap());
+    let r = sell_result(&j, &sid, "published");
+    assert!(h::wl_verify("sellresult", r, &desk_key), "판매 결과는 데스크탑 연결 열쇠 서명");
+    assert_eq!(r["body"]["d"], pd.as_str());
+    println!("  ✔ 폰 판매 글 {pd} · 결과 {}", r["body"]);
+    let evs = h::listing_events(&seller_pk).await.unwrap();
+    let pev = evs.iter().filter(|e| e["tags"].as_array().unwrap().iter().any(|t| t[0] == "d" && t[1] == pd.as_str())).max_by_key(|e| e["created_at"].as_i64()).unwrap().clone();
+    h::check_event(&pev).await.expect("폰이 올린 글도 사는 쪽 체인 확인을 통과");
+    // 같은 「팔아 줘」가 또 와도 다시 하지 않는다.
+    h::wl_deliver(DESK_LINK_SK, PHONE_LINK_SK, "sell", &s1).unwrap();
+    assert_eq!(h::wl_job(&sid).unwrap()["job"]["status"], "published");
+    // 주인 토큰은 거절.
+    let own = "62".repeat(32);
+    let mut ob = sell_body(&lid, &own, "1", "10.00000000");
+    ob["asset"] = json!(format!("{ASSET}!"));
+    h::wl_deliver(DESK_LINK_SK, PHONE_LINK_SK, "sell", &h::wl_phone_sign(PHONE_LINK_SK, "sell", ob).unwrap()).unwrap();
+    assert_eq!(h::wl_job(&own).unwrap()["job"]["reason"], "owner-token");
+    // 6b. 사는 쪽이 산다 → 팔렸음(파는 쪽이 저절로, 글만).
+    as_actor(&net.b);
+    let browse = h::market_browse(None).await.unwrap();
+    let pview = find_view(&browse, &pd).expect("폰 판매 글이 둘러보기에").clone();
+    assert_eq!(pview["check"]["ok"], true);
+    let bought = h::swap_take_listing(pview, true, None).await.expect("폰 판매 글 사기");
+    net.wait_mempool(bought["txid"].as_str().unwrap());
+    net.mine(1);
+    as_actor(&net.a);
+    assert!(net.a.cli(&["gettxout", &pt, &pv.to_string()]).is_null());
+    h::wl_recheck_now(&sid).unwrap();
+    let j = run_sell(&net, &sid, &["sold"]).await;
+    assert!(h::wl_verify("sellresult", sell_result(&j, &sid, "sold"), &desk_key));
+    let mine = h::market_my_listings().await.unwrap();
+    assert_eq!(find_view(&mine, &pd).unwrap()["status"], "sold", "내 판매 글에 팔렸음");
+    assert_eq!(asset_balance(&net.a, ASSET), before - 2.0);
+    println!("  ✔ 팔렸음 글·폰 결과 sold");
+    // 6c. 폰의 내리기.
+    let sid2 = "63".repeat(32);
+    h::wl_deliver(DESK_LINK_SK, PHONE_LINK_SK, "sell", &h::wl_phone_sign(PHONE_LINK_SK, "sell", sell_body(&lid, &sid2, "1", "30.00000000")).unwrap()).unwrap();
+    let j2 = run_sell(&net, &sid2, &["published"]).await;
+    let d2p = j2["job"]["d"].as_str().unwrap().to_string();
+    let (t2p, v2p) = (j2["job"]["outpoint"][0].as_str().unwrap().to_string(), j2["job"]["outpoint"][1].as_u64().unwrap());
+    let uid = "64".repeat(32);
+    let now = ms();
+    let un = h::wl_phone_sign(PHONE_LINK_SK, "unsell", json!({"v": 1, "linkId": lid, "id": uid, "d": d2p, "created": now, "expires": now + 600_000})).unwrap();
+    h::wl_deliver(DESK_LINK_SK, PHONE_LINK_SK, "unsell", &un).unwrap();
+    let j2 = run_sell(&net, &sid2, &["cancelled"]).await;
+    assert!(h::wl_verify("sellresult", sell_result(&j2, &uid, "cancelled"), &desk_key));
+    net.mine(1);
+    assert!(net.a.cli(&["gettxout", &t2p, &v2p.to_string()]).is_null(), "내린 동전은 옮겨졌다");
+    assert_eq!(asset_balance(&net.a, ASSET), before - 2.0, "자산이 하나도 안 샘");
+    println!("  ✔ 폰 내리기 → 동전 옮김·결과 cancelled");
+
     // ═══ 5. 암호화 지갑 ═══════════════════════════════════════════════
     println!("\n[5] 암호화 지갑");
     let _ = net.a.try_cli(&["encryptwallet", PASS]);
@@ -429,6 +527,28 @@ async fn market_listing_end_to_end_on_regtest() {
     assert_eq!(net.a.cli(&["getwalletinfo"])["unlocked_until"], 0, "내리기 뒤 다시 잠김");
     net.mine(1);
     assert!(net.a.cli(&["gettxout", &t3, &v3.to_string()]).is_null());
-    assert_eq!(asset_balance(&net.a, ASSET), 9.0);
+    assert_eq!(asset_balance(&net.a, ASSET), 7.0);
+    // ═══ 5b. 잠긴 지갑의 폰 판매: 사람 대기 → 암호로 이어 가기(두 번: 묶음·제안) ═══
+    println!("\n[5b] 잠긴 지갑 폰 판매");
+    let sid3 = "65".repeat(32);
+    h::wl_deliver(DESK_LINK_SK, PHONE_LINK_SK, "sell", &h::wl_phone_sign(PHONE_LINK_SK, "sell", sell_body(&lid, &sid3, "3", "20.00000000")).unwrap()).unwrap();
+    let j3 = run_sell(&net, &sid3, &["pending_human"]).await;
+    assert_eq!(j3["job"]["resume"], "queued");
+    assert!(h::wl_verify("sellresult", sell_result(&j3, &sid3, "pending_human"), &desk_key));
+    assert!(h::wl_continue(DESK_LINK_SK, &sid3, "wrong-pass").await.is_err(), "틀린 암호");
+    assert_eq!(h::wl_job(&sid3).unwrap()["job"]["status"], "pending_human");
+    h::wl_continue(DESK_LINK_SK, &sid3, PASS).await.expect("암호로 묶음 만들기");
+    assert_eq!(net.a.cli(&["getwalletinfo"])["unlocked_until"], 0, "다시 잠김");
+    net.mine(1);
+    let j3 = run_sell(&net, &sid3, &["pending_human", "published"]).await;
+    if j3["job"]["status"] == "pending_human" {
+        assert_eq!(j3["job"]["resume"], "lot_ready");
+        h::wl_continue(DESK_LINK_SK, &sid3, PASS).await.expect("암호로 제안 서명");
+    }
+    assert_eq!(h::wl_job(&sid3).unwrap()["job"]["status"], "published");
+    assert_eq!(net.a.cli(&["getwalletinfo"])["unlocked_until"], 0, "다시 잠김");
+    let state = std::fs::read_to_string(net.a.home.join("wallet-link/state.json")).unwrap();
+    assert!(!state.contains(PASS), "암호는 기록에 없다");
+    println!("  ✔ 잠긴 지갑: 사람 대기 → 암호 → 올림 · 다시 잠김");
     println!("\n모두 통과");
 }

@@ -67,10 +67,21 @@ function write() {
   const result = link.signLinkResult({ v: 1, linkId: d.linkId, id: '11'.repeat(32), txid: 'aa'.repeat(32) }, desk);
   const refused = link.signLinkResult({ v: 1, linkId: d.linkId, id: '22'.repeat(32), refused: 'refused' }, desk);
   const seen = link.signLinkSeen({ v: 1, linkId: d.linkId, id: '11'.repeat(32), at: now + 2000, dailySats: '100000000000', spentToday: '0' }, desk);
-  const bodies = [['accept', accept.body], ['request', requestFill.body], ['revoke', revoke.body], ['result', result.body], ['result', refused.body], ['seen', seen.body]];
-  const gifts = [['accept', accept], ['request', requestFill], ['request', requestSend], ['revoke', revoke]]
+  // 0.9.18 팔아 줘 · 내리기 · 판매 결과. 자산·값은 시험용 이름.
+  const sellBody = { v: 1, linkId: d.linkId, id: '33'.repeat(32), asset: 'PLAYX/ALBUM1', amount: '1', priceRvn: '25.00000000', title: '첫 앨범',
+    summary: '한정판 · 1번', category: 'music', image: 'https://example.com/a.png', created: now, expires: now + 600_000 };
+  const sell = link.signLinkSell(sellBody, phone);
+  const { image: _drop, ...plainBody } = sellBody;
+  const sellPlain = link.signLinkSell({ ...plainBody, id: '55'.repeat(32), asset: 'RVTESTGAME', amount: '0.5', priceRvn: '1.00000000', category: 'game' }, phone);
+  const unsell = link.signLinkUnsell({ v: 1, linkId: d.linkId, id: '44'.repeat(32), d: `rvswap:${'cc'.repeat(32)}:1`, created: now, expires: now + 600_000 }, phone);
+  const sellResult = link.signLinkSellResult({ v: 1, linkId: d.linkId, id: '33'.repeat(32), status: 'published', eventId: 'dd'.repeat(32),
+    d: `rvswap:${'cc'.repeat(32)}:1`, outpoint: { txid: 'cc'.repeat(32), vout: 1 }, at: now + 3000 }, desk);
+  const sellRefused = link.signLinkSellResult({ v: 1, linkId: d.linkId, id: '55'.repeat(32), status: 'refused', reason: 'sell-off', at: now + 3000 }, desk);
+  const bodies = [['accept', accept.body], ['request', requestFill.body], ['revoke', revoke.body], ['result', result.body], ['result', refused.body], ['seen', seen.body],
+    ['sell', sell.body], ['sell', sellPlain.body], ['unsell', unsell.body], ['sellresult', sellResult.body], ['sellresult', sellRefused.body]];
+  const gifts = [['accept', accept], ['request', requestFill], ['request', requestSend], ['revoke', revoke], ['sell', sell], ['sell', sellPlain], ['unsell', unsell]]
     .map(([t, s]) => ({ t, event: transport.packLinkMessage(phone, d.deskKey, { t, s }) }));
-  const out = { ...d, accept, requestFill, requestSend, revoke, result, refused, seen,
+  const out = { ...d, accept, requestFill, requestSend, revoke, result, refused, seen, sell, sellPlain, unsell, sellResult, sellRefused,
     digests: bodies.map(([tag, body]) => ({ tag, body, hex: digest(tag, body) })), gifts };
   writeFileSync(VECTORS, JSON.stringify(out, null, 2) + '\n');
 }
@@ -103,6 +114,14 @@ test('shared vectors still match the vendored TypeScript (Rust reads the same fi
   assert.equal(link.verifyLinkResult(v.refused, v.deskKey, v.linkId).refused, 'refused');
   assert.equal(link.verifyLinkSeen(v.seen, v.deskKey, v.linkId).dailySats, '100000000000');
   assert.throws(() => link.verifyLinkSeen(v.seen, v.phoneKey, v.linkId));
+  // 0.9.18 팔아 줘: 폰이 서명한 것이 폰 규격 검사를 통과하고(허용 켠 연결), 데스크탑이 서명한 결과가 폰에서 열린다.
+  const sellRec = { ...record, sell: { enabled: true, daily: 3 } };
+  for (const k of ['sell', 'sellPlain']) assert.ok(link.checkLinkSell(v[k], sellRec, v.now, new Set(), 0).ok, k);
+  assert.equal(link.checkLinkSell(v.sell, record, v.now, new Set(), 0).reason, 'sell-off');
+  assert.equal(link.verifyLinkUnsell(v.unsell, v.phoneKey, v.linkId).d, `rvswap:${'cc'.repeat(32)}:1`);
+  assert.equal(link.verifyLinkSellResult(v.sellResult, v.deskKey, v.linkId).outpoint.vout, 1);
+  assert.equal(link.verifyLinkSellResult(v.sellRefused, v.deskKey, v.linkId).reason, 'sell-off');
+  assert.throws(() => link.verifyLinkSellResult(v.sellResult, v.phoneKey, v.linkId));
   const desk = unhex(v.deskSecret);
   for (const g of v.gifts) {
     const got = transport.openLinkMessage(desk, g.event, v.phoneKey);

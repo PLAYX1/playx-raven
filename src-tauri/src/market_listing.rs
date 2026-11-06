@@ -734,18 +734,109 @@ pub async fn market_my_listings() -> Result<Value, String> {
         }
     }))
     .await;
-    let out: Vec<Value> = mine
-        .iter()
-        .zip(checks)
-        .map(|(l, c)| {
-            let mut v = view(l, Some(&me), c.clone());
-            if c.is_none() {
-                v["check"] = json!({ "ok": false, "reason": "판매 중이 아닙니다." });
-            }
-            v
-        })
-        .collect();
+    // 판매 중인데 체인 확인이 안 되는 글: 그 동전을 쓴 거래가 값을 pay 로 냈으면 「팔렸음」 글로 바꾼다(글만 — 돈은 안 움직인다).
+    let mut sold: Vec<String> = Vec::new();
+    for (l, c) in mine.iter().zip(checks.iter()) {
+        if matches!(c, Some(Err(_))) && settle_if_sold(l).await.unwrap_or(false) {
+            sold.push(l.d.clone());
+        }
+    }
+    let mut out: Vec<Value> = Vec::new();
+    for (l, c) in mine.iter().zip(checks) {
+        let mut v = view(l, Some(&me), c.clone());
+        if sold.contains(&l.d) {
+            v["status"] = json!("sold");
+            crate::wallet_link::note_sold(&l.d).await;
+        }
+        if c.is_none() || sold.contains(&l.d) {
+            v["check"] = json!({ "ok": false, "reason": "판매 중이 아닙니다." });
+        }
+        out.push(v);
+    }
     Ok(json!(out))
+}
+
+// ── 팔렸음(파는 쪽이 저절로 — 돈은 안 움직이고 내 글만 다시 올린다) ─────────────
+
+/// 팔린 거래인가: 글의 동전을 쓰고, 글의 값을 자산 없이 글의 pay 주소 하나로 낸다.
+pub(crate) fn sold_by(dec: &Value, l: &Listing) -> bool {
+    let spends = dec["vin"].as_array().is_some_and(|v| {
+        v.iter().any(|i| i["txid"].as_str() == Some(l.txid.as_str()) && i["vout"].as_u64() == Some(l.vout))
+    });
+    let pays = dec["vout"].as_array().is_some_and(|v| {
+        v.iter().any(|o| {
+            let sp = &o["scriptPubKey"];
+            sats(o["value"].as_f64().unwrap_or(-1.0)) == l.price_sats
+                && sp["asset"].is_null()
+                && sp["addresses"].as_array().is_some_and(|a| a.len() == 1 && a[0].as_str() == Some(l.pay.as_str()))
+        })
+    });
+    spends && pays
+}
+
+/// 그 동전이 쓰였으면, pay 주소로 들어온 **확인된** 거래 중 그것을 판 거래를 찾는다(내 지갑 기록만 읽는다).
+async fn find_sale(l: &Listing) -> Result<Option<String>, String> {
+    if !call_rpc("gettxout", json!([l.txid.clone(), l.vout, true])).await?.is_null() {
+        return Ok(None);
+    }
+    let rows = call_rpc("listreceivedbyaddress", json!([1, false, true])).await?;
+    let txids: Vec<String> = rows
+        .as_array()
+        .and_then(|r| r.iter().find(|x| x["address"].as_str() == Some(l.pay.as_str())))
+        .and_then(|x| x["txids"].as_array())
+        .map(|t| t.iter().filter_map(Value::as_str).filter(|t| is_txid(t)).take(20).map(str::to_string).collect())
+        .unwrap_or_default();
+    for t in txids {
+        let Ok(tx) = call_rpc("gettransaction", json!([t.clone()])).await else { continue };
+        let Some(hex) = tx["hex"].as_str() else { continue };
+        let Ok(dec) = call_rpc("decoderawtransaction", json!([hex])).await else { continue };
+        if sold_by(&dec, l) {
+            return Ok(Some(t));
+        }
+    }
+    Ok(None)
+}
+
+/// 판매 중 글이 실제로 팔렸으면 같은 이야기 열쇠로 「sold」 글을 다시 올린다. 돌려주는 값 = 팔렸나.
+/// 🔴 서명하는 것은 내 글(공개)뿐이다. 지갑을 열지 않고, 거래를 만들거나 보내지 않는다.
+pub(crate) async fn settle_if_sold(l: &Listing) -> Result<bool, String> {
+    if l.status == "sold" {
+        return Ok(true);
+    }
+    if l.status != "active" || find_sale(l).await?.is_none() {
+        return Ok(false);
+    }
+    let sk = crate::talk::signing_key()?;
+    if crate::shopkey::pubkey_of(&sk)? != l.pubkey {
+        return Err("내 글이 아니라 「팔렸음」으로 바꾸지 않았습니다.".into());
+    }
+    let mut x = l.clone();
+    x.status = "sold".into();
+    let at = now().max(l.created_at + 1);
+    let ev = crate::shopkey::sign_with(&sk, KIND_LISTING, build_tags(&x), &x.content, at)?;
+    crate::nostrpub::validate_publish_event(&ev)?;
+    crate::nostrpub::nostr_publish(ev).await?;
+    Ok(true)
+}
+
+/// 폰 판매 일(`wallet_link/sell.rs`)이 묻는 입구: 내 그 물건(d)의 지금 상태. 팔렸으면 「sold」 글로 바꾼 뒤 "sold".
+/// None = 릴레이에서 그 글을 못 찾음.
+pub(crate) async fn settle_d(d: &str) -> Result<Option<String>, String> {
+    let Some(me) = my_pubkey_on_disk() else {
+        return Ok(None);
+    };
+    let events = my_listing_events(&me).await?;
+    let same: Vec<Value> = events
+        .into_iter()
+        .filter(|e| e.get("tags").and_then(Value::as_array).and_then(|t| tag_at(t, "d", 1)) == Some(d))
+        .collect();
+    let Some(l) = newest_per_d(same).into_iter().next().and_then(|e| parse_listing(&e).ok()) else {
+        return Ok(None);
+    };
+    if l.status == "active" && settle_if_sold(&l).await? {
+        return Ok(Some("sold".into()));
+    }
+    Ok(Some(l.status))
 }
 
 /// 판매 내리기. **동전을 내 새 주소로 옮겨** 남이 가진 교환 글자를 못 쓰게 만든 뒤,
@@ -1268,10 +1359,54 @@ mod tests {
     fn 읽는_길은_돈을_안_움직인다() {
         for f in ["pub async fn market_browse", "pub async fn market_my_listings", "pub async fn talk_my_posts"] {
             let b = body_of(f);
+            let b = if f.ends_with("market_my_listings") {
+                // 내 목록 끝에 붙은 「팔렸음」 정리(글만 다시 올림)는 따로 본다 — 아래 시험.
+                b[..b.find("// ── 팔렸음").expect("팔렸음 정리 칸")].to_string()
+            } else {
+                b
+            };
             for bad in ["swap_take(", "sendrawtransaction", "signrawtransaction", "unlock_for(", "sign_with(", "nostr_publish("] {
                 assert!(!b.contains(bad), "{f} 에 {bad} 가 있다");
             }
         }
+    }
+
+    /// 「팔렸음」 정리는 내 글만 다시 서명해 올린다 — 지갑을 열거나 거래를 만들거나 보내지 않는다.
+    #[test]
+    fn 팔렸음_정리는_돈을_안_움직인다() {
+        let src = include_str!("market_listing.rs");
+        let i = src.find("// ── 팔렸음(").unwrap();
+        let j = src.find("pub(crate) async fn settle_d").unwrap();
+        let b = &src[i..j];
+        for bad in ["swap_take(", "sendrawtransaction", "signrawtransaction", "unlock_for(", "walletpassphrase", "createrawtransaction", "transfer"] {
+            assert!(!b.contains(bad), "팔렸음 정리에 {bad} 가 있다");
+        }
+        assert!(b.contains("status = \"sold\""), "sold 로만 바꾼다");
+    }
+
+    #[test]
+    fn 팔린_거래를_알아본다() {
+        let l = sample();
+        let sale = json!({
+            "vin": [{ "txid": TX, "vout": 1 }, { "txid": "bb".repeat(32), "vout": 0 }],
+            "vout": [
+                { "value": 2.5, "scriptPubKey": { "addresses": [PAY] } },
+                { "value": 0.0, "scriptPubKey": { "addresses": ["RBuyer1111111111111111111111111111"], "asset": { "name": "PLAYX/ALBUM1", "amount": 1.0 } } },
+            ],
+        });
+        assert!(sold_by(&sale, &l));
+        let mut other_coin = sale.clone();
+        other_coin["vin"][0]["vout"] = json!(0);
+        assert!(!sold_by(&other_coin, &l), "다른 동전을 쓴 거래");
+        let mut less = sale.clone();
+        less["vout"][0]["value"] = json!(2.4);
+        assert!(!sold_by(&less, &l), "값이 모자람 = 내리기·다른 거래");
+        let mut elsewhere = sale.clone();
+        elsewhere["vout"][0]["scriptPubKey"]["addresses"] = json!(["ROther111111111111111111111111111"]);
+        assert!(!sold_by(&elsewhere, &l), "pay 가 아닌 곳");
+        let mut with_asset = sale.clone();
+        with_asset["vout"][0]["scriptPubKey"]["asset"] = json!({ "name": "X", "amount": 1.0 });
+        assert!(!sold_by(&with_asset, &l));
     }
 
     /// 내리기는 잠금 길을 거치고, 동전을 콕 집어 옮긴다.

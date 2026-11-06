@@ -19292,6 +19292,10 @@ window.addEventListener("DOMContentLoaded", async () => {
   walletLink = wireWalletLink({ invoke,
     ask: (why) => why === "limit"
       ? ask("지갑 비밀번호 재인증", "폰 요청으로 하루에 나갈 수 있는 돈을 바꿔요. 확인한 뒤 지갑을 바로 잠가요.", { password: true })
+      : why === "sell"
+      ? ask("지갑 비밀번호 재인증", "폰이 서명하면 이 컴퓨터 지갑의 자산을 장터에 올릴 수 있게 해요. 확인한 뒤 지갑을 바로 잠가요.", { password: true })
+      : why === "unsell"
+      ? ask("지갑 비밀번호", "판매 글을 내리려면 묶음을 이 지갑의 새 주소로 옮겨야 해요. 옮긴 뒤 지갑을 바로 잠가요.", { password: true })
       : ask("지갑 비밀번호 재인증", "폰과 연결할 받기 전용 번호를 만든 뒤 지갑을 바로 잠가요.", { password: true }),
     onState: paintHomePhone });
   $("sales-back").onclick = () => showPage("home");

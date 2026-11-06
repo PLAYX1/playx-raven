@@ -88,3 +88,29 @@ pub async fn start_relay() -> String {
     });
     format!("ws://{addr}/api/relay")
 }
+
+// ── 0.9.18 폰에서 판매: 폰은 시험 열쇠로 흉내(서명만), 데스크탑 쪽은 앱 함수 그대로 ──────────────
+pub fn wl_link_phone(desk_sk: &str, phone_sk: &str, daily: u32) -> Result<(String, String), String> {
+    crate::wallet_link::harness::link_phone(desk_sk, phone_sk, daily)
+}
+pub fn wl_phone_sign(phone_sk: &str, tag: &str, body: Value) -> Result<Value, String> {
+    crate::wallet_link::harness::phone_sign(phone_sk, tag, body)
+}
+pub fn wl_deliver(desk_sk: &str, phone_sk: &str, t: &str, s: &Value) -> Result<(), String> {
+    crate::wallet_link::harness::deliver_from_phone(desk_sk, phone_sk, t, s)
+}
+pub async fn wl_tick(desk_sk: &str) -> Result<Value, String> {
+    crate::wallet_link::harness::tick(desk_sk).await
+}
+pub async fn wl_continue(desk_sk: &str, id: &str, pass: &str) -> Result<(), String> {
+    crate::wallet_link::harness::continue_sell(desk_sk, id, pass).await
+}
+pub fn wl_job(id: &str) -> Result<Value, String> {
+    crate::wallet_link::harness::job(id)
+}
+pub fn wl_verify(tag: &str, s: &Value, key: &str) -> bool {
+    crate::wallet_link::harness::verify(tag, s, key)
+}
+pub fn wl_recheck_now(id: &str) -> Result<(), String> {
+    crate::wallet_link::harness::recheck_now(id)
+}

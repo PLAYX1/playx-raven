@@ -2804,11 +2804,17 @@
       <div class="wl-box">
         <h3 id="wl-m-title"></h3>
         <p class="wl-lead" id="wl-m-lead"></p>
+        <div id="wl-m-pay">
         <p class="wl-label">받는 곳</p>
         <p class="wl-short" id="wl-m-short" translate="no"></p>
         <p class="wl-mono" id="wl-m-addr" translate="no"></p>
         <dl class="wl-sum"><dt>폰</dt><dd id="wl-m-phone" translate="no"></dd><dt>요청 시각</dt><dd id="wl-m-when"></dd><dt>보낼 돈</dt><dd id="wl-m-amount"></dd><dt>수수료</dt><dd id="wl-m-fee"></dd><dt>모두</dt><dd id="wl-m-total"></dd></dl>
         <label class="wl-field" id="wl-m-tailbox" hidden><span>확인을 위해 받는 주소의 끝 4자리를 적어 주세요</span><input id="wl-m-tail" maxlength="4" autocomplete="off" /></label>
+        </div>
+        <!-- 폰에서 판매(0.9.18): 잠긴 지갑 때문에 멈춘 판매. 사는 사람 돈은 건드리지 않는다 — 내 자산을 장터에 올리는 일만. -->
+        <div id="wl-m-sell" hidden>
+          <dl class="wl-sum"><dt>폰</dt><dd id="wl-m-s-phone" translate="no"></dd><dt>팔 것</dt><dd id="wl-m-s-what" translate="no"></dd><dt>값</dt><dd id="wl-m-s-price"></dd><dt>제목</dt><dd id="wl-m-s-title"></dd><dt>할 일</dt><dd id="wl-m-s-step"></dd></dl>
+        </div>
         <label class="wl-field" id="wl-m-passbox" hidden><span>지갑 비밀번호</span><input id="wl-m-pass" type="password" autocomplete="off" /></label>
         <p class="wl-say" id="wl-m-say" role="status"></p>
         <div class="askrow"><button type="button" class="ghost" id="wl-m-later">나중에</button><button type="button" class="ghost" id="wl-m-no">거절</button><button type="button" id="wl-m-go" disabled>승인</button></div>

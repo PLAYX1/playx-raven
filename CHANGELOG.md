@@ -1,5 +1,21 @@
 # 변경 기록
 
+## 0.9.18
+
+### 한국어
+
+- **폰에서 팔기 (컴퓨터 쪽 준비):** 연결한 폰이 밖에서(4G·5G) 이 컴퓨터에 있는 자산을 장터에 올려 달라고 할 수 있습니다. 「폰 연결」에서 폰마다 「폰에서 판매 허용」을 켜야 하고(처음엔 꺼짐), 하루 최대 건수를 정합니다. 컴퓨터가 판매용 자산을 떼어 두고, 확인 뒤 판매 제안을 만들어 장터에 올린 다음 결과를 폰에 알립니다. 대표 토큰(!)은 팔 수 없습니다.
+- **암호 지갑은 사람이 이어서:** 지갑에 암호가 걸려 있으면 컴퓨터에 「암호 필요」가 뜨고, 암호를 넣어야 이어서 올라갑니다. 암호는 저장하지 않습니다.
+- **팔렸음 표시:** 장터에서 팔린 물건은 블록 확인 1번 뒤 「팔렸음」으로 바뀌고, 폰이 올린 것이면 폰에도 알립니다.
+- **내리기:** 폰이 올린 판매 글도 컴퓨터의 「폰 연결」에서 내릴 수 있고, 연결을 끊은 폰이 올린 글도 따로 모아 보여 줍니다.
+
+### English
+
+- **Sell from your phone (computer side):** a linked phone can ask this computer to list one of its assets on the market, even over mobile data. Turn on "Allow selling from phone" per phone under Phone link (off by default) and set a daily limit. The computer sets the asset aside, makes the sell offer after one confirmation, lists it and reports back to the phone. Owner tokens (!) cannot be sold.
+- **Encrypted wallets continue with you:** if the wallet is locked, the computer asks for the password to continue; it is never stored.
+- **Sold status:** listings that sell switch to "Sold" after one confirmation, and the phone is told if it listed them.
+- **Unlist:** phone-made listings can be taken down from Phone link, including those from phones you have unlinked.
+
 ## 0.9.17
 
 ### 한국어

@@ -172,3 +172,123 @@ export function verifyLinkRevoke(s: Signed<LinkRevoke>, signerKey: string, linkI
   if (!b || b.v !== 1 || b.linkId !== linkIdHere || !int(b.at, 1) || !verify('revoke', s, signerKey)) throw new Error('link-revoke');
   return { ...b };
 }
+
+/**
+ * 폰 → 데스크탑 「팔아 줘」(폰 연결 키 서명, 꼬리표 'sell'). 0.9.18 — 데스크탑에서 먼저 더함(폰 저장소에 같은 바이트로 옮긴다).
+ * 데스크탑이 그 연결에 「폰에서 판매 허용」을 켜 두었을 때만, 데스크탑 지갑의 자산을 묶음 → 반쪽 제안 → 장터 글로 올린다.
+ * 사는 쪽이 낼 돈을 데스크탑이 보내는 일은 없다(파는 쪽 반쪽 서명뿐). 폰은 보내기 전에 생체 인증을 거친다(폰 몫).
+ *  · amount = 자산 수량 글자(소수 8자리까지) · priceRvn = RVN 값 글자(소수 정확히 8자리, 파는 사람이 받는 값)
+ *  · image 는 없어도 된다(없으면 키 자체를 빼고 서명한다 — undefined 는 정규 JSON 이 받지 않는다).
+ *  · 모르는 키가 있으면 받지 않는다(돈 글은 엄격히).
+ */
+export const LINK_SELL_TTL_MS = 10 * 60_000;
+export const LINK_SELL_CATEGORIES = ['music', 'game', 'image', 'book', 'ticket', 'work', 'other'] as const;
+export type LinkSellCategory = typeof LINK_SELL_CATEGORIES[number];
+export type LinkSell = { v: 1; linkId: string; id: string; asset: string; amount: string; priceRvn: string; title: string; summary: string; category: LinkSellCategory; image?: string; created: number; expires: number };
+export type LinkUnsell = { v: 1; linkId: string; id: string; d: string; created: number; expires: number };
+export const LINK_SELL_STATUSES = ['published', 'pending_human', 'refused', 'failed', 'cancelled', 'sold'] as const;
+export type LinkSellStatus = typeof LINK_SELL_STATUSES[number];
+/** 데스크탑 → 폰 판매 결과(데스크탑 연결 키 서명, 꼬리표 'sellresult'). id = 그 sell(또는 unsell) 의 id. */
+export type LinkSellResult = { v: 1; linkId: string; id: string; status: LinkSellStatus; reason?: string; eventId?: string; d?: string; outpoint?: { txid: string; vout: number }; at: number };
+/** 판매 하루 건수의 범위(데스크탑 설정 칸). 기본 3. */
+export const LINK_SELL_DAILY_MIN = 1, LINK_SELL_DAILY_MAX = 20, LINK_SELL_DAILY_DEFAULT = 3;
+
+const AMOUNT = /^(0|[1-9]\d{0,10})(\.\d{1,8})?$/, PRICE = /^(0|[1-9]\d{0,10})\.\d{8}$/, CONTROL = /\p{Cc}/u;
+const keysAre = (o: object, need: string[], may: string[] = []) => Object.keys(o).every(k => need.includes(k) || may.includes(k)) && need.every(k => k in o);
+const line = (s: unknown, max: number, required: boolean): s is string =>
+  typeof s === 'string' && !CONTROL.test(s) && [...s].length <= max && utf8(s).length <= 1024 && (!required || s.trim().length > 0);
+const imageOk = (u: unknown) => typeof u === 'string' && u.length <= 1024 && (u.startsWith('https://') || u.startsWith('ipfs://')) && !/[\s"<>\p{Cc}]/u.test(u);
+/** 수량 글자 → 1e-8 단위 정수(0 이면 받지 않는다). */
+export function linkAmountUnits(a: string): bigint | null {
+  if (typeof a !== 'string' || !AMOUNT.test(a)) return null;
+  const [w, f = ''] = a.split('.');
+  const n = BigInt(w) * 100_000_000n + BigInt((f + '00000000').slice(0, 8));
+  return n > 0n && n <= LINK_DAILY_SATS ? n : null;
+}
+/** 값 글자(8자리) → 사토시. 총발행량을 넘으면 null. */
+export function linkPriceSats(p: string): bigint | null {
+  if (typeof p !== 'string' || !PRICE.test(p)) return null;
+  const n = BigInt(p.replace('.', ''));
+  return n <= LINK_DAILY_SATS ? n : null;
+}
+/**
+ * 팔 수 있는 자산 이름(모양만 — 진짜 있는지는 노드가 안다). 3~64자 ASCII, 첫 글자 A-Z·0-9·$,
+ * 영문 소문자와 @%&*()[]{}?:- 는 고유 자산 꼬리표(# 뒤)에서만, '!' 는 맨 끝에서만(그 경우는 주인 토큰 — 따로 거절한다).
+ */
+export function linkSellAssetOk(name: string): boolean {
+  if (typeof name !== 'string' || name.length < 3 || name.length > 64 || !/^[A-Z0-9$]/.test(name)) return false;
+  const hash = name.indexOf('#');
+  for (let i = 0; i < name.length; i++) {
+    const c = name[i];
+    if (/[A-Z0-9._/#~$]/.test(c)) continue;
+    if (c === '!' && i === name.length - 1) continue;
+    if (hash >= 0 && i > hash && /[a-z@%&*()[\]{}?:-]/.test(c)) continue;
+    return false;
+  }
+  return true;
+}
+function sellShapeOk(b: LinkSell | undefined): b is LinkSell {
+  return !!b && typeof b === 'object' && keysAre(b, ['v', 'linkId', 'id', 'asset', 'amount', 'priceRvn', 'title', 'summary', 'category', 'created', 'expires'], ['image'])
+    && b.v === 1 && HEX64.test(b.linkId) && HEX64.test(b.id) && typeof b.asset === 'string' && b.asset.length >= 1 && b.asset.length <= 64
+    && linkAmountUnits(b.amount) !== null && linkPriceSats(b.priceRvn) !== null && line(b.title, 100, true) && line(b.summary, 300, false)
+    && (LINK_SELL_CATEGORIES as readonly string[]).includes(b.category) && (!('image' in b) || imageOk(b.image))
+    && int(b.created, 1) && int(b.expires, 1) && b.expires > b.created && b.expires - b.created <= LINK_SELL_TTL_MS;
+}
+function unsellShapeOk(b: LinkUnsell | undefined): b is LinkUnsell {
+  return !!b && typeof b === 'object' && keysAre(b, ['v', 'linkId', 'id', 'd', 'created', 'expires']) && b.v === 1 && HEX64.test(b.linkId) && HEX64.test(b.id)
+    && typeof b.d === 'string' && /^rvswap:[0-9a-f]{64}:\d{1,6}$/.test(b.d)
+    && int(b.created, 1) && int(b.expires, 1) && b.expires > b.created && b.expires - b.created <= LINK_SELL_TTL_MS;
+}
+export function signLinkSell(body: LinkSell, phoneSecret: Uint8Array): Signed<LinkSell> {
+  if (!sellShapeOk(body)) throw new Error('link-sell');
+  return sign('sell', body, phoneSecret);
+}
+export function signLinkUnsell(body: LinkUnsell, phoneSecret: Uint8Array): Signed<LinkUnsell> {
+  if (!unsellShapeOk(body)) throw new Error('link-unsell');
+  return sign('unsell', body, phoneSecret);
+}
+/** 데스크탑이 아는 그 연결의 판매 허용(없으면 꺼짐). */
+export type LinkSellPolicy = { enabled: boolean; daily: number };
+export type SellCheck = { ok: true; sell: LinkSell } | { ok: false; reason: 'shape' | 'revoked' | 'other-link' | 'signature' | 'future' | 'expired' | 'seen' | 'sell-off' | 'daily-count' | 'asset' | 'owner-token' | 'price' };
+/**
+ * 데스크탑 검사(러스트 check_sell 과 같은 순서). 이 뒤에 데스크탑은 노드에 그 자산을 그만큼 가졌는지 본다(못 가졌으면 'not-held').
+ * countToday = 지난 24시간 이 연결에서 받아들인 판매 건수(거절은 세지 않는다).
+ */
+export function checkLinkSell(s: Signed<LinkSell>, link: LinkRecord & { sell?: LinkSellPolicy }, now: number, seen: ReadonlySet<string>, countToday: number): SellCheck {
+  const b = s?.body;
+  if (!sellShapeOk(b)) return { ok: false, reason: 'shape' };
+  if (link.revoked) return { ok: false, reason: 'revoked' };
+  if (b.linkId !== link.linkId) return { ok: false, reason: 'other-link' };
+  if (!verify('sell', s, link.phoneKey)) return { ok: false, reason: 'signature' };
+  if (b.created > now + 120_000) return { ok: false, reason: 'future' };
+  if (b.expires < now) return { ok: false, reason: 'expired' };
+  if (seen.has(b.id)) return { ok: false, reason: 'seen' };
+  if (!link.sell?.enabled) return { ok: false, reason: 'sell-off' };
+  if (countToday >= link.sell.daily) return { ok: false, reason: 'daily-count' };
+  if (!linkSellAssetOk(b.asset)) return { ok: false, reason: 'asset' };
+  if (b.asset.endsWith('!')) return { ok: false, reason: 'owner-token' };
+  if ((linkPriceSats(b.priceRvn) ?? 0n) < 100_000_000n) return { ok: false, reason: 'price' };
+  return { ok: true, sell: { ...b } };
+}
+/** 데스크탑: 받은 내리기가 이 연결·이 폰 키에 묶여 있고 서명이 맞나(만료·중복은 데스크탑 기록으로 따로 본다). */
+export function verifyLinkUnsell(s: Signed<LinkUnsell>, phoneKey: string, linkIdHere: string): LinkUnsell {
+  const b = s?.body;
+  if (!unsellShapeOk(b) || b.linkId !== linkIdHere || !verify('unsell', s, phoneKey)) throw new Error('link-unsell');
+  return { ...b };
+}
+function sellResultShapeOk(b: LinkSellResult | undefined): b is LinkSellResult {
+  return !!b && typeof b === 'object' && keysAre(b, ['v', 'linkId', 'id', 'status', 'at'], ['reason', 'eventId', 'd', 'outpoint']) && b.v === 1 && HEX64.test(b.linkId) && HEX64.test(b.id)
+    && (LINK_SELL_STATUSES as readonly string[]).includes(b.status) && int(b.at, 1)
+    && (!('reason' in b) || line(b.reason, 300, true)) && (!('eventId' in b) || (typeof b.eventId === 'string' && HEX64.test(b.eventId)))
+    && (!('d' in b) || (typeof b.d === 'string' && /^rvswap:[0-9a-f]{64}:\d{1,6}$/.test(b.d)))
+    && (!('outpoint' in b) || (!!b.outpoint && typeof b.outpoint === 'object' && keysAre(b.outpoint, ['txid', 'vout']) && typeof b.outpoint.txid === 'string' && HEX64.test(b.outpoint.txid) && int(b.outpoint.vout)));
+}
+export function signLinkSellResult(body: LinkSellResult, desktopSecret: Uint8Array): Signed<LinkSellResult> {
+  if (!sellResultShapeOk(body)) throw new Error('link-sellresult');
+  return sign('sellresult', body, desktopSecret);
+}
+export function verifyLinkSellResult(s: Signed<LinkSellResult>, desktopKey: string, linkIdHere: string): LinkSellResult {
+  const b = s?.body;
+  if (!sellResultShapeOk(b) || b.linkId !== linkIdHere || !verify('sellresult', s, desktopKey)) throw new Error('link-sellresult');
+  return { ...b, ...(b.outpoint ? { outpoint: { ...b.outpoint } } : {}) };
+}

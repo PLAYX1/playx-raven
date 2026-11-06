@@ -39,3 +39,9 @@
 #wl-card .wl-limit { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; }
 #wl-card .wl-limit input { width: 140px; font-size: 16px; padding: 8px 10px; }
 #wl-card .wl-rowbtns { display: flex; flex-wrap: wrap; justify-content: flex-end; }
+/* 폰에서 판매(0.9.18): 줄 안의 허용 스위치·건수·판매 목록. */
+#wl-card .wl-sell { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); }
+#wl-card .wl-sell select { font-size: 15px; padding: 4px 8px; margin-left: 4px; }
+#wl-card .wl-sellrow { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+#wl-card .wl-sellrow .wl-d { overflow-wrap: anywhere; }
+#wl-card .wl-orphan { border-top: 1px solid var(--warn); }

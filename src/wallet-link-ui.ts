@@ -7,9 +7,13 @@ import { t, tf } from "./i18n";
 
 type Invoke = <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
 type Offer = { v: 1; chain: "rvn-main"; account: 0; desktopKey: string; name: string; xpub: string; firstAddress: string; nonce: string; expires: number };
-type LinkRow = { linkId: string; name: string; phoneAddresses: string[]; dailySats: string; spentToday: string; created: number; revoked: boolean };
+type SellPolicy = { enabled: boolean; daily: number; today: number };
+type LinkRow = { linkId: string; name: string; phoneAddresses: string[]; dailySats: string; spentToday: string; created: number; revoked: boolean; sell?: SellPolicy };
+/** 폰에서 판매(0.9.18) 일 하나. 러스트 wallet_link/sell.rs jobs_view 모양. */
+type SellRow = { id: string; linkId: string; phoneName: string; status: string; resume: string | null; reason: string | null; asset: string; amount: string;
+  priceSats: string; title: string; category: string; d: string | null; eventId: string | null; received: number; updated: number };
 type Pending = { id: string; linkId: string; phoneName: string; kind: "fill" | "send"; to: string; sats: string; created: number; expires: number };
-type Inbox = { pending: Pending[]; links: LinkRow[]; online?: boolean;
+type Inbox = { pending: Pending[]; links: LinkRow[]; sells?: SellRow[]; online?: boolean;
   offer: null | { stage: "waiting"; expires: number } | { stage: "cancelled" } | { stage: "confirm"; code: string; phoneKey: string; phoneAddresses: string[]; offer: Offer } };
 type Review = { id: string; short: boolean; kind?: "fill" | "send"; to?: string; sats?: string; feeSats?: string; totalSats?: string; fingerprint?: string; phoneName?: string; expires?: number };
 
@@ -30,10 +34,27 @@ const limitText = (sats: string) => (sats === NO_LIMIT_SATS ? t("한도 없음")
 /** 홈·사이드바가 듣는 요약: 살아 있는 연결 수 · 승인을 기다리는 요청 수. */
 export type WalletLinkState = { linked: number; waiting: number };
 
-export function wireWalletLink(deps: { invoke: Invoke; ask: (why: "link" | "limit") => Promise<string | null>; onState?: (s: WalletLinkState) => void }) {
+/** 판매 일 상태 → 쉬운 말. */
+const SELL_STATUS: Record<string, string> = {
+  queued: "준비 중", lot: "묶음이 장부에 들어가길 기다려요", lot_ready: "판매 제안 만드는 중", offered: "장터에 올리는 중", published: "올라가 있음",
+  cancelling: "내리는 중", pending_human: "이 컴퓨터에서 지갑 암호가 필요해요", refused: "거절됨", failed: "못 올렸어요", cancelled: "내렸어요", sold: "팔렸음",
+};
+const SELL_REASON: Record<string, string> = {
+  "not-held": "그만큼 가진 자산이 없어요", "daily-count": "오늘 판매 건수를 다 썼어요", "sell-off": "판매 허용이 꺼져 있어요", "owner-token": "주인 토큰은 팔 수 없어요",
+  price: "값은 1 RVN 이상이어야 해요", asset: "자산 이름이 올바르지 않아요", expired: "폰 요청 시간(10분)이 지났어요", future: "폰 시계가 맞지 않아요",
+  timeout: "2시간 안에 올리지 못했어요", refused: "이 컴퓨터에서 거절했어요", revoked: "연결을 끊었어요",
+};
+const sellStatusText = (j: SellRow) => {
+  const base = t(SELL_STATUS[j.status] ?? j.status);
+  const why = j.reason && (j.status === "refused" || j.status === "failed" || j.status === "cancelled") ? t(SELL_REASON[j.reason] ?? j.reason) : "";
+  return why ? `${base} · ${why}` : base;
+};
+
+export function wireWalletLink(deps: { invoke: Invoke; ask: (why: "link" | "limit" | "sell" | "unsell") => Promise<string | null>; onState?: (s: WalletLinkState) => void }) {
   const { invoke } = deps;
   let offer: Offer | null = null, offerTimer: ReturnType<typeof setInterval> | undefined;
-  let pollTimer: ReturnType<typeof setTimeout> | undefined, polling = false, links: LinkRow[] = [], pending: Pending[] = [];
+  let pollTimer: ReturnType<typeof setTimeout> | undefined, polling = false, links: LinkRow[] = [], pending: Pending[] = [], sells: SellRow[] = [];
+  let sellShown: string | null = null, sellBusy = false;
   let shown: string | null = null, review: Review | null = null, approving = false, deferred = new Set<string>(), editing: string | null = null;
   const msg = (text: string, bad = false) => { const m = $("wl-msg"); m.textContent = text; m.classList.toggle("wl-bad", bad); };
 
@@ -110,9 +131,9 @@ export function wireWalletLink(deps: { invoke: Invoke; ask: (why: "link" | "limi
     const box = $("wl-list");
     const live = links.filter(l => !l.revoked);
     // 한도를 고치는 중이면 목록을 다시 그리지 않는다(몇 초마다 오는 확인이 적던 칸을 지우지 않게).
-    if (!editing || !live.some(l => l.linkId === editing)) { editing = null; box.replaceChildren(...live.map(linkRow)); }
+    if (!editing || !live.some(l => l.linkId === editing)) { editing = null; box.replaceChildren(...live.map(linkRow), ...orphanBlock()); }
     $("wl-empty").hidden = live.length > 0;
-    const waiting = pending.length;
+    const waiting = pending.length + sells.filter(j => j.status === "pending_human").length;
     $("wl-waiting").hidden = waiting === 0;
     $("wl-waiting-n").textContent = tf("폰이 보낸 요청 {0}건이 승인을 기다려요.", waiting);
     deps.onState?.({ linked: live.length, waiting });
@@ -137,8 +158,78 @@ export function wireWalletLink(deps: { invoke: Invoke; ask: (why: "link" | "limi
       catch (e) { msg(errOf(e), true); cut.disabled = false; }
     };
     btns.append(lim, cut);
+    txt.append(sellBox(l));
     row.append(txt, btns);
     return row;
+  }
+  // ── 폰에서 판매(0.9.18) ──
+  /** 줄 안: 「폰에서 판매 허용」(기본 꺼짐) + 하루 최대 건수 + 이 폰이 맡긴 판매 목록·내리기. */
+  function sellBox(l: LinkRow) {
+    const pol = l.sell ?? { enabled: false, daily: 3, today: 0 };
+    const box = document.createElement("div"); box.className = "wl-sell";
+    const on = document.createElement("label"); on.className = "check";
+    const onBox = document.createElement("input"); onBox.type = "checkbox"; onBox.checked = pol.enabled;
+    const onTxt = document.createElement("span"); onTxt.textContent = " " + t("폰에서 판매 허용");
+    on.append(onBox, onTxt);
+    const per = document.createElement("label"); per.className = "wl-d";
+    per.textContent = t("하루 최대 건수") + " ";
+    const sel = document.createElement("select"); sel.setAttribute("aria-label", t("하루 최대 건수"));
+    for (let n = 1; n <= 20; n++) { const o = document.createElement("option"); o.value = String(n); o.textContent = String(n); sel.append(o); }
+    sel.value = String(pol.daily);
+    per.append(sel);
+    const note = document.createElement("span"); note.className = "wl-d";
+    note.textContent = pol.enabled
+      ? tf("폰이 서명한 「팔아 줘」로 이 컴퓨터 지갑의 자산을 장터에 올려요 · 오늘 {0}/{1}건", pol.today, pol.daily)
+      : t("켜면 폰에서 이 컴퓨터 지갑의 자산을 장터에 올릴 수 있어요. 사는 사람 돈은 건드리지 않아요. 켤 때 지갑 암호가 필요해요.");
+    const go = async (enabled: boolean, daily: number) => {
+      let pass: string | null = null;
+      if (enabled) { pass = await deps.ask("sell"); if (!pass) { renderLinks(); return; } }
+      onBox.disabled = sel.disabled = true;
+      try {
+        apply(await invoke<Inbox>("wallet_link_set_sell", { linkId: l.linkId, enabled, daily, passphrase: pass }));
+        msg(enabled ? tf("「{0}」 폰에서 판매를 허용했어요(하루 {1}건까지).", l.name, daily) : tf("「{0}」 폰에서 판매를 껐어요. 올리기 전 일은 멈췄어요.", l.name));
+      } catch (e) { msg(errOf(e), true); renderLinks(); }
+    };
+    onBox.onchange = () => void go(onBox.checked, Number(sel.value));
+    sel.onchange = () => { if (onBox.checked) void go(true, Number(sel.value)); };
+    box.append(on, per, note, ...sellList(sells.filter(j => j.linkId === l.linkId)));
+    return box;
+  }
+  function sellList(rows: SellRow[]): HTMLElement[] {
+    return rows.slice(0, 10).map(j => {
+      const r = document.createElement("div"); r.className = "wl-sellrow";
+      const d = document.createElement("span"); d.className = "wl-d";
+      const what = document.createElement("b"); what.textContent = j.title; what.translate = false;
+      d.append(what, ` · ${j.asset} × ${j.amount} · ${rvn(j.priceSats)} RVN · ${sellStatusText(j)}`);
+      r.append(d);
+      if (j.status === "published") {
+        const down = document.createElement("button"); down.type = "button"; down.className = "ghost"; down.textContent = t("내리기");
+        down.onclick = () => void cancelSell(j, down);
+        r.append(down);
+      }
+      return r;
+    });
+  }
+  /** 끊은 폰이 올린 글은 그대로 장터에 있다 — 여기서 내리기를 권한다. */
+  function orphanBlock(): HTMLElement[] {
+    const dead = new Set(links.filter(l => l.revoked).map(l => l.linkId));
+    const rows = sells.filter(j => dead.has(j.linkId) && j.status === "published");
+    if (!rows.length) return [];
+    const box = document.createElement("div"); box.className = "wl-row wl-orphan";
+    const txt = document.createElement("div"); txt.className = "wl-rowtxt";
+    const b = document.createElement("b"); b.textContent = t("끊은 폰이 올린 판매 글");
+    const note = document.createElement("span"); note.className = "wl-d"; note.textContent = t("연결을 끊어도 글은 장터에 남아 있어요. 팔지 않으려면 내려 주세요.");
+    txt.append(b, note, ...sellList(rows));
+    box.append(txt);
+    return [box];
+  }
+  async function cancelSell(j: SellRow, btn: HTMLButtonElement) {
+    const lock = await invoke<{ encrypted?: boolean; unlocked?: boolean }>("wallet_lock_state").catch(() => null);
+    let pass: string | null = null;
+    if (lock && lock.encrypted && !lock.unlocked) { pass = await deps.ask("unsell"); if (!pass) return; }
+    btn.disabled = true;
+    try { apply(await invoke<Inbox>("wallet_link_sell_cancel", { id: j.id, passphrase: pass })); msg(tf("「{0}」 판매 글을 내렸어요. 묶음은 이 지갑의 새 주소로 돌아왔어요.", j.title)); }
+    catch (e) { msg(errOf(e), true); btn.disabled = false; }
   }
   /** 줄 안에서 새 하루 한도 → 지갑 암호 재인증 → 저장. 연결은 끊지 않는다. */
   function openLimit(l: LinkRow, txt: HTMLElement, btns: HTMLElement) {
@@ -203,11 +294,12 @@ export function wireWalletLink(deps: { invoke: Invoke; ask: (why: "link" | "limi
     } catch (e) { live(tf("폰 요청을 확인하지 못했어요: {0}", errOf(e)), true); /* 앱 잠금·인터넷 끊김 — 다음 차례에 다시 */ }
     finally { polling = false; schedule(offer ? POLL_OFFER_MS : document.hidden ? POLL_HIDDEN_MS : POLL_VISIBLE_MS); }
   }
-  function apply(box: Pick<Inbox, "pending" | "links">) {
-    links = box.links; pending = box.pending;
+  function apply(box: Pick<Inbox, "pending" | "links" | "sells">) {
+    links = box.links; pending = box.pending; if (box.sells) sells = box.sells;
     renderLinks();
     if (shown && !pending.some(p => p.id === shown)) closeModal(t("요청이 끝났어요(시간이 지났거나 연결이 끊겼어요)."));
-    if (!shown) nextModal();
+    if (sellShown && !sellBusy && !sells.some(j => j.id === sellShown && j.status === "pending_human")) closeModal();
+    if (!shown && !sellShown) nextModal();
   }
   async function refresh() {
     try { apply(await invoke<Inbox>("wallet_link_list")); } catch { /* 기록이 없으면 빈 목록 */ }
@@ -217,16 +309,39 @@ export function wireWalletLink(deps: { invoke: Invoke; ask: (why: "link" | "limi
   // ── 승인 창 ──
   const modal = $("wl-modal");
   function closeModal(note = "") {
-    modal.classList.remove("on"); shown = null; review = null;
+    modal.classList.remove("on"); shown = null; review = null; sellShown = null;
+    $("wl-m-pay").hidden = false; $("wl-m-sell").hidden = true;
     ($("wl-m-pass") as HTMLInputElement).value = ""; ($("wl-m-tail") as HTMLInputElement).value = "";
     if (note) msg(note);
   }
   function nextModal() {
     const p = pending.find(x => !deferred.has(x.id));
-    if (p) void openModal(p);
+    if (p) { void openModal(p); return; }
+    const j = sells.find(x => x.status === "pending_human" && !deferred.has(x.id));
+    if (j) openSellModal(j);
+  }
+  /** 잠긴 지갑 때문에 멈춘 판매: 사람이 여기서 암호를 넣어야 이어 간다(남에게 돈을 보내는 일이 아니다). */
+  function openSellModal(j: SellRow) {
+    sellShown = j.id; shown = null; review = null;
+    modal.classList.add("on"); modal.classList.remove("wl-send");
+    $("wl-m-pay").hidden = true; $("wl-m-sell").hidden = false;
+    const cancel = j.resume === "cancelling";
+    $("wl-m-title").textContent = cancel ? tf("「{0}」 폰이 판매 글을 내려 달래요", j.phoneName) : tf("「{0}」 폰이 장터에 팔아 달래요", j.phoneName);
+    $("wl-m-lead").textContent = cancel
+      ? t("이 컴퓨터 지갑이 잠겨 있어 내리지 못했어요. 지갑 암호를 넣으면 묶음을 이 지갑의 새 주소로 옮기고 글을 내려요.")
+      : t("이 컴퓨터 지갑이 잠겨 있어 멈췄어요. 지갑 암호를 넣으면 이 자산을 장터에 올려요. 사는 사람이 값을 내야만 자산이 나가요. 내가 보낸 요청이 아니면 거절하세요.");
+    $("wl-m-s-phone").textContent = j.phoneName;
+    $("wl-m-s-what").textContent = `${j.asset} × ${j.amount}`;
+    $("wl-m-s-price").textContent = `${rvn(j.priceSats)} RVN`;
+    $("wl-m-s-title").textContent = j.title;
+    $("wl-m-s-step").textContent = cancel ? t("판매 글 내리기") : j.resume === "lot_ready" ? t("판매 제안 서명") : t("팔 묶음 만들기(내 지갑 안에서)");
+    $("wl-m-say").textContent = "";
+    $("wl-m-passbox").hidden = false;
+    gate();
   }
   async function openModal(p: Pending) {
-    shown = p.id; review = null;
+    shown = p.id; review = null; sellShown = null;
+    $("wl-m-pay").hidden = false; $("wl-m-sell").hidden = true;
     const send = p.kind === "send";
     modal.classList.add("on");
     modal.classList.toggle("wl-send", send);
@@ -261,8 +376,9 @@ export function wireWalletLink(deps: { invoke: Invoke; ask: (why: "link" | "limi
     gate();
   }
   function gate() {
-    const p = pending.find(x => x.id === shown);
     const go = $("wl-m-go") as HTMLButtonElement;
+    if (sellShown) { go.disabled = sellBusy || !($("wl-m-pass") as HTMLInputElement).value; go.textContent = t("이어서 하기"); return; }
+    const p = pending.find(x => x.id === shown);
     if (!p) { go.disabled = true; return; }
     const tail = ($("wl-m-tail") as HTMLInputElement).value.trim();
     const tailOk = p.kind !== "send" || tail.toLowerCase() === p.to.slice(-4).toLowerCase();
@@ -272,13 +388,30 @@ export function wireWalletLink(deps: { invoke: Invoke; ask: (why: "link" | "limi
   }
   ($("wl-m-tail") as HTMLInputElement).oninput = gate;
   ($("wl-m-pass") as HTMLInputElement).oninput = gate;
-  $("wl-m-later").onclick = () => { if (shown) deferred.add(shown); closeModal(t("요청은 그대로 기다려요(10분 안에 승인하지 않으면 저절로 거절돼요).")); renderLinks(); };
+  $("wl-m-later").onclick = () => { if (sellShown) { deferred.add(sellShown); closeModal(t("판매는 그대로 기다려요(2시간 안에 이어 가지 않으면 저절로 닫혀요).")); renderLinks(); return; }
+    if (shown) deferred.add(shown); closeModal(t("요청은 그대로 기다려요(10분 안에 승인하지 않으면 저절로 거절돼요).")); renderLinks(); };
   $("wl-m-no").onclick = async () => {
+    if (sellShown) {
+      const id = sellShown;
+      try { apply(await invoke<Inbox>("wallet_link_sell_refuse", { id })); closeModal(t("거절했어요. 폰에 알렸어요.")); }
+      catch (e) { $("wl-m-say").textContent = errOf(e); }
+      return;
+    }
     const id = shown; if (!id) return;
     try { await invoke("wallet_link_refuse", { id }); closeModal(t("거절했어요. 폰에 알렸어요.")); await refresh(); }
     catch (e) { $("wl-m-say").textContent = errOf(e); }
   };
   $("wl-m-go").onclick = async () => {
+    if (sellShown) {
+      const id = sellShown, pass = ($("wl-m-pass") as HTMLInputElement).value;
+      if (!pass || sellBusy) return;
+      ($("wl-m-pass") as HTMLInputElement).value = "";
+      sellBusy = true; gate(); $("wl-m-say").textContent = t("이어서 하는 중…");
+      try { const box = await invoke<Inbox>("wallet_link_sell_continue", { id, passphrase: pass }); sellBusy = false; closeModal(t("이어서 했어요. 장터에 오르면 폰에 알려요.")); apply(box); }
+      catch (e) { $("wl-m-say").textContent = errOf(e); }
+      finally { sellBusy = false; gate(); }
+      return;
+    }
     const p = pending.find(x => x.id === shown), r = review;
     if (!p || !r || approving) return;
     approving = true; gate();

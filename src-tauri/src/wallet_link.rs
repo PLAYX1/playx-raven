@@ -17,7 +17,17 @@
 //! - 승인 때는 `payout_guard`(보내기와 같은 지급 기록)가 서명 **전에** id 를 적는다. 같은 id 는 같은 txid 만 돌려준다.
 //! - 같은 요청이 다시 오면 다시 서명하지 않고, 이미 낸 결과를 그대로 다시 보낸다.
 //!
-//! 🔴 자동 승인은 없다. 이 파일에서 돈이 나가는 길은 `wallet_link_approve` 하나이고, 그것은 사람이 누른다.
+//! 🔴 자동 승인은 없다. 이 파일에서 남에게 돈이 나가는 길은 `wallet_link_approve` 하나이고, 그것은 사람이 누른다.
+//!
+//! ## 폰에서 판매(0.9.18, `wallet_link/sell.rs`)
+//! 연결마다 「폰에서 판매 허용」(기본 꺼짐, 켤 때 지갑 암호 재인증)을 켜 두면, 폰이 서명한 「팔아 줘」로
+//! **파는 쪽 일만** 저절로 한다: 내 지갑 안의 묶음 만들기 · 반쪽 제안 서명 · 장터 글 · 내리기. 사는 쪽 돈은 건드리지 않는다.
+//! 잠긴 지갑이면 승인 창에서 사람이 암호를 넣어야 이어 간다.
+//!
+//! ### 왜 러스트 백그라운드 일이 아니라 화면의 앱 전체 타이머인가
+//! 일은 `wallet_link_inbox` 한 번마다 몇 걸음씩 돈다. 그 명령을 부르는 타이머는 `wireWalletLink`(앱이 켜질 때 한 번 붙는다,
+//! 설정 화면을 열지 않아도 돈다)에 있다. 러스트 tokio 일로 돌리면 IPC 입구의 앱 잠금 문지기(`app_lock::command_allowed`)를
+//! 지나지 않는다 — 화면 타이머 쪽이 잠긴 동안 저절로 아무것도 못 하므로 더 안전하다. 그 위에 걸음마다 잠금 차례 번호를 다시 본다.
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -25,6 +35,9 @@ use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 
 use crate::sales_account::{SalesRpc, Text};
+
+/// 폰에서 판매(0.9.18) — 「팔아 줘」·내리기·판매 결과와 그 일의 차례. 문서는 그 파일 맨 위.
+mod sell;
 
 const DOMAIN: &str = "ravenvault-wallet-link-v1";
 const CHAIN: &str = "rvn-main";
@@ -334,7 +347,7 @@ fn open(my: &[u8; 32], gift: &Value) -> Option<(String, String, Value)> {
     let (from, text) = unwrap(my, gift)?;
     let v: Value = serde_json::from_str(&text).ok()?;
     let t = v.get("rvwl1")?.as_str()?;
-    if !["accept", "request", "result", "revoke"].contains(&t) || !v.get("s")?.is_object() { return None; }
+    if !["accept", "request", "result", "revoke", "sell", "unsell"].contains(&t) || !v.get("s")?.is_object() { return None; }
     Some((from, t.into(), v["s"].clone()))
 }
 
@@ -410,6 +423,9 @@ struct Link {
     /// 우리가 서명한 끊기 — 아직 못 보냈으면 다음 확인 때 다시 보낸다.
     #[serde(default)]
     revoke_out: Option<Value>,
+    /// 「폰에서 판매 허용」 — 옛 기록에는 없으니 꺼짐(하루 3건)으로 읽는다.
+    #[serde(default)]
+    sell: sell::SellPolicy,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct Req {
@@ -450,6 +466,10 @@ struct State {
     last_fetch: i64,
     /// 아직 연결 기록이 없는 연결 id 로 온 서명된 끊기(연결 id → 서명한 폰 키). 「같아요」 전에 폰이 취소한 경우를 막는다.
     orphan_revokes: BTreeMap<String, (String, i64)>,
+    /// 폰이 맡긴 판매 일(id = 「팔아 줘」 id).
+    sells: BTreeMap<String, sell::SellJob>,
+    /// 아직 폰에 못 보낸 판매 결과(서명 → 값).
+    sell_outbox: BTreeMap<String, sell::SellOut>,
 }
 fn state_file(dir: &Path) -> PathBuf { dir.join("state.json") }
 fn load(dir: &Path) -> Result<State, String> {
@@ -477,6 +497,7 @@ fn prune(s: &mut State, now: i64) {
     s.orphan_revokes.retain(|_, (_, at)| *at > now - WRAP_RETAIN_MS);
     s.spends.retain(|_, x| x.at > now - 2 * DAY_MS);
     s.requests.retain(|_, r| r.status == "pending" || r.status == "sending" || r.status == "unknown" || r.received > now - 7 * DAY_MS);
+    sell::prune(s, now);
 }
 
 // ── 바깥(노드·릴레이) ──────────────────────────────────────────────
@@ -568,7 +589,7 @@ fn confirm_in(dir: &Path, sess: &Session, daily_rvn: &str, phone_name: &str, now
     if s.links.iter().any(|l| l.link_id == a.link_id) { return Err("이미 연결된 폰이에요.".into()); }
     if s.orphan_revokes.get(&a.link_id).is_some_and(|(k, _)| *k == a.phone_key) { return Err(PHONE_CANCELLED.into()); }
     s.links.push(Link { link_id: a.link_id.clone(), phone_key: a.phone_key.clone(), phone_addresses: a.phone_addresses.clone(),
-        name: clean_name(phone_name, "내 폰"), daily_sats: daily, created: now, revoked: false, revoked_at: None, revoke_out: None });
+        name: clean_name(phone_name, "내 폰"), daily_sats: daily, created: now, revoked: false, revoked_at: None, revoke_out: None, sell: Default::default() });
     if s.last_fetch == 0 { s.last_fetch = now / 1000; }
     save(dir, &s)?;
     Ok(json!({ "linkId": a.link_id, "dailySats": daily.to_string() }))
@@ -637,6 +658,8 @@ fn process(dir: &Path, sk: &[u8; 32], gifts: &[Value], now: i64, session: Option
                     _ => {}
                 }
             }
+            "sell" => sell::on_sell(&mut s, sk, &msg, &from, now, &mut out)?,
+            "unsell" => sell::on_unsell(&mut s, sk, &msg, &from, now)?,
             "revoke" => {
                 let Some(lid) = msg.get("body").and_then(|b| b.get("linkId")).and_then(Value::as_str).map(str::to_string) else { continue };
                 if let Some(l) = s.links.iter_mut().find(|l| l.link_id == lid && l.phone_key == from && !l.revoked) {
@@ -676,6 +699,7 @@ fn process(dir: &Path, sk: &[u8; 32], gifts: &[Value], now: i64, session: Option
         }
     }
     for l in &s.links { if let Some(rv) = &l.revoke_out { out.push((l.phone_key.clone(), "revoke", rv.clone())); } }
+    for x in sell::outbox(&s) { if !out.iter().any(|(_, _, v)| *v == x.2) { out.push(x); } }
     prune(&mut s, now);
     save(dir, &s)?;
     Ok(out)
@@ -686,6 +710,8 @@ fn cancel_pending(s: &mut State, link_id: &str) {
         r.refused = Some("revoked".into());
         r.result = None;
     }
+    // 끊으면 판매 허용도 꺼지고 올리기 전 판매 일은 멈춘다. 이미 올라간 글은 화면이 「내리기」를 권한다.
+    let _ = sell::stop_link(s, None, link_id, "revoked", now_ms());
 }
 /// 보낸 것을 기록에 표시한다(결과는 publish 성공 시 result_published, 받았어요는 seen_out·끊기는 revoke_out 비움).
 fn mark_sent(dir: &Path, sent: &[(&'static str, Value)]) -> Result<(), String> {
@@ -695,6 +721,7 @@ fn mark_sent(dir: &Path, sent: &[(&'static str, Value)]) -> Result<(), String> {
         if *t == "result" { for r in s.requests.values_mut() { if r.result.as_ref() == Some(v) { r.result_published = true; } } }
         if *t == "revoke" { for l in s.links.iter_mut() { if l.revoke_out.as_ref() == Some(v) { l.revoke_out = None; } } }
         if *t == "seen" { for r in s.requests.values_mut() { if r.seen_out.as_ref() == Some(v) { r.seen_out = None; } } }
+        if *t == "sellresult" { s.sell_outbox.retain(|_, o| o.value != *v); }
     }
     save(dir, &s)
 }
@@ -712,8 +739,9 @@ fn view(dir: &Path, now: i64) -> Result<Value, String> {
         "id": id, "linkId": r.link_id, "phoneName": name(&r.link_id), "kind": r.kind, "to": r.to, "sats": r.sats.to_string(),
         "created": r.created, "expires": r.expires })).collect();
     let links: Vec<Value> = s.links.iter().map(|l| json!({ "linkId": l.link_id, "name": l.name, "phoneAddresses": l.phone_addresses,
-        "dailySats": l.daily_sats.to_string(), "spentToday": spent_today(&s, &l.link_id, now, "").to_string(), "created": l.created, "revoked": l.revoked })).collect();
-    Ok(json!({ "pending": pending, "links": links }))
+        "dailySats": l.daily_sats.to_string(), "spentToday": spent_today(&s, &l.link_id, now, "").to_string(), "created": l.created, "revoked": l.revoked,
+        "sell": sell::policy_view(&s, l, now) })).collect();
+    Ok(json!({ "pending": pending, "links": links, "sells": sell::jobs_view(&s) }))
 }
 async fn inbox_with(net: &impl Net, dir: &Path, sk: &[u8; 32], now: i64) -> Result<Value, String> {
     let key = pubkey_of(sk)?;
@@ -744,12 +772,23 @@ async fn inbox_with(net: &impl Net, dir: &Path, sk: &[u8; 32], now: i64) -> Resu
     v["complete"] = json!(complete);
     Ok(v)
 }
-/// 화면이 잠기지 않은 동안 주기적으로 부른다(앱 잠금 중에는 app_lock 이 막는다). 승인은 하지 않는다.
+/// 받은 쪽지 처리 뒤 판매 일을 몇 걸음 돌리고(허용 켠 연결의 일만), 그 결과도 같은 차례에 폰으로 보낸다.
+async fn inbox_and_sell(net: &impl Net, ops: &impl sell::SellOps, dir: &Path, sk: &[u8; 32], now: i64) -> Result<Value, String> {
+    let mut v = inbox_with(net, dir, sk, now).await?;
+    if !sell::has_work(&load(dir)?) { return Ok(v); }
+    // 판매 일의 오류는 다음 차례에 다시(일마다 이유는 기록에 남는다).
+    let _ = sell::tick(ops, dir, sk, now).await;
+    deliver(net, dir, sk, sell::outbox(&load(dir)?)).await?;
+    let fresh = view(dir, now)?;
+    for k in ["pending", "links", "sells"] { v[k] = fresh[k].clone(); }
+    Ok(v)
+}
+/// 화면이 잠기지 않은 동안 주기적으로 부른다(앱 잠금 중에는 app_lock 이 막는다). 남에게 보내는 승인은 하지 않는다.
 #[tauri::command]
 pub async fn wallet_link_inbox() -> Result<Value, String> {
     let _gate = GATE.lock().await;
     let sk = link_secret()?;
-    inbox_with(&Relays, &dir(), &sk.0, now_ms()).await
+    inbox_and_sell(&Relays, &sell::ProdOps, &dir(), &sk.0, now_ms()).await
 }
 #[tauri::command]
 pub fn wallet_link_list() -> Result<Value, String> { view(&dir(), now_ms()) }
@@ -969,6 +1008,118 @@ pub async fn wallet_link_set_limit(link_id: String, daily_rvn: String, passphras
     set_limit_in(&dir(), &link_id, &daily_rvn, now_ms())
 }
 
+/// 「폰에서 판매 허용」 켜기·끄기·하루 최대 건수(1~20).
+/// 🔴 켜거나(켠 채로 건수를 바꾸면) 이 컴퓨터 자산이 폰 서명으로 장터에 오를 수 있으므로 한도 바꾸기와 같은 암호 재인증을 거친다.
+/// 끄기만은 힘을 줄이는 일이라 암호 없이 된다.
+#[tauri::command]
+pub async fn wallet_link_set_sell(link_id: String, enabled: bool, daily: u32, passphrase: Option<String>) -> Result<Value, String> {
+    let passphrase = passphrase.map(Text);
+    let _gate = GATE.lock().await;
+    if !(sell::DAILY_MIN..=sell::DAILY_MAX).contains(&daily) { return Err(format!("하루 최대 건수는 {}~{} 사이로 골라 주세요.", sell::DAILY_MIN, sell::DAILY_MAX)); }
+    if enabled {
+        let p = passphrase.filter(|p| !p.0.is_empty()).ok_or("켜려면 지갑 암호로 다시 인증해 주세요.")?;
+        reveal_main_with(&crate::sales_account::NativeRpc, p).await?;
+    }
+    let sk = link_secret()?;
+    let (d, now) = (dir(), now_ms());
+    sell::set_sell_in(&d, &sk.0, &link_id, enabled, daily, now)?;
+    deliver(&Relays, &d, &sk.0, sell::outbox(&load(&d)?)).await?;
+    view(&d, now)
+}
+/// 승인 창: 잠긴 지갑 때문에 멈춘 판매를 사람이 암호로 이어 간다(암호는 이 차례에만 쓰고 버린다).
+#[tauri::command]
+pub async fn wallet_link_sell_continue(id: String, passphrase: String) -> Result<Value, String> {
+    let passphrase = Text(passphrase);
+    let _gate = GATE.lock().await;
+    let sk = link_secret()?;
+    let (d, now) = (dir(), now_ms());
+    let r = sell::continue_with(&sell::ProdOps, &d, &sk.0, &id, &passphrase, now).await;
+    drop(passphrase);
+    deliver(&Relays, &d, &sk.0, sell::outbox(&load(&d)?)).await?;
+    r?;
+    view(&d, now)
+}
+/// 승인 창: 멈춘 판매(또는 폰의 내리기)를 거절한다.
+#[tauri::command]
+pub async fn wallet_link_sell_refuse(id: String) -> Result<Value, String> {
+    let _gate = GATE.lock().await;
+    let sk = link_secret()?;
+    let (d, now) = (dir(), now_ms());
+    sell::refuse_in(&d, &sk.0, &id, now)?;
+    deliver(&Relays, &d, &sk.0, sell::outbox(&load(&d)?)).await?;
+    view(&d, now)
+}
+/// 이 컴퓨터에서 폰 판매 글 내리기(끊긴 연결의 글도). 잠긴 지갑이면 암호.
+#[tauri::command]
+pub async fn wallet_link_sell_cancel(id: String, passphrase: Option<String>) -> Result<Value, String> {
+    let passphrase = passphrase.filter(|p| !p.is_empty()).map(Text);
+    let _gate = GATE.lock().await;
+    let sk = link_secret()?;
+    let (d, now) = (dir(), now_ms());
+    sell::cancel_with(&sell::ProdOps, &d, &sk.0, &id, passphrase.as_ref(), now).await?;
+    drop(passphrase);
+    deliver(&Relays, &d, &sk.0, sell::outbox(&load(&d)?)).await?;
+    view(&d, now)
+}
+/// 장터 화면(`market_my_listings`)이 「팔렸음」으로 바꾼 글이 폰 판매에서 왔으면 폰에 알린다(다음 확인 때 간다).
+/// 그런 일이 없으면 연결 열쇠를 꺼내지도 않는다.
+pub(crate) async fn note_sold(d: &str) {
+    let _gate = GATE.lock().await;
+    let dd = dir();
+    let Ok(s) = load(&dd) else { return };
+    if !s.sells.values().any(|j| j.d.as_deref() == Some(d) && j.status == "published") { return; }
+    let Ok(sk) = link_secret() else { return };
+    let _ = sell::mark_sold_in(&dd, &sk.0, d, now_ms());
+}
+
+/// regtest 통합 시험(`tests/market_regtest.rs`) 입구 — 폰 흉내(시험 열쇠로 서명) · 판매 일 돌리기. 기본 빌드에는 없다.
+#[cfg(feature = "regtest-harness")]
+pub(crate) mod harness {
+    use super::*;
+    fn sk_of(h: &str) -> Result<[u8; 32], String> { hex::decode(h).ok().and_then(|b| b.try_into().ok()).ok_or_else(|| "열쇠".to_string()) }
+    /// 시험 폰 하나를 판매 허용으로 연결해 둔다(QR 단계는 단위 시험이 따로 본다). (linkId, 데스크탑 연결 공개키)
+    pub fn link_phone(desk_sk: &str, phone_sk: &str, daily: u32) -> Result<(String, String), String> {
+        let (desk, phone) = (pubkey_of(&sk_of(desk_sk)?)?, pubkey_of(&sk_of(phone_sk)?)?);
+        let id = link_id(&desk, &phone, &"ab".repeat(32));
+        let d = dir();
+        let mut s = load(&d)?;
+        s.links.retain(|l| l.link_id != id);
+        s.links.push(Link { link_id: id.clone(), phone_key: phone, phone_addresses: vec![], name: "시험 폰".into(), daily_sats: DAILY_DEFAULT_SATS,
+            created: now_ms(), revoked: false, revoked_at: None, revoke_out: None, sell: sell::SellPolicy { enabled: true, daily } });
+        save(&d, &s)?;
+        Ok((id, desk))
+    }
+    pub fn phone_sign(phone_sk: &str, tag: &str, body: Value) -> Result<Value, String> { sign_body(tag, body, &sk_of(phone_sk)?) }
+    /// 폰이 보낸 것처럼 겉봉에 넣어 받은 쪽지로 처리한다.
+    pub fn deliver_from_phone(desk_sk: &str, phone_sk: &str, t: &str, s: &Value) -> Result<(), String> {
+        let desk = sk_of(desk_sk)?;
+        let gift = pack(&sk_of(phone_sk)?, &pubkey_of(&desk)?, t, s)?;
+        process(&dir(), &desk, &[gift], now_ms(), None).map(|_| ())
+    }
+    pub async fn tick(desk_sk: &str) -> Result<Value, String> {
+        let desk = sk_of(desk_sk)?;
+        sell::tick(&sell::ProdOps, &dir(), &desk, now_ms()).await?;
+        view(&dir(), now_ms())
+    }
+    pub async fn continue_sell(desk_sk: &str, id: &str, pass: &str) -> Result<(), String> {
+        sell::continue_with(&sell::ProdOps, &dir(), &sk_of(desk_sk)?, id, &Text(pass.into()), now_ms()).await
+    }
+    /// 판매 일 하나와 아직 못 보낸 결과들(폰이 받을 몸통·서명).
+    pub fn job(id: &str) -> Result<Value, String> {
+        let s = load(&dir())?;
+        Ok(json!({ "job": serde_json::to_value(s.sells.get(id)).unwrap_or_default(),
+            "results": s.sell_outbox.values().map(|o| o.value.clone()).collect::<Vec<_>>() }))
+    }
+    pub fn verify(tag: &str, s: &Value, key: &str) -> bool { verify_body(tag, s, key) }
+    /// 팔린 글을 다시 볼 때 1분 기다리지 않게(시험 전용).
+    pub fn recheck_now(id: &str) -> Result<(), String> {
+        let d = dir();
+        let mut s = load(&d)?;
+        if let Some(j) = s.sells.get_mut(id) { j.checked = 0; }
+        save(&d, &s)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1025,7 +1176,7 @@ mod tests {
         let now = v["now"].as_i64().unwrap();
         let link = Link { link_id: v["linkId"].as_str().unwrap().into(), phone_key: v["phoneKey"].as_str().unwrap().into(),
             phone_addresses: vec![v["phoneAddress"].as_str().unwrap().into()], name: "폰".into(), daily_sats: DAILY_MAX_SATS,
-            created: now, revoked: false, revoked_at: None, revoke_out: None };
+            created: now, revoked: false, revoked_at: None, revoke_out: None, sell: Default::default() };
         assert_eq!(check_request(&v["requestFill"], &link, now + 1000, false, 0).0, Check::Ok("fill"));
         assert_eq!(check_request(&v["requestSend"], &link, now, false, 0).0, Check::Ok("send"));
         let mut forged = v["requestFill"].clone();

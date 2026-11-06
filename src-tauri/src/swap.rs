@@ -125,6 +125,18 @@ async fn exact_outpoint(asset: &str, amount: f64) -> Result<Option<Value>, Strin
     Ok(outs.into_iter().find(|o| same(f(&o["amount"]), amount)))
 }
 
+/// 파는 양과 **딱 맞는** 자산 UTXO 전부(폰 판매가 다른 글이 쓰는 동전을 피해 고를 때).
+pub(crate) async fn exact_outpoints(asset: &str, amount: f64) -> Result<Vec<Value>, String> {
+    let v = call_rpc("listmyassets", json!([asset, true])).await?;
+    let outs = v
+        .get(asset)
+        .and_then(|e| e.get("outpoints"))
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    Ok(outs.into_iter().filter(|o| same(f(&o["amount"]), amount)).collect())
+}
+
 /// 팔 준비가 됐나. 안 됐으면 **무엇을 해야 하는지** 말한다.
 #[tauri::command]
 pub async fn swap_ready(asset: String, amount: f64) -> Result<Value, String> {
@@ -171,13 +183,47 @@ pub async fn swap_make_lot(
     if exact_outpoint(&asset, amount).await?.is_some() {
         return Ok(json!({ "already": true }));
     }
+    make_lot_inner(&asset, amount, passphrase, &[]).await
+}
+
+/// 폰 판매(`wallet_link/sell.rs`)가 쓰는 묶음 만들기: 딱 맞는 묶음이 **이미 있어도**(다른 판매 글이 쓰는 중) 새로 만든다.
+/// `keep` = 다른 판매 글이 쓰는 동전들 — 노드가 그 동전을 골라 옮기지 않게 **잠깐 잠가 두고**(lockunspent) 보낸 뒤 푼다.
+/// 🔴 자기 지갑 안에서 도는 일이다(받는 주소 = 내 새 주소). 사는 쪽 돈은 건드리지 않는다.
+pub(crate) async fn make_lot_keeping(
+    asset: &str,
+    amount: f64,
+    passphrase: Option<String>,
+    keep: &[(String, u64)],
+) -> Result<Value, String> {
+    make_lot_inner(asset, amount, passphrase, keep).await
+}
+
+async fn make_lot_inner(
+    asset: &str,
+    amount: f64,
+    passphrase: Option<String>,
+    keep: &[(String, u64)],
+) -> Result<Value, String> {
     let was = unlock(passphrase).await?;
-    let to = call_rpc("getnewaddress", json!([])).await?;
-    let to = to.as_str().unwrap_or_default().to_string();
+    let to = match call_rpc("getnewaddress", json!([])).await {
+        Ok(v) => v.as_str().unwrap_or_default().to_string(),
+        Err(e) => {
+            relock(was).await;
+            return Err(e);
+        }
+    };
     if to.is_empty() {
+        relock(was).await;
         return Err("받을 주소를 만들지 못했습니다.".into());
     }
+    let held: Vec<Value> = keep.iter().map(|(t, v)| json!({ "txid": t, "vout": v })).collect();
+    if !held.is_empty() {
+        let _ = call_rpc("lockunspent", json!([false, held.clone()])).await;
+    }
     let r = call_rpc("transfer", json!([asset, amount, to])).await;
+    if !held.is_empty() {
+        let _ = call_rpc("lockunspent", json!([true, held])).await;
+    }
     relock(was).await;
     let r = r?;
     let txid = r
@@ -205,10 +251,38 @@ pub async fn swap_offer(
     price: f64,
     passphrase: Option<String>,
 ) -> Result<Value, String> {
+    offer_inner(asset, amount, price, None, passphrase).await
+}
+
+/// 폰 판매가 쓰는 반쪽 제안: **고른 그 동전**(딱 맞는 묶음이어야 한다)으로 만든다. 같은 동전을 두 글이 쓰지 않게.
+pub(crate) async fn swap_offer_at(
+    asset: String,
+    amount: f64,
+    price: f64,
+    at: (String, u64),
+    passphrase: Option<String>,
+) -> Result<Value, String> {
+    offer_inner(asset, amount, price, Some(at), passphrase).await
+}
+
+async fn offer_inner(
+    asset: String,
+    amount: f64,
+    price: f64,
+    at: Option<(String, u64)>,
+    passphrase: Option<String>,
+) -> Result<Value, String> {
     if amount <= 0.0 || price <= 0.0 {
         return Err("수량과 값은 0보다 커야 합니다.".into());
     }
-    let Some(out) = exact_outpoint(&asset, amount).await? else {
+    let found = match &at {
+        None => exact_outpoint(&asset, amount).await?,
+        Some((t, v)) => exact_outpoints(&asset, amount)
+            .await?
+            .into_iter()
+            .find(|o| o["txid"].as_str() == Some(t.as_str()) && o["vout"].as_u64() == Some(*v)),
+    };
+    let Some(out) = found else {
         return Err(
             "파는 양과 딱 맞는 묶음이 없습니다. 「묶음 만들기」를 먼저 해 주세요 — \
              그대로 팔면 사는 쪽이 남는 것까지 가져갈 수 있습니다."

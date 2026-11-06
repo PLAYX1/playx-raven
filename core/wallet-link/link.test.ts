@@ -7,6 +7,7 @@ import { canonicalJson } from '../creator/bytes';
 import {
   checkLinkRequest, encodeLinkOffer, linkConfirmCode, linkId, linkReceiveAddress, parseLinkOffer, signLinkAccept, signLinkRequest, signLinkResult, signLinkSeen,
   verifyLinkAccept, verifyLinkResult, verifyLinkSeen, LINK_DAILY_SATS, type LinkOffer, type LinkRecord, type LinkRequest, type LinkSeen,
+  checkLinkSell, linkSellAssetOk, signLinkSell, signLinkSellResult, signLinkUnsell, verifyLinkSellResult, verifyLinkUnsell, type LinkSell,
 } from './link';
 
 const hex = (b: Uint8Array) => Array.from(b, x => x.toString(16).padStart(2, '0')).join('');
@@ -86,4 +87,37 @@ assert.equal(verifyLinkSeen(signLinkSeen({ ...seenBody, dailySats: LINK_DAILY_SA
 assert.throws(() => signLinkSeen({ ...seenBody, dailySats: (LINK_DAILY_SATS + 1n).toString() }, desk), 'over the total supply');
 assert.throws(() => signLinkSeen({ ...seenBody, dailySats: '0' }, desk), 'zero limit');
 assert.throws(() => signLinkSeen({ ...seenBody, spentToday: '01' }, desk), 'canonical integer text');
+
+// 팔아 줘(폰 → 데스크탑, 0.9.18): 러스트 check_sell 과 같은 순서 · 허용 꺼짐·하루 건수·주인 토큰·1 RVN 미만은 거절.
+const sellLink = { ...link, sell: { enabled: true, daily: 3 } };
+const sellBody = (over: Partial<LinkSell> = {}): LinkSell => ({ v: 1, linkId: id, id: '33'.repeat(32), asset: 'PLAYX/ALBUM1', amount: '1', priceRvn: '25.00000000',
+  title: '첫 앨범', summary: '한정판', category: 'music', created: now, expires: now + 600_000, ...over });
+const sell = signLinkSell(sellBody(), phone);
+const sellOk = checkLinkSell(sell, sellLink, now + 1000, new Set(), 0);
+assert(sellOk.ok && sellOk.sell.asset === 'PLAYX/ALBUM1');
+const why = (r: ReturnType<typeof checkLinkSell>) => (r as { reason: string }).reason;
+assert.equal(why(checkLinkSell({ ...sell, body: { ...sell.body, priceRvn: '1.00000000' } }, sellLink, now, new Set(), 0)), 'signature');
+assert.equal(why(checkLinkSell(sell, { ...sellLink, revoked: true }, now, new Set(), 0)), 'revoked');
+assert.equal(why(checkLinkSell(sell, sellLink, now + 700_000, new Set(), 0)), 'expired');
+assert.equal(why(checkLinkSell(sell, sellLink, now - 200_000, new Set(), 0)), 'future');
+assert.equal(why(checkLinkSell(sell, sellLink, now, new Set(['33'.repeat(32)]), 0)), 'seen');
+assert.equal(why(checkLinkSell(sell, link, now, new Set(), 0)), 'sell-off', 'default off');
+assert.equal(why(checkLinkSell(sell, sellLink, now, new Set(), 3)), 'daily-count');
+assert.equal(why(checkLinkSell(signLinkSell(sellBody({ asset: 'PLAYX!' }), phone), sellLink, now, new Set(), 0)), 'owner-token');
+assert.equal(why(checkLinkSell(signLinkSell(sellBody({ asset: 'bad name' }), phone), sellLink, now, new Set(), 0)), 'asset');
+assert.equal(why(checkLinkSell(signLinkSell(sellBody({ priceRvn: '0.99999999' }), phone), sellLink, now, new Set(), 0)), 'price');
+assert.throws(() => signLinkSell(sellBody({ priceRvn: '25' }), phone), 'price needs 8 decimals');
+assert.throws(() => signLinkSell(sellBody({ category: 'car' as never }), phone), 'unknown category');
+assert.throws(() => signLinkSell({ ...sellBody(), extra: 1 } as never, phone), 'no extra keys');
+assert.throws(() => signLinkSell(sellBody({ expires: now + 3_600_000 }), phone), 'ttl over 10 minutes');
+assert.throws(() => signLinkSell(sellBody({ image: 'javascript:alert(1)' }), phone), 'image scheme');
+assert(linkSellAssetOk('ART#Tag_1') && linkSellAssetOk('$RESTRICT') && !linkSellAssetOk('ab') && !linkSellAssetOk('A!B') && !linkSellAssetOk('lower'));
+const unsell = signLinkUnsell({ v: 1, linkId: id, id: '44'.repeat(32), d: `rvswap:${'aa'.repeat(32)}:0`, created: now, expires: now + 600_000 }, phone);
+assert.equal(verifyLinkUnsell(unsell, phoneKey, id).d, `rvswap:${'aa'.repeat(32)}:0`);
+assert.throws(() => verifyLinkUnsell(unsell, deskKey, id), 'only the phone key');
+const sr = signLinkSellResult({ v: 1, linkId: id, id: '33'.repeat(32), status: 'published', eventId: 'bb'.repeat(32), d: `rvswap:${'aa'.repeat(32)}:0`, outpoint: { txid: 'aa'.repeat(32), vout: 0 }, at: now + 5 }, desk);
+assert.equal(verifyLinkSellResult(sr, deskKey, id).status, 'published');
+assert.throws(() => verifyLinkSellResult(sr, phoneKey, id), 'desktop key only');
+assert.throws(() => verifyLinkResult(sr as never, deskKey, id), 'tag separates sellresult from result');
+assert.throws(() => signLinkSellResult({ v: 1, linkId: id, id: '33'.repeat(32), status: 'listed' as never, at: now }, desk), 'unknown status');
 console.log('wallet-link ok');
