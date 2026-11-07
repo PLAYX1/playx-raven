@@ -1,5 +1,17 @@
 # 변경 기록
 
+## 0.9.21
+
+### 한국어
+
+- **라비 글쓰기 돕기:** 이야기·피드 글쓰기 칸 옆 「라비」 단추로 글을 다듬거나 짧게 줄이고, 글에 어울리는 그림을 만들 수 있습니다. 고친 글은 칸에만 들어가고 보내기는 직접 누릅니다. 「되돌리기」로 원래 글로 돌아갑니다. 그림은 내 AI 키로 만들고 한 장마다 요금이 나간다고 먼저 묻습니다. 지갑 주소·잔액·전화번호·12단어처럼 보이는 글은 AI 로 보내지 않습니다.
+- **화면 다듬기:** 머리띠가 반투명 유리가 되고, 글이 밑으로 지나갈 때만 아래 선이 보입니다. 화면 제목이 커졌고, 지갑 화면의 「폰으로 가게 보기」 단추가 제목 아래로 내려갔습니다. 「투명도 줄이기」「대비 높이기」 설정을 따릅니다.
+
+### English
+
+- **Ravi writing help:** a "Ravi" button next to the Talk and Feed composer can polish or shorten your post, or make a picture that fits it. The result only goes into the box; you press Send yourself, and "Undo" brings back your text. Pictures use your own AI key and ask first because each one is charged. Text that looks like a wallet address, balance, phone number or 12 words is never sent to the AI.
+- **Polish:** a translucent header that shows its bottom line only while content scrolls under it, larger page titles, and the "View the shop on your phone" button moved below the wallet title. Follows Reduce transparency and Increase contrast settings.
+
 ## 0.9.20
 
 ### 한국어
