@@ -1,0 +1,23 @@
+/* 내 글 서랍 (src/my-drawer.ts) — 큰 글자·넓은 누름 칸. 색은 기존 토큰만. */
+.md-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0; }
+.md-label { font-size: 0.9em; color: var(--muted, inherit); margin-right: 4px; }
+.md-chip { min-height: 44px; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); color: inherit; font: inherit; cursor: pointer; }
+.md-chip small { opacity: 0.7; margin-left: 4px; }
+.md-chip.on { border-color: var(--brand); font-weight: 700; box-shadow: inset 0 0 0 1px var(--brand); }
+.md-add { min-height: 44px; }
+.md-tools, .md-editor { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; }
+.md-editor input { min-height: 44px; min-width: 200px; flex: 1 1 200px; }
+.md-list { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 10px; }
+.md-list li { padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.md-list p { margin: 6px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 1.05em; line-height: 1.6; }
+.md-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.md-row select { min-height: 40px; max-width: 220px; }
+.md-pics { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.md-pics img { width: 96px; height: 96px; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); }
+.md-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin: 8px 0; }
+.md-grid figure { margin: 0; }
+.md-grid img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 12px; border: 1px solid var(--line); display: block; }
+.md-grid figcaption { margin-top: 4px; }
+.md-editor[hidden], .md-tools[hidden] { display: none; }
+.md-confirm { display: grid; gap: 8px; margin: 8px 0; padding: 12px 14px; border: 1px solid var(--danger); border-radius: 12px; background: var(--panel); }
+.md-confirm .md-tools { margin: 0; gap: 48px; }

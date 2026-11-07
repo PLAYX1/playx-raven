@@ -5110,7 +5110,8 @@ function showPage(id: string) {
   if (id === "ravi" || id === "home") paintRavi();
   if (id === "home") void paintHome();
   if (id === "profile") void paintProfile();
-  if (id === "profile") void import("./listing-market").then(({ paintMyPosts }) => paintMyPosts($("rv-profile-posts"), listingDeps(), openFeed)).catch((e) => console.warn("listing-market load failed", e));
+  // 11-07 「내 글 서랍」 — 옛 「내 글」(글자 30개)을 바꿨다: 폰 글까지 모은 내 글·사진만·나만의 폴더·#태그(src/my-drawer.ts).
+  if (id === "profile") void import("./my-drawer").then(({ paintMyDrawer }) => paintMyDrawer($("rv-profile-posts"), { invoke: (cmd, args) => invoke(cmd, args), errText, statusLine: myNotesLine }, openFeed)).catch((e) => console.warn("my-drawer load failed", e));
   if (id === "trade") void import("./listing-market").then(({ mountListingMarket }) => {
     if (!listingMarket) listingMarket = mountListingMarket($("page-trade"), listingDeps());
     if (currentPage === "trade") listingMarket.enter(tradeOpen);
@@ -19477,6 +19478,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   // 안 보기. 🔴 러스트만 있고 여기가 비면 단추가 죽는다 — 이 앱이 여러 번
   //    걸린 병이다. 명단·전체 되돌리기·닫기 세 줄을 반드시 같이 묶는다.
   $("tk-muted").addEventListener("click", () => talkToggleMuted());
+  $("tk-mine").addEventListener("click", () => { showPage("profile"); setTimeout(() => document.querySelector(".rv-profile-posts")?.scrollIntoView({ block: "start" }), 50); });
   $("tk-bm").addEventListener("click", () => { const b = $("tk-bmbox"); b.hidden = !b.hidden; if (!b.hidden) void talkPaintBookmarks(); });
   $("tk-bmclose").addEventListener("click", () => { $("tk-bmbox").hidden = true; });
   tkPaintFollowOnly();

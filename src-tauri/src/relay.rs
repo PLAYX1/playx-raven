@@ -604,6 +604,26 @@ fn owner() -> Option<String> {
     g.0.clone()
 }
 
+/// 내 글 서랍(my_drawer.rs)이 쓴다: 주인 공개키.
+pub(crate) fn owner_pub() -> Option<String> { owner() }
+/// 한 사람의 글(종류 지정), 새 글이 먼저 + 그 사람이 지운 글 번호들.
+/// 잠금 안에서는 그 사람 글만 복사하고, 거르기·정렬은 잠금 밖에서 한다(GPT P2 — 릴레이가 기다리지 않게).
+pub(crate) fn events_of(pubkey: &str, kinds: &[i64]) -> (Vec<Value>, Vec<String>) {
+    let mine: Vec<Value> = peek(|v| v.iter().filter(|x| x.get("pubkey").and_then(Value::as_str) == Some(pubkey)).cloned().collect());
+    let deleted: std::collections::HashSet<String> = mine.iter()
+        .filter(|x| x.get("kind").and_then(Value::as_i64) == Some(5))
+        .flat_map(|x| x.get("tags").and_then(Value::as_array).cloned().unwrap_or_default())
+        .filter(|t| t.get(0).and_then(Value::as_str) == Some("e"))
+        .filter_map(|t| t.get(1).and_then(Value::as_str).map(str::to_string))
+        .collect();
+    let mut out: Vec<Value> = mine.into_iter()
+        .filter(|x| x.get("kind").and_then(Value::as_i64).is_some_and(|k| kinds.contains(&k)))
+        .filter(|x| x.get("id").and_then(Value::as_str).is_some_and(|id| !deleted.contains(id)))
+        .collect();
+    out.sort_by_key(|x| std::cmp::Reverse(x.get("created_at").and_then(Value::as_i64).unwrap_or(0)));
+    (out, deleted.into_iter().collect())
+}
+
 /// 지킬 내 글의 종류: 글·방·방 글·지우기 요청·이름표·팔로우·북마크.
 const MINE_KINDS: [i64; 8] = [1, 40, 41, 42, 5, 0, 3, 10003];
 /// 마지막으로 **끝까지** 모은 (주인 공개키, 시각). 주인이 바뀌면 처음부터 다시 모은다(GPT P2).

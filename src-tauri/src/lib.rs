@@ -146,6 +146,7 @@ mod devfee;
 mod payout_guard;
 mod ticket;
 mod relay;
+mod my_drawer;
 mod upload;
 mod spec;
 mod lockbox;
@@ -386,6 +387,8 @@ pub fn run() {
             member_privacy::member_groups_set,
             pass::member_groups_assign,
             relay::relay_status,
+            my_drawer::my_notes,
+            my_drawer::my_drawer_save,
             devfee::fee_pay,
             shopkey::shop_announce,
             shopkey::shop_refresh,

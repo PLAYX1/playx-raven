@@ -3318,10 +3318,10 @@
           <h2>라비 캐릭터 고르기</h2><div id="rv-profile-characters"></div>
           <button id="rv-profile-save" type="button">저장</button><p id="rv-profile-note" role="status"></p>
         </div>
-        <!-- 0.9.17 「내 글」 — 내가 「모두에게」 올린 글(talk_my_posts). 그리는 곳은 src/listing-market.ts paintMyPosts. -->
+        <!-- 11-07 「내 글 서랍」 — 내가 쓴 글(폰 글 포함)·사진만·나만의 폴더·#태그. 그리는 곳은 src/my-drawer.ts. -->
         <div class="card rv-profile-posts">
-          <h2>내 글</h2>
-          <p class="meta">내가 「모두에게」 올린 글이에요. 누구나 읽을 수 있어요.</p>
+          <h2>내 글 서랍</h2>
+          <p class="meta">글은 공개예요. 폴더는 이 컴퓨터에만 남고 나만 봐요.</p>
           <div id="rv-profile-posts"></div>
         </div>
       </section>
@@ -3331,6 +3331,7 @@
             <div class="roomhead">방</div>
             <button id="rv-room-ravi" class="rv-room-ravi" type="button"><span id="rv-room-ravi-face"></span><span><b>라비</b><small>AI 도우미</small></span></button><div id="tk-rooms"></div>
             <button class="ghost" id="tk-newroom">+ 방 만들기</button>
+            <button class="ghost" id="tk-mine" type="button">내 글 서랍</button>
             <!-- 🔴 모달을 연달아 띄우지 않는다. 「다음, 다음, 다음」은
                  40~70대에게 제일 나쁜 흐름이다. 한 자리에서 끝낸다. -->
             <div id="tk-newbox" hidden>
