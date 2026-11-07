@@ -188,8 +188,10 @@ const text = (page, sel) => page.$eval(sel, (e) => e.innerText);
 async function type(page, sel, value) { await page.$eval(sel, (e) => { e.value = ''; }); await page.type(sel, value); }
 async function upload(page, sel, files) { const h = await page.$(sel); await h.uploadFile(...files); }
 async function hold(page) {
-  // 8초 취소 창 — 기다린다(그만두기를 누르지 않는다).
+  // 확인 창 — 저절로 넘어가지 않는다(11-07). 진행 단추가 풀리면 직접 누른다.
   await page.waitForSelector('.holdbox', { visible: true });
+  await page.waitForSelector('.holdbox .hb-go:not([disabled])', { visible: true, timeout: 15000 });
+  await page.$eval('.holdbox .hb-go', (e) => e.click());
   await page.waitForFunction(() => !document.querySelector('.holdbox'), { timeout: 15000 });
 }
 const photoFiles = PEOPLE.slice(0, 50).map((p) => path.join(photos, `${p}.jpg`));

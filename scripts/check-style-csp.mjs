@@ -5,7 +5,7 @@
 //    시험들은 CSP 없이 dist 를 띄워 늘 설계대로 보였고, 그래서 0.4.5 부터 실제 앱만 달랐다.
 //
 // 재는 것(화면마다): 적용 안 된 style 속성 수 · 숨겨야 하는데 보이는 것(style 에 display:none) ·
-//   8초 취소 창 막대가 차오르는지. 캡처는 artifacts/claude-style-csp/<모드>-<화면>.png.
+//   되돌릴 수 없는 일 앞의 확인 창이 제대로 그려지는지(저절로 진행 안 함). 캡처는 artifacts/claude-style-csp/<모드>-<화면>.png.
 //
 // 쓰는 법: node scripts/check-style-csp.mjs [dist 폴더] [모드 이름] [--no-csp] [--report-only]
 //   기본은 ./dist · 모드 "after" · CSP 씌움 · 틀리면 실패(종료 코드 1).
@@ -125,7 +125,7 @@ try {
     await page.screenshot({ path: resolve(out, `${mode}-${p}.png`) });
   }
 
-  // 8초 취소 창 — 증서 한 장 만들기에서 띄운다. 2.5초 뒤 막대가 차 있어야 한다.
+  // 확인 창 — 증서 한 장 만들기에서 띄운다. 2.5초 뒤 진행 단추가 풀려 있고 창은 그대로여야 한다.
   await page.$eval('nav [data-page="assets"]', (e) => e.click());
   await page.$eval('#pt-assets [data-pt="0"]', (e) => e.click());
   await page.waitForSelector('#cr-kinds [data-kind="certificate"]', { visible: true });
@@ -136,11 +136,13 @@ try {
   await page.$eval('#cr-check', (e) => e.click());
   await page.waitForSelector('#cr-make:not([disabled])', { timeout: 10000 });
   await page.$eval('#cr-make', (e) => e.click());
-  await page.waitForSelector('.holdbox .hb-bar i', { visible: true });
+  await page.waitForSelector('.holdbox .hb-go', { visible: true });
   await new Promise((r) => setTimeout(r, 2500));
+  // 11-07: 저절로 진행하는 8초 막대를 없앴다. 확인 창이 CSP 아래에서도 제대로 그려지고(진행 단추가 그만두기에서 떨어져 있음),
+  //        시간이 지나도 저절로 진행하지 않는지 본다.
   result.hold = await page.evaluate(() => {
-    const i = document.querySelector('.holdbox .hb-bar i'), bar = document.querySelector('.holdbox .hb-bar');
-    return { fillPx: Math.round(i.getBoundingClientRect().width), barPx: Math.round(bar.getBoundingClientRect().width), text: document.querySelector('.holdbox .hb-left')?.textContent };
+    const c = document.querySelector('.holdbox .hb-cancel').getBoundingClientRect(), g = document.querySelector('.holdbox .hb-go').getBoundingClientRect();
+    return { gapPx: Math.round(g.top - c.bottom), goH: Math.round(g.height), stillOpen: !!document.querySelector('.holdbox'), enabled: !document.querySelector('.holdbox .hb-go').disabled, text: document.querySelector('.holdbox .hb-go')?.textContent };
   });
   await page.screenshot({ path: resolve(out, `${mode}-hold.png`) });
   await page.$eval('.holdbox .hb-cancel', (e) => e.click());
@@ -152,14 +154,14 @@ try {
 
 writeFileSync(resolve(out, `${mode}.json`), JSON.stringify(result, null, 1));
 const rows = Object.entries(result.pages).map(([p, m]) => `${p.padEnd(9)} ${m.missing ? '(메뉴 없음)' : `style ${String(m.withStyle).padStart(3)} · 안 먹음 ${String(m.unapplied).padStart(3)} · 숨김이 보임 ${m.leaked.length}${m.leaked.length ? ` (${m.leaked.slice(0, 6).join(', ')})` : ''}`}`);
-console.log(`[${mode}] CSP ${useCsp ? '씌움' : '없음'} · ${dist}\n${rows.join('\n')}\n8초 막대: ${result.hold.fillPx}/${result.hold.barPx}px · ${result.hold.text}`);
+console.log(`[${mode}] CSP ${useCsp ? '씌움' : '없음'} · ${dist}\n${rows.join('\n')}\n확인 창: 간격 ${result.hold.gapPx}px · 진행 단추 ${result.hold.goH}px · ${result.hold.text}`);
 if (!reportOnly) {
   for (const [p, m] of Object.entries(result.pages)) {
     if (m.missing) continue;
     assert.equal(m.unapplied, 0, `${p}: style 속성 ${m.unapplied}개가 안 먹는다`);
     assert.deepEqual(m.leaked, [], `${p}: 숨겨야 할 것이 보인다`);
   }
-  assert.ok(result.hold.fillPx > result.hold.barPx * 0.15, `8초 막대가 안 찬다: ${result.hold.fillPx}/${result.hold.barPx}`);
+  assert.ok(result.hold.gapPx >= 40 && result.hold.goH >= 60 && result.hold.stillOpen && result.hold.enabled, `확인 창이 CSP 아래에서 제대로 안 그려진다: ${JSON.stringify(result.hold)}`);
   assert.deepEqual(result.errors, [], result.errors.join('\n'));
   console.log('style under CSP: all passed');
 }

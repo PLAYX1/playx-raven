@@ -3779,6 +3779,7 @@ pub async fn start_phone_server(
     eprintln!("[phone] bind 끝, 주소 읽는 중");
     // 릴레이가 받은 것을 5초에 한 번 디스크에 내린다.
     crate::relay::start_saver();
+    crate::relay::start_own_backup();
     // 🔴 밀린 개발비를 **사장이 안 눌러도** 스스로 보낸다. 지갑이 풀려 있는
     //    순간에만 나가고, 암호는 어디에도 안 적는다.
     crate::devfee::start_auto_pay();

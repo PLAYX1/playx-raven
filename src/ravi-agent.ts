@@ -158,6 +158,8 @@ export function createRaviAgentUI(api: { invoke: Invoke; keyed(): string | null;
       let timer = 0, closed = false;
       const dismiss = () => { if (closed) return; closed = true; clearTimeout(timer); document.removeEventListener("keydown", onEscape); overlay.classList.add("docking"); window.setTimeout(() => { opening.destroy(); overlay.remove(); }, 360); };
       // The landed bubble covers home controls for up to 18s; Escape and a close button release them without opening the chat.
+      // 돈 확인 창(holdBeforeDoing)이 뜨면 인사는 비킨다 — 덮개가 확인 창을 가리면 안 된다(11-07).
+      window.addEventListener("rv-confirm-open", () => dismiss(), { once: true });
       const onEscape = (event: KeyboardEvent) => { if (event.key !== "Escape" || event.defaultPrevented || !landed) return; event.preventDefault(); dismiss(); };
       const dock = () => {
         const run = () => { if (closed) return; dismiss(); api.dock(); };

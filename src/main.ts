@@ -4359,6 +4359,11 @@ async function paintPartBody(): Promise<void> {
           [
             [t("지금"), r?.running ? t("돌고 있습니다") : t("꺼져 있습니다")],
             [t("들고 있는 공지"), `${Number(r?.events ?? 0).toLocaleString()}${t("개")}`],
+            // 11-07 내 글 지키기: 폰·웹에서 쓴 내 글도 이 컴퓨터가 바깥 릴레이에서 모아 남긴다(relay.rs start_own_backup).
+            [
+              t("내 글 지키기"),
+              myNotesLine(r),
+            ],
             [
               t("바깥 주소"),
               r?.url ? String(r.url) : t("가게 안에서만 — 「바깥에서 열기」를 켜면 밖에서도 붙습니다"),
@@ -5032,6 +5037,14 @@ function paintHomePhone(st: WalletLinkState) {
 }
 let deviceScreen: ReturnType<typeof import("./device-connect").mountDeviceScreen> | undefined;
 let bulkScreen: ReturnType<typeof import("./bulk-products-ui").mountBulkScreen> | undefined;
+
+/** 11-07 「내 글 지키기」 한 줄 — 거짓 안심 금지: 이름이 폰과 다르거나 아직 못 모았으면 그대로 말한다. */
+function myNotesLine(r: any): string {
+  const n = `${Number(r?.my_notes ?? 0).toLocaleString()}${t("개")}`;
+  if (r && r.my_same_as_wallet === false) return `${n} · ${t("이 컴퓨터 이름이 폰과 달라서 폰 글은 모으지 못해요 — 설정 › 내 이름과 열쇠 › 「이름 합치기」")}`;
+  if (r?.my_backup_problem) return `${n} · ${t(String(r.my_backup_problem))}`;
+  return r?.my_backup_at ? `${n} · ${t("폰에서 쓴 글도 15분마다 모아 둡니다")}` : t("곧 모읍니다 — 폰에서 쓴 글도 이 컴퓨터에 남깁니다");
+}
 
 /* ── 0.9.17 장터·「내 글」·피드 메뉴 (src/listing-market.ts — 처음 쓸 때 따로 내려받는다) ── */
 const listingDeps = () => ({ invoke: <T = any>(cmd: string, args?: Record<string, unknown>) => invoke<T>(cmd, args), ensureUnlocked, errText, fmtQty });
@@ -8625,7 +8638,7 @@ async function ensureUnlocked(why: string): Promise<boolean> {
 
 
 /**
- * 되돌릴 수 없는 일 앞의 **취소 창.**
+ * 되돌릴 수 없는 일 앞의 **확인 창.**
  *
  * 🔴 왜 필요한가 — 마법사는 「다음」을 네 번 누르게 한다. 손이 그 리듬에
  * 들어가면 다섯 번째도 누른다. 그 다섯 번째가 500 RVN 이다.
@@ -8633,83 +8646,90 @@ async function ensureUnlocked(why: string): Promise<boolean> {
  * 🔴 왜 **부르기 전**에 두나 — `issue` RPC 는 만들고 **곧바로 뿌린다.**
  * 부른 뒤에는 취소할 자리가 없다. 체인은 되돌리지 않는다.
  *
- * ⚠️ 확인 체크박스를 하나 더 두는 것과는 다르다. 체크박스는 그냥 눌린다.
- * 여기서는 **시간이 흐르는 것을 보면서** 아무것도 안 해야 진행된다 —
- * 습관이 아니라 기다림이 통과 조건이다.
+ * 🔴 2026-11-07 쉬운 레이븐볼트 합의(GPT 6.1 · 그록 · Opus, docs/owner/쉬운-레이븐볼트-합의-1107.md 1번):
+ *    예전에는 **8초 동안 아무것도 안 하면 저절로 진행**했다. 어르신은 창을 읽다가, 또는 잠깐 자리를
+ *    비운 사이에 500 RVN 이 나갔다 — 「가만히 있으면 진행」은 돈 앞에서 거꾸로다.
+ *    이제 **기본은 그만두기**, 진행은 「네, 진행해요」를 **직접 눌러야** 한다.
+ *    리듬으로 눌러 버리는 것은 이렇게 막는다:
+ *      ① 진행 단추는 처음 `seconds`초(기본 2초) 동안 잠겨 있다 — 읽을 틈.
+ *      ② 진행 단추는 그만두기와 48px 떨어져 아래에 있다 — 같은 자리를 연달아 눌러도 진행이 안 된다.
+ *      ③ 처음 초점은 그만두기 — Enter·스페이스는 그만둔다. Esc 도 그만둔다.
  *
- * @returns 사용자가 그대로 두면 `true`, 취소하면 `false`
+ * @returns 「네, 진행해요」를 누르면 `true`, 그 밖은 모두 `false`
  */
-function holdBeforeDoing(what: string, cost: string, seconds = 8): Promise<boolean> {
+function holdBeforeDoing(what: string, cost: string, seconds = 2): Promise<boolean> {
   return new Promise((done) => {
     const box = document.createElement("div");
     box.className = "holdbox";
+    box.setAttribute("role", "alertdialog");
     let left = seconds;
-    // 🔴 막대는 CSSOM 으로 채운다. 예전에는 1초마다 innerHTML 로 `<i style="width:…">` 를 다시
-    //    그렸는데, 앱 CSP(Tauri nonce)가 style 속성을 막아 **막대가 한 번도 안 찼다**(RV3).
-    //    한 번 그리고 폭·글자만 바꾼다 — 다시 그리지 않으니 CSS 전환(1초)도 매끄럽게 이어진다.
     box.innerHTML = `
         <div class="hb-top">${escapeHtml(what)}</div>
         <div class="hb-cost">${escapeHtml(cost)}</div>
-        <div class="hb-bar" role="progressbar" aria-valuemin="0" aria-valuemax="${seconds}"><i></i></div>
-        <div class="hb-left" aria-live="polite"></div>
-        <button class="hb-cancel">그만두기</button>`;
-    const bar = box.querySelector(".hb-bar") as HTMLElement;
-    const fill = box.querySelector(".hb-bar i") as HTMLElement;
-    const leftText = box.querySelector(".hb-left") as HTMLElement;
-    (box.querySelector(".hb-cancel") as HTMLElement).onclick = () => {
-      clearInterval(t);
-      box.remove();
-      done(false);
+        <div class="hb-left">${escapeHtml(t("되돌릴 수 없어요. 맞으면 아래 「네, 진행해요」를 눌러 주세요."))}</div>
+        <button class="hb-cancel">${escapeHtml(t("그만두기"))}</button>
+        <button class="hb-go" disabled></button>`;
+    const cancel = box.querySelector(".hb-cancel") as HTMLButtonElement;
+    const go = box.querySelector(".hb-go") as HTMLButtonElement;
+    let finished = false;
+    const finish = (yes: boolean) => {
+      if (finished) return;
+      finished = true;
+      clearInterval(timer);
+      document.removeEventListener("keydown", onKey, true);
+      if (yes) {
+        box.innerHTML = `<div class="hb-top">${escapeHtml(what)}</div>
+          <div class="hb-left">${escapeHtml(t("시작합니다…"))}</div>`;
+        // 잠깐 남겨 둔다 — 바로 사라지면 눌린 줄 모른다.
+        setTimeout(() => box.remove(), 1500);
+      } else box.remove();
+      done(yes);
     };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { e.preventDefault(); finish(false); }
+    };
+    cancel.onclick = () => finish(false);
+    go.onclick = () => { if (!go.disabled) finish(true); };
     const paint = () => {
-      fill.style.width = `${((seconds - left) / seconds) * 100}%`;
-      bar.setAttribute("aria-valuenow", String(seconds - left));
-      leftText.textContent = tf("{0}초 뒤에 시작합니다", left);
+      go.disabled = left > 0;
+      go.textContent = left > 0 ? tf("잠깐 살펴보세요 ({0})", left) : t("네, 진행해요");
     };
     paint();
     // 지금 열려 있는 화면 안에 그린다. 화면 밖에 그리면 스크롤 위치에
-    // 따라 안 보이고, 안 보이는 취소 단추는 없는 것과 같다.
+    // 따라 안 보이고, 안 보이는 단추는 없는 것과 같다.
     const host =
       document.querySelector("#wiz:not(.hidden) #i-result") ||
       // 🔴 **지금 열려 있는 화면이 스스로 내놓은 자리**가 있으면 거기 그린다.
-      //
-      //    아래 마지막 두 줄(`$("i-result")`)은 **자산 마법사 안쪽**이다.
-      //    자산 화면에서 부를 때는 맞는 자리지만, 다른 화면(「이 컴퓨터」의
-      //    「내 이름」)에서 부르면 확인창이 **접혀 있는 마법사 속**에 그려져
-      //    아무도 못 본다 — 그러면 8초 뒤에 아무 예고 없이 일이 벌어진다.
-      //    안 보이는 취소 단추는 없는 것과 같다.
-      //
-      //    `.holdhost` 를 둔 화면이 아직 없던 때와 똑같이 굴러가므로,
-      //    이 줄이 여태 있던 자리를 건드리지는 않는다.
+      //    `$("i-result")` 는 **자산 마법사 안쪽**이다 — 다른 화면에서 부르면 접힌 마법사 속에 그려져
+      //    아무도 못 본다.
       document.querySelector(".page.on .holdhost") ||
       (document.getElementById("page-shop")?.classList.contains("on")
         ? document.getElementById("sh-result")
         : null) ||
       $("i-result") ||
       document.body;
+    // 🔴 11-07 검수 사진: 돈 확인 창 위를 「짜잔!」 인사 덮개·떠다니는 라비·라비 대화창이 덮고 있었다.
+    //    확인 창이 뜨면 가리는 것부터 치운다 — 인사는 닫고(ravi-agent 가 이 신호를 듣는다), 대화창은 접는다.
+    window.dispatchEvent(new CustomEvent("rv-confirm-open"));
+    {
+      const panel = document.getElementById("ravi-panel");
+      if (panel && !panel.hidden) (document.getElementById("ravi-collapse") as HTMLButtonElement | null)?.click();
+    }
     host.prepend(box);
-    // 🔴 그릴 자리가 안 보이면(닫힌 마법사 속 등) **시작하지 않는다.** 안 보이는 8초 창은
-    //    취소할 수 없는 발행이다 — 검수에서 닫힌 창 속에서 8초가 흐르고 발행이 또 나갔다.
+    // 🔴 그릴 자리가 안 보이면(닫힌 마법사 속 등) **시작하지 않는다.**
     if (box.getClientRects().length === 0) {
       box.remove();
       done(false);
       return;
     }
-    // 🔴 780px 창에서는 확인 화면 아래에 그려져 **화면 밖**이었다(검수). 안 보이는 취소
-    //    단추는 없는 것과 같다 — 가운데로 끌어온다.
+    // 🔴 780px 창에서는 확인 화면 아래에 그려져 **화면 밖**이었다(검수). 가운데로 끌어온다.
     try { box.scrollIntoView({ block: "center", behavior: "smooth" }); } catch { /* 옛 웹뷰 */ }
-    const t = setInterval(() => {
+    try { cancel.focus({ preventScroll: true }); } catch { /* 옛 웹뷰 */ }
+    document.addEventListener("keydown", onKey, true);
+    const timer = setInterval(() => {
       left -= 1;
-      if (left <= 0) {
-        clearInterval(t);
-        box.innerHTML = `<div class="hb-top">${escapeHtml(what)}</div>
-          <div class="hb-left">시작합니다…</div>`;
-        done(true);
-        // 잠깐 남겨 둔다 — 바로 사라지면 눌린 줄 모른다.
-        setTimeout(() => box.remove(), 1500);
-        return;
-      }
       paint();
+      if (left <= 0) clearInterval(timer);
     }, 1000);
   });
 }
@@ -19914,6 +19934,10 @@ async function paintHelping(): Promise<void> {
           relay?.running
             ? `${Number(relay.events ?? 0).toLocaleString()}${t("개를 들고 있습니다")}`
             : on(false),
+        ],
+        [
+          t("내 글 지키기"),
+          myNotesLine(relay),
         ],
         [t("사진 나눠 갖기"), on(ipfs?.running)],
         [t("캐기"), on(mine?.running)],

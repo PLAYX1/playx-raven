@@ -2233,22 +2233,22 @@
         transition: opacity .25s ease, transform .25s ease; z-index: 9999; }
       #live-note.on { opacity: 1; transform: translate(-50%, 0); }
       @media (prefers-reduced-motion: reduce) { #live-note { transition: none; } }
-      /* 되돌릴 수 없는 일 앞의 취소 창. 체크박스와 다른 점은
-         **시간이 흐르는 것을 보게** 한다는 것이다 — 습관으로는 통과 못 한다. */
-      .holdbox { margin-top: 12px; padding: 16px; border-radius: 14px;
+      /* 되돌릴 수 없는 일 앞의 확인 창. 기본은 그만두기 — 진행은 직접 눌러야 한다(11-07 합의).
+         저절로 넘어가지 않는다. */
+      .holdbox { margin-top: 12px; padding: 18px; border-radius: 14px;
         border: 2px solid var(--warn); background: var(--panel); }
-      .hb-top { font-size: 17px; font-weight: 700; }
-      .hb-cost { margin-top: 4px; font-size: 15px; color: var(--warn); }
-      .hb-bar { height: 6px; margin-top: 12px; border-radius: 999px;
-        background: var(--line); overflow: hidden; }
-      .hb-bar i { display: block; height: 100%; background: var(--warn);
-        transition: width 1s linear; }
-      .hb-left { margin-top: 8px; font-size: 14px; color: var(--muted); }
-      /* 🔴 그만두기가 진행보다 **쉬워야** 한다. 여기서 망설이는 사람은
-         이미 뭔가 잘못됐다고 느낀 사람이다. */
-      .hb-cancel { width: 100%; min-height: 52px; margin-top: 12px;
-        font-size: 17px; font-weight: 600; border-radius: 12px;
-        border: 1px solid var(--line); background: var(--bg); color: var(--text); }
+      .hb-top { font-size: 19px; font-weight: 700; line-height: 1.4; }
+      .hb-cost { margin-top: 6px; font-size: 17px; color: var(--warn); line-height: 1.5; }
+      .hb-left { margin-top: 10px; font-size: 16px; color: var(--muted); line-height: 1.5; }
+      /* 🔴 그만두기가 진행보다 **쉬워야** 한다 — 위에, 크게, 처음 초점. */
+      .hb-cancel { width: 100%; min-height: 64px; margin-top: 14px;
+        font-size: 19px; font-weight: 700; border-radius: 12px;
+        border: 2px solid var(--line); background: var(--bg); color: var(--text); }
+      /* 진행은 그만두기에서 48px 떨어진 아래 — 같은 자리를 연달아 눌러도 진행되지 않는다. */
+      .hb-go { width: 100%; min-height: 64px; margin-top: 48px;
+        font-size: 19px; font-weight: 800; border-radius: 12px; border: 0;
+        background: var(--warn); color: #fff; }
+      .hb-go:disabled { background: var(--line); color: var(--muted); cursor: wait; }
       /* 연습. 접어 두되 발행 전에 눈에 띄어야 한다. */
       .rehearse { margin: 14px 0; padding: 12px 14px; border-radius: 14px;
         border: 1px dashed var(--line); background: var(--bg); }

@@ -102,10 +102,13 @@ pub fn start_saver() {
                 let g = STORE.lock().unwrap_or_else(|e| e.into_inner());
                 g.clone().unwrap_or_default()
             };
-            let _ = std::fs::write(
-                file(),
-                serde_json::to_vec(&json!({ "events": snapshot })).unwrap_or_default(),
-            );
+            // 11-07: 임시 파일 → 이름 바꾸기. 실패하면 다음 차례에 다시 쓴다(표시를 되살린다).
+            let tmp = file().with_extension("json.tmp");
+            let ok = std::fs::write(&tmp, serde_json::to_vec(&json!({ "events": snapshot })).unwrap_or_default()).is_ok()
+                && std::fs::rename(&tmp, file()).is_ok();
+            if !ok {
+                DIRTY.store(true, std::sync::atomic::Ordering::Relaxed);
+            }
         }
     });
 }
@@ -176,7 +179,8 @@ pub(crate) fn verify(e: &Value) -> bool {
     };
     let hash = Sha256::digest(pre.as_bytes());
     // 릴레이가 내용을 바꾸고 옛 id 를 붙일 수 있다. 다시 센다.
-    if hex::encode(hash) != id.to_lowercase() {
+    // 11-07 GPT P1: 대소문자만 바꾼 id 가 「다른 글」로 쌓였다(중복 검사는 원래 문자열을 본다) — id 는 소문자 그대로만 받는다.
+    if hex::encode(hash) != id {
         return false;
     }
 
@@ -446,6 +450,14 @@ fn store(e: Value) -> (bool, String) {
     if !verify(&e) {
         return (false, "invalid: 서명이 맞지 않습니다".into());
     }
+    // 11-07 GPT P1: 서명이 덮는 일곱 칸만 남긴다 — 서명 밖에 큰 칸을 붙여 디스크를 채우지 못하게. 크기 검사는 주인 글에도 건다.
+    let e = json!({
+        "id": e["id"], "pubkey": e["pubkey"], "created_at": e["created_at"], "kind": e["kind"],
+        "tags": e.get("tags").cloned().unwrap_or(json!([])), "content": e.get("content").cloned().unwrap_or(json!("")), "sig": e["sig"],
+    });
+    if serde_json::to_vec(&e).map(|b| b.len()).unwrap_or(usize::MAX) > MAX_EVENT_BYTES {
+        return (false, "invalid: 글이 너무 큽니다".into());
+    }
     // 🔴 **종류만 막고 내용은 안 막고 있었다**(제미나이 지적, 코드로 확인).
     //    「가게 공지」라는 껍데기만 맞으면 그 안의 글자는 자유였고, 누구든
     //    **사장 컴퓨터에 아무 글이나 남길 수** 있었다. 릴레이는 사장 집에서
@@ -453,8 +465,14 @@ fn store(e: Value) -> (bool, String) {
     //
     //    세 가지로 좁힌다. 완전히 막을 수는 없지만 — 가게 공지에는 이름과
     //    설명이 있어야 하니까 — **비싸고 눈에 띄게** 만든다.
-    if let Some(why) = smells_bad(&e) {
-        return (false, why);
+    // 11-07 대표: 「자기 글도 지키려면 자기 릴레이에 올려야」 — **이 컴퓨터 주인의 글은 내용·나이·자리 규칙을 받지 않는다.**
+    //    서명은 위에서 확인했다. 주인 열쇠로 서명된 글은 주인이 쓴 것이고, 주인 디스크에 주인 글을 남기는 것은 막을 이유가 없다.
+    let me = owner();
+    let mine = me.as_deref().is_some_and(|o| e.get("pubkey").and_then(Value::as_str) == Some(o));
+    if !mine {
+        if let Some(why) = smells_bad(&e) {
+            return (false, why);
+        }
     }
     // 🔴 시각이 터무니없는 글은 안 받는다. 미래로 적으면 **덮어쓰기 규칙에서
     // 영원히 이기고**, 진짜 가게가 새 주소를 올려도 그 가짜가 계속 최신이 된다.
@@ -468,7 +486,7 @@ fn store(e: Value) -> (bool, String) {
     }
     // 이름표·팔로우·북마크는 몇 달 안 고치는 게 보통이라 오래돼도 받는다(사람마다 하나라 쌓이지 않는다).
     let person = PERSON_KINDS.contains(&e.get("kind").and_then(Value::as_i64).unwrap_or(-1));
-    if !person && at < now - 90 * 86_400 {
+    if !person && !mine && at < now - 90 * 86_400 {
         return (false, "invalid: 너무 오래된 글입니다".into());
     }
     let kind = e.get("kind").and_then(Value::as_i64).unwrap_or(0);
@@ -543,19 +561,161 @@ fn store(e: Value) -> (bool, String) {
         v.push(e.clone());
         // 11-07 감사: 오래된 것부터 자르면 한 사람이 재접속하며 5,000개를 채워 남의 글(가게 공지 포함)을 모두 밀어낸다.
         //   → 넘칠 때는 **가장 많이 쓴 사람의 가장 오래된 글**부터 뺀다. 한 열쇠의 도배는 자기 글만 밀어낸다.
-        while v.len() > MAX_EVENTS {
+        //   11-07: **주인 글은 밀어내지 않는다** — 주인이 가장 많이 쓴 사람이어도 남의 글부터 뺀다. 한도는 남의 글에만 걸린다.
+        let is_mine = |x: &Value| me.as_deref().is_some_and(|o| x.get("pubkey").and_then(Value::as_str) == Some(o));
+        while v.iter().filter(|x| !is_mine(x)).count() > MAX_EVENTS {
             let mut counts: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
-            for x in v.iter() {
+            for x in v.iter().filter(|x| !is_mine(x)) {
                 *counts.entry(x.get("pubkey").and_then(Value::as_str).unwrap_or("")).or_default() += 1;
             }
             let top = counts.into_iter().max_by_key(|(_, n)| *n).map(|(k, _)| k.to_string()).unwrap_or_default();
-            match v.iter().position(|x| x.get("pubkey").and_then(Value::as_str).unwrap_or("") == top) {
+            match v.iter().position(|x| !is_mine(x) && x.get("pubkey").and_then(Value::as_str).unwrap_or("") == top) {
                 Some(i) => { v.remove(i); }
-                None => { v.remove(0); }
+                None => break,
             }
         }
         (true, String::new())
     })
+}
+
+// ── 내 글 지키기(11-07) ─────────────────────────────────────────────────────
+//
+// 대표: 「자기 글도 지키려면 자기 릴레이에 올려야 되는 거 아냐?」
+//   데스크탑에서 쓴 글은 `nostrpub::targets()` 가 맨 먼저 이 컴퓨터 릴레이에 둔다.
+//   **폰·웹에서 쓴 글은 여기 오지 않았다** — 공용 릴레이가 지우고 N100 이 꺼지면 사라질 수 있었다.
+//   같은 12단어면 폰과 데스크탑은 같은 이름(열쇠)이다. 그래서 데스크탑이 바깥 릴레이에서
+//   **내 이름으로 서명된 글**을 주기적으로 모아 여기 남긴다. 폰은 아무것도 안 해도 된다.
+//   남에게 이 컴퓨터를 열어 주는 것이 아니다 — 이 컴퓨터가 바깥에 묻기만 한다.
+
+/// 주인(이 컴퓨터의 이야기 이름) 공개 열쇠. 파일만 읽는다 — 여기서 열쇠를 **만들지 않는다**.
+/// 1분 동안 기억한다(글 하나 받을 때마다 파일을 읽지 않게, 「같은 이름으로 바꾸기」 뒤에는 곧 따라가게).
+static OWNER: Mutex<(Option<String>, i64)> = Mutex::new((None, 0));
+#[cfg(test)]
+static TEST_OWNER: Mutex<Option<String>> = Mutex::new(None);
+fn owner() -> Option<String> {
+    #[cfg(test)]
+    if let Some(o) = TEST_OWNER.lock().unwrap_or_else(|e| e.into_inner()).clone() { return Some(o); }
+    let now = now_secs();
+    let mut g = OWNER.lock().unwrap_or_else(|e| e.into_inner());
+    if now - g.1 >= 60 || (g.0.is_none() && now - g.1 >= 5) {
+        g.0 = crate::talk::key_on_disk().and_then(|(sk, _, _)| crate::shopkey::pubkey_of(&sk).ok());
+        g.1 = now;
+    }
+    g.0.clone()
+}
+
+/// 지킬 내 글의 종류: 글·방·방 글·지우기 요청·이름표·팔로우·북마크.
+const MINE_KINDS: [i64; 8] = [1, 40, 41, 42, 5, 0, 3, 10003];
+/// 마지막으로 **끝까지** 모은 (주인 공개키, 시각). 주인이 바뀌면 처음부터 다시 모은다(GPT P2).
+static OWN_BACKUP: Mutex<Option<(String, i64)>> = Mutex::new(None);
+/// 마지막 시도의 문제(없으면 None) — 화면이 「지키는 중」이라고 거짓말하지 않게.
+static OWN_BACKUP_PROBLEM: Mutex<Option<String>> = Mutex::new(None);
+fn own_backup_at() -> Option<i64> {
+    let me = owner()?;
+    OWN_BACKUP.lock().unwrap_or_else(|e| e.into_inner()).as_ref().filter(|(p, _)| *p == me).map(|(_, t)| *t)
+}
+fn own_backup_file() -> std::path::PathBuf {
+    file().with_file_name("my-notes-backup.json")
+}
+/// 이 컴퓨터 이야기 이름이 폰·웹 지갑(같은 12단어)과 같은 이름인가. 다르면 폰 글은 모을 수 없다(GPT P2).
+fn owner_same_as_wallet() -> bool {
+    crate::talk::key_on_disk().is_some_and(|(_, from, path)| from == "seed" && path == crate::identity::PATH_PERSON)
+}
+
+/// 지금 들고 있는 글을 **바로** 디스크에 쓴다(임시 파일 → 이름 바꾸기). 성공해야 true.
+fn flush_now() -> bool {
+    let snapshot = peek(|v| v.clone());
+    let Ok(body) = serde_json::to_vec(&json!({ "events": snapshot })) else { return false };
+    let tmp = file().with_extension("json.tmp");
+    std::fs::write(&tmp, body).is_ok() && std::fs::rename(&tmp, file()).is_ok()
+}
+
+/// 한 릴레이에서 내 글을 쪽을 넘기며 끝까지 읽는다. 릴레이마다 따로 넘긴다(합친 뒤 넘기면 가운데가 빠진다 — GPT P2).
+/// 같은 초의 글이 쪽 경계에 걸려도 빠지지 않게 `until` 은 그 초를 **포함**하고, 이미 본 id 로 진전을 잰다.
+/// 반환: (모은 글, 끝까지 읽었나).
+async fn read_mine_from(url: &str, me: &str, since: Option<i64>) -> Result<(Vec<Value>, bool), String> {
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut out = Vec::new();
+    let mut until: Option<i64> = None;
+    for _ in 0..60 {
+        let (page, eose) = crate::nostrpub::read_mine_page(url, me, &MINE_KINDS, since, until).await?;
+        if !eose { return Ok((out, false)); }
+        let mut fresh = 0usize;
+        let mut oldest = i64::MAX;
+        for e in page.iter() {
+            if let Some(at) = e.get("created_at").and_then(Value::as_i64) { oldest = oldest.min(at); }
+            if let Some(id) = e.get("id").and_then(Value::as_str) {
+                if seen.insert(id.to_string()) { fresh += 1; out.push(e.clone()); }
+            }
+        }
+        if page.len() < crate::nostrpub::INBOX_PAGE { return Ok((out, true)); }
+        if fresh == 0 {
+            // 한 초에 한 쪽보다 많은 글 — 그 초를 건너뛰면 빠지니 끝까지 못 읽은 것으로 남긴다.
+            return Ok((out, false));
+        }
+        until = Some(oldest);
+    }
+    Ok((out, false))
+}
+
+/// 한 번 모으기. 처음(또는 주인이 바뀐 뒤)에는 옛 글까지, 그다음부터는 지난번 끝낸 시각 이틀 전부터.
+/// 모든 닿은 릴레이를 끝까지 읽고 **디스크에 쓴 뒤에만** 「끝냄」을 남긴다(GPT P2).
+pub(crate) async fn backup_my_notes_once() -> Result<usize, String> {
+    let Some(me) = owner() else { return Ok(0) };
+    let since = own_backup_at().map(|t| t - 2 * 86_400);
+    let started = now_secs();
+    use futures_util::future::join_all;
+    let urls = crate::nostrpub::outside_relays();
+    let got = join_all(urls.iter().map(|u| read_mine_from(u, &me, since))).await;
+    let reached = got.iter().filter(|r| r.is_ok()).count();
+    if reached == 0 {
+        *OWN_BACKUP_PROBLEM.lock().unwrap_or_else(|e| e.into_inner()) = Some("바깥 릴레이에 닿지 못했습니다".into());
+        return Err("바깥 릴레이에 닿지 못했습니다".into());
+    }
+    let complete = got.iter().all(|r| match r { Ok((_, done)) => *done, Err(_) => true });
+    let mut added = 0usize;
+    for (events, _) in got.into_iter().flatten() {
+        for e in events {
+            let had = e.get("id").and_then(Value::as_str).map(|id| peek(|v| v.iter().any(|x| x.get("id").and_then(Value::as_str) == Some(id)))).unwrap_or(true);
+            if store(e).0 && !had { added += 1; }
+        }
+    }
+    if !flush_now() {
+        *OWN_BACKUP_PROBLEM.lock().unwrap_or_else(|e| e.into_inner()) = Some("디스크에 쓰지 못했습니다".into());
+        return Err("디스크에 쓰지 못했습니다".into());
+    }
+    if complete {
+        *OWN_BACKUP.lock().unwrap_or_else(|e| e.into_inner()) = Some((me.clone(), started));
+        let tmp = own_backup_file().with_extension("json.tmp");
+        if std::fs::write(&tmp, serde_json::to_vec(&json!({ "at": started, "pubkey": me })).unwrap_or_default()).is_ok() {
+            let _ = std::fs::rename(&tmp, own_backup_file());
+        }
+        *OWN_BACKUP_PROBLEM.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    } else {
+        *OWN_BACKUP_PROBLEM.lock().unwrap_or_else(|e| e.into_inner()) = Some("아직 다 모으지 못했습니다(다음에 이어서)".into());
+    }
+    Ok(added)
+}
+
+/// 앱이 켜져 있는 동안: 30초 뒤 한 번, 그다음 15분마다 내 글을 모은다. 프로세스마다 한 번만 시작한다(GPT P2).
+pub fn start_own_backup() {
+    static STARTED: std::sync::Once = std::sync::Once::new();
+    STARTED.call_once(|| {
+        if let Ok(s) = std::fs::read_to_string(own_backup_file()) {
+            if let Ok(v) = serde_json::from_str::<Value>(&s) {
+                if let (Some(p), Some(t)) = (v.get("pubkey").and_then(Value::as_str), v.get("at").and_then(Value::as_i64)) {
+                    *OWN_BACKUP.lock().unwrap_or_else(|e| e.into_inner()) = Some((p.to_string(), t));
+                }
+            }
+        }
+        tauri::async_runtime::spawn(async {
+            tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+            loop {
+                let _ = backup_my_notes_once().await;
+                tokio::time::sleep(std::time::Duration::from_secs(15 * 60)).await;
+            }
+        });
+    });
 }
 
 // ── 연결 방(RV6) — 디스크에 안 쓰는 이벤트 ─────────────────────────────────
@@ -840,7 +1000,14 @@ pub async fn serve(mut ws: WebSocket) {
 #[tauri::command]
 pub fn relay_status() -> Value {
     let n = with(|v| v.len());
+    let me = owner();
+    let mine = me.as_deref().map(|o| peek(|v| v.iter().filter(|x| x.get("pubkey").and_then(Value::as_str) == Some(o) && x.get("kind").and_then(Value::as_i64) == Some(1)).count())).unwrap_or(0);
     json!({
+        // 내 글 지키기: 이 컴퓨터에 남은 내 글 수 · 마지막으로 바깥 릴레이에서 모아 온 시각(초, 없으면 null).
+        "my_notes": mine,
+        "my_backup_at": own_backup_at(),
+        "my_same_as_wallet": owner_same_as_wallet(),
+        "my_backup_problem": OWN_BACKUP_PROBLEM.lock().unwrap_or_else(|e| e.into_inner()).clone(),
         // 🔴 `true` 를 박아 두면 안 된다. 8790 을 **옛 앱이나 남의 프로그램**이
         // 쥐고 있으면 손님 화면은 도는데 릴레이는 우리 것이 아니다. 그때
         // [릴레이 켜짐] 이라고 적으면 거짓말이고, 실제로 이 거짓말에
@@ -856,6 +1023,72 @@ pub fn relay_status() -> Value {
 
 #[cfg(test)]
 mod tests {
+
+    /// 주인·저장소 전역값을 만지는 시험은 하나씩 돈다.
+    static OWNER_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    /// 11-07 GPT P1: 주인 글이라도 ① 대소문자만 바꾼 id 는 안 받고 ② 서명 밖 칸은 버리고 ③ 크기 한도는 그대로다.
+    #[test]
+    fn owner_exception_keeps_id_and_size_rules() {
+        use super::*;
+        let _g = OWNER_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let me_sk = [11u8; 32];
+        let me = crate::shopkey::pubkey_of(&me_sk).unwrap();
+        *TEST_OWNER.lock().unwrap() = Some(me.clone());
+        *STORE.lock().unwrap() = Some(vec![]);
+        let tags = json!([["t", "ravencoin"]]);
+        let e = crate::shopkey::sign_with(&me_sk, 1, tags.clone(), "내 글", now_secs()).unwrap();
+        let mut upper = e.clone();
+        upper["id"] = json!(e["id"].as_str().unwrap().to_uppercase());
+        assert!(!store(upper).0, "대문자 id 를 받았다");
+        let mut padded = e.clone();
+        padded["junk"] = json!("x".repeat(1_000_000));
+        assert!(store(padded).0, "서명이 맞는 주인 글을 버렸다");
+        assert!(peek(|v| v.iter().all(|x| x.get("junk").is_none())), "서명 밖 칸이 저장됐다");
+        let big = crate::shopkey::sign_with(&me_sk, 1, tags, &"가".repeat(MAX_EVENT_BYTES), now_secs()).unwrap();
+        assert!(!store(big).0, "크기 한도를 넘는 주인 글을 받았다");
+        *TEST_OWNER.lock().unwrap() = None;
+        *STORE.lock().unwrap() = None;
+    }
+
+    /// 11-07 내 글 지키기: 주인 글은 90일이 지나도 받고, 남의 글이 넘쳐도 밀려나지 않는다. 남의 옛 글은 여전히 안 받는다.
+    #[test]
+    fn owner_notes_are_kept_old_and_never_evicted() {
+        use super::*;
+        let _g = OWNER_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let me_sk = [7u8; 32];
+        let other_sk = [9u8; 32];
+        let me = crate::shopkey::pubkey_of(&me_sk).unwrap();
+        *TEST_OWNER.lock().unwrap() = Some(me.clone());
+        *STORE.lock().unwrap() = Some(vec![]);
+        let old = now_secs() - 200 * 86_400;
+        let tags = json!([["t", "ravencoin"]]);
+        let mine_old = crate::shopkey::sign_with(&me_sk, 1, tags.clone(), "옛날에 쓴 내 글", old).unwrap();
+        assert!(store(mine_old.clone()).0, "주인의 200일 된 글을 버렸다");
+        let other_old = crate::shopkey::sign_with(&other_sk, 1, tags.clone(), "남의 옛 글", old).unwrap();
+        assert!(!store(other_old).0, "남의 200일 된 글을 받았다");
+        // 주인이 남보다 많이 써도, 넘칠 때는 남의 글부터 빠진다.
+        with(|v| {
+            for i in 0..MAX_EVENTS {
+                v.push(json!({ "id": format!("o{i}"), "pubkey": "b".repeat(64), "kind": 1, "created_at": now_secs() }));
+            }
+            for i in 0..(MAX_EVENTS + 10) {
+                v.push(json!({ "id": format!("m{i}"), "pubkey": me.clone(), "kind": 1, "created_at": now_secs() }));
+            }
+        });
+        let fresh = crate::shopkey::sign_with(&other_sk, 1, tags, "남의 새 글", now_secs()).unwrap();
+        let _ = store(fresh);
+        let (mine_n, others_n, has_old) = peek(|v| (
+            v.iter().filter(|x| x.get("pubkey").and_then(Value::as_str) == Some(me.as_str())).count(),
+            v.iter().filter(|x| x.get("pubkey").and_then(Value::as_str) != Some(me.as_str())).count(),
+            v.iter().any(|x| x.get("id") == mine_old.get("id")),
+        ));
+        assert_eq!(mine_n, MAX_EVENTS + 11, "주인 글이 밀려났다");
+        assert!(has_old, "주인 옛 글이 밀려났다");
+        assert_eq!(others_n, MAX_EVENTS, "남의 글 한도가 지켜지지 않았다");
+        *TEST_OWNER.lock().unwrap() = None;
+        *STORE.lock().unwrap() = None;
+    }
 
     /// 방 이름·설명 수정(kind 41)도 레이븐 이야기다 — 우리 릴레이가 안 남기면 이 컴퓨터는
     /// 공개 릴레이가 다 막힌 날 고친 이름을 못 본다. 누가 고칠 수 있는지는 talk.rs 가 본다.

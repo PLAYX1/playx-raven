@@ -350,7 +350,7 @@ try {
     await x.shot('review');
     await x.tap('#s-go', '보내기');
     await x.wait(500);
-    x.note(`8초 취소 창: ${(await x.S()).calls.includes('send_rvn') && !(await x.page.$('.holdbox')) ? '없음(바로 보냄)' : '있음'}`);
+    x.note(`확인 창: ${(await x.S()).calls.includes('send_rvn') && !(await x.page.$('.holdbox')) ? '없음(바로 보냄)' : '있음'}`);
     x.note(`결과: ${(await x.text('#s-result')).replace(/\s+/g, ' ').slice(0, 120)}`);
     return (await x.S()).sent === 1;
   });

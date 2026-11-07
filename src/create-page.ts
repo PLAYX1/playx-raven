@@ -60,7 +60,7 @@ export type CreateDeps = {
   t: (s: string) => string;
   go: (page: string) => void;
   openLink: (url: string) => void;
-  /** 되돌릴 수 없는 일 앞의 8초 취소 창(main.ts 의 holdBeforeDoing). */
+  /** 되돌릴 수 없는 일 앞의 확인 창(main.ts 의 holdBeforeDoing) — 기본은 그만두기, 진행은 직접 눌러야 한다. */
   hold: (what: string, cost: string) => Promise<boolean>;
   /** 예/아니오 창. */
   sure: (title: string, message: string, ok: string) => Promise<boolean>;

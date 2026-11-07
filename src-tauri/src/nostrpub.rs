@@ -394,6 +394,26 @@ pub async fn nostr_query_authors(
     Ok(seen.into_values().collect())
 }
 
+/// **내 글 지키기**용: 바깥 릴레이 목록(이 컴퓨터 릴레이는 뺀다 — 거기에 채우려고 읽는다).
+pub(crate) fn outside_relays() -> Vec<String> {
+    RELAYS.iter().map(|s| s.to_string()).collect()
+}
+
+/// **내 글 지키기**용: 릴레이 **한 곳**에서 나(author)의 글 한 쪽(최대 200개)을 읽는다.
+/// 반환 (글, EOSE 까지 받았나). 서명은 `read_one_eose` 가 확인한다. 쪽 넘기기는 relay.rs 가 릴레이마다 따로 한다.
+pub(crate) async fn read_mine_page(url: &str, author: &str, kinds: &[i64], since: Option<i64>, until: Option<i64>) -> Result<(Vec<Value>, bool), String> {
+    if author.len() != 64 || !author.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) {
+        return Ok((vec![], true));
+    }
+    let sub = "m1";
+    let mut f = json!({ "kinds": kinds, "authors": [author], "limit": INBOX_PAGE });
+    if let Some(t) = since { f["since"] = json!(t.max(0)); }
+    if let Some(t) = until { f["until"] = json!(t.max(0)); }
+    let req = serde_json::to_string(&json!(["REQ", sub, f])).map_err(|e| format!("보낼 것을 만들지 못했습니다: {e}"))?;
+    let (events, eose) = read_one_eose(url, &req, sub).await?;
+    Ok((events.into_iter().filter(|e| e.get("pubkey").and_then(Value::as_str) == Some(author)).collect(), eose))
+}
+
 /// 글 번호로 글을 읽는다(북마크 화면). 번호는 64자리 16진수만, 50개까지. 릴레이는 한꺼번에 묻는다.
 pub(crate) async fn nostr_query_ids(kinds: Vec<i64>, ids: Vec<String>) -> Result<Vec<Value>, String> {
     let ids: Vec<String> = ids
