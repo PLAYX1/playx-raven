@@ -1,5 +1,21 @@
 # 변경 기록
 
+## 0.9.20
+
+### 한국어
+
+- **내 글 지키기:** 폰·웹에서 같은 12단어로 쓴 이야기 글도 이 컴퓨터가 15분마다 모아 자기 릴레이에 남깁니다. 공용 릴레이가 글을 지워도 내 컴퓨터에는 남아요. 이 컴퓨터 이름이 폰과 다르면 화면이 그렇다고 알려 줍니다(설정 › 내 이름과 열쇠 › 이름 합치기).
+- **내 글 서랍:** 「내 소개」(이야기 왼쪽 「내 글 서랍」 단추)에서 내가 쓴 글을 모아 봅니다. 사진만 보기, 글 안 #태그로 거르기, 이 컴퓨터에만 남는 나만의 폴더.
+- **되돌릴 수 없는 일 앞 확인:** 확인 창에서 「그만두기」가 먼저이고, 「네, 진행해요」는 2초 뒤에 눌립니다. 저절로 진행하지 않습니다.
+- **안전:** 대소문자만 바꾼 글 번호로 같은 글을 쌓던 길과, 서명 밖에 큰 칸을 붙여 저장하던 길을 막았습니다.
+
+### English
+
+- **Keeping my posts:** posts you write on your phone or the web with the same 12 words are collected by this computer every 15 minutes and kept in its own relay, even if public relays drop them. If this computer's name differs from your phone's, the screen says so (Settings › My name and key › Merge names).
+- **My posts drawer:** in "About me" (or the "My posts drawer" button in Talk) see everything you wrote — photos only, filter by #tags in your posts, and private folders kept only on this computer.
+- **Confirm before irreversible actions:** "Never mind" comes first and "Yes, go ahead" unlocks after 2 seconds; nothing proceeds on its own.
+- **Safety:** the relay no longer stores copies of a post under case-changed ids, and drops unsigned extra fields.
+
 ## 0.9.19
 
 ### 한국어
