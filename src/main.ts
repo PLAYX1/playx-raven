@@ -18975,6 +18975,10 @@ window.addEventListener("DOMContentLoaded", async () => {
     if (ownedFocus) languageButton.focus({ preventScroll: true });
   });
   document.addEventListener("click", event => { if (!(event.target as Element).closest(".desktop-header")) closeLanguages(); });
+  // 글이 머리띠 밑으로 지나갈 때만 아래 선을 보인다(애플 scroll edge).
+  // 실제로 굴러가는 것은 <main> 이다(body 는 overflow:hidden).
+  const edge = () => { const m = document.querySelector("main"); document.documentElement.classList.toggle("rv-scrolled", window.scrollY > 4 || (m?.scrollTop ?? 0) > 4); };
+  document.addEventListener("scroll", event => { const t = event.target; if (t === document || (t instanceof HTMLElement && t.tagName === "MAIN")) edge(); }, { passive: true, capture: true }); edge();
   const syncLanguage = () => {
     $("desktop-language-name").textContent = LANG_NAMES[lang];
     document.querySelectorAll<HTMLButtonElement>("[data-language]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.language === lang)));

@@ -348,7 +348,10 @@ export function wirePairing(confirmBox?: Ask) {
       (document.querySelector('nav [data-page="settings"]') as HTMLElement | null)?.click();
       card.hidden = false; card.scrollIntoView({ block: "start" }); void refresh();
     };
-    page.prepend(connect);
+    // 11-08 애플 결: 화면 제목 위에 큰 주황 단추가 먼저 보이면 무엇의 화면인지 흐려진다 — 제목·설명 다음에 보조 단추(ghost)로.
+    connect.className = "ghost";
+    const lede = page.querySelector(":scope > .lede") ?? page.querySelector(":scope > h1, :scope > h2");
+    if (lede) lede.after(connect); else page.prepend(connect);
   }
 
   // 구석 알림 — 설정을 안 보고 있어도 폰 요청·연결 요청을 놓치지 않게.

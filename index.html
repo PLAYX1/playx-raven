@@ -2679,6 +2679,25 @@
       .mpcard .meta.bad { color: var(--danger); } .mpcard .meta.warn { color: var(--warn); } .mpcard .meta.good { color: var(--ok); }
       .mpcard .mpactions { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
       .mpcard [hidden] { display: none !important; }
+      /* 11-08 애플 결: 머리띠는 반투명 유리 — 아래 글이 흐리게 비친다. 선은 글이 밑으로 지나갈 때만 보인다(scroll edge). */
+      @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+        .desktop-header { background: color-mix(in srgb, var(--panel) 72%, transparent);
+          -webkit-backdrop-filter: blur(22px) saturate(180%); backdrop-filter: blur(22px) saturate(180%);
+          border-bottom-color: transparent; transition: border-color .2s ease, box-shadow .2s ease; }
+        html.rv-scrolled .desktop-header { border-bottom-color: var(--line); box-shadow: 0 6px 18px -14px rgba(0,0,0,.35); }
+      }
+      /* 큰 제목(애플 large title): 크게·굵게·글자 사이를 조금 좁힌다. 머리띠 바로 밑에 붙어 답답하던 것을 띄운다. */
+      main section.page > h1, main #page-home > h1, main section.page > h2.title { font-size: 30px; line-height: 1.15; letter-spacing: -0.02em; font-weight: 800; margin: 16px 0 18px; }
+      main section.page > h2.title { margin-bottom: 6px; }
+      #rvp-connect-wallet, #rvp-connect-settings { margin: 4px 0 14px; }
+      /* 투명도 줄이기: 유리 대신 꽉 찬 바탕. 대비 높이기: 선을 굵고 진하게. */
+      @media (prefers-reduced-transparency: reduce) {
+        .desktop-header { background: var(--panel) !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; border-bottom-color: var(--line) !important; }
+      }
+      @media (prefers-contrast: more) {
+        .desktop-header { background: var(--panel) !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; border-bottom: 2px solid var(--text) !important; }
+        .card, button.ghost, .md-chip, input, textarea, select { border-color: var(--text) !important; }
+      }
     </style>
   <style id="rv-fit-fixes">
       /* 좁은 창(720~900px)·낮은 창에서 깨지던 곳 — 2차 메뉴가 글자 중간에서 줄바꿈되고(메/뉴/판), 왼쪽 메뉴 아래가 잘리고, 떠 있는 라비 입력줄이 내용을 가렸다. */
