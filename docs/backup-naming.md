@@ -10,6 +10,7 @@
 |---|---|---|---|
 | 백업 폴더 (USB·클라우드·직접 고른 폴더) | `RavenVault-Backup/` | `PLAYXRaven-Backup/`, 그 안의 `RavenVault Desktop 백업/`·`PLAY X Raven 백업/`, 더 옛 `PLAYXRaven-백업/`, 직접 백업 `RavenVault Desktop 백업/`·`PLAY X Raven 백업/` | `backup.rs` `BACKUP_DIR` |
 | 최신 백업 파일 | `RavenVault.zip.pxlock` (잠금 끈 USB면 `RavenVault.zip`) | `PLAYXRaven.zip.pxlock`, `PLAYXRaven.zip`, `PLAYXRaven.zip.잠김` | `backup.rs` `FILE_STEM` |
+| 자동 백업(USB·클라우드, 0.9.19~) | `RavenVault-pc-<컴퓨터이름>.zip.pxlock` — 같은 클라우드를 쓰는 두 컴퓨터가 서로 덮어쓰지 않게(406호·301호 OneDrive 공유, 11-07). 이름을 못 읽으면 `RavenVault.zip.pxlock` | `RavenVault.zip.pxlock` (0.9.18까지 자동 백업) | `backup.rs` `pc_label` |
 | 가게 이름 붙은 직접 백업 | `RavenVault-<가게>.zip.pxlock` | `PLAYXRaven-<가게>.zip.pxlock` | `publish_archive` |
 | 한 판 전 사본 | `RavenVault-previous.zip.pxlock` | `PLAYXRaven-이전.zip.pxlock` | `backup_storage.rs` `previous_path` |
 | 완료 영수증 | `.RavenVault.zip.pxlock.complete.json` (모든 새 파일) | `.PLAYXRaven.zip.pxlock.complete.json` (자동 백업에만 있었음) | `backup.rs` `receipt_path` |

@@ -766,26 +766,115 @@ fn today() -> String {
     day_name(now - now.rem_euclid(86_400))
 }
 
+/// 자동 백업 파일 이름에 붙이는 이 컴퓨터 이름. `pc-DESKTOP-S991634`.
+///
+/// 🔴 같은 OneDrive·구글 드라이브를 두 컴퓨터가 쓰면 둘 다
+/// `RavenVault-Backup/RavenVault.zip.pxlock` 에 써서 서로 덮어썼다(406호
+/// 키오스크와 301호가 한 OneDrive 를 씀, 11-07). 컴퓨터마다 이름을 다르게 해서
+/// 한쪽 백업이 다른 쪽에 지워지지 않게 한다.
+///
+/// 디스크 이름 규칙(위 BACKUP_DIR 설명)대로 **ASCII 만** 남긴다. 이름을 못 읽으면
+/// 빈 글자 → 예전 이름 `RavenVault.zip.pxlock` 으로 돌아간다(백업을 멈추지 않는다).
+/// 옛 `RavenVault.zip.pxlock` 은 건드리지 않고 `backup_find` 가 계속 찾는다.
+fn pc_label() -> String {
+    static LABEL: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    LABEL.get_or_init(|| pc_label_from(&raw_computer_name())).clone()
+}
+
+fn raw_computer_name() -> String {
+    for key in ["COMPUTERNAME", "HOSTNAME"] {
+        if let Ok(v) = std::env::var(key) {
+            if !v.trim().is_empty() { return v; }
+        }
+    }
+    #[cfg(target_os = "macos")]
+    {
+        if let Ok(o) = std::process::Command::new("scutil").args(["--get", "LocalHostName"]).output() {
+            let v = String::from_utf8_lossy(&o.stdout).trim().to_string();
+            if o.status.success() && !v.is_empty() { return v; }
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        if let Ok(v) = std::fs::read_to_string("/etc/hostname") {
+            if !v.trim().is_empty() { return v; }
+        }
+        if let Ok(o) = std::process::Command::new("hostname").output() {
+            if o.status.success() { return String::from_utf8_lossy(&o.stdout).into_owned(); }
+        }
+    }
+    String::new()
+}
+
+fn pc_label_from(raw: &str) -> String {
+    let name = raw.trim().split('.').next().unwrap_or("");
+    let mut out = String::new();
+    for c in name.chars() {
+        if c.is_ascii_alphanumeric() || c == '-' { out.push(c); } else if !out.ends_with('_') { out.push('_'); }
+        if out.len() >= 32 { break; }
+    }
+    let out = out.trim_matches(|c| c == '_' || c == '-');
+    if out.is_empty() || out.eq_ignore_ascii_case("localhost") { String::new() } else { format!("pc-{out}") }
+}
+
+fn daily_stem(label: &str) -> String {
+    if label.is_empty() { FILE_STEM.to_owned() } else { format!("{FILE_STEM}-{label}") }
+}
+
 // Keep yesterday's external copy: a six-hour retry must not rotate a
 // destination that already has this day's verified copy.
-fn daily_archive_paths(picked: &Path, locked: bool) -> (PathBuf, PathBuf) {
+fn daily_archive_paths(picked: &Path, locked: bool, label: &str) -> (PathBuf, PathBuf) {
     let extension = if locked { LOCKED_EXT } else { "zip" };
-    let latest = external_backup_dir(picked).join(format!("{FILE_STEM}.{extension}"));
+    let latest = external_backup_dir(picked).join(format!("{}.{extension}", daily_stem(label)));
     let receipt = receipt_path(&latest);
     (latest, receipt)
 }
 
 fn daily_copy_complete(picked: &Path, locked: bool, day: &str) -> bool {
-    let (latest, _) = daily_archive_paths(picked, locked);
+    let (latest, _) = daily_archive_paths(picked, locked, &pc_label());
     matching_receipt(&latest).is_some_and(|v| v["day"] == day)
 }
 
 fn publish_daily(prepared: &PreparedBackup, picked: &Path, locked: bool, day: &str) -> Result<Value, String> {
-    let (latest, _) = daily_archive_paths(picked, locked);
+    let label = pc_label();
+    let (latest, _) = daily_archive_paths(picked, locked, &label);
     if daily_copy_complete(picked, locked, day) {
         return Ok(json!({"path": latest.to_string_lossy(), "locked": locked, "skipped": true}));
     }
-    publish_archive(prepared, picked, "", locked, day)
+    publish_archive(prepared, picked, &label, locked, day)
+}
+
+#[cfg(test)]
+mod pc_label_tests {
+    use super::*;
+
+    #[test]
+    fn 컴퓨터_이름은_ascii_로_붙는다() {
+        assert_eq!(pc_label_from("DESKTOP-S991634"), "pc-DESKTOP-S991634");
+        assert_eq!(pc_label_from("Gimmusong-MacBook.local\n"), "pc-Gimmusong-MacBook");
+        assert_eq!(pc_label_from("김무송의 PC"), "pc-PC");
+        assert_eq!(pc_label_from("김무송"), "");
+        assert_eq!(pc_label_from("PLAY X 406"), "pc-PLAY_X_406");
+        assert_eq!(pc_label_from(""), "");
+        assert_eq!(pc_label_from("localhost"), "");
+        assert!(pc_label_from(&"A".repeat(100)).len() <= 35);
+    }
+
+    #[test]
+    fn 두_컴퓨터는_다른_파일에_쓴다() {
+        let d = Path::new("/drive");
+        let (a, _) = daily_archive_paths(d, true, &pc_label_from("DESKTOP-406"));
+        let (b, _) = daily_archive_paths(d, true, &pc_label_from("DESKTOP-301"));
+        assert_ne!(a, b);
+        assert!(a.ends_with("RavenVault-Backup/RavenVault-pc-DESKTOP-406.zip.pxlock"), "{a:?}");
+        let (old, _) = daily_archive_paths(d, true, "");
+        assert!(old.ends_with("RavenVault-Backup/RavenVault.zip.pxlock"));
+        // 찾기·되돌리기가 새 이름을 알아본다.
+        let name = a.file_name().unwrap().to_string_lossy();
+        assert_eq!(crate::restore_drop::kind_of_name(&name), Some(crate::restore_drop::Kind::Full));
+        let prev = crate::backup_storage::previous_path(&a).unwrap();
+        assert!(prev.to_string_lossy().contains("-previous."), "{prev:?}");
+    }
 }
 
 /// The public command never returns success for an omitted requested wallet.
