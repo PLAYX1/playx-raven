@@ -1,5 +1,17 @@
 # 변경 기록
 
+## 0.9.22
+
+### 한국어
+
+- **폰 연결이 눈에 보여요:** 폰으로 QR 을 찍으면 QR 이 빛으로 흩어지고, 확인 숫자 옆에 그림 4개(예: 보라 해 · 초록 세모)가 폰과 같은 박자로 깜빡입니다. 그림과 숫자가 같을 때만 「같아요 · 연결」을 누르세요. 연결이 끝나면 라비가 폰으로 건너갑니다. 움직임 줄이기를 켜면 그림만 보입니다.
+- **라비에게 「폰이랑 연결해 줘」:** 이제 지갑 연결 화면을 엽니다.
+
+### English
+
+- **Phone linking you can see:** when your phone scans the QR it dissolves into light, and four pictures (for example "purple sun · green triangle") pulse next to the check number in time with your phone. Press "Same · Link" only when the pictures and number match. When linking finishes, Ravi hops over to your phone. With Reduce motion on, only the pictures show.
+- **Ask Ravi to "connect my phone":** it now opens the wallet link screen.
+
 ## 0.9.21
 
 ### 한국어
