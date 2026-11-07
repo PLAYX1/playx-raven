@@ -91,6 +91,8 @@ import { paintWalletNotes, walletWelcome } from "./wallet-notes";
 import { wireSeedCheck } from "./seed-check";
 import { wireWordsRestore } from "./words-restore";
 import { wireMapCard } from "./map-card";
+import { wirePostHelp } from "./ravi-post-help";
+import "./ravi-post-help.css";
 import { Channel, invoke as rawInvoke } from "@tauri-apps/api/core";
 
 /**
@@ -19464,6 +19466,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   // 사진. 🔴 러스트(`talk_photo_post`)는 진작 다 돼 있었고 **부르는 이 줄이
   //    없어서** 사진을 못 보냈다. 만들어 놓고 안 부르는 그 병이다.
   $("tk-photo").addEventListener("click", () => talkPickPhoto());
+  // 11-08 라비 글쓰기 돕기(다듬기·짧게·그림 만들기) — 고친 글은 칸에만 들어가고 보내기는 사람이 누른다.
+  wirePostHelp({ invoke: (cmd, args) => invoke(cmd, args), provider: () => aiProvider, t, sure, errText, stagePhoto: p => tkStagePhoto(p) });
   $("tk-photocancel").addEventListener("click", () => tkClearPhoto());
   // 「이 컴퓨터를 끄면 상대가 사진을 못 볼 수 있습니다」는 읽고 닫는 말이다.
   $("tk-saidclose").addEventListener("click", () => {

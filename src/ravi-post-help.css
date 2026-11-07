@@ -1,0 +1,11 @@
+/* 11-08 라비 글쓰기 돕기 — 글쓰기 칸 바로 위 작은 판. */
+.rph { margin: 0 14px 8px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); display: grid; gap: 8px; }
+.rph[hidden] { display: none; }
+.rph-note { margin: 0; font-size: 14px; color: var(--muted); }
+.rph-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.rph-row button { min-height: 44px; }
+.rph-out { margin: 0; font-size: 15px; color: var(--warn); }
+.rph-out.good { color: var(--ok); }
+.rph-out[hidden], .rph-undo[hidden] { display: none; }
+#tk-ravi.on { border-color: var(--ravi); }
+.rph-undo { justify-self: start; }
