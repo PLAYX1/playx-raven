@@ -1,5 +1,15 @@
 # 변경 기록
 
+## 0.9.19
+
+### 한국어
+
+- **백업 이름에 컴퓨터 이름:** 자동 백업(USB·클라우드)이 `RavenVault-pc-<컴퓨터 이름>.zip.pxlock` 으로 저장됩니다. 같은 OneDrive·구글 드라이브를 쓰는 컴퓨터가 여러 대여도 서로의 백업을 덮어쓰지 않습니다. 예전 `RavenVault.zip.pxlock` 은 그대로 두고, 「백업 찾기」에서 계속 보입니다.
+
+### English
+
+- **Computer name in backup files:** automatic backups (USB and cloud folders) are now saved as `RavenVault-pc-<computer name>.zip.pxlock`, so several computers sharing one OneDrive or Google Drive no longer overwrite each other's backups. Older `RavenVault.zip.pxlock` files are left untouched and still appear in "Find backups".
+
 ## 0.9.18
 
 ### 한국어
