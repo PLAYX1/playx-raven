@@ -1,5 +1,5 @@
 {
-  "source": "ravenvault 저장소(폰) 브랜치 claude/rv-link-phone 커밋 03f4527(link.ts·link.test.ts 는 11-03 하루 한도 최대 = 총발행량 21,000,000,000 RVN 「한도 없음」으로 데스크탑에서 먼저 고침 — 폰 저장소에 같은 바이트로 옮긴다) · 11-03 「받았어요」(seen) 종류를 데스크탑에서 먼저 더함 — 폰 저장소에 같은 바이트로 옮긴다 · 11-07 0.9.18 「팔아 줘」(sell)·내리기(unsell)·판매 결과(sellresult) 종류를 데스크탑에서 먼저 더함(link.ts·transport.ts·link.test.ts) — 폰 저장소에 같은 바이트로 옮긴다 — 바이트 그대로 복사, 패치 없음. core/talk/relay.ts 는 복사하지 않았다: 데스크탑 화면은 connect-src self 라 릴레이 왕래는 러스트(nostrpub.rs·wallet_link.rs)가 한다. transport.ts 의 그 줄은 import type 이라 빌드에서 지워지고, transport.ts 는 시험에서만 쓴다.",
+  "source": "ravenvault 저장소(폰) 브랜치 claude/rv-link-phone 커밋 03f4527(link.ts·link.test.ts 는 11-03 하루 한도 최대 = 총발행량 21,000,000,000 RVN 「한도 없음」으로 데스크탑에서 먼저 고침 — 폰 저장소에 같은 바이트로 옮긴다) · 11-03 「받았어요」(seen) 종류를 데스크탑에서 먼저 더함 — 폰 저장소에 같은 바이트로 옮긴다 · 11-07 0.9.18 「팔아 줘」(sell)·내리기(unsell)·판매 결과(sellresult) 종류를 데스크탑에서 먼저 더함(link.ts·transport.ts·link.test.ts) — 폰 저장소에 같은 바이트로 옮긴다 — 바이트 그대로 복사, 패치 없음. core/talk/relay.ts 는 복사하지 않았다: 데스크탑 화면은 connect-src self 라 릴레이 왕래는 러스트(nostrpub.rs·wallet_link.rs)가 한다. transport.ts 의 그 줄은 import type 이라 빌드에서 지워지고, transport.ts 는 시험에서만 쓴다. · 11-08 연결 확인 그림(match-symbols.ts·match-symbols.test.ts)을 폰 저장소에서 바이트 그대로 복사.",
   "files": {
     "core/wallet-link/link.ts": "d52f9f31937a7fb7828dfc2304919fdc926368552632f8cebd2e9f9f5ad70265",
     "core/wallet-link/transport.ts": "2f35b516ee2e2ac5c6f105f2e2ed745899b36d1b017d01c2f8314b561cbd5a14",
@@ -8,6 +8,8 @@
     "core/talk/event.ts": "3f2e5f576472d5b030b81e268c4fc81e12cc1c45addeea94c5880170118594d8",
     "core/talk/nip44.ts": "1809c9fcc3b44f17d8a689b163485c91c624b7f2ee3993fc621b0f119a277e66",
     "core/talk/nip17.ts": "1db456750d68bf7c21c9a05c26d5c9a67941019e6510981deaf1d98f39d97229",
-    "core/test-assert.ts": "3da51f9efd5a59bfef3e4a81daf88ab9da0137d9ee20e8193cfd1c0f0c3e1f12"
+    "core/test-assert.ts": "3da51f9efd5a59bfef3e4a81daf88ab9da0137d9ee20e8193cfd1c0f0c3e1f12",
+    "core/wallet-link/match-symbols.ts": "986d762511dfa34693a7378481419410066f7fe899b9ff3d8161eb6ecab7c890",
+    "core/wallet-link/match-symbols.test.ts": "e578bef88cda40d3fc45d2ba2e6a4998d102a453922da57fcf4ff548e6e42d61"
   }
 }

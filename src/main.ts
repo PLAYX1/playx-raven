@@ -11399,7 +11399,8 @@ function raviGo(to: GuideGo) {
     case "sales": raviOpenScreen("sales"); return;
     case "shop": raviOpenScreen("shop"); return;
     case "reward": showPage("reward"); return;
-    case "phone": showPage("settings"); jumpTo("rvp-card"); return;
+    // 11-08: 「라비, 폰이랑 연결해 줘」는 지갑 연결(wl-card)로 — 가게 보기(rvp-card)가 아니라 사람들이 말하는 「연결」이다.
+    case "phone": showPage("settings"); document.querySelector<HTMLElement>('button.sx-easy[data-sx-to="wl-card"]')?.click(); return;
     case "talk": showPage("talk"); return;
     case "settings": showPage("settings"); return;
     case "report": openReport(); return;

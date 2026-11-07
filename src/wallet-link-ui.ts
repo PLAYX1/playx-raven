@@ -4,6 +4,7 @@
 // 🔴 자동 승인 없음: 승인 단추는 사람이 누를 때만 wallet_link_approve 를 부른다.
 import { getCurrentWindow, UserAttentionType } from "@tauri-apps/api/window";
 import { t, tf } from "./i18n";
+import { MATCH_BEAT_MS, MATCH_COLOR_HEX, MATCH_COLOR_NAME, MATCH_SHAPE_NAME, MATCH_SHAPE_PATH, matchSymbols } from "../core/wallet-link/match-symbols";
 
 type Invoke = <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
 type Offer = { v: 1; chain: "rvn-main"; account: 0; desktopKey: string; name: string; xpub: string; firstAddress: string; nonce: string; expires: number };
@@ -49,6 +50,50 @@ const sellStatusText = (j: SellRow) => {
   const why = j.reason && (j.status === "refused" || j.status === "failed" || j.status === "cancelled") ? t(SELL_REASON[j.reason] ?? j.reason) : "";
   return why ? `${base} · ${why}` : base;
 };
+
+const calmMotion = () => { try { return matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { return false; } };
+/** 확인 숫자를 그림 4개로(폰과 같은 규칙 core/wallet-link/match-symbols.ts). 두 화면이 각자 시계로 같은 박자에 깜빡인다. */
+function paintMatchSymbols(code: string) {
+  const box = $("wl-syms");
+  box.replaceChildren();
+  const syms = matchSymbols(code);
+  box.hidden = !syms;
+  if (!syms) return;
+  const delay = `-${Date.now() % MATCH_BEAT_MS}ms`;
+  for (const m of syms) {
+    const cell = document.createElement("span"); cell.className = "wl-sym";
+    const ns = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(ns, "svg"); svg.setAttribute("viewBox", "0 0 24 24"); svg.setAttribute("aria-hidden", "true");
+    const path = document.createElementNS(ns, "path"); path.setAttribute("d", MATCH_SHAPE_PATH[m.shape]); path.setAttribute("fill", MATCH_COLOR_HEX[m.color]);
+    svg.append(path);
+    const name = document.createElement("small"); name.textContent = `${t(MATCH_COLOR_NAME[m.color])} ${t(MATCH_SHAPE_NAME[m.shape])}`;
+    cell.append(svg, name);
+    cell.style.animationDelay = delay;
+    box.append(cell);
+  }
+  box.setAttribute("aria-label", syms.map(m => `${t(MATCH_COLOR_NAME[m.color])} ${t(MATCH_SHAPE_NAME[m.shape])}`).join(", "));
+}
+/** 연결이 끝난 순간 — 라비가 폴짝 뛰어 폰으로 건너가고, 작은 소리. 확인(러스트 저장)이 끝난 뒤에만 부른다. */
+function celebrateLinked() {
+  const card = document.getElementById("wl-card");
+  if (!card) return;
+  document.getElementById("wl-done")?.remove();
+  const done = document.createElement("div"); done.id = "wl-done"; done.className = "wl-done"; done.setAttribute("role", "status");
+  const img = document.createElement("img"); img.src = "/raven-happy.webp"; img.alt = ""; img.className = "wl-done-ravi";
+  const text = document.createElement("p"); text.textContent = t("폰과 이어졌어요. 라비가 폰으로 건너갔어요.");
+  done.append(img, text);
+  card.querySelector("h3")?.after(done);
+  if (!calmMotion()) {
+    try {
+      const ac = new AudioContext(), now = ac.currentTime;
+      [659.25, 987.77, 1318.5].forEach((f, i) => { const o = ac.createOscillator(), g = ac.createGain(); o.type = "sine"; o.frequency.value = f;
+        g.gain.setValueAtTime(0, now + i * .09); g.gain.linearRampToValueAtTime(.06, now + i * .09 + .02); g.gain.exponentialRampToValueAtTime(.0001, now + i * .09 + .9);
+        o.connect(g).connect(ac.destination); o.start(now + i * .09); o.stop(now + i * .09 + 1); });
+      setTimeout(() => { void ac.close(); }, 2000);
+    } catch { /* 소리는 덤 */ }
+  }
+  setTimeout(() => done.classList.add("wl-done-rest"), 2400);
+}
 
 export function wireWalletLink(deps: { invoke: Invoke; ask: (why: "link" | "limit" | "sell" | "unsell") => Promise<string | null>; onState?: (s: WalletLinkState) => void }) {
   const { invoke } = deps;
@@ -110,7 +155,11 @@ export function wireWalletLink(deps: { invoke: Invoke; ask: (why: "link" | "limi
     const link = await import("../core/wallet-link/link");
     if (link.linkConfirmCode(o, phoneKey) !== code) { await cancelOffer(t("확인 숫자를 맞춰 보지 못해 연결하지 않았어요.")); return; }
     clearInterval(offerTimer);
+    // 11-08 연결 장면: 폰이 찍으면 QR 이 빛으로 흩어지고(움직임 줄이기면 건너뜀), 확인 숫자를 그림 4개로도 보인다.
+    if (!calmMotion()) { $("wl-qrimg").classList.add("wl-dissolve"); await new Promise(r => setTimeout(r, 650)); }
+    $("wl-qrimg").classList.remove("wl-dissolve");
     $("wl-qr").hidden = true; $("wl-confirm").hidden = false;
+    paintMatchSymbols(code);
     $("wl-code").textContent = `${code.slice(0, 3)} ${code.slice(3)}`;
     $("wl-phoneaddr").textContent = addresses.join("\n");
   }
@@ -122,6 +171,7 @@ export function wireWalletLink(deps: { invoke: Invoke; ask: (why: "link" | "limi
       await invoke("wallet_link_confirm", { dailyRvn: daily, phoneName: ($("wl-phonename") as HTMLInputElement).value });
       stopOffer(); agree.checked = false; make.disabled = true; $("wl-agree-hint").hidden = false;
       msg(t("연결했어요. 폰에서 이 컴퓨터 지갑의 잔액과 받는 주소를 볼 수 있어요."));
+      celebrateLinked();
       await refresh();
     } catch (e) { msg(errOf(e), true); }
   };

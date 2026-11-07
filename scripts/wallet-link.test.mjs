@@ -95,6 +95,7 @@ test('vendored phone protocol files are byte-identical to the pinned copies', ()
 test('vendored self-tests pass on the desktop crypto adapter', async () => {
   await moduleAt('core/wallet-link/link.test.ts');
   await moduleAt('core/wallet-link/transport.test.ts');
+  await moduleAt('core/wallet-link/match-symbols.test.ts');
 });
 
 test('shared vectors still match the vendored TypeScript (Rust reads the same file)', () => {

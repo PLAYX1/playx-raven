@@ -45,3 +45,19 @@
 #wl-card .wl-sellrow { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 #wl-card .wl-sellrow .wl-d { overflow-wrap: anywhere; }
 #wl-card .wl-orphan { border-top: 1px solid var(--warn); }
+
+/* 11-08 연결 장면 — 그림 4개(두 화면이 같은 박자로)·QR 흩어짐·라비 건너감. 움직임 줄이기면 멈춘 그림만. */
+#wl-card .wl-syms { display: flex; gap: 12px; flex-wrap: wrap; margin: 10px 0 4px; }
+#wl-card .wl-syms[hidden] { display: none; }
+#wl-card .wl-sym { display: grid; justify-items: center; gap: 4px; min-width: 76px; padding: 10px 8px 8px; border-radius: 16px; border: 1px solid var(--line); background: var(--panel); animation: wl-beat 1.2s ease-in-out 10; }
+#wl-card .wl-sym svg { width: 40px; height: 40px; }
+#wl-card .wl-sym small { font-size: 14px; color: var(--text); }
+@keyframes wl-beat { 0%, 100% { transform: scale(1); box-shadow: none; } 40% { transform: scale(1.07); box-shadow: 0 0 22px -6px var(--ravi); } }
+#wl-qrimg.wl-dissolve { animation: wl-dissolve .65s ease-in forwards; }
+@keyframes wl-dissolve { 0% { filter: blur(0); opacity: 1; transform: scale(1); } 60% { filter: blur(6px) brightness(1.6); opacity: .7; transform: scale(1.06); } 100% { filter: blur(14px) brightness(2.2); opacity: 0; transform: scale(.7) translateX(40px); } }
+#wl-card .wl-done { display: flex; align-items: center; gap: 14px; margin: 8px 0 12px; padding: 12px 14px; border-radius: 16px; border: 1px solid var(--ok); background: color-mix(in srgb, var(--ok) 10%, var(--panel)); }
+#wl-card .wl-done p { margin: 0; font-weight: 600; }
+#wl-card .wl-done-ravi { width: 64px; height: 64px; animation: wl-hop 1.4s cubic-bezier(.3, 1.4, .5, 1) forwards; }
+#wl-card .wl-done-rest .wl-done-ravi { opacity: .9; }
+@keyframes wl-hop { 0% { transform: translateY(0) scale(1); } 30% { transform: translateY(-26px) scale(1.08); } 55% { transform: translateY(-60px) translateX(30px) scale(.5); opacity: 0; } 56% { transform: translateY(20px) scale(.6); opacity: 0; } 100% { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { #wl-card .wl-sym, #wl-card .wl-done-ravi, #wl-qrimg.wl-dissolve { animation: none; } }
