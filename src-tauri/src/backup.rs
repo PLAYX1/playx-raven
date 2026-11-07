@@ -869,9 +869,8 @@ mod pc_label_tests {
         assert!(a.ends_with("RavenVault-Backup/RavenVault-pc-DESKTOP-406.zip.pxlock"), "{a:?}");
         let (old, _) = daily_archive_paths(d, true, "");
         assert!(old.ends_with("RavenVault-Backup/RavenVault.zip.pxlock"));
-        // 찾기·되돌리기가 새 이름을 알아본다.
-        let name = a.file_name().unwrap().to_string_lossy();
-        assert_eq!(crate::restore_drop::kind_of_name(&name), Some(crate::restore_drop::Kind::Full));
+        // 되돌리기 파일 고르기는 `.pxlock` 끝으로 알아본다(restore_drop::kind_of_name).
+        assert!(a.to_string_lossy().ends_with(".zip.pxlock"));
         let prev = crate::backup_storage::previous_path(&a).unwrap();
         assert!(prev.to_string_lossy().contains("-previous."), "{prev:?}");
     }

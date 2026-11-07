@@ -78,7 +78,9 @@ mod safety_tests {
         let drive = json!({"name":"fixture", "path":dest.to_string_lossy(), "writable":true});
         let result = auto_to(1_789_344_000, vec![drive], vec![]).await;
         assert_eq!(result["outside"][0]["ok"], true, "{result}");
-        let latest = dest.join("RavenVault-Backup").join("RavenVault.zip.pxlock");
+        // 0.9.19~: 자동 백업은 컴퓨터 이름이 붙는다(`RavenVault-pc-<이름>.zip.pxlock`).
+        let latest = daily_archive_paths(&dest, true, &pc_label()).0;
+        assert!(latest.starts_with(dest.join("RavenVault-Backup")));
         assert_eq!(result["outside"][0]["path"], latest.to_string_lossy().as_ref());
         assert_eq!(matching_receipt(&latest).unwrap()["day"], day_name(1_789_344_000));
         assert_eq!(tree(&dest.join("PLAYXRaven-Backup")), before);
@@ -233,7 +235,8 @@ mod safety_tests {
         let retried = publish_daily(&prepared, &dest, true, "2026-09-14").unwrap();
         assert_eq!(retried["skipped"], true);
         assert_eq!(std::fs::read(&path).unwrap(), today);
-        assert_eq!(std::fs::read(path.parent().unwrap().join("RavenVault-previous.zip.pxlock")).unwrap(), yesterday);
+        let name = path.file_name().unwrap().to_string_lossy().replace(".zip.pxlock", "-previous.zip.pxlock");
+        assert_eq!(std::fs::read(path.with_file_name(name)).unwrap(), yesterday);
     }
 
     #[tokio::test]
