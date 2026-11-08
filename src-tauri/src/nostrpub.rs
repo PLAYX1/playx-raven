@@ -414,6 +414,23 @@ pub(crate) async fn read_mine_page(url: &str, author: &str, kinds: &[i64], since
     Ok((events.into_iter().filter(|e| e.get("pubkey").and_then(Value::as_str) == Some(author)).collect(), eose))
 }
 
+/// **쪽지 보관**용(docs/SYNC-ARCHIVE.md §1): 릴레이 **한 곳**에서 나(`#p`)에게 온 겉봉(1059) 한 쪽을 읽는다. 풀지 않는다.
+/// 받는 이 태그가 정말 나인 것만 남긴다(릴레이가 엉뚱한 것을 섞어 줘도 저장하지 않게). 서명은 `read_one_eose` 가 본다.
+pub(crate) async fn read_wraps_page(url: &str, to: &str, since: Option<i64>, until: Option<i64>) -> Result<(Vec<Value>, bool), String> {
+    if to.len() != 64 || !to.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) {
+        return Ok((vec![], true));
+    }
+    let sub = "w1";
+    let mut f = json!({ "kinds": [1059], "#p": [to], "limit": INBOX_PAGE });
+    if let Some(t) = since { f["since"] = json!(t.max(0)); }
+    if let Some(t) = until { f["until"] = json!(t.max(0)); }
+    let req = serde_json::to_string(&json!(["REQ", sub, f])).map_err(|e| format!("보낼 것을 만들지 못했습니다: {e}"))?;
+    let (events, eose) = read_one_eose(url, &req, sub).await?;
+    let to_me = |e: &Value| e.get("kind").and_then(Value::as_i64) == Some(1059)
+        && e.get("tags").and_then(Value::as_array).is_some_and(|t| t.iter().any(|x| x.get(0).and_then(Value::as_str) == Some("p") && x.get(1).and_then(Value::as_str) == Some(to)));
+    Ok((events.into_iter().filter(to_me).collect(), eose))
+}
+
 /// 글 번호로 글을 읽는다(북마크 화면). 번호는 64자리 16진수만, 50개까지. 릴레이는 한꺼번에 묻는다.
 pub(crate) async fn nostr_query_ids(kinds: Vec<i64>, ids: Vec<String>) -> Result<Vec<Value>, String> {
     let ids: Vec<String> = ids

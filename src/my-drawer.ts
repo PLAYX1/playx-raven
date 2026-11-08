@@ -77,6 +77,26 @@ export async function paintMyDrawer(host: HTMLElement, deps: { invoke: Invoke; e
   notes.sort((a, b) => b.at - a.at);
   state = { notes, folders, assign, rev, drawerProblem, view: state?.view ?? { kind: "all" }, local, status, limit: PAGE, confirmDelete: false };
   render(host, deps, openFeed);
+  if (status?.my_backfill) watchBackfill(host, deps, openFeed, my);
+}
+
+/** 지난 글 모으기를 지켜본 적이 있나 — 끝난 뒤 한 번 「다 모았어요」를 보여 준다. */
+let backfillWatched = false;
+/** 모으는 동안 5초마다 수만 고친다. 끝나면 서랍을 다시 그려 새로 모인 글을 보인다. 다른 화면으로 가면(seq 바뀜) 멈춘다. */
+function watchBackfill(host: HTMLElement, deps: { invoke: Invoke; errText: (e: unknown) => string; statusLine: (r: any) => string }, openFeed: () => void, my: number) {
+  backfillWatched = true;
+  setTimeout(async () => {
+    if (my !== seq || !host.isConnected) return;
+    const r = await deps.invoke<any>("relay_status").catch(() => null);
+    if (my !== seq || !r) return;
+    if (r.my_backfill) {
+      const line = host.querySelector<HTMLElement>("#md-progress");
+      if (line) line.textContent = deps.statusLine(r);
+      watchBackfill(host, deps, openFeed, my);
+    } else {
+      void paintMyDrawer(host, deps, openFeed);
+    }
+  }, 5000);
 }
 
 function shown(): Note[] {
@@ -111,7 +131,9 @@ function render(host: HTMLElement, deps: { invoke: Invoke; errText: (e: unknown)
   const head =
     `<p class="meta">${esc(s.local ? tf("내가 쓴 글 {0}개 — 이 컴퓨터가 지켜 두었어요. 폰에서 쓴 글도 모여요.", String(s.notes.length)) : t("이 컴퓨터가 아직 내 글을 모으기 전이에요. 지금은 바깥 릴레이에서 읽어 보여 드려요."))}</p>` +
     // 지키기에 문제가 있을 때만(이름이 폰과 다름·못 모음) 한 줄 더 — 평소에는 위 한 줄로 충분하다.
-    (s.status && (s.status.my_same_as_wallet === false || s.status.my_backup_problem) ? `<p class="meta danger">${esc(deps.statusLine(s.status))}</p>` : "");
+    (s.status && (s.status.my_same_as_wallet === false || (s.status.my_backup_problem && !s.status.my_backfill)) ? `<p class="meta danger">${esc(deps.statusLine(s.status))}</p>`
+      // 11-08 지난 글을 모으는 동안은 모은 수가 늘어나는 한 줄(아래 watchBackfill 이 몇 초마다 고친다), 끝나면 「다 모았어요」.
+      : s.status?.my_backfill || backfillWatched ? `<p class="meta" id="md-progress" aria-live="polite">${esc(deps.statusLine(s.status))}</p>` : "");
 
   const chips =
     `<div class="md-chips" role="group" aria-label="${esc(t("보기"))}">` +

@@ -78,6 +78,18 @@ fn replaceable(kind: i64) -> bool { kind == 0 || kind == 3 || (10000..20000).con
 /// 사람이 쓴 글은 JSON 이 아니다.
 const TALK_KINDS: [i64; 5] = [40, 41, 42, 1, 5];
 
+/// 이 컴퓨터 주인에게 온 쪽지 겉봉(NIP-17 kind 1059)을 들고 있을 최대 수. 남의 글 한도(MAX_EVENTS)와 따로 센다.
+const MAX_WRAPS: usize = 5_000;
+
+/// 주인에게 온 겉봉인가: kind 1059 이고 `p` 태그가 주인 공개키. 글쓴이는 1회용 열쇠라 `pubkey` 로는 못 가린다.
+fn owner_wrap(e: &Value, me: Option<&str>) -> bool {
+    let Some(me) = me else { return false };
+    e.get("kind").and_then(Value::as_i64) == Some(1059)
+        && e.get("tags").and_then(Value::as_array).is_some_and(|t| {
+            t.iter().any(|x| x.get(0).and_then(Value::as_str) == Some("p") && x.get(1).and_then(Value::as_str) == Some(me))
+        })
+}
+
 /// 들고 있을 글의 최대 수. 넘치면 오래된 것부터 버린다.
 ///
 /// 가게 계산대는 서버가 아니다. 디스크가 차서 장사가 멈추면 그건 우리 잘못이다.
@@ -472,7 +484,10 @@ fn looks_like_asset(d: &str) -> bool {
 /// 옛것을 지운다(NIP-33). 안 그러면 가게가 주소를 바꿀 때마다 글이 쌓이고,
 /// 손님 화면이 어느 것이 최신인지 골라야 한다.
 fn store(e: Value) -> (bool, String) {
-    if !KINDS.contains(&e.get("kind").and_then(Value::as_i64).unwrap_or(-1)) && !node_keeper_badge(&e) {
+    // 11-08 쪽지 보관(docs/SYNC-ARCHIVE.md §1): 겉봉(1059)은 **주인에게 온 것만** 받는다. 남의 겉봉은 디스크를 채울 뿐이다.
+    let me = owner();
+    let wrap = owner_wrap(&e, me.as_deref());
+    if !wrap && !KINDS.contains(&e.get("kind").and_then(Value::as_i64).unwrap_or(-1)) && !node_keeper_badge(&e) {
         return (false, "이 릴레이는 가게 글만 받습니다".into());
     }
     if !verify(&e) {
@@ -495,8 +510,8 @@ fn store(e: Value) -> (bool, String) {
     //    설명이 있어야 하니까 — **비싸고 눈에 띄게** 만든다.
     // 11-07 대표: 「자기 글도 지키려면 자기 릴레이에 올려야」 — **이 컴퓨터 주인의 글은 내용·나이·자리 규칙을 받지 않는다.**
     //    서명은 위에서 확인했다. 주인 열쇠로 서명된 글은 주인이 쓴 것이고, 주인 디스크에 주인 글을 남기는 것은 막을 이유가 없다.
-    let me = owner();
-    let mine = me.as_deref().is_some_and(|o| e.get("pubkey").and_then(Value::as_str) == Some(o));
+    // 주인 겉봉은 봉한 내용이라 글 모양 규칙을 대지 않는다(풀지 않는다). 크기 한도는 위에서 봤다.
+    let mine = wrap || me.as_deref().is_some_and(|o| e.get("pubkey").and_then(Value::as_str) == Some(o));
     if !mine {
         if let Some(why) = smells_bad(&e) {
             return (false, why);
@@ -590,7 +605,15 @@ fn store(e: Value) -> (bool, String) {
         // 11-07 감사: 오래된 것부터 자르면 한 사람이 재접속하며 5,000개를 채워 남의 글(가게 공지 포함)을 모두 밀어낸다.
         //   → 넘칠 때는 **가장 많이 쓴 사람의 가장 오래된 글**부터 뺀다. 한 열쇠의 도배는 자기 글만 밀어낸다.
         //   11-07: **주인 글은 밀어내지 않는다** — 주인이 가장 많이 쓴 사람이어도 남의 글부터 뺀다. 한도는 남의 글에만 걸린다.
-        let is_mine = |x: &Value| me.as_deref().is_some_and(|o| x.get("pubkey").and_then(Value::as_str) == Some(o));
+        let is_mine = |x: &Value| me.as_deref().is_some_and(|o| x.get("pubkey").and_then(Value::as_str) == Some(o)) || owner_wrap(x, me.as_deref());
+        // 주인 겉봉은 따로 한도(MAX_WRAPS) — 넘치면 가장 오래된 겉봉부터. 남이 주인에게 쪽지를 쏟아도 이 칸만 찬다.
+        if wrap {
+            while v.iter().filter(|x| owner_wrap(x, me.as_deref())).count() > MAX_WRAPS {
+                let oldest = v.iter().enumerate().filter(|(_, x)| owner_wrap(x, me.as_deref()))
+                    .min_by_key(|(_, x)| x.get("created_at").and_then(Value::as_i64).unwrap_or(0)).map(|(i, _)| i);
+                match oldest { Some(i) => { v.remove(i); } None => break }
+            }
+        }
         while v.iter().filter(|x| !is_mine(x)).count() > MAX_EVENTS {
             let mut counts: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
             for x in v.iter().filter(|x| !is_mine(x)) {
@@ -678,70 +701,118 @@ fn flush_now() -> bool {
     std::fs::write(&tmp, body).is_ok() && std::fs::rename(&tmp, file()).is_ok()
 }
 
-/// 한 릴레이에서 내 글을 쪽을 넘기며 끝까지 읽는다. 릴레이마다 따로 넘긴다(합친 뒤 넘기면 가운데가 빠진다 — GPT P2).
+/// 한 릴레이에서 쪽을 넘기며 끝까지 읽는다(내 글 또는 나에게 온 겉봉). 릴레이마다 따로 넘긴다(합친 뒤 넘기면 가운데가 빠진다 — GPT P2).
 /// 같은 초의 글이 쪽 경계에 걸려도 빠지지 않게 `until` 은 그 초를 **포함**하고, 이미 본 id 로 진전을 잰다.
-/// 반환: (모은 글, 끝까지 읽었나).
-async fn read_mine_from(url: &str, me: &str, since: Option<i64>) -> Result<(Vec<Value>, bool), String> {
+/// 11-08: 쪽마다 바로 저장한다 — 오래 걸리는 첫 모으기 동안에도 모은 수가 화면에 늘어난다(진행 표시, docs/SYNC-ARCHIVE.md §2).
+/// 반환: (새로 저장한 수, 끝까지 읽었나).
+async fn read_from<F, Fut>(mut page: F) -> Result<(usize, bool), String>
+where
+    F: FnMut(Option<i64>) -> Fut,
+    Fut: std::future::Future<Output = Result<(Vec<Value>, bool), String>>,
+{
     let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
-    let mut out = Vec::new();
+    let mut added = 0usize;
     let mut until: Option<i64> = None;
     for _ in 0..60 {
-        let (page, eose) = crate::nostrpub::read_mine_page(url, me, &MINE_KINDS, since, until).await?;
-        if !eose { return Ok((out, false)); }
+        let (events, eose) = page(until).await?;
+        if !eose { return Ok((added, false)); }
         let mut fresh = 0usize;
         let mut oldest = i64::MAX;
-        for e in page.iter() {
+        for e in events.iter() {
             if let Some(at) = e.get("created_at").and_then(Value::as_i64) { oldest = oldest.min(at); }
             if let Some(id) = e.get("id").and_then(Value::as_str) {
-                if seen.insert(id.to_string()) { fresh += 1; out.push(e.clone()); }
+                if seen.insert(id.to_string()) {
+                    fresh += 1;
+                    if keep_one(e.clone()) { added += 1; }
+                }
             }
         }
-        if page.len() < crate::nostrpub::INBOX_PAGE { return Ok((out, true)); }
+        if events.len() < crate::nostrpub::INBOX_PAGE { return Ok((added, true)); }
         if fresh == 0 {
             // 한 초에 한 쪽보다 많은 글 — 그 초를 건너뛰면 빠지니 끝까지 못 읽은 것으로 남긴다.
-            return Ok((out, false));
+            return Ok((added, false));
         }
         until = Some(oldest);
     }
-    Ok((out, false))
+    Ok((added, false))
 }
 
-/// 한 번 모으기. 처음(또는 주인이 바뀐 뒤)에는 옛 글까지, 그다음부터는 지난번 끝낸 시각 이틀 전부터.
+/// 하나 저장하고, **새로** 들어왔으면 true.
+fn keep_one(e: Value) -> bool {
+    let had = e.get("id").and_then(Value::as_str).map(|id| peek(|v| v.iter().any(|x| x.get("id").and_then(Value::as_str) == Some(id)))).unwrap_or(true);
+    store(e).0 && !had
+}
+
+/// 마지막으로 **끝까지** 모은 쪽지(겉봉) (주인 공개키, 시각). 글과 따로 — 0.9.25 까지 글만 모았으니 첫 쪽지 모으기는 처음부터.
+static OWN_DM_BACKUP: Mutex<Option<(String, i64)>> = Mutex::new(None);
+fn own_dm_backup_at() -> Option<i64> {
+    let me = owner()?;
+    OWN_DM_BACKUP.lock().unwrap_or_else(|e| e.into_inner()).as_ref().filter(|(p, _)| *p == me).map(|(_, t)| *t)
+}
+/// 지난 글 모으기(처음·이름이 바뀐 뒤·사흘 넘게 꺼져 있던 뒤) 중인가. 화면이 「모으는 중」을 띄운다.
+static BACKFILL: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+/// 사흘 넘게 못 모았으면 「지난 글 모으기」로 본다(화면 표시만 다르다 — 읽는 범위는 늘 지난번 끝 이틀 전부터).
+const BACKFILL_GAP_SECS: i64 = 3 * 86_400;
+/// 겉봉 시각은 최대 이틀 앞당겨진다(NIP-59) — 지난번 끝에서 사흘 전부터 다시 읽는다.
+const WRAP_OVERLAP_SECS: i64 = 3 * 86_400;
+fn is_backfill(notes_at: Option<i64>, dms_at: Option<i64>, now: i64) -> bool {
+    [notes_at, dms_at].iter().any(|t| t.is_none_or(|t| now - t > BACKFILL_GAP_SECS))
+}
+
+/// 이 컴퓨터에 보관된 (내 글 kind 1 수, 나에게 온 쪽지 겉봉 수).
+fn kept_counts() -> (usize, usize) {
+    let Some(me) = owner() else { return (0, 0) };
+    peek(|v| {
+        let notes = v.iter().filter(|x| x.get("pubkey").and_then(Value::as_str) == Some(me.as_str()) && x.get("kind").and_then(Value::as_i64) == Some(1)).count();
+        let dms = v.iter().filter(|x| owner_wrap(x, Some(&me))).count();
+        (notes, dms)
+    })
+}
+
+fn save_backup_marks(me: &str, notes_at: Option<i64>, dms_at: Option<i64>) {
+    let tmp = own_backup_file().with_extension("json.tmp");
+    let body = json!({ "at": notes_at, "dm_at": dms_at, "pubkey": me });
+    if std::fs::write(&tmp, serde_json::to_vec(&body).unwrap_or_default()).is_ok() {
+        let _ = std::fs::rename(&tmp, own_backup_file());
+    }
+}
+
+/// 한 번 모으기. 처음(또는 주인이 바뀐 뒤)에는 옛 글까지, 그다음부터는 지난번 끝낸 시각 이틀(쪽지는 사흘) 전부터.
+/// 내 글과 **나에게 온 쪽지 겉봉**(봉한 그대로, 풀지 않는다)을 함께 모은다.
 /// 모든 닿은 릴레이를 끝까지 읽고 **디스크에 쓴 뒤에만** 「끝냄」을 남긴다(GPT P2).
 pub(crate) async fn backup_my_notes_once() -> Result<usize, String> {
     let Some(me) = owner() else { return Ok(0) };
-    let since = own_backup_at().map(|t| t - 2 * 86_400);
+    let (notes_at, dms_at) = (own_backup_at(), own_dm_backup_at());
+    let since = notes_at.map(|t| t - 2 * 86_400);
+    let dm_since = dms_at.map(|t| t - WRAP_OVERLAP_SECS);
     let started = now_secs();
+    BACKFILL.store(is_backfill(notes_at, dms_at, started), std::sync::atomic::Ordering::Relaxed);
+    struct Done;
+    impl Drop for Done { fn drop(&mut self) { BACKFILL.store(false, std::sync::atomic::Ordering::Relaxed); } }
+    let _done = Done;
     use futures_util::future::join_all;
     let urls = crate::nostrpub::outside_relays();
-    let got = join_all(urls.iter().map(|u| read_mine_from(u, &me, since))).await;
-    let reached = got.iter().filter(|r| r.is_ok()).count();
+    let (got, got_dm) = tokio::join!(
+        join_all(urls.iter().map(|u| read_from(|until| crate::nostrpub::read_mine_page(u, &me, &MINE_KINDS, since, until)))),
+        join_all(urls.iter().map(|u| read_from(|until| crate::nostrpub::read_wraps_page(u, &me, dm_since, until)))),
+    );
+    let reached = got.iter().chain(got_dm.iter()).filter(|r| r.is_ok()).count();
     if reached == 0 {
         *OWN_BACKUP_PROBLEM.lock().unwrap_or_else(|e| e.into_inner()) = Some("바깥 릴레이에 닿지 못했습니다".into());
         return Err("바깥 릴레이에 닿지 못했습니다".into());
     }
-    let complete = got.iter().all(|r| match r { Ok((_, done)) => *done, Err(_) => true });
-    let mut added = 0usize;
-    for (events, _) in got.into_iter().flatten() {
-        for e in events {
-            let had = e.get("id").and_then(Value::as_str).map(|id| peek(|v| v.iter().any(|x| x.get("id").and_then(Value::as_str) == Some(id)))).unwrap_or(true);
-            if store(e).0 && !had { added += 1; }
-        }
-    }
+    let all_done = |rs: &[Result<(usize, bool), String>]| rs.iter().any(|r| r.is_ok()) && rs.iter().all(|r| match r { Ok((_, done)) => *done, Err(_) => true });
+    let (complete, dm_complete) = (all_done(&got), all_done(&got_dm));
+    let added: usize = got.iter().chain(got_dm.iter()).filter_map(|r| r.as_ref().ok().map(|(n, _)| *n)).sum();
     if !flush_now() {
         *OWN_BACKUP_PROBLEM.lock().unwrap_or_else(|e| e.into_inner()) = Some("디스크에 쓰지 못했습니다".into());
         return Err("디스크에 쓰지 못했습니다".into());
     }
-    if complete {
-        *OWN_BACKUP.lock().unwrap_or_else(|e| e.into_inner()) = Some((me.clone(), started));
-        let tmp = own_backup_file().with_extension("json.tmp");
-        if std::fs::write(&tmp, serde_json::to_vec(&json!({ "at": started, "pubkey": me })).unwrap_or_default()).is_ok() {
-            let _ = std::fs::rename(&tmp, own_backup_file());
-        }
-        *OWN_BACKUP_PROBLEM.lock().unwrap_or_else(|e| e.into_inner()) = None;
-    } else {
-        *OWN_BACKUP_PROBLEM.lock().unwrap_or_else(|e| e.into_inner()) = Some("아직 다 모으지 못했습니다(다음에 이어서)".into());
-    }
+    if complete { *OWN_BACKUP.lock().unwrap_or_else(|e| e.into_inner()) = Some((me.clone(), started)); }
+    if dm_complete { *OWN_DM_BACKUP.lock().unwrap_or_else(|e| e.into_inner()) = Some((me.clone(), started)); }
+    if complete || dm_complete { save_backup_marks(&me, own_backup_at(), own_dm_backup_at()); }
+    *OWN_BACKUP_PROBLEM.lock().unwrap_or_else(|e| e.into_inner()) =
+        if complete && dm_complete { None } else { Some("아직 다 모으지 못했습니다(다음에 이어서)".into()) };
     Ok(added)
 }
 
@@ -751,8 +822,13 @@ pub fn start_own_backup() {
     STARTED.call_once(|| {
         if let Ok(s) = std::fs::read_to_string(own_backup_file()) {
             if let Ok(v) = serde_json::from_str::<Value>(&s) {
-                if let (Some(p), Some(t)) = (v.get("pubkey").and_then(Value::as_str), v.get("at").and_then(Value::as_i64)) {
-                    *OWN_BACKUP.lock().unwrap_or_else(|e| e.into_inner()) = Some((p.to_string(), t));
+                if let Some(p) = v.get("pubkey").and_then(Value::as_str) {
+                    if let Some(t) = v.get("at").and_then(Value::as_i64) {
+                        *OWN_BACKUP.lock().unwrap_or_else(|e| e.into_inner()) = Some((p.to_string(), t));
+                    }
+                    if let Some(t) = v.get("dm_at").and_then(Value::as_i64) {
+                        *OWN_DM_BACKUP.lock().unwrap_or_else(|e| e.into_inner()) = Some((p.to_string(), t));
+                    }
                 }
             }
         }
@@ -1048,11 +1124,13 @@ pub async fn serve(mut ws: WebSocket) {
 #[tauri::command]
 pub fn relay_status() -> Value {
     let n = with(|v| v.len());
-    let me = owner();
-    let mine = me.as_deref().map(|o| peek(|v| v.iter().filter(|x| x.get("pubkey").and_then(Value::as_str) == Some(o) && x.get("kind").and_then(Value::as_i64) == Some(1)).count())).unwrap_or(0);
+    let (mine, dms) = kept_counts();
     json!({
         // 내 글 지키기: 이 컴퓨터에 남은 내 글 수 · 마지막으로 바깥 릴레이에서 모아 온 시각(초, 없으면 null).
         "my_notes": mine,
+        // 11-08 쪽지 보관·지난 글 모으기 진행(docs/SYNC-ARCHIVE.md §2). 전체 수는 모르므로 모은 수만.
+        "my_dms": dms,
+        "my_backfill": BACKFILL.load(std::sync::atomic::Ordering::Relaxed),
         "my_backup_at": own_backup_at(),
         "my_same_as_wallet": owner_same_as_wallet(),
         "my_backup_problem": OWN_BACKUP_PROBLEM.lock().unwrap_or_else(|e| e.into_inner()).clone(),
@@ -1442,5 +1520,118 @@ mod tests {
         b.send(M::Text(json!(["EVENT", bad]).to_string().into())).await.unwrap();
         assert_eq!(next(&mut b).await.unwrap()[2], false);
         std::env::remove_var("PLAYX_RAVEN_HOME");
+    }
+
+    /// 11-08 쪽지 보관: 겉봉(1059)은 p 가 주인일 때만 받는다 — 이틀 앞당긴 시각·오래된 겉봉도. 남에게 가는 겉봉·주인 없음은 거절.
+    #[test]
+    fn relay_accepts_gift_wraps_only_for_owner() {
+        use super::*;
+        let _g = OWNER_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let me = crate::shopkey::pubkey_of(&[7u8; 32]).unwrap();
+        let stranger = crate::shopkey::pubkey_of(&[8u8; 32]).unwrap();
+        let once = [11u8; 32];
+        *TEST_OWNER.lock().unwrap() = Some(me.clone());
+        *STORE.lock().unwrap() = Some(vec![]);
+        let fuzzed = now_secs() - 2 * 86_400 + 5;
+        let to_me = crate::shopkey::sign_with(&once, 1059, json!([["p", me.clone()]]), "sealed-1", fuzzed).unwrap();
+        assert!(store(to_me.clone()).0, "주인에게 온 겉봉을 버렸다");
+        let old = crate::shopkey::sign_with(&once, 1059, json!([["p", me.clone()]]), "sealed-old", now_secs() - 400 * 86_400).unwrap();
+        assert!(store(old).0, "주인에게 온 옛 겉봉을 버렸다(보관)");
+        let to_other = crate::shopkey::sign_with(&once, 1059, json!([["p", stranger.clone()]]), "sealed-2", now_secs()).unwrap();
+        assert!(!store(to_other).0, "남에게 가는 겉봉을 저장했다");
+        let no_p = crate::shopkey::sign_with(&once, 1059, json!([]), "sealed-3", now_secs()).unwrap();
+        assert!(!store(no_p).0, "받는 이 없는 겉봉을 저장했다");
+        let big = crate::shopkey::sign_with(&once, 1059, json!([["p", me.clone()]]), &"x".repeat(MAX_EVENT_BYTES), now_secs()).unwrap();
+        assert!(!store(big).0, "크기 한도를 넘는 겉봉을 받았다");
+        let mut forged = to_me.clone();
+        forged["content"] = json!("changed");
+        assert!(!store(forged).0, "서명이 안 맞는 겉봉을 받았다");
+        assert_eq!(kept_counts(), (0, 2));
+        // 주인이 없으면(이야기 이름 아직 없음) 어떤 겉봉도 안 받는다.
+        *TEST_OWNER.lock().unwrap() = None;
+        assert!(!owner_wrap(&to_me, None));
+        *TEST_OWNER.lock().unwrap() = Some(me.clone());
+        // 겉봉 한도: 넘치면 가장 오래된 겉봉부터 빠지고, 내 글·남의 글은 건드리지 않는다.
+        with(|v| {
+            for i in 0..MAX_WRAPS {
+                v.push(json!({ "id": format!("w{i}"), "pubkey": "c".repeat(64), "kind": 1059, "created_at": 1_000 + i as i64, "tags": [["p", me.clone()]] }));
+            }
+        });
+        let newest = crate::shopkey::sign_with(&once, 1059, json!([["p", me.clone()]]), "sealed-new", now_secs()).unwrap();
+        assert!(store(newest.clone()).0);
+        let (n, has_new, has_first) = peek(|v| (
+            v.iter().filter(|x| owner_wrap(x, Some(&me))).count(),
+            v.iter().any(|x| x.get("id") == newest.get("id")),
+            v.iter().any(|x| x.get("id") == Some(&json!("w0"))),
+        ));
+        assert_eq!(n, MAX_WRAPS, "겉봉 한도가 지켜지지 않았다");
+        assert!(has_new && !has_first, "가장 오래된 겉봉부터 빠져야 한다");
+        *TEST_OWNER.lock().unwrap() = None;
+        *STORE.lock().unwrap() = None;
+    }
+
+    /// 11-08 지킴이가 겉봉을 쪽 넘기며 모은다: 쪽마다 바로 저장하고, 새로 저장한 수만 센다. 남의 겉봉이 섞여 와도 저장하지 않는다.
+    #[tokio::test]
+    async fn keeper_collects_gift_wraps_page_by_page() {
+        use super::*;
+        let _g = OWNER_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let me = crate::shopkey::pubkey_of(&[7u8; 32]).unwrap();
+        let other = crate::shopkey::pubkey_of(&[8u8; 32]).unwrap();
+        *TEST_OWNER.lock().unwrap() = Some(me.clone());
+        *STORE.lock().unwrap() = Some(vec![]);
+        let base = now_secs() - 10 * 86_400;
+        let page_n = crate::nostrpub::INBOX_PAGE;
+        // 첫 쪽: 꽉 찬 200장(내 것) · 둘째 쪽: 3장(내 것 2 + 남의 것 1, 남의 것은 거절).
+        let first: Vec<Value> = (0..page_n).map(|i| crate::shopkey::sign_with(&[12u8; 32], 1059, json!([["p", me.clone()]]), &format!("s{i}"), base + 1_000 + i as i64).unwrap()).collect();
+        let second: Vec<Value> = vec![
+            crate::shopkey::sign_with(&[13u8; 32], 1059, json!([["p", me.clone()]]), "a", base + 10).unwrap(),
+            crate::shopkey::sign_with(&[13u8; 32], 1059, json!([["p", me.clone()]]), "b", base + 11).unwrap(),
+            crate::shopkey::sign_with(&[13u8; 32], 1059, json!([["p", other.clone()]]), "c", base + 12).unwrap(),
+        ];
+        let calls = std::sync::Mutex::new(Vec::<Option<i64>>::new());
+        let (added, done) = read_from(|until| {
+            calls.lock().unwrap().push(until);
+            let out = if until.is_none() { first.clone() } else { second.clone() };
+            async move { Ok((out, true)) }
+        }).await.unwrap();
+        assert!(done, "끝까지 읽었는데 덜 읽었다고 했다");
+        assert_eq!(added, page_n + 2, "새로 저장한 수가 틀렸다");
+        assert_eq!(calls.lock().unwrap().clone(), vec![None, Some(base + 1_000)], "until 로 쪽을 넘겨야 한다");
+        assert_eq!(kept_counts().1, page_n + 2);
+        // 다시 모으면 이미 있는 것은 새로 센 수에 안 들어간다.
+        let (again, _) = read_from(|_| { let out = second.clone(); async move { Ok((out, true)) } }).await.unwrap();
+        assert_eq!(again, 0);
+        // EOSE 없이 끊기면 「덜 읽음」.
+        let (_, partial) = read_from(|_| async { Ok((vec![], false)) }).await.unwrap();
+        assert!(!partial);
+        *TEST_OWNER.lock().unwrap() = None;
+        *STORE.lock().unwrap() = None;
+    }
+
+    /// 11-08 진행 표시: 처음·사흘 넘게 못 모은 뒤면 「지난 글 모으는 중」, 아니면 아니다. 수는 보관된 것만 센다.
+    #[test]
+    fn backfill_progress_counts() {
+        use super::*;
+        let _g = OWNER_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let now = 2_000_000_000;
+        assert!(is_backfill(None, None, now), "처음은 지난 글 모으기");
+        assert!(is_backfill(Some(now - 60), None, now), "쪽지를 아직 한 번도 안 모았다(0.9.25 에서 올라온 컴퓨터)");
+        assert!(is_backfill(Some(now - 4 * 86_400), Some(now - 60), now), "나흘 꺼져 있었다");
+        assert!(!is_backfill(Some(now - 900), Some(now - 900), now), "15분마다 도는 평소 모으기");
+        let me_sk = [7u8; 32];
+        let me = crate::shopkey::pubkey_of(&me_sk).unwrap();
+        *TEST_OWNER.lock().unwrap() = Some(me.clone());
+        *STORE.lock().unwrap() = Some(vec![]);
+        let tags = json!([["t", "ravencoin"]]);
+        for i in 0..3 { assert!(store(crate::shopkey::sign_with(&me_sk, 1, tags.clone(), &format!("글 {i}"), now_secs() - i).unwrap()).0); }
+        assert!(store(crate::shopkey::sign_with(&me_sk, 3, json!([]), "", now_secs()).unwrap()).0);
+        assert!(store(crate::shopkey::sign_with(&[14u8; 32], 1059, json!([["p", me.clone()]]), "x", now_secs()).unwrap()).0);
+        assert_eq!(kept_counts(), (3, 1), "글은 kind 1 만, 쪽지는 나에게 온 겉봉만");
+        let st = relay_status();
+        assert_eq!(st["my_notes"], 3);
+        assert_eq!(st["my_dms"], 1);
+        assert_eq!(st["my_backfill"], false);
+        *TEST_OWNER.lock().unwrap() = None;
+        *STORE.lock().unwrap() = None;
     }
 }

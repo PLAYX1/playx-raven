@@ -77,14 +77,19 @@ export function linkConfirmCode(offer: LinkOffer, phoneKey: string): string {
   return String(n % 1_000_000).padStart(6, '0');
 }
 
-/** 폰이 연결을 받아들이며 데스크탑에 보내는 것: 폰 연결 공개키 + 「폰으로 채우기」 받을 내 폰 주소들(서명). */
-export type LinkAccept = { v: 1; linkId: string; phoneKey: string; phoneAddresses: string[] };
+/**
+ * 폰이 연결을 받아들이며 데스크탑에 보내는 것: 폰 연결 공개키 + 「폰으로 채우기」 받을 내 폰 주소들(서명).
+ * talk_pub(선택, 11-08): 폰의 이야기 공개키(64 소문자 hex) — 「같은 이야기 이름인가」 확인용(docs/SYNC-ARCHIVE.md §3). 공개키만.
+ * 옛 데스크탑은 몰라도 서명은 맞는다(본문 전체를 다이제스트한다).
+ */
+export type LinkAccept = { v: 1; linkId: string; phoneKey: string; phoneAddresses: string[]; talk_pub?: string };
 export type Signed<T> = { body: T; sig: string };
 const sign = <T>(tag: string, body: T, secret: Uint8Array): Signed<T> => ({ body, sig: hex(schnorr.sign(digest(tag, body), secret)) });
 const verify = (tag: string, s: Signed<unknown>, pub: string) => {
   try { return typeof s?.sig === 'string' && SIG.test(s.sig) && HEX64.test(pub) && schnorr.verify(digest(tag, s.body), unhex(pub), unhex(s.sig)); } catch { return false; }
 };
 export function signLinkAccept(body: LinkAccept, phoneSecret: Uint8Array): Signed<LinkAccept> {
+  if (body.talk_pub !== undefined && (typeof body.talk_pub !== 'string' || !HEX64.test(body.talk_pub))) throw new Error('link-accept');
   if (!HEX64.test(body.phoneKey) || !HEX64.test(body.linkId) || !Array.isArray(body.phoneAddresses) || body.phoneAddresses.length < 1 || body.phoneAddresses.length > MAX_PHONE_ADDRESSES || !body.phoneAddresses.every(a => ADDRESS.test(a))) throw new Error('link-accept');
   return sign('accept', body, phoneSecret);
 }
@@ -93,7 +98,23 @@ export function verifyLinkAccept(s: Signed<LinkAccept>, offer: LinkOffer): LinkA
   const b = s?.body;
   if (!b || b.v !== 1 || !HEX64.test(b.phoneKey) || b.linkId !== linkId(offer, b.phoneKey) || !Array.isArray(b.phoneAddresses) || b.phoneAddresses.length < 1
     || b.phoneAddresses.length > MAX_PHONE_ADDRESSES || !b.phoneAddresses.every(a => typeof a === 'string' && ADDRESS.test(a)) || !verify('accept', s, b.phoneKey)) throw new Error('link-accept');
-  return { v: 1, linkId: b.linkId, phoneKey: b.phoneKey, phoneAddresses: [...b.phoneAddresses] };
+  const talk = typeof b.talk_pub === 'string' && HEX64.test(b.talk_pub) ? { talk_pub: b.talk_pub } : {};
+  return { v: 1, linkId: b.linkId, phoneKey: b.phoneKey, phoneAddresses: [...b.phoneAddresses], ...talk };
+}
+
+/**
+ * 데스크탑 → 폰: 데스크탑의 이야기 공개키(11-08, docs/SYNC-ARCHIVE.md §3). 사람이 「같아요」를 누른 뒤 보낸다.
+ * QR 제안에는 넣지 않는다 — 옛 폰의 parseLinkOffer 가 칸을 정확히 세기 때문. 옛 폰은 모르는 종류(talk)를 조용히 버린다.
+ */
+export type LinkTalk = { v: 1; linkId: string; talk_pub: string; at: number };
+export function signLinkTalk(body: LinkTalk, desktopSecret: Uint8Array): Signed<LinkTalk> {
+  if (body.v !== 1 || !HEX64.test(body.linkId) || typeof body.talk_pub !== 'string' || !HEX64.test(body.talk_pub) || !int(body.at, 1)) throw new Error('link-talk');
+  return sign('talk', body, desktopSecret);
+}
+export function verifyLinkTalk(s: Signed<LinkTalk>, desktopKey: string, linkIdHere: string): LinkTalk {
+  const b = s?.body;
+  if (!b || b.v !== 1 || b.linkId !== linkIdHere || typeof b.talk_pub !== 'string' || !HEX64.test(b.talk_pub) || !int(b.at, 1) || !verify('talk', s, desktopKey)) throw new Error('link-talk');
+  return { v: 1, linkId: b.linkId, talk_pub: b.talk_pub, at: b.at };
 }
 
 /** 폰 → 데스크탑 요청. sats 는 사토시 정수 글자. */

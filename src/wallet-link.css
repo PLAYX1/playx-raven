@@ -36,6 +36,7 @@
 #wl-card .wl-more summary { cursor: pointer; min-height: 32px; display: flex; align-items: center; }
 #wl-card .wl-only { margin: 10px 0 0; font-size: 14px; font-weight: 600; }
 #wl-card .wl-left { font-size: 13px; color: var(--ok); }
+#wl-card .wl-talk-diff { color: var(--text); border-left: 3px solid var(--warn); padding-left: 6px; }
 #wl-card .wl-limit { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; }
 #wl-card .wl-limit input { width: 140px; font-size: 16px; padding: 8px 10px; }
 #wl-card .wl-rowbtns { display: flex; flex-wrap: wrap; justify-content: flex-end; }

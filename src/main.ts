@@ -5055,8 +5055,13 @@ let bulkScreen: ReturnType<typeof import("./bulk-products-ui").mountBulkScreen> 
 function myNotesLine(r: any): string {
   const n = `${Number(r?.my_notes ?? 0).toLocaleString()}${t("개")}`;
   if (r && r.my_same_as_wallet === false) return `${n} · ${t("이 컴퓨터 이름이 폰과 달라서 폰 글은 모으지 못해요 — 설정 › 내 이름과 열쇠 › 「이름 합치기」")}`;
+  // 11-08 지난 글 모으기 진행(docs/SYNC-ARCHIVE.md §2) — 전체 수는 모르니 모은 수만 말한다.
+  const dms = Number(r?.my_dms ?? 0);
+  if (r?.my_backfill) return tf("지난 글을 모으는 중이에요 · {0}개 모았어요", (Number(r?.my_notes ?? 0) + dms).toLocaleString());
   if (r?.my_backup_problem) return `${n} · ${t(String(r.my_backup_problem))}`;
-  return r?.my_backup_at ? `${n} · ${t("폰에서 쓴 글도 15분마다 모아 둡니다")}` : t("곧 모읍니다 — 폰에서 쓴 글도 이 컴퓨터에 남깁니다");
+  return r?.my_backup_at
+    ? `${tf("다 모았어요 · 글 {0}개 · 쪽지 {1}개", Number(r?.my_notes ?? 0).toLocaleString(), dms.toLocaleString())} · ${t("폰에서 쓴 글도 15분마다 모아 둡니다")}`
+    : t("곧 모읍니다 — 폰에서 쓴 글도 이 컴퓨터에 남깁니다");
 }
 
 /* ── 0.9.17 장터·「내 글」·피드 메뉴 (src/listing-market.ts — 처음 쓸 때 따로 내려받는다) ── */

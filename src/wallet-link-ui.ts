@@ -9,7 +9,7 @@ import { MATCH_BEAT_MS, MATCH_COLOR_HEX, MATCH_COLOR_NAME, MATCH_SHAPE_NAME, MAT
 type Invoke = <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
 type Offer = { v: 1; chain: "rvn-main"; account: 0; desktopKey: string; name: string; xpub: string; firstAddress: string; nonce: string; expires: number };
 type SellPolicy = { enabled: boolean; daily: number; today: number };
-type LinkRow = { linkId: string; name: string; phoneAddresses: string[]; dailySats: string; spentToday: string; created: number; revoked: boolean; sell?: SellPolicy };
+type LinkRow = { linkId: string; name: string; phoneAddresses: string[]; dailySats: string; spentToday: string; created: number; revoked: boolean; sell?: SellPolicy; talkSame?: boolean | null };
 /** 폰에서 판매(0.9.18) 일 하나. 러스트 wallet_link/sell.rs jobs_view 모양. */
 type SellRow = { id: string; linkId: string; phoneName: string; status: string; resume: string | null; reason: string | null; asset: string; amount: string;
   priceSats: string; title: string; category: string; d: string | null; eventId: string | null; received: number; updated: number };
@@ -30,6 +30,9 @@ const shortAddr = (a: string) => `${a.slice(0, 4)} … ${a.slice(-4)}`;
 /** 「한도 없음」 = RVN 총발행량(21,000,000,000 RVN). 폰 core 의 LINK_DAILY_SATS · 러스트 DAILY_MAX_SATS 와 같다. */
 export const NO_LIMIT_RVN = "21000000000";
 const NO_LIMIT_SATS = "2100000000000000000";
+/** 11-08 연결할 때 열쇠 확인(docs/SYNC-ARCHIVE.md §3) — 모르면(옛 폰·이야기 이름 없음) 빈 글. */
+const talkLine = (same: unknown) => same === true ? t("폰과 컴퓨터가 같은 이야기 이름이에요 — 글이 한곳에 모여요")
+  : same === false ? t("폰과 컴퓨터의 이야기 이름이 달라요. 같은 12단어로 맞추면 글이 한곳에 모여요") : "";
 const limitText = (sats: string) => (sats === NO_LIMIT_SATS ? t("한도 없음") : `${rvn(sats)} RVN`);
 
 /** 홈·사이드바가 듣는 요약: 살아 있는 연결 수 · 승인을 기다리는 요청 수. */
@@ -168,9 +171,10 @@ export function wireWalletLink(deps: { invoke: Invoke; ask: (why: "link" | "limi
   $("wl-yes").onclick = async () => {
     try {
       const daily = ($("wl-nolimit") as HTMLInputElement).checked ? NO_LIMIT_RVN : ($("wl-daily") as HTMLInputElement).value;
-      await invoke("wallet_link_confirm", { dailyRvn: daily, phoneName: ($("wl-phonename") as HTMLInputElement).value });
+      const done = await invoke<{ talkSame?: boolean | null }>("wallet_link_confirm", { dailyRvn: daily, phoneName: ($("wl-phonename") as HTMLInputElement).value });
       stopOffer(); agree.checked = false; make.disabled = true; $("wl-agree-hint").hidden = false;
-      msg(t("연결했어요. 폰에서 이 컴퓨터 지갑의 잔액과 받는 주소를 볼 수 있어요."));
+      const same = talkLine(done?.talkSame);
+      msg(t("연결했어요. 폰에서 이 컴퓨터 지갑의 잔액과 받는 주소를 볼 수 있어요.") + (same ? ` ${same}` : ""));
       celebrateLinked();
       await refresh();
     } catch (e) { msg(errOf(e), true); }
@@ -198,6 +202,8 @@ export function wireWalletLink(deps: { invoke: Invoke; ask: (why: "link" | "limi
     const room = /^\d+$/.test(l.dailySats) && /^\d+$/.test(l.spentToday) ? BigInt(l.dailySats) - BigInt(l.spentToday) : 0n;
     left.textContent = l.dailySats === NO_LIMIT_SATS ? t("오늘 남은 한도: 한도 없음") : tf("오늘 남은 한도 {0} RVN", rvn((room > 0n ? room : 0n).toString()));
     txt.append(b, d, left);
+    const same = talkLine(l.talkSame);
+    if (same) { const k = document.createElement("span"); k.className = l.talkSame ? "wl-d" : "wl-d wl-talk-diff"; k.textContent = same; txt.append(k); }
     const btns = document.createElement("div"); btns.className = "wl-rowbtns";
     const lim = document.createElement("button"); lim.className = "ghost"; lim.type = "button"; lim.textContent = t("한도 바꾸기");
     const cut = document.createElement("button"); cut.className = "ghost"; cut.type = "button"; cut.textContent = t("끊기");

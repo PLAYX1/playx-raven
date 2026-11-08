@@ -1,8 +1,8 @@
 {
-  "source": "ravenvault 저장소(폰) 브랜치 claude/rv-link-phone 커밋 03f4527(link.ts·link.test.ts 는 11-03 하루 한도 최대 = 총발행량 21,000,000,000 RVN 「한도 없음」으로 데스크탑에서 먼저 고침 — 폰 저장소에 같은 바이트로 옮긴다) · 11-03 「받았어요」(seen) 종류를 데스크탑에서 먼저 더함 — 폰 저장소에 같은 바이트로 옮긴다 · 11-07 0.9.18 「팔아 줘」(sell)·내리기(unsell)·판매 결과(sellresult) 종류를 데스크탑에서 먼저 더함(link.ts·transport.ts·link.test.ts) — 폰 저장소에 같은 바이트로 옮긴다 — 바이트 그대로 복사, 패치 없음. core/talk/relay.ts 는 복사하지 않았다: 데스크탑 화면은 connect-src self 라 릴레이 왕래는 러스트(nostrpub.rs·wallet_link.rs)가 한다. transport.ts 의 그 줄은 import type 이라 빌드에서 지워지고, transport.ts 는 시험에서만 쓴다. · 11-08 연결 확인 그림(match-symbols.ts·match-symbols.test.ts)을 폰 저장소에서 바이트 그대로 복사.",
+  "source": "ravenvault 저장소(폰) 브랜치 claude/rv-link-phone 커밋 03f4527(link.ts·link.test.ts 는 11-03 하루 한도 최대 = 총발행량 21,000,000,000 RVN 「한도 없음」으로 데스크탑에서 먼저 고침 — 폰 저장소에 같은 바이트로 옮긴다) · 11-03 「받았어요」(seen) 종류를 데스크탑에서 먼저 더함 — 폰 저장소에 같은 바이트로 옮긴다 · 11-07 0.9.18 「팔아 줘」(sell)·내리기(unsell)·판매 결과(sellresult) 종류를 데스크탑에서 먼저 더함(link.ts·transport.ts·link.test.ts) — 폰 저장소에 같은 바이트로 옮긴다 — 바이트 그대로 복사, 패치 없음. core/talk/relay.ts 는 복사하지 않았다: 데스크탑 화면은 connect-src self 라 릴레이 왕래는 러스트(nostrpub.rs·wallet_link.rs)가 한다. transport.ts 의 그 줄은 import type 이라 빌드에서 지워지고, transport.ts 는 시험에서만 쓴다. · 11-08 연결 확인 그림(match-symbols.ts·match-symbols.test.ts)을 폰 저장소에서 바이트 그대로 복사. · 11-08 연결할 때 열쇠 확인(talk_pub · LinkTalk · 'talk' 종류, docs/SYNC-ARCHIVE.md §3)을 폰 저장소(wt-rv-0918-phone)에서 바이트 그대로 복사(link.ts·transport.ts).",
   "files": {
-    "core/wallet-link/link.ts": "d52f9f31937a7fb7828dfc2304919fdc926368552632f8cebd2e9f9f5ad70265",
-    "core/wallet-link/transport.ts": "2f35b516ee2e2ac5c6f105f2e2ed745899b36d1b017d01c2f8314b561cbd5a14",
+    "core/wallet-link/link.ts": "a50599b939c29d6c366cbac7532ae591319f1195c9964da5579456868857dc5d",
+    "core/wallet-link/transport.ts": "21a17f292823a4c34e6b58156ff030ac54d914263522eac986bf03e5eef71641",
     "core/wallet-link/link.test.ts": "903fc00fecd00dc2a04cc50ce6e4b4361219cae45387a42b319598e4c4ea92fc",
     "core/wallet-link/transport.test.ts": "0db07b0f29cc9d00191e7f0bee7d138ae1e68400640e7d395796e0404b05a429",
     "core/talk/event.ts": "3f2e5f576472d5b030b81e268c4fc81e12cc1c45addeea94c5880170118594d8",

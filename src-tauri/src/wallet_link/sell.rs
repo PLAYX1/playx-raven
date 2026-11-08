@@ -646,7 +646,7 @@ mod tests {
     fn link_of(v: &Value, enabled: bool) -> Link {
         Link { link_id: v["linkId"].as_str().unwrap().into(), phone_key: v["phoneKey"].as_str().unwrap().into(), phone_addresses: vec![v["phoneAddress"].as_str().unwrap().into()],
             name: "폰".into(), daily_sats: DAILY_DEFAULT_SATS, created: v["now"].as_i64().unwrap(), revoked: false, revoked_at: None, revoke_out: None,
-            sell: SellPolicy { enabled, daily: 3 } }
+            sell: SellPolicy { enabled, daily: 3 }, phone_talk_pub: None, talk_out: None }
     }
     fn linked(v: &Value, name: &str, enabled: bool) -> PathBuf {
         let d = tmp(name);

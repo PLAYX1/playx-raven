@@ -159,7 +159,7 @@ pub(crate) fn confirm_code(o: &Offer, phone_key: &str) -> Option<String> {
     Some(format!("{:06}", u32::from_be_bytes([d[0], d[1], d[2], d[3]]) % 1_000_000))
 }
 #[derive(Clone, Debug)]
-struct Accept { link_id: String, phone_key: String, phone_addresses: Vec<String> }
+struct Accept { link_id: String, phone_key: String, phone_addresses: Vec<String>, talk_pub: Option<String> }
 fn verify_accept(s: &Value, o: &Offer) -> Option<Accept> {
     let b = s.get("body")?;
     let phone_key = b.get("phoneKey")?.as_str()?;
@@ -168,7 +168,9 @@ fn verify_accept(s: &Value, o: &Offer) -> Option<Accept> {
         || addrs.is_empty() || addrs.len() > MAX_PHONE_ADDRESSES || !addrs.iter().all(|a| a.as_str().is_some_and(address_ok))
         || !verify_body("accept", s, phone_key) { return None; }
     Some(Accept { link_id: link_id(&o.desktop_key, phone_key, &o.nonce), phone_key: phone_key.into(),
-        phone_addresses: addrs.iter().filter_map(|a| a.as_str().map(str::to_string)).collect() })
+        phone_addresses: addrs.iter().filter_map(|a| a.as_str().map(str::to_string)).collect(),
+        // 11-08 연결할 때 열쇠 확인(docs/SYNC-ARCHIVE.md §3): 폰 이야기 공개키(선택). 64 소문자 hex 가 아니면 없는 것.
+        talk_pub: b.get("talk_pub").and_then(Value::as_str).filter(|t| hex64(t)).map(str::to_string) })
 }
 #[derive(Clone, Debug)]
 struct Request { link_id: String, id: String, to: String, sats: u64, created: i64, expires: i64 }
@@ -426,6 +428,12 @@ struct Link {
     /// 「폰에서 판매 허용」 — 옛 기록에는 없으니 꺼짐(하루 3건)으로 읽는다.
     #[serde(default)]
     sell: sell::SellPolicy,
+    /// 11-08 폰이 연결할 때 알려 준 이야기 공개키(옛 폰은 없음). 공개키만.
+    #[serde(default)]
+    phone_talk_pub: Option<String>,
+    /// 서명한 「이 컴퓨터 이야기 이름」(talk) — 아직 못 보냈으면 다음 확인 때 다시 보낸다. 보내면 비운다.
+    #[serde(default)]
+    talk_out: Option<Value>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct Req {
@@ -589,17 +597,40 @@ fn confirm_in(dir: &Path, sess: &Session, daily_rvn: &str, phone_name: &str, now
     if s.links.iter().any(|l| l.link_id == a.link_id) { return Err("이미 연결된 폰이에요.".into()); }
     if s.orphan_revokes.get(&a.link_id).is_some_and(|(k, _)| *k == a.phone_key) { return Err(PHONE_CANCELLED.into()); }
     s.links.push(Link { link_id: a.link_id.clone(), phone_key: a.phone_key.clone(), phone_addresses: a.phone_addresses.clone(),
-        name: clean_name(phone_name, "내 폰"), daily_sats: daily, created: now, revoked: false, revoked_at: None, revoke_out: None, sell: Default::default() });
+        name: clean_name(phone_name, "내 폰"), daily_sats: daily, created: now, revoked: false, revoked_at: None, revoke_out: None, sell: Default::default(),
+        phone_talk_pub: a.talk_pub.clone(), talk_out: None });
     if s.last_fetch == 0 { s.last_fetch = now / 1000; }
     save(dir, &s)?;
     Ok(json!({ "linkId": a.link_id, "dailySats": daily.to_string() }))
+}
+
+/// 11-08 「같은 이야기 이름인가」 — 둘 다 알 때만 true/false, 하나라도 모르면 None(화면은 아무것도 안 보인다).
+fn talk_same(phone: Option<&str>, mine: Option<&str>) -> Option<bool> {
+    match (phone.filter(|p| hex64(p)), mine.filter(|m| hex64(m))) { (Some(p), Some(m)) => Some(p == m), _ => None }
+}
+/// 이 컴퓨터 이야기 공개키(릴레이 주인). 파일만 읽는다 — 여기서 만들지 않는다.
+fn my_talk_pub() -> Option<String> { crate::relay::owner_pub() }
+/// 연결을 저장한 뒤: 이 컴퓨터 이야기 공개키를 서명해 폰에 보낼 차례에 올린다(docs/SYNC-ARCHIVE.md §3). 이야기 이름이 없으면 안 보낸다.
+fn queue_talk(dir: &Path, sk: &[u8; 32], link_id_here: &str, mine: Option<&str>, now: i64) -> Result<(), String> {
+    let Some(mine) = mine.filter(|m| hex64(m)) else { return Ok(()) };
+    let mut s = load(dir)?;
+    let Some(l) = s.links.iter_mut().find(|l| l.link_id == link_id_here && !l.revoked) else { return Ok(()) };
+    l.talk_out = Some(sign_body("talk", json!({"v": 1, "linkId": link_id_here, "talk_pub": mine, "at": now}), sk)?);
+    save(dir, &s)
 }
 #[tauri::command]
 pub async fn wallet_link_confirm(daily_rvn: String, phone_name: String) -> Result<Value, String> {
     let _gate = GATE.lock().await;
     let mut g = SESSION.lock().map_err(|_| "x")?;
-    let out = confirm_in(&dir(), g.as_ref().ok_or("연결 QR 이 없어요.")?, &daily_rvn, &phone_name, now_ms())?;
+    let now = now_ms();
+    let mut out = confirm_in(&dir(), g.as_ref().ok_or("연결 QR 이 없어요.")?, &daily_rvn, &phone_name, now)?;
+    let phone_talk = g.as_ref().and_then(|s| s.candidate.as_ref()).and_then(|a| a.talk_pub.clone());
     *g = None;
+    drop(g);
+    let mine = my_talk_pub();
+    // 보낼 차례에만 올린다(실제로는 다음 받은 쪽지 확인 때 나간다). 실패해도 연결은 이미 됐다.
+    if let (Ok(sk), Some(lid)) = (link_secret(), out["linkId"].as_str().map(str::to_string)) { let _ = queue_talk(&dir(), &sk.0, &lid, mine.as_deref(), now); }
+    out["talkSame"] = json!(talk_same(phone_talk.as_deref(), mine.as_deref()));
     Ok(out)
 }
 
@@ -699,6 +730,7 @@ fn process(dir: &Path, sk: &[u8; 32], gifts: &[Value], now: i64, session: Option
         }
     }
     for l in &s.links { if let Some(rv) = &l.revoke_out { out.push((l.phone_key.clone(), "revoke", rv.clone())); } }
+    for l in s.links.iter().filter(|l| !l.revoked) { if let Some(tv) = &l.talk_out { out.push((l.phone_key.clone(), "talk", tv.clone())); } }
     for x in sell::outbox(&s) { if !out.iter().any(|(_, _, v)| *v == x.2) { out.push(x); } }
     prune(&mut s, now);
     save(dir, &s)?;
@@ -721,6 +753,7 @@ fn mark_sent(dir: &Path, sent: &[(&'static str, Value)]) -> Result<(), String> {
         if *t == "result" { for r in s.requests.values_mut() { if r.result.as_ref() == Some(v) { r.result_published = true; } } }
         if *t == "revoke" { for l in s.links.iter_mut() { if l.revoke_out.as_ref() == Some(v) { l.revoke_out = None; } } }
         if *t == "seen" { for r in s.requests.values_mut() { if r.seen_out.as_ref() == Some(v) { r.seen_out = None; } } }
+        if *t == "talk" { for l in s.links.iter_mut() { if l.talk_out.as_ref() == Some(v) { l.talk_out = None; } } }
         if *t == "sellresult" { s.sell_outbox.retain(|_, o| o.value != *v); }
     }
     save(dir, &s)
@@ -732,7 +765,8 @@ async fn deliver(net: &impl Net, dir: &Path, sk: &[u8; 32], out: Vec<(String, &'
     }
     mark_sent(dir, &sent)
 }
-fn view(dir: &Path, now: i64) -> Result<Value, String> {
+fn view(dir: &Path, now: i64) -> Result<Value, String> { view_with(dir, now, my_talk_pub().as_deref()) }
+fn view_with(dir: &Path, now: i64, mine: Option<&str>) -> Result<Value, String> {
     let s = load(dir)?;
     let name = |id: &str| s.links.iter().find(|l| l.link_id == id).map(|l| l.name.clone()).unwrap_or_default();
     let pending: Vec<Value> = s.requests.iter().filter(|(_, r)| r.status == "pending").map(|(id, r)| json!({
@@ -740,7 +774,7 @@ fn view(dir: &Path, now: i64) -> Result<Value, String> {
         "created": r.created, "expires": r.expires })).collect();
     let links: Vec<Value> = s.links.iter().map(|l| json!({ "linkId": l.link_id, "name": l.name, "phoneAddresses": l.phone_addresses,
         "dailySats": l.daily_sats.to_string(), "spentToday": spent_today(&s, &l.link_id, now, "").to_string(), "created": l.created, "revoked": l.revoked,
-        "sell": sell::policy_view(&s, l, now) })).collect();
+        "sell": sell::policy_view(&s, l, now), "talkSame": talk_same(l.phone_talk_pub.as_deref(), mine) })).collect();
     Ok(json!({ "pending": pending, "links": links, "sells": sell::jobs_view(&s) }))
 }
 async fn inbox_with(net: &impl Net, dir: &Path, sk: &[u8; 32], now: i64) -> Result<Value, String> {
@@ -1085,7 +1119,7 @@ pub(crate) mod harness {
         let mut s = load(&d)?;
         s.links.retain(|l| l.link_id != id);
         s.links.push(Link { link_id: id.clone(), phone_key: phone, phone_addresses: vec![], name: "시험 폰".into(), daily_sats: DAILY_DEFAULT_SATS,
-            created: now_ms(), revoked: false, revoked_at: None, revoke_out: None, sell: sell::SellPolicy { enabled: true, daily } });
+            created: now_ms(), revoked: false, revoked_at: None, revoke_out: None, sell: sell::SellPolicy { enabled: true, daily }, phone_talk_pub: None, talk_out: None });
         save(&d, &s)?;
         Ok((id, desk))
     }
@@ -1176,7 +1210,7 @@ mod tests {
         let now = v["now"].as_i64().unwrap();
         let link = Link { link_id: v["linkId"].as_str().unwrap().into(), phone_key: v["phoneKey"].as_str().unwrap().into(),
             phone_addresses: vec![v["phoneAddress"].as_str().unwrap().into()], name: "폰".into(), daily_sats: DAILY_MAX_SATS,
-            created: now, revoked: false, revoked_at: None, revoke_out: None, sell: Default::default() };
+            created: now, revoked: false, revoked_at: None, revoke_out: None, sell: Default::default(), phone_talk_pub: None, talk_out: None };
         assert_eq!(check_request(&v["requestFill"], &link, now + 1000, false, 0).0, Check::Ok("fill"));
         assert_eq!(check_request(&v["requestSend"], &link, now, false, 0).0, Check::Ok("send"));
         let mut forged = v["requestFill"].clone();
@@ -1611,5 +1645,66 @@ mod tests {
         let b = link_secret().unwrap();
         assert_eq!(a.0, b.0, "one dedicated key, created once");
         assert!(pubkey_of(&a.0).is_ok());
+    }
+
+    /// 11-08 연결할 때 열쇠 확인(docs/SYNC-ARCHIVE.md §3): 폰 accept 의 talk_pub 을 읽고, 데스크탑은 서명한 talk 를 폰에 보낸다.
+    /// 옛 폰(칸 없음)·잘못된 칸이면 「모름」(None) — 화면은 아무것도 안 보인다.
+    #[test]
+    fn talk_pub_is_exchanged_and_compared_including_missing() {
+        let v = vectors();
+        let now = v["now"].as_i64().unwrap();
+        let (desk_sk, phone_sk) = (key(&v, "deskSecret"), key(&v, "phoneSecret"));
+        let o = offer_of(&v);
+        let mine = "ab".repeat(32);
+        // 옛 폰: 공용 벡터의 accept 에는 talk_pub 이 없다.
+        let old = verify_accept(&v["accept"], &o).unwrap();
+        assert_eq!(old.talk_pub, None);
+        assert_eq!(talk_same(old.talk_pub.as_deref(), Some(&mine)), None, "옛 폰이면 아무것도 안 보인다");
+        // 새 폰: 같은 본문에 talk_pub 을 더해 폰 열쇠로 서명.
+        let mut body = v["accept"]["body"].clone();
+        body["talk_pub"] = json!(mine.clone());
+        let acc = sign_body("accept", body.clone(), &phone_sk).unwrap();
+        assert_eq!(verify_accept(&acc, &o).unwrap().talk_pub.as_deref(), Some(mine.as_str()));
+        let mut bad = body.clone();
+        bad["talk_pub"] = json!("AB".repeat(32));
+        assert_eq!(verify_accept(&sign_body("accept", bad, &phone_sk).unwrap(), &o).unwrap().talk_pub, None, "대문자 hex 는 없는 것");
+        let mut tampered = acc.clone();
+        tampered["body"]["talk_pub"] = json!("cd".repeat(32));
+        assert!(verify_accept(&tampered, &o).is_none(), "talk_pub 은 서명 안에 있다");
+        assert_eq!(talk_same(Some(&mine), Some(&mine)), Some(true));
+        assert_eq!(talk_same(Some(&mine), Some(&"cd".repeat(32))), Some(false));
+        assert_eq!(talk_same(Some(&mine), None), None, "이 컴퓨터에 이야기 이름이 없으면 모름");
+        // 연결 → talk 를 보낼 차례에 올리고, 폰이 데스크탑 연결 키로 확인할 수 있게 서명한다.
+        let d = tmp("talk");
+        let gift = pack(&phone_sk, v["deskKey"].as_str().unwrap(), "accept", &acc).unwrap();
+        let mut sess = Session { xpub: o.xpub.clone(), first: o.first_address.clone(), name: o.name.clone(), authed: 0, offer: Some(o.clone()), candidate: None };
+        process(&d, &desk_sk, &[gift], now + 1000, Some(&mut sess)).unwrap();
+        assert_eq!(sess.candidate.as_ref().unwrap().talk_pub.as_deref(), Some(mine.as_str()));
+        let out = confirm_in(&d, &sess, "1000", "폰", now).unwrap();
+        let lid = out["linkId"].as_str().unwrap().to_string();
+        assert_eq!(view_with(&d, now, Some(&mine)).unwrap()["links"][0]["talkSame"], json!(true));
+        assert_eq!(view_with(&d, now, Some(&"cd".repeat(32))).unwrap()["links"][0]["talkSame"], json!(false));
+        assert_eq!(view_with(&d, now, None).unwrap()["links"][0]["talkSame"], Value::Null);
+        queue_talk(&d, &desk_sk, &lid, None, now).unwrap();
+        assert!(load(&d).unwrap().links[0].talk_out.is_none(), "이야기 이름이 없으면 보내지 않는다");
+        queue_talk(&d, &desk_sk, &lid, Some(&mine), now).unwrap();
+        let outbox = process(&d, &desk_sk, &[], now + 2000, None).unwrap();
+        let (to, t, sv) = outbox.iter().find(|(_, t, _)| *t == "talk").cloned().expect("talk 가 보낼 차례에 있다");
+        assert_eq!((to.as_str(), t), (v["phoneKey"].as_str().unwrap(), "talk"));
+        assert!(verify_body("talk", &sv, v["deskKey"].as_str().unwrap()), "데스크탑 연결 키로 서명");
+        assert!(!verify_body("seen", &sv, v["deskKey"].as_str().unwrap()), "태그가 갈린다");
+        assert_eq!(sv["body"], json!({"v": 1, "linkId": lid, "talk_pub": mine, "at": now}));
+        // 겉봉에 담으면 폰이 그대로 연다(rvwl1=talk).
+        let ev = pack(&desk_sk, &to, "talk", &sv).unwrap();
+        let (from, text) = unwrap(&phone_sk, &ev).unwrap();
+        assert_eq!(from, v["deskKey"].as_str().unwrap());
+        assert_eq!(serde_json::from_str::<Value>(&text).unwrap()["rvwl1"], "talk");
+        mark_sent(&d, &[("talk", sv)]).unwrap();
+        assert!(load(&d).unwrap().links[0].talk_out.is_none(), "보내면 비운다");
+        // 옛 기록(칸 없음)도 읽힌다.
+        let mut raw: Value = serde_json::from_str(&std::fs::read_to_string(state_file(&d)).unwrap()).unwrap();
+        for l in raw["links"].as_array_mut().unwrap() { l.as_object_mut().unwrap().remove("phone_talk_pub"); l.as_object_mut().unwrap().remove("talk_out"); }
+        std::fs::write(state_file(&d), raw.to_string()).unwrap();
+        assert_eq!(view_with(&d, now, Some(&mine)).unwrap()["links"][0]["talkSame"], Value::Null);
     }
 }
