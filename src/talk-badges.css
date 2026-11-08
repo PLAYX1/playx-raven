@@ -1,17 +1,25 @@
-/* 11-08 기여 표시(src/talk-badges.ts). 라비 결 B — 보라 두 톤 + 주황 한 점. 파란 체크 모양이 아니다.
+/* 11-08 기여 표시(src/talk-badges.ts). 「지킴이 도장」 — 보라 두 톤 스티커 + 주황 사각 한 점. 파란 체크 모양이 아니다.
  * 🔴 style="" 금지(CSP) — 전부 여기서 칠한다. */
-:root { --tk-bd-ink: #4B3A9A; --tk-bd-soft: #EEEAFB; --tk-bd-line: #D6CEF4; --tk-bd-dot: #E2702A; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --tk-bd-ink: #C9BEF5; --tk-bd-soft: #2A2442; --tk-bd-line: #3D3466; --tk-bd-dot: #F0913F; } }
-:root[data-theme="dark"] { --tk-bd-ink: #C9BEF5; --tk-bd-soft: #2A2442; --tk-bd-line: #3D3466; --tk-bd-dot: #F0913F; }
+:root { --tk-bd-ink: #4B3A9A; --tk-bd-soft: #EEEAFB; --tk-bd-line: #D6CEF4; --tk-sl-b0: #3E3480; --tk-sl-b1: #6E5CD4; --tk-sl-edge: #2A2160; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --tk-bd-ink: #C9BEF5; --tk-bd-soft: #2A2442; --tk-bd-line: #3D3466; --tk-sl-b0: #5546B0; --tk-sl-b1: #7A69DE; --tk-sl-edge: #FFFFFF; } }
+:root[data-theme="dark"] { --tk-bd-ink: #C9BEF5; --tk-bd-soft: #2A2442; --tk-bd-line: #3D3466; --tk-sl-b0: #5546B0; --tk-sl-b1: #7A69DE; --tk-sl-edge: #FFFFFF; }
 
 .tk-badges { display: inline-flex; flex-wrap: wrap; gap: 4px; margin-left: 6px; vertical-align: middle; }
 .tk-badges:empty { display: none; }
 .tk-badge, .tk-gate-chip { display: inline-flex; align-items: center; gap: 3px; padding: 1px 7px 1px 4px; border-radius: 999px;
   background: var(--tk-bd-soft); border: 1px solid var(--tk-bd-line); color: var(--tk-bd-ink); font-size: 12px; font-weight: 600; line-height: 18px; white-space: nowrap; }
-.tk-badge-ico { width: 14px; height: 14px; flex: none; }
-.tk-badge-ico .b1 { fill: color-mix(in srgb, var(--tk-bd-ink) 22%, transparent); stroke: var(--tk-bd-ink); stroke-width: 1.6; stroke-linejoin: round; }
-.tk-badge-ico .b2 { fill: none; stroke: var(--tk-bd-ink); stroke-width: 1.6; stroke-linecap: round; }
-.tk-badge-ico .dot { fill: var(--tk-bd-dot); }
+.tk-badge-ico { width: 16px; height: 16px; flex: none; }
+/* 지킴이 도장(src/talk-badges.ts sealSvg) — 밝은: b0 #3E3480 · b1 #6E5CD4 · 테두리 #2A2160 / 어두운: #5546B0 · #7A69DE · 흰색 */
+.tk-badge-ico .sl-b0 { fill: var(--tk-sl-b0); }
+.tk-badge-ico .sl-b1 { fill: var(--tk-sl-b1); }
+.tk-badge-ico .sl-ln { fill: none; stroke: var(--tk-sl-b0); }
+.tk-badge-ico .sl-edge { fill: none; stroke: var(--tk-sl-edge); }
+.tk-badge-ico .sl-w { fill: #fff; }
+.tk-badge-ico .sl-wl { fill: none; stroke: #fff; }
+.tk-badge-ico .sl-or { fill: #FF7A1A; }
+.tk-badge-ico .sl-t-bronze { fill: #E3944A; }
+.tk-badge-ico .sl-t-silver { fill: #F3F4F8; }
+.tk-badge-ico .sl-t-gold { fill: #FFC83D; }
 
 /* 방 목록·방 머리 */
 #tk-rooms .room .tk-gate-chip { margin-left: 6px; font-size: 11px; }

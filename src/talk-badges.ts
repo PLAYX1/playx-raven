@@ -21,10 +21,10 @@ const FAIL_TTL = 5 * 60 * 1000;
 const known = new Map<string, { at: number; addr: string; info: Info }>();
 const inflight = new Set<string>();
 
-export const BADGE_LABEL: Record<Badge, string> = { miner: "채굴 기여", creator: "창작자", node: "노드 지킴이", relay: "릴레이 지킴이" };
-const GATE_CHOICE: Record<Badge | "", string> = { "": "누구나", miner: "채굴 기여 표시 있는 분", creator: "창작자 표시 있는 분", node: "노드 지킴이", relay: "릴레이 지킴이" };
+export const BADGE_LABEL: Record<Badge, string> = { miner: "채굴 지킴이", creator: "창작자", node: "노드 지킴이", relay: "릴레이 지킴이" };
+const GATE_CHOICE: Record<Badge | "", string> = { "": "누구나", miner: "채굴 지킴이 표시 있는 분", creator: "창작자 표시 있는 분", node: "노드 지킴이", relay: "릴레이 지킴이" };
 const GATE_LOCKED: Record<Badge, string> = {
-  miner: "채굴 기여 표시가 있는 분이 글을 써요. 읽기는 누구나 돼요.",
+  miner: "채굴 지킴이 표시가 있는 분이 글을 써요. 읽기는 누구나 돼요.",
   creator: "창작자 표시가 있는 분이 글을 써요. 읽기는 누구나 돼요.",
   node: "노드 지킴이 표시가 있는 분이 글을 써요. 읽기는 누구나 돼요.",
   relay: "릴레이 지킴이 표시가 있는 분이 글을 써요. 읽기는 누구나 돼요.",
@@ -37,19 +37,40 @@ export function cleanGate(g: unknown): Badge | "" {
   return g === "miner" || g === "creator" || g === "node" || g === "relay" ? g : "";
 }
 
-/* ── 아이콘: 라비 결 B(보라 두 톤 + 주황 한 점). 파란 체크가 아니다. ── */
-const ICON: Record<Badge, string> = {
-  // 블록 하나 + 위로 오르는 점
-  miner: `<rect class="b1" x="4" y="9" width="11" height="11" rx="2"/><path class="b2" d="M7 12h5M7 15.5h5"/><circle class="dot" cx="18.5" cy="6" r="2.4"/>`,
-  // 붓 끝 별
-  creator: `<path class="b1" d="M11 3.5l2.2 4.6 5 .7-3.6 3.5.9 5-4.5-2.4-4.5 2.4.9-5L3.8 8.8l5-.7z"/><circle class="dot" cx="19" cy="18.5" r="2.4"/>`,
-  // 이어진 마디(노드)
-  node: `<circle class="b1" cx="6" cy="7" r="2.6"/><circle class="b1" cx="6" cy="17" r="2.6"/><path class="b2" d="M8.4 8.2l6.4 3.2M8.4 15.8l6.4-3.2"/><circle class="dot" cx="17.5" cy="12" r="2.8"/>`,
-  // 가운데 탑 하나가 양쪽으로 글을 나른다(릴레이)
-  relay: `<circle class="b1" cx="11" cy="13" r="2.8"/><path class="b2" d="M6.6 8.6a6.2 6.2 0 0 0 0 8.8M15.4 8.6a6.2 6.2 0 0 1 0 8.8M3.9 5.9a10 10 0 0 0 0 14.2"/><circle class="dot" cx="19" cy="5.5" r="2.4"/>`,
+/* ── 아이콘: 「지킴이 도장」(11-08 GPT·그록 토론 최종, scratchpad badge/seal5.mjs 그대로 옮김) ──
+ * 둥근 사각 스티커 · 아래 진보라(b0)·위 10칸 밝은 보라(b1) · 안쪽 띠 · 바깥 테두리(밝은 화면 진보라 / 어두운 화면 흰색).
+ * 주황 사각 = 모두 우하단 같은 자리·같은 크기, 쉬는 중에도 100%. 파란 체크가 아니다.
+ * 등급(동·은·금): 26px 미만 = 좌하단 접힌 모서리, 26px 이상 = 하단 띠. 🔴 누적 기록이 아직 없으니 지금은 그리지 않는다(지어내지 않는다).
+ * 색은 전부 src/talk-badges.css 의 class 로 — style="" 은 CSP 가 막는다. */
+const SH = "M6.2 1.8h11.6a4.4 4.4 0 0 1 4.4 4.4v11.6a4.4 4.4 0 0 1-4.4 4.4H6.2a4.4 4.4 0 0 1-4.4-4.4V6.2a4.4 4.4 0 0 1 4.4-4.4z";
+const OR = `<rect class="sl-or" x="15.2" y="15.2" width="4.6" height="4.6" rx="1.1"/>`;
+const GLYPH: Record<Badge, string> = {
+  // 노드 = 서버 두 칸 + 칸마다 불빛 구멍
+  node: `<rect class="sl-w" x="4.6" y="4.8" width="11.4" height="5" rx="1.4"/><rect class="sl-w" x="4.6" y="11" width="11.4" height="5" rx="1.4"/><circle class="sl-b0" cx="7.2" cy="7.3" r="1"/><circle class="sl-b0" cx="7.2" cy="13.5" r="1"/><rect class="sl-b0" x="9.6" y="6.7" width="4.2" height="1.2" rx=".6"/><rect class="sl-b0" x="9.6" y="12.9" width="4.2" height="1.2" rx=".6"/>`,
+  // 릴레이 = 가운데 허브에서 네 갈래
+  relay: `<circle class="sl-w" cx="11" cy="11" r="2.8"/><rect class="sl-w" x="10" y="3.6" width="2" height="4.2" rx="1"/><rect class="sl-w" x="10" y="14.2" width="2" height="4.2" rx="1"/><rect class="sl-w" x="3.6" y="10" width="4.2" height="2" rx="1"/><rect class="sl-w" x="14.2" y="10" width="4.2" height="2" rx="1"/>`,
+  // 채굴 = 곡괭이(활 모양 머리 + 곧은 자루, T 자) — 사선을 안 써서 연필과 겹치지 않음
+  miner: `<path class="sl-wl" d="M3.8 9.2C6.4 5.4 15.6 5.4 18.2 9.2" stroke-width="2.6" stroke-linecap="round"/><rect class="sl-w" x="9.7" y="6.4" width="2.6" height="11.6" rx="1.3"/>`,
+  // 창작자 = 연필(45° 사선, 끝이 왼쪽 아래)
+  creator: `<path class="sl-w" d="M15.6 3.9l2.5 2.5-8.6 8.6-3.4.9.9-3.4z"/><path class="sl-ln" d="M14.1 5.4l2.5 2.5" stroke-width=".9"/>`,
 };
+export type Tier = "bronze" | "silver" | "gold";
+let sealSeq = 0;
+/** 도장 하나. tier·paused 는 받을 수 있지만 지금 부르는 곳은 넘기지 않는다(누적 기록 없음). */
+export function sealSvg(b: Badge, size = 16, tier: Tier | null = null, paused = false): string {
+  const id = `tk-seal-${++sealSeq}`;
+  const small = size < 26;
+  const tierMark = !tier ? "" : small
+    ? `<path class="sl-t-${tier}" d="M1.8 13.6L10.4 22.2H6.2a4.4 4.4 0 0 1-4.4-4.4z"/>`
+    : `<rect class="sl-t-${tier}" y="19" width="24" height="6"/>`;
+  return `<svg class="tk-badge-ico" width="${size}" height="${size}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">` +
+    `<defs><clipPath id="${id}"><path d="${SH}"/></clipPath></defs>` +
+    `<g clip-path="url(#${id})"><rect class="sl-b0" width="24" height="24"/><rect class="sl-b1" width="24" height="10"/>${tierMark}<path class="sl-ln" d="${SH}" stroke-width="${small ? 3.2 : 3.6}"/></g>` +
+    `<g opacity="${paused ? 0.4 : 1}">${GLYPH[b]}</g>${OR}` +
+    `<path class="sl-edge" d="${SH}" stroke-width="${small ? 1.2 : 1.6}"/></svg>`;
+}
 function icon(b: Badge): string {
-  return `<svg class="tk-badge-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${ICON[b]}</svg>`;
+  return sealSvg(b);
 }
 
 function whyOf(b: Badge, info: Info): string {

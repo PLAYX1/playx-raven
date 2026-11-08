@@ -1258,7 +1258,7 @@ pub(crate) fn clean_gate(g: &str) -> Option<&'static str> {
 /// 🔴 모르면 막지 않는다(자산 방과 같은 규칙) — 길이 끊긴 동안 자기 방에 자기가 못 쓰면 안 된다.
 async fn my_gate_state(gate: &str) -> Result<(), String> {
     let label = match gate {
-        "miner" => "채굴 기여",
+        "miner" => "채굴 지킴이",
         "creator" => "창작자",
         "relay" => "릴레이 지킴이",
         _ => "노드 지킴이",
