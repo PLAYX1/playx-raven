@@ -242,6 +242,19 @@ fn matches(e: &Value, f: &Value) -> bool {
     true
 }
 
+/// 노드 지킴이 표시(NIP-58) — 확인 서버 열쇠가 서명한 정의(kind 30009, d=rv-node-keeper)와 수여(kind 8)만.
+/// 다른 열쇠가 쓴 같은 종류는 여전히 안 받는다(스팸 길을 열지 않는다). 서명은 store 가 따로 본다.
+fn node_keeper_badge(e: &Value) -> bool {
+    let kind = e.get("kind").and_then(Value::as_i64).unwrap_or(-1);
+    if !matches!(kind, 8 | 30009) || e.get("pubkey").and_then(Value::as_str) != Some(crate::node_keeper::NODE_KEEPER_PUB) {
+        return false;
+    }
+    let want = if kind == 8 { ("a", format!("30009:{}:rv-node-keeper", crate::node_keeper::NODE_KEEPER_PUB)) } else { ("d", "rv-node-keeper".to_string()) };
+    e.get("tags").and_then(Value::as_array).is_some_and(|t| {
+        t.iter().any(|x| x.get(0).and_then(Value::as_str) == Some(want.0) && x.get(1).and_then(Value::as_str) == Some(want.1.as_str()))
+    })
+}
+
 /// 이 글이 가게 공지가 **아닌** 무엇인가.
 ///
 /// 껍데기가 맞아도 안을 봐야 한다. 판단은 셋뿐이고, 셋 다 「이게 정말
@@ -250,6 +263,9 @@ fn matches(e: &Value, f: &Value) -> bool {
 fn smells_bad(e: &Value) -> Option<String> {
     // 대화 글은 다른 잣대로 본다. 아래 규칙은 전부 **가게 공지** 것이라
     // 사람이 쓴 글에 대면 전부 걸린다.
+    if node_keeper_badge(e) {
+        return None;
+    }
     let kind = e.get("kind").and_then(Value::as_i64).unwrap_or(-1);
     if TALK_KINDS.contains(&kind) {
         return talk_smells_bad(e);
@@ -444,7 +460,7 @@ fn looks_like_asset(d: &str) -> bool {
 /// 옛것을 지운다(NIP-33). 안 그러면 가게가 주소를 바꿀 때마다 글이 쌓이고,
 /// 손님 화면이 어느 것이 최신인지 골라야 한다.
 fn store(e: Value) -> (bool, String) {
-    if !KINDS.contains(&e.get("kind").and_then(Value::as_i64).unwrap_or(-1)) {
+    if !KINDS.contains(&e.get("kind").and_then(Value::as_i64).unwrap_or(-1)) && !node_keeper_badge(&e) {
         return (false, "이 릴레이는 가게 글만 받습니다".into());
     }
     if !verify(&e) {
@@ -1123,6 +1139,19 @@ mod tests {
     fn person_lists_are_kept_only_for_raven_people() {
         use super::*;
         for k in [0, 3, 5, 10003] { assert!(KINDS.contains(&k), "kind {k} 를 받는다"); }
+    }
+
+    #[test]
+    fn node_keeper_badge_only_from_check_server() {
+        let pk = crate::node_keeper::NODE_KEEPER_PUB;
+        let a = format!("30009:{pk}:rv-node-keeper");
+        assert!(node_keeper_badge(&json!({ "kind": 30009, "pubkey": pk, "tags": [["d", "rv-node-keeper"]], "content": "" })));
+        assert!(node_keeper_badge(&json!({ "kind": 8, "pubkey": pk, "tags": [["a", a], ["p", "b".repeat(64)]], "content": "" })));
+        assert!(smells_bad(&json!({ "kind": 30009, "pubkey": pk, "tags": [["d", "rv-node-keeper"]], "content": "" })).is_none());
+        // 다른 열쇠 · 다른 배지 · 다른 종류는 안 된다
+        assert!(!node_keeper_badge(&json!({ "kind": 30009, "pubkey": "c".repeat(64), "tags": [["d", "rv-node-keeper"]], "content": "" })));
+        assert!(!node_keeper_badge(&json!({ "kind": 30009, "pubkey": pk, "tags": [["d", "other"]], "content": "" })));
+        assert!(!node_keeper_badge(&json!({ "kind": 1, "pubkey": pk, "tags": [["d", "rv-node-keeper"]], "content": "" })));
         assert!(replaceable(0) && replaceable(3) && replaceable(10003) && !replaceable(1) && !replaceable(30402));
         let stranger = "9".repeat(64);
         // 처음 보는 사람의 팔로우·북마크는 저장하지 않는다(남의 SNS 창고가 되지 않게).
