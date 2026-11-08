@@ -1,4 +1,4 @@
-// 11-08 기여 표시 — 이름표에 **서명으로 걸린** 레이븐코인 주소의 체인 사실 + 노드 지킴이(kind 8).
+// 11-08 기여 표시 — 이름표에 **서명으로 걸린** 레이븐코인 주소의 체인 사실 + 노드·릴레이 지킴이(kind 8, docs/KEEPER-THANKS.md).
 // 폰 core/talk/badges.ts 와 같은 이름·같은 규칙. 계산·검증은 러스트(src-tauri/src/badges.rs)가 한다 — 여기는 그리기만.
 //
 // 🔴 지키는 것
@@ -8,11 +8,11 @@
 import { t, tf } from "./i18n";
 
 type Invoke = <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
-export type Badge = "miner" | "creator" | "node";
-export const BADGES: readonly Badge[] = ["miner", "creator", "node"];
+export type Badge = "miner" | "creator" | "node" | "relay";
+export const BADGES: readonly Badge[] = ["miner", "creator", "node", "relay"];
 
 type Part = { ok?: boolean; unknown?: boolean; blocks?: number; lastAt?: number | null; assets?: string[]; days?: number };
-type Info = { address?: string; miner?: Part; creator?: Part; node?: Part };
+type Info = { address?: string; miner?: Part; creator?: Part; node?: Part; relay?: Part };
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 const TTL = 6 * 60 * 60 * 1000;
@@ -21,19 +21,20 @@ const FAIL_TTL = 5 * 60 * 1000;
 const known = new Map<string, { at: number; addr: string; info: Info }>();
 const inflight = new Set<string>();
 
-export const BADGE_LABEL: Record<Badge, string> = { miner: "채굴 기여", creator: "창작자", node: "노드 지킴이" };
-const GATE_CHOICE: Record<Badge | "", string> = { "": "누구나", miner: "채굴 기여 표시 있는 분", creator: "창작자 표시 있는 분", node: "노드 지킴이" };
+export const BADGE_LABEL: Record<Badge, string> = { miner: "채굴 기여", creator: "창작자", node: "노드 지킴이", relay: "릴레이 지킴이" };
+const GATE_CHOICE: Record<Badge | "", string> = { "": "누구나", miner: "채굴 기여 표시 있는 분", creator: "창작자 표시 있는 분", node: "노드 지킴이", relay: "릴레이 지킴이" };
 const GATE_LOCKED: Record<Badge, string> = {
   miner: "채굴 기여 표시가 있는 분이 글을 써요. 읽기는 누구나 돼요.",
   creator: "창작자 표시가 있는 분이 글을 써요. 읽기는 누구나 돼요.",
   node: "노드 지킴이 표시가 있는 분이 글을 써요. 읽기는 누구나 돼요.",
+  relay: "릴레이 지킴이 표시가 있는 분이 글을 써요. 읽기는 누구나 돼요.",
 };
 const NO_ADDRESS = "이름표에 레이븐코인 주소를 걸면 표시를 확인할 수 있어요.";
 const NOTE = "기여 표시는 신원 확인이 아니에요. 체인 기록으로 누구나 확인할 수 있는 사실만 보여 줘요.";
 const POOL_NOTE = "풀 채굴 보상은 아직 표시하지 않아요.";
 
 export function cleanGate(g: unknown): Badge | "" {
-  return g === "miner" || g === "creator" || g === "node" ? g : "";
+  return g === "miner" || g === "creator" || g === "node" || g === "relay" ? g : "";
 }
 
 /* ── 아이콘: 라비 결 B(보라 두 톤 + 주황 한 점). 파란 체크가 아니다. ── */
@@ -44,6 +45,8 @@ const ICON: Record<Badge, string> = {
   creator: `<path class="b1" d="M11 3.5l2.2 4.6 5 .7-3.6 3.5.9 5-4.5-2.4-4.5 2.4.9-5L3.8 8.8l5-.7z"/><circle class="dot" cx="19" cy="18.5" r="2.4"/>`,
   // 이어진 마디(노드)
   node: `<circle class="b1" cx="6" cy="7" r="2.6"/><circle class="b1" cx="6" cy="17" r="2.6"/><path class="b2" d="M8.4 8.2l6.4 3.2M8.4 15.8l6.4-3.2"/><circle class="dot" cx="17.5" cy="12" r="2.8"/>`,
+  // 가운데 탑 하나가 양쪽으로 글을 나른다(릴레이)
+  relay: `<circle class="b1" cx="11" cy="13" r="2.8"/><path class="b2" d="M6.6 8.6a6.2 6.2 0 0 0 0 8.8M15.4 8.6a6.2 6.2 0 0 1 0 8.8M3.9 5.9a10 10 0 0 0 0 14.2"/><circle class="dot" cx="19" cy="5.5" r="2.4"/>`,
 };
 function icon(b: Badge): string {
   return `<svg class="tk-badge-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${ICON[b]}</svg>`;
@@ -52,6 +55,7 @@ function icon(b: Badge): string {
 function whyOf(b: Badge, info: Info): string {
   if (b === "miner") return t("이 이름표에 걸린 주소가 최근 90일 안에 직접 블록 보상을 받았어요.");
   if (b === "creator") return tf("이 이름표에 걸린 주소가 자산({0})의 주인 토큰을 가지고 있어요.", (info.creator?.assets || []).slice(0, 5).join(", "));
+  if (b === "relay") return tf("이 분이 모두를 위해 컴퓨터를 내어 주고 계세요. 이야기 글을 나르는 릴레이를 최근 30일 중 {0}일 열어 두셨어요. 우리 확인 서버가 직접 접속해 확인했어요.", info.relay?.days ?? 0);
   return tf("이 분의 컴퓨터가 레이븐코인 노드를 최근 30일 중 {0}일 돌렸어요. 우리 확인 서버가 직접 접속해 블록을 받아 확인했어요.", info.node?.days ?? 0);
 }
 
@@ -172,7 +176,7 @@ export async function paintComposerGate(invoke: Invoke, room: string, me: string
   const g = gateOfRoom(room);
   if (!g) { set(false, ""); return; }
   set(false, t("내 기여 표시를 확인하는 중이에요."));
-  const needAddr = g !== "node";
+  const needAddr = g !== "node" && g !== "relay"; // 지킴이 표시는 주소가 아니라 이야기 열쇠에 붙는다
   const addr = needAddr ? await myAddress(invoke) : "";
   if (!stillHere()) return;
   if (needAddr && addr === "") { set(true, `${t(GATE_LOCKED[g])} ${t(NO_ADDRESS)}`); return; }

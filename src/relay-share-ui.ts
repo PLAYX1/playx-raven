@@ -47,6 +47,13 @@ function ensureCard(): HTMLElement | null {
     <label class="check rs-switch"><span class="sx-txt"><b>${copyHtml("이웃 릴레이에서도 읽기")}</b>
       <span class="meta">${copyHtml("다른 사람 컴퓨터 릴레이에 연결하면 그 주인이 내 인터넷 주소(IP)를 볼 수 있어요. 공개 릴레이도 마찬가지예요.")}</span></span>
       <input type="checkbox" id="rs-outbox" role="switch" /></label>
+    <div class="rs-keeper" id="rs-keeper" hidden>
+      <p class="rs-keeper-h"><b>${copyHtml("릴레이 지킴이")}</b></p>
+      <p class="meta">${copyHtml("하루 한 번 확인 서버가 내 릴레이에 들어와 내 주소 목록을 읽어 봐요. 최근 30일 중 25일 확인되면 이야기에서 내 이름 옆에 「릴레이 지킴이」 표시가 붙어요.")}</p>
+      <div class="rs-status" id="rs-k-status" role="status"></div>
+      <div class="meta" id="rs-k-days"></div>
+      <div class="row sx-acts"><button class="ghost" id="rs-k-check">${copyHtml("지금 확인하기")}</button></div>
+    </div>
     <details class="rs-adv">
       <summary>${copyHtml("고급")}</summary>
       <p class="meta">${copyHtml("쓰는 릴레이")}</p>
@@ -62,6 +69,7 @@ function ensureCard(): HTMLElement | null {
   (el("rs-republish") as HTMLInputElement).addEventListener("change", (e) => void setSwitch({ republish: (e.target as HTMLInputElement).checked }));
   (el("rs-outbox") as HTMLInputElement).addEventListener("change", (e) => void setSwitch({ outboxRead: (e.target as HTMLInputElement).checked }));
   el("rs-add-btn")?.addEventListener("click", () => void addRelay());
+  el("rs-k-check")?.addEventListener("click", () => void keeperCheckNow());
   el("rs-new")?.addEventListener("keydown", (e) => { if ((e as KeyboardEvent).key === "Enter") void addRelay(); });
   el("rs-list")?.addEventListener("click", (e) => {
     const b = (e.target as Element | null)?.closest?.("button[data-rs-remove]") as HTMLButtonElement | null;
@@ -134,6 +142,81 @@ function paint(s: State) {
   }
   const list = el("rs-list");
   if (list) list.innerHTML = listHtml(s);
+  paintKeeper();
+}
+
+/* ── 릴레이 지킴이(docs/KEEPER-THANKS.md §1 · src-tauri/src/relay_keeper.rs) ── */
+type KDay = { day: string; ok: boolean; reason?: string; at: number };
+type KState = {
+  sharing: boolean; today: string; today_ok: boolean; last: KDay | null;
+  days_ok: number; needed_days: number; busy: boolean;
+  result?: { ok: boolean; reason?: string | null; day: string };
+};
+let kstate: KState | null = null;
+let kRelayDays: number | null = null;
+let kChecking = false;
+
+const KREASON: Record<string, string> = {
+  "bad-url": "이 릴레이 주소는 확인할 수 없는 모양이에요.",
+  unreachable: "확인 서버가 바깥에서 내 릴레이로 들어오지 못했어요. 잠시 뒤 다시 해 볼게요.",
+  "no-list": "내 릴레이에서 내 주소 목록을 찾지 못했어요. 잠시 뒤 다시 해 볼게요.",
+  mismatch: "내 릴레이에 있는 주소 목록이 지금 주소와 달라요. 잠시 뒤 다시 알릴게요.",
+  auth: "확인 요청 서명이 맞지 않았어요. 컴퓨터 시계가 맞는지 확인해 주세요.",
+  "not-configured": "확인 서버가 아직 준비 중이에요. 나중에 다시 해 볼게요.",
+  unavailable: "확인 서버가 잠시 쉬고 있어요. 나중에 다시 해 볼게요.",
+  "not-sharing": "릴레이 나누기를 켜고 내 주소를 알린 뒤에 확인할 수 있어요.",
+  "no-key": "이야기 이름(열쇠)이 아직 없어요. 이야기 화면을 한 번 열어 주세요.",
+  network: "확인 서버에 닿지 못했어요. 인터넷 연결을 확인해 주세요.",
+  server: "확인 서버가 알 수 없는 답을 했어요. 나중에 다시 해 볼게요.",
+  busy: "이미 확인하는 중이에요.",
+};
+export const keeperReasonText = (code: string | null | undefined) => KREASON[String(code || "server")] ?? KREASON.server;
+
+export function keeperStatusLine(k: KState): string {
+  if (k.busy || kChecking) return t("확인하는 중…");
+  if (k.today_ok) return t("오늘 확인됨");
+  const code = k.result && !k.result.ok ? k.result.reason : k.last && !k.last.ok && k.last.day === k.today ? k.last.reason : null;
+  if (code) return tf("확인 못 함 — {0}", t(keeperReasonText(code)));
+  return t("아직 오늘 확인 안 됨");
+}
+
+function paintKeeper() {
+  const box = el("rs-keeper");
+  if (!box) return;
+  const k = kstate;
+  // 켜 둔 사람에게만 — 꺼져 있으면 확인할 것이 없다.
+  box.hidden = !(state?.enabled && k);
+  if (!k) return;
+  const status = el("rs-k-status");
+  if (status) {
+    setCopyText(status, () => keeperStatusLine(k));
+    status.classList.toggle("ok", k.today_ok);
+  }
+  const days = el("rs-k-days");
+  if (days) {
+    const n = Math.max(k.days_ok, kRelayDays ?? 0);
+    setCopyText(days, () => tf("최근 30일 중 {0}일", n) + " · " + (n >= k.needed_days ? t("「릴레이 지킴이」 표시가 붙어 있어요") : t("25일이 되면 표시가 붙어요")));
+  }
+  const btn = el("rs-k-check") as HTMLButtonElement | null;
+  if (btn) btn.disabled = k.busy || kChecking || !k.sharing;
+}
+
+async function keeperRefresh() {
+  try { kstate = await invoke<KState>("relay_keeper_get"); paintKeeper(); } catch { /* 명령이 없는 판 */ }
+  try {
+    const a = await invoke<{ days_ok: number }>("relay_keeper_awards");
+    kRelayDays = a.days_ok;
+    paintKeeper();
+  } catch { /* 릴레이를 못 읽으면 이 컴퓨터 기록만 */ }
+}
+
+async function keeperCheckNow() {
+  kChecking = true;
+  paintKeeper();
+  try { kstate = await invoke<KState>("relay_keeper_check"); } catch { /* 아래에서 다시 읽는다 */ }
+  finally { kChecking = false; }
+  paintKeeper();
+  void keeperRefresh();
 }
 
 const ERR: Record<string, string> = {
@@ -151,6 +234,7 @@ function showErr(e: unknown) {
 
 async function refresh() {
   try { paint(await invoke<State>("relay_share_get")); } catch { /* 명령이 없는 판 — 카드만 남는다 */ }
+  void keeperRefresh();
 }
 
 async function setSwitch(v: { enabled?: boolean; republish?: boolean; outboxRead?: boolean }) {

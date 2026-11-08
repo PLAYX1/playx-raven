@@ -1,0 +1,17 @@
+/* 지킴이 고마움(src/keeper-thanks-ui.ts). 라비 결 B — 보라 두 톤 + 주황 한 점. style="" 금지(CSP). */
+.kt-cert { margin-top: 10px; }
+.kt-cert [hidden], .kt-tip [hidden] { display: none !important; }
+.kt-acts { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0; }
+.kt-acts button, .kt-tip-open button, .kt-amounts button, .kt-after button { min-height: 44px; }
+.kt-url { display: block; margin-top: 4px; overflow-wrap: anywhere; font-size: 13px; }
+.kt-say:empty { display: none; }
+.kt-tip-open { margin-top: 10px; }
+.kt-tip { border: 1px solid var(--tk-bd-line, #D6CEF4); background: var(--tk-bd-soft, #EEEAFB); color: var(--text); border-radius: 12px; padding: 12px 14px; margin: 0 0 12px; }
+.kt-tip p { margin: 4px 0; }
+.kt-tip-h { color: var(--tk-bd-ink, #4B3A9A); }
+.kt-tail { font-size: 32px; font-weight: 800; letter-spacing: .12em; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--tk-bd-ink, #4B3A9A); margin: 2px 0 6px; }
+.kt-tail::before { content: "…"; color: var(--tk-bd-dot, #E2702A); margin-right: 4px; }
+.kt-amounts { display: flex; gap: 8px; flex-wrap: wrap; margin: 6px 0; }
+.kt-amounts button[aria-pressed="true"] { border-color: var(--tk-bd-ink, #4B3A9A); color: var(--tk-bd-ink, #4B3A9A); font-weight: 700; }
+.kt-after { margin-top: 12px; }
+.kt-after p { margin: 4px 0; }

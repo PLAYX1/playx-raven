@@ -876,6 +876,14 @@ pub fn start() {
     });
 }
 
+/// 지금 알리고 있는 내 릴레이 주소 — 켜져 있고, 지금 바깥 주소로 스스로 들어와 본 뒤 그 주소를 알린 때만.
+/// 릴레이 지킴이 확인(relay_keeper.rs, docs/KEEPER-THANKS.md §1)이 이것만 쓴다.
+pub(crate) fn sharing_url() -> Option<String> {
+    let s = current();
+    let outside = outside_url();
+    (s.enabled && outside.is_some() && s.announced_url == outside).then_some(outside).flatten()
+}
+
 // ── 설정 화면 ─────────────────────────────────────────────────────────────
 
 fn state_json(s: &Share) -> Value {

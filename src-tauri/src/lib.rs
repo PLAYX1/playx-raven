@@ -163,6 +163,7 @@ mod words_restore;
 mod node_keeper;
 // 11-08 — 릴레이 나누기: 레이븐볼트 데스크탑끼리 서로 릴레이가 된다(켠 사람만). 규약 docs/RELAY-SHARE.md.
 mod relay_share;
+mod relay_keeper;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -709,6 +710,10 @@ pub fn run() {
             relay_share::relay_share_set,
             relay_share::relay_share_add,
             relay_share::relay_share_remove,
+            relay_keeper::relay_keeper_get,
+            relay_keeper::relay_keeper_check,
+            relay_keeper::relay_keeper_awards,
+            relay_keeper::keeper_cert_link,
             talk::talk_me,
             talk::talk_post,
             // 사진 보내기. 사진·영수증·「이거요」를 못 보내면 대화방이 빈 방이 된다.
@@ -848,6 +853,7 @@ pub fn run() {
             map::start();
             node_keeper::start();
             relay_share::start();
+            relay_keeper::start();
             use tauri::Manager;
             ravi_companion::setup(app)?;
             mini::setup(app);

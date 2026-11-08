@@ -1249,6 +1249,7 @@ pub(crate) fn clean_gate(g: &str) -> Option<&'static str> {
         "miner" => Some("miner"),
         "creator" => Some("creator"),
         "node" => Some("node"),
+        "relay" => Some("relay"),
         _ => None,
     }
 }
@@ -1259,12 +1260,13 @@ async fn my_gate_state(gate: &str) -> Result<(), String> {
     let label = match gate {
         "miner" => "채굴 기여",
         "creator" => "창작자",
+        "relay" => "릴레이 지킴이",
         _ => "노드 지킴이",
     };
-    // 노드 지킴이는 주소가 아니라 이 컴퓨터의 이야기 열쇠(공개키)에 붙는다.
-    if gate == "node" {
+    // 노드·릴레이 지킴이는 주소가 아니라 이 컴퓨터의 이야기 열쇠(공개키)에 붙는다.
+    if gate == "node" || gate == "relay" {
         let me = crate::shopkey::pubkey_of(&key()?)?;
-        let n = crate::badges::node_of(&me).await;
+        let n = crate::badges::keeper_of(&me, gate).await;
         if n.get("ok") == Some(&Value::Bool(false)) && n.get("unknown") != Some(&Value::Bool(true)) {
             return Err(format!("{label} 표시가 있는 분이 글을 써요. 읽기는 누구나 돼요."));
         }
@@ -2578,6 +2580,8 @@ mod badge_gate_tests {
         assert_eq!(clean_gate("miner"), Some("miner"));
         assert_eq!(clean_gate(" creator "), Some("creator"));
         assert_eq!(clean_gate("node"), Some("node"));
+        assert_eq!(clean_gate("relay"), Some("relay"));
+        assert_eq!(clean_gate("RELAY"), None);
         assert_eq!(clean_gate("admin"), None);
         assert_eq!(clean_gate("MINER"), None);
         assert_eq!(clean_gate(""), None);
@@ -2590,12 +2594,16 @@ mod badge_gate_tests {
         let only_body = room(json!([["t", TAG]]), json!({ "name": "본문만", "gate": "miner" }));
         let bad = room(json!([["t", TAG], ["gate", "vip"]]), json!({ "name": "모르는 값", "gate": "vip" }));
         let none = room(json!([["t", TAG]]), json!({ "name": "그냥 방" }));
-        let rooms = rooms_from_events(vec![e, only_body, bad, none], &[]);
+        let (rbody, rtags) = room_draft("릴레이 방", "", &None, Some("relay"));
+        assert!(rtags.as_array().unwrap().contains(&json!(["gate", "relay"])));
+        let relay_room = crate::shopkey::sign_with(&A, KIND_ROOM, rtags, &rbody, now() - 60).unwrap();
+        let rooms = rooms_from_events(vec![e, only_body, bad, none, relay_room], &[]);
         let gate_of = |n: &str| rooms.iter().find(|r| r["name"] == json!(n)).unwrap()["gate"].clone();
         assert_eq!(gate_of("창작 방"), json!("creator"));
         assert_eq!(gate_of("본문만"), json!("miner"), "태그를 못 붙인 프로그램의 방도 읽는다");
         assert_eq!(gate_of("모르는 값"), json!(""), "모르는 값은 누구나");
         assert_eq!(gate_of("그냥 방"), json!(""));
+        assert_eq!(gate_of("릴레이 방"), json!("relay"), "릴레이 지킴이 방(docs/KEEPER-THANKS.md §1)");
     }
 
     /// 🔴 수정 글(41)에 적힌 조건은 안 읽는다 — 이름은 바뀌어도 「누가 쓰나」는 그대로.

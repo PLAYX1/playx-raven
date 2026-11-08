@@ -125,8 +125,13 @@ pub fn days_ok_in_window(k: &Keeper, now: i64) -> usize {
 /// 릴레이에서 받은 NIP-58 표시(kind 8) 중 **확인 서버 열쇠가 나에게 준 것**의 UTC 날짜들(최근 30일).
 /// 서명 검사는 `verify` 로 한 번 더 한다(릴레이가 아무거나 줄 수 있다).
 pub fn award_days(events: &[Value], me: &str, now: i64, verify: impl Fn(&Value) -> bool) -> std::collections::BTreeSet<String> {
+    award_days_for(events, AWARD_A, me, now, verify)
+}
+
+/// `award_days` 를 표시 이름(d)으로 — 노드 지킴이(`rv-node-keeper`)·릴레이 지킴이(`rv-relay-keeper`)가 같은 규칙을 쓴다.
+pub fn award_days_for(events: &[Value], d: &str, me: &str, now: i64, verify: impl Fn(&Value) -> bool) -> std::collections::BTreeSet<String> {
     let window: Vec<String> = (0..WINDOW_DAYS).map(|i| utc_day(now - i * 86_400)).collect();
-    let a_want = format!("30009:{NODE_KEEPER_PUB}:{AWARD_A}");
+    let a_want = format!("30009:{NODE_KEEPER_PUB}:{d}");
     let mut out = std::collections::BTreeSet::new();
     for e in events {
         if e.get("kind").and_then(Value::as_i64) != Some(8) || e.get("pubkey").and_then(Value::as_str) != Some(NODE_KEEPER_PUB) {

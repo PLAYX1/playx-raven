@@ -87,6 +87,7 @@ import { wirePhoneTransaction } from "./phone-transaction";
 import { wirePairing } from "./pairing-ui";
 import { wireNodeKeeper, openNodeKeeper } from "./node-keeper-ui";
 import { wireRelayShare } from "./relay-share-ui";
+import { endTip, mountCertShare, tipButtonHtml, wireKeeperThanks } from "./keeper-thanks-ui"; // 11-08 지킴이 고마움(docs/KEEPER-THANKS.md §2·§3)
 import { FINGERPRINT_GUESS, wireCreate, type CreateApi } from "./create-page";
 import { readItemName, verifyLink } from "./easy-create";
 import { checkShopAssetName, shopLabel, shopTokenOf, suggestShopAssetName } from "./shop-token";
@@ -4756,8 +4757,9 @@ async function paintProfile(): Promise<void> {
     // 11-08 내 기여 표시 — 서명 확인된 주소(talk_profiles 의 rvn_address)로만.
     const sec = $("rv-profile-badges"), address = String(profiles?.[key]?.rvn_address || "");
     sec.hidden = false;
-    sec.innerHTML = badgeSectionHtml(key, !!address);
-    void loadBadges(invoke, [{ pubkey: key, address }]).then(() => { sec.innerHTML = badgeSectionHtml(key, !!address); });
+    const paintMine = () => { sec.innerHTML = badgeSectionHtml(key, !!address); mountCertShare(sec, { invoke, openFeedDraft: openFeedDraft }); };
+    paintMine();
+    void loadBadges(invoke, [{ pubkey: key, address }]).then(paintMine);
   } catch { /* Profile name can be set while relays are unavailable. */ }
 }
 
@@ -7080,9 +7082,30 @@ async function tkShowPerson(pk: string) {
   const sec = $("rv-person-badges");
   const address = String(p?.rvn_address || "");
   sec.hidden = false;
-  sec.innerHTML = badgeSectionHtml(pk, !!address);
+  // 11-08 응원 보내기 — 서명 확인된 주소가 있을 때만(keeper-thanks-ui.ts).
+  const paintPerson = () => { sec.innerHTML = badgeSectionHtml(pk, !!address) + tipButtonHtml(pk, address, tkMine); };
+  paintPerson();
   await loadBadges(invoke, [{ pubkey: pk, address }]);
-  if ($("rv-person-key").textContent === pk) sec.innerHTML = badgeSectionHtml(pk, !!address);
+  if ($("rv-person-key").textContent === pk) paintPerson();
+}
+
+/** 「피드에 올리기」 — 공개 피드를 열고 글쓰기 칸에 초안만 넣는다. 보내기는 사람이 누른다. */
+function openFeedDraft(text: string) {
+  openFeed();
+  const box = $("tk-text") as HTMLTextAreaElement;
+  box.value = text;
+  box.dispatchEvent(new Event("input"));
+  box.focus();
+}
+
+/** 그 사람과 1:1 쪽지 — 쪽지는 지갑 화면에만 있다(talkOpenDm 주석). 그 화면의 `#talk?to=` 로 바로 연다. */
+async function talkOpenDmTo(pk: string) {
+  if (!/^[0-9a-f]{64}$/.test(pk)) throw new Error(t("쪽지를 열 수 없는 이름표예요."));
+  await Promise.race([
+    invoke<any>("start_phone_server"),
+    new Promise((_, no) => setTimeout(() => no(new Error(t("20초 안에 열리지 않았습니다."))), 20000)),
+  ]);
+  await openUrl(`${LEGACY_LOCAL_WALLET}#talk?to=${pk}`);
 }
 
 /** 아직 모르는 사람의 이름표만 가져온다. 이미 아는 것은 다시 안 묻는다. */
@@ -9274,6 +9297,7 @@ function 고치기_되살리기() {
 }
 
 async function openSend(mode: "asset" | "rvn", preselect?: string) {
+  endTip(); // 응원 안내는 응원으로 연 때만(keeper-thanks-ui.ts startTip 이 이 뒤에 다시 붙인다)
   sendMode = mode;
   라비가채운보내기 = false;
   sendPreview = null;
@@ -9314,6 +9338,7 @@ async function openSend(mode: "asset" | "rvn", preselect?: string) {
 }
 
 function closeSend() {
+  endTip();
   emitRaviEvent("send_closed");
   sendMode = null;
   sendPreview = null;
@@ -18884,6 +18909,15 @@ window.addEventListener("DOMContentLoaded", async () => {
   wireNodeKeeper();
   // 설정 › 「릴레이 나누기」(docs/RELAY-SHARE.md) — 카드는 relay-share-ui.ts 가 스스로 만든다.
   wireRelayShare();
+  wireKeeperThanks({
+    openSendRvn: async () => { showPage("wallet"); await openSend("rvn"); },
+    setQtySats: (sats) => { setAmountSats($("s-qty") as HTMLInputElement, BigInt(sats)); composeChanged(); },
+    composeChanged,
+    openDm: talkOpenDmTo,
+  }, (pk) => {
+    const p = tkNames.get(pk);
+    return { name: String(p?.name || "") || `${t("레이븐")} #${pk.slice(0, 4).toUpperCase()}`, address: String(p?.rvn_address || "") };
+  });
   window.addEventListener("rv-go", (e) => { const d = String((e as CustomEvent).detail ?? ""); if (d === "qr") void openQrSheet(); else showPage(d); });
   createApi = wireCreate({
     invoke, t, go: showPage, openLink: (url) => void openUrl(url),

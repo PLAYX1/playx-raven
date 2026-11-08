@@ -19,3 +19,6 @@
 #rs-card .rs-add button { min-height: 44px; }
 #rs-card .rs-err { margin-top: 6px; color: var(--danger, #b42318); }
 #rs-card .rs-err:empty { display: none; }
+#rs-card .rs-keeper { border-top: 1px solid var(--line); margin-top: 12px; padding-top: 10px; }
+#rs-card .rs-keeper-h { margin: 0 0 4px; }
+#rs-card .rs-keeper .sx-acts button { min-height: 44px; }

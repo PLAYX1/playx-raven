@@ -6,6 +6,7 @@
 //! - 창작자(`creator`): 그 주소가 자산의 주인 토큰(이름 끝 `!`)을 하나 이상 가졌다.
 //! - 노드 지킴이(`node`): 확인 서버 열쇠(`NODE_KEEPER_PUB`)가 그 사람(공개키)에게 준 NIP-58 표시(kind 8)가
 //!   최근 30일 중 25일 이상(UTC 날짜 기준, 서명 확인한 것만).
+//! - 릴레이 지킴이(`relay`): 같은 열쇠가 준 d=`rv-relay-keeper` 표시가 같은 규칙으로(docs/KEEPER-THANKS.md §1).
 //!
 //! ## 🔴 지키는 것
 //!
@@ -171,8 +172,23 @@ fn valid_pubkey(p: &str) -> bool {
 
 /// 확인 서버가 `who` 에게 준 노드 지킴이 표시(kind 8)의 서로 다른 UTC 날짜 수(최근 30일, 오늘 포함).
 /// 🔴 서명은 `verify` 로 한 번 더 본다 — 릴레이는 아무 글이나 줄 수 있다.
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn node_award_days(events: &[Value], who: &str, now: i64, verify: impl Fn(&Value) -> bool) -> usize {
-    crate::node_keeper::award_days(events, who, now, verify).len()
+    keeper_award_days(events, crate::node_keeper::AWARD_A, who, now, verify)
+}
+
+/// 지킴이 표시를 표시 이름(d)으로 센다 — `rv-node-keeper`(노드)·`rv-relay-keeper`(릴레이). 규칙은 같다.
+pub(crate) fn keeper_award_days(events: &[Value], d: &str, who: &str, now: i64, verify: impl Fn(&Value) -> bool) -> usize {
+    crate::node_keeper::award_days_for(events, d, who, now, verify).len()
+}
+
+/// 한 번 읽은 kind 8 묶음 → `{node, relay}` 각각 `{ok, days}`.
+pub(crate) fn keepers_from(events: &[Value], who: &str, now: i64, verify: impl Fn(&Value) -> bool) -> Value {
+    let one = |d: &str| {
+        let n = keeper_award_days(events, d, who, now, &verify);
+        json!({ "ok": n >= NODE_NEEDED_DAYS, "days": n })
+    };
+    json!({ "node": one(crate::node_keeper::AWARD_A), "relay": one(crate::relay_keeper::AWARD_A) })
 }
 
 fn node_cache() -> &'static Mutex<HashMap<String, (Instant, Value)>> {
@@ -180,13 +196,14 @@ fn node_cache() -> &'static Mutex<HashMap<String, (Instant, Value)>> {
     C.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-/// 한 사람(공개키)의 노드 지킴이 표시. `{ok, days}` 또는 모르면 `{ok:false, unknown:true}`.
-pub(crate) async fn node_of(pubkey: &str) -> Value {
+/// 한 사람(공개키)의 지킴이 표시 둘 — `{node, relay}`. 하나를 읽으면 둘 다 안다(같은 열쇠의 kind 8).
+/// 모르면 둘 다 `{ok:false, unknown:true}`.
+pub(crate) async fn keepers_of(pubkey: &str) -> Value {
     if !valid_pubkey(pubkey) {
-        return unknown();
+        return json!({ "node": unknown(), "relay": unknown() });
     }
     if let Some((at, v)) = node_cache().lock().ok().and_then(|c| c.get(pubkey).cloned()) {
-        let fresh_for = if v.get("unknown") == Some(&Value::Bool(true)) { FAIL_FOR } else { CACHE_FOR };
+        let fresh_for = if v["node"].get("unknown") == Some(&Value::Bool(true)) { FAIL_FOR } else { CACHE_FOR };
         if at.elapsed() < fresh_for {
             return v;
         }
@@ -198,10 +215,9 @@ pub(crate) async fn node_of(pubkey: &str) -> Value {
     let v = match got {
         Ok(r) => {
             let events = r.get("events").and_then(Value::as_array).cloned().unwrap_or_default();
-            let n = node_award_days(&events, pubkey, now_secs(), crate::relay::verify);
-            json!({ "ok": n >= NODE_NEEDED_DAYS, "days": n })
+            keepers_from(&events, pubkey, now_secs(), crate::relay::verify)
         }
-        Err(_) => unknown(),
+        Err(_) => json!({ "node": unknown(), "relay": unknown() }),
     };
     if let Ok(mut c) = node_cache().lock() {
         if c.len() > 2000 {
@@ -212,6 +228,11 @@ pub(crate) async fn node_of(pubkey: &str) -> Value {
     v
 }
 
+/// 한 사람의 지킴이 표시 하나(`node` 또는 `relay`). `{ok, days}` 또는 모르면 `{ok:false, unknown:true}`.
+pub(crate) async fn keeper_of(pubkey: &str, which: &str) -> Value {
+    keepers_of(pubkey).await.get(which).cloned().unwrap_or_else(unknown)
+}
+
 #[derive(serde::Deserialize)]
 pub struct BadgePerson {
     pubkey: String,
@@ -219,7 +240,7 @@ pub struct BadgePerson {
     address: String,
 }
 
-/// 사람마다 기여 표시. `{ 공개키: {address, miner, creator, node} }`.
+/// 사람마다 기여 표시. `{ 공개키: {address, miner, creator, node, relay} }`.
 ///
 /// 🔴 `address` 는 화면이 `talk_profiles` 에게 받은 **서명 확인된** 주소만 넘긴다(그 밖의 주소는 이름표에 없는 셈).
 ///    주소가 없는 사람의 채굴·창작 표시는 `{ok:false}` — 볼 주소가 없다.
@@ -247,16 +268,17 @@ pub async fn talk_badges(people: Vec<BadgePerson>) -> Value {
                 } else {
                     badges_of(&a).await
                 };
-                let node = node_of(&pk).await;
+                let k = keepers_of(&pk).await;
                 let mut out = chain;
-                out["node"] = node;
+                out["node"] = k["node"].clone();
+                out["relay"] = k["relay"].clone();
                 out
             })
         })
         .collect();
     let mut out = serde_json::Map::new();
     for ((pk, _), h) in want.into_iter().zip(handles) {
-        let v = h.await.unwrap_or_else(|_| json!({ "miner": unknown(), "creator": unknown(), "node": unknown() }));
+        let v = h.await.unwrap_or_else(|_| json!({ "miner": unknown(), "creator": unknown(), "node": unknown(), "relay": unknown() }));
         out.insert(pk, v);
     }
     Value::Object(out)
@@ -325,6 +347,24 @@ mod tests {
         let mut wrong_a = award(&utc_day(now), &me);
         wrong_a["tags"][0] = json!(["a", "30009:x:rv-node-keeper"]);
         assert_eq!(node_award_days(&[wrong_a], &me, now, |_| true), 0);
+    }
+
+    #[test]
+    fn 릴레이_지킴이는_따로_센다() {
+        let now = 1_762_560_000;
+        let me = "a".repeat(64);
+        let relay = |day: &str| json!({ "kind": 8, "pubkey": NODE_KEEPER_PUB, "tags": [["a", format!("30009:{NODE_KEEPER_PUB}:rv-relay-keeper")], ["p", me], ["t", "ravencoin"], ["day", day]] });
+        let mut ev: Vec<Value> = (0..25).map(|i| relay(&utc_day(now - i * 86_400))).collect();
+        ev.extend((0..3).map(|i| award(&utc_day(now - i * 86_400), &me)));
+        let k = keepers_from(&ev, &me, now, |_| true);
+        assert_eq!(k["relay"], json!({ "ok": true, "days": 25 }));
+        assert_eq!(k["node"], json!({ "ok": false, "days": 3 }), "노드 표시는 릴레이 날을 안 센다");
+        let k = keepers_from(&ev[..24], &me, now, |_| true);
+        assert_eq!(k["relay"], json!({ "ok": false, "days": 24 }), "25일이 안 되면 없다");
+        assert_eq!(keepers_from(&ev, &me, now, |_| false)["relay"]["days"], json!(0), "서명이 틀리면 안 센다");
+        let mut fake = relay(&utc_day(now));
+        fake["pubkey"] = json!("c".repeat(64));
+        assert_eq!(keeper_award_days(&[fake], "rv-relay-keeper", &me, now, |_| true), 0);
     }
 
     #[test]
