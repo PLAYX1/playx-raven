@@ -688,6 +688,10 @@ pub async fn talk_post(
                 ));
             }
         }
+        // 🔴 기여 표시 방이면 그 표시가 있는 분만 쓴다(모를 때는 막지 않는다).
+        if let Some(g) = room_gate(id).await {
+            my_gate_state(g).await?;
+        }
     }
     // 32KB 는 우리 릴레이가 받는 한계다. 넘으면 조용히 버려진다 —
     // 보낸 사람은 올라간 줄 안다. 여기서 미리 말한다.
@@ -949,6 +953,10 @@ pub async fn talk_photo_post(
                 ));
             }
         }
+        // 🔴 기여 표시 방이면 그 표시가 있는 분만 쓴다(모를 때는 막지 않는다).
+        if let Some(g) = room_gate(id).await {
+            my_gate_state(g).await?;
+        }
     }
 
     // 4) 🔴 **파일창고가 꺼져 있으면 여기서 멈춘다.** 켜져 있는 줄 알고
@@ -1127,6 +1135,19 @@ async fn room_asset(room_id: &str) -> Option<String> {
         .map(String::from)
 }
 
+/// 그 방의 기여 표시 조건. 만든 글(kind 40)에서만 읽는다.
+async fn room_gate(room_id: &str) -> Option<&'static str> {
+    let rooms = json!(rooms_from_events(room_events().await.ok()?, &[]));
+    let g = rooms
+        .as_array()?
+        .iter()
+        .find(|r| r.get("id").and_then(Value::as_str) == Some(room_id))?
+        .get("gate")
+        .and_then(Value::as_str)?
+        .to_string();
+    clean_gate(&g)
+}
+
 /// 내가 그 자산을 가졌나.
 ///
 /// ## 🔴 모르면 「없다」가 아니라 「모른다」다
@@ -1172,12 +1193,19 @@ pub async fn talk_make_room(
     name: String,
     about: String,
     asset: Option<String>,
+    gate: Option<String>,
 ) -> Result<Value, String> {
     let name = name.trim();
     if name.is_empty() {
         return Err("방 이름이 필요합니다.".into());
     }
     let asset = asset.map(|a| a.trim().to_uppercase()).filter(|a| !a.is_empty());
+    let gate = clean_gate(gate.as_deref().unwrap_or(""));
+    // 🔴 **내 표시가 확실히 없으면 그 표시 방을 안 만든다** — 자기가 못 쓰는 방이 된다.
+    //    모를 때(길이 끊김)는 막지 않는다. 주소를 안 걸었으면 확인할 길이 없으니 먼저 걸게 한다.
+    if let Some(g) = gate {
+        my_gate_state(g).await?;
+    }
     // 🔴 **내가 못 가진 자산으로 방을 만들지 않는다.** 만들어 놓고 자기가
     //    못 들어가는 방이 된다. 모를 때는 막지 않고 그대로 진행한다 —
     //    노드가 훑는 중일 뿐일 수 있고, 그때 막으면 아무것도 못 만든다.
@@ -1190,20 +1218,69 @@ pub async fn talk_make_room(
         }
     }
     let sk = key()?;
-    let body = json!({
+    let (body, tags) = room_draft(name, &about, &asset, gate);
+    let ev = crate::shopkey::sign_with(&sk, KIND_ROOM, tags, &body, now())?;
+    crate::nostrpub::nostr_publish(ev.clone()).await?;
+    Ok(ev)
+}
+
+/// 방을 만드는 글(kind 40)의 본문과 표. 자산·기여 표시 조건은 **태그와 본문 둘 다**에 적는다.
+fn room_draft(name: &str, about: &str, asset: &Option<String>, gate: Option<&str>) -> (String, Value) {
+    let mut body = json!({
         "name": name,
         "about": about.trim(),
         // 방 정보 안에도 넣는다 — 태그를 못 읽는 프로그램도 볼 수 있게.
         "asset": asset.clone().unwrap_or_default(),
-    })
-    .to_string();
+    });
     let mut tags = vec![json!(["t", TAG])];
-    if let Some(a) = &asset {
+    if let Some(a) = asset {
         tags.push(json!(["asset", a]));
     }
-    let ev = crate::shopkey::sign_with(&sk, KIND_ROOM, json!(tags), &body, now())?;
-    crate::nostrpub::nostr_publish(ev.clone()).await?;
-    Ok(ev)
+    if let Some(g) = gate {
+        body["gate"] = json!(g);
+        tags.push(json!(["gate", g]));
+    }
+    (body.to_string(), json!(tags))
+}
+
+/// 방 글쓰기 조건(기여 표시). 아는 값만 받는다 — 모르는 값은 「누구나」.
+pub(crate) fn clean_gate(g: &str) -> Option<&'static str> {
+    match g.trim() {
+        "miner" => Some("miner"),
+        "creator" => Some("creator"),
+        "node" => Some("node"),
+        _ => None,
+    }
+}
+
+/// 내 이름표 주소가 그 기여 표시를 가졌나. 확실히 없거나 주소가 없으면 `Err`(사람에게 보일 말).
+/// 🔴 모르면 막지 않는다(자산 방과 같은 규칙) — 길이 끊긴 동안 자기 방에 자기가 못 쓰면 안 된다.
+async fn my_gate_state(gate: &str) -> Result<(), String> {
+    let label = match gate {
+        "miner" => "채굴 기여",
+        "creator" => "창작자",
+        _ => "노드 지킴이",
+    };
+    // 노드 지킴이는 주소가 아니라 이 컴퓨터의 이야기 열쇠(공개키)에 붙는다.
+    if gate == "node" {
+        let me = crate::shopkey::pubkey_of(&key()?)?;
+        let n = crate::badges::node_of(&me).await;
+        if n.get("ok") == Some(&Value::Bool(false)) && n.get("unknown") != Some(&Value::Bool(true)) {
+            return Err(format!("{label} 표시가 있는 분이 글을 써요. 읽기는 누구나 돼요."));
+        }
+        return Ok(());
+    }
+    // 이름표를 못 읽었으면(릴레이 끊김) 「주소 없음」이 아니라 「모름」이다 — 막지 않는다.
+    let Ok(my) = talk_my_rvn().await else { return Ok(()) };
+    let mine = my.get("address").and_then(Value::as_str).unwrap_or("").to_string();
+    if mine.is_empty() {
+        return Err(format!("{label} 표시가 있는 분이 글을 써요. 이름표에 레이븐코인 주소를 걸면 표시를 확인할 수 있어요."));
+    }
+    let b = crate::badges::badges_of(&mine).await;
+    if crate::badges::surely_lacks(&b, gate) {
+        return Err(format!("{label} 표시가 있는 분이 글을 써요. 읽기는 누구나 돼요."));
+    }
+    Ok(())
 }
 
 /// 읽는다. 방을 지정하면 그 방 글, 아니면 레이븐 이야기 전체.
@@ -1380,6 +1457,8 @@ fn rooms_from_events(got: Vec<Value>, metas: &[Value]) -> Vec<Value> {
         //    태그만 보면 옛 프로그램이 만든 방을 못 읽고, 본문만 보면
         //    태그로 거르는 릴레이에서 안 걸린다.
         let asset = room_asset_of(&e, &body);
+        // 기여 표시 조건도 **만든 글에서만** — 수정 글(41)은 못 바꾼다.
+        let gate = room_gate_of(&e, &body);
         // 🔴 만든 사람은 **서명을 확인한 뒤에만** 적는다. 릴레이는 아무 글이나
         //    줄 수 있다 — 확인 안 한 공개키를 믿으면, 남의 방에 「방 설정」이
         //    뜨거나 남이 보낸 수정 글이 그 방 이름을 바꾼다.
@@ -1415,6 +1494,7 @@ fn rooms_from_events(got: Vec<Value>, metas: &[Value]) -> Vec<Value> {
             // ⚠️ 자산은 **만든 글(kind 40)에서만** 온다. 수정 글은 「누가 쓸 수
             //    있나」를 못 바꾼다.
             "asset": asset,
+            "gate": gate,
             "created_at": e.get("created_at"),
             "pubkey": creator,
             "meta_at": meta_at,
@@ -1436,6 +1516,18 @@ fn room_asset_of(e: &Value, body: &Value) -> String {
         .or_else(|| body.get("asset").and_then(Value::as_str))
         .unwrap_or("")
         .to_string()
+}
+
+/// 방을 만든 글에 걸린 기여 표시 조건. 태그가 먼저, 본문이 받침. 모르는 값은 "".
+fn room_gate_of(e: &Value, body: &Value) -> String {
+    let tag = e.get("tags").and_then(Value::as_array).and_then(|ts| {
+        ts.iter().find_map(|t| {
+            let a = t.as_array()?;
+            (a.first()?.as_str()? == "gate").then(|| a.get(1)?.as_str())?
+        })
+    });
+    let raw = tag.or_else(|| body.get("gate").and_then(Value::as_str)).unwrap_or("");
+    clean_gate(raw).unwrap_or("").to_string()
 }
 
 /* ── 방 이름·설명 고치기 (NIP-28 kind 41) ─────────────────────────────────
@@ -2434,4 +2526,80 @@ mod room_meta_tests {
         assert_eq!(same.iter().filter(|t| t[0] == json!("e")).count(), 1);
     }
 
+}
+
+#[cfg(test)]
+mod badge_gate_tests {
+    //! 기여 표시 방(kind 40 `gate`). 폰·웹과 같은 규칙 — 만든 글에서만, 모르는 값은 「누구나」.
+    use super::*;
+
+    const A: [u8; 32] = [7u8; 32];
+
+    fn room(tags: Value, body: Value) -> Value {
+        crate::shopkey::sign_with(&A, KIND_ROOM, tags, &body.to_string(), now() - 60).expect("서명")
+    }
+
+    #[test]
+    fn 만드는_글에_조건을_태그와_본문_둘_다_적는다() {
+        let (body, tags) = room_draft("채굴 모임", " 설명 ", &None, Some("miner"));
+        let b: Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(b["gate"], json!("miner"));
+        assert_eq!(b["about"], json!("설명"));
+        assert!(tags.as_array().unwrap().contains(&json!(["gate", "miner"])));
+        let (body, tags) = room_draft("누구나", "", &Some("HANBIT".into()), None);
+        let b: Value = serde_json::from_str(&body).unwrap();
+        assert!(b.get("gate").is_none(), "누구나 방에는 조건을 안 적는다");
+        assert!(!tags.as_array().unwrap().iter().any(|t| t[0] == json!("gate")));
+        assert!(tags.as_array().unwrap().contains(&json!(["asset", "HANBIT"])));
+    }
+
+    #[test]
+    fn 조건_값은_아는_것만_받는다() {
+        assert_eq!(clean_gate("miner"), Some("miner"));
+        assert_eq!(clean_gate(" creator "), Some("creator"));
+        assert_eq!(clean_gate("node"), Some("node"));
+        assert_eq!(clean_gate("admin"), None);
+        assert_eq!(clean_gate("MINER"), None);
+        assert_eq!(clean_gate(""), None);
+    }
+
+    #[test]
+    fn 방_목록이_조건을_읽는다_태그가_먼저() {
+        let (body, tags) = room_draft("창작 방", "", &None, Some("creator"));
+        let e = crate::shopkey::sign_with(&A, KIND_ROOM, tags, &body, now() - 60).unwrap();
+        let only_body = room(json!([["t", TAG]]), json!({ "name": "본문만", "gate": "miner" }));
+        let bad = room(json!([["t", TAG], ["gate", "vip"]]), json!({ "name": "모르는 값", "gate": "vip" }));
+        let none = room(json!([["t", TAG]]), json!({ "name": "그냥 방" }));
+        let rooms = rooms_from_events(vec![e, only_body, bad, none], &[]);
+        let gate_of = |n: &str| rooms.iter().find(|r| r["name"] == json!(n)).unwrap()["gate"].clone();
+        assert_eq!(gate_of("창작 방"), json!("creator"));
+        assert_eq!(gate_of("본문만"), json!("miner"), "태그를 못 붙인 프로그램의 방도 읽는다");
+        assert_eq!(gate_of("모르는 값"), json!(""), "모르는 값은 누구나");
+        assert_eq!(gate_of("그냥 방"), json!(""));
+    }
+
+    /// 🔴 수정 글(41)에 적힌 조건은 안 읽는다 — 이름은 바뀌어도 「누가 쓰나」는 그대로.
+    #[test]
+    fn 수정_글은_조건을_못_바꾼다() {
+        let r = room(json!([["t", TAG]]), json!({ "name": "열린 방" }));
+        let rid = r["id"].as_str().unwrap().to_string();
+        let meta = crate::shopkey::sign_with(&A, KIND_ROOM_META, json!([["e", rid, "", "root"], ["t", TAG], ["gate", "miner"]]), &json!({ "name": "바뀐 이름", "gate": "miner" }).to_string(), now() - 10).unwrap();
+        let rooms = rooms_from_events(vec![r.clone()], &[meta]);
+        assert_eq!(rooms[0]["name"], json!("바뀐 이름"));
+        assert_eq!(rooms[0]["gate"], json!(""));
+
+        let g = room(json!([["t", TAG], ["gate", "creator"]]), json!({ "name": "창작 방", "gate": "creator" }));
+        let gid = g["id"].as_str().unwrap().to_string();
+        let meta2 = crate::shopkey::sign_with(&A, KIND_ROOM_META, json!([["e", gid, "", "root"], ["t", TAG]]), &json!({ "name": "창작 방 2", "gate": "" }).to_string(), now() - 10).unwrap();
+        let rooms = rooms_from_events(vec![g], &[meta2]);
+        assert_eq!(rooms[0]["gate"], json!("creator"), "수정 글로 조건을 풀 수 없다");
+    }
+
+    #[test]
+    fn 글쓰기에서_조건을_본다() {
+        let src = include_str!("talk.rs");
+        let i = src.find("pub async fn talk_post").unwrap();
+        let end = src[i..].find("\n#[tauri::command]").unwrap();
+        assert!(src[i..i + end].contains("room_gate(id)"), "기여 표시 방에서 조건을 안 보고 쓴다");
+    }
 }

@@ -3336,6 +3336,8 @@
           <p class="rv-profile-same">여기 이름은 「이야기」에서 보이는 이름과 같은 이름표예요. 한 곳에서 바꾸면 둘 다 바뀌어요.</p>
           <h2>라비 캐릭터 고르기</h2><div id="rv-profile-characters"></div>
           <button id="rv-profile-save" type="button">저장</button><p id="rv-profile-note" role="status"></p>
+          <!-- 11-08 기여 표시 — 이름표에 서명으로 건 주소의 체인 사실(src/talk-badges.ts). -->
+          <div id="rv-profile-badges" class="tk-badge-section" hidden></div>
         </div>
         <!-- 11-07 「내 글 서랍」 — 내가 쓴 글(폰 글 포함)·사진만·나만의 폴더·#태그. 그리는 곳은 src/my-drawer.ts. -->
         <div class="card rv-profile-posts">
@@ -3366,6 +3368,9 @@
                 비밀 이야기는 여기 쓰지 마세요.</p>
               <select id="tk-nasset"></select>
               <p class="meta" id="tk-nhint"></p>
+              <!-- 11-08 기여 표시 방 — kind 40 content.gate + 표 ["gate", 값]. 읽기는 여전히 누구나. -->
+              <label class="meta" for="tk-ngate">누가 글을 쓸 수 있나요?</label>
+              <select id="tk-ngate"></select>
               <div class="row">
                 <button id="tk-nmake">만들기</button>
                 <button class="ghost" id="tk-ncancel">취소</button>
@@ -3392,7 +3397,7 @@
                     혼자 쓰는 방이고, 그건 매일 쓰는 자리다
                     (「헤더는 보이는 게 전부」). -->
             <div class="chathead">
-              <b id="tk-title">레이븐 이야기</b><span class="rv-public">공개 방 · 누구나 읽을 수 있어요</span>
+              <b id="tk-title">레이븐 이야기</b><span id="tk-gate-head"></span><span class="rv-public">공개 방 · 누구나 읽을 수 있어요</span>
               <span class="meta" id="tk-me"></span>
               <span style="margin-left:auto"></span>
               <span id="tk-invite"></span>
@@ -3579,6 +3584,7 @@
               <button id="tk-replyx" type="button" aria-label="답장 취소">✕</button>
             </div>
 
+            <p id="tk-gate-note" class="tk-gate-note" role="status" hidden></p>
             <div class="composer">
               <!-- 🔴 그림만 두지 않는다. 「사진」이라고 **글자로** 적는다. -->
               <button class="photobtn" id="tk-photo" type="button">
@@ -3606,6 +3612,7 @@
             <p>공개 방 · 누구나 읽을 수 있어요</p>
             <button id="rv-add-friend" class="ghost" type="button">친구 추가</button>
             <p>폰에서 QR 로 친구를 추가해요.</p>
+            <div id="rv-person-badges" class="tk-badge-section" hidden></div>
             <details><summary>고급</summary><code id="rv-person-key"></code></details>
           </aside>
           <!-- 0.9.0 「방 설정」 시트 자리 — 레인 C 시트(aside#info)가 열릴 때 여기 붙고 함께 보인다(display:contents). -->

@@ -1,0 +1,38 @@
+/* 11-08 기여 표시(src/talk-badges.ts). 라비 결 B — 보라 두 톤 + 주황 한 점. 파란 체크 모양이 아니다.
+ * 🔴 style="" 금지(CSP) — 전부 여기서 칠한다. */
+:root { --tk-bd-ink: #4B3A9A; --tk-bd-soft: #EEEAFB; --tk-bd-line: #D6CEF4; --tk-bd-dot: #E2702A; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --tk-bd-ink: #C9BEF5; --tk-bd-soft: #2A2442; --tk-bd-line: #3D3466; --tk-bd-dot: #F0913F; } }
+:root[data-theme="dark"] { --tk-bd-ink: #C9BEF5; --tk-bd-soft: #2A2442; --tk-bd-line: #3D3466; --tk-bd-dot: #F0913F; }
+
+.tk-badges { display: inline-flex; flex-wrap: wrap; gap: 4px; margin-left: 6px; vertical-align: middle; }
+.tk-badges:empty { display: none; }
+.tk-badge, .tk-gate-chip { display: inline-flex; align-items: center; gap: 3px; padding: 1px 7px 1px 4px; border-radius: 999px;
+  background: var(--tk-bd-soft); border: 1px solid var(--tk-bd-line); color: var(--tk-bd-ink); font-size: 12px; font-weight: 600; line-height: 18px; white-space: nowrap; }
+.tk-badge-ico { width: 14px; height: 14px; flex: none; }
+.tk-badge-ico .b1 { fill: color-mix(in srgb, var(--tk-bd-ink) 22%, transparent); stroke: var(--tk-bd-ink); stroke-width: 1.6; stroke-linejoin: round; }
+.tk-badge-ico .b2 { fill: none; stroke: var(--tk-bd-ink); stroke-width: 1.6; stroke-linecap: round; }
+.tk-badge-ico .dot { fill: var(--tk-bd-dot); }
+
+/* 방 목록·방 머리 */
+#tk-rooms .room .tk-gate-chip { margin-left: 6px; font-size: 11px; }
+#tk-gate-head:empty { display: none; }
+#tk-gate-head { display: inline-flex; margin-left: 8px; }
+
+/* 글쓰기 칸이 닫혔을 때 */
+.tk-gate-note { margin: 0 14px 6px; color: var(--muted); font-size: var(--rv-fs-sub, 15px); }
+.tk-gate-note[hidden] { display: none; }
+#page-talk .composer.tk-gated { opacity: .6; }
+
+/* 표시 없는 분의 글 접기 */
+.bub.tk-folded > *:not(.tk-fold) { display: none; }
+.tk-fold { border: 0; background: none; padding: 0; color: var(--muted); font: inherit; font-size: var(--rv-fs-sub, 15px); cursor: pointer; text-decoration: underline; }
+
+/* 이름표 보기의 「기여 표시」 칸 */
+.tk-badge-section { border-top: 1px solid var(--line); padding: 14px 0; }
+.tk-badge-section[hidden] { display: none; }
+.tk-badge-section h4 { margin: 0 0 8px; font-size: 16px; }
+.tk-badge-row { margin: 0 0 10px; }
+.tk-badge-row p { margin: 4px 0 0; color: var(--text); font-size: 14px; }
+.tk-badge-muted { color: var(--muted); font-size: 14px; margin: 4px 0; }
+.tk-badge-note { color: var(--muted); font-size: 13px; margin: 4px 0; }
+#page-talk .who[data-person] { cursor: pointer; }

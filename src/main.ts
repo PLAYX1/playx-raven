@@ -2,6 +2,8 @@
 import "./style-attrs";
 import "./display-mode"; // 설정 「표시 방식」 칸 + 레이아웃 토큰(docs/design/window-modes.md)
 void import("./settings-nav"); // 0.9.0 설정 왼쪽 목록·주제 바꾸기·바로 가기(src/settings-nav.ts) — 레인A. 시작 묶음 1000KB 예산 때문에 따로 싣는다
+import { applyBadges, badgeSectionHtml, forgetMyAddress, gateChipHtml, gateOfRoom, gateOptionsHtml, loadBadges, paintComposerGate, setRoomGates } from "./talk-badges"; // 11-08 기여 표시
+import "./talk-badges.css";
 import { myHeadHtml, nameCardAfterMe, saveTalkName, setMyTalkName, wireTalkIdentity } from "./talk-identity"; // 0.9.0 이야기 이름표 — 레인A
 import "./app-lock"; // 잠긴 기본 화면·매장용 읽기 전용 + 다크 돈 카드(docs/design/lock-and-dark.md)
 import "./wallet-lock-refusal"; // 「지갑 암호 없음」 안내 + 트레이 거절 이벤트 — 시작 때부터 필요한 작은 조각
@@ -4749,6 +4751,11 @@ async function paintProfile(): Promise<void> {
     const profiles = await invoke<any>("talk_profiles", { pubkeys: [key] });
     ($("rv-profile-name") as HTMLInputElement).value = String(profiles?.[key]?.name || "");
     setMyTalkName(String(profiles?.[key]?.name || ""));
+    // 11-08 내 기여 표시 — 서명 확인된 주소(talk_profiles 의 rvn_address)로만.
+    const sec = $("rv-profile-badges"), address = String(profiles?.[key]?.rvn_address || "");
+    sec.hidden = false;
+    sec.innerHTML = badgeSectionHtml(key, !!address);
+    void loadBadges(invoke, [{ pubkey: key, address }]).then(() => { sec.innerHTML = badgeSectionHtml(key, !!address); });
   } catch { /* Profile name can be set while relays are unavailable. */ }
 }
 
@@ -5074,6 +5081,8 @@ function openFeed() {
     avatar.dataset.initial = ($("rv-person-name").textContent || "레").slice(0, 1);
     avatar.style.setProperty("--h", String(tkHue("raven")));
     $("rv-person-key").textContent = "";
+    $("rv-person-badges").hidden = true;
+    $("tk-gate-head").innerHTML = "";
   }
   feedNav = true;
   showPage("talk");
@@ -6270,6 +6279,8 @@ async function talkRvnLink(fresh: boolean) {
     const r = await invoke<any>("talk_rvn_link", { address: "", fresh, passphrase: pass.value || null });
     pass.value = "";
     say.textContent = r?.address ? tf("연결했어요: {0}", String(r.address)) : t("연결을 끊었어요.");
+    forgetMyAddress();
+    tkNames.delete(tkMine);
     void talkPaintRvnLink();
   } catch (e) {
     pass.value = "";
@@ -6483,6 +6494,8 @@ async function talkPaintRooms() {
   }
   rooms = tkAdmin ? tkAdmin.rooms(rooms) : rooms; // 숨긴 방 빼기·방금 바꾼 이름(talk-rooms-admin.ts)
   tkRoomNames = new Map(rooms.map((r) => [String(r.id), String(r.name)]));
+  setRoomGates(rooms); // 기여 표시 방(kind 40 gate) — talk-badges.ts
+  $("tk-gate-head").innerHTML = gateChipHtml(gateOfRoom(tkRoom));
   if (tkRoom && tkRoomNames.has(tkRoom)) setCopyText($("tk-title"), () => tkRoomNames.get(tkRoom) || t("방")); // 고친 이름을 머리줄에도
   paintInvite();
   box.innerHTML =
@@ -6497,6 +6510,7 @@ async function talkPaintRooms() {
           (r.asset
             ? `<span class="tag" title="이 자산을 가진 분만 씁니다">${escapeHtml(String(r.asset))}</span>`
             : "") +
+          gateChipHtml(gateOfRoom(String(r.id))) +
           `</button>`
       )
       .join("");
@@ -6519,6 +6533,8 @@ async function talkPaintRooms() {
       avatar.dataset.initial = ($("rv-person-name").textContent || "레").slice(0, 1);
       avatar.style.setProperty("--h", String(tkHue(tkRoom || "raven")));
       $("rv-person-key").textContent = tkRoom;
+      $("rv-person-badges").hidden = true;
+      $("tk-gate-head").innerHTML = gateChipHtml(gateOfRoom(tkRoom));
     };
   });
 }
@@ -6842,7 +6858,7 @@ async function talkPaint() {
             ? ""
             : mine
             ? myHeadHtml(String(tkNames.get(who)?.name || ""))
-            : `<div class="who" style="--h:${tkHue(who)}"><span class="rv-avatar" aria-hidden="true">${escapeHtml((tkNames.get(who)?.name || "레").slice(0,1))}</span> ${tkWho(who)}</div>`;
+            : `<div class="who" style="--h:${tkHue(who)}" data-person="${escapeHtml(who)}"><span class="rv-avatar" aria-hidden="true">${escapeHtml((tkNames.get(who)?.name || "레").slice(0,1))}</span> ${tkWho(who)}<span class="tk-badges" data-badges-for="${escapeHtml(who)}"></span></div>`;
 
         // ③ 시각은 **덩어리의 마지막 글 옆에** 한 번. 한 사람이 세 줄을
         //    이어 쓰면 시각도 세 번 찍혔는데, 그게 글마다 메타 줄이 붙는
@@ -6887,7 +6903,7 @@ async function talkPaint() {
           day +
           head +
           `<div class="line${mine ? " me" : ""}">
-             <div class="bub${mine ? " me" : ""}" data-say="${id}">${인용}<span translate="no">${escapeHtml(본문)}</span>${pic ? tkPicHtml(pic) : ""}</div>
+             <div class="bub${mine ? " me" : ""}" data-say="${id}" data-author="${escapeHtml(who)}">${인용}<span translate="no">${escapeHtml(본문)}</span>${pic ? tkPicHtml(pic) : ""}</div>
              ${clock}
            </div>` +
           조심 +
@@ -6922,6 +6938,9 @@ async function talkPaint() {
       .join("");
     // 새 글이 아래에 있으므로 맨 아래로 내린다. 안 하면 옛날 글만 보인다.
     box.dataset.loaded = "1";
+    // 11-08 기여 표시 — 아는 것은 바로 붙이고, 모르는 사람은 뒤에서 물어 온 뒤 다시 붙인다(글 그리기를 안 기다리게).
+    applyBadges(box, 읽은방, tkMine);
+    void tkBadgesLoad(box, 읽은방, 쓴이);
     if (wasAtBottom) { box.scrollTop = box.scrollHeight; $("tk-new-messages").hidden = true; }
     else { box.scrollTop = previousTop; if (box.scrollHeight > box.clientHeight) $("tk-new-messages").hidden = false; }
     // 🔴 사진은 그려 놓고 **지켜봐야** 한다. 안 지켜보면 「받는 중…」에서
@@ -7037,6 +7056,31 @@ async function talkPaint() {
   } catch (e) {
     box.innerHTML = `<p class="meta danger">${escapeHtml(errText(e))}</p>`;
   }
+}
+
+/** 이 사람들의 기여 표시를 물어 와서 목록에 붙인다. 주소는 이름표의 **서명 확인된** rvn_address 만. */
+async function tkBadgesLoad(box: HTMLElement, room: string, pubkeys: string[]) {
+  const people = [...new Set(pubkeys)].filter((p) => p && p !== tkMine).map((pubkey) => ({ pubkey, address: String(tkNames.get(pubkey)?.rvn_address || "") }));
+  void paintComposerGate(invoke, room, tkMine, () => tkRoom === room);
+  if (await loadBadges(invoke, people)) { if (tkRoom === room) applyBadges(box, room, tkMine); }
+  else if (tkRoom === room) applyBadges(box, room, tkMine); // 「모름」→「없음」으로 바뀐 경우에도 접기를 맞춘다
+}
+
+/** 글쓴이 이름을 누르면 오른쪽 칸에 그 분의 이름표와 「기여 표시」를 보인다. */
+async function tkShowPerson(pk: string) {
+  const p = tkNames.get(pk);
+  const name = String(p?.name || "") || `${t("레이븐")} #${pk.slice(0, 4).toUpperCase()}`;
+  $("rv-person-name").textContent = name;
+  const avatar = $("rv-person-avatar");
+  avatar.dataset.initial = name.slice(0, 1);
+  avatar.style.setProperty("--h", String(tkHue(pk)));
+  $("rv-person-key").textContent = pk;
+  const sec = $("rv-person-badges");
+  const address = String(p?.rvn_address || "");
+  sec.hidden = false;
+  sec.innerHTML = badgeSectionHtml(pk, !!address);
+  await loadBadges(invoke, [{ pubkey: pk, address }]);
+  if ($("rv-person-key").textContent === pk) sec.innerHTML = badgeSectionHtml(pk, !!address);
 }
 
 /** 아직 모르는 사람의 이름표만 가져온다. 이미 아는 것은 다시 안 묻는다. */
@@ -7490,6 +7534,9 @@ async function talkNewRoom() {
   $("tk-nsay").textContent = "";
   ($("tk-nname") as HTMLInputElement).focus();
 
+  const gateSel = $("tk-ngate") as HTMLSelectElement;
+  gateSel.innerHTML = gateOptionsHtml();
+  gateSel.value = "";
   const sel = $("tk-nasset") as HTMLSelectElement;
   sel.innerHTML = `<option value="" data-desktop-copy="누구나 (자산 없이)">누구나 (자산 없이)</option>`;
   setCopyText($("tk-nhint"), () => t("자산 목록을 읽는 중…"));
@@ -7520,12 +7567,13 @@ async function talkMakeRoomGo() {
   }
   const about = ($("tk-nabout") as HTMLInputElement).value.trim();
   const asset = ($("tk-nasset") as HTMLSelectElement).value || null;
+  const gate = ($("tk-ngate") as HTMLSelectElement).value || null;
   const b = $("tk-nmake") as HTMLButtonElement;
   b.disabled = true;
   // 누른 즉시 말한다. 아무 표시 없이 기다리게 두지 않는다.
   setCopyText($("tk-nsay"), () => t("만드는 중…"));
   try {
-    await invoke("talk_make_room", { name, about, asset });
+    await invoke("talk_make_room", { name, about, asset, gate });
     $("tk-newbox").hidden = true;
     await talkPaintRooms();
     $("tk-note").innerHTML = `<span class="ok">${copyHtml("방을 만들었습니다")}</span>`;
@@ -19405,6 +19453,11 @@ window.addEventListener("DOMContentLoaded", async () => {
   });
   $("tk-reload").addEventListener("click", () => void talkPaint());
   $("tk-newroom").addEventListener("click", () => void talkNewRoom());
+  // 11-08 글쓴이 이름 → 오른쪽 칸에 「기여 표시」(talk-badges.ts).
+  $("tk-list").addEventListener("click", (ev) => {
+    const who = (ev.target as HTMLElement | null)?.closest<HTMLElement>(".who[data-person]");
+    if (who?.dataset.person) void tkShowPerson(who.dataset.person);
+  });
   tkAdmin = wireTalkRoomsAdmin({
     call: (cmd, args) => rawInvoke(cmd, args), // 잠김 안내는 시트 안에서 — 페이지 맨 아래 경고 상자를 붙이지 않는다
     me: () => tkMine,

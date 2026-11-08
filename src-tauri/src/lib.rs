@@ -106,6 +106,7 @@ mod swap;
 mod sweep;
 mod identity;
 mod talk;
+mod badges;
 // 팬클럽 — 자산(1집·2집·싱글)마다 있는 방을 묶어 보고, 여러 방에 한 번에 공지한다.
 // 방을 잠그는 일 자체는 talk.rs 가 이미 한다. 여기는 그것을 **자산 기준으로**
 // 묶는 껍데기다.
@@ -710,6 +711,7 @@ pub fn run() {
             talk::talk_delete_request,
             talk::talk_profile_set,
             talk::talk_profiles,
+            badges::talk_badges,
             talk::talk_rvn_link,
             talk::talk_my_rvn,
             talk::talk_bookmarks,
