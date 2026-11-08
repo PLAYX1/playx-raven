@@ -83,6 +83,7 @@ async function animateRavi(hasKey: boolean): Promise<void> {
 import { setStyledSrcdoc } from "./srcdoc-style";
 import { wirePhoneTransaction } from "./phone-transaction";
 import { wirePairing } from "./pairing-ui";
+import { wireNodeKeeper, openNodeKeeper } from "./node-keeper-ui";
 import { FINGERPRINT_GUESS, wireCreate, type CreateApi } from "./create-page";
 import { readItemName, verifyLink } from "./easy-create";
 import { checkShopAssetName, shopLabel, shopTokenOf, suggestShopAssetName } from "./shop-token";
@@ -11401,6 +11402,7 @@ function raviGo(to: GuideGo) {
     case "reward": showPage("reward"); return;
     // 11-08: 「라비, 폰이랑 연결해 줘」는 지갑 연결(wl-card)로 — 가게 보기(rvp-card)가 아니라 사람들이 말하는 「연결」이다.
     case "phone": showPage("settings"); document.querySelector<HTMLElement>('button.sx-easy[data-sx-to="wl-card"]')?.click(); return;
+    case "nodekeeper": openNodeKeeper(showPage); return;
     case "talk": showPage("talk"); return;
     case "settings": showPage("settings"); return;
     case "report": openReport(); return;
@@ -18830,6 +18832,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   wirePhoneTransaction(invoke, t);
   // RV6 폰 연결(설정 › 「폰 연결」) — 카드·알림은 pairing-ui.ts 가 스스로 만든다.
   wirePairing((title, message) => sure(title, message, t("연결 끊기")));
+  wireNodeKeeper();
   window.addEventListener("rv-go", (e) => { const d = String((e as CustomEvent).detail ?? ""); if (d === "qr") void openQrSheet(); else showPage(d); });
   createApi = wireCreate({
     invoke, t, go: showPage, openLink: (url) => void openUrl(url),

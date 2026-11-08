@@ -1,0 +1,13 @@
+/* 설정 › 「노드 지킴이」. style="…" 속성 대신 여기서만 모양을 준다(CSP nonce 가 속성을 막는다). */
+#nk-card [hidden] { display: none !important; }
+#nk-card h3 { margin: 0 0 6px; font-size: 16px; }
+#nk-card .nk-what { margin: 0 0 6px; }
+#nk-card .nk-switch { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 12px 0 8px; }
+#nk-card .nk-status { font-weight: 700; margin: 6px 0 2px; overflow-wrap: anywhere; }
+#nk-card .nk-status.ok { color: var(--ok, #1a7f37); }
+#nk-card .nk-days { margin: 0 0 8px; }
+#nk-card .nk-help { margin: 8px 0; padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; }
+#nk-card .nk-help p { margin: 0 0 6px; }
+#nk-card .nk-steps { margin: 4px 0 0; padding-left: 20px; }
+#nk-card .nk-steps li { margin: 4px 0; }
+#nk-card .nk-done { font-weight: 600; margin-top: 8px; }

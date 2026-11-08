@@ -158,6 +158,8 @@ mod rehearse;
 // 0.4.9 — 복구 단어(12단어)로 지갑 되살리기. 검사·주소(words) · 흐름(words_restore).
 mod words;
 mod words_restore;
+// 11-08 — 노드 지킴이: 하루 한 번 확인 서버가 이 노드에서 블록 하나를 받아 본다(켠 사람만).
+mod node_keeper;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -695,6 +697,11 @@ pub fn run() {
             identity::identity_status,
             identity::identity_adopt_person_key,
             identity::identity_restore_legacy_key,
+            node_keeper::node_keeper_settings_get,
+            node_keeper::node_keeper_settings_set,
+            node_keeper::node_keeper_check,
+            node_keeper::node_keeper_awards,
+            node_keeper::node_keeper_allow_inbound,
             talk::talk_me,
             talk::talk_post,
             // 사진 보내기. 사진·영수증·「이거요」를 못 보내면 대화방이 빈 방이 된다.
@@ -831,6 +838,7 @@ pub fn run() {
             awake::sync_with_mode();
             // 지도에 올려 둔 가게면 켜자마자 「영업 중」 신호를 한 번, 그 뒤 5분마다(map.rs).
             map::start();
+            node_keeper::start();
             use tauri::Manager;
             ravi_companion::setup(app)?;
             mini::setup(app);
