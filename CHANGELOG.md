@@ -1,5 +1,21 @@
 # 변경 기록
 
+## 0.9.25
+
+### 한국어
+
+- **지킴이 도장:** 이름 옆 표시가 새 도장으로 바뀌었습니다 — 노드 지킴이(서버), 릴레이 지킴이(허브), 채굴 지킴이(곡괭이), 창작자(연필). 「채굴 기여」는 「채굴 지킴이」로 이름이 바뀌었습니다.
+- **릴레이 지킴이:** 「릴레이 나누기」를 켜 두면 하루 한 번 확인 서버가 내 릴레이에 직접 접속해 확인합니다. 최근 30일 중 25일이면 표시가 붙습니다. 표시 방에 「릴레이 지킴이」도 고를 수 있습니다.
+- **증서 나누기:** 내 소개에서 내 표시 증서 주소를 복사하거나 피드 글 초안에 넣을 수 있습니다(보내기는 직접).
+- **응원 보내기:** 서명으로 확인된 주소가 있는 분께 RVN 을 조금 선물할 수 있습니다. 우리가 가져가는 몫은 없습니다.
+
+### English
+
+- **Keeper seals:** new badges next to names — Node keeper (server), Relay keeper (hub), Mining keeper (pickaxe), Creator (pencil). "Mining" is now "Mining keeper".
+- **Relay keeper:** with relay sharing on, the check server connects to your relay once a day. 25 of the last 30 days earns the badge. Badge rooms can now require Relay keeper.
+- **Share certificate:** copy your badge certificate link from your profile, or put it in a feed draft (you press Send).
+- **Send thanks:** gift a little RVN to people with a signature-verified address. We take no cut.
+
 ## 0.9.24
 
 ### 한국어
