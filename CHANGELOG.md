@@ -1,5 +1,21 @@
 # 변경 기록
 
+## 0.9.24
+
+### 한국어
+
+- **릴레이 나누기:** 설정 「일반」에서 켜면 이 컴퓨터 릴레이 주소를 이름표(NIP-65)에 적고, 같이 켠 레이븐볼트 데스크탑들과 서로 글을 나르고 읽습니다(최대 8곳). 바깥 주소로 직접 접속해 확인된 때에만 알립니다. 처음에는 꺼져 있습니다.
+- **내 글 다시 올리기:** 6시간마다 바깥 릴레이에서 사라진 내 글을 이 컴퓨터의 원본으로 다시 올립니다. 내가 지운 글은 다시 올리지 않습니다.
+- **이웃 릴레이에서도 읽기:** 글쓴이가 적어 둔 릴레이에서도 그 사람 글을 읽습니다(기본 켬). 그 컴퓨터 주인은 내 인터넷 주소(IP)를 볼 수 있습니다.
+- **우리 릴레이:** 노드 지킴이 표시와 릴레이 목록(kind 10002)을 받습니다.
+
+### English
+
+- **Relay sharing:** turn it on in Settings → General to put this computer's relay address on your name card (NIP-65) and exchange posts with other RavenVault desktops that share too (up to 8). It is announced only after a self-test through the public address. Off by default.
+- **Re-post my posts:** every 6 hours, posts of yours that vanished from outside relays are re-sent from this computer's copy. Posts you deleted are never re-sent.
+- **Read from neighbor relays:** also read people's posts from the relays they list (on by default). Those relay owners can see your IP address.
+- **Our relay:** now keeps node keeper badges and relay lists (kind 10002).
+
 ## 0.9.23
 
 ### 한국어
