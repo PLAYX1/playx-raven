@@ -35,9 +35,7 @@ const MAX_ADDRESSES: usize = 60;
 
 /// 확인 서버의 표시 열쇠(x-only). 이 열쇠가 서명한 kind 8 만 노드 지킴이로 센다.
 /// (node_keeper.rs 와 같은 값 — 합칠 때 하나로 줄인다.)
-pub const NODE_KEEPER_PUB: &str = "7f57c47eccfc0e5b792624595bcbc040a3c7165d3a8829e119dacbfc6d979b72";
-const AWARD_D: &str = "rv-node-keeper";
-const NODE_WINDOW_DAYS: i64 = 30;
+pub use crate::node_keeper::NODE_KEEPER_PUB;
 pub const NODE_NEEDED_DAYS: usize = 25;
 
 fn cache() -> &'static Mutex<HashMap<String, (Instant, Value)>> {
@@ -165,19 +163,7 @@ fn now_secs() -> i64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0)
 }
 
-/// 유닉스 초 → UTC `YYYY-MM-DD` (Howard Hinnant 의 civil_from_days).
-pub(crate) fn utc_day(secs: i64) -> String {
-    let z = secs.div_euclid(86_400) + 719_468;
-    let era = z.div_euclid(146_097);
-    let doe = z - era * 146_097;
-    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let d = doy - (153 * mp + 2) / 5 + 1;
-    let m = if mp < 10 { mp + 3 } else { mp - 9 };
-    let y = yoe + era * 400 + if m <= 2 { 1 } else { 0 };
-    format!("{y:04}-{m:02}-{d:02}")
-}
+pub(crate) use crate::node_keeper::utc_day;
 
 fn valid_pubkey(p: &str) -> bool {
     p.len() == 64 && p.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
@@ -186,31 +172,7 @@ fn valid_pubkey(p: &str) -> bool {
 /// 확인 서버가 `who` 에게 준 노드 지킴이 표시(kind 8)의 서로 다른 UTC 날짜 수(최근 30일, 오늘 포함).
 /// 🔴 서명은 `verify` 로 한 번 더 본다 — 릴레이는 아무 글이나 줄 수 있다.
 pub(crate) fn node_award_days(events: &[Value], who: &str, now: i64, verify: impl Fn(&Value) -> bool) -> usize {
-    let window: Vec<String> = (0..NODE_WINDOW_DAYS).map(|i| utc_day(now - i * 86_400)).collect();
-    let a_want = format!("30009:{NODE_KEEPER_PUB}:{AWARD_D}");
-    let mut days = std::collections::BTreeSet::new();
-    for e in events {
-        if e.get("kind").and_then(Value::as_i64) != Some(8) || e.get("pubkey").and_then(Value::as_str) != Some(NODE_KEEPER_PUB) {
-            continue;
-        }
-        let tags = e.get("tags").and_then(Value::as_array).cloned().unwrap_or_default();
-        let tag = |name: &str| -> Vec<String> {
-            tags.iter()
-                .filter_map(Value::as_array)
-                .filter(|t| t.first().and_then(Value::as_str) == Some(name))
-                .filter_map(|t| t.get(1).and_then(Value::as_str).map(str::to_string))
-                .collect()
-        };
-        if !tag("a").contains(&a_want) || !tag("p").iter().any(|p| p == who) || !tag("t").iter().any(|t| t == "ravencoin") {
-            continue;
-        }
-        let Some(day) = tag("day").into_iter().next() else { continue };
-        if !window.contains(&day) || days.contains(&day) || !verify(e) {
-            continue;
-        }
-        days.insert(day);
-    }
-    days.len()
+    crate::node_keeper::award_days(events, who, now, verify).len()
 }
 
 fn node_cache() -> &'static Mutex<HashMap<String, (Instant, Value)>> {

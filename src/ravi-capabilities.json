@@ -636,6 +636,16 @@
       "Check the receiving address to the last character, and if it is a new address, send a tiny amount first.",
       "受取アドレスは最後の文字まで確認し、初めての相手ならまずごく少額を送ってみてください。",
       "请核对收款地址直到最后一个字符；如果是第一次转给对方，请先转一笔很小的金额试试。"
+    ],
+    "노드 지킴이 안내": [
+      "Node keeper guide",
+      "ノードキーパーの案内",
+      "节点守护者指南"
+    ],
+    "설정의 노드 지킴이에서 참여하기를 켜 주세요.": [
+      "Turn on Join in Settings → Node keeper.",
+      "設定のノードキーパーで参加をオンに。",
+      "请在设置→节点守护者中打开参与。"
     ]
   },
   "guides": [
@@ -872,6 +882,24 @@
       ],
       "kind": "guide",
       "starter": true
+    },
+    {
+      "id": "nodekeeper",
+      "category": "app",
+      "name": "노드 지킴이 안내",
+      "say": "노드 지킴이 안내",
+      "words": "노드(?:지킴이|표시)|nodekeeper",
+      "lines": [
+        "설정의 노드 지킴이에서 참여하기를 켜 주세요."
+      ],
+      "go": [
+        {
+          "label": "노드 지킴이 안내",
+          "to": "nodekeeper"
+        }
+      ],
+      "kind": "guide",
+      "starter": false
     },
     {
       "id": "talk",

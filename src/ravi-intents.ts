@@ -50,6 +50,7 @@ const concepts = {
   help: /^(?:라비[야가]?)?(?:뭘할|뭐할|무엇을할|뭐가돼|할수있는|뭐해줄|기능(?:알|소개|목록)|사용법|도움말|도와줘|help|whatcanyoudo|howcanyouhelp|show.*features|何ができ|使い方|ヘルプ|你能做什么|可以做什么|功能介绍|帮助)/,
   promo: /홍보|광고(?:글|문구)|(?:카톡|카카오톡|단톡|인스타|instagram).*?(?:글|문장|문구|소식|소개|공지|올|포스|캡션|post|caption)|sns.*(?:글|문구|올)|특가.*(?:알려|글|만들)|promot|advertis|socialpost|instagram.*(?:post|caption)|宣伝|インスタ.*(?:投稿|文章)|宣传|推广|广告文案/,
   unsupported: /비트코인|bitcoin|\bbtc\b|比特币|比特幣|ビットコイン|이더리움|ethereum|以太坊|イーサリアム|usdt|테더|tether|솔라나|solana|도지코인|dogecoin|날씨|기온|weather|forecast|天気|天气|彩票|복권|로또/,
+  nodekeeper: /노드(?:지킴이|표시)|nodekeeper|ノードキーパー|节点守护/,
   market: /중고|판매글|secondhand|used.*rvn|中古|二手/,
 };
 type Concept = keyof typeof concepts;
@@ -99,6 +100,7 @@ export function raviIntentIds(q: string): string[] {
   use("receive", (has("receive") || has("incoming")) && !has("owned", "assets") && !has("owned", "cert")); use("fee", has("fee")); use("seed", has("seed"));
   use("backup", has("backup")); use("key", has("key")); use("sync", has("sync"));
   use("appearance", has("appearance")); use("about", has("about")); use("safety", has("safety")); use("market", has("market"));
+  use("nodekeeper", has("nodekeeper"));
   // Only collapse an overlapping noun, not independently stated requests.
   const collapse: Record<string, string[]> = {
     "order-link": ["orders"], qr: ["orders"], hours: ["shop"], closed: ["shop"],
@@ -106,7 +108,7 @@ export function raviIntentIds(q: string): string[] {
     assets: ["create"], seed: ["backup"], undo: ["send", "orders"],
     fee: ["send"], media: ["send", "talk"], market: ["send", "create"], reward: ["send", "assets", "create"],
     safety: ["key", "seed"], backup: ["media"], key: ["receive"],
-    password: ["seed", "backup"], map: ["shop", "receive"],
+    password: ["seed", "backup"], map: ["shop", "receive"], nodekeeper: ["sync", "talk"],
   };
   for (const [parent, children] of Object.entries(collapse)) if (ids.has(parent)) children.forEach(id => ids.delete(id));
   // Writing about a menu/shop is promotion; independently requested edits stay ambiguous.

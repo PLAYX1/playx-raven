@@ -2,7 +2,7 @@
 import capabilities from "./ravi-capabilities.json";
 import { normalizeRavi, raviResolve, raviHelpIntent, raviQuestionLanguage, type RaviLanguage } from "./ravi-intents";
 export { raviQuestionLanguage } from "./ravi-intents";
-export type GuideGo = "receive" | "send" | "wallet" | "txs" | "backup" | "create" | "assets" | "node" | "key" | "orders" | "sales" | "shop" | "reward" | "phone" | "talk" | "settings" | "report" | "qr";
+export type GuideGo = "receive" | "send" | "wallet" | "txs" | "backup" | "create" | "assets" | "node" | "key" | "orders" | "sales" | "shop" | "reward" | "phone" | "nodekeeper" | "talk" | "settings" | "report" | "qr";
 export type GuideTopic = {
   id: string; category: string; name: string; say: string; words: RegExp;
   lines: string[]; go: { label: string; to: GuideGo }[]; kind: string; starter: boolean;
