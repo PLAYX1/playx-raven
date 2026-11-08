@@ -1,5 +1,19 @@
 # 변경 기록
 
+## 0.9.23
+
+### 한국어
+
+- **기여 표시:** 이야기 방·피드에서 이름 옆에 「채굴 기여」「창작자」「노드 지킴이」 표시가 보입니다. 이름표에 건 레이븐코인 주소의 체인 기록으로만 정하고, 누구나 확인할 수 있는 사실만 보여 줍니다(신원 확인이 아닙니다). 풀 채굴 보상은 아직 세지 않습니다.
+- **표시 방:** 방을 만들 때 「누가 글을 쓸 수 있나요?」에서 누구나 · 채굴 기여 · 창작자 · 노드 지킴이 중 고를 수 있습니다. 읽기는 누구나 됩니다.
+- **노드 지킴이:** 설정 「일반」의 노드 지킴이 카드에서 참여하면, 확인 서버가 하루 한 번 내 컴퓨터 노드에 접속해 블록 하나를 받아 봅니다. 최근 30일 중 25일 확인되면 표시가 붙습니다. IP·위치는 어디에도 공개하지 않습니다.
+
+### English
+
+- **Contribution badges:** "Mining", "Creator" and "Node keeper" badges appear next to names in Talk rooms and the feed. They come only from the chain record of the Ravencoin address on a name card — facts anyone can check, not identity verification. Pool mining rewards are not counted yet.
+- **Badge rooms:** when making a room, "Who can post?" lets you pick Anyone · Mining · Creator · Node keeper. Anyone can read.
+- **Node keeper:** join from the Node keeper card in Settings → General. Once a day the check server connects to your node and fetches one block. 25 confirmed days out of the last 30 earns the badge. Your IP and location are never published.
+
 ## 0.9.22
 
 ### 한국어
