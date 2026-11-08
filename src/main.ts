@@ -86,6 +86,7 @@ import { setStyledSrcdoc } from "./srcdoc-style";
 import { wirePhoneTransaction } from "./phone-transaction";
 import { wirePairing } from "./pairing-ui";
 import { wireNodeKeeper, openNodeKeeper } from "./node-keeper-ui";
+import { wireRelayShare } from "./relay-share-ui";
 import { FINGERPRINT_GUESS, wireCreate, type CreateApi } from "./create-page";
 import { readItemName, verifyLink } from "./easy-create";
 import { checkShopAssetName, shopLabel, shopTokenOf, suggestShopAssetName } from "./shop-token";
@@ -4375,7 +4376,7 @@ async function paintPartBody(): Promise<void> {
             ],
           ],
           // 이게 왜 있는지 한 줄로. 안 적으면 「이건 또 뭐지」가 된다.
-          t("이 컴퓨터가 다른 가게의 공지도 같이 나릅니다. 가게가 늘수록 그물이 촘촘해지고, 남의 릴레이가 끊겨도 서로 붙습니다.")
+          t("이 컴퓨터 릴레이는 레이븐 이야기와 가게 공지를 받아 둡니다. 「릴레이 나누기」를 켠 컴퓨터끼리만 서로 붙어, 큰 릴레이가 끊겨도 그 사이에서는 글이 돕니다.")
         ) +
         // 🔴 릴레이는 따로 도는 프로그램이 아니라 **가게 서버 안에** 있다.
         //    그래서 켜는 길도 가게 서버를 켜는 것 하나뿐이다.
@@ -18881,6 +18882,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   // RV6 폰 연결(설정 › 「폰 연결」) — 카드·알림은 pairing-ui.ts 가 스스로 만든다.
   wirePairing((title, message) => sure(title, message, t("연결 끊기")));
   wireNodeKeeper();
+  // 설정 › 「릴레이 나누기」(docs/RELAY-SHARE.md) — 카드는 relay-share-ui.ts 가 스스로 만든다.
+  wireRelayShare();
   window.addEventListener("rv-go", (e) => { const d = String((e as CustomEvent).detail ?? ""); if (d === "qr") void openQrSheet(); else showPage(d); });
   createApi = wireCreate({
     invoke, t, go: showPage, openLink: (url) => void openUrl(url),
@@ -20009,7 +20012,7 @@ async function paintHelping(): Promise<void> {
         [t("사진 나눠 갖기"), on(ipfs?.running)],
         [t("캐기"), on(mine?.running)],
       ],
-      t("켜 두는 것만으로 이 그물이 촘촘해집니다. 가게가 늘수록 남의 릴레이가 끊겨도 서로 붙습니다.")
+      t("「릴레이 나누기」를 켠 컴퓨터끼리 서로 릴레이가 되어 줍니다. 켠 컴퓨터가 늘수록 큰 릴레이가 끊겨도 글이 잘 돕니다.")
     ) +
     // 🔴 정직하게. 지금은 색인이 꺼져 있어서 이 노드가 남의 지갑을 돕지는
     //    못한다. 돕고 있다고 적으면 안 된다.

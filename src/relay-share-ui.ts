@@ -1,0 +1,188 @@
+/* 설정 › 「릴레이 나누기」 카드. 규약 정본: docs/RELAY-SHARE.md · 뒤쪽 동작: src-tauri/src/relay_share.rs
+ *
+ * 기본값이면 아무것도 안 만져도 된다(어르신 기준): 릴레이 나누기 꺼짐 · 내 글 다시 올리기 켬 · 이웃 릴레이에서도 읽기 켬.
+ * 쓰는 릴레이 목록·주소 더하기는 접어 둔 「고급」 안에만 있다.
+ *
+ * main.ts 는 `wireRelayShare()` 한 줄만 안다. 카드는 이 파일이 #page-settings 에 붙이고,
+ * settings-nav.ts 가 「일반」 끝으로 옮긴다(index.html 은 안 고친다).
+ * style="…" 속성은 쓰지 않는다(CSP nonce 가 막는다) — 모양은 relay-share.css.
+ */
+import { invoke } from "@tauri-apps/api/core";
+import { copyHtml, setCopyText, t, tf } from "./i18n";
+import "./relay-share.css";
+
+type State = {
+  enabled: boolean; republish: boolean; outbox_read: boolean;
+  outside_url: string | null; sharing: boolean; problem: string | null;
+  peers: string[]; extra: string[]; defaults: string[];
+  republish_at: number; republish_count: number; republish_ok: boolean;
+  now: number; busy: boolean;
+};
+
+export const RELAY_SHARE_CARD = "rs-card";
+
+const esc = (v: unknown) => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
+const el = (id: string) => document.getElementById(id);
+let state: State | null = null;
+
+function ensureCard(): HTMLElement | null {
+  const page = el("page-settings");
+  if (!page) return null;
+  let card = el(RELAY_SHARE_CARD);
+  if (card) return card;
+  card = document.createElement("div");
+  card.id = RELAY_SHARE_CARD;
+  card.className = "card rs-card";
+  card.innerHTML = `
+    <h3>${copyHtml("릴레이 나누기")}</h3>
+    <p class="rs-what">${copyHtml("켜면 이 컴퓨터 릴레이 주소를 알리고, 「릴레이 나누기」를 켠 다른 레이븐볼트 컴퓨터와 서로 이야기 글을 나눠요. 큰 릴레이가 막혀도 켠 컴퓨터끼리는 글이 돌아요.")}</p>
+    <p class="meta">${copyHtml("「바깥에서도 열리게」가 켜져 있어야 해요. 지갑 정보는 보내지 않아요. 이미 공개된 이야기 글만 오가요.")}</p>
+    <label class="check rs-switch"><span class="sx-txt"><b>${copyHtml("릴레이 나누기 켜기")}</b></span><input type="checkbox" id="rs-on" role="switch" /></label>
+    <div class="rs-status" id="rs-status" role="status"></div>
+    <div class="meta rs-peers" id="rs-peers"></div>
+    <label class="check rs-switch"><span class="sx-txt"><b>${copyHtml("내 글 다시 올리기")}</b>
+      <span class="meta">${copyHtml("6시간마다 최근 30일 내 글이 큰 릴레이에 남아 있는지 보고, 빠진 글만 다시 올려요. 지운 글은 올리지 않아요.")}</span></span>
+      <input type="checkbox" id="rs-republish" role="switch" /></label>
+    <div class="meta rs-result" id="rs-result"></div>
+    <label class="check rs-switch"><span class="sx-txt"><b>${copyHtml("이웃 릴레이에서도 읽기")}</b>
+      <span class="meta">${copyHtml("다른 사람 컴퓨터 릴레이에 연결하면 그 주인이 내 인터넷 주소(IP)를 볼 수 있어요. 공개 릴레이도 마찬가지예요.")}</span></span>
+      <input type="checkbox" id="rs-outbox" role="switch" /></label>
+    <details class="rs-adv">
+      <summary>${copyHtml("고급")}</summary>
+      <p class="meta">${copyHtml("쓰는 릴레이")}</p>
+      <ul class="rs-list" id="rs-list"></ul>
+      <div class="row rs-add">
+        <input type="text" id="rs-new" inputmode="url" autocomplete="off" spellcheck="false" placeholder="wss://" />
+        <button class="ghost" id="rs-add-btn">${copyHtml("더하기")}</button>
+      </div>
+      <div class="meta rs-err" id="rs-err" role="alert"></div>
+    </details>`;
+  page.append(card);
+  (el("rs-on") as HTMLInputElement).addEventListener("change", (e) => void setSwitch({ enabled: (e.target as HTMLInputElement).checked }));
+  (el("rs-republish") as HTMLInputElement).addEventListener("change", (e) => void setSwitch({ republish: (e.target as HTMLInputElement).checked }));
+  (el("rs-outbox") as HTMLInputElement).addEventListener("change", (e) => void setSwitch({ outboxRead: (e.target as HTMLInputElement).checked }));
+  el("rs-add-btn")?.addEventListener("click", () => void addRelay());
+  el("rs-new")?.addEventListener("keydown", (e) => { if ((e as KeyboardEvent).key === "Enter") void addRelay(); });
+  el("rs-list")?.addEventListener("click", (e) => {
+    const b = (e.target as Element | null)?.closest?.("button[data-rs-remove]") as HTMLButtonElement | null;
+    if (b) void removeRelay(b.dataset.rsRemove || "");
+  });
+  return card;
+}
+
+export function statusLine(s: State): string {
+  if (!s.enabled) return t("꺼져 있어요");
+  if (s.problem === "no-outside") return t("바깥 주소가 없어 나누지 못해요 — 바깥 접속을 켜 주세요");
+  if (s.problem === "self-test") return t("바깥 주소로 들어와 보지 못했어요. 잠시 뒤 다시 해 볼게요.");
+  if (s.problem === "no-key") return t("이야기 이름(열쇠)이 아직 없어요. 이야기 화면을 한 번 열어 주세요.");
+  if (s.problem === "publish") return t("내 릴레이 주소를 알리지 못했어요. 잠시 뒤 다시 해 볼게요.");
+  if (!s.sharing) return t("준비하는 중이에요…");
+  if (s.peers.length === 0) return t("내 릴레이 주소를 알렸어요. 이웃을 찾는 중이에요.");
+  return tf("내 릴레이를 {0}명의 이웃과 나누고 있어요", s.peers.length);
+}
+
+/** 「어제 3개를 다시 올렸어요」 */
+export function resultLine(s: State): string {
+  if (!s.republish) return "";
+  if (!s.republish_at) return t("아직 확인 전이에요. 켜 두면 알아서 해요.");
+  if (!s.republish_ok) return t("큰 릴레이에 닿지 못했어요. 다음에 다시 해 볼게요.");
+  const days = Math.max(0, Math.floor(s.now / 86400) - Math.floor(s.republish_at / 86400));
+  const n = s.republish_count;
+  if (n === 0) {
+    if (days === 0) return t("오늘 확인했어요 — 빠진 글이 없어요");
+    if (days === 1) return t("어제 확인했어요 — 빠진 글이 없어요");
+    return tf("{0}일 전에 확인했어요 — 빠진 글이 없어요", days);
+  }
+  if (days === 0) return tf("오늘 {0}개를 다시 올렸어요", n);
+  if (days === 1) return tf("어제 {0}개를 다시 올렸어요", n);
+  return tf("{0}일 전에 {1}개를 다시 올렸어요", days, n);
+}
+
+function listHtml(s: State): string {
+  const row = (url: string, label: string, removable: boolean) =>
+    `<li><span class="rs-url">${esc(url)}</span><span class="meta rs-tag">${esc(label)}</span>` +
+    (removable ? `<button class="ghost rs-del" data-rs-remove="${esc(url)}">${copyHtml("지우기")}</button>` : "") + `</li>`;
+  return [
+    ...s.defaults.map((u) => row(u, t("기본"), false)),
+    ...s.extra.map((u) => row(u, t("내가 더함"), true)),
+    ...s.peers.map((u) => row(u, t("이웃"), true)),
+  ].join("");
+}
+
+function paint(s: State) {
+  state = s;
+  if (!ensureCard()) return;
+  const set = (id: string, v: boolean) => { const i = el(id) as HTMLInputElement | null; if (i) i.checked = v; };
+  set("rs-on", s.enabled);
+  set("rs-republish", s.republish);
+  set("rs-outbox", s.outbox_read);
+  const status = el("rs-status");
+  if (status) {
+    setCopyText(status, () => statusLine(s));
+    status.classList.toggle("ok", s.enabled && s.sharing);
+  }
+  const peers = el("rs-peers");
+  if (peers) {
+    peers.hidden = !s.enabled;
+    setCopyText(peers, () => tf("이웃 릴레이 {0}곳", s.peers.length));
+  }
+  const result = el("rs-result");
+  if (result) {
+    const line = resultLine(s);
+    result.hidden = !line;
+    setCopyText(result, () => resultLine(s));
+  }
+  const list = el("rs-list");
+  if (list) list.innerHTML = listHtml(s);
+}
+
+const ERR: Record<string, string> = {
+  "bad-url": "이 주소는 쓸 수 없어요. wss:// 로 시작하는 인터넷 주소만 돼요.",
+  already: "이미 쓰고 있는 주소예요.",
+  "too-many": "더 이상 더할 수 없어요. 하나를 지우고 더해 주세요.",
+};
+
+function showErr(e: unknown) {
+  const box = el("rs-err");
+  if (!box) return;
+  const code = e instanceof Error ? e.message : String(e ?? "");
+  setCopyText(box, () => (code ? t(ERR[code] ?? code) : ""));
+}
+
+async function refresh() {
+  try { paint(await invoke<State>("relay_share_get")); } catch { /* 명령이 없는 판 — 카드만 남는다 */ }
+}
+
+async function setSwitch(v: { enabled?: boolean; republish?: boolean; outboxRead?: boolean }) {
+  try { paint(await invoke<State>("relay_share_set", v)); } catch (e) { showErr(e); }
+  // 켜면 뒤에서 한 번 해 본다 — 잠시 뒤 다시 읽는다.
+  if (v.enabled) setTimeout(() => void refresh(), 15_000);
+}
+
+async function addRelay() {
+  const input = el("rs-new") as HTMLInputElement | null;
+  const url = (input?.value || "").trim();
+  if (!url) return;
+  showErr("");
+  try {
+    paint(await invoke<State>("relay_share_add", { url }));
+    if (input) input.value = "";
+  } catch (e) { showErr(e); }
+}
+
+async function removeRelay(url: string) {
+  if (!url) return;
+  showErr("");
+  try { paint(await invoke<State>("relay_share_remove", { url })); } catch (e) { showErr(e); }
+}
+
+/** 설정 화면에 카드를 붙이고, 설정을 열 때마다 다시 읽는다. */
+export function wireRelayShare() {
+  if (!ensureCard()) return;
+  void refresh();
+  window.addEventListener("desktop-language-change", () => { if (state) paint(state); });
+  document.addEventListener("click", (e) => {
+    const a = (e.target as Element | null)?.closest?.('nav a[data-page="settings"]');
+    if (a) void refresh();
+  });
+}

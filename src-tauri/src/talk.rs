@@ -1313,6 +1313,26 @@ pub async fn talk_read(room: Option<String>, limit: Option<i64>) -> Result<Value
         }
     };
 
+    // 릴레이 나누기 §4(docs/RELAY-SHARE.md): 보이는 글쓴이들이 10002 에 적은 자기 릴레이에서도 같은 물음으로 그 사람 글을 묻는다.
+    // 처음 보는 사람의 목록은 뒤에서 알아 두고 이번에는 기다리지 않는다. 동시 6곳 · 5초 · 「이웃 릴레이에서도 읽기」로 끈다.
+    {
+        let authors: Vec<String> = list.iter().filter_map(|e| e.get("pubkey").and_then(Value::as_str).map(str::to_string)).collect();
+        let filter = match &room {
+            Some(id) => json!({ "kinds": [KIND_ROOM_MSG], "#e": [id], "limit": limit }),
+            None => json!({ "kinds": [KIND_NOTE], "#t": [TAG], "limit": limit }),
+        };
+        let extra = crate::relay_share::outbox_extra(filter, authors).await;
+        // 물음에 맞는 것만(남의 릴레이가 아무거나 줄 수 있다). 서명은 읽을 때 이미 봤다.
+        let want_kind = if room.is_some() { KIND_ROOM_MSG } else { KIND_NOTE };
+        let want_tag = match &room { Some(id) => ("e", id.clone()), None => ("t", TAG.to_string()) };
+        list.extend(extra.into_iter().filter(|e| {
+            e.get("kind").and_then(Value::as_i64) == Some(want_kind)
+                && e.get("tags").and_then(Value::as_array).is_some_and(|t| {
+                    t.iter().any(|x| x.get(0).and_then(Value::as_str) == Some(want_tag.0) && x.get(1).and_then(Value::as_str) == Some(want_tag.1.as_str()))
+                })
+        }));
+    }
+
     // 같은 글이 여러 릴레이에서 온다. id 로 하나만 남긴다.
     let mut seen = std::collections::HashSet::new();
     list.retain(|e| {

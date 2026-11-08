@@ -161,6 +161,8 @@ mod words;
 mod words_restore;
 // 11-08 — 노드 지킴이: 하루 한 번 확인 서버가 이 노드에서 블록 하나를 받아 본다(켠 사람만).
 mod node_keeper;
+// 11-08 — 릴레이 나누기: 레이븐볼트 데스크탑끼리 서로 릴레이가 된다(켠 사람만). 규약 docs/RELAY-SHARE.md.
+mod relay_share;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -703,6 +705,10 @@ pub fn run() {
             node_keeper::node_keeper_check,
             node_keeper::node_keeper_awards,
             node_keeper::node_keeper_allow_inbound,
+            relay_share::relay_share_get,
+            relay_share::relay_share_set,
+            relay_share::relay_share_add,
+            relay_share::relay_share_remove,
             talk::talk_me,
             talk::talk_post,
             // 사진 보내기. 사진·영수증·「이거요」를 못 보내면 대화방이 빈 방이 된다.
@@ -841,6 +847,7 @@ pub fn run() {
             // 지도에 올려 둔 가게면 켜자마자 「영업 중」 신호를 한 번, 그 뒤 5분마다(map.rs).
             map::start();
             node_keeper::start();
+            relay_share::start();
             use tauri::Manager;
             ravi_companion::setup(app)?;
             mini::setup(app);

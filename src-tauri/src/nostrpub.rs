@@ -47,6 +47,8 @@ fn targets() -> Vec<String> {
 #[tauri::command]
 pub async fn nostr_publish(event: Value) -> Result<Value, String> {
     validate_publish_event(&event)?;
+    // 릴레이 나누기(docs/RELAY-SHARE.md §3): 내 이야기 글이면 이웃에도 같이 보낸다 — 기다리지 않고, 실패는 무시한다.
+    crate::relay_share::forward(&event);
     let msg = serde_json::to_string(&json!(["EVENT", event]))
         .map_err(|e| format!("보낼 것을 만들지 못했습니다: {e}"))?;
 
@@ -102,7 +104,7 @@ pub async fn nostr_publish(event: Value) -> Result<Value, String> {
     Ok(json!({ "ok": ok, "failed": failed }))
 }
 
-async fn send_one(url: &str, msg: &str) -> Result<(), String> {
+pub(crate) async fn send_one(url: &str, msg: &str) -> Result<(), String> {
     use futures_util::{SinkExt, StreamExt};
     use tokio_tungstenite::tungstenite::Message;
 
@@ -252,9 +254,8 @@ pub async fn nostr_query(
     //    그 화면은 아무도 안 쓴다.
     //
     //    한꺼번에 물으면 최대 7초다 — 제일 느린 한 곳만큼만 기다린다.
-    use futures_util::future::join_all;
     // 한 곳이 죽어도 나머지에서 읽는다. 릴레이는 늘 하나씩 죽는다.
-    let got = join_all(targets().iter().map(|u| read_one(u, &req, sub))).await;
+    let got = read_everywhere(&req, sub).await;
     for r in got {
         if let Ok(events) = r {
             for e in events {
@@ -312,8 +313,7 @@ pub async fn nostr_query_tag(
     //    그 화면은 아무도 안 쓴다.
     //
     //    한꺼번에 물으면 최대 7초다 — 제일 느린 한 곳만큼만 기다린다.
-    use futures_util::future::join_all;
-    let got = join_all(targets().iter().map(|u| read_one(u, &req, sub))).await;
+    let got = read_everywhere(&req, sub).await;
     for r in got {
         if let Ok(events) = r {
             for e in events {
@@ -363,13 +363,13 @@ pub async fn nostr_query_authors(
     //    그 화면은 아무도 안 쓴다.
     //
     //    한꺼번에 물으면 최대 7초다 — 제일 느린 한 곳만큼만 기다린다.
-    use futures_util::future::join_all;
-    let got = join_all(targets().iter().map(|u| read_one(u, &req, sub))).await;
+    let (got, extra) = read_split(&req, sub).await;
     // 11-07: 한 곳도 답하지 않았으면 「없음」이 아니라 「모름」이다 — 고치기 전에 읽는 쪽(이름표·북마크·팔로우)이 빈 목록으로 덮어쓰지 않게.
     if !got.iter().any(|r| r.is_ok()) {
         return Err("릴레이에 하나도 닿지 못했습니다. 인터넷 연결을 확인해 주세요.".into());
     }
-    for r in got {
+    // 이웃 릴레이는 기본 릴레이가 하나라도 답한 뒤에만 더한다 — 이웃은 글이 덜 있을 수 있어 「없음」의 근거가 되면 안 된다.
+    for r in got.into_iter().chain(extra) {
         if let Ok(events) = r {
             for e in events {
                 // 이름표는 **한 사람에 하나**다. 새것만 남긴다 — 옛것이
@@ -427,8 +427,7 @@ pub(crate) async fn nostr_query_ids(kinds: Vec<i64>, ids: Vec<String>) -> Result
     let sub = "i1";
     let req = serde_json::to_string(&json!(["REQ", sub, { "ids": ids, "kinds": kinds, "limit": ids.len() }]))
         .map_err(|e| format!("보낼 것을 만들지 못했습니다: {e}"))?;
-    use futures_util::future::join_all;
-    let got = join_all(targets().iter().map(|u| read_one(u, &req, sub))).await;
+    let got = read_everywhere(&req, sub).await;
     let mut seen: std::collections::HashMap<String, Value> = std::collections::HashMap::new();
     for events in got.into_iter().flatten() {
         for e in events {
@@ -531,6 +530,23 @@ where
     Ok((all.into_values().collect(), false))
 }
 
+/// 기본 릴레이(+이 컴퓨터) 와 릴레이 나누기 이웃·더한 곳을 **한꺼번에** 묻는다.
+/// 이웃은 5초 제한이라(relay_share::read_extra) 기본 릴레이(최대 7초)보다 늦게 붙잡지 않는다.
+async fn read_split(req: &str, sub: &str) -> (Vec<Result<Vec<Value>, String>>, Vec<Result<Vec<Value>, String>>) {
+    use futures_util::future::join_all;
+    let base = targets();
+    let extra = crate::relay_share::extra_relays();
+    tokio::join!(
+        join_all(base.iter().map(|u| read_one(u, req, sub))),
+        join_all(extra.iter().map(|u| crate::relay_share::read_extra(u, req, sub))),
+    )
+}
+
+async fn read_everywhere(req: &str, sub: &str) -> Vec<Result<Vec<Value>, String>> {
+    let (a, b) = read_split(req, sub).await;
+    a.into_iter().chain(b).collect()
+}
+
 /// read_one 과 같되, 개수로 끊지 않고 EOSE 를 받았는지까지 돌려준다(쪽 넘기기용).
 async fn read_one_eose(url: &str, req: &str, sub: &str) -> Result<(Vec<Value>, bool), String> {
     use futures_util::{SinkExt, StreamExt};
@@ -562,7 +578,7 @@ async fn read_one_eose(url: &str, req: &str, sub: &str) -> Result<(Vec<Value>, b
     Ok((out, eose))
 }
 
-async fn read_one(url: &str, req: &str, sub: &str) -> Result<Vec<Value>, String> {
+pub(crate) async fn read_one(url: &str, req: &str, sub: &str) -> Result<Vec<Value>, String> {
     use futures_util::{SinkExt, StreamExt};
     use tokio_tungstenite::tungstenite::Message;
 

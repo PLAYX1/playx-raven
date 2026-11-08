@@ -8,6 +8,7 @@
 //!
 //! 이 프로그램은 이미 노드이고 파일창고이고 계산대다. 릴레이 하나가 더
 //! 붙으면 **가게가 늘수록 그물이 촘촘해진다** — 그게 이 판을 벌인 이유다.
+//! (11-08 정직하게: 실제로 서로 붙는 것은 「릴레이 나누기」를 켠 컴퓨터끼리뿐이다 — relay_share.rs · docs/RELAY-SHARE.md.)
 //!
 //! ## 🔴 NAT 뒤에서 어떻게 되나 — 처음엔 안 된다고 생각했다
 //!
@@ -66,10 +67,11 @@ use std::sync::Mutex;
 ///  0·3·10003 — 이름표·팔로우·북마크(NIP-01/02/51). **사람마다 하나만** 남는 글이다.
 ///       이미 레이븐 이야기를 남긴 사람 것만 받는다(이름표는 ravencoin 표로도) — 남의 SNS 목록 창고가 되지 않게.
 ///       11-06 GPT 지적: 이걸 안 받아서 우리 릴레이만 읽으면 이름이 안 뜨고 팔로우·북마크가 사라졌다.
-const KINDS: [i64; 10] = [30078, 30402, 40, 41, 42, 1, 5, 0, 3, 10003];
+///   10002 — 릴레이 목록(NIP-65). 릴레이 나누기(docs/RELAY-SHARE.md §6): 이름표처럼 사람마다 하나 · 같은 규칙.
+const KINDS: [i64; 11] = [30078, 30402, 40, 41, 42, 1, 5, 0, 3, 10003, 10002];
 
 /// 사람마다 하나만 남는 글(NIP-01 replaceable: 0·3·10000~19999). 같은 사람·같은 종류면 옛것을 지운다.
-const PERSON_KINDS: [i64; 3] = [0, 3, 10003];
+const PERSON_KINDS: [i64; 4] = [0, 3, 10003, 10002];
 fn replaceable(kind: i64) -> bool { kind == 0 || kind == 3 || (10000..20000).contains(&kind) }
 
 /// 대화 글의 종류. 이 셋은 위의 가게 규칙(JSON·d 태그)을 적용하면 안 된다 —
@@ -364,6 +366,11 @@ fn person_smells_bad(e: &Value) -> Option<String> {
         t.iter().any(|x| x.get(0).and_then(Value::as_str) == Some("t") && x.get(1).and_then(Value::as_str) == Some("ravencoin"))
     }).unwrap_or(false);
     if e.get("kind").and_then(Value::as_i64) == Some(0) && tagged {
+        return None;
+    }
+    // 릴레이 목록(10002)은 레이븐 표(ravencoin) 또는 릴레이 나누기 표(ravenvault-relay)가 있으면 처음 보는 사람이어도 받는다 —
+    // 이웃 데스크탑이 서로를 찾는 글이다. 사람마다 하나만 남고(덮어쓰기), 크기 한도는 위에서 봤다.
+    if e.get("kind").and_then(Value::as_i64) == Some(10002) && (tagged || has_t(e, crate::relay_share::SHARE_TAG)) {
         return None;
     }
     Some("레이븐 이야기를 남긴 사람 것만 저장합니다".into())
@@ -1163,6 +1170,35 @@ mod tests {
         // 지우기 요청은 대화 잣대 — ravencoin 표가 있어야 한다.
         assert!(smells_bad(&json!({ "kind": 5, "pubkey": stranger, "tags": [["e", "a".repeat(64)], ["t", "ravencoin"]], "content": "" })).is_none());
         assert!(smells_bad(&json!({ "kind": 5, "pubkey": stranger, "tags": [["e", "a".repeat(64)]], "content": "" })).is_some());
+    }
+    /// 릴레이 나누기 §6: 10002 는 레이븐·릴레이 나누기 표가 있을 때만, 사람마다 가장 새 것 하나만 남는다.
+    #[test]
+    fn relay_lists_are_kept_with_raven_tags_and_replaced() {
+        use super::*;
+        let _g = OWNER_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        *TEST_OWNER.lock().unwrap() = None;
+        *STORE.lock().unwrap() = Some(vec![]);
+        assert!(KINDS.contains(&10002) && PERSON_KINDS.contains(&10002) && replaceable(10002));
+        let sk = [0x31u8; 32];
+        let at = now_secs();
+        let first = crate::relay_share::build_list(&sk, Some("wss://a.trycloudflare.com/api/relay"), at - 100).unwrap();
+        assert_eq!(store(first.clone()), (true, String::new()), "레이븐볼트 릴레이 목록을 버린다");
+        let second = crate::relay_share::build_list(&sk, Some("wss://b.trycloudflare.com/api/relay"), at).unwrap();
+        assert_eq!(store(second.clone()), (true, String::new()));
+        let kept = peek(|v| v.iter().filter(|x| x["kind"] == 10002).cloned().collect::<Vec<_>>());
+        assert_eq!(kept.len(), 1, "사람마다 하나만 남아야 한다");
+        assert_eq!(kept[0]["id"], second["id"]);
+        // 옛 목록이 뒤늦게 와도 새 것을 덮지 않는다.
+        assert!(store(first).0);
+        assert_eq!(peek(|v| v.iter().filter(|x| x["kind"] == 10002).count()), 1);
+        assert_eq!(peek(|v| v.iter().find(|x| x["kind"] == 10002).unwrap()["id"].clone()), second["id"]);
+        // 표 없는 남의 10002 는 저장하지 않는다(남의 SNS 창고가 되지 않게).
+        let plain = crate::shopkey::sign_with(&[0x32u8; 32], 10002, json!([["r", "wss://relay.example.com"]]), "", at).unwrap();
+        assert!(!store(plain).0);
+        // 릴레이 나누기 표만 있어도 받는다.
+        let only_share = crate::shopkey::sign_with(&[0x33u8; 32], 10002, json!([["r", "wss://relay.example.com"], ["t", "ravenvault-relay"]]), "", at).unwrap();
+        assert!(store(only_share).0);
+        *STORE.lock().unwrap() = None;
     }
     /// 🔴 0.9.17 장터 물건(30402 + rv-swap)을 우리 릴레이가 버리고 있었다(regtest 실측 11-07) —
     /// 본문이 JSON 이 아니고 d 가 자산 이름이 아니라서. 모양이 맞는 물건만 받고, 가게 공지 규칙은 그대로.
