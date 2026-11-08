@@ -1,6 +1,6 @@
 # 변경 기록
 
-## 0.9.25
+## 0.9.26
 
 ### 한국어
 
@@ -8,6 +8,9 @@
 - **릴레이 지킴이:** 「릴레이 나누기」를 켜 두면 하루 한 번 확인 서버가 내 릴레이에 직접 접속해 확인합니다. 최근 30일 중 25일이면 표시가 붙습니다. 표시 방에 「릴레이 지킴이」도 고를 수 있습니다.
 - **증서 나누기:** 내 소개에서 내 표시 증서 주소를 복사하거나 피드 글 초안에 넣을 수 있습니다(보내기는 직접).
 - **응원 보내기:** 서명으로 확인된 주소가 있는 분께 RVN 을 조금 선물할 수 있습니다. 우리가 가져가는 몫은 없습니다.
+- **쪽지 보관:** 이 컴퓨터가 내 쪽지(받은 것·보낸 것)를 바깥 릴레이에서 지난 것까지 모아 잠긴 그대로 보관합니다. 공개 릴레이에서 사라져도 다시 볼 수 있습니다. 이 컴퓨터 주인 앞으로 온 쪽지만 받습니다.
+- **지난 글 모으기:** 모으는 동안 「지난 글을 모으는 중이에요 · N개 모았어요」, 다 모으면 글·쪽지 개수를 보여 줍니다.
+- **연결할 때 이야기 이름 확인:** 폰과 지갑을 연결하면 두 기기의 이야기 이름이 같은지 알려 줍니다. 다르면 같은 12단어로 맞추라고 안내합니다.
 
 ### English
 
@@ -15,6 +18,9 @@
 - **Relay keeper:** with relay sharing on, the check server connects to your relay once a day. 25 of the last 30 days earns the badge. Badge rooms can now require Relay keeper.
 - **Share certificate:** copy your badge certificate link from your profile, or put it in a feed draft (you press Send).
 - **Send thanks:** gift a little RVN to people with a signature-verified address. We take no cut.
+- **Message archive:** this computer keeps your messages (received and sent) from outside relays, still encrypted, so you can read them even after public relays drop them. Only messages addressed to this computer's owner are kept.
+- **Collecting past posts:** shows "collecting · N so far" while backfilling, then post and message counts.
+- **Talk name check when linking:** after linking your phone, shows whether both devices use the same Talk name, and suggests the same 12 words if not.
 
 ## 0.9.24
 
