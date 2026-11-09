@@ -1,5 +1,25 @@
 # 변경 기록
 
+## 0.9.27
+
+### 한국어
+
+- **이야기 알림:** 나를 부른 글·답글·새로 팔로우한 분을 알림 칸에서 모아 봅니다.
+- **글 찾기·#태그:** 이 컴퓨터에 있는 글과 찾기를 지원하는 릴레이에서 글을 찾고, #태그를 누르면 그 태그 글을 모아 봅니다.
+- **@부르기:** 글에 @를 쓰면 사람을 골라 부를 수 있습니다. 답글은 원글 주인에게도 알려 줍니다.
+- **이름 확인:** 이름표에 적힌 주소(NIP-05)가 맞는지 확인되면 이름 옆에 확인 표시가 붙습니다.
+- **내 글 받기:** 내가 쓴 글·이름표·팔로우 목록을 서명된 그대로 파일로 받아 둘 수 있습니다.
+- **팔로우 피드:** 팔로우한 분의 글을 모두 보여 주고, 맨 위로 올리면 이전 글을 이어 불러옵니다.
+
+### English
+
+- **Talk notifications:** mentions, replies and new followers in one place.
+- **Search and #tags:** search posts on this computer and on relays that support search; tap a #tag to see its posts.
+- **@mentions:** type @ to pick someone; replies also notify the original author.
+- **Name check:** a check mark appears when a profile's NIP-05 address verifies.
+- **Export my posts:** save your posts, profile and follow list as signed events.
+- **Following feed:** shows every post from people you follow; scroll to the top to load older posts.
+
 ## 0.9.26
 
 ### 한국어
