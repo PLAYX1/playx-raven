@@ -378,6 +378,14 @@ async fn my_follow_list(me: &str) -> Result<Option<Value>, String> {
     Ok(got.into_iter().find(|e| e.get("pubkey").and_then(Value::as_str) == Some(me) && e.get("kind").and_then(Value::as_i64) == Some(KIND_FOLLOWS)))
 }
 
+/// 피드 「팔로우만 보기」(talk_social.rs)가 쓴다 — 같은 읽기 규칙(못 읽으면 Err).
+pub(crate) async fn my_follow_list_pub(me: &str) -> Result<Option<Value>, String> {
+    my_follow_list(me).await
+}
+pub(crate) fn follow_ids_of(list: Option<&Value>) -> Vec<String> {
+    follow_ids(list)
+}
+
 /// 내가 팔로우한 사람들(공개키).
 #[tauri::command]
 pub async fn talk_follows() -> Result<Value, String> {
@@ -535,6 +543,8 @@ pub async fn talk_profiles(pubkeys: Vec<String>) -> Result<Value, String> {
                 "picture": body.get("picture").and_then(Value::as_str).unwrap_or(""),
                 // 서명으로 확인된 레이븐코인 받기 주소만 싣는다(없거나 틀리면 "") — 폰 core/talk/rvn-link.ts 와 같은 규칙.
                 "rvn_address": verified_rvn_address(pk, &body),
+                // NIP-05 「이름@사이트」(모양이 맞는 것만). 확인은 talk_nip05_check 가 따로 한다 — 여기 있다고 확인된 것이 아니다.
+                "nip05": body.get("nip05").and_then(Value::as_str).filter(|s| crate::talk_social::parse_nip05(s).is_some()).unwrap_or(""),
             }),
         );
     }
@@ -659,6 +669,24 @@ fn reply_tags_in(room: &Option<String>, parent: &str, reply_pub: &Option<String>
     t
 }
 
+/// 모두에게 글(kind 1)에 글 속 링크 표를 더한다(talk_social::extra_note_tags). 방 글은 그대로(폰과 같다).
+fn with_note_links(kind: i64, tags: Value, text: &str, root_pub: &Option<String>) -> Value {
+    if kind != KIND_NOTE {
+        return tags;
+    }
+    let mut list = tags.as_array().cloned().unwrap_or_default();
+    let root_pub = root_pub.as_deref().map(str::to_ascii_lowercase);
+    let more = crate::talk_social::extra_note_tags(&list, text, root_pub.as_deref());
+    list.extend(more);
+    Value::Array(list)
+}
+
+// 시험용(talk_social 시험이 답글 표 모양을 같이 본다). 시험 전용 표시(cfg test)를 달면 이 파일의 글자 시험(코드만)이 거기서 끊긴다.
+#[allow(dead_code)]
+pub(crate) fn reply_tags_for_test(parent: &str, reply_pub: &str, root: &str) -> Vec<Value> {
+    reply_tags_in(&None, parent, &Some(reply_pub.to_string()), &Some(root.to_string()))
+}
+
 /// 글을 쓴다. 방을 지정하면 그 방에, 아니면 모두에게.
 #[tauri::command]
 pub async fn talk_post(
@@ -667,10 +695,15 @@ pub async fn talk_post(
     reply_to: Option<String>,
     reply_pub: Option<String>,
     reply_root: Option<String>,
+    reply_root_pub: Option<String>,
 ) -> Result<Value, String> {
     let text = text.trim().to_string();
     if text.is_empty() {
         return Err("쓸 내용이 없습니다.".into());
+    }
+    // 공개 글은 지울 수 없다 — 열쇠(nsec)처럼 보이는 글은 올리기 전에 막는다(폰 postNote 와 같다).
+    if crate::talk_social::has_nsec(&text) {
+        return Err("열쇠처럼 보이는 글은 올릴 수 없어요. 공개 글은 지울 수 없어요.".into());
     }
     let reply_root = reply_root.filter(|r| r.len() == 64 && r.chars().all(|c| c.is_ascii_hexdigit()));
     // 🔴 **자산 방이면 가진 사람만 쓴다.**
@@ -712,6 +745,8 @@ pub async fn talk_post(
         (Some(id), None) => (KIND_ROOM_MSG, json!([["e", id, "", "root"], ["t", TAG]])),
         (None, None) => (KIND_NOTE, json!([["t", TAG]])),
     };
+    // 11-09 폰 noteDraft 와 같게(모두에게 글만): 맨 위 글쓴이 p · 부른 사람(nostr:npub…) p · #낱말 t.
+    let tags = with_note_links(kind, tags, &text, &reply_root_pub);
     let ev = crate::shopkey::sign_with(&sk, kind, tags, &text, now())?;
     let r = crate::nostrpub::nostr_publish(ev.clone()).await?;
     Ok(json!({ "event": ev, "sent": r }))
@@ -903,9 +938,13 @@ pub async fn talk_photo_post(
     reply_to: Option<String>,
     reply_pub: Option<String>,
     reply_root: Option<String>,
+    reply_root_pub: Option<String>,
 ) -> Result<Value, String> {
     let reply_root = reply_root.filter(|r| r.len() == 64 && r.chars().all(|c| c.is_ascii_hexdigit()));
     let text = text.unwrap_or_default().trim().to_string();
+    if crate::talk_social::has_nsec(&text) {
+        return Err("열쇠처럼 보이는 글은 올릴 수 없어요. 공개 글은 지울 수 없어요.".into());
+    }
     if text.chars().count() > PHOTO_TEXT_MAX {
         return Err(format!(
             "사진에 붙이는 글이 너무 깁니다. {PHOTO_TEXT_MAX}자 아래로 줄여 주세요."
@@ -1029,6 +1068,7 @@ pub async fn talk_photo_post(
         ),
         (None, None) => (KIND_NOTE, json!([["t", TAG], imeta, ["ipfs", cid]])),
     };
+    let tags = with_note_links(kind, tags, &text, &reply_root_pub);
 
     let ev = crate::shopkey::sign_with(&sk, kind, tags, &content, now())?;
     // 사진은 이미 올라갔는데 글만 실패할 수 있다. 그때 주소를 안 알려 주면
@@ -1373,7 +1413,8 @@ pub async fn talk_replies(ids: Vec<String>) -> Result<Value, String> {
             continue;
         };
         // 방 표(`root`)가 앞에 올 수 있어서, 가리키는 글은 `reply` 표를 먼저 찾는다.
-        let is_e = |t: &&Value| t.get(0).and_then(Value::as_str) == Some("e");
+        // 11-09: 「mention」 표(인용한 글)는 답글 표시가 아니다(폰 noteOf 와 같다).
+        let is_e = |t: &&Value| t.get(0).and_then(Value::as_str) == Some("e") && t.get(3).and_then(Value::as_str) != Some("mention");
         let Some(parent) = tags
             .iter()
             .filter(is_e)

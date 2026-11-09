@@ -1,0 +1,56 @@
+/* 11-09 이야기 SNS(src/talk-social.ts) — 알림 · 찾기 · 글 속 링크 · NIP-05 · 내 글 받기 · 「@」.
+ * 🔴 style="" 금지(CSP) — 전부 여기서 칠한다. 좋아요 수·리포스트 자리는 없다. */
+:root { --tk-n5: #226B43; --tk-dot: #B32B22; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --tk-n5: #6fcf9a; --tk-dot: #ec7c72; } }
+:root[data-theme="dark"] { --tk-n5: #6fcf9a; --tk-dot: #ec7c72; }
+
+.tk-sico { flex: none; vertical-align: -4px; }
+.tk-headbtn { position: relative; display: inline-flex; align-items: center; gap: 6px; }
+.tk-headbtn .tk-ico:empty { display: none; }
+.tk-bell-dot { position: absolute; top: -6px; right: -6px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px;
+  background: var(--tk-dot); color: #fff; font-size: 12px; font-weight: 700; line-height: 20px; text-align: center; }
+.tk-bell-dot[hidden] { display: none; }
+
+/* 글 속 링크 */
+.tk-at, .tk-hash { border: 0; background: none; padding: 0; margin: 0; font: inherit; color: var(--brand-light); cursor: pointer; text-decoration: none; }
+.tk-at:hover, .tk-hash:hover { text-decoration: underline; }
+.tk-quoted { color: var(--muted); }
+.tk-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.tk-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 4px 12px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--panel); color: var(--brand-light); font: inherit; font-size: 15px; cursor: pointer; }
+.tk-chip:hover { background: var(--side); }
+
+/* NIP-05 이름 확인(체크 그림 + 이름@사이트) — 이모지가 아니다 */
+.tk-nip05 { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; color: var(--tk-n5); font-size: 13px; font-weight: 600; vertical-align: middle; }
+.tk-nip05[hidden] { display: none; }
+.tk-nip05-ico { flex: none; }
+.tk-nip05-bg { fill: var(--tk-n5); }
+.tk-nip05-tick { stroke: #fff; }
+.tk-person-nip05 { margin: 4px 0; }
+.tk-person-nip05:has(.tk-nip05[hidden]) { display: none; }
+.tk-mine-row { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
+
+/* 알림 · 찾기 목록 */
+.tk-nlist { display: flex; flex-direction: column; border-top: 1px solid var(--line); margin: 6px 0 10px; }
+.tk-nrow { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 56px; padding: 10px 6px; border: 0; border-bottom: 1px solid var(--line);
+  background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.tk-nrow:hover { background: var(--panel); }
+.tk-nrow.fresh { background: var(--panel); }
+.tk-nmain { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.tk-nmain small { color: var(--muted); font-size: 14px; overflow-wrap: anywhere; }
+.tk-freshdot { width: 12px; height: 12px; border-radius: 6px; background: var(--brand-light); flex: none; }
+.tk-sform { display: flex; gap: 8px; margin: 0 0 10px; }
+.tk-sinput { flex: 1; min-width: 0; min-height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--text); font: inherit; font-size: 16px; }
+.tk-note1 { padding: 4px 0 8px; }
+.tk-note1-body { margin: 8px 0 0; font-size: 16px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.tk-npub { display: block; padding: 8px 10px; border-radius: 8px; background: var(--panel); overflow-wrap: anywhere; font-size: 13px; }
+
+/* 글쓰기 「@」 */
+.tk-atbtn { font-weight: 700; font-size: 18px; }
+.tk-mentionbox { padding: 10px 14px; border-top: 1px solid var(--line); background: var(--side); }
+.tk-mentionbox[hidden] { display: none; }
+.tk-mentionbox .tk-sinput { margin-bottom: 8px; width: 100%; }
+
+/* 「글 보기」로 이 목록 안의 글을 열면 잠깐 표시 */
+.bub.tk-flash { outline: 2px solid var(--brand-light); outline-offset: 2px; }
+.tk-older { text-align: center; color: var(--muted); font-size: 14px; padding: 6px 0; }

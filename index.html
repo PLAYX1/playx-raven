@@ -3405,6 +3405,9 @@
               <button class="ghost" id="tk-room-settings" type="button" hidden disabled aria-controls="tk-room-sheet" aria-expanded="false">방 설정</button>
               <!-- 🔴 「⋯」 하나만 두지 않는다. 40~70대에게 점 세 개는 단추로
                    안 읽힌다. **글자로** 적는다. -->
+              <!-- 11-09 찾기 · 알림(src/talk-social.ts). 그림만 두지 않고 글자도 적는다. -->
+              <button class="ghost tk-headbtn" id="tk-searchbtn" type="button" aria-controls="tk-searchbox" aria-expanded="false"><span class="tk-ico" id="tk-search-ico"></span><span>찾기</span></button>
+              <button class="ghost tk-headbtn" id="tk-bell" type="button" aria-controls="tk-noticebox" aria-expanded="false"><span class="tk-ico" id="tk-bell-ico"></span><span>알림</span><span class="tk-bell-dot" id="tk-bell-dot" aria-hidden="true" hidden></span></button>
               <button class="ghost" id="tk-more" aria-expanded="false">더 보기</button>
             </div>
 
@@ -3424,6 +3427,8 @@
                 <button class="ghost" id="tk-bm">북마크</button>
                 <button class="ghost" id="tk-followonly" aria-pressed="false">팔로우만 보기</button>
                 <button class="ghost" id="tk-rvnlink">받기 주소 연결</button>
+                <button class="ghost" id="tk-export" type="button">내 글 모두 받기</button>
+                <button class="ghost" id="tk-elsewhere" type="button">다른 Nostr 앱에서 보기</button>
               </div>
 
               <!-- 🔴 **번역을 눌러야만 나오면 아무도 못 쓴다.**
@@ -3553,6 +3558,18 @@
               </div>
               <p class="meta" id="tk-rvnsay" role="status"></p>
             </div>
+            <!-- 11-09 알림 · 찾기 · 글 하나 · 내 글 받기(src/talk-social.ts 가 채운다). 좋아요 수·리포스트는 없다. -->
+            <div id="tk-noticebox" class="mutebox" role="region" aria-label="알림" hidden></div>
+            <div id="tk-searchbox" class="mutebox" role="search" hidden>
+              <form id="tk-sform" class="tk-sform">
+                <input id="tk-sq" class="tk-sinput" type="search" maxlength="200" autocomplete="off" placeholder="이름 · 낱말 · #태그 · 주소(npub)" aria-label="찾을 말" />
+                <button type="submit">찾기</button>
+              </form>
+              <div id="tk-sresult"></div>
+              <div class="muterow2"><button class="ghost" type="button" data-tk-close="tk-searchbox">닫기</button></div>
+            </div>
+            <div id="tk-notebox" class="mutebox" hidden></div>
+            <div id="tk-mydatabox" class="mutebox" hidden></div>
             <div class="msgs" id="tk-list"></div>
             <button id="tk-new-messages" class="tk-new-messages" type="button" hidden>새 메시지 ↓</button>
             <!-- 🔴 단추를 말풍선 뒤로 숨겼으면 **꺼내는 법을 적어야 한다.**
@@ -3585,6 +3602,7 @@
             </div>
 
             <p id="tk-gate-note" class="tk-gate-note" role="status" hidden></p>
+            <div id="tk-mentionbox" class="tk-mentionbox" hidden></div>
             <div class="composer">
               <!-- 🔴 그림만 두지 않는다. 「사진」이라고 **글자로** 적는다. -->
               <button class="photobtn" id="tk-photo" type="button">
@@ -3592,6 +3610,8 @@
                      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.6"/><path d="M21 16l-5-5-5.5 5.5L8 14l-5 5"/></svg>
                 <span>사진</span>
               </button>
+              <!-- 11-09 「@」 — 팔로우한 사람을 글에 넣는다(올릴 때 nostr:npub… 로 바뀌어 그 사람 알림에 뜬다). -->
+              <button class="photobtn tk-atbtn" id="tk-at" type="button" aria-controls="tk-mentionbox" aria-expanded="false" aria-label="사람 넣기">@</button>
               <!-- 🔴 안내문을 입력칸 안에 넣지 않는다. 칸이 좁아서 문장이
                    중간에 잘렸고, 잘린 경고는 경고가 아니라 잡음이다.
                    그 내용은 「더 보기」와 처음 세 번 뜨는 줄에 그대로 있다. -->

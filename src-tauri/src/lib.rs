@@ -106,6 +106,7 @@ mod swap;
 mod sweep;
 mod identity;
 mod talk;
+mod talk_social;
 mod badges;
 // 팬클럽 — 자산(1집·2집·싱글)마다 있는 방을 묶어 보고, 여러 방에 한 번에 공지한다.
 // 방을 잠그는 일 자체는 talk.rs 가 이미 한다. 여기는 그것을 **자산 기준으로**
@@ -736,6 +737,13 @@ pub fn run() {
             talk::talk_bookmark_set,
             talk::talk_follows,
             talk::talk_follow_set,
+            talk_social::talk_feed,
+            talk_social::talk_notices,
+            talk_social::talk_tag_notes,
+            talk_social::talk_search,
+            talk_social::talk_nip05_check,
+            talk_social::talk_notes_by_id,
+            talk_social::talk_export,
             talk::recovery_status,
             // 팬클럽. 자산마다 방을 묶어 보고, 여러 방에 한 번에 공지하고,
             // 몇 분이 가지셨는지 **숫자만** 센다(주소는 안 돌려준다).

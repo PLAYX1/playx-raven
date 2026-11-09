@@ -4,6 +4,8 @@ import "./display-mode"; // 설정 「표시 방식」 칸 + 레이아웃 토큰
 void import("./settings-nav"); // 0.9.0 설정 왼쪽 목록·주제 바꾸기·바로 가기(src/settings-nav.ts) — 레인A. 시작 묶음 1000KB 예산 때문에 따로 싣는다
 import { applyBadges, badgeSectionHtml, forgetMyAddress, gateChipHtml, gateOfRoom, gateOptionsHtml, loadBadges, paintComposerGate, setRoomGates } from "./talk-badges"; // 11-08 기여 표시
 import "./talk-badges.css";
+import { clearMentions, fillNoteLinks, mentionText, nip05Slot, noteBodyHtml, personMineHtml, refreshNotices, rememberNotes, wirePersonMine, wireTalkSocial } from "./talk-social"; // 11-09 알림·찾기·글 속 링크·NIP-05·내 글 받기
+import "./talk-social.css";
 import { myHeadHtml, nameCardAfterMe, saveTalkName, setMyTalkName, wireTalkIdentity } from "./talk-identity"; // 0.9.0 이야기 이름표 — 레인A
 import "./app-lock"; // 잠긴 기본 화면·매장용 읽기 전용 + 다크 돈 카드(docs/design/lock-and-dark.md)
 import "./wallet-lock-refusal"; // 「지갑 암호 없음」 안내 + 트레이 거절 이벤트 — 시작 때부터 필요한 작은 조각
@@ -5204,6 +5206,7 @@ function showPage(id: string) {
     talkPaintMuted();
     // 처음 세 번만 안내를 띄운다. 늘 띄우면 안 읽고, 안 읽히면 없는 것과 같다.
     tk처음안내();
+    void refreshNotices(); // 11-09 알림 종(새 알림 점)
     // 들어올 때마다 서랍은 닫힌 채로. 열어 둔 것을 기억하면 「복잡한 화면」이
     // 그대로 돌아온다.
     const 서랍 = document.getElementById("tk-morebox");
@@ -5912,7 +5915,10 @@ async function doKeyMove(p: any) {
 let tkRoom = "";
 let tkMine = "";
 /** 지금 답장하려는 글. 입력칸 위에 「누구에게」를 보여 주고, 보내면 비운다. 방을 옮기면 버린다. */
-let tkReply: { id: string; pub: string; room: string; who: string; snip: string; root?: string } | null = null;
+let tkReply: { id: string; pub: string; room: string; who: string; snip: string; root?: string; rootPub?: string } | null = null;
+// 11-09 피드 이어 불러오기(모두에게 · 팔로우만) — 위로 올리면 더 오래된 글 50개씩. mode 가 바뀌면 처음부터.
+let tkOlder: { mode: string; notes: any[]; until: number; end: boolean; busy: boolean } = { mode: "", notes: [], until: 0, end: false, busy: false };
+let tkFeedLast: any[] | null = null;
 /** 공개키 → 이름표. 없는 사람은 여기 없다 — **없는 이름을 지어내지 않는다.** */
 const tkNames = new Map<string, any>();
 
@@ -6756,7 +6762,8 @@ function tkNameText(pk: string): string {
 /** 이 글이 답글이면 가리키는 글의 id(`reply` 표 → 없으면 첫 `e` 표). 방 글이 아니라 **글**을 가리킨 것만. */
 function tkParentOf(e: any, roomId: string): string {
   const tags: any[] = Array.isArray(e?.tags) ? e.tags : [];
-  const es = tags.filter((x) => Array.isArray(x) && x[0] === "e" && typeof x[1] === "string");
+  // 11-09: 「mention」 표(인용한 글)는 답글 표시가 아니다(폰·talk_social.rs 와 같다).
+  const es = tags.filter((x) => Array.isArray(x) && x[0] === "e" && typeof x[1] === "string" && x[3] !== "mention");
   const marked = es.find((x) => x[3] === "reply");
   if (marked) return String(marked[1]);
   // NIP-10: 맨 위 글에 바로 단 답은 root 표 하나뿐이다(폰·11-06 이후 데스크탑). 방 글의 root 는 방이라 답글이 아니다.
@@ -6788,7 +6795,36 @@ function tkSetReply(r: typeof tkReply) {
   if (r) (document.getElementById("tk-text") as HTMLTextAreaElement | null)?.focus();
 }
 
-async function talkPaint() {
+/** 11-09 피드에서 더 오래된 글 한 쪽(50개). until = 지금까지 받은 가장 오래된 시각 − 1. 릴레이가 하나도 안 주면 끝. */
+async function tkLoadOlder() {
+  const mode = tkFollowOnly ? "f" : "a";
+  if (tkOlder.mode !== mode || tkOlder.busy || tkOlder.end) return;
+  const box = $("tk-list");
+  const oldest = Math.min(...[...(tkFeedLast ?? []), ...tkOlder.notes].map((e) => Number(e.created_at || 0)).filter((x) => x > 0), tkOlder.until || Infinity);
+  if (!Number.isFinite(oldest)) { tkOlder.end = true; return; }
+  tkOlder.busy = true;
+  let keep = box.scrollHeight - box.scrollTop;
+  await talkPaint({ cached: true });
+  box.scrollTop = box.scrollHeight - keep;
+  try {
+    const r = await invoke<any>("talk_feed", { follows: tkFollowOnly, until: oldest - 1, limit: 50 });
+    if (tkOlder.mode !== mode) return;
+    const notes: any[] = Array.isArray(r?.notes) ? r.notes : [];
+    if (!Number(r?.scanned || 0)) tkOlder.end = true;
+    else tkOlder.until = Math.min(oldest - 1, Number(r?.oldest || oldest - 1));
+    tkOlder.notes = [...tkOlder.notes, ...notes];
+  } catch {
+    // 못 읽었으면 끝으로 치지 않는다 — 다음에 다시 올리면 또 묻는다.
+  } finally {
+    tkOlder.busy = false;
+  }
+  if (tkRoom) return;
+  keep = box.scrollHeight - box.scrollTop;
+  await talkPaint({ cached: true });
+  box.scrollTop = box.scrollHeight - keep;
+}
+
+async function talkPaint(opts: { cached?: boolean } = {}) {
   const box = $("tk-list");
   // ⚠️ 어느 방을 읽는지 **여기서 붙잡아 둔다.** 릴레이가 답하는 사이에
   //    사장이 다른 방을 누르면 `tkRoom` 이 바뀌어, 아래에서 이 목록을
@@ -6799,14 +6835,34 @@ async function talkPaint() {
   const previousTop = box.scrollTop;
   if (!box.dataset.loaded) box.innerHTML = `<div class="meta" style="margin:auto">${copyHtml("세계 릴레이에서 읽는 중…")}</div>`;
   try {
-    const result: unknown = await invoke("talk_read", { room: 읽은방 || null, limit: 60 });
-    const list: any[] = Array.isArray(result) ? result : [];
+    let list: any[];
+    if (읽은방) {
+      const result: unknown = await invoke("talk_read", { room: 읽은방, limit: 60 });
+      list = Array.isArray(result) ? result : [];
+    } else {
+      // 11-09 모두에게 = ravencoin 표 글 · 팔로우만 = 그 사람들의 모든 맨 위 글(다른 Nostr 앱 글도, talk_social.rs talk_feed).
+      const mode = tkFollowOnly ? "f" : "a";
+      if (tkOlder.mode !== mode) { tkOlder = { mode, notes: [], until: 0, end: false, busy: false }; tkFeedLast = null; }
+      if (!(opts.cached && tkFeedLast)) {
+        let r: any;
+        try { r = await invoke<any>("talk_feed", { follows: tkFollowOnly, limit: 60 }); }
+        catch (e) { if (!tkFollowOnly) throw e; r = await invoke<any>("talk_feed", { follows: false, limit: 60 }); /* 팔로우 목록을 못 읽으면 전체를 보인다 */ }
+        tkFeedLast = Array.isArray(r?.notes) ? r.notes : [];
+        if (!tkOlder.until) tkOlder.until = Number(r?.oldest || 0);
+      }
+      list = tkFeedLast ?? [];
+    }
+    rememberNotes(list);
     // 🔴 알림 판단은 **한 곳**에만 둔다. 화면이 읽은 것도 지킴이가 읽은 것도
     //    같은 곳(`대화살피기`)으로 보낸다 — 두 곳에 나눠 두면 한쪽만 고치는
     //    날이 온다. 주문 알림의 `주문살피기` 와 같은 배치다.
     //    ⚠️ 글이 없어도 부른다. 「이 방은 여기까지가 이미 아는 것」을 적는
     //       첫 바퀴가 여기이기 때문이다.
     대화살피기(읽은방, list);
+    if (!읽은방 && tkOlder.notes.length) {
+      const have = new Set(list.map((e) => String(e.id || "")));
+      list = [...list, ...tkOlder.notes.filter((e) => !have.has(String(e.id || "")))];
+    }
     if (!list.length) {
       box.innerHTML =
         `<div class="meta" style="margin:auto;text-align:center;line-height:1.9">` +
@@ -6826,10 +6882,13 @@ async function talkPaint() {
     const 팔로우만 = !읽은방 && tkFollowOnly && !!tkFollows;
     const asc = all.filter((e) => !tkMuted[String(e.pubkey || "")] && (!팔로우만 || tkFollows!.has(String(e.pubkey || "")) || String(e.pubkey || "") === tkMine));
     const hid = all.length - asc.length;
-    const hidNote = hid
+    const olderNote = 읽은방 ? "" : tkOlder.busy
+      ? `<div class="tk-older">${copyHtml("더 오래된 글을 불러오는 중…")}</div>`
+      : tkOlder.end ? `<div class="tk-older">${copyHtml("더 오래된 글이 없어요.")}</div>` : "";
+    const hidNote = olderNote + (hid
       ? `<div class="hidnote">${copyHtml("안 보기 한 분의 글")} ${hid}${copyHtml("개를 숨겼습니다")} ·
            <button data-openmute="1">${copyHtml("명단 보기")}</button></div>`
-      : "";
+      : "");
     // 앞뒤 글을 봐야 「이름을 또 적을까」·「시각을 찍을까」를 정할 수 있다.
     // 그래서 map 안에서 옆 글을 꺼내 쓴다.
     const 때 = asc.map((e) => Number(e.created_at || 0) * 1000);
@@ -6867,7 +6926,7 @@ async function talkPaint() {
             ? ""
             : mine
             ? myHeadHtml(String(tkNames.get(who)?.name || ""))
-            : `<div class="who" style="--h:${tkHue(who)}" data-person="${escapeHtml(who)}"><span class="rv-avatar" aria-hidden="true">${escapeHtml((tkNames.get(who)?.name || "레").slice(0,1))}</span> ${tkWho(who)}<span class="tk-badges" data-badges-for="${escapeHtml(who)}"></span></div>`;
+            : `<div class="who" style="--h:${tkHue(who)}" data-person="${escapeHtml(who)}"><span class="rv-avatar" aria-hidden="true">${escapeHtml((tkNames.get(who)?.name || "레").slice(0,1))}</span> ${tkWho(who)}${nip05Slot(who)}<span class="tk-badges" data-badges-for="${escapeHtml(who)}"></span></div>`;
 
         // ③ 시각은 **덩어리의 마지막 글 옆에** 한 번. 한 사람이 세 줄을
         //    이어 쓰면 시각도 세 번 찍혔는데, 그게 글마다 메타 줄이 붙는
@@ -6912,7 +6971,7 @@ async function talkPaint() {
           day +
           head +
           `<div class="line${mine ? " me" : ""}">
-             <div class="bub${mine ? " me" : ""}" data-say="${id}" data-author="${escapeHtml(who)}">${인용}<span translate="no">${escapeHtml(본문)}</span>${pic ? tkPicHtml(pic) : ""}</div>
+             <div class="bub${mine ? " me" : ""}" data-say="${id}" data-author="${escapeHtml(who)}">${인용}${noteBodyHtml(본문)}${pic ? tkPicHtml(pic) : ""}</div>
              ${clock}
            </div>` +
           조심 +
@@ -6950,6 +7009,7 @@ async function talkPaint() {
     // 11-08 기여 표시 — 아는 것은 바로 붙이고, 모르는 사람은 뒤에서 물어 온 뒤 다시 붙인다(글 그리기를 안 기다리게).
     applyBadges(box, 읽은방, tkMine);
     void tkBadgesLoad(box, 읽은방, 쓴이);
+    void fillNoteLinks(box); // 11-09 「@이름」 이름표 · NIP-05 표시
     if (wasAtBottom) { box.scrollTop = box.scrollHeight; $("tk-new-messages").hidden = true; }
     else { box.scrollTop = previousTop; if (box.scrollHeight > box.clientHeight) $("tk-new-messages").hidden = false; }
     // 🔴 사진은 그려 놓고 **지켜봐야** 한다. 안 지켜보면 「받는 중…」에서
@@ -7023,7 +7083,9 @@ async function talkPaint() {
         const pub = String(target.pubkey || "");
         // 모두에게 글의 답은 맨 위 글(root)을 같이 넘긴다(NIP-10) — 폰은 이 표로 한 글 아래 답을 모은다.
         const 맨위 = 읽은방 ? "" : String((Array.isArray(target.tags) ? target.tags : []).find((x: any) => Array.isArray(x) && x[0] === "e" && x[3] === "root")?.[1] || "");
-        tkSetReply({ id: gid, pub, room: 읽은방, who: tkNameText(pub), snip: tkSnip(String(target.content || "")), root: 맨위 || undefined });
+        // 11-09 NIP-10: 답글의 답이면 맨 위 글쓴이도 p 로 단다(폰 noteDraft rootPubkey) — 목록에 있을 때만.
+        const 맨위쓴이 = 맨위 ? String(list.find((x) => String(x.id || "") === 맨위)?.pubkey || "") : "";
+        tkSetReply({ id: gid, pub, room: 읽은방, who: tkNameText(pub), snip: tkSnip(String(target.content || "")), root: 맨위 || undefined, rootPub: 맨위쓴이 || undefined });
         box.querySelectorAll(".bubacts.on").forEach((x) => x.classList.remove("on"));
       };
     });
@@ -7088,7 +7150,7 @@ async function tkShowPerson(pk: string) {
   const address = String(p?.rvn_address || "");
   sec.hidden = false;
   // 11-08 응원 보내기 — 서명 확인된 주소가 있을 때만(keeper-thanks-ui.ts).
-  const paintPerson = () => { sec.innerHTML = badgeSectionHtml(pk, !!address) + tipButtonHtml(pk, address, tkMine); };
+  const paintPerson = () => { sec.innerHTML = personMineHtml(pk) + badgeSectionHtml(pk, !!address) + tipButtonHtml(pk, address, tkMine); wirePersonMine(sec); }; // 11-09 NIP-05 · 나면 「내 글 모두 받기」
   paintPerson();
   await loadBadges(invoke, [{ pubkey: pk, address }]);
   if ($("rv-person-key").textContent === pk) paintPerson();
@@ -7396,7 +7458,8 @@ async function talkSend() {
   box.style.height = "auto";
   $("tk-note").textContent = "";
   try {
-    await invoke("talk_post", { text, room: tkRoom || null, replyTo: tkReply?.id ?? null, replyPub: tkReply?.pub ?? null, replyRoot: tkReply?.root ?? null });
+    await invoke("talk_post", { text: mentionText(text), room: tkRoom || null, replyTo: tkReply?.id ?? null, replyPub: tkReply?.pub ?? null, replyRoot: tkReply?.root ?? null, replyRootPub: tkReply?.rootPub ?? null });
+    clearMentions();
     tkSetReply(null);
     // 또렷해진다. 「올렸습니다」 같은 알림은 안 띄운다 — 풍선이 곧 답이다.
     임시?.classList.remove("pending");
@@ -7474,12 +7537,14 @@ async function talkSendPhoto(text: string) {
       path: p.path ?? null,
       name: p.path ? null : p.name,
       bytes: p.path ? null : (p.bytes ?? null),
-      text,
+      text: mentionText(text),
       room: tkRoom || null,
       replyTo: tkReply?.id ?? null,
       replyPub: tkReply?.pub ?? null,
       replyRoot: tkReply?.root ?? null,
+      replyRootPub: tkReply?.rootPub ?? null,
     });
+    clearMentions();
     tkSetReply(null);
     box.value = "";
     box.style.height = "auto";
@@ -19594,6 +19659,34 @@ window.addEventListener("DOMContentLoaded", async () => {
     try { localStorage.setItem("rv.talk.followOnly", tkFollowOnly ? "1" : "0"); } catch { /* 기억 못 해도 지금은 바뀐다 */ }
     tkPaintFollowOnly();
     void talkPaint();
+  });
+  // 11-09 알림·찾기·글 속 링크·NIP-05·내 글 받기·「@」(src/talk-social.ts). 바깥에 묻는 일은 러스트가 한다.
+  wireTalkSocial({
+    invoke: (cmd, args) => invoke(cmd, args),
+    me: () => tkMine,
+    nameOf: (pk) => tkNameText(pk),
+    profile: (pk) => tkNames.get(pk) || null,
+    people: () => [...tkNames.entries()].filter(([, p]) => p && p.name).map(([pubkey, p]) => ({ pubkey, name: String(p.name || ""), about: String(p.about || "") })),
+    loadNames: (pks) => tkLoadNames(pks),
+    muted: (pk) => !!tkMuted[pk],
+    showPerson: (pk) => void tkShowPerson(pk),
+    focusNote: (id) => {
+      const b = document.querySelector<HTMLElement>(`#tk-list [data-say="${CSS.escape(id)}"]`);
+      if (!b) return false;
+      b.scrollIntoView({ block: "center" });
+      b.classList.add("tk-flash");
+      setTimeout(() => b.classList.remove("tk-flash"), 2000);
+      return true;
+    },
+    active: () => currentPage === "talk",
+    errText,
+    pickSave: (name) => pickSavePath({ defaultPath: name, filters: [{ name: "JSON", extensions: ["json"] }] }),
+  });
+  // 11-09 피드 이어 불러오기 — 맨 위 가까이 올리면 더 오래된 글 50개씩(끝에 닿으면 멈춘다).
+  $("tk-list").addEventListener("scroll", () => {
+    const box = $("tk-list");
+    if (tkRoom || box.scrollTop > 80 || tkOlder.busy || tkOlder.end || !box.dataset.loaded) return;
+    void tkLoadOlder();
   });
   $("tk-rvnlink").addEventListener("click", () => { const b = $("tk-rvnbox"); b.hidden = !b.hidden; if (!b.hidden) { $("tk-rvnsay").textContent = ""; void talkPaintRvnLink(); } });
   $("tk-rvnclose").addEventListener("click", () => { $("tk-rvnbox").hidden = true; });

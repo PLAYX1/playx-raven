@@ -547,6 +547,35 @@ where
     Ok((all.into_values().collect(), false))
 }
 
+/// 정해진 물음(필터 여럿) 그대로 읽는다 — **이야기 SNS**(talk_social.rs: 팔로우 피드·알림·해시태그)가 쓴다.
+/// 필터는 우리 코드가 만든 것만 넘긴다(종류·개수가 늘 있다). 기본 릴레이가 한 곳도 답하지 않으면 「없음」이 아니라 Err.
+/// 돌려줌 (글들 — id 로 하나씩 · 최신이 앞, 답한 기본 릴레이 수).
+pub(crate) async fn query_filters(filters: Vec<Value>) -> Result<(Vec<Value>, usize), String> {
+    if filters.is_empty() || filters.iter().any(|f| f.get("kinds").and_then(Value::as_array).is_none_or(|k| k.is_empty())) {
+        return Err("무엇을 읽을지 알려 주세요.".into());
+    }
+    let sub = "f1";
+    let mut req = vec![json!("REQ"), json!(sub)];
+    req.extend(filters);
+    let req = serde_json::to_string(&Value::Array(req)).map_err(|e| format!("보낼 것을 만들지 못했습니다: {e}"))?;
+    let (base, extra) = read_split(&req, sub).await;
+    let reached = base.iter().filter(|r| r.is_ok()).count();
+    if reached == 0 {
+        return Err("릴레이에 하나도 닿지 못했습니다. 인터넷 연결을 확인해 주세요.".into());
+    }
+    let mut seen: std::collections::HashMap<String, Value> = std::collections::HashMap::new();
+    for events in base.into_iter().chain(extra).flatten() {
+        for e in events {
+            if let Some(id) = e.get("id").and_then(Value::as_str) {
+                seen.entry(id.to_string()).or_insert(e);
+            }
+        }
+    }
+    let mut out: Vec<Value> = seen.into_values().collect();
+    out.sort_by_key(|e| -(e.get("created_at").and_then(Value::as_i64).unwrap_or(0)));
+    Ok((out, reached))
+}
+
 /// 기본 릴레이(+이 컴퓨터) 와 릴레이 나누기 이웃·더한 곳을 **한꺼번에** 묻는다.
 /// 이웃은 5초 제한이라(relay_share::read_extra) 기본 릴레이(최대 7초)보다 늦게 붙잡지 않는다.
 async fn read_split(req: &str, sub: &str) -> (Vec<Result<Vec<Value>, String>>, Vec<Result<Vec<Value>, String>>) {
