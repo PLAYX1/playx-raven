@@ -112,6 +112,9 @@ pub struct Share {
     pub republish_count: usize,
     #[serde(default)]
     pub republish_ok: bool,
+    /// 사람이 「고급」에 직접 적은 내 바깥 주소(테일스케일 등). 「바깥 접속」(클라우드플레어)이 꺼져 있을 때만 쓴다.
+    #[serde(default)]
+    pub own_url: Option<String>,
 }
 
 impl Default for Share {
@@ -130,6 +133,7 @@ impl Default for Share {
             republish_at: 0,
             republish_count: 0,
             republish_ok: false,
+            own_url: None,
         }
     }
 }
@@ -702,11 +706,14 @@ async fn republish_once() -> (usize, bool) {
 /// 지금 바깥에서 붙을 수 있는 내 릴레이 주소(`wss://…/api/relay`). 터널이 살아 있을 때만.
 fn outside_url() -> Option<String> {
     let st = crate::tunnel::tunnel_status();
-    if !st["running"].as_bool().unwrap_or(false) {
-        return None;
+    if st["running"].as_bool().unwrap_or(false) {
+        if let Some(u) = st["url"].as_str() {
+            return clean_relay_url(&format!("{}/api/relay", u.replacen("https://", "wss://", 1)));
+        }
     }
-    let u = st["url"].as_str()?;
-    clean_relay_url(&format!("{}/api/relay", u.replacen("https://", "wss://", 1)))
+    // 기본은 클라우드플레어(「바깥 접속」). 그게 꺼져 있으면 사람이 직접 적은 주소(테일스케일 등).
+    // 직접 적은 주소도 알리기 전에 스스로 들어와 보는 시험(TryWith)을 똑같이 거친다.
+    current().own_url.as_deref().and_then(clean_relay_url)
 }
 
 /// 무엇을 해야 하나 — 순수 판단(시험용).
@@ -899,6 +906,7 @@ fn state_json(s: &Share) -> Value {
         "problem": if s.enabled { problem } else { None },
         "peers": if s.enabled { s.peers.clone() } else { vec![] },
         "extra": s.extra,
+        "own_url": s.own_url,
         "defaults": DEFAULT_RELAYS,
         "republish_at": s.republish_at,
         "republish_count": s.republish_count,
@@ -959,6 +967,28 @@ pub fn relay_share_add(url: String) -> Result<Value, String> {
         s.blocked.retain(|b| *b != u);
         Ok(s.clone())
     })?;
+    Ok(state_json(&s))
+}
+
+/// 「고급」 내 바깥 주소 직접 쓰기(테일스케일 등). 빈 값이면 지운다. §2 검사를 통과해야 한다.
+#[tauri::command]
+pub fn relay_share_set_own(url: Option<String>) -> Result<Value, String> {
+    let own = match url.as_deref().map(str::trim).filter(|u| !u.is_empty()) {
+        None => None,
+        Some(raw) => {
+            let Some(u) = clean_relay_url(raw) else { return Err("bad-url".into()) };
+            if is_default(&u) {
+                return Err("already".into());
+            }
+            Some(u)
+        }
+    };
+    let s = update(|s| {
+        s.own_url = own;
+        s.problem = None;
+        s.clone()
+    });
+    kick();
     Ok(state_json(&s))
 }
 

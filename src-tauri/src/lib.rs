@@ -711,6 +711,7 @@ pub fn run() {
             relay_share::relay_share_set,
             relay_share::relay_share_add,
             relay_share::relay_share_remove,
+            relay_share::relay_share_set_own,
             relay_keeper::relay_keeper_get,
             relay_keeper::relay_keeper_check,
             relay_keeper::relay_keeper_awards,

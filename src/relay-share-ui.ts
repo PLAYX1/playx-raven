@@ -14,7 +14,7 @@ import "./relay-share.css";
 type State = {
   enabled: boolean; republish: boolean; outbox_read: boolean;
   outside_url: string | null; sharing: boolean; problem: string | null;
-  peers: string[]; extra: string[]; defaults: string[];
+  peers: string[]; extra: string[]; defaults: string[]; own_url?: string | null;
   republish_at: number; republish_count: number; republish_ok: boolean;
   now: number; busy: boolean;
 };
@@ -39,6 +39,11 @@ function ensureCard(): HTMLElement | null {
     <p class="meta">${copyHtml("「바깥에서도 열리게」가 켜져 있어야 해요. 지갑 정보는 보내지 않아요. 이미 공개된 이야기 글만 오가요.")}</p>
     <label class="check rs-switch"><span class="sx-txt"><b>${copyHtml("릴레이 나누기 켜기")}</b></span><input type="checkbox" id="rs-on" role="switch" /></label>
     <div class="rs-status" id="rs-status" role="status"></div>
+    <div class="rs-outside" id="rs-outside" hidden>
+      <p class="meta">${copyHtml("「바깥 접속」을 켜면 클라우드플레어를 통해 바깥에서 들어올 수 있는 주소가 생겨요. 테일스케일을 쓰시면 「고급」에서 주소를 직접 적을 수 있어요.")}</p>
+      <div class="row sx-acts"><button class="sx-primary" id="rs-tunnel-on">${copyHtml("바깥 접속 켜기")}</button></div>
+      <div class="meta" id="rs-tunnel-msg" role="status"></div>
+    </div>
     <div class="meta rs-peers" id="rs-peers"></div>
     <label class="check rs-switch"><span class="sx-txt"><b>${copyHtml("내 글 다시 올리기")}</b>
       <span class="meta">${copyHtml("6시간마다 최근 30일 내 글이 큰 릴레이에 남아 있는지 보고, 빠진 글만 다시 올려요. 지운 글은 올리지 않아요.")}</span></span>
@@ -63,12 +68,21 @@ function ensureCard(): HTMLElement | null {
         <button class="ghost" id="rs-add-btn">${copyHtml("더하기")}</button>
       </div>
       <div class="meta rs-err" id="rs-err" role="alert"></div>
+      <p class="meta"><b>${copyHtml("내 바깥 주소 직접 쓰기 (테일스케일 등)")}</b><br>${copyHtml("「바깥 접속」이 꺼져 있을 때만 써요. 알리기 전에 이 주소로 직접 들어와 보고, 되는 주소만 알려요.")}</p>
+      <div class="row rs-add">
+        <input type="text" id="rs-own" inputmode="url" autocomplete="off" spellcheck="false" placeholder="wss://" />
+        <button class="ghost" id="rs-own-save">${copyHtml("저장")}</button>
+        <button class="ghost" id="rs-own-clear">${copyHtml("지우기")}</button>
+      </div>
     </details>`;
   page.append(card);
   (el("rs-on") as HTMLInputElement).addEventListener("change", (e) => void setSwitch({ enabled: (e.target as HTMLInputElement).checked }));
   (el("rs-republish") as HTMLInputElement).addEventListener("change", (e) => void setSwitch({ republish: (e.target as HTMLInputElement).checked }));
   (el("rs-outbox") as HTMLInputElement).addEventListener("change", (e) => void setSwitch({ outboxRead: (e.target as HTMLInputElement).checked }));
   el("rs-add-btn")?.addEventListener("click", () => void addRelay());
+  el("rs-tunnel-on")?.addEventListener("click", () => void tunnelOn());
+  el("rs-own-save")?.addEventListener("click", () => void setOwn((el("rs-own") as HTMLInputElement | null)?.value ?? ""));
+  el("rs-own-clear")?.addEventListener("click", () => void setOwn(""));
   el("rs-k-check")?.addEventListener("click", () => void keeperCheckNow());
   el("rs-new")?.addEventListener("keydown", (e) => { if ((e as KeyboardEvent).key === "Enter") void addRelay(); });
   el("rs-list")?.addEventListener("click", (e) => {
@@ -142,6 +156,10 @@ function paint(s: State) {
   }
   const list = el("rs-list");
   if (list) list.innerHTML = listHtml(s);
+  const outside = el("rs-outside");
+  if (outside) outside.hidden = !(s.enabled && s.problem === "no-outside");
+  const own = el("rs-own") as HTMLInputElement | null;
+  if (own && document.activeElement !== own) own.value = s.own_url ?? "";
   paintKeeper();
 }
 
@@ -251,6 +269,36 @@ async function addRelay() {
   try {
     paint(await invoke<State>("relay_share_add", { url }));
     if (input) input.value = "";
+  } catch (e) { showErr(e); }
+}
+
+/** 기본 = 클라우드플레어(「바깥 접속」). 준비물이 없으면 먼저 받는다. */
+async function tunnelOn() {
+  const btn = el("rs-tunnel-on") as HTMLButtonElement | null;
+  const msg = el("rs-tunnel-msg");
+  const say = (k: string) => { if (msg) setCopyText(msg, () => t(k)); };
+  if (btn) btn.disabled = true;
+  try {
+    const st = await invoke<{ running?: boolean; installed?: boolean }>("tunnel_status");
+    if (!st?.running) {
+      if (!st?.installed) { say("준비물을 받는 중입니다. 1~2분 걸립니다."); await invoke("tunnel_install"); }
+      say("켜는 중입니다…");
+      await invoke("tunnel_start", { port: 8790 });
+    }
+    say("바깥 접속을 켰어요. 곧 내 릴레이 주소를 알릴게요.");
+    await setSwitch({ enabled: true });
+  } catch (e) {
+    if (msg) msg.textContent = e instanceof Error ? e.message : String(e ?? "");
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function setOwn(url: string) {
+  showErr("");
+  try {
+    paint(await invoke<State>("relay_share_set_own", { url: url.trim() || null }));
+    setTimeout(() => void refresh(), 15_000);
   } catch (e) { showErr(e); }
 }
 
