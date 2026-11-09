@@ -1,5 +1,19 @@
 # 변경 기록
 
+## 0.9.28
+
+### 한국어
+
+- **바깥 접속 단추:** 「릴레이 나누기」가 바깥 주소가 없어 멈추면, 그 자리에 「바깥 접속 켜기」 단추가 나옵니다. 누르면 클라우드플레어로 바깥 주소를 만들고 바로 나누기 시작합니다. 왜 바깥 주소가 필요한지도 적어 두었습니다.
+- **테일스케일 주소 직접 쓰기:** 「고급」에서 내 바깥 주소(테일스케일 등)를 직접 적을 수 있습니다. 바깥 접속이 꺼져 있을 때만 쓰고, 알리기 전에 직접 들어가 보고 되는 주소만 알립니다.
+- **유럽 언어:** 프랑스어·독일어·스페인어·이탈리아어·포르투갈어·러시아어 화면의 빈칸(영어로 나오던 곳)을 채웠습니다.
+
+### English
+
+- **Inbound connections button:** when Relay sharing stops for lack of an outside address, a “Turn on inbound connections” button appears right there. It creates an outside address through Cloudflare and starts sharing. The card also explains why an outside address is needed.
+- **Type your own Tailscale address:** under “Advanced” you can enter your own outside address (Tailscale, etc.). It is used only while inbound connections are off, and the app checks it works before announcing it.
+- **European languages:** filled the gaps (text that showed in English) in French, German, Spanish, Italian, Portuguese and Russian.
+
 ## 0.9.27
 
 ### 한국어

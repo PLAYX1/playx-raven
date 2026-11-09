@@ -40,6 +40,7 @@ function ensureCard(): HTMLElement | null {
     <label class="check rs-switch"><span class="sx-txt"><b>${copyHtml("릴레이 나누기 켜기")}</b></span><input type="checkbox" id="rs-on" role="switch" /></label>
     <div class="rs-status" id="rs-status" role="status"></div>
     <div class="rs-outside" id="rs-outside" hidden>
+      <p class="meta">${copyHtml("왜 필요한가요? 이 컴퓨터는 보통 집 안에서만 보여요. 바깥 주소가 있어야 밖에 있는 폰과 다른 분들도 이 릴레이로 글을 주고받을 수 있어요.")}</p>
       <p class="meta">${copyHtml("「바깥 접속」을 켜면 클라우드플레어를 통해 바깥에서 들어올 수 있는 주소가 생겨요. 테일스케일을 쓰시면 「고급」에서 주소를 직접 적을 수 있어요.")}</p>
       <div class="row sx-acts"><button class="sx-primary" id="rs-tunnel-on">${copyHtml("바깥 접속 켜기")}</button></div>
       <div class="meta" id="rs-tunnel-msg" role="status"></div>
@@ -68,7 +69,7 @@ function ensureCard(): HTMLElement | null {
         <button class="ghost" id="rs-add-btn">${copyHtml("더하기")}</button>
       </div>
       <div class="meta rs-err" id="rs-err" role="alert"></div>
-      <p class="meta"><b>${copyHtml("내 바깥 주소 직접 쓰기 (테일스케일 등)")}</b><br>${copyHtml("「바깥 접속」이 꺼져 있을 때만 써요. 알리기 전에 이 주소로 직접 들어와 보고, 되는 주소만 알려요.")}</p>
+      <p class="meta"><b>${copyHtml("내 바깥 주소 직접 쓰기 (테일스케일 등)")}</b><br>${copyHtml("「바깥 접속」이 꺼져 있을 때만 써요. 알리기 전에 이 주소로 직접 들어와 보고, 되는 주소만 알려요.")}<br>${copyHtml("테일스케일은 이미 쓰고 계신 분을 위한 것이에요. 클라우드플레어 주소는 컴퓨터를 다시 켤 때마다 바뀌지만(앱이 새 주소를 알아서 다시 알려요), 테일스케일 주소는 바뀌지 않아요.")}</p>
       <div class="row rs-add">
         <input type="text" id="rs-own" inputmode="url" autocomplete="off" spellcheck="false" placeholder="wss://" />
         <button class="ghost" id="rs-own-save">${copyHtml("저장")}</button>

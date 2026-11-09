@@ -503,7 +503,9 @@
     "바깥 접속 켜기": "Attiva le connessioni in entrata",
     "내 바깥 주소 직접 쓰기 (테일스케일 등)": "Scrivi il mio indirizzo esterno (Tailscale, ecc.)",
     "「바깥 접속」이 꺼져 있을 때만 써요. 알리기 전에 이 주소로 직접 들어와 보고, 되는 주소만 알려요.": "Si usa solo quando “Connessioni in entrata” è spento. Prima di annunciarlo, l’app prova a collegarsi a questo indirizzo e lo annuncia solo se funziona.",
-    "바깥 접속을 켰어요. 곧 내 릴레이 주소를 알릴게요.": "Connessioni in entrata attive. A breve annunceremo l’indirizzo del tuo relay."
+    "바깥 접속을 켰어요. 곧 내 릴레이 주소를 알릴게요.": "Connessioni in entrata attive. A breve annunceremo l’indirizzo del tuo relay.",
+    "왜 필요한가요? 이 컴퓨터는 보통 집 안에서만 보여요. 바깥 주소가 있어야 밖에 있는 폰과 다른 분들도 이 릴레이로 글을 주고받을 수 있어요.": "Perché serve? Di solito questo computer è visibile solo dentro casa. Con un indirizzo esterno, anche i telefoni fuori casa e altre persone possono inviare e ricevere post tramite questo relay.",
+    "테일스케일은 이미 쓰고 계신 분을 위한 것이에요. 클라우드플레어 주소는 컴퓨터를 다시 켤 때마다 바뀌지만(앱이 새 주소를 알아서 다시 알려요), 테일스케일 주소는 바뀌지 않아요.": "Tailscale è per chi lo usa già. L’indirizzo Cloudflare cambia a ogni riavvio del computer (l’app annuncia da sola quello nuovo), mentre quello Tailscale resta uguale."
   },
   "es": {
     "AI 번역입니다": "Traducción con IA",
@@ -1008,7 +1010,9 @@
     "바깥 접속 켜기": "Activar conexiones entrantes",
     "내 바깥 주소 직접 쓰기 (테일스케일 등)": "Escribir mi dirección externa (Tailscale, etc.)",
     "「바깥 접속」이 꺼져 있을 때만 써요. 알리기 전에 이 주소로 직접 들어와 보고, 되는 주소만 알려요.": "Solo se usa mientras “Conexiones entrantes” está desactivado. Antes de anunciarla, la app se conecta a esta dirección y solo la anuncia si funciona.",
-    "바깥 접속을 켰어요. 곧 내 릴레이 주소를 알릴게요.": "Las conexiones entrantes están activadas. Pronto se anunciará la dirección de tu relay."
+    "바깥 접속을 켰어요. 곧 내 릴레이 주소를 알릴게요.": "Las conexiones entrantes están activadas. Pronto se anunciará la dirección de tu relay.",
+    "왜 필요한가요? 이 컴퓨터는 보통 집 안에서만 보여요. 바깥 주소가 있어야 밖에 있는 폰과 다른 분들도 이 릴레이로 글을 주고받을 수 있어요.": "¿Por qué hace falta? Normalmente este ordenador solo se ve dentro de tu casa. Con una dirección externa, los teléfonos fuera de casa y otras personas también pueden enviar y recibir publicaciones por este relé.",
+    "테일스케일은 이미 쓰고 계신 분을 위한 것이에요. 클라우드플레어 주소는 컴퓨터를 다시 켤 때마다 바뀌지만(앱이 새 주소를 알아서 다시 알려요), 테일스케일 주소는 바뀌지 않아요.": "Tailscale es para quienes ya lo usan. La dirección de Cloudflare cambia cada vez que se reinicia el ordenador (la app anuncia la nueva por sí sola), pero la de Tailscale no cambia."
   },
   "fr": {
     "AI 번역입니다": "Traduction par IA",
@@ -1513,7 +1517,9 @@
     "바깥 접속 켜기": "Activer les connexions entrantes",
     "내 바깥 주소 직접 쓰기 (테일스케일 등)": "Saisir mon adresse extérieure (Tailscale, etc.)",
     "「바깥 접속」이 꺼져 있을 때만 써요. 알리기 전에 이 주소로 직접 들어와 보고, 되는 주소만 알려요.": "Utilisée seulement quand « Connexions entrantes » est désactivé. Avant de l’annoncer, l’app se connecte elle-même à cette adresse et n’annonce que si cela fonctionne.",
-    "바깥 접속을 켰어요. 곧 내 릴레이 주소를 알릴게요.": "Les connexions entrantes sont activées. L’adresse de votre relais sera bientôt annoncée."
+    "바깥 접속을 켰어요. 곧 내 릴레이 주소를 알릴게요.": "Les connexions entrantes sont activées. L’adresse de votre relais sera bientôt annoncée.",
+    "왜 필요한가요? 이 컴퓨터는 보통 집 안에서만 보여요. 바깥 주소가 있어야 밖에 있는 폰과 다른 분들도 이 릴레이로 글을 주고받을 수 있어요.": "Pourquoi est-ce nécessaire ? Cet ordinateur n’est d’habitude visible que chez vous. Avec une adresse extérieure, les téléphones hors de chez vous et d’autres personnes peuvent aussi envoyer et recevoir des messages par ce relais.",
+    "테일스케일은 이미 쓰고 계신 분을 위한 것이에요. 클라우드플레어 주소는 컴퓨터를 다시 켤 때마다 바뀌지만(앱이 새 주소를 알아서 다시 알려요), 테일스케일 주소는 바뀌지 않아요.": "Tailscale est destiné à ceux qui l’utilisent déjà. Une adresse Cloudflare change à chaque redémarrage de l’ordinateur (l’application annonce la nouvelle d’elle-même), alors qu’une adresse Tailscale reste la même."
   },
   "pt-BR": {
     "AI 번역입니다": "Tradução por IA",
@@ -2018,7 +2024,9 @@
     "바깥 접속 켜기": "Ativar conexões de entrada",
     "내 바깥 주소 직접 쓰기 (테일스케일 등)": "Digitar meu endereço externo (Tailscale etc.)",
     "「바깥 접속」이 꺼져 있을 때만 써요. 알리기 전에 이 주소로 직접 들어와 보고, 되는 주소만 알려요.": "Usado apenas quando “Conexões de entrada” está desligado. Antes de anunciar, o app se conecta a este endereço e só o anuncia se funcionar.",
-    "바깥 접속을 켰어요. 곧 내 릴레이 주소를 알릴게요.": "As conexões de entrada foram ativadas. O endereço do seu relay será anunciado em breve."
+    "바깥 접속을 켰어요. 곧 내 릴레이 주소를 알릴게요.": "As conexões de entrada foram ativadas. O endereço do seu relay será anunciado em breve.",
+    "왜 필요한가요? 이 컴퓨터는 보통 집 안에서만 보여요. 바깥 주소가 있어야 밖에 있는 폰과 다른 분들도 이 릴레이로 글을 주고받을 수 있어요.": "Por que isso é necessário? Normalmente este computador só é visível dentro de casa. Com um endereço externo, telefones fora de casa e outras pessoas também podem enviar e receber publicações por este relay.",
+    "테일스케일은 이미 쓰고 계신 분을 위한 것이에요. 클라우드플레어 주소는 컴퓨터를 다시 켤 때마다 바뀌지만(앱이 새 주소를 알아서 다시 알려요), 테일스케일 주소는 바뀌지 않아요.": "O Tailscale é para quem já o usa. O endereço do Cloudflare muda sempre que o computador reinicia (o app anuncia o novo sozinho), mas o endereço do Tailscale não muda."
   },
   "de": {
     "AI 번역입니다": "KI-Übersetzung",
@@ -2523,7 +2531,9 @@
     "바깥 접속 켜기": "Verbindungen von außen einschalten",
     "내 바깥 주소 직접 쓰기 (테일스케일 등)": "Eigene Adresse von außen eintragen (Tailscale usw.)",
     "「바깥 접속」이 꺼져 있을 때만 써요. 알리기 전에 이 주소로 직접 들어와 보고, 되는 주소만 알려요.": "Wird nur verwendet, solange „Verbindungen von außen“ aus ist. Vor dem Bekanntgeben verbindet sich die App selbst mit dieser Adresse und gibt nur eine Adresse bekannt, die funktioniert.",
-    "바깥 접속을 켰어요. 곧 내 릴레이 주소를 알릴게요.": "Verbindungen von außen sind eingeschaltet. Ihre Relay-Adresse wird gleich bekannt gegeben."
+    "바깥 접속을 켰어요. 곧 내 릴레이 주소를 알릴게요.": "Verbindungen von außen sind eingeschaltet. Ihre Relay-Adresse wird gleich bekannt gegeben.",
+    "왜 필요한가요? 이 컴퓨터는 보통 집 안에서만 보여요. 바깥 주소가 있어야 밖에 있는 폰과 다른 분들도 이 릴레이로 글을 주고받을 수 있어요.": "Warum ist das nötig? Dieser Computer ist normalerweise nur in Ihrem Zuhause sichtbar. Mit einer Adresse von außen können auch Handys unterwegs und andere Menschen über dieses Relais Beiträge senden und empfangen.",
+    "테일스케일은 이미 쓰고 계신 분을 위한 것이에요. 클라우드플레어 주소는 컴퓨터를 다시 켤 때마다 바뀌지만(앱이 새 주소를 알아서 다시 알려요), 테일스케일 주소는 바뀌지 않아요.": "Tailscale ist für Menschen, die es schon nutzen. Eine Cloudflare-Adresse ändert sich bei jedem Neustart des Computers (die App meldet die neue von selbst), eine Tailscale-Adresse bleibt gleich."
   },
   "ru": {
     "AI 번역입니다": "Перевод выполнен ИИ",
@@ -3028,6 +3038,8 @@
     "바깥 접속 켜기": "Включить входящие подключения",
     "내 바깥 주소 직접 쓰기 (테일스케일 등)": "Ввести свой внешний адрес (Tailscale и др.)",
     "「바깥 접속」이 꺼져 있을 때만 써요. 알리기 전에 이 주소로 직접 들어와 보고, 되는 주소만 알려요.": "Используется, только пока «Входящие подключения» выключены. Перед объявлением приложение само подключается к этому адресу и объявляет его, только если подключение удалось.",
-    "바깥 접속을 켰어요. 곧 내 릴레이 주소를 알릴게요.": "Входящие подключения включены. Скоро адрес вашего релея будет объявлен."
+    "바깥 접속을 켰어요. 곧 내 릴레이 주소를 알릴게요.": "Входящие подключения включены. Скоро адрес вашего релея будет объявлен.",
+    "왜 필요한가요? 이 컴퓨터는 보통 집 안에서만 보여요. 바깥 주소가 있어야 밖에 있는 폰과 다른 분들도 이 릴레이로 글을 주고받을 수 있어요.": "Зачем это нужно? Обычно этот компьютер виден только внутри дома. С внешним адресом телефоны вне дома и другие люди тоже смогут отправлять и получать записи через этот ретранслятор.",
+    "테일스케일은 이미 쓰고 계신 분을 위한 것이에요. 클라우드플레어 주소는 컴퓨터를 다시 켤 때마다 바뀌지만(앱이 새 주소를 알아서 다시 알려요), 테일스케일 주소는 바뀌지 않아요.": "Tailscale — для тех, кто уже им пользуется. Адрес Cloudflare меняется при каждом перезапуске компьютера (приложение само сообщает новый), а адрес Tailscale остаётся прежним."
   }
 }
