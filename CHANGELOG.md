@@ -10,6 +10,7 @@
 - **이름 확인:** 이름표에 적힌 주소(NIP-05)가 맞는지 확인되면 이름 옆에 확인 표시가 붙습니다.
 - **내 글 받기:** 내가 쓴 글·이름표·팔로우 목록을 서명된 그대로 파일로 받아 둘 수 있습니다.
 - **팔로우 피드:** 팔로우한 분의 글을 모두 보여 주고, 맨 위로 올리면 이전 글을 이어 불러옵니다.
+- **고침:** 설정에 「릴레이 나누기」 칸이 보이지 않던 문제를 고쳤습니다(설정 › 일반 맨 아래).
 
 ### English
 
@@ -19,6 +20,7 @@
 - **Name check:** a check mark appears when a profile's NIP-05 address verifies.
 - **Export my posts:** save your posts, profile and follow list as signed events.
 - **Following feed:** shows every post from people you follow; scroll to the top to load older posts.
+- **Fix:** the Relay sharing card was missing from Settings (now at the bottom of Settings › General).
 
 ## 0.9.26
 

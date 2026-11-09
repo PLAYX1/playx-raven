@@ -19,7 +19,7 @@ type State = {
   now: number; busy: boolean;
 };
 
-export const RELAY_SHARE_CARD = "rs-card";
+export const RELAY_SHARE_CARD = "relay-share-card";
 
 const esc = (v: unknown) => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
 const el = (id: string) => document.getElementById(id);
