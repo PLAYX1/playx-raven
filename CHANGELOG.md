@@ -1,5 +1,27 @@
 # 변경 기록
 
+## 0.9.29
+
+### 한국어
+
+- **방 지우기:** 내가 만든 방은 「방 설정」에서 지울 수 있습니다. 레이븐볼트(데스크탑·폰·웹)에서는 사라지고 다시 살아나지 않습니다. 다른 Nostr 앱에는 남아 있을 수 있습니다.
+- **방 알림 끄기 · 컴퓨터 알림:** 방마다 알림을 끌 수 있고, 창을 내려 두어도 새 글·답글을 컴퓨터 알림으로 알려 줍니다.
+- **라비가 이야기 말을 알아듣습니다:** 「연락 왔어?」「○○ 방 열어 줘」「시끄러워」「이 방 초대」. 글자 크기·밝기·알림 소리·언어도 말로 바꿉니다.
+- **초대 링크:** 카톡·텔레그램에 붙이면 방 이름이 미리보기로 나오는 /t/ 링크로 바뀌었습니다.
+- **라비 이모티콘 · 「광장」:** 이모티콘이 그림으로 보이고, 공개 글 자리 이름을 「광장」으로 통일했습니다.
+- **거래 책임 고지:** 매물에 「레이븐볼트는 거래 당사자가 아닙니다」를 적고, 사기 전에 「읽었어요」를 확인합니다. 개발비 1% 표기.
+- **돈 안전:** 수수료를 모르면 보내기를 잠그고, 장터는 미리 본 값과 같을 때만 삽니다.
+
+### English
+
+- **Delete a room:** rooms you created can be deleted from Room settings. They disappear from RavenVault (desktop, phone, web) and do not come back. They may remain in other Nostr apps.
+- **Per-room mute and desktop notifications** for new posts and replies.
+- **Ravi understands talk requests:** check messages, open a room, mute, invite; also text size, theme, sound and language.
+- **Invite links** now use /t/ so chat apps show the room name.
+- **Ravi stickers and “Square”** naming for public posts.
+- **Trade responsibility notice** on listings and before buying; 1% development fee wording.
+- **Money safety:** sending locks when the fee is unknown; market buys only at the previewed price.
+
 ## 0.9.28
 
 ### 한국어
