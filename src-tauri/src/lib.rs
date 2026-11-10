@@ -165,6 +165,7 @@ mod node_keeper;
 // 11-08 — 릴레이 나누기: 레이븐볼트 데스크탑끼리 서로 릴레이가 된다(켠 사람만). 규약 docs/RELAY-SHARE.md.
 mod relay_share;
 mod relay_keeper;
+mod text_zoom;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -220,6 +221,7 @@ pub fn run() {
             ravi_companion::companion_open_main,
             ravi_companion::companion_show,
             ravi_companion::companion_bubble,
+            text_zoom::set_text_zoom,
             ravi_companion::companion_sample,
             ravi_companion::companion_move,
             ravi_companion::companion_signal,

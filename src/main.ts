@@ -311,6 +311,11 @@ import { loadRaviPersona } from "./ravi-persona-lazy";
 import { raviCrisisReply } from "./ravi-crisis";
 import { guideById, guideHtml, raviAnswerHtml, raviCopy, raviText, raviQuestionLanguage, providerOfKey, type GuideGo } from "./ravi-guide";
 import { questionNeedsPersonalData } from "./ravi-consent-need";
+import { applyTextSize, biggerOf, setTextSize, smallerOf, textSize, TEXT_SIZE_NAME, TEXT_SIZES, type TextSize } from "./text-size";
+import { raviSettingIntent, type RaviSetting } from "./ravi-settings";
+import { showRaviCard } from "./ravi-card";
+// 11-10 글자 크기 — 화면을 그리기 전에 한 번(늦으면 첫 화면이 작게 깜빡인다).
+void applyTextSize();
 
 type Asset = {
   name: string;
@@ -11761,6 +11766,67 @@ async function openRaviPromo(request = "") {
   } finally { promoOpening = false; }
 }
 
+/* ── 11-10 라비가 화면 설정을 바꾼다 ───────────────────────────────────────
+ * 되돌릴 수 있는 것은 바로 바꾸고 카드에 [되돌리기] [좋아요]. 언어만 먼저 묻는다(페이블 합의). */
+const LANG_LABEL: Record<string, string> = { ko: "한국어", en: "English", ja: "日本語", zh: "简体中文", it: "Italiano", es: "Español", fr: "Français", "pt-BR": "Português (Brasil)", de: "Deutsch", ru: "Русский" };
+function raviSaid(text: string) { chatHtml("ai", `<div>${escapeHtml(text)}</div>`); }
+function raviUndoCard(key: string, title: string, undo: () => void, undoLabel = "되돌리기") {
+  showRaviCard({ key, title, buttons: [{ label: undoLabel, run: undo }, { label: "좋아요", primary: true, run: () => {} }] });
+}
+function themeSelect() { return $("rv-theme") as HTMLSelectElement; }
+function setThemeValue(v: string) { const sel = themeSelect(); sel.value = v; sel.dispatchEvent(new Event("change")); }
+function setTalkSound(on: boolean) {
+  try { localStorage.setItem(대화소리_KEY, on ? "1" : "0"); } catch { /* 이번 실행만 */ }
+  const sw = document.getElementById("tk-snd-on") as HTMLInputElement | null;
+  if (sw) sw.checked = on;
+}
+async function raviApplySetting(x: RaviSetting) {
+  if (x.kind === "text") {
+    const was = textSize(), to = x.dir === "up" ? biggerOf(was) : smallerOf(was);
+    if (to === was) { raviSaid(t(x.dir === "up" ? "글자는 이미 가장 커요. 「언어 · 화면」에서도 고를 수 있어요." : "글자는 이미 가장 작아요.")); return; }
+    await setTextSize(to);
+    // 조사: 작게·크게 → 「로」, 보통 → 「으로」.
+    const msg = tf(to === "normal" ? "글자 크기를 「{0}」으로 바꿨어요." : "글자 크기를 「{0}」로 바꿨어요.", t(TEXT_SIZE_NAME[to]));
+    raviSaid(msg);
+    raviUndoCard("set:text", msg, () => { void setTextSize(was); raviSaid(tf(was === "normal" ? "글자 크기를 「{0}」으로 되돌렸어요." : "글자 크기를 「{0}」로 되돌렸어요.", t(TEXT_SIZE_NAME[was]))); });
+    return;
+  }
+  if (x.kind === "theme") {
+    const was = themeSelect().value;
+    setThemeValue(x.to);
+    const msg = t(x.to === "dark" ? "화면을 어둡게 바꿨어요." : "화면을 밝게 바꿨어요.");
+    raviSaid(msg);
+    raviUndoCard("set:theme", msg, () => { setThemeValue(was); raviSaid(t("화면 밝기를 되돌렸어요.")); });
+    return;
+  }
+  if (x.kind === "sound") {
+    const was = 대화알림켜짐();
+    setTalkSound(x.on);
+    const msg = t(x.on ? "이야기 알림 소리를 켰어요." : "이야기 알림 소리를 껐어요.");
+    raviSaid(msg);
+    raviUndoCard("set:sound", msg, () => { setTalkSound(was); raviSaid(t("알림 소리를 되돌렸어요.")); });
+    return;
+  }
+  // 언어 — 지금 언어로 먼저 묻는다. 바꾼 뒤 되돌리기는 두 언어로 적는다(바뀐 말을 못 읽을 수 있다).
+  const was = lang, name = LANG_LABEL[x.to] || x.to;
+  if (x.to === was) { raviSaid(tf("이미 {0}로 보고 있어요.", name)); return; }
+  const ask = tf("화면 언어를 {0}로 바꿀까요?", name);
+  raviSaid(ask);
+  showRaviCard({ key: "set:lang?", title: ask, buttons: [
+    { label: "바꾸기", primary: true, run: () => {
+      const before = t("되돌리기");
+      void Promise.resolve(setLang(x.to as typeof lang)).then(() => {
+        const after = t("되돌리기");
+        showRaviCard({ key: "set:lang", title: `${LANG_LABEL[x.to]} ✓`, buttons: [
+          { label: before === after ? before : `${before} / ${after}`, run: () => { void setLang(was); } },
+          { label: "좋아요", primary: true, run: () => {} },
+        ] });
+      });
+    } },
+    { label: "그만두기", run: () => raviSaid(t("그대로 둘게요.")) },
+  ] });
+}
+
 async function chatSend() {
   if (raviRequestPending || !($("chat-q") as HTMLInputElement).value.trim()) return;
   raviRequestPending = true;
@@ -11792,6 +11858,9 @@ async function chatSendExisting() {
     chatHtml("ai", `<div translate="no">${raviCopy(raviQuestionLanguage(q, (["ko", "en", "ja", "zh"].includes(lang) ? lang : "en") as CoreLang))("시드·키·토큰은 라비에게 보내지 마세요. 입력을 기록하지 않았어요.")}</div>`);
     return;
   }
+  // 11-10 화면 설정(글자·밝기·알림 소리·언어)은 라비+ 없이 라비가 바로 바꾼다(ravi-settings.ts).
+  const setting = raviSettingIntent(q);
+  if (setting) { ($("chat-q") as HTMLInputElement).value = ""; chatSay("me", q); void raviApplySetting(setting); return; }
   // 인물 설정·감정·체인 대답은 지연 묶음(ravi-persona-lazy.ts) — 처음 한 번만 읽는다. 읽기 실패면 null → 기존 경로.
   const persona = await loadRaviPersona();
   if (isRaviHelp(q)) {
@@ -18718,6 +18787,14 @@ window.addEventListener("DOMContentLoaded", async () => {
   paintThemeToggle();
   theme.onchange = applyTheme;
   themeToggle.onclick = () => { theme.value = isLightNow() ? "dark" : "light"; applyTheme(); };
+  // 11-10 글자 크기(작게·보통·크게) — 라비에게 말해도 같은 값이 바뀐다(rv-text-size 사건으로 단추 표시를 맞춘다).
+  const paintTextSize = () => document.querySelectorAll<HTMLButtonElement>("[data-text-size]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.textSize === textSize())));
+  document.querySelectorAll<HTMLButtonElement>("[data-text-size]").forEach((b) => {
+    const v = b.dataset.textSize as TextSize;
+    if (TEXT_SIZES.includes(v)) b.onclick = () => { void setTextSize(v); };
+  });
+  document.addEventListener("rv-text-size", paintTextSize);
+  paintTextSize();
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change", paintThemeToggle);
   // 왼쪽 맨 앞 아이콘은 라비다(아래 rv-header-ravi). 예전 앱 로고 자리는 비운다.
   $("rv-desktop-logo").remove();

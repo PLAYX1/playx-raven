@@ -94,7 +94,7 @@ function harness({ consent = { reviewed: false, balance: false, transactions: fa
     tzMin: () => 540, copyHtml: s => s, t: s => s, escapeHtml: s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]),
     errText: e => String(e), setAllRaviMood() {}, chatPopThinking() { if (/data-thinking/.test(messages.at(-1)?.html || '')) messages.pop(); }, applyActions: () => [], raviOpenScreen() {}, openRaviPromo: async () => {},
     whoseQuestion: () => null, raviWhose() {}, isPromoRequest: () => false,
-    chatSay: (who, t) => messages.push({ who, text: t }), chatHtml: (who, html) => messages.push({ who, html, text: text(html) }),
+    raviSettingIntent: () => null, raviApplySetting: async () => {}, chatSay: (who, t) => messages.push({ who, text: t }), chatHtml: (who, html) => messages.push({ who, html, text: text(html) }),
     invoke: async (command, args) => {
       calls.push({ command, args: Object.fromEntries(Object.entries(args || {}).filter(([k]) => k !== 'progress')), keys: Object.keys(args || {}).sort() });
       if (SPEND.test(command)) throw Error('Forbidden spend ' + command);

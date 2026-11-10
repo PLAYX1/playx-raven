@@ -87,7 +87,7 @@ const nodes=new Map(),messages=[],calls=[];
 const el=id=>{if(!nodes.has(id))nodes.set(id,{value:'',checked:false,hidden:false});return nodes.get(id);};
 const ctx=vm.createContext({ ...g,$:el,document:{getElementById:()=>null},aiProvider:null,
   isPromoRequest:pc.module.exports.isPromoRequest,whoseQuestion:()=>null,lang:'ko',
-  chatSay:(who,text)=>messages.push({who,text}),chatHtml:(who,html)=>messages.push({who,html}),copyHtml:s=>s,t:s=>s,
+  raviSettingIntent:()=>null,raviApplySetting:async()=>{},chatSay:(who,text)=>messages.push({who,text}),chatHtml:(who,html)=>messages.push({who,html}),copyHtml:s=>s,t:s=>s,
   invoke:async()=>{throw Error('Unexpected AI/RPC');},openRaviPromo:()=>{throw Error('Unexpected promo path');},
   showPage:page=>calls.push(['page',page]),jumpToEl:id=>calls.push(['jump',id]),
   openQrSheet:()=>calls.push(['qr']),openReceive:()=>calls.push(['receive']),openSend:()=>calls.push(['send']),openKeyCard:()=>calls.push(['key']),

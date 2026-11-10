@@ -122,11 +122,6 @@
       "画面設定の案内",
       "显示设置指南"
     ],
-    "라비 안내는 테마나 글씨 크기를 대신 바꾸지 못해요. 대신 화면 상단의 테마 선택과 설정에서 지원되는 표시 항목을 확인해 주세요.": [
-      "The guide cannot change the theme or font size. Use the theme selector at the top and check supported display options in Settings.",
-      "ガイドはテーマや文字サイズを変更できません。画面上部のテーマ選択と設定の表示項目をご確認ください。",
-      "指南无法更改主题或字号。请使用顶部主题选择器并查看设置中支持的显示选项。"
-    ],
     "문제 알리기 안내": [
       "Report a problem",
       "問題を報告",
@@ -646,6 +641,11 @@
       "Turn on Join in Settings → Node keeper.",
       "設定のノードキーパーで参加をオンに。",
       "请在设置→节点守护者中打开参与。"
+    ],
+    "「글자 크게」「어둡게」「알림 소리 꺼」처럼 말해 주시면 라비가 바로 바꿔 드려요. 오른쪽 위 「언어 · 화면」에서도 고를 수 있어요.": [
+      "Just say “bigger text”, “dark mode” or “mute notification sound” and Ravi changes it right away. You can also choose in “Language · Display” at the top right.",
+      "「文字を大きく」「暗く」「通知音を消して」のように言っていただければ、ラビがすぐに変えます。右上の「言語・画面」からも選べます。",
+      "说「字大一点」「深色」「关提示音」，拉比会马上帮你改。也可以在右上角的「语言 · 显示」里选择。"
     ]
   },
   "guides": [
@@ -728,7 +728,7 @@
       "say": "화면 설정 안내",
       "words": "테마|다크|밝게|어둡게|글씨|글자|폰트|theme|darkmode|fontsize|テーマ|文字サイズ|主题|字号",
       "lines": [
-        "라비 안내는 테마나 글씨 크기를 대신 바꾸지 못해요. 대신 화면 상단의 테마 선택과 설정에서 지원되는 표시 항목을 확인해 주세요."
+        "「글자 크게」「어둡게」「알림 소리 꺼」처럼 말해 주시면 라비가 바로 바꿔 드려요. 오른쪽 위 「언어 · 화면」에서도 고를 수 있어요."
       ],
       "go": [
         {
