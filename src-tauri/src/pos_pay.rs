@@ -29,6 +29,9 @@ pub const MAX_AMOUNT: i64 = 1_000_000_000;
 const ZERO: &str = "0000000000000000000000000000000000000000000000000000000000000000";
 const MAX_LINE: usize = 8 * 1024;
 const HEAD_FILE: &str = "head.json";
+/// 로그 폴더마다 하나 — 이 파일에 운영체제 잠금(flock / LockFileEx)을 쥔 프로그램만 그 로그에 쓴다.
+/// 프로그램이 죽으면 운영체제가 잠금을 풀어 준다(남은 파일은 그냥 빈 파일 — 「오래된 잠금」 판정이 필요 없다).
+const LOCK_FILE: &str = "writer.lock";
 
 pub const ERR_METHOD: &str = "결제 방법을 골라 주세요.";
 pub const ERR_AMOUNT: &str = "금액을 원 단위 숫자로 적어 주세요.";
@@ -45,6 +48,7 @@ pub const ERR_SAVE: &str = "결제 기록을 저장하지 못했어요. 디스�
 pub const ERR_SIGN: &str = "매장 열쇠로 서명하지 못했어요. 본점에 연락해 주세요.";
 pub const ERR_CHAIN_BIZ: &str = "체인 매장은 본점이 정한 사업자 번호를 써요.";
 pub const ERR_LOCKED: &str = crate::storesign::ERR_LOCKED;
+pub const ERR_BUSY: &str = "다른 레이븐볼트 창이 이 매장의 결제 기록을 쓰고 있어요. 그 창을 닫은 뒤 다시 해 주세요.";
 
 fn pos_root() -> PathBuf {
     crate::paths::app_file("pos")
@@ -273,8 +277,44 @@ pub(crate) fn pos_root_path() -> PathBuf {
     pos_root()
 }
 
+/// 운영체제 배타 잠금을 잡아 본다(기다리지 않음). 잡으면 그 파일을 돌려준다 — 파일이 닫히면(프로그램이 죽어도) 풀린다.
+/// 같은 프로그램 안에서도 따로 연 파일끼리는 겨룬다(flock 은 열린 파일마다 · 윈도우 LockFileEx 도 같다).
+pub(crate) fn os_lock(path: &Path) -> Option<std::fs::File> {
+    if let Some(d) = path.parent() {
+        std::fs::create_dir_all(d).ok()?;
+    }
+    let mut oo = std::fs::OpenOptions::new();
+    oo.read(true).write(true).create(true).truncate(false);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        oo.mode(0o600);
+    }
+    let f = oo.open(path).ok()?;
+    f.try_lock().ok()?;
+    Some(f)
+}
+
+/// `os_lock` 을 잠깐(최대 `wait_ms`) 기다리며 잡는다 — 짧게 끝나는 일(본점 받기 한 번) 용.
+pub(crate) fn os_lock_wait(path: &Path, wait_ms: u64) -> Option<std::fs::File> {
+    let until = std::time::Instant::now() + std::time::Duration::from_millis(wait_ms);
+    loop {
+        if let Some(f) = os_lock(path) {
+            return Some(f);
+        }
+        if std::time::Instant::now() >= until {
+            return None;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+}
+
 /// 메모리에 들고 있는 로그 머리(처음 한 번 전체를 읽어 확인한 뒤, 쓸 때마다 갱신).
+/// 🔴 머리는 그 로그 폴더의 운영체제 잠금을 쥔 채로만 만든다 — 두 번째 레이븐볼트(다른 프로그램)가 같은 로그에
+///    같은 번호를 쓰는 일을 막는다(메모리 Mutex 는 한 프로그램 안만 막는다).
 struct Head {
+    /// 이 로그 폴더의 `writer.lock` — 머리가 살아 있는 동안 쥐고 있다.
+    _lock: Option<std::fs::File>,
     log_id: Option<String>,
     next_seq: u64,
     prev_hash: String,
@@ -298,6 +338,7 @@ fn load_head(dir: &Path) -> Head {
     }
     let check = verify_records(&lines, None);
     let mut h = Head {
+        _lock: None,
         log_id: None,
         next_seq: check.last_seq.map_or(0, |s| s + 1),
         prev_hash: check.last_hash.clone().unwrap_or_else(|| ZERO.to_string()),
@@ -348,11 +389,18 @@ fn load_head(dir: &Path) -> Head {
     h
 }
 
-fn with_head<R>(dir: &Path, f: impl FnOnce(&mut Head) -> R) -> R {
+/// 머리를 빌려준다. 처음이면 그 로그의 운영체제 잠금부터 잡고 읽는다 — 다른 프로그램이 쥐고 있으면 `ERR_BUSY`.
+fn with_head<R>(dir: &Path, f: impl FnOnce(&mut Head) -> R) -> Result<R, String> {
     let mut g = HEADS.lock().unwrap_or_else(|e| e.into_inner());
     let map = g.get_or_insert_with(HashMap::new);
-    let h = map.entry(dir.to_path_buf()).or_insert_with(|| load_head(dir));
-    f(h)
+    if !map.contains_key(dir) {
+        let lock = os_lock(&dir.join(LOCK_FILE)).ok_or_else(|| ERR_BUSY.to_string())?;
+        let mut h = load_head(dir);
+        h._lock = Some(lock);
+        map.insert(dir.to_path_buf(), h);
+    }
+    let h = map.get_mut(dir).ok_or_else(|| ERR_BUSY.to_string())?;
+    Ok(f(h))
 }
 
 #[cfg(test)]
@@ -556,7 +604,7 @@ pub fn record_in(root: &Path, chain_dir: &Path, input: &PayInput, lookup: OrderL
             h.orders.insert(o, seq);
         }
         Ok(rec)
-    })
+    })?
 }
 
 /// 결제 취소 — 원래 줄을 가리키는 새 줄. 금액·결제수단은 원래 줄에서(화면이 주는 값을 믿지 않는다).
@@ -583,7 +631,7 @@ pub fn void_in(root: &Path, chain_dir: &Path, seq: u64, reason: Option<&str>, at
         h.voided.insert(seq);
         h.orders.retain(|_, s| *s != seq);
         Ok(rec)
-    })
+    })?
 }
 
 /// 화면에 보낼 줄(서명·열쇠·앞 해시는 빼고).
@@ -601,7 +649,11 @@ fn row_for_screen(v: &Value, voided: &HashSet<u64>) -> Value {
 pub fn day_in(root: &Path, chain_dir: &Path, from_ms: i64, to_ms: i64) -> Value {
     let ctx = ctx_in(root, chain_dir);
     let dir = root.join("log").join(&ctx.scope);
-    let (broken, voided) = with_head(&dir, |h| (h.broken.clone(), h.voided.clone()));
+    // 다른 프로그램이 이 로그를 쥐고 있으면(쓰기는 거절) 보기만은 파일을 새로 읽어서 한다.
+    let (broken, voided) = with_head(&dir, |h| (h.broken.clone(), h.voided.clone())).unwrap_or_else(|_| {
+        let h = load_head(&dir);
+        (h.broken, h.voided)
+    });
     let first = month_of(from_ms);
     let mut rows = Vec::new();
     let mut totals: Map<String, Value> = METHODS.iter().map(|m| (m.to_string(), json!(0))).collect();
@@ -727,6 +779,28 @@ mod tests {
         crate::chain_store::join_in(&chain, &r.bundle, &r.install_words, NOW).unwrap();
         forget_head(&log_dir(&root, &chain));
         (root, chain, r.store_pubkey)
+    }
+
+    #[test]
+    fn a_second_program_cannot_write_the_same_log() {
+        let (root, chain) = fresh("oslock");
+        let dir = root.join("log").join("shop");
+        // 다른 레이븐볼트가 이 로그를 쥐고 있다(따로 연 파일의 운영체제 잠금 — 다른 프로그램과 같다).
+        let other = os_lock(&dir.join(LOCK_FILE)).expect("first lock");
+        assert!(os_lock(&dir.join(LOCK_FILE)).is_none(), "두 번째 잠금이 잡혔다");
+        assert_eq!(record_in(&root, &chain, &pay("cash", 1000, None), &none, NOW).unwrap_err(), ERR_BUSY);
+        assert_eq!(void_in(&root, &chain, 1, None, NOW).unwrap_err(), ERR_BUSY);
+        assert!(all_lines(&dir).is_empty(), "잠겨 있는데 줄이 써졌다");
+        // 보기는 된다(파일을 새로 읽는다).
+        assert_eq!(day_in(&root, &chain, 0, i64::MAX)["count"], 0);
+        // 그 프로그램이 닫히면(죽어도) 운영체제가 풀어 준다 — 오래된 잠금 판정이 필요 없다.
+        drop(other);
+        let r = record_in(&root, &chain, &pay("cash", 1000, None), &none, NOW).unwrap();
+        assert_eq!(r["seq"], 1);
+        // 이제는 이 프로그램이 쥐고 있다 — 다른 쪽이 잡을 수 없다.
+        assert!(os_lock(&dir.join(LOCK_FILE)).is_none());
+        forget_head(&dir);
+        assert!(os_lock(&dir.join(LOCK_FILE)).is_some());
     }
 
     #[test]

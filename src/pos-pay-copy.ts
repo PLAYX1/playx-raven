@@ -63,4 +63,5 @@ export const POS_PAY_COPY: Record<string, [string, string, string]> = {
   "결제 기록을 저장하지 못했어요. 디스크 공간과 권한을 확인해 주세요.": ["Could not save the payment record. Check disk space and permissions.", "支払い記録を保存できませんでした。ディスクの空きと権限を確認してください。", "未能保存收款记录。请检查磁盘空间和权限。"],
   "매장 열쇠로 서명하지 못했어요. 본점에 연락해 주세요.": ["Could not sign with the store key. Please contact head office.", "店舗の鍵で署名できませんでした。本店に連絡してください。", "未能用门店钥匙签名。请联系总店。"],
   "체인 매장은 본점이 정한 사업자 번호를 써요.": ["Chain stores use the business number set by head office.", "チェーン店舗は本店が決めた事業者番号を使います。", "连锁门店使用总店设定的营业登记号。"],
+  "다른 레이븐볼트 창이 이 매장의 결제 기록을 쓰고 있어요. 그 창을 닫은 뒤 다시 해 주세요.": ["Another RavenVault window is writing this store’s payment records. Close that window and try again.", "別のRavenVaultの画面がこの店舗の支払い記録を書いています。その画面を閉じてからもう一度してください。", "另一个 RavenVault 窗口正在写入本门店的收款记录。请关闭那个窗口后再试。"],
 };

@@ -50,6 +50,7 @@ function storeErr(code: string | null | undefined): string {
   if (code.startsWith("warn:")) return t("본점이 일부 기록을 받지 않았어요(기록이 끊기거나 바뀐 흔적). 본점에 알려 주세요.");
   switch (code) {
     case "no-head": return t("본점 주소를 아직 적지 않았어요.");
+    case "busy": case "refused:busy": return t("다른 레이븐볼트 창이 지금 보내고 있어요. 잠시 뒤 다시 해 주세요.");
     case "unreachable": return t("본점 컴퓨터에 닿지 않아요. 본점 컴퓨터가 켜져 있는지, 인터넷이 되는지 확인해 주세요.");
     case "bad-reply": return t("본점이 아닌 곳에서 답이 왔어요. 본점 주소를 확인해 주세요.");
     case "refused:revoked": return t("본점이 이 매장을 끊었어요.");

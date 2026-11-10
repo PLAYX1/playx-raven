@@ -248,6 +248,15 @@ fn put_watch(st: &mut Value, w: Watch) {
 }
 
 static RECEIVE: Mutex<()> = Mutex::new(());
+/// 프로그램 사이 잠금(`chain/sales/.lock`) — 레이븐볼트가 두 번 켜져도 받기·꺼짐 확인이 같은 state.json 을 겹쳐 쓰지 않게.
+/// 받기 한 번은 짧으니 잠깐 기다린다. 못 잡으면 503 busy(매장은 다음 순번에 다시 보낸다).
+#[cfg(not(test))]
+const OS_LOCK_WAIT_MS: u64 = 2_000;
+#[cfg(test)]
+const OS_LOCK_WAIT_MS: u64 = 50;
+fn receive_os_lock(dir: &Path) -> Option<std::fs::File> {
+    crate::pos_pay::os_lock_wait(&sales_dir(dir).join(".lock"), OS_LOCK_WAIT_MS)
+}
 
 /// 1분 창 버킷(열쇠 → (창 시작, 횟수)). 열쇠 수는 상한이 있다 — 넘치면 낯선 열쇠는 「overflow」 한 칸을 같이 쓴다.
 struct Buckets {
@@ -491,6 +500,7 @@ pub fn receive_in(dir: &Path, body: &[u8], now: i64, client: &str) -> (u16, Valu
     };
 
     let _g = RECEIVE.lock().unwrap_or_else(|e| e.into_inner());
+    let Some(_os) = receive_os_lock(dir) else { return deny(503, "busy") };
     let sdir = store_dir(dir, c.store);
     let mut st = load_state(dir, c.store);
     // 되풀이 막기: 봉함 머리의 sentAt 은 매장마다 늘기만 해야 하고, 본점 시계와 한 시간 안이어야 한다.
@@ -761,6 +771,8 @@ pub fn watch_tick_in(dir: &Path, now: i64) -> Vec<(u32, String)> {
     let revoked = cs::load_list(dir, &chain).map(|(_, i)| i.revoked).unwrap_or_default();
     let mut out = Vec::new();
     let _g = RECEIVE.lock().unwrap_or_else(|e| e.into_inner());
+    // 다른 레이븐볼트가 쥐고 있으면 이번 틱은 건너뛴다(그쪽이 본다 — 쪽지가 두 통 가지 않게).
+    let Some(_os) = receive_os_lock(dir) else { return out };
     for e in std::fs::read_dir(sales_dir(dir)).into_iter().flatten().flatten() {
         let Some(n) = e.file_name().to_str().and_then(|s| s.parse::<u32>().ok()) else { continue };
         let mut st = load_state(dir, n);
@@ -788,6 +800,7 @@ pub fn watch_tick_in(dir: &Path, now: i64) -> Vec<(u32, String)> {
 
 fn mark_dm_sent(dir: &Path, n: u32) {
     let _g = RECEIVE.lock().unwrap_or_else(|e| e.into_inner());
+    let Some(_os) = receive_os_lock(dir) else { return };
     let mut st = load_state(dir, n);
     if st.get("alerted").and_then(Value::as_bool) == Some(true) {
         st["dmSent"] = json!(true);
@@ -950,8 +963,8 @@ pub enum Sent {
     Failed(&'static str),
 }
 
-const REFUSALS: [&str; 15] = ["not-head", "rate", "shape", "bad-clock", "not-yet", "expired",
-    "revoked", "no-revocation-list", "unknown-cert", "need-prepare", "bad-box", "save", "seal", "replay", "too-many-logs"];
+const REFUSALS: [&str; 16] = ["not-head", "rate", "shape", "bad-clock", "not-yet", "expired",
+    "revoked", "no-revocation-list", "unknown-cert", "need-prepare", "bad-box", "save", "seal", "replay", "too-many-logs", "busy"];
 
 fn note_try(chain_dir: &Path, now: i64, f: impl FnOnce(&mut Value)) {
     let mut ps = push_state(chain_dir);
@@ -1046,6 +1059,10 @@ static PUSHING: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 pub async fn push_now() -> Value {
     let _g = PUSHING.lock().await;
     let dir = cs::chain_dir_path();
+    // 프로그램 사이 잠금 — 레이븐볼트가 두 번 켜져 있으면 한쪽만 보낸다(push.json·sentAt 이 겹치지 않게).
+    let Some(_os) = crate::pos_pay::os_lock(&dir.join("push.lock")) else {
+        return json!({ "ok": false, "why": "busy" });
+    };
     let root = crate::pos_pay::pos_root_path();
     let Some(url) = head_url_in(&dir) else {
         note_try(&dir, now_ms(), |ps| ps["lastErr"] = json!("no-head"));
@@ -1272,6 +1289,23 @@ mod tests {
     }
     fn received(owner: &Path, n: u32) -> Vec<Value> {
         received_lines(owner, n, 0)
+    }
+
+    #[test]
+    fn a_second_program_on_the_head_pc_does_not_write_state_at_the_same_time() {
+        let (w, base) = world("oslock");
+        let (cd, root) = add_store(&w, &base, 2, "역삼점", "123-45-67890", None, true);
+        record_in(&root, &cd, &pay("cash", 4500, None), &none, NOW).unwrap();
+        // 다른 레이븐볼트가 본점 받기 잠금을 쥐고 있다.
+        let other = crate::pos_pay::os_lock(&sales_dir(&w.owner).join(".lock")).unwrap();
+        let r = push_with(&cd, &root, NOW + 10, &mut send_to(&w.owner, NOW + 10)).unwrap();
+        assert_eq!(r[0], Sent::Refused("busy".into()));
+        assert!(received(&w.owner, 2).is_empty(), "잠겨 있는데 받았다");
+        assert!(watch_tick_in(&w.owner, NOW + 3_600_000).is_empty(), "잠겨 있는데 꺼짐을 셌다");
+        drop(other);
+        let r = push_with(&cd, &root, NOW + 20, &mut send_to(&w.owner, NOW + 20)).unwrap();
+        assert!(matches!(r[0], Sent::Acked { progressed: true, .. }));
+        assert_eq!(received(&w.owner, 2).len(), 2);
     }
 
     #[test]
