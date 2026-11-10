@@ -1388,7 +1388,7 @@ pub async fn words_restore_undo() -> Result<Value, String> {
 }
 
 /// [닫기] — 끝난 되살리기를 접는다. 옆에 둔 파일 이름은 남긴다(나중에 되돌리기).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn words_restore_close() -> Result<Value, String> {
     let app = crate::paths::app_dir();
     let Some(mut st) = read_state(&app) else {

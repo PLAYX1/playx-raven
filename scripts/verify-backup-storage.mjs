@@ -39,7 +39,7 @@ function helperTest(text,name,expected=0,filter='') {
   return run(binary,[filter,'--nocapture'],name,expected);
 }
 function cryptoTest(text,name,expected=0,filter='backup_safety_tests') {
-  fs.writeFileSync(path.join(harness,'src/lockbox.rs'),text.replaceAll('#[tauri::command]',''));
+  fs.writeFileSync(path.join(harness,'src/lockbox.rs'),text.replace(/#\[tauri::command(?:\(async\))?\]/g,''));
   return run('cargo',['test','--manifest-path',path.join(harness,'Cargo.toml'),filter,'--','--nocapture'],name,expected);
 }
 helperTest(helper,'backup-storage-green');
@@ -63,7 +63,7 @@ cryptoTest(noOrphanCheck,'lockbox-orphaned-envelope-mutant',101,'missing_key_wit
 const brokenFormat=current.replace('b"PXRLOCK1";', 'b"PXRLOCK2";');
 assert.notEqual(brokenFormat,current);
 cryptoTest(brokenFormat,'lockbox-format-mutant',101,'released_plain_and_password_envelope_formats_still_open');
-fs.writeFileSync(path.join(harness,'src/lockbox.rs'),current.replaceAll('#[tauri::command]',''));
+fs.writeFileSync(path.join(harness,'src/lockbox.rs'),current.replace(/#\[tauri::command(?:\(async\))?\]/g,''));
 const testFixtureRoot=path.join(process.env.RV_BACKUP_FIXTURE_ROOT,'test-fixtures');
 if(fs.existsSync(testFixtureRoot))fs.rmdirSync(testFixtureRoot);
 assert.deepEqual(fs.readdirSync(process.env.RV_BACKUP_FIXTURE_ROOT),[],'All synthetic fixture directories must be removed');

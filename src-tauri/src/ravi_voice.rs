@@ -13,12 +13,12 @@ fn read_consent() -> Vec<String> {
     std::fs::read(consent_path()).ok().filter(|b| b.len() < 256)
         .and_then(|b| serde_json::from_slice::<Vec<String>>(&b).ok()).unwrap_or_default()
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn voice_consent(provider: String) -> bool {
     let Ok(_lock) = CONSENT_LOCK.lock() else { return false };
     supported(&provider) && read_consent().contains(&provider)
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn voice_set_consent(provider: String, allowed: bool) -> Result<(), String> {
     let _lock = CONSENT_LOCK.lock().map_err(|_| "storage")?;
     let mut list = read_consent();
@@ -32,7 +32,7 @@ pub fn voice_set_consent(provider: String, allowed: bool) -> Result<(), String> 
     crate::server::atomic_write_0600(&consent_path(), &serde_json::to_vec(&list).map_err(|_| "storage")?)
         .map_err(|_| "storage".into())
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn voice_cancel() { GENERATION.fetch_add(1, Ordering::SeqCst); }
 
 #[tauri::command]

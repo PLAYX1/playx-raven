@@ -313,7 +313,7 @@ fn slug_for(cfg: &MapConfig) -> String {
 }
 
 /// 화면이 처음 그릴 때 — 저장된 값(없으면 가게 정보에서 제안)·동네 표·업종·터널 주소.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn map_load() -> Value {
     let cfg = load();
     let sh = shop_json();
@@ -342,7 +342,7 @@ pub fn map_load() -> Value {
 }
 
 /// 미리보기 — 무엇이 올라가는지 그대로, 그리고 문제 목록. 서명·게시는 하지 않는다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn map_check(draft: MapDraft) -> Value {
     let cfg = load();
     let c = draft_card(&draft, &slug_for(&cfg));
@@ -360,7 +360,7 @@ pub fn map_check(draft: MapDraft) -> Value {
 }
 
 /// [올리기] — 저장하고 바로 돌아온다. 게시(이름표 + 첫 신호)는 뒤에서.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn map_publish(draft: MapDraft) -> Result<Value, String> {
     let mut cfg = load();
     let slug = slug_for(&cfg);
@@ -389,7 +389,7 @@ pub fn map_publish(draft: MapDraft) -> Result<Value, String> {
 }
 
 /// [내리기] — 신호를 멈추고 이름표·신호를 거둔다(지우기를 지키는 릴레이에서).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn map_unpublish() -> Result<Value, String> {
     let mut cfg = load();
     if !cfg.registered {
@@ -407,7 +407,7 @@ pub fn map_unpublish() -> Result<Value, String> {
 }
 
 /// 상태등·카드가 읽는 것.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn map_status() -> Value {
     let cfg = load();
     let s = STATUS.lock().map(|g| g.clone()).unwrap_or_default();
@@ -424,7 +424,7 @@ pub fn map_status() -> Value {
 }
 
 /// 「영업 중」/「지금 닫기」를 눌렀을 때 — 기다리지 않고 바로 신호(또는 닫힘)를 보낸다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn map_presence_now() {
     if load().registered {
         kick();

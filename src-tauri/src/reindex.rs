@@ -146,7 +146,7 @@ pub fn window_from(hours: &Value, now_min_of_week: i64, need_min: i64) -> Value 
 /// 다시 훑는 데 잡아 두는 시간. 이 컴퓨터에서 실제로 재 보기 전까지의 어림수다.
 pub const NEED_MIN: i64 = 6 * 60;
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn reindex_window(now_unix: i64, tz_offset_min: i64) -> Value {
     let shop = crate::shop::shop_load();
     let hours = shop.get("hours").cloned().unwrap_or_else(|| json!({}));

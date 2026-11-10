@@ -715,7 +715,7 @@ pub async fn wallet_import_apply(id: String, confirmed: bool) -> Result<Value, S
 }
 
 /// 가져오기를 그만둔다 — 임시 폴더를 지운다. 현재 지갑은 처음부터 그대로다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn wallet_import_cancel() -> Value {
     let _ = std::fs::remove_dir_all(staging_root());
     json!({ "ok": true })

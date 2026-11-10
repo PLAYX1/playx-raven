@@ -232,7 +232,7 @@ fn required_confirmations(krw: f64) -> (i64, bool) {
 }
 
 /// Same policy, for the screens that have to explain the wait.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn confirmation_policy(krw: f64) -> Value {
     let (need, auto) = required_confirmations(krw);
     json!({
@@ -508,7 +508,7 @@ fn asset_went_to(asset_txs: &Value, asset: &str, to: &str) -> bool {
 }
 
 /// Today's automatic total per asset, for the screen that shows the cap.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn auto_usage(assets: Vec<String>) -> Value {
     let mut out = serde_json::Map::new();
     for a in assets {
@@ -647,7 +647,7 @@ pub async fn auto_deliver_web(
     Ok(json!({ "sent": sent, "skipped": skipped, "armed": true }))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn auto_disable() {
     if let Ok(mut g) = AUTO_PASS.lock() {
         *g = None;

@@ -186,7 +186,7 @@ pub fn fingerprint_set() -> HashSet<String> {
 }
 
 /// 화면용. 자산 목록이 「원본 지문」을 알아보는 데 쓴다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_fingerprints() -> Vec<String> {
     let mut v: Vec<String> = fingerprint_set().into_iter().collect();
     v.sort();
@@ -341,7 +341,7 @@ fn find<'a>(store: &'a mut Value, id: &str) -> Option<&'a mut Value> {
 /// 만들기를 시작한다 — 확인 화면에서 「만들기」를 누른 순간. 아직 체인에는
 /// 아무것도 안 나갔다. 🔴 지문 목록에는 **적지 않는다** — 발행 길(`create_issue`)이
 /// 노드가 받은 뒤에 적는다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_history_begin(entry: Value) -> Result<String, String> {
     let kind = entry.get("kind").and_then(Value::as_str).unwrap_or("");
     if !matches!(kind, "certificate" | "ticket" | "work") {
@@ -445,7 +445,7 @@ fn settle_interrupted(store: &mut Value) -> bool {
 
 /// 화면이 「만들기」를 열 때 — 보냈는지 모르는 기록(보내다 만 것 포함)이 있으면 그 줄.
 /// 화면의 이어하기 표가 없어도(보내는 도중 앱이 꺼졌다) 이것으로 그 자리로 간다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_unresolved() -> Result<Option<Value>, String> {
     let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let mut store = load()?;
@@ -627,7 +627,7 @@ pub fn mark_done(id: &str, names: &[String], txid: &str) -> Result<(), String> {
 
 /// 인쇄할 것만 고친다(받는 사람 이름 오타·양식·발급자). 체인 이름·지문·장수는
 /// 못 바꾼다 — 체인에 이미 있는 것이다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_history_details(id: String, details: Value) -> Result<Value, String> {
     if !valid_id(&id) {
         return Err("기록 번호가 올바르지 않아요.".into());
@@ -671,7 +671,7 @@ pub fn create_history_details(id: String, details: Value) -> Result<Value, Strin
 }
 
 /// 끝난 것만, 새것이 위로.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_history_list() -> Result<Vec<Value>, String> {
     let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let store = load()?;
@@ -683,7 +683,7 @@ pub fn create_history_list() -> Result<Vec<Value>, String> {
     Ok(out)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_history_get(id: String) -> Result<Value, String> {
     if !valid_id(&id) {
         return Err("기록 번호가 올바르지 않아요.".into());
@@ -695,7 +695,7 @@ pub fn create_history_get(id: String) -> Result<Value, String> {
 
 /// 기록 한 줄을 지운다(인쇄 파일도). 🔴 **지문 목록은 그대로 둔다** — 체인에는
 /// 여전히 그 지문이 있고, 지우면 다시 「파일」로 보고 보존을 시도한다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_history_forget(id: String) -> Result<(), String> {
     if !valid_id(&id) {
         return Err("기록 번호가 올바르지 않아요.".into());
@@ -720,7 +720,7 @@ pub fn create_history_forget(id: String) -> Result<(), String> {
 /// 원본 지문은 망가진 파일에서 건질 수 있는 만큼 건진다 — 이 기록에서 `Qm…` 은
 /// 지문뿐이라(체인 이름은 `Qm` 으로 시작하지 않는다) 글자 그대로 찾아도 안전하다.
 /// 못 건진 지문의 자산은 한동안 「파일」로 보일 뿐 해는 없다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_history_restart() -> Result<Value, String> {
     let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
     match load() {

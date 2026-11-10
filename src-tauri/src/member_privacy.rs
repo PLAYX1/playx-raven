@@ -71,7 +71,7 @@ pub struct CleanupResult {
 const SETTINGS_ERROR: &str = "회원 정보 설정 파일이 손상되었습니다.";
 const CLEANUP_ERROR: &str = "정리 중 오류가 났습니다.";
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn member_privacy_state() -> serde_json::Value {
     let (policy, policy_error) = match member_privacy_get() {
         Ok(policy) => (Some(policy), None),
@@ -88,7 +88,7 @@ pub fn member_privacy_state() -> serde_json::Value {
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn member_privacy_get() -> Result<Policy, String> {
     let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let bytes = match std::fs::read(crate::paths::app_file("member_privacy.json")) {
@@ -101,7 +101,7 @@ pub fn member_privacy_get() -> Result<Policy, String> {
     policy.validate()?;
     Ok(policy)
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn member_privacy_set(level: String, retention_months: u32) -> Result<Policy, String> {
     let policy = Policy { level, retention_months };
     policy.validate()?;
@@ -183,12 +183,12 @@ pub(crate) fn with_member_groups<T>(f: impl FnOnce(&[String]) -> Result<T, Strin
     f(&read_groups()?)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn member_groups_get() -> Result<Vec<String>, String> {
     with_member_groups(|groups| Ok(groups.to_vec()))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn member_groups_set(groups: Vec<String>, renames: Option<Vec<(String, String)>>) -> Result<Vec<String>, String> {
     let groups = validate_group_list(&groups)?;
     // IPC contract: renames is an optional array of [oldName, newName] pairs.

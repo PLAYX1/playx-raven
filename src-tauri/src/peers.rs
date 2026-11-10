@@ -49,7 +49,7 @@ fn save(rows: &[Value]) -> Result<(), String> {
 }
 
 /// Every machine registered here.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn peer_list() -> Value {
     json!({ "peers": load() })
 }
@@ -96,7 +96,7 @@ pub async fn peer_add(name: String, address: String, note: String, now_unix: i64
     Ok(peer_list())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn peer_remove(address: String) -> Result<Value, String> {
     let mut rows = load();
     rows.retain(|r| r.get("address").and_then(Value::as_str) != Some(address.as_str()));

@@ -177,7 +177,7 @@ pub fn assign_groups(asset: &str, groups: Vec<String>, _now_unix: i64) -> Result
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn member_groups_assign(asset: String, groups: Vec<String>, now_unix: i64) -> Result<Value, String> {
     assign_groups(&asset, groups, now_unix)
 }
@@ -210,13 +210,13 @@ pub(crate) fn reconcile_member_groups(
     persist_groups()
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn member_memo_add(asset: String, text: String, now_unix: i64) -> Result<Value, String> {
     let memos = append_memo(&asset, "owner", &text, now_unix)?;
     Ok(json!({ "code": asset, "memos": memos }))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn member_memo_delete(asset: String, at: i64, index: usize) -> Result<Value, String> {
     let _guard = STORE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let mut rows = load();
@@ -253,7 +253,7 @@ fn ymd(now_unix: i64) -> i64 {
     y * 10_000 + m * 100 + d
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn today_ymd(now_unix: i64) -> i64 {
     ymd(now_unix)
 }
@@ -265,7 +265,7 @@ pub fn today_ymd(now_unix: i64) -> i64 {
 /// about who this is. Four characters from an unambiguous alphabet gives about
 /// a million combinations, which is more members than any gym has, and no
 /// `0/O` or `1/I` confusion when someone reads it aloud.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn member_number(root: String, seed: String) -> String {
     const ALPHABET: &[u8] = b"ACDEFGHJKLMNPQRTUVWXY34679";
     // Seeded from the caller so this stays a pure function — the frontend
@@ -337,7 +337,7 @@ pub fn save_member(
 ///
 /// ⚠️ 이미 있는 값을 그대로 두거나 고치는 것(전화 오타)은 동의 없이도 된다. 0.4.3 때
 ///    적어 둔 값은 수집 범위가 바뀌어도 **조용히 지우지 않는다** — 바꾼 값에만 새 규칙.
-#[tauri::command]
+#[tauri::command(async)]
 #[allow(clippy::too_many_arguments)]
 pub fn member_save(
     asset: String,
@@ -363,7 +363,7 @@ pub fn member_save(
 
 /// 새 회원을 체인에 찍기(5 RVN) **전에** 같은 규칙으로 미리 본다. 저장은 안 한다.
 /// 🔴 찍은 뒤에 `member_save` 가 거절하면 RVN 만 타고 명단에는 없는 번호가 남는다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn member_save_precheck(
     name: String,
     phone: String,
@@ -665,7 +665,7 @@ pub fn redact_expired_members(now_unix: i64, retention_months: u32) -> Result<us
 }
 
 /// Everyone, with validity worked out for today.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_members(now_unix: i64) -> Result<Value, String> {
     let today = ymd(now_unix);
     let mut rows = load();
@@ -817,7 +817,7 @@ pub fn search_members(q: &str, group: Option<&str>, status: Option<&str>, now_un
 }
 
 /// The door. Name, phone tail, or member number — whatever staff can type fast.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn check_in_lookup(query: String, now_unix: i64) -> Result<Value, String> {
     let today = ymd(now_unix);
     let q = query.trim().to_lowercase();
@@ -845,7 +845,7 @@ pub fn check_in_lookup(query: String, now_unix: i64) -> Result<Value, String> {
 /// Deliberately refuses when the pass is not valid rather than counting anyway
 /// and showing a warning — a count that includes days the member should not
 /// have been admitted is a count nobody can reconcile later.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn check_in(asset: String, now_unix: i64) -> Result<Value, String> {
     let _guard = STORE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let today = ymd(now_unix);
@@ -892,7 +892,7 @@ pub fn check_in(asset: String, now_unix: i64) -> Result<Value, String> {
 /// Unfreezing pushes the expiry out by the number of days frozen, because that
 /// is what a member expects and what the gym promised — the alternative is
 /// arguing about dates at the counter.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_frozen(asset: String, frozen: bool, now_unix: i64) -> Result<Value, String> {
     let _guard = STORE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let today = ymd(now_unix);
@@ -961,7 +961,7 @@ fn last_day_of(y: i64, m: i64) -> i64 {
 /// When the target month has no such day, it lands on that month's last day.
 /// 31 January plus one month is 28 February, which is what the counter would
 /// say and what the member expects.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn add_months(ymd_in: i64, months: i64) -> i64 {
     let (y, m, d) = (ymd_in / 10_000, (ymd_in / 100) % 100, ymd_in % 100);
     let total = (y * 12 + (m - 1)) + months;
@@ -975,7 +975,7 @@ pub fn add_months(ymd_in: i64, months: i64) -> i64 {
 /// `from` is separate from today because gyms sell passes that start later —
 /// someone paying on Friday for a course beginning Monday. Defaulting the start
 /// to the payment date is right; forcing it is not.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn period_end(from_ymd: i64, months: i64, extra_days: i64) -> Value {
     // 시작일 당일도 이용일이다. 한 달권이 1일 시작이면 말일까지, 즉 다음 달
     // 같은 날의 전날이 마지막 날이다.
@@ -991,7 +991,7 @@ pub fn period_end(from_ymd: i64, months: i64, extra_days: i64) -> Value {
 ///
 /// Never mints anything. The member number they already have keeps working,
 /// which is the entire reason it does not carry a date.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn extend(asset: String, days: i64, months: i64, now_unix: i64) -> Result<Value, String> {
     let _guard = STORE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let today = ymd(now_unix);
@@ -1018,7 +1018,7 @@ pub fn extend(asset: String, days: i64, months: i64, now_unix: i64) -> Result<Va
 }
 
 /// Adds sessions to a punch card.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn add_visits(asset: String, count: i64, now_unix: i64) -> Result<Value, String> {
     let _guard = STORE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let today = ymd(now_unix);
@@ -1159,7 +1159,7 @@ pub async fn rebuild_members(root: String, now_unix: i64) -> Result<Value, Strin
 ///
 /// The token stays in their wallet — we cannot take it back, and the UI must
 /// not imply otherwise. This only stops this door from recognising it.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn remove_member(asset: String) -> Result<(), String> {
     let _guard = STORE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let mut rows = load();

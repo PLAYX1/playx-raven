@@ -103,14 +103,14 @@ fn trades() -> Value {
     ])
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn trade_list() -> Value {
     trades()
 }
 
 /// 고른 업종 하나. 모르는 것을 고르면 「그 밖에」로 떨어진다 —
 /// 화면이 빈손으로 멈추는 것보다 낫다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn trade_get(id: String) -> Value {
     let all = trades();
     let arr = all.as_array().cloned().unwrap_or_default();

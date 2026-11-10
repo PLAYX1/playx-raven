@@ -62,7 +62,7 @@ fn classify(name: &str) -> Kind {
 /// choice to make — a Korean or Japanese asset name cannot exist on this chain,
 /// and telling the user that early is kinder than letting them find out after
 /// a failed transaction.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn validate_name(name: String) -> Value {
     let kind = classify(&name);
     let mut problems: Vec<String> = Vec::new();

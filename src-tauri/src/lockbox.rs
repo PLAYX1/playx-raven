@@ -367,7 +367,7 @@ pub fn pass_matches(pass: &str) -> Option<bool> {
 }
 
 /// 암호가 정해져 있나.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn backup_pass_state() -> Value {
     json!({ "set": pass_read().is_some(), "min": MIN_PASS })
 }
@@ -450,7 +450,7 @@ pub fn unlock_file(
 }
 
 /// 화면에 보여 줄 열쇠. **인쇄해서 12단어와 같이 두라고 말한다.**
-#[tauri::command]
+#[tauri::command(async)]
 pub fn cloud_key_show() -> Result<Value, String> {
     let k = key_get_or_make()?;
     Ok(json!({
@@ -460,7 +460,7 @@ pub fn cloud_key_show() -> Result<Value, String> {
 }
 
 /// 종이에 적힌 열쇠로 잠긴 백업을 연다. 컴퓨터가 죽었을 때 쓰는 길이다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn cloud_unlock(locked: String, out: String, key: String) -> Result<Value, String> {
     let k = from_paper(&key)?;
     unlock_file(std::path::Path::new(&locked), std::path::Path::new(&out), &k)?;

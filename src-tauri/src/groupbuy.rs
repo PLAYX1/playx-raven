@@ -455,7 +455,7 @@ fn menu_now() -> Value {
     crate::shop::shop_load().get("menu").cloned().unwrap_or(json!([]))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn gb_overview(today_ymd: i64, now_unix: i64) -> Result<Value, String> {
     let menu = menu_now();
     with_db(|db| {
@@ -470,7 +470,7 @@ pub fn gb_overview(today_ymd: i64, now_unix: i64) -> Result<Value, String> {
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn gb_window_set(hours: i64) -> Result<Value, String> {
     if !(1..=24 * 14).contains(&hours) {
         return Err("1시간에서 14일 사이로 정해 주세요.".into());
@@ -478,17 +478,17 @@ pub fn gb_window_set(hours: i64) -> Result<Value, String> {
     with_db(|db| { db["window_h"] = json!(hours); Ok(json!({ "window_h": hours })) })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn gb_wait_cancel(id: i64) -> Result<(), String> {
     with_db(|db| wait_cancel(db, id, None))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn gb_refund_mark(order: String, item: String) -> Result<bool, String> {
     with_db(|db| Ok(mark_refunded(db, &order, &item)))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn gb_ship_set(order: String, carrier: String, number: String, now_unix: i64) -> Result<Value, String> {
     with_db(|db| ship_set(db, &order, &carrier, &number, now_unix))
 }

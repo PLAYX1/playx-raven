@@ -86,7 +86,7 @@ pub fn find_cloudflared() -> Option<std::path::PathBuf> {
 }
 
 /// Is cloudflared installed, and is a tunnel up?
-#[tauri::command]
+#[tauri::command(async)]
 pub fn tunnel_status() -> Value {
     let found = find_cloudflared();
     let installed = found.is_some();
@@ -194,7 +194,7 @@ fn kill_orphans(port: u16) -> usize {
 /// Reads cloudflared's own output for the hostname rather than guessing it.
 /// The process stays alive for as long as the app does; stopping it closes the
 /// address immediately, which is the only "take it down" that actually works.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn tunnel_start(port: u16) -> Result<Value, String> {
     if CHILD.lock().map(|g| g.is_some()).unwrap_or(false) {
         return Err("이미 켜져 있습니다.".into());
@@ -327,7 +327,7 @@ pub fn ours_running() -> bool {
 }
 
 /// Closes the public address.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn tunnel_stop() -> Result<(), String> {
     if let Ok(mut g) = CHILD.lock() {
         if let Some(mut c) = g.take() {
@@ -474,7 +474,7 @@ fn start_heartbeat() {
 
 /// The address a sale link should use: the tunnel if there is one, else the
 /// local one.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn public_base(local_ip: String, port: u16) -> Value {
     let tunnel = URL.lock().ok().and_then(|g| g.clone());
     match tunnel {
@@ -498,7 +498,7 @@ pub fn public_base(local_ip: String, port: u16) -> Value {
 /// This path is different: the owner pressed a button about their own listing.
 /// Still whitelisted by host, because "the user meant it" stops being true the
 /// moment a bug puts a different string in that variable.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn open_share(url: String) -> Result<(), String> {
     // Only the share endpoints, and only by exact prefix. A whitelist by host
     // alone would let a crafted path through, and this is the one command that
@@ -560,7 +560,7 @@ pub fn open_share(url: String) -> Result<(), String> {
 /// KakaoTalk needs their JavaScript SDK and an app key registered to a domain,
 /// which is a real setup step rather than a URL. Listed as "not yet" rather
 /// than pretending it is impossible.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn share_targets(text: String, url: String) -> Value {
     let t = urlencode(&text);
     let u = urlencode(&url);

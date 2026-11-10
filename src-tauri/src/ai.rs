@@ -1140,7 +1140,7 @@ pub async fn ai_image(prompt: String, prefer: Option<String>) -> Result<Value, S
 }
 
 /// 만든 그림을 사장님이 고른 곳에 저장한다. 그림인지 다시 확인하고, 확장자는 png/jpg/webp 만.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn image_save(path: String, b64: String) -> Result<Value, String> {
     let mime = image_mime_ok(&b64).ok_or("그림 파일이 아니어서 저장하지 않았습니다.")?;
     let bytes = crate::cert_assets::b64_decode(&b64).ok_or("그림을 읽지 못했습니다.")?;
@@ -1234,7 +1234,7 @@ mod auto_model_tests {
 }
 
 /// Which model each provider is set to, with the defaults filled in.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn model_settings() -> Value {
     let mut out = serde_json::Map::new();
     for p in ["anthropic", "openai", "google", "groq", "xai", "meta"] {
@@ -1247,7 +1247,7 @@ pub fn model_settings() -> Value {
 }
 
 /// Overrides the model for one provider. Empty restores the default.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn save_model(provider: String, model: String) -> Result<(), String> {
     if !known(&provider) {
         return Err("알 수 없는 제공자입니다.".into());
@@ -3285,7 +3285,7 @@ fn saved_order(customer: bool) -> Vec<String> {
 
 /// Read both lanes for the screen. Unsaved lanes come back as the default, so
 /// the screen never has to know which constant it would have used.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn ai_order_read() -> Value {
     let fill = |customer: bool| {
         let mut out = saved_order(customer);
@@ -3310,7 +3310,7 @@ pub fn ai_order_read() -> Value {
 }
 
 /// Save one lane. An empty list means "go back to the default".
-#[tauri::command]
+#[tauri::command(async)]
 pub fn ai_order_save(customer: bool, order: Vec<String>) -> Result<Value, String> {
     for p in &order {
         if !known(p) {

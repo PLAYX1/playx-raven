@@ -47,7 +47,7 @@ pub const BURN_REISSUE: f64 = 100.0;
 /// small business, the case where it is the wrong tool, and what it costs.
 /// The last one matters most — nobody should discover the 1,500 RVN after
 /// deciding.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn asset_kinds() -> Value {
     json!([
         // 🔴 사람 말이 먼저 온다.

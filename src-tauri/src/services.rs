@@ -773,7 +773,7 @@ pub fn stop_ours(name: &str) {
 }
 
 /// Stops only what this app started.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn services_stop() -> Result<Value, String> {
     // 🔴 윈도우만 노드가 우리 `Child` 로 남는다(유닉스는 `-daemon` 이라 목록에 없다).
     //    그래서 윈도우에서는 아래 `kill`(TerminateProcess)이 장부를 쓰던 노드를

@@ -202,7 +202,7 @@ pub fn normalize_shop_name(input: &str) -> String {
     format!("{SHOP_PREFIX}{cleaned}")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn shop_asset_name(input: String) -> String {
     normalize_shop_name(&input)
 }
@@ -216,7 +216,7 @@ pub fn shop_asset_name(input: String) -> String {
 /// `payment_address` is the one field that decides where money goes. It is
 /// taken from this wallet rather than typed, so a shop cannot be set up to pay
 /// someone else by a typo — and cannot be tricked into it by a bad paste.
-#[tauri::command]
+#[tauri::command(async)]
 #[allow(clippy::too_many_arguments)]
 pub fn build_shop_profile(
     display_names: Value,
@@ -326,7 +326,7 @@ pub fn build_shop_profile(
 /// Pictures are referenced by CID, not embedded. A menu with ten photos inlined
 /// is a document nobody can load on a phone; a menu of ten CIDs is a few
 /// kilobytes and each picture arrives when it is looked at.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn build_menu(items: Value, currency: String) -> Value {
     json!({
         "playx_menu": {
@@ -467,7 +467,7 @@ pub const MIN_SENDABLE_RVN: f64 = 0.01;
 /// how card processing already works — the customer pays the menu price, the
 /// shop nets slightly less. Presenting it any other way would make our fee look
 /// like a surcharge on the customer, which it is not.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn split_payment(total: f64, fee_rate: f64, fee_address: String) -> Value {
     let raw_fee = total * fee_rate;
     // RVN carries 8 decimals; anything finer is not representable and would be
@@ -584,7 +584,7 @@ fn shop_path() -> std::path::PathBuf {
 }
 
 /// Reads the saved shop, or an empty one on a machine that has never sold.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn shop_load() -> Value {
     std::fs::read_to_string(shop_path())
         .ok()
@@ -622,7 +622,7 @@ pub fn sellable(menu: &Value) -> Value {
 /// 값을 안 매겨 손님에게 못 보여 주는 품목. 사장 화면이 알려 준다.
 ///
 /// 🔴 조용히 빼면 사장은 「왜 손님 화면에 커피가 없지」를 영영 못 푼다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn unsellable(menu: Value) -> Vec<String> {
     menu.as_array()
         .cloned()
@@ -650,7 +650,7 @@ pub fn currency() -> String {
 }
 
 /// Writes it, atomically, keeping the previous copy.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn shop_save(mut shop: Value) -> Result<(), String> {
     let path = shop_path();
     // 화면이 들고 있던 옛 재고로 팔린 수량을 되살리지 않는다(`stock::merge_seen`).
@@ -739,7 +739,7 @@ pub fn shop_save(mut shop: Value) -> Result<(), String> {
 /// Amounts are in the shop's own currency as entered on the menu; the
 /// thresholds below are written for KRW and a shop on another currency should
 /// set its own in 설정.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn counter_confirmations(krw: f64, online: bool) -> Value {
     // 인터넷이 끊긴 노드는 결제를 검증할 수 없다. 0회 확인은 "네트워크가 이
     // 거래만 알고 있다"는 뜻인데, 네트워크와 말을 안 하고 있으면 그 문장이
@@ -919,7 +919,7 @@ pub fn open_at(shop: &Value, now_unix: i64, tz_offset_min: i64) -> Value {
 }
 
 /// What the customer screen asks on every load.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn shop_open_now(now_unix: i64, tz_offset_min: i64) -> Value {
     open_at(&shop_load(), now_unix, tz_offset_min)
 }
@@ -1262,7 +1262,7 @@ pub fn fee_config() -> (f64, String) {
 const PLATFORM_ADDRESS: &str = "RLFnbkjmf1VCVq7D9TZvRp7fv6W97rm2cB";
 
 /// 사장이 **보기만** 하는 화면용. 끄는 자리가 아니다 — `on` 은 늘 참이다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn fee_read() -> Value {
     let (rate, addr) = fee_config();
     json!({
@@ -1636,7 +1636,7 @@ fn luminance(hex: &str) -> Option<f64> {
 }
 
 /// 사장이 고른 색. 없거나 못 읽으면 기본값이다 — **화면이 안 깨지는 쪽으로.**
-#[tauri::command]
+#[tauri::command(async)]
 pub fn theme_read() -> Value {
     let v: Value = std::fs::read_to_string(crate::paths::app_file("shop.json"))
         .ok()
@@ -1661,7 +1661,7 @@ fn ok_tint(c: Option<&str>) -> Option<String> {
     (luminance(c)? > 0.80).then(|| c.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn theme_save(accent: String, tint: String) -> Result<Value, String> {
     let a = ok_accent(Some(&accent))
         .ok_or("강조색이 너무 밝습니다. 흰 글자를 얹으면 매장 조명 아래서 안 보입니다.")?;

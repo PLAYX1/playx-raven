@@ -57,7 +57,7 @@ pub fn version_of(path: &str) -> Option<String> {
 }
 
 /// 화면에 보여 줄 것. **판을 숨기지 않는다.**
-#[tauri::command]
+#[tauri::command(async)]
 pub fn node_version() -> Value {
     let Some(path) = crate::services::which("ravend") else {
         return json!({ "known": false, "why": "노드 프로그램을 찾지 못했습니다." });

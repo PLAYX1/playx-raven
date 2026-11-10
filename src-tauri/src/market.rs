@@ -386,7 +386,7 @@ pub fn is_before_signing(e: &str) -> bool {
     e.starts_with("지갑이 잠겨 있습니다") || e.starts_with("암호가 맞지 않습니다")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn market_purchase_cancel() {
     if let Ok(mut g) = PENDING.lock() {
         *g = None;

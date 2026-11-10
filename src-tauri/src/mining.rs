@@ -112,7 +112,7 @@ pub async fn mining_reality(hashrate_mh: f64, watts: f64, krw_per_kwh: f64) -> R
 }
 
 /// macOS KAWPOW miners, for someone who wants to try it anyway.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn mac_miners() -> Value {
     json!([
         { "name": "Thinminerpro", "what": "Swift + Metal. 애플 실리콘 전용으로 새로 썼습니다.",
@@ -129,7 +129,7 @@ pub fn mac_miners() -> Value {
 /// Approximate on purpose — real numbers move with drivers, power limits and
 /// memory timings. Close enough to answer "is this worth it", which is the only
 /// question this screen exists for.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn gpu_presets() -> Value {
     json!([
         { "name": "RTX 3060",     "mh": 22.0, "watts": 115.0 },
@@ -165,7 +165,7 @@ pub fn gpu_presets() -> Value {
 /// Measured once, then remembered.
 static GPU: std::sync::OnceLock<Value> = std::sync::OnceLock::new();
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn detect_gpu() -> Value {
     GPU.get_or_init(detect_gpu_uncached).clone()
 }
@@ -228,7 +228,7 @@ fn detect_gpu_uncached() -> Value {
 }
 
 /// Pools that list Ravencoin. Not an endorsement — a starting point.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn known_pools() -> Value {
     json!([
         { "name": "2Miners",    "url": "rvn.2miners.com:6060" },
@@ -321,7 +321,7 @@ pub async fn mining_income(days: i64) -> Result<Value, String> {
 /// Generated rather than written in a guide, because the address is the one
 /// part that must not be typed by hand — a mistyped payout address sends a
 /// month of mining to nobody, and it is not recoverable.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn miner_command(pool: String, address: String, worker: String, power: u32) -> Value {
     let w = if worker.trim().is_empty() {
         "shop".to_string()
@@ -364,7 +364,7 @@ pub fn miner_command(pool: String, address: String, worker: String, power: u32) 
 /// than it returns in hash rate. Around 70% most cards keep roughly 90% of
 /// their output, which is why a shop should never run at 100% — the noise and
 /// heat are bought at the worst possible exchange rate.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn power_curve(power: u32) -> Value {
     let p = power.clamp(40, 100) as f64;
     // 대략적인 실측 곡선. 카드마다 다르지만 방향은 같다.
@@ -473,7 +473,7 @@ fn find_miner(name: &str) -> Option<String> {
 }
 
 /// Is a miner running, and what has it said lately?
-#[tauri::command]
+#[tauri::command(async)]
 pub fn miner_running() -> Value {
     let up = MINER.lock().map(|g| g.is_some()).unwrap_or(false);
     let info = MINER_INFO.lock().ok().and_then(|g| g.clone());
@@ -494,7 +494,7 @@ pub fn miner_running() -> Value {
 /// `power` is a percentage the card is limited to. Not a detail: at 70% most
 /// cards keep about 90% of their hash rate while the fan noise and the heat
 /// drop noticeably — and a shop is a room with people in it.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn miner_start(
     binary: String,
     pool: String,
@@ -568,7 +568,7 @@ pub fn miner_start(
     }))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn miner_stop() -> Result<Value, String> {
     let mut was = false;
     if let Ok(mut g) = MINER.lock() {

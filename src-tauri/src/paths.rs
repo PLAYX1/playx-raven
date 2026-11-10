@@ -275,7 +275,7 @@ fn dir_gb(dir: &std::path::Path) -> u64 {
 }
 
 /// 지금 붙는 폴더가 어디인지, 기존 지갑이 있는지.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn datadir_status() -> serde_json::Value {
     let path = raven_dir();
     let saved = saved_datadir().is_some();
@@ -310,7 +310,7 @@ pub fn datadir_status() -> serde_json::Value {
 }
 
 /// 사장이 코어 폴더를 직접 고른다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn datadir_set(path: String) -> Result<serde_json::Value, String> {
     let p = PathBuf::from(path.trim());
     if !p.is_absolute() {

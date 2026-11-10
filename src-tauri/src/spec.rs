@@ -120,7 +120,7 @@ const CHAIN_GB: f64 = 34.0;
 ///
 /// 각 항목에 **왜 그렇게 정했는지**를 사람 말로 같이 담는다. 이유 없이
 /// 정해진 값은 사장이 못 믿고, 못 믿으면 결국 고급 설정을 열어 헤맨다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn suggest_setup() -> Value {
     let c = cores();
     let m = memory_gb();

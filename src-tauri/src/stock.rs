@@ -66,7 +66,7 @@ fn declared(menu: &Value) -> HashMap<String, Option<i64>> {
 /// 손님 화면이 보여 줄 "지금 몇 개 남았나".
 ///
 /// 무제한은 `null` 로 답한다 — 0 으로 답하면 화면이 품절로 그린다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn stock_left(menu: Value, now_unix: i64) -> Value {
     let d = declared(&menu);
     let h = held(now_unix);

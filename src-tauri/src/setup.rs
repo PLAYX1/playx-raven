@@ -195,7 +195,7 @@ fn free_space_gb() -> Option<u64> {
 
 
 /// Everything about this machine that changes what we should recommend.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn inspect_machine() -> Value {
     // 🔴 여기가 전부 맥 명령이었다(`sysctl`·`pmset`). 윈도우·리눅스에서는
     //    빈 값이 되어 **코어 4개·메모리 8GB·데스크톱**으로 넘어갔다. 실제
@@ -235,7 +235,7 @@ pub fn inspect_machine() -> Value {
 /// So the deciding input is `shop_only`: is this computer only the till, or is
 /// it also the machine this person works on? Disk space then decides whether
 /// "shop only" is even survivable.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn recommend_setup_for(shop_only: bool) -> Value {
     let m = inspect_machine();
     let laptop = m["laptop"].as_bool().unwrap_or(false);
@@ -318,7 +318,7 @@ pub fn recommend_setup_for(shop_only: bool) -> Value {
 
 /// Older entry point, kept for anything still calling it. Assumes the machine
 /// is shared, which is the safer of the two guesses.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn recommend_setup() -> Value {
     recommend_setup_for(false)
 }
@@ -329,7 +329,7 @@ pub fn recommend_setup() -> Value {
 /// means nothing until they can see the 45 GB currently sitting there — and on a
 /// machine that already synced the whole chain, the useful action is not
 /// "설정하기" but "40 GB 되찾기", which is a different sentence entirely.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn disk_now() -> Value {
     let home = crate::paths::home().to_string_lossy().to_string();
     let dir = crate::paths::raven_dir().to_string_lossy().to_string();

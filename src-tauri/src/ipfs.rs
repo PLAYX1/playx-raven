@@ -247,7 +247,7 @@ async fn fetch_json(url: &str) -> Option<Value> {
 /// spec leaves open for exactly this. Wallets that do not know about it ignore
 /// the extra keys and still show the English name, which is the behaviour we
 /// want: adding a Korean name must never make the asset look broken elsewhere.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn read_metadata(doc: Value, lang: String) -> Value {
     let m = doc
         .get("rip0014")

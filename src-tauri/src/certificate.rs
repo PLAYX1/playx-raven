@@ -633,7 +633,7 @@ pub fn write_print_many(ids: &[String], lang: &str) -> Result<PathBuf, String> {
 pub const MAX_BATCH_ENTRIES: usize = 20;
 
 /// 인쇄할 파일을 만들고 기본 브라우저로 연다. `index` 가 있으면 그 사람 한 장만.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_print(id: String, lang: String, index: Option<usize>) -> Result<Value, String> {
     let path = write_print_one(&id, &lang, index)?;
     open::that(&path).map_err(|e| format!("브라우저를 열지 못했어요: {e}"))?;
@@ -641,7 +641,7 @@ pub fn create_print(id: String, lang: String, index: Option<usize>) -> Result<Va
 }
 
 /// 한 묶음 전체를 한 파일로 만들어 연다 — 인쇄 창에서 「PDF로 저장」하면 A4 여러 쪽 PDF 하나.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_print_many(ids: Vec<String>, lang: String) -> Result<Value, String> {
     let path = write_print_many(&ids, &lang)?;
     open::that(&path).map_err(|e| format!("브라우저를 열지 못했어요: {e}"))?;
@@ -661,7 +661,7 @@ fn remember_sample(path: &std::path::Path) {
 }
 
 /// 방금 받은 샘플 표를 기본 프로그램(엑셀·Numbers)으로 연다. 다시 쓰지 않는다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn certificate_sample_open(path: String) -> Result<(), String> {
     let p = PathBuf::from(&path);
     if !SAMPLES.lock().map(|l| l.contains(&p)).unwrap_or(false) {
@@ -679,7 +679,7 @@ pub fn certificate_sample_open(path: String) -> Result<(), String> {
 ///   `name` 은 `<첫 기록 id>.xlsx` 또는 `.csv`.
 ///
 /// `open` 이면 쓴 뒤 기본 프로그램으로 연다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn certificate_file_save(kind: String, name: String, data: String, open: bool) -> Result<Value, String> {
     const MAX: usize = 8 * 1024 * 1024;
     if data.len() > MAX * 4 / 3 + 8 {
@@ -727,7 +727,7 @@ pub fn certificate_file_save(kind: String, name: String, data: String, open: boo
 }
 
 /// 앱 안 미리보기 — 아직 저장하지 않은 칸으로 첫 장만 그린다. 파일은 안 쓴다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_certificate_preview(entry: Value, lang: String) -> Result<String, String> {
     let kind = str_of(&entry, "kind").to_string();
     let mut clean = serde_json::Value::Object(crate::create_history::clean_details(entry.get("details").unwrap_or(&Value::Null), &kind)?);

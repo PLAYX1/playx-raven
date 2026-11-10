@@ -916,13 +916,13 @@ fn state_json(s: &Share) -> Value {
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn relay_share_get() -> Value {
     state_json(&current())
 }
 
 /// 스위치 셋 중 바뀐 것만. 켜면 곧바로 한 번 해 본다(기다리지 않는다).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn relay_share_set(enabled: Option<bool>, republish: Option<bool>, outbox_read: Option<bool>) -> Value {
     let s = update(|s| {
         if let Some(v) = enabled {
@@ -948,7 +948,7 @@ pub fn relay_share_set(enabled: Option<bool>, republish: Option<bool>, outbox_re
 }
 
 /// 「고급」 주소 더하기 — §2 검사를 통과해야 한다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn relay_share_add(url: String) -> Result<Value, String> {
     let Some(u) = clean_relay_url(&url) else {
         return Err("bad-url".into());
@@ -971,7 +971,7 @@ pub fn relay_share_add(url: String) -> Result<Value, String> {
 }
 
 /// 「고급」 내 바깥 주소 직접 쓰기(테일스케일 등). 빈 값이면 지운다. §2 검사를 통과해야 한다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn relay_share_set_own(url: Option<String>) -> Result<Value, String> {
     let own = match url.as_deref().map(str::trim).filter(|u| !u.is_empty()) {
         None => None,
@@ -993,7 +993,7 @@ pub fn relay_share_set_own(url: Option<String>) -> Result<Value, String> {
 }
 
 /// 「고급」 지우기 — 더한 주소는 빼고, 이웃은 빼고 다시 고르지 않는다. 기본 릴레이는 지우지 않는다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn relay_share_remove(url: String) -> Value {
     let u = clean_relay_url(&url).unwrap_or(url);
     let s = update(|s| {

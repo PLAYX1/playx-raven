@@ -459,7 +459,7 @@ fn read_rows(from_ymd: i64, to_ymd: i64, tz: i64, shop: Option<&str>) -> Vec<Val
 /// `shop` 은 **안 보내도 된다.** 안 보내면(`None`) 지점을 안 가리고 예전과
 /// 똑같이 전부 센다 — 그래서 인자를 맨 뒤에 붙였고, 화면 쪽 기존 호출은
 /// 한 글자도 안 고쳐도 그대로 돈다. 지점 이름을 보내면 그 지점 것만 센다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn ledger_range(
     from_ymd: i64,
     to_ymd: i64,
@@ -568,7 +568,7 @@ pub fn ledger_range(
 }
 
 /// The same thing as a spreadsheet, because that is what an accountant wants.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn ledger_csv(from_ymd: i64, to_ymd: i64, tz_offset_min: i64) -> String {
     // 내보내기는 아직 지점을 안 가린다. 세무 담당자에게 가는 파일은
     // 「가게가 받은 전부」여야 하고, 지점을 나눠 내보내는 것은 화면이
@@ -666,7 +666,7 @@ pub fn ledger_csv(from_ymd: i64, to_ymd: i64, tz_offset_min: i64) -> String {
 }
 
 /// Writes the CSV next to the other exports and says where it went.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn ledger_export(from_ymd: i64, to_ymd: i64, tz_offset_min: i64) -> Result<Value, String> {
     let csv = ledger_csv(from_ymd, to_ymd, tz_offset_min);
     let home = crate::paths::home().to_string_lossy().to_string();
@@ -763,7 +763,7 @@ pub async fn ledger_sweep(min_conf: u32) -> Result<Value, String> {
 }
 
 /// Orders taken but not paid. Shown so nobody wonders where an order went.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn ledger_pending() -> Value {
     let p = pending_load();
     let rows: Vec<Value> = p

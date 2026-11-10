@@ -378,7 +378,7 @@ pub async fn ipfs_add_bundle(
 /// that has never heard of `name_ko` reads `asset_data.name` and shows the
 /// English one — so adding a Korean name can never make the asset look broken
 /// somewhere else.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn build_metadata(
     name: String,
     description: String,

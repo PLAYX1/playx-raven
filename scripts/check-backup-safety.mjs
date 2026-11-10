@@ -16,7 +16,7 @@ for (const name of ['backup', 'lockbox', 'backup_storage']) {
   if (baseline && name === 'backup_storage') continue;
   if (!existsSync(resolve(root, path))) continue;
   let code = baseline ? execFileSync('git', ['show', '46c10d0:' + path], { cwd: root, encoding: 'utf8' }) : readFileSync(resolve(root, path), 'utf8');
-  code = code.replaceAll('#[tauri::command]', '');
+  code = code.replace(/#\[tauri::command(?:\(async\))?\]/g, '');
   if (mutant && name === 'backup') {
     const original = code;
     code = code.replace('prepare_backup(include_wallet).await?', 'prepare_backup(false).await?');

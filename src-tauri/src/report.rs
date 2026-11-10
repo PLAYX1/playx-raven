@@ -109,7 +109,7 @@ fn build_payload(
 }
 
 /// 보내기 전에 화면에 보여 줄 **가린 노드 기록.** 보낼 때 쓰는 것과 같은 함수의 결과다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn report_log_preview() -> Value {
     match crate::report_log::read_node_log() {
         Some(text) => json!({ "ok": true, "text": text, "lines": text.lines().count() }),
@@ -218,7 +218,7 @@ pub async fn report_flush() -> Value {
 }
 
 /// 쌓인 것이 몇 건인지. 화면이 "아직 못 보낸 신고 N건" 을 말할 수 있게.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn report_parked() -> usize {
     std::fs::read_to_string(queue_file())
         .map(|t| t.lines().filter(|l| !l.trim().is_empty()).count())

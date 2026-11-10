@@ -77,7 +77,7 @@ fn save_doors(rows: &[Value]) -> Result<(), String> {
 }
 
 /// Every configured door, with the warnings that belong next to it.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn door_list() -> Value {
     let rows: Vec<Value> = load_doors()
         .iter()
@@ -107,7 +107,7 @@ pub fn door_list() -> Value {
 }
 
 /// Adds or replaces a door.
-#[tauri::command]
+#[tauri::command(async)]
 #[allow(clippy::too_many_arguments)]
 pub fn door_save(
     id: String,
@@ -151,7 +151,7 @@ pub fn door_save(
     Ok(door_list())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn door_remove(id: String) -> Result<Value, String> {
     let mut rows = load_doors();
     rows.retain(|r| r.get("id").and_then(Value::as_str) != Some(id.as_str()));
@@ -326,7 +326,7 @@ fn log_open(entry: Value) {
 }
 
 /// Every open and every refusal, newest last.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn door_log() -> Value {
     let rows: Vec<Value> = std::fs::read_to_string(log_path())
         .ok()

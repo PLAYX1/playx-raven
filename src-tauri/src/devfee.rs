@@ -319,7 +319,7 @@ fn now() -> i64 {
 }
 
 /// 지금 얼마가 쌓여 있나. 화면에 그대로 보여 준다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn fee_owed() -> Value {
     let v = read();
     let (rate, addr) = crate::shop::fee_config();

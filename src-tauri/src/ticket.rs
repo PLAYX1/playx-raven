@@ -304,7 +304,7 @@ fn judge(row: &Value, now: i64) -> Value {
 }
 
 /// 표 하나를 찾아 본다. 검표기가 QR 을 읽고 부른다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn ticket_find(code: String, now_unix: i64) -> Result<Value, String> {
     let want = code.trim().to_uppercase();
     let rows = read_rows();
@@ -322,7 +322,7 @@ pub fn ticket_find(code: String, now_unix: i64) -> Result<Value, String> {
 ///
 /// 🔴 못 쓰는 표는 **거절한다.** 경고만 띄우고 세어 두면, 나중에 그 숫자를
 /// 아무도 맞춰 볼 수 없다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn ticket_use(code: String, now_unix: i64) -> Result<Value, String> {
     let want = code.trim().to_uppercase();
     with_rows(|rows| {
@@ -373,7 +373,7 @@ pub fn ticket_use(code: String, now_unix: i64) -> Result<Value, String> {
 /// 회원으로 올라간 표는 `promoted` 가 붙고, 그 뒤로는 **회원 쪽이 진실**이다.
 /// 두 곳에 남겨 두면 기간을 연장했을 때 한쪽만 늘어나고, 문 앞에서 어느
 /// 쪽을 믿을지 아무도 모른다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn ticket_to_member(
     code: String,
     name: String,
@@ -499,7 +499,7 @@ pub fn for_order(order_addr: &str, now: i64) -> Value {
 }
 
 /// 사장 화면의 목록. 끝난 것은 뒤로.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn ticket_list(now_unix: i64) -> Value {
     let mut rows: Vec<Value> = read_rows().iter().map(|r| judge(r, now_unix)).collect();
     rows.sort_by_key(|r| -(r.get("issued").and_then(Value::as_i64).unwrap_or(0)));

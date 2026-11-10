@@ -40,7 +40,7 @@ fn read() -> Value {
 /// 🔴 **모르면 모른다고 답한다.** 안 고른 사람에게 「장사」를 기본으로 주면
 /// 돕겠다고 켠 사람이 계산대 화면을 만나고, 그 순간 이 프로그램은 자기
 /// 것이 아니게 된다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn mode_get() -> Value {
     let m = read();
     let chosen = m["mode"].as_str().unwrap_or("");
@@ -65,7 +65,7 @@ pub fn mode_get() -> Value {
     json!({ "mode": "", "chosen": false, "inferred": false })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn mode_set(mode: String) -> Result<Value, String> {
     let m = mode.trim();
     if !MODES.contains(&m) {

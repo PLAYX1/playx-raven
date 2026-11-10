@@ -104,7 +104,7 @@ fn plist_text() -> String {
 }
 
 /// 지금 켜져 있나.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn autostart_get() -> bool {
     #[cfg(target_os = "windows")]
     {
@@ -148,7 +148,7 @@ const LABEL_WIN: &str = "PLAY X Raven";
 ///
 /// 재부팅하면 안 돌아오는 프로그램은 **켜 둘 수가 없다.** 계산대 컴퓨터는
 /// 정전 한 번이면 끝이고, 그날 밤 입금은 아무도 확인하지 않는다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn autostart_set(on: bool) -> Result<bool, String> {
     #[cfg(target_os = "windows")]
     {
@@ -244,7 +244,7 @@ pub fn autostart_set(on: bool) -> Result<bool, String> {
 /// 띄운 것만 안다). 「끝냈는데 ravend 가 남는다」는 그 이야기다.
 ///
 /// 앱 하나만 올라가면 된다 — 앱이 켜지면서 노드를 켠다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn autostart_audit() -> Value {
     let node = crate::paths::home().join("Library/LaunchAgents/se.erci.playx.raven.node.plist");
     let app_on = autostart_get();
@@ -268,7 +268,7 @@ pub fn autostart_audit() -> Value {
 ///
 /// ⚠️ 지금 돌고 있는 노드는 안 끈다. 장부를 훑는 중일 수 있고, 여기서
 ///    할 일은 「다음에 자동으로 뜨지 않게」까지다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn autostart_tidy() -> Result<Value, String> {
     let node = crate::paths::home().join("Library/LaunchAgents/se.erci.playx.raven.node.plist");
     if !node.is_file() {

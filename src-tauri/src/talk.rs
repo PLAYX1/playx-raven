@@ -220,7 +220,7 @@ fn now() -> i64 {
 }
 
 /// 내 이름표(공개키)와 되살릴 수 있는지.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn talk_me() -> Result<Value, String> {
     let sk = key()?;
     let from = std::fs::read_to_string(key_file())
@@ -594,7 +594,7 @@ pub(crate) fn verified_rvn_address(event_pubkey: &str, body: &Value) -> String {
 ///
 /// 감추지 않고 그대로 보여 준다. 「복구됩니다」라고 해 놓고 안 되는 것이
 /// 제일 나쁘다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn recovery_status() -> Value {
     let (seed, seed_why) = match crate::identity::words_from_node() {
         Ok(_) => (true, "12단어가 있습니다.".to_string()),

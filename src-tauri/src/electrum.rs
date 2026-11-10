@@ -143,7 +143,7 @@ fn call(method: &str, params: Value) -> Result<Value, String> {
 }
 
 /// Is ElectrumX there, and what does it say about itself?
-#[tauri::command]
+#[tauri::command(async)]
 pub fn electrum_status() -> Value {
     match call(
         "server.version",
@@ -278,7 +278,7 @@ fn sha256(data: &[u8]) -> [u8; 32] {
 /// stops depending on a local file: if the member still holds their number,
 /// they are still a member, and losing our ledger costs names and dates rather
 /// than access.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn address_assets(address: String) -> Result<Value, String> {
     let sh = scripthash(&address)?;
     let balances = call("blockchain.scripthash.get_asset_balance", json!([sh]))?;
@@ -286,7 +286,7 @@ pub fn address_assets(address: String) -> Result<Value, String> {
 }
 
 /// Does this address hold this specific asset right now?
-#[tauri::command]
+#[tauri::command(async)]
 pub fn holds_asset(address: String, asset: String) -> Result<Value, String> {
     let r = address_assets(address.clone())?;
     let confirmed = r["assets"]
@@ -309,7 +309,7 @@ pub fn holds_asset(address: String, asset: String) -> Result<Value, String> {
 ///
 /// Returns the source it got the answer from, because a customer standing in a
 /// shop should be able to see whether the shop answered or a stranger did.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn wallet_view(address: String) -> Result<Value, String> {
     let script = address_to_scripthash(&address)?;
 

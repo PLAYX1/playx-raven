@@ -71,7 +71,7 @@ fn sending_set<T>(f: impl FnOnce(&mut HashSet<String>) -> T) -> T {
 
 /// 적는다. `state` 는 `sending`(보내기 직전) 또는 `unknown`(시간 초과).
 /// 🔴 `sending` 을 못 적으면 화면은 보내지 않는다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn issue_unknown_mark(name: String, kind: String, probe: Option<String>, state: String) -> Result<(), String> {
     let name = check_name(&name)?;
     if !KINDS.contains(&kind.as_str()) {
@@ -110,7 +110,7 @@ pub fn issue_unknown_mark(name: String, kind: String, probe: Option<String>, sta
 }
 
 /// 분명히 끝났다(성공했거나 노드가 거절했다) — 지운다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn issue_unknown_clear(name: String) -> Result<(), String> {
     let name = check_name(&name)?;
     sending_set(|s| s.remove(&name));

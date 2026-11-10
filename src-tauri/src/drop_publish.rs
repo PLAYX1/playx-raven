@@ -87,7 +87,7 @@ fn walk(root: &Path, dir: &Path, depth: usize, out: &mut Vec<Value>, skipped: &m
 }
 
 /// 떨어뜨린 경로 하나의 목록. 파일이면 그 파일 하나(rel = ""), 폴더면 안의 파일 전부(상대 경로·크기). 내용은 안 읽는다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn creator_dropped_list(path: String) -> Result<Value, String> {
     if !crate::dropbox::was_dropped(&path) {
         return Err("방금 창에 놓은 파일·폴더만 읽을 수 있어요.".into());
@@ -128,7 +128,7 @@ fn resolve_inside(root: &str, rel: &str) -> Result<PathBuf, String> {
 }
 
 /// 떨어뜨린 파일(rel = "") 또는 떨어뜨린 폴더 안 파일 하나의 내용(base64).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn creator_dropped_read(root: String, rel: String) -> Result<Value, String> {
     let path = resolve_inside(&root, &rel)?;
     let meta = std::fs::symlink_metadata(&path).map_err(|_| "파일을 찾지 못했어요.")?;

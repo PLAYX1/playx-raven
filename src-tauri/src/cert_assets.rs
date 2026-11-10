@@ -77,7 +77,7 @@ pub fn font_css() -> &'static str {
 }
 
 /// 앱 안 미리보기가 한 번 받아 붙이는 글꼴 CSS.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn certificate_font_css() -> String {
     font_css().to_string()
 }
@@ -138,12 +138,12 @@ pub fn mark(kind: &str) -> Option<String> {
     data_url(&bytes)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn certificate_marks() -> Value {
     json!({ "logo": mark("logo"), "stamp": mark("stamp") })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn certificate_mark_save(kind: String, image: String) -> Result<Value, String> {
     let path = mark_path(&kind)?;
     let (bytes, _) = image_from_data_url(&image, MAX_MARK_BYTES)?;
@@ -151,7 +151,7 @@ pub fn certificate_mark_save(kind: String, image: String) -> Result<Value, Strin
     Ok(certificate_marks())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn certificate_mark_clear(kind: String) -> Result<Value, String> {
     let path = mark_path(&kind)?;
     match std::fs::remove_file(&path) {
@@ -180,7 +180,7 @@ fn photo_path(id: &str, index: usize) -> PathBuf {
 }
 
 /// 기록 한 건의 사진을 줄 번호에 맞춰 저장한다. 빈 칸(null)은 그 줄 사진을 지운다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_photos_save(id: String, photos: Vec<Option<String>>) -> Result<usize, String> {
     if !valid_id(&id) {
         return Err("기록을 찾지 못했어요.".into());
@@ -271,7 +271,7 @@ fn read_dropped_file(path: &std::path::Path, want: Option<&str>) -> Result<Value
 }
 
 /// 창에 떨어뜨린 파일 하나를 읽는다. 폴더를 떨어뜨렸으면 그 안(한 층)의 표·사진 이름만.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_dropped_read(path: String) -> Result<Value, String> {
     if !crate::dropbox::was_dropped(&path) {
         return Err("방금 창에 놓은 파일만 읽을 수 있어요.".into());
@@ -296,7 +296,7 @@ pub fn create_dropped_read(path: String) -> Result<Value, String> {
 }
 
 /// 떨어뜨린 폴더 안의 사진 한 장. 이름에 경로가 섞이면 안 받는다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_dropped_read_in(folder: String, name: String) -> Result<Value, String> {
     if !crate::dropbox::was_dropped(&folder) {
         return Err("방금 창에 놓은 폴더만 읽을 수 있어요.".into());

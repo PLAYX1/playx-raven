@@ -42,9 +42,9 @@ fn load_consent() -> Result<Consent, String> {
         _ => Err(STORAGE.into()),
     }
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn ravi_consent() -> Result<Consent, String> { load_consent() }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn ravi_consent_save(consent: Consent) -> Result<(), String> {
     if !consent.reviewed { return Err(INVALID.into()); }
     let _guard = SETTINGS_LOCK.lock().map_err(|_| STORAGE)?;
@@ -78,7 +78,7 @@ fn screens() -> Vec<String> {
     let v: Value = serde_json::from_str(include_str!("../../src/ravi-capabilities.json")).unwrap_or_default();
     v["screens"].as_object().map(|m| m.keys().cloned().collect()).unwrap_or_default()
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn ravi_tool_registry() -> Value { json!(NAMES.map(schema)) }
 fn date_days(v: &Value) -> Option<i64> {
     let n = v.as_i64()?;
@@ -208,7 +208,7 @@ fn audit(name: &str, success: bool) -> Result<(), String> {
     crate::server::atomic_write_0600(&crate::paths::app_file("ravi-audit.json"), &serde_json::to_vec(&rows).map_err(|_| STORAGE)?)
         .map_err(|_| STORAGE.into())
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn ravi_audit() -> Result<Value, String> { Ok(json!(audit_rows()?)) }
 
 trait Source: Sync {

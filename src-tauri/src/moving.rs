@@ -99,7 +99,7 @@ pub async fn move_offer(what: String) -> Result<Value, String> {
 }
 
 /// 옛 컴퓨터: 짐을 무른다(취소).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn move_cancel() -> Value {
     if let Ok(mut g) = 준비된짐.lock() {
         if let Some(b) = g.take() {

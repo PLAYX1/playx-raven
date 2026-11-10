@@ -275,7 +275,7 @@ pub fn install_seed_key() -> Result<String, String> {
 
 /// 이 열쇠가 12단어에서 나온 것인가. 화면이 「잃어버려도 되살릴 수 있는가」
 /// 를 정직하게 말하려면 이게 필요하다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn shopkey_origin() -> Value {
     let Ok(s) = std::fs::read_to_string(key_file()) else {
         return json!({ "exists": false });
@@ -295,7 +295,7 @@ pub fn shopkey_origin() -> Value {
 }
 
 /// 체인 프로필에 적을 공개키. **이것만 밖으로 나간다.**
-#[tauri::command]
+#[tauri::command(async)]
 pub fn shop_pubkey() -> Result<String, String> {
     let sk = load_or_make()?;
     Ok(hex::encode(xonly(&sk)?.serialize()))

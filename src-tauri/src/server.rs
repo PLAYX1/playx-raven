@@ -3490,7 +3490,7 @@ pub fn shop_seal_state(state: tauri::State<'_, ServerState>) -> Value {
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn shop_seal_block_set(on: bool) -> Result<Value, String> {
     crate::shopseal::set_block_plain(on)?;
     Ok(json!({ "block_plain": crate::shopseal::block_plain() }))
@@ -3870,7 +3870,7 @@ pub async fn start_phone_server(
 ///
 /// 🔴 서버를 켤 때 잡은 값을 계속 쓰면, 공유기가 새 주소를 준 뒤에 그린 QR 이
 /// **죽은 주소를 가리킨다.** 실제로 그랬다 — QR 은 .58, 컴퓨터는 .57.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn now_ip() -> String {
     // 폰은 전부 와이파이다. QR 에는 그 주소가 들어가야 한다.
     all_local_ips()
@@ -3908,7 +3908,7 @@ pub fn address_check(state: tauri::State<'_, ServerState>) -> Value {
 ///
 /// 그래서 **하나를 고르지 않고 전부 보여 준다.** 어느 것이 맞는지는 이
 /// 컴퓨터가 알 수 없고, 폰을 들고 있는 사람은 한 번 눌러 보면 안다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn all_local_ips() -> Vec<String> {
     // 🔴 윈도우에는 ifconfig·ip 가 없어 늘 `local_ip()` 하나로 떨어졌다.
     //    `ipconfig` 를 창 없이 읽어, 아래 해석기가 아는 `inet <주소>` 줄로 바꾼다.
@@ -4460,7 +4460,7 @@ pub fn logout_all_phones(state: tauri::State<'_, ServerState>) -> Result<Value, 
 
 /// An SVG QR code for a URL, so the owner points a phone instead of typing an
 /// IP address and a 64-character token.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn qr_svg(text: String) -> Result<String, String> {
     use qrcode::{render::svg, QrCode};
     let code = QrCode::new(text.as_bytes()).map_err(|e| format!("QR을 만들지 못했습니다: {e}"))?;

@@ -99,7 +99,7 @@ pub async fn sweep_configure(
     Ok(v)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn sweep_read() -> Value {
     load()
 }
@@ -119,7 +119,7 @@ pub fn sweep_read() -> Value {
 static HOLD_UNTIL: Mutex<i64> = Mutex::new(0);
 
 /// Tells the sweep to stand down while something expensive is being prepared.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn sweep_hold(until_unix: i64) {
     if let Ok(mut g) = HOLD_UNTIL.lock() {
         *g = until_unix;
@@ -222,7 +222,7 @@ pub async fn sweep_run(passphrase: Option<String>) -> Result<Value, String> {
 /// The override exists because reality wins: a shop closes early for a funeral,
 /// opens late after a delivery. A schedule with no way to say "not today" is a
 /// schedule people stop trusting.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn hours_save(hours: Value, closed_note: String) -> Result<(), String> {
     let mut v = load();
     if let Some(o) = v.as_object_mut() {
@@ -237,7 +237,7 @@ pub fn hours_save(hours: Value, closed_note: String) -> Result<(), String> {
 /// `now_minutes` is minutes since local midnight and `weekday` is 0=Sunday,
 /// both passed in from the frontend — the browser already knows the local time
 /// and timezone, and deriving it again here is one more thing to get wrong.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn is_open(now_minutes: i64, weekday: usize) -> Value {
     let v = load();
     let manual = v["manual"].as_str().unwrap_or("");
@@ -281,7 +281,7 @@ pub fn is_open(now_minutes: i64, weekday: usize) -> Value {
 }
 
 /// Force open or closed, or go back to the schedule.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_manual(state: String) -> Result<(), String> {
     if !["open", "closed", "auto"].contains(&state.as_str()) {
         return Err("알 수 없는 상태입니다.".into());

@@ -41,7 +41,7 @@ fn plist_path() -> PathBuf {
 ///
 /// A path with a developer's username in it is a path that works on exactly one
 /// machine. This app is meant to run in shops that are not ours.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn default_paths() -> Value {
     json!({
         "home": crate::paths::home().to_string_lossy(),
@@ -51,7 +51,7 @@ pub fn default_paths() -> Value {
 }
 
 /// Is the node set to come back by itself after a restart or a crash?
-#[tauri::command]
+#[tauri::command(async)]
 pub fn autostart_status() -> Value {
     let installed = plist_path().exists();
     json!({
@@ -70,7 +70,7 @@ pub fn autostart_status() -> Value {
 /// keep being recorded and nothing is missed while the shop is closed; an app
 /// launching itself into an empty room and unlocking a wallet is not a service,
 /// it is an exposure.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn autostart_enable(ravend_path: String, data_dir: String) -> Result<(), String> {
     // 🔴 이 아래는 전부 맥의 launchd 다. 윈도우에서는 **아무 일도 안 일어났고**,
     //    그래서 재부팅하면 가게가 안 돌아왔다. 계산대 컴퓨터는 정전 한 번이면
@@ -140,7 +140,7 @@ pub fn autostart_enable(ravend_path: String, data_dir: String) -> Result<(), Str
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn autostart_disable() -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {

@@ -373,13 +373,13 @@ fn state_json(k: &Keeper, view: &ConfView, at: i64) -> Value {
 }
 
 /// 설정과 이 컴퓨터에 남은 기록.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn node_keeper_settings_get() -> Value {
     state_json(&load_from(&file()), &conf_view(), now())
 }
 
 /// 참여하기 켜기·끄기. 켜면 곧바로 한 번 확인해 본다(기다리지 않는다).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn node_keeper_settings_set(enabled: bool) -> Result<Value, String> {
     let p = file();
     let mut k = load_from(&p);
@@ -426,7 +426,7 @@ pub async fn node_keeper_awards() -> Value {
 
 /// 사용자가 raven.conf 에 직접 `listen=0` 을 적어 둔 경우에만 — 단추를 눌렀을 때 `listen=1` 로 바꾼다.
 /// 사본(`raven.conf.bak`)을 남기고, 노드를 다시 켜야 적용된다고 알린다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn node_keeper_allow_inbound() -> Result<Value, String> {
     let path = conf_path();
     let text = std::fs::read_to_string(&path).unwrap_or_default();

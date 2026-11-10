@@ -386,7 +386,7 @@ pub async fn transfer_ownership(
     .await
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn send_ack(request_id: String) -> Result<(), String> {
     crate::payout_guard::acknowledge(&crate::paths::app_file("payouts"), "send", &request_id)
 }

@@ -165,7 +165,7 @@ fn state_json(k: &Keeper, sharing: Option<&str>, at: i64) -> Value {
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn relay_keeper_get() -> Value {
     state_json(&node_keeper::load_from(&file()), crate::relay_share::sharing_url().as_deref(), now())
 }
@@ -259,7 +259,7 @@ pub fn cert_url(hex_pub: &str) -> Option<String> {
 }
 
 /// 내 증서 주소. 열쇠를 새로 만들지 않는다 — 없으면 `{url: null}`.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn keeper_cert_link() -> Value {
     let me = crate::talk::key_on_disk().and_then(|(sk, _, _)| crate::shopkey::pubkey_of(&sk).ok());
     json!({ "npub": me.as_deref().and_then(npub_of), "url": me.as_deref().and_then(cert_url) })

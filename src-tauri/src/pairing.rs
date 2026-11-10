@@ -45,7 +45,7 @@ fn ago_text(ms: i64, now: i64) -> Value {
 }
 
 /// 화면이 읽는 전부. 연결 기능을 켠 적이 없으면 `ready:false` 만(아무것도 만들지 않는다).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn pairing_state(tz_offset_min: Option<i64>) -> Result<Value, String> {
     let now = now_ms();
     let out = net::with_desk(false, |d| {
@@ -122,7 +122,7 @@ pub async fn pairing_show_qr() -> Result<Value, String> {
                "lan": lan, "outside": !relays.is_empty() }))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn pairing_cancel_qr() -> Result<(), String> {
     net::with_desk(false, |d| d.host.cancel())?;
     Ok(())
@@ -163,7 +163,7 @@ pub async fn pairing_approve(view: bool, request: bool, money: String, daily_lim
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn pairing_reject() -> Result<(), String> {
     let now = now_ms();
     if let Some(Some(ev)) = net::with_desk(false, |d| d.host.deny(&d.keys, "denied", now, proto::SealOpts::default()))? {
@@ -173,7 +173,7 @@ pub fn pairing_reject() -> Result<(), String> {
 }
 
 /// 「연결 끊기」 — 이 컴퓨터에서는 **지금** 끊긴다. 폰에게도 알린다(닿으면).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn pairing_unpair(sign: String) -> Result<(), String> {
     let now = now_ms();
     if let Some(Some(ev)) = net::with_desk(false, |d| d.unpair(&sign, now))? {
@@ -184,7 +184,7 @@ pub fn pairing_unpair(sign: String) -> Result<(), String> {
 }
 
 /// 「폰 요청」 열기. 보내기면 기존 보내기 화면에 채울 값을 준다(사장이 거기서 다시 확인하고 보낸다).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn pairing_request_open(id: String) -> Result<Value, String> {
     net::with_desk(false, |d| {
         let r = d.request_mut(&id).ok_or("그 요청을 찾지 못했어요.")?;
@@ -251,7 +251,7 @@ pub async fn pairing_request_decline(id: String) -> Result<(), String> {
 }
 
 /// 공개 Nostr 예비(기본 끔). 공개 중계는 내용은 못 보지만 언제 어느 기기끼리인지는 본다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn pairing_set_public_backup(on: bool) -> Result<(), String> {
     net::with_desk(false, |d| {
         d.settings.public_backup = on;
@@ -263,7 +263,7 @@ pub fn pairing_set_public_backup(on: bool) -> Result<(), String> {
 }
 
 /// 기다리는 「폰 요청」 수 — 화면 구석 알림이 10초마다 읽는다(가볍게).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn pairing_waiting() -> Value {
     let now = now_ms();
     net::with_desk(false, |d| {

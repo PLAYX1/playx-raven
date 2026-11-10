@@ -109,7 +109,7 @@ fn key() -> Result<[u8; 32], String> {
 }
 
 /// 이 컴퓨터의 아티스트 공개키. **체인에 박힌 것과 같아야 한다.**
-#[tauri::command]
+#[tauri::command(async)]
 pub fn artist_pubkey() -> Result<Value, String> {
     let sk = key()?;
     let pk = crate::shopkey::pubkey_of(&sk)?;

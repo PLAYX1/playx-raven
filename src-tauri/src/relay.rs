@@ -1196,7 +1196,7 @@ pub async fn serve(mut ws: WebSocket) {
 }
 
 /// 지금 몇 개를 들고 있나. 화면의 표시등이 읽는다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn relay_status() -> Value {
     let n = with(|v| v.len());
     let (mine, dms) = kept_counts();

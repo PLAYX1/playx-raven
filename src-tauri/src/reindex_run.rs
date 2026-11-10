@@ -71,7 +71,7 @@ fn armed_path() -> std::path::PathBuf {
 /// 🔴 예약이라고 부르지만 **시계를 따로 두지 않는다.** 앱이 떠 있는 동안
 /// 1분마다 「지금 한가한가」를 물어보고, 한가하면 시작한다. 시계를 따로
 /// 두면 앱이 꺼져 있던 시간을 못 따라잡고, 사장은 예약해 놨는데 안 됐다고 겪는다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn reindex_arm(on: bool) -> bool {
     if on {
         let _ = std::fs::write(armed_path(), "1");
@@ -82,7 +82,7 @@ pub fn reindex_arm(on: bool) -> bool {
 }
 
 /// 지금 상태.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn reindex_state() -> Value {
     json!({
         "armed": armed_path().exists(),
@@ -374,7 +374,7 @@ pub async fn sync_stalled() -> Value {
 /// 옮기고, 판단은 사람이 한다.
 ///
 /// ⚠️ 마지막 40줄만 읽는다. 이 파일은 수백 MB 가 되기도 한다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn node_log_tail() -> Value {
     let p = crate::paths::raven_dir().join("debug.log");
     // 🔴 0.4.9 — 복구 단어로 되살리는 동안과 끝난 직후(사람이 「닫기」를 누르기 전)에는 노드 기록을
@@ -475,7 +475,7 @@ mod behind_tests {
 /// ```text
 ///    멀쩡한 노드를 몇 시간 세운다.
 /// ```
-#[tauri::command]
+#[tauri::command(async)]
 pub fn chain_broken() -> Value {
     let tail = node_log_tail();
     if tail["ok"] != json!(true) {

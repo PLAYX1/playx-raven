@@ -103,13 +103,13 @@ pub fn parse_payload(plain: &[u8]) -> Result<(String, String), String> {
     Ok((asset, key))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn lock_secret_put(name: String, hex: String) -> Result<Value, String> {
     let created = put_in(&store_dir(), &name, &hex)?;
     Ok(json!({ "ok": true, "created": created }))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn lock_secret_get(name: String) -> Result<Value, String> {
     Ok(match get_in(&store_dir(), &name)? {
         Some(h) => json!({ "hex": h }),
@@ -153,7 +153,7 @@ pub fn export_into(dir: &Path, asset: &str, dest_dir: &Path, key: &[u8; 32], sta
     result
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn lock_key_export(asset: String, dest: String) -> Result<Value, String> {
     if !name_ok(&asset) {
         return Err("상품 이름이 올바르지 않아요.".into());
@@ -184,7 +184,7 @@ pub fn import_from(dir: &Path, file: &Path, paper: &str) -> Result<String, Strin
     Ok(asset)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn lock_key_import(file: String, key: String) -> Result<Value, String> {
     let asset = import_from(&store_dir(), Path::new(&file), &key)?;
     Ok(json!({ "ok": true, "asset": asset }))

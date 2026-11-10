@@ -193,7 +193,7 @@ fn win_set(flags: u32) -> bool {
 }
 
 /// 화면에 뭐라고 적을지. 전기를 쓰는 일을 몰래 하지 않는다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn awake_status() -> Value {
     let on = ON.lock().map(|g| *g).unwrap_or(false);
     let mode = crate::mode::mode_get()["mode"].as_str().unwrap_or("").to_string();

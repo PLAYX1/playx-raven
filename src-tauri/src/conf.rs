@@ -32,7 +32,7 @@ fn conf_path() -> PathBuf {
 ///
 /// `unit` and `hint` exist so the field can be a number box with a sentence
 /// next to it rather than a key=value line the owner has to compose.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn conf_options() -> Value {
     json!([
         {
@@ -107,7 +107,7 @@ pub fn conf_options() -> Value {
 }
 
 /// Templates. Not "profiles" — a shop picks one on the first day and forgets.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn conf_templates() -> Value {
     json!([
         {
@@ -132,7 +132,7 @@ pub fn conf_templates() -> Value {
 }
 
 /// What is set right now, plus everything else in the file untouched.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn conf_read() -> Value {
     let text = std::fs::read_to_string(conf_path()).unwrap_or_default();
     let mut known = serde_json::Map::new();
@@ -172,7 +172,7 @@ pub fn conf_read() -> Value {
 ///
 /// A value of `null` removes the key, which is how "back to default" works —
 /// writing `prune=0` and deleting the line are not the same thing to the node.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn conf_write(values: Value) -> Result<Value, String> {
     let path = conf_path();
     let existing = std::fs::read_to_string(&path).unwrap_or_default();

@@ -576,7 +576,7 @@ pub async fn wallet_link_offer_again() -> Result<Value, String> {
     let sess = g.as_mut().filter(|s| now - s.authed < SESSION_MS).ok_or("인증한 지 5분이 지났어요. 다시 인증해 주세요.")?;
     Ok(serde_json::to_value(new_offer(sess, &key, now)).unwrap_or_default())
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn wallet_link_cancel() -> Result<(), String> {
     *SESSION.lock().map_err(|_| "x")? = None;
     Ok(())
@@ -824,7 +824,7 @@ pub async fn wallet_link_inbox() -> Result<Value, String> {
     let sk = link_secret()?;
     inbox_and_sell(&Relays, &sell::ProdOps, &dir(), &sk.0, now_ms()).await
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn wallet_link_list() -> Result<Value, String> { view(&dir(), now_ms()) }
 
 // ── 승인 화면(실제 거래를 만들어 보여 준다) ───────────────────────────

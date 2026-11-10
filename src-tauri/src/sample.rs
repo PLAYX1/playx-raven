@@ -45,7 +45,7 @@ fn count(name: &str, key: &str) -> usize {
 }
 
 /// Is there anything here that a sample would destroy?
-#[tauri::command]
+#[tauri::command(async)]
 pub fn sample_check() -> Value {
     let menu = crate::shop::shop_load()
         .get("menu")
@@ -64,7 +64,7 @@ pub fn sample_check() -> Value {
 }
 
 /// Fills the local files with a shop that looks lived-in.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn sample_fill(now_unix: i64, force: bool) -> Result<Value, String> {
     let existing = sample_check();
     if existing["has_real_work"].as_bool().unwrap_or(false) && !force {
@@ -192,7 +192,7 @@ pub fn sample_fill(now_unix: i64, force: bool) -> Result<Value, String> {
 }
 
 /// Removes everything the sampler wrote, and only that.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn sample_clear() -> Result<Value, String> {
     let mut removed = Vec::new();
 

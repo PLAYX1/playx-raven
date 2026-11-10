@@ -435,7 +435,7 @@ async fn both_keys_async() -> Result<([u8; 32], Option<[u8; 32]>), SeedFailure> 
 }
 
 /// 화면에 보여 줄 경로표. **사람이 읽고 확인할 수 있어야** 계약이다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn identity_paths() -> Value {
     json!({
         "seed": "BIP39 표준 (PBKDF2-HMAC-SHA512, 2048회)",

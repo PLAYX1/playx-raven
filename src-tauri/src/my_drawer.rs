@@ -72,7 +72,7 @@ pub(crate) fn clean(folders: &[Value], assign: &serde_json::Map<String, Value>) 
 /// 내 글(이 컴퓨터가 지켜 둔 것) + 폴더 + 판 번호(rev). 새 글이 먼저.
 /// `collected`: 이 컴퓨터가 내 글을 한 번이라도 끝까지 모았나 — 아니면 화면이 바깥에서 읽는 옛 길을 쓴다.
 /// `deleted`: 내가 지운 글 번호(옛 길에서도 다시 보이지 않게).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn my_notes() -> Result<Value, String> {
     let Some(me) = crate::relay::owner_pub() else {
         return Ok(json!({ "me": null, "notes": [], "folders": [], "assign": {}, "rev": 0, "collected": false, "deleted": [] }));
@@ -88,7 +88,7 @@ pub fn my_notes() -> Result<Value, String> {
 }
 
 /// 폴더와 배정을 통째로 저장한다. `rev` 가 지금 판과 같아야 한다 — 다르면 다른 곳에서 바뀐 것이니 거절한다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn my_drawer_save(folders: Vec<Value>, assign: serde_json::Map<String, Value>, rev: u64) -> Result<Value, String> {
     let _g = SAVE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let (_, _, now) = load()?;

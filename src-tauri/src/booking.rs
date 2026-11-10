@@ -50,7 +50,7 @@ pub fn minutes_for(menu: &Value, items: &Value) -> i64 {
 /// 영업시간 안에서, 지금보다 뒤로, 이미 잡힌 것과 겹치지 않게.
 /// **가게 시계**를 쓴다 — 손님 폰 시간대를 쓰면 여행 온 손님에게만 엉뚱한
 /// 시각이 뜬다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn booking_slots(
     shop: Value,
     taken: Value,
@@ -327,7 +327,7 @@ pub fn for_order(addr: &str) -> Option<Value> {
 ///
 /// 안 낸 것도 같이 준다 — 「지금 누가 고르는 중」이 안 보이면 사장이 그
 /// 시간에 다른 일을 잡는다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn booking_list(now_unix: i64) -> Value {
     let mut rows: Vec<Value> = read_rows()
         .into_iter()
@@ -341,7 +341,7 @@ pub fn booking_list(now_unix: i64) -> Value {
 }
 
 /// 사장이 예약을 취소한다. 자리가 풀린다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn booking_cancel(addr: String) -> Result<(), String> {
     with_rows(|rows| {
         let Some(idx) = rows

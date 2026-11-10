@@ -38,7 +38,7 @@ use serde_json::{json, Value};
 pub const ROLES: [&str; 4] = ["owner", "staff", "scanner", "customer"];
 
 /// What each role is for, and what it deliberately cannot reach.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn role_catalogue() -> Value {
     json!([
         {
@@ -122,7 +122,7 @@ pub fn allowed(role: &str, path: &str) -> bool {
 ///
 /// Shown on the staff and scanner screens themselves, so the person holding it
 /// knows why a thing is missing instead of assuming the app is broken.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn role_limits(role: String) -> Value {
     let cat = role_catalogue();
     let found = cat

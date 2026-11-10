@@ -123,7 +123,7 @@ fn node_path() -> PathBuf {
 /// screen that says "이 컴퓨터" is ambiguous the moment there are two. The id is
 /// generated once and never changes; the name is whatever the owner calls the
 /// place out loud — 강남지점, 2층 계산대.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn node_identity() -> Value {
     if let Some(v) = std::fs::read_to_string(node_path())
         .ok()
@@ -192,7 +192,7 @@ fn machine_uuid() -> String {
 }
 
 /// Names this machine.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn node_rename(name: String) -> Result<Value, String> {
     let mut v = node_identity();
     if let Some(m) = v.as_object_mut() {
@@ -393,7 +393,7 @@ fn unpack_with(input: &str, pass: &str) -> Result<PathBuf, String> {
 /// Deliberately before restoring, and deliberately in nouns rather than file
 /// names: "회원 12명" is checkable at a glance and "passes.json 4.2 KB" is not.
 /// Restoring the wrong night's folder is the mistake this exists to catch.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn restore_survey(folder: String, pass: Option<String>) -> Result<Value, String> {
     let _operation = RestoreOperation::begin()?;
     // 폴더든 zip 이든 여기서 같아진다.
@@ -1179,7 +1179,7 @@ pub fn 청소() {
 /// only exist on the machine that just died. So it gets written down while the
 /// machine is alive. Deliberately excludes anything secret — a page in a drawer
 /// is not where a passphrase or a seed belongs.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn recovery_card() -> Value {
     let node = node_identity();
     let shop = crate::shop::shop_load();
@@ -1208,7 +1208,7 @@ pub fn recovery_card() -> Value {
 /// Returns the plan rather than doing it, because rotating tokens logs out every
 /// staff phone in the shop and that should happen when the owner presses it, not
 /// when they open a help page.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn phone_lost_plan() -> Value {
     json!({
         "calm": "지갑은 안전합니다. 폰에는 열쇠가 들어 있지 않습니다.",
@@ -1437,7 +1437,7 @@ mod tests {
 /// Nothing secret goes in it. No passphrase, no twelve words. A page that
 /// lives in a drawer is not where those belong, and `recovery_card` is built
 /// to leave them out.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn recovery_card_print(now_ymd: String) -> Result<Value, String> {
     let c = recovery_card();
 

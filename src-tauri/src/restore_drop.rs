@@ -143,7 +143,7 @@ fn check_file(path: &str) -> Result<(Kind, PathBuf, u64, String, u64), String> {
 }
 
 /// 1) 놓은 파일 보기 — **읽기만** 한다. 이름·크기·날짜와 되살리는 범위.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn restore_drop_inspect(path: String) -> Result<Value, String> {
     let (kind, p, size, _sha, at) = check_file(&path)?;
     Ok(json!({
@@ -292,7 +292,7 @@ fn cancel_all() -> Value {
 }
 
 /// 그만두기 — 표와 임시로 풀어 둔 것을 치운다. 현재 지갑·가게 파일은 처음부터 그대로다.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn restore_drop_cancel() -> Value {
     cancel_all()
 }

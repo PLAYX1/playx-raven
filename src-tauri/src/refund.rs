@@ -42,7 +42,7 @@ pub fn remember_ours(txid: &str) {
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn note_our_tx(txid: String) {
     remember_ours(&txid);
 }

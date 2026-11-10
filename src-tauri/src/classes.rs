@@ -56,7 +56,7 @@ fn save(rows: &[Value]) -> Result<(), String> {
 /// `starts` is an ISO local datetime string, kept as the shop wrote it. Sessions
 /// are local by nature — nobody attends a knitting class from another timezone —
 /// and converting to UTC only creates a chance to be an hour wrong.
-#[tauri::command]
+#[tauri::command(async)]
 #[allow(clippy::too_many_arguments)]
 pub fn session_save(
     id: String,
@@ -142,7 +142,7 @@ fn decorate(r: &Value) -> Value {
 }
 
 /// Every session, soonest first.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn session_list() -> Result<Value, String> {
     let mut rows = load();
     rows.sort_by(|a, b| {
@@ -161,7 +161,7 @@ pub fn session_list() -> Result<Value, String> {
 /// Returns which of the two happened rather than failing on a full session —
 /// the person is standing there either way, and "마감입니다" with no next step
 /// is where a paper sign-up sheet beats us.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn session_book(
     id: String,
     name: String,
@@ -226,7 +226,7 @@ pub fn session_book(
 /// The promotion is the point. A seat that opens and sits empty while somebody
 /// waits is the failure this whole structure exists to avoid — and doing it by
 /// hand means it happens when the owner remembers, which is not most days.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn session_cancel(id: String, name: String, now_unix: i64) -> Result<Value, String> {
     let mut rows = load();
     let Some(idx) = rows
@@ -274,7 +274,7 @@ pub fn session_cancel(id: String, name: String, now_unix: i64) -> Result<Value, 
 }
 
 /// Removes a session entirely.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn session_remove(id: String) -> Result<(), String> {
     let mut rows = load();
     rows.retain(|r| r.get("id").and_then(Value::as_str) != Some(id.as_str()));

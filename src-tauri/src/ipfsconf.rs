@@ -48,7 +48,7 @@ async fn get_cfg(key: &str) -> Option<Value> {
 }
 
 /// The handful of settings worth exposing, with what each one costs.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn ipfs_options() -> Value {
     json!([
         {
