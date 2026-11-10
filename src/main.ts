@@ -4,7 +4,8 @@ import "./display-mode"; // 설정 「표시 방식」 칸 + 레이아웃 토큰
 void import("./settings-nav"); // 0.9.0 설정 왼쪽 목록·주제 바꾸기·바로 가기(src/settings-nav.ts) — 레인A. 시작 묶음 1000KB 예산 때문에 따로 싣는다
 import { applyBadges, badgeSectionHtml, badgesOf, forgetMyAddress, gateChipHtml, gateOfRoom, gateOptionsHtml, loadBadges, paintComposerGate, setRoomGates } from "./talk-badges"; // 11-08 기여 표시
 import "./talk-badges.css";
-import { clearMentions, fillNoteLinks, mentionText, nip05Slot, noteBodyHtml, noteStickerOnly, personMineHtml, refreshNotices, rememberNotes, wirePersonMine, wireTalkSocial } from "./talk-social"; // 11-09 알림·찾기·글 속 링크·NIP-05·내 글 받기
+import { looksRisky } from "./ravi-card";
+import { clearMentions, fillNoteLinks, mentionText, nip05Slot, noteBodyHtml, noteStickerOnly, openNote, personMineHtml, refreshNotices, rememberNotes, wirePersonMine, wireTalkSocial } from "./talk-social"; // 11-09 알림·찾기·글 속 링크·NIP-05·내 글 받기
 import "./talk-social.css";
 import { myHeadHtml, nameCardAfterMe, saveTalkName, setMyTalkName, wireTalkIdentity } from "./talk-identity"; // 0.9.0 이야기 이름표 — 레인A
 import "./app-lock"; // 잠긴 기본 화면·매장용 읽기 전용 + 다크 돈 카드(docs/design/lock-and-dark.md)
@@ -5990,7 +5991,7 @@ async function doKeyMove(p: any) {
 let tkRoom = "";
 let tkMine = "";
 /** 지금 답장하려는 글. 입력칸 위에 「누구에게」를 보여 주고, 보내면 비운다. 방을 옮기면 버린다. */
-let tkReply: { id: string; pub: string; room: string; who: string; snip: string; root?: string; rootPub?: string } | null = null;
+let tkReply: { id: string; pub: string; room: string; who: string; snip: string; root?: string; rootPub?: string; risky?: boolean } | null = null;
 // 11-09 피드 이어 불러오기(모두에게 · 팔로우만) — 위로 올리면 더 오래된 글 50개씩. mode 가 바뀌면 처음부터.
 let tkOlder: { mode: string; notes: any[]; until: number; end: boolean; busy: boolean } = { mode: "", notes: [], until: 0, end: false, busy: false };
 let tkFeedLast: any[] | null = null;
@@ -6861,6 +6862,40 @@ function tkPaintReplyBar() {
   if (!tkReply) { bar.hidden = true; label.textContent = ""; return; }
   label.textContent = tf("{0}에게 답장 · {1}", tkReply.who, tkReply.snip);
   bar.hidden = false;
+  // 11-10 빠른 말 — 답장 줄이 켜지면 늘 보인다. 누르면 입력칸만 채운다(보내기는 사람이).
+  const quick = document.getElementById("tk-quick");
+  if (quick && !quick.dataset.wired) {
+    quick.dataset.wired = "1";
+    quick.querySelectorAll<HTMLElement>("[data-quick]").forEach((q) => {
+      q.onclick = () => {
+        const ta = document.getElementById("tk-text") as HTMLTextAreaElement | null;
+        if (!ta) return;
+        const say = t(String(q.dataset.quick || ""));
+        ta.value = ta.value.trim() ? `${ta.value.trimEnd()} ${say}` : say;
+        ta.dispatchEvent(new Event("input"));
+        ta.focus();
+      };
+    });
+    quick.querySelector<HTMLElement>("[data-quick-stk]")?.addEventListener("click", () => document.getElementById("tk-stk")?.click());
+  }
+}
+
+/** 11-10 라비 카드 → 광장을 열고 그 글로 간다. 목록에 있으면 그 자리(답장이면 답장 줄까지), 없으면 글 한 장으로 연다. */
+async function tkOpenNoteFromRavi(id: string, reply: boolean) {
+  openFeed();
+  if (!id) return;
+  for (let i = 0; i < 32; i++) {
+    const b = document.querySelector<HTMLElement>(`#tk-list [data-say="${CSS.escape(id)}"]`);
+    if (b) {
+      b.scrollIntoView({ block: "center" });
+      b.classList.add("tk-flash");
+      setTimeout(() => b.classList.remove("tk-flash"), 2000);
+      if (reply) document.querySelector<HTMLElement>(`#tk-list [data-reply="${CSS.escape(id)}"]`)?.click();
+      return;
+    }
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  void openNote(id);
 }
 
 function tkSetReply(r: typeof tkReply) {
@@ -7158,7 +7193,7 @@ async function talkPaint(opts: { cached?: boolean } = {}) {
         const 맨위 = 읽은방 ? "" : String((Array.isArray(target.tags) ? target.tags : []).find((x: any) => Array.isArray(x) && x[0] === "e" && x[3] === "root")?.[1] || "");
         // 11-09 NIP-10: 답글의 답이면 맨 위 글쓴이도 p 로 단다(폰 noteDraft rootPubkey) — 목록에 있을 때만.
         const 맨위쓴이 = 맨위 ? String(list.find((x) => String(x.id || "") === 맨위)?.pubkey || "") : "";
-        tkSetReply({ id: gid, pub, room: 읽은방, who: tkNameText(pub), snip: tkSnip(String(target.content || "")), root: 맨위 || undefined, rootPub: 맨위쓴이 || undefined });
+        tkSetReply({ id: gid, pub, room: 읽은방, who: tkNameText(pub), snip: tkSnip(String(target.content || "")), root: 맨위 || undefined, rootPub: 맨위쓴이 || undefined, risky: looksRisky(String(target.content || "")) });
         box.querySelectorAll(".bubacts.on").forEach((x) => x.classList.remove("on"));
       };
     });
@@ -7524,6 +7559,8 @@ async function talkSend() {
   const text = box.value.trim();
   // 사진이 걸려 있으면 글이 비어도 보낸다 — 사진 한 장이 곧 본문인 나이대다.
   if (!text && !tkPhoto) return;
+  // 11-10 페이블: 돈·비밀 단어·딴 데로 끌어내는 말이 있던 글에 답장하면 보내기 전에 한 번 더 묻는다(막지는 않는다).
+  if (tkReply?.risky && !(await sure(t("돈·비밀 단어 이야기가 있던 글이에요"), t("그래도 이 답장을 보낼까요? 돈을 보내 달라거나 복구 단어·비밀번호를 묻는 사람은 사기일 수 있어요."), t("보내기")))) return;
   if (tkPhoto) return void talkSendPhoto(text);
   // 누른 즉시 붙는다. 입력칸도 즉시 비운다 — 그래야 다음 말을 바로 친다.
   const 임시 = tk임시풍선(text);
@@ -19790,6 +19827,8 @@ window.addEventListener("DOMContentLoaded", async () => {
       return true;
     },
     active: () => currentPage === "talk",
+    openTalkNote: (id, reply) => void tkOpenNoteFromRavi(id, reply),
+    sound: () => { if (대화알림켜짐()) 말소리(); },
     errText,
     pickSave: (name) => pickSavePath({ defaultPath: name, filters: [{ name: "JSON", extensions: ["json"] }] }),
   });

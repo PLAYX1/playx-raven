@@ -3611,6 +3611,13 @@
             <div class="replybar" id="tk-replybar" hidden>
               <span id="tk-replytext"></span>
               <button id="tk-replyx" type="button" aria-label="답장 취소">✕</button>
+              <!-- 11-10 빠른 말: 누르면 입력칸만 채운다. 보내기는 사람이 누른다. -->
+              <div class="tk-quick" id="tk-quick" role="group" aria-label="빠른 답장">
+                <button type="button" class="ghost" data-quick="고마워요">고마워요</button>
+                <button type="button" class="ghost" data-quick="네, 알겠어요">네, 알겠어요</button>
+                <button type="button" class="ghost" data-quick="나중에 답할게요">나중에 답할게요</button>
+                <button type="button" class="ghost" data-quick-stk="1">이모티콘</button>
+              </div>
             </div>
 
             <p id="tk-gate-note" class="tk-gate-note" role="status" hidden></p>

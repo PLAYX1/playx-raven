@@ -12,6 +12,7 @@ import {
   applyMentions, cleanSeen, exportFileName, firstSeen, isUnread, markSeen, matchNotes, matchPeople, noteSegments, npubOf, readSearch,
   type NoticeSeen, type Person, type TalkNotice,
 } from "./talk-links";
+import { hideRaviCard, looksRisky, raviCardKey, showRaviCard } from "./ravi-card";
 import { RAVI_STICKERS, addSticker, stickerName, stickerOnly, stickerParts, type RaviStickerCode } from "../core/talk/sticker";
 
 type Invoke = <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
@@ -26,6 +27,10 @@ export type TalkSocialHost = {
   showPerson: (pk: string) => void;
   /** 지금 목록에 있는 글이면 그리로 내려가 표시하고 true. */
   focusNote: (id: string) => boolean;
+  /** 11-10 라비 카드 「글 보기」·「답장하기」: 이야기(광장)를 열고 그 글로 간다. reply 면 답장 줄까지 켠다. */
+  openTalkNote?: (id: string, reply: boolean) => void;
+  /** 처음 뜰 때 한 번 내는 낮은 소리(대화 알림 소리 켬일 때만). */
+  sound?: () => void;
   active: () => boolean;
   errText: (e: unknown) => string;
   pickSave: (name: string) => Promise<string | null>;
@@ -276,6 +281,46 @@ export async function refreshNotices(force = false): Promise<void> {
   }
   paintBell();
   if ($("tk-noticebox")?.hidden === false) void paintNotices(false);
+  void announceNotices();
+}
+
+/* ── 11-10 「연락이 왔어요」 — 라비 카드(페이블 합의) ─────────────────────
+ * 답글·나를 부른 글이 새로 오면 라비 단추 위에 카드 한 장. 저절로 안 사라지고, 새것이 오면 같은 카드가 바뀐다.
+ * 팔로우는 카드 없음(종 숫자만). 카드는 아무것도 보내지 않는다 — 글을 열거나 답장 줄을 켤 뿐.
+ * 이야기 화면에서 알림 칸을 이미 보고 있으면 띄우지 않는다. */
+function markAllSeenNow() {
+  const me = host?.me() || "";
+  if (!HEX64.test(me)) return;
+  saveSeen(me, markSeen(seenFor(me), visibleNotices(), Math.floor(Date.now() / 1000)));
+  paintBell();
+}
+async function announceNotices() {
+  if (!host) return;
+  const h = host;
+  const me = h.me();
+  const seen = HEX64.test(me) ? seenFor(me) : null;
+  if (!seen) { if (raviCardKey().startsWith("notice:")) hideRaviCard(); return; }
+  const fresh = visibleNotices().filter((n) => n.kind !== "follow" && isUnread(n, seen)).sort((a, b) => b.at - a.at);
+  if (!fresh.length) { if (raviCardKey().startsWith("notice:")) hideRaviCard(); return; }
+  if (h.active() && $("tk-noticebox")?.hidden === false) return;
+  const key = "notice:" + fresh.map((n) => n.key).join(",");
+  if (raviCardKey() === key) return;
+  await h.loadNames(fresh.slice(0, 10).map((n) => n.pubkey));
+  const top = fresh[0];
+  const risky = fresh.some((n) => looksRisky(n.text));
+  const open = (reply: boolean) => { markAllSeenNow(); h.openTalkNote?.(top.noteId, reply); };
+  const first = showRaviCard(fresh.length === 1
+    ? {
+        key, title: tf(NOTICE_LINE[top.kind], h.nameOf(top.pubkey)), body: top.text ? readableLine(top.text, 60) : undefined,
+        warn: risky ? t("돈·비밀 단어 이야기가 있어요. 사기일 수 있어요.") : undefined,
+        buttons: [{ label: "답장하기", primary: true, run: () => open(true) }, { label: "글 보기", run: () => open(false) }, { label: "닫기", run: markAllSeenNow }],
+      }
+    : {
+        key, title: tf("연락 {0}개가 왔어요", String(fresh.length)), body: `${tf(NOTICE_LINE[top.kind], h.nameOf(top.pubkey))}${top.text ? " · " + readableLine(top.text, 40) : ""}`,
+        warn: risky ? t("돈·비밀 단어 이야기가 있어요. 사기일 수 있어요.") : undefined,
+        buttons: [{ label: "모두 보기", primary: true, run: () => { h.openTalkNote?.("", false); if (toggleBox("tk-noticebox", "tk-bell")) { freshKeys = new Set(); void paintNotices(true); } } }, { label: "닫기", run: markAllSeenNow }],
+      });
+  if (first) h.sound?.();
 }
 const NOTICE_LINE: Record<TalkNotice["kind"], string> = { reply: "{0}님이 답글을 달았어요", mention: "{0}님이 글에서 나를 불렀어요", follow: "{0}님이 나를 팔로우해요" };
 let freshKeys = new Set<string>();
@@ -501,8 +546,9 @@ export function wireTalkSocial(h: TalkSocialHost) {
   // 그림 아이콘을 단추에 넣는다(글자는 index.html 그대로 — 그림만 두지 않는다).
   for (const [id, icon] of [["tk-bell-ico", ICON_BELL], ["tk-search-ico", ICON_SEARCH]] as const) { const s = $(id); if (s) s.innerHTML = icon; }
   paintBell();
-  // 이야기 화면이 열려 있는 동안 1분 반마다 알림을 다시 묻는다(닫혀 있으면 묻지 않는다).
-  setInterval(() => { if (host?.active()) void refreshNotices(); }, 90_000);
+  // 11-10: 「연락이 왔어요」 — 어느 화면에 있든 2분마다(이야기 화면이면 1분 반) 알림을 묻는다. 창이 숨어 있으면 쉬고, 다시 보이면 곧바로 한 번.
+  setInterval(() => { if (!document.hidden && (host?.active() || Date.now() - noticeAt >= 120_000)) void refreshNotices(); }, 30_000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) void refreshNotices(); });
 }
 
 /** 사람 이름표 칸(오른쪽)이 나일 때 「내 글 모두 받기」·「다른 Nostr 앱에서 보기」를 보인다. */

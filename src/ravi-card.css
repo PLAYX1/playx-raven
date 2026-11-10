@@ -1,0 +1,16 @@
+/* 11-10 라비 카드(src/ravi-card.ts) — 라비 단추 위 한 장. 저절로 안 사라짐 · 글자 16px+ · 단추 44px+. */
+.rv-ravi-card { position:fixed; right:20px; bottom:104px; z-index:66; width:min(380px, calc(100vw - 40px)); box-sizing:border-box; padding:16px; border:1px solid var(--line); border-radius:18px; background:var(--panel); color:var(--text); box-shadow:0 10px 36px #1f224e33; font-size:16px; line-height:1.5; }
+.rv-ravi-card[hidden] { display:none; }
+.rv-ravi-card-head { display:flex; align-items:center; gap:10px; }
+.rv-ravi-card-head img { width:40px; height:40px; flex:none; }
+.rv-ravi-card-head b { font-size:17px; }
+.rv-ravi-card-body { margin:10px 0 0; padding:10px 12px; border-radius:12px; background:var(--side, #f3f4f8); overflow-wrap:anywhere; }
+.rv-ravi-card-warn { margin:10px 0 0; color:var(--bad, #b42318); font-weight:700; }
+.rv-ravi-card-row { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+.rv-ravi-card-row button { min-height:44px; padding:0 16px; font-size:16px; }
+/* 답장 빠른 말(답장 줄 안) — 누르면 입력칸만 채운다. */
+.tk-quick { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+.tk-quick button { min-height:40px; padding:0 14px; font-size:15px; }
+/* 답장 줄 안 빠른 말은 아랫줄 한 줄을 다 쓴다. */
+#page-talk .replybar { flex-wrap: wrap; }
+#page-talk .replybar .tk-quick { flex-basis: 100%; }
