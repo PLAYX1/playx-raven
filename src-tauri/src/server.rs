@@ -3668,8 +3668,12 @@ fn build_phone_router(st: ServerState) -> axum::Router {
 }
 
 /// 체인 POS ③ 매출 받기. 본문 처리는 `chain_sales::receive`(디스크·서명 확인이라 따로 떼어 돌린다).
-async fn chain_sales_route(body: axum::body::Bytes) -> impl IntoResponse {
-    match tokio::task::spawn_blocking(move || crate::chain_sales::receive(&body)).await {
+/// 인증 전 거절 버킷 열쇠 = 터널이면 cf-connecting-ip(IP 모양일 때만), 아니면 "lan".
+async fn chain_sales_route(headers: HeaderMap, body: axum::body::Bytes) -> impl IntoResponse {
+    let client = headers.get("cf-connecting-ip").and_then(|v| v.to_str().ok())
+        .map(|s| match s.trim().parse::<std::net::IpAddr>() { Ok(ip) => format!("cf:{ip}"), Err(_) => "cf:bad".into() })
+        .unwrap_or_else(|| "lan".into());
+    match tokio::task::spawn_blocking(move || crate::chain_sales::receive(&body, &client)).await {
         Ok((code, v)) => (StatusCode::from_u16(code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR), Json(v)),
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "reason": "internal" }))),
     }

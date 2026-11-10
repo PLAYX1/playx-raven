@@ -26,7 +26,8 @@ export const CHAIN_SALES_COPY: Record<string, [string, string, string]> = {
   "매장 증서 기한이 지났어요. 본점에서 새 꾸러미를 받아 주세요.": ["The store certificate has expired. Get a new package from head office.", "店舗証明書の期限が切れました。本店から新しいパッケージを受け取ってください。", "门店证书已过期。请从总店领取新的安装包。"],
   "본점이 아직 받을 준비를 안 했어요. 본점 화면에서 「받을 준비」를 눌러 달라고 해 주세요.": ["Head office is not ready to receive yet. Ask them to press “Get ready to receive” on the head office screen.", "本店がまだ受け取る準備をしていません。本店の画面で「受け取る準備」を押してもらってください。", "总店还没准备好接收。请让总店在画面上按“准备接收”。"],
   "그 주소는 본점 컴퓨터가 아니에요.": ["That address is not the head office computer.", "そのアドレスは本店のコンピューターではありません。", "该地址不是总店电脑。"],
-  "다른 본점의 주소예요.": ["That is a different head office’s address.", "別の本店のアドレスです。", "这是其他总店的地址。"],
+  "이 컴퓨터의 날짜·시각이 맞지 않아요. 시계를 맞춘 뒤 다시 보내 주세요.": ["This computer’s date or time is wrong. Fix the clock and send again.", "このコンピューターの日付・時刻が合っていません。時計を合わせてからもう一度送ってください。", "这台电脑的日期或时间不对。请校准时钟后重新发送。"],
+  "확인 전에 버린 요청 {0}건(모양·서명이 틀린 것)": ["{0} requests dropped before checking (wrong shape or signature)", "確認前に捨てた要求 {0}件（形・署名が違うもの）", "校验前丢弃的请求 {0} 个（格式或签名错误）"],
   "본점이 받지 않았어요. 본점에 연락해 주세요.": ["Head office did not accept it. Please contact head office.", "本店が受け取りませんでした。本店に連絡してください。", "总店未接收。请联系总店。"],
   "본점이 일부 기록을 받지 않았어요(기록이 끊기거나 바뀐 흔적). 본점에 알려 주세요.": ["Head office did not accept some records (signs of missing or changed records). Please tell head office.", "本店が一部の記録を受け取りませんでした（記録が抜けたり変えられたりした跡）。本店に知らせてください。", "总店未接收部分记录（有记录缺失或被修改的痕迹）。请告知总店。"],
   // 본점 PC

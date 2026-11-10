@@ -56,7 +56,7 @@ function storeErr(code: string | null | undefined): string {
     case "refused:expired": return t("매장 증서 기한이 지났어요. 본점에서 새 꾸러미를 받아 주세요.");
     case "refused:need-prepare": return t("본점이 아직 받을 준비를 안 했어요. 본점 화면에서 「받을 준비」를 눌러 달라고 해 주세요.");
     case "refused:not-head": return t("그 주소는 본점 컴퓨터가 아니에요.");
-    case "refused:other-chain": return t("다른 본점의 주소예요.");
+    case "refused:bad-clock": return t("이 컴퓨터의 날짜·시각이 맞지 않아요. 시계를 맞춘 뒤 다시 보내 주세요.");
     default: return t("본점이 받지 않았어요. 본점에 연락해 주세요.");
   }
 }
@@ -264,8 +264,10 @@ function ownerView(host: HTMLElement, deps: ChainSalesDeps, msg: HTMLElement, sa
       return a;
     }));
     const rows: any[] = s.rejects || [];
-    rej.hidden = !rows.length;
+    const junk = Object.values((s.junk || {}) as Record<string, number>).reduce((a, b) => a + (Number(b) || 0), 0);
+    rej.hidden = !rows.length && !junk;
     rej.replaceChildren(el("summary", "", () => tf("거절한 요청 {0}건", rows.length)),
+      ...(junk ? [el("p", "csl-d", () => tf("확인 전에 버린 요청 {0}건(모양·서명이 틀린 것)", junk))] : []),
       ...rows.map((x) => { const p = el("p", "csl-d"); setCopyText(p, () => `${when(x.at)} · ${x.store ?? "?"} · ${rejectText(String(x.why || ""))}`); return p; }));
     paint();
   }

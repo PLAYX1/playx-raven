@@ -23,7 +23,7 @@
 //! 🔴 열쇠·비밀은 오류·로그에 싣지 않는다(고정 코드만). 다 쓰면 지운다(DataKey Drop · words::wipe*).
 
 use crate::chain_store as cs;
-use crate::lan_cert::is_public_key;
+use crate::lan_cert::{is_public_key, CertReason};
 use crate::lan_proof::canonical_string;
 use crate::pos_pay::{record_hash, verify_records_from, METHODS};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
@@ -46,7 +46,6 @@ const AAD_REQ: &str = "ravenvault-chain-sales-v1/req\n";
 const AAD_RES: &str = "ravenvault-chain-sales-v1/res\n";
 const ZERO: &str = "0000000000000000000000000000000000000000000000000000000000000000";
 const MAX_ROUNDS: usize = 20;
-const MAX_PER_MIN: u32 = 600;
 const REJECTS_KEEP: usize = 200;
 
 pub const ERR_LOCKED: &str = crate::storesign::ERR_LOCKED;
@@ -249,20 +248,82 @@ fn put_watch(st: &mut Value, w: Watch) {
 }
 
 static RECEIVE: Mutex<()> = Mutex::new(());
-static RATE: Mutex<(i64, u32)> = Mutex::new((0, 0));
 
-fn rate_ok(now: i64) -> bool {
-    let mut g = RATE.lock().unwrap_or_else(|e| e.into_inner());
-    if now - g.0 >= 60_000 || now < g.0 {
-        *g = (now, 0);
+/// 1분 창 버킷(열쇠 → (창 시작, 횟수)). 열쇠 수는 상한이 있다 — 넘치면 낯선 열쇠는 「overflow」 한 칸을 같이 쓴다.
+struct Buckets {
+    map: std::collections::HashMap<String, (i64, u32)>,
+}
+static PRE: Mutex<Option<Buckets>> = Mutex::new(None);
+static POST: Mutex<Option<Buckets>> = Mutex::new(None);
+const BUCKET_KEYS: usize = 256;
+
+fn bucket_key(b: &mut Buckets, key: &str, now: i64) -> String {
+    if b.map.contains_key(key) || b.map.len() < BUCKET_KEYS {
+        return key.to_string();
     }
-    g.1 += 1;
-    g.1 <= MAX_PER_MIN
+    b.map.retain(|_, (t, _)| now - *t < 60_000 && now >= *t);
+    if b.map.len() < BUCKET_KEYS { key.to_string() } else { "overflow".into() }
+}
+/// 지금 창의 횟수(늘리지 않음).
+fn bucket_count(m: &Mutex<Option<Buckets>>, key: &str, now: i64) -> u32 {
+    let mut g = m.lock().unwrap_or_else(|e| e.into_inner());
+    let b = g.get_or_insert_with(|| Buckets { map: Default::default() });
+    let k = bucket_key(b, key, now);
+    match b.map.get(&k) {
+        Some((t, n)) if now - *t < 60_000 && now >= *t => *n,
+        _ => 0,
+    }
+}
+/// 하나 늘리고 늘린 뒤의 횟수.
+fn bucket_hit(m: &Mutex<Option<Buckets>>, key: &str, now: i64) -> u32 {
+    let mut g = m.lock().unwrap_or_else(|e| e.into_inner());
+    let b = g.get_or_insert_with(|| Buckets { map: Default::default() });
+    let k = bucket_key(b, key, now);
+    let e = b.map.entry(k).or_insert((now, 0));
+    if now - e.0 >= 60_000 || now < e.0 {
+        *e = (now, 0);
+    }
+    e.1 += 1;
+    e.1
 }
 
-/// 거절 기록(비밀 없음 — 매장 번호·serial·사유 코드·시각만). 오래된 것은 버린다.
+/// 인증 전 거절 셈(줄로 남기지 않는다 — 쓰레기 요청이 거절 기록 창(20줄)의 고친 흔적을 밀어내지 못하게).
+static JUNK: Mutex<Option<(PathBuf, Map<String, Value>, i64)>> = Mutex::new(None);
+fn junk_file(dir: &Path) -> PathBuf {
+    sales_dir(dir).join("junk.json")
+}
+fn count_junk(dir: &Path, why: &str, now: i64) {
+    let mut g = JUNK.lock().unwrap_or_else(|e| e.into_inner());
+    if g.as_ref().is_none_or(|(d, _, _)| d != dir) {
+        let c = read_json(&junk_file(dir)).and_then(|v| v.get("counts").and_then(Value::as_object).cloned()).unwrap_or_default();
+        *g = Some((dir.to_path_buf(), c, 0));
+    }
+    let Some((_, counts, saved)) = g.as_mut() else { return };
+    let n = counts.get(why).and_then(Value::as_u64).unwrap_or(0) + 1;
+    counts.insert(why.into(), json!(n));
+    if now - *saved >= 60_000 || now < *saved || cfg!(test) {
+        *saved = now;
+        let _ = write_json(&junk_file(dir), &json!({ "v": 1, "counts": counts, "lastAt": now }));
+    }
+}
+fn junk_counts(dir: &Path) -> Value {
+    if let Some((d, c, _)) = JUNK.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+        if d == dir {
+            return Value::Object(c.clone());
+        }
+    }
+    read_json(&junk_file(dir)).and_then(|v| v.get("counts").cloned()).unwrap_or_else(|| json!({}))
+}
+
+/// 거절 기록(비밀 없음 — 매장 번호·serial·사유 코드·시각만). 증서 서명이 맞은 뒤의 거절만 적는다.
+/// 같은 (serial, 사유)는 한 시간에 한 줄 — 주운 증서를 되풀이해 보내도 기록이 불어나지 않는다. 오래된 것은 버린다.
 fn log_reject(dir: &Path, store: Option<u64>, serial: Option<u64>, why: &str, now: i64) {
     let p = sales_dir(dir).join("rejects.jsonl");
+    let recent = rejects(dir, 40).iter().any(|r| r["serial"].as_u64() == serial && r["why"].as_str() == Some(why)
+        && r["at"].as_i64().is_some_and(|t| now >= t && now - t < 3_600_000));
+    if recent {
+        return;
+    }
     let _ = std::fs::create_dir_all(sales_dir(dir));
     let line = json!({ "at": now, "store": store, "serial": serial, "why": why }).to_string();
     let mut oo = std::fs::OpenOptions::new();
@@ -315,58 +376,115 @@ fn append_lines(dir: &Path, month: u32, lines: &[&Value]) -> std::io::Result<()>
     f.sync_data()
 }
 
-/// `POST /lan/push/chain` 본문 하나를 처리한다 → (상태 코드, 응답 JSON). 본점이 아니면 404.
-pub fn receive_in(dir: &Path, body: &[u8], now: i64) -> (u16, Value) {
+/// 로그마다의 취소 판정표(`<logId>/index.json`): 매출 seq → (금액, 수단), 취소된 seq, 받지 않을(합계에서 뺄) 취소 줄.
+fn load_index(ldir: &Path) -> Value {
+    read_json(&ldir.join("index.json")).filter(Value::is_object).unwrap_or_else(|| json!({ "sales": {}, "voided": [], "badVoids": [] }))
+}
+
+/// 취소 줄이 맞는가: 같은 로그의 매출을 가리키고, 수단이 같고, |금액| ≤ 그 매출, 한 번만.
+fn check_void(idx: &mut Value, l: &Value) -> bool {
+    let seq = l.get("seq").and_then(Value::as_u64).unwrap_or(0);
+    match l.get("kind").and_then(Value::as_str) {
+        Some("sale") => {
+            idx["sales"][seq.to_string()] = json!([l.get("amount"), l.get("method")]);
+            true
+        }
+        Some("void") => {
+            let r = l.get("ref").and_then(Value::as_u64).unwrap_or(u64::MAX);
+            let sale = idx["sales"].get(r.to_string()).cloned();
+            let amt = l.get("amount").and_then(Value::as_i64).unwrap_or(0);
+            let already = idx["voided"].as_array().is_some_and(|a| a.iter().any(|x| x.as_u64() == Some(r)));
+            let ok = sale.is_some_and(|s| s[0].as_i64().is_some_and(|a| amt.unsigned_abs() <= a.unsigned_abs()) && s[1] == l["method"]) && !already;
+            if ok {
+                if let Some(a) = idx["voided"].as_array_mut() {
+                    a.push(json!(r));
+                }
+            } else if let Some(a) = idx["badVoids"].as_array_mut() {
+                a.push(json!(seq));
+            }
+            ok
+        }
+        _ => true,
+    }
+}
+
+pub const MAX_LOGS_PER_STORE: usize = 8;
+pub const SENT_AT_WINDOW_MS: i64 = 3_600_000;
+const PRE_PER_MIN: u32 = 60;
+const POST_PER_MIN: u32 = 30;
+
+/// `POST /lan/push/chain` 본문 하나를 처리한다 → (상태 코드, 응답 JSON).
+/// `client` = 요청한 곳(터널이면 cf-connecting-ip, 아니면 "lan") — 인증 전 거절 버킷 열쇠.
+/// 🔴 증서 서명이 맞기 전의 실패는 모두 404 not-head — 본점 PC 인지 알려 주지 않는다.
+pub fn receive_in(dir: &Path, body: &[u8], now: i64, client: &str) -> (u16, Value) {
+    let not_head = || deny(404, "not-head");
     if !dir.join("issued.json").exists() {
-        return deny(404, "not-head");
+        return not_head();
     }
-    if !rate_ok(now) {
-        return deny(429, "rate");
+    let pre_key = format!("{}|{client}", dir.display());
+    // 인증 전 버킷은 **실패만** 센다 — 올바른 매장의 요청은 이 버킷을 줄이지 않는다.
+    if bucket_count(&PRE, &pre_key, now) >= PRE_PER_MIN {
+        count_junk(dir, "rate", now);
+        return not_head();
     }
+    let junk = |why: &str| {
+        bucket_hit(&PRE, &pre_key, now);
+        count_junk(dir, why, now);
+        not_head()
+    };
     if body.len() > MAX_REQUEST_BYTES {
-        return deny(413, "too-big");
+        return junk("too-big");
     }
-    let Some(req) = serde_json::from_slice::<Value>(body).ok().and_then(|v| v.as_object().cloned()) else { return deny(400, "shape") };
+    let Some(req) = serde_json::from_slice::<Value>(body).ok().and_then(|v| v.as_object().cloned()) else { return junk("shape") };
     let want: Vec<&str> = HEADER_KEYS.iter().copied().chain(["cert", "box"]).collect();
     if req.len() != want.len() || !want.iter().all(|k| req.contains_key(*k)) || req["v"].as_u64() != Some(1) {
-        return deny(400, "shape");
+        return junk("shape");
     }
-    let Some((chain, certs)) = cs::load_history(dir) else { return deny(404, "not-head") };
+    let Some((chain, certs)) = cs::load_history(dir) else { return not_head() };
     let store_hdr = req["store"].as_u64();
     let serial_hdr = req["serial"].as_u64();
     if req["chain"].as_str() != Some(chain.as_str()) {
-        log_reject(dir, store_hdr, serial_hdr, "other-chain", now);
-        return deny(403, "other-chain");
+        return junk("other-chain");
     }
     // 판정은 본점 자신의 끊기 목록으로(신선도 문제 없음).
     let list = cs::load_list(dir, &chain).map(|(v, _)| v);
     let c = match cs::verify_store_cert(&req["cert"], &chain, now, list.as_ref()) {
         Ok(c) => c,
+        Err(r @ (CertReason::BadClock | CertReason::Shape | CertReason::Signature)) => return junk(r.as_str()),
         Err(r) => {
+            // 서명은 맞았다(진짜 증서) — 끊김·만료는 거절 기록에 남긴다(같은 serial·사유는 한 시간에 한 줄).
+            bucket_hit(&PRE, &pre_key, now);
             log_reject(dir, store_hdr, serial_hdr, r.as_str(), now);
             return deny(403, r.as_str());
         }
     };
     let issued = certs.iter().any(|x| x.get("serial").and_then(Value::as_u64) == Some(c.serial) && x.get("storeKey").and_then(Value::as_str) == Some(c.store_key.as_str()));
     if !issued || store_hdr != Some(c.store as u64) || serial_hdr != Some(c.serial) {
+        bucket_hit(&PRE, &pre_key, now);
         log_reject(dir, Some(c.store as u64), Some(c.serial), "unknown-cert", now);
         return deny(403, "unknown-cert");
     }
     let log_id = req["logId"].as_str().unwrap_or("");
     let nonce = req["nonce"].as_str().unwrap_or("");
-    let (Some(from), Some(count)) = (req["from"].as_u64(), req["count"].as_u64()) else { return deny(400, "shape") };
+    let (Some(from), Some(count), Some(sent_at)) = (req["from"].as_u64(), req["count"].as_u64(), req["sentAt"].as_i64()) else { return junk("shape") };
     // count 0 = 살아 있다는 신호(보낼 줄이 없을 때도 10분마다 온다 — 조용한 가게가 「꺼짐」으로 보이지 않게).
-    if !is_hex(log_id, 32) || !is_hex(nonce, 32) || req["sentAt"].as_i64().is_none() || count as usize > MAX_BATCH_LINES {
-        return deny(400, "shape");
+    if !is_hex(log_id, 32) || !is_hex(nonce, 32) || count as usize > MAX_BATCH_LINES {
+        return junk("shape");
     }
     let Some(key) = load_key(dir, &chain, &c.store_key) else { return deny(503, "need-prepare") };
     let header: Map<String, Value> = HEADER_KEYS.iter().map(|k| (k.to_string(), req[*k].clone())).collect();
     let header = Value::Object(header);
     let plain = req["box"].as_str().and_then(|b| open(&key, &aad_of(AAD_REQ, &header), b));
+    // 증서는 선 위에 평문이라 주울 수 있다 — 진짜 인증은 봉함이 열리는 것. 못 열면 쓰레기로 센다(기록 줄 없음).
     let Some(plain) = plain else {
-        log_reject(dir, Some(c.store as u64), Some(c.serial), "bad-box", now);
+        bucket_hit(&PRE, &pre_key, now);
+        count_junk(dir, "bad-box", now);
         return deny(400, "bad-box");
     };
+    // 인증 뒤 버킷: 매장(serial)마다 1분 30번.
+    if bucket_hit(&POST, &format!("{}|{}", dir.display(), c.serial), now) > POST_PER_MIN {
+        return deny(429, "rate");
+    }
     let lines: Vec<Value> = match serde_json::from_slice::<Value>(&plain) {
         Ok(Value::Array(a)) if a.len() as u64 == count && (count == 0 || a.first().and_then(|l| l.get("seq")).and_then(Value::as_u64) == Some(from)) => a,
         _ => return deny(400, "shape"),
@@ -375,7 +493,19 @@ pub fn receive_in(dir: &Path, body: &[u8], now: i64) -> (u16, Value) {
     let _g = RECEIVE.lock().unwrap_or_else(|e| e.into_inner());
     let sdir = store_dir(dir, c.store);
     let mut st = load_state(dir, c.store);
+    // 되풀이 막기: 봉함 머리의 sentAt 은 매장마다 늘기만 해야 하고, 본점 시계와 한 시간 안이어야 한다.
+    // (주운 신호를 다시 보내 꺼진 매장을 살아 있는 척하게 하는 길을 막는다.) 꺼짐 판정(seen) 전에 본다.
+    if (now - sent_at).abs() > SENT_AT_WINDOW_MS {
+        return deny(400, "bad-clock");
+    }
+    if st.get("lastSentAt").and_then(Value::as_i64).is_some_and(|l| sent_at <= l) {
+        return deny(409, "replay");
+    }
     let entry = st.pointer(&format!("/logs/{log_id}")).cloned();
+    if entry.is_none() && count > 0 && st["logs"].as_object().is_some_and(|o| o.len() >= MAX_LOGS_PER_STORE) {
+        log_reject(dir, Some(c.store as u64), Some(c.serial), "too-many-logs", now);
+        return deny(409, "too-many-logs");
+    }
     let (next, prev) = match &entry {
         Some(e) => (e["ack"].as_u64().map_or(0, |a| a + 1), e["hash"].as_str().unwrap_or(ZERO).to_string()),
         None => (0, ZERO.to_string()),
@@ -424,11 +554,17 @@ pub fn receive_in(dir: &Path, body: &[u8], now: i64) -> (u16, Value) {
     if good > 0 {
         let take = &fresh[..good];
         let mut month = entry.as_ref().and_then(|e| e["month"].as_u64()).unwrap_or(0) as u32;
+        // 먼 미래 시각(`at`)이 여섯 자리가 아닌 파일 이름(→ 영영 안 읽힘)을 만들지 못하게 본점 시계 + 2일로 자른다.
+        let cap = month_of(now + 2 * 86_400_000);
         let ldir = sdir.join(log_id);
+        let mut idx = load_index(&ldir);
         // 줄마다 달(파일)을 정한다 — 시계가 뒤로 가도 파일 순서는 뒤로 가지 않는다.
         let mut groups: Vec<(u32, Vec<&Value>)> = Vec::new();
         for l in take {
-            month = month.max(month_of(l.get("at").and_then(Value::as_i64).unwrap_or(0)));
+            month = month.max(month_of(l.get("at").and_then(Value::as_i64).unwrap_or(0)).min(cap));
+            if !check_void(&mut idx, l) && warn.is_none() {
+                warn = Some((l.get("seq").and_then(Value::as_u64).unwrap_or(0), "void".into()));
+            }
             match groups.last_mut() {
                 Some((m, g)) if *m == month => g.push(l),
                 _ => groups.push((month, vec![l])),
@@ -438,6 +574,9 @@ pub fn receive_in(dir: &Path, body: &[u8], now: i64) -> (u16, Value) {
             if append_lines(&ldir, *m, g).is_err() {
                 return deny(500, "save");
             }
+        }
+        if write_json(&ldir.join("index.json"), &idx).is_err() {
+            return deny(500, "save");
         }
         let last = take.last().unwrap_or(&Value::Null);
         ack = last.get("seq").and_then(Value::as_u64);
@@ -450,9 +589,10 @@ pub fn receive_in(dir: &Path, body: &[u8], now: i64) -> (u16, Value) {
         st["warn"] = json!({ "logId": log_id, "at": s, "why": why, "when": now });
         log_reject(dir, Some(c.store as u64), Some(c.serial), &format!("lines-{why}"), now);
     } else if st.pointer("/warn/why").and_then(Value::as_str) == Some("gap") && good > 0 {
-        // 건너뜀은 매장이 다시 보내면 풀린다. 고친 흔적(prev·signature·shape)은 사장이 볼 때까지 남긴다.
+        // 건너뜀은 매장이 다시 보내면 풀린다. 고친 흔적(prev·signature·shape·void)은 사장이 볼 때까지 남긴다.
         st["warn"] = Value::Null;
     }
+    st["lastSentAt"] = json!(sent_at);
     let mut w = watch_of(&st);
     w.seen(now);
     put_watch(&mut st, w);
@@ -469,9 +609,9 @@ pub fn receive_in(dir: &Path, body: &[u8], now: i64) -> (u16, Value) {
     }
 }
 
-/// 서버 처리기가 부른다(본점 PC 의 chain 폴더).
-pub fn receive(body: &[u8]) -> (u16, Value) {
-    receive_in(&cs::chain_dir_path(), body, now_ms())
+/// 서버 처리기가 부른다(본점 PC 의 chain 폴더). `client` = 터널이면 cf-connecting-ip, 아니면 "lan".
+pub fn receive(body: &[u8], client: &str) -> (u16, Value) {
+    receive_in(&cs::chain_dir_path(), body, now_ms(), client)
 }
 
 // ── 본점: 합계 ───────────────────────────────────────────────────────
@@ -526,6 +666,7 @@ fn month_files(dir: &Path) -> Vec<(u32, PathBuf)> {
 }
 
 /// 본점이 받은 매장 n 의 줄들(받을 때 확인을 통과한 것만 있다) 중 `from_ms` 가 속한 달(앞 달 포함) 이후 것.
+/// 받을 때 맞지 않는 취소(남의 로그·없는 매출·금액 초과·두 번째 취소)로 판정한 줄은 빼고 돌려준다(합계에 안 들어간다).
 fn received_lines(dir: &Path, n: u32, from_ms: i64) -> Vec<Value> {
     let first = month_of(from_ms - 2 * 86_400_000);
     let mut out = Vec::new();
@@ -534,12 +675,14 @@ fn received_lines(dir: &Path, n: u32, from_ms: i64) -> Vec<Value> {
         if !p.is_dir() || !p.file_name().and_then(|f| f.to_str()).is_some_and(|f| is_hex(f, 32)) {
             continue;
         }
+        let bad: Vec<u64> = load_index(&p)["badVoids"].as_array().map(|a| a.iter().filter_map(Value::as_u64).collect()).unwrap_or_default();
         for (m, f) in month_files(&p) {
             if m < first {
                 continue;
             }
             let text = std::fs::read_to_string(&f).unwrap_or_default();
-            out.extend(text.lines().filter_map(|l| serde_json::from_str::<Value>(l).ok()));
+            out.extend(text.lines().filter_map(|l| serde_json::from_str::<Value>(l).ok())
+                .filter(|l| !(l.get("kind").and_then(Value::as_str) == Some("void") && l.get("seq").and_then(Value::as_u64).is_some_and(|s| bad.contains(&s)))));
         }
     }
     out
@@ -753,7 +896,7 @@ pub fn prepare_in(chain_dir: &Path, root: &Path, now: i64, heartbeat: bool) -> R
     let serial = cert.get("serial").and_then(Value::as_u64).ok_or(ERR_NOT_STORE)?;
     let (_, log_id, lines) = crate::pos_pay::log_lines_in(root, chain_dir);
     let log_id = log_id.filter(|l| is_hex(l, 32) && l != NO_LOG).unwrap_or_else(|| NO_LOG.to_string());
-    let ps = push_state(chain_dir);
+    let mut ps = push_state(chain_dir);
     let from = if ps.get("logId").and_then(Value::as_str) == Some(log_id.as_str()) {
         ps.get("ack").and_then(Value::as_u64).map_or(0, |a| a + 1)
     } else {
@@ -777,8 +920,17 @@ pub fn prepare_in(chain_dir: &Path, root: &Path, now: i64, heartbeat: bool) -> R
     };
     let key = cs::with_store_secret_in(chain_dir, |sk, me| data_key(sk, &me.chain, &me.chain, &me.store_key)).map_err(|_| ERR_KEY)?.ok_or(ERR_KEY)?;
     let nonce = hex::encode(rand::random::<[u8; 16]>());
+    // sentAt 은 늘기만 한다(본점이 되풀이를 막는 기준) — 같은 밀리초에 두 묶음을 보내도 겹치지 않게.
+    // 시계가 한 번 크게 앞으로 갔다 돌아왔으면(한 시간 넘게 앞선 값) 지금으로 되돌린다 — 본점 창(±1h) 밖이라 어차피 못 쓴다.
+    let sent_at = match ps.get("lastSentAt").and_then(Value::as_i64) {
+        Some(l) if l > now + SENT_AT_WINDOW_MS => now,
+        Some(l) => now.max(l + 1),
+        None => now,
+    };
+    ps["lastSentAt"] = json!(sent_at);
+    write_json(&push_file(chain_dir), &ps).map_err(|_| ERR_SAVE)?;
     let header = json!({ "v": 1, "chain": me.chain, "store": me.store, "serial": serial, "logId": log_id, "from": first,
-        "count": batch.len(), "sentAt": now, "nonce": nonce });
+        "count": batch.len(), "sentAt": sent_at, "nonce": nonce });
     let plain = serde_json::to_vec(&batch).map_err(|_| ERR_KEY)?;
     let sealed = seal(&key, &aad_of(AAD_REQ, &header), &plain).ok_or(ERR_KEY)?;
     let mut body = header;
@@ -798,8 +950,8 @@ pub enum Sent {
     Failed(&'static str),
 }
 
-const REFUSALS: [&str; 16] = ["not-head", "rate", "too-big", "shape", "other-chain", "signature", "bad-clock", "not-yet", "expired",
-    "revoked", "no-revocation-list", "unknown-cert", "need-prepare", "bad-box", "save", "seal"];
+const REFUSALS: [&str; 15] = ["not-head", "rate", "shape", "bad-clock", "not-yet", "expired",
+    "revoked", "no-revocation-list", "unknown-cert", "need-prepare", "bad-box", "save", "seal", "replay", "too-many-logs"];
 
 fn note_try(chain_dir: &Path, now: i64, f: impl FnOnce(&mut Value)) {
     let mut ps = push_state(chain_dir);
@@ -946,7 +1098,7 @@ pub fn store_status_in(chain_dir: &Path, root: &Path, now: i64) -> Value {
 
 /// 본점 상태(금액 없음): 받을 준비가 덜 된 매장 수·꺼진 매장.
 pub fn owner_status_in(dir: &Path) -> Value {
-    json!({ "role": "owner", "needPrepare": missing_keys(dir).len(), "rejects": rejects(dir, 20), "path": SALES_PATH })
+    json!({ "role": "owner", "needPrepare": missing_keys(dir).len(), "rejects": rejects(dir, 20), "junk": junk_counts(dir), "path": SALES_PATH })
 }
 
 // ── 명령 ─────────────────────────────────────────────────────────────
@@ -1114,7 +1266,7 @@ mod tests {
     }
     fn send_to(owner: &Path, now: i64) -> impl FnMut(&[u8]) -> Option<(u16, Vec<u8>)> + '_ {
         move |b: &[u8]| {
-            let (s, v) = receive_in(owner, b, now);
+            let (s, v) = receive_in(owner, b, now, "lan");
             Some((s, serde_json::to_vec(&v).unwrap()))
         }
     }
@@ -1213,9 +1365,9 @@ mod tests {
         let ssk = crate::identity::chain_store_key_from(WORDS, "", 9, 0).unwrap();
         cs::issue_in(&other, &wrong_csk, &ssk, 9, "남의 점", &cs::clean_biz("1234567890", None).unwrap(), NOW).unwrap();
         let r = push_with(&cd, &root, NOW + 300, &mut send_to(&other, NOW + 300)).unwrap();
-        assert_eq!(r[0], Sent::Refused("other-chain".into()));
+        assert_eq!(r[0], Sent::Refused("not-head".into()), "다른 본점이라고 알려 주지 않는다");
         // 본점이 아닌 곳
-        let (s, _) = receive_in(&cd, b"{}", NOW);
+        let (s, _) = receive_in(&cd, b"{}", NOW, "lan");
         assert_eq!(s, 404);
     }
 
@@ -1300,7 +1452,7 @@ mod tests {
         let o = prepare_in(&cd, &root, NOW, false).unwrap().unwrap();
         let mut v: Value = serde_json::from_slice(&o.body).unwrap();
         v["from"] = json!(1);
-        let (s, body) = receive_in(&w.owner, &serde_json::to_vec(&v).unwrap(), NOW);
+        let (s, body) = receive_in(&w.owner, &serde_json::to_vec(&v).unwrap(), NOW, "lan");
         assert_eq!((s, body["reason"].as_str()), (400, Some("bad-box")));
         // 닿지 않음
         let r = push_with(&cd, &root, NOW, &mut |_b: &[u8]| None).unwrap();
@@ -1438,4 +1590,150 @@ mod tests {
             assert!(!body.contains(bad), "{bad}");
         }
     }
+
+    /// 매장 PC 로그 끝에 매장 열쇠로 서명한 줄을 손으로 덧붙인다(매장 열쇠를 가진 사람이 만든 「올바르게 서명된 이상한 줄」).
+    fn craft(cd: &Path, root: &Path, mut body: Map<String, Value>) -> Value {
+        let (scope, _, lines) = crate::pos_pay::log_lines_in(root, cd);
+        let last = lines.last().unwrap();
+        let me = cs::store_self_in(cd).unwrap();
+        body.insert("v".into(), json!(1));
+        body.insert("seq".into(), json!(last["seq"].as_u64().unwrap() + 1));
+        body.insert("prev".into(), json!(record_hash(last).unwrap()));
+        body.insert("key".into(), json!(me.store_key));
+        body.entry("store").or_insert(json!(me.store));
+        body.entry("at").or_insert(json!(NOW + 100));
+        let rec = cs::sign_as_store_in(cd, crate::pos_pay::SALE_DOMAIN, &Value::Object(body)).unwrap();
+        let dir = root.join("log").join(scope);
+        let (_, f) = month_files(&dir).pop().unwrap();
+        std::fs::OpenOptions::new().append(true).open(f).unwrap().write_all(format!("{}\n", canonical_string(&rec).unwrap()).as_bytes()).unwrap();
+        rec
+    }
+    fn obj(v: Value) -> Map<String, Value> {
+        v.as_object().unwrap().clone()
+    }
+
+    #[test]
+    fn replayed_heartbeat_does_not_mark_a_dead_store_alive_and_clock_must_be_close() {
+        let (w, base) = world("replay");
+        let (cd, root) = add_store(&w, &base, 11, "11호점", "1234567890", None, true);
+        let beat = prepare_in(&cd, &root, NOW, true).unwrap().unwrap();
+        assert_eq!(receive_in(&w.owner, &beat.body, NOW, "lan").0, 200);
+        // 매장이 꺼졌다. 누군가 주운 신호를 30분 뒤에 다시 보낸다 → 되풀이 거절, 꺼짐은 그대로 뜬다.
+        let t = NOW + 3 * PUSH_EVERY_MS;
+        let (s, b) = receive_in(&w.owner, &beat.body, t, "cf:198.51.100.7");
+        assert_eq!((s, b["reason"].as_str()), (409, Some("replay")));
+        assert_eq!(watch_tick_in(&w.owner, t), vec![(11, "11호점".to_string())], "되풀이한 신호로 살아난 척하지 않는다");
+        // 매장 시계가 두 시간 틀리면 받지 않는다
+        let skew = prepare_in(&cd, &root, t, true).unwrap().unwrap();
+        let (s, b) = receive_in(&w.owner, &skew.body, t + 2 * 3_600_000, "lan");
+        assert_eq!((s, b["reason"].as_str()), (400, Some("bad-clock")));
+        // 제대로 된 새 신호는 받는다 → 꺼짐이 풀린다
+        let ok = prepare_in(&cd, &root, t + 1000, true).unwrap().unwrap();
+        assert_eq!(receive_in(&w.owner, &ok.body, t + 1000, "lan").0, 200);
+        assert_eq!(totals_in(&w.owner, (0, 1), (0, 1), t + 1000)["stores"][0]["offline"], false);
+        // 매장 sentAt 은 같은 밀리초에도 늘기만 한다
+        let a = prepare_in(&cd, &root, t + 5000, true).unwrap().unwrap();
+        let b2 = prepare_in(&cd, &root, t + 5000, true).unwrap().unwrap();
+        let sa = |o: &Outgoing| serde_json::from_slice::<Value>(&o.body).unwrap()["sentAt"].as_i64().unwrap();
+        assert!(sa(&b2) > sa(&a));
+    }
+
+    #[test]
+    fn junk_has_its_own_bucket_and_counters_and_legit_stores_do_not_drain_it() {
+        let (w, base) = world("rate");
+        let (cd, root) = add_store(&w, &base, 12, "12호점", "1234567890", None, true);
+        let lines_before = rejects(&w.owner, 100).len();
+        // 쓰레기 60번(같은 곳) → 그곳의 다음 요청은 올바른 것이라도 404. 다른 곳(lan)은 그대로.
+        for _ in 0..PRE_PER_MIN {
+            assert_eq!(receive_in(&w.owner, b"{\"junk\":1}", NOW, "cf:203.0.113.9"), deny(404, "not-head"));
+        }
+        let o = prepare_in(&cd, &root, NOW, true).unwrap().unwrap();
+        assert_eq!(receive_in(&w.owner, &o.body, NOW, "cf:203.0.113.9").0, 404);
+        assert_eq!(receive_in(&w.owner, &o.body, NOW, "lan").0, 200);
+        assert_eq!(rejects(&w.owner, 100).len(), lines_before, "인증 전 거절은 줄로 남지 않는다");
+        assert!(junk_counts(&w.owner)["shape"].as_u64().unwrap_or(0) >= PRE_PER_MIN as u64);
+        assert!(junk_counts(&w.owner)["rate"].as_u64().unwrap_or(0) >= 1);
+        // 올바른 매장의 요청은 인증 전 버킷을 줄이지 않는다 — 대신 매장별 1분 30번.
+        let key = format!("{}|cf:192.0.2.1", w.owner.display());
+        for i in 1..POST_PER_MIN {
+            let o = prepare_in(&cd, &root, NOW + i as i64, true).unwrap().unwrap();
+            assert_eq!(receive_in(&w.owner, &o.body, NOW + i as i64, "cf:192.0.2.1").0, 200, "{i}");
+        }
+        assert_eq!(bucket_count(&PRE, &key, NOW + 40), 0, "올바른 요청은 쓰레기 버킷을 쓰지 않는다");
+        let o = prepare_in(&cd, &root, NOW + 50, true).unwrap().unwrap();
+        assert_eq!(receive_in(&w.owner, &o.body, NOW + 50, "cf:192.0.2.1"), deny(429, "rate"));
+        // 서명이 틀린 증서도 404(본점인지 알려 주지 않는다)
+        let mut v: Value = serde_json::from_slice(&prepare_in(&cd, &root, NOW + 70_000, true).unwrap().unwrap().body).unwrap();
+        v["cert"]["name"] = json!("가짜점");
+        assert_eq!(receive_in(&w.owner, &serde_json::to_vec(&v).unwrap(), NOW + 70_000, "lan"), deny(404, "not-head"));
+        // 버킷 열쇠 수는 상한이 있다
+        for i in 0..(BUCKET_KEYS + 50) {
+            bucket_hit(&PRE, &format!("{}|spoof{i}", w.owner.display()), NOW + 80_000);
+        }
+        assert!(PRE.lock().unwrap().as_ref().unwrap().map.len() <= BUCKET_KEYS + 1);
+    }
+
+    #[test]
+    fn a_store_cannot_open_unlimited_logs() {
+        let (w, base) = world("logs");
+        let (cd, root) = add_store(&w, &base, 13, "13호점", "1234567890", None, true);
+        record_in(&root, &cd, &pay("cash", 100, None), &none, NOW).unwrap();
+        let sp = store_dir(&w.owner, 13).join("state.json");
+        let mut logs = Map::new();
+        for i in 0..MAX_LOGS_PER_STORE {
+            logs.insert(format!("{i:032x}"), json!({ "ack": 0, "hash": ZERO, "month": 0 }));
+        }
+        write_json(&sp, &json!({ "v": 1, "logs": logs })).unwrap();
+        let r = push_with(&cd, &root, NOW + 1, &mut send_to(&w.owner, NOW + 1)).unwrap();
+        assert_eq!(r[0], Sent::Refused("too-many-logs".into()));
+        assert_eq!(std::fs::read_dir(store_dir(&w.owner, 13)).unwrap().filter(|e| e.as_ref().unwrap().path().is_dir()).count(), 0);
+        assert!(rejects(&w.owner, 5).iter().any(|x| x["why"] == "too-many-logs"));
+    }
+
+    #[test]
+    fn bad_voids_are_kept_in_the_chain_but_left_out_of_totals_with_a_warning() {
+        let (w, base) = world("voids");
+        let (cd, root) = add_store(&w, &base, 14, "14호점", "1234567890", None, true);
+        let s = record_in(&root, &cd, &pay("cash", 1000, None), &none, NOW).unwrap();
+        let seq = s["seq"].as_u64().unwrap();
+        void_in(&root, &cd, seq, None, NOW + 1).unwrap();
+        // 같은 매출을 한 번 더 취소(올바르게 서명됨)
+        craft(&cd, &root, obj(json!({ "kind": "void", "ref": seq, "method": "cash", "amount": -1000, "biz": null })));
+        let r = push_with(&cd, &root, NOW + 10, &mut send_to(&w.owner, NOW + 10)).unwrap();
+        assert!(matches!(&r[0], Sent::Acked { warn: Some(w), progressed: true, .. } if w == "void"), "{r:?}");
+        assert_eq!(received(&w.owner, 14).len(), 3, "사슬은 그대로(open·sale·void), 두 번째 취소만 합계에서 뺀다");
+        let t = totals_in(&w.owner, (NOW - 1000, NOW + 100_000), (0, i64::MAX), NOW + 20);
+        assert_eq!(t["stores"][0]["today"]["net"], 0, "-1000 이 되면 안 된다");
+        assert_eq!(t["stores"][0]["warn"]["why"], "void");
+        // 판정표 단위: 없는 매출·금액 초과·수단 다름·두 번
+        let mut idx = json!({ "sales": {}, "voided": [], "badVoids": [] });
+        assert!(check_void(&mut idx, &json!({ "kind": "sale", "seq": 1, "amount": 500, "method": "card" })));
+        assert!(!check_void(&mut idx, &json!({ "kind": "void", "seq": 2, "ref": 9, "amount": -1, "method": "card" })), "다른 로그·없는 매출");
+        assert!(!check_void(&mut idx, &json!({ "kind": "void", "seq": 3, "ref": 1, "amount": -501, "method": "card" })), "금액 초과");
+        assert!(!check_void(&mut idx, &json!({ "kind": "void", "seq": 4, "ref": 1, "amount": -500, "method": "cash" })), "수단 다름");
+        assert!(check_void(&mut idx, &json!({ "kind": "void", "seq": 5, "ref": 1, "amount": -500, "method": "card" })));
+        assert!(!check_void(&mut idx, &json!({ "kind": "void", "seq": 6, "ref": 1, "amount": -500, "method": "card" })), "두 번째");
+        assert_eq!(idx["badVoids"], json!([2, 3, 4, 6]));
+    }
+
+    #[test]
+    fn far_future_time_cannot_make_an_unreadable_month_file() {
+        let (w, base) = world("future");
+        let (cd, root) = add_store(&w, &base, 15, "15호점", "1234567890", None, true);
+        record_in(&root, &cd, &pay("cash", 100, None), &none, NOW).unwrap();
+        craft(&cd, &root, obj(json!({ "kind": "sale", "method": "cash", "amount": 7, "biz": null, "at": 1_000_000_000_000_000i64 })));
+        push_with(&cd, &root, NOW + 1, &mut send_to(&w.owner, NOW + 1)).unwrap();
+        let lid = push_state(&cd)["logId"].as_str().unwrap().to_string();
+        let ldir = store_dir(&w.owner, 15).join(&lid);
+        let cap = month_of(NOW + 1 + 2 * 86_400_000);
+        for e in std::fs::read_dir(&ldir).unwrap() {
+            let name = e.unwrap().file_name().into_string().unwrap();
+            if name.ends_with(".jsonl") {
+                let stem = name.trim_end_matches(".jsonl");
+                assert!(stem.len() == 6 && stem.parse::<u32>().unwrap() <= cap, "{name}");
+            }
+        }
+        assert_eq!(received(&w.owner, 15).len(), 3, "먼 미래 줄도 읽히는 파일에 있다");
+    }
+
 }
