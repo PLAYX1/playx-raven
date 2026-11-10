@@ -418,6 +418,60 @@ pub fn join_in(dir: &Path, bundle: &str, words: &str, now: i64) -> Result<StoreC
     out
 }
 
+/// 이 컴퓨터가 체인 매장이면 그 증서의 내용(비밀 없음). 증서 모양·본점 서명만 본다 —
+/// 만료·끊김은 보지 않는다(인터넷이 끊기거나 증서가 지나도 결제 기록은 계속 쌓여야 한다 · 원칙 2. 판정은 ③ 본점이 한다).
+pub struct StoreSelf {
+    pub chain: String,
+    pub store: u32,
+    pub name: String,
+    pub store_key: String,
+    pub biz: Value,
+}
+
+pub(crate) fn chain_dir_path() -> PathBuf {
+    chain_dir()
+}
+
+pub fn store_self_in(dir: &Path) -> Option<StoreSelf> {
+    if dir.join("issued.json").exists() {
+        return None; // 본점 PC 는 매장이 아니다
+    }
+    let mut v = read_json(&dir.join("store.json"))?;
+    if let Some(Value::String(s)) = v.get_mut("secret") {
+        crate::words::wipe(s);
+    }
+    let cert = v.get("cert")?;
+    let (o, c) = validate(cert, true).ok()?;
+    if !signed_by(CHAIN_DOMAIN, o, &c.chain) {
+        return None;
+    }
+    Some(StoreSelf { biz: o.get("biz").cloned().unwrap_or(Value::Null), chain: c.chain, store: c.store, name: c.name, store_key: c.store_key })
+}
+
+/// 매장 열쇠(`chain/store.json`)로 문서에 서명한다(lan_cert 서명 꼴, 부르는 쪽이 도메인을 정한다).
+/// 🔴 열쇠는 증서의 storeKey 와 맞을 때만 쓰고, 다 쓰면 지운다. 오류는 고정 문장.
+pub fn sign_as_store_in(dir: &Path, domain: &str, body: &Value) -> Result<Value, &'static str> {
+    if domain == CHAIN_DOMAIN {
+        return Err(ERR_SIGN); // 매장 열쇠가 증서·끊기 목록 도메인에 서명하는 길을 만들지 않는다
+    }
+    let me = store_self_in(dir).ok_or(ERR_SIGN)?;
+    let mut v = read_json(&dir.join("store.json")).ok_or(ERR_SIGN)?;
+    let decoded = v.get("secret").and_then(Value::as_str).and_then(|s| hex::decode(s).ok());
+    if let Some(Value::String(s)) = v.get_mut("secret") {
+        crate::words::wipe(s);
+    }
+    let mut raw = decoded.ok_or(ERR_SIGN)?;
+    let sk: Option<[u8; 32]> = raw.as_slice().try_into().ok();
+    crate::words::wipe_bytes(&mut raw);
+    let mut sk = sk.ok_or(ERR_SIGN)?;
+    let out = match pubkey(&sk) {
+        Ok(pk) if pk == me.store_key => sign_doc(domain, body, &pk, ecdsa_signer(&sk)).map_err(|_| ERR_SIGN),
+        _ => Err(ERR_SIGN),
+    };
+    crate::words::wipe_bytes(&mut sk);
+    out
+}
+
 fn store_row(c: &Value, revoked: &[String]) -> Value {
     let chain = c.get("chain").and_then(Value::as_str).unwrap_or("");
     let serial = c.get("serial").and_then(Value::as_u64).unwrap_or(0);

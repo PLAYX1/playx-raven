@@ -18824,6 +18824,8 @@ async function loadOrders() {
                 p.settled || p.accept_now
                   ? `<button class="ghost" data-refund="${p.address}" data-amt="${p.amount}">환불</button>`
                   : ""
+              }${
+                p.settled ? `<button class="ghost" data-pospay="${p.address}">${t("결제 기록")}</button>` : ""
               }</td>
             </tr>`;
           })
@@ -18836,6 +18838,13 @@ async function loadOrders() {
       .forEach((b) => {
         (b as HTMLElement).onclick = () =>
           doRefund((b as HTMLElement).dataset.refund!, parseFloat((b as HTMLElement).dataset.amt!));
+      });
+    // 체인 POS ② — 이 RVN 주문을 「결제 기록」에 붙인다(금액·거래 번호는 러스트가 장부에서 가져온다).
+    $("or-list")
+      .querySelectorAll("[data-pospay]")
+      .forEach((b) => {
+        (b as HTMLElement).onclick = () =>
+          void import("./pos-pay").then((m) => m.posAttachOrder((b as HTMLElement).dataset.pospay!)).catch(() => {});
       });
     $("or-list")
       .querySelectorAll("[data-state]")
@@ -19836,6 +19845,17 @@ window.addEventListener("DOMContentLoaded", async () => {
           pickSave: (name) => pickSavePath({ defaultPath: name, filters: [{ name: "Text", extensions: ["txt"] }] }),
           pickOpen: async () => { const p = await pickFile({ multiple: false, directory: false, filters: [{ name: "Text", extensions: ["txt"] }] }); return typeof p === "string" ? p : null; } }))
           .catch((e) => { console.warn("chain-store load failed", e); io.observe(host); });
+      });
+      io.observe(host);
+    } }
+  // 체인 POS ② 「결제 기록」 카드 — 「들어온 주문」 안. 처음 보일 때만 지연 묶음(src/pos-pay.ts)을 읽는다.
+  { const host = document.getElementById("pos-pay-card");
+    if (host && "IntersectionObserver" in window) {
+      const io = new IntersectionObserver((seen) => {
+        if (!seen.some((e) => e.isIntersecting)) return;
+        io.disconnect();
+        void import("./pos-pay").then((m) => m.mountPosPay(host, { invoke, sure, errText }))
+          .catch((e) => { console.warn("pos-pay load failed", e); io.observe(host); });
       });
       io.observe(host);
     } }

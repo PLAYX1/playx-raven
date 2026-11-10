@@ -51,6 +51,7 @@ mod trust;
 mod publicbook;
 mod chain_info;
 mod chain_store;
+mod pos_pay;
 mod health;
 mod ipfs;
 mod ipfsconf;
@@ -387,6 +388,11 @@ pub fn run() {
             chain_store::chain_store_revoke,
             chain_store::chain_store_bundle_save,
             chain_store::chain_store_bundle_read,
+            pos_pay::pos_record,
+            pos_pay::pos_void,
+            pos_pay::pos_day,
+            pos_pay::pos_status,
+            pos_pay::pos_biz_save,
             lan_mount::lan_sync_status,
             lan_mount::lan_store_set,
             lan_mount::lan_revocation_update,
