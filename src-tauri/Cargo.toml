@@ -130,3 +130,7 @@ required-features = ["regtest-harness"]
 [dev-dependencies]
 ring = "0.17"
 blake2 = "0.10"
+
+# 11-11 리눅스 AppImage 가 99MB 게시 한도(GitHub 100MiB)를 넘었다(0.9.30, 99.3MB). 디버그 기호를 빼서 줄인다.
+[profile.release]
+strip = "symbols"
