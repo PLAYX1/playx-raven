@@ -1518,7 +1518,7 @@ pub async fn talk_room_rebroadcast(room: String) -> Result<Value, String> {
     let meta = crate::nostrpub::query_filters(vec![json!({ "kinds": [KIND_ROOM_META], "#e": [room], "authors": [creator], "limit": 10 })])
         .await.map(|(v, _)| v).unwrap_or_default().into_iter()
         .filter(|e| e.get("pubkey").and_then(Value::as_str) == Some(creator.as_str()) && crate::relay::verify(e)
-            && e.get("content").and_then(Value::as_str).and_then(|c| serde_json::from_str::<Value>(c).ok()).is_some_and(|v| v.is_object() && !broken_name(&v)))
+            && e.get("content").and_then(Value::as_str).and_then(|c| serde_json::from_str::<Value>(c).ok()).is_some_and(|v| v.is_object()))
         .max_by_key(|e| e.get("created_at").and_then(Value::as_i64).unwrap_or(0));
     let root_ok = crate::nostrpub::rebroadcast(&root).await;
     let meta_ok = match &meta { Some(m) => crate::nostrpub::rebroadcast(m).await, None => vec![] };
@@ -1752,11 +1752,6 @@ fn latest_room_meta<'a>(room_id: &str, creator: &str, metas: &'a [Value]) -> Opt
 /// 컴퓨터 시계가 조금 다른 것은 받아 준다(10분).
 const META_FUTURE_SLACK: i64 = 600;
 
-/// 11-10: 한글이 깨져 「???」로 서명된 수정 글(커뮤니티 방 10-12)은 받지 않는다 — 앞의 좋은 이름이 남는다(폰 core/talk/rooms.ts brokenText 와 같다).
-fn broken_name(v: &Value) -> bool {
-    v.get("name").and_then(Value::as_str).is_some_and(|n| !n.trim().is_empty() && n.chars().all(|c| c == '?' || c == '\u{FFFD}' || c.is_whitespace()))
-}
-
 fn latest_room_meta_at<'a>(room_id: &str, creator: &str, metas: &'a [Value], now: i64) -> Option<&'a Value> {
     metas
         .iter()
@@ -1768,7 +1763,7 @@ fn latest_room_meta_at<'a>(room_id: &str, creator: &str, metas: &'a [Value], now
                 && m.get("content")
                     .and_then(Value::as_str)
                     .and_then(|c| serde_json::from_str::<Value>(c).ok())
-                    .is_some_and(|v| v.is_object() && !broken_name(&v))
+                    .is_some_and(|v| v.is_object())
                 && crate::relay::verify(m)
         })
         .max_by(|a, b| {
@@ -2517,17 +2512,6 @@ mod room_meta_tests {
         // 이모지 잇는 글자(ZWJ)·여러 나라 글자는 막지 않는다.
         assert!(clean_room_meta("가족 \u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}", "Café · 東京 · Москва").is_ok());
         assert_eq!(clean_room_meta("  이름  ", "  설명  ").unwrap(), ("이름".to_string(), "설명".to_string()));
-    }
-
-    /// 11-10 커뮤니티 방: 만든 사람이 서명했어도 이름이 「???」로 깨진 수정 글은 건너뛴다.
-    #[test]
-    fn 깨진_이름_수정은_건너뛴다() {
-        let room = room_by(&A, "PLAY X Raven", "");
-        let rid = id(&room);
-        let t = now();
-        let metas = vec![meta_by(&A, &rid, "좋은 이름", t - 300), meta_by(&A, &rid, "???", t - 10)];
-        assert_eq!(rooms_from_events(vec![room], &metas)[0]["name"], json!("좋은 이름"));
-        assert!(broken_name(&json!({"name": "? ?\u{FFFD}"})) && !broken_name(&json!({"name": "왜?"})) && !broken_name(&json!({"name": ""})));
     }
 
     /// 🔴 **남이 보낸 41 은 무시한다.** 더 새것이어도. 그리고 만든 사람의 것 중 가장 새것을 쓴다.
