@@ -4443,7 +4443,7 @@ async function paintPartBody(): Promise<void> {
           ],
           // 이게 왜 있는지 한 줄로. 안 적으면 「이건 또 뭐지」가 된다.
           t("릴레이는 글을 받아 두었다가 전해 주는 우체통 같은 서버예요.") + " " +
-          t("이 컴퓨터 릴레이는 레이븐 이야기와 가게 공지를 받아 둡니다. 「릴레이 나누기」를 켠 컴퓨터끼리만 서로 붙어, 큰 릴레이가 끊겨도 그 사이에서는 글이 돕니다.")
+          t("이 컴퓨터 릴레이는 광장 글과 가게 공지를 받아 둡니다. 「릴레이 나누기」를 켠 컴퓨터끼리만 서로 붙어, 큰 릴레이가 끊겨도 그 사이에서는 글이 돕니다.")
         ) +
         // 🔴 릴레이는 따로 도는 프로그램이 아니라 **가게 서버 안에** 있다.
         //    그래서 켜는 길도 가게 서버를 켜는 것 하나뿐이다.
@@ -5150,28 +5150,27 @@ function openTrade(open?: "browse" | "mine") {
   tradeOpen = open;
   showPage("trade");
 }
-/** 「피드」 메뉴로 들어왔나. 이야기 화면은 같고, 왼쪽 메뉴에서 어느 줄이 켜질지만 다르다. */
-let feedNav = false;
+/** 공개 글 자리의 이름. 11-10 대표·페이블: 「피드」(뜻 없는 외래어)·「레이븐 이야기」(「이야기」 화면과 헷갈림) 대신 「광장」 — 폰·웹도 같은 낱말로 맞춘다. */
+const SQUARE = "광장";
+/** 11-10: 왼쪽 「피드」 메뉴를 뺐다(「이야기」와 똑같은 화면 — 한 이름 = 한 곳). */
 function syncFeedNav(id: string) {
-  document.querySelectorAll<HTMLElement>('nav a[data-page="talk"]').forEach((a) =>
-    a.classList.toggle("on", id === "talk" && (a.dataset.feed ? feedNav : !feedNav)));
+  document.querySelectorAll<HTMLElement>('nav a[data-page="talk"]').forEach((a) => a.classList.toggle("on", id === "talk"));
 }
-/** 「피드」 — 이야기의 공개 방(「모두에게」, tkRoom="")을 X 식 글 목록(feedmode)으로 연다. */
+/** 「광장」 — 이야기의 공개 방(tkRoom="")을 X 식 글 목록(feedmode)으로 연다(증서 자랑하기 등). */
 function openFeed() {
   if (tkRoom !== "") {
     tkRoom = "";
     delete $("tk-list").dataset.loaded;
     $("tk-new-messages").hidden = true;
-    setCopyText($("tk-title"), () => t("레이븐 이야기"));
-    $("rv-person-name").textContent = t("레이븐 이야기");
+    setCopyText($("tk-title"), () => t(SQUARE));
+    $("rv-person-name").textContent = t(SQUARE);
     const avatar = $("rv-person-avatar");
-    avatar.dataset.initial = ($("rv-person-name").textContent || "레").slice(0, 1);
+    avatar.dataset.initial = ($("rv-person-name").textContent || "광").slice(0, 1);
     avatar.style.setProperty("--h", String(tkHue("raven")));
     $("rv-person-key").textContent = "";
     $("rv-person-badges").hidden = true;
     $("tk-gate-head").innerHTML = "";
   }
-  feedNav = true;
   showPage("talk");
 }
 
@@ -6590,7 +6589,7 @@ async function talkPaintRooms() {
   if (tkRoom && tkRoomNames.has(tkRoom)) setCopyText($("tk-title"), () => tkRoomNames.get(tkRoom) || t("방")); // 고친 이름을 머리줄에도
   paintInvite();
   box.innerHTML =
-    `<button class="room${tkRoom ? "" : " on"}" data-room="">${copyHtml("레이븐 이야기")}</button>` +
+    `<button class="room${tkRoom ? "" : " on"}" data-room="">${copyHtml(SQUARE)}</button>` +
     rooms
       .map(
         (r) =>
@@ -6608,20 +6607,19 @@ async function talkPaintRooms() {
   box.querySelectorAll("[data-room]").forEach((b) => {
     (b as HTMLElement).onclick = () => {
       tkRoom = String((b as HTMLElement).dataset.room || "");
-      if (tkRoom) { feedNav = false; syncFeedNav(currentPage); }
       delete $("tk-list").dataset.loaded;
       $("tk-new-messages").hidden = true;
       // 한 번 연 방은 나가 있어도 지켜본다 — 그 방에 새 글이 오면 알린다.
       방지켜보기(tkRoom);
       setCopyText($("tk-title"), () => tkRoom
         ? tkRoomNames.get(tkRoom) || t("방")
-        : t("레이븐 이야기"));
+        : t(SQUARE));
       paintInvite();
       void talkPaintRooms();
       void talkPaint();
-      $("rv-person-name").textContent = tkRoom ? tkRoomNames.get(tkRoom) || t("방") : t("레이븐 이야기");
+      $("rv-person-name").textContent = tkRoom ? tkRoomNames.get(tkRoom) || t("방") : t(SQUARE);
       const avatar = $("rv-person-avatar");
-      avatar.dataset.initial = ($("rv-person-name").textContent || "레").slice(0, 1);
+      avatar.dataset.initial = ($("rv-person-name").textContent || "광").slice(0, 1);
       avatar.style.setProperty("--h", String(tkHue(tkRoom || "raven")));
       $("rv-person-key").textContent = tkRoom;
       $("rv-person-badges").hidden = true;
@@ -6647,7 +6645,7 @@ async function talkPaintRooms() {
 function paintInvite() {
   const host = document.getElementById("tk-invite");
   if (!host) return;
-  const name = tkRoom ? tkRoomNames.get(tkRoom) || t("방") : t("레이븐 이야기");
+  const name = tkRoom ? tkRoomNames.get(tkRoom) || t("방") : t(SQUARE);
   host.innerHTML = `<button class="ghost" id="tk-inv">${copyHtml("초대하기")}</button>`;
   document.getElementById("tk-inv")!.addEventListener("click", () => {
     const url = inviteLink(tkRoom);
@@ -18834,8 +18832,6 @@ window.addEventListener("DOMContentLoaded", async () => {
     (a as HTMLElement).onclick = (ev) => {
       const link = a as HTMLElement;
       if (link.getAttribute("href") === "#") ev.preventDefault();
-      if (link.dataset.feed) { openFeed(); return; }
-      if (link.dataset.page === "talk") feedNav = false;
       showPage(link.dataset.page!);
     };
   });

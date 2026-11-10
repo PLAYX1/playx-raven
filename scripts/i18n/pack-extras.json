@@ -533,7 +533,8 @@
     "수수료를 확인하지 못해서 보내기를 잠갔어요. 「고치기」를 눌러 다시 검토해 주세요.": "Non è stato possibile verificare la commissione, quindi l'invio è bloccato. Tocca «Modifica» per ricontrollare.",
     "보냈어요. 거래 번호: {0}": "Inviato. ID transazione: {0}",
     "미리 본 값과 지금 값이 달라 보내지 않았어요. 다시 「사기」를 눌러 확인해 주세요.": "I valori sono diversi da quelli visti in anteprima, quindi non è stato inviato nulla. Tocca di nuovo «Acquista» per controllare.",
-    "미리 본 값이 없어 보내지 않았어요. 다시 「사기」를 눌러 확인해 주세요.": "Non c'era un'anteprima da confrontare, quindi non è stato inviato nulla. Tocca di nuovo «Acquista» per controllare."
+    "미리 본 값이 없어 보내지 않았어요. 다시 「사기」를 눌러 확인해 주세요.": "Non c'era un'anteprima da confrontare, quindi non è stato inviato nulla. Tocca di nuovo «Acquista» per controllare.",
+    "광장": "Piazza"
   },
   "es": {
     "AI 번역입니다": "Traducción con IA",
@@ -1068,7 +1069,8 @@
     "수수료를 확인하지 못해서 보내기를 잠갔어요. 「고치기」를 눌러 다시 검토해 주세요.": "No se pudo comprobar la comisión, así que el envío está bloqueado. Toca «Editar» para revisarlo de nuevo.",
     "보냈어요. 거래 번호: {0}": "Enviado. ID de transacción: {0}",
     "미리 본 값과 지금 값이 달라 보내지 않았어요. 다시 「사기」를 눌러 확인해 주세요.": "Los valores no coinciden con la vista previa, así que no se envió nada. Toca «Comprar» otra vez para revisarlo.",
-    "미리 본 값이 없어 보내지 않았어요. 다시 「사기」를 눌러 확인해 주세요.": "No había vista previa para comparar, así que no se envió nada. Toca «Comprar» otra vez para revisarlo."
+    "미리 본 값이 없어 보내지 않았어요. 다시 「사기」를 눌러 확인해 주세요.": "No había vista previa para comparar, así que no se envió nada. Toca «Comprar» otra vez para revisarlo.",
+    "광장": "Plaza"
   },
   "fr": {
     "AI 번역입니다": "Traduction par IA",
@@ -1603,7 +1605,8 @@
     "수수료를 확인하지 못해서 보내기를 잠갔어요. 「고치기」를 눌러 다시 검토해 주세요.": "Impossible de vérifier les frais : l'envoi est bloqué. Touchez « Modifier » pour revérifier.",
     "보냈어요. 거래 번호: {0}": "Envoyé. ID de transaction : {0}",
     "미리 본 값과 지금 값이 달라 보내지 않았어요. 다시 「사기」를 눌러 확인해 주세요.": "Les valeurs diffèrent de l'aperçu : rien n'a été envoyé. Touchez à nouveau « Acheter » pour vérifier.",
-    "미리 본 값이 없어 보내지 않았어요. 다시 「사기」를 눌러 확인해 주세요.": "Aucun aperçu à comparer : rien n'a été envoyé. Touchez à nouveau « Acheter » pour vérifier."
+    "미리 본 값이 없어 보내지 않았어요. 다시 「사기」를 눌러 확인해 주세요.": "Aucun aperçu à comparer : rien n'a été envoyé. Touchez à nouveau « Acheter » pour vérifier.",
+    "광장": "Place publique"
   },
   "pt-BR": {
     "AI 번역입니다": "Tradução por IA",
@@ -2138,7 +2141,8 @@
     "수수료를 확인하지 못해서 보내기를 잠갔어요. 「고치기」를 눌러 다시 검토해 주세요.": "Não foi possível verificar a taxa, então o envio foi bloqueado. Toque em “Editar” para revisar de novo.",
     "보냈어요. 거래 번호: {0}": "Enviado. ID da transação: {0}",
     "미리 본 값과 지금 값이 달라 보내지 않았어요. 다시 「사기」를 눌러 확인해 주세요.": "Os valores são diferentes da prévia, então nada foi enviado. Toque em “Comprar” de novo para conferir.",
-    "미리 본 값이 없어 보내지 않았어요. 다시 「사기」를 눌러 확인해 주세요.": "Não havia prévia para comparar, então nada foi enviado. Toque em “Comprar” de novo para conferir."
+    "미리 본 값이 없어 보내지 않았어요. 다시 「사기」를 눌러 확인해 주세요.": "Não havia prévia para comparar, então nada foi enviado. Toque em “Comprar” de novo para conferir.",
+    "광장": "Praça"
   },
   "de": {
     "AI 번역입니다": "KI-Übersetzung",
@@ -2673,7 +2677,8 @@
     "수수료를 확인하지 못해서 보내기를 잠갔어요. 「고치기」를 눌러 다시 검토해 주세요.": "Die Gebühr konnte nicht geprüft werden, daher ist das Senden gesperrt. Tippen Sie auf „Bearbeiten“, um erneut zu prüfen.",
     "보냈어요. 거래 번호: {0}": "Gesendet. Transaktions-ID: {0}",
     "미리 본 값과 지금 값이 달라 보내지 않았어요. 다시 「사기」를 눌러 확인해 주세요.": "Die Werte weichen von der Vorschau ab, daher wurde nichts gesendet. Tippen Sie erneut auf „Kaufen“, um zu prüfen.",
-    "미리 본 값이 없어 보내지 않았어요. 다시 「사기」를 눌러 확인해 주세요.": "Es gab keine Vorschau zum Vergleichen, daher wurde nichts gesendet. Tippen Sie erneut auf „Kaufen“, um zu prüfen."
+    "미리 본 값이 없어 보내지 않았어요. 다시 「사기」를 눌러 확인해 주세요.": "Es gab keine Vorschau zum Vergleichen, daher wurde nichts gesendet. Tippen Sie erneut auf „Kaufen“, um zu prüfen.",
+    "광장": "Platz"
   },
   "ru": {
     "AI 번역입니다": "Перевод выполнен ИИ",
@@ -3208,6 +3213,7 @@
     "수수료를 확인하지 못해서 보내기를 잠갔어요. 「고치기」를 눌러 다시 검토해 주세요.": "Не удалось проверить комиссию, поэтому отправка заблокирована. Нажмите «Изменить», чтобы проверить ещё раз.",
     "보냈어요. 거래 번호: {0}": "Отправлено. ID транзакции: {0}",
     "미리 본 값과 지금 값이 달라 보내지 않았어요. 다시 「사기」를 눌러 확인해 주세요.": "Значения отличаются от предпросмотра, поэтому ничего не отправлено. Нажмите «Купить» ещё раз, чтобы проверить.",
-    "미리 본 값이 없어 보내지 않았어요. 다시 「사기」를 눌러 확인해 주세요.": "Не было предпросмотра для сравнения, поэтому ничего не отправлено. Нажмите «Купить» ещё раз, чтобы проверить."
+    "미리 본 값이 없어 보내지 않았어요. 다시 「사기」를 눌러 확인해 주세요.": "Не было предпросмотра для сравнения, поэтому ничего не отправлено. Нажмите «Купить» ещё раз, чтобы проверить.",
+    "광장": "Площадь"
   }
 }

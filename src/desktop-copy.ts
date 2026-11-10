@@ -2308,6 +2308,7 @@ export const DESKTOP_COPY: Record<string, [string, string, string]> = {
   "{0} RVN + 수수료": ["{0} RVN + fee", "{0} RVN + 手数料", "{0} RVN + 手续费"],
   "이모티콘": ["Stickers", "スタンプ", "表情"],
   "라비 이모티콘": ["Ravi stickers", "ラビのスタンプ", "Ravi 表情"],
+  "광장": ["Square", "広場", "广场"],
   // 11-10 라비 이모티콘 이름(그림 설명) — 폰 번역 그대로
   "안녕": ["Hi", "やあ", "你好"],
   "고마워요": ["Thanks", "ありがとう", "谢谢"],
@@ -2748,7 +2749,7 @@ export const SETTINGS_TALK_090_COPY: Record<string, [string, string, string]> = 
   "이 주소는 쓸 수 없어요. wss:// 로 시작하는 인터넷 주소만 돼요.": ["This address can’t be used. Only internet addresses starting with wss:// work.", "このアドレスは使えません。wss:// で始まるインターネットアドレスだけ使えます。", "这个地址不能用。只能使用以 wss:// 开头的网络地址。"],
   "이미 쓰고 있는 주소예요.": ["That address is already in use.", "すでに使っているアドレスです。", "这个地址已经在使用中。"],
   "더 이상 더할 수 없어요. 하나를 지우고 더해 주세요.": ["You can’t add more. Remove one first, then add.", "これ以上追加できません。1つ削除してから追加してください。", "不能再添加了。请先删除一个再添加。"],
-  "이 컴퓨터 릴레이는 레이븐 이야기와 가게 공지를 받아 둡니다. 「릴레이 나누기」를 켠 컴퓨터끼리만 서로 붙어, 큰 릴레이가 끊겨도 그 사이에서는 글이 돕니다.": ["This computer’s relay keeps Raven Talk posts and shop notices. Only computers with “Relay sharing” on connect to each other, so posts keep moving between them even if the big relays go down.", "このパソコンのリレーはレイヴンのトークとお店のお知らせを保管します。「リレー共有」をオンにしたパソコン同士だけがつながり、大きなリレーが止まってもその間では投稿が届きます。", "这台电脑的中继会保存渡鸦聊天帖子和店铺公告。只有开启“中继共享”的电脑之间才会互相连接，即使大型中继中断，它们之间的帖子也能继续传递。"],
+  "이 컴퓨터 릴레이는 광장 글과 가게 공지를 받아 둡니다. 「릴레이 나누기」를 켠 컴퓨터끼리만 서로 붙어, 큰 릴레이가 끊겨도 그 사이에서는 글이 돕니다.": ["This computer’s relay keeps Raven Talk posts and shop notices. Only computers with “Relay sharing” on connect to each other, so posts keep moving between them even if the big relays go down.", "このパソコンのリレーはレイヴンのトークとお店のお知らせを保管します。「リレー共有」をオンにしたパソコン同士だけがつながり、大きなリレーが止まってもその間では投稿が届きます。", "这台电脑的中继会保存渡鸦聊天帖子和店铺公告。只有开启“中继共享”的电脑之间才会互相连接，即使大型中继中断，它们之间的帖子也能继续传递。"],
   "「릴레이 나누기」를 켠 컴퓨터끼리 서로 릴레이가 되어 줍니다. 켠 컴퓨터가 늘수록 큰 릴레이가 끊겨도 글이 잘 돕니다.": ["Computers with “Relay sharing” on act as relays for each other. The more computers turn it on, the better posts keep moving when the big relays go down.", "「リレー共有」をオンにしたパソコン同士がお互いのリレーになります。オンにするパソコンが増えるほど、大きなリレーが止まっても投稿がよく届きます。", "开启“中继共享”的电脑会互相充当中继。开启的电脑越多，即使大型中继中断，帖子也越能顺利传递。"],
 // 11-08 지킴이 고마움(src/keeper-thanks-ui.ts · relay-share-ui.ts 릴레이 지킴이 · docs/KEEPER-THANKS.md)
   "릴레이 지킴이": ["Relay keeper", "リレーキーパー", "中继守护者"],
