@@ -31,6 +31,8 @@ export type TalkSocialHost = {
   openTalkNote?: (id: string, reply: boolean) => void;
   /** 처음 뜰 때 한 번 내는 낮은 소리(대화 알림 소리 켬일 때만). */
   sound?: () => void;
+  /** 창이 앞에 없을 때 컴퓨터 알림(답글·부름). */
+  osNotify?: (from: string, count: number) => void;
   active: () => boolean;
   errText: (e: unknown) => string;
   pickSave: (name: string) => Promise<string | null>;
@@ -320,7 +322,7 @@ async function announceNotices() {
         warn: risky ? t("돈·비밀 단어 이야기가 있어요. 사기일 수 있어요.") : undefined,
         buttons: [{ label: "모두 보기", primary: true, run: () => { h.openTalkNote?.("", false); if (toggleBox("tk-noticebox", "tk-bell")) { freshKeys = new Set(); void paintNotices(true); } } }, { label: "닫기", run: markAllSeenNow }],
       });
-  if (first) h.sound?.();
+  if (first) { h.sound?.(); h.osNotify?.(h.nameOf(top.pubkey), fresh.length); }
 }
 const NOTICE_LINE: Record<TalkNotice["kind"], string> = { reply: "{0}님이 답글을 달았어요", mention: "{0}님이 글에서 나를 불렀어요", follow: "{0}님이 나를 팔로우해요" };
 let freshKeys = new Set<string>();

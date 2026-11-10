@@ -18508,6 +18508,11 @@ function 방알림단추그리기() {
   setCopyText(b, () => t(off ? "이 방 알림 켜기" : "이 방 알림 끄기"));
 }
 
+/** 컴퓨터 알림(macOS·Windows). 실패는 조용히 — 앱 안 소리·배지가 남는다. */
+function tkOsNotify(kind: "room" | "reply" | "dm", room: string, from: string, count: number) {
+  void invoke("talk_os_notify", { kind, room, from, count, locale: lang, sound: true }).catch(() => {});
+}
+
 function 대화살피기(room: string, list: any[]) {
   if (!Array.isArray(list)) return;
   const 방 = String(room || "");
@@ -18519,6 +18524,7 @@ function 대화살피기(room: string, list: any[]) {
 
   const 처음 = !첫바퀴읽은방.has(방);
   let 새글 = 0;
+  let 마지막쓴이 = "";
 
   for (const e of list) {
     const id = String(e?.id || "");
@@ -18533,6 +18539,7 @@ function 대화살피기(room: string, list: any[]) {
     //    나면 그게 제일 이상하다 — 소리는 나는데 볼 글이 없다.
     if (tkMuted[who]) continue;
     새글++;
+    마지막쓴이 = who;
   }
 
   // 기억이 끝없이 자라지 않게. 지금 목록에 있는 것만 남긴다.
@@ -18556,6 +18563,8 @@ function 대화살피기(room: string, list: any[]) {
   if (!tkMine) return;
   if (!대화알림켜짐()) return;
   if (방알림꺼짐(방)) return; // 11-10 이 방 알림 끔
+  // 11-10 컴퓨터 알림 — 창이 앞에 없을 때만(본문 없음, 문장은 러스트가 만든다 · talk_notify.rs).
+  if (document.hidden || !document.hasFocus()) tkOsNotify("room", 방 ? tkRoomNames.get(방) || t("방") : t(SQUARE), 마지막쓴이 ? tkNameText(마지막쓴이) : "", 새글);
   // ⚠️ 그 방을 보고 있으면 소리도 숫자도 없다. 눈앞에 글이 뜨는 것이 이미
   //    답이다. (주문은 여기서 반대로 판단한다 — 돈이 들어오는 순간 사장의
   //    눈은 손님에게 가 있어서, 창이 떠 있는 것과 보고 있는 것이 다르다.
@@ -19967,6 +19976,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     active: () => currentPage === "talk",
     openTalkNote: (id, reply) => void tkOpenNoteFromRavi(id, reply),
     sound: () => { if (대화알림켜짐()) 말소리(); },
+    osNotify: (from, count) => { if (대화알림켜짐() && (document.hidden || !document.hasFocus())) tkOsNotify("reply", "", from, count); },
     errText,
     pickSave: (name) => pickSavePath({ defaultPath: name, filters: [{ name: "JSON", extensions: ["json"] }] }),
   });

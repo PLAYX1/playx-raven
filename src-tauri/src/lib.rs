@@ -166,6 +166,7 @@ mod node_keeper;
 mod relay_share;
 mod relay_keeper;
 mod text_zoom;
+mod talk_notify;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -222,6 +223,7 @@ pub fn run() {
             ravi_companion::companion_show,
             ravi_companion::companion_bubble,
             text_zoom::set_text_zoom,
+            talk_notify::talk_os_notify,
             ravi_companion::companion_sample,
             ravi_companion::companion_move,
             ravi_companion::companion_signal,
