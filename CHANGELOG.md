@@ -1,5 +1,20 @@
 # 변경 기록
 
+## 0.9.31
+
+### 한국어
+
+- **체인 매장 POS(새 기능):** 매장이 여러 곳이면 본점 컴퓨터 한 대에서 매장마다 열쇠를 만들어 나눠 줍니다. 매장 컴퓨터에는 12단어를 넣지 않습니다. 컴퓨터를 잃어버리면 본점에서 그 매장을 끊을 수 있습니다.
+- **결제 기록:** 카드 승인번호·현금영수증 번호·RVN 결제를 영수증 번호와 사업자 번호(종사업장 포함)와 함께 남깁니다. 인터넷이 끊겨도 쌓이고, 고치거나 지운 흔적은 드러납니다. 카드 승인·현금영수증 발급은 하지 않고 번호만 기록합니다.
+- **본점 매출 합계:** 매장이 10분마다 매출을 봉해서 본점으로 보냅니다. 매장별·사업자별·체인 전체 합계, 30분 소식 없는 매장은 「꺼짐」 알림.
+- **백업 두 곳:** 본점 기록을 이웃 매장 한 곳에 봉해서 맡기고, 매장 컴퓨터를 바꾸면 본점에서 기록을 되찾아 옵니다.
+- **연결 QR:** 1분이 지나 숨긴 QR 이 깨진 그림 칸으로 남던 것을 고쳤습니다.
+
+### English
+
+- **Chain store POS (new):** the head office issues a separate key to each store PC (no recovery words on store PCs), can cut a lost PC, records card approval / cash-receipt numbers and RVN payments offline with tamper evidence, collects sealed sales every 10 minutes with per-store and per-business totals and offline alerts, and keeps a sealed backup at one neighbour store.
+- Fixed the expired link QR leaving a broken image.
+
 ## 0.9.30
 
 ### 한국어
