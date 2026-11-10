@@ -2489,7 +2489,18 @@
       #page-talk .chathead { min-height:80px; background:var(--panel); border-bottom:1px solid var(--line); padding:0 28px; }
       #page-talk .msgs { padding:16px 28px; }
       #page-talk .composer { background:var(--panel); border-top:1px solid var(--line); padding:10px 16px; }
+      /* 11-10: 「이모티콘」 단추가 더해지며 좁은 창(≤1100px)에서 메시지 칸이 밀려 나갔다 → 단추는 윗줄, 메시지 칸·보내기는 아랫줄. */
+      @media (max-width: 1100px) {
+        #page-talk .composer { flex-wrap: wrap; }
+        #page-talk .composer textarea { order: 9; flex: 1 1 120px; }
+        #page-talk .composer #tk-at { order: 8; }
+        #page-talk .composer #tk-send { order: 10; }
+      }
       #page-talk .bub { font-size:16px; line-height:1.5; border-radius:20px 20px 20px 6px; background:var(--panel); border:1px solid var(--line); }
+      /* 11-10 라비 이모티콘: 글 속은 글자 높이보다 조금 크게, 이모티콘 하나뿐인 글은 말풍선 없이 크게(폰과 같은 결). */
+      #page-talk .tk-stk { width:1.75em; height:1.75em; vertical-align:-0.5em; object-fit:contain; }
+      #page-talk .tk-stk.big { width:112px; height:112px; vertical-align:middle; display:block; }
+      #page-talk .bub.stk { background:transparent; border:0; padding:2px 0; }
       #page-talk .bub.me { border:0; border-radius:20px 20px 6px 20px; }
       .rv-avatar { display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; flex:none; border-radius:50%; background:hsl(var(--h, 150) 45% 78%); color:#15161D; font-size:14px; font-weight:700; }
       .rv-person { padding:28px 18px; border-left:1px solid var(--line); background:var(--panel); overflow:auto; }
@@ -3605,6 +3616,7 @@
 
             <p id="tk-gate-note" class="tk-gate-note" role="status" hidden></p>
             <div id="tk-mentionbox" class="tk-mentionbox" hidden></div>
+            <div id="tk-stickerbox" class="tk-stickerbox" role="group" aria-label="라비 이모티콘" hidden></div>
             <div class="composer">
               <!-- 🔴 그림만 두지 않는다. 「사진」이라고 **글자로** 적는다. -->
               <button class="photobtn" id="tk-photo" type="button">
@@ -3613,6 +3625,8 @@
                 <span>사진</span>
               </button>
               <!-- 11-09 「@」 — 팔로우한 사람을 글에 넣는다(올릴 때 nostr:npub… 로 바뀌어 그 사람 알림에 뜬다). -->
+              <!-- 11-10 라비 이모티콘 16종 — 누르면 입력칸에 들어간다(바로 보내지 않는다, 폰과 같다). -->
+              <button class="photobtn tk-stkbtn" id="tk-stk" type="button" aria-controls="tk-stickerbox" aria-expanded="false"><span>이모티콘</span></button>
               <button class="photobtn tk-atbtn" id="tk-at" type="button" aria-controls="tk-mentionbox" aria-expanded="false" aria-label="사람 넣기">@</button>
               <!-- 🔴 안내문을 입력칸 안에 넣지 않는다. 칸이 좁아서 문장이
                    중간에 잘렸고, 잘린 경고는 경고가 아니라 잡음이다.

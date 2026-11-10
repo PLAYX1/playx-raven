@@ -670,6 +670,29 @@ fn reply_tags_in(room: &Option<String>, parent: &str, reply_pub: &Option<String>
 }
 
 /// 모두에게 글(kind 1)에 글 속 링크 표를 더한다(talk_social::extra_note_tags). 방 글은 그대로(폰과 같다).
+/// 라비 이모티콘 16종 짧은 이름 — 폰 core/talk/sticker.ts RAVI_STICKERS 와 같은 목록·같은 주소.
+const RAVI_STICKERS: [&str; 16] = [
+    "ravi_hello", "ravi_thanks", "ravi_like", "ravi_love", "ravi_congrats", "ravi_laugh", "ravi_sad", "ravi_angry",
+    "ravi_surprised", "ravi_curious", "ravi_cheer", "ravi_sorry", "ravi_goodnight", "ravi_gift", "ravi_waiting", "ravi_ok",
+];
+const EMOJI_BASE: &str = "https://ravenvault.ex.erci.se/emoji/";
+
+/// 11-10: 글 속 `:ravi_…:` 마다 NIP-30 emoji 표 하나(같은 것은 한 번). damus·primal 도 같은 그림으로 그린다(폰 stickerTags 와 같다).
+fn with_sticker_tags(tags: Value, text: &str) -> Value {
+    let mut list = tags.as_array().cloned().unwrap_or_default();
+    let mut seen: Vec<&str> = Vec::new();
+    for part in text.split(':').skip(1) {
+        // `:이름:` 사이 조각만 본다 — 이름 뒤에 바로 `:` 가 와야 하므로 목록에 있는 이름과 똑같을 때만.
+        if let Some(code) = RAVI_STICKERS.iter().find(|c| **c == part) {
+            if !seen.contains(code) && text.contains(&format!(":{code}:")) {
+                seen.push(code);
+                list.push(json!(["emoji", code, format!("{EMOJI_BASE}{code}.webp")]));
+            }
+        }
+    }
+    Value::Array(list)
+}
+
 fn with_note_links(kind: i64, tags: Value, text: &str, root_pub: &Option<String>) -> Value {
     if kind != KIND_NOTE {
         return tags;
@@ -747,6 +770,7 @@ pub async fn talk_post(
     };
     // 11-09 폰 noteDraft 와 같게(모두에게 글만): 맨 위 글쓴이 p · 부른 사람(nostr:npub…) p · #낱말 t.
     let tags = with_note_links(kind, tags, &text, &reply_root_pub);
+    let tags = with_sticker_tags(tags, &text);
     let ev = crate::shopkey::sign_with(&sk, kind, tags, &text, now())?;
     let r = crate::nostrpub::nostr_publish(ev.clone()).await?;
     Ok(json!({ "event": ev, "sent": r }))
@@ -1831,6 +1855,15 @@ where
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn 라비_이모티콘에_emoji_표() {
+        let t = super::with_sticker_tags(serde_json::json!([["t", "x"]]), "hi :ravi_like: :ravi_like: :nope: :ravi_ok:");
+        let a = t.as_array().unwrap();
+        assert_eq!(a.len(), 3, "같은 것은 한 번, 모르는 이름은 표 없음");
+        assert_eq!(a[1], serde_json::json!(["emoji", "ravi_like", "https://ravenvault.ex.erci.se/emoji/ravi_like.webp"]));
+        assert_eq!(super::with_sticker_tags(serde_json::json!([]), "ravi_like: 아님").as_array().unwrap().len(), 0);
+    }
+
     use super::{open_bookmarks, bookmark_ids, bookmark_items, follow_ids, follow_tags};
     #[test]
     fn follows_keep_other_apps_tags() {

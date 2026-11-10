@@ -12,6 +12,7 @@ import {
   applyMentions, cleanSeen, exportFileName, firstSeen, isUnread, markSeen, matchNotes, matchPeople, noteSegments, npubOf, readSearch,
   type NoticeSeen, type Person, type TalkNotice,
 } from "./talk-links";
+import { RAVI_STICKERS, addSticker, stickerName, stickerOnly, stickerParts, type RaviStickerCode } from "../core/talk/sticker";
 
 type Invoke = <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
 export type TalkSocialHost = {
@@ -52,12 +53,22 @@ const snip = (s: string, n = 80) => { const one = s.replace(/\s+/g, " ").trim();
 
 // ── 글 속 링크 ──────────────────────────────────────────────────
 /** 글 본문 HTML: 사람 링크 → 「@이름」(누르면 이름표), #태그 → 누르면 그 태그 글 찾기, 글 링크 → 본문엔 「[인용한 글]」 + 아래 「글 보기」 단추. */
+/** 11-10 대표 「데스크탑에 이모티콘이 :ravi_like: 로 보이네」 — 폰·웹과 같은 부호표(core/talk/sticker.ts)로 앱에 든 그림을 그린다.
+ *  글 속 표(emoji 태그)의 바깥 주소는 쓰지 않는다(추적 픽셀일 수 있다). 모르는 짧은 이름은 글자 그대로. */
+const stickerImg = (code: RaviStickerCode, big: boolean) =>
+  `<img class="tk-stk${big ? " big" : ""}" src="/ravi-stickers/${code}.webp" alt="${esc(t(stickerName(code)))}" title="${esc(t(stickerName(code)))}" draggable="false" />`;
+const textWithStickers = (text: string) =>
+  stickerParts(text).map((p) => p.kind === "text" ? esc(p.text) : stickerImg(p.code, false)).join("");
+/** 글 전체가 라비 이모티콘 하나면 그 이름 — 말풍선 없이 크게 그린다. */
+export function noteStickerOnly(text: string): RaviStickerCode | null { return stickerOnly(text); }
 export function noteBodyHtml(text: string): string {
+  const only = stickerOnly(text);
+  if (only) return stickerImg(only, true);
   const segs = noteSegments(text);
-  if (!segs.some((s) => s.kind !== "text")) return `<span translate="no">${esc(text)}</span>`;
+  if (!segs.some((s) => s.kind !== "text")) return `<span translate="no">${textWithStickers(text)}</span>`;
   const notes: string[] = [];
   const body = segs.map((s) => {
-    if (s.kind === "text") return esc(s.text);
+    if (s.kind === "text") return textWithStickers(s.text);
     if (s.kind === "person") return `<button type="button" class="tk-at" data-tk-person="${s.pubkey}">@${esc(host?.nameOf(s.pubkey) || s.pubkey.slice(0, 8))}</button>`;
     if (s.kind === "tag") return `<button type="button" class="tk-hash" data-tk-tag="${esc(s.tag)}">${esc(s.raw)}</button>`;
     if (!notes.includes(s.id)) notes.push(s.id);
@@ -68,7 +79,7 @@ export function noteBodyHtml(text: string): string {
 }
 /** 화면에 한 줄로(알림·찾기 미리보기): 사람 링크 → @이름, 글 링크 → [인용한 글]. */
 export function readableLine(text: string, n = 80): string {
-  return snip(noteSegments(text).map((s) => s.kind === "text" ? s.text : s.kind === "person" ? "@" + (host?.nameOf(s.pubkey) || s.pubkey.slice(0, 8)) : s.kind === "note" ? `[${t("인용한 글")}]` : s.raw).join(""), n);
+  return snip(noteSegments(text).map((s) => s.kind === "text" ? stickerParts(s.text).map((p) => p.kind === "text" ? p.text : `[${t(stickerName(p.code))}]`).join("") : s.kind === "person" ? "@" + (host?.nameOf(s.pubkey) || s.pubkey.slice(0, 8)) : s.kind === "note" ? `[${t("인용한 글")}]` : s.raw).join(""), n);
 }
 /** 그린 뒤: 아직 모르는 「@이름」의 이름표를 가져와 고쳐 쓰고, NIP-05 표시를 채운다. */
 export async function fillNoteLinks(root: ParentNode): Promise<void> {
@@ -177,6 +188,28 @@ async function paintMentionBox() {
     }
     toggleMention(false);
   };
+}
+/** 11-10 라비 이모티콘 고르기 — 입력칸 끝에 :ravi_…: 를 붙인다(올릴 때 러스트가 emoji 표를 단다). */
+function toggleStickers(open?: boolean) {
+  const box = $("tk-stickerbox"), btn = $("tk-stk");
+  if (!box || !btn) return;
+  const on = open ?? box.hidden;
+  box.hidden = !on;
+  btn.setAttribute("aria-expanded", on ? "true" : "false");
+  if (!on) return;
+  toggleMention(false);
+  box.innerHTML = `<div class="tk-stkgrid">${RAVI_STICKERS.map((x) =>
+    `<button type="button" data-tk-stk="${x.code}"><img src="/ravi-stickers/${x.code}.webp" alt="" draggable="false" /><span>${copyHtml(x.name)}</span></button>`).join("")}</div>`;
+  box.querySelectorAll<HTMLElement>("[data-tk-stk]").forEach((b) => {
+    b.onclick = () => {
+      const ta = $("tk-text") as HTMLTextAreaElement | null;
+      if (!ta) return;
+      ta.value = addSticker(ta.value, b.dataset.tkStk as RaviStickerCode);
+      ta.dispatchEvent(new Event("input"));
+      ta.focus();
+      toggleStickers(false);
+    };
+  });
 }
 function toggleMention(open?: boolean) {
   const box = $("tk-mentionbox"), btn = $("tk-at");
@@ -458,7 +491,9 @@ export function wireTalkSocial(h: TalkSocialHost) {
   const form = $("tk-sform") as HTMLFormElement | null;
   if (form) form.onsubmit = (ev) => { ev.preventDefault(); void runSearch(($("tk-sq") as HTMLInputElement).value); };
   const at = $("tk-at");
-  if (at) at.onclick = () => toggleMention();
+  if (at) at.onclick = () => { toggleStickers(false); toggleMention(); };
+  const stk = $("tk-stk");
+  if (stk) stk.onclick = () => toggleStickers();
   const ex = $("tk-export");
   if (ex) ex.onclick = () => openMyData("export");
   const el = $("tk-elsewhere");

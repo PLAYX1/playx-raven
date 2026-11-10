@@ -63,6 +63,7 @@ async function open() {
       if (cmd === 'talk_profiles') return { 'pk-kim': { name: '김무송' }, 'pk-lee': { name: '이영희' }, 'public-home-fixture': { name: '나' } };
       if (cmd === 'talk_rooms') return [];
       if (cmd === 'talk_read') return structuredClone(events);
+      if (cmd === 'talk_feed') return { notes: structuredClone(events), oldest: 0 }; // 11-09 모두에게 = talk_feed
       if (cmd === 'talk_post') { window.__posts.push(JSON.parse(JSON.stringify(args))); return { event: {}, sent: {} }; }
       return real(cmd, args);
     };

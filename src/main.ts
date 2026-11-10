@@ -4,7 +4,7 @@ import "./display-mode"; // 설정 「표시 방식」 칸 + 레이아웃 토큰
 void import("./settings-nav"); // 0.9.0 설정 왼쪽 목록·주제 바꾸기·바로 가기(src/settings-nav.ts) — 레인A. 시작 묶음 1000KB 예산 때문에 따로 싣는다
 import { applyBadges, badgeSectionHtml, badgesOf, forgetMyAddress, gateChipHtml, gateOfRoom, gateOptionsHtml, loadBadges, paintComposerGate, setRoomGates } from "./talk-badges"; // 11-08 기여 표시
 import "./talk-badges.css";
-import { clearMentions, fillNoteLinks, mentionText, nip05Slot, noteBodyHtml, personMineHtml, refreshNotices, rememberNotes, wirePersonMine, wireTalkSocial } from "./talk-social"; // 11-09 알림·찾기·글 속 링크·NIP-05·내 글 받기
+import { clearMentions, fillNoteLinks, mentionText, nip05Slot, noteBodyHtml, noteStickerOnly, personMineHtml, refreshNotices, rememberNotes, wirePersonMine, wireTalkSocial } from "./talk-social"; // 11-09 알림·찾기·글 속 링크·NIP-05·내 글 받기
 import "./talk-social.css";
 import { myHeadHtml, nameCardAfterMe, saveTalkName, setMyTalkName, wireTalkIdentity } from "./talk-identity"; // 0.9.0 이야기 이름표 — 레인A
 import "./app-lock"; // 잠긴 기본 화면·매장용 읽기 전용 + 다크 돈 카드(docs/design/lock-and-dark.md)
@@ -7047,7 +7047,7 @@ async function talkPaint(opts: { cached?: boolean } = {}) {
           day +
           head +
           `<div class="line${mine ? " me" : ""}">
-             <div class="bub${mine ? " me" : ""}" data-say="${id}" data-author="${escapeHtml(who)}">${인용}${noteBodyHtml(본문)}${pic ? tkPicHtml(pic) : ""}</div>
+             <div class="bub${mine ? " me" : ""}${!인용 && !pic && noteStickerOnly(본문) ? " stk" : ""}" data-say="${id}" data-author="${escapeHtml(who)}">${인용}${noteBodyHtml(본문)}${pic ? tkPicHtml(pic) : ""}</div>
              ${clock}
            </div>` +
           조심 +
