@@ -124,7 +124,7 @@ export function mountChainStore(host: HTMLElement, deps: ChainStoreDeps): { refr
       } catch (e) { say(deps.errText(e), true); }
     };
     const done = button(() => t("다 옮겼어요 — 설치 암호 지우기"), true);
-    done.onclick = () => { out.replaceChildren(); out.hidden = true; say(""); };
+    done.onclick = () => { out.replaceChildren(); out.hidden = true; say(""); r.install_words = ""; code.value = ""; };
     const acts = el("div", "cs-acts");
     acts.append(copy, save, done);
     const lead = el("p", "cs-q");

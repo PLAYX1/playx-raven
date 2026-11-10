@@ -1,7 +1,9 @@
 //! 체인 POS ① — 매장 열쇠 발급·끊기 (docs/CHAIN-POS.md).
 //!
-//! * 본점(12단어가 있는 PC 한 곳)이 매장 n 의 열쇠(`identity::PATH_CHAIN_STORE_PREFIX/<n>'`)를 뽑고,
-//!   본점(체인) 열쇠 = 가게 간판 열쇠(`storesign::store_secret`)로 **매장 증서**에 서명한다.
+//! * 본점(12단어가 있는 PC 한 곳)이 매장 n 의 열쇠(`identity::PATH_CHAIN_STORE_PREFIX/<n>'/<세대>'`)를 뽑고,
+//!   본점(체인) 열쇠(`identity::PATH_CHAIN_KEY` — 간판 열쇠와 **따로**)로 **매장 증서**에 서명한다.
+//! * 끊긴 열쇠는 다시 주지 않는다: 같은 번호를 다시 발급하면 끊긴 세대를 건너뛴 새 열쇠가 나온다.
+//! * 릴레이에 올리는 겉봉투도 체인 열쇠로 서명한다(사장의 이야기 이름과 체인을 묶지 않는다). 공개 명부에 사업자 번호는 싣지 않는다.
 //! * 증서·끊기 목록은 `lan_cert` 모양 그대로(정본 JSON·signmessage 해시·65바이트 복구형·낮은 S),
 //!   도메인만 `ravenvault-chain-v1`. 증서와 끊기 목록은 칸 이름이 서로 달라 같은 도메인이어도 섞이지 않는다.
 //! * 매장 PC 로는 **설치 꾸러미** 하나만 건너간다 = {매장 비밀 열쇠, 증서} 를 일회용 6단어 설치 암호로 봉함
@@ -50,6 +52,9 @@ pub const ERR_JOINED_OTHER: &str = "이 컴퓨터는 이미 다른 본점의 매
 pub const ERR_IS_OWNER: &str = "이 컴퓨터는 본점이에요. 본점 컴퓨터는 매장으로 연결할 수 없어요.";
 pub const ERR_NO_SERIAL: &str = "그 매장 증서를 발급 기록에서 찾지 못했어요.";
 pub const ERR_DECLINED: &str = "사장님이 매장 열쇠 만들기를 허락하지 않았어요.";
+pub const ERR_REVOKE_DECLINED: &str = "사장님이 매장 끊기를 허락하지 않았어요.";
+pub const ERR_OLD_BUNDLE: &str = "이 꾸러미는 이 컴퓨터에 이미 있는 증서보다 옛것이에요. 본점에서 새로 받은 꾸러미를 써 주세요.";
+pub const ERR_NO_GEN: &str = "이 매장 번호는 너무 여러 번 끊겼어요. 새 번호로 만들어 주세요.";
 pub const ERR_LOCKED: &str = crate::storesign::ERR_LOCKED;
 
 fn chain_dir() -> PathBuf {
@@ -217,11 +222,11 @@ fn pubkey(sk: &[u8; 32]) -> Result<String, &'static str> {
 }
 
 /// 끊기 목록 본문을 만들어 서명한다(번호·시각은 뒤로 가지 않는다 — lan_cert accept 규칙).
-fn sign_list(chain_sk: &[u8; 32], chain: &str, prev: Option<&ListInfo>, add: Option<&str>, now: i64) -> Result<Value, &'static str> {
+fn sign_list(chain_sk: &[u8; 32], chain: &str, prev: Option<&ListInfo>, add: &[String], now: i64) -> Result<Value, &'static str> {
     let mut revoked: Vec<String> = prev.map(|p| p.revoked.clone()).unwrap_or_default();
-    if let Some(id) = add {
+    for id in add {
         if !revoked.iter().any(|r| r == id) {
-            revoked.push(id.to_string());
+            revoked.push(id.clone());
         }
     }
     revoked.sort();
@@ -370,7 +375,7 @@ pub fn issue_in(dir: &Path, chain_sk: &[u8; 32], store_sk: &[u8; 32], n: u32, na
     };
     // 첫 발급이면 빈 끊기 목록(seq 1)을 같이 만든다 — 확인이 「목록 없음」으로 닫히지 않게.
     if load_list(dir, &chain).is_none() {
-        let list = sign_list(chain_sk, &chain, None, None, now)?;
+        let list = sign_list(chain_sk, &chain, None, &[], now)?;
         write_json(&dir.join("revocations.json"), &list)?;
     }
     certs.push(cert.clone());
@@ -393,6 +398,9 @@ pub fn join_in(dir: &Path, bundle: &str, words: &str, now: i64) -> Result<StoreC
         if let Some(old) = read_json(&dir.join("store.json")) {
             if old.pointer("/cert/chain").and_then(Value::as_str) != Some(chain.as_str()) {
                 return Err(ERR_JOINED_OTHER);
+            }
+            if old.pointer("/cert/serial").and_then(Value::as_u64).is_some_and(|s| c.serial < s) {
+                return Err(ERR_OLD_BUNDLE);
             }
         }
         Ok(c)
@@ -455,22 +463,27 @@ pub fn revoke_in(dir: &Path, chain_sk: &[u8; 32], serial: u64, now: i64) -> Resu
     if hist_chain != chain {
         return Err(ERR_OTHER_CHAIN.into());
     }
-    if !certs.iter().any(|c| c.get("serial").and_then(Value::as_u64) == Some(serial)) {
-        return Err(ERR_NO_SERIAL.into());
-    }
+    let target = certs.iter().find(|c| c.get("serial").and_then(Value::as_u64) == Some(serial)).ok_or(ERR_NO_SERIAL)?;
+    let key = target.get("storeKey").and_then(Value::as_str).unwrap_or("").to_string();
+    // 같은 열쇠로 나간 증서는 모두 끊는다 — serial 하나만 끊으면 같은 열쇠의 다른 증서가 살아 있다.
+    let ids: Vec<String> = certs.iter()
+        .filter(|c| c.get("storeKey").and_then(Value::as_str) == Some(key.as_str()))
+        .filter_map(|c| c.get("serial").and_then(Value::as_u64))
+        .map(|s| store_cert_id(&chain, s)).collect();
     let prev = load_list(dir, &chain).map(|(_, i)| i);
-    let list = sign_list(chain_sk, &chain, prev.as_ref(), Some(&store_cert_id(&chain, serial)), now)?;
+    let list = sign_list(chain_sk, &chain, prev.as_ref(), &ids, now)?;
     write_json(&dir.join("revocations.json"), &list)?;
     let roster = roster_doc(chain_sk, &chain, &certs, &list, now)?;
     Ok((list, roster))
 }
 
-/// 명부(캐시일 뿐 — 판정은 증서·끊기 목록). 매장 번호·이름·매장 공개키·사업자 번호·끊김. 본점 키 서명.
+/// 명부(캐시일 뿐 — 판정은 증서·끊기 목록). 매장 번호·이름·매장 공개키·끊김. 본점 키 서명.
+/// 사업자 번호는 공개 릴레이에 올리지 않는다(본점 issued.json 과 매장 증서 안에만).
 fn roster_doc(chain_sk: &[u8; 32], chain: &str, certs: &[Value], list: &Value, now: i64) -> Result<Value, &'static str> {
     let revoked: Vec<String> = list.get("revoked").and_then(Value::as_array).map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect()).unwrap_or_default();
     let stores: Vec<Value> = certs.iter().map(|c| {
         let r = store_row(c, &revoked);
-        json!({ "serial": r["serial"], "store": r["store"], "name": r["name"], "storeKey": r["storeKey"], "biz": r["biz"], "revoked": r["revoked"] })
+        json!({ "serial": r["serial"], "store": r["store"], "name": r["name"], "storeKey": r["storeKey"], "revoked": r["revoked"] })
     }).collect();
     let body = json!({ "v": 1, "kind": "roster", "chain": chain, "issuedAt": now, "stores": stores });
     sign_doc(CHAIN_DOMAIN, &body, chain, ecdsa_signer(chain_sk)).map_err(|_| ERR_SIGN)
@@ -478,37 +491,54 @@ fn roster_doc(chain_sk: &[u8; 32], chain: &str, certs: &[Value], list: &Value, n
 
 // ── 12단어 → 열쇠 (본점) ───────────────────────────────────────────
 
-async fn owner_keys(n: Option<u32>) -> Result<([u8; 32], Option<[u8; 32]>), String> {
+/// 이 본점이 끊은 매장 공개키들(비밀 없음). 다시 발급할 때 이 열쇠들은 건너뛴다.
+pub fn burned_keys(dir: &Path) -> Vec<String> {
+    let Some((chain, certs)) = load_history(dir) else { return Vec::new() };
+    let revoked = load_list(dir, &chain).map(|(_, i)| i.revoked).unwrap_or_default();
+    certs.iter().filter(|c| store_row(c, &revoked)["revoked"].as_bool().unwrap_or(false))
+        .filter_map(|c| c.get("storeKey").and_then(Value::as_str).map(String::from)).collect()
+}
+
+/// 매장 n 의 첫 「끊기지 않은」 세대 열쇠.
+pub fn fresh_store_key(words: &str, pass: &str, n: u32, burned: &[String]) -> Result<[u8; 32], &'static str> {
+    for gen in 0..crate::identity::CHAIN_STORE_GENS {
+        let mut sk = crate::identity::chain_store_key_from(words, pass, n, gen).ok_or(ERR_KEY)?;
+        match pubkey(&sk) {
+            Ok(pk) if !burned.contains(&pk) => return Ok(sk),
+            _ => crate::words::wipe_bytes(&mut sk),
+        }
+    }
+    Err(ERR_NO_GEN)
+}
+
+async fn owner_keys(n: Option<u32>, burned: Vec<String>) -> Result<([u8; 32], Option<[u8; 32]>), String> {
     if crate::app_lock::is_locked() {
         return Err(ERR_LOCKED.into());
     }
     let (mut w, mut p) = crate::identity::words_async().await.map_err(crate::identity::SeedFailure::public_error)?;
-    let chain = crate::storesign::store_secret(&w, &p);
-    let store = n.map(|n| crate::identity::chain_store_key_from(&w, &p, n));
+    let chain = crate::identity::chain_key_from(&w, &p);
+    let store = n.map(|n| fresh_store_key(&w, &p, n, &burned));
     crate::words::wipe(&mut w);
     crate::words::wipe(&mut p);
     let mut chain = chain.ok_or_else(|| ERR_KEY.to_string())?;
     match store {
         None => Ok((chain, None)),
-        Some(Some(s)) => Ok((chain, Some(s))),
-        Some(None) => {
+        Some(Ok(s)) => Ok((chain, Some(s))),
+        Some(Err(e)) => {
             crate::words::wipe_bytes(&mut chain);
-            Err(ERR_KEY.into())
+            Err(e.into())
         }
     }
 }
 
-/// 이야기 열쇠(사람)로 Nostr 겉봉투에 서명해 올린다. 12단어를 쓸 수 있어 막는 호출이라 spawn_blocking 안에서.
-async fn publish_doc(d: &str, doc: &Value) -> bool {
-    let content = match serde_json::to_string(doc) { Ok(c) => c, Err(_) => return false };
-    let d = d.to_string();
-    let ev = tokio::task::spawn_blocking(move || {
-        let mut sk = crate::talk::signing_key().ok()?;
-        let at = (now_ms() / 1000) as i64;
-        let ev = crate::shopkey::sign_with(&sk, 30078, json!([["d", d]]), &content, at).ok();
-        crate::words::wipe_bytes(&mut sk);
-        ev
-    }).await.ok().flatten();
+/// 체인 열쇠로 Nostr 겉봉투에 서명해 올린다 — 사장의 이야기(사람) 이름과 체인을 공개적으로 묶지 않는다.
+/// 겉봉투 서명은 지금 만들어 두고(열쇠는 부르는 쪽이 지운다) 올리기만 나중에 한다.
+fn envelope(chain_sk: &[u8; 32], d: &str, doc: &Value) -> Option<Value> {
+    let content = serde_json::to_string(doc).ok()?;
+    crate::shopkey::sign_with(chain_sk, 30078, json!([["d", d]]), &content, now_ms() / 1000).ok()
+}
+
+async fn publish_doc(ev: Option<Value>) -> bool {
     match ev {
         Some(ev) => crate::nostrpub::nostr_publish(ev).await.is_ok(),
         None => false,
@@ -536,9 +566,9 @@ pub async fn chain_store_issue(app: tauri::AppHandle, n: u32, name: String, biz_
     if !ok {
         return Err(ERR_DECLINED.into());
     }
-    let (mut chain_sk, store_sk) = owner_keys(Some(n)).await?;
-    let mut store_sk = store_sk.unwrap_or([0u8; 32]);
     let dir = chain_dir();
+    let (mut chain_sk, store_sk) = owner_keys(Some(n), burned_keys(&dir)).await?;
+    let mut store_sk = store_sk.unwrap_or([0u8; 32]);
     let r = issue_in(&dir, &chain_sk, &store_sk, n, &name, &biz, now_ms());
     crate::words::wipe_bytes(&mut chain_sk);
     crate::words::wipe_bytes(&mut store_sk);
@@ -578,7 +608,7 @@ pub fn chain_store_bundle_save(path: String, bundle_text: String) -> Result<Valu
         return Err(ERR_BUNDLE.into());
     }
     let p = PathBuf::from(&path);
-    if !p.is_absolute() || p.extension().and_then(|e| e.to_str()) != Some("txt") {
+    if !p.is_absolute() || !p.file_name().and_then(|f| f.to_str()).is_some_and(|f| f.ends_with(".rvchain.txt")) {
         return Err(ERR_SAVE.into());
     }
     write_text(&p, bundle_text.trim())?;
@@ -616,14 +646,32 @@ pub fn chain_store_list() -> Value {
 }
 
 /// 본점: 이 매장 끊기. 로컬 저장이 먼저, 올리기는 그 뒤(실패해도 끊김은 그대로).
+/// 되돌릴 수 없으니 발급과 같이 Rust 대화상자로 한 번 더 묻는다(화면이 뚫려도 전 매장 일괄 끊기 불가).
 #[tauri::command]
-pub async fn chain_store_revoke(serial: u64) -> Result<Value, String> {
-    let (mut chain_sk, _) = owner_keys(None).await?;
-    let r = revoke_in(&chain_dir(), &chain_sk, serial, now_ms());
+pub async fn chain_store_revoke(app: tauri::AppHandle, serial: u64) -> Result<Value, String> {
+    use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
+    if crate::app_lock::is_locked() {
+        return Err(ERR_LOCKED.into());
+    }
+    let dir = chain_dir();
+    let (_, certs) = load_history(&dir).ok_or(ERR_NO_SERIAL)?;
+    let target = certs.iter().find(|c| c.get("serial").and_then(Value::as_u64) == Some(serial)).ok_or(ERR_NO_SERIAL)?;
+    let label = format!("{}번 「{}」", target.get("store").and_then(Value::as_u64).unwrap_or(0), target.get("name").and_then(Value::as_str).unwrap_or(""));
+    let ask = format!("{label} 매장을 끊습니다.\n\n그 매장 컴퓨터의 열쇠를 더는 믿지 않습니다. 되돌릴 수 없어요. 맞으면 「확인」을 눌러 주세요.");
+    let ok = tokio::task::spawn_blocking(move || {
+        app.dialog().message(ask).title("매장 끊기").buttons(MessageDialogButtons::OkCancel).blocking_show()
+    }).await.unwrap_or(false);
+    if !ok {
+        return Err(ERR_REVOKE_DECLINED.into());
+    }
+    let (mut chain_sk, _) = owner_keys(None, Vec::new()).await?;
+    let r = revoke_in(&dir, &chain_sk, serial, now_ms());
+    let evs = r.as_ref().ok().map(|(list, roster)| (envelope(&chain_sk, D_REVOCATIONS, list), envelope(&chain_sk, D_ROSTER, roster)));
     crate::words::wipe_bytes(&mut chain_sk);
-    let (list, roster) = r?;
-    let revocations = publish_doc(D_REVOCATIONS, &list).await;
-    let roster_ok = publish_doc(D_ROSTER, &roster).await;
+    r?;
+    let (ev_list, ev_roster) = evs.unwrap_or((None, None));
+    let revocations = publish_doc(ev_list).await;
+    let roster_ok = publish_doc(ev_roster).await;
     Ok(json!({ "ok": true, "serial": serial, "published": { "revocations": revocations, "roster": roster_ok } }))
 }
 
@@ -641,7 +689,7 @@ mod tests {
         d
     }
     fn keys(n: u32) -> ([u8; 32], [u8; 32]) {
-        (crate::storesign::store_secret(WORDS, "").unwrap(), crate::identity::chain_store_key_from(WORDS, "", n).unwrap())
+        (crate::identity::chain_key_from(WORDS, "").unwrap(), crate::identity::chain_store_key_from(WORDS, "", n, 0).unwrap())
     }
     fn biz() -> Value {
         clean_biz("123-45-67890", Some("0001")).unwrap()
@@ -649,18 +697,18 @@ mod tests {
 
     #[test]
     fn different_numbers_give_different_keys_and_none_match_shop_or_person() {
-        let a = crate::identity::chain_store_key_from(WORDS, "", 1).unwrap();
-        let b = crate::identity::chain_store_key_from(WORDS, "", 2).unwrap();
+        let a = crate::identity::chain_store_key_from(WORDS, "", 1, 0).unwrap();
+        let b = crate::identity::chain_store_key_from(WORDS, "", 2, 0).unwrap();
         assert_ne!(a, b);
-        assert_eq!(a, crate::identity::chain_store_key_from(WORDS, "", 1).unwrap(), "다시 뽑으면 같아야 한다");
+        assert_eq!(a, crate::identity::chain_store_key_from(WORDS, "", 1, 0).unwrap(), "다시 뽑으면 같아야 한다");
         let shop = crate::identity::shop_key_from(WORDS, "").unwrap();
         let person = crate::identity::person_key_from(WORDS, "").unwrap();
         for k in [a, b] {
             assert_ne!(k, shop);
             assert_ne!(k, person);
         }
-        assert!(crate::identity::chain_store_key_from(WORDS, "", 0).is_none());
-        assert!(crate::identity::chain_store_key_from(WORDS, "", 10_000).is_none());
+        assert!(crate::identity::chain_store_key_from(WORDS, "", 0, 0).is_none());
+        assert!(crate::identity::chain_store_key_from(WORDS, "", 10_000, 0).is_none());
     }
 
     #[test]
@@ -690,7 +738,7 @@ mod tests {
         assert_eq!(join_in(&owner, &r.bundle, &r.install_words, NOW).unwrap_err(), ERR_IS_OWNER);
         // 다른 본점 꾸러미는 거절
         let other = dir("rt-other-owner");
-        let ocsk = crate::storesign::store_secret("zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo wrong", "").unwrap();
+        let ocsk = crate::identity::chain_key_from("zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo wrong", "").unwrap();
         let o = issue_in(&other, &ocsk, &ssk, 1, "남의 가게", &biz(), NOW).unwrap();
         assert_eq!(join_in(&store, &o.bundle, &o.install_words, NOW).unwrap_err(), ERR_JOINED_OTHER);
     }
@@ -780,6 +828,39 @@ mod tests {
         }
         assert!(!r.bundle.contains(&hex::encode(ssk)), "꾸러미는 봉함돼 있어야 한다");
         assert!(!files[0].contains(&hex::encode(ssk)) && !files[1].contains(&hex::encode(ssk)), "본점 기록에 매장 비밀이 남았다");
+    }
+
+    #[test]
+    fn revoked_number_reissues_a_new_key_and_kills_every_cert_of_the_old_key() {
+        let owner = dir("gen-owner");
+        let (csk, s0) = keys(5);
+        let a = issue_in(&owner, &csk, &s0, 5, "5호점", &biz(), NOW).unwrap();
+        // 같은 열쇠로 한 번 더 발급(예: 이름 바꿈) → 증서 둘, 열쇠 하나
+        let a2 = issue_in(&owner, &csk, &s0, 5, "5호점 새이름", &biz(), NOW).unwrap();
+        let chain = pubkey(&csk).unwrap();
+        let (list, roster) = revoke_in(&owner, &csk, a.serial, NOW + 1000).unwrap();
+        assert_eq!(verify_store_cert(&a2.cert, &chain, NOW + 2000, Some(&list)).unwrap_err(), CertReason::Revoked, "같은 열쇠의 다른 증서도 죽어야 한다");
+        assert!(!serde_json::to_string(&roster).unwrap().contains("123-45") && !serde_json::to_string(&roster).unwrap().contains("1234567890"), "공개 명부에 사업자 번호 금지");
+        // 다시 발급하면 끊긴 세대를 건너뛴다
+        let burned = burned_keys(&owner);
+        assert_eq!(burned, vec![pubkey(&s0).unwrap(), pubkey(&s0).unwrap()]);
+        let fresh = fresh_store_key(WORDS, "", 5, &burned).unwrap();
+        assert_ne!(fresh, s0);
+        assert_eq!(fresh, crate::identity::chain_store_key_from(WORDS, "", 5, 1).unwrap());
+    }
+
+    #[test]
+    fn chain_key_is_not_the_shop_key_and_old_bundles_cannot_roll_back() {
+        let chain = crate::identity::chain_key_from(WORDS, "").unwrap();
+        assert_ne!(chain, crate::identity::shop_key_from(WORDS, "").unwrap(), "간판 열쇠는 아무 다이제스트에나 서명한다 — 체인 열쇠와 같으면 안 된다");
+        let (owner, store) = (dir("rb-owner"), dir("rb-store"));
+        let (csk, ssk) = keys(6);
+        let old = issue_in(&owner, &csk, &ssk, 6, "6호점", &biz(), NOW).unwrap();
+        let new = issue_in(&owner, &csk, &ssk, 6, "6호점", &biz(), NOW).unwrap();
+        join_in(&store, &new.bundle, &new.install_words, NOW).unwrap();
+        assert_eq!(join_in(&store, &old.bundle, &old.install_words, NOW).unwrap_err(), ERR_OLD_BUNDLE);
+        let bad = dir("rb-file").join("x.txt");
+        assert_eq!(chain_store_bundle_save(bad.to_string_lossy().into(), new.bundle.clone()).unwrap_err(), ERR_SAVE, "확장자는 .rvchain.txt 만");
     }
 
     #[test]

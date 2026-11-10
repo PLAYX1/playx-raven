@@ -132,7 +132,25 @@ pub const PATH_SHOP: &str = "m/44'/175'/7'/1'/0'";
 /// 하나로 전부 복구된다 — 그것이 이 표의 계약이다.
 pub const PATH_ARTIST: &str = "m/44'/175'/7'/2'/0'";
 
-/// 체인 매장 열쇠의 앞자리(docs/CHAIN-POS.md ①). 매장 n 은 `<앞자리>/<n>'` (n = 1..=9999, 경화).
+/// 체인(본점) 열쇠(docs/CHAIN-POS.md ①). 매장 증서·끊기 목록·명부에만 서명한다.
+///
+/// 🔴 가게 간판 열쇠(`PATH_SHOP`)를 쓰지 않는 이유: `store_sign_digest` 는 화면이 준 **아무 32바이트**에
+/// 간판 열쇠로 서명한다(사유만 보임). 같은 열쇠면 뚫린 화면이 가짜 증서·가짜 「전 매장 끊기」 해시를 만들어
+/// 사장의 확인 한 번으로 진짜 본점 서명을 얻는다(페이블 11-11 검토). 그래서 따로 둔다.
+pub const PATH_CHAIN_KEY: &str = "m/44'/175'/7'/4'/0'";
+
+pub fn chain_key_from(words: &str, passphrase: &str) -> Option<[u8; 32]> {
+    let mut seed = seed_from_words(words, passphrase)?;
+    let out = derive(&seed, PATH_CHAIN_KEY);
+    crate::words::wipe_bytes(&mut seed);
+    out
+}
+
+/// 한 매장 번호에서 다시 뽑을 수 있는 세대 수. 끊긴 열쇠는 그 세대를 건너뛰고 다음 세대를 쓴다.
+pub const CHAIN_STORE_GENS: u32 = 64;
+
+/// 체인 매장 열쇠의 앞자리(docs/CHAIN-POS.md ①). 매장 n 세대 g 는 `<앞자리>/<n>'/<g>'` (n = 1..=9999, 경화).
+/// 세대가 있는 이유: 같은 번호를 끊은 뒤 다시 발급할 때 도둑이 가진 열쇠를 또 주지 않게.
 ///
 /// 본점 12단어 하나로 매장마다 **다른** 열쇠가 나오고, 본점은 언제든 같은 열쇠를 다시 뽑을 수 있다.
 /// 매장 PC 에는 12단어가 없다 — 이 열쇠(비밀) 하나만 설치 꾸러미로 건너간다. 경화라서 매장 열쇠
@@ -140,12 +158,12 @@ pub const PATH_ARTIST: &str = "m/44'/175'/7'/2'/0'";
 pub const PATH_CHAIN_STORE_PREFIX: &str = "m/44'/175'/7'/3'";
 
 /// 매장 번호 n 의 열쇠. 범위 밖이면 `None`(틀린 번호로 조용히 다른 열쇠를 만들지 않는다).
-pub fn chain_store_key_from(words: &str, passphrase: &str, n: u32) -> Option<[u8; 32]> {
-    if !(1..=9999).contains(&n) {
+pub fn chain_store_key_from(words: &str, passphrase: &str, n: u32, gen: u32) -> Option<[u8; 32]> {
+    if !(1..=9999).contains(&n) || gen >= CHAIN_STORE_GENS {
         return None;
     }
     let mut seed = seed_from_words(words, passphrase)?;
-    let out = derive(&seed, &format!("{PATH_CHAIN_STORE_PREFIX}/{n}'"));
+    let out = derive(&seed, &format!("{PATH_CHAIN_STORE_PREFIX}/{n}'/{gen}'"));
     crate::words::wipe_bytes(&mut seed);
     out
 }
@@ -180,6 +198,10 @@ const _: () = assert!(
 const _: () = assert!(
     same(PATH_SHOP, "m/44'/175'/7'/1'/0'"),
     "가게 간판 경로를 바꾸면 이미 옮긴 가게가 죽는다."
+);
+const _: () = assert!(
+    same(PATH_CHAIN_KEY, "m/44'/175'/7'/4'/0'") && !same(PATH_CHAIN_KEY, PATH_SHOP) && !same(PATH_CHAIN_KEY, PATH_PERSON),
+    "체인 열쇠는 가게 간판·사람 열쇠와 달라야 한다(간판 열쇠는 아무 다이제스트에나 서명한다)."
 );
 const _: () = assert!(
     same(PATH_ARTIST, "m/44'/175'/7'/2'/0'"),
