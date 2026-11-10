@@ -47,3 +47,12 @@
 #chain-store-card .csl-backup, #chain-store-card .csl-held { margin: 16px 0; }
 #chain-store-card .csl-pull { margin: 12px 0; font-size: 16px; }
 #chain-store-card .csl-pull > summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; }
+/* 펼치는 줄(details)에 ▸ 표시 — display:flex 가 기본 표시를 지워서 그냥 제목처럼 보였다. 좁은 창에서 줄이 짓눌리지 않게 줄바꿈. */
+#chain-store-card details > summary { list-style: none; gap: 8px; }
+#chain-store-card details > summary::-webkit-details-marker { display: none; }
+#chain-store-card details > summary::before { content: ""; width: 8px; height: 8px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); transition: transform .15s; flex: none; }
+#chain-store-card details[open] > summary::before { transform: rotate(45deg); }
+#chain-store-card .csl-pull > summary, #chain-store-card .csl-rej > summary { font-weight: 600; }
+#chain-store-card .cs-row, #chain-store-card .csl-row { flex-wrap: wrap; row-gap: 6px; }
+#chain-store-card .cs-rowtxt, #chain-store-card .csl-rowtxt { flex: 1 1 200px; min-width: 0; }
+#chain-store-card .csl-m { white-space: nowrap; }

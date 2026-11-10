@@ -320,7 +320,14 @@ function ownerView(host: HTMLElement, deps: ChainSalesDeps, msg: HTMLElement, sa
       const none = document.createElement("option");
       none.value = "";
       none.textContent = t("맡기지 않음");
-      bkPick.replaceChildren(none, ...((b.stores || []) as number[]).map((n) => { const o = document.createElement("option"); o.value = String(n); o.textContent = String(n); return o; }));
+      bkPick.replaceChildren(none, ...((b.stores || []) as number[]).map((n) => {
+        const o = document.createElement("option");
+        o.value = String(n);
+        const nm = last?.stores.find((r) => r.store === n)?.name;
+        o.textContent = nm ? `${n}. ${nm}` : String(n);
+        o.setAttribute("translate", "no");
+        return o;
+      }));
       bkPick.value = b.store == null ? "" : String(b.store);
     }
     setCopyText(bkFacts, () => b.store == null ? t("아직 맡긴 매장이 없어요.")
