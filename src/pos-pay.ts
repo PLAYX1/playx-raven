@@ -231,10 +231,12 @@ export function mountPosPay(host: HTMLElement, deps: PosPayDeps): { refresh(): P
       const li = el("li", "pp-row" + (r.voided ? " pp-voided" : "") + (r.kind === "void" ? " pp-void" : ""));
       const left = el("span", "pp-rowtxt");
       const no = r.approval || r.cashReceipt || (r.txid ? String(r.txid).slice(0, 10) + "…" : "");
-      left.append(
+      const line = el("span");
+      line.append(
         el("b", "", () => `No.${r.seq}`),
         document.createTextNode(` · ${hhmm(r.at)} · ${label(r.method)}${r.kind === "void" ? " · " + tf("취소(No.{0})", r.ref) : ""}`),
       );
+      left.append(line);
       if (no) left.append(el("span", "pp-no", () => no));
       const amt = el("span", "pp-amt", () => won(r.amount));
       li.append(left, amt);

@@ -1,5 +1,7 @@
 /* 「결제 기록」 카드 (체인 POS ②). 70대 기준: 글자 16px 이상, 단추 48px 이상. */
 #pos-pay-card { margin: 0 0 16px; }
+/* display:flex 가 [hidden] 을 이기지 않게 — 카드가 아닌데 카드사 칸·메모 칸이 보이던 것. */
+#pos-pay-card [hidden] { display: none !important; }
 #pos-pay-card .pp-who { font-size: 15px; color: var(--muted); margin: 4px 0 8px; }
 #pos-pay-card .pp-form { display: flex; flex-direction: column; gap: 12px; }
 #pos-pay-card .pp-amount-row { display: flex; align-items: center; gap: 10px; font-size: 16px; }
@@ -22,8 +24,8 @@
 #pos-pay-card .pp-totals { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 16px; margin-bottom: 8px; }
 #pos-pay-card .pp-check { color: var(--danger); font-size: 16px; font-weight: 600; }
 #pos-pay-card .pp-list { list-style: none; padding: 0; margin: 0; }
-#pos-pay-card .pp-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); font-size: 16px; }
-#pos-pay-card .pp-rowtxt { display: flex; flex-direction: column; gap: 2px; margin-right: auto; }
+#pos-pay-card .pp-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 0; border-top: 1px solid var(--line); font-size: 16px; }
+#pos-pay-card .pp-rowtxt { display: flex; flex-direction: column; gap: 2px; margin-right: auto; flex: 1 1 180px; min-width: 0; }
 #pos-pay-card .pp-no { font-size: 14px; color: var(--muted); font-family: ui-monospace, monospace; overflow-wrap: anywhere; }
 #pos-pay-card .pp-amt { font-size: 17px; font-weight: 700; white-space: nowrap; }
 #pos-pay-card .pp-voided .pp-amt { text-decoration: line-through; color: var(--muted); }
@@ -31,5 +33,8 @@
 #pos-pay-card .pp-tag { font-size: 14px; color: var(--muted); }
 #pos-pay-card .pp-empty { font-size: 16px; color: var(--muted); padding: 10px 0; }
 #pos-pay-card .pp-biz { margin-top: 16px; }
-#pos-pay-card .pp-biz > summary { cursor: pointer; font-size: 16px; min-height: 44px; display: flex; align-items: center; }
+#pos-pay-card .pp-biz > summary { cursor: pointer; font-size: 16px; min-height: 44px; display: flex; align-items: center; gap: 8px; list-style: none; }
+#pos-pay-card .pp-biz > summary::-webkit-details-marker { display: none; }
+#pos-pay-card .pp-biz > summary::before { content: ""; width: 8px; height: 8px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); transition: transform .15s; flex: none; }
+#pos-pay-card .pp-biz[open] > summary::before { transform: rotate(45deg); }
 @media (max-width: 520px) { #pos-pay-card .pp-chip { min-width: calc(50% - 4px); } }
