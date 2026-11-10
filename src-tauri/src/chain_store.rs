@@ -551,6 +551,9 @@ pub async fn chain_store_issue(app: tauri::AppHandle, n: u32, name: String, biz_
 /// 매장 PC: 본점에서 받은 꾸러미 열기.
 #[tauri::command]
 pub async fn chain_store_join(bundle_text: String, install_words: String) -> Result<Value, String> {
+    if crate::app_lock::is_locked() {
+        return Err(ERR_LOCKED.into());
+    }
     let mut words = install_words;
     let r = tokio::task::spawn_blocking(move || {
         let r = join_in(&chain_dir(), &bundle_text, &words, now_ms());
