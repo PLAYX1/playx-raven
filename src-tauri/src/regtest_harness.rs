@@ -34,7 +34,13 @@ pub async fn market_cancel_listing(d: String, passphrase: Option<String>) -> Res
     crate::market_listing::market_cancel_listing(d, passphrase).await
 }
 pub async fn swap_take_listing(listing: Value, broadcast: bool, passphrase: Option<String>) -> Result<Value, String> {
-    crate::market_listing::swap_take_listing(listing, broadcast, passphrase).await
+    // 앱과 같은 길: 보내기 전에 미리 보고, 그 값(check)을 넘긴다.
+    let expect = if broadcast {
+        Some(crate::market_listing::swap_take_listing(listing.clone(), false, passphrase.clone(), None).await?["check"].clone())
+    } else {
+        None
+    };
+    crate::market_listing::swap_take_listing(listing, broadcast, passphrase, expect).await
 }
 
 /// 사는 쪽이 하는 확인 그대로(서명 → 모양 → 체인). 통과하면 Ok, 아니면 한국어 이유.

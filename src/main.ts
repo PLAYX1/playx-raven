@@ -9335,6 +9335,8 @@ let sendPreview: any = null;
 /// RVN 보내기에서 노드가 「수수료까지 합치면 모자란다」고 답했는가(0.9.29). 화면 상태만 — 그때는 보내기 단추를 막는다.
 /// 눌러 봐야 노드가 거절하고, 사람은 왜 안 되는지 모른 채 암호만 다시 친다. 이유는 수수료 칸 아래에 적혀 있다.
 let sendFeeShort = false;
+/** 11-10 점검 R3: RVN 보내기인데 수수료를 노드에서 못 받았다 → 얼마가 빠질지 모른 채 보내지 않게 단추를 잠근다. 자산은 수수료를 노드가 정하므로 해당 없음. */
+let sendFeeUnknown = false;
 
 /// 장부에 **자산까지** 담아 읽는다.
 ///
@@ -9524,7 +9526,8 @@ function pickPayee(address: string) {
 
 /** 수수료 한 줄 — RVN 은 노드에 읽기로만 묻는다(`sendfee.rs`, 서명·전파 없음). 못 구하면 지어내지 않는다. */
 const FEE_UNKNOWN = "수수료는 노드가 정해요(보통 0.01 RVN 안팎).";
-function paintSendFee(fee: any, amount: number, asset: string | null) {
+/** 수수료를 노드에서 받았으면 true. */
+function paintSendFee(fee: any, amount: number, asset: string | null): boolean {
   const feeBox = $("r-fee"), feeNote = $("r-feenote"), total = $("r-total");
   const known = !asset && fee && typeof fee.fee === "number" && Number.isFinite(fee.fee) && fee.short !== true;
   if (known) {
@@ -9533,13 +9536,14 @@ function paintSendFee(fee: any, amount: number, asset: string | null) {
     // 합계는 사토시로 더한다(0.1 + 0.2 ≠ 0.3). 노드가 준 합계가 있으면 그 값.
     const sum = fee.total != null ? rvnNumberToSats(Number(fee.total)) : (rvnNumberToSats(amount) ?? 0n) + (rvnNumberToSats(fee.fee) ?? 0n);
     setCopyText(total, () => (sum === null ? t(FEE_UNKNOWN) : fmtSats(sum)));
-    return;
+    return true;
   }
   setCopyText(feeBox, () => t(FEE_UNKNOWN));
   setCopyText(feeNote, () => asset ? t("수수료는 RVN 으로 내요.")
     : fee?.short === true ? t("수수료까지 합치면 잔액이 모자라요. 금액을 조금 줄여 주세요.")
-    : t("이번 수수료를 노드에 묻지 못했어요."));
+    : t("수수료를 확인하지 못해서 보내기를 잠갔어요. 「고치기」를 눌러 다시 검토해 주세요."));
   setCopyText(total, () => asset ? tf("{0} {1} + 수수료(RVN)", fmtQty(amount), asset) : tf("{0} RVN + 수수료", fmtQty(amount)));
+  return false;
 }
 
 function composeChanged() {
@@ -9585,6 +9589,7 @@ async function reviewSend() {
   btn.textContent = "확인 중…";
   try {
     sendFeeShort = false;
+    sendFeeUnknown = false;
     sendPreview = await invoke<any>("preview_send", { address, asset, amount });
   } catch (e) {
     $("s-addrnote").innerHTML = `<span style="color:var(--bad)">${escapeHtml(errText(e))}</span>`;
@@ -9678,9 +9683,10 @@ async function reviewSend() {
     asset ? Promise.resolve(null) : invoke<any>("send_fee", { address, amount }).catch(() => null),
     asset ? Promise.resolve(null) : invoke<any>("rvn_rate", { currency: "KRW" }).catch(() => null),
   ]);
-  paintSendFee(fee, amount, asset);
+  const feeKnown = paintSendFee(fee, amount, asset);
   sendFeeShort = !asset && fee?.short === true;
-  $("r-feenote").classList.toggle("danger", sendFeeShort);
+  sendFeeUnknown = !asset && !feeKnown && !sendFeeShort;
+  $("r-feenote").classList.toggle("danger", sendFeeShort || sendFeeUnknown);
   const won = amount * Number(rate?.rate);
   if (!asset && Number(rate?.rate) > 0 && Number.isFinite(won)) {
     setCopyText($("r-krw"), () => tf("지금 시세로 약 {0}원", fmtCount(Math.round(won))));
@@ -9705,7 +9711,7 @@ function gateSend() {
   const tailOk =
     !needTail || tail.toLowerCase() === String(sendPreview.address).slice(-4).toLowerCase();
   const go = $("s-go") as HTMLButtonElement;
-  go.disabled = sendingNow || !tailOk || (needPass && !pass) || !sendPreview.enough || sendFeeShort;
+  go.disabled = sendingNow || !tailOk || (needPass && !pass) || !sendPreview.enough || sendFeeShort || sendFeeUnknown;
   // 네 자를 다 쳤는데 안 맞으면 말해 준다. 조용히 버튼만 막으면 사람은
   // 자기가 오타를 낸 줄 알고 다시 친다 — 정작 봐야 할 것은 주소다.
   $("s-tailwarn").innerHTML =
@@ -9739,8 +9745,11 @@ async function doSend() {
     isMine: approved.is_mine === true,
   };
 
+  // 11-10 점검 R3: 여태 send_ack·결과 그리기까지 한 try 안이었다 — 돈은 체인에 나갔는데 그 뒤 한 줄이 실패하면
+  // 「보내지 못함」 상자가 뜨고 단추가 다시 살아났다. 실패로 보이는 것은 **보내기 자체**가 실패했을 때뿐이다.
+  let txid: string;
   try {
-    const txid =
+    txid =
       sendMode === "asset"
         ? await invoke<string>("send_asset", {
             asset: approved.asset,
@@ -9756,7 +9765,21 @@ async function doSend() {
             passphrase: pass,
             requestId: approved.requestId,
           });
-    await invoke("send_ack", { requestId: approved.requestId });
+  } catch (e) {
+    $("s-result").innerHTML = `<div class="warnbox" style="margin-top:12px">${escapeHtml(errText(e))}</div>`;
+    // 미확인 지급은 Rust의 영속 잠금이 재시도/재시작에도 차단한다.
+    // "보내는 중…" 이 남아 있으면 얼마를 보내려던 건지 사라진다.
+    btn.textContent = wasLabel || "보내기";
+    btn.disabled = false;
+    ($("s-pass") as HTMLInputElement).value = "";
+    sendingNow = false;
+    if (sendPreview) gateSend();
+    return;
+  }
+  // ── 여기부터는 이미 보냈다. 무엇이 실패해도 「보냈어요」 화면을 지킨다. ──
+  // send_ack 실패 = Rust 쪽 미확인 잠금이 남을 뿐(다음 보내기에서 확인한다) — 보낸 사실은 그대로다.
+  void invoke("send_ack", { requestId: approved.requestId }).catch((e) => console.warn("send_ack failed", e));
+  try {
     emitRaviEvent("send_done");
     // 11-03 감사 B5: 보낸 직후 홈 잔액·최근 거래를 바로 다시 읽는다(5초 바퀴를 기다리지 않게).
     void quietly(refreshOverview); void quietly(paintHomeTxs);
@@ -9802,11 +9825,10 @@ async function doSend() {
     //    자산을 보냈으면 자산 목록도 다시 읽어야 한다.
     void loadAssets(false);
   } catch (e) {
-    $("s-result").innerHTML = `<div class="warnbox" style="margin-top:12px">${escapeHtml(errText(e))}</div>`;
-    // 미확인 지급은 Rust의 영속 잠금이 재시도/재시작에도 차단한다.
-    // "보내는 중…" 이 남아 있으면 얼마를 보내려던 건지 사라진다.
-    btn.textContent = wasLabel || "보내기";
-    btn.disabled = false;
+    // 보낸 뒤 화면 그리기가 실패했다 — 단추를 되살리지 않는다(다시 누르면 두 번 나간다). 거래 번호만이라도 보인다.
+    console.warn("after-send paint failed", e);
+    if (sendPreview === approved) sendPreview = null;
+    $("s-result").innerHTML = `<p style="margin-top:12px">${escapeHtml(tf("보냈어요. 거래 번호: {0}", String(txid ?? "")))}</p>`;
   } finally {
     ($("s-pass") as HTMLInputElement).value = "";
     sendingNow = false;
@@ -18441,7 +18463,8 @@ let 대화지킴이도는중 = false;
  * 안 일어나고, 릴레이는 남의 서버라 덜 두드릴수록 좋다.
  */
 let 대화지킴이마지막 = 0;
-async function 대화지킴이() {
+/** onlyOpen = 이야기 화면을 보고 있는 5초 바퀴 — 지금 연 방 하나만 읽는다(나머지 방은 45초 바퀴가 본다). */
+async function 대화지킴이(onlyOpen = false) {
   if (!대화알림켜짐() && currentPage !== "talk") return;
   if (대화지킴이도는중) return;
   대화지킴이도는중 = true;
@@ -18456,7 +18479,9 @@ async function 대화지킴이() {
       }
     }
     // 11-03 감사 B2: 방을 하나씩 차례로 읽지 않고 한꺼번에(방마다 릴레이를 기다리면 방 수만큼 늦는다).
-    await Promise.all(지켜보는방().map(async (방) => {
+    // 11-10 「빠른가?」: 5초마다 지켜보는 방(최대 3곳)을 다 읽으면 바퀴마다 릴레이 연결이 방 수만큼 열린다 → 연 방만.
+    const 방들 = onlyOpen ? [tkRoom || ""] : 지켜보는방();
+    await Promise.all(방들.map(async (방) => {
       try {
         // 30개면 45초 사이에 온 글을 놓칠 일이 없다. 화면(60개)보다 적게
         // 받는 것은 이건 읽으려는 것이 아니라 **세려는 것**이기 때문이다.
@@ -18466,7 +18491,7 @@ async function 대화지킴이() {
         // 릴레이 한 곳이 죽어도 다음 방은 본다. 조용히 다음 바퀴에 다시 본다.
       }
     }));
-    대화지킴이마지막 = Date.now();
+    if (!onlyOpen) 대화지킴이마지막 = Date.now();
   } finally {
     대화지킴이도는중 = false;
   }
@@ -18515,7 +18540,11 @@ function 대화알림배선() {
   // 동시에 두드리면 느린 컴퓨터에서 첫 화면이 멈춘 것처럼 보인다.
   setTimeout(() => void 대화지킴이(), 6000);
   // 11-03 감사 B2: 이야기 화면을 보고 있으면 5초, 아니면 예전처럼 45초마다.
-  setInterval(() => { if ((currentPage === "talk" && !document.hidden) || Date.now() - 대화지킴이마지막 >= 45000) void 대화지킴이(); }, 5000);
+  //    11-10: 5초 바퀴는 연 방 하나만, 다른 방은 45초마다 모두.
+  setInterval(() => {
+    if (Date.now() - 대화지킴이마지막 >= 45000) void 대화지킴이();
+    else if (currentPage === "talk" && !document.hidden) void 대화지킴이(true);
+  }, 5000);
 }
 
 // ── 주문 ──

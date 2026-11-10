@@ -529,7 +529,11 @@
     "연결해 두면 고마운 분이 「응원 보내기」로 나에게 직접 보낼 수 있어요. 레이븐볼트는 수수료를 떼지 않아요. 이 주소는 내 이름표에 공개돼요.": "Se la colleghi, chi ti è grato può inviarti direttamente con «Invia un ringraziamento». RavenVault non trattiene commissioni. Questo indirizzo è pubblico sulla tua etichetta del nome.",
     "내가 응원한 분": "Persona che ho ringraziato",
     "이 기기에서 나만 보는 표시예요. 다른 사람에게는 보이지 않아요.": "È un segno che vedi solo tu su questo dispositivo. Gli altri non lo vedono.",
-    "받기 주소를 이름표에 걸어 두면, 고마워하는 분이 응원을 보낼 수 있어요": "Se metti il tuo indirizzo di ricezione sull’etichetta del nome, chi ti è grato potrà inviarti un ringraziamento"
+    "받기 주소를 이름표에 걸어 두면, 고마워하는 분이 응원을 보낼 수 있어요": "Se metti il tuo indirizzo di ricezione sull’etichetta del nome, chi ti è grato potrà inviarti un ringraziamento",
+    "수수료를 확인하지 못해서 보내기를 잠갔어요. 「고치기」를 눌러 다시 검토해 주세요.": "Non è stato possibile verificare la commissione, quindi l'invio è bloccato. Tocca «Modifica» per ricontrollare.",
+    "보냈어요. 거래 번호: {0}": "Inviato. ID transazione: {0}",
+    "미리 본 값과 지금 값이 달라 보내지 않았어요. 다시 「사기」를 눌러 확인해 주세요.": "I valori sono diversi da quelli visti in anteprima, quindi non è stato inviato nulla. Tocca di nuovo «Acquista» per controllare.",
+    "미리 본 값이 없어 보내지 않았어요. 다시 「사기」를 눌러 확인해 주세요.": "Non c'era un'anteprima da confrontare, quindi non è stato inviato nulla. Tocca di nuovo «Acquista» per controllare."
   },
   "es": {
     "AI 번역입니다": "Traducción con IA",
@@ -1060,7 +1064,11 @@
     "연결해 두면 고마운 분이 「응원 보내기」로 나에게 직접 보낼 수 있어요. 레이븐볼트는 수수료를 떼지 않아요. 이 주소는 내 이름표에 공개돼요.": "Si la vinculas, quien te esté agradecido puede enviarte directamente con «Enviar apoyo». RavenVault no cobra comisión. Esta dirección se muestra públicamente en tu etiqueta de nombre.",
     "내가 응원한 분": "Persona a la que apoyé",
     "이 기기에서 나만 보는 표시예요. 다른 사람에게는 보이지 않아요.": "Es una marca que solo ves tú en este dispositivo. Nadie más la ve.",
-    "받기 주소를 이름표에 걸어 두면, 고마워하는 분이 응원을 보낼 수 있어요": "Si pones tu dirección para recibir en tu etiqueta de nombre, quien te esté agradecido podrá enviarte apoyo"
+    "받기 주소를 이름표에 걸어 두면, 고마워하는 분이 응원을 보낼 수 있어요": "Si pones tu dirección para recibir en tu etiqueta de nombre, quien te esté agradecido podrá enviarte apoyo",
+    "수수료를 확인하지 못해서 보내기를 잠갔어요. 「고치기」를 눌러 다시 검토해 주세요.": "No se pudo comprobar la comisión, así que el envío está bloqueado. Toca «Editar» para revisarlo de nuevo.",
+    "보냈어요. 거래 번호: {0}": "Enviado. ID de transacción: {0}",
+    "미리 본 값과 지금 값이 달라 보내지 않았어요. 다시 「사기」를 눌러 확인해 주세요.": "Los valores no coinciden con la vista previa, así que no se envió nada. Toca «Comprar» otra vez para revisarlo.",
+    "미리 본 값이 없어 보내지 않았어요. 다시 「사기」를 눌러 확인해 주세요.": "No había vista previa para comparar, así que no se envió nada. Toca «Comprar» otra vez para revisarlo."
   },
   "fr": {
     "AI 번역입니다": "Traduction par IA",
@@ -1591,7 +1599,11 @@
     "연결해 두면 고마운 분이 「응원 보내기」로 나에게 직접 보낼 수 있어요. 레이븐볼트는 수수료를 떼지 않아요. 이 주소는 내 이름표에 공개돼요.": "Une fois l’adresse liée, une personne reconnaissante peut vous envoyer directement avec « Envoyer un merci ». RavenVault ne prélève aucuns frais. Cette adresse est publique sur votre étiquette de nom.",
     "내가 응원한 분": "Personne que j’ai remerciée",
     "이 기기에서 나만 보는 표시예요. 다른 사람에게는 보이지 않아요.": "Cette marque n’est visible que par vous, sur cet appareil. Les autres ne la voient pas.",
-    "받기 주소를 이름표에 걸어 두면, 고마워하는 분이 응원을 보낼 수 있어요": "Si vous mettez votre adresse de réception sur votre étiquette de nom, les personnes reconnaissantes pourront vous envoyer un merci"
+    "받기 주소를 이름표에 걸어 두면, 고마워하는 분이 응원을 보낼 수 있어요": "Si vous mettez votre adresse de réception sur votre étiquette de nom, les personnes reconnaissantes pourront vous envoyer un merci",
+    "수수료를 확인하지 못해서 보내기를 잠갔어요. 「고치기」를 눌러 다시 검토해 주세요.": "Impossible de vérifier les frais : l'envoi est bloqué. Touchez « Modifier » pour revérifier.",
+    "보냈어요. 거래 번호: {0}": "Envoyé. ID de transaction : {0}",
+    "미리 본 값과 지금 값이 달라 보내지 않았어요. 다시 「사기」를 눌러 확인해 주세요.": "Les valeurs diffèrent de l'aperçu : rien n'a été envoyé. Touchez à nouveau « Acheter » pour vérifier.",
+    "미리 본 값이 없어 보내지 않았어요. 다시 「사기」를 눌러 확인해 주세요.": "Aucun aperçu à comparer : rien n'a été envoyé. Touchez à nouveau « Acheter » pour vérifier."
   },
   "pt-BR": {
     "AI 번역입니다": "Tradução por IA",
@@ -2122,7 +2134,11 @@
     "연결해 두면 고마운 분이 「응원 보내기」로 나에게 직접 보낼 수 있어요. 레이븐볼트는 수수료를 떼지 않아요. 이 주소는 내 이름표에 공개돼요.": "Com o endereço vinculado, quem for grato pode enviar diretamente para você com “Enviar apoio”. O RavenVault não cobra taxa. Este endereço fica público na sua etiqueta de nome.",
     "내가 응원한 분": "Pessoa que eu apoiei",
     "이 기기에서 나만 보는 표시예요. 다른 사람에게는 보이지 않아요.": "É uma marca que só você vê neste dispositivo. Ninguém mais vê.",
-    "받기 주소를 이름표에 걸어 두면, 고마워하는 분이 응원을 보낼 수 있어요": "Se você colocar seu endereço de recebimento na etiqueta de nome, quem for grato poderá enviar apoio"
+    "받기 주소를 이름표에 걸어 두면, 고마워하는 분이 응원을 보낼 수 있어요": "Se você colocar seu endereço de recebimento na etiqueta de nome, quem for grato poderá enviar apoio",
+    "수수료를 확인하지 못해서 보내기를 잠갔어요. 「고치기」를 눌러 다시 검토해 주세요.": "Não foi possível verificar a taxa, então o envio foi bloqueado. Toque em “Editar” para revisar de novo.",
+    "보냈어요. 거래 번호: {0}": "Enviado. ID da transação: {0}",
+    "미리 본 값과 지금 값이 달라 보내지 않았어요. 다시 「사기」를 눌러 확인해 주세요.": "Os valores são diferentes da prévia, então nada foi enviado. Toque em “Comprar” de novo para conferir.",
+    "미리 본 값이 없어 보내지 않았어요. 다시 「사기」를 눌러 확인해 주세요.": "Não havia prévia para comparar, então nada foi enviado. Toque em “Comprar” de novo para conferir."
   },
   "de": {
     "AI 번역입니다": "KI-Übersetzung",
@@ -2653,7 +2669,11 @@
     "연결해 두면 고마운 분이 「응원 보내기」로 나에게 직접 보낼 수 있어요. 레이븐볼트는 수수료를 떼지 않아요. 이 주소는 내 이름표에 공개돼요.": "Ist sie verknüpft, kann Ihnen jemand, der dankbar ist, mit „Dank senden“ direkt etwas senden. RavenVault behält keine Gebühr ein. Diese Adresse ist auf Ihrem Namensschild öffentlich sichtbar.",
     "내가 응원한 분": "Von mir bedankt",
     "이 기기에서 나만 보는 표시예요. 다른 사람에게는 보이지 않아요.": "Dieses Zeichen sehen nur Sie auf diesem Gerät. Andere sehen es nicht.",
-    "받기 주소를 이름표에 걸어 두면, 고마워하는 분이 응원을 보낼 수 있어요": "Wenn Sie Ihre Empfangsadresse am Namensschild hinterlegen, können dankbare Menschen Ihnen Dank senden"
+    "받기 주소를 이름표에 걸어 두면, 고마워하는 분이 응원을 보낼 수 있어요": "Wenn Sie Ihre Empfangsadresse am Namensschild hinterlegen, können dankbare Menschen Ihnen Dank senden",
+    "수수료를 확인하지 못해서 보내기를 잠갔어요. 「고치기」를 눌러 다시 검토해 주세요.": "Die Gebühr konnte nicht geprüft werden, daher ist das Senden gesperrt. Tippen Sie auf „Bearbeiten“, um erneut zu prüfen.",
+    "보냈어요. 거래 번호: {0}": "Gesendet. Transaktions-ID: {0}",
+    "미리 본 값과 지금 값이 달라 보내지 않았어요. 다시 「사기」를 눌러 확인해 주세요.": "Die Werte weichen von der Vorschau ab, daher wurde nichts gesendet. Tippen Sie erneut auf „Kaufen“, um zu prüfen.",
+    "미리 본 값이 없어 보내지 않았어요. 다시 「사기」를 눌러 확인해 주세요.": "Es gab keine Vorschau zum Vergleichen, daher wurde nichts gesendet. Tippen Sie erneut auf „Kaufen“, um zu prüfen."
   },
   "ru": {
     "AI 번역입니다": "Перевод выполнен ИИ",
@@ -3184,6 +3204,10 @@
     "연결해 두면 고마운 분이 「응원 보내기」로 나에게 직접 보낼 수 있어요. 레이븐볼트는 수수료를 떼지 않아요. 이 주소는 내 이름표에 공개돼요.": "Если привязать адрес, благодарный человек сможет отправить вам напрямую через «Отправить благодарность». RavenVault не берёт комиссию. Этот адрес публично виден на вашей именной метке.",
     "내가 응원한 분": "Я отправлял(а) благодарность",
     "이 기기에서 나만 보는 표시예요. 다른 사람에게는 보이지 않아요.": "Эту отметку видите только вы на этом устройстве. Другим она не видна.",
-    "받기 주소를 이름표에 걸어 두면, 고마워하는 분이 응원을 보낼 수 있어요": "Если добавить адрес для получения на именную метку, благодарные люди смогут отправить вам благодарность"
+    "받기 주소를 이름표에 걸어 두면, 고마워하는 분이 응원을 보낼 수 있어요": "Если добавить адрес для получения на именную метку, благодарные люди смогут отправить вам благодарность",
+    "수수료를 확인하지 못해서 보내기를 잠갔어요. 「고치기」를 눌러 다시 검토해 주세요.": "Не удалось проверить комиссию, поэтому отправка заблокирована. Нажмите «Изменить», чтобы проверить ещё раз.",
+    "보냈어요. 거래 번호: {0}": "Отправлено. ID транзакции: {0}",
+    "미리 본 값과 지금 값이 달라 보내지 않았어요. 다시 「사기」를 눌러 확인해 주세요.": "Значения отличаются от предпросмотра, поэтому ничего не отправлено. Нажмите «Купить» ещё раз, чтобы проверить.",
+    "미리 본 값이 없어 보내지 않았어요. 다시 「사기」를 눌러 확인해 주세요.": "Не было предпросмотра для сравнения, поэтому ничего не отправлено. Нажмите «Купить» ещё раз, чтобы проверить."
   }
 }

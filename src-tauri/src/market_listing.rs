@@ -391,6 +391,25 @@ pub(crate) fn check_chain_info(l: &Listing, info: &Value) -> Result<(), String> 
     Ok(())
 }
 
+/// 미리 보여 준 값(자산·개수·값·개발비·합계)과 지금 체인 확인 값이 사토시까지 같은가. 다르면 보내지 않는다.
+fn same_as_previewed(expect: &Value, info: &Value) -> Result<(), String> {
+    const DIFF: &str = "미리 본 값과 지금 값이 달라 보내지 않았어요. 다시 「사기」를 눌러 확인해 주세요.";
+    if expect["asset"].as_str().unwrap_or_default() != info["asset"].as_str().unwrap_or_default() {
+        return Err(DIFF.into());
+    }
+    for k in ["amount", "price", "fee", "total"] {
+        let (Some(a), Some(b)) = (expect[k].as_f64(), info[k].as_f64()) else {
+            // 미리 보기에 없던 칸은 비교할 수 없다 — 값(price)·개수(amount)는 반드시 있어야 한다.
+            if k == "price" || k == "amount" { return Err(DIFF.into()); }
+            continue;
+        };
+        if sats(a) != sats(b) {
+            return Err(DIFF.into());
+        }
+    }
+    Ok(())
+}
+
 /// 글 → 체인. 열어 보고(①②③), 노드에 묻는다(④). 노드가 답을 못 하면 그것도 실패다.
 async fn chain_check(l: &Listing) -> Result<Value, String> {
     let dec = call_rpc("decoderawtransaction", json!([l.swap.clone()]))
@@ -1029,7 +1048,7 @@ pub(crate) fn check_cancel_shape(dec: &Value, l: &Listing, to: &str, change_to: 
 /// 서명까지 본다. 어느 쪽이든 체인 확인을 다시 한다 — 화면이 넘긴 숫자를 믿지 않는다.
 /// broadcast=false 는 미리보기(보내지 않음), true 는 사람이 누른 단추에서만.
 #[tauri::command]
-pub async fn swap_take_listing(listing: Value, broadcast: bool, passphrase: Option<String>) -> Result<Value, String> {
+pub async fn swap_take_listing(listing: Value, broadcast: bool, passphrase: Option<String>, expect: Option<Value>) -> Result<Value, String> {
     let l = if listing.get("tags").is_some() {
         if !crate::relay::verify(&listing) {
             return Err("글의 서명이 맞지 않습니다. 사지 마세요.".into());
@@ -1046,6 +1065,13 @@ pub async fn swap_take_listing(listing: Value, broadcast: bool, passphrase: Opti
         return Err("내가 올린 물건입니다. 내리려면 「판매 내리기」를 눌러 주세요.".into());
     }
     let info = chain_check(&l).await?;
+    // 11-10 점검 R3: 「정말 사기」는 미리 본 거래를 새로 만든다 — 그래서 **미리 보여 준 값과 지금 값이 같을 때만** 보낸다.
+    if broadcast {
+        let Some(e) = expect.as_ref() else {
+            return Err("미리 본 값이 없어 보내지 않았어요. 다시 「사기」를 눌러 확인해 주세요.".into());
+        };
+        same_as_previewed(e, &info)?;
+    }
     let take = crate::swap::swap_take(l.swap.clone(), broadcast, passphrase, None).await?;
     Ok(json!({
         "listing": view(&l, None, Some(Ok(()))),
@@ -1352,6 +1378,21 @@ mod tests {
         let t = b.find("swap::swap_take(").expect("swap_take 를 불러야 한다");
         assert!(c < t, "체인 확인이 사기보다 먼저여야 한다");
         assert!(b.contains("swap_take(l.swap.clone(), broadcast, passphrase, None)"), "방송 여부는 부른 사람이 정한다");
+    }
+
+    /// 11-10: 미리 본 값과 다르면 보내지 않는다.
+    #[test]
+    fn 미리_본_값과_다르면_안_보낸다() {
+        let info = json!({ "asset": "CAT", "amount": 1.0, "price": 10.0, "fee": 0.1, "total": 10.1 });
+        assert!(same_as_previewed(&info.clone(), &info).is_ok());
+        let mut e = info.clone(); e["price"] = json!(10.00000001);
+        assert!(same_as_previewed(&e, &info).is_err(), "값 1사토시 차이도 막는다");
+        let mut e = info.clone(); e["asset"] = json!("DOG");
+        assert!(same_as_previewed(&e, &info).is_err());
+        let e = json!({ "asset": "CAT", "amount": 1.0 });
+        assert!(same_as_previewed(&e, &info).is_err(), "값이 없으면 막는다");
+        let b = body_of("pub async fn swap_take_listing");
+        assert!(b.find("same_as_previewed(").unwrap() < b.find("swap::swap_take(").unwrap(), "비교가 보내기보다 먼저");
     }
 
     /// 둘러보기·내 목록·내 글은 서명·방송을 하지 않는다.

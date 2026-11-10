@@ -576,16 +576,54 @@ pub(crate) async fn query_filters(filters: Vec<Value>) -> Result<(Vec<Value>, us
     Ok((out, reached))
 }
 
+/// 바깥 기본 릴레이 하나가 답한 뒤, 나머지를 더 기다리는 시간.
+///
+/// 11-10 「레이븐볼트가 빠른가?」: 여태 **가장 느린 릴레이까지** 기다렸다(한 곳이 막히면 매번 7초).
+/// 바깥 릴레이는 같은 글을 서로 나눠 가지므로, 한 곳이 답하면 나머지는 잠깐만 더 기다리고 있는 것만 쓴다.
+const GRACE_AFTER_FIRST: std::time::Duration = std::time::Duration::from_millis(1500);
+const LATE: &str = "늦어서 기다리지 않았습니다";
+
 /// 기본 릴레이(+이 컴퓨터) 와 릴레이 나누기 이웃·더한 곳을 **한꺼번에** 묻는다.
 /// 이웃은 5초 제한이라(relay_share::read_extra) 기본 릴레이(최대 7초)보다 늦게 붙잡지 않는다.
+/// **바깥** 기본 릴레이(0번 = 이 컴퓨터 릴레이는 빼고) 하나가 답하면 그때부터 GRACE_AFTER_FIRST 만 더 기다린다 —
+/// 이 컴퓨터 릴레이는 곧바로 (거의 빈) 답을 주므로 그걸 신호로 삼으면 바깥 글을 놓친다.
 async fn read_split(req: &str, sub: &str) -> (Vec<Result<Vec<Value>, String>>, Vec<Result<Vec<Value>, String>>) {
-    use futures_util::future::join_all;
+    use futures_util::future::FutureExt;
+    use futures_util::stream::{FuturesUnordered, StreamExt};
     let base = targets();
     let extra = crate::relay_share::extra_relays();
-    tokio::join!(
-        join_all(base.iter().map(|u| read_one(u, req, sub))),
-        join_all(extra.iter().map(|u| crate::relay_share::read_extra(u, req, sub))),
-    )
+    let n_base = base.len();
+    let mut futs = FuturesUnordered::new();
+    for (i, u) in base.iter().enumerate() {
+        futs.push(async move { (i, read_one(u, req, sub).await) }.boxed());
+    }
+    for (j, u) in extra.iter().enumerate() {
+        futs.push(async move { (n_base + j, crate::relay_share::read_extra(u, req, sub).await) }.boxed());
+    }
+    let mut slots: Vec<Option<Result<Vec<Value>, String>>> = (0..n_base + extra.len()).map(|_| None).collect();
+    let mut cutoff: Option<tokio::time::Instant> = None;
+    loop {
+        let next = match cutoff {
+            None => futs.next().await,
+            Some(c) => match tokio::time::timeout_at(c, futs.next()).await {
+                Ok(x) => x,
+                Err(_) => break,
+            },
+        };
+        let Some((i, r)) = next else { break };
+        if cutoff.is_none() && is_outside_base(i, n_base) && r.is_ok() {
+            cutoff = Some(tokio::time::Instant::now() + GRACE_AFTER_FIRST);
+        }
+        slots[i] = Some(r);
+    }
+    let mut all: Vec<Result<Vec<Value>, String>> = slots.into_iter().map(|s| s.unwrap_or_else(|| Err(LATE.into()))).collect();
+    let extra_out = all.split_off(n_base);
+    (all, extra_out)
+}
+
+/// 0번은 이 컴퓨터 릴레이. 시험용 단일 릴레이(regtest)는 한 곳뿐이라 0번도 바깥으로 친다.
+fn is_outside_base(i: usize, n_base: usize) -> bool {
+    i < n_base && (i > 0 || n_base == 1)
 }
 
 async fn read_everywhere(req: &str, sub: &str) -> Vec<Result<Vec<Value>, String>> {
@@ -723,6 +761,16 @@ impl PublishBudget {
 }
 #[cfg(test)]
 mod publish_security_tests {
+    /// 11-10: 이 컴퓨터 릴레이(0번)는 「첫 답」 신호가 아니다 — 바로 빈 답을 줘서 바깥 글을 놓친다.
+    #[test]
+    fn 첫_답_신호는_바깥_릴레이만() {
+        assert!(!super::is_outside_base(0, 5));
+        assert!(super::is_outside_base(1, 5));
+        assert!(!super::is_outside_base(5, 5), "이웃 릴레이는 신호가 아니다");
+        assert!(super::is_outside_base(0, 1), "시험용 단일 릴레이");
+        assert!(super::GRACE_AFTER_FIRST.as_millis() <= 2000);
+    }
+
     use super::*;
     fn signed() -> Value {
         use sha2::{Digest,Sha256};

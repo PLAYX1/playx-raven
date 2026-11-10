@@ -6,7 +6,7 @@
  *   market_browse({category?, limit?})       → ListingView[]
  *   market_my_listings()                     → ListingView[]
  *   market_cancel_listing({d, passphrase?})  → {txid, eventId}
- *   swap_take_listing({listing, broadcast, passphrase?}) → 미리보기 | {txid}
+ *   swap_take_listing({listing, broadcast, passphrase?, expect}) → 미리보기 | {txid}  (broadcast=true 면 expect=미리보기 check — 다르면 안 보냄)
  *   talk_my_posts({limit})                   → talk_read 와 같은 글 목록
  *
  * 🔴 돈이 나가는 일(사기·내리기)은 **사람이 한 번 더 누를 때만** 보낸다. 미리보기 없이 보내는 길은 없다.
@@ -155,7 +155,7 @@ async function buyFlow(l: ListingView, step: HTMLElement, deps: ListingDeps, onD
   step.innerHTML = `<p class="meta">${copyHtml("거래를 만들어 확인하는 중…")}</p>`;
   let p: any;
   try {
-    p = await deps.invoke<any>("swap_take_listing", { listing: rawOf(l), broadcast: false, passphrase: null });
+    p = await deps.invoke<any>("swap_take_listing", { listing: rawOf(l), broadcast: false, passphrase: null, expect: null });
   } catch (e) {
     step.innerHTML = `<p class="meta danger">${esc(deps.errText(e))}</p>`;
     return;
@@ -197,7 +197,8 @@ async function buyFlow(l: ListingView, step: HTMLElement, deps: ListingDeps, onD
     setCopyText(say, () => t("보내는 중…"));
     try {
       if (!(await deps.ensureUnlocked(t("살 때 내 몫을 서명하려면 지갑을 열어야 합니다.")))) { go.disabled = false; stop.disabled = false; say.textContent = ""; return; }
-      const r = await deps.invoke<any>("swap_take_listing", { listing: rawOf(l), broadcast: true, passphrase: null });
+      // 11-10 점검 R3: 미리 본 값을 같이 넘긴다 — 러스트가 지금 값과 사토시까지 같을 때만 보낸다.
+      const r = await deps.invoke<any>("swap_take_listing", { listing: rawOf(l), broadcast: true, passphrase: null, expect: chk });
       const txid = String(r?.txid ?? "");
       if (!txid) {
         step.innerHTML = `<p class="danger">${copyHtml("보냈는지 확인하지 못했어요. 같은 것을 다시 사지 말고, 지갑의 거래 내역에서 먼저 확인해 주세요.")}</p>`;
@@ -273,6 +274,10 @@ export function mountListingMarket(page: HTMLElement, deps: ListingDeps) {
     });
   };
 
+  // 11-10 「빠른가?」: 칸·종류를 누를 때마다 릴레이+체인 확인을 처음부터 다시 했다(한 번에 수 초).
+  //   같은 칸은 1분 안에는 받아 둔 것을 곧바로 보인다. 사거나 내리면 비운다.
+  const cache = new Map<string, { at: number; r: unknown }>();
+  const FRESH_MS = 60_000;
   async function paint() {
     const my = ++seq;
     paintTabs();
@@ -280,9 +285,16 @@ export function mountListingMarket(page: HTMLElement, deps: ListingDeps) {
     setCopyText(say, () => t("장터 가져오는 중…"));
     let items: ListingView[];
     try {
-      const r = tab === "mine"
-        ? await deps.invoke<unknown>("market_my_listings")
-        : await deps.invoke<unknown>("market_browse", { category: cat || null, limit: 30 });
+      const key = tab === "mine" ? "mine" : `browse:${cat}`;
+      const hit = cache.get(key);
+      let r: unknown;
+      if (hit && Date.now() - hit.at < FRESH_MS) r = hit.r;
+      else {
+        r = tab === "mine"
+          ? await deps.invoke<unknown>("market_my_listings")
+          : await deps.invoke<unknown>("market_browse", { category: cat || null, limit: 30 });
+        cache.set(key, { at: Date.now(), r });
+      }
       items = listOf(r);
     } catch (e) {
       if (my !== seq) return;
@@ -305,19 +317,19 @@ export function mountListingMarket(page: HTMLElement, deps: ListingDeps) {
       b.onclick = () => {
         const k = String(b.dataset.lmBuy);
         const step = list.querySelector<HTMLElement>(`[data-lm-step="${k}"]`);
-        if (step) void buyFlow(items[Number(k)], step, deps, () => { /* 목록은 그대로 둔다 — 거래 번호가 사라지지 않게 */ });
+        if (step) void buyFlow(items[Number(k)], step, deps, () => { cache.clear(); /* 목록은 그대로 둔다 — 거래 번호가 사라지지 않게 */ });
       };
     });
     list.querySelectorAll<HTMLElement>("[data-lm-cancel]").forEach((b) => {
       b.onclick = () => {
         const k = String(b.dataset.lmCancel);
         const step = list.querySelector<HTMLElement>(`[data-lm-step="${k}"]`);
-        if (step) cancelFlow(items[Number(k)], step, deps, () => { b.remove(); });
+        if (step) cancelFlow(items[Number(k)], step, deps, () => { cache.clear(); b.remove(); });
       };
     });
   }
 
-  refresh.onclick = () => void paint();
+  refresh.onclick = () => { cache.clear(); void paint(); }; // 「새로 읽기」는 늘 처음부터
   return {
     enter(open?: "browse" | "mine") { if (open) tab = open; void paint(); },
   };
