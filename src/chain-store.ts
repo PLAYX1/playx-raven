@@ -212,6 +212,28 @@ export function mountChainStore(host: HTMLElement, deps: ChainStoreDeps): { refr
     return box;
   }
 
+  /** ④ 새 본점 컴퓨터: 맡은 매장에서 저장해 온 본점 백업 파일 → 12단어로 연다. */
+  function restoreForm(): HTMLElement {
+    const box = el("details", "cs-part");
+    const go = button(() => t("본점 백업 되살리기"), true);
+    const run = async (): Promise<void> => {
+      say("");
+      try {
+        const p = await deps.pickOpen();
+        if (!p) return;
+        go.disabled = true;
+        const r = await deps.invoke<{ stores: number }>("chain_backup_restore", { path: p });
+        say(tf("본점 기록을 되살렸어요(매장 {0}곳). 매장 컴퓨터마다 이 컴퓨터의 새 본점 주소를 적어 주세요.", r.stores));
+        void refresh();
+      } catch (e) { fail(e, run); }
+      finally { go.disabled = false; }
+    };
+    go.onclick = () => void run();
+    box.append(el("summary", "", () => t("본점 컴퓨터를 바꿨나요?")),
+      el("p", "meta", () => t("12단어로 지갑을 되살린 뒤, 백업을 맡은 매장에서 저장해 온 본점 백업 파일을 골라요. 12단어로만 열려요.")), go);
+    return box;
+  }
+
   async function refresh(): Promise<void> {
     let s: Status;
     try { s = await deps.invoke<Status>("chain_store_status"); } catch (e) { say(deps.errText(e), true); return; }
@@ -223,15 +245,16 @@ export function mountChainStore(host: HTMLElement, deps: ChainStoreDeps): { refr
       v.append(st, el("div", "v-why", () => s.revoked ? t("본점에 연락해 새 매장 열쇠를 받아 주세요.") : tf("매장 증서는 {0}까지 쓸 수 있어요.", day(s.notAfter || 0))));
       const sales = el("div", "cs-part cs-sales");
       body.append(v, sales, joinForm());
-      mountChainSales(sales, "store", { invoke: deps.invoke, errText: deps.errText, fail });
+      mountChainSales(sales, "store", { invoke: deps.invoke, errText: deps.errText, fail, pickSave: deps.pickSave });
       return;
     }
     if (s.role === "owner") {
       // ③ 매장 매출 합계·꺼짐 알림을 맨 위에(매일 보는 것).
       const sales = el("div", "cs-part cs-sales");
       body.append(sales);
-      mountChainSales(sales, "owner", { invoke: deps.invoke, errText: deps.errText, fail });
+      mountChainSales(sales, "owner", { invoke: deps.invoke, errText: deps.errText, fail, pickSave: deps.pickSave });
     }
+    if (s.role === "none") body.append(restoreForm());
     body.append(issueForm());
     if (s.role === "owner") { body.append(list); await paintList(); }
     body.append(joinForm());

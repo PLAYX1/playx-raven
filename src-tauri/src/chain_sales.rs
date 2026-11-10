@@ -41,6 +41,8 @@ pub const MAX_BATCH_LINES: usize = 200;
 pub const MAX_BATCH_BYTES: usize = 512 * 1024;
 pub const MAX_REQUEST_BYTES: usize = 800 * 1024;
 pub const DEFAULT_PORT: u16 = 8790;
+/// 본점 답 상한(④ 되찾기·백업 조각이 실린다).
+pub const MAX_REPLY_BYTES: usize = 1024 * 1024;
 const KDF_SALT: &[u8] = b"ravenvault-chain-sales-v1";
 const AAD_REQ: &str = "ravenvault-chain-sales-v1/req\n";
 const AAD_RES: &str = "ravenvault-chain-sales-v1/res\n";
@@ -86,9 +88,37 @@ impl Drop for DataKey {
     }
 }
 
+/// HKDF-SHA256(salt, ikm, info) → 32바이트 열쇠(④ 백업 열쇠 = 체인 비밀에서).
+pub(crate) fn hkdf_key(salt: &[u8], ikm: &[u8], info: &[u8]) -> Option<DataKey> {
+    let hk = hkdf::Hkdf::<sha2::Sha256>::new(Some(salt), ikm);
+    let mut out = [0u8; 32];
+    let ok = hk.expand(info, &mut out).is_ok();
+    let key = DataKey(out);
+    crate::words::wipe_bytes(&mut out);
+    ok.then_some(key)
+}
+/// 열쇠 ↔ 16진 글자(0600 파일에 둘 때만 — 부르는 쪽이 글자를 지운다).
+pub(crate) fn key_hex(k: &DataKey) -> String {
+    hex::encode(k.0)
+}
+pub(crate) fn key_from_hex(s: &str) -> Option<DataKey> {
+    let mut raw = hex::decode(s).ok()?;
+    let arr: Option<[u8; 32]> = raw.as_slice().try_into().ok();
+    crate::words::wipe_bytes(&mut raw);
+    arr.map(DataKey)
+}
+
 /// ECDH(내 비밀, 상대 공개키) → HKDF. 매장은 (매장 비밀, 본점 공개키), 본점은 (본점 비밀, 매장 공개키) — 같은 값이 나온다.
 pub fn data_key(my_sk: &[u8; 32], peer_pub: &str, chain: &str, store_key: &str) -> Option<DataKey> {
-    if !is_public_key(peer_pub) || !is_public_key(chain) || !is_public_key(store_key) {
+    if !is_public_key(chain) || !is_public_key(store_key) {
+        return None;
+    }
+    derive_key(KDF_SALT, my_sk, peer_pub, format!("{chain}\n{store_key}").as_bytes())
+}
+
+/// secp256k1 ECDH(내 비밀, 상대 공개키) → HKDF-SHA256(salt, info). 쓰임마다 salt 를 다르게(③ 매출 · ④ 백업).
+fn derive_key(salt: &[u8], my_sk: &[u8; 32], peer_pub: &str, info: &[u8]) -> Option<DataKey> {
+    if !is_public_key(peer_pub) {
         return None;
     }
     let pk = secp256k1::PublicKey::from_slice(&hex::decode(peer_pub).ok()?).ok()?;
@@ -96,16 +126,17 @@ pub fn data_key(my_sk: &[u8; 32], peer_pub: &str, chain: &str, store_key: &str) 
     let shared = secp256k1::ecdh::SharedSecret::new(&pk, &sk);
     sk.non_secure_erase();
     let mut ikm = shared.secret_bytes();
-    let hk = hkdf::Hkdf::<sha2::Sha256>::new(Some(KDF_SALT), &ikm);
+    let hk = hkdf::Hkdf::<sha2::Sha256>::new(Some(salt), &ikm);
     crate::words::wipe_bytes(&mut ikm);
     let mut out = [0u8; 32];
-    let ok = hk.expand(format!("{chain}\n{store_key}").as_bytes(), &mut out).is_ok();
+    let ok = hk.expand(info, &mut out).is_ok();
     let key = DataKey(out);
     crate::words::wipe_bytes(&mut out);
     ok.then_some(key)
 }
 
-fn seal(key: &DataKey, aad: &[u8], plain: &[u8]) -> Option<String> {
+/// 봉함(바이트): nonce 24 + 암호문.
+pub(crate) fn seal_raw(key: &DataKey, aad: &[u8], plain: &[u8]) -> Option<Vec<u8>> {
     use rand::RngCore;
     let mut nonce = [0u8; 24];
     rand::rngs::OsRng.fill_bytes(&mut nonce);
@@ -113,15 +144,22 @@ fn seal(key: &DataKey, aad: &[u8], plain: &[u8]) -> Option<String> {
     let mut all = Vec::with_capacity(24 + ct.len());
     all.extend_from_slice(&nonce);
     all.extend_from_slice(&ct);
-    Some(URL_SAFE_NO_PAD.encode(all))
+    Some(all)
 }
 
-fn open(key: &DataKey, aad: &[u8], text: &str) -> Option<Vec<u8>> {
-    let raw = URL_SAFE_NO_PAD.decode(text).ok()?;
+pub(crate) fn open_raw(key: &DataKey, aad: &[u8], raw: &[u8]) -> Option<Vec<u8>> {
     if raw.len() < 24 + 16 {
         return None;
     }
     XChaCha20Poly1305::new((&key.0).into()).decrypt(XNonce::from_slice(&raw[..24]), Payload { msg: &raw[24..], aad }).ok()
+}
+
+fn seal(key: &DataKey, aad: &[u8], plain: &[u8]) -> Option<String> {
+    seal_raw(key, aad, plain).map(|b| URL_SAFE_NO_PAD.encode(b))
+}
+
+fn open(key: &DataKey, aad: &[u8], text: &str) -> Option<Vec<u8>> {
+    open_raw(key, aad, &URL_SAFE_NO_PAD.decode(text).ok()?)
 }
 
 const HEADER_KEYS: [&str; 9] = ["v", "chain", "store", "serial", "logId", "from", "count", "sentAt", "nonce"];
@@ -256,6 +294,13 @@ const OS_LOCK_WAIT_MS: u64 = 2_000;
 const OS_LOCK_WAIT_MS: u64 = 50;
 fn receive_os_lock(dir: &Path) -> Option<std::fs::File> {
     crate::pos_pay::os_lock_wait(&sales_dir(dir).join(".lock"), OS_LOCK_WAIT_MS)
+}
+
+/// 받기와 겹치지 않게(같은 프로그램·다른 프로그램 모두) `f` 를 돌린다 — ④ 백업 묶기가 반쯤 쓴 줄을 담지 않게.
+pub(crate) fn with_receive_lock<R>(dir: &Path, f: impl FnOnce() -> R) -> Option<R> {
+    let _g = RECEIVE.lock().unwrap_or_else(|e| e.into_inner());
+    let _os = receive_os_lock(dir)?;
+    Some(f())
 }
 
 /// 1분 창 버킷(열쇠 → (창 시작, 횟수)). 열쇠 수는 상한이 있다 — 넘치면 낯선 열쇠는 「overflow」 한 칸을 같이 쓴다.
@@ -494,8 +539,10 @@ pub fn receive_in(dir: &Path, body: &[u8], now: i64, client: &str) -> (u16, Valu
     if bucket_hit(&POST, &format!("{}|{}", dir.display(), c.serial), now) > POST_PER_MIN {
         return deny(429, "rate");
     }
-    let lines: Vec<Value> = match serde_json::from_slice::<Value>(&plain) {
-        Ok(Value::Array(a)) if a.len() as u64 == count && (count == 0 || a.first().and_then(|l| l.get("seq")).and_then(Value::as_u64) == Some(from)) => a,
+    // 봉함 안 = 줄 배열(③ 보내기) 또는 {op:…}(④ 되찾기·백업 조각 · ⑤ 이웃 — 줄 없이 count 0).
+    let (lines, op): (Vec<Value>, Option<Map<String, Value>>) = match serde_json::from_slice::<Value>(&plain) {
+        Ok(Value::Array(a)) if a.len() as u64 == count && (count == 0 || a.first().and_then(|l| l.get("seq")).and_then(Value::as_u64) == Some(from)) => (a, None),
+        Ok(Value::Object(o)) if count == 0 && o.get("op").and_then(Value::as_str).is_some() => (Vec::new(), Some(o)),
         _ => return deny(400, "shape"),
     };
 
@@ -516,14 +563,16 @@ pub fn receive_in(dir: &Path, body: &[u8], now: i64, client: &str) -> (u16, Valu
         log_reject(dir, Some(c.store as u64), Some(c.serial), "too-many-logs", now);
         return deny(409, "too-many-logs");
     }
+    // 다음 번호 = 받은 마지막 줄 다음(`resume` 줄이면 건너뛴 번호 뒤 · pos_pay::next_after).
+    let last_ack = entry.as_ref().and_then(|e| e["ack"].as_u64());
     let (next, prev) = match &entry {
-        Some(e) => (e["ack"].as_u64().map_or(0, |a| a + 1), e["hash"].as_str().unwrap_or(ZERO).to_string()),
+        Some(e) => (e["next"].as_u64().or(last_ack.map(|a| a + 1)).unwrap_or(0), e["hash"].as_str().unwrap_or(ZERO).to_string()),
         None => (0, ZERO.to_string()),
     };
     let mut warn: Option<(u64, String)> = None;
     // 이미 받은 줄은 건너뛴다(다시 보내도 한 번만). 받은 마지막 줄이 다르게 오면 고친 흔적.
-    if next > 0 {
-        if let Some(l) = lines.iter().find(|l| l.get("seq").and_then(Value::as_u64) == Some(next - 1)) {
+    if let Some(a) = last_ack {
+        if let Some(l) = lines.iter().find(|l| l.get("seq").and_then(Value::as_u64) == Some(a)) {
             if record_hash(l).as_deref() != Some(prev.as_str()) {
                 warn = Some((next - 1, "prev".into()));
             }
@@ -593,7 +642,7 @@ pub fn receive_in(dir: &Path, body: &[u8], now: i64, client: &str) -> (u16, Valu
         if !st["logs"].is_object() {
             st["logs"] = json!({});
         }
-        st["logs"][log_id] = json!({ "ack": ack, "hash": record_hash(last), "month": month, "key": c.store_key });
+        st["logs"][log_id] = json!({ "ack": ack, "next": crate::pos_pay::next_after(last), "hash": record_hash(last), "month": month, "key": c.store_key, "at": now });
     }
     if let Some((s, why)) = &warn {
         st["warn"] = json!({ "logId": log_id, "at": s, "why": why, "when": now });
@@ -611,12 +660,63 @@ pub fn receive_in(dir: &Path, body: &[u8], now: i64, client: &str) -> (u16, Valu
     if write_json(&sdir.join("state.json"), &st).is_err() {
         return deny(500, "save");
     }
-    let inner = json!({ "logId": log_id, "ack": ack, "warn": warn.as_ref().map(|w| json!({ "at": w.0, "why": w.1 })), "revocations": list });
+    let mut inner = json!({ "logId": log_id, "ack": ack, "warn": warn.as_ref().map(|w| json!({ "at": w.0, "why": w.1 })), "revocations": list });
+    // ④ 맡는 매장에게만: 본점 백업 요약(해시·크기·때). 다르면 매장이 조각을 달라고 한다.
+    if let Some(offer) = crate::chain_backup::offer_for(dir, c.store) {
+        inner["backup"] = offer;
+    }
+    if let Some(o) = op {
+        inner["op"] = handle_op(dir, c.store, &o, now);
+    }
     let sealed = seal(&key, &aad_of(AAD_RES, &json!(nonce)), inner.to_string().as_bytes());
     match sealed {
         Some(b) => (200, json!({ "v": 1, "box": b })),
         None => deny(500, "seal"),
     }
+}
+
+/// 되찾기 한 번에 돌려주는 줄 상한.
+pub const PULL_LINES: usize = 2000;
+const PULL_BYTES: usize = 512 * 1024;
+
+/// 본점: 봉함이 열린(=진짜 그 매장) 요청의 일. 받기 잠금 안에서 부른다.
+fn handle_op(dir: &Path, store: u32, o: &Map<String, Value>, now: i64) -> Value {
+    match o.get("op").and_then(Value::as_str) {
+        Some("pull") => pull_reply(dir, store, o.get("logId").and_then(Value::as_str), o.get("from").and_then(Value::as_u64).unwrap_or(0)),
+        Some("backup") => crate::chain_backup::chunk_reply(dir, store, o.get("offset").and_then(Value::as_u64).unwrap_or(0), now),
+        _ => json!({ "none": true }),
+    }
+}
+
+/// ④ 매장 PC 를 바꿨을 때: 본점이 받아 둔 그 매장의 로그(가장 최근에 받은 logId) 줄을 `from` 번부터.
+fn pull_reply(dir: &Path, store: u32, want: Option<&str>, from: u64) -> Value {
+    let st = load_state(dir, store);
+    let logs = st.get("logs").and_then(Value::as_object).cloned().unwrap_or_default();
+    let pick = match want.filter(|w| logs.contains_key(*w)) {
+        Some(w) => Some(w.to_string()),
+        None => logs.iter().max_by_key(|(_, e)| (e.get("at").and_then(Value::as_i64).unwrap_or(0), e.get("ack").and_then(Value::as_u64).unwrap_or(0)))
+            .map(|(k, _)| k.clone()),
+    };
+    let Some(log_id) = pick.filter(|l| is_hex(l, 32)) else { return json!({ "none": true }) };
+    let ack = logs.get(&log_id).and_then(|e| e.get("ack")).and_then(Value::as_u64);
+    let mut out = Vec::new();
+    let mut bytes = 0usize;
+    let mut more = false;
+    'files: for (_, f) in month_files(&store_dir(dir, store).join(&log_id)) {
+        for l in std::fs::read_to_string(&f).unwrap_or_default().lines() {
+            let Ok(v) = serde_json::from_str::<Value>(l) else { continue };
+            if v.get("seq").and_then(Value::as_u64).is_none_or(|s| s < from || ack.is_none_or(|a| s > a)) {
+                continue;
+            }
+            if out.len() >= PULL_LINES || bytes + l.len() > PULL_BYTES {
+                more = true;
+                break 'files;
+            }
+            bytes += l.len() + 1;
+            out.push(v);
+        }
+    }
+    json!({ "logId": log_id, "ack": ack, "lines": out, "more": more })
 }
 
 /// 서버 처리기가 부른다(본점 PC 의 chain 폴더). `client` = 터널이면 cf-connecting-ip, 아니면 "lan".
@@ -904,12 +1004,10 @@ const NO_LOG: &str = "00000000000000000000000000000000";
 /// 보낼 것이 있으면 묶음을 만든다(본점이 받았다고 한 번호 다음부터, 최대 200줄·512KiB).
 /// 보낼 줄이 없고 `heartbeat` 면 빈 묶음(살아 있다는 신호)을 만든다.
 pub fn prepare_in(chain_dir: &Path, root: &Path, now: i64, heartbeat: bool) -> Result<Option<Outgoing>, &'static str> {
-    let me = cs::store_self_in(chain_dir).ok_or(ERR_NOT_STORE)?;
-    let cert = cs::store_cert_in(chain_dir).ok_or(ERR_NOT_STORE)?;
-    let serial = cert.get("serial").and_then(Value::as_u64).ok_or(ERR_NOT_STORE)?;
+    cs::store_self_in(chain_dir).ok_or(ERR_NOT_STORE)?;
     let (_, log_id, lines) = crate::pos_pay::log_lines_in(root, chain_dir);
     let log_id = log_id.filter(|l| is_hex(l, 32) && l != NO_LOG).unwrap_or_else(|| NO_LOG.to_string());
-    let mut ps = push_state(chain_dir);
+    let ps = push_state(chain_dir);
     let from = if ps.get("logId").and_then(Value::as_str) == Some(log_id.as_str()) {
         ps.get("ack").and_then(Value::as_u64).map_or(0, |a| a + 1)
     } else {
@@ -931,6 +1029,16 @@ pub fn prepare_in(chain_dir: &Path, root: &Path, now: i64, heartbeat: bool) -> R
         None if heartbeat => from,
         None => return Ok(None),
     };
+    let plain = serde_json::to_vec(&batch).map_err(|_| ERR_KEY)?;
+    outgoing(chain_dir, &log_id, first, batch.len(), &plain, local_last, now).map(Some)
+}
+
+/// 봉해서 보낼 묶음 하나(머리 + 증서 + 봉함). sentAt 은 여기서 늘린다.
+fn outgoing(chain_dir: &Path, log_id: &str, first: u64, count: usize, plain: &[u8], local_last: u64, now: i64) -> Result<Outgoing, &'static str> {
+    let me = cs::store_self_in(chain_dir).ok_or(ERR_NOT_STORE)?;
+    let cert = cs::store_cert_in(chain_dir).ok_or(ERR_NOT_STORE)?;
+    let serial = cert.get("serial").and_then(Value::as_u64).ok_or(ERR_NOT_STORE)?;
+    let mut ps = push_state(chain_dir);
     let key = cs::with_store_secret_in(chain_dir, |sk, me| data_key(sk, &me.chain, &me.chain, &me.store_key)).map_err(|_| ERR_KEY)?.ok_or(ERR_KEY)?;
     let nonce = hex::encode(rand::random::<[u8; 16]>());
     // sentAt 은 늘기만 한다(본점이 되풀이를 막는 기준) — 같은 밀리초에 두 묶음을 보내도 겹치지 않게.
@@ -943,14 +1051,20 @@ pub fn prepare_in(chain_dir: &Path, root: &Path, now: i64, heartbeat: bool) -> R
     ps["lastSentAt"] = json!(sent_at);
     write_json(&push_file(chain_dir), &ps).map_err(|_| ERR_SAVE)?;
     let header = json!({ "v": 1, "chain": me.chain, "store": me.store, "serial": serial, "logId": log_id, "from": first,
-        "count": batch.len(), "sentAt": sent_at, "nonce": nonce });
-    let plain = serde_json::to_vec(&batch).map_err(|_| ERR_KEY)?;
-    let sealed = seal(&key, &aad_of(AAD_REQ, &header), &plain).ok_or(ERR_KEY)?;
+        "count": count, "sentAt": sent_at, "nonce": nonce });
+    let sealed = seal(&key, &aad_of(AAD_REQ, &header), plain).ok_or(ERR_KEY)?;
     let mut body = header;
     body["cert"] = cert;
     body["box"] = json!(sealed);
     let body = serde_json::to_vec(&body).map_err(|_| ERR_KEY)?;
-    Ok(Some(Outgoing { body, nonce, log_id, local_last, key }))
+    Ok(Outgoing { body, nonce, log_id: log_id.to_string(), local_last, key })
+}
+
+/// 줄 없이 일 하나를 부탁하는 묶음(④ 되찾기·백업 조각 · ⑤ 이웃). `log_id` 는 없으면 NO_LOG.
+pub fn prepare_op_in(chain_dir: &Path, log_id: Option<&str>, op: &Value, now: i64) -> Result<Outgoing, &'static str> {
+    let log_id = log_id.filter(|l| is_hex(l, 32)).unwrap_or(NO_LOG);
+    let plain = serde_json::to_vec(op).map_err(|_| ERR_KEY)?;
+    outgoing(chain_dir, log_id, 0, 0, &plain, 0, now)
 }
 
 /// 보낸 결과(무엇을 기록했는지). `progressed` = 본점 ack 가 앞으로 갔다.
@@ -973,8 +1087,8 @@ fn note_try(chain_dir: &Path, now: i64, f: impl FnOnce(&mut Value)) {
     let _ = write_json(&push_file(chain_dir), &ps);
 }
 
-/// 답을 받아 반영한다. 봉함을 열 수 있는 답(본점만 만들 수 있다)일 때만 ack 를 믿는다.
-pub fn apply_in(chain_dir: &Path, out: &Outgoing, status: Option<u16>, resp: &[u8], now: i64) -> Sent {
+/// 답을 연다. 봉함을 열 수 있는 답(본점만 만들 수 있다)만 믿는다. 거절·실패면 push.json 에 적고 `Err(Sent)`.
+fn open_reply(chain_dir: &Path, out: &Outgoing, status: Option<u16>, resp: &[u8], now: i64) -> Result<Value, Sent> {
     let fail = |code: &'static str| {
         note_try(chain_dir, now, |ps| {
             ps["lastErr"] = json!(code);
@@ -982,7 +1096,7 @@ pub fn apply_in(chain_dir: &Path, out: &Outgoing, status: Option<u16>, resp: &[u
         });
         Sent::Failed(code)
     };
-    let Some(status) = status else { return fail("unreachable") };
+    let Some(status) = status else { return Err(fail("unreachable")) };
     let v: Value = serde_json::from_slice(resp).unwrap_or(Value::Null);
     if status != 200 {
         let why = v.get("reason").and_then(Value::as_str).and_then(|r| REFUSALS.iter().find(|x| **x == r)).copied().unwrap_or("refused");
@@ -990,17 +1104,35 @@ pub fn apply_in(chain_dir: &Path, out: &Outgoing, status: Option<u16>, resp: &[u
             ps["lastErr"] = json!(format!("refused:{why}"));
             ps["fails"] = json!(ps.get("fails").and_then(Value::as_u64).unwrap_or(0) + 1);
         });
-        return Sent::Refused(why.into());
+        return Err(Sent::Refused(why.into()));
     }
     let inner = v.get("box").and_then(Value::as_str).and_then(|b| open(&out.key, &aad_of(AAD_RES, &json!(out.nonce)), b))
         .and_then(|p| serde_json::from_slice::<Value>(&p).ok());
-    let Some(inner) = inner else { return fail("bad-reply") };
+    let Some(inner) = inner else { return Err(fail("bad-reply")) };
     if inner.get("logId").and_then(Value::as_str) != Some(out.log_id.as_str()) {
-        return fail("bad-reply");
+        return Err(fail("bad-reply"));
     }
+    // 본점 백업 요약(맡는 매장만 받는다) — 다음 조각 받기가 본다. 끊기 목록은 서명·seq 후퇴 금지를 넘을 때만.
+    note_try(chain_dir, now, |ps| ps["backupOffer"] = inner.get("backup").cloned().unwrap_or(Value::Null));
+    if let (Some(rev), Some(me)) = (inner.get("revocations").filter(|r| r.is_object()), cs::store_self_in(chain_dir)) {
+        let _ = cs::accept_list_in(chain_dir, &me.chain, rev);
+    }
+    Ok(inner)
+}
+
+/// 답을 받아 반영한다. 봉함을 열 수 있는 답(본점만 만들 수 있다)일 때만 ack 를 믿는다.
+pub fn apply_in(chain_dir: &Path, out: &Outgoing, status: Option<u16>, resp: &[u8], now: i64) -> Sent {
+    let inner = match open_reply(chain_dir, out, status, resp, now) {
+        Ok(i) => i,
+        Err(s) => return s,
+    };
     let ack = inner.get("ack").and_then(Value::as_u64);
     if ack.is_some_and(|a| a > out.local_last) {
-        return fail("bad-reply");
+        note_try(chain_dir, now, |ps| {
+            ps["lastErr"] = json!("bad-reply");
+            ps["fails"] = json!(ps.get("fails").and_then(Value::as_u64).unwrap_or(0) + 1);
+        });
+        return Sent::Failed("bad-reply");
     }
     let warn = inner.pointer("/warn/why").and_then(Value::as_str).map(String::from);
     let ps = push_state(chain_dir);
@@ -1018,12 +1150,24 @@ pub fn apply_in(chain_dir: &Path, out: &Outgoing, status: Option<u16>, resp: &[u
         ps["lastErr"] = Value::Null;
         ps["warn"] = json!(warn);
     });
-    // 끊기 목록: 본점 서명이 맞고 seq 가 뒤로 가지 않을 때만 둔다(lan_cert accept 규칙).
-    if let (Some(rev), Some(me)) = (inner.get("revocations").filter(|r| r.is_object()), cs::store_self_in(chain_dir)) {
-        let _ = cs::accept_list_in(chain_dir, &me.chain, rev);
-    }
     Sent::Acked { ack, progressed, warn }
 }
+
+/// 일 하나의 답(봉함 안 `op`). 거절·실패면 Err.
+pub fn apply_op_in(chain_dir: &Path, out: &Outgoing, status: Option<u16>, resp: &[u8], now: i64) -> Result<Value, Sent> {
+    let inner = open_reply(chain_dir, out, status, resp, now)?;
+    Ok(inner.get("op").cloned().unwrap_or_else(|| json!({ "none": true })))
+}
+
+/// ④ 맡는 매장: 본점 요약이 내 것과 다르면 다음에 달라고 할 조각. 없으면 None.
+pub fn next_backup_op(chain_dir: &Path) -> Option<Value> {
+    let offer = push_state(chain_dir).get("backupOffer").cloned().filter(Value::is_object)?;
+    let offset = crate::chain_backup::want_offset(chain_dir, &offer)?;
+    Some(json!({ "op": "backup", "offset": offset }))
+}
+
+/// 한 번 보낼 때 받는 백업 조각 수 상한(384KiB × 16 ≈ 6MiB / 10분).
+pub const BACKUP_CHUNKS_PER_PUSH: usize = 16;
 
 /// 시험용 동기 운전기(네트워크 없이 `send` 가 본점 처리기를 바로 부른다).
 #[cfg(test)]
@@ -1047,10 +1191,136 @@ async fn post(url: &str, body: Vec<u8>) -> Option<(u16, Vec<u8>)> {
     let r = client.post(format!("{url}{SALES_PATH}")).header("content-type", "application/json").body(body).send().await.ok()?;
     let status = r.status().as_u16();
     let bytes = r.bytes().await.ok()?;
-    if bytes.len() > 64 * 1024 {
+    if bytes.len() > MAX_REPLY_BYTES {
         return None;
     }
     Some((status, bytes.to_vec()))
+}
+
+async fn post_owned(url: String, body: Vec<u8>) -> Option<(u16, Vec<u8>)> {
+    post(&url, body).await
+}
+
+#[cfg(not(test))]
+const RATE_WAIT: std::time::Duration = std::time::Duration::from_secs(20);
+#[cfg(test)]
+const RATE_WAIT: std::time::Duration = std::time::Duration::from_millis(1);
+const MAX_PULL_ROUNDS: usize = 500;
+
+fn sent_code(s: &Sent) -> String {
+    match s {
+        Sent::Refused(w) => format!("refused:{w}"),
+        Sent::Failed(w) => w.to_string(),
+        Sent::Acked { .. } => "bad-reply".into(),
+    }
+}
+
+/// ④ 맡는 매장: 본점 요약이 내 것과 다르면 조각을 받아 모은다(한 번에 최대 16조각). → 받은 조각 수.
+pub async fn fetch_backup_with<F, Fut>(chain_dir: &Path, mut send: F, now: impl Fn() -> i64) -> usize
+where
+    F: FnMut(Vec<u8>) -> Fut,
+    Fut: std::future::Future<Output = Option<(u16, Vec<u8>)>>,
+{
+    let mut got = 0;
+    for _ in 0..BACKUP_CHUNKS_PER_PUSH {
+        let Some(op) = next_backup_op(chain_dir) else { break };
+        let Ok(o) = prepare_op_in(chain_dir, None, &op, now()) else { break };
+        let r = send(o.body.clone()).await;
+        let reply = match apply_op_in(chain_dir, &o, r.as_ref().map(|r| r.0), r.as_ref().map_or(&[][..], |r| &r.1), now()) {
+            Ok(v) => v,
+            Err(_) => break,
+        };
+        if reply.get("none").is_some() {
+            note_try(chain_dir, now(), |ps| ps["backupOffer"] = Value::Null);
+            break;
+        }
+        match crate::chain_backup::take_chunk_in(chain_dir, &reply, now()) {
+            Ok(done) => {
+                got += 1;
+                if done {
+                    break;
+                }
+            }
+            Err(_) => break,
+        }
+    }
+    got
+}
+
+/// ④ 컴퓨터를 바꾼 매장: 본점이 받아 둔 이 매장의 로그를 되찾아 깔고, 번호를 건너뛰는 `resume` 줄을 잇는다.
+/// → Ok({ok:true,…}) · 닿지 않음·거절은 Ok({ok:false, why}) · 되살리기 판정 실패는 Err(한국어).
+pub async fn pull_log_with<F, Fut>(chain_dir: &Path, root: &Path, mut send: F, now: impl Fn() -> i64) -> Result<Value, String>
+where
+    F: FnMut(Vec<u8>) -> Fut,
+    Fut: std::future::Future<Output = Option<(u16, Vec<u8>)>>,
+{
+    cs::store_self_in(chain_dir).ok_or(ERR_NOT_STORE)?;
+    if !crate::pos_pay::log_lines_in(root, chain_dir).2.is_empty() {
+        return Err(crate::pos_pay::ERR_RESTORE_HAVE.into());
+    }
+    let mut log_id: Option<String> = None;
+    let mut from = 0u64;
+    let mut all: Vec<Value> = Vec::new();
+    let mut ack: Option<u64> = None;
+    let mut rate_waits = 0;
+    let mut finished = false;
+    for _ in 0..MAX_PULL_ROUNDS {
+        let op = json!({ "op": "pull", "from": from, "logId": log_id });
+        let o = prepare_op_in(chain_dir, log_id.as_deref(), &op, now())?;
+        let r = send(o.body.clone()).await;
+        let reply = match apply_op_in(chain_dir, &o, r.as_ref().map(|r| r.0), r.as_ref().map_or(&[][..], |r| &r.1), now()) {
+            Ok(v) => v,
+            Err(Sent::Refused(w)) if w == "rate" && rate_waits < 30 => {
+                rate_waits += 1;
+                tokio::time::sleep(RATE_WAIT).await;
+                continue;
+            }
+            Err(s) => return Ok(json!({ "ok": false, "why": sent_code(&s) })),
+        };
+        if reply.get("none").is_some() {
+            if all.is_empty() {
+                return Err(crate::pos_pay::ERR_RESTORE_EMPTY.into());
+            }
+            return Err(crate::pos_pay::ERR_RESTORE.into());
+        }
+        let lid = reply.get("logId").and_then(Value::as_str).filter(|l| is_hex(l, 32)).map(String::from);
+        if lid.is_none() || (log_id.is_some() && lid != log_id) {
+            return Err(crate::pos_pay::ERR_RESTORE.into());
+        }
+        log_id = lid;
+        ack = reply.get("ack").and_then(Value::as_u64);
+        let lines = reply.get("lines").and_then(Value::as_array).cloned().unwrap_or_default();
+        let more = reply.get("more").and_then(Value::as_bool) == Some(true);
+        let Some(last) = lines.last() else {
+            if more {
+                return Err(crate::pos_pay::ERR_RESTORE.into());
+            }
+            finished = true;
+            break;
+        };
+        from = crate::pos_pay::next_after(last);
+        all.extend(lines);
+        if !more {
+            finished = true;
+            break;
+        }
+    }
+    if !finished || all.is_empty() {
+        return Err(crate::pos_pay::ERR_RESTORE_EMPTY.into());
+    }
+    // 본점이 받았다고 한 마지막 번호까지 다 왔는가.
+    if all.last().and_then(|l| l.get("seq")).and_then(Value::as_u64) != ack {
+        return Err(crate::pos_pay::ERR_RESTORE.into());
+    }
+    let out = crate::pos_pay::restore_lines_in(root, chain_dir, &all, now())?;
+    // 되찾은 줄은 본점에 이미 있다 — 다시 보내지 않게 ack 를 맞춘다(그 뒤 resume 줄부터 간다).
+    note_try(chain_dir, now(), |ps| {
+        ps["logId"] = json!(log_id);
+        ps["ack"] = json!(ack);
+    });
+    let mut out = out;
+    out["ok"] = json!(true);
+    Ok(out)
 }
 
 static PUSHING: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
@@ -1092,6 +1362,11 @@ pub async fn push_now() -> Value {
             break;
         }
     }
+    // ④ 맡는 매장이면 본점 백업 조각도 받아 둔다(보내기가 된 때만 — 본점이 답을 봉해 준 뒤).
+    if matches!(last, None | Some(Sent::Acked { .. })) {
+        let u = url.clone();
+        let _ = fetch_backup_with(&dir, |b| post_owned(u.clone(), b), now_ms).await;
+    }
     match last {
         None | Some(Sent::Acked { warn: None, .. }) => json!({ "ok": true, "batches": sent }),
         Some(Sent::Acked { warn: Some(w), .. }) => json!({ "ok": false, "why": format!("warn:{w}") }),
@@ -1132,10 +1407,13 @@ fn refuse_locked() -> Result<(), String> {
 pub fn chain_sales_status() -> Value {
     let dir = cs::chain_dir_path();
     if cs::store_self_in(&dir).is_some() {
-        return store_status_in(&dir, &crate::pos_pay::pos_root_path(), now_ms());
+        let mut v = store_status_in(&dir, &crate::pos_pay::pos_root_path(), now_ms());
+        v["held"] = crate::chain_backup::held_status_in(&dir);
+        return v;
     }
     if dir.join("issued.json").exists() {
         let mut v = owner_status_in(&dir);
+        v["backup"] = crate::chain_backup::owner_status_in(&dir);
         let t = crate::tunnel::tunnel_status();
         v["tunnel"] = if t["running"].as_bool() == Some(true) { t["url"].clone() } else { Value::Null };
         v["lan"] = json!(lan_ip().map(|ip| format!("http://{ip}:{DEFAULT_PORT}")));
@@ -1170,6 +1448,23 @@ pub async fn chain_sales_push_now() -> Result<Value, String> {
     Ok(push_now().await)
 }
 
+/// 매장 PC(새 컴퓨터): 본점이 받아 둔 이 매장 기록을 되찾는다. 이 컴퓨터에 결제 기록이 한 줄도 없을 때만.
+#[tauri::command]
+pub async fn chain_sales_pull_log() -> Result<Value, String> {
+    refuse_locked()?;
+    let dir = cs::chain_dir_path();
+    if cs::store_self_in(&dir).is_none() {
+        return Err(ERR_NOT_STORE.into());
+    }
+    let _g = PUSHING.lock().await;
+    let Some(_os) = crate::pos_pay::os_lock(&dir.join("push.lock")) else {
+        return Ok(json!({ "ok": false, "why": "busy" }));
+    };
+    let Some(url) = head_url_in(&dir) else { return Ok(json!({ "ok": false, "why": "no-head" })) };
+    let root = crate::pos_pay::pos_root_path();
+    pull_log_with(&dir, &root, |b| post_owned(url.clone(), b), now_ms).await
+}
+
 /// 본점 합계 — 금액이 보이므로 잠김이면 거절. 구간은 화면이 지역 시각으로 넘긴다(pos_day 와 같음).
 #[tauri::command(async)]
 pub fn chain_sales_totals(day_from: i64, day_to: i64, month_from: i64, month_to: i64) -> Result<Value, String> {
@@ -1190,10 +1485,13 @@ pub async fn chain_sales_prepare() -> Result<Value, String> {
         return Err(ERR_NOT_OWNER.into());
     }
     let missing = missing_keys(&dir);
-    if missing.is_empty() {
+    let need_backup_key = crate::chain_backup::needs_key(&dir);
+    if missing.is_empty() && !need_backup_key {
         return Ok(json!({ "ok": true, "added": 0 }));
     }
     let (mut chain_sk, _) = cs::owner_keys(None, Vec::new()).await?;
+    // ④ 체인 비밀이 손에 있는 김에 백업 열쇠도.
+    let _ = crate::chain_backup::remember_key_in(&dir, &chain_sk);
     let mut added = 0;
     let mut err = None;
     for k in &missing {
@@ -1204,7 +1502,7 @@ pub async fn chain_sales_prepare() -> Result<Value, String> {
     }
     crate::words::wipe_bytes(&mut chain_sk);
     match err {
-        Some(e) if added == 0 => Err(e.into()),
+        Some(e) if added == 0 && !missing.is_empty() => Err(e.into()),
         _ => Ok(json!({ "ok": true, "added": added })),
     }
 }
@@ -1224,7 +1522,11 @@ pub async fn run_loop() {
             }
         } else if dir.join("issued.json").exists() {
             let d2 = dir.clone();
-            let down = tokio::task::spawn_blocking(move || watch_tick_in(&d2, now)).await.unwrap_or_default();
+            let down = tokio::task::spawn_blocking(move || {
+                // ④ 맡는 매장이 정해져 있으면 6시간마다 본점 백업을 다시 묶는다(체인 공개키에게 봉함 — 비밀 없이).
+                crate::chain_backup::build_if_due_in(&d2, now);
+                watch_tick_in(&d2, now)
+            }).await.unwrap_or_default();
             for (n, name) in down {
                 if send_self_dm(&offline_text(n, &name)).await {
                     mark_dm_sent(&dir, n);
@@ -1770,4 +2072,123 @@ mod tests {
         assert_eq!(received(&w.owner, 15).len(), 3, "먼 미래 줄도 읽히는 파일에 있다");
     }
 
+
+    // ── ④ 백업 두 곳 · 매장 기록 되찾기 ──
+
+    fn async_send(owner: &Path, now: i64) -> impl FnMut(Vec<u8>) -> std::future::Ready<Option<(u16, Vec<u8>)>> + '_ {
+        move |b: Vec<u8>| {
+            let (s, v) = receive_in(owner, &b, now, "lan");
+            std::future::ready(Some((s, serde_json::to_vec(&v).unwrap())))
+        }
+    }
+
+    #[tokio::test]
+    async fn head_backup_goes_to_one_neighbor_who_cannot_read_it_and_a_new_head_restores_it() {
+        let (w, base) = world("bk");
+        let (cd1, root1) = add_store(&w, &base, 1, "강남점", "123-45-67890", None, true);
+        let (cd2, root2) = add_store(&w, &base, 2, "역삼점", "123-45-67890", Some("0002"), true);
+        record_in(&root1, &cd1, &pay("cash", 4500, None), &none, NOW).unwrap();
+        record_in(&root2, &cd2, &pay("card", 9900, Some("30512299")), &none, NOW).unwrap();
+        push_with(&cd1, &root1, NOW + 10, &mut send_to(&w.owner, NOW + 10)).unwrap();
+        push_with(&cd2, &root2, NOW + 10, &mut send_to(&w.owner, NOW + 10)).unwrap();
+        // 맡을 매장 = 2번. 끊긴·없는 번호는 안 된다.
+        assert_eq!(crate::chain_backup::set_keeper_in(&w.owner, Some(9)).unwrap_err(), crate::chain_backup::ERR_STORE_NUMBER);
+        crate::chain_backup::set_keeper_in(&w.owner, Some(2)).unwrap();
+        // 백업 열쇠가 없으면 묶지 않는다(12단어 한 번 — 맡기기 명령이 받는다).
+        assert_eq!(crate::chain_backup::build_in(&w.owner, NOW + 20).unwrap_err(), crate::chain_backup::ERR_NEED_KEY);
+        crate::chain_backup::remember_key_in(&w.owner, &w.csk).unwrap();
+        let meta = crate::chain_backup::build_in(&w.owner, NOW + 20).unwrap();
+        assert!(!crate::chain_backup::build_if_due_in(&w.owner, NOW + 30), "6시간 안에는 다시 묶지 않는다");
+
+        // 1번 매장(맡지 않음)에는 요약도 조각도 가지 않는다.
+        push_with(&cd1, &root1, NOW + 40, &mut send_to(&w.owner, NOW + 40)).unwrap();
+        assert!(next_backup_op(&cd1).is_none());
+        let o = prepare_op_in(&cd1, None, &json!({ "op": "backup", "offset": 0 }), NOW + 41).unwrap();
+        let (st, v) = receive_in(&w.owner, &o.body, NOW + 41, "lan");
+        let rep = apply_op_in(&cd1, &o, Some(st), &serde_json::to_vec(&v).unwrap(), NOW + 41).unwrap();
+        assert_eq!(rep, json!({ "none": true }));
+
+        // 2번 매장: 보내기 답에 요약 → 조각을 받아 맡아 둔다.
+        push_with(&cd2, &root2, NOW + 50, &mut send_to(&w.owner, NOW + 50)).unwrap();
+        assert!(fetch_backup_with(&cd2, async_send(&w.owner, NOW + 51), || NOW + 51).await >= 1);
+        let held = crate::chain_backup::held_status_in(&cd2);
+        assert_eq!(held["size"], meta["size"]);
+        assert_eq!(crate::chain_backup::owner_status_in(&w.owner)["delivered"], true);
+        // 같은 것을 다시 받지 않는다.
+        push_with(&cd2, &root2, NOW + 60, &mut send_to(&w.owner, NOW + 60)).unwrap();
+        assert!(next_backup_op(&cd2).is_none());
+
+        // 맡은 매장은 열 수 없다: 평문 조각(매장 이름·사업자 번호·금액·데이터 열쇠)이 보이지 않고, 매장 열쇠로도 안 열린다.
+        let blob = std::fs::read(cd2.join("held").join("head.rvb")).unwrap();
+        for needle in ["강남점", "1234567890", "4500", "storeKey", "chain-backup"] {
+            assert!(!blob.windows(needle.len()).any(|x| x == needle.as_bytes()), "맡은 백업에 {needle} 가 보인다");
+        }
+        let ssk = crate::identity::chain_store_key_from(WORDS, "", 2, 0).unwrap();
+        assert!(crate::chain_backup::open_with_chain(&ssk, &blob).is_err());
+        // 안을 열어 보면(체인 비밀) 데이터 열쇠·매장 비밀은 없다.
+        let plain = String::from_utf8(crate::chain_backup::open_with_chain(&w.csk, &blob).unwrap()).unwrap();
+        assert!(!plain.contains("sales-keys") && !plain.contains("backup-key") && !plain.contains("\"secret\""));
+        let keys_text = std::fs::read_to_string(w.owner.join("sales-keys.json")).unwrap();
+        let some_key = serde_json::from_str::<Value>(&keys_text).unwrap()["keys"].as_object().unwrap().values().next().unwrap().as_str().unwrap().to_string();
+        assert!(!plain.contains(&some_key), "데이터 열쇠가 백업에 들어갔다");
+        let bk: Value = serde_json::from_str(&std::fs::read_to_string(w.owner.join("backup-key.json")).unwrap()).unwrap();
+        assert!(!plain.contains(bk["key"].as_str().unwrap()), "백업 열쇠가 백업에 들어갔다");
+
+        // 새 본점 PC: 맡은 매장이 저장한 파일 → 12단어(체인 비밀)로 되살린다.
+        let text = crate::chain_backup::held_text_in(&cd2).unwrap();
+        let new_head = base.join("newhead");
+        let other = crate::identity::chain_key_from("zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo wrong", "").unwrap();
+        let blob2 = crate::chain_backup::from_text(&text).unwrap();
+        assert!(crate::chain_backup::restore_in(&new_head, &other, &blob2).is_err());
+        assert!(!new_head.join("issued.json").exists(), "틀린 12단어인데 본점이 되었다");
+        let r = crate::chain_backup::restore_in(&new_head, &w.csk, &blob2).unwrap();
+        assert_eq!((r["stores"].as_u64(), r["keys"].as_u64()), (Some(2), Some(2)));
+        assert_eq!(std::fs::read(new_head.join("issued.json")).unwrap(), std::fs::read(w.owner.join("issued.json")).unwrap());
+        assert_eq!(received(&new_head, 1).len(), received(&w.owner, 1).len());
+        // 이미 본점인 컴퓨터에는 덮어쓰지 않는다.
+        assert_eq!(crate::chain_backup::restore_in(&new_head, &w.csk, &blob2).unwrap_err(), crate::chain_backup::ERR_HAVE_HEAD);
+        // 새 본점이 바로 받는다(데이터 열쇠를 다시 만들었다 · 번호는 이어진다).
+        record_in(&root1, &cd1, &pay("cash", 1000, None), &none, NOW + 70).unwrap();
+        let rr = push_with(&cd1, &root1, NOW + 71, &mut send_to(&new_head, NOW + 71)).unwrap();
+        assert!(matches!(rr[0], Sent::Acked { warn: None, .. }), "{rr:?}");
+        assert_eq!(received(&new_head, 1).len(), 3);
+    }
+
+    #[tokio::test]
+    async fn a_replaced_store_pc_gets_its_log_back_and_never_reuses_a_receipt_number() {
+        let (w, base) = world("pull");
+        let (cd, root) = add_store(&w, &base, 5, "선릉점", "123-45-67890", None, true);
+        for i in 0..5 {
+            record_in(&root, &cd, &pay("cash", 1000 + i, None), &none, NOW + i as i64).unwrap();
+        }
+        push_with(&cd, &root, NOW + 10, &mut send_to(&w.owner, NOW + 10)).unwrap();
+        // 옛 컴퓨터가 본점에 못 보낸 영수증(번호 6)이 손님 손에 있다 — 그리고 컴퓨터가 고장 났다.
+        let lost = record_in(&root, &cd, &pay("cash", 7777, None), &none, NOW + 11).unwrap();
+        assert_eq!(lost["seq"], 6);
+        // 새 컴퓨터: 같은 번호로 다시 받은 꾸러미(새 증서) → 합류.
+        let ssk = crate::identity::chain_store_key_from(WORDS, "", 5, 0).unwrap();
+        let r = cs::issue_in(&w.owner, &w.csk, &ssk, 5, "선릉점", &cs::clean_biz("123-45-67890", None).unwrap(), NOW + 20).unwrap();
+        let pc = base.join("store5-new");
+        let (cd2, root2) = (pc.join("chain"), pc.join("pos"));
+        std::fs::create_dir_all(&cd2).unwrap();
+        cs::join_in(&cd2, &r.bundle, &r.install_words, NOW + 20).unwrap();
+        std::fs::write(cd2.join("head.json"), std::fs::read(cd.join("head.json")).unwrap_or_else(|_| b"{}".to_vec())).ok();
+        let out = pull_log_with(&cd2, &root2, async_send(&w.owner, NOW + 30), || NOW + 30).await.unwrap();
+        assert_eq!(out["ok"], true, "{out}");
+        assert_eq!((out["restored"].as_u64(), out["lastSeq"].as_u64(), out["resumeSeq"].as_u64()), (Some(6), Some(5), Some(6)));
+        // 다음 영수증 번호는 건너뛴 뒤 — 손님 손의 6번과 겹치지 않는다.
+        let next = record_in(&root2, &cd2, &pay("card", 5000, Some("11112222")), &none, NOW + 40).unwrap();
+        assert_eq!(next["seq"].as_u64(), Some(7 + crate::pos_pay::RESUME_SKIP));
+        let day = crate::pos_pay::day_in(&root2, &cd2, 0, i64::MAX);
+        assert_eq!((day["count"].as_u64(), day["check"]["ok"].as_bool()), (Some(6), Some(true)), "되찾은 5건 + 새 1건, 사슬 이어짐");
+        // 되찾은 줄은 다시 보내지 않고, resume·새 줄만 본점에 간다 — 본점은 건너뛴 번호를 받아들인다.
+        let rr = push_with(&cd2, &root2, NOW + 50, &mut send_to(&w.owner, NOW + 50)).unwrap();
+        assert_eq!(rr[0], Sent::Acked { ack: Some(7 + crate::pos_pay::RESUME_SKIP), progressed: true, warn: None });
+        assert_eq!(received(&w.owner, 5).len(), 8);
+        // 이미 기록이 있으면 되찾기를 거절한다(덮어쓰지 않는다).
+        assert_eq!(pull_log_with(&cd2, &root2, async_send(&w.owner, NOW + 60), || NOW + 60).await.unwrap_err(), crate::pos_pay::ERR_RESTORE_HAVE);
+        // 본점에 기록이 없는 매장은 「아직 없어요」.
+        let (cd3, root3) = add_store(&w, &base, 6, "삼성점", "123-45-67890", None, true);
+        assert_eq!(pull_log_with(&cd3, &root3, async_send(&w.owner, NOW + 70), || NOW + 70).await.unwrap_err(), crate::pos_pay::ERR_RESTORE_EMPTY);
+    }
 }

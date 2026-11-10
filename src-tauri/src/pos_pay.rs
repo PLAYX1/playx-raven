@@ -28,6 +28,9 @@ pub const METHODS: [&str; 5] = ["card", "cash", "cash_receipt", "rvn", "other"];
 pub const MAX_AMOUNT: i64 = 1_000_000_000;
 const ZERO: &str = "0000000000000000000000000000000000000000000000000000000000000000";
 const MAX_LINE: usize = 8 * 1024;
+/// 되찾은 로그 뒤에 건너뛰는 영수증 번호 수(`resume` 줄). 옛 컴퓨터가 본점에 못 보낸 영수증이 이만큼까지 있었어도 겹치지 않는다.
+pub const RESUME_SKIP: u64 = 10_000;
+const MAX_SKIP: u64 = 1_000_000;
 const HEAD_FILE: &str = "head.json";
 /// 로그 폴더마다 하나 — 이 파일에 운영체제 잠금(flock / LockFileEx)을 쥔 프로그램만 그 로그에 쓴다.
 /// 프로그램이 죽으면 운영체제가 잠금을 풀어 준다(남은 파일은 그냥 빈 파일 — 「오래된 잠금」 판정이 필요 없다).
@@ -48,6 +51,9 @@ pub const ERR_SAVE: &str = "결제 기록을 저장하지 못했어요. 디스�
 pub const ERR_SIGN: &str = "매장 열쇠로 서명하지 못했어요. 본점에 연락해 주세요.";
 pub const ERR_CHAIN_BIZ: &str = "체인 매장은 본점이 정한 사업자 번호를 써요.";
 pub const ERR_LOCKED: &str = crate::storesign::ERR_LOCKED;
+pub const ERR_RESTORE: &str = "본점에서 받은 기록이 이 매장 것이 아니거나 이어지지 않아요. 본점에 연락해 주세요.";
+pub const ERR_RESTORE_EMPTY: &str = "본점에 이 매장의 기록이 아직 없어요.";
+pub const ERR_RESTORE_HAVE: &str = "이 컴퓨터에 이미 이 매장의 결제 기록이 있어요. 되찾기는 새 컴퓨터에서 결제를 적기 전에만 할 수 있어요.";
 pub const ERR_BUSY: &str = "다른 레이븐볼트 창이 이 매장의 결제 기록을 쓰고 있어요. 그 창을 닫은 뒤 다시 해 주세요.";
 
 fn pos_root() -> PathBuf {
@@ -159,6 +165,9 @@ fn shape_ok(o: &Map<String, Value>) -> bool {
             && o.get("amount").and_then(Value::as_i64).is_some_and(|a| (1..=MAX_AMOUNT).contains(&a)),
         "void" => o.get("ref").and_then(Value::as_u64).is_some()
             && o.get("amount").and_then(Value::as_i64).is_some_and(|a| (-MAX_AMOUNT..=-1).contains(&a)),
+        // ④ 컴퓨터를 바꾼 뒤 본점에서 되찾은 로그에 잇는 줄: 뒤의 `skip` 개 번호는 쓰지 않는다(옛 컴퓨터가 본점에
+        // 보내기 전에 손님에게 준 영수증 번호와 겹치지 않게).
+        "resume" => o.get("skip").and_then(Value::as_u64).is_some_and(|k| (1..=MAX_SKIP).contains(&k)),
         _ => false,
     };
     v_ok && seq_ok && at_ok && prev_ok && key_ok && body_ok
@@ -173,6 +182,15 @@ pub struct Check {
     pub broken: Option<(u64, Break)>,
     /// 처음 끊김 앞까지의 줄 수(③ 본점은 이 앞부분만 받아 둔다).
     pub ok_prefix: usize,
+    /// 마지막 줄 다음에 올 번호(`resume` 줄이면 건너뛴 번호 뒤).
+    pub next_seq: u64,
+}
+
+/// 이 줄 다음에 올 번호 — 보통 seq+1, `resume` 줄이면 seq+1+skip.
+pub fn next_after(v: &Value) -> u64 {
+    let seq = v.get("seq").and_then(Value::as_u64).unwrap_or(u64::MAX);
+    let skip = if v.get("kind").and_then(Value::as_str) == Some("resume") { v.get("skip").and_then(Value::as_u64).unwrap_or(0).min(MAX_SKIP) } else { 0 };
+    seq.saturating_add(1).saturating_add(skip)
 }
 
 /// 줄들을 처음부터 본다: 번호 연속 → 앞 줄 해시 → 모양 → (체인 매장 로그면) 매장 열쇠 서명.
@@ -215,7 +233,7 @@ pub fn verify_records_from(lines: &[Value], want_key: Option<&str>, start: Optio
             }
         }
         prev_seq = Some(seq);
-        want_seq = seq.saturating_add(1);
+        want_seq = next_after(v);
         prev_hash = record_hash(v).unwrap_or_default();
         c.records += 1;
         if c.broken.is_none() {
@@ -224,6 +242,7 @@ pub fn verify_records_from(lines: &[Value], want_key: Option<&str>, start: Optio
     }
     c.last_seq = prev_seq;
     c.last_hash = prev_seq.map(|_| prev_hash);
+    c.next_seq = want_seq;
     c
 }
 
@@ -340,7 +359,7 @@ fn load_head(dir: &Path) -> Head {
     let mut h = Head {
         _lock: None,
         log_id: None,
-        next_seq: check.last_seq.map_or(0, |s| s + 1),
+        next_seq: if check.last_seq.is_some() { check.next_seq } else { 0 },
         prev_hash: check.last_hash.clone().unwrap_or_else(|| ZERO.to_string()),
         last_month: files.last().map_or(0, |(m, _)| *m),
         broken: check.broken.clone(),
@@ -380,7 +399,7 @@ fn load_head(dir: &Path) -> Head {
                 h.broken = Some((hseq, Break::Head));
             }
             // 번호는 다시 쓰지 않는다 — 잘린 로그라도 head 다음부터.
-            h.next_seq = h.next_seq.max(hseq + 1);
+            h.next_seq = h.next_seq.max(hseq + 1).max(hd.get("next").and_then(Value::as_u64).unwrap_or(0));
         }
         if h.log_id.is_none() {
             h.log_id = hd.get("logId").and_then(Value::as_str).map(String::from);
@@ -451,11 +470,11 @@ fn append_in(root: &Path, chain_dir: &Path, ctx: &Ctx, h: &mut Head, mut body: M
     // 시계가 뒤로 가도 파일 순서는 뒤로 가지 않는다(읽을 때 파일 이름 순서 = 줄 순서).
     let month = month_of(at).max(h.last_month);
     append_line(&dir, month, line.as_bytes()).map_err(|_| ERR_SAVE.to_string())?;
-    h.next_seq += 1;
+    h.next_seq = next_after(&rec);
     h.prev_hash = hash.clone();
     h.last_month = month;
     let seq = rec["seq"].as_u64().unwrap_or(0);
-    let head = json!({ "v": 1, "seq": seq, "hash": hash, "logId": h.log_id });
+    let head = json!({ "v": 1, "seq": seq, "hash": hash, "logId": h.log_id, "next": h.next_seq });
     // head 저장 실패는 기록을 되돌리지 않는다(줄은 이미 디스크에 있다) — 다음 쓰기에서 다시 맞춘다.
     let _ = crate::server::atomic_write_0600(&dir.join(HEAD_FILE), &serde_json::to_vec(&head).unwrap_or_default());
     Ok(rec)
@@ -631,6 +650,60 @@ pub fn void_in(root: &Path, chain_dir: &Path, seq: u64, reason: Option<&str>, at
         h.voided.insert(seq);
         h.orders.retain(|_, s| *s != seq);
         Ok(rec)
+    })?
+}
+
+/// ④ 컴퓨터를 바꾼 매장: 본점에서 되찾은 이 매장의 로그 줄을 그대로 깔고, 그 뒤에 `resume` 줄 하나(이 컴퓨터의
+/// 매장 열쇠 서명)를 잇는다. 다음 영수증 번호 = 되찾은 마지막 번호 + 1 + `RESUME_SKIP` — 번호를 다시 쓰지 않는다.
+/// 이 컴퓨터에 이미 이 매장 로그가 한 줄이라도 있으면 거절(덮어쓰지 않는다). 줄은 사슬·서명·시작 줄을 다 본다.
+pub fn restore_lines_in(root: &Path, chain_dir: &Path, lines: &[Value], at: i64) -> Result<Value, String> {
+    let ctx = ctx_in(root, chain_dir);
+    let (Some(chain), Some(store)) = (ctx.chain.clone(), ctx.store) else { return Err(ERR_RESTORE.into()) };
+    let check = verify_records(lines, None);
+    let first = lines.first().ok_or(ERR_RESTORE_EMPTY)?;
+    let opens_here = first.get("kind").and_then(Value::as_str) == Some("open")
+        && first.get("chain").and_then(Value::as_str) == Some(chain.as_str())
+        && first.get("store").and_then(Value::as_u64) == Some(store as u64);
+    let same_store = lines.iter().skip(1).all(|l| l.get("kind").and_then(Value::as_str) != Some("open") && l.get("store").and_then(Value::as_u64) == Some(store as u64));
+    if check.broken.is_some() || !opens_here || !same_store {
+        return Err(ERR_RESTORE.into());
+    }
+    let dir = root.join("log").join(&ctx.scope);
+    with_head(&dir, |h| {
+        if h.next_seq > 0 || !month_files(&dir).is_empty() {
+            return Err(ERR_RESTORE_HAVE.to_string());
+        }
+        let mut month = 0u32;
+        let mut groups: Vec<(u32, Vec<u8>)> = Vec::new();
+        for l in lines {
+            month = month.max(month_of(l.get("at").and_then(Value::as_i64).unwrap_or(0)));
+            let text = canonical_string(l).map_err(|_| ERR_SAVE.to_string())?;
+            match groups.last_mut() {
+                Some((m, buf)) if *m == month => {
+                    buf.extend_from_slice(text.as_bytes());
+                    buf.push(b'\n');
+                }
+                _ => groups.push((month, [text.as_bytes(), b"\n"].concat())),
+            }
+        }
+        for (m, buf) in &groups {
+            // append_line 이 줄바꿈을 하나 더 붙이므로 마지막 하나를 뗀다.
+            append_line(&dir, *m, &buf[..buf.len() - 1]).map_err(|_| ERR_SAVE.to_string())?;
+        }
+        let lock = h._lock.take();
+        *h = load_head(&dir);
+        h._lock = lock;
+        if h.broken.is_some() {
+            return Err(ERR_RESTORE.to_string());
+        }
+        let restored = check.last_seq.unwrap_or(0);
+        let mut b = Map::new();
+        b.insert("kind".into(), json!("resume"));
+        b.insert("skip".into(), json!(RESUME_SKIP));
+        b.insert("store".into(), json!(ctx.store));
+        b.insert("biz".into(), ctx.biz.clone().unwrap_or(Value::Null));
+        let rec = append_in(root, chain_dir, &ctx, h, b, at.max(lines.last().and_then(|l| l.get("at")).and_then(Value::as_i64).unwrap_or(0)))?;
+        Ok(json!({ "restored": lines.len(), "lastSeq": restored, "resumeSeq": rec["seq"], "nextReceipt": h.next_seq, "logId": h.log_id }))
     })?
 }
 

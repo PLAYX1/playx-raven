@@ -20,6 +20,8 @@ export interface ChainSalesDeps {
   errText(e: unknown): string;
   /** 잠김(12단어 필요)이면 「지갑 열기」를 붙이고 다시 시도하게 하는 쪽(chain-store.ts fail). */
   fail(e: unknown, retry: () => Promise<unknown>): void;
+  /** ④ 백업 파일 저장 자리(맡은 매장). */
+  pickSave(name: string): Promise<string | null>;
 }
 
 type Sum = { net: number; count: number; methods: Record<string, number> };
@@ -93,9 +95,25 @@ function storeView(host: HTMLElement, deps: ChainSalesDeps, msg: HTMLElement, sa
   field.append(el("span", "", () => t("본점 주소")), url, el("span", "cs-hint", () => t("본점 화면의 「매장에 적을 본점 주소」를 그대로 적어요.")));
   const acts = el("div", "cs-acts");
   acts.append(saveUrl, send);
+  // ④ 맡은 본점 백업(열 수 없다) · 컴퓨터를 바꿨을 때 이 매장 기록 되찾기
+  const held = el("div", "csl-held");
+  const pull = el("details", "csl-pull");
+  const pullBtn = button(() => t("본점에서 이 매장 기록 되찾기"), true);
+  pull.append(el("summary", "", () => t("컴퓨터를 바꿨나요?")),
+    el("p", "meta", () => t("새 컴퓨터에서 결제를 적기 전에 한 번 눌러요. 본점이 받아 둔 이 매장 기록을 가져오고, 영수증 번호는 겹치지 않게 건너뛰어 이어 가요.")), pullBtn);
   host.replaceChildren(el("h4", "", () => t("본점으로 매출 보내기")),
     el("p", "meta", () => t("10분마다 이 매장의 결제 기록을 봉해서 본점으로 보내요. 끊겨도 기록은 여기 쌓였다가 연결되면 이어서 가요.")),
-    state, facts, field, acts, msg);
+    state, facts, field, acts, held, pull, msg);
+
+  pullBtn.onclick = async () => {
+    pullBtn.disabled = true;
+    try {
+      const r = await deps.invoke<{ ok: boolean; why?: string; restored?: number; nextReceipt?: number }>("chain_sales_pull_log");
+      if (r.ok) say(tf("기록 {0}건을 되찾았어요. 다음 영수증 번호는 {1}번부터예요.", r.restored ?? 0, r.nextReceipt ?? 0));
+      else say(storeErr(r.why), true);
+    } catch (e) { say(deps.errText(e), true); }
+    finally { pullBtn.disabled = false; await refresh(); }
+  };
 
   saveUrl.onclick = async () => {
     try {
@@ -130,6 +148,19 @@ function storeView(host: HTMLElement, deps: ChainSalesDeps, msg: HTMLElement, sa
     setCopyText(why, () => (s.connected ? "" : storeErr(s.lastErr) || t("아직 본점으로 보낸 적이 없어요.")));
     setCopyText(facts, () => (s.lastOkAt ? tf("마지막으로 보낸 때 {0}", when(s.lastOkAt)) : t("아직 보낸 적이 없어요.")) + " · " + tf("안 보낸 기록 {0}건", s.pending ?? 0)
       + (s.warn ? " · " + storeErr("warn:" + s.warn) : ""));
+    held.replaceChildren();
+    if (s.held) {
+      const save = button(() => t("본점 백업을 파일로 저장"), true);
+      save.onclick = async () => {
+        try {
+          const path = await deps.pickSave("chain-head.rvchainbak.txt");
+          if (!path) return;
+          await deps.invoke("chain_backup_held_save", { path });
+          say(t("본점 백업 파일을 저장했어요. 새 본점 컴퓨터로 옮겨 「본점 백업 되살리기」를 눌러 주세요."));
+        } catch (e) { say(deps.errText(e), true); }
+      };
+      held.append(el("p", "meta", () => tf("이 매장이 본점 백업을 맡고 있어요({0}). 봉해져 있어서 이 매장에서는 열어 볼 수 없어요.", when(s.held.at))), save);
+    }
   }
   void refresh();
   const timer = window.setInterval(() => { if (!host.isConnected) { window.clearInterval(timer); return; } void refresh(); }, 60_000);
@@ -155,7 +186,27 @@ function ownerView(host: HTMLElement, deps: ChainSalesDeps, msg: HTMLElement, sa
   const stores = el("div", "csl-stores");
   const rej = el("details", "csl-rej");
   const again = button(() => t("새로 고침"), true);
-  host.replaceChildren(el("h4", "", () => t("매장 매출 합계")), alerts, prep, addr, tabs, all, biz, stores, rej, again, msg);
+  // ④ 본점 백업 맡길 매장(이웃 1곳)
+  const bk = el("div", "csl-backup");
+  const bkPick = document.createElement("select");
+  bkPick.id = "csl-backup-store";
+  const bkSave = button(() => t("맡기기"), true);
+  const bkFacts = el("p", "csl-d");
+  const bkField = el("label", "cs-field");
+  bkField.append(el("span", "", () => t("본점 백업 맡길 매장")), bkPick,
+    el("span", "cs-hint", () => t("발급·끊기 기록과 받은 매출을 봉해서 매장 한 곳에 맡겨요. 그 매장은 열어 볼 수 없고, 12단어로만 열려요.")));
+  bk.append(bkField, bkSave, bkFacts);
+  host.replaceChildren(el("h4", "", () => t("매장 매출 합계")), alerts, prep, addr, tabs, all, biz, stores, rej, bk, again, msg);
+  // 백업 열쇠가 아직 없으면 러스트가 12단어를 한 번 받는다(잠김이면 「지갑 열기」 뒤 다시).
+  const keep = async (): Promise<void> => {
+    try {
+      const v = bkPick.value ? Number(bkPick.value) : null;
+      await deps.invoke("chain_backup_set", { store: v });
+      say(v ? tf("{0}번 매장에 본점 백업을 맡겨요. 그 매장이 다음에 매출을 보낼 때 가져가요.", v) : t("본점 백업을 맡기지 않아요."));
+      await refresh();
+    } catch (e) { deps.fail(e, keep); }
+  };
+  bkSave.onclick = () => void keep();
 
   tToday.onclick = () => { span = "today"; paint(); };
   tMonth.onclick = () => { span = "month"; paint(); };
@@ -264,6 +315,16 @@ function ownerView(host: HTMLElement, deps: ChainSalesDeps, msg: HTMLElement, sa
       setCopyText(a, () => tf("「{0}」 꺼짐 — 30분째 매출이 오지 않아요", r.name));
       return a;
     }));
+    const b = s.backup || {};
+    if (document.activeElement !== bkPick) {
+      const none = document.createElement("option");
+      none.value = "";
+      none.textContent = t("맡기지 않음");
+      bkPick.replaceChildren(none, ...((b.stores || []) as number[]).map((n) => { const o = document.createElement("option"); o.value = String(n); o.textContent = String(n); return o; }));
+      bkPick.value = b.store == null ? "" : String(b.store);
+    }
+    setCopyText(bkFacts, () => b.store == null ? t("아직 맡긴 매장이 없어요.")
+      : b.delivered ? tf("{0}번 매장이 {1}에 가져갔어요.", b.store, when(b.deliveredAt)) : tf("{0}번 매장이 아직 가져가지 않았어요.", b.store));
     const rows: any[] = s.rejects || [];
     const junk = Object.values((s.junk || {}) as Record<string, number>).reduce((a, b) => a + (Number(b) || 0), 0);
     rej.hidden = !rows.length && !junk;

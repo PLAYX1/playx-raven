@@ -42,3 +42,8 @@
 #chain-store-card .csl-off .csl-amt { color: var(--muted); }
 #chain-store-card .csl-rej { margin: 12px 0; font-size: 16px; }
 #chain-store-card .csl-rej > summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; }
+/* ④ 백업 두 곳 · 되찾기 */
+#chain-store-card .cs-field select { font-size: 16px; min-height: 48px; padding: 8px 12px; color: var(--text, inherit); }
+#chain-store-card .csl-backup, #chain-store-card .csl-held { margin: 16px 0; }
+#chain-store-card .csl-pull { margin: 12px 0; font-size: 16px; }
+#chain-store-card .csl-pull > summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; }

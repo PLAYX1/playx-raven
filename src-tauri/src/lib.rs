@@ -52,6 +52,7 @@ mod publicbook;
 mod chain_info;
 mod chain_store;
 mod chain_sales;
+mod chain_backup;
 mod pos_pay;
 mod health;
 mod ipfs;
@@ -394,6 +395,10 @@ pub fn run() {
             chain_sales::chain_sales_push_now,
             chain_sales::chain_sales_totals,
             chain_sales::chain_sales_prepare,
+            chain_sales::chain_sales_pull_log,
+            chain_backup::chain_backup_set,
+            chain_backup::chain_backup_held_save,
+            chain_backup::chain_backup_restore,
             pos_pay::pos_record,
             pos_pay::pos_void,
             pos_pay::pos_day,

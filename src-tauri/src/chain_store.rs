@@ -162,6 +162,16 @@ fn validate(raw: &Value, with_sig: bool) -> Result<(&Map<String, Value>, StoreCe
     Ok((o, StoreCert { chain: chain.into(), store, name: name.into(), store_key: store_key.into(), serial, issued_at, not_after, cert_id }))
 }
 
+/// 모양 + 본점 서명만(시각은 보지 않는다) — ④ 백업을 되살릴 때 옛 증서까지 확인하는 용도.
+pub(crate) fn cert_signed_ok(raw: &Value, chain: &str) -> bool {
+    validate(raw, true).is_ok_and(|(o, c)| c.chain == chain && signed_by(CHAIN_DOMAIN, o, chain))
+}
+
+/// 이 본점이 서명한 끊기 목록인가.
+pub(crate) fn list_ok(v: &Value, chain: &str) -> bool {
+    verify_revocation_list_in(CHAIN_DOMAIN, v, chain, &chain_list_id(chain)).is_ok()
+}
+
 /// 서명 전 본문. 만료 = 발급 + 365일.
 pub fn cert_body(chain: &str, store: u32, name: &str, store_key: &str, biz: &Value, serial: u64, issued_at: i64) -> Result<Value, &'static str> {
     let body = json!({
@@ -660,6 +670,10 @@ pub async fn chain_store_issue(app: tauri::AppHandle, n: u32, name: String, biz_
     let r = issue_in(&dir, &chain_sk, &store_sk, n, &name, &biz, now_ms());
     // ③ 매출 받기: 체인 열쇠가 손에 있는 지금 그 매장의 데이터 열쇠만 적어 둔다(체인 열쇠는 디스크에 두지 않는다).
     let key_saved = r.as_ref().map(|i| crate::chain_sales::remember_key_in(&dir, &chain_sk, &i.store_pubkey).is_ok()).unwrap_or(false);
+    // ④ 본점 백업 열쇠(체인 비밀에서 — 12단어로 언제든 다시 만들 수 있다).
+    if r.is_ok() {
+        let _ = crate::chain_backup::remember_key_in(&dir, &chain_sk);
+    }
     crate::words::wipe_bytes(&mut chain_sk);
     crate::words::wipe_bytes(&mut store_sk);
     let mut r = r?;
