@@ -6595,7 +6595,7 @@ async function talkPaintRooms() {
   if (tkRoom && tkRoomNames.has(tkRoom)) setCopyText($("tk-title"), () => tkRoomNames.get(tkRoom) || t("방")); // 고친 이름을 머리줄에도
   paintInvite();
   box.innerHTML =
-    `<button class="room${tkRoom ? "" : " on"}" data-room="">${copyHtml(SQUARE)}</button>` +
+    `<button class="room${tkRoom ? "" : " on"}" data-room="">${copyHtml(SQUARE)}${방알림꺼짐("") ? 방알림꺼짐표() : ""}</button>` +
     rooms
       .map(
         (r) =>
@@ -6607,6 +6607,7 @@ async function talkPaintRooms() {
             ? `<span class="tag" title="이 자산을 가진 분만 씁니다">${escapeHtml(String(r.asset))}</span>`
             : "") +
           gateChipHtml(gateOfRoom(String(r.id))) +
+          (방알림꺼짐(String(r.id)) ? 방알림꺼짐표() : "") +
           `</button>`
       )
       .join("");
@@ -6974,6 +6975,7 @@ async function talkPaint(opts: { cached?: boolean; list?: any[] } = {}) {
   const wasAtBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80 || !box.dataset.loaded;
   const previousTop = box.scrollTop;
   const 저장키 = tkCacheKey(읽은방);
+  방알림단추그리기();
   if (!opts.list && !box.dataset.loaded) {
     const kept = tkCacheGet(저장키);
     if (kept) await talkPaint({ list: kept });
@@ -18486,6 +18488,26 @@ function 대화방보는중(room: string): boolean {
  * 목록을 받는 자리가 둘이라(화면의 `talkPaint` · 아래 `대화지킴이`) 판단은
  * 여기 한 곳에만 둔다. 주문 알림의 `주문살피기` 와 같은 배치다.
  */
+/* ── 11-10 방마다 알림 끄기 ── 끈 방은 새 글에 소리·숫자가 없다(화면은 그대로 갱신). 광장("")도 끌 수 있다. */
+const 방알림끔_KEY = "rv.talk.roomMute.v1";
+const 방알림꺼짐표 = () => `<span class="tk-roommuted" title="${escapeHtml(t("알림 꺼짐"))}">${escapeHtml(t("알림 꺼짐"))}</span>`;
+function 방알림끔목록(): Record<string, 1> { try { const v = JSON.parse(localStorage.getItem(방알림끔_KEY) || "{}"); return v && typeof v === "object" && !Array.isArray(v) ? v : {}; } catch { return {}; } }
+function 방알림꺼짐(room: string): boolean { return 방알림끔목록()[room || "@"] === 1; }
+function 방알림바꾸기(room: string, off: boolean) {
+  const m = 방알림끔목록(); const k = room || "@";
+  if (off) m[k] = 1; else delete m[k];
+  try { localStorage.setItem(방알림끔_KEY, JSON.stringify(m)); } catch { /* 이번 실행만 */ }
+  방알림단추그리기();
+  void talkPaintRooms();
+}
+function 방알림단추그리기() {
+  const b = document.getElementById("tk-roommute");
+  if (!b) return;
+  const off = 방알림꺼짐(tkRoom);
+  b.setAttribute("aria-pressed", String(off));
+  setCopyText(b, () => t(off ? "이 방 알림 켜기" : "이 방 알림 끄기"));
+}
+
 function 대화살피기(room: string, list: any[]) {
   if (!Array.isArray(list)) return;
   const 방 = String(room || "");
@@ -18533,6 +18555,7 @@ function 대화살피기(room: string, list: any[]) {
   //    내가 쓴 글에 내가 알림을 받는다. 다음 바퀴에 `talk_me` 가 답한다.
   if (!tkMine) return;
   if (!대화알림켜짐()) return;
+  if (방알림꺼짐(방)) return; // 11-10 이 방 알림 끔
   // ⚠️ 그 방을 보고 있으면 소리도 숫자도 없다. 눈앞에 글이 뜨는 것이 이미
   //    답이다. (주문은 여기서 반대로 판단한다 — 돈이 들어오는 순간 사장의
   //    눈은 손님에게 가 있어서, 창이 떠 있는 것과 보고 있는 것이 다르다.
@@ -19818,6 +19841,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   //    그 병이 그대로 반복된다.
   $("tk-send").addEventListener("click", () => void talkSend());
   document.getElementById("tk-replyx")?.addEventListener("click", () => tkSetReply(null));
+  document.getElementById("tk-roommute")?.addEventListener("click", () => 방알림바꾸기(tkRoom, !방알림꺼짐(tkRoom)));
   $("tk-new-messages").addEventListener("click", () => {
     const list = $("tk-list");
     list.scrollTop = list.scrollHeight;

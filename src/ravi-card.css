@@ -14,3 +14,5 @@
 /* 답장 줄 안 빠른 말은 아랫줄 한 줄을 다 쓴다. */
 #page-talk .replybar { flex-wrap: wrap; }
 #page-talk .replybar .tk-quick { flex-basis: 100%; }
+/* 11-10 방 알림 꺼짐 표시(방 목록) */
+.tk-roommuted { margin-left:6px; padding:1px 6px; border-radius:8px; font-size:12px; font-weight:600; color:var(--muted); border:1px solid var(--line); vertical-align:middle; }
