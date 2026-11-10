@@ -14,6 +14,7 @@ import { DICT } from "./dict";
 import { t, tf, setCopyText } from "./i18n";
 import { seedErrorKind, seedUnlockButton } from "./seed-recovery";
 import { CHAIN_STORE_COPY } from "./chain-store-copy";
+import { mountChainSales } from "./chain-sales";
 
 for (const [source, values] of Object.entries(CHAIN_STORE_COPY)) {
   (["en", "ja", "zh"] as const).forEach((language, index) => { DICT[language][source] ??= values[index]; });
@@ -220,8 +221,16 @@ export function mountChainStore(host: HTMLElement, deps: ChainStoreDeps): { refr
       const st = el("div", "v-state");
       setCopyText(st, () => s.revoked ? tf("「{0}」 매장 — 본점이 끊었어요", s.name || "") : tf("이 컴퓨터는 「{0}」({1}번 매장)이에요", s.name || "", s.store ?? ""));
       v.append(st, el("div", "v-why", () => s.revoked ? t("본점에 연락해 새 매장 열쇠를 받아 주세요.") : tf("매장 증서는 {0}까지 쓸 수 있어요.", day(s.notAfter || 0))));
-      body.append(v, joinForm());
+      const sales = el("div", "cs-part cs-sales");
+      body.append(v, sales, joinForm());
+      mountChainSales(sales, "store", { invoke: deps.invoke, errText: deps.errText, fail });
       return;
+    }
+    if (s.role === "owner") {
+      // ③ 매장 매출 합계·꺼짐 알림을 맨 위에(매일 보는 것).
+      const sales = el("div", "cs-part cs-sales");
+      body.append(sales);
+      mountChainSales(sales, "owner", { invoke: deps.invoke, errText: deps.errText, fail });
     }
     body.append(issueForm());
     if (s.role === "owner") { body.append(list); await paintList(); }

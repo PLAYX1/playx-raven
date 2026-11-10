@@ -193,7 +193,6 @@ pub fn verify_store_cert_body(raw: &Value, chain_key: &str, now_ms: i64) -> Resu
 /// 매장 증서 확인 — lan_cert `verify_device_cert` 와 같은 순서·같은 사유 이름. 끊기 목록이 없으면 닫힌 실패(no-revocation-list).
 /// 🔸 lan_cert 와 다른 점 하나: 끊기 목록의 **신선도(24시간)는 보지 않는다** — 목록은 끊을 때만 새로 서명되고,
 ///    매장은 인터넷이 끊겨도 돌아야 한다(원칙 2). 대신 목록의 not-yet(미래 시각)은 본다.
-#[allow(dead_code)] // ③ 매출 받기(/lan/push)가 쓴다 — ①에서는 시험만
 pub fn verify_store_cert(raw: &Value, chain_key: &str, now_ms: i64, revocation: Option<&Value>) -> Result<StoreCert, CertReason> {
     let c = verify_store_cert_body(raw, chain_key, now_ms)?;
     let list = match revocation {
@@ -217,7 +216,7 @@ fn ecdsa_signer(sk: &[u8; 32]) -> impl FnOnce(&[u8; 32]) -> Result<[u8; 64], ()>
     }
 }
 
-fn pubkey(sk: &[u8; 32]) -> Result<String, &'static str> {
+pub(crate) fn pubkey(sk: &[u8; 32]) -> Result<String, &'static str> {
     crate::storesign::pubkey_hex(sk).map_err(|_| ERR_KEY)
 }
 
@@ -330,14 +329,14 @@ fn write_json(path: &Path, v: &Value) -> Result<(), &'static str> {
 }
 
 /// 본점 발급 기록 `chain/issued.json` = {v, chain, certs:[증서…]} — 비밀 없음.
-fn load_history(dir: &Path) -> Option<(String, Vec<Value>)> {
+pub(crate) fn load_history(dir: &Path) -> Option<(String, Vec<Value>)> {
     let v = read_json(&dir.join("issued.json"))?;
     let chain = v.get("chain")?.as_str()?.to_string();
     let certs = v.get("certs")?.as_array()?.clone();
     Some((chain, certs))
 }
 
-fn load_list(dir: &Path, chain: &str) -> Option<(Value, ListInfo)> {
+pub(crate) fn load_list(dir: &Path, chain: &str) -> Option<(Value, ListInfo)> {
     let v = read_json(&dir.join("revocations.json"))?;
     let info = verify_revocation_list_in(CHAIN_DOMAIN, &v, chain, &chain_list_id(chain)).ok()?;
     Some((v, info))
@@ -454,6 +453,11 @@ pub fn sign_as_store_in(dir: &Path, domain: &str, body: &Value) -> Result<Value,
     if domain == CHAIN_DOMAIN {
         return Err(ERR_SIGN); // 매장 열쇠가 증서·끊기 목록 도메인에 서명하는 길을 만들지 않는다
     }
+    with_store_secret_in(dir, |sk, me| sign_doc(domain, body, &me.store_key, ecdsa_signer(sk)).map_err(|_| ERR_SIGN)).map_err(|_| ERR_SIGN)?
+}
+
+/// 매장 비밀 열쇠를 잠깐 꺼내 `f` 에 빌려준다(증서의 storeKey 와 맞을 때만). 끝나면 지운다. 오류는 고정 문장.
+pub(crate) fn with_store_secret_in<R>(dir: &Path, f: impl FnOnce(&[u8; 32], &StoreSelf) -> R) -> Result<R, &'static str> {
     let me = store_self_in(dir).ok_or(ERR_SIGN)?;
     let mut v = read_json(&dir.join("store.json")).ok_or(ERR_SIGN)?;
     let decoded = v.get("secret").and_then(Value::as_str).and_then(|s| hex::decode(s).ok());
@@ -465,11 +469,41 @@ pub fn sign_as_store_in(dir: &Path, domain: &str, body: &Value) -> Result<Value,
     crate::words::wipe_bytes(&mut raw);
     let mut sk = sk.ok_or(ERR_SIGN)?;
     let out = match pubkey(&sk) {
-        Ok(pk) if pk == me.store_key => sign_doc(domain, body, &pk, ecdsa_signer(&sk)).map_err(|_| ERR_SIGN),
+        Ok(pk) if pk == me.store_key => Ok(f(&sk, &me)),
         _ => Err(ERR_SIGN),
     };
     crate::words::wipe_bytes(&mut sk);
     out
+}
+
+/// 이 컴퓨터(매장)에 있는 증서 원문.
+pub(crate) fn store_cert_in(dir: &Path) -> Option<Value> {
+    store_self_in(dir)?;
+    let mut v = read_json(&dir.join("store.json"))?;
+    if let Some(Value::String(s)) = v.get_mut("secret") {
+        crate::words::wipe(s);
+    }
+    v.get("cert").cloned()
+}
+
+/// 네트워크로 받은 끊기 목록을 매장 PC 에 둔다 — `lan_cert::accept_revocation_list` 와 같은 규칙:
+/// 서명·본점 확인 → 지금 것보다 seq 가 크지 않으면 그대로 → 시각·prunedBefore 후퇴 거절 → 끊긴 것이 빠지면 거절.
+/// 돌려주는 값 = 새로 받았는가.
+pub(crate) fn accept_list_in(dir: &Path, chain: &str, raw: &Value) -> Result<bool, ()> {
+    let next = verify_revocation_list_in(CHAIN_DOMAIN, raw, chain, &chain_list_id(chain)).map_err(|_| ())?;
+    if let Some((_, prev)) = load_list(dir, chain) {
+        if next.seq <= prev.seq {
+            return Ok(false);
+        }
+        if next.issued_at < prev.issued_at || next.pruned_before < prev.pruned_before {
+            return Err(());
+        }
+        if next.pruned_before == prev.pruned_before && prev.revoked.iter().any(|id| !next.revoked.contains(id)) {
+            return Err(());
+        }
+    }
+    write_json(&dir.join("revocations.json"), raw).map_err(|_| ())?;
+    Ok(true)
 }
 
 fn store_row(c: &Value, revoked: &[String]) -> Value {
@@ -565,7 +599,7 @@ pub fn fresh_store_key(words: &str, pass: &str, n: u32, burned: &[String]) -> Re
     Err(ERR_NO_GEN)
 }
 
-async fn owner_keys(n: Option<u32>, burned: Vec<String>) -> Result<([u8; 32], Option<[u8; 32]>), String> {
+pub(crate) async fn owner_keys(n: Option<u32>, burned: Vec<String>) -> Result<([u8; 32], Option<[u8; 32]>), String> {
     if crate::app_lock::is_locked() {
         return Err(ERR_LOCKED.into());
     }
@@ -624,10 +658,12 @@ pub async fn chain_store_issue(app: tauri::AppHandle, n: u32, name: String, biz_
     let (mut chain_sk, store_sk) = owner_keys(Some(n), burned_keys(&dir)).await?;
     let mut store_sk = store_sk.unwrap_or([0u8; 32]);
     let r = issue_in(&dir, &chain_sk, &store_sk, n, &name, &biz, now_ms());
+    // ③ 매출 받기: 체인 열쇠가 손에 있는 지금 그 매장의 데이터 열쇠만 적어 둔다(체인 열쇠는 디스크에 두지 않는다).
+    let key_saved = r.as_ref().map(|i| crate::chain_sales::remember_key_in(&dir, &chain_sk, &i.store_pubkey).is_ok()).unwrap_or(false);
     crate::words::wipe_bytes(&mut chain_sk);
     crate::words::wipe_bytes(&mut store_sk);
     let mut r = r?;
-    let out = json!({ "bundle_text": r.bundle, "install_words": r.install_words, "store_pubkey": r.store_pubkey, "serial": r.serial });
+    let out = json!({ "bundle_text": r.bundle, "install_words": r.install_words, "store_pubkey": r.store_pubkey, "serial": r.serial, "sales_key": key_saved });
     crate::words::wipe(&mut r.install_words);
     Ok(out)
 }

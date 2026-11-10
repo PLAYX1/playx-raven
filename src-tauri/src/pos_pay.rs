@@ -167,15 +167,23 @@ pub struct Check {
     pub last_seq: Option<u64>,
     pub last_hash: Option<String>,
     pub broken: Option<(u64, Break)>,
+    /// 처음 끊김 앞까지의 줄 수(③ 본점은 이 앞부분만 받아 둔다).
+    pub ok_prefix: usize,
 }
 
 /// 줄들을 처음부터 본다: 번호 연속 → 앞 줄 해시 → 모양 → (체인 매장 로그면) 매장 열쇠 서명.
 /// 첫 줄이 `open` 이고 거기 `chain` 이 있으면 모든 줄에 서명이 있어야 한다(서명을 떼어 내 가짜 줄로 바꾸는 길을 막는다).
 /// `want_key` 를 주면 서명한 열쇠가 그 열쇠여야 한다(③ 본점 확인 — 증서의 storeKey).
 pub fn verify_records(lines: &[Value], want_key: Option<&str>) -> Check {
+    verify_records_from(lines, want_key, None)
+}
+
+/// 이어 받기(③ 본점): `start = (다음 번호, 앞 줄 해시)` 부터 이어지는 줄들을 본다. 이때는 모든 줄에 서명이 있어야 한다.
+pub fn verify_records_from(lines: &[Value], want_key: Option<&str>, start: Option<(u64, &str)>) -> Check {
     let mut c = Check::default();
-    let mut signed_log = false;
-    let mut prev_hash = ZERO.to_string();
+    let mut signed_log = start.is_some();
+    let mut prev_hash = start.map_or_else(|| ZERO.to_string(), |s| s.1.to_string());
+    let mut want_seq: u64 = start.map_or(0, |s| s.0);
     let mut prev_seq: Option<u64> = None;
     for (i, v) in lines.iter().enumerate() {
         let seq = v.get("seq").and_then(Value::as_u64).unwrap_or(u64::MAX);
@@ -188,10 +196,9 @@ pub fn verify_records(lines: &[Value], want_key: Option<&str>) -> Check {
             fail(&mut c, Break::Shape);
             continue;
         };
-        if i == 0 {
+        if i == 0 && start.is_none() {
             signed_log = o.get("kind").and_then(Value::as_str) == Some("open") && o.get("chain").is_some_and(|c| !c.is_null());
         }
-        let want_seq = prev_seq.map_or(0, |p| p + 1);
         if seq != want_seq {
             fail(&mut c, Break::Seq);
         } else if o.get("prev").and_then(Value::as_str) != Some(prev_hash.as_str()) {
@@ -204,8 +211,12 @@ pub fn verify_records(lines: &[Value], want_key: Option<&str>) -> Check {
             }
         }
         prev_seq = Some(seq);
+        want_seq = seq.saturating_add(1);
         prev_hash = record_hash(v).unwrap_or_default();
         c.records += 1;
+        if c.broken.is_none() {
+            c.ok_prefix = i + 1;
+        }
     }
     c.last_seq = prev_seq;
     c.last_hash = prev_seq.map(|_| prev_hash);
@@ -246,6 +257,20 @@ fn read_lines(path: &Path, trim_tail: bool) -> Vec<Value> {
     raw[..good].split(|b| *b == b'\n').filter(|l| !l.is_empty())
         .map(|l| if l.len() > MAX_LINE { Value::Null } else { serde_json::from_slice(l).unwrap_or(Value::Null) })
         .collect()
+}
+
+/// 이 컴퓨터의 매출 로그 전체(③ 본점 보내기용). (범위, 로그 번호, 줄들). 쓰다 만 꼬리는 읽지 않는다(자르지도 않는다).
+pub fn log_lines_in(root: &Path, chain_dir: &Path) -> (String, Option<String>, Vec<Value>) {
+    let ctx = ctx_in(root, chain_dir);
+    let dir = root.join("log").join(&ctx.scope);
+    let lines: Vec<Value> = month_files(&dir).iter().flat_map(|(_, p)| read_lines(p, false)).collect();
+    let log_id = lines.first().filter(|v| v.get("kind").and_then(Value::as_str) == Some("open"))
+        .and_then(|v| v.get("logId")).and_then(Value::as_str).map(String::from);
+    (ctx.scope, log_id, lines)
+}
+
+pub(crate) fn pos_root_path() -> PathBuf {
+    pos_root()
 }
 
 /// 메모리에 들고 있는 로그 머리(처음 한 번 전체를 읽어 확인한 뒤, 쓸 때마다 갱신).

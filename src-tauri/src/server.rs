@@ -567,6 +567,11 @@ fn lan_from_outside(headers: &HeaderMap) -> bool {
 }
 
 fn outside_blocked(state: &ServerState, headers: &HeaderMap, path: &str) -> bool {
+    // 체인 POS ③ 매장 → 본점 매출 받기. 터널로도 받는다 — 처리기가 **본점 자신의 끊기 목록으로** 매장 증서를 판정하고
+    // (끊김·만료·모양·서명이면 거절·기록), 봉함은 그 매장 데이터 열쇠로만 열린다. 본점 PC 가 아니면 처리기가 404.
+    if path == crate::chain_sales::SALES_PATH {
+        return false;
+    }
     // 기기 복사는 같은 와이파이 전용이다. 원격 관리를 켜도 터널로는 열지 않는다.
     if path.starts_with("/lan/") || path == "/lan" {
         return lan_from_outside(headers) || from_outside(headers);
@@ -3601,7 +3606,10 @@ fn build_phone_router(st: ServerState) -> axum::Router {
         // 가게 안에서는 돈다 — 인터넷이 끊겨도 공지가 오간다.
         // 🔴 `/relay` 로 두면 `/{name}`(라비 그림)이 먼저 삼킨다 — 실측으로
         // 404 였다. **두 칸짜리 경로**면 그 규칙에 안 걸린다.
-        .route("/api/relay", get(relay_upgrade));
+        .route("/api/relay", get(relay_upgrade))
+        // 체인 POS ③ — 매장이 보내는 봉한 매출 묶음(본점 PC 에서만 받는다. 증서 판정은 처리기 안에서).
+        .route(crate::chain_sales::SALES_PATH, post(chain_sales_route)
+            .layer(axum::extract::DefaultBodyLimit::max(crate::chain_sales::MAX_REQUEST_BYTES)));
 
     // A separate router, not a separate handler: there is no path from these
     // routes into wallet code, by construction rather than by discipline.
@@ -3657,6 +3665,14 @@ fn build_phone_router(st: ServerState) -> axum::Router {
         .layer(axum::middleware::from_fn_with_state(st.clone(), outside_gate))
         .with_state(st.clone());
     app
+}
+
+/// 체인 POS ③ 매출 받기. 본문 처리는 `chain_sales::receive`(디스크·서명 확인이라 따로 떼어 돌린다).
+async fn chain_sales_route(body: axum::body::Bytes) -> impl IntoResponse {
+    match tokio::task::spawn_blocking(move || crate::chain_sales::receive(&body)).await {
+        Ok((code, v)) => (StatusCode::from_u16(code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR), Json(v)),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "reason": "internal" }))),
+    }
 }
 
 /// 문 앞 검문. 바깥(터널)에서 온 요청은 손님 길만 들어온다.
@@ -6568,6 +6584,27 @@ mod lan_mount_in_phone_router {
         let app = super::build_phone_router(super::ServerState::default());
         let (s, _) = post(&app, "192.168.0.10:8790", "/lan/pull", &pull_body()).await;
         assert_eq!(s, StatusCode::NOT_FOUND, "기본 꺼짐 = 경로 자체가 없다");
+    }
+
+    #[tokio::test]
+    async fn chain_sales_path_reaches_its_handler_through_the_tunnel_but_lan_push_does_not() {
+        let _home = super::order_persistence_tests::TestHome::new();
+        let app = super::build_phone_router(super::ServerState::default());
+        // 터널(cf 머리)로 와도 문 앞에서 막지 않는다 — 처리기가 판정한다(본점이 아니면 404 not-head).
+        let req = axum::http::Request::post(crate::chain_sales::SALES_PATH).header("host", "abc.trycloudflare.com").header("cf-connecting-ip", "198.51.100.7")
+            .header("content-type", "application/json").body(axum::body::Body::from("{}")).unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::NOT_FOUND);
+        let b: Value = serde_json::from_slice(&axum::body::to_bytes(res.into_body(), 4096).await.unwrap()).unwrap();
+        assert_eq!(b["reason"], "not-head");
+        // 같은 판정은 /lan/push 를 열지 않는다
+        let st = super::ServerState::default();
+        assert!(super::outside_blocked(&st, &{
+            let mut h = axum::http::HeaderMap::new();
+            h.insert("host", "abc.trycloudflare.com".parse().unwrap());
+            h.insert("cf-connecting-ip", "198.51.100.7".parse().unwrap());
+            h
+        }, "/lan/push"));
     }
 
     #[tokio::test]

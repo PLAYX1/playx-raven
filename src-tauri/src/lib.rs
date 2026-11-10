@@ -51,6 +51,7 @@ mod trust;
 mod publicbook;
 mod chain_info;
 mod chain_store;
+mod chain_sales;
 mod pos_pay;
 mod health;
 mod ipfs;
@@ -388,6 +389,11 @@ pub fn run() {
             chain_store::chain_store_revoke,
             chain_store::chain_store_bundle_save,
             chain_store::chain_store_bundle_read,
+            chain_sales::chain_sales_status,
+            chain_sales::chain_sales_head_set,
+            chain_sales::chain_sales_push_now,
+            chain_sales::chain_sales_totals,
+            chain_sales::chain_sales_prepare,
             pos_pay::pos_record,
             pos_pay::pos_void,
             pos_pay::pos_day,
@@ -858,6 +864,8 @@ pub fn run() {
             }
             ai::migrate_keys_on_start();
             tauri::async_runtime::spawn(member_privacy::run_cleanup());
+            // 체인 POS ③ — 매장이면 10분마다 본점으로 매출 보내기, 본점이면 꺼짐 확인(한 끊김에 쪽지 한 통).
+            tauri::async_runtime::spawn(chain_sales::run_loop());
             // 「만들기」 기록 정리 — 보관 기간 지난 받는 사람 이름, 7일 지난 인쇄 파일,
             // 기록에 없는 인쇄 파일, 쓰다 만 파일. 켤 때 한 번, 그 뒤 하루에 한 번.
             tauri::async_runtime::spawn(async {

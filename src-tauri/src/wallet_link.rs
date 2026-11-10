@@ -312,7 +312,7 @@ fn event_id(pubkey: &str, created_at: i64, kind: i64, tags: &Value, content: &st
     hex::encode(Sha256::digest(serde_json::to_string(&json!([0, pubkey, created_at, kind, tags, content])).unwrap_or_default().as_bytes()))
 }
 /// wrapFor(나, 상대, 상대, text) — 상대에게 가는 겉봉 하나(내 사본은 만들지 않는다, transport.ts 와 같음).
-fn wrap_for(my: &[u8; 32], to: &str, text: &str, now: i64) -> Result<Value, String> {
+pub(crate) fn wrap_for(my: &[u8; 32], to: &str, text: &str, now: i64) -> Result<Value, String> {
     let me = pubkey_of(my)?;
     let tags = json!([["p", to]]);
     let rumor = json!({"pubkey": me, "created_at": now, "kind": 14, "tags": tags, "content": text, "id": event_id(&me, now, 14, &tags, text)});

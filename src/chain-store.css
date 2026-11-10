@@ -21,3 +21,24 @@
 #chain-store-card .cs-msg { font-size: 15px; margin-top: 12px; }
 #chain-store-card .cs-msg.cs-bad { color: var(--danger); }
 @media (max-width: 520px) { #chain-store-card .cs-words { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* 체인 POS ③ 매출 보내기(매장)·매출 합계(본점). 글자 16px 이상, 단추 48px. */
+#chain-store-card .cs-sales { padding: 14px 16px; border: 1px solid var(--line); border-radius: 13px; }
+#chain-store-card .cs-sales button { min-height: 48px; font-size: 16px; }
+#chain-store-card .cs-sales h5 { font-size: 16px; margin: 16px 0 4px; }
+#chain-store-card .csl-facts { font-size: 16px; margin: 8px 0; }
+#chain-store-card .csl-alerts:empty { display: none; }
+#chain-store-card .csl-alert { margin: 0 0 8px; padding: 12px 14px; border-radius: 10px; background: var(--danger); color: #fff; font-size: 17px; font-weight: 700; }
+#chain-store-card .csl-addr { margin: 8px 0; }
+#chain-store-card .csl-url { display: block; font-size: 16px; padding: 6px 0; overflow-wrap: anywhere; user-select: all; }
+#chain-store-card .csl-tabs { display: flex; gap: 8px; margin: 12px 0 8px; }
+#chain-store-card .csl-tabs [aria-checked="true"] { border-color: var(--brand); background: var(--brand); color: #fff; }
+#chain-store-card .csl-total { font-size: 22px; font-weight: 700; margin: 4px 0; }
+#chain-store-card .csl-methods { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 15px; }
+#chain-store-card .csl-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+#chain-store-card .csl-rowtxt { display: flex; flex-direction: column; gap: 2px; margin-right: auto; font-size: 16px; min-width: 0; }
+#chain-store-card .csl-amt { font-size: 18px; font-weight: 700; white-space: nowrap; }
+#chain-store-card .csl-d { font-size: 15px; color: var(--muted); margin: 2px 0; }
+#chain-store-card .csl-warn { font-size: 15px; color: var(--danger); font-weight: 600; }
+#chain-store-card .csl-off .csl-amt { color: var(--muted); }
+#chain-store-card .csl-rej { margin: 12px 0; font-size: 16px; }
+#chain-store-card .csl-rej > summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; }
