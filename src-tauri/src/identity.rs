@@ -132,6 +132,24 @@ pub const PATH_SHOP: &str = "m/44'/175'/7'/1'/0'";
 /// 하나로 전부 복구된다 — 그것이 이 표의 계약이다.
 pub const PATH_ARTIST: &str = "m/44'/175'/7'/2'/0'";
 
+/// 체인 매장 열쇠의 앞자리(docs/CHAIN-POS.md ①). 매장 n 은 `<앞자리>/<n>'` (n = 1..=9999, 경화).
+///
+/// 본점 12단어 하나로 매장마다 **다른** 열쇠가 나오고, 본점은 언제든 같은 열쇠를 다시 뽑을 수 있다.
+/// 매장 PC 에는 12단어가 없다 — 이 열쇠(비밀) 하나만 설치 꾸러미로 건너간다. 경화라서 매장 열쇠
+/// 하나가 새도 형제 매장·본점 열쇠를 거꾸로 못 만든다.
+pub const PATH_CHAIN_STORE_PREFIX: &str = "m/44'/175'/7'/3'";
+
+/// 매장 번호 n 의 열쇠. 범위 밖이면 `None`(틀린 번호로 조용히 다른 열쇠를 만들지 않는다).
+pub fn chain_store_key_from(words: &str, passphrase: &str, n: u32) -> Option<[u8; 32]> {
+    if !(1..=9999).contains(&n) {
+        return None;
+    }
+    let mut seed = seed_from_words(words, passphrase)?;
+    let out = derive(&seed, &format!("{PATH_CHAIN_STORE_PREFIX}/{n}'"));
+    crate::words::wipe_bytes(&mut seed);
+    out
+}
+
 /// 돈. **여기서 파생하지 않는다** — 표에 적어 두는 것이 전부다.
 /// 돈 주소는 레이븐코어가 만들고 우리는 손대지 않는다.
 pub const PATH_MONEY: &str = "m/44'/175'/0'/0/*";
@@ -171,6 +189,10 @@ const _: () = assert!(
 const _: () = assert!(
     !same(PATH_ARTIST, PATH_PERSON) && !same(PATH_ARTIST, PATH_SHOP),
     "아티스트·사람·가게는 서로 다른 자리여야 한다. 같으면 정체성이 묶인다."
+);
+const _: () = assert!(
+    same(PATH_CHAIN_STORE_PREFIX, "m/44'/175'/7'/3'"),
+    "체인 매장 경로를 바꾸면 이미 나눠 준 매장 열쇠·증서가 전부 고아가 된다."
 );
 const _: () = assert!(
     same(PATH_MONEY, "m/44'/175'/0'/0/*"),

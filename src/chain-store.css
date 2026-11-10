@@ -1,0 +1,23 @@
+/* 「체인 매장」 카드 (체인 POS ①). 70대 기준: 글자 15px 이상, 단추 44px 이상, 설치 암호는 크게. */
+#chain-store-card .cs-part { margin-top: 16px; }
+#chain-store-card details.cs-part > summary { cursor: pointer; font-size: 16px; font-weight: 600; min-height: 44px; display: flex; align-items: center; }
+#chain-store-card h4 { font-size: 16px; margin: 0 0 8px; }
+#chain-store-card .cs-field { display: flex; flex-direction: column; gap: 6px; margin: 12px 0; font-size: 15px; color: var(--muted); }
+#chain-store-card .cs-field input, #chain-store-card .cs-field textarea { font-size: 16px; padding: 10px 12px; color: var(--text, inherit); }
+#chain-store-card .cs-hint { font-size: 14px; }
+#chain-store-card button { min-height: 44px; font-size: 15px; }
+#chain-store-card .cs-bundle { width: 100%; min-height: 96px; box-sizing: border-box; }
+#chain-store-card .cs-out { margin-top: 16px; padding: 16px; border: 2px solid var(--brand); border-radius: 13px; }
+#chain-store-card .cs-q { font-size: 17px; font-weight: 600; margin: 0 0 12px; }
+#chain-store-card .cs-words { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 8px 0 12px; }
+#chain-store-card .cs-word { font-size: 24px; font-weight: 700; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); user-select: text; overflow-wrap: anywhere; }
+#chain-store-card .cs-warn { color: var(--warn); font-size: 15px; font-weight: 600; }
+#chain-store-card .cs-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+#chain-store-card .cs-list { margin-top: 20px; }
+#chain-store-card .cs-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); }
+#chain-store-card .cs-rowtxt { display: flex; flex-direction: column; gap: 2px; margin-right: auto; font-size: 16px; }
+#chain-store-card .cs-d { font-size: 14px; color: var(--muted); }
+#chain-store-card .cs-cut { font-size: 15px; font-weight: 600; color: var(--danger); }
+#chain-store-card .cs-msg { font-size: 15px; margin-top: 12px; }
+#chain-store-card .cs-msg.cs-bad { color: var(--danger); }
+@media (max-width: 520px) { #chain-store-card .cs-words { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

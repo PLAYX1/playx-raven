@@ -342,6 +342,11 @@ pub struct ListInfo {
 
 /// core `verifyDeviceRevocationList` — 모양 → 같은 가게 → 가게 키 서명. 시각(신선도)은 보지 않는다(증서 확인 때 본다).
 pub fn verify_revocation_list(raw: &Value, store_key: &str, store_id: &str) -> Result<ListInfo, CertReason> {
+    verify_revocation_list_in(DEVICE_REVOKE_DOMAIN, raw, store_key, store_id)
+}
+
+/// 같은 모양·같은 순서, 도메인만 다른 철회 목록(체인 매장 끊기 목록 `chain_store.rs` 가 쓴다).
+pub fn verify_revocation_list_in(domain: &str, raw: &Value, store_key: &str, store_id: &str) -> Result<ListInfo, CertReason> {
     let o = read_doc(raw, MAX_REVOKE_BYTES).map_err(|_| CertReason::Shape)?;
     let well_formed = keys_are(o, &["v", "storeId", "seq", "revoked", "issuedAt", "prunedBefore", "sig"])
         && o["v"].as_u64() == Some(1)
@@ -368,7 +373,7 @@ pub fn verify_revocation_list(raw: &Value, store_key: &str, store_id: &str) -> R
     if o["storeId"].as_str() != Some(store_id) {
         return Err(CertReason::OtherStore);
     }
-    if !is_public_key(store_key) || !signed_by(DEVICE_REVOKE_DOMAIN, o, store_key) {
+    if !is_public_key(store_key) || !signed_by(domain, o, store_key) {
         return Err(CertReason::Signature);
     }
     Ok(ListInfo { seq: seq as u64, issued_at, pruned_before, revoked })

@@ -19826,6 +19826,19 @@ window.addEventListener("DOMContentLoaded", async () => {
       ? ask("지갑 비밀번호", "판매 글을 내리려면 묶음을 이 지갑의 새 주소로 옮겨야 해요. 옮긴 뒤 지갑을 바로 잠가요.", { password: true })
       : ask("지갑 비밀번호 재인증", "폰과 연결할 받기 전용 번호를 만든 뒤 지갑을 바로 잠가요.", { password: true }),
     onState: paintHomePhone });
+  // 체인 POS ① 「체인 매장」 카드 — 처음 보일 때만 지연 묶음(src/chain-store.ts)을 읽는다. 읽기 실패해도 설정 화면은 산다(다음에 보일 때 다시).
+  { const host = document.getElementById("chain-store-card");
+    if (host && "IntersectionObserver" in window) {
+      const io = new IntersectionObserver((seen) => {
+        if (!seen.some((e) => e.isIntersecting)) return;
+        io.disconnect();
+        void import("./chain-store").then((m) => m.mountChainStore(host, { invoke, sure, ensureUnlocked, errText,
+          pickSave: (name) => pickSavePath({ defaultPath: name, filters: [{ name: "Text", extensions: ["txt"] }] }),
+          pickOpen: async () => { const p = await pickFile({ multiple: false, directory: false, filters: [{ name: "Text", extensions: ["txt"] }] }); return typeof p === "string" ? p : null; } }))
+          .catch((e) => { console.warn("chain-store load failed", e); io.observe(host); });
+      });
+      io.observe(host);
+    } }
   $("sales-back").onclick = () => showPage("home");
   $("reward-back").onclick = () => showPage("home");
   $("parts-back").onclick = () => showPage("home");

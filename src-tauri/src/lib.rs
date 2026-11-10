@@ -50,6 +50,7 @@ mod moving;
 mod trust;
 mod publicbook;
 mod chain_info;
+mod chain_store;
 mod health;
 mod ipfs;
 mod ipfsconf;
@@ -379,6 +380,13 @@ pub fn run() {
             shopkey::shop_pubkey,
             storesign::store_key_info,
             storesign::store_sign_digest,
+            chain_store::chain_store_issue,
+            chain_store::chain_store_join,
+            chain_store::chain_store_status,
+            chain_store::chain_store_list,
+            chain_store::chain_store_revoke,
+            chain_store::chain_store_bundle_save,
+            chain_store::chain_store_bundle_read,
             lan_mount::lan_sync_status,
             lan_mount::lan_store_set,
             lan_mount::lan_revocation_update,
