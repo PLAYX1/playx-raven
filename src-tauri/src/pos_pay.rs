@@ -52,6 +52,7 @@ pub const ERR_SIGN: &str = "매장 열쇠로 서명하지 못했어요. 본점�
 pub const ERR_CHAIN_BIZ: &str = "체인 매장은 본점이 정한 사업자 번호를 써요.";
 pub const ERR_LOCKED: &str = crate::storesign::ERR_LOCKED;
 pub const ERR_RESTORE: &str = "본점에서 받은 기록이 이 매장 것이 아니거나 이어지지 않아요. 본점에 연락해 주세요.";
+pub const ERR_RESTORE_KEY: &str = "본점에서 받은 기록의 서명 열쇠가 이 매장 열쇠(또는 바로 앞 열쇠)가 아니에요. 본점에 연락해 주세요.";
 pub const ERR_RESTORE_EMPTY: &str = "본점에 이 매장의 기록이 아직 없어요.";
 pub const ERR_RESTORE_HAVE: &str = "이 컴퓨터에 이미 이 매장의 결제 기록이 있어요. 되찾기는 새 컴퓨터에서 결제를 적기 전에만 할 수 있어요.";
 pub const ERR_BUSY: &str = "다른 레이븐볼트 창이 이 매장의 결제 기록을 쓰고 있어요. 그 창을 닫은 뒤 다시 해 주세요.";
@@ -74,6 +75,8 @@ pub struct Ctx {
     pub name: Option<String>,
     pub chain: Option<String>,
     pub store_key: Option<String>,
+    /// 증서의 `prevStoreKey`(같은 번호의 바로 앞 세대 열쇠) — ④ 되찾기 확인용.
+    pub prev_store_key: Option<String>,
     pub biz: Option<Value>,
 }
 
@@ -92,6 +95,7 @@ pub fn ctx_in(root: &Path, chain_dir: &Path) -> Ctx {
             name: Some(s.name),
             chain: Some(s.chain),
             store_key: Some(s.store_key),
+            prev_store_key: s.prev_store_key,
             biz: Some(s.biz),
         };
     }
@@ -99,7 +103,7 @@ pub fn ctx_in(root: &Path, chain_dir: &Path) -> Ctx {
         let no = b.get("no").and_then(Value::as_str).unwrap_or("");
         crate::chain_store::clean_biz(no, b.get("sub").and_then(Value::as_str)).ok().as_ref() == Some(b)
     });
-    Ctx { scope: "shop".into(), store: None, name: None, chain: None, store_key: None, biz }
+    Ctx { scope: "shop".into(), store: None, name: None, chain: None, store_key: None, prev_store_key: None, biz }
 }
 
 fn read_json(p: &Path) -> Option<Value> {
@@ -167,7 +171,8 @@ fn shape_ok(o: &Map<String, Value>) -> bool {
             && o.get("amount").and_then(Value::as_i64).is_some_and(|a| (-MAX_AMOUNT..=-1).contains(&a)),
         // ④ 컴퓨터를 바꾼 뒤 본점에서 되찾은 로그에 잇는 줄: 뒤의 `skip` 개 번호는 쓰지 않는다(옛 컴퓨터가 본점에
         // 보내기 전에 손님에게 준 영수증 번호와 겹치지 않게).
-        "resume" => o.get("skip").and_then(Value::as_u64).is_some_and(|k| (1..=MAX_SKIP).contains(&k)),
+        "resume" => o.get("skip").and_then(Value::as_u64).is_some_and(|k| (1..=MAX_SKIP).contains(&k))
+            && o.get("prevKey").is_none_or(|k| k.as_str().is_some_and(is_public_key)),
         _ => false,
     };
     v_ok && seq_ok && at_ok && prev_ok && key_ok && body_ok
@@ -653,6 +658,26 @@ pub fn void_in(root: &Path, chain_dir: &Path, seq: u64, reason: Option<&str>, at
     })?
 }
 
+/// 줄들의 서명 열쇠가 「resume 줄에서만, 그 줄의 prevKey 를 이어 받아」 바뀌는가 → 마지막 구간 열쇠.
+fn key_segments(lines: &[Value]) -> Option<String> {
+    let mut cur: Option<String> = None;
+    for l in lines {
+        let k = l.get("key").and_then(Value::as_str)?.to_string();
+        match &cur {
+            None => cur = Some(k),
+            Some(c) if *c == k && l.get("kind").and_then(Value::as_str) != Some("resume") => {}
+            Some(c) => {
+                // 열쇠가 그대로인 resume(같은 세대로 다시 합류)도, 바뀐 resume 도 prevKey 가 앞 구간 열쇠여야 한다.
+                if l.get("kind").and_then(Value::as_str) != Some("resume") || l.get("prevKey").and_then(Value::as_str) != Some(c.as_str()) {
+                    return None;
+                }
+                cur = Some(k);
+            }
+        }
+    }
+    cur
+}
+
 /// ④ 컴퓨터를 바꾼 매장: 본점에서 되찾은 이 매장의 로그 줄을 그대로 깔고, 그 뒤에 `resume` 줄 하나(이 컴퓨터의
 /// 매장 열쇠 서명)를 잇는다. 다음 영수증 번호 = 되찾은 마지막 번호 + 1 + `RESUME_SKIP` — 번호를 다시 쓰지 않는다.
 /// 이 컴퓨터에 이미 이 매장 로그가 한 줄이라도 있으면 거절(덮어쓰지 않는다). 줄은 사슬·서명·시작 줄을 다 본다.
@@ -667,6 +692,13 @@ pub fn restore_lines_in(root: &Path, chain_dir: &Path, lines: &[Value], at: i64)
     let same_store = lines.iter().skip(1).all(|l| l.get("kind").and_then(Value::as_str) != Some("open") && l.get("store").and_then(Value::as_u64) == Some(store as u64));
     if check.broken.is_some() || !opens_here || !same_store {
         return Err(ERR_RESTORE.into());
+    }
+    // 열쇠 묶기(보안 검토 M2): 본점(이나 본점 데이터 열쇠를 훔친 사람)이 아무 열쇠로 서명한 가짜 줄을 끼우지 못하게.
+    // 줄들은 한 열쇠 구간들로 나뉘고, 열쇠는 `resume` 줄에서만 바뀐다 — 그 resume 줄(새 열쇠 서명)의 `prevKey` 가
+    // 앞 구간 열쇠여야 한다. 마지막 구간 열쇠 = 이 PC 의 매장 열쇠, 또는 증서의 `prevStoreKey`(바로 앞 세대)만.
+    let last_key = key_segments(lines).ok_or(ERR_RESTORE)?;
+    if Some(&last_key) != ctx.store_key.as_ref() && Some(&last_key) != ctx.prev_store_key.as_ref() {
+        return Err(ERR_RESTORE_KEY.into());
     }
     let dir = root.join("log").join(&ctx.scope);
     with_head(&dir, |h| {
@@ -700,6 +732,7 @@ pub fn restore_lines_in(root: &Path, chain_dir: &Path, lines: &[Value], at: i64)
         let mut b = Map::new();
         b.insert("kind".into(), json!("resume"));
         b.insert("skip".into(), json!(RESUME_SKIP));
+        b.insert("prevKey".into(), json!(last_key));
         b.insert("store".into(), json!(ctx.store));
         b.insert("biz".into(), ctx.biz.clone().unwrap_or(Value::Null));
         let rec = append_in(root, chain_dir, &ctx, h, b, at.max(lines.last().and_then(|l| l.get("at")).and_then(Value::as_i64).unwrap_or(0)))?;

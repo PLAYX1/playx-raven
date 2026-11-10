@@ -398,6 +398,7 @@ pub fn run() {
             chain_sales::chain_sales_pull_log,
             chain_backup::chain_backup_set,
             chain_backup::chain_backup_held_save,
+            chain_backup::chain_backup_preview,
             chain_backup::chain_backup_restore,
             pos_pay::pos_record,
             pos_pay::pos_void,

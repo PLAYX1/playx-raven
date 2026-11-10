@@ -5,7 +5,9 @@
 //! * 본점은 그것을 묶어(gzip JSON) **백업 열쇠**로 봉한다: key = HKDF-SHA256(salt `ravenvault-chain-backup-v1`,
 //!   ikm = 체인 비밀, info = 체인 공개키) → XChaCha20-Poly1305(AAD = `RVCHB1\n<체인키>`). 본점 PC 는 체인 비밀이
 //!   손에 있을 때 이 열쇠만 `chain/backup-key.json`(0600)에 둔다(③ sales-keys.json 과 같은 방식). 새 PC 에서는
-//!   **12단어로 다시 만든다** — 그래서 12단어 없이는 아무도 열지 못하고, 봉함이 열리면 본점이 만든 것이다(위조 불가).
+//!   **12단어로 다시 만든다** — 그래서 12단어 없이는 아무도 열지 못하고, 봉함이 열리면 본점이 만든 것이다.
+//!   🔸 위조 불가는 **`backup-key.json` 이 새지 않는 동안만**이다(본점 PC 를 통째로 가진 사람은 백업도 만들 수 있다).
+//!   열쇠 세대 돌리기(새 세대 백업 열쇠·옛 백업 폐기)는 나중 일 — 지금은 한 체인에 한 열쇠.
 //! * 🔴 담지 않는 것: `sales-keys.json`·`backup-key.json`(열쇠 — 12단어로 다시 만든다) · `store.json`(매장 비밀) · 12단어 ·
 //!   `backup/`·`held/`(백업 자신) · 그 밖에 정해진 이름이 아닌 파일 전부(허용 목록).
 //! * 맡는 매장(이웃 1곳)은 본점이 정한다(`backup.json`). 그 매장이 ③ 보내기를 할 때 본점 답에 백업 요약(해시·크기·때)이
@@ -26,8 +28,8 @@ const KDF_SALT: &[u8] = b"ravenvault-chain-backup-v1";
 const TEXT_PREFIX: &str = "rvchainbak1-";
 /// 본점이 백업을 다시 묶는 간격.
 pub const BUILD_EVERY_MS: i64 = 6 * 3600_000;
-/// 한 번에 건네는 조각.
-pub const CHUNK: usize = 384 * 1024;
+/// 한 번에 건네는 조각(봉함·base64 두 번 뒤에도 본점 답 상한 1MiB 안 — chain_sales 시험이 잰다).
+pub const CHUNK: usize = 256 * 1024;
 /// 봉한 백업 · 풀어 놓은 내용의 상한(이보다 크면 묶지도 받지도 않는다).
 pub const MAX_BLOB: u64 = 256 * 1024 * 1024;
 const MAX_PLAIN: u64 = 512 * 1024 * 1024;
@@ -44,6 +46,7 @@ pub const ERR_HAVE_HEAD: &str = "이 컴퓨터에는 이미 본점 기록이 있
 pub const ERR_IS_STORE: &str = "이 컴퓨터는 매장으로 연결돼 있어요. 본점 백업은 본점이 될 컴퓨터에서 되살려 주세요.";
 pub const ERR_NO_HELD: &str = "이 매장이 맡아 둔 본점 백업이 아직 없어요.";
 pub const ERR_TOO_BIG: &str = "본점 백업이 너무 커요.";
+pub const ERR_CONFIRM: &str = "확인한 백업과 고른 파일이 달라요. 처음부터 다시 골라 주세요.";
 pub const ERR_NEED_KEY: &str = "본점 백업 열쇠가 아직 없어요. 12단어로 한 번 준비해 주세요.";
 
 fn read_json(p: &Path) -> Option<Value> {
@@ -132,7 +135,9 @@ fn collect(dir: &Path) -> Vec<(String, Vec<u8>)> {
 /// 12단어만 있으면 언제든 다시 만들 수 있다. 본점은 체인 비밀이 손에 있을 때(매장 만들기·받을 준비·맡기기) 이 열쇠만
 /// `chain/backup-key.json`(0600)에 둔다 — `sales-keys.json` 과 같은 자리·같은 등급. 백업에는 들어가지 않는다.
 /// 🔸 공개키에게 봉하기(ECIES)를 쓰지 않은 이유: 체인 공개키는 공개라 **누구나** 그럴듯한 백업을 만들 수 있다(맡은 매장이
-///    가짜 매출을 끼운 백업으로 바꿔치기). 대칭 열쇠는 봉함이 곧 「본점(또는 12단어)이 만들었다」는 증명이다.
+///    가짜 매출을 끼운 백업으로 바꿔치기). 대칭 열쇠는 봉함이 곧 「본점(또는 12단어)이 만들었다」는 증명이다 —
+///    단, backup-key.json 이 새지 않는 동안. 옛 진짜 백업을 내미는 것(되돌리기)은 봉함으로 못 막는다 →
+///    되살리기 전 만든 때를 보여 주고, 되살린 뒤 공개 끊기 목록·명부로 메운다(chain_backup_restore).
 fn derive_backup_key(chain_sk: &[u8; 32]) -> Option<(String, DataKey)> {
     let chain = cs::pubkey(chain_sk).ok()?;
     let k = hkdf_key(KDF_SALT, chain_sk, chain.as_bytes())?;
@@ -294,21 +299,28 @@ pub fn offer_for(dir: &Path, store: u32) -> Option<Value> {
 /// 본점: 조각 하나(`op: "backup"`). 맡는 매장이 아니면 `{none:true}`.
 pub fn chunk_reply(dir: &Path, store: u32, offset: u64, now: i64) -> Value {
     let Some(offer) = offer_for(dir, store) else { return json!({ "none": true }) };
-    let Ok(blob) = std::fs::read(out_bin(dir)) else { return json!({ "none": true }) };
-    let hash = offer["hash"].as_str().unwrap_or("");
-    if sha_hex(&blob) != hash || offset > blob.len() as u64 {
+    let hash = offer["hash"].as_str().unwrap_or("").to_string();
+    let size = offer["size"].as_u64().unwrap_or(0);
+    // out.json 의 해시를 믿는다(받기 잠금 안에서 파일 전체를 읽어 해시하지 않는다) — 매장이 다 모은 뒤 해시를 맞춰 본다.
+    // 파일 크기가 요약과 다르면(묶는 중·망가짐) 주지 않는다.
+    let Ok(mut f) = std::fs::File::open(out_bin(dir)) else { return json!({ "none": true }) };
+    if f.metadata().map(|m| m.len()).ok() != Some(size) || offset > size {
         return json!({ "none": true });
     }
-    let start = offset as usize;
-    let end = (start + CHUNK).min(blob.len());
-    if end == blob.len() {
+    let len = (CHUNK as u64).min(size - offset) as usize;
+    let mut buf = vec![0u8; len];
+    use std::io::Seek;
+    if f.seek(std::io::SeekFrom::Start(offset)).is_err() || f.read_exact(&mut buf).is_err() {
+        return json!({ "none": true });
+    }
+    if offset + len as u64 == size {
         // 마지막 조각을 건넸다(받았는지는 매장의 다음 요약 비교로 다시 맞춰진다).
         let mut s = setting(dir);
         s["deliveredHash"] = json!(hash);
         s["deliveredAt"] = json!(now);
         let _ = write_json(&setting_file(dir), &s);
     }
-    json!({ "hash": hash, "size": blob.len(), "at": offer["at"], "offset": offset, "data": STANDARD.encode(&blob[start..end]) })
+    json!({ "hash": hash, "size": size, "at": offer["at"], "offset": offset, "data": STANDARD.encode(&buf) })
 }
 
 /// 본점 화면용(비밀·금액 없음).
@@ -430,13 +442,7 @@ pub fn held_text_in(chain_dir: &Path) -> Result<String, &'static str> {
 
 /// 봉한 백업을 체인 비밀로 열어 이 컴퓨터의 chain/ 폴더에 되살린다. 데이터 열쇠는 체인 비밀로 다시 만든다.
 /// 이미 본점·매장인 컴퓨터는 거절(덮어쓰지 않는다). issued.json 은 맨 마지막에 쓴다(반쯤 되살린 PC 가 본점으로 보이지 않게).
-pub fn restore_in(dir: &Path, chain_sk: &[u8; 32], blob: &[u8]) -> Result<Value, String> {
-    if dir.join("issued.json").exists() {
-        return Err(ERR_HAVE_HEAD.into());
-    }
-    if dir.join("store.json").exists() {
-        return Err(ERR_IS_STORE.into());
-    }
+fn open_doc(chain_sk: &[u8; 32], blob: &[u8]) -> Result<(String, Value), String> {
     let chain = cs::pubkey(chain_sk).map_err(|_| ERR_FILE.to_string())?;
     let plain = open_with_chain(chain_sk, blob)?;
     let doc: Value = serde_json::from_slice(&plain).map_err(|_| ERR_FILE.to_string())?;
@@ -445,6 +451,29 @@ pub fn restore_in(dir: &Path, chain_sk: &[u8; 32], blob: &[u8]) -> Result<Value,
     }
     if doc.get("chain").and_then(Value::as_str) != Some(chain.as_str()) {
         return Err(ERR_OTHER_CHAIN.into());
+    }
+    Ok((chain, doc))
+}
+
+/// 되살리기 전에 보여 줄 것: 백업을 만든 때·매장 수(아무것도 쓰지 않는다). 옛 백업을 내밀어도 사장이 날짜를 보고 고른다.
+pub fn preview_in(chain_sk: &[u8; 32], blob: &[u8]) -> Result<Value, String> {
+    let (_, doc) = open_doc(chain_sk, blob)?;
+    let stores = doc.pointer("/files/issued.json").and_then(Value::as_str).and_then(|b| STANDARD.decode(b).ok())
+        .and_then(|b| serde_json::from_slice::<Value>(&b).ok()).and_then(|v| v.get("certs").and_then(Value::as_array).map(|a| a.len())).unwrap_or(0);
+    Ok(json!({ "at": doc.get("at"), "stores": stores }))
+}
+
+/// `confirm_at` = 사장이 미리 보기에서 확인한 백업 시각 — 다르면(파일이 바뀌었으면) 되살리지 않는다.
+pub fn restore_in(dir: &Path, chain_sk: &[u8; 32], blob: &[u8], confirm_at: i64) -> Result<Value, String> {
+    if dir.join("issued.json").exists() {
+        return Err(ERR_HAVE_HEAD.into());
+    }
+    if dir.join("store.json").exists() {
+        return Err(ERR_IS_STORE.into());
+    }
+    let (chain, doc) = open_doc(chain_sk, blob)?;
+    if doc.get("at").and_then(Value::as_i64) != Some(confirm_at) {
+        return Err(ERR_CONFIRM.into());
     }
     let files = doc.get("files").and_then(Value::as_object).ok_or(ERR_FILE)?;
     let mut decoded: Vec<(String, Vec<u8>)> = Vec::new();
@@ -535,34 +564,82 @@ pub fn chain_backup_held_save(path: String) -> Result<Value, String> {
     Ok(json!({ "path": path }))
 }
 
-/// 새 본점 컴퓨터: 맡은 매장에서 받아 온 백업 파일로 본점 기록을 되살린다(12단어 한 번 — 체인 열쇠는 쓰고 바로 지운다).
-#[tauri::command]
-pub async fn chain_backup_restore(path: String) -> Result<Value, String> {
-    refuse_locked()?;
-    let dir = cs::chain_dir_path();
+fn read_backup_file(path: &str) -> Result<Vec<u8>, String> {
+    let p = PathBuf::from(path);
+    let meta = std::fs::metadata(&p).map_err(|_| ERR_FILE.to_string())?;
+    if !meta.is_file() || meta.len() > MAX_BLOB * 4 / 3 + 64 {
+        return Err(ERR_FILE.into());
+    }
+    let text = std::fs::read_to_string(&p).map_err(|_| ERR_FILE.to_string())?;
+    Ok(from_text(&text)?)
+}
+
+fn refuse_not_new(dir: &Path) -> Result<(), String> {
     if dir.join("issued.json").exists() {
         return Err(ERR_HAVE_HEAD.into());
     }
     if dir.join("store.json").exists() {
         return Err(ERR_IS_STORE.into());
     }
-    let p = PathBuf::from(&path);
-    let meta = std::fs::metadata(&p).map_err(|_| ERR_FILE.to_string())?;
-    if !meta.is_file() || meta.len() > MAX_BLOB * 4 / 3 + 64 {
-        return Err(ERR_FILE.into());
-    }
-    let text = std::fs::read_to_string(&p).map_err(|_| ERR_FILE.to_string())?;
-    let blob = from_text(&text)?;
+    Ok(())
+}
+
+/// 새 본점 컴퓨터 ①: 백업 파일을 12단어로 열어 만든 때·매장 수만 보여 준다(쓰지 않는다).
+#[tauri::command]
+pub async fn chain_backup_preview(path: String) -> Result<Value, String> {
+    refuse_locked()?;
+    refuse_not_new(&cs::chain_dir_path())?;
+    let blob = read_backup_file(&path)?;
     let (mut chain_sk, _) = cs::owner_keys(None, Vec::new()).await?;
+    let r = preview_in(&chain_sk, &blob);
+    crate::words::wipe_bytes(&mut chain_sk);
+    r
+}
+
+/// 새 본점 컴퓨터 ②: 사장이 날짜를 확인한(`confirm_at`) 백업으로 되살린다. 그 뒤 공개 릴레이에서
+/// 이 체인의 끊기 목록(앞으로만)·공개 명부(serial 바닥·백업 뒤에 끊긴 열쇠)를 읽어 백업 뒤의 일을 메운다.
+/// 릴레이에서 끊기 목록을 못 받았으면 `revocationsStale: true`.
+#[tauri::command]
+pub async fn chain_backup_restore(path: String, confirm_at: i64) -> Result<Value, String> {
+    refuse_locked()?;
+    let dir = cs::chain_dir_path();
+    refuse_not_new(&dir)?;
+    let blob = read_backup_file(&path)?;
+    let (mut chain_sk, _) = cs::owner_keys(None, Vec::new()).await?;
+    let author = crate::shopkey::pubkey_of(&chain_sk).ok();
+    let chain = cs::pubkey(&chain_sk).ok();
     let sk = chain_sk;
+    let d = dir.clone();
     let r = tokio::task::spawn_blocking(move || {
         let mut sk = sk;
-        let r = restore_in(&dir, &sk, &blob);
+        let r = restore_in(&d, &sk, &blob, confirm_at);
         crate::words::wipe_bytes(&mut sk);
         r
     }).await.map_err(|_| ERR_SAVE.to_string());
     crate::words::wipe_bytes(&mut chain_sk);
-    r?
+    let mut out = r??;
+    let events = match author {
+        Some(a) => fetch_public(&a).await,
+        None => None,
+    };
+    let (got_list, floor) = match (events, chain) {
+        (Some(ev), Some(c)) => tokio::task::spawn_blocking(move || cs::apply_public_in(&dir, &c, &ev)).await.unwrap_or((false, None)),
+        _ => (false, None),
+    };
+    out["revocationsStale"] = json!(!got_list);
+    out["serialFloor"] = json!(floor);
+    Ok(out)
+}
+
+/// 바깥 릴레이에서 이 체인 열쇠가 올린 끊기 목록·공개 명부(kind 30078). 한 곳도 답하지 않으면 None.
+async fn fetch_public(author: &str) -> Option<Vec<Value>> {
+    let req = json!(["REQ", "cb1", { "kinds": [30078], "authors": [author], "#d": [cs::D_REVOCATIONS, cs::D_ROSTER], "limit": 50 }]).to_string();
+    let targets = crate::nostrpub::outside_relays();
+    let got = futures_util::future::join_all(targets.iter().map(|u| crate::nostrpub::read_one(u, &req, "cb1"))).await;
+    if !got.iter().any(|r| r.is_ok()) {
+        return None;
+    }
+    Some(got.into_iter().flatten().flatten().filter(|e| e.get("pubkey").and_then(Value::as_str) == Some(author)).collect())
 }
 
 #[cfg(test)]

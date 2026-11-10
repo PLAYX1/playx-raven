@@ -100,7 +100,8 @@ function storeView(host: HTMLElement, deps: ChainSalesDeps, msg: HTMLElement, sa
   const pull = el("details", "csl-pull");
   const pullBtn = button(() => t("본점에서 이 매장 기록 되찾기"), true);
   pull.append(el("summary", "", () => t("컴퓨터를 바꿨나요?")),
-    el("p", "meta", () => t("새 컴퓨터에서 결제를 적기 전에 한 번 눌러요. 본점이 받아 둔 이 매장 기록을 가져오고, 영수증 번호는 겹치지 않게 건너뛰어 이어 가요.")), pullBtn);
+    el("p", "meta", () => t("새 컴퓨터에서 결제를 적기 전에 한 번 눌러요. 본점이 받아 둔 이 매장 기록을 가져오고, 영수증 번호는 겹치지 않게 건너뛰어 이어 가요.")),
+    el("p", "cs-warn", () => t("옛 컴퓨터의 매장 증서를 먼저 끊어 주세요")), pullBtn);
   host.replaceChildren(el("h4", "", () => t("본점으로 매출 보내기")),
     el("p", "meta", () => t("10분마다 이 매장의 결제 기록을 봉해서 본점으로 보내요. 끊겨도 기록은 여기 쌓였다가 연결되면 이어서 가요.")),
     state, facts, field, acts, held, pull, msg);

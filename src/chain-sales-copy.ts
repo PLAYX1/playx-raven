@@ -89,7 +89,13 @@ export const CHAIN_SALES_COPY: Record<string, [string, string, string]> = {
   "본점 백업 되살리기": ["Restore head office backup", "本店のバックアップを戻す", "恢复总店备份"],
   "12단어로 지갑을 되살린 뒤, 백업을 맡은 매장에서 저장해 온 본점 백업 파일을 골라요. 12단어로만 열려요.": ["After restoring the wallet with your 12 words, choose the head office backup file saved at the store that keeps it. Only your 12 words can open it.", "12単語でウォレットを戻したあと、バックアップを預かった店舗で保存してきた本店のバックアップファイルを選びます。12単語でだけ開きます。", "用 12 个助记词恢复钱包后，选择从保管门店存来的总店备份文件。只有 12 个助记词能打开。"],
   "본점 기록을 되살렸어요(매장 {0}곳). 매장 컴퓨터마다 이 컴퓨터의 새 본점 주소를 적어 주세요.": ["Head office records restored ({0} stores). On each store computer, enter this computer’s new head office address.", "本店の記録を戻しました（{0}店舗）。各店舗のコンピューターに、このコンピューターの新しい本店アドレスを入れてください。", "已恢复总店记录（{0} 家门店）。请在每台门店电脑上填写这台电脑的新总店地址。"],
+  "옛 컴퓨터의 매장 증서를 먼저 끊어 주세요": ["First cut off the old computer’s store certificate", "先に古いコンピューターの店舗証明書を切ってください", "请先停用旧电脑的门店证书"],
+  "이 백업은 {0}에 만든 것이에요(매장 {1}곳). 그 뒤의 일은 빠져 있어요. 되살릴까요?": ["This backup was made {0} ({1} stores). Anything after that is missing. Restore it?", "このバックアップは{0}に作ったものです（{1}店舗）。そのあとのことは入っていません。戻しますか？", "此备份制作于 {0}（{1} 家门店）。之后的内容不在其中。要恢复吗？"],
+  "되살리기": ["Restore", "戻す", "恢复"],
+  "끊기 목록은 릴레이에서 못 받았어요": ["Could not get the cut-off list from the relays", "切断リストはリレーから受け取れませんでした", "未能从中继获取停用名单"],
   // 러스트 고정 문장 (chain_backup.rs · pos_pay.rs 되찾기)
+  "확인한 백업과 고른 파일이 달라요. 처음부터 다시 골라 주세요.": ["The file you chose is not the backup you confirmed. Please choose again from the start.", "確認したバックアップと選んだファイルが違います。最初から選び直してください。", "所选文件与确认的备份不同。请从头重新选择。"],
+  "본점에서 받은 기록의 서명 열쇠가 이 매장 열쇠(또는 바로 앞 열쇠)가 아니에요. 본점에 연락해 주세요.": ["The records from head office are not signed with this store’s key (or the one just before it). Please contact head office.", "本店から受け取った記録の署名鍵が、この店舗の鍵（または直前の鍵）ではありません。本店に連絡してください。", "从总店收到的记录不是用本门店钥匙（或上一把钥匙）签名的。请联系总店。"],
   "그 번호의 매장이 없거나 끊긴 매장이에요.": ["There is no store with that number, or it has been cut off.", "その番号の店舗がないか、切断した店舗です。", "没有该编号的门店，或该门店已停用。"],
   "본점 백업 파일이 아니거나 망가졌어요. 맡은 매장에서 다시 저장해 와 주세요.": ["This is not a head office backup file, or it is damaged. Save it again at the store that keeps it.", "本店のバックアップファイルではないか、壊れています。預かった店舗でもう一度保存してきてください。", "这不是总店备份文件，或文件已损坏。请在保管门店重新保存。"],
   "이 백업은 다른 12단어(다른 본점)의 것이라 열 수 없어요.": ["This backup belongs to different 12 words (another head office), so it cannot be opened.", "このバックアップは別の12単語（別の本店）のものなので開けません。", "此备份属于另一组 12 个助记词（另一个总店），无法打开。"],

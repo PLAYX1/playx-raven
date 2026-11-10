@@ -117,6 +117,8 @@ pub struct StoreCert {
     pub issued_at: i64,
     pub not_after: i64,
     pub cert_id: String,
+    /// 같은 매장 번호의 바로 앞 세대 열쇠(그 열쇠가 끊겨 새 세대로 다시 발급했을 때만). ④ 기록 되찾기가 옛 줄 서명을 이 열쇠로 확인한다.
+    pub prev_store_key: Option<String>,
 }
 
 fn int(v: &Value, min: i64, max: i64) -> Option<i64> {
@@ -131,7 +133,9 @@ fn validate(raw: &Value, with_sig: bool) -> Result<(&Map<String, Value>, StoreCe
     }
     const BODY: [&str; 12] = ["v", "chain", "store", "name", "storeKey", "biz", "role", "scope", "serial", "issuedAt", "notAfter", "sig"];
     let want = if with_sig { &BODY[..] } else { &BODY[..11] };
-    if o.len() != want.len() || !want.iter().all(|k| o.contains_key(*k)) {
+    // 선택 칸은 `prevStoreKey` 하나뿐(④ 다시 발급). 그 밖의 칸이 하나라도 더 있으면 거절.
+    let has_prev = o.contains_key("prevStoreKey");
+    if o.len() != want.len() + usize::from(has_prev) || !want.iter().all(|k| o.contains_key(*k)) {
         return Err(());
     }
     let chain = o["chain"].as_str().filter(|k| is_public_key(k)).ok_or(())?;
@@ -139,6 +143,10 @@ fn validate(raw: &Value, with_sig: bool) -> Result<(&Map<String, Value>, StoreCe
     if o["v"].as_u64() != Some(1) || o["role"].as_str() != Some("store") || chain == store_key {
         return Err(());
     }
+    let prev_store_key = match o.get("prevStoreKey") {
+        None => None,
+        Some(p) => Some(p.as_str().filter(|k| is_public_key(k) && *k != store_key && *k != chain).ok_or(())?.to_string()),
+    };
     let store = int(&o["store"], 1, 9999).ok_or(())? as u32;
     let name = o["name"].as_str().ok_or(())?;
     if clean_name(name).ok().as_deref() != Some(name) {
@@ -161,7 +169,7 @@ fn validate(raw: &Value, with_sig: bool) -> Result<(&Map<String, Value>, StoreCe
         return Err(());
     }
     let cert_id = store_cert_id(chain, serial);
-    Ok((o, StoreCert { chain: chain.into(), store, name: name.into(), store_key: store_key.into(), serial, issued_at, not_after, cert_id }))
+    Ok((o, StoreCert { chain: chain.into(), store, name: name.into(), store_key: store_key.into(), serial, issued_at, not_after, cert_id, prev_store_key }))
 }
 
 /// 모양 + 본점 서명만(시각은 보지 않는다) — ④ 백업을 되살릴 때 옛 증서까지 확인하는 용도.
@@ -371,8 +379,21 @@ pub fn issue_in(dir: &Path, chain_sk: &[u8; 32], store_sk: &[u8; 32], n: u32, na
     if hist_chain != chain {
         return Err(ERR_OTHER_CHAIN.into());
     }
-    let serial = certs.iter().filter_map(|c| c.get("serial").and_then(Value::as_u64)).max().unwrap_or(0) + 1;
-    let body = cert_body(&chain, n, name, &store_pub, biz, serial, now)?;
+    // 번호 바닥(④ 되살린 본점 — 백업 뒤에 나간 serial 을 다시 쓰지 않는다).
+    let floor = serial_floor(dir, &chain);
+    let serial = certs.iter().filter_map(|c| c.get("serial").and_then(Value::as_u64)).max().unwrap_or(0).max(floor) + 1;
+    let mut body = cert_body(&chain, n, name, &store_pub, biz, serial, now)?;
+    // 같은 번호의 옛 열쇠가 끊겨 새 세대로 다시 내는 것이면 바로 앞 열쇠를 적어 둔다(④ 되찾기 확인용).
+    let burned = burned_keys(dir);
+    let prev = certs.iter().rev()
+        .filter(|c| c.get("store").and_then(Value::as_u64) == Some(n as u64))
+        .filter_map(|c| c.get("storeKey").and_then(Value::as_str))
+        .find(|k| *k != store_pub && burned.iter().any(|b| b == k))
+        .map(String::from);
+    if let Some(p) = prev {
+        body["prevStoreKey"] = json!(p);
+        validate(&body, false).map_err(|_| ERR_CERT.to_string())?;
+    }
     let cert = sign_doc(CHAIN_DOMAIN, &body, &chain, ecdsa_signer(chain_sk)).map_err(|_| ERR_SIGN.to_string())?;
     verify_store_cert_body(&cert, &chain, now).map_err(|_| ERR_SIGN.to_string())?;
     let mut install_words = new_install_words();
@@ -437,6 +458,7 @@ pub struct StoreSelf {
     pub name: String,
     pub store_key: String,
     pub biz: Value,
+    pub prev_store_key: Option<String>,
 }
 
 pub(crate) fn chain_dir_path() -> PathBuf {
@@ -456,7 +478,7 @@ pub fn store_self_in(dir: &Path) -> Option<StoreSelf> {
     if !signed_by(CHAIN_DOMAIN, o, &c.chain) {
         return None;
     }
-    Some(StoreSelf { biz: o.get("biz").cloned().unwrap_or(Value::Null), chain: c.chain, store: c.store, name: c.name, store_key: c.store_key })
+    Some(StoreSelf { biz: o.get("biz").cloned().unwrap_or(Value::Null), chain: c.chain, store: c.store, name: c.name, store_key: c.store_key, prev_store_key: c.prev_store_key })
 }
 
 /// 매장 열쇠(`chain/store.json`)로 문서에 서명한다(lan_cert 서명 꼴, 부르는 쪽이 도메인을 정한다).
@@ -629,11 +651,74 @@ pub fn verify_relay_roster(v: &Value, chain: &str) -> Option<(i64, Vec<(u64, Str
 // ── 12단어 → 열쇠 (본점) ───────────────────────────────────────────
 
 /// 이 본점이 끊은 매장 공개키들(비밀 없음). 다시 발급할 때 이 열쇠들은 건너뛴다.
+/// ④ 되살린 본점이면 공개 명부에서 알아낸 「백업 뒤에 끊긴 열쇠」(`serial-floor.json` burned)도 더한다.
 pub fn burned_keys(dir: &Path) -> Vec<String> {
     let Some((chain, certs)) = load_history(dir) else { return Vec::new() };
     let revoked = load_list(dir, &chain).map(|(_, i)| i.revoked).unwrap_or_default();
-    certs.iter().filter(|c| store_row(c, &revoked)["revoked"].as_bool().unwrap_or(false))
-        .filter_map(|c| c.get("storeKey").and_then(Value::as_str).map(String::from)).collect()
+    let mut out: Vec<String> = certs.iter().filter(|c| store_row(c, &revoked)["revoked"].as_bool().unwrap_or(false))
+        .filter_map(|c| c.get("storeKey").and_then(Value::as_str).map(String::from)).collect();
+    if let Some(f) = read_json(&dir.join("serial-floor.json")).filter(|f| f.get("chain").and_then(Value::as_str) == Some(chain.as_str())) {
+        out.extend(f.get("burned").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).filter(|k| is_public_key(k)).map(String::from));
+    }
+    out.sort();
+    out.dedup();
+    out
+}
+
+/// ④ 되살린 본점의 serial 바닥(공개 명부에서 본 가장 큰 serial). 없으면 0.
+pub fn serial_floor(dir: &Path, chain: &str) -> u64 {
+    read_json(&dir.join("serial-floor.json")).filter(|f| f.get("chain").and_then(Value::as_str) == Some(chain))
+        .and_then(|f| f.get("floor").and_then(Value::as_u64)).unwrap_or(0)
+}
+
+/// ④ 되살린 뒤: 공개 릴레이에서 읽은 이 체인의 kind 30078 사건들로 (1) 끊기 목록을 앞으로만 당기고
+/// (2) 공개 명부의 serial·끊긴 열쇠가 발급 기록보다 앞서 있으면 `serial-floor.json` 에 적는다.
+/// 사건 겉봉투 서명은 보지 않고, **안의 문서**를 체인 열쇠 서명으로 확인한다. → (끊기 목록을 받았나, 바닥).
+pub fn apply_public_in(dir: &Path, chain: &str, events: &[Value]) -> (bool, Option<u64>) {
+    let d_of = |e: &Value| e.get("tags").and_then(Value::as_array).and_then(|t| t.iter()
+        .find(|x| x.get(0).and_then(Value::as_str) == Some("d")).and_then(|x| x.get(1)).and_then(Value::as_str).map(String::from));
+    let docs = |d: &str| -> Vec<Value> {
+        events.iter().filter(|e| e.get("kind").and_then(Value::as_i64) == Some(30078) && d_of(e).as_deref() == Some(d))
+            .filter_map(|e| serde_json::from_str::<Value>(e.get("content")?.as_str()?).ok()).collect()
+    };
+    let mut lists = docs(D_REVOCATIONS);
+    lists.retain(|l| list_ok(l, chain));
+    lists.sort_by_key(|l| l.get("seq").and_then(Value::as_u64).unwrap_or(0));
+    let mut got_list = false;
+    for l in &lists {
+        got_list |= accept_list_in(dir, chain, l).is_ok();
+    }
+    let Some((_, certs)) = load_history(dir) else { return (got_list, None) };
+    let have_max = certs.iter().filter_map(|c| c.get("serial").and_then(Value::as_u64)).max().unwrap_or(0);
+    let known: Vec<&str> = certs.iter().filter_map(|c| c.get("storeKey").and_then(Value::as_str)).collect();
+    let mut floor = 0u64;
+    let mut burned: Vec<String> = Vec::new();
+    for r in docs(D_ROSTER) {
+        let Some(o) = r.as_object() else { continue };
+        if o.get("kind").and_then(Value::as_str) != Some("roster") || o.get("chain").and_then(Value::as_str) != Some(chain) || !signed_by(CHAIN_DOMAIN, o, chain) {
+            continue;
+        }
+        for st in o.get("stores").and_then(Value::as_array).into_iter().flatten() {
+            floor = floor.max(st.get("serial").and_then(Value::as_u64).unwrap_or(0));
+            if st.get("revoked").and_then(Value::as_bool) == Some(true) {
+                if let Some(k) = st.get("storeKey").and_then(Value::as_str).filter(|k| is_public_key(k) && !known.contains(k)) {
+                    burned.push(k.to_string());
+                }
+            }
+        }
+    }
+    if floor <= have_max && burned.is_empty() {
+        return (got_list, None);
+    }
+    if let Some(f) = read_json(&dir.join("serial-floor.json")).filter(|f| f.get("chain").and_then(Value::as_str) == Some(chain)) {
+        burned.extend(f.get("burned").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).map(String::from));
+    }
+    burned.sort();
+    burned.dedup();
+    let old = serial_floor(dir, chain);
+    let floor = floor.max(old).max(have_max);
+    let _ = write_json(&dir.join("serial-floor.json"), &json!({ "v": 1, "chain": chain, "floor": floor, "burned": burned }));
+    (got_list, Some(floor))
 }
 
 /// 매장 n 의 첫 「끊기지 않은」 세대 열쇠.
@@ -991,7 +1076,7 @@ mod tests {
         assert!(!serde_json::to_string(&roster).unwrap().contains("123-45") && !serde_json::to_string(&roster).unwrap().contains("1234567890"), "공개 명부에 사업자 번호 금지");
         // 다시 발급하면 끊긴 세대를 건너뛴다
         let burned = burned_keys(&owner);
-        assert_eq!(burned, vec![pubkey(&s0).unwrap(), pubkey(&s0).unwrap()]);
+        assert_eq!(burned, vec![pubkey(&s0).unwrap()], "같은 열쇠는 한 번만");
         let fresh = fresh_store_key(WORDS, "", 5, &burned).unwrap();
         assert_ne!(fresh, s0);
         assert_eq!(fresh, crate::identity::chain_store_key_from(WORDS, "", 5, 1).unwrap());
@@ -1023,5 +1108,73 @@ mod tests {
         let chain = pubkey(&csk).unwrap();
         assert!(cert_body(&chain, 0, "x", &pubkey(&ssk).unwrap(), &biz(), 1, NOW).is_err());
         assert!(cert_body(&chain, 1, "x", &chain, &biz(), 1, NOW).is_err(), "본점 키 = 매장 키 금지");
+    }
+
+    #[test]
+    fn reissue_after_cut_names_the_previous_key_and_only_that_optional_field_is_allowed() {
+        let owner = dir("prev-owner");
+        let (csk, s0) = keys(5);
+        let chain = pubkey(&csk).unwrap();
+        let a = issue_in(&owner, &csk, &s0, 5, "5호점", &biz(), NOW).unwrap();
+        assert!(a.cert.get("prevStoreKey").is_none(), "첫 발급에는 앞 열쇠가 없다");
+        revoke_in(&owner, &csk, a.serial, NOW + 1).unwrap();
+        let s1 = fresh_store_key(WORDS, "", 5, &burned_keys(&owner)).unwrap();
+        let b = issue_in(&owner, &csk, &s1, 5, "5호점", &biz(), NOW + 2).unwrap();
+        assert_eq!(b.cert["prevStoreKey"], json!(pubkey(&s0).unwrap()));
+        let c = verify_store_cert_body(&b.cert, &chain, NOW + 3).unwrap();
+        assert_eq!(c.prev_store_key, Some(pubkey(&s0).unwrap()));
+        // 매장 PC 에서도 보인다
+        let pc = dir("prev-store");
+        join_in(&pc, &b.bundle, &b.install_words, NOW + 3).unwrap();
+        assert_eq!(store_self_in(&pc).unwrap().prev_store_key, Some(pubkey(&s0).unwrap()));
+        // 다른 번호의 매장은 앞 열쇠를 받지 않는다
+        let (_, s7) = keys(7);
+        assert!(issue_in(&owner, &csk, &s7, 7, "7호점", &biz(), NOW).unwrap().cert.get("prevStoreKey").is_none());
+        // 모양: 다른 칸 추가 금지 · prevStoreKey 는 공개키 모양이고 지금 열쇠·본점 열쇠와 달라야 한다
+        let mut body = cert_body(&chain, 5, "x", &pubkey(&s1).unwrap(), &biz(), 9, NOW).unwrap();
+        body["extra"] = json!(1);
+        assert!(validate(&body, false).is_err());
+        let mut body = cert_body(&chain, 5, "x", &pubkey(&s1).unwrap(), &biz(), 9, NOW).unwrap();
+        for bad in [json!("zz"), json!(pubkey(&s1).unwrap()), json!(chain.clone()), json!(5)] {
+            body["prevStoreKey"] = bad;
+            assert!(validate(&body, false).is_err());
+        }
+        body["prevStoreKey"] = json!(pubkey(&s0).unwrap());
+        assert!(validate(&body, false).is_ok());
+    }
+
+    #[test]
+    fn restored_head_catches_up_from_public_lists_and_never_reuses_a_serial() {
+        let owner = dir("pub-owner");
+        let (csk, s1) = keys(1);
+        let chain = pubkey(&csk).unwrap();
+        issue_in(&owner, &csk, &s1, 1, "1호점", &biz(), NOW).unwrap();
+        let two = issue_in(&owner, &csk, &keys(2).1, 2, "2호점", &biz(), NOW).unwrap();
+        // 백업은 여기서 찍혔다
+        let restored = dir("pub-restored");
+        for f in ["issued.json", "revocations.json"] {
+            std::fs::copy(owner.join(f), restored.join(f)).unwrap();
+        }
+        // 백업 뒤: 3·4번 발급, 2·4번 끊기 → 공개 릴레이에 끊기 목록·명부
+        issue_in(&owner, &csk, &keys(3).1, 3, "3호점", &biz(), NOW + 1).unwrap();
+        let four = issue_in(&owner, &csk, &keys(4).1, 4, "4호점", &biz(), NOW + 1).unwrap();
+        revoke_in(&owner, &csk, two.serial, NOW + 2).unwrap();
+        let (list, roster) = revoke_in(&owner, &csk, four.serial, NOW + 3).unwrap();
+        let ev = |d: &str, doc: &Value| json!({ "kind": 30078, "tags": [["d", d]], "content": doc.to_string() });
+        // 남이 만든 가짜 명부(서명 없음)는 무시된다
+        let fake = json!({ "v": 1, "kind": "roster", "chain": chain, "stores": [{ "serial": 999 }] });
+        let (got, floor) = apply_public_in(&restored, &chain, &[ev(D_REVOCATIONS, &list), ev(D_ROSTER, &roster), ev(D_ROSTER, &fake)]);
+        assert!(got);
+        assert_eq!(floor, Some(4));
+        // 끊기 목록이 앞으로 당겨져 2번이 끊긴 것을 안다
+        assert!(verify_store_cert(&two.cert, &chain, NOW + 10, load_list(&restored, &chain).map(|(v, _)| v).as_ref()).is_err());
+        // 다음 발급 serial 은 5 — 백업 뒤에 나간 3·4 를 다시 쓰지 않는다
+        assert_eq!(issue_in(&restored, &csk, &keys(5).1, 5, "5호점", &biz(), NOW + 20).unwrap().serial, 5);
+        // 백업에 없던 4번의 끊긴 열쇠도 다시 주지 않는다
+        assert!(burned_keys(&restored).contains(&pubkey(&keys(4).1).unwrap()));
+        // 아무것도 못 읽으면 바뀌는 것 없음
+        let empty = dir("pub-empty");
+        std::fs::copy(owner.join("issued.json"), empty.join("issued.json")).unwrap();
+        assert_eq!(apply_public_in(&empty, &chain, &[]), (false, None));
     }
 }

@@ -661,17 +661,20 @@ pub fn receive_in(dir: &Path, body: &[u8], now: i64, client: &str) -> (u16, Valu
     if write_json(&sdir.join("state.json"), &st).is_err() {
         return deny(500, "save");
     }
-    let mut inner = json!({ "logId": log_id, "ack": ack, "warn": warn.as_ref().map(|w| json!({ "at": w.0, "why": w.1 })), "revocations": list });
-    // ④ 맡는 매장에게만: 본점 백업 요약(해시·크기·때). 다르면 매장이 조각을 달라고 한다.
-    if let Some(offer) = crate::chain_backup::offer_for(dir, c.store) {
-        inner["backup"] = offer;
-    }
-    // ⑤ 같은 체인 릴레이 이웃 묶음의 해시 — 매장이 가진 것과 다르면 `{op:"peers"}` 로 받아 간다.
-    if let Some(h) = peers_bundle(dir, c.store).as_ref().and_then(bundle_hash) {
-        inner["peers"] = json!(h);
-    }
+    let mut inner = json!({ "logId": log_id, "ack": ack, "warn": warn.as_ref().map(|w| json!({ "at": w.0, "why": w.1 })) });
     if let Some(o) = op {
+        // 일 답에는 그 일의 답만(끊기 목록·요약을 싣지 않는다) — 답 크기 상한(MAX_REPLY_BYTES)을 지키려고.
         inner["op"] = handle_op(dir, &c, &o, now);
+    } else {
+        inner["revocations"] = list.unwrap_or(Value::Null);
+        // ④ 맡는 매장에게만: 본점 백업 요약(해시·크기·때). 다르면 매장이 조각을 달라고 한다.
+        if let Some(offer) = crate::chain_backup::offer_for(dir, c.store) {
+            inner["backup"] = offer;
+        }
+        // ⑤ 같은 체인 릴레이 이웃 묶음의 해시 — 매장이 가진 것과 다르면 `{op:"peers"}` 로 받아 간다.
+        if let Some(h) = peers_bundle(dir, c.store).as_ref().and_then(bundle_hash) {
+            inner["peers"] = json!(h);
+        }
     }
     let sealed = seal(&key, &aad_of(AAD_RES, &json!(nonce)), inner.to_string().as_bytes());
     match sealed {
@@ -1305,10 +1308,12 @@ fn open_reply(chain_dir: &Path, out: &Outgoing, status: Option<u16>, resp: &[u8]
         return Err(fail("bad-reply"));
     }
     // 본점 백업 요약(맡는 매장만 받는다) — 다음 조각 받기가 본다. 끊기 목록은 서명·seq 후퇴 금지를 넘을 때만.
-    note_try(chain_dir, now, |ps| {
-        ps["backupOffer"] = inner.get("backup").cloned().unwrap_or(Value::Null);
-        ps["peersOffer"] = inner.get("peers").cloned().filter(Value::is_string).unwrap_or(Value::Null);
-    });
+    if inner.get("op").is_none() {
+        note_try(chain_dir, now, |ps| {
+            ps["backupOffer"] = inner.get("backup").cloned().unwrap_or(Value::Null);
+            ps["peersOffer"] = inner.get("peers").cloned().filter(Value::is_string).unwrap_or(Value::Null);
+        });
+    }
     if let (Some(rev), Some(me)) = (inner.get("revocations").filter(|r| r.is_object()), cs::store_self_in(chain_dir)) {
         let _ = cs::accept_list_in(chain_dir, &me.chain, rev);
     }
@@ -1723,7 +1728,7 @@ pub async fn run_loop() {
         } else if dir.join("issued.json").exists() {
             let d2 = dir.clone();
             let down = tokio::task::spawn_blocking(move || {
-                // ④ 맡는 매장이 정해져 있으면 6시간마다 본점 백업을 다시 묶는다(체인 공개키에게 봉함 — 비밀 없이).
+                // ④ 맡는 매장이 정해져 있으면 6시간마다 본점 백업을 다시 묶는다(backup-key.json 의 대칭 열쇠로 봉함).
                 crate::chain_backup::build_if_due_in(&d2, now);
                 watch_tick_in(&d2, now)
             }).await.unwrap_or_default();
@@ -2339,14 +2344,21 @@ mod tests {
         let new_head = base.join("newhead");
         let other = crate::identity::chain_key_from("zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo wrong", "").unwrap();
         let blob2 = crate::chain_backup::from_text(&text).unwrap();
-        assert!(crate::chain_backup::restore_in(&new_head, &other, &blob2).is_err());
+        let at = meta["at"].as_i64().unwrap();
+        assert!(crate::chain_backup::restore_in(&new_head, &other, &blob2, at).is_err());
         assert!(!new_head.join("issued.json").exists(), "틀린 12단어인데 본점이 되었다");
-        let r = crate::chain_backup::restore_in(&new_head, &w.csk, &blob2).unwrap();
+        // 되살리기 전에 만든 때를 보여 주고, 사장이 확인한 시각과 다르면 되살리지 않는다.
+        let pv = crate::chain_backup::preview_in(&w.csk, &blob2).unwrap();
+        assert_eq!((pv["at"].as_i64(), pv["stores"].as_u64()), (Some(at), Some(2)));
+        assert!(!new_head.join("issued.json").exists(), "미리 보기가 무언가를 썼다");
+        assert_eq!(crate::chain_backup::restore_in(&new_head, &w.csk, &blob2, at - 1).unwrap_err(), crate::chain_backup::ERR_CONFIRM);
+        assert!(!new_head.join("issued.json").exists());
+        let r = crate::chain_backup::restore_in(&new_head, &w.csk, &blob2, at).unwrap();
         assert_eq!((r["stores"].as_u64(), r["keys"].as_u64()), (Some(2), Some(2)));
         assert_eq!(std::fs::read(new_head.join("issued.json")).unwrap(), std::fs::read(w.owner.join("issued.json")).unwrap());
         assert_eq!(received(&new_head, 1).len(), received(&w.owner, 1).len());
         // 이미 본점인 컴퓨터에는 덮어쓰지 않는다.
-        assert_eq!(crate::chain_backup::restore_in(&new_head, &w.csk, &blob2).unwrap_err(), crate::chain_backup::ERR_HAVE_HEAD);
+        assert_eq!(crate::chain_backup::restore_in(&new_head, &w.csk, &blob2, at).unwrap_err(), crate::chain_backup::ERR_HAVE_HEAD);
         // 새 본점이 바로 받는다(데이터 열쇠를 다시 만들었다 · 번호는 이어진다).
         record_in(&root1, &cd1, &pay("cash", 1000, None), &none, NOW + 70).unwrap();
         let rr = push_with(&cd1, &root1, NOW + 71, &mut send_to(&new_head, NOW + 71)).unwrap();
@@ -2440,5 +2452,89 @@ mod tests {
         assert!(!accept_peers_in(&cd1, &b));
         // 체인 매장도 본점도 아닌 컴퓨터는 친구가 없다.
         assert!(relay_friends_in(&base.join("nobody"), None).is_empty());
+    }
+
+    // ── 보안 검토 반영: 되찾기 열쇠 묶기 · 답 크기 상한 ──
+
+    #[tokio::test]
+    async fn pulled_lines_must_be_signed_by_this_store_key_or_the_one_just_before() {
+        let (w, base) = world("keybind");
+        let (cd0, root0) = add_store(&w, &base, 5, "선릉점", "123-45-67890", None, true);
+        for i in 0..3 {
+            record_in(&root0, &cd0, &pay("cash", 1000 + i, None), &none, NOW + i as i64).unwrap();
+        }
+        push_with(&cd0, &root0, NOW + 10, &mut send_to(&w.owner, NOW + 10)).unwrap();
+        let biz = cs::clean_biz("123-45-67890", None).unwrap();
+        let serial_of = |key: &str| cs::load_history(&w.owner).unwrap().1.iter().rev().find(|c| c["storeKey"] == json!(key)).unwrap()["serial"].as_u64().unwrap();
+        // 옛 PC 를 도난당해 끊고(세대 0) 새 세대로 다시 발급 → 증서에 prevStoreKey = 세대 0
+        let k0 = cs::pubkey(&crate::identity::chain_store_key_from(WORDS, "", 5, 0).unwrap()).unwrap();
+        cs::revoke_in(&w.owner, &w.csk, serial_of(&k0), NOW + 20).unwrap();
+        let s1 = crate::identity::chain_store_key_from(WORDS, "", 5, 1).unwrap();
+        let r1 = cs::issue_in(&w.owner, &w.csk, &s1, 5, "선릉점", &biz, NOW + 21).unwrap();
+        remember_key_in(&w.owner, &w.csk, &r1.store_pubkey).unwrap();
+        assert_eq!(r1.cert["prevStoreKey"], json!(k0));
+        let join = |name: &str, r: &cs::Issued| {
+            let pc = base.join(name);
+            let (cd, root) = (pc.join("chain"), pc.join("pos"));
+            std::fs::create_dir_all(&cd).unwrap();
+            cs::join_in(&cd, &r.bundle, &r.install_words, NOW + 22).unwrap();
+            (cd, root)
+        };
+        // 세대 1 PC 는 세대 0 줄을 되찾을 수 있다.
+        let (cd1, root1) = join("gen1", &r1);
+        let ok = pull_log_with(&cd1, &root1, async_send(&w.owner, NOW + 30), || NOW + 30).await.unwrap();
+        assert_eq!(ok["ok"], true, "{ok}");
+        // 세대 1 도 끊고 세대 2 로: 이제 세대 0 줄만 있는 기록은 「바로 앞 열쇠」가 아니라 거절.
+        let (_, lines0, _) = { let (a, b, c) = crate::pos_pay::log_lines_in(&root0, &cd0); (a, c, b) };
+        cs::revoke_in(&w.owner, &w.csk, serial_of(&r1.store_pubkey), NOW + 40).unwrap();
+        let s2 = crate::identity::chain_store_key_from(WORDS, "", 5, 2).unwrap();
+        let r2 = cs::issue_in(&w.owner, &w.csk, &s2, 5, "선릉점", &biz, NOW + 41).unwrap();
+        let (cd2, root2) = join("gen2", &r2);
+        assert_eq!(crate::pos_pay::restore_lines_in(&root2, &cd2, &lines0, NOW + 50).unwrap_err(), crate::pos_pay::ERR_RESTORE_KEY);
+        // 세대 1 PC 가 되찾고 이은 기록(세대 0 줄 + 세대 1 resume, prevKey = 세대 0)은 세대 2 PC 가 받을 수 있다.
+        let lines1 = crate::pos_pay::log_lines_in(&root1, &cd1).2;
+        assert!(crate::pos_pay::restore_lines_in(&root2, &cd2, &lines1, NOW + 51).is_ok());
+        // 남의 열쇠로 서명한 줄(같은 번호인 척)은 사슬을 다시 이어 붙여도 받지 않는다.
+        let (cdx, rootx) = add_store(&w, &base, 6, "가짜", "123-45-67890", None, true);
+        record_in(&rootx, &cdx, &pay("cash", 9999, None), &none, NOW).unwrap();
+        let mut forged = crate::pos_pay::log_lines_in(&rootx, &cdx).2;
+        for l in forged.iter_mut() {
+            l["store"] = json!(5);
+        }
+        let (cd3, root3) = join("gen2b", &r2);
+        assert!(crate::pos_pay::restore_lines_in(&root3, &cd3, &forged, NOW + 60).is_err());
+    }
+
+    #[test]
+    fn worst_case_op_replies_fit_under_the_reply_cap() {
+        let (w, base) = world("cap");
+        let (cd, _root) = add_store(&w, &base, 8, "큰점", "123-45-67890", None, true);
+        let me = cs::store_self_in(&cd).unwrap();
+        let key = data_key(&w.csk, &me.store_key, &w.chain, &me.store_key).unwrap();
+        let wrap = |inner: &Value| -> usize {
+            let sealed = seal(&key, &aad_of(AAD_RES, &json!("00".repeat(16))), inner.to_string().as_bytes()).unwrap();
+            serde_json::to_vec(&json!({ "v": 1, "box": sealed })).unwrap().len()
+        };
+        // 되찾기: 한 줄이 아주 긴(MAX_LINE 근처) 기록이 잔뜩 있어도 PULL_BYTES 에서 자른다.
+        let log_id = "ab".repeat(16);
+        let ldir = store_dir(&w.owner, 8).join(&log_id);
+        std::fs::create_dir_all(&ldir).unwrap();
+        let pad = "가".repeat(2600); // 7.8KB
+        let text: String = (0..400).map(|i| format!("{}\n", json!({ "seq": i, "pad": pad }))).collect();
+        std::fs::write(ldir.join("202611.jsonl"), text).unwrap();
+        let mut st = load_state(&w.owner, 8);
+        st["logs"] = json!({ log_id.clone(): { "ack": 399, "at": NOW } });
+        write_json(&store_dir(&w.owner, 8).join("state.json"), &st).unwrap();
+        let rep = pull_reply(&w.owner, 8, None, 0);
+        assert_eq!(rep["more"], true);
+        let inner = json!({ "logId": log_id, "ack": 399, "warn": null, "op": rep });
+        let n = wrap(&inner);
+        assert!(n < MAX_REPLY_BYTES, "되찾기 답 {n} 바이트가 상한을 넘는다");
+        // 백업 조각: 꽉 찬 조각 하나.
+        let inner = json!({ "logId": NO_LOG, "ack": null, "warn": null,
+            "op": { "hash": "00".repeat(32), "size": crate::chain_backup::MAX_BLOB, "at": NOW, "offset": 0,
+                    "data": base64::engine::general_purpose::STANDARD.encode(vec![0xffu8; crate::chain_backup::CHUNK]) } });
+        let n = wrap(&inner);
+        assert!(n < MAX_REPLY_BYTES, "백업 조각 답 {n} 바이트가 상한을 넘는다");
     }
 }

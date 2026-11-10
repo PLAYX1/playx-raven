@@ -222,8 +222,14 @@ export function mountChainStore(host: HTMLElement, deps: ChainStoreDeps): { refr
         const p = await deps.pickOpen();
         if (!p) return;
         go.disabled = true;
-        const r = await deps.invoke<{ stores: number }>("chain_backup_restore", { path: p });
-        say(tf("본점 기록을 되살렸어요(매장 {0}곳). 매장 컴퓨터마다 이 컴퓨터의 새 본점 주소를 적어 주세요.", r.stores));
+        // 먼저 만든 때를 보여 주고 확인받는다(옛 백업을 내밀어도 사장이 날짜로 알아본다).
+        const pv = await deps.invoke<{ at: number; stores: number }>("chain_backup_preview", { path: p });
+        const okay = await deps.sure(t("본점 백업 되살리기"),
+          tf("이 백업은 {0}에 만든 것이에요(매장 {1}곳). 그 뒤의 일은 빠져 있어요. 되살릴까요?", new Date(pv.at).toLocaleString(), pv.stores), t("되살리기"));
+        if (!okay) return;
+        const r = await deps.invoke<{ stores: number; revocationsStale?: boolean }>("chain_backup_restore", { path: p, confirmAt: pv.at });
+        say(tf("본점 기록을 되살렸어요(매장 {0}곳). 매장 컴퓨터마다 이 컴퓨터의 새 본점 주소를 적어 주세요.", r.stores)
+          + (r.revocationsStale ? " " + t("끊기 목록은 릴레이에서 못 받았어요") : ""), !!r.revocationsStale);
         void refresh();
       } catch (e) { fail(e, run); }
       finally { go.disabled = false; }
