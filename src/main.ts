@@ -6657,6 +6657,8 @@ function paintInvite() {
   host.innerHTML = `<button class="ghost" id="tk-inv">${copyHtml("초대하기")}</button>`;
   document.getElementById("tk-inv")!.addEventListener("click", () => {
     const url = inviteLink(tkRoom);
+    // 11-10 「공유 = 재방송」: 방 원본 글을 릴레이에 다시 올려 둔다 — 받는 사람 미리보기에 방 이름이 뜨게. 기다리지 않는다.
+    if (tkRoom) void invoke("talk_room_rebroadcast", { room: tkRoom }).catch(() => {});
     // 붙여넣기 좋게 **문구까지** 담는다. 사장이 문장을 지어내지 않아도 된다.
     const msg = `${t("이 방으로 오세요")} — ${name}\n${url}`;
 

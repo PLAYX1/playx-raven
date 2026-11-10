@@ -16,6 +16,8 @@ const L = await moduleAt('src/links.ts');
 test('초대 링크는 정본 주소의 새 지갑으로 간다', () => {
   assert.equal(L.inviteLink('42'), 'https://ravenvault.ex.erci.se/wallet/?room=42');
   assert.equal(L.inviteLink(42), 'https://ravenvault.ex.erci.se/wallet/?room=42');
+  // 11-10: 진짜 방 번호(64자리)는 미리보기 카드가 붙는 /t/ 로(폰과 같다). 대문자도 소문자로.
+  assert.equal(L.inviteLink('3A46' + 'a'.repeat(60)), 'https://ravenvault.ex.erci.se/t/3a46' + 'a'.repeat(60));
 });
 test('방 번호는 인코딩되고 다른 정보는 담기지 않는다', () => {
   const u = new URL(L.inviteLink('a b&c=d#x?y/z'));

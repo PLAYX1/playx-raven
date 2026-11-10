@@ -550,6 +550,16 @@ where
 /// 정해진 물음(필터 여럿) 그대로 읽는다 — **이야기 SNS**(talk_social.rs: 팔로우 피드·알림·해시태그)가 쓴다.
 /// 필터는 우리 코드가 만든 것만 넘긴다(종류·개수가 늘 있다). 기본 릴레이가 한 곳도 답하지 않으면 「없음」이 아니라 Err.
 /// 돌려줌 (글들 — id 로 하나씩 · 최신이 앞, 답한 기본 릴레이 수).
+/// 11-10 「공유 = 재방송」(페이블): **이미 서명된 옛 글**을 모든 릴레이에 다시 올린다. 새로 서명하지 않는다.
+/// `nostr_publish` 의 7일 시각 검사는 새 글용이라 여기선 서명·모양만 본다. 방 만들기(40)·방 정보 수정(41)만 받는다.
+pub(crate) async fn rebroadcast(event: &Value) -> Vec<String> {
+    let kind = event.get("kind").and_then(Value::as_i64).unwrap_or(-1);
+    if !(kind == 40 || kind == 41) || !crate::relay::verify(event) { return vec![]; }
+    let Ok(msg) = serde_json::to_string(&json!(["EVENT", event])) else { return vec![] };
+    let runs = targets().into_iter().map(|url| { let msg = msg.clone(); async move { let r = send_one(&url, &msg).await; (url, r) } });
+    futures_util::future::join_all(runs).await.into_iter().filter_map(|(u, r)| r.ok().map(|_| u)).collect()
+}
+
 pub(crate) async fn query_filters(filters: Vec<Value>) -> Result<(Vec<Value>, usize), String> {
     if filters.is_empty() || filters.iter().any(|f| f.get("kinds").and_then(Value::as_array).is_none_or(|k| k.is_empty())) {
         return Err("무엇을 읽을지 알려 주세요.".into());
