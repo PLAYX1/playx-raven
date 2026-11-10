@@ -6938,7 +6938,33 @@ async function tkLoadOlder() {
   box.scrollTop = box.scrollHeight - keep;
 }
 
-async function talkPaint(opts: { cached?: boolean } = {}) {
+/* ── 11-10 속도 ①(페이블 C): 열면 바로 글이 있다 ───────────────────────────────
+ * 방·광장마다 마지막으로 받은 글 60개와 그 글쓴이 이름표를 이 컴퓨터에 둔다. 화면을 처음 열면 이것부터 그리고,
+ * 릴레이 답이 오면 바꿔 그린다. 「세계 릴레이에서 읽는 중…」 빈 화면 1초가 없어진다.
+ * 공개 글뿐이다(광장·공개 방) — 쪽지는 여기 없다. 이 컴퓨터 밖으로 나가지 않는다. */
+const TK_CACHE = "rv.talk.cache.v1";
+type TkCache = Record<string, { at: number; list: any[]; names: Record<string, any> }>;
+function tkCacheKey(room: string) { return room ? `r:${room}` : `f:${tkFollowOnly ? "f" : "a"}`; }
+function tkCacheRead(): TkCache { try { const v = JSON.parse(localStorage.getItem(TK_CACHE) || "{}"); return v && typeof v === "object" ? v : {}; } catch { return {}; } }
+function tkCacheGet(key: string) {
+  const c = tkCacheRead()[key];
+  if (!c || !Array.isArray(c.list) || !c.list.length) return null;
+  for (const [pk, p] of Object.entries(c.names || {})) if (!tkNames.has(pk)) tkNames.set(pk, p);
+  return c.list;
+}
+function tkCacheSet(key: string, list: any[]) {
+  try {
+    const keep = [...list].sort((a, b) => Number(b?.created_at || 0) - Number(a?.created_at || 0)).slice(0, 60)
+      .map((e) => ({ id: e.id, pubkey: e.pubkey, created_at: e.created_at, kind: e.kind, content: String(e.content || "").slice(0, 4000), tags: Array.isArray(e.tags) ? e.tags.slice(0, 40) : [] }));
+    const names: Record<string, any> = {};
+    for (const e of keep) { const p = tkNames.get(String(e.pubkey || "")); if (p) names[String(e.pubkey)] = { name: p.name, picture: p.picture, nip05: p.nip05 }; }
+    const all = tkCacheRead(); delete all[key];
+    const next = Object.fromEntries([...Object.entries(all).sort((a, b) => b[1].at - a[1].at).slice(0, 5), [key, { at: Date.now(), list: keep, names }]]);
+    localStorage.setItem(TK_CACHE, JSON.stringify(next));
+  } catch { /* 저장소가 막혀도 화면은 그대로 */ }
+}
+
+async function talkPaint(opts: { cached?: boolean; list?: any[] } = {}) {
   const box = $("tk-list");
   // ⚠️ 어느 방을 읽는지 **여기서 붙잡아 둔다.** 릴레이가 답하는 사이에
   //    사장이 다른 방을 누르면 `tkRoom` 이 바뀌어, 아래에서 이 목록을
@@ -6947,10 +6973,18 @@ async function talkPaint(opts: { cached?: boolean } = {}) {
   if (tkReply && tkReply.room !== 읽은방) tkSetReply(null);
   const wasAtBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80 || !box.dataset.loaded;
   const previousTop = box.scrollTop;
-  if (!box.dataset.loaded) box.innerHTML = `<div class="meta" style="margin:auto">${copyHtml("세계 릴레이에서 읽는 중…")}</div>`;
+  const 저장키 = tkCacheKey(읽은방);
+  if (!opts.list && !box.dataset.loaded) {
+    const kept = tkCacheGet(저장키);
+    if (kept) await talkPaint({ list: kept });
+    else box.innerHTML = `<div class="meta" style="margin:auto">${copyHtml("세계 릴레이에서 읽는 중…")}</div>`;
+    if (읽은방 !== tkRoom) return;
+  }
   try {
     let list: any[];
-    if (읽은방) {
+    if (opts.list) {
+      list = opts.list; // 저장해 둔 것 — 알림 판단·이름표 기다리기는 진짜 답 때만
+    } else if (읽은방) {
       const result: unknown = await invoke("talk_read", { room: 읽은방, limit: 60 });
       list = Array.isArray(result) ? result : [];
     } else {
@@ -6966,13 +7000,13 @@ async function talkPaint(opts: { cached?: boolean } = {}) {
       }
       list = tkFeedLast ?? [];
     }
-    rememberNotes(list);
+    if (!opts.list) rememberNotes(list);
     // 🔴 알림 판단은 **한 곳**에만 둔다. 화면이 읽은 것도 지킴이가 읽은 것도
     //    같은 곳(`대화살피기`)으로 보낸다 — 두 곳에 나눠 두면 한쪽만 고치는
     //    날이 온다. 주문 알림의 `주문살피기` 와 같은 배치다.
     //    ⚠️ 글이 없어도 부른다. 「이 방은 여기까지가 이미 아는 것」을 적는
     //       첫 바퀴가 여기이기 때문이다.
-    대화살피기(읽은방, list);
+    if (!opts.list) 대화살피기(읽은방, list);
     if (!읽은방 && tkOlder.notes.length) {
       const have = new Set(list.map((e) => String(e.id || "")));
       list = [...list, ...tkOlder.notes.filter((e) => !have.has(String(e.id || "")))];
@@ -6985,8 +7019,11 @@ async function talkPaint(opts: { cached?: boolean } = {}) {
     }
     // 🔴 이름표를 **먼저** 가져온다. 안 그러면 화면에 16진수가 한 번
     //    떴다가 이름으로 바뀌는데, 그 깜빡임이 「고장났나」로 읽힌다.
-    await tkLoadNames(list.map((e) => String(e.pubkey || "")));
-    if (읽은방 !== tkRoom) return;
+    if (!opts.list) {
+      await tkLoadNames(list.map((e) => String(e.pubkey || "")));
+      if (읽은방 !== tkRoom) return;
+      tkCacheSet(저장키, list);
+    }
     // 릴레이가 어느 방향으로 답해도 오래된 것이 위에 오도록 시각으로 정렬한다.
     const all = [...list].sort((a, b) => Number(a?.created_at || 0) - Number(b?.created_at || 0));
     // 안 보기 한 사람의 글을 뺀다. 🔴 **거른 것을 말없이 없애지 않는다** —
