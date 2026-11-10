@@ -250,7 +250,10 @@ export function mountChainStore(host: HTMLElement, deps: ChainStoreDeps): { refr
       setCopyText(st, () => s.revoked ? tf("「{0}」 매장 — 본점이 끊었어요", s.name || "") : tf("이 컴퓨터는 「{0}」({1}번 매장)이에요", s.name || "", s.store ?? ""));
       v.append(st, el("div", "v-why", () => s.revoked ? t("본점에 연락해 새 매장 열쇠를 받아 주세요.") : tf("매장 증서는 {0}까지 쓸 수 있어요.", day(s.notAfter || 0))));
       const sales = el("div", "cs-part cs-sales");
-      body.append(v, sales, joinForm());
+      body.append(v, sales);
+      // 이미 연결된 매장에는 「꾸러미 열기」를 설치 단계처럼 늘 보이지 않는다 — 끊겼거나 만료 30일 전일 때만(새 꾸러미 받기).
+      const soon = (s.notAfter || 0) - Date.now() < 30 * 24 * 3600_000;
+      if (s.revoked || soon) body.append(joinForm());
       mountChainSales(sales, "store", { invoke: deps.invoke, errText: deps.errText, fail, pickSave: deps.pickSave });
       return;
     }
@@ -263,7 +266,7 @@ export function mountChainStore(host: HTMLElement, deps: ChainStoreDeps): { refr
     if (s.role === "none") body.append(restoreForm());
     body.append(issueForm());
     if (s.role === "owner") { body.append(list); await paintList(); }
-    body.append(joinForm());
+    else body.append(joinForm()); // 본점 PC 는 매장으로 합류할 수 없다(Rust 도 거절) — 입구를 보이지 않는다
   }
 
   void refresh();
