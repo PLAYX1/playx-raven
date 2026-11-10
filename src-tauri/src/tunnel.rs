@@ -67,8 +67,11 @@ pub fn urlencode(s: &str) -> String {
 ///
 /// 그래서 **아는 자리를 직접 본다.** PATH 는 마지막 수단이다.
 pub fn find_cloudflared() -> Option<std::path::PathBuf> {
-    // 대표 확인 필요: 과거 앱 자동 다운로드 파일은 해시가 없어 실행하지 않는다.
-    // 아래 OS 패키지 관리자/관리자 설치 경로만 탐지한다.
+    // 11-11 우리가 받은 것은 **고정 판·지문이 맞을 때만** 쓴다(아래 `tunnel_install`).
+    //   지문 표가 없거나 맞지 않는 옛 파일(해시 없이 받던 시절 것)은 실행하지 않는다.
+    if let Some(p) = verified_ours() {
+        return Some(p);
+    }
     for p in [
         "/opt/homebrew/bin/cloudflared", // 애플 실리콘 brew
         "/usr/local/bin/cloudflared",    // 인텔 brew · 수동 설치
@@ -203,7 +206,7 @@ pub fn tunnel_start(port: u16) -> Result<Value, String> {
     // 전체 경로로 부른다. 이름만 주면 PATH 를 타고, Finder 에서 켠 앱의
     // PATH 에는 brew 자리가 없다.
     let exe = find_cloudflared()
-        .ok_or_else(|| "자동 설치는 중지되었습니다. 대표가 확인한 cloudflared를 OS 패키지 관리자로 설치해 주세요.".to_string())?;
+        .ok_or_else(|| "바깥 연결 준비물이 아직 없습니다. 「준비물 받고 켜기」를 눌러 주세요.".to_string())?;
 
     // 🔴 **앞서 남은 유령을 먼저 치운다.**
     //
@@ -597,11 +600,136 @@ pub fn share_targets(text: String, url: String) -> Value {
 ///
 /// ⚠️ 받는 곳은 GitHub 의 공식 배포다. 다른 곳에서 받으면 그건 우리가
 /// 남의 컴퓨터에 낯선 실행파일을 심는 일이 된다.
+///
+/// 11-11 다시 켬(대표 「해」): **판 하나·지문 하나로 고정**한다. GitHub 공식 배포의
+/// `cloudflare/cloudflared` 2026.10.7, 지문은 GitHub 가 낸 sha256 과 우리가 직접 받아
+/// 잰 값이 같은 것만 적었다. 받은 바이트의 지문이 다르면 디스크에 쓰지도 않는다.
+/// 판을 올릴 때는 아래 표(판·파일·지문)만 바꾼다 — 「latest」 주소는 쓰지 않는다.
+const CF_VERSION: &str = "2026.10.7";
+fn cf_asset() -> Option<(&'static str, &'static str)> {
+    Some(match (std::env::consts::OS, std::env::consts::ARCH) {
+        ("windows", "x86_64") => ("cloudflared-windows-amd64.exe", "2493dbc168923bb3e59e5e7716f71deced92992eea9acd6e9d74f84ac7751343"),
+        ("macos", "aarch64") => ("cloudflared-darwin-arm64.tgz", "3586ccf397e98e5f437e60e7c307ca6ac463e110580503af8bb8e6f9ebf831bd"),
+        ("macos", "x86_64") => ("cloudflared-darwin-amd64.tgz", "02f3edfd87684dd5b705607688e4eb4b323f6e777b81e7b3a85af556aa356848"),
+        ("linux", "x86_64") => ("cloudflared-linux-amd64", "1f99fb518b83dec2ba8d870a7cc991d82a77e6196295a3d2754ba17ab9f91872"),
+        ("linux", "aarch64") => ("cloudflared-linux-arm64", "3df43aedc9ff291d1735b5cb576cb97e0b157488796db2e32b28aecabb445775"),
+        _ => return None,
+    })
+}
+fn sha256_hex(b: &[u8]) -> String {
+    use sha2::Digest;
+    hex::encode(sha2::Sha256::digest(b))
+}
+fn ours_path() -> std::path::PathBuf {
+    crate::paths::app_file(if cfg!(windows) { "cloudflared.exe" } else { "cloudflared" })
+}
+fn ours_mark() -> std::path::PathBuf { crate::paths::app_file("cloudflared.verified.json") }
+
+/// 우리가 받은 실행 파일 — 표(판·실행 파일 지문)가 있고 **지금 파일의 지문이 표와 같을 때만.**
+/// 40MB 를 매번 재지 않게 (크기·고친 때)가 같으면 지난 판정을 쓴다.
+fn verified_ours() -> Option<std::path::PathBuf> {
+    static SEEN: std::sync::Mutex<Option<(u64, std::time::SystemTime, bool)>> = std::sync::Mutex::new(None);
+    let p = ours_path();
+    let meta = std::fs::metadata(&p).ok().filter(|m| m.is_file())?;
+    let (len, at) = (meta.len(), meta.modified().ok()?);
+    let mut g = SEEN.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some((l, t, ok)) = *g {
+        if l == len && t == at { return ok.then_some(p); }
+    }
+    let mark: Value = std::fs::read_to_string(ours_mark()).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or(Value::Null);
+    let want = mark.get("sha256").and_then(Value::as_str).unwrap_or("");
+    let ok = mark.get("version").and_then(Value::as_str) == Some(CF_VERSION)
+        && !want.is_empty()
+        && std::fs::read(&p).map(|b| sha256_hex(&b) == want).unwrap_or(false);
+    *g = Some((len, at, ok));
+    ok.then_some(p)
+}
+
+/// 받은 묶음(tgz)에서 `cloudflared` 실행 파일 하나만 꺼낸다. 다른 이름·경로는 무시한다.
+fn exe_from_tgz(bytes: &[u8]) -> Result<Vec<u8>, String> {
+    use std::io::Read;
+    let mut ar = tar::Archive::new(flate2::read::GzDecoder::new(bytes));
+    for e in ar.entries().map_err(|e| format!("압축을 풀지 못했습니다: {e}"))? {
+        let mut e = e.map_err(|e| format!("압축을 풀지 못했습니다: {e}"))?;
+        let name = e.path().ok().and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string())).unwrap_or_default();
+        if name == "cloudflared" && e.header().entry_type().is_file() {
+            let mut out = Vec::new();
+            e.read_to_end(&mut out).map_err(|e| format!("압축을 풀지 못했습니다: {e}"))?;
+            return Ok(out);
+        }
+    }
+    Err("받은 묶음 안에 cloudflared 가 없습니다.".into())
+}
+
 #[tauri::command]
 pub async fn tunnel_install() -> Result<Value, String> {
-    // 대표 확인 필요: 공식 고정 버전과 플랫폼별 SHA-256을 소스에 검토·고정하기
-    // 전에는 네트워크 다운로드/압축 해제/--version 실행을 모두 금지한다.
-    Err("자동 설치는 꺼져 있습니다. 대표가 공식 버전·체크섬을 확인한 뒤 OS 패키지 관리자로 설치해 주세요.".into())
+    if let Some(p) = find_cloudflared() {
+        return Ok(json!({ "ok": true, "already": true, "path": p.to_string_lossy() }));
+    }
+    let (name, want) = cf_asset().ok_or("이 컴퓨터에 맞는 준비물이 없습니다.")?;
+    let url = format!("https://github.com/cloudflare/cloudflared/releases/download/{CF_VERSION}/{name}");
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(300)) // 40~55MB. 가게 인터넷이 느릴 수 있다.
+        .build()
+        .map_err(|e| e.to_string())?;
+    let body = client.get(&url).send().await.map_err(|e| format!("받지 못했습니다: {e}"))?
+        .error_for_status().map_err(|e| format!("받지 못했습니다: {e}"))?
+        .bytes().await.map_err(|e| format!("받는 중 끊겼습니다: {e}"))?;
+    // 🔴 지문이 다르면 **쓰지도 실행하지도 않는다.**
+    if sha256_hex(&body) != want {
+        return Err("받은 파일의 지문이 공식 값과 다릅니다. 설치하지 않았습니다. 잠시 뒤 다시 해 주세요.".into());
+    }
+    let exe = if name.ends_with(".tgz") { exe_from_tgz(&body)? } else { body.to_vec() };
+    let dest = ours_path();
+    if let Some(d) = dest.parent() { let _ = std::fs::create_dir_all(d); }
+    let tmp = dest.with_extension("download");
+    std::fs::write(&tmp, &exe).map_err(|e| format!("저장하지 못했습니다: {e}"))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o755));
+    }
+    std::fs::rename(&tmp, &dest).map_err(|e| format!("저장하지 못했습니다: {e}"))?;
+    let mark = json!({ "version": CF_VERSION, "asset": name, "asset_sha256": want, "sha256": sha256_hex(&exe) });
+    std::fs::write(ours_mark(), mark.to_string()).map_err(|e| format!("저장하지 못했습니다: {e}"))?;
+    // 받았다고 말하기 전에 정말 도는지 본다.
+    let ok = crate::quiet::cmd(&dest).arg("--version").output().map(|o| o.status.success()).unwrap_or(false);
+    if !ok || verified_ours().is_none() {
+        let _ = std::fs::remove_file(&dest);
+        let _ = std::fs::remove_file(ours_mark());
+        return Err("받은 준비물이 이 컴퓨터에서 돌지 않습니다. 설치하지 않았습니다.".into());
+    }
+    Ok(json!({ "ok": true, "version": CF_VERSION, "path": dest.to_string_lossy() }))
+}
+
+#[cfg(test)]
+mod install_tests {
+    #[test]
+    fn 준비물은_고정_판과_지문만() {
+        let src = include_str!("tunnel.rs");
+        let body = &src[src.find("pub async fn tunnel_install").unwrap()..];
+        let body = &body[..body.find("\n}").unwrap()];
+        assert!(!body.contains("latest"), "latest 주소를 쓰면 안 된다");
+        assert!(body.contains("sha256_hex(&body) != want"), "지문을 먼저 본다");
+        let w = body.find("sha256_hex(&body) != want").unwrap();
+        assert!(w < body.find("std::fs::write").unwrap(), "쓰기 전에 지문을 본다");
+        if let Some((_, h)) = super::cf_asset() { assert_eq!(h.len(), 64); }
+    }
+    #[test]
+    fn 묶음에서_cloudflared_만_꺼낸다() {
+        let mut tar_bytes = Vec::new();
+        {
+            let mut b = tar::Builder::new(&mut tar_bytes);
+            for (n, d) in [("README", &b"x"[..]), ("cloudflared", &b"EXE"[..])] {
+                let mut h = tar::Header::new_gnu(); h.set_size(d.len() as u64); h.set_mode(0o755); h.set_cksum();
+                b.append_data(&mut h, n, d).unwrap();
+            }
+            b.finish().unwrap();
+        }
+        let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        std::io::Write::write_all(&mut gz, &tar_bytes).unwrap();
+        assert_eq!(super::exe_from_tgz(&gz.finish().unwrap()).unwrap(), b"EXE");
+    }
 }
 
 #[cfg(test)]
