@@ -119,13 +119,14 @@ export function wireWalletLink(deps: { invoke: Invoke; ask: (why: "link" | "limi
     const svg = await invoke<string>("qr_svg", { text });
     offer = o;
     const img = $("wl-qrimg") as HTMLImageElement;
-    img.src = `data:image/svg+xml,${encodeURIComponent(svg)}`;
+    img.src = `data:image/svg+xml,${encodeURIComponent(svg)}`; img.hidden = false;
     $("wl-qr").hidden = false; $("wl-confirm").hidden = true; make.hidden = true;
     ($("wl-again") as HTMLButtonElement).hidden = true;
     const tick = () => {
       const left = Math.ceil((o.expires - Date.now()) / 1000);
       if (left > 0) { $("wl-left").textContent = tf("남은 시간 {0}초", left); return; }
-      img.removeAttribute("src");
+      // 11-11 키오스크: src 만 빼면 깨진 그림 칸(대체 글자)이 남아 「QR 이 안 나온다」로 보였다 — 칸째 숨긴다.
+      img.removeAttribute("src"); img.hidden = true;
       $("wl-left").textContent = t("1분이 지나 QR 을 숨겼어요. 폰에서 이미 찍었다면 그대로 기다려 주세요.");
       ($("wl-again") as HTMLButtonElement).hidden = false;
       clearInterval(offerTimer);
