@@ -1,5 +1,17 @@
 # 변경 기록
 
+## 0.9.30
+
+### 한국어
+
+- **창이 「응답 없음」으로 멈추던 것 고침:** 느린 컴퓨터(미니 PC 등)에서 설정·이름 화면을 열면 창이 한동안 멈추던 문제를 고쳤습니다. 오래 걸리는 일은 이제 뒤에서 하고, 창은 바로 움직입니다.
+- **「준비물 받고 켜기」가 다시 됩니다:** 바깥 연결 준비물(클라우드플레어 공식 파일)을 정해 둔 판으로만 받고, 지문이 공식 값과 같을 때만 설치합니다.
+
+### English
+
+- **Fixed the window freezing (“Not responding”)** on slower computers when opening settings or identity screens. Slow work now runs in the background.
+- **“Download and turn on” works again** for outside connections: it downloads only a pinned official Cloudflare release and installs it only when the checksum matches.
+
 ## 0.9.29
 
 ### 한국어
