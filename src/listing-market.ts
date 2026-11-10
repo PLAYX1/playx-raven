@@ -137,7 +137,7 @@ function cardHtml(l: ListingView, deps: ListingDeps, mode: "browse" | "mine" | "
     `<h3 translate="no">${esc(l.title)}</h3>` +
     (l.summary ? `<p class="lm-sum" translate="no">${esc(l.summary)}</p>` : "") +
     `<p class="lm-asset"><span translate="no">${esc(l.asset)}</span> · ${esc(deps.fmtQty(l.amount))}${copyHtml("개")}</p>` +
-    `<p class="lm-price"><b>${esc(fmtRvn(l.priceRvn))}</b> <span class="meta">${copyHtml("수수료 1% 별도")}</span></p>`;
+    `<p class="lm-price"><b>${esc(fmtRvn(l.priceRvn))}</b> <span class="meta">${copyHtml("개발비 1% 별도")}</span></p>`;
   const why = off || mineBad
     ? `<p class="lm-why"><b>${copyHtml("살 수 없어요")}</b>${l.check.reason ? ` — ${esc(t(l.check.reason))}` : ""}</p>`
     : "";
@@ -145,7 +145,9 @@ function cardHtml(l: ListingView, deps: ListingDeps, mode: "browse" | "mine" | "
     mode === "browse" && l.check.ok && !l.mine ? `<div class="row lm-acts"><button type="button" data-lm-buy="${esc(key)}">${copyHtml("사기")}</button></div>`
     : mode === "mine" && isOpen(l) ? `<div class="row lm-acts"><button type="button" class="ghost" data-lm-cancel="${esc(key)}">${copyHtml("내리기")}</button></div>`
     : "";
-  return `<li class="card lm-card${off ? " lm-off" : ""}" data-lm-key="${esc(key)}">${imageHtml(l.image)}<div class="lm-body">${head}${body}${why}${acts}` +
+  // 11-10 대표: 거래 책임은 사고파는 사람에게 — 카드마다 한 줄(전자상거래법 「당사자 아님」 고지와 같은 꼴).
+  const party = mode === "browse" && !l.mine ? `<p class="meta lm-party">${copyHtml("레이븐볼트는 거래 당사자가 아닙니다.")}</p>` : "";
+  return `<li class="card lm-card${off ? " lm-off" : ""}" data-lm-key="${esc(key)}">${imageHtml(l.image)}<div class="lm-body">${head}${body}${why}${party}${acts}` +
     `<div class="lm-step" data-lm-step="${esc(key)}"></div></div></li>`;
 }
 
@@ -184,14 +186,19 @@ async function buyFlow(l: ListingView, step: HTMLElement, deps: ListingDeps, onD
     (total !== null ? row("모두", esc(fmtRvn(total)), true) : "") +
     `<p class="meta">${copyHtml("한 거래 안에서 동시에 오갑니다. 먼저 보내지 않습니다.")}</p>` +
     `<p class="lm-warn">${copyHtml("아직 돈은 나가지 않았어요. 「정말 사기」를 눌러야 보내요. 보낸 뒤에는 되돌릴 수 없어요.")}</p>` +
-    `<div class="row"><button type="button" data-lm-go="1">${copyHtml("정말 사기")}</button>` +
+    // 11-10 대표: 「책임은 본인에게」 — 읽었다고 눌러야 「정말 사기」가 켜진다.
+    `<label class="lm-agree"><input type="checkbox" data-lm-agree="1" /> <span>${copyHtml("레이븐볼트는 거래 당사자가 아닙니다. 물건·자산·대금에 대한 책임은 사고파는 두 사람에게 있습니다. 보낸 RVN은 돌려받을 수 없습니다.")} <b>${copyHtml("읽었어요")}</b></span></label>` +
+    `<div class="row"><button type="button" data-lm-go="1" disabled>${copyHtml("정말 사기")}</button>` +
     `<button type="button" class="ghost" data-lm-stop="1">${copyHtml("그만두기")}</button></div>` +
     `<p class="meta" data-lm-say="1" role="status"></p></div>`;
   const go = step.querySelector<HTMLButtonElement>("[data-lm-go]")!;
   const stop = step.querySelector<HTMLButtonElement>("[data-lm-stop]")!;
   const say = step.querySelector<HTMLElement>("[data-lm-say]")!;
+  const agree = step.querySelector<HTMLInputElement>("[data-lm-agree]")!;
+  agree.onchange = () => { go.disabled = !agree.checked; };
   stop.onclick = () => { step.innerHTML = ""; };
   go.onclick = async () => {
+    if (!agree.checked) return;
     // 두 번 눌러 두 번 사지 않게 — 누르는 즉시 막는다.
     go.disabled = true; stop.disabled = true;
     setCopyText(say, () => t("보내는 중…"));

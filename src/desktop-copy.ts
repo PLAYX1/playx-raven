@@ -2834,4 +2834,8 @@ export const SETTINGS_TALK_090_COPY: Record<string, [string, string, string]> = 
   "「{0}」 알림을 켰어요.": ["Turned on notifications for “{0}”.", "「{0}」の通知をオンにしました。", "已开启「{0}」的通知。"],
   "「{0}」 알림을 되돌렸어요.": ["Set notifications for “{0}” back.", "「{0}」の通知を元に戻しました。", "已恢复「{0}」的通知设置。"],
   "「{0}」 초대 링크와 QR을 열었어요. 복사해서 보내고 싶은 곳에 붙여 넣으세요.": ["Opened the invite link and QR for “{0}”. Copy it and paste it wherever you want to share.", "「{0}」の招待リンクとQRを開きました。コピーして送りたい所に貼り付けてください。", "已打开「{0}」的邀请链接和二维码。复制后粘贴到想发送的地方即可。"],
+  "개발비 1% 별도": ["Plus 1% development fee", "開発費1%別途", "另加1%开发费"],
+  "레이븐볼트는 거래 당사자가 아닙니다.": ["RavenVault is not a party to this trade.", "RavenVaultは取引の当事者ではありません。", "RavenVault 不是交易当事方。"],
+  "레이븐볼트는 거래 당사자가 아닙니다. 물건·자산·대금에 대한 책임은 사고파는 두 사람에게 있습니다. 보낸 RVN은 돌려받을 수 없습니다.": ["RavenVault is not a party to this trade. The buyer and seller are responsible for the item, asset, and payment. RVN you send cannot be returned.", "RavenVaultは取引の当事者ではありません。品物・資産・代金の責任は売り手と買い手の二人にあります。送ったRVNは取り戻せません。", "RavenVault 不是交易当事方。物品、资产和款项的责任由买卖双方承担。已发送的 RVN 无法退回。"],
+  "읽었어요": ["I've read this", "読みました", "我已阅读"],
 };
