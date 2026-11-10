@@ -30,6 +30,7 @@ use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use chacha20poly1305::aead::{Aead, KeyInit, Payload};
 use chacha20poly1305::{XChaCha20Poly1305, XNonce};
 use serde_json::{json, Map, Value};
+use sha2::Digest;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -665,8 +666,12 @@ pub fn receive_in(dir: &Path, body: &[u8], now: i64, client: &str) -> (u16, Valu
     if let Some(offer) = crate::chain_backup::offer_for(dir, c.store) {
         inner["backup"] = offer;
     }
+    // ⑤ 같은 체인 릴레이 이웃 묶음의 해시 — 매장이 가진 것과 다르면 `{op:"peers"}` 로 받아 간다.
+    if let Some(h) = peers_bundle(dir, c.store).as_ref().and_then(bundle_hash) {
+        inner["peers"] = json!(h);
+    }
     if let Some(o) = op {
-        inner["op"] = handle_op(dir, c.store, &o, now);
+        inner["op"] = handle_op(dir, &c, &o, now);
     }
     let sealed = seal(&key, &aad_of(AAD_RES, &json!(nonce)), inner.to_string().as_bytes());
     match sealed {
@@ -680,11 +685,198 @@ pub const PULL_LINES: usize = 2000;
 const PULL_BYTES: usize = 512 * 1024;
 
 /// 본점: 봉함이 열린(=진짜 그 매장) 요청의 일. 받기 잠금 안에서 부른다.
-fn handle_op(dir: &Path, store: u32, o: &Map<String, Value>, now: i64) -> Value {
+fn handle_op(dir: &Path, c: &cs::StoreCert, o: &Map<String, Value>, now: i64) -> Value {
+    let store = c.store;
     match o.get("op").and_then(Value::as_str) {
         Some("pull") => pull_reply(dir, store, o.get("logId").and_then(Value::as_str), o.get("from").and_then(Value::as_u64).unwrap_or(0)),
         Some("backup") => crate::chain_backup::chunk_reply(dir, store, o.get("offset").and_then(Value::as_u64).unwrap_or(0), now),
+        Some("relay") => match o.get("binding").filter(|b| binding_ok(b, &c.chain, store, &c.store_key)) {
+            Some(b) => {
+                let mut st = load_state(dir, store);
+                st["relay"] = b.clone();
+                match write_json(&store_dir(dir, store).join("state.json"), &st) {
+                    Ok(()) => json!({ "ok": true }),
+                    Err(_) => json!({ "none": true }),
+                }
+            }
+            None => json!({ "none": true }),
+        },
+        Some("peers") => peers_bundle(dir, store).unwrap_or_else(|| json!({ "none": true })),
         _ => json!({ "none": true }),
+    }
+}
+
+// ── ⑤ 같은 체인 매장끼리 릴레이 이웃 우선 ─────────────────────────────
+//
+// 릴레이 이웃(relay_share)은 10002 를 올린 **이야기 공개키**로 찾는다. 매장 열쇠와는 다른 열쇠라, 매장이 매장 열쇠로
+// 「내 이야기 공개키는 이것」(binding, RELAY_DOMAIN)을 서명해 본점에 보낸다(봉함 안). 본점은 체인 열쇠로 서명한
+// 릴레이 명부(relay-roster.json: 끊기지 않은 매장 공개키 + 본점 이야기 공개키)와 매장들의 binding 을 묶어 매장에 준다.
+// 매장은 명부 서명(체인 열쇠)·자기 끊기 목록·binding 서명(명부의 매장 공개키)을 모두 확인한 것만 「같은 체인」으로 친다.
+// 🔴 이 묶음은 공개 릴레이에 올리지 않는다(체인 ↔ 이야기 이름 연결이 퍼지지 않게). 안전 검사(§2 주소·접속 시험)는 그대로.
+
+fn is_talk_pub(s: &str) -> bool {
+    s.len() == 64 && s.bytes().all(|b| b.is_ascii_hexdigit())
+}
+
+/// binding 이 이 체인·이 매장·이 매장 열쇠가 서명한 것인가.
+fn binding_ok(b: &Value, chain: &str, store: u32, store_key: &str) -> bool {
+    let Some(o) = b.as_object() else { return false };
+    o.get("v").and_then(Value::as_u64) == Some(1) && o.get("kind").and_then(Value::as_str) == Some("relay")
+        && o.get("chain").and_then(Value::as_str) == Some(chain) && o.get("store").and_then(Value::as_u64) == Some(store as u64)
+        && o.get("storeKey").and_then(Value::as_str) == Some(store_key)
+        && o.get("talk").and_then(Value::as_str).is_some_and(is_talk_pub)
+        && canonical_string(b).map(|t| t.len()).unwrap_or(usize::MAX) <= 1024
+        && crate::lan_cert::signed_by(cs::RELAY_DOMAIN, o, store_key)
+}
+
+/// 본점: 매장 `except` 에게 줄 묶음 = {roster(체인 서명), relays:[다른 매장 binding…]}. 명부가 없으면 None.
+fn peers_bundle(dir: &Path, except: u32) -> Option<Value> {
+    let roster = read_json(&dir.join("relay-roster.json"))?;
+    let (chain, _) = cs::load_history(dir)?;
+    let (_, live, _) = cs::verify_relay_roster(&roster, &chain)?;
+    let mut relays = Vec::new();
+    for e in std::fs::read_dir(sales_dir(dir)).into_iter().flatten().flatten() {
+        let Some(n) = e.file_name().to_str().and_then(|s| s.parse::<u32>().ok()) else { continue };
+        if n == except {
+            continue;
+        }
+        let st = load_state(dir, n);
+        let Some(b) = st.get("relay") else { continue };
+        let key = b.get("storeKey").and_then(Value::as_str).unwrap_or("");
+        if live.iter().any(|(_, k)| k == key) && binding_ok(b, &chain, n, key) {
+            relays.push(b.clone());
+        }
+    }
+    relays.sort_by_key(|b| b.get("store").and_then(Value::as_u64).unwrap_or(0));
+    Some(json!({ "roster": roster, "relays": relays }))
+}
+
+fn bundle_hash(v: &Value) -> Option<String> {
+    Some(hex::encode(sha2::Sha256::digest(canonical_string(v).ok()?.as_bytes())))
+}
+
+/// 매장: 본점이 준 묶음을 확인한다 → 같은 체인 이야기 공개키들. 명부 서명·끊기 목록·binding 서명 모두.
+fn friends_from_bundle(chain_dir: &Path, chain: &str, bundle: &Value) -> Option<(i64, Vec<String>)> {
+    let (at, live, head_talk) = cs::verify_relay_roster(bundle.get("roster")?, chain)?;
+    let revoked = cs::load_list(chain_dir, chain).map(|(_, i)| i.revoked).unwrap_or_default();
+    let live: Vec<&(u64, String)> = live.iter().filter(|(serial, _)| !revoked.contains(&cs::store_cert_id(chain, *serial))).collect();
+    let mut out: Vec<String> = head_talk.into_iter().collect();
+    for b in bundle.get("relays")?.as_array()? {
+        let key = b.get("storeKey").and_then(Value::as_str).unwrap_or("");
+        let n = b.get("store").and_then(Value::as_u64).unwrap_or(0) as u32;
+        if live.iter().any(|(_, k)| k == key) && binding_ok(b, chain, n, key) {
+            if let Some(t) = b.get("talk").and_then(Value::as_str) {
+                out.push(t.to_lowercase());
+            }
+        }
+    }
+    out.sort();
+    out.dedup();
+    Some((at, out))
+}
+
+fn peers_file(chain_dir: &Path) -> PathBuf {
+    chain_dir.join("peers.json")
+}
+
+/// 매장: 받은 묶음을 확인하고 둔다. 명부 시각이 뒤로 가면(옛 묶음 되풀이) 두지 않는다.
+pub fn accept_peers_in(chain_dir: &Path, bundle: &Value) -> bool {
+    let Some(me) = cs::store_self_in(chain_dir) else { return false };
+    let Some((at, _)) = friends_from_bundle(chain_dir, &me.chain, bundle) else { return false };
+    let old_at = read_json(&peers_file(chain_dir)).and_then(|old| friends_from_bundle(chain_dir, &me.chain, &old)).map(|(a, _)| a);
+    if old_at.is_some_and(|o| at < o) {
+        return false;
+    }
+    write_json(&peers_file(chain_dir), bundle).is_ok()
+}
+
+/// 이 컴퓨터가 체인 매장·본점이면 같은 체인 이야기 공개키들(확인한 것만). 아니면 비어 있다. 내 것은 뺀다.
+pub fn relay_friends_in(chain_dir: &Path, me_talk: Option<&str>) -> std::collections::HashSet<String> {
+    let mut out: Vec<String> = Vec::new();
+    if let Some(me) = cs::store_self_in(chain_dir) {
+        if let Some(b) = read_json(&peers_file(chain_dir)) {
+            out = friends_from_bundle(chain_dir, &me.chain, &b).map(|(_, f)| f).unwrap_or_default();
+        }
+    } else if let Some((chain, certs)) = cs::load_history(chain_dir) {
+        let revoked = cs::load_list(chain_dir, &chain).map(|(_, i)| i.revoked).unwrap_or_default();
+        for e in std::fs::read_dir(sales_dir(chain_dir)).into_iter().flatten().flatten() {
+            let Some(n) = e.file_name().to_str().and_then(|s| s.parse::<u32>().ok()) else { continue };
+            let st = load_state(chain_dir, n);
+            let Some(b) = st.get("relay") else { continue };
+            let key = b.get("storeKey").and_then(Value::as_str).unwrap_or("");
+            // 본점 자신의 발급 기록 — 그 번호 매장에 끊기지 않은 증서로 나간 열쇠일 때만.
+            let live = certs.iter().any(|c| c.get("store").and_then(Value::as_u64) == Some(n as u64)
+                && c.get("storeKey").and_then(Value::as_str) == Some(key)
+                && !c.get("serial").and_then(Value::as_u64).is_some_and(|s| revoked.contains(&cs::store_cert_id(&chain, s))));
+            if live && binding_ok(b, &chain, n, key) {
+                if let Some(t) = b.get("talk").and_then(Value::as_str) {
+                    out.push(t.to_lowercase());
+                }
+            }
+        }
+    }
+    out.into_iter().filter(|t| me_talk.is_none_or(|m| !m.eq_ignore_ascii_case(t))).collect()
+}
+
+/// 이 컴퓨터의 이야기 공개키(만들지 않는다). 비밀은 바로 지운다.
+pub(crate) fn my_talk_pub() -> Option<String> {
+    let (mut sk, _, _) = crate::talk::key_on_disk()?;
+    let p = crate::shopkey::pubkey_of(&sk).ok();
+    crate::words::wipe_bytes(&mut sk);
+    p
+}
+
+/// 매장: 하루에 한 번(또는 이야기 공개키가 바뀌면) 매장 열쇠로 서명한 binding 을 보낼 차례인가.
+pub fn relay_op_due(chain_dir: &Path, talk: Option<&str>, now: i64) -> Option<Value> {
+    let talk = talk.filter(|t| is_talk_pub(t))?.to_lowercase();
+    let ps = push_state(chain_dir);
+    let same = ps.get("relayTalk").and_then(Value::as_str) == Some(talk.as_str());
+    let at = ps.get("relayAt").and_then(Value::as_i64).unwrap_or(0);
+    if same && now - at < 86_400_000 && now >= at {
+        return None;
+    }
+    let me = cs::store_self_in(chain_dir)?;
+    let body = json!({ "v": 1, "kind": "relay", "chain": me.chain, "store": me.store, "storeKey": me.store_key, "talk": talk, "at": now });
+    let b = cs::sign_as_store_in(chain_dir, cs::RELAY_DOMAIN, &body).ok()?;
+    Some(json!({ "op": "relay", "binding": b }))
+}
+
+/// 매장: 본점 묶음 해시가 내 것과 다르면 받을 차례.
+pub fn peers_op_due(chain_dir: &Path) -> Option<Value> {
+    let want = push_state(chain_dir).get("peersOffer").and_then(Value::as_str).map(String::from)?;
+    let have = read_json(&peers_file(chain_dir)).as_ref().and_then(bundle_hash);
+    (have.as_deref() != Some(want.as_str())).then(|| json!({ "op": "peers" }))
+}
+
+/// 매장: ⑤ binding 보내기 + 묶음 받기(보내기가 된 뒤에 — 본점이 답을 봉해 준 때).
+pub async fn sync_relay_with<F, Fut>(chain_dir: &Path, talk: Option<&str>, mut send: F, now: impl Fn() -> i64)
+where
+    F: FnMut(Vec<u8>) -> Fut,
+    Fut: std::future::Future<Output = Option<(u16, Vec<u8>)>>,
+{
+    if let Some(op) = relay_op_due(chain_dir, talk, now()) {
+        if let Ok(o) = prepare_op_in(chain_dir, None, &op, now()) {
+            let r = send(o.body.clone()).await;
+            if let Ok(rep) = apply_op_in(chain_dir, &o, r.as_ref().map(|r| r.0), r.as_ref().map_or(&[][..], |r| &r.1), now()) {
+                if rep.get("ok").and_then(Value::as_bool) == Some(true) {
+                    let t = op.pointer("/binding/talk").cloned().unwrap_or(Value::Null);
+                    note_try(chain_dir, now(), |ps| {
+                        ps["relayTalk"] = t;
+                        ps["relayAt"] = json!(now());
+                    });
+                }
+            }
+        }
+    }
+    if let Some(op) = peers_op_due(chain_dir) {
+        if let Ok(o) = prepare_op_in(chain_dir, None, &op, now()) {
+            let r = send(o.body.clone()).await;
+            if let Ok(rep) = apply_op_in(chain_dir, &o, r.as_ref().map(|r| r.0), r.as_ref().map_or(&[][..], |r| &r.1), now()) {
+                if rep.get("none").is_none() {
+                    let _ = accept_peers_in(chain_dir, &rep);
+                }
+            }
+        }
     }
 }
 
@@ -1113,7 +1305,10 @@ fn open_reply(chain_dir: &Path, out: &Outgoing, status: Option<u16>, resp: &[u8]
         return Err(fail("bad-reply"));
     }
     // 본점 백업 요약(맡는 매장만 받는다) — 다음 조각 받기가 본다. 끊기 목록은 서명·seq 후퇴 금지를 넘을 때만.
-    note_try(chain_dir, now, |ps| ps["backupOffer"] = inner.get("backup").cloned().unwrap_or(Value::Null));
+    note_try(chain_dir, now, |ps| {
+        ps["backupOffer"] = inner.get("backup").cloned().unwrap_or(Value::Null);
+        ps["peersOffer"] = inner.get("peers").cloned().filter(Value::is_string).unwrap_or(Value::Null);
+    });
     if let (Some(rev), Some(me)) = (inner.get("revocations").filter(|r| r.is_object()), cs::store_self_in(chain_dir)) {
         let _ = cs::accept_list_in(chain_dir, &me.chain, rev);
     }
@@ -1366,6 +1561,10 @@ pub async fn push_now() -> Value {
     if matches!(last, None | Some(Sent::Acked { .. })) {
         let u = url.clone();
         let _ = fetch_backup_with(&dir, |b| post_owned(u.clone(), b), now_ms).await;
+        // ⑤ 같은 체인 릴레이 이웃: 내 이야기 공개키(있으면)를 알리고, 본점 묶음이 바뀌었으면 받아 둔다.
+        let talk = my_talk_pub();
+        let u = url.clone();
+        sync_relay_with(&dir, talk.as_deref(), |b| post_owned(u.clone(), b), now_ms).await;
     }
     match last {
         None | Some(Sent::Acked { warn: None, .. }) => json!({ "ok": true, "batches": sent }),
@@ -1485,13 +1684,14 @@ pub async fn chain_sales_prepare() -> Result<Value, String> {
         return Err(ERR_NOT_OWNER.into());
     }
     let missing = missing_keys(&dir);
-    let need_backup_key = crate::chain_backup::needs_key(&dir);
+    let need_backup_key = crate::chain_backup::needs_key(&dir) || !dir.join("relay-roster.json").exists();
     if missing.is_empty() && !need_backup_key {
         return Ok(json!({ "ok": true, "added": 0 }));
     }
     let (mut chain_sk, _) = cs::owner_keys(None, Vec::new()).await?;
-    // ④ 체인 비밀이 손에 있는 김에 백업 열쇠도.
+    // ④⑤ 체인 비밀이 손에 있는 김에 백업 열쇠·릴레이 이웃 명부도.
     let _ = crate::chain_backup::remember_key_in(&dir, &chain_sk);
+    let _ = cs::write_relay_roster_in(&dir, &chain_sk, my_talk_pub().as_deref(), now_ms());
     let mut added = 0;
     let mut err = None;
     for k in &missing {
@@ -2190,5 +2390,55 @@ mod tests {
         // 본점에 기록이 없는 매장은 「아직 없어요」.
         let (cd3, root3) = add_store(&w, &base, 6, "삼성점", "123-45-67890", None, true);
         assert_eq!(pull_log_with(&cd3, &root3, async_send(&w.owner, NOW + 70), || NOW + 70).await.unwrap_err(), crate::pos_pay::ERR_RESTORE_EMPTY);
+    }
+
+    // ── ⑤ 같은 체인 릴레이 이웃 ──
+
+    #[tokio::test]
+    async fn same_chain_relay_friends_are_signed_end_to_end_and_cut_stores_drop_out() {
+        let (w, base) = world("relay");
+        let (cd1, root1) = add_store(&w, &base, 1, "강남점", "123-45-67890", None, true);
+        let (cd2, root2) = add_store(&w, &base, 2, "역삼점", "123-45-67890", None, true);
+        let (cd3, root3) = add_store(&w, &base, 3, "삼성점", "123-45-67890", None, true);
+        let (head_t, t1, t2, t3) = ("a1".repeat(32), "b1".repeat(32), "b2".repeat(32), "b3".repeat(32));
+        cs::write_relay_roster_in(&w.owner, &w.csk, Some(&head_t), NOW).unwrap();
+        // 공개 명부에는 이야기 공개키가 없다(릴레이 명부는 봉함 안으로만).
+        for (cd, root, t, n) in [(&cd1, &root1, &t1, 1u32), (&cd2, &root2, &t2, 2), (&cd3, &root3, &t3, 3)] {
+            push_with(cd, root, NOW + n as i64, &mut send_to(&w.owner, NOW + n as i64)).unwrap();
+            sync_relay_with(cd, Some(t), async_send(&w.owner, NOW + 10), || NOW + 10).await;
+        }
+        // 1번이 다시 보내면 묶음이 바뀐 것을 알고 받아 간다(2·3번 binding 이 그 뒤에 왔다).
+        push_with(&cd1, &root1, NOW + 20, &mut send_to(&w.owner, NOW + 20)).unwrap();
+        sync_relay_with(&cd1, Some(&t1), async_send(&w.owner, NOW + 21), || NOW + 21).await;
+        let f1 = relay_friends_in(&cd1, Some(&t1));
+        assert_eq!(f1, [head_t.clone(), t2.clone(), t3.clone()].into_iter().collect(), "본점 + 다른 매장, 나는 빼고");
+        let fh = relay_friends_in(&w.owner, Some(&head_t));
+        assert_eq!(fh, [t1.clone(), t2.clone(), t3.clone()].into_iter().collect());
+        // 묶음을 고치면(가짜 이야기 공개키 끼우기) 서명이 안 맞아 빠진다.
+        let mut b: Value = read_json(&peers_file(&cd1)).unwrap();
+        b["relays"][0]["talk"] = json!("ee".repeat(32));
+        std::fs::write(peers_file(&cd1), serde_json::to_vec(&b).unwrap()).unwrap();
+        assert!(!relay_friends_in(&cd1, Some(&t1)).contains(&"ee".repeat(32)));
+        // 매장 열쇠가 아닌 열쇠로 서명한 binding 은 본점이 받지 않는다.
+        let fake = json!({ "v": 1, "kind": "relay", "chain": w.chain, "store": 2, "storeKey": cs::pubkey(&crate::identity::chain_store_key_from(WORDS, "", 2, 0).unwrap()).unwrap(), "talk": "ff".repeat(32), "at": NOW });
+        let wrong = crate::lan_cert::sign_doc(cs::RELAY_DOMAIN, &fake, &w.chain, |d| {
+            let k = secp256k1::SecretKey::from_byte_array(&w.csk).map_err(|_| ())?;
+            Ok(secp256k1::Secp256k1::new().sign_ecdsa(&secp256k1::Message::from_digest(*d), &k).serialize_compact())
+        }).unwrap();
+        assert!(!binding_ok(&wrong, &w.chain, 2, fake["storeKey"].as_str().unwrap()));
+        // 3번을 끊는다 → 본점 명부 다시 서명 → 1번이 끊기 목록·새 묶음을 받으면 3번은 빠진다. 본점 쪽도 바로 빠진다.
+        let serial3 = cs::load_history(&w.owner).unwrap().1.iter().find(|c| c["store"] == 3).unwrap()["serial"].as_u64().unwrap();
+        cs::revoke_in(&w.owner, &w.csk, serial3, NOW + 30).unwrap();
+        cs::write_relay_roster_in(&w.owner, &w.csk, Some(&head_t), NOW + 30).unwrap();
+        assert!(!relay_friends_in(&w.owner, None).contains(&t3));
+        std::fs::remove_file(peers_file(&cd1)).unwrap();
+        push_with(&cd1, &root1, NOW + 40, &mut send_to(&w.owner, NOW + 40)).unwrap();
+        sync_relay_with(&cd1, Some(&t1), async_send(&w.owner, NOW + 41), || NOW + 41).await;
+        let f1 = relay_friends_in(&cd1, Some(&t1));
+        assert!(f1.contains(&t2) && !f1.contains(&t3), "{f1:?}");
+        // 옛 묶음(끊기 전 명부)을 되풀이해 넣어도 받지 않는다.
+        assert!(!accept_peers_in(&cd1, &b));
+        // 체인 매장도 본점도 아닌 컴퓨터는 친구가 없다.
+        assert!(relay_friends_in(&base.join("nobody"), None).is_empty());
     }
 }

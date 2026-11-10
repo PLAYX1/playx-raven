@@ -29,6 +29,8 @@ pub const STORE_SCOPES: [&str; 3] = ["pos", "talk", "shop-read"];
 pub const NAME_MAX: usize = 40;
 pub const D_REVOCATIONS: &str = "ravenvault-chain-revocations";
 pub const D_ROSTER: &str = "ravenvault-chain-roster";
+/// ⑤ 매장이 「내 이야기(릴레이) 공개키는 이것」이라고 매장 열쇠로 서명하는 도메인.
+pub const RELAY_DOMAIN: &str = "ravenvault-chain-relay-v1";
 const BUNDLE_PREFIX: &str = "rvchain1-";
 const BUNDLE_AAD: &[u8] = b"ravenvault-chain-v1/install";
 const INSTALL_WORDS: usize = 6;
@@ -587,6 +589,43 @@ fn roster_doc(chain_sk: &[u8; 32], chain: &str, certs: &[Value], list: &Value, n
     sign_doc(CHAIN_DOMAIN, &body, chain, ecdsa_signer(chain_sk)).map_err(|_| ERR_SIGN)
 }
 
+/// ⑤ 릴레이 이웃 명부(봉함 안으로만 매장에 간다 — 공개 릴레이에 올리지 않는다): 끊기지 않은 매장 (번호, serial, 매장 공개키)
+/// + 본점 자신의 이야기 공개키(있으면). 체인 열쇠 서명. 🔴 공개 명부(D_ROSTER)에는 이야기 공개키를 싣지 않는다
+/// (체인과 사장의 이야기 이름을 공개적으로 묶지 않는다 · ① 원칙).
+pub fn relay_roster_doc(dir: &Path, chain_sk: &[u8; 32], head_talk: Option<&str>, now: i64) -> Result<Value, &'static str> {
+    let chain = pubkey(chain_sk)?;
+    let (hist, certs) = load_history(dir).ok_or(ERR_NO_SERIAL)?;
+    if hist != chain {
+        return Err(ERR_OTHER_CHAIN);
+    }
+    let revoked = load_list(dir, &chain).map(|(_, i)| i.revoked).unwrap_or_default();
+    let stores: Vec<Value> = certs.iter().filter(|c| !store_row(c, &revoked)["revoked"].as_bool().unwrap_or(false))
+        .map(|c| json!({ "store": c.get("store"), "serial": c.get("serial"), "storeKey": c.get("storeKey") })).collect();
+    let talk = head_talk.filter(|t| t.len() == 64 && t.bytes().all(|b| b.is_ascii_hexdigit()));
+    let body = json!({ "v": 1, "kind": "relay-roster", "chain": chain, "issuedAt": now, "stores": stores, "headTalk": talk });
+    sign_doc(CHAIN_DOMAIN, &body, &chain, ecdsa_signer(chain_sk)).map_err(|_| ERR_SIGN)
+}
+
+/// 본점: 체인 열쇠가 손에 있을 때 릴레이 이웃 명부를 새로 서명해 `chain/relay-roster.json` 에 둔다.
+pub fn write_relay_roster_in(dir: &Path, chain_sk: &[u8; 32], head_talk: Option<&str>, now: i64) -> Result<(), &'static str> {
+    let doc = relay_roster_doc(dir, chain_sk, head_talk, now)?;
+    write_json(&dir.join("relay-roster.json"), &doc)
+}
+
+/// 이 체인 열쇠가 서명한 릴레이 이웃 명부인가 → (발급 시각, [(serial, 매장 공개키)], 본점 이야기 공개키).
+pub fn verify_relay_roster(v: &Value, chain: &str) -> Option<(i64, Vec<(u64, String)>, Option<String>)> {
+    let o = v.as_object()?;
+    if o.get("kind").and_then(Value::as_str) != Some("relay-roster") || o.get("chain").and_then(Value::as_str) != Some(chain)
+        || o.get("v").and_then(Value::as_u64) != Some(1) || !signed_by(CHAIN_DOMAIN, o, chain) {
+        return None;
+    }
+    let at = o.get("issuedAt")?.as_i64()?;
+    let stores = o.get("stores")?.as_array()?.iter()
+        .filter_map(|x| Some((x.get("serial")?.as_u64()?, x.get("storeKey")?.as_str().filter(|k| is_public_key(k))?.to_string()))).collect();
+    let talk = o.get("headTalk").and_then(Value::as_str).filter(|t| t.len() == 64 && t.bytes().all(|b| b.is_ascii_hexdigit())).map(String::from);
+    Some((at, stores, talk))
+}
+
 // ── 12단어 → 열쇠 (본점) ───────────────────────────────────────────
 
 /// 이 본점이 끊은 매장 공개키들(비밀 없음). 다시 발급할 때 이 열쇠들은 건너뛴다.
@@ -670,9 +709,10 @@ pub async fn chain_store_issue(app: tauri::AppHandle, n: u32, name: String, biz_
     let r = issue_in(&dir, &chain_sk, &store_sk, n, &name, &biz, now_ms());
     // ③ 매출 받기: 체인 열쇠가 손에 있는 지금 그 매장의 데이터 열쇠만 적어 둔다(체인 열쇠는 디스크에 두지 않는다).
     let key_saved = r.as_ref().map(|i| crate::chain_sales::remember_key_in(&dir, &chain_sk, &i.store_pubkey).is_ok()).unwrap_or(false);
-    // ④ 본점 백업 열쇠(체인 비밀에서 — 12단어로 언제든 다시 만들 수 있다).
+    // ④ 본점 백업 열쇠(체인 비밀에서 — 12단어로 언제든 다시 만들 수 있다) · ⑤ 릴레이 이웃 명부(새 매장 포함).
     if r.is_ok() {
         let _ = crate::chain_backup::remember_key_in(&dir, &chain_sk);
+        let _ = write_relay_roster_in(&dir, &chain_sk, crate::chain_sales::my_talk_pub().as_deref(), now_ms());
     }
     crate::words::wipe_bytes(&mut chain_sk);
     crate::words::wipe_bytes(&mut store_sk);
@@ -770,6 +810,10 @@ pub async fn chain_store_revoke(app: tauri::AppHandle, serial: u64) -> Result<Va
     }
     let (mut chain_sk, _) = owner_keys(None, Vec::new()).await?;
     let r = revoke_in(&dir, &chain_sk, serial, now_ms());
+    // ⑤ 끊긴 매장은 릴레이 이웃 명부에서도 빠진다.
+    if r.is_ok() {
+        let _ = write_relay_roster_in(&dir, &chain_sk, crate::chain_sales::my_talk_pub().as_deref(), now_ms());
+    }
     let evs = r.as_ref().ok().map(|(list, roster)| (envelope(&chain_sk, D_REVOCATIONS, list), envelope(&chain_sk, D_ROSTER, roster)));
     crate::words::wipe_bytes(&mut chain_sk);
     r?;

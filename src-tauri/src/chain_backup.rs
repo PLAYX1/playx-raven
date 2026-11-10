@@ -481,6 +481,7 @@ pub fn restore_in(dir: &Path, chain_sk: &[u8; 32], blob: &[u8]) -> Result<Value,
         }
     }
     let _ = remember_key_in(dir, chain_sk);
+    let _ = cs::write_relay_roster_in(dir, chain_sk, crate::chain_sales::my_talk_pub().as_deref(), now_ms());
     Ok(json!({ "ok": true, "stores": certs.len(), "files": decoded.len(), "keys": made, "at": doc.get("at") }))
 }
 

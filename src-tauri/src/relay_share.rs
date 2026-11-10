@@ -37,6 +37,8 @@ pub const DEFAULT_RELAYS: [&str; 4] = [
 ];
 /// 이웃으로 두는 최대 수(§3).
 pub const MAX_PEERS: usize = 8;
+/// ⑤ 같은 체인(본점·매장) 이웃에게 먼저 주는 자리 — 8곳 중 최대 4곳. 나머지는 늘 다른 이웃(한 체인에 갇히지 않게).
+pub const MAX_FRIENDS: usize = 4;
 /// 한 사람의 10002 에서 쓰는 최대 주소 수(§2).
 pub const PER_PERSON: usize = 3;
 /// 글쓴이 릴레이(§4): 사람당 2곳 · 동시 6곳 · 6시간 기억.
@@ -368,8 +370,20 @@ fn newest_per_author(events: &[Value]) -> Vec<Value> {
 
 /// 이웃 후보. 내 열쇠·내 주소·지운 이웃은 뺀다. `ravenvault-relay` 표가 있는 10002 만.
 pub fn peer_candidates(events: &[Value], me: Option<&str>, my_url: Option<&str>, blocked: &[String]) -> Vec<String> {
+    let (mut a, b) = peer_candidates_split(events, me, my_url, blocked, &HashSet::new());
+    a.extend(b);
+    a
+}
+
+/// ⑤ 후보를 (같은 체인 이웃, 그 밖) 으로 나눈다. `friends` = 확인한 같은 체인 이야기 공개키(chain_sales::relay_friends_in).
+/// 🔴 나누기만 한다 — 거르는 규칙(표·나이·§2 주소 검사·내 주소·지운 이웃·사람당 3곳)은 둘 다 똑같이 먼저 거친다.
+pub fn peer_candidates_split(events: &[Value], me: Option<&str>, my_url: Option<&str>, blocked: &[String], friends: &HashSet<String>) -> (Vec<String>, Vec<String>) {
     let mut out: Vec<String> = Vec::new();
-    for e in newest_per_author(events) {
+    let mut fr: Vec<String> = Vec::new();
+    // 같은 체인 목록을 먼저 본다 — 남이 같은 주소를 적어도 그 주소는 같은 체인 몫(같은 서버다).
+    let mut lists = newest_per_author(events);
+    lists.sort_by_key(|e| !e.get("pubkey").and_then(Value::as_str).is_some_and(|p| friends.contains(&p.to_lowercase())));
+    for e in lists {
         if me.is_some_and(|m| e.get("pubkey").and_then(Value::as_str) == Some(m)) {
             continue;
         }
@@ -379,34 +393,80 @@ pub fn peer_candidates(events: &[Value], me: Option<&str>, my_url: Option<&str>,
         if !tagged {
             continue;
         }
+        let friend = e.get("pubkey").and_then(Value::as_str).is_some_and(|p| friends.contains(&p.to_lowercase()));
         for u in relays_from_list(&e, PER_PERSON, true) {
-            if my_url == Some(u.as_str()) || blocked.contains(&u) || out.contains(&u) {
+            if my_url == Some(u.as_str()) || blocked.contains(&u) || out.contains(&u) || fr.contains(&u) {
                 continue;
             }
-            out.push(u);
+            if friend {
+                fr.push(u);
+            } else {
+                out.push(u);
+            }
         }
     }
+    (fr, out)
+}
+
+/// ⑤ 같은 체인 후보를 먼저 시험해 최대 `MAX_FRIENDS` 곳, 나머지를 다른 후보로 채운다(합 `MAX_PEERS`).
+/// 시험(접속·§2 DNS)은 둘 다 같은 `probe` 를 거친다. 같은 체인 시험은 최대 `MAX_PROBES / 2` 번 — 다른 이웃 몫을 남긴다.
+pub async fn pick_peers_pref<F, Fut>(mut friends: Vec<String>, others: Vec<String>, probe: F) -> Vec<String>
+where
+    F: Fn(String) -> Fut + Clone,
+    Fut: std::future::Future<Output = bool>,
+{
+    use rand::seq::SliceRandom;
+    friends.shuffle(&mut rand::thread_rng());
+    friends.truncate(MAX_PROBES / 2);
+    let mut out = Vec::new();
+    let mut tried = 0usize;
+    for chunk in friends.chunks(6) {
+        let results = futures_util::future::join_all(chunk.iter().map(|u| probe(u.clone()))).await;
+        tried += chunk.len();
+        for (u, ok) in chunk.iter().zip(results) {
+            if ok && out.len() < MAX_FRIENDS {
+                out.push(u.clone());
+            }
+        }
+        if out.len() >= MAX_FRIENDS {
+            break;
+        }
+    }
+    let rest: Vec<String> = others.into_iter().filter(|u| !out.contains(u)).collect();
+    let mut more = pick_peers_n(rest, probe, MAX_PEERS - out.len(), MAX_PROBES.saturating_sub(tried)).await;
+    out.append(&mut more);
     out
 }
 
 /// 후보를 섞어 접속 시험을 해 보고 통과한 것 중 최대 `MAX_PEERS` 곳. 시험은 최대 `MAX_PROBES` 번, 한 번에 6곳씩.
-pub async fn pick_peers<F, Fut>(mut cands: Vec<String>, probe: F) -> Vec<String>
+pub async fn pick_peers<F, Fut>(cands: Vec<String>, probe: F) -> Vec<String>
+where
+    F: Fn(String) -> Fut,
+    Fut: std::future::Future<Output = bool>,
+{
+    pick_peers_n(cands, probe, MAX_PEERS, MAX_PROBES).await
+}
+
+async fn pick_peers_n<F, Fut>(mut cands: Vec<String>, probe: F, want: usize, probes: usize) -> Vec<String>
 where
     F: Fn(String) -> Fut,
     Fut: std::future::Future<Output = bool>,
 {
     use rand::seq::SliceRandom;
     cands.shuffle(&mut rand::thread_rng());
-    cands.truncate(MAX_PROBES);
+    cands.truncate(probes);
     let mut out = Vec::new();
+    if want == 0 {
+        return out;
+    }
     for chunk in cands.chunks(6) {
         let results = futures_util::future::join_all(chunk.iter().map(|u| probe(u.clone()))).await;
         for (u, ok) in chunk.iter().zip(results) {
-            if ok && out.len() < MAX_PEERS {
+            if ok && out.len() < want {
                 out.push(u.clone());
             }
         }
-        if out.len() >= MAX_PEERS {
+        if out.len() >= want {
             break;
         }
     }
@@ -835,8 +895,10 @@ async fn full_step() {
         if got.iter().any(|r| r.is_ok()) {
             let events: Vec<Value> = got.into_iter().flatten().flatten().collect();
             let me = crate::relay::owner_pub();
-            let cands = peer_candidates(&events, me.as_deref(), s.announced_url.as_deref(), &s.blocked);
-            let peers = pick_peers(cands, probe).await;
+            // ⑤ 이 컴퓨터가 체인 본점·매장이면 같은 체인(서명 확인한 명부) 이웃을 8곳 중 최대 4곳 먼저.
+            let friends = crate::chain_sales::relay_friends_in(&crate::chain_store::chain_dir_path(), me.as_deref());
+            let (fr, others) = peer_candidates_split(&events, me.as_deref(), s.announced_url.as_deref(), &s.blocked, &friends);
+            let peers = pick_peers_pref(fr, others, probe).await;
             update(|x| x.peers = peers);
         }
     }
@@ -1164,6 +1226,59 @@ mod tests {
         assert!(got.len() <= 1 && got.iter().all(|u| u == "wss://r3.example.com"));
         assert_eq!(tried.load(Ordering::SeqCst), MAX_PROBES);
         assert!(pick_peers(vec![], |_u| async { true }).await.is_empty());
+    }
+
+    #[test]
+    fn same_chain_split_never_skips_the_safety_filters() {
+        let me = "11".repeat(32);
+        let friend = "aa".repeat(32);
+        let stranger = "bb".repeat(32);
+        let evs = vec![
+            list(&friend, NOW, &["wss://f1.example.com", "wss://127.0.0.1", "ws://f2.example.com", "wss://blocked.example.com", "wss://f3.example.com"], true),
+            list(&stranger, NOW, &["wss://s1.example.com", "wss://f1.example.com"], true),
+            list(&"cc".repeat(32), NOW, &["wss://untagged-friend.example.com"], false),
+        ];
+        let friends: HashSet<String> = [friend.clone(), "cc".repeat(32), me.clone()].into_iter().collect();
+        let (fr, others) = peer_candidates_split(&evs, Some(&me), None, &["wss://blocked.example.com".to_string()], &friends);
+        // IP 주소·ws:// · 지운 이웃 · 표 없는 목록은 같은 체인이어도 빠진다. 같은 주소는 한 번만.
+        let mut fr_sorted = fr.clone();
+        fr_sorted.sort();
+        assert_eq!(fr_sorted, vec!["wss://f1.example.com", "wss://f3.example.com"]);
+        assert_eq!(others, vec!["wss://s1.example.com"]);
+        // 친구가 없으면 예전과 같다.
+        let (a, b) = peer_candidates_split(&evs, Some(&me), None, &[], &HashSet::new());
+        assert!(a.is_empty());
+        let mut all = peer_candidates(&evs, Some(&me), None, &[]);
+        all.sort();
+        let mut b2 = b.clone();
+        b2.sort();
+        assert_eq!(all, b2);
+    }
+
+    #[tokio::test]
+    async fn same_chain_gets_at_most_four_of_eight_and_still_passes_the_probe() {
+        use std::sync::atomic::AtomicUsize;
+        use std::sync::Arc;
+        let fr: Vec<String> = (0..10).map(|i| format!("wss://f{i}.example.com")).collect();
+        let others: Vec<String> = (0..10).map(|i| format!("wss://o{i}.example.com")).collect();
+        let got = pick_peers_pref(fr.clone(), others.clone(), |_u| async { true }).await;
+        assert_eq!(got.len(), MAX_PEERS);
+        assert_eq!(got.iter().filter(|u| u.contains("//f")).count(), MAX_FRIENDS, "같은 체인이 4곳을 넘었다: {got:?}");
+        // 같은 체인이 시험에 떨어지면 하나도 안 고르고 다른 이웃으로 채운다. 시험 총수는 24번을 넘지 않는다.
+        let tried = Arc::new(AtomicUsize::new(0));
+        let t = tried.clone();
+        let got = pick_peers_pref(fr.clone(), others.clone(), move |u| {
+            let t = t.clone();
+            async move {
+                t.fetch_add(1, Ordering::SeqCst);
+                u.contains("//o")
+            }
+        }).await;
+        assert!(got.iter().all(|u| u.contains("//o")) && got.len() == MAX_PEERS);
+        assert!(tried.load(Ordering::SeqCst) <= MAX_PROBES);
+        // 같은 체인이 2곳뿐이면 2곳 + 다른 이웃 6곳.
+        let got = pick_peers_pref(fr[..2].to_vec(), others, |_u| async { true }).await;
+        assert_eq!((got.len(), got.iter().filter(|u| u.contains("//f")).count()), (MAX_PEERS, 2));
     }
 
     #[test]
