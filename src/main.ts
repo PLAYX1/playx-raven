@@ -5,7 +5,7 @@ void import("./settings-nav"); // 0.9.0 설정 왼쪽 목록·주제 바꾸기·
 import { applyBadges, badgeSectionHtml, badgesOf, forgetMyAddress, gateChipHtml, gateOfRoom, gateOptionsHtml, loadBadges, paintComposerGate, setRoomGates } from "./talk-badges"; // 11-08 기여 표시
 import "./talk-badges.css";
 import { looksRisky } from "./ravi-card";
-import { clearMentions, fillNoteLinks, mentionText, nip05Slot, noteBodyHtml, noteStickerOnly, openNote, personMineHtml, refreshNotices, rememberNotes, wirePersonMine, wireTalkSocial } from "./talk-social"; // 11-09 알림·찾기·글 속 링크·NIP-05·내 글 받기
+import { clearMentions, fillNoteLinks, mentionText, nip05Slot, noteBodyHtml, noteStickerOnly, openNote, personMineHtml, raviCheckNotices, refreshNotices, rememberNotes, wirePersonMine, wireTalkSocial } from "./talk-social"; // 11-09 알림·찾기·글 속 링크·NIP-05·내 글 받기
 import "./talk-social.css";
 import { myHeadHtml, nameCardAfterMe, saveTalkName, setMyTalkName, wireTalkIdentity } from "./talk-identity"; // 0.9.0 이야기 이름표 — 레인A
 import "./app-lock"; // 잠긴 기본 화면·매장용 읽기 전용 + 다크 돈 카드(docs/design/lock-and-dark.md)
@@ -313,6 +313,7 @@ import { guideById, guideHtml, raviAnswerHtml, raviCopy, raviText, raviQuestionL
 import { questionNeedsPersonalData } from "./ravi-consent-need";
 import { applyTextSize, biggerOf, setTextSize, smallerOf, textSize, TEXT_SIZE_NAME, TEXT_SIZES, type TextSize } from "./text-size";
 import { raviSettingIntent, type RaviSetting } from "./ravi-settings";
+import { findRoom, raviTalkIntent, type RaviTalkIntent } from "./ravi-talk-intents";
 import { showRaviCard } from "./ravi-card";
 // 11-10 글자 크기 — 화면을 그리기 전에 한 번(늦으면 첫 화면이 작게 깜빡인다).
 void applyTextSize();
@@ -11866,6 +11867,48 @@ async function raviApplySetting(x: RaviSetting) {
   ] });
 }
 
+/** 11-10 라비 이야기 도구(라비+ 없이). 아무것도 대신 보내지 않는다 — 열기·끄기·초대 상자 준비만. */
+async function raviTalkOpenRoom(id: string) {
+  showPage("talk");
+  if (!id) { openFeed(); return; }
+  await talkPaintRooms();
+  const b = document.querySelector<HTMLElement>(`#tk-rooms [data-room="${CSS.escape(id)}"]`);
+  if (b) b.click();
+}
+async function raviTalkDo(x: RaviTalkIntent) {
+  if (x.kind === "notices") {
+    const n = await raviCheckNotices();
+    raviSaid(n ? tf("연락 {0}개가 왔어요. 카드에서 바로 볼 수 있어요.", String(n)) : t("새 연락은 없어요. 오면 바로 알려 드릴게요."));
+    return;
+  }
+  if (x.kind === "open") {
+    if (!x.room) { await raviTalkOpenRoom(""); raviSaid(t("광장을 열었어요.")); return; }
+    if (!tkRoomNames.size) await talkPaintRooms();
+    const hit = findRoom(tkRoomNames, x.room);
+    if (hit.id) { await raviTalkOpenRoom(hit.id); raviSaid(tf("「{0}」 방을 열었어요.", tkRoomNames.get(hit.id) || x.room)); return; }
+    raviSaid(hit.candidates.length
+      ? tf("어느 방인가요? {0}", hit.candidates.map((n) => `「${n}」`).join(" · "))
+      : tf("「{0}」 방은 못 찾았어요. 이야기 화면 왼쪽 방 목록에서 골라 주세요.", x.room));
+    return;
+  }
+  const room = tkRoom, name = room ? tkRoomNames.get(room) || t("방") : t(SQUARE);
+  if (x.kind === "mute") {
+    const was = 방알림꺼짐(room);
+    if (was === x.off) { raviSaid(tf(x.off ? "「{0}」 알림은 이미 꺼져 있어요." : "「{0}」 알림은 이미 켜져 있어요.", name)); return; }
+    방알림바꾸기(room, x.off);
+    const msg = tf(x.off ? "「{0}」 알림을 껐어요. 글은 그대로 보여요." : "「{0}」 알림을 켰어요.", name);
+    raviSaid(msg);
+    raviUndoCard("set:roommute", msg, () => { 방알림바꾸기(room, was); raviSaid(tf("「{0}」 알림을 되돌렸어요.", name)); });
+    return;
+  }
+  // 초대 — 지금 방의 「초대하기」 상자(링크 복사·QR)를 연다. 보내는 곳은 사람이 고른다.
+  showPage("talk");
+  await talkPaintRooms(); // 방 목록이 다시 그려지며 초대 칸도 다시 그린다 — 그 뒤에 연다.
+  paintInvite();
+  document.getElementById("tk-inv")?.click();
+  raviSaid(tf("「{0}」 초대 링크와 QR을 열었어요. 복사해서 보내고 싶은 곳에 붙여 넣으세요.", name));
+}
+
 async function chatSend() {
   if (raviRequestPending || !($("chat-q") as HTMLInputElement).value.trim()) return;
   raviRequestPending = true;
@@ -11900,6 +11943,9 @@ async function chatSendExisting() {
   // 11-10 화면 설정(글자·밝기·알림 소리·언어)은 라비+ 없이 라비가 바로 바꾼다(ravi-settings.ts).
   const setting = raviSettingIntent(q);
   if (setting) { ($("chat-q") as HTMLInputElement).value = ""; chatSay("me", q); void raviApplySetting(setting); return; }
+  // 11-10 이야기 말(연락 확인·방 열기·방 알림·초대) — 라비는 열고 준비만 한다(ravi-talk-intents.ts).
+  const talkAsk = raviTalkIntent(q);
+  if (talkAsk) { ($("chat-q") as HTMLInputElement).value = ""; chatSay("me", q); void raviTalkDo(talkAsk); return; }
   // 인물 설정·감정·체인 대답은 지연 묶음(ravi-persona-lazy.ts) — 처음 한 번만 읽는다. 읽기 실패면 null → 기존 경로.
   const persona = await loadRaviPersona();
   if (isRaviHelp(q)) {

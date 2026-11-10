@@ -324,6 +324,17 @@ async function announceNotices() {
       });
   if (first) { h.sound?.(); h.osNotify?.(h.nameOf(top.pubkey), fresh.length); }
 }
+/** 11-10 라비에게 「연락 왔어?」 — 바로 다시 묻고, 새 연락이 있으면 카드를 (이미 떠 있어도) 다시 띄운다. 새 연락 수를 돌려준다. */
+export async function raviCheckNotices(): Promise<number> {
+  if (!host) return 0;
+  await refreshNotices(true);
+  const me = host.me();
+  const seen = HEX64.test(me) ? seenFor(me) : null;
+  const n = seen ? visibleNotices().filter((x) => x.kind !== "follow" && isUnread(x, seen)).length : 0;
+  if (n && raviCardKey().startsWith("notice:")) hideRaviCard();
+  if (n) await announceNotices();
+  return n;
+}
 const NOTICE_LINE: Record<TalkNotice["kind"], string> = { reply: "{0}님이 답글을 달았어요", mention: "{0}님이 글에서 나를 불렀어요", follow: "{0}님이 나를 팔로우해요" };
 let freshKeys = new Set<string>();
 async function paintNotices(markAfter = true) {
