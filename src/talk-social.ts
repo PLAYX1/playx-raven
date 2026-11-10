@@ -262,7 +262,7 @@ async function paintNotices(markAfter = true) {
       <span class="tk-nmain"><b translate="no">${esc(line)}</b>${nip05Slot(n.pubkey)}${n.text ? `<small translate="no">${esc(readableLine(n.text))}</small>` : ""}<small>${esc(when(n.at))}</small></span>${fresh ? `<span class="tk-freshdot" aria-hidden="true"></span>` : ""}</button>`;
   }).join("");
   box.innerHTML = `<p class="mutewhy"><b>${copyHtml("알림")}</b></p>
-    <p class="mutewhy2">${copyHtml("내 글에 단 답글, 글에서 나를 부른 것, 나를 팔로우한 사람이 보여요. 다른 Nostr 앱에서 쓴 것도 와요.")}</p>
+    <p class="mutewhy2">${copyHtml("내 글에 단 답글, 글에서 나를 부른 것, 나를 팔로우한 사람이 보여요. 다른 앱에서 쓴 것도 와요.")}</p>
     ${noticeProblem ? `<p class="meta danger">${esc(noticeProblem)}</p>` : ""}
     ${notices === null ? `<p class="meta">${copyHtml("알림을 불러오는 중")}</p>` : !list.length ? `<p class="mutenone">${copyHtml("아직 알림이 없어요.")}</p>` : `<div class="tk-nlist">${rows}</div>`}
     <div class="muterow2"><button class="ghost" type="button" data-tk-nrefresh="1">${copyHtml(noticeBusy ? "불러오는 중" : "새로 불러오기")}</button><button class="ghost" type="button" data-tk-close="tk-noticebox">${copyHtml("닫기")}</button></div>`;
@@ -339,7 +339,7 @@ async function runSearch(raw: string) {
   if (!out) return;
   const q = readSearch(raw);
   const live = () => seq === searchSeq;
-  if (q.kind === "empty") { out.innerHTML = `<p class="mutewhy2">${copyHtml("사람 이름, 글 속 낱말, #해시태그를 찾아요. 다른 앱에서 받은 주소(npub)를 붙여 넣어도 돼요.")}</p>`; return; }
+  if (q.kind === "empty") { out.innerHTML = `<p class="mutewhy2">${copyHtml("사람 이름, 글 속 낱말, #해시태그를 찾아요. 다른 앱에서 받은 이야기 아이디(npub…)를 붙여 넣어도 돼요.")}</p>`; return; }
   if (q.kind === "person") { await h.loadNames([q.pubkey]); h.showPerson(q.pubkey); out.innerHTML = `<button type="button" class="ghost" data-tk-person="${q.pubkey}">${copyHtml("이 사람 이름표 열기")}</button>`; return; }
   if (q.kind === "note") { out.innerHTML = `<button type="button" class="ghost" data-tk-note="${q.id}">${copyHtml("이 글 열기")}</button>`; void openNote(q.id); return; }
   if (q.kind === "tag") {
@@ -361,7 +361,7 @@ async function runSearch(raw: string) {
   const paint = (asked: number) => {
     const peopleHtml = people.length
       ? `<div class="tk-nlist">${people.map((p) => `<button type="button" class="tk-nrow" data-tk-person="${p.pubkey}"><span class="tk-nmain"><b translate="no">${esc(p.name || h.nameOf(p.pubkey))}</b>${nip05Slot(p.pubkey)}<small translate="no">${esc(npubOf(p.pubkey).slice(-6) + (p.about ? " · " + snip(p.about, 60) : ""))}</small></span></button>`).join("")}</div>`
-      : `<p class="mutewhy2">${copyHtml("이 기기에서 본 이름표 중에는 없어요. 주소(npub)를 알면 붙여 넣어 찾아요.")}</p>`;
+      : `<p class="mutewhy2">${copyHtml("이 기기에서 본 이름표 중에는 없어요. 이야기 아이디를 알면 붙여 넣어 찾아요.")}</p>`;
     const how = asked < 0 ? `<p class="meta">${copyHtml("찾는 중")}</p>`
       : asked === 0 ? `<p class="mutewhy2">${copyHtml("이 기기에서 본 글 안에서만 찾았어요. 지금 쓰는 릴레이는 낱말 찾기를 지원하지 않아요.")}</p>`
       : `<p class="mutewhy2">${esc(tf("낱말 찾기를 지원하는 릴레이 {0}곳에도 물었어요.", String(asked)))}</p>`;
@@ -394,22 +394,22 @@ export function openMyData(which: "export" | "elsewhere") {
   box.hidden = false;
   box.innerHTML = which === "export"
     ? `<p class="mutewhy"><b>${ICON_FILE} ${copyHtml("내 글 모두 받기")}</b></p>
-       <p class="mutewhy2">${copyHtml("내 이름표·글·팔로우·릴레이 목록·북마크를 한 파일(JSON)로 받아요. 서명된 원본이라 다른 Nostr 앱이나 도구에서도 읽어요.")}</p>
+       <p class="mutewhy2">${copyHtml("내 이름표·글·팔로우·릴레이 목록·북마크를 한 파일로 받아요. 서명된 원본이라 다른 앱이나 도구에서도 읽어요.")}</p>
        <p class="mutewhy2">${copyHtml("복구 단어와 열쇠는 들어가지 않아요. 북마크는 잠긴 채로 들어가요(같은 12단어로만 열려요). 지우기 요청한 글은 빼요.")}</p>
        <div class="muterow2"><button type="button" id="tk-exportgo">${copyHtml("파일로 받기")}</button><button class="ghost" type="button" data-tk-close="tk-mydatabox">${copyHtml("닫기")}</button></div>
        <p class="meta" id="tk-exportsay" role="status"></p>`
-    : `<p class="mutewhy"><b>${ICON_PEOPLE} ${copyHtml("다른 Nostr 앱에서 보기")}</b></p>
-       <p class="mutewhy2">${copyHtml("damus·primal 같은 다른 Nostr 앱에서 아래 내 주소를 찾으면 내 이름표와 글이 보여요. 팔로우 목록도 같아요.")}</p>
+    : `<p class="mutewhy"><b>${ICON_PEOPLE} ${copyHtml("다른 앱에서 보기")}</b></p>
+       <p class="mutewhy2">${copyHtml("damus·primal 같은 다른 앱(Nostr 방식)에서 아래 내 이야기 아이디를 찾으면 내 이름표와 글이 보여요. 팔로우 목록도 같아요.")}</p>
        <p><code class="tk-npub" translate="no">${esc(npub)}</code></p>
-       <div class="muterow2"><button type="button" id="tk-npubcopy">${copyHtml("내 주소 복사")}</button><button class="ghost" type="button" data-tk-close="tk-mydatabox">${copyHtml("닫기")}</button></div>
+       <div class="muterow2"><button type="button" id="tk-npubcopy">${copyHtml("이야기 아이디 복사")}</button><button class="ghost" type="button" data-tk-close="tk-mydatabox">${copyHtml("닫기")}</button></div>
        <p class="meta" id="tk-npubsay" role="status"></p>
        <p class="moneywarn">${copyHtml("다른 앱에서 내 이름으로 글을 쓰려면 열쇠가 필요해요. 이 화면은 열쇠를 보여 주지 않아요. 열쇠나 복구 단어를 달라는 앱·사람은 조심하세요.")}</p>`;
   const copyBtn = $("tk-npubcopy");
   if (copyBtn) copyBtn.onclick = () => {
     const say = $("tk-npubsay");
     void navigator.clipboard.writeText(npub).then(
-      () => { if (say) say.textContent = t("주소를 복사했어요."); },
-      () => { if (say) say.textContent = t("복사하지 못했어요. 주소를 직접 골라 복사해 주세요."); },
+      () => { if (say) say.textContent = t("이야기 아이디를 복사했어요."); },
+      () => { if (say) say.textContent = t("복사하지 못했어요. 이야기 아이디를 직접 골라 복사해 주세요."); },
     );
   };
   const go = $("tk-exportgo") as HTMLButtonElement | null;
@@ -473,7 +473,7 @@ export function wireTalkSocial(h: TalkSocialHost) {
 /** 사람 이름표 칸(오른쪽)이 나일 때 「내 글 모두 받기」·「다른 Nostr 앱에서 보기」를 보인다. */
 export function personMineHtml(pk: string): string {
   if (!host || pk !== host.me()) return nip05Slot(pk) ? `<p class="tk-person-nip05">${nip05Slot(pk)}</p>` : "";
-  return `<p class="tk-person-nip05">${nip05Slot(pk)}</p><div class="tk-mine-row"><button class="ghost" type="button" data-tk-mydata="export">${copyHtml("내 글 모두 받기")}</button><button class="ghost" type="button" data-tk-mydata="elsewhere">${copyHtml("다른 Nostr 앱에서 보기")}</button></div>`;
+  return `<p class="tk-person-nip05">${nip05Slot(pk)}</p><div class="tk-mine-row"><button class="ghost" type="button" data-tk-mydata="export">${copyHtml("내 글 모두 받기")}</button><button class="ghost" type="button" data-tk-mydata="elsewhere">${copyHtml("다른 앱에서 보기")}</button></div>`;
 }
 export function wirePersonMine(root: HTMLElement) {
   root.querySelectorAll<HTMLElement>("[data-tk-mydata]").forEach((b) => { b.onclick = () => openMyData(b.dataset.tkMydata === "export" ? "export" : "elsewhere"); });

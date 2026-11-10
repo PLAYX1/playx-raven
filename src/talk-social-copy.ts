@@ -59,4 +59,13 @@ export const TALK_SOCIAL_COPY: Record<string, [string, string, string]> = {
   "릴레이에 연결하지 못했어요. 인터넷 연결을 확인하고 다시 눌러 주세요.": ["Couldn’t connect to the relays. Check your internet connection and try again.", "リレーに接続できませんでした。インターネット接続を確認して、もう一度押してください。", "无法连接到中继。请检查网络连接后再试一次。"],
   "릴레이에 하나도 닿지 못했습니다. 인터넷 연결을 확인해 주세요.": ["Couldn’t reach any relay. Please check your internet connection.", "リレーにひとつも接続できませんでした。インターネット接続を確認してください。", "无法连接任何中继。请检查网络连接。"],
   "열쇠처럼 보이는 글은 올릴 수 없어요. 공개 글은 지울 수 없어요.": ["You can’t post text that looks like a key. Public posts can’t be deleted.", "鍵のように見える文は投稿できません。公開投稿は削除できません。", "看起来像密钥的内容无法发布。公开帖子无法删除。"],
+  "내 글에 단 답글, 글에서 나를 부른 것, 나를 팔로우한 사람이 보여요. 다른 앱에서 쓴 것도 와요.": ["You’ll see replies to your posts, posts that mention you, and people who followed you. Ones written in other apps arrive too.", "自分の投稿への返信、投稿で自分が呼ばれたもの、自分をフォローした人が表示されます。ほかのアプリで書かれたものも届きます。", "这里会显示对我帖子的回复、帖子里提到我的内容，以及关注我的人。在其他应用里写的也会送到。"],
+  "사람 이름, 글 속 낱말, #해시태그를 찾아요. 다른 앱에서 받은 이야기 아이디(npub…)를 붙여 넣어도 돼요.": ["Search people’s names, words in posts, and #hashtags. You can also paste a Chat ID (npub…) you got from another app.", "人の名前、投稿の中の言葉、#ハッシュタグを探せます。ほかのアプリで受け取ったトークID(npub…)を貼り付けてもかまいません。", "可以查找人名、帖子里的词语和 #话题标签。也可以粘贴从其他应用拿到的聊天 ID(npub…)。"],
+  "이 기기에서 본 이름표 중에는 없어요. 이야기 아이디를 알면 붙여 넣어 찾아요.": ["None of the name tags seen on this device match. If you know the Chat ID, paste it to search.", "この端末で見た名札の中にはありません。トークIDが分かれば、貼り付けて探せます。", "这台设备看过的名牌里没有。如果知道聊天 ID，可以粘贴进来查找。"],
+  "내 이름표·글·팔로우·릴레이 목록·북마크를 한 파일로 받아요. 서명된 원본이라 다른 앱이나 도구에서도 읽어요.": ["Get your name tag, posts, follows, relay list, and bookmarks in one file. They are the signed originals, so other apps and tools can read them too.", "自分の名札・投稿・フォロー・リレー一覧・ブックマークをひとつのファイルで受け取れます。署名付きの原本なので、ほかのアプリやツールでも読めます。", "把我的名牌、帖子、关注、中继列表和书签保存成一个文件。这是带签名的原件，其他应用或工具也能读取。"],
+  "다른 앱에서 보기": ["View in other apps", "ほかのアプリで見る", "在其他应用中查看"],
+  "damus·primal 같은 다른 앱(Nostr 방식)에서 아래 내 이야기 아이디를 찾으면 내 이름표와 글이 보여요. 팔로우 목록도 같아요.": ["Search for your Chat ID below in other apps such as damus or primal (Nostr-based), and your name tag and posts will show up. Your follow list is the same too.", "damus や primal のようなほかのアプリ(Nostr 方式)で下の自分のトークIDを探すと、自分の名札と投稿が表示されます。フォロー一覧も同じです。", "在 damus、primal 等其他应用(Nostr 方式)里查找下面的我的聊天 ID，就能看到我的名牌和帖子。关注列表也一样。"],
+  "이야기 아이디 복사": ["Copy Chat ID", "トークIDをコピー", "复制聊天 ID"],
+  "이야기 아이디를 복사했어요.": ["Chat ID copied.", "トークIDをコピーしました。", "已复制聊天 ID。"],
+  "복사하지 못했어요. 이야기 아이디를 직접 골라 복사해 주세요.": ["Could not copy. Please select the Chat ID yourself and copy it.", "コピーできませんでした。トークIDを自分で選択してコピーしてください。", "没能复制。请自己选中聊天 ID 再复制。"],
 };

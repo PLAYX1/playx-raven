@@ -30,5 +30,8 @@ html[data-ravi-arriving] #app-lock.rv-lock:not([hidden]) { display: grid !import
 .rv-lock-err { margin: 0; min-height: 1.4em; font-size: var(--fs-sm); font-weight: 600; }
 .rv-lock-more { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
 .rv-lock-more button { min-height: var(--hit); word-break: keep-all; }
+.rv-lock-more-say { margin: 0; font-size: var(--fs-sm); font-weight: 600; color: var(--muted); }
+.rv-lock-more-say[hidden] { display: none; }
+.rv-lock-more-say.danger { color: var(--danger); }
 /* 경계 한 색으로 두 테마: 라이트 바탕 4.6~5.0:1, 다크 바탕 3.6~3.8:1(조작·경계 3:1). 오류 글자는 .danger(다크 밝은 빨강은 layout-tokens). */
 .rv-lock { --rvl-edge: #6b7088; }

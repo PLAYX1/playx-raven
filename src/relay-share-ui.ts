@@ -35,6 +35,7 @@ function ensureCard(): HTMLElement | null {
   card.className = "card rs-card";
   card.innerHTML = `
     <h3>${copyHtml("릴레이 나누기")}</h3>
+    <p class="meta">${copyHtml("릴레이는 글을 받아 두었다가 전해 주는 우체통 같은 서버예요.")}</p>
     <p class="rs-what">${copyHtml("켜면 이 컴퓨터 릴레이 주소를 알리고, 「릴레이 나누기」를 켠 다른 레이븐볼트 컴퓨터와 서로 이야기 글을 나눠요. 큰 릴레이가 막혀도 켠 컴퓨터끼리는 글이 돌아요.")}</p>
     <p class="meta">${copyHtml("「바깥에서도 열리게」가 켜져 있어야 해요. 지갑 정보는 보내지 않아요. 이미 공개된 이야기 글만 오가요.")}</p>
     <label class="check rs-switch"><span class="sx-txt"><b>${copyHtml("릴레이 나누기 켜기")}</b></span><input type="checkbox" id="rs-on" role="switch" /></label>

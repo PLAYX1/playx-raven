@@ -74,6 +74,31 @@ export type TipDeps = {
   openDm: (pubkey: string) => Promise<void>;
 };
 
+/* ── 내가 응원한 분 (11-10) ──
+   「응원 보내기」가 끝까지 나간 뒤, 상대의 이야기 공개키만 이 기기에 적어 둔다.
+   🔴 금액·횟수·시각은 적지 않는다. 서버·릴레이로 보내지 않는다. 다른 사람 화면에는 나오지 않는다. */
+const CHEERED_KEY = "rv.cheered.v1";
+function cheered(): string[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(CHEERED_KEY) || "[]");
+    return Array.isArray(v) ? v.filter((x) => typeof x === "string" && /^[0-9a-f]{64}$/.test(x)) : [];
+  } catch { return []; }
+}
+function rememberCheered(pubkey: string): void {
+  if (!/^[0-9a-f]{64}$/.test(pubkey)) return;
+  try {
+    const list = cheered();
+    if (list.includes(pubkey)) return;
+    list.push(pubkey);
+    localStorage.setItem(CHEERED_KEY, JSON.stringify(list.slice(-500)));
+  } catch { /* 적지 못해도 보내기에는 아무 영향이 없다. */ }
+}
+function cheeredHtml(pubkey: string): string {
+  if (!cheered().includes(pubkey)) return "";
+  return `<p class="kt-cheered"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>${copyHtml("내가 응원한 분")}</p>
+    <p class="tk-badge-note">${copyHtml("이 기기에서 나만 보는 표시예요. 다른 사람에게는 보이지 않아요.")}</p>`;
+}
+
 type Tip = { pubkey: string; name: string; address: string };
 let tip: Tip | null = null;
 let deps: TipDeps | null = null;
@@ -82,7 +107,7 @@ let deps: TipDeps | null = null;
 export function tipButtonHtml(pubkey: string, address: string, me: string): string {
   if (!validRvnAddress(address) || !/^[0-9a-f]{64}$/.test(pubkey) || pubkey === me) return "";
   return `<div class="kt-tip-open"><button type="button" class="ghost" data-kt-tip="${esc(pubkey)}">${copyHtml("응원 보내기")}</button>
-    <p class="tk-badge-note">${copyHtml("고마운 마음을 RVN 으로 조금 전해요. 우리가 가져가는 몫은 없어요.")}</p></div>`;
+    <p class="tk-badge-note">${copyHtml("고마운 마음을 RVN 으로 조금 전해요. 우리가 가져가는 몫은 없어요.")}</p>${cheeredHtml(pubkey)}</div>`;
 }
 
 /** 다른 길로 보내기 화면을 열면 응원 안내를 걷는다(main.ts openSend·closeSend). */
@@ -134,6 +159,7 @@ function afterSent(ev: Event) {
   const sent = tip;
   if (!sent || d.what !== "RVN" || d.address !== sent.address) return;
   tip = null;
+  rememberCheered(sent.pubkey); // 이 기기에만. 공개키 하나뿐이다.
   // main.ts 가 보낸 결과(s-result)를 다 그린 뒤에 붙인다.
   setTimeout(() => {
     el("kt-tip")?.remove();

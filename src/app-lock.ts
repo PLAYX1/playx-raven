@@ -40,6 +40,7 @@ const KO = {
   cannotVerify: "노드가 응답하지 않아 암호를 확인할 수 없어요. 노드를 켠 뒤 다시 해 주세요.",
   empty_pass: "암호를 넣어 주세요.", failed: "잠금을 풀지 못했어요. 다시 해 주세요.",
   startNode: "노드 켜기", standbyAgain: "대기화면 다시 켜기",
+  nodeStartFail: "노드를 켜지 못했어요. 잠시 뒤 다시 눌러 주세요.", nodeStarted: "노드를 켰어요. 잠시 뒤 암호를 다시 넣어 주세요.", standbyFail: "대기화면을 켜지 못했어요. 잠시 뒤 다시 눌러 주세요.",
   storeOn: "매장용 읽기 전용 모드 켜기",
   storeNote: "켜면 지갑이 잠기고 조회만 돼요(금액 가림). 끌 때는 지갑 암호가 필요해요.",
 };
@@ -61,6 +62,7 @@ const EN: Copy = {
   cannotVerify: "The node is not responding, so the password can't be checked. Start the node and try again.",
   empty_pass: "Please enter the password.", failed: "Couldn't unlock. Please try again.",
   startNode: "Start node", standbyAgain: "Start standby again",
+  nodeStartFail: "Couldn't start the node. Please press again in a moment.", nodeStarted: "The node is starting. Please enter your passphrase again in a moment.", standbyFail: "Couldn't open the standby screen. Please press again in a moment.",
   storeOn: "Turn on store read-only mode",
   storeNote: "Locks the wallet and shows view-only information (amounts hidden). Turning it off needs the wallet password.",
 };
@@ -81,6 +83,7 @@ const JA: Copy = {
   cannotVerify: "ノードが応答しないため、パスワードを確認できません。ノードを起動してからもう一度お試しください。",
   empty_pass: "パスワードを入力してください。", failed: "ロックを解除できませんでした。もう一度お試しください。",
   startNode: "ノードを起動", standbyAgain: "待機画面をもう一度開く",
+  nodeStartFail: "ノードを起動できませんでした。少ししてからもう一度押してください。", nodeStarted: "ノードを起動しました。少ししてからパスフレーズをもう一度入力してください。", standbyFail: "待機画面を開けませんでした。少ししてからもう一度押してください。",
   storeOn: "店舗用 閲覧専用モードをオン",
   storeNote: "オンにするとウォレットがロックされ、閲覧のみになります(金額は非表示)。オフにするにはウォレットのパスワードが必要です。",
 };
@@ -101,6 +104,7 @@ const ZH: Copy = {
   cannotVerify: "节点无响应，无法确认密码。请启动节点后再试。",
   empty_pass: "请输入密码。", failed: "无法解锁，请重试。",
   startNode: "启动节点", standbyAgain: "再次打开待机画面",
+  nodeStartFail: "无法启动节点。请稍后再按一次。", nodeStarted: "节点已启动。请稍后重新输入密码。", standbyFail: "无法打开待机画面。请稍后再按一次。",
   storeOn: "开启店铺只读模式",
   storeNote: "开启后钱包会锁定，仅可查看(金额隐藏)。关闭时需要钱包密码。",
 };
@@ -151,7 +155,11 @@ export function buildOverlay(c: Copy = lockCopy()): HTMLElement {
     el("button", { type: "button", id: "rv-lock-admin", className: "ghost", textContent: c.admin, hidden: true }),
     el("button", { type: "button", id: "rv-lock-node-start", className: "ghost", textContent: c.startNode, hidden: true }),
     el("button", { type: "button", id: "rv-lock-standby", className: "ghost", textContent: c.standbyAgain }));
-  root.append(el("div", { className: "rv-lock-box" }, head, el("p", { id: "rv-lock-lede", className: "rv-lock-lede" }), feed, form, more));
+  // 2026-11-10: 아래 단추(노드 켜기·대기화면)가 실패했을 때 알리는 한 줄.
+  //   암호 칸의 안내 자리(#rv-lock-err)는 form 이 숨겨진 가게 화면에서는 안 보이므로 form 밖에 따로 둔다.
+  const moreSay = el("p", { id: "rv-lock-more-say", className: "rv-lock-more-say", hidden: true });
+  moreSay.setAttribute("role", "status");
+  root.append(el("div", { className: "rv-lock-box" }, head, el("p", { id: "rv-lock-lede", className: "rv-lock-lede" }), feed, form, more, moreSay));
   return root;
 }
 
@@ -311,8 +319,33 @@ export function mountAppLock() {
     (root.querySelector("#rv-lock-admin") as HTMLElement).hidden = true;
     (pass.hidden ? go : pass).focus();
   });
-  nodeBtn.addEventListener("click", () => { nodeBtn.disabled = true; void invoke("services_start", { only: "node" }).catch(() => {}).finally(() => { nodeBtn.disabled = false; }); });
-  root.querySelector("#rv-lock-standby")!.addEventListener("click", () => void invoke("standby_open").catch(() => {}));
+  // 2026-11-10: 눌렀는데 아무 일도 없던 두 단추 — 실패를 삼키지 않고 한 줄로 알린다.
+  //   Rust 가 준 이유 원문은 붙이지 않는다(노드 원문이 섞일 수 있다). 번역표 문구만 쓴다.
+  const moreSay = root.querySelector<HTMLElement>("#rv-lock-more-say")!;
+  const sayMore = (v: string, bad: boolean) => {
+    moreSay.textContent = v;
+    moreSay.classList.toggle("danger", bad);
+    moreSay.hidden = !v;
+  };
+  nodeBtn.addEventListener("click", async () => {
+    nodeBtn.disabled = true;
+    sayMore("", false);
+    try {
+      // `services_start` 는 노드를 못 켜도 Ok 로 돌아온다 — 켜졌는지는 `started`, 못 켠 까닭은 `skipped` 에 있다.
+      const r = await invoke<any>("services_start", { only: "node" });
+      const on = (r?.started || []).some((x: any) => x?.what === "노드");
+      const already = (r?.skipped || []).some((x: any) => x?.what === "노드" && String(x?.why || "") === "이미 켜져 있습니다");
+      sayMore(on || already ? c.nodeStarted : c.nodeStartFail, !(on || already));
+    } catch {
+      sayMore(c.nodeStartFail, true);
+    } finally {
+      nodeBtn.disabled = false;
+    }
+  });
+  root.querySelector("#rv-lock-standby")!.addEventListener("click", () => {
+    sayMore("", false);
+    void invoke("standby_open").catch(() => sayMore(c.standbyFail, true));
+  });
   // 덮개 밖으로 Tab 이 새지 않게(inert 가 막지만, 덮개 안에서 처음↔끝을 돈다).
   root.addEventListener("keydown", (e) => {
     if (e.key !== "Tab") return;

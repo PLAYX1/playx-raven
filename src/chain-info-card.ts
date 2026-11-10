@@ -23,9 +23,9 @@ export function renderChainPage(ov: OverviewRaw | null, sec: SecurityRaw | null,
   const blockCard = `<section class="ci-card" data-card="blocks"><h2>${esc(t("블록 높이"))}</h2>
     <div class="ci-big">${o.blocks === null ? "–" : esc(o.blocks)}</div>${o.state === "none" ? (nodeError ? nodeOff : "") : syncing}${nodeSrc}</section>`;
   const extra = [o.difficulty !== null ? tf("난이도 {0}", o.difficulty) : null, o.mempool !== null ? tf("대기 거래 {0}건", o.mempool) : null, o.peers !== null ? tf("연결된 상대 {0}곳", o.peers) : null].filter(Boolean) as string[];
-  const hashCard = `<section class="ci-card" data-card="hashrate"><h2>${esc(t("네트워크 해시율"))}</h2>
+  const hashCard = `<section class="ci-card" data-card="hashrate"><h2>${esc(t("채굴 컴퓨터들의 힘(해시율)"))}</h2>
     <div class="ci-big">${o.hashrate === null ? "–" : esc(o.hashrate)}</div>
-    <p class="ci-note">${esc(t(o.state === "syncing" ? "따라잡는 중에는 해시율을 말씀드리지 않아요." : "채굴 컴퓨터들의 힘이에요. 내 노드가 계산해요."))}</p>
+    <p class="ci-note">${esc(t(o.state === "syncing" ? "따라잡는 중에는 채굴 힘을 말씀드리지 않아요." : "채굴 컴퓨터들의 힘이에요. 내 노드가 계산해요."))}</p>
     ${extra.length ? `<p class="ci-sub">${esc(extra.join(" · "))}</p>` : ""}${nodeSrc}</section>`;
   let secBody: string;
   if (s.state === "none") {
@@ -56,7 +56,7 @@ export function renderChainStrip(ov: OverviewRaw | null, sec: SecurityRaw | null
   const s = securityView(sec, now, lang);
   const parts = [
     o.blocks !== null ? tf("블록 {0}", o.blocks) : null,
-    o.hashrate !== null ? tf("해시율 {0}", o.hashrate) : null,
+    o.hashrate !== null ? tf("채굴 힘 {0}", o.hashrate) : null,
     s.cost !== null ? tf("보안 비용 {0}/시간", s.cost) : null,
   ].filter(Boolean) as string[];
   return { text: parts.length ? parts.join(" · ") : t("체인 정보 열기"), state: s.state === "none" ? o.state : s.state };

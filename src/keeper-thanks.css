@@ -15,3 +15,8 @@
 .kt-amounts button[aria-pressed="true"] { border-color: var(--tk-bd-ink, #4B3A9A); color: var(--tk-bd-ink, #4B3A9A); font-weight: 700; }
 .kt-after { margin-top: 12px; }
 .kt-after p { margin: 4px 0; }
+/* 내가 응원한 분 — 이 기기에서 나만 보는 표시. 주황 한 점. */
+.kt-cheered { display: flex; align-items: center; gap: 6px; margin: 10px 0 2px; font-size: 14px; font-weight: 700; color: var(--tk-bd-ink, #4B3A9A); }
+.kt-cheered svg { flex: none; fill: #E8833A; }
+.kt-keeper-hint { margin-top: 10px; }
+.kt-keeper-hint button { min-height: 44px; }

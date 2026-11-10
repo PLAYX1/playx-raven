@@ -67,4 +67,7 @@ export const CHAIN_INFO_COPY: Record<string, [string, string, string]> = {
   "{0}일 전": ["{0} d ago", "{0}日前", "{0}天前"],
   "체인 정보 열기": ["Open chain info", "チェーン情報を開く", "打开链信息"],
   "읽는 중…": ["Reading…", "読み込み中…", "读取中…"],
+  "채굴 컴퓨터들의 힘(해시율)": ["Power of the mining computers (hashrate)", "採掘コンピューターの力(ハッシュレート)", "挖矿电脑的总力量(哈希率)"],
+  "따라잡는 중에는 채굴 힘을 말씀드리지 않아요.": ["While catching up, we don’t report mining power.", "追いついている間は、採掘の力をお伝えしません。", "追赶同步期间不显示挖矿力量。"],
+  "채굴 힘 {0}": ["Mining power {0}", "採掘の力 {0}", "挖矿力量 {0}"],
 };

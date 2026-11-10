@@ -70,7 +70,7 @@
       nav a { display: flex; align-items: center; gap: 8px; padding: 12px 16px; color: var(--text);
               text-decoration: none; font-size: 15px; cursor: pointer; border-left: 2px solid transparent; }
       /* 0.6.0 — 왼쪽 메뉴는 「홈·라비·자산」 셋만 늘 보인다. 나머지는 「더 보기」 안에 접는다.
-         🔴 실제 메뉴는 아래쪽의 88px 어두운 레일 규칙이 입힌다 — 같은 모양을 따른다.
+         🔴 실제 메뉴는 아래쪽의 100px 어두운 레일 규칙이 입힌다 — 같은 모양을 따른다.
          🔴 자리 순서는 order 로 정한다. 접힘은 !important 로 — 「이야기」 화면 규칙이 뒤에서 덮지 못하게. */
       nav .brand { order: 0; }
       nav > a[data-page="home"] { order: 1; }
@@ -84,9 +84,9 @@
       nav.help-first > a[data-page="helping"] { display: flex !important; order: 3; }
       nav > .navfoot { order: 9; }
       #navmore-btn { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center;
-                     gap: 4px; width: 80px; max-width: 100%; min-height: 58px; margin: 2px auto; padding: 8px 4px;
+                     gap: 4px; width: 92px; max-width: 100%; min-height: 58px; margin: 2px auto; padding: 8px 4px;
                      box-sizing: border-box; background: transparent; border: 0; border-radius: 14px;
-                     color: #ECEDF3; font: inherit; font-size: 11px; line-height: 1.2; cursor: pointer; }
+                     color: #ECEDF3; font: inherit; font-size: 13px; line-height: 1.2; cursor: pointer; }
       #navmore-btn svg { width: 24px; height: 24px; flex: none; }
       #navmore-btn .chev { display: none; }
       #navmore-btn:hover { background: #2A2C38; }
@@ -2649,26 +2649,27 @@
       #ravi-key-last4 { font-size:14px; color:var(--muted); }
       #ravi-key-delete[hidden] { display:none; }
       /* 대표 2026-09-28: "왼쪽이 너무 미니멀해서 무슨 기능인지 모르겠어" — 아이콘 아래에 이름을 늘 보인다. */
-      body > nav, .rv-talk-layout nav { width:88px; min-width:88px; }
-      body > nav a, .rv-talk-layout nav a { width:80px; height:auto; min-height:58px; flex-direction:column; gap:4px; padding:8px 4px; border-radius:14px; }
-      body > nav a > span:not(.ordbadge):not(.ravi-face), .rv-talk-layout nav a > span:not(.ordbadge):not(.ravi-face) { display:block; max-width:100%; font-size:11px; letter-spacing:-0.01em; line-height:1.2; font-weight:500; text-align:center; white-space:normal; word-break:keep-all; overflow-wrap:anywhere; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; color:#B9BBC8; }
+      /* 2026-11-10: 어르신이 읽기엔 11px 이 너무 작았다 — 레일 글자를 모두 13px 로 키우고, 그만큼 레일을 88px → 100px(안쪽 80px → 92px)로 넓혔다. */
+      body > nav, .rv-talk-layout nav { width:100px; min-width:100px; }
+      body > nav a, .rv-talk-layout nav a { width:92px; height:auto; min-height:58px; flex-direction:column; gap:4px; padding:8px 4px; border-radius:14px; }
+      body > nav a > span:not(.ordbadge):not(.ravi-face), .rv-talk-layout nav a > span:not(.ordbadge):not(.ravi-face) { display:block; max-width:100%; font-size:13px; letter-spacing:-0.01em; line-height:1.2; font-weight:500; text-align:center; white-space:normal; word-break:keep-all; overflow-wrap:anywhere; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; color:#B9BBC8; }
       body > nav a.on > span:not(.ordbadge):not(.ravi-face), .rv-talk-layout nav a.on > span:not(.ordbadge):not(.ravi-face) { color:#FFFFFF; font-weight:650; }
       body > nav a { position:relative; }
       body > nav a .ordbadge { position:absolute; top:4px; right:8px; }
       body > nav .navfoot { width:100%; }
-      body > nav .reportlink { text-align:center; word-break:keep-all; width:80px; height:auto; min-height:44px; font-size:11.5px; line-height:1.2; white-space:normal; padding:6px 4px; display:flex; flex-direction:column; align-items:center; gap:2px; }
+      body > nav .reportlink { text-align:center; word-break:keep-all; width:92px; height:auto; min-height:44px; font-size:13px; line-height:1.2; white-space:normal; padding:6px 4px; display:flex; flex-direction:column; align-items:center; gap:2px; }
       body > nav .reportlink::before { font-size:16px; height:auto; }
       /* 대표 2026-09-28: "0.5.0 에서 업데이트 버튼이 어디 있는지 모르겠네" — 0.5.0 레일이 .brand(판 번호·업데이트 단추)를 통째로 숨겼다. 그림·제목만 숨기고 두 단추는 레일 맨 위에 보인다. */
-      :is(body > nav, .rv-talk-layout nav) .brand { display:block; width:80px; box-sizing:border-box; padding:0 0 10px; margin:0 auto; text-align:center; }
+      :is(body > nav, .rv-talk-layout nav) .brand { display:block; width:92px; box-sizing:border-box; padding:0 0 10px; margin:0 auto; text-align:center; }
       :is(body > nav, .rv-talk-layout nav) .brand .brandravi, :is(body > nav, .rv-talk-layout nav) .brand h1 { display:none; }
       :is(body > nav, .rv-talk-layout nav) .brand > div { min-width:0; }
-      :is(body > nav, .rv-talk-layout nav) #appver { display:block; width:100%; min-height:0 !important; margin:0 0 4px; padding:2px 0; font-size:11px !important; color:#B9BBC8; background:none; border:0; text-align:center; }
-      :is(body > nav, .rv-talk-layout nav) #upnag { display:block; width:100%; min-height:30px !important; margin:0; padding:4px; font-size:11px !important; line-height:1.2; white-space:normal; word-break:keep-all; color:#ECEDF3; background:transparent; border:1px solid #3A3C49; border-radius:10px; }
+      :is(body > nav, .rv-talk-layout nav) #appver { display:block; width:100%; min-height:0 !important; margin:0 0 4px; padding:2px 0; font-size:13px !important; color:#B9BBC8; background:none; border:0; text-align:center; }
+      :is(body > nav, .rv-talk-layout nav) #upnag { display:block; width:100%; min-height:30px !important; margin:0; padding:4px; font-size:13px !important; line-height:1.2; white-space:normal; word-break:keep-all; color:#ECEDF3; background:transparent; border:1px solid #3A3C49; border-radius:10px; }
       :is(body > nav, .rv-talk-layout nav) #upnag.new { background:var(--ravi, #e7731f); border-color:var(--ravi, #e7731f); color:#15161D; font-weight:700; }
       :is(body > nav, .rv-talk-layout nav) #upnag[hidden] { display:none; }
       /* 대표 09-29: "이 점들도 뭔지 모르겠어" — 0.5.0 레일이 상태 점의 이름을 숨겼다. 메뉴처럼 점 아래에 이름을 늘 보인다(접힘 상태는 .navfoot.folded 가 그대로 숨긴다). */
-      :is(body > nav, .rv-talk-layout nav) .dotrow { width:80px; height:auto; min-height:40px; padding:4px 0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; }
-      :is(body > nav, .rv-talk-layout nav) .dotsum #d-sum-t, :is(body > nav, .rv-talk-layout nav) .dotrow:not(.dotsum) span:last-child { display:block; font-size:11px !important; line-height:1.2; color:#B9BBC8; text-align:center; white-space:normal; word-break:keep-all; }
+      :is(body > nav, .rv-talk-layout nav) .dotrow { width:92px; height:auto; min-height:40px; padding:4px 0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; }
+      :is(body > nav, .rv-talk-layout nav) .dotsum #d-sum-t, :is(body > nav, .rv-talk-layout nav) .dotrow:not(.dotsum) span:last-child { display:block; font-size:13px !important; line-height:1.2; color:#B9BBC8; text-align:center; white-space:normal; word-break:keep-all; }
       @media(max-width:1160px) { #page-talk .talkwrap { grid-template-columns:300px minmax(320px,1fr); } }
       /* ── 내 가게 → 지도에 올리기 (map-card.ts) ── */
       .mpcard .mpfield { display: block; margin: 14px 0 4px; font-weight: 600; }
@@ -3428,7 +3429,7 @@
                 <button class="ghost" id="tk-followonly" aria-pressed="false">팔로우만 보기</button>
                 <button class="ghost" id="tk-rvnlink">받기 주소 연결</button>
                 <button class="ghost" id="tk-export" type="button">내 글 모두 받기</button>
-                <button class="ghost" id="tk-elsewhere" type="button">다른 Nostr 앱에서 보기</button>
+                <button class="ghost" id="tk-elsewhere" type="button">다른 앱에서 보기</button>
               </div>
 
               <!-- 🔴 **번역을 눌러야만 나오면 아무도 못 쓴다.**
@@ -3549,6 +3550,7 @@
             <!-- 11-06 받기 주소 연결 — 이름표에 이 컴퓨터 지갑의 받기 주소를 서명해 건다. 폰 「받기 주소 연결」과 같은 칸. -->
             <div id="tk-rvnbox" class="mutebox" hidden>
               <p class="mutewhy"><b>이름표에 레이븐코인 받기 주소를 겁니다.</b> 이 주소를 누구나 보고 바로 보낼 수 있어요. 대신 그 주소의 잔액과 거래도 누구나 봅니다 — 새 받기 주소를 권해요.</p>
+              <p class="mutewhy2">연결해 두면 고마운 분이 「응원 보내기」로 나에게 직접 보낼 수 있어요. 레이븐볼트는 수수료를 떼지 않아요. 이 주소는 내 이름표에 공개돼요.</p>
               <p class="mutewhy2" id="tk-rvnnow"></p>
               <input id="tk-rvnpass" type="password" autocomplete="off" placeholder="지갑 암호(잠겨 있을 때만)" />
               <div class="muterow2">
@@ -3562,7 +3564,7 @@
             <div id="tk-noticebox" class="mutebox" role="region" aria-label="알림" hidden></div>
             <div id="tk-searchbox" class="mutebox" role="search" hidden>
               <form id="tk-sform" class="tk-sform">
-                <input id="tk-sq" class="tk-sinput" type="search" maxlength="200" autocomplete="off" placeholder="이름 · 낱말 · #태그 · 주소(npub)" aria-label="찾을 말" />
+                <input id="tk-sq" class="tk-sinput" type="search" maxlength="200" autocomplete="off" placeholder="이름 · 낱말 · #태그 · 이야기 아이디" aria-label="찾을 말" />
                 <button type="submit">찾기</button>
               </form>
               <div id="tk-sresult"></div>
@@ -5914,7 +5916,7 @@ THE SOFTWARE.</pre></details>
 
                 <div class="card">
                   <h3>읽기 전용</h3>
-                  <div class="kv"><b>노드 RPC</b><span>127.0.0.1:8766 · 쿠키 인증</span></div>
+                  <div class="kv"><b>내 노드와 연결</b><span>이 컴퓨터 안에서만 · 127.0.0.1:8766</span></div>
                   <div class="kv"><b>IPFS 파일창고 API</b><span>127.0.0.1:5001</span></div>
                   <div class="kv"><b>IPFS 파일창고 게이트웨이</b><span>127.0.0.1:8080</span></div>
                 </div>

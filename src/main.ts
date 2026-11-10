@@ -2,7 +2,7 @@
 import "./style-attrs";
 import "./display-mode"; // 설정 「표시 방식」 칸 + 레이아웃 토큰(docs/design/window-modes.md)
 void import("./settings-nav"); // 0.9.0 설정 왼쪽 목록·주제 바꾸기·바로 가기(src/settings-nav.ts) — 레인A. 시작 묶음 1000KB 예산 때문에 따로 싣는다
-import { applyBadges, badgeSectionHtml, forgetMyAddress, gateChipHtml, gateOfRoom, gateOptionsHtml, loadBadges, paintComposerGate, setRoomGates } from "./talk-badges"; // 11-08 기여 표시
+import { applyBadges, badgeSectionHtml, badgesOf, forgetMyAddress, gateChipHtml, gateOfRoom, gateOptionsHtml, loadBadges, paintComposerGate, setRoomGates } from "./talk-badges"; // 11-08 기여 표시
 import "./talk-badges.css";
 import { clearMentions, fillNoteLinks, mentionText, nip05Slot, noteBodyHtml, personMineHtml, refreshNotices, rememberNotes, wirePersonMine, wireTalkSocial } from "./talk-social"; // 11-09 알림·찾기·글 속 링크·NIP-05·내 글 받기
 import "./talk-social.css";
@@ -89,7 +89,7 @@ import { wirePhoneTransaction } from "./phone-transaction";
 import { wirePairing } from "./pairing-ui";
 import { wireNodeKeeper, openNodeKeeper } from "./node-keeper-ui";
 import { wireRelayShare } from "./relay-share-ui";
-import { endTip, mountCertShare, tipButtonHtml, wireKeeperThanks } from "./keeper-thanks-ui"; // 11-08 지킴이 고마움(docs/KEEPER-THANKS.md §2·§3)
+import { endTip, mountCertShare, startTip, tipButtonHtml, wireKeeperThanks } from "./keeper-thanks-ui"; // 11-08 지킴이 고마움(docs/KEEPER-THANKS.md §2·§3)
 import { FINGERPRINT_GUESS, wireCreate, type CreateApi } from "./create-page";
 import { readItemName, verifyLink } from "./easy-create";
 import { checkShopAssetName, shopLabel, shopTokenOf, suggestShopAssetName } from "./shop-token";
@@ -881,7 +881,10 @@ async function renderPanelBase() {
   }
 
   $("p-cid").innerHTML = `<code>${cid.slice(0, 10)}…${cid.slice(-6)}</code> <button class="link" id="copy-cid">복사</button>`;
-  $("copy-cid").onclick = () => navigator.clipboard.writeText(cid);
+  $("copy-cid").onclick = async () => {
+    const ok = await copyOk(cid);
+    setCopyText($("copy-cid"), () => t(ok ? "복사됨" : "복사하지 못했어요"));
+  };
   $("p-body").innerHTML = '<p class="muted">파일을 확인하는 중…</p>';
   $("p-actions").innerHTML = "";
 
@@ -1000,8 +1003,10 @@ async function renderPanelBase() {
       } catch (e) {
         // Swallowing this is what made the button look dead. If the OS refuses,
         // leave the user something they can act on.
-        await navigator.clipboard.writeText(kind.url).catch(() => {});
-        say("이 컴퓨터에서 열지 못했습니다", tf("주소를 복사했습니다.\n\n{0}\n\n{1}", kind.url, e));
+        const copied = await copyOk(kind.url);
+        say("이 컴퓨터에서 열지 못했습니다", copied
+          ? tf("주소를 복사했습니다.\n\n{0}\n\n{1}", kind.url, e)
+          : `${t("복사하지 못했어요. 주소를 직접 골라 복사해 주세요.")}\n\n${kind.url}\n\n${String(e)}`);
       }
     };
   const sendBtn = document.getElementById("p-send");
@@ -1241,6 +1246,23 @@ function choose(title: string, message: string, yes: string, alt: string): Promi
   $("ask-no").style.display = "";
   $("askwrap").classList.add("on");
   return new Promise((res) => (askResolve = (v) => res(v === null ? null : v === ASK_ALT ? "alt" : "yes")));
+}
+
+/// 화면 조각을 불러오지 못했을 때 빈 화면으로 두지 않는다(0.9.29) — 「불러오지 못했어요」와 「다시 시도」 단추를 그 칸 끝에 붙인다.
+/// 이미 붙어 있으면 또 붙이지 않는다. 단추를 누르면 안내를 지우고 같은 길을 다시 탄다(또 안 되면 다시 붙는다).
+function paintLoadFail(host: HTMLElement | null, retry: () => void, what: string, e: unknown) {
+  console.warn(`${what} load failed`, e);
+  if (!host || host.querySelector(":scope > .load-fail")) return;
+  const box = document.createElement("p");
+  box.className = "meta load-fail";
+  box.setAttribute("role", "alert");
+  box.innerHTML = `<span class="warn">${copyHtml("불러오지 못했어요.")}</span> <button type="button" class="ghost">${copyHtml("다시 시도")}</button>`;
+  (box.querySelector("button") as HTMLButtonElement).onclick = () => { box.remove(); retry(); };
+  host.appendChild(box);
+}
+/// 복사가 정말 됐는지 알려 준다. 안 됐는데 「복사했습니다」라고 말하지 않으려는 것이다(0.9.29).
+async function copyOk(text: string): Promise<boolean> {
+  try { await navigator.clipboard.writeText(text); return true; } catch { return false; }
 }
 
 /// 알리기만. 되돌릴 것이 없을 때.
@@ -3794,8 +3816,10 @@ function bindPrepCopy() {
   const copy = document.getElementById("pc-copy");
   if (!copy) return;
   copy.addEventListener("click", async () => {
-    await navigator.clipboard.writeText(prepFolder).catch(() => {});
-    prepSay = escapeHtml(t("복사했습니다"));
+    const ok = await copyOk(prepFolder);
+    prepSay = ok
+      ? escapeHtml(t("복사했습니다"))
+      : `<span class="warn">${escapeHtml(t("복사하지 못했습니다. 글을 선택해 직접 복사해 주세요."))}</span>`;
     $("pc-say").innerHTML = prepSay;
   });
 }
@@ -3935,13 +3959,43 @@ function bindLog() {
            <span class="meta" id="nd-logsay"></span>
          </div>`;
       $("nd-logcopy").addEventListener("click", async () => {
-        await navigator.clipboard.writeText((r.lines || []).join("\n")).catch(() => {});
-        setCopyText($("nd-logsay"), () => t("복사했습니다"));
+        const ok = await copyOk((r.lines || []).join("\n"));
+        setCopyText($("nd-logsay"), () => t(ok ? "복사했습니다" : "복사하지 못했습니다. 글을 선택해 직접 복사해 주세요."));
       });
     } catch (e) {
       box.innerHTML = `<p class="meta danger">${escapeHtml(errText(e))}</p>`;
     }
   });
+}
+
+// 2026-11-10: 「다시 켰습니다」는 정말 다시 켜졌을 때만 말한다.
+//   `services_start` 는 노드를 못 켜도 Ok 로 돌아오고, 못 켠 이유를 `skipped` 에 담아 준다.
+//   그걸 안 읽고 무조건 성공이라고 적던 세 곳(다시 켜기·메모리 되돌리기·속도 바꾸기)이 이 함수를 쓴다.
+async function restartNodeHonest(): Promise<{ ok: boolean; why: string }> {
+  await invoke("services_stop").catch(() => {});
+  await new Promise((r) => setTimeout(r, 3000));
+  try {
+    const r = await invoke<any>("services_start");
+    const why = (r?.skipped || [])
+      .filter((x: any) => x?.what === "노드")
+      .map((x: any) => String(x.why || ""))
+      .join(" ")
+      .trim();
+    const on = (r?.started || []).some((x: any) => x?.what === "노드");
+    if (on) return { ok: true, why: "" };
+    return { ok: false, why };
+  } catch (e) {
+    return { ok: false, why: errText(e) };
+  }
+}
+
+function restartFailHtml(why: string): string {
+  // 끄는 데 3초보다 오래 걸리면 「이미 켜져 있습니다」가 돌아온다 — 아직 꺼지는 중이라는 뜻이다.
+  const head = /이미 켜져 있습니다/.test(why) && !/레이븐 코어/.test(why)
+    ? copyHtml("노드가 아직 꺼지는 중이에요. 잠시 뒤 다시 눌러 주세요.")
+    : copyHtml("노드를 다시 켜지 못했어요. 잠시 뒤 다시 눌러 주세요.");
+  const tail = why && !/^이미 켜져 있습니다$/.test(why) ? `<br /><span class="muted">${escapeHtml(t(why))}</span>` : "";
+  return `<span class="danger">${head}</span>${tail}`;
 }
 
 function bindRestart() {
@@ -3952,9 +4006,12 @@ function bindRestart() {
     const say = $("nd-restartsay");
     setCopyText(say, () => t("다시 켜는 중…"));
     try {
-      await invoke("services_stop").catch(() => {});
-      await new Promise((r) => setTimeout(r, 3000));
-      await invoke("services_start").catch(() => {});
+      const back = await restartNodeHonest();
+      if (!back.ok) {
+        (b as HTMLButtonElement).disabled = false;
+        say.innerHTML = restartFailHtml(back.why);
+        return;
+      }
       say.innerHTML = `<span class="ok">${copyHtml("다시 켰습니다")}</span>`;
       setTimeout(() => void paintPart(), 5000);
     } catch (e) {
@@ -4007,9 +4064,12 @@ function bindRestore() {
         return;
       }
       setCopyText(say, () => t("다시 켜는 중…"));
-      await invoke("services_stop").catch(() => {});
-      await new Promise((r) => setTimeout(r, 3000));
-      await invoke("services_start").catch(() => {});
+      const back = await restartNodeHonest();
+      if (!back.ok) {
+        (b as HTMLButtonElement).disabled = false;
+        say.innerHTML = restartFailHtml(back.why);
+        return;
+      }
       say.innerHTML = `<span class="ok">${copyHtml("다시 켰습니다")}</span>`;
       setTimeout(() => void paintPart(), 4000);
     } catch (e) {
@@ -4037,9 +4097,12 @@ function bindSpeed() {
       );
       if (!ok) return;
       setCopyText(say, () => t("다시 켜는 중…"));
-      await invoke("services_stop").catch(() => {});
-      await new Promise((r) => setTimeout(r, 3000));
-      await invoke("services_start").catch(() => {});
+      const back = await restartNodeHonest();
+      if (!back.ok) {
+        (b as HTMLButtonElement).disabled = false;
+        say.innerHTML = restartFailHtml(back.why);
+        return;
+      }
       say.innerHTML = `<span class="ok">${copyHtml("다시 켰습니다")}</span>`;
       setTimeout(() => void paintPart(), 4000);
     } catch (e) {
@@ -4379,6 +4442,7 @@ async function paintPartBody(): Promise<void> {
             ],
           ],
           // 이게 왜 있는지 한 줄로. 안 적으면 「이건 또 뭐지」가 된다.
+          t("릴레이는 글을 받아 두었다가 전해 주는 우체통 같은 서버예요.") + " " +
           t("이 컴퓨터 릴레이는 레이븐 이야기와 가게 공지를 받아 둡니다. 「릴레이 나누기」를 켠 컴퓨터끼리만 서로 붙어, 큰 릴레이가 끊겨도 그 사이에서는 글이 돕니다.")
         ) +
         // 🔴 릴레이는 따로 도는 프로그램이 아니라 **가게 서버 안에** 있다.
@@ -4455,9 +4519,9 @@ async function paintPartBody(): Promise<void> {
       }
       const cp = document.getElementById("pt-out-copy");
       if (cp && o?.url) {
-        cp.addEventListener("click", () => {
-          void navigator.clipboard.writeText(String(o.url));
-          say(t("주소를 복사했습니다."));
+        cp.addEventListener("click", async () => {
+          if (await copyOk(String(o.url))) say(t("주소를 복사했습니다."));
+          else say(t("복사하지 못했어요. 주소를 직접 골라 복사해 주세요."));
         });
       }
 
@@ -4759,7 +4823,19 @@ async function paintProfile(): Promise<void> {
     // 11-08 내 기여 표시 — 서명 확인된 주소(talk_profiles 의 rvn_address)로만.
     const sec = $("rv-profile-badges"), address = String(profiles?.[key]?.rvn_address || "");
     sec.hidden = false;
-    const paintMine = () => { sec.innerHTML = badgeSectionHtml(key, !!address); mountCertShare(sec, { invoke, openFeedDraft: openFeedDraft }); };
+    const paintMine = () => {
+      sec.innerHTML = badgeSectionHtml(key, !!address); mountCertShare(sec, { invoke, openFeedDraft: openFeedDraft });
+      // 11-10 지킴이인데 받기 주소를 이름표에 안 걸었으면 한 줄로 알려 준다. 걸었으면 안 보인다.
+      const mine = address ? [] : (badgesOf(key) || []);
+      if (mine.includes("node") || mine.includes("relay")) {
+        sec.insertAdjacentHTML("beforeend", `<div class="kt-keeper-hint"><p class="tk-badge-note">${copyHtml("받기 주소를 이름표에 걸어 두면, 고마워하는 분이 응원을 보낼 수 있어요")}</p><button type="button" class="ghost" data-keeper-link>${copyHtml("받기 주소 연결")}</button></div>`);
+        sec.querySelector<HTMLButtonElement>("[data-keeper-link]")?.addEventListener("click", () => {
+          showPage("talk");
+          if ($("tk-rvnbox").hidden) $("tk-rvnlink").click();
+          $("tk-rvnbox").scrollIntoView({ block: "center" });
+        });
+      }
+    };
     paintMine();
     void loadBadges(invoke, [{ pubkey: key, address }]).then(paintMine);
   } catch { /* Profile name can be set while relays are unavailable. */ }
@@ -5133,12 +5209,12 @@ function showPage(id: string) {
   if (id === "home") void paintHome();
   if (id === "profile") void paintProfile();
   // 11-07 「내 글 서랍」 — 옛 「내 글」(글자 30개)을 바꿨다: 폰 글까지 모은 내 글·사진만·나만의 폴더·#태그(src/my-drawer.ts).
-  if (id === "profile") void import("./my-drawer").then(({ paintMyDrawer }) => paintMyDrawer($("rv-profile-posts"), { invoke: (cmd, args) => invoke(cmd, args), errText, statusLine: myNotesLine }, openFeed)).catch((e) => console.warn("my-drawer load failed", e));
+  if (id === "profile") void import("./my-drawer").then(({ paintMyDrawer }) => paintMyDrawer($("rv-profile-posts"), { invoke: (cmd, args) => invoke(cmd, args), errText, statusLine: myNotesLine }, openFeed)).catch((e) => paintLoadFail($("rv-profile-posts"), () => showPage("profile"), "my-drawer", e));
   if (id === "trade") void import("./listing-market").then(({ mountListingMarket }) => {
     if (!listingMarket) listingMarket = mountListingMarket($("page-trade"), listingDeps());
     if (currentPage === "trade") listingMarket.enter(tradeOpen);
     tradeOpen = undefined;
-  }).catch((e) => console.warn("listing-market load failed", e));
+  }).catch((e) => paintLoadFail($("page-trade"), () => showPage("trade"), "listing-market", e));
   if (id === "chain") chainInfo?.enter();
   paintPageTiles(id);
   document.querySelectorAll(".page").forEach((p) => p.classList.toggle("on", p.id === `page-${id}`));
@@ -5173,14 +5249,14 @@ function showPage(id: string) {
   if (id === "create") createApi?.enter();
   // 판매자 화면 둘 — 처음 열 때 따로 내려받아 그린다(시작 번들에 넣지 않는다). 다시 열면 새로 읽는다.
   if (id === "devices") void import("./device-connect").then(({ mountDeviceScreen, pairingQr, tauriStoreKey, tauriDisconnect, tauriLanPair }) => { if (!deviceScreen) deviceScreen = mountDeviceScreen($("page-devices"), { qr: pairingQr((cmd, args) => invoke(cmd, args)), storeKey: tauriStoreKey((cmd, args) => invoke(cmd, args), storeDocId), disconnect: tauriDisconnect((cmd, args) => invoke(cmd, args)), lanPair: tauriLanPair((cmd, args) => invoke(cmd, args)),
-    confirm: (title, message, okLabel) => sure(title, message, okLabel ?? t("끊기")) }); else deviceScreen.enter(); }).catch((e) => console.warn("device-connect load failed", e));
+    confirm: (title, message, okLabel) => sure(title, message, okLabel ?? t("끊기")) }); else deviceScreen.enter(); }).catch((e) => paintLoadFail($("page-devices"), () => showPage("devices"), "device-connect", e));
   if (id === "bulk") void Promise.all([import("./bulk-products-ui"), import("./device-connect")]).then(async ([{ mountBulkScreen, storeKeyBulkPublisher }, { tauriStoreKey }]) => {
     if (bulkScreen) { bulkScreen.enter(); return; }
     // 서명 길만 잇는다. 올리기 잠금(CREATOR_PUBLISH_PAUSED)은 그대로 — 잠겨 있으면 서명도 하지 않는다.
     const key = tauriStoreKey((cmd, args) => invoke(cmd, args), storeDocId, "상품 대량 등록 서명");
     const connected = await key.info().then(i => !!i, () => false);
     bulkScreen = mountBulkScreen($("page-bulk"), { publisher: storeKeyBulkPublisher(key, undefined, connected) });
-  }).catch((e) => console.warn("bulk-products-ui load failed", e));
+  }).catch((e) => paintLoadFail($("page-bulk"), () => showPage("bulk"), "bulk-products-ui", e));
   if (id === "artist") void artistLoad();
   // 🔴 **여태 모드를 바꿀 때만 그렸다.** 메뉴로 「돕는 중」에 다시 들어오면
   //    빈 화면이었다 — 8초 타이머가 도는 동안만 채워지고, 장사 모드에서는
@@ -6991,9 +7067,9 @@ async function talkPaint(opts: { cached?: boolean } = {}) {
           // 내 글에는 안 붙인다. 나를 안 보기로 할 이유가 없고,
           // 눌렀다가 내 글이 사라지면 그것부터 고장으로 읽힌다.
           (mine ? "" : `<button data-mute="${escapeHtml(who)}">${copyHtml("안 보기")}</button>`) +
-          // 11-06: 이름표에 서명으로 건 받기 주소가 있는 사람에게만 — 보내기 화면을 그 주소만 채워 연다(금액은 사장이 넣는다, 글 팁 아님).
+          // 11-06: 이름표에 서명으로 건 받기 주소가 있는 사람에게만 — 보내기 화면을 그 주소만 채워 연다(금액은 사장이 넣는다). 0.9.29: 이름·길을 사람 칸과 같은 「응원 보내기」로 맞췄다.
           (!mine && /^R[1-9A-HJ-NP-Za-km-z]{33}$/.test(String(tkNames.get(who)?.rvn_address || ""))
-            ? `<button data-pay="${escapeHtml(String(tkNames.get(who).rvn_address))}" data-payname="${escapeHtml(tkNameText(who))}">${copyHtml("레이븐코인 보내기")}</button>`
+            ? `<button data-pay="${escapeHtml(String(tkNames.get(who).rvn_address))}" data-payname="${escapeHtml(tkNameText(who))}" data-paywho="${escapeHtml(who)}">${copyHtml("응원 보내기")}</button>`
             : "") +
             // 🔴 내 글에만. 이름이 「삭제」가 아니라 **「지우기 요청」**인 것이
             //    전부다 — Nostr 의 지움은 **부탁**이지 명령이 아니고, 릴레이가
@@ -7043,10 +7119,9 @@ async function talkPaint(opts: { cached?: boolean } = {}) {
         const to = String((b as HTMLElement).dataset.pay || "");
         if (!/^R[1-9A-HJ-NP-Za-km-z]{33}$/.test(to)) return;
         void (async () => {
-          showPage("wallet");
-          await openSend("rvn");
-          ($("s-addr") as HTMLInputElement).value = to;
-          composeChanged();
+          // 0.9.29: 사람 칸의 「응원 보내기」와 같은 길을 탄다(안내 띠 · 보낸 뒤 「내가 응원한 분」). 보내기 자체는 그대로다.
+          await startTip(String((b as HTMLElement).dataset.paywho || ""), String((b as HTMLElement).dataset.payname || ""), to);
+          if (($("s-addr") as HTMLInputElement).value !== to) return;
           $("s-addrnote").textContent = tf("{0}님 이름표의 받기 주소를 채웠습니다(주소 연결 서명 확인). 이름은 누구나 같게 지을 수 있으니 주소 끝 글자를 한 번 더 확인하세요.", String((b as HTMLElement).dataset.payname || ""));
         })();
       };
@@ -8158,13 +8233,16 @@ async function swapMakeOffer() {
          <div id="sw-publish"></div>
        </div>`;
     $("sw-copy").addEventListener("click", async () => {
-      await navigator.clipboard.writeText(String(r.hex)).catch(() => {});
-      setCopyText($("sw-copied"), () => t("복사했습니다"));
+      const ok = await copyOk(String(r.hex));
+      // 안 됐으면 글자 칸을 골라 둔다 — 바로 Ctrl+C 를 누를 수 있게.
+      if (!ok) ($("sw-out") as HTMLTextAreaElement).select();
+      setCopyText($("sw-copied"), () => t(ok ? "복사했습니다" : "복사하지 못했습니다. 글을 선택해 직접 복사해 주세요."));
     });
     // 0.9.17 — 글자를 복사해 보내는 것 말고, 장터에 올려 누구나 보게 한다(사람이 「올리기」를 눌러야 올라간다).
-    void import("./listing-market").then(({ mountPublishForm }) =>
+    const mountPublish = (): void => void import("./listing-market").then(({ mountPublishForm }) =>
       mountPublishForm($("sw-publish"), { hex: String(r.hex), asset, amount, price }, listingDeps(), (tab) => openTrade(tab)))
-      .catch((e) => console.warn("listing-market load failed", e));
+      .catch((e) => paintLoadFail($("sw-publish"), mountPublish, "listing-market", e));
+    mountPublish();
   } catch (e) {
     box.innerHTML = `<p class="meta danger">${escapeHtml(errText(e))}</p>`;
   }
@@ -9254,6 +9332,9 @@ let 라비가채운보내기 = false;
 /// 마지막으로 읽은 이 지갑의 받는 주소 — 「내 주소로」 요청에만 쓴다.
 let 최근내주소 = "";
 let sendPreview: any = null;
+/// RVN 보내기에서 노드가 「수수료까지 합치면 모자란다」고 답했는가(0.9.29). 화면 상태만 — 그때는 보내기 단추를 막는다.
+/// 눌러 봐야 노드가 거절하고, 사람은 왜 안 되는지 모른 채 암호만 다시 친다. 이유는 수수료 칸 아래에 적혀 있다.
+let sendFeeShort = false;
 
 /// 장부에 **자산까지** 담아 읽는다.
 ///
@@ -9503,6 +9584,7 @@ async function reviewSend() {
   btn.disabled = true;
   btn.textContent = "확인 중…";
   try {
+    sendFeeShort = false;
     sendPreview = await invoke<any>("preview_send", { address, asset, amount });
   } catch (e) {
     $("s-addrnote").innerHTML = `<span style="color:var(--bad)">${escapeHtml(errText(e))}</span>`;
@@ -9597,6 +9679,8 @@ async function reviewSend() {
     asset ? Promise.resolve(null) : invoke<any>("rvn_rate", { currency: "KRW" }).catch(() => null),
   ]);
   paintSendFee(fee, amount, asset);
+  sendFeeShort = !asset && fee?.short === true;
+  $("r-feenote").classList.toggle("danger", sendFeeShort);
   const won = amount * Number(rate?.rate);
   if (!asset && Number(rate?.rate) > 0 && Number.isFinite(won)) {
     setCopyText($("r-krw"), () => tf("지금 시세로 약 {0}원", fmtCount(Math.round(won))));
@@ -9621,7 +9705,7 @@ function gateSend() {
   const tailOk =
     !needTail || tail.toLowerCase() === String(sendPreview.address).slice(-4).toLowerCase();
   const go = $("s-go") as HTMLButtonElement;
-  go.disabled = sendingNow || !tailOk || (needPass && !pass) || !sendPreview.enough;
+  go.disabled = sendingNow || !tailOk || (needPass && !pass) || !sendPreview.enough || sendFeeShort;
   // 네 자를 다 쳤는데 안 맞으면 말해 준다. 조용히 버튼만 막으면 사람은
   // 자기가 오타를 낸 줄 알고 다시 친다 — 정작 봐야 할 것은 주소다.
   $("s-tailwarn").innerHTML =
@@ -9728,7 +9812,9 @@ async function doSend() {
     sendingNow = false;
     if (sendPreview) gateSend();
   }
-  btn.textContent = "보내기";
+  // 성공해 미리보기를 비웠을 때만 「보내기」로 되돌린다(0.9.29). 실패했을 때는 gateSend 가 방금
+  // 「5 RVN 보내기」로 되살린 이름을 그대로 둔다 — 덮어쓰면 얼마를 보내려던 건지 단추에서 사라진다.
+  if (!sendPreview) btn.textContent = "보내기";
 }
 
 // ── 가게 ──────────────────────────────────────────────────────────────────
@@ -13626,10 +13712,10 @@ async function showOfferQr(offer: any, isNew: boolean) {
   };
 
   const copy = async (text: string, btn: HTMLElement) => {
-    await navigator.clipboard.writeText(text);
+    const ok = await copyOk(text);
     const was = btn.textContent;
-    btn.textContent = "복사됨";
-    setTimeout(() => (btn.textContent = was), 1300);
+    btn.textContent = t(ok ? "복사됨" : "복사하지 못했어요");
+    setTimeout(() => (btn.textContent = was), ok ? 1300 : 2600);
   };
   // 공유. 글과 링크만 채워 준다 — 어느 플랫폼도 URL로 이미지를 받지 않아서
   // 사진은 저장한 QR을 직접 붙여야 한다.
@@ -14697,10 +14783,10 @@ async function renderMinerSetup() {
     .querySelectorAll("[data-mncopy]")
     .forEach((b) => {
       (b as HTMLElement).onclick = async () => {
-        await navigator.clipboard.writeText(c[(b as HTMLElement).dataset.mncopy!]);
+        const ok = await copyOk(c[(b as HTMLElement).dataset.mncopy!]);
         const was = b.textContent;
-        b.textContent = "복사됨";
-        setTimeout(() => (b.textContent = was), 1300);
+        b.textContent = t(ok ? "복사됨" : "복사하지 못했어요");
+        setTimeout(() => (b.textContent = was), ok ? 1300 : 2600);
       };
     });
 }
@@ -15100,9 +15186,9 @@ async function loadAddrBook() {
       .querySelectorAll<HTMLElement>("[data-copy]")
       .forEach((b) => {
         b.onclick = async () => {
-          await navigator.clipboard.writeText(b.dataset.copy || "");
-          b.textContent = "복사됨";
-          setTimeout(() => (b.textContent = "복사"), 1400);
+          const ok = await copyOk(b.dataset.copy || "");
+          b.textContent = t(ok ? "복사됨" : "복사하지 못했어요");
+          setTimeout(() => (b.textContent = t("복사")), ok ? 1400 : 2600);
         };
       });
     // 이 주소가 받기 몇 번인지·거스름인지, 거기 무엇이 있는지 — 위의 「주소 확인」 칸에서.
@@ -15148,8 +15234,8 @@ async function newAddrWithName() {
     const cp = document.getElementById("abk-cp");
     if (cp)
       cp.onclick = async () => {
-        await navigator.clipboard.writeText(r.address);
-        cp.textContent = "복사됨";
+        const ok = await copyOk(r.address);
+        cp.textContent = t(ok ? "복사됨" : "복사하지 못했어요");
       };
     await loadAddrBook();
   } catch (e) {
@@ -19382,9 +19468,9 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("sh-checkmap").addEventListener("click", () => {
     const u = (window as any).__checkUrl;
     const open = (url: string, fallbackNote: string) =>
-      invoke("open_share", { url }).catch(() => {
-        navigator.clipboard.writeText(url);
-        say("주소를 복사했습니다", fallbackNote + "\n\n" + url);
+      invoke("open_share", { url }).catch(async () => {
+        if (await copyOk(url)) say("주소를 복사했습니다", fallbackNote + "\n\n" + url);
+        else say(t("복사하지 못했어요. 주소를 직접 골라 복사해 주세요."), url);
       });
 
     if (u) {
