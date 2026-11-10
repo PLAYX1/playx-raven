@@ -554,7 +554,7 @@ where
 /// `nostr_publish` 의 7일 시각 검사는 새 글용이라 여기선 서명·모양만 본다. 방 만들기(40)·방 정보 수정(41)만 받는다.
 pub(crate) async fn rebroadcast(event: &Value) -> Vec<String> {
     let kind = event.get("kind").and_then(Value::as_i64).unwrap_or(-1);
-    if !(kind == 40 || kind == 41) || !crate::relay::verify(event) { return vec![]; }
+    if !(kind == 40 || kind == 41) || !crate::relay::verify(event) || crate::relay::in_deleted_room(event) { return vec![]; }
     let Ok(msg) = serde_json::to_string(&json!(["EVENT", event])) else { return vec![] };
     let runs = targets().into_iter().map(|url| { let msg = msg.clone(); async move { let r = send_one(&url, &msg).await; (url, r) } });
     futures_util::future::join_all(runs).await.into_iter().filter_map(|(u, r)| r.ok().map(|_| u)).collect()
@@ -755,6 +755,8 @@ pub(crate) fn validate_publish_event(event: &Value) -> Result<(), String> {
     }
     if matches!(kind,30078|30402) && !tag("d") { return Err("가게·상품 식별자가 없습니다.".into()); }
     if !crate::relay::verify(event) { return Err("이벤트 ID 또는 서명이 맞지 않습니다. 지갑에서 다시 서명해 주세요.".into()); }
+    // 11-10 지운 방(묘비)의 방 글·수정·대화는 내보내지 않는다.
+    if crate::relay::in_deleted_room(event) { return Err("지운 방입니다. 이 방에는 더 쓸 수 없어요.".into()); }
     Ok(())
 }
 /// Bounded process-wide budget; changing key/address cannot bypass global cap.

@@ -229,6 +229,12 @@ export function createSheet(core: AdminCore): Sheet {
         copy(el("span", { cls: "tkinfo-t" }), "이 방 숨기기"),
         copy(el("span", { cls: "tkinfo-d" }), "내 목록에서만 사라져요. 다른 사람 화면에는 그대로 보여요. 「숨긴 방」에서 되돌릴 수 있어요.")));
     hideRow.addEventListener("click", () => void hideCurrent());
+    // 11-10 방 지우기(만든 사람만 — 이 시트 자체가 만든 사람에게만 열린다). 페이블 판정 문구 그대로.
+    const delRow = el("button", { id: "info-delete", cls: "tkinfo-row tkinfo-danger", type: "button" },
+      el("span", { cls: "tkinfo-txt" },
+        copy(el("span", { cls: "tkinfo-t" }), "방 지우기"),
+        copy(el("span", { cls: "tkinfo-d" }), "레이븐볼트에서는 사라집니다. 다른 Nostr 앱에는 남아 있을 수 있어요.")));
+    delRow.addEventListener("click", () => void deleteCurrent());
 
     const title = user(el("h3", { id: "info-h" }), name);
     box.replaceChildren(
@@ -239,8 +245,7 @@ export function createSheet(core: AdminCore): Sheet {
       meta,
       form,
       say,
-      el("div", { cls: "tkinfo-group" }, hideRow),
-      copy(el("p", { id: "info-nodelete", cls: "tkinfo-foot" }), "이 방은 공개 릴레이에 있어서 완전히 지울 수 없어요. 숨기거나 이름을 바꿀 수 있어요."),
+      el("div", { cls: "tkinfo-group" }, hideRow, delRow),
       copy(el("p", { cls: "tkinfo-foot" }), "공개 방이라 글은 세계 릴레이로 함께 나가요."),
     );
   }
@@ -264,6 +269,41 @@ export function createSheet(core: AdminCore): Sheet {
     show(true);
     infoBtn()?.setAttribute("aria-expanded", "true");
     document.getElementById("closeinfo")?.focus();
+  }
+
+  // ── 지우기(11-10) ─────────────────────────────────────────────────────
+  async function deleteCurrent(): Promise<void> {
+    if (busy) return;
+    const room = core.room(roomId);
+    if (!room || !canEditRoom(room, deps.me())) { close(); return; }
+    const id = roomId;
+    const name = String(room.name || t("이름 없는 방"));
+    const ok = await deps.sure(
+      t("이 방을 지울까요?"),
+      tf("「{0}」 방이 레이븐볼트(데스크탑·폰·웹)에서 사라지고 되살릴 수 없어요. 방 안 글도 함께 안 보여요. 다른 Nostr 앱에는 남아 있을 수 있어요.", name),
+      t("지우기"),
+    );
+    if (!ok) return;
+    busy = true;
+    const say = document.getElementById("info-say");
+    if (say) { say.className = "tkinfo-say"; say.textContent = t("지우는 중…"); }
+    const go = () => deps.call("talk_room_delete", { room: id });
+    try {
+      try { await go(); }
+      catch (e) {
+        if (seedErrorKind(e) !== "LOCKED") throw e;
+        if (!(await deps.unlock(t("지갑을 열면 방 지우기를 다시 시도합니다.")))) { if (say) say.textContent = ""; return; }
+        await go();
+      }
+      close();
+      if (deps.current() === id) deps.leave();
+      else await deps.reload();
+      core.paint();
+    } catch (e) {
+      if (say) { say.textContent = `${t("방을 지우지 못했어요.")} ${deps.errText(e)}`; say.classList.add("warn"); }
+    } finally {
+      busy = false;
+    }
   }
 
   // ── 숨기기 ────────────────────────────────────────────────────────────

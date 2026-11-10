@@ -59,6 +59,13 @@ function installTalkHarness({ me, mine, theirs, official, other, locked }) {
     if (cmd === 'talk_profiles') return {};
     if (cmd === 'wallet_lock_state') return { encrypted: true, unlocked };
     if (cmd === 'unlock_for') { log.push('unlock_for'); unlocked = true; return null; } // 암호 값은 적지 않는다
+    if (cmd === 'talk_room_delete') {
+      log.push(['talk_room_delete', args.room]);
+      const i = rooms.findIndex(x => x.id === args.room && x.pubkey === me);
+      if (i < 0) throw '이 방을 만든 열쇠로 확인되지 않았습니다.';
+      rooms.splice(i, 1);
+      return { public_ok: 2, public_total: 3, local_ok: true, event: {} };
+    }
     if (cmd === 'talk_room_meta_set') {
       log.push(['talk_room_meta_set', args.room, args.name, args.about]);
       if (!unlocked) throw '[SEED_LOCKED] 지갑이 잠겨 있어 12단어를 읽을 수 없습니다. 「지갑 열기」를 눌러 주세요.';
@@ -130,8 +137,9 @@ test('방 설정 시트 — 화면 검사 · 지갑 잠김이면 「지갑 열�
   assert.equal(await page.$eval('#info', e => e.parentElement?.id), 'tk-room-sheet');
   assert.equal(await page.$eval('#tk-room-sheet', e => e.hidden), false);
   assert.equal(await page.$eval('#tk-room-settings', e => e.getAttribute('aria-expanded')), 'true');
-  assert.match(await text(page, '#info-nodelete'), /완전히 지울 수 없어요/);
-  assert.equal(await page.$$eval('#info button', bs => bs.some(b => /지우기|삭제|나가기/.test(b.textContent))), false, '지우기·나가기 단추가 있다');
+  // 11-10 방 지우기(만든 사람만 — 이 시트가 만든 사람에게만 열린다). 사실대로 「다른 Nostr 앱에는 남을 수 있다」.
+  assert.match(await text(page, '#info-delete'), /방 지우기.*레이븐볼트에서는 사라집니다.*다른 Nostr 앱에는 남아 있을 수 있어요/);
+  assert.equal(await page.$$eval('#info button', bs => bs.some(b => /나가기/.test(b.textContent))), false, '나가기 단추가 있다');
   // 1024 폭에서는 대화 위를 덮는 시트다.
   const box = await page.$eval('#info', e => { const r = e.getBoundingClientRect(); return { pos: getComputedStyle(e).position, right: Math.round(innerWidth - r.right), w: Math.round(r.width) }; });
   assert.deepEqual(box, { pos: 'fixed', right: 0, w: 380 });
@@ -238,6 +246,30 @@ test('이 방 숨기기 → 목록에서 사라짐 → 「숨긴 방」에서 �
   // 되돌리기 한 줄.
   await page.click('#tk-hiddenundo');
   await page.waitForFunction(id => document.querySelector(`#tk-rooms [data-room="${id}"]`), {}, OFFICIAL);
+  assert.deepEqual(page.__errors, []);
+  await page.close();
+});
+
+test('방 지우기 — 한 번 묻고, 취소하면 그대로, 지우면 목록에서 사라지고 레이븐 이야기로', async () => {
+  const page = await openTalk();
+  await pick(page, MINE);
+  await page.waitForFunction(() => document.getElementById('tk-room-settings').hidden === false);
+  await page.click('#tk-room-settings');
+  await page.waitForFunction(() => document.querySelector('#info') && !document.querySelector('#info').hidden);
+  await page.click('#info-delete');
+  await page.waitForFunction(() => document.getElementById('askwrap').classList.contains('on'));
+  assert.match(await text(page, '#ask-title'), /이 방을 지울까요/);
+  assert.match(await text(page, '#askwrap'), /내 방.*되살릴 수 없어요.*다른 Nostr 앱에는 남아 있을 수 있어요/);
+  await shot(page, 'delete-ask');
+  await page.click('#ask-no');
+  await new Promise(r => setTimeout(r, 300));
+  assert.equal(await page.evaluate(() => window.__talkLog.filter(x => Array.isArray(x) && x[0] === 'talk_room_delete').length), 0, '취소했는데 지웠다');
+  await page.click('#info-delete');
+  await page.waitForFunction(() => document.getElementById('askwrap').classList.contains('on'));
+  await page.click('#ask-yes');
+  await page.waitForFunction(id => !document.querySelector(`#tk-rooms [data-room="${id}"]`), {}, MINE);
+  assert.equal(await page.$eval('#tk-rooms .room.on', e => e.dataset.room), '');
+  assert.deepEqual(await page.evaluate(() => window.__talkLog.filter(x => Array.isArray(x) && x[0] === 'talk_room_delete')), [['talk_room_delete', '1'.repeat(64)]]);
   assert.deepEqual(page.__errors, []);
   await page.close();
 });

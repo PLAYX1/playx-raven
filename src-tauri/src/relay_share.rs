@@ -475,7 +475,7 @@ pub(crate) fn extra_relays() -> Vec<String> {
 /// 내 이야기 글이면 이웃·더한 곳에도 보낸다. 기다리지 않고, 실패는 무시한다.
 pub(crate) fn forward(event: &Value) {
     let kind = event.get("kind").and_then(Value::as_i64).unwrap_or(-1);
-    if !SHARE_KINDS.contains(&kind) {
+    if !SHARE_KINDS.contains(&kind) || crate::relay::in_deleted_room(event) {
         return;
     }
     let targets = extra_relays();

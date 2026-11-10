@@ -36,3 +36,4 @@
 .tk-hiddenwhy{margin:4px 0 8px}
 .tk-hiddenrow{display:flex;align-items:center;gap:8px;justify-content:space-between;min-height:44px;border-top:1px solid var(--line)}
 .tk-hiddenbox button,.tk-hiddennote button,.tkinfo-top .ghost{min-height:44px}
+.tkinfo-danger .tkinfo-t{color:var(--danger)}

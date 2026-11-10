@@ -727,6 +727,7 @@ pub fn run() {
             talk::talk_read,
             talk::talk_rooms,
             talk::talk_room_rebroadcast,
+            talk::talk_room_delete,
             talk::talk_replies,
             talk::talk_translate,
             talk::talk_make_room,

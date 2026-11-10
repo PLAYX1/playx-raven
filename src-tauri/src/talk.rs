@@ -1511,6 +1511,8 @@ async fn room_events() -> Result<Vec<Value>, String> {
 pub async fn talk_room_rebroadcast(room: String) -> Result<Value, String> {
     let room = room.trim().to_ascii_lowercase();
     if room.len() != 64 || !room.bytes().all(|b| b.is_ascii_hexdigit()) { return Err("방 번호가 올바르지 않습니다.".into()); }
+    // 11-10 지운 방은 다시 올리지 않는다.
+    if crate::relay::room_deleted(&room) { return Ok(json!({ "found": false, "deleted": true })) }
     let root = crate::nostrpub::nostr_query_ids(vec![KIND_ROOM], vec![room.clone()]).await?
         .into_iter().find(|e| e.get("id").and_then(Value::as_str) == Some(room.as_str()) && crate::relay::verify(e));
     let Some(root) = root else { return Ok(json!({ "found": false })) };
@@ -1541,8 +1543,48 @@ pub async fn talk_rooms() -> Result<Value, String> {
             200
         ),
     );
+    let got = got?;
+    // 11-10 방 지우기: 그 방들을 가리키는 지우기 요청(kind 5)을 묻고, 만든 사람이 서명한 것이면 묘비를 적는다.
+    //   못 물어도 목록은 보인다 — 이미 적어 둔 묘비로 거른다.
+    let ids: Vec<String> = got.iter().filter_map(|e| e.get("id").and_then(Value::as_str).map(str::to_string))
+        .filter(|id| !crate::relay::room_deleted(id)).collect();
+    if !ids.is_empty() {
+        if let Ok((dels, _)) = crate::nostrpub::query_filters(vec![json!({ "kinds": [5], "#e": ids, "limit": 200 })]).await {
+            for d in &dels { for id in crate::relay::rooms_deleted_by(d, &got) { crate::relay::mark_room_deleted(&id); } }
+        }
+    }
+    let got: Vec<Value> = got.into_iter().filter(|e| !crate::relay::in_deleted_room(e)).collect();
     // 🔴 수정 글을 못 읽어도 방 목록은 보여야 한다 — 만든 때 이름으로 나올 뿐이다.
-    Ok(json!(rooms_from_events(got?, &metas.unwrap_or_default())))
+    Ok(json!(rooms_from_events(got, &metas.unwrap_or_default())))
+}
+
+/// 11-10 방 지우기(페이블 판정). **방을 만든 이야기 열쇠로만** 지우기 요청(kind 5, NIP-09)을 서명해 올린다.
+/// 이 컴퓨터는 묘비를 바로 적는다 — 레이븐볼트(데스크탑·폰·웹·미리보기)에서는 사라진다.
+/// ⚠️ 다른 Nostr 앱·공개 릴레이는 요청을 따를 수도 안 따를 수도 있다 — 화면이 그대로 말한다.
+#[tauri::command]
+pub async fn talk_room_delete(room: String) -> Result<Value, String> {
+    let room = room.trim().to_ascii_lowercase();
+    if room.len() != 64 || !room.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err("방 번호가 올바르지 않습니다.".into());
+    }
+    let sk = key()?;
+    let me = crate::shopkey::pubkey_of(&sk)?;
+    let v = crate::nostrpub::nostr_query(vec![KIND_ROOM], vec![me.clone()], vec![]).await
+        .map_err(|e| format!("릴레이에서 이 방을 확인하지 못했습니다. 잠시 뒤 다시 해 주세요: {e}"))?;
+    let mine = v.get("events").and_then(Value::as_array).cloned().unwrap_or_default();
+    if !mine.iter().any(|e| e.get("id").and_then(Value::as_str) == Some(room.as_str()) && room_creator(e).as_deref() == Some(me.as_str())) {
+        return Err("이 방을 만든 열쇠로 확인되지 않았습니다. 방은 만든 사람만 지울 수 있습니다.".into());
+    }
+    let tags = json!([["e", room], ["k", "40"], ["t", TAG]]);
+    let ev = crate::shopkey::sign_with(&sk, 5, tags, "방을 지웁니다", now())?;
+    // 🔴 묘비를 **먼저** 적는다 — 그래야 아래 발행이 이 컴퓨터 릴레이에서 방 글을 바로 지운다.
+    crate::relay::mark_room_deleted(&room);
+    let sent = crate::nostrpub::nostr_publish(ev.clone()).await?;
+    let ok: Vec<String> = sent.get("ok").and_then(Value::as_array).map(|a| a.iter()
+        .filter_map(|x| x.as_str().map(str::to_string).or_else(|| x.get("relay").and_then(Value::as_str).map(str::to_string))).collect()).unwrap_or_default();
+    let failed = sent.get("failed").and_then(Value::as_array).map(|a| a.len()).unwrap_or(0);
+    let public_ok = ok.iter().filter(|u| !is_local_relay(u)).count();
+    Ok(json!({ "event": ev, "public_ok": public_ok, "public_total": public_ok + failed, "local_ok": ok.iter().any(|u| is_local_relay(u)) }))
 }
 
 /// 방을 만든 글들 → 화면에 줄 방 목록. 수정 글(`metas`)은 검증해서 반영한다.
@@ -1657,9 +1699,9 @@ fn room_gate_of(e: &Value, body: &Value) -> String {
  *
  * ## ⚠️ 못 하는 것
  *
- * - **방 지우기는 없다.** 공개 릴레이에 올라간 방은 우리가 지울 수 없다.
- *   삭제 요청(kind 5)은 부탁일 뿐이라 「지워졌다」고 말할 수 없다. 화면은
- *   「숨기기(내 화면만)」와 「이름 바꾸기」만 준다.
+ * - **11-10 방 지우기는 있다(`talk_room_delete`, 만든 사람만).** 레이븐볼트에서는 묘비로 사라진다.
+ *   다만 공개 릴레이·다른 Nostr 앱은 지우기 요청(kind 5)을 따를 수도 안 따를 수도 있다 —
+ *   그래서 화면은 「레이븐볼트에서는 사라집니다. 다른 Nostr 앱에는 남아 있을 수 있어요」라고만 말한다.
  * - **다른 Nostr 앱이 41 을 반영하는지는 앱마다 다르다.** 우리 앱은 위 규칙대로
  *   반영한다. 다른 앱에서는 옛 이름으로 보일 수 있다고 화면이 말한다.
  * - **자산(누가 쓸 수 있나)은 못 바꾼다.** 수정 글에 적혀 있어도 안 읽는다.

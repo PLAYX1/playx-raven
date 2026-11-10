@@ -161,6 +161,64 @@ fn peek<T>(f: impl FnOnce(&Vec<Value>) -> T) -> T {
     f(v)
 }
 
+// ── 지운 방 묘비(11-10, 페이블 판정) ─────────────────────────────────────────
+//
+// 대표: 「만든 방 삭제가 안 되던데」. 방을 만든 사람이 지우기 요청(kind 5, NIP-09)을 올리면
+// 이 컴퓨터는 그 방 번호를 **영원히** 적어 둔다. 원본 방 글(kind 40)이 다른 릴레이에서 다시
+// 흘러와도 되살아나지 않는다 — 받지 않고, 목록에 안 보이고, 다시 올리지도 않는다.
+// 🔴 남의 방을 지울 수는 없다: 지우기 요청의 서명자 == 방을 만든 글의 서명자일 때만 적는다.
+
+static TOMBS: Mutex<Option<std::collections::HashSet<String>>> = Mutex::new(None);
+fn tomb_file() -> std::path::PathBuf {
+    // 시험은 진짜 앱 폴더의 묘비를 건드리지 않는다.
+    if cfg!(test) { return std::env::temp_dir().join(format!("rv-test-deleted-rooms-{}.json", std::process::id())); }
+    file().with_file_name("deleted-rooms.json")
+}
+fn tombs<T>(f: impl FnOnce(&mut std::collections::HashSet<String>) -> T) -> T {
+    let mut g = TOMBS.lock().unwrap_or_else(|e| e.into_inner());
+    let set = g.get_or_insert_with(|| {
+        std::fs::read_to_string(tomb_file()).ok()
+            .and_then(|t| serde_json::from_str::<Vec<String>>(&t).ok())
+            .map(|v| v.into_iter().collect()).unwrap_or_default()
+    });
+    f(set)
+}
+/// 지운 방인가.
+pub(crate) fn room_deleted(id: &str) -> bool { tombs(|s| s.contains(&id.to_ascii_lowercase())) }
+/// 이 방을 지운 방으로 적는다(디스크에 바로 쓴다). 확인은 부르는 쪽이 했다.
+pub(crate) fn mark_room_deleted(id: &str) {
+    let id = id.to_ascii_lowercase();
+    if id.len() != 64 || !id.bytes().all(|b| b.is_ascii_hexdigit()) { return; }
+    let list = tombs(|s| if s.insert(id) { let mut v: Vec<String> = s.iter().cloned().collect(); v.sort(); Some(v) } else { None });
+    if let Some(v) = list { let _ = std::fs::write(tomb_file(), serde_json::to_vec(&v).unwrap_or_default()); }
+}
+/// 이 글의 `e` 표들.
+fn e_tags(e: &Value) -> Vec<String> {
+    e.get("tags").and_then(Value::as_array).map(|ts| ts.iter()
+        .filter(|t| t.get(0).and_then(Value::as_str) == Some("e"))
+        .filter_map(|t| t.get(1).and_then(Value::as_str).map(str::to_ascii_lowercase)).collect()).unwrap_or_default()
+}
+/// 지운 방의 글인가 — 방 글(40) 자체, 그 방을 가리키는 수정(41)·대화(42).
+pub(crate) fn in_deleted_room(e: &Value) -> bool {
+    match e.get("kind").and_then(Value::as_i64) {
+        Some(40) => e.get("id").and_then(Value::as_str).is_some_and(room_deleted),
+        Some(41) | Some(42) => e_tags(e).iter().any(|id| room_deleted(id)),
+        _ => false,
+    }
+}
+/// 서명을 확인한 지우기 요청(kind 5) 하나와 그 방을 만든 글(kind 40)들 → 지울 방 번호들.
+/// 만든 사람이 같을 때만 고른다.
+pub(crate) fn rooms_deleted_by(del: &Value, rooms: &[Value]) -> Vec<String> {
+    if del.get("kind").and_then(Value::as_i64) != Some(5) || !verify(del) { return vec![]; }
+    let who = del.get("pubkey").and_then(Value::as_str).unwrap_or("");
+    let want = e_tags(del);
+    rooms.iter().filter(|r| r.get("kind").and_then(Value::as_i64) == Some(40)
+            && r.get("pubkey").and_then(Value::as_str) == Some(who)
+            && r.get("id").and_then(Value::as_str).is_some_and(|id| want.contains(&id.to_ascii_lowercase()))
+            && verify(r))
+        .filter_map(|r| r.get("id").and_then(Value::as_str).map(str::to_ascii_lowercase)).collect()
+}
+
 /// 이 글이 진짜인가. **서명을 우리가 확인한다.**
 ///
 /// 🔴 안 하면 아무나 남의 이름으로 「이 가게는 여기서 주문받습니다」를 올릴
@@ -493,6 +551,10 @@ fn store(e: Value) -> (bool, String) {
     if !verify(&e) {
         return (false, "invalid: 서명이 맞지 않습니다".into());
     }
+    // 11-10 지운 방의 글은 받지 않는다(묘비가 이긴다).
+    if in_deleted_room(&e) {
+        return (false, "blocked: 지운 방입니다".into());
+    }
     // 11-07 GPT P1: 서명이 덮는 일곱 칸만 남긴다 — 서명 밖에 큰 칸을 붙여 디스크를 채우지 못하게. 크기 검사는 주인 글에도 건다.
     let e = json!({
         "id": e["id"], "pubkey": e["pubkey"], "created_at": e["created_at"], "kind": e["kind"],
@@ -600,6 +662,19 @@ fn store(e: Value) -> (bool, String) {
             .any(|x| x.get("id") == e.get("id"))
         {
             return (true, "이미 있습니다".into());
+        }
+        // 11-10 방 지우기: 같은 사람이 만든 방이면 묘비를 적고 그 방 글(40·41·42)을 이 컴퓨터에서 지운다.
+        //   반대로 방 글(40)이 지우기 요청보다 늦게 와도, 이미 받아 둔 요청이 있으면 받지 않는다.
+        if kind == 5 {
+            let gone = rooms_deleted_by(&e, v);
+            for id in &gone { mark_room_deleted(id); }
+            if !gone.is_empty() { v.retain(|x| !in_deleted_room(x)); }
+        } else if kind == 40 {
+            let dels: Vec<Value> = v.iter().filter(|x| x.get("kind").and_then(Value::as_i64) == Some(5) && x.get("pubkey").and_then(Value::as_str) == Some(pk.as_str())).cloned().collect();
+            if dels.iter().any(|d| !rooms_deleted_by(d, std::slice::from_ref(&e)).is_empty()) {
+                if let Some(id) = e.get("id").and_then(Value::as_str) { mark_room_deleted(id); }
+                return (false, "blocked: 지운 방입니다".into());
+            }
         }
         v.push(e.clone());
         // 11-07 감사: 오래된 것부터 자르면 한 사람이 재접속하며 5,000개를 채워 남의 글(가게 공지 포함)을 모두 밀어낸다.
@@ -1152,6 +1227,44 @@ mod tests {
 
     /// 주인·저장소 전역값을 만지는 시험은 하나씩 돈다.
     static OWNER_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    /// 11-10 방 지우기: 만든 사람의 지우기 요청만 묘비가 되고, 묘비가 다시 온 방 글을 이긴다. 남은 못 지운다.
+    #[test]
+    fn room_delete_tombstone() {
+        use super::*;
+        let _g = OWNER_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        *TEST_OWNER.lock().unwrap() = Some(crate::shopkey::pubkey_of(&[23u8; 32]).unwrap());
+        *STORE.lock().unwrap() = Some(vec![]);
+        *TOMBS.lock().unwrap() = Some(Default::default());
+        let (a, b) = ([21u8; 32], [22u8; 32]);
+        let t = json!([["t", "ravencoin"]]);
+        let room = crate::shopkey::sign_with(&a, 40, t.clone(), r#"{"name":"???"}"#, now_secs()).unwrap();
+        let rid = room["id"].as_str().unwrap().to_string();
+        assert!(store(room.clone()).0);
+        let msg = crate::shopkey::sign_with(&b, 42, json!([["e", rid, "", "root"], ["t", "ravencoin"]]), "안녕", now_secs()).unwrap();
+        assert!(store(msg.clone()).0);
+        // 남(b)의 지우기 요청은 묘비가 안 된다.
+        let fake = crate::shopkey::sign_with(&b, 5, json!([["e", rid], ["t", "ravencoin"]]), "", now_secs()).unwrap();
+        store(fake);
+        assert!(!room_deleted(&rid), "남이 내 방을 지웠다");
+        // 만든 사람(a)의 요청 → 묘비 + 방 글·대화가 사라진다.
+        let del = crate::shopkey::sign_with(&a, 5, json!([["e", rid], ["k", "40"], ["t", "ravencoin"]]), "", now_secs()).unwrap();
+        assert!(store(del).0);
+        assert!(room_deleted(&rid));
+        assert!(peek(|v| !v.iter().any(|x| x["id"] == room["id"] || x["id"] == msg["id"])), "지운 방 글이 남았다");
+        // 원본이 다시 흘러와도 안 받는다.
+        assert!(!store(room.clone()).0, "지운 방이 되살아났다");
+        assert!(!store(msg).0);
+        assert!(crate::nostrpub::validate_publish_event(&room).is_err(), "지운 방을 다시 올렸다");
+        // 묘비보다 원본이 늦게 오는 경우: 지우기 요청을 먼저 받아 둔 방.
+        let room2 = crate::shopkey::sign_with(&a, 40, t, r#"{"name":"둘"}"#, now_secs()).unwrap();
+        let rid2 = room2["id"].as_str().unwrap().to_string();
+        let del2 = crate::shopkey::sign_with(&a, 5, json!([["e", rid2], ["t", "ravencoin"]]), "", now_secs()).unwrap();
+        store(del2);
+        assert!(!store(room2).0, "먼저 온 지우기 요청을 무시했다");
+        assert!(room_deleted(&rid2));
+        let _ = std::fs::remove_file(tomb_file());
+    }
 
     /// 11-07 GPT P1: 주인 글이라도 ① 대소문자만 바꾼 id 는 안 받고 ② 서명 밖 칸은 버리고 ③ 크기 한도는 그대로다.
     #[test]
