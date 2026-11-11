@@ -1,5 +1,19 @@
 # 변경 기록
 
+## 0.9.33
+
+### 한국어
+
+- **광장이 SNS 피드가 됐습니다:** 새 글이 맨 위, 맨 위에 「무슨 일이 있나요?」 글쓰기. 글마다 「답글 · 저장 · 공유」가 늘 보입니다. 「피드 | 팔로우」 탭으로 바꿔 봅니다.
+- **공유:** 글 주소 복사, 카카오톡·문자에 붙여 넣을 글 복사, 폰 카메라로 찍는 QR. 받은 사람은 앱이 없어도 웹에서 읽습니다.
+- **글쓰기가 편해졌습니다:** 쓰는 칸이 넓어지고, 입력칸이 늘 화면에 보입니다(아래로 내리지 않아도 됩니다). 한글을 치다 엔터를 눌러 글자가 반쯤 보내지던 것도 고쳤습니다.
+
+### English
+
+- **The Square is now a feed:** newest first, a “What’s happening?” box on top, and Reply · Save · Share on every post. Switch between Feed and Following tabs.
+- **Share:** copy the link, copy text to paste into a chat or text message, or scan a QR code with your phone.
+- **Easier writing:** a wider message box that always stays on screen; fixed Korean input sending half-composed text on Enter.
+
 ## 0.9.32
 
 ### 한국어
