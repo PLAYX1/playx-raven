@@ -32,6 +32,7 @@ import { inviteLink } from "./links";
 // 이야기 방 운영(0.9.0 레인 C): 「방 설정」(만든 사람만 이름·설명 고치기)·「이 방 숨기기」 — 연결 줄만 여기에.
 import { wireTalkRoomsAdmin } from "./talk-rooms-admin";
 import { homeSafety } from "./home-summary";
+import { paintCards, type CardsInput, type CardOpen } from "./ravi-cards";
 import { wireChainInfoLazy } from "./chain-info-lazy";
 import { installFirstRunBarrier, afterRaviLanding, deferUntilRaviLanding, finishRaviLanding } from "./firstrun";
 installFirstRunBarrier();
@@ -2661,6 +2662,38 @@ async function drawMoneyStatus(): Promise<void> {
 /** Read existing commands only; unknown balances never become zero. */
 /** 홈이 마지막으로 읽은 확정 잔액(지갑 화면이 「—」 대신 먼저 보인다). */
 let lastOverviewConfirmed: number | null = null;
+/** 11-11 라비 카드 재료 — 홈 주기의 각 칠하기가 아는 값만 넣는다(카드는 새로 묻지 않는다). */
+const homeCards: Omit<CardsInput, "rvn"> = { incoming: null, confirmed: null, anyTx: null, nodeAt: null, newOrders: 0, ordersAt: null, phoneWaiting: 0, phoneAt: null,
+  backupTone: null, lockNone: false, safetyAt: null, storesOff: 0, headFail: false, chainAt: null, talkNew: 0, talkAt: null };
+function setHomeCards(patch: Partial<typeof homeCards>): void {
+  Object.assign(homeCards, patch);
+  const host = document.getElementById("rv-home-cards");
+  if (host) paintCards(host, { ...homeCards, rvn: (n) => fmtRvn(n) }, openHomeCard);
+}
+function openHomeCard(target: CardOpen): void {
+  switch (target) {
+    case "activity": $("rv-home-activity-all").click(); break;
+    case "shop-orders": showPage("shop"); shopTab("orders"); break;
+    case "phone-requests": $("rv-home-phone").click(); break;
+    case "backup": case "lock": $("rv-home-backup").click(); break;
+    case "chain": showPage("settings"); document.getElementById("chain-store-card")?.scrollIntoView({ block: "start" }); break;
+    case "talk": showPage("talk"); break;
+    case "receive": $("overview-receive").click(); break;
+  }
+}
+/** 체인 매장: 본점이면 오늘 꺼진 매장 수, 매장이면 본점으로 못 보내는 중인지. 체인이 아니면 아무 카드도 없다. */
+async function paintHomeChainCards(): Promise<void> {
+  try {
+    const s = await invoke<any>("chain_sales_status");
+    if (s?.role === "store") { setHomeCards({ storesOff: 0, headFail: !!s.lastErr && !s.connected, chainAt: Date.now() }); return; }
+    if (s?.role !== "owner") { setHomeCards({ storesOff: 0, headFail: false, chainAt: null }); return; }
+    const d = new Date(); const day0 = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); const mon0 = new Date(d.getFullYear(), d.getMonth(), 1).getTime();
+    const tot = await invoke<any>("chain_sales_totals", { dayFrom: day0, dayTo: day0 + 86_400_000, monthFrom: mon0, monthTo: new Date(d.getFullYear(), d.getMonth() + 1, 1).getTime() });
+    const off = Array.isArray(tot?.stores) ? tot.stores.filter((r: any) => r?.offline && !r?.revoked).length : 0;
+    setHomeCards({ storesOff: off, headFail: false, chainAt: Date.now() });
+  } catch { /* 모르면 카드를 만들지 않는다(체인 화면이 직접 말한다) */ }
+}
+
 async function refreshOverview() {
   const [node, wallet] = await Promise.allSettled([invoke<any>("node_status"), invoke<any>("wallet_balance")]);
   const n = node.status === "fulfilled" ? node.value : null;
@@ -2684,6 +2717,7 @@ async function refreshOverview() {
   const show = Number.isFinite(incoming) && incoming > 0;
   if (row) row.hidden = !show;
   if (show) setCopyText($("overview-incoming"), () => fmtRvn(incoming));
+  if (wallet.status === "fulfilled") setHomeCards({ incoming: Number.isFinite(incoming) ? incoming : null, confirmed: typeof confirmed === "number" && Number.isFinite(confirmed) ? confirmed : null, nodeAt: Date.now() });
 }
 
 /** 라비 화면을 그린다. 상태가 바뀔 때마다 다시 부른다. */
@@ -5038,12 +5072,14 @@ async function paintHomeSafety(): Promise<void> {
     el.textContent = t(summary[key].label);
     el.dataset.tone = summary[key].tone;
   }
+  setHomeCards({ backupTone: summary.backup.tone, lockNone: summary.lock.label === "잠금 암호 없음", safetyAt: Date.now() });
 }
 
 async function paintHome(): Promise<void> {
   void refreshOverview();
   void paintHomeSafety();
   chainInfo?.paintHome();
+  void paintHomeChainCards();
   await paintHomeTxs();
   void paintHomeToday();
 }
@@ -5067,6 +5103,7 @@ async function paintHomeTxs(): Promise<void> {
       const when = Number(tx.time) > 0 ? new Date(Number(tx.time) * 1000).toLocaleString(lang, { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" }) : "";
       return `<div class="rv-home-entry"><span class="rv-home-icon ${received ? "receive" : "send"}" aria-hidden="true">${received ? "↓" : "↑"}</span><span class="rv-home-tx-main">${copyHtml(received ? "받음" : "보냄")} · ${escapeHtml(String(tx.asset_name || "RVN"))}<small>${escapeHtml(when)} · ${escapeHtml(state)}</small></span><strong class="${received ? "ok" : ""}">${received ? "+" : "−"}${escapeHtml(fmtRvn(Math.abs(amount), { code: "" }))}</strong></div>`;
     }).join("") || `<p>${copyHtml("최근 거래가 없습니다")}</p>`;
+    setHomeCards({ anyTx: txs.length > 0 });
   } catch { $("rv-home-txs").textContent = t("거래 내역을 읽지 못했습니다"); }
 }
 
@@ -5126,6 +5163,7 @@ function paintHomePhone(st: WalletLinkState) {
   if (btn && tt && dd) {
     btn.dataset.linked = st.linked > 0 ? "1" : "0";
     btn.dataset.waiting = st.waiting > 0 ? "1" : "0";
+    setHomeCards({ phoneWaiting: st.waiting, phoneAt: Date.now() });
     if (st.linked === 0) { setCopyText(tt, () => t("폰과 지갑 연결")); setCopyText(dd, () => t("폰에서 이 지갑 잔액을 보고, 돈은 여기서 승인해요")); }
     else if (st.waiting > 0) { setCopyText(tt, () => tf("폰 요청 {0}건 · 눌러서 승인하기", st.waiting)); setCopyText(dd, () => tf("연결된 폰 {0}대", st.linked)); }
     else { setCopyText(tt, () => tf("연결된 폰 {0}대 · 요청 확인 중", st.linked)); dd.textContent = ""; }
@@ -18230,6 +18268,7 @@ function 배지그리기() {
     el.textContent = String(안본주문);
     el.hidden = 안본주문 <= 0;
   }
+  setHomeCards({ newOrders: 안본주문, ordersAt: Date.now() });
   if (currentPage === "home") void paintHomeToday();
 }
 
@@ -18509,6 +18548,7 @@ function 대화배지그리기() {
   if (!el) return;
   el.textContent = String(안본대화);
   el.hidden = 안본대화 <= 0;
+  setHomeCards({ talkNew: 안본대화, talkAt: Date.now() });
 }
 
 /// 사장이 이야기를 봤다 → 숫자를 내린다.

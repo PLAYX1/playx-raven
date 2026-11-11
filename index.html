@@ -2530,6 +2530,16 @@
       #page-home { padding:36px 44px; }
       #page-home h1 { font-size:32px; margin:0 0 24px; }
       .rv-home-grid { display:grid; grid-template-columns:minmax(0,1.55fr) minmax(0,1fr); gap:28px; }
+      /* 11-11 라비 카드 — 잔액 위. 폰(phone/screens/Home.tsx RaviCards)과 같은 결: 흰 판 + 주황 테두리 한 줄, 출처는 작게. */
+      .rv-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:12px; margin:0 0 20px; }
+      .rv-cards:empty { display:none; }
+      .rv-card { border:1px solid #C26A2B; background:var(--panel); border-radius:18px; padding:14px 18px; display:flex; flex-direction:column; gap:10px; min-width:0; }
+      .rv-card[data-kind="problem"] { border-color:var(--bad, #C0392B); }
+      .rv-card > b { font-size:16px; line-height:1.4; color:var(--text); overflow-wrap:anywhere; }
+      .rv-card-foot { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px 10px; }
+      .rv-card-src { color:var(--muted); font-size:13px; }
+      .rv-card-foot button { min-height:44px; padding:6px 12px; margin-left:auto; max-width:100%; color:#A9541B; font-weight:700; white-space:normal; overflow-wrap:anywhere; }
+      .rv-cards-empty { grid-column:1/-1; margin:0; color:var(--muted); font-size:14px; }
       .rv-home-grid > div { min-width:0; border:1px solid var(--line); background:var(--panel); border-radius:28px; padding:28px; }
       .rv-home-grid h2 { font-size:18px; margin:0 0 18px; }
       .rv-home-balance { background:#15161D !important; color:#F7F6F3; }
@@ -3919,6 +3929,8 @@
            같은 길이라 배울 것이 하나뿐이다. -->
       <section class="page on" id="page-home">
         <h1>홈</h1>
+        <!-- 11-11 라비 카드(라비 중심 홈 2단계): 잔액 위 최대 3장 — src/ravi-cards.ts. 여는 단추만, 보내는 단추 없음. -->
+        <div id="rv-home-cards" class="rv-cards" role="region" aria-label="오늘 볼 것" aria-live="polite"></div>
         <!-- DOM/Tab and two-column reading order: balance → safety → transactions → Ravi → sales → extras. -->
         <div class="rv-home-grid">
           <div class="rv-home-balance">
