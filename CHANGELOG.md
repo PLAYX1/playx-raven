@@ -1,5 +1,19 @@
 # 변경 기록
 
+## 0.9.32
+
+### 한국어
+
+- **홈에 오늘 볼 것 카드:** 홈 맨 위에 지금 볼 일을 최대 3장 보여 줍니다(들어오는 돈·새 주문·폰에서 온 요청·백업·잠금·꺼진 매장·새 글). 카드는 화면을 열어 줄 뿐, 아무것도 보내지 않습니다. 볼 일이 없으면 「오늘은 조용해요」.
+- **가게 열쇠 서명 보안:** 가게 열쇠는 이제 무엇에 서명하는지 확인 창에 실제 내용(상품 이름·가격, 기기 이름·기한 등)을 보여 주고, 그 내용으로만 서명합니다.
+- **설치 파일이 작아졌습니다:** 앱 본체가 약 20% 줄었습니다.
+
+### English
+
+- **Today cards on Home:** up to three cards for what needs a look now (incoming money, new orders, phone requests, backup, lock, offline stores, new posts). Cards only open screens; they never send anything.
+- **Shop key signing:** the confirm dialog now shows exactly what is being signed (product name and price, device name and expiry, …) and the key signs only that document.
+- **Smaller app:** the app binary is about 20% smaller.
+
 ## 0.9.31
 
 ### 한국어
