@@ -111,6 +111,9 @@ mod sweep;
 mod identity;
 mod talk;
 mod talk_social;
+mod talk_fast;
+#[cfg(test)]
+mod talk_bench;
 mod badges;
 // 팬클럽 — 자산(1집·2집·싱글)마다 있는 방을 묶어 보고, 여러 방에 한 번에 공지한다.
 // 방을 잠그는 일 자체는 talk.rs 가 이미 한다. 여기는 그것을 **자산 기준으로**
@@ -152,6 +155,7 @@ mod devfee;
 mod payout_guard;
 mod ticket;
 mod relay;
+mod relay_pool;
 mod my_drawer;
 mod upload;
 mod spec;
@@ -771,6 +775,8 @@ pub fn run() {
             talk::talk_follows,
             talk::talk_follow_set,
             talk_social::talk_feed,
+            talk_fast::talk_view,
+            talk_fast::talk_warm,
             talk_social::talk_notices,
             talk_social::talk_tag_notes,
             talk_social::talk_search,
@@ -896,6 +902,8 @@ pub fn run() {
             map::start();
             node_keeper::start();
             relay_share::start();
+            // 11-12 이야기를 카톡처럼: 켜자마자 기본 릴레이에 미리 붙어 둔다(relay_pool.rs). 안 쓰면 2분 뒤 저절로 닫힌다.
+            tauri::async_runtime::spawn(async { nostrpub::warm_all() });
             relay_keeper::start();
             use tauri::Manager;
             ravi_companion::setup(app)?;

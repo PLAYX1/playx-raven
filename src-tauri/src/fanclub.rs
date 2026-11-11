@@ -383,7 +383,7 @@ pub async fn fan_rooms() -> Value {
         Err(e) => (Vec::new(), Some(e)),
     };
     // 방은 릴레이에서 온다 — 노드와 다른 길이라 따로 실패한다.
-    let (rooms, rooms_why) = match crate::talk::talk_rooms().await {
+    let (rooms, rooms_why) = match crate::talk::talk_rooms(None).await {
         Ok(v) => (v.as_array().cloned().unwrap_or_default(), None),
         Err(e) => (Vec::new(), Some(e)),
     };
@@ -479,7 +479,7 @@ pub async fn fan_announce(
     }
 
     // 방 목록은 **한 번만** 읽는다. 방마다 읽으면 릴레이에 스무 번 왕복한다.
-    let rooms = match crate::talk::talk_rooms().await {
+    let rooms = match crate::talk::talk_rooms(None).await {
         Ok(v) => v.as_array().cloned().unwrap_or_default(),
         Err(e) => {
             return Err(format!(

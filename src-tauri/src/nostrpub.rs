@@ -47,6 +47,11 @@ fn targets() -> Vec<String> {
 #[tauri::command]
 pub async fn nostr_publish(event: Value) -> Result<Value, String> {
     validate_publish_event(&event)?;
+    // 11-12 「보내기 → 내 글 보임」: 이야기 글은 이 컴퓨터 릴레이 저장분에 **곧바로** 둔다(손님 서버가 꺼진 「지갑」 모드여도).
+    //   화면의 「먼저 그리기」가 바깥 답을 기다리지 않고 방금 쓴 글을 그린다. 받는 규칙은 store 그대로다.
+    if matches!(event.get("kind").and_then(Value::as_i64), Some(0 | 1 | 3 | 5 | 40 | 41 | 42 | 10003)) {
+        crate::relay::absorb(vec![event.clone()]);
+    }
     // 릴레이 나누기(docs/RELAY-SHARE.md §3): 내 이야기 글이면 이웃에도 같이 보낸다 — 기다리지 않고, 실패는 무시한다.
     crate::relay_share::forward(&event);
     let msg = serde_json::to_string(&json!(["EVENT", event]))
@@ -105,52 +110,12 @@ pub async fn nostr_publish(event: Value) -> Result<Value, String> {
 }
 
 pub(crate) async fn send_one(url: &str, msg: &str) -> Result<(), String> {
-    use futures_util::{SinkExt, StreamExt};
-    use tokio_tungstenite::tungstenite::Message;
-
-    // 릴레이 하나가 응답을 안 하면 거기서 멈춘다. 카운터에서 기다릴 시간이 아니다.
-    let connect = tokio::time::timeout(
-        std::time::Duration::from_secs(6),
-        tokio_tungstenite::connect_async(url),
-    )
-    .await
-    .map_err(|_| "연결이 오래 걸립니다".to_string())?
-    .map_err(|e| format!("연결 실패: {e}"))?;
-
-    let (mut ws, _) = connect;
     let expected_id = serde_json::from_str::<Value>(msg).ok().and_then(|v| v[1]["id"].as_str().map(str::to_string)).ok_or("이벤트 ID가 없습니다.")?;
-    ws.send(Message::Text(msg.to_string().into()))
-        .await
-        .map_err(|e| format!("보내지 못했습니다: {e}"))?;
-
+    // 11-12 연결 풀(relay_pool.rs): 이미 열린 연결로 보낸다 — 손잡기(0.5~0.9초)가 빠진다.
     // 릴레이는 ["OK", <id>, true|false, "이유"] 로 답한다. 그 답을 안 기다리면
     // "보냈다" 와 "받아졌다" 를 구별할 수 없다 — 받아지지 않은 글은 없는 글이다.
-    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(6);
-    loop {
-        let left = deadline.saturating_duration_since(tokio::time::Instant::now());
-        if left.is_zero() {
-            return Err("답이 없습니다".into());
-        }
-        match tokio::time::timeout(left, ws.next()).await {
-            Err(_) => return Err("답이 없습니다".into()),
-            Ok(None) => return Err("연결이 끊겼습니다".into()),
-            Ok(Some(Err(e))) => return Err(format!("받는 중 오류: {e}")),
-            Ok(Some(Ok(Message::Text(t)))) => {
-                let v: Value = match serde_json::from_str(&t) {
-                    Ok(v) => v,
-                    Err(_) => continue,
-                };
-                if v.get(0).and_then(Value::as_str) == Some("OK") && v.get(1).and_then(Value::as_str) == Some(expected_id.as_str()) {
-                    return if v.get(2).and_then(Value::as_bool).unwrap_or(false) {
-                        Ok(())
-                    } else {
-                        Err(v.get(3).and_then(Value::as_str).unwrap_or("거절됨").to_string())
-                    };
-                }
-            }
-            Ok(Some(Ok(_))) => continue,
-        }
-    }
+    // 릴레이 하나가 응답을 안 하면 거기서 멈춘다. 카운터에서 기다릴 시간이 아니다(붙기 포함 6초).
+    crate::relay_pool::publish(url, msg, &expected_id, std::time::Duration::from_secs(6)).await
 }
 
 #[cfg(test)]
@@ -591,6 +556,8 @@ pub(crate) async fn query_filters(filters: Vec<Value>) -> Result<(Vec<Value>, us
 /// 11-10 「레이븐볼트가 빠른가?」: 여태 **가장 느린 릴레이까지** 기다렸다(한 곳이 막히면 매번 7초).
 /// 바깥 릴레이는 같은 글을 서로 나눠 가지므로, 한 곳이 답하면 나머지는 잠깐만 더 기다리고 있는 것만 쓴다.
 const GRACE_AFTER_FIRST: std::time::Duration = std::time::Duration::from_millis(1500);
+/// 11-12 연결 풀: 남은 곳이 모두 이미 열린 연결이면 이만큼만 — 붙는 시간이 없으니 늦는 곳은 정말 늦는 곳이다.
+const GRACE_WARM: std::time::Duration = std::time::Duration::from_millis(300);
 const LATE: &str = "늦어서 기다리지 않았습니다";
 
 /// 기본 릴레이(+이 컴퓨터) 와 릴레이 나누기 이웃·더한 곳을 **한꺼번에** 묻는다.
@@ -621,14 +588,43 @@ async fn read_split(req: &str, sub: &str) -> (Vec<Result<Vec<Value>, String>>, V
             },
         };
         let Some((i, r)) = next else { break };
-        if cutoff.is_none() && is_outside_base(i, n_base) && r.is_ok() {
-            cutoff = Some(tokio::time::Instant::now() + GRACE_AFTER_FIRST);
-        }
         slots[i] = Some(r);
+        if cutoff.is_none() && is_outside_base(i, n_base) && slots[i].as_ref().is_some_and(|r| r.is_ok()) {
+            // 11-12: 아직 답하지 않은 바깥 기본 릴레이가 모두 **이미 열린 연결**이면 손잡기가 없다 — 짧게만 더 기다린다.
+            let waiting_open = base.iter().enumerate().filter(|(k, _)| is_outside_base(*k, n_base) && slots[*k].is_none()).all(|(_, u)| crate::relay_pool::is_open(u));
+            cutoff = Some(tokio::time::Instant::now() + if waiting_open { GRACE_WARM } else { GRACE_AFTER_FIRST });
+        }
     }
     let mut all: Vec<Result<Vec<Value>, String>> = slots.into_iter().map(|s| s.unwrap_or_else(|| Err(LATE.into()))).collect();
     let extra_out = all.split_off(n_base);
     (all, extra_out)
+}
+
+/// 11-12 정해진 물음 그대로 읽는다 — `nostr_query_tag` 와 같은 뜻(닿은 곳이 없어도 빈 목록) · since·until 을 쓸 수 있다.
+pub(crate) async fn query_any(filters: Vec<Value>, sub: &str) -> Result<Vec<Value>, String> {
+    if filters.is_empty() || filters.iter().any(|f| f.get("kinds").and_then(Value::as_array).is_none_or(|k| k.is_empty())) {
+        return Err("무엇을 읽을지 알려 주세요.".into());
+    }
+    let mut req = vec![json!("REQ"), json!(sub)];
+    req.extend(filters);
+    let req = serde_json::to_string(&Value::Array(req)).map_err(|e| format!("보낼 것을 만들지 못했습니다: {e}"))?;
+    let mut seen: std::collections::HashMap<String, Value> = std::collections::HashMap::new();
+    for events in read_everywhere(&req, sub).await.into_iter().flatten() {
+        for e in events {
+            if let Some(id) = e.get("id").and_then(Value::as_str) {
+                seen.entry(id.to_string()).or_insert(e);
+            }
+        }
+    }
+    let mut out: Vec<Value> = seen.into_values().collect();
+    out.sort_by_key(|e| -(e.get("created_at").and_then(Value::as_i64).unwrap_or(0)));
+    Ok(out)
+}
+
+/// 11-12 미리 붙어 둔다: 기본 릴레이(+이 컴퓨터). 앱 시작 때·이야기 화면을 열 때.
+/// 🔴 릴레이 나누기 이웃은 미리 붙지 않는다 — 이웃 주소는 읽을 때마다 공개 주소인지 보고(relay_share::read_extra) 붙는다.
+pub(crate) fn warm_all() {
+    crate::relay_pool::warm(&targets());
 }
 
 /// 0번은 이 컴퓨터 릴레이. 시험용 단일 릴레이(regtest)는 한 곳뿐이라 0번도 바깥으로 친다.
@@ -642,84 +638,42 @@ async fn read_everywhere(req: &str, sub: &str) -> Vec<Result<Vec<Value>, String>
 }
 
 /// read_one 과 같되, 개수로 끊지 않고 EOSE 를 받았는지까지 돌려준다(쪽 넘기기용).
-async fn read_one_eose(url: &str, req: &str, sub: &str) -> Result<(Vec<Value>, bool), String> {
-    use futures_util::{SinkExt, StreamExt};
-    use tokio_tungstenite::tungstenite::Message;
-    let (mut ws, _) = tokio::time::timeout(std::time::Duration::from_secs(7), tokio_tungstenite::connect_async(url))
-        .await
-        .map_err(|_| "연결이 오래 걸립니다".to_string())?
-        .map_err(|e| format!("연결 실패: {e}"))?;
-    ws.send(Message::Text(req.to_string().into())).await.map_err(|e| format!("보내지 못했습니다: {e}"))?;
-    let mut out = Vec::new();
-    let mut eose = false;
-    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(10);
-    while out.len() <= 4 * INBOX_PAGE {
-        let left = deadline.saturating_duration_since(tokio::time::Instant::now());
-        if left.is_zero() { break; }
-        let Ok(Some(Ok(msg))) = tokio::time::timeout(left, ws.next()).await else { break };
-        let Message::Text(t) = msg else { continue };
-        let Ok(v) = serde_json::from_str::<Value>(&t) else { continue };
-        let Some(a) = v.as_array() else { continue };
-        if a.get(1).and_then(Value::as_str) != Some(sub) { continue; }
-        match a.first().and_then(Value::as_str) {
-            Some("EOSE") => { eose = true; break; }
-            Some("EVENT") => if let Some(e) = a.get(2).filter(|e| crate::relay::verify(e)) { out.push(e.clone()); },
-            Some("CLOSED") => break,
-            _ => {}
-        }
-    }
-    let _ = ws.close(None).await;
-    Ok((out, eose))
+async fn read_one_eose(url: &str, req: &str, _sub: &str) -> Result<(Vec<Value>, bool), String> {
+    pooled_read(url, req, std::time::Duration::from_secs(10), 4 * INBOX_PAGE + 1).await
 }
 
-pub(crate) async fn read_one(url: &str, req: &str, sub: &str) -> Result<Vec<Value>, String> {
-    use futures_util::{SinkExt, StreamExt};
-    use tokio_tungstenite::tungstenite::Message;
-
-    let (mut ws, _) = tokio::time::timeout(
-        std::time::Duration::from_secs(7),
-        tokio_tungstenite::connect_async(url),
-    )
-    .await
-    .map_err(|_| "연결이 오래 걸립니다".to_string())?
-    .map_err(|e| format!("연결 실패: {e}"))?;
-
-    ws.send(Message::Text(req.to_string().into()))
-        .await
-        .map_err(|e| format!("보내지 못했습니다: {e}"))?;
-
-    let mut out = Vec::new();
+pub(crate) async fn read_one(url: &str, req: &str, _sub: &str) -> Result<Vec<Value>, String> {
     // 사람이 화면 앞에서 기다린다. 오래 붙잡느니 있는 것만 주고 끝낸다.
-    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(7);
+    pooled_read(url, req, std::time::Duration::from_secs(7), 200).await.map(|(v, _)| v)
+}
+
+/// 11-12 연결 풀(relay_pool.rs)로 묻는다 — 릴레이마다 연결 하나를 나눠 쓰고, 구독 번호는 풀이 새로 붙인다.
+/// EOSE(= 이 릴레이가 가진 것을 다 보냈다)·CLOSED·끊김·시간 끝·`max` 개 중 먼저 오는 것에서 멈춘다. 끝나면 CLOSE 한다.
+/// 🔴 받은 글은 **여기서 서명을 본다**(예전과 같다). 맞지 않는 글은 버린다.
+/// 하나도 못 받고 붙지 못했거나·끊겼으면 Err — 「없음」이 아니라 「모름」이다.
+async fn pooled_read(url: &str, req: &str, wait: std::time::Duration, max: usize) -> Result<(Vec<Value>, bool), String> {
+    use crate::relay_pool::Incoming;
+    let deadline = tokio::time::Instant::now() + wait;
+    let mut sub = crate::relay_pool::subscribe(url, req, deadline).await?;
+    let mut out = Vec::new();
     loop {
-        let left = deadline.saturating_duration_since(tokio::time::Instant::now());
-        if left.is_zero() || out.len() >= 200 {
-            break;
+        if out.len() >= max {
+            return Ok((out, false));
         }
-        let Ok(Some(Ok(msg))) = tokio::time::timeout(left, ws.next()).await else {
-            break;
-        };
-        let Message::Text(t) = msg else { continue };
-        let Ok(v) = serde_json::from_str::<Value>(&t) else {
-            continue;
-        };
-        let Some(a) = v.as_array() else { continue };
-        // EOSE = 이 릴레이가 가진 것을 다 보냈다는 뜻. 더 기다릴 이유가 없다.
-        if a.first().and_then(Value::as_str) == Some("EOSE")
-            && a.get(1).and_then(Value::as_str) == Some(sub)
-        {
-            break;
-        }
-        if a.first().and_then(Value::as_str) == Some("EVENT")
-            && a.get(1).and_then(Value::as_str) == Some(sub)
-        {
-            if let Some(e) = a.get(2).filter(|e| crate::relay::verify(e)) {
-                out.push(e.clone());
+        match tokio::time::timeout_at(deadline, sub.rx.recv()).await {
+            Err(_) => return Ok((out, false)),
+            Ok(Some(Incoming::Event(e))) => {
+                if crate::relay::verify(&e) {
+                    out.push(e);
+                }
             }
+            Ok(Some(Incoming::Eose)) => return Ok((out, true)),
+            // 릴레이가 구독을 닫았다(auth-required 등) — 예전처럼 「닿았지만 다 못 읽음」.
+            Ok(Some(Incoming::Closed(_))) => return Ok((out, false)),
+            Ok(Some(Incoming::Gone(why))) => return if out.is_empty() { Err(why) } else { Ok((out, false)) },
+            Ok(None) => return if out.is_empty() { Err("연결이 끊겼습니다".into()) } else { Ok((out, false)) },
         }
     }
-    let _ = ws.close(None).await;
-    Ok(out)
 }
 
 /// The public proxy supports only the event types used by this wallet/shop.
@@ -781,6 +735,7 @@ mod publish_security_tests {
         assert!(!super::is_outside_base(5, 5), "이웃 릴레이는 신호가 아니다");
         assert!(super::is_outside_base(0, 1), "시험용 단일 릴레이");
         assert!(super::GRACE_AFTER_FIRST.as_millis() <= 2000);
+        assert!((300..=500).contains(&super::GRACE_WARM.as_millis()), "열린 연결이면 300~500ms");
     }
 
     use super::*;

@@ -106,6 +106,12 @@ static DIRTY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new
 ///
 /// 서버가 켜질 때 한 번 부른다. 앱이 도는 동안 계속 돈다.
 pub fn start_saver() {
+    // 11-12: 한 번만 돈다(손님 서버를 껐다 켜거나, 바깥에서 읽은 글을 둘 때 다시 불려도 고리가 겹치지 않게).
+    static STARTED: std::sync::Once = std::sync::Once::new();
+    if cfg!(test) { return; }
+    let mut first = false;
+    STARTED.call_once(|| first = true);
+    if !first { return; }
     tauri::async_runtime::spawn(async {
         loop {
             tokio::time::sleep(std::time::Duration::from_secs(5)).await;
@@ -219,6 +225,99 @@ pub(crate) fn rooms_deleted_by(del: &Value, rooms: &[Value]) -> Vec<String> {
         .filter_map(|r| r.get("id").and_then(Value::as_str).map(str::to_ascii_lowercase)).collect()
 }
 
+// ── 지운 글(11-12) ─────────────────────────────────────────────────────────────
+//
+// 「먼저 그리기」(이 컴퓨터 릴레이 저장분을 바로 보여 주기)를 하면 **지운 글이 되살아날 길**이 생긴다 —
+// 저장분에 옛 사본이 남아 있거나, 바깥 릴레이가 지우기 요청을 안 따르고 옛 글을 다시 준다.
+// 그래서 서명을 확인한 지우기 요청(kind 5)의 `e` 표를 「글 번호 → 지운 사람」으로 적어 두고,
+// **그 글을 쓴 사람이 지운 것만** 모든 길(저장·이 컴퓨터 읽기·바깥 읽기)에서 뺀다. 남의 글은 못 지운다.
+
+static GONE: Mutex<Option<std::collections::HashMap<String, String>>> = Mutex::new(None);
+const MAX_GONE: usize = 20_000;
+fn gone_file() -> std::path::PathBuf {
+    if cfg!(test) { return std::env::temp_dir().join(format!("rv-test-gone-notes-{}.json", std::process::id())); }
+    file().with_file_name("deleted-notes.json")
+}
+fn gone<T>(f: impl FnOnce(&mut std::collections::HashMap<String, String>) -> T) -> T {
+    let mut g = GONE.lock().unwrap_or_else(|e| e.into_inner());
+    let m = g.get_or_insert_with(|| {
+        std::fs::read_to_string(gone_file()).ok()
+            .and_then(|t| serde_json::from_str::<Vec<(String, String)>>(&t).ok())
+            .map(|v| v.into_iter().collect()).unwrap_or_default()
+    });
+    f(m)
+}
+/// 쓴 사람이 지우기를 요청한 글인가.
+pub(crate) fn is_gone(e: &Value) -> bool {
+    let (Some(id), Some(pk)) = (e.get("id").and_then(Value::as_str), e.get("pubkey").and_then(Value::as_str)) else { return false };
+    gone(|m| m.get(id).is_some_and(|who| who == pk))
+}
+/// 지우기 요청(kind 5)들을 적고, 이 컴퓨터 릴레이에 남은 그 글(같은 사람이 쓴 것)을 지운다. 서명이 맞는 것만.
+/// 새로 적은 것이 있으면 true.
+pub(crate) fn note_deletions(dels: &[Value]) -> bool {
+    let mut fresh: Vec<(String, String)> = vec![];
+    for d in dels.iter().filter(|d| d.get("kind").and_then(Value::as_i64) == Some(5) && verify(d)) {
+        let who = d.get("pubkey").and_then(Value::as_str).unwrap_or("").to_string();
+        for id in e_tags(d).into_iter().filter(|i| i.len() == 64) {
+            fresh.push((id, who.clone()));
+        }
+    }
+    if fresh.is_empty() { return false; }
+    let changed = gone(|m| {
+        let mut changed = false;
+        for (id, who) in &fresh {
+            if m.get(id) != Some(who) { m.insert(id.clone(), who.clone()); changed = true; }
+        }
+        if m.len() > MAX_GONE {
+            let drop: Vec<String> = m.keys().take(m.len() - MAX_GONE).cloned().collect();
+            for k in drop { m.remove(&k); }
+        }
+        changed.then(|| m.iter().map(|(a, b)| (a.clone(), b.clone())).collect::<Vec<_>>())
+    });
+    let Some(all) = changed else { return false };
+    let _ = std::fs::write(gone_file(), serde_json::to_vec(&all).unwrap_or_default());
+    // 방 만들기 글(40)은 묘비 규칙(store 안 rooms_deleted_by)이 지운다 — 여기서 먼저 빼면 묘비가 안 적힌다.
+    let hit = |x: &Value| !matches!(x.get("kind").and_then(Value::as_i64), Some(5 | 40)) && fresh.iter().any(|(id, who)| {
+        x.get("id").and_then(Value::as_str) == Some(id.as_str()) && x.get("pubkey").and_then(Value::as_str) == Some(who.as_str())
+    });
+    if peek(|v| v.iter().any(hit)) {
+        with(|v| v.retain(|x| !hit(x)));
+    }
+    true
+}
+
+/// 11-12 「먼저 그리기」: 이 컴퓨터 릴레이 저장분에서 **곧바로** 읽는다(웹소켓도 안 거친다 · 몇 ms).
+/// 필터 뜻은 REQ 와 같다(NIP-01). 지운 글·지운 방 글은 빼고, 새것이 먼저, 필터의 가장 큰 limit(없으면 200, 최대 500)까지.
+pub(crate) fn query_local(filters: &[Value]) -> Vec<Value> {
+    let mut hits: Vec<Value> = peek(|v| v.iter().filter(|e| filters.iter().any(|f| matches(e, f))).cloned().collect());
+    hits.retain(|e| !is_gone(e) && !in_deleted_room(e));
+    hits.sort_by_key(|e| -(e.get("created_at").and_then(Value::as_i64).unwrap_or(0)));
+    let cap = filters.iter().filter_map(|f| f.get("limit").and_then(Value::as_u64)).max().unwrap_or(200).min(500) as usize;
+    hits.truncate(cap);
+    hits
+}
+
+/// 11-12 바깥에서 읽어 온 글을 이 컴퓨터 릴레이에도 둔다 — 다음에 열 때 「먼저 그리기」가 그린다.
+/// 받는 규칙은 손님이 올릴 때와 **똑같다**(store: 서명·종류·레이븐 이야기만·크기·나이). 뒤에서 한다(화면을 안 기다리게).
+pub(crate) fn absorb(events: Vec<Value>) {
+    if events.is_empty() { return; }
+    let run = move || {
+        let mut any = false;
+        for e in events {
+            let (ok, why) = store(e.clone());
+            if ok && why.is_empty() {
+                any = true;
+                let _ = live().send(e);
+            }
+        }
+        if any { start_saver(); }
+    };
+    match tokio::runtime::Handle::try_current() {
+        Ok(h) => { h.spawn_blocking(run); }
+        Err(_) => run(),
+    }
+}
+
 /// 이 글이 진짜인가. **서명을 우리가 확인한다.**
 ///
 /// 🔴 안 하면 아무나 남의 이름으로 「이 가게는 여기서 주문받습니다」를 올릴
@@ -291,6 +390,11 @@ fn matches(e: &Value, f: &Value) -> bool {
         return false;
     }
     if !want("ids", e.get("id").and_then(Value::as_str)) {
+        return false;
+    }
+    // 11-12 NIP-01 since·until — 「새 글만」 물음(마지막 받은 시각 이후)이 이 컴퓨터 릴레이에서도 맞게.
+    let at = e.get("created_at").and_then(Value::as_i64).unwrap_or(0);
+    if f.get("since").and_then(Value::as_i64).is_some_and(|t| at < t) || f.get("until").and_then(Value::as_i64).is_some_and(|t| at > t) {
         return false;
     }
     // `#d`·`#p` 같은 태그 조건.
@@ -550,6 +654,14 @@ fn store(e: Value) -> (bool, String) {
     }
     if !verify(&e) {
         return (false, "invalid: 서명이 맞지 않습니다".into());
+    }
+    // 11-12 지운 글(NIP-09): 지우기 요청은 저장 여부와 상관없이 기억하고(쓴 사람이 지운 것만 친다),
+    //   이미 지운 글은 다시 받지 않는다 — 바깥 릴레이가 옛 사본을 다시 흘려도 되살아나지 않는다.
+    if e.get("kind").and_then(Value::as_i64) == Some(5) {
+        note_deletions(std::slice::from_ref(&e));
+    } else if e.get("kind").and_then(Value::as_i64) != Some(40) && is_gone(&e) {
+        // 방 만들기 글(40)은 아래 묘비 규칙(만든 사람의 요청 → 영원히)이 맡는다.
+        return (false, "blocked: 지운 글입니다".into());
     }
     // 11-10 지운 방의 글은 받지 않는다(묘비가 이긴다).
     if in_deleted_room(&e) {
@@ -1227,6 +1339,40 @@ mod tests {
 
     /// 주인·저장소 전역값을 만지는 시험은 하나씩 돈다.
     static OWNER_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    /// 11-12 먼저 그리기 + 지운 글: 쓴 사람의 지우기 요청만 글을 지우고, 지운 글은 다시 받지도·보이지도 않는다. since·until 은 REQ 와 같다.
+    #[test]
+    fn deleted_notes_stay_gone_and_local_reads_follow_since() {
+        use super::*;
+        let _g = OWNER_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        *TEST_OWNER.lock().unwrap() = Some(crate::shopkey::pubkey_of(&[33u8; 32]).unwrap());
+        *STORE.lock().unwrap() = Some(vec![]);
+        *GONE.lock().unwrap() = Some(Default::default());
+        let (a, b) = ([31u8; 32], [32u8; 32]);
+        let t = json!([["t", "ravencoin"]]);
+        let now = now_secs();
+        let old = crate::shopkey::sign_with(&a, 1, t.clone(), "옛 글", now - 100).unwrap();
+        let new = crate::shopkey::sign_with(&a, 1, t.clone(), "새 글", now).unwrap();
+        assert!(store(old.clone()).0 && store(new.clone()).0);
+        let f = json!({ "kinds": [1], "#t": ["ravencoin"], "limit": 60 });
+        assert_eq!(query_local(std::slice::from_ref(&f)).len(), 2);
+        let mut since = f.clone(); since["since"] = json!(now - 10);
+        let got = query_local(&[since]);
+        assert!(got.len() == 1 && got[0]["id"] == new["id"], "since 뒤 글만");
+        // 남(b)의 지우기 요청은 a 의 글을 못 지운다.
+        let fake = crate::shopkey::sign_with(&b, 5, json!([["e", new["id"]]]), "", now).unwrap();
+        note_deletions(&[fake]);
+        assert!(!is_gone(&new) && query_local(std::slice::from_ref(&f)).len() == 2, "남이 내 글을 지웠다");
+        // 쓴 사람(a)의 요청 — 저장 규칙에 안 맞아(표 없음) 저장은 안 돼도 기억한다.
+        let del = crate::shopkey::sign_with(&a, 5, json!([["e", new["id"]]]), "", now).unwrap();
+        store(del);
+        assert!(is_gone(&new));
+        let left = query_local(std::slice::from_ref(&f));
+        assert!(left.len() == 1 && left[0]["id"] == old["id"], "지운 글이 먼저 그리기에 남았다");
+        assert!(peek(|v| !v.iter().any(|x| x["id"] == new["id"])), "지운 글이 저장분에 남았다");
+        assert!(!store(new.clone()).0, "지운 글이 다시 들어왔다");
+        *TEST_OWNER.lock().unwrap() = None;
+    }
 
     /// 11-10 방 지우기: 만든 사람의 지우기 요청만 묘비가 되고, 묘비가 다시 온 방 글을 이긴다. 남은 못 지운다.
     #[test]

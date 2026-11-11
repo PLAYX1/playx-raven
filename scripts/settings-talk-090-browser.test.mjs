@@ -49,6 +49,8 @@ const talk = (profiles) => ({
     { id: 'm3', pubkey: ME, created_at: now - 2590, content: '도복은 빌려 드려요.' },
   ],
 });
+// 11-12 이야기 화면은 talk_view(먼저 그리기·바깥 읽기)로 읽는다 — 같은 글을 준다.
+const talkWithView = (profiles) => { const t = talk(profiles); return { ...t, talk_view: { notes: t.talk_read, gone: [], oldest: 0 }, talk_warm: null }; };
 
 /** save: 'ok' | 'throw' | 'null' — talk_profile_set 의 가짜 답. profiles: 'throw' 면 릴레이에서 이름표를 못 읽음. */
 async function open({ width = 1440, height = 900, profiles = {}, save = 'ok', lang = 'ko', keep = {} } = {}) {
@@ -79,7 +81,7 @@ async function open({ width = 1440, height = 900, profiles = {}, save = 'ok', la
       }
       return Object.hasOwn(extra, cmd) ? structuredClone(extra[cmd]) : real(cmd, args);
     };
-  }, talk(profiles === 'throw' ? {} : profiles), save, profiles === 'throw', lang, keep);
+  }, talkWithView(profiles === 'throw' ? {} : profiles), save, profiles === 'throw', lang, keep);
   await page.goto(origin + '/', { waitUntil: 'networkidle0' });
   await page.waitForFunction(() => document.querySelector('#page-home.on') && document.querySelector('#page-settings .sx')?.classList.contains('sx-b'), { timeout: 20000 });
   return { page, errors };

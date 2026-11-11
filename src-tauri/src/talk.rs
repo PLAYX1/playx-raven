@@ -375,6 +375,7 @@ async fn my_follow_list(me: &str) -> Result<Option<Value>, String> {
     let got = crate::nostrpub::nostr_query_authors(vec![KIND_FOLLOWS], vec![me.to_string()], 5)
         .await
         .map_err(|e| format!("팔로우 목록을 읽지 못했습니다: {e}"))?;
+    crate::relay::absorb(got.clone()); // 11-12 「팔로우만」 먼저 그리기가 이 컴퓨터에서 읽는다
     Ok(got.into_iter().find(|e| e.get("pubkey").and_then(Value::as_str) == Some(me) && e.get("kind").and_then(Value::as_i64) == Some(KIND_FOLLOWS)))
 }
 
@@ -519,8 +520,19 @@ fn merged_profile(old: &[Value], me: &str, name: &str, about: &str, picture: &st
 /// 못 찾은 사람은 목록에 없다 — 화면이 그때는 16진수 앞자리를 쓴다.
 /// **없는 이름을 지어내지 않는다.**
 #[tauri::command]
-pub async fn talk_profiles(pubkeys: Vec<String>) -> Result<Value, String> {
-    let got = crate::nostrpub::nostr_query_authors(vec![KIND_PROFILE], pubkeys, 60).await.unwrap_or_default();
+pub async fn talk_profiles(pubkeys: Vec<String>, local: Option<bool>) -> Result<Value, String> {
+    let got = if local == Some(true) {
+        // 11-12 「먼저 그리기」: 이 컴퓨터 릴레이에 있는 이름표로 곧바로. 한 사람에 새것 하나(아래 순서가 새것부터라 먼저 온 것을 남긴다).
+        let pubkeys: Vec<String> = pubkeys.into_iter().filter(|a| a.len() == 64 && a.bytes().all(|b| b.is_ascii_hexdigit())).take(200).collect();
+        if pubkeys.is_empty() { return Ok(json!({})); }
+        let mut seen = std::collections::HashSet::new();
+        crate::relay::query_local(&[json!({ "kinds": [KIND_PROFILE], "authors": pubkeys, "limit": 500 })])
+            .into_iter().filter(|e| seen.insert(e.get("pubkey").and_then(Value::as_str).unwrap_or("").to_string())).collect()
+    } else {
+        let got = crate::nostrpub::nostr_query_authors(vec![KIND_PROFILE], pubkeys, 60).await.unwrap_or_default();
+        crate::relay::absorb(got.clone());
+        got
+    };
     let mut out = serde_json::Map::new();
     for e in got {
         let Some(pk) = e.get("pubkey").and_then(Value::as_str) else {
@@ -1356,60 +1368,70 @@ async fn my_gate_state(gate: &str) -> Result<(), String> {
 ///    공개 릴레이도 같이 물어보고 합친다.
 #[tauri::command]
 pub async fn talk_read(room: Option<String>, limit: Option<i64>) -> Result<Value, String> {
-    let limit = limit.unwrap_or(60).clamp(1, 200);
-    let mut list = match &room {
+    Ok(json!(room_notes(&room, limit.unwrap_or(60), false, None, &[]).await?))
+}
+
+/// 방 글(방을 지정하면) 또는 광장 글. **talk_read · talk_view(talk_fast.rs) 가 같이 쓴다.**
+///
+/// - `local`: 이 컴퓨터 릴레이 저장분만 — 웹소켓도 안 거치고 곧바로(11-12 「먼저 그리기」).
+/// - `since`: 이 시각 이후 글만 묻는다(새 글만 · 화면이 이미 가진 것은 다시 안 받는다).
+/// - `known`: 화면이 이미 그린 글 번호 — 그 글들의 지우기 요청도 같이 물어 적어 둔다(talk_view 가 「지움」을 돌려준다).
+/// 🔴 지운 글(쓴 사람의 kind 5)은 어느 길에서도 빼고, 바깥에서 읽은 글은 이 컴퓨터 릴레이에 둔다(다음 먼저 그리기용).
+pub(crate) async fn room_notes(room: &Option<String>, limit: i64, local: bool, since: Option<i64>, known: &[String]) -> Result<Vec<Value>, String> {
+    let limit = limit.clamp(1, 200);
+    let mut filter = match room {
         // 방 글은 그 방을 가리키는 표(`e`)로 찾는다.
-        Some(id) => {
-            crate::nostrpub::nostr_query_tag(
-                vec![KIND_ROOM_MSG],
-                "e".into(),
-                vec![id.clone()],
-                limit,
-            )
-            .await?
-        }
-        None => {
-            crate::nostrpub::nostr_query_tag(
-                vec![KIND_NOTE],
-                "t".into(),
-                vec![TAG.into()],
-                limit,
-            )
-            .await?
-        }
+        Some(id) => json!({ "kinds": [KIND_ROOM_MSG], "#e": [id], "limit": limit }),
+        None => json!({ "kinds": [KIND_NOTE], "#t": [TAG], "limit": limit }),
     };
+    if let Some(t) = since.filter(|t| *t > 0) {
+        filter["since"] = json!(t);
+    }
+    if local {
+        return Ok(crate::relay::query_local(std::slice::from_ref(&filter)));
+    }
+    // 11-12: 화면이 이미 그린 글(known)의 지우기 요청은 본 물음과 **동시에** 묻는다 — 기다림이 늘지 않는다.
+    let (list, ()) = tokio::join!(crate::nostrpub::query_any(vec![filter.clone()], "r1"), crate::talk_fast::learn_deletions(known.to_vec()));
+    let mut list = list?;
 
     // 릴레이 나누기 §4(docs/RELAY-SHARE.md): 보이는 글쓴이들이 10002 에 적은 자기 릴레이에서도 같은 물음으로 그 사람 글을 묻는다.
     // 처음 보는 사람의 목록은 뒤에서 알아 두고 이번에는 기다리지 않는다. 동시 6곳 · 5초 · 「이웃 릴레이에서도 읽기」로 끈다.
+    // 11-12: 그동안 이 글들(+화면이 가진 글)의 지우기 요청도 **같이** 묻는다 — 따로 기다리지 않는다.
     {
         let authors: Vec<String> = list.iter().filter_map(|e| e.get("pubkey").and_then(Value::as_str).map(str::to_string)).collect();
-        let filter = match &room {
-            Some(id) => json!({ "kinds": [KIND_ROOM_MSG], "#e": [id], "limit": limit }),
-            None => json!({ "kinds": [KIND_NOTE], "#t": [TAG], "limit": limit }),
-        };
         let extra = crate::relay_share::outbox_extra(filter, authors).await;
         // 물음에 맞는 것만(남의 릴레이가 아무거나 줄 수 있다). 서명은 읽을 때 이미 봤다.
         let want_kind = if room.is_some() { KIND_ROOM_MSG } else { KIND_NOTE };
-        let want_tag = match &room { Some(id) => ("e", id.clone()), None => ("t", TAG.to_string()) };
+        let want_tag = match room { Some(id) => ("e", id.clone()), None => ("t", TAG.to_string()) };
         list.extend(extra.into_iter().filter(|e| {
             e.get("kind").and_then(Value::as_i64) == Some(want_kind)
+                && since.is_none_or(|t| e.get("created_at").and_then(Value::as_i64).unwrap_or(0) >= t)
                 && e.get("tags").and_then(Value::as_array).is_some_and(|t| {
                     t.iter().any(|x| x.get(0).and_then(Value::as_str) == Some(want_tag.0) && x.get(1).and_then(Value::as_str) == Some(want_tag.1.as_str()))
                 })
         }));
     }
 
-    // 같은 글이 여러 릴레이에서 온다. id 로 하나만 남긴다.
+    // 같은 글이 여러 릴레이에서 온다. id 로 하나만 남긴다. 지운 글·지운 방 글은 뺀다.
     let mut seen = std::collections::HashSet::new();
     list.retain(|e| {
-        e.get("id")
-            .and_then(Value::as_str)
-            .map(|i| seen.insert(i.to_string()))
-            .unwrap_or(false)
+        !crate::relay::is_gone(e)
+            && !crate::relay::in_deleted_room(e)
+            && e.get("id")
+                .and_then(Value::as_str)
+                .map(|i| seen.insert(i.to_string()))
+                .unwrap_or(false)
     });
+    // since 를 모르는 릴레이(옛 판 등)가 다 줘도 「새 글만」이 되게 한 번 더 거른다.
+    if let Some(t) = since.filter(|t| *t > 0) {
+        list.retain(|e| e.get("created_at").and_then(Value::as_i64).unwrap_or(0) >= t);
+    }
+    // 처음 보는 글의 지우기 요청은 **뒤에서** 묻는다(화면을 안 붙잡는다). 지운 것이면 저장분에서 빠지고, 다음 읽기의 gone 으로 화면에서도 빠진다.
+    crate::talk_fast::learn_deletions_later(&list, known);
+    crate::relay::absorb(list.clone());
     // 최신이 위로.
     list.sort_by_key(|e| -e.get("created_at").and_then(Value::as_i64).unwrap_or(0));
-    Ok(json!(list))
+    Ok(list)
 }
 
 /// 이 글들에 달린 답글을 한꺼번에 가져온다.
@@ -1533,7 +1555,13 @@ pub async fn talk_room_rebroadcast(room: String) -> Result<Value, String> {
 /// 단추를 그 사람에게만 보이려고 쓴다. 이름·설명은 만든 사람이 올린 **가장
 /// 최근 수정 글**(kind 41)이 있으면 그것으로 바꿔 준다(`meta_at`).
 #[tauri::command]
-pub async fn talk_rooms() -> Result<Value, String> {
+pub async fn talk_rooms(local: Option<bool>) -> Result<Value, String> {
+    // 11-12 「먼저 그리기」: 이 컴퓨터 릴레이 저장분의 방·수정 글만으로 곧바로(지운 방은 묘비로 이미 빠진다).
+    if local == Some(true) {
+        let got = crate::relay::query_local(&[json!({ "kinds": [KIND_ROOM], "#t": [TAG], "limit": 50 })]);
+        let metas = crate::relay::query_local(&[json!({ "kinds": [KIND_ROOM_META], "#t": [TAG], "limit": 200 })]);
+        return Ok(json!(rooms_from_events(got, &metas)));
+    }
     let (got, metas) = tokio::join!(
         room_events(),
         crate::nostrpub::nostr_query_tag(
@@ -1554,8 +1582,11 @@ pub async fn talk_rooms() -> Result<Value, String> {
         }
     }
     let got: Vec<Value> = got.into_iter().filter(|e| !crate::relay::in_deleted_room(e)).collect();
+    let metas = metas.unwrap_or_default();
+    // 11-12 다음에 열 때 먼저 그리게 이 컴퓨터 릴레이에도 둔다(방 글 42 는 아는 방이어야 저장된다).
+    crate::relay::absorb(got.iter().chain(metas.iter()).cloned().collect());
     // 🔴 수정 글을 못 읽어도 방 목록은 보여야 한다 — 만든 때 이름으로 나올 뿐이다.
-    Ok(json!(rooms_from_events(got, &metas.unwrap_or_default())))
+    Ok(json!(rooms_from_events(got, &metas)))
 }
 
 /// 11-10 방 지우기(페이블 판정). **방을 만든 이야기 열쇠로만** 지우기 요청(kind 5, NIP-09)을 서명해 올린다.

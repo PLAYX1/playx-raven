@@ -30,7 +30,7 @@ export function installFixture({theme, sales, seller = false}) {
     companion_settings:{saved:true, settings:{greeting:false, notice_seen:true, enabled:true, size:160, locale:'ko', timezone:-540, battery:false}},
     shop_load:shop, ledger_range:{total:32500, currency:'KRW', sales:4, mixed_currency:false, unreadable_rows:0},
     ledger_pending:{count:2}, mode_get:{chosen:true, mode:'shop'},
-    talk_rooms:[{name:'동네 소식', about:'오늘의 이야기'}], talk_read:[], talk_me:{pubkey:'public-home-fixture'}, talk_profiles:{},
+    talk_rooms:[{name:'동네 소식', about:'오늘의 이야기'}], talk_read:[], talk_view:{notes:[], gone:[], scanned:0, oldest:0}, talk_warm:null, talk_me:{pubkey:'public-home-fixture'}, talk_profiles:{},
     pin_list:[], owner_tokens:[], create_fingerprints:[], create_history_list:[], my_channels:{channels:[]},
     words_restore_status:null, reindex_progress:null, fee_owed:{owed:0},
     sweep_run:{swept:false, why:'disabled'}, sweep_read:{enabled:false},

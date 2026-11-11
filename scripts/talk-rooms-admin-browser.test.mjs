@@ -56,6 +56,7 @@ function installTalkHarness({ me, mine, theirs, official, other, locked }) {
     if (cmd === 'talk_me') return { pubkey: me, recoverable: true, path: '', same_as_wallet: true, why: '' };
     if (cmd === 'talk_rooms') { log.push('talk_rooms'); return structuredClone(rooms); }
     if (cmd === 'talk_read') return [];
+    if (cmd === 'talk_view') return { notes: [], gone: [], oldest: 0 };
     if (cmd === 'talk_profiles') return {};
     if (cmd === 'wallet_lock_state') return { encrypted: true, unlocked };
     if (cmd === 'unlock_for') { log.push('unlock_for'); unlocked = true; return null; } // 암호 값은 적지 않는다

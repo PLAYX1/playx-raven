@@ -586,10 +586,24 @@ fn my_pub() -> Result<String, String> {
 /// 돌려줌 { notes(최신이 앞), scanned(릴레이가 준 수), oldest(그중 가장 오래된 시각), follows(팔로우 수) }.
 #[tauri::command]
 pub async fn talk_feed(follows: bool, until: Option<i64>, limit: Option<i64>) -> Result<Value, String> {
-    let limit = limit.unwrap_or(60).clamp(1, 200);
+    feed_notes(follows, until, limit.unwrap_or(60), false, None, &[]).await
+}
+
+/// 피드 한 쪽 — talk_feed · talk_view(talk_fast.rs) 가 같이 쓴다. `local`·`since`·`known` 은 talk::room_notes 와 같은 뜻.
+/// 「팔로우만」을 이 컴퓨터에서만 읽을 때는 이 컴퓨터 릴레이에 있는 내 팔로우 목록을 쓴다(없으면 빈 쪽 — 바깥 답을 기다린다).
+pub(crate) async fn feed_notes(follows: bool, until: Option<i64>, limit: i64, local: bool, since: Option<i64>, known: &[String]) -> Result<Value, String> {
+    let limit = limit.clamp(1, 200);
     let (authors, set) = if follows {
         let me = my_pub()?;
-        let mut a = crate::talk::follow_ids_of(crate::talk::my_follow_list_pub(&me).await?.as_ref());
+        let list = if local {
+            crate::relay::query_local(&[json!({ "kinds": [KIND_FOLLOWS], "authors": [me], "limit": 1 })]).into_iter().next()
+        } else {
+            crate::talk::my_follow_list_pub(&me).await?
+        };
+        if local && list.is_none() {
+            return Ok(json!({ "notes": [], "scanned": 0, "oldest": 0, "follows": 0 }));
+        }
+        let mut a = crate::talk::follow_ids_of(list.as_ref());
         a.truncate(199);
         if !a.contains(&me) {
             a.push(me);
@@ -599,21 +613,37 @@ pub async fn talk_feed(follows: bool, until: Option<i64>, limit: Option<i64>) ->
     } else {
         (None, None)
     };
-    let filter = feed_filter(authors.as_deref(), until, limit);
-    let (mut list, _) = crate::nostrpub::query_filters(vec![filter.clone()]).await?;
-    let who: Vec<String> = match &authors {
-        Some(a) => a.clone(),
-        None => list.iter().map(|e| pub_of(e).to_string()).collect(),
-    };
-    let mut ob = filter.clone();
-    if let Some(o) = ob.as_object_mut() {
-        o.remove("authors");
+    let mut filter = feed_filter(authors.as_deref(), until, limit);
+    if let Some(t) = since.filter(|t| *t > 0) {
+        filter["since"] = json!(t);
     }
-    list.extend(crate::relay_share::outbox_extra(ob, who).await);
+    let mut list = if local {
+        crate::relay::query_local(std::slice::from_ref(&filter))
+    } else {
+        // 11-12: 화면이 이미 그린 글(known)의 지우기 요청은 본 물음과 **동시에** 묻는다.
+        let (got, ()) = tokio::join!(crate::nostrpub::query_filters(vec![filter.clone()]), crate::talk_fast::learn_deletions(known.to_vec()));
+        let (mut list, _) = got?;
+        let who: Vec<String> = match &authors {
+            Some(a) => a.clone(),
+            None => list.iter().map(|e| pub_of(e).to_string()).collect(),
+        };
+        let mut ob = filter.clone();
+        if let Some(o) = ob.as_object_mut() {
+            o.remove("authors");
+        }
+        list.extend(crate::relay_share::outbox_extra(ob, who).await);
+        // since 를 모르는 릴레이(옛 판 등)가 다 줘도 「새 글만」이 되게.
+        list.retain(|e| since.is_none_or(|t| at_of(e) >= t));
+        crate::talk_fast::learn_deletions_later(&list, known);
+        list
+    };
     let scanned = list.len();
     let oldest = list.iter().map(at_of).filter(|t| *t > 0).min().unwrap_or(0);
     let mut seen = HashSet::new();
-    list.retain(|e| feed_keep(e, set.as_ref(), until) && seen.insert(id_of(e).to_string()));
+    list.retain(|e| feed_keep(e, set.as_ref(), until) && !crate::relay::is_gone(e) && seen.insert(id_of(e).to_string()));
+    if !local {
+        crate::relay::absorb(list.clone());
+    }
     list.sort_by_key(|e| -at_of(e));
     Ok(json!({ "notes": list, "scanned": scanned, "oldest": oldest, "follows": set.map(|s| s.len().saturating_sub(1)).unwrap_or(0) }))
 }

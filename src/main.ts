@@ -5350,6 +5350,7 @@ function showPage(id: string) {
     // 지금 보고 있는 방은 지켜보는 명단 맨 앞으로. 나갔다 와도 이 방의
     // 새 글은 알림을 받는다.
     방지켜보기(tkRoom);
+    void invoke("talk_warm").catch(() => {}); // 11-12 기본 릴레이에 미리 붙어 둔다(relay_pool.rs · 이미 열려 있으면 아무것도 안 한다)
     void talkPaintMe();
     void talkPaintRooms();
     // 명단은 닫힌 채로 두되 **머리줄 단추에 인원수는 적는다** — 열어 보기
@@ -6649,17 +6650,29 @@ async function talkPaintMe() {
 let tkRoomNames = new Map<string, string>();
 let tkAdmin: ReturnType<typeof wireTalkRoomsAdmin> | null = null;
 
+/* 11-12 방 목록 먼저 그리기: 이 컴퓨터 릴레이 저장분으로 곧바로 그리고, 바깥 답이 오면 다시 그린다. 바깥을 못 읽으면 먼저 그린 것을 둔다. */
+let tkRoomsLast: any[] | null = null;
 async function talkPaintRooms() {
-  const box = $("tk-rooms");
-  let rooms: any[] = [];
+  if (!tkRoomsLast) {
+    try {
+      const local: unknown = await invoke("talk_rooms", { local: true });
+      if (Array.isArray(local) && local.length) { tkRoomsLast = local; tkPaintRoomList(local); }
+    } catch { /* 먼저 그릴 것이 없으면 바깥 답을 기다린다 */ }
+  }
+  let rooms: any[] = tkRoomsLast ?? [];
   try {
     // `?? []` 가 있어야 한다 — 빈 답이 오면 `catch` 에 안 걸리고 아래
     // `.map` 에서 던진다. 그 순간 **이야기 화면이 통째로 안 그려진다**.
-    const result: unknown = await invoke("talk_rooms");
-    rooms = Array.isArray(result) ? result : [];
+    const result: unknown = await invoke("talk_rooms", { local: false });
+    if (Array.isArray(result)) { rooms = result; tkRoomsLast = result; }
   } catch {
     // 방 목록을 못 읽어도 전체 글은 보여야 한다. 조용히 넘어간다.
   }
+  tkPaintRoomList(rooms);
+}
+
+function tkPaintRoomList(rooms: any[]) {
+  const box = $("tk-rooms");
   rooms = tkAdmin ? tkAdmin.rooms(rooms) : rooms; // 숨긴 방 빼기·방금 바꾼 이름(talk-rooms-admin.ts)
   tkRoomNames = new Map(rooms.map((r) => [String(r.id), String(r.name)]));
   setRoomGates(rooms); // 기여 표시 방(kind 40 gate) — talk-badges.ts
@@ -7108,6 +7121,51 @@ function tkOpenShare(id: string, text: string, anchor: HTMLElement) {
   (pop.querySelector('[data-sp="url"]') as HTMLElement).focus();
 }
 
+/* ── 11-12 카톡처럼 빠르게(talk_fast.rs) ──────────────────────────────────────────────
+ * ① 먼저 그리기: talk_view(local) = 이 컴퓨터 릴레이 저장분(몇 ms). ② 바깥: talk_view(local:false).
+ * ③ 새 글만: 이번에 이미 받은 것이 있으면 since(가장 새 글 − 2분) 이후만 묻고 합친다. 5분마다 한 번은 통째로 다시 읽는다.
+ *    대신 화면이 가진 글(known)을 같이 보내 지운 글(gone)을 돌려받는다 — 지운 글이 남지 않게. */
+const tkLive = new Map<string, { list: any[]; full: number }>();
+const TK_FULL_EVERY = 5 * 60_000;
+const tkPairs = (list: any[]) => list.filter((e) => /^[0-9a-f]{64}$/.test(String(e?.id || "")) && /^[0-9a-f]{64}$/.test(String(e?.pubkey || ""))).slice(0, 300).map((e) => [String(e.id), String(e.pubkey)]);
+function tkMergeNotes(fresh: any[], old: any[], gone: string[], cap = 200): any[] {
+  const g = new Set(gone.map(String)), seen = new Set<string>(), out: any[] = [];
+  for (const e of [...fresh, ...old]) { const id = String(e?.id || ""); if (!id || g.has(id) || seen.has(id)) continue; seen.add(id); out.push(e); }
+  return out.sort((a, b) => Number(b?.created_at || 0) - Number(a?.created_at || 0)).slice(0, cap);
+}
+async function tkLocalFirst(room: string, kept: any[]): Promise<any[]> {
+  try {
+    const r = await invoke<any>("talk_view", { room: room || null, follows: !room && tkFollowOnly, limit: 60, local: true, known: tkPairs(kept) });
+    return tkMergeNotes(Array.isArray(r?.notes) ? r.notes : [], kept, Array.isArray(r?.gone) ? r.gone : [], 60);
+  } catch { return kept; }
+}
+async function tkFresh(room: string): Promise<any> {
+  const key = tkCacheKey(room);
+  const live = tkLive.get(key);
+  const inc = !!live && live.list.length > 0 && Date.now() - live.full < TK_FULL_EVERY;
+  const newest = inc ? Math.max(...live!.list.map((e) => Number(e?.created_at || 0))) : 0;
+  const r = await invoke<any>("talk_view", {
+    room: room || null, follows: !room && tkFollowOnly, limit: 60, local: false,
+    since: inc && newest > 0 ? newest - 120 : null, known: inc ? tkPairs(live!.list) : tkPairs(tkCacheGet(key) ?? []),
+  });
+  const fresh: any[] = Array.isArray(r?.notes) ? r.notes : [];
+  const gone: string[] = Array.isArray(r?.gone) ? r.gone : [];
+  const notes = inc ? tkMergeNotes(fresh, live!.list, gone) : tkMergeNotes(fresh, [], gone);
+  tkLive.set(key, { list: notes, full: inc ? live!.full : Date.now() });
+  return { ...r, notes };
+}
+/** 방금 보낸 내 글을 이번 화면 목록에 바로 넣는다(바깥 답을 안 기다린다). */
+function tkLiveAdd(room: string, ev: any) {
+  if (!ev || !/^[0-9a-f]{64}$/.test(String(ev.id || ""))) return null;
+  const key = tkCacheKey(room);
+  const live = tkLive.get(key);
+  const base = live?.list ?? (room ? [] : tkFeedLast ?? []);
+  const list = tkMergeNotes([ev], base, []);
+  tkLive.set(key, { list, full: live?.full ?? 0 });
+  if (!room) tkFeedLast = list;
+  return list;
+}
+
 async function talkPaint(opts: { cached?: boolean; list?: any[] } = {}) {
   tkFeedLayout();
   const box = $("tk-list");
@@ -7121,8 +7179,12 @@ async function talkPaint(opts: { cached?: boolean; list?: any[] } = {}) {
   const 저장키 = tkCacheKey(읽은방);
   방알림단추그리기();
   if (!opts.list && !box.dataset.loaded) {
+    // 11-12 먼저 그리기: 이 컴퓨터에 둔 마지막 화면(localStorage) + 이 컴퓨터 릴레이 저장분을 합쳐 곧바로 그린다(몇 ms).
+    //   지운 글(쓴 사람의 kind 5)은 릴레이 쪽이 알려 준다(gone) — 저장해 둔 화면에서 되살아나지 않게.
     const kept = tkCacheGet(저장키);
-    if (kept) await talkPaint({ list: kept });
+    const first = await tkLocalFirst(읽은방, kept ?? []);
+    if (읽은방 !== tkRoom) return;
+    if (first.length) await talkPaint({ list: first });
     else box.innerHTML = `<div class="meta" style="margin:auto">${copyHtml("세계 릴레이에서 읽는 중…")}</div>`;
     if (읽은방 !== tkRoom) return;
   }
@@ -7131,16 +7193,18 @@ async function talkPaint(opts: { cached?: boolean; list?: any[] } = {}) {
     if (opts.list) {
       list = opts.list; // 저장해 둔 것 — 알림 판단·이름표 기다리기는 진짜 답 때만
     } else if (읽은방) {
-      const result: unknown = await invoke("talk_read", { room: 읽은방, limit: 60 });
-      list = Array.isArray(result) ? result : [];
+      list = (await tkFresh(읽은방)).notes;
+      if (읽은방 !== tkRoom) return;
     } else {
       // 11-09 모두에게 = ravencoin 표 글 · 팔로우만 = 그 사람들의 모든 맨 위 글(다른 Nostr 앱 글도, talk_social.rs talk_feed).
       const mode = tkFollowOnly ? "f" : "a";
       if (tkOlder.mode !== mode) { tkOlder = { mode, notes: [], until: 0, end: false, busy: false }; tkFeedLast = null; }
       if (!(opts.cached && tkFeedLast)) {
         let r: any;
-        try { r = await invoke<any>("talk_feed", { follows: tkFollowOnly, limit: 60 }); }
+        try { r = await tkFresh(""); }
         catch (e) { if (!tkFollowOnly) throw e; r = await invoke<any>("talk_feed", { follows: false, limit: 60 }); /* 팔로우 목록을 못 읽으면 전체를 보인다 */ }
+        if (tkOlder.mode !== mode) return;
+        if (Array.isArray(r?.gone) && r.gone.length) { const g = new Set(r.gone.map(String)); tkOlder.notes = tkOlder.notes.filter((e) => !g.has(String(e.id || ""))); }
         tkFeedLast = Array.isArray(r?.notes) ? r.notes : [];
         if (!tkOlder.until) tkOlder.until = Number(r?.oldest || 0);
       }
@@ -7545,10 +7609,24 @@ async function talkOpenDmTo(pk: string) {
 
 /** 아직 모르는 사람의 이름표만 가져온다. 이미 아는 것은 다시 안 묻는다. */
 async function tkLoadNames(pubkeys: string[]) {
-  const want = [...new Set(pubkeys.filter((p) => p && !tkNames.has(p)))].slice(0, 50);
+  let want = [...new Set(pubkeys.filter((p) => p && !tkNames.has(p)))].slice(0, 50);
+  if (!want.length) return;
+  // 11-12 먼저 이 컴퓨터 릴레이의 이름표로(몇 ms). 거기 없는 사람만 바깥에 묻고 기다린다 — 있던 사람은 뒤에서 새것으로 맞춘다.
+  try {
+    const local: any = await invoke("talk_profiles", { pubkeys: want, local: true });
+    const found = Object.entries(local && typeof local === "object" && !Array.isArray(local) ? local : {});
+    for (const [pk, p] of found) tkNames.set(pk, p);
+    if (found.length) {
+      const had = found.map(([pk]) => pk);
+      void invoke<any>("talk_profiles", { pubkeys: had, local: false }).then((got) => {
+        for (const [pk, p] of Object.entries(got && typeof got === "object" && !Array.isArray(got) ? got : {})) tkNames.set(pk, p);
+      }, () => {});
+    }
+    want = want.filter((p) => !tkNames.has(p));
+  } catch { /* 이 컴퓨터에 없으면 바깥에서 */ }
   if (!want.length) return;
   try {
-    const got: any = await invoke("talk_profiles", { pubkeys: want });
+    const got: any = await invoke("talk_profiles", { pubkeys: want, local: false });
     for (const [pk, p] of Object.entries(got && typeof got === "object" && !Array.isArray(got) ? got : {})) tkNames.set(pk, p);
     // 못 찾은 사람도 적어 둔다 — 안 그러면 화면을 그릴 때마다 또 묻는다.
     for (const p of want) if (!tkNames.has(p)) tkNames.set(p, null);
@@ -7841,7 +7919,8 @@ async function talkSend() {
   box.style.overflowY = "hidden";
   $("tk-note").textContent = "";
   try {
-    await invoke("talk_post", { text: mentionText(text), room: tkRoom || null, replyTo: tkReply?.id ?? null, replyPub: tkReply?.pub ?? null, replyRoot: tkReply?.root ?? null, replyRootPub: tkReply?.rootPub ?? null });
+    const 보낸방 = tkRoom;
+    const sent = await invoke<any>("talk_post", { text: mentionText(text), room: tkRoom || null, replyTo: tkReply?.id ?? null, replyPub: tkReply?.pub ?? null, replyRoot: tkReply?.root ?? null, replyRootPub: tkReply?.rootPub ?? null });
     clearMentions();
     tkSetReply(null);
     // 또렷해진다. 「올렸습니다」 같은 알림은 안 띄운다 — 풍선이 곧 답이다.
@@ -7849,10 +7928,12 @@ async function talkSend() {
     const 시각 = 임시?.querySelector(".tstamp");
     if (시각) 시각.textContent = t("✓ 전달됨");
     void showBackupReminder();
-    // 🔴 두 번 다시 그린다. 릴레이가 느리면 1.2초에는 아직 안 돌아와서
-    //    붙여 둔 풍선만 사라진다 — 방금 쓴 말이 눈앞에서 없어지는 셈이다.
-    setTimeout(() => void talkPaint(), 1200);
-    setTimeout(() => void talkPaint(), 4000);
+    // 11-12 받은 글(서명된 원본)을 바로 목록에 넣고 다시 그린다 — 릴레이 답을 기다리지 않는다.
+    //   🔴 그 뒤에도 두 번 다시 읽는다(새 글만). 그 사이 온 남의 글·지운 글을 맞춘다.
+    const 바로 = 보낸방 === tkRoom ? tkLiveAdd(보낸방, sent?.event) : null;
+    if (바로) void talkPaint({ list: 바로 });
+    setTimeout(() => void talkPaint(), 1500);
+    setTimeout(() => void talkPaint(), 5000);
   } catch (e) {
     // 🔴 못 갔으면 지운다. 그리고 **글을 돌려준다** — 다시 치게 만들지 않는다.
     임시?.classList.remove("pending");
