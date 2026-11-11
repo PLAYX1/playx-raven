@@ -2483,6 +2483,14 @@
       #rv-send-card input { display:block; width:100%; min-height:48px; padding:10px 14px; font:inherit; background:var(--panel); color:var(--text); border:1px solid var(--line); }
       #rv-voice[hidden] { display:none !important; }
       #page-talk { padding:0; overflow:hidden; }
+      /* 11-11 대표 「밑으로 슬라이드해야 입력창이 나온다 — 딱 화면에 보여야지」: 이야기 화면 높이가 정해지지 않아 글 목록이 다 펼쳐지고
+         main 이 통째로 스크롤됐다(1120×780 에서 5,092px). 화면 높이에 묶고, 글 목록만 안에서 스크롤 → 입력칸은 늘 화면 아래에 붙어 있다. */
+      main:has(> #page-talk.on) { overflow:hidden; }
+      #page-talk.on { height:100%; }
+      #page-talk .talkwrap, #page-talk .chat { min-height:0; }
+      #page-talk .chat { height:100%; overflow-y:auto; }
+      #page-talk .chat > * { flex-shrink:0; }
+      #page-talk .chat > .msgs { flex:1 1 0; min-height:160px; }
       .rv-talk-layout nav { width:76px; background:#15161D; align-items:center; padding:20px 0; }
       .rv-talk-layout nav a { width:56px; height:56px; padding:14px; margin:2px 0; border:0; border-radius:16px; color:#ECEDF3; }
       .rv-talk-layout nav a.on { background:#2A2C38; }
@@ -2496,13 +2504,11 @@
       #page-talk .chathead { min-height:80px; background:var(--panel); border-bottom:1px solid var(--line); padding:0 28px; }
       #page-talk .msgs { padding:16px 28px; }
       #page-talk .composer { background:var(--panel); border-top:1px solid var(--line); padding:10px 16px; }
-      /* 11-10: 「이모티콘」 단추가 더해지며 좁은 창(≤1100px)에서 메시지 칸이 밀려 나갔다 → 단추는 윗줄, 메시지 칸·보내기는 아랫줄. */
-      @media (max-width: 1100px) {
-        #page-talk .composer { flex-wrap: wrap; }
-        #page-talk .composer textarea { order: 9; flex: 1 1 120px; }
-        #page-talk .composer #tk-at { order: 8; }
-        #page-talk .composer #tk-send { order: 10; }
-      }
+      /* 11-11 대표 「글쓰는 게 너무 불편」 — 단추 넷(사진·라비·이모티콘·@)이 한 줄을 먹어 메시지 칸이 손가락 두 개 폭이 됐다.
+         카톡 PC 결: 쓰는 칸이 맨 위 한 줄 전체(세 줄 높이부터), 아랫줄 왼쪽 도구 · 오른쪽 끝 보내기. 창 폭과 상관없이 늘 같다. */
+      #page-talk .composer { flex-wrap: wrap; align-items: center; }
+      #page-talk .composer textarea { order: -1; flex: 1 0 100%; min-height: 84px; max-height: 240px; }
+      #page-talk .composer #tk-send { order: 10; margin-left: auto; margin-right: 92px; padding: 0 26px; } /* 오른쪽 아래 떠 있는 라비 동그라미가 보내기를 덮었다 */
       #page-talk .bub { font-size:16px; line-height:1.5; border-radius:20px 20px 20px 6px; background:var(--panel); border:1px solid var(--line); }
       /* 11-10 라비 이모티콘: 글 속은 글자 높이보다 조금 크게, 이모티콘 하나뿐인 글은 말풍선 없이 크게(폰과 같은 결). */
       #page-talk .tk-stk { width:1.75em; height:1.75em; vertical-align:-0.5em; object-fit:contain; }

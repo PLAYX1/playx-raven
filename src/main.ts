@@ -20167,6 +20167,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   // 엔터로 보낸다. 줄바꿈은 Shift+Enter — 대화창의 기본 약속이다.
   $("tk-text").addEventListener("keydown", (e) => {
     const k = e as KeyboardEvent;
+    // 🔴 한글 조합 중 엔터는 글자 확정이지 보내기가 아니다(안 막으면 「안녕하세ㅇ」이 반쯤 나간다).
+    if (k.isComposing || k.keyCode === 229) return;
     if (k.key === "Enter" && !k.shiftKey) {
       k.preventDefault();
       void talkSend();
@@ -20176,7 +20178,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("tk-text").addEventListener("input", () => {
     const el = $("tk-text") as HTMLTextAreaElement;
     el.style.height = "auto";
-    el.style.height = `${Math.min(140, el.scrollHeight)}px`;
+    el.style.height = `${Math.min(240, el.scrollHeight)}px`;
   });
   // 맞교환. 🔴 러스트에 다 만들어 놓고 **이 다섯 줄이 없으면** 오늘 하루
   //    종일 고친 그 병이 그대로 반복된다.
