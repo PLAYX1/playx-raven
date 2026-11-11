@@ -1,5 +1,15 @@
 # 변경 기록
 
+## 0.9.34
+
+### 한국어
+
+- **문제 알리기가 더 정확해졌습니다:** 신고를 보낼 때 노드·지갑 상태(동기화 정도, 잠금 여부 등)가 함께 갑니다. 「지갑이 안 열려요」 같은 신고의 원인을 바로 찾기 위해서입니다. 복구 단어·암호·주소·잔액은 보내지 않습니다.
+
+### English
+
+- **Better problem reports:** reports now include node and wallet status (sync progress, lock state) so we can find the cause quickly. Recovery words, passwords, addresses and balances are never sent.
+
 ## 0.9.33
 
 ### 한국어
