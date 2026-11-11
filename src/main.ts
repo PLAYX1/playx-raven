@@ -6358,7 +6358,7 @@ async function tkToggleBookmark(id: string, btn?: HTMLButtonElement) {
     const keep = !tkBm!.has(id);
     const r = await invoke<any>("talk_bookmark_set", { id, keep });
     tkBm = new Set<string>(Array.isArray(r?.ids) ? r.ids.map(String) : []);
-    if (btn) setCopyText(btn, () => t(tkBm!.has(id) ? "저장됨" : "저장"));
+    if (btn) setCopyText(btn.querySelector<HTMLElement>(".bmtxt") ?? btn, () => t(tkBm!.has(id) ? "저장됨" : "저장"));
     if (!$("tk-bmbox").hidden) void talkPaintBookmarks();
   } catch (e) {
     if (note) note.textContent = errText(e);
@@ -6955,13 +6955,11 @@ function tkSetReply(r: typeof tkReply) {
 async function tkLoadOlder() {
   const mode = tkFollowOnly ? "f" : "a";
   if (tkOlder.mode !== mode || tkOlder.busy || tkOlder.end) return;
-  const box = $("tk-list");
   const oldest = Math.min(...[...(tkFeedLast ?? []), ...tkOlder.notes].map((e) => Number(e.created_at || 0)).filter((x) => x > 0), tkOlder.until || Infinity);
   if (!Number.isFinite(oldest)) { tkOlder.end = true; return; }
   tkOlder.busy = true;
-  let keep = box.scrollHeight - box.scrollTop;
+  // 11-11 옛 글은 아래에 붙는다 — 읽던 자리는 talkPaint 가 글 id 로 지킨다(예전 「아래 기준 보정」은 위에 붙던 때 것).
   await talkPaint({ cached: true });
-  box.scrollTop = box.scrollHeight - keep;
   try {
     const r = await invoke<any>("talk_feed", { follows: tkFollowOnly, until: oldest - 1, limit: 50 });
     if (tkOlder.mode !== mode) return;
@@ -6975,9 +6973,7 @@ async function tkLoadOlder() {
     tkOlder.busy = false;
   }
   if (tkRoom) return;
-  keep = box.scrollHeight - box.scrollTop;
   await talkPaint({ cached: true });
-  box.scrollTop = box.scrollHeight - keep;
 }
 
 /* ── 11-10 속도 ①(페이블 C): 열면 바로 글이 있다 ───────────────────────────────
@@ -7006,7 +7002,81 @@ function tkCacheSet(key: string, list: any[]) {
   } catch { /* 저장소가 막혀도 화면은 그대로 */ }
 }
 
+/* ── 11-11 피드(광장) — 대표 「이게 SNS 맞나?」「사람들은 공유하는 걸 좋아해」 · 페이블 판정 반영 ──────────────
+ * 광장(tkRoom="")만 X 식 카드: 새 글이 위 · 맨 위 글쓰기 · 늘 보이는 「답글 · 저장 · 공유 · ⋯」. 방(단톡)은 말풍선 그대로.
+ * 🔴 답글 수는 안 적는다 — 받은 60개 안에서만 세면 늘 적게 나온다. 틀린 숫자는 없는 숫자보다 나쁘다(페이블).
+ * 🔴 공유 창에 「카카오톡으로 보내기」라고 적지 않는다 — PC 카톡엔 공유 길이 없다. 복사한다고 정직하게 적는다. */
+const TK_ICON_REPLY = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9.6 9.6 0 0 1-2.6-.4L3 21l1.6-4.6A8.2 8.2 0 0 1 3 11.5 8.4 8.4 0 0 1 12 3a8.4 8.4 0 0 1 9 8.5z"/></svg>`;
+const TK_ICON_BM = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12v18l-6-4-6 4z"/></svg>`;
+const TK_ICON_SHARE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>`;
+
+/** 피드인지 방인지에 따라 탭·입력칸 말·순서를 맞춘다(talkPaint 가 매번 부른다). */
+function tkFeedLayout() {
+  const feed = tkRoom === "";
+  document.getElementById("page-talk")?.classList.toggle("feedon", feed);
+  const tabs = document.getElementById("tk-feedtabs");
+  if (tabs) tabs.hidden = !feed;
+  document.getElementById("tk-tab-all")?.setAttribute("aria-selected", tkFollowOnly ? "false" : "true");
+  document.getElementById("tk-tab-follow")?.setAttribute("aria-selected", tkFollowOnly ? "true" : "false");
+  const ta = document.getElementById("tk-text") as HTMLTextAreaElement | null;
+  if (ta) ta.placeholder = t(feed ? "무슨 일이 있나요?" : "메시지");
+  const send = document.getElementById("tk-send");
+  if (send) setCopyText(send, () => t(feed ? "올리기" : "보내기"));
+  const nm = document.getElementById("tk-new-messages");
+  if (nm) setCopyText(nm, () => t(feed ? "새 글 ↑" : "새 메시지 ↓"));
+}
+
+/** 「방금 · 5분 · 3시간 · 11월 9일」 — 피드 카드의 시간. 정확한 시각은 얹으면(title) 나온다. */
+function tkAgo(ms: number): string {
+  const sec = (Date.now() - ms) / 1000;
+  if (sec < 60) return t("방금");
+  if (sec < 3600) return tf("{0}분", Math.floor(sec / 60));
+  if (sec < 86400) return tf("{0}시간", Math.floor(sec / 3600));
+  const d = new Date(ms);
+  return d.toLocaleDateString(undefined, d.getFullYear() === new Date().getFullYear() ? { month: "short", day: "numeric" } : { year: "numeric", month: "short", day: "numeric" });
+}
+
+/** 공유 창 — 주소 복사 · 카톡·문자에 붙여 넣을 글 복사 · 폰으로 찍는 QR. 보내는 일은 사람이 그 앱에서 한다. */
+function tkOpenShare(id: string, text: string, anchor: HTMLElement) {
+  let pop = document.getElementById("tk-sharepop");
+  if (!pop) {
+    pop = document.createElement("div");
+    pop.id = "tk-sharepop"; pop.className = "tk-sharepop"; pop.hidden = true;
+    pop.setAttribute("role", "dialog");
+    document.body.append(pop);
+    document.addEventListener("mousedown", (ev) => {
+      const p = document.getElementById("tk-sharepop"), el = ev.target as HTMLElement | null;
+      if (p && !p.hidden && !p.contains(el) && !el?.closest?.("[data-sharepop]")) p.hidden = true;
+    });
+    document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") { const p = document.getElementById("tk-sharepop"); if (p) p.hidden = true; } });
+  }
+  const url = `https://ravenvault.ex.erci.se/n/${id}`;
+  const 붙일글 = `${tkSnip(text, 40)}\n${url}`;
+  pop.setAttribute("aria-label", t("이 글 공유하기"));
+  pop.innerHTML =
+    `<h4>${copyHtml("이 글 공유하기")}</h4><p>${copyHtml("주소를 받은 사람은 앱이 없어도 웹에서 바로 읽어요.")}</p>` +
+    `<div class="url" translate="no">${escapeHtml(url)}</div>` +
+    `<div class="row"><button type="button" data-sp="url">${copyHtml("주소 복사")}</button><button type="button" class="ghost" data-sp="text">${copyHtml("카카오톡·문자에 붙여 넣을 글 복사")}</button></div>` +
+    `<div class="qr"><span data-sp="qr"></span><span>${copyHtml("폰 카메라로 찍으면 폰에서 바로 열려요.")}</span></div>` +
+    `<p class="said" role="status"></p>`;
+  const said = pop.querySelector(".said") as HTMLElement;
+  const copy = (v: string) => void navigator.clipboard.writeText(v).then(
+    () => { said.textContent = t("복사했어요. 카카오톡·문자 창에 붙여 넣으세요."); },
+    () => { said.textContent = v; },
+  );
+  (pop.querySelector('[data-sp="url"]') as HTMLElement).onclick = () => copy(url);
+  (pop.querySelector('[data-sp="text"]') as HTMLElement).onclick = () => copy(붙일글);
+  const qr = pop.querySelector('[data-sp="qr"]') as HTMLElement;
+  void invoke<string>("qr_svg", { text: url }).then((svg) => { qr.innerHTML = svg; }, () => { (qr.parentElement as HTMLElement).hidden = true; });
+  pop.hidden = false;
+  const r = anchor.getBoundingClientRect(), w = pop.offsetWidth, h = pop.offsetHeight;
+  pop.style.left = `${Math.max(16, Math.min(r.left, innerWidth - w - 16))}px`;
+  pop.style.top = `${r.top - h - 10 >= 16 ? r.top - h - 10 : Math.min(r.bottom + 10, innerHeight - h - 16)}px`;
+  (pop.querySelector('[data-sp="url"]') as HTMLElement).focus();
+}
+
 async function talkPaint(opts: { cached?: boolean; list?: any[] } = {}) {
+  tkFeedLayout();
   const box = $("tk-list");
   // ⚠️ 어느 방을 읽는지 **여기서 붙잡아 둔다.** 릴레이가 답하는 사이에
   //    사장이 다른 방을 누르면 `tkRoom` 이 바뀌어, 아래에서 이 목록을
@@ -7094,8 +7164,73 @@ async function talkPaint(opts: { cached?: boolean; list?: any[] } = {}) {
     const 날 = 때.map((ms) => new Date(ms).toDateString());
 
     // 11-06 대표 「대화 디자인이 진짜 X 같아야」 — 「모두에게」(공개 글)는 풍선이 아니라 X 처럼 평평한 글 목록. 방은 풍선 그대로.
-    box.classList.toggle("feedmode", !읽은방);
-    box.innerHTML = hidNote + asc
+    // 11-11 피드 카드(새 글이 위). 🔴 읽던 자리는 「화면 맨 위에 보이던 글」로 붙잡는다 — 위에 새 글이 끼어도 밀리지 않는다(페이블).
+    const 피드 = !읽은방;
+    const 맨위였나 = !box.dataset.loaded || box.scrollTop < 80;
+    let 기준: { id: string; off: number } | null = null;
+    if (피드 && !맨위였나) {
+      const top = box.getBoundingClientRect().top;
+      for (const c of box.querySelectorAll<HTMLElement>("[data-card]")) {
+        const r = c.getBoundingClientRect();
+        if (r.bottom > top + 1) { 기준 = { id: String(c.dataset.card || ""), off: r.top - top }; break; }
+      }
+    }
+    const 이전맨위글 = box.dataset.newest || "";
+    box.classList.toggle("feedmode", 피드);
+    box.classList.toggle("feedcards", 피드);
+    // 사진·본문·돈 경고·답글 인용 — 말풍선과 카드가 같이 쓴다(한쪽만 고치는 날이 없게).
+    const 조각 = (e: any, mine: boolean) => {
+        const 읽은방2 = 읽은방;
+        // ④ 사진이 붙어 있으면 말풍선 안에 그린다. 주소 한 줄은 본문에서
+        //    빼고 — 사진을 바로 아래 그리므로 같은 말을 두 번 하는 셈이다.
+        const pic = tkPicOf(e);
+        const 본문 = pic
+          ? (pic.cid ? tkStripPicUrl(String(e.content || ""), pic.cid) : String(e.content || "").split("\n").filter((l) => l.trim() !== pic.gateway).join("\n").trim())
+          : String(e.content || "");
+        // ⑤ 🔴 **돈·주소가 적힌 글에는 그 자리에서 표시한다.** 내 글에는 안 붙인다.
+        const 조심 =
+          !mine && tk돈이야기인가(본문)
+            ? `<p class="moneywarn">${copyHtml("돈·주소가 적힌 글입니다. 이름은 누구나 같게 달 수 있으니, 보내기 전에 다른 길로 한 번 확인하세요.")}</p>`
+            : "";
+        // 답글이면 어느 글에 대한 답인지 한 줄로. 가리키는 글이 지금 목록에 없으면 이름 없이 말만 한다.
+        const 부모id = tkParentOf(e, 읽은방2);
+        const 부모 = 부모id ? asc.find((x) => String(x.id || "") === 부모id) ?? all.find((x) => String(x.id || "") === 부모id) : null;
+        const 인용 = 부모id
+          ? `<div class="replyquote${tkIsReplyToMe(e) && !mine ? " tome" : ""}">↪ ${
+              부모
+                ? `${escapeHtml(tkNameText(String(부모.pubkey || "")))} · ${escapeHtml(tkSnip(String(부모.content || ""), 28))}`
+                : copyHtml("이전 글에 대한 답장")
+            }</div>`
+          : "";
+        return { pic, 본문, 조심, 인용 };
+    };
+    const 피드카드 = (e: any, i: number) => {
+      const who = 쓴이[i], mine = who === tkMine, id = String(e.id || ""), ms = 때[i];
+      const { pic, 본문, 조심, 인용 } = 조각(e, mine);
+      const hex = /^[0-9a-f]{64}$/.test(id);
+      const 이름 = mine ? `<span translate="no">${escapeHtml(String(tkNames.get(who)?.name || t("나")))}</span>` : tkWho(who);
+      return `<article class="fcard${mine ? " me" : ""}" data-card="${escapeHtml(id)}">` +
+        `<span class="fav" style="--h:${tkHue(who)}" aria-hidden="true">${escapeHtml((tkNames.get(who)?.name || "레").slice(0, 1))}</span>` +
+        `<div class="fbody"><div class="fhead"><span class="fname" data-person="${escapeHtml(who)}">${이름}${nip05Slot(who)}</span>` +
+        `<span class="tk-badges" data-badges-for="${escapeHtml(who)}"></span>` +
+        `<span class="fmeta" translate="no">· …${escapeHtml(who.slice(-4))} · <time class="tstamp" title="${escapeHtml(new Date(ms).toLocaleString())}">${escapeHtml(tkAgo(ms))}</time></span></div>` +
+        `<div class="bub${!인용 && !pic && noteStickerOnly(본문) ? " stk" : ""}" data-say="${escapeHtml(id)}" data-author="${escapeHtml(who)}">${인용}${noteBodyHtml(본문)}${pic ? tkPicHtml(pic) : ""}</div>` +
+        조심 +
+        `<div class="facts"><button type="button" data-reply="${escapeHtml(id)}">${TK_ICON_REPLY}${copyHtml("답글")}</button>` +
+        (hex ? `<button type="button" data-bm="${id}">${TK_ICON_BM}<span class="bmtxt">${copyHtml(tkBm?.has(id) ? "저장됨" : "저장")}</span></button>` : "") +
+        (hex ? `<button type="button" class="fshare" data-sharepop="${id}">${TK_ICON_SHARE}${copyHtml("공유")}</button>` : "") +
+        `<button type="button" data-more="${escapeHtml(id)}" aria-label="${escapeHtml(t("더 보기"))}" title="${escapeHtml(t("더 보기"))}">⋯</button></div>` +
+        `<div class="bubacts" data-acts="${escapeHtml(id)}"><button data-tr="${escapeHtml(id)}">${copyHtml("내 말로")}</button><button data-keep="${escapeHtml(id)}">${copyHtml("간직")}</button>` +
+        (!mine && /^[0-9a-f]{64}$/.test(who) ? `<button data-follow="${escapeHtml(who)}">${copyHtml(tkFollows?.has(who) ? "팔로우 중" : "팔로우")}</button>` : "") +
+        (mine ? "" : `<button data-mute="${escapeHtml(who)}">${copyHtml("안 보기")}</button>`) +
+        (!mine && /^R[1-9A-HJ-NP-Za-km-z]{33}$/.test(String(tkNames.get(who)?.rvn_address || ""))
+          ? `<button data-pay="${escapeHtml(String(tkNames.get(who).rvn_address))}" data-payname="${escapeHtml(tkNameText(who))}" data-paywho="${escapeHtml(who)}">${copyHtml("응원 보내기")}</button>` : "") +
+        (mine ? `<button data-del="${escapeHtml(id)}">${copyHtml("지우기 요청")}</button>` : "") +
+        `<span class="meta" data-note="${escapeHtml(id)}"></span></div></div></article>`;
+    };
+    box.innerHTML = 피드
+      ? asc.map((_, i) => asc.length - 1 - i).map((i) => 피드카드(asc[i], i)).join("") + hidNote
+      : hidNote + asc
       .map((e, i) => {
         const who = 쓴이[i];
         const mine = who === tkMine;
@@ -7134,32 +7269,7 @@ async function talkPaint(opts: { cached?: boolean; list?: any[] } = {}) {
           ? ""
           : `<time class="tstamp" title="${escapeHtml(new Date(ms).toLocaleString())}">${escapeHtml(tkClock(ms))}</time>`;
 
-        // ④ 사진이 붙어 있으면 말풍선 안에 그린다. 주소 한 줄은 본문에서
-        //    빼고 — 사진을 바로 아래 그리므로 같은 말을 두 번 하는 셈이다.
-        const pic = tkPicOf(e);
-        const 본문 = pic
-          ? (pic.cid ? tkStripPicUrl(String(e.content || ""), pic.cid) : String(e.content || "").split("\n").filter((l) => l.trim() !== pic.gateway).join("\n").trim())
-          : String(e.content || "");
-
-        // ⑤ 🔴 **돈·주소가 적힌 글에는 그 자리에서 표시한다.** 늘 떠 있는
-        //    경고문은 아무도 안 읽지만, 「계좌가 바뀌었어요」라고 적힌 글
-        //    바로 아래에 붙은 한 줄은 읽는다. 내 글에는 안 붙인다 —
-        //    내가 쓴 것을 나에게 조심하라고 하는 것은 잡음이다.
-        const 조심 =
-          !mine && tk돈이야기인가(본문)
-            ? `<p class="moneywarn">${copyHtml("돈·주소가 적힌 글입니다. 이름은 누구나 같게 달 수 있으니, 보내기 전에 다른 길로 한 번 확인하세요.")}</p>`
-            : "";
-
-        // 답글이면 어느 글에 대한 답인지 한 줄로. 가리키는 글이 지금 목록에 없으면 이름 없이 말만 한다.
-        const 부모id = tkParentOf(e, 읽은방);
-        const 부모 = 부모id ? asc.find((x) => String(x.id || "") === 부모id) ?? all.find((x) => String(x.id || "") === 부모id) : null;
-        const 인용 = 부모id
-          ? `<div class="replyquote${tkIsReplyToMe(e) && !mine ? " tome" : ""}">↪ ${
-              부모
-                ? `${escapeHtml(tkNameText(String(부모.pubkey || "")))} · ${escapeHtml(tkSnip(String(부모.content || ""), 28))}`
-                : copyHtml("이전 글에 대한 답장")
-            }</div>`
-          : "";
+        const { pic, 본문, 조심, 인용 } = 조각(e, mine);
 
         return (
           day +
@@ -7204,8 +7314,23 @@ async function talkPaint(opts: { cached?: boolean; list?: any[] } = {}) {
     applyBadges(box, 읽은방, tkMine);
     void tkBadgesLoad(box, 읽은방, 쓴이);
     void fillNoteLinks(box); // 11-09 「@이름」 이름표 · NIP-05 표시
-    if (wasAtBottom) { box.scrollTop = box.scrollHeight; $("tk-new-messages").hidden = true; }
-    else { box.scrollTop = previousTop; if (box.scrollHeight > box.clientHeight) $("tk-new-messages").hidden = false; }
+    const nm = $("tk-new-messages");
+    if (피드) {
+      const 맨위글 = String(asc[asc.length - 1]?.id || "");
+      box.dataset.newest = 맨위글;
+      nm.style.top = `${box.offsetTop + 10}px`;
+      if (맨위였나) { box.scrollTop = 0; nm.hidden = true; }
+      else {
+        const c = 기준 ? box.querySelector<HTMLElement>(`[data-card="${CSS.escape(기준.id)}"]`) : null;
+        if (c && 기준) box.scrollTop += c.getBoundingClientRect().top - box.getBoundingClientRect().top - 기준.off;
+        else box.scrollTop = previousTop;
+        if (이전맨위글 && 맨위글 !== 이전맨위글) nm.hidden = false;
+      }
+    } else {
+      nm.style.top = "";
+      if (wasAtBottom) { box.scrollTop = box.scrollHeight; nm.hidden = true; }
+      else { box.scrollTop = previousTop; if (box.scrollHeight > box.clientHeight) nm.hidden = false; }
+    }
     // 🔴 사진은 그려 놓고 **지켜봐야** 한다. 안 지켜보면 「받는 중…」에서
     //    영영 멈춰 있고, 그건 못 받았다는 말을 안 하는 것과 같다.
     tkWatchPics(box);
@@ -7242,6 +7367,23 @@ async function talkPaint(opts: { cached?: boolean; list?: any[] } = {}) {
           if (($("s-addr") as HTMLInputElement).value !== to) return;
           $("s-addrnote").textContent = tf("{0}님 이름표의 받기 주소를 채웠습니다(주소 연결 서명 확인). 이름은 누구나 같게 지을 수 있으니 주소 끝 글자를 한 번 더 확인하세요.", String((b as HTMLElement).dataset.payname || ""));
         })();
+      };
+    });
+    box.querySelectorAll<HTMLElement>("[data-more]").forEach((b) => {
+      b.onclick = (ev) => {
+        ev.stopPropagation();
+        const acts = box.querySelector(`[data-acts="${CSS.escape(String(b.dataset.more || ""))}"]`) as HTMLElement | null;
+        const 열림 = acts?.classList.contains("on") === true;
+        box.querySelectorAll(".bubacts.on").forEach((x) => x.classList.remove("on"));
+        if (acts && !열림) acts.classList.add("on");
+      };
+    });
+    box.querySelectorAll<HTMLElement>("[data-sharepop]").forEach((b) => {
+      b.onclick = (ev) => {
+        ev.stopPropagation();
+        const gid = String(b.dataset.sharepop || "");
+        const target = list.find((x) => String(x.id || "") === gid);
+        tkOpenShare(gid, String(target?.content || ""), b);
       };
     });
     box.querySelectorAll("[data-bm]").forEach((b) => {
@@ -7630,6 +7772,18 @@ function tk임시풍선(text: string): HTMLElement | null {
   const box = document.getElementById("tk-list");
   if (!box) return null;
   const wrap = document.createElement("div");
+  // 11-11 피드는 새 글이 맨 위 — 맨 위에 붙이고 맨 위로 올린다(아래에 붙이면 「올린 글이 사라졌다」가 첫 신고다 · 페이블).
+  if (tkRoom === "") {
+    wrap.className = "fcard me pending";
+    wrap.innerHTML =
+      `<span class="fav" style="--h:${tkHue(tkMine)}" aria-hidden="true">${escapeHtml((tkNames.get(tkMine)?.name || "나").slice(0, 1))}</span>` +
+      `<div class="fbody"><div class="fhead"><span class="fname">${escapeHtml(String(tkNames.get(tkMine)?.name || t("나")))}</span>` +
+      `<span class="fmeta">· <time class="tstamp rv-send-status">${copyHtml("올리는 중…")}</time></span></div>` +
+      `<div class="bub" translate="no">${escapeHtml(text)}</div></div>`;
+    box.prepend(wrap);
+    box.scrollTop = 0;
+    return wrap;
+  }
   wrap.className = "line me pending";
   wrap.innerHTML =
     `<div class="bub me" translate="no">${escapeHtml(text)}</div>` +
@@ -19974,14 +20128,14 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("tk-roommute")?.addEventListener("click", () => 방알림바꾸기(tkRoom, !방알림꺼짐(tkRoom)));
   $("tk-new-messages").addEventListener("click", () => {
     const list = $("tk-list");
-    list.scrollTop = list.scrollHeight;
+    list.scrollTop = tkRoom === "" ? 0 : list.scrollHeight;
     $("tk-new-messages").hidden = true;
   });
   $("tk-reload").addEventListener("click", () => void talkPaint());
   $("tk-newroom").addEventListener("click", () => void talkNewRoom());
   // 11-08 글쓴이 이름 → 오른쪽 칸에 「기여 표시」(talk-badges.ts).
   $("tk-list").addEventListener("click", (ev) => {
-    const who = (ev.target as HTMLElement | null)?.closest<HTMLElement>(".who[data-person]");
+    const who = (ev.target as HTMLElement | null)?.closest<HTMLElement>(".who[data-person], .fname[data-person]");
     if (who?.dataset.person) void tkShowPerson(who.dataset.person);
   });
   tkAdmin = wireTalkRoomsAdmin({
@@ -20070,6 +20224,17 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("tk-bm").addEventListener("click", () => { const b = $("tk-bmbox"); b.hidden = !b.hidden; if (!b.hidden) void talkPaintBookmarks(); });
   $("tk-bmclose").addEventListener("click", () => { $("tk-bmbox").hidden = true; });
   tkPaintFollowOnly();
+  // 11-11 피드 탭 = 예전 「팔로우만 보기」 스위치(한 상태 · 두 단추가 아니라 탭 둘).
+  const 탭 = (follow: boolean) => {
+    if (tkFollowOnly === follow) return;
+    tkFollowOnly = follow;
+    try { localStorage.setItem("rv.talk.followOnly", tkFollowOnly ? "1" : "0"); } catch { /* 기억 못 해도 지금은 바뀐다 */ }
+    tkPaintFollowOnly();
+    delete $("tk-list").dataset.loaded;
+    void talkPaint();
+  };
+  $("tk-tab-all").addEventListener("click", () => 탭(false));
+  $("tk-tab-follow").addEventListener("click", () => 탭(true));
   $("tk-followonly").addEventListener("click", () => {
     tkFollowOnly = !tkFollowOnly;
     try { localStorage.setItem("rv.talk.followOnly", tkFollowOnly ? "1" : "0"); } catch { /* 기억 못 해도 지금은 바뀐다 */ }
@@ -20101,10 +20266,11 @@ window.addEventListener("DOMContentLoaded", async () => {
     errText,
     pickSave: (name) => pickSavePath({ defaultPath: name, filters: [{ name: "JSON", extensions: ["json"] }] }),
   });
-  // 11-09 피드 이어 불러오기 — 맨 위 가까이 올리면 더 오래된 글 50개씩(끝에 닿으면 멈춘다).
+  // 11-09 피드 이어 불러오기 — 끝 가까이 가면 더 오래된 글 50개씩(끝에 닿으면 멈춘다).
   $("tk-list").addEventListener("scroll", () => {
     const box = $("tk-list");
-    if (tkRoom || box.scrollTop > 80 || tkOlder.busy || tkOlder.end || !box.dataset.loaded) return;
+    // 11-11 피드는 새 글이 위 — 옛 글은 **아래 끝**에서 더 불러온다.
+    if (tkRoom || box.scrollHeight - box.scrollTop - box.clientHeight > 200 || tkOlder.busy || tkOlder.end || !box.dataset.loaded) return;
     void tkLoadOlder();
   });
   $("tk-rvnlink").addEventListener("click", () => { const b = $("tk-rvnbox"); b.hidden = !b.hidden; if (!b.hidden) { $("tk-rvnsay").textContent = ""; void talkPaintRvnLink(); } });

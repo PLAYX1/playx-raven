@@ -82,10 +82,11 @@ test('답글에는 어느 글에 대한 답인지 인용 한 줄이 붙고, 내�
     await page.waitForFunction(() => document.querySelectorAll('#tk-list .bub').length >= 4, { timeout: 15000 });
     const quotes = await page.$$eval('#tk-list .replyquote', (q) => q.map((x) => ({ text: x.textContent.replace(/\s+/g, ' ').trim(), tome: x.classList.contains('tome') })));
     assert.equal(quotes.length, 2, '답글 둘에만 인용');
-    assert.match(quotes[0].text, /^↪ 나 · 네, 오세요\./);
-    assert.equal(quotes[0].tome, true, '내 글에 온 답');
-    assert.match(quotes[1].text, /^↪ .*이전 글/, '가리키는 글이 목록에 없으면 이름 없이 말만');
-    assert.equal(quotes[1].tome, false);
+    // 11-11 광장은 피드(새 글이 위)라 DOM 순서가 바뀐다 — 순서가 아니라 내용으로 찾는다.
+    const toMe = quotes.find((q) => /^↪ 나 · 네, 오세요\./.test(q.text));
+    const lost = quotes.find((q) => /^↪ .*이전 글/.test(q.text));
+    assert.ok(toMe, '내 글을 가리키는 인용'); assert.equal(toMe.tome, true, '내 글에 온 답');
+    assert.ok(lost, '가리키는 글이 목록에 없으면 이름 없이 말만'); assert.equal(lost.tome, false);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });
