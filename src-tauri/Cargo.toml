@@ -134,3 +134,7 @@ blake2 = "0.10"
 # 11-11 리눅스 AppImage 가 99MB 게시 한도(GitHub 100MiB)를 넘었다(0.9.30, 99.3MB). 디버그 기호를 빼서 줄인다.
 [profile.release]
 strip = "symbols"
+# 11-11 0.9.31 AppImage 98.26MB(한도까지 0.7MB). 링크 단계 최적화로 앱 본체를 줄인다 — 맥 측정 39.0MB → 31.1MB(-20%), 빌드 3분 → 7분.
+# panic 은 그대로(unwind) — catch_unwind 를 쓰는 곳이 있다.
+lto = true
+codegen-units = 1
