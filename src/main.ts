@@ -2948,6 +2948,38 @@ async function rpLogShow(force: boolean) {
   }
 }
 
+/**
+ * 11-11 신고에 지갑·노드 상태를 자동으로 싣는다 — 「지갑이안열려요」 한 줄만 왔는데 원인을 알 길이 없었다(윈도우 0.9.32, 비로그인).
+ * 「노드 동기화 중 / 잠금 암호 / 노드가 안 켜짐」 셋을 가를 만큼만. 🔴 12단어·암호·주소·잔액·거래는 싣지 않는다.
+ * 오류 글에서도 주소(R…)·긴 16진수·사용자 폴더 이름을 지운다. 하나가 늦어도 신고는 1.5초 안에 간다.
+ */
+function diagClean(v: unknown): string {
+  return String(v ?? "")
+    .replace(/[RrXx][1-9A-HJ-NP-Za-km-z]{25,34}/g, "<주소>")
+    .replace(/[0-9a-fA-F]{32,}/g, "<hex>")
+    .replace(/([A-Za-z]:\\Users\\|\/Users\/|\/home\/)[^\\/\s]+/g, "$1<user>")
+    .slice(0, 160);
+}
+async function reportDiag(): Promise<Record<string, unknown>> {
+  const within = <T,>(p: Promise<T>) => Promise.race([p, new Promise<never>((_, no) => setTimeout(() => no(new Error("timeout 1.5s")), 1500))]);
+  const [node, lock, appLock, bal] = await Promise.allSettled([
+    within(invoke<any>("node_status")), within(invoke<any>("wallet_lock_state")), within(invoke<any>("app_lock_state")), within(invoke<any>("wallet_balance")),
+  ]);
+  const err = (r: PromiseSettledResult<unknown>) => (r.status === "rejected" ? diagClean(errText(r.reason)) : undefined);
+  const n = node.status === "fulfilled" ? node.value : null;
+  const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+  return {
+    node: n
+      ? { progress: num(n.progress) === null ? null : Math.round(Number(n.progress) * 10000) / 100, blocks: num(n.blocks), headers: num(n.headers), peers: num(n.connections), chain: diagClean(n.chain) }
+      : { error: err(node), warming: isWarming(node.status === "rejected" ? node.reason : null) },
+    node_up_seen: nodeUp,
+    wallet_lock: lock.status === "fulfilled" ? { encrypted: !!lock.value?.encrypted, unlocked: !!lock.value?.unlocked } : { error: err(lock) },
+    app_lock: appLock.status === "fulfilled" ? { locked: !!appLock.value?.locked, reason: diagClean(appLock.value?.reason ?? ""), wallet_encrypted: !!appLock.value?.wallet_encrypted } : { error: err(appLock) },
+    // 잔액은 싣지 않는다 — 「지갑이 답했나」만.
+    wallet_answers: bal.status === "fulfilled" ? true : { error: err(bal) },
+  };
+}
+
 async function sendReport() {
   const text = ($("rp-text") as HTMLTextAreaElement).value.trim();
   if (!text) return void ($("rp-text") as HTMLTextAreaElement).focus();
@@ -2966,6 +2998,7 @@ async function sendReport() {
         // 🔴 손님 폰 서버가 왜 안 켜졌는지. 이게 안 실려 오면 「손님이 주문할
         //    곳이 없습니다」라는 결과만 보고 원인을 못 찾는다 — 실제로 그랬다.
         phone_error: lastPhoneError,
+        diag: await reportDiag(),
       },
       // 🔴 체크했을 때만. 가리는 일은 러스트가 한다.
       attachLog: (document.getElementById("rp-log") as HTMLInputElement).checked,
