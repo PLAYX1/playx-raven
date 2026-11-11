@@ -7838,6 +7838,7 @@ async function talkSend() {
   const 임시 = tk임시풍선(text);
   box.value = "";
   box.style.height = "auto";
+  box.style.overflowY = "hidden";
   $("tk-note").textContent = "";
   try {
     await invoke("talk_post", { text: mentionText(text), room: tkRoom || null, replyTo: tkReply?.id ?? null, replyPub: tkReply?.pub ?? null, replyRoot: tkReply?.root ?? null, replyRootPub: tkReply?.rootPub ?? null });
@@ -20378,6 +20379,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     const el = $("tk-text") as HTMLTextAreaElement;
     el.style.height = "auto";
     el.style.height = `${Math.min(240, el.scrollHeight)}px`;
+    el.style.overflowY = el.scrollHeight > 240 ? "auto" : "hidden"; // 넘칠 때만 세로 막대
   });
   // 맞교환. 🔴 러스트에 다 만들어 놓고 **이 다섯 줄이 없으면** 오늘 하루
   //    종일 고친 그 병이 그대로 반복된다.

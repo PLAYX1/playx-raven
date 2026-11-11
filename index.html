@@ -2508,6 +2508,10 @@
          카톡 PC 결: 쓰는 칸이 맨 위 한 줄 전체(세 줄 높이부터), 아랫줄 왼쪽 도구 · 오른쪽 끝 보내기. 창 폭과 상관없이 늘 같다. */
       #page-talk .composer { flex-wrap: wrap; align-items: center; }
       #page-talk .composer textarea { order: -1; flex: 1 0 100%; min-height: 84px; max-height: 240px; }
+      /* 11-11 대표 「입력창에 왜 슬라이드가 필요하지? X 는 없다」 — 맥 「스크롤 막대 항상 보기」면 빈 칸에도 가로 막대가 떴다.
+         글은 늘 줄바꿈되고 칸은 쓴 만큼 자라니 막대가 필요 없다. 240px 를 넘을 때만 세로로 굴린다(main.ts). */
+      #page-talk .composer textarea { overflow-x:hidden; overflow-y:hidden; overflow-wrap:anywhere; white-space:pre-wrap; scrollbar-width:thin; }
+      #page-talk .composer textarea::-webkit-scrollbar:horizontal { display:none; height:0; }
       #page-talk .composer #tk-send { order: 10; margin-left: auto; margin-right: 92px; padding: 0 26px; } /* 오른쪽 아래 떠 있는 라비 동그라미가 보내기를 덮었다 */
       /* ── 11-11 피드(광장) — 페이블 승인 설계. 방(단톡)은 아래 규칙을 하나도 안 받는다(#page-talk.feedon 일 때만). ── */
       #page-talk.feedon .chat > #tk-list { order:20; }
