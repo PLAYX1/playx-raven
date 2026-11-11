@@ -95,7 +95,7 @@ const nodes=new Map();const el=id=>{if(!nodes.has(id))nodes.set(id,{innerHTML:''
 let shop={name:'fixture'}, fail=false;
 const escape=s=>String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
 const context=vm.createContext({$:el,document:{getElementById:el,querySelector:()=>null},homeTodaySeq:0,homePendingOrders:[],lastReceivedHomeTx:null,chainInfo:{paintHome(){context.chainPainted=(context.chainPainted||0)+1;}},lang:'ko',안본주문:2,
-  t:s=>s,tf:(s,...a)=>String(s).replace(/\{(\d)\}/g,(_,i)=>String(a[i])),fmtRvn:n=>String(n),copyHtml:escape,escapeHtml:escape,refreshOverview(){},paintHomeSafety(){},todayYmd:()=>'',tzMin:()=>0,
+  t:s=>s,tf:(s,...a)=>String(s).replace(/\{(\d)\}/g,(_,i)=>String(a[i])),fmtRvn:n=>String(n),copyHtml:escape,escapeHtml:escape,refreshOverview(){},paintHomeSafety(){},paintHomeChainCards(){},setHomeCards(){},todayYmd:()=>'',tzMin:()=>0,
   invoke:async command=>{
     if(command==='shop_load'){if(fail)throw Error('fixture');return shop;}
     if(command==='ledger_range')return {total:12000,currency:'KRW',sales:4};
