@@ -237,7 +237,7 @@ pub fn write_config(dir: &Path, on: bool) -> Result<(), String> {
 // 어디에 무엇이 있나(코드 근거 — 2026-10-15 이 브랜치):
 //   · 가게 공개키: Rust 가 12단어에서 그때그때 뽑는다(`storesign::store_key_info`, 경로 `identity::PATH_SHOP`). 저장된 곳 없음.
 //   · 가게 번호(storeId): 화면(웹뷰) localStorage 에만 있다(`src/store-doc-ui.ts localStoreDocStorage`, 키 rv-store-doc). Rust 는 못 읽는다.
-//   · 철회 목록: 화면 localStorage `rv-devices-v1` 에만 있다(`src/device-connect.ts localDeviceStore`). 서명은 `store_sign_digest`(사장 확인창).
+//   · 철회 목록: 화면 localStorage `rv-devices-v1` 에만 있다(`src/device-connect.ts localDeviceStore`). 서명은 `store_sign_doc`(사장 확인창 — 본문의 실제 값).
 //   · 데이터 열쇠: **어디에도 없다**(Rust·화면 전체 검색 0건 — 화면 문구만 있음). 만들기·나눠 주기(sealDataKey)·백업 판 5 는 결정 대기.
 // 그래서 운영 공급자는 앱 폴더 `lan/` 의 파일 세 개를 읽는다. 가게 키는 Rust 가 12단어로 직접 뽑아 적고(화면이 준 키를 믿지 않음),
 // 가게 번호만 화면이 준다(틀려도 그 번호로 서명된 증서가 없으니 문이 열리지 않는다 — 닫힌 실패).
@@ -403,7 +403,7 @@ pub fn arm_from_disk(slot: &LanSlot) -> MountState {
 //
 // 규칙(core 와 같음): 목록이 없거나 서명 시각이 24시간을 넘으면 **모든 증서를 거절**한다(`lan_cert` stale-revocation-list).
 // 그래서 가게 키 PC 가 하루 안에 같은 목록을 seq+1 로 다시 서명해 이 길로 넣어 줘야 한다.
-// 🔴 자동 재서명은 없다: 가게 키 서명은 매번 사장 확인창을 거친다(`storesign::store_sign_digest`). 화면은 `refreshBy` 전에 사장에게 묻는다.
+// 🔴 자동 재서명은 없다: 가게 키 서명은 매번 사장 확인창을 거친다(`storesign::store_sign_doc`). 화면은 `refreshBy` 전에 사장에게 묻는다.
 // 실패하면 지금 목록을 그대로 둔다(망가진/옛 목록으로 바꾸지 않는다). 지금 목록이 낡았으면 그대로 「모두 거절 중」이라고 보인다.
 
 /// §4.2 ①② — 같은 가게의 지금 재료(`cur`)에서 새 재료(`next`)로 바꿔도 되나: 열쇠 기록이 뒤로 가지 않고, 목록 seq 도 뒤로 가지 않는다.

@@ -23,7 +23,7 @@ const B = mod.exports;
 
 const DAY = 86_400_000;
 const STORE_PRIV = B.fakePriv(7), STORE_KEY = B.pubOf(STORE_PRIV);
-const K = { storeId: 'ab'.repeat(32), storeKey: STORE_KEY, sign: B.signerOf(STORE_PRIV) };
+const K = { storeId: 'ab'.repeat(32), storeKey: STORE_KEY, sign: B.anyDoc(B.signerOf(STORE_PRIV)) };
 const dev = n => B.pubOf(B.fakePriv(n));
 
 /** 지금 시각 기준 가짜 기기 셋: 쓰는 중 · 기간 지남 · 끊음. 목록은 방금 서명(하루 안). */
@@ -158,18 +158,19 @@ for (const [width, theme] of [[1440, 'light'], [1440, 'dark'], [390, 'light']]) 
   });
 }
 
-/** 가게 키 PC 흉내: Rust 명령 store_key_info · store_sign_digest 만 가짜 키(fakePriv 7)로 답한다. 사장 확인창은 시험이 대신 눌렀다고 치고 사유만 기록한다. */
+/** 가게 키 PC 흉내: Rust 명령 store_key_info · store_sign_doc 만 가짜 키(fakePriv 7)로 답한다. 사장 확인창은 시험이 대신 눌렀다고 치고 문서 종류만 기록한다. */
 const fakeKeyPc = signed => async page => {
   await page.exposeFunction('__fakeStoreKey', () => STORE_KEY);
-  await page.exposeFunction('__fakeStoreSign', (digestHex, reason) => {
-    signed.push(reason);
-    return secp256k1.sign(Uint8Array.from(digestHex.match(/../g), b => parseInt(b, 16)), STORE_PRIV, { lowS: true }).toCompactHex();
+  await page.exposeFunction('__fakeStoreSign', (kind, body) => {
+    signed.push(kind);
+    const digest = B.docDigestHex(kind, body);
+    return { digest, sig: secp256k1.sign(Uint8Array.from(digest.match(/../g), b => parseInt(b, 16)), STORE_PRIV, { lowS: true }).toCompactHex() };
   });
   await page.evaluateOnNewDocument(() => {
     const orig = window.__TAURI_INTERNALS__.invoke;
     const inv = async (cmd, args) => {
       if (cmd === 'store_key_info') return { store_key: await window.__fakeStoreKey(), fingerprint: '' };
-      if (cmd === 'store_sign_digest') return { store_key: await window.__fakeStoreKey(), sig: await window.__fakeStoreSign(args.digest, args.reason) };
+      if (cmd === 'store_sign_doc') return { store_key: await window.__fakeStoreKey(), ...(await window.__fakeStoreSign(args.kind, args.body)) };
       return orig(cmd, args);
     };
     window.__TAURI_INTERNALS__.invoke = inv; window.__TAURI__.core.invoke = inv;
@@ -213,7 +214,7 @@ for (const [width, theme] of [[1440, 'light'], [390, 'dark']]) {
     await page.click('#sd-create'); await answer(page, true);
     await page.waitForFunction(() => /^[0-9a-f]{64}$/.test(document.getElementById('sd-id').textContent), { timeout: 10000 });
     const storeId = await page.$eval('#sd-id', e => e.textContent);
-    assert.deepEqual(signed, [B.STORE_DOC_REASON]);
+    assert.deepEqual(signed, ['store']);
     assert.equal(storeId, B.storeIdOf(JSON.parse(await page.evaluate(() => localStorage.getItem('rv-store-doc-v1'))).doc));
     const txt = await page.$eval('#dv-storecard', e => e.innerText.replace(/\s+/g, ' '));
     for (const need of ['서명 확인됨 · 키 지문', '어디에도 올리지 않았어요', '파일로 내보내기']) assert.ok(txt.includes(need), need);
@@ -230,7 +231,7 @@ for (const [width, theme] of [[1440, 'light'], [390, 'dark']]) {
     const list = JSON.parse(await page.evaluate(() => localStorage.getItem('rv-devices-v1'))).list;
     assert.equal(cert.storeId, storeId);
     assert.equal(B.verifyDeviceCert(cert, STORE_KEY, Date.now(), list).ok, true, '폰 core 가 확인');
-    assert.ok(signed.some(r => /기기 증서 발급/.test(r)));
+    assert.ok(signed.includes('device-cert'), JSON.stringify(signed));
     // 끊기
     await page.click('#dv-rows [data-revoke]'); await answer(page, true);
     await page.waitForFunction(() => /기기를 끊었어요/.test(document.getElementById('dv-say').textContent), { timeout: 10000 });

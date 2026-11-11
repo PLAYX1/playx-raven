@@ -11,7 +11,7 @@
  * style="…" 속성은 쓰지 않는다(CSP) — 모양은 bulk-products-ui.css.
  */
 import { BULK_LIMITS, parseBulkProducts, type BulkContext, type BulkDraft, type BulkIssue, type BulkResult } from "../core/creator/bulk-products";
-import { feeTrackHash, sellerAddressOf, signProductDoc, zeroFeeTrack, type ProductDoc } from "../core/creator/product-doc";
+import { feeTrackHash, productBody, sellerAddressOf, signProductDoc, zeroFeeTrack, type ProductDoc } from "../core/creator/product-doc";
 import type { StoreKeyPort } from "./device-connect";
 import { CREATOR_PUBLISH_PAUSED } from "./creator-pause";
 import { DICT } from "./dict";
@@ -60,7 +60,7 @@ export function storeKeyBulkPublisher(key: StoreKeyPort, paused: boolean = CREAT
     signReady: connected,
     publish: async draft => {
       if (paused) return { ok: false, say: "지금은 올리기를 잠가 두었어요" };
-      try { signed.push(await signProductDoc(key.signDigest, draft.body)); } catch { return { ok: false, say: "서명하지 못했어요. 다시 해 주세요." }; }
+      try { signed.push(await signProductDoc(key.signerFor("product", productBody(draft.body)), draft.body)); } catch { return { ok: false, say: "서명하지 못했어요. 다시 해 주세요." }; }
       return { ok: false, say: "서명은 준비됐지만 올리기 길이 아직 연결되지 않았어요." };
     },
   };

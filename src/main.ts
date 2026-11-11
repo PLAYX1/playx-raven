@@ -5297,7 +5297,7 @@ function showPage(id: string) {
   if (id === "bulk") void Promise.all([import("./bulk-products-ui"), import("./device-connect")]).then(async ([{ mountBulkScreen, storeKeyBulkPublisher }, { tauriStoreKey }]) => {
     if (bulkScreen) { bulkScreen.enter(); return; }
     // 서명 길만 잇는다. 올리기 잠금(CREATOR_PUBLISH_PAUSED)은 그대로 — 잠겨 있으면 서명도 하지 않는다.
-    const key = tauriStoreKey((cmd, args) => invoke(cmd, args), storeDocId, "상품 대량 등록 서명");
+    const key = tauriStoreKey((cmd, args) => invoke(cmd, args), storeDocId);
     const connected = await key.info().then(i => !!i, () => false);
     bulkScreen = mountBulkScreen($("page-bulk"), { publisher: storeKeyBulkPublisher(key, undefined, connected) });
   }).catch((e) => paintLoadFail($("page-bulk"), () => showPage("bulk"), "bulk-products-ui", e));

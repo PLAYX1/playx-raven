@@ -404,7 +404,7 @@ mod tests {
         "unlock_for", "encrypt_wallet", "change_passphrase", "reveal_seed", "sales_account_reveal",
         "sales_account_balance", "wallet_link_offer", "wallet_link_offer_again", "wallet_link_confirm",
         "wallet_link_inbox", "wallet_link_review", "wallet_link_approve", "wallet_link_refuse", "wallet_link_revoke", "wallet_link_set_limit", "wallet_link_set_sell", "wallet_link_sell_continue", "wallet_link_sell_refuse", "wallet_link_sell_cancel", "cloud_key_show", "cloud_unlock", "backup_pass_set", "identity_adopt_person_key",
-        "identity_restore_legacy_key", "shop_key_move", "shop_key_move_plan", "shop_pubkey", "artist_pubkey", "store_key_info", "store_sign_digest",
+        "identity_restore_legacy_key", "shop_key_move", "shop_key_move_plan", "shop_pubkey", "artist_pubkey", "store_key_info", "store_sign_doc",
         "words_restore_preflight", "words_restore_check", "words_restore_start", "words_restore_rescan",
         "words_restore_abort", "words_restore_undo", "words_restore_close", "restore_apply", "restore_survey",
         // 백업 내보내기

@@ -382,7 +382,7 @@ pub fn run() {
             nostrpub::nostr_publish,
             shopkey::shop_pubkey,
             storesign::store_key_info,
-            storesign::store_sign_digest,
+            storesign::store_sign_doc,
             chain_store::chain_store_issue,
             chain_store::chain_store_join,
             chain_store::chain_store_status,

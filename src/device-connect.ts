@@ -35,46 +35,53 @@ for (const [source, values] of Object.entries(DEVICE_COPY)) {
 
 /* ── 연결 자리(포트) ───────────────────────────────────────── */
 
+/** 가게 키로 서명할 수 있는 문서 종류(Rust storesign::DocKind — 도메인은 Rust 가 정한다). */
+export type SignedDocKind = "device-cert" | "device-revoke" | "product" | "store";
+/**
+ * 문서 하나에만 쓰는 서명 콜백을 만든다. 11-11: 「아무 32바이트」 서명(store_sign_digest)을 없앴다 — Rust 가 본문으로 다이제스트를
+ * 다시 만들고 확인 창에 본문의 실제 값을 보인다. 코어가 넘기는 다이제스트가 Rust 것과 다르면 서명을 쓰지 않는다.
+ */
+export type DocSigner = (kind: SignedDocKind, body: object) => SignDigest;
 /** 가게 키 서명 자리. info() 가 null 이면 「가게 키 연결 전」 — 발급·끊기는 닫힌다. */
 export type StoreKeyPort = {
   /** storeId 가 null 이면 「가게 키는 있으나 가게 문서(번호)가 없다」 — 키 지문은 보이고 발급·끊기는 닫힌다. */
   info(): Promise<{ storeId: string | null; storeKey: string } | null>;
-  signDigest: SignDigest;
-  /** 같은 키로 서명하되 사장 확인창에 다른 사유를 보인다(80자 이하). 연결 전 포트에는 없다. */
-  withReason?(reason: string): StoreKeyPort;
+  signerFor: DocSigner;
 };
 export const nullStoreKey: StoreKeyPort = {
   info: async () => null,
-  signDigest: async () => { throw new Error("store-key-not-connected"); },
+  signerFor: () => async () => { throw new Error("store-key-not-connected"); },
 };
+/** 이미 손에 든 서명 콜백(시험·폰 같은 메모리 키)을 문서 종류와 상관없이 쓰는 DocSigner 로. */
+export const anyDoc = (sign: SignDigest): DocSigner => () => sign;
 
 type Invoke0 = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 const SHA_HEX = /^[0-9a-f]{64}$/, PUB_HEX = /^0[23][0-9a-f]{64}$/;
 const unhex = (h: string) => Uint8Array.from(h.match(/../g) ?? [], b => parseInt(b, 16));
 /**
- * 데스크탑 가게 키(Rust `store_key_info` · `store_sign_digest`). 키·12단어는 Rust 안에만 있고 여기에는 공개키와 서명만 온다.
- * 서명할 때마다 Rust 가 사장에게 사유를 보여 주고 확인을 받는다(앱 잠금 중이면 거절). reason 은 80자 이하 한 줄.
+ * 데스크탑 가게 키(Rust `store_key_info` · `store_sign_doc`). 키·12단어는 Rust 안에만 있고 여기에는 공개키와 서명만 온다.
+ * 서명할 때마다 Rust 가 본문에서 만든 글(기기 열쇠·기한, 상품 이름·가격, 가게 이름)을 사장에게 보이고 확인을 받는다(앱 잠금 중이면 거절).
  * storeId = 가게 문서(rev 0 해시) — 「가게 번호」 카드(store-doc-ui.ts)로 만들어 이 기기에 저장한 값을 호출자가 넘긴다(없으면 null → 발급 닫힘).
  */
-export function tauriStoreKey(invoke: Invoke0, storeId: () => Promise<string | null> = async () => null, reason = "가게 기기·상품 서명"): StoreKeyPort {
-  const port: StoreKeyPort = {
+export function tauriStoreKey(invoke: Invoke0, storeId: () => Promise<string | null> = async () => null): StoreKeyPort {
+  return {
     info: async () => {
       const r = await invoke<{ store_key?: string }>("store_key_info");
       if (!r || typeof r.store_key !== "string" || !PUB_HEX.test(r.store_key)) return null;
       const id = await storeId().catch(() => null);
       return { storeId: id && SHA_HEX.test(id) ? id : null, storeKey: r.store_key };
     },
-    signDigest: async digest => {
+    signerFor: (kind, body) => async digest => {
       if (!(digest instanceof Uint8Array) || digest.length !== 32) throw new Error("store-sign-digest");
       const hex = Array.from(digest, b => b.toString(16).padStart(2, "0")).join("");
-      const r = await invoke<{ sig?: string }>("store_sign_digest", { digest: hex, reason });
+      const r = await invoke<{ sig?: string; digest?: string }>("store_sign_doc", { kind, body });
       // 오류 문구는 Rust 의 고정 문장뿐이지만 화면 코드에는 옮기지 않는다(코드만).
       if (!r || typeof r.sig !== "string" || !/^[0-9a-f]{128}$/.test(r.sig)) throw new Error("store-sign-reply");
+      // Rust 가 본문으로 만든 다이제스트 = 코어가 서명하려는 다이제스트. 다르면(본문·도메인 어긋남) 그 서명은 쓰지 않는다.
+      if (r.digest !== hex) throw new Error("store-sign-mismatch");
       return unhex(r.sig);
     },
-    withReason: next => tauriStoreKey(invoke, storeId, next),
   };
-  return port;
 }
 
 /** 새 기기와 주고받는 자리(같은 Wi-Fi). 지금은 아무것도 보내지 않는다. */
@@ -248,13 +255,13 @@ export function deviceRows(state: DeviceState, now: number): DeviceRow[] {
 /** 철회 목록이 하루(core 규칙)보다 오래됐나 — 오래되면 증서 확인이 전부 거절된다. */
 export const listIsStale = (list: DeviceRevocationList | null, now: number): boolean => !list || now - list.issuedAt > REVOCATION_LIST_MAX_AGE_MS;
 
-type Signing = { storeId: string; storeKey: string; sign: SignDigest };
+type Signing = { storeId: string; storeKey: string; sign: DocSigner };
 /** 철회 목록을 새로 서명한다(seq+1 · 같은 철회 목록 · prunedBefore 유지). 받는 쪽 규칙(후퇴 금지)을 통과한 것만 돌려준다. */
 export async function resignList(state: DeviceState, k: Signing, now: number, add: readonly string[] = []): Promise<DeviceRevocationList> {
   const prev = state.list;
   const revoked = [...new Set([...(prev?.revoked ?? []), ...add])].sort();
   const body = { v: 1 as const, storeId: k.storeId, seq: (prev?.seq ?? 0) + 1, revoked, issuedAt: now, prunedBefore: prev?.prunedBefore ?? 0 };
-  const next = await signDeviceRevocationList(body, k.storeKey, k.sign);
+  const next = await signDeviceRevocationList(body, k.storeKey, k.sign("device-revoke", body));
   return acceptDeviceRevocationList(prev, next, k.storeKey, k.storeId);
 }
 
@@ -270,7 +277,7 @@ export async function issueFor(state: DeviceState, k: Signing, input: IssueInput
     v: 1, storeId: k.storeId, deviceId: deviceIdOf(input.devicePubKey), devicePubKey: input.devicePubKey, role: input.role,
     scopes: [...DEVICE_ROLE_SCOPES[input.role]], issuedAt: win.issuedAt, notAfter: win.notAfter, serial: nextSerial(state.history),
   };
-  const cert = await issueDeviceCert(body, k.storeKey, k.sign, now, list, state.history);
+  const cert = await issueDeviceCert(body, k.storeKey, k.sign("device-cert", body), now, list, state.history);
   const verified = verifyDeviceCert(cert, k.storeKey, now, list);
   if (!verified.ok) throw new Error("device-verify:" + verified.reason);
   return { cert, state: { ...state, list, history: [...state.history, cert], names: { ...state.names, [cert.deviceId]: input.name.trim().slice(0, 40) } } };
@@ -418,11 +425,6 @@ export function mountDeviceScreen(root: HTMLElement, deps: DeviceScreenDeps = {}
   let signing: Signing | null = null;
   let keyOnly: string | null = null;
   let busy = false;
-  const REASON_ISSUE = "기기 증서 발급 - 새 기기를 등록합니다", REASON_REVOKE = "기기 끊기 - 철회 목록을 새로 서명합니다";
-  const withReason = (k: Signing, reason: string): Signing => {
-    const port = key.withReason?.(reason);
-    return port ? { ...k, sign: port.signDigest } : k;
-  };
 
   const say = (render: () => string) => setCopyText(el(root, "dv-say"), render);
   const storeCard = mountStoreDocCard(el(root, "dv-storecard"), {
@@ -474,7 +476,7 @@ export function mountDeviceScreen(root: HTMLElement, deps: DeviceScreenDeps = {}
     keyOnly = null;
     try {
       const i = await key.info();
-      signing = i && i.storeId ? { storeId: i.storeId, storeKey: i.storeKey, sign: key.signDigest } : null;
+      signing = i && i.storeId ? { storeId: i.storeId, storeKey: i.storeKey, sign: key.signerFor } : null;
       storeCard.paint();
       if (i && !i.storeId) keyOnly = i.storeKey;
     } catch { signing = null; }
@@ -560,7 +562,7 @@ export function mountDeviceScreen(root: HTMLElement, deps: DeviceScreenDeps = {}
       if (!pub) pub = (await link.receiveKey().catch(() => null)) ?? "";
       const name = el<HTMLInputElement>(root, "dv-name").value.trim();
       if (!name) { say(() => t("기기 이름을 적어 주세요.")); return; }
-      const r = await issueFor(state, withReason(signing, REASON_ISSUE), { devicePubKey: pub, role: roleSel.value as DeviceRole, ttlMs: Number(ttlSel.value) * DAY_MS, name }, now());
+      const r = await issueFor(state, signing, { devicePubKey: pub, role: roleSel.value as DeviceRole, ttlMs: Number(ttlSel.value) * DAY_MS, name }, now());
       state = r.state; store.save(state);
       el<HTMLTextAreaElement>(root, "dv-cert").value = new TextDecoder().decode(encodeDeviceCert(r.cert));
       el(root, "dv-result").hidden = false;
@@ -571,7 +573,7 @@ export function mountDeviceScreen(root: HTMLElement, deps: DeviceScreenDeps = {}
     else if (b.id === "dv-copy") void copy(el<HTMLTextAreaElement>(root, "dv-cert").value).then(() => say(() => t("복사했어요."))).catch(() => say(() => t("복사하지 못했어요. 글을 직접 끌어 선택해 복사해 주세요.")));
     else if (b.id === "dv-resign") void act(async () => {
       if (!signing) throw new Error("store-key-not-connected");
-      state = { ...state, list: await resignList(state, withReason(signing, REASON_REVOKE), now()) }; store.save(state);
+      state = { ...state, list: await resignList(state, signing, now()) }; store.save(state);
       say(() => t("철회 목록을 새로 서명했어요."));
     });
     else if (b.dataset.revoke) {
@@ -580,7 +582,7 @@ export function mountDeviceScreen(root: HTMLElement, deps: DeviceScreenDeps = {}
         if (!signing) throw new Error("store-key-not-connected");
         const ok = await confirmBox(t("이 기기를 끊을까요?"), `${t("끊으면 그 기기는 바로 멈춰요.")}\n${t("남은 기기에는 새 열쇠를 나눠 줘요. 확인은 한 번만 하면 돼요.")}\n${t("이미 복사된 지난 데이터는 되돌릴 수 없어요.")}`);
         if (!ok) return;
-        const r = await disconnectFor(state, withReason(signing, REASON_REVOKE), disconnect, id, now());
+        const r = await disconnectFor(state, signing, disconnect, id, now());
         state = r.state; store.save(state);
         say(() => r.rotated
           ? t("기기를 끊고 새 열쇠로 바꿨어요. 남은 기기는 같은 와이파이에서 앱을 열면 새 열쇠를 받아요. 이미 복사된 지난 데이터는 되돌릴 수 없어요.")

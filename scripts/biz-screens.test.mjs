@@ -16,7 +16,7 @@ const B = mod.exports;
 
 const NOW = 1_790_000_000_000, DAY = 86_400_000;
 const STORE_PRIV = B.fakePriv(7), STORE_KEY = B.pubOf(STORE_PRIV), STORE_ID = 'ab'.repeat(32);
-const K = { storeId: STORE_ID, storeKey: STORE_KEY, sign: B.signerOf(STORE_PRIV) };
+const K = { storeId: STORE_ID, storeKey: STORE_KEY, sign: B.anyDoc(B.signerOf(STORE_PRIV)) };
 const dev = n => B.pubOf(B.fakePriv(n));
 const input = (n, over = {}) => ({ devicePubKey: dev(n), role: 'remote', ttlMs: 7 * DAY, name: '직원 폰 ' + n, ...over });
 
@@ -51,8 +51,8 @@ test('발급 입력 거절: 공개키 모양 · 역할 · 기간 범위(1~30일)
 
 test('가게 키 연결 전(Null)에는 서명이 거절된다 — 키 노출·가짜 서명 없음', async () => {
   assert.equal(await B.nullStoreKey.info(), null);
-  await assert.rejects(() => B.nullStoreKey.signDigest(new Uint8Array(32)), /store-key-not-connected/);
-  await assert.rejects(() => B.issueFor(B.emptyState(), { storeId: STORE_ID, storeKey: STORE_KEY, sign: B.nullStoreKey.signDigest }, input(11), NOW));
+  await assert.rejects(() => B.nullStoreKey.signerFor('store', {})(new Uint8Array(32)), /store-key-not-connected/);
+  await assert.rejects(() => B.issueFor(B.emptyState(), { storeId: STORE_ID, storeKey: STORE_KEY, sign: B.nullStoreKey.signerFor }, input(11), NOW));
   assert.equal(await B.nullDeviceLink.receiveKey(), null);
   assert.equal(await B.nullDeviceLink.deliverCert({}), false);
   assert.equal(B.nullDeviceLink.connected, false);
@@ -83,7 +83,7 @@ test('레인 Y 끊기 단추: Rust 회전 한 길만 · 열쇠 없음일 때만 
   const certId = B.deviceRows(s, NOW + 20).find(r => r.deviceId === id).certId;
   // ① 나눠 준 열쇠가 있음 → Rust 가 서명한 새 목록을 그대로 받는다(화면은 서명하지 않는다).
   const signed = [];
-  const K2 = { ...K, sign: async d => { signed.push(d); return K.sign(d); } };
+  const K2 = { ...K, sign: (kind, body) => async d => { signed.push(d); return K.sign(kind, body)(d); } };
   const calls = [];
   const rustList = await B.resignList(s, K, NOW + 20, [certId]);
   const port = { disconnect: async (...args) => { calls.push(args); return { rotated: true, list: rustList }; } };
@@ -97,7 +97,7 @@ test('레인 Y 끊기 단추: Rust 회전 한 길만 · 열쇠 없음일 때만 
   // ③ 그 기기를 빼먹은 목록 · 다른 가게 키 목록 · 모르는 기기는 거절.
   const wrong = await B.resignList(s, K, NOW + 20, []);
   await assert.rejects(() => B.disconnectFor(s, K, { disconnect: async () => ({ rotated: true, list: wrong }) }, id, NOW + 20), /device-disconnect/);
-  const other = { storeId: STORE_ID, storeKey: B.pubOf(B.fakePriv(9)), sign: B.signerOf(B.fakePriv(9)) };
+  const other = { storeId: STORE_ID, storeKey: B.pubOf(B.fakePriv(9)), sign: B.anyDoc(B.signerOf(B.fakePriv(9))) };
   const foreign = await B.resignList({ ...s, list: null }, other, NOW + 20, [certId]);
   await assert.rejects(() => B.disconnectFor(s, K, { disconnect: async () => ({ rotated: true, list: foreign }) }, id, NOW + 20));
   await assert.rejects(() => B.disconnectFor(s, K, port, 'cd'.repeat(32), NOW + 20), /device-unknown/);
@@ -229,7 +229,7 @@ test('화면 문구는 영어·일본어·중국어가 모두 있다 · 금지 �
   assert.ok(!/\p{Extended_Pictographic}/u.test(code), '이모지 금지');
 });
 
-/* ── 가게 키 서명(Rust store_sign_digest 를 같은 규칙으로 흉내 낸 가짜 invoke) — 가짜 12단어만 ── */
+/* ── 가게 키 서명(Rust store_sign_doc 을 같은 규칙으로 흉내 낸 가짜 invoke) — 가짜 12단어만 ── */
 const WORDS = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
 const SHOP_PATH = "m/44'/175'/7'/1'/0'"; // 데스크탑 identity.rs PATH_SHOP — src-tauri 시험이 같은 공개키·서명을 확인한다
 const shopPriv = HDKey.fromMasterSeed(pbkdf2Sync(WORDS, 'mnemonic', 2048, 64, 'sha512')).derive(SHOP_PATH).privateKey;
@@ -242,10 +242,11 @@ const fakeInvoke = (opts = {}) => {
     calls.push({ cmd, args });
     if (opts.locked) throw '지갑이 잠겨 있어요. 잠금을 푼 뒤 다시 해 주세요.';
     if (cmd === 'store_key_info') return { store_key: SHOP_PUB };
-    if (cmd === 'store_sign_digest') {
-      if (!/^[0-9a-f]{64}$/.test(args.digest) || !args.reason || args.reason.length > 80) throw '서명할 내용의 모양이 맞지 않아요.';
+    if (cmd === 'store_sign_doc') {
+      let digest; try { digest = B.docDigestHex(args.kind, args.body); } catch { throw '서명할 내용의 모양이 맞지 않아요.'; }
+      if ((args.kind === 'product' || args.kind === 'store') && args.body.seller !== SHOP_PUB) throw '이 가게 열쇠의 문서가 아니에요.';
       if ('badReply' in opts) return opts.badReply;
-      return { store_key: SHOP_PUB, sig: secp256k1.sign(Uint8Array.from(args.digest.match(/../g), b => parseInt(b, 16)), shopPriv, { lowS: true }).toCompactHex() };
+      return { store_key: SHOP_PUB, digest, sig: secp256k1.sign(Uint8Array.from(digest.match(/../g), b => parseInt(b, 16)), shopPriv, { lowS: true }).toCompactHex() };
     }
     throw 'unknown';
   };
@@ -260,33 +261,37 @@ test('가게 키 서명: 파생 공개키가 Rust 시험 벡터와 같고, 기�
   const port = B.tauriStoreKey(inv, async () => STORE_ID);
   const info = await port.info();
   assert.deepEqual(info, { storeId: STORE_ID, storeKey: SHOP_PUB });
-  const k = { storeId: info.storeId, storeKey: info.storeKey, sign: port.signDigest };
+  const k = { storeId: info.storeId, storeKey: info.storeKey, sign: port.signerFor };
   const r1 = await B.issueFor(B.emptyState(), k, input(21), NOW);
   assert.equal(B.verifyDeviceCert(r1.cert, SHOP_PUB, NOW, r1.state.list).ok, true);
   const s2 = await B.revokeFor(r1.state, k, r1.cert.deviceId, NOW + 1000);
   assert.equal(B.verifyDeviceRevocationList(s2.list, SHOP_PUB, STORE_ID).seq, 2);
-  assert.ok(inv.calls.every(c => c.cmd !== 'store_sign_digest' || (/^[0-9a-f]{64}$/.test(c.args.digest) && c.args.reason.length <= 80)));
+  assert.deepEqual(inv.calls.filter(c => c.cmd === 'store_sign_doc').map(c => c.args.kind), ['device-revoke', 'device-cert', 'device-revoke'], '종류가 Rust 로 간다 — 다이제스트·사유는 보내지 않는다');
+  assert.ok(inv.calls.every(c => !('digest' in (c.args ?? {})) && !('reason' in (c.args ?? {}))));
 });
 
 test('가게 키 서명: 앱 잠금 중 거절 · 잘못된 요청/응답 거절 · 오류에 열쇠·단어가 없다', async () => {
   const locked = B.tauriStoreKey(fakeInvoke({ locked: true }), async () => STORE_ID);
   await assert.rejects(() => locked.info());
-  await assert.rejects(() => locked.signDigest(new Uint8Array(32)));
+  await assert.rejects(() => locked.signerFor('store', {})(new Uint8Array(32)));
   const ok = B.tauriStoreKey(fakeInvoke(), async () => STORE_ID);
-  await assert.rejects(() => ok.signDigest(new Uint8Array(31)), /store-sign-digest/);
-  await assert.rejects(() => ok.signDigest('zz'), /store-sign-digest/);
+  await assert.rejects(() => ok.signerFor('store', {})(new Uint8Array(31)), /store-sign-digest/);
+  await assert.rejects(() => ok.signerFor('store', {})('zz'), /store-sign-digest/);
   for (const bad of [null, {}, { sig: 'zz' }, { sig: 'a'.repeat(127) }, { sig: 'A'.repeat(128) }]) {
-    await assert.rejects(() => B.tauriStoreKey(fakeInvoke({ badReply: bad }), async () => STORE_ID).signDigest(new Uint8Array(32)), /store-sign-reply/);
+    await assert.rejects(() => B.tauriStoreKey(fakeInvoke({ badReply: bad }), async () => STORE_ID).signerFor('device-revoke', { v: 1 })(new Uint8Array(32)), /store-sign-reply/);
   }
+  // 서명은 맞는 모양이지만 Rust 가 다른 다이제스트(다른 본문·도메인)에 서명했다고 답하면 쓰지 않는다
+  const good = { sig: 'a'.repeat(128), digest: 'b'.repeat(64) };
+  await assert.rejects(() => B.tauriStoreKey(fakeInvoke({ badReply: good }), async () => STORE_ID).signerFor('device-revoke', { v: 1 })(new Uint8Array(32)), /store-sign-mismatch/);
   // 가게 번호가 없으면 키만 보이고 발급은 닫힌다
   assert.deepEqual(await B.tauriStoreKey(fakeInvoke(), async () => null).info(), { storeId: null, storeKey: SHOP_PUB });
   assert.deepEqual(await B.tauriStoreKey(fakeInvoke(), async () => 'zz').info(), { storeId: null, storeKey: SHOP_PUB });
   // 다른 키의 서명이 오면(키 불일치) 코어가 거절한다
   const other = secp256k1.sign(new Uint8Array(32).fill(1), B.fakePriv(9), { lowS: true }).toCompactHex();
   const mism = B.tauriStoreKey(fakeInvoke({ badReply: { sig: other } }), async () => STORE_ID);
-  await assert.rejects(() => B.issueFor(B.emptyState(), { storeId: STORE_ID, storeKey: SHOP_PUB, sign: mism.signDigest }, input(22), NOW));
+  await assert.rejects(() => B.issueFor(B.emptyState(), { storeId: STORE_ID, storeKey: SHOP_PUB, sign: mism.signerFor }, input(22), NOW));
   const msgs = [];
-  try { await locked.signDigest(new Uint8Array(32)); } catch (e) { msgs.push(String(e?.message ?? e)); }
+  try { await locked.signerFor('store', {})(new Uint8Array(32)); } catch (e) { msgs.push(String(e?.message ?? e)); }
   for (const m of msgs) assert.ok(!m.includes(Buffer.from(shopPriv).toString('hex')) && !m.includes('abandon'));
 });
 
@@ -309,13 +314,14 @@ test('대량 등록 서명: 잠금이면 서명도 안 하고, 잠금이 풀려�
   assert.equal(out.ok, false);
   assert.match(out.say, /올리기 길이 아직 연결되지 않았어요/);
   assert.equal(open.signed.length, 1);
-  assert.equal(inv2.calls.filter(c => c.cmd !== 'store_sign_digest').length, 0);
+  assert.equal(inv2.calls.filter(c => c.cmd !== 'store_sign_doc').length, 0);
+  assert.deepEqual(inv2.calls.map(c => c.args.kind), ['product']);
 });
 
 /* ── 가게 문서(가게 번호) 만들기 — 가짜 12단어 ── */
 const SD_NOW = 1_790_000_000_000;
 const SD_INPUT = { name: '무송 체육관 스토어', intro: '직접 만든 굿즈를 팝니다.', category: 'retail', region: '서울 마포' };
-const signCalls = inv => inv.calls.filter(c => c.cmd === 'store_sign_digest');
+const signCalls = inv => inv.calls.filter(c => c.cmd === 'store_sign_doc');
 
 test('가게 문서: 가짜 12단어 → 서명 → core 검증 → 가게 번호(rev 0 본문 해시) · 사유는 80자 이하로 확인창에 전달', async () => {
   const inv = fakeInvoke();
@@ -328,7 +334,7 @@ test('가게 문서: 가짜 12단어 → 서명 → core 검증 → 가게 번�
   assert.equal(v.idProven, true); assert.equal(v.storeId, rec.storeId);
   assert.equal(rec.doc.expiresAt - rec.doc.issuedAt, 90 * 86400);
   const calls = signCalls(inv);
-  assert.equal(calls.length, 1); assert.equal(calls[0].args.reason, B.STORE_DOC_REASON); assert.ok(calls[0].args.reason.length <= 80);
+  assert.equal(calls.length, 1); assert.equal(calls[0].args.kind, 'store'); assert.equal(calls[0].args.body.name, SD_INPUT.name); assert.ok(!('sig' in calls[0].args.body));
   // 같은 12단어·같은 입력·같은 시각이면 같은 번호(결정적), 다른 이름이면 다른 번호
   const again = await B.createStoreDoc(B.tauriStoreKey(fakeInvoke()), SD_INPUT, SD_NOW);
   assert.equal(again.storeId, rec.storeId);
@@ -402,7 +408,7 @@ test('가게 번호가 있으면 기기 증서 발급과 끊기가 열린다 · 
   const port = B.tauriStoreKey(inv, () => B.savedStoreId(inv, mem));
   const info = await port.info();
   assert.equal(info.storeId, rec.storeId);
-  const k = { storeId: info.storeId, storeKey: info.storeKey, sign: port.withReason('기기 증서 발급 - 시험').signDigest };
+  const k = { storeId: info.storeId, storeKey: info.storeKey, sign: port.signerFor };
   const r1 = await B.issueFor(B.emptyState(), k, input(31), NOW);
   assert.equal(r1.cert.storeId, rec.storeId);
   const ok = B.verifyDeviceCert(r1.cert, rec.doc.seller, NOW, r1.state.list);
@@ -416,9 +422,10 @@ test('가게 번호가 있으면 기기 증서 발급과 끊기가 열린다 · 
   assert.equal(B.deviceRows(s2, NOW + 2000)[0].status, 'revoked');
   // 다른 가게 번호로 만든 철회 목록은 받아주지 않는다
   assert.throws(() => B.verifyDeviceRevocationList(s2.list, rec.doc.seller, 'cd'.repeat(32)));
-  // 서명 요청에는 사유가 붙었다(80자 이하)
-  for (const c of signCalls(inv)) assert.ok(c.args.reason && c.args.reason.length <= 80);
-  assert.ok(signCalls(inv).some(c => c.args.reason === '기기 증서 발급 - 시험'));
+  // 서명 요청은 종류 + 본문(Rust 가 확인창 글을 본문에서 만든다) — 화면이 정한 사유·다이제스트는 없다
+  assert.deepEqual(signCalls(inv).map(c => c.args.kind), ['store', 'device-revoke', 'device-cert', 'device-revoke']);
+  assert.ok(signCalls(inv).every(c => !('reason' in c.args) && !('digest' in c.args)));
+  assert.ok(signCalls(inv).some(c => c.args.kind === 'device-cert' && c.args.body.devicePubKey === r1.cert.devicePubKey));
 });
 
 test('가게 번호 카드 문구: 영·일·중 번역 있음 · 금지 문구 없음 · 올리기 길 없음', () => {

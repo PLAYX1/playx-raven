@@ -4,12 +4,12 @@
  * 규칙은 지갑 core/store/store-doc.ts 를 그대로 쓴다(만들기·검사·번호). 이 파일은 입력 → 본문 → 서명(StoreKeyPort) → 확인 → 저장과 화면만 가진다.
  * 🔴 게시·공개·업로드는 하지 않는다. 문서는 이 기기 안(localStorage)에 두고, 사장이 「파일로 내보내기」를 눌러 한 번 더 확인한 뒤에만 파일로 내보낸다.
  *    (공개하는 순간 공개키가 곧 가게 신원이 된다 — 되돌릴 수 없는 시점이라 이 화면에는 그 길이 없다.)
- * 🔴 키: 가게 키는 이 파일에 없다. 서명은 StoreKeyPort.signDigest 콜백(Rust store_sign_digest — 앱 잠금 중 거절 · 사장 확인창에 사유 표시)뿐이다.
+ * 🔴 키: 가게 키는 이 파일에 없다. 서명은 StoreKeyPort.signerFor("store", 본문)(Rust store_sign_doc — 앱 잠금 중 거절 · 확인창에 본문의 가게 이름·지역)뿐이다.
  * 🔴 한 번 만든 문서는 지우거나 덮어쓰는 길이 없다(번호를 잃으면 이미 발급한 기기 증서가 주인을 잃는다). 고치는 판(rev 1~)은 아직 없다.
  * style="…" 속성은 쓰지 않는다(CSP) — 모양은 device-connect.css.
  */
 import {
-  StoreError, encodeStoreDoc, signStoreDoc, storeDocHash, storeIdOf, storeKeyFingerprint, validateStoreDoc, verifyStoreDoc,
+  StoreError, encodeStoreDoc, signStoreDoc, storeBody, storeDocHash, storeIdOf, storeKeyFingerprint, validateStoreDoc, verifyStoreDoc,
   type StoreBody, type StoreDoc,
 } from "../core/store/store-doc";
 import { STORE_CATEGORIES, STORE_CATEGORY_LABELS, STORE_DEFAULT_LIFETIME_SECONDS, STORE_INTRO_MAX, STORE_NAME_MAX, STORE_NOTICE_DEFAULT, STORE_REGION_MAX, type StoreCategory } from "../core/store/limits";
@@ -23,7 +23,6 @@ for (const [source, values] of Object.entries(STORE_DOC_COPY)) {
 }
 
 /** 서명할 때 사장 확인창에 그대로 보이는 사유(80자 이하 한 줄). */
-export const STORE_DOC_REASON = "가게 문서 서명 - 가게 번호를 만듭니다(올리지 않음)";
 export const STORE_DOC_STORAGE_KEY = "rv-store-doc-v1";
 
 export type StoreInput = { name: string; intro: string; category: string; region: string };
@@ -49,8 +48,7 @@ export async function createStoreDoc(key: StoreKeyPort, input: StoreInput, nowMs
   if (!info) throw new Error("store-key-not-connected");
   const body = buildRev0Body(input, info.storeKey, nowMs);
   precheck(body);
-  const signer = (key.withReason?.(STORE_DOC_REASON) ?? key).signDigest;
-  const doc = await signStoreDoc(signer, body);
+  const doc = await signStoreDoc(key.signerFor("store", storeBody(body)), body);
   const v = verifyStoreDoc(encodeStoreDoc(doc), { now: Math.floor(nowMs / 1000) });
   if (v.doc.rev !== 0 || v.storeId !== storeDocHash(doc) || v.doc.seller !== info.storeKey) throw new Error("store-verify");
   return { doc, storeId: v.storeId, createdAt: nowMs };
