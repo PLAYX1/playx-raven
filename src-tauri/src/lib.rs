@@ -112,6 +112,7 @@ mod identity;
 mod talk;
 mod talk_social;
 mod talk_fast;
+mod talk_push;
 #[cfg(test)]
 mod talk_bench;
 mod badges;
@@ -777,6 +778,8 @@ pub fn run() {
             talk_social::talk_feed,
             talk_fast::talk_view,
             talk_fast::talk_warm,
+            talk_push::talk_push_get,
+            talk_push::talk_push_set,
             talk_social::talk_notices,
             talk_social::talk_tag_notes,
             talk_social::talk_search,
@@ -904,6 +907,8 @@ pub fn run() {
             relay_share::start();
             // 11-12 이야기를 카톡처럼: 켜자마자 기본 릴레이에 미리 붙어 둔다(relay_pool.rs). 안 쓰면 2분 뒤 저절로 닫힌다.
             tauri::async_runtime::spawn(async { nostrpub::warm_all() });
+            // 11-12 알림 지킴이(기본 꺼짐 · 켠 컴퓨터만): 바깥 릴레이의 새 쪽지·방 글을 알림 서버에 곧바로 넘긴다.
+            talk_push::start();
             relay_keeper::start();
             use tauri::Manager;
             ravi_companion::setup(app)?;

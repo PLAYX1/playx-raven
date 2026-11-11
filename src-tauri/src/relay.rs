@@ -289,12 +289,20 @@ pub(crate) fn note_deletions(dels: &[Value]) -> bool {
 /// 11-12 「먼저 그리기」: 이 컴퓨터 릴레이 저장분에서 **곧바로** 읽는다(웹소켓도 안 거친다 · 몇 ms).
 /// 필터 뜻은 REQ 와 같다(NIP-01). 지운 글·지운 방 글은 빼고, 새것이 먼저, 필터의 가장 큰 limit(없으면 200, 최대 500)까지.
 pub(crate) fn query_local(filters: &[Value]) -> Vec<Value> {
-    let mut hits: Vec<Value> = peek(|v| v.iter().filter(|e| filters.iter().any(|f| matches(e, f))).cloned().collect());
-    hits.retain(|e| !is_gone(e) && !in_deleted_room(e));
-    hits.sort_by_key(|e| -(e.get("created_at").and_then(Value::as_i64).unwrap_or(0)));
     let cap = filters.iter().filter_map(|f| f.get("limit").and_then(Value::as_u64)).max().unwrap_or(200).min(500) as usize;
+    // 지운 것을 뺀 뒤에도 cap 개가 남게 넉넉히 뽑고 거른다.
+    let mut hits: Vec<Value> = peek(|v| top_matches(v, filters, cap * 2 + 20));
+    hits.retain(|e| !is_gone(e) && !in_deleted_room(e));
     hits.truncate(cap);
     hits
+}
+
+/// 필터에 맞는 글 중 새것부터 `cap` 개만 복사한다(맞는 것을 다 복사하지 않는다).
+fn top_matches(v: &[Value], filters: &[Value], cap: usize) -> Vec<Value> {
+    let mut hits: Vec<&Value> = v.iter().filter(|e| filters.iter().any(|f| matches(e, f))).collect();
+    hits.sort_unstable_by_key(|e| std::cmp::Reverse(e.get("created_at").and_then(Value::as_i64).unwrap_or(0)));
+    hits.truncate(cap);
+    hits.into_iter().cloned().collect()
 }
 
 /// 11-12 바깥에서 읽어 온 글을 이 컴퓨터 릴레이에도 둔다 — 다음에 열 때 「먼저 그리기」가 그린다.
@@ -398,7 +406,8 @@ fn matches(e: &Value, f: &Value) -> bool {
         return false;
     }
     // `#d`·`#p` 같은 태그 조건.
-    for (key, vals) in f.as_object().cloned().unwrap_or_default() {
+    // 11-12 부하 시험: 예전에는 글 하나마다 필터 전체를 복사했다(1000곳 × 3000개 = 300만 번) — 빌려 읽는다.
+    for (key, vals) in f.as_object().into_iter().flatten() {
         let Some(name) = key.strip_prefix('#') else { continue };
         let Some(vals) = vals.as_array() else { continue };
         let hit = e
@@ -1097,8 +1106,43 @@ fn take_pairing_event(e: &Value) -> Option<(bool, String)> {
 /// 그 뒤로 들어오는 맞는 글을 바로 밀어 준다(CLOSE 하거나 연결이 끊길 때까지).
 /// 한꺼번에 붙어 있을 수 있는 연결 수. 폰 몇 대·손님 화면·다른 가게면 넉넉하다.
 /// 🔴 없으면 같은 Wi-Fi(또는 터널)의 누군가가 소켓을 수천 개 열어 계산대 메모리를 다 쓴다.
-const MAX_CONNS: usize = 64;
+/// 11-12 대표 N100 처럼 늘 켜 두고 바깥(터널)에서 많이 붙는 컴퓨터를 위해 64 → 2000(부하 시험: relay_load 시험, 1000 연결).
+/// 한 곳(IP)이 다 차지하지 못하게 IP 당 20 개를 따로 센다(IP_CONNS).
+const MAX_CONNS: usize = 2000;
 static OPEN_CONNS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+/// 한 IP 가 한꺼번에 붙어 있을 수 있는 수. 폰 몇 대·화면 몇 개면 넉넉하다.
+const MAX_CONNS_PER_IP: usize = 20;
+static IP_CONNS: Mutex<Option<std::collections::HashMap<std::net::IpAddr, usize>>> = Mutex::new(None);
+
+/// IP 한 자리. 끊길 때 돌려준다.
+struct IpSlot(std::net::IpAddr);
+impl IpSlot {
+    fn take(ip: std::net::IpAddr) -> Option<Self> {
+        let mut g = IP_CONNS.lock().unwrap_or_else(|e| e.into_inner());
+        let n = g.get_or_insert_with(Default::default).entry(ip).or_insert(0);
+        if *n >= MAX_CONNS_PER_IP { return None; }
+        *n += 1;
+        Some(IpSlot(ip))
+    }
+}
+impl Drop for IpSlot {
+    fn drop(&mut self) {
+        let mut g = IP_CONNS.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(m) = g.as_mut() {
+            if let Some(n) = m.get_mut(&self.0) { *n = n.saturating_sub(1); if *n == 0 { m.remove(&self.0); } }
+        }
+    }
+}
+
+/// 누가 붙었나(IP 당 상한용). 🔴 전달 머리말(CF-Connecting-IP · X-Forwarded-For)은 **이 컴퓨터 안(터널)에서 온 연결에서만** 믿는다 —
+/// 같은 와이파이의 누군가가 머리말을 꾸며 남의 자리를 쓰지 못하게. 이 컴퓨터 안에서 머리말 없이 온 연결(앱 자신·머리말 안 주는 터널)은 None(IP 상한 없음, 전체 상한만).
+pub(crate) fn client_ip(peer: Option<std::net::SocketAddr>, headers: &axum::http::HeaderMap) -> Option<std::net::IpAddr> {
+    let peer = peer?;
+    if !peer.ip().is_loopback() { return Some(peer.ip()); }
+    let h = |k: &str| headers.get(k).and_then(|v| v.to_str().ok()).map(str::to_string);
+    h("cf-connecting-ip").or_else(|| h("x-forwarded-for").and_then(|v| v.split(',').next().map(|x| x.trim().to_string())))
+        .and_then(|v| v.parse::<std::net::IpAddr>().ok())
+}
 
 /// 연결 한 자리. 떨어질 때(연결이 끝날 때) 자리를 돌려준다.
 struct ConnSlot;
@@ -1139,7 +1183,25 @@ fn author_budget_ok(pubkey: &str) -> bool {
 const PING_EVERY_SECS: u64 = 60;
 const SILENT_CLOSE_SECS: u64 = 150;
 
-pub async fn serve(mut ws: WebSocket) {
+/// IP 상한 없이(시험·regtest 가 쓴다). 앱의 /api/relay 는 serve_from 을 쓴다.
+#[allow(dead_code)]
+pub async fn serve(ws: WebSocket) {
+    serve_from(ws, None).await
+}
+
+/// `ip` = client_ip 가 가린 상대(없으면 IP 상한을 안 건다).
+pub async fn serve_from(mut ws: WebSocket, ip: Option<std::net::IpAddr>) {
+    let _ip_slot = match ip {
+        None => None,
+        Some(ip) => match IpSlot::take(ip) {
+            Some(s) => Some(s),
+            None => {
+                let _ = ws.send(Message::Text(json!(["NOTICE", "이 주소에서 붙은 연결이 너무 많습니다."]).to_string().into())).await;
+                let _ = ws.send(Message::Close(None)).await;
+                return;
+            }
+        },
+    };
     let Some(_slot) = ConnSlot::take() else {
         let _ = ws
             .send(Message::Text(json!(["NOTICE", "지금 연결이 너무 많습니다. 잠시 뒤에 다시 붙어 주세요."]).to_string().into()))
@@ -1253,12 +1315,14 @@ pub async fn serve(mut ws: WebSocket) {
                 let sub = sub.chars().take(64).collect::<String>();
                 // 걸러 낼 조건이 여럿 올 수 있다. 하나라도 맞으면 보낸다.
                 let filters: Vec<Value> = a.as_array().map(|x| x.iter().skip(2).take(10).cloned().collect()).unwrap_or_default();
-                let mut hits = peek(|v| {
-                    v.iter()
-                        .filter(|e| filters.iter().any(|f| matches(e, f)))
-                        .cloned()
-                        .collect::<Vec<Value>>()
-                });
+                let cap = filters
+                    .iter()
+                    .filter_map(|f| f.get("limit").and_then(Value::as_u64))
+                    .max()
+                    .unwrap_or(200)
+                    .min(500) as usize;
+                // 11-12 부하 시험: 맞는 것을 다 복사하던 것을 — 가리키기만 해서 새것부터 cap 개만 복사한다(잠금 시간이 짧아진다).
+                let mut hits = peek(|v| top_matches(v, &filters, cap));
                 {
                     let g = EPHEMERAL.lock().unwrap_or_else(|x| x.into_inner());
                     let cut = now_secs() - EPHEMERAL_TTL_SECS;
@@ -1271,19 +1335,13 @@ pub async fn serve(mut ws: WebSocket) {
                 }
                 // 최신이 먼저. 손님 화면이 첫 줄만 봐도 맞게.
                 hits.sort_by_key(|e| -(e.get("created_at").and_then(Value::as_i64).unwrap_or(0)));
-                let cap = filters
-                    .iter()
-                    .filter_map(|f| f.get("limit").and_then(Value::as_u64))
-                    .max()
-                    .unwrap_or(200)
-                    .min(500) as usize;
                 hits.truncate(cap);
+                // 11-12 부하 시험: 글마다 내보내기(flush)하지 않고 쌓았다가 EOSE 와 함께 한 번에 내보낸다.
                 for e in hits {
-                    let _ = ws
-                        .send(Message::Text(
-                            json!(["EVENT", sub, e]).to_string().into(),
-                        ))
-                        .await;
+                    let _ = futures_util::SinkExt::feed(&mut ws, Message::Text(
+                        json!(["EVENT", sub, e]).to_string().into(),
+                    ))
+                    .await;
                 }
                 // 🔴 EOSE 를 안 보내면 부르는 쪽이 **영원히 기다린다.**
                 let _ = ws
@@ -1339,6 +1397,94 @@ mod tests {
 
     /// 주인·저장소 전역값을 만지는 시험은 하나씩 돈다.
     static OWNER_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    /// 11-12 IP 당 상한: 21번째는 거절, 끊기면 자리가 돌아온다. 전달 머리말은 이 컴퓨터 안(터널)에서 온 연결에서만 믿는다.
+    #[test]
+    fn per_ip_slots_and_forwarded_headers_are_trusted_only_from_loopback() {
+        use super::*;
+        let ip: std::net::IpAddr = "203.0.113.7".parse().unwrap();
+        let held: Vec<IpSlot> = (0..MAX_CONNS_PER_IP).map(|_| IpSlot::take(ip).expect("자리")).collect();
+        assert!(IpSlot::take(ip).is_none(), "한 IP 가 상한을 넘었다");
+        assert!(IpSlot::take("203.0.113.8".parse().unwrap()).is_some(), "다른 IP 는 따로 센다");
+        drop(held);
+        assert!(IpSlot::take(ip).is_some(), "끊긴 자리가 안 돌아왔다");
+        let mut h = axum::http::HeaderMap::new();
+        h.insert("cf-connecting-ip", "198.51.100.9".parse().unwrap());
+        let lan: std::net::SocketAddr = "192.168.0.5:5000".parse().unwrap();
+        let lo: std::net::SocketAddr = "127.0.0.1:5000".parse().unwrap();
+        assert_eq!(client_ip(Some(lan), &h), Some(lan.ip()), "같은 와이파이가 꾸민 머리말을 믿었다");
+        assert_eq!(client_ip(Some(lo), &h), Some("198.51.100.9".parse().unwrap()), "터널 머리말");
+        assert_eq!(client_ip(Some(lo), &axum::http::HeaderMap::new()), None, "앱 자신은 IP 상한 밖");
+        assert!(MAX_CONNS >= 1000 && MAX_SUBS <= 16);
+    }
+
+    /// 11-12 부하 시험(손으로 돌린다): 이 컴퓨터 릴레이에 소켓 1000개를 **한꺼번에** 붙여 두고 동시에 REQ → EOSE 시간 p50/p95.
+    /// `cargo test --release --lib relay_load_1000 -- --ignored --nocapture`
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+    #[ignore]
+    async fn relay_load_1000() {
+        use super::*;
+        use futures_util::{SinkExt, StreamExt};
+        use tokio_tungstenite::tungstenite::Message as M;
+        let _g = OWNER_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        // 저장분 3000개(레이븐 이야기 글).
+        let now = now_secs();
+        let evs: Vec<Value> = (0..3000).map(|i| crate::shopkey::sign_with(&[(i % 200 + 1) as u8; 32], 1, json!([["t", "ravencoin"]]), &format!("글 {i}"), now - i as i64).unwrap()).collect();
+        *STORE.lock().unwrap() = Some(evs);
+        async fn up(ws: axum::extract::ws::WebSocketUpgrade) -> axum::response::Response {
+            use axum::response::IntoResponse;
+            ws.max_message_size(512 * 1024).on_upgrade(|s| serve_from(s, None)).into_response()
+        }
+        let app = axum::Router::new().route("/api/relay", axum::routing::get(up));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("ws://{}/api/relay", listener.local_addr().unwrap());
+        tokio::spawn(async move { axum::serve(listener, app.into_make_service_with_connect_info::<std::net::SocketAddr>()).await.unwrap() });
+        const N: usize = 1000;
+        let rss0 = rss_kb();
+        // ① 붙기(동시에).
+        let t = std::time::Instant::now();
+        let conns = futures_util::future::join_all((0..N).map(|_| { let u = url.clone(); async move {
+            let s = std::time::Instant::now();
+            let r = tokio_tungstenite::connect_async(u.as_str()).await.map(|(ws, _)| ws);
+            (r, s.elapsed())
+        }})).await;
+        let connect_all = t.elapsed();
+        let mut connect_ms: Vec<f64> = conns.iter().map(|(_, d)| d.as_secs_f64() * 1000.0).collect();
+        let mut socks: Vec<_> = conns.into_iter().filter_map(|(r, _)| r.ok()).collect();
+        let open = socks.len();
+        assert_eq!(OPEN_CONNS.load(std::sync::atomic::Ordering::SeqCst), open, "다 붙어 있어야 한다");
+        let rss1 = rss_kb();
+        // ② 1000곳이 동시에 REQ(최근 50개) → EOSE.
+        let t = std::time::Instant::now();
+        let res = futures_util::future::join_all(socks.iter_mut().enumerate().map(|(i, ws)| async move {
+            let s = std::time::Instant::now();
+            ws.send(M::Text(json!(["REQ", format!("s{i}"), {"kinds": [1], "#t": ["ravencoin"], "limit": 50}]).to_string().into())).await.ok()?;
+            let mut n = 0;
+            while let Some(Ok(m)) = ws.next().await {
+                let M::Text(t) = m else { continue };
+                if t.starts_with("[\"EOSE\"") { return Some((s.elapsed(), n)); }
+                n += 1;
+            }
+            None
+        })).await;
+        let req_all = t.elapsed();
+        let ok: Vec<_> = res.into_iter().flatten().collect();
+        assert!(ok.iter().all(|(_, n)| *n == 50));
+        let mut req_ms: Vec<f64> = ok.iter().map(|(d, _)| d.as_secs_f64() * 1000.0).collect();
+        let pct = |v: &mut Vec<f64>, p: f64| { v.sort_by(|a, b| a.partial_cmp(b).unwrap()); v[((v.len() as f64 - 1.0) * p).round() as usize] };
+        println!("[릴레이 부하] 연결 {open}/{N} (전부 {:.0}ms · 하나 p50 {:.1}ms p95 {:.1}ms) · REQ→EOSE {}/{open} (전부 {:.0}ms · p50 {:.1}ms p95 {:.1}ms) · 메모리 {}MB → {}MB",
+            connect_all.as_secs_f64() * 1000.0, pct(&mut connect_ms, 0.5), pct(&mut connect_ms, 0.95),
+            ok.len(), req_all.as_secs_f64() * 1000.0, pct(&mut req_ms, 0.5), pct(&mut req_ms, 0.95), rss0 / 1024, rss1 / 1024);
+        assert_eq!(open, N);
+        assert_eq!(ok.len(), N);
+        drop(socks);
+        *STORE.lock().unwrap() = Some(vec![]);
+    }
+
+    fn rss_kb() -> u64 {
+        std::process::Command::new("ps").args(["-o", "rss=", "-p", &std::process::id().to_string()]).output().ok()
+            .and_then(|o| String::from_utf8(o.stdout).ok()).and_then(|s| s.trim().parse().ok()).unwrap_or(0)
+    }
 
     /// 11-12 먼저 그리기 + 지운 글: 쓴 사람의 지우기 요청만 글을 지우고, 지운 글은 다시 받지도·보이지도 않는다. since·until 은 REQ 와 같다.
     #[test]

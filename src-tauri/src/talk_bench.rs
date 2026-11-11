@@ -72,7 +72,6 @@ async fn one_round(label: &str) {
         None => (0, 0),
     };
     let (send_ms, first) = send_first_outside().await;
-    #[cfg(not(feature = "bench-before"))]
     {
         // 「먼저 그리기」: 이 컴퓨터 릴레이 저장분(바깥에서 읽은 글을 둔 것)에서 곧바로.
         tokio::time::sleep(std::time::Duration::from_millis(300)).await; // absorb 가 뒤에서 끝나게
@@ -110,7 +109,6 @@ async fn one_round(label: &str) {
 #[ignore]
 async fn talk_speed_against_real_relays() {
     one_round("차가움 1").await;
-    #[cfg(not(feature = "bench-before"))]
     {
         // 앱을 켜면 warm_all 로 미리 붙는다 — 그 뒤 처음 여는 경우.
         tokio::time::sleep(std::time::Duration::from_secs(3)).await;

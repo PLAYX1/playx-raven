@@ -2613,8 +2613,16 @@ async fn api_order(
 }
 
 /// 릴레이로 붙는 자리. 웹소켓으로 올라탄다.
-async fn relay_upgrade(ws: axum::extract::ws::WebSocketUpgrade) -> impl IntoResponse {
-    ws.max_message_size(512 * 1024).max_frame_size(512 * 1024).on_upgrade(crate::relay::serve)
+async fn relay_upgrade(req: axum::extract::Request) -> axum::response::Response {
+    use axum::extract::FromRequestParts;
+    let (mut parts, _) = req.into_parts();
+    // 11-12 IP 당 상한(relay.rs client_ip) — 붙은 곳을 연결 정보와 (터널이면) 전달 머리말로 가린다.
+    let peer = parts.extensions.get::<axum::extract::ConnectInfo<std::net::SocketAddr>>().map(|c| c.0);
+    let ip = crate::relay::client_ip(peer, &parts.headers);
+    match axum::extract::ws::WebSocketUpgrade::from_request_parts(&mut parts, &()).await {
+        Ok(ws) => ws.max_message_size(512 * 1024).max_frame_size(512 * 1024).on_upgrade(move |s| crate::relay::serve_from(s, ip)).into_response(),
+        Err(e) => e.into_response(),
+    }
 }
 
 #[derive(serde::Deserialize)]

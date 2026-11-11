@@ -76,6 +76,9 @@ function ensureCard(): HTMLElement | null {
         <button class="ghost" id="rs-own-save">${copyHtml("저장")}</button>
         <button class="ghost" id="rs-own-clear">${copyHtml("지우기")}</button>
       </div>
+      <label class="check rs-switch"><span class="sx-txt"><b>${copyHtml("알림 지킴이")}</b>
+        <span class="meta">${copyHtml("늘 켜 둔 컴퓨터 한 대만 켜요. 큰 릴레이의 새 쪽지·방 글을 곧바로 알림 서버에 넘겨 폰 알림이 바로 울려요. 서명된 원본만 넘기고, 쪽지는 열지 않아요.")}</span></span>
+        <input type="checkbox" id="rs-push" role="switch" /></label>
     </details>`;
   page.append(card);
   (el("rs-on") as HTMLInputElement).addEventListener("change", (e) => void setSwitch({ enabled: (e.target as HTMLInputElement).checked }));
@@ -86,6 +89,11 @@ function ensureCard(): HTMLElement | null {
   el("rs-own-save")?.addEventListener("click", () => void setOwn((el("rs-own") as HTMLInputElement | null)?.value ?? ""));
   el("rs-own-clear")?.addEventListener("click", () => void setOwn(""));
   el("rs-k-check")?.addEventListener("click", () => void keeperCheckNow());
+  // 11-12 알림 지킴이(talk_push.rs) — 기본 꺼짐.
+  (el("rs-push") as HTMLInputElement).addEventListener("change", (e) => {
+    const box = e.target as HTMLInputElement;
+    void invoke<{ enabled: boolean }>("talk_push_set", { enabled: box.checked }).then((r) => { box.checked = !!r?.enabled; }, (err) => { box.checked = !box.checked; showErr(err); });
+  });
   el("rs-new")?.addEventListener("keydown", (e) => { if ((e as KeyboardEvent).key === "Enter") void addRelay(); });
   el("rs-list")?.addEventListener("click", (e) => {
     const b = (e.target as Element | null)?.closest?.("button[data-rs-remove]") as HTMLButtonElement | null;
@@ -254,6 +262,7 @@ function showErr(e: unknown) {
 
 async function refresh() {
   try { paint(await invoke<State>("relay_share_get")); } catch { /* 명령이 없는 판 — 카드만 남는다 */ }
+  try { const p = el("rs-push") as HTMLInputElement | null; if (p) p.checked = !!(await invoke<{ enabled: boolean }>("talk_push_get"))?.enabled; } catch { /* 없는 판 */ }
   void keeperRefresh();
 }
 
