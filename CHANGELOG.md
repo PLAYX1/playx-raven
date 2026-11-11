@@ -1,5 +1,15 @@
 # 변경 기록
 
+## 0.9.35
+
+### 한국어
+
+- **입력칸이 깔끔해졌습니다:** 글 쓰는 칸 아래에 뜨던 가로 막대를 없앴습니다. 긴 글은 다음 줄로 넘어가고, 칸은 쓴 만큼 자랍니다. 아주 길어질 때만 세로로 굴립니다.
+
+### English
+
+- **Cleaner message box:** the horizontal scrollbar under the message box is gone. Long text wraps and the box grows as you type; it only scrolls vertically when very long.
+
 ## 0.9.34
 
 ### 한국어
