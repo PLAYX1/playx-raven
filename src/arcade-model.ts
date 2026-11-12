@@ -10,7 +10,8 @@
  *   · 결제 직전 문서를 다시 확인하고(checkArcadeDoc) 나누기는 splitPrice(1%, 올림·먼지 1000) — 러스트 arcade_pay 가 한 번 더 나눠 맞춘다.
  */
 import { ARCADE_GENRES, ARCADE_GENRE_LABELS, arcadeSplit, verifyArcadeProduct, type ArcadeGenre, type ArcadeProductDoc } from "../core/creator/arcade-product";
-import { buildArcadeCatalog, type ChainAssetEntry, type CatalogItem } from "../core/creator/arcade-catalog";
+import { type ChainAssetEntry } from "../core/creator/arcade-catalog";
+import { mergeArcadeSources, parseArcadeHidden, type ArcadeSourceItem } from "../core/creator/arcade-listing";
 import { MARKET_FEE_ADDRESS } from "../core/creator/trade-primitives";
 
 export const ARCADE_SITE = "https://ravenvault.ex.erci.se";
@@ -28,6 +29,8 @@ export type ArcadeProduct = {
   sellerAddress: string;
   assetName?: string;
   verified: boolean;
+  /** 'verified' = 체인 RVLT/<가게> 자산(확인 판매자) · 'open' = Nostr 알림 쪽지(일반 판매자, 누구나 0 RVN 으로 올림). */
+  listing: "verified" | "open";
   minutes: number;
   genre: ArcadeGenre;
   /** 상품 문서가 있는 CID(체인 자산의 ipfs_hash) — 게임 길·결제 기록이 이것으로 묶인다. */
@@ -40,14 +43,14 @@ export type ArcadeProduct = {
 
 const shopOf = (d: ArcadeProductDoc) => d.assetName ? d.assetName.replace(/^RVLT\//, "").split(/[/#]/)[0] : `${d.seller.slice(0, 6)}…${d.seller.slice(-4)}`;
 
-/** 목록 한 줄(서명 확인 끝) → 화면이 받는 상품. docCid 는 확인의 닻이 된 체인 자산의 IPFS 해시. */
-export function productFromCatalogItem(item: CatalogItem, docCid: string): ArcadeProduct {
+/** 목록 한 줄(서명 확인 끝 — core mergeArcadeSources) → 화면이 받는 상품. docCid = 그 문서의 CID(체인 자산 ipfs_hash 또는 알림 쪽지 docCid). */
+export function productFromSourceItem(item: Pick<ArcadeSourceItem, "key" | "verified" | "listing" | "genre" | "docCid" | "verifiedDoc">): ArcadeProduct {
   const d = item.verifiedDoc.doc, price = Number(d.priceSats);
   if (!Number.isSafeInteger(price) || price < 0) throw new Error("arcade-price");
   return {
     id: item.key, title: d.title, description: d.description, priceSats: price, sellerName: shopOf(d), sellerAddress: d.payTo,
-    ...(d.assetName ? { assetName: d.assetName } : {}), verified: item.verified, minutes: d.x.arcade.minutes, genre: item.genre,
-    docCid, entry: d.entry, locked: !!d.lock?.paths.includes(d.entry), doc: d,
+    ...(d.assetName ? { assetName: d.assetName } : {}), verified: item.verified, listing: item.listing, minutes: d.x.arcade.minutes, genre: item.genre,
+    docCid: item.docCid, entry: d.entry, locked: !!d.lock?.paths.includes(d.entry), doc: d,
   };
 }
 
@@ -58,28 +61,32 @@ export function bytesOfBase64(b64: unknown): Uint8Array | null {
 }
 
 /**
- * 러스트 답 { assets:[{name, ipfsHash}], docs:{cid: base64} } → 상품 목록. 답의 모양을 믿지 않는다(틀린 칸은 버린다).
- * 서명이 맞고 「문서의 assetName = 그 자산」인 것만 확인 판매자. 확인되지 않은 문서는 이 길로는 들어오지 않는다(체인 자산이 닻).
+ * 러스트 답 { assets:[{name, ipfsHash}], docs:{cid: base64}, open:{ events:[…], docs:{cid: base64}, hidden } } → 상품 목록. 답의 모양을 믿지 않는다(틀린 칸은 버린다).
+ * 두 출처를 core mergeArcadeSources 로 합친다: 확인 판매자(체인 자산 → 문서, 「문서의 assetName = 그 자산」) 먼저, 그다음 일반 판매자
+ * (Nostr kind 31405 쪽지 — 겉봉투·판매자 서명·docHash·문서 서명을 모두 다시 확인). 숨김 목록은 일반 판매자에만. hide = 내가 신고한 게임(이 컴퓨터).
  */
-export function productsFromSources(raw: unknown): { items: ArcadeProduct[]; dropped: number } {
-  const r = raw && typeof raw === "object" ? raw as { assets?: unknown; docs?: unknown } : {};
+export function productsFromSources(raw: unknown, o: { now?: number; hide?: readonly string[] } = {}): { items: ArcadeProduct[]; dropped: number; openCount: number } {
+  const r = raw && typeof raw === "object" ? raw as { assets?: unknown; docs?: unknown; open?: unknown } : {};
   const assets: ChainAssetEntry[] = (Array.isArray(r.assets) ? r.assets : [])
     .filter((a): a is { name: string; ipfsHash?: unknown } => !!a && typeof a === "object" && typeof (a as any).name === "string")
     .map((a) => ({ name: a.name, ipfsHash: typeof a.ipfsHash === "string" ? a.ipfsHash : null }));
-  const docsByCid: Record<string, Uint8Array> = {};
-  if (r.docs && typeof r.docs === "object") {
-    for (const [cid, b64] of Object.entries(r.docs as Record<string, unknown>)) { const b = bytesOfBase64(b64); if (b) docsByCid[cid] = b; }
-  }
-  const cat = buildArcadeCatalog({ assets, docsByCid });
-  const cidOf = new Map<string, string>();
-  for (const a of assets) if (a.ipfsHash) cidOf.set(a.name, a.ipfsHash);
+  const bytesMap = (m: unknown) => {
+    const out: Record<string, Uint8Array> = {};
+    if (m && typeof m === "object") for (const [cid, b64] of Object.entries(m as Record<string, unknown>)) { const b = bytesOfBase64(b64); if (b) out[cid] = b; }
+    return out;
+  };
+  const open = r.open && typeof r.open === "object" ? r.open as { events?: unknown; docs?: unknown; hidden?: unknown } : {};
+  const merged = mergeArcadeSources({
+    assets, docsByCid: bytesMap(r.docs), listings: Array.isArray(open.events) ? open.events : [], listingDocs: bytesMap(open.docs),
+    hidden: parseArcadeHidden(open.hidden), ...(o.now ? { now: o.now } : {}),
+  });
+  const hide = new Set(o.hide ?? []);
   const items: ArcadeProduct[] = [];
-  for (const it of cat.items) {
-    const cid = it.verifiedBy ? cidOf.get(it.verifiedBy) : undefined;
-    if (!cid) continue;
-    try { items.push(productFromCatalogItem(it, cid)); } catch { /* 값이 틀린 문서는 그리지 않는다 */ }
+  for (const it of merged.items) {
+    if (hide.has(it.key)) continue;
+    try { items.push(productFromSourceItem(it)); } catch { /* 값이 틀린 문서는 그리지 않는다 */ }
   }
-  return { items, dropped: cat.dropped.length };
+  return { items, dropped: merged.dropped.length, openCount: merged.openCount };
 }
 
 /** 게임 시작 주소. 확인된 게임 길 아래의 https 주소만, 아니면 null(iframe 을 만들지 않는다). */

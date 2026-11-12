@@ -8,14 +8,19 @@
  *   → 다 되면 장터 목록(arcade-catalog 길)을 새로 읽는다.
  * 🔴 공개(IPFS)·소각(체인)은 ④ 를 지난 뒤에만. 그만두면 아무것도 나가지 않는다. 「보냈는지 모름」(SENT_UNKNOWN)이면 다시 올리는 단추를 살리지 않는다.
  * 🔴 판매자가 적은 글(제목·설명)은 번역하지 않는다(translate="no").
+ *
+ * 11-13 대표 승인 「누구나 0 RVN」: 첫 칸 = 「일반 판매자로 올리기」 — 체인 자산·소각 없음. 폴더·문서는 IPFS, 알림 쪽지(kind 31405)는 공개 릴레이
+ *   (길 = arcade-open.ts runOpenUpload). RVLT/<가게> 주인 표가 있으면 그 아래로 올려 「확인 판매자」가 된다(아래 옛 길 그대로).
+ *   내가 올린 일반 판매자 게임은 같은 화면에서 「고치기」(더 높은 판) · 「내리기」(내림 쪽지).
  */
 import { t, tf, copyHtml, setCopyText } from "./i18n";
-import { ARCADE_GENRES, ARCADE_GENRE_LABELS, arcadeSigningMessage, attachArcadeSignature, encodeArcadeProduct, type ArcadeGenre } from "../core/creator/arcade-product";
+import { ARCADE_GENRES, ARCADE_GENRE_LABELS, arcadeDocHash, arcadeSigningMessage, attachArcadeSignature, encodeArcadeProduct, type ArcadeGenre } from "../core/creator/arcade-product";
 import {
   PLACEHOLDER_CID, atomsOfRvnText, buildBody, checkFolder, entryCandidates, idFromTag, scanOf, sellerPlaces, suggestTag, targetName,
   type FolderScan, type Target,
 } from "./arcade-upload-rules";
 import type { ArcadeProduct } from "./arcade-model";
+import { publishListing, runOpenUpload, type OpenStep } from "./arcade-open";
 
 type Invoke = <T = any>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
 export interface UploadDeps { invoke: Invoke; ensureUnlocked: (why: string) => Promise<boolean>; errText: (e: unknown) => string }
@@ -37,10 +42,43 @@ export function paintUpload(host: HTMLElement, deps: UploadDeps, o: { existing: 
     `<div class="ar-up">` +
     `<p class="meta">${copyHtml("게임 폴더(index.html 이 든 폴더)를 고르면, 장터 「바로 해 보는 게임」에 올릴 수 있는지 먼저 살펴봐요. 확인하기 전에는 아무것도 공개되지 않아요.")}</p>` +
     `<div class="row"><button type="button" data-up-pick="1">${copyHtml("게임 폴더 고르기")}</button></div>` +
+    `<div data-up-mine="1"></div>` +
     `<div data-up-folder="1"></div><div data-up-form="1"></div><div data-up-step="1"></div>` +
     `</div>`;
   const $ = <T extends HTMLElement>(sel: string) => host.querySelector<T>(sel)!;
   $("[data-up-back]").onclick = () => { if (!busy) o.onBack(); };
+
+  const savedSeller = () => { try { return localStorage.getItem(SELLER_KEY) || ""; } catch { return ""; } };
+  /** 이 지갑이 올린 일반 판매자 게임(판매자 주소 = 이 화면이 기억한 판매 주소). */
+  const myOpen = () => { const me = savedSeller(); return me ? o.existing.filter((p) => p.listing === "open" && p.doc.seller === me) : []; };
+  paintMine();
+  function paintMine() {
+    const box = $("[data-up-mine]"), mine = myOpen();
+    if (!mine.length) { box.innerHTML = ""; return; }
+    box.innerHTML = `<div class="ar-up-mine"><h4>${copyHtml("내가 올린 일반 판매자 게임")}</h4><ul>` +
+      mine.map((p) => `<li><span translate="no">${esc(p.title)}</span> <span class="meta">${esc(tf("{0}판", p.doc.version))}</span>` +
+        `<button type="button" class="ghost" data-up-down="${esc(p.id)}">${copyHtml("내리기")}</button></li>`).join("") + `</ul><p class="meta" data-up-mine-say="1" role="status"></p></div>`;
+    box.querySelectorAll<HTMLButtonElement>("[data-up-down]").forEach((b) => { b.onclick = () => askDown(b.dataset.upDown || ""); });
+  }
+  function askDown(key: string) {
+    const p = myOpen().find((x) => x.id === key);
+    const say = $("[data-up-mine-say]");
+    if (!p || busy) return;
+    say.innerHTML = `<span class="ar-warn">${esc(tf("「{0}」을 내릴까요? 공개 릴레이에 「내림」 쪽지를 올려요. 체인 거래는 없어요(0 RVN).", p.title))}</span> ` +
+      `<button type="button" data-up-down-go="1">${copyHtml("내리기")}</button> <button type="button" class="ghost" data-up-down-stop="1">${copyHtml("그만두기")}</button>`;
+    say.querySelector<HTMLElement>("[data-up-down-stop]")!.onclick = () => { say.textContent = ""; };
+    say.querySelector<HTMLButtonElement>("[data-up-down-go]")!.onclick = async (e) => {
+      (e.currentTarget as HTMLButtonElement).disabled = true; busy = true;
+      try {
+        if (!(await deps.ensureUnlocked(t("게임을 내리려면 지갑을 열어야 합니다.")))) { busy = false; say.textContent = ""; return; }
+        setCopyText(say, () => t("내림 쪽지를 올리는 중…"));
+        await publishListing(deps.invoke, { seller: p.doc.seller, id: p.doc.id, version: p.doc.version, docCid: p.docCid, docHash: arcadeDocHash(p.doc), state: "removed" });
+        setCopyText(say, () => t("내렸어요. 몇 분 안에 장터에서 사라져요."));
+        o.onPublished();
+      } catch (err) { say.innerHTML = `<span class="danger">${esc(deps.errText(err))}</span>`; }
+      busy = false;
+    };
+  }
 
   // 가게 목록은 미리 읽는다(주인 표 RVLT/<가게>!).
   void deps.invoke<unknown>("owner_tokens").then((r) => { places = sellerPlaces(r); if (scan) paintForm(); }).catch(() => { places = { shops: [], products: [] }; });
@@ -70,13 +108,16 @@ export function paintUpload(host: HTMLElement, deps: UploadDeps, o: { existing: 
     $("[data-up-folder]").innerHTML =
       `<div class="ar-up-folder"><b translate="no">${esc(s.folder)}</b> · ${esc(tf("파일 {0}개 · {1}", s.files.length, fmtSize(total)))}</div>`;
     const tokens = places;
-    const shopOpts = tokens.shops.map((x) => `<option value="new:${esc(x)}">${esc(tf("새 게임 · RVLT/{0}#… (고유 자산)", x))}</option>`).join("") +
+    const openOpts = `<option value="open:new">${esc(t("새 게임 · 일반 판매자 (0 RVN · 자산 없음)"))}</option>` +
+      myOpen().map((p) => `<option value="open:update:${esc(p.id)}">${esc(tf("고치기 · {0} (일반 판매자 · 0 RVN)", p.title))}</option>`).join("");
+    const shopOpts = openOpts + tokens.shops.map((x) => `<option value="new:${esc(x)}">${esc(tf("새 게임 · RVLT/{0}#… (고유 자산)", x))}</option>`).join("") +
       tokens.products.map((x) => `<option value="update:${esc(x)}">${esc(tf("고치기 · {0} (재발행)", x))}</option>`).join("");
     const saved = (() => { try { return localStorage.getItem(SELLER_KEY) || ""; } catch { return ""; } })();
     $("[data-up-form]").innerHTML =
       `<div class="ar-up-form">` +
-      (tokens.shops.length || tokens.products.length ? "" :
-        `<p class="ar-note">${copyHtml("이 지갑에 RVLT 가게(RVLT/<가게>)의 주인 표가 없어요. 게임은 가게 아래 고유 자산으로 올라가요. 가게 자산은 RVLT! 주인 표로만 만들 수 있어서, 먼저 레이븐볼트에 가게 자산을 요청해 주세요.")}</p>`) +
+      `<p class="ar-note">${copyHtml(tokens.shops.length || tokens.products.length
+        ? "일반 판매자로 올리면 0 RVN 이에요. 내 RVLT 가게 아래로 올리면 「확인 판매자」 표시가 붙고 RVN 이 소각돼요."
+        : "가게 자산이 없어도 일반 판매자로 0 RVN 에 올릴 수 있어요. 장터에는 「일반 판매자」로 보여요. RVLT/<가게> 자산이 있으면 「확인 판매자」 표시가 붙어요.")}</p>` +
       `<label>${copyHtml("어디에 올릴까요")}<select data-up-target="1">${shopOpts}</select></label>` +
       `<label data-up-tagrow="1">${copyHtml("꼬리표 (# 뒤 영문 이름)")}<input data-up-tag="1" maxlength="20" autocomplete="off" spellcheck="false" placeholder="STAR_RUN" /></label>` +
       `<label>${copyHtml("게임 이름")}<input data-up-title="1" maxlength="80" autocomplete="off" translate="no" /></label>` +
@@ -92,7 +133,7 @@ export function paintUpload(host: HTMLElement, deps: UploadDeps, o: { existing: 
       `<div class="row"><button type="button" data-up-review="1">${copyHtml("확인하기")}</button></div>` +
       `</div>`;
     const target = $<HTMLSelectElement>("[data-up-target]");
-    const syncTag = () => { $("[data-up-tagrow]").hidden = !target.value.startsWith("new:"); };
+    const syncTag = () => { $("[data-up-tagrow]").hidden = !(target.value.startsWith("new:") || target.value === "open:new"); };
     target.onchange = syncTag; syncTag();
     const title = $<HTMLInputElement>("[data-up-title]"), tag = $<HTMLInputElement>("[data-up-tag]");
     title.oninput = () => { if (!tag.dataset.touched) tag.value = suggestTag(title.value); };
@@ -109,12 +150,74 @@ export function paintUpload(host: HTMLElement, deps: UploadDeps, o: { existing: 
     $("[data-up-review]").onclick = () => void review(recheck);
   }
 
+  /** 일반 판매자 길의 확인 칸 — 소각 없음 · 공개 IPFS · 공개 릴레이. 「읽었어요」 전에는 「올리기」가 잠긴다. */
+  function reviewOpen(tv: string, say: (k: string) => void) {
+    const step = $("[data-up-step]");
+    if (!scan) return;
+    const prior = tv.startsWith("open:update:") ? myOpen().find((p) => p.id === tv.slice(12)) : undefined;
+    if (tv.startsWith("open:update:") && !prior) { say("고칠 게임을 찾지 못했어요."); return; }
+    const tag = $<HTMLInputElement>("[data-up-tag]").value.trim();
+    if (!prior && !/^[A-Za-z0-9_]{1,20}$/.test(tag)) { say("꼬리표는 영문·숫자·밑줄로 적어 주세요."); return; }
+    const title = $<HTMLInputElement>("[data-up-title]").value.trim();
+    if (!title) { say("게임 이름을 적어 주세요."); return; }
+    const priceSats = atomsOfRvnText($<HTMLInputElement>("[data-up-price]").value || "0");
+    if (priceSats === null) { say("값은 숫자로 적어 주세요(예: 0.5)."); return; }
+    const minutes = Math.round(Number($<HTMLInputElement>("[data-up-min]").value));
+    const genre = $<HTMLSelectElement>("[data-up-genre]").value as ArcadeGenre;
+    const entry = $<HTMLSelectElement>("[data-up-entry]").value;
+    const description = $<HTMLTextAreaElement>("[data-up-desc]").value;
+    const id = prior ? prior.doc.id : idFromTag(tag);
+    const version = prior ? prior.doc.version + 1 : 1;
+    let seller = prior ? prior.doc.seller : "";
+    let payTo = $<HTMLInputElement>("[data-up-payto]").value.trim();
+    const probe = "R" + "1".repeat(33);
+    try { buildBody({ id, version, title, description, priceSats, seller: seller || payTo || probe, payTo: payTo || seller || probe, entry, cid: PLACEHOLDER_CID, files: scan.files, minutes, genre, assetName: "" }); }
+    catch (e) { if (!/arcade-address/.test(String(e))) { step.innerHTML = `<p class="danger">${esc(t("상품 문서 모양이 맞지 않아요."))} <span class="meta">${esc(String((e as Error)?.message ?? e))}</span></p>`; return; } }
+    const priceText = priceSats === "0" ? t("무료") : `${(Number(priceSats) / 1e8).toString()} RVN`;
+    step.innerHTML =
+      `<div class="ar-confirm" role="group">` +
+      `<h4>${copyHtml("올리기 전에 확인해 주세요")}</h4>` +
+      `<div class="kv"><b>${copyHtml("올리는 곳")}</b><span>${copyHtml("일반 판매자")} · <code translate="no">${esc(id)}</code>${prior ? ` · ${esc(tf("{0}판", version))}` : ""}</span></div>` +
+      `<div class="kv"><b>${copyHtml("게임 이름")}</b><span translate="no">${esc(title)}</span></div>` +
+      `<div class="kv"><b>${copyHtml("한 판 값")}</b><span>${esc(priceText)}</span></div>` +
+      `<div class="kv"><b>${copyHtml("소각")}</b><span><b>${copyHtml("없음 (0 RVN · 체인 거래 없음)")}</b></span></div>` +
+      `<p class="meta">${copyHtml("장터에는 「일반 판매자」로 보여요. 사는 사람은 첫 결제 전에 「일반 판매자 게임이에요」 안내를 봐요. 신고가 쌓이면 레이븐볼트가 숨길 수 있어요.")}</p>` +
+      `<p class="ar-warn">${copyHtml("「올리기」를 누르면 게임 폴더와 상품 문서가 공개 IPFS 에, 알림 쪽지가 공개 릴레이에 올라가요. 게임 파일은 이 컴퓨터가 지켜요 — 켜 두어야 사람들이 받을 수 있어요.")}</p>` +
+      `<label class="ar-agree"><input type="checkbox" data-up-agree="1" /> <span>${copyHtml("게임과 그 안의 그림·소리는 내가 팔 권리가 있는 것입니다.")} <b>${copyHtml("읽었어요")}</b></span></label>` +
+      `<div class="row"><button type="button" data-up-go="1" disabled>${copyHtml("올리기")}</button><button type="button" class="ghost" data-up-stop="1">${copyHtml("그만두기")}</button></div>` +
+      `<p class="meta" data-up-say="1" role="status"></p></div>`;
+    const go = $<HTMLButtonElement>("[data-up-go]"), stop = $<HTMLButtonElement>("[data-up-stop]"), sayEl = $("[data-up-say]");
+    $<HTMLInputElement>("[data-up-agree]").onchange = (e) => { go.disabled = !(e.target as HTMLInputElement).checked; };
+    stop.onclick = () => { step.innerHTML = ""; };
+    const words: Record<OpenStep, string> = { pin: "게임 폴더를 이 컴퓨터 IPFS 에 올리는 중…", sign: "상품 문서에 서명하는 중…", doc: "상품 문서를 IPFS 에 올리는 중…", listing: "알림 쪽지를 공개 릴레이에 올리는 중…", done: "" };
+    go.onclick = async () => {
+      if (busy || !scan) return;
+      busy = true; go.disabled = true; stop.disabled = true;
+      if (!(await deps.ensureUnlocked(t("게임을 올리려면 지갑을 열어야 합니다.")))) { busy = false; go.disabled = false; stop.disabled = false; return; }
+      try {
+        if (!seller) {
+          seller = savedSeller();
+          if (!seller) { seller = String(await deps.invoke<string>("new_address", { label: "arcade" })); try { localStorage.setItem(SELLER_KEY, seller); } catch { /* 없어도 된다 */ } }
+        }
+        if (!payTo) payTo = seller;
+        const r = await runOpenUpload(deps.invoke, { files: scan.files, id, version, title, description, priceSats, seller, payTo, entry, minutes, genre },
+          (st) => { if (words[st]) setCopyText(sayEl, () => t(words[st])); });
+        try { localStorage.setItem(SELLER_KEY, seller); } catch { /* 없어도 된다 */ }
+        step.innerHTML = `<p class="ok">${copyHtml("올렸어요. 몇 분 안에 장터 「바로 해 보는 게임」에 「일반 판매자」로 보여요.")}</p>` +
+          `<p class="meta ar-txid">${copyHtml("상품 문서")} <code translate="no">${esc(r.docCid)}</code></p>`;
+        busy = false;
+        o.onPublished();
+      } catch (e) { busy = false; go.disabled = false; stop.disabled = false; sayEl.innerHTML = `<span class="danger">${esc(deps.errText(e))}</span>`; }
+    };
+  }
+
   async function review(folderOk: () => boolean) {
     const step = $("[data-up-step]");
     const say = (k: string) => { step.innerHTML = `<p class="danger">${esc(t(k))}</p>`; };
     if (!scan || !folderOk()) { say("폴더 검사를 먼저 통과해야 해요."); return; }
     const tv = $<HTMLSelectElement>("[data-up-target]").value;
     if (!tv) { say("올릴 가게가 없어요."); return; }
+    if (tv.startsWith("open:")) { reviewOpen(tv, say); return; }
     const target: Target = tv.startsWith("new:") ? { mode: "new", shop: tv.slice(4), tag: $<HTMLInputElement>("[data-up-tag]").value.trim() } : { mode: "update", asset: tv.slice(7) };
     const tn = targetName(target);
     if (tn.problems.length) { step.innerHTML = `<p class="danger">${esc(tn.problems.map((p) => t(p)).join(" · "))}</p>`; return; }

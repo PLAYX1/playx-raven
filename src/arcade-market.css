@@ -88,3 +88,14 @@
 .ar-up-list.bad li { color: var(--danger); } .ar-up-list.warn li { color: var(--warn); }
 #sell-arcade { white-space: nowrap; flex-shrink: 0; margin-left: 6px; }
 @media (max-width: 860px) { .ar-up-two { grid-template-columns: 1fr; } }
+/* 11-13 일반 판매자: 신고 · 첫 결제 전 안내 · 내가 올린 일반 판매자 게임 */
+.ar-report-row { margin-top: 10px; }
+.ar-report { min-height: 36px; padding: 4px 12px; color: var(--muted); }
+.ar-open-notice h4 svg { width: 16px; height: 16px; flex: 0 0 auto; color: var(--warn); }
+.ar-open-notice h4 { display: flex; align-items: center; gap: 6px; }
+.ar-up-mine { border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; margin: 10px 0; }
+.ar-up-mine h4 { margin: 0 0 6px; font-size: 15px; }
+.ar-up-mine ul { list-style: none; margin: 0; padding: 0; }
+.ar-up-mine li { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+.ar-up-mine li > span:first-child { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ar-up-mine button { min-height: 34px; padding: 4px 12px; }

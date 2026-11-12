@@ -2,7 +2,7 @@
  * 장터 첫 화면 「바로 해 보는 게임」 줄 · 전체 목록(더 보기) · 게임 페이지 · 앱 창 안에서 하기 · 한 판 결제. (2026-11-12)
  *
  * 폰·웹 장터(phone/screens/ArcadeMarket.tsx · GamePage.tsx · GameHost.web.tsx)와 같은 규칙:
- *   · 카드에서 가장 큰 글은 값(사는 사람이 먼저 보는 것). 판매자 확인 여부는 색만이 아니라 글(「확인 판매자」·「판매자 미확인」)로도 말한다.
+ *   · 카드에서 가장 큰 글은 값(사는 사람이 먼저 보는 것). 판매자 확인 여부는 색만이 아니라 글(「확인 판매자」·「일반 판매자」)로도 말한다.
  *   · 장르 칩 = 「전체」 + 게임이 실제로 있는 장르만(둘 이상일 때만 줄을 그린다).
  *   · 게임은 앱 창 안 iframe — sandbox="allow-scripts" 만(같은 출처 권한·팝업·폼·최상위 이동 없음), referrerpolicy no-referrer, allow 비움.
  *     지갑은 iframe 의 메시지를 듣지 않는다 — 게임에는 결제 통로가 없다. 주소는 arcade-model gameUrl(확인된 게임 길 하나)뿐.
@@ -50,8 +50,18 @@ export function priceText(p: Pick<ArcadeProduct, "priceSats">): string {
 }
 const sellerLine = (p: ArcadeProduct) => p.verified
   ? `<span class="ar-ok">${ICON_CHECK}<span>${copyHtml("확인 판매자")}</span></span>`
-  : `<span class="ar-unv">${ICON_WARN}<span>${copyHtml("판매자 미확인")}</span></span>`;
-const cardLabel = (p: ArcadeProduct) => [p.title, priceText(p), t(p.verified ? "확인 판매자" : "판매자 미확인"), tf("{0} · 한 판", p.sellerName)].join(" · ");
+  : `<span class="ar-unv">${ICON_WARN}<span>${copyHtml("일반 판매자")}</span></span>`;
+const cardLabel = (p: ArcadeProduct) => [p.title, priceText(p), t(p.verified ? "확인 판매자" : "일반 판매자"), tf("{0} · 한 판", p.sellerName)].join(" · ");
+
+/* 이 컴퓨터에만 기억(비밀 아님): 내가 신고한 게임(곧바로 숨김) · 「일반 판매자 게임이에요」를 확인한 게임(첫 결제 전 한 번). */
+const HIDE_KEY = "rv-arcade-hidden-v1", NOTICE_KEY = "rv-arcade-noticed-v1";
+export function readKeys(k: string): string[] {
+  try { const v = JSON.parse(localStorage.getItem(k) || "[]"); return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && x.length <= 80).slice(-500) : []; } catch { return []; }
+}
+export function addKey(k: string, id: string): void { try { localStorage.setItem(k, JSON.stringify([...new Set([...readKeys(k), id])].slice(-500))); } catch { /* 없어도 된다 */ } }
+/** 유료 일반 판매자 게임이고 아직 안내를 확인하지 않았으면 true. */
+export const needsOpenNotice = (p: Pick<ArcadeProduct, "id" | "verified" | "priceSats">, noticed: readonly string[]) => !p.verified && p.priceSats > 0 && !noticed.includes(p.id);
+const REPORT_REASONS: [string, string][] = [["scam", "사기·돈만 받고 안 됨"], ["harmful", "나쁜 내용"], ["copy", "남의 게임을 베낌"], ["other", "기타"]];
 
 export function cardHtml(p: ArcadeProduct): string {
   return `<li><button type="button" class="ar-card" data-ar-open="${esc(p.id)}" aria-label="${esc(cardLabel(p))}">` +
@@ -83,7 +93,7 @@ export function mountArcade(page: HTMLElement, host: HTMLElement, deps: ArcadeDe
     try {
       const r = await deps.invoke<unknown>("arcade_catalog_sources");
       if (my !== seq) return;
-      items = sortProducts(productsFromSources(r).items);
+      items = sortProducts(productsFromSources(r, { hide: readKeys(HIDE_KEY) }).items);
       loadedAt = Date.now();
     } catch (e) {
       if (my !== seq) return;
@@ -102,7 +112,7 @@ export function mountArcade(page: HTMLElement, host: HTMLElement, deps: ArcadeDe
   };
   const emptyHtml = () =>
     `<div class="ar-empty" role="status"><p class="ar-empty-title">${copyHtml("아직 올라온 게임이 없어요")}</p>` +
-    `<p class="meta">${copyHtml("판매자가 게임을 공개 장부(RVLT)에 올리고 서명한 상품 문서를 붙이면 여기에 보여요. 예시 게임은 보여 드리지 않아요.")}</p></div>`;
+    `<p class="meta">${copyHtml("판매자가 서명한 게임을 올리면 여기에 보여요(누구나 0 RVN · RVLT 가게는 「확인 판매자」). 예시 게임은 보여 드리지 않아요.")}</p></div>`;
   const failHtml = () =>
     `<div class="ar-empty" role="status"><p class="ar-empty-title">${copyHtml("게임 목록을 읽지 못했어요")}</p>` +
     `<p class="meta">${esc(failed)}</p><div class="row"><button type="button" class="ghost" data-ar-reload="1">${copyHtml("다시 읽기")}</button></div></div>`;
@@ -148,7 +158,7 @@ export function mountArcade(page: HTMLElement, host: HTMLElement, deps: ArcadeDe
     box.innerHTML = !list.length ? emptyHtml()
       : !shown.length ? `<p class="meta" role="status">${copyHtml("찾는 게임이 없어요.")}</p>`
       : (ok.length ? `<h4>${copyHtml("레이븐볼트 확인 판매자")}</h4><ul class="ar-grid">${ok.map(cardHtml).join("")}</ul>` : "") +
-        (fresh.length ? `<h4>${copyHtml("새로 올라온 게임")}</h4><ul class="ar-grid">${fresh.map(cardHtml).join("")}</ul>` : "");
+        (fresh.length ? `<h4>${copyHtml("일반 판매자 게임")}</h4><ul class="ar-grid">${fresh.map(cardHtml).join("")}</ul>` : "");
     box.querySelectorAll<HTMLElement>("[data-ar-open]").forEach((b) => {
       b.onclick = () => { const p = items?.find((x) => x.id === b.dataset.arOpen); if (p) { current = p; cameFromAll = true; view = "game"; paint(); host.scrollIntoView({ block: "start" }); } };
     });
@@ -186,14 +196,71 @@ export function mountArcade(page: HTMLElement, host: HTMLElement, deps: ArcadeDe
       `<p class="meta"><span translate="no">${esc(p.sellerName)}</span>${p.assetName ? ` · <code translate="no">${esc(p.assetName)}</code>` : ""}</p>` +
       `<p class="meta">${esc(tf("{0} · 혼자 하기 · 약 {1}분", t(genreLabel(p.genre)), p.minutes))}</p>` +
       (p.description ? `<p class="ar-desc" translate="no">${esc(p.description)}</p>` : "") +
-      (!p.verified ? `<p class="ar-note">${copyHtml("레이븐볼트가 이 판매자를 확인하지 않았어요. 서명은 맞지만, 체인의 가게 자산이 이 게임을 가리키지 않아요.")}</p>` : "") +
+      (!p.verified ? `<p class="ar-note">${copyHtml("누구나 0 RVN 으로 올릴 수 있는 일반 판매자 게임이에요. 서명은 맞지만 레이븐볼트가 판매자를 확인하지 않았어요(RVLT 가게 자산 없음).")}</p>` : "") +
       `<p class="meta">${copyHtml(free ? "무료 게임이에요. 한 판마다 바로 시작해요." : "오락실처럼 한 판마다 넣는 게임이에요. 게임이 「한 판 넣기」를 물으면 그때마다 내가 확인해요. 미리 넣어 두는 돈은 없어요.")}</p>` +
       action +
       `<div data-ar-step="1"></div>` +
+      `<div class="row ar-report-row"><button type="button" class="ghost ar-report" data-ar-report="1">${copyHtml("신고")}</button></div>` +
+      `<div data-ar-report-box="1"></div>` +
       `</div></article>` +
       `<div class="ar-stage" data-ar-stage="1" hidden></div>`;
     wire();
-    host.querySelector<HTMLElement>("[data-ar-play]")?.addEventListener("click", (e) => void openGame(p, e.currentTarget as HTMLButtonElement));
+    host.querySelector<HTMLElement>("[data-ar-play]")?.addEventListener("click", (e) => {
+      const btn = e.currentTarget as HTMLButtonElement;
+      if (needsOpenNotice(p, readKeys(NOTICE_KEY))) askOpenNotice(p, () => void openGame(p, btn)); else void openGame(p, btn);
+    });
+    host.querySelector<HTMLElement>("[data-ar-report]")?.addEventListener("click", () => openReport(p));
+  }
+
+  /** 유료 일반 판매자 게임의 첫 결제 전 한 번 — 「일반 판매자 게임이에요」를 눌러 확인해야 연다. */
+  function askOpenNotice(p: ArcadeProduct, go: () => void) {
+    const step = host.querySelector<HTMLElement>("[data-ar-step]");
+    if (!step) return;
+    step.innerHTML = `<div class="ar-confirm ar-open-notice" role="alertdialog" aria-label="${esc(t("일반 판매자 게임이에요"))}">` +
+      `<h4>${ICON_WARN}<span>${copyHtml("일반 판매자 게임이에요")}</span></h4>` +
+      `<p class="meta">${copyHtml("레이븐볼트가 확인한 가게(RVLT 자산)가 아니라, 누구나 올릴 수 있는 일반 판매자 게임이에요. 서명은 맞지만 판매자를 확인하지 않았어요. 돈은 판매자에게 바로 가고 돌려받을 수 없어요.")}</p>` +
+      `<div class="row"><button type="button" data-ar-notice-ok="1">${copyHtml("알겠어요")}</button><button type="button" class="ghost" data-ar-notice-no="1">${copyHtml("그만두기")}</button></div></div>`;
+    step.querySelector<HTMLElement>("[data-ar-notice-no]")!.onclick = () => { step.innerHTML = ""; };
+    const ok = step.querySelector<HTMLButtonElement>("[data-ar-notice-ok]")!;
+    ok.onclick = () => { addKey(NOTICE_KEY, p.id); step.innerHTML = ""; go(); };
+    ok.focus();
+  }
+
+  /** 「신고」 — 「문제 알리기」와 같은 길(report_send → px_bug_reports, category counterparty). 공개 값만 싣는다. 보내면 이 컴퓨터에서 곧바로 숨긴다. */
+  function openReport(p: ArcadeProduct) {
+    const box = host.querySelector<HTMLElement>("[data-ar-report-box]");
+    if (!box) return;
+    let reason = "";
+    box.innerHTML = `<div class="ar-confirm" role="group" aria-label="${esc(t("신고 이유"))}"><h4>${copyHtml("신고 이유")}</h4>` +
+      `<div class="ar-chips">${REPORT_REASONS.map(([k, label]) => `<button type="button" data-ar-rep="${k}" aria-pressed="false">${copyHtml(label)}</button>`).join("")}</div>` +
+      `<p class="meta">${copyHtml("신고하면 이 게임은 내 화면에서 곧바로 숨겨져요. 레이븐볼트가 살펴보고 모두에게서 숨길 수 있어요.")}</p>` +
+      `<div class="row"><button type="button" data-ar-rep-go="1" disabled>${copyHtml("신고하기")}</button><button type="button" class="ghost" data-ar-rep-no="1">${copyHtml("취소")}</button></div>` +
+      `<p class="meta" data-ar-rep-say="1" role="status"></p></div>`;
+    const go = box.querySelector<HTMLButtonElement>("[data-ar-rep-go]")!, say = box.querySelector<HTMLElement>("[data-ar-rep-say]")!;
+    box.querySelectorAll<HTMLButtonElement>("[data-ar-rep]").forEach((b) => {
+      b.onclick = () => { reason = String(b.dataset.arRep); box.querySelectorAll("[data-ar-rep]").forEach((x) => x.setAttribute("aria-pressed", String(x === b))); go.disabled = false; };
+    });
+    box.querySelector<HTMLElement>("[data-ar-rep-no]")!.onclick = () => { box.innerHTML = ""; };
+    go.onclick = async () => {
+      if (!reason) return;
+      go.disabled = true;
+      setCopyText(say, () => t("보내는 중…"));
+      try {
+        const r = await deps.invoke<any>("report_send", {
+          title: `[오락실 신고] ${reason}`,
+          description: `[오락실 신고] ${reason} · ${p.verified ? "확인 판매자" : "일반 판매자"} · 게임 ${p.id}`,
+          category: "counterparty", screen: "arcade",
+          context: { kind: "arcade-report", reason, game: p.id, doc_cid: p.docCid, listing: p.listing, seller: p.doc.seller, lang: document.documentElement.lang || "" },
+          attachLog: false,
+        });
+        addKey(HIDE_KEY, p.id);
+        items = (items ?? []).filter((x) => x.id !== p.id);
+        session?.close();
+        view = cameFromAll ? "all" : "row"; current = null; paint();
+        const where = host.querySelector<HTMLElement>(".ar-head");
+        where?.insertAdjacentHTML("afterend", `<p class="ok" role="status">${esc(r?.sent ? t("신고했어요. 이 게임은 내 화면에서 숨겨졌어요.") : t("지금 인터넷이 안 닿아 이 컴퓨터에 넣어 뒀어요. 다음에 켤 때 저절로 가요. 이 게임은 내 화면에서 숨겨졌어요."))}</p>`);
+      } catch (e) { go.disabled = false; say.innerHTML = `<span class="danger">${esc(deps.errText(e))}</span>`; }
+    };
   }
 
   /** 지금 열린 게임 판(한 화면에 하나). 닫으면 듣기도 끝난다. */

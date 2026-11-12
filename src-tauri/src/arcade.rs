@@ -79,6 +79,16 @@ async fn fetch_doc(cid: &str) -> Option<Vec<u8>> {
     get_capped(&format!("{SITE}/g/{cid}/doc")).await
 }
 
+/// 일반 판매자 문서를 받아 볼 수(목록 상한 core ARCADE_LISTING_LIMITS.open 안).
+const OPEN_DOCS_MAX: usize = 40;
+const HIDDEN_MAX_BYTES: usize = 300_000;
+/// 플랫폼 숨김 목록(`GET {SITE}/api/chain/arcade-hidden`, 읽기 전용). 못 읽으면 Null — TS 는 빈 목록으로 본다(다 숨기지 않는다).
+async fn hidden_list() -> Value {
+    let Ok(r) = client().get(format!("{SITE}/api/chain/arcade-hidden")).send().await else { return Value::Null };
+    if !r.status().is_success() { return Value::Null; }
+    match r.bytes().await { Ok(b) if b.len() <= HIDDEN_MAX_BYTES => serde_json::from_slice(&b).unwrap_or(Value::Null), _ => Value::Null }
+}
+
 /// 공개 연결의 목록 답(`GET {SITE}/api/chain/arcade-assets` → `{assets:[{name, ipfs_hash}]}`) 크기 상한.
 const PUBLIC_LIST_MAX_BYTES: usize = 600_000;
 
@@ -134,14 +144,27 @@ pub async fn arcade_catalog_sources() -> Result<Value, String> {
         assets.push(json!({ "name": name, "ipfsHash": hash }));
     }
     let jobs = want.iter().map(|cid| async move { (cid.clone(), fetch_doc(cid).await) });
-    let got = futures_util::future::join_all(jobs).await;
+    // 일반 판매자(Nostr kind 31405) 쪽지 + 플랫폼 숨김 목록은 체인 문서와 한꺼번에 읽는다(느린 한 곳만큼만 기다린다).
+    let (got, listings, hidden) = futures_util::future::join3(futures_util::future::join_all(jobs), crate::arcade_listing::read_listings(), hidden_list()).await;
     let mut docs = serde_json::Map::new();
     for (cid, bytes) in got {
         if let Some(b) = bytes {
             docs.insert(cid, json!(base64::engine::general_purpose::STANDARD.encode(b)));
         }
     }
-    Ok(json!({ "assets": assets, "docs": docs, "source": source }))
+    // 일반 판매자 문서: 새 쪽지부터 OPEN_DOCS_MAX 개까지(확인 판매자보다 적게). 모양만 보고 받는다 — 믿는 것은 TS 가 두 서명·docHash 를 본 뒤.
+    let mut open_want: Vec<String> = Vec::new();
+    for e in &listings {
+        if let Some(c) = crate::arcade_listing::doc_cid_of(e) {
+            if open_want.len() < OPEN_DOCS_MAX && !open_want.contains(&c) && !docs.contains_key(&c) { open_want.push(c); }
+        }
+    }
+    let open_got = futures_util::future::join_all(open_want.iter().map(|cid| async move { (cid.clone(), fetch_doc(cid).await) })).await;
+    let mut open_docs = serde_json::Map::new();
+    for (cid, bytes) in open_got {
+        if let Some(b) = bytes { open_docs.insert(cid, json!(base64::engine::general_purpose::STANDARD.encode(b))); }
+    }
+    Ok(json!({ "assets": assets, "docs": docs, "source": source, "open": { "events": listings, "docs": open_docs, "hidden": hidden } }))
 }
 
 /// 게임 시작 파일을 지금 받을 수 있나. 공유 사이트가 문서 sha256·크기를 맞춰 내주는 길(`/arcade/ipfs/<문서 CID>/<시작 파일>`).

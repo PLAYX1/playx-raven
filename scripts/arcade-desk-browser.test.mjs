@@ -107,6 +107,9 @@ async function openMarket({ width, theme = 'light', sources, scan = UP_SCAN }) {
       if (command === 'sign_message') { up.push([command, args.address]); return { address: args.address, message: args.message, signature: await window.__signTest(args.message) }; }
       if (command === 'ipfs_add_file') { up.push([command, args.file.name]); return { cid: 'Qm' + '4'.repeat(44), name: args.file.name, size: args.file.bytes.length }; }
       if (command === 'issue_asset') { up.push([command, args]); return { txid: 'cd'.repeat(32) }; }
+      if (command === 'arcade_listing_pubkey') { up.push([command]); return 'e'.repeat(64); }
+      if (command === 'arcade_listing_publish') { up.push([command, JSON.parse(args.content)]); return { published: 1 }; }
+      if (command === 'report_send') { up.push([command, args]); return { sent: true }; }
       if (command === 'arcade_catalog_sources') return structuredClone(src);
       if (command === 'arcade_entry_reachable') return true;
       if (command === 'market_browse') return [];
@@ -219,6 +222,9 @@ for (const width of [1120, 1440]) {
     await page.click('#ar-host [data-up-pick]');
     await page.waitForSelector('#ar-host [data-up-review]');
     assert.match(await page.$eval('#ar-host [data-up-check]', e => e.textContent), /폴더 검사를 통과했어요/);
+    // 첫 칸은 「일반 판매자(0 RVN)」 — 확인 판매자 길은 내 가게를 골라야 한다.
+    assert.equal(await page.$eval('#ar-host [data-up-target]', e => e.value), 'open:new');
+    await page.select('#ar-host [data-up-target]', 'new:TESTARCADE');
     await page.type('#ar-host [data-up-title]', 'Star Run');
     assert.equal(await page.$eval('#ar-host [data-up-tag]', e => e.value), 'STAR_RUN');
     await page.type('#ar-host [data-up-price]', '0.5');
@@ -259,5 +265,99 @@ for (const width of [1120, 1440]) {
     assert.equal(await page.$('#ar-host [data-up-go]'), null, '확인 칸이 열리지 않는다');
     await shot(page, `upload/upload-blocked-${width}-dark.png`);
     await page.close();
+  });
+}
+
+
+// ── 11-13 일반 판매자(0 RVN) ─────────────────────────────────────────────
+const OPEN_KEY = A.secp256k1.utils.randomPrivateKey(), OPEN_SELLER = A.addressOfPublicKey(A.secp256k1.getPublicKey(OPEN_KEY, true));
+const OPEN_NOSTR = A.schnorr.utils.randomPrivateKey();
+const openDoc = A.signArcadeProductForTest({ format: 'rv-arcade-product', v: 1, kind: 'arcade-game', id: 'apple-catch', version: 1, title: 'Apple Catch', description: 'Test document signed with a throwaway key.',
+  priceSats: '10000000', seller: OPEN_SELLER, payTo: OPEN_SELLER, feeBps: A.ARCADE_FEE_BPS, entry: 'index.html', cid: cidOf(9),
+  files: [{ path: 'index.html', sha256: A.sha256Hex(A.utf8('h')), size: 1 }], x: { arcade: { mode: 'solo', network: 'none', minutes: 2, genre: 'casual' } } }, OPEN_KEY);
+const OPEN_CID = 'Qm' + '5'.repeat(44);
+const openEvent = A.signArcadeListingForTest({ seller: OPEN_SELLER, id: 'apple-catch', version: 1, docCid: OPEN_CID, docHash: A.arcadeDocHash(openDoc), at: Math.floor(Date.now() / 1000) - 60, state: 'open' }, OPEN_KEY, OPEN_NOSTR);
+const BOTH = { ...FULL, open: { events: [openEvent], docs: { [OPEN_CID]: Buffer.from(A.encodeArcadeProduct(openDoc)).toString('base64') }, hidden: { format: 'rv-arcade-hidden', v: 1, games: [], sellers: [], docs: [] } } };
+
+for (const width of [1120, 1440]) {
+  test(`일반 판매자 ${width}: 「일반 판매자」 글 · 첫 결제 전 한 번 안내 · 신고하면 곧바로 숨김`, async () => {
+    for (const theme of ['light', 'dark']) {
+      const page = await openMarket({ width, theme, sources: BOTH });
+      assert.equal(await page.$$eval('#ar-host .ar-row .ar-card', l => l.length), 4);
+      const last = await page.$eval('#ar-host .ar-row li:last-child', e => e.textContent);
+      assert.match(last, /Apple Catch/); assert.match(last, /일반 판매자/);
+      await page.click('#ar-host [data-ar-more]');
+      await page.waitForSelector('#ar-host [data-ar-all] .ar-grid');
+      const heads = await page.$$eval('#ar-host [data-ar-all] h4', l => l.map(h => h.textContent));
+      assert.deepEqual(heads, ['레이븐볼트 확인 판매자', '일반 판매자 게임']);
+      await shot(page, `desktop-open-all-${width}-${theme}.png`);
+      await page.click('#ar-host [data-ar-open$="/apple-catch"]');
+      await page.waitForSelector('#ar-host [data-ar-play]');
+      assert.match(await page.$eval('#ar-host .ar-page', e => e.textContent), /누구나 0 RVN 으로 올릴 수 있는 일반 판매자 게임이에요/);
+      await page.click('#ar-host [data-ar-play]');
+      await page.waitForSelector('#ar-host .ar-open-notice [data-ar-notice-ok]');
+      assert.equal(await page.$('#ar-host iframe.ar-frame'), null, '안내를 확인하기 전에는 게임을 열지 않는다');
+      assert.deepEqual(await noWrapButtons(page), []);
+      assert.ok(await overflowX(page) <= 1);
+      await shot(page, `desktop-open-notice-${width}-${theme}.png`);
+      await page.click('#ar-host [data-ar-notice-ok]');
+      await page.waitForSelector('#ar-host iframe.ar-frame');
+      assert.ok((await page.$eval('#ar-host iframe.ar-frame', f => f.src)).startsWith(A.ARCADE_LINK_BASE + OPEN_CID + '/'));
+      await page.click('#ar-host [data-ar-close]');
+      // 두 번째로 열면 안내 없이 바로
+      await page.click('#ar-host [data-ar-play]');
+      await page.waitForSelector('#ar-host iframe.ar-frame');
+      await page.click('#ar-host [data-ar-close]');
+      // 신고
+      await page.click('#ar-host [data-ar-report]');
+      await page.waitForSelector('#ar-host [data-ar-rep="scam"]');
+      assert.equal(await page.$eval('#ar-host [data-ar-rep-go]', b => b.disabled), true);
+      await page.click('#ar-host [data-ar-rep="scam"]');
+      assert.deepEqual(await noWrapButtons(page), []);
+      await page.$eval('#ar-host [data-ar-report-box]', e => e.scrollIntoView());
+      await shot(page, `desktop-open-report-${width}-${theme}.png`);
+      await page.click('#ar-host [data-ar-rep-go]');
+      await page.waitForFunction(() => /이 게임은 내 화면에서 숨겨졌어요/.test(document.querySelector('#ar-host').textContent));
+      const rep = (await page.evaluate(() => window.__upCalls)).find(c => c[0] === 'report_send')[1];
+      assert.equal(rep.category, 'counterparty'); assert.equal(rep.context.game, `${OPEN_SELLER}/apple-catch`); assert.equal(rep.context.listing, 'open'); assert.equal(rep.attachLog, false);
+      assert.ok(!(await page.$eval('#ar-host', e => e.textContent)).includes('Apple Catch'), '신고한 게임은 곧바로 사라진다');
+      assert.deepEqual(page.__errors ?? [], []);
+      await page.close();
+    }
+  });
+
+  test(`일반 판매자로 올리기 ${width}: 0 RVN · 체인 명령 없음 · 알림 쪽지 · 어둡게도`, async () => {
+    for (const theme of ['light', 'dark']) {
+      const page = await openMarket({ width, theme, sources: { assets: [], docs: {} } });
+      await page.click('#ar-host [data-ar-upload]');
+      await page.waitForSelector('#ar-host [data-up-pick]');
+      await page.click('#ar-host [data-up-pick]');
+      await page.waitForSelector('#ar-host [data-up-review]');
+      assert.equal(await page.$eval('#ar-host [data-up-target]', e => e.value), 'open:new');
+      await page.type('#ar-host [data-up-title]', 'Star Run');
+      await page.type('#ar-host [data-up-price]', '0.5');
+      await shot(page, `desktop-open-upload-form-${width}-${theme}.png`);
+      await page.click('#ar-host [data-up-review]');
+      await page.waitForSelector('#ar-host [data-up-go]');
+      const box = await page.$eval('#ar-host .ar-confirm', e => e.textContent);
+      assert.match(box, /일반 판매자/); assert.match(box, /없음 \(0 RVN · 체인 거래 없음\)/); assert.match(box, /켜 두어야/);
+      assert.equal(await page.$eval('#ar-host [data-up-go]', b => b.disabled), true, '「읽었어요」 전에는 잠김');
+      assert.deepEqual(await noWrapButtons(page), []);
+      assert.ok(await overflowX(page) <= 1);
+      await page.$eval('#ar-host .ar-confirm', e => e.scrollIntoView());
+      await shot(page, `desktop-open-upload-confirm-${width}-${theme}.png`);
+      await page.click('#ar-host [data-up-agree]');
+      await page.click('#ar-host [data-up-go]');
+      await page.waitForFunction(() => /올렸어요/.test(document.querySelector('#ar-host [data-up-step]').textContent), { timeout: 8000 });
+      const calls = await page.evaluate(() => window.__upCalls);
+      assert.deepEqual(calls.map(c => c[0]).filter(c => c !== 'new_address'), ['arcade_pick_folder', 'arcade_pin_folder', 'sign_message', 'ipfs_add_file', 'arcade_listing_pubkey', 'sign_message', 'arcade_listing_publish']);
+      const content = calls.find(c => c[0] === 'arcade_listing_publish')[1];
+      assert.deepEqual([content.kind, content.id, content.version, content.docCid, content.state, content.seller], ['rv.arcade-listing/1', 'star-run', 1, 'Qm' + '4'.repeat(44), 'open', UP_SELLER]);
+      assert.ok(!calls.some(c => ['issue_asset', 'reissue'].includes(c[0])));
+      await page.$eval('#ar-host [data-up-step]', e => e.scrollIntoView());
+      await shot(page, `desktop-open-upload-done-${width}-${theme}.png`);
+      assert.deepEqual(page.__errors ?? [], []);
+      await page.close();
+    }
   });
 }
