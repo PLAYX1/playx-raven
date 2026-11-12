@@ -1,5 +1,15 @@
 # 변경 기록
 
+## 0.9.37
+
+### 한국어
+
+- **처음 블록을 받는 동안 컴퓨터가 잠들지 않습니다:** 「돕기」·「지갑」으로 처음 깔아도, 블록을 다 받을 때까지는 이 컴퓨터가 잠들지 않게 붙잡고 다 받으면 저절로 놓습니다. 윈도우 절전 설정을 바꾸지 않아도 됩니다. 화면은 꺼져도 괜찮습니다.
+
+### English
+
+- **The computer stays awake during the first chain download:** even in Help or Wallet mode, RavenVault keeps the computer from sleeping until the first block download finishes, then lets go automatically. No need to change power settings; the screen may still turn off.
+
 ## 0.9.36
 
 ### 한국어
