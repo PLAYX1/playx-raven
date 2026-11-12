@@ -43,6 +43,16 @@ for (const m of ts.matchAll(/"((?:[^"\\]|\\.)*)"/g)) {
   if (HANGUL.test(s) && !groups.has(s) && !SKIP.has(s)) want.add(norm(s));
 }
 
+// 2b) tailscale-fixed.ts — 테일스케일 고정 주소의 걸음마다 할 말·단추(라비도 같은 말을 한다).
+//     정규식(/…/) 안의 한국어는 화면 글이 아니라 알아듣는 말이라 뺀다.
+const tsf = read('src/tailscale-fixed.ts').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '').replace(/\s\/\/ .*$/gm, '');
+for (const m of tsf.matchAll(/"((?:[^"\\]|\\.)*)"/g)) if (HANGUL.test(m[1])) want.add(norm(m[1]));
+// 2c) tailscale.rs 가 화면에 그대로 내는 오류
+for (const s of ['테일스케일이 이 컴퓨터에 없어요.', '열 주소가 아직 없어요. 다시 눌러 주세요.']) {
+  assert.ok(read('src-tauri/src/tailscale.rs').includes(s), `tailscale.rs 에 ${s} 가 없다`);
+  want.add(s);
+}
+
 // 3) main.ts 의 지도 줄 · 4) map_format.rs 검사 문구(화면에 그대로 뜬다)
 const main = read('src/main.ts');
 for (const s of ['지도: 올림', '지도: 안 올림']) { assert.ok(main.includes(`"${s}"`), `main.ts 에 ${s} 가 없다`); want.add(s); }

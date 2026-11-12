@@ -9,6 +9,7 @@
  * 🔴 라비는 **준비만** 한다(prepare). 게시는 사장이 [올리기]를 눌러야 한다.
  */
 import { setCopyText, t, tf } from "./i18n";
+import { TS_FILLED_SAY, TS_OFF_SAY, TS_PUBLISHED_SAY, TS_STEP, TS_TIMEOUT_SAY, isFixedTsUrl, isTemporaryUrl, runFixedAddress, type TsOpen, type TsResult } from "./tailscale-fixed";
 
 type Invoke = <T = any>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
 
@@ -88,9 +89,13 @@ export type MapCard = {
   prepare(a: { name?: unknown; category?: unknown; area?: unknown }): { ok: boolean; message: string };
   /** 「영업 중」/「지금 닫기」를 바꾼 뒤 — 저장이 끝난 다음 신호를 바로 보낸다. */
   openChanged(): void;
+  /** [테일스케일로 고정 주소 만들기] — 단추와 라비가 같이 쓴다. `say` 가 있으면 걸음마다 그 말을 라비도 한다. */
+  makeFixed(say?: (text: string, open?: { target: TsOpen; label: string }) => void): Promise<void>;
+  /** 테일스케일 가게 문 끄기. 끝나면 할 말(한국어 원문). */
+  fixedOff(): Promise<string>;
 };
 
-export function wireMapCard(deps: { invoke: Invoke; showShop: () => void }): MapCard {
+export function wireMapCard(deps: { invoke: Invoke; showShop: () => void; onTemporary?: () => void }): MapCard {
   const $ = (id: string) => document.getElementById(id);
   const card = $("mp-card");
   const nameEl = $("mp-name") as HTMLInputElement | null;
@@ -171,9 +176,13 @@ export function wireMapCard(deps: { invoke: Invoke; showShop: () => void }): Map
     if (go) go.disabled = problems.length > 0;
     paintPreview(r?.preview ?? {});
     const url = String(r?.preview?.shopUrl ?? "");
-    if (r?.temporary_url) {
-      say("mp-urlnote", () => t("임시 주소예요 — 재시작마다 바뀌어 지도에서 열리지 않아요. 켜져 있는 동안은 바뀐 주소로 다시 올리지만, 그 사이 손님은 헛걸음해요. 고정 이름 터널(내 도메인)을 쓰세요."), "warn");
+    // 🔴 테일스케일 퍼널 주소(…ts.net)는 고정 주소다 — 임시 주소 경고를 띄우지 않는다.
+    const temporary = !!r?.temporary_url && isTemporaryUrl(url);
+    const fixedTs = isFixedTsUrl(url);
+    if (temporary) {
+      say("mp-urlnote", () => t("임시 주소예요 — 재시작마다 바뀌어 지도에서 열리지 않아요. 켜져 있는 동안은 바뀐 주소로 다시 올리지만, 그 사이 손님은 헛걸음해요. 아래 [테일스케일로 고정 주소 만들기]를 눌러 보세요."), "warn");
       ($("mp-fixed") as HTMLElement | null)?.removeAttribute("hidden");
+      deps.onTemporary?.();
     } else if (!url) {
       say("mp-urlnote", () => t("가게 링크가 없으면 지도에는 보이지만 손님이 가게를 열 수 없어요. 「바깥 연결」을 켜거나 고정 주소를 넣어 주세요."), "warn");
       ($("mp-fixed") as HTMLElement | null)?.removeAttribute("hidden");
@@ -181,6 +190,11 @@ export function wireMapCard(deps: { invoke: Invoke; showShop: () => void }): Map
       say("mp-urlnote", () => t("고정 주소예요. 손님 지도의 [가게 열기]가 이 주소를 엽니다."));
       ($("mp-fixed") as HTMLElement | null)?.setAttribute("hidden", "");
     }
+    // 고정 주소를 이미 쓰면 [만들기]는 숨기고, 테일스케일 주소면 [끄기]를 보인다.
+    const tsGo = $("mp-ts-go") as HTMLButtonElement | null;
+    if (tsGo) tsGo.hidden = !!url && !temporary;
+    const tsOff = $("mp-ts-off") as HTMLButtonElement | null;
+    if (tsOff) tsOff.hidden = !fixedTs;
     const useTunnel = $("mp-usetunnel") as HTMLButtonElement | null;
     if (useTunnel) useTunnel.hidden = !tunnelUrl || tunnelUrl === url;
   }
@@ -296,8 +310,88 @@ export function wireMapCard(deps: { invoke: Invoke; showShop: () => void }): Map
     setInterval(() => { if (!document.hidden) void paintState(); }, 60_000);
   }
 
+  // ── 테일스케일 고정 주소 ─────────────────────────────────────────────
+  let tsOpen: { target: TsOpen; label: string } | undefined;
+  function paintTsStep(text: string, cls = "", open?: { target: TsOpen; label: string }) {
+    say("mp-ts-note", () => t(text), cls);
+    tsOpen = open;
+    const next = $("mp-ts-next") as HTMLButtonElement | null;
+    if (next) {
+      next.hidden = !open;
+      if (open) setCopyText(next, () => t(open.label));
+    }
+  }
+
+  async function makeFixed(sayToo?: (text: string, open?: { target: TsOpen; label: string }) => void) {
+    const go = $("mp-ts-go") as HTMLButtonElement | null;
+    if (go) go.disabled = true;
+    const tell = (text: string, cls = "", open?: { target: TsOpen; label: string }) => {
+      paintTsStep(text, cls, open);
+      sayToo?.(t(text), open);
+    };
+    try {
+      const end = await runFixedAddress(deps.invoke, (r: TsResult) => {
+        const step = TS_STEP[r.state];
+        if (r.state === "ready") return; // 아래에서 주소와 함께 말한다
+        tell(step.say, r.state === "failed" || r.state === "not_answering" ? "bad" : "warn", step.open);
+      });
+      if (end === null) return; // 이미 돌고 있다
+      if (end === "timeout") return tell(TS_TIMEOUT_SAY, "warn");
+      if (end.state !== "ready" || !isFixedTsUrl(end.url)) return;
+      const url = String(end.url);
+      // 가게 링크 칸에 넣는다. 이미 지도에 올린 가게면 Rust 가 새 주소로 다시 올렸다(map.rs adopt_fixed_shop_url).
+      if (urlEl) urlEl.value = url;
+      const tail = end.published ? TS_PUBLISHED_SAY : TS_FILLED_SAY;
+      paintTsStep(TS_STEP.ready.say, "good");
+      say("mp-ts-note", () => `${t(TS_STEP.ready.say)} ${t(tail)}`, "good");
+      // 주소는 따로 한 줄(번역하지 않는다).
+      const note = $("mp-ts-note");
+      if (note) {
+        const u = document.createElement("div");
+        u.setAttribute("translate", "no");
+        u.textContent = url;
+        note.append(u);
+      }
+      sayToo?.(`${t(TS_STEP.ready.say)} ${t(tail)} ${url}`);
+      await check();
+      await paintState();
+      if (!end.published) {
+        $("mp-go")?.classList.add("flash");
+        setTimeout(() => $("mp-go")?.classList.remove("flash"), 4000);
+      }
+      window.dispatchEvent(new Event("rv-map-changed"));
+    } finally {
+      if (go) go.disabled = false;
+    }
+  }
+
+  async function fixedOff(): Promise<string> {
+    try {
+      await deps.invoke("tailscale_funnel_off");
+      paintTsStep(TS_OFF_SAY, "warn");
+      return TS_OFF_SAY;
+    } catch (e) {
+      const m = String((e as Error)?.message ?? e);
+      paintTsStep(m, "bad");
+      return m;
+    }
+  }
+
+  if (card) {
+    $("mp-ts-go")?.addEventListener("click", () => void makeFixed());
+    $("mp-ts-next")?.addEventListener("click", () => {
+      if (tsOpen) void deps.invoke("tailscale_open", { target: tsOpen.target }).catch((e) => paintTsStep(String((e as Error)?.message ?? e), "bad"));
+    });
+    $("mp-ts-off")?.addEventListener("click", async () => {
+      if (!confirm(t("테일스케일 가게 문을 닫을까요? 이 주소로는 손님이 못 들어와요."))) return;
+      await fixedOff();
+    });
+  }
+
   return {
     refresh,
+    makeFixed,
+    fixedOff,
     prepare(a) {
       const name = typeof a.name === "string" ? a.name.trim().slice(0, 40) : "";
       const cat = MAP_CATEGORIES.find((c) => c.key === a.category);

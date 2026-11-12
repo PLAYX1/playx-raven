@@ -2766,6 +2766,9 @@
       .mpcard .meta.bad { color: var(--danger); } .mpcard .meta.warn { color: var(--warn); } .mpcard .meta.good { color: var(--ok); }
       .mpcard .mpactions { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
       .mpcard [hidden] { display: none !important; }
+      .mpcard .mpactions button { white-space: nowrap; flex-shrink: 0; }
+      .mpcard .mpts { margin-top: 10px; } .mpcard .mpts .mpactions { margin-top: 8px; }
+      .mpcard #mp-ts-note { margin-top: 6px; }
       /* 11-08 애플 결: 머리띠는 반투명 유리 — 아래 글이 흐리게 비친다. 선은 글이 밑으로 지나갈 때만 보인다(scroll edge). */
       @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
         .desktop-header { background: color-mix(in srgb, var(--panel) 72%, transparent);
@@ -5050,9 +5053,23 @@
             <input id="mp-url" placeholder="https://" autocomplete="off" />
             <div class="meta" id="mp-urlnote"></div>
             <button type="button" class="ghost" id="mp-usetunnel" hidden>지금 바깥 연결 주소 넣기</button>
+            <!-- 11-12 테일스케일 퍼널 = 도메인 없이 바뀌지 않는 주소(tailscale.rs · tailscale-fixed.ts). 클라우드플레어는 둘째 길. -->
+            <div class="mpts" id="mp-ts">
+              <div class="mpactions">
+                <button type="button" id="mp-ts-go">테일스케일로 고정 주소 만들기</button>
+                <button type="button" class="ghost" id="mp-ts-next" hidden>열기</button>
+                <button type="button" class="ghost" id="mp-ts-off" hidden>끄기</button>
+              </div>
+              <div class="meta" id="mp-ts-note" aria-live="polite"></div>
+            </div>
             <details id="mp-fixed" hidden>
-              <summary>고정 이름 터널 만드는 법</summary>
-              <p class="meta">임시 주소(…trycloudflare.com)는 앱이나 터널을 다시 켤 때마다 바뀝니다. 내 도메인이 있으면 Cloudflare 의 「이름 있는 터널」로 주소를 고정할 수 있습니다: ① cloudflared tunnel login ② cloudflared tunnel create 가게이름 ③ cloudflared tunnel route dns 가게이름 shop.내도메인 ④ 그 터널을 이 컴퓨터의 8790 포트로 연결 ⑤ https://shop.내도메인 을 위 「가게 링크」에 넣기. 어려우시면 「문제 알리기」로 물어 주세요.</p>
+              <summary>고정 주소 만드는 법</summary>
+              <p class="meta mpsafe">바깥에 열리는 것은 가게 문(8790) 하나뿐이에요. 지갑과 복구 단어는 밖으로 나가지 않아요. 테일스케일 계정에는 꼭 「2단계 인증」을 켜 두세요.</p>
+              <p class="meta"><b>첫째 — 테일스케일 퍼널 (추천 · 내 도메인이 없어도 돼요)</b></p>
+              <p class="meta">위 [테일스케일로 고정 주소 만들기]를 누르면 앱이 차례대로 해 드려요. 직접 하실 때는: ① 테일스케일을 깔고 로그인 ② 퍼널(Funnel)을 한 번 허락 ③ 터미널에서 tailscale funnel --bg 8790 ④ 나온 https://….ts.net 주소를 위 「가게 링크」에 넣기.</p>
+              <p class="meta">보통 테일스케일 주소(100. 으로 시작하는 주소, 내 기기끼리만 보이는 주소)는 손님 폰에서 열리지 않아요. 퍼널 주소(https://….ts.net)만 써 주세요.</p>
+              <p class="meta"><b>둘째 — 클라우드플레어 이름 있는 터널 (내 도메인이 있는 분)</b></p>
+              <p class="meta">① cloudflared tunnel login ② cloudflared tunnel create 가게이름 ③ cloudflared tunnel route dns 가게이름 shop.내도메인 ④ 그 터널을 이 컴퓨터의 8790 포트로 연결 ⑤ https://shop.내도메인 을 위 「가게 링크」에 넣기. 어려우시면 「문제 알리기」로 물어 주세요.</p>
             </details>
             <div class="mppreview" id="mp-preview" aria-live="polite"></div>
             <div class="meta" id="mp-problems"></div>

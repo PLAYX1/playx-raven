@@ -127,6 +127,7 @@ mod reindex;
 mod reindex_run;
 mod node_boot;
 mod tunnel;
+mod tailscale;
 mod vending;
 mod remote_sales;
 mod sales_account;
@@ -843,6 +844,9 @@ pub fn run() {
             tunnel::public_base,
             tunnel::open_share,
             tunnel::share_targets,
+            tailscale::tailscale_fixed_setup,
+            tailscale::tailscale_funnel_off,
+            tailscale::tailscale_open,
             server::qr_svg,
             companion::phone_transaction_review,
             companion::phone_transaction_send,
@@ -1060,6 +1064,9 @@ pub fn run() {
                 // 지도의 「영업 중」을 거둔다(3초까지만 시도 — 종료를 붙잡지 않는다).
                 crate::map::stop_on_exit();
                 crate::tunnel::stop_on_exit();
+                // 승인을 기다리던 테일스케일 CLI 만 끝낸다. 퍼널 설정은 남는다 — 앱이 꺼지면
+                // 8790 이 안 받으니 문은 닫힌 것과 같고, 다시 켜면 같은 주소로 바로 열린다.
+                crate::tailscale::stop_on_exit();
             }
         });
 }

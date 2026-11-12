@@ -406,6 +406,30 @@ pub fn map_unpublish() -> Result<Value, String> {
     Ok(json!({ "ok": true }))
 }
 
+/// 테일스케일 고정 주소(tailscale.rs)가 **실제로 대답한 뒤에만** 부른다.
+/// 이미 지도에 올린 가게면 이름표를 새 주소로 다시 서명해 올리고(`true`), 아니면 아무것도
+/// 안 한다(`false`) — 처음 올리기는 여전히 사장이 [올리기]를 누른다.
+/// 주소는 사람이·라비가 적은 글이 아니라 이 컴퓨터의 테일스케일 이름에서 만든 것이다.
+pub fn adopt_fixed_shop_url(url: &str) -> Result<bool, String> {
+    if !fmt::is_shop_url(url) || fmt::is_temporary_url(url) || !url.to_ascii_lowercase().ends_with(".ts.net") {
+        return Err("고정 주소가 아니에요.".into());
+    }
+    let mut cfg = load();
+    if !cfg.registered {
+        return Ok(false);
+    }
+    if cfg.shop_url != url {
+        cfg.shop_url = url.to_string();
+        cfg.created_at = now().max(cfg.created_at + 1);
+        cfg.card_pending = true;
+    }
+    // 임시 주소를 따라가던 가게가 고정 주소로 바뀌었으니 더는 따라가지 않는다.
+    cfg.follow_tunnel = false;
+    save(&cfg)?;
+    kick();
+    Ok(true)
+}
+
 /// 상태등·카드가 읽는 것.
 #[tauri::command(async)]
 pub fn map_status() -> Value {

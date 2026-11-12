@@ -319,7 +319,8 @@ import { questionNeedsPersonalData } from "./ravi-consent-need";
 import { applyTextSize, biggerOf, setTextSize, smallerOf, textSize, TEXT_SIZE_NAME, TEXT_SIZES, type TextSize } from "./text-size";
 import { raviSettingIntent, type RaviSetting } from "./ravi-settings";
 import { findRoom, raviTalkIntent, type RaviTalkIntent } from "./ravi-talk-intents";
-import { showRaviCard } from "./ravi-card";
+import { showRaviCard, hideRaviCard, raviCardKey } from "./ravi-card";
+import { raviFixedAddressIntent, fixedAddressRunning, TS_BUSY_SAY, TS_START_SAY, TS_SUGGEST_BODY, TS_SUGGEST_NO, TS_SUGGEST_TITLE, TS_SUGGEST_YES, type TsOpen } from "./tailscale-fixed";
 // 11-10 글자 크기 — 화면을 그리기 전에 한 번(늦으면 첫 화면이 작게 깜빡인다).
 void applyTextSize();
 
@@ -12374,6 +12375,10 @@ async function chatSendExisting() {
   // 11-10 화면 설정(글자·밝기·알림 소리·언어)은 라비+ 없이 라비가 바로 바꾼다(ravi-settings.ts).
   const setting = raviSettingIntent(q);
   if (setting) { ($("chat-q") as HTMLInputElement).value = ""; chatSay("me", q); void raviApplySetting(setting); return; }
+  // 11-12 「고정 주소 만들어 줘」「가게 주소 안 바뀌게 해 줘」 — 라비가 테일스케일 퍼널을 차례대로 한다(tailscale-fixed.ts).
+  //   로그인·허락은 사장님이 직접 누른다. 주소는 이 컴퓨터의 테일스케일 이름에서 나온다(라비가 적지 않는다).
+  const fixedAsk = raviFixedAddressIntent(q);
+  if (fixedAsk) { ($("chat-q") as HTMLInputElement).value = ""; chatSay("me", q); void raviFixedAddress(fixedAsk); return; }
   // 11-10 이야기 말(연락 확인·방 열기·방 알림·초대) — 라비는 열고 준비만 한다(ravi-talk-intents.ts).
   const talkAsk = raviTalkIntent(q);
   if (talkAsk) { ($("chat-q") as HTMLInputElement).value = ""; chatSay("me", q); void raviTalkDo(talkAsk); return; }
@@ -20947,8 +20952,47 @@ const wordsRestore = wireWordsRestore({
   },
 });
 
+/* ── 11-12 테일스케일 고정 주소 — 라비가 대신 차례를 밟는다 ─────────────────────
+ * 사람이 할 일(깔기·로그인·허락)이 나오면 그 말을 하고 카드에 [그 창 열기] 하나. 되면 저절로 이어 간다.
+ * 🔴 라비는 암호를 받지도 넣지도 않는다. 로그인은 사장님이 테일스케일 창에서 직접 한다. */
+async function raviFixedAddress(kind: "on" | "off") {
+  if (kind === "off") {
+    showRaviCard({ key: "ts:off?", title: t("테일스케일 가게 문을 닫을까요? 이 주소로는 손님이 못 들어와요."), buttons: [
+      { label: TS_SUGGEST_NO, run: () => {} },
+      { label: "끄기", primary: true, run: () => { void mapCard.fixedOff().then((m) => raviSaid(t(m))); } },
+    ] });
+    return;
+  }
+  if (fixedAddressRunning()) { raviSaid(t(TS_BUSY_SAY)); return; }
+  raviSaid(t(TS_START_SAY));
+  showPage("shop"); shopTab("mine"); jumpToEl("mp-card");
+  await mapCard.makeFixed((text: string, open?: { target: TsOpen; label: string }) => {
+    raviSaid(text);
+    if (open) {
+      showRaviCard({ key: "ts:step", title: text, buttons: [
+        { label: open.label, primary: true, run: () => { void invoke("tailscale_open", { target: open.target }).catch(() => {}); } },
+      ] });
+    } else if (raviCardKey() === "ts:step") hideRaviCard();
+  });
+}
+
+/** 가게 링크가 임시 주소(…trycloudflare.com)면 한 번만 넌지시 묻는다. [괜찮아요]를 누르면 다시 안 묻는다. */
+const TS_SUGGEST_KEY = "rv.tailscale.suggest.dismissed";
+let tsSuggestedThisRun = false;
+function raviSuggestFixed() {
+  if (tsSuggestedThisRun || fixedAddressRunning()) return;
+  try { if (localStorage.getItem(TS_SUGGEST_KEY) === "1") return; } catch { /* 저장소가 없으면 이번 실행에만 한 번 */ }
+  // 다른 카드가 떠 있으면 덮지 않는다(방해하지 않기).
+  if (raviCardKey()) return;
+  tsSuggestedThisRun = true;
+  showRaviCard({ key: "ts:suggest", title: t(TS_SUGGEST_TITLE), body: t(TS_SUGGEST_BODY), buttons: [
+    { label: TS_SUGGEST_NO, run: () => { try { localStorage.setItem(TS_SUGGEST_KEY, "1"); } catch { /* 이번 실행만 */ } } },
+    { label: TS_SUGGEST_YES, primary: true, run: () => { void raviFixedAddress("on"); } },
+  ] });
+}
+
 /** 「내 가게 → 지도에 올리기」(map-card.ts · map.rs). 라비는 prepare 로 칸만 채운다. */
-const mapCard = wireMapCard({ invoke, showShop: () => { showPage("shop"); shopTab("mine"); } });
+const mapCard = wireMapCard({ invoke, showShop: () => { showPage("shop"); shopTab("mine"); }, onTemporary: raviSuggestFixed });
 void mapCard.refresh();
 document.querySelectorAll('[data-page="shop"]').forEach((a) => a.addEventListener("click", () => void mapCard.refresh()));
 window.addEventListener("rv-map-changed", () => void paintStatusDots());
