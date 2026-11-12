@@ -79,18 +79,55 @@ async fn fetch_doc(cid: &str) -> Option<Vec<u8>> {
     get_capped(&format!("{SITE}/g/{cid}/doc")).await
 }
 
-/// 체인의 `RVLT/*` 자산과 그 문서 바이트(base64). 노드가 못 답하면 오류 — 화면은 「읽지 못했어요」로 정직하게.
+/// 공개 연결의 목록 답(`GET {SITE}/api/chain/arcade-assets` → `{assets:[{name, ipfs_hash}]}`) 크기 상한.
+const PUBLIC_LIST_MAX_BYTES: usize = 600_000;
+
+/// 노드 `listassets` 답(이름 → 정보) → (이름, 해시) 목록.
+fn assets_from_node(raw: &Value) -> Option<Vec<(String, Option<String>)>> {
+    let map = raw.as_object()?;
+    Some(map.iter().take(LIST_MAX).map(|(name, info)| {
+        (name.clone(), info.get("ipfs_hash").and_then(Value::as_str).filter(|c| cid_ok(c)).map(str::to_string))
+    }).collect())
+}
+/// 공개 연결 답 → (이름, 해시) 목록. 모양이 틀리면 None. 이 답도 믿지 않는다(TS 가 문서 서명·assetName 을 다시 본다).
+fn assets_from_public(raw: &Value) -> Option<Vec<(String, Option<String>)>> {
+    let list = raw.get("assets")?.as_array()?;
+    let mut out = Vec::new();
+    for a in list.iter().take(LIST_MAX) {
+        let name = a.get("name")?.as_str()?;
+        if !name.starts_with("RVLT/") || name.len() > 32 {
+            continue;
+        }
+        out.push((name.to_string(), a.get("ipfs_hash").and_then(Value::as_str).filter(|c| cid_ok(c)).map(str::to_string)));
+    }
+    Some(out)
+}
+async fn public_list() -> Option<Vec<(String, Option<String>)>> {
+    let r = client().get(format!("{SITE}/api/chain/arcade-assets")).send().await.ok()?;
+    if !r.status().is_success() || r.content_length().map(|n| n as usize > PUBLIC_LIST_MAX_BYTES).unwrap_or(false) {
+        return None;
+    }
+    let b = r.bytes().await.ok()?;
+    if b.len() > PUBLIC_LIST_MAX_BYTES {
+        return None;
+    }
+    assets_from_public(&serde_json::from_slice(&b).ok()?)
+}
+
+/// 체인의 `RVLT/*` 자산과 그 문서 바이트(base64). 이 컴퓨터의 노드가 먼저, 노드가 못 답하면 레이븐볼트 공개 연결의 목록.
+/// 둘 다 못 읽으면 오류 — 화면은 「읽지 못했어요」로 정직하게.
 #[tauri::command]
 pub async fn arcade_catalog_sources() -> Result<Value, String> {
     use base64::Engine as _;
-    let raw = call_rpc("listassets", json!(["RVLT/*", true, LIST_MAX, 0])).await?;
-    let map = raw.as_object().ok_or("공개 장부가 목록을 주지 않았습니다.")?;
+    let (list, source) = match call_rpc("listassets", json!(["RVLT/*", true, LIST_MAX, 0])).await.ok().as_ref().and_then(assets_from_node) {
+        Some(l) => (l, "node"),
+        None => (public_list().await.ok_or("공개 장부가 목록을 주지 않았습니다.")?, "public"),
+    };
     let mut assets = Vec::new();
     let mut want = Vec::new();
-    for (name, info) in map.iter() {
-        let hash = info.get("ipfs_hash").and_then(Value::as_str).filter(|c| cid_ok(c)).map(str::to_string);
+    for (name, hash) in list {
         if let Some(h) = &hash {
-            if product_like(name) && want.len() < DOCS_MAX && !want.contains(h) {
+            if product_like(&name) && want.len() < DOCS_MAX && !want.contains(h) {
                 want.push(h.clone());
             }
         }
@@ -104,7 +141,7 @@ pub async fn arcade_catalog_sources() -> Result<Value, String> {
             docs.insert(cid, json!(base64::engine::general_purpose::STANDARD.encode(b)));
         }
     }
-    Ok(json!({ "assets": assets, "docs": docs }))
+    Ok(json!({ "assets": assets, "docs": docs, "source": source }))
 }
 
 /// 게임 시작 파일을 지금 받을 수 있나. 공유 사이트가 문서 sha256·크기를 맞춰 내주는 길(`/arcade/ipfs/<문서 CID>/<시작 파일>`).
@@ -193,6 +230,26 @@ pub fn arcade_ack(request_id: String) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn 공개_연결_목록은_이름과_해시만_받는다() {
+        let q = format!("Qm{}", "W".repeat(44));
+        let v = json!({ "assets": [
+            { "name": "RVLT/SHOP#A", "ipfs_hash": q },
+            { "name": "RVLT/SHOP/B", "ipfs_hash": "../../etc" },
+            { "name": "PLAYX", "ipfs_hash": q },
+        ]});
+        let got = assets_from_public(&v).unwrap();
+        assert_eq!(got, vec![("RVLT/SHOP#A".to_string(), Some(q.clone())), ("RVLT/SHOP/B".to_string(), None)]);
+        assert!(assets_from_public(&json!({ "nope": 1 })).is_none());
+        assert!(assets_from_public(&json!({ "assets": [{ "name": 3 }] })).is_none());
+        let node = json!({ "RVLT/SHOP#A": { "name": "RVLT/SHOP#A", "ipfs_hash": q } });
+        assert_eq!(assets_from_node(&node).unwrap().len(), 1);
+        assert!(assets_from_node(&json!([])).is_none());
+        // 공개 연결 길은 코드 고정(요청에서 주소를 받지 않는다).
+        let src = include_str!("arcade.rs");
+        assert!(src.contains("format!(\"{SITE}/api/chain/arcade-assets\")"));
+    }
 
     #[test]
     fn 나누기는_지갑과_같다() {
