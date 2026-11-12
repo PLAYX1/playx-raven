@@ -320,6 +320,7 @@ import { applyTextSize, biggerOf, setTextSize, smallerOf, textSize, TEXT_SIZE_NA
 import { raviSettingIntent, type RaviSetting } from "./ravi-settings";
 import { findRoom, raviTalkIntent, type RaviTalkIntent } from "./ravi-talk-intents";
 import { showRaviCard, hideRaviCard, raviCardKey } from "./ravi-card";
+import { raviShopLinkTellIntent } from "./shop-link";
 import { raviFixedAddressIntent, fixedAddressRunning, TS_BUSY_SAY, TS_START_SAY, TS_SUGGEST_BODY, TS_SUGGEST_NO, TS_SUGGEST_TITLE, TS_SUGGEST_YES, type TsOpen } from "./tailscale-fixed";
 import { nodeLine, simpleLine, type RailLine } from "./rail-status";
 import { askTextSizeOnce } from "./text-size-ask";
@@ -12383,8 +12384,10 @@ async function chatSendExisting() {
   if (setting) { ($("chat-q") as HTMLInputElement).value = ""; chatSay("me", q); void raviApplySetting(setting); return; }
   // 11-12 「고정 주소 만들어 줘」「가게 주소 안 바뀌게 해 줘」 — 라비가 테일스케일 퍼널을 차례대로 한다(tailscale-fixed.ts).
   //   로그인·허락은 사장님이 직접 누른다. 주소는 이 컴퓨터의 테일스케일 이름에서 나온다(라비가 적지 않는다).
+  //   11-13 「가게 링크 알려 줘」「고정 주소 만들어 줘」는 무료 고정 링크를 먼저 보여 주고, 유료(테일스케일·내 도메인)는 그다음 선택지.
   const fixedAsk = raviFixedAddressIntent(q);
-  if (fixedAsk) { ($("chat-q") as HTMLInputElement).value = ""; chatSay("me", q); void raviFixedAddress(fixedAsk); return; }
+  if (fixedAsk) { ($("chat-q") as HTMLInputElement).value = ""; chatSay("me", q); void (fixedAsk === "on" ? raviOfferShopLink() : raviFixedAddress(fixedAsk)); return; }
+  if (raviShopLinkTellIntent(q)) { ($("chat-q") as HTMLInputElement).value = ""; chatSay("me", q); void raviOfferShopLink(); return; }
   // 11-10 이야기 말(연락 확인·방 열기·방 알림·초대) — 라비는 열고 준비만 한다(ravi-talk-intents.ts).
   const talkAsk = raviTalkIntent(q);
   if (talkAsk) { ($("chat-q") as HTMLInputElement).value = ""; chatSay("me", q); void raviTalkDo(talkAsk); return; }
@@ -20963,7 +20966,21 @@ const wordsRestore = wireWordsRestore({
 /* ── 11-12 테일스케일 고정 주소 — 라비가 대신 차례를 밟는다 ─────────────────────
  * 사람이 할 일(깔기·로그인·허락)이 나오면 그 말을 하고 카드에 [그 창 열기] 하나. 되면 저절로 이어 간다.
  * 🔴 라비는 암호를 받지도 넣지도 않는다. 로그인은 사장님이 테일스케일 창에서 직접 한다. */
-async function raviFixedAddress(kind: "on" | "off") {
+/** 11-13 가게 링크 두 갈래 — 무료 · 레이븐볼트 고정 링크를 먼저, 유료(테일스케일·내 도메인)는 단추로. */
+async function raviOfferShopLink() {
+  showPage("shop"); shopTab("mine"); jumpToEl("mp-card");
+  await mapCard.refresh();
+  const link = mapCard.freeLink();
+  if (!link) { raviSaid(t("무료 고정 링크를 아직 못 만들었어요. 가게 열쇠를 확인해 주세요.")); return; }
+  raviSaid(`${t("가게 링크는 이거예요 — 무료 · 레이븐볼트 고정 링크(추천).")} ${link} ${t("컴퓨터를 다시 켠 직후 잠깐(1분 안팎) 손님이 못 들어올 수 있어요.")}`);
+  showRaviCard({ key: "shoplink:offer", title: t("가게 링크 고르기"), body: t("무료 고정 링크를 먼저 권해요. 끊김이 싫으시면 유료 길도 있어요."), buttons: [
+    { label: "이 링크 쓰기", primary: true, run: () => { void mapCard.useFreeLink().then((m) => raviSaid(t(m))); } },
+    { label: "테일스케일 (유료)", run: () => { void raviFixedAddress("tailscale"); } },
+    { label: "내 도메인 (유료)", run: () => { const d = document.getElementById("mp-opt-paid") as HTMLDetailsElement | null; if (d) d.open = true; jumpToEl("mp-price-domain"); raviSaid(t("「더 안정적 · 유료」 안의 「가 — 내 도메인 + 클라우드플레어」 차례를 따라 해 주세요. 어려우시면 「문제 알리기」로 물어 주세요.")); } },
+  ] });
+}
+
+async function raviFixedAddress(kind: "tailscale" | "off") {
   if (kind === "off") {
     showRaviCard({ key: "ts:off?", title: t("테일스케일 가게 문을 닫을까요? 이 주소로는 손님이 못 들어와요."), buttons: [
       { label: TS_SUGGEST_NO, run: () => {} },
@@ -20974,6 +20991,8 @@ async function raviFixedAddress(kind: "on" | "off") {
   if (fixedAddressRunning()) { raviSaid(t(TS_BUSY_SAY)); return; }
   raviSaid(t(TS_START_SAY));
   showPage("shop"); shopTab("mine"); jumpToEl("mp-card");
+  const paid = document.getElementById("mp-opt-paid") as HTMLDetailsElement | null;
+  if (paid) paid.open = true;
   await mapCard.makeFixed((text: string, open?: { target: TsOpen; label: string }) => {
     raviSaid(text);
     if (open) {
@@ -20995,7 +21014,7 @@ function raviSuggestFixed() {
   tsSuggestedThisRun = true;
   showRaviCard({ key: "ts:suggest", title: t(TS_SUGGEST_TITLE), body: t(TS_SUGGEST_BODY), buttons: [
     { label: TS_SUGGEST_NO, run: () => { try { localStorage.setItem(TS_SUGGEST_KEY, "1"); } catch { /* 이번 실행만 */ } } },
-    { label: TS_SUGGEST_YES, primary: true, run: () => { void raviFixedAddress("on"); } },
+    { label: TS_SUGGEST_YES, primary: true, run: () => { void mapCard.useFreeLink().then((m) => raviSaid(t(m))); } },
   ] });
 }
 

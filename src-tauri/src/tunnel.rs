@@ -305,6 +305,8 @@ pub fn tunnel_start(port: u16) -> Result<Value, String> {
             // 주문 버튼이 안 생긴다 — 체인에는 안 바뀌는 것만 적혀 있어서,
             // **지금 어디서 받는지**는 여기서만 나간다.
             announce_now(Some(url.clone()));
+            // 무료 고정 링크(/s/)를 새 주소로 바로 옮긴다(map.rs) — 5분 박동을 기다리지 않는다.
+            crate::map::tunnel_changed();
             start_heartbeat();
             Ok(json!({
                 "url": url,

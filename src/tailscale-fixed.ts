@@ -36,7 +36,7 @@ export const TS_FILLED_SAY = "「가게 링크」에 넣었어요. [올리기]�
 export const TS_START_SAY = "바뀌지 않는 가게 주소를 만들어 볼게요. 사장님이 직접 누르실 곳이 나오면 말씀드릴게요.";
 export const TS_BUSY_SAY = "이미 만드는 중이에요. 조금만 기다려 주세요.";
 export const TS_SUGGEST_TITLE = "가게 링크가 임시 주소예요";
-export const TS_SUGGEST_BODY = "앱을 다시 켜면 주소가 바뀌어 손님이 헛걸음해요. 바뀌지 않는 주소로 바꿔 드릴까요?";
+export const TS_SUGGEST_BODY = "앱을 다시 켜면 주소가 바뀌어 손님이 헛걸음해요. 바뀌지 않는 무료 고정 링크로 바꿔 드릴까요?";
 export const TS_SUGGEST_YES = "바꿔 줘";
 export const TS_SUGGEST_NO = "괜찮아요";
 
@@ -54,8 +54,11 @@ const ASK_ON = /고정\s?(주소|링크|이름)|(주소|링크)(가|는|이)?\s?
 const ASK_OFF = /(테일\s?스케일|tailscale|퍼널|funnel|고정\s?주소).{0,10}(꺼|끄|닫아|닫|멈춰|그만|해제|off)|(turn|switch) off (tailscale|funnel)/;
 const ASK_HOW = /(뭐야|뭔가요|뭐예요|무엇|설명|what is|어떤 거)/;
 
-/** 라비가 「고정 주소 만들어 줘」를 알아듣나. "on" = 만들기, "off" = 끄기, 아니면 null. */
-export function raviFixedAddressIntent(q: string): "on" | "off" | null {
+/** 라비가 「고정 주소 만들어 줘」를 알아듣나.
+ *  "on" = 고정 주소 일반 → 무료 고정 링크를 **먼저** 권한다(유료는 그다음 선택지).
+ *  "tailscale" = 테일스케일·퍼널을 콕 집어 말함 → 테일스케일 흐름을 바로 시작.
+ *  "off" = 끄기, 아니면 null. */
+export function raviFixedAddressIntent(q: string): "on" | "tailscale" | "off" | null {
   const s = q.replace(/\s+/g, " ").trim().toLowerCase();
   if (!s || s.length > 60) return null;
   if (ASK_OFF.test(s)) return "off";
@@ -64,7 +67,7 @@ export function raviFixedAddressIntent(q: string): "on" | "off" | null {
   if (/지갑|받는\s?주소|보내는\s?주소|rvn|코인|wallet/.test(s)) return null;
   // 「테일스케일이 뭐야?」 같은 물음은 설명 길로 보낸다(만들기를 시작하지 않는다).
   if (ASK_HOW.test(s) && !/(만들|해\s?줘|해줘|연결|켜|바꿔|되게|해\s?주세요|부탁)/.test(s)) return null;
-  return "on";
+  return /테일\s?스케일|tailscale|funnel|퍼널/.test(s) ? "tailscale" : "on";
 }
 
 type Invoke = <T = any>(cmd: string, args?: Record<string, unknown>) => Promise<T>;

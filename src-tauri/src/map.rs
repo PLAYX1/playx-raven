@@ -32,6 +32,10 @@ static RUNNING: AtomicBool = AtomicBool::new(false);
 static BUSY: AtomicBool = AtomicBool::new(false);
 /// 「닫힘」을 이미 보냈나 — 닫혀 있는 동안 5분마다 지우기를 또 보내지 않게.
 static CLOSED_SENT: AtomicBool = AtomicBool::new(false);
+/// 이번 실행에서 고정 링크 쪽지를 한 번이라도 올렸나 — 켤 때마다 한 번은 새로 올려 「막 켰음」을 알린다.
+static LINK_SENT: AtomicBool = AtomicBool::new(false);
+/// 고정 링크 쪽지를 다시 올리는 간격(주소가 그대로여도). 릴레이가 오래된 것을 버려도 살아 있게.
+pub const LINK_REFRESH_SECS: i64 = 6 * 60 * 60;
 static STATUS: Mutex<RunStatus> = Mutex::new(RunStatus { card_ok_at: 0, beat_ok_at: 0, last_error: String::new(), closed: false });
 
 #[derive(Clone, Default, Serialize)]
@@ -65,6 +69,14 @@ struct MapConfig {
     /// 이름표를 아직 한 곳에도 못 올렸다 — 다음 박동에 다시 한다.
     #[serde(default)]
     card_pending: bool,
+    /// 무료 고정 링크(/s/)가 가리킬 **바뀌지 않는** 주소(테일스케일 퍼널 등). 비면 지금 임시 터널 주소를 따라간다.
+    #[serde(default)]
+    fixed_target: String,
+    /// 고정 링크 쪽지에 마지막으로 올린 주소·시각.
+    #[serde(default)]
+    link_target: String,
+    #[serde(default)]
+    link_at: i64,
 }
 
 /// 화면이 넘기는 초안.
@@ -226,6 +238,7 @@ async fn tick_inner() {
             Err(e) => return note_error(&e),
         }
     }
+    publish_link(&mut cfg, &signer, &nk).await;
     let at = now();
     match fmt::build_beat_event(&signer, &nk, &cfg.slug, &cfg.area, at, None) {
         Ok(ev) => match publish(ev).await {
@@ -240,6 +253,83 @@ async fn tick_inner() {
             Err(e) => note_error(&e),
         },
         Err(e) => note_error(&e),
+    }
+}
+
+/// 이 가게의 무료 고정 링크(`https://ravenvault.ex.erci.se/s/<가게 주소 이름>-<8자리>`).
+fn own_link(cfg: &MapConfig) -> Option<String> {
+    keys().ok().map(|k| fmt::shop_link_url(&k.0.address, &slug_for(cfg)))
+}
+
+/// 지도 이름표가 이 가게 자신의 고정 링크를 쓰나.
+fn uses_free_link(cfg: &MapConfig) -> bool {
+    fmt::is_shop_link_url(&cfg.shop_url) && own_link(cfg).is_some_and(|l| l == cfg.shop_url.trim().trim_end_matches('/'))
+}
+
+/// 고정 링크가 지금 가리킬 곳 — 순수 함수(시험).
+/// - 무료 고정 링크를 쓰면: 바뀌지 않는 주소(테일스케일 등)가 있으면 그것, 없으면 지금 임시 터널 주소.
+/// - 이름표에 임시 주소를 적었으면: 지금 임시 터널 주소.
+/// - 이름표에 내 도메인·테일스케일 주소를 적었으면: 그 주소(예전에 나눠 준 /s/ 링크도 계속 열리게).
+/// - 남의 /s/ 링크·우리 사이트 주소는 가리키지 않는다(고리).
+pub fn link_target_for(shop_url: &str, free: bool, fixed_target: &str, tunnel: Option<&str>) -> Option<String> {
+    let ok = |u: &str| fmt::is_shop_url(u) && !u.to_ascii_lowercase().contains(".ex.erci.se");
+    let tunnel = tunnel.filter(|u| ok(u)).map(str::to_string);
+    if free {
+        return if ok(fixed_target) { Some(fixed_target.to_string()) } else { tunnel };
+    }
+    let u = shop_url.trim();
+    if u.is_empty() || !ok(u) {
+        return None;
+    }
+    if fmt::is_temporary_url(u) {
+        return tunnel;
+    }
+    Some(u.to_string())
+}
+
+/// 고정 링크 쪽지(kind 31404) — 가리킬 곳이 바뀌었거나, 이번 실행 첫 박동이거나, 6시간이 지났으면 올린다.
+async fn publish_link(cfg: &mut MapConfig, signer: &RvnSigner, nk: &[u8; 32]) {
+    if !fmt::is_slug(&cfg.slug) {
+        return;
+    }
+    let tunnel = tunnel_url();
+    let Some(target) = link_target_for(&cfg.shop_url, uses_free_link(cfg), &cfg.fixed_target, tunnel.as_deref()) else { return };
+    let at = now();
+    let due = target != cfg.link_target || !LINK_SENT.load(Ordering::SeqCst) || at - cfg.link_at > LINK_REFRESH_SECS;
+    if !due {
+        return;
+    }
+    match fmt::build_shop_link_event(signer, nk, &cfg.slug, &target, at.max(cfg.link_at + 1)) {
+        Ok(ev) => match publish(ev).await {
+            Ok(()) => {
+                LINK_SENT.store(true, Ordering::SeqCst);
+                cfg.link_target = target;
+                cfg.link_at = at.max(cfg.link_at + 1);
+                let _ = save(cfg);
+            }
+            Err(e) => note_error(&e),
+        },
+        Err(e) => note_error(&e),
+    }
+}
+
+/// 임시 터널이 새 주소를 받았을 때(tunnel.rs) — 5분 박동을 기다리지 않고 바로 고정 링크를 옮긴다.
+/// 이것이 「컴퓨터를 다시 켠 직후 1분 안팎」의 그 1분이다.
+pub fn tunnel_changed() {
+    if load().registered {
+        kick();
+    }
+}
+
+/// 테일스케일 퍼널을 껐을 때(tailscale.rs) — 고정 링크가 죽은 ts.net 을 가리키지 않게 임시 터널로 되돌린다.
+pub fn forget_fixed_target() {
+    let mut cfg = load();
+    if cfg.fixed_target.to_ascii_lowercase().ends_with(".ts.net") {
+        cfg.fixed_target.clear();
+        let _ = save(&cfg);
+        if cfg.registered {
+            kick();
+        }
     }
 }
 
@@ -327,7 +417,12 @@ pub fn map_load() -> Value {
         tunnel.clone().unwrap_or_default()
     };
     let issuer = keys().map(|k| k.0.address).ok();
+    let free_link = own_link(&cfg);
+    // 처음 여는 가게는 무료 고정 링크를 먼저 권한다(추천). 이미 적어 둔 링크가 있으면 그대로.
+    let suggested_url = if cfg.shop_url.is_empty() { free_link.clone().unwrap_or(suggested_url) } else { suggested_url };
     json!({
+        "free_link": free_link,
+        "fixed_target": cfg.fixed_target,
         "registered": cfg.registered,
         "name": if cfg.name.is_empty() { shop_str(&sh, "name") } else { cfg.name.clone() },
         "category": cfg.category,
@@ -355,6 +450,7 @@ pub fn map_check(draft: MapDraft) -> Value {
             "shopUrl": c.shop_url,
         },
         "temporary_url": !url.is_empty() && fmt::is_temporary_url(&url),
+        "free_link": !url.is_empty() && own_link(&cfg).is_some_and(|l| l == url.trim_end_matches('/')),
         "no_url": url.is_empty(),
     })
 }
@@ -378,6 +474,8 @@ pub fn map_publish(draft: MapDraft) -> Result<Value, String> {
     cfg.area = c.area.clone();
     cfg.follow_tunnel = fmt::is_temporary_url(&url) && tunnel_url().as_deref() == Some(url.as_str());
     cfg.shop_url = url;
+    // 링크를 바꿨으면 고정 링크 쪽지도 곧바로 새로 올린다.
+    LINK_SENT.store(false, Ordering::SeqCst);
     // 같은 가게 id 는 더 새 것이 이긴다 — 같은 초에 두 번 눌러도 뒤의 것이 이기게.
     cfg.created_at = now().max(cfg.created_at + 1);
     cfg.card_pending = true;
@@ -415,6 +513,17 @@ pub fn adopt_fixed_shop_url(url: &str) -> Result<bool, String> {
         return Err("고정 주소가 아니에요.".into());
     }
     let mut cfg = load();
+    // 무료 고정 링크를 쓰는 가게: 이름표는 /s/ 그대로 두고, /s/ 가 이 바뀌지 않는 주소를 가리키게 한다
+    // (손님 손에 있는 링크가 그대로 산다). 지도에 올리기 전이어도 저장해 둔다.
+    if uses_free_link(&cfg) || (!cfg.registered && cfg.shop_url.is_empty()) {
+        cfg.fixed_target = url.to_string();
+        cfg.follow_tunnel = false;
+        save(&cfg)?;
+        if cfg.registered {
+            kick();
+        }
+        return Ok(cfg.registered);
+    }
     if !cfg.registered {
         return Ok(false);
     }
@@ -444,6 +553,8 @@ pub fn map_status() -> Value {
         "last_error": s.last_error,
         "area": cfg.area,
         "temporary_url": fmt::is_temporary_url(&cfg.shop_url),
+        "free_link": uses_free_link(&cfg),
+        "link_at": cfg.link_at,
     })
 }
 
@@ -476,6 +587,22 @@ mod tests {
         assert_eq!(c.name, "가게");
         assert!(c.shop_url.is_none());
         assert!(fmt::card_problems(&c).is_empty());
+    }
+
+    /// 고정 링크가 가리킬 곳 — 무료면 바뀌지 않는 주소 > 임시 터널, 고리·http 는 안 된다.
+    #[test]
+    fn the_free_link_follows_the_tunnel_or_the_fixed_address() {
+        let t = Some("https://abc-def.trycloudflare.com");
+        let s = "https://ravenvault.ex.erci.se/s/playx-gym-ymr3qhcu";
+        assert_eq!(link_target_for(s, true, "", t).as_deref(), t);
+        assert_eq!(link_target_for(s, true, "https://shop.tail1.ts.net", t).as_deref(), Some("https://shop.tail1.ts.net"));
+        assert_eq!(link_target_for(s, true, "", None), None, "터널이 아직 없으면 올리지 않는다");
+        assert_eq!(link_target_for(s, true, "http://x.ts.net", t).as_deref(), t, "http 고정 주소는 무시");
+        assert_eq!(link_target_for("https://old.trycloudflare.com", false, "", t).as_deref(), t, "임시 주소 가게는 지금 터널");
+        assert_eq!(link_target_for("https://shop.mydomain.kr", false, "", t).as_deref(), Some("https://shop.mydomain.kr"));
+        assert_eq!(link_target_for("https://ravenvault.ex.erci.se/s/other-abcdefgh", false, "", t), None, "남의 /s/ 는 안 가리킨다");
+        assert_eq!(link_target_for("", false, "", t), None);
+        assert_eq!(link_target_for(s, true, "", Some("https://ravenvault.ex.erci.se/s/x-abcdefgh")), None, "고리 금지");
     }
 
     #[test]
