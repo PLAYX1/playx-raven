@@ -56,6 +56,12 @@ for (const s of ['테일스케일이 이 컴퓨터에 없어요.', '열 주소�
 // 3) main.ts 의 지도 줄 · 4) map_format.rs 검사 문구(화면에 그대로 뜬다)
 const main = read('src/main.ts');
 for (const s of ['지도: 올림', '지도: 안 올림']) { assert.ok(main.includes(`"${s}"`), `main.ts 에 ${s} 가 없다`); want.add(s); }
+// 3b) 11-13 라비의 가게 링크 두 갈래(main.ts raviOfferShopLink) — 단추·말
+{
+  const i = main.indexOf('async function raviOfferShopLink'), j = main.indexOf('async function raviFixedAddress', i);
+  assert.ok(i > 0 && j > i, 'main.ts 에 raviOfferShopLink 가 없다');
+  for (const m of main.slice(i, j).matchAll(/"((?:[^"\\]|\\.)*)"/g)) if (HANGUL.test(m[1])) want.add(norm(m[1]));
+}
 const rs = read('src-tauri/src/map_format.rs');
 const fnStart = rs.indexOf('pub fn card_problems'), fnEnd = rs.indexOf('\n}\n', fnStart);
 for (const m of rs.slice(fnStart, fnEnd).matchAll(/out\.push\("([^"]+)"\)/g)) want.add(m[1]);

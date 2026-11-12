@@ -8,7 +8,8 @@
  *    정확한 주소·좌표는 이 카드 어디에도 없다(동네는 표에서 고르거나 5자리 코드만).
  * 🔴 라비는 **준비만** 한다(prepare). 게시는 사장이 [올리기]를 눌러야 한다.
  */
-import { setCopyText, t, tf } from "./i18n";
+import { lang, setCopyText, t, tf } from "./i18n";
+import { SHOP_LINK_PRICES, domainPriceText, shopLinkKind, tailscalePriceText } from "./shop-link";
 import { TS_FILLED_SAY, TS_OFF_SAY, TS_PUBLISHED_SAY, TS_STEP, TS_TIMEOUT_SAY, isFixedTsUrl, isTemporaryUrl, runFixedAddress, type TsOpen, type TsResult } from "./tailscale-fixed";
 
 type Invoke = <T = any>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
@@ -93,6 +94,10 @@ export type MapCard = {
   makeFixed(say?: (text: string, open?: { target: TsOpen; label: string }) => void): Promise<void>;
   /** 테일스케일 가게 문 끄기. 끝나면 할 말(한국어 원문). */
   fixedOff(): Promise<string>;
+  /** 이 가게의 무료 고정 링크(없으면 ""). */
+  freeLink(): string;
+  /** [이 링크 쓰기] — 가게 링크 칸에 무료 고정 링크를 넣고, 이미 지도에 올린 가게면 바로 다시 올린다. 할 말(한국어 원문). */
+  useFreeLink(): Promise<string>;
 };
 
 export function wireMapCard(deps: { invoke: Invoke; showShop: () => void; onTemporary?: () => void }): MapCard {
@@ -106,6 +111,7 @@ export function wireMapCard(deps: { invoke: Invoke; showShop: () => void; onTemp
   let area = "";
   let registered = false;
   let tunnelUrl = "";
+  let freeLink = "";
   let checkTimer: number | undefined;
 
   const say = (id: string, render: () => string, cls = "") => {
@@ -176,23 +182,27 @@ export function wireMapCard(deps: { invoke: Invoke; showShop: () => void; onTemp
     if (go) go.disabled = problems.length > 0;
     paintPreview(r?.preview ?? {});
     const url = String(r?.preview?.shopUrl ?? "");
-    // 🔴 테일스케일 퍼널 주소(…ts.net)는 고정 주소다 — 임시 주소 경고를 띄우지 않는다.
-    const temporary = !!r?.temporary_url && isTemporaryUrl(url);
+    // 🔴 무료 고정 링크(/s/…)·테일스케일 퍼널 주소(…ts.net)·내 도메인은 「임시 주소」 경고를 띄우지 않는다.
+    const kind = shopLinkKind(url, freeLink);
+    const temporary = isTemporaryUrl(url) && kind === "temporary" && !!r?.temporary_url;
     const fixedTs = isFixedTsUrl(url);
-    if (temporary) {
-      say("mp-urlnote", () => t("임시 주소예요 — 재시작마다 바뀌어 지도에서 열리지 않아요. 켜져 있는 동안은 바뀐 주소로 다시 올리지만, 그 사이 손님은 헛걸음해요. 아래 [테일스케일로 고정 주소 만들기]를 눌러 보세요."), "warn");
-      ($("mp-fixed") as HTMLElement | null)?.removeAttribute("hidden");
+    if (kind === "free") {
+      say("mp-urlnote", () => t("무료 고정 링크예요. 컴퓨터가 켜져 있는 동안 레이븐볼트가 손님을 지금 가게 주소로 이어 드려요."), "good");
+    } else if (temporary) {
+      say("mp-urlnote", () => t("임시 주소예요 — 앱을 다시 켜면 바뀌어 손님이 헛걸음해요. 위 「무료 · 레이븐볼트 고정 링크」의 [이 링크 쓰기]를 눌러 주세요."), "warn");
       deps.onTemporary?.();
     } else if (!url) {
-      say("mp-urlnote", () => t("가게 링크가 없으면 지도에는 보이지만 손님이 가게를 열 수 없어요. 「바깥 연결」을 켜거나 고정 주소를 넣어 주세요."), "warn");
-      ($("mp-fixed") as HTMLElement | null)?.removeAttribute("hidden");
+      say("mp-urlnote", () => t("가게 링크가 없으면 지도에는 보이지만 손님이 가게를 열 수 없어요. 위 [이 링크 쓰기]를 눌러 주세요."), "warn");
     } else {
       say("mp-urlnote", () => t("고정 주소예요. 손님 지도의 [가게 열기]가 이 주소를 엽니다."));
-      ($("mp-fixed") as HTMLElement | null)?.setAttribute("hidden", "");
     }
-    // 고정 주소를 이미 쓰면 [만들기]는 숨기고, 테일스케일 주소면 [끄기]를 보인다.
+    const useFree = $("mp-free-use") as HTMLButtonElement | null;
+    if (useFree) useFree.hidden = kind === "free" || !freeLink;
+    const freeBox = $("mp-opt-free");
+    freeBox?.classList.toggle("on", kind === "free");
+    // 테일스케일을 쓰면 [끄기]를 보인다. [만들기]는 늘 유료 갈래 안에 있다.
     const tsGo = $("mp-ts-go") as HTMLButtonElement | null;
-    if (tsGo) tsGo.hidden = !!url && !temporary;
+    if (tsGo) tsGo.hidden = fixedTs;
     const tsOff = $("mp-ts-off") as HTMLButtonElement | null;
     if (tsOff) tsOff.hidden = !fixedTs;
     const useTunnel = $("mp-usetunnel") as HTMLButtonElement | null;
@@ -244,6 +254,37 @@ export function wireMapCard(deps: { invoke: Invoke; showShop: () => void; onTemp
     say("mp-state", () => t("지도: 올림 · 아직 신호를 못 보냈어요 — 5분마다 조용히 다시 해요"), s.last_error ? "warn" : "");
   }
 
+  function paintPrices() {
+    const p = SHOP_LINK_PRICES;
+    say("mp-price-domain", () => tf("도메인 1년 약 {0}, 터널은 무료예요. 내 도메인이 있는 분께 맞아요.", domainPriceText(lang)));
+    say("mp-price-ts", () => tf("개인·시험은 무료예요. 장사용은 유료 — 1명 월 약 {0}(Standard).", tailscalePriceText(lang)));
+    say("mp-price-date", () => tf("가격은 {0}에 확인한 값이에요. 바뀔 수 있으니 결제 전에 한 번 더 확인해 주세요.", p.checked));
+  }
+
+  async function useFreeLink(): Promise<string> {
+    if (!freeLink) await refresh();
+    if (!freeLink) return "무료 고정 링크를 아직 못 만들었어요. 가게 열쇠를 확인해 주세요.";
+    if (urlEl) urlEl.value = freeLink;
+    await check();
+    if (registered) {
+      try {
+        await deps.invoke("map_publish", { draft: draft() });
+        setTimeout(() => void paintState(), 8000);
+        window.dispatchEvent(new Event("rv-map-changed"));
+        say("mp-free-note", () => t("지도에도 이 링크로 다시 올렸어요."), "good");
+        return "무료 고정 링크로 바꿨어요. 지도에도 이 링크로 다시 올렸어요.";
+      } catch (e) {
+        const m = String((e as Error)?.message ?? e);
+        say("mp-free-note", () => t(m), "bad");
+        return m;
+      }
+    }
+    say("mp-free-note", () => t("「가게 링크」에 넣었어요. [올리기]를 누르면 이 링크가 열려요."), "good");
+    $("mp-go")?.classList.add("flash");
+    setTimeout(() => $("mp-go")?.classList.remove("flash"), 4000);
+    return "무료 고정 링크를 넣었어요. [올리기]를 누르면 이 링크가 열려요.";
+  }
+
   async function refresh() {
     let r: any;
     try {
@@ -252,6 +293,10 @@ export function wireMapCard(deps: { invoke: Invoke; showShop: () => void; onTemp
       return;
     }
     tunnelUrl = String(r?.tunnel_url ?? "");
+    freeLink = String(r?.free_link ?? "");
+    const fu = $("mp-free-url");
+    if (fu) fu.textContent = freeLink || "—";
+    paintPrices();
     if (nameEl && !nameEl.value) nameEl.value = String(r?.name ?? "");
     if (!category) category = String(r?.category ?? "");
     if (!area) area = String(r?.area ?? "");
@@ -280,6 +325,13 @@ export function wireMapCard(deps: { invoke: Invoke; showShop: () => void; onTemp
       } else if (v) {
         say("mp-problems", () => t("동네는 5자리 지역 코드만 쓸 수 있어요. 정확한 위치는 받지 않아요."), "bad");
       }
+    });
+    $("mp-free-use")?.addEventListener("click", () => void useFreeLink());
+    $("mp-free-copy")?.addEventListener("click", async () => {
+      if (!freeLink) return;
+      let ok = false;
+      try { await navigator.clipboard.writeText(freeLink); ok = true; } catch { ok = false; }
+      say("mp-free-note", () => t(ok ? "링크를 복사했어요. 손님에게 보내 주세요." : "복사하지 못했어요. 링크를 눌러 직접 복사해 주세요."), ok ? "good" : "warn");
     });
     $("mp-usetunnel")?.addEventListener("click", () => {
       if (urlEl && tunnelUrl) urlEl.value = tunnelUrl;
@@ -392,6 +444,8 @@ export function wireMapCard(deps: { invoke: Invoke; showShop: () => void; onTemp
     refresh,
     makeFixed,
     fixedOff,
+    freeLink: () => freeLink,
+    useFreeLink,
     prepare(a) {
       const name = typeof a.name === "string" ? a.name.trim().slice(0, 40) : "";
       const cat = MAP_CATEGORIES.find((c) => c.key === a.category);

@@ -12,9 +12,11 @@ vm.runInNewContext(js, { module: mod, exports: mod.exports, setTimeout, Date });
 const T = mod.exports;
 
 test('「고정 주소 만들어 줘」를 알아듣는다', () => {
-  for (const q of ['고정 주소 만들어 줘', '가게 주소 안 바뀌게 해 줘', '테일스케일 연결해 줘', '링크가 안 바뀌게 해줘', 'tailscale funnel 켜줘', '고정 링크 부탁해']) {
+  // 11-13 일반 「고정 주소」는 무료 고정 링크를 먼저 권하고(on), 테일스케일을 콕 집으면 바로 그 흐름(tailscale).
+  for (const q of ['고정 주소 만들어 줘', '가게 주소 안 바뀌게 해 줘', '링크가 안 바뀌게 해줘', '고정 링크 부탁해']) {
     assert.equal(T.raviFixedAddressIntent(q), 'on', q);
   }
+  for (const q of ['테일스케일 연결해 줘', 'tailscale funnel 켜줘', '퍼널로 고정 주소 만들어 줘']) assert.equal(T.raviFixedAddressIntent(q), 'tailscale', q);
   for (const q of ['테일스케일 꺼 줘', '퍼널 닫아 줘']) assert.equal(T.raviFixedAddressIntent(q), 'off', q);
 });
 

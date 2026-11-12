@@ -390,6 +390,76 @@ pub fn build_delete_event(nostr_sk: &[u8; 32], nostr_pubkey: &str, issuer: &str,
     crate::shopkey::sign_with(nostr_sk, DELETE_KIND, Value::Array(tags), "", at)
 }
 
+// ── 레이븐볼트 고정 링크(kind 31404) ─────────────────────────────────────────
+// 손님에게 주는 바뀌지 않는 링크 `https://ravenvault.ex.erci.se/s/<링크 이름>`. 웹 /s/ 가 이 쪽지를 읽어
+// 가게의 **지금** 주소로 302 보낸다(웹 core/market/merchants/shop-link.ts · docs/MERCHANT-EVENT-FORMAT.md §5).
+// 🔴 링크 이름 끝 8자리가 발행 주소에서 나온다 — 다른 열쇠의 쪽지는 이름이 안 맞아 웹이 버린다.
+
+pub const SHOP_LINK_NOSTR_KIND: i64 = 31404;
+pub const SHOP_LINK_TAG: &str = "ravenvault-shoplink";
+pub const SHOP_LINK_FORMAT: &str = "rv.shop-link/1";
+pub const SHOP_LINK_ORIGIN: &str = "https://ravenvault.ex.erci.se";
+
+/// 끝 8자리 — `sha256("rv.shop-link/1\n" ‖ issuer ‖ "\n" ‖ slug)` 앞 40비트를 geohash 글자표로.
+pub fn shop_link_suffix(issuer: &str, slug: &str) -> String {
+    let h = Sha256::digest(format!("{SHOP_LINK_FORMAT}\n{issuer}\n{slug}").as_bytes());
+    let mut v: u64 = 0;
+    for b in &h[..5] {
+        v = (v << 8) | *b as u64;
+    }
+    let alpha = BASE32.as_bytes();
+    (0..8).map(|i| alpha[((v >> (35 - 5 * i)) & 31) as usize] as char).collect()
+}
+
+/// 링크 이름 `<slug>-<8자리>`.
+pub fn shop_link_id(issuer: &str, slug: &str) -> String {
+    format!("{slug}-{}", shop_link_suffix(issuer, slug))
+}
+
+pub fn shop_link_url(issuer: &str, slug: &str) -> String {
+    format!("{SHOP_LINK_ORIGIN}/s/{}", shop_link_id(issuer, slug))
+}
+
+/// 레이븐볼트 고정 링크 모양인가(`https://ravenvault.ex.erci.se/s/<slug>-<8자리>`). 이 주소면 「임시 주소」 경고를 안 띄운다.
+pub fn is_shop_link_url(v: &str) -> bool {
+    let Some(rest) = v.trim().strip_prefix("https://ravenvault.ex.erci.se/s/") else { return false };
+    let rest = rest.strip_suffix('/').unwrap_or(rest);
+    let Some((slug, tail)) = rest.rsplit_once('-') else { return false };
+    is_slug(slug) && tail.len() == 8 && tail.chars().all(|c| BASE32.contains(c))
+}
+
+/// 서명 대상 — `JSON.stringify(["rv.shop-link/1", issuer, slug, link, url, at])`.
+pub fn shop_link_message(issuer: &str, slug: &str, link: &str, url: &str, at: i64) -> String {
+    serde_json::to_string(&json!([SHOP_LINK_FORMAT, issuer, slug, link, url, at])).unwrap_or_default()
+}
+
+/// 링크 쪽지 — 가게의 지금 주소(임시 터널·테일스케일·내 도메인). 고정 링크 자기 자신은 거절(고리).
+pub fn build_shop_link_event(signer: &RvnSigner, nostr_sk: &[u8; 32], slug: &str, url: &str, at: i64) -> Result<Value, String> {
+    if !is_slug(slug) {
+        return Err("가게 주소 이름은 영문 소문자·숫자·- 로 2~40자여야 해요.".into());
+    }
+    if !is_shop_url(url) || url.to_ascii_lowercase().contains(".ex.erci.se") {
+        return Err("가게 링크는 https:// 로 시작해야 해요.".into());
+    }
+    if at <= 0 {
+        return Err("시각이 올바르지 않아요.".into());
+    }
+    let link = shop_link_id(&signer.address, slug);
+    let signature = signer.sign(&shop_link_message(&signer.address, slug, &link, url, at));
+    let mut m = Map::new();
+    m.insert("kind".into(), json!(SHOP_LINK_FORMAT));
+    m.insert("issuer".into(), json!(signer.address));
+    m.insert("slug".into(), json!(slug));
+    m.insert("link".into(), json!(link));
+    m.insert("url".into(), json!(url));
+    m.insert("at".into(), json!(at));
+    m.insert("signature".into(), json!(signature));
+    m.insert("pubkey".into(), json!(signer.pubkey));
+    let content = serde_json::to_string(&Value::Object(m)).unwrap_or_default();
+    let tags = json!([["d", link], ["t", SHOP_LINK_TAG]]);
+    crate::shopkey::sign_with(nostr_sk, SHOP_LINK_NOSTR_KIND, tags, &content, at)
+}
+
 /// 가게 주소 이름(slug) 제안 — 체인 이름(새 `RV.S.GANGNAM_CAFE`·옛 `SHOP.GANGNAM_CAFE` → `gangnam-cafe`)에서, 없으면 `shop`.
 /// 한 번 올린 뒤에는 **바꾸지 않는다**(가게 id 가 바뀌면 지도에 가게가 둘로 보인다).
 pub fn suggest_slug(chain_asset: &str) -> String {
@@ -494,6 +564,40 @@ mod tests {
         assert_eq!(ev["kind"], 31403);
         assert_eq!(ev["tags"], json!([["d", format!("{VEC_ISSUER}/playx-gym")], ["t", "ravenvault-presence"], ["g", "wydk3"]]));
         assert_eq!(ev["id"], "ca650c5d8d12fc6d8dfbde05a35d11d5db6df24f905d16b2743377387ea3caef");
+    }
+
+    /// 🔴 웹 core/market/merchants/shop-link.test.ts 와 같은 벡터 — 다르면 /s/ 링크가 열리지 않는다.
+    #[test]
+    fn shop_link_matches_the_web_vector() {
+        let signer = RvnSigner::new(&[0x15; 32]).unwrap();
+        assert_eq!(shop_link_id(&signer.address, "playx-gym"), "playx-gym-ymr3qhcu");
+        assert_eq!(shop_link_id(&signer.address, "ab"), "ab-wq8hn9q5");
+        assert_eq!(shop_link_url(&signer.address, "playx-gym"), "https://ravenvault.ex.erci.se/s/playx-gym-ymr3qhcu");
+        assert_eq!(
+            shop_link_message(&signer.address, "playx-gym", "playx-gym-ymr3qhcu", "https://a.trycloudflare.com", 5),
+            "[\"rv.shop-link/1\",\"RMem8GvhCRTBMi7Gr1ZaC4xfEr1RFCRBbR\",\"playx-gym\",\"playx-gym-ymr3qhcu\",\"https://a.trycloudflare.com\",5]"
+        );
+        let ev = build_shop_link_event(&signer, &[0x17; 32], "playx-gym", "https://a-b.trycloudflare.com", 1_790_000_000).unwrap();
+        assert_eq!(ev["kind"], 31404);
+        assert_eq!(ev["tags"], json!([["d", "playx-gym-ymr3qhcu"], ["t", "ravenvault-shoplink"]]));
+        let c: Value = serde_json::from_str(ev["content"].as_str().unwrap()).unwrap();
+        assert_eq!(c["url"], "https://a-b.trycloudflare.com");
+        assert_eq!(c["link"], "playx-gym-ymr3qhcu");
+        assert_eq!(c["pubkey"], VEC_RVN_PUB);
+        // 고리(고정 링크 → 고정 링크)·http 는 거절
+        assert!(build_shop_link_event(&signer, &[0x17; 32], "playx-gym", "https://ravenvault.ex.erci.se/s/playx-gym-ymr3qhcu", 5).is_err());
+        assert!(build_shop_link_event(&signer, &[0x17; 32], "playx-gym", "http://a.trycloudflare.com", 5).is_err());
+    }
+
+    #[test]
+    fn shop_link_url_shape() {
+        assert!(is_shop_link_url("https://ravenvault.ex.erci.se/s/playx-gym-ymr3qhcu"));
+        assert!(is_shop_link_url("https://ravenvault.ex.erci.se/s/ab-wq8hn9q5/"));
+        for bad in ["https://ravenvault.ex.erci.se/s/SHOP.PLAYX", "https://ravenvault.ex.erci.se/s/playx", "https://evil.com/s/playx-gym-ymr3qhcu",
+            "http://ravenvault.ex.erci.se/s/playx-gym-ymr3qhcu", "https://ravenvault.ex.erci.se/s/playx-gym-YMR3QHCU"] {
+            assert!(!is_shop_link_url(bad), "{bad}");
+        }
+        assert!(!is_temporary_url("https://ravenvault.ex.erci.se/s/playx-gym-ymr3qhcu"));
     }
 
     /// 빈 선택 칸은 키째 빠진다 — 빈 문자열을 넣으면 폰이 거절한다.
@@ -603,6 +707,7 @@ mod tests {
         c2.area = "wydq5".into();
         let card2 = build_card_event(&c2, &s2, &nk).unwrap();
         let beat2 = build_beat_event(&s2, &nk, "shop", "wydq5", 1_790_000_301, Some(3)).unwrap();
-        std::fs::write(path, serde_json::to_string_pretty(&json!({"events": [card, beat, card2, beat2]})).unwrap()).unwrap();
+        let link = build_shop_link_event(&signer, &[0x17; 32], "playx-gym", "https://abc-def.trycloudflare.com", 1_790_000_302).unwrap();
+        std::fs::write(path, serde_json::to_string_pretty(&json!({"events": [card, beat, card2, beat2, link]})).unwrap()).unwrap();
     }
 }

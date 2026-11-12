@@ -495,6 +495,8 @@ pub async fn tailscale_funnel_off() -> Result<Value, String> {
                 return Err(format!("끄지 못했어요: {}", short(&second.out)));
             }
         }
+        // 무료 고정 링크가 이 ts.net 을 가리키고 있었으면 임시 터널로 되돌린다.
+        crate::map::forget_fixed_target();
         Ok(json!({ "ok": true }))
     })
     .await
