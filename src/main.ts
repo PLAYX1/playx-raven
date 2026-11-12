@@ -31,6 +31,7 @@ import { openRaviStory } from "./desktop-links";
 import { inviteLink } from "./links";
 // 이야기 방 운영(0.9.0 레인 C): 「방 설정」(만든 사람만 이름·설명 고치기)·「이 방 숨기기」 — 연결 줄만 여기에.
 import { wireTalkRoomsAdmin } from "./talk-rooms-admin";
+import { wireTalkDm } from "./talk-dm"; // 11-12 카톡 PC 처럼 — 친구·채팅·광장 + 이 창 안 쪽지(talk_dm.rs)
 import { homeSafety } from "./home-summary";
 import { paintCards, type CardsInput, type CardOpen } from "./ravi-cards";
 import { wireChainInfoLazy } from "./chain-info-lazy";
@@ -5236,7 +5237,9 @@ function syncFeedNav(id: string) {
 }
 /** 「광장」 — 이야기의 공개 방(tkRoom="")을 X 식 글 목록(feedmode)으로 연다(증서 자랑하기 등). */
 function openFeed() {
-  if (tkRoom !== "") {
+  const 쪽지였나 = !!tkDmUi?.active();
+  tkDmUi?.close(false);
+  if (tkRoom !== "" || 쪽지였나) {
     tkRoom = "";
     delete $("tk-list").dataset.loaded;
     $("tk-new-messages").hidden = true;
@@ -5353,6 +5356,7 @@ function showPage(id: string) {
     void invoke("talk_warm").catch(() => {}); // 11-12 기본 릴레이에 미리 붙어 둔다(relay_pool.rs · 이미 열려 있으면 아무것도 안 한다)
     void talkPaintMe();
     void talkPaintRooms();
+    void tkDmUi?.start(); // 11-12 왼쪽 「채팅」 — 이 컴퓨터에 둔 쪽지로 먼저 그리고 바깥을 읽는다
     // 명단은 닫힌 채로 두되 **머리줄 단추에 인원수는 적는다** — 열어 보기
     // 전에는 내가 누굴 숨겼는지 알 길이 없으면 그것도 숨긴 셈이다.
     // 「되돌렸습니다」는 지난 판의 말이므로 들어올 때 지운다.
@@ -6649,6 +6653,7 @@ async function talkPaintMe() {
 
 let tkRoomNames = new Map<string, string>();
 let tkAdmin: ReturnType<typeof wireTalkRoomsAdmin> | null = null;
+let tkDmUi: ReturnType<typeof wireTalkDm> | null = null;
 
 /* 11-12 방 목록 먼저 그리기: 이 컴퓨터 릴레이 저장분으로 곧바로 그리고, 바깥 답이 오면 다시 그린다. 바깥을 못 읽으면 먼저 그린 것을 둔다. */
 let tkRoomsLast: any[] | null = null;
@@ -6696,9 +6701,12 @@ function tkPaintRoomList(rooms: any[]) {
           `</button>`
       )
       .join("");
+  tkDmUi?.roomsChanged();
   box.querySelectorAll("[data-room]").forEach((b) => {
     (b as HTMLElement).onclick = () => {
+      tkDmUi?.close(false); // 쪽지를 보고 있었으면 닫고 이 방으로
       tkRoom = String((b as HTMLElement).dataset.room || "");
+      tkDmUi?.roomOpened(tkRoom);
       delete $("tk-list").dataset.loaded;
       $("tk-new-messages").hidden = true;
       // 한 번 연 방은 나가 있어도 지켜본다 — 그 방에 새 글이 오면 알린다.
@@ -7058,6 +7066,7 @@ const TK_ICON_SHARE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor
 
 /** 피드인지 방인지에 따라 탭·입력칸 말·순서를 맞춘다(talkPaint 가 매번 부른다). */
 function tkFeedLayout() {
+  if (tkDmUi?.active()) { document.getElementById("page-talk")?.classList.remove("feedon"); const tb = document.getElementById("tk-feedtabs"); if (tb) tb.hidden = true; return; }
   const feed = tkRoom === "";
   document.getElementById("page-talk")?.classList.toggle("feedon", feed);
   const tabs = document.getElementById("tk-feedtabs");
@@ -7167,6 +7176,8 @@ function tkLiveAdd(room: string, ev: any) {
 }
 
 async function talkPaint(opts: { cached?: boolean; list?: any[] } = {}) {
+  // 11-12 쪽지를 열어 두었으면 그 대화만 그린다(talk-dm.ts) — 방·광장 목록으로 덮지 않는다.
+  if (tkDmUi?.active()) { tkDmUi.paint(); return; }
   tkFeedLayout();
   const box = $("tk-list");
   // ⚠️ 어느 방을 읽는지 **여기서 붙잡아 둔다.** 릴레이가 답하는 사이에
@@ -7600,9 +7611,23 @@ function openFeedDraft(text: string) {
   box.focus();
 }
 
-/** 그 사람과 1:1 쪽지 — 쪽지는 지갑 화면에만 있다(talkOpenDm 주석). 그 화면의 `#talk?to=` 로 바로 연다. */
+/**
+ * 그 사람과 1:1 쪽지 — 11-12부터 **이 창 안에서** 연다(talk-dm.ts · talk_dm.rs). 이야기 열쇠가 이 컴퓨터에 있어야 한다.
+ * 열쇠가 없으면(파일이 깨졌거나 만들 수 없을 때) 옛 길: 지갑 화면의 `#talk?to=` 를 인터넷 창에 연다.
+ */
 async function talkOpenDmTo(pk: string) {
   if (!/^[0-9a-f]{64}$/.test(pk)) throw new Error(t("쪽지를 열 수 없는 이름표예요."));
+  let 열쇠있음 = false;
+  try { 열쇠있음 = !!(await invoke<any>("talk_me"))?.pubkey; } catch { 열쇠있음 = false; }
+  if (열쇠있음 && tkDmUi) {
+    if (currentPage !== "talk") showPage("talk");
+    await tkDmUi.openWith(pk);
+    return;
+  }
+  await talkOpenDmLegacy(pk);
+}
+/** 옛 길 — 이 컴퓨터에 이야기 열쇠가 없을 때만. 지갑 화면(12단어)이 쪽지를 연다. */
+async function talkOpenDmLegacy(pk: string) {
   await Promise.race([
     invoke<any>("start_phone_server"),
     new Promise((_, no) => setTimeout(() => no(new Error(t("20초 안에 열리지 않았습니다."))), 20000)),
@@ -7908,6 +7933,11 @@ function tk임시풍선(text: string): HTMLElement | null {
 }
 
 async function talkSend() {
+  if (tkDmUi?.active()) {
+    // 쪽지에는 아직 사진을 못 싣는다(폰의 암호 사진 kind 15 는 다음 차례) — 붙인 사진은 말없이 버리지 않고 알린다.
+    if (tkPhoto) { tkClearPhoto(); $("tk-note").textContent = t("쪽지에는 아직 사진을 보낼 수 없어요. 글만 보냅니다."); }
+    return void tkDmUi.send();
+  }
   const box = $("tk-text") as HTMLTextAreaElement;
   const text = box.value.trim();
   // 사진이 걸려 있으면 글이 비어도 보낸다 — 사진 한 장이 곧 본문인 나이대다.
@@ -20246,7 +20276,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("tk-roommute")?.addEventListener("click", () => 방알림바꾸기(tkRoom, !방알림꺼짐(tkRoom)));
   $("tk-new-messages").addEventListener("click", () => {
     const list = $("tk-list");
-    if (tkRoom === "") { list.scrollTop = 0; document.querySelector("#page-talk .chat")?.scrollTo({ top: 0 }); } else list.scrollTop = list.scrollHeight;
+    if (tkRoom === "" && !tkDmUi?.active()) { list.scrollTop = 0; document.querySelector("#page-talk .chat")?.scrollTo({ top: 0 }); } else list.scrollTop = list.scrollHeight;
     $("tk-new-messages").hidden = true;
   });
   $("tk-reload").addEventListener("click", () => void talkPaint());
@@ -20266,6 +20296,28 @@ window.addEventListener("DOMContentLoaded", async () => {
     reload: () => talkPaintRooms(),
     leave: () => document.querySelector<HTMLElement>('#tk-rooms [data-room=""]')?.click(),
   });
+  tkDmUi = wireTalkDm({
+    invoke: (cmd, args) => invoke(cmd, args),
+    me: () => tkMine,
+    nameOf: (pk) => (pk && pk === tkMine ? String(tkNames.get(pk)?.name || t("나")) : String(tkNames.get(pk)?.name || "").trim() || `${t("레이븐")} #${pk.slice(0, 4).toUpperCase()}`),
+    loadNames: (pks) => tkLoadNames(pks),
+    hue: tkHue,
+    bodyHtml: noteBodyHtml,
+    stickerOnly: (s) => !!noteStickerOnly(s),
+    rooms: () => (tkRoomsLast ?? []).map((r: any) => ({ id: String(r.id), name: String(tkRoomNames.get(String(r.id)) || r.name || t("방")) })).filter((r) => !tkAdmin || tkAdmin.rooms([{ id: r.id, name: r.name }]).length > 0),
+    roomOpen: () => tkRoom,
+    openRoom: (id) => document.querySelector<HTMLElement>(`#tk-rooms [data-room="${CSS.escape(id)}"]`)?.click(),
+    openSquare: () => openFeed(),
+    showPerson: (pk) => void tkShowPerson(pk),
+    follows: async () => { if (!tkFollows) await tkLoadFollows(); return tkFollows; },
+    muted: () => Object.keys(tkMuted),
+    notify: (from, count) => tkOsNotify("dm", "", from, count),
+    legacyOpen: () => talkOpenDm(),
+    errText,
+    escapeHtml,
+    repaint: () => openFeed(),
+  });
+  tkDmUi.watch();
   $("tk-nmake").addEventListener("click", () => void talkMakeRoomGo());
   $("tk-ncancel").addEventListener("click", () => {
     $("tk-newbox").hidden = true;
@@ -20328,13 +20380,11 @@ window.addEventListener("DOMContentLoaded", async () => {
   // 쪽지. 단추를 누르면 **먼저 무엇이 다른지 읽게** 하고, 그다음에 연다.
   $("tk-dm").addEventListener("click", () => {
     const b = $("tk-dmbox");
-    b.hidden = !b.hidden;
-    if (!b.hidden) $("tk-dmsay").textContent = "";
+    if (b.hidden) tkDmUi?.newBox(); else b.hidden = true;
   });
   $("tk-dmclose").addEventListener("click", () => {
     $("tk-dmbox").hidden = true;
   });
-  $("tk-dmgo").addEventListener("click", () => void talkOpenDm());
   // 안 보기. 🔴 러스트만 있고 여기가 비면 단추가 죽는다 — 이 앱이 여러 번
   //    걸린 병이다. 명단·전체 되돌리기·닫기 세 줄을 반드시 같이 묶는다.
   $("tk-muted").addEventListener("click", () => talkToggleMuted());

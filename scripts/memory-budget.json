@@ -22,7 +22,7 @@
     "allowedInvokes": [
       "wallet_since", "wallet_balance", "wallet_lock_state", "node_status", "backup_survey", "incoming_payments",
       "talk_read", "reindex_state", "reindex_window", "words_restore_status", "load_orders", "service_health",
-      "sweep_run", "backup_auto", "report_flush", "relay_status"
+      "sweep_run", "backup_auto", "report_flush", "relay_status", "talk_dm_threads"
     ],
     "_allowedInvokes": "Work that must continue while nobody looks (deposit watch, order/chat notices, scheduled reindex, auto-backup). Drawing-only calls (money_status, pairing_waiting, ...) must not appear here."
   },

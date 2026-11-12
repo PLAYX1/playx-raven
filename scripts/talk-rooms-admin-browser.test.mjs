@@ -92,6 +92,8 @@ async function openTalk({ lang = 'ko', locked = false, width = 1440, height = 90
   await page.evaluateOnNewDocument(installFixture, { theme: 'light', sales: false });
   await page.evaluateOnNewDocument(installTalkHarness, { me: ME, mine: MINE, theirs: THEIRS, official: OFFICIAL, other: OTHER, locked });
   if (lang !== 'ko') await page.evaluateOnNewDocument(l => localStorage.setItem('playx-raven-lang', l), lang);
+  // 11-12 왼쪽 칸이 「친구 · 채팅 · 광장」이 됐다 — 방 목록(#tk-rooms)은 「광장」 칸에 있다.
+  await page.evaluateOnNewDocument(() => localStorage.setItem('rv.talk.side', '"square"'));
   await page.goto(origin + '/', { waitUntil: 'networkidle0' });
   await page.waitForFunction(() => document.querySelector('#page-home.on') && !document.documentElement.hasAttribute('data-ravi-arriving'), { timeout: 20000 });
   await page.evaluate(() => document.querySelector('nav')?.classList.add('more-open'));
