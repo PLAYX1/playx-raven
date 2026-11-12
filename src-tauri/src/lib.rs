@@ -112,6 +112,7 @@ mod identity;
 mod talk;
 mod talk_social;
 mod talk_fast;
+mod talk_dm;
 mod talk_push;
 #[cfg(test)]
 mod talk_bench;
@@ -778,6 +779,11 @@ pub fn run() {
             talk_social::talk_feed,
             talk_fast::talk_view,
             talk_fast::talk_warm,
+            talk_dm::talk_dm_threads,
+            talk_dm::talk_dm_read,
+            talk_dm::talk_dm_send,
+            talk_dm::talk_dm_peers,
+            talk_dm::talk_dm_group_key,
             talk_push::talk_push_get,
             talk_push::talk_push_set,
             talk_social::talk_notices,
