@@ -7263,10 +7263,13 @@ async function talkPaint(opts: { cached?: boolean; list?: any[] } = {}) {
     // 11-06 대표 「대화 디자인이 진짜 X 같아야」 — 「모두에게」(공개 글)는 풍선이 아니라 X 처럼 평평한 글 목록. 방은 풍선 그대로.
     // 11-11 피드 카드(새 글이 위). 🔴 읽던 자리는 「화면 맨 위에 보이던 글」로 붙잡는다 — 위에 새 글이 끼어도 밀리지 않는다(페이블).
     const 피드 = !읽은방;
-    const 맨위였나 = !box.dataset.loaded || box.scrollTop < 80;
+    // 11-12 광장은 가운데 기둥(.chat)이 굴러간다 — 읽던 자리도 그 칸으로 잰다.
+    const 굴림 = 피드 ? ((document.querySelector("#page-talk .chat") as HTMLElement | null) ?? box) : box;
+    const 굴림이전 = 굴림.scrollTop;
+    const 맨위였나 = !box.dataset.loaded || 굴림.scrollTop < 80;
     let 기준: { id: string; off: number } | null = null;
     if (피드 && !맨위였나) {
-      const top = box.getBoundingClientRect().top;
+      const top = 굴림.getBoundingClientRect().top;
       for (const c of box.querySelectorAll<HTMLElement>("[data-card]")) {
         const r = c.getBoundingClientRect();
         if (r.bottom > top + 1) { 기준 = { id: String(c.dataset.card || ""), off: r.top - top }; break; }
@@ -7415,12 +7418,12 @@ async function talkPaint(opts: { cached?: boolean; list?: any[] } = {}) {
     if (피드) {
       const 맨위글 = String(asc[asc.length - 1]?.id || "");
       box.dataset.newest = 맨위글;
-      nm.style.top = `${box.offsetTop + 10}px`;
+      nm.style.top = 굴림 === box ? `${box.offsetTop + 10}px` : "";
       if (맨위였나) { box.scrollTop = 0; nm.hidden = true; }
       else {
         const c = 기준 ? box.querySelector<HTMLElement>(`[data-card="${CSS.escape(기준.id)}"]`) : null;
-        if (c && 기준) box.scrollTop += c.getBoundingClientRect().top - box.getBoundingClientRect().top - 기준.off;
-        else box.scrollTop = previousTop;
+        if (c && 기준) 굴림.scrollTop += c.getBoundingClientRect().top - 굴림.getBoundingClientRect().top - 기준.off;
+        else 굴림.scrollTop = 굴림 === box ? previousTop : 굴림이전;
         if (이전맨위글 && 맨위글 !== 이전맨위글) nm.hidden = false;
       }
     } else {
@@ -20243,7 +20246,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("tk-roommute")?.addEventListener("click", () => 방알림바꾸기(tkRoom, !방알림꺼짐(tkRoom)));
   $("tk-new-messages").addEventListener("click", () => {
     const list = $("tk-list");
-    list.scrollTop = tkRoom === "" ? 0 : list.scrollHeight;
+    if (tkRoom === "") { list.scrollTop = 0; document.querySelector("#page-talk .chat")?.scrollTo({ top: 0 }); } else list.scrollTop = list.scrollHeight;
     $("tk-new-messages").hidden = true;
   });
   $("tk-reload").addEventListener("click", () => void talkPaint());
@@ -20382,12 +20385,16 @@ window.addEventListener("DOMContentLoaded", async () => {
     pickSave: (name) => pickSavePath({ defaultPath: name, filters: [{ name: "JSON", extensions: ["json"] }] }),
   });
   // 11-09 피드 이어 불러오기 — 끝 가까이 가면 더 오래된 글 50개씩(끝에 닿으면 멈춘다).
-  $("tk-list").addEventListener("scroll", () => {
-    const box = $("tk-list");
+  // 11-12 광장은 가운데 기둥(.chat)이 통째로 굴러간다(x.com 결) — 끝 닿기는 실제로 굴러가는 칸에서 잰다.
+  const tkScrollBox = (): HTMLElement => tkRoom === "" ? ((document.querySelector("#page-talk .chat") as HTMLElement | null) ?? $("tk-list")) : $("tk-list");
+  const tkMaybeOlder = () => {
+    const box = tkScrollBox();
     // 11-11 피드는 새 글이 위 — 옛 글은 **아래 끝**에서 더 불러온다.
-    if (tkRoom || box.scrollHeight - box.scrollTop - box.clientHeight > 200 || tkOlder.busy || tkOlder.end || !box.dataset.loaded) return;
+    if (tkRoom || box.scrollHeight - box.scrollTop - box.clientHeight > 200 || tkOlder.busy || tkOlder.end || !$("tk-list").dataset.loaded) return;
     void tkLoadOlder();
-  });
+  };
+  $("tk-list").addEventListener("scroll", tkMaybeOlder);
+  document.querySelector("#page-talk .chat")?.addEventListener("scroll", tkMaybeOlder);
   $("tk-rvnlink").addEventListener("click", () => { const b = $("tk-rvnbox"); b.hidden = !b.hidden; if (!b.hidden) { $("tk-rvnsay").textContent = ""; void talkPaintRvnLink(); } });
   $("tk-rvnclose").addEventListener("click", () => { $("tk-rvnbox").hidden = true; });
   $("tk-rvnfresh").addEventListener("click", () => void talkRvnLink(true));

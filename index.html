@@ -2528,6 +2528,12 @@
       #page-talk.feedon .composer textarea { min-height:52px; transition:min-height .15s; }
       #page-talk.feedon .composer textarea:focus, #page-talk.feedon .composer textarea:not(:placeholder-shown) { min-height:100px; }
       #page-talk.feedon .composer button { min-height:44px; }
+      /* 11-12 대표 「각 영역이 스크롤 형식이라 피드 보기 어렵다 — x.com 처럼 어우러지게」: 광장은 칸 안 칸(글 목록 따로 굴림)이라
+         막대가 둘이었다. 광장에서는 가운데 기둥 하나만 굴러간다 — 방 머리·글쓰기는 위로 같이 올라가고, 피드/팔로우 줄만 위에 붙는다. 방(단톡)은 그대로. */
+      #page-talk.feedon .chat > #tk-list { flex:none; min-height:auto; overflow:visible; }
+      #page-talk.feedon .chat { scrollbar-width:thin; }
+      #page-talk.feedon .tk-feedtabs { position:sticky; top:0; z-index:6; }
+      #page-talk.feedon .tk-new-messages { position:sticky; top:64px; bottom:auto; order:19; align-self:center; transform:none; left:auto; margin:6px 0; }
       #tk-list.feedcards .fcard { display:flex; gap:14px; padding:16px 24px 6px; border-bottom:1px solid var(--line); background:var(--panel); }
       #tk-list.feedcards .fcard.pending { opacity:.6; }
       #tk-list.feedcards .fav { width:44px; height:44px; flex:none; border-radius:50%; display:grid; place-items:center; font-weight:800; color:#fff; background:hsl(var(--h,260) 45% 48%); }
