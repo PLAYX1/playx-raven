@@ -1,5 +1,33 @@
 # 변경 기록
 
+## 0.9.39
+
+### 한국어
+
+- **대화 화면을 텔레그램처럼 한 번 더 정리했습니다:** 글 쓰는 칸이 한 줄이 되고 아이콘 크기가 모두 같아졌습니다. 답글·저장·공유가 같은 모양이고, 방마다 동그란 그림(사진 또는 첫 글자)이 붙습니다.
+- **링크를 누를 수 있고 미리보기가 나옵니다:** 수상한 링크는 열기 전에 「이 링크 조심하세요」로 진짜 주소를 크게 보여 줍니다.
+- **방 사진·내 사진:** 방을 만든 사람은 방 사진을, 누구나 이름표에 내 사진을 쓸 수 있습니다. 부적절한 사진은 신고할 수 있습니다.
+- **「한눈에 많이」 크기:** 글자와 큰 단추를 함께 줄여 한 화면에 더 많이 보입니다. 라비에게 「한눈에 보이게 해 줘」라고 말해도 됩니다. 처음 한 번 라비가 글씨 크기를 묻습니다.
+- **왼쪽 연결 표시가 한 줄로:** 「● 노드 ● 채굴 ● IPFS」처럼 보이고, 장부를 받는 중일 때만 막대가 나옵니다.
+- **라비 목소리가 빨리 나옵니다:** 첫 문장부터 바로 읽습니다.
+- **가게 링크 무료 고정 주소:** 컴퓨터를 다시 켜도 바뀌지 않는 `ravenvault.ex.erci.se/s/…` 링크를 무료로 줍니다. 더 안정적인 유료 방법(내 도메인, 테일스케일)도 비용과 함께 안내하고, 테일스케일은 단추 하나로 연결합니다.
+- **장터 오락실:** 「바로 해 보는 게임」을 앱 창 안에서 하고, 한 판마다 직접 확인하고 RVN을 냅니다. 판매자 컴퓨터가 꺼져 있으면 돈을 받지 않고 「지금 쉬는 중」으로 알려 줍니다.
+- **게임 올리기:** 누구나 0 RVN으로 서명만 해서 게임을 올릴 수 있습니다(일반 판매자). 연결된 폰에서도 올릴 수 있습니다. 내 게임은 내 컴퓨터가 보관하고, 원하는 사람만 「다른 판매자 게임 함께 보관」을 켤 수 있습니다.
+- **고침:** 가게 지도 이름표·영업 신호가 중계에서 거절되던 문제를 고쳤습니다.
+
+### English
+
+- **Chat screen polished again:** one-line composer with same-size icons, consistent reply/save/share actions, and a round picture (photo or initial) for every room.
+- **Tappable links with previews;** suspicious links show the real domain in a warning before opening.
+- **Room photos and profile photos,** with reporting for inappropriate pictures.
+- **"Compact" size:** shrinks text and large buttons together; Ravi asks once which size you prefer.
+- **One-line connection status** in the left rail; the progress bar shows only while syncing.
+- **Ravi's voice starts faster** — it begins with the first sentence.
+- **Free fixed shop link** (`ravenvault.ex.erci.se/s/…`) that survives restarts; paid options (own domain, Tailscale) are explained with costs, and Tailscale connects with one button.
+- **Arcade in the market:** play games inside the app and confirm each play's RVN payment yourself. If the seller's computer is off, no payment is taken.
+- **Upload games:** anyone can list a game for 0 RVN with a signature, also from a paired phone. Your games are kept on your computer; helpers can opt in to keep others' games.
+- **Fixed:** shop map cards and presence signals were rejected by the relay.
+
 ## 0.9.38
 
 ### 한국어
