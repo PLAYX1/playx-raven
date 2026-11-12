@@ -184,6 +184,7 @@ mod arcade;
 // 11-13 「게임 올리기」 — 고른 폴더만 살펴보고 붙잡는다(화면이 경로를 못 준다).
 mod arcade_upload;
 mod arcade_listing;
+mod arcade_phone;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -349,6 +350,9 @@ pub fn run() {
             arcade::arcade_pay,
             arcade::arcade_ack,
             arcade_listing::arcade_listing_pubkey,
+            arcade_phone::arcade_phone_jobs,
+            arcade_phone::arcade_phone_take,
+            arcade_phone::arcade_phone_report,
             arcade_listing::arcade_listing_publish,
             arcade_upload::arcade_pick_folder,
             arcade_upload::arcade_pin_folder,

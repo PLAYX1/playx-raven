@@ -11,6 +11,7 @@
  *   · 🔴 예시(가짜) 게임을 그리지 않는다. 올라온 게임이 없으면 「아직 올라온 게임이 없어요」.
  *   · 판매자가 적은 글(제목·설명·가게 이름)은 번역하지 않는다(translate="no").
  */
+import type { PhonePreset } from "./arcade-upload";
 import "./arcade-market.css";
 import { t, tf, copyHtml, setCopyText } from "./i18n";
 import { fmtRvn } from "./amount-ui";
@@ -383,14 +384,17 @@ export function mountArcade(page: HTMLElement, host: HTMLElement, deps: ArcadeDe
     go.focus();
   }
 
+  let preset: PhonePreset | undefined;
   function paintUploadView() {
     focus(true);
+    const pre = preset; preset = undefined;
     void import("./arcade-upload").then(({ paintUpload }) => {
       if (view !== "upload") return;
       paintUpload(host, deps, {
         existing: items ?? [],
         onBack: () => { view = "row"; paint(); },
         onPublished: () => { loadedAt = 0; },
+        preset: pre,
       });
     });
   }
@@ -409,6 +413,6 @@ export function mountArcade(page: HTMLElement, host: HTMLElement, deps: ArcadeDe
     /** 「새로 읽기」 — 목록을 처음부터. */
     refresh() { void load(true).then(paint); },
     /** 「게임 올리기」(판매자) 화면으로 — 「바로 팔기」 안내에서도 연다. */
-    upload() { view = "upload"; current = null; paint(); },
+    upload(p?: PhonePreset) { preset = p; view = "upload"; current = null; paint(); },
   };
 }

@@ -214,4 +214,9 @@ export const ARCADE_COPY: Record<string, [string, string, string]> = {
   "「올리기」를 누르면 게임 폴더와 상품 문서가 공개 IPFS 에, 알림 쪽지가 공개 릴레이에 올라가요. 게임 파일은 이 컴퓨터가 지켜요 — 켜 두어야 사람들이 받을 수 있어요.": ["When you press “Publish”, the game folder and product document go to public IPFS and a listing note goes to the public relays. This computer keeps the game files — keep it on so people can download them.", "「出品」を押すと、ゲームフォルダと商品文書が公開 IPFS に、出品メモが公開リレーに送られます。ゲームファイルはこのパソコンが保管します — 電源を入れておかないと、ほかの人が受け取れません。", "按下“上架”后，游戏文件夹和商品文件会发布到公开 IPFS，上架消息会发布到公开中继。游戏文件由这台电脑保存 —— 需要保持开机，别人才能下载。"],
   "알림 쪽지를 공개 릴레이에 올리는 중…": ["Posting the listing note to public relays…", "出品メモを公開リレーに送っています…", "正在向公开中继发布上架消息…"],
   "올렸어요. 몇 분 안에 장터 「바로 해 보는 게임」에 「일반 판매자」로 보여요.": ["Published. Within a few minutes it appears in “Games to play now” as a general seller.", "出品しました。数分以内に「すぐ遊べるゲーム」に「一般の販売者」として表示されます。", "已上架。几分钟内会以“普通卖家”出现在“马上能玩的游戏”中。"],
+  "폰에서 보낸 게임을 가게 이름으로 올리려면 여기서 소각액을 확인해 주세요.": ["To publish the game sent from your phone under your shop name, check the burn amount here.", "スマホから送ったゲームをお店の名前で出品するには、ここで焼却額を確認してください。", "要以店铺名义上架从手机发送的游戏，请在这里确认销毁金额。"],
+  "폰에서 보낸 게임이 기다려요. 지갑을 열면 바로 올려요.": ["A game sent from your phone is waiting. Unlock the wallet and it will be published right away.", "スマホから送ったゲームが待っています。ウォレットを開くとすぐに出品します。", "从手机发送的游戏正在等待。打开钱包后会立即上架。"],
+  "확인하러 가기": ["Review it", "確認する", "去确认"],
+  "폰에서 보낸 게임이에요.": ["This game was sent from your phone.", "スマホから送られたゲームです。", "这是从手机发送的游戏。"],
+  "폰에서 보낸 게임을 올리려면 지갑을 열어야 합니다.": ["Unlock the wallet to publish the game sent from your phone.", "スマホから送ったゲームを出品するにはウォレットを開く必要があります。", "要上架从手机发送的游戏，需要打开钱包。"],
 };

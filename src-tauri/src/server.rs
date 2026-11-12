@@ -2929,6 +2929,24 @@ async fn admin_publish(
     (StatusCode::OK, Json(json!({ "ok": true })))
 }
 
+/// 폰에서 게임 올리기(arcade_phone.rs). 🔴 사장 토큰 **그리고** 봉함 안쪽(SealedInner)일 때만 — 평문으로 온 것은 토큰이 맞아도 거절.
+async fn admin_arcade_upload(
+    State(state): State<ServerState>,
+    sealed: Option<axum::Extension<crate::shopseal::SealedInner>>,
+    headers: HeaderMap,
+    body: axum::body::Bytes,
+) -> impl IntoResponse {
+    if let Err(reason) = admin_authed_reason(&state, &headers, &json!({})) {
+        return (StatusCode::UNAUTHORIZED, Json(auth_fail_json(reason)));
+    }
+    if sealed.is_none() {
+        return (StatusCode::FORBIDDEN, Json(json!({ "code": "SEALED_ONLY", "error": "연결된 폰의 암호 길로만 받아요." })));
+    }
+    let Ok(v) = serde_json::from_slice::<Value>(&body) else { return (StatusCode::BAD_REQUEST, Json(json!({ "code": "bad-json" }))) };
+    let (status, out) = tokio::task::spawn_blocking(move || crate::arcade_phone::handle(&v)).await.unwrap_or((500, json!({ "code": "state" })));
+    (StatusCode::from_u16(status).unwrap_or(StatusCode::BAD_REQUEST), Json(out))
+}
+
 /// What the owner currently has published, so the phone can edit it rather than
 /// starting from an empty form and wiping what the desktop set.
 async fn admin_shop(State(state): State<ServerState>, headers: HeaderMap) -> impl IntoResponse {
@@ -3636,6 +3654,8 @@ fn build_phone_router(st: ServerState) -> axum::Router {
         .route("/api/admin/machine", get(admin_machine))
         .route("/api/admin/machine/start", post(admin_machine_start))
         .route("/api/admin/backup", post(admin_backup))
+        // 폰에서 게임 올리기 — 사장 토큰 + 봉함으로 온 것만(arcade_phone.rs).
+        .route("/api/admin/arcade-upload", post(admin_arcade_upload))
         // 직원 환불. 한도는 refund.rs 가 건다.
         .route("/api/staff/refund/limits", get(staff_refund_limits_route))
         .route("/api/staff/refund", post(staff_refund_route))
@@ -6659,5 +6679,117 @@ mod lan_mount_in_phone_router {
         st.lan.disarm();
         let (s, _) = post(&app, "192.168.0.10:8790", "/lan/pull", &pull_with("cd".repeat(16))).await;
         assert_eq!(s, StatusCode::NOT_FOUND);
+    }
+}
+
+/// 11-13 폰에서 게임 올리기 — 진짜 라우터로: 봉함 + 사장 토큰만 통과, 평문·직원·검표·위조는 거절.
+#[cfg(test)]
+mod arcade_phone_route_tests {
+    use super::order_persistence_tests::TestHome;
+    use super::*;
+    use crate::shopseal::{install_key_for_test, open_response, seal_request_for_test, set_test_now};
+    use tower::ServiceExt;
+
+    const DESK: [u8; 32] = [9u8; 32];
+    fn shop() -> ServerState {
+        let st = ServerState::default();
+        *st.token.lock().unwrap() = "owner-token-synthetic".into();
+        st.role_tokens.lock().unwrap().insert("staff".into(), "staff-token-synthetic".into());
+        st.role_tokens.lock().unwrap().insert("scanner".into(), "scanner-token-synthetic".into());
+        install_key_for_test(DESK);
+        st
+    }
+    async fn post(st: &ServerState, path: &str, token: Option<&str>, body: String) -> (StatusCode, Value) {
+        let mut req = axum::http::Request::builder().uri(path).method("POST").header("host", "192.168.0.10:8790").header("content-type", "application/json");
+        if let Some(t) = token { req = req.header("x-playx-token", t); }
+        let resp = build_phone_router(st.clone()).oneshot(req.body(axum::body::Body::from(body)).unwrap()).await.unwrap();
+        let status = resp.status();
+        let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        (status, serde_json::from_slice(&bytes).unwrap_or(Value::Null))
+    }
+
+    #[tokio::test]
+    async fn 봉함_사장만_통과_나머지는_거절() {
+        let _home = TestHome::new();
+        let st = shop();
+        set_test_now(Some(1_790_000_000));
+        let info = json!({ "action": "info" });
+        // ① 사장 토큰 + 봉함 → 200
+        let (env, ctx) = seal_request_for_test(&DESK, "owner-token-synthetic", "POST", "/api/admin/arcade-upload", info.clone(), 1_790_000_000, 1);
+        let (status, out) = post(&st, "/api/scan/sealed", None, env.to_string()).await;
+        assert_eq!(status, StatusCode::OK);
+        let ans = open_response(&ctx, &out).unwrap();
+        assert_eq!(ans["status"], 200, "{ans}"); assert_eq!(ans["body"]["maxFiles"], 500);
+        // ② 같은 사장 토큰이라도 평문으로 바로 부르면 403 SEALED_ONLY(토큰을 주운 사람이 봉함 열쇠 없이 못 쓴다)
+        let (status, out) = post(&st, "/api/admin/arcade-upload", Some("owner-token-synthetic"), info.to_string()).await;
+        // (같은 와이파이의 평문 사장 길은 바깥 문지기가 먼저 SEAL_REQUIRED 로 막는다 — 막히지 않아도 처리기가 SEALED_ONLY 로 한 번 더)
+        assert!(status.is_client_error(), "{status}"); assert!(out["code"] == "SEAL_REQUIRED" || out["code"] == "SEALED_ONLY", "{out}");
+        // ③ 직원·검표 토큰으로 봉한 것 → 안쪽에서 거절(사장 길)
+        for (tok, seed) in [("staff-token-synthetic", 2u8), ("scanner-token-synthetic", 3u8)] {
+            let (env, ctx) = seal_request_for_test(&DESK, tok, "POST", "/api/admin/arcade-upload", info.clone(), 1_790_000_000, seed);
+            let (status, out) = post(&st, "/api/scan/sealed", None, env.to_string()).await;
+            let ans = open_response(&ctx, &out).unwrap_or_else(|| panic!("{tok}: {status} {out}"));
+            assert!(ans["status"] == 401 || ans["status"] == 403, "{tok}: {ans}");
+        }
+        // ④ 연결 안 된(모르는 토큰) 폰·다른 컴퓨터 열쇠로 봉한 것 → 평문 401
+        let (env, _) = seal_request_for_test(&DESK, "forged-token", "POST", "/api/admin/arcade-upload", info.clone(), 1_790_000_000, 4);
+        assert_eq!(post(&st, "/api/scan/sealed", None, env.to_string()).await.0, StatusCode::UNAUTHORIZED);
+        let (env, _) = seal_request_for_test(&[7u8; 32], "owner-token-synthetic", "POST", "/api/admin/arcade-upload", info.clone(), 1_790_000_000, 5);
+        assert_eq!(post(&st, "/api/scan/sealed", None, env.to_string()).await.0, StatusCode::UNAUTHORIZED);
+        // ⑤ 변조한 봉투 → 401
+        let (mut env, _) = seal_request_for_test(&DESK, "owner-token-synthetic", "POST", "/api/admin/arcade-upload", info.clone(), 1_790_000_000, 6);
+        let ct = env["ct"].as_str().unwrap().to_string();
+        env["ct"] = json!(format!("{}{}", if ct.starts_with('0') { "1" } else { "0" }, &ct[1..]));
+        assert_eq!(post(&st, "/api/scan/sealed", None, env.to_string()).await.0, StatusCode::UNAUTHORIZED);
+        // ⑥ 같은 봉투 다시 → 재전송 거절
+        let (env, ctx) = seal_request_for_test(&DESK, "owner-token-synthetic", "POST", "/api/admin/arcade-upload", info.clone(), 1_790_000_000, 8);
+        let _ = post(&st, "/api/scan/sealed", None, env.to_string()).await;
+        let (_, out) = post(&st, "/api/scan/sealed", None, env.to_string()).await;
+        assert_eq!(open_response(&ctx, &out).unwrap()["body"]["code"], "SEAL_REPLAY");
+        set_test_now(None);
+    }
+
+    /// 끝까지: 봉함으로 start → 꽉 찬 조각(32KiB)들 → finish → 일감 줄에 「queued」. 조각 크기가 봉함 평문 한도 안에 드는지도 같이 본다.
+    #[tokio::test]
+    async fn 봉함으로_끝까지_보내면_일감이_생긴다() {
+        use base64::Engine as _;
+        use sha2::{Digest, Sha256};
+        let _serial = crate::arcade_phone::tests::SERIAL.lock().unwrap_or_else(|e| e.into_inner()); // 받는 중 일감은 하나(전역) — 다른 시험과 겹치지 않게
+        let _home = TestHome::new();
+        let st = shop();
+        set_test_now(Some(1_790_000_100));
+        let mut seed = 40u8;
+        let mut call = |body: Value| { seed = seed.wrapping_add(1); let st = st.clone(); let s = seed; async move {
+            let (env, ctx) = seal_request_for_test(&DESK, "owner-token-synthetic", "POST", "/api/admin/arcade-upload", body, 1_790_000_100, s);
+            let (status, out) = post(&st, "/api/scan/sealed", None, env.to_string()).await;
+            assert_eq!(status, StatusCode::OK, "{out}");
+            open_response(&ctx, &out).unwrap()
+        } };
+        let mut html = b"<!doctype html><html><head><script src=\"game.js\"></script></head><body></body></html>".to_vec();
+        html.resize(40 * 1024, b' ');
+        let js = vec![b';'; 70 * 1024];
+        let sha = |b: &[u8]| Sha256::digest(b).iter().map(|x| format!("{x:02x}")).collect::<String>();
+        let files = json!([{ "path": "index.html", "size": html.len(), "sha256": sha(&html) }, { "path": "game.js", "size": js.len(), "sha256": sha(&js) }]);
+        let a = call(json!({ "action": "start", "files": files })).await;
+        assert_eq!(a["status"], 200, "{a}");
+        let id = a["body"]["id"].as_str().unwrap().to_string();
+        let n = a["body"]["chunkBytes"].as_u64().unwrap() as usize;
+        assert_eq!(n, crate::arcade_phone::CHUNK_BYTES);
+        for (path, bytes) in [("index.html", &html), ("game.js", &js)] {
+            for (i, c) in bytes.chunks(n).enumerate() {
+                let r = call(json!({ "action": "chunk", "id": id, "path": path, "offset": i * n, "data": base64::engine::general_purpose::STANDARD.encode(c) })).await;
+                assert_eq!(r["status"], 200, "{path} #{i}: {r}");
+            }
+        }
+        let meta = json!({ "title": "Star Run", "description": "", "genre": "arcade", "priceSats": "0", "minutes": 3, "tag": "STAR_RUN", "mode": "open" });
+        let f = call(json!({ "action": "finish", "id": id, "meta": meta })).await;
+        assert_eq!(f["status"], 200, "{f}");
+        let jobs = crate::arcade_phone::arcade_phone_jobs();
+        let j = jobs.as_array().unwrap().iter().find(|j| j["id"] == id.as_str()).expect("일감");
+        assert_eq!(j["status"], "queued");
+        assert_eq!(j["scan"]["files"].as_array().unwrap().len(), 2);
+        let s = call(json!({ "action": "status", "id": id })).await;
+        assert_eq!(s["body"]["status"], "queued", "{s}");
+        set_test_now(None);
     }
 }

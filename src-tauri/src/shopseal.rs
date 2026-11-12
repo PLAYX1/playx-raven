@@ -52,6 +52,8 @@ pub const REPLAY_TTL: i64 = 600;
 /// `/api/scan/sealed` 자신은 없다(재귀 금지). 입장 처리(`/api/scan/in`)는 폰이 안 부른다.
 pub const SEALED_PATHS: &[&str] = &[
     "/api/admin/ai",
+    // 11-13 폰에서 게임 올리기(arcade_phone.rs) — 사장 토큰 + 봉함으로만.
+    "/api/admin/arcade-upload",
     "/api/admin/assets",
     "/api/admin/backup",
     "/api/admin/issue",
@@ -229,6 +231,21 @@ pub fn open_request(desk_sk: &[u8; 32], tokens: &[(String, String)], env: &Value
         body: p["body"].clone(),
         ctx,
     })
+}
+
+/// 시험 전용: 폰(core/shop-remote/seal.ts prepareSealedRequest)과 같은 봉투를 만든다. 답을 열 Ctx 도 돌려준다.
+#[cfg(test)]
+pub fn seal_request_for_test(desk_sk: &[u8; 32], token: &str, method: &str, path: &str, body: Value, ts: i64, seed: u8) -> (Value, Ctx) {
+    let eph_sk = x25519_dalek::StaticSecret::from([seed; 32]);
+    let eph = x25519_dalek::PublicKey::from(&eph_sk).to_bytes();
+    let desk_pub = x25519_dalek::PublicKey::from(&x25519_dalek::StaticSecret::from(*desk_sk)).to_bytes();
+    let shared = eph_sk.diffie_hellman(&x25519_dalek::PublicKey::from(desk_pub)).to_bytes();
+    let key = derive_key(&shared, token);
+    let n = [seed.wrapping_add(1); 24];
+    let nonce: String = (0..16).map(|i| format!("{:02x}", seed.wrapping_add(i))).collect();
+    let plain = serde_json::to_vec(&json!({ "v": 1, "m": method, "path": path, "ts": ts, "nonce": nonce, "body": body })).unwrap();
+    let ct = XChaCha20Poly1305::new((&key).into()).encrypt(XNonce::from_slice(&n), Payload { msg: &plain, aad: &aad_req(&eph, &desk_pub) }).unwrap();
+    (json!({ "v": 1, "eph": hex::encode(eph), "n": hex::encode(n), "ct": hex::encode(ct) }), Ctx { key, eph, n })
 }
 
 /// 길·시계·재전송 검사. 거절이면 봉해서 돌려줄 (상태, 코드).

@@ -70,7 +70,7 @@ pub fn scan_dir(root: &Path) -> Result<(Vec<Scanned>, Vec<String>, Vec<String>),
 
 fn is_html(p: &str) -> bool { let l = p.to_ascii_lowercase(); l.ends_with(".html") || l.ends_with(".htm") }
 
-fn scan_answer(root: &Path) -> Result<Value, String> {
+pub(crate) fn scan_answer(root: &Path) -> Result<Value, String> {
     let (files, skipped, bad) = scan_dir(root)?;
     let mut texts = serde_json::Map::new();
     let mut used = 0usize;
@@ -84,6 +84,11 @@ fn scan_answer(root: &Path) -> Result<Value, String> {
         "files": files.iter().map(|f| json!({ "path": f.path, "sha256": f.sha256, "size": f.size })).collect::<Vec<_>>(),
         "skipped": skipped, "badNames": bad, "htmlTexts": texts,
     }))
+}
+
+/// 폰 연결 올리기(arcade_phone.rs)가 받은 폴더를 「고른 폴더」로 둔다 — 화면이 경로를 보내지 않는 규칙은 그대로.
+pub(crate) fn set_picked(dir: PathBuf) {
+    if let Ok(mut p) = PICKED.lock() { *p = Some(dir); }
 }
 
 /// 이 컴퓨터 대화상자로 게임 폴더를 고른다. 고른 폴더만 기억한다(다음 고르기 전까지).

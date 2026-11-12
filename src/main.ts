@@ -5279,9 +5279,10 @@ function myNotesLine(r: any): string {
 /* ── 0.9.17 장터·「내 글」·피드 메뉴 (src/listing-market.ts — 처음 쓸 때 따로 내려받는다) ── */
 const listingDeps = () => ({ invoke: <T = any>(cmd: string, args?: Record<string, unknown>) => invoke<T>(cmd, args), ensureUnlocked, errText, fmtQty });
 let listingMarket: { enter(open?: "browse" | "mine"): void } | undefined;
-let arcadeMarket: { enter(): void; refresh(): void; upload(): void } | undefined;
+let arcadeMarket: { enter(): void; refresh(): void; upload(p?: import("./arcade-upload").PhonePreset): void } | undefined;
 /** 다음에 장터를 열 때 「게임 올리기」부터(「바로 팔기」 안내에서). */
 let arcadeUploadNext = false;
+let arcadePhonePreset: import("./arcade-upload").PhonePreset | undefined;
 let tradeOpen: "browse" | "mine" | undefined;
 function openTrade(open?: "browse" | "mine") {
   tradeOpen = open;
@@ -5358,8 +5359,8 @@ function showPage(id: string) {
   // 11-12 장터 첫 줄 「바로 해 보는 게임」(src/arcade-market.ts) — 맞교환 목록과 따로 내려받는다.
   if (id === "trade") void import("./arcade-market").then(({ mountArcade }) => {
     arcadeMarket ??= mountArcade($("page-trade"), $("ar-host"), { ...listingDeps(), canSell: sellerModeOn });
-    if (currentPage === "trade") { if (arcadeUploadNext) arcadeMarket.upload(); else arcadeMarket.enter(); }
-    arcadeUploadNext = false;
+    if (currentPage === "trade") { if (arcadeUploadNext) arcadeMarket.upload(arcadePhonePreset); else arcadeMarket.enter(); }
+    arcadeUploadNext = false; arcadePhonePreset = undefined;
   }).catch((e) => paintLoadFail($("ar-host"), () => showPage("trade"), "arcade-market", e));
   if (id === "chain") chainInfo?.enter();
   paintPageTiles(id);
@@ -19341,6 +19342,20 @@ async function loadOrders() {
 
 // ── 가게 찾기 ──
 window.addEventListener("DOMContentLoaded", async () => {
+  // 11-13 짝 맺은 폰에서 보낸 게임(봉인 통로 /api/admin/arcade-upload → 러스트 arcade_phone.rs) — 몇 초마다 집어 같은 길로 올린다(src/arcade-phone-upload.ts).
+  void Promise.all([import("./arcade-phone-upload"), import("./arcade-phone-bar")]).then(([{ startPhoneUploads }, { paintPhoneBar, clearPhoneBar }]) => {
+    const runner = startPhoneUploads({
+      invoke: (cmd, args) => invoke(cmd, args),
+      onNeedsDesktop: (job, why) => paintPhoneBar(job, why, {
+        unlock: () => void ensureUnlocked(t("폰에서 보낸 게임을 올리려면 지갑을 열어야 합니다.")).then((ok) => { if (ok) void runner.tick(); }),
+        openShop: (j) => {
+          arcadePhonePreset = { jobId: j.id, scan: j.scan, meta: j.meta, onPublished: (docCid) => void invoke("arcade_phone_report", { id: j.id, status: "done", step: "done", message: "올렸어요.", result: { docCid } }).catch(() => {}) };
+          arcadeUploadNext = true; showPage("trade");
+        },
+      }),
+      onClear: clearPhoneBar,
+    });
+  }).catch(() => { /* 없어도 앱은 돈다 */ });
   const theme = $("rv-theme") as HTMLSelectElement;
   // 0.9.4 — 자료 폴더 이름을 RavenVault 로 옮기다 막혔거나, 옛 폴더에도 자료가 있을 때 쉬운 말로 알린다.
   void invoke<any>("datadir_status").then((d) => {

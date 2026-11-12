@@ -9,7 +9,7 @@ import { readFile, stat } from 'node:fs/promises';
 import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { resolve, join, extname, sep } from 'node:path';
+import { resolve, join, extname, sep, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { build } from 'esbuild';
 import puppeteer from 'puppeteer-core';
@@ -127,7 +127,7 @@ async function openMarket({ width, theme = 'light', sources, scan = UP_SCAN }) {
   await page.waitForFunction(() => !/가져오는 중/.test(document.querySelector('#ar-host').textContent), { timeout: 10000 });
   return page;
 }
-const shot = (page, name) => page.screenshot({ path: join(shotDir, name), fullPage: false });
+const shot = (page, name) => { mkdirSync(dirname(join(shotDir, name)), { recursive: true }); return page.screenshot({ path: join(shotDir, name), fullPage: false }); };
 /** 보이는 단추 중 글자가 두 줄 이상인 것(줄 상자 윗선이 둘 이상) · nowrap 이 아닌 것. */
 async function noWrapButtons(page) {
   return page.evaluate(() => [...document.querySelectorAll('#ar-host button:not(.ar-card)')].filter(b => b.offsetParent)

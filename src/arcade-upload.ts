@@ -21,6 +21,7 @@ import {
 } from "./arcade-upload-rules";
 import type { ArcadeProduct } from "./arcade-model";
 import { publishListing, runOpenUpload, type OpenStep } from "./arcade-open";
+import type { PhoneMeta } from "./arcade-phone-upload";
 
 type Invoke = <T = any>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
 export interface UploadDeps { invoke: Invoke; ensureUnlocked: (why: string) => Promise<boolean>; errText: (e: unknown) => string }
@@ -32,7 +33,10 @@ function esc(s: unknown): string {
 const isSentUnknown = (e: unknown) => /SENT_UNKNOWN/.test(String(e));
 const fmtSize = (n: number) => n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
 
-export function paintUpload(host: HTMLElement, deps: UploadDeps, o: { existing: readonly ArcadeProduct[]; onBack: () => void; onPublished: () => void }) {
+/** 폰에서 보낸 게임(가게 이름으로 올리기) — 받은 폴더·글을 채워 연다. 확인 칸·소각은 이 화면 그대로(사람이 눌러야 나간다). */
+export type PhonePreset = { jobId: string; scan: unknown; meta: PhoneMeta; onPublished: (docCid: string) => void };
+
+export function paintUpload(host: HTMLElement, deps: UploadDeps, o: { existing: readonly ArcadeProduct[]; onBack: () => void; onPublished: () => void; preset?: PhonePreset }) {
   let scan: FolderScan | null = null;
   let places = { shops: [] as string[], products: [] as string[] };
   let busy = false;
@@ -52,6 +56,14 @@ export function paintUpload(host: HTMLElement, deps: UploadDeps, o: { existing: 
   /** 이 지갑이 올린 일반 판매자 게임(판매자 주소 = 이 화면이 기억한 판매 주소). */
   const myOpen = () => { const me = savedSeller(); return me ? o.existing.filter((p) => p.listing === "open" && p.doc.seller === me) : []; };
   paintMine();
+  if (o.preset) {
+    const pre = o.preset;
+    // 받은 폴더를 「고른 폴더」로(러스트 arcade_phone_take) — 올리기에서 arcade_pin_folder 가 다시 재서 같을 때만 붙잡는다.
+    void deps.invoke("arcade_phone_take", { id: pre.jobId }).then(() => {
+      scan = scanOf(pre.scan);
+      if (scan) { setCopyText($("[data-up-folder]"), () => t("폰에서 보낸 게임이에요.")); paintForm(); }
+    }).catch((e) => { $("[data-up-folder]").innerHTML = `<p class="danger">${esc(deps.errText(e))}</p>`; });
+  }
   function paintMine() {
     const box = $("[data-up-mine]"), mine = myOpen();
     if (!mine.length) { box.innerHTML = ""; return; }
@@ -148,6 +160,19 @@ export function paintUpload(host: HTMLElement, deps: UploadDeps, o: { existing: 
     $<HTMLSelectElement>("[data-up-entry]").onchange = recheck;
     recheck();
     $("[data-up-review]").onclick = () => void review(recheck);
+    if (o.preset) fillPreset(o.preset.meta, recheck);
+  }
+
+  /** 폰이 적은 글을 칸에 채운다(사람이 고칠 수 있다). 가게가 이 지갑에 있으면 그 가게를 고른다. */
+  function fillPreset(m: PhoneMeta, recheck: () => boolean) {
+    const set = (sel: string, v: string) => { const el = host.querySelector<HTMLInputElement>(sel); if (el) el.value = v; };
+    set("[data-up-title]", m.title); set("[data-up-desc]", m.description ?? ""); set("[data-up-genre]", m.genre);
+    set("[data-up-price]", m.priceSats === "0" ? "0" : String(Number(m.priceSats) / 1e8)); set("[data-up-min]", String(m.minutes));
+    const tag = host.querySelector<HTMLInputElement>("[data-up-tag]"); if (tag) { tag.value = m.tag; tag.dataset.touched = "1"; }
+    if (m.entry) set("[data-up-entry]", m.entry);
+    const target = host.querySelector<HTMLSelectElement>("[data-up-target]");
+    if (target && m.mode === "shop" && m.shop && [...target.options].some((x) => x.value === `new:${m.shop}`)) { target.value = `new:${m.shop}`; target.dispatchEvent(new Event("change")); }
+    recheck();
   }
 
   /** 일반 판매자 길의 확인 칸 — 소각 없음 · 공개 IPFS · 공개 릴레이. 「읽었어요」 전에는 「올리기」가 잠긴다. */
@@ -206,7 +231,7 @@ export function paintUpload(host: HTMLElement, deps: UploadDeps, o: { existing: 
         step.innerHTML = `<p class="ok">${copyHtml("올렸어요. 몇 분 안에 장터 「바로 해 보는 게임」에 「일반 판매자」로 보여요.")}</p>` +
           `<p class="meta ar-txid">${copyHtml("상품 문서")} <code translate="no">${esc(r.docCid)}</code></p>`;
         busy = false;
-        o.onPublished();
+        o.onPublished(); o.preset?.onPublished(r.docCid);
       } catch (e) { busy = false; go.disabled = false; stop.disabled = false; sayEl.innerHTML = `<span class="danger">${esc(deps.errText(e))}</span>`; }
     };
   }
@@ -289,7 +314,7 @@ export function paintUpload(host: HTMLElement, deps: UploadDeps, o: { existing: 
           `<p class="meta ar-txid">${copyHtml("거래 번호")} <code translate="no">${esc(txid)}</code></p>` +
           `<p class="meta ar-txid">${copyHtml("상품 문서")} <code translate="no">${esc(docCid)}</code></p>`;
         busy = false;
-        o.onPublished();
+        o.onPublished(); o.preset?.onPublished(docCid);
       } catch (e) {
         if (isSentUnknown(e)) { busy = false; step.innerHTML = `<p class="danger">${copyHtml("보냈는지 확인하지 못했어요. 다시 올리지 말고, 자산 화면에서 기록됐는지 먼저 확인해 주세요.")}</p>`; return; }
         fail(e);
