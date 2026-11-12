@@ -54,6 +54,12 @@ const mocks = ({ tts }) => {
   const W = window.Worker; window.Worker = function (...a) { const w = new W(...a); w.addEventListener('message', e => { window.__WLOG = (window.__WLOG || []).concat([String(e.data && e.data.type) + (e.data && e.data.message ? ':' + e.data.message : '')]); }); w.addEventListener('error', e => { window.__WLOG = (window.__WLOG || []).concat(['worker-error:' + e.message]); }); return w; };
   window.__WAVS = []; const cou = URL.createObjectURL.bind(URL);
   URL.createObjectURL = b => { if (b && b.type === 'audio/wav') b.slice(0, 44).arrayBuffer().then(h => { const v = new DataView(h); window.__WAVS.push({ rate: v.getUint32(24, true), seconds: (b.size - 44) / 2 / v.getUint32(24, true), peak: 0 }); }); return cou(b); };
+  // 웹 오디오(조각 줄): 조각마다 기록(선언 샘플레이트·길이) — 첫 조각 시각이 첫 소리 시각.
+  const start = AudioBufferSourceNode.prototype.start;
+  AudioBufferSourceNode.prototype.start = function (when = 0, ...rest) {
+    const b = this.buffer; if (b && b.duration > 0.2) { window.__PLAYED.push({ src: 'webaudio', duration: b.duration }); window.__WAVS.push({ rate: b.sampleRate, seconds: b.duration, peak: 0 }); }
+    return start.call(this, when, ...rest);
+  };
   const play = HTMLMediaElement.prototype.play;
   HTMLMediaElement.prototype.play = function () {
     window.__PLAYED.push({ src: String(this.src).slice(0, 5) });
@@ -123,17 +129,21 @@ try {
     await page.screenshot({ path: resolve(process.env.RV_SHOT_DIR || tmpdir(), 'ravi-tts-ai-badge.png') }).catch(() => {});
     await page.waitForFunction(() => window.__PLAYED.length >= 1, { timeout: Number(process.env.RV_WAIT || 150000) });
     const made = Date.now() - t0;
-    const played = await page.evaluate(() => window.__PLAYED[0]); assert.equal(played.src, 'blob:');
+    const played = await page.evaluate(() => window.__PLAYED[0]); assert.ok(['webaudio', 'blob:'].includes(played.src), played.src);
     await page.waitForFunction(() => window.__WAVS.length >= 1, { timeout: 5000 });
-    const { rate, seconds: dur } = await page.evaluate(() => window.__WAVS[0]);
+    const { rate } = await page.evaluate(() => window.__WAVS[0]);
     assert.ok(Math.abs(rate - 50949) <= 2, `재생 샘플레이트 44100 x 1.1553 = 50949: ${rate}`);
-    assert.ok(Math.abs(dur - 6.03) < 0.5, `기준 6.0초와 ±5% 안: ${dur}`);
+    await page.waitForFunction(() => document.getElementById('ravi-ai-voice').hidden, { timeout: 60000 });
+    const pieces = await page.evaluate(() => window.__WAVS.map(w => w.seconds)), dur = pieces.reduce((a, b) => a + b, 0);
+    assert.ok(pieces.length >= 2, `문장 조각으로 나눠 틀었다: ${pieces.length}`);
+    // 기준 6.03초는 글 전체를 한 번에 만든 소리. 조각마다 끝을 조금 늘여 말하므로(쉼 제외) 소리 길이 합은 기준보다 조금 길다 — 말 빠르기 규칙(0.908·×1.1553)은 그대로.
+    assert.ok(dur > 6.03 * 0.95 && dur < 6.03 * 1.12, `조각 소리 길이 합이 기준 6.0초 -5%~+12% 안: ${dur.toFixed(2)} (${pieces.map(x => x.toFixed(2)).join('+')})`);
     assert.equal(await page.evaluate(() => window.__DEVICE.length), 0, '기기 목소리는 안 썼다');
     await page.waitForFunction(() => document.querySelectorAll('#chat-log .msg.ai .ai-voice-tag').length === 1, { timeout: 5000 });
     assert.equal(await page.$eval('#chat-log .ai-voice-tag', e => e.textContent), 'AI 음성');
     assert.ok(await page.evaluate(() => window.__AIFLAGS.some(Boolean)), '말하는 동안 배지가 보였다');
     await page.waitForFunction(() => document.getElementById('ravi-ai-voice').hidden, { timeout: 15000 });
-    console.log(`A: 첫 문장 읽기+만들기+재생 시작까지 ${made}ms, 재생 길이 ${dur.toFixed(2)}초, 선언 샘플레이트 ${rate}`);
+    console.log(`A: 첫 소리까지(묻기 → 첫 조각 재생) ${made}ms, 조각 ${pieces.length}개, 길이 합 ${dur.toFixed(2)}초, 선언 샘플레이트 ${rate}`);
     // 같은 문장 다시: 캐시(합성 명령 없이 바로)
     const t1 = Date.now(); const n0 = await page.evaluate(() => window.__PLAYED.length); await ask(page).catch(() => {});
     await page.$eval('#chat-q', el => { el.value = '레이븐코인은 언제 만들어졌어?'; }); await page.click('#chat-go');

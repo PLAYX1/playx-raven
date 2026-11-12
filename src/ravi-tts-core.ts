@@ -148,3 +148,98 @@ export function parseStyle(json: { style_ttl: { data: unknown; dims: number[] };
   const flat = (x: unknown): number[] => Array.isArray(x) ? (x as unknown[]).flatMap(flat) : [x as number];
   return { ttl: { data: Float32Array.from(flat(json.style_ttl.data)), dims: json.style_ttl.dims }, dp: { data: Float32Array.from(flat(json.style_dp.data)), dims: json.style_dp.dims } };
 }
+
+// ── 문장 조각(스트리밍) — 폰 phone/ui/ravi/ravi-voice-core.ts 의 voiceChunks 와 같은 규칙(바꾸면 둘 다) ──
+/**
+ * 읽을 글 → 차례로 합성할 조각들(문장 단위). 첫 조각을 짧게 해서 첫 소리를 빨리 낸다 — 글 전체를 다 만든 뒤에 틀면 3~4문장 답에 십수 초가 걸린다(11-13 실측).
+ * - 문장 끝(. ! ? … 。 ！ ？ 뒤 빈칸·끝)에서 나눈다. 소수점(3.5)·약어(e.g. Mr. etc.)·번호(1. 2.)에서는 안 나눈다.
+ * - 너무 긴 문장(maxLen=40 초과 — 앞 조각이 재생되는 동안 다음 조각을 만들 수 있게 짧게)은 쉼표에서, 그래도 길면 빈칸에서 나눈다.
+ * - 첫 문장이 firstMax 보다 길면 가장 이른 숨 쉬는 자리에서 한 번 더 나눈다: 쉼표, 또는 이어지는 말끝(…고, …면, …서, …는데, …지만)·주제/주어 조사(…은/는/이/가/에서) 뒤에 쉼표를 붙여(억양이 이어지게).
+ * - 읽을 글자(글자·숫자)가 없는 조각(이모지만 등)은 앞 조각에 붙인다.
+ */
+const SENTENCE_END = /([.!?…。！？]+)(["'”’)\]」』]*)(\s+|$)/g;
+const ABBREVIATION = /^(?:e\.g|i\.e|etc|vs|mr|mrs|ms|dr|prof|st|no|inc|ltd|jr|sr|approx|a\.m|p\.m)\.$/i;
+const SPEAKABLE = /[\p{L}\p{N}]/u;
+const CONNECTIVE = /(?:고|면|서|며|는데|은데|지만|니까|으니|려면|도록|거나|든지|면서|어서|아서|해서|하고)$/;
+/** 첫 조각만: 말할 때 숨을 쉬는 자리(주제·주어 조사 뒤) — 「복구 단어는, 이 지갑을…」 */
+const TOPIC = /[가-힣](?:은|는|이|가|에서|에게|께서|도|마다|부터|까지|에는|에도|으로|로|에)$/;
+/** 이 말로 시작하는 낱말 앞에서는 끊지 않는다(앞말에 붙어 한 덩어리: 「옮길 수」「할 때」「본 적」). */
+const BOUND_NEXT = /^(?:수|것|거|때|줄|적|뿐|만큼|대로|듯|중|등|번|개|분|원)(?:$|[^가-힣]|[은는이가을를도에의와과로])/;
+function sentencesOf(text: string): string[] {
+  const out: string[] = []; let start = 0;
+  for (const m of text.matchAll(SENTENCE_END)) {
+    const end = m.index! + m[1].length + m[2].length;
+    const piece = text.slice(start, end).trim(), last = piece.split(/\s+/).pop() ?? '';
+    if (m[3] && m[1] === '.' && (ABBREVIATION.test(last) || /^\d{1,3}\.$/.test(last))) continue;   // 약어·번호 목록은 문장 끝이 아니다
+    if (piece) out.push(piece);
+    start = end + m[3].length;
+  }
+  const rest = text.slice(start).trim(); if (rest) out.push(rest);
+  return out;
+}
+function pack(parts: string[], maxLen: number, join = ' '): string[] {
+  const out: string[] = []; let cur = '';
+  for (const p of parts) { if (cur && cur.length + join.length + p.length > maxLen) { out.push(cur); cur = p; } else cur = cur ? cur + join + p : p; }
+  if (cur) out.push(cur);
+  return out;
+}
+/** 쉼표도 없이 긴 부분: 빈칸에서 고르게 나눈다 — 길이가 고른 자리 중 숨 쉬는 자리(이어지는 말끝·조사 뒤)를 먼저 고르고, 「옮길 수」처럼 붙은 말은 떼지 않는다.
+ *  문장 중간에서 끊은 곳엔 쉼표를 붙인다(억양이 이어지게 — 안 붙이면 합성 전처리가 마침표를 붙인다). */
+function splitWords(part: string, maxLen: number): string[] {
+  const words = part.split(/\s+/), out: string[] = [];
+  let from = 0;
+  while (from < words.length) {
+    const left = words.slice(from).join(' ');
+    if (left.length <= maxLen) { out.push(left); break; }
+    const n = Math.ceil(left.length / maxLen), target = left.length / n;
+    let best = -1, bestScore = Infinity, head = '';
+    for (let i = from; i < words.length - 1; i++) {
+      head = head ? head + ' ' + words[i] : words[i];
+      if (head.length > maxLen) break;
+      if (head.length < target * 0.5 || BOUND_NEXT.test(words[i + 1])) continue;
+      const score = Math.abs(head.length - target) - (CONNECTIVE.test(words[i]) || TOPIC.test(words[i]) || /(?:을|를)$/.test(words[i]) ? maxLen / 3 : 0);
+      if (score < bestScore) { bestScore = score; best = i; }
+    }
+    if (best < 0) { out.push(left); break; }   // 끊을 자리가 없으면 그대로(합성기가 한 번에 읽는다)
+    const piece = words.slice(from, best + 1).join(' ');
+    out.push(/[,，、]$/.test(piece) ? piece : piece + ','); from = best + 1;
+  }
+  return out;
+}
+function splitLong(sentence: string, maxLen: number): string[] {
+  if (sentence.length <= maxLen) return [sentence];
+  const out: string[] = [];
+  for (const part of pack(sentence.split(/(?<=[,，、])\s+/), maxLen)) out.push(...(part.length <= maxLen ? [part] : splitWords(part, maxLen)));
+  return out;
+}
+function splitFirst(sentence: string, firstMax: number): string[] {
+  if (sentence.length <= firstMax) return [sentence];
+  // 가장 이른 자연스러운 끊김: 쉼표(머리 5자 이상) 또는 이어지는 말끝 낱말(머리 6자 이상, 쉼표를 붙인다). 머리는 firstMax×2 안, 꼬리는 4자 이상.
+  const words = sentence.split(' '); let head = '';
+  for (let i = 0; i < words.length - 1; i++) {
+    head = head ? head + ' ' + words[i] : words[i];
+    if (head.length > firstMax * 2) break;
+    const tail = words.slice(i + 1).join(' ');
+    if (tail.length < 4) break;
+    if (BOUND_NEXT.test(words[i + 1])) continue;
+    if (/[,，、]$/.test(words[i]) && head.length >= 5) return [head, tail];
+    if ((CONNECTIVE.test(words[i]) || TOPIC.test(words[i])) && head.length >= 6) return [head + ',', tail];
+  }
+  return [sentence];
+}
+export function voiceChunks(text: string, o: { firstMax?: number; maxLen?: number } = {}): string[] {
+  const firstMax = o.firstMax ?? 10, maxLen = o.maxLen ?? 40;
+  const chunks: string[] = [];
+  const sentences = sentencesOf(text.replace(/\s+/g, ' ').trim());
+  if (sentences.length) sentences.splice(0, 1, ...splitFirst(sentences[0], firstMax));   // 첫 문장은 먼저 짧은 머리를 떼어 낸다(첫 소리)
+  for (const s of sentences) for (const c of splitLong(s, maxLen)) {
+    if (!SPEAKABLE.test(c) && chunks.length) chunks[chunks.length - 1] += ' ' + c;   // 이모지·기호만 → 앞에 붙인다(합성 전처리가 지운다)
+    else chunks.push(c);
+  }
+  while (chunks.length > 1 && !SPEAKABLE.test(chunks[0])) chunks.splice(0, 2, chunks[0] + ' ' + chunks[1]);
+  if (!chunks.length || !SPEAKABLE.test(chunks.join(''))) return [];
+  return chunks;
+}
+/** 앞 조각 다음에 둘 쉼(초). 문장 사이 0.3초(합성 기준 RAVI_SILENCE_SEC 와 같다), 쉼표로 나눈 곳은 짧게. */
+export const chunkPauseSec = (previous: string): number => /[,，、]$/.test(previous) ? 0.12 : 0.3;
+
