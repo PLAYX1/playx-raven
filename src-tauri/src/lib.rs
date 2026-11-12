@@ -179,6 +179,10 @@ mod relay_share;
 mod relay_keeper;
 mod text_zoom;
 mod talk_notify;
+// 11-12 장터 「바로 해 보는 게임」(오락실) — 목록 바이트·시작 파일 확인·한 판 결제(sendmany 한 거래).
+mod arcade;
+// 11-13 「게임 올리기」 — 고른 폴더만 살펴보고 붙잡는다(화면이 경로를 못 준다).
+mod arcade_upload;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -339,6 +343,12 @@ pub fn run() {
             send::transfer_ownership,
             send::send_rvn,
             send::send_ack,
+            arcade::arcade_catalog_sources,
+            arcade::arcade_entry_reachable,
+            arcade::arcade_pay,
+            arcade::arcade_ack,
+            arcade_upload::arcade_pick_folder,
+            arcade_upload::arcade_pin_folder,
             upload::ipfs_add_file,
             upload::ipfs_add_bundle,
             upload::build_metadata,

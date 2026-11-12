@@ -30,6 +30,11 @@
   `store-key.ts` 가 쓰는 hardened 경로 파생(`HardenedKeyPath` · `derivePrivateKeyAtHardenedPath` 등) 때문에 `core/wallet-keys/derive.ts` 를 통합 원본과 같은 파일로 바꿨다(옛 파일에 함수 3개와 타입 하나를 더한 것뿐 — 기존 함수 불변; 데스크탑 전용 어댑터 `crypto-backend.ts`·`playx-asset-proof/crypto.ts` 는 건드리지 않았다). 앱의 가게 키 파생은 여전히 Rust(`storesign.rs`)이고, TS 쪽 `store-key.ts` 는 시험에서 Rust 와 바이트가 같은지 확인하는 데만 쓴다.
   시험 파일(`store.test.ts` · `store-vectors.json` · `fixtures.ts` · `store-key.test.ts`)은 복사하지 않았다 — 지갑 저장소에서 돈다.
 
+- 오락실 동기화(2026-11-12, 지갑 저장소 브랜치 `claude/rv-buy-phone` 커밋 `380bc12`): 게임 상품 문서 `core/creator/arcade-product.ts`(rv-arcade-product v1 · 서명 확인 · 1% 나누기) · 목록 `core/creator/arcade-catalog.ts`(체인 `RVLT/*` 자산 ↔ 문서) 와 그 의존 `core/creator/asset-name-v3.ts` · `core/creator/asset-name-v2.ts` 를 바이트 그대로 복사 — 패치 없음, `vendor-sha256.json` 갱신.
+  데스크탑 장터 「바로 해 보는 게임」(`src/arcade-market.ts`)이 이 둘만 믿는다. 폰 화면 쪽(`phone/ui/arcade/*`)은 복사하지 않고 같은 규칙을 `src/arcade-model.ts` 에 옮겼다(폰 전용 부품에 기대서).
+
+- 한 판 넣기 통로(2026-11-13, 지갑 저장소 `claude/rv-buy-phone` 의 새 파일 — 같은 바이트): `core/creator/arcade-credit.ts`(게임 iframe ⇄ 지갑 postMessage v1 · 빈도 제한 · 미리 넣은 돈 없음). `vendor-sha256.json` 갱신.
+
 복사하지 않은 것: `core/creator/purchase.ts`(구매자 거래 — 지갑의 직접 결제 부품에 기댄다)와 시험 파일. 구매자 쪽 거래 시험은 지갑 저장소에서 돈다. 데스크탑은 `purchase.ts` 대신 공통 순수 부품(`purchase-plan.ts`·`payment-allowlist.ts`·`owner-id.ts`)을 쓰고, 러스트 거래 검사는 같은 공유 벡터로 시험한다.
 
 `manifest.ts` 는 `core/wallet-offline/base58check.ts`(이미 같은 바이트로 복사돼 있음)와 `core/playx-asset-proof/crypto.ts` 의 `concatBytes` 를 쓴다.

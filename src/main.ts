@@ -5279,6 +5279,9 @@ function myNotesLine(r: any): string {
 /* ── 0.9.17 장터·「내 글」·피드 메뉴 (src/listing-market.ts — 처음 쓸 때 따로 내려받는다) ── */
 const listingDeps = () => ({ invoke: <T = any>(cmd: string, args?: Record<string, unknown>) => invoke<T>(cmd, args), ensureUnlocked, errText, fmtQty });
 let listingMarket: { enter(open?: "browse" | "mine"): void } | undefined;
+let arcadeMarket: { enter(): void; refresh(): void; upload(): void } | undefined;
+/** 다음에 장터를 열 때 「게임 올리기」부터(「바로 팔기」 안내에서). */
+let arcadeUploadNext = false;
 let tradeOpen: "browse" | "mine" | undefined;
 function openTrade(open?: "browse" | "mine") {
   tradeOpen = open;
@@ -5352,6 +5355,12 @@ function showPage(id: string) {
     if (currentPage === "trade") listingMarket.enter(tradeOpen);
     tradeOpen = undefined;
   }).catch((e) => paintLoadFail($("page-trade"), () => showPage("trade"), "listing-market", e));
+  // 11-12 장터 첫 줄 「바로 해 보는 게임」(src/arcade-market.ts) — 맞교환 목록과 따로 내려받는다.
+  if (id === "trade") void import("./arcade-market").then(({ mountArcade }) => {
+    arcadeMarket ??= mountArcade($("page-trade"), $("ar-host"), { ...listingDeps(), canSell: sellerModeOn });
+    if (currentPage === "trade") { if (arcadeUploadNext) arcadeMarket.upload(); else arcadeMarket.enter(); }
+    arcadeUploadNext = false;
+  }).catch((e) => paintLoadFail($("ar-host"), () => showPage("trade"), "arcade-market", e));
   if (id === "chain") chainInfo?.enter();
   paintPageTiles(id);
   document.querySelectorAll(".page").forEach((p) => p.classList.toggle("on", p.id === `page-${id}`));
@@ -9787,6 +9796,14 @@ function 바로팔기배선(asset: string, kind: string) {
   const 말 = (t: string) => { const e = $("sell-say"); if (e) e.textContent = t; };
   const btn = $("sell-list") as HTMLButtonElement | null;
   if (!btn) return;
+  // 11-13 대표: 이 「바로 팔기」는 rvn.ex.erci.se 상점 진열이다 — 해 볼 수 있는 오락실 게임이 아니다. 게임이면 「게임 올리기」로 잇는다.
+  if (종류 === "game") {
+    const note = document.createElement("div");
+    note.className = "meta";
+    note.innerHTML = `${copyHtml("이 「바로 팔기」는 상점 진열이에요. 장터에서 바로 해 보는 게임(한 판마다 RVN)으로 올리려면 「게임 올리기」를 쓰세요.")} <button type="button" class="ghost" id="sell-arcade">${copyHtml("게임 올리기")}</button>`;
+    btn.parentElement?.insertBefore(note, btn);
+    ($("sell-arcade") as HTMLButtonElement).onclick = () => { arcadeUploadNext = true; showPage("trade"); };
+  }
   btn.onclick = async () => {
     const rvn = amountOrNaN(bindAmountInput($("sell-rvn") as HTMLInputElement));
     const title = ($("sell-title") as HTMLInputElement).value.trim();

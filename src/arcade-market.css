@@ -1,0 +1,90 @@
+/* 11-12 장터 「바로 해 보는 게임」 (src/arcade-market.ts). 색은 앱 토큰만(어둡게 자동). style 속성 대신 여기. */
+.ar { margin: 6px 0 18px; }
+.ar[hidden] { display: none; }
+/* 🔴 버튼 글자 두 줄 금지(11-12) — 줄지 않고, 꺾이지 않는다. */
+.ar button { white-space: nowrap; flex-shrink: 0; }
+.ar-head { display: flex; align-items: center; gap: 10px; margin: 4px 0 8px; min-width: 0; }
+.ar-head h3 { margin: 0; font-size: 19px; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ar-head .ar-back { order: -1; }
+.ar-more, .ar-back { min-height: 40px; padding: 6px 14px; }
+.ar-chips { display: flex; gap: 6px; margin: 6px 0 10px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.ar-chips::-webkit-scrollbar { display: none; }
+.ar-chips button { min-height: 40px; margin: 0; padding: 6px 14px; border-radius: 999px; font-size: 15px;
+  background: var(--panel); color: var(--text); border: 1px solid var(--line); }
+.ar-chips button[aria-pressed="true"] { border: 2px solid var(--brand); font-weight: 700; background: color-mix(in srgb, var(--brand) 10%, var(--panel)); }
+.ar-row { list-style: none; margin: 0; padding: 0 0 4px; display: grid; gap: 12px; grid-auto-flow: column;
+  grid-auto-columns: minmax(200px, 1fr); overflow-x: auto; }
+.ar-grid { list-style: none; margin: 6px 0 16px; padding: 0; display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
+.ar-row li, .ar-grid li { min-width: 0; }
+.ar-card { display: flex; flex-direction: column; width: 100%; height: 100%; margin: 0; padding: 0; text-align: left; overflow: hidden;
+  border-radius: 14px; border: 1px solid var(--line); background: var(--panel); color: var(--text); white-space: normal; cursor: pointer; }
+.ar-card:hover { border-color: var(--brand); }
+.ar-card:focus-visible { outline: 3px solid var(--brand); outline-offset: 2px; }
+.ar-cover, .ar-hero { display: flex; align-items: center; justify-content: center; width: 100%; height: 112px;
+  background: color-mix(in srgb, var(--tone) 16%, var(--panel)); color: var(--tone); }
+.ar-cover svg { width: 46px; height: 46px; }
+.ar-tone0 { --tone: var(--brand); } .ar-tone1 { --tone: var(--ravi, #e7731f); } .ar-tone2 { --tone: var(--ok); }
+.ar-tone3 { --tone: var(--warn); } .ar-tone4 { --tone: var(--brand-light, var(--brand)); }
+.ar-cbody { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px 12px; min-width: 0; }
+/* 값이 카드에서 가장 큰 글 */
+.ar-price { font-size: 22px; font-weight: 800; line-height: 1.2; font-variant-numeric: tabular-nums; color: var(--text); }
+.ar-title { font-size: 16px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.ar-shop { font-size: 14px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ar-who { font-size: 14px; font-weight: 700; }
+.ar-ok, .ar-unv { display: inline-flex; align-items: center; gap: 4px; }
+.ar-ok { color: var(--ok); } .ar-unv { color: var(--warn); }
+.ar-ok svg, .ar-unv svg { width: 16px; height: 16px; flex: 0 0 auto; }
+.ar-empty { padding: 16px 18px; border: 1px dashed var(--line); border-radius: 14px; background: var(--panel); }
+.ar-empty-title { margin: 0 0 4px; font-size: 17px; font-weight: 700; }
+.ar-empty .meta { margin: 0; }
+.ar-search { width: 100%; box-sizing: border-box; min-height: 44px; margin: 4px 0 6px; padding: 8px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); color: var(--text); }
+.ar h4 { margin: 12px 0 4px; font-size: 16px; }
+.ar-page { display: grid; grid-template-columns: minmax(220px, 320px) minmax(0, 1fr); gap: 18px; align-items: start; }
+.ar-hero { height: 220px; border-radius: 16px; border: 1px solid var(--line); }
+.ar-hero svg { width: 84px; height: 84px; }
+.ar-info { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.ar-info h3 { margin: 0; font-size: 20px; overflow-wrap: anywhere; }
+.ar-info p { margin: 0; overflow-wrap: anywhere; }
+.ar .ar-info .ar-big { font-size: 30px; font-weight: 800; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.ar-desc { white-space: pre-wrap; font-size: 15px; }
+.ar-note { color: var(--warn); font-weight: 600; font-size: 14px; }
+.ar-acts { margin-top: 6px; gap: 8px; }
+.ar-acts button, .ar-confirm button { min-height: 44px; }
+.ar-confirm { margin-top: 10px; padding: 12px 14px; border: 2px solid var(--ravi, #e7731f); border-radius: 12px; background: var(--panel); }
+.ar-confirm h4 { margin: 0 0 8px; }
+.ar-confirm .row { margin-top: 10px; gap: 8px; }
+.ar-addr, .ar-txid code { overflow-wrap: anywhere; word-break: break-all; font-size: 13px; }
+.ar-warn { margin: 8px 0 0; font-weight: 600; }
+.ar-agree { display: flex; gap: 10px; align-items: flex-start; margin: 10px 0 4px; padding: 10px 12px; border-radius: 10px;
+  background: color-mix(in srgb, var(--muted) 10%, transparent); font-size: 15px; line-height: 1.5; cursor: pointer; }
+.ar-agree input { width: 22px; height: 22px; flex: 0 0 auto; margin-top: 2px; }
+.ar-stage { margin-top: 16px; }
+.ar-stage[hidden] { display: none; }
+.ar-stage-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.ar-stage-bar b { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ar-frame { display: block; width: 100%; height: min(72vh, 680px); min-height: 420px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); }
+/* 게임 목록·게임 페이지를 보는 동안에는 맞교환 목록을 접는다(한 화면 = 한 일). */
+#page-trade.ar-focus > .lede, #page-trade.ar-focus > .lm-bar, #page-trade.ar-focus > .lm-chips,
+#page-trade.ar-focus > #lm-say, #page-trade.ar-focus > .lm-list, #page-trade.ar-focus > .ar-swap-head { display: none; }
+.ar-swap-head { margin: 18px 0 0; font-size: 19px; }
+@media (max-width: 860px) { .ar-page { grid-template-columns: 1fr; } .ar-hero { height: 160px; } }
+/* 값은 div(main p 의 16px !important 규칙 밖) — 게임 페이지에서 가장 큰 글. */
+.ar-per { font-size: 16px; font-weight: 600; color: var(--muted); }
+/* 11-13 「한 판 넣기」 확인 칸 — 게임 바로 위, 작게. */
+.ar-coin { margin: 0 0 10px; }
+.ar-coin[hidden] { display: none; }
+.ar-coin .ar-confirm { margin-top: 0; }
+/* 11-13 「게임 올리기」 */
+.ar-up { display: flex; flex-direction: column; gap: 10px; max-width: 860px; }
+.ar-up-folder { padding: 10px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); overflow-wrap: anywhere; }
+.ar-up-form { display: flex; flex-direction: column; gap: 10px; }
+.ar-up-form label { display: flex; flex-direction: column; gap: 4px; font-weight: 600; min-width: 0; }
+.ar-up-form label[hidden] { display: none; }
+.ar-up-form input, .ar-up-form textarea, .ar-up-form select { width: 100%; box-sizing: border-box; min-height: 44px; padding: 8px 12px; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--panel); color: var(--text); font: inherit; font-weight: 400; }
+.ar-up-two { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.ar-up-list { margin: 4px 0 0; padding-left: 20px; font-size: 14px; }
+.ar-up-list li { overflow-wrap: anywhere; }
+.ar-up-list.bad li { color: var(--danger); } .ar-up-list.warn li { color: var(--warn); }
+#sell-arcade { white-space: nowrap; flex-shrink: 0; margin-left: 6px; }
+@media (max-width: 860px) { .ar-up-two { grid-template-columns: 1fr; } }
