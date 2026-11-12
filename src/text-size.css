@@ -1,0 +1,33 @@
+/* 11-12 「한눈에 많이」(text-size.ts · <html data-density="compact">) — 대표: 한 화면에 다 보이는 게 좋다.
+ * main 의 단추는 어르신 기본 64px·16px(!important, index.html)이다. 한눈에 많이를 고른 사람에게만 40px 로 줄이고 여백을 좁힌다.
+ * 누르는 자리는 36px 밑으로 내리지 않는다. 글자 크기(16px)는 그대로 — 크기는 웹뷰 배율(100%)이 이미 줄였다.
+ * 보통·크게에서는 이 파일의 어떤 규칙도 맞지 않는다(속성이 없다). */
+html[data-density="compact"] main :is(button, summary),
+html[data-density="compact"] .todochip { min-height:40px !important; }
+html[data-density="compact"] #page-ravi :is(.chat-mode button, #chat-go, #key-save, #ai-pick),
+html[data-density="compact"] :is(.keyrow input, .keyrow button, .keyask input, .keyask button, #cu-url, #cu-model, #cu-label, #cu-key) { min-height:40px !important; }
+html[data-density="compact"] :is(#rv-phone-open, .phone-tx-actions button, #phone-tx-send, .feepick, .hb-cancel, .hb-go, .desktop-language-options button, #desktop-settings-go) { min-height:40px; }
+html[data-density="compact"] .rv-web-info summary { min-height:40px; }
+/* 홈의 받기·보내기는 가장 자주 누르는 단추라 한 단계만 줄인다. */
+html[data-density="compact"] #page-home .overview-actions button { min-height:44px !important; font-size:16px !important; }
+html[data-density="compact"] main button:not(.ghost-icon) { padding-block:6px; }
+/* 여백: 화면 둘레 · 카드 안 · 카드 사이 */
+html[data-density="compact"] main { padding:12px 16px 28px; }
+html[data-density="compact"] main .card { padding:10px 12px; }
+html[data-density="compact"] .overview { padding:12px; margin-bottom:10px; }
+html[data-density="compact"] .rv-home-grid { gap:12px !important; }
+html[data-density="compact"] main h2 { margin-block:4px 6px; }
+html[data-density="compact"] .wbal { padding:14px; margin-bottom:10px; }
+html[data-density="compact"] #page-settings .card + .card,
+html[data-density="compact"] #page-settings .card + details,
+html[data-density="compact"] #page-settings details + .card { margin-top:8px; }
+
+/* 11-12 첫 실행 「글씨 잘 보이세요?」(text-size-ask.ts) — 라비 카드 안 세 단추, 각 단추에 그 크기의 맛보기 글. 「나중에」는 아래 한 줄. */
+.rv-ravi-card-row.pv { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:8px; }
+.rv-ravi-card-row.pv > button:not(.rv-ravi-card-pvbtn) { grid-column:1 / -1; min-height:40px; }
+.rv-ravi-card-row.pv .rv-ravi-card-pvbtn { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; min-height:72px; padding:8px 4px; white-space:nowrap; }
+.rv-ravi-card-pv { display:block; font-weight:700; line-height:1.1; }
+.rv-ravi-card-lb { display:block; font-size:13px; line-height:1.2; }
+.rv-ravi-card-pvbtn[data-look="small"] .rv-ravi-card-pv { font-size:13px; }
+.rv-ravi-card-pvbtn[data-look="normal"] .rv-ravi-card-pv { font-size:15px; }
+.rv-ravi-card-pvbtn[data-look="large"] .rv-ravi-card-pv { font-size:17px; }

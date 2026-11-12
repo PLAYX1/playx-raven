@@ -321,6 +321,8 @@ import { raviSettingIntent, type RaviSetting } from "./ravi-settings";
 import { findRoom, raviTalkIntent, type RaviTalkIntent } from "./ravi-talk-intents";
 import { showRaviCard, hideRaviCard, raviCardKey } from "./ravi-card";
 import { raviFixedAddressIntent, fixedAddressRunning, TS_BUSY_SAY, TS_START_SAY, TS_SUGGEST_BODY, TS_SUGGEST_NO, TS_SUGGEST_TITLE, TS_SUGGEST_YES, type TsOpen } from "./tailscale-fixed";
+import { nodeLine, simpleLine, type RailLine } from "./rail-status";
+import { askTextSizeOnce } from "./text-size-ask";
 // 11-10 글자 크기 — 화면을 그리기 전에 한 번(늦으면 첫 화면이 작게 깜빡인다).
 void applyTextSize();
 
@@ -2322,18 +2324,21 @@ async function paintStatusDots() {
 
   // 11-03 대표 「차분하게」: 정상(켜짐)·사람이 고른 꺼짐은 작은 점 + 짧은 말로 조용히(data-tone ok·quiet),
   // 문제(노드 꺼짐·따라잡는 중)는 색과 이유로 눈에 띄게(warn·bad). 이유 전체는 title 에.
-  const set = (dot: string, label: string, ok: boolean, text: string, tone?: "ok" | "quiet" | "warn" | "bad", why = "") => {
+  // 11-12 한 줄 = 점 + 짧은 이름(rail-status.ts). 켜짐·꺼짐은 점 색, 자세한 말은 title·aria-label.
+  const set = (dot: string, label: string, line: RailLine) => {
     const d = document.getElementById(dot);
     const lab = document.getElementById(label);
+    const tone = line.tone;
+    const long = line.why ? `${t(line.detail)} — ${t(line.why)}` : t(line.detail);
     if (d) {
-      d.classList.toggle("on", ok && tone !== "warn");
-      d.classList.toggle("off", !ok && tone !== "bad");
+      d.classList.toggle("on", line.on && tone !== "warn");
+      d.classList.toggle("off", !line.on && tone !== "bad");
       d.classList.toggle("warn", tone === "warn");
       d.classList.toggle("bad", tone === "bad");
       const row = d.closest<HTMLElement>(".dotrow");
-      if (row) { row.dataset.tone = tone || (ok ? "ok" : "quiet"); row.title = why ? `${t(text)} — ${t(why)}` : t(text); }
+      if (row) { row.dataset.tone = tone; row.title = long; row.setAttribute("aria-label", long); }
     }
-    if (lab) lab.textContent = text;
+    if (lab) lab.textContent = line.pct != null ? tf(line.label, line.pct) : line.label;
   };
 
   try {
@@ -2343,8 +2348,7 @@ async function paintStatusDots() {
     const synced = (n?.progress ?? 0) > 0.9999;
     // 🔴 「따라잡는 중」만 적으면 **끝이 안 보인다.** 34GB 를 훑는 동안
     //    사장은 이게 10분짜리인지 하루짜리인지 알 수가 없다. 숫자를 준다.
-    set("d-node", "d-node-t", true, synced ? "RVN 노드 켜짐" : tf("노드 {0}%", pct.toFixed(1)), synced ? "ok" : "warn",
-      synced ? "" : "따라잡는 중이에요. 방금 들어온 돈이 늦게 보일 수 있어요.");
+    set("d-node", "d-node-t", nodeLine(synced ? { kind: "ok" } : { kind: "sync", pct }));
     setSyncBar(synced ? null : pct);
     nodeUp = true;
     nodeWarming = false;
@@ -2356,14 +2360,7 @@ async function paintStatusDots() {
     nodeWarming = isWarming(e);
     // 11-12 — 막 띄운 노드는 몇 초 동안 포트를 안 연다(닿지 못함). 기록이 「켜는 중」이면 꺼짐이 아니다.
     if (!nodeWarming) { const b = await nodeBoot(); nodeWarming = !!b?.booting && !b?.stalled; }
-    set(
-      "d-node",
-      "d-node-t",
-      nodeWarming,
-      nodeWarming ? "RVN 노드 여는 중" : "RVN 노드 꺼짐 · 눌러서 켜기",
-      nodeWarming ? "warn" : "bad",
-      nodeWarming ? "장부를 여는 중이에요. 처음이면 몇 분 걸려요." : "노드가 꺼져 있어 잔액·입금 확인·보내기가 멈춰 있어요."
-    );
+    set("d-node", "d-node-t", nodeLine({ kind: nodeWarming ? "warm" : "down" }));
     setSyncBar(null);
     nodeUp = false;
     dotSum.node = nodeWarming ? "warm" : "down";
@@ -2375,21 +2372,21 @@ async function paintStatusDots() {
 
   try {
     const i = await invoke<any>("ipfs_status");
-    set("d-ipfs", "d-ipfs-t", !!i?.running, i?.running ? "IPFS 켜짐" : "IPFS 꺼짐");
+    set("d-ipfs", "d-ipfs-t", simpleLine("ipfs", !!i?.running));
     // 채굴과 릴레이도 같이. 넷이 이 프로그램의 전부다.
     void (async () => {
       try {
         const m = await invoke<any>("miner_running");
-        set("d-mine", "d-mine-t", !!m?.running, m?.running ? "채굴 켜짐" : "채굴 꺼짐");
+        set("d-mine", "d-mine-t", simpleLine("mine", !!m?.running));
       } catch {
-        set("d-mine", "d-mine-t", false, "채굴 꺼짐");
+        set("d-mine", "d-mine-t", simpleLine("mine", false));
       }
       try {
         const r = await invoke<any>("relay_status");
-        set("d-relay", "d-relay-t", !!r?.running, r?.running ? "릴레이 켜짐" : "릴레이 꺼짐");
+        set("d-relay", "d-relay-t", simpleLine("relay", !!r?.running));
         dotSum.relay = !!r?.running;
       } catch {
-        set("d-relay", "d-relay-t", false, "릴레이 꺼짐");
+        set("d-relay", "d-relay-t", simpleLine("relay", false));
         dotSum.relay = false;
       }
       // 🔴 바깥에서 손님이 들어올 수 있는가. 위의 넷이 다 초록이어도 이게
@@ -2397,23 +2394,23 @@ async function paintStatusDots() {
       try {
         const o = await invoke<any>("tunnel_status");
         outUp = !!o?.running;
-        set("d-out", "d-out-t", !!o?.running, o?.running ? "바깥 연결 켜짐" : "바깥 연결 꺼짐");
+        set("d-out", "d-out-t", simpleLine("out", !!o?.running));
       } catch {
         outUp = false;
-        set("d-out", "d-out-t", false, "바깥 연결 꺼짐");
+        set("d-out", "d-out-t", simpleLine("out", false));
       }
       dotSum.out = outUp;
       paintDotSum();
       // 여섯째 — 손님 폰 지도에 올라가 있나(map.rs). 「올림」이면 켜져 있는 동안 5분마다 「영업 중」 신호.
       try {
         const m = await invoke<any>("map_status");
-        set("d-map", "d-map-t", !!m?.registered, m?.registered ? "지도: 올림" : "지도: 안 올림");
+        set("d-map", "d-map-t", simpleLine("map", !!m?.registered));
       } catch {
-        set("d-map", "d-map-t", false, "지도: 안 올림");
+        set("d-map", "d-map-t", simpleLine("map", false));
       }
     })();
   } catch {
-    set("d-ipfs", "d-ipfs-t", false, "IPFS 꺼짐");
+    set("d-ipfs", "d-ipfs-t", simpleLine("ipfs", false));
   }
 }
 
@@ -12254,9 +12251,16 @@ function setTalkSound(on: boolean) {
 }
 async function raviApplySetting(x: RaviSetting) {
   if (x.kind === "text") {
-    const was = textSize(), to = x.dir === "up" ? biggerOf(was) : smallerOf(was);
-    if (to === was) { raviSaid(t(x.dir === "up" ? "글자는 이미 가장 커요. 「언어 · 화면」에서도 고를 수 있어요." : "글자는 이미 가장 작아요.")); return; }
+    const was = textSize(), to = x.dir === "compact" ? "small" : x.dir === "up" ? biggerOf(was) : smallerOf(was);
+    if (to === was) { raviSaid(t(x.dir === "compact" ? "이미 「한눈에 많이」로 보고 있어요." : x.dir === "up" ? "글자는 이미 가장 커요. 「언어 · 화면」에서도 고를 수 있어요." : "글자는 이미 가장 작아요.")); return; }
     await setTextSize(to);
+    // 11-12 한눈에 많이 — 글자만이 아니라 단추·여백도 줄어든다는 것을 말해 준다.
+    if (to === "small") {
+      const msg = t("「한눈에 많이」로 바꿨어요. 글자·단추가 조금 작아지고 한 화면에 더 많이 보여요.");
+      raviSaid(msg);
+      raviUndoCard("set:text", msg, () => { void setTextSize(was); raviSaid(tf(was === "normal" ? "글자 크기를 「{0}」으로 되돌렸어요." : "글자 크기를 「{0}」로 되돌렸어요.", t(TEXT_SIZE_NAME[was]))); });
+      return;
+    }
     // 조사: 작게·크게 → 「로」, 보통 → 「으로」.
     const msg = tf(to === "normal" ? "글자 크기를 「{0}」으로 바꿨어요." : "글자 크기를 「{0}」로 바꿨어요.", t(TEXT_SIZE_NAME[to]));
     raviSaid(msg);
@@ -20837,6 +20841,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   window.setInterval(() => void reindexTick(), 60_000);
   // 0.4.9 — 되살리기가 중간에 멈춰 있으면(노드를 못 켜는 상태) 먼저 알리고, 「마감 뒤 찾기」 예약을 1분마다 본다.
   afterRaviLanding(() => wordsRestore.checkOnStart());
+  // 11-12 첫 실행 — 라비가 한 번만 「글씨 잘 보이세요?」(text-size-ask.ts). 창이 아니라 라비 카드, 건너뛸 수 있음.
+  afterRaviLanding(() => askTextSizeOnce(t));
   window.setInterval(() => wordsRestore.tick(), 60_000);
   // Status is cheap; the IPFS scan is not, and is deliberately not on a timer.
 });

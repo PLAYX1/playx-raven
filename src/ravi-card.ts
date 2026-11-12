@@ -10,7 +10,8 @@
 import { copyHtml } from "./i18n";
 import "./ravi-card.css";
 
-export type RaviCardButton = { label: string; primary?: boolean; run: () => void };
+/** preview: 단추 안 작은 맛보기 글(11-12 첫 실행 「글씨 잘 보이세요?」) · look: 맛보기 모양 이름(CSS data-look). */
+export type RaviCardButton = { label: string; primary?: boolean; run: () => void; preview?: string; look?: string };
 export type RaviCard = { key: string; title: string; body?: string; warn?: string; buttons: RaviCardButton[] };
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -33,7 +34,7 @@ export function showRaviCard(card: RaviCard): boolean {
     `<div class="rv-ravi-card-head"><img src="/raven-hello.webp" alt="" width="40" height="40" /><b>${esc(card.title)}</b></div>` +
     (card.body ? `<p class="rv-ravi-card-body" translate="no">${esc(card.body)}</p>` : "") +
     (card.warn ? `<p class="rv-ravi-card-warn">${esc(card.warn)}</p>` : "") +
-    `<div class="rv-ravi-card-row">${card.buttons.map((b, i) => `<button type="button" class="${b.primary ? "" : "ghost"}" data-rc="${i}">${copyHtml(b.label)}</button>`).join("")}</div>`;
+    `<div class="rv-ravi-card-row${card.buttons.some((b) => b.preview) ? " pv" : ""}">${card.buttons.map((b, i) => `<button type="button" class="${b.primary ? "" : "ghost"}${b.preview ? " rv-ravi-card-pvbtn" : ""}" data-rc="${i}"${b.look ? ` data-look="${esc(b.look)}"` : ""}>${b.preview ? `<span class="rv-ravi-card-pv" aria-hidden="true">${esc(b.preview)}</span><span class="rv-ravi-card-lb">${copyHtml(b.label)}</span>` : copyHtml(b.label)}</button>`).join("")}</div>`;
   box.querySelectorAll<HTMLElement>("[data-rc]").forEach((el) => {
     el.onclick = () => { const b = card.buttons[Number(el.dataset.rc)]; hideRaviCard(); b?.run(); };
   });

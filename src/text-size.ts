@@ -1,22 +1,38 @@
 /**
  * 11-10 글자 크기 — 작게(100%) · 보통(115%, 기본) · 크게(130%). 대표·페이블 합의.
  * 웹뷰 확대(러스트 set_text_zoom)라 단추·아이콘도 같이 커지고, 창 최소 폭도 같이 늘어 데스크탑 배치가 유지된다.
- * 브라우저 시험(타우리 없음)에서는 아무것도 하지 않는다 — 화면 배치 검사가 100% 기준을 그대로 본다.
+ * 브라우저 시험(타우리 없음)에서는 확대는 하지 않는다 — 화면 배치 검사가 100% 기준을 그대로 본다.
+ *
+ * 11-12 대표 「한눈에 다 보고 싶다」: 「작게」를 **「한눈에 많이」**로 바꿨다. 저장 값은 그대로 small(예전에 작게를 고른 사람은
+ * 한눈에 많이가 된다). 이때만 <html data-density="compact"> 를 붙여, main 의 64px 단추(어르신 기본)를 40px 로 줄이고
+ * 여백을 좁힌다(text-size.css). 보통·크게는 아무것도 안 바뀐다.
  */
 import { invoke } from "@tauri-apps/api/core";
+import "./text-size.css";
 
 export type TextSize = "small" | "normal" | "large";
 export const TEXT_SIZES: readonly TextSize[] = ["small", "normal", "large"];
-export const TEXT_SIZE_NAME: Record<TextSize, string> = { small: "작게", normal: "보통", large: "크게" };
+export const TEXT_SIZE_NAME: Record<TextSize, string> = { small: "한눈에 많이", normal: "보통", large: "크게" };
 const KEY = "ravenvault-text-size";
 
 export function textSize(): TextSize {
   try { const v = localStorage.getItem(KEY); if (v === "small" || v === "normal" || v === "large") return v; } catch { /* 기본 */ }
   return "normal";
 }
+/** 사람이 한 번이라도 직접 고른 적이 있나(첫 실행 질문을 건너뛸 근거). */
+export function textSizeChosen(): boolean {
+  try { return localStorage.getItem(KEY) != null; } catch { return false; }
+}
+/** 한눈에 많이 = 촘촘한 배치. 보통·크게는 속성을 아예 없앤다(기존 화면 그대로). */
+export function applyDensity(size: TextSize = textSize()): void {
+  if (typeof document === "undefined") return;
+  const root = document.documentElement;
+  if (size === "small") root.dataset.density = "compact"; else delete root.dataset.density;
+}
 const inTauri = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window && !(window as any).__RV_FIXTURE__;
 
 export async function applyTextSize(size: TextSize = textSize()): Promise<void> {
+  applyDensity(size);
   if (!inTauri()) return;
   try { await invoke("set_text_zoom", { level: size }); } catch (e) { console.warn("set_text_zoom failed", e); }
 }
