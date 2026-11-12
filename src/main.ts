@@ -3060,6 +3060,9 @@ async function sendReport() {
         // 🔴 손님 폰 서버가 왜 안 켜졌는지. 이게 안 실려 오면 「손님이 주문할
         //    곳이 없습니다」라는 결과만 보고 원인을 못 찾는다 — 실제로 그랬다.
         phone_error: lastPhoneError,
+        // 11-12 신고 2건이 어느 나라인지 몰랐다 — 앱 언어·시간대만(사람은 알 수 없는 정도).
+        lang: document.documentElement.lang || "",
+        tz: (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch { return ""; } })(),
         diag: await reportDiag(),
       },
       // 🔴 체크했을 때만. 가리는 일은 러스트가 한다.

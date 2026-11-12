@@ -1,5 +1,25 @@
 # 변경 기록
 
+## 0.9.36
+
+### 한국어
+
+- **이야기가 카톡처럼 빨라졌습니다:** 광장과 방은 이 컴퓨터에 둔 마지막 화면을 먼저 바로 그리고, 새 글만 이어 받습니다. 보내기도 훨씬 빨라졌습니다.
+- **카톡 PC처럼 「친구 · 채팅 · 광장」:** 1:1 쪽지와 단톡을 이 창 안에서 주고받습니다(인터넷 창이 따로 열리지 않습니다). 채팅 목록에 쪽지·단톡·방이 최근 순으로 모이고 안 읽은 수가 보입니다. 폰과 같은 복구 단어면 폰 쪽지를 여기서 그대로 이어서 씁니다. 암호 열쇠는 앱 안쪽에만 있습니다.
+- **광장이 X처럼 한 줄로 내려갑니다:** 칸 안에 칸이 있던 스크롤을 하나로 합쳤습니다. 「피드 · 팔로우」 줄은 위에 붙어 있습니다.
+- **노드가 켜지는 동안 무엇을 하는지 보여 줍니다:** 「블록 목록 읽는 중 · 3분째」처럼 보이고, 지갑 화면에는 「노드가 켜지면 열려요」가 나옵니다. 디스크가 느린 컴퓨터에서 1분만에 「안 켜졌어요」가 뜨던 것을 고쳤습니다 — 이제 5분 넘게 진행이 없거나 오류로 꺼졌을 때만 알리기 단추가 나옵니다.
+- **알림 지킴이:** 쪽지와 답글 알림이 폰으로 더 빨리 갑니다. 많은 사람이 이 컴퓨터 릴레이에 붙어도 버팁니다.
+- 문제 알리기에 앱 언어·시간대가 함께 갑니다(누구인지는 알 수 없습니다).
+
+### English
+
+- **Talk is much faster:** the square and rooms draw instantly from what this computer already has, then fetch only new posts. Sending is faster too.
+- **Friends · Chats · Square, like a desktop messenger:** send and receive 1:1 and group messages inside this window (no separate browser). Chats list messages, groups and rooms by latest with unread counts. With the same recovery words as your phone, you continue the same conversations here. Encryption keys stay inside the app.
+- **The square scrolls as one column, like X:** no more scroll-inside-scroll; the Feed · Following bar stays on top.
+- **Shows what the node is doing while it starts:** e.g. "Reading block index · 3 min", and the wallet screen says it opens once the node is up. Slow disks no longer trigger a "node didn't start" prompt after one minute — the report button appears only after 5 minutes without progress or if the node exits with an error.
+- **Notification keeper:** message and reply notifications reach phones faster; this computer's relay holds up under many connections.
+- Problem reports include the app language and time zone (never who you are).
+
 ## 0.9.35
 
 ### 한국어
