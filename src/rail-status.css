@@ -1,0 +1,15 @@
+/* 11-12 왼쪽 줄 연결 표시(rail-status.ts) — 한 줄 = 점 + 짧은 이름. 줄바꿈 없음. 자세한 말은 title·aria-label.
+ * index.html 의 레일 규칙(점 아래 이름 · white-space:normal → 「RVN/노드/켜짐」 세 줄)을 이긴다. 요약 줄(.dotsum)은 그대로.
+ * 누르는 자리 36px — .dotrow 의 44px !important 를 한 줄에 맞춰 낮춘다(대표 「한눈에」, ≥36px). */
+html :is(body > nav, .rv-talk-layout nav) .navfoot .dotrow:not(.dotsum) { flex-direction:row; justify-content:flex-start; gap:7px; width:92px; min-height:36px !important; height:36px; padding:0 0 0 12px; box-sizing:border-box; }
+html :is(body > nav, .rv-talk-layout nav) .navfoot .dotrow:not(.dotsum) > span:last-child { display:block; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; word-break:normal; text-align:left; font-size:13px !important; line-height:1.2; }
+html :is(body > nav, .rv-talk-layout nav) .navfoot .dotrow:not(.dotsum) .dot { flex:none; width:8px; height:8px; box-shadow:none; opacity:1; }
+/* 초록 켜짐 · 회색 꺼짐 · 주황 따라잡는 중/여는 중 · 빨강 노드 꺼짐(누르면 켜는 화면) */
+html :is(body > nav, .rv-talk-layout nav) .navfoot .dotrow .dot.on { background:#3BB273; }
+html :is(body > nav, .rv-talk-layout nav) .navfoot .dotrow .dot.off { background:#6B6E7C; }
+html :is(body > nav, .rv-talk-layout nav) .navfoot .dotrow .dot.warn { background:#F29A38; }
+html :is(body > nav, .rv-talk-layout nav) .navfoot .dotrow .dot.bad { background:#FF6B5E; }
+/* 따라잡기 막대 — 따라잡는 동안만. `.navfoot div { display:flex }` 가 hidden 을 이겨 늘 흰 막대가 남았다(11-12 대표 「이상한 흰 줄」). */
+.syncbar[hidden] { display:none !important; }
+html :is(body > nav, .rv-talk-layout nav) .navfoot .syncbar { display:block; width:64px; height:3px; margin:0 0 4px 27px; box-sizing:border-box; background:#3A3C49; }
+html :is(body > nav, .rv-talk-layout nav) .navfoot .syncbar i { background:#F29A38; }

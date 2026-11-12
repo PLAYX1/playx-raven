@@ -44,7 +44,7 @@ for (const m of ts.matchAll(/"((?:[^"\\]|\\.)*)"/g)) {
 }
 
 // 3) main.ts 의 지도 줄 · 4) map_format.rs 검사 문구(화면에 그대로 뜬다)
-const main = read('src/main.ts');
+const main = read('src/main.ts') + read('src/rail-status.ts'); // 11-12 지도 줄 말은 rail-status.ts 로 옮겼다
 for (const s of ['지도: 올림', '지도: 안 올림']) { assert.ok(main.includes(`"${s}"`), `main.ts 에 ${s} 가 없다`); want.add(s); }
 const rs = read('src-tauri/src/map_format.rs');
 const fnStart = rs.indexOf('pub fn card_problems'), fnEnd = rs.indexOf('\n}\n', fnStart);
