@@ -109,6 +109,12 @@ for (const [w, hh] of process.env.RV_THEME === 'dark' ? [[1440, 900]] : [[1440, 
     await page.mouse.click(r.x, r.y, { button: 'right' });
     await settle(200);
     await shot(page, `room-menu-${w}`);
+    // 신고: 메뉴 맨 아래 「신고」 → 이유 고르기 창
+    await page.evaluate(() => [...document.querySelectorAll('#tk-ctx button')].find((b) => /신고/.test(b.textContent))?.click());
+    await settle(200);
+    await page.evaluate(() => document.querySelector('#tk-report [data-rep="scam"]')?.click());
+    await settle(150);
+    await shot(page, `report-${w}`);
     await page.keyboard.press('Escape');
     // 1:1 다시 → Esc 로 닫기 → 빈 가운데
     await page.evaluate((k) => document.querySelector(`#tk-chats [data-chat-key="${k}"]`).click(), KIM);

@@ -7,6 +7,7 @@
  * - 보내기 단추는 글(또는 붙인 사진)이 있을 때만 진하게 · 「새 메시지 N개 ↓」 알약
  */
 import { copyHtml, setCopyText, t, tf } from "./i18n";
+import { reportClose, reportOpen } from "./talk-report";
 
 const $ = (id: string) => document.getElementById(id);
 
@@ -50,6 +51,9 @@ export type DeskDeps = {
   dm: { active: () => boolean; close: (repaint?: boolean) => void; side: () => string; textOf: (id: string) => string | undefined };
   room: () => string;
   openFeed: () => void;
+  me: () => string;
+  /** 「신고」 창(src/talk-report.ts)을 연다. */
+  report: (bub: HTMLElement, text: string) => void;
 };
 
 const ICON = {
@@ -59,6 +63,7 @@ const ICON = {
   tr: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h9M8.5 3v2M6 5c.6 3 2.6 5.5 5 7M11 5c-.8 3.6-3.3 6.6-7 8"/><path d="M13 21l4-9 4 9M14.5 18h5"/></svg>`,
   keep: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12v18l-6-4-6 4z"/></svg>`,
   mute: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg>`,
+  flag: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>`,
   del: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>`,
 };
 
@@ -169,6 +174,8 @@ export function wireTalkDesk(d: DeskDeps) {
     const harmStart = items.length;
     proxy("[data-mute]", "안 보기", ICON.mute, true);
     proxy("[data-del]", "지우기 요청", ICON.del, true);
+    const author = String(bub.dataset.author || "");
+    if (author && author !== d.me()) items.push({ label: "신고", icon: ICON.flag, harm: true, run: () => d.report(bub, copyOf(bub)) });
     if (items.length > harmStart && harmStart > 0) items.splice(harmStart, 0, "sep");
     menu.innerHTML = items.map((it, i) => it === "sep" ? "<hr />" : `<button type="button" role="menuitem" data-i="${i}"${it.harm ? ' class="harm"' : ""}>${it.icon}${copyHtml(it.label)}</button>`).join("");
     menu.querySelectorAll<HTMLElement>("button[data-i]").forEach((b) => {
@@ -223,6 +230,7 @@ export function wireTalkDesk(d: DeskDeps) {
     }
     if (ev.key !== "Escape" || ev.isComposing) return;
     if (menu && !menu.hidden) { ev.preventDefault(); ev.stopPropagation(); closeMenu(); bubFocusBack(); return; }
+    if (reportOpen()) { ev.preventDefault(); ev.stopPropagation(); reportClose(); return; }
     if ($("askwrap")?.classList.contains("on") || visible("tk-sharepop") || visible("desktop-language-menu") || visible("info") || $("dropveil")?.classList.contains("on")) return;
     if (ev.target === filter) return;
     // ① 열린 칸

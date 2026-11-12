@@ -31,8 +31,10 @@ import { openRaviStory } from "./desktop-links";
 import { inviteLink } from "./links";
 // 이야기 방 운영(0.9.0 레인 C): 「방 설정」(만든 사람만 이름·설명 고치기)·「이 방 숨기기」 — 연결 줄만 여기에.
 import { wireTalkRoomsAdmin } from "./talk-rooms-admin";
+import "./chrome-slim.css"; // 11-12 머리띠 40px · 왼쪽 메뉴 아래 한 줄씩(대표 승인)
 import { wireTalkDm } from "./talk-dm";
-import { talkIdle, unreadPill, wireTalkDesk } from "./talk-desk"; // 11-12 카톡 PC·텔레그램 손버릇(찾기·Esc·말풍선 메뉴·새 메시지 N개) // 11-12 카톡 PC 처럼 — 친구·채팅·광장 + 이 창 안 쪽지(talk_dm.rs)
+import { talkIdle, unreadPill, wireTalkDesk } from "./talk-desk";
+import { openReport as openTalkReport } from "./talk-report"; // 11-12 말풍선 「신고」 — 「문제 알리기」와 같은 길(report_send) // 11-12 카톡 PC·텔레그램 손버릇(찾기·Esc·말풍선 메뉴·새 메시지 N개) // 11-12 카톡 PC 처럼 — 친구·채팅·광장 + 이 창 안 쪽지(talk_dm.rs)
 import { homeSafety } from "./home-summary";
 import { paintCards, type CardsInput, type CardOpen } from "./ravi-cards";
 import { wireChainInfoLazy } from "./chain-info-lazy";
@@ -6403,9 +6405,9 @@ function tkMuteName(pk: string): string {
  * 🔴 묻는 창에서 **무슨 일이 일어나는지 그대로 적는다.** 「차단하시겠습니까」
  *    만 적으면 사장은 내보내는 줄 안다.
  */
-async function talkMute(pk: string) {
+async function talkMute(pk: string, ask = true) {
   if (!pk || pk === tkMine) return;
-  const ok = await sure(
+  const ok = !ask || await sure(
     `${tkMuteName(pk)} ${t("님 안 보기")}`,
     t("내 화면에서만 숨깁니다. 그 사람은 계속 쓸 수 있고, 다른 사람에게는 그대로 보입니다. 내보내는 것이 아닙니다. 언제든 되돌릴 수 있습니다."),
     t("안 보기")
@@ -20405,7 +20407,19 @@ window.addEventListener("DOMContentLoaded", async () => {
     repaint: () => openFeed(),
   });
   tkDmUi.watch();
-  wireTalkDesk({ dm: tkDmUi, room: () => tkRoom, openFeed });
+  wireTalkDesk({
+    dm: tkDmUi, room: () => tkRoom, openFeed, me: () => tkMine,
+    report: (bub, text) => openTalkReport({
+      invoke: (cmd, args) => invoke(cmd, args),
+      nameOf: (pk) => tkNameText(pk),
+      hide: (pk) => void talkMute(pk, false), // 신고 창이 곧 확인이다
+      room: () => tkRoom,
+      dmActive: () => !!tkDmUi?.active(),
+      closeDm: () => { const side = tkDmUi?.side(); tkDmUi?.close(true); if (side !== "square") talkIdle(true); },
+      say: (msg) => { const n = $("tk-note"); n.textContent = msg; setTimeout(() => { if (n.textContent === msg) n.textContent = ""; }, 6000); },
+      escapeHtml,
+    }, bub, text),
+  });
   $("tk-nmake").addEventListener("click", () => void talkMakeRoomGo());
   $("tk-ncancel").addEventListener("click", () => {
     $("tk-newbox").hidden = true;

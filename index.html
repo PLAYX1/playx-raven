@@ -3434,19 +3434,19 @@
       </section>
       <section class="page" id="page-talk">
         <div class="talkwrap">
-          <!-- 11-12 카톡 PC·텔레그램 결: 맨 왼쪽 얇은 그림 줄(친구·채팅·광장) → 목록 → 대화. 그림 아래에 이름을 늘 적는다(대표 09-28 「그림만으로는 모른다」).
-               nav 가 아니라 div 다 — `.rv-talk-layout nav` 규칙(앱 왼쪽 메뉴)이 여기까지 먹지 않게. -->
-          <div class="tk-rail tk-side" role="tablist" aria-label="이야기 보기" aria-orientation="vertical">
-            <button type="button" role="tab" id="tk-side-friends" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg><span class="tk-rail-t">친구</span></button>
-            <button type="button" role="tab" id="tk-side-chats" aria-selected="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9.6 9.6 0 0 1-2.6-.4L3 21l1.6-4.6A8.2 8.2 0 0 1 3 11.5 8.4 8.4 0 0 1 12 3a8.4 8.4 0 0 1 9 8.5z"/></svg><span class="tk-rail-t">채팅</span><span class="tk-side-n" id="tk-side-chats-n" hidden></span></button>
-            <button type="button" role="tab" id="tk-side-square" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/></svg><span class="tk-rail-t">광장</span></button>
-          </div>
           <aside class="rooms">
+            <!-- 11-12 대표 승인: 왼쪽 줄은 앱 메뉴 하나만. 친구·채팅·광장은 목록 칸 위 세 칸 탭(1120 폭에서도 세로 줄 하나가 덜 든다). -->
             <div class="tk-listhead">
-              <b id="tk-listtitle" class="tk-listtitle">채팅</b>
+              <div class="tk-seg tk-side" role="tablist" aria-label="이야기 보기">
+                <button type="button" role="tab" id="tk-side-friends" aria-selected="false"><span class="tk-seg-t">친구</span></button>
+                <button type="button" role="tab" id="tk-side-chats" aria-selected="true"><span class="tk-seg-t">채팅</span><span class="tk-side-n" id="tk-side-chats-n" hidden></span></button>
+                <button type="button" role="tab" id="tk-side-square" aria-selected="false"><span class="tk-seg-t">광장</span></button>
+              </div>
+            </div>
+            <div class="tk-findrow">
+              <label class="tk-filter"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="tk-filter" type="search" autocomplete="off" spellcheck="false" placeholder="이름·내용 찾기" aria-label="이름·내용 찾기" /></label>
               <button type="button" class="tk-iconbtn" id="tk-newdm" aria-label="새 쪽지" title="새 쪽지"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>
             </div>
-            <label class="tk-filter"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="tk-filter" type="search" autocomplete="off" spellcheck="false" placeholder="이름·내용 찾기" aria-label="이름·내용 찾기" /></label>
             <button id="rv-room-ravi" class="rv-room-ravi" type="button"><span id="rv-room-ravi-face"></span><span><b>라비</b><small>AI 도우미</small></span></button>
             <div id="tk-chats" class="tk-chats"></div>
             <div id="tk-friends" class="tk-chats" hidden></div>
@@ -3589,13 +3589,9 @@
             </section>
 
             <!-- 처음 세 번만(설계안 §3-4: 규칙 세 줄). 이름 카드가 떠 있으면 같은 말이라 이 띠는 숨는다. -->
-            <div id="tk-first" class="tkfirst" hidden>
-              <ul class="tk-rules">
-                <li>① 복구 단어(12단어)는 누구에게도, 어떤 글에도 쓰지 마세요.</li>
-                <li>② 이름은 누구나 똑같이 달 수 있어요. 돈 이야기는 이름만 믿지 마세요.</li>
-                <li>③ 번역은 틀릴 수 있어요. 원문을 함께 보세요.</li>
-              </ul>
-              <button class="ghost" id="tk-firstok">알겠습니다</button>
+            <div id="tk-first" class="tkfirst tk-firstline" role="note" hidden>
+              <span class="tk-first-t" title="복구 단어(12단어)는 누구에게도, 어떤 글에도 쓰지 마세요. 이름은 누구나 똑같이 달 수 있어요. 돈 이야기는 이름만 믿지 마세요. 번역은 틀릴 수 있어요. 원문을 함께 보세요.">복구 단어는 아무에게도 알려 주지 마세요 · 이름만 보고 돈 이야기를 믿지 마세요</span>
+              <button type="button" class="ghost" id="tk-firstok" aria-label="알겠습니다" title="알겠습니다"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
             </div>
 
             <!-- ── 쪽지 안내 ────────────────────────────────────────

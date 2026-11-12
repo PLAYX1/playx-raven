@@ -1,0 +1,22 @@
+/* 11-12 대표 승인 — 앱 틀을 카톡 PC 처럼 얇게.
+ * ① 머리띠 110px(신호등 띠 34 + 머리 76) → 40px 한 줄: 라비 · 이름 · 밝기 · 언어. 신호등(맥)은 왼쪽 84px 안에 그대로 앉는다.
+ *    머리띠가 신호등 띠(.titlebar, z 50) 위에 오므로 z 51 · 머리띠 자체가 창 손잡이(data-tauri-drag-region).
+ * ② 왼쪽 메뉴 맨 아래 「문제 알리기」·연결 표시는 한 줄씩(그림 + 작은 이름). 누르는 곳은 그대로 남는다. */
+body { padding-top:40px; }
+.desktop-header { top:0; height:40px; padding:0 10px 0 84px; gap:6px; z-index:51; }
+.desktop-header svg { width:18px; height:18px; }
+.rv-header-ravi { flex-direction:row; gap:6px; height:32px; padding:0 8px 0 3px; border-radius:16px; }
+.rv-header-ravi-face { width:26px; height:26px; }
+.rv-header-ravi-face > * { width:26px !important; height:26px !important; }
+.rv-header-ravi-face::after { width:10px; height:10px; right:-1px; bottom:-1px; border-width:2px; }
+.rv-header-ravi-name { font-size:13px; white-space:nowrap; }
+.desktop-logo { gap:8px; font-size:14px; }
+.desktop-logo strong { font-weight:700; white-space:nowrap; }
+.desktop-logo img, #rv-desktop-logo img, #rv-desktop-logo svg { width:22px; height:22px; }
+#rv-theme-toggle { width:32px; height:32px; min-height:32px; border-radius:9px; }
+#rv-theme-toggle svg { width:18px; height:18px; }
+#desktop-preferences { height:32px; min-height:32px; padding:0 10px; gap:6px; border-radius:9px; font-size:13px; }
+#desktop-language-menu { top:42px; right:10px; max-height:calc(100vh - 56px); }
+
+:is(body > nav, .rv-talk-layout nav) .reportlink { flex-direction:row; justify-content:center; gap:6px; width:92px; min-height:36px; height:36px; padding:0 6px; margin:0 0 4px; font-size:12px; white-space:nowrap; }
+:is(body > nav, .rv-talk-layout nav) .reportlink::before { font-size:14px; }

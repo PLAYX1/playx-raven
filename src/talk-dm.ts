@@ -123,7 +123,6 @@ export function wireTalkDm(d: DmDeps) {
     $("tk-chats").hidden = side !== "chats";
     $("tk-friends").hidden = side !== "friends";
     $("tk-squarebox").hidden = side !== "square";
-    setCopyText($("tk-listtitle"), () => t(side === "friends" ? "친구" : side === "square" ? "광장" : "채팅"));
     $("tk-newdm").hidden = side === "square";
     const total = threads.reduce((n, th) => n + (th.unread > 0 ? 1 : 0), 0);
     const badge = $("tk-side-chats-n");
@@ -341,7 +340,7 @@ export function wireTalkDm(d: DmDeps) {
         : showClock ? `<time class="tstamp" title="${esc(new Date(m.at * 1000).toLocaleString())}">${esc(new Date(m.at * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }))}</time>` : "";
       const body = m.photo ? `<span class="tkc-photo">${copyHtml("사진 쪽지 — 지금은 폰에서 볼 수 있어요")}</span>` : d.bodyHtml(m.text);
       return sep + head +
-        `<div class="line${mine ? " me" : ""}${joined ? " cont" : ""}${pending && !failed ? " pending" : ""}"><div class="bub${mine ? " me" : ""}${!m.photo && d.stickerOnly(m.text) ? " stk" : ""}" data-dm="${esc(m.id)}">${body}</div>${clock}</div>`;
+        `<div class="line${mine ? " me" : ""}${joined ? " cont" : ""}${pending && !failed ? " pending" : ""}"><div class="bub${mine ? " me" : ""}${!m.photo && d.stickerOnly(m.text) ? " stk" : ""}" data-dm="${esc(m.id)}" data-author="${esc(m.from)}">${body}</div>${clock}</div>`;
     }).join("");
     box.dataset.dmPainted = o.key;
     if (wasBottom) box.scrollTop = box.scrollHeight;
