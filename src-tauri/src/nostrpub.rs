@@ -689,7 +689,8 @@ pub(crate) fn validate_publish_event(event: &Value) -> Result<(), String> {
     }
     let hex_field = |key: &str, size: usize| o[key].as_str().is_some_and(|s| s.len() == size && s.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)));
     if !hex_field("id",64) || !hex_field("pubkey",64) || !hex_field("sig",128) { return Err("이벤트 ID·공개키·서명 모양이 올바르지 않습니다.".into()); }
-    let kind = o["kind"].as_u64().filter(|k| [0,1,5,40,41,42,1059,30078,30402,31405].contains(k)).ok_or("이 가게는 프로필·레이븐 이야기(방 만들기·방 정보 수정 포함)·상품·가게 공지·쪽지·삭제 요청만 중계합니다.")?;
+    // 31402 지도 이름표 · 31403 영업 중 신호 · 31404 고정 링크(map.rs) · 31405 오락실 일반 판매자(arcade_listing.rs) — 11-13 앞 셋이 빠져 데스크탑 지도·/s/ 링크가 못 올라갔다.
+    let kind = o["kind"].as_u64().filter(|k| [0,1,5,40,41,42,1059,30078,30402,31402,31403,31404,31405].contains(k)).ok_or("이 가게는 프로필·레이븐 이야기(방 만들기·방 정보 수정 포함)·상품·가게 공지·지도 이름표·영업 신호·고정 링크·오락실 게임·쪽지·삭제 요청만 중계합니다.")?;
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
     if !o["created_at"].as_u64().is_some_and(|t| t >= now.saturating_sub(7 * 86_400) && t <= now.saturating_add(300) && t <= 9_007_199_254_740_991) { return Err("이벤트 시각이 올바르지 않습니다. 기기 시계를 확인해 주세요.".into()); }
     let content = o["content"].as_str().ok_or("이벤트 내용은 글자여야 합니다.")?;
@@ -707,7 +708,7 @@ pub(crate) fn validate_publish_event(event: &Value) -> Result<(), String> {
         1059 => if !tag("p") || content.is_empty() { return Err("쪽지의 받는 사람과 봉함 내용을 확인해 주세요.".into()); },
         _ => (),
     }
-    if matches!(kind,30078|30402|31405) && !tag("d") { return Err("가게·상품 식별자가 없습니다.".into()); }
+    if matches!(kind,30078|30402|31402|31403|31404|31405) && !tag("d") { return Err("가게·상품 식별자가 없습니다.".into()); }
     if !crate::relay::verify(event) { return Err("이벤트 ID 또는 서명이 맞지 않습니다. 지갑에서 다시 서명해 주세요.".into()); }
     // 11-10 지운 방(묘비)의 방 글·수정·대화는 내보내지 않는다.
     if crate::relay::in_deleted_room(event) { return Err("지운 방입니다. 이 방에는 더 쓸 수 없어요.".into()); }
@@ -723,6 +724,40 @@ impl PublishBudget {
             return Err("릴레이 중계 요청이 많습니다. 1분 뒤 다시 올려 주세요.");
         }
         self.times.push((now,pubkey.to_string())); Ok(())
+    }
+}
+#[cfg(test)]
+mod publish_kind_regression_tests {
+    use serde_json::{json, Value};
+    /// 11-13 회귀: 데스크탑이 실제로 만드는 이벤트(지도 이름표·영업 신호·고정 링크·가게 지도 지우기·오락실 일반 판매자)가 모두 중계 검사를 지나야 한다.
+    /// 예전에는 31402~31404 가 빠져 map.rs 의 올리기가 늘 거절됐다.
+    #[test]
+    fn 데스크탑_발행기의_종류는_모두_받는다() {
+        use crate::map_format as fmt;
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64;
+        let signer = fmt::RvnSigner::new(&[0x15; 32]).unwrap();
+        let nk = [0x17u8; 32];
+        let card = fmt::Card { slug: "playx-gym".into(), name: "PLAY X 체육관".into(), category: "fitness".into(), area: "wydk3".into(), contact: None, shop_url: Some("https://shop.example.com/playx".into()), created_at: now };
+        let npub = crate::shopkey::pubkey_of(&nk).unwrap();
+        let listing = crate::arcade_listing::build_events(&nk, &serde_json::to_string(&json!({
+            "kind": "rv.arcade-listing/1", "seller": "RHMKPy3Ana5NyzTgo6qWXXMiHAxzPyMgG1", "id": "star-run", "version": 1,
+            "docCid": format!("Qm{}", "D".repeat(44)), "docHash": "a".repeat(64), "at": now, "state": "open", "signature": "A".repeat(87) + "=",
+        })).unwrap(), now).unwrap();
+        let events: Vec<(i64, Value)> = vec![
+            (31402, fmt::build_card_event(&card, &signer, &nk).unwrap()),
+            (31403, fmt::build_beat_event(&signer, &nk, "playx-gym", "wydk3", now, None).unwrap()),
+            (31404, fmt::build_shop_link_event(&signer, &nk, "playx-gym", "https://a-b.trycloudflare.com", now).unwrap()),
+            (5, fmt::build_delete_event(&nk, &npub, &signer.address, "playx-gym", true, now).unwrap()),
+            (31405, listing[0].clone()),
+        ];
+        for (kind, ev) in events {
+            assert_eq!(ev["kind"], kind);
+            assert_eq!(super::validate_publish_event(&ev), Ok(()), "kind {kind} 가 중계 검사에서 거절됐다");
+        }
+        // d 가 없으면 여전히 거절
+        let mut no_d = fmt::build_beat_event(&signer, &nk, "playx-gym", "wydk3", now, None).unwrap();
+        no_d["tags"] = json!([["t", "ravenvault-presence"]]);
+        assert!(super::validate_publish_event(&no_d).is_err());
     }
 }
 #[cfg(test)]
