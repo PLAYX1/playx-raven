@@ -18,6 +18,7 @@ import { DICT } from "./dict";
 import { t, tf, setCopyText } from "./i18n";
 import { seedErrorKind } from "./seed-recovery";
 import { TALK_ROOMS_ADMIN_COPY } from "./talk-rooms-admin-copy";
+import { pickAndUploadPhoto, roomPictureSrc, setAvatarPicture } from "./talk-media";
 import {
   ROOM_ABOUT_MAX, ROOM_NAME_MAX, canEditRoom, hideRoom, isOfficialRoom, loadHidden, unhideRoom,
   type AdminCore, type TalkRoom,
@@ -76,6 +77,8 @@ export function createSheet(core: AdminCore): Sheet {
   let lastFocus: HTMLElement | null = null;
 
   const page = () => document.getElementById("page-talk");
+  /** 지금 방 사진(방금 바꾼 것 포함). 없으면 "". */
+  const currentPicture = () => String(deps.picture?.(roomId) ?? core.room(roomId)?.picture ?? "");
   const infoBtn = () => document.getElementById("tk-room-settings");
   // 병합(0.9.0): 레인 A 가 비워 둔 마운트 자리 #tk-room-sheet(.talkwrap 격자 안, display:contents) 안에 붙인다.
   // 자리 상자의 hidden 은 시트와 같이 켜고 끈다. 자리가 없으면 예전처럼 #page-talk 에.
@@ -108,6 +111,48 @@ export function createSheet(core: AdminCore): Sheet {
     const av = el("span", { cls: "tkinfo-av" }, Array.from(name)[0] || "#");
     av.setAttribute("aria-hidden", "true");
     av.setAttribute("translate", "no"); // 방 이름 첫 글자 — 사용자 글이다
+    setAvatarPicture(av, roomPictureSrc(currentPicture()));
+
+    // ── 11-13 방 사진(만든 사람만 — 이 시트가 만든 사람에게만 열린다). 정사각 512 JPEG → 공용 사진 서버 → 41 의 picture ──
+    const picSay = el("p", { cls: "tkinfo-say", id: "info-pic-say" });
+    picSay.setAttribute("role", "status");
+    const picBtn = copy(el("button", { id: "info-pic", cls: "ghost", type: "button" }), "방 사진 바꾸기");
+    const picDel = copy(el("button", { id: "info-pic-del", cls: "ghost", type: "button", hidden: !currentPicture() }), "방 사진 내리기");
+    const setPicture = async (next: string | null) => {
+      if (busy) return;
+      const cur = core.room(roomId);
+      if (!cur || !canEditRoom(cur, deps.me())) { close(); return; }
+      busy = true; picBtn.disabled = picDel.disabled = true;
+      picSay.className = "tkinfo-say";
+      try {
+        let url = "";
+        if (next === null) {
+          picSay.textContent = t("사진을 올리는 중…");
+          url = await pickAndUploadPhoto();
+          if (!url) { picSay.textContent = ""; return; }
+        }
+        const go = () => deps.call<MetaResult>("talk_room_meta_set", { room: roomId, name: String(cur.name || ""), about: String(cur.about || ""), picture: url });
+        try { await go(); }
+        catch (e) {
+          if (seedErrorKind(e) !== "LOCKED") throw e;
+          if (!(await deps.unlock(t("지갑을 열면 방 이름 바꾸기를 다시 시도합니다.")))) { picSay.textContent = ""; return; }
+          await go();
+        }
+        deps.pictureSet?.(roomId, url);
+        setAvatarPicture(av, roomPictureSrc(url));
+        picDel.hidden = !url;
+        picSay.textContent = t(url ? "방 사진을 바꿨어요." : "방 사진을 내렸어요.");
+      } catch (e) {
+        picSay.textContent = deps.errText(e);
+        picSay.classList.add("warn");
+      } finally { busy = false; picBtn.disabled = picDel.disabled = false; }
+    };
+    picBtn.addEventListener("click", () => void setPicture(null));
+    picDel.addEventListener("click", () => void setPicture(""));
+    const picRow = el("div", { cls: "tkinfo-group tkinfo-pic" },
+      el("div", { cls: "tkinfo-acts" }, picBtn, picDel),
+      copy(el("p", { cls: "tkinfo-note" }), "사진은 공용 사진 서버에 올라가 주소를 아는 누구나 볼 수 있어요."),
+      picSay);
 
     // ── 방 정보(만든 사람만) ──────────────────────────────────────────
     const row = (id: string, label: string, value: string) => {
@@ -179,7 +224,8 @@ export function createSheet(core: AdminCore): Sheet {
       save.disabled = true;
       say.textContent = t("저장하는 중…");
       try {
-        const r = await deps.call<MetaResult>("talk_room_meta_set", { room: roomId, name: n, about: a });
+        // 11-13 41 은 통째로 바뀐다 — 이름만 고쳐도 지금 방 사진을 그대로 넘긴다(안 넘기면 사진이 지워진다).
+        const r = await deps.call<MetaResult>("talk_room_meta_set", { room: roomId, name: n, about: a, picture: currentPicture() });
         core.setOverride(roomId, String(r?.name ?? n), String(r?.about ?? a));
         const ok = Number(r?.public_ok || 0);
         const total = Number(r?.public_total || 0);
@@ -243,6 +289,7 @@ export function createSheet(core: AdminCore): Sheet {
       about ? user(el("p", { cls: "tkinfo-about" }), about) : el("p", { cls: "tkinfo-about", hidden: true }),
       copy(el("p", { cls: "tkinfo-mine" }), "내가 만든 방이에요. 이름과 설명은 나만 바꿀 수 있어요."),
       meta,
+      picRow,
       form,
       say,
       el("div", { cls: "tkinfo-group" }, hideRow, delRow),

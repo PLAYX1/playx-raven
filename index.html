@@ -3542,6 +3542,7 @@
                 <button class="ghost" id="tk-roommute" type="button" aria-pressed="false">이 방 알림 끄기</button>
                 <button class="ghost" id="tk-muted">안 보기 명단</button>
                 <button class="ghost" id="tk-name">내 이름</button>
+                <button class="ghost" id="tk-picture">이름표 그림</button>
                 <!-- 🔴 **1:1 암호 쪽지는 이 창에 없다.** 지갑 화면에만 있다.
                      길이 없으면 없는 기능이나 마찬가지라 여기서 문을 낸다. -->
                 <button class="ghost" id="tk-dm">쪽지</button>
@@ -3760,6 +3761,7 @@
             <button id="rv-add-friend" class="ghost" type="button">친구 추가</button>
             <p>폰에서 QR 로 친구를 추가해요.</p>
             <div id="rv-person-badges" class="tk-badge-section" hidden></div>
+            <button id="rv-pic-report" class="ghost" type="button" hidden>프로필 사진 신고</button>
             <details><summary>고급</summary><code id="rv-person-key"></code></details>
           </aside>
           <!-- 0.9.0 「방 설정」 시트 자리 — 레인 C 시트(aside#info)가 열릴 때 여기 붙고 함께 보인다(display:contents). -->
@@ -5547,6 +5549,10 @@
                 </details>
               </div>
               <p class="sx-foot">두 소리는 따로 켜고 꺼요. 밤새 켜 두는 컴퓨터라면 꺼 두세요.</p>
+              <div class="card sx-group" id="tklp-card">
+                <label class="check"><span class="sx-txt"><b>링크 미리보기</b><span class="sx-d">대화에 온 링크의 제목과 그림을 카드로 보여 주기</span></span><input type="checkbox" id="tk-lp-on" role="switch" checked /></label>
+                <p class="meta">레이븐볼트 서버가 대신 읽어 와서, 링크의 사이트는 내 인터넷 주소(IP)를 몰라요.</p>
+              </div>
             </section>
 
             <!-- ── 백업과 복구 ── 레인B(0.9.0 백업 화면)가 이 주제의 속을 새로 짠다. 지금은 기존 백업 칸을

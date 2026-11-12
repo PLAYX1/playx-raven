@@ -111,6 +111,7 @@ mod sweep;
 mod identity;
 mod talk;
 mod talk_social;
+mod talk_media; // 11-13 링크 미리보기(우리 사이트만) · 방 사진 · 내 사진 이름표
 mod talk_fast;
 mod talk_dm;
 mod talk_push;
@@ -780,6 +781,8 @@ pub fn run() {
             talk::talk_my_assets,
             talk::talk_delete_request,
             talk::talk_profile_set,
+            talk_media::talk_unfurl,
+            talk_media::talk_blossom_upload,
             talk::talk_profiles,
             badges::talk_badges,
             talk::talk_rvn_link,
