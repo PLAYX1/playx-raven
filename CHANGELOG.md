@@ -1,5 +1,19 @@
 # 변경 기록
 
+## 0.9.38
+
+### 한국어
+
+- **카톡 PC처럼 바뀐 대화 화면:** 왼쪽 메뉴 줄을 하나로 합치고, 친구·채팅·광장은 목록 위 탭으로 옮겼습니다. 맨 위 머리줄이 얇아져 대화가 더 넓게 보입니다. 대화 화면의 단추는 누르기 쉬운 크기(44px)로 맞췄습니다.
+- **말풍선 「신고」:** 말풍선을 오른쪽 클릭해 신고할 수 있습니다. 이유를 고르고 보내면 그 사람 글이 더는 안 보입니다. 글 내용은 「이 글 함께 보내기」를 체크했을 때만 함께 갑니다.
+- **복구 단어 주의는 한 줄로:** 세 줄이던 안내를 한 줄로 줄였고 ✕로 닫을 수 있습니다.
+
+### English
+
+- **Chat screen redesigned like a desktop messenger:** one left rail, with Friends · Chats · Square as tabs above the list. A slimmer top bar leaves more room for conversations, and chat buttons are now easy-to-click 44px targets.
+- **Report a message:** right-click a bubble to report it. After you pick a reason, that person's posts are hidden. The message text is sent only if you tick "Include this message".
+- **Recovery-word warning is now one line,** and can be closed with ✕.
+
 ## 0.9.37
 
 ### 한국어
