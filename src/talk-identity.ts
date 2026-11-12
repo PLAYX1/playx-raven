@@ -7,6 +7,7 @@
 // ③ 내 글에도 내 이름과 아이콘(라비 캐릭터)을 단다 — 대표 결정 2026-10-12(이전 「카톡식, 내 글엔 이름 없음」을 뒤집음).
 // ④ 「내 색」은 없앴다(내 표시는 이름 + 라비 캐릭터로 충분, 색은 대비를 깨뜨릴 수 있음). 옛 저장값은 지운다.
 // ⑤ 「내 소개」의 이름 칸·이야기의 「내 이름」·설정 「이야기에서 쓰는 이름」은 같은 이름표 하나다.
+import { BLOSSOM, avatarImgHtml, stickerCodeOf } from "./talk-media";
 import { t, tf } from "./i18n";
 
 type Invoke = <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
@@ -26,9 +27,11 @@ export function myFaceHtml(): string {
 }
 
 /** 내 글 머리 — 「김무송 · 나」 + 아이콘. 이름이 없으면 「나」만. */
-export function myHeadHtml(name: string): string {
+export function myHeadHtml(name: string, picture = ""): string {
   const shown = name.trim();
-  return `<div class="who me">` + (shown ? `<span translate="no">${esc(shown)}</span><span class="tk-me-tag">· ${esc(t("나"))}</span>` : `<span>${esc(t("나"))}</span>`) + myFaceHtml() + `</div>`;
+  // 11-13 이름표 그림(라비 이모티콘·내 사진)이 있으면 라비 얼굴 위에 덮는다 — 못 읽으면 지워져 라비 얼굴이 보인다.
+  const face = picture ? myFaceHtml().replace("</span>", `${avatarImgHtml(picture)}</span>`).replace('class="rv-myface"', 'class="rv-myface has-pic"') : myFaceHtml();
+  return `<div class="who me">` + (shown ? `<span translate="no">${esc(shown)}</span><span class="tk-me-tag">· ${esc(t("나"))}</span>` : `<span>${esc(t("나"))}</span>`) + face + `</div>`;
 }
 
 /** 지금 알고 있는 내 이름을 이름이 보이는 자리에 적는다(설정 「이야기에서 쓰는 이름」·첫 진입 카드 칸). */
@@ -44,7 +47,9 @@ export async function saveTalkName(invoke: Invoke, name: string, about = "", pic
   const clean = name.trim();
   if (!clean) return { ok: false, error: t("이름을 적어 주세요") };
   try {
-    const ev = await invoke<unknown>("talk_profile_set", { name: clean, about, picture });
+    // 11-13 이름표 그림은 라비 이모티콘이나 여기서 올린 사진(Blossom)만 — 다른 앱이 넣은 바깥 주소는 남기지 않는다(폰 profileDraft 와 같다).
+    const pic = stickerCodeOf(picture) || BLOSSOM.test(picture) ? picture : "";
+    const ev = await invoke<unknown>("talk_profile_set", { name: clean, about, picture: pic });
     const id = ev && typeof ev === "object" ? (ev as { id?: unknown }).id : null;
     if (typeof id !== "string" || !id) return { ok: false, error: t("이름이 저장됐는지 확인하지 못했어요. 잠시 뒤 다시 눌러 주세요.") };
     // 서명된 이름표에 실제로 들어간 이름을 본다 — 다르면(잘림·바뀜) 「저장했어요」라고 하지 않는다(0.9.0 병합, GPT 교차검토 Q10).
