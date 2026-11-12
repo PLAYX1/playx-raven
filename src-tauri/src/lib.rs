@@ -909,6 +909,8 @@ pub fn run() {
             //    밤새 들어온 입금이 아침까지 확인되지 않는다.
             //    「돕기」인 사람의 노트북은 건드리지 않는다(배터리는 그 사람 것).
             awake::sync_with_mode();
+            // 처음 블록을 받는 동안은 모드와 상관없이 깨워 둔다(0.9.37 · awake.rs).
+            awake::start_first_sync_watch();
             // 지도에 올려 둔 가게면 켜자마자 「영업 중」 신호를 한 번, 그 뒤 5분마다(map.rs).
             map::start();
             node_keeper::start();

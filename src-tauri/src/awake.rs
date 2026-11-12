@@ -48,6 +48,12 @@ use std::sync::Mutex;
 static HOLD: Mutex<Option<std::process::Child>> = Mutex::new(None);
 /// 윈도우는 프로세스가 아니라 상태라, 따로 기억해야 화면에 말할 수 있다.
 static ON: Mutex<bool> = Mutex::new(false);
+/// 처음 블록을 받는 중인가(노드의 `initialblockdownload`). `start_first_sync_watch` 가 1분마다 고친다.
+///
+/// 🔴 0.9.37 — 「돕기」·「지갑」으로 처음 깐 사람의 컴퓨터가 첫 받기(몇 시간) 도중에
+///    잠들어 받기가 멈췄다. 사람들이 「윈도우 절전을 끄라」는 안내를 서로 돌렸다.
+///    설정을 바꾸라고 하지 않는다 — 다시 훑기처럼 **긴 일 하는 동안만** 붙잡고, 끝나면 놓는다.
+static FIRST_SYNC: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 /// 윈도우에서 붙잡는 스레드에게 「계속할까」를 알린다.
 #[cfg(target_os = "windows")]
 static WANT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
@@ -78,11 +84,43 @@ pub fn sync_with_mode() {
     let busy = crate::reindex_run::reindex_state()["running"]
         .as_bool()
         .unwrap_or(false);
-    if should_hold(mode, busy) {
+    // 처음 받기도 다시 훑기와 같은 「긴 일」이다 — 모드와 상관없이 붙잡고, 끝나면 놓는다.
+    if should_hold(mode, busy || first_sync()) {
         hold();
     } else {
         release();
     }
+}
+
+fn first_sync() -> bool {
+    FIRST_SYNC.load(std::sync::atomic::Ordering::SeqCst)
+}
+
+/// 노드 답(`getblockchaininfo`)에서 「처음 받는 중」을 읽는다. 모르면 `None` — 그때는 전에 알던 값을 둔다.
+pub(crate) fn first_sync_from(info: &Value) -> Option<bool> {
+    info.get("initialblockdownload").and_then(|v| v.as_bool())
+}
+
+/// 1분마다 노드에게 「처음 받는 중이냐」를 묻고, 바뀌면 붙잡거나 놓는다.
+///
+/// 노드가 꺼져 있거나 바빠서 답이 없으면 **전에 알던 값을 그대로 둔다** — 켜지는 중에
+/// 놓았다 붙잡았다 하지 않게. 답을 못 받는 동안 새로 붙잡지도 않는다(배터리는 그 사람 것).
+pub fn start_first_sync_watch() {
+    tauri::async_runtime::spawn(async {
+        loop {
+            if let Ok(info) =
+                crate::raven::call_rpc_quick("getblockchaininfo", serde_json::json!([]), crate::raven::QUICK_MS).await
+            {
+                if let Some(now) = first_sync_from(&info) {
+                    let before = FIRST_SYNC.swap(now, std::sync::atomic::Ordering::SeqCst);
+                    if before != now {
+                        sync_with_mode();
+                    }
+                }
+            }
+            tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+        }
+    });
 }
 
 fn hold() {
@@ -197,14 +235,18 @@ fn win_set(flags: u32) -> bool {
 pub fn awake_status() -> Value {
     let on = ON.lock().map(|g| *g).unwrap_or(false);
     let mode = crate::mode::mode_get()["mode"].as_str().unwrap_or("").to_string();
-    let busy = crate::reindex_run::reindex_state()["running"]
+    let reindexing = crate::reindex_run::reindex_state()["running"]
         .as_bool()
         .unwrap_or(false);
+    let first = first_sync();
+    let busy = reindexing || first;
     json!({
         "holding": on,
         "mode": mode,
-        "why": if busy { "reindex" } else if mode == "shop" { "shop" } else { "" },
-        "note": if on && busy {
+        "why": if reindexing { "reindex" } else if first { "first_sync" } else if mode == "shop" { "shop" } else { "" },
+        "note": if on && first && !reindexing {
+            "처음 블록을 받는 동안 이 컴퓨터가 잠들지 않게 하고 있습니다. 다 받으면 저절로 놓습니다. 화면은 꺼져도 됩니다."
+        } else if on && busy {
             // 왜 붙잡는지 다르면 문장도 달라야 한다. 색인 중인 사람에게
             // 「입금」 이야기를 하면 무슨 말인지 모른다.
             "다시 훑는 동안 이 컴퓨터가 잠들지 않게 하고 있습니다. 잠들면 처음부터 다시 훑습니다."
@@ -222,6 +264,23 @@ pub fn awake_status() -> Value {
 #[cfg(test)]
 mod tests {
     use super::should_hold;
+
+    /// 🔴 0.9.37 — 처음 받기는 sync_with_mode 가 `busy` 로 넘긴다. 돕기·지갑이어도 붙잡는다.
+    #[test]
+    fn 처음_받는_동안은_돕기도_지갑도_붙잡는다() {
+        assert!(should_hold("help", true));
+        assert!(should_hold("wallet", true));
+    }
+
+    #[test]
+    fn 처음_받는_중은_노드_답에서만_읽는다() {
+        use super::first_sync_from;
+        use serde_json::json;
+        assert_eq!(first_sync_from(&json!({"initialblockdownload": true})), Some(true));
+        assert_eq!(first_sync_from(&json!({"initialblockdownload": false})), Some(false));
+        assert_eq!(first_sync_from(&json!({"blocks": 10})), None, "모르면 전에 알던 값을 둔다");
+        assert_eq!(first_sync_from(&json!({"initialblockdownload": "yes"})), None);
+    }
 
     #[test]
     fn 장사만_붙잡는다() {
