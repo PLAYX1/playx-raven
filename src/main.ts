@@ -5280,6 +5280,7 @@ function myNotesLine(r: any): string {
 /* ── 0.9.17 장터·「내 글」·피드 메뉴 (src/listing-market.ts — 처음 쓸 때 따로 내려받는다) ── */
 const listingDeps = () => ({ invoke: <T = any>(cmd: string, args?: Record<string, unknown>) => invoke<T>(cmd, args), ensureUnlocked, errText, fmtQty });
 let listingMarket: { enter(open?: "browse" | "mine"): void } | undefined;
+let arcadeMarket: { enter(): void; refresh(): void } | undefined;
 let tradeOpen: "browse" | "mine" | undefined;
 function openTrade(open?: "browse" | "mine") {
   tradeOpen = open;
@@ -5353,6 +5354,11 @@ function showPage(id: string) {
     if (currentPage === "trade") listingMarket.enter(tradeOpen);
     tradeOpen = undefined;
   }).catch((e) => paintLoadFail($("page-trade"), () => showPage("trade"), "listing-market", e));
+  // 11-12 장터 첫 줄 「바로 해 보는 게임」(src/arcade-market.ts) — 맞교환 목록과 따로 내려받는다.
+  if (id === "trade") void import("./arcade-market").then(({ mountArcade }) => {
+    arcadeMarket ??= mountArcade($("page-trade"), $("ar-host"), listingDeps());
+    if (currentPage === "trade") arcadeMarket.enter();
+  }).catch((e) => paintLoadFail($("ar-host"), () => showPage("trade"), "arcade-market", e));
   if (id === "chain") chainInfo?.enter();
   paintPageTiles(id);
   document.querySelectorAll(".page").forEach((p) => p.classList.toggle("on", p.id === `page-${id}`));
