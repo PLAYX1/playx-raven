@@ -48,9 +48,12 @@ export function paintUpload(host: HTMLElement, deps: UploadDeps, o: { existing: 
     `<div class="row"><button type="button" data-up-pick="1">${copyHtml("게임 폴더 고르기")}</button></div>` +
     `<div data-up-mine="1"></div>` +
     `<div data-up-folder="1"></div><div data-up-form="1"></div><div data-up-step="1"></div>` +
+    `<div data-up-keep="1"></div>` +
     `</div>`;
   const $ = <T extends HTMLElement>(sel: string) => host.querySelector<T>(sel)!;
   $("[data-up-back]").onclick = () => { if (!busy) o.onBack(); };
+  // 내 게임 보관 — 게임은 내 컴퓨터에 산다(꺼져 있으면 손님이 못 한다는 말을 숨기지 않는다).
+  void import("./arcade-keep").then(({ paintMineKeep }) => paintMineKeep($("[data-up-keep]"), deps.invoke, deps.errText));
 
   const savedSeller = () => { try { return localStorage.getItem(SELLER_KEY) || ""; } catch { return ""; } };
   /** 이 지갑이 올린 일반 판매자 게임(판매자 주소 = 이 화면이 기억한 판매 주소). */
@@ -312,7 +315,8 @@ export function paintUpload(host: HTMLElement, deps: UploadDeps, o: { existing: 
         try { localStorage.setItem(SELLER_KEY, seller); } catch { /* 없어도 된다 */ }
         step.innerHTML = `<p class="ok">${copyHtml("올렸어요. 공개 장부에 기록되면(몇 분) 장터 「바로 해 보는 게임」에 보여요.")}</p>` +
           `<p class="meta ar-txid">${copyHtml("거래 번호")} <code translate="no">${esc(txid)}</code></p>` +
-          `<p class="meta ar-txid">${copyHtml("상품 문서")} <code translate="no">${esc(docCid)}</code></p>`;
+          `<p class="meta ar-txid">${copyHtml("상품 문서")} <code translate="no">${esc(docCid)}</code></p>` +
+          `<p class="ar-note">${copyHtml("게임은 내 컴퓨터에 있어요. 내 컴퓨터가 꺼져 있으면 손님이 게임을 못 해요. 손님이 많은 시간에는 켜 두세요.")}</p>`;
         busy = false;
         o.onPublished(); o.preset?.onPublished(docCid);
       } catch (e) {

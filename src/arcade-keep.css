@@ -1,0 +1,9 @@
+/* 오락실 게임 보관 카드(src/arcade-keep.ts) — 돕는 중 화면·게임 올리기 화면. */
+.ar-keep { margin-top: 12px; }
+.ar-keep .ar-opts { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
+.ar-keep .ar-opt { display: flex; align-items: center; gap: 8px; min-height: 44px; cursor: pointer; }
+.ar-keep .ar-opt input { width: 20px; height: 20px; flex: 0 0 auto; }
+.ar-keep select { min-height: 40px; margin-left: 6px; }
+.ar-keep .row { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 8px; }
+.ar-keep button { white-space: nowrap; flex-shrink: 0; }
+.ar-keep input[type="text"] { width: 100%; box-sizing: border-box; min-height: 44px; padding: 8px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); color: var(--text); }

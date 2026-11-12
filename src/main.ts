@@ -7,6 +7,8 @@ import "./talk-badges.css";
 import { looksRisky } from "./ravi-card";
 import { clearMentions, fillNoteLinks, mentionText, nip05Slot, noteBodyHtml, noteStickerOnly, openNote, personMineHtml, raviCheckNotices, refreshNotices, rememberNotes, wirePersonMine, wireTalkSocial } from "./talk-social"; // 11-09 알림·찾기·글 속 링크·NIP-05·내 글 받기
 import "./talk-social.css";
+import { avatarImgHtml, personPictureSrc, roomPictureSrc, setAvatarPicture, reportPicture, wireTalkMedia } from "./talk-media"; // 11-13 링크·미리보기·방 사진·내 사진 이름표
+import { openPictureEditor } from "./talk-picture";
 import { myHeadHtml, nameCardAfterMe, saveTalkName, setMyTalkName, wireTalkIdentity } from "./talk-identity"; // 0.9.0 이야기 이름표 — 레인A
 import "./app-lock"; // 잠긴 기본 화면·매장용 읽기 전용 + 다크 돈 카드(docs/design/lock-and-dark.md)
 import "./wallet-lock-refusal"; // 「지갑 암호 없음」 안내 + 트레이 거절 이벤트 — 시작 때부터 필요한 작은 조각
@@ -6746,6 +6748,23 @@ async function talkPaintMe() {
 }
 
 let tkRoomNames = new Map<string, string>();
+/** 11-13 방 사진(만든 사람 41 의 Blossom 주소). 방금 바꾼 사진은 목록이 따라올 때까지(tkRoomPicsAt) 이것을 쓴다. */
+const tkRoomPics = new Map<string, string>();
+const tkRoomPicsAt = new Map<string, number>();
+/** 지금 방의 머리줄·오른쪽 칸 얼굴과 「방 사진 신고」 단추를 맞춘다. 광장·쪽지는 사진 없음. */
+function tkPaintRoomFace(): void {
+  const raw = tkRoom ? String(tkRoomPics.get(tkRoom) || "") : "";
+  const src = roomPictureSrc(raw);
+  for (const av of [$("rv-person-avatar"), $("tk-headav")]) setAvatarPicture(av, src);
+  const room = (tkRoomsLast ?? []).find((r: any) => String(r.id) === tkRoom);
+  const rep = document.getElementById("rv-pic-report");
+  if (rep) {
+    const mine = !!room && String(room.pubkey || "") === tkMine;
+    rep.hidden = !src || mine;
+    rep.dataset.kind = "room"; rep.dataset.target = tkRoom; rep.dataset.url = raw;
+    setCopyText(rep, () => t("방 사진 신고"));
+  }
+}
 let tkAdmin: ReturnType<typeof wireTalkRoomsAdmin> | null = null;
 let tkDmUi: ReturnType<typeof wireTalkDm> | null = null;
 
@@ -6774,6 +6793,12 @@ function tkPaintRoomList(rooms: any[]) {
   const box = $("tk-rooms");
   rooms = tkAdmin ? tkAdmin.rooms(rooms) : rooms; // 숨긴 방 빼기·방금 바꾼 이름(talk-rooms-admin.ts)
   tkRoomNames = new Map(rooms.map((r) => [String(r.id), String(r.name)]));
+  for (const r of rooms) {
+    const id = String(r.id), pinned = tkRoomPicsAt.get(id);
+    if (pinned !== undefined && Number(r.meta_at || 0) < pinned) continue; // 방금 바꾼 사진 — 릴레이 답이 따라올 때까지
+    tkRoomPicsAt.delete(id);
+    tkRoomPics.set(id, String(r.picture || ""));
+  }
   setRoomGates(rooms); // 기여 표시 방(kind 40 gate) — talk-badges.ts
   $("tk-gate-head").innerHTML = gateChipHtml(gateOfRoom(tkRoom));
   if (tkRoom && tkRoomNames.has(tkRoom)) setCopyText($("tk-title"), () => tkRoomNames.get(tkRoom) || t("방")); // 고친 이름을 머리줄에도
@@ -6821,6 +6846,7 @@ function tkPaintRoomList(rooms: any[]) {
       }
       $("rv-person-key").textContent = tkRoom;
       $("rv-person-badges").hidden = true;
+      tkPaintRoomFace();
       $("tk-gate-head").innerHTML = gateChipHtml(gateOfRoom(tkRoom));
     };
   });
@@ -7419,7 +7445,7 @@ async function talkPaint(opts: { cached?: boolean; list?: any[] } = {}) {
       const hex = /^[0-9a-f]{64}$/.test(id);
       const 이름 = mine ? `<span translate="no">${escapeHtml(String(tkNames.get(who)?.name || t("나")))}</span>` : tkWho(who);
       return `<article class="fcard${mine ? " me" : ""}" data-card="${escapeHtml(id)}">` +
-        `<span class="fav" style="--h:${tkHue(who)}" aria-hidden="true">${escapeHtml((tkNames.get(who)?.name || "레").slice(0, 1))}</span>` +
+        `<span class="fav" style="--h:${tkHue(who)}" aria-hidden="true">${escapeHtml((tkNames.get(who)?.name || "레").slice(0, 1))}${avatarImgHtml(personPictureSrc(tkNames.get(who)?.picture))}</span>` +
         `<div class="fbody"><div class="fhead"><span class="fname" data-person="${escapeHtml(who)}">${이름}${nip05Slot(who)}</span>` +
         `<span class="tk-badges" data-badges-for="${escapeHtml(who)}"></span>` +
         `<span class="fmeta" translate="no">· …${escapeHtml(who.slice(-4))} · <time class="tstamp" title="${escapeHtml(new Date(ms).toLocaleString())}">${escapeHtml(tkAgo(ms))}</time></span></div>` +
@@ -7463,8 +7489,8 @@ async function talkPaint(opts: { cached?: boolean; list?: any[] } = {}) {
           이어짐
             ? ""
             : mine
-            ? myHeadHtml(String(tkNames.get(who)?.name || ""))
-            : `<div class="who" style="--h:${tkHue(who)}" data-person="${escapeHtml(who)}"><span class="rv-avatar" aria-hidden="true">${escapeHtml((tkNames.get(who)?.name || "레").slice(0,1))}</span> ${tkWho(who)}${nip05Slot(who)}<span class="tk-badges" data-badges-for="${escapeHtml(who)}"></span></div>`;
+            ? myHeadHtml(String(tkNames.get(who)?.name || ""), personPictureSrc(tkNames.get(who)?.picture))
+            : `<div class="who" style="--h:${tkHue(who)}" data-person="${escapeHtml(who)}"><span class="rv-avatar" aria-hidden="true">${escapeHtml((tkNames.get(who)?.name || "레").slice(0,1))}${avatarImgHtml(personPictureSrc(tkNames.get(who)?.picture))}</span> ${tkWho(who)}${nip05Slot(who)}<span class="tk-badges" data-badges-for="${escapeHtml(who)}"></span></div>`;
 
         // ③ 시각은 **덩어리의 마지막 글 옆에** 한 번. 한 사람이 세 줄을
         //    이어 쓰면 시각도 세 번 찍혔는데, 그게 글마다 메타 줄이 붙는
@@ -7691,6 +7717,15 @@ async function tkShowPerson(pk: string) {
   const avatar = $("rv-person-avatar");
   avatar.dataset.initial = name.slice(0, 1);
   avatar.style.setProperty("--h", String(tkHue(pk)));
+  // 11-13 이름표 그림(라비 이모티콘·그 사람 사진). 남의 사진이면 「프로필 사진 신고」.
+  const pic = personPictureSrc(p?.picture);
+  setAvatarPicture(avatar, pic);
+  const rep = document.getElementById("rv-pic-report");
+  if (rep) {
+    rep.hidden = !pic || pk === tkMine || pic.startsWith("/ravi-stickers/");
+    rep.dataset.kind = "profile"; rep.dataset.target = pk; rep.dataset.url = String(p?.picture || "");
+    setCopyText(rep, () => t("프로필 사진 신고"));
+  }
   $("rv-person-key").textContent = pk;
   const sec = $("rv-person-badges");
   const address = String(p?.rvn_address || "");
@@ -20430,6 +20465,8 @@ window.addEventListener("DOMContentLoaded", async () => {
     errText,
     reload: () => talkPaintRooms(),
     leave: () => document.querySelector<HTMLElement>('#tk-rooms [data-room=""]')?.click(),
+    picture: (id) => String(tkRoomPics.get(id) ?? ""),
+    pictureSet: (id, url) => { tkRoomPics.set(id, url); tkRoomPicsAt.set(id, Math.floor(Date.now() / 1000)); if (tkRoom === id) tkPaintRoomFace(); tkDmUi?.roomsChanged(); },
   });
   tkDmUi = wireTalkDm({
     invoke: (cmd, args) => invoke(cmd, args),
@@ -20437,9 +20474,10 @@ window.addEventListener("DOMContentLoaded", async () => {
     nameOf: (pk) => (pk && pk === tkMine ? String(tkNames.get(pk)?.name || t("나")) : String(tkNames.get(pk)?.name || "").trim() || `${t("레이븐")} #${pk.slice(0, 4).toUpperCase()}`),
     loadNames: (pks) => tkLoadNames(pks),
     hue: tkHue,
+    pictureOf: (pk) => personPictureSrc(tkNames.get(pk)?.picture),
     bodyHtml: noteBodyHtml,
     stickerOnly: (s) => !!noteStickerOnly(s),
-    rooms: () => (tkRoomsLast ?? []).map((r: any) => ({ id: String(r.id), name: String(tkRoomNames.get(String(r.id)) || r.name || t("방")) })).filter((r) => !tkAdmin || tkAdmin.rooms([{ id: r.id, name: r.name }]).length > 0),
+    rooms: () => (tkRoomsLast ?? []).map((r: any) => ({ id: String(r.id), name: String(tkRoomNames.get(String(r.id)) || r.name || t("방")), picture: String(tkRoomPics.get(String(r.id)) ?? r.picture ?? "") })).filter((r) => !tkAdmin || tkAdmin.rooms([{ id: r.id, name: r.name }]).length > 0),
     roomOpen: () => tkRoom,
     openRoom: (id) => document.querySelector<HTMLElement>(`#tk-rooms [data-room="${CSS.escape(id)}"]`)?.click(),
     openSquare: () => openFeed(),
@@ -20482,6 +20520,23 @@ window.addEventListener("DOMContentLoaded", async () => {
     });
   }
   $("tk-name").addEventListener("click", () => void talkSetName());
+  // 11-13 링크(기본 브라우저·위험 경고)·미리보기(우리 서버만)·사진 신고 — talk-media.ts
+  wireTalkMedia({ invoke: (cmd, args) => invoke(cmd, args), openUrl: (url) => openUrl(url) });
+  document.getElementById("tk-picture")?.addEventListener("click", () => void openPictureEditor({
+    invoke: (cmd, args) => invoke(cmd, args),
+    me: () => ({ pubkey: tkMine, name: String(tkNames.get(tkMine)?.name || ""), about: String(tkNames.get(tkMine)?.about || ""), picture: String(tkNames.get(tkMine)?.picture || "") }),
+    hue: tkHue,
+    onSaved: (picture) => { const now = tkNames.get(tkMine) || {}; tkNames.set(tkMine, { ...now, picture }); void talkPaintMe(); void talkPaint(); },
+  }));
+  document.getElementById("rv-pic-report")?.addEventListener("click", async (e) => {
+    const b = e.currentTarget as HTMLElement;
+    const kind = b.dataset.kind === "room" ? "room" : "profile", target = String(b.dataset.target || ""), url = String(b.dataset.url || "");
+    if (!(await reportPicture(kind, target, url))) return;
+    b.hidden = true;
+    setAvatarPicture($("rv-person-avatar"), ""); setAvatarPicture($("tk-headav"), "");
+    if (kind === "room") tkPaintRoomList(tkRoomsLast ?? []); else void talkPaint();
+    tkDmUi?.roomsChanged();
+  });
   wireTalkIdentity({ invoke, current: () => tkNames.get(tkMine) || null, onSaved: (name) => { tkNames.set(tkMine, { ...(tkNames.get(tkMine) || {}), name }); void talkPaintMe(); void talkPaint(); } }); // 0.9.0 첫 진입 이름 카드
   bindArtist();
   // ── 접기·펴기 ────────────────────────────────────────────────────

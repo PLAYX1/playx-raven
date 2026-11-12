@@ -34,6 +34,7 @@
 .ar-ok, .ar-unv { display: inline-flex; align-items: center; gap: 4px; }
 .ar-ok { color: var(--ok); } .ar-unv { color: var(--warn); }
 .ar-ok svg, .ar-unv svg { width: 16px; height: 16px; flex: 0 0 auto; }
+.ar-rest { display: inline-block; align-self: flex-start; padding: 2px 10px; border-radius: 999px; font-size: 13px; font-weight: 700; white-space: nowrap; flex-shrink: 0; color: var(--warn); border: 1px solid currentColor; }
 .ar-empty { padding: 16px 18px; border: 1px dashed var(--line); border-radius: 14px; background: var(--panel); }
 .ar-empty-title { margin: 0 0 4px; font-size: 17px; font-weight: 700; }
 .ar-empty .meta { margin: 0; }

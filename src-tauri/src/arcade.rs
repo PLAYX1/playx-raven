@@ -43,7 +43,7 @@ fn client() -> &'static reqwest::Client {
 }
 
 /// CID 모양(v0 `Qm…` · v1 `b…`). 경로에 붙이기 전 거른다.
-fn cid_ok(c: &str) -> bool {
+pub(crate) fn cid_ok(c: &str) -> bool {
     let v0 = c.len() == 46 && c.starts_with("Qm") && c.bytes().all(|b| b.is_ascii_alphanumeric() && b != b'0' && b != b'O' && b != b'I' && b != b'l');
     let v1 = c.len() >= 59 && c.len() <= 101 && c.starts_with('b') && c.bytes().skip(1).all(|b| b.is_ascii_lowercase() || (b'2'..=b'7').contains(&b));
     v0 || v1
@@ -56,7 +56,7 @@ fn entry_ok(p: &str) -> bool {
     })
 }
 /// 문서를 받아 볼 만한 이름인가: `RVLT/<가게>/<상품>` 또는 `RVLT/<가게>#<이름>` (가게 이름만은 상품이 아니다).
-fn product_like(name: &str) -> bool {
+pub(crate) fn product_like(name: &str) -> bool {
     name.starts_with("RVLT/") && (name.matches('/').count() >= 2 || name.contains('#'))
 }
 
@@ -72,7 +72,7 @@ async fn get_capped(url: &str) -> Option<Vec<u8>> {
     (b.len() <= DOC_MAX).then(|| b.to_vec())
 }
 
-async fn fetch_doc(cid: &str) -> Option<Vec<u8>> {
+pub(crate) async fn fetch_doc(cid: &str) -> Option<Vec<u8>> {
     if let Some(b) = get_capped(&format!("{LOCAL_GATEWAY}/ipfs/{cid}")).await {
         return Some(b);
     }
@@ -124,57 +124,88 @@ async fn public_list() -> Option<Vec<(String, Option<String>)>> {
     assets_from_public(&serde_json::from_slice(&b).ok()?)
 }
 
+/// 체인의 `RVLT/*` 자산 목록 — 이 컴퓨터의 노드가 먼저, 노드가 못 답하면 레이븐볼트 공개 연결의 목록.
+pub(crate) async fn chain_list() -> Result<(Vec<(String, Option<String>)>, &'static str), String> {
+    match call_rpc("listassets", json!(["RVLT/*", true, LIST_MAX, 0])).await.ok().as_ref().and_then(assets_from_node) {
+        Some(l) => Ok((l, "node")),
+        None => Ok((public_list().await.ok_or("공개 장부가 목록을 주지 않았습니다.")?, "public")),
+    }
+}
+
+/// 상품처럼 생긴 자산의 문서 해시(겹침 없이 · 최대 `max`)와 그 문서 바이트. 오락실 화면과 「오락실 게임 지키기」가 같이 쓴다.
+pub(crate) async fn docs_for(list: &[(String, Option<String>)], max: usize) -> Vec<(String, Vec<u8>)> {
+    let mut want: Vec<String> = Vec::new();
+    for (name, hash) in list {
+        if let Some(h) = hash {
+            if product_like(name) && want.len() < max && !want.contains(h) {
+                want.push(h.clone());
+            }
+        }
+    }
+    let jobs = want.iter().map(|cid| async move { (cid.clone(), fetch_doc(cid).await) });
+    futures_util::future::join_all(jobs).await.into_iter().filter_map(|(c, b)| b.map(|b| (c, b))).collect()
+}
+
+/// 화면에 주는 모양 `{ assets:[{name, ipfsHash}], docs:{cid: base64}, source }`.
+pub(crate) fn sources_json(list: &[(String, Option<String>)], docs: &[(String, Vec<u8>)], source: &str) -> Value {
+    use base64::Engine as _;
+    let assets: Vec<Value> = list.iter().map(|(name, hash)| json!({ "name": name, "ipfsHash": hash })).collect();
+    let mut map = serde_json::Map::new();
+    for (cid, b) in docs {
+        map.insert(cid.clone(), json!(base64::engine::general_purpose::STANDARD.encode(b)));
+    }
+    json!({ "assets": assets, "docs": map, "source": source })
+}
+
+/// 일반 판매자 쪽(TS mergeArcadeSources 의 `open` 입력): `{ events, docs:{cid: base64}, hidden }`.
+/// 문서는 새 쪽지부터 OPEN_DOCS_MAX 개까지 — 모양만 보고 받는다(믿는 것은 TS 가 두 서명·docHash·CID 를 본 뒤).
+/// 오락실 화면과 「오락실 게임 지키기」(arcade_keep)가 같이 쓴다.
+pub(crate) async fn open_sources() -> Value {
+    use base64::Engine as _;
+    let (listings, hidden) = futures_util::future::join(crate::arcade_listing::read_listings(), hidden_list()).await;
+    let mut want: Vec<String> = Vec::new();
+    for e in &listings {
+        if let Some(c) = crate::arcade_listing::doc_cid_of(e) {
+            if want.len() < OPEN_DOCS_MAX && !want.contains(&c) { want.push(c); }
+        }
+    }
+    let got = futures_util::future::join_all(want.iter().map(|cid| async move { (cid.clone(), fetch_doc(cid).await) })).await;
+    let mut docs = serde_json::Map::new();
+    for (cid, bytes) in got {
+        if let Some(b) = bytes { docs.insert(cid, json!(base64::engine::general_purpose::STANDARD.encode(b))); }
+    }
+    json!({ "events": listings, "docs": docs, "hidden": hidden })
+}
+
 /// 체인의 `RVLT/*` 자산과 그 문서 바이트(base64). 이 컴퓨터의 노드가 먼저, 노드가 못 답하면 레이븐볼트 공개 연결의 목록.
 /// 둘 다 못 읽으면 오류 — 화면은 「읽지 못했어요」로 정직하게.
 #[tauri::command]
 pub async fn arcade_catalog_sources() -> Result<Value, String> {
-    use base64::Engine as _;
-    let (list, source) = match call_rpc("listassets", json!(["RVLT/*", true, LIST_MAX, 0])).await.ok().as_ref().and_then(assets_from_node) {
-        Some(l) => (l, "node"),
-        None => (public_list().await.ok_or("공개 장부가 목록을 주지 않았습니다.")?, "public"),
-    };
-    let mut assets = Vec::new();
-    let mut want = Vec::new();
-    for (name, hash) in list {
-        if let Some(h) = &hash {
-            if product_like(&name) && want.len() < DOCS_MAX && !want.contains(h) {
-                want.push(h.clone());
-            }
-        }
-        assets.push(json!({ "name": name, "ipfsHash": hash }));
-    }
-    let jobs = want.iter().map(|cid| async move { (cid.clone(), fetch_doc(cid).await) });
-    // 일반 판매자(Nostr kind 31405) 쪽지 + 플랫폼 숨김 목록은 체인 문서와 한꺼번에 읽는다(느린 한 곳만큼만 기다린다).
-    let (got, listings, hidden) = futures_util::future::join3(futures_util::future::join_all(jobs), crate::arcade_listing::read_listings(), hidden_list()).await;
-    let mut docs = serde_json::Map::new();
-    for (cid, bytes) in got {
-        if let Some(b) = bytes {
-            docs.insert(cid, json!(base64::engine::general_purpose::STANDARD.encode(b)));
-        }
-    }
-    // 일반 판매자 문서: 새 쪽지부터 OPEN_DOCS_MAX 개까지(확인 판매자보다 적게). 모양만 보고 받는다 — 믿는 것은 TS 가 두 서명·docHash 를 본 뒤.
-    let mut open_want: Vec<String> = Vec::new();
-    for e in &listings {
-        if let Some(c) = crate::arcade_listing::doc_cid_of(e) {
-            if open_want.len() < OPEN_DOCS_MAX && !open_want.contains(&c) && !docs.contains_key(&c) { open_want.push(c); }
-        }
-    }
-    let open_got = futures_util::future::join_all(open_want.iter().map(|cid| async move { (cid.clone(), fetch_doc(cid).await) })).await;
-    let mut open_docs = serde_json::Map::new();
-    for (cid, bytes) in open_got {
-        if let Some(b) = bytes { open_docs.insert(cid, json!(base64::engine::general_purpose::STANDARD.encode(b))); }
-    }
-    Ok(json!({ "assets": assets, "docs": docs, "source": source, "open": { "events": listings, "docs": open_docs, "hidden": hidden } }))
+    // 체인 문서 + 일반 판매자(Nostr kind 31405) 쪽지·숨김 목록을 한꺼번에(느린 한 곳만큼만 기다린다).
+    let (chain, open) = futures_util::future::join(async { let (list, source) = chain_list().await?; let docs = docs_for(&list, DOCS_MAX).await; Ok::<_, String>((list, docs, source)) }, open_sources()).await;
+    let (list, docs, source) = chain?;
+    let mut out = sources_json(&list, &docs, source);
+    out["open"] = open;
+    Ok(out)
 }
 
-/// 게임 시작 파일을 지금 받을 수 있나. 공유 사이트가 문서 sha256·크기를 맞춰 내주는 길(`/arcade/ipfs/<문서 CID>/<시작 파일>`).
+/// 손님이 한 판 내기 전 「지금 할 수 있나」 확인의 제한 시간 — 판매자 컴퓨터가 꺼져 있으면 오래 기다리지 않는다.
+const REACH_SECS: u64 = 5;
+
+/// 게임 문서와 시작 파일을 **손님 게임 판이 쓰는 그 길**(공유 사이트 `/g/<CID>/doc` · `/arcade/ipfs/<CID>/<시작 파일>`)로
+/// 지금 받을 수 있나. 둘 다 되어야 참. 사이트가 문서 CID·서명·sha256·크기를 맞춰 내주므로 200 = 진짜 받을 수 있다.
+/// 🔴 게임은 판매자 컴퓨터에 산다 — 꺼져 있으면 여기서 거짓이 되고, 화면은 돈을 받지 않는다.
 #[tauri::command]
 pub async fn arcade_entry_reachable(doc_cid: String, entry: String) -> Result<bool, String> {
     if !cid_ok(&doc_cid) || !entry_ok(&entry) {
         return Ok(false);
     }
-    let r = client().get(format!("{SITE}/arcade/ipfs/{doc_cid}/{entry}")).send().await;
-    Ok(matches!(r, Ok(res) if res.status().is_success()))
+    let ok = |url: String| async move {
+        let r = client().get(url).timeout(std::time::Duration::from_secs(REACH_SECS)).send().await;
+        matches!(r, Ok(res) if res.status().is_success())
+    };
+    let (doc, file) = futures_util::join!(ok(format!("{SITE}/g/{doc_cid}/doc")), ok(format!("{SITE}/arcade/ipfs/{doc_cid}/{entry}")));
+    Ok(doc && file)
 }
 
 /// 게임값 → (판매자, 수수료) atoms. 지갑 `splitPrice(price, 100)` 와 같은 규칙: 수수료 올림 · 먼지 한계 1000.

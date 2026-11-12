@@ -16,3 +16,4 @@ export { schnorr } from "@noble/curves/secp256k1";
 export * from "../../core/creator/arcade-listing";
 export { publishListing, runOpenUpload } from "../../src/arcade-open";
 export { arcadeDocHash, recoverArcadeSigner } from "../../core/creator/arcade-product";
+export * from "../../src/arcade-keep-core";

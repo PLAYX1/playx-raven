@@ -139,3 +139,19 @@ export function prepareArcadePay(p: ArcadeProduct): ArcadePayPlan {
 
 /** atoms → RVN 숫자(화면 글자는 amount-ui fmtRvn 이 만든다). */
 export const atomsToRvn = (a: number): number => a / 100_000_000;
+
+/*
+ * 「지금 쉬는 중」 — 게임은 판매자 컴퓨터에 산다(11-13 대표). 최근 「지금 할 수 있나」 확인이 실패한 게임은 목록·페이지에 표시하고,
+ * 돈을 받기 전에는 늘 다시 확인한다(표시는 참고일 뿐 결제를 막는 것은 그 자리의 확인이다).
+ */
+export const REST_MS = 10 * 60_000;
+export type ReachLog = Map<string, { ok: boolean; at: number }>;
+export function noteReach(log: ReachLog, docCid: string, ok: boolean, now: number): void {
+  log.set(docCid, { ok, at: now });
+  if (log.size > 500) { const first = log.keys().next().value; if (first !== undefined) log.delete(first); }
+}
+/** 최근(REST_MS 안) 확인이 실패했다. 확인한 적 없거나 오래됐으면 거짓(모르는 것을 쉬는 중이라 하지 않는다). */
+export function isResting(log: ReachLog, docCid: string, now: number): boolean {
+  const r = log.get(docCid);
+  return !!r && !r.ok && now - r.at < REST_MS;
+}

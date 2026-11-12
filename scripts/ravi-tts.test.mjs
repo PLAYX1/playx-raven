@@ -5,14 +5,14 @@ import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
-function load(file, extra = {}) {
+function load(file, extra = {}, modules = {}) {
   const exports = {};
   vm.runInNewContext(ts.transpileModule(readFileSync(file, 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText,
-    { exports, require: n => { throw new Error('no require ' + n); }, BigInt64Array, Float32Array, Uint8Array, TextDecoder, DataView, ArrayBuffer, Promise, Math, Number, Map, Object, Error, URL, setTimeout, clearTimeout, ...extra });
+    { exports, require: n => { if (n in modules) return modules[n]; throw new Error('no require ' + n); }, BigInt64Array, Float32Array, Uint8Array, TextDecoder, DataView, ArrayBuffer, Promise, Math, Number, Map, Object, Error, URL, setTimeout, clearTimeout, ...extra });
   return exports;
 }
 const core = load('src/ravi-tts-core.ts');
-const tts = load('src/ravi-tts.ts');
+const tts = load('src/ravi-tts.ts', {}, { './ravi-tts-core': core });
 const voiceMod = load('src/ravi-voice.ts', { SpeechSynthesisVoice: class {} });
 
 test('전처리: 마침표 보충·태그·기호 정리', () => {
@@ -59,19 +59,26 @@ test('합성 흐름(가짜 모델): 길이 = 예측 길이 / 0.908, 네 모델�
 test('같은 시드 = 같은 잡음', () => { assert.deepEqual(Array.from(core.gaussianNoise(8, 7)), Array.from(core.gaussianNoise(8, 7))); });
 
 // ── 관리자(폴백·취소·캐시) ──
-const wavBytes = () => core.encodeWav(new Float32Array(2000).fill(0.3), 50949);
-function rig({ status = { ok: true, sizes: [['dp', 4], ['enc', 4], ['vec', 4], ['voc', 4], ['cfg', 2], ['indexer', 2], ['style', 2], ['license', 2]] }, invokeFail = false, workerMode = 'ok', playFail = false } = {}) {
-  const log = { workers: 0, speaks: [], cancels: [], played: 0, stopped: 0 };
+const pcmFor = text => new Float32Array(1000 + text.length).fill(0.3);   // 길이로 어떤 조각인지 알아본다
+function rig({ status = { ok: true, sizes: [['dp', 4], ['enc', 4], ['vec', 4], ['voc', 4], ['cfg', 2], ['indexer', 2], ['style', 2], ['license', 2]] }, invokeFail = false, workerMode = 'ok', playFail = false, failText = null, playMs = 5 } = {}) {
+  const log = { workers: 0, speaks: [], cancels: [], played: 0, stopped: 0, pushes: [], events: [] }; const held = [];
   const timers = []; const sched = { setTimer: (f, ms) => timers.push({ f, ms }), clearTimer: () => {} };
   const worker = () => { log.workers++; const w = { onmessage: null, onerror: null, terminate() {}, postMessage(m) {
     if (m.type === 'init') queueMicrotask(() => w.onmessage({ data: workerMode === 'initfail' ? { type: 'error', phase: 'init', id: 0, message: 'x' } : { type: 'ready' } }));
-    else if (m.type === 'speak') { log.speaks.push(m.text); if (workerMode === 'hang') return; queueMicrotask(() => w.onmessage({ data: workerMode === 'error' ? { type: 'error', id: m.id, message: 'bad-sound' } : { type: 'done', id: m.id, wav: wavBytes(), seconds: 1, ms: 5 } })); }
-    else if (m.type === 'cancel') log.cancels.push(m.id);
+    else if (m.type === 'speak') { log.speaks.push(m.text); log.events.push('synth:' + m.text); if (workerMode === 'hang') return;
+      const answer = () => w.onmessage?.({ data: workerMode === 'error' || m.text === failText ? { type: 'error', id: m.id, message: 'bad-sound' } : { type: 'done', id: m.id, pcm: pcmFor(m.text), rate: 50949, seconds: 1, ms: 5 } });
+      if (workerMode === 'manual') held.push({ text: m.text, send: answer }); else queueMicrotask(answer); }
+    else if (m.type === 'cancel') { log.cancels.push(m.id); log.events.push('cancel'); }
   } }; return w; };
   const deps = { base: '/ravi-tts/', ...sched, newWorker: worker,
     invoke: async (c, a) => { if (invokeFail) throw new Error('boom'); if (c === 'ravi_tts_status') return status; return new Uint8Array(a.len); },
-    play: async () => { if (playFail) throw new Error('blocked'); log.played++; let end; const ended = new Promise(r => { end = r; }); setTimeout(end, 5); return { ended, stop() { log.stopped++; end(); } }; } };
-  return { t: tts.createRaviTts(deps), log, timers };
+    queue: async () => {
+      if (playFail) throw new Error('blocked');
+      let pending = 0, stopped = false; const waiters = []; const settle = () => { if (stopped || pending === 0) waiters.splice(0).forEach(f => f()); };
+      return { push(pcm, rate, pause) { if (stopped) return; log.played++; log.pushes.push({ n: pcm.length, rate, pause }); log.events.push('play:' + pcm.length); pending++; setTimeout(() => { pending--; settle(); }, playMs); },
+        idle: () => new Promise(r => { waiters.push(r); settle(); }), stop() { if (!stopped) log.stopped++; stopped = true; settle(); } };
+    } };
+  return { t: tts.createRaviTts(deps), log, timers, release: text => { const i = held.findIndex(h => h.text === text); if (i >= 0) held.splice(i, 1)[0].send(); } };
 }
 test('정상: 만들어서 재생하고 같은 문장은 캐시', async () => {
   const { t, log } = rig(); let started = 0;
@@ -94,7 +101,7 @@ test('폴백: 너무 느리면(제한 시간) fallback, 두 번 느리면 이번
   for (let n = 1; n <= 2; n++) {
     const p = t.speak('느린 문장 ' + n);
     for (let i = 0; i < 20; i++) await new Promise(r => setTimeout(r, 1));
-    const slow = timers.filter(x => x.ms === tts.synthBudgetMs('느린 문장 ' + n)).pop(); assert.ok(slow, '제한 시간이 걸려 있다'); slow.f();
+    const slow = timers.filter(x => x.ms === tts.FIRST_SOUND_LIMIT_MS).pop(); assert.ok(slow, '첫 조각에 2.5초 마감이 걸려 있다'); slow.f();
     assert.equal(await p, 'fallback');
   }
   assert.equal(t.state, 'unavailable'); assert.ok(log.cancels.length >= 2, '워커에게 취소를 알린다');
@@ -103,6 +110,45 @@ test('취소: 말하는 도중 새 요청이 오면 이전 것은 cancelled', as
   const { t, log } = rig(); const first = t.speak('첫 문장'); await new Promise(r => setTimeout(r, 0));
   const second = t.speak('둘째 문장');
   assert.equal(await first, 'cancelled'); assert.equal(await second, 'played');
+});
+// ── 문장 조각 줄(스트리밍) ──
+const reply = '안녕하세요! 저는 라비예요. RVN을 보내려면 아래의 보내기 단추를 누르고, 받는 사람 주소와 금액을 넣어 주세요. 보내기 전에 주소를 한 번 더 확인하면 안전해요.';
+const tick = async (n = 20) => { for (let i = 0; i < n; i++) await new Promise(r => setTimeout(r, 0)); };
+test('조각(폰과 같은 규칙): 첫 조각 짧게 · 문장/쉼표 · 숫자·약어·이모지·영어', () => {
+  assert.deepEqual(Array.from(core.voiceChunks(reply)), ['안녕하세요!', '저는 라비예요.', 'RVN을 보내려면 아래의 보내기 단추를 누르고,', '받는 사람 주소와 금액을 넣어 주세요.', '보내기 전에 주소를 한 번 더 확인하면 안전해요.']);
+  assert.deepEqual(Array.from(core.voiceChunks('수수료는 0.5 RVN이에요. 1. 지갑을 열어요. e.g. 이런 식. Then click send. 😊')), ['수수료는 0.5 RVN이에요.', '1. 지갑을 열어요.', 'e.g. 이런 식.', 'Then click send. 😊']);
+  assert.deepEqual(Array.from(core.voiceChunks('복구 단어는 이 지갑을 어느 기기에서든 되살리는 열쇠예요.')), ['복구 단어는,', '이 지갑을 어느 기기에서든 되살리는 열쇠예요.']);
+  assert.deepEqual(Array.from(core.voiceChunks('...')), []);
+  const phone = '/Users/gimmusong/wt-rv-buy-phone/phone/ui/ravi/ravi-voice-core.ts';
+  try { const src = readFileSync(phone, 'utf8'), mine = readFileSync('src/ravi-tts-core.ts', 'utf8'); const grab = t => t.slice(t.indexOf('const SENTENCE_END'), t.indexOf('export const chunkPauseSec')); assert.equal(grab(mine), grab(src), '폰 voiceChunks 와 같은 코드'); } catch (e) { if (e.code !== 'ENOENT') throw e; }
+});
+test('조각 줄: 첫 조각이 오면 바로 틀고, 트는 동안 다음 조각을 만들고, 차례대로 · 한 번에 하나만 시킨다', async () => {
+  const { t, log, release } = rig({ workerMode: 'manual', playMs: 1 }); await t.warm(); let started = 0;
+  const parts = Array.from(core.voiceChunks(reply));
+  const p = t.speak(reply, { started: () => started++ }); await tick();
+  assert.deepEqual(log.speaks, [parts[0]]); release(parts[0]); await tick();
+  assert.equal(log.played, 1, '첫 조각 즉시 재생'); assert.equal(started, 1); assert.deepEqual(log.speaks, parts.slice(0, 2), '첫 조각을 트는 동안 둘째 조각 합성');
+  assert.ok(log.events.indexOf('synth:' + parts[1]) < log.events.indexOf('play:' + (1000 + parts[0].length)));
+  for (const x of parts.slice(1)) { release(x); await tick(); }
+  assert.equal(await p, 'played'); assert.deepEqual(log.pushes.map(x => x.n), parts.map(x => 1000 + x.length)); assert.deepEqual(log.pushes.map(x => x.pause), [0, 0.3, 0.3, 0.12, 0.3]);
+});
+test('조각 줄: 도중에 멈추면 바로 끊고 남은 합성 취소, 더 안 튼다', async () => {
+  const { t, log, release } = rig({ workerMode: 'manual', playMs: 50 }); await t.warm(); const parts = Array.from(core.voiceChunks(reply));
+  const p = t.speak(reply); await tick(); release(parts[0]); await tick(); assert.equal(log.played, 1);
+  t.cancel(); assert.equal(log.stopped, 1); assert.ok(log.cancels.length >= 1); release(parts[1]); await tick();
+  assert.equal(await p, 'cancelled'); assert.equal(log.played, 1);
+});
+test('조각 줄: 첫 조각이 늦으면 fallback(소리 0) · 중간 조각 실패면 { rest } = 남은 글만(두 번 말하지 않는다)', async () => {
+  { const { t, log, timers } = rig({ workerMode: 'manual' }); await t.warm(); const p = t.speak(reply); await tick();
+    timers.filter(x => x.ms === tts.FIRST_SOUND_LIMIT_MS).pop().f(); assert.equal(await p, 'fallback'); assert.equal(log.played, 0); }
+  { const parts = Array.from(core.voiceChunks(reply)); const { t, log } = rig({ failText: parts[2], playMs: 1 });
+    const r = await t.speak(reply); assert.deepEqual({ ...r }, { rest: parts.slice(2).join(' ') }); assert.equal(log.played, 2); }
+});
+test('어댑터: { rest } 면 기기 목소리는 남은 글만 읽는다', async () => {
+  const said = []; const synthesis = { getVoices: () => [{ lang: 'ko-KR', name: 'Yuna' }], cancel() {}, speak(u) { said.push(u.text); } };
+  const v = voiceMod.createRaviVoice({ synthesis, utterance: class { constructor(x) { this.text = x; } }, allowed: () => true, transcript() {}, listening() {}, boundary() {}, ended() {}, unavailable() {},
+    ravi: { speak: async (_t, h) => { h.started?.(); return { rest: '남은 글이에요.' }; }, cancel() {}, warm: async () => true }, preferRavi: () => true, aiVoice() {}, aiTag() {} });
+  v.setEnabled(true); v.speak('앞 글이에요. 남은 글이에요.'); await new Promise(r => setTimeout(r, 5)); assert.deepEqual(said, ['남은 글이에요.']);
 });
 test('시간 제한 식: 6초 분량 문장에 충분하고 끝없이 기다리지 않는다', () => {
   assert.ok(tts.synthBudgetMs('안녕하세요, 저는 라비예요. 오늘 레이븐볼트에서 무엇을 도와 드릴까요?') >= 10000); assert.ok(tts.synthBudgetMs('가'.repeat(400)) <= 40000);

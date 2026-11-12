@@ -89,3 +89,15 @@ test('화면 규칙: 「일반 판매자」 글 · 첫 결제 전 안내 · 신�
   for (const src of [market, up]) for (const m of src.matchAll(/(?:copyHtml|\bt|tf|row)\("([^"]*[가-힣][^"]*)"/g)) assert.ok(keys.has(m[1]) || dict.includes(JSON.stringify(m[1])), `번역 없음: ${m[1]}`);
   for (const k of ['사기·돈만 받고 안 됨', '나쁜 내용', '남의 게임을 베낌', '알림 쪽지를 공개 릴레이에 올리는 중…']) assert.ok(keys.has(k), k);
 });
+
+test('돕기 보관 후보(keep): 일반 판매자 게임도 mergeArcadeSources 를 통과하면 verified=false · listing=open · key 를 같이 넘긴다 · 숨김 목록이면 빠진다', async () => {
+  const d = fakeDesk();
+  const r = await A.runOpenUpload(d.invoke, input);
+  const open = { events: d.published, docs: { [r.docCid]: Buffer.from(d.ipfs[r.docCid]).toString('base64') }, hidden: null };
+  assert.deepEqual(A.shareCandidates({ assets: [], docs: {}, open }), [{ docCid: r.docCid, verified: false, listing: 'open', key: `${seller}/star-run` }]);
+  const hidden = { format: 'rv-arcade-hidden', v: 1, updatedAt: '2026-11-13T00:00:00Z', games: [`${seller}/star-run`], sellers: [], docs: [] };
+  assert.deepEqual(A.shareCandidates({ assets: [], docs: {}, open: { ...open, hidden } }), [], '숨긴 게임은 돕지 않는다');
+  // 서명이 틀린 쪽지(겉봉투 바꿔치기)는 후보가 아니다
+  const bad = { ...d.published[0], content: d.published[0].content.replace('"open"', '"open" ') };
+  assert.deepEqual(A.shareCandidates({ assets: [], docs: {}, open: { ...open, events: [bad] } }), []);
+});

@@ -9,13 +9,14 @@
  * 🔴 글자는 전부 escape 해서 넣는다(쪽지는 남이 쓴 글이다). 본문은 main 의 noteBodyHtml(이모티콘·링크)을 쓴다.
  * 🔴 먼저 그리기: 이 컴퓨터 저장분(local)으로 곧바로 → 바깥 답으로 다시.
  */
+import { avatarImgHtml, fillPreviews, roomPictureSrc, setAvatarPicture } from "./talk-media";
 import "./talk-dm.css";
 import { copyHtml, setCopyText, t, tf } from "./i18n";
 import { applyFilter, talkIdle, unreadPill } from "./talk-desk";
 
 export type DmMsg = { id: string; from: string; to: string; at: number; text: string; wrap: string; members?: string[]; subject?: string; photo?: boolean };
 export type DmThread = { key: string; kind: "dm" | "group"; with?: string; members?: string[]; subject?: string; last: DmMsg; count: number; unread: number };
-type Room = { id: string; name: string };
+type Room = { id: string; name: string; picture?: string };
 type Side = "friends" | "chats" | "square";
 type Open = { key: string; with: string; members: string[]; subject: string };
 
@@ -25,6 +26,8 @@ export type DmDeps = {
   nameOf: (pk: string) => string;
   loadNames: (pks: string[]) => Promise<void>;
   hue: (pk: string) => number;
+  /** 11-13 사람 이름표 그림(라비 이모티콘·내 사진) → 그릴 주소. 없으면 "" — 첫 글자 동그라미. */
+  pictureOf?: (pk: string) => string;
   bodyHtml: (text: string) => string;
   stickerOnly: (text: string) => boolean;
   rooms: () => Room[];
@@ -99,8 +102,9 @@ export function wireTalkDm(d: DmDeps) {
 
   const groupTitle = (members: string[], subject: string) => subject || members.filter((m) => m !== d.me()).map((m) => d.nameOf(m)).slice(0, 3).join(", ") + (members.length > 4 ? ` ${tf("외 {0}명", members.length - 4)}` : "");
   const titleOf = (o: { with?: string; members?: string[]; subject?: string }) => o.members && o.members.length > 2 ? groupTitle(o.members, o.subject || "") : d.nameOf(o.with || "");
-  const avatar = (seed: string, label: string, group = false) =>
-    `<span class="tkc-av${group ? " grp" : ""}" style="--h:${d.hue(seed)}" aria-hidden="true">${esc(Array.from(label || "레")[0] || "레")}</span>`;
+  // 11-13 그림(방 사진·이름표 사진)이 있으면 동그라미 위에 덮는다. 못 읽으면 지워져 첫 글자가 보인다(talk-media.ts).
+  const avatar = (seed: string, label: string, group = false, pic = "") =>
+    `<span class="tkc-av${group ? " grp" : ""}${pic ? " has-pic" : ""}" style="--h:${d.hue(seed)}" aria-hidden="true">${esc(Array.from(label || "레")[0] || "레")}${avatarImgHtml(pic)}</span>`;
   const snip = (s: string, n = 40) => { const one = String(s || "").replace(/\s+/g, " ").trim(); const a = Array.from(one); return a.slice(0, n).join("") + (a.length > n ? "…" : ""); };
   const lastLine = (m: DmMsg) => (m.from === d.me() ? `${t("나")}: ` : "") + (m.photo ? t("사진") : snip(m.text.replace(/:ravi_[a-z]+:/g, t("이모티콘"))));
 
@@ -138,7 +142,7 @@ export function wireTalkDm(d: DmDeps) {
     const n = unreadBadge(r.unread);
     if (r.kind === "room") {
       return `<button type="button" class="tkc-row${on ? " on" : ""}" data-chat-room="${esc(r.room.id)}">` +
-        avatar(r.room.id, r.room.name, true) +
+        avatar(r.room.id, r.room.name, true, roomPictureSrc(d.rooms().find((x) => x.id === r.room.id)?.picture)) +
         `<span class="tkc-mid"><span class="tkc-top"><b class="tkc-name" translate="no">${esc(r.room.name)}</b></span>` +
         `<span class="tkc-last" translate="no">${esc((r.from === d.me() ? `${t("나")}: ` : `${d.nameOf(r.from)}: `) + snip(r.text))}</span></span>` +
         `<span class="tkc-side"><time>${esc(listTime(r.at))}</time>${r.unread ? `<span class="tkc-dot" aria-label="${esc(t("새 글"))}"></span>` : ""}</span></button>`;
@@ -147,7 +151,7 @@ export function wireTalkDm(d: DmDeps) {
     const group = th.kind === "group";
     const name = titleOf(th);
     return `<button type="button" class="tkc-row${on ? " on" : ""}" data-chat-key="${esc(th.key)}">` +
-      avatar(group ? th.key : th.with || "", name, group) +
+      avatar(group ? th.key : th.with || "", name, group, group ? "" : d.pictureOf?.(th.with || "") || "") +
       `<span class="tkc-mid"><span class="tkc-top"><b class="tkc-name" translate="no">${esc(name)}</b>${group ? `<span class="tkc-kind">${esc(String((th.members || []).length))}</span>` : ""}</span>` +
       `<span class="tkc-last" translate="no">${esc(lastLine(th.last))}</span></span>` +
       `<span class="tkc-side"><time>${esc(listTime(th.last.at))}</time>${n ? `<span class="tkc-n">${esc(n)}</span>` : ""}</span></button>`;
@@ -249,6 +253,7 @@ export function wireTalkDm(d: DmDeps) {
     for (const av of [$("rv-person-avatar"), $("tk-headav")]) {
       av.dataset.initial = initial;
       av.style.setProperty("--h", String(d.hue(group ? o.key : o.with)));
+      setAvatarPicture(av, group ? "" : d.pictureOf?.(o.with) || "");
     }
     $("rv-person-key").textContent = group ? o.members.join("\n") : o.with;
     if (!group && HEX64.test(o.with) && o.with !== d.me()) d.showPerson(o.with);
@@ -319,6 +324,7 @@ export function wireTalkDm(d: DmDeps) {
     if (!list.length) {
       box.innerHTML = `<div class="tkc-start">${copyHtml("아직 주고받은 쪽지가 없어요.")}</div>`;
       box.dataset.dmPainted = o.key;
+    void fillPreviews(box); // 11-13 링크 미리보기(우리 서버만)
       $("tk-new-messages").hidden = true;
       return;
     }
@@ -330,7 +336,7 @@ export function wireTalkDm(d: DmDeps) {
       const joined = !sep && prev && prev.from === m.from && m.at - prev.at < 이음;
       // 남의 말 무리마다 얼굴·이름 한 번(카톡 PC 처럼 1:1 도). 이어 쓴 말에는 안 단다.
       const head = mine || joined ? ""
-        : `<div class="who" style="--h:${d.hue(m.from)}" data-person="${esc(m.from)}"><span class="rv-avatar" aria-hidden="true">${esc(Array.from(d.nameOf(m.from))[0] || "레")}</span> <span translate="no">${esc(d.nameOf(m.from))}</span></div>`;
+        : `<div class="who" style="--h:${d.hue(m.from)}" data-person="${esc(m.from)}"><span class="rv-avatar" aria-hidden="true">${esc(Array.from(d.nameOf(m.from))[0] || "레")}${avatarImgHtml(d.pictureOf?.(m.from) || "")}</span> <span translate="no">${esc(d.nameOf(m.from))}</span></div>`;
       const showClock = !(next && next.from === m.from && day(next.at) === day(m.at) && next.at - m.at < 이음);
       const pending = m.id.startsWith("pending:");
       const failed = m.id.startsWith("pending:x:");

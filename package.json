@@ -26,6 +26,7 @@
     "check:home-onescreen": "node scripts/check-home-onescreen.mjs",
     "test:tailscale": "node --test scripts/tailscale-fixed.test.mjs scripts/shop-link.test.mjs",
     "test:wallet-link": "node --test scripts/wallet-link.test.mjs",
+    "test:talk-links": "node --test scripts/chat-links.test.mjs",
     "test:chain": "node --test scripts/chain-info.test.mjs",
     "check:i18n": "node scripts/i18n/check-packs.mjs",
     "test:i18n": "node --test scripts/i18n-packs-browser.test.mjs",

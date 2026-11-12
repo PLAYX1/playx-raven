@@ -128,6 +128,21 @@ pub fn doc_cid_of(e: &Value) -> Option<String> {
     is_cid(cid).then(|| cid.to_string())
 }
 
+/// 이 컴퓨터가 올린 일반 판매자 게임(「내 게임 보관」용): 내 겉봉투 열쇠(my_pk)로 서명이 맞는 쪽지만, 같은 d 는 가장 새것 하나,
+/// 그것이 open 일 때만 (d, 문서 CID). 내린 게임(removed)은 빠진다.
+pub fn my_open_docs(events: &[Value], my_pk: &str) -> Vec<(String, String)> {
+    let mut best: std::collections::BTreeMap<String, (i64, &Value)> = std::collections::BTreeMap::new();
+    for e in events {
+        if e.get("pubkey").and_then(Value::as_str) != Some(my_pk) || !crate::relay::verify(e) { continue; }
+        let Some(d) = e.get("tags").and_then(Value::as_array).and_then(|t| t.iter().find(|x| x.get(0).and_then(Value::as_str) == Some("d"))).and_then(|x| x.get(1)).and_then(Value::as_str) else { continue };
+        let at = e.get("created_at").and_then(Value::as_i64).unwrap_or(0);
+        if best.get(d).map_or(true, |(a, _)| at > *a) { best.insert(d.to_string(), (at, e)); }
+    }
+    best.into_iter().filter_map(|(d, (_, e))| doc_cid_of(e).map(|c| (d, c))).collect()
+}
+/// 내 겉봉투 공개키(가게 열쇠가 없으면 None).
+pub fn my_pubkey() -> Option<String> { arcade_listing_pubkey().ok() }
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -198,5 +213,21 @@ mod tests {
         let mut no_d = evs[0].clone();
         no_d["tags"] = json!([["t", "ravenvault-arcade"]]);
         assert!(crate::nostrpub::validate_publish_event(&no_d).is_err());
+    }
+
+    #[test]
+    fn 내_게임은_내_열쇠로_서명된_가장_새_쪽지만() {
+        let me = [7u8; 32];
+        let pk = crate::shopkey::pubkey_of(&me).unwrap();
+        let other = build_events(&[8u8; 32], &content("open", 1_790_000_000), 1_790_000_000).unwrap();
+        let open1 = build_events(&me, &content("open", 1_790_000_000), 1_790_000_000).unwrap();
+        let got = my_open_docs(&[open1[0].clone(), other[0].clone()], &pk);
+        assert_eq!(got.len(), 1, "남의 열쇠 쪽지는 내 게임이 아니다");
+        // 서명을 망가뜨린 쪽지(내 공개키를 흉내)는 버린다
+        let mut fake = open1[0].clone(); fake["content"] = json!(fake["content"].as_str().unwrap().replace("open", "open "));
+        assert!(my_open_docs(&[fake], &pk).is_empty());
+        // 더 새 내림 쪽지가 있으면 빠진다
+        let removed = build_events(&me, &content("removed", 1_790_000_100), 1_790_000_100).unwrap();
+        assert!(my_open_docs(&[open1[0].clone(), removed[0].clone()], &pk).is_empty());
     }
 }

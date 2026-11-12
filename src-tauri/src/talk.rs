@@ -264,6 +264,10 @@ pub async fn talk_profile_set(
     if name.chars().count() > 40 {
         return Err("이름이 너무 깁니다. 40자 아래로 줄여 주세요.".into());
     }
+    // 11-13 이름표 그림 = 라비 이모티콘 또는 내 사진(Blossom 지문 주소)만. 바깥 주소는 받지 않는다(talk_media.rs).
+    if !crate::talk_media::picture_ok(picture.trim()) {
+        return Err("이름표 그림은 라비 이모티콘이나 여기서 올린 사진만 쓸 수 있어요.".into());
+    }
     let sk = key()?;
     let me = crate::shopkey::pubkey_of(&sk)?;
     let old = crate::nostrpub::nostr_query_authors(vec![KIND_PROFILE], vec![me.clone()], 5)
@@ -1646,6 +1650,8 @@ fn rooms_from_events(got: Vec<Value>, metas: &[Value]) -> Vec<Value> {
         let creator = room_creator(&e).unwrap_or_default();
         let mut name = body.get("name").and_then(Value::as_str).unwrap_or("이름 없는 방").to_string();
         let mut about = body.get("about").and_then(Value::as_str).unwrap_or("").to_string();
+        // 11-13 방 사진: 만든 글(40)·만든 사람의 최신 수정 글(41)의 `picture` 만, Blossom 지문 주소만. 41 의 "" 는 사진 내리기.
+        let mut picture = body.get("picture").and_then(Value::as_str).filter(|u| crate::talk_media::room_picture_ok(u)).unwrap_or("").to_string();
         let mut meta_at = Value::Null;
         if !creator.is_empty() {
             if let Some(m) = latest_room_meta(id, &creator, metas) {
@@ -1665,6 +1671,11 @@ fn rooms_from_events(got: Vec<Value>, metas: &[Value]) -> Vec<Value> {
                 if let Some(a) = mb.get("about").and_then(Value::as_str) {
                     about = shown_meta_text(a, ROOM_ABOUT_MAX);
                 }
+                if let Some(p) = mb.get("picture").and_then(Value::as_str) {
+                    if crate::talk_media::room_picture_ok(p) {
+                        picture = p.to_string();
+                    }
+                }
                 meta_at = m.get("created_at").cloned().unwrap_or(Value::Null);
             }
         }
@@ -1676,6 +1687,7 @@ fn rooms_from_events(got: Vec<Value>, metas: &[Value]) -> Vec<Value> {
             //    있나」를 못 바꾼다.
             "asset": asset,
             "gate": gate,
+            "picture": if creator.is_empty() { String::new() } else { picture },
             "created_at": e.get("created_at"),
             "pubkey": creator,
             "meta_at": meta_at,
@@ -1856,11 +1868,12 @@ fn is_local_relay(url: &str) -> bool {
 /// 응답의 `public_ok`/`public_total` 은 공개 릴레이 중 몇 곳이 받았는지다 —
 /// 화면이 「몇 곳이 받았어요」를 그대로 적는다. 한 곳도 못 받으면 오류다.
 #[tauri::command]
-pub async fn talk_room_meta_set(room: String, name: String, about: String) -> Result<Value, String> {
+pub async fn talk_room_meta_set(room: String, name: String, about: String, picture: Option<String>) -> Result<Value, String> {
     room_meta_set_with(
         &room,
         &name,
         &about,
+        picture.as_deref().unwrap_or(""),
         key,
         |me| async move {
             let v = crate::nostrpub::nostr_query(vec![KIND_ROOM], vec![me], vec![]).await?;
@@ -1877,6 +1890,7 @@ async fn room_meta_set_with<K, Q, QF, P, PF>(
     room: &str,
     name: &str,
     about: &str,
+    picture: &str,
     key: K,
     my_rooms: Q,
     publish: P,
@@ -1894,6 +1908,11 @@ where
         return Err("방 번호가 올바르지 않습니다.".into());
     }
     let (name, about) = clean_room_meta(name, about)?;
+    // 11-13 방 사진은 Blossom 지문 주소만(비우면 내리기). 화면은 이름만 고칠 때도 지금 사진을 그대로 넘긴다 — 41 은 통째로 바뀐다.
+    let picture = picture.trim();
+    if !crate::talk_media::room_picture_ok(picture) {
+        return Err("방 사진은 여기서 올린 사진만 쓸 수 있어요.".into());
+    }
     // 🔴 지갑이 잠겨 있고 이야기 열쇠가 아직 없으면 여기서 `[SEED_LOCKED]` 로
     //    멈춘다. 화면이 그 표를 보고 「지갑 열기」를 먼저 안내한다.
     let sk = key()?;
@@ -1915,7 +1934,7 @@ where
         .and_then(|c| serde_json::from_str(c).ok())
         .unwrap_or(Value::Null);
     let asset = room_asset_of(room_ev, &body);
-    let mut content = json!({ "name": name, "about": about, "picture": "" });
+    let mut content = json!({ "name": name, "about": about, "picture": picture });
     if !asset.is_empty() {
         // 다른 앱이 수정 글로 정보를 통째로 바꿔도 자산 표시가 안 사라지게 그대로 옮겨 적는다.
         content["asset"] = json!(asset);
@@ -2450,6 +2469,7 @@ mod room_meta_tests {
             &rid,
             "  서울 주짓수 모임(목)  ",
             "매주 목요일 스파링",
+            "",
             || Ok(A),
             |me| {
                 assert_eq!(me, crate::shopkey::pubkey_of(&A).unwrap(), "내 공개키로 내 방을 찾아야 한다");
@@ -2486,7 +2506,7 @@ mod room_meta_tests {
         let room = room_by(&A, "단골 방", "SHOP.PLAYX");
         let rid = id(&room);
         let got = std::sync::Mutex::new(None::<Value>);
-        room_meta_set_with(&rid, "단골 방 2", "", || Ok(A), |_| async move { Ok(vec![room]) }, |e| {
+        room_meta_set_with(&rid, "단골 방 2", "", "", || Ok(A), |_| async move { Ok(vec![room]) }, |e| {
             *got.lock().unwrap() = Some(e);
             async { Ok(fake_sent()) }
         }, now())
@@ -2503,7 +2523,7 @@ mod room_meta_tests {
         let room = room_by(&B, "남의 방", "");
         let rid = id(&room);
         let sent = AtomicBool::new(false);
-        let e = room_meta_set_with(&rid, "빼앗은 이름", "", || Ok(A), |_| async move { Ok(vec![room]) }, |_| {
+        let e = room_meta_set_with(&rid, "빼앗은 이름", "", "", || Ok(A), |_| async move { Ok(vec![room]) }, |_| {
             sent.store(true, Ordering::SeqCst);
             async { Ok(fake_sent()) }
         }, now())
@@ -2520,7 +2540,7 @@ mod room_meta_tests {
         let rid = id(&room);
         room["content"] = json!("{\"name\":\"바꿔치기\"}");
         let sent = AtomicBool::new(false);
-        let r = room_meta_set_with(&rid, "새 이름", "", || Ok(A), |_| async move { Ok(vec![room]) }, |_| {
+        let r = room_meta_set_with(&rid, "새 이름", "", "", || Ok(A), |_| async move { Ok(vec![room]) }, |_| {
             sent.store(true, Ordering::SeqCst);
             async { Ok(fake_sent()) }
         }, now())
@@ -2537,6 +2557,7 @@ mod room_meta_tests {
         let e = room_meta_set_with(
             &"a".repeat(64),
             "새 이름",
+            "",
             "",
             || Err(crate::identity::SeedFailure::Locked.public_error()),
             |_| {
@@ -2559,7 +2580,7 @@ mod room_meta_tests {
     #[tokio::test]
     async fn 잘못된_이름은_열쇠를_꺼내기_전에_멈춘다() {
         let keyed = AtomicBool::new(false);
-        let e = room_meta_set_with(&"a".repeat(64), &"가".repeat(41), "", || {
+        let e = room_meta_set_with(&"a".repeat(64), &"가".repeat(41), "", "", || {
             keyed.store(true, Ordering::SeqCst);
             Ok(A)
         }, |_| async { Ok(vec![]) }, |_| async { Ok(fake_sent()) }, now())
@@ -2568,7 +2589,7 @@ mod room_meta_tests {
         assert!(e.contains("너무 깁니다"), "{e}");
         assert!(!keyed.load(Ordering::SeqCst), "검사 전에 열쇠를 꺼냈다");
         // 방 번호가 이상해도 같다.
-        assert!(room_meta_set_with("../x", "이름", "", || Ok(A), |_| async { Ok(vec![]) }, |_| async { Ok(fake_sent()) }, now()).await.is_err());
+        assert!(room_meta_set_with("../x", "이름", "", "", || Ok(A), |_| async { Ok(vec![]) }, |_| async { Ok(fake_sent()) }, now()).await.is_err());
     }
 
     /// 길이·빈 이름·제어 문자. 한 글자 차이로 갈리는지까지 본다.
@@ -2588,6 +2609,26 @@ mod room_meta_tests {
     }
 
     /// 🔴 **남이 보낸 41 은 무시한다.** 더 새것이어도. 그리고 만든 사람의 것 중 가장 새것을 쓴다.
+    /// 11-13 방 사진: 만든 사람의 41 만 · Blossom 지문 주소만 · "" 는 내리기 · 키가 없는 41 은 그대로 둔다.
+    #[test]
+    fn 방_사진은_만든_사람의_우리_사진_주소만() {
+        let room = room_by(&A, "사진 방", "");
+        let rid = id(&room);
+        let t = now();
+        let pic = format!("https://blossom.nostr.build/{}.jpg", "ab".repeat(32));
+        let with = |sk: &[u8; 32], p: &str, at: i64| ev(sk, KIND_ROOM_META, json!([["e", rid.clone(), "", "root"], ["t", TAG]]), &json!({ "name": "사진 방", "about": "", "picture": p }).to_string(), at);
+        let set = rooms_from_events(vec![room.clone()], &[with(&A, &pic, t - 50)]);
+        assert_eq!(set[0]["picture"], json!(pic));
+        let by_b = rooms_from_events(vec![room.clone()], &[with(&A, &pic, t - 50), with(&B, &format!("https://blossom.nostr.build/{}.jpg", "cd".repeat(32)), t - 10)]);
+        assert_eq!(by_b[0]["picture"], json!(pic), "남의 41 은 사진을 못 바꾼다");
+        let external = rooms_from_events(vec![room.clone()], &[with(&A, "https://evil.example/x.jpg", t - 50)]);
+        assert_eq!(external[0]["picture"], json!(""), "바깥 주소는 안 그린다");
+        let cleared = rooms_from_events(vec![room.clone()], &[with(&A, "", t - 10)]);
+        assert_eq!(cleared[0]["picture"], json!(""));
+        let keep = rooms_from_events(vec![room.clone()], &[meta_by(&A, &rid, "이름만", t - 10)]);
+        assert_eq!(keep[0]["picture"], json!(""), "방 글에 사진이 없으면 없음");
+    }
+
     #[test]
     fn 남의_41_은_무시하고_만든_사람의_최신만_반영한다() {
         let room = room_by(&A, "처음 이름", "SHOP.PLAYX");

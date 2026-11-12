@@ -7,6 +7,7 @@
 //  - 좋아요 수·리포스트·알고리즘은 넣지 않는다(대표 결정). 알림도 「누가 무엇을」만.
 //  - 「다른 Nostr 앱에서 보기」·내보내기는 공개 주소(npub)만. 비밀 열쇠는 보이지도 담지도 않는다.
 //  - 아이콘은 SVG(이모지 금지) · 모양은 src/talk-social.css(style="" 은 CSP 가 막는다).
+import { fillPreviews, linkifyHtml, previewSlotHtml } from "./talk-media";
 import { copyHtml, t, tf } from "./i18n";
 import {
   applyMentions, cleanSeen, exportFileName, firstSeen, isUnread, markSeen, matchNotes, matchPeople, noteSegments, npubOf, readSearch,
@@ -64,15 +65,18 @@ const snip = (s: string, n = 80) => { const one = s.replace(/\s+/g, " ").trim();
  *  글 속 표(emoji 태그)의 바깥 주소는 쓰지 않는다(추적 픽셀일 수 있다). 모르는 짧은 이름은 글자 그대로. */
 const stickerImg = (code: RaviStickerCode, big: boolean) =>
   `<img class="tk-stk${big ? " big" : ""}" src="/ravi-stickers/${code}.webp" alt="${esc(t(stickerName(code)))}" title="${esc(t(stickerName(code)))}" draggable="false" />`;
+// 11-13 글자 조각의 웹 주소는 누르는 링크로(talk-media.ts — 위험하면 경고 시트, 아니면 기본 브라우저).
 const textWithStickers = (text: string) =>
-  stickerParts(text).map((p) => p.kind === "text" ? esc(p.text) : stickerImg(p.code, false)).join("");
+  stickerParts(text).map((p) => p.kind === "text" ? linkifyHtml(p.text) : stickerImg(p.code, false)).join("");
 /** 글 전체가 라비 이모티콘 하나면 그 이름 — 말풍선 없이 크게 그린다. */
 export function noteStickerOnly(text: string): RaviStickerCode | null { return stickerOnly(text); }
 export function noteBodyHtml(text: string): string {
   const only = stickerOnly(text);
   if (only) return stickerImg(only, true);
   const segs = noteSegments(text);
-  if (!segs.some((s) => s.kind !== "text")) return `<span translate="no">${textWithStickers(text)}</span>`;
+  // 11-13 첫 주소의 미리보기 자리(그린 뒤 fillNoteLinks → fillPreviews 가 우리 서버 답으로 채운다).
+  const lp = previewSlotHtml(text);
+  if (!segs.some((s) => s.kind !== "text")) return `<span translate="no">${textWithStickers(text)}</span>${lp}`;
   const notes: string[] = [];
   const body = segs.map((s) => {
     if (s.kind === "text") return textWithStickers(s.text);
@@ -82,7 +86,7 @@ export function noteBodyHtml(text: string): string {
     return `<span class="tk-quoted">[${copyHtml("인용한 글")}]</span>`;
   }).join("");
   const chips = notes.slice(0, 6).map((id) => `<button type="button" class="tk-chip" data-tk-note="${id}">${ICON_NOTE}<span>${copyHtml("글 보기")}</span></button>`).join("");
-  return `<span translate="no">${body}</span>${chips ? `<span class="tk-chips">${chips}</span>` : ""}`;
+  return `<span translate="no">${body}</span>${chips ? `<span class="tk-chips">${chips}</span>` : ""}${lp}`;
 }
 /** 화면에 한 줄로(알림·찾기 미리보기): 사람 링크 → @이름, 글 링크 → [인용한 글]. */
 export function readableLine(text: string, n = 80): string {
@@ -90,6 +94,7 @@ export function readableLine(text: string, n = 80): string {
 }
 /** 그린 뒤: 아직 모르는 「@이름」의 이름표를 가져와 고쳐 쓰고, NIP-05 표시를 채운다. */
 export async function fillNoteLinks(root: ParentNode): Promise<void> {
+  void fillPreviews(root); // 11-13 링크 미리보기(우리 서버만)
   if (!host) return;
   const h = host;
   const people = [...root.querySelectorAll<HTMLElement>("[data-tk-person]")];

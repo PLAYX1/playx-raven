@@ -120,6 +120,9 @@ export interface AdminDeps {
   reload(): unknown;
   /** 지금 보던 방을 숨겼을 때 「레이븐 이야기」로 돌아간다. */
   leave(): void;
+  /** 11-13 방 사진 — 지금 사진 주소(방금 바꾼 것 포함)와, 바꾼 뒤 목록·머리줄을 곧바로 맞추기. */
+  picture?(id: string): string;
+  pictureSet?(id: string, url: string): void;
 }
 
 /** 시트 묶음에 넘기는 것. */

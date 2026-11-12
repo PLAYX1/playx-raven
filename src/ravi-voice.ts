@@ -28,7 +28,7 @@ export function createRaviVoice(api: {
   ended(): void;
   unavailable(): void;
   // 라비 목소리(Supertonic): 없으면 기존처럼 기기 목소리만 쓴다. 실패·느림·리소스 없음은 모두 기기 목소리로 넘어간다.
-  ravi?: { speak(text: string, hooks: { started?(): void }): Promise<"played" | "fallback" | "cancelled">; cancel(): void; warm(): Promise<boolean> };
+  ravi?: { speak(text: string, hooks: { started?(): void }): Promise<"played" | "fallback" | "cancelled" | { rest: string }>; cancel(): void; warm(): Promise<boolean> };
   preferRavi?(): boolean;
   aiVoice?(on: boolean): void;
   aiTag?(bubble: Element): void; // 소리가 실제로 나기 시작했을 때 그 말풍선에 「AI 음성」을 남긴다(기기 목소리로 넘어가면 안 붙는다)
@@ -76,6 +76,7 @@ export function createRaviVoice(api: {
           if (session !== epoch) return;
           if (result === "played") { api.aiVoice?.(false); api.ended(); }
           else if (result === "fallback") { api.aiVoice?.(false); deviceSpeak(text, session, true); }
+          else if (typeof result === "object") { api.aiVoice?.(false); deviceSpeak(result.rest, session, true); }   // 앞부분은 라비 목소리로 읽었다 — 남은 글만
         }, () => { if (session === epoch) { api.aiVoice?.(false); deviceSpeak(text, session, true); } });
         return true;
       }

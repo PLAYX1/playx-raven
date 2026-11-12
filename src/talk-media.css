@@ -1,0 +1,60 @@
+/* 11-13 이야기 링크·링크 미리보기·사진 얼굴·경고 시트 (src/talk-media.ts · talk-picture.ts) */
+.tk-url { color: inherit; text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; word-break: normal; cursor: pointer; }
+.bub.me .tk-url { color: inherit; }
+.tk-url:focus-visible, .tk-lpcard:focus-visible { outline: 2px solid var(--ravi, #7a69de); outline-offset: 2px; border-radius: 4px; }
+.tk-lp { display: block; margin-top: 8px; }
+.tk-lp:empty { display: none; }
+.tk-lpcard { display: flex; flex-direction: column; width: min(320px, 100%); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--panel); color: var(--text); text-decoration: none; cursor: pointer; }
+.tk-lpcard:hover { border-color: color-mix(in srgb, var(--ravi, #7a69de) 50%, var(--line)); }
+.tk-lpimg { display: block; width: 100%; height: 160px; object-fit: cover; background: var(--side, #eee); }
+.tk-lpbody { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px 12px; min-width: 0; }
+.tk-lpbody > span { overflow-wrap: anywhere; }
+.tk-lpsite { color: var(--muted); font-size: 13px; }
+.tk-lptitle { font-weight: 700; font-size: 15px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.tk-lpdesc { color: var(--muted); font-size: 14px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.tk-lpdesc.x { -webkit-line-clamp: 4; color: var(--text); }
+.tk-lphost { color: var(--ravi, #5546b0); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* 사진 얼굴: 첫 글자 동그라미 위에 덮는다. 못 읽으면 그림이 지워져 글자가 보인다. */
+.tkc-av, .rv-avatar, .fav, .tk-headav, .tkinfo-av { position: relative; overflow: hidden; }
+img.tk-avpic { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 50%; background: var(--panel, #fff); }
+.rv-myface img.tk-avpic { z-index: 1; }
+
+/* 시트(경고·전체 주소·사진 신고 확인·이름표 그림) */
+.tk-lsheet-wrap { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; background: #0006; padding: 16px; }
+.tk-lsheet-wrap[hidden] { display: none; }
+.tk-lsheet { width: min(460px, 100%); max-height: calc(100vh - 32px); overflow: auto; padding: 22px; border-radius: 18px; background: var(--panel); color: var(--text); box-shadow: 0 24px 64px #0005; }
+.tk-lsheet h3 { margin: 0 0 10px; font-size: 18px; }
+.tk-lsheet .tk-ls-warn { color: var(--danger); font-size: 21px; }
+.tk-lsheet .tk-ls-small { color: var(--muted); font-size: 15px; font-weight: 600; }
+.tk-lsheet .tk-ls-lbl { margin: 0; color: var(--muted); font-size: 13px; }
+.tk-lsheet .tk-ls-domain { margin: 2px 0 10px; font-size: 28px; font-weight: 800; line-height: 1.2; overflow-wrap: anywhere; }
+.tk-lsheet.risky .tk-ls-domain { color: var(--danger); }
+.tk-lsheet .tk-ls-why { margin: 0 0 8px; padding-left: 18px; font-size: 15px; line-height: 1.5; }
+.tk-lsheet .tk-ls-tip, .tk-lsheet .tk-ls-body { margin: 0 0 10px; color: var(--muted); font-size: 14px; line-height: 1.5; }
+.tk-lsheet .tk-ls-full { margin: 0 0 6px; color: var(--muted); font-size: 13px; overflow-wrap: anywhere; user-select: text; }
+.tk-lsheet .tk-ls-say { min-height: 1.2em; margin: 0 0 8px; color: var(--muted); font-size: 14px; }
+.tk-lsheet .tk-ls-acts { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+.tk-lsheet .tk-ls-acts button { min-height: 44px; padding: 0 18px; border-radius: 12px; font-size: 15px; white-space: nowrap; flex-shrink: 0; }
+.tk-lsheet .tk-ls-acts button.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+.tk-lsheet .tk-ls-acts button[hidden] { display: none; }
+
+/* 이름표 그림 고르기 */
+.tk-picsheet { width: min(520px, 100%); }
+.tk-pic-preview { display: flex; align-items: center; gap: 12px; padding: 12px; margin-bottom: 12px; border: 1px solid var(--line); border-radius: 14px; }
+.tk-pic-preview .tk-pic-av { width: 56px; height: 56px; font-size: 22px; color: #fff; background: hsl(var(--h, 260) 45% 50%); }
+.tk-pic-preview .tk-pic-av::before { content: attr(data-initial); }
+.tk-pic-preview .tk-pic-name { font-size: 18px; }
+.tk-pic-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(60px, 1fr)); gap: 8px; margin-bottom: 12px; }
+.tk-pic-cell { position: relative; aspect-ratio: 1; min-height: 0; padding: 4px; border: 2px solid var(--line); border-radius: 14px; background: var(--panel); cursor: pointer; }
+.tk-pic-cell img { width: 100%; height: 100%; object-fit: cover; border-radius: 10px; }
+.tk-pic-cell.on { border-color: var(--ravi, #7a69de); box-shadow: 0 0 0 2px color-mix(in srgb, var(--ravi, #7a69de) 35%, transparent); }
+.tk-pic-tick { position: absolute; right: -6px; top: -6px; width: 22px; height: 22px; border-radius: 50%; display: none; place-items: center; background: var(--ravi, #7a69de); color: #fff; font-size: 13px; font-weight: 800; }
+.tk-pic-cell.on .tk-pic-tick { display: grid; }
+.tk-pic-acts { justify-content: flex-start !important; margin-bottom: 4px; }
+
+/* 방 설정 · 방 사진 */
+.tkinfo-pic .tkinfo-acts button { white-space: nowrap; }
+.tkinfo-pic .tkinfo-acts button[hidden] { display: none; }
+#rv-pic-report { white-space: nowrap; }
+#rv-pic-report[hidden] { display: none; }

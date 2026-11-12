@@ -111,6 +111,7 @@ mod sweep;
 mod identity;
 mod talk;
 mod talk_social;
+mod talk_media; // 11-13 링크 미리보기(우리 사이트만) · 방 사진 · 내 사진 이름표
 mod talk_fast;
 mod talk_dm;
 mod talk_push;
@@ -185,6 +186,7 @@ mod arcade;
 mod arcade_upload;
 mod arcade_listing;
 mod arcade_phone;
+mod arcade_keep;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -354,6 +356,12 @@ pub fn run() {
             arcade_phone::arcade_phone_take,
             arcade_phone::arcade_phone_report,
             arcade_listing::arcade_listing_publish,
+            arcade_keep::arcade_mine_round,
+            arcade_keep::arcade_mine_state,
+            arcade_keep::arcade_share_get,
+            arcade_keep::arcade_share_set,
+            arcade_keep::arcade_share_sources,
+            arcade_keep::arcade_share_apply,
             arcade_upload::arcade_pick_folder,
             arcade_upload::arcade_pin_folder,
             upload::ipfs_add_file,
@@ -787,6 +795,8 @@ pub fn run() {
             talk::talk_my_assets,
             talk::talk_delete_request,
             talk::talk_profile_set,
+            talk_media::talk_unfurl,
+            talk_media::talk_blossom_upload,
             talk::talk_profiles,
             badges::talk_badges,
             talk::talk_rvn_link,
@@ -936,6 +946,7 @@ pub fn run() {
             map::start();
             node_keeper::start();
             relay_share::start();
+            arcade_keep::start();
             // 11-12 이야기를 카톡처럼: 켜자마자 기본 릴레이에 미리 붙어 둔다(relay_pool.rs). 안 쓰면 2분 뒤 저절로 닫힌다.
             tauri::async_runtime::spawn(async { nostrpub::warm_all() });
             // 11-12 알림 지킴이(기본 꺼짐 · 켠 컴퓨터만): 바깥 릴레이의 새 쪽지·방 글을 알림 서버에 곧바로 넘긴다.
