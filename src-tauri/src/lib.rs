@@ -125,6 +125,7 @@ mod autostart;
 mod mode;
 mod reindex;
 mod reindex_run;
+mod node_boot;
 mod tunnel;
 mod vending;
 mod remote_sales;
@@ -264,16 +265,16 @@ pub fn run() {
             pairing::pairing_request_decline,
             pairing::pairing_set_public_backup,
             pairing::pairing_waiting,
-            raven::node_status,
+            raven::quick::node_status,
             raven::node_reachability,
             raven::network_state,
             raven::list_assets,
             raven::new_address,
-            raven::wallet_balance,
+            raven::quick::wallet_balance,
             raven::recent_transactions,
             raven::wallet_since,
             raven::received_by_address,
-            raven::wallet_lock_state,
+            raven::quick::wallet_lock_state,
             ipfs::ipfs_status,
             ipfs::check_alive,
             ipfs::pin_add,
@@ -820,6 +821,7 @@ pub fn run() {
             reindex_run::sync_stalled,
             reindex_run::node_log_tail,
             reindex_run::chain_broken,
+            node_boot::node_boot_progress,
             reindex_run::chain_heal,
             prep::pc_prepare,
             resources::start_disk_check,

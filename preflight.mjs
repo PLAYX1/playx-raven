@@ -95,7 +95,7 @@ const ts = read("src/main.ts");
 {
   const lib = read("src-tauri/src/lib.rs");
   const registered = new Set(
-    [...lib.matchAll(/^\s+(?:\w+::)?(\w+),\s*$/gm)].map((m) => m[1])
+    [...lib.matchAll(/^\s+(?:\w+::)*(\w+),\s*$/gm)].map((m) => m[1])
   );
   // 🔴 main.ts 만 보면 다른 모듈(pairing-ui.ts 등)이 부르는 명령을 못 본다 — src 의 .ts 전부.
   const srcTs = readdirSync(join(ROOT, "src")).filter((f) => f.endsWith(".ts")).map((f) => read("src/" + f)).join("\n");
@@ -119,7 +119,7 @@ const ts = read("src/main.ts");
 // 통째로 껍데기였다는 뜻이다.
 {
   const lib = read("src-tauri/src/lib.rs");
-  const registered = [...lib.matchAll(/^\s+\w+::(\w+),\s*$/gm)].map((m) => m[1]);
+  const registered = [...lib.matchAll(/^\s+(?:\w+::)+(\w+),\s*$/gm)].map((m) => m[1]);
   const webFiles = readdirSync(join(ROOT, "web"))
     .filter((f) => f.endsWith(".html") || f.endsWith(".ts"))
     .map((f) => read(`web/${f}`))

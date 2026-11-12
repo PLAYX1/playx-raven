@@ -197,9 +197,39 @@ pub async fn call_rpc(method: &str, params: Value) -> Result<Value, String> {
 /// Preserve numeric RPC error codes for public chain adapters without exposing
 /// node credentials, configuration paths, or raw RPC errors to browsers.
 pub(crate) async fn call_rpc_detailed(method: &str, params: Value) -> Result<Value, RpcFailure> {
+    call_rpc_inner(method, params, None).await
+}
+
+/// 화면이 **상태만** 물을 때 쓰는 짧은 부름(11-12).
+///
+/// 🔴 노드가 켜지는 중이거나 바쁘면 보통 부름은 대기열(`rpc_gate`, 넷)에서 기다리고 20초를 채운다.
+///    그 사이 화면의 상태 질문(노드 상태·지갑 잠금·앱 잠금·잔액)이 전부 줄을 서서, 「문제 알리기」의
+///    진단은 넷 다 1.5초 시간 초과였다(윈도우 0.9.35 신고). 화면은 멈춘 것처럼 보이고 노드는 「꺼짐」으로 읽혔다.
+///
+///    여기서는 줄을 `QUICK_GATE_MS` 넘게 서지 않고, 답도 `ms` 만 기다린다. 못 받으면 **이유를 가른다**:
+///    연결 자체가 거부됐으면 `CODE_DOWN`(꺼짐), 연결은 됐는데 답이 늦으면 `CODE_BUSY`(살아 있고 바쁨).
+///    ⚠️ 윈도우는 닫힌 포트에 붙을 때 거부를 받기까지 약 2초가 걸린다 — 그래서 `ms` 는 3초보다 짧게 잡지 않는다.
+///    보내는 부름(`SEND_METHODS`)은 여기로 오면 안 되고, 와도 짧게 끊지 않는다.
+pub(crate) async fn call_rpc_quick(method: &str, params: Value, ms: u64) -> Result<Value, RpcFailure> {
+    call_rpc_inner(method, params, Some(std::time::Duration::from_millis(ms))).await
+}
+
+/// 줄 서기를 이만큼만 기다린다(짧은 부름).
+const QUICK_GATE_MS: u64 = 1000;
+/// 짧은 부름의 기본 답 기다림. 윈도우의 연결 거부(약 2초)보다 길게.
+pub(crate) const QUICK_MS: u64 = 3000;
+/// 짧은 부름이 답을 못 받았다 — 연결은 됐다(살아 있고 바쁘거나 켜지는 중).
+pub(crate) const CODE_BUSY: i64 = -90_001;
+/// 짧은 부름이 노드에 닿지도 못했다(꺼져 있다).
+pub(crate) const CODE_DOWN: i64 = -90_002;
+/// 바쁠 때 화면에 가는 말. 화면의 `isWarming` 이 「노드가 바빠」를 알아본다.
+pub(crate) const BUSY_SAY: &str = "노드가 바빠서 바로 답하지 못했어요. 켜지는 중이거나 장부를 따라잡는 중일 수 있어요.";
+
+async fn call_rpc_inner(method: &str, params: Value, quick: Option<std::time::Duration>) -> Result<Value, RpcFailure> {
+    let quick = quick.filter(|_| !is_send_method(method));
     let _transfer = if is_send_method(method) { Some(crate::ravi_lifecycle::begin_transfer()?) } else { None };
     #[cfg(test)]
-    { let _ = (method, params); return Err("Synthetic lib tests cannot access a live node; inject a mock RPC backend".into()); }
+    { let _ = (method, params, quick); return Err("Synthetic lib tests cannot access a live node; inject a mock RPC backend".into()); }
     #[cfg(not(test))]
     {
     // 🔴 0.4.9 — 지갑을 되살리며 옛 거래를 찾는 동안(`rescanblockchain`) 코어는 `cs_main` 을
@@ -224,21 +254,39 @@ pub(crate) async fn call_rpc_detailed(method: &str, params: Value) -> Result<Val
     // 노드는 RPC 스레드 4개, 대기열 16개로 돈다(httpserver.h). 그보다 많이
     // 쏘면 노드가 500으로 버리고, 우리는 그것을 "노드가 죽었다"로 읽는다.
     // 그래서 동시에 4개까지만 보낸다 — 줄 서는 쪽이 우리가 되게 한다.
-    let _permit = rpc_gate().acquire().await.map_err(|e| e.to_string())?;
+    let _permit = match quick {
+        // 짧은 부름은 줄을 오래 서지 않는다. 줄이 길다는 것은 앞선 부름들이 노드에서 늦고 있다는 뜻 — 바쁨이다.
+        Some(_) => match tokio::time::timeout(std::time::Duration::from_millis(QUICK_GATE_MS), rpc_gate().acquire()).await {
+            Ok(p) => p.map_err(|e| e.to_string())?,
+            Err(_) => return Err(RpcFailure { code: Some(CODE_BUSY), message: BUSY_SAY.into() }),
+        },
+        None => rpc_gate().acquire().await.map_err(|e| e.to_string())?,
+    };
 
     let send = is_send_method(method);
     let secs = if send { SEND_TIMEOUT_SECS } else { RPC_TIMEOUT_SECS };
+    let wait = quick.unwrap_or(std::time::Duration::from_secs(secs));
     let response = client()
         .post(rpc_url())
         .basic_auth(user, Some(pass))
         .json(&body)
-        .timeout(std::time::Duration::from_secs(secs))
+        .timeout(wait)
         .send()
         .await
         .map_err(|e| {
+            if quick.is_some() {
+                // 시간 초과가 먼저다 — 연결 도중 시간이 다 됐으면 닿았는지 모르므로 「바쁨」으로 둔다.
+                return if e.is_timeout() {
+                    RpcFailure { code: Some(CODE_BUSY), message: BUSY_SAY.into() }
+                } else if e.is_connect() {
+                    RpcFailure { code: Some(CODE_DOWN), message: format!("노드에 닿지 못했습니다 ({}): {e}", rpc_url()) }
+                } else {
+                    RpcFailure::from(format!("노드에 닿지 못했습니다 ({}): {e}", rpc_url()))
+                };
+            }
             // 닿지도 못했으면(연결 거부) 안 보낸 것이 확실하다. 그 밖에 보내는 부름이
             // 도중에 끊기면 노드가 받았는지 모른다.
-            if send && !e.is_connect() {
+            RpcFailure::from(if send && !e.is_connect() {
                 sent_unknown_message(method, secs)
             } else if e.is_timeout() {
                 // 타임아웃이 없던 시절, 노드가 한 번 늦으면 화면이 "확인 중…"에서
@@ -246,18 +294,21 @@ pub(crate) async fn call_rpc_detailed(method: &str, params: Value) -> Result<Val
                 format!("노드가 {RPC_TIMEOUT_SECS}초 안에 답하지 않았습니다 ({method}). 따라잡는 중이거나 바쁠 수 있습니다.")
             } else {
                 format!("노드에 닿지 못했습니다 ({}): {e}", rpc_url())
-            }
+            })
         })?;
 
     // 인증에서 막힌 답(401·403)은 노드가 부름을 읽지도 않은 것이다 — 모름이 아니다.
     let refused = matches!(response.status().as_u16(), 401 | 403);
     let parsed: Value = response.json().await.map_err(|e| {
-        if send && !refused {
+        if quick.is_some() && e.is_timeout() {
+            return RpcFailure { code: Some(CODE_BUSY), message: BUSY_SAY.into() };
+        }
+        RpcFailure::from(if send && !refused {
             // 답을 받다가 끊겼다 — 노드는 이미 보냈을 수 있다.
             sent_unknown_message(method, secs)
         } else {
             format!("Node returned something that is not JSON: {e}")
-        }
+        })
     })?;
 
     // A JSON-RPC error arrives with HTTP 500 and a populated "error" field, so
@@ -385,20 +436,31 @@ struct ChainInfo {
 }
 
 /// Height, sync progress, and whether the node is reachable at all.
-#[tauri::command]
 pub async fn node_status() -> Result<Value, String> {
+    node_status_with(None).await
+}
+
+/// 부름 하나 — `quick` 이면 짧게(`call_rpc_quick`), 아니면 보통으로.
+async fn ask(method: &str, params: Value, quick: Option<u64>) -> Result<Value, String> {
+    match quick {
+        Some(ms) => call_rpc_quick(method, params, ms).await.map_err(|e| e.message),
+        None => call_rpc(method, params).await,
+    }
+}
+
+async fn node_status_with(quick: Option<u64>) -> Result<Value, String> {
     // 11-03 감사 B12: 세 물음(장부 정보·맨 끝 블록 시각·연결 수)을 차례로 기다리지 않고 한꺼번에 묻는다.
     // 동시에 셋 — RPC 동시 4개 제한(rpc_gate) 안이다.
     let tip = async {
-        match call_rpc("getbestblockhash", json!([])).await {
+        match ask("getbestblockhash", json!([]), quick).await {
             Ok(hash) => match hash.as_str() {
-                Some(h) => call_rpc("getblockheader", json!([h])).await.ok().and_then(|hdr| hdr.get("time").and_then(Value::as_i64)),
+                Some(h) => ask("getblockheader", json!([h]), quick).await.ok().and_then(|hdr| hdr.get("time").and_then(Value::as_i64)),
                 None => None,
             },
             Err(_) => None,
         }
     };
-    let (raw, tip_time, peers) = tokio::join!(call_rpc("getblockchaininfo", json!([])), tip, call_rpc("getconnectioncount", json!([])));
+    let (raw, tip_time, peers) = tokio::join!(ask("getblockchaininfo", json!([]), quick), tip, ask("getconnectioncount", json!([]), quick));
     let info: ChainInfo =
         serde_json::from_value(raw?).map_err(|e| format!("Unexpected chain info: {e}"))?;
 
@@ -539,10 +601,13 @@ pub async fn list_assets() -> Result<Vec<AssetEntry>, String> {
 /// Unconfirmed funds are reported separately rather than folded into one number:
 /// a shop that treats a zero-confirmation payment as settled is a shop that can
 /// be paid with a transaction that never confirms.
-#[tauri::command]
 pub async fn wallet_balance() -> Result<Value, String> {
+    wallet_balance_with(None).await
+}
+
+async fn wallet_balance_with(quick: Option<u64>) -> Result<Value, String> {
     // 11-03 감사 B12: 두 잔액을 한꺼번에 묻는다.
-    let (confirmed, unconfirmed) = tokio::join!(call_rpc("getbalance", json!([])), call_rpc("getunconfirmedbalance", json!([])));
+    let (confirmed, unconfirmed) = tokio::join!(ask("getbalance", json!([]), quick), ask("getunconfirmedbalance", json!([]), quick));
     let confirmed = confirmed?;
     let unconfirmed = unconfirmed.unwrap_or(json!(0.0));
 
@@ -658,9 +723,17 @@ pub async fn received_by_address(address: String, min_conf: u32) -> Result<f64, 
 /// Automatic sending needs an unlocked wallet, which means the keys are usable
 /// by anything running on this machine for as long as it stays open. The UI has
 /// to be able to say so plainly, so it needs to know.
-#[tauri::command]
 pub async fn wallet_lock_state() -> Result<Value, String> {
-    let info = call_rpc("getwalletinfo", json!([])).await?;
+    wallet_lock_state_with(None).await
+}
+
+/// 화면의 상태 질문용(짧게). 앱 잠금 상태(`app_lock_state`)도 이것을 쓴다.
+pub async fn wallet_lock_state_quick() -> Result<Value, String> {
+    wallet_lock_state_with(Some(QUICK_MS)).await
+}
+
+async fn wallet_lock_state_with(quick: Option<u64>) -> Result<Value, String> {
+    let info = ask("getwalletinfo", json!([]), quick).await?;
 
     // unlocked_until is absent on wallets that were never encrypted, 0 when
     // locked, and a unix timestamp while temporarily unlocked.
@@ -785,5 +858,56 @@ mod send_timeout_tests {
         assert!(msg.starts_with(super::SENT_UNKNOWN));
         assert!(msg.contains("보냈는지 아직 몰라요"));
         assert!(!msg.contains("실패"));
+    }
+}
+
+/// 화면이 부르는 **상태** 명령들(11-12) — 같은 이름, 짧은 부름.
+///
+/// 🔴 러스트 안쪽(보내기·잠금 풀기·내보내기)은 위의 보통 함수를 그대로 쓴다. 그쪽은 「못 받음」을
+///    「꺼짐」으로 읽고 다음 일을 정하므로(예: `walletfile` 의 `Probe::NodeDown`) 짧게 끊으면 안 된다.
+///    화면만 짧게 묻고, 바쁘면 바쁘다고(`BUSY_SAY`) 듣는다 — 화면이 멈춘 것처럼 보이지 않게.
+pub mod quick {
+    use super::*;
+
+    #[tauri::command]
+    pub async fn node_status() -> Result<Value, String> {
+        node_status_with(Some(QUICK_MS)).await
+    }
+
+    #[tauri::command]
+    pub async fn wallet_lock_state() -> Result<Value, String> {
+        wallet_lock_state_quick().await
+    }
+
+    /// 잔액은 큰 지갑에서 몇 초 걸릴 수 있어 조금 더 기다린다.
+    #[tauri::command]
+    pub async fn wallet_balance() -> Result<Value, String> {
+        wallet_balance_with(Some(8_000)).await
+    }
+}
+
+#[cfg(test)]
+mod quick_tests {
+    use super::*;
+
+    /// 보내는 부름은 짧게 끊지 않는다 — 끊으면 「보냈는지 모름」이 「실패」로 둔갑한다.
+    #[test]
+    fn 보내는_부름은_짧은_부름이_되지_않는다() {
+        let src = include_str!("raven.rs");
+        let body = &src[src.find("async fn call_rpc_inner").unwrap()..];
+        assert!(body.contains("let quick = quick.filter(|_| !is_send_method(method));"));
+        assert!(QUICK_MS >= 3000, "윈도우 연결 거부(약 2초)보다 짧으면 꺼진 노드를 「바쁨」으로 잘못 읽는다");
+    }
+
+    /// 화면의 상태 명령은 짧은 쪽으로 등록돼 있어야 한다.
+    #[test]
+    fn 화면_상태_명령은_짧은_부름으로_등록된다() {
+        let lib = include_str!("lib.rs");
+        for c in ["raven::quick::node_status,", "raven::quick::wallet_lock_state,", "raven::quick::wallet_balance,", "node_boot::node_boot_progress,"] {
+            assert!(lib.contains(c), "{c} 가 등록돼 있지 않다");
+        }
+        for c in ["raven::node_status,", "raven::wallet_lock_state,", "raven::wallet_balance,"] {
+            assert!(!lib.contains(&format!("            {c}")), "{c} 보통(긴) 부름이 화면 명령으로 남아 있다");
+        }
     }
 }

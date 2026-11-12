@@ -275,7 +275,9 @@ fn lock_view(s: &State) -> Value {
 #[tauri::command]
 pub async fn app_lock_state() -> Value {
     let s = state();
-    let wallet = crate::raven::wallet_lock_state().await.ok();
+    // 🔴 11-12 — 짧게 묻는다. 노드가 켜지는 중이면 보통 부름은 20초를 채우고, 그동안 앱 잠금 상태(이 컴퓨터
+    //    파일만 보면 되는 것)까지 답을 못 했다(신고 진단: app_lock_state 1.5초 시간 초과). 모르면 null 이다.
+    let wallet = crate::raven::wallet_lock_state_quick().await.ok();
     let mut v = lock_view(&s);
     v["wallet_encrypted"] = wallet.as_ref().and_then(|w| w["encrypted"].as_bool()).map(Value::Bool).unwrap_or(Value::Null);
     v["backup_pass"] = json!(crate::lockbox::backup_pass_state()["set"].as_bool().unwrap_or(false));
@@ -429,7 +431,7 @@ mod tests {
         lib[start..end]
             .lines()
             .filter_map(|l| l.trim().strip_suffix(','))
-            .filter_map(|l| l.split_once("::").map(|(_, c)| c.to_string()))
+            .filter_map(|l| l.rsplit_once("::").map(|(_, c)| c.to_string()))
             .collect()
     }
 

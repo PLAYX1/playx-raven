@@ -257,12 +257,22 @@ fn look_on_path(name: &str) -> Option<String> {
     }
 }
 
+/// 노드가 **살아 있는가** — 답했거나, 「시작하는 중(-28)」이라고 했거나, 연결은 됐는데 바빠 늦을 때.
+fn node_answers(r: Result<Value, crate::raven::RpcFailure>) -> bool {
+    match r {
+        Ok(_) => true,
+        Err(e) => matches!(e.code, Some(-28) | Some(crate::raven::CODE_BUSY)),
+    }
+}
+
 /// Is each piece installed, running, and did we start it?
 #[tauri::command]
 pub async fn services_status() -> Value {
-    let node_running = crate::raven::call_rpc("getblockchaininfo", json!([]))
-        .await
-        .is_ok();
+    // 🔴 11-12 — 「답했다」만 켜짐으로 치면 **켜지는 중인 노드**가 꺼짐으로 읽혔다. 켜지는 중에는 코어가
+    //    `-28 Loading block index…` 로 답하고, 느린 디스크에서는 몇 분씩 바빠서 늦게 답한다. 그걸 꺼짐으로
+    //    보고 「지금 켜기」가 노드를 **하나 더** 띄웠고(잠금 충돌), 20초씩 기다리느라 단추가 60초를 넘겼다.
+    //    짧게 묻고, 닿기는 했으면(시작하는 중·바쁨) 켜져 있는 것이다. 닿지도 못했을 때만 꺼짐.
+    let node_running = node_answers(crate::raven::call_rpc_quick("getblockchaininfo", json!([]), crate::raven::QUICK_MS).await);
     let ipfs_running = reqwest::Client::new()
         .post("http://127.0.0.1:5001/api/v0/id")
         .timeout(std::time::Duration::from_secs(4))
@@ -1020,5 +1030,20 @@ mod tests {
     fn 아주_긴_오류는_끊는다() {
         let said = node_why(&"E".repeat(5000));
         assert!(said.chars().count() < 260, "실제 길이: {}", said.chars().count());
+    }
+}
+
+#[cfg(test)]
+mod node_answers_tests {
+    use super::node_answers;
+    use crate::raven::RpcFailure;
+
+    #[test]
+    fn 켜지는_중이거나_바쁜_노드는_켜져_있다() {
+        assert!(node_answers(Ok(serde_json::json!({}))));
+        assert!(node_answers(Err(RpcFailure { code: Some(-28), message: "getblockchaininfo: Loading block index...".into() })));
+        assert!(node_answers(Err(RpcFailure { code: Some(crate::raven::CODE_BUSY), message: "바쁨".into() })));
+        assert!(!node_answers(Err(RpcFailure { code: Some(crate::raven::CODE_DOWN), message: "닿지 못함".into() })));
+        assert!(!node_answers(Err(RpcFailure { code: None, message: "쿠키 없음".into() })));
     }
 }

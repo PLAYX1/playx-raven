@@ -2179,9 +2179,63 @@ function setSyncBar(pct: number | null) {
  */
 function isWarming(err: unknown): boolean {
   const msg = String((err as Error)?.message ?? err ?? "");
-  return /Loading block index|Verifying|Rewinding|Activating|Loading wallet|warming up|-28/i.test(
+  // 「노드가 바빠」 = 짧은 상태 질문에 연결은 됐는데 답이 늦었다(raven.rs BUSY_SAY) — 살아 있다.
+  return /Loading block index|Verifying|Rewinding|Activating|Loading wallet|Rescanning|warming up|-28|노드가 바빠/i.test(
     msg
   );
+}
+
+/**
+ * 11-12 — 노드가 **켜지는 중** 어디까지 왔는지(러스트 `node_boot.rs` 가 debug.log 끝을 읽는다).
+ *
+ * 🔴 윈도우 느린 디스크에서 「블록 목록 읽기」만 100초가 걸렸는데, 화면은 60초가 되면 「노드가 안
+ *    켜졌어요. 기록과 함께 알리기」를 내밀었고 지갑 화면은 「안 열린다」만 말했다. 이제 단계와 시간을
+ *    말하고, 알리기는 **기록이 5분 넘게 안 늘 때** 또는 **오류를 남기고 멈췄을 때**만 낸다.
+ */
+type NodeBoot = {
+  known?: boolean; booting?: boolean; stalled?: boolean; exited?: boolean; done?: boolean;
+  phase?: string; say?: string; elapsed_secs?: number | null; quiet_secs?: number | null;
+  error?: string | null; error_say?: string | null;
+};
+async function nodeBoot(): Promise<NodeBoot | null> {
+  return invoke<NodeBoot>("node_boot_progress").catch(() => null);
+}
+/** 초 → 「3분」·「40초」. */
+function durText(secs: number | null | undefined): string {
+  const n = Math.max(0, Math.floor(Number(secs) || 0));
+  return n >= 60 ? tf("{0}분", Math.floor(n / 60)) : tf("{0}초", n);
+}
+/** 「노드가 켜지는 중 · 블록 목록 읽는 중 (디스크가 느리면 몇 분 걸려요)」 */
+function bootLine(b: NodeBoot | null, msg = ""): string {
+  const phase = (b?.booting && b.say) ? t(b.say) : t(warmPhase(msg) || "켜기 시작");
+  return tf("노드가 켜지는 중 · {0} (디스크가 느리면 몇 분 걸려요)", phase);
+}
+/** 알리기 단추 — 기록이 멈췄거나 오류로 꺼졌을 때만. 버튼 글자는 한 줄. */
+function bootReportButton(): string {
+  return `<button class="ghost" id="nd-stuck" style="margin-top:10px;white-space:nowrap;flex-shrink:0">${copyHtml("기록과 함께 알리기")}</button>`;
+}
+function bindBootReport(b: NodeBoot) {
+  document.getElementById("nd-stuck")?.addEventListener("click", () => {
+    const text = b.exited && b.error_say
+      ? tf("노드가 오류를 남기고 멈췄어요: {0}", t(b.error_say))
+      : tf("노드가 켜지다가 「{0}」 단계에서 {1}째 기록이 없어요.", t(b.say || "켜기 시작"), durText(b.quiet_secs));
+    openReport(text, { category: "install-run", attachLog: true });
+  });
+}
+/** 멈춤·오류 설명 칸(없으면 빈 글). */
+function bootTroubleHtml(b: NodeBoot | null): string {
+  if (!b) return "";
+  if (b.exited && b.error_say) {
+    return `<div class="meta" style="margin-top:10px;color:var(--warn)">${escapeHtml(t(b.error_say))}</div>` +
+      (b.error ? `<p class="meta" style="opacity:.7">${copyHtml("노드가 남긴 마지막 오류")} — <code class="addr">${escapeHtml(String(b.error).slice(0, 200))}</code></p>` : "") +
+      bootReportButton();
+  }
+  if (b.booting && b.stalled) {
+    return `<div class="meta" style="margin-top:10px;color:var(--warn)">${escapeHtml(tf("노드 기록이 {0}째 그대로예요 · 마지막 단계: {1}", durText(b.quiet_secs), t(b.say || "켜기 시작")))}</div>` +
+      `<p class="meta">${copyHtml("느린 디스크라도 보통 몇 분 안에 다음 줄이 나와요. 멈춘 것 같으면 기록과 함께 알려 주세요.")}</p>` +
+      bootReportButton();
+  }
+  return "";
 }
 
 /** 시작하는 중이면 지금 어느 단계인지(사람 말). 모르면 빈 글. */
@@ -2296,6 +2350,8 @@ async function paintStatusDots() {
     // 🔴 답을 못 받은 것과 꺼진 것은 **다르다.** 「장부 여는 중」이라는
     //    답이 왔다면 그건 살아 있다는 뜻이다.
     nodeWarming = isWarming(e);
+    // 11-12 — 막 띄운 노드는 몇 초 동안 포트를 안 연다(닿지 못함). 기록이 「켜는 중」이면 꺼짐이 아니다.
+    if (!nodeWarming) { const b = await nodeBoot(); nodeWarming = !!b?.booting && !b?.stalled; }
     set(
       "d-node",
       "d-node-t",
@@ -2952,7 +3008,7 @@ async function rpLogShow(force: boolean) {
 /**
  * 11-11 신고에 지갑·노드 상태를 자동으로 싣는다 — 「지갑이안열려요」 한 줄만 왔는데 원인을 알 길이 없었다(윈도우 0.9.32, 비로그인).
  * 「노드 동기화 중 / 잠금 암호 / 노드가 안 켜짐」 셋을 가를 만큼만. 🔴 12단어·암호·주소·잔액·거래는 싣지 않는다.
- * 오류 글에서도 주소(R…)·긴 16진수·사용자 폴더 이름을 지운다. 하나가 늦어도 신고는 1.5초 안에 간다.
+ * 오류 글에서도 주소(R…)·긴 16진수·사용자 폴더 이름을 지운다. 하나가 늦어도 신고는 4초 안에 간다.
  */
 function diagClean(v: unknown): string {
   return String(v ?? "")
@@ -2962,10 +3018,13 @@ function diagClean(v: unknown): string {
     .slice(0, 160);
 }
 async function reportDiag(): Promise<Record<string, unknown>> {
-  const within = <T,>(p: Promise<T>) => Promise.race([p, new Promise<never>((_, no) => setTimeout(() => no(new Error("timeout 1.5s")), 1500))]);
-  const [node, lock, appLock, bal] = await Promise.allSettled([
+  // 11-12 — 상태 질문은 이제 러스트에서 짧게 끊는다(3초, 잔액 8초). 그보다 조금 넉넉히 기다린다.
+  const within = <T,>(p: Promise<T>) => Promise.race([p, new Promise<never>((_, no) => setTimeout(() => no(new Error("timeout 4s")), 4000))]);
+  const [node, lock, appLock, bal, boot] = await Promise.allSettled([
     within(invoke<any>("node_status")), within(invoke<any>("wallet_lock_state")), within(invoke<any>("app_lock_state")), within(invoke<any>("wallet_balance")),
+    within(invoke<NodeBoot>("node_boot_progress")),
   ]);
+  const b = boot.status === "fulfilled" ? boot.value : null;
   const err = (r: PromiseSettledResult<unknown>) => (r.status === "rejected" ? diagClean(errText(r.reason)) : undefined);
   const n = node.status === "fulfilled" ? node.value : null;
   const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
@@ -2978,6 +3037,8 @@ async function reportDiag(): Promise<Record<string, unknown>> {
     app_lock: appLock.status === "fulfilled" ? { locked: !!appLock.value?.locked, reason: diagClean(appLock.value?.reason ?? ""), wallet_encrypted: !!appLock.value?.wallet_encrypted } : { error: err(appLock) },
     // 잔액은 싣지 않는다 — 「지갑이 답했나」만.
     wallet_answers: bal.status === "fulfilled" ? true : { error: err(bal) },
+    // 노드 기록으로 본 켜기 단계(단계 이름·시간만 — 줄 내용은 attachLog 가 따로 가린 뒤 싣는다).
+    node_boot: b ? { phase: diagClean(b.phase), booting: !!b.booting, stalled: !!b.stalled, exited: !!b.exited, elapsed_secs: num(b.elapsed_secs), quiet_secs: num(b.quiet_secs), error_say: b.error_say ? diagClean(b.error_say) : null } : { error: err(boot) },
   };
 }
 
@@ -4216,21 +4277,24 @@ async function paintPartBody(): Promise<void> {
         //    잠금에 걸려 「레이븐 코어가 켜져 있습니다」가 나온다.
         //    코어를 껐는데 그 말이 나오는 이유가 이것이다. 실측으로 만났다.
         const msg = String((e as Error)?.message || e);
+        // 11-12 — 노드 기록도 같이 본다. 답이 늦거나(바쁨) 아직 포트를 안 열었어도 기록이 「켜는 중」이면 켜지는 중이다.
+        const boot = await nodeBoot();
         // 표시등과 **같은 판별**을 쓴다. 두 벌로 두면 한쪽만 고쳐진다.
-        const warming = isWarming(msg);
+        const warming = isWarming(msg) || (!!boot?.booting && !boot?.stalled);
         if (!warming) warmSince = null;
         if (warming) {
           if (warmSince === null) warmSince = Date.now();
-          const phase = warmPhase(msg);
-          const minutes = Math.max(0, Math.floor((Date.now() - warmSince) / 60000));
+          // 켜진 지: 노드 기록의 시작 시각이 있으면 그것(앱을 다시 열어도 맞다), 없으면 이 화면이 처음 본 때부터.
+          const elapsed = typeof boot?.elapsed_secs === "number" && boot.booting ? boot.elapsed_secs : (Date.now() - warmSince) / 1000;
           box.innerHTML =
             `<div class="card">
                <h3>${copyHtml("노드가 시작하는 중입니다")}</h3>
-               <p class="meta">${copyHtml("장부를 확인하고 있습니다. 몇 분 걸립니다 — 그동안 아무것도 안 하셔도 됩니다.")}</p>
-               ${phase ? `<p class="meta">${escapeHtml(tf("지금은 「{0}」 단계예요 · 켜진 지 {1}분째", t(phase), minutes))}</p>` : ""}
+               <p class="meta">${escapeHtml(bootLine(boot, msg))}</p>
+               <p class="meta">${escapeHtml(tf("켜진 지 {0}째", durText(elapsed)))}${typeof boot?.quiet_secs === "number" && boot.booting ? ` · ${escapeHtml(tf("마지막 기록 {0} 전", durText(boot.quiet_secs)))}` : ""}</p>
                <p class="meta">${copyHtml("처음 켜거나 다시 설치한 뒤에는 30분~1시간 넘게 걸릴 수 있어요. 컴퓨터를 끄지 말고 이 앱을 켜 두세요. 끝나면 잔액이 나옵니다.")}</p>
-               <p class="meta" style="opacity:.7">${escapeHtml(msg.slice(0, 120))}</p>
+               ${bootTroubleHtml(boot)}
              </div>`;
+          if (boot) bindBootReport(boot);
           setTimeout(() => void paintPart(), 5000);
           return;
         }
@@ -4298,28 +4362,18 @@ async function paintPartBody(): Promise<void> {
                      : "")
              }
              <div class="meta" id="nd-say" style="margin-top:12px"></div>
+             ${bootTroubleHtml(boot)}
            </div>`;
+        if (boot) bindBootReport(boot);
         const go = document.getElementById("nd-go");
         if (go) {
           go.addEventListener("click", async () => {
             if (!(await diskOkToStart())) return;
             (go as HTMLButtonElement).disabled = true;
             setCopyText($("nd-say"), () => t("켜는 중…"));
-            // 60초가 넘도록 안 끝나면 앱이 먼저 「기록과 함께 알리기」 를 내민다.
-            // 사장이 원인을 찾아 헤매지 않게 — 원인은 노드 기록에만 있는 경우가 많다.
-            const stuckTimer = setTimeout(() => {
-              if (document.getElementById("nd-stuck")) return;
-              const say = document.getElementById("nd-say");
-              if (!say) return;
-              const sb = document.createElement("button");
-              sb.id = "nd-stuck";
-              sb.className = "ghost";
-              sb.style.marginTop = "10px";
-              sb.textContent = t("노드가 안 켜졌어요. 기록과 함께 알리기");
-              sb.addEventListener("click", () =>
-                openReport(t("노드(노드)가 60초가 넘도록 안 켜져요."), { category: "install-run", attachLog: true }));
-              say.insertAdjacentElement("afterend", sb);
-            }, 60_000);
+            // 🔴 11-12 — 여기 있던 「60초가 지나면 알리기 단추」를 뺐다. 느린 디스크에서는 블록 목록 읽기만
+            //    100초가 걸려, 멀쩡히 켜지는 노드를 고장으로 신고하게 만들었다. 이제 3초 뒤 화면이 노드 기록을
+            //    읽어 단계를 보여 주고, 알리기는 기록이 5분 넘게 멈췄거나 오류로 꺼졌을 때만 나온다(bootTroubleHtml).
             try {
               const r = await invoke<any>("services_start");
               // 🔴 못 켠 이유를 **그대로 보여 준다.** 레이븐 코어가 켜져 있어서
@@ -4331,10 +4385,6 @@ async function paintPartBody(): Promise<void> {
               setCopyText($("nd-say"), () => why || t("켰습니다. 잠시 뒤 다시 봐 주세요."));
             } catch (e) {
               $("nd-say").textContent = String((e as Error)?.message || e);
-            } finally {
-              // 호출이 끝났으면(켜졌든 실패했든) 단추를 치운다.
-              clearTimeout(stuckTimer);
-              document.getElementById("nd-stuck")?.remove();
             }
             setTimeout(() => void paintPart(), 3000);
           });
@@ -5376,6 +5426,28 @@ function showPage(id: string) {
 
 /* ── 지갑 ─────────────────────────────────────────────────── */
 let walletWasLocked: boolean | null = null;
+let walletWarmTimer: number | undefined;
+/**
+ * 11-12 「지갑이 안 열려요」(윈도우 0.9.32) — 노드가 켜지는 중이면 지갑은 열 수 없는 게 맞다. 그걸 말한다:
+ * 「지갑은 노드가 켜지면 열려요 · 지금: 블록 목록 읽는 중 · 3분째」. 아니면 null(원래 오류를 보인다).
+ * 지갑 화면이 열려 있는 동안 10초마다 다시 읽는다 — 켜지면 저절로 잔액이 나온다.
+ */
+async function walletWaitLine(e: unknown): Promise<string | null> {
+  const msg = errText(e);
+  const b = await nodeBoot();
+  const warming = isWarming(msg) || (!!b?.booting && !b?.stalled);
+  if (!warming && !(b?.booting)) return null;
+  if (walletWarmTimer === undefined) {
+    walletWarmTimer = window.setTimeout(() => {
+      walletWarmTimer = undefined;
+      if (currentPage === "wallet") void loadWallet();
+    }, 10_000);
+  }
+  const phase = b?.booting && b.say ? t(b.say) : t(warmPhase(msg) || "켜기 시작");
+  const elapsed = b?.booting && typeof b.elapsed_secs === "number" ? ` · ${tf("{0}째", durText(b.elapsed_secs))}` : "";
+  const stuck = b?.booting && b.stalled ? ` · ${t("기록이 5분 넘게 멈춰 있어요 — 「이 컴퓨터 → RVN 노드」에서 알려 주세요")}` : "";
+  return `${tf("지갑은 노드가 켜지면 열려요 · 지금: {0}", phase)}${elapsed}${stuck}`;
+}
 async function loadWallet() {
   // 주인 표 줄은 따로 읽는다 — 느려도 잔액·잠금이 기다리지 않게.
   void paintOwners();
@@ -5395,7 +5467,9 @@ async function loadWallet() {
     $("w-incoming-note").hidden = !incoming;
   } catch (e) {
     $("w-confirmed").textContent = "—";
-    $("w-unconfirmed").textContent = errText(e);
+    // 11-12 — 노드가 켜지는 중이면 「안 열린다」가 아니라 언제 열리는지와 지금 단계를 말한다.
+    const wait = await walletWaitLine(e);
+    $("w-unconfirmed").textContent = wait || errText(e);
     $("w-incoming-note").hidden = true;
   } })();
 
@@ -5450,9 +5524,10 @@ async function loadWallet() {
       lockNow.style.display = "none";
     }
   } catch (e) {
-    $("w-lock").textContent = "확인 불가";
+    const wait = await walletWaitLine(e);
+    $("w-lock").textContent = wait ? t("노드 켜지는 중") : t("확인 불가");
     $("w-lock").className = "state muted";
-    $("w-lock-detail").textContent = errText(e);
+    $("w-lock-detail").textContent = wait || errText(e);
   } })();
 
   const txP = (async () => { try {
