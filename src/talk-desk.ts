@@ -92,7 +92,10 @@ export function wireTalkDesk(d: DeskDeps) {
   const more = $("tk-more");
   if (more) more.title = t("더 보기");
   for (const [id, label] of [["tk-searchbtn", "찾기"], ["tk-bell", "알림"]] as const) { const b = $(id); if (b) b.title = t(label); }
-  for (const [id, label] of [["tk-photo", "사진"], ["tk-stk", "이모티콘"]] as const) { const b = $(id); if (b) b.title = t(label); }
+  // 입력줄 그림 단추는 그림만 보인다(talk-dm.css) — 얹으면 이름이 뜬다. 라비 단추는 나중에 붙어서(ravi-post-help.ts) 얹을 때 다시 단다.
+  const tips = () => { for (const [id, label] of [["tk-photo", "사진"], ["tk-stk", "이모티콘"], ["tk-ravi", "라비 도움"], ["tk-at", "사람 넣기"]] as const) { const b = $(id); if (b) b.title = t(label); } };
+  tips();
+  $("tk-text")?.closest(".composer")?.addEventListener("pointerenter", tips);
 
   // ── 보내기: 글(또는 붙인 사진)이 있을 때만 진하게 ─────────────────────
   const ta = $("tk-text") as HTMLTextAreaElement | null;

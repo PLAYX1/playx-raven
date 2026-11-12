@@ -20,3 +20,8 @@ body { padding-top:40px; }
 
 :is(body > nav, .rv-talk-layout nav) .reportlink { flex-direction:row; justify-content:center; gap:6px; width:92px; min-height:36px; height:36px; padding:0 6px; margin:0 0 4px; font-size:12px; white-space:nowrap; }
 :is(body > nav, .rv-talk-layout nav) .reportlink::before { font-size:14px; }
+
+/* ③ 11-12 셋째 손질 — 왼쪽 메뉴 그림은 한 크기(22px) · 한 굵기(1.8) · 이름은 한 줄(넘치면 「…」). 그림마다 1.7·1.8 이 섞여 있었다. */
+html body > nav a > svg, html .rv-talk-layout nav a > svg, html body > nav #navmore-btn > svg:not(.chev) { width:22px; height:22px; stroke-width:1.8; }
+html body > nav a > svg :is(path, rect, circle, line, polyline)[stroke-width] { stroke-width:1.8; }
+html body > nav a > span:not(.ordbadge):not(.ravi-face), html .rv-talk-layout nav a > span:not(.ordbadge):not(.ravi-face), html body > nav #navmore-t { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; -webkit-line-clamp:unset; flex-shrink:0; }

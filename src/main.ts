@@ -6768,11 +6768,13 @@ function tkPaintRoomList(rooms: any[]) {
   if (tkRoom && tkRoomNames.has(tkRoom)) setCopyText($("tk-title"), () => tkRoomNames.get(tkRoom) || t("방")); // 고친 이름을 머리줄에도
   paintInvite();
   box.innerHTML =
-    `<button class="room${tkRoom ? "" : " on"}" data-room="">${copyHtml(SQUARE)}${방알림꺼짐("") ? 방알림꺼짐표() : ""}</button>` +
+    // 11-12 방 줄도 채팅 줄처럼 머리글자 동그라미(talk-dm.css ::before — 글자 칸이 아니라 찾기·번역에 안 섞인다)
+    `<button class="room${tkRoom ? "" : " on"}" data-room="" data-initial="${escapeHtml(Array.from(t(SQUARE))[0] || "")}" style="--h:${tkHue("raven")}">${copyHtml(SQUARE)}${방알림꺼짐("") ? 방알림꺼짐표() : ""}</button>` +
     rooms
       .map(
         (r) =>
           `<button class="room${tkRoom === String(r.id) ? " on" : ""}" data-room="${escapeHtml(String(r.id))}"
+             data-initial="${escapeHtml(Array.from(String(r.name || "")).find((c) => c.trim()) || "")}" style="--h:${tkHue(String(r.id))}"
              title="${escapeHtml(String(r.about || ""))}" translate="no">${escapeHtml(String(r.name))}` +
           // 🔴 자산 방인 것을 **들어가기 전에** 알려 준다. 글을 다 쓰고
           //    보내기를 눌렀을 때 「못 씁니다」가 뜨면 그건 우리 잘못이다.

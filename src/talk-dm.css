@@ -88,7 +88,6 @@ main:has(> #page-talk.on) { padding:0 !important; }
 #page-talk .chathead #tk-info[aria-pressed="true"] { background:var(--tk-sel); }
 #page-talk .chathead .tk-headbtn .tk-ico { display:inline-grid; place-items:center; }
 #page-talk .chathead .tk-headbtn .tk-ico svg { width:22px; height:22px; }
-#page-talk .chathead .tk-headbtn .tk-lbl { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
 #page-talk .chathead .tk-bell-dot { position:absolute; top:7px; right:7px; }
 #page-talk.dmon .chathead :is(#tk-searchbtn, #tk-bell) { display:none; } /* 찾기·알림은 광장 글 것 — 쪽지 머리에는 안 맞는다 */
 
@@ -127,20 +126,6 @@ main:has(> #page-talk.on) { padding:0 !important; }
 #page-talk.dmon .tkc-photo { color:var(--muted); font-style:italic; }
 #page-talk .line.pending { opacity:.6; }
 #page-talk .tkc-retry { border:0; background:none; padding:0; min-height:0 !important; font-size:12px !important; color:var(--bad, #C0392B); cursor:pointer; white-space:nowrap; }
-
-/* ── 입력칸: 위는 여러 줄 칸, 아래는 그림 단추 · 보내기(글이 있을 때만 진하게) ── */
-#page-talk:not(.feedon) .composer { flex-wrap:wrap; align-items:center; gap:2px; padding:6px 12px 10px; border-top:1px solid var(--line); background:var(--panel); }
-#page-talk:not(.feedon) .composer:focus-within { box-shadow:inset 0 2px 0 color-mix(in srgb, var(--ravi) 60%, transparent); }
-#page-talk:not(.feedon) .composer textarea { order:-1; flex:1 0 100%; min-height:58px; max-height:200px; padding:8px 6px; border:0; border-radius:0; background:transparent; font-size:15px; line-height:1.5; box-shadow:none; outline:none; }
-#page-talk:not(.feedon) .composer .photobtn { min-height:44px !important; height:44px; padding:0 10px; border:0; border-radius:10px; background:transparent; color:var(--muted); font-size:15px !important; white-space:nowrap; box-shadow:none; }
-#page-talk:not(.feedon) .composer .photobtn:hover, #page-talk:not(.feedon) .composer .photobtn[aria-expanded="true"] { background:var(--tk-sel); color:var(--text); }
-#page-talk:not(.feedon) .composer :is(#tk-photo, #tk-stk) { width:44px; padding:0; justify-content:center; }
-#page-talk:not(.feedon) .composer :is(#tk-photo, #tk-stk) svg { width:22px; height:22px; }
-#page-talk:not(.feedon) .composer :is(#tk-photo, #tk-stk) > span { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
-#page-talk .composer #tk-stk > svg { width:20px; height:20px; flex:none; }
-#page-talk.feedon .composer #tk-stk { display:inline-flex; align-items:center; gap:7px; }
-#page-talk:not(.feedon) .composer #tk-send { min-height:44px !important; height:44px; padding:0 20px; border-radius:10px; font-size:15px !important; white-space:nowrap; margin-left:auto; margin-right:84px; }
-#page-talk:not(.feedon) .composer.tk-empty #tk-send { background:var(--side); color:var(--muted); border-color:var(--line); box-shadow:none; }
 
 /* 새 메시지 알약 · 비었을 때 가운데 */
 #page-talk:not(.feedon) .tk-new-messages { bottom:132px; min-height:44px !important; padding:0 16px; font-size:14px !important; font-weight:700; white-space:nowrap; }
@@ -197,3 +182,64 @@ main:has(> #page-talk.on) { padding:0 !important; }
 /* 빈 알림 줄이 입력칸 아래 12px 띠로 남았다 — 비었을 때만 접는다 */
 #page-talk .chat > #tk-note:empty { display:none; }
 #page-talk .chat > #tk-note { background:var(--panel); }
+
+/* ── 11-12 셋째 손질(대표 「삐뚤빼뚤, 아이콘 크기도 다르다」) — 텔레그램 데스크탑 결 ─────────────────────────
+ * ① 입력은 한 줄: [사진 · 라비 · 이모티콘 · @] [쓰는 칸(알약)] [보내기]. 그림 20px · 누르는 곳 44px 동그라미 하나로 통일.
+ *    광장(맨 위 글쓰기)과 방·쪽지(맨 아래 입력)가 같은 모양이다. 칸은 쓴 만큼 자란다(main.ts) — 단추는 칸 아래 끝에 맞춘다.
+ *    그림 단추 글자(사진·라비·이모티콘)는 화면 읽기용으로 남기고 title 로 얹으면 보인다(talk-desk.ts).
+ * ② 글 아래 「답글 · 저장 · 공유 · ⋯」 은 한 모양 — 주황은 얹었을 때만.
+ * ③ 광장 칸 목록 아래 「+ 방 만들기 · 내 글 서랍 · 숨긴 방 N」 은 납작한 글자 단추 한 줄.
+ * ④ 광장 칸 방 줄도 채팅 줄처럼 46px 동그라미(머리글자) · 68px. */
+#page-talk .composer { display:flex; flex-wrap:nowrap !important; align-items:flex-end; gap:2px; padding:10px 104px 10px 12px; border-top:1px solid var(--line); background:var(--panel); box-shadow:none !important; }
+#page-talk.feedon .composer { padding:12px 16px; border-top:0; border-bottom:1px solid var(--line); }
+#page-talk .composer #tk-text { order:0 !important; flex:1 1 auto; min-width:0; width:auto; min-height:44px !important; max-height:240px; margin:0 4px; padding:11px 16px; border:0; border-radius:22px; background:var(--side); color:var(--text); font-size:15px; line-height:22px; box-sizing:border-box; box-shadow:none; outline:none; transition:box-shadow .12s; }
+#page-talk .composer #tk-text:focus { box-shadow:inset 0 0 0 2px color-mix(in srgb, var(--ravi) 55%, transparent); }
+#page-talk.feedon .composer #tk-text, #page-talk.feedon .composer #tk-text:focus, #page-talk.feedon .composer #tk-text:not(:placeholder-shown) { min-height:44px !important; }
+#page-talk .composer :is(#tk-photo, #tk-ravi, #tk-stk, #tk-at) { position:relative; flex:none; display:inline-flex; align-items:center; justify-content:center; width:44px; height:44px; min-height:44px !important; margin:0; padding:0 !important; border:0 !important; border-radius:50%; background:transparent; color:var(--muted); box-shadow:none; white-space:nowrap; }
+#page-talk .composer :is(#tk-ravi, #tk-at) { font-size:0 !important; line-height:44px; } /* 글자는 aria-label 로 — 그림만 보인다 */
+#page-talk .composer :is(#tk-photo, #tk-ravi, #tk-stk, #tk-at):hover,
+#page-talk .composer :is(#tk-photo, #tk-ravi, #tk-stk, #tk-at)[aria-expanded="true"] { background:var(--tk-sel); color:var(--text); }
+#page-talk .composer #tk-ravi.on { color:var(--ravi); }
+#page-talk .composer :is(#tk-photo, #tk-stk) > svg { width:20px !important; height:20px !important; }
+/* 화면 읽기용 글자 — 1px 상자 + clip-path 로 감춘다(overflow:hidden 이면 레이아웃 관문이 「잘림」으로 센다) */
+#page-talk .composer :is(#tk-photo, #tk-stk) > span, #page-talk .chathead .tk-headbtn .tk-lbl { position:absolute !important; left:0; top:0; width:1px !important; height:1px !important; margin:0; padding:0; overflow:visible !important; clip:auto !important; clip-path:inset(50%); font-size:12px; line-height:16px; white-space:nowrap; pointer-events:none; }
+/* 라비 · @ 는 글자 단추라 그림을 덧입힌다(글자는 aria-label 로 남는다) */
+#page-talk .composer :is(#tk-ravi, #tk-at)::before { content:""; width:20px; height:20px; background:currentColor; -webkit-mask:var(--tk-ico) center/20px 20px no-repeat; mask:var(--tk-ico) center/20px 20px no-repeat; }
+#page-talk .composer #tk-ravi { --tk-ico:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M11 3.5l1.9 4.9 4.9 1.9-4.9 1.9L11 17.1l-1.9-4.9-4.9-1.9 4.9-1.9z'/%3E%3Cpath d='M18 14.5l.9 2.1 2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9z'/%3E%3C/svg%3E"); }
+#page-talk .composer #tk-at { --tk-ico:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='4'/%3E%3Cpath d='M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.9 7.9'/%3E%3C/svg%3E"); }
+#page-talk .composer #tk-send { order:0 !important; flex:none; height:44px; min-height:44px !important; margin:0 0 0 2px !important; padding:0 18px !important; border-radius:22px; font-size:15px !important; font-weight:700; white-space:nowrap; }
+#page-talk .composer.tk-empty #tk-send { background:var(--side); color:var(--muted); border-color:transparent; box-shadow:none; }
+#page-talk .composer #tk-send:disabled { opacity:.55; }
+
+/* ② 글 아래 단추 — 모두 같은 모양(그림 20 + 이름 · 회색 · 보통 굵기). 공유도 같다 — 주황은 얹었을 때만. */
+#page-talk #tk-list.feedcards .facts { gap:2px; margin-left:-10px; flex-wrap:nowrap; }
+#page-talk #tk-list.feedcards .facts button { display:inline-flex; align-items:center; gap:6px; height:40px; min-height:44px !important; padding:0 12px !important; border:0; border-radius:22px; background:transparent; color:var(--muted); font-size:14px !important; font-weight:500; white-space:nowrap; flex:none; box-shadow:none; }
+#page-talk #tk-list.feedcards .facts button svg { width:20px; height:20px; flex:none; stroke-width:1.8; }
+#page-talk #tk-list.feedcards .facts button:hover,
+#page-talk #tk-list.feedcards .facts button:focus-visible,
+#page-talk #tk-list.feedcards .facts button[aria-expanded="true"] { background:var(--ravi-tint); color:var(--ravi); }
+#page-talk #tk-list.feedcards .facts button[data-more] { width:44px; padding:0 !important; justify-content:center; font-size:0 !important; }
+#page-talk #tk-list.feedcards .facts button[data-more]::before { content:""; width:20px; height:20px; background:currentColor; -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='5' cy='12' r='1.7'/%3E%3Ccircle cx='12' cy='12' r='1.7'/%3E%3Ccircle cx='19' cy='12' r='1.7'/%3E%3C/svg%3E") center/20px 20px no-repeat; mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='5' cy='12' r='1.7'/%3E%3Ccircle cx='12' cy='12' r='1.7'/%3E%3Ccircle cx='19' cy='12' r='1.7'/%3E%3C/svg%3E") center/20px 20px no-repeat; }
+
+/* ③ 광장 칸 목록 아래 단추 한 줄 — 같은 높이 · 같은 글자 · 테두리 없음. 좁은 말(다른 나라 말)이면 줄만 바뀌고 글자는 안 접힌다. */
+#page-talk #tk-squarebox:not([hidden]) { display:flex; flex-wrap:wrap; align-items:center; gap:2px; padding:0 8px; }
+#page-talk #tk-squarebox > * { order:4; flex:1 0 100%; }
+#page-talk #tk-squarebox > #tk-rooms { order:0; margin:0 -8px 6px; padding-bottom:6px; border-bottom:1px solid var(--line); }
+#page-talk #tk-squarebox > :is(#tk-newroom, #tk-mine, #tk-hiddenrooms) { order:1; flex:0 0 auto; display:inline-flex; align-items:center; height:44px; min-height:44px !important; margin:0 !important; padding:0 10px !important; border:0 !important; border-radius:10px; background:transparent; color:var(--muted); font-size:14px !important; font-weight:600; white-space:nowrap; box-shadow:none; }
+#page-talk #tk-squarebox > :is(#tk-newroom, #tk-mine, #tk-hiddenrooms):hover { background:var(--side); color:var(--text); }
+#page-talk #tk-squarebox > #tk-newroom { color:var(--ravi); }
+#page-talk #tk-squarebox > #tk-mine { order:2; }
+#page-talk #tk-squarebox > #tk-hiddenrooms { order:3; }
+#page-talk #tk-squarebox > [hidden] { display:none !important; }
+
+/* ④ 광장 칸 방 줄 = 채팅 줄과 같은 결(46px 동그라미 · 68px · 이름 15) */
+#page-talk #tk-rooms .room { box-sizing:border-box; min-height:68px !important; height:auto; padding:10px 16px; gap:12px; border:0; font-size:15px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+#page-talk #tk-rooms .room::before { content:attr(data-initial); flex:none; width:46px; height:46px; border-radius:50%; display:grid; place-items:center; background:hsl(var(--h,260) 45% 50%); color:#fff; font-size:18px; font-weight:800; }
+#page-talk #tk-rooms .room.on { font-weight:800; }
+
+/* 친구 줄 「쪽지」 — 검은 알약 대신 옅은 단추(목록이 한 결로 읽히게) */
+#page-talk .tk-chats .tkc-dm { background:var(--side); color:var(--text); border:0; font-weight:600; box-shadow:none; }
+#page-talk .tk-chats .tkc-dm:hover { background:var(--ravi-tint); color:var(--ravi); }
+#page-talk #tk-rooms .room:not([data-room=""])::before { background:hsl(var(--h,260) 35% 42%); }
+#page-talk:not(.feedon) .tk-new-messages { bottom:80px; }
+#page-talk .composer :is(#tk-photo, #tk-stk), #page-talk .chathead .tk-headbtn { overflow:visible; white-space:normal; } /* 보이는 글자가 없는 그림 단추 — 숨긴 글자 상자가 「넘침」으로 세이지 않게 */
